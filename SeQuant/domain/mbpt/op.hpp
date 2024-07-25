@@ -546,20 +546,20 @@ class OpMaker {
   /// @param[in] cre_list list of creator indices
   /// @param[in] ann_list list of annihilator indices
   template <typename IndexSpaceTypeRange1, typename IndexSpaceTypeRange2>
-  OpMaker(OpType op, IndexSpaceTypeRange1&& cre_list,
-          IndexSpaceTypeRange2&& ann_list)
+  OpMaker(OpType op, const cre<IndexSpaceTypeRange1>& cre_list,
+          const ann<IndexSpaceTypeRange2>& ann_list)
       : op_(op),
         cre_spaces_(cre_list.begin(), cre_list.end()),
         ann_spaces_(ann_list.begin(), ann_list.end()) {
-    assert(ncre() > 0 || nann() > 0);
+    assert(ncreators() > 0 || nannihilators() > 0);
   }
 
   /// @param[in] op the operator type
-  /// @param[in] ncre number of bra indices/creators
-  /// @param[in] nann number of ket indices/annihilators
+  /// @param[in] nc number of bra indices/creators
+  /// @param[in] na number of ket indices/annihilators
   /// @param[in] particle_space IndexSpace corresponding to particle_space
   /// @param[in] hole_space IndexSpace corresponding to hole_space
-  OpMaker(OpType op, std::size_t ncre, std::size_t nann,
+  OpMaker(OpType op, ncre nc, nann na,
           IndexSpace particle_space = get_particle_space(Spin::any),
           IndexSpace hole_space = get_hole_space(Spin::any));
 
@@ -656,8 +656,7 @@ class OpMaker {
                              : Symmetry::nonsymm;
     return ex<Constant>(rational{1, mult}) *
            tensor_generator(creidxs, annidxs, opsymm) *
-           ex<NormalOperator<S>>(/* creators */ creidxs,
-                                 /* annihilators */ annidxs,
+           ex<NormalOperator<S>>(cre(creidxs), ann(annidxs),
                                  get_default_context().vacuum());
   }
 
@@ -680,8 +679,8 @@ class OpMaker {
 
   OpMaker(OpType op);
 
-  [[nodiscard]] const auto ncre() const { return cre_spaces_.size(); };
-  [[nodiscard]] const auto nann() const { return ann_spaces_.size(); };
+  [[nodiscard]] const auto ncreators() const { return cre_spaces_.size(); };
+  [[nodiscard]] const auto nannihilators() const { return ann_spaces_.size(); };
 };
 
 extern template class OpMaker<Statistics::FermiDirac>;
@@ -792,20 +791,20 @@ ExprPtr Λ_(std::size_t K);
 ExprPtr Λ(std::size_t K);
 
 /// @brief Makes generic excitation operator
-/// @param nann number of annihilators
-/// @param ncre number of creators
+/// @param na number of annihilators
+/// @param nc number of creators
 /// @param particle_space IndexSpace corresponding to the particle space
 /// @param hole_space IndexSpace corresponding to the hole space
-ExprPtr R_(std::size_t nann, std::size_t ncre,
+ExprPtr R_(nann na, ncre nc,
            IndexSpace particle_space = get_particle_space(Spin::any),
            IndexSpace hole_space = get_hole_space(Spin::any));
 
 /// @brief Makes generic deexcitation operator
-/// @param nann number of annihilators
-/// @param ncre number of creators
+/// @param na number of annihilators
+/// @param nc number of creators
 /// @param particle_space IndexSpace corresponding to the particle space
 /// @param hole_space IndexSpace corresponding to the hole space
-ExprPtr L_(std::size_t nann, std::size_t ncre,
+ExprPtr L_(nann na, ncre nc,
            IndexSpace particle_space = get_particle_space(Spin::any),
            IndexSpace hole_space = get_hole_space(Spin::any));
 
@@ -904,38 +903,38 @@ ExprPtr Λ_(std::size_t K);
 ExprPtr Λ(std::size_t K);
 
 /// @brief Makes generic excitation operator
-/// @param nann number of annihilators
-/// @param ncre number of creators
+/// @param na number of annihilators
+/// @param nc number of creators
 /// @param particle_space IndexSpace corresponding to the particle space
 /// @param hole_space IndexSpace corresponding to the hole space
-ExprPtr R_(std::size_t nann, std::size_t ncre,
+ExprPtr R_(nann na, ncre nc,
            IndexSpace particle_space = get_particle_space(Spin::any),
            IndexSpace hole_space = get_hole_space(Spin::any));
 
 /// @brief Makes generic deexcitation operator
-/// @param nann number of annihilators
-/// @param ncre number of creators
+/// @param na number of annihilators
+/// @param nc number of creators
 /// @param particle_space IndexSpace corresponding to the particle space
 /// @param hole_space IndexSpace corresponding to the hole space
-ExprPtr L_(std::size_t nann, std::size_t ncre,
+ExprPtr L_(nann na, ncre nc,
            IndexSpace particle_space = get_particle_space(Spin::any),
            IndexSpace hole_space = get_hole_space(Spin::any));
 
 /// @brief Makes sum of generic excitation operators upto rank \p nann \p ncre
-/// @param nann number of annihililators
-/// @param ncre number of creators
+/// @param na number of annihililators
+/// @param nc number of creators
 /// @param particle_space IndexSpace corresponding to the particle space
 /// @param hole_space IndexSpace corresponding to the hole space
-ExprPtr R(std::size_t nann, std::size_t ncre,
+ExprPtr R(nann na, ncre nc,
           IndexSpace particle_space = get_particle_space(Spin::any),
           IndexSpace hole_space = get_hole_space(Spin::any));
 
 /// @brief Makes sum of generic deexcitation operators upto rank \p nann \p ncre
-/// @param nann number of annihilators
-/// @param ncre number of creators
+/// @param na number of annihilators
+/// @param nc number of creators
 /// @param particle_space IndexSpace corresponding to the particle space
 /// @param hole_space IndexSpace corresponding to the hole space
-ExprPtr L(std::size_t nann, std::size_t ncre,
+ExprPtr L(nann na, ncre nc,
           IndexSpace particle_space = get_particle_space(Spin::any),
           IndexSpace hole_space = get_hole_space(Spin::any));
 

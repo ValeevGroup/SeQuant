@@ -234,7 +234,7 @@ class antisymm_element {
               new_crea.push_back(unique_kets_list[j].second[index_label_pos]);
               index_label_pos++;
             }
-            auto new_Nop = ex<FNOperator>(new_crea, new_anni);
+            auto new_Nop = ex<FNOperator>(cre(new_crea), ann(new_anni));
             new_product = new_product * new_Nop;
             // std::wcout << "product:  " << to_latex(new_product) << std::endl;
             new_product->canonicalize();
@@ -455,8 +455,8 @@ ExprPtr max_similarity(const std::vector<Index>& original_upper,
           }
         }
         if (new_pairs > og_pairs) {
-          factor =
-              ex<Constant>(-1) * ex<FNOperator>(current_upper, current_lower);
+          factor = ex<Constant>(-1) *
+                   ex<FNOperator>(cre(current_upper), ann(current_lower));
         }
       }
     }

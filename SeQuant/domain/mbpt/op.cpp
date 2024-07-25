@@ -410,29 +410,29 @@ OpMaker<S>::OpMaker(OpType op, std::initializer_list<IndexSpace> cre_list,
     : op_(op),
       cre_spaces_(cre_list.begin(), cre_list.end()),
       ann_spaces_(ann_list.begin(), ann_list.end()) {
-  assert(ncre() > 0 || nann() > 0);
+  assert(ncreators() > 0 || nannihilators() > 0);
 }
 
 template <Statistics S>
 OpMaker<S>::OpMaker(OpType op) : op_(op) {}
 
 template <Statistics S>
-OpMaker<S>::OpMaker(OpType op, std::size_t nbra, std::size_t nket,
-                    IndexSpace particle_space, IndexSpace hole_space) {
+OpMaker<S>::OpMaker(OpType op, ncre nc, nann na, IndexSpace particle_space,
+                    IndexSpace hole_space) {
   op_ = op;
-  assert(nbra > 0 || nket > 0);
+  assert(*nc > 0 || *na > 0);
   switch (to_class(op)) {
     case OpClass::ex:
-      cre_spaces_ = decltype(cre_spaces_)(nbra, particle_space);
-      ann_spaces_ = decltype(ann_spaces_)(nket, hole_space);
+      cre_spaces_ = decltype(cre_spaces_)(*nc, particle_space);
+      ann_spaces_ = decltype(ann_spaces_)(*na, hole_space);
       break;
     case OpClass::deex:
-      cre_spaces_ = decltype(cre_spaces_)(nbra, hole_space);
-      ann_spaces_ = decltype(ann_spaces_)(nket, particle_space);
+      cre_spaces_ = decltype(cre_spaces_)(*nc, hole_space);
+      ann_spaces_ = decltype(ann_spaces_)(*na, particle_space);
       break;
     case OpClass::gen:
-      cre_spaces_ = decltype(cre_spaces_)(nbra, get_complete_space(Spin::any));
-      ann_spaces_ = decltype(ann_spaces_)(nket, get_complete_space(Spin::any));
+      cre_spaces_ = decltype(cre_spaces_)(*nc, get_complete_space(Spin::any));
+      ann_spaces_ = decltype(ann_spaces_)(*na, get_complete_space(Spin::any));
       break;
   }
 }
@@ -604,15 +604,13 @@ ExprPtr Λ(std::size_t K) {
   return result;
 }
 
-ExprPtr R_(std::size_t nann, std::size_t ncre, IndexSpace particle_space,
-           IndexSpace hole_space) {
-  return OpMaker<Statistics::FermiDirac>(OpType::R, ncre, nann, particle_space,
+ExprPtr R_(nann na, ncre nc, IndexSpace particle_space, IndexSpace hole_space) {
+  return OpMaker<Statistics::FermiDirac>(OpType::R, nc, na, particle_space,
                                          hole_space)();
 }
 
-ExprPtr L_(std::size_t nann, std::size_t ncre, IndexSpace particle_space,
-           IndexSpace hole_space) {
-  return OpMaker<Statistics::FermiDirac>(OpType::L, ncre, nann, particle_space,
+ExprPtr L_(nann na, ncre nc, IndexSpace particle_space, IndexSpace hole_space) {
+  return OpMaker<Statistics::FermiDirac>(OpType::L, nc, na, particle_space,
                                          hole_space)();
 }
 
@@ -657,8 +655,8 @@ ExprPtr A(std::int64_t nh, std::int64_t np) {
   if (get_default_mbpt_context().csv() == mbpt::CSV::Yes)
     dep = np > 0 ? OpMaker<Statistics::FermiDirac>::UseDepIdx::Bra
                  : OpMaker<Statistics::FermiDirac>::UseDepIdx::Ket;
-  return OpMaker<Statistics::FermiDirac>(OpType::A, creators, annihilators)(
-      dep, {Symmetry::antisymm});
+  return OpMaker<Statistics::FermiDirac>(
+      OpType::A, cre(creators), ann(annihilators))(dep, {Symmetry::antisymm});
 }
 
 ExprPtr S(std::int64_t K) {
@@ -682,8 +680,8 @@ ExprPtr S(std::int64_t K) {
   if (get_default_mbpt_context().csv() == mbpt::CSV::Yes)
     dep = K > 0 ? OpMaker<Statistics::FermiDirac>::UseDepIdx::Bra
                 : OpMaker<Statistics::FermiDirac>::UseDepIdx::Ket;
-  return OpMaker<Statistics::FermiDirac>(OpType::S, creators, annihilators)(
-      dep, {Symmetry::nonsymm});
+  return OpMaker<Statistics::FermiDirac>(
+      OpType::S, cre(creators), ann(annihilators))(dep, {Symmetry::nonsymm});
 }
 
 ExprPtr H_pt(std::size_t order, std::size_t R) {
@@ -921,62 +919,52 @@ ExprPtr Λ_pt(std::size_t order, std::size_t K, bool skip1) {
   return result;
 }
 
-ExprPtr R_(std::size_t nann, std::size_t ncre, IndexSpace particle_space,
-           IndexSpace hole_space) {
+ExprPtr R_(nann na, ncre nc, IndexSpace particle_space, IndexSpace hole_space) {
   return ex<op_t>(
       []() -> std::wstring_view { return optype2label.at(OpType::R); },
       [=]() -> ExprPtr {
-        return tensor::R_(nann, ncre, particle_space, hole_space);
+        return tensor::R_(na, nc, particle_space, hole_space);
       },
       [=](qnc_t& qns) {
         // ex -> creators in particle_space, annihilators in hole_space
         qns = combine(
-            generic_excitation_qns(/*particle_rank*/ ncre, /*hole_rank*/ nann,
+            generic_excitation_qns(/*particle_rank*/ *nc, /*hole_rank*/ *na,
                                    particle_space, hole_space),
             qns);
       });
 }
 
-ExprPtr L_(std::size_t nann, std::size_t ncre, IndexSpace particle_space,
-           IndexSpace hole_space) {
+ExprPtr L_(nann na, ncre nc, IndexSpace particle_space, IndexSpace hole_space) {
   return ex<op_t>(
       []() -> std::wstring_view { return optype2label.at(OpType::L); },
       [=]() -> ExprPtr {
-        return tensor::L_(nann, ncre, particle_space, hole_space);
+        return tensor::L_(na, nc, particle_space, hole_space);
       },
       [=](qnc_t& qns) {
         // deex -> creators in hole_space, annihilators in particle_space
         qns = combine(generic_deexcitation_qns(
-                          /*particle_rank*/ nann, /*hole_rank*/ ncre,
+                          /*particle_rank*/ *na, /*hole_rank*/ *nc,
                           particle_space, hole_space),
                       qns);
       });
 }
 
-ExprPtr R(std::size_t nann, std::size_t ncre, IndexSpace particle_space,
-          IndexSpace hole_space) {
-  using boost::numeric_cast;
-  assert(nann > 0 || ncre > 0);
+ExprPtr R(nann na, ncre nc, IndexSpace particle_space, IndexSpace hole_space) {
+  assert(*na > 0 || *nc > 0);
   ExprPtr result;
 
-  for (auto na = numeric_cast<std::int64_t>(nann),
-            nc = numeric_cast<std::int64_t>(ncre);
-       na > 0 || nc > 0; --na, --nc) {
-    result += R_(na, nc, particle_space, hole_space);
+  for (std::int64_t ra = *na, rc = *nc; ra > 0 || rc > 0; --ra, --rc) {
+    result += R_(nann(ra), ncre(rc), particle_space, hole_space);
   }
   return result;
 }
 
-ExprPtr L(std::size_t nann, std::size_t ncre, IndexSpace particle_space,
-          IndexSpace hole_space) {
-  using boost::numeric_cast;
-  assert(nann > 0 || ncre > 0);
+ExprPtr L(nann na, ncre nc, IndexSpace particle_space, IndexSpace hole_space) {
+  assert(*na > 0 || *nc > 0);
   ExprPtr result;
 
-  for (auto na = numeric_cast<std::int64_t>(nann),
-            nc = numeric_cast<std::int64_t>(ncre);
-       na > 0 || nc > 0; --na, --nc) {
-    result += L_(na, nc, particle_space, hole_space);
+  for (std::int64_t ra = *na, rc = *nc; ra > 0 || rc > 0; --ra, --rc) {
+    result += L_(nann(ra), ncre(rc), particle_space, hole_space);
   }
   return result;
 }

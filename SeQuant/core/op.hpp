@@ -15,6 +15,7 @@
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/ranges.hpp>
 #include <SeQuant/core/space.hpp>
+#include <SeQuant/core/utility/strong.hpp>
 
 #include <cassert>
 #include <cstddef>
@@ -33,6 +34,37 @@
 #include <range/v3/all.hpp>
 
 namespace sequant {
+
+template <typename T>
+struct cre : detail::strong_type_base<T, cre<T>> {
+  using detail::strong_type_base<T, cre<T>>::strong_type_base;
+};
+
+// deduction guide
+template <class T>
+cre(T &&t) -> cre<meta::remove_cvref_t<T>>;
+template <class T>
+cre(std::initializer_list<T> t)
+    -> cre<container::svector<meta::remove_cvref_t<T>>>;
+
+template <typename T>
+struct ann : detail::strong_type_base<T, ann<T>> {
+  using detail::strong_type_base<T, ann<T>>::strong_type_base;
+};
+
+// deduction guide
+template <class T>
+ann(T &&t) -> ann<meta::remove_cvref_t<T>>;
+template <class T>
+ann(std::initializer_list<T> t)
+    -> ann<container::svector<meta::remove_cvref_t<T>>>;
+
+struct ncre : detail::strong_type_base<std::size_t, ncre> {
+  using detail::strong_type_base<std::size_t, ncre>::strong_type_base;
+};
+struct nann : detail::strong_type_base<std::size_t, nann> {
+  using detail::strong_type_base<std::size_t, nann>::strong_type_base;
+};
 
 /// @brief Op is a creator/annihilator operator
 ///
@@ -481,8 +513,8 @@ class NormalOperator : public Operator<S>,
                     meta::range_value_t<IndexSequence1>, Index> &&
                 meta::is_statically_castable_v<
                     meta::range_value_t<IndexSequence1>, Index>>>
-  NormalOperator(IndexSequence1 &&creator_indices,
-                 IndexSequence2 &&annihilator_indices,
+  NormalOperator(const cre<IndexSequence1> &creator_indices,
+                 const ann<IndexSequence2> &annihilator_indices,
                  Vacuum v = get_default_context(S).vacuum())
       : Operator<S>{}, vacuum_(v), ncreators_(creator_indices.size()) {
     this->reserve(creator_indices.size() + annihilator_indices.size());
@@ -502,7 +534,7 @@ class NormalOperator : public Operator<S>,
   /// @param v vacuum state with respect to which the operator is normal-ordered
   template <typename OpSequence1, typename OpSequence2>
   NormalOperator(
-      OpSequence1 &&creators, OpSequence2 &&annihilators,
+      const cre<OpSequence1> &creators, const ann<OpSequence2> &annihilators,
       Vacuum v = get_default_context(S).vacuum(),
       std::enable_if_t<
           !std::is_same_v<std::decay_t<OpSequence1>, NormalOperator> &&
@@ -1188,9 +1220,9 @@ std::tuple<int, std::shared_ptr<NormalOperator<S>>> normalize(
     }  // nann == rank
   }
 
-  return std::make_tuple(
-      phase, std::make_shared<NormalOperator<S>>(
-                 std::move(creators), std::move(annihilators), vacuum));
+  return std::make_tuple(phase, std::make_shared<NormalOperator<S>>(
+                                    cre(std::move(creators)),
+                                    ann(std::move(annihilators)), vacuum));
 }
 
 template <typename T>

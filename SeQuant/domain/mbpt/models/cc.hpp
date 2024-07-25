@@ -5,6 +5,8 @@
 #include <limits>
 #include <vector>
 
+#include <SeQuant/core/op.hpp>
+
 namespace sequant {
 class ExprPtr;
 }
@@ -93,16 +95,16 @@ class CC {
   [[nodiscard]] std::vector<ExprPtr> λ_pt(size_t order = 1, size_t rank = 1);
 
   /// @brief derives right-side sigma equations for EOM-CC
-  /// @param nann number of annihilators in R operator
-  /// @param ncre number of creators in R operator
+  /// @param na number of annihilators in R operator
+  /// @param nc number of creators in R operator
   /// @return vector of right side sigma equations, element 0 is always null
-  [[nodiscard]] std::vector<ExprPtr> eom_r(size_t nann, size_t ncre);
+  [[nodiscard]] std::vector<ExprPtr> eom_r(nann na, ncre nc);
 
   /// @brief derives left-side sigma equations for EOM-CC
   /// @param nann number of annihilators in R operator
   /// @param ncre number of creators in R operator
   /// @return vector of left side sigma equations, element 0 is always null
-  [[nodiscard]] std::vector<ExprPtr> eom_l(size_t nann, size_t ncre);
+  [[nodiscard]] std::vector<ExprPtr> eom_l(nann na, ncre nc);
 
  private:
   size_t N;

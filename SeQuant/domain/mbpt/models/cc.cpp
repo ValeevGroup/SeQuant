@@ -265,13 +265,13 @@ std::vector<ExprPtr> CC::λ_pt(size_t order, size_t rank) {
   return result;
 }
 
-std::vector<ExprPtr> CC::eom_r(size_t nann, size_t ncre) {
+std::vector<ExprPtr> CC::eom_r(nann na, ncre nc) {
   assert(!unitary() && "Unitary ansatz is not yet supported");
-  assert(nann > 0 || ncre > 0 && "Unsupported excitation order");
-  assert(nann == ncre && "Only EE-EOM-CC is supported for now");
+  assert(*na > 0 || *nc > 0 && "Unsupported excitation order");
+  assert(*na == *nc && "Only EE-EOM-CC is supported for now");
   // TODO: Debug IP and EA EOM-CC
 
-  if (nann != ncre)
+  if (*na != *nc)
     assert(
         get_default_context().spbasis() != SPBasis::spinfree &&
         "spin-free basis does not yet support non particle-conserving cases");
@@ -280,7 +280,7 @@ std::vector<ExprPtr> CC::eom_r(size_t nann, size_t ncre) {
   auto hbar = sim_tr(H(), 4);
 
   // hbar * R
-  auto hbar_R = hbar * R(nann, ncre);
+  auto hbar_R = hbar * R(na, nc);
 
   // connectivity:
   // default connections + connect R with {h,f,g}
@@ -292,28 +292,25 @@ std::vector<ExprPtr> CC::eom_r(size_t nann, size_t ncre) {
 
   // initialize result vector
   std::vector<ExprPtr> result;
-  auto idx = std::max(nann, ncre);  // index for populating the result vector
+  auto idx = std::max(*na, *nc);  // index for populating the result vector
   result.resize(idx + 1);
 
-  using boost::numeric_cast;
   // start from the highest excitation order, go down to the lowest possible
-  for (auto na = numeric_cast<std::int64_t>(nann),
-            nc = numeric_cast<std::int64_t>(ncre);
-       na > 0 || nc > 0; --na, --nc) {
+  for (std::int64_t ra = *na, rc = *nc; ra > 0 || rc > 0; --ra, --rc) {
     // project with <ncre, nann| (i.e., multiply P(ncre, nann)) and compute VEV
-    result.at(idx) = vac_av(P(nc, na) * hbar_R, op_connect);
+    result.at(idx) = vac_av(P(rc, ra) * hbar_R, op_connect);
     idx--;  // index decrement
   }
 
   return result;
 }
 
-std::vector<ExprPtr> CC::eom_l(size_t nann, size_t ncre) {
+std::vector<ExprPtr> CC::eom_l(nann na, ncre nc) {
   assert(!unitary() && "Unitary ansatz is not yet supported");
-  assert(nann > 0 || ncre > 0 && "Unsupported excitation order");
-  assert(nann == ncre && "Only EE-EOM-CC is supported for now");
+  assert(*na > 0 || *nc > 0 && "Unsupported excitation order");
+  assert(*na == *nc && "Only EE-EOM-CC is supported for now");
 
-  if (nann != ncre)
+  if (*na != *nc)
     assert(get_default_context().spbasis() != SPBasis::spinfree &&
            "spin-free basis does not support non particle-conserving cases");
 
@@ -321,7 +318,7 @@ std::vector<ExprPtr> CC::eom_l(size_t nann, size_t ncre) {
   auto hbar = sim_tr(H(), 4);
 
   // L * hbar
-  auto L_hbar = L(nann, ncre) * hbar;
+  auto L_hbar = L(na, nc) * hbar;
 
   // connectivity:
   // default connections + connect H with projectors
@@ -336,17 +333,14 @@ std::vector<ExprPtr> CC::eom_l(size_t nann, size_t ncre) {
 
   // initialize result vector
   std::vector<ExprPtr> result;
-  auto idx = std::max(nann, ncre);  // index for populating the result vector
+  auto idx = std::max(*na, *nc);  // index for populating the result vector
   result.resize(idx + 1);
 
-  using boost::numeric_cast;
   // start from the highest excitation order, go down to the lowest possible
-  for (auto na = numeric_cast<std::int64_t>(nann),
-            nc = numeric_cast<std::int64_t>(ncre);
-       na > 0 || nc > 0; --na, --nc) {
+  for (std::int64_t ra = *na, rc = *nc; ra > 0 || rc > 0; --ra, --rc) {
     // right project with |ncre,nann> (i.e., multiply P(-ncre, -nann)) and
     // compute VEV
-    result.at(idx) = vac_av(L_hbar * P(-nc, -na), op_connect);
+    result.at(idx) = vac_av(L_hbar * P(-rc, -ra), op_connect);
     idx--;  // index decrement
   }
 
