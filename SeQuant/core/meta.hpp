@@ -153,6 +153,22 @@ template <typename T>
 static constexpr bool is_less_than_comparable_v =
     is_less_than_comparable<T>::value;
 
+///////// are_less_than_comparable /////////
+
+template <typename T, typename U, typename = std::void_t<>>
+struct are_less_than_comparable : public std::false_type {};
+
+template <typename T, typename U>
+struct are_less_than_comparable<
+    T, U,
+    std::void_t<decltype(std::declval<const T &>() <
+                         std::declval<const U &>())>> : public std::true_type {
+};
+
+template <typename T, typename U>
+static constexpr bool are_less_than_comparable_v =
+    are_less_than_comparable<T, U>::value;
+
 ///////// is_initializer_list /////////
 
 template <typename T>

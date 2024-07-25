@@ -420,19 +420,19 @@ template <Statistics S>
 OpMaker<S>::OpMaker(OpType op, ncre nc, nann na, IndexSpace particle_space,
                     IndexSpace hole_space) {
   op_ = op;
-  assert(*nc > 0 || *na > 0);
+  assert(nc > 0 || na > 0);
   switch (to_class(op)) {
     case OpClass::ex:
-      cre_spaces_ = decltype(cre_spaces_)(*nc, particle_space);
-      ann_spaces_ = decltype(ann_spaces_)(*na, hole_space);
+      cre_spaces_ = decltype(cre_spaces_)(nc, particle_space);
+      ann_spaces_ = decltype(ann_spaces_)(na, hole_space);
       break;
     case OpClass::deex:
-      cre_spaces_ = decltype(cre_spaces_)(*nc, hole_space);
-      ann_spaces_ = decltype(ann_spaces_)(*na, particle_space);
+      cre_spaces_ = decltype(cre_spaces_)(nc, hole_space);
+      ann_spaces_ = decltype(ann_spaces_)(na, particle_space);
       break;
     case OpClass::gen:
-      cre_spaces_ = decltype(cre_spaces_)(*nc, get_complete_space(Spin::any));
-      ann_spaces_ = decltype(ann_spaces_)(*na, get_complete_space(Spin::any));
+      cre_spaces_ = decltype(cre_spaces_)(nc, get_complete_space(Spin::any));
+      ann_spaces_ = decltype(ann_spaces_)(na, get_complete_space(Spin::any));
       break;
   }
 }
@@ -928,7 +928,7 @@ ExprPtr R_(nann na, ncre nc, IndexSpace particle_space, IndexSpace hole_space) {
       [=](qnc_t& qns) {
         // ex -> creators in particle_space, annihilators in hole_space
         qns = combine(
-            generic_excitation_qns(/*particle_rank*/ *nc, /*hole_rank*/ *na,
+            generic_excitation_qns(/*particle_rank*/ nc, /*hole_rank*/ na,
                                    particle_space, hole_space),
             qns);
       });
@@ -943,27 +943,27 @@ ExprPtr L_(nann na, ncre nc, IndexSpace particle_space, IndexSpace hole_space) {
       [=](qnc_t& qns) {
         // deex -> creators in hole_space, annihilators in particle_space
         qns = combine(generic_deexcitation_qns(
-                          /*particle_rank*/ *na, /*hole_rank*/ *nc,
+                          /*particle_rank*/ na, /*hole_rank*/ nc,
                           particle_space, hole_space),
                       qns);
       });
 }
 
 ExprPtr R(nann na, ncre nc, IndexSpace particle_space, IndexSpace hole_space) {
-  assert(*na > 0 || *nc > 0);
+  assert(na > 0 || nc > 0);
   ExprPtr result;
 
-  for (std::int64_t ra = *na, rc = *nc; ra > 0 || rc > 0; --ra, --rc) {
+  for (std::int64_t ra = na, rc = nc; ra > 0 || rc > 0; --ra, --rc) {
     result += R_(nann(ra), ncre(rc), particle_space, hole_space);
   }
   return result;
 }
 
 ExprPtr L(nann na, ncre nc, IndexSpace particle_space, IndexSpace hole_space) {
-  assert(*na > 0 || *nc > 0);
+  assert(na > 0 || nc > 0);
   ExprPtr result;
 
-  for (std::int64_t ra = *na, rc = *nc; ra > 0 || rc > 0; --ra, --rc) {
+  for (std::int64_t ra = na, rc = nc; ra > 0 || rc > 0; --ra, --rc) {
     result += L_(nann(ra), ncre(rc), particle_space, hole_space);
   }
   return result;

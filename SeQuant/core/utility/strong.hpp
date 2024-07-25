@@ -9,7 +9,7 @@
 
 namespace sequant::detail {
 
-template <typename T, typename Derived>
+template <typename T, typename Tag>
 class strong_type_base {
  public:
   constexpr strong_type_base() noexcept(
@@ -29,27 +29,15 @@ class strong_type_base {
       std::is_nothrow_move_constructible<T>::value)
       : value_(std::move(value)) {}
 
-  explicit constexpr operator T&() & noexcept { return value_; }
-  explicit constexpr operator const T&() const& noexcept { return value_; }
-  explicit constexpr operator T&&() && noexcept { return std::move(value_); }
-  explicit constexpr operator const T&&() const&& noexcept {
-    return std::move(value_);
-  }
+  constexpr operator T&() & noexcept { return value_; }
+  constexpr operator const T&() const& noexcept { return value_; }
+  constexpr operator T&&() && noexcept { return std::move(value_); }
+  constexpr operator const T&&() const&& noexcept { return std::move(value_); }
 
   constexpr T& value() & noexcept { return value_; }
   constexpr const T& value() const& noexcept { return value_; }
   constexpr T&& value() && noexcept { return std::move(value_); }
   constexpr const T&& value() const&& noexcept { return std::move(value_); }
-
-  constexpr T& operator*() & noexcept { return value_; }
-  constexpr const T& operator*() const& noexcept { return value_; }
-  constexpr T&& operator*() && noexcept { return std::move(value_); }
-  constexpr const T&& operator*() const&& noexcept { return std::move(value_); }
-
-  constexpr T* operator->() & noexcept { return &value_; }
-  constexpr const T* operator->() const& noexcept { return &value_; }
-  constexpr T* operator->() && noexcept { return &value_; }
-  constexpr const T* operator->() const&& noexcept { return &value_; }
 
   template <typename T_ = T,
             typename = std::enable_if_t<meta::has_memfn_size_v<const T_>>>
@@ -83,6 +71,24 @@ class strong_type_base {
   friend void swap(strong_type_base& a, strong_type_base& b) noexcept {
     using std::swap;
     swap(static_cast<T&>(a), static_cast<T&>(b));
+  }
+
+  template <typename U, typename TagU,
+            typename = meta::are_less_than_comparable<T, U>>
+  friend std::common_type_t<T, U> const max(
+      const strong_type_base& a, const strong_type_base<U, TagU>& b) noexcept {
+    return static_cast<const T&>(a) < static_cast<const U&>(b)
+               ? static_cast<const U&>(b)
+               : static_cast<const T&>(a);
+  }
+
+  template <typename U, typename TagU,
+            typename = meta::are_less_than_comparable<T, U>>
+  friend std::common_type_t<T, U> const min(
+      const strong_type_base& a, const strong_type_base<U, TagU>& b) noexcept {
+    return static_cast<const T&>(a) < static_cast<const U&>(b)
+               ? static_cast<const T&>(a)
+               : static_cast<const U&>(b);
   }
 
  private:
