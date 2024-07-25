@@ -138,6 +138,30 @@ struct is_char<const T> : is_char<T> {};
 template <class T>
 static constexpr bool is_char_v = is_char<T>::value;
 
+///////// string literal to std::string, if possible
+template <typename T, typename Enabler = void>
+struct literal_to_string {
+  using type = T;
+};
+
+template <typename Char, std::size_t N>
+struct literal_to_string<Char[N], std::enable_if_t<is_char_v<Char>>> {
+  using type = std::basic_string<meta::remove_cvref_t<Char>>;
+};
+
+template <typename Char>
+struct literal_to_string<Char[], std::enable_if_t<is_char_v<Char>>> {
+  using type = std::basic_string<meta::remove_cvref_t<Char>>;
+};
+
+template <typename Char>
+struct literal_to_string<Char *, std::enable_if_t<is_char_v<Char>>> {
+  using type = std::basic_string<meta::remove_cvref_t<Char>>;
+};
+
+template <typename T>
+using literal_to_string_t = typename literal_to_string<T>::type;
+
 ///////// is_less_than_comparable /////////
 
 template <typename T, typename = std::void_t<>>
