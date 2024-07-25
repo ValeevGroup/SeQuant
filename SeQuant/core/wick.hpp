@@ -1015,7 +1015,7 @@ class WickTheorem {
     state.count_only = count_only;
     // TODO extract index->particle maps
 
-    if (Logger::instance()->wick_contract) {
+    if (Logger::instance().wick_contract) {
       std::wcout << "nop topological partitions: {\n";
       for (auto &&toppart : state.nop_partitions) {
         std::wcout << "{" << std::endl;
@@ -1314,7 +1314,7 @@ class WickTheorem {
               if (state.connect(nop_connections_,
                                 ranges::get_cursor(op_left_iter),
                                 ranges::get_cursor(op_right_iter))) {
-                if (Logger::instance()->wick_contract) {
+                if (Logger::instance().wick_contract) {
                   std::wcout << "level " << state.level << ":contracting "
                              << to_latex(*op_left_iter) << " with "
                              << to_latex(*op_right_iter)

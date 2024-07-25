@@ -37,15 +37,15 @@ inline ExprPtr canonicalize(ExprPtr&& expr_rv) {
 namespace detail {
 struct expand_visitor {
   void operator()(ExprPtr& expr) {
-    if (Logger::instance()->expand)
+    if (Logger::instance().expand)
       std::wcout << "expand_visitor received " << to_latex(expr) << std::endl;
     // apply expand() iteratively until done
     while (expand(expr)) {
-      if (Logger::instance()->expand)
+      if (Logger::instance().expand)
         std::wcout << "after 1 round of expansion have " << to_latex(expr)
                    << std::endl;
     }
-    if (Logger::instance()->expand)
+    if (Logger::instance().expand)
       std::wcout << "expansion result = " << to_latex(expr) << std::endl;
     // simplification and canonicalization are to be done by other visitors
   }
@@ -92,7 +92,7 @@ struct expand_visitor {
     std::shared_ptr<Sum>
         result;  // will keep the result if one or more summands is expanded
     const auto nsubexpr = size(expr);
-    if (Logger::instance()->expand)
+    if (Logger::instance().expand)
       std::wcout << "in expand_sum: expr = " << to_latex(expr) << std::endl;
     for (std::size_t i = 0; i != nsubexpr; ++i) {
       // if summand is a Product, expand it
@@ -106,7 +106,7 @@ struct expand_visitor {
         }
         // if expr != expanded result append current subexpr
         if (result) result->append(expr_ref[i]);
-        if (Logger::instance()->expand)
+        if (Logger::instance().expand)
           std::wcout << "in expand_sum: after expand_product("
                      << (this_term_expanded ? "true)" : "false)")
                      << " result = " << to_latex(result ? result : expr)
@@ -121,7 +121,7 @@ struct expand_visitor {
           for (std::size_t j = 0; j != i; ++j) result->append(expr_ref[j]);
         }
         if (result) result->append(expr_ref[i]);
-        if (Logger::instance()->expand)
+        if (Logger::instance().expand)
           std::wcout << "in expand_sum: after flattening Sum summand result = "
                      << to_latex(result ? result : expr) << std::endl;
       } else {  // nothing to expand? if expanded previously (i.e. result is
@@ -307,16 +307,16 @@ class expr_range : public ranges::view_facade<expr_range> {
 namespace detail {
 struct rapid_simplify_visitor {
   void operator()(ExprPtr& expr) {
-    if (Logger::instance()->simplify)
+    if (Logger::instance().simplify)
       std::wcout << "rapid_simplify_visitor received " << to_latex(expr)
                  << std::endl;
     // apply simplify() iteratively until done
     while (simplify(expr)) {
-      if (Logger::instance()->simplify)
+      if (Logger::instance().simplify)
         std::wcout << "after 1 round of simplification have " << to_latex(expr)
                    << std::endl;
     }
-    if (Logger::instance()->simplify)
+    if (Logger::instance().simplify)
       std::wcout << "simplification result = " << to_latex(expr) << std::endl;
   }
 
