@@ -101,7 +101,7 @@ class compute_cceqvec {
           using ranges::views::transform;
           auto bixs = ext_idxs | transform([](auto&& vec) { return vec[0]; });
           auto kixs = ext_idxs | transform([](auto&& vec) { return vec[1]; });
-          auto s_tensor = ex<Tensor>(Tensor{L"S", kixs, bixs});
+          auto s_tensor = ex<Tensor>(Tensor{L"S", bra(kixs), ket(bixs)});
           eqvec_sf_ref[R] = s_tensor * eqvec_sf_ref[R];
           expand(eqvec_sf_ref[R]);
         }
@@ -179,7 +179,7 @@ class compute_cceqvec {
           auto kixs = ext_idxs | ranges::views::transform(
                                      [](auto&& vec) { return vec[1]; });
           // N.B. external_indices(expr) confuses bra and ket
-          eqvec[R] = ex<Tensor>(Tensor{L"S", kixs, bixs}) * eqvec[R];
+          eqvec[R] = ex<Tensor>(Tensor{L"S", bra(kixs), ket(bixs)}) * eqvec[R];
           eqvec[R] = expand(eqvec[R]);
           simplify(eqvec[R]);
 

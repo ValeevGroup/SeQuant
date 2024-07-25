@@ -378,6 +378,46 @@ struct has_memfn_size<T,
 template <typename T>
 static constexpr bool has_memfn_size_v = has_memfn_size<T>::value;
 
+///////// has_memfn_empty /////////
+
+template <typename T, typename = std::void_t<>>
+struct has_memfn_empty : public std::false_type {};
+
+template <typename T>
+struct has_memfn_empty<T,
+                       std::void_t<decltype(std::declval<const T &>().empty())>>
+    : public std::true_type {};
+
+template <typename T>
+static constexpr bool has_memfn_empty_v = has_memfn_empty<T>::value;
+
+///////// has_memfn_at /////////
+
+template <typename T, typename = std::void_t<>>
+struct has_memfn_at : public std::false_type {};
+
+template <typename T>
+struct has_memfn_at<T, std::void_t<decltype(std::declval<T &>().at(
+                           std::declval<std::size_t>()))>>
+    : public std::true_type {};
+
+template <typename T>
+static constexpr bool has_memfn_at_v = has_memfn_at<T>::value;
+
+///////// has_operator_subscript /////////
+
+template <typename T, typename = std::void_t<>>
+struct has_operator_subscript : public std::false_type {};
+
+template <typename T>
+struct has_operator_subscript<
+    T, std::void_t<decltype(std::declval<T &>().operator[](
+           std::declval<std::size_t>()))>> : public std::true_type {};
+
+template <typename T>
+static constexpr bool has_operator_subscript_v =
+    has_operator_subscript<T>::value;
+
 /// is_same
 /// Checks whether \c T is a \c Base (is either the same class or a sub-class
 /// ignoring CV and reference qualifiers

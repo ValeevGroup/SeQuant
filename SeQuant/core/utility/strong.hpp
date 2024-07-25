@@ -102,6 +102,12 @@ class strong_type_base {
   }
 
   template <typename T_ = T,
+            typename = std::enable_if_t<meta::has_memfn_empty_v<const T_>>>
+  decltype(auto) empty() const {
+    return value_.empty();
+  }
+
+  template <typename T_ = T,
             typename = std::enable_if_t<meta::is_range_v<const T_>>>
   decltype(auto) begin() const {
     using ranges::begin;
@@ -123,6 +129,31 @@ class strong_type_base {
     using ranges::end;
     return end(value_);
   }
+
+  template <typename T_ = T, typename = std::enable_if_t<
+                                 meta::has_operator_subscript_v<const T_>>>
+  decltype(auto) operator[](std::size_t i) const {
+    return value_[i];
+  }
+
+  template <typename T_ = T,
+            typename = std::enable_if_t<meta::has_operator_subscript_v<T_>>>
+  decltype(auto) operator[](std::size_t i) {
+    return value_[i];
+  }
+
+  template <typename T_ = T,
+            typename = std::enable_if_t<meta::has_memfn_at_v<const T_>>>
+  decltype(auto) at(std::size_t i) const {
+    return value_.at(i);
+  }
+
+  template <typename T_ = T,
+            typename = std::enable_if_t<meta::has_memfn_at_v<T_>>>
+  decltype(auto) at(std::size_t i) {
+    return value_.at(i);
+  }
+
   /// @}
 
   friend void swap(strong_type_base& a, strong_type_base& b) noexcept {
@@ -180,5 +211,35 @@ class strong_type_base {
 };  // class strong_type_base
 
 }  // namespace sequant::detail
+
+#ifndef DEFINE_STRONG_TYPES_FOR_RANGE_AND_RANGESIZE
+#define DEFINE_STRONG_TYPES_FOR_RANGE_AND_RANGESIZE(ID)                        \
+  template <typename T>                                                        \
+  struct ID : detail::strong_type_base<T, ID<T>> {                             \
+    using detail::strong_type_base<T, ID<T>>::strong_type_base;                \
+  };                                                                           \
+                                                                               \
+  template <class T>                                                           \
+  ID(T&& t) -> ID<meta::remove_cvref_t<T>>;                                    \
+  template <class T = meta::castable_to_any>                                   \
+  ID(std::initializer_list<T> t) -> ID<                                        \
+      container::svector<meta::literal_to_string_t<meta::remove_cvref_t<T>>>>; \
+  template <                                                                   \
+      class T, typename... U,                                                  \
+      typename = std::enable_if_t<                                             \
+          sizeof...(U) != 0 &&                                                 \
+          (std::is_same_v<meta::remove_cvref_t<T>, meta::remove_cvref_t<U>> && \
+           ...)>>                                                              \
+  ID(T&& t, U&&... rest)                                                       \
+      -> ID<std::array<meta::literal_to_string_t<meta::remove_cvref_t<T>>,     \
+                       1 + sizeof...(U)>>;                                     \
+  template <class T = meta::castable_to_any>                                   \
+  ID() -> ID<std::array<T, 0>>;                                                \
+  struct SEQUANT_CONCAT(n, ID)                                                 \
+      : detail::strong_type_base<std::size_t, SEQUANT_CONCAT(n, ID)> {         \
+    using detail::strong_type_base<std::size_t,                                \
+                                   SEQUANT_CONCAT(n, ID)>::strong_type_base;   \
+  };
+#endif  // DEFINE_STRONG_TYPES_FOR_RANGE_AND_RANGESIZE
 
 #endif  // SEQUANT_CORE_UTILITY_STRONG_HPP

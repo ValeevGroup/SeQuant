@@ -636,7 +636,7 @@ TEST_CASE("WickTheorem", "[algorithms][wick]") {
       auto input =
           ex<FNOperator>(cre({L"i_1"}), ann(L"a_3", L"a_4")) *
           (ex<Constant>(rational{1, 4}) *
-           ex<Tensor>(L"g", WstrList{L"p_1", L"p_2"}, WstrList{L"p_3", L"p_4"},
+           ex<Tensor>(L"g", bra{L"p_1", L"p_2"}, ket{L"p_3", L"p_4"},
                       Symmetry::antisymm) *
            ex<FNOperator>(cre({L"p_1", L"p_2"}), ann({L"p_3", L"p_4"}))) *
           ex<FNOperator>(cre({L"a_2"}), ann({}));
@@ -845,12 +845,11 @@ TEST_CASE("WickTheorem", "[algorithms][wick]") {
       REQUIRE(wick_result->size() == 4);
 
       // multiply tensor factors and expand
-      auto wick_result_2 =
-          ex<Tensor>(L"g", WstrList{L"p_1", L"p_2"}, WstrList{L"p_3", L"p_4"},
-                     Symmetry::antisymm) *
-          ex<Tensor>(L"t", WstrList{L"a_4", L"a_5"}, WstrList{L"i_4", L"i_5"},
-                     Symmetry::antisymm) *
-          wick_result;
+      auto wick_result_2 = ex<Tensor>(L"g", bra{L"p_1", L"p_2"},
+                                      ket{L"p_3", L"p_4"}, Symmetry::antisymm) *
+                           ex<Tensor>(L"t", bra{L"a_4", L"a_5"},
+                                      ket{L"i_4", L"i_5"}, Symmetry::antisymm) *
+                           wick_result;
       expand(wick_result_2);
       REQUIRE(to_latex(wick_result_2) ==
               L"{ "
@@ -895,9 +894,9 @@ TEST_CASE("WickTheorem", "[algorithms][wick]") {
 
         // multiply tensor factors and expand
         auto wick_result_2 =
-            ex<Tensor>(L"g", WstrList{L"p_1", L"p_2"}, WstrList{L"p_3", L"p_4"},
+            ex<Tensor>(L"g", bra{L"p_1", L"p_2"}, ket{L"p_3", L"p_4"},
                        Symmetry::nonsymm) *
-            ex<Tensor>(L"t", WstrList{L"a_4", L"a_5"}, WstrList{L"i_4", L"i_5"},
+            ex<Tensor>(L"t", bra{L"a_4", L"a_5"}, ket{L"i_4", L"i_5"},
                        Symmetry::nonsymm) *
             wick_result;
         expand(wick_result_2);
@@ -949,12 +948,10 @@ TEST_CASE("WickTheorem", "[algorithms][wick]") {
 
           // multiply tensor factors and expand
           auto wick_result_2 =
-              ex<Tensor>(L"g", WstrList{L"p_1", L"p_2"},
-                         WstrList{L"p_3", L"p_4"}, Symmetry::antisymm) *
-              ex<Tensor>(L"t", WstrList{L"a_4"}, WstrList{L"i_4"},
+              ex<Tensor>(L"g", bra{L"p_1", L"p_2"}, ket{L"p_3", L"p_4"},
                          Symmetry::antisymm) *
-              ex<Tensor>(L"t", WstrList{L"a_5"}, WstrList{L"i_5"},
-                         Symmetry::antisymm) *
+              ex<Tensor>(L"t", bra{L"a_4"}, ket{L"i_4"}, Symmetry::antisymm) *
+              ex<Tensor>(L"t", bra{L"a_5"}, ket{L"i_5"}, Symmetry::antisymm) *
               wick_result;
           expand(wick_result_2);
           wick.reduce(wick_result_2);
@@ -995,16 +992,15 @@ TEST_CASE("WickTheorem", "[algorithms][wick]") {
 
       // multiply tensor factors and expand
       auto wick_result_2 =
-          ex<Tensor>(
-              L"A", IndexList{L"i_1", L"i_2"},
-              IndexList{{L"a_1", {L"i_1", L"i_2"}}, {L"a_2", {L"i_1", L"i_2"}}},
-              Symmetry::antisymm) *
-          ex<Tensor>(L"f", WstrList{L"p_1"}, WstrList{L"p_2"},
+          ex<Tensor>(L"A", bra{L"i_1", L"i_2"},
+                     ket{Index{L"a_1", {L"i_1", L"i_2"}},
+                         Index{L"a_2", {L"i_1", L"i_2"}}},
                      Symmetry::antisymm) *
-          ex<Tensor>(
-              L"t",
-              IndexList{{L"a_3", {L"i_3", L"i_4"}}, {L"a_4", {L"i_3", L"i_4"}}},
-              IndexList{L"i_3", L"i_4"}, Symmetry::antisymm) *
+          ex<Tensor>(L"f", bra{L"p_1"}, ket{L"p_2"}, Symmetry::antisymm) *
+          ex<Tensor>(L"t",
+                     bra{Index{L"a_3", {L"i_3", L"i_4"}},
+                         Index{L"a_4", {L"i_3", L"i_4"}}},
+                     ket{L"i_3", L"i_4"}, Symmetry::antisymm) *
           wick_result;
       expand(wick_result_2);
       wick.reduce(wick_result_2);
@@ -1074,20 +1070,20 @@ TEST_CASE("WickTheorem", "[algorithms][wick]") {
           // multiply tensor factors and expand
           auto wick_result_2 =
               ex<Constant>(rational{1, 256}) *
-              ex<Tensor>(L"A", IndexList{L"i_1", L"i_2"},
-                         IndexList{{L"a_1", {L"i_1", L"i_2"}},
-                                   {L"a_2", {L"i_1", L"i_2"}}},
+              ex<Tensor>(L"A", bra{L"i_1", L"i_2"},
+                         ket{Index{L"a_1", {L"i_1", L"i_2"}},
+                             Index{L"a_2", {L"i_1", L"i_2"}}},
                          Symmetry::antisymm) *
-              ex<Tensor>(L"g", WstrList{L"p_1", L"p_2"},
-                         WstrList{L"p_3", L"p_4"}, Symmetry::antisymm) *
+              ex<Tensor>(L"g", bra{L"p_1", L"p_2"}, ket{L"p_3", L"p_4"},
+                         Symmetry::antisymm) *
               ex<Tensor>(L"t",
-                         IndexList{{L"a_3", {L"i_3", L"i_4"}},
-                                   {L"a_4", {L"i_3", L"i_4"}}},
-                         IndexList{L"i_3", L"i_4"}, Symmetry::antisymm) *
+                         bra{Index{L"a_3", {L"i_3", L"i_4"}},
+                             Index{L"a_4", {L"i_3", L"i_4"}}},
+                         ket{L"i_3", L"i_4"}, Symmetry::antisymm) *
               ex<Tensor>(L"t",
-                         IndexList{{L"a_5", {L"i_5", L"i_6"}},
-                                   {L"a_6", {L"i_5", L"i_6"}}},
-                         IndexList{L"i_5", L"i_6"}, Symmetry::antisymm) *
+                         bra{Index{L"a_5", {L"i_5", L"i_6"}},
+                             Index{L"a_6", {L"i_5", L"i_6"}}},
+                         ket{L"i_5", L"i_6"}, Symmetry::antisymm) *
               wick_result;
           expand(wick_result_2);
           wick.reduce(wick_result_2);
@@ -1112,26 +1108,24 @@ TEST_CASE("WickTheorem", "[algorithms][wick]") {
     SEQUANT_PROFILE_SINGLE("wick(P3*H2*T2*T3)", {
       constexpr bool connected_only = true;
       constexpr bool topology = true;
-      auto P3 =
-          ex<Constant>(rational{1, 36}) *
-          ex<Tensor>(L"A", WstrList{L"i_1", L"i_2", L"i_3"},
-                     WstrList{L"a_1", L"a_2", L"a_3"}, Symmetry::antisymm) *
-          ex<FNOperator>(cre{L"i_1", L"i_2", L"i_3"},
-                         ann{L"a_1", L"a_2", L"a_3"});
+      auto P3 = ex<Constant>(rational{1, 36}) *
+                ex<Tensor>(L"A", bra{L"i_1", L"i_2", L"i_3"},
+                           ket{L"a_1", L"a_2", L"a_3"}, Symmetry::antisymm) *
+                ex<FNOperator>(cre{L"i_1", L"i_2", L"i_3"},
+                               ann{L"a_1", L"a_2", L"a_3"});
       auto H2 = ex<Constant>(rational{1, 4}) *
-                ex<Tensor>(L"g", WstrList{L"p_1", L"p_2"},
-                           WstrList{L"p_3", L"p_4"}, Symmetry::antisymm) *
+                ex<Tensor>(L"g", bra{L"p_1", L"p_2"}, ket{L"p_3", L"p_4"},
+                           Symmetry::antisymm) *
                 ex<FNOperator>(cre{L"p_1", L"p_2"}, ann{L"p_3", L"p_4"});
       auto T2 = ex<Constant>(rational{1, 4}) *
-                ex<Tensor>(L"t", WstrList{L"a_4", L"a_5"},
-                           WstrList{L"i_4", L"i_5"}, Symmetry::antisymm) *
+                ex<Tensor>(L"t", bra{L"a_4", L"a_5"}, ket{L"i_4", L"i_5"},
+                           Symmetry::antisymm) *
                 ex<FNOperator>(cre{L"a_4", L"a_5"}, ann{L"i_4", L"i_5"});
-      auto T3 =
-          ex<Constant>(rational{1, 36}) *
-          ex<Tensor>(L"t", WstrList{L"a_6", L"a_7", L"a_8"},
-                     WstrList{L"i_6", L"i_7", L"i_8"}, Symmetry::antisymm) *
-          ex<FNOperator>(cre{L"a_6", L"a_7", L"a_8"},
-                         ann{L"i_6", L"i_7", L"i_8"});
+      auto T3 = ex<Constant>(rational{1, 36}) *
+                ex<Tensor>(L"t", bra{L"a_6", L"a_7", L"a_8"},
+                           ket{L"i_6", L"i_7", L"i_8"}, Symmetry::antisymm) *
+                ex<FNOperator>(cre{L"a_6", L"a_7", L"a_8"},
+                               ann{L"i_6", L"i_7", L"i_8"});
       FWickTheorem wick{P3 * H2 * T2 * T3};
       wick.use_topology(topology);
       if (connected_only) wick.set_nop_connections({{1, 2}, {1, 3}});

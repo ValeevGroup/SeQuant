@@ -35,70 +35,10 @@
 
 namespace sequant {
 
-/// strong type wrapper for objects associated with creation operators
-template <typename T>
-struct cre : detail::strong_type_base<T, cre<T>> {
-  using detail::strong_type_base<T, cre<T>>::strong_type_base;
-};
-
-/// @name deduction guides for cre<T>
-/// @{
-template <class T>
-cre(T &&t) -> cre<meta::remove_cvref_t<T>>;
-/// std::initializer_list becomes container::svector
-/// @note empty initializer list is deduced as cre<detail::castable_to_any>
-template <class T = meta::castable_to_any>
-cre(std::initializer_list<T> t) -> cre<
-    container::svector<meta::literal_to_string_t<meta::remove_cvref_t<T>>>>;
-/// parameter pack becomes a std::array
-template <class T, typename... U,
-          typename = std::enable_if_t<
-              sizeof...(U) != 0 && (std::is_same_v<meta::remove_cvref_t<T>,
-                                                   meta::remove_cvref_t<U>> &&
-                                    ...)>>
-cre(T &&t, U &&...rest)
-    -> cre<std::array<meta::literal_to_string_t<meta::remove_cvref_t<T>>,
-                      1 + sizeof...(U)>>;
-/// without arguments make a cre<std::array<detail::castable_to_any,0>>
-template <class T = meta::castable_to_any>
-cre() -> cre<std::array<T, 0>>;
-/// @}
-
-/// strong type wrapper for objects associated with annihilation operators
-template <typename T>
-struct ann : detail::strong_type_base<T, ann<T>> {
-  using detail::strong_type_base<T, ann<T>>::strong_type_base;
-};
-
-/// @name deduction guides for ann<T>
-/// @{
-template <class T>
-ann(T &&t) -> ann<meta::remove_cvref_t<T>>;
-/// std::initializer_list becomes container::svector
-/// @note empty initializer list is deduced as cre<detail::castable_to_any>
-template <class T = meta::castable_to_any>
-ann(std::initializer_list<T> t) -> ann<
-    container::svector<meta::literal_to_string_t<meta::remove_cvref_t<T>>>>;
-/// parameter pack becomes a std::array
-template <class T, typename... U,
-          typename = std::enable_if_t<
-              sizeof...(U) != 0 && (std::is_same_v<meta::remove_cvref_t<T>,
-                                                   meta::remove_cvref_t<U>> &&
-                                    ...)>>
-ann(T &&t, U &&...rest)
-    -> ann<std::array<meta::literal_to_string_t<meta::remove_cvref_t<T>>,
-                      1 + sizeof...(U)>>;
-/// without arguments make a ann<std::array<detail::castable_to_any,0>>
-template <class T = meta::castable_to_any>
-ann() -> ann<std::array<T, 0>>;
-/// @}
-
-struct ncre : detail::strong_type_base<std::size_t, ncre> {
-  using detail::strong_type_base<std::size_t, ncre>::strong_type_base;
-};
-struct nann : detail::strong_type_base<std::size_t, nann> {
-  using detail::strong_type_base<std::size_t, nann>::strong_type_base;
-};
+// strong type wrapper for objects associated with creation operators
+DEFINE_STRONG_TYPES_FOR_RANGE_AND_RANGESIZE(cre);
+// strong type wrapper for objects associated with annihilation operators
+DEFINE_STRONG_TYPES_FOR_RANGE_AND_RANGESIZE(ann);
 
 /// @brief Op is a creator/annihilator operator
 ///

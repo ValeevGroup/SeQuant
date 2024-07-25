@@ -150,8 +150,6 @@ class AbstractTensor {
 /// @name customization points to support generic algorithms on AbstractTensor
 /// objects.
 /// @{
-inline auto bra(const AbstractTensor& t) { return t._bra(); }
-inline auto ket(const AbstractTensor& t) { return t._ket(); }
 inline auto braket(const AbstractTensor& t) { return t._braket(); }
 inline auto bra_rank(const AbstractTensor& t) { return t._bra_rank(); }
 inline auto ket_rank(const AbstractTensor& t) { return t._ket_rank(); }

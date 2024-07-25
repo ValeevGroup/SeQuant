@@ -487,7 +487,7 @@ ExprPtr OpMaker<S>::operator()(std::optional<UseDepIdx> dep,
       cre_spaces_, ann_spaces_,
       [this, opsymm_opt](const auto& creidxs, const auto& annidxs,
                          Symmetry opsymm) {
-        return ex<Tensor>(to_wstring(op_), creidxs, annidxs,
+        return ex<Tensor>(to_wstring(op_), bra(creidxs), ket(annidxs),
                           opsymm_opt ? *opsymm_opt : opsymm);
       },
       dep ? *dep : UseDepIdx::None);
@@ -548,10 +548,11 @@ ExprPtr F(bool use_tensor, IndexSpace reference_occupied) {
             if (opsymm == Symmetry::antisymm) {
               braidxs.push_back(m1);
               ketidxs.push_back(m2);
-              return ex<Tensor>(to_wstring(mbpt::OpType::g), braidxs, ketidxs,
-                                Symmetry::antisymm) *
-                     ex<Tensor>(to_wstring(mbpt::OpType::δ), IndexList{m2},
-                                IndexList{m1}, Symmetry::nonsymm);
+              return ex<Tensor>(to_wstring(mbpt::OpType::g),
+                                bra(std::move(braidxs)),
+                                ket(std::move(ketidxs)), Symmetry::antisymm) *
+                     ex<Tensor>(to_wstring(mbpt::OpType::δ), bra{m2}, ket{m1},
+                                Symmetry::nonsymm);
             } else {  // opsymm == Symmetry::nonsymm
               auto braidx_J = braidxs;
               braidx_J.push_back(m1);
@@ -562,12 +563,14 @@ ExprPtr F(bool use_tensor, IndexSpace reference_occupied) {
               auto ketidxs_K = ketidxs;
               using std::begin;
               ketidxs_K.emplace(begin(ketidxs_K), m2);
-              return (ex<Tensor>(to_wstring(mbpt::OpType::g), braidx_J,
-                                 ketidxs_J, Symmetry::nonsymm) -
-                      ex<Tensor>(to_wstring(mbpt::OpType::g), braidx_K,
-                                 ketidxs_K, Symmetry::nonsymm)) *
-                     ex<Tensor>(to_wstring(mbpt::OpType::δ), IndexList{m2},
-                                IndexList{m1}, Symmetry::nonsymm);
+              return (ex<Tensor>(to_wstring(mbpt::OpType::g),
+                                 bra(std::move(braidx_J)),
+                                 ket(std::move(ketidxs_J)), Symmetry::nonsymm) -
+                      ex<Tensor>(
+                          to_wstring(mbpt::OpType::g), bra(std::move(braidx_K)),
+                          ket(std::move(ketidxs_K)), Symmetry::nonsymm)) *
+                     ex<Tensor>(to_wstring(mbpt::OpType::δ), bra{m2}, ket{m1},
+                                Symmetry::nonsymm);
             }
           });
     };
@@ -1086,7 +1089,7 @@ ExprPtr vac_av(ExprPtr expr, std::vector<std::pair<int, int>> nop_connections,
                ketidxs.size());  // need to handle particle # violating case?
         const auto rank = braidxs.size();
         return ex<Tensor>(
-            rdm_label, braidxs, ketidxs,
+            rdm_label, bra(std::move(braidxs)), ket(std::move(ketidxs)),
             rank > 1 && spinorbital ? Symmetry::antisymm : Symmetry::nonsymm);
       };
 

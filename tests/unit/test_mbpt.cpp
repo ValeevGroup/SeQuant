@@ -36,7 +36,7 @@ TEST_CASE("NBodyOp", "[mbpt]") {
 
       op_t f1([]() -> std::wstring_view { return L"f"; },
               []() -> ExprPtr {
-                return ex<Tensor>(L"f", WstrList{L"p_1"}, WstrList{L"p_2"}) *
+                return ex<Tensor>(L"f", bra{L"p_1"}, ket{L"p_2"}) *
                        ex<FNOperator>(cre({L"p_1"}), ann({L"p_2"}));
               },
               [](qns_t& qns) { qns += general_type_qns(1); });
@@ -63,14 +63,14 @@ TEST_CASE("NBodyOp", "[mbpt]") {
       // this is fock operator in terms of general spaces
       op_t f_gg([]() -> std::wstring_view { return L"f"; },
                 []() -> ExprPtr {
-                  return ex<Tensor>(L"f", WstrList{L"p_1"}, WstrList{L"p_2"}) *
+                  return ex<Tensor>(L"f", bra{L"p_1"}, ket{L"p_2"}) *
                          ex<FNOperator>(cre({L"p_1"}), ann({L"p_2"}));
                 },
                 [](qns_t& qns) { qns += mbpt::general_type_qns(1); });
       // excitation part of the Fock operator
       op_t f_uo([]() -> std::wstring_view { return L"f"; },
                 []() -> ExprPtr {
-                  return ex<Tensor>(L"f", WstrList{L"a_2"}, WstrList{L"i_2"}) *
+                  return ex<Tensor>(L"f", bra{L"a_2"}, ket{L"i_2"}) *
                          ex<FNOperator>(cre({L"a_1"}), ann({L"i_2"}));
                 },
                 [](qns_t& qns) { qns += mbpt::excitation_type_qns(1); });

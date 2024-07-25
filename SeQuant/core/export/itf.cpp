@@ -44,7 +44,8 @@ Tensor generateResultTensor(ExprPtr expr) {
   // to the result of the expression
   IndexGroups externals = get_unique_indices(expr);
 
-  return Tensor(L"Result", std::move(externals.bra), std::move(externals.ket));
+  return Tensor(L"Result", bra(std::move(externals.bra)),
+                ket(std::move(externals.ket)));
 }
 
 Result::Result(ExprPtr expression, bool importResultTensor)
@@ -145,7 +146,8 @@ std::vector<Contraction> to_contractions(const Product &product,
       // There is no notion of bra and ket for intermediates, so we dump all
       // indices in the bra for now
       Tensor intermediate(intermediateName.data(),
-                          std::move(intermediateIndices), std::vector<Index>{});
+                          bra(std::move(intermediateIndices)),
+                          ket(std::vector<Index>{}));
 
       std::vector<Contraction> intermediateContractions =
           to_contractions(factor, intermediate);
@@ -266,12 +268,13 @@ void one_electron_integral_remapper(
     std::swap(braIndices[0], ketIndices[0]);
   }
 
-  expr =
-      ex<Tensor>(tensor.label(), std::move(braIndices), std::move(ketIndices));
+  expr = ex<Tensor>(tensor.label(), bra(std::move(braIndices)),
+                    ket(std::move(ketIndices)));
 }
 
-template <typename Container>
-bool isExceptionalJ(const Container &braIndices, const Container &ketIndices) {
+template <typename BraContainer, typename KetContainer>
+bool isExceptionalJ(const BraContainer &braIndices,
+                    const KetContainer &ketIndices) {
   assert(braIndices.size() == 2);
   assert(ketIndices.size() == 2);
   // integrals with 3 external (virtual) indices ought to be converted to
@@ -400,8 +403,8 @@ void two_electron_integral_remapper(
     }
   }
 
-  expr = ex<Tensor>(std::move(tensorLabel), std::move(braIndices),
-                    std::move(ketIndices));
+  expr = ex<Tensor>(std::move(tensorLabel), bra(std::move(braIndices)),
+                    ket(std::move(ketIndices)));
 }
 
 void integral_remapper(ExprPtr &expr, std::wstring_view oneElectronIntegralName,
