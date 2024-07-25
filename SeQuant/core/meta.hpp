@@ -391,6 +391,27 @@ template <typename From, typename To>
 constexpr bool is_statically_castable_v =
     is_statically_castable<From, To>::value;
 
+/// is_std_array
+template <typename T>
+struct is_std_array : std::false_type {};
+
+template <typename T, std::size_t N>
+struct is_std_array<std::array<T, N>> : std::true_type {};
+
+template <typename T>
+constexpr bool is_std_array_v = is_std_array<T>::value;
+
+/// std_array_size
+template <typename T>
+struct std_array_size : std::integral_constant<std::size_t, 0> {};
+
+template <typename T, std::size_t N>
+struct std_array_size<std::array<T, N>>
+    : std::integral_constant<std::size_t, N> {};
+
+template <typename T>
+constexpr inline std::size_t std_array_size_v = std_array_size<T>::value;
+
 }  // namespace meta
 }  // namespace sequant
 
