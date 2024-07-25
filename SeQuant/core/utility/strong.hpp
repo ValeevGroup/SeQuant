@@ -154,6 +154,12 @@ class strong_type_base {
     return value_.at(i);
   }
 
+  template <typename T_ = T, typename U,
+            typename = std::enable_if_t<meta::has_memfn_push_back_v<T_, U&&>>>
+  decltype(auto) push_back(U&& u) const {
+    return value_.push_back(std::forward<U>(u));
+  }
+
   /// @}
 
   friend void swap(strong_type_base& a, strong_type_base& b) noexcept {

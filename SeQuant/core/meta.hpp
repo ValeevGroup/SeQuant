@@ -404,6 +404,21 @@ struct has_memfn_at<T, std::void_t<decltype(std::declval<T &>().at(
 template <typename T>
 static constexpr bool has_memfn_at_v = has_memfn_at<T>::value;
 
+///////// has_memfn_push_back<T,U> is true if T::push_back(U) is defined
+////////////
+
+template <typename T, typename U, typename = std::void_t<>>
+struct has_memfn_push_back : public std::false_type {};
+
+template <typename T, typename U>
+struct has_memfn_push_back<
+    T, U,
+    std::void_t<decltype(std::declval<T &>().push_back(std::declval<U>()))>>
+    : public std::true_type {};
+
+template <typename T, typename U>
+static constexpr bool has_memfn_push_back_v = has_memfn_push_back<T, U>::value;
+
 ///////// has_operator_subscript /////////
 
 template <typename T, typename = std::void_t<>>
