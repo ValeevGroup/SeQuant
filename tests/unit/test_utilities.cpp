@@ -6,6 +6,7 @@
 #include <SeQuant/core/parse.hpp>
 #include <SeQuant/core/tensor.hpp>
 #include <SeQuant/core/utility/indices.hpp>
+#include <SeQuant/core/utility/strong.hpp>
 
 #include <codecvt>
 #include <iostream>
@@ -178,4 +179,43 @@ TEST_CASE("Singleton", "[utilities]") {
     }
     CHECK(Singleton<S<DisableDefaultCtor>>::instance().s() == 1);
   }
+}
+
+TEST_CASE("StrongType", "[utilities]") {
+  using namespace sequant::detail;
+
+  struct A : strong_type_base<int, A> {
+    using strong_type_base::strong_type_base;
+  };
+
+  struct B : strong_type_base<int, B> {
+    using strong_type_base::strong_type_base;
+  };
+
+  struct C : strong_type_base<double, C> {
+    using strong_type_base::strong_type_base;
+  };
+
+  A a{1};
+  B b{2};
+  C c0, c1;
+
+  CHECK(a.value() == 1);
+  CHECK(int(a) == 1);
+  CHECK(b.value() == 2);
+  CHECK(c0.value() == double(c1));
+  CHECK(double(c0) == std::move(c1).value());
+
+  struct nondefault_constructible_int {
+    nondefault_constructible_int() = delete;
+    nondefault_constructible_int(int i) : value(i) {}
+    int value;
+  };
+
+  struct D : strong_type_base<nondefault_constructible_int, C> {
+    using strong_type_base::strong_type_base;
+  };
+
+  // "D d;" does not compile, but this does
+  D d(1);
 }
