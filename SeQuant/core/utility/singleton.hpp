@@ -30,9 +30,9 @@ namespace sequant {
 /// // optional: create the instance of A
 /// A::set_instance(Args...);  // this call-once method creates the instance of A; if A is default-constructible, can skip this as the instance will be created by first call to instance()
 /// // access the instance of A
-/// std::shared_ptr<A> the_instance_ptr = A::instance();      // throws if A is not default-constructible or A::set_instance() had not been called to create the instance
+/// A& the_instance = A::instance();      // throws if A is not default-constructible or A::set_instance() had not been called to create the instance
 /// // ... or ...
-/// std::shared_ptr<A> the_instance_ptr = A::instance_ptr();  // alternative to A::instance(), instead of throwing, returns nullptr
+/// A* the_instance_ptr = A::instance_ptr();  // alternative to A::instance(), instead of throwing, returns nullptr
 /// // the instance of A will be destroyed with other static-linkage objects
 /// \endcode
 /// Singleton is thread-safe, in that multiple threads can call `A::instance()`, even if `A::set_instance()` has not been called yet.
@@ -50,13 +50,13 @@ class Singleton {
       is_default_constructible_helper<Derived>::value;
 
  public:
-  /// @return shared_ptr to the instance
+  /// @return reference to the instance
   /// @throw std::logic_error if the instance has not been constructed (because
   /// Derived is not default-constructible and set_instance() had not been
   /// called)
-  static std::shared_ptr<Derived> instance() {
-    const auto result_ptr = instance_accessor();
-    if (result_ptr != nullptr) return result_ptr;
+  static Derived& instance() {
+    const auto& result_ptr = instance_accessor();
+    if (result_ptr != nullptr) return *result_ptr;
     if constexpr (derived_is_default_constructible) {
       return set_default_instance();
     } else
@@ -65,13 +65,13 @@ class Singleton {
           "has not been called");
   }
 
-  /// same as instance(), but, instead of throwing, returns nullptr if
+  /// same as instance(), but returns pointer to the instance, or nullptr if
   /// the instance has not been constructed
   /// @return pointer to the instance, or nullptr if it has not yet been
   /// constructed
-  static std::shared_ptr<Derived> instance_ptr() {
-    const auto result_ptr = instance_accessor();
-    if (result_ptr != nullptr) return result_ptr;
+  static Derived* instance_ptr() {
+    const auto& result_ptr = instance_accessor();
+    if (result_ptr != nullptr) return result_ptr.get();
     if constexpr (derived_is_default_constructible) {
       return set_default_instance();
     } else
@@ -82,10 +82,10 @@ class Singleton {
   /// default-constructible.
   /// @tparam Args a parameter pack type
   /// @param args a parameter pack
-  /// @return shared_ptr to the newly-created instance
+  /// @return reference to the newly-created instance
   /// @throw std::logic_error if the instance has already been constructed
   template <typename... Args>
-  static std::shared_ptr<Derived> set_instance(Args&&... args) {
+  static Derived& set_instance(Args&&... args) {
     //    WARNING: can't check constructibility since the ctor may be private
     //    static_assert(std::is_constructible_v<Derived, Args...>,
     //                  "sequant::Singleton::set_instance: Derived is not
@@ -96,8 +96,8 @@ class Singleton {
           "sequant::Singleton::set_instance: instance has already been "
           "constructed");
     instance_accessor() = std::move(
-        std::shared_ptr<Derived>(new Derived(std::forward<Args>(args)...)));
-    return instance_accessor();
+        std::unique_ptr<Derived>(new Derived(std::forward<Args>(args)...)));
+    return *instance_accessor();
   }
 
  protected:
@@ -105,7 +105,7 @@ class Singleton {
   Singleton(Args&&... args) {}  // all constructors are private
 
   static auto& instance_accessor() {
-    static std::shared_ptr<Derived> instance(nullptr);
+    static std::unique_ptr<Derived> instance;
     return instance;
   }
   // provides mutex that controls access to instance_accessor()'s object
@@ -117,12 +117,12 @@ class Singleton {
  private:
   /// Constructs a default-constructed instance. If called from multiple threads
   /// only the first call will construct the instance.
-  static std::shared_ptr<Derived> set_default_instance() {
+  static Derived& set_default_instance() {
     std::scoped_lock lock(instance_mutex());
     if (!instance_accessor()) {
-      instance_accessor() = std::move(std::shared_ptr<Derived>(new Derived));
+      instance_accessor() = std::move(std::unique_ptr<Derived>(new Derived));
     }
-    return instance_accessor();
+    return *instance_accessor();
   }
 };
 

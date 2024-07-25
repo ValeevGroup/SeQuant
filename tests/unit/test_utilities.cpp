@@ -148,12 +148,12 @@ TEST_CASE("Singleton", "[utilities]") {
     std::vector<std::thread> threads;
     for (int c = 0; c != 5; ++c)
       threads.emplace_back([]() {
-        CHECK(Singleton<S<EnableDefaultCtor>>::instance()->s() == 0);
+        CHECK(Singleton<S<EnableDefaultCtor>>::instance().s() == 0);
       });
     for (auto&& thr : threads) thr.join();
     CHECK_THROWS_AS(Singleton<S<EnableDefaultCtor>>::set_instance(1),
                     std::logic_error);
-    CHECK(Singleton<S<EnableDefaultCtor>>::instance()->s() == 0);
+    CHECK(Singleton<S<EnableDefaultCtor>>::instance().s() == 0);
   }
   // non-default-constructible Singleton
   {
@@ -161,9 +161,10 @@ TEST_CASE("Singleton", "[utilities]") {
       std::vector<std::thread> threads;
       for (int c = 0; c != 5; ++c)
         threads.emplace_back([]() {
-          CHECK_THROWS_AS(Singleton<S<DisableDefaultCtor>>::instance()->s(),
+          CHECK_THROWS_AS(Singleton<S<DisableDefaultCtor>>::instance().s(),
                           std::logic_error);
         });
+      CHECK(Singleton<S<DisableDefaultCtor>>::instance_ptr() == nullptr);
       for (auto&& thr : threads) thr.join();
     }
     CHECK_NOTHROW(Singleton<S<DisableDefaultCtor>>::set_instance(1));
@@ -171,10 +172,10 @@ TEST_CASE("Singleton", "[utilities]") {
       std::vector<std::thread> threads;
       for (int c = 0; c != 5; ++c)
         threads.emplace_back([]() {
-          CHECK(Singleton<S<DisableDefaultCtor>>::instance()->s() == 1);
+          CHECK(Singleton<S<DisableDefaultCtor>>::instance().s() == 1);
         });
       for (auto&& thr : threads) thr.join();
     }
-    CHECK(Singleton<S<DisableDefaultCtor>>::instance()->s() == 1);
+    CHECK(Singleton<S<DisableDefaultCtor>>::instance().s() == 1);
   }
 }
