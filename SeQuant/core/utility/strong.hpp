@@ -50,13 +50,31 @@ class strong_type_base {
   /// \name constructors that take the value of underlying type
   /// @{
 
-  /// \param value the value to initialize the strong type with
+  /// \param value the value to this will hold
   explicit constexpr strong_type_base(const T& value) : value_(value) {}
 
-  /// \param value the value to initialize the strong type with
+  /// \param value the value to this will hold
   explicit constexpr strong_type_base(T&& value) noexcept(
       std::is_nothrow_move_constructible<T>::value)
       : value_(std::move(value)) {}
+
+  /// if \p T is a range, this will initialize the contained value using the
+  /// provided initializer_list \param elements the elements to initialize the
+  /// value with
+  template <typename U, typename T_ = T,
+            typename = std::enable_if_t<meta::is_range_v<T_>>>
+  explicit constexpr strong_type_base(std::initializer_list<U> elements)
+      : value_{elements.begin(), elements.end()} {}
+
+  /// if \p T is a std::array, this will initialize the contained value using
+  /// the provided parameter pack \param elements the elements to initialize the
+  /// value with
+  template <typename... Elements,
+            typename = std::enable_if_t<meta::is_std_array_v<T> &&
+                                        meta::std_array_size_v<T> ==
+                                            sizeof...(Elements)>>
+  explicit constexpr strong_type_base(Elements&&... elements)
+      : value_{std::forward<Elements>(elements)...} {}
   /// @}
 
   /// \name implicit conversion operators provide direct access the value

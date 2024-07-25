@@ -58,8 +58,8 @@ TEST_CASE("TensorNetwork", "[elements]") {
 
     {  // with NormalOperators
       constexpr const auto V = Vacuum::SingleProduct;
-      auto t1 = ex<FNOperator>(WstrList{L"i_1"}, WstrList{L"i_2"}, V);
-      auto t2 = ex<FNOperator>(WstrList{L"i_2"}, WstrList{L"i_1"}, V);
+      auto t1 = ex<FNOperator>(cre({L"i_1"}), ann({L"i_2"}), V);
+      auto t2 = ex<FNOperator>(cre({L"i_2"}), ann({L"i_1"}), V);
       auto t1_x_t2 = t1 * t2;
       REQUIRE_NOTHROW(TensorNetwork(*t1_x_t2));
     }
@@ -75,7 +75,7 @@ TEST_CASE("TensorNetwork", "[elements]") {
     {
       constexpr const auto V = Vacuum::SingleProduct;
       auto t1 = ex<Tensor>(L"F", WstrList{L"i_1"}, WstrList{L"i_2"});
-      auto t2 = ex<FNOperator>(WstrList{L"i_1"}, WstrList{L"i_3"}, V);
+      auto t2 = ex<FNOperator>(cre({L"i_1"}), ann({L"i_3"}), V);
       auto t1_x_t2 = t1 * t2;
       REQUIRE_NOTHROW(TensorNetwork(*t1_x_t2));
       TensorNetwork tn(*t1_x_t2);
@@ -109,7 +109,7 @@ TEST_CASE("TensorNetwork", "[elements]") {
         Index::reset_tmp_index();
         constexpr const auto V = Vacuum::SingleProduct;
         auto t1 = ex<Tensor>(L"F", WstrList{L"i_1"}, WstrList{L"i_2"});
-        auto t2 = ex<FNOperator>(WstrList{L"i_1"}, WstrList{L"i_2"}, V);
+        auto t2 = ex<FNOperator>(cre({L"i_1"}), ann({L"i_2"}), V);
         auto t1_x_t2 = t1 * t2;
         TensorNetwork tn(*t1_x_t2);
         tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(), false);
@@ -133,7 +133,7 @@ TEST_CASE("TensorNetwork", "[elements]") {
         Index::reset_tmp_index();
         constexpr const auto V = Vacuum::SingleProduct;
         auto t1 = ex<Tensor>(L"F", WstrList{L"i_2"}, WstrList{L"i_17"});
-        auto t2 = ex<FNOperator>(WstrList{L"i_2"}, WstrList{L"i_3"}, V);
+        auto t2 = ex<FNOperator>(cre({L"i_2"}), ann({L"i_3"}), V);
         auto t1_x_t2 = t1 * t2;
 
         // with all external named indices

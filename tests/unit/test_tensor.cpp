@@ -122,7 +122,7 @@ TEST_CASE("Tensor", "[elements]") {
     REQUIRE(to_latex(t1) == L"{F^{{i_2}}_{{i_1}}}");
 
     auto h1 = ex<Tensor>(L"F", WstrList{L"i_1"}, WstrList{L"i_2"}) *
-              ex<FNOperator>(WstrList{L"i_1"}, WstrList{L"i_2"});
+              ex<FNOperator>(cre({L"i_1"}), ann({L"i_2"}));
     REQUIRE(to_latex(h1) ==
             L"{{F^{{i_2}}_{{i_1}}}{\\tilde{a}^{{i_1}}_{{i_2}}}}");
 
@@ -141,7 +141,7 @@ TEST_CASE("Tensor", "[elements]") {
     REQUIRE(to_latex(t1) == L"{t^{{i_1}}_{{a_1}}}");
 
     auto h1 = ex<Tensor>(L"F", WstrList{L"i_1"}, WstrList{L"i_2"}) *
-              ex<FNOperator>(WstrList{L"i_1"}, WstrList{L"i_2"});
+              ex<FNOperator>(cre({L"i_1"}), ann({L"i_2"}));
     h1 = adjoint(h1);
     REQUIRE(to_latex(h1) ==
             L"{{\\tilde{a}^{{i_2}}_{{i_1}}}{F^{{i_1}}_{{i_2}}}}");

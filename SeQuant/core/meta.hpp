@@ -25,6 +25,16 @@ struct type_printer;
 template <typename T>
 struct always_false : std::false_type {};
 
+///////// castable_to_any is used for deducing type of empty sequences or
+/// parameter packs
+struct castable_to_any {
+  template <typename T,
+            typename = std::enable_if_t<std::is_default_constructible_v<T>>>
+  operator T() const {
+    return T{};
+  }
+};
+
 ///////// remove_cvref ///////////
 
 #if __cplusplus < 202002L

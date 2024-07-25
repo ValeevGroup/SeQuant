@@ -23,11 +23,15 @@ int main() {
              .compute()
              ->size() == 7);
 
-  auto nop1 = ex<FNOperator>(cre({p1, p2}), ann({p3, p4}));
-  // auto nop1 = ex<FNOperator>(cre(std::vector{p1, p2}), ann(std::array{L"p3",
-  // L"p4"})); auto nop1 = ex<FNOperator>(cre(std::set{"p1", "p2"}),
-  // ann(std::vector{L"p3", L"p4"})); auto nop1 = ex<FNOperator>(WstrList{L"p1",
-  // L"p2"}, WstrList{L"p3", L"p4"});
+  auto nop1 = ex<FNOperator>(cre(p1, p2), ann(p3, p4));
+  // OR
+  // auto nop1 = ex<FNOperator>(cre({p1, p2}), ann({p3, p4}));
+  // OR
+  // auto nop1 = ex<FNOperator>(cre(std::vector{p1, p2}),
+  //                            ann(std::array{L"p3", L"p4"}));
+  // OR
+  // auto nop1 = ex<FNOperator>(cre(std::set{"p1", "p2"}),
+  //                            ann(std::vector{L"p3", L"p4"}));
   auto nop2 = ex<FNOperator>(cre({L"p_5"}), ann({L"p_6", L"p_7"}));
 
   std::wcout

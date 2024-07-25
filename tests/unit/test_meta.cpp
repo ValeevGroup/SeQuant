@@ -4,6 +4,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <SeQuant/core/index.hpp>
 #include <SeQuant/core/meta.hpp>
 
 #define STATIC_ASSERT_AND_CHECK(X) \
@@ -11,7 +12,15 @@
   CHECK(X);
 
 TEST_CASE("meta", "[meta]") {
+  using namespace sequant;
   using namespace sequant::meta;
+
+  SECTION("castable_to_any") {
+    STATIC_ASSERT_AND_CHECK((is_statically_castable_v<castable_to_any, Index>));
+    STATIC_ASSERT_AND_CHECK(
+        (is_statically_castable_v<range_value_t<std::array<castable_to_any, 0>>,
+                                  Index>));
+  }
 
   SECTION("std_array_size") {
     STATIC_ASSERT_AND_CHECK((std_array_size_v<std::array<int, 3>> == 3));

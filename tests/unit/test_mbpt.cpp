@@ -37,7 +37,7 @@ TEST_CASE("NBodyOp", "[mbpt]") {
       op_t f1([]() -> std::wstring_view { return L"f"; },
               []() -> ExprPtr {
                 return ex<Tensor>(L"f", WstrList{L"p_1"}, WstrList{L"p_2"}) *
-                       ex<FNOperator>(WstrList{L"p_1"}, WstrList{L"p_2"});
+                       ex<FNOperator>(cre({L"p_1"}), ann({L"p_2"}));
               },
               [](qns_t& qns) { qns += general_type_qns(1); });
 
@@ -64,14 +64,14 @@ TEST_CASE("NBodyOp", "[mbpt]") {
       op_t f_gg([]() -> std::wstring_view { return L"f"; },
                 []() -> ExprPtr {
                   return ex<Tensor>(L"f", WstrList{L"p_1"}, WstrList{L"p_2"}) *
-                         ex<FNOperator>(WstrList{L"p_1"}, WstrList{L"p_2"});
+                         ex<FNOperator>(cre({L"p_1"}), ann({L"p_2"}));
                 },
                 [](qns_t& qns) { qns += mbpt::general_type_qns(1); });
       // excitation part of the Fock operator
       op_t f_uo([]() -> std::wstring_view { return L"f"; },
                 []() -> ExprPtr {
                   return ex<Tensor>(L"f", WstrList{L"a_2"}, WstrList{L"i_2"}) *
-                         ex<FNOperator>(WstrList{L"a_1"}, WstrList{L"i_2"});
+                         ex<FNOperator>(cre({L"a_1"}), ann({L"i_2"}));
                 },
                 [](qns_t& qns) { qns += mbpt::excitation_type_qns(1); });
 
