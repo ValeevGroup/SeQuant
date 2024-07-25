@@ -2,15 +2,15 @@
 // Created by Robert Adam on 2023-09-20
 //
 
-#include <SeQuant/core/parse.hpp>
-#include <SeQuant/core/parse/ast.hpp>
-#include <SeQuant/core/parse/ast_conversions.hpp>
-#include <SeQuant/core/parse/semantic_actions.hpp>
-
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
+#include <SeQuant/core/parse.hpp>
+#include <SeQuant/core/parse/ast.hpp>
+#include <SeQuant/core/parse/ast_conversions.hpp>
+#include <SeQuant/core/parse/semantic_actions.hpp>
+#include <SeQuant/core/result_expr.hpp>
 #include <SeQuant/core/space.hpp>
 #include <SeQuant/core/tensor.hpp>
 
@@ -22,11 +22,18 @@
 
 #include <algorithm>
 #include <cassert>
+#include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <iostream>
+#include <iterator>
 #include <memory>
+#include <stdexcept>
+#include <string>
+#include <string_view>
 #include <type_traits>
+#include <utility>
+#include <vector>
 
 namespace sequant {
 
@@ -44,6 +51,7 @@ struct TensorRule;
 struct ProductRule;
 struct SumRule;
 struct ExprRule;
+struct ResultExprRule;
 struct IndexLabelRule;
 struct IndexRule;
 struct IndexGroupRule;
@@ -57,6 +65,7 @@ x3::rule<TensorRule, ast::Tensor> tensor{"Tensor"};
 x3::rule<ProductRule, ast::Product> product{"Product"};
 x3::rule<SumRule, ast::Sum> sum{"Sum"};
 x3::rule<ExprRule, ast::Sum> expr{"Expression"};
+x3::rule<ResultExprRule, ast::ResultExpr> resultExpr{"ResultExpr"};
 
 // Auxiliaries
 x3::rule<struct NameRule, std::wstring> name{"Name"};
@@ -121,10 +130,12 @@ auto addend           = (('+' >> x3::attr(1) | '-' >> x3::attr(-1)) > product)[a
 auto sum_def          = first_addend >> *addend;
 
 auto expr_def         = -sum > x3::eoi;
+
+auto resultExpr_def       = (tensor | variable) > (L'=' | x3::lit(L"->")) >> expr;
 // clang-format on
 
 BOOST_SPIRIT_DEFINE(name, number, variable, index_label, index, index_groups,
-                    tensor, product, sum, expr);
+                    tensor, product, sum, expr, resultExpr);
 
 struct position_cache_tag;
 struct error_handler_tag;
@@ -159,6 +170,7 @@ struct TensorRule : helpers::annotate_position, helpers::error_handler {};
 struct ProductRule : helpers::annotate_position, helpers::error_handler {};
 struct SumRule : helpers::annotate_position, helpers::error_handler {};
 struct ExprRule : helpers::annotate_position, helpers::error_handler {};
+struct ResultRule : helpers::annotate_position, helpers::error_handler {};
 struct IndexLabelRule : helpers::annotate_position, helpers::error_handler {};
 struct IndexRule : helpers::annotate_position, helpers::error_handler {};
 struct IndexGroupRule : helpers::annotate_position, helpers::error_handler {};
@@ -179,23 +191,23 @@ struct ErrorHandler {
   }
 };
 
-ExprPtr parse_expr(std::wstring_view input, Symmetry default_symmetry) {
+template <typename AST, typename StartRule, typename PositionCache>
+AST do_parse(const StartRule &start, std::wstring_view input,
+             PositionCache &positions) {
   using iterator_type = decltype(input)::iterator;
-  x3::position_cache<std::vector<iterator_type>> positions(input.begin(),
-                                                           input.end());
 
   ErrorHandler<iterator_type> error_handler(input.begin());
 
-  parse::ast::Sum ast;
+  AST ast;
 
   const auto parser = x3::with<parse::error_handler_tag>(
       std::ref(error_handler))[x3::with<parse::position_cache_tag>(
-      std::ref(positions))[parse::expr]];
+      std::ref(positions))[start]];
 
-  auto start = input.begin();
+  auto begin = input.begin();
   try {
     bool success =
-        x3::phrase_parse(start, input.end(), parser, x3::unicode::space, ast);
+        x3::phrase_parse(begin, input.end(), parser, x3::unicode::space, ast);
 
     if (!success) {
       // Normally, this shouldn't happen as any error should itself throw a
@@ -203,10 +215,10 @@ ExprPtr parse_expr(std::wstring_view input, Symmetry default_symmetry) {
       throw ParseError(0, input.size(),
                        "Parsing was unsuccessful for an unknown reason");
     }
-    if (start != input.end()) {
+    if (begin != input.end()) {
       // This should also not happen as the parser requires matching EOI
-      throw ParseError(std::distance(input.begin(), start),
-                       std::distance(start, input.end()),
+      throw ParseError(std::distance(input.begin(), begin),
+                       std::distance(begin, input.end()),
                        "Couldn't parse the entire input");
     }
   } catch (const boost::spirit::x3::expectation_failure<iterator_type> &e) {
@@ -215,6 +227,27 @@ ExprPtr parse_expr(std::wstring_view input, Symmetry default_symmetry) {
                << std::endl;
     throw;
   }
+
+  return ast;
+}
+
+ResultExpr parse_result_expr(std::wstring_view input,
+                             Symmetry default_symmetry) {
+  using iterator_type = decltype(input)::iterator;
+  x3::position_cache<std::vector<iterator_type>> positions(input.begin(),
+                                                           input.end());
+  auto ast =
+      do_parse<parse::ast::ResultExpr>(parse::resultExpr, input, positions);
+
+  return parse::transform::ast_to_result(ast, positions, input.begin(),
+                                         default_symmetry);
+}
+
+ExprPtr parse_expr(std::wstring_view input, Symmetry default_symmetry) {
+  using iterator_type = decltype(input)::iterator;
+  x3::position_cache<std::vector<iterator_type>> positions(input.begin(),
+                                                           input.end());
+  auto ast = do_parse<parse::ast::Sum>(parse::expr, input, positions);
 
   return parse::transform::ast_to_expr(ast, positions, input.begin(),
                                        default_symmetry);
