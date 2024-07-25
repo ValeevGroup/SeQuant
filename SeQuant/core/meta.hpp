@@ -169,6 +169,67 @@ template <typename T, typename U>
 static constexpr bool are_less_than_comparable_v =
     are_less_than_comparable<T, U>::value;
 
+///////// is_greater_than_comparable /////////
+
+template <typename T, typename = std::void_t<>>
+struct is_greater_than_comparable : public std::false_type {};
+
+template <typename T>
+struct is_greater_than_comparable<
+    T, std::void_t<decltype(std::declval<const T &>() >
+                            std::declval<const T &>())>>
+    : public std::true_type {};
+
+template <typename T>
+static constexpr bool is_greater_than_comparable_v =
+    is_greater_than_comparable<T>::value;
+
+///////// are_greater_than_comparable /////////
+
+template <typename T, typename U, typename = std::void_t<>>
+struct are_greater_than_comparable : public std::false_type {};
+
+template <typename T, typename U>
+struct are_greater_than_comparable<
+    T, U,
+    std::void_t<decltype(std::declval<const T &>() >
+                         std::declval<const U &>())>> : public std::true_type {
+};
+
+template <typename T, typename U>
+static constexpr bool are_greater_than_comparable_v =
+    are_greater_than_comparable<T, U>::value;
+
+///////// is_equality_comparable /////////
+
+template <typename T, typename = std::void_t<>>
+struct is_equality_comparable : public std::false_type {};
+
+template <typename T>
+struct is_equality_comparable<T,
+                              std::void_t<decltype(std::declval<const T &>() ==
+                                                   std::declval<const T &>())>>
+    : public std::true_type {};
+
+template <typename T>
+static constexpr bool is_equality_comparable_v =
+    is_equality_comparable<T>::value;
+
+///////// are_equality_comparable /////////
+
+template <typename T, typename U, typename = std::void_t<>>
+struct are_equality_comparable : public std::false_type {};
+
+template <typename T, typename U>
+struct are_equality_comparable<T, U,
+                               std::void_t<decltype(std::declval<const T &>() ==
+                                                    std::declval<const U &>())>>
+    : public std::true_type {};
+
+template <typename T, typename U>
+static constexpr bool are_equality_comparable_v =
+    are_equality_comparable<T, U>::value;
+
 ///////// is_initializer_list /////////
 
 template <typename T>
