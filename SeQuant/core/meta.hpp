@@ -254,6 +254,19 @@ template <typename R,
               std::enable_if_t<meta::is_range_v<std::remove_reference_t<R>>>>
 using range_value_t = ranges::range_value_t<std::remove_reference_t<R>>;
 
+///////// has_memfn_size /////////
+
+template <typename T, typename = std::void_t<>>
+struct has_memfn_size : public std::false_type {};
+
+template <typename T>
+struct has_memfn_size<T,
+                      std::void_t<decltype(std::declval<const T &>().size())>>
+    : public std::true_type {};
+
+template <typename T>
+static constexpr bool has_memfn_size_v = has_memfn_size<T>::value;
+
 /// is_same
 /// Checks whether \c T is a \c Base (is either the same class or a sub-class
 /// ignoring CV and reference qualifiers
