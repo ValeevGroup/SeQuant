@@ -229,19 +229,28 @@ class strong_type_base {
 }  // namespace sequant::detail
 
 #ifndef DEFINE_STRONG_TYPES_FOR_RANGE
+// N.B. default deduction guide with older gcc does not defer to the
+// initializer_list guide, so end up with non-range instantiations clang and
+// recent gcc (14) handle this fine
 #define DEFINE_STRONG_TYPES_FOR_RANGE(ID)                                      \
   template <typename T>                                                        \
   struct ID : detail::strong_type_base<T, ID<T>> {                             \
     using detail::strong_type_base<T, ID<T>>::strong_type_base;                \
   };                                                                           \
                                                                                \
-  template <class T>                                                           \
-  ID(T&& t) -> ID<meta::remove_cvref_t<T>>;                                    \
-  template <class T = meta::castable_to_any>                                   \
+  template <typename T>                                                        \
+  ID(T&& t) -> ID<                                                             \
+      std::conditional_t<((meta::is_range_v<meta::remove_cvref_t<T>> &&        \
+                           !meta::is_char_range_v<meta::remove_cvref_t<T>>) || \
+                          std::is_arithmetic_v<meta::remove_cvref_t<T>>),      \
+                         meta::remove_cvref_t<T>,                              \
+                         container::svector<meta::literal_to_string_t<         \
+                             meta::remove_cvref_t<T>>>>>;                      \
+  template <typename T = meta::castable_to_any>                                \
   ID(std::initializer_list<T> t) -> ID<                                        \
       container::svector<meta::literal_to_string_t<meta::remove_cvref_t<T>>>>; \
   template <                                                                   \
-      class T, typename... U,                                                  \
+      typename T, typename... U,                                               \
       typename = std::enable_if_t<                                             \
           sizeof...(U) != 0 &&                                                 \
           (std::is_same_v<meta::remove_cvref_t<T>, meta::remove_cvref_t<U>> && \
@@ -249,7 +258,7 @@ class strong_type_base {
   ID(T&& t, U&&... rest)                                                       \
       -> ID<std::array<meta::literal_to_string_t<meta::remove_cvref_t<T>>,     \
                        1 + sizeof...(U)>>;                                     \
-  template <class T = meta::castable_to_any>                                   \
+  template <typename T = meta::castable_to_any>                                \
   ID() -> ID<std::array<T, 0>>;
 #endif  // DEFINE_STRONG_TYPES_FOR_RANGE
 

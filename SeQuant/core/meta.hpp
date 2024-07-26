@@ -365,6 +365,17 @@ template <typename R,
               std::enable_if_t<meta::is_range_v<std::remove_reference_t<R>>>>
 using range_value_t = ranges::range_value_t<std::remove_reference_t<R>>;
 
+template <typename T, typename = void>
+struct is_char_range : std::false_type {};
+
+template <typename T>
+struct is_char_range<
+    T, std::enable_if_t<is_range_v<T> && is_char_v<range_value_t<T>>>>
+    : std::true_type {};
+
+template <typename T>
+static constexpr inline bool is_char_range_v = is_char_range<T>::value;
+
 ///////// has_memfn_size /////////
 
 template <typename T, typename = std::void_t<>>
