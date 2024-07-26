@@ -271,16 +271,16 @@ class strong_type_base {
 #endif  // DEFINE_STRONG_TYPES_FOR_RANGE
 
 #ifndef DEFINE_STRONG_TYPES_FOR_RANGESIZE
-#define DEFINE_STRONG_TYPES_FOR_RANGESIZE(ID)                                \
+#define DEFINE_STRONG_TYPES_FOR_RANGESIZE(ID, IntType)                       \
   struct SEQUANT_CONCAT(n, ID)                                               \
-      : detail::strong_type_base<std::size_t, SEQUANT_CONCAT(n, ID)> {       \
-    using detail::strong_type_base<std::size_t,                              \
+      : detail::strong_type_base<IntType, SEQUANT_CONCAT(n, ID)> {           \
+    using detail::strong_type_base<IntType,                                  \
                                    SEQUANT_CONCAT(n, ID)>::strong_type_base; \
   };
 #endif  // DEFINE_STRONG_TYPES_FOR_RANGESIZE
 #ifndef DEFINE_STRONG_TYPES_FOR_RANGE_AND_RANGESIZE
 #define DEFINE_STRONG_TYPES_FOR_RANGE_AND_RANGESIZE(ID) \
-  DEFINE_STRONG_TYPES_FOR_RANGESIZE(ID)                 \
+  DEFINE_STRONG_TYPES_FOR_RANGESIZE(ID, std::size_t)    \
   DEFINE_STRONG_TYPES_FOR_RANGE(ID)
 #endif  // DEFINE_STRONG_TYPES_FOR_RANGE_AND_RANGESIZE
 
