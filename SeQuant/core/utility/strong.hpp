@@ -32,6 +32,9 @@ namespace sequant::detail {
 /// \tparam Tag tag type
 template <typename T, typename Tag>
 class strong_type_base {
+  template <typename U, typename TagU>
+  friend class strong_type_base;
+
  public:
   /// \name standard constructors and assignment operators
   /// @{
@@ -45,6 +48,49 @@ class strong_type_base {
       std::is_nothrow_copy_assignable_v<T>) = default;
   constexpr strong_type_base& operator=(strong_type_base&&) noexcept(
       std::is_nothrow_move_assignable_v<T>) = default;
+  /// @}
+
+  /// \name extension of standard constructors and assignment operators to
+  /// handle different tags as well as payload conversions
+  /// @{
+  template <
+      typename U, typename TagU,
+      typename = std::enable_if_t<
+          (!std::is_same_v<T, U> ||
+           !std::is_same_v<Tag, TagU>)&&std::is_constructible_v<T, const U&>>>
+  explicit constexpr strong_type_base(
+      const strong_type_base<U, TagU>&
+          other) noexcept(std::is_nothrow_constructible_v<T, const U&>)
+      : value_(other.value_) {}
+  template <typename U, typename TagU,
+            typename = std::enable_if_t<
+                (!std::is_same_v<T, U> ||
+                 !std::is_same_v<Tag, TagU>)&&std::is_constructible_v<T, U&&>>>
+  explicit constexpr strong_type_base(
+      strong_type_base<U, TagU>&&
+          other) noexcept(std::is_nothrow_constructible_v<T, U&&>)
+      : value_(std::move(other.value_)) {}
+  template <
+      typename U, typename TagU,
+      typename = std::enable_if_t<
+          (!std::is_same_v<T, U> ||
+           !std::is_same_v<Tag, TagU>)&&std::is_assignable_v<T&, const U&>>>
+  constexpr strong_type_base&
+  operator=(const strong_type_base<U, TagU>& other) noexcept(
+      std::is_nothrow_assignable_v<T, const U&>) {
+    value_ = other.value_;
+    return *this;
+  }
+  template <typename U, typename TagU,
+            typename = std::enable_if_t<
+                (!std::is_same_v<T, U> ||
+                 !std::is_same_v<Tag, TagU>)&&std::is_assignable_v<T&, U&&>>>
+  constexpr strong_type_base&
+  operator=(strong_type_base<U, TagU>&& other) noexcept(
+      std::is_nothrow_assignable_v<T, U&&>) {
+    value_ = std::move(other.value_);
+    return *this;
+  }
   /// @}
 
   /// \name constructors that take the value of underlying type
@@ -244,6 +290,7 @@ class strong_type_base {
   template <typename T>                                                        \
   struct ID : detail::strong_type_base<T, ID<T>> {                             \
     using detail::strong_type_base<T, ID<T>>::strong_type_base;                \
+    using detail::strong_type_base<T, ID<T>>::operator=;                       \
   };                                                                           \
                                                                                \
   template <typename T>                                                        \
@@ -271,11 +318,12 @@ class strong_type_base {
 #endif  // DEFINE_STRONG_TYPES_FOR_RANGE
 
 #ifndef DEFINE_STRONG_TYPES_FOR_RANGESIZE
-#define DEFINE_STRONG_TYPES_FOR_RANGESIZE(ID, IntType)                       \
-  struct SEQUANT_CONCAT(n, ID)                                               \
-      : detail::strong_type_base<IntType, SEQUANT_CONCAT(n, ID)> {           \
-    using detail::strong_type_base<IntType,                                  \
-                                   SEQUANT_CONCAT(n, ID)>::strong_type_base; \
+#define DEFINE_STRONG_TYPES_FOR_RANGESIZE(ID, IntType)                         \
+  struct SEQUANT_CONCAT(n, ID)                                                 \
+      : detail::strong_type_base<IntType, SEQUANT_CONCAT(n, ID)> {             \
+    using detail::strong_type_base<IntType,                                    \
+                                   SEQUANT_CONCAT(n, ID)>::strong_type_base;   \
+    using detail::strong_type_base<IntType, SEQUANT_CONCAT(n, ID)>::operator=; \
   };
 #endif  // DEFINE_STRONG_TYPES_FOR_RANGESIZE
 #ifndef DEFINE_STRONG_TYPES_FOR_RANGE_AND_RANGESIZE
