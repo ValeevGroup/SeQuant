@@ -617,8 +617,8 @@ ExprPtr L_(nann na, ncre nc, IndexSpace particle_space, IndexSpace hole_space) {
                                          hole_space)();
 }
 
-ExprPtr P(std::int64_t nh, std::int64_t np) {
-  if (np == std::numeric_limits<std::int64_t>::max()) np = nh;
+ExprPtr P(nₚ np, nₕ nh) {
+  if (nh == std::numeric_limits<std::int64_t>::max()) nh = np;
 
   if (np != nh)
     assert(
@@ -863,8 +863,8 @@ ExprPtr S(std::int64_t K) {
                   });
 }
 
-ExprPtr P(std::int64_t nh, std::int64_t np) {
-  if (np == std::numeric_limits<std::int64_t>::max()) np = nh;
+ExprPtr P(nₚ np, nₕ nh) {
+  if (nh == std::numeric_limits<std::int64_t>::max()) nh = np;
   if (get_default_context().spbasis() == SPBasis::spinfree) {
     assert(nh == np &&
            "Only particle number conserving cases are supported with spinfree "

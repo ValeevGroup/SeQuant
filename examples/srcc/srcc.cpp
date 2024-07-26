@@ -6,6 +6,7 @@
 #include <SeQuant/domain/mbpt/context.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/models/cc.hpp>
+#include <SeQuant/domain/mbpt/op.hpp>
 #include <SeQuant/domain/mbpt/spin.hpp>
 
 #include <clocale>
@@ -52,7 +53,7 @@ class compute_cceqvec {
 
  public:
   compute_cceqvec(size_t p, size_t pmin, size_t n, EqnType t = EqnType::t)
-      : P(p), PMIN(pmin), N(n), type(t) {}
+      : P(nₚ(p)), PMIN(pmin), N(n), type(t) {}
 
   void operator()(bool print, bool screen, bool use_topology,
                   bool use_connectivity, bool canonical_only) {

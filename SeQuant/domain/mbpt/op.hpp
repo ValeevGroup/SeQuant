@@ -20,6 +20,7 @@
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/space.hpp>
+#include <SeQuant/core/utility/strong.hpp>
 
 #include <range/v3/iterator/basic_iterator.hpp>
 #include <range/v3/range/conversion.hpp>
@@ -48,6 +49,9 @@
 
 namespace sequant {
 namespace mbpt {
+
+DEFINE_STRONG_TYPES_FOR_RANGESIZE(ₚ, std::int64_t);  // define nₚ
+DEFINE_STRONG_TYPES_FOR_RANGESIZE(ₕ, std::int64_t);  // define nₕ
 
 template <typename QuantumNumbers>
 bool is_vacuum(QuantumNumbers qns);
@@ -810,14 +814,12 @@ ExprPtr L_(nann na, ncre nc,
 
 // clang-format off
 /// makes projector onto excited bra (if \p np > 0 && \p nh > 0) or ket (if \p np < 0 && \p nh <0) manifold
-/// @param nh number operators in hole space. If \p nh > 0 creators, else annihilators
-/// @param np number of operators in particle space. If \p np > 0 creators, else annihilators
-/// (default is to set \p nh to \p np)
+/// @param np number of particle creators (if > 0) or annihilators (< 0)
+/// @param nh number of hole creators (if > 0) or annihilators (< 0); if omitted, will use \p np
 /// @note if using spin-free basis, only supports particle-symmetric operators `K = Kh = Kp`, returns `S(-K)`
 /// else supports particle non-conserving operators and returns `A(-nh, -np)`
 // clang-format on
-ExprPtr P(std::int64_t nh,
-          std::int64_t np = std::numeric_limits<std::int64_t>::max());
+ExprPtr P(nₚ np, nₕ nh = nₕ(std::numeric_limits<std::int64_t>::max()));
 
 // clang-format off
 /// @brief makes generic bra/ket-antisymmetric excitation (if \p nh > 0 && \p np > 0) or deexcitation (if \p nh < 0 && \p np < 0) operator
@@ -940,14 +942,12 @@ ExprPtr L(nann na, ncre nc,
 
 // clang-format off
 /// makes projector onto excited bra (if \p np > 0 && \p nh > 0) or ket (if \p np < 0 && \p nh <0) manifold
-/// @param nh number operators in hole space. If \p nh > 0 creators, else annihilators
-/// @param np number of operators in particle space. If \p np > 0 creators, else annihilators
-/// (default is to set \p nh to \p np)
+/// @param np number of particle creators (if > 0) or annihilators (< 0)
+/// @param nh number of hole creators (if > 0) or annihilators (< 0); if omitted, will use \p np
 /// @note if using spin-free basis, only supports particle-symmetric operators `K = Kh = Kp`, returns `S(-K)`
 /// else supports particle non-conserving operators and returns `A(-nh, -np)`
 // clang-format on
-ExprPtr P(std::int64_t nh,
-          std::int64_t np = std::numeric_limits<std::int64_t>::max());
+ExprPtr P(nₚ np, nₕ nh = nₕ(std::numeric_limits<std::int64_t>::max()));
 
 // clang-format off
 /// @brief makes generic bra/ket-antisymmetric excitation (if \p nh > 0 && \p np > 0) or deexcitation (if \p nh < 0 && \p np < 0) operator

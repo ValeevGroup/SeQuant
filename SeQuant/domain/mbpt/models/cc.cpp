@@ -110,7 +110,7 @@ std::vector<ExprPtr> CC::t(size_t commutator_rank, size_t pmax, size_t pmin) {
     }
     hbar = hbar_le_p;
     // 2.b project onto <p| (i.e., multiply by P(p) if p>0) and compute VEV
-    result.at(p) = vac_av(p != 0 ? P(p) * hbar_p : hbar_p);
+    result.at(p) = vac_av(p != 0 ? P(nₚ(p)) * hbar_p : hbar_p);
   }
 
   return result;
@@ -164,7 +164,7 @@ std::vector<ExprPtr> CC::λ(size_t commutator_rank) {
 
     // 2.b multiply by adjoint of P(p) (i.e., P(-p)) on the right side and
     // compute VEV
-    result.at(p) = vac_av(hbar_p * P(-p), op_connect);
+    result.at(p) = vac_av(hbar_p * P(nₚ(-p)), op_connect);
   }
   return result;
 }
@@ -204,8 +204,8 @@ std::vector<ExprPtr> CC::t_pt(size_t order, size_t rank) {
 
   std::vector<ExprPtr> result(N + 1);
   for (auto p = N; p >= 1; --p) {
-    auto freq_term = ex<Variable>(L"ω") * P(p) * T_pt_(order, p);
-    result.at(p) = vac_av(P(p) * expr, op_connect) - vac_av(freq_term);
+    auto freq_term = ex<Variable>(L"ω") * P(nₚ(p)) * T_pt_(order, p);
+    result.at(p) = vac_av(P(nₚ(p)) * expr, op_connect) - vac_av(freq_term);
   }
   return result;
 }
@@ -259,8 +259,8 @@ std::vector<ExprPtr> CC::λ_pt(size_t order, size_t rank) {
 
   std::vector<ExprPtr> result(N + 1);
   for (auto p = N; p >= 1; --p) {
-    auto freq_term = ex<Variable>(L"ω") * Λ_pt_(order, p) * P(-p);
-    result.at(p) = vac_av(expr * P(-p), op_connect) + vac_av(freq_term);
+    auto freq_term = ex<Variable>(L"ω") * Λ_pt_(order, p) * P(nₚ(-p));
+    result.at(p) = vac_av(expr * P(nₚ(-p)), op_connect) + vac_av(freq_term);
   }
   return result;
 }
@@ -299,7 +299,7 @@ std::vector<ExprPtr> CC::eom_r(nann na, ncre nc) {
   // start from the highest excitation order, go down to the lowest possible
   for (std::int64_t ra = na, rc = nc; ra > 0 || rc > 0; --ra, --rc) {
     // project with <ncre, nann| (i.e., multiply P(ncre, nann)) and compute VEV
-    result.at(idx) = vac_av(P(rc, ra) * hbar_R, op_connect);
+    result.at(idx) = vac_av(P(nₚ(ra), nₕ(rc)) * hbar_R, op_connect);
     idx--;  // index decrement
   }
 
@@ -342,7 +342,7 @@ std::vector<ExprPtr> CC::eom_l(nann na, ncre nc) {
   for (std::int64_t ra = na, rc = nc; ra > 0 || rc > 0; --ra, --rc) {
     // right project with |ncre,nann> (i.e., multiply P(-ncre, -nann)) and
     // compute VEV
-    result.at(idx) = vac_av(L_hbar * P(-rc, -ra), op_connect);
+    result.at(idx) = vac_av(L_hbar * P(nₚ(-ra), nₕ(-rc)), op_connect);
     idx--;  // index decrement
   }
 
