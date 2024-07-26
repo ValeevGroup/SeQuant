@@ -72,9 +72,17 @@ class strong_type_base {
   /// provided initializer_list \param elements the elements to initialize the
   /// value with
   template <typename U, typename T_ = T,
-            typename = std::enable_if_t<meta::is_range_v<T_>>>
-  explicit constexpr strong_type_base(std::initializer_list<U> elements)
-      : value_{elements.begin(), elements.end()} {}
+            typename = std::enable_if_t<
+                meta::is_range_v<T_> &&
+                meta::is_statically_castable_v<U, meta::range_value_t<T_>>>>
+  explicit constexpr strong_type_base(std::initializer_list<U> elements) {
+    if constexpr (meta::has_memfn_push_back_v<T, U>)
+      std::copy(elements.begin(), elements.end(), std::back_inserter(value_));
+    else {
+      assert(elements.size() == value_.size());
+      std::copy(elements.begin(), elements.end(), value_.begin());
+    }
+  }
 
   /// if \p T is a std::array, this will initialize the contained value using
   /// the provided parameter pack \param elements the elements to initialize the
