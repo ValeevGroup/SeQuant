@@ -51,9 +51,19 @@ class strong_type_base {
   /// @{
 
   /// \param value the value to this will hold
+  /// \note this is disabled if \p T is the castable_to_any placeholder to allow
+  /// GCC resolve string_type({}) construction ambiguity
+  template <typename T_ = T,
+            typename = std::enable_if_t<!std::is_same_v<
+                meta::remove_cvref_t<T_>, meta::castable_to_any>>>
   explicit constexpr strong_type_base(const T& value) : value_(value) {}
 
   /// \param value the value to this will hold
+  /// \note this is disabled if \p T is the castable_to_any placeholder to allow
+  /// GCC resolve string_type({}) construction ambiguity
+  template <typename T_ = T,
+            typename = std::enable_if_t<!std::is_same_v<
+                meta::remove_cvref_t<T_>, meta::castable_to_any>>>
   explicit constexpr strong_type_base(T&& value) noexcept(
       std::is_nothrow_move_constructible<T>::value)
       : value_(std::move(value)) {}
@@ -218,8 +228,8 @@ class strong_type_base {
 
 }  // namespace sequant::detail
 
-#ifndef DEFINE_STRONG_TYPES_FOR_RANGE_AND_RANGESIZE
-#define DEFINE_STRONG_TYPES_FOR_RANGE_AND_RANGESIZE(ID)                        \
+#ifndef DEFINE_STRONG_TYPES_FOR_RANGE
+#define DEFINE_STRONG_TYPES_FOR_RANGE(ID)                                      \
   template <typename T>                                                        \
   struct ID : detail::strong_type_base<T, ID<T>> {                             \
     using detail::strong_type_base<T, ID<T>>::strong_type_base;                \
@@ -240,12 +250,21 @@ class strong_type_base {
       -> ID<std::array<meta::literal_to_string_t<meta::remove_cvref_t<T>>,     \
                        1 + sizeof...(U)>>;                                     \
   template <class T = meta::castable_to_any>                                   \
-  ID() -> ID<std::array<T, 0>>;                                                \
-  struct SEQUANT_CONCAT(n, ID)                                                 \
-      : detail::strong_type_base<std::size_t, SEQUANT_CONCAT(n, ID)> {         \
-    using detail::strong_type_base<std::size_t,                                \
-                                   SEQUANT_CONCAT(n, ID)>::strong_type_base;   \
+  ID() -> ID<std::array<T, 0>>;
+#endif  // DEFINE_STRONG_TYPES_FOR_RANGE
+
+#ifndef DEFINE_STRONG_TYPES_FOR_RANGESIZE
+#define DEFINE_STRONG_TYPES_FOR_RANGESIZE(ID)                                \
+  struct SEQUANT_CONCAT(n, ID)                                               \
+      : detail::strong_type_base<std::size_t, SEQUANT_CONCAT(n, ID)> {       \
+    using detail::strong_type_base<std::size_t,                              \
+                                   SEQUANT_CONCAT(n, ID)>::strong_type_base; \
   };
+#endif  // DEFINE_STRONG_TYPES_FOR_RANGESIZE
+#ifndef DEFINE_STRONG_TYPES_FOR_RANGE_AND_RANGESIZE
+#define DEFINE_STRONG_TYPES_FOR_RANGE_AND_RANGESIZE(ID) \
+  DEFINE_STRONG_TYPES_FOR_RANGESIZE(ID)                 \
+  DEFINE_STRONG_TYPES_FOR_RANGE(ID)
 #endif  // DEFINE_STRONG_TYPES_FOR_RANGE_AND_RANGESIZE
 
 #endif  // SEQUANT_CORE_UTILITY_STRONG_HPP
