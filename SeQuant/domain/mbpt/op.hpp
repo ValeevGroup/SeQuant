@@ -761,6 +761,10 @@ extern template class Operator<qns_t, Statistics::BoseEinstein>;
 
 inline namespace op {
 namespace tensor {
+
+using mbpt::nₕ;
+using mbpt::nₚ;
+
 // clang-format off
 /// @brief `k`-body contribution to the "generic" Hamiltonian (in normal order relative to the default vacuum)
 /// @param[in] k the rank of the particle interactions; only `k<=2` is
@@ -823,13 +827,12 @@ ExprPtr P(nₚ np, nₕ nh = nₕ(std::numeric_limits<std::int64_t>::max()));
 
 // clang-format off
 /// @brief makes generic bra/ket-antisymmetric excitation (if \p nh > 0 && \p np > 0) or deexcitation (if \p nh < 0 && \p np < 0) operator
-/// @param nh number operators in hole space. If \p nh < 0 creators, else annihilators
-/// @param np number of operators in particle space. If \p np < 0 creators, else annihilators
+/// @param np number of particle creators (if > 0) or annihilators (< 0)
+/// @param nh number of hole creators (if > 0) or annihilators (< 0); if omitted, will use \p np
 /// (default is to set \p np to \p nh)
 /// @note supports particle non-conserving operators
 // clang-format on
-ExprPtr A(std::int64_t nh,
-          std::int64_t np = std::numeric_limits<std::int64_t>::max());
+ExprPtr A(nₚ np, nₕ nh = nₕ(std::numeric_limits<std::int64_t>::max()));
 
 /// @brief makes generic particle-symmetric excitation (if \p K > 0) or
 /// deexcitation (if \p K < 0) operator of rank `|K|`
@@ -951,13 +954,11 @@ ExprPtr P(nₚ np, nₕ nh = nₕ(std::numeric_limits<std::int64_t>::max()));
 
 // clang-format off
 /// @brief makes generic bra/ket-antisymmetric excitation (if \p nh > 0 && \p np > 0) or deexcitation (if \p nh < 0 && \p np < 0) operator
-/// @param nh number operators in hole space. If \p nh < 0 creators, else annihilators
-/// @param np number of operators in particle space. If \p np < 0 creators, else annihilators
-/// (default is to set \p np to \p nh)
+/// @param np number of particle creators (if > 0) or annihilators (< 0)
+/// @param nh number of hole creators (if > 0) or annihilators (< 0); if omitted, will use \p np
 /// @note supports particle non-conserving operators
 // clang-format on
-ExprPtr A(std::int64_t nh,
-          std::int64_t np = std::numeric_limits<std::int64_t>::max());
+ExprPtr A(nₚ np, nₕ nh = nₕ(std::numeric_limits<std::int64_t>::max()));
 
 /// @brief makes generic particle-symmetric excitation (if \p K > 0) or
 /// deexcitation (if \p K < 0) operator of rank `|K|`

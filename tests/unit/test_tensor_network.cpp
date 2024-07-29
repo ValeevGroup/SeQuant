@@ -43,7 +43,10 @@
 
 TEST_CASE("TensorNetwork", "[elements]") {
   using namespace sequant;
-  using namespace sequant::mbpt::tensor;
+  using namespace sequant::mbpt;
+  using sequant::Context;
+  namespace t = sequant::mbpt::tensor;
+  namespace o = sequant::mbpt::op;
 
   SECTION("constructors") {
     {  // with Tensors
@@ -65,7 +68,7 @@ TEST_CASE("TensorNetwork", "[elements]") {
     }
 
     {  // with Tensors and NormalOperators
-      auto tmp = A(-2) * H_(2) * T_(2) * T_(2);
+      auto tmp = t::A(nₚ(-2)) * t::H_(2) * t::T_(2) * t::T_(2);
       REQUIRE_NOTHROW(TensorNetwork(tmp->as<Product>().factors()));
     }
 
@@ -190,7 +193,7 @@ TEST_CASE("TensorNetwork", "[elements]") {
     // can't use operator expression (due to unspecified order of evaluation of
     // function arguments), must use initializer list
     auto tmp = ex<Product, std::initializer_list<ExprPtr>>(
-        {A(-2), H_(2), T_(2), T_(2), T_(2)});
+        {t::A(nₚ(-2)), t::H_(2), t::T_(2), t::T_(2), t::T_(2)});
     // canonicalize to avoid dependence on the implementation details of
     // mbpt::sr::make_op
     canonicalize(tmp);

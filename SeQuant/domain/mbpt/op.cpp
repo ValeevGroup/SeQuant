@@ -626,12 +626,11 @@ ExprPtr P(nₚ np, nₕ nh) {
         "Spinfree basis does not support non-particle conserving projectors");
   return get_default_context().spbasis() == SPBasis::spinfree
              ? tensor::S(-nh /* nh == np */)
-             : tensor::A(-nh, -np);
+             : tensor::A(-np, -nh);
 }
 
-ExprPtr A(std::int64_t nh, std::int64_t np) {
-  // particle number conserving
-  if (np == std::numeric_limits<std::int64_t>::max()) np = nh;
+ExprPtr A(nₚ np, nₕ nh) {
+  if (nh == std::numeric_limits<std::int64_t>::max()) nh = np;
 
   assert(!(np == 0 && nh == 0));
   // if they are not zero, Kh and Kp should have the same sign
@@ -819,9 +818,8 @@ ExprPtr F(bool use_f_tensor, IndexSpace occupied_density) {
   }
 }
 
-ExprPtr A(std::int64_t nh, std::int64_t np) {
-  // particle conserving
-  if (np == std::numeric_limits<std::int64_t>::max()) np = nh;
+ExprPtr A(nₚ np, nₕ nh) {
+  if (nh == std::numeric_limits<std::int64_t>::max()) nh = np;
   assert(!(nh == 0 && np == 0));
   // if they are not zero, Kh and Kp should have the same sign
   if (nh != 0 && np != 0) {
@@ -831,7 +829,7 @@ ExprPtr A(std::int64_t nh, std::int64_t np) {
   auto particle_space = get_particle_space(Spin::any);
   auto hole_space = get_hole_space(Spin::any);
   return ex<op_t>([]() -> std::wstring_view { return L"A"; },
-                  [=]() -> ExprPtr { return tensor::A(nh, np); },
+                  [=]() -> ExprPtr { return tensor::A(np, nh); },
                   [=](qnc_t& qns) {
                     const std::size_t abs_nh = std::abs(nh);
                     const std::size_t abs_np = std::abs(np);
@@ -873,7 +871,7 @@ ExprPtr P(nₚ np, nₕ nh) {
     return S(-K);
   } else {
     assert(get_default_context().spbasis() == SPBasis::spinorbital);
-    return A(-nh, -np);
+    return A(-np, -nh);
   }
 }
 
