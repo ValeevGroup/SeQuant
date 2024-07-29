@@ -276,6 +276,16 @@ class strong_type_base {
   }
   /// @}
 
+  /// \name pass-through the arithmetic interface of \p T , if available
+  /// @{
+  template <typename T_ = T,
+            typename = std::enable_if_t<std::is_integral_v<T_> &&
+                                        std::is_signed_v<T_>>>
+  strong_type_base operator-() const noexcept {
+    return strong_type_base(-value());
+  }
+  /// @}
+
  private:
   T value_{};
 };  // class strong_type_base
