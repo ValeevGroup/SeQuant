@@ -9,6 +9,7 @@
 #include <SeQuant/core/result_expr.hpp>
 #include <SeQuant/core/space.hpp>
 #include <SeQuant/core/tensor.hpp>
+#include <SeQuant/core/utility/swap.hpp>
 
 #ifdef SEQUANT_HAS_EIGEN
 #include <Eigen/Eigenvalues>
@@ -967,14 +968,129 @@ ExprPtr closed_shell_CC_spintrace(ExprPtr const& expr) {
   return st_expr;
 }
 
-ResultExpr closed_shell_spintrace(ResultExpr expr) {
-  expr.expression() = closed_shell_spintrace(
-      expr.expression(),
-      expr.index_particle_grouping<container::svector<Index>>());
+container::svector<ResultExpr> closed_shell_spintrace(ResultExpr expr) {
+  bool searchForNonEquivalentResults = expr.symmetry() != Symmetry::nonsymm;
+  searchForNonEquivalentResults &=
+      expr.bra().size() > 1 || expr.ket().size() > 1;
+  const bool brasSameSpace = std::all_of(
+      expr.bra().begin(), expr.bra().end(),
+      [&](const Index& idx) { return idx.space() == expr.bra()[0].space(); });
+  const bool ketsSameSpace = std::all_of(
+      expr.ket().begin(), expr.ket().end(),
+      [&](const Index& idx) { return idx.space() == expr.ket()[0].space(); });
+  searchForNonEquivalentResults &= !brasSameSpace && !ketsSameSpace;
 
-  expr.set_symmetry(Symmetry::nonsymm);
+  if (!searchForNonEquivalentResults) {
+    expr.expression() = closed_shell_spintrace(
+        expr.expression(),
+        expr.index_particle_grouping<container::svector<Index>>());
 
-  return expr;
+    expr.set_symmetry(Symmetry::nonsymm);
+
+    return {std::move(expr)};
+  }
+
+  assert(expr.symmetry() == Symmetry::antisymm ||
+         expr.symmetry() == Symmetry::symm);
+
+  // TODO: Do we have to track the sign?
+  const bool permuteBra = expr.bra().size() >= expr.ket().size();
+  auto permIndices = permuteBra ? expr.bra() : expr.ket();
+  const std::size_t unchangedSize =
+      permuteBra ? expr.ket().size() : expr.bra().size();
+
+  auto get_phase = [](auto container) {
+    reset_ts_swap_counter<Index>();
+    bubble_sort(container.begin(), container.end(), std::less<Index>{});
+    return ts_swap_counter_is_even<Index>() ? 1 : -1;
+  };
+
+  reset_ts_swap_counter<Index>();
+  bubble_sort(permIndices.begin(), permIndices.end(), std::less<Index>{});
+  const int initialSign = ts_swap_counter_is_even<Index>() ? 1 : -1;
+  const auto originalIndices = permIndices;
+
+  container::svector<container::set<std::pair<IndexSpace, IndexSpace>>>
+      idxPairings;
+
+  container::svector<ResultExpr> resultSet;
+
+  int sign = initialSign;
+  do {
+    const int currentSign = sign;
+    // std::next_permutation creates one lexicographical permutation after the
+    // other, which should imply that the phase should alternate between
+    // iterations.
+    sign *= -1;
+    assert(currentSign == get_phase(permIndices) * initialSign);
+
+    container::set<std::pair<IndexSpace, IndexSpace>> currentPairing;
+
+    for (std::size_t i = 0; i < unchangedSize; ++i) {
+      if (permuteBra) {
+        currentPairing.insert(
+            std::make_pair(permIndices[i].space(), expr.ket()[i].space()));
+      } else {
+        currentPairing.insert(
+            std::make_pair(expr.bra()[i].space(), permIndices[i].space()));
+      }
+    }
+
+    for (std::size_t i = unchangedSize; i < permIndices.size(); ++i) {
+      currentPairing.insert(
+          std::make_pair(permIndices[i].space(), IndexSpace::null));
+    }
+
+    if (std::find(idxPairings.begin(), idxPairings.end(), currentPairing) !=
+        idxPairings.end()) {
+      continue;
+    }
+
+    // Found a new index pairing
+
+    container::map<Index, Index> idxReplacements;
+
+    for (std::size_t i = 0; i < permIndices.size(); ++i) {
+      if (permIndices[i] != originalIndices[i]) {
+        idxReplacements.insert({originalIndices[i], permIndices[i]});
+        idxReplacements.insert({permIndices[i], originalIndices[i]});
+      }
+    }
+
+    ExprPtr expression = expr.expression().clone();
+    // expression->visit([&](ExprPtr &expr) { if (expr.is<Tensor>())
+    // expr.as<Tensor>().transform_indices(idxReplacements); }, true);
+    expression->visit(
+        [](ExprPtr& expr) {
+          if (expr.is<Tensor>()) expr.as<Tensor>().reset_tags();
+        },
+        true);
+
+    expression *= ex<Constant>(currentSign);
+
+    ResultExpr result = [&]() {
+      assert(expr.has_label());
+      if (permuteBra) {
+        return ResultExpr(permIndices, expr.ket(), expr.aux(), expr.symmetry(),
+                          expr.braket_symmetry(), expr.particle_symmetry(),
+                          expr.label(), std::move(expression));
+      } else {
+        return ResultExpr(expr.bra(), permIndices, expr.aux(), expr.symmetry(),
+                          expr.braket_symmetry(), expr.particle_symmetry(),
+                          expr.label(), std::move(expression));
+      }
+    }();
+
+    result.expression() = closed_shell_spintrace(
+        result.expression(),
+        result.index_particle_grouping<container::svector<Index>>());
+
+    result.set_symmetry(Symmetry::nonsymm);
+
+    resultSet.push_back(std::move(result));
+  } while (std::next_permutation(permIndices.begin(), permIndices.end()));
+
+  return resultSet;
 }
 
 ExprPtr closed_shell_CC_spintrace_rigorous(ExprPtr const& expr) {

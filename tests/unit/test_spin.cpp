@@ -1371,11 +1371,12 @@ SECTION("ResultExpr") {
         result.expression().clone(),
         {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}, {L"i_3", L"a_3"}});
 
-    ResultExpr traced = closed_shell_spintrace(result);
+	container::svector<ResultExpr> traced = closed_shell_spintrace(result);
 
-    REQUIRE(traced.expression() == expected);
-    REQUIRE(traced.symmetry() == Symmetry::nonsymm);
-    REQUIRE(traced.particle_symmetry() == ParticleSymmetry::symm);
+	REQUIRE(traced.size() == 1);
+    REQUIRE(traced[0].expression() == expected);
+    REQUIRE(traced[0].symmetry() == Symmetry::nonsymm);
+    REQUIRE(traced[0].particle_symmetry() == ParticleSymmetry::symm);
   }
   SECTION("rigorous") {
     ResultExpr result = parse_result_expr(
