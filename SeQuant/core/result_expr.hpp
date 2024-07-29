@@ -23,6 +23,10 @@ class ResultExpr {
 
   ResultExpr(const Tensor &tensor, ExprPtr expression);
   ResultExpr(const Variable &variable, ExprPtr expression);
+  ResultExpr(IndexContainer bra, IndexContainer ket, IndexContainer aux,
+             Symmetry symm, BraKetSymmetry braket_symm,
+             ParticleSymmetry particle_symm, std::optional<std::wstring> label,
+             ExprPtr expression);
 
   ResultExpr(const ResultExpr &other) = default;
   ResultExpr(ResultExpr &&other) = default;
