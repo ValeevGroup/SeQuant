@@ -40,7 +40,7 @@ TEST_CASE("EOM-CC", "[mbpt/cc]") {
       const auto N = 2;
       const auto K_occ = 2;
       const auto K_uocc = 2;
-      const auto eqs = CC{N}.eom_r(nann(K_occ), ncre(K_uocc));
+      const auto eqs = CC{N}.eom_r(nₚ(K_uocc), nₕ(K_occ));
       for (auto k = 1; k < eqs.size(); ++k) REQUIRE(eqs[k]);
 
       if (N == 2 && K_occ == 2 && K_uocc == 2) {
@@ -53,7 +53,7 @@ TEST_CASE("EOM-CC", "[mbpt/cc]") {
       const auto N = 2;
       const auto K_occ = 2;
       const auto K_uocc = 2;
-      const auto eqs = CC{N}.eom_l(nann(K_occ), ncre(K_uocc));
+      const auto eqs = CC{N}.eom_l(nₚ(K_uocc), nₕ(K_occ));
       for (auto k = 1; k < eqs.size(); ++k) REQUIRE(eqs[k]);
 
       if (N == 2 && K_occ == 2 && K_uocc == 2) {
@@ -68,7 +68,7 @@ TEST_CASE("EOM-CC", "[mbpt/cc]") {
       const auto N = 3;
       const auto K_occ = 3;
       const auto K_uocc = 3;
-      const auto eqs = CC{N}.eom_r(nann(K_occ), ncre(K_uocc));
+      const auto eqs = CC{N}.eom_r(nₚ(K_uocc), nₕ(K_occ));
       for (auto k = 1; k < eqs.size(); ++k) REQUIRE(eqs[k]);
 
       if (N == 3 && K_occ == 3 && K_uocc == 3) {

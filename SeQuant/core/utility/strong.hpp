@@ -295,7 +295,9 @@ class strong_type_base {
 #ifndef DEFINE_STRONG_TYPE_FOR_RANGE
 // N.B. default deduction guide with older gcc does not defer to the
 // initializer_list guide, so end up with non-range instantiations clang and
-// recent gcc (14) handle this fine
+// recent gcc (14) handle this fine ... this means we have to explicitly define
+// the list of types that the default deduction guide will use as is (i.e.
+// interpret as T)
 #define DEFINE_STRONG_TYPE_FOR_RANGE(ID)                                       \
   template <typename T>                                                        \
   struct ID : detail::strong_type_base<T, ID<T>> {                             \
@@ -305,13 +307,14 @@ class strong_type_base {
   };                                                                           \
                                                                                \
   template <typename T>                                                        \
-  ID(T&& t) -> ID<                                                             \
-      std::conditional_t<((meta::is_range_v<meta::remove_cvref_t<T>> &&        \
-                           !meta::is_char_range_v<meta::remove_cvref_t<T>>) || \
-                          std::is_arithmetic_v<meta::remove_cvref_t<T>>),      \
-                         meta::remove_cvref_t<T>,                              \
-                         container::svector<meta::literal_to_string_t<         \
-                             meta::remove_cvref_t<T>>>>>;                      \
+  ID(T&& t) -> ID<std::conditional_t<                                          \
+      ((meta::is_range_v<meta::remove_cvref_t<T>> &&                           \
+        !meta::is_char_range_v<meta::remove_cvref_t<T>>) ||                    \
+       std::is_arithmetic_v<meta::remove_cvref_t<T>> ||                        \
+       std::is_same_v<meta::remove_cvref_t<T>, IndexSpace>),                   \
+      meta::remove_cvref_t<T>,                                                 \
+      container::svector<                                                      \
+          meta::literal_to_string_t<meta::remove_cvref_t<T>>>>>;               \
   template <typename T = meta::castable_to_any>                                \
   ID(std::initializer_list<T> t) -> ID<                                        \
       container::svector<meta::literal_to_string_t<meta::remove_cvref_t<T>>>>; \

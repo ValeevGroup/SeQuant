@@ -405,30 +405,20 @@ std::wstring to_latex(const mbpt::Operator<mbpt::qns_t, S>& op) {
 namespace sequant::mbpt {
 
 template <Statistics S>
-OpMaker<S>::OpMaker(OpType op, std::initializer_list<IndexSpace> cre_list,
-                    std::initializer_list<IndexSpace> ann_list)
-    : op_(op),
-      cre_spaces_(cre_list.begin(), cre_list.end()),
-      ann_spaces_(ann_list.begin(), ann_list.end()) {
-  assert(ncreators() > 0 || nannihilators() > 0);
-}
-
-template <Statistics S>
 OpMaker<S>::OpMaker(OpType op) : op_(op) {}
 
 template <Statistics S>
-OpMaker<S>::OpMaker(OpType op, ncre nc, nann na, IndexSpace particle_space,
-                    IndexSpace hole_space) {
+OpMaker<S>::OpMaker(OpType op, ncre nc, nann na) {
   op_ = op;
   assert(nc > 0 || na > 0);
   switch (to_class(op)) {
     case OpClass::ex:
-      cre_spaces_ = decltype(cre_spaces_)(nc, particle_space);
-      ann_spaces_ = decltype(ann_spaces_)(na, hole_space);
+      cre_spaces_ = decltype(cre_spaces_)(nc, get_particle_space(Spin::any));
+      ann_spaces_ = decltype(ann_spaces_)(na, get_hole_space(Spin::any));
       break;
     case OpClass::deex:
-      cre_spaces_ = decltype(cre_spaces_)(nc, hole_space);
-      ann_spaces_ = decltype(ann_spaces_)(na, particle_space);
+      cre_spaces_ = decltype(cre_spaces_)(nc, get_hole_space(Spin::any));
+      ann_spaces_ = decltype(ann_spaces_)(na, get_particle_space(Spin::any));
       break;
     case OpClass::gen:
       cre_spaces_ = decltype(cre_spaces_)(nc, get_complete_space(Spin::any));
@@ -438,27 +428,17 @@ OpMaker<S>::OpMaker(OpType op, ncre nc, nann na, IndexSpace particle_space,
 }
 
 template <Statistics S>
-OpMaker<S>::OpMaker(OpType op, std::size_t nparticle) {
-  assert(nparticle > 0);
+OpMaker<S>::OpMaker(OpType op, std::size_t rank)
+    : OpMaker(op, ncre(rank), nann(rank)) {}
+
+template <Statistics S>
+OpMaker<S>::OpMaker(OpType op, ncre nc, nann na,
+                    const cre<IndexSpace>& cre_space,
+                    const ann<IndexSpace>& ann_space) {
   op_ = op;
-  const auto hole_space = get_hole_space(Spin::any);
-  const auto particle_space = get_particle_space(Spin::any);
-  switch (to_class(op)) {
-    case OpClass::ex:
-      cre_spaces_ = decltype(cre_spaces_)(nparticle, particle_space);
-      ann_spaces_ = decltype(ann_spaces_)(nparticle, hole_space);
-      break;
-    case OpClass::deex:
-      cre_spaces_ = decltype(cre_spaces_)(nparticle, hole_space);
-      ann_spaces_ = decltype(ann_spaces_)(nparticle, particle_space);
-      break;
-    case OpClass::gen:
-      cre_spaces_ =
-          decltype(cre_spaces_)(nparticle, get_complete_space(Spin::any));
-      ann_spaces_ =
-          decltype(ann_spaces_)(nparticle, get_complete_space(Spin::any));
-      break;
-  }
+  assert(nc > 0 || na > 0);
+  cre_spaces_ = decltype(cre_spaces_)(nc, cre_space);
+  ann_spaces_ = decltype(ann_spaces_)(na, ann_space);
 }
 
 template <Statistics S>
@@ -607,19 +587,30 @@ ExprPtr Λ(std::size_t K) {
   return result;
 }
 
-ExprPtr R_(nann na, ncre nc, IndexSpace particle_space, IndexSpace hole_space) {
-  return OpMaker<Statistics::FermiDirac>(OpType::R, nc, na, particle_space,
-                                         hole_space)();
+ExprPtr R_(nann na, ncre nc, const cre<IndexSpace>& cre_space,
+           const ann<IndexSpace>& ann_space) {
+  return OpMaker<Statistics::FermiDirac>(OpType::R, nc, na, cre_space,
+                                         ann_space)();
+}
+ExprPtr R_(nₚ np, nₕ nh) {
+  assert(np >= 0 && nh >= 0);
+  return OpMaker<Statistics::FermiDirac>(OpType::R, ncre(np.value()),
+                                         nann(nh.value()))();
 }
 
-ExprPtr L_(nann na, ncre nc, IndexSpace particle_space, IndexSpace hole_space) {
-  return OpMaker<Statistics::FermiDirac>(OpType::L, nc, na, particle_space,
-                                         hole_space)();
+ExprPtr L_(nann na, ncre nc, const cre<IndexSpace>& cre_space,
+           const ann<IndexSpace>& ann_space) {
+  return OpMaker<Statistics::FermiDirac>(OpType::L, nc, na, cre_space,
+                                         ann_space)();
+}
+
+ExprPtr L_(nₚ np, nₕ nh) {
+  assert(np >= 0 && nh >= 0);
+  return OpMaker<Statistics::FermiDirac>(OpType::L, ncre(nh.value()),
+                                         nann(np.value()))();
 }
 
 ExprPtr P(nₚ np, nₕ nh) {
-  if (nh == std::numeric_limits<std::int64_t>::max()) nh = np;
-
   if (np != nh)
     assert(
         get_default_context().spbasis() != SPBasis::spinfree &&
@@ -630,8 +621,6 @@ ExprPtr P(nₚ np, nₕ nh) {
 }
 
 ExprPtr A(nₚ np, nₕ nh) {
-  if (nh == std::numeric_limits<std::int64_t>::max()) nh = np;
-
   assert(!(np == 0 && nh == 0));
   // if they are not zero, Kh and Kp should have the same sign
   if (np != 0 && nh != 0) {
@@ -819,7 +808,6 @@ ExprPtr F(bool use_f_tensor, IndexSpace occupied_density) {
 }
 
 ExprPtr A(nₚ np, nₕ nh) {
-  if (nh == std::numeric_limits<std::int64_t>::max()) nh = np;
   assert(!(nh == 0 && np == 0));
   // if they are not zero, Kh and Kp should have the same sign
   if (nh != 0 && np != 0) {
@@ -862,7 +850,6 @@ ExprPtr S(std::int64_t K) {
 }
 
 ExprPtr P(nₚ np, nₕ nh) {
-  if (nh == std::numeric_limits<std::int64_t>::max()) nh = np;
   if (get_default_context().spbasis() == SPBasis::spinfree) {
     assert(nh == np &&
            "Only particle number conserving cases are supported with spinfree "
@@ -920,55 +907,66 @@ ExprPtr Λ_pt(std::size_t order, std::size_t K, bool skip1) {
   return result;
 }
 
-ExprPtr R_(nann na, ncre nc, IndexSpace particle_space, IndexSpace hole_space) {
+ExprPtr R_(nann na, ncre nc, const cre<IndexSpace>& cre_space,
+           const ann<IndexSpace>& ann_space) {
   return ex<op_t>(
       []() -> std::wstring_view { return optype2label.at(OpType::R); },
-      [=]() -> ExprPtr {
-        return tensor::R_(na, nc, particle_space, hole_space);
-      },
+      [=]() -> ExprPtr { return tensor::R_(na, nc, cre_space, ann_space); },
       [=](qnc_t& qns) {
         // ex -> creators in particle_space, annihilators in hole_space
         qns = combine(
             generic_excitation_qns(/*particle_rank*/ nc, /*hole_rank*/ na,
-                                   particle_space, hole_space),
+                                   cre_space, ann_space),
             qns);
       });
 }
 
-ExprPtr L_(nann na, ncre nc, IndexSpace particle_space, IndexSpace hole_space) {
+ExprPtr R_(nₚ np, nₕ nh) { return R_(nann(nh), ncre(np)); }
+
+ExprPtr L_(nann na, ncre nc, const cre<IndexSpace>& cre_space,
+           const ann<IndexSpace>& ann_space) {
   return ex<op_t>(
       []() -> std::wstring_view { return optype2label.at(OpType::L); },
-      [=]() -> ExprPtr {
-        return tensor::L_(na, nc, particle_space, hole_space);
-      },
+      [=]() -> ExprPtr { return tensor::L_(na, nc, cre_space, ann_space); },
       [=](qnc_t& qns) {
         // deex -> creators in hole_space, annihilators in particle_space
-        qns = combine(generic_deexcitation_qns(
-                          /*particle_rank*/ na, /*hole_rank*/ nc,
-                          particle_space, hole_space),
-                      qns);
+        qns = combine(
+            generic_deexcitation_qns(
+                /*particle_rank*/ na, /*hole_rank*/ nc, ann_space, cre_space),
+            qns);
       });
 }
 
-ExprPtr R(nann na, ncre nc, IndexSpace particle_space, IndexSpace hole_space) {
+ExprPtr L_(nₚ np, nₕ nh) { return L_(nann(np), ncre(nh)); }
+
+ExprPtr R(nann na, ncre nc, const cre<IndexSpace>& cre_space,
+          const ann<IndexSpace>& ann_space) {
   assert(na > 0 || nc > 0);
   ExprPtr result;
 
   for (std::int64_t ra = na, rc = nc; ra > 0 || rc > 0; --ra, --rc) {
-    result += R_(nann(ra), ncre(rc), particle_space, hole_space);
+    result += R_(nann(ra), ncre(rc), cre_space, ann_space);
   }
   return result;
 }
 
-ExprPtr L(nann na, ncre nc, IndexSpace particle_space, IndexSpace hole_space) {
+ExprPtr R(nₚ np, nₕ nh) {
+  assert(np >= 0 && nh >= 0);
+  return R(nann(nh), ncre(np));
+}
+
+ExprPtr L(nann na, ncre nc, const cre<IndexSpace>& cre_space,
+          const ann<IndexSpace>& ann_space) {
   assert(na > 0 || nc > 0);
   ExprPtr result;
 
   for (std::int64_t ra = na, rc = nc; ra > 0 || rc > 0; --ra, --rc) {
-    result += L_(nann(ra), ncre(rc), particle_space, hole_space);
+    result += L_(nann(ra), ncre(rc), cre_space, ann_space);
   }
   return result;
 }
+
+ExprPtr L(nₚ np, nₕ nh) { return L(nann(np), ncre(nh)); }
 
 bool can_change_qns(const ExprPtr& op_or_op_product, const qns_t target_qns,
                     const qns_t source_qns = {}) {

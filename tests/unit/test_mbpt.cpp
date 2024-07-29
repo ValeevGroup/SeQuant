@@ -159,8 +159,8 @@ TEST_CASE("NBodyOp", "[mbpt]") {
     auto t2 = T_(2);
     auto lambda1 = Λ_(1);
     auto lambda2 = Λ_(2);
-    auto r_2_1 = R_(nann(2), ncre(1));
-    auto r_1_2 = R_(nann(1), ncre(2));
+    auto r_2_1 = R_(nₚ(1), nₕ(2));
+    auto r_1_2 = R_(nₚ(2), nₕ(1));
 
     REQUIRE(to_latex(f) == L"{\\hat{f}}");
     REQUIRE(to_latex(t1) == L"{\\hat{t}_{1}}");
@@ -225,7 +225,7 @@ TEST_CASE("NBodyOp", "[mbpt]") {
     op_t f = F()->as<op_t>();
     op_t t1 = T_(1)->as<op_t>();
     op_t lambda2 = Λ_(2)->as<op_t>();
-    op_t r_1_2 = R_(nann(1), ncre(2))->as<op_t>();
+    op_t r_1_2 = R_(nₚ(2), nₕ(1))->as<op_t>();
 
     REQUIRE_NOTHROW(adjoint(f));
     REQUIRE_NOTHROW(adjoint(t1));
@@ -235,7 +235,7 @@ TEST_CASE("NBodyOp", "[mbpt]") {
     REQUIRE(adjoint(f)() == mbpt::general_type_qns(1));
     REQUIRE(adjoint(t1)() == mbpt::deexcitation_type_qns(1));
     REQUIRE(adjoint(lambda2)() == mbpt::excitation_type_qns(2));
-    REQUIRE(adjoint(r_1_2)() == L_(nann(2), ncre(1))->as<op_t>()());
+    REQUIRE(adjoint(r_1_2)() == L_(nₚ(2), nₕ(1))->as<op_t>()());
 
     // adjoint(adjoint(Op)) = Op
     REQUIRE(adjoint(adjoint(t1))() == t1());
@@ -291,28 +291,28 @@ TEST_CASE("NBodyOp", "[mbpt]") {
   SECTION("operators") {
     using namespace sequant::mbpt;
 
-    auto R_2 = R_(nann(2), ncre(2))->as<op_t>();
+    auto R_2 = R_(2)->as<op_t>();
     //    std::wcout << "R_2: " << to_latex(simplify(R_2.tensor_form())) <<
     //    std::endl;
     REQUIRE(to_latex(simplify(R_2.tensor_form())) ==
             L"{{{\\frac{1}{4}}}{R^{{i_1}{i_2}}_{{a_1}{a_2}}}{\\tilde{a}^{{a_1}{"
             L"a_2}}_{{i_1}{i_2}}}}");
 
-    auto L_3 = L_(nann(3), ncre(3))->as<op_t>();
+    auto L_3 = L_(3)->as<op_t>();
     //    std::wcout << "L_3: " << to_latex(simplify(L_3.tensor_form())) <<
     //    std::endl;
     REQUIRE(to_latex(simplify(L_3.tensor_form())) ==
             L"{{{\\frac{1}{36}}}{L^{{a_1}{a_2}{a_3}}_{{i_1}{i_2}{i_3}}}{"
             L"\\tilde{a}^{{i_1}{i_2}{i_3}}_{{a_1}{a_2}{a_3}}}}");
 
-    auto R_2_3 = R_(nann(2), ncre(3))->as<op_t>();
+    auto R_2_3 = R_(nₚ(3), nₕ(2))->as<op_t>();
     //    std::wcout << "R_2_3: " << to_latex(simplify(R_2_3.tensor_form())) <<
     //    std::endl;
     REQUIRE(to_latex(simplify(R_2_3.tensor_form())) ==
             L"{{{\\frac{1}{12}}}{R^{{i_1}{i_2}}_{{a_1}{a_2}{a_3}}}{\\tilde{a}^{"
             L"{a_1}{a_2}{a_3}}_{\\textvisiblespace\\,{i_1}{i_2}}}}");
 
-    auto L_1_2 = L_(nann(1), ncre(2))->as<op_t>();
+    auto L_1_2 = L_(nₚ(1), nₕ(2))->as<op_t>();
     // std::wcout << "L_(1,2): " << to_latex(simplify(L_1_2.tensor_form())) <<
     // std::endl;
     REQUIRE(to_latex(simplify(L_1_2.tensor_form())) ==
@@ -346,7 +346,7 @@ TEST_CASE("NBodyOp", "[mbpt]") {
             L"{{{\\frac{1}{12}}}{A^{{a_1}{a_2}}_{{i_1}{i_2}{i_3}}}{\\tilde{a}^{"
             L"{i_1}{i_2}{i_3}}_{\\textvisiblespace\\,{a_1}{a_2}}}}");
 
-    auto R33 = R(nann(3), ncre(3));
+    auto R33 = R(3);
     lower_to_tensor_form(R33);
     simplify(R33);
     //    std::wcout << "R33: " << to_latex(R33) << std::endl;
@@ -358,7 +358,7 @@ TEST_CASE("NBodyOp", "[mbpt]") {
             L"{{{\\frac{1}{4}}}{R^{{i_1}{i_2}}_{{a_1}{a_2}}}{\\tilde{a}^{{a_1}{"
             L"a_2}}_{{i_1}{i_2}}}}\\bigr) }");
 
-    auto R12 = R(nann(1), ncre(2));
+    auto R12 = R(nₚ(2), nₕ(1));
     lower_to_tensor_form(R12);
     simplify(R12);
     //    std::wcout << "R12: " << to_latex(R12) << std::endl;
@@ -367,7 +367,7 @@ TEST_CASE("NBodyOp", "[mbpt]") {
             L"{{{\\frac{1}{2}}}{R^{{i_1}}_{{a_1}{a_2}}}{\\tilde{a}^{{a_1}{a_"
             L"2}}_{\\textvisiblespace\\,{i_1}}}}\\bigr) }");
 
-    auto R21 = R(nann(2), ncre(1));
+    auto R21 = R(nₚ(1), nₕ(2));
     lower_to_tensor_form(R21);
     simplify(R21);
     //    std::wcout << "R21: " << to_latex(R21) << std::endl;
@@ -377,7 +377,7 @@ TEST_CASE("NBodyOp", "[mbpt]") {
             L"\\textvisiblespace\\,{a_1}}_{{i_1}{i_2}}}} + "
             L"{{R^{{i_1}}_{}}{\\tilde{a}_{{i_1}}}}\\bigr) }");
 
-    auto L23 = L(nann(2), ncre(3));
+    auto L23 = L(nₚ(2), nₕ(3));
     lower_to_tensor_form(L23);
     simplify(L23);
     // std::wcout << "L23: " << to_latex(L23) << std::endl;
@@ -457,22 +457,20 @@ TEST_CASE("MBPT", "[mbpt]") {
 
   SECTION("SRSO Fock") {
     // <2p1h|H2|1p> ->
-    SEQUANT_PROFILE_SINGLE("wick(<2p1h|H2|1p>)", ({
-                             auto input = t::L_(nann(1), ncre(2)) * t::H_(2) *
-                                          t::R_(nann(1), ncre(0));
-                             auto result = t::vac_av(input);
+    SEQUANT_PROFILE_SINGLE(
+        "wick(<2p1h|H2|1p>)", ({
+          auto input = t::L_(nₚ(2), nₕ(1)) * t::H_(2) * t::R_(nₚ(1), nₕ(0));
+          auto result = t::vac_av(input);
 
-                             std::wcout << "<2p1h|H2|1p> = " << to_latex(result)
-                                        << std::endl;
-                             REQUIRE(result->is<Product>());  // product ...
-                             REQUIRE(result->size() == 3);  // ... of 3 factors
-                           }));
+          std::wcout << "<2p1h|H2|1p> = " << to_latex(result) << std::endl;
+          REQUIRE(result->is<Product>());  // product ...
+          REQUIRE(result->size() == 3);    // ... of 3 factors
+        }));
 
     // <2p1h|H2|2p1h(c)> ->
     SEQUANT_PROFILE_SINGLE(
         "wick(<2p1h|H2|2p1h(c)>)", ({
-          auto input =
-              t::L_(nann(1), ncre(2)) * t::H() * t::R_(nann(2), ncre(1));
+          auto input = t::L_(nₚ(2), nₕ(1)) * t::H() * t::R_(nₚ(2), nₕ(1));
           auto result = t::vac_av(input);
 
           std::wcout << "<2p1h|H|2p1h(c)> = " << to_latex(result) << std::endl;
