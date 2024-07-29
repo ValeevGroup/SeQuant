@@ -326,20 +326,20 @@ TEST_CASE("NBodyOp", "[mbpt]") {
             L"{{{\\frac{1}{2}}}{A^{{i_1}}_{{a_1}{a_2}}}{\\tilde{a}^{{a_1}{a_2}}"
             L"_{\\textvisiblespace\\,{i_1}}}}");
 
-    auto P_0_1 = P(nₚ(1), nₕ(0))->as<op_t>();
-    //    std::wcout << "P_0_1: " << to_latex(simplify(P_1_0.tensor_form()))
+    auto P_0_1 = P(nₚ(0), nₕ(1))->as<op_t>();
+    //    std::wcout << "P_0_1: " << to_latex(simplify(P_0_1.tensor_form()))
     //               << std::endl;
     REQUIRE(to_latex(simplify(P_0_1.tensor_form())) ==
             L"{{A^{}_{{i_1}}}{\\tilde{a}^{{i_1}}}}");
 
-    auto P_2_1 = P(nₚ(1), nₕ(2))->as<op_t>();
-    //    std::wcout << "P_2_1: " << to_latex(simplify(P_1_2.tensor_form()))
+    auto P_2_1 = P(nₚ(2), nₕ(1))->as<op_t>();
+    //    std::wcout << "P_2_1: " << to_latex(simplify(P_2_1.tensor_form()))
     //               << std::endl;
     REQUIRE(to_latex(simplify(P_2_1.tensor_form())) ==
             L"{{{\\frac{1}{2}}}{A^{{a_1}{a_2}}_{{i_1}}}{\\tilde{a}^{"
             L"\\textvisiblespace\\,{i_1}}_{{a_1}{a_2}}}}");
 
-    auto P_2_3 = P(nₚ(3), nₕ(2))->as<op_t>();
+    auto P_2_3 = P(nₚ(2), nₕ(3))->as<op_t>();
     //    std::wcout << "P_2_3: " << to_latex(simplify(P_3_2.tensor_form()))
     //               << std::endl;
     REQUIRE(to_latex(simplify(P_2_3.tensor_form())) ==

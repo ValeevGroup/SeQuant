@@ -641,17 +641,17 @@ ExprPtr A(std::int64_t nh, std::int64_t np) {
 
   container::svector<IndexSpace> creators;
   container::svector<IndexSpace> annihilators;
-  if (np > 0)  // ex
-    for ([[maybe_unused]] auto i : ranges::views::iota(0, np))
-      annihilators.emplace_back(get_hole_space(Spin::any));
-  else  // deex
-    for ([[maybe_unused]] auto i : ranges::views::iota(0, -np))
-      creators.emplace_back(get_hole_space(Spin::any));
   if (nh > 0)  // ex
     for ([[maybe_unused]] auto i : ranges::views::iota(0, nh))
-      creators.emplace_back(get_particle_space(Spin::any));
+      annihilators.emplace_back(get_hole_space(Spin::any));
   else  // deex
     for ([[maybe_unused]] auto i : ranges::views::iota(0, -nh))
+      creators.emplace_back(get_hole_space(Spin::any));
+  if (np > 0)  // ex
+    for ([[maybe_unused]] auto i : ranges::views::iota(0, np))
+      creators.emplace_back(get_particle_space(Spin::any));
+  else  // deex
+    for ([[maybe_unused]] auto i : ranges::views::iota(0, -np))
       annihilators.emplace_back(get_particle_space(Spin::any));
 
   std::optional<OpMaker<Statistics::FermiDirac>::UseDepIdx> dep;
