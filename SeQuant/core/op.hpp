@@ -36,9 +36,9 @@
 namespace sequant {
 
 // strong type wrapper for objects associated with creation operators
-DEFINE_STRONG_TYPES_FOR_RANGE_AND_RANGESIZE(cre);
+DEFINE_STRONG_TYPE_FOR_RANGE_AND_RANGESIZE(cre);
 // strong type wrapper for objects associated with annihilation operators
-DEFINE_STRONG_TYPES_FOR_RANGE_AND_RANGESIZE(ann);
+DEFINE_STRONG_TYPE_FOR_RANGE_AND_RANGESIZE(ann);
 
 /// @brief Op is a creator/annihilator operator
 ///

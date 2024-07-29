@@ -50,8 +50,8 @@
 namespace sequant {
 namespace mbpt {
 
-DEFINE_STRONG_TYPES_FOR_RANGESIZE(ₚ, std::int64_t);  // define nₚ
-DEFINE_STRONG_TYPES_FOR_RANGESIZE(ₕ, std::int64_t);  // define nₕ
+DEFINE_STRONG_TYPE_FOR_INTEGER(nₚ, std::int64_t);  // define nₚ
+DEFINE_STRONG_TYPE_FOR_INTEGER(nₕ, std::int64_t);  // define nₕ
 
 template <typename QuantumNumbers>
 bool is_vacuum(QuantumNumbers qns);

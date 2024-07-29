@@ -35,9 +35,9 @@
 namespace sequant {
 
 // strong type wrapper for objects associated with bra
-DEFINE_STRONG_TYPES_FOR_RANGE_AND_RANGESIZE(bra);
+DEFINE_STRONG_TYPE_FOR_RANGE_AND_RANGESIZE(bra);
 // strong type wrapper for objects associated with ket
-DEFINE_STRONG_TYPES_FOR_RANGE_AND_RANGESIZE(ket);
+DEFINE_STRONG_TYPE_FOR_RANGE_AND_RANGESIZE(ket);
 
 /// @brief particle-symmetric Tensor, i.e. permuting
 class Tensor : public Expr, public AbstractTensor, public Labeled {

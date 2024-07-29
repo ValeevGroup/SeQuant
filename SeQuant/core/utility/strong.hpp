@@ -292,15 +292,16 @@ class strong_type_base {
 
 }  // namespace sequant::detail
 
-#ifndef DEFINE_STRONG_TYPES_FOR_RANGE
+#ifndef DEFINE_STRONG_TYPE_FOR_RANGE
 // N.B. default deduction guide with older gcc does not defer to the
 // initializer_list guide, so end up with non-range instantiations clang and
 // recent gcc (14) handle this fine
-#define DEFINE_STRONG_TYPES_FOR_RANGE(ID)                                      \
+#define DEFINE_STRONG_TYPE_FOR_RANGE(ID)                                       \
   template <typename T>                                                        \
   struct ID : detail::strong_type_base<T, ID<T>> {                             \
-    using detail::strong_type_base<T, ID<T>>::strong_type_base;                \
-    using detail::strong_type_base<T, ID<T>>::operator=;                       \
+    using base_type = detail::strong_type_base<T, ID<T>>;                      \
+    using base_type::base_type;                                                \
+    using base_type::operator=;                                                \
   };                                                                           \
                                                                                \
   template <typename T>                                                        \
@@ -325,21 +326,23 @@ class strong_type_base {
                        1 + sizeof...(U)>>;                                     \
   template <typename T = meta::castable_to_any>                                \
   ID() -> ID<std::array<T, 0>>;
-#endif  // DEFINE_STRONG_TYPES_FOR_RANGE
+#endif  // DEFINE_STRONG_TYPE_FOR_RANGE
 
-#ifndef DEFINE_STRONG_TYPES_FOR_RANGESIZE
-#define DEFINE_STRONG_TYPES_FOR_RANGESIZE(ID, IntType)                         \
-  struct SEQUANT_CONCAT(n, ID)                                                 \
-      : detail::strong_type_base<IntType, SEQUANT_CONCAT(n, ID)> {             \
-    using detail::strong_type_base<IntType,                                    \
-                                   SEQUANT_CONCAT(n, ID)>::strong_type_base;   \
-    using detail::strong_type_base<IntType, SEQUANT_CONCAT(n, ID)>::operator=; \
+#ifndef DEFINE_STRONG_TYPE_FOR_INTEGER
+#define DEFINE_STRONG_TYPE_FOR_INTEGER(ID, IntType)          \
+  struct ID : detail::strong_type_base<IntType, ID> {        \
+    using base_type = detail::strong_type_base<IntType, ID>; \
+    using base_type::base_type;                              \
+    using base_type::operator=;                              \
+    using base_type::operator-;                              \
+    ID(const base_type& b) noexcept : base_type(b) {}        \
+    ID(base_type&& b) noexcept : base_type(std::move(b)) {}  \
   };
-#endif  // DEFINE_STRONG_TYPES_FOR_RANGESIZE
-#ifndef DEFINE_STRONG_TYPES_FOR_RANGE_AND_RANGESIZE
-#define DEFINE_STRONG_TYPES_FOR_RANGE_AND_RANGESIZE(ID) \
-  DEFINE_STRONG_TYPES_FOR_RANGESIZE(ID, std::size_t)    \
-  DEFINE_STRONG_TYPES_FOR_RANGE(ID)
-#endif  // DEFINE_STRONG_TYPES_FOR_RANGE_AND_RANGESIZE
+#endif  // DEFINE_STRONG_TYPE_FOR_INTEGER
+#ifndef DEFINE_STRONG_TYPE_FOR_RANGE_AND_RANGESIZE
+#define DEFINE_STRONG_TYPE_FOR_RANGE_AND_RANGESIZE(ID)               \
+  DEFINE_STRONG_TYPE_FOR_INTEGER(SEQUANT_CONCAT(n, ID), std::size_t) \
+  DEFINE_STRONG_TYPE_FOR_RANGE(ID)
+#endif  // DEFINE_STRONG_TYPE_FOR_RANGE_AND_RANGESIZE
 
 #endif  // SEQUANT_CORE_UTILITY_STRONG_HPP
