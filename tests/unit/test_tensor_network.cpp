@@ -43,12 +43,15 @@
 
 TEST_CASE("TensorNetwork", "[elements]") {
   using namespace sequant;
-  using namespace sequant::mbpt::tensor;
+  using namespace sequant::mbpt;
+  using sequant::Context;
+  namespace t = sequant::mbpt::tensor;
+  namespace o = sequant::mbpt::op;
 
   SECTION("constructors") {
     {  // with Tensors
-      auto t1 = ex<Tensor>(L"F", WstrList{L"i_1"}, WstrList{L"i_2"});
-      auto t2 = ex<Tensor>(L"t", WstrList{L"i_1"}, WstrList{L"i_2"});
+      auto t1 = ex<Tensor>(L"F", bra{L"i_1"}, ket{L"i_2"});
+      auto t2 = ex<Tensor>(L"t", bra{L"i_1"}, ket{L"i_2"});
       auto t1_x_t2 = t1 * t2;
       REQUIRE_NOTHROW(TensorNetwork(*t1_x_t2));
 
@@ -58,14 +61,14 @@ TEST_CASE("TensorNetwork", "[elements]") {
 
     {  // with NormalOperators
       constexpr const auto V = Vacuum::SingleProduct;
-      auto t1 = ex<FNOperator>(WstrList{L"i_1"}, WstrList{L"i_2"}, V);
-      auto t2 = ex<FNOperator>(WstrList{L"i_2"}, WstrList{L"i_1"}, V);
+      auto t1 = ex<FNOperator>(cre({L"i_1"}), ann({L"i_2"}), V);
+      auto t2 = ex<FNOperator>(cre({L"i_2"}), ann({L"i_1"}), V);
       auto t1_x_t2 = t1 * t2;
       REQUIRE_NOTHROW(TensorNetwork(*t1_x_t2));
     }
 
     {  // with Tensors and NormalOperators
-      auto tmp = A(-2) * H_(2) * T_(2) * T_(2);
+      auto tmp = t::A(nₚ(-2)) * t::H_(2) * t::T_(2) * t::T_(2);
       REQUIRE_NOTHROW(TensorNetwork(tmp->as<Product>().factors()));
     }
 
@@ -74,8 +77,8 @@ TEST_CASE("TensorNetwork", "[elements]") {
   SECTION("accessors") {
     {
       constexpr const auto V = Vacuum::SingleProduct;
-      auto t1 = ex<Tensor>(L"F", WstrList{L"i_1"}, WstrList{L"i_2"});
-      auto t2 = ex<FNOperator>(WstrList{L"i_1"}, WstrList{L"i_3"}, V);
+      auto t1 = ex<Tensor>(L"F", bra{L"i_1"}, ket{L"i_2"});
+      auto t2 = ex<FNOperator>(cre({L"i_1"}), ann({L"i_3"}), V);
       auto t1_x_t2 = t1 * t2;
       REQUIRE_NOTHROW(TensorNetwork(*t1_x_t2));
       TensorNetwork tn(*t1_x_t2);
@@ -108,8 +111,8 @@ TEST_CASE("TensorNetwork", "[elements]") {
       {  // with no external indices, hence no named indices whatsoever
         Index::reset_tmp_index();
         constexpr const auto V = Vacuum::SingleProduct;
-        auto t1 = ex<Tensor>(L"F", WstrList{L"i_1"}, WstrList{L"i_2"});
-        auto t2 = ex<FNOperator>(WstrList{L"i_1"}, WstrList{L"i_2"}, V);
+        auto t1 = ex<Tensor>(L"F", bra{L"i_1"}, ket{L"i_2"});
+        auto t2 = ex<FNOperator>(cre({L"i_1"}), ann({L"i_2"}), V);
         auto t1_x_t2 = t1 * t2;
         TensorNetwork tn(*t1_x_t2);
         tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(), false);
@@ -132,8 +135,8 @@ TEST_CASE("TensorNetwork", "[elements]") {
       {
         Index::reset_tmp_index();
         constexpr const auto V = Vacuum::SingleProduct;
-        auto t1 = ex<Tensor>(L"F", WstrList{L"i_2"}, WstrList{L"i_17"});
-        auto t2 = ex<FNOperator>(WstrList{L"i_2"}, WstrList{L"i_3"}, V);
+        auto t1 = ex<Tensor>(L"F", bra{L"i_2"}, ket{L"i_17"});
+        auto t2 = ex<FNOperator>(cre({L"i_2"}), ann({L"i_3"}), V);
         auto t1_x_t2 = t1 * t2;
 
         // with all external named indices
@@ -190,7 +193,7 @@ TEST_CASE("TensorNetwork", "[elements]") {
     // can't use operator expression (due to unspecified order of evaluation of
     // function arguments), must use initializer list
     auto tmp = ex<Product, std::initializer_list<ExprPtr>>(
-        {A(-2), H_(2), T_(2), T_(2), T_(2)});
+        {t::A(nₚ(-2)), t::H_(2), t::T_(2), t::T_(2), t::T_(2)});
     // canonicalize to avoid dependence on the implementation details of
     // mbpt::sr::make_op
     canonicalize(tmp);
@@ -383,12 +386,12 @@ TEST_CASE("TensorNetwork", "[elements]") {
     if (false) {
       Index::reset_tmp_index();
       // TN1 from manuscript
-      auto g = ex<Tensor>(L"g", WstrList{L"i_3", L"i_4"},
-                          WstrList{L"a_3", L"a_4"}, Symmetry::antisymm);
-      auto ta = ex<Tensor>(L"t", WstrList{L"a_1", L"a_3"},
-                           WstrList{L"i_1", L"i_2"}, Symmetry::antisymm);
-      auto tb = ex<Tensor>(L"t", WstrList{L"a_2", L"a_4"},
-                           WstrList{L"i_3", L"i_4"}, Symmetry::antisymm);
+      auto g = ex<Tensor>(L"g", bra{L"i_3", L"i_4"}, ket{L"a_3", L"a_4"},
+                          Symmetry::antisymm);
+      auto ta = ex<Tensor>(L"t", bra{L"a_1", L"a_3"}, ket{L"i_1", L"i_2"},
+                           Symmetry::antisymm);
+      auto tb = ex<Tensor>(L"t", bra{L"a_2", L"a_4"}, ket{L"i_3", L"i_4"},
+                           Symmetry::antisymm);
 
       auto tmp = g * ta * tb;
       // std::wcout << "TN1 = " << to_latex(tmp) << std::endl;
@@ -512,19 +515,19 @@ TEST_CASE("TensorNetwork", "[elements]") {
                 covariant_indices | ranges::views::chunk(N / n) |
                 ranges::views::transform([&](const auto& idxs) {
                   return ex<Tensor>(
-                      L"u", idxs, std::vector<Index>{},
+                      L"u", bra(idxs), ket{},
                       (testcase == 3
                            ? Symmetry::nonsymm
                            : ((n == 1) ? Symmetry::symm : Symmetry::nonsymm)));
                 }) |
                 ranges::to_vector;
             CHECK(utensors.size() == static_cast<std::size_t>(n));
-            auto dtensors = contravariant_indices | ranges::views::chunk(N) |
-                            ranges::views::transform([&](const auto& idxs) {
-                              return ex<Tensor>(L"d", std::vector<Index>{},
-                                                idxs, Symmetry::nonsymm);
-                            }) |
-                            ranges::to_vector;
+            auto dtensors =
+                contravariant_indices | ranges::views::chunk(N) |
+                ranges::views::transform([&](const auto& idxs) {
+                  return ex<Tensor>(L"d", bra{}, ket(idxs), Symmetry::nonsymm);
+                }) |
+                ranges::to_vector;
             CHECK(dtensors.size() == 1);
 
             ExprPtr expr;

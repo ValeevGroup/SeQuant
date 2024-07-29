@@ -13,6 +13,7 @@
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/latex.hpp>
+#include <SeQuant/core/utility/strong.hpp>
 
 #include <algorithm>
 #include <array>
@@ -32,6 +33,11 @@
 #include <range/v3/all.hpp>
 
 namespace sequant {
+
+// strong type wrapper for objects associated with bra
+DEFINE_STRONG_TYPE_FOR_RANGE_AND_RANGESIZE(bra);
+// strong type wrapper for objects associated with ket
+DEFINE_STRONG_TYPE_FOR_RANGE_AND_RANGESIZE(ket);
 
 /// @brief particle-symmetric Tensor, i.e. permuting
 class Tensor : public Expr, public AbstractTensor, public Labeled {
@@ -81,15 +87,36 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
   // list of friends who can make Tensor objects with reserved labels
   friend ExprPtr make_overlap(const Index &bra_index, const Index &ket_index);
 
-  template <typename IndexRange1, typename IndexRange2>
-  Tensor(std::wstring_view label, IndexRange1 &&bra_indices,
-         IndexRange2 &&ket_indices, reserved_tag,
+  template <
+      typename IndexRange1, typename IndexRange2,
+      typename = std::enable_if_t<
+          (meta::is_statically_castable_v<
+              meta::range_value_t<IndexRange1>,
+              Index>)&&(meta::
+                            is_statically_castable_v<
+                                meta::range_value_t<IndexRange2>, Index>)>>
+  Tensor(std::wstring_view label, const bra<IndexRange1> &bra_indices,
+         const ket<IndexRange2> &ket_indices, reserved_tag,
          Symmetry s = Symmetry::nonsymm,
          BraKetSymmetry bks = get_default_context().braket_symmetry(),
          ParticleSymmetry ps = ParticleSymmetry::symm)
       : label_(label),
         bra_(make_indices(bra_indices)),
         ket_(make_indices(ket_indices)),
+        symmetry_(s),
+        braket_symmetry_(bks),
+        particle_symmetry_(ps) {
+    validate_symmetries();
+  }
+
+  Tensor(std::wstring_view label, bra<index_container_type> &&bra_indices,
+         ket<index_container_type> &&ket_indices, reserved_tag,
+         Symmetry s = Symmetry::nonsymm,
+         BraKetSymmetry bks = get_default_context().braket_symmetry(),
+         ParticleSymmetry ps = ParticleSymmetry::symm)
+      : label_(label),
+        bra_(std::move(bra_indices)),
+        ket_(std::move(ket_indices)),
         symmetry_(s),
         braket_symmetry_(bks),
         particle_symmetry_(ps) {
@@ -110,23 +137,22 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
   /// @param s the symmetry of bra or ket
   /// @param bks the symmetry with respect to bra-ket exchange
   /// @param ps the symmetry under exchange of particles
-  template <typename IndexRange1, typename IndexRange2,
-            typename = std::enable_if_t<
-                !meta::is_initializer_list_v<std::decay_t<IndexRange1>> &&
-                !meta::is_initializer_list_v<std::decay_t<IndexRange2>>>>
-  Tensor(std::wstring_view label, IndexRange1 &&bra_indices,
-         IndexRange2 &&ket_indices, Symmetry s = Symmetry::nonsymm,
+  template <
+      typename IndexRange1, typename IndexRange2,
+      typename = std::enable_if_t<
+          (meta::is_statically_castable_v<
+              meta::range_value_t<IndexRange1>,
+              Index>)&&(meta::
+                            is_statically_castable_v<
+                                meta::range_value_t<IndexRange2>, Index>)>>
+  Tensor(std::wstring_view label, const bra<IndexRange1> &bra_indices,
+         const ket<IndexRange2> &ket_indices, Symmetry s = Symmetry::nonsymm,
          BraKetSymmetry bks = get_default_context().braket_symmetry(),
          ParticleSymmetry ps = ParticleSymmetry::symm)
-      : Tensor(label, std::forward<IndexRange1>(bra_indices),
-               std::forward<IndexRange2>(ket_indices), reserved_tag{}, s, bks,
-               ps) {
+      : Tensor(label, bra_indices, ket_indices, reserved_tag{}, s, bks, ps) {
     assert_nonreserved_label(label_);
   }
 
-  /// @tparam I1 any type convertible to Index)
-  /// @tparam I2 any type convertible to Index
-  /// @note  I1 and I2 default to Index to allow empty lists
   /// @param label the tensor label
   /// @param bra_indices list of bra indices (or objects that can be converted
   /// to indices)
@@ -135,12 +161,12 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
   /// @param s the symmetry of bra or ket
   /// @param bks the symmetry with respect to bra-ket exchange
   /// @param ps the symmetry under exchange of particles
-  template <typename I1 = Index, typename I2 = Index>
-  Tensor(std::wstring_view label, std::initializer_list<I1> bra_indices,
-         std::initializer_list<I2> ket_indices, Symmetry s = Symmetry::nonsymm,
+  Tensor(std::wstring_view label, bra<index_container_type> &&bra_indices,
+         ket<index_container_type> &&ket_indices,
+         Symmetry s = Symmetry::nonsymm,
          BraKetSymmetry bks = get_default_context().braket_symmetry(),
          ParticleSymmetry ps = ParticleSymmetry::symm)
-      : Tensor(label, make_indices(bra_indices), make_indices(ket_indices),
+      : Tensor(label, std::move(bra_indices), std::move(ket_indices),
                reserved_tag{}, s, bks, ps) {
     assert_nonreserved_label(label_);
   }
@@ -245,8 +271,8 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
 
  private:
   std::wstring label_{};
-  index_container_type bra_{};
-  index_container_type ket_{};
+  sequant::bra<index_container_type> bra_{};
+  sequant::ket<index_container_type> ket_{};
   Symmetry symmetry_ = Symmetry::invalid;
   BraKetSymmetry braket_symmetry_ = BraKetSymmetry::invalid;
   ParticleSymmetry particle_symmetry_ = ParticleSymmetry::invalid;
@@ -381,8 +407,7 @@ using TensorPtr = std::shared_ptr<Tensor>;
 inline std::wstring overlap_label() { return L"s"; }
 
 inline ExprPtr make_overlap(const Index &bra_index, const Index &ket_index) {
-  return ex<Tensor>(Tensor(overlap_label(), std::array<Index, 1>{{bra_index}},
-                           std::array<Index, 1>{{ket_index}},
+  return ex<Tensor>(Tensor(overlap_label(), bra{bra_index}, ket{ket_index},
                            Tensor::reserved_tag{}));
 }
 

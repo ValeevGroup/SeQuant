@@ -13,36 +13,33 @@ void try_main() {
   using namespace sequant::mbpt;
   std::wcout << "START ANTISYMM_TEST: " << std::endl;
   const auto cumulant = ex<Tensor>(optype2label.at(OpType::RDMCumulant),
-                                   WstrList{L"a_1"}, WstrList{L"i_1"});
-  // const auto a =ex<Tensor>(L"a",WstrList{L"i_2", L"i_3"},WstrList{L"a_2",
+                                   bra{L"a_1"}, ket{L"i_1"});
+  // const auto a =ex<Tensor>(L"a",bra{L"i_2", L"i_3"},ket{L"a_2",
   // L"a_3"});
-  const auto a = ex<FNOperator>(
-      std::initializer_list<Index>({Index(L"i_2"), Index(L"i_3")}),
-      std::initializer_list<Index>({Index(L"a_2"), Index(L"a_3")}));
+  const auto a = ex<FNOperator>(cre{Index(L"i_2"), Index(L"i_3")},
+                                ann{Index(L"a_2"), Index(L"a_3")});
   auto a_cumulant = cumulant * a;
   std::wcout << "a_cumulant " << to_latex_align(a_cumulant) << std::endl;
   antisymmetrize _a_cumulant(a_cumulant);
   std::wcout << to_latex_align(_a_cumulant.result) << std::endl;
 
-  auto cumulant2 = ex<Tensor>(optype2label.at(OpType::RDMCumulant),
-                              WstrList{L"a_2"}, WstrList{L"i_2"});
-  auto cumulant3 = ex<Tensor>(optype2label.at(OpType::RDMCumulant),
-                              WstrList{L"a_3"}, WstrList{L"i_3"});
+  auto cumulant2 = ex<Tensor>(optype2label.at(OpType::RDMCumulant), bra{L"a_2"},
+                              ket{L"i_2"});
+  auto cumulant3 = ex<Tensor>(optype2label.at(OpType::RDMCumulant), bra{L"a_3"},
+                              ket{L"i_3"});
   auto cumulant_3x = cumulant * cumulant2 * cumulant3;
   std::wcout << "cumulant_3x " << to_latex_align(cumulant_3x) << std::endl;
   antisymmetrize _cumulant_3x(cumulant_3x);
   std::wcout << to_latex_align(_cumulant_3x.result) << std::endl;
 
-  auto a1 = ex<FNOperator>(std::initializer_list<Index>({Index(L"i_1")}),
-                           std::initializer_list<Index>({Index(L"a_1")}));
+  auto a1 = ex<FNOperator>(cre{Index(L"i_1")}, ann{Index(L"a_1")});
   auto a1_cumu1_cumu2 = a1 * cumulant2 * cumulant3;
   std::wcout << "a1 y1 y2 " << to_latex_align(a1_cumu1_cumu2) << std::endl;
   antisymmetrize _a1_cumu1_cumu2(a1_cumu1_cumu2);
   std::wcout << to_latex_align(_a1_cumu1_cumu2.result) << std::endl;
 
-  auto two_body_cumu =
-      ex<Tensor>(optype2label.at(OpType::RDMCumulant), WstrList{L"a_2", L"a_3"},
-                 WstrList{L"i_2", L"i_3"});
+  auto two_body_cumu = ex<Tensor>(optype2label.at(OpType::RDMCumulant),
+                                  bra{L"a_2", L"a_3"}, ket{L"i_2", L"i_3"});
   auto a1_cumu2 = a1 * two_body_cumu;
   std::wcout << " a1 y2 " << to_latex_align(a1_cumu2) << std::endl;
   antisymmetrize _a1_cumu2(a1_cumu2);
@@ -53,9 +50,9 @@ void try_main() {
   antisymmetrize _cumu1_cumu2(cumu1_cumu2);
   std::wcout << to_latex_align(_cumu1_cumu2.result) << std::endl;
 
-  auto cumu3 = ex<Tensor>(optype2label.at(OpType::RDMCumulant),
-                          WstrList{L"a_1", L"a_2", L"a_3"},
-                          WstrList{L"i_1", L"i_2", L"i_3"});
+  auto cumu3 =
+      ex<Tensor>(optype2label.at(OpType::RDMCumulant),
+                 bra{L"a_1", L"a_2", L"a_3"}, ket{L"i_1", L"i_2", L"i_3"});
   std::wcout << " y3 " << to_latex_align(cumu3) << std::endl;
   antisymmetrize _cumu3(cumu3);
   std::wcout << to_latex_align(_cumu3.result) << std::endl;
@@ -69,10 +66,8 @@ void try_main() {
                     // (2007); https://doi.org/10.1063/1.2761870 eqn 26.
   std::wcout << "END ANTISYMM TEST: " << std::endl << std::endl << std::endl;
 
-  auto a3 = ex<FNOperator>(std::initializer_list<Index>(
-                               {Index(L"i_1"), Index(L"i_2"), Index(L"i_3")}),
-                           std::initializer_list<Index>(
-                               {Index(L"a_1"), Index(L"a_2"), Index(L"a_3")}));
+  auto a3 = ex<FNOperator>(cre{Index(L"i_1"), Index(L"i_2"), Index(L"i_3")},
+                           ann{Index(L"a_1"), Index(L"a_2"), Index(L"a_3")});
   auto new_a3 = decompositions::three_body_substitution(a3, 2);
   std::wcout << "Now TESTING SPIN SUMMATION";
   // auto result = new_a3 - antisymm_test;

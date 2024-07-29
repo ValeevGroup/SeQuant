@@ -689,12 +689,12 @@ void TensorNetwork::init_edges() const {
   for (auto &&t : tensors_) {
     const auto t_is_nonsymm = symmetry(*t) == Symmetry::nonsymm;
     size_t cnt = 0;
-    for (const Index &idx : bra(*t)) {
+    for (const Index &idx : t->_bra()) {
       idx_insert(idx, t_idx, t_is_nonsymm ? cnt : 0);
       ++cnt;
     }
     cnt = 0;
-    for (const Index &idx : ket(*t)) {
+    for (const Index &idx : t->_ket()) {
       idx_insert(idx, -t_idx, t_is_nonsymm ? cnt : 0);
       ++cnt;
     }

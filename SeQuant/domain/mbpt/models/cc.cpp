@@ -110,7 +110,7 @@ std::vector<ExprPtr> CC::t(size_t commutator_rank, size_t pmax, size_t pmin) {
     }
     hbar = hbar_le_p;
     // 2.b project onto <p| (i.e., multiply by P(p) if p>0) and compute VEV
-    result.at(p) = vac_av(p != 0 ? P(p) * hbar_p : hbar_p);
+    result.at(p) = vac_av(p != 0 ? P(nₚ(p)) * hbar_p : hbar_p);
   }
 
   return result;
@@ -164,7 +164,7 @@ std::vector<ExprPtr> CC::λ(size_t commutator_rank) {
 
     // 2.b multiply by adjoint of P(p) (i.e., P(-p)) on the right side and
     // compute VEV
-    result.at(p) = vac_av(hbar_p * P(-p), op_connect);
+    result.at(p) = vac_av(hbar_p * P(nₚ(-p)), op_connect);
   }
   return result;
 }
@@ -204,8 +204,8 @@ std::vector<ExprPtr> CC::t_pt(size_t order, size_t rank) {
 
   std::vector<ExprPtr> result(N + 1);
   for (auto p = N; p >= 1; --p) {
-    auto freq_term = ex<Variable>(L"ω") * P(p) * T_pt_(order, p);
-    result.at(p) = vac_av(P(p) * expr, op_connect) - vac_av(freq_term);
+    auto freq_term = ex<Variable>(L"ω") * P(nₚ(p)) * T_pt_(order, p);
+    result.at(p) = vac_av(P(nₚ(p)) * expr, op_connect) - vac_av(freq_term);
   }
   return result;
 }
@@ -259,19 +259,20 @@ std::vector<ExprPtr> CC::λ_pt(size_t order, size_t rank) {
 
   std::vector<ExprPtr> result(N + 1);
   for (auto p = N; p >= 1; --p) {
-    auto freq_term = ex<Variable>(L"ω") * Λ_pt_(order, p) * P(-p);
-    result.at(p) = vac_av(expr * P(-p), op_connect) + vac_av(freq_term);
+    auto freq_term = ex<Variable>(L"ω") * Λ_pt_(order, p) * P(nₚ(-p));
+    result.at(p) = vac_av(expr * P(nₚ(-p)), op_connect) + vac_av(freq_term);
   }
   return result;
 }
 
-std::vector<ExprPtr> CC::eom_r(size_t nann, size_t ncre) {
+std::vector<ExprPtr> CC::eom_r(nₚ np, nₕ nh) {
   assert(!unitary() && "Unitary ansatz is not yet supported");
-  assert(nann > 0 || ncre > 0 && "Unsupported excitation order");
-  assert(nann == ncre && "Only EE-EOM-CC is supported for now");
-  // TODO: Debug IP and EA EOM-CC
+  assert(np > 0 || nh > 0 && "Unsupported excitation order");
+  assert(np == nh &&
+         "Only EE-EOM-CC has been tested ... remove this assert to try "
+         "Fock-space EOM-CC");
 
-  if (nann != ncre)
+  if (np != nh)
     assert(
         get_default_context().spbasis() != SPBasis::spinfree &&
         "spin-free basis does not yet support non particle-conserving cases");
@@ -280,7 +281,7 @@ std::vector<ExprPtr> CC::eom_r(size_t nann, size_t ncre) {
   auto hbar = sim_tr(H(), 4);
 
   // hbar * R
-  auto hbar_R = hbar * R(nann, ncre);
+  auto hbar_R = hbar * R(np, nh);
 
   // connectivity:
   // default connections + connect R with {h,f,g}
@@ -292,28 +293,28 @@ std::vector<ExprPtr> CC::eom_r(size_t nann, size_t ncre) {
 
   // initialize result vector
   std::vector<ExprPtr> result;
-  auto idx = std::max(nann, ncre);  // index for populating the result vector
+  using std::max;
+  auto idx = max(np, nh);  // index for populating the result vector
   result.resize(idx + 1);
 
-  using boost::numeric_cast;
   // start from the highest excitation order, go down to the lowest possible
-  for (auto na = numeric_cast<std::int64_t>(nann),
-            nc = numeric_cast<std::int64_t>(ncre);
-       na > 0 || nc > 0; --na, --nc) {
-    // project with <ncre, nann| (i.e., multiply P(ncre, nann)) and compute VEV
-    result.at(idx) = vac_av(P(nc, na) * hbar_R, op_connect);
+  for (std::int64_t rp = np, rh = nh; rp > 0 || rh > 0; --rp, --rh) {
+    // project with <rp, rh| (i.e., multiply P(rp, rh)) and compute VEV
+    result.at(idx) = vac_av(P(nₚ(rp), nₕ(rh)) * hbar_R, op_connect);
     idx--;  // index decrement
   }
 
   return result;
 }
 
-std::vector<ExprPtr> CC::eom_l(size_t nann, size_t ncre) {
+std::vector<ExprPtr> CC::eom_l(nₚ np, nₕ nh) {
   assert(!unitary() && "Unitary ansatz is not yet supported");
-  assert(nann > 0 || ncre > 0 && "Unsupported excitation order");
-  assert(nann == ncre && "Only EE-EOM-CC is supported for now");
+  assert(np > 0 || nh > 0 && "Unsupported excitation order");
+  assert(np == nh &&
+         "Only EE-EOM-CC has been tested ... remove this assert to try "
+         "Fock-space EOM-CC");
 
-  if (nann != ncre)
+  if (np != nh)
     assert(get_default_context().spbasis() != SPBasis::spinfree &&
            "spin-free basis does not support non particle-conserving cases");
 
@@ -321,7 +322,7 @@ std::vector<ExprPtr> CC::eom_l(size_t nann, size_t ncre) {
   auto hbar = sim_tr(H(), 4);
 
   // L * hbar
-  auto L_hbar = L(nann, ncre) * hbar;
+  auto L_hbar = L(np, nh) * hbar;
 
   // connectivity:
   // default connections + connect H with projectors
@@ -336,17 +337,14 @@ std::vector<ExprPtr> CC::eom_l(size_t nann, size_t ncre) {
 
   // initialize result vector
   std::vector<ExprPtr> result;
-  auto idx = std::max(nann, ncre);  // index for populating the result vector
+  using std::max;
+  auto idx = max(np, nh);  // index for populating the result vector
   result.resize(idx + 1);
 
-  using boost::numeric_cast;
   // start from the highest excitation order, go down to the lowest possible
-  for (auto na = numeric_cast<std::int64_t>(nann),
-            nc = numeric_cast<std::int64_t>(ncre);
-       na > 0 || nc > 0; --na, --nc) {
-    // right project with |ncre,nann> (i.e., multiply P(-ncre, -nann)) and
-    // compute VEV
-    result.at(idx) = vac_av(L_hbar * P(-nc, -na), op_connect);
+  for (std::int64_t rp = np, rh = nh; rp > 0 || rh > 0; --rp, --rh) {
+    // right project with |rp,rh> (i.e., multiply P(-np, -rh)) and compute VEV
+    result.at(idx) = vac_av(L_hbar * P(nₚ(-rp), nₕ(-rh)), op_connect);
     idx--;  // index decrement
   }
 

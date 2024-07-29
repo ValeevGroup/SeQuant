@@ -20,6 +20,7 @@
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/space.hpp>
+#include <SeQuant/core/utility/strong.hpp>
 
 #include <range/v3/iterator/basic_iterator.hpp>
 #include <range/v3/range/conversion.hpp>
@@ -48,6 +49,15 @@
 
 namespace sequant {
 namespace mbpt {
+
+DEFINE_STRONG_TYPE_FOR_INTEGER(nₚ, std::int64_t);  // define nₚ
+DEFINE_STRONG_TYPE_FOR_INTEGER(nₕ, std::int64_t);  // define nₕ
+
+#ifndef DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT
+#define DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(OP)                      \
+  inline ExprPtr OP(std::int64_t Rank) { return OP(nₚ(Rank), nₕ(Rank)); } \
+  inline ExprPtr OP(nₚ Rank) { return OP(Rank, nₕ(Rank)); }
+#endif  // DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT
 
 template <typename QuantumNumbers>
 bool is_vacuum(QuantumNumbers qns);
@@ -539,34 +549,33 @@ class OpMaker {
   /// @param[in] op the operator type
   /// @param[in] cre_list list of creator indices
   /// @param[in] ann_list list of annihilator indices
-  OpMaker(OpType op, std::initializer_list<IndexSpace> cre_list,
-          std::initializer_list<IndexSpace> ann_list);
-
-  /// @param[in] op the operator type
-  /// @param[in] cre_list list of creator indices
-  /// @param[in] ann_list list of annihilator indices
   template <typename IndexSpaceTypeRange1, typename IndexSpaceTypeRange2>
-  OpMaker(OpType op, IndexSpaceTypeRange1&& cre_list,
-          IndexSpaceTypeRange2&& ann_list)
+  OpMaker(OpType op, const cre<IndexSpaceTypeRange1>& cre_list,
+          const ann<IndexSpaceTypeRange2>& ann_list)
       : op_(op),
         cre_spaces_(cre_list.begin(), cre_list.end()),
         ann_spaces_(ann_list.begin(), ann_list.end()) {
-    assert(ncre() > 0 || nann() > 0);
+    assert(ncreators() > 0 || nannihilators() > 0);
   }
 
   /// @param[in] op the operator type
-  /// @param[in] ncre number of bra indices/creators
-  /// @param[in] nann number of ket indices/annihilators
-  /// @param[in] particle_space IndexSpace corresponding to particle_space
-  /// @param[in] hole_space IndexSpace corresponding to hole_space
-  OpMaker(OpType op, std::size_t ncre, std::size_t nann,
-          IndexSpace particle_space = get_particle_space(Spin::any),
-          IndexSpace hole_space = get_hole_space(Spin::any));
+  /// @param[in] nc number of bra indices/creators
+  /// @param[in] na number of ket indices/annihilators
+  OpMaker(OpType op, ncre nc, nann na);
 
-  /// For constructing particle number conserving operators
+  /// @brief creates a particle-conserving replacement operator
   /// @param[in] op the operator type
-  /// @param[i] nparticle rank of the operator
-  OpMaker(OpType op, std::size_t nparticle);
+  /// @param[in] rank particle rank of the operator (# of creators = # of
+  /// annihilators = @p rank )
+  OpMaker(OpType op, std::size_t rank);
+
+  /// @param[in] op the operator type
+  /// @param[in] nc number of bra indices/creators
+  /// @param[in] na number of ket indices/annihilators
+  /// @param[in] cre_space IndexSpace referred to be the creator
+  /// @param[in] ann_space IndexSpace referred to be the annihilators
+  OpMaker(OpType op, ncre nc, nann na, const cre<IndexSpace>& cre_space,
+          const ann<IndexSpace>& ann_space);
 
   enum class UseDepIdx {
     /// bra/cre indices depend on ket
@@ -656,8 +665,7 @@ class OpMaker {
                              : Symmetry::nonsymm;
     return ex<Constant>(rational{1, mult}) *
            tensor_generator(creidxs, annidxs, opsymm) *
-           ex<NormalOperator<S>>(/* creators */ creidxs,
-                                 /* annihilators */ annidxs,
+           ex<NormalOperator<S>>(cre(creidxs), ann(annidxs),
                                  get_default_context().vacuum());
   }
 
@@ -680,8 +688,8 @@ class OpMaker {
 
   OpMaker(OpType op);
 
-  [[nodiscard]] const auto ncre() const { return cre_spaces_.size(); };
-  [[nodiscard]] const auto nann() const { return ann_spaces_.size(); };
+  [[nodiscard]] const auto ncreators() const { return cre_spaces_.size(); };
+  [[nodiscard]] const auto nannihilators() const { return ann_spaces_.size(); };
 };
 
 extern template class OpMaker<Statistics::FermiDirac>;
@@ -758,6 +766,10 @@ extern template class Operator<qns_t, Statistics::BoseEinstein>;
 
 inline namespace op {
 namespace tensor {
+
+using mbpt::nₕ;
+using mbpt::nₚ;
+
 // clang-format off
 /// @brief `k`-body contribution to the "generic" Hamiltonian (in normal order relative to the default vacuum)
 /// @param[in] k the rank of the particle interactions; only `k<=2` is
@@ -791,44 +803,57 @@ ExprPtr Λ_(std::size_t K);
 /// \p K based on the defined context
 ExprPtr Λ(std::size_t K);
 
-/// @brief Makes generic excitation operator
-/// @param nann number of annihilators
-/// @param ncre number of creators
+/// @brief Makes generic right-hand replacement operator
+/// @param na number of annihilators
+/// @param nc number of creators
 /// @param particle_space IndexSpace corresponding to the particle space
 /// @param hole_space IndexSpace corresponding to the hole space
-ExprPtr R_(std::size_t nann, std::size_t ncre,
-           IndexSpace particle_space = get_particle_space(Spin::any),
-           IndexSpace hole_space = get_hole_space(Spin::any));
+ExprPtr R_(
+    nann na, ncre nc,
+    const cre<IndexSpace>& cre_space = cre(get_particle_space(Spin::any)),
+    const ann<IndexSpace>& ann_space = ann(get_hole_space(Spin::any)));
+
+/// @brief Makes generic excitation operator
+/// @param np number of particle creators
+/// @param nh number of hole creators
+ExprPtr R_(nₚ np, nₕ nh);
+DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(R_);
+
+/// @brief Makes generic left-hand replacement operator
+/// @param na number of annihilators
+/// @param nc number of creators
+/// @param particle_space IndexSpace corresponding to the particle space
+/// @param hole_space IndexSpace corresponding to the hole space
+ExprPtr L_(
+    nann na, ncre nc,
+    const cre<IndexSpace>& cre_space = cre(get_hole_space(Spin::any)),
+    const ann<IndexSpace>& ann_space = ann(get_particle_space(Spin::any)));
 
 /// @brief Makes generic deexcitation operator
-/// @param nann number of annihilators
-/// @param ncre number of creators
-/// @param particle_space IndexSpace corresponding to the particle space
-/// @param hole_space IndexSpace corresponding to the hole space
-ExprPtr L_(std::size_t nann, std::size_t ncre,
-           IndexSpace particle_space = get_particle_space(Spin::any),
-           IndexSpace hole_space = get_hole_space(Spin::any));
+/// @param np number of particle annihilators
+/// @param nh number of hole annihilators
+ExprPtr L_(nₚ np, nₕ nh);
+DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(L_);
 
 // clang-format off
 /// makes projector onto excited bra (if \p np > 0 && \p nh > 0) or ket (if \p np < 0 && \p nh <0) manifold
-/// @param nh number operators in hole space. If \p nh > 0 creators, else annihilators
-/// @param np number of operators in particle space. If \p np > 0 creators, else annihilators
-/// (default is to set \p nh to \p np)
+/// @param np number of particle creators (if > 0) or annihilators (< 0)
+/// @param nh number of hole creators (if > 0) or annihilators (< 0); if omitted, will use \p np
 /// @note if using spin-free basis, only supports particle-symmetric operators `K = Kh = Kp`, returns `S(-K)`
-/// else supports particle non-conserving operators and returns `A(-nh, -np)`
+/// else supports particle non-conserving operators and returns `A(-np, -nh)`
 // clang-format on
-ExprPtr P(std::int64_t nh,
-          std::int64_t np = std::numeric_limits<std::int64_t>::max());
+ExprPtr P(nₚ np, nₕ nh);
+DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(P);
 
 // clang-format off
 /// @brief makes generic bra/ket-antisymmetric excitation (if \p nh > 0 && \p np > 0) or deexcitation (if \p nh < 0 && \p np < 0) operator
-/// @param nh number operators in hole space. If \p nh < 0 creators, else annihilators
-/// @param np number of operators in particle space. If \p np < 0 creators, else annihilators
+/// @param np number of particle creators (if > 0) or annihilators (< 0)
+/// @param nh number of hole creators (if > 0) or annihilators (< 0); if omitted, will use \p np
 /// (default is to set \p np to \p nh)
 /// @note supports particle non-conserving operators
 // clang-format on
-ExprPtr A(std::int64_t nh,
-          std::int64_t np = std::numeric_limits<std::int64_t>::max());
+ExprPtr A(nₚ np, nₕ nh);
+DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(A);
 
 /// @brief makes generic particle-symmetric excitation (if \p K > 0) or
 /// deexcitation (if \p K < 0) operator of rank `|K|`
@@ -904,61 +929,90 @@ ExprPtr Λ_(std::size_t K);
 ExprPtr Λ(std::size_t K);
 
 /// @brief Makes generic excitation operator
-/// @param nann number of annihilators
-/// @param ncre number of creators
-/// @param particle_space IndexSpace corresponding to the particle space
-/// @param hole_space IndexSpace corresponding to the hole space
-ExprPtr R_(std::size_t nann, std::size_t ncre,
-           IndexSpace particle_space = get_particle_space(Spin::any),
-           IndexSpace hole_space = get_hole_space(Spin::any));
+/// @param na number of annihilators
+/// @param nc number of creators
+/// @param cre_space IndexSpace on which creators act
+/// @param hole_space IndexSpace on which annihilators act
+ExprPtr R_(
+    nann na, ncre nc,
+    const cre<IndexSpace>& cre_space = cre(get_particle_space(Spin::any)),
+    const ann<IndexSpace>& ann_space = ann(get_hole_space(Spin::any)));
+
+/// @brief Makes generic excitation operator
+/// @param np number of particle creators
+/// @param nh number of hole creators
+ExprPtr R_(nₚ np, nₕ nh);
+DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(R_);
 
 /// @brief Makes generic deexcitation operator
-/// @param nann number of annihilators
-/// @param ncre number of creators
-/// @param particle_space IndexSpace corresponding to the particle space
-/// @param hole_space IndexSpace corresponding to the hole space
-ExprPtr L_(std::size_t nann, std::size_t ncre,
-           IndexSpace particle_space = get_particle_space(Spin::any),
-           IndexSpace hole_space = get_hole_space(Spin::any));
+/// @param na number of annihilators
+/// @param nc number of creators
+/// @param cre_space IndexSpace on which creators act
+/// @param hole_space IndexSpace on which annihilators act
+ExprPtr L_(
+    nann na, ncre nc,
+    const cre<IndexSpace>& cre_space = cre(get_hole_space(Spin::any)),
+    const ann<IndexSpace>& ann_space = ann(get_particle_space(Spin::any)));
 
-/// @brief Makes sum of generic excitation operators upto rank \p nann \p ncre
-/// @param nann number of annihililators
-/// @param ncre number of creators
-/// @param particle_space IndexSpace corresponding to the particle space
-/// @param hole_space IndexSpace corresponding to the hole space
-ExprPtr R(std::size_t nann, std::size_t ncre,
-          IndexSpace particle_space = get_particle_space(Spin::any),
-          IndexSpace hole_space = get_hole_space(Spin::any));
+/// @brief Makes generic deexcitation operator
+/// @param np number of particle annihilators
+/// @param nh number of hole annihilators
+ExprPtr L_(nₚ np, nₕ nh);
+DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(L_);
 
-/// @brief Makes sum of generic deexcitation operators upto rank \p nann \p ncre
-/// @param nann number of annihilators
-/// @param ncre number of creators
-/// @param particle_space IndexSpace corresponding to the particle space
-/// @param hole_space IndexSpace corresponding to the hole space
-ExprPtr L(std::size_t nann, std::size_t ncre,
-          IndexSpace particle_space = get_particle_space(Spin::any),
-          IndexSpace hole_space = get_hole_space(Spin::any));
+/// @brief Makes sum of generic right-hand replacement operators up to max rank
+/// @param na number of annihilators
+/// @param nc number of creators
+/// @param cre_space IndexSpace on which creators act
+/// @param hole_space IndexSpace on which annihilators act
+/// @return `R_(na,nc) + R_(na-1,nc-1) + ...`
+ExprPtr R(nann na, ncre nc,
+          const cre<IndexSpace>& cre_space = cre(get_particle_space(Spin::any)),
+          const ann<IndexSpace>& ann_space = ann(get_hole_space(Spin::any)));
+
+/// @brief Makes sum of generic excitation operators up to max rank
+/// @param np max number of particle creators
+/// @param nh max number of hole creators
+/// @return `R_(np,nh) + R_(np-1,nh-1) + ...`
+ExprPtr R(nₚ np, nₕ nh);
+DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(R);
+
+/// @brief Makes sum of generic "left-hand" replacement operators up to max rank
+/// @param na number of annihilators
+/// @param nc number of creators
+/// @param cre_space IndexSpace on which creators act
+/// @param hole_space IndexSpace on which annihilators act
+/// @return `L_(na,nc) + L_(na-1,nc-1) + ...`
+ExprPtr L(
+    nann na, ncre nc,
+    const cre<IndexSpace>& cre_space = cre(get_hole_space(Spin::any)),
+    const ann<IndexSpace>& ann_space = ann(get_particle_space(Spin::any)));
+
+/// @brief Makes sum of deexcitation operators up to max rank
+/// @param np max number of particle annihilators
+/// @param nh max number of hole annihilators
+/// @return `L_(np,nh) + L_(np-1,nh-1) + ...`
+ExprPtr L(nₚ np, nₕ nh);
+DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(L);
 
 // clang-format off
 /// makes projector onto excited bra (if \p np > 0 && \p nh > 0) or ket (if \p np < 0 && \p nh <0) manifold
-/// @param nh number operators in hole space. If \p nh > 0 creators, else annihilators
-/// @param np number of operators in particle space. If \p np > 0 creators, else annihilators
-/// (default is to set \p nh to \p np)
+/// @param np number of particle creators (if > 0) or annihilators (< 0)
+/// @param nh number of hole creators (if > 0) or annihilators (< 0); if omitted, will use \p np
 /// @note if using spin-free basis, only supports particle-symmetric operators `K = Kh = Kp`, returns `S(-K)`
-/// else supports particle non-conserving operators and returns `A(-nh, -np)`
+/// else supports particle non-conserving operators and returns `A(-np, -nh)`
 // clang-format on
-ExprPtr P(std::int64_t nh,
-          std::int64_t np = std::numeric_limits<std::int64_t>::max());
+ExprPtr P(nₚ np, nₕ nh);
+DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(P);
 
 // clang-format off
 /// @brief makes generic bra/ket-antisymmetric excitation (if \p nh > 0 && \p np > 0) or deexcitation (if \p nh < 0 && \p np < 0) operator
-/// @param nh number operators in hole space. If \p nh < 0 creators, else annihilators
-/// @param np number of operators in particle space. If \p np < 0 creators, else annihilators
-/// (default is to set \p np to \p nh)
+/// @param np number of particle creators (if > 0) or annihilators (< 0)
+/// @param nh number of hole creators (if > 0) or annihilators (< 0); if omitted, will use \p np
 /// @note supports particle non-conserving operators
 // clang-format on
-ExprPtr A(std::int64_t nh,
-          std::int64_t np = std::numeric_limits<std::int64_t>::max());
+ExprPtr A(nₚ np, nₕ nh);
+DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(A);
 
 /// @brief makes generic particle-symmetric excitation (if \p K > 0) or
 /// deexcitation (if \p K < 0) operator of rank `|K|`

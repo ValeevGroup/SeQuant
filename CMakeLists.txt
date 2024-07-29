@@ -431,6 +431,7 @@ if (BUILD_TESTING)
             tests/unit/test_latex.cpp
             tests/unit/test_utilities.cpp
             tests/unit/test_export.cpp
+            tests/unit/test_meta.cpp
             )
 
     if (TARGET tiledarray)

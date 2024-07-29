@@ -181,8 +181,8 @@ ExprPtr ast_to_expr(const parse::ast::NullaryValue &value,
       auto [offset, length] =
           get_pos(tensor, position_cache.get(), begin.get());
 
-      return ex<Tensor>(tensor.name, std::move(braIndices),
-                        std::move(ketIndices),
+      return ex<Tensor>(tensor.name, bra(std::move(braIndices)),
+                        ket(std::move(ketIndices)),
                         to_symmetry(tensor.symmetry, offset + length - 1,
                                     begin.get(), default_symmetry));
     }

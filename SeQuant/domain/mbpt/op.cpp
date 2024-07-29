@@ -405,60 +405,40 @@ std::wstring to_latex(const mbpt::Operator<mbpt::qns_t, S>& op) {
 namespace sequant::mbpt {
 
 template <Statistics S>
-OpMaker<S>::OpMaker(OpType op, std::initializer_list<IndexSpace> cre_list,
-                    std::initializer_list<IndexSpace> ann_list)
-    : op_(op),
-      cre_spaces_(cre_list.begin(), cre_list.end()),
-      ann_spaces_(ann_list.begin(), ann_list.end()) {
-  assert(ncre() > 0 || nann() > 0);
-}
-
-template <Statistics S>
 OpMaker<S>::OpMaker(OpType op) : op_(op) {}
 
 template <Statistics S>
-OpMaker<S>::OpMaker(OpType op, std::size_t nbra, std::size_t nket,
-                    IndexSpace particle_space, IndexSpace hole_space) {
+OpMaker<S>::OpMaker(OpType op, ncre nc, nann na) {
   op_ = op;
-  assert(nbra > 0 || nket > 0);
+  assert(nc > 0 || na > 0);
   switch (to_class(op)) {
     case OpClass::ex:
-      cre_spaces_ = decltype(cre_spaces_)(nbra, particle_space);
-      ann_spaces_ = decltype(ann_spaces_)(nket, hole_space);
+      cre_spaces_ = decltype(cre_spaces_)(nc, get_particle_space(Spin::any));
+      ann_spaces_ = decltype(ann_spaces_)(na, get_hole_space(Spin::any));
       break;
     case OpClass::deex:
-      cre_spaces_ = decltype(cre_spaces_)(nbra, hole_space);
-      ann_spaces_ = decltype(ann_spaces_)(nket, particle_space);
+      cre_spaces_ = decltype(cre_spaces_)(nc, get_hole_space(Spin::any));
+      ann_spaces_ = decltype(ann_spaces_)(na, get_particle_space(Spin::any));
       break;
     case OpClass::gen:
-      cre_spaces_ = decltype(cre_spaces_)(nbra, get_complete_space(Spin::any));
-      ann_spaces_ = decltype(ann_spaces_)(nket, get_complete_space(Spin::any));
+      cre_spaces_ = decltype(cre_spaces_)(nc, get_complete_space(Spin::any));
+      ann_spaces_ = decltype(ann_spaces_)(na, get_complete_space(Spin::any));
       break;
   }
 }
 
 template <Statistics S>
-OpMaker<S>::OpMaker(OpType op, std::size_t nparticle) {
-  assert(nparticle > 0);
+OpMaker<S>::OpMaker(OpType op, std::size_t rank)
+    : OpMaker(op, ncre(rank), nann(rank)) {}
+
+template <Statistics S>
+OpMaker<S>::OpMaker(OpType op, ncre nc, nann na,
+                    const cre<IndexSpace>& cre_space,
+                    const ann<IndexSpace>& ann_space) {
   op_ = op;
-  const auto hole_space = get_hole_space(Spin::any);
-  const auto particle_space = get_particle_space(Spin::any);
-  switch (to_class(op)) {
-    case OpClass::ex:
-      cre_spaces_ = decltype(cre_spaces_)(nparticle, particle_space);
-      ann_spaces_ = decltype(ann_spaces_)(nparticle, hole_space);
-      break;
-    case OpClass::deex:
-      cre_spaces_ = decltype(cre_spaces_)(nparticle, hole_space);
-      ann_spaces_ = decltype(ann_spaces_)(nparticle, particle_space);
-      break;
-    case OpClass::gen:
-      cre_spaces_ =
-          decltype(cre_spaces_)(nparticle, get_complete_space(Spin::any));
-      ann_spaces_ =
-          decltype(ann_spaces_)(nparticle, get_complete_space(Spin::any));
-      break;
-  }
+  assert(nc > 0 || na > 0);
+  cre_spaces_ = decltype(cre_spaces_)(nc, cre_space);
+  ann_spaces_ = decltype(ann_spaces_)(na, ann_space);
 }
 
 template <Statistics S>
@@ -487,7 +467,7 @@ ExprPtr OpMaker<S>::operator()(std::optional<UseDepIdx> dep,
       cre_spaces_, ann_spaces_,
       [this, opsymm_opt](const auto& creidxs, const auto& annidxs,
                          Symmetry opsymm) {
-        return ex<Tensor>(to_wstring(op_), creidxs, annidxs,
+        return ex<Tensor>(to_wstring(op_), bra(creidxs), ket(annidxs),
                           opsymm_opt ? *opsymm_opt : opsymm);
       },
       dep ? *dep : UseDepIdx::None);
@@ -548,10 +528,11 @@ ExprPtr F(bool use_tensor, IndexSpace reference_occupied) {
             if (opsymm == Symmetry::antisymm) {
               braidxs.push_back(m1);
               ketidxs.push_back(m2);
-              return ex<Tensor>(to_wstring(mbpt::OpType::g), braidxs, ketidxs,
-                                Symmetry::antisymm) *
-                     ex<Tensor>(to_wstring(mbpt::OpType::δ), IndexList{m2},
-                                IndexList{m1}, Symmetry::nonsymm);
+              return ex<Tensor>(to_wstring(mbpt::OpType::g),
+                                bra(std::move(braidxs)),
+                                ket(std::move(ketidxs)), Symmetry::antisymm) *
+                     ex<Tensor>(to_wstring(mbpt::OpType::δ), bra{m2}, ket{m1},
+                                Symmetry::nonsymm);
             } else {  // opsymm == Symmetry::nonsymm
               auto braidx_J = braidxs;
               braidx_J.push_back(m1);
@@ -562,12 +543,14 @@ ExprPtr F(bool use_tensor, IndexSpace reference_occupied) {
               auto ketidxs_K = ketidxs;
               using std::begin;
               ketidxs_K.emplace(begin(ketidxs_K), m2);
-              return (ex<Tensor>(to_wstring(mbpt::OpType::g), braidx_J,
-                                 ketidxs_J, Symmetry::nonsymm) -
-                      ex<Tensor>(to_wstring(mbpt::OpType::g), braidx_K,
-                                 ketidxs_K, Symmetry::nonsymm)) *
-                     ex<Tensor>(to_wstring(mbpt::OpType::δ), IndexList{m2},
-                                IndexList{m1}, Symmetry::nonsymm);
+              return (ex<Tensor>(to_wstring(mbpt::OpType::g),
+                                 bra(std::move(braidx_J)),
+                                 ket(std::move(ketidxs_J)), Symmetry::nonsymm) -
+                      ex<Tensor>(
+                          to_wstring(mbpt::OpType::g), bra(std::move(braidx_K)),
+                          ket(std::move(ketidxs_K)), Symmetry::nonsymm)) *
+                     ex<Tensor>(to_wstring(mbpt::OpType::δ), bra{m2}, ket{m1},
+                                Symmetry::nonsymm);
             }
           });
     };
@@ -604,34 +587,40 @@ ExprPtr Λ(std::size_t K) {
   return result;
 }
 
-ExprPtr R_(std::size_t nann, std::size_t ncre, IndexSpace particle_space,
-           IndexSpace hole_space) {
-  return OpMaker<Statistics::FermiDirac>(OpType::R, ncre, nann, particle_space,
-                                         hole_space)();
+ExprPtr R_(nann na, ncre nc, const cre<IndexSpace>& cre_space,
+           const ann<IndexSpace>& ann_space) {
+  return OpMaker<Statistics::FermiDirac>(OpType::R, nc, na, cre_space,
+                                         ann_space)();
+}
+ExprPtr R_(nₚ np, nₕ nh) {
+  assert(np >= 0 && nh >= 0);
+  return OpMaker<Statistics::FermiDirac>(OpType::R, ncre(np.value()),
+                                         nann(nh.value()))();
 }
 
-ExprPtr L_(std::size_t nann, std::size_t ncre, IndexSpace particle_space,
-           IndexSpace hole_space) {
-  return OpMaker<Statistics::FermiDirac>(OpType::L, ncre, nann, particle_space,
-                                         hole_space)();
+ExprPtr L_(nann na, ncre nc, const cre<IndexSpace>& cre_space,
+           const ann<IndexSpace>& ann_space) {
+  return OpMaker<Statistics::FermiDirac>(OpType::L, nc, na, cre_space,
+                                         ann_space)();
 }
 
-ExprPtr P(std::int64_t nh, std::int64_t np) {
-  if (np == std::numeric_limits<std::int64_t>::max()) np = nh;
+ExprPtr L_(nₚ np, nₕ nh) {
+  assert(np >= 0 && nh >= 0);
+  return OpMaker<Statistics::FermiDirac>(OpType::L, ncre(nh.value()),
+                                         nann(np.value()))();
+}
 
+ExprPtr P(nₚ np, nₕ nh) {
   if (np != nh)
     assert(
         get_default_context().spbasis() != SPBasis::spinfree &&
         "Spinfree basis does not support non-particle conserving projectors");
   return get_default_context().spbasis() == SPBasis::spinfree
              ? tensor::S(-nh /* nh == np */)
-             : tensor::A(-nh, -np);
+             : tensor::A(-np, -nh);
 }
 
-ExprPtr A(std::int64_t nh, std::int64_t np) {
-  // particle number conserving
-  if (np == std::numeric_limits<std::int64_t>::max()) np = nh;
-
+ExprPtr A(nₚ np, nₕ nh) {
   assert(!(np == 0 && nh == 0));
   // if they are not zero, Kh and Kp should have the same sign
   if (np != 0 && nh != 0) {
@@ -640,25 +629,25 @@ ExprPtr A(std::int64_t nh, std::int64_t np) {
 
   container::svector<IndexSpace> creators;
   container::svector<IndexSpace> annihilators;
-  if (np > 0)  // ex
-    for ([[maybe_unused]] auto i : ranges::views::iota(0, np))
-      annihilators.emplace_back(get_hole_space(Spin::any));
-  else  // deex
-    for ([[maybe_unused]] auto i : ranges::views::iota(0, -np))
-      creators.emplace_back(get_hole_space(Spin::any));
   if (nh > 0)  // ex
     for ([[maybe_unused]] auto i : ranges::views::iota(0, nh))
-      creators.emplace_back(get_particle_space(Spin::any));
+      annihilators.emplace_back(get_hole_space(Spin::any));
   else  // deex
     for ([[maybe_unused]] auto i : ranges::views::iota(0, -nh))
+      creators.emplace_back(get_hole_space(Spin::any));
+  if (np > 0)  // ex
+    for ([[maybe_unused]] auto i : ranges::views::iota(0, np))
+      creators.emplace_back(get_particle_space(Spin::any));
+  else  // deex
+    for ([[maybe_unused]] auto i : ranges::views::iota(0, -np))
       annihilators.emplace_back(get_particle_space(Spin::any));
 
   std::optional<OpMaker<Statistics::FermiDirac>::UseDepIdx> dep;
   if (get_default_mbpt_context().csv() == mbpt::CSV::Yes)
     dep = np > 0 ? OpMaker<Statistics::FermiDirac>::UseDepIdx::Bra
                  : OpMaker<Statistics::FermiDirac>::UseDepIdx::Ket;
-  return OpMaker<Statistics::FermiDirac>(OpType::A, creators, annihilators)(
-      dep, {Symmetry::antisymm});
+  return OpMaker<Statistics::FermiDirac>(
+      OpType::A, cre(creators), ann(annihilators))(dep, {Symmetry::antisymm});
 }
 
 ExprPtr S(std::int64_t K) {
@@ -682,8 +671,8 @@ ExprPtr S(std::int64_t K) {
   if (get_default_mbpt_context().csv() == mbpt::CSV::Yes)
     dep = K > 0 ? OpMaker<Statistics::FermiDirac>::UseDepIdx::Bra
                 : OpMaker<Statistics::FermiDirac>::UseDepIdx::Ket;
-  return OpMaker<Statistics::FermiDirac>(OpType::S, creators, annihilators)(
-      dep, {Symmetry::nonsymm});
+  return OpMaker<Statistics::FermiDirac>(
+      OpType::S, cre(creators), ann(annihilators))(dep, {Symmetry::nonsymm});
 }
 
 ExprPtr H_pt(std::size_t order, std::size_t R) {
@@ -818,9 +807,7 @@ ExprPtr F(bool use_f_tensor, IndexSpace occupied_density) {
   }
 }
 
-ExprPtr A(std::int64_t nh, std::int64_t np) {
-  // particle conserving
-  if (np == std::numeric_limits<std::int64_t>::max()) np = nh;
+ExprPtr A(nₚ np, nₕ nh) {
   assert(!(nh == 0 && np == 0));
   // if they are not zero, Kh and Kp should have the same sign
   if (nh != 0 && np != 0) {
@@ -830,7 +817,7 @@ ExprPtr A(std::int64_t nh, std::int64_t np) {
   auto particle_space = get_particle_space(Spin::any);
   auto hole_space = get_hole_space(Spin::any);
   return ex<op_t>([]() -> std::wstring_view { return L"A"; },
-                  [=]() -> ExprPtr { return tensor::A(nh, np); },
+                  [=]() -> ExprPtr { return tensor::A(np, nh); },
                   [=](qnc_t& qns) {
                     const std::size_t abs_nh = std::abs(nh);
                     const std::size_t abs_np = std::abs(np);
@@ -862,8 +849,7 @@ ExprPtr S(std::int64_t K) {
                   });
 }
 
-ExprPtr P(std::int64_t nh, std::int64_t np) {
-  if (np == std::numeric_limits<std::int64_t>::max()) np = nh;
+ExprPtr P(nₚ np, nₕ nh) {
   if (get_default_context().spbasis() == SPBasis::spinfree) {
     assert(nh == np &&
            "Only particle number conserving cases are supported with spinfree "
@@ -872,7 +858,7 @@ ExprPtr P(std::int64_t nh, std::int64_t np) {
     return S(-K);
   } else {
     assert(get_default_context().spbasis() == SPBasis::spinorbital);
-    return A(-nh, -np);
+    return A(-np, -nh);
   }
 }
 
@@ -921,65 +907,66 @@ ExprPtr Λ_pt(std::size_t order, std::size_t K, bool skip1) {
   return result;
 }
 
-ExprPtr R_(std::size_t nann, std::size_t ncre, IndexSpace particle_space,
-           IndexSpace hole_space) {
+ExprPtr R_(nann na, ncre nc, const cre<IndexSpace>& cre_space,
+           const ann<IndexSpace>& ann_space) {
   return ex<op_t>(
       []() -> std::wstring_view { return optype2label.at(OpType::R); },
-      [=]() -> ExprPtr {
-        return tensor::R_(nann, ncre, particle_space, hole_space);
-      },
+      [=]() -> ExprPtr { return tensor::R_(na, nc, cre_space, ann_space); },
       [=](qnc_t& qns) {
         // ex -> creators in particle_space, annihilators in hole_space
         qns = combine(
-            generic_excitation_qns(/*particle_rank*/ ncre, /*hole_rank*/ nann,
-                                   particle_space, hole_space),
+            generic_excitation_qns(/*particle_rank*/ nc, /*hole_rank*/ na,
+                                   cre_space, ann_space),
             qns);
       });
 }
 
-ExprPtr L_(std::size_t nann, std::size_t ncre, IndexSpace particle_space,
-           IndexSpace hole_space) {
+ExprPtr R_(nₚ np, nₕ nh) { return R_(nann(nh), ncre(np)); }
+
+ExprPtr L_(nann na, ncre nc, const cre<IndexSpace>& cre_space,
+           const ann<IndexSpace>& ann_space) {
   return ex<op_t>(
       []() -> std::wstring_view { return optype2label.at(OpType::L); },
-      [=]() -> ExprPtr {
-        return tensor::L_(nann, ncre, particle_space, hole_space);
-      },
+      [=]() -> ExprPtr { return tensor::L_(na, nc, cre_space, ann_space); },
       [=](qnc_t& qns) {
         // deex -> creators in hole_space, annihilators in particle_space
-        qns = combine(generic_deexcitation_qns(
-                          /*particle_rank*/ nann, /*hole_rank*/ ncre,
-                          particle_space, hole_space),
-                      qns);
+        qns = combine(
+            generic_deexcitation_qns(
+                /*particle_rank*/ na, /*hole_rank*/ nc, ann_space, cre_space),
+            qns);
       });
 }
 
-ExprPtr R(std::size_t nann, std::size_t ncre, IndexSpace particle_space,
-          IndexSpace hole_space) {
-  using boost::numeric_cast;
-  assert(nann > 0 || ncre > 0);
+ExprPtr L_(nₚ np, nₕ nh) { return L_(nann(np), ncre(nh)); }
+
+ExprPtr R(nann na, ncre nc, const cre<IndexSpace>& cre_space,
+          const ann<IndexSpace>& ann_space) {
+  assert(na > 0 || nc > 0);
   ExprPtr result;
 
-  for (auto na = numeric_cast<std::int64_t>(nann),
-            nc = numeric_cast<std::int64_t>(ncre);
-       na > 0 || nc > 0; --na, --nc) {
-    result += R_(na, nc, particle_space, hole_space);
+  for (std::int64_t ra = na, rc = nc; ra > 0 || rc > 0; --ra, --rc) {
+    result += R_(nann(ra), ncre(rc), cre_space, ann_space);
   }
   return result;
 }
 
-ExprPtr L(std::size_t nann, std::size_t ncre, IndexSpace particle_space,
-          IndexSpace hole_space) {
-  using boost::numeric_cast;
-  assert(nann > 0 || ncre > 0);
+ExprPtr R(nₚ np, nₕ nh) {
+  assert(np >= 0 && nh >= 0);
+  return R(nann(nh), ncre(np));
+}
+
+ExprPtr L(nann na, ncre nc, const cre<IndexSpace>& cre_space,
+          const ann<IndexSpace>& ann_space) {
+  assert(na > 0 || nc > 0);
   ExprPtr result;
 
-  for (auto na = numeric_cast<std::int64_t>(nann),
-            nc = numeric_cast<std::int64_t>(ncre);
-       na > 0 || nc > 0; --na, --nc) {
-    result += L_(na, nc, particle_space, hole_space);
+  for (std::int64_t ra = na, rc = nc; ra > 0 || rc > 0; --ra, --rc) {
+    result += L_(nann(ra), ncre(rc), cre_space, ann_space);
   }
   return result;
 }
+
+ExprPtr L(nₚ np, nₕ nh) { return L(nann(np), ncre(nh)); }
 
 bool can_change_qns(const ExprPtr& op_or_op_product, const qns_t target_qns,
                     const qns_t source_qns = {}) {
@@ -1098,7 +1085,7 @@ ExprPtr vac_av(ExprPtr expr, std::vector<std::pair<int, int>> nop_connections,
                ketidxs.size());  // need to handle particle # violating case?
         const auto rank = braidxs.size();
         return ex<Tensor>(
-            rdm_label, braidxs, ketidxs,
+            rdm_label, bra(std::move(braidxs)), ket(std::move(ketidxs)),
             rank > 1 && spinorbital ? Symmetry::antisymm : Symmetry::nonsymm);
       };
 
