@@ -101,8 +101,7 @@ ProcessingOptions extractProcessingOptions(const json &details) {
 	return options;
 }
 
-itf::Result toItfResult(const ResultExpr &result, const ItfContext &ctx,
-						bool importResultTensor) {
+itf::Result toItfResult(const ResultExpr &result, const ItfContext &ctx, bool importResultTensor) {
 	// TODO: Handle symmetry of result tensor
 	Tensor resultTensor(result.label(), bra(result.bra()), ket(result.ket()), aux(result.aux()));
 
@@ -137,36 +136,35 @@ void generateITF(const json &blocks, std::string_view out_file, const IndexSpace
 			sequant::ResultExpr result = sequant::parse_result_expr(toUtf16(input), Symmetry::antisymm);
 
 			if (current_result.contains("name")) {
-				result.set_label(toUtf16(current_result.at("name").get<std::string>()));
+				result.set_label(toUtf16(current_result.at("name").get< std::string >()));
 			}
 
 			spdlog::debug("Initial equation is:\n{}", result);
 
 			ProcessingOptions options = extractProcessingOptions(current_result);
 
-			result = postProcess(result, spaceMeta, options);
+			for (ResultExpr &current : postProcess(result, spaceMeta, options)) {
+				spdlog::debug("Fully processed equation is:\n{}", current);
 
-			spdlog::debug("Fully processed equation is:\n{}", result);
+				if (needsSymmetrization(current.expression())) {
+					std::optional< ExprPtr > symmetrizer = popTensor(current.expression(), L"S");
+					assert(symmetrizer.has_value());
 
-			if (needsSymmetrization(result.expression())) {
-				std::optional< ExprPtr > symmetrizer = popTensor(result.expression(), L"S");
-				assert(symmetrizer.has_value());
+					ResultExpr symmetrizedResult = current;
+					current.set_label(symmetrizedResult.label() + L"u");
 
-				ResultExpr symmetrizedResult = result;
-				result.set_label(symmetrizedResult.label() + L"u");
+					spdlog::debug("After popping S tensor:\n{}", current);
 
-				spdlog::debug("After popping S tensor:\n{}", result);
+					results.push_back(toItfResult(current, context, false));
 
-				results.push_back(toItfResult(result, context, false));
+					symmetrizedResult.expression() = generateResultSymmetrization(symmetrizedResult, current.label());
 
-				symmetrizedResult.expression() = generateResultSymmetrization(symmetrizedResult, result.label());
+					spdlog::debug("Result symmetrization via\n{}", symmetrizedResult);
 
-				spdlog::debug("Result symmetrization via\n{}", symmetrizedResult);
-
-				results.push_back(
-					toItfResult(symmetrizedResult, context, current_result.value("import", true)));
-			} else {
-				results.push_back(toItfResult(result, context, current_result.value("import", true)));
+					results.push_back(toItfResult(symmetrizedResult, context, current_result.value("import", true)));
+				} else {
+					results.push_back(toItfResult(current, context, current_result.value("import", true)));
+				}
 			}
 		}
 
@@ -193,7 +191,7 @@ void generateCode(const json &details, const IndexSpaceMeta &spaceMeta) {
 void registerIndexSpaces(const json &spaces, IndexSpaceMeta &meta) {
 	IndexSpaceRegistry &registry = *get_default_context().mutable_index_space_registry();
 
-	std::vector< std::pair<std::wstring, IndexSpaceMeta::Entry> > spaceList;
+	std::vector< std::pair< std::wstring, IndexSpaceMeta::Entry > > spaceList;
 	spaceList.reserve(spaces.size());
 
 	for (std::size_t i = 0; i < spaces.size(); ++i) {
@@ -215,7 +213,7 @@ void registerIndexSpaces(const json &spaces, IndexSpaceMeta &meta) {
 		spdlog::debug("Registered index space '{}' with label '{}', tag '{}' and size {}", toUtf8(entry.name),
 					  toUtf8(label), toUtf8(entry.tag), size);
 
-		spaceList.push_back(std::make_pair(std::move(label), std::move(entry) ));
+		spaceList.push_back(std::make_pair(std::move(label), std::move(entry)));
 	}
 
 	mbpt::add_fermi_spin(registry);
