@@ -60,20 +60,20 @@ TEST_CASE("Op", "[elements]") {
 
     /////////////////// N-conserving normal op
     // 1 body
-    REQUIRE_NOTHROW(FNOperator({L"i_1"}, {L"a_1"}));
-    auto nop1 = FNOperator({L"i_1"}, {L"a_1"});
+    REQUIRE_NOTHROW(FNOperator(cre({L"i_1"}), ann({L"a_1"})));
+    auto nop1 = FNOperator(cre({L"i_1"}), ann({L"a_1"}));
     REQUIRE(nop1.creators().size() == 1);
     REQUIRE(nop1.annihilators().size() == 1);
     REQUIRE(nop1.creators()[0] == fcre(L"i_1"));
     REQUIRE(nop1.annihilators()[0] == fann(L"a_1"));
 
     // 2 body
-    REQUIRE_NOTHROW(FNOperator(
-        {Index{L"i_1"}, Index{L"i_2"}},
-        {Index{L"a_1", {L"i_1", L"i_2"}}, Index{L"a_2", {L"i_1", L"i_2"}}}));
-    auto nop2 = FNOperator(
-        {Index{L"i_1"}, Index{L"i_2"}},
-        {Index{L"a_1", {L"i_1", L"i_2"}}, Index{L"a_2", {L"i_1", L"i_2"}}});
+    REQUIRE_NOTHROW(FNOperator(cre({Index{L"i_1"}, Index{L"i_2"}}),
+                               ann({Index{L"a_1", {L"i_1", L"i_2"}},
+                                    Index{L"a_2", {L"i_1", L"i_2"}}})));
+    auto nop2 = FNOperator(cre({Index{L"i_1"}, Index{L"i_2"}}),
+                           ann({Index{L"a_1", {L"i_1", L"i_2"}},
+                                Index{L"a_2", {L"i_1", L"i_2"}}}));
     REQUIRE(nop2.creators().size() == 2);
     REQUIRE(nop2.annihilators().size() == 2);
     REQUIRE(nop2.creators()[0] == fcre(L"i_1"));
@@ -82,43 +82,43 @@ TEST_CASE("Op", "[elements]") {
     REQUIRE(nop2.annihilators()[1] == fann(Index{L"a_2", {L"i_1", L"i_2"}}));
 
     /////////////////// N-nonconserving normal op
-    REQUIRE_NOTHROW(FNOperator({L"i_1"}, {}));
-    auto nop3 = FNOperator({L"i_1"}, {});
+    REQUIRE_NOTHROW(FNOperator(cre({L"i_1"}), ann({})));
+    auto nop3 = FNOperator(cre({L"i_1"}), ann({}));
     REQUIRE(nop3.creators().size() == 1);
     REQUIRE(nop3.annihilators().size() == 0);
     REQUIRE(nop3.creators()[0] == fcre(L"i_1"));
-    REQUIRE_NOTHROW(FNOperator({}, {Index{L"a_1", {L"i_1"}}}));
-    auto nop4 = FNOperator({}, {Index{L"a_1", {L"i_1"}}});
+    REQUIRE_NOTHROW(FNOperator(cre({}), ann({Index{L"a_1", {L"i_1"}}})));
+    auto nop4 = FNOperator(cre({}), ann({Index{L"a_1", {L"i_1"}}}));
     REQUIRE(nop4.creators().size() == 0);
     REQUIRE(nop4.annihilators().size() == 1);
     REQUIRE(nop4.annihilators()[0] == fann(Index{L"a_1", {L"i_1"}}));
 
     /////////////////// normal op sequence
     // can include N-conserving ...
-    REQUIRE_NOTHROW(FNOperatorSeq({FNOperator({L"i_1"}, {L"i_2"}),
-                                   FNOperator({L"i_3"}, {L"i_4"}),
-                                   FNOperator({L"i_5"}, {L"i_6"})}));
-    auto nopseq1 = FNOperatorSeq({FNOperator({L"i_1"}, {L"i_2"}),
-                                  FNOperator({L"i_3"}, {L"i_4"}),
-                                  FNOperator({L"i_5"}, {L"i_6"})});
+    REQUIRE_NOTHROW(FNOperatorSeq({FNOperator(cre({L"i_1"}), ann({L"i_2"})),
+                                   FNOperator(cre({L"i_3"}), ann({L"i_4"})),
+                                   FNOperator(cre({L"i_5"}), ann({L"i_6"}))}));
+    auto nopseq1 = FNOperatorSeq({FNOperator(cre({L"i_1"}), ann({L"i_2"})),
+                                  FNOperator(cre({L"i_3"}), ann({L"i_4"})),
+                                  FNOperator(cre({L"i_5"}), ann({L"i_6"}))});
     REQUIRE(nopseq1.size() == 3);
-    REQUIRE(nopseq1[0] == FNOperator({L"i_1"}, {L"i_2"}));
-    REQUIRE(nopseq1[1] == FNOperator({L"i_3"}, {L"i_4"}));
-    REQUIRE(nopseq1[2] == FNOperator({L"i_5"}, {L"i_6"}));
-    REQUIRE(nopseq1.at(0) == FNOperator({L"i_1"}, {L"i_2"}));
-    REQUIRE(nopseq1.at(1) == FNOperator({L"i_3"}, {L"i_4"}));
-    REQUIRE(nopseq1.at(2) == FNOperator({L"i_5"}, {L"i_6"}));
+    REQUIRE(nopseq1[0] == FNOperator(cre({L"i_1"}), ann({L"i_2"})));
+    REQUIRE(nopseq1[1] == FNOperator(cre({L"i_3"}), ann({L"i_4"})));
+    REQUIRE(nopseq1[2] == FNOperator(cre({L"i_5"}), ann({L"i_6"})));
+    REQUIRE(nopseq1.at(0) == FNOperator(cre({L"i_1"}), ann({L"i_2"})));
+    REQUIRE(nopseq1.at(1) == FNOperator(cre({L"i_3"}), ann({L"i_4"})));
+    REQUIRE(nopseq1.at(2) == FNOperator(cre({L"i_5"}), ann({L"i_6"})));
 
     // ... N-nonconserving normal ops ...
-    auto nopseq2 = FNOperatorSeq({FNOperator({}, {L"i_1"})});
+    auto nopseq2 = FNOperatorSeq({FNOperator(cre({}), ann({L"i_1"}))});
     REQUIRE(nopseq2.size() == 1);
-    REQUIRE(nopseq2[0] == FNOperator({}, {L"i_1"}));
+    REQUIRE(nopseq2[0] == FNOperator(cre({}), ann({L"i_1"})));
 
     // but all vacua must match
-    REQUIRE_THROWS(
-        FNOperatorSeq({FNOperator({L"i_1"}, {L"i_2"}, Vacuum::Physical),
-                       FNOperator({L"i_3"}, {L"i_4"}, Vacuum::SingleProduct),
-                       FNOperator({L"i_5"}, {L"i_6"})}));
+    REQUIRE_THROWS(FNOperatorSeq(
+        {FNOperator(cre({L"i_1"}), ann({L"i_2"}), Vacuum::Physical),
+         FNOperator(cre({L"i_3"}), ann({L"i_4"}), Vacuum::SingleProduct),
+         FNOperator(cre({L"i_5"}), ann({L"i_6"}))}));
   }
 
   SECTION("adjoint") {
@@ -138,27 +138,29 @@ TEST_CASE("Op", "[elements]") {
     REQUIRE(oper1[0] == fcre(L"i_2"));
     REQUIRE(oper1[1] == fann(L"i_1"));
 
-    auto nop2 = adjoint(FNOperator(
-        {Index{L"i_1"}}, {Index{L"a_1", {L"i_1"}}, Index{L"a_2", {L"i_1"}}}));
+    auto nop2 = adjoint(
+        FNOperator(cre({Index{L"i_1"}}),
+                   ann({Index{L"a_1", {L"i_1"}}, Index{L"a_2", {L"i_1"}}})));
     REQUIRE(nop2.creators().size() == 2);
     REQUIRE(nop2.annihilators().size() == 1);
     REQUIRE(nop2.annihilators()[0] == fann(L"i_1"));
     REQUIRE(nop2.creators()[0] == fcre(Index{L"a_1", {L"i_1"}}));
     REQUIRE(nop2.creators()[1] == fcre(Index{L"a_2", {L"i_1"}}));
 
-    auto nopseq1 = adjoint(FNOperatorSeq({FNOperator({L"i_1"}, {L"i_2"}),
-                                          FNOperator({L"i_3"}, {L"i_4"}),
-                                          FNOperator({L"i_5"}, {L"i_6"})}));
+    auto nopseq1 =
+        adjoint(FNOperatorSeq({FNOperator(cre({L"i_1"}), ann({L"i_2"})),
+                               FNOperator(cre({L"i_3"}), ann({L"i_4"})),
+                               FNOperator(cre({L"i_5"}), ann({L"i_6"}))}));
     REQUIRE(nopseq1.size() == 3);
-    REQUIRE(nopseq1[2] == adjoint(FNOperator({L"i_1"}, {L"i_2"})));
-    REQUIRE(nopseq1[1] == adjoint(FNOperator({L"i_3"}, {L"i_4"})));
-    REQUIRE(nopseq1[0] == adjoint(FNOperator({L"i_5"}, {L"i_6"})));
+    REQUIRE(nopseq1[2] == adjoint(FNOperator(cre({L"i_1"}), ann({L"i_2"}))));
+    REQUIRE(nopseq1[1] == adjoint(FNOperator(cre({L"i_3"}), ann({L"i_4"}))));
+    REQUIRE(nopseq1[0] == adjoint(FNOperator(cre({L"i_5"}), ann({L"i_6"}))));
   }
 
   SECTION("conversion") {
-    auto nop1 = FNOperator(
-        {Index{L"i_1"}, Index{L"i_2"}},
-        {Index{L"a_1", {L"i_1", L"i_2"}}, Index{L"a_2", {L"i_1", L"i_2"}}});
+    auto nop1 = FNOperator(cre({Index{L"i_1"}, Index{L"i_2"}}),
+                           ann({Index{L"a_1", {L"i_1", L"i_2"}},
+                                Index{L"a_2", {L"i_1", L"i_2"}}}));
     REQUIRE_NOTHROW(static_cast<FOperator>(nop1));
     FOperator op1(static_cast<FOperator>(nop1));
     REQUIRE(op1.size() == 4);
@@ -270,9 +272,9 @@ TEST_CASE("Op", "[elements]") {
 
   SECTION("hug") {
     auto nop1 = FNOperator(
-        {Index{L"i_1"}, Index{L"i_2"}, Index{L"i_3"}, Index{L"a_1"}},
-        {Index{L"a_1", {L"i_1", L"i_2"}}, Index{L"a_2", {L"i_1", L"i_2"}},
-         Index{L"a_1", {L"i_1", L"i_3"}}, Index{L"a_4"}});
+        cre({Index{L"i_1"}, Index{L"i_2"}, Index{L"i_3"}, Index{L"a_1"}}),
+        ann({Index{L"a_1", {L"i_1", L"i_2"}}, Index{L"a_2", {L"i_1", L"i_2"}},
+             Index{L"a_1", {L"i_1", L"i_3"}}, Index{L"a_4"}}));
     REQUIRE_NOTHROW(nop1.hug());
     auto& hug1 = nop1.hug();
     REQUIRE(hug1->num_edges() == 8);
@@ -392,30 +394,32 @@ TEST_CASE("Op", "[elements]") {
     auto oper1 = FOperator{fcre(L"i_1"), fann(L"i_1")};
     REQUIRE(to_latex(oper1) == L"{{a^{\\dagger}_{i_1}}{a_{i_1}}}");
 
-    auto nop1 =
-        FNOperator({L"i_1", L"i_2"}, {L"a_1", L"a_2"}, Vacuum::SingleProduct);
+    auto nop1 = FNOperator(cre({L"i_1", L"i_2"}), ann({L"a_1", L"a_2"}),
+                           Vacuum::SingleProduct);
     REQUIRE(to_latex(nop1) == L"{\\tilde{a}^{{i_1}{i_2}}_{{a_1}{a_2}}}");
 
     auto nop2 = FNOperator(
-        {Index{L"i_1"}, Index{L"i_2"}},
-        {Index{L"a_1", {L"i_1", L"i_2"}}, Index{L"a_2", {L"i_1", L"i_2"}}},
+        cre({Index{L"i_1"}, Index{L"i_2"}}),
+        ann({Index{L"a_1", {L"i_1", L"i_2"}}, Index{L"a_2", {L"i_1", L"i_2"}}}),
         Vacuum::SingleProduct);
     REQUIRE(
         to_latex(nop2) ==
         L"{\\tilde{a}^{{i_1}{i_2}}_{{a_1^{{i_1}{i_2}}}{a_2^{{i_1}{i_2}}}}}");
 
-    auto nop3 = FNOperator({L"i_1", L"i_2"}, {L"a_2"}, Vacuum::SingleProduct);
+    auto nop3 =
+        FNOperator(cre({L"i_1", L"i_2"}), ann({L"a_2"}), Vacuum::SingleProduct);
     REQUIRE(to_latex(nop3) ==
             L"{\\tilde{a}^{{i_1}{i_2}}_{\\textvisiblespace\\,{a_2}}}");
 
-    auto nop4 = FNOperator({L"i_2"}, {L"a_1", L"a_2"}, Vacuum::SingleProduct);
+    auto nop4 =
+        FNOperator(cre({L"i_2"}), ann({L"a_1", L"a_2"}), Vacuum::SingleProduct);
     REQUIRE(to_latex(nop4) ==
             L"{\\tilde{a}^{\\textvisiblespace\\,{i_2}}_{{a_1}{a_2}}}");
 
-    auto nop5 = FNOperator({L"i_1"}, {}, Vacuum::SingleProduct);
+    auto nop5 = FNOperator(cre({L"i_1"}), ann({}), Vacuum::SingleProduct);
     REQUIRE(to_latex(nop5) == L"{\\tilde{a}^{{i_1}}}");
 
-    auto nop6 = FNOperator({}, {L"a_1"}, Vacuum::SingleProduct);
+    auto nop6 = FNOperator(cre({}), ann({L"a_1"}), Vacuum::SingleProduct);
     REQUIRE(to_latex(nop6) == L"{\\tilde{a}_{{a_1}}}");
 
     auto nopseq1 = FNOperatorSeq({nop1, nop2});
@@ -425,10 +429,10 @@ TEST_CASE("Op", "[elements]") {
   }
 
   SECTION("commutativity") {
-    auto nop1 = FNOperator({L"i_1"}, {L"a_1"});
-    auto nop2 = FNOperator(
-        {Index{L"i_1"}, Index{L"i_2"}},
-        {Index{L"a_1", {L"i_1", L"i_2"}}, Index{L"a_2", {L"i_1", L"i_2"}}});
+    auto nop1 = FNOperator(cre({L"i_1"}), ann({L"a_1"}));
+    auto nop2 = FNOperator(cre({Index{L"i_1"}, Index{L"i_2"}}),
+                           ann({Index{L"a_1", {L"i_1", L"i_2"}},
+                                Index{L"a_2", {L"i_1", L"i_2"}}}));
 
     REQUIRE(nop1.commutes_with(nop1));
     REQUIRE(nop1.commutes_with(nop2));

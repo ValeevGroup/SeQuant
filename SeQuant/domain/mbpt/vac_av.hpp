@@ -49,6 +49,27 @@ inline std::vector<std::pair<std::wstring, std::wstring>> to_label_connections(
   return op_connect_wstr;
 }
 
+/// @brief lowers an expression composed of Operators to tensor form
+/// @param[in] expr input expression
+/// @return expression with all Operators lowered to tensor form
+/// @note mutates the input ExprPtr
+inline ExprPtr lower_to_tensor_form(ExprPtr& expr) {
+  auto op_lowerer = [](ExprPtr& leaf) {
+    if (leaf.is<op_t>()) leaf = leaf.as<op_t>().tensor_form();
+  };
+  expr->visit(op_lowerer, /* atoms only = */ true);
+  return expr;
+}
+
+///// @brief lowers an expression composed of Operators to tensor form
+///// @param[in] expr_inp input expression
+///// @return expression with all Operators lowered to tensor form
+inline ExprPtr lower_to_tensor_form(const ExprPtr& expr_inp) {
+  auto expr = expr_inp->clone();
+  lower_to_tensor_form(expr);
+  return expr;
+}
+
 /// computes the vacuum expectation value (VEV)
 
 /// @param[in] expr input expression

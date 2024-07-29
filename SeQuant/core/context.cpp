@@ -157,6 +157,18 @@ Context& Context::set_first_dummy_index_ordinal(
   return *this;
 }
 
+IndexSpace get_particle_space(const IndexSpace::QuantumNumbers& qn) {
+  return get_default_context().index_space_registry()->particle_space(qn);
+}
+
+IndexSpace get_hole_space(const IndexSpace::QuantumNumbers& qn) {
+  return get_default_context().index_space_registry()->hole_space(qn);
+}
+
+IndexSpace get_complete_space(const IndexSpace::QuantumNumbers& qn) {
+  return get_default_context().index_space_registry()->complete_space(qn);
+}
+
 }  // namespace sequant
 
 #ifdef SEQUANT_HAS_MIMALLOC

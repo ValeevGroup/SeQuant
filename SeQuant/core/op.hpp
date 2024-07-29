@@ -15,6 +15,7 @@
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/ranges.hpp>
 #include <SeQuant/core/space.hpp>
+#include <SeQuant/core/utility/strong.hpp>
 
 #include <cassert>
 #include <cstddef>
@@ -33,6 +34,11 @@
 #include <range/v3/all.hpp>
 
 namespace sequant {
+
+// strong type wrapper for objects associated with creation operators
+DEFINE_STRONG_TYPE_FOR_RANGE_AND_RANGESIZE(cre);
+// strong type wrapper for objects associated with annihilation operators
+DEFINE_STRONG_TYPE_FOR_RANGE_AND_RANGESIZE(ann);
 
 /// @brief Op is a creator/annihilator operator
 ///
@@ -467,104 +473,57 @@ class NormalOperator : public Operator<S>,
   /// constructs an identity operator
   NormalOperator(Vacuum v = get_default_context(S).vacuum()) {}
 
-  /// @tparam IndexSequence1 type representing a sequence of Index objects or
-  /// objects that can be statically cast into Index
-  /// @tparam IndexSequence2 type representing a sequence of Index objects or
-  /// objects that can be statically cast into Index
-  /// @param creator_indices sequence of creator indices
-  /// @param annihilator_indices sequence of annihilator indices (in order of
-  /// particle indices, see the class documentation for more info).
+  /// @tparam IndexOrOpSequence1 type representing a sequence of objects that
+  /// can be statically cast into Index or Op<S>
+  /// @tparam IndexOrOpSequence2 type representing a sequence of objects that
+  /// can be statically cast into Index or Op<S>
+  /// @param creators sequence of creator indices or operators (in order of
+  /// particle indices)
+  /// @param annihilators sequence of annihilator indices or operators (in order
+  /// of particle indices).
   /// @param v vacuum state with respect to which the operator is normal-ordered
-  template <typename IndexSequence1, typename IndexSequence2,
-            typename = std::enable_if_t<
-                meta::is_statically_castable_v<
-                    meta::range_value_t<IndexSequence1>, Index> &&
-                meta::is_statically_castable_v<
-                    meta::range_value_t<IndexSequence1>, Index>>>
-  NormalOperator(IndexSequence1 &&creator_indices,
-                 IndexSequence2 &&annihilator_indices,
+  template <
+      typename IndexOrOpSequence1, typename IndexOrOpSequence2,
+      typename = std::enable_if_t<
+          (meta::is_statically_castable_v<
+               meta::range_value_t<IndexOrOpSequence1>, Index> ||
+           meta::is_statically_castable_v<
+               meta::range_value_t<IndexOrOpSequence1>,
+               Op<S>>)&&(meta::
+                             is_statically_castable_v<
+                                 meta::range_value_t<IndexOrOpSequence2>,
+                                 Index> ||
+                         meta::is_statically_castable_v<
+                             meta::range_value_t<IndexOrOpSequence2>, Op<S>>)>>
+  NormalOperator(const cre<IndexOrOpSequence1> &creators,
+                 const ann<IndexOrOpSequence2> &annihilators,
                  Vacuum v = get_default_context(S).vacuum())
-      : Operator<S>{}, vacuum_(v), ncreators_(creator_indices.size()) {
-    this->reserve(creator_indices.size() + annihilator_indices.size());
-    for (const auto &i : creator_indices) {
-      this->emplace_back(i, Action::create);
-    }
-    for (const auto &i : annihilator_indices | ranges::views::reverse) {
-      this->emplace_back(i, Action::annihilate);
-    }
-  }
-
-  /// @tparam OpSequence1 type representing a sequence of `Op<S>` objects
-  /// @tparam OpSequence2 type representing a sequence of `Op<S>` objects
-  /// @param creators sequence of creators
-  /// @param annihilators sequence of annihilators (in order of particle
-  /// indices, see the class documentation for more info).
-  /// @param v vacuum state with respect to which the operator is normal-ordered
-  template <typename OpSequence1, typename OpSequence2>
-  NormalOperator(
-      OpSequence1 &&creators, OpSequence2 &&annihilators,
-      Vacuum v = get_default_context(S).vacuum(),
-      std::enable_if_t<
-          !std::is_same_v<std::decay_t<OpSequence1>, NormalOperator> &&
-          !std::is_same_v<std::decay_t<OpSequence2>, NormalOperator> &&
-          std::is_same_v<typename std::decay_t<OpSequence1>::value_type,
-                         Op<S>> &&
-          std::is_same_v<typename std::decay_t<OpSequence2>::value_type, Op<S>>>
-          * = nullptr)
       : Operator<S>{}, vacuum_(v), ncreators_(ranges::size(creators)) {
-    for (const auto &op : creators) {
-      assert(op.action() == Action::create);
-    }
-    for (const auto &op : annihilators) {
-      assert(op.action() == Action::annihilate);
-    }
     this->reserve(ranges::size(creators) + ranges::size(annihilators));
-    static_cast<vector_type *>(this)->insert(
-        this->end(), ranges::cbegin(creators), ranges::cend(creators));
-    static_cast<vector_type *>(this)->insert(this->end(),
-                                             ranges::crbegin(annihilators),
-                                             ranges::crend(annihilators));
-  }
-
-  /// @param creator_indices initializer_list of creator indices
-  /// @param annihilator_indices initializer_list of annihilator indices (in
-  /// order of particle indices, see the class documentation for more info).
-  /// @param v vacuum state with respect to which the operator is normal-ordered
-  template <typename I, typename = std::enable_if_t<
-                            !std::is_same_v<std::decay_t<I>, Op<S>>>>
-  NormalOperator(std::initializer_list<I> creator_indices,
-                 std::initializer_list<I> annihilator_indices,
-                 Vacuum v = get_default_context(S).vacuum())
-      : Operator<S>{}, vacuum_(v), ncreators_(creator_indices.size()) {
-    this->reserve(creator_indices.size() + annihilator_indices.size());
-    for (const auto &i : creator_indices) {
-      this->emplace_back(i, Action::create);
+    for (const auto &c : creators) {
+      assert((!std::is_same_v<meta::remove_cvref_t<IndexOrOpSequence1>,
+                              std::array<meta::castable_to_any, 0>>));
+      if constexpr (meta::is_statically_castable_v<
+                        meta::range_value_t<IndexOrOpSequence1>, Index>)
+        this->emplace_back(c, Action::create);
+      else {
+        assert(c.action() == Action::create);
+        this->emplace_back(c);
+      }
     }
-    for (const auto &i : annihilator_indices | ranges::views::reverse) {
-      this->emplace_back(i, Action::annihilate);
+    for (const auto &a : annihilators | ranges::views::reverse) {
+      assert((!std::is_same_v<meta::remove_cvref_t<IndexOrOpSequence2>,
+                              std::array<meta::castable_to_any, 0>>));
+      if constexpr (meta::is_statically_castable_v<
+                        meta::range_value_t<IndexOrOpSequence2>, Index>)
+        this->emplace_back(a, Action::annihilate);
+      else {
+        assert(a.action() == Action::annihilate);
+        this->emplace_back(a);
+      }
     }
   }
 
-  /// @param creators initializer_list of creators
-  /// @param annihilators initializer_list of annihilators (in order of particle
-  /// indices, see the class documentation for more info).
-  /// @param v vacuum state with respect to which the operator is normal-ordered
-  NormalOperator(std::initializer_list<Op<S>> creators,
-                 std::initializer_list<Op<S>> annihilators,
-                 Vacuum v = get_default_context(S).vacuum())
-      : Operator<S>{}, vacuum_(v), ncreators_(std::size(creators)) {
-    for (const auto &op : creators) {
-      assert(op.action() == Action::create);
-    }
-    for (const auto &op : annihilators) {
-      assert(op.action() == Action::annihilate);
-    }
-    this->reserve(std::size(creators) + std::size(annihilators));
-    static_cast<vector_type *>(this)->insert(this->end(), std::cbegin(creators),
-                                             std::cend(creators));
-    static_cast<vector_type *>(this)->insert(
-        this->end(), std::crbegin(annihilators), std::crend(annihilators));
-  }
   NormalOperator(const NormalOperator &other)
       : Operator<S>(other),
         vacuum_(other.vacuum_),
@@ -1019,19 +978,19 @@ using FNOperatorSeq = NormalOperatorSequence<Statistics::FermiDirac>;
 
 template <typename... Attr>
 inline ExprPtr bcrex(Index i, Attr &&...attr) {
-  return ex<BNOperator>(BNOperator({bcre(i, std::forward<Attr>(attr)...)}, {}));
+  return ex<BNOperator>(cre({bcre(i, std::forward<Attr>(attr)...)}), ann());
 }
 template <typename... Attr>
 inline ExprPtr bannx(Index i, Attr &&...attr) {
-  return ex<BNOperator>(BNOperator({}, {bann(i, std::forward<Attr>(attr)...)}));
+  return ex<BNOperator>(cre({}), ann({bann(i, std::forward<Attr>(attr)...)}));
 }
 template <typename... Attr>
 inline ExprPtr fcrex(Index i, Attr &&...attr) {
-  return ex<FNOperator>(FNOperator({fcre(i, std::forward<Attr>(attr)...)}, {}));
+  return ex<FNOperator>(cre({fcre(i, std::forward<Attr>(attr)...)}), ann());
 }
 template <typename... Attr>
 inline ExprPtr fannx(Index i, Attr &&...attr) {
-  return ex<FNOperator>(FNOperator({}, {fann(i, std::forward<Attr>(attr)...)}));
+  return ex<FNOperator>(cre(), ann({fann(i, std::forward<Attr>(attr)...)}));
 }
 
 template <Statistics S>
@@ -1188,9 +1147,9 @@ std::tuple<int, std::shared_ptr<NormalOperator<S>>> normalize(
     }  // nann == rank
   }
 
-  return std::make_tuple(
-      phase, std::make_shared<NormalOperator<S>>(
-                 std::move(creators), std::move(annihilators), vacuum));
+  return std::make_tuple(phase, std::make_shared<NormalOperator<S>>(
+                                    cre(std::move(creators)),
+                                    ann(std::move(annihilators)), vacuum));
 }
 
 template <typename T>

@@ -64,11 +64,10 @@ OpClass to_class(OpType op) {
   }
 }
 
-// excitation type qns will have qp creators for every space which intersects
-// with the active hole space and
-//  qp annihilators wherever there is intersection with the active particle
-//  space. the presence of additional blocks depends on  whether the
-//  corresponding active hole or active particle space is a base space.
+// Excitation type QNs will have quasiparticle annihilators in every space which
+// intersects with the active hole space. The active particle space will have
+// quasiparticle creators. The presence of additional blocks depends on whether
+// the corresponding active hole or active particle space is a base space.
 qns_t excitation_type_qns(std::size_t K, const IndexSpace::QuantumNumbers SQN) {
   qnc_t result;
   if (get_default_context().vacuum() == Vacuum::Physical) {
@@ -100,8 +99,6 @@ qns_t excitation_type_qns(std::size_t K, const IndexSpace::QuantumNumbers SQN) {
   return result;
 }
 
-// sometimes we want to guarantee that a qns has an interval from 0-K
-// regardless of the base spaces.
 qns_t interval_excitation_type_qns(std::size_t K,
                                    const IndexSpace::QuantumNumbers SQN) {
   qnc_t result;
@@ -161,8 +158,6 @@ qns_t deexcitation_type_qns(std::size_t K,
   return result;
 }
 
-// sometimes we want to guarantee that a qns has an interval from 0-K
-// regardless of the base spaces.
 qns_t interval_deexcitation_type_qns(std::size_t K,
                                      const IndexSpace::QuantumNumbers SQN) {
   qnc_t result;
@@ -264,9 +259,8 @@ qns_t generic_deexcitation_qns(std::size_t particle_rank, std::size_t hole_rank,
   return result;
 }
 
-// by counting the number of contractions between indices of proper type, we can
-// know the quantum numbers
-//  of a combined result.
+// By counting the number of contractions between indices of proper type, we can
+// know the quantum numbers of a combined result.
 qns_t combine(qns_t a, qns_t b) {
   assert(a.size() == b.size());
   qns_t result;
@@ -411,62 +405,40 @@ std::wstring to_latex(const mbpt::Operator<mbpt::qns_t, S>& op) {
 namespace sequant::mbpt {
 
 template <Statistics S>
-OpMaker<S>::OpMaker(OpType op, std::initializer_list<IndexSpace> bras,
-                    std::initializer_list<IndexSpace> kets)
-    : op_(op),
-      bra_spaces_(bras.begin(), bras.end()),
-      ket_spaces_(kets.begin(), kets.end()) {
-  assert(nbra() > 0 || nket() > 0);
-}
-
-template <Statistics S>
 OpMaker<S>::OpMaker(OpType op) : op_(op) {}
 
 template <Statistics S>
-OpMaker<S>::OpMaker(OpType op, std::size_t nbra, std::size_t nket,
-                    IndexSpace particle_space, IndexSpace hole_space) {
+OpMaker<S>::OpMaker(OpType op, ncre nc, nann na) {
   op_ = op;
-  assert(nbra > 0 || nket > 0);
-  auto isr = get_default_context().index_space_registry();
+  assert(nc > 0 || na > 0);
   switch (to_class(op)) {
     case OpClass::ex:
-      bra_spaces_ = decltype(bra_spaces_)(nbra, particle_space);
-      ket_spaces_ = decltype(ket_spaces_)(nket, hole_space);
+      cre_spaces_ = decltype(cre_spaces_)(nc, get_particle_space(Spin::any));
+      ann_spaces_ = decltype(ann_spaces_)(na, get_hole_space(Spin::any));
       break;
     case OpClass::deex:
-      bra_spaces_ = decltype(bra_spaces_)(nbra, hole_space);
-      ket_spaces_ = decltype(ket_spaces_)(nket, particle_space);
+      cre_spaces_ = decltype(cre_spaces_)(nc, get_hole_space(Spin::any));
+      ann_spaces_ = decltype(ann_spaces_)(na, get_particle_space(Spin::any));
       break;
     case OpClass::gen:
-      bra_spaces_ = decltype(bra_spaces_)(nbra, isr->complete_space(Spin::any));
-      ket_spaces_ = decltype(ket_spaces_)(nket, isr->complete_space(Spin::any));
+      cre_spaces_ = decltype(cre_spaces_)(nc, get_complete_space(Spin::any));
+      ann_spaces_ = decltype(ann_spaces_)(na, get_complete_space(Spin::any));
       break;
   }
 }
 
 template <Statistics S>
-OpMaker<S>::OpMaker(OpType op, std::size_t nparticle) {
+OpMaker<S>::OpMaker(OpType op, std::size_t rank)
+    : OpMaker(op, ncre(rank), nann(rank)) {}
+
+template <Statistics S>
+OpMaker<S>::OpMaker(OpType op, ncre nc, nann na,
+                    const cre<IndexSpace>& cre_space,
+                    const ann<IndexSpace>& ann_space) {
   op_ = op;
-  auto isr = get_default_context().index_space_registry();
-  auto current_context = get_default_context();
-  const auto hole_space = isr->hole_space(Spin::any);
-  const auto particle_space = isr->particle_space(Spin::any);
-  switch (to_class(op)) {
-    case OpClass::ex:
-      bra_spaces_ = decltype(bra_spaces_)(nparticle, particle_space);
-      ket_spaces_ = decltype(ket_spaces_)(nparticle, hole_space);
-      break;
-    case OpClass::deex:
-      bra_spaces_ = decltype(bra_spaces_)(nparticle, hole_space);
-      ket_spaces_ = decltype(ket_spaces_)(nparticle, particle_space);
-      break;
-    case OpClass::gen:
-      bra_spaces_ =
-          decltype(bra_spaces_)(nparticle, isr->complete_space(Spin::any));
-      ket_spaces_ =
-          decltype(ket_spaces_)(nparticle, isr->complete_space(Spin::any));
-      break;
-  }
+  assert(nc > 0 || na > 0);
+  cre_spaces_ = decltype(cre_spaces_)(nc, cre_space);
+  ann_spaces_ = decltype(ann_spaces_)(na, ann_space);
 }
 
 template <Statistics S>
@@ -477,12 +449,12 @@ ExprPtr OpMaker<S>::operator()(std::optional<UseDepIdx> dep,
   // dependent indices for pure (de)excitation ops
   if (!dep && get_default_mbpt_context().csv() == mbpt::CSV::Yes) {
     if (to_class(op_) == OpClass::ex) {
-      for (auto&& s : bra_spaces_) {
+      for (auto&& s : cre_spaces_) {
         assert(isr->contains_unoccupied(s));
       }
       dep = UseDepIdx::Bra;
     } else if (to_class(op_) == OpClass::deex) {
-      for (auto&& s : ket_spaces_) {
+      for (auto&& s : ann_spaces_) {
         assert(isr->contains_unoccupied(s));
       }
       dep = UseDepIdx::Ket;
@@ -492,10 +464,10 @@ ExprPtr OpMaker<S>::operator()(std::optional<UseDepIdx> dep,
   }
 
   return make(
-      bra_spaces_, ket_spaces_,
-      [this, opsymm_opt](const auto& braidxs, const auto& ketidxs,
+      cre_spaces_, ann_spaces_,
+      [this, opsymm_opt](const auto& creidxs, const auto& annidxs,
                          Symmetry opsymm) {
-        return ex<Tensor>(to_wstring(op_), braidxs, ketidxs,
+        return ex<Tensor>(to_wstring(op_), bra(creidxs), ket(annidxs),
                           opsymm_opt ? *opsymm_opt : opsymm);
       },
       dep ? *dep : UseDepIdx::None);
@@ -556,10 +528,11 @@ ExprPtr F(bool use_tensor, IndexSpace reference_occupied) {
             if (opsymm == Symmetry::antisymm) {
               braidxs.push_back(m1);
               ketidxs.push_back(m2);
-              return ex<Tensor>(to_wstring(mbpt::OpType::g), braidxs, ketidxs,
-                                Symmetry::antisymm) *
-                     ex<Tensor>(to_wstring(mbpt::OpType::δ), IndexList{m2},
-                                IndexList{m1}, Symmetry::nonsymm);
+              return ex<Tensor>(to_wstring(mbpt::OpType::g),
+                                bra(std::move(braidxs)),
+                                ket(std::move(ketidxs)), Symmetry::antisymm) *
+                     ex<Tensor>(to_wstring(mbpt::OpType::δ), bra{m2}, ket{m1},
+                                Symmetry::nonsymm);
             } else {  // opsymm == Symmetry::nonsymm
               auto braidx_J = braidxs;
               braidx_J.push_back(m1);
@@ -570,12 +543,14 @@ ExprPtr F(bool use_tensor, IndexSpace reference_occupied) {
               auto ketidxs_K = ketidxs;
               using std::begin;
               ketidxs_K.emplace(begin(ketidxs_K), m2);
-              return (ex<Tensor>(to_wstring(mbpt::OpType::g), braidx_J,
-                                 ketidxs_J, Symmetry::nonsymm) -
-                      ex<Tensor>(to_wstring(mbpt::OpType::g), braidx_K,
-                                 ketidxs_K, Symmetry::nonsymm)) *
-                     ex<Tensor>(to_wstring(mbpt::OpType::δ), IndexList{m2},
-                                IndexList{m1}, Symmetry::nonsymm);
+              return (ex<Tensor>(to_wstring(mbpt::OpType::g),
+                                 bra(std::move(braidx_J)),
+                                 ket(std::move(ketidxs_J)), Symmetry::nonsymm) -
+                      ex<Tensor>(
+                          to_wstring(mbpt::OpType::g), bra(std::move(braidx_K)),
+                          ket(std::move(ketidxs_K)), Symmetry::nonsymm)) *
+                     ex<Tensor>(to_wstring(mbpt::OpType::δ), bra{m2}, ket{m1},
+                                Symmetry::nonsymm);
             }
           });
     };
@@ -612,73 +587,92 @@ ExprPtr Λ(std::size_t K) {
   return result;
 }
 
-ExprPtr R_(std::size_t nbra, std::size_t nket, IndexSpace hole_space,
-           IndexSpace particle_space) {
-  return OpMaker<Statistics::FermiDirac>(OpType::R, nbra, nket, particle_space,
-                                         hole_space)();
+ExprPtr R_(nann na, ncre nc, const cre<IndexSpace>& cre_space,
+           const ann<IndexSpace>& ann_space) {
+  return OpMaker<Statistics::FermiDirac>(OpType::R, nc, na, cre_space,
+                                         ann_space)();
+}
+ExprPtr R_(nₚ np, nₕ nh) {
+  assert(np >= 0 && nh >= 0);
+  return OpMaker<Statistics::FermiDirac>(OpType::R, ncre(np.value()),
+                                         nann(nh.value()))();
 }
 
-ExprPtr L_(std::size_t nbra, std::size_t nket, IndexSpace hole_space,
-           IndexSpace particle_space) {
-  return OpMaker<Statistics::FermiDirac>(OpType::L, nbra, nket, particle_space,
-                                         hole_space)();
+ExprPtr L_(nann na, ncre nc, const cre<IndexSpace>& cre_space,
+           const ann<IndexSpace>& ann_space) {
+  return OpMaker<Statistics::FermiDirac>(OpType::L, nc, na, cre_space,
+                                         ann_space)();
 }
 
-ExprPtr P(std::int64_t K) {
-  return get_default_context().spbasis() == SPBasis::spinfree ? tensor::S(-K)
-                                                              : tensor::A(-K);
+ExprPtr L_(nₚ np, nₕ nh) {
+  assert(np >= 0 && nh >= 0);
+  return OpMaker<Statistics::FermiDirac>(OpType::L, ncre(nh.value()),
+                                         nann(np.value()))();
 }
 
-ExprPtr A(std::int64_t K) {
-  auto isr = get_default_context().index_space_registry();
-  assert(K != 0);
+ExprPtr P(nₚ np, nₕ nh) {
+  if (np != nh)
+    assert(
+        get_default_context().spbasis() != SPBasis::spinfree &&
+        "Spinfree basis does not support non-particle conserving projectors");
+  return get_default_context().spbasis() == SPBasis::spinfree
+             ? tensor::S(-nh /* nh == np */)
+             : tensor::A(-np, -nh);
+}
+
+ExprPtr A(nₚ np, nₕ nh) {
+  assert(!(np == 0 && nh == 0));
+  // if they are not zero, Kh and Kp should have the same sign
+  if (np != 0 && nh != 0) {
+    assert((np > 0 && nh > 0) || (np < 0 && nh < 0));
+  }
+
   container::svector<IndexSpace> creators;
   container::svector<IndexSpace> annihilators;
-  if (K > 0)  // ex
-    for ([[maybe_unused]] auto i : ranges::views::iota(0, K))
-      annihilators.emplace_back(isr->hole_space(Spin::any));
+  if (nh > 0)  // ex
+    for ([[maybe_unused]] auto i : ranges::views::iota(0, nh))
+      annihilators.emplace_back(get_hole_space(Spin::any));
   else  // deex
-    for ([[maybe_unused]] auto i : ranges::views::iota(0, -K))
-      creators.emplace_back(isr->hole_space(Spin::any));
-  if (K > 0)  // ex
-    for ([[maybe_unused]] auto i : ranges::views::iota(0, K))
-      creators.emplace_back(isr->particle_space(Spin::any));
+    for ([[maybe_unused]] auto i : ranges::views::iota(0, -nh))
+      creators.emplace_back(get_hole_space(Spin::any));
+  if (np > 0)  // ex
+    for ([[maybe_unused]] auto i : ranges::views::iota(0, np))
+      creators.emplace_back(get_particle_space(Spin::any));
   else  // deex
-    for ([[maybe_unused]] auto i : ranges::views::iota(0, -K))
-      annihilators.emplace_back(isr->particle_space(Spin::any));
+    for ([[maybe_unused]] auto i : ranges::views::iota(0, -np))
+      annihilators.emplace_back(get_particle_space(Spin::any));
 
   std::optional<OpMaker<Statistics::FermiDirac>::UseDepIdx> dep;
   if (get_default_mbpt_context().csv() == mbpt::CSV::Yes)
-    dep = K > 0 ? OpMaker<Statistics::FermiDirac>::UseDepIdx::Bra
-                : OpMaker<Statistics::FermiDirac>::UseDepIdx::Ket;
-  return OpMaker<Statistics::FermiDirac>(OpType::A, creators, annihilators)(
-      dep, {Symmetry::antisymm});
+    dep = np > 0 ? OpMaker<Statistics::FermiDirac>::UseDepIdx::Bra
+                 : OpMaker<Statistics::FermiDirac>::UseDepIdx::Ket;
+  return OpMaker<Statistics::FermiDirac>(
+      OpType::A, cre(creators), ann(annihilators))(dep, {Symmetry::antisymm});
 }
 
 ExprPtr S(std::int64_t K) {
-  auto isr = get_default_context().index_space_registry();
   assert(K != 0);
   container::svector<IndexSpace> creators;
   container::svector<IndexSpace> annihilators;
   if (K > 0)  // ex
     for ([[maybe_unused]] auto i : ranges::views::iota(0, K))
-      annihilators.emplace_back(isr->hole_space(Spin::any));
+      annihilators.emplace_back(get_hole_space(Spin::any));
   else  // deex
     for ([[maybe_unused]] auto i : ranges::views::iota(0, -K))
-      creators.emplace_back(isr->hole_space(Spin::any));
+      creators.emplace_back(get_hole_space(Spin::any));
   if (K > 0)  // ex
     for ([[maybe_unused]] auto i : ranges::views::iota(0, K))
-      creators.emplace_back(isr->particle_space(Spin::any));
+      creators.emplace_back(get_particle_space(Spin::any));
   else  // deex
     for ([[maybe_unused]] auto i : ranges::views::iota(0, -K))
-      annihilators.emplace_back(isr->particle_space(Spin::any));
+      annihilators.emplace_back(get_particle_space(Spin::any));
 
   std::optional<OpMaker<Statistics::FermiDirac>::UseDepIdx> dep;
   if (get_default_mbpt_context().csv() == mbpt::CSV::Yes)
     dep = K > 0 ? OpMaker<Statistics::FermiDirac>::UseDepIdx::Bra
                 : OpMaker<Statistics::FermiDirac>::UseDepIdx::Ket;
-  return OpMaker<Statistics::FermiDirac>(OpType::S, creators, annihilators)(
-      dep, {Symmetry::nonsymm});
+  return OpMaker<Statistics::FermiDirac>(
+      OpType::S, cre(creators), ann(annihilators))(dep, {Symmetry::nonsymm});
 }
 
 ExprPtr H_pt(std::size_t order, std::size_t R) {
@@ -813,18 +807,27 @@ ExprPtr F(bool use_f_tensor, IndexSpace occupied_density) {
   }
 }
 
-ExprPtr A(std::int64_t K) {
-  auto isr = get_default_context().index_space_registry();
-  assert(K != 0);
+ExprPtr A(nₚ np, nₕ nh) {
+  assert(!(nh == 0 && np == 0));
+  // if they are not zero, Kh and Kp should have the same sign
+  if (nh != 0 && np != 0) {
+    assert((nh > 0 && np > 0) || (nh < 0 && np < 0));
+  }
+
+  auto particle_space = get_particle_space(Spin::any);
+  auto hole_space = get_hole_space(Spin::any);
   return ex<op_t>([]() -> std::wstring_view { return L"A"; },
-                  [=]() -> ExprPtr { return tensor::A(K); },
+                  [=]() -> ExprPtr { return tensor::A(np, nh); },
                   [=](qnc_t& qns) {
-                    const std::size_t abs_K = std::abs(K);
-                    if (K < 0) {
-                      qnc_t op_qnc_t = deexcitation_type_qns(abs_K);
+                    const std::size_t abs_nh = std::abs(nh);
+                    const std::size_t abs_np = std::abs(np);
+                    if (np < 0) {
+                      qnc_t op_qnc_t = generic_deexcitation_qns(
+                          abs_np, abs_nh, particle_space, hole_space);
                       qns = combine(op_qnc_t, qns);
                     } else {
-                      qnc_t op_qnc_t = excitation_type_qns(abs_K);
+                      qnc_t op_qnc_t = generic_excitation_qns(
+                          abs_np, abs_nh, particle_space, hole_space);
                       qns = combine(op_qnc_t, qns);
                     }
                   });
@@ -846,8 +849,17 @@ ExprPtr S(std::int64_t K) {
                   });
 }
 
-ExprPtr P(std::int64_t K) {
-  return get_default_context().spbasis() == SPBasis::spinfree ? S(-K) : A(-K);
+ExprPtr P(nₚ np, nₕ nh) {
+  if (get_default_context().spbasis() == SPBasis::spinfree) {
+    assert(nh == np &&
+           "Only particle number conserving cases are supported with spinfree "
+           "basis for now");
+    const auto K = np;  // K = np = nh
+    return S(-K);
+  } else {
+    assert(get_default_context().spbasis() == SPBasis::spinorbital);
+    return A(-np, -nh);
+  }
 }
 
 ExprPtr H_pt(std::size_t order, std::size_t R) {
@@ -895,33 +907,66 @@ ExprPtr Λ_pt(std::size_t order, std::size_t K, bool skip1) {
   return result;
 }
 
-ExprPtr R_(std::size_t Nbra, std::size_t Nket, IndexSpace hole_space,
-           IndexSpace particle_space) {
+ExprPtr R_(nann na, ncre nc, const cre<IndexSpace>& cre_space,
+           const ann<IndexSpace>& ann_space) {
   return ex<op_t>(
       []() -> std::wstring_view { return optype2label.at(OpType::R); },
-      [=]() -> ExprPtr {
-        return tensor::R_(Nbra, Nket, hole_space, particle_space);
-      },
+      [=]() -> ExprPtr { return tensor::R_(na, nc, cre_space, ann_space); },
       [=](qnc_t& qns) {
+        // ex -> creators in particle_space, annihilators in hole_space
         qns = combine(
-            generic_excitation_qns(Nket, Nbra, particle_space, hole_space),
+            generic_excitation_qns(/*particle_rank*/ nc, /*hole_rank*/ na,
+                                   cre_space, ann_space),
             qns);
       });
 }
 
-ExprPtr L_(std::size_t Nbra, std::size_t Nket, IndexSpace hole_space,
-           IndexSpace particle_space) {
+ExprPtr R_(nₚ np, nₕ nh) { return R_(nann(nh), ncre(np)); }
+
+ExprPtr L_(nann na, ncre nc, const cre<IndexSpace>& cre_space,
+           const ann<IndexSpace>& ann_space) {
   return ex<op_t>(
       []() -> std::wstring_view { return optype2label.at(OpType::L); },
-      [=]() -> ExprPtr {
-        return tensor::L_(Nbra, Nket, hole_space, particle_space);
-      },
+      [=]() -> ExprPtr { return tensor::L_(na, nc, cre_space, ann_space); },
       [=](qnc_t& qns) {
+        // deex -> creators in hole_space, annihilators in particle_space
         qns = combine(
-            generic_deexcitation_qns(Nbra, Nket, particle_space, hole_space),
+            generic_deexcitation_qns(
+                /*particle_rank*/ na, /*hole_rank*/ nc, ann_space, cre_space),
             qns);
       });
 }
+
+ExprPtr L_(nₚ np, nₕ nh) { return L_(nann(np), ncre(nh)); }
+
+ExprPtr R(nann na, ncre nc, const cre<IndexSpace>& cre_space,
+          const ann<IndexSpace>& ann_space) {
+  assert(na > 0 || nc > 0);
+  ExprPtr result;
+
+  for (std::int64_t ra = na, rc = nc; ra > 0 || rc > 0; --ra, --rc) {
+    result += R_(nann(ra), ncre(rc), cre_space, ann_space);
+  }
+  return result;
+}
+
+ExprPtr R(nₚ np, nₕ nh) {
+  assert(np >= 0 && nh >= 0);
+  return R(nann(nh), ncre(np));
+}
+
+ExprPtr L(nann na, ncre nc, const cre<IndexSpace>& cre_space,
+          const ann<IndexSpace>& ann_space) {
+  assert(na > 0 || nc > 0);
+  ExprPtr result;
+
+  for (std::int64_t ra = na, rc = nc; ra > 0 || rc > 0; --ra, --rc) {
+    result += L_(nann(ra), ncre(rc), cre_space, ann_space);
+  }
+  return result;
+}
+
+ExprPtr L(nₚ np, nₕ nh) { return L(nann(np), ncre(nh)); }
 
 bool can_change_qns(const ExprPtr& op_or_op_product, const qns_t target_qns,
                     const qns_t source_qns = {}) {
@@ -1040,7 +1085,7 @@ ExprPtr vac_av(ExprPtr expr, std::vector<std::pair<int, int>> nop_connections,
                ketidxs.size());  // need to handle particle # violating case?
         const auto rank = braidxs.size();
         return ex<Tensor>(
-            rdm_label, braidxs, ketidxs,
+            rdm_label, bra(std::move(braidxs)), ket(std::move(ketidxs)),
             rank > 1 && spinorbital ? Symmetry::antisymm : Symmetry::nonsymm);
       };
 

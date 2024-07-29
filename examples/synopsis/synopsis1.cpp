@@ -23,12 +23,16 @@ int main() {
              .compute()
              ->size() == 7);
 
-  auto nop1 = ex<FNOperator>(std::array{p1, p2}, std::array{p3, p4});
-  // auto nop1 = ex<FNOperator>(std::vector{p1, p2}, std::array{L"p3", L"p4"});
-  // auto nop1 = ex<FNOperator>(std::set{"p1", "p2"}, std::vector{L"p3",
-  // L"p4"});
-  // auto nop1 = ex<FNOperator>(WstrList{L"p1", L"p2"}, WstrList{L"p3", L"p4"});
-  auto nop2 = ex<FNOperator>(std::array{L"p_5"}, std::array{L"p_6", L"p_7"});
+  auto nop1 = ex<FNOperator>(cre(p1, p2), ann(p3, p4));
+  // OR
+  // auto nop1 = ex<FNOperator>(cre({p1, p2}), ann({p3, p4}));
+  // OR
+  // auto nop1 = ex<FNOperator>(cre(std::vector{p1, p2}),
+  //                            ann(std::array{L"p3", L"p4"}));
+  // OR
+  // auto nop1 = ex<FNOperator>(cre(std::set{"p1", "p2"}),
+  //                            ann(std::vector{L"p3", L"p4"}));
+  auto nop2 = ex<FNOperator>(cre({L"p_5"}), ann({L"p_6", L"p_7"}));
 
   std::wcout
       << to_latex(nop1 * nop2) << " = "
@@ -38,8 +42,8 @@ int main() {
   assert(FWickTheorem{nop1 * nop2}.full_contractions(false).compute()->size() ==
          3);
 
-  auto nop3 = ex<BNOperator>(std::array{p1, p2}, std::array{p3, p4});
-  auto nop4 = ex<BNOperator>(std::array{L"p_5", L"p_6"}, std::array{L"p_7"});
+  auto nop3 = ex<BNOperator>(cre({p1, p2}), ann({p3, p4}));
+  auto nop4 = ex<BNOperator>(cre({L"p_5", L"p_6"}), ann({L"p_7"}));
 
   std::wcout
       << to_latex(nop3 * nop4) << " = "
