@@ -840,7 +840,7 @@ DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(L_);
 /// @param np number of particle creators (if > 0) or annihilators (< 0)
 /// @param nh number of hole creators (if > 0) or annihilators (< 0); if omitted, will use \p np
 /// @note if using spin-free basis, only supports particle-symmetric operators `K = Kh = Kp`, returns `S(-K)`
-/// else supports particle non-conserving operators and returns `A(-nh, -np)`
+/// else supports particle non-conserving operators and returns `A(-np, -nh)`
 // clang-format on
 ExprPtr P(nₚ np, nₕ nh);
 DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(P);
@@ -1000,7 +1000,7 @@ DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(L);
 /// @param np number of particle creators (if > 0) or annihilators (< 0)
 /// @param nh number of hole creators (if > 0) or annihilators (< 0); if omitted, will use \p np
 /// @note if using spin-free basis, only supports particle-symmetric operators `K = Kh = Kp`, returns `S(-K)`
-/// else supports particle non-conserving operators and returns `A(-nh, -np)`
+/// else supports particle non-conserving operators and returns `A(-np, -nh)`
 // clang-format on
 ExprPtr P(nₚ np, nₕ nh);
 DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(P);

@@ -268,6 +268,9 @@ std::vector<ExprPtr> CC::λ_pt(size_t order, size_t rank) {
 std::vector<ExprPtr> CC::eom_r(nₚ np, nₕ nh) {
   assert(!unitary() && "Unitary ansatz is not yet supported");
   assert(np > 0 || nh > 0 && "Unsupported excitation order");
+  assert(np == nh &&
+         "Only EE-EOM-CC has been tested ... remove this assert to try "
+         "Fock-space EOM-CC");
 
   if (np != nh)
     assert(
@@ -296,7 +299,7 @@ std::vector<ExprPtr> CC::eom_r(nₚ np, nₕ nh) {
 
   // start from the highest excitation order, go down to the lowest possible
   for (std::int64_t rp = np, rh = nh; rp > 0 || rh > 0; --rp, --rh) {
-    // project with <ncre, nann| (i.e., multiply P(ncre, nann)) and compute VEV
+    // project with <rp, rh| (i.e., multiply P(rp, rh)) and compute VEV
     result.at(idx) = vac_av(P(nₚ(rp), nₕ(rh)) * hbar_R, op_connect);
     idx--;  // index decrement
   }
@@ -307,6 +310,9 @@ std::vector<ExprPtr> CC::eom_r(nₚ np, nₕ nh) {
 std::vector<ExprPtr> CC::eom_l(nₚ np, nₕ nh) {
   assert(!unitary() && "Unitary ansatz is not yet supported");
   assert(np > 0 || nh > 0 && "Unsupported excitation order");
+  assert(np == nh &&
+         "Only EE-EOM-CC has been tested ... remove this assert to try "
+         "Fock-space EOM-CC");
 
   if (np != nh)
     assert(get_default_context().spbasis() != SPBasis::spinfree &&
@@ -337,8 +343,7 @@ std::vector<ExprPtr> CC::eom_l(nₚ np, nₕ nh) {
 
   // start from the highest excitation order, go down to the lowest possible
   for (std::int64_t rp = np, rh = nh; rp > 0 || rh > 0; --rp, --rh) {
-    // right project with |ncre,nann> (i.e., multiply P(-ncre, -nann)) and
-    // compute VEV
+    // right project with |rp,rh> (i.e., multiply P(-np, -rh)) and compute VEV
     result.at(idx) = vac_av(L_hbar * P(nₚ(-rp), nₕ(-rh)), op_connect);
     idx--;  // index decrement
   }
