@@ -2,6 +2,13 @@
 // Created by Nakul Teke on 12/20/19.
 //
 
+// WARNING this test suite was produced when SeQuant used the original
+// representation of spin attributes (IndexSpace::nullqns=0b00 was used
+// to represent what is now Spin::any=0b11)
+// Since IndexSpace bitstring affects its hash, hence color, canonical form of
+// even spin-free expressions differs from their original form, thus
+// the old spin attribute representation is used to avoid changing the tests
+
 #include <catch2/catch_test_macros.hpp>
 #include "test_config.hpp"
 
@@ -559,6 +566,7 @@ SECTION("Expand Symmetrizer") {
 }
 
 SECTION("Symmetrize expression") {
+  // ignore_spin = true => see WARNING at the top of the file
   auto ctx_resetter = set_scoped_default_context(
       Context(sequant::mbpt::make_legacy_spaces(/* ignore_spin= */ true),
               Vacuum::SingleProduct));
@@ -722,8 +730,7 @@ SECTION("Closed-shell spintrace CCD") {
 
 SECTION("Closed-shell spintrace CCSD") {
   auto ctx_resetter = set_scoped_default_context(
-      Context(sequant::mbpt::make_legacy_spaces(/* ignore_spin = */ true),
-              Vacuum::SingleProduct));
+      Context(sequant::mbpt::make_legacy_spaces(), Vacuum::SingleProduct));
 
   // These terms from CCSD R1 equations
   {
@@ -754,14 +761,13 @@ SECTION("Closed-shell spintrace CCSD") {
         to_latex(result) ==
         L"{ \\bigl( - {{g^{{a_2}{i_1}}_{{a_1}{i_2}}}{t^{{i_2}}_{{a_2}}}} + "
         L"{{{2}}{g^{{i_1}{a_2}}_{{a_1}{i_2}}}{t^{{i_2}}_{{a_2}}}}\\bigr) }");
-
     container::map<Index, Index> idxmap = {{Index{L"i_1"}, Index{L"i_2"}},
                                            {Index{L"i_2"}, Index{L"i_1"}}};
     auto transformed_result = transform_expr(result, idxmap);
     REQUIRE(
         to_latex(transformed_result) ==
-        L"{ \\bigl( - {{g^{{a_2}{i_1}}_{{a_1}{i_2}}}{t^{{i_2}}_{{a_2}}}} + "
-        L"{{{2}}{g^{{i_1}{a_2}}_{{a_1}{i_2}}}{t^{{i_2}}_{{a_2}}}}\\bigr) }");
+        L"{ \\bigl( - {{g^{{a_2}{i_2}}_{{a_1}{i_1}}}{t^{{i_1}}_{{a_2}}}} + "
+        L"{{{2}}{g^{{i_2}{a_2}}_{{a_1}{i_1}}}{t^{{i_1}}_{{a_2}}}}\\bigr) }");
   }
 
   {
