@@ -200,6 +200,11 @@ size_t hash_braket(T const& bk) noexcept {
   for (auto const& idx : bk) {
     hash::combine(h, hash::value(idx.space().type().to_int32()));
     hash::combine(h, hash::value(idx.space().qns().to_int32()));
+    if (idx.has_proto_indices()) {
+      hash::combine(h, hash::value(idx.proto_indices().size()));
+      for (auto&& i : idx.proto_indices())
+        hash::combine(h, hash::value(i.label()));
+    }
   }
   return h;
 }
