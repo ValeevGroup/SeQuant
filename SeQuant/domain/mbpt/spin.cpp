@@ -376,7 +376,7 @@ bool has_tensor(const ExprPtr& expr, std::wstring label) {
 
   auto check_product = [&label](const Product& p) {
     return ranges::any_of(p.factors(), [&label](const auto& t) {
-      return (t->template as<Tensor>()).label() == label;
+      return t->template is<Tensor>() && (t->template as<Tensor>()).label() == label;
     });
   };
 
