@@ -1,5 +1,5 @@
 sphinx
 breathe
 sphinx_rtd_theme
+sphinx-copybutton
 myst_parser
-exhale
