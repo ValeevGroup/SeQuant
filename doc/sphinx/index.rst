@@ -84,3 +84,18 @@ Development of SeQuant has been possible thanks to the support of the US Nationa
 
     source/cc
     source/eval
+
+.. toctree::
+    :caption: API Reference
+    :maxdepth: 1
+    :hidden:
+
+    genindex
+
+.. toctree::
+    :caption: See Also
+    :hidden:
+
+    TiledArray <https://valeevgroup.github.io/tiledarray>
+    Massively Parallel Quantum Chemistry <https://valeevgroup.github.io/mpqc>
+    Valeev Research Group <https://valeevgroup.github.io>
