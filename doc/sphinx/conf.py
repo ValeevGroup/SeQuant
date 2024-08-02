@@ -16,6 +16,28 @@ html_static_path = ['_static']
 html_theme = 'furo' # "sphinx_rtd_theme", "furo", "pydata_sphinx_theme", "sphinx_book_theme"
 html_title = "SeQuant Documentation"
 
+# Extensions 
+extensions = [
+    'sphinx.ext.autodoc',
+    'sphinx.ext.intersphinx',
+    'sphinx.ext.mathjax',
+    "sphinx_copybutton",
+    'breathe',
+    'exhale',
+    "myst_parser"
+]
+
+# Exhale Configuration
+# Warning: This generates files in the specified folder
+exhale_args = {
+    "containmentFolder": "./api",
+    "rootFileName": "library_root.rst",
+    "doxygenStripFromPath": "..",
+    "rootFileTitle": "API Reference",
+    "createTreeView": False,
+    "contentsDirectives": False, # Not needed for themes like furo
+}
+
 # Custom options for sphinx_rtd_theme
 html_theme_options = {
     "display_version": True,
@@ -39,16 +61,6 @@ html_context = {
 primary_domain = "cpp"
 # Use xeLatex for support for unicode characters
 latex_engine = 'xelatex'
-
-# Extensions 
-extensions = [
-    'sphinx.ext.autodoc',
-    'sphinx.ext.intersphinx',
-    'sphinx.ext.mathjax',
-    "sphinx_copybutton",
-    'breathe',
-    "myst_parser"
-]
 
 # Breathe Configuration
 # We use breathe to generate documentation from Doxygen XML files

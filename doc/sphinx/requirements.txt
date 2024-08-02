@@ -1,5 +1,6 @@
 sphinx
 breathe
+exhale
 sphinx_rtd_theme
 furo
 sphinx-copybutton
