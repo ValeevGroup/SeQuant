@@ -1,6 +1,6 @@
-######################################
+#######################################
 SeQuant: Symbolic Tensor Algebra in C++
-######################################
+#######################################
 
 .. image:: https://img.shields.io/badge/License-BSD_3--Clause-blue.svg
     :target: https://opensource.org/licenses/BSD-3-Clause
@@ -75,3 +75,12 @@ Development of SeQuant has been possible thanks to the support of the US Nationa
 
     source/install
     source/using
+
+
+.. toctree::
+    :caption: Advanced Topics
+    :maxdepth: 2
+    :hidden:
+
+    source/cc
+    source/eval
