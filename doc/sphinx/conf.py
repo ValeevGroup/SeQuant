@@ -3,17 +3,17 @@
 import os
 import subprocess
 
-
 project = 'SeQuant'
 copyright = '2024, Valeev Research Group'
 author = 'Valeev Research Group'
+version = "2.0.0"
 
 # General Configuration
 exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store', "/external/*"]
 # templates_path = ['_templates']
 
 html_static_path = ['_static']
-html_theme = 'furo' # "sphinx_rtd_theme", "furo", "pydata_sphinx_theme", "sphinx_book_theme"
+html_theme = 'furo'  # "sphinx_rtd_theme", "furo"
 html_title = "SeQuant Documentation"
 
 # Extensions 
@@ -35,32 +35,33 @@ exhale_args = {
     "doxygenStripFromPath": "..",
     "rootFileTitle": "API Reference",
     "createTreeView": False,
-    "contentsDirectives": False, # Not needed for themes like furo
+    "contentsDirectives": False,  # Not needed for themes like furo
 }
 
-# Custom options for sphinx_rtd_theme
+# HTML options: theme specific, this is for Furo
+html_css_files = [
+    "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/fontawesome.min.css",
+    "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/solid.min.css",
+    "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/brands.min.css",
+]
+
 html_theme_options = {
-    "display_version": True,
-    "vcs_pageview_mode": "",
-    # Toc options
-    "collapse_navigation": False,
-    "sticky_navigation": True,
-    "navigation_depth": 4,
+    "top_of_page_buttons": ["view", "edit"],
+    "source_repository": "https://github.com/ajay-mk/SeQuant/",
+    "source_branch": "ajay/feature/sphinx-doc",
+    "source_directory": "doc/sphinx",
+    "footer_icons": [
+        {
+            "name": "GitHub",
+            "url": "https://github.com/ajay-mk/SeQuant",
+            "html": "",
+            "class": "fa-brands fa-solid fa-github fa-2x",
+        },
+    ],
 }
 
-# To include GitHub repo info
-html_context = {
-    "display_github": True,
-    "github_user": "ajay-mk",
-    "github_repo": "SeQuant",
-    "github_version": "master",
-    "conf_py_path": "/doc/sphinx/"
-}
-
-# Primary Code Language
-primary_domain = "cpp"
-# Use xeLatex for support for unicode characters
-latex_engine = 'xelatex'
+primary_domain = "cpp"  # Primary Code Language
+latex_engine = 'xelatex'  # Use xeLatex for support for unicode characters
 
 # Breathe Configuration
 # We use breathe to generate documentation from Doxygen XML files
@@ -70,7 +71,6 @@ breathe_default_project = "SeQuant"
 # Current default in Sphinx is MathJax v3, but we are using v4
 # see https://stackoverflow.com/questions/78813688/mathjax-rendering-issue-in-sphinx-with-symbol
 mathjax_path = 'https://cdn.jsdelivr.net/npm/mathjax@4.0.0-beta.3/tex-mml-chtml.js'
-
 
 # MyST Enables parsing of markdown files
 myst_enable_extensions = [
