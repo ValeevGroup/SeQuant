@@ -260,7 +260,8 @@ set(SeQuant_src
         SeQuant/domain/mbpt/op.cpp
         SeQuant/domain/mbpt/op.hpp
         SeQuant/domain/mbpt/op.ipp
-        SeQuant/domain/mbpt/rdm.hpp
+        SeQuant/domain/mbpt/rdm.cpp
+        SeQuant/domain/mbpt/rdm.h
         SeQuant/domain/mbpt/spin.cpp
         SeQuant/domain/mbpt/spin.hpp
         SeQuant/domain/mbpt/vac_av.ipp)

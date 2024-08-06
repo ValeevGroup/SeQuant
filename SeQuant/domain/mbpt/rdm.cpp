@@ -1,16 +1,6 @@
-//
-// Created by Conner Masteran on 7/1/21.
-//
+#include <SeQuant/domain/mbpt/rdm.h>
 
-#ifndef SEQUANT_DOMAIN_MBPT_RDM_HPP
-#define SEQUANT_DOMAIN_MBPT_RDM_HPP
-
-#include <SeQuant/domain/mbpt/antisymmetrizer.hpp>
-#include <SeQuant/domain/mbpt/op.hpp>
-
-namespace sequant {
-namespace mbpt {
-namespace decompositions {
+namespace sequant::mbpt::decompositions {
 
 ExprPtr cumu_to_density(ExprPtr ex_) {
   assert(ex_->is<Tensor>());
@@ -24,7 +14,7 @@ ExprPtr cumu_to_density(ExprPtr ex_) {
   return density;
 }
 
-ExprPtr cumu2_to_density(ExprPtr ex_) {
+sequant::ExprPtr cumu2_to_density(sequant::ExprPtr ex_) {
   assert(ex_->is<Tensor>());
   assert(ex_->as<Tensor>().rank() == 2);
   assert(ex_->as<Tensor>().label() == optype2label.at(OpType::RDMCumulant));
@@ -91,9 +81,8 @@ ExprPtr cumu3_to_density(ExprPtr ex_) {
   return temp_result;
 }
 
-ExprPtr one_body_sub(
-    ExprPtr ex_) {  // J. Chem. Phys. 132, 234107 (2010);
-                    // https://doi.org/10.1063/1.3439395 eqn 15 for
+ExprPtr one_body_sub(ExprPtr ex_) {  // J. Chem. Phys. 132, 234107 (2010);
+  // https://doi.org/10.1063/1.3439395 eqn 15 for
   assert(ex_->is<FNOperator>());
   assert(ex_->as<FNOperator>().rank() == 1);
   auto down_0 = ex_->as<FNOperator>().annihilators()[0].index();
@@ -107,10 +96,10 @@ ExprPtr one_body_sub(
   return (result);
 }
 
-ExprPtr two_body_decomp(
-    ExprPtr ex_, bool approx = false) {  // J. Chem. Phys. 132, 234107 (2010);
-                                         // https://doi.org/10.1063/1.3439395
-                                         // eqn 16 for \tilde{a}^{pr}_{qs}
+ExprPtr two_body_decomp(ExprPtr ex_,
+                        bool approx) {  // J. Chem. Phys. 132, 234107 (2010);
+  // https://doi.org/10.1063/1.3439395
+  // eqn 16 for \tilde{a}^{pr}_{qs}
   assert(ex_->is<FNOperator>());
   assert(ex_->as<FNOperator>().rank() == 2);
 
@@ -139,10 +128,8 @@ ExprPtr two_body_decomp(
   return (result);
 }
 
-// express 3-body term as sums of 1 and 2-body term. as described in J. Chem.
-// Phys. 132, 234107 (2010); https://doi.org/10.1063/1.3439395 eqn 17.
 std::pair<ExprPtr, std::pair<std::vector<Index>, std::vector<Index>>>
-three_body_decomp(ExprPtr ex_, bool approx = true) {
+three_body_decomp(ExprPtr ex_, bool approx) {
   assert(ex_->is<FNOperator>());
   assert(ex_->as<FNOperator>().rank() == 3);
 
@@ -194,7 +181,7 @@ three_body_decomp(ExprPtr ex_, bool approx = true) {
 
   for (auto&& product :
        temp_result->as<Sum>().summands()) {  // replace all the two body terms
-                                             // with one body terms.
+    // with one body terms.
     if (product->is<Product>()) {
       for (auto&& factor : product->as<Product>().factors()) {
         if (factor->is<FNOperator>() && factor->as<FNOperator>().rank() == 2) {
@@ -207,7 +194,7 @@ three_body_decomp(ExprPtr ex_, bool approx = true) {
   simplify(temp_result);
   for (auto&& product :
        temp_result->as<Sum>().summands()) {  // replace the one body terms with
-                                             // the substituted expression
+    // the substituted expression
     if (product->is<Product>()) {
       for (auto&& factor : product->as<Product>().factors()) {
         if (factor->is<FNOperator>() && factor->as<FNOperator>().rank() == 1) {
@@ -227,7 +214,7 @@ three_body_decomp(ExprPtr ex_, bool approx = true) {
 }
 
 std::pair<ExprPtr, std::pair<std::vector<Index>, std::vector<Index>>>
-three_body_decomposition(ExprPtr ex_, int rank, bool fast = false) {
+three_body_decomposition(ExprPtr ex_, int rank, bool fast) {
   std::pair<std::vector<Index>, std::vector<Index>> initial_pairing;
   if (rank == 3) {
     auto ex_pair = three_body_decomp(ex_);
@@ -349,16 +336,7 @@ three_body_decomposition(ExprPtr ex_, int rank, bool fast = false) {
   return {ex_, initial_pairing};
 }
 
-// in general a three body substitution can be approximated with 1, 2, or 3 body
-// terms(3 body has no approximation). this is achieved by replacing densities
-// with with particle number > rank by the each successive cumulant
-// approximation followed by neglect of the particle rank sized term.
-// TODO this implementation is ambitious and currently we only support rank 2
-// decompositions.
-//
-// fast implementation represent non-constant solution interms of like terms and
-// permutation operators.
-ExprPtr three_body_substitution(ExprPtr& input, int rank, bool fast = false) {
+ExprPtr three_body_substitution(ExprPtr& input, int rank, bool fast) {
   // just return back if the input is zero.
   if (input == ex<Constant>(0)) {
     return input;
@@ -459,9 +437,6 @@ ExprPtr three_body_substitution(ExprPtr& input, int rank, bool fast = false) {
   }
 
   return input;
-};
-}  // namespace decompositions
-}  // namespace mbpt
-}  // namespace sequant
+}
 
-#endif  // SEQUANT_DOMAIN_MBPT_RDM_HPP
+}  // namespace sequant::mbpt::decompositions
