@@ -1,8 +1,8 @@
 
-#include <SeQuant/domain/mbpt/rdm.h>
 #include <SeQuant/core/wick.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/op.hpp>
+#include <SeQuant/domain/mbpt/rdm.hpp>
 
 #include <clocale>
 #include <iostream>

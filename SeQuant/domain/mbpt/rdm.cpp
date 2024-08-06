@@ -1,4 +1,4 @@
-#include <SeQuant/domain/mbpt/rdm.h>
+#include <SeQuant/domain/mbpt/rdm.hpp>
 
 namespace sequant::mbpt::decompositions {
 
