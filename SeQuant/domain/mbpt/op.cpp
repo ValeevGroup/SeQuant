@@ -341,6 +341,9 @@ std::wstring to_latex(const mbpt::Operator<mbpt::qns_t, S>& op) {
   if (it != label2optype.end()) {  // handle special cases
     optype = it->second;
     if (to_class(optype) == OpClass::gen) {
+      if (optype == OpType::θ) {  // special case for θ
+        result += L"_{" + std::to_wstring(op()[0].upper()) + L"}";
+      }
       result += L"}";
       return result;
     }
@@ -1061,7 +1064,7 @@ ExprPtr vac_av(ExprPtr expr, std::vector<std::pair<int, int>> nop_connections,
   wick.full_contractions(full_contractions);
   auto result = wick.compute();
   simplify(result);
-  // std::wcout << "post wick: " << to_latex_align(result,20,1) << std::endl;
+
   if (Logger::instance().wick_stats) {
     std::wcout << "WickTheorem stats: # of contractions attempted = "
                << wick.stats().num_attempted_contractions
