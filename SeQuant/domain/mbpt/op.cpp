@@ -17,16 +17,16 @@ std::vector<std::wstring> cardinal_tensor_labels() {
           L"L",  L"λ",
           L"λ¹", L"h",
           L"f",  L"f̃",
-          L"g",  L"t",
-          L"t¹", L"R",
-          L"F",  L"X",
-          L"μ",  L"V",
-          L"Ṽ",  L"B",
-          L"U",  L"GR",
-          L"C",  overlap_label(),
-          L"a",  L"ã",
-          L"b",  L"b̃",
-          L"E"};
+          L"g",  L"θ",
+          L"t",  L"t¹",
+          L"R",  L"F",
+          L"X",  L"μ",
+          L"V",  L"Ṽ",
+          L"B",  L"U",
+          L"GR", L"C",
+          overlap_label(), L"a",
+          L"ã",  L"b",
+          L"b̃",  L"E"};
 }
 
 std::wstring to_wstring(OpType op) {
@@ -49,6 +49,7 @@ OpClass to_class(OpType op) {
     case OpType::A:
     case OpType::S:
     case OpType::h_1:
+    case OpType::θ:
       return OpClass::gen;
     case OpType::t:
     case OpType::R:
@@ -560,6 +561,10 @@ ExprPtr F(bool use_tensor, IndexSpace reference_occupied) {
   }
 }
 
+ExprPtr θ(std::size_t K) {
+  return OpMaker<Statistics::FermiDirac>(OpType::θ, K)();
+}
+
 ExprPtr T_(std::size_t K) {
   return OpMaker<Statistics::FermiDirac>(OpType::t, K)();
 }
@@ -753,6 +758,16 @@ ExprPtr H_(std::size_t k) {
 ExprPtr H(std::size_t k) {
   assert(k > 0 && k <= 2);
   return k == 1 ? H_(1) : H_(1) + H_(2);
+}
+
+ExprPtr θ(std::size_t K) {
+  assert(K > 0);
+  return ex<op_t>([]() -> std::wstring_view { return L"θ"; },
+                  [=]() -> ExprPtr { return tensor::θ(K); },
+                  [=](qnc_t& qns) {
+                    qnc_t op_qnc_t = general_type_qns(K);
+                    qns = combine(op_qnc_t, qns);
+                  });
 }
 
 ExprPtr T_(std::size_t K) {
