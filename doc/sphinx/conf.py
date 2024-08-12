@@ -10,8 +10,7 @@ version = "2.0.0"
 
 # General Configuration
 exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store', "/external/*"]
-# templates_path = ['_templates']
-
+templates_path = ['_templates']
 html_static_path = ['_static']
 html_theme = 'furo'  # "sphinx_rtd_theme", "furo"
 html_title = "SeQuant Documentation"
