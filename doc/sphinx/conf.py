@@ -45,14 +45,14 @@ html_css_files = [
 ]
 
 html_theme_options = {
-    "top_of_page_buttons": ["view", "edit"],
-    "source_repository": "https://github.com/ajay-mk/SeQuant/",
-    "source_branch": "ajay/feature/sphinx-doc",
+    "top_of_page_buttons": ["view"],
+    "source_repository": "https://github.com/ValeevGroup/SeQuant/",
+    "source_branch": "master",
     "source_directory": "doc/sphinx",
     "footer_icons": [
         {
             "name": "GitHub",
-            "url": "https://github.com/ajay-mk/SeQuant",
+            "url": "https://github.com/ValeevGroup/SeQuant",
             "html": "",
             "class": "fa-brands fa-solid fa-github fa-2x",
         },
