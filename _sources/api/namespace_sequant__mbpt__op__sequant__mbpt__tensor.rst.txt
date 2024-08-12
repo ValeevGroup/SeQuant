@@ -39,9 +39,9 @@ Functions
 
 - :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1_1tensor_1a49fe51c3dc9743caf8cf38990ca3eeb7`
 
-- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1_1tensor_1a2c81ee9578153369c183aeb2eca8f899`
-
 - :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1_1tensor_1a1ac9fb48c1b1eb2309a63f7f117d819e`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1_1tensor_1a2c81ee9578153369c183aeb2eca8f899`
 
 - :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1_1tensor_1a71f3c48da665ff20b615e3df93bd5869`
 
