@@ -1,0 +1,80 @@
+
+.. _file_SeQuant_domain_mbpt_antisymmetrizer.hpp:
+
+File antisymmetrizer.hpp
+========================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_domain_mbpt>` (``SeQuant/domain/mbpt``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+Definition (``SeQuant/domain/mbpt/antisymmetrizer.hpp``)
+--------------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_domain_mbpt_antisymmetrizer.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/expr.hpp`` (:ref:`file_SeQuant_core_expr.hpp`)
+
+- ``SeQuant/core/math.hpp`` (:ref:`file_SeQuant_core_math.hpp`)
+
+- ``SeQuant/core/op.hpp`` (:ref:`file_SeQuant_core_op.hpp`)
+
+- ``SeQuant/core/tensor.hpp`` (:ref:`file_SeQuant_core_tensor.hpp`)
+
+- ``algorithm`` (:ref:`file_SeQuant_core_algorithm.hpp`)
+
+- ``iostream``
+
+- ``vector``
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_domain_mbpt_rdm.hpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+- :ref:`namespace_sequant__antisymm`
+
+
+Classes
+-------
+
+
+- :ref:`exhale_class_classsequant_1_1antisymm__element`
+
+- :ref:`exhale_class_classsequant_1_1antisymmetrize`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1_1antisymm_1ad3d642117b3214d5e4d87a2ab6d1ca42`
+
+- :ref:`exhale_function_namespacesequant_1_1antisymm_1a127f54cebd96b97eca3bc0290ff22817`
+
+- :ref:`exhale_function_namespacesequant_1_1antisymm_1af85535730aaf1143304536b4e8110852`
+

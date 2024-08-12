@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1mbpt_1_1op_1_1tensor_1a0db49c6a577ec4019a0d45339ae1a655:
+
+Function sequant::mbpt::op::sequant::mbpt::tensor::DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT()
+=============================================================================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_op.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::mbpt::op::sequant::mbpt::tensor::DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT()
+   :project: SeQuant

@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1acdb0a849c7a549fc20b032f74899d23c:
+
+Function sequant::color
+=======================
+
+- Defined in :ref:`file_SeQuant_core_abstract_tensor.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::color()
+   :project: SeQuant

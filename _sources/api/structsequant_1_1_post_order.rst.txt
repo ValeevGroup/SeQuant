@@ -1,0 +1,17 @@
+.. _exhale_struct_structsequant_1_1_post_order:
+
+Struct PostOrder
+================
+
+- Defined in :ref:`file_SeQuant_core_binary_node.hpp`
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::PostOrder
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

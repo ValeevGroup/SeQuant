@@ -1,0 +1,65 @@
+
+.. _namespace_sequant__opt:
+
+Namespace sequant::opt
+======================
+
+
+Detailed Description
+--------------------
+
+
+
+expr
+
+
+Expression to be optimized. 
+
+
+
+EvalNode object. 
+
+
+
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant__opt__@37`
+
+
+Classes
+-------
+
+
+- :ref:`exhale_class_classsequant_1_1opt_1_1_fusion`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1a8d6dd66c2606214e3190ea878e84de89`
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1af6fc7be814aa005561ba962d5b4c3212`
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1a8a7ea2cfd93e083b1c1107f6301bc0de`
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1a2b7e08206ce6df99e30e7349490c7847`
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1a0eda7f76073a13b7aca43425edcdcaf5`
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1a088126559bd2e83e8fc9fa1a3240d784`
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1aaadaffb72d6aad3724d3ceca662716cc`
+
+
+Variables
+---------
+
+
+- :ref:`exhale_variable_namespacesequant_1_1opt_1a48a8bef6af07122aed95dc25a3441546`

@@ -1,0 +1,22 @@
+
+.. _namespace_boost:
+
+Namespace boost
+===============
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_boost__numeric`
+
+- :ref:`namespace_boost__spirit`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespaceboost_1acbcbb98cfab51b10ffc1a6a0f590f8b1`

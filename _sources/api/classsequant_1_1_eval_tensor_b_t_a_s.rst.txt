@@ -1,0 +1,26 @@
+.. _exhale_class_classsequant_1_1_eval_tensor_b_t_a_s:
+
+Template Class EvalTensorBTAS
+=============================
+
+- Defined in :ref:`file_SeQuant_domain_eval_eval_result.hpp`
+
+
+Inheritance Relationships
+-------------------------
+
+Base Type
+*********
+
+- ``public sequant::EvalResult`` (:ref:`exhale_class_classsequant_1_1_eval_result`)
+
+
+Class Documentation
+-------------------
+
+
+.. doxygenclass:: sequant::EvalTensorBTAS
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

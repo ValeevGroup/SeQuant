@@ -1,0 +1,14 @@
+.. _exhale_typedef_namespacesequant_1ad63beaf1a3a78ff2bedb455e51c253b3:
+
+Typedef sequant::BWickTheorem
+=============================
+
+- Defined in :ref:`file_SeQuant_core_wick.hpp`
+
+
+Typedef Documentation
+---------------------
+
+
+.. doxygentypedef:: sequant::BWickTheorem
+   :project: SeQuant

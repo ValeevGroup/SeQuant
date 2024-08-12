@@ -1,0 +1,153 @@
+
+.. _file_SeQuant_core_tensor.hpp:
+
+File tensor.hpp
+===============
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core>` (``SeQuant/core``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+Definition (``SeQuant/core/tensor.hpp``)
+----------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_tensor.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/abstract_tensor.hpp`` (:ref:`file_SeQuant_core_abstract_tensor.hpp`)
+
+- ``SeQuant/core/attr.hpp`` (:ref:`file_SeQuant_core_attr.hpp`)
+
+- ``SeQuant/core/container.hpp`` (:ref:`file_SeQuant_core_container.hpp`)
+
+- ``SeQuant/core/context.hpp`` (:ref:`file_SeQuant_core_context.hpp`)
+
+- ``SeQuant/core/expr.hpp`` (:ref:`file_SeQuant_core_expr.hpp`)
+
+- ``SeQuant/core/hash.hpp`` (:ref:`file_SeQuant_core_hash.hpp`)
+
+- ``SeQuant/core/index.hpp`` (:ref:`file_SeQuant_core_index.hpp`)
+
+- ``SeQuant/core/latex.hpp`` (:ref:`file_SeQuant_core_latex.hpp`)
+
+- ``SeQuant/core/utility/strong.hpp`` (:ref:`file_SeQuant_core_utility_strong.hpp`)
+
+- ``algorithm`` (:ref:`file_SeQuant_core_algorithm.hpp`)
+
+- ``array``
+
+- ``cassert``
+
+- ``cstddef``
+
+- ``initializer_list``
+
+- ``iterator``
+
+- ``memory``
+
+- ``optional``
+
+- ``range/v3/all.hpp``
+
+- ``stdexcept``
+
+- ``string`` (:ref:`file_SeQuant_core_utility_string.cpp`)
+
+- ``string_view``
+
+- ``type_traits``
+
+- ``utility`` (:ref:`file_SeQuant_core_utility_context.hpp`)
+
+- ``vector``
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_core_eval_expr.cpp`
+
+- :ref:`file_SeQuant_core_eval_node.hpp`
+
+- :ref:`file_SeQuant_core_export_itf.hpp`
+
+- :ref:`file_SeQuant_core_expr.cpp`
+
+- :ref:`file_SeQuant_core_parse.hpp`
+
+- :ref:`file_SeQuant_core_parse_ast_conversions.hpp`
+
+- :ref:`file_SeQuant_core_parse_deparse.cpp`
+
+- :ref:`file_SeQuant_core_parse_parse.cpp`
+
+- :ref:`file_SeQuant_core_tensor.cpp`
+
+- :ref:`file_SeQuant_core_utility_indices.hpp`
+
+- :ref:`file_SeQuant_core_wick.hpp`
+
+- :ref:`file_SeQuant_domain_eval_eval.hpp`
+
+- :ref:`file_SeQuant_domain_mbpt_antisymmetrizer.hpp`
+
+- :ref:`file_SeQuant_domain_mbpt_convention.cpp`
+
+- :ref:`file_SeQuant_domain_mbpt_op.cpp`
+
+- :ref:`file_SeQuant_domain_mbpt_spin.cpp`
+
+- :ref:`file_SeQuant_domain_mbpt_spin.hpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+
+Classes
+-------
+
+
+- :ref:`exhale_struct_structsequant_1_1_tensor_1_1reserved__tag`
+
+- :ref:`exhale_class_classsequant_1_1_tensor`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1ae2c6c0d4c1b036b287a0df7a5752cab8`
+
+- :ref:`exhale_function_namespacesequant_1aa399e3729d27a657b18529a241e086bb`
+
+- :ref:`exhale_function_namespacesequant_1a62fa48844ef915fbcd75f6f9891d3893`
+
+- :ref:`exhale_function_namespacesequant_1a8360af13bf4a44e5e3566224c22f05aa`
+
+
+Typedefs
+--------
+
+
+- :ref:`exhale_typedef_namespacesequant_1a5245bec8704cc658cb2a21c135984c5b`
+

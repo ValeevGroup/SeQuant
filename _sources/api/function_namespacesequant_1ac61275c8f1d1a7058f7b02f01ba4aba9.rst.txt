@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1ac61275c8f1d1a7058f7b02f01ba4aba9:
+
+Template Function sequant::evaluate_symm
+========================================
+
+- Defined in :ref:`file_SeQuant_domain_eval_eval.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::evaluate_symm(NodeT const&, Annot const&, container::svector<std::array<size_t, 3>> const&, Le const&, Args&&...)
+   :project: SeQuant

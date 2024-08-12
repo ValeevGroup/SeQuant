@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a87dcb5d11d2b1bc05cf975397c8124e3:
+
+Function sequant::to_itf(const itf::CodeBlock&)
+===============================================
+
+- Defined in :ref:`file_SeQuant_core_export_itf.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::to_itf(const itf::CodeBlock&)
+   :project: SeQuant

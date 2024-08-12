@@ -1,0 +1,14 @@
+.. _exhale_variable_namespacesequant_1a7b55917da76cdc221eb34363fbd442d2:
+
+Variable sequant::ctx_mtx
+=========================
+
+- Defined in :ref:`file_SeQuant_core_context.cpp`
+
+
+Variable Documentation
+----------------------
+
+
+.. doxygenvariable:: sequant::ctx_mtx
+   :project: SeQuant

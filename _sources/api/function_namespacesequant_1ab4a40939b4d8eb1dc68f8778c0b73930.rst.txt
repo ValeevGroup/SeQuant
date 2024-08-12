@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1ab4a40939b4d8eb1dc68f8778c0b73930:
+
+Function sequant::operator==(std::nullptr_t, const ExprPtr&)
+============================================================
+
+- Defined in :ref:`file_SeQuant_core_expr.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::operator==(std::nullptr_t, const ExprPtr&)
+   :project: SeQuant

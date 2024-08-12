@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1ad638076d20f3590a515e9165bc6a1a71:
+
+Function sequant::swap
+======================
+
+- Defined in :ref:`file_SeQuant_core_index.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::swap(Index&, Index&)
+   :project: SeQuant

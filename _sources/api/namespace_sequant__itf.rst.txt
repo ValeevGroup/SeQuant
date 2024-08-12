@@ -1,0 +1,31 @@
+
+.. _namespace_sequant__itf:
+
+Namespace sequant::itf
+======================
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant__itf__detail`
+
+
+Classes
+-------
+
+
+- :ref:`exhale_struct_structsequant_1_1itf_1_1_code_block`
+
+- :ref:`exhale_struct_structsequant_1_1itf_1_1_index_type_comparer`
+
+- :ref:`exhale_struct_structsequant_1_1itf_1_1_result`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1_1itf_1ae730bcddb88874c63fdad1f0589d741d`

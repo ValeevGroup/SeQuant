@@ -1,0 +1,110 @@
+
+.. _file_SeQuant_core_attr.hpp:
+
+File attr.hpp
+=============
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core>` (``SeQuant/core``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+Definition (``SeQuant/core/attr.hpp``)
+--------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_attr.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``string`` (:ref:`file_SeQuant_core_utility_string.cpp`)
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_core_abstract_tensor.hpp`
+
+- :ref:`file_SeQuant_core_context.cpp`
+
+- :ref:`file_SeQuant_core_context.hpp`
+
+- :ref:`file_SeQuant_core_eval_expr.cpp`
+
+- :ref:`file_SeQuant_core_op.cpp`
+
+- :ref:`file_SeQuant_core_op.hpp`
+
+- :ref:`file_SeQuant_core_parse.hpp`
+
+- :ref:`file_SeQuant_core_parse_deparse.cpp`
+
+- :ref:`file_SeQuant_core_parse_parse.cpp`
+
+- :ref:`file_SeQuant_core_space.hpp`
+
+- :ref:`file_SeQuant_core_tensor.hpp`
+
+- :ref:`file_SeQuant_core_tensor_network.cpp`
+
+- :ref:`file_SeQuant_domain_mbpt_op.hpp`
+
+- :ref:`file_SeQuant_domain_mbpt_spin.cpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+
+Enums
+-----
+
+
+- :ref:`exhale_enum_namespacesequant_1a0990b523fdb49d7c838857bec0bbbf6f`
+
+- :ref:`exhale_enum_namespacesequant_1a77a100102aa705742fa050ab1c0d3dc6`
+
+- :ref:`exhale_enum_namespacesequant_1a8fa350a3e3719764fcc1ce8aeddaea46`
+
+- :ref:`exhale_enum_namespacesequant_1a03158c7d13fd7e3c714b834bf3492164`
+
+- :ref:`exhale_enum_namespacesequant_1a9130bd036deb119cc1bf7a8acceed847`
+
+- :ref:`exhale_enum_namespacesequant_1a78aab8bd907ae4e1585c729c79703fd3`
+
+- :ref:`exhale_enum_namespacesequant_1ac51aaf1e35bf9fe90a2282a6cdb2c1fe`
+
+- :ref:`exhale_enum_namespacesequant_1a80bc8a00a0036a84c252e8a64db4c485`
+
+- :ref:`exhale_enum_namespacesequant_1a27c1015914fed77818b3cd447345f196`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1a6131cba13aaf34ebd0d52c126e79361c`
+
+- :ref:`exhale_function_namespacesequant_1a107d9204a84750f799d7d7adb900ef6a`
+
+- :ref:`exhale_function_namespacesequant_1a29889a5868cb88bf1a70a6495cbdbc6d`
+
+- :ref:`exhale_function_namespacesequant_1ac5ad51312512824e669c34030e451610`
+
+- :ref:`exhale_function_namespacesequant_1aebe8ff98f384c09bc14730a15d3858f2`
+

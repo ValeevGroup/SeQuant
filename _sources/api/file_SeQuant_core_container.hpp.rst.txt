@@ -1,0 +1,121 @@
+
+.. _file_SeQuant_core_container.hpp:
+
+File container.hpp
+==================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core>` (``SeQuant/core``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+Definition (``SeQuant/core/container.hpp``)
+-------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_container.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``boost/container/flat_map.hpp``
+
+- ``boost/container/flat_set.hpp``
+
+- ``boost/container/small_vector.hpp``
+
+- ``boost/range.hpp``
+
+- ``map``
+
+- ``set``
+
+- ``vector``
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_core_abstract_tensor.cpp`
+
+- :ref:`file_SeQuant_core_abstract_tensor.hpp`
+
+- :ref:`file_SeQuant_core_asy_cost.cpp`
+
+- :ref:`file_SeQuant_core_asy_cost.hpp`
+
+- :ref:`file_SeQuant_core_eval_expr.cpp`
+
+- :ref:`file_SeQuant_core_eval_expr.hpp`
+
+- :ref:`file_SeQuant_core_expr.hpp`
+
+- :ref:`file_SeQuant_core_index.hpp`
+
+- :ref:`file_SeQuant_core_op.cpp`
+
+- :ref:`file_SeQuant_core_op.hpp`
+
+- :ref:`file_SeQuant_core_optimize.hpp`
+
+- :ref:`file_SeQuant_core_optimize_fusion.cpp`
+
+- :ref:`file_SeQuant_core_optimize_optimize.cpp`
+
+- :ref:`file_SeQuant_core_parse_ast_conversions.hpp`
+
+- :ref:`file_SeQuant_core_parse_parse.cpp`
+
+- :ref:`file_SeQuant_core_space.hpp`
+
+- :ref:`file_SeQuant_core_tensor.hpp`
+
+- :ref:`file_SeQuant_core_tensor_network.cpp`
+
+- :ref:`file_SeQuant_core_tensor_network.hpp`
+
+- :ref:`file_SeQuant_domain_eval_cache_manager.hpp`
+
+- :ref:`file_SeQuant_domain_eval_eval.hpp`
+
+- :ref:`file_SeQuant_domain_eval_eval_result.hpp`
+
+- :ref:`file_SeQuant_domain_mbpt_op.hpp`
+
+- :ref:`file_SeQuant_domain_mbpt_spin.hpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+- :ref:`namespace_sequant__container`
+
+
+Typedefs
+--------
+
+
+- :ref:`exhale_typedef_namespacesequant_1_1container_1a556ea941fd3f2e05a55e495a51dac7bb`
+
+- :ref:`exhale_typedef_namespacesequant_1_1container_1a50bfaa02cc9f547b0bf338f7b47dad21`
+
+- :ref:`exhale_typedef_namespacesequant_1_1container_1ab5247a8f761659646a51764e233b2040`
+
+- :ref:`exhale_typedef_namespacesequant_1_1container_1a811e88e20a4f0165d2043990f337d84f`
+
+- :ref:`exhale_typedef_namespacesequant_1_1container_1a824019b6b588824917406d2541352d83`
+

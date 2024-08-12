@@ -1,0 +1,67 @@
+
+.. _file_SeQuant_domain_mbpt_rdm.hpp:
+
+File rdm.hpp
+============
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_domain_mbpt>` (``SeQuant/domain/mbpt``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+Definition (``SeQuant/domain/mbpt/rdm.hpp``)
+--------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_domain_mbpt_rdm.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/domain/mbpt/antisymmetrizer.hpp`` (:ref:`file_SeQuant_domain_mbpt_antisymmetrizer.hpp`)
+
+- ``SeQuant/domain/mbpt/op.hpp`` (:ref:`file_SeQuant_domain_mbpt_op.hpp`)
+
+
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+- :ref:`namespace_sequant__mbpt`
+
+- :ref:`namespace_sequant__mbpt__decompositions`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1decompositions_1a39d6e2a857f74ed0fe053048d5d7565b`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1decompositions_1a327a2f30c5728deaebc56e45aed3b080`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1decompositions_1a5d7ea9f3d960a41b337b04927018c762`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1decompositions_1a08c0043a78d0b3543233060643fd3f54`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1decompositions_1a11813ad35900f2f021fb16087a39e909`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1decompositions_1a13dfc76d663bc990f9812b351a8c1a9e`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1decompositions_1ad9a5915ea837c4c4b9b58a869dc30c97`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1decompositions_1a5b46b9fc009eed55e694dfeddd3b66a5`
+

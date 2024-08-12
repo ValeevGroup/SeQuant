@@ -1,0 +1,115 @@
+
+.. _file_SeQuant_domain_eval_eval.hpp:
+
+File eval.hpp
+=============
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_domain_eval>` (``SeQuant/domain/eval``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+Definition (``SeQuant/domain/eval/eval.hpp``)
+---------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_domain_eval_eval.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/container.hpp`` (:ref:`file_SeQuant_core_container.hpp`)
+
+- ``SeQuant/core/eval_node.hpp`` (:ref:`file_SeQuant_core_eval_node.hpp`)
+
+- ``SeQuant/core/logger.hpp`` (:ref:`file_SeQuant_core_logger.hpp`)
+
+- ``SeQuant/core/meta.hpp``
+
+- ``SeQuant/core/tensor.hpp`` (:ref:`file_SeQuant_core_tensor.hpp`)
+
+- ``SeQuant/domain/eval/cache_manager.hpp`` (:ref:`file_SeQuant_domain_eval_cache_manager.hpp`)
+
+- ``SeQuant/domain/eval/eval_result.hpp`` (:ref:`file_SeQuant_domain_eval_eval_result.hpp`)
+
+- ``any`` (:ref:`file_SeQuant_core_any.hpp`)
+
+- ``btas/btas.h``
+
+- ``iostream``
+
+- ``range/v3/numeric.hpp``
+
+- ``range/v3/view.hpp``
+
+- ``stdexcept``
+
+- ``tiledarray.h``
+
+- ``type_traits``
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_domain_eval_eval.cpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+
+Classes
+-------
+
+
+- :ref:`exhale_class_classsequant_1_1_eval_expr_b_t_a_s`
+
+- :ref:`exhale_class_classsequant_1_1_eval_expr_t_a`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1abb43df794dbd2663991665437459e8ff`
+
+- :ref:`exhale_function_namespacesequant_1a4e6daa8c05a50598d16b73a24969f6bd`
+
+- :ref:`exhale_function_namespacesequant_1a1427d807c6200a7eed297306ab48b633`
+
+- :ref:`exhale_function_namespacesequant_1a9e77ca1c042a46648f894e41a0fe7f09`
+
+- :ref:`exhale_function_namespacesequant_1a429e19804f67f8f148a60404b3b4d2e1`
+
+- :ref:`exhale_function_namespacesequant_1af27086da99ee4f6c0f663c9b22eb4877`
+
+- :ref:`exhale_function_namespacesequant_1a7ccf50b632430352b8a5747391836909`
+
+- :ref:`exhale_function_namespacesequant_1a2f77cd22d1a79db688baecf8605ad394`
+
+- :ref:`exhale_function_namespacesequant_1ac61275c8f1d1a7058f7b02f01ba4aba9`
+
+
+Variables
+---------
+
+
+- :ref:`exhale_variable_namespacesequant_1a86b34e9f6b93d64980c4fceb9a4cc3dc`
+
+- :ref:`exhale_variable_namespacesequant_1abbdcc38ec0144d350f806c53ef164402`
+

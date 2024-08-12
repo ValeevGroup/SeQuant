@@ -1,0 +1,120 @@
+
+.. _file_SeQuant_domain_eval_eval_result.hpp:
+
+File eval_result.hpp
+====================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_domain_eval>` (``SeQuant/domain/eval``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+Definition (``SeQuant/domain/eval/eval_result.hpp``)
+----------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_domain_eval_eval_result.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/algorithm.hpp`` (:ref:`file_SeQuant_core_algorithm.hpp`)
+
+- ``SeQuant/core/container.hpp`` (:ref:`file_SeQuant_core_container.hpp`)
+
+- ``SeQuant/core/hash.hpp`` (:ref:`file_SeQuant_core_hash.hpp`)
+
+- ``SeQuant/core/index.hpp`` (:ref:`file_SeQuant_core_index.hpp`)
+
+- ``SeQuant/core/logger.hpp`` (:ref:`file_SeQuant_core_logger.hpp`)
+
+- ``TiledArray/einsum/tiledarray.h``
+
+- ``any`` (:ref:`file_SeQuant_core_any.hpp`)
+
+- ``btas/btas.h``
+
+- ``memory``
+
+- ``range/v3/algorithm.hpp``
+
+- ``range/v3/numeric.hpp``
+
+- ``range/v3/view.hpp``
+
+- ``tiledarray.h``
+
+- ``utility`` (:ref:`file_SeQuant_core_utility_context.hpp`)
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_domain_eval_cache_manager.hpp`
+
+- :ref:`file_SeQuant_domain_eval_eval.hpp`
+
+- :ref:`file_SeQuant_domain_eval_eval_result.cpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+
+Classes
+-------
+
+
+- :ref:`exhale_class_classsequant_1_1_eval_result`
+
+- :ref:`exhale_class_classsequant_1_1_eval_scalar`
+
+- :ref:`exhale_class_classsequant_1_1_eval_tensor_b_t_a_s`
+
+- :ref:`exhale_class_classsequant_1_1_eval_tensor_of_tensor_t_a`
+
+- :ref:`exhale_class_classsequant_1_1_eval_tensor_t_a`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1a2e66d03686cc8f382e36f57e00d4d853`
+
+
+Typedefs
+--------
+
+
+- :ref:`exhale_typedef_namespacesequant_1aaff28ffc714c2758a30dc54d7d4ee290`
+
+
+Variables
+---------
+
+
+- :ref:`exhale_variable_eval__result_8hpp_1a528bc2e4543f7a3e17fe8fa8808ec84a`
+
+- :ref:`exhale_variable_eval__result_8hpp_1ad52986295279c4146e59b5675798e256`
+
+- :ref:`exhale_variable_eval__result_8hpp_1a103447f0113670deaa9808fd2b447311`
+
+- :ref:`exhale_variable_eval__result_8hpp_1a8133307333be4be0fa29bdddf0dbce5c`
+
+- :ref:`exhale_variable_eval__result_8hpp_1a4ac88fa6cddf06725697df3dffa9de7b`
+

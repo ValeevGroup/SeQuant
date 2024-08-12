@@ -1,0 +1,89 @@
+
+.. _file_SeQuant_core_tensor_network.hpp:
+
+File tensor_network.hpp
+=======================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core>` (``SeQuant/core``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+Definition (``SeQuant/core/tensor_network.hpp``)
+------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_tensor_network.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/abstract_tensor.hpp`` (:ref:`file_SeQuant_core_abstract_tensor.hpp`)
+
+- ``SeQuant/core/container.hpp`` (:ref:`file_SeQuant_core_container.hpp`)
+
+- ``SeQuant/core/expr.hpp`` (:ref:`file_SeQuant_core_expr.hpp`)
+
+- ``SeQuant/core/index.hpp`` (:ref:`file_SeQuant_core_index.hpp`)
+
+- ``cassert``
+
+- ``cstdlib``
+
+- ``memory``
+
+- ``stdexcept``
+
+- ``string`` (:ref:`file_SeQuant_core_utility_string.cpp`)
+
+- ``string_view``
+
+- ``tuple``
+
+- ``utility`` (:ref:`file_SeQuant_core_utility_context.hpp`)
+
+- ``vector``
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_core_expr.cpp`
+
+- :ref:`file_SeQuant_core_optimize.hpp`
+
+- :ref:`file_SeQuant_core_tensor_network.cpp`
+
+- :ref:`file_SeQuant_core_wick.impl.hpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_bliss`
+
+- :ref:`namespace_sequant`
+
+
+Classes
+-------
+
+
+- :ref:`exhale_struct_structsequant_1_1_tensor_network_1_1_full_label_compare`
+
+- :ref:`exhale_class_classsequant_1_1_tensor_network`
+
+- :ref:`exhale_class_classsequant_1_1_tensor_network_1_1_edge`
+

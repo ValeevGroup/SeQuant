@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1abae8eae397f4fa498bdc2486da8c7860:
+
+Template Function sequant::qpcreator_space
+==========================================
+
+- Defined in :ref:`file_SeQuant_core_op.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::qpcreator_space(const Op<S>&, Vacuum)
+   :project: SeQuant

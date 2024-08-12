@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a4f7a82ef79acb5f9253be6cf51a1bde0:
+
+Function sequant::operator==(const Expr&, const Expr&)
+======================================================
+
+- Defined in :ref:`file_SeQuant_core_expr.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::operator==(const Expr&, const Expr&)
+   :project: SeQuant

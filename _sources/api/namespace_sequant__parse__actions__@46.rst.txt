@@ -1,0 +1,11 @@
+
+.. _namespace_sequant__parse__actions__@46:
+
+Namespace sequant::parse::actions::@46
+======================================
+
+
+Auxiliary type traits. 
+
+
+

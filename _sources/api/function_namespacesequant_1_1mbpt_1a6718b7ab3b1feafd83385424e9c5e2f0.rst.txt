@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1mbpt_1a6718b7ab3b1feafd83385424e9c5e2f0:
+
+Function sequant::mbpt::make_sr_spaces
+======================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_convention.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::mbpt::make_sr_spaces()
+   :project: SeQuant

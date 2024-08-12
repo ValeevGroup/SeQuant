@@ -1,0 +1,44 @@
+
+.. _file_SeQuant_domain_eval_eval.cpp:
+
+File eval.cpp
+=============
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_domain_eval>` (``SeQuant/domain/eval``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+Definition (``SeQuant/domain/eval/eval.cpp``)
+---------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_domain_eval_eval.cpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/domain/eval/eval.hpp`` (:ref:`file_SeQuant_domain_eval_eval.hpp`)
+
+- ``TiledArray/expressions/index_list.h``
+
+- ``TiledArray/expressions/permopt.h``
+
+
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+

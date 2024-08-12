@@ -1,0 +1,97 @@
+
+.. _file_SeQuant_core_optimize_optimize.cpp:
+
+File optimize.cpp
+=================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core_optimize>` (``SeQuant/core/optimize``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+Definition (``SeQuant/core/optimize/optimize.cpp``)
+---------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_optimize_optimize.cpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/binary_node.hpp`` (:ref:`file_SeQuant_core_binary_node.hpp`)
+
+- ``SeQuant/core/complex.hpp`` (:ref:`file_SeQuant_core_complex.hpp`)
+
+- ``SeQuant/core/container.hpp`` (:ref:`file_SeQuant_core_container.hpp`)
+
+- ``SeQuant/core/eval_expr.hpp`` (:ref:`file_SeQuant_core_eval_expr.hpp`)
+
+- ``SeQuant/core/eval_node.hpp`` (:ref:`file_SeQuant_core_eval_node.hpp`)
+
+- ``SeQuant/core/expr.hpp`` (:ref:`file_SeQuant_core_expr.hpp`)
+
+- ``SeQuant/core/hash.hpp`` (:ref:`file_SeQuant_core_hash.hpp`)
+
+- ``SeQuant/core/optimize.hpp`` (:ref:`file_SeQuant_core_optimize.hpp`)
+
+- ``algorithm`` (:ref:`file_SeQuant_core_algorithm.hpp`)
+
+- ``cassert``
+
+- ``cstddef``
+
+- ``memory``
+
+- ``range/v3/iterator/basic_iterator.hpp``
+
+- ``range/v3/range/access.hpp``
+
+- ``range/v3/view/tail.hpp``
+
+- ``range/v3/view/transform.hpp``
+
+- ``range/v3/view/view.hpp``
+
+- ``stack``
+
+- ``utility`` (:ref:`file_SeQuant_core_utility_context.hpp`)
+
+- ``vector``
+
+
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+- :ref:`namespace_sequant__opt`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1a8d6dd66c2606214e3190ea878e84de89`
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1af6fc7be814aa005561ba962d5b4c3212`
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1a2b7e08206ce6df99e30e7349490c7847`
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1a0eda7f76073a13b7aca43425edcdcaf5`
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1aaadaffb72d6aad3724d3ceca662716cc`
+
+- :ref:`exhale_function_namespacesequant_1a9209384c6ea4d9af5a060009cc73b1a7`
+

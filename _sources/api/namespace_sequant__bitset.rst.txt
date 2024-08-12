@@ -1,0 +1,22 @@
+
+.. _namespace_sequant__bitset:
+
+Namespace sequant::bitset
+=========================
+
+
+
+Typedefs
+--------
+
+
+- :ref:`exhale_typedef_namespacesequant_1_1bitset_1a64291bfc40ea89849d7530333a416c46`
+
+
+Variables
+---------
+
+
+- :ref:`exhale_variable_namespacesequant_1_1bitset_1a481f2d280e76ae124f2ed254f796a29a`
+
+- :ref:`exhale_variable_namespacesequant_1_1bitset_1a3487ba40ecda3f6d9d6368761c7a8385`

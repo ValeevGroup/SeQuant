@@ -1,0 +1,73 @@
+
+.. _file_SeQuant_domain_mbpt_convention.cpp:
+
+File convention.cpp
+===================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_domain_mbpt>` (``SeQuant/domain/mbpt``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+Definition (``SeQuant/domain/mbpt/convention.cpp``)
+---------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_domain_mbpt_convention.cpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/context.hpp`` (:ref:`file_SeQuant_core_context.hpp`)
+
+- ``SeQuant/core/index.hpp`` (:ref:`file_SeQuant_core_index.hpp`)
+
+- ``SeQuant/core/tensor.hpp`` (:ref:`file_SeQuant_core_tensor.hpp`)
+
+- ``SeQuant/domain/mbpt/convention.hpp`` (:ref:`file_SeQuant_domain_mbpt_convention.hpp`)
+
+- ``SeQuant/domain/mbpt/op.hpp`` (:ref:`file_SeQuant_domain_mbpt_op.hpp`)
+
+- ``SeQuant/domain/mbpt/spin.hpp`` (:ref:`file_SeQuant_domain_mbpt_spin.hpp`)
+
+
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+- :ref:`namespace_sequant__mbpt`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1a0e001494800d6d8675412f9b676d94f9`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1ac5e5ddeccd4147dd8c8452cba7cc3d06`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1aea69add5352ce5f8b7be7c2a9f23c379`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1a9618d1130a31bb3b5c5025fa08ef7bf1`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1a9f2b0006877b64283f05f0c848841cb7`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1a425d7ce59ccefc391ed870b51ca0b8ca`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1ae727e1059f2cb2779c9f932b08295bfe`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1a6718b7ab3b1feafd83385424e9c5e2f0`
+

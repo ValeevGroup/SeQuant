@@ -1,0 +1,61 @@
+
+.. _program_listing_file_SeQuant_domain_mbpt_convention.hpp:
+
+Program Listing for File convention.hpp
+=======================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_domain_mbpt_convention.hpp>` (``SeQuant/domain/mbpt/convention.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   //
+   // Created by Eduard Valeyev on 2019-04-01.
+   //
+   
+   #ifndef SEQUANT_CONVENTION_HPP
+   #define SEQUANT_CONVENTION_HPP
+   
+   #include <SeQuant/domain/mbpt/fwd.hpp>
+   
+   #include <SeQuant/core/index_space_registry.hpp>
+   
+   namespace sequant {
+   namespace mbpt {
+   
+   enum class Convention {
+     Minimal,  
+     SR,       
+     MR,    
+     F12,   
+     QCiFS  
+   };
+   
+   void load(Convention conv = Convention::Minimal);
+   
+   std::wstring decorate_label(std::wstring label, bool up);
+   
+   void add_fermi_spin(std::shared_ptr<IndexSpaceRegistry>& isr);
+   
+   
+   std::shared_ptr<IndexSpaceRegistry> make_min_sr_spaces();
+   
+   std::shared_ptr<IndexSpaceRegistry> make_F12_sr_spaces();
+   
+   std::shared_ptr<IndexSpaceRegistry> make_mr_spaces();
+   
+   std::shared_ptr<IndexSpaceRegistry> make_sr_spaces();
+   
+   std::shared_ptr<IndexSpaceRegistry> make_legacy_spaces(
+       bool ignore_spin = false);
+   
+   std::pair<std::shared_ptr<IndexSpaceRegistry>,
+             std::shared_ptr<IndexSpaceRegistry>>
+   make_fermi_and_bose_spaces();
+   
+   
+   }  // namespace mbpt
+   }  // namespace sequant
+   
+   #endif  // SEQUANT_CONVENTION_HPP

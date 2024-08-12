@@ -1,0 +1,26 @@
+.. _exhale_struct_structsequant_1_1_expr_1_1is__shared__ptr__of__expr__or__derived_3_01std_1_1shared__ptr_3_01_t_0b9041721e7914bd1fb6a6a0536a3b3b6:
+
+Template Struct is_shared_ptr_of_expr_or_derived< std::shared_ptr< T >, std::enable_if_t< is_an_expr_v< T > > >
+===============================================================================================================
+
+- Defined in :ref:`file_SeQuant_core_expr.hpp`
+
+
+Inheritance Relationships
+-------------------------
+
+Base Type
+*********
+
+- ``public std::true_type``
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::Expr::is_shared_ptr_of_expr_or_derived< std::shared_ptr< T >, std::enable_if_t< is_an_expr_v< T > > >
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

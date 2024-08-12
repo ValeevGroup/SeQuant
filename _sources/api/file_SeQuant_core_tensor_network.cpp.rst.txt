@@ -1,0 +1,88 @@
+
+.. _file_SeQuant_core_tensor_network.cpp:
+
+File tensor_network.cpp
+=======================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core>` (``SeQuant/core``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+Definition (``SeQuant/core/tensor_network.cpp``)
+------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_tensor_network.cpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/abstract_tensor.hpp`` (:ref:`file_SeQuant_core_abstract_tensor.hpp`)
+
+- ``SeQuant/core/algorithm.hpp`` (:ref:`file_SeQuant_core_algorithm.hpp`)
+
+- ``SeQuant/core/attr.hpp`` (:ref:`file_SeQuant_core_attr.hpp`)
+
+- ``SeQuant/core/bliss.hpp`` (:ref:`file_SeQuant_core_bliss.hpp`)
+
+- ``SeQuant/core/complex.hpp`` (:ref:`file_SeQuant_core_complex.hpp`)
+
+- ``SeQuant/core/container.hpp`` (:ref:`file_SeQuant_core_container.hpp`)
+
+- ``SeQuant/core/expr.hpp`` (:ref:`file_SeQuant_core_expr.hpp`)
+
+- ``SeQuant/core/hash.hpp`` (:ref:`file_SeQuant_core_hash.hpp`)
+
+- ``SeQuant/core/index.hpp`` (:ref:`file_SeQuant_core_index.hpp`)
+
+- ``SeQuant/core/latex.hpp`` (:ref:`file_SeQuant_core_latex.hpp`)
+
+- ``SeQuant/core/logger.hpp`` (:ref:`file_SeQuant_core_logger.hpp`)
+
+- ``SeQuant/core/tag.hpp`` (:ref:`file_SeQuant_core_tag.hpp`)
+
+- ``SeQuant/core/tensor_network.hpp`` (:ref:`file_SeQuant_core_tensor_network.hpp`)
+
+- ``SeQuant/core/wstring.hpp`` (:ref:`file_SeQuant_core_wstring.hpp`)
+
+- ``algorithm`` (:ref:`file_SeQuant_core_algorithm.hpp`)
+
+- ``iostream``
+
+- ``iterator``
+
+- ``range/v3/algorithm/for_each.hpp``
+
+- ``range/v3/algorithm/none_of.hpp``
+
+- ``range/v3/functional/identity.hpp``
+
+- ``range/v3/iterator/basic_iterator.hpp``
+
+- ``range/v3/view/any_view.hpp``
+
+- ``range/v3/view/view.hpp``
+
+- ``sstream``
+
+- ``type_traits``
+
+
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+

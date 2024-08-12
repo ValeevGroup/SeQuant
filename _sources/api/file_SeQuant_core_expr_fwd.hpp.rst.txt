@@ -1,0 +1,65 @@
+
+.. _file_SeQuant_core_expr_fwd.hpp:
+
+File expr_fwd.hpp
+=================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core>` (``SeQuant/core``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+Definition (``SeQuant/core/expr_fwd.hpp``)
+------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_expr_fwd.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``memory``
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_core_expr.hpp`
+
+- :ref:`file_SeQuant_core_fwd.hpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+
+Typedefs
+--------
+
+
+- :ref:`exhale_typedef_namespacesequant_1aa76f39bb994067cbae603a4fb36b1d61`
+
+- :ref:`exhale_typedef_namespacesequant_1ad9f229ebfea204600e262fbd730b3f79`
+
+- :ref:`exhale_typedef_namespacesequant_1a6d79870a4fd5e190b1d4c4f32045b5cd`
+
+- :ref:`exhale_typedef_namespacesequant_1a972a28a14c55baaaff99c43a19ba2c2b`
+
+- :ref:`exhale_typedef_namespacesequant_1a45c0f4acfa2d7475f63d0c076a3b182f`
+
+- :ref:`exhale_typedef_namespacesequant_1aba54db4207e3a370a05bb03742cb8666`
+

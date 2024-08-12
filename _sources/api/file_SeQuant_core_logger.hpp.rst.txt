@@ -1,0 +1,72 @@
+
+.. _file_SeQuant_core_logger.hpp:
+
+File logger.hpp
+===============
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core>` (``SeQuant/core``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+Definition (``SeQuant/core/logger.hpp``)
+----------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_logger.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/utility/singleton.hpp`` (:ref:`file_SeQuant_core_utility_singleton.hpp`)
+
+- ``iostream``
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_core_expr.cpp`
+
+- :ref:`file_SeQuant_core_expr_algorithm.hpp`
+
+- :ref:`file_SeQuant_core_tensor_network.cpp`
+
+- :ref:`file_SeQuant_core_wick.impl.hpp`
+
+- :ref:`file_SeQuant_domain_eval_eval.hpp`
+
+- :ref:`file_SeQuant_domain_eval_eval_result.hpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+
+Classes
+-------
+
+
+- :ref:`exhale_struct_structsequant_1_1_logger`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1aa839e62b14e81c3a5923af1600737da0`
+

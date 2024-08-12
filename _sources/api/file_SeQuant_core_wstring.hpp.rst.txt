@@ -1,0 +1,102 @@
+
+.. _file_SeQuant_core_wstring.hpp:
+
+File wstring.hpp
+================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core>` (``SeQuant/core``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+Definition (``SeQuant/core/wstring.hpp``)
+-----------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_wstring.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/utility/macros.hpp`` (:ref:`file_SeQuant_core_utility_macros.hpp`)
+
+- ``SeQuant/core/utility/string.hpp`` (:ref:`file_SeQuant_core_utility_string.hpp`)
+
+- ``boost/locale/encoding_utf.hpp``
+
+- ``cmath``
+
+- ``string`` (:ref:`file_SeQuant_core_utility_string.cpp`)
+
+- ``string_view``
+
+- ``type_traits``
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_core_asy_cost.cpp`
+
+- :ref:`file_SeQuant_core_eval_expr.cpp`
+
+- :ref:`file_SeQuant_core_index.cpp`
+
+- :ref:`file_SeQuant_core_latex.hpp`
+
+- :ref:`file_SeQuant_core_latex.ipp`
+
+- :ref:`file_SeQuant_core_rational.hpp`
+
+- :ref:`file_SeQuant_core_space.hpp`
+
+- :ref:`file_SeQuant_core_tensor_network.cpp`
+
+- :ref:`file_SeQuant_core_wolfram.hpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+- :ref:`namespace_sequant__detail`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1_1detail_1a785547f6ef47fbf695d01ec9146c5d55`
+
+- :ref:`exhale_function_namespacesequant_1a64ebcba54776ad99873ad9adeee78d1f`
+
+- :ref:`exhale_function_namespacesequant_1a8b3f62b488e9eb5152db5b5f77f182e7`
+
+- :ref:`exhale_function_namespacesequant_1a7de0165d6211e8d301f66cc4e83db9fa`
+
+- :ref:`exhale_function_namespacesequant_1a7f044c4f053575f1183641261f73f154`
+
+- :ref:`exhale_function_namespacesequant_1a9a4394ec8a60af48bfe4f5fa5269f98e`
+
+- :ref:`exhale_function_namespacesequant_1af6495449b17b85bec48b4e1a89f7570f`
+
+
+Defines
+-------
+
+
+- :ref:`exhale_define_wstring_8hpp_1a81ef57fa6b2d82eee3006de055773a34`
+

@@ -1,0 +1,80 @@
+
+.. _file_SeQuant_core_context.cpp:
+
+File context.cpp
+================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core>` (``SeQuant/core``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+Definition (``SeQuant/core/context.cpp``)
+-----------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_context.cpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/attr.hpp`` (:ref:`file_SeQuant_core_attr.hpp`)
+
+- ``SeQuant/core/context.hpp`` (:ref:`file_SeQuant_core_context.hpp`)
+
+- ``SeQuant/core/utility/context.hpp`` (:ref:`file_SeQuant_core_utility_context.hpp`)
+
+- ``mutex``
+
+
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1a98b108007e2a0edda2db78ae7dbc051e`
+
+- :ref:`exhale_function_namespacesequant_1adce7b7bf4d068ee074635fbd97efff08`
+
+- :ref:`exhale_function_namespacesequant_1a5df71c18ca95a2dc9964443ec44dc0d8`
+
+- :ref:`exhale_function_namespacesequant_1a49da1604cd44fac56a26f2fdbfc1884c`
+
+- :ref:`exhale_function_namespacesequant_1ae582646eac2e00a875ecc82e9d16b6bf`
+
+- :ref:`exhale_function_namespacesequant_1a1572a115ae7fa4a25142f573f9fa7040`
+
+- :ref:`exhale_function_namespacesequant_1accd1b214bed10b62fa989e2d9dbc86f4`
+
+- :ref:`exhale_function_namespacesequant_1a94543a94e43cc428c19ff5a306484603`
+
+- :ref:`exhale_function_namespacesequant_1a28fe937cf0195785bd93939ff477a2f3`
+
+- :ref:`exhale_function_namespacesequant_1ac95b27ca1069ade246e759b6f3f8df97`
+
+- :ref:`exhale_function_namespacesequant_1ac1a8d19c4b99d52c077d3031ae791121`
+
+
+Variables
+---------
+
+
+- :ref:`exhale_variable_namespacesequant_1a7b55917da76cdc221eb34363fbd442d2`
+

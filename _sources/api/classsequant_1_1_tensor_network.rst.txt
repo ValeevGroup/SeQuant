@@ -1,0 +1,28 @@
+.. _exhale_class_classsequant_1_1_tensor_network:
+
+Class TensorNetwork
+===================
+
+- Defined in :ref:`file_SeQuant_core_tensor_network.hpp`
+
+
+Nested Relationships
+--------------------
+
+
+Nested Types
+************
+
+- :ref:`exhale_class_classsequant_1_1_tensor_network_1_1_edge`
+- :ref:`exhale_struct_structsequant_1_1_tensor_network_1_1_full_label_compare`
+
+
+Class Documentation
+-------------------
+
+
+.. doxygenclass:: sequant::TensorNetwork
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

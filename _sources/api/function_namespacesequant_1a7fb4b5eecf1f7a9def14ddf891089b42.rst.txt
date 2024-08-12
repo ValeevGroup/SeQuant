@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a7fb4b5eecf1f7a9def14ddf891089b42:
+
+Function sequant::factorize_S
+=============================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_spin.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::factorize_S(const ExprPtr&, std::initializer_list<IndexList>, bool)
+   :project: SeQuant

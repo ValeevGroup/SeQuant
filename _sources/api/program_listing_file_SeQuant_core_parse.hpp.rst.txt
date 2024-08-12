@@ -1,0 +1,51 @@
+
+.. _program_listing_file_SeQuant_core_parse.hpp:
+
+Program Listing for File parse.hpp
+==================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_core_parse.hpp>` (``SeQuant/core/parse.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   #ifndef SEQUANT_PARSE_HPP
+   #define SEQUANT_PARSE_HPP
+   
+   #include <SeQuant/core/attr.hpp>
+   #include <SeQuant/core/expr.hpp>
+   #include <SeQuant/core/index.hpp>
+   #include <SeQuant/core/tensor.hpp>
+   
+   #include <stdexcept>
+   #include <string>
+   #include <string_view>
+   
+   
+   namespace sequant {
+   
+   struct ParseError : std::runtime_error {
+     std::size_t offset;
+     std::size_t length;
+   
+     ParseError(std::size_t offset, std::size_t length, std::string message);
+   };
+   
+   // clang-format off
+   // clang-format on
+   ExprPtr parse_expr(std::wstring_view raw,
+                      Symmetry tensor_sym = Symmetry::nonsymm);
+   
+   std::wstring deparse(const ExprPtr &expr, bool annot_sym = true);
+   std::wstring deparse(const Expr &expr, bool annot_sym = true);
+   std::wstring deparse(const Product &product, bool annot_sym);
+   std::wstring deparse(const Sum &sum, bool annot_sym);
+   std::wstring deparse(const Tensor &tensor, bool annot_sym = true);
+   std::wstring deparse(const Variable &variable);
+   std::wstring deparse(const Constant &constant);
+   std::wstring deparse(const Index &index);
+   
+   }  // namespace sequant
+   
+   #endif  // SEQUANT_PARSE_HPP

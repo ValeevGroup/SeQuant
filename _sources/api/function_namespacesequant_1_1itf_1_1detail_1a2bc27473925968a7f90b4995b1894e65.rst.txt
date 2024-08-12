@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1itf_1_1detail_1a2bc27473925968a7f90b4995b1894e65:
+
+Template Function sequant::itf::detail::isExceptionalJ
+======================================================
+
+- Defined in :ref:`file_SeQuant_core_export_itf.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::itf::detail::isExceptionalJ(const BraContainer&, const KetContainer&)
+   :project: SeQuant

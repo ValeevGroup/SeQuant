@@ -1,0 +1,14 @@
+.. _exhale_variable_namespacesequant_1_1bitset_1a3487ba40ecda3f6d9d6368761c7a8385:
+
+Variable sequant::bitset::reserved
+==================================
+
+- Defined in :ref:`file_SeQuant_core_space.hpp`
+
+
+Variable Documentation
+----------------------
+
+
+.. doxygenvariable:: sequant::bitset::reserved
+   :project: SeQuant

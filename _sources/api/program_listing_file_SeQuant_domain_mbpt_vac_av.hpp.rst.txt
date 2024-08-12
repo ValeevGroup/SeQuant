@@ -1,0 +1,83 @@
+
+.. _program_listing_file_SeQuant_domain_mbpt_vac_av.hpp:
+
+Program Listing for File vac_av.hpp
+===================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_domain_mbpt_vac_av.hpp>` (``SeQuant/domain/mbpt/vac_av.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   //
+   // Created by Eduard Valeyev on 2023-10-30.
+   //
+   using namespace sequant::mbpt;
+   
+   inline std::vector<std::pair<mbpt::OpType, mbpt::OpType>>
+   default_op_connections() {
+     using mbpt::OpType;
+     static const std::vector<std::pair<mbpt::OpType, mbpt::OpType>> defaults = {
+         {OpType::h, OpType::t},
+         {OpType::f, OpType::t},
+         {OpType::f̃, OpType::t},
+         {OpType::g, OpType::t},
+         // NBs
+         // - for unitary ansatz can also connect t^+ with Hamiltonian
+         // - for exact (non-approximated) unitary ansatz will also need to connect
+         // t^+ with t;
+         //   for MR unitary ansatz can also connect t with t and t^+ with t^+ ,
+         //   but since adjoint() does not change OpType all of these are expressed
+         //   as same connection ... this points out the need to have a separate
+         //   OpType for t^+ and t, and in general the contents of OpType must be
+         //   customizable
+         {OpType::t, OpType::h},
+         {OpType::t, OpType::f},
+         {OpType::t, OpType::f̃},
+         {OpType::t, OpType::g}};
+     return defaults;
+   }
+   
+   inline std::vector<std::pair<mbpt::OpType, mbpt::OpType>> concat(
+       const std::vector<std::pair<mbpt::OpType, mbpt::OpType>> connections1,
+       const std::vector<std::pair<mbpt::OpType, mbpt::OpType>> connections2) {
+     return ranges::concat_view(connections1, connections2) | ranges::to_vector;
+   }
+   
+   inline std::vector<std::pair<std::wstring, std::wstring>> to_label_connections(
+       const std::vector<std::pair<mbpt::OpType, mbpt::OpType>>& op_connections) {
+     // convert mbpt::OpType to std::wstring
+     using mbpt::optype2label;
+     std::vector<std::pair<std::wstring, std::wstring>> op_connect_wstr;
+     for (const auto& [op1, op2] : op_connections) {
+       op_connect_wstr.emplace_back(optype2label.at(op1), optype2label.at(op2));
+     }
+     return op_connect_wstr;
+   }
+   
+   inline ExprPtr lower_to_tensor_form(ExprPtr& expr) {
+     auto op_lowerer = [](ExprPtr& leaf) {
+       if (leaf.is<op_t>()) leaf = leaf.as<op_t>().tensor_form();
+     };
+     expr->visit(op_lowerer, /* atoms only = */ true);
+     return expr;
+   }
+   
+   inline ExprPtr lower_to_tensor_form(const ExprPtr& expr_inp) {
+     auto expr = expr_inp->clone();
+     lower_to_tensor_form(expr);
+     return expr;
+   }
+   
+   
+   ExprPtr vac_av(ExprPtr expr,
+                  std::vector<std::pair<mbpt::OpType, mbpt::OpType>>
+                      op_connections = default_op_connections(),
+                  bool skip_clone = false);
+   
+   
+   ExprPtr vac_av(
+       ExprPtr expr,
+       std::vector<std::pair<std::wstring, std::wstring>> op_connections,
+       bool skip_clone = false);

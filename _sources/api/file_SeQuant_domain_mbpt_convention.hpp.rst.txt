@@ -1,0 +1,66 @@
+
+.. _file_SeQuant_domain_mbpt_convention.hpp:
+
+File convention.hpp
+===================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_domain_mbpt>` (``SeQuant/domain/mbpt``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+Definition (``SeQuant/domain/mbpt/convention.hpp``)
+---------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_domain_mbpt_convention.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/index_space_registry.hpp`` (:ref:`file_SeQuant_core_index_space_registry.hpp`)
+
+- ``SeQuant/domain/mbpt/fwd.hpp`` (:ref:`file_SeQuant_domain_mbpt_fwd.hpp`)
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_domain_mbpt_convention.cpp`
+
+- :ref:`file_SeQuant_domain_mbpt_models_cc.cpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+- :ref:`namespace_sequant__mbpt`
+
+
+Enums
+-----
+
+
+- :ref:`exhale_enum_namespacesequant_1_1mbpt_1a085298ac5894ca08279f64ead1348a31`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1aecf410c31e905e98bad493306900b2fa`
+

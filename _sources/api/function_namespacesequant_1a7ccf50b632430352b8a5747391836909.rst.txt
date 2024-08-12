@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a7ccf50b632430352b8a5747391836909:
+
+Template Function sequant::evaluate_crust(NodeT const&, Le const&)
+==================================================================
+
+- Defined in :ref:`file_SeQuant_domain_eval_eval.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::evaluate_crust(NodeT const&, Le const&)
+   :project: SeQuant

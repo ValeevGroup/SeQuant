@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1afae13e036fa22d07266b1f39171dd571:
+
+Function sequant::log_ta_tensor_host_memory_use
+===============================================
+
+- Defined in :ref:`file_SeQuant_domain_eval_eval_result.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::log_ta_tensor_host_memory_use(madness::World&, std::string_view)
+   :project: SeQuant

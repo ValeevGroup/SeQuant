@@ -1,0 +1,14 @@
+.. _exhale_function_vac__av_8hpp_1a0714297f7472d0f648e954ff2e3708ad:
+
+Function default_op_connections
+===============================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_vac_av.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: default_op_connections()
+   :project: SeQuant

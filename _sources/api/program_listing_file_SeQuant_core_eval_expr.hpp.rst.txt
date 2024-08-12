@@ -1,0 +1,104 @@
+
+.. _program_listing_file_SeQuant_core_eval_expr.hpp:
+
+Program Listing for File eval_expr.hpp
+======================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_core_eval_expr.hpp>` (``SeQuant/core/eval_expr.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   #ifndef SEQUANT_EVAL_EXPR_HPP
+   #define SEQUANT_EVAL_EXPR_HPP
+   
+   #include <SeQuant/core/container.hpp>
+   #include <SeQuant/core/expr.hpp>
+   #include <SeQuant/core/index.hpp>
+   
+   #include <cstddef>
+   #include <string>
+   
+   namespace sequant {
+   
+   class Tensor;
+   
+   enum class EvalOp {
+   
+     Id,
+   
+     Sum,
+   
+     Prod
+   };
+   
+   enum class ResultType { Tensor, Scalar };
+   
+   struct NestedTensorIndices {
+     container::svector<Index> outer, inner;
+   
+     explicit NestedTensorIndices(Tensor const&);
+   };
+   
+   class EvalExpr {
+    public:
+     explicit EvalExpr(Tensor const& tnsr);
+   
+     explicit EvalExpr(Constant const& c);
+   
+     explicit EvalExpr(Variable const& v);
+   
+     EvalExpr(EvalExpr const& left, EvalExpr const& right, EvalOp op);
+   
+     [[nodiscard]] EvalOp op_type() const noexcept;
+   
+     [[nodiscard]] ResultType result_type() const noexcept;
+   
+     [[nodiscard]] size_t hash_value() const noexcept;
+   
+     [[nodiscard]] size_t id() const noexcept;
+   
+     [[nodiscard]] ExprPtr expr() const noexcept;
+   
+     [[nodiscard]] bool tot() const noexcept;
+   
+     [[nodiscard]] std::wstring to_latex() const noexcept;
+   
+     [[nodiscard]] bool is_tensor() const noexcept;
+   
+     [[nodiscard]] bool is_scalar() const noexcept;
+   
+     [[nodiscard]] bool is_constant() const noexcept;
+   
+     [[nodiscard]] bool is_variable() const noexcept;
+   
+     [[nodiscard]] Tensor const& as_tensor() const noexcept;
+   
+     [[nodiscard]] Constant const& as_constant() const noexcept;
+   
+     [[nodiscard]] Variable const& as_variable() const noexcept;
+   
+     [[nodiscard]] std::string label() const noexcept;
+   
+     [[nodiscard]] std::string braket_annot() const noexcept;
+   
+    private:
+     EvalOp op_type_;
+   
+     ResultType result_type_;
+   
+     size_t hash_value_;
+   
+     size_t id_;
+   
+     ExprPtr expr_;
+   
+     bool tot_;
+   
+     static size_t global_id_;
+   };
+   
+   }  // namespace sequant
+   
+   #endif  // SEQUANT_EVAL_EXPR_HPP

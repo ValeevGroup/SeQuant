@@ -1,0 +1,23 @@
+.. _exhale_struct_structsequant_1_1expr__range_1_1cursor:
+
+Struct expr_range::cursor
+=========================
+
+- Defined in :ref:`file_SeQuant_core_expr_algorithm.hpp`
+
+
+Nested Relationships
+--------------------
+
+This struct is a nested type of :ref:`exhale_class_classsequant_1_1expr__range`.
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::expr_range::cursor
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

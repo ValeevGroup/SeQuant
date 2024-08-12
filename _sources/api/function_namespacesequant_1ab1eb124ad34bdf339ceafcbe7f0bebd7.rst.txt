@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1ab1eb124ad34bdf339ceafcbe7f0bebd7:
+
+Function sequant::spintrace
+===========================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_spin.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::spintrace(const ExprPtr&, container::svector<container::svector<Index>>, bool)
+   :project: SeQuant

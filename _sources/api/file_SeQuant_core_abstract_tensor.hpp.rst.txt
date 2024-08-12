@@ -1,0 +1,143 @@
+
+.. _file_SeQuant_core_abstract_tensor.hpp:
+
+File abstract_tensor.hpp
+========================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core>` (``SeQuant/core``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+Definition (``SeQuant/core/abstract_tensor.hpp``)
+-------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_abstract_tensor.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/algorithm.hpp`` (:ref:`file_SeQuant_core_algorithm.hpp`)
+
+- ``SeQuant/core/attr.hpp`` (:ref:`file_SeQuant_core_attr.hpp`)
+
+- ``SeQuant/core/container.hpp`` (:ref:`file_SeQuant_core_container.hpp`)
+
+- ``SeQuant/core/expr.hpp`` (:ref:`file_SeQuant_core_expr.hpp`)
+
+- ``SeQuant/core/index.hpp`` (:ref:`file_SeQuant_core_index.hpp`)
+
+- ``algorithm`` (:ref:`file_SeQuant_core_algorithm.hpp`)
+
+- ``boost/core/demangle.hpp``
+
+- ``cstdlib``
+
+- ``functional``
+
+- ``memory``
+
+- ``mutex``
+
+- ``ostream``
+
+- ``range/v3/all.hpp``
+
+- ``stdexcept``
+
+- ``string`` (:ref:`file_SeQuant_core_utility_string.cpp`)
+
+- ``string_view``
+
+- ``typeinfo``
+
+- ``utility`` (:ref:`file_SeQuant_core_utility_context.hpp`)
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_core_abstract_tensor.cpp`
+
+- :ref:`file_SeQuant_core_expr.cpp`
+
+- :ref:`file_SeQuant_core_op.hpp`
+
+- :ref:`file_SeQuant_core_optimize.hpp`
+
+- :ref:`file_SeQuant_core_tensor.cpp`
+
+- :ref:`file_SeQuant_core_tensor.hpp`
+
+- :ref:`file_SeQuant_core_tensor_network.cpp`
+
+- :ref:`file_SeQuant_core_tensor_network.hpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+
+Classes
+-------
+
+
+- :ref:`exhale_class_classsequant_1_1_abstract_tensor`
+
+- :ref:`exhale_class_classsequant_1_1_default_tensor_canonicalizer`
+
+- :ref:`exhale_class_classsequant_1_1_null_tensor_canonicalizer`
+
+- :ref:`exhale_class_classsequant_1_1_tensor_canonicalizer`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1ab9d9bd3f1638ab8169b5323d0d9dd045`
+
+- :ref:`exhale_function_namespacesequant_1a50cc3bdd8cb7728958b1b3e5fc10d48e`
+
+- :ref:`exhale_function_namespacesequant_1a65db7bf1a69edaf8a0d257246b1d2486`
+
+- :ref:`exhale_function_namespacesequant_1acdb0a849c7a549fc20b032f74899d23c`
+
+- :ref:`exhale_function_namespacesequant_1a89cc6567669d53a5927508e64e59e76a`
+
+- :ref:`exhale_function_namespacesequant_1a039b52413448851b812d59af83eb088b`
+
+- :ref:`exhale_function_namespacesequant_1a0eecf6ec0dce4025a7072fa2e41c228f`
+
+- :ref:`exhale_function_namespacesequant_1a3781e8bc98d5621a2282e94bc73ca7c4`
+
+- :ref:`exhale_function_namespacesequant_1a12360c91d5adef4acd2e0cfed34ea1f3`
+
+- :ref:`exhale_function_namespacesequant_1a64dd0476465ed036b6a82616625d5480`
+
+- :ref:`exhale_function_namespacesequant_1a0218117138934de953b2eec98fa83b13`
+
+- :ref:`exhale_function_namespacesequant_1ad7716b333a12b80db3e33067288ded90`
+
+
+Typedefs
+--------
+
+
+- :ref:`exhale_typedef_namespacesequant_1ac1783594fe2c55cbfd86aff408b565bf`
+

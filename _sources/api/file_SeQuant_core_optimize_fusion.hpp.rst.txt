@@ -1,0 +1,55 @@
+
+.. _file_SeQuant_core_optimize_fusion.hpp:
+
+File fusion.hpp
+===============
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core_optimize>` (``SeQuant/core/optimize``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+Definition (``SeQuant/core/optimize/fusion.hpp``)
+-------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_optimize_fusion.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/expr.hpp`` (:ref:`file_SeQuant_core_expr.hpp`)
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_core_optimize_fusion.cpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+- :ref:`namespace_sequant__opt`
+
+
+Classes
+-------
+
+
+- :ref:`exhale_class_classsequant_1_1opt_1_1_fusion`
+

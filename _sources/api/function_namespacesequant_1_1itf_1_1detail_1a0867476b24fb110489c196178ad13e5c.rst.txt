@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1itf_1_1detail_1a0867476b24fb110489c196178ad13e5c:
+
+Function sequant::itf::detail::one_electron_integral_remapper
+=============================================================
+
+- Defined in :ref:`file_SeQuant_core_export_itf.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::itf::detail::one_electron_integral_remapper(ExprPtr&, const std::wstring_view)
+   :project: SeQuant

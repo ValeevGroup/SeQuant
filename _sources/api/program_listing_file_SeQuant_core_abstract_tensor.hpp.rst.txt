@@ -1,0 +1,305 @@
+
+.. _program_listing_file_SeQuant_core_abstract_tensor.hpp:
+
+Program Listing for File abstract_tensor.hpp
+============================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_core_abstract_tensor.hpp>` (``SeQuant/core/abstract_tensor.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   //
+   // Created by Eduard Valeyev on 2019-03-22.
+   //
+   
+   #ifndef SEQUANT_ABSTRACT_TENSOR_HPP
+   #define SEQUANT_ABSTRACT_TENSOR_HPP
+   
+   #include <SeQuant/core/algorithm.hpp>
+   #include <SeQuant/core/attr.hpp>
+   #include <SeQuant/core/container.hpp>
+   #include <SeQuant/core/expr.hpp>
+   #include <SeQuant/core/index.hpp>
+   
+   #include <algorithm>
+   #include <cstdlib>
+   #include <functional>
+   #include <memory>
+   #include <mutex>
+   #include <ostream>
+   #include <stdexcept>
+   #include <string>
+   #include <string_view>
+   #include <typeinfo>
+   #include <utility>
+   
+   #include <range/v3/all.hpp>
+   
+   #include <boost/core/demangle.hpp>
+   
+   namespace sequant {
+   
+   class AbstractTensor {
+     inline auto missing_instantiation_for(const char* fn_name) const {
+       std::ostringstream oss;
+       oss << "AbstractTensor::" << fn_name << " not implemented in class "
+           << boost::core::demangle(typeid(*this).name());
+       return std::runtime_error(oss.str());
+     }
+   
+    public:
+     virtual ~AbstractTensor() = default;
+   
+     using const_any_view_rand =
+         ranges::any_view<const Index&, ranges::category::random_access>;
+     using const_any_view_randsz =
+         ranges::any_view<const Index&, ranges::category::random_access |
+                                            ranges::category::sized>;
+     using any_view_rand =
+         ranges::any_view<Index&, ranges::category::random_access>;
+     using any_view_randsz =
+         ranges::any_view<Index&, ranges::category::random_access |
+                                      ranges::category::sized>;
+   
+     virtual const_any_view_randsz _bra() const {
+       throw missing_instantiation_for("_bra");
+     }
+     virtual const_any_view_randsz _ket() const {
+       throw missing_instantiation_for("_ket");
+     }
+     virtual const_any_view_rand _braket() const {
+       throw missing_instantiation_for("_braket");
+     }
+     virtual std::size_t _bra_rank() const {
+       throw missing_instantiation_for("_bra_rank");
+     }
+     virtual std::size_t _ket_rank() const {
+       throw missing_instantiation_for("_ket_rank");
+     }
+     virtual Symmetry _symmetry() const {
+       throw missing_instantiation_for("_symmetry");
+     }
+     virtual BraKetSymmetry _braket_symmetry() const {
+       throw missing_instantiation_for("_braket_symmetry");
+     }
+     virtual ParticleSymmetry _particle_symmetry() const {
+       throw missing_instantiation_for("_particle_symmetry");
+     }
+     virtual std::size_t _color() const {
+       throw missing_instantiation_for("_color");
+     }
+     virtual bool _is_cnumber() const {
+       throw missing_instantiation_for("_is_cnumber");
+     }
+     virtual std::wstring_view _label() const {
+       throw missing_instantiation_for("_label");
+     }
+     virtual std::wstring _to_latex() const {
+       throw missing_instantiation_for("_to_latex");
+     }
+   
+     virtual bool operator<(const AbstractTensor& other) const {
+       throw missing_instantiation_for("operator<");
+     }
+   
+     virtual bool _transform_indices(
+         const container::map<Index, Index>& index_map) {
+       throw missing_instantiation_for("_transform_indices");
+     }
+     virtual void _reset_tags() { throw missing_instantiation_for("_reset_tags"); }
+   
+    private:
+     virtual any_view_randsz _bra_mutable() {
+       throw missing_instantiation_for("_bra_mutable");
+     }
+     virtual any_view_randsz _ket_mutable() {
+       throw missing_instantiation_for("_ket_mutable");
+     }
+   
+     friend class TensorCanonicalizer;
+   };
+   
+   inline auto braket(const AbstractTensor& t) { return t._braket(); }
+   inline auto bra_rank(const AbstractTensor& t) { return t._bra_rank(); }
+   inline auto ket_rank(const AbstractTensor& t) { return t._ket_rank(); }
+   inline auto symmetry(const AbstractTensor& t) { return t._symmetry(); }
+   inline auto braket_symmetry(const AbstractTensor& t) {
+     return t._braket_symmetry();
+   }
+   inline auto particle_symmetry(const AbstractTensor& t) {
+     return t._particle_symmetry();
+   }
+   inline auto color(const AbstractTensor& t) { return t._color(); }
+   inline auto is_cnumber(const AbstractTensor& t) { return t._is_cnumber(); }
+   inline auto label(const AbstractTensor& t) { return t._label(); }
+   inline auto to_latex(const AbstractTensor& t) { return t._to_latex(); }
+   template <typename IndexMap = container::map<Index, Index>>
+   inline bool transform_indices(AbstractTensor& t, const IndexMap& index_map) {
+     if constexpr (std::is_same_v<IndexMap, container::map<Index, Index>>) {
+       return t._transform_indices(index_map);
+     } else {
+       container::map<Index, Index> index_map_copy;
+       ranges::copy(index_map, index_map_copy);
+       return t._transform_indices(index_map_copy);
+     }
+   }
+   inline void reset_tags(AbstractTensor& t) { t._reset_tags(); }
+   
+   // defined in AbstractTensor
+   // inline bool operator<(const AbstractTensor& first, const AbstractTensor&
+   // second) {
+   //  return first.operator<(second);
+   //}
+   
+   
+   using AbstractTensorPtr = std::shared_ptr<AbstractTensor>;
+   
+   class TensorCanonicalizer {
+    public:
+     virtual ~TensorCanonicalizer();
+   
+     static std::shared_ptr<TensorCanonicalizer> instance_ptr(
+         std::wstring_view label = L"");
+   
+     static std::shared_ptr<TensorCanonicalizer> nondefault_instance_ptr(
+         std::wstring_view label);
+   
+     static std::shared_ptr<TensorCanonicalizer> instance(
+         std::wstring_view label = L"");
+   
+     static void register_instance(
+         std::shared_ptr<TensorCanonicalizer> canonicalizer,
+         std::wstring_view label = L"");
+   
+     static bool try_register_instance(
+         std::shared_ptr<TensorCanonicalizer> canonicalizer,
+         std::wstring_view label = L"");
+   
+     static void deregister_instance(std::wstring_view label = L"");
+   
+     static const auto& cardinal_tensor_labels() {
+       return cardinal_tensor_labels_accessor();
+     }
+   
+     static void set_cardinal_tensor_labels(
+         const container::vector<std::wstring>& labels) {
+       cardinal_tensor_labels_accessor() = labels;
+     }
+   
+     // TODO generalize for complex tensors
+     virtual ExprPtr apply(AbstractTensor&) = 0;
+   
+     static const std::function<bool(const Index&, const Index&)>&
+     index_comparer();
+   
+     static void index_comparer(
+         std::function<bool(const Index&, const Index&)> comparer);
+   
+    protected:
+     inline auto bra_range(AbstractTensor& t) { return t._bra_mutable(); }
+     inline auto ket_range(AbstractTensor& t) { return t._ket_mutable(); }
+   
+     static std::function<bool(const Index&, const Index&)> index_comparer_;
+   
+    private:
+     static std::pair<
+         container::map<std::wstring, std::shared_ptr<TensorCanonicalizer>>*,
+         std::unique_lock<std::recursive_mutex>>
+     instance_map_accessor();  // map* + locked recursive mutex
+     static container::vector<std::wstring>& cardinal_tensor_labels_accessor();
+   };
+   
+   class NullTensorCanonicalizer : public TensorCanonicalizer {
+    public:
+     virtual ~NullTensorCanonicalizer() = default;
+   
+     ExprPtr apply(AbstractTensor&) override;
+   };
+   
+   class DefaultTensorCanonicalizer : public TensorCanonicalizer {
+    public:
+     DefaultTensorCanonicalizer() = default;
+   
+     template <typename IndexContainer>
+     DefaultTensorCanonicalizer(IndexContainer&& external_indices) {
+       ranges::for_each(external_indices, [this](const Index& idx) {
+         this->external_indices_.emplace(idx.label(), idx);
+       });
+     }
+     virtual ~DefaultTensorCanonicalizer() = default;
+   
+     ExprPtr apply(AbstractTensor& t) override;
+   
+     template <typename Compare>
+     ExprPtr apply(AbstractTensor& t, const Compare& comp) {
+       // std::wcout << "abstract tensor: " << to_latex(t) << "\n";
+       auto s = symmetry(t);
+       auto is_antisymm = (s == Symmetry::antisymm);
+       const auto _bra_rank = bra_rank(t);
+       const auto _ket_rank = ket_rank(t);
+       const auto _rank = std::min(_bra_rank, _ket_rank);
+   
+       // nothing to do for rank-1 tensors
+       if (_bra_rank == 1 && _ket_rank == 1) return nullptr;
+   
+       using ranges::begin;
+       using ranges::end;
+       using ranges::views::counted;
+       using ranges::views::take;
+       using ranges::views::zip;
+   
+       bool even = true;
+       switch (s) {
+         case Symmetry::antisymm:
+         case Symmetry::symm: {
+           auto _bra = bra_range(t);
+           auto _ket = ket_range(t);
+           //      std::wcout << "canonicalizing " << to_latex(t);
+           IndexSwapper::thread_instance().reset();
+           // std::{stable_}sort does not necessarily use swap! so must implement
+           // sort ourselves .. thankfully ranks will be low so can stick with
+           // bubble
+           bubble_sort(begin(_bra), end(_bra), comp);
+           bubble_sort(begin(_ket), end(_ket), comp);
+           if (is_antisymm)
+             even = IndexSwapper::thread_instance().even_num_of_swaps();
+           //      std::wcout << " is " << (even ? "even" : "odd") << " and
+           //      produces " << to_latex(t) << std::endl;
+         } break;
+   
+         case Symmetry::nonsymm: {
+           // sort particles with bra and ket functions first,
+           // then the particles with either bra or ket index
+           auto _bra = bra_range(t);
+           auto _ket = ket_range(t);
+           auto _zip_braket = zip(take(_bra, _rank), take(_ket, _rank));
+           bubble_sort(begin(_zip_braket), end(_zip_braket), comp);
+           if (_bra_rank > _rank) {
+             auto size_of_rest = _bra_rank - _rank;
+             auto rest_of = counted(begin(_bra) + _rank, size_of_rest);
+             bubble_sort(begin(rest_of), end(rest_of), comp);
+           } else if (_ket_rank > _rank) {
+             auto size_of_rest = _ket_rank - _rank;
+             auto rest_of = counted(begin(_ket) + _rank, size_of_rest);
+             bubble_sort(begin(rest_of), end(rest_of), comp);
+           }
+         } break;
+   
+         default:
+           abort();
+       }
+   
+       ExprPtr result =
+           is_antisymm ? (even == false ? ex<Constant>(-1) : nullptr) : nullptr;
+       return result;
+     }
+   
+    private:
+     container::map<std::wstring, Index> external_indices_;
+   };
+   
+   }  // namespace sequant
+   
+   #endif  // SEQUANT_ABSTRACT_TENSOR_HPP

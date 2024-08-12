@@ -1,0 +1,100 @@
+
+.. _file_SeQuant_core_export_itf.cpp:
+
+File itf.cpp
+============
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core_export>` (``SeQuant/core/export``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+Definition (``SeQuant/core/export/itf.cpp``)
+--------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_export_itf.cpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/utility/indices.hpp`` (:ref:`file_SeQuant_core_utility_indices.hpp`)
+
+- ``algorithm`` (:ref:`file_SeQuant_core_algorithm.hpp`)
+
+- ``array``
+
+- ``cassert``
+
+- ``cwchar``
+
+- ``functional``
+
+- ``itf.hpp`` (:ref:`file_SeQuant_core_export_itf.hpp`)
+
+- ``map``
+
+- ``unordered_map``
+
+
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+- :ref:`namespace_sequant__itf`
+
+- :ref:`namespace_sequant__itf__detail`
+
+
+Classes
+-------
+
+
+- :ref:`exhale_struct_structsequant_1_1itf_1_1detail_1_1_index_components`
+
+- :ref:`exhale_struct_structsequant_1_1itf_1_1_index_type_comparer`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1_1itf_1_1detail_1aa7f695e34bbcaf9b818c19dfca720a88`
+
+- :ref:`exhale_function_namespacesequant_1_1itf_1_1detail_1a4d414821ee1201144b3f6dbce756ca88`
+
+- :ref:`exhale_function_namespacesequant_1_1itf_1_1detail_1a2124df51f0e7593db6ad4eec5f0bf1a7`
+
+- :ref:`exhale_function_namespacesequant_1_1itf_1_1detail_1a2bc27473925968a7f90b4995b1894e65`
+
+- :ref:`exhale_function_namespacesequant_1_1itf_1_1detail_1accf90074b9cce132cb22501907d9fbc7`
+
+- :ref:`exhale_function_namespacesequant_1_1itf_1_1detail_1a0867476b24fb110489c196178ad13e5c`
+
+- :ref:`exhale_function_namespacesequant_1_1itf_1_1detail_1a0a5185017601c8171b6db50c1fc296cd`
+
+- :ref:`exhale_function_namespacesequant_1_1itf_1_1detail_1ac502a7f49ccb05e1f9efbe75b329725a`
+
+- :ref:`exhale_function_namespacesequant_1_1itf_1_1detail_1a82aa0442024dc69e6c3ac9cac753512b`
+
+- :ref:`exhale_function_namespacesequant_1_1itf_1_1detail_1af0851dc54c1bfdd7f1d6050ba767cc10`
+
+- :ref:`exhale_function_namespacesequant_1_1itf_1_1detail_1a1009bae111f63e296f314b44d4ae747c`
+
+- :ref:`exhale_function_namespacesequant_1_1itf_1ae730bcddb88874c63fdad1f0589d741d`
+
+- :ref:`exhale_function_namespacesequant_1a87dcb5d11d2b1bc05cf975397c8124e3`
+

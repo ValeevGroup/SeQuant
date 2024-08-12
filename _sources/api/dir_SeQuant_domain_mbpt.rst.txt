@@ -1,0 +1,39 @@
+.. _dir_SeQuant_domain_mbpt:
+
+
+Directory mbpt
+==============
+
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_domain>` (``SeQuant/domain``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+*Directory path:* ``SeQuant/domain/mbpt``
+
+Subdirectories
+--------------
+
+- :ref:`dir_SeQuant_domain_mbpt_models`
+
+
+Files
+-----
+
+- :ref:`file_SeQuant_domain_mbpt_antisymmetrizer.hpp`
+- :ref:`file_SeQuant_domain_mbpt_context.cpp`
+- :ref:`file_SeQuant_domain_mbpt_context.hpp`
+- :ref:`file_SeQuant_domain_mbpt_convention.cpp`
+- :ref:`file_SeQuant_domain_mbpt_convention.hpp`
+- :ref:`file_SeQuant_domain_mbpt_fwd.hpp`
+- :ref:`file_SeQuant_domain_mbpt_op.cpp`
+- :ref:`file_SeQuant_domain_mbpt_op.hpp`
+- :ref:`file_SeQuant_domain_mbpt_op.ipp`
+- :ref:`file_SeQuant_domain_mbpt_rdm.hpp`
+- :ref:`file_SeQuant_domain_mbpt_spin.cpp`
+- :ref:`file_SeQuant_domain_mbpt_spin.hpp`
+- :ref:`file_SeQuant_domain_mbpt_vac_av.hpp`
+- :ref:`file_SeQuant_domain_mbpt_vac_av.ipp`
+
+

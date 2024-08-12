@@ -1,0 +1,97 @@
+
+.. _file_SeQuant_core_parse_deparse.cpp:
+
+File deparse.cpp
+================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core_parse>` (``SeQuant/core/parse``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+Definition (``SeQuant/core/parse/deparse.cpp``)
+-----------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_parse_deparse.cpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/attr.hpp`` (:ref:`file_SeQuant_core_attr.hpp`)
+
+- ``SeQuant/core/complex.hpp`` (:ref:`file_SeQuant_core_complex.hpp`)
+
+- ``SeQuant/core/expr.hpp`` (:ref:`file_SeQuant_core_expr.hpp`)
+
+- ``SeQuant/core/index.hpp`` (:ref:`file_SeQuant_core_index.hpp`)
+
+- ``SeQuant/core/parse.hpp`` (:ref:`file_SeQuant_core_parse.hpp`)
+
+- ``SeQuant/core/tensor.hpp`` (:ref:`file_SeQuant_core_tensor.hpp`)
+
+- ``cassert``
+
+- ``codecvt``
+
+- ``cstddef``
+
+- ``locale``
+
+- ``memory``
+
+- ``range/v3/all.hpp``
+
+- ``stdexcept``
+
+- ``string`` (:ref:`file_SeQuant_core_utility_string.cpp`)
+
+- ``utility`` (:ref:`file_SeQuant_core_utility_context.hpp`)
+
+- ``vector``
+
+
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+- :ref:`namespace_sequant__details`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1abcb1341c11dcbc821a92429f891ff5fa`
+
+- :ref:`exhale_function_namespacesequant_1a9c7e7721e4b51c1b20608b63794328bb`
+
+- :ref:`exhale_function_namespacesequant_1aeed130d6a5f23cd4eedc9be19c34b379`
+
+- :ref:`exhale_function_namespacesequant_1a6fd1b3e795e61a300439a4f1cd6b0436`
+
+- :ref:`exhale_function_namespacesequant_1afe276926c5c2e7724779e2048c12fe75`
+
+- :ref:`exhale_function_namespacesequant_1aab4a42f481715f868c7914630cd3d2d3`
+
+- :ref:`exhale_function_namespacesequant_1a3005a7b546fe1ae4cc7bf6b7771a28da`
+
+- :ref:`exhale_function_namespacesequant_1_1details_1a3b669bdb16571be827a124e1e6dec2ad`
+
+- :ref:`exhale_function_namespacesequant_1_1details_1a956db5f186d4b7eaf5f87a67dc8afa05`
+
+- :ref:`exhale_function_namespacesequant_1_1details_1a592d1e8cab529b694ffe33e558d489df`
+

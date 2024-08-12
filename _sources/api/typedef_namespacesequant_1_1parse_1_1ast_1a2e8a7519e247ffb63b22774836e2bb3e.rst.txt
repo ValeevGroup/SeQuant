@@ -1,0 +1,14 @@
+.. _exhale_typedef_namespacesequant_1_1parse_1_1ast_1a2e8a7519e247ffb63b22774836e2bb3e:
+
+Typedef sequant::parse::ast::NullaryValue
+=========================================
+
+- Defined in :ref:`file_SeQuant_core_parse_ast.hpp`
+
+
+Typedef Documentation
+---------------------
+
+
+.. doxygentypedef:: sequant::parse::ast::NullaryValue
+   :project: SeQuant

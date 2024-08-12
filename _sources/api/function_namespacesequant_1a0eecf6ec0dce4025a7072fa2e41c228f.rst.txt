@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a0eecf6ec0dce4025a7072fa2e41c228f:
+
+Function sequant::label
+=======================
+
+- Defined in :ref:`file_SeQuant_core_abstract_tensor.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::label()
+   :project: SeQuant

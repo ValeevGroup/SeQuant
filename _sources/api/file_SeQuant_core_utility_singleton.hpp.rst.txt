@@ -1,0 +1,65 @@
+
+.. _file_SeQuant_core_utility_singleton.hpp:
+
+File singleton.hpp
+==================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core_utility>` (``SeQuant/core/utility``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+Definition (``SeQuant/core/utility/singleton.hpp``)
+---------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_utility_singleton.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``cassert``
+
+- ``memory``
+
+- ``mutex``
+
+- ``stdexcept``
+
+- ``type_traits``
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_core_logger.hpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+
+Classes
+-------
+
+
+- :ref:`exhale_struct_structsequant_1_1_singleton_1_1is__default__constructible__helper`
+
+- :ref:`exhale_struct_structsequant_1_1_singleton_1_1is__default__constructible__helper_3_01_t_00_01std_1_1void__t_3_01decltype_07_t_02_03_08_4_01_4`
+
+- :ref:`exhale_class_classsequant_1_1_singleton`
+

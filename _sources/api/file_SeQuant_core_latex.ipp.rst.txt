@@ -1,0 +1,74 @@
+
+.. _file_SeQuant_core_latex.ipp:
+
+File latex.ipp
+==============
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core>` (``SeQuant/core``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+Definition (``SeQuant/core/latex.ipp``)
+---------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_latex.ipp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/latex.hpp`` (:ref:`file_SeQuant_core_latex.hpp`)
+
+- ``SeQuant/core/wstring.hpp`` (:ref:`file_SeQuant_core_wstring.hpp`)
+
+- ``map``
+
+- ``optional``
+
+- ``type_traits``
+
+- ``vector``
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_core_latex.cpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+- :ref:`namespace_sequant__detail`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1_1detail_1ad1808ad121aa7c24e54553a00152b18e`
+
+- :ref:`exhale_function_namespacesequant_1_1detail_1abecb5e7499231a94f1856b22bb30df10`
+
+
+Defines
+-------
+
+
+- :ref:`exhale_define_latex_8ipp_1a280cb8841c2dbd2a93cfa821b24afdef`
+

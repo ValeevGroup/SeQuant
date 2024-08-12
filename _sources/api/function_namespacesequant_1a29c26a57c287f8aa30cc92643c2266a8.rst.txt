@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a29c26a57c287f8aa30cc92643c2266a8:
+
+Template Function sequant::bubble_sort
+======================================
+
+- Defined in :ref:`file_SeQuant_core_algorithm.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::bubble_sort(ForwardIter, Sentinel, Compare)
+   :project: SeQuant

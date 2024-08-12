@@ -1,0 +1,59 @@
+
+.. _file_SeQuant_domain_mbpt_context.cpp:
+
+File context.cpp
+================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_domain_mbpt>` (``SeQuant/domain/mbpt``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+Definition (``SeQuant/domain/mbpt/context.cpp``)
+------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_domain_mbpt_context.cpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/domain/mbpt/context.hpp`` (:ref:`file_SeQuant_domain_mbpt_context.hpp`)
+
+
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+- :ref:`namespace_sequant__mbpt`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1a160a6eb2ab46eb609a41ed8226d762ad`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1acfa27645ec0f814f01319c8774427f07`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1a7ab482903fc560710dee956768cf3859`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1a9f1d1501444c98328f9ca26293969495`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1acac3fd55692949b3412c0bdffe781b53`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1a97d026807d6467c797f15362c3306e85`
+

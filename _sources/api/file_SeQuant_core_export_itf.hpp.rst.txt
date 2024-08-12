@@ -1,0 +1,88 @@
+
+.. _file_SeQuant_core_export_itf.hpp:
+
+File itf.hpp
+============
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core_export>` (``SeQuant/core/export``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+Definition (``SeQuant/core/export/itf.hpp``)
+--------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_export_itf.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/expr.hpp`` (:ref:`file_SeQuant_core_expr.hpp`)
+
+- ``SeQuant/core/tensor.hpp`` (:ref:`file_SeQuant_core_tensor.hpp`)
+
+- ``optional``
+
+- ``set``
+
+- ``string`` (:ref:`file_SeQuant_core_utility_string.cpp`)
+
+- ``type_traits``
+
+- ``unordered_set``
+
+- ``vector``
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_core_export_itf.cpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+- :ref:`namespace_sequant__itf`
+
+- :ref:`namespace_sequant__itf__detail`
+
+
+Classes
+-------
+
+
+- :ref:`exhale_struct_structsequant_1_1itf_1_1_code_block`
+
+- :ref:`exhale_struct_structsequant_1_1itf_1_1detail_1_1_code_section`
+
+- :ref:`exhale_struct_structsequant_1_1itf_1_1detail_1_1_contraction`
+
+- :ref:`exhale_struct_structsequant_1_1itf_1_1detail_1_1_tensor_block_compare`
+
+- :ref:`exhale_struct_structsequant_1_1itf_1_1_result`
+
+- :ref:`exhale_class_classsequant_1_1itf_1_1detail_1_1_i_t_f_generator`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1ac9217c6b789b3d79193a54a6064d2b23`
+

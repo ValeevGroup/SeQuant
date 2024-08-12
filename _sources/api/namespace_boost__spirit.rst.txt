@@ -1,0 +1,13 @@
+
+.. _namespace_boost__spirit:
+
+Namespace boost::spirit
+=======================
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_boost__spirit__x3`

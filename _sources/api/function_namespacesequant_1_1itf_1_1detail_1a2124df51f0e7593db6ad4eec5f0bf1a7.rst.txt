@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1itf_1_1detail_1a2124df51f0e7593db6ad4eec5f0bf1a7:
+
+Function sequant::itf::detail::integral_remapper
+================================================
+
+- Defined in :ref:`file_SeQuant_core_export_itf.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::itf::detail::integral_remapper(ExprPtr&, std::wstring_view, std::wstring_view)
+   :project: SeQuant

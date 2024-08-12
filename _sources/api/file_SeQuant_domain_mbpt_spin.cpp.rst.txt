@@ -1,0 +1,199 @@
+
+.. _file_SeQuant_domain_mbpt_spin.cpp:
+
+File spin.cpp
+=============
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_domain_mbpt>` (``SeQuant/domain/mbpt``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+Definition (``SeQuant/domain/mbpt/spin.cpp``)
+---------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_domain_mbpt_spin.cpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/algorithm.hpp`` (:ref:`file_SeQuant_core_algorithm.hpp`)
+
+- ``SeQuant/core/attr.hpp`` (:ref:`file_SeQuant_core_attr.hpp`)
+
+- ``SeQuant/core/expr_algorithm.hpp`` (:ref:`file_SeQuant_core_expr_algorithm.hpp`)
+
+- ``SeQuant/core/expr_operator.hpp`` (:ref:`file_SeQuant_core_expr_operator.hpp`)
+
+- ``SeQuant/core/math.hpp`` (:ref:`file_SeQuant_core_math.hpp`)
+
+- ``SeQuant/core/rational.hpp`` (:ref:`file_SeQuant_core_rational.hpp`)
+
+- ``SeQuant/core/space.hpp`` (:ref:`file_SeQuant_core_space.hpp`)
+
+- ``SeQuant/core/tensor.hpp`` (:ref:`file_SeQuant_core_tensor.hpp`)
+
+- ``SeQuant/domain/mbpt/spin.hpp`` (:ref:`file_SeQuant_domain_mbpt_spin.hpp`)
+
+- ``algorithm`` (:ref:`file_SeQuant_core_algorithm.hpp`)
+
+- ``cassert``
+
+- ``cmath``
+
+- ``cstdint``
+
+- ``cstdlib``
+
+- ``functional``
+
+- ``iterator``
+
+- ``memory``
+
+- ``new``
+
+- ``numeric``
+
+- ``range/v3/algorithm/any_of.hpp``
+
+- ``range/v3/algorithm/contains.hpp``
+
+- ``range/v3/algorithm/count_if.hpp``
+
+- ``range/v3/algorithm/for_each.hpp``
+
+- ``range/v3/detail/variant.hpp``
+
+- ``range/v3/functional/identity.hpp``
+
+- ``range/v3/iterator/basic_iterator.hpp``
+
+- ``range/v3/utility/get.hpp``
+
+- ``range/v3/view/concat.hpp``
+
+- ``range/v3/view/interface.hpp``
+
+- ``range/v3/view/transform.hpp``
+
+- ``range/v3/view/view.hpp``
+
+- ``stdexcept``
+
+- ``string_view``
+
+- ``unordered_map``
+
+- ``utility`` (:ref:`file_SeQuant_core_utility_context.hpp`)
+
+
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+- :ref:`namespace_sequant__detail`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1ac5810391f5f0cfc048466effa835785d`
+
+- :ref:`exhale_function_namespacesequant_1a64432b1a781bc7ffd57eb8554b280f2c`
+
+- :ref:`exhale_function_namespacesequant_1abf91e6ba929de81989e494c217a51ac8`
+
+- :ref:`exhale_function_namespacesequant_1a2fd6f7c59eae96654d0657a078d1cd49`
+
+- :ref:`exhale_function_namespacesequant_1a6911b938169abf8e3de1616fa8e4424c`
+
+- :ref:`exhale_function_namespacesequant_1a293deb48eba786055cb59378e8ef44df`
+
+- :ref:`exhale_function_namespacesequant_1afa65b1375f02c1bc0a71556ee6097572`
+
+- :ref:`exhale_function_namespacesequant_1_1detail_1a3b68f2623ef3b31a5d04846b75276bd6`
+
+- :ref:`exhale_function_namespacesequant_1a6492953455422a5903841b72a2c73539`
+
+- :ref:`exhale_function_namespacesequant_1a7ea60aebddfa28b64cd880088002bb67`
+
+- :ref:`exhale_function_namespacesequant_1a3f82b6772553fedc95da4ea299972f5c`
+
+- :ref:`exhale_function_namespacesequant_1ad70637d2e37da4c601d03d785dac2f6c`
+
+- :ref:`exhale_function_namespacesequant_1a165c66ebbf84d68e1c0182f640b3c95a`
+
+- :ref:`exhale_function_namespacesequant_1adc72eb090ca1e9129b5cb64c98ba0ca2`
+
+- :ref:`exhale_function_namespacesequant_1aeca5ee37b05742a509e08bc1f27bce81`
+
+- :ref:`exhale_function_namespacesequant_1a189e6e5be8596e3591bb4c46214af16e`
+
+- :ref:`exhale_function_namespacesequant_1a7fb4b5eecf1f7a9def14ddf891089b42`
+
+- :ref:`exhale_function_namespacesequant_1ab4080d1930c5ba22da9ffb6c36b34b41`
+
+- :ref:`exhale_function_namespacesequant_1ae2e9d23d1c2532491d386ab0f606daf2`
+
+- :ref:`exhale_function_namespacesequant_1a745f7070c7fe7ac8767c67d77902221b`
+
+- :ref:`exhale_function_namespacesequant_1a872db6cc7cbfc97cc8b4b9eb71e3ac2f`
+
+- :ref:`exhale_function_namespacesequant_1a01c92fce4088699db7e799fb69a90ec8`
+
+- :ref:`exhale_function_namespacesequant_1ae0f043d0386bc36d50f76e545f569b5b`
+
+- :ref:`exhale_function_namespacesequant_1a274bb7e21525de8d6515ccb44880e221`
+
+- :ref:`exhale_function_namespacesequant_1af6f2d39c51ed1c196e19f3db5a9ddf6a`
+
+- :ref:`exhale_function_namespacesequant_1a4f3eee2b68c8517373f0927f616386cb`
+
+- :ref:`exhale_function_namespacesequant_1a8f44b674e4c671ceb63e39d650d26b4a`
+
+- :ref:`exhale_function_namespacesequant_1a16c484d306dd82c2e85b19ce03868af8`
+
+- :ref:`exhale_function_namespacesequant_1a13cdc83f724cad0904471255851dc3a8`
+
+- :ref:`exhale_function_namespacesequant_1a88685d8d7e0729724cdd52c262435058`
+
+- :ref:`exhale_function_namespacesequant_1aa3d2074a72e3f4cc66b88284848af148`
+
+- :ref:`exhale_function_namespacesequant_1a8fc26c92cb4ad8d84bb0c8b2924ab6e7`
+
+- :ref:`exhale_function_namespacesequant_1a31ac2ecc371f5ca999f89f7c6247ed36`
+
+- :ref:`exhale_function_namespacesequant_1aad97d04e6f34c635c31b95e4ee8a4307`
+
+- :ref:`exhale_function_namespacesequant_1a2a66be5fad043d767d1e00f01f21ecd3`
+
+- :ref:`exhale_function_namespacesequant_1ab1eb124ad34bdf339ceafcbe7f0bebd7`
+
+- :ref:`exhale_function_namespacesequant_1a695d0c4e30f385152f83fa93a668e62f`
+
+- :ref:`exhale_function_namespacesequant_1a2aa324a94b1ab75d6ad40a9bafd50158`
+
+- :ref:`exhale_function_namespacesequant_1a7fe703f56d6a4ba6b8ddcc707ae42c7f`
+
+- :ref:`exhale_function_namespacesequant_1a8b58d6ccd8000e3f45d99c871b45844a`
+
+- :ref:`exhale_function_namespacesequant_1a05a60d7f5af9f324247f9d517d5a9ac0`
+
+- :ref:`exhale_function_namespacesequant_1aa70655df42f82e55ef4603052208611e`
+

@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1antisymm_1ad3d642117b3214d5e4d87a2ab6d1ca42:
+
+Function sequant::antisymm::max_similarity
+==========================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_antisymmetrizer.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::antisymm::max_similarity(const std::vector<Index>&, const std::vector<Index>&, ExprPtr)
+   :project: SeQuant

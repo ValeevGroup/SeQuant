@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a9e77ca1c042a46648f894e41a0fe7f09:
+
+Template Function sequant::evaluate(NodesT const&, Annot const&, Le const&, Args&&...)
+======================================================================================
+
+- Defined in :ref:`file_SeQuant_domain_eval_eval.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::evaluate(NodesT const&, Annot const&, Le const&, Args&&...)
+   :project: SeQuant

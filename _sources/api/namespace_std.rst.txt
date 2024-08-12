@@ -1,0 +1,11 @@
+
+.. _namespace_std:
+
+Namespace std
+=============
+
+
+STL namespace. 
+
+
+

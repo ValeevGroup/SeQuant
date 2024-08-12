@@ -1,0 +1,14 @@
+.. _exhale_variable_namespacesequant_1a6c89624f108880b0b5a6b0695eb01dcb:
+
+Variable sequant::expr_ptr_comparer
+===================================
+
+- Defined in :ref:`file_SeQuant_core_expr.hpp`
+
+
+Variable Documentation
+----------------------
+
+
+.. doxygenvariable:: sequant::expr_ptr_comparer
+   :project: SeQuant

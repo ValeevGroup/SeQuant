@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a7fe703f56d6a4ba6b8ddcc707ae42c7f:
+
+Function sequant::swap_spin(const ExprPtr&)
+===========================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_spin.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::swap_spin(const ExprPtr&)
+   :project: SeQuant

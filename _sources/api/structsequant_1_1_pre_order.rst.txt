@@ -1,0 +1,17 @@
+.. _exhale_struct_structsequant_1_1_pre_order:
+
+Struct PreOrder
+===============
+
+- Defined in :ref:`file_SeQuant_core_binary_node.hpp`
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::PreOrder
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

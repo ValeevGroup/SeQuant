@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a4b7f044ab8d87a437e88b04b116df367:
+
+Function sequant::deparse(const Expr&, bool)
+============================================
+
+- Defined in :ref:`file_SeQuant_core_parse.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::deparse(const Expr&, bool)
+   :project: SeQuant

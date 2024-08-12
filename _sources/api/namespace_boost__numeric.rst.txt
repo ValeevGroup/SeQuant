@@ -1,0 +1,17 @@
+
+.. _namespace_boost__numeric:
+
+Namespace boost::numeric
+========================
+
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespaceboost_1_1numeric_1a4bb132a8c70f8c0e7acc85c17b1023c9`
+
+- :ref:`exhale_function_namespaceboost_1_1numeric_1ad5a4eb494a17ea4450e354edd4bb1b2c`
+
+- :ref:`exhale_function_namespaceboost_1_1numeric_1a44543b8665ebce19ab7c19636e20ba83`

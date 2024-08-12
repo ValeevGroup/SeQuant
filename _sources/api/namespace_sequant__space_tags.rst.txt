@@ -1,0 +1,36 @@
+
+.. _namespace_sequant__space_tags:
+
+Namespace sequant::space_tags
+=============================
+
+
+
+Classes
+-------
+
+
+- :ref:`exhale_struct_structsequant_1_1space__tags_1_1_is_complete`
+
+- :ref:`exhale_struct_structsequant_1_1space__tags_1_1_is_hole`
+
+- :ref:`exhale_struct_structsequant_1_1space__tags_1_1_is_particle`
+
+- :ref:`exhale_struct_structsequant_1_1space__tags_1_1_is_reference_occupied`
+
+- :ref:`exhale_struct_structsequant_1_1space__tags_1_1_is_vacuum_occupied`
+
+
+Variables
+---------
+
+
+- :ref:`exhale_variable_namespacesequant_1_1space__tags_1a3e213491a52064c5c3cf92dcda641fbd`
+
+- :ref:`exhale_variable_namespacesequant_1_1space__tags_1a6c11f0c43b0a1dfd809972c8013d04f3`
+
+- :ref:`exhale_variable_namespacesequant_1_1space__tags_1a453f6692f07fdb3fed4a51c75f555e3b`
+
+- :ref:`exhale_variable_namespacesequant_1_1space__tags_1a1a4caee1489fee7fb8a0589fdc5714e5`
+
+- :ref:`exhale_variable_namespacesequant_1_1space__tags_1a7e1e282301f4660d5251905084be6f54`

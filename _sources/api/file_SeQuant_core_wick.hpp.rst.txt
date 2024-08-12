@@ -1,0 +1,84 @@
+
+.. _file_SeQuant_core_wick.hpp:
+
+File wick.hpp
+=============
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core>` (``SeQuant/core``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+Definition (``SeQuant/core/wick.hpp``)
+--------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_wick.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/math.hpp`` (:ref:`file_SeQuant_core_math.hpp`)
+
+- ``SeQuant/core/op.hpp`` (:ref:`file_SeQuant_core_op.hpp`)
+
+- ``SeQuant/core/ranges.hpp`` (:ref:`file_SeQuant_core_ranges.hpp`)
+
+- ``SeQuant/core/runtime.hpp`` (:ref:`file_SeQuant_core_runtime.hpp`)
+
+- ``SeQuant/core/tensor.hpp`` (:ref:`file_SeQuant_core_tensor.hpp`)
+
+- ``SeQuant/core/wick.impl.hpp`` (:ref:`file_SeQuant_core_wick.impl.hpp`)
+
+- ``bitset``
+
+- ``mutex``
+
+- ``utility`` (:ref:`file_SeQuant_core_utility_context.hpp`)
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_domain_mbpt_op.cpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+
+Classes
+-------
+
+
+- :ref:`exhale_struct_structsequant_1_1_wick_theorem_1_1access__by`
+
+- :ref:`exhale_struct_structsequant_1_1_wick_theorem_1_1_nontensor_wick_state`
+
+- :ref:`exhale_class_classsequant_1_1_wick_theorem`
+
+- :ref:`exhale_class_classsequant_1_1_wick_theorem_1_1_stats`
+
+
+Typedefs
+--------
+
+
+- :ref:`exhale_typedef_namespacesequant_1ad63beaf1a3a78ff2bedb455e51c253b3`
+
+- :ref:`exhale_typedef_namespacesequant_1a3f4cafb42ca8c8069a06731c4f7c6e1b`
+

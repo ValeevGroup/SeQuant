@@ -1,0 +1,120 @@
+
+.. _file_SeQuant_core_complex.hpp:
+
+File complex.hpp
+================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core>` (``SeQuant/core``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+Definition (``SeQuant/core/complex.hpp``)
+-----------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_complex.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/hash.hpp`` (:ref:`file_SeQuant_core_hash.hpp`)
+
+- ``SeQuant/core/latex.hpp`` (:ref:`file_SeQuant_core_latex.hpp`)
+
+- ``SeQuant/core/rational.hpp`` (:ref:`file_SeQuant_core_rational.hpp`)
+
+- ``SeQuant/core/wolfram.hpp`` (:ref:`file_SeQuant_core_wolfram.hpp`)
+
+- ``string`` (:ref:`file_SeQuant_core_utility_string.cpp`)
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_core_eval_expr.cpp`
+
+- :ref:`file_SeQuant_core_expr.hpp`
+
+- :ref:`file_SeQuant_core_optimize_fusion.cpp`
+
+- :ref:`file_SeQuant_core_optimize_optimize.cpp`
+
+- :ref:`file_SeQuant_core_parse_deparse.cpp`
+
+- :ref:`file_SeQuant_core_tensor_network.cpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+
+Classes
+-------
+
+
+- :ref:`exhale_struct_structsequant_1_1_complex`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1afba3eb9a4c4c6659f0ee160004e98bc8`
+
+- :ref:`exhale_function_namespacesequant_1a194ed0ffaa987967006e69458ec83423`
+
+- :ref:`exhale_function_namespacesequant_1a85e346c4c8387071774ccb710ea5fe93`
+
+- :ref:`exhale_function_namespacesequant_1ae571b283e3402ca207d2e5b93b3e579c`
+
+- :ref:`exhale_function_namespacesequant_1a1f1efc7e03ecd96c841c129d11201e68`
+
+- :ref:`exhale_function_namespacesequant_1ad554ebefd23ee4f7763d2ae01d351e2a`
+
+- :ref:`exhale_function_namespacesequant_1aa3812b7b83b1427775056ea29c490b86`
+
+- :ref:`exhale_function_namespacesequant_1acf115a162e3ca42e2882e52a282b97f4`
+
+- :ref:`exhale_function_namespacesequant_1abbb55252e11d1c6f28e96abaf56ec310`
+
+- :ref:`exhale_function_namespacesequant_1a64cf68fed89b5b0a638c33c0f93a0b95`
+
+- :ref:`exhale_function_namespacesequant_1ae9fcbe62cae7eb06453685820ea97e45`
+
+- :ref:`exhale_function_namespacesequant_1a2289a0e76a31d923a77bf4ddc8e7b46e`
+
+- :ref:`exhale_function_namespacesequant_1a271c50d2fd0706347354b0a26ef761e2`
+
+- :ref:`exhale_function_namespacesequant_1a6a56e41dbabad25a310c712c17aff9b7`
+
+- :ref:`exhale_function_namespacesequant_1ae88edf6f660941e78c31cc1e8e72f798`
+
+- :ref:`exhale_function_namespacesequant_1aec0e583c655a448af8385a2804114217`
+
+- :ref:`exhale_function_namespacesequant_1ab3abe86363b66a63c0e8521acb0ec014`
+
+- :ref:`exhale_function_namespacesequant_1a487a6641646c9ffacdf5ea5e8865d679`
+
+- :ref:`exhale_function_namespacesequant_1a4b6ae3dc30ac2f12ea826de6c05175f3`
+
+- :ref:`exhale_function_namespacesequant_1acf61bf30e938f1bcd39a19117443ab74`
+
+- :ref:`exhale_function_namespacesequant_1a3c3b7708ffda618115109e073c79e0e7`
+
+- :ref:`exhale_function_namespacesequant_1a7c0c30b1a59cb0c1116251340fe95e09`
+

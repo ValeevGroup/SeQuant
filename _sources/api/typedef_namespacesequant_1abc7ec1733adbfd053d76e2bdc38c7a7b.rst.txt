@@ -1,0 +1,14 @@
+.. _exhale_typedef_namespacesequant_1abc7ec1733adbfd053d76e2bdc38c7a7b:
+
+Typedef sequant::bitset_t
+=========================
+
+- Defined in :ref:`file_SeQuant_core_space.hpp`
+
+
+Typedef Documentation
+---------------------
+
+
+.. doxygentypedef:: sequant::bitset_t
+   :project: SeQuant

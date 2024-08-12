@@ -1,0 +1,17 @@
+.. _exhale_struct_structsequant_1_1meta_1_1char__type_3_01_t_00_01std_1_1enable__if__t_3_01is__basic__string__convc91e62bf4b0e46ade68a32f8c3774434:
+
+Template Struct char_type< T, std::enable_if_t< is_basic_string_convertible_v< T > > >
+======================================================================================
+
+- Defined in :ref:`file_SeQuant_core_utility_string.hpp`
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::meta::char_type< T, std::enable_if_t< is_basic_string_convertible_v< T > > >
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

@@ -1,0 +1,84 @@
+
+.. _file_SeQuant_core_expr_algorithm.hpp:
+
+File expr_algorithm.hpp
+=======================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core>` (``SeQuant/core``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+Definition (``SeQuant/core/expr_algorithm.hpp``)
+------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_expr_algorithm.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/expr.hpp`` (:ref:`file_SeQuant_core_expr.hpp`)
+
+- ``SeQuant/core/logger.hpp`` (:ref:`file_SeQuant_core_logger.hpp`)
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_core_expr.hpp`
+
+- :ref:`file_SeQuant_domain_mbpt_spin.cpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+- :ref:`namespace_sequant__detail`
+
+
+Classes
+-------
+
+
+- :ref:`exhale_struct_structsequant_1_1detail_1_1expand__visitor`
+
+- :ref:`exhale_struct_structsequant_1_1detail_1_1rapid__simplify__visitor`
+
+- :ref:`exhale_struct_structsequant_1_1expr__range_1_1cursor`
+
+- :ref:`exhale_class_classsequant_1_1expr__range`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1a175f4077c34ed84fc54c9a14547d6b6c`
+
+- :ref:`exhale_function_namespacesequant_1ae45d1ab781814eb2cb10455da06785f1`
+
+- :ref:`exhale_function_namespacesequant_1a046c20d81ebc0e26a2e6d7f279807fd6`
+
+- :ref:`exhale_function_namespacesequant_1aabe9737895e799a8bf7bd97282bc67a1`
+
+- :ref:`exhale_function_namespacesequant_1a237e4a9cf9e2d2e676a4f61487b859e9`
+
+- :ref:`exhale_function_namespacesequant_1a707cedc0447e7cd5f40efcec00feb5a4`
+
+- :ref:`exhale_function_namespacesequant_1a2b8ed8d6d3723466e0b176d456113d00`
+

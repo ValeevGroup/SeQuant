@@ -1,0 +1,74 @@
+
+.. _file_SeQuant_core_wick.impl.hpp:
+
+File wick.impl.hpp
+==================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core>` (``SeQuant/core``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+Definition (``SeQuant/core/wick.impl.hpp``)
+-------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_wick.impl.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/bliss.hpp`` (:ref:`file_SeQuant_core_bliss.hpp`)
+
+- ``SeQuant/core/logger.hpp`` (:ref:`file_SeQuant_core_logger.hpp`)
+
+- ``SeQuant/core/tensor_network.hpp`` (:ref:`file_SeQuant_core_tensor_network.hpp`)
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_core_wick.hpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+- :ref:`namespace_sequant__detail`
+
+
+Classes
+-------
+
+
+- :ref:`exhale_struct_structsequant_1_1detail_1_1_null_normal_operator_canonicalizer_deregister`
+
+- :ref:`exhale_struct_structsequant_1_1detail_1_1zero__result`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1_1detail_1a6b853ac863527eb88053311da0695c4b`
+
+- :ref:`exhale_function_namespacesequant_1_1detail_1ae87ba67a68308a46131f3a2d0fa6cef6`
+
+- :ref:`exhale_function_namespacesequant_1_1detail_1a1953af3d74ba95bf4d6ad1cef3025912`
+
+- :ref:`exhale_function_namespacesequant_1ae10c6337dda9d993b1bbac6f0c1eec07`
+

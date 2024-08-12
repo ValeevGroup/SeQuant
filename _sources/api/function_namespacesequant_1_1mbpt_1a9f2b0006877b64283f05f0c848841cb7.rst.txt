@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1mbpt_1a9f2b0006877b64283f05f0c848841cb7:
+
+Function sequant::mbpt::make_legacy_spaces
+==========================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_convention.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::mbpt::make_legacy_spaces()
+   :project: SeQuant

@@ -1,0 +1,533 @@
+:orphan:
+
+
+Full API
+========
+
+Directories
+***********
+
+
+.. toctree::
+   :maxdepth: 5
+
+   dir_SeQuant.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   dir_SeQuant_core.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   dir_SeQuant_core_export.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   dir_SeQuant_core_optimize.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   dir_SeQuant_core_parse.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   dir_SeQuant_core_utility.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   dir_SeQuant_domain.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   dir_SeQuant_domain_eval.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   dir_SeQuant_domain_mbpt.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   dir_SeQuant_domain_mbpt_models.rst
+
+Files
+*****
+
+
+.. toctree::
+   :maxdepth: 5
+
+   file_SeQuant_core_abstract_tensor.cpp.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   file_SeQuant_core_abstract_tensor.hpp.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   file_SeQuant_core_algorithm.hpp.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   file_SeQuant_domain_mbpt_antisymmetrizer.hpp.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   file_SeQuant_core_any.hpp.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   file_SeQuant_core_parse_ast.hpp.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   file_SeQuant_core_parse_ast_conversions.hpp.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   file_SeQuant_core_asy_cost.cpp.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   file_SeQuant_core_asy_cost.hpp.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   file_SeQuant_core_attr.hpp.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   file_SeQuant_core_binary_node.hpp.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   file_SeQuant_core_bliss.hpp.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   file_SeQuant_domain_eval_cache_manager.cpp.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   file_SeQuant_domain_eval_cache_manager.hpp.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   file_SeQuant_domain_mbpt_models_cc.cpp.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   file_SeQuant_domain_mbpt_models_cc.hpp.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   file_SeQuant_core_complex.hpp.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   file_SeQuant_core_container.hpp.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   file_SeQuant_core_context.cpp.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   file_SeQuant_domain_mbpt_context.cpp.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   file_SeQuant_core_context.hpp.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   file_SeQuant_core_utility_context.hpp.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   file_SeQuant_domain_mbpt_context.hpp.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   file_SeQuant_domain_mbpt_convention.cpp.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   file_SeQuant_domain_mbpt_convention.hpp.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   file_SeQuant_core_parse_deparse.cpp.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   file_SeQuant_domain_eval_eval.cpp.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   file_SeQuant_domain_eval_eval.hpp.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   file_SeQuant_core_eval_expr.cpp.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   file_SeQuant_core_eval_expr.hpp.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   file_SeQuant_core_eval_node.hpp.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   file_SeQuant_domain_eval_eval_result.cpp.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   file_SeQuant_domain_eval_eval_result.hpp.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   file_SeQuant_core_expr.cpp.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   file_SeQuant_core_expr.hpp.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   file_SeQuant_core_expr_algorithm.hpp.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   file_SeQuant_core_expr_fwd.hpp.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   file_SeQuant_core_expr_operator.hpp.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   file_SeQuant_core_optimize_fusion.cpp.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   file_SeQuant_core_optimize_fusion.hpp.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   file_SeQuant_core_fwd.hpp.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   file_SeQuant_domain_mbpt_fwd.hpp.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   file_SeQuant_core_hash.hpp.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   file_SeQuant_core_hugenholtz.hpp.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   file_SeQuant_core_index.cpp.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   file_SeQuant_core_index.hpp.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   file_SeQuant_core_index_space_registry.hpp.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   file_SeQuant_core_utility_indices.hpp.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   file_SeQuant_core_interval.hpp.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   file_SeQuant_core_export_itf.cpp.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   file_SeQuant_core_export_itf.hpp.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   file_SeQuant_core_latex.cpp.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   file_SeQuant_core_latex.hpp.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   file_SeQuant_core_latex.ipp.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   file_SeQuant_core_logger.hpp.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   file_SeQuant_core_utility_macros.hpp.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   file_SeQuant_core_math.hpp.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   file_SeQuant_core_utility_nodiscard.hpp.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   file_SeQuant_core_op.cpp.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   file_SeQuant_domain_mbpt_op.cpp.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   file_SeQuant_core_op.hpp.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   file_SeQuant_domain_mbpt_op.hpp.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   file_SeQuant_domain_mbpt_op.ipp.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   file_SeQuant_core_optimize_optimize.cpp.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   file_SeQuant_core_optimize.hpp.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   file_SeQuant_core_parse_parse.cpp.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   file_SeQuant_core_parse.hpp.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   file_SeQuant_core_ranges.hpp.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   file_SeQuant_core_rational.hpp.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   file_SeQuant_domain_mbpt_rdm.hpp.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   file_README.md.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   file_SeQuant_core_runtime.cpp.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   file_SeQuant_core_runtime.hpp.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   file_SeQuant_core_parse_semantic_actions.hpp.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   file_SeQuant_core_utility_singleton.hpp.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   file_SeQuant_core_space.hpp.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   file_SeQuant_domain_mbpt_spin.cpp.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   file_SeQuant_domain_mbpt_spin.hpp.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   file_SeQuant_core_utility_string.cpp.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   file_SeQuant_core_utility_string.hpp.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   file_SeQuant_core_utility_strong.hpp.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   file_SeQuant_core_tag.hpp.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   file_SeQuant_core_tensor.cpp.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   file_SeQuant_core_tensor.hpp.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   file_SeQuant_core_tensor_network.cpp.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   file_SeQuant_core_tensor_network.hpp.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   file_SeQuant_core_timer.hpp.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   file_SeQuant_domain_mbpt_vac_av.hpp.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   file_SeQuant_domain_mbpt_vac_av.ipp.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   file_SeQuant_version.cpp.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   file_SeQuant_core_wick.hpp.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   file_SeQuant_core_wick.impl.hpp.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   file_SeQuant_core_wolfram.hpp.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   file_SeQuant_core_wstring.hpp.rst

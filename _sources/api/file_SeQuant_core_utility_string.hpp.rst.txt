@@ -1,0 +1,102 @@
+
+.. _file_SeQuant_core_utility_string.hpp:
+
+File string.hpp
+===============
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core_utility>` (``SeQuant/core/utility``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+Definition (``SeQuant/core/utility/string.hpp``)
+------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_utility_string.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/meta.hpp``
+
+- ``string`` (:ref:`file_SeQuant_core_utility_string.cpp`)
+
+- ``string_view``
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_core_index.hpp`
+
+- :ref:`file_SeQuant_core_parse_ast_conversions.hpp`
+
+- :ref:`file_SeQuant_core_parse_semantic_actions.hpp`
+
+- :ref:`file_SeQuant_core_space.hpp`
+
+- :ref:`file_SeQuant_core_utility_string.cpp`
+
+- :ref:`file_SeQuant_core_wstring.hpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+- :ref:`namespace_sequant__meta`
+
+
+Classes
+-------
+
+
+- :ref:`exhale_struct_structsequant_1_1meta_1_1char__type`
+
+- :ref:`exhale_struct_structsequant_1_1meta_1_1char__type_3_01_t_00_01std_1_1enable__if__t_3_01is__basic__string__convc91e62bf4b0e46ade68a32f8c3774434`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1aa8679c674fe3f00f592cce04f34dd980`
+
+
+Typedefs
+--------
+
+
+- :ref:`exhale_typedef_namespacesequant_1_1meta_1a75f788fa5020a9e7167be94f8a16a76e`
+
+- :ref:`exhale_typedef_namespacesequant_1_1meta_1a304849fc2be4a8f64889ef1cd87766c7`
+
+
+Variables
+---------
+
+
+- :ref:`exhale_variable_namespacesequant_1_1meta_1aacddf4c95bac108b32c0e4a201d0a4ba`
+
+- :ref:`exhale_variable_namespacesequant_1_1meta_1a0b48e457ce05378839e56f26c4abe902`
+
+- :ref:`exhale_variable_namespacesequant_1_1meta_1a042be8751c168ae3d4bce4c0aacc8d5c`
+
+- :ref:`exhale_variable_namespacesequant_1_1meta_1a58df74868a7058420177a428eabd3561`
+
+- :ref:`exhale_variable_namespacesequant_1_1meta_1a1cf27f03915a42b3702dc4ae4652378c`
+

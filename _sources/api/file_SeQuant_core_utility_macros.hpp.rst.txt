@@ -1,0 +1,64 @@
+
+.. _file_SeQuant_core_utility_macros.hpp:
+
+File macros.hpp
+===============
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core_utility>` (``SeQuant/core/utility``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+Definition (``SeQuant/core/utility/macros.hpp``)
+------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_utility_macros.hpp.rst
+
+
+
+
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_core_utility_string.cpp`
+
+- :ref:`file_SeQuant_core_wstring.hpp`
+
+
+
+
+Defines
+-------
+
+
+- :ref:`exhale_define_macros_8hpp_1a7f38eba691e292d48d05a428b371f55f`
+
+- :ref:`exhale_define_macros_8hpp_1a5edfff4d4464dfeb7d2cc370b838c03c`
+
+- :ref:`exhale_define_macros_8hpp_1a495c41183e48779e12eb8e5d9e8bc8d9`
+
+- :ref:`exhale_define_macros_8hpp_1ad84d8156c21dc4e5204e9ba6daf23c10`
+
+- :ref:`exhale_define_macros_8hpp_1aeb52e4ed05337a83fff8fa9daeeb2cfc`
+
+- :ref:`exhale_define_macros_8hpp_1ae5f3f3d823d2807e0967773351b8939a`
+
+- :ref:`exhale_define_macros_8hpp_1a28aa0a9b0b9e13322991aa5d073259c9`
+
+- :ref:`exhale_define_macros_8hpp_1aaaf0427fa5d580701f5966ac06a1ca08`
+
+- :ref:`exhale_define_macros_8hpp_1a061d310e111004cae906a24611d4c087`
+
+- :ref:`exhale_define_macros_8hpp_1a7b15ec618bbfca510235e6958edd93a2`
+
+- :ref:`exhale_define_macros_8hpp_1a39e8f4ac897eef6b64a5f9fba373c719`
+
+- :ref:`exhale_define_macros_8hpp_1a6168d7f72981ac76cf1b72936049d8dc`
+

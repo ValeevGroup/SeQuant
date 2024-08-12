@@ -1,0 +1,14 @@
+.. _exhale_variable_namespacesequant_1abbdcc38ec0144d350f806c53ef164402:
+
+Template Variable sequant::IsLeafEvaluator< NodeT, CacheManager, void >
+=======================================================================
+
+- Defined in :ref:`file_SeQuant_domain_eval_eval.hpp`
+
+
+Variable Documentation
+----------------------
+
+
+.. doxygenvariable:: sequant::IsLeafEvaluator< NodeT, CacheManager, void >
+   :project: SeQuant

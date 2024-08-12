@@ -1,0 +1,96 @@
+
+.. _file_SeQuant_core_optimize.hpp:
+
+File optimize.hpp
+=================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core>` (``SeQuant/core``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+Definition (``SeQuant/core/optimize.hpp``)
+------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_optimize.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/abstract_tensor.hpp`` (:ref:`file_SeQuant_core_abstract_tensor.hpp`)
+
+- ``SeQuant/core/container.hpp`` (:ref:`file_SeQuant_core_container.hpp`)
+
+- ``SeQuant/core/expr.hpp`` (:ref:`file_SeQuant_core_expr.hpp`)
+
+- ``SeQuant/core/index.hpp`` (:ref:`file_SeQuant_core_index.hpp`)
+
+- ``SeQuant/core/tensor_network.hpp`` (:ref:`file_SeQuant_core_tensor_network.hpp`)
+
+- ``cassert``
+
+- ``cmath``
+
+- ``cstddef``
+
+- ``functional``
+
+- ``iterator``
+
+- ``limits``
+
+- ``memory``
+
+- ``stdexcept``
+
+- ``type_traits``
+
+- ``utility`` (:ref:`file_SeQuant_core_utility_context.hpp`)
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_core_optimize_optimize.cpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+- :ref:`namespace_sequant__opt`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1a8a7ea2cfd93e083b1c1107f6301bc0de`
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1a088126559bd2e83e8fc9fa1a3240d784`
+
+
+Variables
+---------
+
+
+- :ref:`exhale_variable_optimize_8hpp_1a786703939f61f085bd7d5b96b7a1f5cb`
+
+- :ref:`exhale_variable_optimize_8hpp_1af529b4a3079403e31c1517777e3134fe`
+
+- :ref:`exhale_variable_optimize_8hpp_1a892fe85ab419bccbbe5d5f2eecc3c86a`
+

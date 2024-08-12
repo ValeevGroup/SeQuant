@@ -1,0 +1,17 @@
+.. _exhale_struct_structsequant_1_1itf_1_1detail_1_1_tensor_block_compare:
+
+Struct TensorBlockCompare
+=========================
+
+- Defined in :ref:`file_SeQuant_core_export_itf.hpp`
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::itf::detail::TensorBlockCompare
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

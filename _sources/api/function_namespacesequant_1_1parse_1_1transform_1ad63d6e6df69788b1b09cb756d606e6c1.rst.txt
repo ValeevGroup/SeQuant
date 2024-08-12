@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1parse_1_1transform_1ad63d6e6df69788b1b09cb756d606e6c1:
+
+Template Function sequant::parse::transform::ast_to_expr(const parse::ast::Sum&, const PositionCache&, const Iterator&, Symmetry)
+=================================================================================================================================
+
+- Defined in :ref:`file_SeQuant_core_parse_ast_conversions.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::parse::transform::ast_to_expr(const parse::ast::Sum&, const PositionCache&, const Iterator&, Symmetry)
+   :project: SeQuant

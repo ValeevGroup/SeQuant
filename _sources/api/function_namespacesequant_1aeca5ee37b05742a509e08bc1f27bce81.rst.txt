@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1aeca5ee37b05742a509e08bc1f27bce81:
+
+Function sequant::external_indices(const ExprPtr&)
+==================================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_spin.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::external_indices(const ExprPtr&)
+   :project: SeQuant

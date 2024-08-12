@@ -1,0 +1,28 @@
+.. _dir_SeQuant_core_utility:
+
+
+Directory utility
+=================
+
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core>` (``SeQuant/core``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+*Directory path:* ``SeQuant/core/utility``
+
+
+Files
+-----
+
+- :ref:`file_SeQuant_core_utility_context.hpp`
+- :ref:`file_SeQuant_core_utility_indices.hpp`
+- :ref:`file_SeQuant_core_utility_macros.hpp`
+- :ref:`file_SeQuant_core_utility_nodiscard.hpp`
+- :ref:`file_SeQuant_core_utility_singleton.hpp`
+- :ref:`file_SeQuant_core_utility_string.cpp`
+- :ref:`file_SeQuant_core_utility_string.hpp`
+- :ref:`file_SeQuant_core_utility_strong.hpp`
+
+

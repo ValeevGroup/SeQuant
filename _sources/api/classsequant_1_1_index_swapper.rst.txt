@@ -1,0 +1,17 @@
+.. _exhale_class_classsequant_1_1_index_swapper:
+
+Class IndexSwapper
+==================
+
+- Defined in :ref:`file_SeQuant_core_index.hpp`
+
+
+Class Documentation
+-------------------
+
+
+.. doxygenclass:: sequant::IndexSwapper
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

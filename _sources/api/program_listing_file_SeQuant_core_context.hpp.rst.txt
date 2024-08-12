@@ -1,0 +1,119 @@
+
+.. _program_listing_file_SeQuant_core_context.hpp:
+
+Program Listing for File context.hpp
+====================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_core_context.hpp>` (``SeQuant/core/context.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   #ifndef SEQUANT_CORE_CONTEXT_HPP
+   #define SEQUANT_CORE_CONTEXT_HPP
+   
+   #include <SeQuant/core/attr.hpp>
+   #include <SeQuant/core/index_space_registry.hpp>
+   #include <SeQuant/core/utility/context.hpp>
+   
+   namespace sequant {
+   
+   class Context {
+    public:
+     struct Defaults {
+       constexpr static auto vacuum = Vacuum::Physical;
+       constexpr static auto metric = IndexSpaceMetric::Unit;
+       constexpr static auto braket_symmetry = BraKetSymmetry::conjugate;
+       constexpr static auto spbasis = sequant::SPBasis::spinorbital;
+       constexpr static auto first_dummy_index_ordinal = 100;
+     };
+   
+   
+     explicit Context(std::shared_ptr<IndexSpaceRegistry> isr_sptr,
+                      Vacuum vac = Defaults::vacuum,
+                      IndexSpaceMetric m = Defaults::metric,
+                      BraKetSymmetry bks = Defaults::braket_symmetry,
+                      SPBasis spb = Defaults::spbasis,
+                      std::size_t fdio = Defaults::first_dummy_index_ordinal);
+   
+   
+     explicit Context(IndexSpaceRegistry isr, Vacuum vac = Defaults::vacuum,
+                      IndexSpaceMetric m = Defaults::metric,
+                      BraKetSymmetry bks = Defaults::braket_symmetry,
+                      SPBasis spb = Defaults::spbasis,
+                      std::size_t fdio = Defaults::first_dummy_index_ordinal);
+   
+   
+     explicit Context(Vacuum vac, IndexSpaceMetric m = Defaults::metric,
+                      BraKetSymmetry bks = Defaults::braket_symmetry,
+                      SPBasis spb = Defaults::spbasis,
+                      std::size_t fdio = Defaults::first_dummy_index_ordinal);
+   
+     Context() = default;
+   
+     ~Context() = default;
+   
+     Context(const Context&) = default;
+     Context& operator=(const Context&) = default;
+   
+     Vacuum vacuum() const;
+     std::shared_ptr<const IndexSpaceRegistry> index_space_registry() const;
+     std::shared_ptr<IndexSpaceRegistry> mutable_index_space_registry() const;
+     IndexSpaceMetric metric() const;
+     BraKetSymmetry braket_symmetry() const;
+     SPBasis spbasis() const;
+     std::size_t first_dummy_index_ordinal() const;
+   
+     Context& set(Vacuum vacuum);
+     Context& set(IndexSpaceRegistry ISR);
+     Context& set(IndexSpaceMetric metric);
+     Context& set(BraKetSymmetry braket_symmetry);
+     Context& set(SPBasis spbasis);
+     Context& set_first_dummy_index_ordinal(std::size_t first_dummy_index_ordinal);
+   
+    private:
+     std::shared_ptr<IndexSpaceRegistry> idx_space_reg_ = nullptr;
+     Vacuum vacuum_ = Defaults::vacuum;
+     IndexSpaceMetric metric_ = Defaults::metric;
+     BraKetSymmetry braket_symmetry_ = Defaults::braket_symmetry;
+     SPBasis spbasis_ = Defaults::spbasis;
+     std::size_t first_dummy_index_ordinal_ = Defaults::first_dummy_index_ordinal;
+   };
+   
+   bool operator==(const Context& ctx1, const Context& ctx2);
+   
+   bool operator!=(const Context& ctx1, const Context& ctx2);
+   
+   
+   
+   const Context& get_default_context(Statistics s = Statistics::Arbitrary);
+   
+   void set_default_context(const Context& ctx,
+                            Statistics s = Statistics::Arbitrary);
+   
+   void set_default_context(const std::map<Statistics, Context>& ctxs);
+   
+   void reset_default_context();
+   
+   [[nodiscard]] detail::ImplicitContextResetter<std::map<Statistics, Context>>
+   set_scoped_default_context(const std::map<Statistics, Context>& ctx);
+   
+   [[nodiscard]] detail::ImplicitContextResetter<std::map<Statistics, Context>>
+   set_scoped_default_context(const Context& ctx);
+   
+   
+   
+   
+   [[nodiscard]] IndexSpace get_particle_space(
+       const IndexSpace::QuantumNumbers& qn);
+   
+   [[nodiscard]] IndexSpace get_hole_space(const IndexSpace::QuantumNumbers& qn);
+   
+   [[nodiscard]] IndexSpace get_complete_space(
+       const IndexSpace::QuantumNumbers& qn);
+   
+   
+   }  // namespace sequant
+   
+   #endif

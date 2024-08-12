@@ -1,0 +1,14 @@
+.. _exhale_variable_namespacesequant_1ab5e1ca79d2de9542f7e0ed8d9fd96488:
+
+Variable sequant::IsIterableOfEvalNodes
+=======================================
+
+- Defined in :ref:`file_SeQuant_core_eval_node.hpp`
+
+
+Variable Documentation
+----------------------
+
+
+.. doxygenvariable:: sequant::IsIterableOfEvalNodes
+   :project: SeQuant

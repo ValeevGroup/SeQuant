@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a9532eeef85be3bedb29a5573336ef2d0:
+
+Function sequant::operator!=(const ExprPtr&, const ExprPtr&)
+============================================================
+
+- Defined in :ref:`file_SeQuant_core_expr_operator.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::operator!=(const ExprPtr&, const ExprPtr&)
+   :project: SeQuant

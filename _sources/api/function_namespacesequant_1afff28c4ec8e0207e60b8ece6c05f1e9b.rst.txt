@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1afff28c4ec8e0207e60b8ece6c05f1e9b:
+
+Template Function sequant::is_pure_qpannihilator
+================================================
+
+- Defined in :ref:`file_SeQuant_core_op.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::is_pure_qpannihilator(const Op<S>&, Vacuum)
+   :project: SeQuant

@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1parse_1ad166ce1f16ea2f13922c92f44f9aa38a:
+
+Function sequant::parse::BOOST_SPIRIT_DEFINE
+============================================
+
+- Defined in :ref:`file_SeQuant_core_parse_parse.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::parse::BOOST_SPIRIT_DEFINE(name, number, variable, index_label, index, index_groups, tensor, product, sum, expr)
+   :project: SeQuant

@@ -1,0 +1,6 @@
+
+.. _namespace_sequant__@19:
+
+Namespace sequant::@19
+======================
+
