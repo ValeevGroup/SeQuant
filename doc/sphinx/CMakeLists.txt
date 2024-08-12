@@ -12,19 +12,19 @@ if (SPHINX_FOUND)
         endif()
     endforeach()
 
-    # Configure conf.py and copy source files to binary tree, otherwise a lot files will be generated in source tree
-    configure_file(conf.py.in conf.py @ONLY IMMEDIATE)
-    file(COPY index.rst DESTINATION ${PROJECT_BINARY_DIR}/doc/sphinx)
-    # Copy source files to Sphinx root, because everything needs to be relative to conf.py
-    file(COPY source DESTINATION ${PROJECT_BINARY_DIR}/doc/sphinx)
-    file(COPY ${PROJECT_SOURCE_DIR}/INSTALL.md DESTINATION ${PROJECT_BINARY_DIR}/doc/sphinx/source)
-
-    set(SPHINX_SOURCE ${PROJECT_BINARY_DIR}/doc/sphinx)
-    set(SPHINX_BUILD ${PROJECT_BINARY_DIR}/doc/sphinx/html)
+    set(SPHINX_ROOT ${PROJECT_BINARY_DIR}/doc/sphinx)
+    set(SPHINX_BUILD ${SPHINX_ROOT}/html)
     file(MAKE_DIRECTORY ${SPHINX_BUILD})
 
+    # Configure conf.py and copy source files to binary tree, otherwise a lot files will be generated in source tree
+    configure_file(conf.py.in conf.py @ONLY IMMEDIATE)
+    file(COPY index.rst DESTINATION ${SPHINX_ROOT})
+    # Copy source files to Sphinx root, because everything needs to be relative to conf.py
+    file(COPY source DESTINATION ${SPHINX_ROOT})
+    file(COPY ${PROJECT_SOURCE_DIR}/INSTALL.md DESTINATION ${SPHINX_ROOT}/source)
+
     add_custom_target_subproject(sequant sphinx USES_TERMINAL COMMAND ${SPHINX_EXECUTABLE} -b html
-            -Dbreathe_projects.SeQuant=${PROJECT_BINARY_DIR}/doc/doxygen/xml ${SPHINX_SOURCE} ${SPHINX_BUILD}
+            -Dbreathe_projects.SeQuant=${PROJECT_BINARY_DIR}/doc/doxygen/xml ${SPHINX_ROOT} ${SPHINX_BUILD}
             WORKING_DIRECTORY ${PROJECT_BINARY_DIR}/doc DEPENDS html-sequant)
 else ()
     message(WARNING "Sphinx not found, not building Sphinx documentation.")
