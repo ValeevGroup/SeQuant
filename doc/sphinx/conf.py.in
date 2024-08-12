@@ -1,12 +1,9 @@
 # Configuration file for the Sphinx documentation builder.
 
-import os
-import subprocess
-
-project = 'SeQuant'
+project = '@PROJECT_NAME@'
 copyright = '2024, Valeev Research Group'
 author = 'Valeev Research Group'
-version = "2.0.0"
+version = "@SEQUANT_VERSION@"
 
 # General Configuration
 exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store', "/external/*"]
@@ -15,7 +12,7 @@ html_static_path = ['_static']
 html_theme = 'furo'  # "sphinx_rtd_theme", "furo"
 html_title = "SeQuant Documentation"
 
-# Extensions 
+# Extensions
 extensions = [
     'sphinx.ext.autodoc',
     'sphinx.ext.intersphinx',
@@ -64,7 +61,7 @@ latex_engine = 'xelatex'  # Use xeLatex for support for unicode characters
 
 # Breathe Configuration
 # We use breathe to generate documentation from Doxygen XML files
-breath_projects = {"SeQuant": "./../doxygen/xml"}
+breath_projects = {"SeQuant": "./../doxygen/xml"}  # Paths should be relative to the conf.py file
 breathe_default_project = "SeQuant"
 
 # Current default in Sphinx is MathJax v3, but we are using v4

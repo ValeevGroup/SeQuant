@@ -12,7 +12,14 @@ if (SPHINX_FOUND)
         endif()
     endforeach()
 
-    set(SPHINX_SOURCE ${CMAKE_CURRENT_SOURCE_DIR})
+    # Configure conf.py and copy source files to binary tree, otherwise a lot files will be generated in source tree
+    configure_file(conf.py.in conf.py @ONLY IMMEDIATE)
+    file(COPY index.rst DESTINATION ${PROJECT_BINARY_DIR}/doc/sphinx)
+    # Copy source files to Sphinx root, because everything needs to be relative to conf.py
+    file(COPY source DESTINATION ${PROJECT_BINARY_DIR}/doc/sphinx)
+    file(COPY ${PROJECT_SOURCE_DIR}/INSTALL.md DESTINATION ${PROJECT_BINARY_DIR}/doc/sphinx/source)
+
+    set(SPHINX_SOURCE ${PROJECT_BINARY_DIR}/doc/sphinx)
     set(SPHINX_BUILD ${PROJECT_BINARY_DIR}/doc/sphinx/html)
     file(MAKE_DIRECTORY ${SPHINX_BUILD})
 
