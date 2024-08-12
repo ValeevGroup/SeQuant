@@ -210,11 +210,11 @@ Functions
 
 - :ref:`exhale_function_namespacesequant_1a24f69f16c272cb4a9bd054c7d9dc6410`
 
-- :ref:`exhale_function_namespacesequant_1a4f7a82ef79acb5f9253be6cf51a1bde0`
-
 - :ref:`exhale_function_namespacesequant_1ab4a40939b4d8eb1dc68f8778c0b73930`
 
 - :ref:`exhale_function_namespacesequant_1af06cc45e975afcb9ae60db7b6cbbcba9`
+
+- :ref:`exhale_function_namespacesequant_1a4f7a82ef79acb5f9253be6cf51a1bde0`
 
 - :ref:`exhale_function_namespacesequant_1a437ad10a56bd65379c519b985070f255`
 
