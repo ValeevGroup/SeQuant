@@ -15,6 +15,7 @@ jobs:
         -DSEQUANT_BUILD_DOCS=ON
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
 
       - name: Setup Environment
         run: |
