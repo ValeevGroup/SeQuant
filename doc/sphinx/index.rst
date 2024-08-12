@@ -5,10 +5,10 @@ SeQuant: Symbolic Tensor Algebra in C++
 .. image:: https://img.shields.io/badge/License-BSD_3--Clause-blue.svg
     :target: https://opensource.org/licenses/BSD-3-Clause
 
-.. image:: https://github.com/ajay-mk/SeQuant/actions/workflows/cmake.yml/badge.svg
+.. image:: https://github.com/ValeevGroup/SeQuant/actions/workflows/cmake.yml/badge.svg
     :target: https://github.com/ajay-mk/SeQuant/actions/workflows/cmake.yml
 
-.. image:: https://github.com/ajay-mk/SeQuant/actions/workflows/docs.yml/badge.svg
+.. image:: https://github.com/ValeevGroup/SeQuant/actions/workflows/docs.yml/badge.svg
     :target: https://ajay-mk.github.io/SeQuant
 
 .. warning::
