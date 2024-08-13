@@ -12,15 +12,19 @@ jobs:
         -G Ninja
         -DCMAKE_BUILD_TYPE=Release
         -DCMAKE_PREFIX_PATH='/usr/local/opt/boost'
+        -DBUILD_TESTING=OFF
         -DSEQUANT_BUILD_DOCS=ON
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
+        with:
+          python-version: '3.9' # Breathe needs 3.9 or later
+          cache: 'pip'
 
       - name: Setup Environment
         run: |
           cmake -E make_directory ${{github.workspace}}/build
-          brew install ninja boost catch2
+          brew install ninja boost
           brew install --cask doxygen
           pip install -r doc/sphinx/requirements.txt
 
