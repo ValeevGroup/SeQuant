@@ -113,9 +113,9 @@ Functions
 
 - :ref:`exhale_function_namespacesequant_1_1hash_1a03d04dae60cc048d2e506d880405906c`
 
-- :ref:`exhale_function_namespacesequant_1_1hash_1a93fe63e731c0b4d320d349d46e224e53`
-
 - :ref:`exhale_function_namespacesequant_1_1hash_1ae0df3b24d161aae375c70408e949b41a`
+
+- :ref:`exhale_function_namespacesequant_1_1hash_1a93fe63e731c0b4d320d349d46e224e53`
 
 - :ref:`exhale_function_namespacesequant_1_1hash_1a7fc5cf68b16d900d946d7b72045d5128`
 
