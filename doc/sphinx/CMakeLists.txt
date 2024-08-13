@@ -5,6 +5,7 @@ if (SPHINX_FOUND)
     # Check if required python modules are available
     file(STRINGS ${CMAKE_CURRENT_SOURCE_DIR}/requirements.txt SPHINX_PYTHON_MODULES)
     foreach (module ${SPHINX_PYTHON_MODULES})
+        STRING(REGEX REPLACE ">=.*" "" module ${module}) # Remove version tags
         execute_process(COMMAND python -c "import ${module}"
                 RESULT_VARIABLE PYMODULE_CHECK_EXITCODE ERROR_QUIET)
         if (NOT PYMODULE_CHECK_EXITCODE EQUAL 0)
