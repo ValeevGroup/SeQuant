@@ -26,7 +26,7 @@ Program Listing for File README.md
    performance of high-level languages not sufficient for practical use cases.
    SeQuant is written in C++ and is designed to be as efficient as possible without loss of generality.
    
-   See detailed documentation see the [https://valeevgroup.github.io/SeQuant/](https://ajay-mk.github.io/SeQuant/).
+   See detailed documentation see the [https://valeevgroup.github.io/SeQuant/](https://valeevgroup.github.io/SeQuant/).
    
    # Installation
    
@@ -35,7 +35,7 @@ Program Listing for File README.md
    - configure (from top SeQuant source dfirectory): `cmake -B build -S . -DCMAKE_INSTALL_PREFIX=/path/where/sequant/to/be/installed`
    - build and test: `cmake --build build --target install`
    
-   For detailed instructions see [SeQuant: Installation Guide](https://ajay-mk.github.io/SeQuant/install.html).
+   For detailed instructions see [SeQuant: Installation Guide](https://valeevgroup.github.io/SeQuant/install.html).
    
    
    ## Build harness
