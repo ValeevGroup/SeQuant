@@ -11,7 +11,7 @@ SeQuant: Symbolic Tensor Algebra in C++
 .. image:: https://github.com/ValeevGroup/SeQuant/actions/workflows/docs.yml/badge.svg
     :target: https://ajay-mk.github.io/SeQuant
 
-.. warning::
+.. note::
 
     This documentation is under development and may not be complete yet.
 
