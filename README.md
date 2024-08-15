@@ -14,7 +14,7 @@ using high-level languages like Python. In fact, version 1 of SeQuant was writte
 performance of high-level languages not sufficient for practical use cases.
 SeQuant is written in C++ and is designed to be as efficient as possible without loss of generality.
 
-See detailed documentation see the [https://valeevgroup.github.io/SeQuant/](https://valeevgroup.github.io/SeQuant/).
+See detailed documentation see [https://valeevgroup.github.io/SeQuant/](https://valeevgroup.github.io/SeQuant/).
 
 # Installation
 
