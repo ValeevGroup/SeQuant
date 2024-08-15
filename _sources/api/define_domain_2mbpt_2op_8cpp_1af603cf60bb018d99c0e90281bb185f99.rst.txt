@@ -1,0 +1,14 @@
+.. _exhale_define_domain_2mbpt_2op_8cpp_1af603cf60bb018d99c0e90281bb185f99:
+
+Define SEQUANT_DOMAIN_MBPT_VAC_AV_IPP
+=====================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_op.cpp`
+
+
+Define Documentation
+--------------------
+
+
+.. doxygendefine:: SEQUANT_DOMAIN_MBPT_VAC_AV_IPP
+   :project: SeQuant

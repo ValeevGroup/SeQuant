@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1mbpt_1_1op_1ac8a9ab8a19cf9745f8d21bfc500a4bfc:
+
+Function sequant::mbpt::op::vac_av(ExprPtr, std::vector<std::pair<mbpt::OpType, mbpt::OpType>>, bool)
+=====================================================================================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_op.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::mbpt::op::vac_av(ExprPtr, std::vector<std::pair<mbpt::OpType, mbpt::OpType>>, bool)
+   :project: SeQuant

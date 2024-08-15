@@ -3,7 +3,7 @@
 Function sequant::mbpt::op::sequant::mbpt::tensor::vac_av
 =========================================================
 
-- Defined in :ref:`file_SeQuant_domain_mbpt_op.cpp`
+- Defined in :ref:`file_SeQuant_domain_mbpt_op.hpp`
 
 
 Function Documentation

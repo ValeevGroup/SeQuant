@@ -67,9 +67,9 @@ Functions
 
 - :ref:`exhale_function_namespacesequant_1a28fe937cf0195785bd93939ff477a2f3`
 
-- :ref:`exhale_function_namespacesequant_1ac1a8d19c4b99d52c077d3031ae791121`
-
 - :ref:`exhale_function_namespacesequant_1ac95b27ca1069ade246e759b6f3f8df97`
+
+- :ref:`exhale_function_namespacesequant_1ac1a8d19c4b99d52c077d3031ae791121`
 
 
 Variables

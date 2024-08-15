@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1mbpt_1_1op_1a0e100a51a995b02bd3bd420749c21427:
+
+Function sequant::mbpt::op::concat
+==================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_vac_av.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::mbpt::op::concat(const std::vector<std::pair<mbpt::OpType, mbpt::OpType>>, const std::vector<std::pair<mbpt::OpType, mbpt::OpType>>)
+   :project: SeQuant
