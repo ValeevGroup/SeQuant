@@ -22,7 +22,6 @@ if (SPHINX_FOUND)
     file(COPY index.rst DESTINATION ${SPHINX_ROOT})
     # Copy source files to Sphinx root, because everything needs to be relative to conf.py
     file(COPY source DESTINATION ${SPHINX_ROOT})
-    file(COPY ${PROJECT_SOURCE_DIR}/INSTALL.md DESTINATION ${SPHINX_ROOT}/source)
 
     add_custom_target_subproject(sequant sphinx USES_TERMINAL COMMAND ${SPHINX_EXECUTABLE} -b html
             -Dbreathe_projects.SeQuant=${PROJECT_BINARY_DIR}/doc/doxygen/xml ${SPHINX_ROOT} ${SPHINX_BUILD}
