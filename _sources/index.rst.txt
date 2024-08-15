@@ -39,7 +39,7 @@ Installation
 
 - build and test: :code:`cmake --build build --target install`
 
-See :doc:`source/install` for detailed installation instructions.
+See :doc:`source/installing` for detailed installation instructions.
 
 Build Harness
 =============
@@ -73,7 +73,7 @@ Development of SeQuant has been possible thanks to the support of the US Nationa
     :hidden:
     :maxdepth: 2
 
-    source/install
+    source/installing
     source/using
 
 

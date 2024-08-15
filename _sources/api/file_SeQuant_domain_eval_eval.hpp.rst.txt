@@ -86,13 +86,13 @@ Functions
 ---------
 
 
+- :ref:`exhale_function_namespacesequant_1abb43df794dbd2663991665437459e8ff`
+
 - :ref:`exhale_function_namespacesequant_1a4e6daa8c05a50598d16b73a24969f6bd`
 
 - :ref:`exhale_function_namespacesequant_1a1427d807c6200a7eed297306ab48b633`
 
 - :ref:`exhale_function_namespacesequant_1a9e77ca1c042a46648f894e41a0fe7f09`
-
-- :ref:`exhale_function_namespacesequant_1abb43df794dbd2663991665437459e8ff`
 
 - :ref:`exhale_function_namespacesequant_1a429e19804f67f8f148a60404b3b4d2e1`
 
