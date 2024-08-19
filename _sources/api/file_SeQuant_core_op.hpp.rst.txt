@@ -178,11 +178,11 @@ Functions
 
 - :ref:`exhale_function_namespacesequant_1a1b7fd49159294bfa5b46f309a8742286`
 
-- :ref:`exhale_function_namespacesequant_1aec313efc5a2f86c70203f17953ee20e4`
-
 - :ref:`exhale_function_namespacesequant_1aaf7c742d3ac61b03615c69c67e462dc0`
 
 - :ref:`exhale_function_namespacesequant_1ad59caf9dc97b151ebf5f35038750b831`
+
+- :ref:`exhale_function_namespacesequant_1aec313efc5a2f86c70203f17953ee20e4`
 
 - :ref:`exhale_function_namespacesequant_1a6afa4fe4129c885aa2c4ad46252a66bb`
 
