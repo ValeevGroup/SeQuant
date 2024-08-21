@@ -18,14 +18,14 @@ if (SPHINX_FOUND)
     file(MAKE_DIRECTORY ${SPHINX_BUILD})
 
     # Configure conf.py and copy source files to binary tree, otherwise a lot files will be generated in source tree
+    # Copy source files to SPHINX_ROOT, because everything needs to be relative to conf.py
     configure_file(conf.py.in conf.py @ONLY IMMEDIATE)
     file(COPY index.rst DESTINATION ${SPHINX_ROOT})
-    # Copy source files to Sphinx root, because everything needs to be relative to conf.py
     file(COPY source DESTINATION ${SPHINX_ROOT})
 
-    add_custom_target_subproject(sequant sphinx USES_TERMINAL COMMAND ${SPHINX_EXECUTABLE} -b html
+    add_custom_target_subproject(sequant sphinx USES_TERMINAL COMMAND ${SPHINX_EXECUTABLE} -E -b html
             -Dbreathe_projects.SeQuant=${PROJECT_BINARY_DIR}/doc/doxygen/xml ${SPHINX_ROOT} ${SPHINX_BUILD}
-            WORKING_DIRECTORY ${PROJECT_BINARY_DIR}/doc DEPENDS html-sequant)
+            DEPENDS html-sequant)
 else ()
     message(WARNING "Sphinx not found, not building Sphinx documentation.")
 endif ()
