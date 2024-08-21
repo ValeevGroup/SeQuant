@@ -260,18 +260,11 @@
           </label>
         </div>
         <article role="main" id="furo-main-content">
-          <section id="sequant-symbolic-tensor-algebra-in-c">
+          <section class="tex2jax_ignore mathjax_ignore" id="sequant-symbolic-tensor-algebra-in-c">
 <h1>SeQuant: Symbolic Tensor Algebra in C++<a class="headerlink" href="#sequant-symbolic-tensor-algebra-in-c" title="Link to this heading">¶</a></h1>
-<a class="reference external image-reference" href="https://opensource.org/licenses/BSD-3-Clause"><img alt="https://img.shields.io/badge/License-BSD_3--Clause-blue.svg" src="https://img.shields.io/badge/License-BSD_3--Clause-blue.svg" />
-</a>
-<a class="reference external image-reference" href="https://github.com/ajay-mk/SeQuant/actions/workflows/cmake.yml"><img alt="https://github.com/ValeevGroup/SeQuant/actions/workflows/cmake.yml/badge.svg" src="https://github.com/ValeevGroup/SeQuant/actions/workflows/cmake.yml/badge.svg" />
-</a>
-<a class="reference external image-reference" href="https://ajay-mk.github.io/SeQuant"><img alt="https://github.com/ValeevGroup/SeQuant/actions/workflows/docs.yml/badge.svg" src="https://github.com/ValeevGroup/SeQuant/actions/workflows/docs.yml/badge.svg" />
-</a>
-<div class="admonition note">
-<p class="admonition-title">Note</p>
-<p>This documentation is under development and may not be complete yet.</p>
-</div>
+<p><a class="reference internal" href="#"><span class="xref myst"><img alt="License" src="https://img.shields.io/badge/License-BSD_3--Clause-blue.svg" /></span></a>
+<a class="reference external" href="https://github.com/ValeevGroup/SeQuant/actions/workflows/cmake.yml"><img alt="Linux/MacOS Build" src="https://github.com/ValeevGroup/SeQuant/actions/workflows/cmake.yml/badge.svg" /></a>
+<a class="reference external" href="https://github.com/ValeevGroup/SeQuant/actions/workflows/docs.yml"><img alt="Sphinx Docs" src="https://github.com/ValeevGroup/SeQuant/actions/workflows/docs.yml/badge.svg" /></a></p>
 <section id="synopsis">
 <h2>Synopsis<a class="headerlink" href="#synopsis" title="Link to this heading">¶</a></h2>
 <p>SeQuant is a framework for performing symbolic algebra of tensors over scalar fields (regular tensors) and over
@@ -283,21 +276,24 @@ tensor algebra expressions.</p>
 using high-level languages like Python. In fact, version 1 of SeQuant was written in Mathematica. However, the
 performance of high-level languages not sufficient for practical use cases.
 SeQuant is written in C++ and is designed to be as efficient as possible without loss of generality.</p>
-<p>For getting started with SeQuant, refer to <a class="reference internal" href="source/using.html"><span class="doc">Using SeQuant</span></a>.</p>
+<p>See detailed documentation see <a class="reference external" href="https://valeevgroup.github.io/SeQuant/">https://valeevgroup.github.io/SeQuant/</a>.</p>
 </section>
 <section id="installation">
 <h2>Installation<a class="headerlink" href="#installation" title="Link to this heading">¶</a></h2>
-<p><strong>The short version</strong>:</p>
+<p>The short version:</p>
 <ul class="simple">
-<li><p>configure (from top SeQuant source dfirectory): <code class="code docutils literal notranslate"><span class="pre">cmake</span> <span class="pre">-DCMAKE_INSTALL_PREFIX=/path/to/install</span></code></p></li>
-<li><p>build and test: <code class="code docutils literal notranslate"><span class="pre">cmake</span> <span class="pre">--build</span> <span class="pre">build</span> <span class="pre">--target</span> <span class="pre">install</span></code></p></li>
+<li><p>configure (from top SeQuant source dfirectory): <code class="docutils literal notranslate"><span class="pre">cmake</span> <span class="pre">-B</span> <span class="pre">build</span> <span class="pre">-S</span> <span class="pre">.</span> <span class="pre">-DCMAKE_INSTALL_PREFIX=/path/where/sequant/to/be/installed</span></code></p></li>
+<li><p>build and test: <code class="docutils literal notranslate"><span class="pre">cmake</span> <span class="pre">--build</span> <span class="pre">build</span> <span class="pre">--target</span> <span class="pre">install</span></code></p></li>
 </ul>
-<p>See <a class="reference internal" href="source/installing.html"><span class="doc">Installation Guide</span></a> for detailed installation instructions.</p>
-</section>
+<p>For detailed instructions see <a class="reference external" href="https://valeevgroup.github.io/SeQuant/installing.html">SeQuant: Installation Guide</a>.</p>
 <section id="build-harness">
-<h2>Build Harness<a class="headerlink" href="#build-harness" title="Link to this heading">¶</a></h2>
-<p>We will only consider how to use SeQuant from within an existing codebase that has a <a class="reference external" href="https://cmake.org">CMake</a> harness.
-If SeQuant has already been built and installed, it should be sufficient to add the SeQuant install prefix to <code class="code docutils literal notranslate"><span class="pre">CMAKE_INSTALL_PREFIX</span></code> CMake cache variable and adding the following lines to the <code class="code docutils literal notranslate"><span class="pre">CMakeLists.txt</span></code> file in your codebase:</p>
+<h3>Build harness<a class="headerlink" href="#build-harness" title="Link to this heading">¶</a></h3>
+<p>We will only consider how to use SeQuant from within an existing codebase that has a <a class="reference external" href="https://cmake.org">CMake</a> harness. If SeQuant has already been built and installed, it should be sufficient to add the SeQuant install prefix to <code class="docutils literal notranslate"><span class="pre">CMAKE_INSTALL_PREFIX</span></code> CMake cache variable and adding the following lines to the <code class="docutils literal notranslate"><span class="pre">CMakeLists.txt</span></code> file in your codebase:</p>
+<div class="highlight-cmake notranslate"><div class="highlight"><pre><span></span><span class="nb">find_package</span><span class="p">(</span><span class="s">SeQuant</span><span class="w"> </span><span class="s">CONFIG</span><span class="w"> </span><span class="s">REQUIRED</span><span class="p">)</span>
+<span class="nb">target_link_libraries</span><span class="p">(</span><span class="s">your_executable_or_library_target</span><span class="w"> </span><span class="s">PUBLIC</span><span class="w"> </span><span class="s">SeQuant::SeQuant</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>It is often desirable to build SeQuant from source within a standalone codebase; this case be done using the <a class="reference external" href="https://cmake.org/cmake/help/latest/module/FetchContent.html">FetchContent CMake module</a> as follows:</p>
 <div class="highlight-cmake notranslate"><div class="highlight"><pre><span></span><span class="nb">find_package</span><span class="p">(</span><span class="s">SeQuant</span><span class="w"> </span><span class="s">CONFIG</span><span class="p">)</span>
 <span class="nb">if</span><span class="w"> </span><span class="p">(</span><span class="s">NOT</span><span class="w"> </span><span class="s">TARGET</span><span class="w"> </span><span class="s">SeQuant::SeQuant</span><span class="p">)</span>
 <span class="w">    </span><span class="nb">cmake_minimum_required</span><span class="p">(</span><span class="s">VERSION</span><span class="w"> </span><span class="s">3.14.0</span><span class="p">)</span><span class="w">  </span><span class="c"># for FetchContent_MakeAvailable</span>
@@ -312,6 +308,7 @@ If SeQuant has already been built and installed, it should be sufficient to add 
 </pre></div>
 </div>
 </section>
+</section>
 <section id="developers">
 <h2>Developers<a class="headerlink" href="#developers" title="Link to this heading">¶</a></h2>
 <p>SeQuant is developed by the <a class="reference external" href="https://valeevgroup.github.io">Valeev Research Group</a> in the Department of Chemistry at Virginia Tech.</p>
@@ -319,16 +316,16 @@ If SeQuant has already been built and installed, it should be sufficient to add 
 <section id="acknowledgement">
 <h2>Acknowledgement<a class="headerlink" href="#acknowledgement" title="Link to this heading">¶</a></h2>
 <p>Development of SeQuant has been possible thanks to the support of the US National Science Foundation (award 2217081) and the US Department of Energy (awards DE-SC0022327 and DE-SC0022263)</p>
-<div class="toctree-wrapper compound">
-</div>
-<div class="toctree-wrapper compound">
-</div>
-<div class="toctree-wrapper compound">
-</div>
-<div class="toctree-wrapper compound">
-</div>
 </section>
 </section>
+<div class="toctree-wrapper compound">
+</div>
+<div class="toctree-wrapper compound">
+</div>
+<div class="toctree-wrapper compound">
+</div>
+<div class="toctree-wrapper compound">
+</div>
 
         </article>
       </div>
@@ -380,12 +377,12 @@ If SeQuant has already been built and installed, it should be sufficient to add 
             <ul>
 <li><a class="reference internal" href="#">SeQuant: Symbolic Tensor Algebra in C++</a><ul>
 <li><a class="reference internal" href="#synopsis">Synopsis</a></li>
-<li><a class="reference internal" href="#installation">Installation</a></li>
-<li><a class="reference internal" href="#build-harness">Build Harness</a></li>
-<li><a class="reference internal" href="#developers">Developers</a></li>
-<li><a class="reference internal" href="#acknowledgement">Acknowledgement</a><ul>
+<li><a class="reference internal" href="#installation">Installation</a><ul>
+<li><a class="reference internal" href="#build-harness">Build harness</a></li>
 </ul>
 </li>
+<li><a class="reference internal" href="#developers">Developers</a></li>
+<li><a class="reference internal" href="#acknowledgement">Acknowledgement</a></li>
 </ul>
 </li>
 </ul>

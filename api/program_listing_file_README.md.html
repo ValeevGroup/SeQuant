@@ -263,10 +263,14 @@
           <section id="program-listing-for-file-readme-md">
 <span id="program-listing-file-readme-md"></span><h1>Program Listing for File README.md<a class="headerlink" href="#program-listing-for-file-readme-md" title="Link to this heading">¶</a></h1>
 <p>↰ <a class="reference internal" href="file_README.md.html#file-readme-md"><span class="std std-ref">Return to documentation for file</span></a> (<code class="docutils literal notranslate"><span class="pre">README.md</span></code>)</p>
-<div class="highlight-markdown notranslate"><div class="highlight"><pre><span></span><span class="gh">SeQuant: symbolic tensor algebra in C++</span>
-<span class="gh">=======================================</span>
+<div class="highlight-markdown notranslate"><div class="highlight"><pre><span></span><span class="gh"># SeQuant: Symbolic Tensor Algebra in C++</span>
 
-<span class="gh"># Synopsis</span>
+[<span class="nt">![License</span>](<span class="na">https://img.shields.io/badge/License-BSD_3--Clause-blue.svg</span>)]()
+[<span class="nt">![Linux/MacOS Build</span>](<span class="na">https://github.com/ValeevGroup/SeQuant/actions/workflows/cmake.yml/badge.svg</span>)](https://github.com/ValeevGroup/SeQuant/actions/workflows/cmake.yml)
+[<span class="nt">![Sphinx Docs</span>](<span class="na">https://github.com/ValeevGroup/SeQuant/actions/workflows/docs.yml/badge.svg</span>)](https://github.com/ValeevGroup/SeQuant/actions/workflows/docs.yml)
+
+
+<span class="gu">## Synopsis</span>
 
 SeQuant is a framework for performing symbolic algebra of tensors over scalar fields (regular tensors) and over
 operator fields (tensor operators in, e.g., quantum many-body physics).
@@ -281,7 +285,7 @@ SeQuant is written in C++ and is designed to be as efficient as possible without
 
 See detailed documentation see [<span class="nt">https://valeevgroup.github.io/SeQuant/</span>](<span class="na">https://valeevgroup.github.io/SeQuant/</span>).
 
-<span class="gh"># Installation</span>
+<span class="gu">## Installation</span>
 
 The short version:
 
@@ -291,7 +295,7 @@ The short version:
 For detailed instructions see [<span class="nt">SeQuant: Installation Guide</span>](<span class="na">https://valeevgroup.github.io/SeQuant/installing.html</span>).
 
 
-<span class="gu">## Build harness</span>
+<span class="gu">### Build harness</span>
 We will only consider how to use SeQuant from within an existing codebase that has a [<span class="nt">CMake</span>](<span class="na">https://cmake.org</span>) harness. If SeQuant has already been built and installed, it should be sufficient to add the SeQuant install prefix to <span class="sb">`CMAKE_INSTALL_PREFIX`</span> CMake cache variable and adding the following lines to the <span class="sb">`CMakeLists.txt`</span> file in your codebase:
 
 <span class="sb">```cmake</span>
@@ -315,11 +319,11 @@ It is often desirable to build SeQuant from source within a standalone codebase;
 <span class="nb">target_link_libraries</span><span class="p">(</span><span class="s">your_executable_or_library_target</span><span class="w"> </span><span class="s">PUBLIC</span><span class="w"> </span><span class="s">SeQuant::SeQuant</span><span class="p">)</span>
 <span class="sb">```</span>
 
-<span class="gh"># Developers</span>
+<span class="gu">## Developers</span>
 
 SeQuant is developed by the [<span class="nt">Valeev Research Group</span>](<span class="na">https://valeevgroup.github.io</span>) in the Department of Chemistry at Virginia Tech.
 
-<span class="gh"># Acknowledgement</span>
+<span class="gu">## Acknowledgement</span>
 
 Development of SeQuant has been possible thanks to the support of the US National Science Foundation (award 2217081) and the US Department of Energy (awards DE-SC0022327 and DE-SC0022263)
 </pre></div>
