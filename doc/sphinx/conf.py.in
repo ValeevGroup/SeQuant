@@ -45,9 +45,6 @@ html_css_files = [
 
 html_theme_options = {
     "top_of_page_buttons": ["view"],
-    "source_repository": "https://github.com/ValeevGroup/SeQuant/",
-    "source_branch": "master",
-    "source_directory": "doc/sphinx",
     "footer_icons": [
         {
             "name": "GitHub",
