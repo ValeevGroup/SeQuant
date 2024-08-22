@@ -152,9 +152,9 @@ Functions
 
 - :ref:`exhale_function_namespacesequant_1af3ae416b27d3c00894eff3049ab73b37`
 
-- :ref:`exhale_function_namespacesequant_1a7805d2d68dc5858122638f7048c9d255`
-
 - :ref:`exhale_function_namespacesequant_1ac6290ec75116ffe5375cef841fee7178`
+
+- :ref:`exhale_function_namespacesequant_1a7805d2d68dc5858122638f7048c9d255`
 
 - :ref:`exhale_function_namespacesequant_1adc608ead17c4bcb8f0404491da04ed7b`
 
@@ -178,11 +178,11 @@ Functions
 
 - :ref:`exhale_function_namespacesequant_1a1b7fd49159294bfa5b46f309a8742286`
 
+- :ref:`exhale_function_namespacesequant_1aec313efc5a2f86c70203f17953ee20e4`
+
 - :ref:`exhale_function_namespacesequant_1aaf7c742d3ac61b03615c69c67e462dc0`
 
 - :ref:`exhale_function_namespacesequant_1ad59caf9dc97b151ebf5f35038750b831`
-
-- :ref:`exhale_function_namespacesequant_1aec313efc5a2f86c70203f17953ee20e4`
 
 - :ref:`exhale_function_namespacesequant_1a6afa4fe4129c885aa2c4ad46252a66bb`
 
@@ -197,19 +197,19 @@ Typedefs
 --------
 
 
-- :ref:`exhale_typedef_namespacesequant_1a9c73a9c08e733d9f05c3b2d745e5cfe7`
+- :ref:`exhale_typedef_namespacesequant_1ae068630254e047ad18d69a607a9c7489`
 
-- :ref:`exhale_typedef_namespacesequant_1ab7803c1ad0634d899c9c39d6ab7578b3`
+- :ref:`exhale_typedef_namespacesequant_1a0692a62a6e7dbed8a05f95db0f245dde`
 
-- :ref:`exhale_typedef_namespacesequant_1a97d8f4612383fdd6cc624aba64d89fef`
+- :ref:`exhale_typedef_namespacesequant_1afd21c16c0e05c5a81f0c518e4c28e9a2`
 
-- :ref:`exhale_typedef_namespacesequant_1a7e5669a42b5e43c2fe5cc0620cd0dd5f`
+- :ref:`exhale_typedef_namespacesequant_1aea380cdaef751d8a0d12438b3fb62510`
 
-- :ref:`exhale_typedef_namespacesequant_1a79ef0a541428db48cf3bc0e78ebf7b37`
+- :ref:`exhale_typedef_namespacesequant_1a62d05af8788c34b87a8ddf5b042dbc88`
 
-- :ref:`exhale_typedef_namespacesequant_1accf60abf59b89ae474d77e9c651b6845`
+- :ref:`exhale_typedef_namespacesequant_1ae51e03af4f757db1a87d91a3d34b98ce`
 
-- :ref:`exhale_typedef_namespacesequant_1a42399907b479207537a6ce1a53dd9c95`
+- :ref:`exhale_typedef_namespacesequant_1a99cedd041fd32e4b2ee233a2245bef2f`
 
-- :ref:`exhale_typedef_namespacesequant_1a472e942dafcaa53f3a64c8bc5557c840`
+- :ref:`exhale_typedef_namespacesequant_1aba2f65a5fec0171aac73b513eac05fbb`
 

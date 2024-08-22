@@ -3,7 +3,7 @@
 Function sequant::mbpt::op::R(nann, ncre, const cre<IndexSpace>&, const ann<IndexSpace>&)
 =========================================================================================
 
-- Defined in :ref:`file_SeQuant_core_eval_node.hpp`
+- Defined in :ref:`file_SeQuant_domain_mbpt_op.cpp`
 
 
 Function Documentation

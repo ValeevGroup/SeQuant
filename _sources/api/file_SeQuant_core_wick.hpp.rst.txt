@@ -78,7 +78,7 @@ Typedefs
 --------
 
 
-- :ref:`exhale_typedef_namespacesequant_1ad63beaf1a3a78ff2bedb455e51c253b3`
+- :ref:`exhale_typedef_namespacesequant_1a8853c32b310892f0fa900466d95e3798`
 
-- :ref:`exhale_typedef_namespacesequant_1a3f4cafb42ca8c8069a06731c4f7c6e1b`
+- :ref:`exhale_typedef_namespacesequant_1ab78692b9307cc06a9ab029b7b63d9c1e`
 

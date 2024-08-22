@@ -51,15 +51,15 @@ Typedefs
 --------
 
 
-- :ref:`exhale_typedef_namespacesequant_1aa76f39bb994067cbae603a4fb36b1d61`
+- :ref:`exhale_typedef_namespacesequant_1a2d4193b3b962fddd47cd8a09ddeeb8e2`
 
-- :ref:`exhale_typedef_namespacesequant_1ad9f229ebfea204600e262fbd730b3f79`
+- :ref:`exhale_typedef_namespacesequant_1aef605085133dd4427c0007b88d918fc1`
 
-- :ref:`exhale_typedef_namespacesequant_1a6d79870a4fd5e190b1d4c4f32045b5cd`
+- :ref:`exhale_typedef_namespacesequant_1a65106409bb17023bf401805be621525e`
 
-- :ref:`exhale_typedef_namespacesequant_1a972a28a14c55baaaff99c43a19ba2c2b`
+- :ref:`exhale_typedef_namespacesequant_1affaf52dbe035a2da16ffe15803b8dfbf`
 
-- :ref:`exhale_typedef_namespacesequant_1a45c0f4acfa2d7475f63d0c076a3b182f`
+- :ref:`exhale_typedef_namespacesequant_1a65efd2744749bf1696c8e7c25348e3c4`
 
-- :ref:`exhale_typedef_namespacesequant_1aba54db4207e3a370a05bb03742cb8666`
+- :ref:`exhale_typedef_namespacesequant_1a1608061d8c20932c4c66213d3484e2fb`
 

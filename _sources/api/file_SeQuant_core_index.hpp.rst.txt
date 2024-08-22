@@ -170,7 +170,7 @@ Typedefs
 --------
 
 
-- :ref:`exhale_typedef_namespacesequant_1a0dc2102d5e7c08c417b83b43d6d52f10`
+- :ref:`exhale_typedef_namespacesequant_1a96b7a6cc53c4719e06b9a12ec872472e`
 
-- :ref:`exhale_typedef_namespacesequant_1a3c20767e368edb9489e4efcb98211836`
+- :ref:`exhale_typedef_namespacesequant_1a1b26ede0cd68099f86f81c9fe3d34bb1`
 

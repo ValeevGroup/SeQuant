@@ -3,7 +3,7 @@
 Template Function sequant::to_latex(const mbpt::Operator<mbpt::qns_t, S>&)
 ==========================================================================
 
-.. did not find file this was defined in
+- Defined in :ref:`file_SeQuant_domain_mbpt_op.cpp`
 
 
 Function Documentation

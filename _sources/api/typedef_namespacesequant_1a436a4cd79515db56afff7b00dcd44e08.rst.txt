@@ -1,0 +1,14 @@
+.. _exhale_typedef_namespacesequant_1a436a4cd79515db56afff7b00dcd44e08:
+
+Typedef sequant::ERPtr
+======================
+
+- Defined in :ref:`file_SeQuant_domain_eval_eval_result.hpp`
+
+
+Typedef Documentation
+---------------------
+
+
+.. doxygentypedef:: sequant::ERPtr
+   :project: SeQuant

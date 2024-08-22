@@ -241,7 +241,7 @@
         </a>
         <div class="content-icon-container">
           <div class="view-this-page">
-  <a class="muted-link" href="https://github.com/ValeevGroup/SeQuant/blob/master/doc/sphinx/api/classsequant_1_1_expr.rst?plain=true" title="View this page">
+  <a class="muted-link" href="../_sources/api/classsequant_1_1_expr.rst.txt" title="View this page">
     <svg><use href="#svg-eye"></use></svg>
     <span class="visually-hidden">View this page</span>
   </a>
@@ -319,7 +319,7 @@
 </pre></div>
 </div>
  There are two possible scenarios:<ul class="simple">
-<li><p>if <code class="docutils literal notranslate"><span class="pre">Container</span></code> is a container of <a class="reference internal" href="#classsequant_1_1_expr"><span class="std std-ref">Expr</span></a> objects, BaseContainer will iterate over <a class="reference internal" href="classsequant_1_1_expr_ptr.html#classsequant_1_1_expr_ptr"><span class="std std-ref">ExprPtr</span></a> objects already and both ranges will be equivalent; it is sufficient to add <code class="docutils literal notranslate"><span class="pre">using</span> <span class="pre">/</span> <span class="pre">BaseContainer::begin</span></code>, etc. to Container’s public API.</p></li>
+<li><p>if <code class="docutils literal notranslate"><span class="pre">Container</span></code> is a container of <a class="reference internal" href="#classsequant_1_1_expr"><span class="std std-ref">Expr</span></a> objects, BaseContainer will iterate over <a class="reference internal" href="classsequant_1_1_expr_ptr.html#classsequant_1_1_expr_ptr"><span class="std std-ref">ExprPtr</span></a> objects already and both ranges will be equivalent; it is sufficient to add <code class="docutils literal notranslate"><span class="pre">using</span> <span class="pre">BaseContainer::begin</span></code>, etc. to Container’s public API.</p></li>
 <li><p>if <code class="docutils literal notranslate"><span class="pre">Container</span></code> is a container of non-Expr objects, iteration over BaseContainer is likely to be more commonly used in practice, hence again adding <code class="docutils literal notranslate"><span class="pre">using</span> <span class="pre">BaseContainer::begin</span></code>, etc. will suffice. To be able to iterate over subexpression range (in this case it is empty) <a class="reference internal" href="#classsequant_1_1_expr"><span class="std std-ref">Expr</span></a> provides <a class="reference internal" href="#classsequant_1_1_expr_1a0edadd93f1526c41400ea436fa0150af"><span class="std std-ref">Expr::expr</span></a> member to cast to <a class="reference internal" href="#classsequant_1_1_expr"><span class="std std-ref">Expr</span></a>: <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">Container</span> <span class="n">c</span><span class="p">(</span><span class="o">...</span><span class="p">);</span>
 <span class="k">for</span><span class="p">(</span><span class="n">const</span> <span class="n">auto</span><span class="o">&amp;</span> <span class="n">e</span><span class="p">:</span> <span class="n">c</span><span class="p">)</span> <span class="p">{</span>  <span class="o">//</span> <span class="n">iterates</span> <span class="n">over</span> <span class="n">elements</span> <span class="n">of</span> <span class="n">BaseContainer</span>
 <span class="p">}</span>
@@ -1050,7 +1050,8 @@
             Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
             
             <a href="https://github.com/pradyunsg/furo">Furo</a>
-            
+            <div class="last-updated">
+              Last updated on Aug 22, 2024 5:04:34 PM</div>
           </div>
           <div class="right-details">
             <div class="icons">

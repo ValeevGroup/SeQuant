@@ -202,9 +202,9 @@ Functions
 
 - :ref:`exhale_function_namespacesequant_1a92238a447312a29368c42f7b9ac14bef`
 
-- :ref:`exhale_function_namespacesequant_1af4ece5a049a3d307e03f6b2af97697ab`
-
 - :ref:`exhale_function_namespacesequant_1ad600d7fe47c0c4f006149cd13a114bc5`
+
+- :ref:`exhale_function_namespacesequant_1af4ece5a049a3d307e03f6b2af97697ab`
 
 - :ref:`exhale_function_namespacesequant_1af4f19f545e6cd169b63cae9380ec8a40`
 
@@ -231,9 +231,9 @@ Typedefs
 --------
 
 
-- :ref:`exhale_typedef_namespacesequant_1a6ee11cff777cf1e50a07f23fa3eeaca8`
+- :ref:`exhale_typedef_namespacesequant_1ac7e383437dab811d4219dd728be59a70`
 
-- :ref:`exhale_typedef_namespacesequant_1a2ac9b6d74a5671b8dbbfc6f1a8c8a3e4`
+- :ref:`exhale_typedef_namespacesequant_1a388e4a59478e5e1ead910ed0f0edcf5b`
 
 
 Variables

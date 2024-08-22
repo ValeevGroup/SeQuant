@@ -98,7 +98,7 @@ Typedefs
 --------
 
 
-- :ref:`exhale_typedef_namespacesequant_1a343a69e1a8b13a0965431fb9ae56f2ae`
+- :ref:`exhale_typedef_namespacesequant_1a25135b0aeaefabca7c130e4ea759f2f7`
 
 
 Variables

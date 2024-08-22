@@ -3,7 +3,7 @@
 Function sequant::mbpt::can_change_qns(const ExprPtr&, const qns_t, const qns_t)
 ================================================================================
 
-.. did not find file this was defined in
+- Defined in :ref:`file_SeQuant_domain_mbpt_op.cpp`
 
 
 Function Documentation

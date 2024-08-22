@@ -139,5 +139,5 @@ Typedefs
 --------
 
 
-- :ref:`exhale_typedef_namespacesequant_1ac1783594fe2c55cbfd86aff408b565bf`
+- :ref:`exhale_typedef_namespacesequant_1ace7a501f5466fb9a216eb835e68d354e`
 

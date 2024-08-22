@@ -3,7 +3,7 @@
 Function sequant::mbpt::op::sequant::mbpt::tensor::S
 ====================================================
 
-- Defined in :ref:`file_SeQuant_core_op.hpp`
+- Defined in :ref:`file_SeQuant_domain_mbpt_op.cpp`
 
 
 Function Documentation

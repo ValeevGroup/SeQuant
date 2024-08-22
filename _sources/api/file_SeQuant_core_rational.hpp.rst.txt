@@ -83,9 +83,9 @@ Functions
 
 - :ref:`exhale_function_namespacesequant_1a77b3e24a128d11cf0b016193dd9e68b7`
 
-- :ref:`exhale_function_namespacesequant_1ab6e3d096b7f17459531d00a378dc5e80`
-
 - :ref:`exhale_function_namespacesequant_1a14ccb9838626818330084a10cdc496b8`
+
+- :ref:`exhale_function_namespacesequant_1ab6e3d096b7f17459531d00a378dc5e80`
 
 - :ref:`exhale_function_namespacesequant_1a7ee778d62320741894ca0634ac8112d6`
 
@@ -104,9 +104,9 @@ Typedefs
 --------
 
 
-- :ref:`exhale_typedef_namespacesequant_1aeae509774a543146e095ddc8f63c8c13`
+- :ref:`exhale_typedef_namespacesequant_1a817e0c1244b279fe920e3368db52d311`
 
-- :ref:`exhale_typedef_namespacesequant_1ae72c7fb8d6eb790438166e35039c4d59`
+- :ref:`exhale_typedef_namespacesequant_1a53573d914a7d5e14b2ab04622b02fd6d`
 
-- :ref:`exhale_typedef_namespacesequant_1a101cd8545e5a999b555f48dd53618856`
+- :ref:`exhale_typedef_namespacesequant_1a324a4bdc4d7d8c50e962ef65395851a3`
 

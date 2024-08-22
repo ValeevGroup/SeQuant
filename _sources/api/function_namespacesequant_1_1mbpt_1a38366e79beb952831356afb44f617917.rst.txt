@@ -3,7 +3,7 @@
 Function sequant::mbpt::to_class
 ================================
 
-.. did not find file this was defined in
+- Defined in :ref:`file_SeQuant_domain_mbpt_op.cpp`
 
 
 Function Documentation

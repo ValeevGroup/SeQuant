@@ -28,10 +28,6 @@ Functions
 
 - :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1a2e40b49c3201b4472e29a6f116433182`
 
-- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1a0e100a51a995b02bd3bd420749c21427`
-
-- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1adee7a9fb19a7be03735505805680b7b6`
-
 - :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1aca74f1417232ad545883f39d51c95373`
 
 - :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1ae3872bc86eddfaf827173dd8bf3f5272`
@@ -60,19 +56,15 @@ Functions
 
 - :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1a4c1fa777f64e1c1a086f05dd1c1aed7b`
 
-- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1a6eb224d07b96ee459e3720cdab99b3bd`
-
-- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1ab5a51703fa1be2baf0e03afbba941858`
-
 - :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1a48425eefec4b9fb72ee4bc5cb21a438f`
 
 - :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1a027c8fbac813db708c772228dbfbfffe`
 
 - :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1a4dbf3231d9327199f5bac47a9aba15a3`
 
-- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1ac62b12efdb822f12baffbb1d70a2ddee`
-
 - :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1ad9ad97dc67e844f0299f6800608c90b4`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1ac62b12efdb822f12baffbb1d70a2ddee`
 
 - :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1abea7bde4e5ad9f0b842ebf79c54799d8`
 
@@ -91,12 +83,6 @@ Functions
 - :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1ad0efa6cc78196b7443da776fab1dac44`
 
 - :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1a412c86d89a91039a181b468ed2dd337f`
-
-- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1a2aa12cc3398a9f11d41959df2f3a87c6`
-
-- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1affdb70142970393b313c3b90271be72d`
-
-- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1ac8a9ab8a19cf9745f8d21bfc500a4bfc`
 
 - :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1ae3b03f40d3d015db21a0317b4f158fd1`
 

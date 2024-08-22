@@ -10,7 +10,7 @@ Typedefs
 --------
 
 
-- :ref:`exhale_typedef_namespacesequant_1_1bitset_1a64291bfc40ea89849d7530333a416c46`
+- :ref:`exhale_typedef_namespacesequant_1_1bitset_1a392c9bdebe70a8280160d4dd4e1c31c9`
 
 
 Variables
