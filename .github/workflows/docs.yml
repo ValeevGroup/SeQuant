@@ -5,13 +5,13 @@ on: [push, pull_request, workflow_dispatch]
 jobs:
   build:
     name: "Build and Deploy"
-    runs-on: macos-latest
+    runs-on: ubuntu-24.04
     env:
-      CXX: clang++
+      CXX: g++
       BUILD_CONFIG: >
         -G Ninja
         -DCMAKE_BUILD_TYPE=Release
-        -DCMAKE_PREFIX_PATH='/usr/local/opt/boost'
+        -DCMAKE_PREFIX_PATH='/usr/include/boost'
         -DBUILD_TESTING=OFF
         -DSEQUANT_BUILD_DOCS=ON
     steps:
@@ -24,8 +24,8 @@ jobs:
       - name: Setup Environment
         run: |
           cmake -E make_directory ${{github.workspace}}/build
-          brew install ninja boost
-          brew install --cask doxygen
+          sudo apt-get update
+          sudo apt-get install -y ninja-build libboost-all-dev doxygen
           pip install -r doc/sphinx/requirements.txt
 
       - name: Build Docs
