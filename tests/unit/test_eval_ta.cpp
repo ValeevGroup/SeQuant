@@ -310,6 +310,22 @@ TEST_CASE("TEST_EVAL_USING_TA", "[eval]") {
                                yield(L"t{a1,a3;i3,i4}")("a1,a3,i3,i4");
 
     REQUIRE(norm(prod2_man) == Catch::Approx(norm(prod2_eval)));
+
+    auto expr3 = sequant::parse_expr(L"R_{a1}^{i1,i3} * f_{i3}^{i2}");
+    auto prod3_eval = eval(expr3, "a_1,i_1,i_2");
+    auto prod3_man = TArrayD{};
+    prod3_man("a1,i1,i2") =
+        yield(L"R{a1;i1,i3}")("a1,i1,i3") * yield(L"f{i3;i2}")("i3,i2");
+    REQUIRE(norm(prod3_man) == Catch::Approx(norm(prod3_eval)));
+
+    auto expr4 =
+        sequant::parse_expr(L"1/4 * R_{a1,a2,a3}^{i2,i3} * g_{i2,i3}^{i1,a3}");
+    auto prod4_eval = eval(expr4, "i_1,a_1,a_2");
+    auto prod4_man = TArrayD{};
+    prod4_man("i1,a1,a2") = 1 / 4.0 *
+                            yield(L"R{a1,a2,a3;i2,i3}")("a1,a2,a3,i2,i3") *
+                            yield(L"g{i2,i3;i1,a3}")("i2,i3,i1,a3");
+    REQUIRE(norm(prod4_man) == Catch::Approx(norm(prod4_eval)));
   }
 
   SECTION("sum and product") {
@@ -328,6 +344,19 @@ TEST_CASE("TEST_EVAL_USING_TA", "[eval]") {
                               yield(L"t{a3,a4;i1,i2}")("a3,a4,i1,i2");
 
     REQUIRE(norm(man1) == Catch::Approx(norm(eval1)));
+
+    auto expr2 = sequant::parse_expr(
+        L"1/4 * R_{a1,a2,a3}^{i2,i3} * g_{i2,i3}^{i1,a3} + R_{a1,a3}^{i1} * "
+        L"f_{i2}^{a3} * t_{a2}^{i2}");
+    auto eval2 = eval(expr2, "i_1,a_1,a_2");
+
+    auto man2 = TArrayD{};
+    man2("i1,a1,a2") = 1 / 4.0 * yield(L"R{a1,a2,a3;i2,i3}")("a1,a2,a3,i2,i3") *
+                           yield(L"g{i2,i3;i1,a3}")("i2,i3,i1,a3") +
+                       yield(L"R{a1,a3;i1}")("a1,a3,i1") *
+                           yield(L"f{i2;a3}")("i2,a3") *
+                           yield(L"t{a2;i2}")("a2,i2");
+    REQUIRE(norm(man2) == Catch::Approx(norm(eval2)));
   }
 
   SECTION("variable at leaves") {
@@ -533,6 +562,22 @@ TEST_CASE("TEST_EVAL_USING_TA_COMPLEX", "[eval]") {
                                yield(L"t{a1,a3;i3,i4}")("a1,a3,i3,i4");
 
     REQUIRE(norm(prod2_man) == Catch::Approx(norm(prod2_eval)));
+
+    auto expr3 = sequant::parse_expr(L"R_{a1}^{i1,i3} * f_{i3}^{i2}");
+    auto prod3_eval = eval(expr3, "a_1,i_1,i_2");
+    auto prod3_man = TArrayC{};
+    prod3_man("a1,i1,i2") =
+        yield(L"R{a1;i1,i3}")("a1,i1,i3") * yield(L"f{i3;i2}")("i3,i2");
+    REQUIRE(norm(prod3_man) == Catch::Approx(norm(prod3_eval)));
+
+    auto expr4 =
+        sequant::parse_expr(L"1/4 * R_{a1,a2,a3}^{i2,i3} * g_{i2,i3}^{i1,a3}");
+    auto prod4_eval = eval(expr4, "i_1,a_1,a_2");
+    auto prod4_man = TArrayC{};
+    prod4_man("i1,a1,a2") = 1 / 4.0 *
+                            yield(L"R{a1,a2,a3;i2,i3}")("a1,a2,a3,i2,i3") *
+                            yield(L"g{i2,i3;i1,a3}")("i2,i3,i1,a3");
+    REQUIRE(norm(prod4_man) == Catch::Approx(norm(prod4_eval)));
   }
 
   SECTION("sum and product") {
@@ -553,6 +598,19 @@ TEST_CASE("TEST_EVAL_USING_TA_COMPLEX", "[eval]") {
                               yield(L"t{a3,a4;i1,i2}")("a3,a4,i1,i2");
 
     REQUIRE(norm(man1) == Catch::Approx(norm(eval1)));
+
+    auto expr2 = sequant::parse_expr(
+        L"1/4 * R_{a1,a2,a3}^{i2,i3} * g_{i2,i3}^{i1,a3} + R_{a1,a3}^{i1} * "
+        L"f_{i2}^{a3} * t_{a2}^{i2}");
+    auto eval2 = eval(expr2, "i_1,a_1,a_2");
+
+    auto man2 = TArrayC{};
+    man2("i1,a1,a2") = 1 / 4.0 * yield(L"R{a1,a2,a3;i2,i3}")("a1,a2,a3,i2,i3") *
+                           yield(L"g{i2,i3;i1,a3}")("i2,i3,i1,a3") +
+                       yield(L"R{a1,a3;i1}")("a1,a3,i1") *
+                           yield(L"f{i2;a3}")("i2,a3") *
+                           yield(L"t{a2;i2}")("a2,i2");
+    REQUIRE(norm(man2) == Catch::Approx(norm(eval2)));
   }
 
   SECTION("Antisymmetrization") {

@@ -258,48 +258,40 @@ std::pair<container::svector<Index>,  // bra
           container::svector<Index>   // ket
           >
 target_braket(Tensor const& t1, Tensor const& t2) noexcept {
-  using ranges::views::keys;
-  using ranges::views::values;
-  using ranges::views::zip;
-  using index_container = container::svector<Index>;
+  using ranges::contains;
+  using ranges::views::concat;
+  using ranges::views::filter;
+  using idx_container = container::svector<Index>;
 
-  auto remove_item = [](auto& vec, size_t pos) -> void {
-    std::swap(vec[pos], vec.back());
-    vec.pop_back();
-  };
+  // find contracted indices
+  const auto contracted_indices =
+      concat(t1.bra() | filter([&](const auto& idx) {
+               return contains(t2.ket(), idx);
+             }),
+             t1.ket() | filter([&](const auto& idx) {
+               return contains(t2.bra(), idx);
+             })) |
+      ranges::to<idx_container>();
 
-  auto left = zip(t1.bra(), t1.ket()) | ranges::to_vector;
-  auto right = zip(t2.bra(), t2.ket()) | ranges::to_vector;
+  // combine free bra indices
+  const auto result_bra = concat(t1.bra() | filter([&](const auto& idx) {
+                                   return !contains(contracted_indices, idx);
+                                 }),
+                                 t2.bra() | filter([&](const auto& idx) {
+                                   return !contains(contracted_indices, idx);
+                                 })) |
+                          ranges::to<idx_container>();
 
-  while (!right.empty()) {
-    for (std::size_t rr = 0; rr < right.size(); ++rr) {
-      auto& [rb, rk] = right[rr];
-      for (std::size_t ll = 0; ll < left.size(); ++ll) {
-        auto& [lb, lk] = left[ll];
-        if (lb == rk && rb == lk) {
-          remove_item(left, ll);
-          remove_item(right, rr);
-          goto next_contract;
-        } else if (lb == rk) {
-          std::swap(lk, rk);
-          remove_item(left, ll);
-          goto next_contract;
-        } else if (lk == rb) {
-          std::swap(lb, rb);
-          remove_item(left, ll);
-          goto next_contract;
-        }
-      }  // ll
-      left.emplace_back(rb, rk);
-      remove_item(right, rr);
-    }  // rr
-  next_contract:
-      /* just point to the start of the while loop */;
-  }
-  // the result is now in left
+  // combine free ket indices
+  const auto result_ket = concat(t1.ket() | filter([&](const auto& idx) {
+                                   return !contains(contracted_indices, idx);
+                                 }),
+                                 t2.ket() | filter([&](const auto& idx) {
+                                   return !contains(contracted_indices, idx);
+                                 })) |
+                          ranges::to<idx_container>();
 
-  return {keys(left) | ranges::to<index_container>,
-          values(left) | ranges::to<index_container>};
+  return std::make_pair(result_bra, result_ket);
 }
 
 Symmetry tensor_symmetry_sum(EvalExpr const& left,
