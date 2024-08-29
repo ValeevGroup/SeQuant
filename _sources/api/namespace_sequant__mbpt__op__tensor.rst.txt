@@ -39,9 +39,9 @@ Functions
 
 - :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1_1tensor_1a49fe51c3dc9743caf8cf38990ca3eeb7`
 
-- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1_1tensor_1a2c81ee9578153369c183aeb2eca8f899`
-
 - :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1_1tensor_1a1ac9fb48c1b1eb2309a63f7f117d819e`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1_1tensor_1a2c81ee9578153369c183aeb2eca8f899`
 
 - :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1_1tensor_1a71f3c48da665ff20b615e3df93bd5869`
 
@@ -54,6 +54,8 @@ Functions
 - :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1_1tensor_1a46fe330d24f9f03c67e8afbde8fd2bd0`
 
 - :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1_1tensor_1af4b0637377884afc59363a598c28a20d`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1_1tensor_1ae23dc07f7a143edf733e4878cfac28e7`
 
 - :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1_1tensor_1afa28c8b3682c5a1b2765a173f950855f`
 

@@ -40,9 +40,9 @@ Functions
 
 - :ref:`exhale_function_vac__av_8hpp_1a0714297f7472d0f648e954ff2e3708ad`
 
-- :ref:`exhale_function_vac__av_8hpp_1ae8208c25e2d14d18f20d9c33207fb300`
-
 - :ref:`exhale_function_vac__av_8hpp_1a5a0a127b69d3a475f3618d177fa28954`
+
+- :ref:`exhale_function_vac__av_8hpp_1ae8208c25e2d14d18f20d9c33207fb300`
 
 - :ref:`exhale_function_vac__av_8hpp_1a821a3550b9d2abd5f268f62fb2d0c38e`
 

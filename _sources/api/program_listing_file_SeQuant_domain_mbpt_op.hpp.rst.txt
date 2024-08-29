@@ -83,6 +83,7 @@ Program Listing for File op.hpp
      h,    
      f,    
      f̃,    
+     θ,    
      g,    
      t,    
      λ,    
@@ -107,6 +108,7 @@ Program Listing for File op.hpp
        {OpType::f, L"f"},
        {OpType::f̃, L"f̃"},
        {OpType::g, L"g"},
+       {OpType::θ, L"θ"},
        {OpType::t, L"t"},
        {OpType::λ, L"λ"},
        {OpType::A, L"A"},
@@ -627,6 +629,8 @@ Program Listing for File op.hpp
    
    ExprPtr F(bool use_tensor = true, IndexSpace reference_occupied = {L"", 0});
    
+   ExprPtr θ(std::size_t K);
+   
    ExprPtr T_(std::size_t K);
    
    ExprPtr T(std::size_t K, bool skip1 = false);
@@ -683,6 +687,8 @@ Program Listing for File op.hpp
    ExprPtr H(std::size_t k = 2);
    
    ExprPtr F(bool use_tensor = true, IndexSpace reference_occupied = {L"", 0});
+   
+   ExprPtr θ(std::size_t K);
    
    ExprPtr T_(std::size_t K);
    
