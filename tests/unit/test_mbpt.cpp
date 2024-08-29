@@ -161,7 +161,9 @@ TEST_CASE("NBodyOp", "[mbpt]") {
     auto lambda2 = Λ_(2);
     auto r_2_1 = R_(nₚ(1), nₕ(2));
     auto r_1_2 = R_(nₚ(2), nₕ(1));
+    auto theta2 = θ(2);
 
+    REQUIRE(to_latex(theta2) == L"{\\hat{\\theta}_{2}}");
     REQUIRE(to_latex(f) == L"{\\hat{f}}");
     REQUIRE(to_latex(t1) == L"{\\hat{t}_{1}}");
     REQUIRE(to_latex(t2) == L"{\\hat{t}_{2}}");
@@ -290,6 +292,11 @@ TEST_CASE("NBodyOp", "[mbpt]") {
 
   SECTION("operators") {
     using namespace sequant::mbpt;
+
+    auto theta1 = θ(1)->as<op_t>();
+    // std::wcout << "theta1: " << to_latex(simplify(theta1.tensor_form()));
+    REQUIRE(to_latex(simplify(theta1.tensor_form())) ==
+            L"{{\\theta^{{p_1}}_{{p_2}}}{\\tilde{a}^{{p_2}}_{{p_1}}}}");
 
     auto R_2 = R_(2)->as<op_t>();
     //    std::wcout << "R_2: " << to_latex(simplify(R_2.tensor_form())) <<

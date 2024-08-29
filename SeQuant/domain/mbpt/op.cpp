@@ -11,22 +11,10 @@
 namespace sequant::mbpt {
 
 std::vector<std::wstring> cardinal_tensor_labels() {
-  return {L"κ",  L"γ",
-          L"Γ",  L"A",
-          L"S",  L"P",
-          L"L",  L"λ",
-          L"λ¹", L"h",
-          L"f",  L"f̃",
-          L"g",  L"t",
-          L"t¹", L"R",
-          L"F",  L"X",
-          L"μ",  L"V",
-          L"Ṽ",  L"B",
-          L"U",  L"GR",
-          L"C",  overlap_label(),
-          L"a",  L"ã",
-          L"b",  L"b̃",
-          L"E"};
+  return {L"κ", L"γ", L"Γ", L"A", L"S", L"P", L"L",  L"λ", L"λ¹",
+          L"h", L"f", L"f̃", L"g", L"θ", L"t", L"t¹", L"R", L"F",
+          L"X", L"μ", L"V", L"Ṽ", L"B", L"U", L"GR", L"C", overlap_label(),
+          L"a", L"ã", L"b", L"b̃", L"E"};
 }
 
 std::wstring to_wstring(OpType op) {
@@ -49,6 +37,7 @@ OpClass to_class(OpType op) {
     case OpType::A:
     case OpType::S:
     case OpType::h_1:
+    case OpType::θ:
       return OpClass::gen;
     case OpType::t:
     case OpType::R:
@@ -340,6 +329,9 @@ std::wstring to_latex(const mbpt::Operator<mbpt::qns_t, S>& op) {
   if (it != label2optype.end()) {  // handle special cases
     optype = it->second;
     if (to_class(optype) == OpClass::gen) {
+      if (optype == OpType::θ) {  // special case for θ
+        result += L"_{" + std::to_wstring(op()[0].upper()) + L"}";
+      }
       result += L"}";
       return result;
     }
@@ -560,6 +552,10 @@ ExprPtr F(bool use_tensor, IndexSpace reference_occupied) {
   }
 }
 
+ExprPtr θ(std::size_t K) {
+  return OpMaker<Statistics::FermiDirac>(OpType::θ, K)();
+}
+
 ExprPtr T_(std::size_t K) {
   return OpMaker<Statistics::FermiDirac>(OpType::t, K)();
 }
@@ -753,6 +749,16 @@ ExprPtr H_(std::size_t k) {
 ExprPtr H(std::size_t k) {
   assert(k > 0 && k <= 2);
   return k == 1 ? H_(1) : H_(1) + H_(2);
+}
+
+ExprPtr θ(std::size_t K) {
+  assert(K > 0);
+  return ex<op_t>([]() -> std::wstring_view { return L"θ"; },
+                  [=]() -> ExprPtr { return tensor::θ(K); },
+                  [=](qnc_t& qns) {
+                    qnc_t op_qnc_t = general_type_qns(K);
+                    qns = combine(op_qnc_t, qns);
+                  });
 }
 
 ExprPtr T_(std::size_t K) {
@@ -1046,7 +1052,7 @@ ExprPtr vac_av(ExprPtr expr, std::vector<std::pair<int, int>> nop_connections,
   wick.full_contractions(full_contractions);
   auto result = wick.compute();
   simplify(result);
-  // std::wcout << "post wick: " << to_latex_align(result,20,1) << std::endl;
+
   if (Logger::instance().wick_stats) {
     std::wcout << "WickTheorem stats: # of contractions attempted = "
                << wick.stats().num_attempted_contractions
