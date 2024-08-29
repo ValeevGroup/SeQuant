@@ -263,35 +263,30 @@ target_braket(Tensor const& t1, Tensor const& t2) noexcept {
   using ranges::views::filter;
   using idx_container = container::svector<Index>;
 
-  const auto left_bra = t1.bra() | ranges::to_vector;
-  const auto left_ket = t1.ket() | ranges::to_vector;
-  const auto right_bra = t2.bra() | ranges::to_vector;
-  const auto right_ket = t2.ket() | ranges::to_vector;
-
   // find contracted indices
   const auto contracted_indices =
-      concat(left_bra | filter([&](const auto& idx) {
-               return contains(right_ket, idx);
+      concat(t1.bra() | filter([&](const auto& idx) {
+               return contains(t2.ket(), idx);
              }),
-             left_ket | filter([&](const auto& idx) {
-               return contains(right_bra, idx);
+             t1.ket() | filter([&](const auto& idx) {
+               return contains(t2.bra(), idx);
              })) |
-      ranges::to_vector;
+      ranges::to<idx_container>();
 
   // combine free bra indices
-  const auto result_bra = concat(left_bra | filter([&](const auto& idx) {
+  const auto result_bra = concat(t1.bra() | filter([&](const auto& idx) {
                                    return !contains(contracted_indices, idx);
                                  }),
-                                 right_bra | filter([&](const auto& idx) {
+                                 t2.bra() | filter([&](const auto& idx) {
                                    return !contains(contracted_indices, idx);
                                  })) |
                           ranges::to<idx_container>();
 
   // combine free ket indices
-  const auto result_ket = concat(left_ket | filter([&](const auto& idx) {
+  const auto result_ket = concat(t1.ket() | filter([&](const auto& idx) {
                                    return !contains(contracted_indices, idx);
                                  }),
-                                 right_ket | filter([&](const auto& idx) {
+                                 t2.ket() | filter([&](const auto& idx) {
                                    return !contains(contracted_indices, idx);
                                  })) |
                           ranges::to<idx_container>();
