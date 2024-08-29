@@ -1,0 +1,44 @@
+name: Sphinx Docs
+
+on: [push, pull_request, workflow_dispatch]
+
+jobs:
+  build:
+    name: "Build and Deploy"
+    runs-on: ubuntu-24.04
+    env:
+      CXX: g++
+      BUILD_CONFIG: >
+        -G Ninja
+        -DCMAKE_BUILD_TYPE=Release
+        -DCMAKE_PREFIX_PATH='/usr/include/boost'
+        -DBUILD_TESTING=OFF
+        -DSEQUANT_BUILD_DOCS=ON
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.9' # Breathe needs 3.9 or later
+          cache: 'pip'
+
+      - name: Setup Environment
+        run: |
+          cmake -E make_directory ${{github.workspace}}/build
+          sudo apt-get update
+          sudo apt-get install -y ninja-build libboost-all-dev doxygen
+          pip install -r doc/sphinx/requirements.txt
+
+      - name: Build Docs
+        working-directory: ${{github.workspace}}/build
+        run: |
+          cmake $GITHUB_WORKSPACE -DCMAKE_BUILD_TYPE=$BUILD_TYPE $BUILD_CONFIG
+          cmake --build . --target sphinx-sequant
+
+      - name: Deploy to gh-pages
+        # if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/master' }}
+        if: ${{ github.event_name == 'push'}}
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          publish_branch: gh-pages
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ${{github.workspace}}/build/doc/sphinx/html
