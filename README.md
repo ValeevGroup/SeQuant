@@ -1,8 +1,8 @@
 # SeQuant: Symbolic Tensor Algebra in C++
 
-[![License](https://img.shields.io/badge/License-BSD_3--Clause-blue.svg)]()
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](h)
 [![Linux/MacOS Build](https://github.com/ValeevGroup/SeQuant/actions/workflows/cmake.yml/badge.svg)](https://github.com/ValeevGroup/SeQuant/actions/workflows/cmake.yml)
-[![Sphinx Docs](https://github.com/ValeevGroup/SeQuant/actions/workflows/docs.yml/badge.svg)](https://github.com/ValeevGroup/SeQuant/actions/workflows/docs.yml)
+[![Docs](https://github.com/ValeevGroup/SeQuant/actions/workflows/docs.yml/badge.svg)](https://valeevgroup.github.io/SeQuant)
 
 
 ## Synopsis
