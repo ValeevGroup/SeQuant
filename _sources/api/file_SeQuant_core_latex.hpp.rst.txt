@@ -83,13 +83,13 @@ Functions
 
 - :ref:`exhale_function_namespacesequant_1a17d2cf94f7badc7f7fa96d564f6814c5`
 
-- :ref:`exhale_function_namespacesequant_1a69c0f990e32a12156dc64e519f1dd7d0`
-
-- :ref:`exhale_function_namespacesequant_1ad96d44bec339597aa73d0f9e56b8115b`
-
 - :ref:`exhale_function_namespacesequant_1a7c470b6be97eed78f20e5eef7b196180`
 
 - :ref:`exhale_function_namespacesequant_1a22459d1973ac873218da6272239d3cfe`
+
+- :ref:`exhale_function_namespacesequant_1a69c0f990e32a12156dc64e519f1dd7d0`
+
+- :ref:`exhale_function_namespacesequant_1ad96d44bec339597aa73d0f9e56b8115b`
 
 - :ref:`exhale_function_namespacesequant_1a86b61721e1dd2ea4d2dbf22a14e14be5`
 

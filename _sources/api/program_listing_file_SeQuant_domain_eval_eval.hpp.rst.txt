@@ -262,6 +262,7 @@ Program Listing for File eval.hpp
    }
    
    template <typename NodeT, typename Annot, typename Le, typename... Args,
+             std::enable_if_t<IsEvaluable<NodeT>, bool> = true,
              std::enable_if_t<IsLeafEvaluator<NodeT, Le>, bool> = true>
    auto evaluate(NodeT const& node,    //
                  Annot const& layout,  //

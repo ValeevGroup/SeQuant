@@ -515,6 +515,7 @@
 <span class="p">}</span>
 
 <span class="k">template</span><span class="w"> </span><span class="o">&lt;</span><span class="k">typename</span><span class="w"> </span><span class="nc">NodeT</span><span class="p">,</span><span class="w"> </span><span class="k">typename</span><span class="w"> </span><span class="nc">Annot</span><span class="p">,</span><span class="w"> </span><span class="k">typename</span><span class="w"> </span><span class="nc">Le</span><span class="p">,</span><span class="w"> </span><span class="k">typename</span><span class="p">...</span><span class="w"> </span><span class="n">Args</span><span class="p">,</span>
+<span class="w">          </span><span class="n">std</span><span class="o">::</span><span class="n">enable_if_t</span><span class="o">&lt;</span><span class="n">IsEvaluable</span><span class="o">&lt;</span><span class="n">NodeT</span><span class="o">&gt;</span><span class="p">,</span><span class="w"> </span><span class="kt">bool</span><span class="o">&gt;</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">true</span><span class="p">,</span>
 <span class="w">          </span><span class="n">std</span><span class="o">::</span><span class="n">enable_if_t</span><span class="o">&lt;</span><span class="n">IsLeafEvaluator</span><span class="o">&lt;</span><span class="n">NodeT</span><span class="p">,</span><span class="w"> </span><span class="n">Le</span><span class="o">&gt;</span><span class="p">,</span><span class="w"> </span><span class="kt">bool</span><span class="o">&gt;</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">true</span><span class="o">&gt;</span>
 <span class="k">auto</span><span class="w"> </span><span class="n">evaluate</span><span class="p">(</span><span class="n">NodeT</span><span class="w"> </span><span class="k">const</span><span class="o">&amp;</span><span class="w"> </span><span class="n">node</span><span class="p">,</span><span class="w">    </span><span class="c1">//</span>
 <span class="w">              </span><span class="n">Annot</span><span class="w"> </span><span class="k">const</span><span class="o">&amp;</span><span class="w"> </span><span class="n">layout</span><span class="p">,</span><span class="w">  </span><span class="c1">//</span>
@@ -642,7 +643,7 @@
             
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on Aug 30, 2024 2:47:43 PM</div>
+              Last updated on Aug 30, 2024 2:48:20 PM</div>
           </div>
           <div class="right-details">
             <div class="icons">
