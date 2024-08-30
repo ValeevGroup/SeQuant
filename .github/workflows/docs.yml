@@ -35,8 +35,7 @@ jobs:
           cmake --build . --target sphinx-sequant
 
       - name: Deploy to gh-pages
-        # if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/master' }}
-        if: ${{ github.event_name == 'push'}}
+        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/master' }}
         uses: peaceiris/actions-gh-pages@v4
         with:
           publish_branch: gh-pages
