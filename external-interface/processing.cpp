@@ -135,7 +135,8 @@ container::svector< ResultExpr > postProcess(ResultExpr result, const IndexSpace
 			current.expression() = optimize(current.expression());
 
 			if (symmetrizer.has_value()) {
-				current.expression() = ex< Product >(1, ExprPtrList{ symmetrizer.value(), current.expression() });
+				current.expression() =
+					ex< Product >(ExprPtrList{ symmetrizer.value(), current.expression() }, Product::Flatten::No);
 			}
 		}
 	}

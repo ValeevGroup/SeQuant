@@ -219,6 +219,19 @@ sequant::ExprPtr generateResultSymmetrization(const ResultExpr &result, std::wst
 	return generateResultSymmetrization(precursorName, externals);
 }
 
+sequant::ExprPtr generateResultSymmetrization(const Tensor &result, std::wstring_view precursorName) {
+	assert(result.bra_rank() == result.ket_rank());
+
+	IndexGroups< std::vector< Index > > externals;
+
+	for (const auto [bra, ket] : ranges::views::zip(result.bra(), result.ket())) {
+		externals.bra.push_back(bra);
+		externals.ket.push_back(ket);
+	}
+
+	return generateResultSymmetrization(precursorName, externals);
+}
+
 sequant::ExprPtr generateResultSymmetrization(std::wstring_view precursorName,
 											  const sequant::IndexGroups< std::vector< sequant::Index > > &externals) {
 	assert(externals.bra.size() == externals.ket.size());

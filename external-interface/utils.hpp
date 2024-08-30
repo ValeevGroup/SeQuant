@@ -46,6 +46,8 @@ bool needsSymmetrization(const sequant::ExprPtr &expression);
 
 sequant::ExprPtr generateResultSymmetrization(const sequant::ResultExpr &result, std::wstring_view precursorName);
 
+sequant::ExprPtr generateResultSymmetrization(const sequant::Tensor &result, std::wstring_view precursorName);
+
 sequant::ExprPtr generateResultSymmetrization(std::wstring_view precursorName,
 											  const sequant::IndexGroups< std::vector< sequant::Index > > &externals);
 

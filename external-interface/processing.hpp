@@ -25,6 +25,7 @@ struct ProcessingOptions {
 	ProjectionTransformation transform = ProjectionTransformation::None;
 	bool factorize_to_binary           = true;
 	bool expand_symmetrizer            = false;
+	bool term_by_term                  = false;
 };
 
 sequant::container::svector< sequant::ResultExpr > postProcess(sequant::ResultExpr expression,

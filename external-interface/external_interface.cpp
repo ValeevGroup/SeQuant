@@ -34,6 +34,10 @@
 using nlohmann::json;
 using namespace sequant;
 
+template<> struct std::hash< Tensor > {
+	std::size_t operator()(const Tensor &tensor) const { return tensor.hash_value(); }
+};
+
 class ItfContext : public itf::Context {
 public:
 	ItfContext(const IndexSpaceMeta &meta) : m_meta(&meta) {}
@@ -98,6 +102,10 @@ ProcessingOptions extractProcessingOptions(const json &details) {
 		options.expand_symmetrizer = details.at("expand_symmetrizer").get< bool >();
 	}
 
+	if (details.contains("term_by_term")) {
+		options.term_by_term = details.at("term_by_term").get< bool >();
+	}
+
 	return options;
 }
 
@@ -106,6 +114,26 @@ itf::Result toItfResult(const ResultExpr &result, const ItfContext &ctx, bool im
 	Tensor resultTensor(result.label(), bra(result.bra()), ket(result.ket()), aux(result.aux()));
 
 	return itf::Result(result.expression(), resultTensor, importResultTensor);
+}
+
+std::vector< ResultExpr > splitContributions(const ResultExpr &result) {
+	if (!result.expression()->is< Sum >()) {
+		return { result };
+	}
+
+	assert(result.expression()->is< Sum >());
+
+	Tensor resultTensor(result.label(), bra(result.bra()), ket(result.ket()), aux(result.aux()), result.symmetry(),
+						result.braket_symmetry(), result.particle_symmetry());
+
+	std::vector< ResultExpr > contributions;
+	contributions.reserve(result.expression()->size());
+
+	for (const ExprPtr &subExpr : result.expression()) {
+		contributions.emplace_back(resultTensor, subExpr);
+	}
+
+	return contributions;
 }
 
 void generateITF(const json &blocks, std::string_view out_file, const IndexSpaceMeta &spaceMeta) {
@@ -143,28 +171,46 @@ void generateITF(const json &blocks, std::string_view out_file, const IndexSpace
 
 			ProcessingOptions options = extractProcessingOptions(current_result);
 
-			for (ResultExpr &current : postProcess(result, spaceMeta, options)) {
-				spdlog::debug("Fully processed equation is:\n{}", current);
+			std::vector< ResultExpr > resultParts =
+				options.term_by_term ? splitContributions(result) : std::vector< ResultExpr >{ result };
 
-				if (needsSymmetrization(current.expression())) {
-					std::optional< ExprPtr > symmetrizer = popTensor(current.expression(), L"S");
-					assert(symmetrizer.has_value());
+			std::unordered_set< Tensor > tensorsToSymmetrize;
 
-					ResultExpr symmetrizedResult = current;
-					current.set_label(symmetrizedResult.label() + L"u");
-
-					spdlog::debug("After popping S tensor:\n{}", current);
-
-					results.push_back(toItfResult(current, context, false));
-
-					symmetrizedResult.expression() = generateResultSymmetrization(symmetrizedResult, current.label());
-
-					spdlog::debug("Result symmetrization via\n{}", symmetrizedResult);
-
-					results.push_back(toItfResult(symmetrizedResult, context, current_result.value("import", true)));
-				} else {
-					results.push_back(toItfResult(current, context, current_result.value("import", true)));
+			for (const ResultExpr &contribution : resultParts) {
+				if (resultParts.size() > 1) {
+					spdlog::debug("Current contribution:\n{}", contribution);
 				}
+
+				for (ResultExpr &current : postProcess(contribution, spaceMeta, options)) {
+					spdlog::debug("Fully processed equation is:\n{}", toUtf8(to_latex(current.expression())));
+
+					if (needsSymmetrization(current.expression())) {
+						std::optional< ExprPtr > symmetrizer = popTensor(current.expression(), L"S");
+						assert(symmetrizer.has_value());
+
+						Tensor resultTensor(current.label(), bra(current.bra()), ket(current.ket()), aux(current.aux()),
+											current.symmetry(), current.braket_symmetry(), current.particle_symmetry());
+						tensorsToSymmetrize.insert(resultTensor);
+
+						current.set_label(current.label() + L"u");
+
+						spdlog::debug("After popping S tensor:\n{}", toUtf8(to_latex(current.expression())));
+
+						results.push_back(toItfResult(current, context, false));
+					} else {
+						results.push_back(toItfResult(current, context, current_result.value("import", true)));
+					}
+				}
+			}
+
+			for (const Tensor &current : tensorsToSymmetrize) {
+				ExprPtr symmetrization = generateResultSymmetrization(current, std::wstring(current.label()) + L"u");
+
+				ResultExpr symmetrizedResult(current, std::move(symmetrization));
+
+				spdlog::debug("Result symmetrization via\n{}", symmetrizedResult);
+
+				results.push_back(toItfResult(symmetrizedResult, context, current_result.value("import", true)));
 			}
 		}
 
