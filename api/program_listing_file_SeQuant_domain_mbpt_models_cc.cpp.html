@@ -533,6 +533,9 @@
 <span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="n">ExprPtr</span><span class="o">&gt;</span><span class="w"> </span><span class="n">CC</span><span class="o">::</span><span class="n">eom_r</span><span class="p">(</span><span class="n">nₚ</span><span class="w"> </span><span class="n">np</span><span class="p">,</span><span class="w"> </span><span class="n">nₕ</span><span class="w"> </span><span class="n">nh</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
 <span class="w">  </span><span class="n">assert</span><span class="p">(</span><span class="o">!</span><span class="n">unitary</span><span class="p">()</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="s">&quot;Unitary ansatz is not yet supported&quot;</span><span class="p">);</span>
 <span class="w">  </span><span class="n">assert</span><span class="p">(</span><span class="n">np</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="n">nh</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="s">&quot;Unsupported excitation order&quot;</span><span class="p">);</span>
+<span class="w">  </span><span class="n">assert</span><span class="p">(</span><span class="n">np</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">nh</span><span class="w"> </span><span class="o">&amp;&amp;</span>
+<span class="w">         </span><span class="s">&quot;Only EE-EOM-CC has been tested ... remove this assert to try &quot;</span>
+<span class="w">         </span><span class="s">&quot;Fock-space EOM-CC&quot;</span><span class="p">);</span>
 
 <span class="w">  </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">np</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="n">nh</span><span class="p">)</span>
 <span class="w">    </span><span class="n">assert</span><span class="p">(</span>
@@ -572,6 +575,9 @@
 <span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="n">ExprPtr</span><span class="o">&gt;</span><span class="w"> </span><span class="n">CC</span><span class="o">::</span><span class="n">eom_l</span><span class="p">(</span><span class="n">nₚ</span><span class="w"> </span><span class="n">np</span><span class="p">,</span><span class="w"> </span><span class="n">nₕ</span><span class="w"> </span><span class="n">nh</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
 <span class="w">  </span><span class="n">assert</span><span class="p">(</span><span class="o">!</span><span class="n">unitary</span><span class="p">()</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="s">&quot;Unitary ansatz is not yet supported&quot;</span><span class="p">);</span>
 <span class="w">  </span><span class="n">assert</span><span class="p">(</span><span class="n">np</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="n">nh</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="s">&quot;Unsupported excitation order&quot;</span><span class="p">);</span>
+<span class="w">  </span><span class="n">assert</span><span class="p">(</span><span class="n">np</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">nh</span><span class="w"> </span><span class="o">&amp;&amp;</span>
+<span class="w">         </span><span class="s">&quot;Only EE-EOM-CC has been tested ... remove this assert to try &quot;</span>
+<span class="w">         </span><span class="s">&quot;Fock-space EOM-CC&quot;</span><span class="p">);</span>
 
 <span class="w">  </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">np</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="n">nh</span><span class="p">)</span>
 <span class="w">    </span><span class="n">assert</span><span class="p">(</span><span class="n">get_default_context</span><span class="p">().</span><span class="n">spbasis</span><span class="p">()</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="n">SPBasis</span><span class="o">::</span><span class="n">spinfree</span><span class="w"> </span><span class="o">&amp;&amp;</span>
@@ -631,7 +637,7 @@
             
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on Aug 29, 2024 7:21:44 PM</div>
+              Last updated on Aug 30, 2024 2:47:43 PM</div>
           </div>
           <div class="right-details">
             <div class="icons">

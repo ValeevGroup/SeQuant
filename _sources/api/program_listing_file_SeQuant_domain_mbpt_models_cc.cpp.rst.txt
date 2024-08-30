@@ -280,6 +280,9 @@ Program Listing for File cc.cpp
    std::vector<ExprPtr> CC::eom_r(nₚ np, nₕ nh) {
      assert(!unitary() && "Unitary ansatz is not yet supported");
      assert(np > 0 || nh > 0 && "Unsupported excitation order");
+     assert(np == nh &&
+            "Only EE-EOM-CC has been tested ... remove this assert to try "
+            "Fock-space EOM-CC");
    
      if (np != nh)
        assert(
@@ -319,6 +322,9 @@ Program Listing for File cc.cpp
    std::vector<ExprPtr> CC::eom_l(nₚ np, nₕ nh) {
      assert(!unitary() && "Unitary ansatz is not yet supported");
      assert(np > 0 || nh > 0 && "Unsupported excitation order");
+     assert(np == nh &&
+            "Only EE-EOM-CC has been tested ... remove this assert to try "
+            "Fock-space EOM-CC");
    
      if (np != nh)
        assert(get_default_context().spbasis() != SPBasis::spinfree &&
