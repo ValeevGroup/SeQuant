@@ -17,13 +17,13 @@ Functions
 
 - :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1_1tensor_1a4ac6e9d3992f8c36a87a58b30982578b`
 
-- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1_1tensor_1a110f84536fa8cd366aa4b3bb1e93c926`
-
 - :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1_1tensor_1a0db49c6a577ec4019a0d45339ae1a655`
 
 - :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1_1tensor_1a23b6e48af0173e3a719a6f4659811412`
 
 - :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1_1tensor_1a12250159f02da3558c6ec1242e4bba53`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1_1tensor_1a110f84536fa8cd366aa4b3bb1e93c926`
 
 - :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1_1tensor_1a55ce9c6d106e9d4dbb1ebeac9c9e5625`
 
