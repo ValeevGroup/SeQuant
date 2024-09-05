@@ -618,7 +618,7 @@ ExprPtr P(nₚ np, nₕ nh) {
 
 ExprPtr A(nₚ np, nₕ nh) {
   assert(!(np == 0 && nh == 0));
-  // if they are not zero, Kh and Kp should have the same sign
+  // if one of them is not zero, nh and np should have the same sign
   if (np != 0 && nh != 0) {
     assert((np > 0 && nh > 0) || (np < 0 && nh < 0));
   }
@@ -628,20 +628,21 @@ ExprPtr A(nₚ np, nₕ nh) {
   if (nh > 0)  // ex
     for ([[maybe_unused]] auto i : ranges::views::iota(0, nh))
       annihilators.emplace_back(get_hole_space(Spin::any));
-  else  // deex
+  else if (nh < 0)  // deex
     for ([[maybe_unused]] auto i : ranges::views::iota(0, -nh))
       creators.emplace_back(get_hole_space(Spin::any));
   if (np > 0)  // ex
     for ([[maybe_unused]] auto i : ranges::views::iota(0, np))
       creators.emplace_back(get_particle_space(Spin::any));
-  else  // deex
+  else if (np < 0)  // deex
     for ([[maybe_unused]] auto i : ranges::views::iota(0, -np))
       annihilators.emplace_back(get_particle_space(Spin::any));
+  // don't populate if rank is zero
 
   std::optional<OpMaker<Statistics::FermiDirac>::UseDepIdx> dep;
   if (get_default_mbpt_context().csv() == mbpt::CSV::Yes)
-    dep = np > 0 ? OpMaker<Statistics::FermiDirac>::UseDepIdx::Bra
-                 : OpMaker<Statistics::FermiDirac>::UseDepIdx::Ket;
+    dep = (np > 0 || nh > 0) ? OpMaker<Statistics::FermiDirac>::UseDepIdx::Bra
+                             : OpMaker<Statistics::FermiDirac>::UseDepIdx::Ket;
   return OpMaker<Statistics::FermiDirac>(
       OpType::A, cre(creators), ann(annihilators))(dep, {Symmetry::antisymm});
 }
@@ -815,10 +816,12 @@ ExprPtr F(bool use_f_tensor, IndexSpace occupied_density) {
 
 ExprPtr A(nₚ np, nₕ nh) {
   assert(!(nh == 0 && np == 0));
-  // if they are not zero, Kh and Kp should have the same sign
+  // if one of them is not zero, nh and np should have the same sign
   if (nh != 0 && np != 0) {
     assert((nh > 0 && np > 0) || (nh < 0 && np < 0));
   }
+  // if np or nh is negative, it's a deexcitation operator
+  const auto deexcitation = (np < 0 || nh < 0);
 
   auto particle_space = get_particle_space(Spin::any);
   auto hole_space = get_hole_space(Spin::any);
@@ -827,7 +830,7 @@ ExprPtr A(nₚ np, nₕ nh) {
                   [=](qnc_t& qns) {
                     const std::size_t abs_nh = std::abs(nh);
                     const std::size_t abs_np = std::abs(np);
-                    if (np < 0) {
+                    if (deexcitation) {
                       qnc_t op_qnc_t = generic_deexcitation_qns(
                           abs_np, abs_nh, particle_space, hole_space);
                       qns = combine(op_qnc_t, qns);
