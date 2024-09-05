@@ -288,6 +288,18 @@ TEST_CASE("NBodyOp", "[mbpt]") {
     auto lambda2_f = Λ_(2) * H_(1);
     REQUIRE(lowers_rank_to_vacuum(lambda2_f, 2));
 
+    auto expr1 = P(nₚ(0), nₕ(1)) * H() * R(nₚ(0), nₕ(1));
+    auto expr1_tnsr = lower_to_tensor_form(expr1);
+    auto vev1_op = op::vac_av(expr1);
+    auto vev1_t = tensor::vac_av(expr1_tnsr);  // no operator level screening
+    REQUIRE(to_latex(vev1_op) == to_latex(vev1_t));
+
+    auto expr2 = P(nₚ(2), nₕ(1)) * H() * R(nₚ(1), nₕ(0));
+    auto expr2_tnsr = lower_to_tensor_form(expr2);
+    auto vev2_op = op::vac_av(expr2);
+    auto vev2_t = tensor::vac_av(expr2_tnsr);  // no operator level screening
+    REQUIRE(to_latex(vev2_op) == to_latex(vev2_t));
+
   }  // SECTION("screen")
 
   SECTION("operators") {
