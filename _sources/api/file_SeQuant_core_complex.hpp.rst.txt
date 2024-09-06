@@ -80,15 +80,15 @@ Functions
 
 - :ref:`exhale_function_namespacesequant_1a85e346c4c8387071774ccb710ea5fe93`
 
+- :ref:`exhale_function_namespacesequant_1aa3812b7b83b1427775056ea29c490b86`
+
+- :ref:`exhale_function_namespacesequant_1acf115a162e3ca42e2882e52a282b97f4`
+
 - :ref:`exhale_function_namespacesequant_1ae571b283e3402ca207d2e5b93b3e579c`
 
 - :ref:`exhale_function_namespacesequant_1a1f1efc7e03ecd96c841c129d11201e68`
 
 - :ref:`exhale_function_namespacesequant_1ad554ebefd23ee4f7763d2ae01d351e2a`
-
-- :ref:`exhale_function_namespacesequant_1aa3812b7b83b1427775056ea29c490b86`
-
-- :ref:`exhale_function_namespacesequant_1acf115a162e3ca42e2882e52a282b97f4`
 
 - :ref:`exhale_function_namespacesequant_1abbb55252e11d1c6f28e96abaf56ec310`
 

@@ -68,11 +68,11 @@ Functions
 ---------
 
 
-- :ref:`exhale_function_namespacesequant_1_1detail_1a867aeabd5c138213924d003e90260750`
-
-- :ref:`exhale_function_namespacesequant_1_1detail_1a866c15b6b0da948abf0e99f5936eaacb`
-
 - :ref:`exhale_function_namespacesequant_1_1detail_1ab08dabd364bf0e57c5c51c6d62f50473`
 
 - :ref:`exhale_function_namespacesequant_1_1detail_1afce77ed7019ff0861143bd1f66fa0e5c`
+
+- :ref:`exhale_function_namespacesequant_1_1detail_1a867aeabd5c138213924d003e90260750`
+
+- :ref:`exhale_function_namespacesequant_1_1detail_1a866c15b6b0da948abf0e99f5936eaacb`
 
