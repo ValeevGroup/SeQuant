@@ -13,6 +13,7 @@
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/op.hpp>
+#include <SeQuant/core/parse.hpp>
 #include <SeQuant/core/tensor.hpp>
 #include <SeQuant/core/tensor_network.hpp>
 #include <SeQuant/core/timer.hpp>
@@ -577,3 +578,70 @@ TEST_CASE("TensorNetwork", "[elements]") {
   }  // SECTION("misc1")
 
 }  // TEST_CASE("Tensor")
+
+
+TEST_CASE("TensorNetwork", "[subnetworks]") {
+  using namespace sequant;
+  using namespace sequant::container;
+  using sequant::mbpt::cardinal_tensor_labels;
+  using named_indices_t = TensorNetwork::named_indices_t;
+  using ranges::views::transform;
+
+  // tensor subnetwork canonicalization for tensor networks free
+  // of proto indices.
+  {
+    auto const S = parse_expr(L"S{i_1,i_2;a_1,a_2}:N")->as<Tensor>();
+    auto const prod =
+        parse_expr(
+            L"+ 1/2 g{i_3,i_4;a_3,a_4}:N * t{a_1,a_2;i_3,i_4}:N * "
+            L"t{a_3,a_4;i_1,i_2}:N")
+            ->as<Product>();
+    auto const fixed_indices = S.const_braket() | ranges::to<named_indices_t>();
+
+    auto factor = [&prod](size_t pos){
+      return prod.factors().at(pos).clone();
+    };
+
+    // all sub-networks (indexed by positions)
+    svector<svector<size_t>> const  //
+        sub_nets{{0}, {1}, {0, 1}, {2}, {0, 2}, {1, 2}, {0, 1, 2}};
+
+    for (auto const& net : sub_nets) {
+      auto vec_for_tn = net | transform(factor) | ranges::to<ExprPtrVector>;
+      auto tn = TensorNetwork(vec_for_tn);
+      ExprPtr canon;
+      REQUIRE_NOTHROW(canon = tn.canonicalize(cardinal_tensor_labels(),
+                                              false,  // fast canon
+                                              &fixed_indices));
+    }
+  }
+
+  // tensor subnetwork canonicalization for tensor networks with
+  // proto indices.
+  {
+    auto const S = parse_expr(L"S{i_1,i_2;a_1<i_1,i_2>,a_2<i_1,i_2>}:N")->as<Tensor>();
+    auto const prod =
+        parse_expr(
+            L"+ 1/2 g{a_1<i_1,i_2>,a_2<i_1,i_2>;a_3<i_1>,a_4<i_2>}:N * "
+            L"t{a_3<i_1>;i_1}:N * t{a_4<i_2>;i_2}:N")
+            ->as<Product>();
+    auto const fixed_indices = S.const_braket() | ranges::to<named_indices_t>();
+
+    auto factor = [&prod](size_t pos){
+      return prod.factors().at(pos).clone();
+    };
+
+    // all sub-networks (indexed by positions)
+    svector<svector<size_t>> const  //
+        sub_nets{{0}, {1}, {0, 1}, {2}, {0, 2}, {1, 2}, {0, 1, 2}};
+
+    for (auto const& net : sub_nets) {
+      auto vec_for_tn = net | transform(factor) | ranges::to<ExprPtrVector>;
+      auto tn = TensorNetwork(vec_for_tn);
+      ExprPtr canon;
+      REQUIRE_NOTHROW(canon = tn.canonicalize(cardinal_tensor_labels(),
+                                              false,  // fast canon
+                                              &fixed_indices));
+    }
+  }
+}
