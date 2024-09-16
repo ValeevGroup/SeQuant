@@ -182,7 +182,7 @@ void generateITF(const json &blocks, std::string_view out_file, const IndexSpace
 				}
 
 				for (ResultExpr &current : postProcess(contribution, spaceMeta, options)) {
-					spdlog::debug("Fully processed equation is:\n{}", toUtf8(to_latex(current.expression())));
+					spdlog::debug("Fully processed equation is:\n{}", current);
 
 					if (needsSymmetrization(current.expression())) {
 						std::optional< ExprPtr > symmetrizer = popTensor(current.expression(), L"S");
@@ -194,7 +194,7 @@ void generateITF(const json &blocks, std::string_view out_file, const IndexSpace
 
 						current.set_label(current.label() + L"u");
 
-						spdlog::debug("After popping S tensor:\n{}", toUtf8(to_latex(current.expression())));
+						spdlog::debug("After popping S tensor:\n{}", current);
 
 						results.push_back(toItfResult(current, context, false));
 					} else {
