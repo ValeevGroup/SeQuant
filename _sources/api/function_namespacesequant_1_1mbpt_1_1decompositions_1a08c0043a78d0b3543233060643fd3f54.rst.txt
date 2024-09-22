@@ -3,7 +3,7 @@
 Function sequant::mbpt::decompositions::one_body_sub
 ====================================================
 
-- Defined in :ref:`file_SeQuant_domain_mbpt_rdm.hpp`
+- Defined in :ref:`file_SeQuant_domain_mbpt_rdm.cpp`
 
 
 Function Documentation

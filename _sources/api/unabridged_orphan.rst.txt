@@ -80,6 +80,11 @@ Files
 .. toctree::
    :maxdepth: 5
 
+   file_SeQuant_domain_mbpt_antisymmetrizer.cpp.rst
+
+.. toctree::
+   :maxdepth: 5
+
    file_SeQuant_domain_mbpt_antisymmetrizer.hpp.rst
 
 .. toctree::
@@ -406,6 +411,11 @@ Files
    :maxdepth: 5
 
    file_SeQuant_core_rational.hpp.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   file_SeQuant_domain_mbpt_rdm.cpp.rst
 
 .. toctree::
    :maxdepth: 5

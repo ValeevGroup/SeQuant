@@ -1,9 +1,9 @@
-.. _exhale_function_namespacesequant_1_1mbpt_1_1decompositions_1a13dfc76d663bc990f9812b351a8c1a9e:
+.. _exhale_function_namespacesequant_1_1mbpt_1_1decompositions_1abaa3116ca239366e571dd6cd04821e4b:
 
 Function sequant::mbpt::decompositions::three_body_decomposition
 ================================================================
 
-- Defined in :ref:`file_SeQuant_domain_mbpt_rdm.hpp`
+- Defined in :ref:`file_SeQuant_domain_mbpt_rdm.cpp`
 
 
 Function Documentation

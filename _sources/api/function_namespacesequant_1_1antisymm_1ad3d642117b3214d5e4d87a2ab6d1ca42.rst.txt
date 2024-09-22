@@ -3,7 +3,7 @@
 Function sequant::antisymm::max_similarity
 ==========================================
 
-- Defined in :ref:`file_SeQuant_domain_mbpt_antisymmetrizer.hpp`
+- Defined in :ref:`file_SeQuant_domain_mbpt_antisymmetrizer.cpp`
 
 
 Function Documentation

@@ -45,6 +45,8 @@ Included By
 -----------
 
 
+- :ref:`file_SeQuant_domain_mbpt_antisymmetrizer.cpp`
+
 - :ref:`file_SeQuant_domain_mbpt_rdm.hpp`
 
 
@@ -66,15 +68,4 @@ Classes
 - :ref:`exhale_class_classsequant_1_1antisymm__element`
 
 - :ref:`exhale_class_classsequant_1_1antisymmetrize`
-
-
-Functions
----------
-
-
-- :ref:`exhale_function_namespacesequant_1_1antisymm_1ad3d642117b3214d5e4d87a2ab6d1ca42`
-
-- :ref:`exhale_function_namespacesequant_1_1antisymm_1a127f54cebd96b97eca3bc0290ff22817`
-
-- :ref:`exhale_function_namespacesequant_1_1antisymm_1af85535730aaf1143304536b4e8110852`
 

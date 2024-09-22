@@ -263,14 +263,25 @@
           <section id="function-sequant-antisymm-num-closed-loops">
 <span id="exhale-function-namespacesequant-1-1antisymm-1a127f54cebd96b97eca3bc0290ff22817"></span><h1>Function sequant::antisymm::num_closed_loops<a class="headerlink" href="#function-sequant-antisymm-num-closed-loops" title="Link to this heading">¶</a></h1>
 <ul class="simple">
-<li><p>Defined in <a class="reference internal" href="file_SeQuant_domain_mbpt_antisymmetrizer.hpp.html#file-sequant-domain-mbpt-antisymmetrizer-hpp"><span class="std std-ref">File antisymmetrizer.hpp</span></a></p></li>
+<li><p>Defined in <a class="reference internal" href="file_SeQuant_domain_mbpt_antisymmetrizer.cpp.html#file-sequant-domain-mbpt-antisymmetrizer-cpp"><span class="std std-ref">File antisymmetrizer.cpp</span></a></p></li>
 </ul>
 <section id="function-documentation">
 <h2>Function Documentation<a class="headerlink" href="#function-documentation" title="Link to this heading">¶</a></h2>
 <dl class="cpp function">
 <dt class="sig sig-object cpp" id="_CPPv4N7sequant8antisymm16num_closed_loopsENSt6vectorI5IndexEENSt6vectorI5IndexEENSt6vectorI5IndexEENSt6vectorI5IndexEE">
 <span id="_CPPv3N7sequant8antisymm16num_closed_loopsENSt6vectorI5IndexEENSt6vectorI5IndexEENSt6vectorI5IndexEENSt6vectorI5IndexEE"></span><span id="_CPPv2N7sequant8antisymm16num_closed_loopsENSt6vectorI5IndexEENSt6vectorI5IndexEENSt6vectorI5IndexEENSt6vectorI5IndexEE"></span><span id="sequant::antisymm::num_closed_loops__std::vector:Index:.std::vector:Index:.std::vector:Index:.std::vector:Index:"></span><span class="target" id="namespacesequant_1_1antisymm_1a127f54cebd96b97eca3bc0290ff22817"></span><span class="kt"><span class="pre">int</span></span><span class="w"> </span><span class="sig-prename descclassname"><span class="n"><span class="pre">sequant</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">antisymm</span></span><span class="p"><span class="pre">::</span></span></span><span class="sig-name descname"><span class="n"><span class="pre">num_closed_loops</span></span></span><span class="sig-paren">(</span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">vector</span></span><span class="p"><span class="pre">&lt;</span></span><a class="reference internal" href="classsequant_1_1_index.html#_CPPv4N7sequant5IndexE" title="sequant::Index"><span class="n"><span class="pre">Index</span></span></a><span class="p"><span class="pre">&gt;</span></span><span class="w"> </span><span class="n sig-param"><span class="pre">init_upper</span></span>, <span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">vector</span></span><span class="p"><span class="pre">&lt;</span></span><a class="reference internal" href="classsequant_1_1_index.html#_CPPv4N7sequant5IndexE" title="sequant::Index"><span class="n"><span class="pre">Index</span></span></a><span class="p"><span class="pre">&gt;</span></span><span class="w"> </span><span class="n sig-param"><span class="pre">init_lower</span></span>, <span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">vector</span></span><span class="p"><span class="pre">&lt;</span></span><a class="reference internal" href="classsequant_1_1_index.html#_CPPv4N7sequant5IndexE" title="sequant::Index"><span class="n"><span class="pre">Index</span></span></a><span class="p"><span class="pre">&gt;</span></span><span class="w"> </span><span class="n sig-param"><span class="pre">new_upper</span></span>, <span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">vector</span></span><span class="p"><span class="pre">&lt;</span></span><a class="reference internal" href="classsequant_1_1_index.html#_CPPv4N7sequant5IndexE" title="sequant::Index"><span class="n"><span class="pre">Index</span></span></a><span class="p"><span class="pre">&gt;</span></span><span class="w"> </span><span class="n sig-param"><span class="pre">new_lower</span></span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N7sequant8antisymm16num_closed_loopsENSt6vectorI5IndexEENSt6vectorI5IndexEENSt6vectorI5IndexEENSt6vectorI5IndexEE" title="Link to this definition">¶</a><br /></dt>
-<dd></dd></dl>
+<dd><p>function which counts number of closed loops from the starting order of upper and lower indices and the contracted indices. since the ordering of the new contracted indices is arbitrary, the algorithm searched for the upper index which would connect to the lower index checks if contracted lower index closes the loop, if not, continue searching until the corresponding upper index is not present, or the loop closes. keep track of which indices are used so that loops are not double counted </p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>init_upper</strong> – initial order of upper indices before contraction, </p></li>
+<li><p><strong>init_lower</strong> – initial order of lower indices before contraction, </p></li>
+<li><p><strong>new_upper</strong> – set of contracted upper indices, </p></li>
+<li><p><strong>new_lower</strong> – set of lower contracted indices. &#64;out the number of loops. </p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
 
 </section>
 </section>
@@ -292,7 +303,7 @@
             
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on Sep 6, 2024 5:36:47 AM</div>
+              Last updated on Sep 22, 2024 10:37:19 AM</div>
           </div>
           <div class="right-details">
             <div class="icons">

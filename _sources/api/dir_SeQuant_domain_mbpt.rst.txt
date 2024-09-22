@@ -21,6 +21,7 @@ Subdirectories
 Files
 -----
 
+- :ref:`file_SeQuant_domain_mbpt_antisymmetrizer.cpp`
 - :ref:`file_SeQuant_domain_mbpt_antisymmetrizer.hpp`
 - :ref:`file_SeQuant_domain_mbpt_context.cpp`
 - :ref:`file_SeQuant_domain_mbpt_context.hpp`
@@ -30,6 +31,7 @@ Files
 - :ref:`file_SeQuant_domain_mbpt_op.cpp`
 - :ref:`file_SeQuant_domain_mbpt_op.hpp`
 - :ref:`file_SeQuant_domain_mbpt_op.ipp`
+- :ref:`file_SeQuant_domain_mbpt_rdm.cpp`
 - :ref:`file_SeQuant_domain_mbpt_rdm.hpp`
 - :ref:`file_SeQuant_domain_mbpt_spin.cpp`
 - :ref:`file_SeQuant_domain_mbpt_spin.hpp`

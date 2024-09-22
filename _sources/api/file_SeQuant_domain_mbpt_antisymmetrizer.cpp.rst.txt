@@ -1,0 +1,53 @@
+
+.. _file_SeQuant_domain_mbpt_antisymmetrizer.cpp:
+
+File antisymmetrizer.cpp
+========================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_domain_mbpt>` (``SeQuant/domain/mbpt``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+Definition (``SeQuant/domain/mbpt/antisymmetrizer.cpp``)
+--------------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_domain_mbpt_antisymmetrizer.cpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/domain/mbpt/antisymmetrizer.hpp`` (:ref:`file_SeQuant_domain_mbpt_antisymmetrizer.hpp`)
+
+
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+- :ref:`namespace_sequant__antisymm`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1_1antisymm_1ad3d642117b3214d5e4d87a2ab6d1ca42`
+
+- :ref:`exhale_function_namespacesequant_1_1antisymm_1a127f54cebd96b97eca3bc0290ff22817`
+
+- :ref:`exhale_function_namespacesequant_1_1antisymm_1af162f23d16a7fbf5a29a06275e96ca7e`
+
