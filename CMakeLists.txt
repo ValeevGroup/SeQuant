@@ -313,6 +313,7 @@ if (Boost_IS_MODULARIZED)
     target_link_libraries(SeQuant PUBLIC
             Boost::container
             Boost::container_hash
+            Boost::hana
             Boost::multiprecision
             Boost::numeric_conversion
             Boost::numeric_interval
