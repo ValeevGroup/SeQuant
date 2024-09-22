@@ -250,6 +250,7 @@ set(SeQuant_src
         SeQuant/core/wick.impl.hpp
         SeQuant/core/wolfram.hpp
         SeQuant/core/wstring.hpp
+        SeQuant/domain/mbpt/antisymmetrizer.cpp
         SeQuant/domain/mbpt/antisymmetrizer.hpp
         SeQuant/domain/mbpt/context.hpp
         SeQuant/domain/mbpt/context.cpp
