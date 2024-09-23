@@ -13,7 +13,7 @@ void log_ta_tensor_host_memory_use(madness::World& world,
                                    std::string_view label) {
 #if defined(TA_TENSOR_MEM_PROFILE) && defined(SEQUANT_EVAL_TRACE)
   auto logger = Logger::instance();
-  if (logger->log_level_eval < 3) return;
+  if (logger.log_level_eval < 3) return;
   std::vector<std::uint64_t> hwsize(world.size(), 0);
   std::vector<std::uint64_t> currsize(world.size(), 0);
   std::vector<std::uint64_t> actsize(world.size(), 0);

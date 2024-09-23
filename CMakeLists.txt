@@ -253,6 +253,7 @@ set(SeQuant_src
         SeQuant/core/wick.impl.hpp
         SeQuant/core/wolfram.hpp
         SeQuant/core/wstring.hpp
+        SeQuant/domain/mbpt/antisymmetrizer.cpp
         SeQuant/domain/mbpt/antisymmetrizer.hpp
         SeQuant/domain/mbpt/context.hpp
         SeQuant/domain/mbpt/context.cpp
@@ -263,6 +264,7 @@ set(SeQuant_src
         SeQuant/domain/mbpt/op.cpp
         SeQuant/domain/mbpt/op.hpp
         SeQuant/domain/mbpt/op.ipp
+        SeQuant/domain/mbpt/rdm.cpp
         SeQuant/domain/mbpt/rdm.hpp
         SeQuant/domain/mbpt/spin.cpp
         SeQuant/domain/mbpt/spin.hpp
@@ -314,6 +316,7 @@ if (Boost_IS_MODULARIZED)
     target_link_libraries(SeQuant PUBLIC
             Boost::container
             Boost::container_hash
+            Boost::hana
             Boost::multiprecision
             Boost::numeric_conversion
             Boost::numeric_interval
