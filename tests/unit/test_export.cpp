@@ -1,8 +1,8 @@
 #include <SeQuant/core/eval_node.hpp>
 #include <SeQuant/core/export/export.hpp>
-#include <SeQuant/core/export/julia_itensorgen.hpp>
-#include <SeQuant/core/export/julia_tensorkitgen.hpp>
-#include <SeQuant/core/export/julia_tensoroperationsgen.hpp>
+#include <SeQuant/core/export/julia_itensor.hpp>
+#include <SeQuant/core/export/julia_tensor_kit.hpp>
+#include <SeQuant/core/export/julia_tensor_operations.hpp>
 #include <SeQuant/core/export/text_generator.hpp>
 #include <SeQuant/core/optimize.hpp>
 #include <SeQuant/core/rational.hpp>
@@ -848,13 +848,10 @@ TEST_CASE("Export capabilities", "[exports]") {
     index_tags[i] = "o";
     index_dims[a] = "nv";
     index_dims[i] = "nocc";
-    bool print_intermediate_comments =
-        false;  // tests will fail if true is used due to print of comment lines
 
     SECTION("TensorOperations") {
-      JuliaTensorOperationsGenContext ctx(index_tags, index_dims,
-                                          print_intermediate_comments);
-      JuliaTensorOperationsGen generator;
+      JuliaTensorOperationsGeneratorContext ctx(index_tags, index_dims);
+      JuliaTensorOperationsGenerator generator;
 
       SECTION("represent complex") {
         Complex<rational> z1(1.0, -2.0);
@@ -892,8 +889,7 @@ TEST_CASE("Export capabilities", "[exports]") {
         ExprPtr expr = parse_expr(L"g{i1<a1>;}+u{i1<a1>;}");
         auto tree = eval_node<EvalExpr>(expr);
         REQUIRE_THROWS_WITH(export_expression(tree, generator, ctx),
-                            "Incompatible (proto) index detected. Proto "
-                            "Indices are not (yet) supported!");
+                            "Proto Indices are not (yet) supported!");
       }
 
       SECTION("binary contraction") {
@@ -998,9 +994,8 @@ TEST_CASE("Export capabilities", "[exports]") {
     }
 
     SECTION("TensorKit") {
-      JuliaTensorKitGenContext ctx(index_tags, index_dims,
-                                   print_intermediate_comments);
-      JuliaTensorKitGen generator;
+      JuliaTensorKitGeneratorContext ctx(index_tags, index_dims);
+      JuliaTensorKitGenerator generator;
 
       SECTION("binary contraction") {
         ExprPtr expr = parse_expr(L"g{i_1,i_2;a_1,a_2} * T2{a_1,a_2;i_3,i_4}");
@@ -1012,11 +1007,11 @@ TEST_CASE("Export capabilities", "[exports]") {
             "\n"
             "\n"
             "I_oooo = TensorMap(zeros(Float64, nocc, nocc, nocc, nocc), ℝ^nocc "
-            "⊗ ℝ^nocc,ℝ^nocc ⊗ ℝ^nocc)\n"
-            "g_oovv = TensorMap(deserialize(\"g_oovv.jlbin\"),ℝ^nocc ⊗ "
-            "ℝ^nocc,ℝ^nv ⊗ ℝ^nv)\n"
-            "T2_vvoo = TensorMap(deserialize(\"T2_vvoo.jlbin\"),ℝ^nv ⊗ "
-            "ℝ^nv,ℝ^nocc ⊗ ℝ^nocc)\n"
+            "⊗ ℝ^nocc, ℝ^nocc ⊗ ℝ^nocc)\n"
+            "g_oovv = TensorMap(deserialize(\"g_oovv.jlbin\"), ℝ^nocc ⊗ "
+            "ℝ^nocc, ℝ^nv ⊗ ℝ^nv)\n"
+            "T2_vvoo = TensorMap(deserialize(\"T2_vvoo.jlbin\"), ℝ^nv ⊗ "
+            "ℝ^nv, ℝ^nocc ⊗ ℝ^nocc)\n"
             "@tensor I_oooo[ i_1, i_2, i_3, i_4 ] += g_oovv[ i_1, i_2, a_1, "
             "a_2 ] * T2_vvoo[ a_1, a_2, i_3, i_4 ]\n"
             "T2_vvoo = nothing\n"
@@ -1034,14 +1029,14 @@ TEST_CASE("Export capabilities", "[exports]") {
         std::string expected =
             "\n"
             "\n"
-            "I_ov = TensorMap(zeros(Float64, nocc, nv), ℝ^nocc,ℝ^nv)\n"
-            "I_vv = TensorMap(zeros(Float64, nv, nv), ℝ^nv,ℝ^nv)\n"
-            "A_vo = TensorMap(deserialize(\"A_vo.jlbin\"),ℝ^nv,ℝ^nocc)\n"
-            "B_ov = TensorMap(deserialize(\"B_ov.jlbin\"),ℝ^nocc,ℝ^nv)\n"
+            "I_ov = TensorMap(zeros(Float64, nocc, nv), ℝ^nocc, ℝ^nv)\n"
+            "I_vv = TensorMap(zeros(Float64, nv, nv), ℝ^nv, ℝ^nv)\n"
+            "A_vo = TensorMap(deserialize(\"A_vo.jlbin\"), ℝ^nv, ℝ^nocc)\n"
+            "B_ov = TensorMap(deserialize(\"B_ov.jlbin\"), ℝ^nocc, ℝ^nv)\n"
             "@tensor I_vv[ a_2, a_1 ] += A_vo[ a_2, i_2 ] * B_ov[ i_2, a_1 ]\n"
             "B_ov = nothing\n"
             "A_vo = nothing\n"
-            "C_ov = TensorMap(deserialize(\"C_ov.jlbin\"),ℝ^nocc,ℝ^nv)\n"
+            "C_ov = TensorMap(deserialize(\"C_ov.jlbin\"), ℝ^nocc, ℝ^nv)\n"
             "@tensor I_ov[ i_1, a_1 ] += I_vv[ a_2, a_1 ] * C_ov[ i_1, a_2 ]\n"
             "C_ov = nothing\n"
             "I_vv = nothing\n"
@@ -1060,18 +1055,18 @@ TEST_CASE("Export capabilities", "[exports]") {
             "\n"
             "\n"
             "Z = 0.0\n"
-            "g_oovv = TensorMap(deserialize(\"g_oovv.jlbin\"),ℝ^nocc ⊗ "
-            "ℝ^nocc,ℝ^nv ⊗ ℝ^nv)\n"
-            "T2_vvoo = TensorMap(deserialize(\"T2_vvoo.jlbin\"),ℝ^nv ⊗ "
-            "ℝ^nv,ℝ^nocc ⊗ ℝ^nocc)\n"
+            "g_oovv = TensorMap(deserialize(\"g_oovv.jlbin\"), ℝ^nocc ⊗ "
+            "ℝ^nocc, ℝ^nv ⊗ ℝ^nv)\n"
+            "T2_vvoo = TensorMap(deserialize(\"T2_vvoo.jlbin\"), ℝ^nv ⊗ "
+            "ℝ^nv, ℝ^nocc ⊗ ℝ^nocc)\n"
             "@tensor Z += 2 * g_oovv[ i_1, i_2, a_1, a_2 ] * T2_vvoo[ a_1, "
             "a_2, i_1, i_2 ]\n"
             "T2_vvoo = nothing\n"
             "g_oovv = nothing\n"
-            "g_oovv = TensorMap(deserialize(\"g_oovv.jlbin\"),ℝ^nocc ⊗ "
-            "ℝ^nocc,ℝ^nv ⊗ ℝ^nv)\n"
-            "T2_vvoo = TensorMap(deserialize(\"T2_vvoo.jlbin\"),ℝ^nv ⊗ "
-            "ℝ^nv,ℝ^nocc ⊗ ℝ^nocc)\n"
+            "g_oovv = TensorMap(deserialize(\"g_oovv.jlbin\"), ℝ^nocc ⊗ "
+            "ℝ^nocc, ℝ^nv ⊗ ℝ^nv)\n"
+            "T2_vvoo = TensorMap(deserialize(\"T2_vvoo.jlbin\"), ℝ^nv ⊗ "
+            "ℝ^nv, ℝ^nocc ⊗ ℝ^nocc)\n"
             "@tensor Z += -1 * g_oovv[ i_1, i_2, a_1, a_2 ] * T2_vvoo[ a_1, "
             "a_2, i_2, i_1 ]\n"
             "T2_vvoo = nothing\n"
@@ -1089,19 +1084,19 @@ TEST_CASE("Export capabilities", "[exports]") {
         std::string expected =
             "\n"
             "\n"
-            "I_vo = TensorMap(zeros(Float64, nv, nocc), ℝ^nv,ℝ^nocc)\n"
-            "I2_vo = TensorMap(zeros(Float64, nv, nocc), ℝ^nv,ℝ^nocc)\n"
-            "A_vo = TensorMap(deserialize(\"A_vo.jlbin\"),ℝ^nv,ℝ^nocc)\n"
-            "B_oo = TensorMap(deserialize(\"B_oo.jlbin\"),ℝ^nocc,ℝ^nocc)\n"
+            "I_vo = TensorMap(zeros(Float64, nv, nocc), ℝ^nv, ℝ^nocc)\n"
+            "I2_vo = TensorMap(zeros(Float64, nv, nocc), ℝ^nv, ℝ^nocc)\n"
+            "A_vo = TensorMap(deserialize(\"A_vo.jlbin\"), ℝ^nv, ℝ^nocc)\n"
+            "B_oo = TensorMap(deserialize(\"B_oo.jlbin\"), ℝ^nocc, ℝ^nocc)\n"
             "@tensor I2_vo[ a_1, i_3 ] += A_vo[ a_1, i_1 ] * B_oo[ i_1, i_3 ]\n"
             "B_oo = nothing\n"
             "A_vo = nothing\n"
-            "C_oo = TensorMap(deserialize(\"C_oo.jlbin\"),ℝ^nocc,ℝ^nocc)\n"
+            "C_oo = TensorMap(deserialize(\"C_oo.jlbin\"), ℝ^nocc, ℝ^nocc)\n"
             "@tensor I_vo[ a_1, i_2 ] += I2_vo[ a_1, i_3 ] * C_oo[ i_3, i_2 ]\n"
             "C_oo = nothing\n"
             "I2_vo = nothing\n"
-            "A_vo = TensorMap(deserialize(\"A_vo.jlbin\"),ℝ^nv,ℝ^nocc)\n"
-            "B_oo = TensorMap(deserialize(\"B_oo.jlbin\"),ℝ^nocc,ℝ^nocc)\n"
+            "A_vo = TensorMap(deserialize(\"A_vo.jlbin\"), ℝ^nv, ℝ^nocc)\n"
+            "B_oo = TensorMap(deserialize(\"B_oo.jlbin\"), ℝ^nocc, ℝ^nocc)\n"
             "@tensor I_vo[ a_1, i_2 ] += A_vo[ a_1, i_1 ] * B_oo[ i_1, i_2 ]\n"
             "B_oo = nothing\n"
             "A_vo = nothing\n"
@@ -1112,9 +1107,8 @@ TEST_CASE("Export capabilities", "[exports]") {
     }
 
     SECTION("ITensor") {
-      JuliaITensorGenContext ctx(index_tags, index_dims,
-                                 print_intermediate_comments);
-      JuliaITensorGen generator;
+      JuliaITensorGeneratorContext ctx(index_tags, index_dims);
+      JuliaITensorGenerator generator;
 
       SECTION("binary contraction") {
         ExprPtr expr = parse_expr(L"g{i_1,i_2;a_1,a_2} * T2{a_1,a_2;i_3,i_4}");
@@ -1123,19 +1117,19 @@ TEST_CASE("Export capabilities", "[exports]") {
         export_expression(tree, generator, ctx);
 
         std::string expected =
-            "i_1= Index(nocc, \"i_1\")\n"
-            "i_2= Index(nocc, \"i_2\")\n"
-            "i_3= Index(nocc, \"i_3\")\n"
-            "i_4= Index(nocc, \"i_4\")\n"
-            "a_1= Index(nv, \"a_1\")\n"
-            "a_2= Index(nv, \"a_2\")\n"
+            "i_1 = Index(nocc, \"i_1\")\n"
+            "i_2 = Index(nocc, \"i_2\")\n"
+            "i_3 = Index(nocc, \"i_3\")\n"
+            "i_4 = Index(nocc, \"i_4\")\n"
+            "a_1 = Index(nv, \"a_1\")\n"
+            "a_2 = Index(nv, \"a_2\")\n"
             "\n"
             "\n"
             "I_oooo = ITensor(zeros(Float64, nocc, nocc, nocc, nocc), i_1, "
             "i_2, i_3, i_4)\n"
-            "g_oovv = ITensor(deserialize(\"g_oovv.jlbin\"),i_1, i_2, a_1, "
+            "g_oovv = ITensor(deserialize(\"g_oovv.jlbin\"), i_1, i_2, a_1, "
             "a_2)\n"
-            "T2_vvoo = ITensor(deserialize(\"T2_vvoo.jlbin\"),a_1, a_2, i_3, "
+            "T2_vvoo = ITensor(deserialize(\"T2_vvoo.jlbin\"), a_1, a_2, i_3, "
             "i_4)\n"
             "I_oooo += g_oovv * T2_vvoo\n"
             "T2_vvoo = nothing\n"
@@ -1151,20 +1145,20 @@ TEST_CASE("Export capabilities", "[exports]") {
         export_expression(tree, generator, ctx);
 
         std::string expected =
-            "i_1= Index(nocc, \"i_1\")\n"
-            "i_2= Index(nocc, \"i_2\")\n"
-            "a_1= Index(nv, \"a_1\")\n"
-            "a_2= Index(nv, \"a_2\")\n"
+            "i_1 = Index(nocc, \"i_1\")\n"
+            "i_2 = Index(nocc, \"i_2\")\n"
+            "a_1 = Index(nv, \"a_1\")\n"
+            "a_2 = Index(nv, \"a_2\")\n"
             "\n"
             "\n"
             "I_ov = ITensor(zeros(Float64, nocc, nv), i_1, a_1)\n"
             "I_vv = ITensor(zeros(Float64, nv, nv), a_2, a_1)\n"
-            "A_vo = ITensor(deserialize(\"A_vo.jlbin\"),a_2, i_2)\n"
-            "B_ov = ITensor(deserialize(\"B_ov.jlbin\"),i_2, a_1)\n"
+            "A_vo = ITensor(deserialize(\"A_vo.jlbin\"), a_2, i_2)\n"
+            "B_ov = ITensor(deserialize(\"B_ov.jlbin\"), i_2, a_1)\n"
             "I_vv += A_vo * B_ov\n"
             "B_ov = nothing\n"
             "A_vo = nothing\n"
-            "C_ov = ITensor(deserialize(\"C_ov.jlbin\"),i_1, a_2)\n"
+            "C_ov = ITensor(deserialize(\"C_ov.jlbin\"), i_1, a_2)\n"
             "I_ov += I_vv * C_ov\n"
             "C_ov = nothing\n"
             "I_vv = nothing\n"
@@ -1179,25 +1173,25 @@ TEST_CASE("Export capabilities", "[exports]") {
         auto tree = eval_node<EvalExpr>(expr);
         export_expression(tree, generator, ctx);
         std::string expected =
-            "i_1= Index(nocc, \"i_1\")\n"
-            "i_2= Index(nocc, \"i_2\")\n"
-            "a_1= Index(nv, \"a_1\")\n"
-            "a_2= Index(nv, \"a_2\")\n"
+            "i_1 = Index(nocc, \"i_1\")\n"
+            "i_2 = Index(nocc, \"i_2\")\n"
+            "a_1 = Index(nv, \"a_1\")\n"
+            "a_2 = Index(nv, \"a_2\")\n"
             "\n"
             "\n"
             "\n"
             "tmpvar = 0.0\n"
             "Z = ITensor(tmpvar)\n"
-            "g_oovv = ITensor(deserialize(\"g_oovv.jlbin\"),i_1, i_2, a_1, "
+            "g_oovv = ITensor(deserialize(\"g_oovv.jlbin\"), i_1, i_2, a_1, "
             "a_2)\n"
-            "T2_vvoo = ITensor(deserialize(\"T2_vvoo.jlbin\"),a_1, a_2, i_1, "
+            "T2_vvoo = ITensor(deserialize(\"T2_vvoo.jlbin\"), a_1, a_2, i_1, "
             "i_2)\n"
             "Z += 2 * g_oovv * T2_vvoo\n"
             "T2_vvoo = nothing\n"
             "g_oovv = nothing\n"
-            "g_oovv = ITensor(deserialize(\"g_oovv.jlbin\"),i_1, i_2, a_1, "
+            "g_oovv = ITensor(deserialize(\"g_oovv.jlbin\"), i_1, i_2, a_1, "
             "a_2)\n"
-            "T2_vvoo = ITensor(deserialize(\"T2_vvoo.jlbin\"),a_1, a_2, i_2, "
+            "T2_vvoo = ITensor(deserialize(\"T2_vvoo.jlbin\"), a_1, a_2, i_2, "
             "i_1)\n"
             "Z += -1 * g_oovv * T2_vvoo\n"
             "T2_vvoo = nothing\n"
@@ -1213,25 +1207,25 @@ TEST_CASE("Export capabilities", "[exports]") {
         export_expression(tree, generator, ctx);
 
         std::string expected =
-            "i_1= Index(nocc, \"i_1\")\n"
-            "i_2= Index(nocc, \"i_2\")\n"
-            "i_3= Index(nocc, \"i_3\")\n"
-            "a_1= Index(nv, \"a_1\")\n"
+            "i_1 = Index(nocc, \"i_1\")\n"
+            "i_2 = Index(nocc, \"i_2\")\n"
+            "i_3 = Index(nocc, \"i_3\")\n"
+            "a_1 = Index(nv, \"a_1\")\n"
             "\n"
             "\n"
             "I_vo = ITensor(zeros(Float64, nv, nocc), a_1, i_2)\n"
             "I2_vo = ITensor(zeros(Float64, nv, nocc), a_1, i_3)\n"
-            "A_vo = ITensor(deserialize(\"A_vo.jlbin\"),a_1, i_1)\n"
-            "B_oo = ITensor(deserialize(\"B_oo.jlbin\"),i_1, i_3)\n"
+            "A_vo = ITensor(deserialize(\"A_vo.jlbin\"), a_1, i_1)\n"
+            "B_oo = ITensor(deserialize(\"B_oo.jlbin\"), i_1, i_3)\n"
             "I2_vo += A_vo * B_oo\n"
             "B_oo = nothing\n"
             "A_vo = nothing\n"
-            "C_oo = ITensor(deserialize(\"C_oo.jlbin\"),i_3, i_2)\n"
+            "C_oo = ITensor(deserialize(\"C_oo.jlbin\"), i_3, i_2)\n"
             "I_vo += I2_vo * C_oo\n"
             "C_oo = nothing\n"
             "I2_vo = nothing\n"
-            "A_vo = ITensor(deserialize(\"A_vo.jlbin\"),a_1, i_1)\n"
-            "B_oo = ITensor(deserialize(\"B_oo.jlbin\"),i_1, i_2)\n"
+            "A_vo = ITensor(deserialize(\"A_vo.jlbin\"), a_1, i_1)\n"
+            "B_oo = ITensor(deserialize(\"B_oo.jlbin\"), i_1, i_2)\n"
             "I_vo += A_vo * B_oo\n"
             "B_oo = nothing\n"
             "A_vo = nothing\n"

@@ -1,58 +1,64 @@
-#ifndef SEQUANT_CORE_EXPORT_JULIATENSOROPERATIONSGEN_HPP
-#define SEQUANT_CORE_EXPORT_JULIATENSOROPERATIONSGEN_HPP
+#ifndef SEQUANT_CORE_EXPORT_JULIA_TENSOR_OPERATIONS_HPP
+#define SEQUANT_CORE_EXPORT_JULIA_TENSOR_OPERATIONS_HPP
 
 #include <SeQuant/core/export/context.hpp>
 #include <SeQuant/core/export/generator.hpp>
+#include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/index.hpp>
+#include <SeQuant/core/space.hpp>
+#include <SeQuant/core/tensor.hpp>
+#include <SeQuant/core/utility/string.hpp>
 
 namespace sequant {
 
-class JuliaTensorOperationsGenContext : public ExportContext {
+/// Context class for the @see JuliaTensorOperationsGenerator generator
+class JuliaTensorOperationsGeneratorContext : public ExportContext {
  public:
-  JuliaTensorOperationsGenContext() = default;
-  ~JuliaTensorOperationsGenContext() = default;
-  JuliaTensorOperationsGenContext(std::map<IndexSpace, std::string> index_tags,
-                                  std::map<IndexSpace, std::string> index_dims,
-                                  bool print_intermediate_comments);
+  using TagMap = std::map<IndexSpace, std::string>;
+  using DimMap = std::map<IndexSpace, std::string>;
 
-  std::string get_tag(const IndexSpace &indexspace) const;
+  JuliaTensorOperationsGeneratorContext() = default;
+  ~JuliaTensorOperationsGeneratorContext() = default;
+  JuliaTensorOperationsGeneratorContext(TagMap index_tags, DimMap index_dims);
 
-  std::string get_dim(const IndexSpace &indexspace) const;
+  std::string get_tag(const IndexSpace &space) const;
+
+  std::string get_dim(const IndexSpace &space) const;
 
   std::string get_tags(const Tensor &tensor) const;
 
-  bool print_intermediate_comments() const;
-
  protected:
-  std::map<IndexSpace, std::string> m_index_tags;
-  std::map<IndexSpace, std::string> m_index_dims;
-  bool m_print_intermediate_comments;
+  TagMap m_index_tags;
+  DimMap m_index_dims;
 };
 
-template <typename Context = JuliaTensorOperationsGenContext>
-class JuliaTensorOperationsGen : public Generator<Context> {
+/// Code generator for the Julia language, which will make use of the
+/// TensorOperations.jl package for tensor contractions
+template <typename Context = JuliaTensorOperationsGeneratorContext>
+class JuliaTensorOperationsGenerator : public Generator<Context> {
  public:
-  JuliaTensorOperationsGen() = default;
-  ~JuliaTensorOperationsGen() = default;
+  JuliaTensorOperationsGenerator() = default;
+  ~JuliaTensorOperationsGenerator() = default;
 
   std::string get_format_name() const override {
-    return "Julia TensorOperations";
+    return "Julia (TensorOperations)";
   }
 
   std::string represent(const Index &idx, const Context &ctx) const override {
-    std::string labelstring = toUtf8(idx.full_label());
     if (idx.has_proto_indices()) {
-      throw std::runtime_error(
-          "Incompatible (proto) index detected. Proto Indices are not (yet) "
-          "supported!");
+      throw std::runtime_error("Proto Indices are not (yet) supported!");
     }
-    return labelstring;
+
+    return toUtf8(idx.full_label());
   }
 
   std::string represent(const Tensor &tensor,
                         const Context &ctx) const override {
     const auto &indices = tensor.const_braket();
-    std::string representation = represent_tensor_noindex(tensor, ctx);
+    std::string representation = tensor_name(tensor, ctx);
+
     representation += "[ ";
+
     for (std::size_t i = 0; i < indices.size(); ++i) {
       representation += represent(indices[i], ctx);
 
@@ -62,6 +68,7 @@ class JuliaTensorOperationsGen : public Generator<Context> {
     }
 
     representation += " ]";
+
     return representation;
   }
 
@@ -73,6 +80,7 @@ class JuliaTensorOperationsGen : public Generator<Context> {
   std::string represent(const Constant &constant,
                         const Context &ctx) const override {
     std::stringstream sstream;
+
     if (constant.value().imag() != 0) {
       sstream << "(" << constant.value().real();
       if (constant.value().imag() < 0) {
@@ -83,6 +91,7 @@ class JuliaTensorOperationsGen : public Generator<Context> {
     } else {
       sstream << constant.value().real();
     }
+
     return sstream.str();
   }
 
@@ -90,43 +99,21 @@ class JuliaTensorOperationsGen : public Generator<Context> {
               const Context &ctx) override {
     if (!zero_init) {
       throw std::runtime_error(
-          "Creation without initialization is not supported.");
+          "In Julia tensors can't be created without being initialized");
     }
-    m_generated += represent_tensor_noindex(tensor, ctx);
-    const auto &indices = tensor.const_braket();
-    std::vector<std::string> dimStrings(indices.size());
-    for (std::size_t i = 0; i < indices.size(); ++i) {
-      dimStrings[i] = ctx.get_dim(indices[i].space());
-    }
-    std::string rhs = "zeros(Float64";
-    for (std::size_t i = 0; i < indices.size(); ++i) {
-      rhs += ", " + dimStrings[i];
-    }
-    rhs += ")";
-    m_generated += " = " + rhs + "\n";
+
+    m_generated += zero_initialization(tensor, ctx) + "\n";
   }
 
   void load(const Tensor &tensor, bool set_to_zero,
             const Context &ctx) override {
-    if (!set_to_zero) {
-      m_generated += represent_tensor_noindex(tensor, ctx) +
-                     " = deserialize(\"" +
-                     represent_tensor_noindex(tensor, ctx) + ".jlbin\")";
-    }
+    m_generated += tensor_name(tensor, ctx);
+    m_generated += " = ";
 
-    else {
-      m_generated += represent_tensor_noindex(tensor, ctx);
-      const auto &indices = tensor.const_braket();
-      std::vector<std::string> dimStrings(indices.size());
-      for (std::size_t i = 0; i < indices.size(); ++i) {
-        dimStrings[i] = ctx.get_dim(indices[i].space());
-      }
-      std::string rhs = "zeros(Float64";
-      for (std::size_t i = 0; i < indices.size(); ++i) {
-        rhs += ", " + dimStrings[i];
-      }
-      rhs += ")";
-      m_generated += " = " + rhs;
+    if (!set_to_zero) {
+      m_generated += "deserialize(\"" + tensor_name(tensor, ctx) + ".jlbin\")";
+    } else {
+      m_generated += zero_initialization(tensor, ctx);
     }
 
     m_generated += "\n";
@@ -139,23 +126,27 @@ class JuliaTensorOperationsGen : public Generator<Context> {
   }
 
   void unload(const Tensor &tensor, const Context &ctx) override {
-    m_generated += represent_tensor_noindex(tensor, ctx) + " = nothing\n";
+    m_generated += tensor_name(tensor, ctx) + " = nothing\n";
   }
 
   void destroy(const Tensor &tensor, const Context &ctx) override {
-    m_generated += represent_tensor_noindex(tensor, ctx) + " = nothing\n";
-    m_generated +=
-        "rm( \"" + represent_tensor_noindex(tensor, ctx) + +".jlbin\"" + ")\n";
+    unload(tensor, ctx);
+    // Remove potential serialized version of this tensor from disk
+    m_generated += "rm( \"" + tensor_name(tensor, ctx) + +".jlbin\"" + ")\n";
   }
 
   void persist(const Tensor &tensor, const Context &ctx) override {
-    m_generated += "return " + represent_tensor_noindex(tensor, ctx) + "\n";
+    m_generated += "return " + tensor_name(tensor, ctx) + "\n";
   }
 
   void create(const Variable &variable, bool zero_init,
               const Context &ctx) override {
-    m_generated += represent(variable, ctx) + " = 0.0";
-    m_generated += "\n";
+    if (!zero_init) {
+      throw std::runtime_error(
+          "Julia doesn't support declaring a variable without initializing it");
+    }
+
+    m_generated += represent(variable, ctx) + " = 0.0\n";
   }
   void load(const Variable &variable, bool set_to_zero,
             const Context &ctx) override {
@@ -173,7 +164,9 @@ class JuliaTensorOperationsGen : public Generator<Context> {
   }
 
   void destroy(const Variable &variable, const Context &ctx) override {
-    m_generated += represent(variable, ctx) + " = nothing\n";
+    unload(variable, ctx);
+    // Remove any potentially serialized version from disk
+    m_generated += "rm(\"" + represent(variable, ctx) + ".jlbin\")\n";
   }
 
   void persist(const Variable &variable, const Context &ctx) override {
@@ -193,36 +186,18 @@ class JuliaTensorOperationsGen : public Generator<Context> {
   }
 
   void declare(const Index &idx, const Context &ctx) override {
-    if (ctx.print_intermediate_comments()) {
-      std::string comment_line = "Declare index " + represent(idx, ctx);
-      insert_comment(comment_line, ctx);
-    }
+    (void)idx;
+    (void)ctx;
   }
 
   void declare(const Variable &variable, const Context &ctx) override {
-    if (ctx.print_intermediate_comments()) {
-      std::string comment_line = "Declare Variable " + represent(variable, ctx);
-      insert_comment(comment_line, ctx);
-    }
+    (void)variable;
+    (void)ctx;
   }
 
   void declare(const Tensor &tensor, const Context &ctx) override {
-    if (ctx.print_intermediate_comments()) {
-      std::string representation = toUtf8(tensor.label());
-      const auto &indices = tensor.const_braket();
-      std::vector<std::string> dimStrings(indices.size());
-      for (std::size_t i = 0; i < indices.size(); ++i) {
-        dimStrings[i] = ctx.get_dim(indices[i].space());
-      }
-
-      std::string rhs = "zeros(Float64";
-      for (std::size_t i = 0; i < indices.size(); ++i) {
-        rhs += ", " + dimStrings[i];
-      }
-      rhs += ")";
-      representation += " = " + rhs;
-      m_generated += "#" + representation + "\n";
-    }
+    (void)tensor;
+    (void)ctx;
   }
 
   void insert_comment(const std::string &comment, const Context &ctx) override {
@@ -238,6 +213,8 @@ class JuliaTensorOperationsGen : public Generator<Context> {
   std::string get_generated_code() const override { return m_generated; }
 
  protected:
+  std::string m_generated;
+
   std::string to_julia_expr(const Expr &expr, const Context &ctx) const {
     if (expr.is<Tensor>()) {
       return represent(expr.as<Tensor>(), ctx);
@@ -280,18 +257,31 @@ class JuliaTensorOperationsGen : public Generator<Context> {
     throw std::runtime_error("Unsupported expression type in to_julia_expr");
   }
 
-  std::string represent_tensor_noindex(const Tensor &tensor,
-                                       const Context &ctx) const {
+  std::string tensor_name(const Tensor &tensor, const Context &ctx) const {
     std::string representation = toUtf8(tensor.label());
-    std::string tagstring = ctx.get_tags(tensor);
+
     representation += "_";
-    representation += tagstring;
+    representation += ctx.get_tags(tensor);
+
     return representation;
   }
 
-  std::string m_generated;
+  std::string zero_initialization(const Tensor &tensor,
+                                  const Context &ctx) const {
+    std::string code = tensor_name(tensor, ctx);
+    code += " = zeros(Float64";
+
+    for (const Index &idx : tensor.const_braket()) {
+      code += ", ";
+      code += ctx.get_dim(idx.space());
+    }
+
+    code += ")";
+
+    return code;
+  }
 };
 
 }  // namespace sequant
 
-#endif  // SEQUANT_CORE_EXPORT_JULIATENSOROPERATIONSGEN_HPP
+#endif  // SEQUANT_CORE_EXPORT_JULIA_TENSOR_OPERATIONS_HPP
