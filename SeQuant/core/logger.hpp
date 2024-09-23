@@ -24,6 +24,7 @@ struct Logger : public Singleton<Logger> {
   bool canonicalize_dot = false;
   bool simplify = false;
   bool tensor_network = false;
+  bool export_equations = false;
 
   ///
   /// Evaluation log verbosity level
@@ -49,6 +50,7 @@ struct Logger : public Singleton<Logger> {
       canonicalize = true;
       simplify = true;
       tensor_network = true;
+      export_equations = true;
     }
   }
 };
