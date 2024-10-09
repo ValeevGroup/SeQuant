@@ -290,15 +290,17 @@ std::vector<ExprPtr> CC::eom_r(nₚ np, nₕ nh) {
 
   // initialize result vector
   std::vector<ExprPtr> result;
-  using std::max;
-  auto idx = max(np, nh);  // index for populating the result vector
-  result.resize(idx + 1);
+  using std::min;
+  result.resize(min(np, nh) + 1);  // for EE first element will be empty
 
-  // start from the highest excitation order, go down to the lowest possible
-  for (std::int64_t rp = np, rh = nh; rp > 0 || rh > 0; --rp, --rh) {
+  std::int64_t rp = np, rh = nh;
+  while (rp >= 0 && rh >= 0) {
+    if (rp == 0 && rh == 0) break;
     // project with <rp, rh| (i.e., multiply P(rp, rh)) and compute VEV
-    result.at(idx) = vac_av(P(nₚ(rp), nₕ(rh)) * hbar_R, op_connect);
-    idx--;  // index decrement
+    result.at(min(rp, rh)) = vac_av(P(nₚ(rp), nₕ(rh)) * hbar_R, op_connect);
+    if (rp == 0 || rh == 0) break;
+    rp--;
+    rh--;
   }
 
   return result;
@@ -331,15 +333,17 @@ std::vector<ExprPtr> CC::eom_l(nₚ np, nₕ nh) {
 
   // initialize result vector
   std::vector<ExprPtr> result;
-  using std::max;
-  auto idx = max(np, nh);  // index for populating the result vector
-  result.resize(idx + 1);
+  using std::min;
+  result.resize(min(nh, np) + 1);  // for EE first element will be empty
 
-  // start from the highest excitation order, go down to the lowest possible
-  for (std::int64_t rp = np, rh = nh; rp > 0 || rh > 0; --rp, --rh) {
-    // right project with |rp,rh> (i.e., multiply P(-np, -rh)) and compute VEV
-    result.at(idx) = vac_av(L_hbar * P(nₚ(-rp), nₕ(-rh)), op_connect);
-    idx--;  // index decrement
+  std::int64_t rp = np, rh = nh;
+  while (rp >= 0 && rh >= 0) {
+    if (rp == 0 && rh == 0) break;
+    // right project with |rp,rh> (i.e., multiply P(-rp, -rh)) and compute VEV
+    result.at(min(rp, rh)) = vac_av(L_hbar * P(nₚ(-rp), nₕ(-rh)), op_connect);
+    if (rp == 0 || rh == 0) break;
+    rp--;
+    rh--;
   }
 
   return result;
