@@ -291,14 +291,20 @@ std::vector<ExprPtr> CC::eom_r(nₚ np, nₕ nh) {
   // initialize result vector
   std::vector<ExprPtr> result;
   using std::max;
-  auto idx = max(np, nh);  // index for populating the result vector
+  auto idx =
+      max(np, nh) - std::abs(np - nh);  // index for populating the result
   result.resize(idx + 1);
 
-  // start from the highest excitation order, go down to the lowest possible
-  for (std::int64_t rp = np, rh = nh; rp > 0 || rh > 0; --rp, --rh) {
+  std::int64_t rp = np, rh = nh;
+  while (rp >= 0 && rh >= 0) {
+    if (rp == 0 && rh == 0) break;
+    assert(idx >= 0 && "index out of range");
     // project with <rp, rh| (i.e., multiply P(rp, rh)) and compute VEV
     result.at(idx) = vac_av(P(nₚ(rp), nₕ(rh)) * hbar_R, op_connect);
+    if (rp == 0 || rh == 0) break;
     idx--;  // index decrement
+    rp--;
+    rh--;
   }
 
   return result;
@@ -332,14 +338,20 @@ std::vector<ExprPtr> CC::eom_l(nₚ np, nₕ nh) {
   // initialize result vector
   std::vector<ExprPtr> result;
   using std::max;
-  auto idx = max(np, nh);  // index for populating the result vector
+  auto idx =
+      max(np, nh) - std::abs(np - nh);  // index for populating the result
   result.resize(idx + 1);
 
-  // start from the highest excitation order, go down to the lowest possible
-  for (std::int64_t rp = np, rh = nh; rp > 0 || rh > 0; --rp, --rh) {
+  std::int64_t rp = np, rh = nh;
+  while (rp >= 0 && rh >= 0) {
+    if (rp == 0 && rh == 0) break;
+    assert(idx >= 0 && "index out of range");
     // right project with |rp,rh> (i.e., multiply P(-np, -rh)) and compute VEV
     result.at(idx) = vac_av(L_hbar * P(nₚ(-rp), nₕ(-rh)), op_connect);
+    if (rp == 0 || rh == 0) break;
     idx--;  // index decrement
+    rp--;
+    rh--;
   }
 
   return result;
