@@ -25,9 +25,9 @@ See detailed documentation see [https://valeevgroup.github.io/SeQuant/](https://
 The short version:
 
 - configure (from top SeQuant source dfirectory): `cmake -B build -S . -DCMAKE_INSTALL_PREFIX=/path/where/sequant/to/be/installed`
-- build and test: `cmake --build build --target install`
+- build and install: `cmake --build build --target install`
 
-For detailed instructions see [SeQuant: Installation Guide](https://valeevgroup.github.io/SeQuant/installing.html).
+For detailed instructions see [SeQuant: Installation Guide](https://valeevgroup.github.io/SeQuant/source/installing.html).
 
 
 ### Build harness
