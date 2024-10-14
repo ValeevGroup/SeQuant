@@ -92,11 +92,11 @@ Functions
 ---------
 
 
-- :ref:`exhale_function_namespacesequant_1a3e63e86bb1509bbbd71fe2fc6cf71407`
-
 - :ref:`exhale_function_namespacesequant_1af457c712ea93671abc344a6696e2e657`
 
 - :ref:`exhale_function_namespacesequant_1a2519aa981b383cebb103e8e49fbcb50d`
+
+- :ref:`exhale_function_namespacesequant_1a3e63e86bb1509bbbd71fe2fc6cf71407`
 
 - :ref:`exhale_function_namespacesequant_1ac9f738fa8770180ed240f3e2e41f1873`
 
