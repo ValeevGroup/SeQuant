@@ -16,40 +16,89 @@
 
 using namespace sequant;
 
-ExprPtr custom_biorthogonalize(ExprPtr expr, const container::svector< container::svector< Index > > &externals) {
-	assert(externals.size() <= 2);
+void custom_biorthogonalize(container::svector< ResultExpr > &exprs) {
+	container::svector< container::svector< Index > > externals =
+		exprs.at(0).index_particle_grouping< container::svector< Index > >();
 
 	if (externals.size() < 2) {
-		return biorthogonal_transform(expr, externals);
+		// Singles or scalar
+		for (ResultExpr &current : exprs) {
+			std::optional< ExprPtr > symmetrizer = popTensor(current.expression(), L"S");
+			current.expression()                 = biorthogonal_transform(current.expression(), externals);
+			current.expression()                 = simplify(current.expression());
+			if (symmetrizer) {
+				current.expression() = simplify(
+					ex< Product >(ExprPtrList{ symmetrizer.value(), current.expression() }, Product::Flatten::No));
+			}
+		}
+
+		return;
 	}
+
+	assert(externals.size() == 2);
 
 	const bool braSpacesSame = externals[0][0].space() == externals[1][0].space();
 	const bool ketSpacesSame = externals[0][1].space() == externals[1][1].space();
+
 	if (braSpacesSame && ketSpacesSame) {
 		// P0, P2, I2
-		return biorthogonal_transform(expr, externals);
+		for (ResultExpr &current : exprs) {
+			std::optional< ExprPtr > symmetrizer = popTensor(current.expression(), L"S");
+			current.expression()                 = biorthogonal_transform(current.expression(), externals);
+			current.expression()                 = simplify(current.expression());
+			if (symmetrizer) {
+				current.expression() = simplify(
+					ex< Product >(ExprPtrList{ symmetrizer.value(), current.expression() }, Product::Flatten::No));
+			}
+		}
+
+		return;
 	}
 
 	if (!braSpacesSame && !ketSpacesSame) {
-		spdlog::error("Biorthogonalization for S1 not yet supported");
-		return expr;
+		// S1
+
+		assert(exprs.size() == 2);
+
+		ExprPtr clone = exprs[0].expression().clone();
+
+		exprs[0].expression() =
+			simplify(ex< Constant >(ratio{ 1, 6 }) * (ex< Constant >(2) * clone + exprs[1].expression()));
+		exprs[1].expression() =
+			simplify(ex< Constant >(ratio{ 1, 6 }) * (ex< Constant >(2) * exprs[1].expression() + clone));
+
+		return;
 	}
 
-	container::map< Index, Index > permutation;
-	if (braSpacesSame) {
-		permutation = { { { externals[0][0], externals[1][0] }, { externals[1][0], externals[0][0] } } };
-	} else {
-		assert(ketSpacesSame);
-		permutation = { { { externals[0][1], externals[1][1] }, { externals[1][1], externals[0][1] } } };
+	// P1, I1
+
+	for (ResultExpr &current : exprs) {
+		externals = current.index_particle_grouping< container::svector< Index > >();
+
+		container::map< Index, Index > permutation;
+		if (braSpacesSame) {
+			permutation = { { { externals[0][0], externals[1][0] }, { externals[1][0], externals[0][0] } } };
+		} else {
+			assert(ketSpacesSame);
+			permutation = { { { externals[0][1], externals[1][1] }, { externals[1][1], externals[0][1] } } };
+		}
+
+		std::optional< ExprPtr > symmetrizer = popTensor(current.expression(), L"S");
+
+		ExprPtr permuted = current.expression().clone();
+		permuted         = transform_expr(permuted, permutation);
+
+		spdlog::warn("Adding additional factor of 1/2 to P1/S2 expression to remain consistent with GeCCo");
+
+		current.expression() = ex< Constant >(ratio{ 1, 2 }) * ex< Constant >(ratio{ 1, 3 })
+							   * ex< Sum >(ex< Constant >(2) * current.expression() + permuted);
+		current.expression() = simplify(current.expression());
+
+		if (symmetrizer) {
+			current.expression() =
+				simplify(ex< Product >(ExprPtrList{ symmetrizer.value(), current.expression() }, Product::Flatten::No));
+		}
 	}
-
-	ExprPtr permuted = expr.clone();
-	permuted         = transform_expr(permuted, permutation);
-
-	spdlog::warn("Adding additional factor of 1/2 to P1/S2 expression to remain consistent with GeCCo");
-
-	return ex< Constant >(ratio{ 1, 2 }) * ex< Constant >(ratio{ 1, 3 })
-		   * ex< Sum >(ex< Constant >(2) * expr + permuted);
 }
 
 container::svector< ResultExpr > postProcess(ResultExpr result, const IndexSpaceMeta &spaceMeta,
@@ -102,30 +151,25 @@ container::svector< ResultExpr > postProcess(ResultExpr result, const IndexSpace
 	}
 
 	for (ResultExpr &current : processed) {
-		externals = current.index_particle_grouping< container::svector< Index > >();
-
 		current.expression() = simplify(current.expression());
 		if (options.spintrace != SpinTracing::None) {
 			spdlog::debug("Expression after spintracing:\n{}", current);
 		}
+	}
 
-		switch (options.transform) {
-			case ProjectionTransformation::None:
-				break;
-			case ProjectionTransformation::Biorthogonal:
-				// TODO: pop S tensor first?
-				std::optional< ExprPtr > symmetrizer = popTensor(current.expression(), L"S");
-				current.expression()                 = custom_biorthogonalize(current.expression(), externals);
-				spdlog::debug("Biorthogonalized without simplification:\n{}", current);
-				current.expression() = simplify(current.expression());
-				if (symmetrizer) {
-					current.expression() = simplify(
-						ex< Product >(ExprPtrList{ symmetrizer.value(), current.expression() }, Product::Flatten::No));
-				}
+	switch (options.transform) {
+		case ProjectionTransformation::None:
+			break;
+		case ProjectionTransformation::Biorthogonal:
+			custom_biorthogonalize(processed);
+
+			for (const ResultExpr &current : processed) {
 				spdlog::debug("Expression after biorthogonal transformation:\n{}", current);
-				break;
-		}
+			}
+			break;
+	}
 
+	for (ResultExpr &current : processed) {
 		if (options.factorize_to_binary) {
 			std::optional< ExprPtr > symmetrizer = popTensor(current.expression(), L"S");
 			if (!symmetrizer.has_value()) {
