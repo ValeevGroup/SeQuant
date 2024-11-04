@@ -61,8 +61,8 @@ private:
 	const IndexSpaceMeta *m_meta;
 };
 
-ProcessingOptions extractProcessingOptions(const json &details) {
-	ProcessingOptions options;
+ProcessingOptions extractProcessingOptions(const json &details, const ProcessingOptions &defaults = {}) {
+	ProcessingOptions options = defaults;
 
 	if (details.contains("density_fitting")) {
 		options.density_fitting = details.at("density_fitting").get< bool >();
@@ -136,7 +136,8 @@ std::vector< ResultExpr > splitContributions(const ResultExpr &result) {
 	return contributions;
 }
 
-void generateITF(const json &blocks, std::string_view out_file, const IndexSpaceMeta &spaceMeta) {
+void generateITF(const json &blocks, std::string_view out_file, const ProcessingOptions &defaults,
+				 const IndexSpaceMeta &spaceMeta) {
 	std::vector< itf::CodeBlock > itfBlocks;
 	ItfContext context(spaceMeta);
 
@@ -169,7 +170,7 @@ void generateITF(const json &blocks, std::string_view out_file, const IndexSpace
 
 			spdlog::debug("Initial equation is:\n{}", result);
 
-			ProcessingOptions options = extractProcessingOptions(current_result);
+			ProcessingOptions options = extractProcessingOptions(current_result, defaults);
 
 			std::vector< ResultExpr > resultParts =
 				options.term_by_term ? splitContributions(result) : std::vector< ResultExpr >{ result };
@@ -227,8 +228,13 @@ void generateCode(const json &details, const IndexSpaceMeta &spaceMeta) {
 	const std::string format   = details.at("output_format");
 	const std::string out_path = details.at("output_path");
 
+	ProcessingOptions defaultOptions;
+	if (details.contains("default_options")) {
+		defaultOptions = extractProcessingOptions(details.at("default_options"));
+	}
+
 	if (boost::iequals(format, "itf")) {
-		generateITF(details.at("code_blocks"), out_path, spaceMeta);
+		generateITF(details.at("code_blocks"), out_path, defaultOptions, spaceMeta);
 	} else {
 		throw std::runtime_error("Unknown code generation target format '" + std::string(format) + "'");
 	}
