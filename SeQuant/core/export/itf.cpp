@@ -250,7 +250,6 @@ void one_electron_integral_remapper(ExprPtr &expr,
 
   auto braIndices = tensor.bra();
   auto ketIndices = tensor.ket();
-  assert(tensor.aux().empty());
 
   // Use the bra-ket (hermitian) symmetry of the integrals to exchange creators
   // and annihilators such that the larger index space is on the left (in the
@@ -264,7 +263,7 @@ void one_electron_integral_remapper(ExprPtr &expr,
   }
 
   expr = ex<Tensor>(tensor.label(), bra(std::move(braIndices)),
-                    ket(std::move(ketIndices)), tensor.aux());
+                    ket(std::move(ketIndices)), aux(tensor.aux()));
 }
 
 template <typename BraContainer, typename KetContainer>
@@ -397,17 +396,21 @@ void two_electron_integral_remapper(ExprPtr &expr,
 
 void integral_remapper(ExprPtr &expr, const Context &ctx,
                        std::wstring_view oneElectronIntegralName,
-                       std::wstring_view twoElectronIntegralName) {
+                       std::wstring_view twoElectronIntegralName,
+                       std::wstring_view dfTensorName) {
   two_electron_integral_remapper(expr, twoElectronIntegralName, ctx);
   one_electron_integral_remapper(expr, oneElectronIntegralName, ctx);
+  // We can reuse the same logic for the DF tensors
+  one_electron_integral_remapper(expr, dfTensorName, ctx);
 }
 
 void remap_integrals(ExprPtr &expr, const Context &ctx,
                      std::wstring_view oneElectronIntegralName,
-                     std::wstring_view twoElectronIntegralName) {
+                     std::wstring_view twoElectronIntegralName,
+                     std::wstring_view dfTensorName) {
   auto remapper = [&](ExprPtr &expr) {
     return integral_remapper(expr, ctx, oneElectronIntegralName,
-                             twoElectronIntegralName);
+                             twoElectronIntegralName, dfTensorName);
   };
 
   const bool visitedRoot = expr->visit(remapper, true);
