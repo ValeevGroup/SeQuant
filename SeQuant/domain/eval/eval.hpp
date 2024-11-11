@@ -104,6 +104,20 @@ constexpr bool IsIterableOfEvaluableNodes<
     Iterable, std::enable_if_t<IsEvaluable<meta::range_value_t<Iterable>>>> =
     true;
 
+template <typename NodeT, typename = std::enable_if_t<IsEvaluable<NodeT>>>
+[[maybe_unused]] inline void append_timing(NodeT const& node, double time) {
+  auto& timing = Logger::instance().eval_timing;
+
+  if (node.leaf())
+    timing.append(node->label(), time);
+  else {
+    timing.append(node->label() + " = " + node.left()->label() +
+                      (node->op_type() == EvalOp::Sum ? " + " : " * ") +
+                      node.right()->label(),
+                  time);
+  }
+}
+
 }  // namespace
 
 template <typename, typename, typename = void>
@@ -241,7 +255,12 @@ ERPtr evaluate_core(NodeT const& node, Le const& le, Args&&... args) {
       log_eval("[SUM] ", node.left()->label(), " + ", node.right()->label(),
                " = ", node->label(), "\n");
 
-      return left->sum(*right, ann);
+      const auto start = std::chrono::high_resolution_clock::now();
+      auto res = left->sum(*right, ann);
+      const auto end = std::chrono::high_resolution_clock::now();
+      const std::chrono::duration<double> diff = end - start;
+      append_timing(node, diff.count());
+      return res;
     } else {
       assert(node->op_type() == EvalOp::Prod);
 
@@ -249,8 +268,14 @@ ERPtr evaluate_core(NodeT const& node, Le const& le, Args&&... args) {
                " = ", node->label(), "\n");
       auto const de_nest =
           node.left()->tot() && node.right()->tot() && !node->tot();
-      return left->prod(*right, ann,
-                        de_nest ? TA::DeNest::True : TA::DeNest::False);
+
+      const auto start = std::chrono::high_resolution_clock::now();
+      auto res = left->prod(*right, ann,
+                            de_nest ? TA::DeNest::True : TA::DeNest::False);
+      const auto end = std::chrono::high_resolution_clock::now();
+      const std::chrono::duration<double> diff = end - start;
+      append_timing(node, diff.count());
+      return res;
     }
   }
 }

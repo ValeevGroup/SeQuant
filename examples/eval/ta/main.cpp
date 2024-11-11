@@ -99,6 +99,12 @@ int main(int argc, char* argv[]) {
 
   eval::SequantEvalScfTA<TA::TArrayD>{world, calc_info}.scf(std::wcout);
 
+  auto& timing = Logger::instance().eval_timing;
+  timing.time_sort();
+  std::wcout << "10 most expensive calculations in (s):\n";
+  for (auto&& [t, l] : timing.time_to_label() | ranges::views::take(10))
+    std::wcout << t << L"\t\t" << sequant::to_wstring(l) << std::endl;
+
   TA::finalize();
   return 0;
 }

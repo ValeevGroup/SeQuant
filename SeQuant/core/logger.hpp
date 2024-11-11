@@ -6,6 +6,7 @@
 #define SEQUANT_LOGGER_HPP
 
 #include <SeQuant/core/utility/singleton.hpp>
+#include <SeQuant/domain/eval/timing.hpp>
 
 #include <iostream>
 
@@ -24,6 +25,8 @@ struct Logger : public Singleton<Logger> {
   bool canonicalize_dot = false;
   bool simplify = false;
   bool tensor_network = false;
+
+  EvaluationTiming eval_timing{};
 
   ///
   /// Evaluation log verbosity level
