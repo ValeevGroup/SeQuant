@@ -31,10 +31,47 @@ namespace sequant {
 
 class TensorCanonicalizer;
 
-/// This interface class defines a Tensor concept. All Tensor objects must
-/// fulfill the is_tensor trait (see below). To adapt an existing class
+/// AbstractTensor is a [tensor](https://en.wikipedia.org/wiki/Tensor) over
+/// general (i.e., not necessarily commutative)
+/// rings. A tensor with \f$ k \geq 0 \f$ contravariant
+/// (ket, [Dirac notation](https://en.wikipedia.org/wiki/Bra-ket_notation) ) and
+/// \f$ b \geq 0 \f$ covariant (bra) modes
+/// describes elements of a tensor product of \f$ b+k \f$ vector spaces.
+/// Equivalently it represents a linear map between the tensor product
+/// of \f$ k \f$ _primal_ vector spaces to the tensor product of \f$ b \f$
+/// _dual_ vector spaces. Tensor modes are 1-to-1 represented by unique
+/// [indices](https://en.wikipedia.org/wiki/Abstract_index_notation),
+/// represented by Index objects.
+///
+/// It is also necessary to support modes that are "array-like" in that they
+/// do not refer to a vector space or its dual; such modes can represent
+/// ordinal indices (e.g. to treat a collection/sequence of tensors as
+/// a single tensor) Thus each tensor has zero or more auxiliary (aux) modes.
+/// The aux modes are invariant under the transformations of vector spaces and
+/// do not contribute to the tensor symmetries.
+///
+/// Tensors can have the following symmetries:
+/// - Tensors can be symmetric or nonsymmetric with respect to the transposition
+///   of corresponding (first, second, etc.) modes in bra/ket mode ranges. This
+///   symmetry is used to treat particle as indistinguishable or distinguishable
+///   in many-particle quantum mechanics context.
+/// - Tensors can be symmetric, antisymmetric, and nonsymmetric
+///   with respect to the transposition of modes within the bra or ket sets.
+///   This symmetry is used to model the
+///   distinguishable and indistinguishable (bosonic and fermionic) degrees
+///   of freedom in many-body quantum mechanics context. More complicated
+///   symmetries are not yet supported.
+/// - Tensors can be symmetric, conjugate, or nonsymmetric with respect to
+///   swap of bra with ket. This symmetry corresponds to time reversal in
+///   physical simulation.
+///
+/// Lastly, the supporting rings are not assumed to be scalars, hence tensor
+/// product supporting the concept of tensor is not necessarily commutative.
+///
+/// \note This interface class defines a Tensor _concept_. All Tensor objects
+/// must fulfill the is_tensor trait (see below). To adapt an existing class
 /// intrusively derive it from AbstractTensor and implement all member
-/// functions. This allows to implemement heterogeneous containers of objects
+/// functions. This allows to implement heterogeneous containers of objects
 /// that meet the Tensor concept.
 class AbstractTensor {
   inline auto missing_instantiation_for(const char* fn_name) const {
@@ -58,41 +95,54 @@ class AbstractTensor {
       ranges::any_view<Index&, ranges::category::random_access |
                                    ranges::category::sized>;
 
-  /// view of a contiguous range of Index objects
+  /// accessor bra (covariant) indices
+  /// @return view of a contiguous range of Index objects
   virtual const_any_view_randsz _bra() const {
     throw missing_instantiation_for("_bra");
   }
-  /// view of a contiguous range of Index objects
+  /// accesses ket (contravariant) indices
+  /// @return view of a contiguous range of Index objects
   virtual const_any_view_randsz _ket() const {
     throw missing_instantiation_for("_ket");
   }
-  /// view of a contiguous range of Index objects
+  /// accesses aux (invariant) indices
+  /// @return view of a contiguous range of Index objects
   virtual const_any_view_randsz _auxiliary() const {
     throw missing_instantiation_for("_auxiliary");
   }
+  /// accesses bra and ket indices
   /// view of a not necessarily contiguous range of Index objects
   virtual const_any_view_rand _braket() const {
     throw missing_instantiation_for("_braket");
   }
-  /// view of a not necessarily contiguous range of Index objects
+  /// accesses bra, ket, and aux indices
+  /// @return view of a not necessarily contiguous range of Index objects
   virtual const_any_view_rand _indices() const {
     throw missing_instantiation_for("_indices");
   }
+  /// @return the number of bra indices
   virtual std::size_t _bra_rank() const {
     throw missing_instantiation_for("_bra_rank");
   }
+  /// @return the number of ket indices
   virtual std::size_t _ket_rank() const {
     throw missing_instantiation_for("_ket_rank");
   }
+  /// @return the number of aux indices
   virtual std::size_t _auxiliary_rank() const {
     throw missing_instantiation_for("_auxiliary_rank");
   }
+  /// @return the permutational symmetry of the vector space indices of
+  /// the tensor
   virtual Symmetry _symmetry() const {
     throw missing_instantiation_for("_symmetry");
   }
+  /// @return the symmetry of tensor under exchange of vectors space (bra) and
+  /// its dual (ket)
   virtual BraKetSymmetry _braket_symmetry() const {
     throw missing_instantiation_for("_braket_symmetry");
   }
+  /// @return the symmetry of tensor under exchange of bra and ket
   virtual ParticleSymmetry _particle_symmetry() const {
     throw missing_instantiation_for("_particle_symmetry");
   }
@@ -222,8 +272,8 @@ static_assert(is_tensor_v<AbstractTensor>,
               "The AbstractTensor class does not fulfill the requirements of "
               "the Tensor interface");
 
-/// @tparam IndexMap a {source Index -> target Index} map type; if it is not @c
-/// container::map<Index,Index>
+/// @tparam IndexMap a {source Index -> target Index} map type; if it is not
+///         @c container::map<Index,Index>
 ///         will need to make a copy.
 /// @param[in,out] t an AbstractTensor object whose indices will be transformed
 /// @param[in] index_map a const reference to an IndexMap object that specifies

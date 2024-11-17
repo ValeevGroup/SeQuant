@@ -33,7 +33,8 @@
 
 namespace sequant {
 
-/// @brief particle-symmetric Tensor, i.e. permuting
+/// @brief a Tensor is an instance of AbstractTensor over a scalar field, i.e.
+/// Tensors have commutative addition and product operations
 class Tensor : public Expr, public AbstractTensor, public Labeled {
  private:
   using index_container_type = container::svector<Index>;
@@ -67,10 +68,10 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
     }
   }
 
-  /// @return view of the bra+ket index ranges
+  /// @return concatenated view of the bra and ket index ranges
   auto braket() { return ranges::views::concat(bra_, ket_); }
 
-  /// @return view of all indices
+  /// @return concatenated view of bra, ket, and auxiliary index ranges
   auto indices() { return ranges::views::concat(bra_, ket_, auxiliary_); }
 
   /// asserts that @p label is not reserved
@@ -168,12 +169,16 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
 
   /// @return "core" label of the tensor
   std::wstring_view label() const override { return label_; }
+  /// @return the bra index range
   const auto &bra() const { return bra_; }
+  /// @return the ket index range
   const auto &ket() const { return ket_; }
+  /// @return the auxiliary index range
   const auto &auxiliary() const { return auxiliary_; }
-  /// @return joined view of the bra and ket index ranges
+  /// @return concatenated view of the bra and ket index ranges
   auto braket() const { return ranges::views::concat(bra_, ket_); }
-  /// @return joined view of all indices of this tensor (bra, ket and auxiliary)
+  /// @return concatenated view of all indices of this tensor (bra, ket and
+  /// auxiliary)
   auto indices() const { return ranges::views::concat(bra_, ket_, auxiliary_); }
   /// @return view of the bra+ket index ranges
   /// @note this is to work around broken lookup rules
