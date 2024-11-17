@@ -257,7 +257,7 @@ void one_electron_integral_remapper(
 
   auto braIndices = tensor.bra();
   auto ketIndices = tensor.ket();
-  assert(tensor.auxiliary().empty());
+  assert(tensor.aux().empty());
 
   IndexTypeComparer cmp;
 
@@ -273,7 +273,7 @@ void one_electron_integral_remapper(
   }
 
   expr = ex<Tensor>(tensor.label(), std::move(braIndices),
-                    std::move(ketIndices), tensor.auxiliary());
+                    std::move(ketIndices), tensor.aux());
 }
 
 template <typename Container>
@@ -317,7 +317,7 @@ void two_electron_integral_remapper(
   // Copy indices as we might have to mutate them
   auto braIndices = tensor.bra();
   auto ketIndices = tensor.ket();
-  assert(tensor.auxiliary().empty());
+  assert(tensor.aux().empty());
 
   IndexTypeComparer cmp;
 
@@ -408,7 +408,7 @@ void two_electron_integral_remapper(
   }
 
   expr = ex<Tensor>(std::move(tensorLabel), std::move(braIndices),
-                    std::move(ketIndices), tensor.auxiliary());
+                    std::move(ketIndices), tensor.aux());
 }
 
 void integral_remapper(ExprPtr &expr, std::wstring_view oneElectronIntegralName,

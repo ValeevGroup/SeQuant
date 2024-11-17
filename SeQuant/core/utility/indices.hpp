@@ -97,10 +97,10 @@ IndexGroups<Container> get_uncontracted_indices(const Tensor& t1,
                detail::not_in{t1.bra()});
 
   // Auxiliary indices
-  std::copy_if(t1.auxiliary().begin(), t1.auxiliary().end(),
-               std::back_inserter(groups.aux), detail::not_in{t2.auxiliary()});
-  std::copy_if(t2.auxiliary().begin(), t2.auxiliary().end(),
-               std::back_inserter(groups.aux), detail::not_in{t1.auxiliary()});
+  std::copy_if(t1.aux().begin(), t1.aux().end(), std::back_inserter(groups.aux),
+               detail::not_in{t2.aux()});
+  std::copy_if(t2.aux().begin(), t2.aux().end(), std::back_inserter(groups.aux),
+               detail::not_in{t1.aux()});
 
   return groups;
 }
@@ -132,7 +132,7 @@ IndexGroups<Container> get_unique_indices(const Tensor& tensor) {
     }
   }
 
-  for (const Index& current : tensor.auxiliary()) {
+  for (const Index& current : tensor.aux()) {
     if (encounteredIndices.find(current) == encounteredIndices.end()) {
       groups.aux.push_back(current);
       encounteredIndices.insert(current);

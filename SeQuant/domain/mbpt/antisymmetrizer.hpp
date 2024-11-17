@@ -503,7 +503,7 @@ ExprPtr spin_sum(std::vector<Index> original_upper,
           }
           factor = ex<Tensor>(L"Γ", factor->as<Tensor>().bra(),
                               factor->as<Tensor>().ket(),
-                              factor->as<Tensor>().auxiliary());
+                              factor->as<Tensor>().aux());
         } else if (factor->is<FNOperator>()) {
           // prefactor = ex<Constant>(-0.5) *
           // ex<Constant>(factor->as<Tensor>().rank()) * prefactor;

@@ -32,7 +32,7 @@ TEST_CASE("Tensor", "[elements]") {
     REQUIRE(!t1);
     REQUIRE(t1.bra_rank() == 0);
     REQUIRE(t1.ket_rank() == 0);
-    REQUIRE(t1.auxiliary_rank() == 0);
+    REQUIRE(t1.aux_rank() == 0);
     REQUIRE(t1.rank() == 0);
     REQUIRE(t1.symmetry() == Symmetry::invalid);
     REQUIRE(t1.braket_symmetry() == BraKetSymmetry::invalid);
@@ -44,7 +44,7 @@ TEST_CASE("Tensor", "[elements]") {
     REQUIRE(t2);
     REQUIRE(t2.bra_rank() == 1);
     REQUIRE(t2.ket_rank() == 1);
-    REQUIRE(t2.auxiliary_rank() == 0);
+    REQUIRE(t2.aux_rank() == 0);
     REQUIRE(t2.rank() == 1);
     REQUIRE(t2.const_indices().size() == 2);
     REQUIRE(t2.symmetry() == Symmetry::nonsymm);
@@ -57,7 +57,7 @@ TEST_CASE("Tensor", "[elements]") {
     REQUIRE(t3);
     REQUIRE(t3.bra_rank() == 1);
     REQUIRE(t3.ket_rank() == 0);
-    REQUIRE(t3.auxiliary_rank() == 1);
+    REQUIRE(t3.aux_rank() == 1);
     REQUIRE_THROWS(t3.rank());
     REQUIRE(t3.const_indices().size() == 2);
     REQUIRE(t3.symmetry() == Symmetry::nonsymm);
@@ -76,7 +76,7 @@ TEST_CASE("Tensor", "[elements]") {
     REQUIRE(t4);
     REQUIRE(t4.bra_rank() == 2);
     REQUIRE(t4.ket_rank() == 2);
-    REQUIRE(t4.auxiliary_rank() == 1);
+    REQUIRE(t4.aux_rank() == 1);
     REQUIRE(t4.rank() == 2);
     REQUIRE(t4.const_indices().size() == 5);
     REQUIRE(t4.symmetry() == Symmetry::nonsymm);

@@ -71,8 +71,8 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
   /// @return concatenated view of the bra and ket index ranges
   auto braket() { return ranges::views::concat(bra_, ket_); }
 
-  /// @return concatenated view of bra, ket, and auxiliary index ranges
-  auto indices() { return ranges::views::concat(bra_, ket_, auxiliary_); }
+  /// @return concatenated view of bra, ket, and aux index ranges
+  auto indices() { return ranges::views::concat(bra_, ket_, aux_); }
 
   /// asserts that @p label is not reserved
   /// @note Tensor with reserved labels are constructed using friends of Tensor
@@ -87,14 +87,14 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
 
   template <typename IndexRange1, typename IndexRange2, typename IndexRange3>
   Tensor(std::wstring_view label, IndexRange1 &&bra_indices,
-         IndexRange2 &&ket_indices, IndexRange3 &&auxiliary_indices,
-         reserved_tag, Symmetry s = Symmetry::nonsymm,
+         IndexRange2 &&ket_indices, IndexRange3 &&aux_indices, reserved_tag,
+         Symmetry s = Symmetry::nonsymm,
          BraKetSymmetry bks = get_default_context().braket_symmetry(),
          ParticleSymmetry ps = ParticleSymmetry::symm)
       : label_(label),
         bra_(make_indices(bra_indices)),
         ket_(make_indices(ket_indices)),
-        auxiliary_(make_indices(auxiliary_indices)),
+        aux_(make_indices(aux_indices)),
         symmetry_(s),
         braket_symmetry_(bks),
         particle_symmetry_(ps) {
@@ -112,7 +112,7 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
   /// to indices)
   /// @param ket_indices list of ket indices (or objects that can be converted
   /// to indices)
-  /// @param auxiliary_indices list of auxiliary indices (or objects that can be
+  /// @param aux_indices list of aux indices (or objects that can be
   /// converted to indices)
   /// @param s the symmetry of bra or ket
   /// @param bks the symmetry with respect to bra-ket exchange
@@ -123,14 +123,14 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
                 !meta::is_initializer_list_v<std::decay_t<IndexRange2>> &&
                 !meta::is_initializer_list_v<std::decay_t<IndexRange3>>>>
   Tensor(std::wstring_view label, IndexRange1 &&bra_indices,
-         IndexRange2 &&ket_indices, IndexRange3 &&auxiliary_indices,
+         IndexRange2 &&ket_indices, IndexRange3 &&aux_indices,
          Symmetry s = Symmetry::nonsymm,
          BraKetSymmetry bks = get_default_context().braket_symmetry(),
          ParticleSymmetry ps = ParticleSymmetry::symm)
       : Tensor(label, std::forward<IndexRange1>(bra_indices),
                std::forward<IndexRange2>(ket_indices),
-               std::forward<IndexRange3>(auxiliary_indices), reserved_tag{}, s,
-               bks, ps) {
+               std::forward<IndexRange3>(aux_indices), reserved_tag{}, s, bks,
+               ps) {
     assert_nonreserved_label(label_);
   }
 
@@ -143,7 +143,7 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
   /// to indices)
   /// @param ket_indices list of ket indices (or objects that can be converted
   /// to indices)
-  /// @param auxiliary_indices list of auxiliary indices (or objects that can be
+  /// @param aux_indices list of aux indices (or objects that can be
   /// converted to indices)
   /// @param s the symmetry of bra or ket
   /// @param bks the symmetry with respect to bra-ket exchange
@@ -151,12 +151,11 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
   template <typename I1 = Index, typename I2 = Index, typename I3 = Index>
   Tensor(std::wstring_view label, std::initializer_list<I1> bra_indices,
          std::initializer_list<I2> ket_indices,
-         std::initializer_list<I3> auxiliary_indices,
-         Symmetry s = Symmetry::nonsymm,
+         std::initializer_list<I3> aux_indices, Symmetry s = Symmetry::nonsymm,
          BraKetSymmetry bks = get_default_context().braket_symmetry(),
          ParticleSymmetry ps = ParticleSymmetry::symm)
       : Tensor(label, make_indices(bra_indices), make_indices(ket_indices),
-               make_indices(auxiliary_indices), reserved_tag{}, s, bks, ps) {
+               make_indices(aux_indices), reserved_tag{}, s, bks, ps) {
     assert_nonreserved_label(label_);
   }
 
@@ -173,13 +172,13 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
   const auto &bra() const { return bra_; }
   /// @return the ket index range
   const auto &ket() const { return ket_; }
-  /// @return the auxiliary index range
-  const auto &auxiliary() const { return auxiliary_; }
+  /// @return the aux index range
+  const auto &aux() const { return aux_; }
   /// @return concatenated view of the bra and ket index ranges
   auto braket() const { return ranges::views::concat(bra_, ket_); }
   /// @return concatenated view of all indices of this tensor (bra, ket and
-  /// auxiliary)
-  auto indices() const { return ranges::views::concat(bra_, ket_, auxiliary_); }
+  /// aux)
+  auto indices() const { return ranges::views::concat(bra_, ket_, aux_); }
   /// @return view of the bra+ket index ranges
   /// @note this is to work around broken lookup rules
   auto const_braket() const { return this->braket(); }
@@ -207,8 +206,8 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
   std::size_t bra_rank() const { return bra_.size(); }
   /// @return number of ket indices
   std::size_t ket_rank() const { return ket_.size(); }
-  /// @return number of auxiliary indices
-  auto auxiliary_rank() const { return auxiliary_.size(); }
+  /// @return number of aux indices
+  std::size_t aux_rank() const { return aux_.size(); }
   /// @return number of indices in bra/ket
   /// @throw std::logic_error if bra and ket ranks do not match
   std::size_t rank() const {
@@ -234,13 +233,13 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
     result += L"}_{";
     for (const auto &i : this->bra()) result += sequant::to_latex(i);
     result += L"}";
-    if (!this->auxiliary_.empty()) {
+    if (!this->aux_.empty()) {
       result += L"(";
-      const index_container_type &aux = auxiliary();
-      for (std::size_t i = 0; i < auxiliary_rank(); ++i) {
-        result += sequant::to_latex(aux[i]);
+      const index_container_type &__aux = aux();
+      for (std::size_t i = 0; i < aux_rank(); ++i) {
+        result += sequant::to_latex(__aux[i]);
 
-        if (i + 1 < auxiliary_rank()) {
+        if (i + 1 < aux_rank()) {
           result += L",";
         }
       }
@@ -287,7 +286,7 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
   std::wstring label_{};
   index_container_type bra_{};
   index_container_type ket_{};
-  index_container_type auxiliary_{};
+  index_container_type aux_{};
   Symmetry symmetry_ = Symmetry::invalid;
   BraKetSymmetry braket_symmetry_ = BraKetSymmetry::invalid;
   ParticleSymmetry particle_symmetry_ = ParticleSymmetry::invalid;
@@ -308,7 +307,7 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
     auto val = hash::range(begin(bra()), end(bra()));
     bra_hash_value_ = val;
     hash::range(val, begin(ket()), end(ket()));
-    hash::range(val, begin(auxiliary()), end(auxiliary()));
+    hash::range(val, begin(aux()), end(aux()));
     hash::combine(val, label_);
     hash::combine(val, symmetry_);
     hash_value_ = val;
@@ -324,7 +323,8 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
     if (this->label() == that_cast.label() &&
         this->symmetry() == that_cast.symmetry() &&
         this->bra_rank() == that_cast.bra_rank() &&
-        this->ket_rank() == that_cast.ket_rank()) {
+        this->ket_rank() == that_cast.ket_rank() &&
+        this->aux_rank() == that_cast.aux_rank()) {
       // compare hash values first
       if (this->hash_value() ==
           that.hash_value())  // hash values agree -> do full comparison
@@ -351,6 +351,10 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
       return this->ket_rank() < that_cast.ket_rank();
     }
 
+    if (this->aux_rank() != that_cast.aux_rank()) {
+      return this->aux_rank() < that_cast.aux_rank();
+    }
+
     //          v1: compare hashes only
     //          return Expr::static_less_than(that);
     //          v2: compare fully
@@ -366,9 +370,9 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
           that_cast.ket().end());
     }
 
-    return std::lexicographical_compare(
-        this->auxiliary().begin(), this->auxiliary().end(),
-        that_cast.auxiliary().begin(), that_cast.auxiliary().end());
+    return std::lexicographical_compare(this->aux().begin(), this->aux().end(),
+                                        that_cast.aux().begin(),
+                                        that_cast.aux().end());
   }
 
   // these implement the AbstractTensor interface
@@ -380,9 +384,9 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
     return ranges::counted_view<const Index *>(
         ket_.empty() ? nullptr : &(ket_[0]), ket_.size());
   }
-  AbstractTensor::const_any_view_randsz _auxiliary() const override final {
+  AbstractTensor::const_any_view_randsz _aux() const override final {
     return ranges::counted_view<const Index *>(
-        auxiliary_.empty() ? nullptr : &(auxiliary_[0]), auxiliary_.size());
+        aux_.empty() ? nullptr : &(aux_[0]), aux_.size());
   }
   AbstractTensor::const_any_view_rand _braket() const override final {
     return braket();
@@ -392,9 +396,7 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
   }
   std::size_t _bra_rank() const override final { return bra_rank(); }
   std::size_t _ket_rank() const override final { return ket_rank(); }
-  std::size_t _auxiliary_rank() const override final {
-    return auxiliary_rank();
-  }
+  std::size_t _aux_rank() const override final { return aux_rank(); }
   Symmetry _symmetry() const override final { return symmetry_; }
   BraKetSymmetry _braket_symmetry() const override final {
     return braket_symmetry_;
@@ -430,10 +432,10 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
     return ranges::counted_view<Index *>(ket_.empty() ? nullptr : &(ket_[0]),
                                          ket_.size());
   }
-  AbstractTensor::any_view_randsz _auxiliary_mutable() override final {
+  AbstractTensor::any_view_randsz _aux_mutable() override final {
     this->reset_hash_value();
-    return ranges::counted_view<Index *>(
-        auxiliary_.empty() ? nullptr : &(auxiliary_[0]), auxiliary_.size());
+    return ranges::counted_view<Index *>(aux_.empty() ? nullptr : &(aux_[0]),
+                                         aux_.size());
   }
 
 };  // class Tensor

@@ -339,7 +339,7 @@ ExprPtr make_sum(EvalExpr const& left, EvalExpr const& right) noexcept {
   auto ts = tensor_symmetry_sum(left, right);
   auto ps = particle_symmetry(ts);
   auto bks = get_default_context().braket_symmetry();
-  return ex<Tensor>(L"I", t1.bra(), t1.ket(), t1.auxiliary(), ts, bks, ps);
+  return ex<Tensor>(L"I", t1.bra(), t1.ket(), t1.aux(), ts, bks, ps);
 }
 
 ExprPtr make_prod(EvalExpr const& left, EvalExpr const& right) noexcept {
@@ -379,9 +379,8 @@ ExprPtr make_imed(EvalExpr const& left, EvalExpr const& right,
 
     assert(op == EvalOp::Prod && "scalar + tensor not supported");
     auto const& t = right.expr()->as<Tensor>();
-    return ex<Tensor>(Tensor{L"I", t.bra(), t.ket(), t.auxiliary(),
-                             t.symmetry(), t.braket_symmetry(),
-                             t.particle_symmetry()});
+    return ex<Tensor>(Tensor{L"I", t.bra(), t.ket(), t.aux(), t.symmetry(),
+                             t.braket_symmetry(), t.particle_symmetry()});
 
   } else if (lres == ResultType::Tensor && rres == ResultType::Scalar) {
     // tensor (*) scalar

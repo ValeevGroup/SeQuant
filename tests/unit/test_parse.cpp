@@ -88,7 +88,7 @@ TEST_CASE("parse_expr", "[parse]") {
     REQUIRE(expr->is<Tensor>());
     REQUIRE(expr->as<Tensor>().bra().empty());
     REQUIRE(expr->as<Tensor>().ket().empty());
-    REQUIRE(expr->as<Tensor>().auxiliary().empty());
+    REQUIRE(expr->as<Tensor>().aux().empty());
 
     REQUIRE(expr == parse_expr(L"t{;}"));
     REQUIRE(expr == parse_expr(L"t{;;}"));
@@ -103,7 +103,7 @@ TEST_CASE("parse_expr", "[parse]") {
     REQUIRE(expr->as<Tensor>().bra().at(0).label() == L"i_1");
     REQUIRE(expr->as<Tensor>().ket().size() == 1);
     REQUIRE(expr->as<Tensor>().ket().at(0) == L"a_1");
-    REQUIRE(expr->as<Tensor>().auxiliary().empty());
+    REQUIRE(expr->as<Tensor>().aux().empty());
 
     REQUIRE(expr == parse_expr(L"t_{i1}^{a1}"));
     REQUIRE(expr == parse_expr(L"t^{a1}_{i1}"));
@@ -118,7 +118,7 @@ TEST_CASE("parse_expr", "[parse]") {
     REQUIRE(expr->as<Tensor>().ket().size() == 2);
     REQUIRE(expr->as<Tensor>().ket().at(0).label() == L"a_1");
     REQUIRE(expr->as<Tensor>().ket().at(1).label() == L"a_2");
-    REQUIRE(expr->as<Tensor>().auxiliary().empty());
+    REQUIRE(expr->as<Tensor>().aux().empty());
 
     REQUIRE(expr == parse_expr(L"+t{i1, i2; a1, a2}"));
     REQUIRE(parse_expr(L"-t{i1;a1}")->is<Product>());
@@ -150,8 +150,8 @@ TEST_CASE("parse_expr", "[parse]") {
     REQUIRE(expr->is<Tensor>());
     REQUIRE(expr->as<Tensor>().bra().empty());
     REQUIRE(expr->as<Tensor>().ket().empty());
-    REQUIRE(expr->as<Tensor>().auxiliary().size() == 1);
-    REQUIRE(expr->as<Tensor>().auxiliary()[0].label() == L"i_1");
+    REQUIRE(expr->as<Tensor>().aux().size() == 1);
+    REQUIRE(expr->as<Tensor>().aux()[0].label() == L"i_1");
 
     // All index groups at once
     expr = parse_expr(L"t{i1,i2;a1;x1,x2}");
@@ -161,9 +161,9 @@ TEST_CASE("parse_expr", "[parse]") {
     REQUIRE(expr->as<Tensor>().bra().at(1).label() == L"i_2");
     REQUIRE(expr->as<Tensor>().ket().size() == 1);
     REQUIRE(expr->as<Tensor>().ket().at(0).label() == L"a_1");
-    REQUIRE(expr->as<Tensor>().auxiliary().size() == 2);
-    REQUIRE(expr->as<Tensor>().auxiliary().at(0).label() == L"x_1");
-    REQUIRE(expr->as<Tensor>().auxiliary().at(1).label() == L"x_2");
+    REQUIRE(expr->as<Tensor>().aux().size() == 2);
+    REQUIRE(expr->as<Tensor>().aux().at(0).label() == L"x_1");
+    REQUIRE(expr->as<Tensor>().aux().at(1).label() == L"x_2");
   }
 
   SECTION("Tensor with symmetry annotation") {

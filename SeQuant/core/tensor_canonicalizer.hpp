@@ -102,9 +102,7 @@ class TensorCanonicalizer {
  protected:
   inline auto bra_range(AbstractTensor& t) const { return t._bra_mutable(); }
   inline auto ket_range(AbstractTensor& t) const { return t._ket_mutable(); }
-  inline auto auxiliary_range(AbstractTensor& t) const {
-    return t._auxiliary_mutable();
-  }
+  inline auto aux_range(AbstractTensor& t) const { return t._aux_mutable(); }
 
   /// the object used to compare indices
   static index_comparer_t index_comparer_;
@@ -163,7 +161,7 @@ class DefaultTensorCanonicalizer : public TensorCanonicalizer {
     auto is_antisymm = (s == Symmetry::antisymm);
     const auto _bra_rank = bra_rank(t);
     const auto _ket_rank = ket_rank(t);
-    const auto _aux_rank = auxiliary_rank(t);
+    const auto _aux_rank = aux_rank(t);
     const auto _rank = std::min(_bra_rank, _ket_rank);
 
     // nothing to do for rank-1 tensors
@@ -217,7 +215,7 @@ class DefaultTensorCanonicalizer : public TensorCanonicalizer {
     }
 
     // TODO: Handle auxiliary index symmetries once they are introduced
-    // auto _aux = auxiliary_range(t);
+    // auto _aux = aux_range(t);
     // ranges::sort(_aux, comp);
 
     ExprPtr result =

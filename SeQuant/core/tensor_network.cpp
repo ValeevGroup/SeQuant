@@ -65,8 +65,8 @@ struct TensorBlockCompare {
     if (ket_rank(lhs) != ket_rank(rhs)) {
       return ket_rank(lhs) < ket_rank(rhs);
     }
-    if (auxiliary_rank(lhs) != auxiliary_rank(rhs)) {
-      return auxiliary_rank(lhs) < auxiliary_rank(rhs);
+    if (aux_rank(lhs) != aux_rank(rhs)) {
+      return aux_rank(lhs) < aux_rank(rhs);
     }
 
     auto lhs_indices = indices(lhs);
@@ -759,7 +759,7 @@ TensorNetwork::Graph TensorNetwork::create_graph(
 
     // TODO: handle aux indices permutation symmetries once they are supported
     // for now, auxiliary indices are considered to always be asymmetric
-    for (std::size_t i = 0; i < auxiliary_rank(tensor); ++i) {
+    for (std::size_t i = 0; i < aux_rank(tensor); ++i) {
       graph.vertex_labels.emplace_back(L"aux_" + std::to_wstring(i + 1));
       graph.vertex_types.push_back(VertexType::TensorAux);
       graph.vertex_colors.push_back(2 * max_rank + i);
@@ -942,7 +942,7 @@ void TensorNetwork::init_edges() {
                  Vertex(Origin::Ket, tensor_idx, index_idx, tensor_symm));
     }
 
-    auto aux_indices = auxiliary(tensor);
+    auto aux_indices = aux(tensor);
     for (std::size_t index_idx = 0; index_idx < aux_indices.size();
          ++index_idx) {
       // Note: for the time being we don't have a way of expressing

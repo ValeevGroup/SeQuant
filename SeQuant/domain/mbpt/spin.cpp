@@ -126,7 +126,7 @@ ExprPtr swap_bra_ket(const ExprPtr& expr) {
   // Lambda for tensor
   auto tensor_swap = [](const Tensor& tensor) {
     auto result = Tensor(tensor.label(), tensor.ket(), tensor.bra(),
-                         tensor.auxiliary(), tensor.symmetry(),
+                         tensor.aux(), tensor.symmetry(),
                          tensor.braket_symmetry(), tensor.particle_symmetry());
     return ex<Tensor>(result);
   };
@@ -198,8 +198,8 @@ ExprPtr remove_spin(const ExprPtr& expr) {
         idx = make_spinfree(idx);
       }
     }
-    Tensor result(tensor.label(), bra, ket, tensor.auxiliary(),
-                  tensor.symmetry(), tensor.braket_symmetry());
+    Tensor result(tensor.label(), bra, ket, tensor.aux(), tensor.symmetry(),
+                  tensor.braket_symmetry());
     return std::make_shared<Tensor>(std::move(result));
   };
 
@@ -287,9 +287,9 @@ ExprPtr expand_antisymm(const Tensor& tensor, bool skip_spinsymm) {
   assert(tensor.bra_rank() == tensor.ket_rank());
   // Return non-symmetric tensor if rank is 1
   if (tensor.bra_rank() == 1) {
-    Tensor new_tensor(tensor.label(), tensor.bra(), tensor.ket(),
-                      tensor.auxiliary(), Symmetry::nonsymm,
-                      tensor.braket_symmetry(), tensor.particle_symmetry());
+    Tensor new_tensor(tensor.label(), tensor.bra(), tensor.ket(), tensor.aux(),
+                      Symmetry::nonsymm, tensor.braket_symmetry(),
+                      tensor.particle_symmetry());
     return std::make_shared<Tensor>(new_tensor);
   }
 
@@ -318,8 +318,8 @@ ExprPtr expand_antisymm(const Tensor& tensor, bool skip_spinsymm) {
     container::set<Index> ket_list(tensor.ket().begin(), tensor.ket().end());
     auto expr_sum = std::make_shared<Sum>();
     do {
-      auto new_tensor = Tensor(tensor.label(), bra_list, ket_list,
-                               tensor.auxiliary(), Symmetry::nonsymm);
+      auto new_tensor = Tensor(tensor.label(), bra_list, ket_list, tensor.aux(),
+                               Symmetry::nonsymm);
 
       if (spin_symm_tensor(new_tensor)) {
         auto new_tensor_product = std::make_shared<Product>();
@@ -524,7 +524,7 @@ ExprPtr symmetrize_expr(const Product& product) {
 
   auto S = Tensor{};
   if (A_is_nconserving) {
-    S = Tensor(L"S", A_tensor.bra(), A_tensor.ket(), A_tensor.auxiliary(),
+    S = Tensor(L"S", A_tensor.bra(), A_tensor.ket(), A_tensor.aux(),
                Symmetry::nonsymm);
   } else {  // A is N-nonconserving
     auto n = std::min(A_tensor.bra_rank(), A_tensor.ket_rank());
@@ -532,8 +532,7 @@ ExprPtr symmetrize_expr(const Product& product) {
                                        A_tensor.bra().begin() + n);
     container::svector<Index> ket_list(A_tensor.ket().begin(),
                                        A_tensor.ket().begin() + n);
-    S = Tensor(L"S", bra_list, ket_list, A_tensor.auxiliary(),
-               Symmetry::nonsymm);
+    S = Tensor(L"S", bra_list, ket_list, A_tensor.aux(), Symmetry::nonsymm);
   }
 
   // Generate replacement maps from a list of Index type (could be a bra or a
@@ -1081,7 +1080,7 @@ Tensor swap_spin(const Tensor& t) {
   return {t.label(),
           bra,
           ket,
-          t.auxiliary(),
+          t.aux(),
           t.symmetry(),
           t.braket_symmetry(),
           t.particle_symmetry()};
@@ -1121,7 +1120,7 @@ ExprPtr merge_tensors(const Tensor& O1, const Tensor& O2) {
   assert(O1.symmetry() == O2.symmetry());
   auto bra = ranges::views::concat(O1.bra(), O2.bra());
   auto ket = ranges::views::concat(O1.ket(), O2.ket());
-  auto aux = ranges::views::concat(O1.auxiliary(), O2.auxiliary());
+  auto aux = ranges::views::concat(O1.aux(), O2.aux());
   return ex<Tensor>(Tensor(O1.label(), bra, ket, aux, O1.symmetry()));
 }
 
@@ -1148,7 +1147,7 @@ std::vector<ExprPtr> open_shell_A_op(const Tensor& A) {
     ranges::for_each(spin_bra, [](const Index& i) { i.reset_tag(); });
     ranges::for_each(spin_ket, [](const Index& i) { i.reset_tag(); });
     result.at(i) = ex<Tensor>(
-        Tensor(L"A", spin_bra, spin_ket, A.auxiliary(), Symmetry::antisymm));
+        Tensor(L"A", spin_bra, spin_ket, A.aux(), Symmetry::antisymm));
     // std::wcout << to_latex(result.at(i)) << " ";
   }
   // std::wcout << "\n" << std::endl;

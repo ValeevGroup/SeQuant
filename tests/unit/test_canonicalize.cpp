@@ -17,7 +17,7 @@
 
 #include <range/v3/all.hpp>
 
-// TODO: Add test cases with auxiliary indices
+// TODO: Add test cases with aux indices
 
 TEST_CASE("Canonicalizer", "[algorithms]") {
   using namespace sequant;
