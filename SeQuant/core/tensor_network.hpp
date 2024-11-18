@@ -126,8 +126,14 @@ class TensorNetwork {
       return first == other.first && second == other.second;
     }
 
-    const Vertex &first_vertex() const { return first.value(); }
-    const Vertex &second_vertex() const { return second.value(); }
+    const Vertex &first_vertex() const {
+      assert(first.has_value());
+      return first.value();
+    }
+    const Vertex &second_vertex() const {
+      assert(second.has_value());
+      return second.value();
+    }
 
     /// @return the number of attached terminals (0, 1, or 2)
     std::size_t vertex_count() const {
