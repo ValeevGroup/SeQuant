@@ -5,6 +5,9 @@
 #include <limits>
 #include <vector>
 
+#include <SeQuant/core/op.hpp>
+#include <SeQuant/domain/mbpt/op.hpp>
+
 namespace sequant {
 class ExprPtr;
 }
@@ -57,8 +60,8 @@ class CC {
   /// equation
   ///   \f$ \langle k |\bar{H}|0 \rangle = 0 \f$ for `k` in the [\p pmin,\p
   ///   pmax] range, and null value otherwise
-  [[nodiscard]] std::vector<sequant::ExprPtr> t(
-      std::size_t commutator_rank = 4,
+  [[nodiscard]] std::vector<ExprPtr> t(
+      size_t commutator_rank = 4,
       size_t pmax = std::numeric_limits<size_t>::max(), size_t pmin = 0);
 
   /// @brief derives λ amplitude equations,
@@ -72,8 +75,7 @@ class CC {
   ///   \f$ \langle 0| (1 + \hat{\Lambda}) \frac{d \bar{H}}{d \hat{T}_k} |0
   ///   \rangle = 0 \f$ for `k` in
   /// the [1,N] range; element 0 is always null
-  [[nodiscard]] std::vector<sequant::ExprPtr> λ(
-      std::size_t commutator_rank = 4);
+  [[nodiscard]] std::vector<ExprPtr> λ(size_t commutator_rank = 4);
 
   // clang-format off
   /// @brief derives perturbed t amplitude equations
@@ -82,7 +84,7 @@ class CC {
   /// @pre `rank==1 && order==1`, only first order perturbation and one-body perturbation operator is supported now
   /// @return std::vector of perturbed t amplitude equations
   // clang-format on
-  [[nodiscard]] std::vector<sequant::ExprPtr> t_pt(size_t order, size_t rank);
+  [[nodiscard]] std::vector<ExprPtr> t_pt(size_t order = 1, size_t rank = 1);
 
   // clang-format off
   /// @brief derives perturbed λ amplitude equations
@@ -91,7 +93,19 @@ class CC {
   /// @pre `rank==1 && order==1`, only first order perturbation and one-body perturbation operator is supported now
   /// @return std::vector of perturbed λ amplitude equations
   // clang-format on
-  [[nodiscard]] std::vector<sequant::ExprPtr> λ_pt(size_t order, size_t rank);
+  [[nodiscard]] std::vector<ExprPtr> λ_pt(size_t order = 1, size_t rank = 1);
+
+  /// @brief derives right-side sigma equations for EOM-CC
+  /// @param np number of particle creators in R operator
+  /// @param nh number of hole creators in R operator
+  /// @return vector of right side sigma equations, element 0 is always null
+  [[nodiscard]] std::vector<ExprPtr> eom_r(nₚ np, nₕ nh);
+
+  /// @brief derives left-side sigma equations for EOM-CC
+  /// @param np number of particle annihilators in L operator
+  /// @param nh number of hole annihilators in L operator
+  /// @return vector of left side sigma equations, element 0 is always null
+  [[nodiscard]] std::vector<ExprPtr> eom_l(nₚ np, nₕ nh);
 
  private:
   size_t N;

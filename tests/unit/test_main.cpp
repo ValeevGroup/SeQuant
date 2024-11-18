@@ -40,7 +40,7 @@ int main(int argc, char* argv[]) {
   // uncomment to enable verbose output ...
   // Logger::set_instance(1);
   // ... or can instead selectively set/unset particular logging flags
-  // Logger::get_instance().wick_contract = true;
+  // Logger::instance().wick_contract = true;
 
 #ifdef SEQUANT_HAS_TILEDARRAY
   auto& world = TA::initialize(argc, argv);

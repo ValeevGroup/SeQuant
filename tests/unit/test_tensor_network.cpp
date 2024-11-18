@@ -87,7 +87,10 @@ class TensorNetworkAccessor {
 
 TEST_CASE("TensorNetwork", "[elements]") {
   using namespace sequant;
-  using namespace sequant::mbpt::tensor;
+  using namespace sequant::mbpt;
+  using sequant::Context;
+  namespace t = sequant::mbpt::tensor;
+  namespace o = sequant::mbpt::op;
 
   sequant::set_default_context(Context(
       mbpt::make_sr_spaces(), Vacuum::SingleProduct, IndexSpaceMetric::Unit,
@@ -152,10 +155,8 @@ TEST_CASE("TensorNetwork", "[elements]") {
 
   SECTION("constructors") {
     {  // with Tensors
-      auto t1 =
-          ex<Tensor>(L"F", WstrList{L"i_1"}, WstrList{L"i_2"}, WstrList{});
-      auto t2 =
-          ex<Tensor>(L"t", WstrList{L"i_1"}, WstrList{L"i_2"}, WstrList{});
+      auto t1 = ex<Tensor>(L"F", bra{L"i_1"}, ket{L"i_2"});
+      auto t2 = ex<Tensor>(L"t", bra{L"i_1"}, ket{L"i_2"});
       auto t1_x_t2 = t1 * t2;
       REQUIRE_NOTHROW(TensorNetwork(*t1_x_t2));
 
@@ -165,14 +166,14 @@ TEST_CASE("TensorNetwork", "[elements]") {
 
     {  // with NormalOperators
       constexpr const auto V = Vacuum::SingleProduct;
-      auto t1 = ex<FNOperator>(WstrList{L"i_1"}, WstrList{L"i_2"}, V);
-      auto t2 = ex<FNOperator>(WstrList{L"i_2"}, WstrList{L"i_1"}, V);
+      auto t1 = ex<FNOperator>(cre({L"i_1"}), ann({L"i_2"}), V);
+      auto t2 = ex<FNOperator>(cre({L"i_2"}), ann({L"i_1"}), V);
       auto t1_x_t2 = t1 * t2;
       REQUIRE_NOTHROW(TensorNetwork(*t1_x_t2));
     }
 
     {  // with Tensors and NormalOperators
-      auto tmp = A(-2) * H_(2) * T_(2) * T_(2);
+      auto tmp = t::A(nₚ(-2)) * t::H_(2) * t::T_(2) * t::T_(2);
       REQUIRE_NOTHROW(TensorNetwork(tmp->as<Product>().factors()));
     }
 
@@ -181,9 +182,8 @@ TEST_CASE("TensorNetwork", "[elements]") {
   SECTION("accessors") {
     {
       constexpr const auto V = Vacuum::SingleProduct;
-      auto t1 =
-          ex<Tensor>(L"F", WstrList{L"i_1"}, WstrList{L"i_2"}, WstrList{});
-      auto t2 = ex<FNOperator>(WstrList{L"i_1"}, WstrList{L"i_3"}, V);
+      auto t1 = ex<Tensor>(L"F", bra{L"i_1"}, ket{L"i_2"});
+      auto t2 = ex<FNOperator>(cre({L"i_1"}), ann({L"i_3"}), V);
       auto t1_x_t2 = t1 * t2;
       REQUIRE_NOTHROW(TensorNetwork(*t1_x_t2));
       TensorNetwork tn(*t1_x_t2);
@@ -207,12 +207,11 @@ TEST_CASE("TensorNetwork", "[elements]") {
   }  // SECTION("accessors")
 
   SECTION("canonicalizer") {
-    SECTION("no externals") {
+    {  // with no external indices, hence no named indices whatsoever
       Index::reset_tmp_index();
       constexpr const auto V = Vacuum::SingleProduct;
-      auto t1 =
-          ex<Tensor>(L"F", WstrList{L"i_1"}, WstrList{L"i_2"}, WstrList{});
-      auto t2 = ex<FNOperator>(WstrList{L"i_1"}, WstrList{L"i_2"}, V);
+      auto t1 = ex<Tensor>(L"F", bra{L"i_1"}, ket{L"i_2"});
+      auto t2 = ex<FNOperator>(cre({L"i_1"}), ann({L"i_2"}), V);
       auto t1_x_t2 = t1 * t2;
       TensorNetwork tn(*t1_x_t2);
       tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(), false);
@@ -231,12 +230,11 @@ TEST_CASE("TensorNetwork", "[elements]") {
               L"{\\tilde{a}^{{i_1}}_{{i_2}}}");
     }
 
-    SECTION("with externals") {
+    {
       Index::reset_tmp_index();
       constexpr const auto V = Vacuum::SingleProduct;
-      auto t1 =
-          ex<Tensor>(L"F", WstrList{L"i_2"}, WstrList{L"i_17"}, WstrList{});
-      auto t2 = ex<FNOperator>(WstrList{L"i_2"}, WstrList{L"i_3"}, V);
+      auto t1 = ex<Tensor>(L"F", bra{L"i_2"}, ket{L"i_17"});
+      auto t2 = ex<FNOperator>(cre({L"i_2"}), ann({L"i_3"}), V);
       auto t1_x_t2 = t1 * t2;
 
       // with all external named indices
@@ -431,9 +429,9 @@ TEST_CASE("TensorNetwork", "[elements]") {
 
       const auto original_indices = indices;
 
-      // Make sure to clone all expressions in order to not accidentally modify
-      // the ones in expected (even though they are const... the pointer-like
-      // semantics of expressions messes with const semantics)
+      // Make sure to clone all expressions in order to not accidentally
+      // modify the ones in expected (even though they are const... the
+      // pointer-like semantics of expressions messes with const semantics)
       std::remove_const_t<decltype(expected)> factors;
       for (const auto& factor : expected) {
         factors.push_back(factor.clone());
@@ -563,22 +561,20 @@ TEST_CASE("TensorNetwork", "[elements]") {
                   to_latex(to_product(check_tn.tensors())));
         }
       }
-    }
+    }  // SECTION("idempotency")
+
   }  // SECTION("canonicalizer")
 
   SECTION("misc1") {
     if (false) {
       Index::reset_tmp_index();
       // TN1 from manuscript
-      auto g =
-          ex<Tensor>(L"g", WstrList{L"i_3", L"i_4"}, WstrList{L"a_3", L"a_4"},
-                     WstrList{}, Symmetry::antisymm);
-      auto ta =
-          ex<Tensor>(L"t", WstrList{L"a_1", L"a_3"}, WstrList{L"i_1", L"i_2"},
-                     WstrList{}, Symmetry::antisymm);
-      auto tb =
-          ex<Tensor>(L"t", WstrList{L"a_2", L"a_4"}, WstrList{L"i_3", L"i_4"},
-                     WstrList{}, Symmetry::antisymm);
+      auto g = ex<Tensor>(L"g", bra{L"i_3", L"i_4"}, ket{L"a_3", L"a_4"},
+                          Symmetry::antisymm);
+      auto ta = ex<Tensor>(L"t", bra{L"a_1", L"a_3"}, ket{L"i_1", L"i_2"},
+                           Symmetry::antisymm);
+      auto tb = ex<Tensor>(L"t", bra{L"a_2", L"a_4"}, ket{L"i_3", L"i_4"},
+                           Symmetry::antisymm);
 
       auto tmp = g * ta * tb;
       // std::wcout << "TN1 = " << to_latex(tmp) << std::endl;
@@ -595,7 +591,8 @@ TEST_CASE("TensorNetwork", "[elements]") {
       {
         std::basic_ostringstream<wchar_t> oss;
         REQUIRE_NOTHROW(graph.bliss_graph->write_dot(oss, graph.vertex_labels));
-        // std::wcout << "oss.str() = " << std::endl << oss.str() << std::endl;
+        // std::wcout << "oss.str() = " << std::endl << oss.str() <<
+        // std::endl;
       }
 
       bliss::Stats stats;
@@ -628,9 +625,9 @@ TEST_CASE("TensorNetwork", "[elements]") {
         // - testcase=3 corresponds to the "No symmetry dummy"
         //   case in Section 5.1 of DOI 10.1016/j.cpc.2018.02.014
         if (testcase == 0)
-          std::wcout
-              << "canonicalizing network with 1 totally-symmetric tensor with "
-                 "N indices and 1 asymmetric tensor with N indices\n";
+          std::wcout << "canonicalizing network with 1 totally-symmetric "
+                        "tensor with "
+                        "N indices and 1 asymmetric tensor with N indices\n";
         else if (testcase == 3)
           std::wcout << "canonicalizing network with 1 asymmetric tensor with "
                         "N indices and 1 asymmetric tensor with N indices\n";
@@ -683,10 +680,10 @@ TEST_CASE("TensorNetwork", "[elements]") {
 
           auto product_time =
               1.;  // product of all times, need to get geometric mean
-          auto min_time =
-              std::numeric_limits<double>::max();  // total time for all samples
-          auto max_time =
-              std::numeric_limits<double>::min();  // total time for all samples
+          auto min_time = std::numeric_limits<double>::max();  // total time for
+                                                               // all samples
+          auto max_time = std::numeric_limits<double>::min();  // total time for
+                                                               // all samples
           for (auto s = 0; s != S; ++s) {
             // make tensors of independently (and randomly) permuted
             // contravariant and covariant indices
@@ -702,20 +699,19 @@ TEST_CASE("TensorNetwork", "[elements]") {
                 covariant_indices | ranges::views::chunk(N / n) |
                 ranges::views::transform([&](const auto& idxs) {
                   return ex<Tensor>(
-                      L"u", idxs, std::vector<Index>{}, std::vector<Index>{},
+                      L"u", bra(idxs), ket{},
                       (testcase == 3
                            ? Symmetry::nonsymm
                            : ((n == 1) ? Symmetry::symm : Symmetry::nonsymm)));
                 }) |
                 ranges::to_vector;
             CHECK(utensors.size() == static_cast<std::size_t>(n));
-            auto dtensors = contravariant_indices | ranges::views::chunk(N) |
-                            ranges::views::transform([&](const auto& idxs) {
-                              return ex<Tensor>(L"d", std::vector<Index>{},
-                                                std::vector<Index>{}, idxs,
-                                                Symmetry::nonsymm);
-                            }) |
-                            ranges::to_vector;
+            auto dtensors =
+                contravariant_indices | ranges::views::chunk(N) |
+                ranges::views::transform([&](const auto& idxs) {
+                  return ex<Tensor>(L"d", bra{}, ket(idxs), Symmetry::nonsymm);
+                }) |
+                ranges::to_vector;
             CHECK(dtensors.size() == 1);
 
             ExprPtr expr;
@@ -765,4 +761,4 @@ TEST_CASE("TensorNetwork", "[elements]") {
 
   }  // SECTION("misc1")
 
-}  // TEST_CASE("Tensor")
+}  // TEST_CASE("TensorNetwork")

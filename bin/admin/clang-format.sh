@@ -1,5 +1,12 @@
 #!/bin/bash
 
+set -e
+set -u
+
+# Taken from https://stackoverflow.com/a/246128
+script_dir="$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+repo_root="$(realpath "$script_dir/../../" )"
+
 # these are the versions of clang-format that are supported required
 # should be ordered from oldest to newest to make sure the newest is picked
 supported_clang_format_versions="17"
@@ -22,12 +29,12 @@ case "${unameOut}" in
     ;;
 esac
 
-path_to_clang_format=`which clang-format`
+path_to_clang_format="$( which clang-format || true )"
 have_supported_clang_format_version=0
 if [[ "X$path_to_clang_format" != "X" ]]; then
 
   # check clang-format version
-  clang_format_version=`clang-format --version | sed 's/.* version //' | awk -F'[.]' '{print $1}'`
+  clang_format_version="$( $path_to_clang_format --version | sed 's/.* version //' | awk -F'[.]' '{print $1}' )"
 
   #echo "supported_clang_format_versions=\"$supported_clang_format_versions\" clang_format_version=$clang_format_version"
 
@@ -41,24 +48,28 @@ if [[ "X$path_to_clang_format" != "X" ]]; then
 fi
 
 if [[ $have_supported_clang_format_version -eq 0 ]]; then
-  echo "WARNING: found clang-format with unsupported version $clang_format_version (supported versions: $supported_clang_format_versions)"
+  if [[ -z "${clang_format_version:-}" ]]; then
+    echo "No clang-format installed locally"
+  else
+    echo "WARNING: found clang-format with unsupported version $clang_format_version (supported versions: $supported_clang_format_versions)"
+  fi
 
   # look for docker
-  path_to_docker=`which docker`
+  path_to_docker="$( which docker || true )"
   if [[ "X$path_to_docker" = "X" ]]; then
     echo "ERROR: docker is not found either, PATH=$PATH, install one of supported clang-format versions (any of these: $supported_clang_format_versions) or install docker"
+    echo "Note: sudo apt install docker installs the wrong thing though!"
     exit 1
   fi
 
   # if docker up?
-  docker info >/dev/null 2>&1
-  if [[ $? -ne 0 ]]; then
+  if [ "$path_to_docker" info > /dev/null 2>&1 ]; then
     echo "ERROR: docker is found but not running, start it"
     exit 1
   fi
 
   # use docker to run clang-format
-  mount_path=$(readlink -f "$HOME")
+  mount_path="$repo_root"
 
   # convert file names in the arguments to relative paths
   args=""
@@ -68,27 +79,11 @@ if [[ $have_supported_clang_format_version -eq 0 ]]; then
       args="$args $i"
       continue
     fi
-    abs_file_path=$(readlink -f "$i")
-    if [[ "X$abs_file_path" = "X" ]]; then
-      echo "ERROR: given file $i is not found"
-      exit 1
-    fi
 
-    dir=$(dirname $abs_file_path)
-    file_path_relative_to_project_root=$(basename $abs_file_path)
-    while [[ "$dir" != "$mount_path" && "$dir" != "/" ]]; do
-      file_path_relative_to_project_root="$(basename $dir)/$file_path_relative_to_project_root"
-      dir=$(dirname $dir)
-      #echo "dir=$dir file_path_relative_to_project_root=$file_path_relative_to_project_root"
-    done
-    if [[ "$dir" == "/" ]]; then
-      echo "ERROR: given file $i (absolute path $abs_file_path) is not under \$HOME=$mount_path, cannot use docker-based clang-format in this case"
-      exit 1
-    fi
-    args="$args /hostHOME/$file_path_relative_to_project_root"
+    args="$args /hostHOME/$(realpath --relative-to="$mount_path" $i )"
   done
-  docker run --platform linux/x86_64 -v $mount_path:/hostHOME xianpengshen/clang-tools:$preferred_clang_format_version clang-format $args
+  "$path_to_docker" run --platform linux/x86_64 -v $mount_path:/hostHOME xianpengshen/clang-tools:$preferred_clang_format_version clang-format $args
 else
   #echo "found $path_to_clang_format with required version $clang_format_version"
-  clang-format $*
+  "$path_to_clang_format" $*
 fi

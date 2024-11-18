@@ -15,8 +15,8 @@ TEST_CASE("SR-TCC", "[mbpt/cc]") {
   SECTION("t") {
     // TCC R1
     SEQUANT_PROFILE_SINGLE("CCSD t", {
-      [[maybe_unused]] auto& l = sequant::Logger::get_instance();
-      // l.canonicalize = true;
+      [[maybe_unused]] auto l = sequant::Logger::instance();
+      // l->canonicalize = true;
       const auto N = 2;
       auto t_eqs = CC{N}.t();
       REQUIRE(t_eqs.size() == N + 1);
@@ -30,6 +30,56 @@ TEST_CASE("SR-TCC", "[mbpt/cc]") {
   }  // SECTION("t")
 
 }  // TEST_CASE("SR-TCC")
+
+TEST_CASE("EOM-CC", "[mbpt/cc]") {
+  using namespace sequant;
+  using namespace sequant::mbpt;
+
+  SECTION("EOM-CCSD") {
+    SEQUANT_PROFILE_SINGLE("EE-EOM-CCSD R", {
+      const auto N = 2;
+      const auto K_occ = 2;
+      const auto K_uocc = 2;
+      const auto eqs = CC{N}.eom_r(nₚ(K_uocc), nₕ(K_occ));
+      for (auto k = 1; k < eqs.size(); ++k) REQUIRE(eqs[k]);
+
+      if (N == 2 && K_occ == 2 && K_uocc == 2) {
+        REQUIRE(size(eqs[1]) == 21);
+        REQUIRE(size(eqs[2]) == 53);
+      }
+    });
+
+    SEQUANT_PROFILE_SINGLE("EE-EOM-CCSD L", {
+      const auto N = 2;
+      const auto K_occ = 2;
+      const auto K_uocc = 2;
+      const auto eqs = CC{N}.eom_l(nₚ(K_uocc), nₕ(K_occ));
+      for (auto k = 1; k < eqs.size(); ++k) REQUIRE(eqs[k]);
+
+      if (N == 2 && K_occ == 2 && K_uocc == 2) {
+        REQUIRE(size(eqs[1]) == 43);
+        REQUIRE(size(eqs[2]) == 31);
+      }
+    });
+  }  // SECTION("EOM-CCSD")
+
+  SECTION("EOM-CCSDT") {
+    SEQUANT_PROFILE_SINGLE("EE-EOM-CCSDT R", {
+      const auto N = 3;
+      const auto K_occ = 3;
+      const auto K_uocc = 3;
+      const auto eqs = CC{N}.eom_r(nₚ(K_uocc), nₕ(K_occ));
+      for (auto k = 1; k < eqs.size(); ++k) REQUIRE(eqs[k]);
+
+      if (N == 3 && K_occ == 3 && K_uocc == 3) {
+        REQUIRE(size(eqs[1]) == 22);
+        REQUIRE(size(eqs[2]) == 62);
+        REQUIRE(size(eqs[3]) == 99);
+      }
+    });
+  }  // SECTION("EOM-CCSDT")
+
+}  // TEST_CASE("EOM-CC")
 
 TEST_CASE("SR-UCC", "[mbpt/cc]") {
   using namespace sequant::mbpt;

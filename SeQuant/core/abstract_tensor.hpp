@@ -197,9 +197,6 @@ class AbstractTensor {
 /// @name customization points to support generic algorithms on AbstractTensor
 /// objects.
 /// @{
-inline auto bra(const AbstractTensor& t) { return t._bra(); }
-inline auto ket(const AbstractTensor& t) { return t._ket(); }
-inline auto aux(const AbstractTensor& t) { return t._aux(); }
 inline auto braket(const AbstractTensor& t) { return t._braket(); }
 inline auto indices(const AbstractTensor& t) { return t._indices(); }
 inline auto bra_rank(const AbstractTensor& t) { return t._bra_rank(); }
@@ -220,7 +217,7 @@ inline auto to_latex(const AbstractTensor& t) { return t._to_latex(); }
 /// Type trait for checking whether a given class fulfills the Tensor interface
 /// requirements Object @c t of a type that meets the concept must satisfy the
 /// following:
-///         - @c bra(t) , @c ket(t), @c aux(t), @c braket(t) and
+///         - @c braket(t) and
 ///         @c indices(t) are valid expressions and evaluate to a range of Index
 ///         objects;
 ///         - @c bra_rank(t), @c ket_rank(t) and @c aux_rank(t) are valid
@@ -247,9 +244,6 @@ inline auto to_latex(const AbstractTensor& t) { return t._to_latex(); }
 template <typename T>
 struct is_tensor
     : std::bool_constant<
-          std::is_invocable_v<decltype(bra), T> &&
-          std::is_invocable_v<decltype(ket), T> &&
-          std::is_invocable_v<decltype(aux), T> &&
           std::is_invocable_v<decltype(braket), T> &&
           std::is_invocable_v<decltype(indices), T> &&
           std::is_invocable_v<decltype(bra_rank), T> &&

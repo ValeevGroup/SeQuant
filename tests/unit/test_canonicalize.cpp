@@ -29,30 +29,26 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
 
   SECTION("Tensors") {
     {
-      auto op =
-          ex<Tensor>(L"g", WstrList{L"p_1", L"p_2"}, WstrList{L"p_3", L"p_4"},
-                     WstrList{}, Symmetry::nonsymm);
+      auto op = ex<Tensor>(L"g", bra{L"p_1", L"p_2"}, ket{L"p_3", L"p_4"},
+                           Symmetry::nonsymm);
       canonicalize(op);
       REQUIRE(to_latex(op) == L"{g^{{p_3}{p_4}}_{{p_1}{p_2}}}");
     }
     {
-      auto op =
-          ex<Tensor>(L"g", WstrList{L"p_2", L"p_1"}, WstrList{L"p_3", L"p_4"},
-                     WstrList{}, Symmetry::nonsymm);
+      auto op = ex<Tensor>(L"g", bra{L"p_2", L"p_1"}, ket{L"p_3", L"p_4"},
+                           Symmetry::nonsymm);
       canonicalize(op);
       REQUIRE(to_latex(op) == L"{g^{{p_4}{p_3}}_{{p_1}{p_2}}}");
     }
     {
-      auto op =
-          ex<Tensor>(L"g", WstrList{L"p_1", L"p_2"}, WstrList{L"p_4", L"p_3"},
-                     WstrList{}, Symmetry::nonsymm);
+      auto op = ex<Tensor>(L"g", bra{L"p_1", L"p_2"}, ket{L"p_4", L"p_3"},
+                           Symmetry::nonsymm);
       canonicalize(op);
       REQUIRE(to_latex(op) == L"{g^{{p_4}{p_3}}_{{p_1}{p_2}}}");
     }
     {
-      auto op =
-          ex<Tensor>(L"g", WstrList{L"p_2", L"p_1"}, WstrList{L"p_4", L"p_3"},
-                     WstrList{}, Symmetry::nonsymm);
+      auto op = ex<Tensor>(L"g", bra{L"p_2", L"p_1"}, ket{L"p_4", L"p_3"},
+                           Symmetry::nonsymm);
       canonicalize(op);
       REQUIRE(to_latex(op) == L"{g^{{p_3}{p_4}}_{{p_1}{p_2}}}");
     }
@@ -61,14 +57,12 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
   SECTION("Products") {
     {
       auto input =
-          ex<Tensor>(L"S", WstrList{L"a_1", L"a_2"}, WstrList{L"i_1", L"i_2"},
-                     WstrList{}, Symmetry::nonsymm) *
-          ex<Tensor>(L"f", IndexList{{L"a_5"}}, IndexList{{L"i_5"}},
-                     IndexList{}, Symmetry::nonsymm) *
-          ex<Tensor>(L"t", IndexList{{L"i_5"}}, IndexList{{L"a_1"}}, WstrList{},
+          ex<Tensor>(L"S", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"},
                      Symmetry::nonsymm) *
-          ex<Tensor>(L"t", WstrList{L"i_1", L"i_2"}, WstrList{L"a_5", L"a_2"},
-                     WstrList{}, Symmetry::nonsymm);
+          ex<Tensor>(L"f", bra{L"a_5"}, ket{L"i_5"}, Symmetry::nonsymm) *
+          ex<Tensor>(L"t", bra{L"i_5"}, ket{L"a_1"}, Symmetry::nonsymm) *
+          ex<Tensor>(L"t", bra{L"i_1", L"i_2"}, ket{L"a_5", L"a_2"},
+                     Symmetry::nonsymm);
       canonicalize(input);
       REQUIRE(to_latex(input) ==
               L"{{S^{{i_1}{i_2}}_{{a_1}{a_2}}}{f^{{i_3}}_{{"
@@ -76,14 +70,12 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
     }
     {
       auto input =
-          ex<Tensor>(L"S", WstrList{L"a_1", L"a_2"}, WstrList{L"i_1", L"i_2"},
-                     WstrList{}, Symmetry::nonsymm) *
-          ex<Tensor>(L"f", IndexList{{L"a_5"}}, IndexList{{L"i_5"}}, WstrList{},
+          ex<Tensor>(L"S", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"},
                      Symmetry::nonsymm) *
-          ex<Tensor>(L"t", IndexList{{L"i_1"}}, IndexList{{L"a_5"}},
-                     IndexList{}, Symmetry::nonsymm) *
-          ex<Tensor>(L"t", WstrList{L"i_5", L"i_2"}, WstrList{L"a_1", L"a_2"},
-                     WstrList{}, Symmetry::nonsymm);
+          ex<Tensor>(L"f", bra{L"a_5"}, ket{L"i_5"}, Symmetry::nonsymm) *
+          ex<Tensor>(L"t", bra{L"i_1"}, ket{L"a_5"}, Symmetry::nonsymm) *
+          ex<Tensor>(L"t", bra{L"i_5", L"i_2"}, ket{L"a_1", L"a_2"},
+                     Symmetry::nonsymm);
       canonicalize(input);
       REQUIRE(to_latex(input) ==
               L"{{S^{{i_1}{i_2}}_{{a_1}{a_2}}}{f^{{i_3}}_{{"
@@ -93,47 +85,38 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
       auto q2 = ex<Variable>(L"q2");
       q2->adjoint();
       auto input =
-          ex<Tensor>(L"S", WstrList{L"a_1", L"a_2"}, WstrList{L"i_1", L"i_2"},
-                     WstrList{}, Symmetry::nonsymm) *
-          q2 *
-          ex<Tensor>(L"f", IndexList{{L"a_5"}}, IndexList{{L"i_5"}}, WstrList{},
+          ex<Tensor>(L"S", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"},
                      Symmetry::nonsymm) *
+          q2 * ex<Tensor>(L"f", bra{L"a_5"}, ket{L"i_5"}, Symmetry::nonsymm) *
           ex<Variable>(L"p") *
-          ex<Tensor>(L"t", IndexList{{L"i_1"}}, IndexList{{L"a_5"}}, WstrList{},
-                     Symmetry::nonsymm) *
+          ex<Tensor>(L"t", bra{L"i_1"}, ket{L"a_5"}, Symmetry::nonsymm) *
           ex<Variable>(L"q1") *
-          ex<Tensor>(L"t", WstrList{L"i_5", L"i_2"}, WstrList{L"a_1", L"a_2"},
-                     WstrList{}, Symmetry::nonsymm);
+          ex<Tensor>(L"t", bra{L"i_5", L"i_2"}, ket{L"a_1", L"a_2"},
+                     Symmetry::nonsymm);
       canonicalize(input);
       REQUIRE(to_latex(input) ==
               L"{{p}{q1}{{q2}^*}{S^{{i_1}{i_2}}_{{a_1}{a_2}}}{f^{{i_3}}_{{"
               L"a_3}}}{t^{{a_3}}_{{i_2}}}{t^{{a_1}{a_2}}_{{i_1}{i_3}}}}");
     }
     {  // Product containing adjoint of a Tensor
-      auto f2 =
-          ex<Tensor>(L"f", WstrList{L"i_5", L"i_2"}, WstrList{L"a_1", L"a_2"},
-                     WstrList{}, Symmetry::nonsymm, BraKetSymmetry::nonsymm);
+      auto f2 = ex<Tensor>(L"f", bra{L"i_5", L"i_2"}, ket{L"a_1", L"a_2"},
+                           Symmetry::nonsymm, BraKetSymmetry::nonsymm);
       f2->adjoint();
       auto input1 =
-          ex<Tensor>(L"S", WstrList{L"a_1", L"a_2"}, WstrList{L"i_1", L"i_2"},
-                     WstrList{}, Symmetry::nonsymm) *
-          ex<Tensor>(L"f", IndexList{{L"a_5"}}, IndexList{{L"i_5"}},
-                     IndexList{}, Symmetry::nonsymm) *
-          ex<Tensor>(L"t", IndexList{{L"i_1"}}, IndexList{{L"a_5"}},
-                     IndexList{}, Symmetry::nonsymm) *
-          f2;
+          ex<Tensor>(L"S", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"},
+                     Symmetry::nonsymm) *
+          ex<Tensor>(L"f", bra{L"a_5"}, ket{L"i_5"}, Symmetry::nonsymm) *
+          ex<Tensor>(L"t", bra{L"i_1"}, ket{L"a_5"}, Symmetry::nonsymm) * f2;
       canonicalize(input1);
       REQUIRE(to_latex(input1) ==
-              L"{{S^{{i_1}{i_2}}_{{a_1}{a_2}}}{f^{{i_3}}_{{a_3}}}{f⁺^{{i_1}{i_"
-              L"3}}_{{a_1}{a_2}}}{t^{{a_3}}_{{i_2}}}}");
+              L"{{S^{{i_1}{i_2}}_{{a_1}{a_3}}}{f^{{i_3}}_{{a_2}}}{f⁺^{{i_1}{i_"
+              L"3}}_{{a_1}{a_3}}}{t^{{a_2}}_{{i_2}}}}");
       auto input2 =
-          ex<Tensor>(L"S", WstrList{L"a_1", L"a_2"}, WstrList{L"i_1", L"i_2"},
-                     WstrList{}, Symmetry::nonsymm) *
-          ex<Tensor>(L"f", IndexList{{L"a_5"}}, IndexList{{L"i_5"}},
-                     IndexList{}, Symmetry::nonsymm) *
-          ex<Tensor>(L"t", IndexList{{L"i_1"}}, IndexList{{L"a_5"}},
-                     IndexList{}, Symmetry::nonsymm) *
-          f2 * ex<Variable>(L"w") * ex<Constant>(rational{1, 2});
+          ex<Tensor>(L"S", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"},
+                     Symmetry::nonsymm) *
+          ex<Tensor>(L"f", bra{L"a_5"}, ket{L"i_5"}, Symmetry::nonsymm) *
+          ex<Tensor>(L"t", bra{L"i_1"}, ket{L"a_5"}, Symmetry::nonsymm) * f2 *
+          ex<Variable>(L"w") * ex<Constant>(rational{1, 2});
       canonicalize(input2);
       REQUIRE(to_latex(input2) ==
               L"{{{\\frac{1}{2}}}{w}{S^{{i_1}{i_2}}_{{a_1}{a_2}}}{f^{{i_3}}_{{"
@@ -146,21 +129,15 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
       // CASE 1: Non-symmetric tensors
       auto input =
           ex<Constant>(rational{1, 2}) *
-              ex<Tensor>(L"g", WstrList{L"p_1", L"p_2"},
-                         WstrList{L"p_3", L"p_4"}, WstrList{},
+              ex<Tensor>(L"g", bra{L"p_1", L"p_2"}, ket{L"p_3", L"p_4"},
                          Symmetry::nonsymm) *
-              ex<Tensor>(L"t", IndexList{{L"p_3"}}, IndexList{{L"p_1"}},
-                         IndexList{}, Symmetry::nonsymm) *
-              ex<Tensor>(L"t", IndexList{{L"p_4"}}, IndexList{{L"p_2"}},
-                         IndexList{}, Symmetry::nonsymm) +
+              ex<Tensor>(L"t", bra{L"p_3"}, ket{L"p_1"}, Symmetry::nonsymm) *
+              ex<Tensor>(L"t", bra{L"p_4"}, ket{L"p_2"}, Symmetry::nonsymm) +
           ex<Constant>(rational{1, 2}) *
-              ex<Tensor>(L"g", WstrList{L"p_2", L"p_1"},
-                         WstrList{L"p_4", L"p_3"}, IndexList{},
+              ex<Tensor>(L"g", bra{L"p_2", L"p_1"}, ket{L"p_4", L"p_3"},
                          Symmetry::nonsymm) *
-              ex<Tensor>(L"t", IndexList{{L"p_3"}}, IndexList{{L"p_1"}},
-                         IndexList{}, Symmetry::nonsymm) *
-              ex<Tensor>(L"t", IndexList{{L"p_4"}}, IndexList{{L"p_2"}},
-                         IndexList{}, Symmetry::nonsymm);
+              ex<Tensor>(L"t", bra{L"p_3"}, ket{L"p_1"}, Symmetry::nonsymm) *
+              ex<Tensor>(L"t", bra{L"p_4"}, ket{L"p_2"}, Symmetry::nonsymm);
       canonicalize(input);
       REQUIRE(to_latex(input) ==
               L"{ "
@@ -172,20 +149,15 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
     {
       auto input =
           ex<Constant>(rational{1, 2}) *
-              ex<Tensor>(L"g", WstrList{L"p_1", L"p_2"},
-                         WstrList{L"p_3", L"p_4"}, WstrList{}, Symmetry::symm) *
-              ex<Tensor>(L"t", IndexList{{L"p_3"}}, IndexList{{L"p_1"}},
-                         IndexList{}, Symmetry::nonsymm) *
-              ex<Tensor>(L"t", IndexList{{L"p_4"}}, IndexList{{L"p_2"}},
-                         IndexList{}, Symmetry::nonsymm) +
-          ex<Constant>(rational{1, 2}) *
-              ex<Tensor>(L"g", WstrList{L"p_2", L"p_1"},
-                         WstrList{L"p_4", L"p_3"}, IndexList{},
+              ex<Tensor>(L"g", bra{L"p_1", L"p_2"}, ket{L"p_3", L"p_4"},
                          Symmetry::symm) *
-              ex<Tensor>(L"t", IndexList{{L"p_3"}}, IndexList{{L"p_1"}},
-                         IndexList{}, Symmetry::nonsymm) *
-              ex<Tensor>(L"t", IndexList{{L"p_4"}}, IndexList{{L"p_2"}},
-                         IndexList{}, Symmetry::nonsymm);
+              ex<Tensor>(L"t", bra{L"p_3"}, ket{L"p_1"}, Symmetry::nonsymm) *
+              ex<Tensor>(L"t", bra{L"p_4"}, ket{L"p_2"}, Symmetry::nonsymm) +
+          ex<Constant>(rational{1, 2}) *
+              ex<Tensor>(L"g", bra{L"p_2", L"p_1"}, ket{L"p_4", L"p_3"},
+                         Symmetry::symm) *
+              ex<Tensor>(L"t", bra{L"p_3"}, ket{L"p_1"}, Symmetry::nonsymm) *
+              ex<Tensor>(L"t", bra{L"p_4"}, ket{L"p_2"}, Symmetry::nonsymm);
       canonicalize(input);
       REQUIRE(to_latex(input) ==
               L"{ "
@@ -197,21 +169,15 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
     {
       auto input =
           ex<Constant>(rational{1, 2}) *
-              ex<Tensor>(L"g", WstrList{L"p_1", L"p_2"},
-                         WstrList{L"p_3", L"p_4"}, WstrList{},
+              ex<Tensor>(L"g", bra{L"p_1", L"p_2"}, ket{L"p_3", L"p_4"},
                          Symmetry::antisymm) *
-              ex<Tensor>(L"t", IndexList{{L"p_3"}}, IndexList{{L"p_1"}},
-                         IndexList{}, Symmetry::nonsymm) *
-              ex<Tensor>(L"t", IndexList{{L"p_4"}}, IndexList{{L"p_2"}},
-                         IndexList{}, Symmetry::nonsymm) +
+              ex<Tensor>(L"t", bra{L"p_3"}, ket{L"p_1"}, Symmetry::nonsymm) *
+              ex<Tensor>(L"t", bra{L"p_4"}, ket{L"p_2"}, Symmetry::nonsymm) +
           ex<Constant>(rational{1, 2}) *
-              ex<Tensor>(L"g", WstrList{L"p_2", L"p_1"},
-                         WstrList{L"p_4", L"p_3"}, WstrList{},
+              ex<Tensor>(L"g", bra{L"p_2", L"p_1"}, ket{L"p_4", L"p_3"},
                          Symmetry::antisymm) *
-              ex<Tensor>(L"t", IndexList{{L"p_3"}}, IndexList{{L"p_1"}},
-                         IndexList{}, Symmetry::nonsymm) *
-              ex<Tensor>(L"t", IndexList{{L"p_4"}}, IndexList{{L"p_2"}},
-                         IndexList{}, Symmetry::nonsymm);
+              ex<Tensor>(L"t", bra{L"p_3"}, ket{L"p_1"}, Symmetry::nonsymm) *
+              ex<Tensor>(L"t", bra{L"p_4"}, ket{L"p_2"}, Symmetry::nonsymm);
       canonicalize(input);
       REQUIRE(to_latex(input) ==
               L"{ "
@@ -223,22 +189,16 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
     {
       auto input =
           ex<Constant>(rational{4, 3}) *
-              ex<Tensor>(L"g", WstrList{L"i_3", L"i_4"},
-                         WstrList{L"a_3", L"i_1"}, WstrList{},
+              ex<Tensor>(L"g", bra{L"i_3", L"i_4"}, ket{L"a_3", L"i_1"},
                          Symmetry::antisymm) *
-              ex<Tensor>(L"t", IndexList{{L"a_2"}}, IndexList{{L"i_3"}},
-                         IndexList{}, Symmetry::nonsymm) *
-              ex<Tensor>(L"t", IndexList{L"a_1", L"a_3"},
-                         IndexList{L"i_4", L"i_2"}, IndexList{},
+              ex<Tensor>(L"t", bra{L"a_2"}, ket{L"i_3"}, Symmetry::nonsymm) *
+              ex<Tensor>(L"t", bra{L"a_1", L"a_3"}, ket{L"i_4", L"i_2"},
                          Symmetry::antisymm) -
           ex<Constant>(rational{1, 3}) *
-              ex<Tensor>(L"g", WstrList{L"i_3", L"i_4"},
-                         WstrList{L"i_1", L"a_3"}, WstrList{},
+              ex<Tensor>(L"g", bra{L"i_3", L"i_4"}, ket{L"i_1", L"a_3"},
                          Symmetry::antisymm) *
-              ex<Tensor>(L"t", IndexList{{L"a_2"}}, IndexList{{L"i_4"}},
-                         IndexList{}, Symmetry::nonsymm) *
-              ex<Tensor>(L"t", IndexList{L"a_1", L"a_3"},
-                         IndexList{L"i_3", L"i_2"}, IndexList{},
+              ex<Tensor>(L"t", bra{L"a_2"}, ket{L"i_4"}, Symmetry::nonsymm) *
+              ex<Tensor>(L"t", bra{L"a_1", L"a_3"}, ket{L"i_3", L"i_2"},
                          Symmetry::antisymm);
       canonicalize(input);
       REQUIRE(input->size() == 1);
@@ -252,22 +212,16 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
     {
       auto input =
           ex<Constant>(rational{4, 3}) *
-              ex<Tensor>(L"g", WstrList{L"i_3", L"i_4"},
-                         WstrList{L"a_3", L"i_1"}, WstrList{},
+              ex<Tensor>(L"g", bra{L"i_3", L"i_4"}, ket{L"a_3", L"i_1"},
                          Symmetry::nonsymm) *
-              ex<Tensor>(L"t", IndexList{{L"a_2"}}, IndexList{{L"i_3"}},
-                         IndexList{}, Symmetry::nonsymm) *
-              ex<Tensor>(L"t", IndexList{L"a_1", L"a_3"},
-                         IndexList{L"i_4", L"i_2"}, IndexList{},
+              ex<Tensor>(L"t", bra{L"a_2"}, ket{L"i_3"}, Symmetry::nonsymm) *
+              ex<Tensor>(L"t", bra{L"a_1", L"a_3"}, ket{L"i_4", L"i_2"},
                          Symmetry::nonsymm) -
           ex<Constant>(rational{1, 3}) *
-              ex<Tensor>(L"g", WstrList{L"i_3", L"i_4"},
-                         WstrList{L"i_1", L"a_3"}, WstrList{},
+              ex<Tensor>(L"g", bra{L"i_3", L"i_4"}, ket{L"i_1", L"a_3"},
                          Symmetry::nonsymm) *
-              ex<Tensor>(L"t", IndexList{{L"a_2"}}, IndexList{{L"i_4"}},
-                         IndexList{}, Symmetry::nonsymm) *
-              ex<Tensor>(L"t", IndexList{L"a_1", L"a_3"},
-                         IndexList{L"i_3", L"i_2"}, IndexList{},
+              ex<Tensor>(L"t", bra{L"a_2"}, ket{L"i_4"}, Symmetry::nonsymm) *
+              ex<Tensor>(L"t", bra{L"a_1", L"a_3"}, ket{L"i_3", L"i_2"},
                          Symmetry::nonsymm);
 
       canonicalize(input);
@@ -281,24 +235,19 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
     {  // Case 5: CCSDT R3: S3 * F * T3
 
       {  // Terms 1 and 6 from spin-traced result
-        auto input = ex<Constant>(-4) *
-                         ex<Tensor>(L"S", WstrList{L"i_1", L"i_2", L"i_3"},
-                                    WstrList{L"a_1", L"a_2", L"a_3"},
-                                    WstrList{}, Symmetry::nonsymm) *
-                         ex<Tensor>(L"f", WstrList{L"i_4"}, WstrList{L"i_1"},
-                                    WstrList{}) *
-                         ex<Tensor>(L"t", WstrList{L"a_1", L"a_2", L"a_3"},
-                                    WstrList{L"i_3", L"i_2", L"i_4"},
-                                    WstrList{}, Symmetry::nonsymm) +
-                     ex<Constant>(-4) *
-                         ex<Tensor>(L"S", WstrList{L"i_1", L"i_2", L"i_3"},
-                                    WstrList{L"a_1", L"a_2", L"a_3"},
-                                    WstrList{}, Symmetry::nonsymm) *
-                         ex<Tensor>(L"f", WstrList{L"i_4"}, WstrList{L"i_1"},
-                                    WstrList{}) *
-                         ex<Tensor>(L"t", WstrList{L"a_1", L"a_2", L"a_3"},
-                                    WstrList{L"i_2", L"i_4", L"i_3"},
-                                    WstrList{}, Symmetry::nonsymm);
+        auto input =
+            ex<Constant>(-4) *
+                ex<Tensor>(L"S", bra{L"i_1", L"i_2", L"i_3"},
+                           ket{L"a_1", L"a_2", L"a_3"}, Symmetry::nonsymm) *
+                ex<Tensor>(L"f", bra{L"i_4"}, ket{L"i_1"}) *
+                ex<Tensor>(L"t", bra{L"a_1", L"a_2", L"a_3"},
+                           ket{L"i_3", L"i_2", L"i_4"}, Symmetry::nonsymm) +
+            ex<Constant>(-4) *
+                ex<Tensor>(L"S", bra{L"i_1", L"i_2", L"i_3"},
+                           ket{L"a_1", L"a_2", L"a_3"}, Symmetry::nonsymm) *
+                ex<Tensor>(L"f", bra{L"i_4"}, ket{L"i_1"}) *
+                ex<Tensor>(L"t", bra{L"a_1", L"a_2", L"a_3"},
+                           ket{L"i_2", L"i_4", L"i_3"}, Symmetry::nonsymm);
         canonicalize(input);
         REQUIRE(to_latex(input) ==
                 L"{ \\bigl( - "
@@ -309,22 +258,18 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
       {
         auto term1 =
             ex<Constant>(-4) *
-            ex<Tensor>(L"S", WstrList{L"i_1", L"i_2", L"i_3"},
-                       WstrList{L"a_1", L"a_2", L"a_3"}, WstrList{},
-                       Symmetry::nonsymm) *
-            ex<Tensor>(L"f", WstrList{L"i_4"}, WstrList{L"i_1"}, WstrList{}) *
-            ex<Tensor>(L"t", WstrList{L"a_1", L"a_2", L"a_3"},
-                       WstrList{L"i_3", L"i_2", L"i_4"}, WstrList{},
-                       Symmetry::nonsymm);
+            ex<Tensor>(L"S", bra{L"i_1", L"i_2", L"i_3"},
+                       ket{L"a_1", L"a_2", L"a_3"}, Symmetry::nonsymm) *
+            ex<Tensor>(L"f", bra{L"i_4"}, ket{L"i_1"}) *
+            ex<Tensor>(L"t", bra{L"a_1", L"a_2", L"a_3"},
+                       ket{L"i_3", L"i_2", L"i_4"}, Symmetry::nonsymm);
         auto term2 =
             ex<Constant>(-4) *
-            ex<Tensor>(L"S", WstrList{L"i_1", L"i_2", L"i_3"},
-                       WstrList{L"a_1", L"a_2", L"a_3"}, WstrList{},
-                       Symmetry::nonsymm) *
-            ex<Tensor>(L"f", WstrList{L"i_4"}, WstrList{L"i_1"}, WstrList{}) *
-            ex<Tensor>(L"t", WstrList{L"a_1", L"a_2", L"a_3"},
-                       WstrList{L"i_2", L"i_4", L"i_3"}, WstrList{},
-                       Symmetry::nonsymm);
+            ex<Tensor>(L"S", bra{L"i_1", L"i_2", L"i_3"},
+                       ket{L"a_1", L"a_2", L"a_3"}, Symmetry::nonsymm) *
+            ex<Tensor>(L"f", bra{L"i_4"}, ket{L"i_1"}) *
+            ex<Tensor>(L"t", bra{L"a_1", L"a_2", L"a_3"},
+                       ket{L"i_2", L"i_4", L"i_3"}, Symmetry::nonsymm);
         canonicalize(term1);
         canonicalize(term2);
         REQUIRE(to_latex(term1) ==
@@ -341,24 +286,19 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
       }
 
       {  // Terms 2 and 4 from spin-traced result
-        auto input = ex<Constant>(2) *
-                         ex<Tensor>(L"S", WstrList{L"i_1", L"i_2", L"i_3"},
-                                    WstrList{L"a_1", L"a_2", L"a_3"},
-                                    WstrList{}, Symmetry::nonsymm) *
-                         ex<Tensor>(L"f", WstrList{L"i_4"}, WstrList{L"i_1"},
-                                    WstrList{}) *
-                         ex<Tensor>(L"t", WstrList{L"a_1", L"a_2", L"a_3"},
-                                    WstrList{L"i_3", L"i_4", L"i_2"},
-                                    WstrList{}, Symmetry::nonsymm) +
-                     ex<Constant>(2) *
-                         ex<Tensor>(L"S", WstrList{L"i_1", L"i_2", L"i_3"},
-                                    WstrList{L"a_1", L"a_2", L"a_3"},
-                                    WstrList{}, Symmetry::nonsymm) *
-                         ex<Tensor>(L"f", WstrList{L"i_4"}, WstrList{L"i_1"},
-                                    WstrList{}) *
-                         ex<Tensor>(L"t", WstrList{L"a_1", L"a_2", L"a_3"},
-                                    WstrList{L"i_2", L"i_3", L"i_4"},
-                                    WstrList{}, Symmetry::nonsymm);
+        auto input =
+            ex<Constant>(2) *
+                ex<Tensor>(L"S", bra{L"i_1", L"i_2", L"i_3"},
+                           ket{L"a_1", L"a_2", L"a_3"}, Symmetry::nonsymm) *
+                ex<Tensor>(L"f", bra{L"i_4"}, ket{L"i_1"}) *
+                ex<Tensor>(L"t", bra{L"a_1", L"a_2", L"a_3"},
+                           ket{L"i_3", L"i_4", L"i_2"}, Symmetry::nonsymm) +
+            ex<Constant>(2) *
+                ex<Tensor>(L"S", bra{L"i_1", L"i_2", L"i_3"},
+                           ket{L"a_1", L"a_2", L"a_3"}, Symmetry::nonsymm) *
+                ex<Tensor>(L"f", bra{L"i_4"}, ket{L"i_1"}) *
+                ex<Tensor>(L"t", bra{L"a_1", L"a_2", L"a_3"},
+                           ket{L"i_2", L"i_3", L"i_4"}, Symmetry::nonsymm);
         canonicalize(input);
         REQUIRE(to_latex(input) ==
                 L"{ "

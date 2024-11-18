@@ -27,14 +27,14 @@ namespace {
 template <typename... Args>
 void log_eval(Args const&... args) noexcept {
 #ifdef SEQUANT_EVAL_TRACE
-  auto& l = Logger::get_instance();
+  auto l = Logger::instance();
   if (l.log_level_eval > 0) write_log(l, "[EVAL] ", args...);
 #endif
 }
 
 [[maybe_unused]] void log_cache_access(size_t key, CacheManager const& cm) {
 #ifdef SEQUANT_EVAL_TRACE
-  auto& l = Logger::get_instance();
+  auto l = Logger::instance();
   if (l.log_level_eval > 0) {
     assert(cm.exists(key));
     auto max_l = cm.max_life(key);
@@ -52,7 +52,7 @@ void log_eval(Args const&... args) noexcept {
 
 [[maybe_unused]] void log_cache_store(size_t key, CacheManager const& cm) {
 #ifdef SEQUANT_EVAL_TRACE
-  auto& l = Logger::get_instance();
+  auto l = Logger::instance();
   if (l.log_level_eval > 0) {
     assert(cm.exists(key));
     write_log(l,  //
@@ -344,6 +344,7 @@ auto evaluate(NodesT const& nodes, Le const& le, Args&&... args) {
 /// \see EvalResult to know more about the return type.
 ///
 template <typename NodeT, typename Annot, typename Le, typename... Args,
+          std::enable_if_t<IsEvaluable<NodeT>, bool> = true,
           std::enable_if_t<IsLeafEvaluator<NodeT, Le>, bool> = true>
 auto evaluate(NodeT const& node,    //
               Annot const& layout,  //

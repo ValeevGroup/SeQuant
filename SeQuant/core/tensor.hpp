@@ -13,6 +13,7 @@
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/latex.hpp>
+#include <SeQuant/core/utility/strong.hpp>
 
 #include <algorithm>
 #include <array>
@@ -32,6 +33,13 @@
 #include <range/v3/all.hpp>
 
 namespace sequant {
+
+// strong type wrapper for objects associated with bra
+DEFINE_STRONG_TYPE_FOR_RANGE_AND_RANGESIZE(bra);
+// strong type wrapper for objects associated with ket
+DEFINE_STRONG_TYPE_FOR_RANGE_AND_RANGESIZE(ket);
+// strong type wrapper for objects associated with aux
+DEFINE_STRONG_TYPE_FOR_RANGE_AND_RANGESIZE(aux);
 
 /// @brief a Tensor is an instance of AbstractTensor over a scalar field, i.e.
 /// Tensors have commutative addition and product operations
@@ -85,9 +93,21 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
   // list of friends who can make Tensor objects with reserved labels
   friend ExprPtr make_overlap(const Index &bra_index, const Index &ket_index);
 
-  template <typename IndexRange1, typename IndexRange2, typename IndexRange3>
-  Tensor(std::wstring_view label, IndexRange1 &&bra_indices,
-         IndexRange2 &&ket_indices, IndexRange3 &&aux_indices, reserved_tag,
+  template <typename IndexRange1, typename IndexRange2, typename IndexRange3,
+            typename = std::enable_if_t<
+                (meta::is_statically_castable_v<
+                    meta::range_value_t<IndexRange1>,
+                    Index>)&&(meta::
+                                  is_statically_castable_v<
+                                      meta::range_value_t<IndexRange2>,
+                                      Index>)&&(meta::
+                                                    is_statically_castable_v<
+                                                        meta::range_value_t<
+                                                            IndexRange3>,
+                                                        Index>)>>
+  Tensor(std::wstring_view label, const bra<IndexRange1> &bra_indices,
+         const ket<IndexRange2> &ket_indices,
+         const aux<IndexRange3> &aux_indices, reserved_tag,
          Symmetry s = Symmetry::nonsymm,
          BraKetSymmetry bks = get_default_context().braket_symmetry(),
          ParticleSymmetry ps = ParticleSymmetry::symm)
@@ -95,6 +115,22 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
         bra_(make_indices(bra_indices)),
         ket_(make_indices(ket_indices)),
         aux_(make_indices(aux_indices)),
+        symmetry_(s),
+        braket_symmetry_(bks),
+        particle_symmetry_(ps) {
+    validate_symmetries();
+  }
+
+  Tensor(std::wstring_view label, bra<index_container_type> &&bra_indices,
+         ket<index_container_type> &&ket_indices,
+         aux<index_container_type> &&aux_indices, reserved_tag,
+         Symmetry s = Symmetry::nonsymm,
+         BraKetSymmetry bks = get_default_context().braket_symmetry(),
+         ParticleSymmetry ps = ParticleSymmetry::symm)
+      : label_(label),
+        bra_(std::move(bra_indices)),
+        ket_(std::move(ket_indices)),
+        aux_(std::move(aux_indices)),
         symmetry_(s),
         braket_symmetry_(bks),
         particle_symmetry_(ps) {
@@ -112,32 +148,26 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
   /// to indices)
   /// @param ket_indices list of ket indices (or objects that can be converted
   /// to indices)
-  /// @param aux_indices list of aux indices (or objects that can be
-  /// converted to indices)
   /// @param s the symmetry of bra or ket
   /// @param bks the symmetry with respect to bra-ket exchange
   /// @param ps the symmetry under exchange of particles
-  template <typename IndexRange1, typename IndexRange2, typename IndexRange3,
-            typename = std::enable_if_t<
-                !meta::is_initializer_list_v<std::decay_t<IndexRange1>> &&
-                !meta::is_initializer_list_v<std::decay_t<IndexRange2>> &&
-                !meta::is_initializer_list_v<std::decay_t<IndexRange3>>>>
-  Tensor(std::wstring_view label, IndexRange1 &&bra_indices,
-         IndexRange2 &&ket_indices, IndexRange3 &&aux_indices,
-         Symmetry s = Symmetry::nonsymm,
+  template <
+      typename IndexRange1, typename IndexRange2,
+      typename = std::enable_if_t<
+          (meta::is_statically_castable_v<
+              meta::range_value_t<IndexRange1>,
+              Index>)&&(meta::
+                            is_statically_castable_v<
+                                meta::range_value_t<IndexRange2>, Index>)>>
+  Tensor(std::wstring_view label, const bra<IndexRange1> &bra_indices,
+         const ket<IndexRange2> &ket_indices, Symmetry s = Symmetry::nonsymm,
          BraKetSymmetry bks = get_default_context().braket_symmetry(),
          ParticleSymmetry ps = ParticleSymmetry::symm)
-      : Tensor(label, std::forward<IndexRange1>(bra_indices),
-               std::forward<IndexRange2>(ket_indices),
-               std::forward<IndexRange3>(aux_indices), reserved_tag{}, s, bks,
-               ps) {
+      : Tensor(label, bra_indices, ket_indices, sequant::aux{}, reserved_tag{},
+               s, bks, ps) {
     assert_nonreserved_label(label_);
   }
 
-  /// @tparam I1 any type convertible to Index)
-  /// @tparam I2 any type convertible to Index
-  /// @tparam I3 any type convertible to Index
-  /// @note  I1, I2 and I3 default to Index to allow empty lists
   /// @param label the tensor label
   /// @param bra_indices list of bra indices (or objects that can be converted
   /// to indices)
@@ -148,14 +178,64 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
   /// @param s the symmetry of bra or ket
   /// @param bks the symmetry with respect to bra-ket exchange
   /// @param ps the symmetry under exchange of particles
-  template <typename I1 = Index, typename I2 = Index, typename I3 = Index>
-  Tensor(std::wstring_view label, std::initializer_list<I1> bra_indices,
-         std::initializer_list<I2> ket_indices,
-         std::initializer_list<I3> aux_indices, Symmetry s = Symmetry::nonsymm,
+  template <typename IndexRange1, typename IndexRange2, typename IndexRange3,
+            typename = std::enable_if_t<
+                (meta::is_statically_castable_v<
+                    meta::range_value_t<IndexRange1>,
+                    Index>)&&(meta::
+                                  is_statically_castable_v<
+                                      meta::range_value_t<IndexRange2>,
+                                      Index>)&&(meta::
+                                                    is_statically_castable_v<
+                                                        meta::range_value_t<
+                                                            IndexRange3>,
+                                                        Index>)>>
+  Tensor(std::wstring_view label, const bra<IndexRange1> &bra_indices,
+         const ket<IndexRange2> &ket_indices,
+         const aux<IndexRange3> &aux_indices, Symmetry s = Symmetry::nonsymm,
          BraKetSymmetry bks = get_default_context().braket_symmetry(),
          ParticleSymmetry ps = ParticleSymmetry::symm)
-      : Tensor(label, make_indices(bra_indices), make_indices(ket_indices),
-               make_indices(aux_indices), reserved_tag{}, s, bks, ps) {
+      : Tensor(label, bra_indices, ket_indices, aux_indices, reserved_tag{}, s,
+               bks, ps) {
+    assert_nonreserved_label(label_);
+  }
+
+  /// @param label the tensor label
+  /// @param bra_indices list of bra indices (or objects that can be converted
+  /// to indices)
+  /// @param ket_indices list of ket indices (or objects that can be converted
+  /// to indices)
+  /// @param s the symmetry of bra or ket
+  /// @param bks the symmetry with respect to bra-ket exchange
+  /// @param ps the symmetry under exchange of particles
+  Tensor(std::wstring_view label, bra<index_container_type> &&bra_indices,
+         ket<index_container_type> &&ket_indices,
+         Symmetry s = Symmetry::nonsymm,
+         BraKetSymmetry bks = get_default_context().braket_symmetry(),
+         ParticleSymmetry ps = ParticleSymmetry::symm)
+      : Tensor(label, std::move(bra_indices), std::move(ket_indices),
+               sequant::aux{}, reserved_tag{}, s, bks, ps) {
+    assert_nonreserved_label(label_);
+  }
+
+  /// @param label the tensor label
+  /// @param bra_indices list of bra indices (or objects that can be converted
+  /// to indices)
+  /// @param ket_indices list of ket indices (or objects that can be converted
+  /// to indices)
+  /// @param aux_indices list of aux indices (or objects that can be
+  /// converted to indices)
+  /// @param s the symmetry of bra or ket
+  /// @param bks the symmetry with respect to bra-ket exchange
+  /// @param ps the symmetry under exchange of particles
+  Tensor(std::wstring_view label, bra<index_container_type> &&bra_indices,
+         ket<index_container_type> &&ket_indices,
+         aux<index_container_type> &&aux_indices,
+         Symmetry s = Symmetry::nonsymm,
+         BraKetSymmetry bks = get_default_context().braket_symmetry(),
+         ParticleSymmetry ps = ParticleSymmetry::symm)
+      : Tensor(label, std::move(bra_indices), std::move(ket_indices),
+               std::move(aux_indices), reserved_tag{}, s, bks, ps) {
     assert_nonreserved_label(label_);
   }
 
@@ -235,7 +315,7 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
     result += L"}";
     if (!this->aux_.empty()) {
       result += L"(";
-      const index_container_type &__aux = aux();
+      const index_container_type &__aux = this->aux();
       for (std::size_t i = 0; i < aux_rank(); ++i) {
         result += sequant::to_latex(__aux[i]);
 
@@ -284,9 +364,9 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
 
  private:
   std::wstring label_{};
-  index_container_type bra_{};
-  index_container_type ket_{};
-  index_container_type aux_{};
+  sequant::bra<index_container_type> bra_{};
+  sequant::ket<index_container_type> ket_{};
+  sequant::aux<index_container_type> aux_{};
   Symmetry symmetry_ = Symmetry::invalid;
   BraKetSymmetry braket_symmetry_ = BraKetSymmetry::invalid;
   ParticleSymmetry particle_symmetry_ = ParticleSymmetry::invalid;
@@ -451,9 +531,8 @@ using TensorPtr = std::shared_ptr<Tensor>;
 inline std::wstring overlap_label() { return L"s"; }
 
 inline ExprPtr make_overlap(const Index &bra_index, const Index &ket_index) {
-  return ex<Tensor>(Tensor(overlap_label(), std::array<Index, 1>{{bra_index}},
-                           std::array<Index, 1>{{ket_index}},
-                           std::array<Index, 0>{}, Tensor::reserved_tag{}));
+  return ex<Tensor>(Tensor(overlap_label(), bra{bra_index}, ket{ket_index},
+                           aux{}, Tensor::reserved_tag{}));
 }
 
 }  // namespace sequant

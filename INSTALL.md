@@ -1,12 +1,12 @@
-SeQuant: installation guide
-===========================
+# Installation Guide
 
-## TL;DR
+
+### TL;DR
 While in the SeQuant source directory:
 * `cmake -B build -S .`
 * `cmake --build build --target check-sequant`
 
-## Prerequisites
+### Prerequisites
   * mandatory:
     * CMake 3.15 or later
     * a C++17 compiler
@@ -20,12 +20,12 @@ While in the SeQuant source directory:
     * for building `stcc*` example programs
         * [Eigen](http://eigen.tuxfamily.org/), version 3
 
-## Configure
+### Configure
 
 From the SeQuant source directory run the following command to configure the build harness:
 * `cmake -B build -S .`
 
-### Useful CMake variables
+#### Useful CMake variables
   * [`BUILD_TESTING`](https://cmake.org/cmake/help/latest/module/CTest.html) --- enables unit tests targets, e.g. `check-sequant` [default=ON]
   * [`CMAKE_CXX_COMPILER`](https://cmake.org/cmake/help/latest/variable/CMAKE_LANG_COMPILER.html#variable:CMAKE_%3CLANG%3E_COMPILER) --- specifies the C++ compiler to use
   * [`CMAKE_PREFIX_PATH`](https://cmake.org/cmake/help/latest/variable/CMAKE_PREFIX_PATH.html) --- this semicolon-separated list specifies search paths for dependencies (Boost, Range-V3, etc.)
@@ -35,7 +35,7 @@ From the SeQuant source directory run the following command to configure the bui
   * `SEQUANT_PYTHON` --- enables building of Pythin bindings
   * `Boost_FETCH_IF_MISSING` --- if set to `ON`, SeQuant will download and build Boost if it is not found by `find_package(Boost ...)`; this is not recommended. [default=OFF]
 
-## Build
+### Build
 
 To build, test, and install SeQuant, run the following commands:
 * `cmake --build build`

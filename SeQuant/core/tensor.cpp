@@ -17,7 +17,7 @@ void Tensor::assert_nonreserved_label(std::wstring_view label) const {
 }
 
 void Tensor::adjoint() {
-  std::swap(bra_, ket_);
+  std::swap(bra_.value(), ket_.value());
 
   // only track adjointness for BraKetSymmetry::nonsymm cases
   if (braket_symmetry() == BraKetSymmetry::nonsymm) {

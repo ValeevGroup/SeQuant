@@ -127,6 +127,9 @@ add_feature_info(EVAL_TRACE SEQUANT_EVAL_TRACE "Trace expression interpretation"
 option(SEQUANT_USE_SYSTEM_BOOST_HASH "Use system Boost for hashing? Set to OFF to make hashing independent of Boost, thus value-portable" ON)
 add_feature_info(SEQUANT_USE_SYSTEM_BOOST_HASH SEQUANT_USE_SYSTEM_BOOST_HASH "SeQuant uses system Boost for hashing (thus results depend on the Boost version)")
 
+option(SEQUANT_BUILD_DOCS "Build SeQuant documentation using Doxygen and Sphinx" OFF)
+add_feature_info(BUILD_DOCS SEQUANT_BUILD_DOCS "Build SeQuant documentation. Doxygen and Sphinx are required.")
+
 ##########################
 # Prerequisites
 ##########################
@@ -253,6 +256,7 @@ set(SeQuant_src
         SeQuant/core/wick_graph.hpp
         SeQuant/core/wolfram.hpp
         SeQuant/core/wstring.hpp
+        SeQuant/domain/mbpt/antisymmetrizer.cpp
         SeQuant/domain/mbpt/antisymmetrizer.hpp
         SeQuant/domain/mbpt/context.hpp
         SeQuant/domain/mbpt/context.cpp
@@ -263,6 +267,7 @@ set(SeQuant_src
         SeQuant/domain/mbpt/op.cpp
         SeQuant/domain/mbpt/op.hpp
         SeQuant/domain/mbpt/op.ipp
+        SeQuant/domain/mbpt/rdm.cpp
         SeQuant/domain/mbpt/rdm.hpp
         SeQuant/domain/mbpt/spin.cpp
         SeQuant/domain/mbpt/spin.hpp
@@ -314,6 +319,7 @@ if (Boost_IS_MODULARIZED)
     target_link_libraries(SeQuant PUBLIC
             Boost::container
             Boost::container_hash
+            Boost::hana
             Boost::multiprecision
             Boost::numeric_conversion
             Boost::numeric_interval
@@ -434,6 +440,7 @@ if (BUILD_TESTING)
             tests/unit/test_latex.cpp
             tests/unit/test_utilities.cpp
             tests/unit/test_export.cpp
+            tests/unit/test_meta.cpp
             )
 
     if (TARGET tiledarray)
@@ -555,7 +562,7 @@ if (BUILD_TESTING)
       target_link_libraries(${example${i}} SeQuant)
     endforeach ()
 
-	set(example12 "tensor_network_graphs")
+    set(example12 "tensor_network_graphs")
     add_executable(${example12} EXCLUDE_FROM_ALL
             examples/${example12}/${example12}.cpp)
     target_link_libraries(${example12} SeQuant)
@@ -599,8 +606,9 @@ if (SEQUANT_PYTHON)
 endif ()
 
 ####### DOCS ########
-
-add_subdirectory(doc)
+if (SEQUANT_BUILD_DOCS)
+    add_subdirectory(doc)
+endif ()
 
 
 ##########################

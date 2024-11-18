@@ -15,11 +15,11 @@ class FullBinaryNode;
 
 /// Full-binary node visit orders.
 
-/// Visit children nodes followed by parent node.
+/// Visit parent node followed by children nodes.
 /// Left will be visited before right.
 struct PreOrder {};
 
-/// Visit parent node followed by children nodes.
+/// Visit children nodes followed by parent node.
 /// Left will be visited before right.
 struct PostOrder {};
 

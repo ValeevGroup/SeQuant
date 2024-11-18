@@ -266,7 +266,7 @@ void WickGraph::init_edges() const {
   if (have_edges_) return;
 
   auto idx_insert = [this](const Index &idx, int tensor_idx, int pos) {
-    if (Logger::get_instance().tensor_network) {
+    if (Logger::instance().tensor_network) {
       std::wcout << "WickGraph::init_edges: idx=" << to_latex(idx)
                  << " attached to tensor " << std::abs(tensor_idx) << "'s "
                  << ((tensor_idx > 0) ? "bra" : "ket") << " at position " << pos
@@ -285,12 +285,12 @@ void WickGraph::init_edges() const {
   for (auto &&t : tensors_) {
     const auto t_is_nonsymm = symmetry(*t) == Symmetry::nonsymm;
     size_t cnt = 0;
-    for (const Index &idx : bra(*t)) {
+    for (const Index &idx : t->_bra()) {
       idx_insert(idx, t_idx, t_is_nonsymm ? cnt : 0);
       ++cnt;
     }
     cnt = 0;
-    for (const Index &idx : ket(*t)) {
+    for (const Index &idx : t->_ket()) {
       idx_insert(idx, -t_idx, t_is_nonsymm ? cnt : 0);
       ++cnt;
     }
@@ -301,7 +301,7 @@ void WickGraph::init_edges() const {
   for (const auto &terminals : edges_) {
     assert(terminals.size() != 0);
     if (terminals.size() == 1) {  // external?
-      if (Logger::get_instance().tensor_network) {
+      if (Logger::instance().tensor_network) {
         std::wcout << "idx " << to_latex(terminals.idx()) << " is external"
                    << std::endl;
       }

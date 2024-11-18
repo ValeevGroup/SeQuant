@@ -21,8 +21,8 @@ int main() {
   auto hbar =
       H(2) + commutator(H(2), T_(2)) +
       ex<Constant>(rational(1, 2)) * commutator(commutator(H(2), T_(2)), T_(2));
-  auto ccd_eq = op::vac_av(P(2) * hbar);
-  std::wcout << "<" << to_latex(P(2) * hbar) << "> = " << to_latex(ccd_eq)
+  auto ccd_eq = op::vac_av(P(nₚ(2)) * hbar);
+  std::wcout << "<" << to_latex(P(nₚ(2)) * hbar) << "> = " << to_latex(ccd_eq)
              << std::endl;
 
   return 0;

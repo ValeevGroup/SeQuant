@@ -6,12 +6,14 @@
 #include <SeQuant/core/parse.hpp>
 #include <SeQuant/core/tensor.hpp>
 #include <SeQuant/core/utility/indices.hpp>
+#include <SeQuant/core/utility/strong.hpp>
 
 #include <codecvt>
 #include <iostream>
 #include <locale>
 #include <string>
 #include <string_view>
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -21,7 +23,7 @@ namespace Catch {
 // for custom types but not for sequant::Index.
 template <>
 struct StringMaker<sequant::Index> {
-  static std::string convert(const sequant::Index &idx) {
+  static std::string convert(const sequant::Index& idx) {
     using convert_type = std::codecvt_utf8<wchar_t>;
     std::wstring_convert<convert_type, wchar_t> converter;
 
@@ -86,6 +88,15 @@ TEST_CASE("get_unique_indices", "[utilities]") {
     REQUIRE(indices.bra.empty());
     REQUIRE(indices.ket.empty());
     REQUIRE(indices == get_unique_indices(expression->as<Constant>()));
+  }
+  SECTION("Variable") {
+    auto const expression = ex<Variable>(L"x");
+
+    auto const indices = get_unique_indices(expression);
+
+    REQUIRE(indices.bra.empty());
+    REQUIRE(indices.ket.empty());
+    REQUIRE(indices == get_unique_indices(expression->as<Variable>()));
   }
   SECTION("Tensor") {
     auto expression = parse_expr(L"t{i1;a1,a2;x1}");
@@ -159,4 +170,104 @@ TEST_CASE("get_unique_indices", "[utilities]") {
     REQUIRE(indices.aux.empty());
     REQUIRE(indices == get_unique_indices(expression->as<Sum>()));
   }
+}
+
+namespace sequant::singleton {
+
+enum Tag { EnableDefaultCtor, DisableDefaultCtor };
+template <Tag T>
+class S : public sequant::Singleton<S<T>> {
+ public:
+  int s() const { return s_; }
+
+ private:
+  friend class sequant::Singleton<S>;
+
+  template <Tag U = T, typename = std::enable_if_t<U == EnableDefaultCtor>>
+  S() {}
+
+  S(int s) : s_(s) {}
+
+  int s_ = 0;
+};
+
+}  // namespace sequant::singleton
+
+TEST_CASE("Singleton", "[utilities]") {
+  using namespace sequant;
+  using namespace sequant::singleton;
+  // default-constructible Singleton
+  {
+    std::vector<std::thread> threads;
+    for (int c = 0; c != 5; ++c)
+      threads.emplace_back([]() {
+        CHECK(Singleton<S<EnableDefaultCtor>>::instance().s() == 0);
+      });
+    for (auto&& thr : threads) thr.join();
+    CHECK_THROWS_AS(Singleton<S<EnableDefaultCtor>>::set_instance(1),
+                    std::logic_error);
+    CHECK(Singleton<S<EnableDefaultCtor>>::instance().s() == 0);
+  }
+  // non-default-constructible Singleton
+  {
+    {
+      std::vector<std::thread> threads;
+      for (int c = 0; c != 5; ++c)
+        threads.emplace_back([]() {
+          CHECK_THROWS_AS(Singleton<S<DisableDefaultCtor>>::instance().s(),
+                          std::logic_error);
+        });
+      CHECK(Singleton<S<DisableDefaultCtor>>::instance_ptr() == nullptr);
+      for (auto&& thr : threads) thr.join();
+    }
+    CHECK_NOTHROW(Singleton<S<DisableDefaultCtor>>::set_instance(1));
+    {
+      std::vector<std::thread> threads;
+      for (int c = 0; c != 5; ++c)
+        threads.emplace_back([]() {
+          CHECK(Singleton<S<DisableDefaultCtor>>::instance().s() == 1);
+        });
+      for (auto&& thr : threads) thr.join();
+    }
+    CHECK(Singleton<S<DisableDefaultCtor>>::instance().s() == 1);
+  }
+}
+
+TEST_CASE("StrongType", "[utilities]") {
+  using namespace sequant::detail;
+
+  struct A : strong_type_base<int, A> {
+    using strong_type_base::strong_type_base;
+  };
+
+  struct B : strong_type_base<int, B> {
+    using strong_type_base::strong_type_base;
+  };
+
+  struct C : strong_type_base<double, C> {
+    using strong_type_base::strong_type_base;
+  };
+
+  A a{1};
+  B b{2};
+  C c0, c1;
+
+  CHECK(a.value() == 1);
+  CHECK(int(a) == 1);
+  CHECK(b.value() == 2);
+  CHECK(c0.value() == double(c1));
+  CHECK(double(c0) == std::move(c1).value());
+
+  struct nondefault_constructible_int {
+    nondefault_constructible_int() = delete;
+    nondefault_constructible_int(int i) : value(i) {}
+    int value;
+  };
+
+  struct D : strong_type_base<nondefault_constructible_int, C> {
+    using strong_type_base::strong_type_base;
+  };
+
+  // "D d;" does not compile, but this does
+  D d(1);
 }

@@ -313,7 +313,7 @@ void sort_via_indices(Container &container, const Comparator &cmp) {
 }
 
 void TensorNetwork::canonicalize_graph(const named_indices_t &named_indices) {
-  if (Logger::get_instance().canonicalize) {
+  if (Logger::instance().canonicalize) {
     std::wcout << "TensorNetwork::canonicalize_graph: input tensors\n";
     size_t cnt = 0;
     ranges::for_each(tensors_, [&](const auto &t) {
@@ -337,7 +337,7 @@ void TensorNetwork::canonicalize_graph(const named_indices_t &named_indices) {
   Graph graph = create_graph(&named_indices);
   // graph.bliss_graph->write_dot(std::wcout, graph.vertex_labels);
 
-  if (Logger::get_instance().canonicalize_input_graph) {
+  if (Logger::instance().canonicalize_input_graph) {
     std::wcout << "Input graph for canonicalization:\n";
     graph.bliss_graph->write_dot(std::wcout, graph.vertex_labels);
   }
@@ -348,7 +348,7 @@ void TensorNetwork::canonicalize_graph(const named_indices_t &named_indices) {
   const unsigned int *canonize_perm =
       graph.bliss_graph->canonical_form(stats, nullptr, nullptr);
 
-  if (Logger::get_instance().canonicalize_dot) {
+  if (Logger::instance().canonicalize_dot) {
     std::wcout << "Canonicalization permutation:\n";
     for (std::size_t i = 0; i < graph.vertex_labels.size(); ++i) {
       std::wcout << i << " -> " << canonize_perm[i] << "\n";
@@ -443,8 +443,8 @@ void TensorNetwork::canonicalize_graph(const named_indices_t &named_indices) {
     }
 
     const auto &particle_order = it->second;
-    auto bra_indices = bra(tensor);
-    auto ket_indices = ket(tensor);
+    auto bra_indices = tensor._bra();
+    auto ket_indices = tensor._ket();
 
     assert(num_particles == particle_order.size());
 
@@ -493,7 +493,7 @@ void TensorNetwork::canonicalize_graph(const named_indices_t &named_indices) {
   edges_.clear();
   have_edges_ = false;
 
-  if (Logger::get_instance().canonicalize) {
+  if (Logger::instance().canonicalize) {
     std::wcout << "TensorNetwork::canonicalize_graph: tensors after "
                   "canonicalization\n";
     size_t cnt = 0;
@@ -506,7 +506,7 @@ void TensorNetwork::canonicalize_graph(const named_indices_t &named_indices) {
 ExprPtr TensorNetwork::canonicalize(
     const container::vector<std::wstring> &cardinal_tensor_labels, bool fast,
     const named_indices_t *named_indices_ptr) {
-  if (Logger::get_instance().canonicalize) {
+  if (Logger::instance().canonicalize) {
     std::wcout << "TensorNetwork::canonicalize(" << (fast ? "fast" : "slow")
                << "): input tensors\n";
     size_t cnt = 0;
@@ -545,7 +545,7 @@ ExprPtr TensorNetwork::canonicalize(
 
   init_edges();
 
-  if (Logger::get_instance().canonicalize) {
+  if (Logger::instance().canonicalize) {
     std::wcout << "TensorNetwork::canonicalize(" << (fast ? "fast" : "slow")
                << "): tensors after initial sort\n";
     size_t cnt = 0;
@@ -596,7 +596,7 @@ ExprPtr TensorNetwork::canonicalize(
 
   // Done computing canonical index replacement list
 
-  if (Logger::get_instance().canonicalize) {
+  if (Logger::instance().canonicalize) {
     for (const auto &idxpair : idxrepl) {
       std::wcout << "TensorNetwork::canonicalize(" << (fast ? "fast" : "slow")
                  << "): replacing " << to_latex(idxpair.first) << " with "
@@ -905,7 +905,7 @@ void TensorNetwork::init_edges() {
   ext_indices_.clear();
 
   auto idx_insert = [this](const Index &idx, Vertex vertex) {
-    if (Logger::get_instance().tensor_network) {
+    if (Logger::instance().tensor_network) {
       std::wcout << "TensorNetwork::init_edges: idx=" << to_latex(idx)
                  << " attached to tensor " << vertex.getTerminalIndex() << " ("
                  << vertex.getOrigin() << ") at position "
@@ -928,21 +928,21 @@ void TensorNetwork::init_edges() {
     const AbstractTensor &tensor = *tensors_[tensor_idx];
     const Symmetry tensor_symm = symmetry(tensor);
 
-    auto bra_indices = bra(tensor);
+    auto bra_indices = tensor._bra();
     for (std::size_t index_idx = 0; index_idx < bra_indices.size();
          ++index_idx) {
       idx_insert(bra_indices[index_idx],
                  Vertex(Origin::Bra, tensor_idx, index_idx, tensor_symm));
     }
 
-    auto ket_indices = ket(tensor);
+    auto ket_indices = tensor._ket();
     for (std::size_t index_idx = 0; index_idx < ket_indices.size();
          ++index_idx) {
       idx_insert(ket_indices[index_idx],
                  Vertex(Origin::Ket, tensor_idx, index_idx, tensor_symm));
     }
 
-    auto aux_indices = aux(tensor);
+    auto aux_indices = tensor._aux();
     for (std::size_t index_idx = 0; index_idx < aux_indices.size();
          ++index_idx) {
       // Note: for the time being we don't have a way of expressing
@@ -959,7 +959,7 @@ void TensorNetwork::init_edges() {
     if (current.vertex_count() == 1) {
       // External index (== Edge only connected to a single vertex in the
       // network)
-      if (Logger::get_instance().tensor_network) {
+      if (Logger::instance().tensor_network) {
         std::wcout << "idx " << to_latex(current.idx()) << " is external"
                    << std::endl;
       }

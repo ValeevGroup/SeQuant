@@ -6,6 +6,7 @@
 #include <SeQuant/domain/mbpt/context.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/models/cc.hpp>
+#include <SeQuant/domain/mbpt/op.hpp>
 #include <SeQuant/domain/mbpt/spin.hpp>
 
 #include <clocale>
@@ -52,7 +53,7 @@ class compute_cceqvec {
 
  public:
   compute_cceqvec(size_t p, size_t pmin, size_t n, EqnType t = EqnType::t)
-      : P(p), PMIN(pmin), N(n), type(t) {}
+      : P(nₚ(p)), PMIN(pmin), N(n), type(t) {}
 
   void operator()(bool print, bool screen, bool use_topology,
                   bool use_connectivity, bool canonical_only) {
@@ -101,8 +102,7 @@ class compute_cceqvec {
           using ranges::views::transform;
           auto bixs = ext_idxs | transform([](auto&& vec) { return vec[0]; });
           auto kixs = ext_idxs | transform([](auto&& vec) { return vec[1]; });
-          auto s_tensor =
-              ex<Tensor>(Tensor{L"S", kixs, bixs, std::vector<Index>{}});
+          auto s_tensor = ex<Tensor>(Tensor{L"S", bra(kixs), ket(bixs)});
           eqvec_sf_ref[R] = s_tensor * eqvec_sf_ref[R];
           expand(eqvec_sf_ref[R]);
         }
@@ -180,9 +180,7 @@ class compute_cceqvec {
           auto kixs = ext_idxs | ranges::views::transform(
                                      [](auto&& vec) { return vec[1]; });
           // N.B. external_indices(expr) confuses bra and ket
-          eqvec[R] =
-              ex<Tensor>(Tensor{L"S", kixs, bixs, std::vector<Index>{}}) *
-              eqvec[R];
+          eqvec[R] = ex<Tensor>(Tensor{L"S", bra(kixs), ket(bixs)}) * eqvec[R];
           eqvec[R] = expand(eqvec[R]);
           simplify(eqvec[R]);
 
@@ -263,7 +261,7 @@ int main(int argc, char* argv[]) {
       std::make_shared<DefaultTensorCanonicalizer>());
 
   // change to true to print stats
-  Logger::get_instance().wick_stats = false;
+  Logger::instance().wick_stats = false;
 
   tpool.clear();
   // comment out to run all possible combinations

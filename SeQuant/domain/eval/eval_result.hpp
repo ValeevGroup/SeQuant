@@ -461,7 +461,7 @@ auto antisymmetrize_btas(
 template <typename... Args>
 inline void log_result(Args const&... args) noexcept {
 #ifdef SEQUANT_EVAL_TRACE
-  auto& l = Logger::get_instance();
+  auto l = Logger::instance();
   if (l.log_level_eval > 1) write_log(l, args...);
 #endif
 }

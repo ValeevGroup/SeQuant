@@ -1,0 +1,6 @@
+sphinx>=6.2
+breathe>=4.35
+exhale>=0.3.7
+furo
+sphinx_copybutton
+myst_parser

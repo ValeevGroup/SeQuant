@@ -46,24 +46,19 @@ std::wstring_view const var_label = L"Z";
 }  // namespace
 
 NestedTensorIndices::NestedTensorIndices(const sequant::Tensor& tnsr) {
-  auto push_ix = [this](Index const& ix) {
-    if (ix.has_proto_indices())
-      inner.push_back(ix);
-    else
-      outer.push_back(ix);
+  using ranges::views::join;
+  using ranges::views::transform;
+
+  auto append_unique = [](auto& cont, auto const& el) {
+    if (!ranges::contains(cont, el)) cont.emplace_back(el);
   };
 
-  for (auto const& ix : tnsr.const_braket()) {
-    push_ix(ix);
-    for (auto const& ix_proto : ix.proto_indices()) push_ix(ix_proto);
-  }
+  for (Index const& ix : tnsr.const_braket())
+    append_unique(ix.has_proto_indices() ? inner : outer, ix);
 
-  if (!inner.empty()) {
-    ranges::actions::stable_sort(outer, Index::LabelCompare{});
-    ranges::actions::unique(outer, [](Index const& ix1, Index const& ix2) {
-      return ix1.label() == ix2.label();
-    });
-  }
+  for (Index const& ix :
+       tnsr.const_braket() | transform(&Index::proto_indices) | join)
+    append_unique(outer, ix);
 }
 
 std::string EvalExpr::braket_annot() const noexcept {
@@ -203,6 +198,11 @@ size_t hash_indices(T const& indices) noexcept {
   for (auto const& idx : indices) {
     hash::combine(h, hash::value(idx.space().type().to_int32()));
     hash::combine(h, hash::value(idx.space().qns().to_int32()));
+    if (idx.has_proto_indices()) {
+      hash::combine(h, hash::value(idx.proto_indices().size()));
+      for (auto&& i : idx.proto_indices())
+        hash::combine(h, hash::value(i.label()));
+    }
   }
   return h;
 }
@@ -250,6 +250,46 @@ size_t hash_imed(EvalExpr const& left, EvalExpr const& right,
     hash::combine(h, hash_tensor_pair_topology(left.expr()->as<Tensor>(),
                                                right.expr()->as<Tensor>()));
   return h;
+}
+
+std::pair<container::svector<Index>,  // bra
+          container::svector<Index>   // ket
+          >
+target_braket(Tensor const& t1, Tensor const& t2) noexcept {
+  using ranges::contains;
+  using ranges::views::concat;
+  using ranges::views::filter;
+  using idx_container = container::svector<Index>;
+
+  // find contracted indices
+  const auto contracted_indices =
+      concat(t1.bra() | filter([&](const auto& idx) {
+               return contains(t2.ket(), idx);
+             }),
+             t1.ket() | filter([&](const auto& idx) {
+               return contains(t2.bra(), idx);
+             })) |
+      ranges::to<idx_container>();
+
+  // combine free bra indices
+  const auto result_bra = concat(t1.bra() | filter([&](const auto& idx) {
+                                   return !contains(contracted_indices, idx);
+                                 }),
+                                 t2.bra() | filter([&](const auto& idx) {
+                                   return !contains(contracted_indices, idx);
+                                 })) |
+                          ranges::to<idx_container>();
+
+  // combine free ket indices
+  const auto result_ket = concat(t1.ket() | filter([&](const auto& idx) {
+                                   return !contains(contracted_indices, idx);
+                                 }),
+                                 t2.ket() | filter([&](const auto& idx) {
+                                   return !contains(contracted_indices, idx);
+                                 })) |
+                          ranges::to<idx_container>();
+
+  return std::make_pair(result_bra, result_ket);
 }
 
 Symmetry tensor_symmetry_sum(EvalExpr const& left,
@@ -348,8 +388,8 @@ ExprPtr make_prod(EvalExpr const& left, EvalExpr const& right) noexcept {
   auto const& t1 = left.as_tensor();
   auto const& t2 = right.as_tensor();
 
-  auto [bra, ket, auxiliary] = get_uncontracted_indices(t1, t2);
-  if (bra.empty() && ket.empty() && auxiliary.empty()) {
+  auto [b, k, a] = get_uncontracted_indices(t1, t2);
+  if (b.empty() && k.empty() && a.empty()) {
     // dot product
     return ex<Variable>(var_label);
   } else {
@@ -357,8 +397,8 @@ ExprPtr make_prod(EvalExpr const& left, EvalExpr const& right) noexcept {
     auto ts = tensor_symmetry_prod(left, right);
     auto ps = particle_symmetry(ts);
     auto bks = get_default_context().braket_symmetry();
-    return ex<Tensor>(L"I", std::move(bra), std::move(ket),
-                      std::move(auxiliary), ts, bks, ps);
+    return ex<Tensor>(L"I", bra(std::move(b)), ket(std::move(k)),
+                      aux(std::move(a)), ts, bks, ps);
   }
 }
 

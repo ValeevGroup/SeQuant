@@ -84,6 +84,7 @@ make_indices(const parse::ast::IndexGroups &groups,
   container::vector<Index> braIndices;
   container::vector<Index> ketIndices;
   container::vector<Index> auxiliaries;
+  container::vector<Index> auxIndices;
 
   static_assert(std::is_same_v<decltype(groups.bra), decltype(groups.ket)>,
                 "Types for bra and ket indices must be equal for pointer "
@@ -186,8 +187,8 @@ ExprPtr ast_to_expr(const parse::ast::NullaryValue &value,
       auto [offset, length] =
           get_pos(tensor, position_cache.get(), begin.get());
 
-      return ex<Tensor>(tensor.name, std::move(braIndices),
-                        std::move(ketIndices), std::move(auxiliaries),
+      return ex<Tensor>(tensor.name, bra(std::move(braIndices)),
+                        ket(std::move(ketIndices)), aux(std::move(auxiliaries)),
                         to_symmetry(tensor.symmetry, offset + length - 1,
                                     begin.get(), default_symmetry));
     }

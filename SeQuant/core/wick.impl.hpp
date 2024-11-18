@@ -377,7 +377,7 @@ void reduce_wick_impl(std::shared_ptr<Product> &expr,
       const auto replacement_rules = compute_index_replacement_rules<S>(
           expr, external_indices, all_indices);
 
-      if (Logger::get_instance().wick_reduce) {
+      if (Logger::instance().wick_reduce) {
         std::wcout << "reduce_wick_impl(expr, external_indices):\n  expr = "
                    << expr->to_latex() << "\n  external_indices = ";
         ranges::for_each(external_indices, [](auto &index) {
@@ -397,7 +397,7 @@ void reduce_wick_impl(std::shared_ptr<Product> &expr,
             expr, replacement_rules, external_indices, all_indices, isr);
       }
 
-      if (Logger::get_instance().wick_reduce) {
+      if (Logger::instance().wick_reduce) {
         std::wcout << "\n  result = " << expr->to_latex() << std::endl;
       }
 
@@ -477,11 +477,11 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
   // have an Expr as input? Apply recursively ...
   if (expr_input_) {
     /// expand, then apply recursively to products
-    if (Logger::get_instance().wick_harness)
+    if (Logger::instance().wick_harness)
       std::wcout << "WickTheorem<S>::compute: input (before expand) = "
                  << to_latex_align(expr_input_) << std::endl;
     expand(expr_input_);
-    if (Logger::get_instance().wick_harness)
+    if (Logger::instance().wick_harness)
       std::wcout << "WickTheorem<S>::compute: input (after expand) = "
                  << to_latex_align(expr_input_) << std::endl;
     // if sum, canonicalize and apply to each summand ...
@@ -519,7 +519,7 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
         });
       }
 
-      if (Logger::get_instance().wick_harness)
+      if (Logger::instance().wick_harness)
         std::wcout << "WickTheorem<S>::compute: input (after canonicalize) has "
                    << summands.size() << " terms = " << to_latex_align(result)
                    << std::endl;
@@ -594,7 +594,7 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
         // compute and record/analyze topological NormalOperator and Index
         // partitions
         if (use_topology_) {
-          if (Logger::get_instance().wick_topology)
+          if (Logger::instance().wick_topology)
             std::wcout
                 << "WickTheorem<S>::compute: input to topology computation = "
                 << to_latex(expr_input_) << std::endl;
@@ -607,7 +607,7 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
           const auto &tn_edges = network.edges();
           const auto &tn_tensors = network.tensors();
 
-          if (Logger::get_instance().wick_topology) {
+          if (Logger::instance().wick_topology) {
             std::basic_ostringstream<wchar_t> oss;
             graph->write_dot(oss, vlabels);
             std::wcout
@@ -678,7 +678,7 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
             graph->find_automorphisms(
                 stats, &bliss::aut_hook<decltype(save_aut)>, &save_aut);
 
-            if (Logger::get_instance().wick_topology) {
+            if (Logger::instance().wick_topology) {
               std::basic_ostringstream<wchar_t> oss2;
               bliss::print_auts(aut_generators, oss2, vlabels);
               std::wcout << "WickTheorem<S>::compute: colored graph "
@@ -860,7 +860,7 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
             nop_partitions = extract_partitions(nop_vidx2pidx, nop_npartitions,
                                                 nop_vidx_ord);
 
-            if (Logger::get_instance().wick_topology) {
+            if (Logger::instance().wick_topology) {
               std::wcout
                   << "WickTheorem<S>::compute: topological nop partitions:{\n";
               ranges::for_each(nop_partitions, [](auto &&part) {
@@ -921,7 +921,7 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
             index_partitions = extract_partitions(
                 index_vidx2pidx, index_npartitions, index_vidx_ord);
 
-            if (Logger::get_instance().wick_topology) {
+            if (Logger::instance().wick_topology) {
               std::wcout << "WickTheorem<S>::compute: topological index "
                             "partitions:{\n";
               ranges::for_each(index_vidx2pidx, [&tn_edges](auto &&vidx_pidx) {
@@ -939,7 +939,7 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
         }
 
         if (!input_->empty()) {
-          if (Logger::get_instance().wick_contract) {
+          if (Logger::instance().wick_contract) {
             std::wcout
                 << "WickTheorem<S>::compute: input to compute_nopseq = {\n";
             for (auto &&nop : input_) std::wcout << to_latex(nop) << "\n";
@@ -981,7 +981,7 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
 
 template <Statistics S>
 void WickTheorem<S>::reduce(ExprPtr &expr) const {
-  if (Logger::get_instance().wick_reduce) {
+  if (Logger::instance().wick_reduce) {
     std::wcout << "WickTheorem<S>::reduce: input = "
                << to_latex_align(expr, 20, 1) << std::endl;
   }
@@ -1011,7 +1011,7 @@ void WickTheorem<S>::reduce(ExprPtr &expr) const {
     }
   }
 
-  if (Logger::get_instance().wick_reduce) {
+  if (Logger::instance().wick_reduce) {
     std::wcout << "WickTheorem<S>::reduce: result = "
                << to_latex_align(expr, 20, 1) << std::endl;
   }
