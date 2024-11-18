@@ -9,17 +9,16 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
+#include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/vertex_type.hpp>
 
 #include <cassert>
 #include <cstdlib>
-#include <iosfwd>
 #include <memory>
 #include <stdexcept>
 #include <string>
 #include <string_view>
 #include <tuple>
-#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -38,35 +37,7 @@ namespace sequant {
 /// graph), with Tensor objects represented by one or more vertices.
 class TensorNetwork {
  public:
-  friend class TensorNetworkAccessor;
-
   constexpr static size_t max_rank = 256;
-
-  enum class Origin {
-    Bra = 1,
-    Ket,
-    Aux,
-  };
-
-  class Vertex {
-   public:
-    Vertex(Origin origin, std::size_t terminal_idx, std::size_t index_slot,
-           Symmetry terminal_symm);
-
-    Origin getOrigin() const;
-    std::size_t getTerminalIndex() const;
-    std::size_t getIndexSlot() const;
-    Symmetry getTerminalSymmetry() const;
-
-    bool operator<(const Vertex &rhs) const;
-    bool operator==(const Vertex &rhs) const;
-
-   private:
-    Origin origin;
-    std::size_t terminal_idx;
-    std::size_t index_slot;
-    Symmetry terminal_symm;
-  };
 
   // clang-format off
   /// @brief Edge in a TensorNetwork = the Index annotating it + a pair of indices to identify which Tensor terminals it's connected to
@@ -84,108 +55,102 @@ class TensorNetwork {
   class Edge {
    public:
     Edge() = default;
-    explicit Edge(Vertex vertex) : first(std::move(vertex)), second() {}
-    Edge(Vertex vertex, Index index)
-        : first(std::move(vertex)), second(), index(std::move(index)) {}
+    explicit Edge(int terminal_idx, int position = 0)
+        : first_(0), second_(terminal_idx), second_position_(position) {}
+    Edge(int terminal_idx, const Index *idxptr, int position = 0)
+        : first_(0),
+          second_(terminal_idx),
+          idxptr_(idxptr),
+          second_position_(position) {}
+    //    Edge(const Edge&) = default;
+    //    Edge(Edge&&) = default;
+    //    Edge& operator=(const Edge&) = default;
+    //    Edge& operator=(Edge&&) = default;
 
-    Edge &connect_to(Vertex vertex) {
-      assert(!second.has_value());
-
-      if (!first.has_value()) {
-        // unconnected Edge
-        first = std::move(vertex);
-      } else {
-        second = std::move(vertex);
-        if (second < first) {
-          // Ensure first <= second
-          std::swap(first, second);
-        }
+    Edge &connect_to(int terminal_idx, int position = 0) {
+      assert(first_ == 0 || second_ == 0);  // not connected yet
+      assert(terminal_idx != 0);            // valid idx
+      if (second_ == 0) {                   // unconnected Edge
+        second_ = terminal_idx;
+        second_position_ = position;
+      } else if (std::abs(second_) <
+                 std::abs(terminal_idx)) {  // connected to 2 Edges? ensure
+                                            // first_ < second_
+        assert(first_ == 0);                // there are slots left
+        first_ = second_;
+        first_position_ = second_position_;
+        second_ = terminal_idx;
+        second_position_ = position;
+      } else {  // put into first slot
+        first_ = terminal_idx;
+        first_position_ = position;
       }
       return *this;
     }
 
     bool operator<(const Edge &other) const {
-      if (vertex_count() != other.vertex_count()) {
-        // Ensure external indices (edges that are only attached to a tensor on
-        // one side) always come before internal ones
-        return vertex_count() < other.vertex_count();
+      if (std::abs(first_) == std::abs(other.first_)) {
+        if (first_position_ == other.first_position_) {
+          if (std::abs(second_) == std::abs(other.second_)) {
+            return second_position_ < other.second_position_;
+          } else {
+            return std::abs(second_) < std::abs(other.second_);
+          }
+        } else {
+          return first_position_ < other.first_position_;
+        }
+      } else {
+        return std::abs(first_) < std::abs(other.first_);
       }
-
-      if (!(first == other.first)) {
-        return first < other.first;
-      }
-
-      if (second < other.second) {
-        return second < other.second;
-      }
-
-      return index.space() < other.index.space();
     }
 
     bool operator==(const Edge &other) const {
-      return first == other.first && second == other.second;
+      return std::abs(first_) == std::abs(other.first_) &&
+             std::abs(second_) == std::abs(other.second_) &&
+             first_position_ == other.first_position_ &&
+             second_position_ == other.second_position_;
     }
 
-    const Vertex &first_vertex() const {
-      assert(first.has_value());
-      return first.value();
-    }
-    const Vertex &second_vertex() const {
-      assert(second.has_value());
-      return second.value();
-    }
+    auto first() const { return first_; }
+    auto second() const { return second_; }
+    auto first_position() const { return first_position_; }
+    auto second_position() const { return second_position_; }
 
     /// @return the number of attached terminals (0, 1, or 2)
-    std::size_t vertex_count() const {
-      return second.has_value() ? 2 : (first.has_value() ? 1 : 0);
-    }
+    auto size() const { return (first_ != 0) ? 2 : ((second_ != 0) ? 1 : 0); }
 
-    const Index &idx() const { return index; }
+    const Index &idx() const {
+      assert(idxptr_ != nullptr);
+      return *idxptr_;
+    }
 
    private:
-    std::optional<Vertex> first;
-    std::optional<Vertex> second;
-    Index index;
+    // if only connected to 1 terminal, this is always 0
+    // otherwise first_ <= second_
+    int first_ = 0;
+    int second_ = 0;
+    const Index *idxptr_ = nullptr;
+    int first_position_ = 0;
+    int second_position_ = 0;
   };
 
-  struct Graph {
-    std::unique_ptr<bliss::Graph> bliss_graph;
-    std::vector<std::wstring> vertex_labels;
-    std::vector<std::size_t> vertex_colors;
-    std::vector<VertexType> vertex_types;
+  using VertexType = sequant::VertexType;
 
-    Graph() = default;
-
-    std::size_t vertex_to_index_idx(std::size_t vertex) const;
-    std::size_t vertex_to_tensor_idx(std::size_t vertex) const;
-  };
-
-  TensorNetwork(const Expr &expr) {
-    if (expr.size() > 0) {
-      for (const ExprPtr &subexpr : expr) {
-        add_expr(*subexpr);
+ public:
+  /// @throw std::logic_error if exprptr_range contains a non-tensor
+  /// @note uses RTTI
+  template <typename ExprPtrRange>
+  TensorNetwork(ExprPtrRange &exprptr_range) {
+    for (auto &&ex : exprptr_range) {
+      auto t = std::dynamic_pointer_cast<AbstractTensor>(ex);
+      if (t) {
+        tensors_.emplace_back(t);
+      } else {
+        throw std::logic_error(
+            "TensorNetwork::TensorNetwork: non-tensors in the given expression "
+            "range");
       }
-    } else {
-      add_expr(expr);
     }
-
-    init_edges();
-  }
-
-  TensorNetwork(const ExprPtr &expr) : TensorNetwork(*expr) {}
-
-  template <
-      typename ExprPtrRange,
-      typename = std::enable_if_t<!std::is_base_of_v<ExprPtr, ExprPtrRange> &&
-                                  !std::is_base_of_v<Expr, ExprPtrRange>>>
-  TensorNetwork(const ExprPtrRange &exprptr_range) {
-    static_assert(
-        std::is_base_of_v<ExprPtr, typename ExprPtrRange::value_type>);
-    for (const ExprPtr &current : exprptr_range) {
-      add_expr(*current);
-    }
-
-    init_edges();
   }
 
   /// @return const reference to the sequence of tensors
@@ -202,7 +167,7 @@ class TensorNetwork {
   /// @param named_indices specifies the indices that cannot be renamed, i.e.
   /// their labels are meaningful; default is nullptr, which results in external
   /// indices treated as named indices
-  /// @return byproduct of canonicalization (e.g. phase); if none, returns
+  /// @return biproduct of canonicalization (e.g. phase); if none, returns
   /// nullptr
   ExprPtr canonicalize(
       const container::vector<std::wstring> &cardinal_tensor_labels = {},
@@ -219,29 +184,74 @@ class TensorNetwork {
   ///         @c (((T3*T1)*T2)*T0) .
   container::svector<std::pair<long, long>> factorize();
 
+ private:
+  // source tensors and indices
+  container::svector<AbstractTensorPtr> tensors_;
+
+  struct FullLabelCompare {
+    using is_transparent = void;
+    bool operator()(const Edge &first, const Edge &second) const {
+      return first.idx().full_label() < second.idx().full_label();
+    }
+    bool operator()(const Edge &first, const std::wstring_view &second) const {
+      return first.idx().full_label() < second;
+    }
+    bool operator()(const std::wstring_view &first, const Edge &second) const {
+      return first < second.idx().full_label();
+    }
+  };
+  // Index -> Edge, sorted by full label
+  mutable container::set<Edge, FullLabelCompare> edges_;
+  // set to true by init_edges();
+  mutable bool have_edges_ = false;
+  // ext indices do not connect tensors
+  // sorted by *label* (not full label) of the corresponding value (Index)
+  // this ensures that proto indices are not considered and all internal indices
+  // have unique labels (not full labels)
+  mutable named_indices_t ext_indices_;
+
+  // replacements of anonymous indices produced by the last call to
+  // canonicalize()
+  container::map<Index, Index> idxrepl_;
+
+  /// initializes edges_ and ext_indices_
+  void init_edges() const;
+
+ public:
   /// accessor for the Edge object sequence
   /// @return const reference to the sequence container of Edge objects, sorted
   /// by their Index's full label
   /// @sa Edge
   const auto &edges() const {
-    assert(have_edges_);
+    init_edges();
     return edges_;
   }
 
   /// @brief Returns a range of external indices, i.e. those indices that do not
   /// connect tensors
+
+  /// @note The external indices are sorted by *label* (not full label) of the
+  /// corresponding value (Index)
   const auto &ext_indices() const {
-    assert(have_edges_);
+    if (edges_.empty()) init_edges();
     return ext_indices_;
   }
 
+  /// accessor for the list of anonymous index replacements performed by the
+  /// last call to canonicalize()
+  /// @return replacements of anonymous indices performed by the last call to
+  /// canonicalize()
+  const auto &idxrepl() const { return idxrepl_; };
+
+ public:
   /// @brief converts the network into a Bliss graph whose vertices are indices
   /// and tensor vertex representations
   /// @param[in] named_indices pointer to the set of named indices (ordinarily,
   /// this includes all external indices);
   ///            default is nullptr, which means use all external indices for
   ///            named indices
-  /// @return The created Graph object
+  /// @return {shared_ptr to Graph, vector of vertex labels, vector of vertex
+  /// colors, vector of vertex types}
 
   /// @note Rules for constructing the graph:
   ///   - Indices with protoindices are connected to their protoindices,
@@ -258,70 +268,10 @@ class TensorNetwork {
   ///   tensor; terminal vertices are colored by the color of its tensor,
   ///     with the color of symm/antisymm terminals augmented by the
   ///     terminal's type (bra/ket).
-  Graph create_graph(const named_indices_t *named_indices = nullptr) const;
-
- private:
-  // source tensors and indices
-  container::svector<AbstractTensorPtr> tensors_;
-
-  container::vector<Edge> edges_;
-  bool have_edges_ = false;
-  // ext indices do not connect tensors
-  // sorted by *label* (not full label) of the corresponding value (Index)
-  // this ensures that proto indices are not considered and all internal indices
-  // have unique labels (not full labels)
-  named_indices_t ext_indices_;
-
-  /// initializes edges_ and ext_indices_
-  void init_edges();
-
-  /// Canonicalizes the network graph representation
-  /// Note: The explicit order of tensors and labelling of indices
-  /// remains undefined.
-  void canonicalize_graph(const named_indices_t &named_indices);
-
-  /// Canonicalizes every individual tensor for itself, taking into account only
-  /// tensor blocks
-  /// @returns The byproduct of the canonicalizations
-  ExprPtr canonicalize_individual_tensor_blocks(
-      const named_indices_t &named_indices);
-
-  /// Canonicalizes every individual tensor for itself
-  /// @returns The byproduct of the canonicalizations
-  ExprPtr canonicalize_individual_tensors(const named_indices_t &named_indices);
-
-  ExprPtr do_individual_canonicalization(
-      const TensorCanonicalizer &canonicalizer);
-
-  void add_expr(const Expr &expr) {
-    ExprPtr clone = expr.clone();
-
-    auto tensor_ptr = std::dynamic_pointer_cast<AbstractTensor>(clone);
-    if (!tensor_ptr) {
-      throw std::invalid_argument(
-          "TensorNetwork::TensorNetwork: tried to add non-tensor to network");
-    }
-
-    tensors_.push_back(std::move(tensor_ptr));
-  }
+  std::tuple<std::shared_ptr<bliss::Graph>, std::vector<std::wstring>,
+             std::vector<std::size_t>, std::vector<VertexType>>
+  make_bliss_graph(const named_indices_t *named_indices = nullptr) const;
 };
-
-template <typename CharT, typename Traits>
-std::basic_ostream<CharT, Traits> &operator<<(
-    std::basic_ostream<CharT, Traits> &stream, TensorNetwork::Origin origin) {
-  switch (origin) {
-    case TensorNetwork::Origin::Bra:
-      stream << "Bra";
-      break;
-    case TensorNetwork::Origin::Ket:
-      stream << "Ket";
-      break;
-    case TensorNetwork::Origin::Aux:
-      stream << "Aux";
-      break;
-  }
-  return stream;
-}
 
 }  // namespace sequant
 

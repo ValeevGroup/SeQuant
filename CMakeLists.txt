@@ -242,6 +242,8 @@ set(SeQuant_src
         SeQuant/core/tensor_canonicalizer.hpp
         SeQuant/core/tensor_network.cpp
         SeQuant/core/tensor_network.hpp
+        SeQuant/core/tensor_network_v2.cpp
+        SeQuant/core/tensor_network_v2.hpp
         SeQuant/core/timer.hpp
         SeQuant/core/utility/context.hpp
         SeQuant/core/utility/indices.hpp
@@ -252,8 +254,6 @@ set(SeQuant_src
         SeQuant/core/utility/string.cpp
         SeQuant/core/wick.hpp
         SeQuant/core/wick.impl.hpp
-        SeQuant/core/wick_graph.cpp
-        SeQuant/core/wick_graph.hpp
         SeQuant/core/wolfram.hpp
         SeQuant/core/wstring.hpp
         SeQuant/domain/mbpt/antisymmetrizer.cpp

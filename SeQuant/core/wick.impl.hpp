@@ -10,7 +10,6 @@
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/tensor_network.hpp>
 #include <SeQuant/core/vertex_type.hpp>
-#include <SeQuant/core/wick_graph.hpp>
 
 #ifdef SEQUANT_HAS_EXECUTION_HEADER
 #include <execution>
@@ -600,12 +599,12 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
                 << to_latex(expr_input_) << std::endl;
 
           // construct graph representation of the tensor product
-          WickGraph network(expr_input_->as<Product>().factors());
-          auto [graph, vlabels, vcolors, vtypes] = network.make_bliss_graph();
+          TensorNetwork tn(expr_input_->as<Product>().factors());
+          auto [graph, vlabels, vcolors, vtypes] = tn.make_bliss_graph();
           const auto n = vlabels.size();
           assert(vtypes.size() == n);
-          const auto &tn_edges = network.edges();
-          const auto &tn_tensors = network.tensors();
+          const auto &tn_edges = tn.edges();
+          const auto &tn_tensors = tn.tensors();
 
           if (Logger::instance().wick_topology) {
             std::basic_ostringstream<wchar_t> oss;
