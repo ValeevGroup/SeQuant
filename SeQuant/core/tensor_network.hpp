@@ -167,7 +167,7 @@ class TensorNetwork {
   /// @param named_indices specifies the indices that cannot be renamed, i.e.
   /// their labels are meaningful; default is nullptr, which results in external
   /// indices treated as named indices
-  /// @return biproduct of canonicalization (e.g. phase); if none, returns
+  /// @return byproduct of canonicalization (e.g. phase); if none, returns
   /// nullptr
   ExprPtr canonicalize(
       const container::vector<std::wstring> &cardinal_tensor_labels = {},

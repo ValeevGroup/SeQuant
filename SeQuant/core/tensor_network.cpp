@@ -35,7 +35,7 @@ namespace sequant {
 ExprPtr TensorNetwork::canonicalize(
     const container::vector<std::wstring> &cardinal_tensor_labels, bool fast,
     const named_indices_t *named_indices_ptr) {
-  ExprPtr canon_biproduct = ex<Constant>(1);
+  ExprPtr canon_byproduct = ex<Constant>(1);
   container::svector<Edge> idx_terminals_sorted;  // to avoid memory allocs
 
   if (Logger::instance().canonicalize) {
@@ -399,15 +399,15 @@ ExprPtr TensorNetwork::canonicalize(
           nondefault_canonizer_ptr ? nondefault_canonizer_ptr.get()
                                    : &default_tensor_canonizer;
       auto bp = tensor_canonizer->apply(*tensor);
-      if (bp) *canon_biproduct *= *bp;
+      if (bp) *canon_byproduct *= *bp;
     }
   }
   edges_.clear();
   ext_indices_.clear();
 
-  assert(canon_biproduct->is<Constant>());
-  return (canon_biproduct->as<Constant>().value() == 1) ? nullptr
-                                                        : canon_biproduct;
+  assert(canon_byproduct->is<Constant>());
+  return (canon_byproduct->as<Constant>().value() == 1) ? nullptr
+                                                        : canon_byproduct;
 }
 
 std::tuple<std::shared_ptr<bliss::Graph>, std::vector<std::wstring>,
