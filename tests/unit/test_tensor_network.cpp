@@ -912,7 +912,7 @@ TEST_CASE("TensorNetworkV2", "[elements]") {
           {L"g{i_1,a_1;i_2,i_3}:N * I{i_2,i_3;i_1,a_1}:N",
            L"g{i_1,a_1;i_2,i_3}:N * I{i_2,i_3;i_1,a_1}:N"},
           {L"g{a_1,i_1;i_2,i_3}:N * I{i_2,i_3;i_1,a_1}:N",
-           L"g{i_1,a_1;i_2,i_3}:N * I{i_3,i_2;i_1,a_1}:N"},
+           L"g{i_1,a_1;i_2,i_3}:N * I{i_2,i_3;a_1,i_1}:N"},
       };
 
       for (const auto& [input, expected] : inputs) {

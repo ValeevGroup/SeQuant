@@ -65,8 +65,8 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
                      Symmetry::nonsymm);
       canonicalize(input);
       REQUIRE(to_latex(input) ==
-              L"{{S^{{i_1}{i_2}}_{{a_1}{a_2}}}{f^{{i_3}}_{{"
-              L"a_3}}}{t^{{a_2}}_{{i_3}}}{t^{{a_1}{a_3}}_{{i_1}{i_2}}}}");
+              L"{{S^{{i_1}{i_2}}_{{a_1}{a_3}}}{f^{{i_3}}_{{"
+              L"a_2}}}{t^{{a_3}}_{{i_3}}}{t^{{a_1}{a_2}}_{{i_1}{i_2}}}}");
     }
     {
       auto input =
@@ -78,8 +78,8 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
                      Symmetry::nonsymm);
       canonicalize(input);
       REQUIRE(to_latex(input) ==
-              L"{{S^{{i_1}{i_2}}_{{a_1}{a_2}}}{f^{{i_3}}_{{"
-              L"a_3}}}{t^{{a_3}}_{{i_2}}}{t^{{a_1}{a_2}}_{{i_1}{i_3}}}}");
+              L"{{S^{{i_1}{i_2}}_{{a_1}{a_3}}}{f^{{i_3}}_{{"
+              L"a_2}}}{t^{{a_2}}_{{i_2}}}{t^{{a_1}{a_3}}_{{i_1}{i_3}}}}");
     }
     {  // Product containing Variables
       auto q2 = ex<Variable>(L"q2");
@@ -95,8 +95,8 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
                      Symmetry::nonsymm);
       canonicalize(input);
       REQUIRE(to_latex(input) ==
-              L"{{p}{q1}{{q2}^*}{S^{{i_1}{i_2}}_{{a_1}{a_2}}}{f^{{i_3}}_{{"
-              L"a_3}}}{t^{{a_3}}_{{i_2}}}{t^{{a_1}{a_2}}_{{i_1}{i_3}}}}");
+              L"{{p}{q1}{{q2}^*}{S^{{i_1}{i_2}}_{{a_1}{a_3}}}{f^{{i_3}}_{{"
+              L"a_2}}}{t^{{a_2}}_{{i_2}}}{t^{{a_1}{a_3}}_{{i_1}{i_3}}}}");
     }
     {  // Product containing adjoint of a Tensor
       auto f2 = ex<Tensor>(L"f", bra{L"i_5", L"i_2"}, ket{L"a_1", L"a_2"},
@@ -119,8 +119,8 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
           ex<Variable>(L"w") * ex<Constant>(rational{1, 2});
       canonicalize(input2);
       REQUIRE(to_latex(input2) ==
-              L"{{{\\frac{1}{2}}}{w}{S^{{i_1}{i_2}}_{{a_1}{a_2}}}{f^{{i_3}}_{{"
-              L"a_3}}}{f⁺^{{i_1}{i_3}}_{{a_1}{a_2}}}{t^{{a_3}}_{{i_2}}}}");
+              L"{{{\\frac{1}{2}}}{w}{S^{{i_1}{i_2}}_{{a_1}{a_3}}}{f^{{i_3}}_{{"
+              L"a_2}}}{f⁺^{{i_1}{i_3}}_{{a_1}{a_3}}}{t^{{a_2}}_{{i_2}}}}");
     }
   }
 
@@ -141,8 +141,8 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
       canonicalize(input);
       REQUIRE(to_latex(input) ==
               L"{ "
-              L"\\bigl({{g^{{p_3}{p_4}}_{{p_1}{p_2}}}{t^{{p_1}}_{{p_3}}}{t^{{p_"
-              L"2}}_{{p_4}}}}\\bigr) }");
+              L"\\bigl({{g^{{p_1}{p_4}}_{{p_2}{p_3}}}{t^{{p_2}}_{{p_1}}}{t^{{"
+              L"p_3}}_{{p_4}}}}\\bigr) }");
     }
 
     // CASE 2: Symmetric tensors
@@ -161,8 +161,8 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
       canonicalize(input);
       REQUIRE(to_latex(input) ==
               L"{ "
-              L"\\bigl({{g^{{p_3}{p_4}}_{{p_1}{p_2}}}{t^{{p_1}}_{{p_3}}}{t^{{p_"
-              L"2}}_{{p_4}}}}\\bigr) }");
+              L"\\bigl({{g^{{p_1}{p_4}}_{{p_2}{p_3}}}{t^{{p_2}}_{{p_1}}}{t^{{p_"
+              L"3}}_{{p_4}}}}\\bigr) }");
     }
 
     // Case 3: Anti-symmetric tensors
@@ -181,8 +181,9 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
       canonicalize(input);
       REQUIRE(to_latex(input) ==
               L"{ "
-              L"\\bigl({{\\bar{g}^{{p_3}{p_4}}_{{p_1}{p_2}}}{t^{{p_1}}_{{p_3}}}"
-              L"{t^{{p_2}}_{{p_4}}}}\\bigr) }");
+              L"\\bigl({{\\bar{g}^{{p_1}{p_4}}_{{p_2}{p_3}}}{t^{{p_2}}_{{p_1}}}"
+              L"{t^{{p_"
+              L"3}}_{{p_4}}}}\\bigr) }");
     }
 
     // Case 4: permuted indices
@@ -228,8 +229,8 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
       REQUIRE(input->size() == 1);
       REQUIRE(to_latex(input) ==
               L"{ "
-              L"\\bigl({{g^{{i_1}{a_3}}_{{i_3}{i_4}}}{t^{{i_4}}_{{a_2}}}{t^{{i_"
-              L"3}{i_2}}_{{a_1}{a_3}}}}\\bigr) }");
+              L"\\bigl({{g^{{a_3}{i_1}}_{{i_3}{i_4}}}{t^{{i_3}}_{{a_2}}}{t^{{i_"
+              L"4}{i_2}}_{{a_1}{a_3}}}}\\bigr) }");
     }
 
     {  // Case 5: CCSDT R3: S3 * F * T3
@@ -273,11 +274,11 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
         canonicalize(term1);
         canonicalize(term2);
         REQUIRE(to_latex(term1) ==
-                L"{{{-4}}{S^{{a_1}{a_2}{a_3}}_{{i_1}{i_2}{i_3}}}{f^{{i_3}}_{{i_"
-                L"4}}}{t^{{i_1}{i_4}{i_2}}_{{a_1}{a_2}{a_3}}}}");
+                L"{{{-4}}{S^{{a_1}{a_2}{a_3}}_{{i_1}{i_3}{i_4}}}{f^{{i_4}}_{{i_"
+                L"2}}}{t^{{i_1}{i_2}{i_3}}_{{a_1}{a_2}{a_3}}}}");
         REQUIRE(to_latex(term2) ==
-                L"{{{-4}}{S^{{a_1}{a_2}{a_3}}_{{i_1}{i_2}{i_3}}}{f^{{i_3}}_{{i_"
-                L"4}}}{t^{{i_1}{i_4}{i_2}}_{{a_1}{a_2}{a_3}}}}");
+                L"{{{-4}}{S^{{a_1}{a_2}{a_3}}_{{i_1}{i_3}{i_4}}}{f^{{i_4}}_{{i_"
+                L"2}}}{t^{{i_1}{i_2}{i_3}}_{{a_1}{a_2}{a_3}}}}");
         auto sum_of_terms = term1 + term2;
         simplify(sum_of_terms);
         REQUIRE(to_latex(sum_of_terms) ==
