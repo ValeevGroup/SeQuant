@@ -17,8 +17,6 @@
 
 #include <range/v3/all.hpp>
 
-// TODO: Add test cases with aux indices
-
 TEST_CASE("Canonicalizer", "[algorithms]") {
   using namespace sequant;
 
@@ -160,6 +158,19 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
               L"{{{\\frac{1}{2}}}{w}{S^{{i_1}{i_2}}_{{a_1}{a_3}}}{f^{{i_3}}_{{"
               L"a_2}}}{f⁺^{{i_1}{i_3}}_{{a_1}{a_3}}}{t^{{a_2}}_{{i_2}}}}");
     }
+  }
+  {
+    auto input = ex<Constant>(rational{1, 2}) *
+                 ex<Tensor>(L"B", bra{L"p_2"}, ket{L"p_4"}, aux{L"p_5"},
+                            Symmetry::nonsymm) *
+                 ex<Tensor>(L"B", bra{L"p_1"}, ket{L"p_3"}, aux{L"p_5"},
+                            Symmetry::nonsymm) *
+                 ex<Tensor>(L"t", bra{L"p_4"}, ket{L"p_2"}, Symmetry::nonsymm) *
+                 ex<Tensor>(L"t", bra{L"p_3"}, ket{L"p_1"}, Symmetry::nonsymm);
+    canonicalize(input);
+    REQUIRE(to_latex(input) ==
+            L"{{{\\frac{1}{2}}}{t^{{p_3}}_{{p_1}}}{t^{{p_4}}_{{p_2}}}{B^{{p_1}}"
+            L"_{{p_3}}[{p_5}]}{B^{{p_2}}_{{p_4}}[{p_5}]}}");
   }
 
   SECTION("sum of products") {
@@ -344,6 +355,34 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
                 L"\\bigl({{{4}}{S^{{a_1}{a_2}{a_3}}_{{i_1}{i_2}{i_3}}}{f^{{i_3}"
                 L"}_{{i_4}}}{t^{{i_4}{i_1}{i_2}}_{{a_1}{a_2}{a_3}}}}\\bigr) }");
       }
+    }
+
+    // Case 6: Case 4 w/ aux indices
+    {
+      auto input =
+          ex<Constant>(rational{4, 3}) *
+              ex<Tensor>(L"B", bra{L"i_3"}, ket{L"a_3"}, aux{L"p_5"},
+                         Symmetry::nonsymm) *
+              ex<Tensor>(L"B", bra{L"i_4"}, ket{L"i_1"}, aux{L"p_5"},
+                         Symmetry::nonsymm) *
+              ex<Tensor>(L"t", bra{L"a_2"}, ket{L"i_3"}, Symmetry::nonsymm) *
+              ex<Tensor>(L"t", bra{L"a_1", L"a_3"}, ket{L"i_4", L"i_2"},
+                         Symmetry::nonsymm) -
+          ex<Constant>(rational{1, 3}) *
+              ex<Tensor>(L"B", bra{L"i_3"}, ket{L"i_1"}, aux{L"p_5"},
+                         Symmetry::nonsymm) *
+              ex<Tensor>(L"B", bra{L"i_4"}, ket{L"a_3"}, aux{L"p_5"},
+                         Symmetry::nonsymm) *
+              ex<Tensor>(L"t", bra{L"a_2"}, ket{L"i_4"}, Symmetry::nonsymm) *
+              ex<Tensor>(L"t", bra{L"a_1", L"a_3"}, ket{L"i_3", L"i_2"},
+                         Symmetry::nonsymm);
+
+      canonicalize(input);
+      REQUIRE(input->size() == 1);
+      REQUIRE(to_latex(input) ==
+              L"{ "
+              L"\\bigl({{t^{{i_3}}_{{a_2}}}{t^{{i_4}{i_2}}_{{a_1}{a_3}}}{B^{{a_"
+              L"3}}_{{i_3}}[{p_5}]}{B^{{i_1}}_{{i_4}}[{p_5}]}}\\bigr) }");
     }
   }
 }
