@@ -1141,7 +1141,12 @@ class Product : public Expr {
     if (!scalar().is_zero()) {
       const auto scal = negate ? -scalar() : scalar();
       if (!scal.is_identity()) {
-        result += sequant::to_latex(scal);
+        // replace -1 prefactor by -
+        if (!(negate ? scalar() : -scalar()).is_identity()) {
+          result += sequant::to_latex(scal);
+        } else {
+          result += L"{-}";
+        }
       }
       for (const auto &i : factors()) {
         if (i->is<Product>())
