@@ -140,7 +140,10 @@ TEST_CASE("Tensor", "[elements]") {
     REQUIRE(to_latex(t1) == L"{F^{{i_2}}_{{i_1}}}");
 
     auto t2 = Tensor(L"F", bra{L"i_1"}, ket{L"i_2"}, aux{L"i_3"});
-    REQUIRE(to_latex(t2) == L"{F^{{i_2}}_{{i_1}}({i_3})}");
+    REQUIRE(to_latex(t2) == L"{F^{{i_2}}_{{i_1}}[{i_3}]}");
+
+    auto t3 = Tensor(L"F", bra{L"i_1"}, ket{L"i_2"}, aux{L"i_3", L"i_4"});
+    REQUIRE(to_latex(t3) == L"{F^{{i_2}}_{{i_1}}[{i_3},{i_4}]}");
 
     auto h1 = ex<Tensor>(L"F", bra{L"i_1"}, ket{L"i_2"}) *
               ex<FNOperator>(cre({L"i_1"}), ann({L"i_2"}));

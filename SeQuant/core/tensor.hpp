@@ -314,7 +314,7 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
     for (const auto &i : this->bra()) result += sequant::to_latex(i);
     result += L"}";
     if (!this->aux_.empty()) {
-      result += L"(";
+      result += L"[";
       const index_container_type &__aux = this->aux();
       for (std::size_t i = 0; i < aux_rank(); ++i) {
         result += sequant::to_latex(__aux[i]);
@@ -323,7 +323,7 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
           result += L",";
         }
       }
-      result += L")";
+      result += L"]";
     }
     result += L"}";
     return result;
