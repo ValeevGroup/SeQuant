@@ -52,6 +52,44 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
       canonicalize(op);
       REQUIRE(to_latex(op) == L"{g^{{p_3}{p_4}}_{{p_1}{p_2}}}");
     }
+    {
+      auto op = ex<Tensor>(L"g", bra{L"p_1", L"p_2"}, ket{L"p_4", L"p_3"},
+                           Symmetry::symm);
+      canonicalize(op);
+      REQUIRE(to_latex(op) == L"{g^{{p_3}{p_4}}_{{p_1}{p_2}}}");
+    }
+    {
+      auto op = ex<Tensor>(L"g", bra{L"p_1", L"p_2"}, ket{L"p_4", L"p_3"},
+                           Symmetry::antisymm);
+      canonicalize(op);
+      REQUIRE(to_latex(op) == L"{{{-1}}{\\bar{g}^{{p_3}{p_4}}_{{p_1}{p_2}}}}");
+    }
+
+    // aux indices
+    {
+      auto op = ex<Tensor>(L"B", bra{L"p_1"}, ket{L"p_2"}, aux{L"p_3"},
+                           Symmetry::nonsymm);
+      canonicalize(op);
+      REQUIRE(to_latex(op) == L"{B^{{p_2}}_{{p_1}}[{p_3}]}");
+    }
+    {
+      auto op = ex<Tensor>(L"B", bra{L"p_1", L"p_2"}, ket{L"p_4", L"p_3"},
+                           aux{L"p_5"}, Symmetry::nonsymm);
+      canonicalize(op);
+      REQUIRE(to_latex(op) == L"{B^{{p_4}{p_3}}_{{p_1}{p_2}}[{p_5}]}");
+    }
+    {
+      auto op = ex<Tensor>(L"B", bra{L"p_1", L"p_2"}, ket{L"p_4", L"p_3"},
+                           aux{L"p_5"}, Symmetry::symm);
+      canonicalize(op);
+      REQUIRE(to_latex(op) == L"{B^{{p_3}{p_4}}_{{p_1}{p_2}}[{p_5}]}");
+    }
+    {
+      auto op = ex<Tensor>(L"B", bra{L"p_1", L"p_2"}, ket{L"p_4", L"p_3"},
+                           aux{L"p_5"}, Symmetry::antisymm);
+      canonicalize(op);
+      REQUIRE(to_latex(op) == L"{{{-1}}{B^{{p_3}{p_4}}_{{p_1}{p_2}}[{p_5}]}}");
+    }
   }
 
   SECTION("Products") {
