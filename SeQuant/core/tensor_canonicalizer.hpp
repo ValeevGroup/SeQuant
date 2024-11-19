@@ -165,7 +165,7 @@ class DefaultTensorCanonicalizer : public TensorCanonicalizer {
     const auto _rank = std::min(_bra_rank, _ket_rank);
 
     // nothing to do for rank-1 tensors
-    if (_bra_rank == 1 && _ket_rank == 1 && _aux_rank == 1) return nullptr;
+    if (_bra_rank == 1 && _ket_rank == 1 && _aux_rank == 0) return nullptr;
 
     using ranges::begin;
     using ranges::end;
