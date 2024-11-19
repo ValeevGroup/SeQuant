@@ -49,80 +49,20 @@ struct TensorBlockIndexComparer {
       static_assert(std::is_same_v<std::decay_t<decltype(rhs_second)>, Index>,
                     "TensorBlockIndexComparer can only work with indices");
 
-      // First compare only index spaces of equivalent pairs
-      int res = compare_spaces(lhs_first, rhs_first);
+      int res = lhs_first < rhs_first ? -1 : (rhs_first < lhs_first ? 1 : 0);
       if (res != 0) {
         return res;
       }
 
-      res = compare_spaces(lhs_second, rhs_second);
-      if (res != 0) {
-        return res;
-      }
-
-      // Then consider tags of equivalent pairs
-      res = compare_tags(lhs_first, rhs_first);
-      if (res != 0) {
-        return res;
-      }
-
-      res = compare_tags(lhs_second, rhs_second);
+      res = lhs_second < rhs_second ? -1 : (rhs_second < lhs_second ? 1 : 0);
       return res;
     } else {
       static_assert(std::is_same_v<std::decay_t<T>, Index>,
                     "TensorBlockIndexComparer can only work with indices");
 
-      int res = compare_spaces(lhs, rhs);
-      if (res != 0) {
-        return res;
-      }
-
-      res = compare_tags(lhs, rhs);
+      int res = lhs < rhs ? -1 : (rhs < lhs ? 1 : 0);
       return res;
     }
-  }
-
-  int compare_spaces(const Index& lhs, const Index& rhs) const {
-    if (lhs.space() != rhs.space()) {
-      return lhs.space() < rhs.space() ? -1 : 1;
-    }
-
-    if (lhs.has_proto_indices() != rhs.has_proto_indices()) {
-      return lhs.has_proto_indices() ? -1 : 1;
-    }
-
-    if (lhs.proto_indices().size() != rhs.proto_indices().size()) {
-      return lhs.proto_indices().size() < rhs.proto_indices().size() ? -1 : 1;
-    }
-
-    for (std::size_t i = 0; i < lhs.proto_indices().size(); ++i) {
-      const auto& lhs_proto = lhs.proto_indices()[i];
-      const auto& rhs_proto = rhs.proto_indices()[i];
-
-      int res = compare_spaces(lhs_proto, rhs_proto);
-      if (res != 0) {
-        return res;
-      }
-    }
-
-    // Index spaces are equal
-    return 0;
-  }
-
-  int compare_tags(const Index& lhs, const Index& rhs) const {
-    if (!lhs.tag().has_value() || !rhs.tag().has_value()) {
-      // We only compare tags if both indices have a tag
-      return 0;
-    }
-
-    const int lhs_tag = lhs.tag().value<int>();
-    const int rhs_tag = rhs.tag().value<int>();
-
-    if (lhs_tag != rhs_tag) {
-      return lhs_tag < rhs_tag ? -1 : 1;
-    }
-
-    return 0;
   }
 };
 
