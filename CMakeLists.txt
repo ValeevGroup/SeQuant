@@ -188,7 +188,6 @@ add_library(SeQuant-bliss
 set(SeQuant_src
         ${PROJECT_BINARY_DIR}/SeQuant/version.hpp
         SeQuant/version.cpp
-        SeQuant/core/abstract_tensor.cpp
         SeQuant/core/abstract_tensor.hpp
         SeQuant/core/algorithm.hpp
         SeQuant/core/any.hpp
@@ -239,8 +238,12 @@ set(SeQuant_src
         SeQuant/core/tag.hpp
         SeQuant/core/tensor.cpp
         SeQuant/core/tensor.hpp
+        SeQuant/core/tensor_canonicalizer.cpp
+        SeQuant/core/tensor_canonicalizer.hpp
         SeQuant/core/tensor_network.cpp
         SeQuant/core/tensor_network.hpp
+        SeQuant/core/tensor_network_v2.cpp
+        SeQuant/core/tensor_network_v2.hpp
         SeQuant/core/timer.hpp
         SeQuant/core/utility/context.hpp
         SeQuant/core/utility/indices.hpp
@@ -558,6 +561,11 @@ if (BUILD_TESTING)
               examples/synopsis/${example${i}}.cpp)
       target_link_libraries(${example${i}} SeQuant)
     endforeach ()
+
+    set(example12 "tensor_network_graphs")
+    add_executable(${example12} EXCLUDE_FROM_ALL
+            examples/${example12}/${example12}.cpp)
+    target_link_libraries(${example12} SeQuant)
 
     # add tests for running examples
     foreach (i RANGE ${lastexample})

@@ -137,6 +137,12 @@ std::wstring deparse(Tensor const& tensor, bool annot_sym) {
   if (tensor.ket_rank() > 0) {
     deparsed += L";" + details::deparse_indices(tensor.ket());
   }
+  if (tensor.aux_rank() > 0) {
+    if (tensor.ket_rank() == 0) {
+      deparsed += L";";
+    }
+    deparsed += L";" + details::deparse_indices(tensor.aux());
+  }
   deparsed += L"}";
 
   if (annot_sym) {

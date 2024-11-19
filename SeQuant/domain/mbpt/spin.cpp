@@ -199,7 +199,7 @@ ExprPtr remove_spin(const ExprPtr& expr) {
       }
     }
     Tensor result(tensor.label(), bra(std::move(b)), ket(std::move(k)),
-                  tensor.symmetry(), tensor.braket_symmetry());
+                  tensor.aux(), tensor.symmetry(), tensor.braket_symmetry());
     return std::make_shared<Tensor>(std::move(result));
   };
 
@@ -287,7 +287,7 @@ ExprPtr expand_antisymm(const Tensor& tensor, bool skip_spinsymm) {
   assert(tensor.bra_rank() == tensor.ket_rank());
   // Return non-symmetric tensor if rank is 1
   if (tensor.bra_rank() == 1) {
-    Tensor new_tensor(tensor.label(), tensor.bra(), tensor.ket(),
+    Tensor new_tensor(tensor.label(), tensor.bra(), tensor.ket(), tensor.aux(),
                       Symmetry::nonsymm, tensor.braket_symmetry(),
                       tensor.particle_symmetry());
     return std::make_shared<Tensor>(new_tensor);
@@ -320,7 +320,7 @@ ExprPtr expand_antisymm(const Tensor& tensor, bool skip_spinsymm) {
     do {
       // N.B. must copy
       auto new_tensor = Tensor(tensor.label(), bra(bra_list), ket(ket_list),
-                               Symmetry::nonsymm);
+                               tensor.aux(), Symmetry::nonsymm);
 
       if (spin_symm_tensor(new_tensor)) {
         auto new_tensor_product = std::make_shared<Product>();
@@ -525,7 +525,8 @@ ExprPtr symmetrize_expr(const Product& product) {
 
   auto S = Tensor{};
   if (A_is_nconserving) {
-    S = Tensor(L"S", A_tensor.bra(), A_tensor.ket(), Symmetry::nonsymm);
+    S = Tensor(L"S", A_tensor.bra(), A_tensor.ket(), A_tensor.aux(),
+               Symmetry::nonsymm);
   } else {  // A is N-nonconserving
     auto n = std::min(A_tensor.bra_rank(), A_tensor.ket_rank());
     container::svector<Index> bra_list(A_tensor.bra().begin(),
@@ -533,7 +534,7 @@ ExprPtr symmetrize_expr(const Product& product) {
     container::svector<Index> ket_list(A_tensor.ket().begin(),
                                        A_tensor.ket().begin() + n);
     S = Tensor(L"S", bra(std::move(bra_list)), ket(std::move(ket_list)),
-               Symmetry::nonsymm);
+               A_tensor.aux(), Symmetry::nonsymm);
   }
 
   // Generate replacement maps from a list of Index type (could be a bra or a
@@ -1080,7 +1081,7 @@ Tensor swap_spin(const Tensor& t) {
     k.at(i) = spin_flipped_idx(t.ket().at(i));
   }
 
-  return {t.label(),    bra(std::move(b)),   ket(std::move(k)),
+  return {t.label(),    bra(std::move(b)),   ket(std::move(k)),    t.aux(),
           t.symmetry(), t.braket_symmetry(), t.particle_symmetry()};
 }
 
@@ -1118,7 +1119,8 @@ ExprPtr merge_tensors(const Tensor& O1, const Tensor& O2) {
   assert(O1.symmetry() == O2.symmetry());
   auto b = ranges::views::concat(O1.bra(), O2.bra());
   auto k = ranges::views::concat(O1.ket(), O2.ket());
-  return ex<Tensor>(Tensor(O1.label(), bra(b), ket(k), O1.symmetry()));
+  auto a = ranges::views::concat(O1.aux(), O2.aux());
+  return ex<Tensor>(Tensor(O1.label(), bra(b), ket(k), aux(a), O1.symmetry()));
 }
 
 std::vector<ExprPtr> open_shell_A_op(const Tensor& A) {
@@ -1143,8 +1145,8 @@ std::vector<ExprPtr> open_shell_A_op(const Tensor& A) {
                    make_spinbeta);
     ranges::for_each(spin_bra, [](const Index& i) { i.reset_tag(); });
     ranges::for_each(spin_ket, [](const Index& i) { i.reset_tag(); });
-    result.at(i) =
-        ex<Tensor>(Tensor(L"A", spin_bra, spin_ket, Symmetry::antisymm));
+    result.at(i) = ex<Tensor>(
+        Tensor(L"A", spin_bra, spin_ket, A.aux(), Symmetry::antisymm));
     // std::wcout << to_latex(result.at(i)) << " ";
   }
   // std::wcout << "\n" << std::endl;

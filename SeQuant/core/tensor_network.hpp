@@ -9,6 +9,8 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
+#include <SeQuant/core/tensor_canonicalizer.hpp>
+#include <SeQuant/core/vertex_type.hpp>
 
 #include <cassert>
 #include <cstdlib>
@@ -132,14 +134,7 @@ class TensorNetwork {
     int second_position_ = 0;
   };
 
-  enum class VertexType {
-    Index,
-    SPBundle,
-    TensorBra,
-    TensorKet,
-    TensorBraKet,
-    TensorCore
-  };
+  using VertexType = sequant::VertexType;
 
  public:
   /// @throw std::logic_error if exprptr_range contains a non-tensor
@@ -172,7 +167,7 @@ class TensorNetwork {
   /// @param named_indices specifies the indices that cannot be renamed, i.e.
   /// their labels are meaningful; default is nullptr, which results in external
   /// indices treated as named indices
-  /// @return biproduct of canonicalization (e.g. phase); if none, returns
+  /// @return byproduct of canonicalization (e.g. phase); if none, returns
   /// nullptr
   ExprPtr canonicalize(
       const container::vector<std::wstring> &cardinal_tensor_labels = {},

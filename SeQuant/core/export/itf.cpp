@@ -45,7 +45,7 @@ Tensor generateResultTensor(ExprPtr expr) {
   IndexGroups externals = get_unique_indices(expr);
 
   return Tensor(L"Result", bra(std::move(externals.bra)),
-                ket(std::move(externals.ket)));
+                ket(std::move(externals.ket)), aux(std::move(externals.aux)));
 }
 
 Result::Result(ExprPtr expression, bool importResultTensor)
@@ -126,6 +126,9 @@ std::vector<Contraction> to_contractions(const Product &product,
       intermediateIndices.insert(intermediateIndices.end(),
                                  intermediateIndexGroups.ket.begin(),
                                  intermediateIndexGroups.ket.end());
+      intermediateIndices.insert(intermediateIndices.end(),
+                                 intermediateIndexGroups.aux.begin(),
+                                 intermediateIndexGroups.aux.end());
       std::sort(intermediateIndices.begin(), intermediateIndices.end(),
                 [](const Index &lhs, const Index &rhs) {
                   IndexTypeComparer cmp;
@@ -254,6 +257,7 @@ void one_electron_integral_remapper(
 
   auto braIndices = tensor.bra();
   auto ketIndices = tensor.ket();
+  assert(tensor.aux().empty());
 
   IndexTypeComparer cmp;
 
@@ -269,7 +273,7 @@ void one_electron_integral_remapper(
   }
 
   expr = ex<Tensor>(tensor.label(), bra(std::move(braIndices)),
-                    ket(std::move(ketIndices)));
+                    ket(std::move(ketIndices)), tensor.aux());
 }
 
 template <typename BraContainer, typename KetContainer>
@@ -314,6 +318,7 @@ void two_electron_integral_remapper(
   // Copy indices as we might have to mutate them
   auto braIndices = tensor.bra();
   auto ketIndices = tensor.ket();
+  assert(tensor.aux().empty());
 
   IndexTypeComparer cmp;
 
@@ -404,7 +409,7 @@ void two_electron_integral_remapper(
   }
 
   expr = ex<Tensor>(std::move(tensorLabel), bra(std::move(braIndices)),
-                    ket(std::move(ketIndices)));
+                    ket(std::move(ketIndices)), tensor.aux());
 }
 
 void integral_remapper(ExprPtr &expr, std::wstring_view oneElectronIntegralName,

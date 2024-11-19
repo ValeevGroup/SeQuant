@@ -201,7 +201,7 @@ eval_seq_t single_term_opt(TensorNetwork const& network, IdxToSz const& idxsz) {
     auto const& tnsr = *network.tensors().at(i);
     auto bk = container::svector<Index>{};
     bk.reserve(bra_rank(tnsr) + ket_rank(tnsr));
-    for (auto&& idx : braket(tnsr)) bk.push_back(idx);
+    for (auto&& idx : indices(tnsr)) bk.push_back(idx);
 
     ranges::sort(bk, Index::LabelCompare{});
     nth_tensor_indices.emplace_back(std::move(bk));

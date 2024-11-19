@@ -7,7 +7,9 @@
 
 #include <SeQuant/core/bliss.hpp>
 #include <SeQuant/core/logger.hpp>
+#include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/tensor_network.hpp>
+#include <SeQuant/core/vertex_type.hpp>
 
 #ifdef SEQUANT_HAS_EXECUTION_HEADER
 #include <execution>
@@ -238,7 +240,7 @@ inline bool apply_index_replacement_rules(
       const auto &factor = *it;
       if (factor->is<Tensor>()) {
         auto &tensor = factor->as<Tensor>();
-        assert(ranges::none_of(tensor.const_braket(), [](const Index &idx) {
+        assert(ranges::none_of(tensor.const_indices(), [](const Index &idx) {
           return idx.tag().has_value();
         }));
       }
@@ -363,7 +365,7 @@ void reduce_wick_impl(std::shared_ptr<Product> &expr,
       std::set<Index, Index::LabelCompare> all_indices;
       ranges::for_each(*expr, [&all_indices](const auto &factor) {
         if (factor->template is<Tensor>()) {
-          ranges::for_each(factor->template as<const Tensor>().braket(),
+          ranges::for_each(factor->template as<const Tensor>().indices(),
                            [&all_indices](const Index &idx) {
                              [[maybe_unused]] auto result =
                                  all_indices.insert(idx);
@@ -640,14 +642,13 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
             // ordinal can be computed by counting
             std::size_t nop_ord = 0;
             for (size_t v = 0; v != n; ++v) {
-              if (vtypes[v] == TensorNetwork::VertexType::TensorCore &&
+              if (vtypes[v] == VertexType::TensorCore &&
                   (std::find(nop_labels_begin, nop_labels_end, vlabels[v]) !=
                    nop_labels_end)) {
                 auto insertion_result = nop_vidx_ord.emplace(v, nop_ord++);
                 assert(insertion_result.second);
               }
-              if (vtypes[v] == TensorNetwork::VertexType::Index &&
-                  !input_->empty()) {
+              if (vtypes[v] == VertexType::Index && !input_->empty()) {
                 auto &idx = (tn_edges.begin() + v)->idx();
                 auto idx_it_in_opseq = ranges::find_if(
                     opseq_view,
@@ -882,7 +883,7 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
           auto exclude_index_vertex_pair = [&tn_tensors, &tn_edges](size_t v1,
                                                                     size_t v2) {
             // v1 and v2 are vertex indices and also index the edges in the
-            // TensorNetwork
+            // WickGraph
             assert(v1 < tn_edges.size());
             assert(v2 < tn_edges.size());
             const auto &edge1 = *(tn_edges.begin() + v1);

@@ -10,6 +10,7 @@
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/runtime.hpp>
 #include <SeQuant/core/space.hpp>
+#include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/domain/mbpt/context.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/op.hpp>

@@ -100,9 +100,10 @@ auto index_def        = x3::lexeme[
                             index_label >> -('<' >> index_label % ',' >> ">")
                         ];
 
-auto index_groups_def =   L"_{" > -(index % ',') > L"}^{" > -(index % ',') > L"}" >> x3::attr(false)
-                        | L"^{" > -(index % ',') > L"}_{" > -(index % ',') > L"}" >> x3::attr(true)
-                        |  '{'  > -(index % ',') > ';'    > -(index % ',') >  '}' >> x3::attr(false);
+const std::vector<ast::Index> noIndices;
+auto index_groups_def =   L"_{" > -(index % ',') > L"}^{" > -(index % ',')  > L"}" >> x3::attr(noIndices) >> x3::attr(false)
+                        | L"^{" > -(index % ',') > L"}_{" > -(index % ',')  > L"}" >> x3::attr(noIndices) >> x3::attr(true)
+                        |  '{'  > -(index % ',') > -( ';' > -(index % ',')) > -(';' > -(index % ','))     >  '}'  >> x3::attr(false);
 
 auto tensor_def       = x3::lexeme[
                             name >> x3::skip[index_groups] >> -(':' >> x3::upper)

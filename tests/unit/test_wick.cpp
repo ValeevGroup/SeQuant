@@ -20,6 +20,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 #include "test_config.hpp"
+#include "utils.hpp"
 
 #include <range/v3/all.hpp>
 
@@ -646,8 +647,7 @@ TEST_CASE("WickTheorem", "[algorithms][wick]") {
       ExprPtr result;
       REQUIRE_NOTHROW(result = wick.compute());
       // std::wcout << "result = " << to_latex(result) << std::endl;
-      REQUIRE(to_latex(result) ==
-              L"{{{-1}}{\\bar{g}^{{i_1}{a_2}}_{{a_3}{a_4}}}}");
+      REQUIRE(to_latex(result) == L"{{-}{\\bar{g}^{{i_1}{a_2}}_{{a_3}{a_4}}}}");
     }
 
     // odd number of ops -> full contraction is 0
@@ -912,12 +912,13 @@ TEST_CASE("WickTheorem", "[algorithms][wick]") {
 
         std::wcout << L"spinfree H2*T2 = " << to_latex(wick_result_2)
                    << std::endl;
-        REQUIRE(to_latex(wick_result_2) ==
-                L"{ "
-                L"\\bigl({{{8}}{g^{{a_1}{a_2}}_{{i_1}{i_2}}}{t^{{i_1}{i_2}}_{{"
-                L"a_1}{a_2}}}} - "
-                L"{{{4}}{g^{{a_1}{a_2}}_{{i_1}{i_2}}}{t^{{i_2}{i_1}}_{{a_1}{a_"
-                L"2}}}}\\bigr) }");
+        REQUIRE_SUM_EQUAL(
+            wick_result_2,
+            L"{ \\bigl( - "
+            L"{{{4}}{g^{{a_1}{a_2}}_{{i_1}{i_2}}}{t^{{i_2}{i_1}}_{{a_1}{a_2}}"
+            L"}} + "
+            L"{{{8}}{g^{{a_1}{a_2}}_{{i_1}{i_2}}}{t^{{i_1}{i_2}}_{{a_1}{a_2}}"
+            L"}}\\bigr) }");
       }
     });
 
