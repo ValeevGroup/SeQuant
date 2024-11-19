@@ -434,7 +434,7 @@ TensorNetwork::make_bliss_graph(
   std::vector<VertexType> vertex_type(
       edges_.size());  // the size will be updated
 
-  // N.B. Colors [0, 2 max rank + named_indices.size()) are reserved:
+  // N.B. Colors [0, 3 max rank + named_indices.size()) are reserved:
   // 0 - the bra vertex (for particle 0, if bra is nonsymm, or for the entire
   // bra, if (anti)symm) 1 - the bra vertex for particle 1, if bra is nonsymm
   // ...
@@ -442,13 +442,15 @@ TensorNetwork::make_bliss_graph(
   // the entire ket, if particle-symmetric) max_rank+1 - the ket vertex for
   // particle 1, if particle-asymmetric
   // ...
-  // 2 max_rank - first named index
-  // 2 max_rank + 1 - second named index
+  // 2 max_rank - the aux index
+  // ...
+  // 3 max_rank - first named index
+  // 3 max_rank + 1 - second named index
   // ...
   // N.B. For braket-symmetric tensors the ket vertices use the same indices as
   // the bra vertices
   auto nonreserved_color = [&named_indices](size_t color) -> bool {
-    return color >= 2 * max_rank + named_indices.size();
+    return color >= 3 * max_rank + named_indices.size();
   };
 
   // compute # of vertices
@@ -477,7 +479,7 @@ TensorNetwork::make_bliss_graph(
       vertex_color.at(index_cnt) = idx_color;
     } else {
       const auto named_index_rank = named_index_it - named_indices.begin();
-      vertex_color.at(index_cnt) = 2 * max_rank + named_index_rank;
+      vertex_color.at(index_cnt) = 3 * max_rank + named_index_rank;
     }
     // each symmetric proto index bundle will have a vertex ...
     // for now only store the unique protoindex bundles in
@@ -574,6 +576,17 @@ TensorNetwork::make_bliss_graph(
         vertex_color.push_back(t_color);
       }
     }
+    // aux indices currently do not support any symmetry
+    assert(aux_rank(tref) <= max_rank);
+    for (size_t p = 0; p != aux_rank(tref); ++p) {
+      nv += 1;
+      auto pstr = to_wstring(p + 1);
+      vertex_labels.push_back(std::wstring(L"aux") + pstr);
+      vertex_type.push_back(VertexType::TensorAux);
+      const auto color = 2 * max_rank + p;
+      vertex_color.push_back(color);
+    }
+
     ++tensor_cnt;
   });
 
