@@ -92,7 +92,7 @@ EvalExpr::EvalExpr(Tensor const& tnsr)
     : op_type_{EvalOp::Id},
       result_type_{ResultType::Tensor},
       hash_value_{hash_terminal_tensor(tnsr)},
-      id_{},
+      id_{++global_id_},
       expr_{tnsr.clone()},
       tot_{is_tot(tnsr)} {}
 
@@ -100,7 +100,7 @@ EvalExpr::EvalExpr(Constant const& c)
     : op_type_{EvalOp::Id},
       result_type_{ResultType::Scalar},
       hash_value_{hash::value(c)},
-      id_{},
+      id_{++global_id_},
       expr_{c.clone()},
       tot_{false} {}
 
@@ -108,7 +108,7 @@ EvalExpr::EvalExpr(Variable const& v)
     : op_type_{EvalOp::Id},
       result_type_{ResultType::Scalar},
       hash_value_{hash::value(v)},
-      id_{},
+      id_{++global_id_},
       expr_{v.clone()},
       tot_{false} {}
 
@@ -130,6 +130,8 @@ size_t EvalExpr::hash_value() const noexcept { return hash_value_; }
 size_t EvalExpr::id() const noexcept { return id_; }
 
 ExprPtr EvalExpr::expr() const noexcept { return expr_; }
+
+void EvalExpr::set_expr(ExprPtr expr) { expr_ = std::move(expr); }
 
 bool EvalExpr::tot() const noexcept { return tot_; }
 
@@ -269,24 +271,32 @@ target_braket(Tensor const& t1, Tensor const& t2) noexcept {
       ranges::to<idx_container>();
 
   // combine free bra indices
-  const auto result_bra = concat(t1.bra() | filter([&](const auto& idx) {
-                                   return !contains(contracted_indices, idx);
-                                 }),
-                                 t2.bra() | filter([&](const auto& idx) {
-                                   return !contains(contracted_indices, idx);
-                                 })) |
-                          ranges::to<idx_container>();
+  auto result_bra = concat(t1.bra() | filter([&](const auto& idx) {
+                             return !contains(contracted_indices, idx);
+                           }),
+                           t2.bra() | filter([&](const auto& idx) {
+                             return !contains(contracted_indices, idx);
+                           })) |
+                    ranges::to<idx_container>();
 
   // combine free ket indices
-  const auto result_ket = concat(t1.ket() | filter([&](const auto& idx) {
-                                   return !contains(contracted_indices, idx);
-                                 }),
-                                 t2.ket() | filter([&](const auto& idx) {
-                                   return !contains(contracted_indices, idx);
-                                 })) |
-                          ranges::to<idx_container>();
+  auto result_ket = concat(t1.ket() | filter([&](const auto& idx) {
+                             return !contains(contracted_indices, idx);
+                           }),
+                           t2.ket() | filter([&](const auto& idx) {
+                             return !contains(contracted_indices, idx);
+                           })) |
+                    ranges::to<idx_container>();
 
-  return std::make_pair(result_bra, result_ket);
+  // We are generating an index sequence for an intermediate.
+  // Since an intermediate is an object that we make up,
+  // we can choose the indexing however we please.
+  // By sorting bra and ket indices, we ensure that intermediates
+  // with the same indices share the exact same indexing.
+  std::sort(result_bra.begin(), result_bra.end());
+  std::sort(result_ket.begin(), result_ket.end());
+
+  return {std::move(result_bra), std::move(result_ket)};
 }
 
 Symmetry tensor_symmetry_sum(EvalExpr const& left,
