@@ -24,9 +24,15 @@
 namespace {
 
 // validates if x is constructible from tspec using parse_expr
-auto validate_tensor = [](const auto& x, std::wstring_view tspec) -> bool {
+auto validate_eval_expr = [](const sequant::EvalExpr& x,
+                             std::wstring_view tspec) -> bool {
   return x.to_latex() ==
          sequant::parse_expr(tspec, sequant::Symmetry::antisymm)->to_latex();
+};
+
+auto validate_tensor = [](const sequant::Tensor& x,
+                          std::wstring_view tspec) -> bool {
+  return x.to_latex() == sequant::parse_expr(tspec, x.symmetry())->to_latex();
 };
 
 auto eval_node(sequant::ExprPtr const& expr) {
@@ -179,8 +185,8 @@ TEST_CASE("TEST EVAL_NODE", "[EvalNode]") {
 
     auto prod2 = parse_expr(L"a * t{i1;a1}");
     auto node3 = eval_node(prod2);
-    REQUIRE(validate_tensor(node(node3, {}), L"I{i1;a1}"));
-    REQUIRE(validate_tensor(node(node3, {R}), L"t{i1;a1}"));
+    REQUIRE(validate_eval_expr(node(node3, {}), L"I{i1;a1}"));
+    REQUIRE(validate_eval_expr(node(node3, {R}), L"t{i1;a1}"));
     REQUIRE(node(node3, {L}).as_variable() == Variable{L"a"});
   }
 
