@@ -19,13 +19,42 @@ auto eval_node(sequant::ExprPtr const& expr) {
   return sequant::eval_node<sequant::EvalExprTA>(expr);
 }
 
+///
+/// \brief Represents the outer indices and the inner indices of a nested
+/// tensor.
+///
+/// \note The nested tensor is a concept that generalizes the sequant::Tensor
+/// with and without proto indices. sequant::Tensors with proto indices have
+/// outer and inner indices, whereas, those without proto indices only have
+/// outer indices.
+///
+struct NestedTensorIndices {
+  sequant::container::svector<sequant::Index> outer, inner;
+
+  explicit NestedTensorIndices(sequant::Tensor const& tnsr) {
+    using ranges::views::filter;
+    using namespace sequant;
+
+    outer = sequant::EvalExpr(tnsr).outer_indices();
+
+    inner = tnsr.const_braket()                  //
+            | filter(&Index::has_proto_indices)  //
+            | ranges::to<container::svector<Index>>;
+
+    if (outer.empty()) {
+      assert(inner.empty());
+      outer = tnsr.const_braket() | ranges::to<container::svector<Index>>;
+    }
+  }
+};
+
 auto tensor_to_key(sequant::Tensor const& tnsr) {
   static auto const idx_rgx = boost::wregex{L"([ia])([↑↓])?(_?\\d+)"};
   auto formatter = [](boost::wsmatch mo) -> std::wstring {
     return (mo[1].str() == L"i" ? L"o" : L"v") + mo[2].str();
   };
 
-  sequant::NestedTensorIndices oixs{tnsr};
+  NestedTensorIndices oixs{tnsr};
   if (oixs.inner.empty()) {
     auto const tnsr_deparsed = sequant::deparse(tnsr.clone(), false);
     return boost::regex_replace(tnsr_deparsed, idx_rgx, formatter);

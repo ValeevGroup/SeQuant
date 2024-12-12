@@ -34,29 +34,43 @@ size_t hash_imed(EvalExpr const&, EvalExpr const&, EvalOp) noexcept;
 
 ExprPtr make_imed(EvalExpr const&, EvalExpr const&, EvalOp) noexcept;
 
-bool is_tot(Tensor const& t) noexcept {
+inline bool is_tot(Tensor const& t) noexcept {
   return ranges::any_of(t.const_braket(), &Index::has_proto_indices);
+}
+
+///
+/// \param t sequant Tensor
+/// \return If @c t has at least one index with proto-indices returns a vector
+///         of outer tensor indices (ie. independent indices) otherwise returns
+///         an empty vector.
+///
+container::svector<Index> outer_idxs(Tensor const& t) noexcept {
+  using ranges::not_fn;
+  using ranges::views::filter;
+  using ranges::views::join;
+  using ranges::views::transform;
+
+  if (!is_tot(t)) return {};
+
+  auto independent_indices = t.const_braket()                             //
+                             | filter(not_fn(&Index::has_proto_indices))  //
+                             | ranges::to<container::svector<Index>>;
+
+  auto proto_indices = t.const_braket()                    //
+                       | transform(&Index::proto_indices)  //
+                       | join;
+
+  for (auto&& idx : proto_indices) {
+    if (!ranges::contains(independent_indices, idx))
+      independent_indices.emplace_back(idx);
+  }
+
+  return independent_indices;
 }
 
 std::wstring_view const var_label = L"Z";
 
 }  // namespace
-
-NestedTensorIndices::NestedTensorIndices(const sequant::Tensor& tnsr) {
-  using ranges::views::join;
-  using ranges::views::transform;
-
-  auto append_unique = [](auto& cont, auto const& el) {
-    if (!ranges::contains(cont, el)) cont.emplace_back(el);
-  };
-
-  for (Index const& ix : tnsr.const_braket())
-    append_unique(ix.has_proto_indices() ? inner : outer, ix);
-
-  for (Index const& ix :
-       tnsr.const_braket() | transform(&Index::proto_indices) | join)
-    append_unique(outer, ix);
-}
 
 std::string EvalExpr::braket_annot() const noexcept {
   if (!is_tensor()) return {};
@@ -79,11 +93,14 @@ std::string EvalExpr::braket_annot() const noexcept {
            | ranges::to<std::string>;
   };
 
-  auto nested = NestedTensorIndices{as_tensor()};
+  auto dependent_idxs = [](Tensor const& t) {
+    return ranges::views::filter(t.const_braket(), &Index::has_proto_indices);
+  };
 
-  return nested.inner.empty()  //
-             ? annot(nested.outer)
-             : annot(nested.outer) + ";" + annot(nested.inner);
+  if (tot())
+    return annot(outer_indices_) + ";" + annot(dependent_idxs(as_tensor()));
+  else
+    return annot(as_tensor().const_braket());
 }
 
 size_t EvalExpr::global_id_{};
@@ -94,23 +111,23 @@ EvalExpr::EvalExpr(Tensor const& tnsr)
       hash_value_{hash_terminal_tensor(tnsr)},
       id_{},
       expr_{tnsr.clone()},
-      tot_{is_tot(tnsr)} {}
+      outer_indices_(outer_idxs(tnsr)) {
+  hash::combine(hash_value_, outer_indices_.size());
+}
 
 EvalExpr::EvalExpr(Constant const& c)
     : op_type_{EvalOp::Id},
       result_type_{ResultType::Scalar},
       hash_value_{hash::value(c)},
       id_{},
-      expr_{c.clone()},
-      tot_{false} {}
+      expr_{c.clone()} {}
 
 EvalExpr::EvalExpr(Variable const& v)
     : op_type_{EvalOp::Id},
       result_type_{ResultType::Scalar},
       hash_value_{hash::value(v)},
       id_{},
-      expr_{v.clone()},
-      tot_{false} {}
+      expr_{v.clone()} {}
 
 EvalExpr::EvalExpr(EvalExpr const& left, EvalExpr const& right, EvalOp op)
     : op_type_{op},
@@ -118,7 +135,7 @@ EvalExpr::EvalExpr(EvalExpr const& left, EvalExpr const& right, EvalOp op)
       id_{++global_id_},
       expr_{make_imed(left, right, op)} {
   result_type_ = expr_->is<Tensor>() ? ResultType::Tensor : ResultType::Scalar;
-  tot_ = expr_->is<Tensor>() && is_tot(expr_->as<Tensor>());
+  if (expr_->is<Tensor>()) outer_indices_ = outer_idxs(expr_->as<Tensor>());
 }
 
 EvalOp EvalExpr::op_type() const noexcept { return op_type_; }
@@ -131,7 +148,7 @@ size_t EvalExpr::id() const noexcept { return id_; }
 
 ExprPtr EvalExpr::expr() const noexcept { return expr_; }
 
-bool EvalExpr::tot() const noexcept { return tot_; }
+bool EvalExpr::tot() const noexcept { return !outer_indices_.empty(); }
 
 std::wstring EvalExpr::to_latex() const noexcept { return expr_->to_latex(); }
 
@@ -180,6 +197,10 @@ std::string EvalExpr::label() const noexcept {
   }
 }
 
+container::svector<Index> const& EvalExpr::outer_indices() const noexcept {
+  return outer_indices_;
+}
+
 namespace {
 
 ///
@@ -195,11 +216,7 @@ size_t hash_braket(T const& bk) noexcept {
   for (auto const& idx : bk) {
     hash::combine(h, hash::value(idx.space().type().to_int32()));
     hash::combine(h, hash::value(idx.space().qns().to_int32()));
-    if (idx.has_proto_indices()) {
-      hash::combine(h, hash::value(idx.proto_indices().size()));
-      for (auto&& i : idx.proto_indices())
-        hash::combine(h, hash::value(i.label()));
-    }
+    hash::combine(h, idx.proto_indices().size());
   }
   return h;
 }
