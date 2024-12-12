@@ -465,7 +465,7 @@ auto evaluate_symm(NodeT const& node, Annot const& layout,
 ///                    anti-symmetric. The first two elements of the array are
 ///                    the indices of the bra and ket of the resulting tensor,
 ///                    respectively, and the third element is the number of
-///                    symmetric indices in the group.
+///                    anti-symmetric indices in the group.
 ///
 /// \param le A leaf evaluator that takes an EvalNode and returns a tensor
 ///           (TA::TArrayD, btas::Tensor<double>, etc.) or a constant (double,
