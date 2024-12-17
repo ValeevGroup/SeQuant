@@ -97,7 +97,7 @@ auto index_label_def  = x3::lexeme[
                         ];
 
 auto index_def        = x3::lexeme[
-                            index_label >> -('<' >> index_label % ',' >> ">")
+                            index_label >> -x3::skip['<' >> index_label % ',' >> ">"]
                         ];
 
 const std::vector<ast::Index> noIndices;
