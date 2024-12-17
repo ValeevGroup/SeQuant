@@ -821,11 +821,14 @@ TensorNetworkV2::Graph TensorNetworkV2::create_graph(
         proto_vertex = it->second;
       } else {
         // Create a new vertex for this bundle of proto indices
-        std::wstring spbundle_label = L"{";
-        for (const Index &proto : index.proto_indices()) {
-          spbundle_label += proto.label();
-        }
-        spbundle_label += L"}";
+        std::wstring spbundle_label =
+            L"{" +
+            (ranges::views::transform(
+                 index.proto_indices(),
+                 [](const Index &idx) { return idx.label(); }) |
+             ranges::views::join(L", ") | ranges::to<std::wstring>()) +
+            L"}";
+
         graph.vertex_labels.push_back(std::move(spbundle_label));
         graph.vertex_types.push_back(VertexType::SPBundle);
         const std::size_t bundle_color =
