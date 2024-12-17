@@ -785,6 +785,8 @@ TensorNetworkV2::Graph TensorNetworkV2::create_graph(
   }
 
   // Now add all indices (edges) to the graph
+  container::map<Index, std::size_t> index_vertices;
+
   for (const Edge &current_edge : edges_) {
     const Index &index = current_edge.idx();
     graph.vertex_labels.push_back(std::wstring(index.full_label()));
@@ -805,6 +807,8 @@ TensorNetworkV2::Graph TensorNetworkV2::create_graph(
     graph.vertex_colors.push_back(idx_color);
 
     const std::size_t index_vertex = graph.vertex_labels.size() - 1;
+
+    index_vertices[index] = index_vertex;
 
     // Handle proto indices
     if (index.has_proto_indices()) {
@@ -884,6 +888,22 @@ TensorNetworkV2::Graph TensorNetworkV2::create_graph(
 
       assert(tensor_component_vertex < graph.vertex_labels.size());
       edges.push_back(std::make_pair(index_vertex, tensor_component_vertex));
+    }
+  }
+
+  // Add edges between proto index bundle vertices and all vertices of the
+  // indices contained in that bundle i.e. if the bundle is {i_1,i_2}, the
+  // bundle would be connected with vertices for i_1 and i_2
+  for (const auto &[bundle, vertex] : proto_bundles) {
+    for (const Index &idx : bundle) {
+      auto it = index_vertices.find(idx);
+
+      assert(it != index_vertices.end());
+      if (it == index_vertices.end()) {
+        std::abort();
+      }
+
+      edges.push_back(std::make_pair(it->second, vertex));
     }
   }
 
