@@ -140,19 +140,19 @@ TEST_CASE("Spin", "[spin]") {
       // proto
       REQUIRE_NOTHROW(make_spinalpha(p_i));
       REQUIRE(make_spinalpha(p_i).label() == L"p↑");
-      REQUIRE(make_spinalpha(p_i).full_label() == L"p↑i↑");
+      REQUIRE(make_spinalpha(p_i).full_label() == L"p↑<i↑>");
       REQUIRE(make_spinalpha(p_i).to_latex() == L"{p↑^{{i↑}}}");
       REQUIRE_NOTHROW(make_spinalpha(p1_i));
       REQUIRE(make_spinalpha(p1_i).label() == L"p↑_1");
-      REQUIRE(make_spinalpha(p1_i).full_label() == L"p↑_1i↑");
+      REQUIRE(make_spinalpha(p1_i).full_label() == L"p↑_1<i↑>");
       REQUIRE(make_spinalpha(p1_i).to_latex() == L"{p↑_1^{{i↑}}}");
       REQUIRE_NOTHROW(make_spinalpha(p_i1));
       REQUIRE(make_spinalpha(p_i1).label() == L"p↑");
-      REQUIRE(make_spinalpha(p_i1).full_label() == L"p↑i↑_1");
+      REQUIRE(make_spinalpha(p_i1).full_label() == L"p↑<i↑_1>");
       REQUIRE(make_spinalpha(p_i1).to_latex() == L"{p↑^{{i↑_1}}}");
       REQUIRE_NOTHROW(make_spinalpha(p1_i1));
       REQUIRE(make_spinalpha(p1_i1).label() == L"p↑_1");
-      REQUIRE(make_spinalpha(p1_i1).full_label() == L"p↑_1i↑_1");
+      REQUIRE(make_spinalpha(p1_i1).full_label() == L"p↑_1<i↑_1>");
       REQUIRE(make_spinalpha(p1_i1).to_latex() == L"{p↑_1^{{i↑_1}}}");
     }
 
