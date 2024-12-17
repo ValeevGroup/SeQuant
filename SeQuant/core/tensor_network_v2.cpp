@@ -787,7 +787,7 @@ TensorNetworkV2::Graph TensorNetworkV2::create_graph(
   // Now add all indices (edges) to the graph
   for (const Edge &current_edge : edges_) {
     const Index &index = current_edge.idx();
-    graph.vertex_labels.push_back(std::wstring(index.label()));
+    graph.vertex_labels.push_back(std::wstring(index.full_label()));
     graph.vertex_types.push_back(VertexType::Index);
 
     // Assign index color
