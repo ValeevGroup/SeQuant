@@ -714,7 +714,8 @@ class Graph : public AbstractGraph {
       } else
         os << vnum;
       if (rgb_colors) {
-        os << "\"; color=\"#" << int_to_rgb(v.color) << "\"];\n";
+        auto color = int_to_rgb(v.color);
+        os << "\"; style=filled; color=\"#" << color << "\"; fillcolor=\"#" << color << "80\"; penwidth=2];\n";
       } else {
         os << ":" << v.color << "\"];\n";
       }
