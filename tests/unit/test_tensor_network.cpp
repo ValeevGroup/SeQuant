@@ -798,7 +798,7 @@ TEST_CASE("TensorNetworkV2", "[elements]") {
         Index::reset_tmp_index();
         TensorNetworkV2 tn(*t1_x_t2);
 
-        using named_indices_t = TensorNetworkV2::named_indices_t;
+        using named_indices_t = TensorNetworkV2::NamedIndexSet;
         named_indices_t indices{Index{L"i_17"}};
         tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(), false,
                         &indices);
@@ -1119,7 +1119,7 @@ TEST_CASE("TensorNetworkV2", "[elements]") {
 
       // make graph
       // N.B. treat all indices as dummy so that the automorphism ignores the
-      using named_indices_t = TensorNetworkV2::named_indices_t;
+      using named_indices_t = TensorNetworkV2::NamedIndexSet;
       named_indices_t indices{};
       REQUIRE_NOTHROW(tn.create_graph(&indices));
       TensorNetworkV2::Graph graph = tn.create_graph(&indices);

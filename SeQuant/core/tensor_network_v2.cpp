@@ -26,6 +26,7 @@
 #include <sstream>
 #include <string>
 #include <type_traits>
+#include <variant>
 
 #include <range/v3/algorithm/for_each.hpp>
 #include <range/v3/algorithm/none_of.hpp>
@@ -312,7 +313,7 @@ void sort_via_indices(Container &container, const Comparator &cmp) {
   }
 }
 
-void TensorNetworkV2::canonicalize_graph(const named_indices_t &named_indices) {
+void TensorNetworkV2::canonicalize_graph(const NamedIndexSet &named_indices) {
   if (Logger::instance().canonicalize) {
     std::wcout << "TensorNetworkV2::canonicalize_graph: input tensors\n";
     size_t cnt = 0;
@@ -521,7 +522,7 @@ void TensorNetworkV2::canonicalize_graph(const named_indices_t &named_indices) {
 
 ExprPtr TensorNetworkV2::canonicalize(
     const container::vector<std::wstring> &cardinal_tensor_labels, bool fast,
-    const named_indices_t *named_indices_ptr) {
+    const NamedIndexSet *named_indices_ptr) {
   if (Logger::instance().canonicalize) {
     std::wcout << "TensorNetworkV2::canonicalize(" << (fast ? "fast" : "slow")
                << "): input tensors\n";
@@ -638,22 +639,224 @@ ExprPtr TensorNetworkV2::canonicalize(
   return (byproduct->as<Constant>().value() == 1) ? nullptr : byproduct;
 }
 
+using ProtoBundle =
+    std::decay_t<decltype(std::declval<const Index &>().proto_indices())>;
+
+struct BraGroup {
+  explicit BraGroup(std::size_t id) : id(id) {}
+
+  std::size_t id;
+};
+struct KetGroup {
+  explicit KetGroup(std::size_t id) : id(id) {}
+
+  std::size_t id;
+};
+struct AuxGroup {
+  explicit AuxGroup(std::size_t id) : id(id) {}
+
+  std::size_t id;
+};
+struct ParticleGroup {
+  explicit ParticleGroup(std::size_t id) : id(id) {}
+
+  std::size_t id;
+};
+
+class VertexPainter {
+ public:
+  using Color = TensorNetworkV2::Graph::VertexColor;
+  using VertexData =
+      std::variant<const AbstractTensor *, Index, const ProtoBundle *, BraGroup,
+                   KetGroup, AuxGroup, ParticleGroup>;
+  using ColorMap = container::map<Color, VertexData>;
+
+  VertexPainter(const TensorNetworkV2::NamedIndexSet &named_indices)
+      : used_colors_(), named_indices_(named_indices) {}
+
+  const ColorMap &used_colors() const { return used_colors_; }
+
+  Color operator()(const AbstractTensor &tensor) {
+    Color color = to_color(hash::value(label(tensor)));
+
+    return ensure_uniqueness(color, tensor);
+  }
+
+  Color operator()(const BraGroup &group) {
+    Color color = to_color(group.id + 0xff);
+
+    return ensure_uniqueness(color, group);
+  }
+
+  Color operator()(const KetGroup &group) {
+    Color color = to_color(group.id + 0xff00);
+
+    return ensure_uniqueness(color, group);
+  }
+
+  Color operator()(const AuxGroup &group) {
+    Color color = to_color(group.id + 3 * 0xff0000);
+
+    return ensure_uniqueness(color, group);
+  }
+
+  Color operator()(const ParticleGroup &group) {
+    Color color = to_color(group.id);
+
+    return ensure_uniqueness(color, group);
+  }
+
+  Color operator()(const Index &idx) {
+    auto it = named_indices_.find(idx);
+
+    // TODO: shift
+    std::size_t pre_color;
+    if (it == named_indices_.end()) {
+      // anonymous index
+      pre_color = idx.color();
+    } else {
+      pre_color = static_cast<decltype(pre_color)>(
+          std::distance(named_indices_.begin(), it));
+    }
+
+    return ensure_uniqueness(to_color(pre_color), idx);
+  }
+
+  Color operator()(const ProtoBundle &bundle) {
+    Color color = to_color(Index::proto_indices_color(bundle));
+
+    return ensure_uniqueness(color, bundle);
+  }
+
+ private:
+  ColorMap used_colors_;
+  const TensorNetworkV2::NamedIndexSet &named_indices_;
+
+  Color to_color(std::size_t color) const {
+    // Due to the way we compute the input color, different colors might only
+    // differ by a value of 1. This is fine for the algorithmic purpose (after
+    // all, colors need only be different - by how much is irrelevant), but
+    // sometimes we'll want to use those colors as actual colors to show to a
+    // human being. In those cases, having larger differences makes it easier to
+    // recognize different colors. Therefore, we hash-combined with an
+    // arbitrarily chosen salt with the goal that this will uniformly spread out
+    // all input values and therefore increase color differences.
+    constexpr std::size_t salt = 0x43d2c59cb15b73f0;
+    hash::combine(color, salt);
+
+    if constexpr (sizeof(Color) >= sizeof(std::size_t)) {
+      return color;
+    }
+
+    // Need to somehow fit the color into a lower precision integer. In the
+    // general case, this is necessarily a lossy conversion. We make the
+    // assumption that the input color is
+    // - a hash, or
+    // - computed from some object ID
+    // In the first case, we assume that the used hash function has a uniform
+    // distribution or if there is a bias, the bias is towards lower numbers.
+    // This allows us to simply reuse the lower x bits of the hash as a new hash
+    // (where x == CHAR_BIT * sizeof(VertexColor)). In the second case we assume
+    // that such values never exceed the possible value range of VertexColor so
+    // that again, we can simply take the lower x bits of color and in this case
+    // even retain the numeric value representing the color. Handily, this is
+    // exactly what happens when we perform a conversion into a narrower type.
+    // We only have to make sure that the underlying types are unsigned as
+    // otherwise the behavior is undefined.
+    static_assert(sizeof(Color) < sizeof(std::size_t));
+    static_assert(std::is_unsigned_v<TensorNetworkV2::Graph::VertexColor>,
+                  "Narrowing conversion are undefined for signed integers");
+    static_assert(std::is_unsigned_v<std::size_t>,
+                  "Narrowing conversion are undefined for signed integers");
+    return static_cast<Color>(color);
+  }
+
+  template <typename T>
+  Color ensure_uniqueness(Color color, const T &val) {
+    auto it = used_colors_.find(color);
+    while (it != used_colors_.end() && !may_have_same_color(it->second, val)) {
+      // Color collision: val was computed to have the same color
+      // as another object, but these objects do not compare equal (for
+      // the purpose of color assigning).
+      // -> Need to modify color until conflict is resolved.
+      color++;
+      it = used_colors_.find(color);
+    }
+
+    if (it == used_colors_.end()) {
+      // We have not yet seen this color before -> add it to cache
+      if constexpr (std::is_same_v<T, AbstractTensor> ||
+                    std::is_same_v<T, ProtoBundle>) {
+        used_colors_[color] = &val;
+      } else {
+        used_colors_[color] = val;
+      }
+    }
+
+    return color;
+  }
+
+  bool may_have_same_color(const VertexData &data,
+                           const AbstractTensor &tensor) {
+    return std::holds_alternative<const AbstractTensor *>(data) &&
+           label(*std::get<const AbstractTensor *>(data)) == label(tensor);
+  }
+
+  bool may_have_same_color(const VertexData &data, const BraGroup &group) {
+    return std::holds_alternative<BraGroup>(data) &&
+           std::get<BraGroup>(data).id == group.id;
+  }
+
+  bool may_have_same_color(const VertexData &data, const KetGroup &group) {
+    return std::holds_alternative<KetGroup>(data) &&
+           std::get<KetGroup>(data).id == group.id;
+  }
+
+  bool may_have_same_color(const VertexData &data, const AuxGroup &group) {
+    return std::holds_alternative<AuxGroup>(data) &&
+           std::get<AuxGroup>(data).id == group.id;
+  }
+
+  bool may_have_same_color(const VertexData &data, const ParticleGroup &group) {
+    return std::holds_alternative<ParticleGroup>(data) &&
+           std::get<ParticleGroup>(data).id == group.id;
+  }
+
+  bool may_have_same_color(const VertexData &data, const Index &idx) {
+    if (!std::holds_alternative<Index>(data)) {
+      return false;
+    }
+
+    const Index &lhs = std::get<Index>(data);
+
+    auto it1 = named_indices_.find(lhs);
+    auto it2 = named_indices_.find(idx);
+
+    if (it1 != it2) {
+      // Either one index is named and the other is not or both are named, but
+      // are different indices
+      return false;
+    }
+
+    return lhs.color() == idx.color();
+  }
+
+  bool may_have_same_color(const VertexData &data, const ProtoBundle &bundle) {
+    return std::holds_alternative<const ProtoBundle *>(data) &&
+           Index::proto_indices_color(*std::get<const ProtoBundle *>(data)) ==
+               Index::proto_indices_color(bundle);
+  }
+};
+
 TensorNetworkV2::Graph TensorNetworkV2::create_graph(
-    const named_indices_t *named_indices_ptr) const {
+    const NamedIndexSet *named_indices_ptr) const {
   assert(have_edges_);
 
   // initialize named_indices by default to all external indices
-  const named_indices_t &named_indices =
+  const NamedIndexSet &named_indices =
       named_indices_ptr == nullptr ? this->ext_indices() : *named_indices_ptr;
 
-  // Colors in the range [ 0, 3 * max_rank + named_indices.size() ) are
-  // reserved: Up to max_rank colors can be used for bra indices Up to
-  // max_rank colors can be used for ket indices Up to max_rank colors can be
-  // used for auxiliary indices Every named index is identified by a unique
-  // color
-  constexpr std::size_t named_idx_color_start = 3 * max_rank;
-  const std::size_t max_reserved_color =
-      named_idx_color_start + named_indices.size() - 1;
+  VertexPainter colorizer(named_indices);
 
   // core, bra, ket, auxiliary and optionally (for non-symmetric tensors) a
   // particle vertex
@@ -669,9 +872,7 @@ TensorNetworkV2::Graph TensorNetworkV2::create_graph(
   graph.vertex_colors.reserve(vertex_count_estimate);
   graph.vertex_types.reserve(vertex_count_estimate);
 
-  using proto_bundle_t =
-      std::decay_t<decltype(std::declval<const Index &>().proto_indices())>;
-  container::map<proto_bundle_t, std::size_t> proto_bundles;
+  container::map<ProtoBundle, std::size_t> proto_bundles;
 
   container::map<std::size_t, std::size_t> tensor_vertices;
   tensor_vertices.reserve(tensors_.size());
@@ -686,13 +887,9 @@ TensorNetworkV2::Graph TensorNetworkV2::create_graph(
     const AbstractTensor &tensor = *tensors_.at(tensor_idx);
 
     // Tensor core
-    std::wstring_view tensor_label = label(tensor);
-    graph.vertex_labels.emplace_back(tensor_label);
+    graph.vertex_labels.emplace_back(label(tensor));
     graph.vertex_types.emplace_back(VertexType::TensorCore);
-    const std::size_t tensor_color =
-        hash::value(tensor_label) + max_reserved_color;
-    assert(tensor_color > max_reserved_color);
-    graph.vertex_colors.push_back(tensor_color);
+    graph.vertex_colors.push_back(colorizer(tensor));
 
     const std::size_t tensor_vertex = graph.vertex_labels.size() - 1;
     tensor_vertices.insert(std::make_pair(tensor_idx, tensor_vertex));
@@ -715,19 +912,19 @@ TensorNetworkV2::Graph TensorNetworkV2::create_graph(
       for (std::size_t i = 0; i < num_particle_vertices; ++i) {
         graph.vertex_labels.emplace_back(L"p_" + std::to_wstring(i + 1));
         graph.vertex_types.push_back(VertexType::Particle);
-        graph.vertex_colors.push_back(tensor_color);
+        // Particles are indistinguishable -> always use same ID
+        graph.vertex_colors.push_back(colorizer(ParticleGroup{0}));
         edges.push_back(
             std::make_pair(tensor_vertex, graph.vertex_labels.size() - 1));
       }
 
-      assert(bra_rank(tensor) <= max_rank);
       for (std::size_t i = 0; i < bra_rank(tensor); ++i) {
         const bool is_unpaired_idx = i >= num_particle_vertices;
         const bool color_idx = is_unpaired_idx || !is_part_symm;
 
         graph.vertex_labels.emplace_back(L"bra_" + std::to_wstring(i + 1));
         graph.vertex_types.push_back(VertexType::TensorBra);
-        graph.vertex_colors.push_back(color_idx ? i : 0);
+        graph.vertex_colors.push_back(colorizer(BraGroup{color_idx ? i : 0}));
 
         const std::size_t connect_vertex =
             tensor_vertex + (is_unpaired_idx ? 0 : (i + 1));
@@ -735,15 +932,19 @@ TensorNetworkV2::Graph TensorNetworkV2::create_graph(
             std::make_pair(connect_vertex, graph.vertex_labels.size() - 1));
       }
 
-      assert(ket_rank(tensor) <= max_rank);
       for (std::size_t i = 0; i < ket_rank(tensor); ++i) {
         const bool is_unpaired_idx = i >= num_particle_vertices;
         const bool color_idx = is_unpaired_idx || !is_part_symm;
 
         graph.vertex_labels.emplace_back(L"ket_" + std::to_wstring(i + 1));
         graph.vertex_types.push_back(VertexType::TensorKet);
-        graph.vertex_colors.push_back((color_idx ? i : 0) +
-                                      (is_braket_symm ? 0 : max_rank));
+        if (is_braket_symm) {
+          // Use BraGroup for kets as well as they are supposed to be
+          // indistinguishable
+          graph.vertex_colors.push_back(colorizer(BraGroup{color_idx ? i : 0}));
+        } else {
+          graph.vertex_colors.push_back(colorizer(KetGroup{color_idx ? i : 0}));
+        }
 
         const std::size_t connect_vertex =
             tensor_vertex + (is_unpaired_idx ? 0 : (i + 1));
@@ -754,21 +955,21 @@ TensorNetworkV2::Graph TensorNetworkV2::create_graph(
       // Shared set of bra/ket vertices for all indices
       std::wstring suffix = tensor_sym == Symmetry::symm ? L"_s" : L"_a";
 
-      const std::size_t bra_color = 0;
       graph.vertex_labels.push_back(L"bra" + suffix);
       graph.vertex_types.push_back(VertexType::TensorBra);
-      graph.vertex_colors.push_back(bra_color);
+      graph.vertex_colors.push_back(colorizer(BraGroup{0}));
       edges.push_back(
           std::make_pair(tensor_vertex, graph.vertex_labels.size() - 1));
 
-      // TODO: figure out how to handle BraKetSymmetry::conjugate
-      const std::size_t ket_color =
-          braket_symmetry(tensor) == BraKetSymmetry::symm
-              ? bra_color
-              : bra_color + max_rank;
       graph.vertex_labels.push_back(L"ket" + suffix);
       graph.vertex_types.push_back(VertexType::TensorKet);
-      graph.vertex_colors.push_back(ket_color);
+      // TODO: figure out how to handle BraKetSymmetry::conjugate
+      if (braket_symmetry(tensor) == BraKetSymmetry::symm) {
+        // Use BraGroup for kets as well as they should be indistinguishable
+        graph.vertex_colors.push_back(colorizer(BraGroup{0}));
+      } else {
+        graph.vertex_colors.push_back(colorizer(KetGroup{0}));
+      }
       edges.push_back(
           std::make_pair(tensor_vertex, graph.vertex_labels.size() - 1));
     }
@@ -778,7 +979,7 @@ TensorNetworkV2::Graph TensorNetworkV2::create_graph(
     for (std::size_t i = 0; i < aux_rank(tensor); ++i) {
       graph.vertex_labels.emplace_back(L"aux_" + std::to_wstring(i + 1));
       graph.vertex_types.push_back(VertexType::TensorAux);
-      graph.vertex_colors.push_back(2 * max_rank + i);
+      graph.vertex_colors.push_back(colorizer(AuxGroup{i}));
       edges.push_back(
           std::make_pair(tensor_vertex, graph.vertex_labels.size() - 1));
     }
@@ -791,20 +992,7 @@ TensorNetworkV2::Graph TensorNetworkV2::create_graph(
     const Index &index = current_edge.idx();
     graph.vertex_labels.push_back(std::wstring(index.full_label()));
     graph.vertex_types.push_back(VertexType::Index);
-
-    // Assign index color
-    std::size_t idx_color;
-    auto named_idx_iter = named_indices.find(index);
-    if (named_idx_iter == named_indices.end()) {
-      // This is an anonymous index
-      idx_color = index.color();
-      assert(idx_color > max_reserved_color);
-    } else {
-      idx_color = static_cast<decltype(idx_color)>(
-          std::distance(named_indices.begin(), named_idx_iter));
-      idx_color += named_idx_color_start;
-    }
-    graph.vertex_colors.push_back(idx_color);
+    graph.vertex_colors.push_back(colorizer(index));
 
     const std::size_t index_vertex = graph.vertex_labels.size() - 1;
 
@@ -831,11 +1019,7 @@ TensorNetworkV2::Graph TensorNetworkV2::create_graph(
 
         graph.vertex_labels.push_back(std::move(spbundle_label));
         graph.vertex_types.push_back(VertexType::SPBundle);
-        const std::size_t bundle_color =
-            Index::proto_indices_color(index.proto_indices()) +
-            max_reserved_color;
-        assert(bundle_color);
-        graph.vertex_colors.push_back(bundle_color);
+        graph.vertex_colors.push_back(colorizer(index.proto_indices()));
 
         proto_vertex = graph.vertex_labels.size() - 1;
         proto_bundles.insert(
@@ -921,19 +1105,9 @@ TensorNetworkV2::Graph TensorNetworkV2::create_graph(
     graph.bliss_graph->add_edge(current_edge.first, current_edge.second);
   }
 
-  // compress vertex colors to 32 bits, as required by Bliss, by hashing
-  for (std::size_t vertex = 0; vertex < graph.vertex_colors.size(); ++vertex) {
-    auto color = graph.vertex_colors[vertex];
-    static_assert(sizeof(color) == 8);
-
-    color = (~color) + (color << 18);  // color = (color << 18) - color - 1;
-    color = color ^ (color >> 31);
-    color = color * 21;  // color = (color + (color << 2)) + (color << 4);
-    color = color ^ (color >> 11);
-    color = color + (color << 6);
-    color = color ^ (color >> 22);
-
-    graph.bliss_graph->change_color(vertex, static_cast<int>(color));
+  for (const auto [vertex, color] :
+       ranges::views::enumerate(graph.vertex_colors)) {
+    graph.bliss_graph->change_color(vertex, color);
   }
 
   return graph;
@@ -1016,13 +1190,13 @@ container::svector<std::pair<long, long>> TensorNetworkV2::factorize() {
 }
 
 ExprPtr TensorNetworkV2::canonicalize_individual_tensor_blocks(
-    const named_indices_t &named_indices) {
+    const NamedIndexSet &named_indices) {
   return do_individual_canonicalization(
       TensorBlockCanonicalizer(named_indices));
 }
 
 ExprPtr TensorNetworkV2::canonicalize_individual_tensors(
-    const named_indices_t &named_indices) {
+    const NamedIndexSet &named_indices) {
   return do_individual_canonicalization(
       DefaultTensorCanonicalizer(named_indices));
 }

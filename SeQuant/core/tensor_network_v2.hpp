@@ -40,8 +40,6 @@ class TensorNetworkV2 {
  public:
   friend class TensorNetworkV2Accessor;
 
-  constexpr static size_t max_rank = 256;
-
   enum class Origin {
     Bra = 1,
     Ket,
@@ -149,9 +147,14 @@ class TensorNetworkV2 {
   };
 
   struct Graph {
+    /// The type used to encode the color of a vertex. The restriction of this
+    /// being as 32-bit integer comes from how BLISS is trying to convert these
+    /// into RGB values.
+    using VertexColor = std::uint32_t;
+
     std::unique_ptr<bliss::Graph> bliss_graph;
     std::vector<std::wstring> vertex_labels;
-    std::vector<std::size_t> vertex_colors;
+    std::vector<VertexColor> vertex_colors;
     std::vector<VertexType> vertex_types;
 
     Graph() = default;
@@ -192,7 +195,7 @@ class TensorNetworkV2 {
   /// @note the order of tensors may be different from that provided as input
   const auto &tensors() const { return tensors_; }
 
-  using named_indices_t = container::set<Index, Index::LabelCompare>;
+  using NamedIndexSet = container::set<Index, Index::LabelCompare>;
 
   /// @param cardinal_tensor_labels move all tensors with these labels to the
   /// front before canonicalizing indices
@@ -206,7 +209,7 @@ class TensorNetworkV2 {
   /// nullptr
   ExprPtr canonicalize(
       const container::vector<std::wstring> &cardinal_tensor_labels = {},
-      bool fast = true, const named_indices_t *named_indices = nullptr);
+      bool fast = true, const NamedIndexSet *named_indices = nullptr);
 
   /// Factorizes tensor network
   /// @return sequence of binary products; each element encodes the tensors to
@@ -258,7 +261,7 @@ class TensorNetworkV2 {
   ///   tensor; terminal vertices are colored by the color of its tensor,
   ///     with the color of symm/antisymm terminals augmented by the
   ///     terminal's type (bra/ket).
-  Graph create_graph(const named_indices_t *named_indices = nullptr) const;
+  Graph create_graph(const NamedIndexSet *named_indices = nullptr) const;
 
  private:
   // source tensors and indices
@@ -270,7 +273,7 @@ class TensorNetworkV2 {
   // sorted by *label* (not full label) of the corresponding value (Index)
   // this ensures that proto indices are not considered and all internal indices
   // have unique labels (not full labels)
-  named_indices_t ext_indices_;
+  NamedIndexSet ext_indices_;
 
   /// initializes edges_ and ext_indices_
   void init_edges();
@@ -278,17 +281,17 @@ class TensorNetworkV2 {
   /// Canonicalizes the network graph representation
   /// Note: The explicit order of tensors and labelling of indices
   /// remains undefined.
-  void canonicalize_graph(const named_indices_t &named_indices);
+  void canonicalize_graph(const NamedIndexSet &named_indices);
 
   /// Canonicalizes every individual tensor for itself, taking into account only
   /// tensor blocks
   /// @returns The byproduct of the canonicalizations
   ExprPtr canonicalize_individual_tensor_blocks(
-      const named_indices_t &named_indices);
+      const NamedIndexSet &named_indices);
 
   /// Canonicalizes every individual tensor for itself
   /// @returns The byproduct of the canonicalizations
-  ExprPtr canonicalize_individual_tensors(const named_indices_t &named_indices);
+  ExprPtr canonicalize_individual_tensors(const NamedIndexSet &named_indices);
 
   ExprPtr do_individual_canonicalization(
       const TensorCanonicalizer &canonicalizer);
