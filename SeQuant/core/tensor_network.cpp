@@ -549,7 +549,7 @@ TensorNetwork::make_bliss_graph(
       vertex_labels.push_back(
           std::wstring(L"bk") +
           ((symmetry(tref) == Symmetry::antisymm) ? L"a" : L"s"));
-      vertex_type.push_back(VertexType::TensorBraKet);
+      vertex_type.push_back(VertexType::Particle);
       vertex_color.push_back(t_color);
     }
     // nonsymmetric tensors are represented by 3*rank more vertices (with rank =
@@ -572,7 +572,7 @@ TensorNetwork::make_bliss_graph(
                                    ? bra_color
                                    : bra_color + max_rank);
         vertex_labels.push_back(std::wstring(L"bk") + pstr);
-        vertex_type.push_back(VertexType::TensorBraKet);
+        vertex_type.push_back(VertexType::Particle);
         vertex_color.push_back(t_color);
       }
     }

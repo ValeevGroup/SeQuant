@@ -10,7 +10,7 @@ enum class VertexType {
   TensorKet,
   TensorAux,
   TensorCore,
-  TensorBraKet,
+  Particle,
 };
 
 }
