@@ -61,6 +61,16 @@ NestedTensorIndices::NestedTensorIndices(const sequant::Tensor& tnsr) {
     append_unique(outer, ix);
 }
 
+std::string to_label_annotation(const Index& idx) {
+  using namespace ranges::views;
+  using ranges::to;
+
+  return sequant::to_string(idx.label()) +
+         (idx.proto_indices() | transform(&Index::label) |
+          transform([](auto&& str) { return sequant::to_string(str); }) |
+          ranges::views::join | to<std::string>);
+}
+
 std::string EvalExpr::braket_annot() const noexcept {
   if (!is_tensor()) return {};
 
@@ -71,12 +81,9 @@ std::string EvalExpr::braket_annot() const noexcept {
   auto annot = [](auto&& ixs) -> std::string {
     using namespace ranges::views;
 
-    auto full_labels = ixs                              //
-                       | transform(&Index::full_label)  //
-                       | transform([](auto&& fl) {      //
-                           return sequant::to_string(fl);
-                         });
-    return full_labels                      //
+    auto annotations = ixs | transform(to_label_annotation);
+
+    return annotations                      //
            | intersperse(std::string{","})  //
            | join                           //
            | ranges::to<std::string>;
