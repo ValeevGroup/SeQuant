@@ -18,6 +18,7 @@
 #include <algorithm>
 #include <atomic>
 #include <cassert>
+#include <charconv>
 #include <cstdint>
 #include <cwchar>
 #include <functional>
@@ -364,6 +365,20 @@ class Index : public Taggable {
   /// @warning this does not include the proto index labels
   std::pair<std::wstring_view, std::wstring_view> split_label() const {
     return make_split_label(this->label());
+  }
+
+  ///
+  /// \return The numeric suffix if present in the label.
+  ///
+  std::optional<int> suffix() const {
+    auto &&[_, s_] = split_label();
+    auto &&s = sequant::to_string(s_);
+
+    int value{};
+    if (std::from_chars(s.data(), s.data() + s.size(), value).ec == std::errc{})
+      return value;
+    else
+      return std::nullopt;
   }
 
   /// @return A string label representable in ASCII encoding

@@ -225,6 +225,19 @@ IndexGroups<Container> get_unique_indices(const ExprPtr& expr) {
   }
 }
 
+///
+/// Does the numeric comparison of the index suffixes using less-than operator.
+///
+/// \param idx1
+/// \param idx2
+/// \return True if the numeric suffix of \c idx1 is less than that of \c idx2.
+///
+inline bool suffix_compare(Index const& idx1, Index const& idx2) {
+  auto&& s1 = idx1.suffix();
+  auto&& s2 = idx2.suffix();
+  return (s1 && s2) && s1.value() < s2.value();
+}
+
 }  // namespace sequant
 
 #endif  // SEQUANT_CORE_UTILITY_INDICES_HPP
