@@ -345,11 +345,14 @@ Sum reorder(Sum const& sum);
 ///
 /// \param expr  Expression to be optimized.
 /// \param idxsz An invocable object that maps an Index object to size.
+/// \param reorder_sum If true, the summands are reordered so that terms with
+///                    common sub-expressions appear closer to each other.
 /// \return Optimized expression for lower evaluation cost.
 template <typename IdxToSize,
           typename =
               std::enable_if_t<std::is_invocable_r_v<size_t, IdxToSize, Index>>>
-ExprPtr optimize(ExprPtr const& expr, IdxToSize const& idx2size) {
+ExprPtr optimize(ExprPtr const& expr, IdxToSize const& idx2size,
+                 bool reorder_sum) {
   using ranges::views::transform;
   if (expr->is<Tensor>())
     return expr->clone();
@@ -360,7 +363,7 @@ ExprPtr optimize(ExprPtr const& expr, IdxToSize const& idx2size) {
       return optimize(s, idx2size);
     }) | ranges::to_vector;
     auto sum = Sum{smands.begin(), smands.end()};
-    return ex<Sum>(opt::reorder(sum));
+    return reorder_sum ? ex<Sum>(opt::reorder(sum)) : ex<Sum>(std::move(sum));
   } else
     throw std::runtime_error{"Optimization attempted on unsupported Expr type"};
 }
@@ -372,8 +375,11 @@ ExprPtr optimize(ExprPtr const& expr, IdxToSize const& idx2size) {
 /// index extent.
 ///
 /// \param expr  Expression to be optimized.
+/// \param reorder_sum If true, the summands are reordered so that terms with
+///                    common sub-expressions appear closer to each other.
+///                    True by default.
 /// \return Optimized expression for lower evaluation cost.
-ExprPtr optimize(ExprPtr const& expr);
+ExprPtr optimize(ExprPtr const& expr, bool reorder_sum = true);
 
 ///
 /// Converts the 4-center 'g' tensors into a product of two rank-3 tensors.
