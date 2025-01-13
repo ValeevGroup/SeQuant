@@ -96,18 +96,23 @@ std::wstring deparse_scalar(const Constant::scalar_type& scalar) {
 }  // namespace details
 
 std::wstring deparse(const ExprPtr& expr, bool annot_sym) {
-  using namespace details;
   if (!expr) return {};
-  if (expr->is<Tensor>())
-    return deparse(expr->as<Tensor>(), annot_sym);
-  else if (expr->is<Sum>())
-    return deparse(expr->as<Sum>(), annot_sym);
-  else if (expr->is<Product>())
-    return deparse(expr->as<Product>(), annot_sym);
-  else if (expr->is<Constant>())
-    return deparse(expr->as<Constant>());
-  else if (expr->is<Variable>())
-    return deparse(expr->as<Variable>());
+
+  return deparse(*expr, annot_sym);
+}
+
+std::wstring deparse(const Expr& expr, bool annot_sym) {
+  using namespace details;
+  if (expr.is<Tensor>())
+    return deparse(expr.as<Tensor>(), annot_sym);
+  else if (expr.is<Sum>())
+    return deparse(expr.as<Sum>(), annot_sym);
+  else if (expr.is<Product>())
+    return deparse(expr.as<Product>(), annot_sym);
+  else if (expr.is<Constant>())
+    return deparse(expr.as<Constant>());
+  else if (expr.is<Variable>())
+    return deparse(expr.as<Variable>());
   else
     throw std::runtime_error("Unsupported expr type for deparse!");
 }
