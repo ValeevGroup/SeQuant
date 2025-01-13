@@ -62,6 +62,13 @@ struct IndexGroups {
   }
 };
 
+/// A composite type for holding tensor-of-tensor indices
+template <typename Container = std::vector<Index>>
+struct TensorOfTensorIndices {
+  Container outer;
+  Container inner;
+};
+
 template <typename Container = std::vector<Index>>
 IndexGroups<Container> get_unique_indices(const ExprPtr& expr);
 
@@ -223,6 +230,29 @@ IndexGroups<Container> get_unique_indices(const ExprPtr& expr) {
     throw std::runtime_error(
         "Encountered unsupported expression type in get_unique_indices");
   }
+}
+
+template <typename Container = std::vector<Index>>
+TensorOfTensorIndices<Container> tot_indices(AbstractTensor const& tnsr) {
+  using ranges::views::concat;
+  using ranges::views::filter;
+  using ranges::views::join;
+  using ranges::views::transform;
+
+  auto indep_idxs = filter(indices(tnsr),  //
+                           ranges::not_fn(&Index::has_proto_indices));
+
+  auto dep_idxs = filter(indices(tnsr), &Index::has_proto_indices);
+
+  TensorOfTensorIndices<Container> result;
+
+  for (auto&& idx : dep_idxs) result.inner.emplace_back(idx);
+
+  for (auto&& idx :
+       concat(indep_idxs, join(dep_idxs | transform(&Index::proto_indices))))
+    if (!ranges::contains(result.outer, idx)) result.outer.emplace_back(idx);
+
+  return result;
 }
 
 ///
