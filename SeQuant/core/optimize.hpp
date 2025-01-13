@@ -17,6 +17,7 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/tensor_network.hpp>
+#include <SeQuant/core/utility/indices.hpp>
 
 #if __cplusplus >= 202002L
 #include <bit>
@@ -190,21 +191,24 @@ template <typename IdxToSz,
           std::enable_if_t<std::is_invocable_r_v<size_t, IdxToSz, Index>,
                            bool> = true>
 eval_seq_t single_term_opt(TensorNetwork const& network, IdxToSz const& idxsz) {
+  using ranges::views::concat;
+  using IndexContainer = container::svector<Index>;
   // number of terms
   auto const nt = network.tensors().size();
   if (nt == 1) return eval_seq_t{0};
   if (nt == 2) return eval_seq_t{0, 1, -1};
-  auto nth_tensor_indices = container::svector<container::svector<Index>>{};
+  auto nth_tensor_indices = container::svector<IndexContainer>{};
   nth_tensor_indices.reserve(nt);
 
   for (std::size_t i = 0; i < nt; ++i) {
     auto const& tnsr = *network.tensors().at(i);
-    auto bk = container::svector<Index>{};
-    bk.reserve(bra_rank(tnsr) + ket_rank(tnsr));
-    for (auto&& idx : indices(tnsr)) bk.push_back(idx);
 
-    ranges::sort(bk, Index::LabelCompare{});
-    nth_tensor_indices.emplace_back(std::move(bk));
+    auto oixs = tot_indices<IndexContainer>(tnsr);
+    auto ixs = concat(oixs.outer, oixs.inner)  //
+               | ranges::to<IndexContainer>;
+
+    ranges::sort(ixs, Index::LabelCompare{});
+    nth_tensor_indices.emplace_back(std::move(ixs));
   }
 
   container::svector<OptRes> results((1 << nt), OptRes{{}, 0, {}});
@@ -256,10 +260,9 @@ eval_seq_t single_term_opt(TensorNetwork const& network, IdxToSz const& idxsz) {
       auto const& first = results[curr_parts.first].sequence;
       auto const& second = results[curr_parts.second].sequence;
 
-      curr_result.sequence =
-          (first[0] < second[0] ? ranges::views::concat(first, second)
-                                : ranges::views::concat(second, first)) |
-          ranges::to<eval_seq_t>;
+      curr_result.sequence = (first[0] < second[0] ? concat(first, second)
+                                                   : concat(second, first)) |
+                             ranges::to<eval_seq_t>;
       curr_result.sequence.push_back(-1);
     }
   }
