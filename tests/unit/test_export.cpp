@@ -1,27 +1,13 @@
 #include <catch2/catch_test_macros.hpp>
 
+#include "catch2_sequant.hpp"
+
 #include <SeQuant/core/export/itf.hpp>
 #include <SeQuant/core/parse.hpp>
 
 #include <codecvt>
 #include <locale>
 #include <vector>
-
-namespace Catch {
-
-// Note: Again, template specialization doesn't seem to be used from inside
-// ::Catch::Details::stringify for some reason
-template <>
-struct StringMaker<sequant::ExprPtr> {
-  static std::string convert(const sequant::ExprPtr &expr) {
-    using convert_type = std::codecvt_utf8<wchar_t>;
-    std::wstring_convert<convert_type, wchar_t> converter;
-
-    return converter.to_bytes(sequant::deparse(expr, false));
-  }
-};
-
-}  // namespace Catch
 
 std::vector<std::vector<std::size_t>> twoElectronIntegralSymmetries() {
   // Symmetries of spin-summed (skeleton) two-electron integrals

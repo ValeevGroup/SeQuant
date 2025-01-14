@@ -1,12 +1,15 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_all.hpp>
 
+#include "catch2_sequant.hpp"
+
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/parse.hpp>
 #include <SeQuant/core/tensor.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/strong.hpp>
+#include <SeQuant/core/utility/singleton.hpp>
 
 #include <codecvt>
 #include <iostream>
@@ -16,22 +19,6 @@
 #include <thread>
 #include <utility>
 #include <vector>
-
-namespace Catch {
-
-// Note: For some reason this template specialization is never used. It works
-// for custom types but not for sequant::Index.
-template <>
-struct StringMaker<sequant::Index> {
-  static std::string convert(const sequant::Index& idx) {
-    using convert_type = std::codecvt_utf8<wchar_t>;
-    std::wstring_convert<convert_type, wchar_t> converter;
-
-    return converter.to_bytes(sequant::to_latex(idx));
-  }
-};
-
-}  // namespace Catch
 
 sequant::Tensor parse_tensor(std::wstring_view str) {
   return sequant::parse_expr(str)->as<sequant::Tensor>();

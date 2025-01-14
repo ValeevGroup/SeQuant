@@ -1,5 +1,7 @@
 #include <catch2/catch_test_macros.hpp>
 
+#include "catch2_sequant.hpp"
+
 #include <SeQuant/core/asy_cost.hpp>
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/binary_node.hpp>

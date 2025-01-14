@@ -18,7 +18,9 @@
 #include <SeQuant/domain/mbpt/op.hpp>
 
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers.hpp>
 #include "test_config.hpp"
+#include "catch2_sequant.hpp"
 
 #include <iostream>
 #include <memory>
