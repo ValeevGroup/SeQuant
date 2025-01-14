@@ -8,8 +8,8 @@
 #include <SeQuant/core/parse.hpp>
 #include <SeQuant/core/tensor.hpp>
 #include <SeQuant/core/utility/indices.hpp>
-#include <SeQuant/core/utility/strong.hpp>
 #include <SeQuant/core/utility/singleton.hpp>
+#include <SeQuant/core/utility/strong.hpp>
 
 #include <codecvt>
 #include <iostream>

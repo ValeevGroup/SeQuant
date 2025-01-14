@@ -7,8 +7,8 @@
 #include <SeQuant/domain/mbpt/models/cc.hpp>
 
 #include <catch2/catch_test_macros.hpp>
-#include "test_config.hpp"
 #include "catch2_sequant.hpp"
+#include "test_config.hpp"
 
 TEST_CASE("SR-TCC", "[mbpt/cc]") {
   using namespace sequant::mbpt;

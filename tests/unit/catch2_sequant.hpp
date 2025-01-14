@@ -49,16 +49,15 @@ struct StringMaker<sequant::Index> {
 
 }  // namespace Catch
 
-
-/// Matches that the tested expression is equivalent to the given one. Two expressions are
-/// considered equivalent if they both have the same canonical form (i.e. they are
-/// the same expression after canonicalization)
+/// Matches that the tested expression is equivalent to the given one. Two
+/// expressions are considered equivalent if they both have the same canonical
+/// form (i.e. they are the same expression after canonicalization)
 class EquivalentToMatcher : public Catch::Matchers::MatcherGenericBase {
  public:
-	 /// Constructs the matcher with the expected expression. The constructor
-	 /// accepts either an actual expression object (as Expr & or ExprPtr) or
-	 /// a (w)string-like object which will then be parsed to yield the actual
-	 /// expression object.
+  /// Constructs the matcher with the expected expression. The constructor
+  /// accepts either an actual expression object (as Expr & or ExprPtr) or
+  /// a (w)string-like object which will then be parsed to yield the actual
+  /// expression object.
   template <typename T>
   EquivalentToMatcher(T &&expression) {
     if constexpr (std::is_convertible_v<T, std::string>) {
