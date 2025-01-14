@@ -298,12 +298,11 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
   }
 
   std::wstring to_latex() const override {
-    std::wstring result;
-    std::vector<std::wstring> labels = {L"g", L"t", L"λ", L"t¹", L"λ¹"};
-    bool add_bar =
-        ranges::find(labels, this->label()) != labels.end() && this->rank() > 1;
+    // either rank > 1 or sum of bra and ket ranks > 1
+    const bool add_bar =
+        bra_rank() == ket_rank() ? rank() > 1 : bra_rank() + ket_rank() > 1;
 
-    result = L"{";
+    std::wstring result = L"{";
     if ((this->symmetry() == Symmetry::antisymm) && add_bar)
       result += L"\\bar{";
     result += utf_to_latex(this->label());
