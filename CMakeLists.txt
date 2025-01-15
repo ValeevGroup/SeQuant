@@ -414,6 +414,7 @@ if (BUILD_TESTING)
     include(FindOrFetchCatch2)
 
     set(utests_src
+            tests/unit/catch2_sequant.hpp
             tests/unit/test_space.cpp
             tests/unit/test_index.cpp
             tests/unit/test_op.cpp
