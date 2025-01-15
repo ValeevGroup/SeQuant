@@ -88,7 +88,8 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
       auto op = ex<Tensor>(L"B", bra{L"p_1", L"p_2"}, ket{L"p_4", L"p_3"},
                            aux{L"p_5"}, Symmetry::antisymm);
       canonicalize(op);
-      REQUIRE(to_latex(op) == L"{{-}{B^{{p_3}{p_4}}_{{p_1}{p_2}}[{p_5}]}}");
+      REQUIRE(to_latex(op) ==
+              L"{{-}{\\bar{B}^{{p_3}{p_4}}_{{p_1}{p_2}}[{p_5}]}}");
     }
   }
 
