@@ -23,8 +23,6 @@
 
 #include <range/v3/all.hpp>
 
-#include "utils.hpp"
-
 namespace {
 
 auto eval_node(sequant::ExprPtr const& expr) {
@@ -76,21 +74,24 @@ TEST_CASE("TEST EVAL_NODE", "[EvalNode]") {
 
     auto node1 = eval_node(p1);
 
-    REQUIRE_TENSOR_EQUAL(node(node1, {}).as_tensor(), L"I_{a1,a2}^{i1,i2}");
+    REQUIRE_THAT(node(node1, {}).as_tensor(), EquivalentTo("I{a1,a2;i1,i2}:A"));
 
     REQUIRE(node(node1, {R}).as_constant() == Constant{rational{1, 16}});
 
-    REQUIRE_TENSOR_EQUAL(node(node1, {L}).as_tensor(), L"I_{a1,a2}^{i1,i2}");
+    REQUIRE_THAT(node(node1, {L}).as_tensor(),
+                 EquivalentTo("I{a1,a2;i1,i2}:A"));
 
-    REQUIRE_TENSOR_EQUAL(node(node1, {L, L}).as_tensor(), L"I_{a1,a2}^{a3,a4}");
+    REQUIRE_THAT(node(node1, {L, L}).as_tensor(),
+                 EquivalentTo("I{a1,a2;a3,a4}:A"));
 
-    REQUIRE_TENSOR_EQUAL(node(node1, {L, R}).as_tensor(), L"t_{a3,a4}^{i1,i2}");
+    REQUIRE_THAT(node(node1, {L, R}).as_tensor(),
+                 EquivalentTo("t{a3,a4;i1,i2}:A"));
 
-    REQUIRE_TENSOR_EQUAL(node(node1, {L, L, L}).as_tensor(),
-                         L"g_{i3,i4}^{a3,a4}");
+    REQUIRE_THAT(node(node1, {L, L, L}).as_tensor(),
+                 EquivalentTo("g{i3,i4;a3,a4}:A"));
 
-    REQUIRE_TENSOR_EQUAL(node(node1, {L, L, R}).as_tensor(),
-                         L"t_{a1,a2}^{i3,i4}");
+    REQUIRE_THAT(node(node1, {L, L, R}).as_tensor(),
+                 EquivalentTo("t{a1,a2;i3,i4}:A"));
 
     // 1/16 * A * (B * C)
     auto node2p = Product{p1->as<Product>().scalar(), {}};
@@ -100,20 +101,24 @@ TEST_CASE("TEST EVAL_NODE", "[EvalNode]") {
 
     auto const node2 = eval_node(ex<Product>(node2p));
 
-    REQUIRE_TENSOR_EQUAL(node(node2, {}).as_tensor(), L"I_{a1,a2}^{i1,i2}");
+    REQUIRE_THAT(node(node2, {}).as_tensor(), EquivalentTo("I{a1,a2;i1,i2}:N"));
 
-    REQUIRE_TENSOR_EQUAL(node(node2, {L}).as_tensor(), L"I_{a1,a2}^{i1,i2}");
+    REQUIRE_THAT(node(node2, {L}).as_tensor(),
+                 EquivalentTo("I{a1,a2;i1,i2}:N"));
 
     REQUIRE(node(node2, {R}).as_constant() == Constant{rational{1, 16}});
 
-    REQUIRE_TENSOR_EQUAL(node(node2, {L, L}).as_tensor(), L"g{i3,i4; a3,a4}");
+    REQUIRE_THAT(node(node2, {L, L}).as_tensor(),
+                 EquivalentTo("g{i3,i4; a3,a4}:A"));
 
-    REQUIRE_TENSOR_EQUAL(node(node2, {L, R}).as_tensor(),
-                         L"I{a1,a2,a3,a4;i3,i4,i1,i2}");
+    REQUIRE_THAT(node(node2, {L, R}).as_tensor(),
+                 EquivalentTo("I{a1,a2,a3,a4;i3,i4,i1,i2}:A"));
 
-    REQUIRE_TENSOR_EQUAL(node(node2, {L, R, L}).as_tensor(), L"t{a1,a2;i3,i4}");
+    REQUIRE_THAT(node(node2, {L, R, L}).as_tensor(),
+                 EquivalentTo("t{a1,a2;i3,i4}:A"));
 
-    REQUIRE_TENSOR_EQUAL(node(node2, {L, R, R}).as_tensor(), L"t{a3,a4;i1,i2}");
+    REQUIRE_THAT(node(node2, {L, R, R}).as_tensor(),
+                 EquivalentTo("t{a3,a4;i1,i2}:A"));
   }
 
   SECTION("sum") {
@@ -125,17 +130,18 @@ TEST_CASE("TEST EVAL_NODE", "[EvalNode]") {
     auto const node1 = eval_node(sum1);
     REQUIRE(node1->op_type() == EvalOp::Sum);
     REQUIRE(node1.left()->op_type() == EvalOp::Sum);
-    REQUIRE_TENSOR_EQUAL(node1.left()->as_tensor(), L"I^{i1,i2}_{a1,a2}");
-    REQUIRE_TENSOR_EQUAL(node1.left().left()->as_tensor(),
-                         L"X^{i1,i2}_{a1,a2}");
-    REQUIRE_TENSOR_EQUAL(node1.left().right()->as_tensor(),
-                         L"Y^{i1,i2}_{a1,a2}");
+    REQUIRE_THAT(node1.left()->as_tensor(), EquivalentTo("I{a1,a2;i1,i2}:A"));
+    REQUIRE_THAT(node1.left().left()->as_tensor(),
+                 EquivalentTo("X{a1,a2;i1,i2}:A"));
+    REQUIRE_THAT(node1.left().right()->as_tensor(),
+                 EquivalentTo("Y{a1,a2;i1,i2}:A"));
 
     REQUIRE(node1.right()->op_type() == EvalOp::Prod);
-    REQUIRE_TENSOR_EQUAL(node1.right()->as_tensor(), L"I_{a2,a1}^{i1,i2}");
-    REQUIRE_TENSOR_EQUAL(node1.right().left()->as_tensor(),
-                         L"g_{i3,a1}^{i1,i2}");
-    REQUIRE_TENSOR_EQUAL(node1.right().right()->as_tensor(), L"t_{a2}^{i3}");
+    REQUIRE_THAT(node1.right()->as_tensor(), EquivalentTo("I{a2,a1;i1,i2}:N"));
+    REQUIRE_THAT(node1.right().left()->as_tensor(),
+                 EquivalentTo("g{i3,a1;i1,i2}:A"));
+    REQUIRE_THAT(node1.right().right()->as_tensor(),
+                 EquivalentTo("t{a2;i3}:A"));
   }
 
   SECTION("variable") {
@@ -167,8 +173,8 @@ TEST_CASE("TEST EVAL_NODE", "[EvalNode]") {
 
     auto prod2 = parse_expr(L"a * t{i1;a1}");
     auto node3 = eval_node(prod2);
-    REQUIRE_TENSOR_EQUAL(node(node3, {}), L"I{i1;a1}");
-    REQUIRE_TENSOR_EQUAL(node(node3, {R}), L"t{i1;a1}");
+    REQUIRE_THAT(node(node3, {}).as_tensor(), EquivalentTo("I{i1;a1}"));
+    REQUIRE_THAT(node(node3, {R}).as_tensor(), EquivalentTo("t{i1;a1}"));
     REQUIRE(node(node3, {L}).as_variable() == Variable{L"a"});
   }
 
