@@ -23,20 +23,42 @@ namespace Catch {
 
 template <>
 struct StringMaker<sequant::Expr> {
-  static std::string convert(const sequant::Expr &expr) {
+  static std::string convert(const sequant::Expr &expr,
+                             bool include_canonical = true) {
+    std::string str;
     try {
-      return sequant::to_string(sequant::deparse(expr, true));
+      str = sequant::to_string(sequant::deparse(expr, true));
     } catch (const std::exception &) {
       // deparse doesn't support all kinds of expressions -> fall back to LaTeX
       // representation
-      return sequant::to_string(sequant::to_latex(expr));
+      str = sequant::to_string(sequant::to_latex(expr));
     }
+
+    if (include_canonical) {
+      sequant::ExprPtr clone = expr.clone();
+      canonicalize(clone);
+      simplify(clone);
+      std::string canon_str =
+          StringMaker<sequant::Expr>::convert(*clone, false);
+
+      if (canon_str != str) {
+        str += " (canonicalized: " + canon_str + ")";
+      }
+    }
+
+    return str;
   }
 };
 template <>
 struct StringMaker<sequant::ExprPtr> {
   static std::string convert(const sequant::ExprPtr &expr) {
     return StringMaker<sequant::Expr>::convert(*expr);
+  }
+};
+template <>
+struct StringMaker<sequant::Tensor> {
+  static std::string convert(const sequant::Tensor &tensor) {
+    return StringMaker<sequant::Expr>::convert(tensor);
   }
 };
 
@@ -48,6 +70,8 @@ struct StringMaker<sequant::Index> {
 };
 
 }  // namespace Catch
+
+namespace {
 
 /// Matches that the tested expression is equivalent to the given one. Two
 /// expressions are considered equivalent if they both have the same canonical
@@ -81,15 +105,19 @@ class EquivalentToMatcher : public Catch::Matchers::MatcherGenericBase {
     assert(m_expr);
 
     // Bring expression into canonical form
-    m_expr->canonicalize();
+    simplify(m_expr);
+    canonicalize(m_expr);
   }
+
+  bool match(const sequant::ExprPtr &expr) const { return match(*expr); }
 
   bool match(const sequant::Expr &expr) const {
     // Never modify the expression that we are trying to check in order to avoid
     // side-effects
     sequant::ExprPtr clone = expr.clone();
 
-    clone->canonicalize();
+    canonicalize(clone);
+    simplify(clone);
 
     return *clone == *m_expr;
   }
@@ -101,6 +129,8 @@ class EquivalentToMatcher : public Catch::Matchers::MatcherGenericBase {
  private:
   sequant::ExprPtr m_expr;
 };
+
+}  // namespace
 
 template <typename T>
 EquivalentToMatcher EquivalentTo(T &&expression) {
