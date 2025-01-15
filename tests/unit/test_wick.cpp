@@ -21,7 +21,6 @@
 #include <catch2/catch_test_macros.hpp>
 #include "catch2_sequant.hpp"
 #include "test_config.hpp"
-#include "utils.hpp"
 
 #include <range/v3/all.hpp>
 
@@ -913,13 +912,9 @@ TEST_CASE("WickTheorem", "[algorithms][wick]") {
 
         std::wcout << L"spinfree H2*T2 = " << to_latex(wick_result_2)
                    << std::endl;
-        REQUIRE_SUM_EQUAL(
-            wick_result_2,
-            L"{ \\bigl( - "
-            L"{{{4}}{g^{{a_1}{a_2}}_{{i_1}{i_2}}}{t^{{i_2}{i_1}}_{{a_1}{a_2}}"
-            L"}} + "
-            L"{{{8}}{g^{{a_1}{a_2}}_{{i_1}{i_2}}}{t^{{i_1}{i_2}}_{{a_1}{a_2}}"
-            L"}}\\bigr) }");
+        REQUIRE_THAT(wick_result_2,
+                     EquivalentTo("-4 * g{i1,i2;a1,a2} t{a1,a2;i2,i1} + 8 "
+                                  "g{i1,i2;a1,a2} t{a1,a2;i1,i2}"));
       }
     });
 
