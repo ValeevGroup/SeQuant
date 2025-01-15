@@ -209,6 +209,7 @@ set(SeQuant_src
         SeQuant/core/expr.hpp
         SeQuant/core/expr_algorithm.hpp
         SeQuant/core/expr_operator.hpp
+        SeQuant/core/hash.cpp
         SeQuant/core/hash.hpp
         SeQuant/core/hugenholtz.hpp
         SeQuant/core/index.cpp
