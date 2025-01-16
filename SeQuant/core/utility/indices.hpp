@@ -232,25 +232,28 @@ IndexGroups<Container> get_unique_indices(const ExprPtr& expr) {
   }
 }
 
-template <typename Container = std::vector<Index>>
-TensorOfTensorIndices<Container> tot_indices(AbstractTensor const& tnsr) {
+template <typename Container = std::vector<Index>, typename Rng>
+TensorOfTensorIndices<Container> tot_indices(Rng const& idxs) {
+  using ranges::not_fn;
   using ranges::views::concat;
   using ranges::views::filter;
   using ranges::views::join;
   using ranges::views::transform;
 
-  auto indep_idxs = filter(indices(tnsr),  //
-                           ranges::not_fn(&Index::has_proto_indices));
-
-  auto dep_idxs = filter(indices(tnsr), &Index::has_proto_indices);
+  // Container indep_idxs;
 
   TensorOfTensorIndices<Container> result;
+  auto& outer = result.outer;
 
-  for (auto&& idx : dep_idxs) result.inner.emplace_back(idx);
+  for (auto&& i : idxs | transform(&Index::proto_indices) | join)
+    if (!ranges::contains(outer, i)) outer.emplace_back(i);
 
-  for (auto&& idx :
-       concat(indep_idxs, join(dep_idxs | transform(&Index::proto_indices))))
-    if (!ranges::contains(result.outer, idx)) result.outer.emplace_back(idx);
+  for (auto&& i : idxs | filter(not_fn(&Index::has_proto_indices)))
+    if (!ranges::contains(outer, i)) outer.emplace_back(i);
+
+  auto& inner = result.inner;
+  for (auto&& i : idxs | filter(&Index::has_proto_indices))
+    inner.emplace_back(i);
 
   return result;
 }

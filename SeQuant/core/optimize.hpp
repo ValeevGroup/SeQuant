@@ -52,6 +52,23 @@ class Tensor;
 
 namespace opt {
 
+///
+/// \param idxsz An invocable that returns size_t for Index argument.
+/// \param idxs Index objects.
+/// \return flops count
+///
+template <typename IdxToSz, typename Idxs,
+          std::enable_if_t<std::is_invocable_r_v<size_t, IdxToSz, Index>,
+                           bool> = true>
+double ops_count(IdxToSz const& idxsz, Idxs const& idxs) {
+  auto oixs = tot_indices(idxs);
+  double ops = 1.0;
+  for (auto&& idx : ranges::views::concat(oixs.outer, oixs.inner))
+    ops *= std::invoke(idxsz, idx);
+  // ops == 1.0 implies zero flops.
+  return ops == 1.0 ? 0 : ops;
+}
+
 namespace {
 
 ///
@@ -83,26 +100,6 @@ void biparts(I n, F const& func) {
     auto const r = (n - n_) & n;
     if ((l | r) == n) func(l, r);
   }
-}
-
-///
-/// \tparam IdxToSz map-like {IndexSpace : size_t}
-/// \param idxsz see @c IdxToSz
-/// \param commons Index objects
-/// \param diffs   Index objects
-/// \return flops count
-/// @note @c commons and @c diffs have unique indices individually as well as
-///       combined
-template <typename IdxToSz,
-          std::enable_if_t<std::is_invocable_r_v<size_t, IdxToSz, Index>,
-                           bool> = true>
-double ops_count(IdxToSz const& idxsz, container::svector<Index> const& commons,
-                 container::svector<Index> const& diffs) {
-  double ops = 1.0;
-  for (auto&& idx : ranges::views::concat(commons, diffs))
-    ops *= std::invoke(idxsz, idx);
-  // ops == 1.0 implies both commons and diffs empty
-  return ops == 1.0 ? 0 : ops;
 }
 
 ///
@@ -139,20 +136,20 @@ struct OptRes {
 /// @note I1 and I2 containers are assumed to be sorted by using
 /// Index::LabelCompare{};
 ///
-template <typename I1, typename I2>
+template <typename I1, typename I2, typename Comp = std::less<Index>>
 container::svector<Index> common_indices(I1 const& idxs1, I2 const& idxs2) {
   using std::back_inserter;
   using std::begin;
   using std::end;
   using std::set_intersection;
 
-  assert(std::is_sorted(begin(idxs1), end(idxs1), Index::LabelCompare{}));
-  assert(std::is_sorted(begin(idxs2), end(idxs2), Index::LabelCompare{}));
+  assert(std::is_sorted(begin(idxs1), end(idxs1), Comp{}));
+  assert(std::is_sorted(begin(idxs2), end(idxs2), Comp{}));
 
   container::svector<Index> result;
 
   set_intersection(begin(idxs1), end(idxs1), begin(idxs2), end(idxs2),
-                   back_inserter(result), Index::LabelCompare{});
+                   back_inserter(result), Comp{});
   return result;
 }
 
@@ -163,20 +160,20 @@ container::svector<Index> common_indices(I1 const& idxs1, I2 const& idxs2) {
 /// @note I1 and I2 containers are assumed to be sorted by using
 /// Index::LabelCompare{};
 ///
-template <typename I1, typename I2>
+template <typename I1, typename I2, typename Comp = std::less<Index>>
 container::svector<Index> diff_indices(I1 const& idxs1, I2 const& idxs2) {
   using std::back_inserter;
   using std::begin;
   using std::end;
   using std::set_symmetric_difference;
 
-  assert(std::is_sorted(begin(idxs1), end(idxs1), Index::LabelCompare{}));
-  assert(std::is_sorted(begin(idxs2), end(idxs2), Index::LabelCompare{}));
+  assert(std::is_sorted(begin(idxs1), end(idxs1), Comp{}));
+  assert(std::is_sorted(begin(idxs2), end(idxs2), Comp{}));
 
   container::svector<Index> result;
 
   set_symmetric_difference(begin(idxs1), end(idxs1), begin(idxs2), end(idxs2),
-                           back_inserter(result), Index::LabelCompare{});
+                           back_inserter(result), Comp{});
   return result;
 }
 
@@ -203,12 +200,11 @@ eval_seq_t single_term_opt(TensorNetwork const& network, IdxToSz const& idxsz) {
   for (std::size_t i = 0; i < nt; ++i) {
     auto const& tnsr = *network.tensors().at(i);
 
-    auto oixs = tot_indices<IndexContainer>(tnsr);
-    auto ixs = concat(oixs.outer, oixs.inner)  //
-               | ranges::to<IndexContainer>;
+    nth_tensor_indices.emplace_back();
+    auto& ixs = nth_tensor_indices.back();
+    for (auto&& j : indices(tnsr)) ixs.emplace_back(j);
 
-    ranges::sort(ixs, Index::LabelCompare{});
-    nth_tensor_indices.emplace_back(std::move(ixs));
+    ranges::sort(ixs, std::less<Index>{});
   }
 
   container::svector<OptRes> results((1 << nt), OptRes{{}, 0, {}});
@@ -234,9 +230,9 @@ eval_seq_t single_term_opt(TensorNetwork const& network, IdxToSz const& idxsz) {
       auto commons =
           common_indices(results[lpart].indices, results[rpart].indices);
       auto diffs = diff_indices(results[lpart].indices, results[rpart].indices);
-      auto new_cost = ops_count(idxsz,           //
-                                commons, diffs)  //
-                      + results[lpart].flops     //
+      auto new_cost = ops_count(idxsz,                   //
+                                concat(commons, diffs))  //
+                      + results[lpart].flops             //
                       + results[rpart].flops;
       if (new_cost <= curr_cost) {
         curr_cost = new_cost;
