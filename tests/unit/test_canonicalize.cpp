@@ -32,37 +32,37 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
       auto op = ex<Tensor>(L"g", bra{L"p_1", L"p_2"}, ket{L"p_3", L"p_4"},
                            Symmetry::nonsymm);
       canonicalize(op);
-      REQUIRE(to_latex(op) == L"{g^{{p_3}{p_4}}_{{p_1}{p_2}}}");
+      REQUIRE_THAT(op, SimplifiesTo("g{p1,p2;p3,p4}"));
     }
     {
       auto op = ex<Tensor>(L"g", bra{L"p_2", L"p_1"}, ket{L"p_3", L"p_4"},
                            Symmetry::nonsymm);
       canonicalize(op);
-      REQUIRE(to_latex(op) == L"{g^{{p_4}{p_3}}_{{p_1}{p_2}}}");
+      REQUIRE_THAT(op, SimplifiesTo("g{p1,p2;p4,p3}"));
     }
     {
       auto op = ex<Tensor>(L"g", bra{L"p_1", L"p_2"}, ket{L"p_4", L"p_3"},
                            Symmetry::nonsymm);
       canonicalize(op);
-      REQUIRE(to_latex(op) == L"{g^{{p_4}{p_3}}_{{p_1}{p_2}}}");
+      REQUIRE_THAT(op, SimplifiesTo("g{p1,p2;p4,p3}"));
     }
     {
       auto op = ex<Tensor>(L"g", bra{L"p_2", L"p_1"}, ket{L"p_4", L"p_3"},
                            Symmetry::nonsymm);
       canonicalize(op);
-      REQUIRE(to_latex(op) == L"{g^{{p_3}{p_4}}_{{p_1}{p_2}}}");
+      REQUIRE_THAT(op, SimplifiesTo("g{p1,p2;p3,p4}"));
     }
     {
       auto op = ex<Tensor>(L"g", bra{L"p_1", L"p_2"}, ket{L"p_4", L"p_3"},
                            Symmetry::symm);
       canonicalize(op);
-      REQUIRE(to_latex(op) == L"{g^{{p_3}{p_4}}_{{p_1}{p_2}}}");
+      REQUIRE_THAT(op, SimplifiesTo("g{p1,p2;p3,p4}:S"));
     }
     {
       auto op = ex<Tensor>(L"g", bra{L"p_1", L"p_2"}, ket{L"p_4", L"p_3"},
                            Symmetry::antisymm);
       canonicalize(op);
-      REQUIRE(to_latex(op) == L"{{-}{\\bar{g}^{{p_3}{p_4}}_{{p_1}{p_2}}}}");
+      REQUIRE_THAT(op, SimplifiesTo("-g{p1,p2;p3,p4}:A"));
     }
 
     // aux indices
@@ -70,26 +70,25 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
       auto op = ex<Tensor>(L"B", bra{L"p_1"}, ket{L"p_2"}, aux{L"p_3"},
                            Symmetry::nonsymm);
       canonicalize(op);
-      REQUIRE(to_latex(op) == L"{B^{{p_2}}_{{p_1}}[{p_3}]}");
+      REQUIRE_THAT(op, SimplifiesTo("B{p1;p2;p3}"));
     }
     {
       auto op = ex<Tensor>(L"B", bra{L"p_1", L"p_2"}, ket{L"p_4", L"p_3"},
                            aux{L"p_5"}, Symmetry::nonsymm);
       canonicalize(op);
-      REQUIRE(to_latex(op) == L"{B^{{p_4}{p_3}}_{{p_1}{p_2}}[{p_5}]}");
+      REQUIRE_THAT(op, SimplifiesTo("B{p1,p2;p4,p3;p5}"));
     }
     {
       auto op = ex<Tensor>(L"B", bra{L"p_1", L"p_2"}, ket{L"p_4", L"p_3"},
                            aux{L"p_5"}, Symmetry::symm);
       canonicalize(op);
-      REQUIRE(to_latex(op) == L"{B^{{p_3}{p_4}}_{{p_1}{p_2}}[{p_5}]}");
+      REQUIRE_THAT(op, SimplifiesTo("B{p1,p2;p3,p4;p5}:S"));
     }
     {
       auto op = ex<Tensor>(L"B", bra{L"p_1", L"p_2"}, ket{L"p_4", L"p_3"},
                            aux{L"p_5"}, Symmetry::antisymm);
       canonicalize(op);
-      REQUIRE(to_latex(op) ==
-              L"{{-}{\\bar{B}^{{p_3}{p_4}}_{{p_1}{p_2}}[{p_5}]}}");
+      REQUIRE_THAT(op, SimplifiesTo("-B{p1,p2;p3,p4;p5}:A"));
     }
   }
 
@@ -103,9 +102,9 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
           ex<Tensor>(L"t", bra{L"i_1", L"i_2"}, ket{L"a_5", L"a_2"},
                      Symmetry::nonsymm);
       canonicalize(input);
-      REQUIRE(to_latex(input) ==
-              L"{{S^{{i_1}{i_2}}_{{a_1}{a_3}}}{f^{{i_3}}_{{"
-              L"a_2}}}{t^{{a_3}}_{{i_3}}}{t^{{a_1}{a_2}}_{{i_1}{i_2}}}}");
+      REQUIRE_THAT(
+          input,
+          SimplifiesTo("S{a1,a3;i1,i2} f{a2;i3} t{i3;a3} t{i1,i2;a1,a2}"));
     }
     {
       auto input =
@@ -116,9 +115,9 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
           ex<Tensor>(L"t", bra{L"i_5", L"i_2"}, ket{L"a_1", L"a_2"},
                      Symmetry::nonsymm);
       canonicalize(input);
-      REQUIRE(to_latex(input) ==
-              L"{{S^{{i_1}{i_2}}_{{a_1}{a_3}}}{f^{{i_3}}_{{"
-              L"a_2}}}{t^{{a_2}}_{{i_2}}}{t^{{a_1}{a_3}}_{{i_1}{i_3}}}}");
+      REQUIRE_THAT(
+          input,
+          SimplifiesTo("S{a1,a3;i1,i2} f{a2;i3} t{i_2;a_2} t{i1,i3;a1,a3}"));
     }
     {  // Product containing Variables
       auto q2 = ex<Variable>(L"q2");
@@ -133,9 +132,10 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
           ex<Tensor>(L"t", bra{L"i_5", L"i_2"}, ket{L"a_1", L"a_2"},
                      Symmetry::nonsymm);
       canonicalize(input);
-      REQUIRE(to_latex(input) ==
-              L"{{p}{q1}{{q2}^*}{S^{{i_1}{i_2}}_{{a_1}{a_3}}}{f^{{i_3}}_{{"
-              L"a_2}}}{t^{{a_2}}_{{i_2}}}{t^{{a_1}{a_3}}_{{i_1}{i_3}}}}");
+      REQUIRE_THAT(
+          input,
+          SimplifiesTo(
+              "p q1 q2^* S{a1,a3;i1,i2} f{a2;i3} t {i2;a2} t{i1,i3;a1,a3}"));
     }
     {  // Product containing adjoint of a Tensor
       auto f2 = ex<Tensor>(L"f", bra{L"i_5", L"i_2"}, ket{L"a_1", L"a_2"},
@@ -147,9 +147,9 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
           ex<Tensor>(L"f", bra{L"a_5"}, ket{L"i_5"}, Symmetry::nonsymm) *
           ex<Tensor>(L"t", bra{L"i_1"}, ket{L"a_5"}, Symmetry::nonsymm) * f2;
       canonicalize(input1);
-      REQUIRE(to_latex(input1) ==
-              L"{{S^{{i_1}{i_2}}_{{a_1}{a_3}}}{f^{{i_3}}_{{a_2}}}{f⁺^{{i_1}{i_"
-              L"3}}_{{a_1}{a_3}}}{t^{{a_2}}_{{i_2}}}}");
+      REQUIRE_THAT(
+          input1,
+          SimplifiesTo("S{a1,a3;i1,i2} f{a2;i3} f⁺{a1,a3;i1,i3} t{i2;a2}"));
       auto input2 =
           ex<Tensor>(L"S", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"},
                      Symmetry::nonsymm) *
@@ -157,9 +157,10 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
           ex<Tensor>(L"t", bra{L"i_1"}, ket{L"a_5"}, Symmetry::nonsymm) * f2 *
           ex<Variable>(L"w") * ex<Constant>(rational{1, 2});
       canonicalize(input2);
-      REQUIRE(to_latex(input2) ==
-              L"{{{\\frac{1}{2}}}{w}{S^{{i_1}{i_2}}_{{a_1}{a_3}}}{f^{{i_3}}_{{"
-              L"a_2}}}{f⁺^{{i_1}{i_3}}_{{a_1}{a_3}}}{t^{{a_2}}_{{i_2}}}}");
+      REQUIRE_THAT(
+          input2,
+          SimplifiesTo(
+              "1/2 w S{a1,a3;i1,i2} f{a2;i3} f⁺{a1,a3;i1,i3} t{i2;a2}"));
     }
   }
   {
@@ -171,9 +172,8 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
                  ex<Tensor>(L"t", bra{L"p_4"}, ket{L"p_2"}, Symmetry::nonsymm) *
                  ex<Tensor>(L"t", bra{L"p_3"}, ket{L"p_1"}, Symmetry::nonsymm);
     canonicalize(input);
-    REQUIRE(to_latex(input) ==
-            L"{{{\\frac{1}{2}}}{t^{{p_3}}_{{p_1}}}{t^{{p_4}}_{{p_2}}}{B^{{p_1}}"
-            L"_{{p_3}}[{p_5}]}{B^{{p_2}}_{{p_4}}[{p_5}]}}");
+    REQUIRE_THAT(input,
+                 SimplifiesTo("1/2 t{p1;p3} t{p2;p4} B{p3;p1;p5} B{p4;p2;p5}"));
   }
 
   SECTION("sum of products") {
@@ -191,10 +191,7 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
               ex<Tensor>(L"t", bra{L"p_3"}, ket{L"p_1"}, Symmetry::nonsymm) *
               ex<Tensor>(L"t", bra{L"p_4"}, ket{L"p_2"}, Symmetry::nonsymm);
       canonicalize(input);
-      REQUIRE(to_latex(input) ==
-              L"{ "
-              L"\\bigl({{g^{{p_1}{p_4}}_{{p_2}{p_3}}}{t^{{p_2}}_{{p_1}}}{t^{{"
-              L"p_3}}_{{p_4}}}}\\bigr) }");
+      REQUIRE_THAT(input, SimplifiesTo("g{p2,p3;p1,p4} t{p1;p2} t{p4;p3}"));
     }
 
     // CASE 2: Symmetric tensors
@@ -211,10 +208,7 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
               ex<Tensor>(L"t", bra{L"p_3"}, ket{L"p_1"}, Symmetry::nonsymm) *
               ex<Tensor>(L"t", bra{L"p_4"}, ket{L"p_2"}, Symmetry::nonsymm);
       canonicalize(input);
-      REQUIRE(to_latex(input) ==
-              L"{ "
-              L"\\bigl({{g^{{p_1}{p_4}}_{{p_2}{p_3}}}{t^{{p_2}}_{{p_1}}}{t^{{p_"
-              L"3}}_{{p_4}}}}\\bigr) }");
+      REQUIRE_THAT(input, SimplifiesTo("g{p2,p3;p1,p4}:S t{p1;p2} t{p4;p3}"));
     }
 
     // Case 3: Anti-symmetric tensors
@@ -231,11 +225,7 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
               ex<Tensor>(L"t", bra{L"p_3"}, ket{L"p_1"}, Symmetry::nonsymm) *
               ex<Tensor>(L"t", bra{L"p_4"}, ket{L"p_2"}, Symmetry::nonsymm);
       canonicalize(input);
-      REQUIRE(to_latex(input) ==
-              L"{ "
-              L"\\bigl({{\\bar{g}^{{p_1}{p_4}}_{{p_2}{p_3}}}{t^{{p_2}}_{{p_1}}}"
-              L"{t^{{p_"
-              L"3}}_{{p_4}}}}\\bigr) }");
+      REQUIRE_THAT(input, SimplifiesTo("g{p2,p3;p1,p4}:A t{p1;p2} t{p4;p3}"));
     }
 
     // Case 4: permuted indices
@@ -255,10 +245,8 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
                          Symmetry::antisymm);
       canonicalize(input);
       REQUIRE(input->size() == 1);
-      REQUIRE(to_latex(input) ==
-              L"{ "
-              "\\bigl({{\\bar{g}^{{i_1}{a_3}}_{{i_3}{i_4}}}{t^{{i_3}}_{{a_2}}}{"
-              "\\bar{t}^{{i_2}{i_4}}_{{a_1}{a_3}}}}\\bigr) }");
+      REQUIRE_THAT(input,
+                   SimplifiesTo("g{i3,i4;i1,a3}:A t{a2;i3} t{a1,a3;i2,i4}:A"));
     }
 
     // Case 4: permuted indices from CCSD R2 biorthogonal configuration
@@ -279,10 +267,8 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
 
       canonicalize(input);
       REQUIRE(input->size() == 1);
-      REQUIRE(to_latex(input) ==
-              L"{ "
-              L"\\bigl({{g^{{a_3}{i_1}}_{{i_3}{i_4}}}{t^{{i_3}}_{{a_2}}}{t^{{i_"
-              L"4}{i_2}}_{{a_1}{a_3}}}}\\bigr) }");
+      REQUIRE_THAT(input,
+                   SimplifiesTo("g{i3,i4;a3,i1} t{a2;i3} t{a1,a3;i4,i2}"));
     }
 
     {  // Case 5: CCSDT R3: S3 * F * T3
@@ -302,10 +288,10 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
                 ex<Tensor>(L"t", bra{L"a_1", L"a_2", L"a_3"},
                            ket{L"i_2", L"i_4", L"i_3"}, Symmetry::nonsymm);
         canonicalize(input);
-        REQUIRE(to_latex(input) ==
-                L"{ \\bigl( - "
-                L"{{{8}}{S^{{a_1}{a_2}{a_3}}_{{i_1}{i_2}{i_3}}}{f^{{i_3}}_{{i_"
-                L"4}}}{t^{{i_1}{i_4}{i_2}}_{{a_1}{a_2}{a_3}}}}\\bigr) }");
+        REQUIRE_THAT(
+            input,
+            SimplifiesTo(
+                "-8 S{i1,i2,i3;a1,a2,a3} f{i4;i3} t{a1,a2,a3;i1,i4,i2}"));
       }
 
       {
@@ -325,17 +311,20 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
                        ket{L"i_2", L"i_4", L"i_3"}, Symmetry::nonsymm);
         canonicalize(term1);
         canonicalize(term2);
-        REQUIRE(to_latex(term1) ==
-                L"{{{-4}}{S^{{a_1}{a_2}{a_3}}_{{i_1}{i_3}{i_4}}}{f^{{i_4}}_{{i_"
-                L"2}}}{t^{{i_1}{i_2}{i_3}}_{{a_1}{a_2}{a_3}}}}");
-        REQUIRE(to_latex(term2) ==
-                L"{{{-4}}{S^{{a_1}{a_2}{a_3}}_{{i_1}{i_3}{i_4}}}{f^{{i_4}}_{{i_"
-                L"2}}}{t^{{i_1}{i_2}{i_3}}_{{a_1}{a_2}{a_3}}}}");
+        REQUIRE_THAT(
+            term1,
+            SimplifiesTo(
+                "-4 S{i1,i3,i4;a1,a2,a3} f{i2;i4} t{a1,a2,a3;i1,i2,i3}"));
+        REQUIRE_THAT(
+            term2,
+            SimplifiesTo(
+                "-4 S{i1,i3,i4;a1,a2,a3} f{i2;i4} t{a1,a2,a3;i1,i2,i3}"));
         auto sum_of_terms = term1 + term2;
         simplify(sum_of_terms);
-        REQUIRE(to_latex(sum_of_terms) ==
-                L"{{{-8}}{S^{{a_1}{a_2}{a_3}}_{{i_1}{i_2}{i_3}}}{f^{{i_3}}_{{i_"
-                L"4}}}{t^{{i_1}{i_4}{i_2}}_{{a_1}{a_2}{a_3}}}}");
+        REQUIRE_THAT(
+            sum_of_terms,
+            SimplifiesTo(
+                "-8 S{i1,i2,i3;a1,a2,a3} f{i4;i3} t{a1,a2,a3;i1,i4,i2}"));
       }
 
       {  // Terms 2 and 4 from spin-traced result
@@ -353,10 +342,9 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
                 ex<Tensor>(L"t", bra{L"a_1", L"a_2", L"a_3"},
                            ket{L"i_2", L"i_3", L"i_4"}, Symmetry::nonsymm);
         canonicalize(input);
-        REQUIRE(to_latex(input) ==
-                L"{ "
-                L"\\bigl({{{4}}{S^{{a_1}{a_2}{a_3}}_{{i_1}{i_2}{i_3}}}{f^{{i_3}"
-                L"}_{{i_4}}}{t^{{i_4}{i_1}{i_2}}_{{a_1}{a_2}{a_3}}}}\\bigr) }");
+        REQUIRE_THAT(
+            input, SimplifiesTo(
+                       "4 S{i1,i2,i3;a1,a2,a3} f{i4;i3} t{a1,a2,a3;i4,i1,i2}"));
       }
     }
 
@@ -382,10 +370,9 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
 
       canonicalize(input);
       REQUIRE(input->size() == 1);
-      REQUIRE(to_latex(input) ==
-              L"{ "
-              L"\\bigl({{t^{{i_3}}_{{a_2}}}{t^{{i_4}{i_2}}_{{a_1}{a_3}}}{B^{{a_"
-              L"3}}_{{i_3}}[{p_5}]}{B^{{i_1}}_{{i_4}}[{p_5}]}}\\bigr) }");
+      REQUIRE_THAT(
+          input,
+          SimplifiesTo("t{a2;i3} t{a1,a3;i4,i2} B{i3;a3;p5} B{i4;i1;p5}"));
     }
   }
 }
