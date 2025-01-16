@@ -73,40 +73,39 @@ struct StringMaker<sequant::Index> {
 
 namespace {
 
-/// Matches that the tested expression is equivalent to the given one. Two
-/// expressions are considered equivalent if they both have the same canonical
-/// form (i.e. they are the same expression after canonicalization)
-class EquivalentToMatcher : public Catch::Matchers::MatcherGenericBase {
+/// Converts the given expression-like object into an actual ExprPtr.
+/// It accepts either an actual expression object (as Expr & or ExprPtr) or
+/// a (w)string-like object which will then be parsed to yield the actual
+/// expression object.
+template <typename T>
+sequant::ExprPtr to_expression(T &&expression) {
+  if constexpr (std::is_convertible_v<T, std::string>) {
+    return sequant::parse_expr(
+        sequant::to_wstring(std::string(std::forward<T>(expression))),
+        sequant::Symmetry::nonsymm);
+  } else if constexpr (std::is_convertible_v<T, std::wstring>) {
+    return sequant::parse_expr(std::wstring(std::forward<T>(expression)),
+                               sequant::Symmetry::nonsymm);
+  } else if constexpr (std::is_convertible_v<T, sequant::Expr>) {
+    // Clone in order to not have to worry about later modification
+    return expression.clone();
+  } else {
+    static_assert(std::is_convertible_v<T, sequant::ExprPtr>,
+                  "Invalid type for expression");
+
+    // Clone in order to not have to worry about later modification
+    return expression->clone();
+  }
+}
+
+template <typename Subclass>
+class ExpressionMatcher : public Catch::Matchers::MatcherGenericBase {
  public:
-  /// Constructs the matcher with the expected expression. The constructor
-  /// accepts either an actual expression object (as Expr & or ExprPtr) or
-  /// a (w)string-like object which will then be parsed to yield the actual
-  /// expression object.
   template <typename T>
-  EquivalentToMatcher(T &&expression) {
-    if constexpr (std::is_convertible_v<T, std::string>) {
-      m_expr = sequant::parse_expr(
-          sequant::to_wstring(std::string(std::forward<T>(expression))),
-          sequant::Symmetry::nonsymm);
-    } else if constexpr (std::is_convertible_v<T, std::wstring>) {
-      m_expr = sequant::parse_expr(std::wstring(std::forward<T>(expression)),
-                                   sequant::Symmetry::nonsymm);
-    } else if constexpr (std::is_convertible_v<T, sequant::Expr>) {
-      // Clone in order to not have to worry about later modification
-      m_expr = expression.clone();
-    } else {
-      static_assert(std::is_convertible_v<T, sequant::ExprPtr>,
-                    "Invalid type for expression");
-
-      // Clone in order to not have to worry about later modification
-      m_expr = expression->clone();
-    }
-
+  ExpressionMatcher(T &&expression)
+      : m_expr(to_expression(std::forward<T>(expression))) {
     assert(m_expr);
-
-    // Bring expression into canonical form
-    simplify(m_expr);
-    canonicalize(m_expr);
+    Subclass::pre_comparison(m_expr);
   }
 
   bool match(const sequant::ExprPtr &expr) const { return match(*expr); }
@@ -116,18 +115,44 @@ class EquivalentToMatcher : public Catch::Matchers::MatcherGenericBase {
     // side-effects
     sequant::ExprPtr clone = expr.clone();
 
-    canonicalize(clone);
-    simplify(clone);
+    Subclass::pre_comparison(clone);
 
     return *clone == *m_expr;
   }
 
   std::string describe() const override {
-    return "Equivalent to: " + Catch::Detail::stringify(m_expr);
+    return Subclass::comparison_requirement() + ": " +
+           Catch::Detail::stringify(m_expr);
   }
 
- private:
+ protected:
   sequant::ExprPtr m_expr;
+};
+
+/// Matches that the tested expression is equivalent to the given one. Two
+/// expressions are considered equivalent if they both have the same canonical
+/// form (i.e. they are the same expression after canonicalization)
+struct EquivalentToMatcher : ExpressionMatcher<EquivalentToMatcher> {
+  using ExpressionMatcher::ExpressionMatcher;
+
+  static void pre_comparison(sequant::ExprPtr &expr) {
+    sequant::canonicalize(expr);
+    sequant::simplify(expr);
+  }
+
+  static std::string comparison_requirement() { return "Equivalent to"; }
+};
+
+/// Matches that the tested expression simplifies (**without**
+/// re-canonicalization!) to the same form as the given one
+struct SimplifiesToMatcher : ExpressionMatcher<SimplifiesToMatcher> {
+  using ExpressionMatcher::ExpressionMatcher;
+
+  static void pre_comparison(sequant::ExprPtr &expr) {
+    sequant::rapid_simplify(expr);
+  }
+
+  static std::string comparison_requirement() { return "Simplifies to"; }
 };
 
 }  // namespace
@@ -135,6 +160,11 @@ class EquivalentToMatcher : public Catch::Matchers::MatcherGenericBase {
 template <typename T>
 EquivalentToMatcher EquivalentTo(T &&expression) {
   return EquivalentToMatcher(std::forward<T>(expression));
+}
+
+template <typename T>
+SimplifiesToMatcher SimplifiesTo(T &&expression) {
+  return SimplifiesToMatcher(std::forward<T>(expression));
 }
 
 #endif
