@@ -7,6 +7,7 @@
 
 #define BOOST_SPIRIT_X3_UNICODE
 #include <boost/fusion/include/adapt_struct.hpp>
+#include <boost/optional.hpp>
 #include <boost/spirit/home/x3.hpp>
 #include <boost/spirit/home/x3/support/ast/position_tagged.hpp>
 #include <boost/variant.hpp>
@@ -66,17 +67,23 @@ struct IndexGroups : boost::spirit::x3::position_tagged {
         reverse_bra_ket(reverse_bra_ket) {}
 };
 
+struct SymmetrySpec : boost::spirit::x3::position_tagged {
+  static constexpr char unspecified = '\0';
+  char perm_symm = unspecified;
+  char braket_symm = unspecified;
+  char particle_symm = unspecified;
+};
+
 struct Tensor : boost::spirit::x3::position_tagged {
-  static constexpr char unspecified_symmetry = '\0';
   std::wstring name;
   IndexGroups indices;
-  char symmetry;
+  boost::optional<SymmetrySpec> symmetry;
 
   Tensor(std::wstring name = {}, IndexGroups indices = {},
-         char symmetry = unspecified_symmetry)
+         boost::optional<SymmetrySpec> symmetry = {})
       : name(std::move(name)),
         indices(std::move(indices)),
-        symmetry(symmetry) {}
+        symmetry(std::move(symmetry)) {}
 };
 
 struct Product;
@@ -125,6 +132,8 @@ BOOST_FUSION_ADAPT_STRUCT(sequant::parse::ast::Number, numerator, denominator);
 BOOST_FUSION_ADAPT_STRUCT(sequant::parse::ast::Variable, name, conjugated);
 BOOST_FUSION_ADAPT_STRUCT(sequant::parse::ast::IndexGroups, bra, ket,
                           auxiliaries, reverse_bra_ket);
+BOOST_FUSION_ADAPT_STRUCT(sequant::parse::ast::SymmetrySpec, perm_symm,
+                          braket_symm, particle_symm);
 BOOST_FUSION_ADAPT_STRUCT(sequant::parse::ast::Tensor, name, indices, symmetry);
 
 BOOST_FUSION_ADAPT_STRUCT(sequant::parse::ast::Product, factors);

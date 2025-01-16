@@ -170,11 +170,21 @@ TEST_CASE("parse_expr", "[parse]") {
 
   SECTION("Tensor with symmetry annotation") {
     auto expr1 = parse_expr(L"t{a1;i1}:A");
-    auto expr2 = parse_expr(L"t{a1;i1}:S");
-    auto expr3 = parse_expr(L"t{a1;i1}:N");
-    REQUIRE(expr1->as<Tensor>().symmetry() == sequant::Symmetry::antisymm);
-    REQUIRE(expr2->as<Tensor>().symmetry() == sequant::Symmetry::symm);
-    REQUIRE(expr3->as<Tensor>().symmetry() == sequant::Symmetry::nonsymm);
+    auto expr2 = parse_expr(L"t{a1;i1}:S-C");
+    auto expr3 = parse_expr(L"t{a1;i1}:N-S-N");
+
+    const Tensor& t1 = expr1->as<Tensor>();
+    const Tensor& t2 = expr2->as<Tensor>();
+    const Tensor& t3 = expr3->as<Tensor>();
+
+    REQUIRE(t1.symmetry() == Symmetry::antisymm);
+
+    REQUIRE(t2.symmetry() == Symmetry::symm);
+    REQUIRE(t2.braket_symmetry() == BraKetSymmetry::conjugate);
+
+    REQUIRE(t3.symmetry() == Symmetry::nonsymm);
+    REQUIRE(t3.braket_symmetry() == BraKetSymmetry::symm);
+    REQUIRE(t3.particle_symmetry() == ParticleSymmetry::nonsymm);
   }
 
   SECTION("Constant") {

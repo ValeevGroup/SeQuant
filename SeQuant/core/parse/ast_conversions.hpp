@@ -22,6 +22,9 @@
 
 namespace sequant::parse::transform {
 
+using DefaultSymmetries =
+    std::tuple<Symmetry, BraKetSymmetry, ParticleSymmetry>;
+
 template <typename AST, typename PositionCache, typename Iterator>
 std::tuple<std::size_t, std::size_t> get_pos(const AST &ast,
                                              const PositionCache &cache,
@@ -114,9 +117,9 @@ make_indices(const parse::ast::IndexGroups &groups,
 }
 
 template <typename Iterator>
-Symmetry to_symmetry(char c, std::size_t offset, const Iterator &begin,
-                     Symmetry default_symmetry) {
-  if (c == parse::ast::Tensor::unspecified_symmetry) {
+Symmetry to_perm_symmetry(char c, std::size_t offset, const Iterator &begin,
+                          Symmetry default_symmetry) {
+  if (c == parse::ast::SymmetrySpec::unspecified) {
     return default_symmetry;
   }
 
@@ -136,6 +139,52 @@ Symmetry to_symmetry(char c, std::size_t offset, const Iterator &begin,
                    std::string("Invalid symmetry specifier '") + c + "'");
 }
 
+template <typename Iterator>
+BraKetSymmetry to_braket_symmetry(char c, std::size_t offset,
+                                  const Iterator &begin,
+                                  BraKetSymmetry default_symmetry) {
+  if (c == parse::ast::SymmetrySpec::unspecified) {
+    return default_symmetry;
+  }
+
+  switch (c) {
+    case 'C':
+    case 'c':
+      return BraKetSymmetry::conjugate;
+    case 'S':
+    case 's':
+      return BraKetSymmetry::symm;
+    case 'N':
+    case 'n':
+      return BraKetSymmetry::nonsymm;
+  }
+
+  throw ParseError(
+      offset, 1, std::string("Invalid BraKet symmetry specifier '") + c + "'");
+}
+
+template <typename Iterator>
+ParticleSymmetry to_particle_symmetry(char c, std::size_t offset,
+                                      const Iterator &begin,
+                                      ParticleSymmetry default_symmetry) {
+  if (c == parse::ast::SymmetrySpec::unspecified) {
+    return default_symmetry;
+  }
+
+  switch (c) {
+    case 'S':
+    case 's':
+      return ParticleSymmetry::symm;
+    case 'N':
+    case 'n':
+      return ParticleSymmetry::nonsymm;
+  }
+
+  throw ParseError(
+      offset, 1,
+      std::string("Invalid particle symmetry specifier '") + c + "'");
+}
+
 template <typename PositionCache, typename Iterator>
 Constant to_constant(const parse::ast::Number &number,
                      const PositionCache &position_cache,
@@ -153,44 +202,70 @@ Constant to_constant(const parse::ast::Number &number,
 }
 
 template <typename PositionCache, typename Iterator>
+std::tuple<Symmetry, BraKetSymmetry, ParticleSymmetry> to_symmetries(
+    const boost::optional<parse::ast::SymmetrySpec> &symm_spec,
+    const DefaultSymmetries &default_symms, const PositionCache &cache,
+    const Iterator &begin) {
+  if (!symm_spec.has_value()) {
+    return {std::get<0>(default_symms), std::get<1>(default_symms),
+            std::get<2>(default_symms)};
+  }
+
+  const ast::SymmetrySpec &spec = symm_spec.get();
+
+  auto [offset, length] = get_pos(spec, cache, begin);
+
+  // Note: symmetry specifications are a separator (colon or dash) followed by
+  // an uppercase letter each (no whitespace allowed in-between)
+  Symmetry perm_symm = to_perm_symmetry(spec.perm_symm, offset + 1, begin,
+                                        std::get<0>(default_symms));
+  BraKetSymmetry braket_symm = to_braket_symmetry(
+      spec.braket_symm, offset + 3, begin, std::get<1>(default_symms));
+  ParticleSymmetry particle_symm = to_particle_symmetry(
+      spec.particle_symm, offset + 5, begin, std::get<2>(default_symms));
+
+  return {perm_symm, braket_symm, particle_symm};
+}
+
+template <typename PositionCache, typename Iterator>
 ExprPtr ast_to_expr(const parse::ast::Product &product,
                     const PositionCache &position_cache, const Iterator &begin,
-                    Symmetry default_symmetry);
+                    const DefaultSymmetries &default_symms);
 template <typename PositionCache, typename Iterator>
 ExprPtr ast_to_expr(const parse::ast::Sum &sum,
                     const PositionCache &position_cache, const Iterator &begin,
-                    Symmetry default_symmetry);
+                    const DefaultSymmetries &default_symms);
 
 template <typename PositionCache, typename Iterator>
 ExprPtr ast_to_expr(const parse::ast::NullaryValue &value,
                     const PositionCache &position_cache, const Iterator &begin,
-                    Symmetry default_symmetry) {
+                    const DefaultSymmetries &default_symms) {
   struct Transformer {
     std::reference_wrapper<const PositionCache> position_cache;
     std::reference_wrapper<const Iterator> begin;
-    std::reference_wrapper<Symmetry> default_symmetry;
+    std::reference_wrapper<const DefaultSymmetries> default_symms;
 
     ExprPtr operator()(const parse::ast::Product &product) const {
       return ast_to_expr<PositionCache>(product, position_cache.get(),
-                                        begin.get(), default_symmetry);
+                                        begin.get(), default_symms.get());
     }
 
     ExprPtr operator()(const parse::ast::Sum &sum) const {
       return ast_to_expr<PositionCache>(sum, position_cache.get(), begin.get(),
-                                        default_symmetry);
+                                        default_symms.get());
     }
 
     ExprPtr operator()(const parse::ast::Tensor &tensor) const {
       auto [braIndices, ketIndices, auxiliaries] =
           make_indices(tensor.indices, position_cache.get(), begin.get());
 
-      auto [offset, length] =
-          get_pos(tensor, position_cache.get(), begin.get());
+      auto [perm_symm, braket_symm, particle_symm] =
+          to_symmetries(tensor.symmetry, default_symms.get(),
+                        position_cache.get(), begin.get());
 
       return ex<Tensor>(tensor.name, bra(std::move(braIndices)),
                         ket(std::move(ketIndices)), aux(std::move(auxiliaries)),
-                        to_symmetry(tensor.symmetry, offset + length - 1,
-                                    begin.get(), default_symmetry));
+                        perm_symm, braket_symm, particle_symm);
     }
 
     ExprPtr operator()(const parse::ast::Variable &variable) const {
@@ -211,7 +286,7 @@ ExprPtr ast_to_expr(const parse::ast::NullaryValue &value,
 
   return boost::apply_visitor(
       Transformer{std::ref(position_cache), std::ref(begin),
-                  std::ref(default_symmetry)},
+                  std::ref(default_symms)},
       value);
 }
 
@@ -223,7 +298,7 @@ bool holds_alternative(const boost::variant<Ts...> &v) noexcept {
 template <typename PositionCache, typename Iterator>
 ExprPtr ast_to_expr(const parse::ast::Product &product,
                     const PositionCache &position_cache, const Iterator &begin,
-                    Symmetry default_symmetry) {
+                    const DefaultSymmetries &default_symms) {
   if (product.factors.empty()) {
     // This shouldn't happen
     assert(false);
@@ -233,7 +308,7 @@ ExprPtr ast_to_expr(const parse::ast::Product &product,
 
   if (product.factors.size() == 1) {
     return ast_to_expr(product.factors.front(), position_cache, begin,
-                       default_symmetry);
+                       default_symms);
   }
 
   std::vector<ExprPtr> factors;
@@ -247,7 +322,7 @@ ExprPtr ast_to_expr(const parse::ast::Product &product,
                                position_cache, begin);
     } else {
       factors.push_back(
-          ast_to_expr(value, position_cache, begin, default_symmetry));
+          ast_to_expr(value, position_cache, begin, default_symms));
     }
   }
 
@@ -267,13 +342,13 @@ ExprPtr ast_to_expr(const parse::ast::Product &product,
 template <typename PositionCache, typename Iterator>
 ExprPtr ast_to_expr(const parse::ast::Sum &sum,
                     const PositionCache &position_cache, const Iterator &begin,
-                    Symmetry default_symmetry) {
+                    const DefaultSymmetries &default_symms) {
   if (sum.summands.empty()) {
     return {};
   }
   if (sum.summands.size() == 1) {
     return ast_to_expr(sum.summands.front(), position_cache, begin,
-                       default_symmetry);
+                       default_symms);
   }
 
   std::vector<ExprPtr> summands;
@@ -281,7 +356,7 @@ ExprPtr ast_to_expr(const parse::ast::Sum &sum,
   std::transform(
       sum.summands.begin(), sum.summands.end(), std::back_inserter(summands),
       [&](const parse::ast::Product &product) {
-        return ast_to_expr(product, position_cache, begin, default_symmetry);
+        return ast_to_expr(product, position_cache, begin, default_symms);
       });
 
   return ex<Sum>(std::move(summands));
