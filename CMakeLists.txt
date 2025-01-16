@@ -253,6 +253,8 @@ set(SeQuant_src
         SeQuant/core/utility/singleton.hpp
         SeQuant/core/utility/string.hpp
         SeQuant/core/utility/string.cpp
+        SeQuant/core/vertex_painter.cpp
+        SeQuant/core/vertex_painter.hpp
         SeQuant/core/wick.hpp
         SeQuant/core/wick.impl.hpp
         SeQuant/core/wolfram.hpp
