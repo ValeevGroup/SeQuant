@@ -194,11 +194,13 @@ ExprPtr ast_to_expr(const parse::ast::NullaryValue &value,
     }
 
     ExprPtr operator()(const parse::ast::Variable &variable) const {
+      ExprPtr var = ex<Variable>(variable.name);
+
       if (variable.conjugated) {
-        return ex<Variable>(variable.name + L"^*");
-      } else {
-        return ex<Variable>(variable.name);
+        var->as<Variable>().conjugate();
       }
+
+      return var;
     }
 
     ExprPtr operator()(const parse::ast::Number &number) const {

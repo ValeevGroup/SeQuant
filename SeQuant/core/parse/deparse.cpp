@@ -162,7 +162,7 @@ std::wstring deparse(const Constant& constant) {
 }
 
 std::wstring deparse(const Variable& variable) {
-  return std::wstring(variable.label());
+  return std::wstring(variable.label()) + (variable.conjugated() ? L"^*" : L"");
 }
 
 std::wstring deparse(Product const& prod, bool annot_sym) {

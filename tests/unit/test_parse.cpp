@@ -204,9 +204,8 @@ TEST_CASE("parse_expr", "[parse]") {
     REQUIRE(parse_expr(L"α^*")->is<Variable>());
     REQUIRE(parse_expr(L"β^*")->is<Variable>());
     REQUIRE(parse_expr(L"b^*")->is<Variable>());
-    // Currently the conjugated "property" really just is part of the
-    // variable's name
-    REQUIRE(parse_expr(L"b^*")->as<Variable>().label() == L"b^*");
+    REQUIRE(parse_expr(L"b^*")->as<Variable>().conjugated());
+    REQUIRE(parse_expr(L"b^*")->as<Variable>().label() == L"b");
   }
 
   SECTION("Product") {
@@ -369,7 +368,8 @@ TEST_CASE("deparse", "[parse]") {
       L"a + b - 4 specialVariable",
       L"variable + A{a_1;i_1}:N * B{i_1;a_1}:A",
       L"1/2 (a + b) * c",
-      L"T1{}:N + T2{;;x_1}:N * T3{;;x_1}:N + T4{a_1;;x_2}:S * T5{;a_1;x_2}:S"};
+      L"T1{}:N + T2{;;x_1}:N * T3{;;x_1}:N + T4{a_1;;x_2}:S * T5{;a_1;x_2}:S",
+      L"q1 * q2^* * q3"};
 
   for (const std::wstring& current : expressions) {
     ExprPtr expression = parse_expr(current);
