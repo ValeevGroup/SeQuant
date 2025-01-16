@@ -37,8 +37,8 @@ std::wstring deparse_indices(const Range& indices) {
   return deparsed;
 }
 
-std::wstring deparse_sym(Symmetry sym) {
-  switch (sym) {
+std::wstring deparse_symm(Symmetry symm) {
+  switch (symm) {
     case Symmetry::symm:
       return L"S";
     case Symmetry::antisymm:
@@ -46,6 +46,36 @@ std::wstring deparse_sym(Symmetry sym) {
     case Symmetry::nonsymm:
       return L"N";
     case Symmetry::invalid:
+      return L"INVALID";
+  }
+
+  assert(false);
+  return L"INVALIDANDUNREACHABLE";
+}
+
+std::wstring deparse_symm(BraKetSymmetry symm) {
+  switch (symm) {
+    case BraKetSymmetry::conjugate:
+      return L"C";
+    case BraKetSymmetry::symm:
+      return L"S";
+    case BraKetSymmetry::nonsymm:
+      return L"N";
+    case BraKetSymmetry::invalid:
+      return L"INVALID";
+  }
+
+  assert(false);
+  return L"INVALIDANDUNREACHABLE";
+}
+
+std::wstring deparse_symm(ParticleSymmetry symm) {
+  switch (symm) {
+    case ParticleSymmetry::symm:
+      return L"S";
+    case ParticleSymmetry::nonsymm:
+      return L"N";
+    case ParticleSymmetry::invalid:
       return L"INVALID";
   }
 
@@ -151,7 +181,9 @@ std::wstring deparse(Tensor const& tensor, bool annot_sym) {
   deparsed += L"}";
 
   if (annot_sym) {
-    deparsed += L":" + details::deparse_sym(tensor.symmetry());
+    deparsed += L":" + details::deparse_symm(tensor.symmetry());
+    deparsed += L"-" + details::deparse_symm(tensor.braket_symmetry());
+    deparsed += L"-" + details::deparse_symm(tensor.particle_symmetry());
   }
 
   return deparsed;

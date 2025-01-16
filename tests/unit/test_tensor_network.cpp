@@ -910,7 +910,7 @@ TEST_CASE("TensorNetworkV2", "[elements]") {
         TensorNetworkV2 tn(input);
         tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(), fast);
         const auto result = ex<Product>(to_tensors(tn.tensors()));
-        REQUIRE(deparse(result) == expected);
+        REQUIRE_THAT(result, SimplifiesTo(expected));
       }
     }
 
@@ -990,7 +990,7 @@ TEST_CASE("TensorNetworkV2", "[elements]") {
               prod.as<Product>().scale(factor.as<Constant>().value()));
         }
 
-        REQUIRE(deparse(prod) == expected);
+        REQUIRE_THAT(prod, SimplifiesTo(expected));
       }
     }
 

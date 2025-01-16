@@ -361,14 +361,15 @@ TEST_CASE("deparse", "[parse]") {
   using namespace sequant;
 
   std::vector<std::wstring> expressions = {
-      L"t{a_1,a_2;a_3,a_4}:N",
+      L"t{a_1,a_2;a_3,a_4}:N-C-S",
       L"42",
       L"1/2",
-      L"-1/4 t{a_1,i_1<a_1>;a_2,i_2}:S",
+      L"-1/4 t{a_1,i_1<a_1>;a_2,i_2}:S-N-N",
       L"a + b - 4 specialVariable",
-      L"variable + A{a_1;i_1}:N * B{i_1;a_1}:A",
+      L"variable + A{a_1;i_1}:N-N-S * B{i_1;a_1}:A-C-S",
       L"1/2 (a + b) * c",
-      L"T1{}:N + T2{;;x_1}:N * T3{;;x_1}:N + T4{a_1;;x_2}:S * T5{;a_1;x_2}:S",
+      L"T1{}:N-N-N + T2{;;x_1}:N-N-N * T3{;;x_1}:N-N-N + T4{a_1;;x_2}:S-C-S * "
+      L"T5{;a_1;x_2}:S-S-S",
       L"q1 * q2^* * q3"};
 
   for (const std::wstring& current : expressions) {
