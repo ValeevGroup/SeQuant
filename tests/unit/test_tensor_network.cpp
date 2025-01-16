@@ -21,6 +21,7 @@
 #include <SeQuant/core/tensor_network.hpp>
 #include <SeQuant/core/tensor_network_v2.hpp>
 #include <SeQuant/core/timer.hpp>
+#include <SeQuant/core/utility/string.hpp>
 
 #include <algorithm>
 #include <cmath>
@@ -645,12 +646,6 @@ TEST_CASE("TensorNetwork", "[elements]") {
 
 }  // TEST_CASE("TensorNetwork")
 
-std::string to_utf8(const std::wstring& wstr) {
-  using convert_type = std::codecvt_utf8<wchar_t>;
-  std::wstring_convert<convert_type, wchar_t> converter;
-  return converter.to_bytes(wstr);
-}
-
 template <typename Container>
 std::vector<sequant::ExprPtr> to_tensors(const Container& cont) {
   std::vector<sequant::ExprPtr> tensors;
@@ -944,7 +939,7 @@ TEST_CASE("TensorNetworkV2", "[elements]") {
               TensorNetwork(first).make_bliss_graph();
           wick_graph->write_dot(stream, labels, true);
 
-          FAIL(to_utf8(stream.str()));
+          FAIL(to_string(stream.str()));
         }
 
         TensorNetworkV2 tn1(first);
@@ -1117,7 +1112,7 @@ TEST_CASE("TensorNetworkV2", "[elements]") {
               }
               sstream << "\nInput was " << deparse(ex<Product>(factors))
                       << "\n";
-              FAIL(to_utf8(sstream.str()));
+              FAIL(to_string(sstream.str()));
             }
           } while (std::next_permutation(indices.begin() + 4, indices.end()));
         } while (std::next_permutation(indices.begin(), indices.begin() + 4));
