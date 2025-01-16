@@ -104,7 +104,7 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
       canonicalize(input);
       REQUIRE_THAT(
           input,
-          SimplifiesTo("S{a1,a3;i1,i2} f{a2;i3} t{i3;a3} t{i1,i2;a1,a2}"));
+          SimplifiesTo("S{a1,a2;i1,i2} f{a3;i3} t{i3;a2} t{i1,i2;a1,a3}"));
     }
     {
       auto input =
@@ -149,7 +149,7 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
       canonicalize(input1);
       REQUIRE_THAT(
           input1,
-          SimplifiesTo("S{a1,a3;i1,i2} f{a2;i3} f⁺{a1,a3;i1,i3} t{i2;a2}"));
+          SimplifiesTo("S{a1,a2;i1,i3} f{a3;i2} f⁺{a1,a2;i1,i2} t{i3;a3}"));
       auto input2 =
           ex<Tensor>(L"S", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"},
                      Symmetry::nonsymm) *
@@ -160,7 +160,7 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
       REQUIRE_THAT(
           input2,
           SimplifiesTo(
-              "1/2 w S{a1,a3;i1,i2} f{a2;i3} f⁺{a1,a3;i1,i3} t{i2;a2}"));
+              "1/2 w S{a1,a2;i1,i3} f{a3;i2} f⁺{a1,a2;i1,i2} t{i3;a3}"));
     }
   }
   {
@@ -190,8 +190,9 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
                          Symmetry::nonsymm) *
               ex<Tensor>(L"t", bra{L"p_3"}, ket{L"p_1"}, Symmetry::nonsymm) *
               ex<Tensor>(L"t", bra{L"p_4"}, ket{L"p_2"}, Symmetry::nonsymm);
+      simplify(input);
       canonicalize(input);
-      REQUIRE_THAT(input, SimplifiesTo("g{p2,p3;p1,p4} t{p1;p2} t{p4;p3}"));
+      REQUIRE_THAT(input, SimplifiesTo("g{p3,p4;p1,p2} t{p1;p3} t{p2;p4}"));
     }
 
     // CASE 2: Symmetric tensors
@@ -268,7 +269,7 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
       canonicalize(input);
       REQUIRE(input->size() == 1);
       REQUIRE_THAT(input,
-                   SimplifiesTo("g{i3,i4;a3,i1} t{a2;i3} t{a1,a3;i4,i2}"));
+                   SimplifiesTo("g{i3,i4;i1,a3} t{a2;i4} t{a1,a3;i3,i2}"));
     }
 
     {  // Case 5: CCSDT R3: S3 * F * T3
@@ -369,10 +370,10 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
                          Symmetry::nonsymm);
 
       canonicalize(input);
-      REQUIRE(input->size() == 1);
+      simplify(input);
       REQUIRE_THAT(
           input,
-          SimplifiesTo("t{a2;i3} t{a1,a3;i4,i2} B{i3;a3;p5} B{i4;i1;p5}"));
+          SimplifiesTo("t{a2;i4} t{a1,a3;i3,i2} B{i3;i1;p5} B{i4;a3;p5}"));
     }
   }
 }
