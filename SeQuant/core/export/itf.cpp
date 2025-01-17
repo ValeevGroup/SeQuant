@@ -559,7 +559,12 @@ std::wstring ITFGenerator::generate() const {
   }
   itf += L"\n";
   for (const Tensor &current : m_createdTensors) {
-    itf += L"tensor: " + to_itf(current, *m_ctx) + L", !Create{type:disk}\n";
+    itf += L"tensor: " + to_itf(current, *m_ctx);
+    if (current.indices().size() > 0) {
+      itf += +L", !Create{type:disk}\n";
+    } else {
+      itf += +L", !Create{type:scalar}\n";
+    }
   }
   itf += L"\n\n";
 
