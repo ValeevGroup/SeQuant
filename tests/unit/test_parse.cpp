@@ -374,7 +374,7 @@ TEST_CASE("deparse", "[parse]") {
       L"t{a_1,a_2;a_3,a_4}:N-C-S",
       L"42",
       L"1/2",
-      L"-1/4 t{a_1,i_1<a_1>;a_2,i_2}:S-N-N",
+      L"-1/4 t{a_1,i_1<a_1>;a_2,i_2}:S-N-S",
       L"a + b - 4 specialVariable",
       L"variable + A{a_1;i_1}:N-N-S * B{i_1;a_1}:A-C-S",
       L"1/2 (a + b) * c",
