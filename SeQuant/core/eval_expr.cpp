@@ -49,6 +49,12 @@ NestedTensorIndices::NestedTensorIndices(const sequant::Tensor& tnsr) {
   using ranges::views::join;
   using ranges::views::transform;
 
+  for (auto&& ix : tnsr.aux()) {
+    assert(!ix.has_proto_indices() &&
+           "Aux indices with proto indices not supported");
+    outer.emplace_back(ix);
+  }
+
   auto append_unique = [](auto& cont, auto const& el) {
     if (!ranges::contains(cont, el)) cont.emplace_back(el);
   };
