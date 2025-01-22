@@ -261,6 +261,9 @@ std::size_t count_cycles(Seq0&& v0, const Seq1& v1) {
   std::remove_reference_t<Seq0> v(std::forward<Seq0>(v0));
   using T = std::decay_t<decltype(v[0])>;
   assert(ranges::is_permutation(v, v1));
+  // This function can't deal with duplicate entries in v0 or v1
+  assert(std::set(std::begin(v0), std::end(v0)).size() == v0.size());
+  assert(std::set(std::begin(v1), std::end(v1)).size() == v1.size());
 
   auto make_null = []() -> T {
     if constexpr (std::is_arithmetic_v<T>) {
@@ -271,21 +274,36 @@ std::size_t count_cycles(Seq0&& v0, const Seq1& v1) {
       abort();
   };
 
-  std::size_t n_cycles = 0;
   const auto null = make_null();
   assert(ranges::contains(v, null) == false);
   assert(ranges::contains(v1, null) == false);
+
+  std::size_t n_cycles = 0;
   for (auto it = v.begin(); it != v.end(); ++it) {
     if (*it != null) {
       n_cycles++;
+
       auto idx = std::distance(v.begin(), it);
+      assert(idx >= 0);
+
       auto it0 = it;
+
       auto it1 = std::find(v1.begin(), v1.end(), *it0);
+      assert(it1 != v1.end());
+
       auto idx1 = std::distance(v1.begin(), it1);
+      assert(idx1 >= 0);
+
       do {
         it0 = std::find(v.begin(), v.end(), v[idx1]);
+        assert(it0 != v.end());
+
         it1 = std::find(v1.begin(), v1.end(), *it0);
+        assert(it1 != v1.end());
+
         idx1 = std::distance(v1.begin(), it1);
+        assert(idx1 >= 0);
+
         *it0 = null;
       } while (idx1 != idx);
     }
@@ -328,7 +346,7 @@ ExprPtr closed_shell_CC_spintrace(ExprPtr const& expr);
 ExprPtr closed_shell_CC_spintrace_rigorous(ExprPtr const& expr);
 
 /// Collect all indices from an expression
-auto index_list(const ExprPtr& expr);
+container::set<Index, Index::LabelCompare> index_list(const ExprPtr& expr);
 
 /// @brief Swap spin labels in a tensor
 Tensor swap_spin(const Tensor& t);
