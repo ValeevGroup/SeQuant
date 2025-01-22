@@ -78,18 +78,32 @@ std::vector<Contraction> to_contractions(const ExprPtr &expression,
                                          const Tensor &resultTensor,
                                          const Context &ctx);
 
+Tensor to_tensor(const Expr &expr) {
+  if (expr.is<Tensor>()) {
+    return expr.as<Tensor>();
+  }
+
+  if (expr.is<Variable>()) {
+    // A variable can be seen as a tensor without indices
+    return Tensor(std::wstring(expr.as<Variable>().label()), {}, {}, {});
+  }
+
+  throw std::runtime_error(
+      "Invalid Expr type encountered (can't be converted to a Tensor) in "
+      "to_tensor");
+}
+
 std::vector<Contraction> to_contractions(const Product &product,
                                          const Tensor &resultTensor,
                                          const Context &ctx) {
   static std::size_t intermediateCounter = 1;
 
   if (product.factors().size() == 1) {
-    assert(product.factor(0).is<Tensor>());
     assert(product.scalar().imag() == 0);
 
     return {Contraction{product.scalar().real(),
                         resultTensor,
-                        product.factor(0).as<Tensor>(),
+                        to_tensor(*product.factor(0)),
                         {}}};
   }
 
@@ -165,9 +179,9 @@ std::vector<Contraction> to_contractions(const Product &product,
   assert(product.scalar().imag() == 0);
   contractions.push_back(Contraction{
       product.scalar().real(), resultTensor,
-      lhsIntermediate == intermediates.end() ? product.factor(0).as<Tensor>()
+      lhsIntermediate == intermediates.end() ? to_tensor(*product.factor(0))
                                              : lhsIntermediate->second,
-      rhsIntermediate == intermediates.end() ? product.factor(1).as<Tensor>()
+      rhsIntermediate == intermediates.end() ? to_tensor(*product.factor(1))
                                              : rhsIntermediate->second});
 
   return contractions;
@@ -442,23 +456,21 @@ void ITFGenerator::addBlock(const itf::CodeBlock &block) {
 
     // If we encounter a tensor in an expression that we have not yet seen
     // before, it must be an imported tensor (otherwise the expression would be
-    // invalid)
-    expression->visit(
-        [this](const ExprPtr &expr) {
-          if (expr.is<Tensor>()) {
-            const Tensor &tensor = expr.as<Tensor>();
-            if (m_createdTensors.find(tensor) == m_createdTensors.end()) {
-              m_importedTensors.insert(tensor);
-            }
-            m_encounteredIndices.insert(tensor.braket().begin(),
-                                        tensor.braket().end());
-          }
-        },
-        true);
-
-    // Now go through all result tensors of the contractions that we have
-    // produced and add all new tensors to the set of created tensors
+    // invalid).
+    // Additionally, all result tensors that we find in the produced
+    // contractions that is not imported must be created in order for the
+    // expression to be valid.
     for (const Contraction &currentContraction : contractionBlocks.back()) {
+      if (m_createdTensors.find(currentContraction.lhs) ==
+          m_createdTensors.end()) {
+        m_importedTensors.insert(currentContraction.lhs);
+      }
+      if (currentContraction.rhs.has_value()) {
+        if (m_createdTensors.find(currentContraction.rhs.value()) ==
+            m_createdTensors.end()) {
+          m_importedTensors.insert(currentContraction.rhs.value());
+        }
+      }
       if (m_importedTensors.find(currentContraction.result) ==
           m_importedTensors.end()) {
         m_createdTensors.insert(currentContraction.result);
@@ -554,11 +566,21 @@ std::wstring ITFGenerator::generate() const {
 
   // Tensor declarations
   for (const Tensor &current : m_importedTensors) {
+    if (current.indices().size() == 0 && current.label() == L"One") {
+      // The One[] tensor exists implicitly
+      continue;
+    }
+
     itf += L"tensor: " + to_itf(current, *m_ctx) + L", " +
            to_itf(current, *m_ctx, false) + L"\n";
   }
   itf += L"\n";
   for (const Tensor &current : m_createdTensors) {
+    if (current.indices().size() == 0 && current.label() == L"One") {
+      // The One[] tensor exists implicitly
+      continue;
+    }
+
     itf += L"tensor: " + to_itf(current, *m_ctx);
     if (current.indices().size() > 0) {
       itf += +L", !Create{type:disk}\n";
@@ -577,6 +599,9 @@ std::wstring ITFGenerator::generate() const {
     for (const std::vector<Contraction> &currentBlock :
          currentSection.contractionBlocks) {
       for (const Contraction &currentContraction : currentBlock) {
+        if (currentContraction.factor == 0) {
+          continue;
+        }
         // For now we'll do a really silly contribution-by-contribution
         // load-process-store strategy
         if (allocatedTensors.find(currentContraction.result) ==

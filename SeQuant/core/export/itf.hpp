@@ -71,7 +71,7 @@ struct TensorBlockCompare {
 void remap_integrals(ExprPtr &expr, const Context &ctx,
                      std::wstring_view oneElectronIntegralName = L"f",
                      std::wstring_view twoElectronIntegralName = L"g",
-					 std::wstring_view dfTensorName = L"DF");
+                     std::wstring_view dfTensorName = L"DF");
 
 /// Represents a single contraction where the contraction of lhs with rhs,
 /// multiplied by the given factor contributes to the given result. If rhs is
