@@ -711,7 +711,7 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
             // using each automorphism generator
             for (auto &&aut : aut_generators) {
               // skip automorphism generators that involve vertices that are
-              // not part of vertices
+              // not part of list `vertices`
               // this prevents topology exploitation for spin-free Wick
               // TODO learn how to compute partitions correctly for
               //      spin-free cases
@@ -912,6 +912,8 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
           int index_npartitions = -1;
           std::tie(index_vidx2pidx, index_npartitions) = compute_partitions(
               index_vidx_ord, /* nontrivial_partitions_only = */ false,
+              /* this is to ensure that each index partition only involves
+                 indices attached to bra or to ket of same nop */
               exclude_index_vertex_pair);
 
           if (!index_vidx2pidx.empty()) {
