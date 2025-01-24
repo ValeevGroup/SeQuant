@@ -108,25 +108,25 @@ int main(int argc, char **argv) {
       std::optional<TensorNetwork> network = to_network(expr);
       if (!network.has_value()) {
         std::wcout << "Failed to construct tensor network for input '"
-                   << current << "'" << std::endl;
+                   << to_latex(expr) << "'" << std::endl;
         return 2;
       }
 
       auto [graph, vlabels, vcolors, vtypes] = network->make_bliss_graph(
           use_named_indices ? nullptr : &empty_named_indices);
-      std::wcout << "Graph for '" << current << "'\n";
+      std::wcout << "Graph for '" << to_latex(expr) << "'\n";
       graph->write_dot(std::wcout, vlabels);
     } else {
       std::optional<TensorNetworkV2> network = to_network_v2(expr);
       if (!network.has_value()) {
         std::wcout << "Failed to construct tensor network for input '"
-                   << current << "'" << std::endl;
+                   << to_latex(expr) << "'" << std::endl;
         return 2;
       }
 
       TensorNetworkV2::Graph graph = network->create_graph(
           use_named_indices ? nullptr : &empty_named_indices);
-      std::wcout << "Graph for '" << current << "'\n";
+      std::wcout << "Graph for '" << to_latex(expr) << "'\n";
       graph.bliss_graph->write_dot(std::wcout, graph.vertex_labels);
     }
   }
