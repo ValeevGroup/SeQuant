@@ -405,10 +405,13 @@ class Index : public Taggable {
     if (!has_proto_indices()) return label();
     if (full_label_) return *full_label_;
     std::wstring result = label_ + L"<";
+    using namespace std::literals;
     result +=
         ranges::views::transform(proto_indices_,
-                                 [](const Index &idx) { return idx.label(); }) |
-        ranges::views::join(L", ") | ranges::to<std::wstring>();
+                                 [](const Index &idx) -> std::wstring_view {
+                                   return idx.full_label();
+                                 }) |
+        ranges::views::join(L", "sv) | ranges::to<std::wstring>();
     result += L">";
     full_label_ = result;
     return *full_label_;
