@@ -800,14 +800,15 @@ TensorNetworkV2::Graph TensorNetworkV2::create_graph(
           it != proto_bundles.end()) {
         proto_vertex = it->second;
       } else {
+        using namespace std::literals;
         // Create a new vertex for this bundle of proto indices
         std::wstring spbundle_label =
-            L"{" +
+            L"<" +
             (ranges::views::transform(
                  index.proto_indices(),
-                 [](const Index &idx) { return idx.label(); }) |
-             ranges::views::join(L", ") | ranges::to<std::wstring>()) +
-            L"}";
+                 [](const Index &idx) { return idx.full_label(); }) |
+             ranges::views::join(L", "sv) | ranges::to<std::wstring>()) +
+            L">";
 
         graph.vertex_labels.push_back(std::move(spbundle_label));
         graph.vertex_types.push_back(VertexType::SPBundle);
