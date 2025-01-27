@@ -450,7 +450,7 @@ auto evaluate_symm(NodeT const& node, Annot const& layout,
   log_eval("[SYMMETRIZE] (bra pos, ket pos, length) ",
            perm_groups_string(perm_groups.empty() ? pgs : perm_groups), "\n");
 
-  return result->symmetrize(perm_groups.empty() ? pgs : perm_groups);
+  return result->symmetrize();
 }
 
 ///
@@ -486,11 +486,8 @@ auto evaluate_antisymm(
     Le const& le,                                                  //
     Args&&... args) {
   container::svector<std::array<size_t, 3>> pgs;
-  if (perm_groups.empty()) {
-    // asked for anti-symmetrization without specifying particle
-    // antisymmetric index ranges assume both bra indices and ket indices are
-    // antisymmetric in the particle exchange
-
+  size_t bra_rank;
+  {
     ExprPtr expr_ptr{};
     if constexpr (IsIterableOfEvaluableNodes<NodeT>) {
       expr_ptr = (*std::begin(node))->expr();
@@ -499,18 +496,14 @@ auto evaluate_antisymm(
     }
     assert(expr_ptr->is<Tensor>());
     auto const& t = expr_ptr->as<Tensor>();
-    assert(t.bra_rank() == t.ket_rank());
-
-    size_t const half_rank = t.bra_rank();
-    pgs = {{0, half_rank, half_rank}};
+    bra_rank = t.bra_rank();
   }
 
   auto result = evaluate(node, layout, le, std::forward<Args>(args)...);
-
+  // TODO: Update logging
   log_eval("[ANTISYMMETRIZE] (bra pos, ket pos, length) ",
            perm_groups_string(perm_groups.empty() ? pgs : perm_groups), "\n");
-
-  return result->antisymmetrize(perm_groups.empty() ? pgs : perm_groups);
+  return result->antisymmetrize(bra_rank);
 }
 
 }  // namespace sequant

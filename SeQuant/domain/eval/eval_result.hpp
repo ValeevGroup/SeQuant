@@ -258,11 +258,11 @@ auto particle_symmetrize_ta(TA::DistArray<Args...> const& arr) {
 ///
 template <typename... Args>
 auto particle_antisymmetrize_ta(TA::DistArray<Args...> const& arr,
-                                size_t bra_size) {
+                                size_t bra_rank) {
   using ranges::views::iota;
 
   size_t const rank = arr.trange().rank();
-  assert(bra_size <= rank);
+  assert(bra_rank <= rank);
 
   TA::DistArray<Args...> result;
 
@@ -279,13 +279,13 @@ auto particle_antisymmetrize_ta(TA::DistArray<Args...> const& arr,
       result(lannot) = p_ * arr(ords_to_annot(perm));
   };
 
-  auto const ket_size = rank - bra_size;
+  auto const ket_rank = rank - bra_rank;
 
   antisymmetric_permutation(
       AntisymmetricParticleRange{perm.begin(),             //
-                                 bra_size,                 //
-                                 perm.begin() + bra_size,  //
-                                 ket_size},
+                                 bra_rank,                 //
+                                 perm.begin() + bra_rank,  //
+                                 ket_rank},
       call_back);
 
   TA::DistArray<Args...>::wait_for_lazy_cleanup(result.world());
@@ -352,11 +352,11 @@ auto particle_symmetrize_btas(btas::Tensor<Args...> const& arr) {
 ///
 template <typename... Args>
 auto particle_antisymmetrize_btas(btas::Tensor<Args...> const& arr,
-                                  size_t bra_size) {
+                                  size_t bra_rank) {
   using ranges::views::iota;
 
   size_t const rank = arr.rank();
-  assert(bra_size <= rank);
+  assert(bra_rank <= rank);
 
   auto result = btas::Tensor<Args...>{arr.range()};
   result.fill(0);
@@ -373,13 +373,13 @@ auto particle_antisymmetrize_btas(btas::Tensor<Args...> const& arr,
     result += temp;
   };
 
-  auto const ket_size = rank - bra_size;
+  auto const ket_rank = rank - bra_rank;
 
   antisymmetric_permutation(
       AntisymmetricParticleRange{perm.begin(),             //
-                                 bra_size,                 //
-                                 perm.begin() + bra_size,  //
-                                 ket_size},
+                                 bra_rank,                 //
+                                 perm.begin() + bra_rank,  //
+                                 ket_rank},
       call_back);
 
   return result;
@@ -510,8 +510,7 @@ class EvalResult {
   ///       [b1, b1+len) and [b2, b2+len) are two ranges that will be permuted
   ///       simultaneously and at the equivalent positions.
   ///
-  //  [[nodiscard]] virtual ERPtr symmetrize(
-  //      container::svector<std::array<size_t, 3>> const&) const = 0;
+  [[nodiscard]] virtual ERPtr symmetrize() const = 0;
 
   ///
   /// \brief Particle antisymmetrize this eval result according to the list of
@@ -525,8 +524,7 @@ class EvalResult {
   ///       by keeping track of the parity -- (even/odd)-ness -- of the total
   ///       permutation.
   ///
-  //  [[nodiscard]] virtual ERPtr antisymmetrize(
-  //      container::svector<std::array<size_t, 3>> const&) const = 0;
+  [[nodiscard]] virtual ERPtr antisymmetrize(size_t bra_rank) const = 0;
 
   [[nodiscard]] bool has_value() const noexcept;
 
@@ -624,15 +622,13 @@ class EvalScalar final : public EvalResult {
     val += other.get<T>();
   }
 
-  //  [[nodiscard]] ERPtr symmetrize(
-  //      container::svector<std::array<size_t, 3>> const&) const override {
-  //    throw unimplemented_method("symmetrize");
-  //  }
-  //
-  //  [[nodiscard]] ERPtr antisymmetrize(
-  //      container::svector<std::array<size_t, 3>> const&) const override {
-  //    throw unimplemented_method("antisymmetrize");
-  //  }
+  [[nodiscard]] ERPtr symmetrize() const override {
+    throw unimplemented_method("symmetrize");
+  }
+
+  [[nodiscard]] ERPtr antisymmetrize(size_t bra_rank) const override {
+    throw unimplemented_method("antisymmetrize");
+  }
 
  private:
   [[nodiscard]] id_t type_id() const noexcept override {
@@ -753,17 +749,14 @@ class EvalTensorTA final : public EvalResult {
     ArrayT::wait_for_lazy_cleanup(t.world());
   }
 
-  //  [[nodiscard]] ERPtr symmetrize(
-  //      container::svector<std::array<size_t, 3>> const& groups) const
-  //      override {
-  //    return eval_result<this_type>(symmetrize_ta(get<ArrayT>(), groups));
-  //  }
-  //
-  //  [[nodiscard]] ERPtr antisymmetrize(
-  //      container::svector<std::array<size_t, 3>> const& groups) const
-  //      override {
-  //    return eval_result<this_type>(antisymmetrize_ta(get<ArrayT>(), groups));
-  //  }
+  [[nodiscard]] ERPtr symmetrize() const override {
+    return eval_result<this_type>(particle_symmetrize_ta(get<ArrayT>()));
+  }
+
+  [[nodiscard]] ERPtr antisymmetrize(size_t bra_rank) const override {
+    return eval_result<this_type>(
+        particle_antisymmetrize_ta(get<ArrayT>(), bra_rank));
+  }
 };
 
 template <typename ArrayT,
@@ -888,21 +881,11 @@ class EvalTensorOfTensorTA final : public EvalResult {
     ArrayT::wait_for_lazy_cleanup(t.world());
   }
 
-  //  [[nodiscard]] ERPtr symmetrize(
-  //      container::svector<std::array<size_t, 3>> const& groups) const
-  //      override {
-  //    // todo
-  //    // return eval_result<this_type>(symmetrize_ta(get<ArrayT>(), groups));
-  //    return nullptr;
-  //  }
-  //
-  //  [[nodiscard]] ERPtr antisymmetrize(
-  //      container::svector<std::array<size_t, 3>> const& groups) const
-  //      override {
-  //    // todo
-  //    // return eval_result<this_type>(antisymmetrize_ta(get<ArrayT>(),
-  //    groups)); return nullptr;
-  //  }
+  [[nodiscard]] ERPtr symmetrize() const override { return nullptr; }
+
+  [[nodiscard]] ERPtr antisymmetrize(size_t bra_rank) const override {
+    return nullptr;
+  }
 };
 
 ///
@@ -982,19 +965,14 @@ class EvalTensorBTAS final : public EvalResult {
     t += o;
   }
 
-  //  [[nodiscard]] ERPtr symmetrize(
-  //      container::svector<std::array<size_t, 3>> const& groups) const
-  //      override {
-  //    return eval_result<EvalTensorBTAS<T>>(symmetrize_btas(get<T>(),
-  //    groups));
-  //  }
-  //
-  //  [[nodiscard]] ERPtr antisymmetrize(
-  //      container::svector<std::array<size_t, 3>> const& groups) const
-  //      override {
-  //    return eval_result<EvalTensorBTAS<T>>(
-  //        antisymmetrize_btas(get<T>(), groups));
-  //  }
+  [[nodiscard]] ERPtr symmetrize() const override {
+    return eval_result<EvalTensorBTAS<T>>(particle_symmetrize_btas(get<T>()));
+  }
+
+  [[nodiscard]] ERPtr antisymmetrize(size_t bra_rank) const override {
+    return eval_result<EvalTensorBTAS<T>>(
+        particle_antisymmetrize_btas(get<T>(), bra_rank));
+  }
 };
 
 }  // namespace sequant
