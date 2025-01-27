@@ -209,12 +209,17 @@ class TensorNetwork {
   // this ensures that proto indices are not considered and all internal indices
   // have unique labels (not full labels)
   mutable named_indices_t ext_indices_;
+  /// some proto indices may not be in edges_ if they appear exclusively among
+  /// proto indices
+  /// @note these will need to be processed separately from the rest
+  /// to appear as vertices on the graph
+  mutable named_indices_t pure_proto_indices_;
 
   // replacements of anonymous indices produced by the last call to
   // canonicalize()
   container::map<Index, Index> idxrepl_;
 
-  /// initializes edges_ and ext_indices_
+  /// initializes edges_, ext_indices_, and pure_proto_indices_
   void init_edges() const;
 
  public:

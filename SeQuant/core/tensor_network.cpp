@@ -430,12 +430,10 @@ TensorNetwork::make_bliss_graph(
 
   // results
   std::shared_ptr<bliss::Graph> graph;
-  std::vector<std::wstring> vertex_labels(
-      edges_.size());  // the size will be updated
-  std::vector<std::size_t> vertex_color(edges_.size(),
-                                        0);  // the size will be updated
-  std::vector<VertexType> vertex_type(
-      edges_.size());  // the size will be updated
+  const auto nidx = edges_.size() + pure_proto_indices_.size();
+  std::vector<std::wstring> vertex_labels(nidx);   // the size will be updated
+  std::vector<std::size_t> vertex_color(nidx, 0);  // the size will be updated
+  std::vector<VertexType> vertex_type(nidx);       // the size will be updated
 
   // compute # of vertices
   size_t nv = 0;
@@ -448,7 +446,7 @@ TensorNetwork::make_bliss_graph(
       std::decay_t<decltype(std::declval<const Index &>().proto_indices())>;
   container::set<protoindex_bundle_t> symmetric_protoindex_bundles;
   const size_t spbundle_vertex_offset =
-      edges_.size();  // where spbundle vertices will start
+      nidx;  // where spbundle vertices will start
   ranges::for_each(edges_, [&](const Edge &ttpair) {
     const Index &idx = ttpair.idx();
     ++nv;  // each index is a vertex
@@ -472,6 +470,14 @@ TensorNetwork::make_bliss_graph(
     }
     index_cnt++;
   });
+  ranges::for_each(pure_proto_indices_, [&](const Index &idx) {
+    ++nv;  // each index is a vertex
+    vertex_labels.at(index_cnt) = idx.to_latex();
+    vertex_type.at(index_cnt) = VertexType::Index;
+    vertex_color.at(index_cnt) = colorizer(idx);
+    index_cnt++;
+  });
+
   // now commit protoindex bundle metadata
   ranges::for_each(symmetric_protoindex_bundles, [&](const auto &bundle) {
     ++nv;  // each symmetric protoindex bundle is a vertex
@@ -616,10 +622,19 @@ TensorNetwork::make_bliss_graph(
   ranges::for_each(symmetric_protoindex_bundles, [&graph, this, &spbundle_cnt](
                                                      const auto &bundle) {
     for (auto &&proto_index : bundle) {
-      assert(edges_.find(proto_index.full_label()) != edges_.end());
-      const auto proto_index_vertex =
-          edges_.find(proto_index.full_label()) - edges_.begin();
-      graph->add_edge(spbundle_cnt, proto_index_vertex);
+      // proto index either connects tensors (i.e. it's in edges_) OR
+      // it's among pure_proto_indices_
+      auto edges_it = edges_.find(proto_index.full_label());
+      if (edges_it != edges_.end()) {
+        const auto proto_index_vertex = edges_it - edges_.begin();
+        graph->add_edge(spbundle_cnt, proto_index_vertex);
+      } else {
+        auto ppidx_it = pure_proto_indices_.find(proto_index);
+        assert(ppidx_it != pure_proto_indices_.end());
+        const auto proto_index_vertex =
+            ppidx_it - pure_proto_indices_.begin() + edges_.size();
+        graph->add_edge(spbundle_cnt, proto_index_vertex);
+      }
     }
     ++spbundle_cnt;
   });
@@ -684,10 +699,14 @@ void TensorNetwork::init_edges() const {
     ++t_idx;
   }
 
-  // extract external indices
+  // extract external indices and all protoindices (since some external indices
+  // may be pure protoindices)
+  named_indices_t proto_indices;
   for (const auto &terminals : edges_) {
     assert(terminals.size() != 0);
-    if (terminals.size() == 1) {  // external?
+    // External index (== Edge only connected to a single vertex in the
+    // network)
+    if (terminals.size() == 1) {
       if (Logger::instance().tensor_network) {
         std::wcout << "idx " << to_latex(terminals.idx()) << " is external"
                    << std::endl;
@@ -695,7 +714,36 @@ void TensorNetwork::init_edges() const {
       auto insertion_result = ext_indices_.emplace(terminals.idx());
       assert(insertion_result.second);
     }
+
+    // add proto indices to the grand list of proto indices
+    for (auto &&proto_idx : terminals.idx().proto_indices()) {
+      if (proto_idx.has_proto_indices())
+        throw std::runtime_error(
+            "TensorNetwork does not support recursive protoindices");  // for
+                                                                       // now no
+                                                                       // recursive
+                                                                       // proto
+                                                                       // indices
+      proto_indices.insert(proto_idx);
+    }
   }
+
+  // now identify pure protoindices ...
+  for (const Edge &current : edges_) {
+    auto it = proto_indices.find(current.idx());
+    if (it != proto_indices.end()) proto_indices.erase(it);
+  }
+  pure_proto_indices_ = std::move(proto_indices);
+  if (Logger::instance().tensor_network) {
+    for (auto &&idx : pure_proto_indices_) {
+      std::wcout << "idx " << to_latex(idx) << " is pure protoindex"
+                 << std::endl;
+    }
+  }
+
+  // ... and add pure protoindices to the external indices
+  ext_indices_.reserve(ext_indices_.size() + pure_proto_indices_.size());
+  ext_indices_.insert(pure_proto_indices_.begin(), pure_proto_indices_.end());
 
   have_edges_ = true;
 }
