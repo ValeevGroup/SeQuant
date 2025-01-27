@@ -269,13 +269,18 @@ class TensorNetworkV2 {
 
   container::vector<Edge> edges_;
   bool have_edges_ = false;
-  // ext indices do not connect tensors
-  // sorted by *label* (not full label) of the corresponding value (Index)
-  // this ensures that proto indices are not considered and all internal indices
-  // have unique labels (not full labels)
+  /// ext indices do not connect tensors
+  /// sorted by *label* (not full label) of the corresponding value (Index)
+  /// this ensures that proto indices are not considered and all internal
+  /// indices have unique labels (not full labels)
   NamedIndexSet ext_indices_;
+  /// some proto indices may not be in edges_ if they appear exclusively among
+  /// proto indices
+  /// @note these will need to be processed separately from the rest
+  /// to appear as vertices on the graph
+  NamedIndexSet pure_proto_indices_;
 
-  /// initializes edges_ and ext_indices_
+  /// initializes edges_, ext_indices_, and pure_proto_indices_
   void init_edges();
 
   /// Canonicalizes the network graph representation
