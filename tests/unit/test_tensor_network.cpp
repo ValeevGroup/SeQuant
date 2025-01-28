@@ -137,7 +137,7 @@ TEST_CASE("TensorNetwork", "[elements]") {
                 L"{F^{{i_2}}_{{i_1}}}");
         REQUIRE(to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[1])) ==
                 L"{\\tilde{a}^{{i_1}}_{{i_2}}}");
-        REQUIRE(tn.idxrepl().size() == 2);
+        REQUIRE(tn.idxrepl().size() == 0);
       }
 
       {
@@ -185,9 +185,9 @@ TEST_CASE("TensorNetwork", "[elements]") {
           //        to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[1]))
           //        << std::endl;
           REQUIRE(to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[1])) ==
-                  L"{\\tilde{a}^{{i_2}}_{{i_1}}}");
+                  L"{\\tilde{a}^{{i_1}}_{{i_3}}}");
           REQUIRE(to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[0])) ==
-                  L"{F^{{i_{17}}}_{{i_2}}}");
+                  L"{F^{{i_{17}}}_{{i_1}}}");
         }
       }
     }
