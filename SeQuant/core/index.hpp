@@ -890,7 +890,7 @@ class IndexFactory {
   template <typename IndexValidator>
   explicit IndexFactory(IndexValidator validator,
                         size_t min_index = Index::min_tmp_index())
-      : min_index_(min_index), validator_(validator) {
+      : min_index_(min_index), validator_(std::move(validator)) {
     assert(min_index_ > 0);
   }
 
