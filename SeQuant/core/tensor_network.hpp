@@ -145,18 +145,34 @@ class TensorNetwork {
   /// @note uses RTTI
   template <typename ExprPtrRange>
   TensorNetwork(ExprPtrRange &exprptr_range) {
-    for (auto &&ex : exprptr_range) {
-      auto t = std::dynamic_pointer_cast<AbstractTensor>(ex);
-      std::size_t count = 0;
-      if (t) {
-        tensors_.emplace_back(t);
-        tensor_input_ordinals_.emplace_back(count++);
-      } else {
-        throw std::logic_error(
-            "TensorNetwork::TensorNetwork: non-tensors in the given expression "
-            "range");
+    if (exprptr_range.size() > 0) {
+      for (auto &&ex : exprptr_range) {
+        auto t = std::dynamic_pointer_cast<AbstractTensor>(ex);
+        std::size_t count = 0;
+        if (t) {
+          tensors_.emplace_back(t);
+          tensor_input_ordinals_.emplace_back(count++);
+        } else {
+          throw std::logic_error(
+              "TensorNetwork::TensorNetwork: non-tensors in the given "
+              "expression "
+              "range");
+        }
+      }
+      return;
+    } else {
+      if constexpr (Expr::is_shared_ptr_of_expr<ExprPtrRange>::value) {
+        if (auto tensor =
+                std::dynamic_pointer_cast<AbstractTensor>(exprptr_range)) {
+          tensors_.emplace_back(tensor);
+          tensor_input_ordinals_.emplace_back(0);
+          return;
+        }
       }
     }
+    throw std::logic_error(
+        "TensorNetwork::TensorNetwork: non-tensors in the given expression "
+        "range");
   }
 
   /// @return const reference to the sequence of tensors
