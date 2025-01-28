@@ -172,11 +172,11 @@ class TensorNetwork {
 
   /// metadata optionally produced by canonicalize()
   struct CanonicalizationMetadata {
-    /// list of namex indices
+    /// list of named indices
     named_indices_t named_indices;
-    /// if canonicalize() called with rename_named_indices, specifies
-    /// replacements of named indices to canonical order
-    container::map<Index, Index> named_index_replacements;
+    /// list of named indices in canonical order; iterators point to
+    /// named_indices
+    container::svector<named_indices_t::const_iterator> named_indices_canonical;
     /// canonicalized colored graph, use graph->cmp to compare against another
     /// to detect equivalence
     std::shared_ptr<bliss::Graph> graph;
@@ -190,19 +190,25 @@ class TensorNetwork {
   /// @param named_indices specifies the indices that cannot be renamed, i.e.
   /// their labels are meaningful; default is nullptr, which results in external
   /// indices treated as named indices
-  /// @param rename_named_indices if \p named_indices is null and this is true
-  ///        treat named indices as renameable, but keep their names distinct
-  ///        from those of anonymous/dummy indices
-  /// @param metadata if nonnull, pointer to the objects where to keep the
-  /// canonicalization
-  ///        metadata
   /// @return byproduct of canonicalization (e.g. phase); if none, returns
   /// nullptr
   ExprPtr canonicalize(
       const container::vector<std::wstring> &cardinal_tensor_labels = {},
-      bool fast = true, const named_indices_t *named_indices = nullptr,
-      bool rename_named_indices = false,
-      CanonicalizationMetadata *metadata = nullptr);
+      bool fast = true, const named_indices_t *named_indices = nullptr);
+
+  /// Like canonicalize(), but only use graph-based canonicalization to
+  /// produce canonical list of slots occupied by named indices.
+  /// This is sufficient to be able to match 2 tensor networks that
+  /// differ in anonymous and named indices.
+  /// @param cardinal_tensor_labels move all tensors with these labels to the
+  /// front before canonicalizing indices
+  /// @param named_indices specifies the indices that cannot be renamed, i.e.
+  /// their labels are meaningful; default is nullptr, which results in external
+  /// indices treated as named indices
+  /// @return the computed canonicalization metadata
+  CanonicalizationMetadata canonicalize_slots(
+      const container::vector<std::wstring> &cardinal_tensor_labels = {},
+      const named_indices_t *named_indices = nullptr);
 
   /// Factorizes tensor network
   /// @return sequence of binary products; each element encodes the tensors to
@@ -257,7 +263,8 @@ class TensorNetwork {
       ranges::ref_view<named_indices_t>>
       grand_index_list_;
 
-  // replacements of renameable indices
+  // replacements of anonymous indices produced by the last call to
+  // canonicalize()
   container::map<Index, Index> idxrepl_;
 
   /// initializes edges_, ext_indices_, and pure_proto_indices_
@@ -283,11 +290,10 @@ class TensorNetwork {
     return ext_indices_;
   }
 
-  /// accessor for the list of anonymous index replacements (and, optionally,
-  /// named index replacements, if canonicalize called with
-  /// rename_named_indices=true) performed by the last call to canonicalize()
-  /// @return replacements of renameable indices performed by the last
-  /// canonicalize call
+  /// accessor for the list of anonymous index replacements performed by the
+  /// last call to canonicalize()
+  /// @return replacements of anonymous indices performed by the last call to
+  /// canonicalize()
   const auto &idxrepl() const { return idxrepl_; };
 
  public:

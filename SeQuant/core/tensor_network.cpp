@@ -35,13 +35,7 @@ namespace sequant {
 
 ExprPtr TensorNetwork::canonicalize(
     const container::vector<std::wstring> &cardinal_tensor_labels, bool fast,
-    const named_indices_t *named_indices_ptr, bool rename_named_indices,
-    CanonicalizationMetadata *metadata) {
-  const bool preserve_metadata = metadata != nullptr;
-  if (preserve_metadata) {
-    metadata->named_index_replacements.clear();
-  }
-
+    const named_indices_t *named_indices_ptr) {
   ExprPtr canon_byproduct = ex<Constant>(1);
   container::svector<Edge> idx_terminals_sorted;  // to avoid memory allocs
 
@@ -124,7 +118,6 @@ ExprPtr TensorNetwork::canonicalize(
   // been computed in init_edges)
   const auto &named_indices =
       named_indices_ptr == nullptr ? this->ext_indices() : *named_indices_ptr;
-  if (preserve_metadata) metadata->named_indices = named_indices;
 
   // helpers to filter named ("external" in traditional use case) / anonymous
   // ("internal" in traditional use case)
@@ -143,10 +136,6 @@ ExprPtr TensorNetwork::canonicalize(
       return edge_it->size() == 2;
     } else  // pure proto indices are named
       return false;
-  };
-  auto is_renameable_index = [&](const Index &idx) {
-    return rename_named_indices ||
-           named_indices.find(idx) == named_indices.end();
   };
   auto namedness = [&](const Index &idx) {
     return is_named_index(idx) ? 1 : 0;
@@ -183,19 +172,10 @@ ExprPtr TensorNetwork::canonicalize(
     //     terminal's type (bra/ket).
     // - canonize the graph
 
-    auto permute = [](const auto &vector, auto &&perm) {
-      using std::size;
-      auto sz = size(vector);
-      std::decay_t<decltype(vector)> pvector(sz);
-      for (size_t i = 0; i != sz; ++i) pvector[perm[i]] = vector[i];
-      return pvector;
-    };
-
     // make the graph
-    const bool distinct_named_indices =
-        named_indices_ptr == nullptr && rename_named_indices == false;
+    // named indices are not renamed, so each gets a distinct color
     auto [graph, vlabels, vcolors, vtypes] =
-        make_bliss_graph(&named_indices, distinct_named_indices);
+        make_bliss_graph(&named_indices, /* distinct_named_indices = */ true);
     //    graph->write_dot(std::wcout, vlabels);
 
     // canonize the graph
@@ -203,20 +183,22 @@ ExprPtr TensorNetwork::canonicalize(
     graph->set_splitting_heuristic(bliss::Graph::shs_fsm);
     const unsigned int *cl = graph->canonical_form(stats, nullptr, nullptr);
 
-    // save canonicalized graph, if needed
-    if (preserve_metadata) {
-      metadata->graph = std::shared_ptr<bliss::Graph>{graph->permute(cl)};
-    }
-
     if (Logger::instance().canonicalize_dot) {
+      auto permute = [](const auto &vector, auto &&perm) {
+        using std::size;
+        auto sz = size(vector);
+        std::decay_t<decltype(vector)> pvector(sz);
+        for (size_t i = 0; i != sz; ++i) pvector[perm[i]] = vector[i];
+        return pvector;
+      };
+
       bliss::Graph *cgraph = graph->permute(cl);
       auto cvlabels = permute(vlabels, cl);
       cgraph->write_dot(std::wcout, cvlabels);
       delete cgraph;
     }
 
-    // make index replacement list; in addition to anonymous renamings include
-    // named index renamings IF rename_named_indices==true
+    // make anonymous index replacement list
     {
       // for each color make a replacement list for bringing the indices to
       // the canonical order
@@ -224,56 +206,30 @@ ExprPtr TensorNetwork::canonicalize(
       // grand list of colors
       container::set<size_t> colors;
       // maps color to the ordinals of the corresponding
-      // renameable indices + their canonical ordinals + is_anonymous flag
-      container::multimap<size_t, std::tuple<size_t, size_t, bool>> color2idx;
-      // collect colors and renameable indices sorted by colors
+      // anonymous indices + their canonical ordinals
+      container::multimap<size_t, std::pair<size_t, size_t>> color2idx;
+      // collect colors and anonymous indices sorted by colors
       size_t idx_ord = 0;
-      for (auto &&idx : grand_index_list_) {
-        auto color = vcolors[idx_ord];
-        if (colors.find(color) == colors.end()) colors.insert(color);
-        if (is_renameable_index(idx)) {
-          color2idx.emplace(color,
-                            std::make_tuple(idx_ord, cl[idx_ord],
-                                            is_anonymous_index_ord(idx_ord)));
+      for (auto &&ttpair : edges_) {
+        if (is_anonymous_index_ord(idx_ord)) {
+          auto color = vcolors[idx_ord];
+          if (colors.find(color) == colors.end()) colors.insert(color);
+          color2idx.emplace(color, std::make_pair(idx_ord, cl[idx_ord]));
         }
         ++idx_ord;
       }
-      // for each color:
-      // - if anonymous: generate indices starting from 1 in the order of
-      // appearance in canonical list
-      // - if named: reassign from sorted list of named indices of same color in
-      // the order of appearance in canonical list
-      container::svector<std::tuple<size_t, size_t, bool>>
-          idx_can;  // canonically-ordered list of {index ordinal in
-                    // grand_index_list_, canonical ordinal, is_anonymous flag}
-      named_indices_t
-          named_idxs;  // indices of this color, sorted by labels (only needed
-                       // if not anonymous and rename_named_indices==true)
+      // for each color sort anonymous indices by canonical order
+      container::svector<std::pair<size_t, size_t>>
+          idx_can;  // canonically-ordered list of {index ordinal in edges_,
+                    // canonical ordinal}
       for (auto &&color : colors) {
         auto [beg, end] = color2idx.equal_range(color);
         const auto sz = end - beg;
-        // sz == 0 is possible since some colors in colors refer to tensors
-        if (sz == 0) continue;
+        // sz == 0 should not be possible since colors contains only anonymous
+        // Index colors
+        assert(sz != 0);
 
-        // indices of same color have same anonymity
-        const auto color_is_anonymous = std::get<2>(beg->second);
-
-        // if this color corresponds to named indices, make a list sorted by
-        // labels
-        if (!color_is_anonymous && rename_named_indices) {
-          named_idxs.clear();
-          for (auto &[color, tup] : ranges::make_subrange(beg, end)) {
-            auto &[ord, ord_can, is_anonymous] = tup;
-            const auto &idx = *(grand_index_list_.begin() + ord);
-            auto [it, inserted] = named_idxs.emplace(idx);
-            assert(inserted);
-          }
-        }
-
-        // for anonymous indices need to make indices using factory
-        // for named indices that can be renamed replacements are permutations
-        // among [beg,end) in either case need to resort indices into canonical
-        // order
+        // anonymous indices are regenerated using factory
         if (sz > 1) {
           idx_can.resize(sz);
           size_t cnt = 0;
@@ -283,38 +239,25 @@ ExprPtr TensorNetwork::canonicalize(
           using std::begin;
           using std::end;
           std::sort(begin(idx_can), end(idx_can),
-                    [](const auto &a, const auto &b) {
-                      return std::get<1>(a) < std::get<1>(b);
+                    [](const std::pair<size_t, size_t> &a,
+                       const std::pair<size_t, size_t> &b) {
+                      return a.second < b.second;
                     });
           // make a replacement list by generating new indices in canonical
           // order
           std::size_t ord = 0;
-          for (auto &&[idx_ord, idx_ord_can, is_anonymous] : idx_can) {
-            assert(is_anonymous == color_is_anonymous);
+          for (auto &&[idx_ord, idx_ord_can] : idx_can) {
             const auto &idx = *(grand_index_list_.begin() + idx_ord);
-            if (is_anonymous) {
-              const auto new_idx = idxfac.make(idx);
-              if (idx != new_idx) idxrepl.emplace(idx, std::move(new_idx));
-            } else if (rename_named_indices) {
-              const auto &new_idx = *(named_idxs.begin() + ord);
-              if (idx != new_idx) {
-                idxrepl.emplace(idx, new_idx);
-                if (preserve_metadata) {
-                  metadata->named_index_replacements.emplace(idx, new_idx);
-                }
-              }
-            }
-
+            const auto new_idx = idxfac.make(idx);
+            if (idx != new_idx) idxrepl.emplace(idx, std::move(new_idx));
             ++ord;
           }
         } else if (sz == 1) {  // no need for resorting of colors with 1 index
                                // only, but still need to replace the index
           const auto it = grand_index_list_.begin() + std::get<0>(beg->second);
           const auto &idx = *it;
-          if (color_is_anonymous) {
-            const auto new_idx = idxfac.make(idx);
-            if (idx != new_idx) idxrepl.emplace(idx, std::move(new_idx));
-          }
+          const auto new_idx = idxfac.make(idx);
+          if (idx != new_idx) idxrepl.emplace(idx, std::move(new_idx));
         }
       }
     }  // index repl
@@ -528,6 +471,9 @@ TensorNetwork::make_bliss_graph(const named_indices_t *named_indices_ptr,
   container::set<protoindex_bundle_t> symmetric_protoindex_bundles;
   const size_t spbundle_vertex_offset =
       nidx;  // where spbundle vertices will start
+
+  // iterates over edges_, then pure_proto_indices_, this is equivalent to
+  // iteration over grand_index_list_
   ranges::for_each(edges_, [&](const Edge &ttpair) {
     const Index &idx = ttpair.idx();
     ++nv;  // each index is a vertex
@@ -834,6 +780,140 @@ void TensorNetwork::init_edges() const {
 
 container::svector<std::pair<long, long>> TensorNetwork::factorize() {
   abort();  // not yet implemented
+}
+
+TensorNetwork::CanonicalizationMetadata TensorNetwork::canonicalize_slots(
+    const std::vector<std::wstring> &cardinal_tensor_labels,
+    const TensorNetwork::named_indices_t *named_indices_ptr) {
+  TensorNetwork::CanonicalizationMetadata metadata;
+
+  if (Logger::instance().canonicalize) {
+    std::wcout << "TensorNetwork::canonicalize_slots(): input tensors\n";
+    size_t cnt = 0;
+    ranges::for_each(tensors_, [&](const auto &t) {
+      std::wcout << "tensor " << cnt++ << ": " << to_latex(*t) << std::endl;
+    });
+    std::wcout << "cardinal_tensor_labels = ";
+    ranges::for_each(cardinal_tensor_labels,
+                     [](auto &&i) { std::wcout << i << L" "; });
+    std::wcout << std::endl;
+  }
+
+  if (edges_.empty()) init_edges();
+
+  // initialize named_indices by default to all external indices (these HAVE
+  // been computed in init_edges)
+  const auto &named_indices =
+      named_indices_ptr == nullptr ? this->ext_indices() : *named_indices_ptr;
+  metadata.named_indices = named_indices;
+
+  // helpers to filter named ("external" in traditional use case) / anonymous
+  // ("internal" in traditional use case)
+  auto is_named_index = [&](const Index &idx) {
+    return named_indices.find(idx) != named_indices.end();
+  };
+  auto is_anonymous_index = [&](const Index &idx) {
+    return named_indices.find(idx) == named_indices.end();
+  };
+  // more efficient version of is_anonymous_index
+  auto is_anonymous_index_ord = [&](const std::size_t &idx_ord) {
+    assert(idx_ord < edges_.size() + pure_proto_indices_.size());
+    if (idx_ord < edges_.size()) {
+      const auto edge_it = edges_.begin() + idx_ord;
+      assert(edge_it->size() > 0);
+      return edge_it->size() == 2;
+    } else  // pure proto indices are named
+      return false;
+  };
+  auto namedness = [&](const Index &idx) {
+    return is_named_index(idx) ? 1 : 0;
+  };
+
+  // make the graph
+  // only slots (hence, attr) of named indices define their color, so
+  // distinct_named_indices = false
+  auto [graph, vlabels, vcolors, vtypes] =
+      make_bliss_graph(&named_indices, /* distinct_named_indices = */ false);
+  //    graph->write_dot(std::wcout, vlabels);
+
+  // canonize the graph
+  bliss::Stats stats;
+  graph->set_splitting_heuristic(bliss::Graph::shs_fsm);
+  const unsigned int *cl = graph->canonical_form(stats, nullptr, nullptr);
+
+  metadata.graph = std::shared_ptr<bliss::Graph>(graph->permute(cl));
+
+  if (Logger::instance().canonicalize_dot) {
+    auto permute = [](const auto &vector, auto &&perm) {
+      using std::size;
+      auto sz = size(vector);
+      std::decay_t<decltype(vector)> pvector(sz);
+      for (size_t i = 0; i != sz; ++i) pvector[perm[i]] = vector[i];
+      return pvector;
+    };
+
+    auto cvlabels = permute(vlabels, cl);
+    metadata.graph->write_dot(std::wcout, cvlabels);
+  }
+
+  // produce canonical list of named indices
+  {
+    // grand list of colors used for vertices representing Index
+    container::set<size_t> colors;
+    using ord_cord_it_t =
+        std::tuple<size_t, size_t, named_indices_t::const_iterator>;
+    // maps color to the ordinals of the corresponding
+    // named indices + their canonical ordinals + their iterators in
+    // metadata.named_indices
+    container::multimap<size_t, ord_cord_it_t> color2idx;
+    // collect colors and named indices sorted by colors
+    size_t idx_ord = 0;
+    for (auto &&idx : grand_index_list_) {
+      if (is_named_index(idx)) {
+        auto color = vcolors[idx_ord];
+        if (colors.find(color) == colors.end()) colors.insert(color);
+        auto named_indices_it = metadata.named_indices.find(idx);
+        assert(named_indices_it != metadata.named_indices.end());
+        color2idx.emplace(
+            color, std::make_tuple(idx_ord, cl[idx_ord], named_indices_it));
+      }
+      ++idx_ord;
+    }
+    // for each color sort named indices by canonical order
+    container::svector<ord_cord_it_t>
+        idx_can;  // canonically-ordered list of {index ordinal in
+                  // grand_index_list_, canonical ordinal}
+    for (auto &&color : colors) {
+      auto [beg, end] = color2idx.equal_range(color);
+      const auto sz = end - beg;
+      // sz == 0 should not be possible since colors contains only named Index
+      // colors
+      assert(sz != 0);
+
+      // anonymous indices are regenerated using factory
+      if (sz > 1) {
+        idx_can.resize(sz);
+        size_t cnt = 0;
+        for (auto it = beg; it != end; ++it, ++cnt) {
+          idx_can[cnt] = it->second;
+        }
+        using std::begin;
+        using std::end;
+        std::sort(begin(idx_can), end(idx_can),
+                  [](const ord_cord_it_t &a, const ord_cord_it_t &b) {
+                    return std::get<1>(a) < std::get<1>(b);
+                  });
+        // append named indices of this color in their canonical order
+        for (auto &&[ord, cord, named_idx_it] : idx_can) {
+          metadata.named_indices_canonical.emplace_back(named_idx_it);
+        }
+      } else if (sz == 1) {
+        metadata.named_indices_canonical.emplace_back(std::get<2>(beg->second));
+      }
+    }
+  }  // named indices resort to canonical order
+
+  return metadata;
 }
 
 }  // namespace sequant

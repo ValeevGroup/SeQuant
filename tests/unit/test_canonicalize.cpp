@@ -49,36 +49,33 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
         std::wcout << "============== " << input1_ref
                    << " ===============" << std::endl;
         TensorNetwork tn1(parse_expr(input1_ref).as<Product>());
-        TensorNetwork::CanonicalizationMetadata cbp1;
-        auto tn1_canon_factor = tn1.canonicalize(
-            TensorCanonicalizer::cardinal_tensor_labels(), false, nullptr,
-            /* rename_named_indices = */ true, &cbp1);
+        TensorNetwork::CanonicalizationMetadata cbp1 = tn1.canonicalize_slots(
+            TensorCanonicalizer::cardinal_tensor_labels());
 
-        for (auto&& [orig_idx, new_idx] : cbp1.named_index_replacements) {
-          std::wcout << "named index " << orig_idx.to_latex()
-                     << " should be renamed to " << new_idx.to_latex()
-                     << " in canonical form" << std::endl;
+        std::wcout << "canonical order of named indices:\n";
+        for (const auto idx_it : cbp1.named_indices_canonical) {
+          std::wcout << idx_it->to_latex() << "\n";
         }
 
         for (auto& input : {input1, input2, input3, input4}) {
           std::wcout << "============== " << input
                      << " ===============" << std::endl;
           TensorNetwork tn(parse_expr(input).as<Product>());
-          TensorNetwork::CanonicalizationMetadata cbp;
-          auto tn_canon_factor = tn.canonicalize(
-              TensorCanonicalizer::cardinal_tensor_labels(), false, nullptr,
-              /* rename_named_indices = */ true, &cbp);
+          TensorNetwork::CanonicalizationMetadata cbp = tn.canonicalize_slots(
+              TensorCanonicalizer::cardinal_tensor_labels());
 
-          for (auto&& [orig_idx, new_idx] : cbp.named_index_replacements) {
-            std::wcout << "named index " << orig_idx.to_latex()
-                       << " should be renamed to " << new_idx.to_latex()
-                       << " in canonical form" << std::endl;
+          std::wcout << "canonical order of named indices:\n";
+          for (const auto idx_it : cbp.named_indices_canonical) {
+            std::wcout << idx_it->to_latex() << "\n";
           }
 
           std::wcout << "graph(" << input1_ref << ") <=> graph(" << input
                      << "): " << cbp1.graph->cmp(*cbp.graph) << std::endl;
         }
       }
+
+      l.tensor_network = l.canonicalize = l.canonicalize_dot =
+          l.canonicalize_input_graph = true;
 
       {
         auto input1 =
@@ -92,29 +89,22 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
                    << " ===============" << std::endl;
         auto ex1 = parse_expr(input1);
         TensorNetwork tn1(ex1.as<Product>());
-        TensorNetwork::CanonicalizationMetadata cbp1;
-        auto tn1_canon_factor = tn1.canonicalize(
-            TensorCanonicalizer::cardinal_tensor_labels(), false, nullptr,
-            /* rename_named_indices = */ true, &cbp1);
-        for (auto&& [orig_idx, new_idx] : cbp1.named_index_replacements) {
-          std::wcout << "named index " << orig_idx.to_latex()
-                     << " should be renamed to " << new_idx.to_latex()
-                     << " in canonical form" << std::endl;
+        TensorNetwork::CanonicalizationMetadata cbp1 = tn1.canonicalize_slots(
+            TensorCanonicalizer::cardinal_tensor_labels());
+        std::wcout << "canonical order of named indices:\n";
+        for (const auto idx_it : cbp1.named_indices_canonical) {
+          std::wcout << idx_it->to_latex() << "\n";
         }
 
         std::wcout << "============== " << input2
                    << " ===============" << std::endl;
         auto ex2 = parse_expr(input2);
         TensorNetwork tn2(ex2.as<Product>());
-        TensorNetwork::CanonicalizationMetadata cbp2;
-        auto tn2_canon_factor = tn2.canonicalize(
-            TensorCanonicalizer::cardinal_tensor_labels(), false, nullptr,
-            /* rename_named_indices = */ true, &cbp2);
-
-        for (auto&& [orig_idx, new_idx] : cbp2.named_index_replacements) {
-          std::wcout << "named index " << orig_idx.to_latex()
-                     << " should be renamed to " << new_idx.to_latex()
-                     << " in canonical form" << std::endl;
+        TensorNetwork::CanonicalizationMetadata cbp2 = tn2.canonicalize_slots(
+            TensorCanonicalizer::cardinal_tensor_labels());
+        std::wcout << "canonical order of named indices:\n";
+        for (const auto idx_it : cbp2.named_indices_canonical) {
+          std::wcout << idx_it->to_latex() << "\n";
         }
 
         std::wcout << "graph(" << input1 << ") <=> graph(" << input2
@@ -122,12 +112,13 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
 
         REQUIRE(cbp1.graph->cmp(*cbp2.graph) == 0);
 
-        //        std::wcout << canonicalize(ex1).to_latex() << " should be
-        //        equal " << canonicalize(ex2).to_latex() << std::endl;
+        //                std::wcout << canonicalize(ex1).to_latex() << " should
+        //                be equal " << canonicalize(ex2).to_latex() <<
+        //                std::endl;
       }
 
-      //      l.tensor_network = l.canonicalize = l.canonicalize_dot =
-      //          l.canonicalize_input_graph = false;
+      l.tensor_network = l.canonicalize = l.canonicalize_dot =
+          l.canonicalize_input_graph = false;
     }
   }
 
