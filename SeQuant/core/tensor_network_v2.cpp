@@ -140,6 +140,12 @@ struct CanonicalTensorCompare {
       return lhs < rhs;
     }
   }
+
+  template <typename AbstractTensorPtr_T>
+  bool operator()(const AbstractTensorPtr_T &lhs_ptr,
+                  const AbstractTensorPtr_T &rhs_ptr) const {
+    return (*this)(lhs_ptr.first, rhs_ptr.first);
+  }
 };
 
 TensorNetworkV2::Vertex::Vertex(Origin origin, std::size_t terminal_idx,
@@ -560,7 +566,12 @@ ExprPtr TensorNetworkV2::canonicalize(
   CanonicalTensorCompare<decltype(cardinal_tensor_labels)> tensor_sorter(
       cardinal_tensor_labels, true);
 
-  std::stable_sort(tensors_.begin(), tensors_.end(), tensor_sorter);
+  using ranges::begin;
+  using ranges::end;
+  using ranges::views::zip;
+  auto tensors_with_ordinals = zip(tensors_, tensor_input_ordinals_);
+  bubble_sort(begin(tensors_with_ordinals), end(tensors_with_ordinals),
+              tensor_sorter);
 
   init_edges();
 
@@ -1020,6 +1031,9 @@ void TensorNetworkV2::init_edges() {
   // ... and add pure protoindices to the external indices
   ext_indices_.reserve(ext_indices_.size() + pure_proto_indices_.size());
   ext_indices_.insert(pure_proto_indices_.begin(), pure_proto_indices_.end());
+
+  grand_index_list_ = ranges::views::concat(
+      edges_ | ranges::views::transform(edge2index_), pure_proto_indices_);
 
   have_edges_ = true;
 }

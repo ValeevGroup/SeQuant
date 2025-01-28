@@ -146,6 +146,10 @@ class TensorNetworkV2 {
     Index index;
   };
 
+  static inline auto edge2index_ = [](const Edge &e) -> const Index & {
+    return e.idx();
+  };
+
   struct Graph {
     /// The type used to encode the color of a vertex. The restriction of this
     /// being as 32-bit integer comes from how BLISS is trying to convert these
@@ -192,8 +196,13 @@ class TensorNetworkV2 {
   }
 
   /// @return const reference to the sequence of tensors
-  /// @note the order of tensors may be different from that provided as input
+  /// @note after invoking TensorNetwork::canonicalize() the order of
+  /// tensors may be different from that provided as input; use
+  /// tensor_input_ordinals() to obtain the input ordinals of
+  /// the tensors in the result
   const auto &tensors() const { return tensors_; }
+
+  const auto &tensor_input_ordinals() const { return tensor_input_ordinals_; }
 
   using NamedIndexSet = container::set<Index, Index::LabelCompare>;
 
@@ -264,8 +273,12 @@ class TensorNetworkV2 {
   Graph create_graph(const NamedIndexSet *named_indices = nullptr) const;
 
  private:
-  // source tensors and indices
+  /// list of tensors
+  /// - before canonicalize(): input
+  /// - after canonicalize(): canonical
   container::svector<AbstractTensorPtr> tensors_;
+  /// input ordinals of tensors in tensors_
+  container::svector<std::size_t> tensor_input_ordinals_;
 
   container::vector<Edge> edges_;
   bool have_edges_ = false;
@@ -279,6 +292,13 @@ class TensorNetworkV2 {
   /// @note these will need to be processed separately from the rest
   /// to appear as vertices on the graph
   NamedIndexSet pure_proto_indices_;
+  /// grand list of all indices is view of concatenated ranges of indices in
+  /// edges_ and pure_proto_indices_
+  ranges::concat_view<
+      ranges::transform_view<ranges::ref_view<container::vector<Edge>>,
+                             decltype(edge2index_)>,
+      ranges::ref_view<NamedIndexSet>>
+      grand_index_list_;
 
   /// initializes edges_, ext_indices_, and pure_proto_indices_
   void init_edges();
@@ -312,6 +332,7 @@ class TensorNetworkV2 {
     }
 
     tensors_.push_back(std::move(tensor_ptr));
+    tensor_input_ordinals_.push_back(tensor_input_ordinals_.size());
   }
 };
 
