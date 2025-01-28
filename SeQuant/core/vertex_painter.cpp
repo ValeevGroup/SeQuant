@@ -4,8 +4,11 @@
 namespace sequant {
 
 VertexPainter::VertexPainter(
-    const TensorNetworkV2::NamedIndexSet &named_indices)
-    : used_colors_(), named_indices_(named_indices) {}
+    const TensorNetworkV2::NamedIndexSet &named_indices,
+    bool distinct_named_indices)
+    : used_colors_(),
+      named_indices_(named_indices),
+      distinct_named_indices_(distinct_named_indices) {}
 
 VertexPainter::Color VertexPainter::operator()(const AbstractTensor &tensor) {
   Color color = to_color(hash::value(label(tensor)));
@@ -45,8 +48,13 @@ VertexPainter::Color VertexPainter::operator()(const Index &idx) {
     // anonymous index
     pre_color = idx.color();
   } else {
-    pre_color = static_cast<decltype(pre_color)>(
-        std::distance(named_indices_.begin(), it));
+    if (distinct_named_indices_) {
+      pre_color = static_cast<decltype(pre_color)>(
+          std::distance(named_indices_.begin(), it));
+    } else {  // base colors on Index::color(), but shift to keep distinct from
+              // unnamed indices
+      pre_color = idx.color() + 0xabcd;
+    }
   }
   // shift
   pre_color += 0xaa;
@@ -140,7 +148,7 @@ bool VertexPainter::may_have_same_color(const VertexData &data,
   auto it1 = named_indices_.find(lhs);
   auto it2 = named_indices_.find(idx);
 
-  if (it1 != it2) {
+  if (distinct_named_indices_ && it1 != it2) {
     // Either one index is named and the other is not or both are named, but
     // are different indices
     return false;

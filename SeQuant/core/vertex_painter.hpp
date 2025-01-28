@@ -48,7 +48,12 @@ class VertexPainter {
                    KetGroup, AuxGroup, ParticleGroup>;
   using ColorMap = container::map<Color, VertexData>;
 
-  VertexPainter(const TensorNetworkV2::NamedIndexSet &named_indices);
+  /// \param named_indices indices not in this list will use colors based on
+  /// their Index::color() \param distinct_named_indices if false, will use same
+  /// color for all named indices that have same Index::color(), else will use
+  /// distinct color for each named_index
+  VertexPainter(const TensorNetworkV2::NamedIndexSet &named_indices,
+                bool distinct_named_indices = true);
 
   const ColorMap &used_colors() const;
 
@@ -63,6 +68,7 @@ class VertexPainter {
  private:
   ColorMap used_colors_;
   const TensorNetworkV2::NamedIndexSet &named_indices_;
+  bool distinct_named_indices_ = true;
 
   Color to_color(std::size_t color) const;
 
