@@ -91,6 +91,8 @@ ExprPtr &ExprPtr::operator*=(const ExprPtr &other) {
   return *this;
 }
 
+std::size_t ExprPtr::size() const { return this->get()->size(); }
+
 std::wstring ExprPtr::to_latex() const { return as_shared_ptr()->to_latex(); }
 
 std::logic_error Expr::not_implemented(const char *fn) const {

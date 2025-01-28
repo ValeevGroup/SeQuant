@@ -174,6 +174,9 @@ class ExprPtr : public std::shared_ptr<Expr> {
   template <typename T>
   T &as();
 
+  /// @return the range size of the contained expression
+  std::size_t size() const;
+
   std::wstring to_latex() const;
 };  // class ExprPtr
 
