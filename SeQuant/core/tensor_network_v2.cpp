@@ -652,15 +652,155 @@ ExprPtr TensorNetworkV2::canonicalize(
   return (byproduct->as<Constant>().value() == 1) ? nullptr : byproduct;
 }
 
+TensorNetworkV2::SlotCanonicalizationMetadata
+TensorNetworkV2::canonicalize_slots(
+    const container::vector<std::wstring> &cardinal_tensor_labels,
+    const NamedIndexSet *named_indices_ptr) {
+  TensorNetworkV2::SlotCanonicalizationMetadata metadata;
+
+  if (Logger::instance().canonicalize) {
+    std::wcout << "TensorNetworkV2::canonicalize_slots(): input tensors\n";
+    size_t cnt = 0;
+    ranges::for_each(tensors_, [&](const auto &t) {
+      std::wcout << "tensor " << cnt++ << ": " << to_latex(*t) << std::endl;
+    });
+    std::wcout << "cardinal_tensor_labels = ";
+    ranges::for_each(cardinal_tensor_labels,
+                     [](auto &&i) { std::wcout << i << L" "; });
+    std::wcout << std::endl;
+  }
+
+  if (!have_edges_) {
+    init_edges();
+  }
+
+  // initialize named_indices by default to all external indices
+  const auto &named_indices =
+      named_indices_ptr == nullptr ? this->ext_indices() : *named_indices_ptr;
+  metadata.named_indices = named_indices;
+
+  // helper to filter named ("external" in traditional use case) / anonymous
+  // ("internal" in traditional use case)
+  auto is_named_index = [&](const Index &idx) {
+    return named_indices.find(idx) != named_indices.end();
+  };
+
+  // make the graph
+  // only slots (hence, attr) of named indices define their color, so
+  // distinct_named_indices = false
+  Graph graph =
+      create_graph(&named_indices, /* distinct_named_indices = */ false);
+  // graph.bliss_graph->write_dot(std::wcout, graph.vertex_labels);
+
+  if (Logger::instance().canonicalize_input_graph) {
+    std::wcout << "Input graph for canonicalization:\n";
+    graph.bliss_graph->write_dot(std::wcout, graph.vertex_labels);
+  }
+
+  // canonize the graph
+  bliss::Stats stats;
+  graph.bliss_graph->set_splitting_heuristic(bliss::Graph::shs_fsm);
+  const unsigned int *canonize_perm =
+      graph.bliss_graph->canonical_form(stats, nullptr, nullptr);
+
+  metadata.graph =
+      std::shared_ptr<bliss::Graph>(graph.bliss_graph->permute(canonize_perm));
+
+  if (Logger::instance().canonicalize_dot) {
+    std::wcout << "Canonicalization permutation:\n";
+    for (std::size_t i = 0; i < graph.vertex_labels.size(); ++i) {
+      std::wcout << i << " -> " << canonize_perm[i] << "\n";
+    }
+    std::wcout << "Canonicalized graph:\n";
+    metadata.graph->write_dot(std::wcout, {}, true);
+    auto cvlabels = permute(graph.vertex_labels, canonize_perm);
+    std::wcout << "with our labels:\n";
+    metadata.graph->write_dot(std::wcout, cvlabels);
+  }
+
+  // maps index ordinal to vertex ordinal
+  container::map<std::size_t, std::size_t> index_idx_to_vertex;
+  std::size_t index_idx = 0;
+  for (std::size_t vertex = 0; vertex < graph.vertex_types.size(); ++vertex) {
+    if (graph.vertex_types[vertex] == VertexType::Index) {
+      index_idx_to_vertex[index_idx] = vertex;
+      index_idx++;
+    }
+  }
+  assert(index_idx_to_vertex.size() ==
+         edges_.size() + pure_proto_indices_.size());
+
+  // produce canonical list of named indices
+  {
+    // grand list of colors used for vertices representing Index
+    container::set<size_t> colors;
+    using ord_cord_it_t =
+        std::tuple<size_t, size_t, NamedIndexSet::const_iterator>;
+    // maps color to the ordinals of the corresponding
+    // named indices + their canonical vertex ordinals + their iterators in
+    // metadata.named_indices
+    container::multimap<size_t, ord_cord_it_t> color2idx;
+    // collect colors and named indices sorted by colors
+    size_t idx_ord = 0;
+    for (auto &&idx : grand_index_list_) {
+      if (is_named_index(idx)) {
+        const auto vertex_ord = index_idx_to_vertex[idx_ord];
+        auto color = graph.vertex_colors[vertex_ord];
+        if (colors.find(color) == colors.end()) colors.insert(color);
+        auto named_indices_it = metadata.named_indices.find(idx);
+        assert(named_indices_it != metadata.named_indices.end());
+        color2idx.emplace(color,
+                          std::make_tuple(idx_ord, canonize_perm[vertex_ord],
+                                          named_indices_it));
+      }
+      ++idx_ord;
+    }
+    // for each color sort named indices by canonical order
+    container::svector<ord_cord_it_t>
+        idx_can;  // canonically-ordered list of {index ordinal in
+                  // grand_index_list_, canonical vertex ordinal, iterator}
+    for (auto &&color : colors) {
+      auto [beg, end] = color2idx.equal_range(color);
+      const auto sz = end - beg;
+      // sz == 0 should not be possible since colors contains only named Index
+      // colors
+      assert(sz != 0);
+
+      // anonymous indices are regenerated using factory
+      if (sz > 1) {
+        idx_can.resize(sz);
+        size_t cnt = 0;
+        for (auto it = beg; it != end; ++it, ++cnt) {
+          idx_can[cnt] = it->second;
+        }
+        using std::begin;
+        using std::end;
+        std::sort(begin(idx_can), end(idx_can),
+                  [](const ord_cord_it_t &a, const ord_cord_it_t &b) {
+                    return std::get<1>(a) < std::get<1>(b);
+                  });
+        // append named indices of this color in their canonical order
+        for (auto &&[ord, cord, named_idx_it] : idx_can) {
+          metadata.named_indices_canonical.emplace_back(named_idx_it);
+        }
+      } else if (sz == 1) {
+        metadata.named_indices_canonical.emplace_back(std::get<2>(beg->second));
+      }
+    }
+  }  // named indices resort to canonical order
+
+  return metadata;
+}
+
 TensorNetworkV2::Graph TensorNetworkV2::create_graph(
-    const NamedIndexSet *named_indices_ptr) const {
+    const NamedIndexSet *named_indices_ptr, bool distinct_named_indices) const {
   assert(have_edges_);
 
   // initialize named_indices by default to all external indices
   const NamedIndexSet &named_indices =
       named_indices_ptr == nullptr ? this->ext_indices() : *named_indices_ptr;
 
-  VertexPainter colorizer(named_indices);
+  VertexPainter colorizer(named_indices, distinct_named_indices);
 
   // core, bra, ket, auxiliary and optionally (for non-symmetric tensors) a
   // particle vertex

@@ -220,6 +220,32 @@ class TensorNetworkV2 {
       const container::vector<std::wstring> &cardinal_tensor_labels = {},
       bool fast = true, const NamedIndexSet *named_indices = nullptr);
 
+  /// metadata produced by canonicalize_slots()
+  struct SlotCanonicalizationMetadata {
+    /// list of named indices
+    NamedIndexSet named_indices;
+    /// list of named indices in canonical order; iterators point to
+    /// named_indices
+    container::svector<NamedIndexSet::const_iterator> named_indices_canonical;
+    /// canonicalized colored graph, use graph->cmp to compare against another
+    /// to detect equivalence
+    std::shared_ptr<bliss::Graph> graph;
+  };
+
+  /// Like canonicalize(), but only use graph-based canonicalization to
+  /// produce canonical list of slots occupied by named indices.
+  /// This is sufficient to be able to match 2 tensor networks that
+  /// differ in anonymous and named indices.
+  /// @param cardinal_tensor_labels move all tensors with these labels to the
+  /// front before canonicalizing indices
+  /// @param named_indices specifies the indices that cannot be renamed, i.e.
+  /// their labels are meaningful; default is nullptr, which results in external
+  /// indices treated as named indices
+  /// @return the computed canonicalization metadata
+  SlotCanonicalizationMetadata canonicalize_slots(
+      const container::vector<std::wstring> &cardinal_tensor_labels = {},
+      const NamedIndexSet *named_indices = nullptr);
+
   /// Factorizes tensor network
   /// @return sequence of binary products; each element encodes the tensors to
   /// be
@@ -253,6 +279,9 @@ class TensorNetworkV2 {
   /// this includes all external indices);
   ///            default is nullptr, which means use all external indices for
   ///            named indices
+  /// @param[in] distinct_named_indices if false, will use same color for all
+  /// named indices that have same Index::color(), else will use distinct color
+  /// for each
   /// @return The created Graph object
 
   /// @note Rules for constructing the graph:
@@ -270,7 +299,8 @@ class TensorNetworkV2 {
   ///   tensor; terminal vertices are colored by the color of its tensor,
   ///     with the color of symm/antisymm terminals augmented by the
   ///     terminal's type (bra/ket).
-  Graph create_graph(const NamedIndexSet *named_indices = nullptr) const;
+  Graph create_graph(const NamedIndexSet *named_indices = nullptr,
+                     bool distinct_named_indices = true) const;
 
  private:
   /// list of tensors
