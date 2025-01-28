@@ -31,83 +31,6 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
   auto ctx_resetter = set_scoped_default_context(
       Context(sequant::mbpt::make_legacy_spaces(), Vacuum::SingleProduct));
 
-  SECTION("tests") {
-    // Case 7: with protoindices
-    auto do_test = [&](auto* tn) {
-      using TN = std::remove_pointer_t<decltype(tn)>;
-
-      auto& l = Logger::instance();
-      //      l.tensor_network = l.canonicalize = l.canonicalize_dot =
-      //          l.canonicalize_input_graph = true;
-
-      for (auto& [input1, input2, should_be_equal] :
-           {// original 4 tensor networks from Bimal
-            std::make_tuple(L"g{i3,i4;a3<i1,i4>,a4<i2>} * s{a1<i1,i2>;a5<i3>}",
-                            L"s{a1<i1,i2>;a5<i3>} * g{i3,i4;a3<i1,i4>,a4<i2>}",
-                            true),  // product reorder is OK
-            std::make_tuple(L"g{i3,i4;a3<i1,i4>,a4<i2>} * s{a1<i1,i2>;a5<i3>}",
-                            L"g{i3,i4;a3<i1,i3>,a4<i2>} * s{a2<i1,i2>;a6<i4>}",
-                            false),
-            std::make_tuple(L"g{i3,i4;a3<i1,i4>,a4<i2>} * s{a1<i1,i2>;a5<i3>}",
-                            L"g{i3,i4;a3<i1,i4>,a4<i2>} * s{a2<i1,i2>;a6<i3>}",
-                            true),
-            std::make_tuple(L"g{i3,i4;a3<i1,i4>,a4<i2>} * s{a1<i1,i2>;a5<i3>}",
-                            L"g{i3,i4;a3<i1,i3>,a4<i2>} * s{a2<i1,i2>;a6<i4>}",
-                            false),
-            // one more pair of ternary products
-            std::make_tuple(
-                L"s{a2<i1,i2>;a6<i2,i4>} * g{i3,i4;a3<i2,i4>,a4<i1,i3>} * "
-                L"t{a3<i2,i4>,a6<i2,i4>;i4,i2}",
-                L"g{i3,i4;a3<i1,i4>,a4<i2,i3>} * t{a3<i1,i4>,a5<i1,i4>;i4,i1} "
-                L"* s{a1<i1,i2>;a5<i1,i4>}",
-                true),
-            // last pair of ternary nets involved in MO->PNO integral transform
-            std::make_tuple(L"g{i3,i4;a3,a4} * C{a3;a3<i1,i4>} * C{a4;a4<i2>}",
-                            L"g{i3,i4;a3,a4} * C{a3;a3<i1,i3>} * C{a4;a4<i2>}",
-                            false)}) {
-        std::wcout << "============== " << input1
-                   << " ===============" << std::endl;
-        auto ex1 = parse_expr(input1);
-        TN tn1(ex1.as<Product>());
-        auto cbp1 = tn1.canonicalize_slots(
-            TensorCanonicalizer::cardinal_tensor_labels());
-        std::wcout << "canonical order of named indices:\n";
-        for (const auto idx_it : cbp1.named_indices_canonical) {
-          std::wcout << idx_it->to_latex() << "\n";
-        }
-
-        std::wcout << "============== " << input2
-                   << " ===============" << std::endl;
-        auto ex2 = parse_expr(input2);
-        TN tn2(ex2.as<Product>());
-        auto cbp2 = tn2.canonicalize_slots(
-            TensorCanonicalizer::cardinal_tensor_labels());
-        std::wcout << "canonical order of named indices:\n";
-        for (const auto idx_it : cbp2.named_indices_canonical) {
-          std::wcout << idx_it->to_latex() << "\n";
-        }
-
-        std::wcout << "graph(" << input1 << ") <=> graph(" << input2
-                   << "): " << cbp1.graph->cmp(*cbp2.graph) << std::endl;
-
-        if (should_be_equal)
-          REQUIRE(cbp1.graph->cmp(*cbp2.graph) == 0);
-        else
-          REQUIRE(cbp1.graph->cmp(*cbp2.graph) != 0);
-
-        //                std::wcout << canonicalize(ex1).to_latex() << " should
-        //                be equal " << canonicalize(ex2).to_latex() <<
-        //                std::endl;
-      }
-
-      //      l.tensor_network = l.canonicalize = l.canonicalize_dot =
-      //          l.canonicalize_input_graph = false;
-    };
-
-    do_test(static_cast<TensorNetwork*>(nullptr));
-    do_test(static_cast<TensorNetworkV2*>(nullptr));
-  }
-
   SECTION("Tensors") {
     {
       auto op = ex<Tensor>(L"g", bra{L"p_1", L"p_2"}, ket{L"p_3", L"p_4"},
@@ -257,7 +180,7 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
                  SimplifiesTo("1/2 t{p1;p3} t{p2;p4} B{p3;p1;p5} B{p4;p2;p5}"));
   }
 
-  SECTION("sum of products") {
+  SECTION("Sum of Products") {
     {
       // CASE 1: Non-symmetric tensors
       auto input =
@@ -456,5 +379,85 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
           input,
           SimplifiesTo("t{a2;i4} t{a1,a3;i3,i2} B{i3;i1;p5} B{i4;a3;p5}"));
     }
+  }
+
+  SECTION("TN isomorphism") {
+    // Case 7: with protoindices
+    auto do_test = [&](auto* tn) {
+      using TN = std::remove_pointer_t<decltype(tn)>;
+
+      auto& l = Logger::instance();
+      //      l.tensor_network = l.canonicalize = l.canonicalize_dot =
+      //          l.canonicalize_input_graph = true;
+
+      for (auto& [input1, input2, should_be_equal] :
+           {// original 4 tensor networks from Bimal
+            std::make_tuple(L"g{i3,i4;a3<i1,i4>,a4<i2>} * s{a1<i1,i2>;a5<i3>}",
+                            L"s{a1<i1,i2>;a5<i3>} * g{i3,i4;a3<i1,i4>,a4<i2>}",
+                            true),  // product reorder is OK
+            std::make_tuple(L"g{i3,i4;a3<i1,i4>,a4<i2>} * s{a1<i1,i2>;a5<i3>}",
+                            L"g{i3,i4;a3<i1,i3>,a4<i2>} * s{a2<i1,i2>;a6<i4>}",
+                            false),
+            std::make_tuple(L"g{i3,i4;a3<i1,i4>,a4<i2>} * s{a1<i1,i2>;a5<i3>}",
+                            L"g{i3,i4;a3<i1,i4>,a4<i2>} * s{a2<i1,i2>;a6<i3>}",
+                            true),
+            std::make_tuple(L"g{i3,i4;a3<i1,i4>,a4<i2>} * s{a1<i1,i2>;a5<i3>}",
+                            L"g{i3,i4;a3<i1,i3>,a4<i2>} * s{a2<i1,i2>;a6<i4>}",
+                            false),
+            // one more pair of ternary products
+            std::make_tuple(
+                L"s{a2<i1,i2>;a6<i2,i4>} * g{i3,i4;a3<i2,i4>,a4<i1,i3>} * "
+                L"t{a3<i2,i4>,a6<i2,i4>;i4,i2}",
+                L"g{i3,i4;a3<i1,i4>,a4<i2,i3>} * t{a3<i1,i4>,a5<i1,i4>;i4,i1} "
+                L"* s{a1<i1,i2>;a5<i1,i4>}",
+                true),
+            // last pair of ternary nets involved in MO->PNO integral transform
+            std::make_tuple(L"g{i3,i4;a3,a4} * C{a3;a3<i1,i4>} * C{a4;a4<i2>}",
+                            L"g{i3,i4;a3,a4} * C{a3;a3<i1,i3>} * C{a4;a4<i2>}",
+                            false),
+            // representation of the above as single tensor
+            std::make_tuple(L"g{i3,i4;a3<i1,i4>,a4<i2>}",
+                            L"g{i3,i4;a3<i1,i3>,a4<i2>}", false)}) {
+        std::wcout << "============== " << input1
+                   << " ===============" << std::endl;
+        auto ex1 = parse_expr(input1);
+        TN tn1(ex1);
+        auto cbp1 = tn1.canonicalize_slots(
+            TensorCanonicalizer::cardinal_tensor_labels());
+        std::wcout << "canonical order of named indices:\n";
+        for (const auto idx_it : cbp1.named_indices_canonical) {
+          std::wcout << idx_it->to_latex() << "\n";
+        }
+
+        std::wcout << "============== " << input2
+                   << " ===============" << std::endl;
+        auto ex2 = parse_expr(input2);
+        TN tn2(ex2);
+        auto cbp2 = tn2.canonicalize_slots(
+            TensorCanonicalizer::cardinal_tensor_labels());
+        std::wcout << "canonical order of named indices:\n";
+        for (const auto idx_it : cbp2.named_indices_canonical) {
+          std::wcout << idx_it->to_latex() << "\n";
+        }
+
+        std::wcout << "graph(" << input1 << ") <=> graph(" << input2
+                   << "): " << cbp1.graph->cmp(*cbp2.graph) << std::endl;
+
+        if (should_be_equal)
+          REQUIRE(cbp1.graph->cmp(*cbp2.graph) == 0);
+        else
+          REQUIRE(cbp1.graph->cmp(*cbp2.graph) != 0);
+
+        //                std::wcout << canonicalize(ex1).to_latex() << " should
+        //                be equal " << canonicalize(ex2).to_latex() <<
+        //                std::endl;
+      }
+
+      //      l.tensor_network = l.canonicalize = l.canonicalize_dot =
+      //          l.canonicalize_input_graph = false;
+    };
+
+    do_test(static_cast<TensorNetwork*>(nullptr));
+    do_test(static_cast<TensorNetworkV2*>(nullptr));
   }
 }
