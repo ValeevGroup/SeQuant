@@ -12,6 +12,7 @@
 #include <SeQuant/core/tensor.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/tensor_network.hpp>
+#include <SeQuant/core/tensor_network_v2.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 
 #include <SeQuant/core/bliss.hpp>
@@ -32,58 +33,35 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
 
   SECTION("tests") {
     // Case 7: with protoindices
-    {
-      using TN = TensorNetwork;
+    auto do_test = [&](auto* tn) {
+      using TN = std::remove_pointer_t<decltype(tn)>;
 
       auto& l = Logger::instance();
       //      l.tensor_network = l.canonicalize = l.canonicalize_dot =
       //          l.canonicalize_input_graph = true;
 
-      if (true) {
-        auto input1 = L"g{i3,i4;a3<i1,i4>,a4<i2>} * s{a1<i1,i2>;a5<i3>}";
-        auto input2 = L"g{i3,i4;a3<i1,i3>,a4<i2>} * s{a2<i1,i2>;a6<i4>}";
-        auto input3 = L"g{i3,i4;a3<i1,i4>,a4<i2>} * s{a2<i1,i2>;a6<i3>}";
-        auto input4 = L"g{i3,i4;a3<i1,i3>,a4<i2>} * s{a2<i1,i2>;a6<i4>}";
-
-        // input1 with transposed tensors
-        auto input1_ref = L"s{a1<i1,i2>;a5<i3>} * g{i3,i4;a3<i1,i4>,a4<i2>}";
-
-        std::wcout << "============== " << input1_ref
-                   << " ===============" << std::endl;
-        TN tn1(parse_expr(input1_ref).as<Product>());
-        auto cbp1 = tn1.canonicalize_slots(
-            TensorCanonicalizer::cardinal_tensor_labels());
-
-        std::wcout << "canonical order of named indices:\n";
-        for (const auto idx_it : cbp1.named_indices_canonical) {
-          std::wcout << idx_it->to_latex() << "\n";
-        }
-
-        for (auto& input : {input1, input2, input3, input4}) {
-          std::wcout << "============== " << input
-                     << " ===============" << std::endl;
-          TN tn(parse_expr(input).as<Product>());
-          auto cbp = tn.canonicalize_slots(
-              TensorCanonicalizer::cardinal_tensor_labels());
-
-          std::wcout << "canonical order of named indices:\n";
-          for (const auto idx_it : cbp.named_indices_canonical) {
-            std::wcout << idx_it->to_latex() << "\n";
-          }
-
-          std::wcout << "graph(" << input1_ref << ") <=> graph(" << input
-                     << "): " << cbp1.graph->cmp(*cbp.graph) << std::endl;
-        }
-      }
-
       for (auto& [input1, input2, should_be_equal] :
-           {std::make_tuple(
+           {// original 4 tensor networks from Bimal
+            std::make_tuple(L"g{i3,i4;a3<i1,i4>,a4<i2>} * s{a1<i1,i2>;a5<i3>}",
+                            L"s{a1<i1,i2>;a5<i3>} * g{i3,i4;a3<i1,i4>,a4<i2>}",
+                            true),  // product reorder is OK
+            std::make_tuple(L"g{i3,i4;a3<i1,i4>,a4<i2>} * s{a1<i1,i2>;a5<i3>}",
+                            L"g{i3,i4;a3<i1,i3>,a4<i2>} * s{a2<i1,i2>;a6<i4>}",
+                            false),
+            std::make_tuple(L"g{i3,i4;a3<i1,i4>,a4<i2>} * s{a1<i1,i2>;a5<i3>}",
+                            L"g{i3,i4;a3<i1,i4>,a4<i2>} * s{a2<i1,i2>;a6<i3>}",
+                            true),
+            std::make_tuple(L"g{i3,i4;a3<i1,i4>,a4<i2>} * s{a1<i1,i2>;a5<i3>}",
+                            L"g{i3,i4;a3<i1,i3>,a4<i2>} * s{a2<i1,i2>;a6<i4>}",
+                            false),
+            // one more pair of ternary products
+            std::make_tuple(
                 L"s{a2<i1,i2>;a6<i2,i4>} * g{i3,i4;a3<i2,i4>,a4<i1,i3>} * "
                 L"t{a3<i2,i4>,a6<i2,i4>;i4,i2}",
                 L"g{i3,i4;a3<i1,i4>,a4<i2,i3>} * t{a3<i1,i4>,a5<i1,i4>;i4,i1} "
-                L"* "
-                L"s{a1<i1,i2>;a5<i1,i4>}",
+                L"* s{a1<i1,i2>;a5<i1,i4>}",
                 true),
+            // last pair of ternary nets involved in MO->PNO integral transform
             std::make_tuple(L"g{i3,i4;a3,a4} * C{a3;a3<i1,i4>} * C{a4;a4<i2>}",
                             L"g{i3,i4;a3,a4} * C{a3;a3<i1,i3>} * C{a4;a4<i2>}",
                             false)}) {
@@ -122,9 +100,12 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
         //                std::endl;
       }
 
-      l.tensor_network = l.canonicalize = l.canonicalize_dot =
-          l.canonicalize_input_graph = false;
-    }
+      //      l.tensor_network = l.canonicalize = l.canonicalize_dot =
+      //          l.canonicalize_input_graph = false;
+    };
+
+    do_test(static_cast<TensorNetwork*>(nullptr));
+    do_test(static_cast<TensorNetworkV2*>(nullptr));
   }
 
   SECTION("Tensors") {
