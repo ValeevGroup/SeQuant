@@ -134,6 +134,10 @@ class TensorNetwork {
     int second_position_ = 0;
   };
 
+  static inline auto edge2index_ = [](const Edge &e) -> const Index & {
+    return e.idx();
+  };
+
   using VertexType = sequant::VertexType;
 
  public:
@@ -143,8 +147,10 @@ class TensorNetwork {
   TensorNetwork(ExprPtrRange &exprptr_range) {
     for (auto &&ex : exprptr_range) {
       auto t = std::dynamic_pointer_cast<AbstractTensor>(ex);
+      std::size_t count = 0;
       if (t) {
         tensors_.emplace_back(t);
+        tensor_input_ordinals_.emplace_back(count++);
       } else {
         throw std::logic_error(
             "TensorNetwork::TensorNetwork: non-tensors in the given expression "
@@ -154,10 +160,27 @@ class TensorNetwork {
   }
 
   /// @return const reference to the sequence of tensors
-  /// @note the order of tensors may be different from that provided as input
+  /// @note after invoking TensorNetwork::canonicalize() the order of
+  /// tensors may be different from that provided as input; use
+  /// tensor_input_ordinals() to obtain the input ordinals of
+  /// the tensors in the result
   const auto &tensors() const { return tensors_; }
 
+  const auto &tensor_input_ordinals() const { return tensor_input_ordinals_; }
+
   using named_indices_t = container::set<Index, Index::LabelCompare>;
+
+  /// metadata optionally produced by canonicalize()
+  struct CanonicalizationMetadata {
+    /// list of namex indices
+    named_indices_t named_indices;
+    /// if canonicalize() called with rename_named_indices, specifies
+    /// replacements of named indices to canonical order
+    container::map<Index, Index> named_index_replacements;
+    /// canonicalized colored graph, use graph->cmp to compare against another
+    /// to detect equivalence
+    std::shared_ptr<bliss::Graph> graph;
+  };
 
   /// @param cardinal_tensor_labels move all tensors with these labels to the
   /// front before canonicalizing indices
@@ -167,11 +190,19 @@ class TensorNetwork {
   /// @param named_indices specifies the indices that cannot be renamed, i.e.
   /// their labels are meaningful; default is nullptr, which results in external
   /// indices treated as named indices
+  /// @param rename_named_indices if \p named_indices is null and this is true
+  ///        treat named indices as renameable, but keep their names distinct
+  ///        from those of anonymous/dummy indices
+  /// @param metadata if nonnull, pointer to the objects where to keep the
+  /// canonicalization
+  ///        metadata
   /// @return byproduct of canonicalization (e.g. phase); if none, returns
   /// nullptr
   ExprPtr canonicalize(
       const container::vector<std::wstring> &cardinal_tensor_labels = {},
-      bool fast = true, const named_indices_t *named_indices = nullptr);
+      bool fast = true, const named_indices_t *named_indices = nullptr,
+      bool rename_named_indices = false,
+      CanonicalizationMetadata *metadata = nullptr);
 
   /// Factorizes tensor network
   /// @return sequence of binary products; each element encodes the tensors to
@@ -185,8 +216,12 @@ class TensorNetwork {
   container::svector<std::pair<long, long>> factorize();
 
  private:
-  // source tensors and indices
+  /// list of tensors
+  /// - before canonicalize(): input
+  /// - after canonicalize(): canonical
   container::svector<AbstractTensorPtr> tensors_;
+  /// input ordinals of tensors in tensors_
+  container::svector<std::size_t> tensor_input_ordinals_;
 
   struct FullLabelCompare {
     using is_transparent = void;
@@ -201,7 +236,8 @@ class TensorNetwork {
     }
   };
   // Index -> Edge, sorted by full label
-  mutable container::set<Edge, FullLabelCompare> edges_;
+  using edges_t = container::set<Edge, FullLabelCompare>;
+  mutable edges_t edges_;
   // set to true by init_edges();
   mutable bool have_edges_ = false;
   // ext indices do not connect tensors
@@ -214,9 +250,14 @@ class TensorNetwork {
   /// @note these will need to be processed separately from the rest
   /// to appear as vertices on the graph
   mutable named_indices_t pure_proto_indices_;
+  /// grand list of all indices is view of concatenated ranges of indices in
+  /// edges_ and pure_proto_indices_
+  mutable ranges::concat_view<
+      ranges::transform_view<ranges::ref_view<edges_t>, decltype(edge2index_)>,
+      ranges::ref_view<named_indices_t>>
+      grand_index_list_;
 
-  // replacements of anonymous indices produced by the last call to
-  // canonicalize()
+  // replacements of renameable indices
   container::map<Index, Index> idxrepl_;
 
   /// initializes edges_, ext_indices_, and pure_proto_indices_
@@ -242,10 +283,11 @@ class TensorNetwork {
     return ext_indices_;
   }
 
-  /// accessor for the list of anonymous index replacements performed by the
-  /// last call to canonicalize()
-  /// @return replacements of anonymous indices performed by the last call to
-  /// canonicalize()
+  /// accessor for the list of anonymous index replacements (and, optionally,
+  /// named index replacements, if canonicalize called with
+  /// rename_named_indices=true) performed by the last call to canonicalize()
+  /// @return replacements of renameable indices performed by the last
+  /// canonicalize call
   const auto &idxrepl() const { return idxrepl_; };
 
  public:
@@ -255,6 +297,9 @@ class TensorNetwork {
   /// this includes all external indices);
   ///            default is nullptr, which means use all external indices for
   ///            named indices
+  /// @param[in] distinct_named_indices if false, will use same color for all
+  /// named indices that have same Index::color(), else will use distinct color
+  /// for each
   /// @return {shared_ptr to Graph, vector of vertex labels, vector of vertex
   /// colors, vector of vertex types}
 
@@ -275,7 +320,8 @@ class TensorNetwork {
   ///     terminal's type (bra/ket).
   std::tuple<std::shared_ptr<bliss::Graph>, std::vector<std::wstring>,
              std::vector<std::size_t>, std::vector<VertexType>>
-  make_bliss_graph(const named_indices_t *named_indices = nullptr) const;
+  make_bliss_graph(const named_indices_t *named_indices = nullptr,
+                   bool distinct_named_indices = true) const;
 };
 
 }  // namespace sequant

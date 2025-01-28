@@ -35,7 +35,13 @@ namespace sequant {
 
 ExprPtr TensorNetwork::canonicalize(
     const container::vector<std::wstring> &cardinal_tensor_labels, bool fast,
-    const named_indices_t *named_indices_ptr) {
+    const named_indices_t *named_indices_ptr, bool rename_named_indices,
+    CanonicalizationMetadata *metadata) {
+  const bool preserve_metadata = metadata != nullptr;
+  if (preserve_metadata) {
+    metadata->named_index_replacements.clear();
+  }
+
   ExprPtr canon_byproduct = ex<Constant>(1);
   container::svector<Edge> idx_terminals_sorted;  // to avoid memory allocs
 
@@ -55,50 +61,53 @@ ExprPtr TensorNetwork::canonicalize(
   // - resort tensors (this cannot be done in Product::canonicalize since that
   // requires analysis of commutativity ... here we are dealing with tensors
   // only and are free to reorder)
+  using ranges::views::zip;
   using std::begin;
   using std::end;
-  bubble_sort(
-      begin(tensors_), end(tensors_),
-      [&cardinal_tensor_labels](const auto &first_ptr, const auto &second_ptr) {
-        const auto &first = *first_ptr;
-        const auto &second = *second_ptr;
-        // grab base label if adjoint label is present
-        auto base_label = [](const auto &t) {
-          if (label(t).back() == adjoint_label) {
-            return label(t).substr(0, label(t).size() - 1);
-          } else {
-            return label(t);
-          }
-        };
-        // tensors commute if their colors are different or either one of them
-        // is a c-number
-        if ((color(first) != color(second)) || is_cnumber(first) ||
-            is_cnumber(second)) {
-          const auto cardinal_tensor_labels_end = end(cardinal_tensor_labels);
-          const auto first_cardinal_it =
-              std::find(begin(cardinal_tensor_labels),
-                        end(cardinal_tensor_labels), base_label(first));
-          const auto second_cardinal_it =
-              std::find(begin(cardinal_tensor_labels),
-                        end(cardinal_tensor_labels), base_label(second));
-          const auto first_is_cardinal =
-              first_cardinal_it != cardinal_tensor_labels_end;
-          const auto second_is_cardinal =
-              second_cardinal_it != cardinal_tensor_labels_end;
-          if (first_is_cardinal && second_is_cardinal) {
-            if (first_cardinal_it == second_cardinal_it)
-              return first < second;
-            else
-              return first_cardinal_it < second_cardinal_it;
-          } else if (first_is_cardinal)
-            return true;
-          else if (second_is_cardinal)
-            return false;
-          else  // neither is cardinal
-            return first < second;
-        } else
-          return false;
-      });
+  auto tensors_with_ordinals = zip(tensors_, tensor_input_ordinals_);
+  bubble_sort(begin(tensors_with_ordinals), end(tensors_with_ordinals),
+              [&cardinal_tensor_labels](const auto &first_ptr_and_ord,
+                                        const auto &second_ptr_and_ord) {
+                const auto &first = *(first_ptr_and_ord.first);
+                const auto &second = *(second_ptr_and_ord.first);
+                // grab base label if adjoint label is present
+                auto base_label = [](const auto &t) {
+                  if (label(t).back() == adjoint_label) {
+                    return label(t).substr(0, label(t).size() - 1);
+                  } else {
+                    return label(t);
+                  }
+                };
+                // tensors commute if their colors are different or either one
+                // of them is a c-number
+                if ((color(first) != color(second)) || is_cnumber(first) ||
+                    is_cnumber(second)) {
+                  const auto cardinal_tensor_labels_end =
+                      end(cardinal_tensor_labels);
+                  const auto first_cardinal_it =
+                      std::find(begin(cardinal_tensor_labels),
+                                end(cardinal_tensor_labels), base_label(first));
+                  const auto second_cardinal_it = std::find(
+                      begin(cardinal_tensor_labels),
+                      end(cardinal_tensor_labels), base_label(second));
+                  const auto first_is_cardinal =
+                      first_cardinal_it != cardinal_tensor_labels_end;
+                  const auto second_is_cardinal =
+                      second_cardinal_it != cardinal_tensor_labels_end;
+                  if (first_is_cardinal && second_is_cardinal) {
+                    if (first_cardinal_it == second_cardinal_it)
+                      return first < second;
+                    else
+                      return first_cardinal_it < second_cardinal_it;
+                  } else if (first_is_cardinal)
+                    return true;
+                  else if (second_is_cardinal)
+                    return false;
+                  else  // neither is cardinal
+                    return first < second;
+                } else
+                  return false;
+              });
 
   if (Logger::instance().canonicalize) {
     std::wcout << "TensorNetwork::canonicalize(" << (fast ? "fast" : "slow")
@@ -115,6 +124,7 @@ ExprPtr TensorNetwork::canonicalize(
   // been computed in init_edges)
   const auto &named_indices =
       named_indices_ptr == nullptr ? this->ext_indices() : *named_indices_ptr;
+  if (preserve_metadata) metadata->named_indices = named_indices;
 
   // helpers to filter named ("external" in traditional use case) / anonymous
   // ("internal" in traditional use case)
@@ -123,6 +133,20 @@ ExprPtr TensorNetwork::canonicalize(
   };
   auto is_anonymous_index = [&](const Index &idx) {
     return named_indices.find(idx) == named_indices.end();
+  };
+  // more efficient version of is_anonymous_index
+  auto is_anonymous_index_ord = [&](const std::size_t &idx_ord) {
+    assert(idx_ord < edges_.size() + pure_proto_indices_.size());
+    if (idx_ord < edges_.size()) {
+      const auto edge_it = edges_.begin() + idx_ord;
+      assert(edge_it->size() > 0);
+      return edge_it->size() == 2;
+    } else  // pure proto indices are named
+      return false;
+  };
+  auto is_renameable_index = [&](const Index &idx) {
+    return rename_named_indices ||
+           named_indices.find(idx) == named_indices.end();
   };
   auto namedness = [&](const Index &idx) {
     return is_named_index(idx) ? 1 : 0;
@@ -168,13 +192,21 @@ ExprPtr TensorNetwork::canonicalize(
     };
 
     // make the graph
-    auto [graph, vlabels, vcolors, vtypes] = make_bliss_graph(&named_indices);
+    const bool distinct_named_indices =
+        named_indices_ptr == nullptr && rename_named_indices == false;
+    auto [graph, vlabels, vcolors, vtypes] =
+        make_bliss_graph(&named_indices, distinct_named_indices);
     //    graph->write_dot(std::wcout, vlabels);
 
     // canonize the graph
     bliss::Stats stats;
     graph->set_splitting_heuristic(bliss::Graph::shs_fsm);
     const unsigned int *cl = graph->canonical_form(stats, nullptr, nullptr);
+
+    // save canonicalized graph, if needed
+    if (preserve_metadata) {
+      metadata->graph = std::shared_ptr<bliss::Graph>{graph->permute(cl)};
+    }
 
     if (Logger::instance().canonicalize_dot) {
       bliss::Graph *cgraph = graph->permute(cl);
@@ -183,32 +215,65 @@ ExprPtr TensorNetwork::canonicalize(
       delete cgraph;
     }
 
-    // make anonymous index replacement list
+    // make index replacement list; in addition to anonymous renamings include
+    // named index renamings IF rename_named_indices==true
     {
       // for each color make a replacement list for bringing the indices to
       // the canonical order
+
+      // grand list of colors
       container::set<size_t> colors;
-      container::multimap<size_t, std::pair<size_t, size_t>>
-          color2idx;  // maps color to the ordinals of the corresponding
-      // indices in edges_ + their canonical ordinals
-      // collect colors and anonymous indices sorted by colors
-      size_t idx_cnt = 0;
-      for (auto &&ttpair : edges_) {
-        auto color = vcolors[idx_cnt];
+      // maps color to the ordinals of the corresponding
+      // renameable indices + their canonical ordinals + is_anonymous flag
+      container::multimap<size_t, std::tuple<size_t, size_t, bool>> color2idx;
+      // collect colors and renameable indices sorted by colors
+      size_t idx_ord = 0;
+      for (auto &&idx : grand_index_list_) {
+        auto color = vcolors[idx_ord];
         if (colors.find(color) == colors.end()) colors.insert(color);
-        if (is_anonymous_index(ttpair.idx())) {
-          color2idx.emplace(color, std::make_pair(idx_cnt, cl[idx_cnt]));
+        if (is_renameable_index(idx)) {
+          color2idx.emplace(color,
+                            std::make_tuple(idx_ord, cl[idx_ord],
+                                            is_anonymous_index_ord(idx_ord)));
         }
-        ++idx_cnt;
+        ++idx_ord;
       }
-      // for each color sort anonymous indices by canonical order
-      container::svector<std::pair<size_t, size_t>>
-          idx_can;  // canonically-ordered list of {index ordinal in edges_,
-                    // canonical ordinal}
+      // for each color:
+      // - if anonymous: generate indices starting from 1 in the order of
+      // appearance in canonical list
+      // - if named: reassign from sorted list of named indices of same color in
+      // the order of appearance in canonical list
+      container::svector<std::tuple<size_t, size_t, bool>>
+          idx_can;  // canonically-ordered list of {index ordinal in
+                    // grand_index_list_, canonical ordinal, is_anonymous flag}
+      named_indices_t
+          named_idxs;  // indices of this color, sorted by labels (only needed
+                       // if not anonymous and rename_named_indices==true)
       for (auto &&color : colors) {
-        auto beg = color2idx.lower_bound(color);
-        auto end = color2idx.upper_bound(color);
+        auto [beg, end] = color2idx.equal_range(color);
         const auto sz = end - beg;
+        // sz == 0 is possible since some colors in colors refer to tensors
+        if (sz == 0) continue;
+
+        // indices of same color have same anonymity
+        const auto color_is_anonymous = std::get<2>(beg->second);
+
+        // if this color corresponds to named indices, make a list sorted by
+        // labels
+        if (!color_is_anonymous && rename_named_indices) {
+          named_idxs.clear();
+          for (auto &[color, tup] : ranges::make_subrange(beg, end)) {
+            auto &[ord, ord_can, is_anonymous] = tup;
+            const auto &idx = *(grand_index_list_.begin() + ord);
+            auto [it, inserted] = named_idxs.emplace(idx);
+            assert(inserted);
+          }
+        }
+
+        // for anonymous indices need to make indices using factory
+        // for named indices that can be renamed replacements are permutations
+        // among [beg,end) in either case need to resort indices into canonical
+        // order
         if (sz > 1) {
           idx_can.resize(sz);
           size_t cnt = 0;
@@ -218,23 +283,39 @@ ExprPtr TensorNetwork::canonicalize(
           using std::begin;
           using std::end;
           std::sort(begin(idx_can), end(idx_can),
-                    [](const std::pair<size_t, size_t> &a,
-                       const std::pair<size_t, size_t> &b) {
-                      return a.second < b.second;
+                    [](const auto &a, const auto &b) {
+                      return std::get<1>(a) < std::get<1>(b);
                     });
           // make a replacement list by generating new indices in canonical
           // order
-          for (auto &&p : idx_can) {
-            const auto &idx = (edges_.begin() + p.first)->idx();
-            idxrepl.emplace(std::make_pair(idx, idxfac.make(idx)));
+          std::size_t ord = 0;
+          for (auto &&[idx_ord, idx_ord_can, is_anonymous] : idx_can) {
+            assert(is_anonymous == color_is_anonymous);
+            const auto &idx = *(grand_index_list_.begin() + idx_ord);
+            if (is_anonymous) {
+              const auto new_idx = idxfac.make(idx);
+              if (idx != new_idx) idxrepl.emplace(idx, std::move(new_idx));
+            } else if (rename_named_indices) {
+              const auto &new_idx = *(named_idxs.begin() + ord);
+              if (idx != new_idx) {
+                idxrepl.emplace(idx, new_idx);
+                if (preserve_metadata) {
+                  metadata->named_index_replacements.emplace(idx, new_idx);
+                }
+              }
+            }
+
+            ++ord;
           }
         } else if (sz == 1) {  // no need for resorting of colors with 1 index
                                // only, but still need to replace the index
-          const auto edge_it = edges_.begin() + beg->second.first;
-          const auto &idx = edge_it->idx();
-          idxrepl.emplace(std::make_pair(idx, idxfac.make(idx)));
+          const auto it = grand_index_list_.begin() + std::get<0>(beg->second);
+          const auto &idx = *it;
+          if (color_is_anonymous) {
+            const auto new_idx = idxfac.make(idx);
+            if (idx != new_idx) idxrepl.emplace(idx, std::move(new_idx));
+          }
         }
-        // sz == 0 is possible since some colors in colors refer to tensors
       }
     }  // index repl
 
@@ -414,8 +495,8 @@ ExprPtr TensorNetwork::canonicalize(
 std::tuple<std::shared_ptr<bliss::Graph>, std::vector<std::wstring>,
            std::vector<std::size_t>,
            std::vector<typename TensorNetwork::VertexType>>
-TensorNetwork::make_bliss_graph(
-    const named_indices_t *named_indices_ptr) const {
+TensorNetwork::make_bliss_graph(const named_indices_t *named_indices_ptr,
+                                bool distinct_named_indices) const {
   // must call init_edges() prior to calling this
   if (edges_.empty()) {
     init_edges();
@@ -426,7 +507,7 @@ TensorNetwork::make_bliss_graph(
   const auto &named_indices =
       named_indices_ptr == nullptr ? this->ext_indices() : *named_indices_ptr;
 
-  VertexPainter colorizer(named_indices);
+  VertexPainter colorizer(named_indices, distinct_named_indices);
 
   // results
   std::shared_ptr<bliss::Graph> graph;
@@ -744,6 +825,9 @@ void TensorNetwork::init_edges() const {
   // ... and add pure protoindices to the external indices
   ext_indices_.reserve(ext_indices_.size() + pure_proto_indices_.size());
   ext_indices_.insert(pure_proto_indices_.begin(), pure_proto_indices_.end());
+
+  grand_index_list_ = ranges::views::concat(
+      edges_ | ranges::views::transform(edge2index_), pure_proto_indices_);
 
   have_edges_ = true;
 }
