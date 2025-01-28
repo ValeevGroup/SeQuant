@@ -74,17 +74,17 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
         }
       }
 
-      l.tensor_network = l.canonicalize = l.canonicalize_dot =
-          l.canonicalize_input_graph = true;
-
-      {
-        auto input1 =
-            L"s{a2<i1,i2>;a6<i2,i4>} * g{i3,i4;a3<i2,i4>,a4<i1,i3>} * "
-            L"t{a3<i2,i4>,a6<i2,i4>;i4,i2}";
-        auto input2 =
-            L"g{i3,i4;a3<i1,i4>,a4<i2,i3>} * t{a3<i1,i4>,a5<i1,i4>;i4,i1} * "
-            L"s{a1<i1,i2>;a5<i1,i4>}";
-
+      for (auto& [input1, input2, should_be_equal] :
+           {std::make_tuple(
+                L"s{a2<i1,i2>;a6<i2,i4>} * g{i3,i4;a3<i2,i4>,a4<i1,i3>} * "
+                L"t{a3<i2,i4>,a6<i2,i4>;i4,i2}",
+                L"g{i3,i4;a3<i1,i4>,a4<i2,i3>} * t{a3<i1,i4>,a5<i1,i4>;i4,i1} "
+                L"* "
+                L"s{a1<i1,i2>;a5<i1,i4>}",
+                true),
+            std::make_tuple(L"g{i3,i4;a3,a4} * C{a3;a3<i1,i4>} * C{a4;a4<i2>}",
+                            L"g{i3,i4;a3,a4} * C{a3;a3<i1,i3>} * C{a4;a4<i2>}",
+                            false)}) {
         std::wcout << "============== " << input1
                    << " ===============" << std::endl;
         auto ex1 = parse_expr(input1);
@@ -110,7 +110,10 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
         std::wcout << "graph(" << input1 << ") <=> graph(" << input2
                    << "): " << cbp1.graph->cmp(*cbp2.graph) << std::endl;
 
-        REQUIRE(cbp1.graph->cmp(*cbp2.graph) == 0);
+        if (should_be_equal)
+          REQUIRE(cbp1.graph->cmp(*cbp2.graph) == 0);
+        else
+          REQUIRE(cbp1.graph->cmp(*cbp2.graph) != 0);
 
         //                std::wcout << canonicalize(ex1).to_latex() << " should
         //                be equal " << canonicalize(ex2).to_latex() <<
