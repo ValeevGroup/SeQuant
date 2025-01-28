@@ -170,18 +170,6 @@ class TensorNetwork {
 
   using named_indices_t = container::set<Index, Index::LabelCompare>;
 
-  /// metadata optionally produced by canonicalize()
-  struct CanonicalizationMetadata {
-    /// list of named indices
-    named_indices_t named_indices;
-    /// list of named indices in canonical order; iterators point to
-    /// named_indices
-    container::svector<named_indices_t::const_iterator> named_indices_canonical;
-    /// canonicalized colored graph, use graph->cmp to compare against another
-    /// to detect equivalence
-    std::shared_ptr<bliss::Graph> graph;
-  };
-
   /// @param cardinal_tensor_labels move all tensors with these labels to the
   /// front before canonicalizing indices
   /// @param fast if true (default), does fast canonicalization that is only
@@ -196,6 +184,18 @@ class TensorNetwork {
       const container::vector<std::wstring> &cardinal_tensor_labels = {},
       bool fast = true, const named_indices_t *named_indices = nullptr);
 
+  /// metadata produced by canonicalize_slots()
+  struct SlotCanonicalizationMetadata {
+    /// list of named indices
+    named_indices_t named_indices;
+    /// list of named indices in canonical order; iterators point to
+    /// named_indices
+    container::svector<named_indices_t::const_iterator> named_indices_canonical;
+    /// canonicalized colored graph, use graph->cmp to compare against another
+    /// to detect equivalence
+    std::shared_ptr<bliss::Graph> graph;
+  };
+
   /// Like canonicalize(), but only use graph-based canonicalization to
   /// produce canonical list of slots occupied by named indices.
   /// This is sufficient to be able to match 2 tensor networks that
@@ -206,7 +206,7 @@ class TensorNetwork {
   /// their labels are meaningful; default is nullptr, which results in external
   /// indices treated as named indices
   /// @return the computed canonicalization metadata
-  CanonicalizationMetadata canonicalize_slots(
+  SlotCanonicalizationMetadata canonicalize_slots(
       const container::vector<std::wstring> &cardinal_tensor_labels = {},
       const named_indices_t *named_indices = nullptr);
 

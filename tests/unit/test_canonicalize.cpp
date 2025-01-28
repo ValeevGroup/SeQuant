@@ -33,6 +33,8 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
   SECTION("tests") {
     // Case 7: with protoindices
     {
+      using TN = TensorNetwork;
+
       auto& l = Logger::instance();
       //      l.tensor_network = l.canonicalize = l.canonicalize_dot =
       //          l.canonicalize_input_graph = true;
@@ -48,8 +50,8 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
 
         std::wcout << "============== " << input1_ref
                    << " ===============" << std::endl;
-        TensorNetwork tn1(parse_expr(input1_ref).as<Product>());
-        TensorNetwork::CanonicalizationMetadata cbp1 = tn1.canonicalize_slots(
+        TN tn1(parse_expr(input1_ref).as<Product>());
+        auto cbp1 = tn1.canonicalize_slots(
             TensorCanonicalizer::cardinal_tensor_labels());
 
         std::wcout << "canonical order of named indices:\n";
@@ -60,8 +62,8 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
         for (auto& input : {input1, input2, input3, input4}) {
           std::wcout << "============== " << input
                      << " ===============" << std::endl;
-          TensorNetwork tn(parse_expr(input).as<Product>());
-          TensorNetwork::CanonicalizationMetadata cbp = tn.canonicalize_slots(
+          TN tn(parse_expr(input).as<Product>());
+          auto cbp = tn.canonicalize_slots(
               TensorCanonicalizer::cardinal_tensor_labels());
 
           std::wcout << "canonical order of named indices:\n";
@@ -88,8 +90,8 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
         std::wcout << "============== " << input1
                    << " ===============" << std::endl;
         auto ex1 = parse_expr(input1);
-        TensorNetwork tn1(ex1.as<Product>());
-        TensorNetwork::CanonicalizationMetadata cbp1 = tn1.canonicalize_slots(
+        TN tn1(ex1.as<Product>());
+        auto cbp1 = tn1.canonicalize_slots(
             TensorCanonicalizer::cardinal_tensor_labels());
         std::wcout << "canonical order of named indices:\n";
         for (const auto idx_it : cbp1.named_indices_canonical) {
@@ -99,8 +101,8 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
         std::wcout << "============== " << input2
                    << " ===============" << std::endl;
         auto ex2 = parse_expr(input2);
-        TensorNetwork tn2(ex2.as<Product>());
-        TensorNetwork::CanonicalizationMetadata cbp2 = tn2.canonicalize_slots(
+        TN tn2(ex2.as<Product>());
+        auto cbp2 = tn2.canonicalize_slots(
             TensorCanonicalizer::cardinal_tensor_labels());
         std::wcout << "canonical order of named indices:\n";
         for (const auto idx_it : cbp2.named_indices_canonical) {

@@ -782,10 +782,10 @@ container::svector<std::pair<long, long>> TensorNetwork::factorize() {
   abort();  // not yet implemented
 }
 
-TensorNetwork::CanonicalizationMetadata TensorNetwork::canonicalize_slots(
+TensorNetwork::SlotCanonicalizationMetadata TensorNetwork::canonicalize_slots(
     const std::vector<std::wstring> &cardinal_tensor_labels,
     const TensorNetwork::named_indices_t *named_indices_ptr) {
-  TensorNetwork::CanonicalizationMetadata metadata;
+  TensorNetwork::SlotCanonicalizationMetadata metadata;
 
   if (Logger::instance().canonicalize) {
     std::wcout << "TensorNetwork::canonicalize_slots(): input tensors\n";
@@ -807,26 +807,10 @@ TensorNetwork::CanonicalizationMetadata TensorNetwork::canonicalize_slots(
       named_indices_ptr == nullptr ? this->ext_indices() : *named_indices_ptr;
   metadata.named_indices = named_indices;
 
-  // helpers to filter named ("external" in traditional use case) / anonymous
+  // helper to filter named ("external" in traditional use case) / anonymous
   // ("internal" in traditional use case)
   auto is_named_index = [&](const Index &idx) {
     return named_indices.find(idx) != named_indices.end();
-  };
-  auto is_anonymous_index = [&](const Index &idx) {
-    return named_indices.find(idx) == named_indices.end();
-  };
-  // more efficient version of is_anonymous_index
-  auto is_anonymous_index_ord = [&](const std::size_t &idx_ord) {
-    assert(idx_ord < edges_.size() + pure_proto_indices_.size());
-    if (idx_ord < edges_.size()) {
-      const auto edge_it = edges_.begin() + idx_ord;
-      assert(edge_it->size() > 0);
-      return edge_it->size() == 2;
-    } else  // pure proto indices are named
-      return false;
-  };
-  auto namedness = [&](const Index &idx) {
-    return is_named_index(idx) ? 1 : 0;
   };
 
   // make the graph
