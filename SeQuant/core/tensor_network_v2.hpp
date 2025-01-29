@@ -224,9 +224,25 @@ class TensorNetworkV2 {
   struct SlotCanonicalizationMetadata {
     /// list of named indices
     NamedIndexSet named_indices;
-    /// list of named indices in canonical order; iterators point to
-    /// named_indices
+
+    /// named index can occupy either a slot of a Tensor or a proto index
+    enum class SlotType { tensor, protoindex };
+
+    /// type of less-than comparison function for named indices, receives {Index
+    /// ptr, its slot type}
+    using named_index_compare_t =
+        std::function<bool(const std::pair<const Index *, SlotType> &,
+                           const std::pair<const Index *, SlotType> &)>;
+
+    /// less-than comparison function for named indices, used for
+    /// coarse-grained sorting of named indices,
+    /// before sorting to canonical order
+    named_index_compare_t named_index_compare;
+
+    /// list of named indices, sorted first by named_index_compare,
+    /// then by canonical order; iterators point to named_indices
     container::svector<NamedIndexSet::const_iterator> named_indices_canonical;
+
     /// canonicalized colored graph, use graph->cmp to compare against another
     /// to detect equivalence
     std::shared_ptr<bliss::Graph> graph;
@@ -241,10 +257,16 @@ class TensorNetworkV2 {
   /// @param named_indices specifies the indices that cannot be renamed, i.e.
   /// their labels are meaningful; default is nullptr, which results in external
   /// indices treated as named indices
+  /// @param named_index_compare less-than comparison function for
+  /// named indices, used for coarse-grained sorting of named indices,
+  /// before sorting to canonical order; the default is to sort
+  /// by Index::space()
   /// @return the computed canonicalization metadata
   SlotCanonicalizationMetadata canonicalize_slots(
       const container::vector<std::wstring> &cardinal_tensor_labels = {},
-      const NamedIndexSet *named_indices = nullptr);
+      const NamedIndexSet *named_indices = nullptr,
+      SlotCanonicalizationMetadata::named_index_compare_t named_index_compare =
+          {});
 
   /// Factorizes tensor network
   /// @return sequence of binary products; each element encodes the tensors to

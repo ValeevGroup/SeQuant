@@ -16,6 +16,7 @@
 #include <SeQuant/core/tag.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/tensor_network_v2.hpp>
+#include <SeQuant/core/utility/tuple.hpp>
 #include <SeQuant/core/vertex_painter.hpp>
 #include <SeQuant/core/wstring.hpp>
 
@@ -655,7 +656,17 @@ ExprPtr TensorNetworkV2::canonicalize(
 TensorNetworkV2::SlotCanonicalizationMetadata
 TensorNetworkV2::canonicalize_slots(
     const container::vector<std::wstring> &cardinal_tensor_labels,
-    const NamedIndexSet *named_indices_ptr) {
+    const NamedIndexSet *named_indices_ptr,
+    TensorNetworkV2::SlotCanonicalizationMetadata::named_index_compare_t
+        named_index_compare) {
+  if (!named_index_compare)
+    named_index_compare = [](const auto &idxptr_slottype_1,
+                             const auto &idxptr_slottype_2) -> bool {
+      const auto &[idxptr1, slottype1] = idxptr_slottype_1;
+      const auto &[idxptr2, slottype2] = idxptr_slottype_2;
+      return idxptr1->space() < idxptr2->space();
+    };
+
   TensorNetworkV2::SlotCanonicalizationMetadata metadata;
 
   if (Logger::instance().canonicalize) {
@@ -732,61 +743,56 @@ TensorNetworkV2::canonicalize_slots(
 
   // produce canonical list of named indices
   {
-    // grand list of colors used for vertices representing Index
-    container::set<size_t> colors;
     using ord_cord_it_t =
         std::tuple<size_t, size_t, NamedIndexSet::const_iterator>;
-    // maps color to the ordinals of the corresponding
-    // named indices + their canonical vertex ordinals + their iterators in
-    // metadata.named_indices
-    container::multimap<size_t, ord_cord_it_t> color2idx;
-    // collect colors and named indices sorted by colors
+    using cord_set_t = container::set<ord_cord_it_t, detail::tuple_less<1>>;
+
+    // for each named index type (as defined by named_index_compare) maps its
+    // ptr in grand_index_list_ to its ordinal in grand_index_list_ + canonical
+    // ordinal + its iterator in metadata.named_indices
+    using SlotType = TensorNetworkV2::SlotCanonicalizationMetadata::SlotType;
+    container::map<std::pair<const Index *, SlotType>, cord_set_t,
+                   decltype(named_index_compare)>
+        idx2cord(named_index_compare);
+
+    // collect named indices and sort them on the fly
     size_t idx_ord = 0;
-    for (auto &&idx : grand_index_list_) {
+    auto grand_index_list_end = grand_index_list_.end();
+    for (auto git = grand_index_list_.begin(); git != grand_index_list_end;
+         ++git) {
+      const auto &idx = *git;
+
       if (is_named_index(idx)) {
         const auto vertex_ord = index_idx_to_vertex[idx_ord];
-        auto color = graph.vertex_colors[vertex_ord];
-        if (colors.find(color) == colors.end()) colors.insert(color);
-        auto named_indices_it = metadata.named_indices.find(idx);
+        const auto named_indices_it = metadata.named_indices.find(idx);
         assert(named_indices_it != metadata.named_indices.end());
-        color2idx.emplace(color,
-                          std::make_tuple(idx_ord, canonize_perm[vertex_ord],
-                                          named_indices_it));
+
+        // find the entry for this index type
+        const auto slot_type =
+            idx_ord < edges_.size() ? SlotType::tensor : SlotType::protoindex;
+        const auto idxptr_slottype = std::make_pair(&idx, slot_type);
+        auto it = idx2cord.find(idxptr_slottype);
+
+        if (it == idx2cord.end()) {
+          bool inserted;
+          std::tie(it, inserted) = idx2cord.insert(std::make_pair(
+              idxptr_slottype, cord_set_t(cord_set_t::key_compare{})));
+          assert(inserted);
+        }
+        it->second.emplace(idx_ord, canonize_perm[vertex_ord],
+                           named_indices_it);
       }
       ++idx_ord;
     }
-    // for each color sort named indices by canonical order
-    container::svector<ord_cord_it_t>
-        idx_can;  // canonically-ordered list of {index ordinal in
-                  // grand_index_list_, canonical vertex ordinal, iterator}
-    for (auto &&color : colors) {
-      auto [beg, end] = color2idx.equal_range(color);
-      const auto sz = end - beg;
-      // sz == 0 should not be possible since colors contains only named Index
-      // colors
-      assert(sz != 0);
 
-      // anonymous indices are regenerated using factory
-      if (sz > 1) {
-        idx_can.resize(sz);
-        size_t cnt = 0;
-        for (auto it = beg; it != end; ++it, ++cnt) {
-          idx_can[cnt] = it->second;
-        }
-        using std::begin;
-        using std::end;
-        std::sort(begin(idx_can), end(idx_can),
-                  [](const ord_cord_it_t &a, const ord_cord_it_t &b) {
-                    return std::get<1>(a) < std::get<1>(b);
-                  });
-        // append named indices of this color in their canonical order
-        for (auto &&[ord, cord, named_idx_it] : idx_can) {
-          metadata.named_indices_canonical.emplace_back(named_idx_it);
-        }
-      } else if (sz == 1) {
-        metadata.named_indices_canonical.emplace_back(std::get<2>(beg->second));
+    // save the result
+    for (auto &[idxptr_slottype, cord_set] : idx2cord) {
+      for (auto &[idx_ord, idx_ord_can, named_indices_it] : cord_set) {
+        metadata.named_indices_canonical.emplace_back(named_indices_it);
       }
     }
+    metadata.named_index_compare = std::move(named_index_compare);
+
   }  // named indices resort to canonical order
 
   return metadata;
