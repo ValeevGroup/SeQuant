@@ -24,11 +24,11 @@ inline std::vector<Index> make_index(std::vector<std::wstring> labels) {
 }
 
 std::shared_ptr<Tensor> make_tensor(std::wstring label,
-                                    std::vector<std::wstring> bra,
-                                    std::vector<std::wstring> ket,
-                                    std::vector<std::wstring> auxiliary) {
-  return std::make_shared<Tensor>(label, make_index(bra), make_index(ket),
-                                  make_index(auxiliary));
+                                    std::vector<std::wstring> b,
+                                    std::vector<std::wstring> k,
+                                    std::vector<std::wstring> a) {
+  return std::make_shared<Tensor>(label, bra(make_index(b)), ket(make_index(k)),
+                                  aux(make_index(a)));
 }
 
 std::shared_ptr<Constant> make_constant(py::float_ number) {
@@ -42,13 +42,6 @@ inline ExprPtr pow(const ExprPtr &b, int n) {
     e = e * b;
   }
   return e;
-}
-
-void index_space_register(py::kwargs kwargs) {
-  for (auto kw : kwargs) {
-    IndexSpace::register_instance(py::cast<std::wstring>(kw.first),
-                                  IndexSpace::occupied);
-  }
 }
 
 py::object summands(ExprPtr &expr) {
@@ -80,8 +73,8 @@ std::string complex_to_string(const Complex<rational> &z) {
 
 }  // namespace sequant::python
 
-NAMESPACE_BEGIN(PYBIND11_NAMESPACE)
-NAMESPACE_BEGIN(detail)
+PYBIND11_NAMESPACE_BEGIN(PYBIND11_NAMESPACE)
+PYBIND11_NAMESPACE_BEGIN(detail)
 
 template <>
 struct is_holder_type<sequant::Expr, sequant::ExprPtr> : std::true_type {};
@@ -93,24 +86,26 @@ template <>
 class type_caster<sequant::ExprPtr>
     : public type_caster_holder<sequant::Expr, sequant::ExprPtr> {};
 
-NAMESPACE_END(detail)
-NAMESPACE_END(PYBIND11_NAMESPACE)
+PYBIND11_NAMESPACE_END(detail)
+PYBIND11_NAMESPACE_END(PYBIND11_NAMESPACE)
 
 PYBIND11_MODULE(_sequant, m) {
   using namespace sequant;
   using namespace sequant::python;
 
-#define SEQUANT_PYTHON_INDEXSPACE_TYPE_PROPERTY(TYPE)                \
-  .def_property_static(                                              \
-      #TYPE, [](py::object /* self */) { return IndexSpace::TYPE; }, \
-      [](py::object /* self */, std::wstring s) {                    \
-        IndexSpace::register_instance(s, IndexSpace::TYPE);          \
-      })
+#define SEQUANT_PYTHON_INDEXSPACE_TYPE_PROPERTY(TYPE, LABEL)                  \
+  .def_property_static(                                                       \
+      #TYPE,                                                                  \
+      [](py::object /* self */) {                                             \
+        return get_default_context().index_space_registry()->retrieve(LABEL); \
+      },                                                                      \
+      [](py::object /* self */) {})
 
   py::class_<IndexSpace>(m, "IndexSpace")
-      SEQUANT_PYTHON_INDEXSPACE_TYPE_PROPERTY(active_occupied)
-          SEQUANT_PYTHON_INDEXSPACE_TYPE_PROPERTY(occupied)
-              SEQUANT_PYTHON_INDEXSPACE_TYPE_PROPERTY(unoccupied);
+      SEQUANT_PYTHON_INDEXSPACE_TYPE_PROPERTY(occupied, "i")
+          SEQUANT_PYTHON_INDEXSPACE_TYPE_PROPERTY(unoccupied, "a")
+              SEQUANT_PYTHON_INDEXSPACE_TYPE_PROPERTY(particle, "i")
+                  SEQUANT_PYTHON_INDEXSPACE_TYPE_PROPERTY(hole, "a");
 
   py::class_<ExprPtr>(m, "ExprPtr")
       .def_property_readonly("latex", &ExprPtr::to_latex)
@@ -137,7 +132,7 @@ PYBIND11_MODULE(_sequant, m) {
       .def_property_readonly("label", &Tensor::label)
       .def_property_readonly("bra", &Tensor::bra)
       .def_property_readonly("ket", &Tensor::ket)
-      .def_property_readonly("auxikiary", &Tensor::auxiliary)
+      .def_property_readonly("aux", &Tensor::aux)
       .def_property_readonly("braket",
                              [](const Tensor &t) {
                                auto braket = t.braket();

@@ -23,20 +23,25 @@ auto make_sr_op(F f) {
 
 template <class... Args>
 ExprPtr VacuumAverage(const ExprPtr& e, const Args&... args) {
-  return sequant::mbpt::sr::vac_av(e, args...);
+  return sequant::mbpt::op::vac_av(e, args...);
 }
 
-#define SR_OP(OP)                                                     \
-  #OP, [](std::int64_t Rank) { return sequant::mbpt::sr::OP(Rank); }, \
-      py::arg("Bra")
+#define SR_OP(OP) \
+  #OP, [](std::int64_t Rank) { return sequant::mbpt::OP(Rank); }, py::arg("Bra")
 
 inline void __init__(py::module m) {
-  sequant::mbpt::set_default_convention();
+  sequant::mbpt::load(sequant::mbpt::Convention::Minimal);
   sequant::TensorCanonicalizer::register_instance(
       std::make_shared<DefaultTensorCanonicalizer>());
 
-  m.def("F", &sequant::mbpt::sr::F);
-  m.def("H", &sequant::mbpt::sr::H,
+  py::enum_<sequant::mbpt::OpType>(m, "OpType")
+      .value("h", sequant::mbpt::OpType::h)
+      .value("f", sequant::mbpt::OpType::f)
+      .value("t", sequant::mbpt::OpType::t)
+      .export_values();
+
+  m.def("F", &sequant::mbpt::F);
+  m.def("H", &sequant::mbpt::H,
         "H(k = 2) returns a Hamiltonian operator with up to k-body terms",
         py::arg("k") = 2);
 
@@ -45,7 +50,9 @@ inline void __init__(py::module m) {
   m.def(SR_OP(T_));
 
   m.def("VacuumAverage", &VacuumAverage<>);
-  m.def("VacuumAverage", &VacuumAverage<std::vector<std::pair<int, int> > >);
+  m.def("VacuumAverage",
+        &VacuumAverage<std::vector<
+            std::pair<sequant::mbpt::OpType, sequant::mbpt::OpType> > >);
 }
 
 }  // namespace sequant::python::mbpt
