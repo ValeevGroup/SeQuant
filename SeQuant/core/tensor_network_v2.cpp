@@ -1137,8 +1137,13 @@ void TensorNetworkV2::init_edges() {
                    << std::endl;
       }
 
-      bool inserted = ext_indices_.insert(current.idx()).second;
-      assert(inserted);
+      const auto &[it, inserted] = ext_indices_.insert(current.idx());
+      // only scenario where idx is already in ext_indices_ if it were a
+      // protoindex of a previously inserted ext index ... check to ensure no
+      // accidental duplicates
+      if (!inserted) {
+        assert(proto_indices.contains(current.idx()));
+      }
     }
 
     // add proto indices to the grand list of proto indices

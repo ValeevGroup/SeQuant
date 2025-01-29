@@ -738,8 +738,13 @@ void TensorNetwork::init_edges() const {
         std::wcout << "idx " << to_latex(terminals.idx()) << " is external"
                    << std::endl;
       }
-      auto insertion_result = ext_indices_.emplace(terminals.idx());
-      assert(insertion_result.second);
+      const auto &[it, inserted] = ext_indices_.emplace(terminals.idx());
+      // only scenario where idx is already in ext_indices_ if it were a
+      // protoindex of a previously inserted ext index ... check to ensure no
+      // accidental duplicates
+      if (!inserted) {
+        assert(proto_indices.contains(terminals.idx()));
+      }
     }
 
     // add proto indices to the grand list of proto indices
