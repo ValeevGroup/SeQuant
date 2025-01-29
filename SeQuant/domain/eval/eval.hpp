@@ -368,9 +368,22 @@ auto evaluate(NodesT const& nodes, Le const& le, Args&&... args) {
   assert(iter != end);
 
   auto result = evaluate(*iter, le, std::forward<Args>(args)...);
+  auto const pnode_label = (*iter)->label();
 
   for (++iter; iter != end; ++iter) {
     auto right = evaluate(*iter, le, std::forward<Args>(args)...);
+#ifdef SEQUANT_EVAL_TRACE
+    auto&& time = timed_eval_inplace([&]() { result->add_inplace(*right); });
+    log_eval("[ADD_INPLACE] ",  //
+             pnode_label,       //
+             " += ",            //
+             (*iter)->label(),  //
+             "  ",              //
+             time.count(),      //
+             "\n");
+#else
+    result->add_inplace(*right);
+#endif
     result->add_inplace(*right);
   }
 
@@ -447,9 +460,9 @@ auto evaluate(NodesT const& nodes,  //
 #ifdef SEQUANT_EVAL_TRACE
     auto&& time = timed_eval_inplace([&]() { result->add_inplace(*right); });
     log_eval("[ADD_INPLACE] ",  //
-             (*iter)->label(),  //
-             " += ",            //
              pnode_label,       //
+             " += ",            //
+             (*iter)->label(),  //
              "  ",              //
              time.count(),      //
              "\n");
