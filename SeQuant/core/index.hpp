@@ -686,6 +686,20 @@ class Index : public Taggable {
     }
   };
 
+  /// compares Index objects using full labels only
+  struct FullLabelCompare {
+    using is_transparent = void;
+    bool operator()(const Index &first, const Index &second) const {
+      return first.full_label() < second.full_label();
+    }
+    bool operator()(const Index &first, const std::wstring_view &second) const {
+      return first.full_label() < second;
+    }
+    bool operator()(const std::wstring_view &first, const Index &second) const {
+      return first < second.full_label();
+    }
+  };
+
   /// compares Index objects using type only (but since type is defined by the
   /// *values* of proto indices those are not ignored)
   struct TypeCompare {
