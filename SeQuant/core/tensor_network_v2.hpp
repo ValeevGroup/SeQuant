@@ -99,7 +99,16 @@ class TensorNetworkV2 {
           // Ensure first <= second
           std::swap(first, second);
         }
+        // - cannot connect braket slot to aux slot
+        // - can connect bra slot to ket slot, and vice versa
+        assert((first->getOrigin() == Origin::Aux &&
+                second->getOrigin() == Origin::Aux) ||
+               ((first->getOrigin() == Origin::Bra &&
+                 second->getOrigin() == Origin::Ket) ||
+                (first->getOrigin() == Origin::Ket &&
+                 second->getOrigin() == Origin::Bra)));
       }
+
       return *this;
     }
 
