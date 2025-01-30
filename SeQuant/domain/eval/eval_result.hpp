@@ -205,7 +205,9 @@ auto index_hash(Iterable const& bk) {
 ///
 /// \brief This function implements the symmetrization of TA::DistArray.
 ///
-/// \param arr The tensor to be symmetrized.
+/// \param arr The array to be symmetrized
+///
+/// \pre The rank of the array must be even
 ///
 /// \return The symmetrized TA::DistArray.
 ///
@@ -246,13 +248,9 @@ auto particle_symmetrize_ta(TA::DistArray<Args...> const& arr) {
 ///
 /// \brief This function implements the antisymmetrization of TA::DistArray.
 ///
-/// \param arr The tensor to be antisymmetrized.
+/// \param arr The array to be antisymmetrized.
 ///
-/// \param groups A vector of particle ranges. Each element is an array of three
-///               unsigned integers. The first integer is the position of tensor
-///               index where the antisymmetric range starts in bra and the
-///               second is the corresponding position in ket. The third integer
-///               is the length of the symmetric range.
+/// \param bra_rank The rank of the bra indices
 ///
 /// \return The antisymmetrized TA::DistArray.
 ///
@@ -298,11 +296,7 @@ auto particle_antisymmetrize_ta(TA::DistArray<Args...> const& arr,
 ///
 /// \param arr The tensor to be symmetrized.
 ///
-/// \param groups A vector of particle ranges. Each element is an array of three
-///               unsigned integers. The first integer is the position of tensor
-///               index where the symmetric range starts in bra and the
-///               second is the corresponding position in ket. The third integer
-///               is the length of the symmetric range.
+/// \pre The rank of the tensor must be even.
 ///
 /// \return The symmetrized btas::Tensor.
 ///
@@ -340,13 +334,9 @@ auto particle_symmetrize_btas(btas::Tensor<Args...> const& arr) {
 ///
 /// \brief This function implements the antisymmetrization of btas::Tensor.
 ///
-/// \param arr The tensor to be antisymmetrized.
+/// \param arr The tensor to be antisymmetrized
 ///
-/// \param groups A vector of particle ranges. Each element is an array of three
-///               unsigned integers. The first integer is the position of tensor
-///               index where the antisymmetric range starts in bra and the
-///               second is the corresponding position in ket. The third integer
-///               is the length of the symmetric range.
+/// \param bra_rank The rank of the bra indices
 ///
 /// \return The antisymmetrized btas::Tensor.
 ///
