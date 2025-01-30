@@ -5,13 +5,21 @@ namespace sequant {
 
 /// types of slots that can host an index
 
+/// @note the order orchestrated to produce intuitively "canonical" layout of
+/// named indices of tensor networks
 /// @sa TensorNetwork
 /// @sa TensorNetworkV2
 enum class IndexSlotType {
-  /// occupying tensor vector index slot(s)
+  /// in bra tensor vector index slot
+  TensorBra,
+  /// in ket tensor vector index slot
+  TensorKet,
+  /// connecting two tensor vector index slots
   TensorBraKet,
-  /// occupying tensor aux index slot(s)
+  /// in tensor aux index slot
   TensorAux,
+  /// connecting two tensor aux index slots
+  TensorAuxAux,
   /// only part of proto index bundles
   SPBundle
 };

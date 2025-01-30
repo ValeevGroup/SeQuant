@@ -768,8 +768,17 @@ TensorNetworkV2::canonicalize_slots(
 
         // find the entry for this index type
         IndexSlotType slot_type;
-        if (idx_ord < edges_.size()) {  // TODO: handle aux indices
-          slot_type = IndexSlotType::TensorBraKet;
+        if (idx_ord < edges_.size()) {
+          auto edge_it = edges_.begin();
+          std::advance(edge_it, idx_ord);
+          // for named indices edges are always disconnected
+          assert(edge_it->vertex_count() == 1);
+          if (edge_it->first_vertex().getOrigin() == Origin::Aux)
+            slot_type = IndexSlotType::TensorAux;
+          else if (edge_it->first_vertex().getOrigin() == Origin::Bra)
+            slot_type = IndexSlotType::TensorBra;
+          else  // edge_it->first_vertex().getOrigin() == Origin::Ket
+            slot_type = IndexSlotType::TensorKet;
         } else
           slot_type = IndexSlotType::SPBundle;
         const auto idxptr_slottype = std::make_pair(&idx, slot_type);
