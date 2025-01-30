@@ -213,7 +213,6 @@ class rand_tensor_yield {
     return found->second;
   }
 };
-
 }  // namespace
 
 TEST_CASE("TEST_EVAL_USING_TA", "[eval]") {
@@ -250,21 +249,17 @@ TEST_CASE("TEST_EVAL_USING_TA", "[eval]") {
     return evaluate(eval_node(expr), target_labels, yield_)->get<TA::TArrayD>();
   };
 
-  auto eval_symm =
-      [&yield_](sequant::ExprPtr const& expr, std::string const& target_labels,
-                sequant::container::svector<std::array<size_t, 3>> const&
-                    groups = {}) {
-        return evaluate_symm(eval_node(expr), target_labels, groups, yield_)
-            ->get<TA::TArrayD>();
-      };
+  auto eval_symm = [&yield_](sequant::ExprPtr const& expr,
+                             std::string const& target_labels) {
+    return evaluate_symm(eval_node(expr), target_labels, yield_)
+        ->get<TA::TArrayD>();
+  };
 
-  auto eval_antisymm =
-      [&yield_](sequant::ExprPtr const& expr, std::string const& target_labels,
-                sequant::container::svector<std::array<size_t, 3>> const&
-                    groups = {}) {
-        return evaluate_antisymm(eval_node(expr), target_labels, groups, yield_)
-            ->get<TA::TArrayD>();
-      };
+  auto eval_antisymm = [&yield_](sequant::ExprPtr const& expr,
+                                 std::string const& target_labels) {
+    return evaluate_antisymm(eval_node(expr), target_labels, yield_)
+        ->get<TA::TArrayD>();
+  };
 
   SECTION("summation") {
     auto expr1 = parse_antisymm(L"t_{a1}^{i1} + f_{i1}^{a1}");
@@ -393,25 +388,21 @@ TEST_CASE("TEST_EVAL_USING_TA", "[eval]") {
     REQUIRE(norm(zero1) == Catch::Approx(0).margin(
                                100 * std::numeric_limits<double>::epsilon()));
 
-    // partial antisymmetrization
+    // odd-ranked tensor
+    auto expr2 = parse_antisymm(L"g_{i1, i2, i3}^{a1, a2}");
+    auto eval2 = eval_antisymm(expr2, "i_1,i_2,i_3,a_1,a_2");
+    auto const& arr2 = yield(L"g{i1,i2,i3;a1,a2}");
 
-    // g("0,1,2,3,4,5")
-    // suppose [3, 4,]
-    //         [0, 1,]
-    // form particle antisymmetric pair of index ranges
-    auto expr2 = parse_antisymm(L"g_{i1,i2,i3}^{a1,a2,a3}");
-    auto eval2 = eval_antisymm(expr2, "i_1,i_2,i_3,a_1,a_2,a_3", {{0, 3, 2}});
-    auto const& arr2 = yield(L"g{i1,i2,i3;a1,a2,a3}");
     auto man2 = TArrayD{};
-    man2("0,1,2,3,4,5") = arr2("0,1,2,3,4,5") - arr2("0,1,2,4,3,5") +
-                          arr2("1,0,2,4,3,5") - arr2("1,0,2,3,4,5");
-
-    REQUIRE(norm(man2) == Catch::Approx(norm(eval2)));
-
+    man2("0,1,2,3,4") =
+        arr2("0,1,2,3,4") - arr2("1,0,2,3,4") + arr2("1,2,0,3,4") -
+        arr2("2,1,0,3,4") + arr2("2,0,1,3,4") - arr2("0,2,1,3,4") -
+        arr2("0,1,2,4,3") + arr2("1,0,2,4,3") - arr2("1,2,0,4,3") +
+        arr2("2,1,0,4,3") - arr2("2,0,1,4,3") + arr2("0,2,1,4,3");
     TArrayD zero2;
-    zero2("0,1,2,3,4,5") = man2("0,1,2,3,4,5") - eval2("0,1,2,3,4,5");
-    // todo: might fail. update catch2 version
-    //    REQUIRE(Approx(norm(zero2)) == 0);
+    zero2("0,1,2,3,4") = man2("0,1,2,3,4") - eval2("0,1,2,3,4");
+    REQUIRE(norm(zero2) == Catch::Approx(0).margin(
+                               100 * std::numeric_limits<double>::epsilon()));
   }
 
   SECTION("Symmetrization") {
@@ -425,37 +416,16 @@ TEST_CASE("TEST_EVAL_USING_TA", "[eval]") {
 
     REQUIRE(norm(man1) == Catch::Approx(norm(eval1)));
 
-    TArrayD zero1;
-    zero1("0,1,2,3") = man1("0,1,2,3") - eval1("0,1,2,3");
-    // todo: update catch2
-    // REQUIRE(Approx(norm(zero1)) == 0);
+    auto expr2 = parse_antisymm(L"g_{i1,i2,i3}^{a1,a2,a3}");
 
-    // partial symmetrization
-
-    // g("0,1,2,3,4,5,6,7")
-    //    |-| |-| |-| |-|
-    //     ^-------^
-    //         ^-------^
-    // suppose [0,1] and [4,5] form a particle symmetric pair of index ranges
-    // and, [2,3] and [6,7] form another particle symmetric pair of index ranges
-
-    auto expr2 = parse_antisymm(L"g_{i1,i2,i3,i4}^{a1,a2,a3,a4}");
-    //                                0  1  2  3    4  5  6  7
-
-    auto eval2 = eval_symm(expr2, "i_1,i_2,i_3,i_4,a_1,a_2,a_3,a_4",
-                           {{0, 4, 2}, {2, 6, 2}});
-    auto const& arr2 = yield(L"g{i1,i2,i3,i4;a1,a2,a3,a4}");
+    auto eval2 = eval_symm(expr2, "i_1,i_2,i_3,a_1,a_2,a_3");
+    auto const& arr2 = yield(L"g{i1,i2,i3;a1,a2,a3}");
     TArrayD man2;
-    man2("i,j,k,l,a,b,c,d") = arr2("i,j,k,l,a,b,c,d") +
-                              arr2("i,j,l,k,a,b,d,c") + arr2("j,i,k,l,b,a,c,d");
+    man2("0,1,2,3,4,5") = arr2("0,1,2,3,4,5") + arr2("0,2,1,3,5,4") +
+                          arr2("2,0,1,5,3,4") + arr2("2,1,0,5,4,3") +
+                          arr2("1,2,0,4,5,3") + arr2("1,0,2,4,3,5");
 
     REQUIRE(norm(man2) == Catch::Approx(norm(eval2)));
-
-    TArrayD zero2;
-    zero2("i,j,k,l,a,b,c,d") =
-        man2("i,j,k,l,a,b,c,d") - eval2("i,j,k,l,a,b,c,d");
-    // todo: update catch2
-    // REQUIRE(Approx(norm(zero2)) == 0);
   }
 
   SECTION("Others") {
@@ -498,21 +468,17 @@ TEST_CASE("TEST_EVAL_USING_TA_COMPLEX", "[eval]") {
     return evaluate(eval_node(expr), target_labels, yield_)->get<TArrayC>();
   };
 
-  auto eval_symm =
-      [&yield_](sequant::ExprPtr const& expr, std::string const& target_labels,
-                sequant::container::svector<std::array<size_t, 3>> const&
-                    groups = {}) {
-        return evaluate_symm(eval_node(expr), target_labels, groups, yield_)
-            ->get<TArrayC>();
-      };
+  auto eval_symm = [&yield_](sequant::ExprPtr const& expr,
+                             std::string const& target_labels) {
+    return evaluate_symm(eval_node(expr), target_labels, yield_)
+        ->get<TArrayC>();
+  };
 
-  auto eval_antisymm =
-      [&yield_](sequant::ExprPtr const& expr, std::string const& target_labels,
-                sequant::container::svector<std::array<size_t, 3>> const&
-                    groups = {}) {
-        return evaluate_antisymm(eval_node(expr), target_labels, groups, yield_)
-            ->get<TArrayC>();
-      };
+  auto eval_antisymm = [&yield_](sequant::ExprPtr const& expr,
+                                 std::string const& target_labels) {
+    return evaluate_antisymm(eval_node(expr), target_labels, yield_)
+        ->get<TArrayC>();
+  };
 
   using namespace sequant;
   using namespace std::string_literals;
@@ -632,25 +598,21 @@ TEST_CASE("TEST_EVAL_USING_TA_COMPLEX", "[eval]") {
     // todo: Catch::Approx(0.0) == 0 fails. probably update catch2 version
     // REQUIRE(Approx(norm(zero1)) == 0);
 
-    // partial antisymmetrization
+    // odd-ranked tensor
+    auto expr2 = parse_expr(L"g_{i1, i2, i3}^{a1, a2}");
+    auto eval2 = eval_antisymm(expr2, "i_1,i_2,i_3,a_1,a_2");
+    auto const& arr2 = yield(L"g{i1,i2,i3;a1,a2}");
 
-    // g("0,1,2,3,4,5")
-    // suppose [3, 4,]
-    //         [0, 1,]
-    // form particle antisymmetric pair of index ranges
-    auto expr2 = parse_expr(L"g_{i1,i2,i3}^{a1,a2,a3}");
-    auto eval2 = eval_antisymm(expr2, "i_1,i_2,i_3,a_1,a_2,a_3", {{0, 3, 2}});
-    auto const& arr2 = yield(L"g{i1,i2,i3;a1,a2,a3}");
     auto man2 = TArrayC{};
-    man2("0,1,2,3,4,5") = arr2("0,1,2,3,4,5") - arr2("0,1,2,4,3,5") +
-                          arr2("1,0,2,4,3,5") - arr2("1,0,2,3,4,5");
-
-    REQUIRE(norm(man2) == Catch::Approx(norm(eval2)));
-
+    man2("0,1,2,3,4") =
+        arr2("0,1,2,3,4") - arr2("1,0,2,3,4") + arr2("1,2,0,3,4") -
+        arr2("2,1,0,3,4") + arr2("2,0,1,3,4") - arr2("0,2,1,3,4") -
+        arr2("0,1,2,4,3") + arr2("1,0,2,4,3") - arr2("1,2,0,4,3") +
+        arr2("2,1,0,4,3") - arr2("2,0,1,4,3") + arr2("0,2,1,4,3");
     TArrayC zero2;
-    zero2("0,1,2,3,4,5") = man2("0,1,2,3,4,5") - eval2("0,1,2,3,4,5");
-    // todo: might fail. update catch2 version
-    //    REQUIRE(Approx(norm(zero2)) == 0);
+    zero2("0,1,2,3,4") = man2("0,1,2,3,4") - eval2("0,1,2,3,4");
+    REQUIRE(norm(zero2) == Catch::Approx(0).margin(
+                               100 * std::numeric_limits<double>::epsilon()));
   }
 
   SECTION("Symmetrization") {
@@ -664,48 +626,16 @@ TEST_CASE("TEST_EVAL_USING_TA_COMPLEX", "[eval]") {
 
     REQUIRE(norm(man1) == Catch::Approx(norm(eval1)));
 
-    TArrayC zero1;
-    zero1("0,1,2,3") = man1("0,1,2,3") - eval1("0,1,2,3");
-    // todo: update catch2
-    // REQUIRE(Approx(norm(zero1)) == 0);
+    auto expr2 = parse_expr(L"g_{i1,i2,i3}^{a1,a2,a3}");
 
-    // partial symmetrization
-
-    // g("0,1,2,3,4,5,6,7")
-    //    |-| |-| |-| |-|
-    //     ^-------^
-    //         ^-------^
-    // suppose [0,1] and [4,5] form a particle symmetric pair of index ranges
-    // and, [2,3] and [6,7] form another particle symmetric pair of index ranges
-
-    auto expr2 = parse_expr(L"g_{i1,i2,i3,i4}^{a1,a2,a3,a4}");
-    //                                0  1  2  3    4  5  6  7
-
-    auto eval2 = eval_symm(expr2, "i_1,i_2,i_3,i_4,a_1,a_2,a_3,a_4",
-                           {{0, 4, 2}, {2, 6, 2}});
-    auto const& arr2 = yield(L"g{i1,i2,i3,i4;a1,a2,a3,a4}");
+    auto eval2 = eval_symm(expr2, "i_1,i_2,i_3,a_1,a_2,a_3");
+    auto const& arr2 = yield(L"g{i1,i2,i3;a1,a2,a3}");
     TArrayC man2;
-    man2("i,j,k,l,a,b,c,d") = arr2("i,j,k,l,a,b,c,d") +
-                              arr2("i,j,l,k,a,b,d,c") + arr2("j,i,k,l,b,a,c,d");
+    man2("0,1,2,3,4,5") = arr2("0,1,2,3,4,5") + arr2("0,2,1,3,5,4") +
+                          arr2("2,0,1,5,3,4") + arr2("2,1,0,5,4,3") +
+                          arr2("1,2,0,4,5,3") + arr2("1,0,2,4,3,5");
 
     REQUIRE(norm(man2) == Catch::Approx(norm(eval2)));
-
-    TArrayC zero2;
-    zero2("i,j,k,l,a,b,c,d") =
-        man2("i,j,k,l,a,b,c,d") - eval2("i,j,k,l,a,b,c,d");
-    // todo: update catch2
-    // REQUIRE(Approx(norm(zero2)) == 0);
-
-    auto expr3 = parse_expr(L"g_{i1,i2,i3}^{a1,a2,a3}");
-    auto eval3 = eval_symm(expr3, "i_1,i_2,i_3,a_1,a_2,a_3", {{0, 3, 3}});
-    auto const& arr3 = yield(L"g{i1,i2,i3;a1,a2,a3}");
-    TArrayC man3;
-    man3("i,j,k,a,b,c") = arr3("i,j,k,a,b,c") + arr3("i,k,j,a,c,b") +
-                          arr3("j,i,k,b,a,c") + arr3("j,k,i,b,c,a") +
-                          arr3("k,i,j,c,a,b") + arr3("k,j,i,c,b,a");
-    REQUIRE(norm(man3) == Catch::Approx(norm(eval3)));
-    TArrayC zero3;
-    zero3("i,j,k,a,b,c") = eval3("i,j,k,a,b,c") - man3("i,j,k,a,b,c");
   }
 
   SECTION("Others") {
