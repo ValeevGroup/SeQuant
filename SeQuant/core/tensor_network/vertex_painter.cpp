@@ -1,5 +1,5 @@
 #include <SeQuant/core/hash.hpp>
-#include <SeQuant/core/vertex_painter.hpp>
+#include <SeQuant/core/tensor_network/vertex_painter.hpp>
 
 namespace sequant {
 

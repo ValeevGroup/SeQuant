@@ -1,5 +1,5 @@
-#ifndef SEQUANT_VERTEX_PAINTER_H
-#define SEQUANT_VERTEX_PAINTER_H
+#ifndef SEQUANT_TENSOR_NETWORK_VERTEX_PAINTER_H
+#define SEQUANT_TENSOR_NETWORK_VERTEX_PAINTER_H
 
 #include <SeQuant/core/abstract_tensor.hpp>
 #include <SeQuant/core/container.hpp>
@@ -109,4 +109,4 @@ class VertexPainter {
 
 }  // namespace sequant
 
-#endif
+#endif  // SEQUANT_TENSOR_NETWORK_VERTEX_PAINTER_H

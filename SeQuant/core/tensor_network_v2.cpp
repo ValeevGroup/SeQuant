@@ -15,9 +15,9 @@
 #include <SeQuant/core/logger.hpp>
 #include <SeQuant/core/tag.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
+#include <SeQuant/core/tensor_network/vertex_painter.hpp>
 #include <SeQuant/core/tensor_network_v2.hpp>
 #include <SeQuant/core/utility/tuple.hpp>
-#include <SeQuant/core/vertex_painter.hpp>
 #include <SeQuant/core/wstring.hpp>
 
 #include <algorithm>

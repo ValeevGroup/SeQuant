@@ -437,8 +437,7 @@ ExprPtr TensorNetwork::canonicalize(
 }
 
 std::tuple<std::shared_ptr<bliss::Graph>, std::vector<std::wstring>,
-           std::vector<std::size_t>,
-           std::vector<typename TensorNetwork::VertexType>>
+           std::vector<std::size_t>, std::vector<VertexType>>
 TensorNetwork::make_bliss_graph(const named_indices_t *named_indices_ptr,
                                 bool distinct_named_indices) const {
   // must call init_edges() prior to calling this

@@ -9,7 +9,7 @@
 #include <SeQuant/core/logger.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/tensor_network.hpp>
-#include <SeQuant/core/vertex_type.hpp>
+#include <SeQuant/core/tensor_network/vertex.hpp>
 
 #ifdef SEQUANT_HAS_EXECUTION_HEADER
 #include <execution>

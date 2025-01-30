@@ -10,7 +10,7 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
-#include <SeQuant/core/vertex_type.hpp>
+#include <SeQuant/core/tensor_network/vertex.hpp>
 
 #include <cassert>
 #include <cstdlib>
@@ -137,8 +137,6 @@ class TensorNetwork {
   static inline auto edge2index_ = [](const Edge &e) -> const Index & {
     return e.idx();
   };
-
-  using VertexType = sequant::VertexType;
 
  public:
   /// @throw std::logic_error if exprptr_range contains a non-tensor

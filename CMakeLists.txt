@@ -245,6 +245,9 @@ set(SeQuant_src
         SeQuant/core/tensor_network.hpp
         SeQuant/core/tensor_network_v2.cpp
         SeQuant/core/tensor_network_v2.hpp
+        SeQuant/core/tensor_network/vertex.hpp
+        SeQuant/core/tensor_network/vertex_painter.cpp
+        SeQuant/core/tensor_network/vertex_painter.hpp
         SeQuant/core/timer.hpp
         SeQuant/core/utility/context.hpp
         SeQuant/core/utility/indices.hpp
@@ -254,8 +257,6 @@ set(SeQuant_src
         SeQuant/core/utility/string.hpp
         SeQuant/core/utility/string.cpp
         SeQuant/core/utility/tuple.hpp
-        SeQuant/core/vertex_painter.cpp
-        SeQuant/core/vertex_painter.hpp
         SeQuant/core/wick.hpp
         SeQuant/core/wick.impl.hpp
         SeQuant/core/wolfram.hpp

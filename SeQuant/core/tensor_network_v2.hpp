@@ -9,7 +9,7 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
-#include <SeQuant/core/vertex_type.hpp>
+#include <SeQuant/core/tensor_network/vertex.hpp>
 
 #include <cassert>
 #include <cstdlib>
