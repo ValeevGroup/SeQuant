@@ -750,8 +750,7 @@ TensorNetworkV2::canonicalize_slots(
     // for each named index type (as defined by named_index_compare) maps its
     // ptr in grand_index_list_ to its ordinal in grand_index_list_ + canonical
     // ordinal + its iterator in metadata.named_indices
-    using SlotType = TensorNetworkV2::SlotCanonicalizationMetadata::SlotType;
-    container::map<std::pair<const Index *, SlotType>, cord_set_t,
+    container::map<std::pair<const Index *, IndexSlotType>, cord_set_t,
                    decltype(named_index_compare)>
         idx2cord(named_index_compare);
 
@@ -768,8 +767,11 @@ TensorNetworkV2::canonicalize_slots(
         assert(named_indices_it != metadata.named_indices.end());
 
         // find the entry for this index type
-        const auto slot_type =
-            idx_ord < edges_.size() ? SlotType::tensor : SlotType::protoindex;
+        IndexSlotType slot_type;
+        if (idx_ord < edges_.size()) {  // TODO: handle aux indices
+          slot_type = IndexSlotType::TensorBraKet;
+        } else
+          slot_type = IndexSlotType::SPBundle;
         const auto idxptr_slottype = std::make_pair(&idx, slot_type);
         auto it = idx2cord.find(idxptr_slottype);
 

@@ -15,8 +15,8 @@
 #include <SeQuant/core/logger.hpp>
 #include <SeQuant/core/tag.hpp>
 #include <SeQuant/core/tensor_network.hpp>
+#include <SeQuant/core/tensor_network/vertex_painter.hpp>
 #include <SeQuant/core/utility/tuple.hpp>
-#include <SeQuant/core/vertex_painter.hpp>
 #include <SeQuant/core/wstring.hpp>
 
 #include <algorithm>
@@ -865,8 +865,7 @@ TensorNetwork::SlotCanonicalizationMetadata TensorNetwork::canonicalize_slots(
     // for each named index type (as defined by named_index_compare) maps its
     // ptr in grand_index_list_ to its ordinal in grand_index_list_ + canonical
     // ordinal + its iterator in metadata.named_indices
-    using SlotType = TensorNetwork::SlotCanonicalizationMetadata::SlotType;
-    container::map<std::pair<const Index *, SlotType>, cord_set_t,
+    container::map<std::pair<const Index *, IndexSlotType>, cord_set_t,
                    decltype(named_index_compare)>
         idx2cord(named_index_compare);
     // collect named indices and sort on the fly
@@ -878,8 +877,14 @@ TensorNetwork::SlotCanonicalizationMetadata TensorNetwork::canonicalize_slots(
       if (is_named_index(idx)) {
         const auto named_indices_it = metadata.named_indices.find(idx);
         assert(named_indices_it != metadata.named_indices.end());
-        const auto slot_type =
-            idx_ord < edges_.size() ? SlotType::tensor : SlotType::protoindex;
+
+        // deduce the slot type occupied by this index
+        IndexSlotType slot_type;
+        if (idx_ord < edges_.size()) {  // TODO: handle aux indices
+          slot_type = IndexSlotType::TensorBraKet;
+        } else
+          slot_type = IndexSlotType::SPBundle;
+
         // find the entry for this index type
         const auto idxptr_slottype = std::make_pair(&idx, slot_type);
         auto it = idx2cord.find(idxptr_slottype);

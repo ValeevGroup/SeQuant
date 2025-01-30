@@ -9,6 +9,7 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
+#include <SeQuant/core/tensor_network/slot.hpp>
 #include <SeQuant/core/tensor_network/vertex.hpp>
 
 #include <cassert>
@@ -225,14 +226,11 @@ class TensorNetworkV2 {
     /// list of named indices
     NamedIndexSet named_indices;
 
-    /// named index can occupy either a slot of a Tensor or a proto index
-    enum class SlotType { tensor, protoindex };
-
     /// type of less-than comparison function for named indices, receives {Index
     /// ptr, its slot type}
     using named_index_compare_t =
-        std::function<bool(const std::pair<const Index *, SlotType> &,
-                           const std::pair<const Index *, SlotType> &)>;
+        std::function<bool(const std::pair<const Index *, IndexSlotType> &,
+                           const std::pair<const Index *, IndexSlotType> &)>;
 
     /// less-than comparison function for named indices, used for
     /// coarse-grained sorting of named indices,
