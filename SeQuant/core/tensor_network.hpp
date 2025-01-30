@@ -183,7 +183,7 @@ class TensorNetwork {
 
   const auto &tensor_input_ordinals() const { return tensor_input_ordinals_; }
 
-  using named_indices_t = container::set<Index, Index::LabelCompare>;
+  using named_indices_t = container::set<Index, Index::FullLabelCompare>;
 
   /// @param cardinal_tensor_labels move all tensors with these labels to the
   /// front before canonicalizing indices
