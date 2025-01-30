@@ -76,77 +76,80 @@ bool operator<(IterPair<It> const& l, IterPair<It> const& r) noexcept {
   return *l.first < *r.first;
 }
 
-auto valid_particle_range = [](auto const& tpl) -> bool {
-  using std::distance;
-  auto [b1, b2, l] = tpl;
-  return distance(b1, b1 + l) == distance(b2, b2 + l);
+using perm_t = container::svector<size_t>;
+
+struct SymmetricParticleRange {
+  perm_t::iterator bra_beg;
+  perm_t::iterator ket_beg;
+  size_t nparticles;
 };
 
-auto iter_pairs = [](auto&& tpl) {
+struct AntisymmetricParticleRange {
+  perm_t::iterator bra_beg;
+  size_t bra_size;
+  perm_t::iterator ket_beg;
+  size_t ket_size;
+};
+
+inline bool valid_particle_range(SymmetricParticleRange const& rng) {
+  using std::distance;
+  auto bra_end = rng.bra_beg + rng.nparticles;
+  auto ket_end = rng.ket_beg + rng.nparticles;
+  return std::is_sorted(rng.bra_beg, bra_end) &&
+         std::is_sorted(rng.ket_beg, ket_end) &&
+         distance(rng.bra_beg, bra_end) == distance(rng.ket_beg, ket_end);
+}
+
+inline bool valid_particle_range(AntisymmetricParticleRange const& rng) {
+  auto bra_end = rng.bra_beg + rng.bra_size;
+  auto ket_end = rng.ket_beg + rng.ket_size;
+  return std::is_sorted(rng.bra_beg, bra_end) &&
+         std::is_sorted(rng.ket_beg, ket_end);
+}
+
+inline auto iter_pairs(SymmetricParticleRange const& rng) {
   using ranges::views::iota;
   using ranges::views::transform;
-  using std::get;
 
-  auto b1 = get<0>(tpl);
-  auto b2 = get<1>(tpl);
-  auto l = get<2>(tpl);
-
-  return iota(size_t{0}, l) | transform([b1, b2](auto i) {
-           return IterPair{b1 + i, b2 + i};
-         }) |
-         ranges::to_vector;
-};
-
-using perm_t = container::svector<size_t>;
-using particle_range_t = std::array<size_t, 3>;
+  return iota(size_t{0}, rng.nparticles)  //
+         | transform([b = rng.bra_beg, k = rng.ket_beg](auto i) {
+             return IterPair{b + i, k + i};
+           });
+}
 
 ///
 /// \brief This function permutes the given range of antisymmetric particles
 ///        in-place and calls the given callback function with the parity of the
-///        permutation.
+///        permutation as the argument.
 ///
-/// \param groups A vector of antisymmetric particle ranges. Each element is a
-///               tuple of two iterators and the length of the range. An
-///               iterator and the length make up the range which is permuted
-///               until it reaches lexicographical maximum, for every
-///               permutation of the other range.
+/// \param rng The antisymmetric particle range.
 ///
 /// \param call_back A function object which is called with the parity of the
 ///                  particle antisymsmetric permutation.
 ///
-template <typename F,
-          std::enable_if_t<std::is_invocable_v<F, int>, bool> = true>
-void antisymmetric_permutation(
-    container::svector<
-        std::tuple<perm_t::iterator, perm_t::iterator, size_t>> const& groups,
-    F const& call_back) {
-  using ranges::views::transform;
 
-  auto const n = groups.size();
-  if (n == 0) return;
+template <typename F, typename = std::enable_if_t<std::is_invocable_v<F, int>>>
+void antisymmetric_permutation(AntisymmetricParticleRange const& rng,
+                               F call_back) {
+  struct {
+    int bra;
+    int ket;
+  } parity{0, 0};
 
-  assert(ranges::all_of(groups, valid_particle_range));
+  auto bra_end = rng.bra_beg + rng.bra_size;
+  auto ket_end = rng.ket_beg + rng.ket_size;
 
-  call_back(0);
-
-  for (int i = n - 1; i >= 0; --i) {
-    auto [bra_beg, ket_beg, len] = groups[i];
-
-    auto bra_end = bra_beg + len;
-    auto ket_end = ket_beg + len;
-
-    int bra_p = 0;
-    auto outer = 0;
-
-    for (auto bra_yn = true; bra_yn;
-         bra_yn = next_permutation_parity(bra_p, bra_beg, bra_end), ++outer) {
-      auto inner = 0;
-      int ket_p = 0;
-
-      for (auto ket_yn = true; ket_yn;
-           ket_yn = next_permutation_parity(ket_p, ket_beg, ket_end), ++inner) {
-        if (!(outer == 0 && inner == 0)) call_back((bra_p + ket_p) % 2);
-      }
+  for (auto bra_yn = true;                            //
+       bra_yn;                                        //
+       bra_yn = next_permutation_parity(parity.bra,   //
+                                        rng.bra_beg,  //
+                                        bra_end)) {
+    for (auto ket_yn = true;                            //
+         ket_yn;                                        //
+         ket_yn = next_permutation_parity(parity.ket,   //
+                                          rng.ket_beg,  //
+                                          ket_end)) {
+      call_back((parity.bra + parity.ket) % 2);
     }
   }
 }
@@ -155,107 +158,17 @@ void antisymmetric_permutation(
 /// \brief This function permutes the given range of symmetric particles
 ///        in-place and calls the given callback function.
 ///
-/// \param groups A vector of symmetric particle ranges. Each element is a
-///               tuple of two iterators and the length of the range. An
-///               iterator and the length make up the range which is permuted
-///               together with the other range.
+/// \param rng The symmetric particle range.
 ///
 /// \param call_back A function object which is called after permutation.
 ///
-template <typename F, std::enable_if_t<std::is_invocable_v<F>, bool> = true>
-void symmetric_permutation(
-    container::svector<
-        std::tuple<perm_t::iterator, perm_t::iterator, size_t>> const& groups,
-    F const& call_back) {
-  using ranges::views::transform;
 
-  auto const n = groups.size();
-  if (n == 0) return;
-
-  assert(ranges::all_of(groups, valid_particle_range));
-
-  auto groups_vec = groups | transform(iter_pairs) | ranges::to_vector;
-
-  call_back();
-
-  // using reverse iterator (instead of indices) not allowed for some reason
-  // iter from the end group
-  for (int i = n - 1; i >= 0; --i) {
-    auto beg = groups_vec[i].begin();
-    auto end = groups_vec[i].end();
-    auto yn = std::next_permutation(beg, end);
-    for (; yn; yn = std::next_permutation(beg, end)) call_back();
-  }
-}
-
-///
-/// \brief This function implements the antisymmetrization of a tensor (eg.
-///        TA::DistArray).
-///
-/// \param rank The rank of the tensor to be antisymmetrized.
-/// \param groups A vector of particle ranges. Each element is an array of three
-///               unsigned integers. The first integer is the position of tensor
-///               index where the antisymmetric range starts in bra and the
-///               second is the corresponding position in ket. The third integer
-///               is the length of the antisymmetric range.
-///
-/// \param call_back Will be called for each antisymmetric permutation of
-///                  [0, rank) with the parity of the permutation and the
-///                  permutation itself.
-///
-template <
-    typename F,
-    std::enable_if_t<std::is_invocable_v<F, int, perm_t const&>, bool> = true>
-void antisymmetrize_backend(size_t rank,
-                            container::svector<particle_range_t> const& groups,
-                            F const& call_back) {
-  using ranges::views::iota;
-  auto perm = iota(size_t{0}, rank) | ranges::to<perm_t>;
-
-  auto groups_vec = container::svector<
-      std::tuple<perm_t::iterator, perm_t::iterator, size_t>>{};
-  groups_vec.reserve(groups.size());
-  auto beg = perm.begin();
-  for (auto&& g : groups) {
-    groups_vec.emplace_back(beg + g[0], beg + g[1], g[2]);
-  }
-  antisymmetric_permutation(
-      groups_vec,
-      [&call_back, &perm = std::as_const(perm)](int p) { call_back(p, perm); });
-}
-
-///
-/// \brief This function implements the symmetrization of a tensor (eg.
-///        TA::DistArray).
-///
-/// \param rank The rank of the tensor to be symmetrized.
-///
-/// \param groups A vector of particle ranges. Each element is an array of three
-///               unsigned integers. The first integer is the position of tensor
-///               index where the symmetric range starts in bra and the
-///               second is the corresponding position in ket. The third integer
-///               is the length of the symmetric range.
-///
-/// \param call_back Will be called for each symmetric permutation [0,rank) with
-///                  the permutation itself.
-///
-template <typename F,
-          std::enable_if_t<std::is_invocable_v<F, perm_t const&>, bool> = true>
-void symmetrize_backend(size_t rank,
-                        container::svector<particle_range_t> const& groups,
-                        F const& call_back) {
-  using ranges::views::iota;
-  auto perm = iota(size_t{0}, rank) | ranges::to<perm_t>;
-  auto groups_vec = container::svector<
-      std::tuple<perm_t::iterator, perm_t::iterator, size_t>>{};
-  groups_vec.reserve(groups.size());
-  auto beg = perm.begin();
-  for (auto&& g : groups) {
-    groups_vec.emplace_back(beg + g[0], beg + g[1], g[2]);
-  }
-  symmetric_permutation(
-      groups_vec,
-      [&call_back, &perm = std::as_const(perm)]() { call_back(perm); });
+template <typename F, typename = std::enable_if_t<std::is_invocable_v<F>>>
+void symmetric_permutation(SymmetricParticleRange const& rng, F call_back) {
+  auto ips = iter_pairs(rng) | ranges::to_vector;
+  do {
+    call_back();
+  } while (std::next_permutation(ips.begin(), ips.end()));
 }
 
 template <typename RngOfOrdinals>
@@ -292,28 +205,27 @@ auto index_hash(Iterable const& bk) {
 ///
 /// \brief This function implements the symmetrization of TA::DistArray.
 ///
-/// \param arr The tensor to be symmetrized.
+/// \param arr The array to be symmetrized
 ///
-/// \param groups A vector of particle ranges. Each element is an array of three
-///               unsigned integers. The first integer is the position of tensor
-///               index where the symmetric range starts in bra and the
-///               second is the corresponding position in ket. The third integer
-///               is the length of the symmetric range.
+/// \pre The rank of the array must be even
 ///
 /// \return The symmetrized TA::DistArray.
 ///
 template <typename... Args>
-auto symmetrize_ta(TA::DistArray<Args...> const& arr,
-                   container::svector<particle_range_t> const& groups) {
+auto particle_symmetrize_ta(TA::DistArray<Args...> const& arr) {
   using ranges::views::iota;
 
   size_t const rank = arr.trange().rank();
+  if (rank % 2 != 0)
+    throw std::domain_error("This function only supports even-ranked tensors");
 
   TA::DistArray<Args...> result;
 
-  auto const lannot = ords_to_annot(iota(size_t{0}, rank));
+  perm_t perm = iota(size_t{0}, rank) | ranges::to<perm_t>;
 
-  auto call_back = [&result, &lannot, &arr](perm_t const& perm) {
+  auto const lannot = ords_to_annot(perm);
+
+  auto call_back = [&result, &lannot, &arr, &perm = std::as_const(perm)]() {
     auto const rannot = ords_to_annot(perm);
     if (result.is_initialized()) {
       result(lannot) += arr(rannot);
@@ -322,7 +234,11 @@ auto symmetrize_ta(TA::DistArray<Args...> const& arr,
     }
   };
 
-  symmetrize_backend(rank, groups, call_back);
+  auto const nparticles = rank / 2;
+  symmetric_permutation(SymmetricParticleRange{perm.begin(),               //
+                                               perm.begin() + nparticles,  //
+                                               nparticles},
+                        call_back);
 
   TA::DistArray<Args...>::wait_for_lazy_cleanup(result.world());
 
@@ -332,37 +248,43 @@ auto symmetrize_ta(TA::DistArray<Args...> const& arr,
 ///
 /// \brief This function implements the antisymmetrization of TA::DistArray.
 ///
-/// \param arr The tensor to be antisymmetrized.
+/// \param arr The array to be antisymmetrized.
 ///
-/// \param groups A vector of particle ranges. Each element is an array of three
-///               unsigned integers. The first integer is the position of tensor
-///               index where the antisymmetric range starts in bra and the
-///               second is the corresponding position in ket. The third integer
-///               is the length of the symmetric range.
+/// \param bra_rank The rank of the bra indices
 ///
 /// \return The antisymmetrized TA::DistArray.
 ///
 template <typename... Args>
-auto antisymmetrize_ta(
-    TA::DistArray<Args...> const& arr,
-    container::svector<particle_range_t> const& groups = {}) {
+auto particle_antisymmetrize_ta(TA::DistArray<Args...> const& arr,
+                                size_t bra_rank) {
   using ranges::views::iota;
 
   size_t const rank = arr.trange().rank();
+  assert(bra_rank <= rank);
 
   TA::DistArray<Args...> result;
 
-  auto const lannot = ords_to_annot(iota(size_t{0}, rank));
+  perm_t perm = iota(size_t{0}, rank) | ranges::to<perm_t>;
 
-  auto call_back = [&lannot, &arr, &result](int p, perm_t const& perm) {
-    typename decltype(result)::numeric_type p_ = p == 0 ? 1 : -1;
+  auto const lannot = ords_to_annot(perm);
+
+  auto call_back = [&lannot, &arr, &result,
+                    &perm = std::as_const(perm)](int parity) {
+    typename decltype(result)::numeric_type p_ = parity == 0 ? 1 : -1;
     if (result.is_initialized())
       result(lannot) += p_ * arr(ords_to_annot(perm));
     else
       result(lannot) = p_ * arr(ords_to_annot(perm));
   };
 
-  antisymmetrize_backend(rank, groups, call_back);
+  auto const ket_rank = rank - bra_rank;
+
+  antisymmetric_permutation(
+      AntisymmetricParticleRange{perm.begin(),             //
+                                 bra_rank,                 //
+                                 perm.begin() + bra_rank,  //
+                                 ket_rank},
+      call_back);
 
   TA::DistArray<Args...>::wait_for_lazy_cleanup(result.world());
 
@@ -374,86 +296,81 @@ auto antisymmetrize_ta(
 ///
 /// \param arr The tensor to be symmetrized.
 ///
-/// \param groups A vector of particle ranges. Each element is an array of three
-///               unsigned integers. The first integer is the position of tensor
-///               index where the symmetric range starts in bra and the
-///               second is the corresponding position in ket. The third integer
-///               is the length of the symmetric range.
+/// \pre The rank of the tensor must be even.
 ///
 /// \return The symmetrized btas::Tensor.
 ///
 template <typename... Args>
-auto symmetrize_btas(btas::Tensor<Args...> const& arr,
-                     container::svector<particle_range_t> const& groups) {
+auto particle_symmetrize_btas(btas::Tensor<Args...> const& arr) {
   using ranges::views::iota;
 
   size_t const rank = arr.rank();
-  // Caveat:
-  // clang-format off
-  // auto const lannot = iota(size_t{0}, rank) | ranges::to<perm_t>;
-  // clang-format on
-  auto const lannot = [rank]() {
-    auto p = perm_t(rank);
-    for (auto i = 0; i < rank; ++i) p[i] = i;
-    return p;
-  }();
+
+  if (rank % 2 != 0)
+    throw std::domain_error("This function only supports even-ranked tensors");
+
+  perm_t perm = iota(size_t{0}, rank) | ranges::to<perm_t>;
+
+  auto const lannot = perm;
 
   auto result = btas::Tensor<Args...>{arr.range()};
   result.fill(0);
 
-  auto call_back = [&result, &lannot, &arr](auto const& permutation) {
-    auto const& rannot = permutation;
+  auto call_back = [&result, &lannot, &arr, &perm = std::as_const(perm)]() {
     btas::Tensor<Args...> temp;
-    btas::permute(arr, lannot, temp, rannot);
+    btas::permute(arr, lannot, temp, perm);
     result += temp;
   };
 
-  symmetrize_backend(rank, groups, call_back);
+  auto const nparticles = rank / 2;
+  symmetric_permutation(SymmetricParticleRange{perm.begin(),               //
+                                               perm.begin() + nparticles,  //
+                                               nparticles},
+                        call_back);
+
   return result;
 }
 
 ///
 /// \brief This function implements the antisymmetrization of btas::Tensor.
 ///
-/// \param arr The tensor to be antisymmetrized.
+/// \param arr The tensor to be antisymmetrized
 ///
-/// \param groups A vector of particle ranges. Each element is an array of three
-///               unsigned integers. The first integer is the position of tensor
-///               index where the antisymmetric range starts in bra and the
-///               second is the corresponding position in ket. The third integer
-///               is the length of the symmetric range.
+/// \param bra_rank The rank of the bra indices
 ///
 /// \return The antisymmetrized btas::Tensor.
 ///
 template <typename... Args>
-auto antisymmetrize_btas(
-    btas::Tensor<Args...> const& arr,
-    container::svector<particle_range_t> const& groups = {}) {
+auto particle_antisymmetrize_btas(btas::Tensor<Args...> const& arr,
+                                  size_t bra_rank) {
   using ranges::views::iota;
 
   size_t const rank = arr.rank();
-  // Caveat:
-  // auto const lannot = iota(size_t{0}, rank) | ranges::to<perm_t>;
-  //
-  auto const lannot = [rank]() {
-    auto p = perm_t(rank);
-    for (auto i = 0; i < rank; ++i) p[i] = i;
-    return p;
-  }();
+  assert(bra_rank <= rank);
 
   auto result = btas::Tensor<Args...>{arr.range()};
   result.fill(0);
 
-  auto call_back = [&result, &lannot, &arr](int p, perm_t const& perm) {
-    typename decltype(result)::numeric_type p_ = p == 0 ? 1 : -1;
-    auto const& rannot = perm;
+  perm_t perm = iota(size_t{0}, rank) | ranges::to<perm_t>;
+  auto const lannot = perm;
+
+  auto call_back = [&lannot, &arr, &result,
+                    &perm = std::as_const(perm)](int parity) {
+    typename decltype(result)::numeric_type p_ = parity == 0 ? 1 : -1;
     btas::Tensor<Args...> temp;
-    btas::permute(arr, lannot, temp, rannot);
+    btas::permute(arr, lannot, temp, perm);
     btas::scal(p_, temp);
     result += temp;
   };
 
-  antisymmetrize_backend(rank, groups, call_back);
+  auto const ket_rank = rank - bra_rank;
+
+  antisymmetric_permutation(
+      AntisymmetricParticleRange{perm.begin(),             //
+                                 bra_rank,                 //
+                                 perm.begin() + bra_rank,  //
+                                 ket_rank},
+      call_back);
 
   return result;
 }
@@ -583,8 +500,7 @@ class EvalResult {
   ///       [b1, b1+len) and [b2, b2+len) are two ranges that will be permuted
   ///       simultaneously and at the equivalent positions.
   ///
-  [[nodiscard]] virtual ERPtr symmetrize(
-      container::svector<std::array<size_t, 3>> const&) const = 0;
+  [[nodiscard]] virtual ERPtr symmetrize() const = 0;
 
   ///
   /// \brief Particle antisymmetrize this eval result according to the list of
@@ -595,11 +511,10 @@ class EvalResult {
   ///         [b1,b2,len]
   ///       where b1, and b2 are the zero-based positions of the tensor indices.
   ///       [b1, b1+len) and [b2, b2+len) are two ranges that will be permuted
-  ///       by keeping track of the parity (even/odd)-ness of the total
+  ///       by keeping track of the parity -- (even/odd)-ness -- of the total
   ///       permutation.
   ///
-  [[nodiscard]] virtual ERPtr antisymmetrize(
-      container::svector<std::array<size_t, 3>> const&) const = 0;
+  [[nodiscard]] virtual ERPtr antisymmetrize(size_t bra_rank) const = 0;
 
   [[nodiscard]] bool has_value() const noexcept;
 
@@ -697,13 +612,11 @@ class EvalScalar final : public EvalResult {
     val += other.get<T>();
   }
 
-  [[nodiscard]] ERPtr symmetrize(
-      container::svector<std::array<size_t, 3>> const&) const override {
+  [[nodiscard]] ERPtr symmetrize() const override {
     throw unimplemented_method("symmetrize");
   }
 
-  [[nodiscard]] ERPtr antisymmetrize(
-      container::svector<std::array<size_t, 3>> const&) const override {
+  [[nodiscard]] ERPtr antisymmetrize(size_t bra_rank) const override {
     throw unimplemented_method("antisymmetrize");
   }
 
@@ -826,14 +739,13 @@ class EvalTensorTA final : public EvalResult {
     ArrayT::wait_for_lazy_cleanup(t.world());
   }
 
-  [[nodiscard]] ERPtr symmetrize(
-      container::svector<std::array<size_t, 3>> const& groups) const override {
-    return eval_result<this_type>(symmetrize_ta(get<ArrayT>(), groups));
+  [[nodiscard]] ERPtr symmetrize() const override {
+    return eval_result<this_type>(particle_symmetrize_ta(get<ArrayT>()));
   }
 
-  [[nodiscard]] ERPtr antisymmetrize(
-      container::svector<std::array<size_t, 3>> const& groups) const override {
-    return eval_result<this_type>(antisymmetrize_ta(get<ArrayT>(), groups));
+  [[nodiscard]] ERPtr antisymmetrize(size_t bra_rank) const override {
+    return eval_result<this_type>(
+        particle_antisymmetrize_ta(get<ArrayT>(), bra_rank));
   }
 };
 
@@ -959,17 +871,9 @@ class EvalTensorOfTensorTA final : public EvalResult {
     ArrayT::wait_for_lazy_cleanup(t.world());
   }
 
-  [[nodiscard]] ERPtr symmetrize(
-      container::svector<std::array<size_t, 3>> const& groups) const override {
-    // todo
-    // return eval_result<this_type>(symmetrize_ta(get<ArrayT>(), groups));
-    return nullptr;
-  }
+  [[nodiscard]] ERPtr symmetrize() const override { return nullptr; }
 
-  [[nodiscard]] ERPtr antisymmetrize(
-      container::svector<std::array<size_t, 3>> const& groups) const override {
-    // todo
-    // return eval_result<this_type>(antisymmetrize_ta(get<ArrayT>(), groups));
+  [[nodiscard]] ERPtr antisymmetrize(size_t bra_rank) const override {
     return nullptr;
   }
 };
@@ -1051,15 +955,13 @@ class EvalTensorBTAS final : public EvalResult {
     t += o;
   }
 
-  [[nodiscard]] ERPtr symmetrize(
-      container::svector<std::array<size_t, 3>> const& groups) const override {
-    return eval_result<EvalTensorBTAS<T>>(symmetrize_btas(get<T>(), groups));
+  [[nodiscard]] ERPtr symmetrize() const override {
+    return eval_result<EvalTensorBTAS<T>>(particle_symmetrize_btas(get<T>()));
   }
 
-  [[nodiscard]] ERPtr antisymmetrize(
-      container::svector<std::array<size_t, 3>> const& groups) const override {
+  [[nodiscard]] ERPtr antisymmetrize(size_t bra_rank) const override {
     return eval_result<EvalTensorBTAS<T>>(
-        antisymmetrize_btas(get<T>(), groups));
+        particle_antisymmetrize_btas(get<T>(), bra_rank));
   }
 };
 

@@ -189,14 +189,14 @@ TEST_CASE("TEST_EVAL_USING_BTAS", "[eval]") {
 
   auto eval_symm = [&yield_](sequant::ExprPtr const& expr,
                              container::svector<long> const& target_labels) {
-    return evaluate_symm(eval_node(expr), target_labels, {}, yield_)
+    return evaluate_symm(eval_node(expr), target_labels, yield_)
         ->get<BTensorD>();
   };
 
   auto eval_antisymm = [&yield_](
                            sequant::ExprPtr const& expr,
                            container::svector<long> const& target_labels) {
-    return evaluate_antisymm(eval_node(expr), target_labels, {}, yield_)
+    return evaluate_antisymm(eval_node(expr), target_labels, yield_)
         ->get<BTensorD>();
   };
 
