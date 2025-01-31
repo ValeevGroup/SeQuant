@@ -896,20 +896,14 @@ ExprPtr closed_shell_spintrace(
     auto substitute_ext_idx = [&product_bras, &product_kets](
                                   const container::svector<Index>& idx_pair) {
       assert(idx_pair.size() == 2);
-      if (idx_pair.size() == 2) {
-        auto it = idx_pair.begin();
-        auto first = *it;
-        it++;
-        auto second = *it;
-        std::replace(product_bras.begin(), product_bras.end(), first, second);
-        std::replace(product_kets.begin(), product_kets.end(), first, second);
-      }
+      const auto& what = idx_pair[0];
+      const auto& with = idx_pair[1];
+      std::replace(product_bras.begin(), product_bras.end(), what, with);
+      std::replace(product_kets.begin(), product_kets.end(), what, with);
     };
 
     // Substitute indices from external index list
-    if ((*ext_index_groups.begin()).size() == 2) {
-      ranges::for_each(ext_index_groups, substitute_ext_idx);
-    }
+    ranges::for_each(ext_index_groups, substitute_ext_idx);
 
     auto n_cycles = count_cycles(product_kets, product_bras);
 

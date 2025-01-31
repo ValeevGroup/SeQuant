@@ -924,8 +924,10 @@ class IndexFactory {
         std::scoped_lock lock(mutex_);
 #endif
         if ((counter_it = counters_.find(space)) == counters_.end()) {
-          counters_[space] = min_index_ - 1;
-          counter_it = counters_.find(space);
+          bool inserted = false;
+          std::tie(counter_it, inserted) =
+              counters_.emplace(space, min_index_ - 1);
+          assert(inserted);
         }
       }
       result = Index(
