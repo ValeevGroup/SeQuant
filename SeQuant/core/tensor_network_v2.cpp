@@ -981,7 +981,7 @@ TensorNetworkV2::Graph TensorNetworkV2::create_graph(
             (ranges::views::transform(
                  index.proto_indices(),
                  [](const Index &idx) { return idx.full_label(); }) |
-             ranges::views::join(L", "sv) | ranges::to<std::wstring>()) +
+             ranges::views::join(L","sv) | ranges::to<std::wstring>()) +
             L">";
 
         graph.vertex_labels.push_back(std::move(spbundle_label));

@@ -477,7 +477,7 @@ TensorNetwork::make_bliss_graph(const named_indices_t *named_indices_ptr,
   ranges::for_each(edges_, [&](const Edge &edge) {
     const Index &idx = edge.idx();
     ++nv;  // each index is a vertex
-    vertex_labels.at(index_cnt) = idx.to_latex();
+    vertex_labels.at(index_cnt) = idx.full_label();
     vertex_type.at(index_cnt) = VertexType::Index;
     vertex_color.at(index_cnt) = colorizer(idx);
 
@@ -499,7 +499,7 @@ TensorNetwork::make_bliss_graph(const named_indices_t *named_indices_ptr,
   });
   ranges::for_each(pure_proto_indices_, [&](const Index &idx) {
     ++nv;  // each index is a vertex
-    vertex_labels.at(index_cnt) = idx.to_latex();
+    vertex_labels.at(index_cnt) = idx.full_label();
     vertex_type.at(index_cnt) = VertexType::Index;
     vertex_color.at(index_cnt) = colorizer(idx);
     index_cnt++;
@@ -507,12 +507,18 @@ TensorNetwork::make_bliss_graph(const named_indices_t *named_indices_ptr,
 
   // now commit protoindex bundle metadata
   ranges::for_each(symmetric_protoindex_bundles, [&](const auto &bundle) {
+    assert(!bundle.empty());
     ++nv;  // each symmetric protoindex bundle is a vertex
-    std::wstring spbundle_label = L"{";
-    for (auto &&pi : bundle) {
-      spbundle_label += pi.to_latex();
+    std::wstring spbundle_label = L"<";
+    std::size_t pi_count = 0;
+    const auto end = bundle.end();
+    auto it = bundle.begin();
+    spbundle_label += it->full_label();
+    for (++it; it != end; ++it) {
+      spbundle_label += L",";
+      spbundle_label += it->full_label();
     }
-    spbundle_label += L"}";
+    spbundle_label += L">";
     vertex_labels.push_back(spbundle_label);
     vertex_type.push_back(VertexType::SPBundle);
     vertex_color.push_back(colorizer(bundle));
