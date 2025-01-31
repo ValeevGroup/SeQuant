@@ -10,6 +10,7 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
+#include <SeQuant/core/tensor_network/canonicals.hpp>
 #include <SeQuant/core/tensor_network/slot.hpp>
 #include <SeQuant/core/tensor_network/vertex.hpp>
 
@@ -307,7 +308,7 @@ class TensorNetwork {
       const container::vector<std::wstring> &cardinal_tensor_labels = {},
       const named_indices_t *named_indices = nullptr,
       SlotCanonicalizationMetadata::named_index_compare_t named_index_compare =
-          {});
+          default_idxptr_slottype_lesscompare{});
 
   /// Factorizes tensor network
   /// @return sequence of binary products; each element encodes the tensors to

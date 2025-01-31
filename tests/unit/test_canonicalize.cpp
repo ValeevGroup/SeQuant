@@ -428,35 +428,12 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
                    L"g{a3;a4;x2,x1} * C{a3<i1,i2>;a3} * C{a4;a4<i2>}", true),
 
            }) {
-        // to produce the "canonical" layout of tensors/TNs this is used by
-        // canonicalize_slots to sort BEFORE sorting by topological canonical
-        // order produced by bliss::Graph:
-        // - first order by # of protoindices
-        // - then, order by index slot types: bra, ket, aux, spbundle (matches
-        // the order of entries in IndexSlotType)
-        auto idxptr_slottype_lesscompare = [](const auto& idxptr_slottype1,
-                                              const auto& idxptr_slottype2) {
-          const auto& [idxptr1, slottype1] = idxptr_slottype1;
-          const auto& [idxptr2, slottype2] = idxptr_slottype2;
-          if (idxptr1->proto_indices().size() !=
-              idxptr2->proto_indices().size())
-            return idxptr1->proto_indices().size() <
-                   idxptr2->proto_indices().size();
-          else {
-            if (slottype1 != slottype2)
-              return slottype1 < slottype2;
-            else  // in same types of slots order by space
-              return idxptr1->space() < idxptr2->space();
-          }
-        };
-
         std::wcout << "============== " << input1
                    << " ===============" << std::endl;
         auto ex1 = parse_expr(input1);
         TN tn1(ex1);
         auto cbp1 = tn1.canonicalize_slots(
-            TensorCanonicalizer::cardinal_tensor_labels(), nullptr,
-            idxptr_slottype_lesscompare);
+            TensorCanonicalizer::cardinal_tensor_labels());
         std::wcout << "canonical order of named indices:\n";
         for (const auto idx_it : cbp1.named_indices_canonical) {
           std::wcout << idx_it->to_latex() << "\n";
@@ -467,8 +444,7 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
         auto ex2 = parse_expr(input2);
         TN tn2(ex2);
         auto cbp2 = tn2.canonicalize_slots(
-            TensorCanonicalizer::cardinal_tensor_labels(), nullptr,
-            idxptr_slottype_lesscompare);
+            TensorCanonicalizer::cardinal_tensor_labels());
         std::wcout << "canonical order of named indices:\n";
         for (const auto idx_it : cbp2.named_indices_canonical) {
           std::wcout << idx_it->to_latex() << "\n";
