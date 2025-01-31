@@ -994,8 +994,8 @@ ExprPtr closed_shell_CC_spintrace(ExprPtr const& expr) {
     // Biorthogonal transformation
     st_expr = biorthogonal_transform(st_expr, ext_idxs);
 
-    auto bixs = ext_idxs | transform([](auto&& vec) { return vec[0]; });
-    auto kixs = ext_idxs | transform([](auto&& vec) { return vec[1]; });
+    auto bixs = ext_idxs | transform([](auto&& vec) { return vec[1]; });
+    auto kixs = ext_idxs | transform([](auto&& vec) { return vec[0]; });
     st_expr =
         ex<Tensor>(Tensor{L"S", bra(std::move(bixs)), ket(std::move(kixs))}) *
         st_expr;
@@ -1023,8 +1023,8 @@ ExprPtr closed_shell_CC_spintrace_rigorous(ExprPtr const& expr) {
     // Biorthogonal transformation
     st_expr = biorthogonal_transform(st_expr, ext_idxs);
 
-    auto bixs = ext_idxs | transform([](auto&& vec) { return vec[0]; });
-    auto kixs = ext_idxs | transform([](auto&& vec) { return vec[1]; });
+    auto bixs = ext_idxs | transform([](auto&& vec) { return vec[1]; });
+    auto kixs = ext_idxs | transform([](auto&& vec) { return vec[0]; });
     st_expr =
         ex<Tensor>(Tensor{L"S", bra(std::move(bixs)), ket(std::move(kixs))}) *
         st_expr;
