@@ -142,7 +142,7 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
               "p q1 q2^* S{a1,a3;i1,i2} f{a2;i3} t {i2;a2} t{i1,i3;a1,a3}"));
     }
     {  // Product containing adjoint of a Tensor
-      auto f2 = ex<Tensor>(L"f", bra{L"i_5", L"i_2"}, ket{L"a_1", L"a_2"},
+      auto f2 = ex<Tensor>(L"f", bra{L"a_1", L"a_2"}, ket{L"i_5", L"i_2"},
                            Symmetry::nonsymm, BraKetSymmetry::nonsymm);
       f2->adjoint();
       auto input1 =
@@ -153,7 +153,7 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
       canonicalize(input1);
       REQUIRE_THAT(
           input1,
-          SimplifiesTo("S{a1,a2;i1,i3} f{a3;i2} f⁺{a1,a2;i1,i2} t{i3;a3}"));
+          SimplifiesTo("S{a1,a2;i1,i3} f{a3;i2} f⁺{i1,i2;a1,a2} t{i3;a3}"));
       auto input2 =
           ex<Tensor>(L"S", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"},
                      Symmetry::nonsymm) *
@@ -164,7 +164,7 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
       REQUIRE_THAT(
           input2,
           SimplifiesTo(
-              "1/2 w S{a1,a2;i1,i3} f{a3;i2} f⁺{a1,a2;i1,i2} t{i3;a3}"));
+              "1/2 w S{a1,a2;i1,i3} f{a3;i2} f⁺{i1,i2;a1,a2} t{i3;a3}"));
     }
   }
   {
@@ -177,7 +177,7 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
                  ex<Tensor>(L"t", bra{L"p_3"}, ket{L"p_1"}, Symmetry::nonsymm);
     canonicalize(input);
     REQUIRE_THAT(input,
-                 SimplifiesTo("1/2 t{p1;p3} t{p2;p4} B{p3;p1;p5} B{p4;p2;p5}"));
+                 EquivalentTo("1/2 t{p1;p3} t{p2;p4} B{p3;p1;p5} B{p4;p2;p5}"));
   }
 
   SECTION("Sum of Products") {
@@ -213,7 +213,7 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
               ex<Tensor>(L"t", bra{L"p_3"}, ket{L"p_1"}, Symmetry::nonsymm) *
               ex<Tensor>(L"t", bra{L"p_4"}, ket{L"p_2"}, Symmetry::nonsymm);
       canonicalize(input);
-      REQUIRE_THAT(input, SimplifiesTo("g{p2,p3;p1,p4}:S t{p1;p2} t{p4;p3}"));
+      REQUIRE_THAT(input, EquivalentTo("g{p2,p3;p1,p4}:S t{p1;p2} t{p4;p3}"));
     }
 
     // Case 3: Anti-symmetric tensors
@@ -230,7 +230,7 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
               ex<Tensor>(L"t", bra{L"p_3"}, ket{L"p_1"}, Symmetry::nonsymm) *
               ex<Tensor>(L"t", bra{L"p_4"}, ket{L"p_2"}, Symmetry::nonsymm);
       canonicalize(input);
-      REQUIRE_THAT(input, SimplifiesTo("g{p2,p3;p1,p4}:A t{p1;p2} t{p4;p3}"));
+      REQUIRE_THAT(input, EquivalentTo("g{p2,p3;p1,p4}:A t{p1;p2} t{p4;p3}"));
     }
 
     // Case 4: permuted indices
@@ -377,7 +377,7 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
       simplify(input);
       REQUIRE_THAT(
           input,
-          SimplifiesTo("t{a2;i4} t{a1,a3;i3,i2} B{i3;i1;p5} B{i4;a3;p5}"));
+          EquivalentTo("t{a2;i4} t{a1,a3;i3,i2} B{i3;i1;p5} B{i4;a3;p5}"));
     }
   }
 
