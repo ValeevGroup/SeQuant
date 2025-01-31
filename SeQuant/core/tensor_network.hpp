@@ -36,6 +36,7 @@ namespace sequant {
 /// be connected by multiple Index'es (thus edges are colored), what is
 /// canonized is actually the graph of indices (roughly the dual of the tensor
 /// graph), with Tensor objects represented by one or more vertices.
+/// @warning the terminology is a mix at best, e.g. terminal vs. slot, etc.
 class TensorNetwork {
  public:
   constexpr static size_t max_rank = 256;
@@ -48,77 +49,141 @@ class TensorNetwork {
   /// of 7th tensor object in the sequence)
   /// - <0 for ket terminals
   /// - 0 if free (not attached to any tensor objects)
-  /// - position records the terminal's location in the sequence of bra/ket
+  /// - position records the terminal's location in the sequence of bra/ket/aux
   /// terminals (always 0 for symmetric/antisymmetric tensors) Terminal indices
   /// are sorted by the tensor index (i.e. by the absolute value of the terminal
   /// index), followed by position
   // clang-format on
   class Edge {
    public:
+    struct Terminal {
+      int tensor_ord = -1;
+      TensorIndexSlotType slot_type = TensorIndexSlotType::Invalid;
+      // index slots are grouped according to degrees of freedom and/or
+      // symmetry. E.g. bra/ket slots for same particle of a nonsymmetric tensor
+      // are grouped together. Bra and ket slots of a symmetric/antisymmetric
+      // tensor are also grouped into their own slot groups. Each aux slot for
+      // now is its own slot group. The slot groups are indexed 0, 1, ...
+      int slot_group_ord = -1;
+
+      Terminal() noexcept {};
+      Terminal(int tensor_ord, TensorIndexSlotType slot_type,
+               int slot_group_ord) noexcept
+          : tensor_ord(tensor_ord),
+            slot_type(slot_type),
+            slot_group_ord(slot_group_ord) {
+        assert(tensor_ord >= 0 && slot_type != TensorIndexSlotType::Invalid &&
+               slot_group_ord >= 0);
+      }
+
+      friend bool operator==(const Terminal &a, const Terminal &b) {
+        return a.tensor_ord == b.tensor_ord && a.slot_type == b.slot_type &&
+               a.slot_group_ord == b.slot_group_ord;
+      }
+      friend bool operator<(const Terminal &a, const Terminal &b) {
+        return std::tie(a.tensor_ord, a.slot_type, a.slot_group_ord) <
+               std::tie(b.tensor_ord, b.slot_type, b.slot_group_ord);
+      }
+
+      explicit operator bool() const { return tensor_ord >= 0; }
+      bool null() const { return tensor_ord < 0; }
+      bool nonnull() const { return tensor_ord >= 0; }
+    };
+
     Edge() = default;
-    explicit Edge(int terminal_idx, int position = 0)
-        : first_(0), second_(terminal_idx), second_position_(position) {}
-    Edge(int terminal_idx, const Index *idxptr, int position = 0)
-        : first_(0),
-          second_(terminal_idx),
-          idxptr_(idxptr),
-          second_position_(position) {}
+    explicit Edge(const Terminal &t) : second_(t) {}
+    Edge(const Terminal &t, const Index *idxptr)
+        : second_(t), idxptr_(idxptr) {}
     //    Edge(const Edge&) = default;
     //    Edge(Edge&&) = default;
     //    Edge& operator=(const Edge&) = default;
     //    Edge& operator=(Edge&&) = default;
 
-    Edge &connect_to(int terminal_idx, int position = 0) {
-      assert(first_ == 0 || second_ == 0);  // not connected yet
-      assert(terminal_idx != 0);            // valid idx
-      if (second_ == 0) {                   // unconnected Edge
-        second_ = terminal_idx;
-        second_position_ = position;
-      } else if (std::abs(second_) <
-                 std::abs(terminal_idx)) {  // connected to 2 Edges? ensure
-                                            // first_ < second_
-        assert(first_ == 0);                // there are slots left
-        first_ = second_;
-        first_position_ = second_position_;
-        second_ = terminal_idx;
-        second_position_ = position;
-      } else {  // put into first slot
-        first_ = terminal_idx;
-        first_position_ = position;
+    Edge &connect_to(const Terminal &t) {
+      assert(first_.null() || second_.null());  // not fully connected yet
+      if (second_.null()) {
+        assert(first_.null());  // unconnected Edge
+        second_ = t;
+      } else {
+        // - cannot connect braket slot to aux slot
+        switch (t.slot_type) {
+          case TensorIndexSlotType::Aux:
+            if (second_.slot_type != TensorIndexSlotType::Aux) {
+              throw std::logic_error(
+                  "TensorNetwork::Edge::connect_to: aux slot cannot be "
+                  "connected to a non-aux slot");
+            }
+            break;
+            // - can connect bra slot to ket slot, and vice versa
+          case TensorIndexSlotType::Bra:
+            if (second_.slot_type != TensorIndexSlotType::Ket) {
+              throw std::logic_error(
+                  "TensorNetwork::Edge::connect_to: bra slot can only be "
+                  "connected to a ket slot");
+            }
+            break;
+          case TensorIndexSlotType::Ket:
+            if (second_.slot_type != TensorIndexSlotType::Bra) {
+              throw std::logic_error(
+                  "TensorNetwork::Edge::connect_to: ket slot can only be "
+                  "connected to a bra slot");
+            }
+            break;
+          default:
+            throw std::logic_error(
+                "TensorNetwork::Edge::connect_to: invalid slot");
+        }
+
+        first_ = t;
+        // ensure first_ < second_
+        if (second_ < first_) {
+          std::swap(first_, second_);
+        }
       }
       return *this;
     }
 
     bool operator<(const Edge &other) const {
-      if (std::abs(first_) == std::abs(other.first_)) {
-        if (first_position_ == other.first_position_) {
-          if (std::abs(second_) == std::abs(other.second_)) {
-            return second_position_ < other.second_position_;
-          } else {
-            return std::abs(second_) < std::abs(other.second_);
-          }
-        } else {
-          return first_position_ < other.first_position_;
-        }
-      } else {
-        return std::abs(first_) < std::abs(other.first_);
+      return std::tie(first_, second_) < std::tie(other.first_, other.second_);
+    }
+
+    friend bool operator==(const Edge &a, const Edge &b) {
+      return a.first_ == b.first_ && a.second_ == b.second_;
+    }
+
+    const auto &first() const {
+      assert(first_.nonnull());
+      return first_;
+    }
+    const auto &second() const {
+      assert(second_.nonnull());
+      return second_;
+    }
+    /// access terminals by index, nonnull terminals first
+    /// @param i the ordinal index, `i` must be 0 or 1
+    /// @return if `i==0` return first(), if nonnull, else second(), if nonnull,
+    /// else null;  if `i==1` return second(), if nonnull, else else null;
+    const auto &operator[](std::size_t i) const {
+      assert(i == 0 || i == 1);
+      if (i == 0) {
+        if (first_.nonnull())
+          return first_;
+        else if (second_.nonnull())
+          return second_;
+        else
+          return null_terminal_;
+      } else {  // i == 1
+        if (second_.nonnull())
+          return second_;
+        else
+          return null_terminal_;
       }
     }
 
-    bool operator==(const Edge &other) const {
-      return std::abs(first_) == std::abs(other.first_) &&
-             std::abs(second_) == std::abs(other.second_) &&
-             first_position_ == other.first_position_ &&
-             second_position_ == other.second_position_;
-    }
-
-    auto first() const { return first_; }
-    auto second() const { return second_; }
-    auto first_position() const { return first_position_; }
-    auto second_position() const { return second_position_; }
-
     /// @return the number of attached terminals (0, 1, or 2)
-    auto size() const { return (first_ != 0) ? 2 : ((second_ != 0) ? 1 : 0); }
+    auto size() const {
+      return first_.nonnull() ? 2 : (second_.nonnull() ? 1 : 0);
+    }
 
     const Index &idx() const {
       assert(idxptr_ != nullptr);
@@ -126,13 +191,13 @@ class TensorNetwork {
     }
 
    private:
-    // if only connected to 1 terminal, this is always 0
-    // otherwise first_ <= second_
-    int first_ = 0;
-    int second_ = 0;
+    // if only connected to 1 terminal, this is always null
+    Terminal first_;
+    // invariant: first_.tensor_order <= second_.tensor_order
+    Terminal second_;
     const Index *idxptr_ = nullptr;
-    int first_position_ = 0;
-    int second_position_ = 0;
+
+    static inline Terminal null_terminal_ = {};
   };
 
   static inline auto edge2index_ = [](const Edge &e) -> const Index & {

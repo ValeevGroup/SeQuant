@@ -474,8 +474,8 @@ TensorNetwork::make_bliss_graph(const named_indices_t *named_indices_ptr,
 
   // iterates over edges_, then pure_proto_indices_, this is equivalent to
   // iteration over grand_index_list_
-  ranges::for_each(edges_, [&](const Edge &ttpair) {
-    const Index &idx = ttpair.idx();
+  ranges::for_each(edges_, [&](const Edge &edge) {
+    const Index &idx = edge.idx();
     ++nv;  // each index is a vertex
     vertex_labels.at(index_cnt) = idx.to_latex();
     vertex_type.at(index_cnt) = VertexType::Index;
@@ -612,29 +612,45 @@ TensorNetwork::make_bliss_graph(const named_indices_t *named_indices_ptr,
   // add edges
   // - each index's degree <= 2 + # of protoindex terminals
   index_cnt = 0;
-  ranges::for_each(edges_, [&](const Edge &ttpair) {
-    for (int t = 0; t != 2; ++t) {
-      const auto terminal_index = t == 0 ? ttpair.first() : ttpair.second();
-      const auto terminal_position =
-          t == 0 ? ttpair.first_position() : ttpair.second_position();
-      if (terminal_index) {
-        const auto tidx = std::abs(terminal_index) - 1;
-        const auto ttpos = terminal_position;
-        const bool bra = terminal_index > 0;
-        const size_t braket_vertex_index = tensor_vertex_offset[tidx] +
-                                           /* core */ 1 + 3 * ttpos +
-                                           (bra ? 0 : 1);
-        graph->add_edge(index_cnt, braket_vertex_index);
+  ranges::for_each(edges_, [&](const Edge &edge) {
+    assert(edge.size() > 0);
+    const auto edge_connected = edge.size() == 2;
+    for (int t = 0; t != edge.size(); ++t) {
+      const auto &terminal = edge[t];
+      const auto tensor_ord = terminal.tensor_ord;
+      // which vertex after the core vertex in the tensor does this edge attach
+      // to?
+      int vertex_ord;
+      if (terminal.slot_type != TensorIndexSlotType::Aux) {
+        // each vector slot group is represented by 3 vertices: bra, ket, bk
+        const auto slot_group_ord_offset = 3 * terminal.slot_group_ord;
+        vertex_ord =
+            slot_group_ord_offset + static_cast<int>(terminal.slot_type);
+      } else {
+        const auto &tensor = *tensors_[tensor_ord];
+        const auto num_vector_slot_groups =
+            tensor._symmetry() == Symmetry::nonsymm
+                ? std::max(tensor._bra().size(), tensor._ket().size())
+                : 1;
+        // aux slot groups appear after the vector slot groups
+        const auto slot_group_ord_offset =
+            num_vector_slot_groups * 3 +
+            (terminal.slot_group_ord - num_vector_slot_groups);
+        // each aux slot group is represented by 1 vertex
+        vertex_ord = slot_group_ord_offset;
       }
+      const size_t slot_vertex_index = tensor_vertex_offset[tensor_ord] +
+                                       /* core */ 1 + vertex_ord;
+      graph->add_edge(index_cnt, slot_vertex_index);
     }
     // if this index has symmetric protoindex bundles
-    if (ttpair.idx().has_proto_indices()) {
-      if (ttpair.idx().symmetric_proto_indices()) {
-        assert(
-            symmetric_protoindex_bundles.find(ttpair.idx().proto_indices()) !=
-            symmetric_protoindex_bundles.end());
+    const auto &idx = edge.idx();
+    if (idx.has_proto_indices()) {
+      if (idx.symmetric_proto_indices()) {
+        assert(symmetric_protoindex_bundles.find(idx.proto_indices()) !=
+               symmetric_protoindex_bundles.end());
         const auto spbundle_idx =
-            symmetric_protoindex_bundles.find(ttpair.idx().proto_indices()) -
+            symmetric_protoindex_bundles.find(idx.proto_indices()) -
             symmetric_protoindex_bundles.begin();
         graph->add_edge(index_cnt, spbundle_vertex_offset + spbundle_idx);
       } else {
@@ -681,6 +697,12 @@ TensorNetwork::make_bliss_graph(const named_indices_t *named_indices_ptr,
           graph->add_edge(bk_vertex - 2, bk_vertex);  // bra
           graph->add_edge(bk_vertex - 1, bk_vertex);  // ket
         }
+        // for each aux terminal linker
+        const size_t naux = aux_rank(tref);
+        for (size_t aux = 1; aux <= naux; ++aux) {
+          const int aux_vertex = vertex_offset + 3 * nbk + aux;
+          graph->add_edge(vertex_offset, aux_vertex);  // core
+        }
         ++tensor_cnt;
       });
 
@@ -694,34 +716,47 @@ TensorNetwork::make_bliss_graph(const named_indices_t *named_indices_ptr,
 void TensorNetwork::init_edges() const {
   if (have_edges_) return;
 
-  auto idx_insert = [this](const Index &idx, int tensor_idx, int pos) {
+  auto idx_insert = [this](const Index &idx, int tensor_idx,
+                           TensorIndexSlotType slot_type, int slot_group_ord) {
     if (Logger::instance().tensor_network) {
       std::wcout << "TensorNetwork::init_edges: idx=" << to_latex(idx)
                  << " attached to tensor " << std::abs(tensor_idx) << "'s "
-                 << ((tensor_idx > 0) ? "bra" : "ket") << " at position " << pos
-                 << std::endl;
+                 << ((tensor_idx > 0) ? "bra" : "ket") << " via slot group "
+                 << slot_group_ord << std::endl;
     }
-    decltype(edges_) &indices = this->edges_;
-    auto it = indices.find(idx.full_label());
-    if (it == indices.end()) {
-      indices.emplace(Edge(tensor_idx, &idx, pos));
+    edges_t &edges = this->edges_;
+    auto it = edges.find(idx.full_label());
+    if (it == edges.end()) {
+      edges.emplace(Edge::Terminal(tensor_idx, slot_type, slot_group_ord),
+                    &idx);
     } else {
-      const_cast<Edge &>(*it).connect_to(tensor_idx, pos);
+      it->connect_to(Edge::Terminal(tensor_idx, slot_type, slot_group_ord));
     }
   };
 
-  int t_idx = 1;
+  int t_idx = 0;
   for (auto &&t : tensors_) {
     const auto t_is_nonsymm = symmetry(*t) == Symmetry::nonsymm;
-    size_t cnt = 0;
+    size_t slot_group_ord = 0;
     for (const Index &idx : t->_bra()) {
-      idx_insert(idx, t_idx, t_is_nonsymm ? cnt : 0);
-      ++cnt;
+      idx_insert(idx, t_idx, TensorIndexSlotType::Bra,
+                 t_is_nonsymm ? slot_group_ord++
+                              : /* bra indices of symm/antisymm tensors are part
+                                   of same slot group */
+                     0);
     }
-    cnt = 0;
+    slot_group_ord = 0;  // bra and ket slots are grouped together
     for (const Index &idx : t->_ket()) {
-      idx_insert(idx, -t_idx, t_is_nonsymm ? cnt : 0);
-      ++cnt;
+      idx_insert(idx, t_idx, TensorIndexSlotType::Ket,
+                 t_is_nonsymm ? slot_group_ord++
+                              : /* ket indices of symm/antisymm tensors are part
+                                   of same slot group */
+                     0);
+    }
+    // aux slot group count starts after last braket slot group
+    for (const Index &idx : t->_aux()) {
+      // aux slots are not symmetric
+      idx_insert(idx, t_idx, TensorIndexSlotType::Aux, slot_group_ord++);
     }
     ++t_idx;
   }
@@ -880,8 +915,17 @@ TensorNetwork::SlotCanonicalizationMetadata TensorNetwork::canonicalize_slots(
 
         // deduce the slot type occupied by this index
         IndexSlotType slot_type;
-        if (idx_ord < edges_.size()) {  // TODO: handle aux indices
-          slot_type = IndexSlotType::TensorBraKet;
+        if (idx_ord < edges_.size()) {
+          auto edge_it = edges_.begin();
+          std::advance(edge_it, idx_ord);
+          // for named indices edges are always disconnected
+          assert(edge_it->size() == 1);
+          if (edge_it->second().slot_type == TensorIndexSlotType::Aux)
+            slot_type = IndexSlotType::TensorAux;
+          else if (edge_it->second().slot_type == TensorIndexSlotType::Bra)
+            slot_type = IndexSlotType::TensorBra;
+          else  // edge_it->second().slot_type == TensorIndexSlotType::Ket
+            slot_type = IndexSlotType::TensorKet;
         } else
           slot_type = IndexSlotType::SPBundle;
 

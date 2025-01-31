@@ -888,21 +888,26 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
             assert(v2 < tn_edges.size());
             const auto &edge1 = *(tn_edges.begin() + v1);
             const auto &edge2 = *(tn_edges.begin() + v2);
-            auto connected_to_same_nop = [&tn_tensors](int term1, int term2) {
-              if (term1 == term2 && term1 != 0) {
-                auto tensor_idx = std::abs(term1) - 1;
-                const std::shared_ptr<AbstractTensor> &tensor_ptr =
-                    tn_tensors.at(tensor_idx);
-                if (std::dynamic_pointer_cast<NormalOperator<S>>(tensor_ptr))
-                  return true;
-              }
-              return false;
+            auto connected_to_same_nop = [&tn_tensors](const auto &edge1,
+                                                       const auto &edge2) {
+              const auto term_connected_to_same_nop = [&](const auto &term1,
+                                                          const auto &term2) {
+                if (term1.nonnull() && term2.nonnull() &&
+                    term1.tensor_ord == term2.tensor_ord) {
+                  auto tensor_ord = term1.tensor_ord;
+                  const std::shared_ptr<AbstractTensor> &tensor_ptr =
+                      tn_tensors.at(tensor_ord);
+                  if (std::dynamic_pointer_cast<NormalOperator<S>>(tensor_ptr))
+                    return true;
+                }
+                return false;
+              };
+              return term_connected_to_same_nop(edge1[0], edge2[0]) ||
+                     term_connected_to_same_nop(edge1[0], edge2[1]) ||
+                     term_connected_to_same_nop(edge1[1], edge2[0]) ||
+                     term_connected_to_same_nop(edge1[1], edge2[1]);
             };
-            const bool exclude =
-                !(connected_to_same_nop(edge1.first(), edge2.first()) ||
-                  connected_to_same_nop(edge1.first(), edge2.second()) ||
-                  connected_to_same_nop(edge1.second(), edge2.first()) ||
-                  connected_to_same_nop(edge1.second(), edge2.second()));
+            const bool exclude = !connected_to_same_nop(edge1, edge2);
             return exclude;
           };
 
