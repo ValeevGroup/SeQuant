@@ -37,7 +37,7 @@ ExprPtr vac_av(
     // compute connections
     std::vector<std::pair<int, int>> connections;
     {
-      std::map<std::wstring, std::vector<int>>
+      container::map<std::wstring, std::vector<int>>
           oplbl2pos;  // maps operator labels to the operator positions in the
                       // product
       int pos = 0;
