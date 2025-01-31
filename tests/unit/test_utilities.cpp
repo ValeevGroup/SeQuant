@@ -63,7 +63,7 @@ TEST_CASE("TEST GET_UNCONCTRACTED_INDICES", "[utilities]") {
   }
 }
 
-TEST_CASE("get_unique_indices", "[utilities]") {
+TEST_CASE("TEST GET_UNIQUE_INDICES", "[utilities]") {
   using namespace sequant;
   using namespace Catch::Matchers;
 
