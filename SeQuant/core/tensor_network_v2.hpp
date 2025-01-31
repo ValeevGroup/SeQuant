@@ -94,19 +94,33 @@ class TensorNetworkV2 {
         // unconnected Edge
         first = std::move(vertex);
       } else {
+        // - cannot connect braket slot to aux slot
+        if ((first->getOrigin() == Origin::Aux &&
+             vertex.getOrigin() != Origin::Aux) ||
+            (first->getOrigin() != Origin::Aux &&
+             vertex.getOrigin() == Origin::Aux)) {
+          throw std::logic_error(
+              "TensorNetwork::Edge::connect_to: aux slot cannot be connected "
+              "to a non-aux slot");
+        }
+        // - can connect bra slot to ket slot, and vice versa
+        if (first->getOrigin() == Origin::Bra &&
+            vertex.getOrigin() != Origin::Ket) {
+          throw std::logic_error(
+              "TensorNetwork::Edge::connect_to: bra slot can only be connected "
+              "to a ket slot");
+        }
+        if (first->getOrigin() == Origin::Ket &&
+            vertex.getOrigin() != Origin::Bra) {
+          throw std::logic_error(
+              "TensorNetwork::Edge::connect_to: ket slot can only be connected "
+              "to a bra slot");
+        }
         second = std::move(vertex);
         if (second < first) {
           // Ensure first <= second
           std::swap(first, second);
         }
-        // - cannot connect braket slot to aux slot
-        // - can connect bra slot to ket slot, and vice versa
-        assert((first->getOrigin() == Origin::Aux &&
-                second->getOrigin() == Origin::Aux) ||
-               ((first->getOrigin() == Origin::Bra &&
-                 second->getOrigin() == Origin::Ket) ||
-                (first->getOrigin() == Origin::Ket &&
-                 second->getOrigin() == Origin::Bra)));
       }
 
       return *this;

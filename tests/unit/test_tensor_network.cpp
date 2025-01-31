@@ -723,9 +723,7 @@ TEST_CASE("TensorNetworkV2", "[elements]") {
     Edge e5(v8, dummy);
     e5.connect_to(v6);
     Edge e6(v8, dummy);
-    e6.connect_to(v7);
-
-    Edge e7(v4, dummy);
+    REQUIRE_THROWS_AS(e6.connect_to(v7), std::logic_error);
 
     // Due to tensor symmetries, these edges are considered equal
     REQUIRE(e1 == e2);
@@ -742,25 +740,26 @@ TEST_CASE("TensorNetworkV2", "[elements]") {
     REQUIRE(e3 < e4);
     REQUIRE(!(e4 < e3));
 
-    REQUIRE(!(e5 == e6));
-    REQUIRE(e5 < e6);
-    REQUIRE(!(e6 < e5));
-
     // Unconnected edges always come before fully connected ones
-    REQUIRE(!(e7 == e1));
-    REQUIRE(e7 < e1);
-    REQUIRE(!(e1 < e7));
+    REQUIRE(!(e6 == e1));
+    REQUIRE(e6 < e1);
+    REQUIRE(!(e1 < e6));
   }
 
   SECTION("constructors") {
     {  // with Tensors
       auto t1 = ex<Tensor>(L"F", bra{L"i_1"}, ket{L"i_2"});
-      auto t2 = ex<Tensor>(L"t", bra{L"i_1"}, ket{L"i_2"});
+      auto t2 = ex<Tensor>(L"t", bra{L"i_2"}, ket{L"i_1"});
       auto t1_x_t2 = t1 * t2;
       REQUIRE_NOTHROW(TensorNetworkV2(*t1_x_t2));
 
       auto t1_x_t2_p_t2 = t1 * (t2 + t2);  // can only use a flat tensor product
       REQUIRE_THROWS_AS(TensorNetworkV2(*t1_x_t2_p_t2), std::logic_error);
+
+      // must be covariant: no bra to bra or ket to ket
+      t2->adjoint();
+      auto t1_x_t2_adjoint = t1 * t2;
+      REQUIRE_THROWS_AS(TensorNetworkV2(t1_x_t2_adjoint), std::logic_error);
     }
 
     {  // with NormalOperators
@@ -900,11 +899,11 @@ TEST_CASE("TensorNetworkV2", "[elements]") {
 
     SECTION("non-symmetric") {
       const auto input =
-          parse_expr(L"A{i7,i3;i9,i12}:A I1{i7,i3;;x5}:N I2{;i9,i12;x5}:N")
+          parse_expr(L"A{i9,i12;i7,i3}:A I1{i7,i3;;x5}:N I2{;i9,i12;x5}:N")
               .as<Product>()
               .factors();
       const std::wstring expected =
-          L"A{i_1,i_2;i_3,i_4}:A * I1{i_1,i_2;;x_1}:N * I2{;i_3,i_4;x_1}:N";
+          L"A{i_1,i_2;i_3,i_4}:A * I1{i_3,i_4;;x_1}:N * I2{;i_1,i_2;x_1}:N";
 
       for (bool fast : {true, false}) {
         TensorNetworkV2 tn(input);
@@ -1011,9 +1010,9 @@ TEST_CASE("TensorNetworkV2", "[elements]") {
       const auto [canonical_graph, canonical_graph_labels] =
           accessor.get_canonical_bliss_graph(TensorNetworkV2(expected));
 
-      std::wcout << "Canonical graph:\n";
-      canonical_graph->write_dot(std::wcout, canonical_graph_labels);
-      std::wcout << std::endl;
+      //      std::wcout << "Canonical graph:\n";
+      //      canonical_graph->write_dot(std::wcout, canonical_graph_labels);
+      //      std::wcout << std::endl;
 
       std::vector<Index> indices;
       for (std::size_t i = 0; i < expected.size(); ++i) {
@@ -1131,7 +1130,7 @@ TEST_CASE("TensorNetworkV2", "[elements]") {
     SECTION("idempotency") {
       const std::vector<std::wstring> inputs = {
           L"F{i1;i8} g{i8,i9;i1,i7}",
-          L"A{i7,i3;i9,i12}:A I1{i7,i3;;x5}:N I2{;i9,i12;x5}:N",
+          L"A{i9,i12;i7,i3}:A I1{i7,i3;;x5}:N I2{;i9,i12;x5}:N",
           L"f{i4;i1}:N t{a1,a2,a3;i2,i3,i4}:N S{i1,i2,i3;a1,a2,a3}:N",
           L"P{a1,a3;} k{i8;i2}",
           L"L{x6;;x2} P{;a1,a3}",

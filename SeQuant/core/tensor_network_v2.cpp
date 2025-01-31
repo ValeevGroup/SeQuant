@@ -175,8 +175,10 @@ bool TensorNetworkV2::Vertex::operator<(const Vertex &rhs) const {
     return terminal_idx < rhs.terminal_idx;
   }
 
-  // Both vertices belong to same tensor -> they must have same symmetry
-  assert(terminal_symm == rhs.terminal_symm);
+  // Both vertices belong to same tensor and are both non-aux? -> they must have
+  // same symmetry
+  assert(origin != Origin::Aux || rhs.origin != Origin::Aux ||
+         terminal_symm == rhs.terminal_symm);
 
   if (origin != rhs.origin) {
     return origin < rhs.origin;
@@ -197,7 +199,9 @@ bool TensorNetworkV2::Vertex::operator==(const Vertex &rhs) const {
   const std::size_t rhs_slot =
       (rhs.terminal_symm == Symmetry::nonsymm) * rhs.index_slot;
 
-  assert(terminal_idx != rhs.terminal_idx ||
+  // sanity check that bra and ket have same symmetry
+  assert(origin == Origin::Aux || rhs.origin == Origin::Aux ||
+         terminal_idx != rhs.terminal_idx ||
          terminal_symm == rhs.terminal_symm);
 
   return terminal_idx == rhs.terminal_idx && lhs_slot == rhs_slot &&
