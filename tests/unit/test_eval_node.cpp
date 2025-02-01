@@ -137,7 +137,8 @@ TEST_CASE("TEST EVAL_NODE", "[EvalNode]") {
                  EquivalentTo("Y{a1,a2;i1,i2}:A"));
 
     REQUIRE(node1.right()->op_type() == EvalOp::Prod);
-    REQUIRE_THAT(node1.right()->as_tensor(), EquivalentTo("I{a2,a1;i1,i2}:N"));
+    REQUIRE_THAT(node1.right()->as_tensor(),
+                 EquivalentTo("I{a2,a1;i1,i2}:N-C-N"));
     REQUIRE_THAT(node1.right().left()->as_tensor(),
                  EquivalentTo("g{i3,a1;i1,i2}:A"));
     REQUIRE_THAT(node1.right().right()->as_tensor(),

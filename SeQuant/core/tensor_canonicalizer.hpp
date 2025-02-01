@@ -157,6 +157,10 @@ class DefaultTensorCanonicalizer : public TensorCanonicalizer {
   ExprPtr apply(AbstractTensor& t, const IndexComp& idxcmp,
                 const IndexPairComp& paircmp) const {
     // std::wcout << "abstract tensor: " << to_latex(t) << "\n";
+
+    // nothing to do for non-particle-symmetric tensors
+    if (t._particle_symmetry() == ParticleSymmetry::nonsymm) return nullptr;
+
     auto s = symmetry(t);
     auto is_antisymm = (s == Symmetry::antisymm);
     const auto _bra_rank = bra_rank(t);
