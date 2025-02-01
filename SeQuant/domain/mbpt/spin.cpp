@@ -1131,10 +1131,12 @@ std::vector<ExprPtr> open_shell_P_op_vector(const Tensor& A) {
     for (auto& j : alpha_spin) {
       for (auto& k : beta_spin) {
         if (!alpha_spin.empty() && !beta_spin.empty()) {
-          P_bra_list.emplace_back(
-              Tensor(L"P", bra{A.bra().at(j), A.bra().at(k)}, ket{}));
-          P_ket_list.emplace_back(
-              Tensor(L"P", bra{}, ket{A.ket().at(j), A.ket().at(k)}));
+          P_bra_list.emplace_back(Tensor(
+              L"P", bra{A.bra().at(j), A.bra().at(k)}, ket{}, Symmetry::nonsymm,
+              BraKetSymmetry::nonsymm, ParticleSymmetry::nonsymm));
+          P_ket_list.emplace_back(Tensor(
+              L"P", bra{}, ket{A.ket().at(j), A.ket().at(k)}, Symmetry::nonsymm,
+              BraKetSymmetry::nonsymm, ParticleSymmetry::nonsymm));
         }
       }
     }
@@ -1153,11 +1155,14 @@ std::vector<ExprPtr> open_shell_P_op_vector(const Tensor& A) {
                   Tensor(L"P",
                          bra{A.bra().at(i1), A.bra().at(i3), A.bra().at(i2),
                              A.bra().at(i4)},
-                         ket{}));
+                         ket{}, Symmetry::nonsymm, BraKetSymmetry::nonsymm,
+                         ParticleSymmetry::nonsymm));
               P_ket_list.emplace_back(
                   Tensor(L"P", bra{},
                          ket{A.ket().at(i1), A.ket().at(i3), A.ket().at(i2),
-                             A.ket().at(i4)}));
+                             A.ket().at(i4)},
+                         Symmetry::nonsymm, BraKetSymmetry::nonsymm,
+                         ParticleSymmetry::nonsymm));
             }
           }
         }
@@ -1181,7 +1186,7 @@ std::vector<ExprPtr> open_shell_P_op_vector(const Tensor& A) {
 
     ExprPtr spin_case_result =
         ex<Sum>(bra_permutations) * ex<Sum>(ket_permutations);
-    simplify(spin_case_result);
+    expand(spin_case_result);
 
     // Merge P operators if it encounters alpha_spin product of operators
     for (auto& term : *spin_case_result) {
