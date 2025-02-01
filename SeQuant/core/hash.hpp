@@ -22,6 +22,8 @@ namespace sequant_boost = boost;
 
 namespace sequant {
 
+class ExprPtr;
+
 namespace hash {
 
 /// the hashing versions known to SeQuant (N.B. hashing changed in Boost 1.81)
@@ -88,6 +90,8 @@ template <typename T, std::enable_if_t<!has_hash_value_member_fn_v<T> &&
 auto hash_value(const T& obj) {
   return sequant_boost::hash_value(obj);
 }
+
+std::size_t hash_value(const ExprPtr& expr);
 
 // clang-format off
 // rationale:

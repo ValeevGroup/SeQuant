@@ -47,6 +47,7 @@ struct ExprRule;
 struct IndexLabelRule;
 struct IndexRule;
 struct IndexGroupRule;
+struct SymmetrySpecRule;
 
 // Types
 x3::rule<NumberRule, ast::Number> number{"Number"};
@@ -63,6 +64,7 @@ x3::rule<struct NameRule, std::wstring> name{"Name"};
 x3::rule<IndexLabelRule, ast::IndexLabel> index_label{"IndexLabel"};
 x3::rule<IndexRule, ast::Index> index{"Index"};
 x3::rule<IndexGroupRule, ast::IndexGroups> index_groups{"IndexGroups"};
+x3::rule<SymmetrySpecRule, ast::SymmetrySpec> symmetry_spec{"SymmetrySpec"};
 
 auto to_char_type = [](auto c) {
   return static_cast<x3::unicode::char_type::char_type>(c);
@@ -97,15 +99,20 @@ auto index_label_def  = x3::lexeme[
                         ];
 
 auto index_def        = x3::lexeme[
-                            index_label >> -('<' >> index_label % ',' >> ">")
+                            index_label >> -x3::skip['<' >> index_label % ',' >> ">"]
                         ];
 
-auto index_groups_def =   L"_{" > -(index % ',') > L"}^{" > -(index % ',') > L"}" >> x3::attr(false)
-                        | L"^{" > -(index % ',') > L"}_{" > -(index % ',') > L"}" >> x3::attr(true)
-                        |  '{'  > -(index % ',') > ';'    > -(index % ',') >  '}' >> x3::attr(false);
+const std::vector<ast::Index> noIndices;
+auto index_groups_def =   L"_{" > -(index % ',') > L"}^{" > -(index % ',')  > L"}" >> x3::attr(noIndices) >> x3::attr(false)
+                        | L"^{" > -(index % ',') > L"}_{" > -(index % ',')  > L"}" >> x3::attr(noIndices) >> x3::attr(true)
+                        |  '{'  > -(index % ',') > -( ';' > -(index % ',')) > -(';' > -(index % ','))     >  '}'  >> x3::attr(false);
+
+auto symmetry_spec_def= x3::lexeme[
+	                       ':' >> x3::upper >> -('-' >> x3::upper) >> -('-' >> x3::upper)
+                        ];
 
 auto tensor_def       = x3::lexeme[
-                            name >> x3::skip[index_groups] >> -(':' >> x3::upper)
+                            name >> x3::skip[index_groups] >> -(symmetry_spec)
                         ];
 
 auto nullary          = number | tensor | variable;
@@ -124,7 +131,7 @@ auto expr_def         = -sum > x3::eoi;
 // clang-format on
 
 BOOST_SPIRIT_DEFINE(name, number, variable, index_label, index, index_groups,
-                    tensor, product, sum, expr);
+                    tensor, product, sum, expr, symmetry_spec);
 
 struct position_cache_tag;
 struct error_handler_tag;
@@ -162,6 +169,7 @@ struct ExprRule : helpers::annotate_position, helpers::error_handler {};
 struct IndexLabelRule : helpers::annotate_position, helpers::error_handler {};
 struct IndexRule : helpers::annotate_position, helpers::error_handler {};
 struct IndexGroupRule : helpers::annotate_position, helpers::error_handler {};
+struct SymmetrySpecRule : helpers::annotate_position, helpers::error_handler {};
 
 }  // namespace parse
 
@@ -179,7 +187,8 @@ struct ErrorHandler {
   }
 };
 
-ExprPtr parse_expr(std::wstring_view input, Symmetry default_symmetry) {
+ExprPtr parse_expr(std::wstring_view input, Symmetry perm_symm,
+                   BraKetSymmetry braket_symm, ParticleSymmetry particle_symm) {
   using iterator_type = decltype(input)::iterator;
   x3::position_cache<std::vector<iterator_type>> positions(input.begin(),
                                                            input.end());
@@ -216,8 +225,10 @@ ExprPtr parse_expr(std::wstring_view input, Symmetry default_symmetry) {
     throw;
   }
 
-  return parse::transform::ast_to_expr(ast, positions, input.begin(),
-                                       default_symmetry);
+  return parse::transform::ast_to_expr(
+      ast, positions, input.begin(),
+      parse::transform::DefaultSymmetries{perm_symm, braket_symm,
+                                          particle_symm});
 }
 
 }  // namespace sequant

@@ -7,6 +7,7 @@
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/tensor.hpp>
+#include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/wstring.hpp>
 
 #include <range/v3/action.hpp>
@@ -17,9 +18,11 @@
 
 #include <algorithm>
 #include <cassert>
+#include <cmath>
 #include <iterator>
 #include <memory>
 #include <string_view>
+#include <tuple>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -35,7 +38,7 @@ size_t hash_imed(EvalExpr const&, EvalExpr const&, EvalOp) noexcept;
 ExprPtr make_imed(EvalExpr const&, EvalExpr const&, EvalOp) noexcept;
 
 bool is_tot(Tensor const& t) noexcept {
-  return ranges::any_of(t.const_braket(), &Index::has_proto_indices);
+  return ranges::any_of(t.const_indices(), &Index::has_proto_indices);
 }
 
 std::wstring_view const var_label = L"Z";
@@ -45,6 +48,12 @@ std::wstring_view const var_label = L"Z";
 NestedTensorIndices::NestedTensorIndices(const sequant::Tensor& tnsr) {
   using ranges::views::join;
   using ranges::views::transform;
+
+  for (auto&& ix : tnsr.aux()) {
+    assert(!ix.has_proto_indices() &&
+           "Aux indices with proto indices not supported");
+    outer.emplace_back(ix);
+  }
 
   auto append_unique = [](auto& cont, auto const& el) {
     if (!ranges::contains(cont, el)) cont.emplace_back(el);
@@ -58,6 +67,16 @@ NestedTensorIndices::NestedTensorIndices(const sequant::Tensor& tnsr) {
     append_unique(outer, ix);
 }
 
+std::string to_label_annotation(const Index& idx) {
+  using namespace ranges::views;
+  using ranges::to;
+
+  return sequant::to_string(idx.label()) +
+         (idx.proto_indices() | transform(&Index::label) |
+          transform([](auto&& str) { return sequant::to_string(str); }) |
+          ranges::views::join | to<std::string>);
+}
+
 std::string EvalExpr::braket_annot() const noexcept {
   if (!is_tensor()) return {};
 
@@ -68,12 +87,9 @@ std::string EvalExpr::braket_annot() const noexcept {
   auto annot = [](auto&& ixs) -> std::string {
     using namespace ranges::views;
 
-    auto full_labels = ixs                              //
-                       | transform(&Index::full_label)  //
-                       | transform([](auto&& fl) {      //
-                           return sequant::to_string(fl);
-                         });
-    return full_labels                      //
+    auto annotations = ixs | transform(to_label_annotation);
+
+    return annotations                      //
            | intersperse(std::string{","})  //
            | join                           //
            | ranges::to<std::string>;
@@ -190,9 +206,9 @@ namespace {
 ///       the hash.
 ///
 template <typename T>
-size_t hash_braket(T const& bk) noexcept {
+size_t hash_indices(T const& indices) noexcept {
   size_t h = 0;
-  for (auto const& idx : bk) {
+  for (auto const& idx : indices) {
     hash::combine(h, hash::value(idx.space().type().to_int32()));
     hash::combine(h, hash::value(idx.space().qns().to_int32()));
     if (idx.has_proto_indices()) {
@@ -208,7 +224,7 @@ size_t hash_braket(T const& bk) noexcept {
 /// \return hash value to identify the connectivity between a pair of tensors.
 ///
 /// @note Let [(i,j)] be the list of ordered pair of index positions that are
-///       connected. i is the position in the braket of the first tensor (T1)
+///       connected. i is the position in the indices of the first tensor (T1)
 ///       and j is that of the second tensor (T2). Then this function combines
 ///       the hash values of the elements of this list.
 ///
@@ -217,8 +233,8 @@ size_t hash_braket(T const& bk) noexcept {
 size_t hash_tensor_pair_topology(Tensor const& t1, Tensor const& t2) noexcept {
   using ranges::views::enumerate;
   size_t h = 0;
-  for (auto&& [pos1, idx1] : t1.const_braket() | enumerate)
-    for (auto&& [pos2, idx2] : t2.const_braket() | enumerate)
+  for (auto&& [pos1, idx1] : t1.const_indices() | enumerate)
+    for (auto&& [pos2, idx2] : t2.const_indices() | enumerate)
       if (idx1.label() == idx2.label())
         hash::combine(h, hash::value(std::pair(pos1, pos2)));
   return h;
@@ -227,7 +243,7 @@ size_t hash_tensor_pair_topology(Tensor const& t1, Tensor const& t2) noexcept {
 size_t hash_terminal_tensor(Tensor const& tnsr) noexcept {
   size_t h = 0;
   hash::combine(h, hash::value(tnsr.label()));
-  hash::combine(h, hash_braket(tnsr.const_braket()));
+  hash::combine(h, hash_indices(tnsr.const_indices()));
   return h;
 }
 
@@ -325,11 +341,11 @@ Symmetry tensor_symmetry_prod(EvalExpr const& left,
   if (hash::value(left) == hash::value(right)) {
     // potential outer product of the same tensor
     auto const uniq_idxs =
-        ranges::views::concat(tnsr1.const_braket(), tnsr2.const_braket()) |
+        ranges::views::concat(tnsr1.const_indices(), tnsr2.const_indices()) |
         ranges::to<index_set_t>;
 
     if (static_cast<std::size_t>(ranges::distance(uniq_idxs)) ==
-        tnsr1.const_braket().size() + tnsr2.const_braket().size()) {
+        tnsr1.const_indices().size() + tnsr2.const_indices().size()) {
       // outer product confirmed
       return Symmetry::antisymm;
     }
@@ -376,7 +392,7 @@ ExprPtr make_sum(EvalExpr const& left, EvalExpr const& right) noexcept {
   auto ts = tensor_symmetry_sum(left, right);
   auto ps = particle_symmetry(ts);
   auto bks = get_default_context().braket_symmetry();
-  return ex<Tensor>(L"I", t1.bra(), t1.ket(), ts, bks, ps);
+  return ex<Tensor>(L"I", t1.bra(), t1.ket(), t1.aux(), ts, bks, ps);
 }
 
 ExprPtr make_prod(EvalExpr const& left, EvalExpr const& right) noexcept {
@@ -385,8 +401,8 @@ ExprPtr make_prod(EvalExpr const& left, EvalExpr const& right) noexcept {
   auto const& t1 = left.as_tensor();
   auto const& t2 = right.as_tensor();
 
-  auto [b, k] = target_braket(t1, t2);
-  if (b.empty() && k.empty()) {
+  auto [b, k, a] = get_uncontracted_indices(t1, t2);
+  if (b.empty() && k.empty() && a.empty()) {
     // dot product
     return ex<Variable>(var_label);
   } else {
@@ -394,7 +410,8 @@ ExprPtr make_prod(EvalExpr const& left, EvalExpr const& right) noexcept {
     auto ts = tensor_symmetry_prod(left, right);
     auto ps = particle_symmetry(ts);
     auto bks = get_default_context().braket_symmetry();
-    return ex<Tensor>(L"I", bra(std::move(b)), ket(std::move(k)), ts, bks, ps);
+    return ex<Tensor>(L"I", bra(std::move(b)), ket(std::move(k)),
+                      aux(std::move(a)), ts, bks, ps);
   }
 }
 
@@ -415,7 +432,7 @@ ExprPtr make_imed(EvalExpr const& left, EvalExpr const& right,
 
     assert(op == EvalOp::Prod && "scalar + tensor not supported");
     auto const& t = right.expr()->as<Tensor>();
-    return ex<Tensor>(Tensor{L"I", t.bra(), t.ket(), t.symmetry(),
+    return ex<Tensor>(Tensor{L"I", t.bra(), t.ket(), t.aux(), t.symmetry(),
                              t.braket_symmetry(), t.particle_symmetry()});
 
   } else if (lres == ResultType::Tensor && rres == ResultType::Scalar) {

@@ -6,6 +6,7 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/optimize.hpp>
+#include <SeQuant/core/utility/indices.hpp>
 
 #include <range/v3/iterator/basic_iterator.hpp>
 #include <range/v3/range/access.hpp>
@@ -158,9 +159,143 @@ Sum reorder(Sum const& sum) {
 
 }  // namespace opt
 
-ExprPtr optimize(ExprPtr const& expr) {
+ExprPtr optimize(ExprPtr const& expr, bool reorder_sum) {
   return opt::optimize(
-      expr, [](Index const& ix) { return ix.space().approximate_size(); });
+      expr, [](Index const& ix) { return ix.space().approximate_size(); },
+      reorder_sum);
+}
+
+ExprPtr density_fit_impl(Tensor const& tnsr, Index const& aux_idx) {
+  assert(tnsr.bra_rank() == 2     //
+         && tnsr.ket_rank() == 2  //
+         && tnsr.aux_rank() == 0);
+
+  auto t1 = ex<Tensor>(L"g", bra({ranges::front(tnsr.bra())}),
+                       ket({ranges::front(tnsr.ket())}), aux({aux_idx}));
+
+  auto t2 = ex<Tensor>(L"g", bra({ranges::back(tnsr.bra())}),
+                       ket({ranges::back(tnsr.ket())}), aux({aux_idx}));
+
+  return ex<Product>(1, ExprPtrList{t1, t2});
+}
+
+ExprPtr density_fit(ExprPtr const& expr, std::wstring const& aux_label) {
+  using ranges::views::transform;
+  if (expr->is<Sum>())
+    return ex<Sum>(*expr | transform([&aux_label](auto&& x) {
+      return density_fit(x, aux_label);
+    }));
+
+  else if (expr->is<Tensor>()) {
+    auto const& g = expr->as<Tensor>();
+    if (g.label() == L"g"     //
+        && g.bra_rank() == 2  //
+        && g.ket_rank() == 2  //
+        && ranges::none_of(g.indices(), &Index::has_proto_indices))
+      return density_fit_impl(expr->as<Tensor>(), Index(aux_label + L"_1"));
+    else
+      return expr;
+  } else if (expr->is<Product>()) {
+    auto const& prod = expr->as<Product>();
+
+    Product result;
+    result.scale(prod.scalar());
+    size_t aux_ix = 0;
+    for (auto&& f : prod.factors())
+      if (f.is<Tensor>() && f.as<Tensor>().label() == L"g") {
+        auto const& g = f->as<Tensor>();
+        auto g_df = density_fit_impl(
+            g, Index(aux_label + L"_" + std::to_wstring(++aux_ix)));
+        result.append(1, std::move(g_df), Product::Flatten::Yes);
+      } else {
+        result.append(1, f, Product::Flatten::No);
+      }
+    return ex<Product>(std::move(result));
+  } else
+    return expr;
+}
+
+ExprPtr csv_transform_impl(Tensor const& tnsr,
+                           std::wstring_view coeff_tensor_label) {
+  using ranges::views::transform;
+
+  if (ranges::none_of(tnsr.const_braket(), &Index::has_proto_indices))
+    return nullptr;
+
+  ////
+  auto drop_protos = [](auto&& ixs) {
+    return ixs | transform(&Index::drop_proto_indices);
+  };
+  ////
+
+  if (tnsr.label() == overlap_label()) {
+    assert(tnsr.bra_rank() == 1     //
+           && tnsr.ket_rank() == 1  //
+           && tnsr.aux_rank() == 0);
+
+    auto&& bra_idx = tnsr.bra().at(0);
+    auto&& ket_idx = tnsr.ket().at(0);
+
+    auto dummy_idx = suffix_compare(bra_idx, ket_idx)    //
+                         ? bra_idx.drop_proto_indices()  //
+                         : ket_idx.drop_proto_indices();
+
+    return ex<Product>(
+        1,
+        ExprPtrList{ex<Tensor>(coeff_tensor_label,                 //
+                               bra({bra_idx}), ket({dummy_idx})),  //
+                    ex<Tensor>(coeff_tensor_label,                 //
+                               bra({dummy_idx}), ket({ket_idx}))});
+  }
+
+  Product result;
+  result.append(1, ex<Tensor>(tnsr.label(), bra(drop_protos(tnsr.bra())),
+                              ket(drop_protos(tnsr.ket())), tnsr.aux()));
+
+  for (auto&& idx : tnsr.bra())
+    if (idx.has_proto_indices())
+      result.append(1, ex<Tensor>(coeff_tensor_label, bra({idx}),
+                                  ket({idx.drop_proto_indices()}), aux({})));
+  for (auto&& idx : tnsr.ket())
+    if (idx.has_proto_indices())
+      result.append(
+          1, ex<Tensor>(coeff_tensor_label, bra({idx.drop_proto_indices()}),
+                        ket({idx}), aux({})));
+
+  return ex<Product>(std::move(result));
+}
+
+ExprPtr csv_transform(ExprPtr const& expr,
+                      std::wstring const& coeff_tensor_label,
+                      container::svector<std::wstring> const& csv_tensors) {
+  using ranges::views::transform;
+  if (expr->is<Sum>())
+    return ex<Sum>(*expr                              //
+                   | transform([&coeff_tensor_label,  //
+                                &csv_tensors](auto&& x) {
+                       return csv_transform(x, coeff_tensor_label, csv_tensors);
+                     }));
+  else if (expr->is<Tensor>()) {
+    auto const& tnsr = expr->as<Tensor>();
+    if (!ranges::contains(csv_tensors, tnsr.label())) return expr;
+    return csv_transform_impl(tnsr, coeff_tensor_label);
+  } else if (expr->is<Product>()) {
+    auto const& prod = expr->as<Product>();
+
+    Product result;
+    result.scale(prod.scalar());
+
+    for (auto&& f : prod.factors()) {
+      auto trans = csv_transform(f, coeff_tensor_label, csv_tensors);
+      result.append(1, trans ? trans : f,
+                    (f->is<Product>() || f->is<Sum>()) ? Product::Flatten::No
+                                                       : Product::Flatten::Yes);
+    }
+
+    return ex<Product>(std::move(result));
+
+  } else
+    return expr;
 }
 
 }  // namespace sequant

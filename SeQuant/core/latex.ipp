@@ -7,6 +7,7 @@
 
 #include <SeQuant/core/latex.hpp>
 #include <SeQuant/core/wstring.hpp>
+#include <SeQuant/core/container.hpp>
 #include <map>
 #include <optional>
 #include <type_traits>
@@ -168,7 +169,7 @@ std::basic_string<Char, Traits, Alloc> diactrics_to_latex_impl(
     if (!is_ascii(ch)) {  // check for combined characters
       {                   // tilde
                           // lower-case characters with tilde
-        const std::map<str_t, str_t> lc = {
+        const container::map<str_t, str_t> lc = {
             {SQ_STRLIT(Char, "ã"), SQ_STRLIT(Char, "\\tilde{a}")},
             {SQ_STRLIT(Char, "ẽ"), SQ_STRLIT(Char, "\\tilde{e}")},
             {SQ_STRLIT(Char, "ñ"), SQ_STRLIT(Char, "\\tilde{n}")},
@@ -180,7 +181,7 @@ std::basic_string<Char, Traits, Alloc> diactrics_to_latex_impl(
           append(lc_it->second);
         } else {
           // upper-case characters with tilde
-          const std::map<str_t, str_t> uc = {
+          const container::map<str_t, str_t> uc = {
               {SQ_STRLIT(Char, "Ã"), SQ_STRLIT(Char, "\\tilde{A}")},
               {SQ_STRLIT(Char, "Ẽ"), SQ_STRLIT(Char, "\\tilde{E}")},
               {SQ_STRLIT(Char, "Ñ"), SQ_STRLIT(Char, "\\tilde{N}")},

@@ -227,20 +227,17 @@ ExprPtr expand_A_op(const ExprPtr& expr);
 /// operator
 /// @param P a particle permutation operator (with > 2 particle indices)
 /// @return Vector of replacement maps
-container::svector<container::map<Index, Index>> P_maps(
-    const Tensor& P, bool keep_canonical = true, bool pair_wise = false);
+container::svector<container::map<Index, Index>> P_maps(const Tensor& P);
 
 /// @brief Expand a product containing the particle permutation (P) tensor
 /// @param product a Product that may or may not contain P tensor
 /// @return an ExprPtr containing sum of expanded terms if P is present
-ExprPtr expand_P_op(const Product& product, bool keep_canonical = true,
-                    bool pair_wise = true);
+ExprPtr expand_P_op(const Product& product);
 
 /// @brief Expand an expression containing the particle permutation (P) tensor
 /// @param expr any ExprPtr
 /// @return an ExprPtr containing sum of expanded terms if P is present
-ExprPtr expand_P_op(const ExprPtr& expr, bool keep_canonical = true,
-                    bool pair_wise = true);
+ExprPtr expand_P_op(const ExprPtr& expr);
 
 container::svector<container::map<Index, Index>> S_replacement_maps(
     const Tensor& S);
@@ -312,7 +309,9 @@ ExprPtr closed_shell_spintrace(
 ///        indices.
 /// \note The argument tensor must have a label of 'S' or 'A' do denote that
 ///       it is OpType::S or OpType::A respectively.
-///
+/// \return a vector of external index groups, `{{P.ket(0), P.bra(0)},
+/// {P.ket(1), P.bra(1)}, ...}`, where `P` is the symmetrizer/antisymmetrizer
+/// tensor.
 container::svector<container::svector<Index>> external_indices(Tensor const&);
 
 /// @brief Transforms Coupled cluster from spin orbital to spatial orbitals

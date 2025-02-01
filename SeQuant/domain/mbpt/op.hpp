@@ -95,7 +95,7 @@ enum class OpType {
 };
 
 /// maps operator types to their labels
-inline const std::map<OpType, std::wstring> optype2label{
+inline const container::map<OpType, std::wstring> optype2label{
     {OpType::h, L"h"},
     {OpType::f, L"f"},
     {OpType::f̃, L"f̃"},
@@ -119,10 +119,10 @@ inline const std::map<OpType, std::wstring> optype2label{
     {OpType::λ_1, L"λ¹"}};
 
 /// maps operator labels to their types
-inline const std::map<std::wstring, OpType> label2optype =
+inline const container::map<std::wstring, OpType> label2optype =
     ranges::views::zip(ranges::views::values(optype2label),
                        ranges::views::keys(optype2label)) |
-    ranges::to<std::map<std::wstring, OpType>>();
+    ranges::to<container::map<std::wstring, OpType>>();
 
 /// Operator character relative to Fermi vacuum
 enum class OpClass { ex, deex, gen };

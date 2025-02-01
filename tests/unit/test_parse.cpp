@@ -1,6 +1,8 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 
+#include "catch2_sequant.hpp"
+
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/complex.hpp>
 #include <SeQuant/core/context.hpp>
@@ -79,9 +81,22 @@ ParseErrorMatcher parseErrorMatches(std::size_t offset, std::size_t length,
 
 TEST_CASE("parse_expr", "[parse]") {
   using namespace sequant;
-  // use a minimal spinbasis registry
+
   auto ctx_resetter = set_scoped_default_context(
-      Context(mbpt::make_min_sr_spaces(), Vacuum::SingleProduct));
+      Context(mbpt::make_sr_spaces(), Vacuum::SingleProduct));
+
+  SECTION("Scalar tensor") {
+    auto expr = parse_expr(L"t{}");
+    REQUIRE(expr->is<Tensor>());
+    REQUIRE(expr->as<Tensor>().bra().empty());
+    REQUIRE(expr->as<Tensor>().ket().empty());
+    REQUIRE(expr->as<Tensor>().aux().empty());
+
+    REQUIRE(expr == parse_expr(L"t{;}"));
+    REQUIRE(expr == parse_expr(L"t{;;}"));
+    REQUIRE(expr == parse_expr(L"t^{}_{}"));
+    REQUIRE(expr == parse_expr(L"t_{}^{}"));
+  }
   SECTION("Tensor") {
     auto expr = parse_expr(L"t{i1;a1}");
     REQUIRE(expr->is<Tensor>());
@@ -90,10 +105,12 @@ TEST_CASE("parse_expr", "[parse]") {
     REQUIRE(expr->as<Tensor>().bra().at(0).label() == L"i_1");
     REQUIRE(expr->as<Tensor>().ket().size() == 1);
     REQUIRE(expr->as<Tensor>().ket().at(0) == L"a_1");
+    REQUIRE(expr->as<Tensor>().aux().empty());
 
     REQUIRE(expr == parse_expr(L"t_{i1}^{a1}"));
     REQUIRE(expr == parse_expr(L"t^{a1}_{i1}"));
     REQUIRE(expr == parse_expr(L"t{i_1; a_1}"));
+    REQUIRE(expr == parse_expr(L"t{i_1; a_1;}"));
     REQUIRE(expr == parse_expr(L"t_{i_1}^{a_1}"));
 
     expr = parse_expr(L"t{i1,i2;a1,a2}");
@@ -103,6 +120,7 @@ TEST_CASE("parse_expr", "[parse]") {
     REQUIRE(expr->as<Tensor>().ket().size() == 2);
     REQUIRE(expr->as<Tensor>().ket().at(0).label() == L"a_1");
     REQUIRE(expr->as<Tensor>().ket().at(1).label() == L"a_2");
+    REQUIRE(expr->as<Tensor>().aux().empty());
 
     REQUIRE(expr == parse_expr(L"+t{i1, i2; a1, a2}"));
     REQUIRE(parse_expr(L"-t{i1;a1}")->is<Product>());
@@ -128,15 +146,45 @@ TEST_CASE("parse_expr", "[parse]") {
     auto expr1 = parse_expr(L"t{a↓1;i↑1}");
     REQUIRE(expr1->as<Tensor>().bra().at(0).label() == L"a↓_1");
     REQUIRE(expr1->as<Tensor>().ket().at(0).label() == L"i↑_1");
+
+    // Auxiliary indices
+    expr = parse_expr(L"t{;;i1}");
+    REQUIRE(expr->is<Tensor>());
+    REQUIRE(expr->as<Tensor>().bra().empty());
+    REQUIRE(expr->as<Tensor>().ket().empty());
+    REQUIRE(expr->as<Tensor>().aux().size() == 1);
+    REQUIRE(expr->as<Tensor>().aux()[0].label() == L"i_1");
+
+    // All index groups at once
+    expr = parse_expr(L"t{i1,i2;a1;x1,x2}");
+    REQUIRE(expr->is<Tensor>());
+    REQUIRE(expr->as<Tensor>().bra().size() == 2);
+    REQUIRE(expr->as<Tensor>().bra().at(0).label() == L"i_1");
+    REQUIRE(expr->as<Tensor>().bra().at(1).label() == L"i_2");
+    REQUIRE(expr->as<Tensor>().ket().size() == 1);
+    REQUIRE(expr->as<Tensor>().ket().at(0).label() == L"a_1");
+    REQUIRE(expr->as<Tensor>().aux().size() == 2);
+    REQUIRE(expr->as<Tensor>().aux().at(0).label() == L"x_1");
+    REQUIRE(expr->as<Tensor>().aux().at(1).label() == L"x_2");
   }
 
   SECTION("Tensor with symmetry annotation") {
     auto expr1 = parse_expr(L"t{a1;i1}:A");
-    auto expr2 = parse_expr(L"t{a1;i1}:S");
-    auto expr3 = parse_expr(L"t{a1;i1}:N");
-    REQUIRE(expr1->as<Tensor>().symmetry() == sequant::Symmetry::antisymm);
-    REQUIRE(expr2->as<Tensor>().symmetry() == sequant::Symmetry::symm);
-    REQUIRE(expr3->as<Tensor>().symmetry() == sequant::Symmetry::nonsymm);
+    auto expr2 = parse_expr(L"t{a1;i1}:S-C");
+    auto expr3 = parse_expr(L"t{a1;i1}:N-S-N");
+
+    const Tensor& t1 = expr1->as<Tensor>();
+    const Tensor& t2 = expr2->as<Tensor>();
+    const Tensor& t3 = expr3->as<Tensor>();
+
+    REQUIRE(t1.symmetry() == Symmetry::antisymm);
+
+    REQUIRE(t2.symmetry() == Symmetry::symm);
+    REQUIRE(t2.braket_symmetry() == BraKetSymmetry::conjugate);
+
+    REQUIRE(t3.symmetry() == Symmetry::nonsymm);
+    REQUIRE(t3.braket_symmetry() == BraKetSymmetry::symm);
+    REQUIRE(t3.particle_symmetry() == ParticleSymmetry::nonsymm);
   }
 
   SECTION("Constant") {
@@ -166,9 +214,8 @@ TEST_CASE("parse_expr", "[parse]") {
     REQUIRE(parse_expr(L"α^*")->is<Variable>());
     REQUIRE(parse_expr(L"β^*")->is<Variable>());
     REQUIRE(parse_expr(L"b^*")->is<Variable>());
-    // Currently the conjugated "property" really just is part of the
-    // variable's name
-    REQUIRE(parse_expr(L"b^*")->as<Variable>().label() == L"b^*");
+    REQUIRE(parse_expr(L"b^*")->as<Variable>().conjugated());
+    REQUIRE(parse_expr(L"b^*")->as<Variable>().label() == L"b");
   }
 
   SECTION("Product") {
@@ -324,13 +371,16 @@ TEST_CASE("deparse", "[parse]") {
   using namespace sequant;
 
   std::vector<std::wstring> expressions = {
-      L"t{a_1,a_2;a_3,a_4}:N",
+      L"t{a_1,a_2;a_3,a_4}:N-C-S",
       L"42",
       L"1/2",
-      L"-1/4 t{a_1,i_1<a_1>;a_2,i_2}:S",
+      L"-1/4 t{a_1,i_1<a_1>;a_2,i_2}:S-N-S",
       L"a + b - 4 specialVariable",
-      L"variable + A{a_1;i_1}:N * B{i_1;a_1}:A",
-      L"1/2 (a + b) * c"};
+      L"variable + A{a_1;i_1}:N-N-S * B{i_1;a_1}:A-C-S",
+      L"1/2 (a + b) * c",
+      L"T1{}:N-N-N + T2{;;x_1}:N-N-N * T3{;;x_1}:N-N-N + T4{a_1;;x_2}:S-C-S * "
+      L"T5{;a_1;x_2}:S-S-S",
+      L"q1 * q2^* * q3"};
 
   for (const std::wstring& current : expressions) {
     ExprPtr expression = parse_expr(current);

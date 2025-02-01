@@ -174,6 +174,9 @@ class ExprPtr : public std::shared_ptr<Expr> {
   template <typename T>
   T &as();
 
+  /// @return the range size of the contained expression
+  std::size_t size() const;
+
   std::wstring to_latex() const;
 };  // class ExprPtr
 
@@ -266,18 +269,18 @@ class Expr : public std::enable_shared_from_this<Expr>,
         std::const_pointer_cast<Expr>(this->shared_from_this()));
   }
 
-  /// Canonicalizes @c this and returns the biproduct of canonicalization (e.g.
+  /// Canonicalizes @c this and returns the byproduct of canonicalization (e.g.
   /// phase)
-  /// @return the biproduct of canonicalization, or @c nullptr if no biproduct
+  /// @return the byproduct of canonicalization, or @c nullptr if no byproduct
   /// generated
   virtual ExprPtr canonicalize() {
     return {};  // by default do nothing and return nullptr
   }
 
   /// Performs approximate, but fast, canonicalization of @c this and returns
-  /// the biproduct of canonicalization (e.g. phase) The default is to use
+  /// the byproduct of canonicalization (e.g. phase) The default is to use
   /// canonicalize(), unless overridden in the derived class.
-  /// @return the biproduct of canonicalization, or @c nullptr if no biproduct
+  /// @return the byproduct of canonicalization, or @c nullptr if no byproduct
   /// generated
   virtual ExprPtr rapid_canonicalize() { return this->canonicalize(); }
 
@@ -1141,7 +1144,12 @@ class Product : public Expr {
     if (!scalar().is_zero()) {
       const auto scal = negate ? -scalar() : scalar();
       if (!scal.is_identity()) {
-        result += sequant::to_latex(scal);
+        // replace -1 prefactor by -
+        if (!(negate ? scalar() : -scalar()).is_identity()) {
+          result += sequant::to_latex(scal);
+        } else {
+          result += L"{-}";
+        }
       }
       for (const auto &i : factors()) {
         if (i->is<Product>())

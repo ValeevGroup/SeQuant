@@ -7,6 +7,7 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/logger.hpp>
 #include <SeQuant/core/tensor.hpp>
+#include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/tensor_network.hpp>
 
 #include <range/v3/all.hpp>
@@ -89,6 +90,8 @@ ExprPtr &ExprPtr::operator*=(const ExprPtr &other) {
   }
   return *this;
 }
+
+std::size_t ExprPtr::size() const { return this->get()->size(); }
 
 std::wstring ExprPtr::to_latex() const { return as_shared_ptr()->to_latex(); }
 

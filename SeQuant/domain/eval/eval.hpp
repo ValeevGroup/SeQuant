@@ -12,6 +12,7 @@
 #include <btas/btas.h>
 #include <tiledarray.h>
 
+#include <chrono>
 #include <range/v3/numeric.hpp>
 #include <range/v3/view.hpp>
 
@@ -23,6 +24,34 @@
 namespace sequant {
 
 namespace {
+
+///
+/// Invokes @c fun on @c args and returns a pair of the result, and
+/// the time duration as @c std::chrono::duration<double>.
+///
+template <typename F, typename... Args>
+auto timed_eval(F&& fun, Args&&... args) {
+  using Clock = std::chrono::high_resolution_clock;
+  auto tstart = Clock::now();
+  auto&& res = std::forward<F>(fun)(std::forward<Args>(args)...);
+  auto tend = Clock::now();
+  return std::pair{std::move(res),
+                   std::chrono::duration<double>(tend - tstart)};
+}
+
+///
+/// Invokes @c fun that returns void on the arguments @c args and returns the
+/// time duration as @c std::chrono::duration<double>.
+template <
+    typename F, typename... Args,
+    std::enable_if_t<std::is_invocable_r_v<void, F, Args...>, bool> = true>
+auto timed_eval_inplace(F&& fun, Args&&... args) {
+  using Clock = std::chrono::high_resolution_clock;
+  auto tstart = Clock::now();
+  std::forward<F>(fun)(std::forward<Args>(args)...);
+  auto tend = Clock::now();
+  return std::chrono::duration<double>(tend - tstart);
+}
 
 template <typename... Args>
 void log_eval(Args const&... args) noexcept {
@@ -220,11 +249,16 @@ template <typename NodeT, typename Le, typename... Args,
           std::enable_if_t<IsLeafEvaluator<NodeT, Le>, bool> = true>
 ERPtr evaluate_core(NodeT const& node, Le const& le, Args&&... args) {
   if (node.leaf()) {
+#ifdef SEQUANT_EVAL_TRACE
+    auto&& [res, time] = timed_eval(le, node);
     log_eval(node->is_constant()   ? "[CONSTANT] "
              : node->is_variable() ? "[VARIABLE] "
                                    : "[TENSOR] ",
-             node->label(), "\n");
+             node->label(), "  ", time.count(), "\n");
+    return res;
+#else
     return le(node);
+#endif
   } else {
     ERPtr const left =
         evaluate_crust(node.left(), le, std::forward<Args>(args)...);
@@ -238,19 +272,33 @@ ERPtr evaluate_core(NodeT const& node, Le const& le, Args&&... args) {
                                       node.right()->annot(), node->annot()};
 
     if (node->op_type() == EvalOp::Sum) {
+#ifdef SEQUANT_EVAL_TRACE
+      auto&& [res, time] = timed_eval([&]() { return left->sum(*right, ann); });
       log_eval("[SUM] ", node.left()->label(), " + ", node.right()->label(),
-               " = ", node->label(), "\n");
-
+               " = ", node->label(), "  ", time.count(), "\n");
+      return res;
+#else
       return left->sum(*right, ann);
+#endif
     } else {
       assert(node->op_type() == EvalOp::Prod);
-
-      log_eval("[PRODUCT] ", node.left()->label(), " * ", node.right()->label(),
-               " = ", node->label(), "\n");
       auto const de_nest =
           node.left()->tot() && node.right()->tot() && !node->tot();
+
+#ifdef SEQUANT_EVAL_TRACE
+      auto&& [res, time] = timed_eval([&]() {
+        return left->prod(*right, ann,
+                          de_nest ? TA::DeNest::True : TA::DeNest::False);
+      });
+
+      log_eval("[PRODUCT] ", node.left()->label(), " * ", node.right()->label(),
+               " = ", node->label(), "  ", time.count(), "\n");
+      return res;
+#else
+
       return left->prod(*right, ann,
                         de_nest ? TA::DeNest::True : TA::DeNest::False);
+#endif
     }
   }
 }
@@ -320,9 +368,22 @@ auto evaluate(NodesT const& nodes, Le const& le, Args&&... args) {
   assert(iter != end);
 
   auto result = evaluate(*iter, le, std::forward<Args>(args)...);
+  auto const pnode_label = (*iter)->label();
 
   for (++iter; iter != end; ++iter) {
     auto right = evaluate(*iter, le, std::forward<Args>(args)...);
+#ifdef SEQUANT_EVAL_TRACE
+    auto&& time = timed_eval_inplace([&]() { result->add_inplace(*right); });
+    log_eval("[ADD_INPLACE] ",  //
+             pnode_label,       //
+             " += ",            //
+             (*iter)->label(),  //
+             "  ",              //
+             time.count(),      //
+             "\n");
+#else
+    result->add_inplace(*right);
+#endif
     result->add_inplace(*right);
   }
 
@@ -351,9 +412,16 @@ auto evaluate(NodeT const& node,    //
               Le const& le, Args&&... args) {
   auto result = evaluate_crust(node, le, std::forward<Args>(args)...);
 
-  log_eval("[PERMUTE] ", node->label(), "\n");
+#ifdef SEQUANT_EVAL_TRACE
+  auto&& [res, time] = timed_eval([&]() {
+    return result->permute(std::array<std::any, 2>{node->annot(), layout});
+  });
+  log_eval("[PERMUTE] ", node->label(), "  ", time.count(), "\n");
+  return res;
 
+#else
   return result->permute(std::array<std::any, 2>{node->annot(), layout});
+#endif
 }
 
 ///
@@ -389,10 +457,18 @@ auto evaluate(NodesT const& nodes,  //
 
   for (++iter; iter != end; ++iter) {
     auto right = evaluate(*iter, layout, le, std::forward<Args>(args)...);
-
-    log_eval("[ADD_INPLACE] ", (*iter)->label(), " += ", pnode_label, "\n");
-
+#ifdef SEQUANT_EVAL_TRACE
+    auto&& time = timed_eval_inplace([&]() { result->add_inplace(*right); });
+    log_eval("[ADD_INPLACE] ",  //
+             pnode_label,       //
+             " += ",            //
+             (*iter)->label(),  //
+             "  ",              //
+             time.count(),      //
+             "\n");
+#else
     result->add_inplace(*right);
+#endif
   }
   return result;
 }
@@ -419,11 +495,17 @@ auto evaluate_symm(NodeT const& node, Annot const& layout, Le const& le,
                    Args&&... args) {
   auto result = evaluate(node, layout, le, std::forward<Args>(args)...);
 
+#ifdef SEQUANT_EVAL_TRACE
+  auto&& [res, time] = timed_eval([&]() { return result->symmetrize(); });
   // TODO: Update logging
-  // log_eval("[SYMMETRIZE] (bra pos, ket pos, length) ",
-  //          perm_groups_string(perm_groups.empty() ? pgs : perm_groups),
-  //          "\n");
+//   log_eval("[SYMMETRIZE] (bra pos, ket pos, length) ",                   //
+//           perm_groups_string(perm_groups.empty() ? pgs : perm_groups),  //
+//           "  ",                                                         //
+//            time.count(),                                                 //
+//            "\n");
+#else
   return result->symmetrize();
+#endif
 }
 
 ///
@@ -464,11 +546,19 @@ auto evaluate_antisymm(NodeT const& node,    //
   }
 
   auto result = evaluate(node, layout, le, std::forward<Args>(args)...);
+#ifdef SEQUANT_EVAL_TRACE
+  auto&& [res, time] =
+      timed_eval([&]() { return result->antisymmetrize(bra_rank); });
   // TODO: Update logging
-  // log_eval("[ANTISYMMETRIZE] (bra pos, ket pos, length) ",
-  //          perm_groups_string(perm_groups.empty() ? pgs : perm_groups),
-  //          "\n");
+  //  log_eval("[ANTISYMMETRIZE] (bra pos, ket pos, length) ",               //
+  //           perm_groups_string(perm_groups.empty() ? pgs : perm_groups),  //
+  //           "  ",                                                         //
+  //           time.count(),                                                 //
+  //            "\n");
+  return res;
+#else
   return result->antisymmetrize(bra_rank);
+#endif
 }
 
 }  // namespace sequant

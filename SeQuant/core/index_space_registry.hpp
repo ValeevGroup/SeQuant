@@ -779,7 +779,7 @@ class IndexSpaceRegistry {
   ///                nonzero occupancy in the reference wave function
   /// @return reference to `this`
   IndexSpaceRegistry& vacuum_occupied_space(
-      std::map<IndexSpace::QuantumNumbers, IndexSpace::Type> qn2type) {
+      container::map<IndexSpace::QuantumNumbers, IndexSpace::Type> qn2type) {
     throw_if_missing_any(qn2type, "vacuum_occupied_space");
     std::get<1>(vacocc_) = std::move(qn2type);
     return *this;
@@ -811,7 +811,7 @@ class IndexSpaceRegistry {
       throw std::invalid_argument(
           "vacuum occupied space has not been specified, invoke "
           "vacuum_occupied_space(IndexSpace::Type) or "
-          "vacuum_occupied_space(std::map<IndexSpace::QuantumNumbers,"
+          "vacuum_occupied_space(container::map<IndexSpace::QuantumNumbers,"
           "IndexSpace::Type>)");
     } else
       return std::get<0>(vacocc_);
@@ -856,7 +856,7 @@ class IndexSpaceRegistry {
   ///          the reference wave function
   /// @return reference to `this`
   IndexSpaceRegistry& reference_occupied_space(
-      std::map<IndexSpace::QuantumNumbers, IndexSpace::Type> qn2type) {
+      container::map<IndexSpace::QuantumNumbers, IndexSpace::Type> qn2type) {
     throw_if_missing_any(qn2type, "reference_occupied_space");
     std::get<1>(refocc_) = std::move(qn2type);
     return *this;
@@ -889,7 +889,7 @@ class IndexSpaceRegistry {
       throw std::invalid_argument(
           "reference occupied space has not been specified, invoke "
           "reference_occupied_space(IndexSpace::Type) or "
-          "reference_occupied_space(std::map<IndexSpace::QuantumNumbers,"
+          "reference_occupied_space(container::map<IndexSpace::QuantumNumbers,"
           "IndexSpace::Type>)");
     } else
       return std::get<0>(refocc_);
@@ -927,7 +927,7 @@ class IndexSpaceRegistry {
   /// nonzero occupancy in
   ///          the reference wave function
   IndexSpaceRegistry& complete_space(
-      std::map<IndexSpace::QuantumNumbers, IndexSpace::Type> qn2type) {
+      container::map<IndexSpace::QuantumNumbers, IndexSpace::Type> qn2type) {
     throw_if_missing_any(qn2type, "complete_space");
     std::get<1>(complete_) = std::move(qn2type);
     return *this;
@@ -1002,7 +1002,7 @@ class IndexSpaceRegistry {
   /// @param qn2type for each quantum number specifies the space in which holes
   /// can be created
   IndexSpaceRegistry& hole_space(
-      std::map<IndexSpace::QuantumNumbers, IndexSpace::Type> qn2type) {
+      container::map<IndexSpace::QuantumNumbers, IndexSpace::Type> qn2type) {
     throw_if_missing_any(qn2type, "hole_space");
     std::get<1>(hole_space_) = std::move(qn2type);
     return *this;
@@ -1033,7 +1033,7 @@ class IndexSpaceRegistry {
       throw std::invalid_argument(
           "active hole space has not been specified, invoke "
           "hole_space(IndexSpace::Type) or "
-          "hole_space(std::map<IndexSpace::QuantumNumbers,IndexSpace::"
+          "hole_space(container::map<IndexSpace::QuantumNumbers,IndexSpace::"
           "Type>)");
     } else
       return std::get<0>(hole_space_);
@@ -1070,7 +1070,7 @@ class IndexSpaceRegistry {
   /// @param qn2type for each quantum number specifies the space in which
   /// particles can be created
   IndexSpaceRegistry& particle_space(
-      std::map<IndexSpace::QuantumNumbers, IndexSpace::Type> qn2type) {
+      container::map<IndexSpace::QuantumNumbers, IndexSpace::Type> qn2type) {
     throw_if_missing_any(qn2type, "particle_space");
     std::get<1>(particle_space_) = std::move(qn2type);
     return *this;
@@ -1101,7 +1101,7 @@ class IndexSpaceRegistry {
       throw std::invalid_argument(
           "active particle space has not been specified, invoke "
           "particle_space(IndexSpace::Type) or "
-          "particle_space(std::map<IndexSpace::QuantumNumbers,"
+          "particle_space(container::map<IndexSpace::QuantumNumbers,"
           "IndexSpace::Type>)");
     } else
       return std::get<0>(particle_space_);
@@ -1181,10 +1181,10 @@ class IndexSpaceRegistry {
                                 " , any IndexSpace::QuantumNumbers } space");
   }
 
-  void throw_if_missing_any(
-      const std::map<IndexSpace::QuantumNumbers, IndexSpace::Type>& qn2type,
-      std::string call_context = "") {
-    std::map<IndexSpace::QuantumNumbers, IndexSpace::Type> qn2type_found;
+  void throw_if_missing_any(const container::map<IndexSpace::QuantumNumbers,
+                                                 IndexSpace::Type>& qn2type,
+                            std::string call_context = "") {
+    container::map<IndexSpace::QuantumNumbers, IndexSpace::Type> qn2type_found;
     for (auto&& space : *spaces_) {
       for (auto&& [qn, t] : qn2type) {
         if (space.type() == t && space.qns() == qn) {
@@ -1222,26 +1222,26 @@ class IndexSpaceRegistry {
 
   // used for fermi vacuum wick application
   std::tuple<IndexSpace::Type,
-             std::map<IndexSpace::QuantumNumbers, IndexSpace::Type>>
+             container::map<IndexSpace::QuantumNumbers, IndexSpace::Type>>
       vacocc_ = {{}, {}};
 
   // used for MR MBPT to take average over multiconfiguration reference
   std::tuple<IndexSpace::Type,
-             std::map<IndexSpace::QuantumNumbers, IndexSpace::Type>>
+             container::map<IndexSpace::QuantumNumbers, IndexSpace::Type>>
       refocc_ = {{}, {}};
 
   // defines active bits in TypeAttr; used by general operators in mbpt/op
   std::tuple<IndexSpace::Type,
-             std::map<IndexSpace::QuantumNumbers, IndexSpace::Type>>
+             container::map<IndexSpace::QuantumNumbers, IndexSpace::Type>>
       complete_ = {{}, {}};
 
   // both needed to make excitation and de-excitation operators. not
   // necessarily equivalent in the case of multi-reference context.
   std::tuple<IndexSpace::Type,
-             std::map<IndexSpace::QuantumNumbers, IndexSpace::Type>>
+             container::map<IndexSpace::QuantumNumbers, IndexSpace::Type>>
       hole_space_ = {{}, {}};
   std::tuple<IndexSpace::Type,
-             std::map<IndexSpace::QuantumNumbers, IndexSpace::Type>>
+             container::map<IndexSpace::QuantumNumbers, IndexSpace::Type>>
       particle_space_ = {{}, {}};
 
   // Boost.Hana snippet to process attribute tag arguments

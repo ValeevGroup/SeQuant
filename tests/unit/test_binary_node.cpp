@@ -2,6 +2,8 @@
 
 #include <SeQuant/core/binary_node.hpp>
 
+#include "catch2_sequant.hpp"
+
 #include <array>
 #include <cstddef>
 #include <string>

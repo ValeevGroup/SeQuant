@@ -158,7 +158,7 @@ void set_default_context(const Context& ctx,
 
 /// @brief sets default Context for several given Statistics
 /// @param ctxs a Statistics->Context map
-void set_default_context(const std::map<Statistics, Context>& ctxs);
+void set_default_context(const container::map<Statistics, Context>& ctxs);
 
 /// @brief resets default Contexts for all statistics to their initial values
 void reset_default_context();
@@ -176,13 +176,15 @@ void reset_default_context();
 /// } // leaving scope, resetter is destroyed, default context is reset back to
 /// the old value
 /// ```
-[[nodiscard]] detail::ImplicitContextResetter<std::map<Statistics, Context>>
-set_scoped_default_context(const std::map<Statistics, Context>& ctx);
+[[nodiscard]] detail::ImplicitContextResetter<
+    container::map<Statistics, Context>>
+set_scoped_default_context(const container::map<Statistics, Context>& ctx);
 
 /// @brief changes default context for arbitrary statistics
 /// @note equivalent to `set_scoped_default_context({{Statistics::Arbitrary,
 /// ctx}})`
-[[nodiscard]] detail::ImplicitContextResetter<std::map<Statistics, Context>>
+[[nodiscard]] detail::ImplicitContextResetter<
+    container::map<Statistics, Context>>
 set_scoped_default_context(const Context& ctx);
 
 ///@}

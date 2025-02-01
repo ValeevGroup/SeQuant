@@ -4,6 +4,8 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include "catch2_sequant.hpp"
+
 #include <SeQuant/core/math.hpp>
 #include <SeQuant/core/meta.hpp>
 #include <SeQuant/core/rational.hpp>

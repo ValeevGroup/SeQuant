@@ -1,4 +1,5 @@
 #include <SeQuant/core/op.hpp>
+#include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/timer.hpp>
 #include <SeQuant/domain/mbpt/context.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
@@ -37,9 +38,13 @@ int main(int argc, char* argv[]) {
 #ifndef NDEBUG
   const size_t DEFAULT_NMAX = 3;
 #else
-  const size_t DEFAULT_NMAX = 4;
+  const size_t DEFAULT_NMAX = 3;
 #endif
   const size_t NMAX = argc > 1 ? std::atoi(argv[1]) : DEFAULT_NMAX;
+  if (NMAX >= 4)
+    throw std::logic_error(
+        "spin-tracing rank-4 and "
+        "higher-body equations is not currently supported");
 
   // Spin-orbital coupled cluster
   auto cc_r = sequant::mbpt::CC{NMAX}.t();
