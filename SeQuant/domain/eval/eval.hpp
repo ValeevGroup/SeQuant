@@ -498,11 +498,12 @@ auto evaluate_symm(NodeT const& node, Annot const& layout, Le const& le,
 #ifdef SEQUANT_EVAL_TRACE
   auto&& [res, time] = timed_eval([&]() { return result->symmetrize(); });
   // TODO: Update logging
-//   log_eval("[SYMMETRIZE] (bra pos, ket pos, length) ",                   //
-//           perm_groups_string(perm_groups.empty() ? pgs : perm_groups),  //
-//           "  ",                                                         //
-//            time.count(),                                                 //
-//            "\n");
+  //   log_eval("[SYMMETRIZE] (bra pos, ket pos, length) ",                   //
+  //           perm_groups_string(perm_groups.empty() ? pgs : perm_groups),  //
+  //           "  ",                                                         //
+  //            time.count(),                                                 //
+  //            "\n");
+  return res;
 #else
   return result->symmetrize();
 #endif
