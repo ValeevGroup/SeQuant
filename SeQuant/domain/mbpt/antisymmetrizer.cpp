@@ -308,7 +308,7 @@ ExprPtr max_similarity(const std::vector<Index>& original_upper,
                        ExprPtr expression) {
   // index pairing is originally understood as a position in the original
   // vectors, but for this case, a map may do better.
-  std::map<std::wstring, std::wstring> original_map;
+  container::map<std::wstring, std::wstring> original_map;
   for (int i = 0; i < original_upper.size(); i++) {
     original_map.emplace(original_upper[i].to_latex(),
                          original_lower[i].to_latex());

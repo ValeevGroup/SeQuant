@@ -1,16 +1,31 @@
 #ifndef SEQUANT_CORE_UTILITY_INDICES_HPP
 #define SEQUANT_CORE_UTILITY_INDICES_HPP
 
+#include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/tensor.hpp>
 
+#include <algorithm>
 #include <set>
+#include <tuple>
+#include <type_traits>
 #include <vector>
 
 namespace sequant {
 
 namespace detail {
+template <typename Range>
+struct not_in {
+  const Range& range;
+
+  not_in(const Range& range) : range(range) {}
+
+  template <typename T>
+  bool operator()(const T& element) const {
+    return std::find(range.begin(), range.end(), element) == range.end();
+  }
+};
 
 /// This function is equal to std::remove in case the given container
 /// contains none or only a single occurrence of the given element.
@@ -36,14 +51,22 @@ template <typename Container = std::vector<Index>>
 struct IndexGroups {
   Container bra;
   Container ket;
+  Container aux;
 
   bool operator==(const IndexGroups<Container>& other) const {
-    return bra == other.bra && ket == other.ket;
+    return bra == other.bra && ket == other.ket && aux == other.aux;
   }
 
   bool operator!=(const IndexGroups<Container>& other) const {
     return !(*this == other);
   }
+};
+
+/// A composite type for holding tensor-of-tensor indices
+template <typename Container = std::vector<Index>>
+struct TensorOfTensorIndices {
+  Container outer;
+  Container inner;
 };
 
 template <typename Container = std::vector<Index>>
@@ -57,6 +80,36 @@ IndexGroups<Container> get_unique_indices(const Constant&) {
 template <typename Container = std::vector<Index>>
 IndexGroups<Container> get_unique_indices(const Variable&) {
   return {};
+}
+
+/// @returns Lists of non-contracted indices arising when contracting the two
+/// given tensors in the order bra, ket, auxiliary
+template <typename Container = container::svector<Index>>
+IndexGroups<Container> get_uncontracted_indices(const Tensor& t1,
+                                                const Tensor& t2) {
+  static_assert(std::is_same_v<typename Container::value_type, Index>);
+
+  IndexGroups<Container> groups;
+
+  // Bra indices
+  std::copy_if(t1.bra().begin(), t1.bra().end(), std::back_inserter(groups.bra),
+               detail::not_in{t2.ket()});
+  std::copy_if(t2.bra().begin(), t2.bra().end(), std::back_inserter(groups.bra),
+               detail::not_in{t1.ket()});
+
+  // Ket indices
+  std::copy_if(t1.ket().begin(), t1.ket().end(), std::back_inserter(groups.ket),
+               detail::not_in{t2.bra()});
+  std::copy_if(t2.ket().begin(), t2.ket().end(), std::back_inserter(groups.ket),
+               detail::not_in{t1.bra()});
+
+  // Auxiliary indices
+  std::copy_if(t1.aux().begin(), t1.aux().end(), std::back_inserter(groups.aux),
+               detail::not_in{t2.aux()});
+  std::copy_if(t2.aux().begin(), t2.aux().end(), std::back_inserter(groups.aux),
+               detail::not_in{t1.aux()});
+
+  return groups;
 }
 
 /// Obtains the set of unique (non-repeated) indices used in the given tensor
@@ -83,6 +136,17 @@ IndexGroups<Container> get_unique_indices(const Tensor& tensor) {
     } else {
       detail::remove_one(groups.bra, current);
       detail::remove_one(groups.ket, current);
+    }
+  }
+
+  for (const Index& current : tensor.aux()) {
+    if (encounteredIndices.find(current) == encounteredIndices.end()) {
+      groups.aux.push_back(current);
+      encounteredIndices.insert(current);
+    } else {
+      detail::remove_one(groups.bra, current);
+      detail::remove_one(groups.ket, current);
+      detail::remove_one(groups.aux, current);
     }
   }
 
@@ -131,6 +195,18 @@ IndexGroups<Container> get_unique_indices(const Product& product) {
         detail::remove_one(groups.ket, current);
       }
     }
+
+    // Same for aux indices
+    for (Index& current : currentGroups.aux) {
+      if (encounteredIndices.find(current) == encounteredIndices.end()) {
+        encounteredIndices.insert(current);
+        groups.aux.push_back(std::move(current));
+      } else {
+        detail::remove_one(groups.bra, current);
+        detail::remove_one(groups.ket, current);
+        detail::remove_one(groups.aux, current);
+      }
+    }
   }
 
   return groups;
@@ -154,6 +230,45 @@ IndexGroups<Container> get_unique_indices(const ExprPtr& expr) {
     throw std::runtime_error(
         "Encountered unsupported expression type in get_unique_indices");
   }
+}
+
+template <typename Container = std::vector<Index>, typename Rng>
+TensorOfTensorIndices<Container> tot_indices(Rng const& idxs) {
+  using ranges::not_fn;
+  using ranges::views::concat;
+  using ranges::views::filter;
+  using ranges::views::join;
+  using ranges::views::transform;
+
+  // Container indep_idxs;
+
+  TensorOfTensorIndices<Container> result;
+  auto& outer = result.outer;
+
+  for (auto&& i : idxs | transform(&Index::proto_indices) | join)
+    if (!ranges::contains(outer, i)) outer.emplace_back(i);
+
+  for (auto&& i : idxs | filter(not_fn(&Index::has_proto_indices)))
+    if (!ranges::contains(outer, i)) outer.emplace_back(i);
+
+  auto& inner = result.inner;
+  for (auto&& i : idxs | filter(&Index::has_proto_indices))
+    inner.emplace_back(i);
+
+  return result;
+}
+
+///
+/// Does the numeric comparison of the index suffixes using less-than operator.
+///
+/// \param idx1
+/// \param idx2
+/// \return True if the numeric suffix of \c idx1 is less than that of \c idx2.
+///
+inline bool suffix_compare(Index const& idx1, Index const& idx2) {
+  auto&& s1 = idx1.suffix();
+  auto&& s2 = idx2.suffix();
+  return (s1 && s2) && s1.value() < s2.value();
 }
 
 }  // namespace sequant

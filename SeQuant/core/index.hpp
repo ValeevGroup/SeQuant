@@ -18,6 +18,7 @@
 #include <algorithm>
 #include <atomic>
 #include <cassert>
+#include <charconv>
 #include <cstdint>
 #include <cwchar>
 #include <functional>
@@ -366,6 +367,20 @@ class Index : public Taggable {
     return make_split_label(this->label());
   }
 
+  ///
+  /// \return The numeric suffix if present in the label.
+  ///
+  std::optional<int> suffix() const {
+    auto &&[_, s_] = split_label();
+    auto &&s = sequant::to_string(s_);
+
+    int value{};
+    if (std::from_chars(s.data(), s.data() + s.size(), value).ec == std::errc{})
+      return value;
+    else
+      return std::nullopt;
+  }
+
   /// @return A string label representable in ASCII encoding
   /// @warning not to be used with proto indices
   /// @brief Replaces non-ascii wstring characters with human-readable analogs,
@@ -389,10 +404,15 @@ class Index : public Taggable {
   std::wstring_view full_label() const {
     if (!has_proto_indices()) return label();
     if (full_label_) return *full_label_;
-    std::wstring result = label_;
-    ranges::for_each(proto_indices_, [&result](const Index &idx) {
-      result += idx.full_label();
-    });
+    std::wstring result = label_ + L"<";
+    using namespace std::literals;
+    result +=
+        ranges::views::transform(proto_indices_,
+                                 [](const Index &idx) -> std::wstring_view {
+                                   return idx.full_label();
+                                 }) |
+        ranges::views::join(L", "sv) | ranges::to<std::wstring>();
+    result += L">";
     full_label_ = result;
     return *full_label_;
   }
@@ -666,6 +686,20 @@ class Index : public Taggable {
     }
   };
 
+  /// compares Index objects using full labels only
+  struct FullLabelCompare {
+    using is_transparent = void;
+    bool operator()(const Index &first, const Index &second) const {
+      return first.full_label() < second.full_label();
+    }
+    bool operator()(const Index &first, const std::wstring_view &second) const {
+      return first.full_label() < second;
+    }
+    bool operator()(const std::wstring_view &first, const Index &second) const {
+      return first < second.full_label();
+    }
+  };
+
   /// compares Index objects using type only (but since type is defined by the
   /// *values* of proto indices those are not ignored)
   struct TypeCompare {
@@ -762,32 +796,39 @@ class Index : public Taggable {
   friend bool operator<(const Index &i1, const Index &i2) {
     // compare qns, tags and spaces in that sequence
 
-    auto i1_Q = i1.space().qns();
-    auto i2_Q = i2.space().qns();
-
     auto compare_space = [&i1, &i2]() {
-      if (i1.space() == i2.space()) {
-        if (i1.label() == i2.label()) {
-          return i1.proto_indices() < i2.proto_indices();
-        } else {
-          return i1.label() < i2.label();
-        }
-      } else {
+      if (i1.space() != i2.space()) {
         return i1.space() < i2.space();
       }
+
+      if (i1.label() != i2.label()) {
+        // Note: Can't simply use label1 < label2 as that won't yield expected
+        // results for e.g. i2 < i11 (which will yield false)
+        if (i1.label().size() != i2.label().size()) {
+          return i1.label().size() < i2.label().size();
+        }
+
+        return i1.label() < i2.label();
+      }
+
+      return i1.proto_indices() < i2.proto_indices();
     };
+
+    const auto i1_Q = i1.space().qns();
+    const auto i2_Q = i2.space().qns();
 
     if (i1_Q == i2_Q) {
       const bool have_tags = i1.tag().has_value() && i2.tag().has_value();
 
       if (!have_tags || i1.tag() == i2.tag()) {
+        // Note that comparison of index spaces contains comparison of QNs
         return compare_space();
-      } else {
-        return i1.tag() < i2.tag();
       }
-    } else {
-      return i1_Q < i2_Q;
+
+      return i1.tag() < i2.tag();
     }
+
+    return i1_Q < i2_Q;
   }
 
 };  // class Index
@@ -863,7 +904,7 @@ class IndexFactory {
   template <typename IndexValidator>
   explicit IndexFactory(IndexValidator validator,
                         size_t min_index = Index::min_tmp_index())
-      : min_index_(min_index), validator_(validator) {
+      : min_index_(min_index), validator_(std::move(validator)) {
     assert(min_index_ > 0);
   }
 
@@ -883,8 +924,10 @@ class IndexFactory {
         std::scoped_lock lock(mutex_);
 #endif
         if ((counter_it = counters_.find(space)) == counters_.end()) {
-          counters_[space] = min_index_ - 1;
-          counter_it = counters_.find(space);
+          bool inserted = false;
+          std::tie(counter_it, inserted) =
+              counters_.emplace(space, min_index_ - 1);
+          assert(inserted);
         }
       }
       result = Index(

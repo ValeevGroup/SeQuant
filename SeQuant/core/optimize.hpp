@@ -17,6 +17,7 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/tensor_network.hpp>
+#include <SeQuant/core/utility/indices.hpp>
 
 #if __cplusplus >= 202002L
 #include <bit>
@@ -51,6 +52,23 @@ class Tensor;
 
 namespace opt {
 
+///
+/// \param idxsz An invocable that returns size_t for Index argument.
+/// \param idxs Index objects.
+/// \return flops count
+///
+template <typename IdxToSz, typename Idxs,
+          std::enable_if_t<std::is_invocable_r_v<size_t, IdxToSz, Index>,
+                           bool> = true>
+double ops_count(IdxToSz const& idxsz, Idxs const& idxs) {
+  auto oixs = tot_indices(idxs);
+  double ops = 1.0;
+  for (auto&& idx : ranges::views::concat(oixs.outer, oixs.inner))
+    ops *= std::invoke(idxsz, idx);
+  // ops == 1.0 implies zero flops.
+  return ops == 1.0 ? 0 : ops;
+}
+
 namespace {
 
 ///
@@ -82,26 +100,6 @@ void biparts(I n, F const& func) {
     auto const r = (n - n_) & n;
     if ((l | r) == n) func(l, r);
   }
-}
-
-///
-/// \tparam IdxToSz map-like {IndexSpace : size_t}
-/// \param idxsz see @c IdxToSz
-/// \param commons Index objects
-/// \param diffs   Index objects
-/// \return flops count
-/// @note @c commons and @c diffs have unique indices individually as well as
-///       combined
-template <typename IdxToSz,
-          std::enable_if_t<std::is_invocable_r_v<size_t, IdxToSz, Index>,
-                           bool> = true>
-double ops_count(IdxToSz const& idxsz, container::svector<Index> const& commons,
-                 container::svector<Index> const& diffs) {
-  double ops = 1.0;
-  for (auto&& idx : ranges::views::concat(commons, diffs))
-    ops *= std::invoke(idxsz, idx);
-  // ops == 1.0 implies both commons and diffs empty
-  return ops == 1.0 ? 0 : ops;
 }
 
 ///
@@ -138,20 +136,20 @@ struct OptRes {
 /// @note I1 and I2 containers are assumed to be sorted by using
 /// Index::LabelCompare{};
 ///
-template <typename I1, typename I2>
+template <typename I1, typename I2, typename Comp = std::less<Index>>
 container::svector<Index> common_indices(I1 const& idxs1, I2 const& idxs2) {
   using std::back_inserter;
   using std::begin;
   using std::end;
   using std::set_intersection;
 
-  assert(std::is_sorted(begin(idxs1), end(idxs1), Index::LabelCompare{}));
-  assert(std::is_sorted(begin(idxs2), end(idxs2), Index::LabelCompare{}));
+  assert(std::is_sorted(begin(idxs1), end(idxs1), Comp{}));
+  assert(std::is_sorted(begin(idxs2), end(idxs2), Comp{}));
 
   container::svector<Index> result;
 
   set_intersection(begin(idxs1), end(idxs1), begin(idxs2), end(idxs2),
-                   back_inserter(result), Index::LabelCompare{});
+                   back_inserter(result), Comp{});
   return result;
 }
 
@@ -162,20 +160,20 @@ container::svector<Index> common_indices(I1 const& idxs1, I2 const& idxs2) {
 /// @note I1 and I2 containers are assumed to be sorted by using
 /// Index::LabelCompare{};
 ///
-template <typename I1, typename I2>
+template <typename I1, typename I2, typename Comp = std::less<Index>>
 container::svector<Index> diff_indices(I1 const& idxs1, I2 const& idxs2) {
   using std::back_inserter;
   using std::begin;
   using std::end;
   using std::set_symmetric_difference;
 
-  assert(std::is_sorted(begin(idxs1), end(idxs1), Index::LabelCompare{}));
-  assert(std::is_sorted(begin(idxs2), end(idxs2), Index::LabelCompare{}));
+  assert(std::is_sorted(begin(idxs1), end(idxs1), Comp{}));
+  assert(std::is_sorted(begin(idxs2), end(idxs2), Comp{}));
 
   container::svector<Index> result;
 
   set_symmetric_difference(begin(idxs1), end(idxs1), begin(idxs2), end(idxs2),
-                           back_inserter(result), Index::LabelCompare{});
+                           back_inserter(result), Comp{});
   return result;
 }
 
@@ -190,21 +188,23 @@ template <typename IdxToSz,
           std::enable_if_t<std::is_invocable_r_v<size_t, IdxToSz, Index>,
                            bool> = true>
 eval_seq_t single_term_opt(TensorNetwork const& network, IdxToSz const& idxsz) {
+  using ranges::views::concat;
+  using IndexContainer = container::svector<Index>;
   // number of terms
   auto const nt = network.tensors().size();
   if (nt == 1) return eval_seq_t{0};
   if (nt == 2) return eval_seq_t{0, 1, -1};
-  auto nth_tensor_indices = container::svector<container::svector<Index>>{};
+  auto nth_tensor_indices = container::svector<IndexContainer>{};
   nth_tensor_indices.reserve(nt);
 
   for (std::size_t i = 0; i < nt; ++i) {
     auto const& tnsr = *network.tensors().at(i);
-    auto bk = container::svector<Index>{};
-    bk.reserve(bra_rank(tnsr) + ket_rank(tnsr));
-    for (auto&& idx : braket(tnsr)) bk.push_back(idx);
 
-    ranges::sort(bk, Index::LabelCompare{});
-    nth_tensor_indices.emplace_back(std::move(bk));
+    nth_tensor_indices.emplace_back();
+    auto& ixs = nth_tensor_indices.back();
+    for (auto&& j : indices(tnsr)) ixs.emplace_back(j);
+
+    ranges::sort(ixs, std::less<Index>{});
   }
 
   container::svector<OptRes> results((1 << nt), OptRes{{}, 0, {}});
@@ -230,9 +230,9 @@ eval_seq_t single_term_opt(TensorNetwork const& network, IdxToSz const& idxsz) {
       auto commons =
           common_indices(results[lpart].indices, results[rpart].indices);
       auto diffs = diff_indices(results[lpart].indices, results[rpart].indices);
-      auto new_cost = ops_count(idxsz,           //
-                                commons, diffs)  //
-                      + results[lpart].flops     //
+      auto new_cost = ops_count(idxsz,                   //
+                                concat(commons, diffs))  //
+                      + results[lpart].flops             //
                       + results[rpart].flops;
       if (new_cost <= curr_cost) {
         curr_cost = new_cost;
@@ -256,10 +256,9 @@ eval_seq_t single_term_opt(TensorNetwork const& network, IdxToSz const& idxsz) {
       auto const& first = results[curr_parts.first].sequence;
       auto const& second = results[curr_parts.second].sequence;
 
-      curr_result.sequence =
-          (first[0] < second[0] ? ranges::views::concat(first, second)
-                                : ranges::views::concat(second, first)) |
-          ranges::to<eval_seq_t>;
+      curr_result.sequence = (first[0] < second[0] ? concat(first, second)
+                                                   : concat(second, first)) |
+                             ranges::to<eval_seq_t>;
       curr_result.sequence.push_back(-1);
     }
   }
@@ -345,24 +344,63 @@ Sum reorder(Sum const& sum);
 ///
 /// \param expr  Expression to be optimized.
 /// \param idxsz An invocable object that maps an Index object to size.
+/// \param reorder_sum If true, the summands are reordered so that terms with
+///                    common sub-expressions appear closer to each other.
 /// \return Optimized expression for lower evaluation cost.
 template <typename IdxToSize,
           typename =
               std::enable_if_t<std::is_invocable_r_v<size_t, IdxToSize, Index>>>
-ExprPtr optimize(ExprPtr const& expr, IdxToSize const& idx2size) {
+ExprPtr optimize(ExprPtr const& expr, IdxToSize const& idx2size,
+                 bool reorder_sum) {
   using ranges::views::transform;
-  if (expr->is<Tensor>())
-    return expr->clone();
-  else if (expr->is<Product>())
-    return opt::single_term_opt(expr->as<Product>(), idx2size);
-  else if (expr->is<Sum>()) {
+  if (expr->is<Product>()) {
+    if (ranges::all_of(*expr, [](auto&& x) {
+          return x->template is<Tensor>() || x->template is<Variable>();
+        }))
+      return opt::single_term_opt(expr->as<Product>(), idx2size);
+    else {
+      auto const& prod = expr->as<Product>();
+
+      container::svector<ExprPtr> non_tensors(prod.size());
+      container::svector<ExprPtr> new_factors;
+
+      for (auto i = 0; i < prod.size(); ++i) {
+        auto&& f = prod.factor(i);
+        if (f.is<Tensor>() || f.is<Variable>())
+          new_factors.emplace_back(f);
+        else {
+          non_tensors[i] = f;
+          auto target_idxs = get_unique_indices(f);
+          new_factors.emplace_back(
+              ex<Tensor>(L"I_" + std::to_wstring(i), bra(target_idxs.bra),
+                         ket(target_idxs.ket), aux(target_idxs.aux)));
+        }
+      }
+
+      auto result = opt::single_term_opt(
+          Product(prod.scalar(), new_factors, Product::Flatten::No), idx2size);
+
+      auto replacer = [&non_tensors](ExprPtr& out) {
+        if (!out->is<Tensor>()) return;
+        auto const& tnsr = out->as<Tensor>();
+        auto&& label = tnsr.label();
+        if (label.at(0) == L'I' && label.at(1) == L'_') {
+          size_t suffix = std::stoi(std::wstring(label.data() + 2));
+          out = non_tensors[suffix].clone();
+        }
+      };
+
+      result->visit(replacer, /* atoms_only = */ true);
+      return result;
+    }
+  } else if (expr->is<Sum>()) {
     auto smands = *expr | transform([&idx2size](auto&& s) {
       return optimize(s, idx2size);
     }) | ranges::to_vector;
     auto sum = Sum{smands.begin(), smands.end()};
-    return ex<Sum>(opt::reorder(sum));
+    return reorder_sum ? ex<Sum>(opt::reorder(sum)) : ex<Sum>(std::move(sum));
   } else
-    throw std::runtime_error{"Optimization attempted on unsupported Expr type"};
+    return expr->clone();
 }
 
 }  // namespace opt
@@ -372,8 +410,38 @@ ExprPtr optimize(ExprPtr const& expr, IdxToSize const& idx2size) {
 /// index extent.
 ///
 /// \param expr  Expression to be optimized.
+/// \param reorder_sum If true, the summands are reordered so that terms with
+///                    common sub-expressions appear closer to each other.
+///                    True by default.
 /// \return Optimized expression for lower evaluation cost.
-ExprPtr optimize(ExprPtr const& expr);
+ExprPtr optimize(ExprPtr const& expr, bool reorder_sum = true);
+
+///
+/// Converts the 4-center 'g' tensors into a product of two rank-3 tensors.
+///
+/// \param expr The expression to be density-fit.
+/// \param aux_label The label of the introduced auxilliary index. eg. 'x', 'p'.
+/// \return The density-fit expression if 'g' of rank-4 present, otherwise the
+///         input expression itself will be returned.
+///
+ExprPtr density_fit(ExprPtr const& expr, std::wstring const& aux_label);
+
+///
+/// Converts the tensors in CSV basis into a product of full-basis
+/// tensors times the CSV-transformation tensors.
+///
+/// \param expr The expression to be CSV-transformed.
+/// \param coeff_tensor_label The label of the CSV-tranformation tensors that
+///                           will be introduced.
+/// \param csv_tensors The label of the CSV-basis tensors that will be
+///                    written as the transformed product. Eg. 'f', 'g'.
+/// \return The CSV-transformed expression if CSV-tensors with labels present
+///         in @c csv_tensors appear in @c expr. Otherwise returns the input
+///         expression itself.
+ExprPtr csv_transform(ExprPtr const& expr,
+                      std::wstring const& coeff_tensor_label = L"C",
+                      container::svector<std::wstring> const& csv_tensors = {
+                          L"f", L"g"});
 
 }  // namespace sequant
 

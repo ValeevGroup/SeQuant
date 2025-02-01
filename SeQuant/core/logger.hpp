@@ -21,6 +21,7 @@ struct Logger : public Singleton<Logger> {
   bool wick_stats = false;
   bool expand = false;
   bool canonicalize = false;
+  bool canonicalize_input_graph = false;
   bool canonicalize_dot = false;
   bool simplify = false;
   bool tensor_network = false;

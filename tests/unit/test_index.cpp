@@ -4,6 +4,8 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include "catch2_sequant.hpp"
+
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/latex.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
@@ -42,6 +44,7 @@ TEST_CASE("Index", "[elements][index]") {
       REQUIRE(i3.proto_indices().size() == 2);
       REQUIRE(i3.proto_indices()[0] == i1);
       REQUIRE(i3.proto_indices()[1] == i2);
+      REQUIRE(i3.full_label() == L"i_3<i_1, i_2>");
 
       REQUIRE_NOTHROW(Index(L"i_4", {L"i_1", L"i_2"}));
       Index i4(L"i_4", {L"i_1", L"i_2"});
@@ -52,6 +55,7 @@ TEST_CASE("Index", "[elements][index]") {
       REQUIRE(i4.proto_indices().size() == 2);
       REQUIRE(i4.proto_indices()[0] == i1);
       REQUIRE(i4.proto_indices()[1] == i2);
+      REQUIRE(i4.full_label() == L"i_4<i_1, i_2>");
 
       // nonsymmetric proto indices
       REQUIRE_NOTHROW(Index(L"i_5", {i2, i1}, false));
@@ -62,6 +66,7 @@ TEST_CASE("Index", "[elements][index]") {
       REQUIRE(i5.proto_indices().size() == 2);
       REQUIRE(i5.proto_indices()[0] == i2);
       REQUIRE(i5.proto_indices()[1] == i1);
+      REQUIRE(i5.full_label() == L"i_5<i_2, i_1>");
 
       // one of the proto indices is a proto index
       REQUIRE_NOTHROW(Index(L"i_6", {i1, i5}, false));
@@ -72,6 +77,7 @@ TEST_CASE("Index", "[elements][index]") {
       REQUIRE(i6.proto_indices().size() == 2);
       REQUIRE(i6.proto_indices()[0] == i1);
       REQUIRE(i6.proto_indices()[1] == i5);
+      REQUIRE(i6.full_label() == L"i_6<i_1, i_5<i_2, i_1>>");
 
       // symmetric proto indices
       REQUIRE_NOTHROW(Index(L"i_7", {i2, i1}));
@@ -82,6 +88,7 @@ TEST_CASE("Index", "[elements][index]") {
       REQUIRE(i7.proto_indices().size() == 2);
       REQUIRE(i7.proto_indices()[0] == i1);  // !!
       REQUIRE(i7.proto_indices()[1] == i2);  // !!
+      REQUIRE(i7.full_label() == L"i_7<i_1, i_2>");
 
 #ifndef NDEBUG
       REQUIRE_THROWS(Index(L"i_4", isr->retrieve(L"i_4"), {i1, i1}));
@@ -132,9 +139,15 @@ TEST_CASE("Index", "[elements][index]") {
     // compare by qns, then tag, then space, then label, then proto indices
     Index i1(L"i_1");
     Index i2(L"i_2");
+    Index i3(L"i_11");
     REQUIRE(i1 < i2);
     REQUIRE(!(i2 < i1));
     REQUIRE(!(i1 < i1));
+    REQUIRE(i1 < i3);
+    REQUIRE(!(i3 < i1));
+    REQUIRE(i2 < i3);
+    REQUIRE(!(i3 < i2));
+    REQUIRE(!(i3 < i3));
     Index a1(L"a_2");
     REQUIRE(i1 < a1);
     REQUIRE(!(a1 < i1));

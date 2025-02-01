@@ -37,8 +37,8 @@ std::wstring deparse_indices(const Range& indices) {
   return deparsed;
 }
 
-std::wstring deparse_sym(Symmetry sym) {
-  switch (sym) {
+std::wstring deparse_symm(Symmetry symm) {
+  switch (symm) {
     case Symmetry::symm:
       return L"S";
     case Symmetry::antisymm:
@@ -46,6 +46,36 @@ std::wstring deparse_sym(Symmetry sym) {
     case Symmetry::nonsymm:
       return L"N";
     case Symmetry::invalid:
+      return L"INVALID";
+  }
+
+  assert(false);
+  return L"INVALIDANDUNREACHABLE";
+}
+
+std::wstring deparse_symm(BraKetSymmetry symm) {
+  switch (symm) {
+    case BraKetSymmetry::conjugate:
+      return L"C";
+    case BraKetSymmetry::symm:
+      return L"S";
+    case BraKetSymmetry::nonsymm:
+      return L"N";
+    case BraKetSymmetry::invalid:
+      return L"INVALID";
+  }
+
+  assert(false);
+  return L"INVALIDANDUNREACHABLE";
+}
+
+std::wstring deparse_symm(ParticleSymmetry symm) {
+  switch (symm) {
+    case ParticleSymmetry::symm:
+      return L"S";
+    case ParticleSymmetry::nonsymm:
+      return L"N";
+    case ParticleSymmetry::invalid:
       return L"INVALID";
   }
 
@@ -96,18 +126,23 @@ std::wstring deparse_scalar(const Constant::scalar_type& scalar) {
 }  // namespace details
 
 std::wstring deparse(const ExprPtr& expr, bool annot_sym) {
-  using namespace details;
   if (!expr) return {};
-  if (expr->is<Tensor>())
-    return deparse(expr->as<Tensor>(), annot_sym);
-  else if (expr->is<Sum>())
-    return deparse(expr->as<Sum>(), annot_sym);
-  else if (expr->is<Product>())
-    return deparse(expr->as<Product>(), annot_sym);
-  else if (expr->is<Constant>())
-    return deparse(expr->as<Constant>());
-  else if (expr->is<Variable>())
-    return deparse(expr->as<Variable>());
+
+  return deparse(*expr, annot_sym);
+}
+
+std::wstring deparse(const Expr& expr, bool annot_sym) {
+  using namespace details;
+  if (expr.is<Tensor>())
+    return deparse(expr.as<Tensor>(), annot_sym);
+  else if (expr.is<Sum>())
+    return deparse(expr.as<Sum>(), annot_sym);
+  else if (expr.is<Product>())
+    return deparse(expr.as<Product>(), annot_sym);
+  else if (expr.is<Constant>())
+    return deparse(expr.as<Constant>());
+  else if (expr.is<Variable>())
+    return deparse(expr.as<Variable>());
   else
     throw std::runtime_error("Unsupported expr type for deparse!");
 }
@@ -137,10 +172,18 @@ std::wstring deparse(Tensor const& tensor, bool annot_sym) {
   if (tensor.ket_rank() > 0) {
     deparsed += L";" + details::deparse_indices(tensor.ket());
   }
+  if (tensor.aux_rank() > 0) {
+    if (tensor.ket_rank() == 0) {
+      deparsed += L";";
+    }
+    deparsed += L";" + details::deparse_indices(tensor.aux());
+  }
   deparsed += L"}";
 
   if (annot_sym) {
-    deparsed += L":" + details::deparse_sym(tensor.symmetry());
+    deparsed += L":" + details::deparse_symm(tensor.symmetry());
+    deparsed += L"-" + details::deparse_symm(tensor.braket_symmetry());
+    deparsed += L"-" + details::deparse_symm(tensor.particle_symmetry());
   }
 
   return deparsed;
@@ -151,7 +194,7 @@ std::wstring deparse(const Constant& constant) {
 }
 
 std::wstring deparse(const Variable& variable) {
-  return std::wstring(variable.label());
+  return std::wstring(variable.label()) + (variable.conjugated() ? L"^*" : L"");
 }
 
 std::wstring deparse(Product const& prod, bool annot_sym) {

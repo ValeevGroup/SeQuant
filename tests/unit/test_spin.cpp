@@ -10,6 +10,7 @@
 // the old spin attribute representation is used to avoid changing the tests
 
 #include <catch2/catch_test_macros.hpp>
+#include "catch2_sequant.hpp"
 #include "test_config.hpp"
 
 #include <SeQuant/core/abstract_tensor.hpp>
@@ -23,8 +24,12 @@
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/space.hpp>
 #include <SeQuant/core/tensor.hpp>
+#include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/spin.hpp>
+
+#include <catch2/catch_test_macros.hpp>
+#include "test_config.hpp"
 
 #include <cassert>
 #include <cstddef>
@@ -135,19 +140,19 @@ TEST_CASE("Spin", "[spin]") {
       // proto
       REQUIRE_NOTHROW(make_spinalpha(p_i));
       REQUIRE(make_spinalpha(p_i).label() == L"p↑");
-      REQUIRE(make_spinalpha(p_i).full_label() == L"p↑i↑");
+      REQUIRE(make_spinalpha(p_i).full_label() == L"p↑<i↑>");
       REQUIRE(make_spinalpha(p_i).to_latex() == L"{p↑^{{i↑}}}");
       REQUIRE_NOTHROW(make_spinalpha(p1_i));
       REQUIRE(make_spinalpha(p1_i).label() == L"p↑_1");
-      REQUIRE(make_spinalpha(p1_i).full_label() == L"p↑_1i↑");
+      REQUIRE(make_spinalpha(p1_i).full_label() == L"p↑_1<i↑>");
       REQUIRE(make_spinalpha(p1_i).to_latex() == L"{p↑_1^{{i↑}}}");
       REQUIRE_NOTHROW(make_spinalpha(p_i1));
       REQUIRE(make_spinalpha(p_i1).label() == L"p↑");
-      REQUIRE(make_spinalpha(p_i1).full_label() == L"p↑i↑_1");
+      REQUIRE(make_spinalpha(p_i1).full_label() == L"p↑<i↑_1>");
       REQUIRE(make_spinalpha(p_i1).to_latex() == L"{p↑^{{i↑_1}}}");
       REQUIRE_NOTHROW(make_spinalpha(p1_i1));
       REQUIRE(make_spinalpha(p1_i1).label() == L"p↑_1");
-      REQUIRE(make_spinalpha(p1_i1).full_label() == L"p↑_1i↑_1");
+      REQUIRE(make_spinalpha(p1_i1).full_label() == L"p↑_1<i↑_1>");
       REQUIRE(make_spinalpha(p1_i1).to_latex() == L"{p↑_1^{{i↑_1}}}");
     }
 
@@ -265,9 +270,8 @@ TEST_CASE("Spin", "[spin]") {
     auto result = spintrace(expr);
     REQUIRE(result->is<Sum>());
     canonicalize(result);
-    REQUIRE(to_latex(result) ==
-            L"{ \\bigl( - {{g^{{p_4}{p_3}}_{{p_1}{p_2}}}} + "
-            L"{{g^{{p_3}{p_4}}_{{p_1}{p_2}}}}\\bigr) }");
+    REQUIRE(result->size() == 2);
+    REQUIRE_THAT(result, EquivalentTo("- g{p1,p2;p4,p3} + g{p1,p2;p3,p4}"));
   }
 
   SECTION("Product") {
@@ -319,15 +323,13 @@ TEST_CASE("Spin", "[spin]") {
     expand(result);
     rapid_simplify(result);
     canonicalize(result);
-    REQUIRE(to_latex(result) ==
-            L"{ \\bigl({{f^{{a_1}}_{{i_1}}}{t^{{i_1}}_{{a_1}}}} + "
-            L"{{g^{{a_1}{a_2}}_{{i_1}{i_2}}}{t^{{i_1}{i_2}}_{{a_1}{a_2}}}} - "
-            L"{{{\\frac{1}{2}}}{g^{{a_1}{a_2}}_{{i_1}{i_2}}}{t^{{i_2}{i_1}}_{{"
-            L"a_1}{a_2}}}} - "
-            L"{{{\\frac{1}{2}}}{g^{{a_1}{a_2}}_{{i_1}{i_2}}}{t^{{i_2}}_{{a_1}}}"
-            L"{t^{{i_1}}_{{a_2}}}} + "
-            L"{{g^{{a_1}{a_2}}_{{i_1}{i_2}}}{t^{{i_1}}_{{a_1}}}{t^{{i_2}}_{{a_"
-            L"2}}}}\\bigr) }");
+    REQUIRE(result->is<Sum>());
+    REQUIRE(result->size() == 5);
+    REQUIRE_THAT(
+        result,
+        EquivalentTo("-1/2 g{i1,i2;a1,a2} t{a1,a2;i2,i1} + g{i1,i2;a1,a2} "
+                     "t{a1,a2;i1,i2} + f{i1;a1} t{a1;i1}  - 1/2 g{i1,i2;a1,a2} "
+                     "t{a1;i2} t{a2;i1} + g{i1,i2;a1,a2} t{a1;i1} t{a2;i2}"));
   }  // Sum
 
   SECTION("Expand Antisymmetrizer"){// 0-body
@@ -547,21 +549,15 @@ SECTION("Expand Symmetrizer") {
     REQUIRE(result->size() == 6);
     result->canonicalize();
     rapid_simplify(result);
-    REQUIRE(
-        to_latex(result) ==
-        L"{ "
-        L"\\bigl({{{4}}{g^{{a_4}{a_5}}_{{i_4}{i_5}}}{t^{{i_4}}_{{a_2}}}{t^{{"
-        L"i_3}}_{{a_4}}}{t^{{i_1}}_{{a_5}}}{t^{{i_5}{i_2}}_{{a_1}{a_3}}}} + "
-        L"{{{4}}{g^{{a_4}{a_5}}_{{i_4}{i_5}}}{t^{{i_4}}_{{a_1}}}{t^{{i_2}}_{{"
-        L"a_4}}}{t^{{i_3}}_{{a_5}}}{t^{{i_1}{i_5}}_{{a_2}{a_3}}}} + "
-        L"{{{4}}{g^{{a_4}{a_5}}_{{i_4}{i_5}}}{t^{{i_4}}_{{a_1}}}{t^{{i_3}}_{{"
-        L"a_4}}}{t^{{i_2}}_{{a_5}}}{t^{{i_5}{i_1}}_{{a_2}{a_3}}}} + "
-        L"{{{4}}{g^{{a_4}{a_5}}_{{i_4}{i_5}}}{t^{{i_5}}_{{a_3}}}{t^{{i_2}}_{{"
-        L"a_4}}}{t^{{i_1}}_{{a_5}}}{t^{{i_3}{i_4}}_{{a_1}{a_2}}}} + "
-        L"{{{4}}{g^{{a_4}{a_5}}_{{i_4}{i_5}}}{t^{{i_4}}_{{a_3}}}{t^{{i_2}}_{{"
-        L"a_4}}}{t^{{i_1}}_{{a_5}}}{t^{{i_5}{i_3}}_{{a_1}{a_2}}}} + "
-        L"{{{4}}{g^{{a_4}{a_5}}_{{i_4}{i_5}}}{t^{{i_5}}_{{a_2}}}{t^{{i_3}}_{{"
-        L"a_4}}}{t^{{i_1}}_{{a_5}}}{t^{{i_2}{i_4}}_{{a_1}{a_3}}}}\\bigr) }");
+    REQUIRE_THAT(
+        result,
+        EquivalentTo(
+            "4 g{i4,i5;a4,a5} t{a2;i4} t{a4;i3} t{a5;i1} t{a1,a3;i5,i2} + "
+            "4 g{i4,i5;a4,a5} t{a1;i5} t{a4;i2} t{a5;i3} t{a2,a3;i4,i1} + "
+            "4 g{i4,i5;a4,a5} t{a3;i4} t{a4;i1} t{a5;i2} t{a1,a2;i3,i5} + "
+            "4 g{i4,i5;a4,a5} t{a1;i5} t{a4;i3} t{a5;i2} t{a2,a3;i1,i4} + "
+            "4 g{i4,i5;a4,a5} t{a2;i4} t{a4;i1} t{a5;i3} t{a1,a3;i2,i5} + "
+            "4 g{i4,i5;a4,a5} t{a3;i4} t{a4;i2} t{a5;i1} t{a1,a2;i5,i3}"));
   }
 }
 
@@ -580,9 +576,8 @@ SECTION("Symmetrize expression") {
                      ex<Tensor>(L"t", bra{L"a_3"}, ket{L"i_1"});
     auto result =
         factorize_S(input, {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}}, true);
-    REQUIRE(to_latex(result) ==
-            L"{{S^{{a_1}{a_2}}_{{i_1}{i_2}}}{g^{{i_2}{a_3}}_{{a_1}{a_2}}}{t^{"
-            L"{i_1}}_{{a_3}}}}");
+    REQUIRE_THAT(result,
+                 EquivalentTo("S{i1,i2;a1,a2} g{a1,a2;i2,a3}:S t{a3;i1}"));
   }
 
   {
@@ -598,9 +593,10 @@ SECTION("Symmetrize expression") {
                      ex<Tensor>(L"t", bra{L"a_1"}, ket{L"i_4"}) *
                      ex<Tensor>(L"t", bra{L"a_3"}, ket{L"i_1"});
     auto result = factorize_S(input, {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}});
-    REQUIRE(to_latex(result) ==
-            L"{{S^{{a_2}{a_1}}_{{i_3}{i_4}}}{g^{{i_4}{a_3}}_{{i_1}{i_2}}}{t^{"
-            L"{i_1}}_{{a_1}}}{t^{{i_2}}_{{a_2}}}{t^{{i_3}}_{{a_3}}}}");
+    REQUIRE_THAT(
+        result,
+        EquivalentTo(
+            "S{i3,i4;a2,a1} g{i1,i2;i4,a3}:S t{a1;i1} t{a2;i2} t{a3;i3}"));
   }
 
   {
@@ -620,10 +616,9 @@ SECTION("Symmetrize expression") {
             ex<Tensor>(L"t", bra{L"a_2", L"a_4"}, ket{L"i_2", L"i_1"});
     auto result =
         factorize_S(input, {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}}, true);
-    REQUIRE(
-        to_latex(result) ==
-        L"{{{2}}{S^{{a_1}{a_2}}_{{i_1}{i_2}}}{g^{{a_3}{a_4}}_{{i_3}{i_4}}}{t^"
-        L"{{i_3}}_{{a_4}}}{t^{{i_4}}_{{a_2}}}{t^{{i_1}{i_2}}_{{a_1}{a_3}}}}");
+    REQUIRE(result->is<Sum>() == false);
+    REQUIRE_THAT(result, EquivalentTo("2 S{i1,i2;a1,a2} g{i3,i4;a3,a4}:S "
+                                      "t{a4;i3} t{a2;i4} t{a1,a3;i1,i2}"));
   }
 }
 
@@ -639,16 +634,18 @@ SECTION("Transform expression") {
   expand(result);
   rapid_simplify(result);
   canonicalize(result);
-  REQUIRE(to_latex(result) ==
-          L"{ \\bigl( - {{g^{{a_2}{i_1}}_{{a_1}{i_2}}}{t^{{i_2}}_{{a_2}}}} + "
-          L"{{{2}}{g^{{i_1}{a_2}}_{{a_1}{i_2}}}{t^{{i_2}}_{{a_2}}}}\\bigr) }");
+  REQUIRE_THAT(
+      result,
+      EquivalentTo("- g{a1,i2;a2,i1} t{a2;i2} + 2 g{a1,i2;i1,a2} t{a2;i2}"));
 
   container::map<Index, Index> idxmap = {{Index{L"i_1"}, Index{L"i_2"}},
                                          {Index{L"i_2"}, Index{L"i_1"}}};
   auto transformed_result = transform_expr(result, idxmap);
-  REQUIRE(to_latex(transformed_result) ==
-          L"{ \\bigl( - {{g^{{a_2}{i_2}}_{{a_1}{i_1}}}{t^{{i_1}}_{{a_2}}}} + "
-          L"{{{2}}{g^{{i_2}{a_2}}_{{a_1}{i_1}}}{t^{{i_1}}_{{a_2}}}}\\bigr) }");
+  REQUIRE(transformed_result->is<Sum>());
+  REQUIRE(transformed_result->size() == 2);
+  REQUIRE_THAT(
+      transformed_result,
+      EquivalentTo("- g{a1,i1;a2,i2} t{a2;i1} + 2 g{a1,i1;i2,a2} t{a2;i1}"));
 }
 
 SECTION("Swap bra kets") {
@@ -697,9 +694,9 @@ SECTION("Closed-shell spintrace CCD") {
       const auto input = ex<Sum>(ExprPtrList{parse_expr(
           L"1/4 g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_1,i_2}", Symmetry::antisymm)});
       auto result = closed_shell_CC_spintrace(input);
-      REQUIRE(result == parse_expr(L"2 g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_1,i_2} - "
-                                   L"g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_2,i_1}",
-                                   Symmetry::nonsymm));
+      REQUIRE_THAT(result,
+                   EquivalentTo(L"- g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_2,i_1} + "
+                                L"2 g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_1,i_2}"));
     }
     {  // CSV (aka PNO)
       Index i1(L"i_1", {L"i", 0b01});
@@ -779,10 +776,7 @@ SECTION("Closed-shell spintrace CCSD") {
     auto result =
         ex<Constant>(rational{1, 2}) * spintrace(input, {{L"i_1", L"a_1"}});
     expand(result);
-    rapid_simplify(result);
-    canonicalize(result);
-    REQUIRE(to_latex(result) ==
-            L"{ \\bigl( - {{f^{{i_1}}_{{i_2}}}{t^{{i_2}}_{{a_1}}}}\\bigr) }");
+    REQUIRE_THAT(result, EquivalentTo("- f{i2;i1} t{a1;i2}"));
   }
 
   {
@@ -793,10 +787,7 @@ SECTION("Closed-shell spintrace CCSD") {
     auto result =
         ex<Constant>(rational{1, 2}) * spintrace(input, {{L"i_1", L"a_1"}});
     expand(result);
-    rapid_simplify(result);
-    canonicalize(result);
-    REQUIRE(to_latex(result) ==
-            L"{ \\bigl({{f^{{a_2}}_{{a_1}}}{t^{{i_1}}_{{a_2}}}}\\bigr) }");
+    REQUIRE_THAT(result, EquivalentTo("f{a1;a2} t{a2;i1}"));
   }
 
   {
@@ -810,14 +801,10 @@ SECTION("Closed-shell spintrace CCSD") {
     auto result =
         ex<Constant>(rational{1, 2}) * spintrace(input, {{L"i_1", L"a_1"}});
     expand(result);
-    rapid_simplify(result);
-    canonicalize(result);
-    REQUIRE(to_latex(result) ==
-            L"{ \\bigl( - "
-            L"{{{2}}{g^{{a_2}{i_1}}_{{i_2}{i_3}}}{t^{{i_3}{i_2}}_{{a_1}{a_2}}"
-            L"}} + "
-            L"{{g^{{a_2}{i_1}}_{{i_2}{i_3}}}{t^{{i_2}{i_3}}_{{a_1}{a_2}}}}"
-            L"\\bigr) }");
+    REQUIRE_THAT(
+        result,
+        EquivalentTo(
+            "g{i2,i3;i1,a2} t{a1,a2;i3,i2} - 2 g{i2,i3;a2,i1} t{a1,a2;i3,i2}"));
   }
 
   {
@@ -831,14 +818,9 @@ SECTION("Closed-shell spintrace CCSD") {
     auto result =
         ex<Constant>(rational{1, 2}) * spintrace(input, {{L"i_1", L"a_1"}});
     expand(result);
-    rapid_simplify(result);
-    canonicalize(result);
 
-    REQUIRE(to_latex(result) ==
-            L"{ \\bigl( - "
-            L"{{g^{{a_3}{a_2}}_{{a_1}{i_2}}}{t^{{i_1}{i_2}}_{{a_2}{a_3}}}} + "
-            L"{{{2}}{g^{{a_3}{a_2}}_{{a_1}{i_2}}}{t^{{i_2}{i_1}}_{{a_2}{a_3}}"
-            L"}}\\bigr) }");
+    REQUIRE_THAT(result, EquivalentTo("- g{a1,i2;a3,a2} t{a2,a3;i1,i2} + 2 "
+                                      "g{a1,i2;a3,a2} t{a2,a3;i2,i1}"));
   }
 
   {
@@ -851,12 +833,9 @@ SECTION("Closed-shell spintrace CCSD") {
     auto result =
         ex<Constant>(rational{1, 2}) * spintrace(input, {{L"i_1", L"a_1"}});
     expand(result);
-    rapid_simplify(result);
-    canonicalize(result);
-    REQUIRE(
-        to_latex(result) ==
-        L"{ \\bigl( - {{f^{{a_2}}_{{i_2}}}{t^{{i_2}{i_1}}_{{a_1}{a_2}}}} + "
-        L"{{{2}}{f^{{a_2}}_{{i_2}}}{t^{{i_1}{i_2}}_{{a_1}{a_2}}}}\\bigr) }");
+    REQUIRE_THAT(
+        result,
+        EquivalentTo("-f{i2;a2} t{a1,a2;i2,i1} + 2 f{i2;a2} t{a1,a2;i1,i2}"));
   }
 
   {
@@ -869,14 +848,8 @@ SECTION("Closed-shell spintrace CCSD") {
     auto result =
         ex<Constant>(rational{1, 2}) * spintrace(input, {{L"i_1", L"a_1"}});
     expand(result);
-    rapid_simplify(result);
-    canonicalize(result);
-    REQUIRE(to_latex(result) ==
-            L"{ "
-            L"\\bigl({{{2}}{g^{{a_3}{a_2}}_{{a_1}{i_2}}}{t^{{i_1}}_{{a_3}}}{t^{"
-            L"{i_2}}_{{a_2}}}} - "
-            L"{{g^{{a_3}{a_2}}_{{a_1}{i_2}}}{t^{{i_1}}_{{a_2}}}{t^{{i_2}}_{{a_"
-            L"3}}}}\\bigr) }");
+    REQUIRE_THAT(result, EquivalentTo("2 g{a1,i2;a3,a2} t{a2;i2} t{a3;i1} - "
+                                      "g{a1,i2;a3,a2} t{a2;i1} t{a3;i2}"));
   }
 
   {
@@ -889,14 +862,8 @@ SECTION("Closed-shell spintrace CCSD") {
     auto result =
         ex<Constant>(rational{1, 2}) * spintrace(input, {{L"i_1", L"a_1"}});
     expand(result);
-    rapid_simplify(result);
-    canonicalize(result);
-    REQUIRE(to_latex(result) ==
-            L"{ "
-            L"\\bigl({{g^{{a_2}{i_1}}_{{i_2}{i_3}}}{t^{{i_2}}_{{a_1}}}{t^{{i_"
-            L"3}}_{{a_2}}}} - "
-            L"{{{2}}{g^{{a_2}{i_1}}_{{i_2}{i_3}}}{t^{{i_3}}_{{a_1}}}{t^{{i_2}"
-            L"}_{{a_2}}}}\\bigr) }");
+    REQUIRE_THAT(result, EquivalentTo("g{i2,i3;i1,a2} t{a1;i3} t{a2;i2} - 2 "
+                                      "g{i2,i3;a2,i1} t{a1;i3} t{a2;i2}"));
   }
 
   {
@@ -909,12 +876,7 @@ SECTION("Closed-shell spintrace CCSD") {
     auto result =
         ex<Constant>(rational{1, 2}) * spintrace(input, {{L"i_1", L"a_1"}});
     expand(result);
-    rapid_simplify(result);
-    canonicalize(result);
-    REQUIRE(to_latex(result) ==
-            L"{ \\bigl( - "
-            L"{{f^{{a_2}}_{{i_2}}}{t^{{i_2}}_{{a_1}}}{t^{{i_1}}_{{a_2}}}}"
-            L"\\bigr) }");
+    REQUIRE_THAT(result, EquivalentTo("-f{i2;a2} t{a1;i2} t{a2;i1}"));
   }
 
   {
@@ -929,14 +891,9 @@ SECTION("Closed-shell spintrace CCSD") {
     auto result =
         ex<Constant>(rational{1, 2}) * spintrace(input, {{L"i_1", L"a_1"}});
     expand(result);
-    rapid_simplify(result);
-    canonicalize(result);
-    REQUIRE(to_latex(result) ==
-            L"{ \\bigl( - "
-            L"{{{2}}{g^{{a_2}{a_3}}_{{i_2}{i_3}}}{t^{{i_3}}_{{a_1}}}{t^{{"
-            L"i_2}{i_1}}_{{a_2}{a_3}}}} + "
-            L"{{g^{{a_2}{a_3}}_{{i_2}{i_3}}}{t^{{i_2}}_{{a_1}}}{t^{{i_3}{"
-            L"i_1}}_{{a_2}{a_3}}}}\\bigr) }");
+    REQUIRE_THAT(result,
+                 EquivalentTo("g{i2,i3;a2,a3} t{a1;i3} t{a2,a3;i1,i2} - 2 "
+                              "g{i2,i3;a2,a3} t{a1;i3} t{a2,a3;i2,i1}"));
   }
 
   {
@@ -951,14 +908,9 @@ SECTION("Closed-shell spintrace CCSD") {
     auto result =
         ex<Constant>(rational{1, 2}) * spintrace(input, {{L"i_1", L"a_1"}});
     expand(result);
-    rapid_simplify(result);
-    canonicalize(result);
-    REQUIRE(to_latex(result) ==
-            L"{ \\bigl( - "
-            L"{{{2}}{g^{{a_2}{a_3}}_{{i_2}{i_3}}}{t^{{i_1}}_{{a_3}}}{t^{{i_3}"
-            L"{i_2}}_{{a_1}{a_2}}}} + "
-            L"{{g^{{a_2}{a_3}}_{{i_2}{i_3}}}{t^{{i_1}}_{{a_3}}}{t^{{i_2}{i_3}"
-            L"}_{{a_1}{a_2}}}}\\bigr) }");
+    REQUIRE_THAT(result,
+                 EquivalentTo("g{i2,i3;a2,a3} t{a2;i1} t{a1,a3;i3,i2} - 2 "
+                              "g{i2,i3;a2,a3} t{a3;i1} t{a1,a2;i3,i2}"));
   }
 
   {
@@ -973,18 +925,11 @@ SECTION("Closed-shell spintrace CCSD") {
     auto result =
         ex<Constant>(rational{1, 2}) * spintrace(input, {{L"i_1", L"a_1"}});
     expand(result);
-    rapid_simplify(result);
-    canonicalize(result);
-    REQUIRE(to_latex(result) ==
-            L"{ \\bigl( - "
-            L"{{{2}}{g^{{a_2}{a_3}}_{{i_2}{i_3}}}{t^{{i_2}}_{{a_3}}}{t^{{i_1}"
-            L"{i_3}}_{{a_1}{a_2}}}} + "
-            L"{{{4}}{g^{{a_2}{a_3}}_{{i_2}{i_3}}}{t^{{i_2}}_{{a_2}}}{t^{{i_1}"
-            L"{i_3}}_{{a_1}{a_3}}}} - "
-            L"{{{2}}{g^{{a_2}{a_3}}_{{i_2}{i_3}}}{t^{{i_2}}_{{a_2}}}{t^{{i_3}"
-            L"{i_1}}_{{a_1}{a_3}}}} + "
-            L"{{g^{{a_2}{a_3}}_{{i_2}{i_3}}}{t^{{i_3}}_{{a_2}}}{t^{{i_2}{i_1}"
-            L"}_{{a_1}{a_3}}}}\\bigr) }");
+    REQUIRE_THAT(result,
+                 EquivalentTo("-2 g{i2,i3;a2,a3} t{a3;i2} t{a1,a2;i1,i3} + 4 "
+                              "g{i2,i3;a2,a3} t{a2;i2} t{a1,a3;i1,i3} + "
+                              "g{i2,i3;a2,a3} t{a3;i2} t{a1,a2;i3,i1} - 2 "
+                              "g{i2,i3;a2,a3} t{a2;i2} t{a1,a3;i3,i1}"));
   }
 
   {
@@ -998,14 +943,9 @@ SECTION("Closed-shell spintrace CCSD") {
     auto result =
         ex<Constant>(rational{1, 2}) * spintrace(input, {{L"i_1", L"a_1"}});
     expand(result);
-    rapid_simplify(result);
-    canonicalize(result);
-    REQUIRE(to_latex(result) ==
-            L"{ \\bigl( - "
-            L"{{{2}}{g^{{a_2}{a_3}}_{{i_2}{i_3}}}{t^{{i_3}}_{{a_1}}}{t^{{i_2}"
-            L"}_{{a_2}}}{t^{{i_1}}_{{a_3}}}} + "
-            L"{{g^{{a_2}{a_3}}_{{i_2}{i_3}}}{t^{{i_2}}_{{a_1}}}{t^{{i_3}}_{{"
-            L"a_2}}}{t^{{i_1}}_{{a_3}}}}\\bigr) }");
+    REQUIRE_THAT(result,
+                 EquivalentTo("-2 g{i2,i3;a2,a3} t{a1;i3} t{a2;i2} t{a3;i1} + "
+                              "g{i2,i3;a2,a3} t{a1;i3} t{a2;i1} t{a3;i2}"));
   }
 }  // CCSD R1
 
@@ -1024,16 +964,13 @@ SECTION("Closed-shell spintrace CCSDT terms") {
     result = closed_shell_spintrace(
         input, {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}, {L"i_3", L"a_3"}});
     simplify(result);
-    REQUIRE(to_latex(result) ==
-            L"{ \\bigl( - "
-            L"{{{2}}{S^{{a_1}{a_2}{a_3}}_{{i_1}{i_2}{i_3}}}{f^{{i_3}}_{{i_4}}"
-            L"}{t^{{i_2}{i_1}{i_4}}_{{a_1}{a_2}{a_3}}}} + "
-            L"{{{4}}{S^{{a_1}{a_2}{a_3}}_{{i_1}{i_2}{i_3}}}{f^{{i_3}}_{{i_4}}"
-            L"}{t^{{i_1}{i_2}{i_4}}_{{a_1}{a_2}{a_3}}}} + "
-            L"{{{2}}{S^{{a_1}{a_2}{a_3}}_{{i_1}{i_2}{i_3}}}{f^{{i_3}}_{{i_4}}"
-            L"}{t^{{i_4}{i_1}{i_2}}_{{a_1}{a_2}{a_3}}}} - "
-            L"{{{4}}{S^{{a_1}{a_2}{a_3}}_{{i_1}{i_2}{i_3}}}{f^{{i_3}}_{{i_4}}"
-            L"}{t^{{i_1}{i_4}{i_2}}_{{a_1}{a_2}{a_3}}}}\\bigr) }");
+    REQUIRE(result->size() == 4);
+    REQUIRE_THAT(
+        result,
+        EquivalentTo("2 S{i1,i2,i3;a1,a2,a3} f{i4;i3} t{a1,a2,a3;i4,i1,i2} - 4 "
+                     "S{i1,i2,i3;a1,a2,a3} f{i4;i3} t{a1,a2,a3;i1,i4,i2} + 4 "
+                     "S{i1,i2,i3;a1,a2,a3} f{i4;i3} t{a1,a2,a3;i1,i2,i4} - 2 "
+                     "S{i1,i2,i3;a1,a2,a3} f{i4;i3} t{a1,a2,a3;i2,i1,i4}"));
   }
 
   {  // f * t3
@@ -1175,7 +1112,7 @@ SECTION("Relation in spin P operators") {
 
   auto p6_input = p_aab * input;
   expand(p6_input);
-  auto p6_result = expand_P_op(p6_input, false);
+  auto p6_result = expand_P_op(p6_input);
   p6_result->visit(reset_idx_tags);
   simplify(p6_result);
 
@@ -1195,7 +1132,7 @@ SECTION("Relation in spin P operators") {
 
   auto p7_input = p_abb * input;
   expand(p7_input);
-  auto p7_result = expand_P_op(p7_input, false);
+  auto p7_result = expand_P_op(p7_input);
   p7_result->visit(reset_idx_tags);
   simplify(p7_result);
 
@@ -1356,9 +1293,11 @@ SECTION("Open-shell spin-tracing") {
     auto result =
         open_shell_spintrace(input, {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}});
     REQUIRE(result.size() == 3);
-    REQUIRE(to_latex(result[0]) ==
+    REQUIRE(
+        toUtf8(to_latex(result[0])) ==
+        toUtf8(
             L"{{{-\\frac{1}{2}}}{\\bar{g}^{{i↑_1}{i↑_2}}_{{a↑_1}{i↑_3}}}{t^{{"
-            L"i↑_3}}_{{a↑_2}}}}");
+            L"i↑_3}}_{{a↑_2}}}}"));
     REQUIRE(to_latex(result[1]) ==
             L"{{{-\\frac{1}{2}}}{g^{{i↑_1}{i↓_2}}_{{a↑_1}{i↓_1}}}{t^{{i↓_1}}_"
             L"{{a↓_2}}}}");
@@ -1379,18 +1318,12 @@ SECTION("Open-shell spin-tracing") {
     REQUIRE(to_latex(result[0]) ==
             L"{{{\\frac{1}{12}}}{f^{{a↑_4}}_{{a↑_1}}}{\\bar{t}^{{i↑_1}{i↑_2}{"
             L"i↑_3}}_{{a↑_2}{a↑_3}{a↑_4}}}}");
-    REQUIRE(to_latex(result[1]) ==
-            L"{ \\bigl( - "
-            L"{{{\\frac{1}{12}}}{f^{{a↑_3}}_{{a↑_1}}}{t^{{i↑_1}{i↑_2}{i↓_3}}_"
-            L"{{a↑_2}{a↑_3}{a↓_3}}}} + "
-            L"{{{\\frac{1}{12}}}{f^{{a↑_3}}_{{a↑_1}}}{t^{{i↑_2}{i↑_1}{i↓_3}}_"
-            L"{{a↑_2}{a↑_3}{a↓_3}}}}\\bigr) }");
-    REQUIRE(to_latex(result[2]) ==
-            L"{ \\bigl( - "
-            L"{{{\\frac{1}{12}}}{f^{{a↑_2}}_{{a↑_1}}}{t^{{i↑_1}{i↓_3}{i↓_2}}_"
-            L"{{a↑_2}{a↓_2}{a↓_3}}}} + "
-            L"{{{\\frac{1}{12}}}{f^{{a↑_2}}_{{a↑_1}}}{t^{{i↑_1}{i↓_2}{i↓_3}}_{{"
-            L"a↑_2}{a↓_2}{a↓_3}}}}\\bigr) }");
+    REQUIRE_THAT(result[1],
+                 EquivalentTo("-1/12 f{a↑1;a↑3} t{a↑2,a↑3,a↓3;i↑_1,i↑2,i↓3} + "
+                              "1/12 f{a↑1;a↑3} t{a↑2,a↑3,a↓3;i↑2,i↑1,i↓3}"));
+    REQUIRE_THAT(result[2],
+                 EquivalentTo("-1/12 f{a↑1;a↑2} t{a↑2,a↓2,a↓3;i↑1,i↓3,i↓2} + "
+                              "1/12 f{a↑1;a↑2} t{a↑2,a↓2,a↓3;i↑1,i↓2,i↓3}"));
     REQUIRE(to_latex(result[3]) ==
             L"{{{\\frac{1}{12}}}{f^{{a↓_4}}_{{a↓_1}}}{\\bar{t}^{{i↓_1}{i↓_2}{"
             L"i↓_3}}_{{a↓_2}{a↓_3}{a↓_4}}}}");
@@ -1411,11 +1344,9 @@ SECTION("Open-shell spin-tracing") {
                  ex<Tensor>(g) * ex<Tensor>(t3);
     auto result = expand_A_op(input);
     result->visit(reset_idx_tags);
-    canonicalize(result);
-    rapid_simplify(result);
-    REQUIRE(to_latex(result) ==
-            L"{{{\\frac{1}{3}}}{\\bar{g}^{{i↑_1}{i↑_2}}_{{i↑_3}{i↑_4}}}{t^{{"
-            L"i↑_3}{i↑_4}{i↓_3}}_{{a↑_1}{a↑_2}{a↓_3}}}}");
+    REQUIRE_THAT(
+        result,
+        EquivalentTo("1/3 g{i↑3,i↑4;i↑1,i↑2}:A t{a↑1,a↑2,a↓3;i↑3,i↑4,i↓3}:N"));
 
     g = Tensor(L"g", bra{i4A, i5A}, ket{i1A, i2A}, Symmetry::antisymm);
     t3 =
@@ -1425,11 +1356,9 @@ SECTION("Open-shell spin-tracing") {
             ex<Tensor>(t3);
     result = expand_A_op(input);
     result->visit(reset_idx_tags);
-    canonicalize(result);
-    rapid_simplify(result);
-    REQUIRE(to_latex(result) ==
-            L"{{{\\frac{1}{3}}}{\\bar{g}^{{i↑_1}{i↑_2}}_{{i↑_3}{i↑_4}}}{t^{{"
-            L"i↑_3}{i↑_4}{i↓_3}}_{{a↑_1}{a↑_2}{a↓_3}}}}");
+    REQUIRE_THAT(
+        result,
+        EquivalentTo("1/3 g{i↑3,i↑4;i↑1,i↑2}:A t{a↑_1,a↑2,a↓3;i↑3,i↑4,i↓3}:N"));
   }
 
   // CCSDT R3 10 aaa, bbb

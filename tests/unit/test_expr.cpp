@@ -4,6 +4,8 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include "catch2_sequant.hpp"
+
 #include <SeQuant/core/complex.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
@@ -640,6 +642,8 @@ TEST_CASE("Expr", "[elements]") {
         std::make_shared<Constant>(3)};
     REQUIRE_NOTHROW(hash_value(ex5_init));
     REQUIRE(hash_value(ex5_init) != hash_value(ex<Constant>(1)));
+
+    REQUIRE(hash_value(ex<Constant>(1)) == hash_value(ex<Constant>(1)));
 
     auto hasher = [](const std::shared_ptr<const Expr> &) -> unsigned int {
       return 0;
