@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1ab604f2c3fea2134e0d986e65d3bbd3e4:
+
+Function sequant::parse_expr
+============================
+
+- Defined in :ref:`file_SeQuant_core_parse_parse.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::parse_expr(std::wstring_view, Symmetry, BraKetSymmetry, ParticleSymmetry)
+   :project: SeQuant

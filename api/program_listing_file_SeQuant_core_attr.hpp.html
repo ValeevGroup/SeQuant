@@ -7,7 +7,7 @@
 
     <!-- Generated with Sphinx 7.4.7 and Furo 2024.08.06 -->
         <title>Program Listing for File attr.hpp - SeQuant Documentation</title>
-      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=a746c00c" />
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=8f2a1f02" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=354aac6f" />
     <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo-extensions.css?v=302659d7" />
@@ -270,6 +270,7 @@
 <span class="cp">#ifndef SEQUANT_ATTR_HPP</span>
 <span class="cp">#define SEQUANT_ATTR_HPP</span>
 
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;cassert&gt;</span>
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;string&gt;</span>
 
 <span class="k">namespace</span><span class="w"> </span><span class="nn">sequant</span><span class="w"> </span><span class="p">{</span>
@@ -306,11 +307,33 @@
 <span class="w">  </span><span class="k">return</span><span class="w"> </span><span class="n">result</span><span class="p">;</span>
 <span class="p">}</span>
 
+<span class="kr">inline</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">wstring</span><span class="w"> </span><span class="nf">to_wstring</span><span class="p">(</span><span class="n">Symmetry</span><span class="w"> </span><span class="n">sym</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="k">switch</span><span class="w"> </span><span class="p">(</span><span class="n">sym</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">case</span><span class="w"> </span><span class="no">Symmetry</span><span class="o">::</span><span class="no">symm</span><span class="p">:</span>
+<span class="w">      </span><span class="k">return</span><span class="w"> </span><span class="sa">L</span><span class="s">&quot;symmetric&quot;</span><span class="p">;</span>
+<span class="w">    </span><span class="k">case</span><span class="w"> </span><span class="no">Symmetry</span><span class="o">::</span><span class="no">antisymm</span><span class="p">:</span>
+<span class="w">      </span><span class="k">return</span><span class="w"> </span><span class="sa">L</span><span class="s">&quot;antisymmetric&quot;</span><span class="p">;</span>
+<span class="w">    </span><span class="k">case</span><span class="w"> </span><span class="no">Symmetry</span><span class="o">::</span><span class="no">nonsymm</span><span class="p">:</span>
+<span class="w">      </span><span class="k">return</span><span class="w"> </span><span class="sa">L</span><span class="s">&quot;nonsymmetric&quot;</span><span class="p">;</span>
+<span class="w">    </span><span class="k">case</span><span class="w"> </span><span class="no">Symmetry</span><span class="o">::</span><span class="no">invalid</span><span class="p">:</span>
+<span class="w">      </span><span class="k">return</span><span class="w"> </span><span class="sa">L</span><span class="s">&quot;invalid&quot;</span><span class="p">;</span>
+<span class="w">  </span><span class="p">}</span>
+
+<span class="w">  </span><span class="n">assert</span><span class="p">(</span><span class="nb">false</span><span class="p">);</span>
+<span class="w">  </span><span class="n">std</span><span class="o">::</span><span class="n">abort</span><span class="p">();</span>
+<span class="p">}</span>
+
 <span class="k">enum</span><span class="w"> </span><span class="k">class</span><span class="w"> </span><span class="nc">BraKetPos</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">bra</span><span class="p">,</span><span class="w"> </span><span class="n">ket</span><span class="p">,</span><span class="w"> </span><span class="n">none</span><span class="w"> </span><span class="p">};</span>
 
 <span class="kr">inline</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">wstring</span><span class="w"> </span><span class="nf">to_wolfram</span><span class="p">(</span><span class="n">BraKetPos</span><span class="w"> </span><span class="n">a</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
-<span class="w">  </span><span class="k">using</span><span class="w"> </span><span class="k">namespace</span><span class="w"> </span><span class="nn">std</span><span class="o">::</span><span class="nn">literals</span><span class="p">;</span>
-<span class="w">  </span><span class="k">return</span><span class="w"> </span><span class="sa">L</span><span class="s">&quot;indexType[&quot;</span><span class="n">s</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="p">(</span><span class="n">a</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">BraKetPos</span><span class="o">::</span><span class="n">bra</span><span class="w"> </span><span class="o">?</span><span class="w"> </span><span class="sa">L</span><span class="s">&quot;bra&quot;</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="sa">L</span><span class="s">&quot;ket&quot;</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="sa">L</span><span class="s">&quot;]&quot;</span><span class="p">;</span>
+<span class="w">  </span><span class="k">switch</span><span class="w"> </span><span class="p">(</span><span class="n">a</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">case</span><span class="w"> </span><span class="no">BraKetPos</span><span class="o">::</span><span class="no">bra</span><span class="p">:</span>
+<span class="w">      </span><span class="k">return</span><span class="w"> </span><span class="sa">L</span><span class="s">&quot;indexType[bra]&quot;</span><span class="p">;</span>
+<span class="w">    </span><span class="k">case</span><span class="w"> </span><span class="no">BraKetPos</span><span class="o">::</span><span class="no">ket</span><span class="p">:</span>
+<span class="w">      </span><span class="k">return</span><span class="w"> </span><span class="sa">L</span><span class="s">&quot;indexType[ket]&quot;</span><span class="p">;</span>
+<span class="w">    </span><span class="k">case</span><span class="w"> </span><span class="no">BraKetPos</span><span class="o">::</span><span class="no">none</span><span class="p">:</span>
+<span class="w">      </span><span class="k">return</span><span class="w"> </span><span class="sa">L</span><span class="s">&quot;indexType[none]&quot;</span><span class="p">;</span>
+<span class="w">  </span><span class="p">}</span>
 <span class="p">}</span>
 
 <span class="k">enum</span><span class="w"> </span><span class="k">class</span><span class="w"> </span><span class="nc">Statistics</span><span class="w"> </span><span class="p">{</span>
@@ -373,7 +396,7 @@
             
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on Nov 27, 2024 9:58:28 PM</div>
+              Last updated on Feb 1, 2025 3:24:07 PM</div>
           </div>
           <div class="right-details">
             <div class="icons">

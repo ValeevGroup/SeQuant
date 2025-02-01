@@ -35,7 +35,9 @@ Program Listing for File parse.hpp
    // clang-format off
    // clang-format on
    ExprPtr parse_expr(std::wstring_view raw,
-                      Symmetry tensor_sym = Symmetry::nonsymm);
+                      Symmetry perm_symm = Symmetry::nonsymm,
+                      BraKetSymmetry braket_symm = BraKetSymmetry::nonsymm,
+                      ParticleSymmetry particle_symm = ParticleSymmetry::symm);
    
    std::wstring deparse(const ExprPtr &expr, bool annot_sym = true);
    std::wstring deparse(const Expr &expr, bool annot_sym = true);

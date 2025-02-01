@@ -7,7 +7,7 @@
 
     <!-- Generated with Sphinx 7.4.7 and Furo 2024.08.06 -->
         <title>File complex.hpp - SeQuant Documentation</title>
-      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=a746c00c" />
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=8f2a1f02" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=354aac6f" />
     <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo-extensions.css?v=302659d7" />
@@ -290,6 +290,7 @@
 <li><p><a class="reference internal" href="file_SeQuant_core_optimize_optimize.cpp.html#file-sequant-core-optimize-optimize-cpp"><span class="std std-ref">File optimize.cpp</span></a></p></li>
 <li><p><a class="reference internal" href="file_SeQuant_core_parse_deparse.cpp.html#file-sequant-core-parse-deparse-cpp"><span class="std std-ref">File deparse.cpp</span></a></p></li>
 <li><p><a class="reference internal" href="file_SeQuant_core_tensor_network.cpp.html#file-sequant-core-tensor-network-cpp"><span class="std std-ref">File tensor_network.cpp</span></a></p></li>
+<li><p><a class="reference internal" href="file_SeQuant_core_tensor_network_v2.cpp.html#file-sequant-core-tensor-network-v2-cpp"><span class="std std-ref">File tensor_network_v2.cpp</span></a></p></li>
 </ul>
 </section>
 <section id="namespaces">
@@ -310,11 +311,11 @@
 <li><p><a class="reference internal" href="function_namespacesequant_1afba3eb9a4c4c6659f0ee160004e98bc8.html#exhale-function-namespacesequant-1afba3eb9a4c4c6659f0ee160004e98bc8"><span class="std std-ref">Template Function sequant::abs</span></a></p></li>
 <li><p><a class="reference internal" href="function_namespacesequant_1a194ed0ffaa987967006e69458ec83423.html#exhale-function-namespacesequant-1a194ed0ffaa987967006e69458ec83423"><span class="std std-ref">Template Function sequant::conj</span></a></p></li>
 <li><p><a class="reference internal" href="function_namespacesequant_1a85e346c4c8387071774ccb710ea5fe93.html#exhale-function-namespacesequant-1a85e346c4c8387071774ccb710ea5fe93"><span class="std std-ref">Template Function sequant::norm_squared</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1acf115a162e3ca42e2882e52a282b97f4.html#exhale-function-namespacesequant-1acf115a162e3ca42e2882e52a282b97f4"><span class="std std-ref">Template Function sequant::operator!=(const T&amp;, const Complex&lt;T&gt;&amp;)</span></a></p></li>
 <li><p><a class="reference internal" href="function_namespacesequant_1ae571b283e3402ca207d2e5b93b3e579c.html#exhale-function-namespacesequant-1ae571b283e3402ca207d2e5b93b3e579c"><span class="std std-ref">Template Function sequant::operator!=(const Complex&lt;T&gt;&amp;, const Complex&lt;T&gt;&amp;)</span></a></p></li>
 <li><p><a class="reference internal" href="function_namespacesequant_1a1f1efc7e03ecd96c841c129d11201e68.html#exhale-function-namespacesequant-1a1f1efc7e03ecd96c841c129d11201e68"><span class="std std-ref">Template Function sequant::operator!=(const Complex&lt;T&gt;&amp;, const X&amp;)</span></a></p></li>
 <li><p><a class="reference internal" href="function_namespacesequant_1ad554ebefd23ee4f7763d2ae01d351e2a.html#exhale-function-namespacesequant-1ad554ebefd23ee4f7763d2ae01d351e2a"><span class="std std-ref">Template Function sequant::operator!=(const X&amp;, const Complex&lt;T&gt;&amp;)</span></a></p></li>
 <li><p><a class="reference internal" href="function_namespacesequant_1aa3812b7b83b1427775056ea29c490b86.html#exhale-function-namespacesequant-1aa3812b7b83b1427775056ea29c490b86"><span class="std std-ref">Template Function sequant::operator!=(const Complex&lt;T&gt;&amp;, const T&amp;)</span></a></p></li>
-<li><p><a class="reference internal" href="function_namespacesequant_1acf115a162e3ca42e2882e52a282b97f4.html#exhale-function-namespacesequant-1acf115a162e3ca42e2882e52a282b97f4"><span class="std std-ref">Template Function sequant::operator!=(const T&amp;, const Complex&lt;T&gt;&amp;)</span></a></p></li>
 <li><p><a class="reference internal" href="function_namespacesequant_1abbb55252e11d1c6f28e96abaf56ec310.html#exhale-function-namespacesequant-1abbb55252e11d1c6f28e96abaf56ec310"><span class="std std-ref">Template Function sequant::operator*(const Complex&lt;T&gt;&amp;, const Complex&lt;T&gt;&amp;)</span></a></p></li>
 <li><p><a class="reference internal" href="function_namespacesequant_1a64cf68fed89b5b0a638c33c0f93a0b95.html#exhale-function-namespacesequant-1a64cf68fed89b5b0a638c33c0f93a0b95"><span class="std std-ref">Template Function sequant::operator*(const U&amp;, const Complex&lt;T&gt;&amp;)</span></a></p></li>
 <li><p><a class="reference internal" href="function_namespacesequant_1ae9fcbe62cae7eb06453685820ea97e45.html#exhale-function-namespacesequant-1ae9fcbe62cae7eb06453685820ea97e45"><span class="std std-ref">Template Function sequant::operator*(const Complex&lt;T&gt;&amp;, const U&amp;)</span></a></p></li>
@@ -350,7 +351,7 @@
             
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on Nov 27, 2024 9:58:28 PM</div>
+              Last updated on Feb 1, 2025 3:24:07 PM</div>
           </div>
           <div class="right-details">
             <div class="icons">

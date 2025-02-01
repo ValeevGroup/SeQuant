@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a1f3c19698b98abec58582b0e86310974:
+
+Function sequant::suffix_compare
+================================
+
+- Defined in :ref:`file_SeQuant_core_utility_indices.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::suffix_compare(Index const&, Index const&)
+   :project: SeQuant

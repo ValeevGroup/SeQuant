@@ -7,7 +7,7 @@
 
     <!-- Generated with Sphinx 7.4.7 and Furo 2024.08.06 -->
         <title>Program Listing for File itf.cpp - SeQuant Documentation</title>
-      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=a746c00c" />
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=8f2a1f02" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=354aac6f" />
     <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo-extensions.css?v=302659d7" />
@@ -310,7 +310,7 @@
 <span class="w">  </span><span class="n">IndexGroups</span><span class="w"> </span><span class="n">externals</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">get_unique_indices</span><span class="p">(</span><span class="n">expr</span><span class="p">);</span>
 
 <span class="w">  </span><span class="k">return</span><span class="w"> </span><span class="n">Tensor</span><span class="p">(</span><span class="sa">L</span><span class="s">&quot;Result&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">bra</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">move</span><span class="p">(</span><span class="n">externals</span><span class="p">.</span><span class="n">bra</span><span class="p">)),</span>
-<span class="w">                </span><span class="n">ket</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">move</span><span class="p">(</span><span class="n">externals</span><span class="p">.</span><span class="n">ket</span><span class="p">)));</span>
+<span class="w">                </span><span class="n">ket</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">move</span><span class="p">(</span><span class="n">externals</span><span class="p">.</span><span class="n">ket</span><span class="p">)),</span><span class="w"> </span><span class="n">aux</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">move</span><span class="p">(</span><span class="n">externals</span><span class="p">.</span><span class="n">aux</span><span class="p">)));</span>
 <span class="p">}</span>
 
 <span class="n">Result</span><span class="o">::</span><span class="n">Result</span><span class="p">(</span><span class="n">ExprPtr</span><span class="w"> </span><span class="n">expression</span><span class="p">,</span><span class="w"> </span><span class="kt">bool</span><span class="w"> </span><span class="n">importResultTensor</span><span class="p">)</span>
@@ -391,6 +391,9 @@
 <span class="w">      </span><span class="n">intermediateIndices</span><span class="p">.</span><span class="n">insert</span><span class="p">(</span><span class="n">intermediateIndices</span><span class="p">.</span><span class="n">end</span><span class="p">(),</span>
 <span class="w">                                 </span><span class="n">intermediateIndexGroups</span><span class="p">.</span><span class="n">ket</span><span class="p">.</span><span class="n">begin</span><span class="p">(),</span>
 <span class="w">                                 </span><span class="n">intermediateIndexGroups</span><span class="p">.</span><span class="n">ket</span><span class="p">.</span><span class="n">end</span><span class="p">());</span>
+<span class="w">      </span><span class="n">intermediateIndices</span><span class="p">.</span><span class="n">insert</span><span class="p">(</span><span class="n">intermediateIndices</span><span class="p">.</span><span class="n">end</span><span class="p">(),</span>
+<span class="w">                                 </span><span class="n">intermediateIndexGroups</span><span class="p">.</span><span class="n">aux</span><span class="p">.</span><span class="n">begin</span><span class="p">(),</span>
+<span class="w">                                 </span><span class="n">intermediateIndexGroups</span><span class="p">.</span><span class="n">aux</span><span class="p">.</span><span class="n">end</span><span class="p">());</span>
 <span class="w">      </span><span class="n">std</span><span class="o">::</span><span class="n">sort</span><span class="p">(</span><span class="n">intermediateIndices</span><span class="p">.</span><span class="n">begin</span><span class="p">(),</span><span class="w"> </span><span class="n">intermediateIndices</span><span class="p">.</span><span class="n">end</span><span class="p">(),</span>
 <span class="w">                </span><span class="p">[](</span><span class="k">const</span><span class="w"> </span><span class="n">Index</span><span class="w"> </span><span class="o">&amp;</span><span class="n">lhs</span><span class="p">,</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="n">Index</span><span class="w"> </span><span class="o">&amp;</span><span class="n">rhs</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
 <span class="w">                  </span><span class="n">IndexTypeComparer</span><span class="w"> </span><span class="n">cmp</span><span class="p">;</span>
@@ -519,6 +522,7 @@
 
 <span class="w">  </span><span class="k">auto</span><span class="w"> </span><span class="n">braIndices</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">tensor</span><span class="p">.</span><span class="n">bra</span><span class="p">();</span>
 <span class="w">  </span><span class="k">auto</span><span class="w"> </span><span class="n">ketIndices</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">tensor</span><span class="p">.</span><span class="n">ket</span><span class="p">();</span>
+<span class="w">  </span><span class="n">assert</span><span class="p">(</span><span class="n">tensor</span><span class="p">.</span><span class="n">aux</span><span class="p">().</span><span class="n">empty</span><span class="p">());</span>
 
 <span class="w">  </span><span class="n">IndexTypeComparer</span><span class="w"> </span><span class="n">cmp</span><span class="p">;</span>
 
@@ -534,7 +538,7 @@
 <span class="w">  </span><span class="p">}</span>
 
 <span class="w">  </span><span class="n">expr</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ex</span><span class="o">&lt;</span><span class="n">Tensor</span><span class="o">&gt;</span><span class="p">(</span><span class="n">tensor</span><span class="p">.</span><span class="n">label</span><span class="p">(),</span><span class="w"> </span><span class="n">bra</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">move</span><span class="p">(</span><span class="n">braIndices</span><span class="p">)),</span>
-<span class="w">                    </span><span class="n">ket</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">move</span><span class="p">(</span><span class="n">ketIndices</span><span class="p">)));</span>
+<span class="w">                    </span><span class="n">ket</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">move</span><span class="p">(</span><span class="n">ketIndices</span><span class="p">)),</span><span class="w"> </span><span class="n">tensor</span><span class="p">.</span><span class="n">aux</span><span class="p">());</span>
 <span class="p">}</span>
 
 <span class="k">template</span><span class="w"> </span><span class="o">&lt;</span><span class="k">typename</span><span class="w"> </span><span class="nc">BraContainer</span><span class="p">,</span><span class="w"> </span><span class="k">typename</span><span class="w"> </span><span class="nc">KetContainer</span><span class="o">&gt;</span>
@@ -579,6 +583,7 @@
 <span class="w">  </span><span class="c1">// Copy indices as we might have to mutate them</span>
 <span class="w">  </span><span class="k">auto</span><span class="w"> </span><span class="n">braIndices</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">tensor</span><span class="p">.</span><span class="n">bra</span><span class="p">();</span>
 <span class="w">  </span><span class="k">auto</span><span class="w"> </span><span class="n">ketIndices</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">tensor</span><span class="p">.</span><span class="n">ket</span><span class="p">();</span>
+<span class="w">  </span><span class="n">assert</span><span class="p">(</span><span class="n">tensor</span><span class="p">.</span><span class="n">aux</span><span class="p">().</span><span class="n">empty</span><span class="p">());</span>
 
 <span class="w">  </span><span class="n">IndexTypeComparer</span><span class="w"> </span><span class="n">cmp</span><span class="p">;</span>
 
@@ -669,7 +674,7 @@
 <span class="w">  </span><span class="p">}</span>
 
 <span class="w">  </span><span class="n">expr</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ex</span><span class="o">&lt;</span><span class="n">Tensor</span><span class="o">&gt;</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">move</span><span class="p">(</span><span class="n">tensorLabel</span><span class="p">),</span><span class="w"> </span><span class="n">bra</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">move</span><span class="p">(</span><span class="n">braIndices</span><span class="p">)),</span>
-<span class="w">                    </span><span class="n">ket</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">move</span><span class="p">(</span><span class="n">ketIndices</span><span class="p">)));</span>
+<span class="w">                    </span><span class="n">ket</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">move</span><span class="p">(</span><span class="n">ketIndices</span><span class="p">)),</span><span class="w"> </span><span class="n">tensor</span><span class="p">.</span><span class="n">aux</span><span class="p">());</span>
 <span class="p">}</span>
 
 <span class="kt">void</span><span class="w"> </span><span class="n">integral_remapper</span><span class="p">(</span><span class="n">ExprPtr</span><span class="w"> </span><span class="o">&amp;</span><span class="n">expr</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">wstring_view</span><span class="w"> </span><span class="n">oneElectronIntegralName</span><span class="p">,</span>
@@ -922,7 +927,7 @@
             
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on Nov 27, 2024 9:58:28 PM</div>
+              Last updated on Feb 1, 2025 3:24:07 PM</div>
           </div>
           <div class="right-details">
             <div class="icons">

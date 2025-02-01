@@ -148,6 +148,8 @@ Program Listing for File expr.hpp
      template <typename T>
      T &as();
    
+     std::size_t size() const;
+   
      std::wstring to_latex() const;
    };  // class ExprPtr
    
@@ -824,7 +826,12 @@ Program Listing for File expr.hpp
        if (!scalar().is_zero()) {
          const auto scal = negate ? -scalar() : scalar();
          if (!scal.is_identity()) {
-           result += sequant::to_latex(scal);
+           // replace -1 prefactor by -
+           if (!(negate ? scalar() : -scalar()).is_identity()) {
+             result += sequant::to_latex(scal);
+           } else {
+             result += L"{-}";
+           }
          }
          for (const auto &i : factors()) {
            if (i->is<Product>())

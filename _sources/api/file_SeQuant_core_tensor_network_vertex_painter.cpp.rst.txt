@@ -1,0 +1,42 @@
+
+.. _file_SeQuant_core_tensor_network_vertex_painter.cpp:
+
+File vertex_painter.cpp
+=======================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core_tensor_network>` (``SeQuant/core/tensor_network``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+Definition (``SeQuant/core/tensor_network/vertex_painter.cpp``)
+---------------------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_tensor_network_vertex_painter.cpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/hash.hpp`` (:ref:`file_SeQuant_core_hash.hpp`)
+
+- ``SeQuant/core/tensor_network/vertex_painter.hpp`` (:ref:`file_SeQuant_core_tensor_network_vertex_painter.hpp`)
+
+
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+

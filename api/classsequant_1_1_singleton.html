@@ -7,7 +7,7 @@
 
     <!-- Generated with Sphinx 7.4.7 and Furo 2024.08.06 -->
         <title>Template Class Singleton - SeQuant Documentation</title>
-      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=a746c00c" />
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=8f2a1f02" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=354aac6f" />
     <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo-extensions.css?v=302659d7" />
@@ -280,9 +280,9 @@
 <dt class="sig sig-object cpp" id="_CPPv4I0EN7sequant9SingletonE">
 <span id="_CPPv3I0EN7sequant9SingletonE"></span><span id="_CPPv2I0EN7sequant9SingletonE"></span><span class="k"><span class="pre">template</span></span><span class="p"><span class="pre">&lt;</span></span><span class="k"><span class="pre">typename</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">Derived</span></span></span><span class="p"><span class="pre">&gt;</span></span><br /><span class="target" id="classsequant_1_1_singleton"></span><span class="k"><span class="pre">class</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">Singleton</span></span></span><a class="headerlink" href="#_CPPv4I0EN7sequant9SingletonE" title="Link to this definition">¶</a><br /></dt>
 <dd><p><a class="reference internal" href="#classsequant_1_1_singleton"><span class="std std-ref">Singleton</span></a> base class <a class="reference internal" href="#classsequant_1_1_singleton"><span class="std std-ref">Singleton</span></a> is a CRTP base class that provides a thread-safe way to create an immutable singleton object. </p>
-<p>To create a singleton class <code class="docutils literal notranslate"><span class="pre">A</span></code> do: <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">A</span> <span class="p">:</span> <span class="n">Singleton</span><span class="o">&lt;</span><span class="n">A</span><span class="o">&gt;</span> <span class="p">{</span>
+<p>To create a singleton class <code class="docutils literal notranslate"><span class="pre">A</span></code> do: <div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="k">class</span><span class="w"> </span><span class="nc">A</span> <span class="p">:</span> <span class="n">Singleton</span><span class="o">&lt;</span><span class="n">A</span><span class="o">&gt;</span> <span class="p">{</span>
   <span class="n">private</span><span class="p">:</span>
-    <span class="n">friend</span> <span class="k">class</span> <span class="nc">Singleton</span><span class="o">&lt;</span><span class="n">A</span><span class="o">&gt;</span><span class="p">;</span>
+    <span class="n">friend</span> <span class="k">class</span><span class="w"> </span><span class="nc">Singleton</span><span class="o">&lt;</span><span class="n">A</span><span class="o">&gt;</span><span class="p">;</span>
     <span class="n">A</span><span class="p">(</span><span class="o">...</span><span class="p">);</span>  <span class="o">//</span> <span class="n">define</span> <span class="p">(</span><span class="n">private</span><span class="p">)</span> <span class="n">constructors</span>
 <span class="p">};</span>
 </pre></div>
@@ -387,7 +387,7 @@
             
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on Nov 27, 2024 9:58:28 PM</div>
+              Last updated on Feb 1, 2025 3:24:07 PM</div>
           </div>
           <div class="right-details">
             <div class="icons">

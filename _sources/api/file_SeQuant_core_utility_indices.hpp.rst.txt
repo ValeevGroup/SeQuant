@@ -25,13 +25,21 @@ Includes
 --------
 
 
+- ``SeQuant/core/container.hpp`` (:ref:`file_SeQuant_core_container.hpp`)
+
 - ``SeQuant/core/expr.hpp`` (:ref:`file_SeQuant_core_expr.hpp`)
 
 - ``SeQuant/core/index.hpp`` (:ref:`file_SeQuant_core_index.hpp`)
 
 - ``SeQuant/core/tensor.hpp`` (:ref:`file_SeQuant_core_tensor.hpp`)
 
+- ``algorithm`` (:ref:`file_SeQuant_core_algorithm.hpp`)
+
 - ``set``
+
+- ``tuple`` (:ref:`file_SeQuant_core_utility_tuple.hpp`)
+
+- ``type_traits``
 
 - ``vector``
 
@@ -41,7 +49,13 @@ Included By
 -----------
 
 
+- :ref:`file_SeQuant_core_eval_expr.cpp`
+
 - :ref:`file_SeQuant_core_export_itf.cpp`
+
+- :ref:`file_SeQuant_core_optimize.hpp`
+
+- :ref:`file_SeQuant_core_optimize_optimize.cpp`
 
 
 
@@ -59,7 +73,11 @@ Classes
 -------
 
 
+- :ref:`exhale_struct_structsequant_1_1detail_1_1not__in`
+
 - :ref:`exhale_struct_structsequant_1_1_index_groups`
+
+- :ref:`exhale_struct_structsequant_1_1_tensor_of_tensor_indices`
 
 
 Functions
@@ -68,7 +86,7 @@ Functions
 
 - :ref:`exhale_function_namespacesequant_1_1detail_1addf8be11c7ffd789829be77a37f7ff37`
 
-- :ref:`exhale_function_namespacesequant_1af3378e211033b815ded22fc08c161a3e`
+- :ref:`exhale_function_namespacesequant_1ad3a0936a566597248d20e2dd924a0642`
 
 - :ref:`exhale_function_namespacesequant_1ae52fa524e53cee73d9afa5f00e75904e`
 
@@ -79,4 +97,10 @@ Functions
 - :ref:`exhale_function_namespacesequant_1a63ea8fc50bb2f25bf1672e7182421f13`
 
 - :ref:`exhale_function_namespacesequant_1a83708a06e2d866abf2b00cef9f324225`
+
+- :ref:`exhale_function_namespacesequant_1af3378e211033b815ded22fc08c161a3e`
+
+- :ref:`exhale_function_namespacesequant_1a1f3c19698b98abec58582b0e86310974`
+
+- :ref:`exhale_function_namespacesequant_1a9face8761a450f6688be610b6345af31`
 

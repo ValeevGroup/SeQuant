@@ -7,7 +7,7 @@
 
     <!-- Generated with Sphinx 7.4.7 and Furo 2024.08.06 -->
         <title>Program Listing for File ast.hpp - SeQuant Documentation</title>
-      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=a746c00c" />
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=8f2a1f02" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=354aac6f" />
     <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo-extensions.css?v=302659d7" />
@@ -272,6 +272,7 @@
 
 <span class="cp">#define BOOST_SPIRIT_X3_UNICODE</span>
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;boost/fusion/include/adapt_struct.hpp&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;boost/optional.hpp&gt;</span>
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;boost/spirit/home/x3.hpp&gt;</span>
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;boost/spirit/home/x3/support/ast/position_tagged.hpp&gt;</span>
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;boost/variant.hpp&gt;</span>
@@ -320,26 +321,34 @@
 <span class="k">struct</span><span class="w"> </span><span class="nc">IndexGroups</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">boost</span><span class="o">::</span><span class="n">spirit</span><span class="o">::</span><span class="n">x3</span><span class="o">::</span><span class="n">position_tagged</span><span class="w"> </span><span class="p">{</span>
 <span class="w">  </span><span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="n">Index</span><span class="o">&gt;</span><span class="w"> </span><span class="n">bra</span><span class="p">;</span>
 <span class="w">  </span><span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="n">Index</span><span class="o">&gt;</span><span class="w"> </span><span class="n">ket</span><span class="p">;</span>
+<span class="w">  </span><span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="n">Index</span><span class="o">&gt;</span><span class="w"> </span><span class="n">auxiliaries</span><span class="p">;</span>
 <span class="w">  </span><span class="kt">bool</span><span class="w"> </span><span class="n">reverse_bra_ket</span><span class="p">;</span>
 
 <span class="w">  </span><span class="n">IndexGroups</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="n">Index</span><span class="o">&gt;</span><span class="w"> </span><span class="n">bra</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{},</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="n">Index</span><span class="o">&gt;</span><span class="w"> </span><span class="n">ket</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{},</span>
-<span class="w">              </span><span class="kt">bool</span><span class="w"> </span><span class="n">reverse_bra_ket</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{})</span>
+<span class="w">              </span><span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="n">Index</span><span class="o">&gt;</span><span class="w"> </span><span class="n">auxiliaries</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{},</span><span class="w"> </span><span class="kt">bool</span><span class="w"> </span><span class="n">reverse_bra_ket</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{})</span>
 <span class="w">      </span><span class="o">:</span><span class="w"> </span><span class="n">bra</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">move</span><span class="p">(</span><span class="n">bra</span><span class="p">)),</span>
 <span class="w">        </span><span class="n">ket</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">move</span><span class="p">(</span><span class="n">ket</span><span class="p">)),</span>
+<span class="w">        </span><span class="n">auxiliaries</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">move</span><span class="p">(</span><span class="n">auxiliaries</span><span class="p">)),</span>
 <span class="w">        </span><span class="n">reverse_bra_ket</span><span class="p">(</span><span class="n">reverse_bra_ket</span><span class="p">)</span><span class="w"> </span><span class="p">{}</span>
 <span class="p">};</span>
 
+<span class="k">struct</span><span class="w"> </span><span class="nc">SymmetrySpec</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">boost</span><span class="o">::</span><span class="n">spirit</span><span class="o">::</span><span class="n">x3</span><span class="o">::</span><span class="n">position_tagged</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="k">static</span><span class="w"> </span><span class="k">constexpr</span><span class="w"> </span><span class="kt">char</span><span class="w"> </span><span class="n">unspecified</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="sc">&#39;\0&#39;</span><span class="p">;</span>
+<span class="w">  </span><span class="kt">char</span><span class="w"> </span><span class="n">perm_symm</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">unspecified</span><span class="p">;</span>
+<span class="w">  </span><span class="kt">char</span><span class="w"> </span><span class="n">braket_symm</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">unspecified</span><span class="p">;</span>
+<span class="w">  </span><span class="kt">char</span><span class="w"> </span><span class="n">particle_symm</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">unspecified</span><span class="p">;</span>
+<span class="p">};</span>
+
 <span class="k">struct</span><span class="w"> </span><span class="nc">Tensor</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">boost</span><span class="o">::</span><span class="n">spirit</span><span class="o">::</span><span class="n">x3</span><span class="o">::</span><span class="n">position_tagged</span><span class="w"> </span><span class="p">{</span>
-<span class="w">  </span><span class="k">static</span><span class="w"> </span><span class="k">constexpr</span><span class="w"> </span><span class="kt">char</span><span class="w"> </span><span class="n">unspecified_symmetry</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="sc">&#39;\0&#39;</span><span class="p">;</span>
 <span class="w">  </span><span class="n">std</span><span class="o">::</span><span class="n">wstring</span><span class="w"> </span><span class="n">name</span><span class="p">;</span>
 <span class="w">  </span><span class="n">IndexGroups</span><span class="w"> </span><span class="n">indices</span><span class="p">;</span>
-<span class="w">  </span><span class="kt">char</span><span class="w"> </span><span class="n">symmetry</span><span class="p">;</span>
+<span class="w">  </span><span class="n">boost</span><span class="o">::</span><span class="n">optional</span><span class="o">&lt;</span><span class="n">SymmetrySpec</span><span class="o">&gt;</span><span class="w"> </span><span class="n">symmetry</span><span class="p">;</span>
 
 <span class="w">  </span><span class="n">Tensor</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">wstring</span><span class="w"> </span><span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{},</span><span class="w"> </span><span class="n">IndexGroups</span><span class="w"> </span><span class="n">indices</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{},</span>
-<span class="w">         </span><span class="kt">char</span><span class="w"> </span><span class="n">symmetry</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">unspecified_symmetry</span><span class="p">)</span>
+<span class="w">         </span><span class="n">boost</span><span class="o">::</span><span class="n">optional</span><span class="o">&lt;</span><span class="n">SymmetrySpec</span><span class="o">&gt;</span><span class="w"> </span><span class="n">symmetry</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{})</span>
 <span class="w">      </span><span class="o">:</span><span class="w"> </span><span class="n">name</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">move</span><span class="p">(</span><span class="n">name</span><span class="p">)),</span>
 <span class="w">        </span><span class="n">indices</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">move</span><span class="p">(</span><span class="n">indices</span><span class="p">)),</span>
-<span class="w">        </span><span class="n">symmetry</span><span class="p">(</span><span class="n">symmetry</span><span class="p">)</span><span class="w"> </span><span class="p">{}</span>
+<span class="w">        </span><span class="n">symmetry</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">move</span><span class="p">(</span><span class="n">symmetry</span><span class="p">))</span><span class="w"> </span><span class="p">{}</span>
 <span class="p">};</span>
 
 <span class="k">struct</span><span class="w"> </span><span class="nc">Product</span><span class="p">;</span>
@@ -387,7 +396,9 @@
 <span class="n">BOOST_FUSION_ADAPT_STRUCT</span><span class="p">(</span><span class="n">sequant</span><span class="o">::</span><span class="n">parse</span><span class="o">::</span><span class="n">ast</span><span class="o">::</span><span class="n">Number</span><span class="p">,</span><span class="w"> </span><span class="n">numerator</span><span class="p">,</span><span class="w"> </span><span class="n">denominator</span><span class="p">);</span>
 <span class="n">BOOST_FUSION_ADAPT_STRUCT</span><span class="p">(</span><span class="n">sequant</span><span class="o">::</span><span class="n">parse</span><span class="o">::</span><span class="n">ast</span><span class="o">::</span><span class="n">Variable</span><span class="p">,</span><span class="w"> </span><span class="n">name</span><span class="p">,</span><span class="w"> </span><span class="n">conjugated</span><span class="p">);</span>
 <span class="n">BOOST_FUSION_ADAPT_STRUCT</span><span class="p">(</span><span class="n">sequant</span><span class="o">::</span><span class="n">parse</span><span class="o">::</span><span class="n">ast</span><span class="o">::</span><span class="n">IndexGroups</span><span class="p">,</span><span class="w"> </span><span class="n">bra</span><span class="p">,</span><span class="w"> </span><span class="n">ket</span><span class="p">,</span>
-<span class="w">                          </span><span class="n">reverse_bra_ket</span><span class="p">);</span>
+<span class="w">                          </span><span class="n">auxiliaries</span><span class="p">,</span><span class="w"> </span><span class="n">reverse_bra_ket</span><span class="p">);</span>
+<span class="n">BOOST_FUSION_ADAPT_STRUCT</span><span class="p">(</span><span class="n">sequant</span><span class="o">::</span><span class="n">parse</span><span class="o">::</span><span class="n">ast</span><span class="o">::</span><span class="n">SymmetrySpec</span><span class="p">,</span><span class="w"> </span><span class="n">perm_symm</span><span class="p">,</span>
+<span class="w">                          </span><span class="n">braket_symm</span><span class="p">,</span><span class="w"> </span><span class="n">particle_symm</span><span class="p">);</span>
 <span class="n">BOOST_FUSION_ADAPT_STRUCT</span><span class="p">(</span><span class="n">sequant</span><span class="o">::</span><span class="n">parse</span><span class="o">::</span><span class="n">ast</span><span class="o">::</span><span class="n">Tensor</span><span class="p">,</span><span class="w"> </span><span class="n">name</span><span class="p">,</span><span class="w"> </span><span class="n">indices</span><span class="p">,</span><span class="w"> </span><span class="n">symmetry</span><span class="p">);</span>
 
 <span class="n">BOOST_FUSION_ADAPT_STRUCT</span><span class="p">(</span><span class="n">sequant</span><span class="o">::</span><span class="n">parse</span><span class="o">::</span><span class="n">ast</span><span class="o">::</span><span class="n">Product</span><span class="p">,</span><span class="w"> </span><span class="n">factors</span><span class="p">);</span>
@@ -415,7 +426,7 @@
             
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on Nov 27, 2024 9:58:28 PM</div>
+              Last updated on Feb 1, 2025 3:24:07 PM</div>
           </div>
           <div class="right-details">
             <div class="icons">

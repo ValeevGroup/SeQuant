@@ -157,14 +157,11 @@ Program Listing for File spin.hpp
    
    ExprPtr expand_A_op(const ExprPtr& expr);
    
-   container::svector<container::map<Index, Index>> P_maps(
-       const Tensor& P, bool keep_canonical = true, bool pair_wise = false);
+   container::svector<container::map<Index, Index>> P_maps(const Tensor& P);
    
-   ExprPtr expand_P_op(const Product& product, bool keep_canonical = true,
-                       bool pair_wise = true);
+   ExprPtr expand_P_op(const Product& product);
    
-   ExprPtr expand_P_op(const ExprPtr& expr, bool keep_canonical = true,
-                       bool pair_wise = true);
+   ExprPtr expand_P_op(const ExprPtr& expr);
    
    container::svector<container::map<Index, Index>> S_replacement_maps(
        const Tensor& S);

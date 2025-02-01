@@ -33,6 +33,14 @@ Includes
 
 - ``SeQuant/core/index.hpp`` (:ref:`file_SeQuant_core_index.hpp`)
 
+- ``SeQuant/core/tensor_canonicalizer.hpp`` (:ref:`file_SeQuant_core_tensor_canonicalizer.hpp`)
+
+- ``SeQuant/core/tensor_network/canonicals.hpp`` (:ref:`file_SeQuant_core_tensor_network_canonicals.hpp`)
+
+- ``SeQuant/core/tensor_network/slot.hpp`` (:ref:`file_SeQuant_core_tensor_network_slot.hpp`)
+
+- ``SeQuant/core/tensor_network/vertex.hpp`` (:ref:`file_SeQuant_core_tensor_network_vertex.hpp`)
+
 - ``cassert``
 
 - ``cstdlib``
@@ -45,7 +53,7 @@ Includes
 
 - ``string_view``
 
-- ``tuple``
+- ``tuple`` (:ref:`file_SeQuant_core_utility_tuple.hpp`)
 
 - ``utility`` (:ref:`file_SeQuant_core_utility_context.hpp`)
 
@@ -81,7 +89,11 @@ Classes
 -------
 
 
+- :ref:`exhale_struct_structsequant_1_1_tensor_network_1_1_edge_1_1_terminal`
+
 - :ref:`exhale_struct_structsequant_1_1_tensor_network_1_1_full_label_compare`
+
+- :ref:`exhale_struct_structsequant_1_1_tensor_network_1_1_slot_canonicalization_metadata`
 
 - :ref:`exhale_class_classsequant_1_1_tensor_network`
 

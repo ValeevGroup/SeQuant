@@ -7,7 +7,7 @@
 
     <!-- Generated with Sphinx 7.4.7 and Furo 2024.08.06 -->
         <title>File tensor_network.hpp - SeQuant Documentation</title>
-      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=a746c00c" />
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=8f2a1f02" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=354aac6f" />
     <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo-extensions.css?v=302659d7" />
@@ -278,13 +278,17 @@
 <li><p><code class="docutils literal notranslate"><span class="pre">SeQuant/core/container.hpp</span></code> (<a class="reference internal" href="file_SeQuant_core_container.hpp.html#file-sequant-core-container-hpp"><span class="std std-ref">File container.hpp</span></a>)</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">SeQuant/core/expr.hpp</span></code> (<a class="reference internal" href="file_SeQuant_core_expr.hpp.html#file-sequant-core-expr-hpp"><span class="std std-ref">File expr.hpp</span></a>)</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">SeQuant/core/index.hpp</span></code> (<a class="reference internal" href="file_SeQuant_core_index.hpp.html#file-sequant-core-index-hpp"><span class="std std-ref">File index.hpp</span></a>)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">SeQuant/core/tensor_canonicalizer.hpp</span></code> (<a class="reference internal" href="file_SeQuant_core_tensor_canonicalizer.hpp.html#file-sequant-core-tensor-canonicalizer-hpp"><span class="std std-ref">File tensor_canonicalizer.hpp</span></a>)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">SeQuant/core/tensor_network/canonicals.hpp</span></code> (<a class="reference internal" href="file_SeQuant_core_tensor_network_canonicals.hpp.html#file-sequant-core-tensor-network-canonicals-hpp"><span class="std std-ref">File canonicals.hpp</span></a>)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">SeQuant/core/tensor_network/slot.hpp</span></code> (<a class="reference internal" href="file_SeQuant_core_tensor_network_slot.hpp.html#file-sequant-core-tensor-network-slot-hpp"><span class="std std-ref">File slot.hpp</span></a>)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">SeQuant/core/tensor_network/vertex.hpp</span></code> (<a class="reference internal" href="file_SeQuant_core_tensor_network_vertex.hpp.html#file-sequant-core-tensor-network-vertex-hpp"><span class="std std-ref">File vertex.hpp</span></a>)</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">cassert</span></code></p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">cstdlib</span></code></p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">memory</span></code></p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">stdexcept</span></code></p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">string</span></code> (<a class="reference internal" href="file_SeQuant_core_utility_string.cpp.html#file-sequant-core-utility-string-cpp"><span class="std std-ref">File string.cpp</span></a>)</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">string_view</span></code></p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">tuple</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">tuple</span></code> (<a class="reference internal" href="file_SeQuant_core_utility_tuple.hpp.html#file-sequant-core-utility-tuple-hpp"><span class="std std-ref">File tuple.hpp</span></a>)</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">utility</span></code> (<a class="reference internal" href="file_SeQuant_core_utility_context.hpp.html#file-sequant-core-utility-context-hpp"><span class="std std-ref">File context.hpp</span></a>)</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">vector</span></code></p></li>
 </ul>
@@ -308,7 +312,9 @@
 <section id="classes">
 <h2>Classes<a class="headerlink" href="#classes" title="Link to this heading">¶</a></h2>
 <ul class="simple">
+<li><p><a class="reference internal" href="structsequant_1_1_tensor_network_1_1_edge_1_1_terminal.html#exhale-struct-structsequant-1-1-tensor-network-1-1-edge-1-1-terminal"><span class="std std-ref">Struct Edge::Terminal</span></a></p></li>
 <li><p><a class="reference internal" href="structsequant_1_1_tensor_network_1_1_full_label_compare.html#exhale-struct-structsequant-1-1-tensor-network-1-1-full-label-compare"><span class="std std-ref">Struct TensorNetwork::FullLabelCompare</span></a></p></li>
+<li><p><a class="reference internal" href="structsequant_1_1_tensor_network_1_1_slot_canonicalization_metadata.html#exhale-struct-structsequant-1-1-tensor-network-1-1-slot-canonicalization-metadata"><span class="std std-ref">Struct TensorNetwork::SlotCanonicalizationMetadata</span></a></p></li>
 <li><p><a class="reference internal" href="classsequant_1_1_tensor_network.html#exhale-class-classsequant-1-1-tensor-network"><span class="std std-ref">Class TensorNetwork</span></a></p></li>
 <li><p><a class="reference internal" href="classsequant_1_1_tensor_network_1_1_edge.html#exhale-class-classsequant-1-1-tensor-network-1-1-edge"><span class="std std-ref">Class TensorNetwork::Edge</span></a></p></li>
 </ul>
@@ -332,7 +338,7 @@
             
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on Nov 27, 2024 9:58:28 PM</div>
+              Last updated on Feb 1, 2025 3:24:07 PM</div>
           </div>
           <div class="right-details">
             <div class="icons">

@@ -1,6 +1,0 @@
-
-.. _namespace_sequant__@7:
-
-Namespace sequant::@7
-=====================
-

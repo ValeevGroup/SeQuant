@@ -27,6 +27,8 @@ Includes
 
 - ``boost/fusion/include/adapt_struct.hpp``
 
+- ``boost/optional.hpp``
+
 - ``boost/spirit/home/x3.hpp``
 
 - ``boost/spirit/home/x3/support/ast/position_tagged.hpp``
@@ -81,6 +83,8 @@ Classes
 
 - :ref:`exhale_struct_structsequant_1_1parse_1_1ast_1_1_sum`
 
+- :ref:`exhale_struct_structsequant_1_1parse_1_1ast_1_1_symmetry_spec`
+
 - :ref:`exhale_struct_structsequant_1_1parse_1_1ast_1_1_tensor`
 
 - :ref:`exhale_struct_structsequant_1_1parse_1_1ast_1_1_variable`
@@ -98,7 +102,9 @@ Functions
 
 - :ref:`exhale_function_ast_8hpp_1acb28cd7887651cff374b9049c28c7e7c`
 
-- :ref:`exhale_function_ast_8hpp_1a0988897a700222e8f62cbfb69e10f8f3`
+- :ref:`exhale_function_ast_8hpp_1a2cec8e03a95282b7312545f2c2d3c82d`
+
+- :ref:`exhale_function_ast_8hpp_1a3508ebb0f538a39e988de08bf2283189`
 
 - :ref:`exhale_function_ast_8hpp_1abc32465f1db33ecd01dee6338751b446`
 

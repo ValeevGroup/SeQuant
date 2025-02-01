@@ -65,11 +65,11 @@ Functions
 
 - :ref:`exhale_function_namespacesequant_1a94543a94e43cc428c19ff5a306484603`
 
-- :ref:`exhale_function_namespacesequant_1a28fe937cf0195785bd93939ff477a2f3`
+- :ref:`exhale_function_namespacesequant_1a5ec094513b9382a51134ee3f2361c840`
 
-- :ref:`exhale_function_namespacesequant_1ac95b27ca1069ade246e759b6f3f8df97`
+- :ref:`exhale_function_namespacesequant_1a0ed27261fd24d3392c9b4aae23145700`
 
-- :ref:`exhale_function_namespacesequant_1ac1a8d19c4b99d52c077d3031ae791121`
+- :ref:`exhale_function_namespacesequant_1ae73c3f8b4c2d29262d54fefbf55ad619`
 
 
 Variables

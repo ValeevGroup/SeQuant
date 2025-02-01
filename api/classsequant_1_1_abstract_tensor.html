@@ -7,7 +7,7 @@
 
     <!-- Generated with Sphinx 7.4.7 and Furo 2024.08.06 -->
         <title>Class AbstractTensor - SeQuant Documentation</title>
-      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=a746c00c" />
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=8f2a1f02" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=354aac6f" />
     <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo-extensions.css?v=302659d7" />
@@ -280,18 +280,19 @@
 <dl class="cpp class">
 <dt class="sig sig-object cpp" id="_CPPv4N7sequant14AbstractTensorE">
 <span id="_CPPv3N7sequant14AbstractTensorE"></span><span id="_CPPv2N7sequant14AbstractTensorE"></span><span id="sequant::AbstractTensor"></span><span class="target" id="classsequant_1_1_abstract_tensor"></span><span class="k"><span class="pre">class</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">AbstractTensor</span></span></span><a class="headerlink" href="#_CPPv4N7sequant14AbstractTensorE" title="Link to this definition">¶</a><br /></dt>
-<dd><p>This interface class defines a <a class="reference internal" href="classsequant_1_1_tensor.html#classsequant_1_1_tensor"><span class="std std-ref">Tensor</span></a> concept. Object <code class="docutils literal notranslate"><span class="pre">t</span></code> of a type that meets the concept must satisfy the following:<ul class="simple">
-<li><p><code class="docutils literal notranslate"><a class="reference internal" href="enum_namespacesequant_1a77a100102aa705742fa050ab1c0d3dc6.html#namespacesequant_1a77a100102aa705742fa050ab1c0d3dc6a3c6ab8c37ec264689cd0131c7014b99d"><span class="std std-ref"><span class="pre">bra(t)</span></span></a></code> , <code class="docutils literal notranslate"><a class="reference internal" href="enum_namespacesequant_1a77a100102aa705742fa050ab1c0d3dc6.html#namespacesequant_1a77a100102aa705742fa050ab1c0d3dc6a83f989dd820bb3683ef6ff6b2bc7fd68"><span class="std std-ref"><span class="pre">ket(t)</span></span></a></code> , and <code class="docutils literal notranslate"><span class="pre">braket(t)</span></code> are valid expressions and evaluate to a range of <a class="reference internal" href="classsequant_1_1_index.html#classsequant_1_1_index"><span class="std std-ref">Index</span></a> objects;</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">bra_rank(t)</span></code> and <code class="docutils literal notranslate"><span class="pre">ket_rank(t)</span></code> are valid expression and return sizes of the <code class="docutils literal notranslate"><a class="reference internal" href="enum_namespacesequant_1a77a100102aa705742fa050ab1c0d3dc6.html#namespacesequant_1a77a100102aa705742fa050ab1c0d3dc6a3c6ab8c37ec264689cd0131c7014b99d"><span class="std std-ref"><span class="pre">bra(t)</span></span></a></code> and <code class="docutils literal notranslate"><a class="reference internal" href="enum_namespacesequant_1a77a100102aa705742fa050ab1c0d3dc6.html#namespacesequant_1a77a100102aa705742fa050ab1c0d3dc6a83f989dd820bb3683ef6ff6b2bc7fd68"><span class="std std-ref"><span class="pre">ket(t)</span></span></a></code> ranges, respectively;</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">symmetry(t)</span></code> is a valid expression and evaluates to a Symmetry object that describes the symmetry of bra/ket of a <em>particle-symmetric</em> <code class="docutils literal notranslate"><span class="pre">t</span></code> ;</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">braket_symmetry(t)</span></code> is a valid expression and evaluates to a BraKetSymmetry object that describes the bra-ket symmetry of <code class="docutils literal notranslate"><span class="pre">t</span></code> ;</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">particle_symmetry(t)</span></code> is a valid expression and evaluates to a ParticleSymmetry object that describes the symmetry of <code class="docutils literal notranslate"><span class="pre">t</span></code> with respect to permutations of particles;</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">color(t)</span></code> is a valid expression and returns whether a nonnegative integer that identifies the type of a tensor; tensors with different colors can be reordered in a <a class="reference internal" href="classsequant_1_1_product.html#classsequant_1_1_product"><span class="std std-ref">Product</span></a> at will</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">is_cnumber(t)</span></code> is a valid expression and returns whether t commutes with other tensor of same color (tensors of different colors are, for now, always assumed to commute)</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">label(t)</span></code> is a valid expression and its return is convertible to a std::wstring;</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">to_latex(t)</span></code> is a valid expression and its return is convertible to a std::wstring. To adapt an existing class intrusively derive it from <a class="reference internal" href="#classsequant_1_1_abstract_tensor"><span class="std std-ref">AbstractTensor</span></a> and implement all member functions. This allows to implememnt heterogeneous containers of objects that meet the <a class="reference internal" href="classsequant_1_1_tensor.html#classsequant_1_1_tensor"><span class="std std-ref">Tensor</span></a> concept. </p></li>
+<dd><p><a class="reference internal" href="#classsequant_1_1_abstract_tensor"><span class="std std-ref">AbstractTensor</span></a> is a <a class="reference external" href="https://en.wikipedia.org/wiki/Tensor">tensor</a> over general (i.e., not necessarily commutative) rings. A tensor with <span class="math notranslate nohighlight">\( k \geq 0 \)</span> contravariant (ket, <a class="reference external" href="https://en.wikipedia.org/wiki/Bra-ket_notation">Dirac notation</a> ) and <span class="math notranslate nohighlight">\( b \geq 0 \)</span> covariant (bra) modes describes elements of a tensor product of <span class="math notranslate nohighlight">\( b+k \)</span> vector spaces. Equivalently it represents a linear map between the tensor product of <span class="math notranslate nohighlight">\( k \)</span> <em>primal</em> vector spaces to the tensor product of <span class="math notranslate nohighlight">\( b \)</span> <em>dual</em> vector spaces. <a class="reference internal" href="classsequant_1_1_tensor.html#classsequant_1_1_tensor"><span class="std std-ref">Tensor</span></a> modes are 1-to-1 represented by unique <a class="reference external" href="https://en.wikipedia.org/wiki/Abstract_index_notation">indices</a>, represented by <a class="reference internal" href="classsequant_1_1_index.html#classsequant_1_1_index"><span class="std std-ref">Index</span></a> objects.</p>
+<p>It is also necessary to support modes that are “array-like” in that they do not refer to a vector space or its dual; such modes can represent ordinal indices (e.g. to treat a collection/sequence of tensors as a single tensor) Thus each tensor has zero or more auxiliary (aux) modes. The aux modes are invariant under the transformations of vector spaces and do not contribute to the tensor symmetries.</p>
+<p>Tensors can have the following symmetries:<ul class="simple">
+<li><p>Tensors can be symmetric or nonsymmetric with respect to the transposition of corresponding (first, second, etc.) modes in bra/ket mode ranges. This symmetry is used to treat particle as indistinguishable or distinguishable in many-particle quantum mechanics context.</p></li>
+<li><p>Tensors can be symmetric, antisymmetric, and nonsymmetric with respect to the transposition of modes within the bra or ket sets. This symmetry is used to model the distinguishable and indistinguishable (bosonic and fermionic) degrees of freedom in many-body quantum mechanics context. More complicated symmetries are not yet supported.</p></li>
+<li><p>Tensors can be symmetric, conjugate, or nonsymmetric with respect to swap of bra with ket. This symmetry corresponds to time reversal in physical simulation.</p></li>
 </ul>
 </p>
+<p>Lastly, the supporting rings are not assumed to be scalars, hence tensor product supporting the concept of tensor is not necessarily commutative.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>This interface class defines a <a class="reference internal" href="classsequant_1_1_tensor.html#classsequant_1_1_tensor"><span class="std std-ref">Tensor</span></a> <em>concept</em>. All <a class="reference internal" href="classsequant_1_1_tensor.html#classsequant_1_1_tensor"><span class="std std-ref">Tensor</span></a> objects must fulfill the <a class="reference internal" href="structsequant_1_1is__tensor.html#structsequant_1_1is__tensor"><span class="std std-ref">is_tensor</span></a> trait (see below). To adapt an existing class intrusively derive it from <a class="reference internal" href="#classsequant_1_1_abstract_tensor"><span class="std std-ref">AbstractTensor</span></a> and implement all member functions. This allows to implement heterogeneous containers of objects that meet the <a class="reference internal" href="classsequant_1_1_tensor.html#classsequant_1_1_tensor"><span class="std std-ref">Tensor</span></a> concept. </p>
+</div>
 <p>Subclassed by <a class="reference internal" href="classsequant_1_1_normal_operator.html#classsequant_1_1_normal_operator"><span class="std std-ref">sequant::NormalOperator&lt; S &gt;</span></a>, <a class="reference internal" href="classsequant_1_1_tensor.html#classsequant_1_1_tensor"><span class="std std-ref">sequant::Tensor</span></a></p>
 <div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric" id="breathe-section-title-public-types">Public Types</p>
@@ -326,45 +327,112 @@
 <dl class="cpp function">
 <dt class="sig sig-object cpp" id="_CPPv4NK7sequant14AbstractTensor4_braEv">
 <span id="_CPPv3NK7sequant14AbstractTensor4_braEv"></span><span id="_CPPv2NK7sequant14AbstractTensor4_braEv"></span><span id="sequant::AbstractTensor::_braC"></span><span class="target" id="classsequant_1_1_abstract_tensor_1a5d44dde5e2dc1d271062fa4318e2cc94"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4N7sequant14AbstractTensor21const_any_view_randszE" title="sequant::AbstractTensor::const_any_view_randsz"><span class="n"><span class="pre">const_any_view_randsz</span></span></a><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">_bra</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant14AbstractTensor4_braEv" title="Link to this definition">¶</a><br /></dt>
-<dd><p>view of a contiguous range of <a class="reference internal" href="classsequant_1_1_index.html#classsequant_1_1_index"><span class="std std-ref">Index</span></a> objects </p>
+<dd><p>accessor bra (covariant) indices </p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>view of a contiguous range of <a class="reference internal" href="classsequant_1_1_index.html#classsequant_1_1_index"><span class="std std-ref">Index</span></a> objects </p>
+</dd>
+</dl>
 </dd></dl>
 
 <dl class="cpp function">
 <dt class="sig sig-object cpp" id="_CPPv4NK7sequant14AbstractTensor4_ketEv">
 <span id="_CPPv3NK7sequant14AbstractTensor4_ketEv"></span><span id="_CPPv2NK7sequant14AbstractTensor4_ketEv"></span><span id="sequant::AbstractTensor::_ketC"></span><span class="target" id="classsequant_1_1_abstract_tensor_1a69809acbc8e45c03b1e22f8690795251"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4N7sequant14AbstractTensor21const_any_view_randszE" title="sequant::AbstractTensor::const_any_view_randsz"><span class="n"><span class="pre">const_any_view_randsz</span></span></a><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">_ket</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant14AbstractTensor4_ketEv" title="Link to this definition">¶</a><br /></dt>
-<dd><p>view of a contiguous range of <a class="reference internal" href="classsequant_1_1_index.html#classsequant_1_1_index"><span class="std std-ref">Index</span></a> objects </p>
+<dd><p>accesses ket (contravariant) indices </p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>view of a contiguous range of <a class="reference internal" href="classsequant_1_1_index.html#classsequant_1_1_index"><span class="std std-ref">Index</span></a> objects </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant14AbstractTensor4_auxEv">
+<span id="_CPPv3NK7sequant14AbstractTensor4_auxEv"></span><span id="_CPPv2NK7sequant14AbstractTensor4_auxEv"></span><span id="sequant::AbstractTensor::_auxC"></span><span class="target" id="classsequant_1_1_abstract_tensor_1ae2bf27083342b01431682baf273146b3"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4N7sequant14AbstractTensor21const_any_view_randszE" title="sequant::AbstractTensor::const_any_view_randsz"><span class="n"><span class="pre">const_any_view_randsz</span></span></a><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">_aux</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant14AbstractTensor4_auxEv" title="Link to this definition">¶</a><br /></dt>
+<dd><p>accesses aux (invariant) indices </p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>view of a contiguous range of <a class="reference internal" href="classsequant_1_1_index.html#classsequant_1_1_index"><span class="std std-ref">Index</span></a> objects </p>
+</dd>
+</dl>
 </dd></dl>
 
 <dl class="cpp function">
 <dt class="sig sig-object cpp" id="_CPPv4NK7sequant14AbstractTensor7_braketEv">
 <span id="_CPPv3NK7sequant14AbstractTensor7_braketEv"></span><span id="_CPPv2NK7sequant14AbstractTensor7_braketEv"></span><span id="sequant::AbstractTensor::_braketC"></span><span class="target" id="classsequant_1_1_abstract_tensor_1aee142e310fb362a8f0f677c050c348f9"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4N7sequant14AbstractTensor19const_any_view_randE" title="sequant::AbstractTensor::const_any_view_rand"><span class="n"><span class="pre">const_any_view_rand</span></span></a><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">_braket</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant14AbstractTensor7_braketEv" title="Link to this definition">¶</a><br /></dt>
-<dd><p>view of a not necessarily contiguous range of <a class="reference internal" href="classsequant_1_1_index.html#classsequant_1_1_index"><span class="std std-ref">Index</span></a> objects </p>
+<dd><p>accesses bra and ket indices view of a not necessarily contiguous range of <a class="reference internal" href="classsequant_1_1_index.html#classsequant_1_1_index"><span class="std std-ref">Index</span></a> objects </p>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant14AbstractTensor8_indicesEv">
+<span id="_CPPv3NK7sequant14AbstractTensor8_indicesEv"></span><span id="_CPPv2NK7sequant14AbstractTensor8_indicesEv"></span><span id="sequant::AbstractTensor::_indicesC"></span><span class="target" id="classsequant_1_1_abstract_tensor_1ab0ef6de692f4a62b589bbda1e72d1e27"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4N7sequant14AbstractTensor19const_any_view_randE" title="sequant::AbstractTensor::const_any_view_rand"><span class="n"><span class="pre">const_any_view_rand</span></span></a><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">_indices</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant14AbstractTensor8_indicesEv" title="Link to this definition">¶</a><br /></dt>
+<dd><p>accesses bra, ket, and aux indices </p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>view of a not necessarily contiguous range of <a class="reference internal" href="classsequant_1_1_index.html#classsequant_1_1_index"><span class="std std-ref">Index</span></a> objects </p>
+</dd>
+</dl>
 </dd></dl>
 
 <dl class="cpp function">
 <dt class="sig sig-object cpp" id="_CPPv4NK7sequant14AbstractTensor9_bra_rankEv">
 <span id="_CPPv3NK7sequant14AbstractTensor9_bra_rankEv"></span><span id="_CPPv2NK7sequant14AbstractTensor9_bra_rankEv"></span><span id="sequant::AbstractTensor::_bra_rankC"></span><span class="target" id="classsequant_1_1_abstract_tensor_1aec52f2b37a9e24aaceae6a249a04b67e"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">size_t</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">_bra_rank</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant14AbstractTensor9_bra_rankEv" title="Link to this definition">¶</a><br /></dt>
-<dd></dd></dl>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>the number of bra indices </p>
+</dd>
+</dl>
+</dd></dl>
 
 <dl class="cpp function">
 <dt class="sig sig-object cpp" id="_CPPv4NK7sequant14AbstractTensor9_ket_rankEv">
 <span id="_CPPv3NK7sequant14AbstractTensor9_ket_rankEv"></span><span id="_CPPv2NK7sequant14AbstractTensor9_ket_rankEv"></span><span id="sequant::AbstractTensor::_ket_rankC"></span><span class="target" id="classsequant_1_1_abstract_tensor_1a54357d7ad76f94b601a614e6bc9c7030"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">size_t</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">_ket_rank</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant14AbstractTensor9_ket_rankEv" title="Link to this definition">¶</a><br /></dt>
-<dd></dd></dl>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>the number of ket indices </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant14AbstractTensor9_aux_rankEv">
+<span id="_CPPv3NK7sequant14AbstractTensor9_aux_rankEv"></span><span id="_CPPv2NK7sequant14AbstractTensor9_aux_rankEv"></span><span id="sequant::AbstractTensor::_aux_rankC"></span><span class="target" id="classsequant_1_1_abstract_tensor_1a718667161d74a1900459ad3dd76b5e8d"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">size_t</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">_aux_rank</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant14AbstractTensor9_aux_rankEv" title="Link to this definition">¶</a><br /></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>the number of aux indices </p>
+</dd>
+</dl>
+</dd></dl>
 
 <dl class="cpp function">
 <dt class="sig sig-object cpp" id="_CPPv4NK7sequant14AbstractTensor9_symmetryEv">
 <span id="_CPPv3NK7sequant14AbstractTensor9_symmetryEv"></span><span id="_CPPv2NK7sequant14AbstractTensor9_symmetryEv"></span><span id="sequant::AbstractTensor::_symmetryC"></span><span class="target" id="classsequant_1_1_abstract_tensor_1afd3da357f5da9fbeb7c2610d3f028f07"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><a class="reference internal" href="enum_namespacesequant_1a80bc8a00a0036a84c252e8a64db4c485.html#_CPPv4N7sequant8SymmetryE" title="sequant::Symmetry"><span class="n"><span class="pre">Symmetry</span></span></a><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">_symmetry</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant14AbstractTensor9_symmetryEv" title="Link to this definition">¶</a><br /></dt>
-<dd></dd></dl>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>the permutational symmetry of the vector space indices of the tensor </p>
+</dd>
+</dl>
+</dd></dl>
 
 <dl class="cpp function">
 <dt class="sig sig-object cpp" id="_CPPv4NK7sequant14AbstractTensor16_braket_symmetryEv">
 <span id="_CPPv3NK7sequant14AbstractTensor16_braket_symmetryEv"></span><span id="_CPPv2NK7sequant14AbstractTensor16_braket_symmetryEv"></span><span id="sequant::AbstractTensor::_braket_symmetryC"></span><span class="target" id="classsequant_1_1_abstract_tensor_1ab991a28ab3d8c5ae4122524f499ca18e"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><a class="reference internal" href="enum_namespacesequant_1a8fa350a3e3719764fcc1ce8aeddaea46.html#_CPPv4N7sequant14BraKetSymmetryE" title="sequant::BraKetSymmetry"><span class="n"><span class="pre">BraKetSymmetry</span></span></a><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">_braket_symmetry</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant14AbstractTensor16_braket_symmetryEv" title="Link to this definition">¶</a><br /></dt>
-<dd></dd></dl>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>the symmetry of tensor under exchange of vectors space (bra) and its dual (ket) </p>
+</dd>
+</dl>
+</dd></dl>
 
 <dl class="cpp function">
 <dt class="sig sig-object cpp" id="_CPPv4NK7sequant14AbstractTensor18_particle_symmetryEv">
 <span id="_CPPv3NK7sequant14AbstractTensor18_particle_symmetryEv"></span><span id="_CPPv2NK7sequant14AbstractTensor18_particle_symmetryEv"></span><span id="sequant::AbstractTensor::_particle_symmetryC"></span><span class="target" id="classsequant_1_1_abstract_tensor_1a2ba60e0eb1488aa78fe80b63d0bbf567"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><a class="reference internal" href="enum_namespacesequant_1a9130bd036deb119cc1bf7a8acceed847.html#_CPPv4N7sequant16ParticleSymmetryE" title="sequant::ParticleSymmetry"><span class="n"><span class="pre">ParticleSymmetry</span></span></a><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">_particle_symmetry</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant14AbstractTensor18_particle_symmetryEv" title="Link to this definition">¶</a><br /></dt>
-<dd></dd></dl>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>the symmetry of tensor under exchange of bra and ket </p>
+</dd>
+</dl>
+</dd></dl>
 
 <dl class="cpp function">
 <dt class="sig sig-object cpp" id="_CPPv4NK7sequant14AbstractTensor6_colorEv">
@@ -434,7 +502,7 @@
             
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on Nov 27, 2024 9:58:28 PM</div>
+              Last updated on Feb 1, 2025 3:24:07 PM</div>
           </div>
           <div class="right-details">
             <div class="icons">
@@ -472,9 +540,12 @@
 <li><a class="reference internal" href="#_CPPv4N7sequant14AbstractTensorD0Ev"><code class="docutils literal notranslate"><span class="pre">AbstractTensor::~AbstractTensor()</span></code></a></li>
 <li><a class="reference internal" href="#_CPPv4NK7sequant14AbstractTensor4_braEv"><code class="docutils literal notranslate"><span class="pre">AbstractTensor::_bra()</span></code></a></li>
 <li><a class="reference internal" href="#_CPPv4NK7sequant14AbstractTensor4_ketEv"><code class="docutils literal notranslate"><span class="pre">AbstractTensor::_ket()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant14AbstractTensor4_auxEv"><code class="docutils literal notranslate"><span class="pre">AbstractTensor::_aux()</span></code></a></li>
 <li><a class="reference internal" href="#_CPPv4NK7sequant14AbstractTensor7_braketEv"><code class="docutils literal notranslate"><span class="pre">AbstractTensor::_braket()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant14AbstractTensor8_indicesEv"><code class="docutils literal notranslate"><span class="pre">AbstractTensor::_indices()</span></code></a></li>
 <li><a class="reference internal" href="#_CPPv4NK7sequant14AbstractTensor9_bra_rankEv"><code class="docutils literal notranslate"><span class="pre">AbstractTensor::_bra_rank()</span></code></a></li>
 <li><a class="reference internal" href="#_CPPv4NK7sequant14AbstractTensor9_ket_rankEv"><code class="docutils literal notranslate"><span class="pre">AbstractTensor::_ket_rank()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant14AbstractTensor9_aux_rankEv"><code class="docutils literal notranslate"><span class="pre">AbstractTensor::_aux_rank()</span></code></a></li>
 <li><a class="reference internal" href="#_CPPv4NK7sequant14AbstractTensor9_symmetryEv"><code class="docutils literal notranslate"><span class="pre">AbstractTensor::_symmetry()</span></code></a></li>
 <li><a class="reference internal" href="#_CPPv4NK7sequant14AbstractTensor16_braket_symmetryEv"><code class="docutils literal notranslate"><span class="pre">AbstractTensor::_braket_symmetry()</span></code></a></li>
 <li><a class="reference internal" href="#_CPPv4NK7sequant14AbstractTensor18_particle_symmetryEv"><code class="docutils literal notranslate"><span class="pre">AbstractTensor::_particle_symmetry()</span></code></a></li>
@@ -506,5 +577,7 @@
     <script src="../_static/scripts/furo.js?v=5fa4622c"></script>
     <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
     <script src="../_static/copybutton.js?v=f281be69"></script>
+    <script>window.MathJax = {"options": {"processHtmlClass": "tex2jax_process|mathjax_process|math|output_area"}}</script>
+    <script defer="defer" src="https://cdn.jsdelivr.net/npm/mathjax@4.0.0-beta.3/tex-mml-chtml.js"></script>
     </body>
 </html>

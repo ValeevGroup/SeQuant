@@ -41,6 +41,8 @@ Program Listing for File abstract_tensor.hpp
    
    namespace sequant {
    
+   class TensorCanonicalizer;
+   
    class AbstractTensor {
      inline auto missing_instantiation_for(const char* fn_name) const {
        std::ostringstream oss;
@@ -69,14 +71,23 @@ Program Listing for File abstract_tensor.hpp
      virtual const_any_view_randsz _ket() const {
        throw missing_instantiation_for("_ket");
      }
+     virtual const_any_view_randsz _aux() const {
+       throw missing_instantiation_for("_aux");
+     }
      virtual const_any_view_rand _braket() const {
        throw missing_instantiation_for("_braket");
+     }
+     virtual const_any_view_rand _indices() const {
+       throw missing_instantiation_for("_indices");
      }
      virtual std::size_t _bra_rank() const {
        throw missing_instantiation_for("_bra_rank");
      }
      virtual std::size_t _ket_rank() const {
        throw missing_instantiation_for("_ket_rank");
+     }
+     virtual std::size_t _aux_rank() const {
+       throw missing_instantiation_for("_aux_rank");
      }
      virtual Symmetry _symmetry() const {
        throw missing_instantiation_for("_symmetry");
@@ -117,13 +128,18 @@ Program Listing for File abstract_tensor.hpp
      virtual any_view_randsz _ket_mutable() {
        throw missing_instantiation_for("_ket_mutable");
      }
+     virtual any_view_randsz _aux_mutable() {
+       throw missing_instantiation_for("_aux_mutable");
+     }
    
      friend class TensorCanonicalizer;
    };
    
    inline auto braket(const AbstractTensor& t) { return t._braket(); }
+   inline auto indices(const AbstractTensor& t) { return t._indices(); }
    inline auto bra_rank(const AbstractTensor& t) { return t._bra_rank(); }
    inline auto ket_rank(const AbstractTensor& t) { return t._ket_rank(); }
+   inline auto aux_rank(const AbstractTensor& t) { return t._aux_rank(); }
    inline auto symmetry(const AbstractTensor& t) { return t._symmetry(); }
    inline auto braket_symmetry(const AbstractTensor& t) {
      return t._braket_symmetry();
@@ -135,6 +151,30 @@ Program Listing for File abstract_tensor.hpp
    inline auto is_cnumber(const AbstractTensor& t) { return t._is_cnumber(); }
    inline auto label(const AbstractTensor& t) { return t._label(); }
    inline auto to_latex(const AbstractTensor& t) { return t._to_latex(); }
+   
+   template <typename T>
+   struct is_tensor
+       : std::bool_constant<
+             std::is_invocable_v<decltype(braket), T> &&
+             std::is_invocable_v<decltype(indices), T> &&
+             std::is_invocable_v<decltype(bra_rank), T> &&
+             std::is_invocable_v<decltype(ket_rank), T> &&
+             std::is_invocable_v<decltype(aux_rank), T> &&
+             std::is_invocable_v<decltype(symmetry), T> &&
+             std::is_invocable_v<decltype(braket_symmetry), T> &&
+             std::is_invocable_v<decltype(particle_symmetry), T> &&
+             std::is_invocable_v<decltype(color), T> &&
+             std::is_invocable_v<decltype(is_cnumber), T> &&
+             std::is_invocable_v<decltype(label), T> &&
+             std::is_invocable_v<
+                 decltype(static_cast<std::wstring (*)(const T&)>(to_latex)), T>> {
+   };
+   template <typename T>
+   constexpr bool is_tensor_v = is_tensor<T>::value;
+   static_assert(is_tensor_v<AbstractTensor>,
+                 "The AbstractTensor class does not fulfill the requirements of "
+                 "the Tensor interface");
+   
    template <typename IndexMap = container::map<Index, Index>>
    inline bool transform_indices(AbstractTensor& t, const IndexMap& index_map) {
      if constexpr (std::is_same_v<IndexMap, container::map<Index, Index>>) {
@@ -155,150 +195,6 @@ Program Listing for File abstract_tensor.hpp
    
    
    using AbstractTensorPtr = std::shared_ptr<AbstractTensor>;
-   
-   class TensorCanonicalizer {
-    public:
-     virtual ~TensorCanonicalizer();
-   
-     static std::shared_ptr<TensorCanonicalizer> instance_ptr(
-         std::wstring_view label = L"");
-   
-     static std::shared_ptr<TensorCanonicalizer> nondefault_instance_ptr(
-         std::wstring_view label);
-   
-     static std::shared_ptr<TensorCanonicalizer> instance(
-         std::wstring_view label = L"");
-   
-     static void register_instance(
-         std::shared_ptr<TensorCanonicalizer> canonicalizer,
-         std::wstring_view label = L"");
-   
-     static bool try_register_instance(
-         std::shared_ptr<TensorCanonicalizer> canonicalizer,
-         std::wstring_view label = L"");
-   
-     static void deregister_instance(std::wstring_view label = L"");
-   
-     static const auto& cardinal_tensor_labels() {
-       return cardinal_tensor_labels_accessor();
-     }
-   
-     static void set_cardinal_tensor_labels(
-         const container::vector<std::wstring>& labels) {
-       cardinal_tensor_labels_accessor() = labels;
-     }
-   
-     // TODO generalize for complex tensors
-     virtual ExprPtr apply(AbstractTensor&) = 0;
-   
-     static const std::function<bool(const Index&, const Index&)>&
-     index_comparer();
-   
-     static void index_comparer(
-         std::function<bool(const Index&, const Index&)> comparer);
-   
-    protected:
-     inline auto bra_range(AbstractTensor& t) { return t._bra_mutable(); }
-     inline auto ket_range(AbstractTensor& t) { return t._ket_mutable(); }
-   
-     static std::function<bool(const Index&, const Index&)> index_comparer_;
-   
-    private:
-     static std::pair<
-         container::map<std::wstring, std::shared_ptr<TensorCanonicalizer>>*,
-         std::unique_lock<std::recursive_mutex>>
-     instance_map_accessor();  // map* + locked recursive mutex
-     static container::vector<std::wstring>& cardinal_tensor_labels_accessor();
-   };
-   
-   class NullTensorCanonicalizer : public TensorCanonicalizer {
-    public:
-     virtual ~NullTensorCanonicalizer() = default;
-   
-     ExprPtr apply(AbstractTensor&) override;
-   };
-   
-   class DefaultTensorCanonicalizer : public TensorCanonicalizer {
-    public:
-     DefaultTensorCanonicalizer() = default;
-   
-     template <typename IndexContainer>
-     DefaultTensorCanonicalizer(IndexContainer&& external_indices) {
-       ranges::for_each(external_indices, [this](const Index& idx) {
-         this->external_indices_.emplace(idx.label(), idx);
-       });
-     }
-     virtual ~DefaultTensorCanonicalizer() = default;
-   
-     ExprPtr apply(AbstractTensor& t) override;
-   
-     template <typename Compare>
-     ExprPtr apply(AbstractTensor& t, const Compare& comp) {
-       // std::wcout << "abstract tensor: " << to_latex(t) << "\n";
-       auto s = symmetry(t);
-       auto is_antisymm = (s == Symmetry::antisymm);
-       const auto _bra_rank = bra_rank(t);
-       const auto _ket_rank = ket_rank(t);
-       const auto _rank = std::min(_bra_rank, _ket_rank);
-   
-       // nothing to do for rank-1 tensors
-       if (_bra_rank == 1 && _ket_rank == 1) return nullptr;
-   
-       using ranges::begin;
-       using ranges::end;
-       using ranges::views::counted;
-       using ranges::views::take;
-       using ranges::views::zip;
-   
-       bool even = true;
-       switch (s) {
-         case Symmetry::antisymm:
-         case Symmetry::symm: {
-           auto _bra = bra_range(t);
-           auto _ket = ket_range(t);
-           //      std::wcout << "canonicalizing " << to_latex(t);
-           IndexSwapper::thread_instance().reset();
-           // std::{stable_}sort does not necessarily use swap! so must implement
-           // sort ourselves .. thankfully ranks will be low so can stick with
-           // bubble
-           bubble_sort(begin(_bra), end(_bra), comp);
-           bubble_sort(begin(_ket), end(_ket), comp);
-           if (is_antisymm)
-             even = IndexSwapper::thread_instance().even_num_of_swaps();
-           //      std::wcout << " is " << (even ? "even" : "odd") << " and
-           //      produces " << to_latex(t) << std::endl;
-         } break;
-   
-         case Symmetry::nonsymm: {
-           // sort particles with bra and ket functions first,
-           // then the particles with either bra or ket index
-           auto _bra = bra_range(t);
-           auto _ket = ket_range(t);
-           auto _zip_braket = zip(take(_bra, _rank), take(_ket, _rank));
-           bubble_sort(begin(_zip_braket), end(_zip_braket), comp);
-           if (_bra_rank > _rank) {
-             auto size_of_rest = _bra_rank - _rank;
-             auto rest_of = counted(begin(_bra) + _rank, size_of_rest);
-             bubble_sort(begin(rest_of), end(rest_of), comp);
-           } else if (_ket_rank > _rank) {
-             auto size_of_rest = _ket_rank - _rank;
-             auto rest_of = counted(begin(_ket) + _rank, size_of_rest);
-             bubble_sort(begin(rest_of), end(rest_of), comp);
-           }
-         } break;
-   
-         default:
-           abort();
-       }
-   
-       ExprPtr result =
-           is_antisymm ? (even == false ? ex<Constant>(-1) : nullptr) : nullptr;
-       return result;
-     }
-   
-    private:
-     container::map<std::wstring, Index> external_indices_;
-   };
    
    }  // namespace sequant
    

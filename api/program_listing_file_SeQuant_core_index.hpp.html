@@ -7,7 +7,7 @@
 
     <!-- Generated with Sphinx 7.4.7 and Furo 2024.08.06 -->
         <title>Program Listing for File index.hpp - SeQuant Documentation</title>
-      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=a746c00c" />
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=8f2a1f02" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=354aac6f" />
     <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo-extensions.css?v=302659d7" />
@@ -283,6 +283,7 @@
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;algorithm&gt;</span>
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;atomic&gt;</span>
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;cassert&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;charconv&gt;</span>
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;cstdint&gt;</span>
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;cwchar&gt;</span>
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;functional&gt;</span>
@@ -518,6 +519,17 @@
 <span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">make_split_label</span><span class="p">(</span><span class="k">this</span><span class="o">-&gt;</span><span class="n">label</span><span class="p">());</span>
 <span class="w">  </span><span class="p">}</span>
 
+<span class="w">  </span><span class="n">std</span><span class="o">::</span><span class="n">optional</span><span class="o">&lt;</span><span class="kt">int</span><span class="o">&gt;</span><span class="w"> </span><span class="n">suffix</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">auto</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="p">[</span><span class="n">_</span><span class="p">,</span><span class="w"> </span><span class="n">s_</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">split_label</span><span class="p">();</span>
+<span class="w">    </span><span class="k">auto</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="n">s</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">sequant</span><span class="o">::</span><span class="n">to_string</span><span class="p">(</span><span class="n">s_</span><span class="p">);</span>
+
+<span class="w">    </span><span class="kt">int</span><span class="w"> </span><span class="n">value</span><span class="p">{};</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">from_chars</span><span class="p">(</span><span class="n">s</span><span class="p">.</span><span class="n">data</span><span class="p">(),</span><span class="w"> </span><span class="n">s</span><span class="p">.</span><span class="n">data</span><span class="p">()</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">s</span><span class="p">.</span><span class="n">size</span><span class="p">(),</span><span class="w"> </span><span class="n">value</span><span class="p">).</span><span class="n">ec</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">errc</span><span class="p">{})</span>
+<span class="w">      </span><span class="k">return</span><span class="w"> </span><span class="n">value</span><span class="p">;</span>
+<span class="w">    </span><span class="k">else</span>
+<span class="w">      </span><span class="k">return</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">nullopt</span><span class="p">;</span>
+<span class="w">  </span><span class="p">}</span>
+
 <span class="w">  </span><span class="p">[[</span><span class="n">deprecated</span><span class="p">(</span>
 <span class="w">      </span><span class="s">&quot;use to_string to produce TiledArray-compatible index label &quot;</span>
 <span class="w">      </span><span class="s">&quot;representation&quot;</span><span class="p">)]]</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">string</span>
@@ -528,10 +540,15 @@
 <span class="w">  </span><span class="n">std</span><span class="o">::</span><span class="n">wstring_view</span><span class="w"> </span><span class="nf">full_label</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="p">{</span>
 <span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">has_proto_indices</span><span class="p">())</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="n">label</span><span class="p">();</span>
 <span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">full_label_</span><span class="p">)</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="o">*</span><span class="n">full_label_</span><span class="p">;</span>
-<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">wstring</span><span class="w"> </span><span class="n">result</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">label_</span><span class="p">;</span>
-<span class="w">    </span><span class="n">ranges</span><span class="o">::</span><span class="n">for_each</span><span class="p">(</span><span class="n">proto_indices_</span><span class="p">,</span><span class="w"> </span><span class="p">[</span><span class="o">&amp;</span><span class="n">result</span><span class="p">](</span><span class="k">const</span><span class="w"> </span><span class="n">Index</span><span class="w"> </span><span class="o">&amp;</span><span class="n">idx</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
-<span class="w">      </span><span class="n">result</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="n">idx</span><span class="p">.</span><span class="n">full_label</span><span class="p">();</span>
-<span class="w">    </span><span class="p">});</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">wstring</span><span class="w"> </span><span class="n">result</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">label_</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="sa">L</span><span class="s">&quot;&lt;&quot;</span><span class="p">;</span>
+<span class="w">    </span><span class="k">using</span><span class="w"> </span><span class="k">namespace</span><span class="w"> </span><span class="nn">std</span><span class="o">::</span><span class="nn">literals</span><span class="p">;</span>
+<span class="w">    </span><span class="n">result</span><span class="w"> </span><span class="o">+=</span>
+<span class="w">        </span><span class="n">ranges</span><span class="o">::</span><span class="n">views</span><span class="o">::</span><span class="n">transform</span><span class="p">(</span><span class="n">proto_indices_</span><span class="p">,</span>
+<span class="w">                                 </span><span class="p">[](</span><span class="k">const</span><span class="w"> </span><span class="n">Index</span><span class="w"> </span><span class="o">&amp;</span><span class="n">idx</span><span class="p">)</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">wstring_view</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                                   </span><span class="k">return</span><span class="w"> </span><span class="n">idx</span><span class="p">.</span><span class="n">full_label</span><span class="p">();</span>
+<span class="w">                                 </span><span class="p">})</span><span class="w"> </span><span class="o">|</span>
+<span class="w">        </span><span class="n">ranges</span><span class="o">::</span><span class="n">views</span><span class="o">::</span><span class="n">join</span><span class="p">(</span><span class="sa">L</span><span class="s">&quot;, &quot;</span><span class="n">sv</span><span class="p">)</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="n">ranges</span><span class="o">::</span><span class="n">to</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="n">wstring</span><span class="o">&gt;</span><span class="p">();</span>
+<span class="w">    </span><span class="n">result</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="sa">L</span><span class="s">&quot;&gt;&quot;</span><span class="p">;</span>
 <span class="w">    </span><span class="n">full_label_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">result</span><span class="p">;</span>
 <span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="o">*</span><span class="n">full_label_</span><span class="p">;</span>
 <span class="w">  </span><span class="p">}</span>
@@ -751,6 +768,19 @@
 <span class="w">    </span><span class="p">}</span>
 <span class="w">  </span><span class="p">};</span>
 
+<span class="w">  </span><span class="k">struct</span><span class="w"> </span><span class="nc">FullLabelCompare</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">using</span><span class="w"> </span><span class="n">is_transparent</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kt">void</span><span class="p">;</span>
+<span class="w">    </span><span class="kt">bool</span><span class="w"> </span><span class="nf">operator</span><span class="p">()(</span><span class="k">const</span><span class="w"> </span><span class="n">Index</span><span class="w"> </span><span class="o">&amp;</span><span class="n">first</span><span class="p">,</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="n">Index</span><span class="w"> </span><span class="o">&amp;</span><span class="n">second</span><span class="p">)</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="p">{</span>
+<span class="w">      </span><span class="k">return</span><span class="w"> </span><span class="n">first</span><span class="p">.</span><span class="n">full_label</span><span class="p">()</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">second</span><span class="p">.</span><span class="n">full_label</span><span class="p">();</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="kt">bool</span><span class="w"> </span><span class="nf">operator</span><span class="p">()(</span><span class="k">const</span><span class="w"> </span><span class="n">Index</span><span class="w"> </span><span class="o">&amp;</span><span class="n">first</span><span class="p">,</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">wstring_view</span><span class="w"> </span><span class="o">&amp;</span><span class="n">second</span><span class="p">)</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="p">{</span>
+<span class="w">      </span><span class="k">return</span><span class="w"> </span><span class="n">first</span><span class="p">.</span><span class="n">full_label</span><span class="p">()</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">second</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="kt">bool</span><span class="w"> </span><span class="nf">operator</span><span class="p">()(</span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">wstring_view</span><span class="w"> </span><span class="o">&amp;</span><span class="n">first</span><span class="p">,</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="n">Index</span><span class="w"> </span><span class="o">&amp;</span><span class="n">second</span><span class="p">)</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="p">{</span>
+<span class="w">      </span><span class="k">return</span><span class="w"> </span><span class="n">first</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">second</span><span class="p">.</span><span class="n">full_label</span><span class="p">();</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">  </span><span class="p">};</span>
+
 <span class="w">  </span><span class="k">struct</span><span class="w"> </span><span class="nc">TypeCompare</span><span class="w"> </span><span class="p">{</span>
 <span class="w">    </span><span class="kt">bool</span><span class="w"> </span><span class="nf">operator</span><span class="p">()(</span><span class="k">const</span><span class="w"> </span><span class="n">Index</span><span class="w"> </span><span class="o">&amp;</span><span class="n">first</span><span class="p">,</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="n">Index</span><span class="w"> </span><span class="o">&amp;</span><span class="n">second</span><span class="p">)</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="p">{</span>
 <span class="w">      </span><span class="kt">bool</span><span class="w"> </span><span class="n">result</span><span class="p">;</span>
@@ -829,32 +859,39 @@
 <span class="w">  </span><span class="k">friend</span><span class="w"> </span><span class="kt">bool</span><span class="w"> </span><span class="k">operator</span><span class="o">&lt;</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">Index</span><span class="w"> </span><span class="o">&amp;</span><span class="n">i1</span><span class="p">,</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="n">Index</span><span class="w"> </span><span class="o">&amp;</span><span class="n">i2</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
 <span class="w">    </span><span class="c1">// compare qns, tags and spaces in that sequence</span>
 
-<span class="w">    </span><span class="k">auto</span><span class="w"> </span><span class="n">i1_Q</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">i1</span><span class="p">.</span><span class="n">space</span><span class="p">().</span><span class="n">qns</span><span class="p">();</span>
-<span class="w">    </span><span class="k">auto</span><span class="w"> </span><span class="n">i2_Q</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">i2</span><span class="p">.</span><span class="n">space</span><span class="p">().</span><span class="n">qns</span><span class="p">();</span>
-
 <span class="w">    </span><span class="k">auto</span><span class="w"> </span><span class="n">compare_space</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="o">&amp;</span><span class="n">i1</span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="n">i2</span><span class="p">]()</span><span class="w"> </span><span class="p">{</span>
-<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">i1</span><span class="p">.</span><span class="n">space</span><span class="p">()</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">i2</span><span class="p">.</span><span class="n">space</span><span class="p">())</span><span class="w"> </span><span class="p">{</span>
-<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">i1</span><span class="p">.</span><span class="n">label</span><span class="p">()</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">i2</span><span class="p">.</span><span class="n">label</span><span class="p">())</span><span class="w"> </span><span class="p">{</span>
-<span class="w">          </span><span class="k">return</span><span class="w"> </span><span class="n">i1</span><span class="p">.</span><span class="n">proto_indices</span><span class="p">()</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">i2</span><span class="p">.</span><span class="n">proto_indices</span><span class="p">();</span>
-<span class="w">        </span><span class="p">}</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="p">{</span>
-<span class="w">          </span><span class="k">return</span><span class="w"> </span><span class="n">i1</span><span class="p">.</span><span class="n">label</span><span class="p">()</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">i2</span><span class="p">.</span><span class="n">label</span><span class="p">();</span>
-<span class="w">        </span><span class="p">}</span>
-<span class="w">      </span><span class="p">}</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="p">{</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">i1</span><span class="p">.</span><span class="n">space</span><span class="p">()</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="n">i2</span><span class="p">.</span><span class="n">space</span><span class="p">())</span><span class="w"> </span><span class="p">{</span>
 <span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">i1</span><span class="p">.</span><span class="n">space</span><span class="p">()</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">i2</span><span class="p">.</span><span class="n">space</span><span class="p">();</span>
 <span class="w">      </span><span class="p">}</span>
+
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">i1</span><span class="p">.</span><span class="n">label</span><span class="p">()</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="n">i2</span><span class="p">.</span><span class="n">label</span><span class="p">())</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="c1">// Note: Can&#39;t simply use label1 &lt; label2 as that won&#39;t yield expected</span>
+<span class="w">        </span><span class="c1">// results for e.g. i2 &lt; i11 (which will yield false)</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">i1</span><span class="p">.</span><span class="n">label</span><span class="p">().</span><span class="n">size</span><span class="p">()</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="n">i2</span><span class="p">.</span><span class="n">label</span><span class="p">().</span><span class="n">size</span><span class="p">())</span><span class="w"> </span><span class="p">{</span>
+<span class="w">          </span><span class="k">return</span><span class="w"> </span><span class="n">i1</span><span class="p">.</span><span class="n">label</span><span class="p">().</span><span class="n">size</span><span class="p">()</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">i2</span><span class="p">.</span><span class="n">label</span><span class="p">().</span><span class="n">size</span><span class="p">();</span>
+<span class="w">        </span><span class="p">}</span>
+
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">i1</span><span class="p">.</span><span class="n">label</span><span class="p">()</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">i2</span><span class="p">.</span><span class="n">label</span><span class="p">();</span>
+<span class="w">      </span><span class="p">}</span>
+
+<span class="w">      </span><span class="k">return</span><span class="w"> </span><span class="n">i1</span><span class="p">.</span><span class="n">proto_indices</span><span class="p">()</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">i2</span><span class="p">.</span><span class="n">proto_indices</span><span class="p">();</span>
 <span class="w">    </span><span class="p">};</span>
+
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">i1_Q</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">i1</span><span class="p">.</span><span class="n">space</span><span class="p">().</span><span class="n">qns</span><span class="p">();</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">i2_Q</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">i2</span><span class="p">.</span><span class="n">space</span><span class="p">().</span><span class="n">qns</span><span class="p">();</span>
 
 <span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">i1_Q</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">i2_Q</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
 <span class="w">      </span><span class="k">const</span><span class="w"> </span><span class="kt">bool</span><span class="w"> </span><span class="n">have_tags</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">i1</span><span class="p">.</span><span class="n">tag</span><span class="p">().</span><span class="n">has_value</span><span class="p">()</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">i2</span><span class="p">.</span><span class="n">tag</span><span class="p">().</span><span class="n">has_value</span><span class="p">();</span>
 
 <span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">have_tags</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="n">i1</span><span class="p">.</span><span class="n">tag</span><span class="p">()</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">i2</span><span class="p">.</span><span class="n">tag</span><span class="p">())</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="c1">// Note that comparison of index spaces contains comparison of QNs</span>
 <span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">compare_space</span><span class="p">();</span>
-<span class="w">      </span><span class="p">}</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="p">{</span>
-<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">i1</span><span class="p">.</span><span class="n">tag</span><span class="p">()</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">i2</span><span class="p">.</span><span class="n">tag</span><span class="p">();</span>
 <span class="w">      </span><span class="p">}</span>
-<span class="w">    </span><span class="p">}</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="p">{</span>
-<span class="w">      </span><span class="k">return</span><span class="w"> </span><span class="n">i1_Q</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">i2_Q</span><span class="p">;</span>
+
+<span class="w">      </span><span class="k">return</span><span class="w"> </span><span class="n">i1</span><span class="p">.</span><span class="n">tag</span><span class="p">()</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">i2</span><span class="p">.</span><span class="n">tag</span><span class="p">();</span>
 <span class="w">    </span><span class="p">}</span>
+
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">i1_Q</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">i2_Q</span><span class="p">;</span>
 <span class="w">  </span><span class="p">}</span>
 
 <span class="p">};</span><span class="w">  </span><span class="c1">// class Index</span>
@@ -923,7 +960,7 @@
 <span class="w">  </span><span class="k">template</span><span class="w"> </span><span class="o">&lt;</span><span class="k">typename</span><span class="w"> </span><span class="nc">IndexValidator</span><span class="o">&gt;</span>
 <span class="w">  </span><span class="k">explicit</span><span class="w"> </span><span class="n">IndexFactory</span><span class="p">(</span><span class="n">IndexValidator</span><span class="w"> </span><span class="n">validator</span><span class="p">,</span>
 <span class="w">                        </span><span class="kt">size_t</span><span class="w"> </span><span class="n">min_index</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Index</span><span class="o">::</span><span class="n">min_tmp_index</span><span class="p">())</span>
-<span class="w">      </span><span class="o">:</span><span class="w"> </span><span class="n">min_index_</span><span class="p">(</span><span class="n">min_index</span><span class="p">),</span><span class="w"> </span><span class="n">validator_</span><span class="p">(</span><span class="n">validator</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">      </span><span class="o">:</span><span class="w"> </span><span class="n">min_index_</span><span class="p">(</span><span class="n">min_index</span><span class="p">),</span><span class="w"> </span><span class="n">validator_</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">move</span><span class="p">(</span><span class="n">validator</span><span class="p">))</span><span class="w"> </span><span class="p">{</span>
 <span class="w">    </span><span class="n">assert</span><span class="p">(</span><span class="n">min_index_</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mi">0</span><span class="p">);</span>
 <span class="w">  </span><span class="p">}</span>
 
@@ -937,8 +974,10 @@
 <span class="w">        </span><span class="n">std</span><span class="o">::</span><span class="n">scoped_lock</span><span class="w"> </span><span class="nf">lock</span><span class="p">(</span><span class="n">mutex_</span><span class="p">);</span>
 <span class="cp">#endif</span>
 <span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">((</span><span class="n">counter_it</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">counters_</span><span class="p">.</span><span class="n">find</span><span class="p">(</span><span class="n">space</span><span class="p">))</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">counters_</span><span class="p">.</span><span class="n">end</span><span class="p">())</span><span class="w"> </span><span class="p">{</span>
-<span class="w">          </span><span class="n">counters_</span><span class="p">[</span><span class="n">space</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">min_index_</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span>
-<span class="w">          </span><span class="n">counter_it</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">counters_</span><span class="p">.</span><span class="n">find</span><span class="p">(</span><span class="n">space</span><span class="p">);</span>
+<span class="w">          </span><span class="kt">bool</span><span class="w"> </span><span class="n">inserted</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">false</span><span class="p">;</span>
+<span class="w">          </span><span class="n">std</span><span class="o">::</span><span class="n">tie</span><span class="p">(</span><span class="n">counter_it</span><span class="p">,</span><span class="w"> </span><span class="n">inserted</span><span class="p">)</span><span class="w"> </span><span class="o">=</span>
+<span class="w">              </span><span class="n">counters_</span><span class="p">.</span><span class="n">emplace</span><span class="p">(</span><span class="n">space</span><span class="p">,</span><span class="w"> </span><span class="n">min_index_</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">);</span>
+<span class="w">          </span><span class="n">assert</span><span class="p">(</span><span class="n">inserted</span><span class="p">);</span>
 <span class="w">        </span><span class="p">}</span>
 <span class="w">      </span><span class="p">}</span>
 <span class="w">      </span><span class="n">result</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Index</span><span class="p">(</span>
@@ -1030,7 +1069,7 @@
             
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on Nov 27, 2024 9:58:28 PM</div>
+              Last updated on Feb 1, 2025 3:24:07 PM</div>
           </div>
           <div class="right-details">
             <div class="icons">

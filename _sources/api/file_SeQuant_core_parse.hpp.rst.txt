@@ -67,10 +67,3 @@ Classes
 
 - :ref:`exhale_struct_structsequant_1_1_parse_error`
 
-
-Functions
----------
-
-
-- :ref:`exhale_function_namespacesequant_1a4b7f044ab8d87a437e88b04b116df367`
-

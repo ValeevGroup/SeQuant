@@ -7,7 +7,7 @@
 
     <!-- Generated with Sphinx 7.4.7 and Furo 2024.08.06 -->
         <title>Program Listing for File op.hpp - SeQuant Documentation</title>
-      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=a746c00c" />
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=8f2a1f02" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=354aac6f" />
     <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo-extensions.css?v=302659d7" />
@@ -968,13 +968,20 @@
 <span class="w">           </span><span class="n">ranges</span><span class="o">::</span><span class="n">views</span><span class="o">::</span><span class="n">transform</span><span class="p">(</span>
 <span class="w">               </span><span class="p">[](</span><span class="k">auto</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="n">op</span><span class="p">)</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="n">Index</span><span class="w"> </span><span class="o">&amp;</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="n">op</span><span class="p">.</span><span class="n">index</span><span class="p">();</span><span class="w"> </span><span class="p">});</span>
 <span class="w">  </span><span class="p">}</span>
+<span class="w">  </span><span class="n">AbstractTensor</span><span class="o">::</span><span class="n">const_any_view_randsz</span><span class="w"> </span><span class="nf">_aux</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="k">override</span><span class="w"> </span><span class="k">final</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="p">{};</span>
+<span class="w">  </span><span class="p">}</span>
 <span class="w">  </span><span class="n">AbstractTensor</span><span class="o">::</span><span class="n">const_any_view_rand</span><span class="w"> </span><span class="nf">_braket</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="k">override</span><span class="w"> </span><span class="k">final</span><span class="w"> </span><span class="p">{</span>
 <span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">ranges</span><span class="o">::</span><span class="n">views</span><span class="o">::</span><span class="n">concat</span><span class="p">(</span><span class="n">annihilators</span><span class="p">(),</span><span class="w"> </span><span class="n">creators</span><span class="p">())</span><span class="w"> </span><span class="o">|</span>
 <span class="w">           </span><span class="n">ranges</span><span class="o">::</span><span class="n">views</span><span class="o">::</span><span class="n">transform</span><span class="p">(</span>
 <span class="w">               </span><span class="p">[](</span><span class="k">auto</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="n">op</span><span class="p">)</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="n">Index</span><span class="w"> </span><span class="o">&amp;</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="n">op</span><span class="p">.</span><span class="n">index</span><span class="p">();</span><span class="w"> </span><span class="p">});</span>
 <span class="w">  </span><span class="p">}</span>
+<span class="w">  </span><span class="n">AbstractTensor</span><span class="o">::</span><span class="n">const_any_view_rand</span><span class="w"> </span><span class="nf">_indices</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="k">override</span><span class="w"> </span><span class="k">final</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">_braket</span><span class="p">();</span>
+<span class="w">  </span><span class="p">}</span>
 <span class="w">  </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="nf">_bra_rank</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="k">override</span><span class="w"> </span><span class="k">final</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="n">nannihilators</span><span class="p">();</span><span class="w"> </span><span class="p">}</span>
 <span class="w">  </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="nf">_ket_rank</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="k">override</span><span class="w"> </span><span class="k">final</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="n">ncreators</span><span class="p">();</span><span class="w"> </span><span class="p">}</span>
+<span class="w">  </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="nf">_aux_rank</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="k">override</span><span class="w"> </span><span class="k">final</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
 <span class="w">  </span><span class="n">Symmetry</span><span class="w"> </span><span class="nf">_symmetry</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="k">override</span><span class="w"> </span><span class="k">final</span><span class="w"> </span><span class="p">{</span>
 <span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="p">(</span><span class="n">S</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">Statistics</span><span class="o">::</span><span class="n">FermiDirac</span>
 <span class="w">                </span><span class="o">?</span><span class="w"> </span><span class="p">(</span><span class="n">get_default_context</span><span class="p">(</span><span class="n">S</span><span class="p">).</span><span class="n">spbasis</span><span class="p">()</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">SPBasis</span><span class="o">::</span><span class="n">spinorbital</span>
@@ -1022,7 +1029,17 @@
 <span class="w">           </span><span class="n">ranges</span><span class="o">::</span><span class="n">views</span><span class="o">::</span><span class="n">transform</span><span class="p">(</span>
 <span class="w">               </span><span class="p">[](</span><span class="k">auto</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="n">op</span><span class="p">)</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="n">Index</span><span class="w"> </span><span class="o">&amp;</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="n">op</span><span class="p">.</span><span class="n">index</span><span class="p">();</span><span class="w"> </span><span class="p">});</span>
 <span class="w">  </span><span class="p">}</span>
+<span class="w">  </span><span class="n">AbstractTensor</span><span class="o">::</span><span class="n">any_view_randsz</span><span class="w"> </span><span class="n">_aux_mutable</span><span class="p">()</span><span class="w"> </span><span class="k">override</span><span class="w"> </span><span class="k">final</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="p">{};</span><span class="w"> </span><span class="p">}</span>
 <span class="p">};</span>
+
+<span class="k">static_assert</span><span class="p">(</span>
+<span class="w">    </span><span class="n">is_tensor_v</span><span class="o">&lt;</span><span class="n">NormalOperator</span><span class="o">&lt;</span><span class="n">Statistics</span><span class="o">::</span><span class="n">FermiDirac</span><span class="o">&gt;&gt;</span><span class="p">,</span>
+<span class="w">    </span><span class="s">&quot;The NormalOperator&lt;Statistics::FermiDirac&gt; class does not fulfill the &quot;</span>
+<span class="w">    </span><span class="s">&quot;requirements of the Tensor interface&quot;</span><span class="p">);</span>
+<span class="k">static_assert</span><span class="p">(</span>
+<span class="w">    </span><span class="n">is_tensor_v</span><span class="o">&lt;</span><span class="n">NormalOperator</span><span class="o">&lt;</span><span class="n">Statistics</span><span class="o">::</span><span class="n">BoseEinstein</span><span class="o">&gt;&gt;</span><span class="p">,</span>
+<span class="w">    </span><span class="s">&quot;The NormalOperator&lt;Statistics::BoseEinstein&gt; class does not fulfill the &quot;</span>
+<span class="w">    </span><span class="s">&quot;requirements of the Tensor interface&quot;</span><span class="p">);</span>
 
 <span class="k">template</span><span class="w"> </span><span class="o">&lt;</span><span class="n">Statistics</span><span class="w"> </span><span class="n">S</span><span class="o">&gt;</span>
 <span class="kt">bool</span><span class="w"> </span><span class="k">operator</span><span class="o">==</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">NormalOperator</span><span class="o">&lt;</span><span class="n">S</span><span class="o">&gt;</span><span class="w"> </span><span class="o">&amp;</span><span class="n">op1</span><span class="p">,</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="n">NormalOperator</span><span class="o">&lt;</span><span class="n">S</span><span class="o">&gt;</span><span class="w"> </span><span class="o">&amp;</span><span class="n">op2</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
@@ -1346,7 +1363,7 @@
             
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on Nov 27, 2024 9:58:28 PM</div>
+              Last updated on Feb 1, 2025 3:24:07 PM</div>
           </div>
           <div class="right-details">
             <div class="icons">

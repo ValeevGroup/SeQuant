@@ -55,6 +55,8 @@ Included By
 
 - :ref:`file_SeQuant_core_parse_parse.cpp`
 
+- :ref:`file_SeQuant_domain_mbpt_convention.cpp`
+
 - :ref:`file_SeQuant_domain_mbpt_op.hpp`
 
 - :ref:`file_SeQuant_domain_mbpt_spin.cpp`

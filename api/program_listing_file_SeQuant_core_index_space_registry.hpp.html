@@ -7,7 +7,7 @@
 
     <!-- Generated with Sphinx 7.4.7 and Furo 2024.08.06 -->
         <title>Program Listing for File index_space_registry.hpp - SeQuant Documentation</title>
-      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=a746c00c" />
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=8f2a1f02" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=354aac6f" />
     <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo-extensions.css?v=302659d7" />
@@ -846,7 +846,7 @@
 <span class="w">  </span><span class="p">}</span>
 
 <span class="w">  </span><span class="n">IndexSpaceRegistry</span><span class="o">&amp;</span><span class="w"> </span><span class="n">vacuum_occupied_space</span><span class="p">(</span>
-<span class="w">      </span><span class="n">std</span><span class="o">::</span><span class="n">map</span><span class="o">&lt;</span><span class="n">IndexSpace</span><span class="o">::</span><span class="n">QuantumNumbers</span><span class="p">,</span><span class="w"> </span><span class="n">IndexSpace</span><span class="o">::</span><span class="n">Type</span><span class="o">&gt;</span><span class="w"> </span><span class="n">qn2type</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">      </span><span class="n">container</span><span class="o">::</span><span class="n">map</span><span class="o">&lt;</span><span class="n">IndexSpace</span><span class="o">::</span><span class="n">QuantumNumbers</span><span class="p">,</span><span class="w"> </span><span class="n">IndexSpace</span><span class="o">::</span><span class="n">Type</span><span class="o">&gt;</span><span class="w"> </span><span class="n">qn2type</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
 <span class="w">    </span><span class="n">throw_if_missing_any</span><span class="p">(</span><span class="n">qn2type</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;vacuum_occupied_space&quot;</span><span class="p">);</span>
 <span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">get</span><span class="o">&lt;</span><span class="mi">1</span><span class="o">&gt;</span><span class="p">(</span><span class="n">vacocc_</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">move</span><span class="p">(</span><span class="n">qn2type</span><span class="p">);</span>
 <span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="o">*</span><span class="k">this</span><span class="p">;</span>
@@ -868,7 +868,7 @@
 <span class="w">      </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">invalid_argument</span><span class="p">(</span>
 <span class="w">          </span><span class="s">&quot;vacuum occupied space has not been specified, invoke &quot;</span>
 <span class="w">          </span><span class="s">&quot;vacuum_occupied_space(IndexSpace::Type) or &quot;</span>
-<span class="w">          </span><span class="s">&quot;vacuum_occupied_space(std::map&lt;IndexSpace::QuantumNumbers,&quot;</span>
+<span class="w">          </span><span class="s">&quot;vacuum_occupied_space(container::map&lt;IndexSpace::QuantumNumbers,&quot;</span>
 <span class="w">          </span><span class="s">&quot;IndexSpace::Type&gt;)&quot;</span><span class="p">);</span>
 <span class="w">    </span><span class="p">}</span><span class="w"> </span><span class="k">else</span>
 <span class="w">      </span><span class="k">return</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">get</span><span class="o">&lt;</span><span class="mi">0</span><span class="o">&gt;</span><span class="p">(</span><span class="n">vacocc_</span><span class="p">);</span>
@@ -893,7 +893,7 @@
 <span class="w">  </span><span class="p">}</span>
 
 <span class="w">  </span><span class="n">IndexSpaceRegistry</span><span class="o">&amp;</span><span class="w"> </span><span class="n">reference_occupied_space</span><span class="p">(</span>
-<span class="w">      </span><span class="n">std</span><span class="o">::</span><span class="n">map</span><span class="o">&lt;</span><span class="n">IndexSpace</span><span class="o">::</span><span class="n">QuantumNumbers</span><span class="p">,</span><span class="w"> </span><span class="n">IndexSpace</span><span class="o">::</span><span class="n">Type</span><span class="o">&gt;</span><span class="w"> </span><span class="n">qn2type</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">      </span><span class="n">container</span><span class="o">::</span><span class="n">map</span><span class="o">&lt;</span><span class="n">IndexSpace</span><span class="o">::</span><span class="n">QuantumNumbers</span><span class="p">,</span><span class="w"> </span><span class="n">IndexSpace</span><span class="o">::</span><span class="n">Type</span><span class="o">&gt;</span><span class="w"> </span><span class="n">qn2type</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
 <span class="w">    </span><span class="n">throw_if_missing_any</span><span class="p">(</span><span class="n">qn2type</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;reference_occupied_space&quot;</span><span class="p">);</span>
 <span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">get</span><span class="o">&lt;</span><span class="mi">1</span><span class="o">&gt;</span><span class="p">(</span><span class="n">refocc_</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">move</span><span class="p">(</span><span class="n">qn2type</span><span class="p">);</span>
 <span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="o">*</span><span class="k">this</span><span class="p">;</span>
@@ -915,7 +915,7 @@
 <span class="w">      </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">invalid_argument</span><span class="p">(</span>
 <span class="w">          </span><span class="s">&quot;reference occupied space has not been specified, invoke &quot;</span>
 <span class="w">          </span><span class="s">&quot;reference_occupied_space(IndexSpace::Type) or &quot;</span>
-<span class="w">          </span><span class="s">&quot;reference_occupied_space(std::map&lt;IndexSpace::QuantumNumbers,&quot;</span>
+<span class="w">          </span><span class="s">&quot;reference_occupied_space(container::map&lt;IndexSpace::QuantumNumbers,&quot;</span>
 <span class="w">          </span><span class="s">&quot;IndexSpace::Type&gt;)&quot;</span><span class="p">);</span>
 <span class="w">    </span><span class="p">}</span><span class="w"> </span><span class="k">else</span>
 <span class="w">      </span><span class="k">return</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">get</span><span class="o">&lt;</span><span class="mi">0</span><span class="o">&gt;</span><span class="p">(</span><span class="n">refocc_</span><span class="p">);</span>
@@ -940,7 +940,7 @@
 <span class="w">  </span><span class="p">}</span>
 
 <span class="w">  </span><span class="n">IndexSpaceRegistry</span><span class="o">&amp;</span><span class="w"> </span><span class="n">complete_space</span><span class="p">(</span>
-<span class="w">      </span><span class="n">std</span><span class="o">::</span><span class="n">map</span><span class="o">&lt;</span><span class="n">IndexSpace</span><span class="o">::</span><span class="n">QuantumNumbers</span><span class="p">,</span><span class="w"> </span><span class="n">IndexSpace</span><span class="o">::</span><span class="n">Type</span><span class="o">&gt;</span><span class="w"> </span><span class="n">qn2type</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">      </span><span class="n">container</span><span class="o">::</span><span class="n">map</span><span class="o">&lt;</span><span class="n">IndexSpace</span><span class="o">::</span><span class="n">QuantumNumbers</span><span class="p">,</span><span class="w"> </span><span class="n">IndexSpace</span><span class="o">::</span><span class="n">Type</span><span class="o">&gt;</span><span class="w"> </span><span class="n">qn2type</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
 <span class="w">    </span><span class="n">throw_if_missing_any</span><span class="p">(</span><span class="n">qn2type</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;complete_space&quot;</span><span class="p">);</span>
 <span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">get</span><span class="o">&lt;</span><span class="mi">1</span><span class="o">&gt;</span><span class="p">(</span><span class="n">complete_</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">move</span><span class="p">(</span><span class="n">qn2type</span><span class="p">);</span>
 <span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="o">*</span><span class="k">this</span><span class="p">;</span>
@@ -992,7 +992,7 @@
 <span class="w">  </span><span class="p">}</span>
 
 <span class="w">  </span><span class="n">IndexSpaceRegistry</span><span class="o">&amp;</span><span class="w"> </span><span class="n">hole_space</span><span class="p">(</span>
-<span class="w">      </span><span class="n">std</span><span class="o">::</span><span class="n">map</span><span class="o">&lt;</span><span class="n">IndexSpace</span><span class="o">::</span><span class="n">QuantumNumbers</span><span class="p">,</span><span class="w"> </span><span class="n">IndexSpace</span><span class="o">::</span><span class="n">Type</span><span class="o">&gt;</span><span class="w"> </span><span class="n">qn2type</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">      </span><span class="n">container</span><span class="o">::</span><span class="n">map</span><span class="o">&lt;</span><span class="n">IndexSpace</span><span class="o">::</span><span class="n">QuantumNumbers</span><span class="p">,</span><span class="w"> </span><span class="n">IndexSpace</span><span class="o">::</span><span class="n">Type</span><span class="o">&gt;</span><span class="w"> </span><span class="n">qn2type</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
 <span class="w">    </span><span class="n">throw_if_missing_any</span><span class="p">(</span><span class="n">qn2type</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;hole_space&quot;</span><span class="p">);</span>
 <span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">get</span><span class="o">&lt;</span><span class="mi">1</span><span class="o">&gt;</span><span class="p">(</span><span class="n">hole_space_</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">move</span><span class="p">(</span><span class="n">qn2type</span><span class="p">);</span>
 <span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="o">*</span><span class="k">this</span><span class="p">;</span>
@@ -1013,7 +1013,7 @@
 <span class="w">      </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">invalid_argument</span><span class="p">(</span>
 <span class="w">          </span><span class="s">&quot;active hole space has not been specified, invoke &quot;</span>
 <span class="w">          </span><span class="s">&quot;hole_space(IndexSpace::Type) or &quot;</span>
-<span class="w">          </span><span class="s">&quot;hole_space(std::map&lt;IndexSpace::QuantumNumbers,IndexSpace::&quot;</span>
+<span class="w">          </span><span class="s">&quot;hole_space(container::map&lt;IndexSpace::QuantumNumbers,IndexSpace::&quot;</span>
 <span class="w">          </span><span class="s">&quot;Type&gt;)&quot;</span><span class="p">);</span>
 <span class="w">    </span><span class="p">}</span><span class="w"> </span><span class="k">else</span>
 <span class="w">      </span><span class="k">return</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">get</span><span class="o">&lt;</span><span class="mi">0</span><span class="o">&gt;</span><span class="p">(</span><span class="n">hole_space_</span><span class="p">);</span>
@@ -1037,7 +1037,7 @@
 <span class="w">  </span><span class="p">}</span>
 
 <span class="w">  </span><span class="n">IndexSpaceRegistry</span><span class="o">&amp;</span><span class="w"> </span><span class="n">particle_space</span><span class="p">(</span>
-<span class="w">      </span><span class="n">std</span><span class="o">::</span><span class="n">map</span><span class="o">&lt;</span><span class="n">IndexSpace</span><span class="o">::</span><span class="n">QuantumNumbers</span><span class="p">,</span><span class="w"> </span><span class="n">IndexSpace</span><span class="o">::</span><span class="n">Type</span><span class="o">&gt;</span><span class="w"> </span><span class="n">qn2type</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">      </span><span class="n">container</span><span class="o">::</span><span class="n">map</span><span class="o">&lt;</span><span class="n">IndexSpace</span><span class="o">::</span><span class="n">QuantumNumbers</span><span class="p">,</span><span class="w"> </span><span class="n">IndexSpace</span><span class="o">::</span><span class="n">Type</span><span class="o">&gt;</span><span class="w"> </span><span class="n">qn2type</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
 <span class="w">    </span><span class="n">throw_if_missing_any</span><span class="p">(</span><span class="n">qn2type</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;particle_space&quot;</span><span class="p">);</span>
 <span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">get</span><span class="o">&lt;</span><span class="mi">1</span><span class="o">&gt;</span><span class="p">(</span><span class="n">particle_space_</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">move</span><span class="p">(</span><span class="n">qn2type</span><span class="p">);</span>
 <span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="o">*</span><span class="k">this</span><span class="p">;</span>
@@ -1058,7 +1058,7 @@
 <span class="w">      </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">invalid_argument</span><span class="p">(</span>
 <span class="w">          </span><span class="s">&quot;active particle space has not been specified, invoke &quot;</span>
 <span class="w">          </span><span class="s">&quot;particle_space(IndexSpace::Type) or &quot;</span>
-<span class="w">          </span><span class="s">&quot;particle_space(std::map&lt;IndexSpace::QuantumNumbers,&quot;</span>
+<span class="w">          </span><span class="s">&quot;particle_space(container::map&lt;IndexSpace::QuantumNumbers,&quot;</span>
 <span class="w">          </span><span class="s">&quot;IndexSpace::Type&gt;)&quot;</span><span class="p">);</span>
 <span class="w">    </span><span class="p">}</span><span class="w"> </span><span class="k">else</span>
 <span class="w">      </span><span class="k">return</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">get</span><span class="o">&lt;</span><span class="mi">0</span><span class="o">&gt;</span><span class="p">(</span><span class="n">particle_space_</span><span class="p">);</span>
@@ -1131,10 +1131,10 @@
 <span class="w">                                </span><span class="s">&quot; , any IndexSpace::QuantumNumbers } space&quot;</span><span class="p">);</span>
 <span class="w">  </span><span class="p">}</span>
 
-<span class="w">  </span><span class="kt">void</span><span class="w"> </span><span class="n">throw_if_missing_any</span><span class="p">(</span>
-<span class="w">      </span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">map</span><span class="o">&lt;</span><span class="n">IndexSpace</span><span class="o">::</span><span class="n">QuantumNumbers</span><span class="p">,</span><span class="w"> </span><span class="n">IndexSpace</span><span class="o">::</span><span class="n">Type</span><span class="o">&gt;&amp;</span><span class="w"> </span><span class="n">qn2type</span><span class="p">,</span>
-<span class="w">      </span><span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="w"> </span><span class="n">call_context</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">&quot;&quot;</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
-<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">map</span><span class="o">&lt;</span><span class="n">IndexSpace</span><span class="o">::</span><span class="n">QuantumNumbers</span><span class="p">,</span><span class="w"> </span><span class="n">IndexSpace</span><span class="o">::</span><span class="n">Type</span><span class="o">&gt;</span><span class="w"> </span><span class="n">qn2type_found</span><span class="p">;</span>
+<span class="w">  </span><span class="kt">void</span><span class="w"> </span><span class="n">throw_if_missing_any</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">container</span><span class="o">::</span><span class="n">map</span><span class="o">&lt;</span><span class="n">IndexSpace</span><span class="o">::</span><span class="n">QuantumNumbers</span><span class="p">,</span>
+<span class="w">                                                 </span><span class="n">IndexSpace</span><span class="o">::</span><span class="n">Type</span><span class="o">&gt;&amp;</span><span class="w"> </span><span class="n">qn2type</span><span class="p">,</span>
+<span class="w">                            </span><span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="w"> </span><span class="n">call_context</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">&quot;&quot;</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">container</span><span class="o">::</span><span class="n">map</span><span class="o">&lt;</span><span class="n">IndexSpace</span><span class="o">::</span><span class="n">QuantumNumbers</span><span class="p">,</span><span class="w"> </span><span class="n">IndexSpace</span><span class="o">::</span><span class="n">Type</span><span class="o">&gt;</span><span class="w"> </span><span class="n">qn2type_found</span><span class="p">;</span>
 <span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="k">auto</span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">space</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="o">*</span><span class="n">spaces_</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
 <span class="w">      </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="k">auto</span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="p">[</span><span class="n">qn</span><span class="p">,</span><span class="w"> </span><span class="n">t</span><span class="p">]</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">qn2type</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
 <span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">space</span><span class="p">.</span><span class="n">type</span><span class="p">()</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">t</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">space</span><span class="p">.</span><span class="n">qns</span><span class="p">()</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">qn</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
@@ -1172,26 +1172,26 @@
 
 <span class="w">  </span><span class="c1">// used for fermi vacuum wick application</span>
 <span class="w">  </span><span class="n">std</span><span class="o">::</span><span class="n">tuple</span><span class="o">&lt;</span><span class="n">IndexSpace</span><span class="o">::</span><span class="n">Type</span><span class="p">,</span>
-<span class="w">             </span><span class="n">std</span><span class="o">::</span><span class="n">map</span><span class="o">&lt;</span><span class="n">IndexSpace</span><span class="o">::</span><span class="n">QuantumNumbers</span><span class="p">,</span><span class="w"> </span><span class="n">IndexSpace</span><span class="o">::</span><span class="n">Type</span><span class="o">&gt;&gt;</span>
+<span class="w">             </span><span class="n">container</span><span class="o">::</span><span class="n">map</span><span class="o">&lt;</span><span class="n">IndexSpace</span><span class="o">::</span><span class="n">QuantumNumbers</span><span class="p">,</span><span class="w"> </span><span class="n">IndexSpace</span><span class="o">::</span><span class="n">Type</span><span class="o">&gt;&gt;</span>
 <span class="w">      </span><span class="n">vacocc_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{{},</span><span class="w"> </span><span class="p">{}};</span>
 
 <span class="w">  </span><span class="c1">// used for MR MBPT to take average over multiconfiguration reference</span>
 <span class="w">  </span><span class="n">std</span><span class="o">::</span><span class="n">tuple</span><span class="o">&lt;</span><span class="n">IndexSpace</span><span class="o">::</span><span class="n">Type</span><span class="p">,</span>
-<span class="w">             </span><span class="n">std</span><span class="o">::</span><span class="n">map</span><span class="o">&lt;</span><span class="n">IndexSpace</span><span class="o">::</span><span class="n">QuantumNumbers</span><span class="p">,</span><span class="w"> </span><span class="n">IndexSpace</span><span class="o">::</span><span class="n">Type</span><span class="o">&gt;&gt;</span>
+<span class="w">             </span><span class="n">container</span><span class="o">::</span><span class="n">map</span><span class="o">&lt;</span><span class="n">IndexSpace</span><span class="o">::</span><span class="n">QuantumNumbers</span><span class="p">,</span><span class="w"> </span><span class="n">IndexSpace</span><span class="o">::</span><span class="n">Type</span><span class="o">&gt;&gt;</span>
 <span class="w">      </span><span class="n">refocc_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{{},</span><span class="w"> </span><span class="p">{}};</span>
 
 <span class="w">  </span><span class="c1">// defines active bits in TypeAttr; used by general operators in mbpt/op</span>
 <span class="w">  </span><span class="n">std</span><span class="o">::</span><span class="n">tuple</span><span class="o">&lt;</span><span class="n">IndexSpace</span><span class="o">::</span><span class="n">Type</span><span class="p">,</span>
-<span class="w">             </span><span class="n">std</span><span class="o">::</span><span class="n">map</span><span class="o">&lt;</span><span class="n">IndexSpace</span><span class="o">::</span><span class="n">QuantumNumbers</span><span class="p">,</span><span class="w"> </span><span class="n">IndexSpace</span><span class="o">::</span><span class="n">Type</span><span class="o">&gt;&gt;</span>
+<span class="w">             </span><span class="n">container</span><span class="o">::</span><span class="n">map</span><span class="o">&lt;</span><span class="n">IndexSpace</span><span class="o">::</span><span class="n">QuantumNumbers</span><span class="p">,</span><span class="w"> </span><span class="n">IndexSpace</span><span class="o">::</span><span class="n">Type</span><span class="o">&gt;&gt;</span>
 <span class="w">      </span><span class="n">complete_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{{},</span><span class="w"> </span><span class="p">{}};</span>
 
 <span class="w">  </span><span class="c1">// both needed to make excitation and de-excitation operators. not</span>
 <span class="w">  </span><span class="c1">// necessarily equivalent in the case of multi-reference context.</span>
 <span class="w">  </span><span class="n">std</span><span class="o">::</span><span class="n">tuple</span><span class="o">&lt;</span><span class="n">IndexSpace</span><span class="o">::</span><span class="n">Type</span><span class="p">,</span>
-<span class="w">             </span><span class="n">std</span><span class="o">::</span><span class="n">map</span><span class="o">&lt;</span><span class="n">IndexSpace</span><span class="o">::</span><span class="n">QuantumNumbers</span><span class="p">,</span><span class="w"> </span><span class="n">IndexSpace</span><span class="o">::</span><span class="n">Type</span><span class="o">&gt;&gt;</span>
+<span class="w">             </span><span class="n">container</span><span class="o">::</span><span class="n">map</span><span class="o">&lt;</span><span class="n">IndexSpace</span><span class="o">::</span><span class="n">QuantumNumbers</span><span class="p">,</span><span class="w"> </span><span class="n">IndexSpace</span><span class="o">::</span><span class="n">Type</span><span class="o">&gt;&gt;</span>
 <span class="w">      </span><span class="n">hole_space_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{{},</span><span class="w"> </span><span class="p">{}};</span>
 <span class="w">  </span><span class="n">std</span><span class="o">::</span><span class="n">tuple</span><span class="o">&lt;</span><span class="n">IndexSpace</span><span class="o">::</span><span class="n">Type</span><span class="p">,</span>
-<span class="w">             </span><span class="n">std</span><span class="o">::</span><span class="n">map</span><span class="o">&lt;</span><span class="n">IndexSpace</span><span class="o">::</span><span class="n">QuantumNumbers</span><span class="p">,</span><span class="w"> </span><span class="n">IndexSpace</span><span class="o">::</span><span class="n">Type</span><span class="o">&gt;&gt;</span>
+<span class="w">             </span><span class="n">container</span><span class="o">::</span><span class="n">map</span><span class="o">&lt;</span><span class="n">IndexSpace</span><span class="o">::</span><span class="n">QuantumNumbers</span><span class="p">,</span><span class="w"> </span><span class="n">IndexSpace</span><span class="o">::</span><span class="n">Type</span><span class="o">&gt;&gt;</span>
 <span class="w">      </span><span class="n">particle_space_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{{},</span><span class="w"> </span><span class="p">{}};</span>
 
 <span class="w">  </span><span class="c1">// Boost.Hana snippet to process attribute tag arguments</span>
@@ -1272,7 +1272,7 @@
             
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on Nov 27, 2024 9:58:28 PM</div>
+              Last updated on Feb 1, 2025 3:24:07 PM</div>
           </div>
           <div class="right-details">
             <div class="icons">

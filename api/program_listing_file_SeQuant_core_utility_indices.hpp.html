@@ -7,7 +7,7 @@
 
     <!-- Generated with Sphinx 7.4.7 and Furo 2024.08.06 -->
         <title>Program Listing for File indices.hpp - SeQuant Documentation</title>
-      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=a746c00c" />
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=8f2a1f02" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=354aac6f" />
     <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo-extensions.css?v=302659d7" />
@@ -266,16 +266,31 @@
 <div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="cp">#ifndef SEQUANT_CORE_UTILITY_INDICES_HPP</span>
 <span class="cp">#define SEQUANT_CORE_UTILITY_INDICES_HPP</span>
 
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;SeQuant/core/container.hpp&gt;</span>
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;SeQuant/core/expr.hpp&gt;</span>
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;SeQuant/core/index.hpp&gt;</span>
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;SeQuant/core/tensor.hpp&gt;</span>
 
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;algorithm&gt;</span>
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;set&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;tuple&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;type_traits&gt;</span>
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;vector&gt;</span>
 
 <span class="k">namespace</span><span class="w"> </span><span class="nn">sequant</span><span class="w"> </span><span class="p">{</span>
 
 <span class="k">namespace</span><span class="w"> </span><span class="nn">detail</span><span class="w"> </span><span class="p">{</span>
+<span class="k">template</span><span class="w"> </span><span class="o">&lt;</span><span class="k">typename</span><span class="w"> </span><span class="nc">Range</span><span class="o">&gt;</span>
+<span class="k">struct</span><span class="w"> </span><span class="nc">not_in</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="k">const</span><span class="w"> </span><span class="n">Range</span><span class="o">&amp;</span><span class="w"> </span><span class="n">range</span><span class="p">;</span>
+
+<span class="w">  </span><span class="n">not_in</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">Range</span><span class="o">&amp;</span><span class="w"> </span><span class="n">range</span><span class="p">)</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">range</span><span class="p">(</span><span class="n">range</span><span class="p">)</span><span class="w"> </span><span class="p">{}</span>
+
+<span class="w">  </span><span class="k">template</span><span class="w"> </span><span class="o">&lt;</span><span class="k">typename</span><span class="w"> </span><span class="nc">T</span><span class="o">&gt;</span>
+<span class="w">  </span><span class="kt">bool</span><span class="w"> </span><span class="k">operator</span><span class="p">()(</span><span class="k">const</span><span class="w"> </span><span class="n">T</span><span class="o">&amp;</span><span class="w"> </span><span class="n">element</span><span class="p">)</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">find</span><span class="p">(</span><span class="n">range</span><span class="p">.</span><span class="n">begin</span><span class="p">(),</span><span class="w"> </span><span class="n">range</span><span class="p">.</span><span class="n">end</span><span class="p">(),</span><span class="w"> </span><span class="n">element</span><span class="p">)</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">range</span><span class="p">.</span><span class="n">end</span><span class="p">();</span>
+<span class="w">  </span><span class="p">}</span>
+<span class="p">};</span>
 
 <span class="k">template</span><span class="w"> </span><span class="o">&lt;</span><span class="k">typename</span><span class="w"> </span><span class="nc">Container</span><span class="p">,</span><span class="w"> </span><span class="k">typename</span><span class="w"> </span><span class="nc">Element</span><span class="o">&gt;</span>
 <span class="kt">void</span><span class="w"> </span><span class="n">remove_one</span><span class="p">(</span><span class="n">Container</span><span class="o">&amp;</span><span class="w"> </span><span class="n">container</span><span class="p">,</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="n">Element</span><span class="o">&amp;</span><span class="w"> </span><span class="n">e</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
@@ -292,14 +307,21 @@
 <span class="k">struct</span><span class="w"> </span><span class="nc">IndexGroups</span><span class="w"> </span><span class="p">{</span>
 <span class="w">  </span><span class="n">Container</span><span class="w"> </span><span class="n">bra</span><span class="p">;</span>
 <span class="w">  </span><span class="n">Container</span><span class="w"> </span><span class="n">ket</span><span class="p">;</span>
+<span class="w">  </span><span class="n">Container</span><span class="w"> </span><span class="n">aux</span><span class="p">;</span>
 
 <span class="w">  </span><span class="kt">bool</span><span class="w"> </span><span class="k">operator</span><span class="o">==</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">IndexGroups</span><span class="o">&lt;</span><span class="n">Container</span><span class="o">&gt;&amp;</span><span class="w"> </span><span class="n">other</span><span class="p">)</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="p">{</span>
-<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">bra</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">other</span><span class="p">.</span><span class="n">bra</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">ket</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">other</span><span class="p">.</span><span class="n">ket</span><span class="p">;</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">bra</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">other</span><span class="p">.</span><span class="n">bra</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">ket</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">other</span><span class="p">.</span><span class="n">ket</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">aux</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">other</span><span class="p">.</span><span class="n">aux</span><span class="p">;</span>
 <span class="w">  </span><span class="p">}</span>
 
 <span class="w">  </span><span class="kt">bool</span><span class="w"> </span><span class="k">operator</span><span class="o">!=</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">IndexGroups</span><span class="o">&lt;</span><span class="n">Container</span><span class="o">&gt;&amp;</span><span class="w"> </span><span class="n">other</span><span class="p">)</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="p">{</span>
 <span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="o">!</span><span class="p">(</span><span class="o">*</span><span class="k">this</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">other</span><span class="p">);</span>
 <span class="w">  </span><span class="p">}</span>
+<span class="p">};</span>
+
+<span class="k">template</span><span class="w"> </span><span class="o">&lt;</span><span class="k">typename</span><span class="w"> </span><span class="nc">Container</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="n">Index</span><span class="o">&gt;&gt;</span>
+<span class="k">struct</span><span class="w"> </span><span class="nc">TensorOfTensorIndices</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="n">Container</span><span class="w"> </span><span class="n">outer</span><span class="p">;</span>
+<span class="w">  </span><span class="n">Container</span><span class="w"> </span><span class="n">inner</span><span class="p">;</span>
 <span class="p">};</span>
 
 <span class="k">template</span><span class="w"> </span><span class="o">&lt;</span><span class="k">typename</span><span class="w"> </span><span class="nc">Container</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="n">Index</span><span class="o">&gt;&gt;</span>
@@ -313,6 +335,34 @@
 <span class="k">template</span><span class="w"> </span><span class="o">&lt;</span><span class="k">typename</span><span class="w"> </span><span class="nc">Container</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="n">Index</span><span class="o">&gt;&gt;</span>
 <span class="n">IndexGroups</span><span class="o">&lt;</span><span class="n">Container</span><span class="o">&gt;</span><span class="w"> </span><span class="n">get_unique_indices</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">Variable</span><span class="o">&amp;</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
 <span class="w">  </span><span class="k">return</span><span class="w"> </span><span class="p">{};</span>
+<span class="p">}</span>
+
+<span class="k">template</span><span class="w"> </span><span class="o">&lt;</span><span class="k">typename</span><span class="w"> </span><span class="nc">Container</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">container</span><span class="o">::</span><span class="n">svector</span><span class="o">&lt;</span><span class="n">Index</span><span class="o">&gt;&gt;</span>
+<span class="n">IndexGroups</span><span class="o">&lt;</span><span class="n">Container</span><span class="o">&gt;</span><span class="w"> </span><span class="n">get_uncontracted_indices</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">Tensor</span><span class="o">&amp;</span><span class="w"> </span><span class="n">t1</span><span class="p">,</span>
+<span class="w">                                                </span><span class="k">const</span><span class="w"> </span><span class="n">Tensor</span><span class="o">&amp;</span><span class="w"> </span><span class="n">t2</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="k">static_assert</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">is_same_v</span><span class="o">&lt;</span><span class="k">typename</span><span class="w"> </span><span class="nc">Container</span><span class="o">::</span><span class="n">value_type</span><span class="p">,</span><span class="w"> </span><span class="n">Index</span><span class="o">&gt;</span><span class="p">);</span>
+
+<span class="w">  </span><span class="n">IndexGroups</span><span class="o">&lt;</span><span class="n">Container</span><span class="o">&gt;</span><span class="w"> </span><span class="n">groups</span><span class="p">;</span>
+
+<span class="w">  </span><span class="c1">// Bra indices</span>
+<span class="w">  </span><span class="n">std</span><span class="o">::</span><span class="n">copy_if</span><span class="p">(</span><span class="n">t1</span><span class="p">.</span><span class="n">bra</span><span class="p">().</span><span class="n">begin</span><span class="p">(),</span><span class="w"> </span><span class="n">t1</span><span class="p">.</span><span class="n">bra</span><span class="p">().</span><span class="n">end</span><span class="p">(),</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">back_inserter</span><span class="p">(</span><span class="n">groups</span><span class="p">.</span><span class="n">bra</span><span class="p">),</span>
+<span class="w">               </span><span class="n">detail</span><span class="o">::</span><span class="n">not_in</span><span class="p">{</span><span class="n">t2</span><span class="p">.</span><span class="n">ket</span><span class="p">()});</span>
+<span class="w">  </span><span class="n">std</span><span class="o">::</span><span class="n">copy_if</span><span class="p">(</span><span class="n">t2</span><span class="p">.</span><span class="n">bra</span><span class="p">().</span><span class="n">begin</span><span class="p">(),</span><span class="w"> </span><span class="n">t2</span><span class="p">.</span><span class="n">bra</span><span class="p">().</span><span class="n">end</span><span class="p">(),</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">back_inserter</span><span class="p">(</span><span class="n">groups</span><span class="p">.</span><span class="n">bra</span><span class="p">),</span>
+<span class="w">               </span><span class="n">detail</span><span class="o">::</span><span class="n">not_in</span><span class="p">{</span><span class="n">t1</span><span class="p">.</span><span class="n">ket</span><span class="p">()});</span>
+
+<span class="w">  </span><span class="c1">// Ket indices</span>
+<span class="w">  </span><span class="n">std</span><span class="o">::</span><span class="n">copy_if</span><span class="p">(</span><span class="n">t1</span><span class="p">.</span><span class="n">ket</span><span class="p">().</span><span class="n">begin</span><span class="p">(),</span><span class="w"> </span><span class="n">t1</span><span class="p">.</span><span class="n">ket</span><span class="p">().</span><span class="n">end</span><span class="p">(),</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">back_inserter</span><span class="p">(</span><span class="n">groups</span><span class="p">.</span><span class="n">ket</span><span class="p">),</span>
+<span class="w">               </span><span class="n">detail</span><span class="o">::</span><span class="n">not_in</span><span class="p">{</span><span class="n">t2</span><span class="p">.</span><span class="n">bra</span><span class="p">()});</span>
+<span class="w">  </span><span class="n">std</span><span class="o">::</span><span class="n">copy_if</span><span class="p">(</span><span class="n">t2</span><span class="p">.</span><span class="n">ket</span><span class="p">().</span><span class="n">begin</span><span class="p">(),</span><span class="w"> </span><span class="n">t2</span><span class="p">.</span><span class="n">ket</span><span class="p">().</span><span class="n">end</span><span class="p">(),</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">back_inserter</span><span class="p">(</span><span class="n">groups</span><span class="p">.</span><span class="n">ket</span><span class="p">),</span>
+<span class="w">               </span><span class="n">detail</span><span class="o">::</span><span class="n">not_in</span><span class="p">{</span><span class="n">t1</span><span class="p">.</span><span class="n">bra</span><span class="p">()});</span>
+
+<span class="w">  </span><span class="c1">// Auxiliary indices</span>
+<span class="w">  </span><span class="n">std</span><span class="o">::</span><span class="n">copy_if</span><span class="p">(</span><span class="n">t1</span><span class="p">.</span><span class="n">aux</span><span class="p">().</span><span class="n">begin</span><span class="p">(),</span><span class="w"> </span><span class="n">t1</span><span class="p">.</span><span class="n">aux</span><span class="p">().</span><span class="n">end</span><span class="p">(),</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">back_inserter</span><span class="p">(</span><span class="n">groups</span><span class="p">.</span><span class="n">aux</span><span class="p">),</span>
+<span class="w">               </span><span class="n">detail</span><span class="o">::</span><span class="n">not_in</span><span class="p">{</span><span class="n">t2</span><span class="p">.</span><span class="n">aux</span><span class="p">()});</span>
+<span class="w">  </span><span class="n">std</span><span class="o">::</span><span class="n">copy_if</span><span class="p">(</span><span class="n">t2</span><span class="p">.</span><span class="n">aux</span><span class="p">().</span><span class="n">begin</span><span class="p">(),</span><span class="w"> </span><span class="n">t2</span><span class="p">.</span><span class="n">aux</span><span class="p">().</span><span class="n">end</span><span class="p">(),</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">back_inserter</span><span class="p">(</span><span class="n">groups</span><span class="p">.</span><span class="n">aux</span><span class="p">),</span>
+<span class="w">               </span><span class="n">detail</span><span class="o">::</span><span class="n">not_in</span><span class="p">{</span><span class="n">t1</span><span class="p">.</span><span class="n">aux</span><span class="p">()});</span>
+
+<span class="w">  </span><span class="k">return</span><span class="w"> </span><span class="n">groups</span><span class="p">;</span>
 <span class="p">}</span>
 
 <span class="k">template</span><span class="w"> </span><span class="o">&lt;</span><span class="k">typename</span><span class="w"> </span><span class="nc">Container</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="n">Index</span><span class="o">&gt;&gt;</span>
@@ -338,6 +388,17 @@
 <span class="w">    </span><span class="p">}</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="p">{</span>
 <span class="w">      </span><span class="n">detail</span><span class="o">::</span><span class="n">remove_one</span><span class="p">(</span><span class="n">groups</span><span class="p">.</span><span class="n">bra</span><span class="p">,</span><span class="w"> </span><span class="n">current</span><span class="p">);</span>
 <span class="w">      </span><span class="n">detail</span><span class="o">::</span><span class="n">remove_one</span><span class="p">(</span><span class="n">groups</span><span class="p">.</span><span class="n">ket</span><span class="p">,</span><span class="w"> </span><span class="n">current</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">  </span><span class="p">}</span>
+
+<span class="w">  </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">Index</span><span class="o">&amp;</span><span class="w"> </span><span class="n">current</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">tensor</span><span class="p">.</span><span class="n">aux</span><span class="p">())</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">encounteredIndices</span><span class="p">.</span><span class="n">find</span><span class="p">(</span><span class="n">current</span><span class="p">)</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">encounteredIndices</span><span class="p">.</span><span class="n">end</span><span class="p">())</span><span class="w"> </span><span class="p">{</span>
+<span class="w">      </span><span class="n">groups</span><span class="p">.</span><span class="n">aux</span><span class="p">.</span><span class="n">push_back</span><span class="p">(</span><span class="n">current</span><span class="p">);</span>
+<span class="w">      </span><span class="n">encounteredIndices</span><span class="p">.</span><span class="n">insert</span><span class="p">(</span><span class="n">current</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="p">{</span>
+<span class="w">      </span><span class="n">detail</span><span class="o">::</span><span class="n">remove_one</span><span class="p">(</span><span class="n">groups</span><span class="p">.</span><span class="n">bra</span><span class="p">,</span><span class="w"> </span><span class="n">current</span><span class="p">);</span>
+<span class="w">      </span><span class="n">detail</span><span class="o">::</span><span class="n">remove_one</span><span class="p">(</span><span class="n">groups</span><span class="p">.</span><span class="n">ket</span><span class="p">,</span><span class="w"> </span><span class="n">current</span><span class="p">);</span>
+<span class="w">      </span><span class="n">detail</span><span class="o">::</span><span class="n">remove_one</span><span class="p">(</span><span class="n">groups</span><span class="p">.</span><span class="n">aux</span><span class="p">,</span><span class="w"> </span><span class="n">current</span><span class="p">);</span>
 <span class="w">    </span><span class="p">}</span>
 <span class="w">  </span><span class="p">}</span>
 
@@ -381,6 +442,18 @@
 <span class="w">        </span><span class="n">detail</span><span class="o">::</span><span class="n">remove_one</span><span class="p">(</span><span class="n">groups</span><span class="p">.</span><span class="n">ket</span><span class="p">,</span><span class="w"> </span><span class="n">current</span><span class="p">);</span>
 <span class="w">      </span><span class="p">}</span>
 <span class="w">    </span><span class="p">}</span>
+
+<span class="w">    </span><span class="c1">// Same for aux indices</span>
+<span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="n">Index</span><span class="o">&amp;</span><span class="w"> </span><span class="n">current</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">currentGroups</span><span class="p">.</span><span class="n">aux</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">encounteredIndices</span><span class="p">.</span><span class="n">find</span><span class="p">(</span><span class="n">current</span><span class="p">)</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">encounteredIndices</span><span class="p">.</span><span class="n">end</span><span class="p">())</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">encounteredIndices</span><span class="p">.</span><span class="n">insert</span><span class="p">(</span><span class="n">current</span><span class="p">);</span>
+<span class="w">        </span><span class="n">groups</span><span class="p">.</span><span class="n">aux</span><span class="p">.</span><span class="n">push_back</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">move</span><span class="p">(</span><span class="n">current</span><span class="p">));</span>
+<span class="w">      </span><span class="p">}</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">detail</span><span class="o">::</span><span class="n">remove_one</span><span class="p">(</span><span class="n">groups</span><span class="p">.</span><span class="n">bra</span><span class="p">,</span><span class="w"> </span><span class="n">current</span><span class="p">);</span>
+<span class="w">        </span><span class="n">detail</span><span class="o">::</span><span class="n">remove_one</span><span class="p">(</span><span class="n">groups</span><span class="p">.</span><span class="n">ket</span><span class="p">,</span><span class="w"> </span><span class="n">current</span><span class="p">);</span>
+<span class="w">        </span><span class="n">detail</span><span class="o">::</span><span class="n">remove_one</span><span class="p">(</span><span class="n">groups</span><span class="p">.</span><span class="n">aux</span><span class="p">,</span><span class="w"> </span><span class="n">current</span><span class="p">);</span>
+<span class="w">      </span><span class="p">}</span>
+<span class="w">    </span><span class="p">}</span>
 <span class="w">  </span><span class="p">}</span>
 
 <span class="w">  </span><span class="k">return</span><span class="w"> </span><span class="n">groups</span><span class="p">;</span>
@@ -402,6 +475,38 @@
 <span class="w">    </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">runtime_error</span><span class="p">(</span>
 <span class="w">        </span><span class="s">&quot;Encountered unsupported expression type in get_unique_indices&quot;</span><span class="p">);</span>
 <span class="w">  </span><span class="p">}</span>
+<span class="p">}</span>
+
+<span class="k">template</span><span class="w"> </span><span class="o">&lt;</span><span class="k">typename</span><span class="w"> </span><span class="nc">Container</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="n">Index</span><span class="o">&gt;</span><span class="p">,</span><span class="w"> </span><span class="k">typename</span><span class="w"> </span><span class="nc">Rng</span><span class="o">&gt;</span>
+<span class="n">TensorOfTensorIndices</span><span class="o">&lt;</span><span class="n">Container</span><span class="o">&gt;</span><span class="w"> </span><span class="n">tot_indices</span><span class="p">(</span><span class="n">Rng</span><span class="w"> </span><span class="k">const</span><span class="o">&amp;</span><span class="w"> </span><span class="n">idxs</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="k">using</span><span class="w"> </span><span class="n">ranges</span><span class="o">::</span><span class="n">not_fn</span><span class="p">;</span>
+<span class="w">  </span><span class="k">using</span><span class="w"> </span><span class="n">ranges</span><span class="o">::</span><span class="n">views</span><span class="o">::</span><span class="n">concat</span><span class="p">;</span>
+<span class="w">  </span><span class="k">using</span><span class="w"> </span><span class="n">ranges</span><span class="o">::</span><span class="n">views</span><span class="o">::</span><span class="n">filter</span><span class="p">;</span>
+<span class="w">  </span><span class="k">using</span><span class="w"> </span><span class="n">ranges</span><span class="o">::</span><span class="n">views</span><span class="o">::</span><span class="n">join</span><span class="p">;</span>
+<span class="w">  </span><span class="k">using</span><span class="w"> </span><span class="n">ranges</span><span class="o">::</span><span class="n">views</span><span class="o">::</span><span class="n">transform</span><span class="p">;</span>
+
+<span class="w">  </span><span class="c1">// Container indep_idxs;</span>
+
+<span class="w">  </span><span class="n">TensorOfTensorIndices</span><span class="o">&lt;</span><span class="n">Container</span><span class="o">&gt;</span><span class="w"> </span><span class="n">result</span><span class="p">;</span>
+<span class="w">  </span><span class="k">auto</span><span class="o">&amp;</span><span class="w"> </span><span class="n">outer</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">result</span><span class="p">.</span><span class="n">outer</span><span class="p">;</span>
+
+<span class="w">  </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="k">auto</span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">idxs</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="n">transform</span><span class="p">(</span><span class="o">&amp;</span><span class="n">Index</span><span class="o">::</span><span class="n">proto_indices</span><span class="p">)</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="n">join</span><span class="p">)</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">ranges</span><span class="o">::</span><span class="n">contains</span><span class="p">(</span><span class="n">outer</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="p">))</span><span class="w"> </span><span class="n">outer</span><span class="p">.</span><span class="n">emplace_back</span><span class="p">(</span><span class="n">i</span><span class="p">);</span>
+
+<span class="w">  </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="k">auto</span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">idxs</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="n">filter</span><span class="p">(</span><span class="n">not_fn</span><span class="p">(</span><span class="o">&amp;</span><span class="n">Index</span><span class="o">::</span><span class="n">has_proto_indices</span><span class="p">)))</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">ranges</span><span class="o">::</span><span class="n">contains</span><span class="p">(</span><span class="n">outer</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="p">))</span><span class="w"> </span><span class="n">outer</span><span class="p">.</span><span class="n">emplace_back</span><span class="p">(</span><span class="n">i</span><span class="p">);</span>
+
+<span class="w">  </span><span class="k">auto</span><span class="o">&amp;</span><span class="w"> </span><span class="n">inner</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">result</span><span class="p">.</span><span class="n">inner</span><span class="p">;</span>
+<span class="w">  </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="k">auto</span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">idxs</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="n">filter</span><span class="p">(</span><span class="o">&amp;</span><span class="n">Index</span><span class="o">::</span><span class="n">has_proto_indices</span><span class="p">))</span>
+<span class="w">    </span><span class="n">inner</span><span class="p">.</span><span class="n">emplace_back</span><span class="p">(</span><span class="n">i</span><span class="p">);</span>
+
+<span class="w">  </span><span class="k">return</span><span class="w"> </span><span class="n">result</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="kr">inline</span><span class="w"> </span><span class="kt">bool</span><span class="w"> </span><span class="n">suffix_compare</span><span class="p">(</span><span class="n">Index</span><span class="w"> </span><span class="k">const</span><span class="o">&amp;</span><span class="w"> </span><span class="n">idx1</span><span class="p">,</span><span class="w"> </span><span class="n">Index</span><span class="w"> </span><span class="k">const</span><span class="o">&amp;</span><span class="w"> </span><span class="n">idx2</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="k">auto</span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">s1</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">idx1</span><span class="p">.</span><span class="n">suffix</span><span class="p">();</span>
+<span class="w">  </span><span class="k">auto</span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">s2</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">idx2</span><span class="p">.</span><span class="n">suffix</span><span class="p">();</span>
+<span class="w">  </span><span class="k">return</span><span class="w"> </span><span class="p">(</span><span class="n">s1</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">s2</span><span class="p">)</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">s1</span><span class="p">.</span><span class="n">value</span><span class="p">()</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">s2</span><span class="p">.</span><span class="n">value</span><span class="p">();</span>
 <span class="p">}</span>
 
 <span class="p">}</span><span class="w">  </span><span class="c1">// namespace sequant</span>
@@ -428,7 +533,7 @@
             
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on Nov 27, 2024 9:58:28 PM</div>
+              Last updated on Feb 1, 2025 3:24:07 PM</div>
           </div>
           <div class="right-details">
             <div class="icons">

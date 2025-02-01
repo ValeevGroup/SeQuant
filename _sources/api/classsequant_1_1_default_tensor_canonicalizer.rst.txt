@@ -3,7 +3,7 @@
 Class DefaultTensorCanonicalizer
 ================================
 
-- Defined in :ref:`file_SeQuant_core_abstract_tensor.hpp`
+- Defined in :ref:`file_SeQuant_core_tensor_canonicalizer.hpp`
 
 
 Inheritance Relationships
@@ -13,6 +13,12 @@ Base Type
 *********
 
 - ``public sequant::TensorCanonicalizer`` (:ref:`exhale_class_classsequant_1_1_tensor_canonicalizer`)
+
+
+Derived Type
+************
+
+- ``public sequant::TensorBlockCanonicalizer`` (:ref:`exhale_class_classsequant_1_1_tensor_block_canonicalizer`)
 
 
 Class Documentation

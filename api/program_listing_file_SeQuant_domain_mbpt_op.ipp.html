@@ -7,7 +7,7 @@
 
     <!-- Generated with Sphinx 7.4.7 and Furo 2024.08.06 -->
         <title>Program Listing for File op.ipp - SeQuant Documentation</title>
-      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=a746c00c" />
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=8f2a1f02" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=354aac6f" />
     <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo-extensions.css?v=302659d7" />
@@ -270,6 +270,7 @@
 <span class="cp">#ifndef SEQUANT_DOMAIN_MBPT_OP_IPP</span>
 <span class="cp">#define SEQUANT_DOMAIN_MBPT_OP_IPP</span>
 
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;SeQuant/core/tensor_canonicalizer.hpp&gt;</span>
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;SeQuant/domain/mbpt/op.hpp&gt;</span>
 
 <span class="k">namespace</span><span class="w"> </span><span class="nn">sequant</span><span class="w"> </span><span class="p">{</span>
@@ -414,13 +415,19 @@
 <span class="w">  </span><span class="k">return</span><span class="w"> </span><span class="n">ex</span><span class="o">&lt;</span><span class="n">this_type</span><span class="o">&gt;</span><span class="p">(</span><span class="o">*</span><span class="k">this</span><span class="p">);</span>
 <span class="p">}</span>
 
-<span class="c1">// Expresses general operators in human interpretable form. for example: \hat{T}_2 is a particle conserving 2-body excitation operator</span>
-<span class="c1">// a non-particle conserving operator \hat{R}_2_1 implies that two particles are created followed by a single hole creation.</span>
-<span class="c1">// conversely \hat{R}_1_2 implies the that only one particle is annihilated followed by two holes being created.</span>
-<span class="c1">// The rule being, that for non-particle conserving operators, the first position indicates where the quasiparticle is going to and the second position indicates where it comes from.</span>
-<span class="c1">// for the case of adjoint operators, the adjoint is represented by the symbol ⁺ and superscripting the quasi-particle numbers. for example: hat{R⁺}^{1,2}}</span>
-<span class="c1">// For operators in which one or more quasi-particles has only partial coverage in the particle_space or hole_space, this notation is unsuitable, and we default to</span>
-<span class="c1">// level printing of the operator.</span>
+<span class="c1">// Expresses general operators in human interpretable form. for example:</span>
+<span class="c1">// \hat{T}_2 is a particle conserving 2-body excitation operator a non-particle</span>
+<span class="c1">// conserving operator \hat{R}_2_1 implies that two particles are created</span>
+<span class="c1">// followed by a single hole creation. conversely \hat{R}_1_2 implies the that</span>
+<span class="c1">// only one particle is annihilated followed by two holes being created. The</span>
+<span class="c1">// rule being, that for non-particle conserving operators, the first position</span>
+<span class="c1">// indicates where the quasiparticle is going to and the second position</span>
+<span class="c1">// indicates where it comes from. for the case of adjoint operators, the adjoint</span>
+<span class="c1">// is represented by the symbol ⁺ and superscripting the quasi-particle numbers.</span>
+<span class="c1">// for example: hat{R⁺}^{1,2}} For operators in which one or more</span>
+<span class="c1">// quasi-particles has only partial coverage in the particle_space or</span>
+<span class="c1">// hole_space, this notation is unsuitable, and we default to level printing of</span>
+<span class="c1">// the operator.</span>
 <span class="k">template</span><span class="w"> </span><span class="o">&lt;</span><span class="k">typename</span><span class="w"> </span><span class="nc">QuantumNumbers</span><span class="p">,</span><span class="w"> </span><span class="n">Statistics</span><span class="w"> </span><span class="n">S</span><span class="o">&gt;</span>
 <span class="n">std</span><span class="o">::</span><span class="n">wstring</span><span class="w"> </span><span class="n">Operator</span><span class="o">&lt;</span><span class="n">QuantumNumbers</span><span class="p">,</span><span class="w"> </span><span class="n">S</span><span class="o">&gt;::</span><span class="n">to_latex</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="p">{</span>
 <span class="w">  </span><span class="k">return</span><span class="w"> </span><span class="n">sequant</span><span class="o">::</span><span class="n">to_latex</span><span class="p">(</span><span class="o">*</span><span class="k">this</span><span class="p">);</span>
@@ -462,7 +469,7 @@
             
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on Nov 27, 2024 9:58:28 PM</div>
+              Last updated on Feb 1, 2025 3:24:07 PM</div>
           </div>
           <div class="right-details">
             <div class="icons">

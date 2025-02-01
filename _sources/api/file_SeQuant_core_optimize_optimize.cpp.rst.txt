@@ -41,6 +41,8 @@ Includes
 
 - ``SeQuant/core/optimize.hpp`` (:ref:`file_SeQuant_core_optimize.hpp`)
 
+- ``SeQuant/core/utility/indices.hpp`` (:ref:`file_SeQuant_core_utility_indices.hpp`)
+
 - ``algorithm`` (:ref:`file_SeQuant_core_algorithm.hpp`)
 
 - ``cassert``
@@ -83,6 +85,14 @@ Functions
 ---------
 
 
+- :ref:`exhale_function_namespacesequant_1ae2b6e7fc17ca820e46cda702013c905b`
+
+- :ref:`exhale_function_namespacesequant_1a2675645ef37f2fc8a8c1dcc464e412e0`
+
+- :ref:`exhale_function_namespacesequant_1abac9e1d5c3632f41aab33873a15e397e`
+
+- :ref:`exhale_function_namespacesequant_1a362b02f31d72b4fb7ea643ae969f82c8`
+
 - :ref:`exhale_function_namespacesequant_1_1opt_1a8d6dd66c2606214e3190ea878e84de89`
 
 - :ref:`exhale_function_namespacesequant_1_1opt_1af6fc7be814aa005561ba962d5b4c3212`
@@ -93,5 +103,5 @@ Functions
 
 - :ref:`exhale_function_namespacesequant_1_1opt_1aaadaffb72d6aad3724d3ceca662716cc`
 
-- :ref:`exhale_function_namespacesequant_1a9209384c6ea4d9af5a060009cc73b1a7`
+- :ref:`exhale_function_namespacesequant_1aed6e65817face9e2aa5bde963b9307ef`
 

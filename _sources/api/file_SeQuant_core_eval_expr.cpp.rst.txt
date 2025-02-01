@@ -43,11 +43,15 @@ Includes
 
 - ``SeQuant/core/tensor.hpp`` (:ref:`file_SeQuant_core_tensor.hpp`)
 
+- ``SeQuant/core/utility/indices.hpp`` (:ref:`file_SeQuant_core_utility_indices.hpp`)
+
 - ``SeQuant/core/wstring.hpp`` (:ref:`file_SeQuant_core_wstring.hpp`)
 
 - ``algorithm`` (:ref:`file_SeQuant_core_algorithm.hpp`)
 
 - ``cassert``
+
+- ``cmath``
 
 - ``iterator``
 
@@ -65,6 +69,8 @@ Includes
 
 - ``string_view``
 
+- ``tuple`` (:ref:`file_SeQuant_core_utility_tuple.hpp`)
+
 - ``type_traits``
 
 - ``utility`` (:ref:`file_SeQuant_core_utility_context.hpp`)
@@ -81,4 +87,11 @@ Namespaces
 
 
 - :ref:`namespace_sequant`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1a77bacfa9b834eb5b0bbb7c44d52b25c1`
 

@@ -1,6 +1,0 @@
-
-.. _namespace_sequant__@13:
-
-Namespace sequant::@13
-======================
-

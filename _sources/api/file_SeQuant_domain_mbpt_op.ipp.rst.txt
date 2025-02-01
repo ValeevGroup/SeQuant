@@ -25,6 +25,8 @@ Includes
 --------
 
 
+- ``SeQuant/core/tensor_canonicalizer.hpp`` (:ref:`file_SeQuant_core_tensor_canonicalizer.hpp`)
+
 - ``SeQuant/domain/mbpt/op.hpp`` (:ref:`file_SeQuant_domain_mbpt_op.hpp`)
 
 

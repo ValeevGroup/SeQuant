@@ -25,13 +25,19 @@ Includes
 --------
 
 
+- ``SeQuant/core/meta.hpp``
+
 - ``algorithm`` (:ref:`file_SeQuant_core_algorithm.hpp`)
+
+- ``boost/dynamic_bitset.hpp``
 
 - ``functional``
 
 - ``iterator``
 
-- ``tuple``
+- ``range/v3/view.hpp``
+
+- ``tuple`` (:ref:`file_SeQuant_core_utility_tuple.hpp`)
 
 - ``type_traits``
 
@@ -46,6 +52,8 @@ Included By
 - :ref:`file_SeQuant_core_expr.cpp`
 
 - :ref:`file_SeQuant_core_tensor_network.cpp`
+
+- :ref:`file_SeQuant_core_tensor_network_v2.cpp`
 
 - :ref:`file_SeQuant_domain_eval_eval_result.hpp`
 
@@ -68,4 +76,15 @@ Functions
 - :ref:`exhale_function_namespacesequant_1a29c26a57c287f8aa30cc92643c2266a8`
 
 - :ref:`exhale_function_namespacesequant_1a1f2111e048cde79c5edaf1371d65bf50`
+
+- :ref:`exhale_function_namespacesequant_1a9fb532127bfd2f2fa6242f3a82772b42`
+
+- :ref:`exhale_function_namespacesequant_1a84696f859cef24bf983198320314ef82`
+
+
+Typedefs
+--------
+
+
+- :ref:`exhale_typedef_namespacesequant_1a29942dea09dd6e9780b9507ad0feaf86`
 

@@ -33,6 +33,8 @@ Includes
 
 - ``SeQuant/core/tensor.hpp`` (:ref:`file_SeQuant_core_tensor.hpp`)
 
+- ``SeQuant/core/tensor_canonicalizer.hpp`` (:ref:`file_SeQuant_core_tensor_canonicalizer.hpp`)
+
 
 
 

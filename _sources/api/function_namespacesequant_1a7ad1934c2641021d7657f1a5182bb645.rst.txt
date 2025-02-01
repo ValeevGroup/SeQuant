@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a7ad1934c2641021d7657f1a5182bb645:
+
+Template Function sequant::order_to_indices
+===========================================
+
+- Defined in :ref:`file_SeQuant_core_tensor_network_v2.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::order_to_indices(Container&)
+   :project: SeQuant

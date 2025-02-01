@@ -18,13 +18,13 @@ Subdirectories
 - :ref:`dir_SeQuant_core_export`
 - :ref:`dir_SeQuant_core_optimize`
 - :ref:`dir_SeQuant_core_parse`
+- :ref:`dir_SeQuant_core_tensor_network`
 - :ref:`dir_SeQuant_core_utility`
 
 
 Files
 -----
 
-- :ref:`file_SeQuant_core_abstract_tensor.cpp`
 - :ref:`file_SeQuant_core_abstract_tensor.hpp`
 - :ref:`file_SeQuant_core_algorithm.hpp`
 - :ref:`file_SeQuant_core_any.hpp`
@@ -46,6 +46,7 @@ Files
 - :ref:`file_SeQuant_core_expr_fwd.hpp`
 - :ref:`file_SeQuant_core_expr_operator.hpp`
 - :ref:`file_SeQuant_core_fwd.hpp`
+- :ref:`file_SeQuant_core_hash.cpp`
 - :ref:`file_SeQuant_core_hash.hpp`
 - :ref:`file_SeQuant_core_hugenholtz.hpp`
 - :ref:`file_SeQuant_core_index.cpp`
@@ -69,8 +70,12 @@ Files
 - :ref:`file_SeQuant_core_tag.hpp`
 - :ref:`file_SeQuant_core_tensor.cpp`
 - :ref:`file_SeQuant_core_tensor.hpp`
+- :ref:`file_SeQuant_core_tensor_canonicalizer.cpp`
+- :ref:`file_SeQuant_core_tensor_canonicalizer.hpp`
 - :ref:`file_SeQuant_core_tensor_network.cpp`
 - :ref:`file_SeQuant_core_tensor_network.hpp`
+- :ref:`file_SeQuant_core_tensor_network_v2.cpp`
+- :ref:`file_SeQuant_core_tensor_network_v2.hpp`
 - :ref:`file_SeQuant_core_timer.hpp`
 - :ref:`file_SeQuant_core_wick.hpp`
 - :ref:`file_SeQuant_core_wick.impl.hpp`

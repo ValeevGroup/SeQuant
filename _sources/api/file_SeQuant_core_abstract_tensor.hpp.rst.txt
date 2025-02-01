@@ -67,8 +67,6 @@ Included By
 -----------
 
 
-- :ref:`file_SeQuant_core_abstract_tensor.cpp`
-
 - :ref:`file_SeQuant_core_expr.cpp`
 
 - :ref:`file_SeQuant_core_op.hpp`
@@ -79,9 +77,19 @@ Included By
 
 - :ref:`file_SeQuant_core_tensor.hpp`
 
+- :ref:`file_SeQuant_core_tensor_canonicalizer.cpp`
+
+- :ref:`file_SeQuant_core_tensor_canonicalizer.hpp`
+
 - :ref:`file_SeQuant_core_tensor_network.cpp`
 
 - :ref:`file_SeQuant_core_tensor_network.hpp`
+
+- :ref:`file_SeQuant_core_tensor_network_vertex_painter.hpp`
+
+- :ref:`file_SeQuant_core_tensor_network_v2.cpp`
+
+- :ref:`file_SeQuant_core_tensor_network_v2.hpp`
 
 
 
@@ -97,18 +105,16 @@ Classes
 -------
 
 
+- :ref:`exhale_struct_structsequant_1_1is__tensor`
+
 - :ref:`exhale_class_classsequant_1_1_abstract_tensor`
-
-- :ref:`exhale_class_classsequant_1_1_default_tensor_canonicalizer`
-
-- :ref:`exhale_class_classsequant_1_1_null_tensor_canonicalizer`
-
-- :ref:`exhale_class_classsequant_1_1_tensor_canonicalizer`
 
 
 Functions
 ---------
 
+
+- :ref:`exhale_function_namespacesequant_1af965f371b1400b15899b5c030077cfbc`
 
 - :ref:`exhale_function_namespacesequant_1ab9d9bd3f1638ab8169b5323d0d9dd045`
 
@@ -117,6 +123,8 @@ Functions
 - :ref:`exhale_function_namespacesequant_1a65db7bf1a69edaf8a0d257246b1d2486`
 
 - :ref:`exhale_function_namespacesequant_1acdb0a849c7a549fc20b032f74899d23c`
+
+- :ref:`exhale_function_namespacesequant_1ada6eacab34e391b3e13a57017aed6f94`
 
 - :ref:`exhale_function_namespacesequant_1a89cc6567669d53a5927508e64e59e76a`
 
@@ -140,4 +148,11 @@ Typedefs
 
 
 - :ref:`exhale_typedef_namespacesequant_1ace7a501f5466fb9a216eb835e68d354e`
+
+
+Variables
+---------
+
+
+- :ref:`exhale_variable_namespacesequant_1a28fdd47f23955ea2ad9956c2aa856ad3`
 

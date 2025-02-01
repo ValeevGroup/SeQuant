@@ -7,7 +7,7 @@
 
     <!-- Generated with Sphinx 7.4.7 and Furo 2024.08.06 -->
         <title>Class DefaultTensorCanonicalizer - SeQuant Documentation</title>
-      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=a746c00c" />
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=8f2a1f02" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=354aac6f" />
     <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo-extensions.css?v=302659d7" />
@@ -263,7 +263,7 @@
           <section id="class-defaulttensorcanonicalizer">
 <span id="exhale-class-classsequant-1-1-default-tensor-canonicalizer"></span><h1>Class DefaultTensorCanonicalizer<a class="headerlink" href="#class-defaulttensorcanonicalizer" title="Link to this heading">¶</a></h1>
 <ul class="simple">
-<li><p>Defined in <a class="reference internal" href="file_SeQuant_core_abstract_tensor.hpp.html#file-sequant-core-abstract-tensor-hpp"><span class="std std-ref">File abstract_tensor.hpp</span></a></p></li>
+<li><p>Defined in <a class="reference internal" href="file_SeQuant_core_tensor_canonicalizer.hpp.html#file-sequant-core-tensor-canonicalizer-hpp"><span class="std std-ref">File tensor_canonicalizer.hpp</span></a></p></li>
 </ul>
 <section id="inheritance-relationships">
 <h2>Inheritance Relationships<a class="headerlink" href="#inheritance-relationships" title="Link to this heading">¶</a></h2>
@@ -273,13 +273,20 @@
 <li><p><code class="docutils literal notranslate"><span class="pre">public</span> <span class="pre">sequant::TensorCanonicalizer</span></code> (<a class="reference internal" href="classsequant_1_1_tensor_canonicalizer.html#exhale-class-classsequant-1-1-tensor-canonicalizer"><span class="std std-ref">Class TensorCanonicalizer</span></a>)</p></li>
 </ul>
 </section>
+<section id="derived-type">
+<h3>Derived Type<a class="headerlink" href="#derived-type" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">public</span> <span class="pre">sequant::TensorBlockCanonicalizer</span></code> (<a class="reference internal" href="classsequant_1_1_tensor_block_canonicalizer.html#exhale-class-classsequant-1-1-tensor-block-canonicalizer"><span class="std std-ref">Class TensorBlockCanonicalizer</span></a>)</p></li>
+</ul>
+</section>
 </section>
 <section id="class-documentation">
 <h2>Class Documentation<a class="headerlink" href="#class-documentation" title="Link to this heading">¶</a></h2>
 <dl class="cpp class">
 <dt class="sig sig-object cpp" id="_CPPv4N7sequant26DefaultTensorCanonicalizerE">
 <span id="_CPPv3N7sequant26DefaultTensorCanonicalizerE"></span><span id="_CPPv2N7sequant26DefaultTensorCanonicalizerE"></span><span id="sequant::DefaultTensorCanonicalizer"></span><span class="target" id="classsequant_1_1_default_tensor_canonicalizer"></span><span class="k"><span class="pre">class</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">DefaultTensorCanonicalizer</span></span></span><span class="w"> </span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="k"><span class="pre">public</span></span><span class="w"> </span><span class="n"><span class="pre">sequant</span></span><span class="p"><span class="pre">::</span></span><a class="reference internal" href="classsequant_1_1_tensor_canonicalizer.html#_CPPv4N7sequant19TensorCanonicalizerE" title="sequant::TensorCanonicalizer"><span class="n"><span class="pre">TensorCanonicalizer</span></span></a><a class="headerlink" href="#_CPPv4N7sequant26DefaultTensorCanonicalizerE" title="Link to this definition">¶</a><br /></dt>
-<dd><div class="breathe-sectiondef docutils container">
+<dd><p>Subclassed by <a class="reference internal" href="classsequant_1_1_tensor_block_canonicalizer.html#classsequant_1_1_tensor_block_canonicalizer"><span class="std std-ref">sequant::TensorBlockCanonicalizer</span></a></p>
+<div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric" id="breathe-section-title-public-functions">Public Functions</p>
 <dl class="cpp function">
 <dt class="sig sig-object cpp" id="_CPPv4N7sequant26DefaultTensorCanonicalizer26DefaultTensorCanonicalizerEv">
@@ -309,9 +316,9 @@
 <dd></dd></dl>
 
 <dl class="cpp function">
-<dt class="sig sig-object cpp" id="_CPPv4N7sequant26DefaultTensorCanonicalizer5applyER14AbstractTensor">
-<span id="_CPPv3N7sequant26DefaultTensorCanonicalizer5applyER14AbstractTensor"></span><span id="_CPPv2N7sequant26DefaultTensorCanonicalizer5applyER14AbstractTensor"></span><span id="sequant::DefaultTensorCanonicalizer::apply__AbstractTensorR"></span><span class="target" id="classsequant_1_1_default_tensor_canonicalizer_1a6e2659006fd8e649720dbf7336b63100"></span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><a class="reference internal" href="classsequant_1_1_expr_ptr.html#_CPPv4N7sequant7ExprPtrE" title="sequant::ExprPtr"><span class="n"><span class="pre">ExprPtr</span></span></a><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">apply</span></span></span><span class="sig-paren">(</span><a class="reference internal" href="classsequant_1_1_abstract_tensor.html#_CPPv4N7sequant14AbstractTensorE" title="sequant::AbstractTensor"><span class="n"><span class="pre">AbstractTensor</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">t</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">override</span></span><a class="headerlink" href="#_CPPv4N7sequant26DefaultTensorCanonicalizer5applyER14AbstractTensor" title="Link to this definition">¶</a><br /></dt>
-<dd><p>Implements <a class="reference internal" href="classsequant_1_1_tensor_canonicalizer.html#classsequant_1_1_tensor_canonicalizer_1a573188c77847e3f0ee66841737095267"><span class="std std-ref">TensorCanonicalizer::apply</span></a> </p>
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant26DefaultTensorCanonicalizer5applyER14AbstractTensor">
+<span id="_CPPv3NK7sequant26DefaultTensorCanonicalizer5applyER14AbstractTensor"></span><span id="_CPPv2NK7sequant26DefaultTensorCanonicalizer5applyER14AbstractTensor"></span><span id="sequant::DefaultTensorCanonicalizer::apply__AbstractTensorRC"></span><span class="target" id="classsequant_1_1_default_tensor_canonicalizer_1a85163ca87b6ad4a6e157851434d37a9b"></span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><a class="reference internal" href="classsequant_1_1_expr_ptr.html#_CPPv4N7sequant7ExprPtrE" title="sequant::ExprPtr"><span class="n"><span class="pre">ExprPtr</span></span></a><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">apply</span></span></span><span class="sig-paren">(</span><a class="reference internal" href="classsequant_1_1_abstract_tensor.html#_CPPv4N7sequant14AbstractTensorE" title="sequant::AbstractTensor"><span class="n"><span class="pre">AbstractTensor</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">t</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><span class="w"> </span><span class="k"><span class="pre">override</span></span><a class="headerlink" href="#_CPPv4NK7sequant26DefaultTensorCanonicalizer5applyER14AbstractTensor" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Implements <a class="reference internal" href="classsequant_1_1_tensor_canonicalizer.html#classsequant_1_1_tensor_canonicalizer_1a5ac8d129b9efc5941634ffb7a98c618e"><span class="std std-ref">TensorCanonicalizer::apply</span></a> </p>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
 <p>Canonicalizes <code class="docutils literal notranslate"><span class="pre">t</span></code> by sorting its bra (if <code class="docutils literal notranslate"><span class="pre">t.symmetry()==</span><a class="reference internal" href="enum_namespacesequant_1a80bc8a00a0036a84c252e8a64db4c485.html#namespacesequant_1a80bc8a00a0036a84c252e8a64db4c485a66ac2f25670b7fdcde4a1b050400cf68"><span class="std std-ref"><span class="pre">Symmetry::nonsymm</span></span></a></code> ) or its bra and ket (if <code class="docutils literal notranslate"><span class="pre">t.symmetry()!=</span><a class="reference internal" href="enum_namespacesequant_1a80bc8a00a0036a84c252e8a64db4c485.html#namespacesequant_1a80bc8a00a0036a84c252e8a64db4c485a66ac2f25670b7fdcde4a1b050400cf68"><span class="std std-ref"><span class="pre">Symmetry::nonsymm</span></span></a></code> ), with the external indices appearing “before” (smaller particle indices) than the internal indices </p>
@@ -319,10 +326,18 @@
 </dd></dl>
 
 <dl class="cpp function">
-<dt class="sig sig-object cpp" id="_CPPv4I0EN7sequant26DefaultTensorCanonicalizer5applyE7ExprPtrR14AbstractTensorRK7Compare">
-<span id="_CPPv3I0EN7sequant26DefaultTensorCanonicalizer5applyER14AbstractTensorRK7Compare"></span><span id="_CPPv2I0EN7sequant26DefaultTensorCanonicalizer5applyER14AbstractTensorRK7Compare"></span><span class="k"><span class="pre">template</span></span><span class="p"><span class="pre">&lt;</span></span><span class="k"><span class="pre">typename</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">Compare</span></span></span><span class="p"><span class="pre">&gt;</span></span><br /><span class="target" id="classsequant_1_1_default_tensor_canonicalizer_1a5e0000436354f9f08b10f328cbe83c76"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><a class="reference internal" href="classsequant_1_1_expr_ptr.html#_CPPv4N7sequant7ExprPtrE" title="sequant::ExprPtr"><span class="n"><span class="pre">ExprPtr</span></span></a><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">apply</span></span></span><span class="sig-paren">(</span><a class="reference internal" href="classsequant_1_1_abstract_tensor.html#_CPPv4N7sequant14AbstractTensorE" title="sequant::AbstractTensor"><span class="n"><span class="pre">AbstractTensor</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">t</span></span>, <span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4I0EN7sequant26DefaultTensorCanonicalizer5applyE7ExprPtrR14AbstractTensorRK7Compare" title="sequant::DefaultTensorCanonicalizer::apply::Compare"><span class="n"><span class="pre">Compare</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">comp</span></span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4I0EN7sequant26DefaultTensorCanonicalizer5applyE7ExprPtrR14AbstractTensorRK7Compare" title="Link to this definition">¶</a><br /></dt>
-<dd><p>Core of <a class="reference internal" href="#classsequant_1_1_default_tensor_canonicalizer_1a6e2659006fd8e649720dbf7336b63100"><span class="std std-ref">DefaultTensorCanonicalizer::apply</span></a>, only does the canonicalization, i.e. no tagging/untagging </p>
+<dt class="sig sig-object cpp" id="_CPPv4I00ENK7sequant26DefaultTensorCanonicalizer5applyE7ExprPtrR14AbstractTensorRK9IndexCompRK13IndexPairComp">
+<span id="_CPPv3I00ENK7sequant26DefaultTensorCanonicalizer5applyER14AbstractTensorRK9IndexCompRK13IndexPairComp"></span><span id="_CPPv2I00ENK7sequant26DefaultTensorCanonicalizer5applyER14AbstractTensorRK9IndexCompRK13IndexPairComp"></span><span class="k"><span class="pre">template</span></span><span class="p"><span class="pre">&lt;</span></span><span class="k"><span class="pre">typename</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">IndexComp</span></span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="k"><span class="pre">typename</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">IndexPairComp</span></span></span><span class="p"><span class="pre">&gt;</span></span><br /><span class="target" id="classsequant_1_1_default_tensor_canonicalizer_1af42b1d0df1db2c5121c04086e774bfd3"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><a class="reference internal" href="classsequant_1_1_expr_ptr.html#_CPPv4N7sequant7ExprPtrE" title="sequant::ExprPtr"><span class="n"><span class="pre">ExprPtr</span></span></a><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">apply</span></span></span><span class="sig-paren">(</span><a class="reference internal" href="classsequant_1_1_abstract_tensor.html#_CPPv4N7sequant14AbstractTensorE" title="sequant::AbstractTensor"><span class="n"><span class="pre">AbstractTensor</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">t</span></span>, <span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4I00ENK7sequant26DefaultTensorCanonicalizer5applyE7ExprPtrR14AbstractTensorRK9IndexCompRK13IndexPairComp" title="sequant::DefaultTensorCanonicalizer::apply::IndexComp"><span class="n"><span class="pre">IndexComp</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">idxcmp</span></span>, <span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4I00ENK7sequant26DefaultTensorCanonicalizer5applyE7ExprPtrR14AbstractTensorRK9IndexCompRK13IndexPairComp" title="sequant::DefaultTensorCanonicalizer::apply::IndexPairComp"><span class="n"><span class="pre">IndexPairComp</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">paircmp</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4I00ENK7sequant26DefaultTensorCanonicalizer5applyE7ExprPtrR14AbstractTensorRK9IndexCompRK13IndexPairComp" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Core of <a class="reference internal" href="#classsequant_1_1_default_tensor_canonicalizer_1a85163ca87b6ad4a6e157851434d37a9b"><span class="std std-ref">DefaultTensorCanonicalizer::apply</span></a>, only does the canonicalization, i.e. no tagging/untagging </p>
 </dd></dl>
+
+</div>
+<div class="breathe-sectiondef docutils container">
+<p class="breathe-sectiondef-title rubric" id="breathe-section-title-protected-functions">Protected Functions</p>
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant26DefaultTensorCanonicalizer11tag_indicesER14AbstractTensor">
+<span id="_CPPv3NK7sequant26DefaultTensorCanonicalizer11tag_indicesER14AbstractTensor"></span><span id="_CPPv2NK7sequant26DefaultTensorCanonicalizer11tag_indicesER14AbstractTensor"></span><span id="sequant::DefaultTensorCanonicalizer::tag_indices__AbstractTensorRC"></span><span class="target" id="classsequant_1_1_default_tensor_canonicalizer_1a1594314a770c728f35949aab4c10c2e3"></span><span class="kt"><span class="pre">void</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">tag_indices</span></span></span><span class="sig-paren">(</span><a class="reference internal" href="classsequant_1_1_abstract_tensor.html#_CPPv4N7sequant14AbstractTensorE" title="sequant::AbstractTensor"><span class="n"><span class="pre">AbstractTensor</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">t</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant26DefaultTensorCanonicalizer11tag_indicesER14AbstractTensor" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
 
 </div>
 </dd></dl>
@@ -347,7 +362,7 @@
             
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on Nov 27, 2024 9:58:28 PM</div>
+              Last updated on Feb 1, 2025 3:24:07 PM</div>
           </div>
           <div class="right-details">
             <div class="icons">
@@ -374,6 +389,7 @@
 <li><a class="reference internal" href="#">Class DefaultTensorCanonicalizer</a><ul>
 <li><a class="reference internal" href="#inheritance-relationships">Inheritance Relationships</a><ul>
 <li><a class="reference internal" href="#base-type">Base Type</a></li>
+<li><a class="reference internal" href="#derived-type">Derived Type</a></li>
 </ul>
 </li>
 <li><a class="reference internal" href="#class-documentation">Class Documentation</a><ul>
@@ -381,8 +397,9 @@
 <li><a class="reference internal" href="#_CPPv4N7sequant26DefaultTensorCanonicalizer26DefaultTensorCanonicalizerEv"><code class="docutils literal notranslate"><span class="pre">DefaultTensorCanonicalizer::DefaultTensorCanonicalizer()</span></code></a></li>
 <li><a class="reference internal" href="#_CPPv4I0EN7sequant26DefaultTensorCanonicalizer26DefaultTensorCanonicalizerERR14IndexContainer"><code class="docutils literal notranslate"><span class="pre">DefaultTensorCanonicalizer::DefaultTensorCanonicalizer()</span></code></a></li>
 <li><a class="reference internal" href="#_CPPv4N7sequant26DefaultTensorCanonicalizerD0Ev"><code class="docutils literal notranslate"><span class="pre">DefaultTensorCanonicalizer::~DefaultTensorCanonicalizer()</span></code></a></li>
-<li><a class="reference internal" href="#_CPPv4N7sequant26DefaultTensorCanonicalizer5applyER14AbstractTensor"><code class="docutils literal notranslate"><span class="pre">DefaultTensorCanonicalizer::apply()</span></code></a></li>
-<li><a class="reference internal" href="#_CPPv4I0EN7sequant26DefaultTensorCanonicalizer5applyE7ExprPtrR14AbstractTensorRK7Compare"><code class="docutils literal notranslate"><span class="pre">DefaultTensorCanonicalizer::apply()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant26DefaultTensorCanonicalizer5applyER14AbstractTensor"><code class="docutils literal notranslate"><span class="pre">DefaultTensorCanonicalizer::apply()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4I00ENK7sequant26DefaultTensorCanonicalizer5applyE7ExprPtrR14AbstractTensorRK9IndexCompRK13IndexPairComp"><code class="docutils literal notranslate"><span class="pre">DefaultTensorCanonicalizer::apply()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant26DefaultTensorCanonicalizer11tag_indicesER14AbstractTensor"><code class="docutils literal notranslate"><span class="pre">DefaultTensorCanonicalizer::tag_indices()</span></code></a></li>
 </ul>
 </li>
 </ul>

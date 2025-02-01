@@ -12,6 +12,12 @@ Nested Relationships
 This class is a nested type of :ref:`exhale_class_classsequant_1_1_tensor_network`.
 
 
+Nested Types
+************
+
+- :ref:`exhale_struct_structsequant_1_1_tensor_network_1_1_edge_1_1_terminal`
+
+
 Class Documentation
 -------------------
 

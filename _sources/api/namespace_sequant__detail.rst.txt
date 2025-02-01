@@ -32,11 +32,15 @@ Classes
 
 - :ref:`exhale_struct_structsequant_1_1detail_1_1_no_discard`
 
+- :ref:`exhale_struct_structsequant_1_1detail_1_1not__in`
+
 - :ref:`exhale_struct_structsequant_1_1detail_1_1_null_normal_operator_canonicalizer_deregister`
 
 - :ref:`exhale_struct_structsequant_1_1detail_1_1_op_id_registrar`
 
 - :ref:`exhale_struct_structsequant_1_1detail_1_1rapid__simplify__visitor`
+
+- :ref:`exhale_struct_structsequant_1_1detail_1_1tuple__less`
 
 - :ref:`exhale_struct_structsequant_1_1detail_1_1zero__result`
 
@@ -51,9 +55,9 @@ Functions
 ---------
 
 
-- :ref:`exhale_function_namespacesequant_1_1detail_1a867aeabd5c138213924d003e90260750`
-
 - :ref:`exhale_function_namespacesequant_1_1detail_1ab08dabd364bf0e57c5c51c6d62f50473`
+
+- :ref:`exhale_function_namespacesequant_1_1detail_1a867aeabd5c138213924d003e90260750`
 
 - :ref:`exhale_function_namespacesequant_1_1detail_1a866c15b6b0da948abf0e99f5936eaacb`
 
@@ -91,6 +95,6 @@ Functions
 
 - :ref:`exhale_function_namespacesequant_1_1detail_1a4d530f2fe54abd2bdeff325388c05131`
 
-- :ref:`exhale_function_namespacesequant_1_1detail_1a59133a39ee162bde9883c9a3267d9f17`
-
 - :ref:`exhale_function_namespacesequant_1_1detail_1a520c4877aa5705eb2b11d47e52b06a9e`
+
+- :ref:`exhale_function_namespacesequant_1_1detail_1a59133a39ee162bde9883c9a3267d9f17`

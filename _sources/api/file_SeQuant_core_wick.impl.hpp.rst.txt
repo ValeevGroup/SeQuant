@@ -29,7 +29,11 @@ Includes
 
 - ``SeQuant/core/logger.hpp`` (:ref:`file_SeQuant_core_logger.hpp`)
 
+- ``SeQuant/core/tensor_canonicalizer.hpp`` (:ref:`file_SeQuant_core_tensor_canonicalizer.hpp`)
+
 - ``SeQuant/core/tensor_network.hpp`` (:ref:`file_SeQuant_core_tensor_network.hpp`)
+
+- ``SeQuant/core/tensor_network/vertex.hpp`` (:ref:`file_SeQuant_core_tensor_network_vertex.hpp`)
 
 
 
@@ -71,4 +75,11 @@ Functions
 - :ref:`exhale_function_namespacesequant_1_1detail_1a1953af3d74ba95bf4d6ad1cef3025912`
 
 - :ref:`exhale_function_namespacesequant_1ae10c6337dda9d993b1bbac6f0c1eec07`
+
+
+Defines
+-------
+
+
+- :ref:`exhale_define_wick_8impl_8hpp_1a2f3b01b1a77affa6e1ca0fd8938de695`
 

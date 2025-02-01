@@ -3,7 +3,7 @@
 Function sequant::deparse(const Expr&, bool)
 ============================================
 
-- Defined in :ref:`file_SeQuant_core_parse.hpp`
+- Defined in :ref:`file_SeQuant_core_parse_deparse.cpp`
 
 
 Function Documentation

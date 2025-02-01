@@ -7,7 +7,7 @@
 
     <!-- Generated with Sphinx 7.4.7 and Furo 2024.08.06 -->
         <title>Class TensorNetwork::Edge - SeQuant Documentation</title>
-      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=a746c00c" />
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=8f2a1f02" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=354aac6f" />
     <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo-extensions.css?v=302659d7" />
@@ -268,6 +268,12 @@
 <section id="nested-relationships">
 <h2>Nested Relationships<a class="headerlink" href="#nested-relationships" title="Link to this heading">¶</a></h2>
 <p>This class is a nested type of <a class="reference internal" href="classsequant_1_1_tensor_network.html#exhale-class-classsequant-1-1-tensor-network"><span class="std std-ref">Class TensorNetwork</span></a>.</p>
+<section id="nested-types">
+<h3>Nested Types<a class="headerlink" href="#nested-types" title="Link to this heading">¶</a></h3>
+<ul class="simple">
+<li><p><a class="reference internal" href="structsequant_1_1_tensor_network_1_1_edge_1_1_terminal.html#exhale-struct-structsequant-1-1-tensor-network-1-1-edge-1-1-terminal"><span class="std std-ref">Struct Edge::Terminal</span></a></p></li>
+</ul>
+</section>
 </section>
 <section id="class-documentation">
 <h2>Class Documentation<a class="headerlink" href="#class-documentation" title="Link to this heading">¶</a></h2>
@@ -281,7 +287,7 @@
 <li><p>&gt;0 for bra terminals (i.e. “+7” indicated connection to a bra terminal of 7th tensor object in the sequence)</p></li>
 <li><p>&lt;0 for ket terminals</p></li>
 <li><p>0 if free (not attached to any tensor objects)</p></li>
-<li><p>position records the terminal’s location in the sequence of bra/ket terminals (always 0 for symmetric/antisymmetric tensors) Terminal indices are sorted by the tensor index (i.e. by the absolute value of the terminal index), followed by position </p></li>
+<li><p>position records the terminal’s location in the sequence of bra/ket/aux terminals (always 0 for symmetric/antisymmetric tensors) <a class="reference internal" href="structsequant_1_1_tensor_network_1_1_edge_1_1_terminal.html#structsequant_1_1_tensor_network_1_1_edge_1_1_terminal"><span class="std std-ref">Terminal</span></a> indices are sorted by the tensor index (i.e. by the absolute value of the terminal index), followed by position </p></li>
 </ul>
 </p>
 </div>
@@ -293,18 +299,18 @@
 <dd></dd></dl>
 
 <dl class="cpp function">
-<dt class="sig sig-object cpp" id="_CPPv4N7sequant13TensorNetwork4Edge4EdgeEii">
-<span id="_CPPv3N7sequant13TensorNetwork4Edge4EdgeEii"></span><span id="_CPPv2N7sequant13TensorNetwork4Edge4EdgeEii"></span><span id="sequant::TensorNetwork::Edge::Edge__i.i"></span><span class="target" id="classsequant_1_1_tensor_network_1_1_edge_1a63372154ff675df748cce7e7d07ffddc"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">explicit</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">Edge</span></span></span><span class="sig-paren">(</span><span class="kt"><span class="pre">int</span></span><span class="w"> </span><span class="n sig-param"><span class="pre">terminal_idx</span></span>, <span class="kt"><span class="pre">int</span></span><span class="w"> </span><span class="n sig-param"><span class="pre">position</span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="m"><span class="pre">0</span></span><span class="sig-paren">)</span><br /></dt>
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant13TensorNetwork4Edge4EdgeERK8Terminal">
+<span id="_CPPv3N7sequant13TensorNetwork4Edge4EdgeERK8Terminal"></span><span id="_CPPv2N7sequant13TensorNetwork4Edge4EdgeERK8Terminal"></span><span id="sequant::TensorNetwork::Edge::Edge__TerminalCR"></span><span class="target" id="classsequant_1_1_tensor_network_1_1_edge_1ac61f0056a89650af54c43e0d942c1e14"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">explicit</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">Edge</span></span></span><span class="sig-paren">(</span><span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="classsequant_1_1_tensor_network.html#_CPPv4N7sequant13TensorNetwork4Edge8TerminalE" title="sequant::TensorNetwork::Edge::Terminal"><span class="n"><span class="pre">Terminal</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">t</span></span><span class="sig-paren">)</span><br /></dt>
 <dd></dd></dl>
 
 <dl class="cpp function">
-<dt class="sig sig-object cpp" id="_CPPv4N7sequant13TensorNetwork4Edge4EdgeEiPK5Indexi">
-<span id="_CPPv3N7sequant13TensorNetwork4Edge4EdgeEiPK5Indexi"></span><span id="_CPPv2N7sequant13TensorNetwork4Edge4EdgeEiPK5Indexi"></span><span id="sequant::TensorNetwork::Edge::Edge__i.IndexCP.i"></span><span class="target" id="classsequant_1_1_tensor_network_1_1_edge_1a7d6e5830af468b7ef7e03b271e0dec45"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">Edge</span></span></span><span class="sig-paren">(</span><span class="kt"><span class="pre">int</span></span><span class="w"> </span><span class="n sig-param"><span class="pre">terminal_idx</span></span>, <span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="classsequant_1_1_index.html#_CPPv4N7sequant5IndexE" title="sequant::Index"><span class="n"><span class="pre">Index</span></span></a><span class="w"> </span><span class="p"><span class="pre">*</span></span><span class="n sig-param"><span class="pre">idxptr</span></span>, <span class="kt"><span class="pre">int</span></span><span class="w"> </span><span class="n sig-param"><span class="pre">position</span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="m"><span class="pre">0</span></span><span class="sig-paren">)</span><br /></dt>
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant13TensorNetwork4Edge4EdgeERK8TerminalPK5Index">
+<span id="_CPPv3N7sequant13TensorNetwork4Edge4EdgeERK8TerminalPK5Index"></span><span id="_CPPv2N7sequant13TensorNetwork4Edge4EdgeERK8TerminalPK5Index"></span><span id="sequant::TensorNetwork::Edge::Edge__TerminalCR.IndexCP"></span><span class="target" id="classsequant_1_1_tensor_network_1_1_edge_1adcf06ff2825a9f7b0ce05a497cc2074c"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">Edge</span></span></span><span class="sig-paren">(</span><span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="classsequant_1_1_tensor_network.html#_CPPv4N7sequant13TensorNetwork4Edge8TerminalE" title="sequant::TensorNetwork::Edge::Terminal"><span class="n"><span class="pre">Terminal</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">t</span></span>, <span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="classsequant_1_1_index.html#_CPPv4N7sequant5IndexE" title="sequant::Index"><span class="n"><span class="pre">Index</span></span></a><span class="w"> </span><span class="p"><span class="pre">*</span></span><span class="n sig-param"><span class="pre">idxptr</span></span><span class="sig-paren">)</span><br /></dt>
 <dd></dd></dl>
 
 <dl class="cpp function">
-<dt class="sig sig-object cpp" id="_CPPv4N7sequant13TensorNetwork4Edge10connect_toEii">
-<span id="_CPPv3N7sequant13TensorNetwork4Edge10connect_toEii"></span><span id="_CPPv2N7sequant13TensorNetwork4Edge10connect_toEii"></span><span id="sequant::TensorNetwork::Edge::connect_to__i.i"></span><span class="target" id="classsequant_1_1_tensor_network_1_1_edge_1a1218b1028a6398f6eae39422855d0aad"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><a class="reference internal" href="classsequant_1_1_tensor_network.html#_CPPv4N7sequant13TensorNetwork4EdgeE" title="sequant::TensorNetwork::Edge"><span class="n"><span class="pre">Edge</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="sig-name descname"><span class="n"><span class="pre">connect_to</span></span></span><span class="sig-paren">(</span><span class="kt"><span class="pre">int</span></span><span class="w"> </span><span class="n sig-param"><span class="pre">terminal_idx</span></span>, <span class="kt"><span class="pre">int</span></span><span class="w"> </span><span class="n sig-param"><span class="pre">position</span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="m"><span class="pre">0</span></span><span class="sig-paren">)</span><br /></dt>
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant13TensorNetwork4Edge10connect_toERK8Terminal">
+<span id="_CPPv3N7sequant13TensorNetwork4Edge10connect_toERK8Terminal"></span><span id="_CPPv2N7sequant13TensorNetwork4Edge10connect_toERK8Terminal"></span><span id="sequant::TensorNetwork::Edge::connect_to__TerminalCR"></span><span class="target" id="classsequant_1_1_tensor_network_1_1_edge_1ab1c158a54c2cc227c8929f06b3ab62c0"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><a class="reference internal" href="classsequant_1_1_tensor_network.html#_CPPv4N7sequant13TensorNetwork4EdgeE" title="sequant::TensorNetwork::Edge"><span class="n"><span class="pre">Edge</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="sig-name descname"><span class="n"><span class="pre">connect_to</span></span></span><span class="sig-paren">(</span><span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="classsequant_1_1_tensor_network.html#_CPPv4N7sequant13TensorNetwork4Edge8TerminalE" title="sequant::TensorNetwork::Edge::Terminal"><span class="n"><span class="pre">Terminal</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">t</span></span><span class="sig-paren">)</span><br /></dt>
 <dd></dd></dl>
 
 <dl class="cpp function">
@@ -313,29 +319,28 @@
 <dd></dd></dl>
 
 <dl class="cpp function">
-<dt class="sig sig-object cpp" id="_CPPv4NK7sequant13TensorNetwork4EdgeeqERK4Edge">
-<span id="_CPPv3NK7sequant13TensorNetwork4EdgeeqERK4Edge"></span><span id="_CPPv2NK7sequant13TensorNetwork4EdgeeqERK4Edge"></span><span id="sequant::TensorNetwork::Edge::eq-operator__EdgeCRC"></span><span class="target" id="classsequant_1_1_tensor_network_1_1_edge_1af0c71df3eaee1722bba1be9021226125"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="kt"><span class="pre">bool</span></span><span class="w"> </span><span class="sig-name descname"><span class="k"><span class="pre">operator</span></span><span class="o"><span class="pre">==</span></span></span><span class="sig-paren">(</span><span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="classsequant_1_1_tensor_network.html#_CPPv4N7sequant13TensorNetwork4EdgeE" title="sequant::TensorNetwork::Edge"><span class="n"><span class="pre">Edge</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">other</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><br /></dt>
-<dd></dd></dl>
-
-<dl class="cpp function">
 <dt class="sig sig-object cpp" id="_CPPv4NK7sequant13TensorNetwork4Edge5firstEv">
-<span id="_CPPv3NK7sequant13TensorNetwork4Edge5firstEv"></span><span id="_CPPv2NK7sequant13TensorNetwork4Edge5firstEv"></span><span id="sequant::TensorNetwork::Edge::firstC"></span><span class="target" id="classsequant_1_1_tensor_network_1_1_edge_1a3fb17d4b6e74fe3f7d1edc49ebab46ee"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="kt"><span class="pre">auto</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">first</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><br /></dt>
+<span id="_CPPv3NK7sequant13TensorNetwork4Edge5firstEv"></span><span id="_CPPv2NK7sequant13TensorNetwork4Edge5firstEv"></span><span id="sequant::TensorNetwork::Edge::firstC"></span><span class="target" id="classsequant_1_1_tensor_network_1_1_edge_1a40d18a95139bfd426852bd1ba242fa8b"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">const</span></span><span class="w"> </span><span class="kt"><span class="pre">auto</span></span><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="sig-name descname"><span class="n"><span class="pre">first</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><br /></dt>
 <dd></dd></dl>
 
 <dl class="cpp function">
 <dt class="sig sig-object cpp" id="_CPPv4NK7sequant13TensorNetwork4Edge6secondEv">
-<span id="_CPPv3NK7sequant13TensorNetwork4Edge6secondEv"></span><span id="_CPPv2NK7sequant13TensorNetwork4Edge6secondEv"></span><span id="sequant::TensorNetwork::Edge::secondC"></span><span class="target" id="classsequant_1_1_tensor_network_1_1_edge_1a58e5671b4ae6cf2dd179ef7363dba7c7"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="kt"><span class="pre">auto</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">second</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><br /></dt>
+<span id="_CPPv3NK7sequant13TensorNetwork4Edge6secondEv"></span><span id="_CPPv2NK7sequant13TensorNetwork4Edge6secondEv"></span><span id="sequant::TensorNetwork::Edge::secondC"></span><span class="target" id="classsequant_1_1_tensor_network_1_1_edge_1ae7ac19e75955b4f67b122c117b58fed0"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">const</span></span><span class="w"> </span><span class="kt"><span class="pre">auto</span></span><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="sig-name descname"><span class="n"><span class="pre">second</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><br /></dt>
 <dd></dd></dl>
 
 <dl class="cpp function">
-<dt class="sig sig-object cpp" id="_CPPv4NK7sequant13TensorNetwork4Edge14first_positionEv">
-<span id="_CPPv3NK7sequant13TensorNetwork4Edge14first_positionEv"></span><span id="_CPPv2NK7sequant13TensorNetwork4Edge14first_positionEv"></span><span id="sequant::TensorNetwork::Edge::first_positionC"></span><span class="target" id="classsequant_1_1_tensor_network_1_1_edge_1ab53431fefba8459503040e7db08d86d1"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="kt"><span class="pre">auto</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">first_position</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><br /></dt>
-<dd></dd></dl>
-
-<dl class="cpp function">
-<dt class="sig sig-object cpp" id="_CPPv4NK7sequant13TensorNetwork4Edge15second_positionEv">
-<span id="_CPPv3NK7sequant13TensorNetwork4Edge15second_positionEv"></span><span id="_CPPv2NK7sequant13TensorNetwork4Edge15second_positionEv"></span><span id="sequant::TensorNetwork::Edge::second_positionC"></span><span class="target" id="classsequant_1_1_tensor_network_1_1_edge_1a202b0ae1c00a612b75a04ac20a62190c"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="kt"><span class="pre">auto</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">second_position</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><br /></dt>
-<dd></dd></dl>
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant13TensorNetwork4EdgeixENSt6size_tE">
+<span id="_CPPv3NK7sequant13TensorNetwork4EdgeixENSt6size_tE"></span><span id="_CPPv2NK7sequant13TensorNetwork4EdgeixENSt6size_tE"></span><span id="sequant::TensorNetwork::Edge::subscript-operator__std::sC"></span><span class="target" id="classsequant_1_1_tensor_network_1_1_edge_1a416ec7704c6936916f0604a27a05f652"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">const</span></span><span class="w"> </span><span class="kt"><span class="pre">auto</span></span><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="sig-name descname"><span class="k"><span class="pre">operator</span></span><span class="o"><span class="pre">[]</span></span></span><span class="sig-paren">(</span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">size_t</span></span><span class="w"> </span><span class="n sig-param"><span class="pre">i</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><br /></dt>
+<dd><p>access terminals by index, nonnull terminals first </p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>i</strong> – the ordinal index, <code class="docutils literal notranslate"><span class="pre">i</span></code> must be 0 or 1 </p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>if <code class="docutils literal notranslate"><span class="pre">i==0</span></code> return first(), if nonnull, else second(), if nonnull, else null; if <code class="docutils literal notranslate"><span class="pre">i==1</span></code> return second(), if nonnull, else else null; </p>
+</dd>
+</dl>
+</dd></dl>
 
 <dl class="cpp function">
 <dt class="sig sig-object cpp" id="_CPPv4NK7sequant13TensorNetwork4Edge4sizeEv">
@@ -353,6 +358,78 @@
 <dd></dd></dl>
 
 </div>
+<div class="breathe-sectiondef docutils container">
+<p class="breathe-sectiondef-title rubric" id="breathe-section-title-friends">Friends</p>
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant13TensorNetwork4EdgeeqERK4EdgeRK4Edge">
+<span id="_CPPv3N7sequant13TensorNetwork4EdgeeqERK4EdgeRK4Edge"></span><span id="_CPPv2N7sequant13TensorNetwork4EdgeeqERK4EdgeRK4Edge"></span><span id="sequant::TensorNetwork::Edge::eq-operator__EdgeCR.EdgeCR"></span><span class="target" id="classsequant_1_1_tensor_network_1_1_edge_1abbcb459b8e2c94baabe6ec06a061f874"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">friend</span></span><span class="w"> </span><span class="kt"><span class="pre">bool</span></span><span class="w"> </span><span class="sig-name descname"><span class="k"><span class="pre">operator</span></span><span class="o"><span class="pre">==</span></span></span><span class="sig-paren">(</span><span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="classsequant_1_1_tensor_network.html#_CPPv4N7sequant13TensorNetwork4EdgeE" title="sequant::TensorNetwork::Edge"><span class="n"><span class="pre">Edge</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">a</span></span>, <span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="classsequant_1_1_tensor_network.html#_CPPv4N7sequant13TensorNetwork4EdgeE" title="sequant::TensorNetwork::Edge"><span class="n"><span class="pre">Edge</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">b</span></span><span class="sig-paren">)</span><br /></dt>
+<dd></dd></dl>
+
+</div>
+<dl class="cpp struct">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant13TensorNetwork4Edge8TerminalE">
+<span id="_CPPv3N7sequant13TensorNetwork4Edge8TerminalE"></span><span id="_CPPv2N7sequant13TensorNetwork4Edge8TerminalE"></span><span id="sequant::TensorNetwork::Edge::Terminal"></span><span class="target" id="structsequant_1_1_tensor_network_1_1_edge_1_1_terminal"></span><span class="k"><span class="pre">struct</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">Terminal</span></span></span><br /></dt>
+<dd><div class="breathe-sectiondef docutils container">
+<p class="breathe-sectiondef-title rubric" id="breathe-section-title-public-functions">Public Functions</p>
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant13TensorNetwork4Edge8Terminal8TerminalEv">
+<span id="_CPPv3N7sequant13TensorNetwork4Edge8Terminal8TerminalEv"></span><span id="_CPPv2N7sequant13TensorNetwork4Edge8Terminal8TerminalEv"></span><span id="sequant::TensorNetwork::Edge::Terminal::Terminal"></span><span class="target" id="structsequant_1_1_tensor_network_1_1_edge_1_1_terminal_1ae3ae8de502e553ab0bbfa566197a0458"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">Terminal</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">noexcept</span></span><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant13TensorNetwork4Edge8Terminal8TerminalEi19TensorIndexSlotTypei">
+<span id="_CPPv3N7sequant13TensorNetwork4Edge8Terminal8TerminalEi19TensorIndexSlotTypei"></span><span id="_CPPv2N7sequant13TensorNetwork4Edge8Terminal8TerminalEi19TensorIndexSlotTypei"></span><span id="sequant::TensorNetwork::Edge::Terminal::Terminal__i.TensorIndexSlotType.i"></span><span class="target" id="structsequant_1_1_tensor_network_1_1_edge_1_1_terminal_1a9ad08cb04e866d7b22b655d1e00f6bf7"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">Terminal</span></span></span><span class="sig-paren">(</span><span class="kt"><span class="pre">int</span></span><span class="w"> </span><span class="n sig-param"><span class="pre">tensor_ord</span></span>, <a class="reference internal" href="enum_namespacesequant_1ab0861d36226ce47001355beff3bc28a9.html#_CPPv4N7sequant19TensorIndexSlotTypeE" title="sequant::TensorIndexSlotType"><span class="n"><span class="pre">TensorIndexSlotType</span></span></a><span class="w"> </span><span class="n sig-param"><span class="pre">slot_type</span></span>, <span class="kt"><span class="pre">int</span></span><span class="w"> </span><span class="n sig-param"><span class="pre">slot_group_ord</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">noexcept</span></span><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant13TensorNetwork4Edge8TerminalcvbEv">
+<span id="_CPPv3NK7sequant13TensorNetwork4Edge8TerminalcvbEv"></span><span id="_CPPv2NK7sequant13TensorNetwork4Edge8TerminalcvbEv"></span><span id="sequant::TensorNetwork::Edge::Terminal::castto-b-operatorC"></span><span class="target" id="structsequant_1_1_tensor_network_1_1_edge_1_1_terminal_1a9fc2c47f67cf633674ce5e1265765261"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">explicit</span></span><span class="w"> </span><span class="sig-name descname"><span class="k"><span class="pre">operator</span></span><span class="w"> </span><span class="kt"><span class="pre">bool</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant13TensorNetwork4Edge8Terminal4nullEv">
+<span id="_CPPv3NK7sequant13TensorNetwork4Edge8Terminal4nullEv"></span><span id="_CPPv2NK7sequant13TensorNetwork4Edge8Terminal4nullEv"></span><span id="sequant::TensorNetwork::Edge::Terminal::nullC"></span><span class="target" id="structsequant_1_1_tensor_network_1_1_edge_1_1_terminal_1afd11777aa85b8f0a1e2c2389d8658ea2"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="kt"><span class="pre">bool</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">null</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant13TensorNetwork4Edge8Terminal7nonnullEv">
+<span id="_CPPv3NK7sequant13TensorNetwork4Edge8Terminal7nonnullEv"></span><span id="_CPPv2NK7sequant13TensorNetwork4Edge8Terminal7nonnullEv"></span><span id="sequant::TensorNetwork::Edge::Terminal::nonnullC"></span><span class="target" id="structsequant_1_1_tensor_network_1_1_edge_1_1_terminal_1ae2c3dee69360a7ae2f6a0e8154597ee8"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="kt"><span class="pre">bool</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">nonnull</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><br /></dt>
+<dd></dd></dl>
+
+</div>
+<div class="breathe-sectiondef docutils container">
+<p class="breathe-sectiondef-title rubric" id="breathe-section-title-public-members">Public Members</p>
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant13TensorNetwork4Edge8Terminal10tensor_ordE">
+<span id="_CPPv3N7sequant13TensorNetwork4Edge8Terminal10tensor_ordE"></span><span id="_CPPv2N7sequant13TensorNetwork4Edge8Terminal10tensor_ordE"></span><span id="sequant::TensorNetwork::Edge::Terminal::tensor_ord__i"></span><span class="target" id="structsequant_1_1_tensor_network_1_1_edge_1_1_terminal_1ab7ec65136a6dc514c391e6c34bc7e6da"></span><span class="kt"><span class="pre">int</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">tensor_ord</span></span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="o"><span class="pre">-</span></span><span class="m"><span class="pre">1</span></span><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant13TensorNetwork4Edge8Terminal9slot_typeE">
+<span id="_CPPv3N7sequant13TensorNetwork4Edge8Terminal9slot_typeE"></span><span id="_CPPv2N7sequant13TensorNetwork4Edge8Terminal9slot_typeE"></span><span id="sequant::TensorNetwork::Edge::Terminal::slot_type__TensorIndexSlotType"></span><span class="target" id="structsequant_1_1_tensor_network_1_1_edge_1_1_terminal_1a9a33cbfe3587bf294aeb9a0964dc91b2"></span><a class="reference internal" href="enum_namespacesequant_1ab0861d36226ce47001355beff3bc28a9.html#_CPPv4N7sequant19TensorIndexSlotTypeE" title="sequant::TensorIndexSlotType"><span class="n"><span class="pre">TensorIndexSlotType</span></span></a><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">slot_type</span></span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><a class="reference internal" href="enum_namespacesequant_1ab0861d36226ce47001355beff3bc28a9.html#_CPPv4N7sequant19TensorIndexSlotTypeE" title="sequant::TensorIndexSlotType"><span class="n"><span class="pre">TensorIndexSlotType</span></span></a><span class="p"><span class="pre">::</span></span><a class="reference internal" href="enum_namespacesequant_1ab0861d36226ce47001355beff3bc28a9.html#_CPPv4N7sequant19TensorIndexSlotType7InvalidE" title="sequant::TensorIndexSlotType::Invalid"><span class="n"><span class="pre">Invalid</span></span></a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant13TensorNetwork4Edge8Terminal14slot_group_ordE">
+<span id="_CPPv3N7sequant13TensorNetwork4Edge8Terminal14slot_group_ordE"></span><span id="_CPPv2N7sequant13TensorNetwork4Edge8Terminal14slot_group_ordE"></span><span id="sequant::TensorNetwork::Edge::Terminal::slot_group_ord__i"></span><span class="target" id="structsequant_1_1_tensor_network_1_1_edge_1_1_terminal_1ae5d7dc23c60f2ad112f3fa6935b25adb"></span><span class="kt"><span class="pre">int</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">slot_group_ord</span></span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="o"><span class="pre">-</span></span><span class="m"><span class="pre">1</span></span><br /></dt>
+<dd></dd></dl>
+
+</div>
+<div class="breathe-sectiondef docutils container">
+<p class="breathe-sectiondef-title rubric" id="breathe-section-title-friends">Friends</p>
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant13TensorNetwork4Edge8TerminaleqERK8TerminalRK8Terminal">
+<span id="_CPPv3N7sequant13TensorNetwork4Edge8TerminaleqERK8TerminalRK8Terminal"></span><span id="_CPPv2N7sequant13TensorNetwork4Edge8TerminaleqERK8TerminalRK8Terminal"></span><span id="sequant::TensorNetwork::Edge::Terminal::eq-operator__TerminalCR.TerminalCR"></span><span class="target" id="structsequant_1_1_tensor_network_1_1_edge_1_1_terminal_1abb02a3e4819ec960c11c27a374138224"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">friend</span></span><span class="w"> </span><span class="kt"><span class="pre">bool</span></span><span class="w"> </span><span class="sig-name descname"><span class="k"><span class="pre">operator</span></span><span class="o"><span class="pre">==</span></span></span><span class="sig-paren">(</span><span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="classsequant_1_1_tensor_network.html#_CPPv4N7sequant13TensorNetwork4Edge8TerminalE" title="sequant::TensorNetwork::Edge::Terminal"><span class="n"><span class="pre">Terminal</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">a</span></span>, <span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="classsequant_1_1_tensor_network.html#_CPPv4N7sequant13TensorNetwork4Edge8TerminalE" title="sequant::TensorNetwork::Edge::Terminal"><span class="n"><span class="pre">Terminal</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">b</span></span><span class="sig-paren">)</span><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant13TensorNetwork4Edge8TerminalltERK8TerminalRK8Terminal">
+<span id="_CPPv3N7sequant13TensorNetwork4Edge8TerminalltERK8TerminalRK8Terminal"></span><span id="_CPPv2N7sequant13TensorNetwork4Edge8TerminalltERK8TerminalRK8Terminal"></span><span id="sequant::TensorNetwork::Edge::Terminal::lt-operator__TerminalCR.TerminalCR"></span><span class="target" id="structsequant_1_1_tensor_network_1_1_edge_1_1_terminal_1a6cb7db28c8fdc5058fb9e71b3c0e8322"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">friend</span></span><span class="w"> </span><span class="kt"><span class="pre">bool</span></span><span class="w"> </span><span class="sig-name descname"><span class="k"><span class="pre">operator</span></span><span class="o"><span class="pre">&lt;</span></span></span><span class="sig-paren">(</span><span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="classsequant_1_1_tensor_network.html#_CPPv4N7sequant13TensorNetwork4Edge8TerminalE" title="sequant::TensorNetwork::Edge::Terminal"><span class="n"><span class="pre">Terminal</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">a</span></span>, <span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="classsequant_1_1_tensor_network.html#_CPPv4N7sequant13TensorNetwork4Edge8TerminalE" title="sequant::TensorNetwork::Edge::Terminal"><span class="n"><span class="pre">Terminal</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">b</span></span><span class="sig-paren">)</span><br /></dt>
+<dd></dd></dl>
+
+</div>
+</dd></dl>
+
 </dd></dl>
 
 </section>
@@ -375,7 +452,7 @@
             
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on Nov 27, 2024 9:58:28 PM</div>
+              Last updated on Feb 1, 2025 3:24:07 PM</div>
           </div>
           <div class="right-details">
             <div class="icons">
@@ -400,21 +477,36 @@
           <div class="toc-tree">
             <ul>
 <li><a class="reference internal" href="#">Class TensorNetwork::Edge</a><ul>
-<li><a class="reference internal" href="#nested-relationships">Nested Relationships</a></li>
+<li><a class="reference internal" href="#nested-relationships">Nested Relationships</a><ul>
+<li><a class="reference internal" href="#nested-types">Nested Types</a></li>
+</ul>
+</li>
 <li><a class="reference internal" href="#class-documentation">Class Documentation</a><ul>
 <li><a class="reference internal" href="#_CPPv4N7sequant13TensorNetwork4EdgeE"><code class="docutils literal notranslate"><span class="pre">Edge</span></code></a><ul>
 <li><a class="reference internal" href="#_CPPv4N7sequant13TensorNetwork4Edge4EdgeEv"><code class="docutils literal notranslate"><span class="pre">Edge::Edge()</span></code></a></li>
-<li><a class="reference internal" href="#_CPPv4N7sequant13TensorNetwork4Edge4EdgeEii"><code class="docutils literal notranslate"><span class="pre">Edge::Edge()</span></code></a></li>
-<li><a class="reference internal" href="#_CPPv4N7sequant13TensorNetwork4Edge4EdgeEiPK5Indexi"><code class="docutils literal notranslate"><span class="pre">Edge::Edge()</span></code></a></li>
-<li><a class="reference internal" href="#_CPPv4N7sequant13TensorNetwork4Edge10connect_toEii"><code class="docutils literal notranslate"><span class="pre">Edge::connect_to()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant13TensorNetwork4Edge4EdgeERK8Terminal"><code class="docutils literal notranslate"><span class="pre">Edge::Edge()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant13TensorNetwork4Edge4EdgeERK8TerminalPK5Index"><code class="docutils literal notranslate"><span class="pre">Edge::Edge()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant13TensorNetwork4Edge10connect_toERK8Terminal"><code class="docutils literal notranslate"><span class="pre">Edge::connect_to()</span></code></a></li>
 <li><a class="reference internal" href="#_CPPv4NK7sequant13TensorNetwork4EdgeltERK4Edge"><code class="docutils literal notranslate"><span class="pre">Edge::operator&lt;()</span></code></a></li>
-<li><a class="reference internal" href="#_CPPv4NK7sequant13TensorNetwork4EdgeeqERK4Edge"><code class="docutils literal notranslate"><span class="pre">Edge::operator==()</span></code></a></li>
 <li><a class="reference internal" href="#_CPPv4NK7sequant13TensorNetwork4Edge5firstEv"><code class="docutils literal notranslate"><span class="pre">Edge::first()</span></code></a></li>
 <li><a class="reference internal" href="#_CPPv4NK7sequant13TensorNetwork4Edge6secondEv"><code class="docutils literal notranslate"><span class="pre">Edge::second()</span></code></a></li>
-<li><a class="reference internal" href="#_CPPv4NK7sequant13TensorNetwork4Edge14first_positionEv"><code class="docutils literal notranslate"><span class="pre">Edge::first_position()</span></code></a></li>
-<li><a class="reference internal" href="#_CPPv4NK7sequant13TensorNetwork4Edge15second_positionEv"><code class="docutils literal notranslate"><span class="pre">Edge::second_position()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant13TensorNetwork4EdgeixENSt6size_tE"><code class="docutils literal notranslate"><span class="pre">Edge::operator[]()</span></code></a></li>
 <li><a class="reference internal" href="#_CPPv4NK7sequant13TensorNetwork4Edge4sizeEv"><code class="docutils literal notranslate"><span class="pre">Edge::size()</span></code></a></li>
 <li><a class="reference internal" href="#_CPPv4NK7sequant13TensorNetwork4Edge3idxEv"><code class="docutils literal notranslate"><span class="pre">Edge::idx()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant13TensorNetwork4EdgeeqERK4EdgeRK4Edge"><code class="docutils literal notranslate"><span class="pre">Edge::operator==()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant13TensorNetwork4Edge8TerminalE"><code class="docutils literal notranslate"><span class="pre">Edge::Terminal</span></code></a><ul>
+<li><a class="reference internal" href="#_CPPv4N7sequant13TensorNetwork4Edge8Terminal8TerminalEv"><code class="docutils literal notranslate"><span class="pre">Edge::Terminal::Terminal()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant13TensorNetwork4Edge8Terminal8TerminalEi19TensorIndexSlotTypei"><code class="docutils literal notranslate"><span class="pre">Edge::Terminal::Terminal()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant13TensorNetwork4Edge8TerminalcvbEv"><code class="docutils literal notranslate"><span class="pre">Edge::Terminal::operator</span> <span class="pre">bool()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant13TensorNetwork4Edge8Terminal4nullEv"><code class="docutils literal notranslate"><span class="pre">Edge::Terminal::null()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant13TensorNetwork4Edge8Terminal7nonnullEv"><code class="docutils literal notranslate"><span class="pre">Edge::Terminal::nonnull()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant13TensorNetwork4Edge8Terminal10tensor_ordE"><code class="docutils literal notranslate"><span class="pre">Edge::Terminal::tensor_ord</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant13TensorNetwork4Edge8Terminal9slot_typeE"><code class="docutils literal notranslate"><span class="pre">Edge::Terminal::slot_type</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant13TensorNetwork4Edge8Terminal14slot_group_ordE"><code class="docutils literal notranslate"><span class="pre">Edge::Terminal::slot_group_ord</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant13TensorNetwork4Edge8TerminaleqERK8TerminalRK8Terminal"><code class="docutils literal notranslate"><span class="pre">Edge::Terminal::operator==()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant13TensorNetwork4Edge8TerminalltERK8TerminalRK8Terminal"><code class="docutils literal notranslate"><span class="pre">Edge::Terminal::operator&lt;()</span></code></a></li>
+</ul>
+</li>
 </ul>
 </li>
 </ul>

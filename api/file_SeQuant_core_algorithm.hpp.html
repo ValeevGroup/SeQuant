@@ -7,7 +7,7 @@
 
     <!-- Generated with Sphinx 7.4.7 and Furo 2024.08.06 -->
         <title>File algorithm.hpp - SeQuant Documentation</title>
-      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=a746c00c" />
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=8f2a1f02" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=354aac6f" />
     <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo-extensions.css?v=302659d7" />
@@ -274,10 +274,13 @@
 <section id="includes">
 <h2>Includes<a class="headerlink" href="#includes" title="Link to this heading">¶</a></h2>
 <ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">SeQuant/core/meta.hpp</span></code></p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">algorithm</span></code> (<a class="reference internal" href="#file-sequant-core-algorithm-hpp"><span class="std std-ref">File algorithm.hpp</span></a>)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">boost/dynamic_bitset.hpp</span></code></p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">functional</span></code></p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">iterator</span></code></p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">tuple</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">range/v3/view.hpp</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">tuple</span></code> (<a class="reference internal" href="file_SeQuant_core_utility_tuple.hpp.html#file-sequant-core-utility-tuple-hpp"><span class="std std-ref">File tuple.hpp</span></a>)</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">type_traits</span></code></p></li>
 </ul>
 </section>
@@ -287,6 +290,7 @@
 <li><p><a class="reference internal" href="file_SeQuant_core_abstract_tensor.hpp.html#file-sequant-core-abstract-tensor-hpp"><span class="std std-ref">File abstract_tensor.hpp</span></a></p></li>
 <li><p><a class="reference internal" href="file_SeQuant_core_expr.cpp.html#file-sequant-core-expr-cpp"><span class="std std-ref">File expr.cpp</span></a></p></li>
 <li><p><a class="reference internal" href="file_SeQuant_core_tensor_network.cpp.html#file-sequant-core-tensor-network-cpp"><span class="std std-ref">File tensor_network.cpp</span></a></p></li>
+<li><p><a class="reference internal" href="file_SeQuant_core_tensor_network_v2.cpp.html#file-sequant-core-tensor-network-v2-cpp"><span class="std std-ref">File tensor_network_v2.cpp</span></a></p></li>
 <li><p><a class="reference internal" href="file_SeQuant_domain_eval_eval_result.hpp.html#file-sequant-domain-eval-eval-result-hpp"><span class="std std-ref">File eval_result.hpp</span></a></p></li>
 <li><p><a class="reference internal" href="file_SeQuant_domain_mbpt_spin.cpp.html#file-sequant-domain-mbpt-spin-cpp"><span class="std std-ref">File spin.cpp</span></a></p></li>
 </ul>
@@ -302,6 +306,14 @@
 <ul class="simple">
 <li><p><a class="reference internal" href="function_namespacesequant_1a29c26a57c287f8aa30cc92643c2266a8.html#exhale-function-namespacesequant-1a29c26a57c287f8aa30cc92643c2266a8"><span class="std std-ref">Template Function sequant::bubble_sort</span></a></p></li>
 <li><p><a class="reference internal" href="function_namespacesequant_1a1f2111e048cde79c5edaf1371d65bf50.html#exhale-function-namespacesequant-1a1f2111e048cde79c5edaf1371d65bf50"><span class="std std-ref">Template Function sequant::next_permutation_parity</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a9fb532127bfd2f2fa6242f3a82772b42.html#exhale-function-namespacesequant-1a9fb532127bfd2f2fa6242f3a82772b42"><span class="std std-ref">Template Function sequant::subsequence</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a84696f859cef24bf983198320314ef82.html#exhale-function-namespacesequant-1a84696f859cef24bf983198320314ef82"><span class="std std-ref">Function sequant::subset_indices</span></a></p></li>
+</ul>
+</section>
+<section id="typedefs">
+<h2>Typedefs<a class="headerlink" href="#typedefs" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p><a class="reference internal" href="typedef_namespacesequant_1a29942dea09dd6e9780b9507ad0feaf86.html#exhale-typedef-namespacesequant-1a29942dea09dd6e9780b9507ad0feaf86"><span class="std std-ref">Typedef sequant::suitable_call_operator</span></a></p></li>
 </ul>
 </section>
 </section>
@@ -323,7 +335,7 @@
             
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on Nov 27, 2024 9:58:28 PM</div>
+              Last updated on Feb 1, 2025 3:24:07 PM</div>
           </div>
           <div class="right-details">
             <div class="icons">
@@ -353,6 +365,7 @@
 <li><a class="reference internal" href="#included-by">Included By</a></li>
 <li><a class="reference internal" href="#namespaces">Namespaces</a></li>
 <li><a class="reference internal" href="#functions">Functions</a></li>
+<li><a class="reference internal" href="#typedefs">Typedefs</a></li>
 </ul>
 </li>
 </ul>

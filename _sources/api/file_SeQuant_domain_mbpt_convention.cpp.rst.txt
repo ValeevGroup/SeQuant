@@ -29,13 +29,25 @@ Includes
 
 - ``SeQuant/core/index.hpp`` (:ref:`file_SeQuant_core_index.hpp`)
 
-- ``SeQuant/core/tensor.hpp`` (:ref:`file_SeQuant_core_tensor.hpp`)
+- ``SeQuant/core/space.hpp`` (:ref:`file_SeQuant_core_space.hpp`)
 
 - ``SeQuant/domain/mbpt/convention.hpp`` (:ref:`file_SeQuant_domain_mbpt_convention.hpp`)
 
 - ``SeQuant/domain/mbpt/op.hpp`` (:ref:`file_SeQuant_domain_mbpt_op.hpp`)
 
 - ``SeQuant/domain/mbpt/spin.hpp`` (:ref:`file_SeQuant_domain_mbpt_spin.hpp`)
+
+- ``cassert``
+
+- ``cstdlib``
+
+- ``memory``
+
+- ``string`` (:ref:`file_SeQuant_core_utility_string.cpp`)
+
+- ``string_view``
+
+- ``vector``
 
 
 

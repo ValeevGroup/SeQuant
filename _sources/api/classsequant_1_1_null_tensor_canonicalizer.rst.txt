@@ -3,7 +3,7 @@
 Class NullTensorCanonicalizer
 =============================
 
-- Defined in :ref:`file_SeQuant_core_abstract_tensor.hpp`
+- Defined in :ref:`file_SeQuant_core_tensor_canonicalizer.hpp`
 
 
 Inheritance Relationships

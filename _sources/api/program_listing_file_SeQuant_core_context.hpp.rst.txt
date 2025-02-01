@@ -92,14 +92,16 @@ Program Listing for File context.hpp
    void set_default_context(const Context& ctx,
                             Statistics s = Statistics::Arbitrary);
    
-   void set_default_context(const std::map<Statistics, Context>& ctxs);
+   void set_default_context(const container::map<Statistics, Context>& ctxs);
    
    void reset_default_context();
    
-   [[nodiscard]] detail::ImplicitContextResetter<std::map<Statistics, Context>>
-   set_scoped_default_context(const std::map<Statistics, Context>& ctx);
+   [[nodiscard]] detail::ImplicitContextResetter<
+       container::map<Statistics, Context>>
+   set_scoped_default_context(const container::map<Statistics, Context>& ctx);
    
-   [[nodiscard]] detail::ImplicitContextResetter<std::map<Statistics, Context>>
+   [[nodiscard]] detail::ImplicitContextResetter<
+       container::map<Statistics, Context>>
    set_scoped_default_context(const Context& ctx);
    
    

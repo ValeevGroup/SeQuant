@@ -7,7 +7,7 @@
 
     <!-- Generated with Sphinx 7.4.7 and Furo 2024.08.06 -->
         <title>Program Listing for File context.hpp - SeQuant Documentation</title>
-      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=a746c00c" />
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=8f2a1f02" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=354aac6f" />
     <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo-extensions.css?v=302659d7" />
@@ -345,14 +345,16 @@
 <span class="kt">void</span><span class="w"> </span><span class="nf">set_default_context</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">Context</span><span class="o">&amp;</span><span class="w"> </span><span class="n">ctx</span><span class="p">,</span>
 <span class="w">                         </span><span class="n">Statistics</span><span class="w"> </span><span class="n">s</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Statistics</span><span class="o">::</span><span class="n">Arbitrary</span><span class="p">);</span>
 
-<span class="kt">void</span><span class="w"> </span><span class="nf">set_default_context</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">map</span><span class="o">&lt;</span><span class="n">Statistics</span><span class="p">,</span><span class="w"> </span><span class="n">Context</span><span class="o">&gt;&amp;</span><span class="w"> </span><span class="n">ctxs</span><span class="p">);</span>
+<span class="kt">void</span><span class="w"> </span><span class="nf">set_default_context</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">container</span><span class="o">::</span><span class="n">map</span><span class="o">&lt;</span><span class="n">Statistics</span><span class="p">,</span><span class="w"> </span><span class="n">Context</span><span class="o">&gt;&amp;</span><span class="w"> </span><span class="n">ctxs</span><span class="p">);</span>
 
 <span class="kt">void</span><span class="w"> </span><span class="nf">reset_default_context</span><span class="p">();</span>
 
-<span class="p">[[</span><span class="n">nodiscard</span><span class="p">]]</span><span class="w"> </span><span class="n">detail</span><span class="o">::</span><span class="n">ImplicitContextResetter</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="n">map</span><span class="o">&lt;</span><span class="n">Statistics</span><span class="p">,</span><span class="w"> </span><span class="n">Context</span><span class="o">&gt;&gt;</span>
-<span class="n">set_scoped_default_context</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">map</span><span class="o">&lt;</span><span class="n">Statistics</span><span class="p">,</span><span class="w"> </span><span class="n">Context</span><span class="o">&gt;&amp;</span><span class="w"> </span><span class="n">ctx</span><span class="p">);</span>
+<span class="p">[[</span><span class="n">nodiscard</span><span class="p">]]</span><span class="w"> </span><span class="n">detail</span><span class="o">::</span><span class="n">ImplicitContextResetter</span><span class="o">&lt;</span>
+<span class="w">    </span><span class="n">container</span><span class="o">::</span><span class="n">map</span><span class="o">&lt;</span><span class="n">Statistics</span><span class="p">,</span><span class="w"> </span><span class="n">Context</span><span class="o">&gt;&gt;</span>
+<span class="n">set_scoped_default_context</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">container</span><span class="o">::</span><span class="n">map</span><span class="o">&lt;</span><span class="n">Statistics</span><span class="p">,</span><span class="w"> </span><span class="n">Context</span><span class="o">&gt;&amp;</span><span class="w"> </span><span class="n">ctx</span><span class="p">);</span>
 
-<span class="p">[[</span><span class="n">nodiscard</span><span class="p">]]</span><span class="w"> </span><span class="n">detail</span><span class="o">::</span><span class="n">ImplicitContextResetter</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="n">map</span><span class="o">&lt;</span><span class="n">Statistics</span><span class="p">,</span><span class="w"> </span><span class="n">Context</span><span class="o">&gt;&gt;</span>
+<span class="p">[[</span><span class="n">nodiscard</span><span class="p">]]</span><span class="w"> </span><span class="n">detail</span><span class="o">::</span><span class="n">ImplicitContextResetter</span><span class="o">&lt;</span>
+<span class="w">    </span><span class="n">container</span><span class="o">::</span><span class="n">map</span><span class="o">&lt;</span><span class="n">Statistics</span><span class="p">,</span><span class="w"> </span><span class="n">Context</span><span class="o">&gt;&gt;</span>
 <span class="n">set_scoped_default_context</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">Context</span><span class="o">&amp;</span><span class="w"> </span><span class="n">ctx</span><span class="p">);</span>
 
 
@@ -391,7 +393,7 @@
             
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on Nov 27, 2024 9:58:28 PM</div>
+              Last updated on Feb 1, 2025 3:24:07 PM</div>
           </div>
           <div class="right-details">
             <div class="icons">

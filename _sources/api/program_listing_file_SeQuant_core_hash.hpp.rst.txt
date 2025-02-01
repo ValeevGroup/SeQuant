@@ -34,6 +34,8 @@ Program Listing for File hash.hpp
    
    namespace sequant {
    
+   class ExprPtr;
+   
    namespace hash {
    
    enum class Impl { BoostPre181 = 1, Boost181OrLater = 2 };
@@ -97,6 +99,8 @@ Program Listing for File hash.hpp
    auto hash_value(const T& obj) {
      return sequant_boost::hash_value(obj);
    }
+   
+   std::size_t hash_value(const ExprPtr& expr);
    
    // clang-format off
    // rationale:

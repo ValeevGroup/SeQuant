@@ -50,6 +50,8 @@ Program Listing for File tensor.hpp
    DEFINE_STRONG_TYPE_FOR_RANGE_AND_RANGESIZE(bra);
    // strong type wrapper for objects associated with ket
    DEFINE_STRONG_TYPE_FOR_RANGE_AND_RANGESIZE(ket);
+   // strong type wrapper for objects associated with aux
+   DEFINE_STRONG_TYPE_FOR_RANGE_AND_RANGESIZE(aux);
    
    class Tensor : public Expr, public AbstractTensor, public Labeled {
     private:
@@ -86,6 +88,8 @@ Program Listing for File tensor.hpp
    
      auto braket() { return ranges::views::concat(bra_, ket_); }
    
+     auto indices() { return ranges::views::concat(bra_, ket_, aux_); }
+   
      void assert_nonreserved_label(std::wstring_view label) const;
    
      // utility for dispatching to private ctor
@@ -94,22 +98,28 @@ Program Listing for File tensor.hpp
      // list of friends who can make Tensor objects with reserved labels
      friend ExprPtr make_overlap(const Index &bra_index, const Index &ket_index);
    
-     template <
-         typename IndexRange1, typename IndexRange2,
-         typename = std::enable_if_t<
-             (meta::is_statically_castable_v<
-                 meta::range_value_t<IndexRange1>,
-                 Index>)&&(meta::
-                               is_statically_castable_v<
-                                   meta::range_value_t<IndexRange2>, Index>)>>
+     template <typename IndexRange1, typename IndexRange2, typename IndexRange3,
+               typename = std::enable_if_t<
+                   (meta::is_statically_castable_v<
+                       meta::range_value_t<IndexRange1>,
+                       Index>)&&(meta::
+                                     is_statically_castable_v<
+                                         meta::range_value_t<IndexRange2>,
+                                         Index>)&&(meta::
+                                                       is_statically_castable_v<
+                                                           meta::range_value_t<
+                                                               IndexRange3>,
+                                                           Index>)>>
      Tensor(std::wstring_view label, const bra<IndexRange1> &bra_indices,
-            const ket<IndexRange2> &ket_indices, reserved_tag,
+            const ket<IndexRange2> &ket_indices,
+            const aux<IndexRange3> &aux_indices, reserved_tag,
             Symmetry s = Symmetry::nonsymm,
             BraKetSymmetry bks = get_default_context().braket_symmetry(),
             ParticleSymmetry ps = ParticleSymmetry::symm)
          : label_(label),
            bra_(make_indices(bra_indices)),
            ket_(make_indices(ket_indices)),
+           aux_(make_indices(aux_indices)),
            symmetry_(s),
            braket_symmetry_(bks),
            particle_symmetry_(ps) {
@@ -117,13 +127,15 @@ Program Listing for File tensor.hpp
      }
    
      Tensor(std::wstring_view label, bra<index_container_type> &&bra_indices,
-            ket<index_container_type> &&ket_indices, reserved_tag,
+            ket<index_container_type> &&ket_indices,
+            aux<index_container_type> &&aux_indices, reserved_tag,
             Symmetry s = Symmetry::nonsymm,
             BraKetSymmetry bks = get_default_context().braket_symmetry(),
             ParticleSymmetry ps = ParticleSymmetry::symm)
          : label_(label),
            bra_(std::move(bra_indices)),
            ket_(std::move(ket_indices)),
+           aux_(std::move(aux_indices)),
            symmetry_(s),
            braket_symmetry_(bks),
            particle_symmetry_(ps) {
@@ -146,7 +158,30 @@ Program Listing for File tensor.hpp
             const ket<IndexRange2> &ket_indices, Symmetry s = Symmetry::nonsymm,
             BraKetSymmetry bks = get_default_context().braket_symmetry(),
             ParticleSymmetry ps = ParticleSymmetry::symm)
-         : Tensor(label, bra_indices, ket_indices, reserved_tag{}, s, bks, ps) {
+         : Tensor(label, bra_indices, ket_indices, sequant::aux{}, reserved_tag{},
+                  s, bks, ps) {
+       assert_nonreserved_label(label_);
+     }
+   
+     template <typename IndexRange1, typename IndexRange2, typename IndexRange3,
+               typename = std::enable_if_t<
+                   (meta::is_statically_castable_v<
+                       meta::range_value_t<IndexRange1>,
+                       Index>)&&(meta::
+                                     is_statically_castable_v<
+                                         meta::range_value_t<IndexRange2>,
+                                         Index>)&&(meta::
+                                                       is_statically_castable_v<
+                                                           meta::range_value_t<
+                                                               IndexRange3>,
+                                                           Index>)>>
+     Tensor(std::wstring_view label, const bra<IndexRange1> &bra_indices,
+            const ket<IndexRange2> &ket_indices,
+            const aux<IndexRange3> &aux_indices, Symmetry s = Symmetry::nonsymm,
+            BraKetSymmetry bks = get_default_context().braket_symmetry(),
+            ParticleSymmetry ps = ParticleSymmetry::symm)
+         : Tensor(label, bra_indices, ket_indices, aux_indices, reserved_tag{}, s,
+                  bks, ps) {
        assert_nonreserved_label(label_);
      }
    
@@ -156,7 +191,18 @@ Program Listing for File tensor.hpp
             BraKetSymmetry bks = get_default_context().braket_symmetry(),
             ParticleSymmetry ps = ParticleSymmetry::symm)
          : Tensor(label, std::move(bra_indices), std::move(ket_indices),
-                  reserved_tag{}, s, bks, ps) {
+                  sequant::aux{}, reserved_tag{}, s, bks, ps) {
+       assert_nonreserved_label(label_);
+     }
+   
+     Tensor(std::wstring_view label, bra<index_container_type> &&bra_indices,
+            ket<index_container_type> &&ket_indices,
+            aux<index_container_type> &&aux_indices,
+            Symmetry s = Symmetry::nonsymm,
+            BraKetSymmetry bks = get_default_context().braket_symmetry(),
+            ParticleSymmetry ps = ParticleSymmetry::symm)
+         : Tensor(label, std::move(bra_indices), std::move(ket_indices),
+                  std::move(aux_indices), reserved_tag{}, s, bks, ps) {
        assert_nonreserved_label(label_);
      }
    
@@ -169,14 +215,18 @@ Program Listing for File tensor.hpp
      std::wstring_view label() const override { return label_; }
      const auto &bra() const { return bra_; }
      const auto &ket() const { return ket_; }
+     const auto &aux() const { return aux_; }
      auto braket() const { return ranges::views::concat(bra_, ket_); }
+     auto indices() const { return ranges::views::concat(bra_, ket_, aux_); }
      auto const_braket() const { return this->braket(); }
+     auto const_indices() const { return this->indices(); }
      Symmetry symmetry() const { return symmetry_; }
      BraKetSymmetry braket_symmetry() const { return braket_symmetry_; }
      ParticleSymmetry particle_symmetry() const { return particle_symmetry_; }
    
      std::size_t bra_rank() const { return bra_.size(); }
      std::size_t ket_rank() const { return ket_.size(); }
+     std::size_t aux_rank() const { return aux_.size(); }
      std::size_t rank() const {
        if (bra_rank() != ket_rank()) {
          throw std::logic_error("Tensor::rank(): bra rank != ket rank");
@@ -198,7 +248,20 @@ Program Listing for File tensor.hpp
        for (const auto &i : this->ket()) result += sequant::to_latex(i);
        result += L"}_{";
        for (const auto &i : this->bra()) result += sequant::to_latex(i);
-       result += L"}}";
+       result += L"}";
+       if (!this->aux_.empty()) {
+         result += L"[";
+         const index_container_type &__aux = this->aux();
+         for (std::size_t i = 0; i < aux_rank(); ++i) {
+           result += sequant::to_latex(__aux[i]);
+   
+           if (i + 1 < aux_rank()) {
+             result += L",";
+           }
+         }
+         result += L"]";
+       }
+       result += L"}";
        return result;
      }
    
@@ -210,7 +273,7 @@ Program Listing for File tensor.hpp
                typename... Args>
      bool transform_indices(const Map<Index, Index, Args...> &index_map) {
        bool mutated = false;
-       ranges::for_each(braket(), [&](auto &idx) {
+       ranges::for_each(indices(), [&](auto &idx) {
          if (idx.transform(index_map)) mutated = true;
        });
        if (mutated) this->reset_hash_value();
@@ -222,7 +285,7 @@ Program Listing for File tensor.hpp
      ExprPtr clone() const override { return ex<Tensor>(*this); }
    
      void reset_tags() const {
-       ranges::for_each(braket(), [](const auto &idx) { idx.reset_tag(); });
+       ranges::for_each(indices(), [](const auto &idx) { idx.reset_tag(); });
      }
    
      hash_type bra_hash_value() const {
@@ -235,6 +298,7 @@ Program Listing for File tensor.hpp
      std::wstring label_{};
      sequant::bra<index_container_type> bra_{};
      sequant::ket<index_container_type> ket_{};
+     sequant::aux<index_container_type> aux_{};
      Symmetry symmetry_ = Symmetry::invalid;
      BraKetSymmetry braket_symmetry_ = BraKetSymmetry::invalid;
      ParticleSymmetry particle_symmetry_ = ParticleSymmetry::invalid;
@@ -255,6 +319,7 @@ Program Listing for File tensor.hpp
        auto val = hash::range(begin(bra()), end(bra()));
        bra_hash_value_ = val;
        hash::range(val, begin(ket()), end(ket()));
+       hash::range(val, begin(aux()), end(aux()));
        hash::combine(val, label_);
        hash::combine(val, symmetry_);
        hash_value_ = val;
@@ -270,7 +335,8 @@ Program Listing for File tensor.hpp
        if (this->label() == that_cast.label() &&
            this->symmetry() == that_cast.symmetry() &&
            this->bra_rank() == that_cast.bra_rank() &&
-           this->ket_rank() == that_cast.ket_rank()) {
+           this->ket_rank() == that_cast.ket_rank() &&
+           this->aux_rank() == that_cast.aux_rank()) {
          // compare hash values first
          if (this->hash_value() ==
              that.hash_value())  // hash values agree -> do full comparison
@@ -282,32 +348,43 @@ Program Listing for File tensor.hpp
      }
    
      bool static_less_than(const Expr &that) const override {
-       const auto &that_cast = static_cast<const Tensor &>(that);
        if (this == &that) return false;
-       if (this->label() == that_cast.label()) {
-         if (this->bra_rank() == that_cast.bra_rank()) {
-           if (this->ket_rank() == that_cast.ket_rank()) {
-             //          v1: compare hashes only
-             //          return Expr::static_less_than(that);
-             //          v2: compare fully
-             if (this->bra_hash_value() == that_cast.bra_hash_value()) {
-               return std::lexicographical_compare(
-                   this->ket().begin(), this->ket().end(), that_cast.ket().begin(),
-                   that_cast.ket().end());
-             } else {
-               return std::lexicographical_compare(
-                   this->bra().begin(), this->bra().end(), that_cast.bra().begin(),
-                   that_cast.bra().end());
-             }
-           } else {
-             return this->ket_rank() < that_cast.ket_rank();
-           }
-         } else {
-           return this->bra_rank() < that_cast.bra_rank();
-         }
-       } else {
+   
+       const auto &that_cast = static_cast<const Tensor &>(that);
+       if (this->label() != that_cast.label()) {
          return this->label() < that_cast.label();
        }
+   
+       if (this->bra_rank() != that_cast.bra_rank()) {
+         return this->bra_rank() < that_cast.bra_rank();
+       }
+   
+       if (this->ket_rank() != that_cast.ket_rank()) {
+         return this->ket_rank() < that_cast.ket_rank();
+       }
+   
+       if (this->aux_rank() != that_cast.aux_rank()) {
+         return this->aux_rank() < that_cast.aux_rank();
+       }
+   
+       //          v1: compare hashes only
+       //          return Expr::static_less_than(that);
+       //          v2: compare fully
+       if (this->bra_hash_value() != that_cast.bra_hash_value()) {
+         return std::lexicographical_compare(
+             this->bra().begin(), this->bra().end(), that_cast.bra().begin(),
+             that_cast.bra().end());
+       }
+   
+       if (this->ket() != that_cast.ket()) {
+         return std::lexicographical_compare(
+             this->ket().begin(), this->ket().end(), that_cast.ket().begin(),
+             that_cast.ket().end());
+       }
+   
+       return std::lexicographical_compare(this->aux().begin(), this->aux().end(),
+                                           that_cast.aux().begin(),
+                                           that_cast.aux().end());
      }
    
      // these implement the AbstractTensor interface
@@ -319,11 +396,19 @@ Program Listing for File tensor.hpp
        return ranges::counted_view<const Index *>(
            ket_.empty() ? nullptr : &(ket_[0]), ket_.size());
      }
+     AbstractTensor::const_any_view_randsz _aux() const override final {
+       return ranges::counted_view<const Index *>(
+           aux_.empty() ? nullptr : &(aux_[0]), aux_.size());
+     }
      AbstractTensor::const_any_view_rand _braket() const override final {
        return braket();
      }
+     AbstractTensor::const_any_view_rand _indices() const override final {
+       return indices();
+     }
      std::size_t _bra_rank() const override final { return bra_rank(); }
      std::size_t _ket_rank() const override final { return ket_rank(); }
+     std::size_t _aux_rank() const override final { return aux_rank(); }
      Symmetry _symmetry() const override final { return symmetry_; }
      BraKetSymmetry _braket_symmetry() const override final {
        return braket_symmetry_;
@@ -359,8 +444,17 @@ Program Listing for File tensor.hpp
        return ranges::counted_view<Index *>(ket_.empty() ? nullptr : &(ket_[0]),
                                             ket_.size());
      }
+     AbstractTensor::any_view_randsz _aux_mutable() override final {
+       this->reset_hash_value();
+       return ranges::counted_view<Index *>(aux_.empty() ? nullptr : &(aux_[0]),
+                                            aux_.size());
+     }
    
    };  // class Tensor
+   
+   static_assert(is_tensor_v<Tensor>,
+                 "The Tensor class does not fulfill the requirements of the "
+                 "Tensor interface");
    
    using TensorPtr = std::shared_ptr<Tensor>;
    
@@ -368,7 +462,7 @@ Program Listing for File tensor.hpp
    
    inline ExprPtr make_overlap(const Index &bra_index, const Index &ket_index) {
      return ex<Tensor>(Tensor(overlap_label(), bra{bra_index}, ket{ket_index},
-                              Tensor::reserved_tag{}));
+                              aux{}, Tensor::reserved_tag{}));
    }
    
    }  // namespace sequant

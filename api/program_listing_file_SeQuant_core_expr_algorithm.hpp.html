@@ -7,7 +7,7 @@
 
     <!-- Generated with Sphinx 7.4.7 and Furo 2024.08.06 -->
         <title>Program Listing for File expr_algorithm.hpp - SeQuant Documentation</title>
-      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=a746c00c" />
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=8f2a1f02" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=354aac6f" />
     <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo-extensions.css?v=302659d7" />
@@ -276,17 +276,17 @@
 <span class="k">namespace</span><span class="w"> </span><span class="nn">sequant</span><span class="w"> </span><span class="p">{</span>
 
 <span class="kr">inline</span><span class="w"> </span><span class="n">ExprPtr</span><span class="o">&amp;</span><span class="w"> </span><span class="nf">canonicalize</span><span class="p">(</span><span class="n">ExprPtr</span><span class="o">&amp;</span><span class="w"> </span><span class="n">expr</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
-<span class="w">  </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">biproduct</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">expr</span><span class="o">-&gt;</span><span class="n">canonicalize</span><span class="p">();</span>
-<span class="w">  </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">biproduct</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">biproduct</span><span class="o">-&gt;</span><span class="n">is</span><span class="o">&lt;</span><span class="n">Constant</span><span class="o">&gt;</span><span class="p">())</span><span class="w"> </span><span class="p">{</span>
-<span class="w">    </span><span class="n">expr</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">biproduct</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">expr</span><span class="p">;</span>
+<span class="w">  </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">byproduct</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">expr</span><span class="o">-&gt;</span><span class="n">canonicalize</span><span class="p">();</span>
+<span class="w">  </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">byproduct</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">byproduct</span><span class="o">-&gt;</span><span class="n">is</span><span class="o">&lt;</span><span class="n">Constant</span><span class="o">&gt;</span><span class="p">())</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">expr</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">byproduct</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">expr</span><span class="p">;</span>
 <span class="w">  </span><span class="p">}</span>
 <span class="w">  </span><span class="k">return</span><span class="w"> </span><span class="n">expr</span><span class="p">;</span>
 <span class="p">}</span>
 
 <span class="kr">inline</span><span class="w"> </span><span class="n">ExprPtr</span><span class="w"> </span><span class="nf">canonicalize</span><span class="p">(</span><span class="n">ExprPtr</span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">expr_rv</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
-<span class="w">  </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">biproduct</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">expr_rv</span><span class="o">-&gt;</span><span class="n">canonicalize</span><span class="p">();</span>
-<span class="w">  </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">biproduct</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">biproduct</span><span class="o">-&gt;</span><span class="n">is</span><span class="o">&lt;</span><span class="n">Constant</span><span class="o">&gt;</span><span class="p">())</span><span class="w"> </span><span class="p">{</span>
-<span class="w">    </span><span class="n">expr_rv</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">biproduct</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">expr_rv</span><span class="p">;</span>
+<span class="w">  </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">byproduct</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">expr_rv</span><span class="o">-&gt;</span><span class="n">canonicalize</span><span class="p">();</span>
+<span class="w">  </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">byproduct</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">byproduct</span><span class="o">-&gt;</span><span class="n">is</span><span class="o">&lt;</span><span class="n">Constant</span><span class="o">&gt;</span><span class="p">())</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">expr_rv</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">byproduct</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">expr_rv</span><span class="p">;</span>
 <span class="w">  </span><span class="p">}</span>
 <span class="w">  </span><span class="k">return</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">move</span><span class="p">(</span><span class="n">expr_rv</span><span class="p">);</span>
 <span class="p">}</span>
@@ -700,7 +700,7 @@
             
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on Nov 27, 2024 9:58:28 PM</div>
+              Last updated on Feb 1, 2025 3:24:07 PM</div>
           </div>
           <div class="right-details">
             <div class="icons">

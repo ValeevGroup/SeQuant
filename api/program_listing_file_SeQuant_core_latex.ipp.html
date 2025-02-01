@@ -7,7 +7,7 @@
 
     <!-- Generated with Sphinx 7.4.7 and Furo 2024.08.06 -->
         <title>Program Listing for File latex.ipp - SeQuant Documentation</title>
-      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=a746c00c" />
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=8f2a1f02" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=354aac6f" />
     <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo-extensions.css?v=302659d7" />
@@ -272,6 +272,7 @@
 
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;SeQuant/core/latex.hpp&gt;</span>
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;SeQuant/core/wstring.hpp&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;SeQuant/core/container.hpp&gt;</span>
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;map&gt;</span>
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;optional&gt;</span>
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;type_traits&gt;</span>
@@ -431,7 +432,7 @@
 <span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">is_ascii</span><span class="p">(</span><span class="n">ch</span><span class="p">))</span><span class="w"> </span><span class="p">{</span><span class="w">  </span><span class="c1">// check for combined characters</span>
 <span class="w">      </span><span class="p">{</span><span class="w">                   </span><span class="c1">// tilde</span>
 <span class="w">                          </span><span class="c1">// lower-case characters with tilde</span>
-<span class="w">        </span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">map</span><span class="o">&lt;</span><span class="n">str_t</span><span class="p">,</span><span class="w"> </span><span class="n">str_t</span><span class="o">&gt;</span><span class="w"> </span><span class="n">lc</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">const</span><span class="w"> </span><span class="n">container</span><span class="o">::</span><span class="n">map</span><span class="o">&lt;</span><span class="n">str_t</span><span class="p">,</span><span class="w"> </span><span class="n">str_t</span><span class="o">&gt;</span><span class="w"> </span><span class="n">lc</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span>
 <span class="w">            </span><span class="p">{</span><span class="n">SQ_STRLIT</span><span class="p">(</span><span class="n">Char</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;ã&quot;</span><span class="p">),</span><span class="w"> </span><span class="n">SQ_STRLIT</span><span class="p">(</span><span class="n">Char</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;</span><span class="se">\\</span><span class="s">tilde{a}&quot;</span><span class="p">)},</span>
 <span class="w">            </span><span class="p">{</span><span class="n">SQ_STRLIT</span><span class="p">(</span><span class="n">Char</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;ẽ&quot;</span><span class="p">),</span><span class="w"> </span><span class="n">SQ_STRLIT</span><span class="p">(</span><span class="n">Char</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;</span><span class="se">\\</span><span class="s">tilde{e}&quot;</span><span class="p">)},</span>
 <span class="w">            </span><span class="p">{</span><span class="n">SQ_STRLIT</span><span class="p">(</span><span class="n">Char</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;ñ&quot;</span><span class="p">),</span><span class="w"> </span><span class="n">SQ_STRLIT</span><span class="p">(</span><span class="n">Char</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;</span><span class="se">\\</span><span class="s">tilde{n}&quot;</span><span class="p">)},</span>
@@ -443,7 +444,7 @@
 <span class="w">          </span><span class="n">append</span><span class="p">(</span><span class="n">lc_it</span><span class="o">-&gt;</span><span class="n">second</span><span class="p">);</span>
 <span class="w">        </span><span class="p">}</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="p">{</span>
 <span class="w">          </span><span class="c1">// upper-case characters with tilde</span>
-<span class="w">          </span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">map</span><span class="o">&lt;</span><span class="n">str_t</span><span class="p">,</span><span class="w"> </span><span class="n">str_t</span><span class="o">&gt;</span><span class="w"> </span><span class="n">uc</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span>
+<span class="w">          </span><span class="k">const</span><span class="w"> </span><span class="n">container</span><span class="o">::</span><span class="n">map</span><span class="o">&lt;</span><span class="n">str_t</span><span class="p">,</span><span class="w"> </span><span class="n">str_t</span><span class="o">&gt;</span><span class="w"> </span><span class="n">uc</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span>
 <span class="w">              </span><span class="p">{</span><span class="n">SQ_STRLIT</span><span class="p">(</span><span class="n">Char</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;Ã&quot;</span><span class="p">),</span><span class="w"> </span><span class="n">SQ_STRLIT</span><span class="p">(</span><span class="n">Char</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;</span><span class="se">\\</span><span class="s">tilde{A}&quot;</span><span class="p">)},</span>
 <span class="w">              </span><span class="p">{</span><span class="n">SQ_STRLIT</span><span class="p">(</span><span class="n">Char</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;Ẽ&quot;</span><span class="p">),</span><span class="w"> </span><span class="n">SQ_STRLIT</span><span class="p">(</span><span class="n">Char</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;</span><span class="se">\\</span><span class="s">tilde{E}&quot;</span><span class="p">)},</span>
 <span class="w">              </span><span class="p">{</span><span class="n">SQ_STRLIT</span><span class="p">(</span><span class="n">Char</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;Ñ&quot;</span><span class="p">),</span><span class="w"> </span><span class="n">SQ_STRLIT</span><span class="p">(</span><span class="n">Char</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;</span><span class="se">\\</span><span class="s">tilde{N}&quot;</span><span class="p">)},</span>
@@ -491,7 +492,7 @@
             
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on Nov 27, 2024 9:58:28 PM</div>
+              Last updated on Feb 1, 2025 3:24:07 PM</div>
           </div>
           <div class="right-details">
             <div class="icons">
