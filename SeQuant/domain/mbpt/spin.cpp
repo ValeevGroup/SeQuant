@@ -627,66 +627,25 @@ ExprPtr expand_A_op(const ExprPtr& expr) {
     return nullptr;
 }
 
-container::svector<container::map<Index, Index>> P_maps(const Tensor& P,
-                                                        bool keep_canonical,
-                                                        bool pair_wise) {
+container::svector<container::map<Index, Index>> P_maps(const Tensor& P) {
   assert(P.label() == L"P");
 
-  // pair-wise is the preferred way of generating replacement maps
-  if (pair_wise) {
-    // Return pair-wise replacements (this is the preferred method)
-    // P_ij -> {{i,j},{j,i}}
-    // P_ijkl -> {{i,j},{j,i},{k,l},{l,k}}
-    // P_ij^ab -> {{i,j},{j,i},{a,b},{b,a}}
-    assert(P.bra_rank() % 2 == 0 && P.ket_rank() % 2 == 0);
-    container::map<Index, Index> idx_rep;
-    for (std::size_t i = 0; i != P.const_braket().size(); i += 2) {
-      idx_rep.emplace(P.const_braket().at(i), P.const_braket().at(i + 1));
-      idx_rep.emplace(P.const_braket().at(i + 1), P.const_braket().at(i));
-    }
-
-    assert(idx_rep.size() == (P.bra_rank() + P.ket_rank()));
-    return container::svector<container::map<Index, Index>>{idx_rep};
+  // Return pair-wise replacements
+  // P_ij -> {{i,j},{j,i}}
+  // P_ijkl \equiv P_ij P_kl -> {{i,j},{j,i},{k,l},{l,k}}
+  // P_ij^ab \equiv P_ij P^ab -> {{i,j},{j,i},{a,b},{b,a}}
+  assert(P.bra_rank() % 2 == 0 && P.ket_rank() % 2 == 0);
+  container::map<Index, Index> idx_rep;
+  for (std::size_t i = 0; i != P.const_braket().size(); i += 2) {
+    idx_rep.emplace(P.const_braket().at(i), P.const_braket().at(i + 1));
+    idx_rep.emplace(P.const_braket().at(i + 1), P.const_braket().at(i));
   }
 
-  size_t size;
-  if (P.bra_rank() == 0 || P.ket_rank() == 0)
-    size = std::max(P.bra_rank(), P.ket_rank());
-  else
-    size = std::min(P.bra_rank(), P.ket_rank());
-
-  container::svector<int> int_list(size);
-  std::iota(std::begin(int_list), std::end(int_list), 0);
-  container::svector<container::map<Index, Index>> result;
-  container::svector<Index> P_braket(P.const_braket().begin(),
-                                     P.const_braket().end());
-
-  do {
-    auto P_braket_ptr = P_braket.begin();
-    container::map<Index, Index> replacement_map;
-    for (std::size_t i : int_list) {
-      if (i < P.bra_rank()) {
-        replacement_map.emplace(*P_braket_ptr, P.bra()[i]);
-        P_braket_ptr++;
-      }
-    }
-    for (std::size_t i : int_list) {
-      if (i < P.ket_rank()) {
-        replacement_map.emplace(*P_braket_ptr, P.ket()[i]);
-        P_braket_ptr++;
-      }
-    }
-    result.push_back(replacement_map);
-  } while (std::next_permutation(int_list.begin(), int_list.end()));
-
-  if (!keep_canonical) {
-    result.erase(result.begin());
-  }
-  return result;
+  assert(idx_rep.size() == (P.bra_rank() + P.ket_rank()));
+  return container::svector<container::map<Index, Index>>{idx_rep};
 }
 
-ExprPtr expand_P_op(const Product& product, bool keep_canonical,
-                    bool pair_wise) {
+ExprPtr expand_P_op(const Product& product) {
   bool has_P_operator = false;
 
   // Check P and build a replacement map
@@ -697,7 +656,7 @@ ExprPtr expand_P_op(const Product& product, bool keep_canonical,
       auto P = term->as<Tensor>();
       if ((P.label() == L"P") && (P.bra_rank() > 1 || (P.ket_rank() > 1))) {
         has_P_operator = true;
-        auto map = P_maps(P, keep_canonical, pair_wise);
+        auto map = P_maps(P);
         map_list.insert(map_list.end(), map.begin(), map.end());
       } else if ((P.label() == L"P") &&
                  (P.bra_rank() == 1 && (P.ket_rank() == 1))) {
@@ -725,15 +684,15 @@ ExprPtr expand_P_op(const Product& product, bool keep_canonical,
   return result;
 }
 
-ExprPtr expand_P_op(const ExprPtr& expr, bool keep_canonical, bool pair_wise) {
+ExprPtr expand_P_op(const ExprPtr& expr) {
   if (expr->is<Constant>() || expr->is<Tensor>())
     return expr;
   else if (expr->is<Product>())
-    return expand_P_op(expr->as<Product>(), keep_canonical, pair_wise);
+    return expand_P_op(expr->as<Product>());
   else if (expr->is<Sum>()) {
     auto result = std::make_shared<Sum>();
     for (auto& summand : *expr) {
-      result->append(expand_P_op(summand, keep_canonical, pair_wise));
+      result->append(expand_P_op(summand));
     }
     return result;
   } else
@@ -1453,7 +1412,7 @@ std::vector<ExprPtr> open_shell_CC_spintrace(const ExprPtr& expr) {
     for (std::size_t s = 0; s != os_st.size(); ++s) {
       os_st.at(s) = P_vec.at(s) * term;
       expand(os_st.at(s));
-      os_st.at(s) = expand_P_op(os_st.at(s), false, true);
+      os_st.at(s) = expand_P_op(os_st.at(s));
       os_st.at(s) =
           open_shell_spintrace(os_st.at(s), external_indices(A), s).at(0);
       if (i > 2) {

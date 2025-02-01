@@ -1112,7 +1112,7 @@ SECTION("Relation in spin P operators") {
 
   auto p6_input = p_aab * input;
   expand(p6_input);
-  auto p6_result = expand_P_op(p6_input, false);
+  auto p6_result = expand_P_op(p6_input);
   p6_result->visit(reset_idx_tags);
   simplify(p6_result);
 
@@ -1132,7 +1132,7 @@ SECTION("Relation in spin P operators") {
 
   auto p7_input = p_abb * input;
   expand(p7_input);
-  auto p7_result = expand_P_op(p7_input, false);
+  auto p7_result = expand_P_op(p7_input);
   p7_result->visit(reset_idx_tags);
   simplify(p7_result);
 
