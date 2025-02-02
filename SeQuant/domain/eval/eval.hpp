@@ -384,7 +384,6 @@ auto evaluate(NodesT const& nodes, Le const& le, Args&&... args) {
 #else
     result->add_inplace(*right);
 #endif
-    result->add_inplace(*right);
   }
 
   return result;
