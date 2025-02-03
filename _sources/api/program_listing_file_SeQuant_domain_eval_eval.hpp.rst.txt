@@ -309,7 +309,6 @@ Program Listing for File eval.hpp
    #else
        result->add_inplace(*right);
    #endif
-       result->add_inplace(*right);
      }
    
      return result;
