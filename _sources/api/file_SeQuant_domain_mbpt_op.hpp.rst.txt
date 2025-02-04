@@ -163,9 +163,9 @@ Functions
 ---------
 
 
-- :ref:`exhale_function_namespacesequant_1_1mbpt_1afc8c0e61721e9d23ef85730471b7d5ce`
-
 - :ref:`exhale_function_namespacesequant_1_1mbpt_1a7cb793919553f2c3387eab53ee55b590`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1afc8c0e61721e9d23ef85730471b7d5ce`
 
 - :ref:`exhale_function_namespacesequant_1_1mbpt_1a8ec0f4965fc7e1017a447b9943e299f9`
 

@@ -192,10 +192,6 @@ Program Listing for File tensor_network.hpp
        static inline Terminal null_terminal_ = {};
      };
    
-     static inline auto edge2index_ = [](const Edge &e) -> const Index & {
-       return e.idx();
-     };
-   
     public:
      template <typename ExprPtrRange>
      TensorNetwork(ExprPtrRange &exprptr_range) {
@@ -288,10 +284,6 @@ Program Listing for File tensor_network.hpp
      // have unique labels (not full labels)
      mutable named_indices_t ext_indices_;
      mutable named_indices_t pure_proto_indices_;
-     mutable ranges::concat_view<
-         ranges::transform_view<ranges::ref_view<edges_t>, decltype(edge2index_)>,
-         ranges::ref_view<named_indices_t>>
-         grand_index_list_;
    
      // replacements of anonymous indices produced by the last call to
      // canonicalize()

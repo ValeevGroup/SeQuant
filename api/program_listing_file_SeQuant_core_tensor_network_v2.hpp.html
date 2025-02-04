@@ -420,10 +420,6 @@
 <span class="w">    </span><span class="n">Index</span><span class="w"> </span><span class="n">index</span><span class="p">;</span>
 <span class="w">  </span><span class="p">};</span>
 
-<span class="w">  </span><span class="k">static</span><span class="w"> </span><span class="kr">inline</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">edge2index_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[](</span><span class="k">const</span><span class="w"> </span><span class="n">Edge</span><span class="w"> </span><span class="o">&amp;</span><span class="n">e</span><span class="p">)</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="n">Index</span><span class="w"> </span><span class="o">&amp;</span><span class="w"> </span><span class="p">{</span>
-<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">e</span><span class="p">.</span><span class="n">idx</span><span class="p">();</span>
-<span class="w">  </span><span class="p">};</span>
-
 <span class="w">  </span><span class="k">struct</span><span class="w"> </span><span class="nc">Graph</span><span class="w"> </span><span class="p">{</span>
 <span class="w">    </span><span class="k">using</span><span class="w"> </span><span class="n">VertexColor</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">uint32_t</span><span class="p">;</span>
 
@@ -520,11 +516,6 @@
 <span class="w">  </span><span class="kt">bool</span><span class="w"> </span><span class="n">have_edges_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">false</span><span class="p">;</span>
 <span class="w">  </span><span class="n">NamedIndexSet</span><span class="w"> </span><span class="n">ext_indices_</span><span class="p">;</span>
 <span class="w">  </span><span class="n">NamedIndexSet</span><span class="w"> </span><span class="n">pure_proto_indices_</span><span class="p">;</span>
-<span class="w">  </span><span class="n">ranges</span><span class="o">::</span><span class="n">concat_view</span><span class="o">&lt;</span>
-<span class="w">      </span><span class="n">ranges</span><span class="o">::</span><span class="n">transform_view</span><span class="o">&lt;</span><span class="n">ranges</span><span class="o">::</span><span class="n">ref_view</span><span class="o">&lt;</span><span class="n">container</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="n">Edge</span><span class="o">&gt;&gt;</span><span class="p">,</span>
-<span class="w">                             </span><span class="k">decltype</span><span class="p">(</span><span class="n">edge2index_</span><span class="p">)</span><span class="o">&gt;</span><span class="p">,</span>
-<span class="w">      </span><span class="n">ranges</span><span class="o">::</span><span class="n">ref_view</span><span class="o">&lt;</span><span class="n">NamedIndexSet</span><span class="o">&gt;&gt;</span>
-<span class="w">      </span><span class="n">grand_index_list_</span><span class="p">;</span>
 
 <span class="w">  </span><span class="kt">void</span><span class="w"> </span><span class="nf">init_edges</span><span class="p">();</span>
 
@@ -570,6 +561,11 @@
 <span class="w">  </span><span class="k">return</span><span class="w"> </span><span class="n">stream</span><span class="p">;</span>
 <span class="p">}</span>
 
+<span class="k">template</span><span class="w"> </span><span class="o">&lt;</span><span class="k">typename</span><span class="w"> </span><span class="nc">Edge</span><span class="o">&gt;</span>
+<span class="k">auto</span><span class="w"> </span><span class="n">edge2index</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">Edge</span><span class="w"> </span><span class="o">&amp;</span><span class="n">e</span><span class="p">)</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="n">Index</span><span class="w"> </span><span class="o">&amp;</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="k">return</span><span class="w"> </span><span class="n">e</span><span class="p">.</span><span class="n">idx</span><span class="p">();</span>
+<span class="p">}</span>
+
 <span class="p">}</span><span class="w">  </span><span class="c1">// namespace sequant</span>
 
 <span class="cp">#endif  </span><span class="c1">// SEQUANT_TENSOR_NETWORK_H</span>
@@ -594,7 +590,7 @@
             
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on Feb 3, 2025 9:34:14 AM</div>
+              Last updated on Feb 4, 2025 2:40:54 PM</div>
           </div>
           <div class="right-details">
             <div class="icons">

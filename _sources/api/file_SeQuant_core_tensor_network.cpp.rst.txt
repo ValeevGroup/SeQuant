@@ -53,6 +53,8 @@ Includes
 
 - ``SeQuant/core/tensor_network/vertex_painter.hpp`` (:ref:`file_SeQuant_core_tensor_network_vertex_painter.hpp`)
 
+- ``SeQuant/core/tensor_network_v2.hpp`` (:ref:`file_SeQuant_core_tensor_network_v2.hpp`)
+
 - ``SeQuant/core/utility/tuple.hpp`` (:ref:`file_SeQuant_core_utility_tuple.hpp`)
 
 - ``SeQuant/core/wstring.hpp`` (:ref:`file_SeQuant_core_wstring.hpp`)

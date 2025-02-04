@@ -445,10 +445,6 @@
 <span class="w">    </span><span class="k">static</span><span class="w"> </span><span class="kr">inline</span><span class="w"> </span><span class="n">Terminal</span><span class="w"> </span><span class="n">null_terminal_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{};</span>
 <span class="w">  </span><span class="p">};</span>
 
-<span class="w">  </span><span class="k">static</span><span class="w"> </span><span class="kr">inline</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">edge2index_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[](</span><span class="k">const</span><span class="w"> </span><span class="n">Edge</span><span class="w"> </span><span class="o">&amp;</span><span class="n">e</span><span class="p">)</span><span class="w"> </span><span class="o">-&gt;</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="n">Index</span><span class="w"> </span><span class="o">&amp;</span><span class="w"> </span><span class="p">{</span>
-<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">e</span><span class="p">.</span><span class="n">idx</span><span class="p">();</span>
-<span class="w">  </span><span class="p">};</span>
-
 <span class="w"> </span><span class="k">public</span><span class="o">:</span>
 <span class="w">  </span><span class="k">template</span><span class="w"> </span><span class="o">&lt;</span><span class="k">typename</span><span class="w"> </span><span class="nc">ExprPtrRange</span><span class="o">&gt;</span>
 <span class="w">  </span><span class="n">TensorNetwork</span><span class="p">(</span><span class="n">ExprPtrRange</span><span class="w"> </span><span class="o">&amp;</span><span class="n">exprptr_range</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
@@ -541,10 +537,6 @@
 <span class="w">  </span><span class="c1">// have unique labels (not full labels)</span>
 <span class="w">  </span><span class="k">mutable</span><span class="w"> </span><span class="n">named_indices_t</span><span class="w"> </span><span class="n">ext_indices_</span><span class="p">;</span>
 <span class="w">  </span><span class="k">mutable</span><span class="w"> </span><span class="n">named_indices_t</span><span class="w"> </span><span class="n">pure_proto_indices_</span><span class="p">;</span>
-<span class="w">  </span><span class="k">mutable</span><span class="w"> </span><span class="n">ranges</span><span class="o">::</span><span class="n">concat_view</span><span class="o">&lt;</span>
-<span class="w">      </span><span class="n">ranges</span><span class="o">::</span><span class="n">transform_view</span><span class="o">&lt;</span><span class="n">ranges</span><span class="o">::</span><span class="n">ref_view</span><span class="o">&lt;</span><span class="n">edges_t</span><span class="o">&gt;</span><span class="p">,</span><span class="w"> </span><span class="k">decltype</span><span class="p">(</span><span class="n">edge2index_</span><span class="p">)</span><span class="o">&gt;</span><span class="p">,</span>
-<span class="w">      </span><span class="n">ranges</span><span class="o">::</span><span class="n">ref_view</span><span class="o">&lt;</span><span class="n">named_indices_t</span><span class="o">&gt;&gt;</span>
-<span class="w">      </span><span class="n">grand_index_list_</span><span class="p">;</span>
 
 <span class="w">  </span><span class="c1">// replacements of anonymous indices produced by the last call to</span>
 <span class="w">  </span><span class="c1">// canonicalize()</span>
@@ -598,7 +590,7 @@
             
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on Feb 3, 2025 9:34:14 AM</div>
+              Last updated on Feb 4, 2025 2:40:54 PM</div>
           </div>
           <div class="right-details">
             <div class="icons">
