@@ -39,10 +39,6 @@
 
 namespace sequant {
 
-auto edge2index(const TensorNetworkV2::Edge &e) -> const Index & {
-  return e.idx();
-};
-
 struct FullLabelIndexLocator {
   std::wstring_view label;
   FullLabelIndexLocator(std::wstring_view label) : label(std::move(label)) {}
@@ -756,7 +752,8 @@ TensorNetworkV2::canonicalize_slots(
     using cord_set_t = container::set<ord_cord_it_t, detail::tuple_less<1>>;
 
     auto grand_index_list = ranges::views::concat(
-        edges_ | ranges::views::transform(edge2index), pure_proto_indices_);
+        edges_ | ranges::views::transform(edge2index<Edge>),
+        pure_proto_indices_);
 
     // for each named index type (as defined by named_index_compare) maps its
     // ptr in grand_index_list to its ordinal in grand_index_list + canonical

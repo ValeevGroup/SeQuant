@@ -16,6 +16,7 @@
 #include <SeQuant/core/tag.hpp>
 #include <SeQuant/core/tensor_network.hpp>
 #include <SeQuant/core/tensor_network/vertex_painter.hpp>
+#include <SeQuant/core/tensor_network_v2.hpp>
 #include <SeQuant/core/utility/tuple.hpp>
 #include <SeQuant/core/wstring.hpp>
 
@@ -33,10 +34,6 @@
 #include <range/v3/view/view.hpp>
 
 namespace sequant {
-
-auto edge2index(const TensorNetwork::Edge &e) -> const Index & {
-  return e.idx();
-};
 
 ExprPtr TensorNetwork::canonicalize(
     const container::vector<std::wstring> &cardinal_tensor_labels, bool fast,
@@ -905,7 +902,8 @@ TensorNetwork::SlotCanonicalizationMetadata TensorNetwork::canonicalize_slots(
     using cord_set_t = container::set<ord_cord_it_t, detail::tuple_less<1>>;
 
     auto grand_index_list = ranges::views::concat(
-        edges_ | ranges::views::transform(edge2index), pure_proto_indices_);
+        edges_ | ranges::views::transform(edge2index<Edge>),
+        pure_proto_indices_);
 
     // for each named index type (as defined by named_index_compare) maps its
     // ptr in grand_index_list to its ordinal in grand_index_list + canonical
