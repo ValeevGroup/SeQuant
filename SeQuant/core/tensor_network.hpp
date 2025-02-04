@@ -201,10 +201,6 @@ class TensorNetwork {
     static inline Terminal null_terminal_ = {};
   };
 
-  static inline auto edge2index_ = [](const Edge &e) -> const Index & {
-    return e.idx();
-  };
-
  public:
   /// @throw std::logic_error if exprptr_range contains a non-tensor
   /// @note uses RTTI
@@ -356,12 +352,6 @@ class TensorNetwork {
   /// @note these will need to be processed separately from the rest
   /// to appear as vertices on the graph
   mutable named_indices_t pure_proto_indices_;
-  /// grand list of all indices is view of concatenated ranges of indices in
-  /// edges_ and pure_proto_indices_
-  mutable ranges::concat_view<
-      ranges::transform_view<ranges::ref_view<edges_t>, decltype(edge2index_)>,
-      ranges::ref_view<named_indices_t>>
-      grand_index_list_;
 
   // replacements of anonymous indices produced by the last call to
   // canonicalize()
