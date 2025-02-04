@@ -6,6 +6,7 @@
 #define SEQUANT_ALGORITHM_HPP
 
 #include <SeQuant/core/meta.hpp>
+#include <SeQuant/core/container.hpp>
 #include <boost/dynamic_bitset.hpp>
 #include <range/v3/view.hpp>
 
@@ -158,6 +159,18 @@ auto subsequence(Iterable const& it, boost::dynamic_bitset<> const& bs) {
   return zip(it, bits) | filter([](auto&& kv) { return std::get<1>(kv); }) |
          transform([](auto&& kv) { return std::get<0>(kv); });
 }
+
+///
+/// All elements in the vector belong to the integral range [-1,N)
+/// where N is the length of the [Expr] (ie. the iterable of expressions)
+///   * only applicable for binary evaluations
+///   * the integer -1 can appear in certain places: it implies the binary
+///     operation between the last two expressions
+///   * eg.
+///         * {0,1,-1,2,-1} => ( (e[0], e[1]), e[2])
+///         * {0,1,-1,2,3,-1,-1} => ((e[0], e[1]), (e[2],e[3]))
+///
+using EvalSequence = container::svector<int>;
 
 }  // namespace sequant
 
