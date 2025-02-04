@@ -265,46 +265,6 @@ size_t hash_imed(EvalExpr const& left, EvalExpr const& right,
   return h;
 }
 
-std::pair<container::svector<Index>,  // bra
-          container::svector<Index>   // ket
-          >
-target_braket(Tensor const& t1, Tensor const& t2) noexcept {
-  using ranges::contains;
-  using ranges::views::concat;
-  using ranges::views::filter;
-  using idx_container = container::svector<Index>;
-
-  // find contracted indices
-  const auto contracted_indices =
-      concat(t1.bra() | filter([&](const auto& idx) {
-               return contains(t2.ket(), idx);
-             }),
-             t1.ket() | filter([&](const auto& idx) {
-               return contains(t2.bra(), idx);
-             })) |
-      ranges::to<idx_container>();
-
-  // combine free bra indices
-  const auto result_bra = concat(t1.bra() | filter([&](const auto& idx) {
-                                   return !contains(contracted_indices, idx);
-                                 }),
-                                 t2.bra() | filter([&](const auto& idx) {
-                                   return !contains(contracted_indices, idx);
-                                 })) |
-                          ranges::to<idx_container>();
-
-  // combine free ket indices
-  const auto result_ket = concat(t1.ket() | filter([&](const auto& idx) {
-                                   return !contains(contracted_indices, idx);
-                                 }),
-                                 t2.ket() | filter([&](const auto& idx) {
-                                   return !contains(contracted_indices, idx);
-                                 })) |
-                          ranges::to<idx_container>();
-
-  return std::make_pair(result_bra, result_ket);
-}
-
 Symmetry tensor_symmetry_sum(EvalExpr const& left,
                              EvalExpr const& right) noexcept {
   auto const& t1 = left.expr()->as<Tensor>();
