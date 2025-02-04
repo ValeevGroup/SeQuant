@@ -16,6 +16,7 @@
 #include <SeQuant/core/tag.hpp>
 #include <SeQuant/core/tensor_network.hpp>
 #include <SeQuant/core/tensor_network/vertex_painter.hpp>
+#include <SeQuant/core/tensor_network_v2.hpp>
 #include <SeQuant/core/utility/tuple.hpp>
 #include <SeQuant/core/wstring.hpp>
 
@@ -248,15 +249,15 @@ ExprPtr TensorNetwork::canonicalize(
           // order
           std::size_t ord = 0;
           for (auto &&[idx_ord, idx_ord_can] : idx_can) {
-            const auto &idx = *(grand_index_list_.begin() + idx_ord);
+            const auto &idx = (edges_.begin() + idx_ord)->idx();
             const auto new_idx = idxfac.make(idx);
             if (idx != new_idx) idxrepl.emplace(idx, std::move(new_idx));
             ++ord;
           }
         } else if (sz == 1) {  // no need for resorting of colors with 1 index
                                // only, but still need to replace the index
-          const auto it = grand_index_list_.begin() + std::get<0>(beg->second);
-          const auto &idx = *it;
+          const auto it = edges_.begin() + std::get<0>(beg->second);
+          const auto &idx = it->idx();
           const auto new_idx = idxfac.make(idx);
           if (idx != new_idx) idxrepl.emplace(idx, std::move(new_idx));
         }
@@ -473,7 +474,7 @@ TensorNetwork::make_bliss_graph(const named_indices_t *named_indices_ptr,
       nidx;  // where spbundle vertices will start
 
   // iterates over edges_, then pure_proto_indices_, this is equivalent to
-  // iteration over grand_index_list_
+  // iteration over grand_index_list
   ranges::for_each(edges_, [&](const Edge &edge) {
     const Index &idx = edge.idx();
     ++nv;  // each index is a vertex
@@ -818,9 +819,6 @@ void TensorNetwork::init_edges() const {
   ext_indices_.reserve(ext_indices_.size() + pure_proto_indices_.size());
   ext_indices_.insert(pure_proto_indices_.begin(), pure_proto_indices_.end());
 
-  grand_index_list_ = ranges::views::concat(
-      edges_ | ranges::views::transform(edge2index_), pure_proto_indices_);
-
   have_edges_ = true;
 }
 
@@ -903,16 +901,20 @@ TensorNetwork::SlotCanonicalizationMetadata TensorNetwork::canonicalize_slots(
         std::tuple<size_t, size_t, named_indices_t::const_iterator>;
     using cord_set_t = container::set<ord_cord_it_t, detail::tuple_less<1>>;
 
+    auto grand_index_list = ranges::views::concat(
+        edges_ | ranges::views::transform(edge2index<Edge>),
+        pure_proto_indices_);
+
     // for each named index type (as defined by named_index_compare) maps its
-    // ptr in grand_index_list_ to its ordinal in grand_index_list_ + canonical
+    // ptr in grand_index_list to its ordinal in grand_index_list + canonical
     // ordinal + its iterator in metadata.named_indices
     container::map<std::pair<const Index *, IndexSlotType>, cord_set_t,
                    decltype(named_index_compare)>
         idx2cord(named_index_compare);
     // collect named indices and sort on the fly
     size_t idx_ord = 0;
-    auto grand_index_list_end = grand_index_list_.end();
-    for (auto git = grand_index_list_.begin(); git != grand_index_list_end;
+    auto grand_index_list_end = grand_index_list.end();
+    for (auto git = grand_index_list.begin(); git != grand_index_list_end;
          ++git) {
       const auto &idx = *git;
       if (is_named_index(idx)) {
