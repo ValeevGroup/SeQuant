@@ -12,12 +12,18 @@ using namespace sequant;
 using namespace sequant::mbpt;
 
 namespace {
-// TODO: Implement runtime_assert
+#define runtime_assert(tf)                                   \
+  if (!(tf)) {                                               \
+    std::ostringstream oss;                                  \
+    oss << "failed assert at line " << __LINE__              \
+        << " in equation-of-motion coupled cluster example"; \
+    throw std::runtime_error(oss.str().c_str());             \
+  }
 
 TimerPool<32> timer_pool;
 
-std::pair<int64_t, int64_t> parse_excitation_manifold(std::string& str) {
-  std::pair<int64_t, int64_t> result;
+std::pair<size_t, size_t> parse_excitation_manifold(std::string& str) {
+  std::pair<size_t, size_t> result;
 
   ranges::transform(str, str.begin(), ::tolower);
   const auto h_pos = str.find('h');
@@ -64,18 +70,19 @@ inline const container::map<EqnType, std::wstring> type2wstr = {
     {EqnType::left, L"L"}, {EqnType::right, L"R"}};
 
 class compute_eomcc {
-  size_t N;
+  size_t N, np, nh;
   std::string manifold;
   EqnType type;
 
  public:
   compute_eomcc(size_t n, const std::string& exc_manifold,
                 EqnType t = EqnType::right)
-      : N(n), manifold(exc_manifold), type(t) {}
+      : N(n), manifold(exc_manifold), type(t) {
+    std::tie(nh, np) = parse_excitation_manifold(manifold);
+  }
 
   void operator()(bool print) {
     assert(get_default_context().spbasis() == SPBasis::spinorbital);
-    const auto [nh, np] = parse_excitation_manifold(manifold);
     timer_pool.start(N);
     std::vector<ExprPtr> eqvec;
     switch (type) {
@@ -93,17 +100,35 @@ class compute_eomcc {
                << ", CC rank=" << N
                << ", manifold=" << sequant::to_wstring(manifold) << "]"
                << " computed in " << timer_pool.read(N) << " s\n";
-    size_t idx = 0;
-    for (const auto& eq : eqvec) {
-      if (eq == nullptr) {
-        idx++;
-        continue;
+    for (auto i = 0; i < eqvec.size(); i++) {
+      if (eqvec[i] == nullptr) continue;
+      std::wcout << "R[" << i << "] has " << eqvec[i].size() << " terms\n";
+      if (print) std::wcout << to_latex_align(eqvec[i], 20, 1) << "\n";
+      if (N == 2 && type == EqnType::right) {
+        if (np == 2 && nh == 2) {  // EOM-CCSD(2h2p)
+          if (i == 1) runtime_assert(eqvec[i].size() == 21);
+          if (i == 2) runtime_assert(eqvec[i].size() == 53);
+        }
+        if (np == 2 && nh == 1) {  // EA-EOM-CCSD(1h2p)
+          if (i == 1) runtime_assert(eqvec[i].size() == 9);
+          if (i == 2) runtime_assert(eqvec[i].size() == 32);
+        }
+        if (np == 1 && nh == 2) {  // IP-EOM-CCSD(2h1p)
+          if (i == 0) runtime_assert(eqvec[i].size() == 9);
+          if (i == 1) runtime_assert(eqvec[i].size() == 32);
+        }
+        if (np == 1 && nh == 3) {  // DIP-EOM-CCSD(3h1p)
+          if (i == 0) runtime_assert(eqvec[i].size() == 13);
+          if (i == 1) runtime_assert(eqvec[i].size() == 34);
+        }
       }
-      std::wcout << "R[" << idx << "] has " << eq->size() << " terms\n";
-      if (print) std::wcout << to_latex_align(eq, 20, 1) << "\n";
-
-      // TODO: add assertions here
-      idx++;
+      if (N == 3 && type == EqnType::right) {
+        if (np == 3 && nh == 3) {  // EOM-CCSDT(3h3p)
+          if (i == 1) runtime_assert(eqvec[i].size() == 22);
+          if (i == 2) runtime_assert(eqvec[i].size() == 62);
+          if (i == 3) runtime_assert(eqvec[i].size() == 99);
+        }
+      }
     }
   }
 };  // class compute_eomcc
@@ -157,13 +182,13 @@ int main(int argc, char* argv[]) {
 #endif
 
   // read command line arguments
-  const size_t NMAX = argc > 1 ? std::atoi(argv[1]) : DEFAULT_NMAX;
+  const size_t NMAX = argc > 1 ? std::stoi(argv[1]) : DEFAULT_NMAX;
   assert(NMAX > 0 && "Invalid NMAX");
   const std::string exc_manifold =
       argc > 2 ? argv[2]
                : (std::to_string(NMAX) + "h" + std::to_string(NMAX) + "p");
   assert(!exc_manifold.empty() && "Invalid excitation manifold");
-  const std::string eqn_type = argc > 3 ? argv[3] : "right";
+  const std::string eqn_type = argc > 3 ? argv[3] : "R";
   const std::string print_str = argc > 4 ? argv[4] : "noprint";
   const bool print = print_str == "print";
 
