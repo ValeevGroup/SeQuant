@@ -56,7 +56,7 @@ target_link_libraries(your_executable_or_library_target PUBLIC SeQuant::SeQuant)
 
 ## Developers
 
-SeQuant is developed by the [Valeev Research Group](https://valeevgroup.github.io) in the Department of Chemistry at Virginia Tech.
+SeQuant is developed by the [Valeev Research Group](https://valeevgroup.github.io) in the Department of Chemistry at Virginia Tech and the [Köhn Group](https://www.itheoc.uni-stuttgart.de/research/koehn) in the Department of Theoretical Chemistry at University of Stuttgart.
 
 ## Acknowledgement
 
