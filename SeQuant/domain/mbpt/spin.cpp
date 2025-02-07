@@ -676,11 +676,13 @@ ExprPtr expand_P_op(const Product& product) {
       if (term->is<Tensor>()) {
         auto new_tensor = term->as<Tensor>();
         new_tensor.transform_indices(map);
+        new_tensor.reset_tags();
         new_product.append(1, ex<Tensor>(new_tensor));
       }
     }
     result->append(ex<Product>(new_product));
   }  // map_list
+
   return result;
 }
 
