@@ -252,6 +252,8 @@ set(SeQuant_src
         SeQuant/core/tensor_network/vertex_painter.hpp
         SeQuant/core/timer.hpp
         SeQuant/core/utility/context.hpp
+        SeQuant/core/utility/expr_diff.cpp
+        SeQuant/core/utility/expr_diff.hpp
         SeQuant/core/utility/indices.hpp
         SeQuant/core/utility/macros.hpp
         SeQuant/core/utility/nodiscard.hpp
