@@ -102,6 +102,7 @@ set(SEQUANT_INSTALL_DOCDIR "${SEQUANT_INSTALL_SHAREDIR}/doc"
         CACHE PATH "SeQuant DOC install directory")
 set(SEQUANT_INSTALL_CMAKEDIR "lib/cmake/sequant"
         CACHE PATH "SeQuant CMAKE install directory")
+option(SEQUANT_BENCHMARKS "Enable SeQuant benchmarks" OFF)
 
 ############################
 # Additional build variables
@@ -411,6 +412,10 @@ if (SEQUANT_IWYU)
         )
         set_property(TARGET SeQuant PROPERTY CXX_INCLUDE_WHAT_YOU_USE ${iwyu_options_and_path})
     endif()
+endif()
+
+if (SEQUANT_BENCHMARKS)
+	add_subdirectory(benchmarks)
 endif()
 
 ### unit tests
