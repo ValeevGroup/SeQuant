@@ -2,13 +2,6 @@
 // Created by Nakul Teke on 12/20/19.
 //
 
-// WARNING this test suite was produced when SeQuant used the original
-// representation of spin attributes (IndexSpace::nullqns=0b00 was used
-// to represent what is now Spin::any=0b11)
-// Since IndexSpace bitstring affects its hash, hence color, canonical form of
-// even spin-free expressions differs from their original form, thus
-// the old spin attribute representation is used to avoid changing the tests
-
 #include <catch2/catch_test_macros.hpp>
 #include "catch2_sequant.hpp"
 #include "test_config.hpp"
@@ -525,10 +518,6 @@ SECTION("Expand Symmetrizer") {
 }
 
 SECTION("Symmetrize expression") {
-  // ignore_spin = true => see WARNING at the top of the file
-  auto ctx_resetter = set_scoped_default_context(
-      Context(sequant::mbpt::make_legacy_spaces(/* ignore_spin= */ true),
-              Vacuum::SingleProduct));
   {
     // g * t1 + g * t1
     auto input = ex<Tensor>(L"g", bra{L"a_1", L"a_2"}, ket{L"i_1", L"a_3"},
@@ -680,9 +669,6 @@ SECTION("Closed-shell spintrace CCD") {
 }
 
 SECTION("Closed-shell spintrace CCSD") {
-  auto ctx_resetter = set_scoped_default_context(
-      Context(sequant::mbpt::make_legacy_spaces(), Vacuum::SingleProduct));
-
   // These terms from CCSD R1 equations
   {
     // A * f
@@ -1157,10 +1143,6 @@ SECTION("Expand P operator pair-wise") {
 }
 
 SECTION("Open-shell spin-tracing") {
-  // checks depend on the legacy subspaces
-  auto ctx_resetter = set_scoped_default_context(
-      Context(sequant::mbpt::make_legacy_spaces(), Vacuum::SingleProduct));
-
   const auto i1A = Index(L"i↑_1");
   const auto i2A = Index(L"i↑_2");
   const auto i3A = Index(L"i↑_3");
