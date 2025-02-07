@@ -45,6 +45,8 @@ Included By
 
 - :ref:`file_SeQuant_core_space.hpp`
 
+- :ref:`file_SeQuant_core_utility_expr_diff.cpp`
+
 - :ref:`file_SeQuant_core_utility_string.cpp`
 
 - :ref:`file_SeQuant_core_wstring.hpp`

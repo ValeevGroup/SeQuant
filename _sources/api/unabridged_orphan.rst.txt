@@ -255,6 +255,16 @@ Files
 .. toctree::
    :maxdepth: 5
 
+   file_SeQuant_core_utility_expr_diff.cpp.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   file_SeQuant_core_utility_expr_diff.hpp.rst
+
+.. toctree::
+   :maxdepth: 5
+
    file_SeQuant_core_expr_fwd.hpp.rst
 
 .. toctree::

@@ -97,6 +97,8 @@ Included By
 
 - :ref:`file_SeQuant_core_tensor.cpp`
 
+- :ref:`file_SeQuant_core_utility_expr_diff.cpp`
+
 - :ref:`file_SeQuant_core_utility_indices.hpp`
 
 - :ref:`file_SeQuant_core_wick.hpp`

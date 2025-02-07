@@ -941,11 +941,13 @@
 <span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">term</span><span class="o">-&gt;</span><span class="n">is</span><span class="o">&lt;</span><span class="n">Tensor</span><span class="o">&gt;</span><span class="p">())</span><span class="w"> </span><span class="p">{</span>
 <span class="w">        </span><span class="k">auto</span><span class="w"> </span><span class="n">new_tensor</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">term</span><span class="o">-&gt;</span><span class="n">as</span><span class="o">&lt;</span><span class="n">Tensor</span><span class="o">&gt;</span><span class="p">();</span>
 <span class="w">        </span><span class="n">new_tensor</span><span class="p">.</span><span class="n">transform_indices</span><span class="p">(</span><span class="n">map</span><span class="p">);</span>
+<span class="w">        </span><span class="n">new_tensor</span><span class="p">.</span><span class="n">reset_tags</span><span class="p">();</span>
 <span class="w">        </span><span class="n">new_product</span><span class="p">.</span><span class="n">append</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">ex</span><span class="o">&lt;</span><span class="n">Tensor</span><span class="o">&gt;</span><span class="p">(</span><span class="n">new_tensor</span><span class="p">));</span>
 <span class="w">      </span><span class="p">}</span>
 <span class="w">    </span><span class="p">}</span>
 <span class="w">    </span><span class="n">result</span><span class="o">-&gt;</span><span class="n">append</span><span class="p">(</span><span class="n">ex</span><span class="o">&lt;</span><span class="n">Product</span><span class="o">&gt;</span><span class="p">(</span><span class="n">new_product</span><span class="p">));</span>
 <span class="w">  </span><span class="p">}</span><span class="w">  </span><span class="c1">// map_list</span>
+
 <span class="w">  </span><span class="k">return</span><span class="w"> </span><span class="n">result</span><span class="p">;</span>
 <span class="p">}</span>
 
@@ -2306,7 +2308,7 @@
             
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on Feb 4, 2025 2:40:54 PM</div>
+              Last updated on Feb 7, 2025 9:39:04 AM</div>
           </div>
           <div class="right-details">
             <div class="icons">

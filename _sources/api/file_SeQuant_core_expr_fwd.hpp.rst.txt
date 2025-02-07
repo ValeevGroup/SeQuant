@@ -37,6 +37,8 @@ Included By
 
 - :ref:`file_SeQuant_core_fwd.hpp`
 
+- :ref:`file_SeQuant_core_utility_expr_diff.hpp`
+
 
 
 

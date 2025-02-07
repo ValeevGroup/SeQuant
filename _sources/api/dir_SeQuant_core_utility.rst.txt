@@ -17,6 +17,8 @@ Files
 -----
 
 - :ref:`file_SeQuant_core_utility_context.hpp`
+- :ref:`file_SeQuant_core_utility_expr_diff.cpp`
+- :ref:`file_SeQuant_core_utility_expr_diff.hpp`
 - :ref:`file_SeQuant_core_utility_indices.hpp`
 - :ref:`file_SeQuant_core_utility_macros.hpp`
 - :ref:`file_SeQuant_core_utility_nodiscard.hpp`
