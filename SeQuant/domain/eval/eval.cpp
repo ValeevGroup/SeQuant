@@ -8,7 +8,7 @@ namespace sequant {
 std::string const& EvalExprTA::annot() const { return annot_; }
 
 EvalExprTA::EvalExprTA(Tensor const& tnsr) : EvalExpr(tnsr) {
-  annot_ = braket_annot();
+  annot_ = indices_annot();
 }
 
 EvalExprTA::EvalExprTA(Constant const& c) : EvalExpr(c), annot_{} {}
@@ -22,7 +22,7 @@ EvalExprTA::EvalExprTA(const EvalExprTA& left, const EvalExprTA& right,
   using TA::expressions::GEMMPermutationOptimizer;
 
   if (result_type() == ResultType::Tensor) {
-    annot_ = braket_annot();
+    annot_ = indices_annot();
     // clang-format off
 // TODO: fix the following so that it works for ToT x ToT -> T
 //    using Tidxs = TA::expressions::IndexList;

@@ -3,12 +3,16 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/eval_expr.hpp>
+#include <SeQuant/core/eval_node.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/tensor.hpp>
+#include <SeQuant/core/tensor_canonicalizer.hpp>
+#include <SeQuant/core/tensor_network.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/wstring.hpp>
+#include <SeQuant/external/bliss/graph.hh>
 
 #include <range/v3/action.hpp>
 #include <range/v3/algorithm.hpp>
@@ -45,28 +49,6 @@ std::wstring_view const var_label = L"Z";
 
 }  // namespace
 
-NestedTensorIndices::NestedTensorIndices(const sequant::Tensor& tnsr) {
-  using ranges::views::join;
-  using ranges::views::transform;
-
-  for (auto&& ix : tnsr.aux()) {
-    assert(!ix.has_proto_indices() &&
-           "Aux indices with proto indices not supported");
-    outer.emplace_back(ix);
-  }
-
-  auto append_unique = [](auto& cont, auto const& el) {
-    if (!ranges::contains(cont, el)) cont.emplace_back(el);
-  };
-
-  for (Index const& ix : tnsr.const_braket())
-    append_unique(ix.has_proto_indices() ? inner : outer, ix);
-
-  for (Index const& ix :
-       tnsr.const_braket() | transform(&Index::proto_indices) | join)
-    append_unique(outer, ix);
-}
-
 std::string to_label_annotation(const Index& idx) {
   using namespace ranges::views;
   using ranges::to;
@@ -77,7 +59,12 @@ std::string to_label_annotation(const Index& idx) {
           ranges::views::join | to<std::string>);
 }
 
-std::string EvalExpr::braket_annot() const noexcept {
+std::string EvalExpr::indices_annot() const noexcept {
+  using ranges::views::filter;
+  using ranges::views::intersperse;
+  using ranges::views::join;
+  using ranges::views::transform;
+
   if (!is_tensor()) return {};
 
   // given an iterable of sequant::Index objects, returns a string made
@@ -85,8 +72,6 @@ std::string EvalExpr::braket_annot() const noexcept {
   //   eg. (a_1^{i_1,i_2},a_2^{i_2,i_3}) -> "a_1i_1i_2,a_2i_2i_3"
   //   eg. (i_1, i_2) -> "i_1,i_2"
   auto annot = [](auto&& ixs) -> std::string {
-    using namespace ranges::views;
-
     auto annotations = ixs | transform(to_label_annotation);
 
     return annotations                      //
@@ -95,46 +80,60 @@ std::string EvalExpr::braket_annot() const noexcept {
            | ranges::to<std::string>;
   };
 
-  auto nested = NestedTensorIndices{as_tensor()};
+  auto outer =
+      annot(canon_indices_ | filter(ranges::not_fn(&Index::has_proto_indices)));
+  auto inner = annot(canon_indices_ | filter(&Index::has_proto_indices));
 
-  return nested.inner.empty()  //
-             ? annot(nested.outer)
-             : annot(nested.outer) + ";" + annot(nested.inner);
+  return outer + (inner.empty() ? "" : (";" + inner));
 }
 
-size_t EvalExpr::global_id_{};
+EvalExpr::index_vector const& EvalExpr::canon_indices() const noexcept {
+  return canon_indices_;
+}
 
 EvalExpr::EvalExpr(Tensor const& tnsr)
     : op_type_{EvalOp::Id},
       result_type_{ResultType::Tensor},
-      hash_value_{hash_terminal_tensor(tnsr)},
-      id_{},
-      expr_{tnsr.clone()},
-      tot_{is_tot(tnsr)} {}
+      expr_{tnsr.clone()} {
+  ExprPtrList tlist{expr_};
+  auto tn = TensorNetwork(tlist);
+  auto md =
+      tn.canonicalize_slots(TensorCanonicalizer::cardinal_tensor_labels());
+  hash_value_ = md.hash_value();
+  canon_indices_ = md.get_indices() | ranges::to<index_vector>;
+}
 
 EvalExpr::EvalExpr(Constant const& c)
     : op_type_{EvalOp::Id},
       result_type_{ResultType::Scalar},
       hash_value_{hash::value(c)},
-      id_{},
-      expr_{c.clone()},
-      tot_{false} {}
+      expr_{c.clone()} {}
 
 EvalExpr::EvalExpr(Variable const& v)
     : op_type_{EvalOp::Id},
       result_type_{ResultType::Scalar},
       hash_value_{hash::value(v)},
-      id_{},
-      expr_{v.clone()},
-      tot_{false} {}
+      expr_{v.clone()} {}
+
+EvalExpr::EvalExpr(EvalOp op, ResultType res, ExprPtr const& ex,
+                   index_vector ixs, size_t h)
+    : op_type_{op},
+      result_type_{res},
+      expr_{ex.clone()},
+      canon_indices_{std::move(ixs)},
+      hash_value_{h} {}
 
 EvalExpr::EvalExpr(EvalExpr const& left, EvalExpr const& right, EvalOp op)
     : op_type_{op},
       hash_value_{hash_imed(left, right, op)},
-      id_{++global_id_},
       expr_{make_imed(left, right, op)} {
   result_type_ = expr_->is<Tensor>() ? ResultType::Tensor : ResultType::Scalar;
-  tot_ = expr_->is<Tensor>() && is_tot(expr_->as<Tensor>());
+  if (result_type() == ResultType::Tensor) {
+    auto tn = TensorNetwork(expr_);
+    auto canon =
+        tn.canonicalize_slots(TensorCanonicalizer::cardinal_tensor_labels());
+    canon_indices_ = canon.get_indices() | ranges::to<index_vector>;
+  }
 }
 
 EvalOp EvalExpr::op_type() const noexcept { return op_type_; }
@@ -143,11 +142,11 @@ ResultType EvalExpr::result_type() const noexcept { return result_type_; }
 
 size_t EvalExpr::hash_value() const noexcept { return hash_value_; }
 
-size_t EvalExpr::id() const noexcept { return id_; }
-
 ExprPtr EvalExpr::expr() const noexcept { return expr_; }
 
-bool EvalExpr::tot() const noexcept { return tot_; }
+bool EvalExpr::tot() const noexcept {
+  return ranges::any_of(canon_indices(), &Index::has_proto_indices);
+}
 
 std::wstring EvalExpr::to_latex() const noexcept { return expr_->to_latex(); }
 
@@ -179,17 +178,9 @@ Variable const& EvalExpr::as_variable() const noexcept {
 
 std::string EvalExpr::label() const noexcept {
   if (is_tensor())
-    return to_string(as_tensor().label()) + "(" + braket_annot() + ")";
+    return to_string(as_tensor().label()) + "(" + indices_annot() + ")";
   else if (is_constant()) {
-    auto const& c = as_constant();
-    auto real = Constant{c.value().real()}.value<double>();
-    auto imag = Constant{c.value().imag()}.value<double>();
-    assert(real != 0 || imag != 0);
-    std::string r = std::to_string(real);
-    std::string i = std::to_string(imag);
-    if (real == 0) return i;
-    if (imag == 0) return r;
-    return "(" + r + "," + i + ")";
+    return sequant::to_string(sequant::to_latex(as_constant()));
   } else {
     assert(is_variable());
     return to_string(as_variable().label());

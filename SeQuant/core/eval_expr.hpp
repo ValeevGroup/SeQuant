@@ -1,6 +1,7 @@
 #ifndef SEQUANT_EVAL_EXPR_HPP
 #define SEQUANT_EVAL_EXPR_HPP
 
+#include <SeQuant/core/binary_node.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
@@ -47,21 +48,6 @@ enum class EvalOp {
 enum class ResultType { Tensor, Scalar };
 
 ///
-/// \brief Represents the outer indices and the inner indices of a nested
-/// tensor.
-///
-/// \note The nested tensor is a concept that generalizes the sequant::Tensor
-/// with and without proto indices. sequant::Tensors with proto indices have
-/// outer and inner indices, whereas, those without proto indices only have
-/// outer indices.
-///
-struct NestedTensorIndices {
-  container::svector<Index> outer, inner;
-
-  explicit NestedTensorIndices(Tensor const&);
-};
-
-///
 /// \brief The EvalExpr class represents the object that go into the nodes of
 ///        the binary tree that is used to evaluate the sequant expressions.
 ///
@@ -70,6 +56,8 @@ struct NestedTensorIndices {
 ///
 class EvalExpr {
  public:
+  using index_vector = Index::index_vector;
+
   ///
   /// \brief Construct an EvalExpr object from a tensor. The EvalOp is Id.
   ///
@@ -85,11 +73,14 @@ class EvalExpr {
   ///
   explicit EvalExpr(Variable const& v);
 
+  EvalExpr(EvalOp, ResultType, ExprPtr const&, index_vector, size_t);
+
   ///
   /// \brief Construct an EvalExpr object from two EvalExpr objects and an
   ///        EvalOp. The EvalOp is either Sum or Prod.
   ///
-  EvalExpr(EvalExpr const& left, EvalExpr const& right, EvalOp op);
+  [[deprecated("Cannot use tensor-network canonicalization")]] EvalExpr(
+      EvalExpr const& left, EvalExpr const& right, EvalOp op);
 
   ///
   /// \return The EvalOp resulting into this EvalExpr object.
@@ -111,14 +102,6 @@ class EvalExpr {
   /// \return The hash value of this EvalExpr object.
   ///
   [[nodiscard]] size_t hash_value() const noexcept;
-
-  ///
-  /// \brief Get the unique id of this EvalExpr object. Useful for tracing. Not
-  ///        used by evaluation.
-  ///
-  /// \return The unique id of this EvalExpr object.
-  ///
-  [[nodiscard]] size_t id() const noexcept;
 
   ///
   /// \return The ExprPtr object that this EvalExpr object holds.
@@ -189,7 +172,13 @@ class EvalExpr {
   /// \return A string usable as TiledArray annotation if is_tensor() true,
   ///         empty string otherwise.
   ///
-  [[nodiscard]] std::string braket_annot() const noexcept;
+  [[nodiscard]] std::string indices_annot() const noexcept;
+
+  ///
+  /// \return Canonically ordered indices -- non-empty if this object represents
+  /// a tensor result.
+  ///
+  [[nodiscard]] index_vector const& canon_indices() const noexcept;
 
  private:
   EvalOp op_type_;
@@ -198,13 +187,9 @@ class EvalExpr {
 
   size_t hash_value_;
 
-  size_t id_;
+  index_vector canon_indices_;
 
   ExprPtr expr_;
-
-  bool tot_;
-
-  static size_t global_id_;
 };
 
 }  // namespace sequant
