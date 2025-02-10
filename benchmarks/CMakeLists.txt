@@ -1,7 +1,10 @@
 include(FindOrFetchGoogleBenchmark)
 
 add_executable(sequant_benchmarks
+	"canonicalize.cpp"
 	"main.cpp"
+	"simplify.cpp"
+	"spintrace.cpp"
 	"wick.cpp"
 )
 
