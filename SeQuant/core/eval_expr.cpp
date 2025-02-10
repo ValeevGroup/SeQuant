@@ -410,4 +410,183 @@ ExprPtr make_imed(EvalExpr const& left, EvalExpr const& right,
 }
 }  // namespace
 
+///
+/// \brief Sorts the input range and calls hash_range.
+///
+template <typename Rng>
+size_t canon_hash(Rng const& rng) {
+  auto vec = rng | ranges::to_vector;
+  ranges::sort(vec);
+  return hash::hash_range(vec.begin(), vec.end());
+}
+
+///
+/// \brief Calls canon_hash on all inits subranges.
+/// \see inits
+/// \see canon_hash
+///
+template <typename Rng>
+auto imed_hashes(Rng const& rng) {
+  using ranges::views::transform;
+  return inits(rng) | transform([](auto&& v) { return canon_hash(v); });
+}
+
+struct ExprWithHash {
+  ExprPtr expr;
+  size_t hash;
+};
+
+struct DummyLabel {
+  static constexpr std::wstring_view tensor{L"I"};
+  static constexpr std::wstring_view scalar{L"Z"};
+
+  template <typename... Args>
+  static ExprPtr make_tensor(Args&&... args) {
+    auto&& [b, k, a] = std::forward_as_tuple(args...);
+    return ex<Tensor>(tensor, bra(b), ket(k), aux(a));
+  }
+
+  static ExprPtr make_variable() { return ex<Variable>(scalar); }
+};
+
+using EvalExprNode = FullBinaryNode<EvalExpr>;
+
+///
+/// \brief Collect tensors appearing as a factor at the leaf node of a product
+///        sub-tree, or, at the internal node of a sum sub-tree. Does not
+///        collect leaf tensors from the sum sub-trees.
+///
+template <typename Rng>
+void collect_tensor_factors(EvalExprNode const& node,  //
+                            Rng& collect) {
+  static_assert(std::is_same_v<ranges::range_value_t<Rng>, ExprWithHash>);
+  if (node->is_tensor() && (node.leaf() || node->op_type() == EvalOp::Sum))
+    collect.emplace_back(ExprWithHash{node->expr(), node->hash_value()});
+  else {
+    collect_tensor_factors(node.left(), collect);
+    collect_tensor_factors(node.right(), collect);
+  }
+}
+
+EvalExprNode binarize(Constant const& c) { return EvalExprNode{EvalExpr{c}}; }
+
+EvalExprNode binarize(Variable const& v) { return EvalExprNode{EvalExpr{v}}; }
+
+EvalExprNode binarize(Tensor const& t) { return EvalExprNode{EvalExpr{t}}; }
+
+EvalExprNode binarize(Sum const& sum) {
+  using ranges::views::move;
+  using ranges::views::transform;
+  auto summands = sum.summands()                                             //
+                  | transform([](ExprPtr const& x) { return binarize(x); })  //
+                  | ranges::to_vector;
+
+  bool const all_tensors =
+      ranges::all_of(summands, [](auto&& n) { return n->is_tensor(); });
+
+  bool const all_scalars =
+      ranges::all_of(summands, [](auto&& n) { return n->is_scalar(); });
+
+  assert(all_tensors | all_scalars);
+
+  auto hvals = summands | transform([](auto&& n) { return n->hash_value(); });
+
+  auto make_sum = [i = 0,                    //
+                   hs = imed_hashes(hvals),  //
+                   all_tensors](EvalExpr const& left,
+                                EvalExpr const& right) mutable -> EvalExpr {
+    auto h = ranges::at(hs, ++i);
+    if (all_tensors) {
+      auto const& t = left.as_tensor();
+      return {EvalOp::Sum,                                         //
+              ResultType::Tensor,                                  //
+              DummyLabel::make_tensor(t.bra(), t.ket(), t.aux()),  //
+              left.canon_indices(),                                //
+              h};
+    } else {
+      return {EvalOp::Sum,                  //
+              ResultType::Scalar,           //
+              DummyLabel::make_variable(),  //
+              {},                           //
+              h};
+    }
+  };
+
+  return fold_left_to_node(summands | move, make_sum);
+}
+
+EvalExprNode binarize(Product const& prod) {
+  using ranges::views::move;
+  using ranges::views::transform;
+  auto factors = prod.factors()                                             //
+                 | transform([](ExprPtr const& x) { return binarize(x); })  //
+                 | ranges::to_vector;
+  if (prod.scalar() != 1)
+    factors.emplace_back(EvalExpr{Constant{prod.scalar()}});
+
+  auto hvals = factors | transform([](auto&& n) { return n->hash_value(); });
+
+  auto make_prod = [i = 0, hs = imed_hashes(hvals)](
+                       EvalExprNode const& left,
+                       EvalExprNode const& right) mutable -> EvalExpr {
+    auto h = ranges::at(hs, ++i);
+    if (left->is_scalar() && right->is_scalar()) {
+      // scalar * scalar
+      return {
+          EvalOp::Prod, ResultType::Scalar, DummyLabel::make_variable(), {}, h};
+    } else if (left->is_scalar() || right->is_scalar()) {
+      // scalar * tensor or tensor * scalar
+      auto const& tl = left->is_tensor() ? left : right;
+      auto const& t = tl->as_tensor();
+      return {EvalOp::Prod, ResultType::Tensor,
+              DummyLabel::make_tensor(t.bra(), t.ket(), t.aux()),
+              tl->canon_indices(), h};
+    } else {
+      // tensor * tensor
+      container::svector<ExprWithHash> subfacs;
+      collect_tensor_factors(left, subfacs);
+      collect_tensor_factors(right, subfacs);
+      auto ts = subfacs | transform([](auto&& t) { return t.expr; });
+      auto tn = TensorNetwork(ts);
+      auto canon =
+          tn.canonicalize_slots(TensorCanonicalizer::cardinal_tensor_labels());
+      hash::combine(h, canon.hash_value());
+      bool const scalar_result = ranges::empty(canon.get_indices());
+      if (scalar_result) {
+        return {EvalOp::Prod,
+                ResultType::Scalar,
+                DummyLabel::make_variable(),
+                {},
+                h};
+      } else {
+        auto idxs = get_unique_indices(Product(ts));
+        return {EvalOp::Prod, ResultType::Tensor,
+                DummyLabel::make_tensor(idxs.bra, idxs.ket, idxs.aux),
+                canon.get_indices<Index::index_vector>(), h};
+      }
+    }
+  };
+
+  return fold_left_to_node(factors | move, make_prod);
+}
+
+EvalExprNode binarize(ExprPtr const& expr) {
+  if (expr->is<Constant>())  //
+    return binarize(expr->as<Constant>());
+
+  if (expr->is<Variable>())  //
+    return binarize(expr->as<Variable>());
+
+  if (expr->is<Tensor>())  //
+    return binarize(expr->as<Tensor>());
+
+  if (expr->is<Sum>())  //
+    return binarize(expr->as<Sum>());
+
+  if (expr->is<Product>())  //
+    return binarize(expr->as<Product>());
+
+  throw std::logic_error("Encountered unsupported expression in binarize.");
+}
+
 }  // namespace sequant

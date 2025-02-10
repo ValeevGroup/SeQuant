@@ -192,6 +192,8 @@ class EvalExpr {
   ExprPtr expr_;
 };
 
+FullBinaryNode<EvalExpr> binarize(ExprPtr const&);
+
 }  // namespace sequant
 
 #endif  // SEQUANT_EVAL_EXPR_HPP
