@@ -3,15 +3,27 @@
 
 #include <iostream>
 #include <memory>
-#include <range/v3/numeric/accumulate.hpp>
 #include <sstream>
 #include <stdexcept>
 #include <utility>
+
+#include <range/v3/numeric/accumulate.hpp>
+#include <range/v3/view.hpp>
 
 namespace sequant {
 
 template <typename>
 class FullBinaryNode;
+
+namespace meta {
+
+template <typename>
+constexpr bool is_full_binary_node{false};
+
+template <typename T>
+constexpr bool is_full_binary_node<FullBinaryNode<T>>{true};
+
+}  // namespace meta
 
 /// Full-binary node visit orders.
 
@@ -411,12 +423,26 @@ class FullBinaryNode {
     return oss.str();
   }
 
+  ///
+  /// \tparam string_t
+  /// \param label_gen Generates the label for tikz nodes.
+  /// \param spec_gen Generates the node spec that goes into the square
+  ///                 bracket of tikz node statement.
+  /// \note Make sure the following are present in the preamble.
+  ///
+  ///                  @c \usepackage{tikz}
+  ///                  @c \usetikzlibrary{graphs,graphdrawing}
+  ///                  @c \usegdlibrary{trees}
+  ///
+  /// \return TikZ graph.
   template <typename string_t>
   string_t tikz(
       std::function<string_t(FullBinaryNode<T> const&)> label_gen,
-      std::function<string_t(FullBinaryNode<T> const&)> spec_gen) const {
+      std::function<string_t(FullBinaryNode<T> const&)> spec_gen = [](auto&&) {
+        return string_t{};
+      }) const {
     auto oss = std::basic_ostringstream{string_t{}};
-    oss << "\\tikz{\n\\";
+    oss << "\\tikz[binary tree layout]{\n\\";
     tikz(oss, label_gen, spec_gen);
     oss << "\n}";
     oss.flush();
@@ -430,6 +456,62 @@ bool operator==(FullBinaryNode<T> const& lhs, FullBinaryNode<U> const& rhs) {
   return ((*lhs == *rhs) &&
           ((lhs.leaf() && rhs.leaf()) ||
            (lhs.left() == rhs.left() && lhs.right() == rhs.right())));
+}
+
+///
+/// \return A new binary node where each node value is the result of applying @c
+///         fun on the argument node value.
+///
+template <typename T, typename F,
+          typename = std::enable_if_t<std::is_invocable_v<F, T>>>
+auto transform_node(FullBinaryNode<T> const& node, F fun) {
+  using V = std::invoke_result_t<F, T>;
+  if (node.leaf())
+    return FullBinaryNode(fun(*node));
+  else {
+    return FullBinaryNode(fun(*node), transform_node(node.left(), fun),
+                          transform_node(node.right(), fun));
+  }
+}
+
+///
+/// \brief Accumulates the given range of binary nodes into a single binary node
+///        using a given operation to generate the internal node values.
+///
+/// \tparam Node The FullBinaryNode type.
+/// \param rng A range of Node objects.
+/// \param op A binary function that returns Node::value_type.
+///           The signature could be `op(Node, Node) -> Node::value_type` or
+///           `op(Node::value_type, Node::value_type) -> Node::value_type`.
+/// \return A binary node with subtrees built by left-folding given range.
+///
+template <typename Rng,                                //
+          typename F,                                  //
+          typename Node = ranges::range_value_t<Rng>,  //
+          typename = std::enable_if_t<meta::is_full_binary_node<Node>>>
+Node fold_left_to_node(Rng rng, F op) {
+  using Value = typename Node::value_type;
+
+  constexpr bool invoke_on_value =  //
+      std::is_invocable_r_v<Value, F, Value, Value>;
+
+  constexpr bool invoke_on_node =  //
+      std::is_invocable_r_v<Value, F, Node, Node>;
+
+  static_assert(invoke_on_value || invoke_on_node);
+
+  using ranges::views::move;
+  using ranges::views::tail;
+  return ranges::accumulate(
+      rng | tail | move, std::move(ranges::front(rng)),
+      [&op, invoke_on_node](auto&& l, auto&& r) {
+        if constexpr (invoke_on_node) {
+          return FullBinaryNode(op(l, r), std::move(l), std::move(r));
+
+        } else {
+          return FullBinaryNode(op(*l, *r), std::move(l), std::move(r));
+        }
+      });
 }
 
 }  // namespace sequant
