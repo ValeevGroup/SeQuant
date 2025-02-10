@@ -288,6 +288,18 @@ class TensorNetwork {
     /// canonicalized colored graph, use graph->cmp to compare against another
     /// to detect equivalence
     std::shared_ptr<bliss::Graph> graph;
+
+    [[nodiscard]] size_t hash_value() const;
+
+    [[nodiscard]] inline auto get_indices() const {
+      return named_indices_canonical  //
+             | ranges::views::indirect;
+    }
+
+    template <typename Cont>
+    auto get_indices() const {
+      return get_indices() | ranges::to<Cont>;
+    }
   };
 
   /// Like canonicalize(), but only use graph-based canonicalization to

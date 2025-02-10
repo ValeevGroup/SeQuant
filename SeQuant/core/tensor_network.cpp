@@ -828,6 +828,10 @@ container::svector<std::pair<long, long>> TensorNetwork::factorize() {
   abort();  // not yet implemented
 }
 
+size_t TensorNetwork::SlotCanonicalizationMetadata::hash_value() const {
+  return graph->get_hash();
+}
+
 TensorNetwork::SlotCanonicalizationMetadata TensorNetwork::canonicalize_slots(
     const std::vector<std::wstring> &cardinal_tensor_labels,
     const TensorNetwork::named_indices_t *named_indices_ptr,
