@@ -3,6 +3,7 @@
 
 #include <iostream>
 #include <memory>
+#include <ostream>
 #include <sstream>
 #include <stdexcept>
 #include <utility>
@@ -363,15 +364,12 @@ class FullBinaryNode {
   }
 
  private:
-  template <typename Ostream, typename F>
-  [[maybe_unused]] int digraph(Ostream& os, F const& label_gen,
-                               int count = 0) const {
+  template <typename F, typename Os>
+  [[maybe_unused]] int digraph(F label_gen, Os& os, int count) const {
     os << "node" << count << "[label=" << label_gen(*this) << "];\n";
-
     if (this->leaf()) return count;
-
-    auto lcount = left().digraph(os, label_gen, count + 1);
-    auto rcount = right().digraph(os, label_gen, lcount + 1);
+    auto lcount = left().digraph(label_gen, os, count + 1);
+    auto rcount = right().digraph(label_gen, os, lcount + 1);
     os << "node" << count << " -> "
        << "node" << count + 1 << ";\n";
     os << "node" << count << " -> "
@@ -381,8 +379,7 @@ class FullBinaryNode {
   }
 
   template <typename Ostream, typename F, typename G>
-  void tikz(Ostream& os, F const& label_gen, G const& spec_gen,
-            size_t indent = 2) const {
+  void tikz(Ostream& os, F label_gen, G spec_gen, size_t indent = 2) const {
     auto pad = [](Ostream& o, size_t i) {
       for (size_t j = 0; j < i; ++j) o << " ";
     };
@@ -407,16 +404,15 @@ class FullBinaryNode {
   }
 
  public:
-  template <typename string_t, typename F>
-  string_t digraph(F const& label_gen, string_t const& graph_name = {}) const {
-    static_assert(std::is_invocable_r_v<string_t, F, FullBinaryNode<T> const&>,
-                  "node label generator F(FullBinaryNode<T> const &) should "
-                  "return string_t");
-
-    auto oss = std::basic_ostringstream{string_t{}};
+  template <typename F,
+            typename String = std::invoke_result_t<F, FullBinaryNode>>
+  String digraph(F label_gen,
+                 std::basic_string_view<typename String::value_type>
+                     graph_name = {}) const {
+    auto oss = std::basic_ostringstream{String{}};
 
     oss << "digraph " << graph_name << "{\n";
-    this->digraph(oss, label_gen, 0);
+    this->digraph(label_gen, oss, 0);
     oss << "}";
     oss.flush();
 
@@ -424,7 +420,6 @@ class FullBinaryNode {
   }
 
   ///
-  /// \tparam string_t
   /// \param label_gen Generates the label for tikz nodes.
   /// \param spec_gen Generates the node spec that goes into the square
   ///                 bracket of tikz node statement.
@@ -435,13 +430,13 @@ class FullBinaryNode {
   ///                  @c \usegdlibrary{trees}
   ///
   /// \return TikZ graph.
-  template <typename string_t>
-  string_t tikz(
-      std::function<string_t(FullBinaryNode<T> const&)> label_gen,
-      std::function<string_t(FullBinaryNode<T> const&)> spec_gen = [](auto&&) {
-        return string_t{};
-      }) const {
-    auto oss = std::basic_ostringstream{string_t{}};
+
+  template <typename L,
+            typename String = std::invoke_result_t<L, FullBinaryNode>,
+            typename S = std::function<String(FullBinaryNode)>>
+  String tikz(
+      L label_gen, S spec_gen = [](auto&&) { return String{}; }) const {
+    auto oss = std::basic_ostringstream{String{}};
     oss << "\\tikz[binary tree layout]{\n\\";
     tikz(oss, label_gen, spec_gen);
     oss << "\n}";
