@@ -80,8 +80,10 @@ static void wick(benchmark::State &state, bool full_conractions_only,
 
   state.counters["produced"] = n_useful;
   state.counters["attempted"] = n_attempted;
-  state.counters["percentage"] = static_cast<int>(
-      100 * static_cast<float>(n_useful) / static_cast<float>(n_attempted));
+  state.counters["percentage"] =
+      n_attempted > 0 ? static_cast<int>(100 * static_cast<float>(n_useful) /
+                                         static_cast<float>(n_attempted))
+                      : 0;
 }
 
 BENCHMARK_CAPTURE(wick<Statistics::FermiDirac>, full_only_with_topology, true,
