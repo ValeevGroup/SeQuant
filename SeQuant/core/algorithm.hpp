@@ -5,8 +5,9 @@
 #ifndef SEQUANT_ALGORITHM_HPP
 #define SEQUANT_ALGORITHM_HPP
 
-#include <SeQuant/core/meta.hpp>
 #include <SeQuant/core/container.hpp>
+#include <SeQuant/core/meta.hpp>
+
 #include <boost/dynamic_bitset.hpp>
 #include <range/v3/view.hpp>
 
@@ -171,6 +172,19 @@ auto subsequence(Iterable const& it, boost::dynamic_bitset<> const& bs) {
 ///         * {0,1,-1,2,3,-1,-1} => ((e[0], e[1]), (e[2],e[3]))
 ///
 using EvalSequence = container::svector<int>;
+
+///
+/// Given a range [a_0, a_1, ..., a_n] returns a range of sliced views of
+/// lengths 1 through n: [[a_0], [a_0, a_1], ..., [a_0, a_1, ..., a_n]].
+///
+template <typename Rng>
+auto inits(Rng const& rng) {
+  using ranges::views::slice;
+  using ranges::views::transform;
+  return rng | transform([n = 0, &rng](auto&& val) mutable {
+           return slice(rng, 0, ++n);
+         });
+}
 
 }  // namespace sequant
 
