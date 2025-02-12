@@ -6,6 +6,7 @@
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/logger.hpp>
+#include <SeQuant/core/math.hpp>
 
 #include <TiledArray/einsum/tiledarray.h>
 #include <btas/btas.h>
@@ -84,11 +85,9 @@ struct SymmetricParticleRange {
   size_t nparticles;
 };
 
-struct AntisymmetricParticleRange {
-  perm_t::iterator bra_beg;
-  size_t bra_size;
-  perm_t::iterator ket_beg;
-  size_t ket_size;
+struct ParticleRange {
+  perm_t::iterator beg;
+  size_t size;
 };
 
 inline bool valid_particle_range(SymmetricParticleRange const& rng) {
@@ -98,13 +97,6 @@ inline bool valid_particle_range(SymmetricParticleRange const& rng) {
   return std::is_sorted(rng.bra_beg, bra_end) &&
          std::is_sorted(rng.ket_beg, ket_end) &&
          distance(rng.bra_beg, bra_end) == distance(rng.ket_beg, ket_end);
-}
-
-inline bool valid_particle_range(AntisymmetricParticleRange const& rng) {
-  auto bra_end = rng.bra_beg + rng.bra_size;
-  auto ket_end = rng.ket_beg + rng.ket_size;
-  return std::is_sorted(rng.bra_beg, bra_end) &&
-         std::is_sorted(rng.ket_beg, ket_end);
 }
 
 inline auto iter_pairs(SymmetricParticleRange const& rng) {
@@ -125,32 +117,19 @@ inline auto iter_pairs(SymmetricParticleRange const& rng) {
 /// \param rng The antisymmetric particle range.
 ///
 /// \param call_back A function object which is called with the parity of the
-///                  particle antisymsmetric permutation.
+///                  particle antisymmetric permutation.
 ///
-
 template <typename F, typename = std::enable_if_t<std::is_invocable_v<F, int>>>
-void antisymmetric_permutation(AntisymmetricParticleRange const& rng,
-                               F call_back) {
-  struct {
-    int bra;
-    int ket;
-  } parity{0, 0};
-
-  auto bra_end = rng.bra_beg + rng.bra_size;
-  auto ket_end = rng.ket_beg + rng.ket_size;
-
-  for (auto bra_yn = true;                            //
-       bra_yn;                                        //
-       bra_yn = next_permutation_parity(parity.bra,   //
-                                        rng.bra_beg,  //
-                                        bra_end)) {
-    for (auto ket_yn = true;                            //
-         ket_yn;                                        //
-         ket_yn = next_permutation_parity(parity.ket,   //
-                                          rng.ket_beg,  //
-                                          ket_end)) {
-      call_back((parity.bra + parity.ket) % 2);
-    }
+void antisymmetric_permutation(ParticleRange const& rng, F call_back) {
+  // if the range has 1 or no elements, there is no permutation
+  if (rng.size <= 1) {
+    call_back(0);
+    return;
+  }
+  int parity = 0;
+  auto end = rng.beg + rng.size;
+  for (auto yn = true; yn; yn = next_permutation_parity(parity, rng.beg, end)) {
+    call_back(parity);
   }
 }
 
@@ -162,7 +141,6 @@ void antisymmetric_permutation(AntisymmetricParticleRange const& rng,
 ///
 /// \param call_back A function object which is called after permutation.
 ///
-
 template <typename F, typename = std::enable_if_t<std::is_invocable_v<F>>>
 void symmetric_permutation(SymmetricParticleRange const& rng, F call_back) {
   auto ips = iter_pairs(rng) | ranges::to_vector;
@@ -258,36 +236,56 @@ template <typename... Args>
 auto particle_antisymmetrize_ta(TA::DistArray<Args...> const& arr,
                                 size_t bra_rank) {
   using ranges::views::iota;
-
   size_t const rank = arr.trange().rank();
   assert(bra_rank <= rank);
+  size_t const ket_rank = rank - bra_rank;
 
-  TA::DistArray<Args...> result;
+  if (bra_rank <= 1 && ket_rank <= 1) {
+    // nothing to do
+    return arr;
+  }
 
   perm_t perm = iota(size_t{0}, rank) | ranges::to<perm_t>;
+  perm_t bra_perm = iota(size_t{0}, bra_rank) | ranges::to<perm_t>;
+  perm_t ket_perm = iota(bra_rank, rank) | ranges::to<perm_t>;
 
-  auto const lannot = ords_to_annot(perm);
+  const auto lannot = ords_to_annot(perm);
 
-  auto call_back = [&lannot, &arr, &result,
-                    &perm = std::as_const(perm)](int parity) {
-    typename decltype(result)::numeric_type p_ = parity == 0 ? 1 : -1;
-    if (result.is_initialized())
-      result(lannot) += p_ * arr(ords_to_annot(perm));
-    else
-      result(lannot) = p_ * arr(ords_to_annot(perm));
+  auto process_permutations = [&lannot](const TA::DistArray<Args...>& input_arr,
+                                        size_t range_rank, perm_t range_perm,
+                                        const std::string& other_annot,
+                                        bool is_bra) -> TA::DistArray<Args...> {
+    if (range_rank <= 1) return input_arr;
+    TA::DistArray<Args...> result;
+
+    auto callback = [&](int parity) {
+      const auto range_annot = ords_to_annot(range_perm);
+      const auto annot = other_annot.empty()
+                             ? range_annot
+                             : (is_bra ? range_annot + "," + other_annot
+                                       : other_annot + "," + range_annot);
+
+      typename decltype(result)::numeric_type p_ = parity == 0 ? 1 : -1;
+      if (result.is_initialized()) {
+        result(lannot) += p_ * input_arr(annot);
+      } else {
+        result(lannot) = p_ * input_arr(annot);
+      }
+    };
+    antisymmetric_permutation(ParticleRange{range_perm.begin(), range_rank},
+                              callback);
+    return result;
   };
 
-  auto const ket_rank = rank - bra_rank;
+  // Process bra permutations first
+  const auto ket_annot = ket_rank == 0 ? "" : ords_to_annot(ket_perm);
+  auto result = process_permutations(arr, bra_rank, bra_perm, ket_annot, true);
 
-  antisymmetric_permutation(
-      AntisymmetricParticleRange{perm.begin(),             //
-                                 bra_rank,                 //
-                                 perm.begin() + bra_rank,  //
-                                 ket_rank},
-      call_back);
+  // Process ket permutations
+  const auto bra_annot = bra_rank == 0 ? "" : ords_to_annot(bra_perm);
+  result = process_permutations(result, ket_rank, ket_perm, bra_annot, false);
 
   TA::DistArray<Args...>::wait_for_lazy_cleanup(result.world());
-
   return result;
 }
 
@@ -343,34 +341,45 @@ auto particle_symmetrize_btas(btas::Tensor<Args...> const& arr) {
 template <typename... Args>
 auto particle_antisymmetrize_btas(btas::Tensor<Args...> const& arr,
                                   size_t bra_rank) {
+  using ranges::views::concat;
   using ranges::views::iota;
-
   size_t const rank = arr.rank();
   assert(bra_rank <= rank);
+  size_t const ket_rank = rank - bra_rank;
 
-  auto result = btas::Tensor<Args...>{arr.range()};
-  result.fill(0);
+  perm_t bra_perm = iota(size_t{0}, bra_rank) | ranges::to<perm_t>;
+  perm_t ket_perm = iota(bra_rank, rank) | ranges::to<perm_t>;
+  const auto lannot = iota(size_t{0}, rank) | ranges::to<perm_t>;
 
-  perm_t perm = iota(size_t{0}, rank) | ranges::to<perm_t>;
-  auto const lannot = perm;
+  auto process_permutations = [&lannot](const btas::Tensor<Args...>& input_arr,
+                                        size_t range_rank, perm_t range_perm,
+                                        const perm_t& other_perm, bool is_bra) {
+    if (range_rank <= 1) return input_arr;
+    btas::Tensor<Args...> result{input_arr.range()};
 
-  auto call_back = [&lannot, &arr, &result,
-                    &perm = std::as_const(perm)](int parity) {
-    typename decltype(result)::numeric_type p_ = parity == 0 ? 1 : -1;
-    btas::Tensor<Args...> temp;
-    btas::permute(arr, lannot, temp, perm);
-    btas::scal(p_, temp);
-    result += temp;
+    auto callback = [&](int parity) {
+      const auto annot =
+          is_bra ? concat(range_perm, other_perm) | ranges::to<perm_t>()
+                 : concat(other_perm, range_perm) | ranges::to<perm_t>();
+
+      typename decltype(result)::numeric_type p_ = parity == 0 ? 1 : -1;
+      btas::Tensor<Args...> temp;
+      btas::permute(input_arr, lannot, temp, annot);
+      btas::scal(p_, temp);
+      result += temp;
+    };
+
+    antisymmetric_permutation(ParticleRange{range_perm.begin(), range_rank},
+                              callback);
+    return result;
   };
+  // Process bra permutations first
+  const auto ket_annot = ket_rank == 0 ? perm_t{} : ket_perm;
+  auto result = process_permutations(arr, bra_rank, bra_perm, ket_annot, true);
 
-  auto const ket_rank = rank - bra_rank;
-
-  antisymmetric_permutation(
-      AntisymmetricParticleRange{perm.begin(),             //
-                                 bra_rank,                 //
-                                 perm.begin() + bra_rank,  //
-                                 ket_rank},
-      call_back);
+  // Process ket permutations if needed
+  const auto bra_annot = bra_rank == 0 ? perm_t{} : bra_perm;
+  result = process_permutations(result, ket_rank, ket_perm, bra_annot, false);
 
   return result;
 }
@@ -745,7 +754,7 @@ class EvalTensorTA final : public EvalResult {
 
   [[nodiscard]] ERPtr antisymmetrize(size_t bra_rank) const override {
     return eval_result<this_type>(
-        particle_antisymmetrize_ta(get<ArrayT>(), bra_rank));
+        particle_antisymmetrize_ta_v2(get<ArrayT>(), bra_rank));
   }
 };
 
