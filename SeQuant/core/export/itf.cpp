@@ -600,8 +600,19 @@ std::wstring ITFGenerator::generate() const {
          currentSection.contractionBlocks) {
       for (const Contraction &currentContraction : currentBlock) {
         if (currentContraction.factor == 0) {
+          if (currentContraction.lhs.label() == L"One" &&
+              !currentContraction.rhs.has_value()) {
+            // This is likely the only contraction belonging to the given result
+            // meaning that we simply want to explicitly set it to zero
+            itf +=
+                L"alloc " + to_itf(currentContraction.result, *m_ctx) + L"\n";
+            itf +=
+                L"store " + to_itf(currentContraction.result, *m_ctx) + L"\n";
+          }
+
           continue;
         }
+
         // For now we'll do a really silly contribution-by-contribution
         // load-process-store strategy
         if (allocatedTensors.find(currentContraction.result) ==
