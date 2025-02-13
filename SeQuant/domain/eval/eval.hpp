@@ -529,7 +529,6 @@ auto evaluate_antisymm(NodeT const& node,    //
                        Annot const& layout,  //
                        Le const& le,         //
                        Args&&... args) {
-  container::svector<std::array<size_t, 3>> pgs;
   size_t bra_rank;
   {
     ExprPtr expr_ptr{};

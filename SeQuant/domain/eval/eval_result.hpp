@@ -499,29 +499,12 @@ class EvalResult {
   virtual void add_inplace(EvalResult const&) = 0;
 
   ///
-  /// \brief Particle symmetrize this eval result according to the list of index
-  ///        groups.
-  ///
-  /// @note vector<array<size_t,3>> represents list of particle
-  ///       symmetry index groups. array<size_t, 3> is expected to be
-  ///         [b1, b2, len]
-  ///       where b1, and b2 are the zero-based positions of the tensor indices.
-  ///       [b1, b1+len) and [b2, b2+len) are two ranges that will be permuted
-  ///       simultaneously and at the equivalent positions.
+  /// \brief Particle symmetrize the eval result
   ///
   [[nodiscard]] virtual ERPtr symmetrize() const = 0;
 
   ///
-  /// \brief Particle antisymmetrize this eval result according to the list of
-  ///        index groups.
-  ///
-  /// @note vector<array<size_t,3>> represents list of antisymmetric index
-  ///       groups. array<size_t,3> is expected to be
-  ///         [b1,b2,len]
-  ///       where b1, and b2 are the zero-based positions of the tensor indices.
-  ///       [b1, b1+len) and [b2, b2+len) are two ranges that will be permuted
-  ///       by keeping track of the parity -- (even/odd)-ness -- of the total
-  ///       permutation.
+  /// \brief Particle antisymmetrize the eval result
   ///
   [[nodiscard]] virtual ERPtr antisymmetrize(size_t bra_rank) const = 0;
 
@@ -754,7 +737,7 @@ class EvalTensorTA final : public EvalResult {
 
   [[nodiscard]] ERPtr antisymmetrize(size_t bra_rank) const override {
     return eval_result<this_type>(
-        particle_antisymmetrize_ta_v2(get<ArrayT>(), bra_rank));
+        particle_antisymmetrize_ta(get<ArrayT>(), bra_rank));
   }
 };
 
