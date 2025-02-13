@@ -316,6 +316,24 @@ TEST_CASE("TEST_EVAL_USING_BTAS", "[eval]") {
     btas::scal(0.5, man1);
 
     REQUIRE(norm(eval1) == Catch::Approx(norm(man1)));
+
+    auto expr2 = parse_antisymm(L"R_{a1,a2}^{i1}");
+    auto tidx2 = tidxs(L"a_1,a_2,i_1");
+    auto eval2 = eval_antisymm(expr2, tidx2);
+
+    auto const& r = yield(L"R{v,v;o}");
+    BTensorD man2{r.range()}, temp2{r.range()};
+    man2.fill(0.0);
+    temp2.fill(0.0);
+
+    man2 += BTensorD{permute(r, {0, 1, 2})};
+
+    temp2 += BTensorD{permute(r, {1, 0, 2})};
+    btas::scal(-1.0, temp2);
+    man2 += temp2;
+    temp2.clear();
+
+    REQUIRE(norm(eval2) == Catch::Approx(norm(man2)));
   }
 
   SECTION("Symmetrization") {

@@ -405,6 +405,17 @@ TEST_CASE("TEST_EVAL_USING_TA", "[eval]") {
     zero2("0,1,2,3,4") = man2("0,1,2,3,4") - eval2("0,1,2,3,4");
     REQUIRE(norm(zero2) == Catch::Approx(0).margin(
                                100 * std::numeric_limits<double>::epsilon()));
+
+    auto expr3 = parse_antisymm(L"R_{a1,a2}^{}");
+    auto eval3 = eval_antisymm(expr3, "a_1,a_2");
+    auto const& arr3 = yield(L"R{a1,a2;}");
+    auto man3 = TArrayD{};
+    man3("0,1") = arr3("0,1") - arr3("1,0");
+
+    TArrayD zero3;
+    zero3("0,1") = man3("0,1") - eval3("0,1");
+    REQUIRE(norm(zero3) == Catch::Approx(0).margin(
+                               100 * std::numeric_limits<double>::epsilon()));
   }
 
   SECTION("Symmetrization") {
@@ -614,6 +625,17 @@ TEST_CASE("TEST_EVAL_USING_TA_COMPLEX", "[eval]") {
     TArrayC zero2;
     zero2("0,1,2,3,4") = man2("0,1,2,3,4") - eval2("0,1,2,3,4");
     REQUIRE(norm(zero2) == Catch::Approx(0).margin(
+                               100 * std::numeric_limits<double>::epsilon()));
+
+    auto expr3 = parse_expr(L"R_{a1,a2}^{}");
+    auto eval3 = eval_antisymm(expr3, "a_1,a_2");
+    auto const& arr3 = yield(L"R{a1,a2;}");
+    auto man3 = TArrayC{};
+    man3("0,1") = arr3("0,1") - arr3("1,0");
+
+    TArrayC zero3;
+    zero3("0,1") = man3("0,1") - eval3("0,1");
+    REQUIRE(norm(zero3) == Catch::Approx(0).margin(
                                100 * std::numeric_limits<double>::epsilon()));
   }
 
