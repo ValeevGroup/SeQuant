@@ -6,12 +6,10 @@
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/logger.hpp>
-#include <SeQuant/core/math.hpp>
 
 #include <TiledArray/einsum/tiledarray.h>
 #include <btas/btas.h>
 #include <tiledarray.h>
-#include <range/v3/algorithm.hpp>
 #include <range/v3/numeric.hpp>
 #include <range/v3/view.hpp>
 
@@ -863,9 +861,13 @@ class EvalTensorOfTensorTA final : public EvalResult {
     ArrayT::wait_for_lazy_cleanup(t.world());
   }
 
-  [[nodiscard]] ERPtr symmetrize() const override { return nullptr; }
+  [[nodiscard]] ERPtr symmetrize() const override {
+    // not implemented yet
+    return nullptr;
+  }
 
   [[nodiscard]] ERPtr antisymmetrize(size_t bra_rank) const override {
+    // not implemented yet
     return nullptr;
   }
 };
