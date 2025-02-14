@@ -429,16 +429,17 @@ using EvalExprNode = FullBinaryNode<EvalExpr>;
 
 ///
 /// \brief Collect tensors appearing as a factor at the leaf node of a product
-///        sub-tree, or, at the internal node of a sum sub-tree. Does not
-///        collect leaf tensors from the sum sub-trees.
+///        sub-tree, or, at the root node of a sum sub-tree.
 ///
 template <typename Rng>
 void collect_tensor_factors(EvalExprNode const& node,  //
                             Rng& collect) {
   static_assert(std::is_same_v<ranges::range_value_t<Rng>, ExprWithHash>);
-  if (node->is_tensor() && (node.leaf() || node->op_type() == EvalOp::Sum))
+
+  if (auto op = node->op_type();
+      node->is_tensor() && op == EvalOp::Id || op == EvalOp::Sum)
     collect.emplace_back(ExprWithHash{node->expr(), node->hash_value()});
-  else {
+  else if (node->op_type() == EvalOp::Prod && !node.leaf()) {
     collect_tensor_factors(node.left(), collect);
     collect_tensor_factors(node.right(), collect);
   }
