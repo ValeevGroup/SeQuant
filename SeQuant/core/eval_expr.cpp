@@ -395,16 +395,6 @@ ExprPtr make_imed(EvalExpr const& left, EvalExpr const& right,
 }  // namespace
 
 ///
-/// \brief Sorts the input range and calls hash_range.
-///
-template <typename Rng>
-size_t canon_hash(Rng const& rng) {
-  auto vec = rng | ranges::to_vector;
-  ranges::sort(vec);
-  return hash::hash_range(vec.begin(), vec.end());
-}
-
-///
 /// \brief Calls canon_hash on all inits subranges.
 /// \see inits
 /// \see canon_hash
@@ -412,7 +402,9 @@ size_t canon_hash(Rng const& rng) {
 template <typename Rng>
 auto imed_hashes(Rng const& rng) {
   using ranges::views::transform;
-  return inits(rng) | transform([](auto&& v) { return canon_hash(v); });
+  return inits(rng) | transform([](auto&& v) {
+           return hash::range_unordered(ranges::begin(v), ranges::end(v));
+         });
 }
 
 struct ExprWithHash {
