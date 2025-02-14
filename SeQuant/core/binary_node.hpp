@@ -63,7 +63,7 @@ struct VisitAll {};
 template <
     typename T, typename V, typename Order, typename NodeType,
     typename = std::enable_if_t<std::is_invocable_v<V, FullBinaryNode<T>>>>
-void visit(FullBinaryNode<T> const& node, V const& f, Order, NodeType) {
+void visit(FullBinaryNode<T> const& node, V f, Order, NodeType) {
   static_assert(std::is_same_v<Order, PreOrder> ||
                     std::is_same_v<Order, InOrder> ||
                     std::is_same_v<Order, PostOrder>,
@@ -275,7 +275,7 @@ class FullBinaryNode {
       std::enable_if_t<
           std::is_void_v<std::invoke_result_t<F, FullBinaryNode<T> const&>>,
           bool> = true>
-  void visit(F const& visitor, Order = {}) const {
+  void visit(F visitor, Order = {}) const {
     sequant::visit(*this,    //
                    visitor,  //
                    Order{},  //
@@ -293,7 +293,7 @@ class FullBinaryNode {
       typename F,
       std::enable_if_t<std::is_invocable_r_v<bool, F, FullBinaryNode<T> const&>,
                        bool> = true>
-  void visit(F const& visitor) const {
+  void visit(F visitor) const {
     if (visitor(*this) && !leaf()) {
       left().visit(visitor);
       right().visit(visitor);
@@ -311,7 +311,7 @@ class FullBinaryNode {
       typename F,
       std::enable_if_t<std::is_invocable_r_v<bool, F, FullBinaryNode<T> const&>,
                        bool> = true>
-  void visit_internal(F const& visitor) const {
+  void visit_internal(F visitor) const {
     if (leaf()) return;
     if (visitor(*this)) {
       left().visit_internal(visitor);
@@ -334,7 +334,7 @@ class FullBinaryNode {
       std::enable_if_t<
           std::is_void_v<std::invoke_result_t<F, FullBinaryNode<T> const&>>,
           bool> = true>
-  void visit_internal(F const& visitor, Order = {}) const {
+  void visit_internal(F visitor, Order = {}) const {
     sequant::visit(*this,    //
                    visitor,  //
                    Order{},  //
@@ -356,7 +356,7 @@ class FullBinaryNode {
       std::enable_if_t<
           std::is_void_v<std::invoke_result_t<F, FullBinaryNode<T> const&>>,
           bool> = true>
-  void visit_leaf(F const& visitor, Order = {}) const {
+  void visit_leaf(F visitor, Order = {}) const {
     sequant::visit(*this,    //
                    visitor,  //
                    Order{},  //
