@@ -13,12 +13,12 @@
 #include <utility>
 
 #include <SeQuant/core/abstract_tensor.hpp>
+#include <SeQuant/core/algorithm.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/tensor_network.hpp>
 #include <SeQuant/core/utility/indices.hpp>
-#include <SeQuant/core/algorithm.hpp>
 
 #if __cplusplus >= 202002L
 #include <bit>
@@ -176,7 +176,8 @@ container::svector<Index> diff_indices(I1 const& idxs1, I2 const& idxs2) {
 template <typename IdxToSz,
           std::enable_if_t<std::is_invocable_r_v<size_t, IdxToSz, Index>,
                            bool> = true>
-EvalSequence single_term_opt(TensorNetwork const& network, IdxToSz const& idxsz) {
+EvalSequence single_term_opt(TensorNetwork const& network,
+                             IdxToSz const& idxsz) {
   using ranges::views::concat;
   using IndexContainer = container::svector<Index>;
   // number of terms
@@ -384,7 +385,7 @@ ExprPtr optimize(ExprPtr const& expr, IdxToSize const& idx2size,
     }
   } else if (expr->is<Sum>()) {
     auto smands = *expr | transform([&idx2size](auto&& s) {
-      return optimize(s, idx2size);
+      return optimize(s, idx2size, /* reorder_sum= */ false);
     }) | ranges::to_vector;
     auto sum = Sum{smands.begin(), smands.end()};
     return reorder_sum ? ex<Sum>(opt::reorder(sum)) : ex<Sum>(std::move(sum));
