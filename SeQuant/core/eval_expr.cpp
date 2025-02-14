@@ -61,28 +61,12 @@ std::string to_label_annotation(const Index& idx) {
 
 std::string EvalExpr::indices_annot() const noexcept {
   using ranges::views::filter;
-  using ranges::views::intersperse;
-  using ranges::views::join;
-  using ranges::views::transform;
 
   if (!is_tensor()) return {};
 
-  // given an iterable of sequant::Index objects, returns a string made
-  // of their full labels separated by comma
-  //   eg. (a_1^{i_1,i_2},a_2^{i_2,i_3}) -> "a_1i_1i_2,a_2i_2i_3"
-  //   eg. (i_1, i_2) -> "i_1,i_2"
-  auto annot = [](auto&& ixs) -> std::string {
-    auto annotations = ixs | transform(to_label_annotation);
-
-    return annotations                      //
-           | intersperse(std::string{","})  //
-           | join                           //
-           | ranges::to<std::string>;
-  };
-
-  auto outer =
-      annot(canon_indices_ | filter(ranges::not_fn(&Index::has_proto_indices)));
-  auto inner = annot(canon_indices_ | filter(&Index::has_proto_indices));
+  auto outer = csv_labels(canon_indices_ |
+                          filter(ranges::not_fn(&Index::has_proto_indices)));
+  auto inner = csv_labels(canon_indices_ | filter(&Index::has_proto_indices));
 
   return outer + (inner.empty() ? "" : (";" + inner));
 }
