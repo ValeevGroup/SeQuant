@@ -872,7 +872,10 @@ TensorNetwork::SlotCanonicalizationMetadata TensorNetwork::canonicalize_slots(
   // distinct_named_indices = false
   auto [graph, vlabels, vcolors, vtypes] =
       make_bliss_graph(&named_indices, /* distinct_named_indices = */ false);
-  //    graph->write_dot(std::wcout, vlabels);
+  if (Logger::instance().canonicalize_dot) {
+    std::wcout << "Input graph for canonicalization:\n";
+    graph->write_dot(std::wcout, vlabels);
+  }
 
   // canonize the graph
   bliss::Stats stats;
@@ -890,6 +893,7 @@ TensorNetwork::SlotCanonicalizationMetadata TensorNetwork::canonicalize_slots(
       return pvector;
     };
 
+    std::wcout << "Canonicalized graph:\n";
     auto cvlabels = permute(vlabels, cl);
     metadata.graph->write_dot(std::wcout, cvlabels);
   }
