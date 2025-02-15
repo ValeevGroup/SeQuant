@@ -213,7 +213,7 @@ ExprPtr TensorNetwork::canonicalize(
       container::multimap<size_t, std::pair<size_t, size_t>> color2idx;
       // collect colors and anonymous indices sorted by colors
       size_t idx_ord = 0;
-      for (auto &&ttpair : edges_) {
+      for ([[maybe_unused]] auto &&ttpair : edges_) {
         if (is_anonymous_index_ord(idx_ord)) {
           auto color = vcolors[idx_ord];
           if (colors.find(color) == colors.end()) colors.insert(color);
@@ -512,7 +512,7 @@ TensorNetwork::make_bliss_graph(const named_indices_t *named_indices_ptr,
     assert(!bundle.empty());
     ++nv;  // each symmetric protoindex bundle is a vertex
     std::wstring spbundle_label = L"<";
-    std::size_t pi_count = 0;
+    [[maybe_unused]] std::size_t pi_count = 0;
     const auto end = bundle.end();
     auto it = bundle.begin();
     spbundle_label += it->full_label();
@@ -622,7 +622,7 @@ TensorNetwork::make_bliss_graph(const named_indices_t *named_indices_ptr,
   index_cnt = 0;
   ranges::for_each(edges_, [&](const Edge &edge) {
     assert(edge.size() > 0);
-    const auto edge_connected = edge.size() == 2;
+    [[maybe_unused]] const auto edge_connected = edge.size() == 2;
     for (int t = 0; t != edge.size(); ++t) {
       const auto &terminal = edge[t];
       const auto tensor_ord = terminal.tensor_ord;
