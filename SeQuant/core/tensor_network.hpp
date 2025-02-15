@@ -216,8 +216,7 @@ class TensorNetwork {
         } else {
           throw std::logic_error(
               "TensorNetwork::TensorNetwork: non-tensors in the given "
-              "expression "
-              "range");
+              "expression range");
         }
       }
       return;
