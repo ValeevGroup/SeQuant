@@ -435,6 +435,19 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
                // these differ by a sign ...
                std::make_tuple(L"g{i1,i4;a1,a4}:A * t{a4;i4}:A",
                                L"g{i3,i2;a2,a4}:A * t{a4;i3}:A", true, true),
+               // more spin-orbital CC cases suggested by Bimal
+               // 1
+               std::make_tuple(L"g{i_2,i_3;a_2,a_3}:A * t{a_2;i_1}:A",
+                               L"g{i_3,i_4;a_3,a_4}:A * t{a_3;i_1}:A", true,
+                               false),
+               std::make_tuple(L"g{i_2,i_3;a_2,a_3}:A * t{a_2;i_1}:A",
+                               L"g{i_3,i_4;a_3,a_4}:A * t{a_4;i_1}:A", true,
+                               true),
+               // 2
+               std::make_tuple(
+                   L"g{i_3,i_4;a_3,a_4}:A * t{a_3;i_1}:A * t{a_4;i_2}:A",
+                   L"g{i_3,i_4;a_3,a_4}:A * t{a_4;i_1}:A * t{a_3;i_2}:A", true,
+                   true),
            }) {
         std::wcout << "============== " << input1
                    << " ===============" << std::endl;
