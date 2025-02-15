@@ -21,13 +21,13 @@ class SwapCountableRef;
 
 /// counted swap for types whose default swap is not counted
 template <typename T>
-inline void counted_swap(T& a, T& b);
+void counted_swap(T& a, T& b);
 
 namespace detail {
 
 /// use this for implementing custom swap that counts swaps by default
 template <typename T>
-inline void count_swap();
+void count_swap();
 
 /// atomic counter, used by swap overloads for SwapCountable and
 /// SwapCountableRef
@@ -48,12 +48,12 @@ struct SwapCounter {
 
   friend class SwapCountable<T>;
   friend class SwapCountableRef<T>;
-  friend inline void counted_swap<T>(T& a, T& b);
-  friend inline void count_swap<T>();
+  friend void counted_swap<T>(T& a, T& b);
+  friend void count_swap<T>();
 };
 
 template <typename T>
-inline void count_swap() {
+void count_swap() {
   detail::SwapCounter<T>::thread_instance().toggle();
 }
 
@@ -69,13 +69,13 @@ class SwapCountable {
  private:
   T value_;
 
-  friend inline void swap(SwapCountable& a, SwapCountable& b) {
+  friend void swap(SwapCountable& a, SwapCountable& b) {
     using std::swap;
     swap(a.value_, b.value_);
     detail::SwapCounter<T>::thread_instance().toggle();
   }
 
-  friend inline bool operator<(const SwapCountable& a, const SwapCountable& b) {
+  friend bool operator<(const SwapCountable& a, const SwapCountable& b) {
     return a.value_ < b.value_;
   }
 };
@@ -90,15 +90,13 @@ class SwapCountableRef {
   T& ref_;
 
   // NB swapping const wrappers swaps the payload
-  friend inline void swap(const SwapCountableRef& a,
-                          const SwapCountableRef& b) {
+  friend void swap(const SwapCountableRef& a, const SwapCountableRef& b) {
     using std::swap;
     swap(a.ref_, b.ref_);
     detail::SwapCounter<T>::thread_instance().toggle();
   }
 
-  friend inline bool operator<(const SwapCountableRef& a,
-                               const SwapCountableRef& b) {
+  friend bool operator<(const SwapCountableRef& a, const SwapCountableRef& b) {
     return a.ref_ < b.ref_;
   }
 };
@@ -114,7 +112,7 @@ bool ts_swap_counter_is_even() {
 }
 
 template <typename T>
-inline void counted_swap(T& a, T& b) {
+void counted_swap(T& a, T& b) {
   using std::swap;
   swap(a, b);
   detail::SwapCounter<T>::thread_instance().toggle();
