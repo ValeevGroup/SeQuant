@@ -431,6 +431,14 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
                    L"g{a3;a4;x1,x2} * C{a3<i1,i4>;a3} * C{a4;a4<i1>}",
                    L"g{a3;a4;x2,x1} * C{a3<i1,i2>;a3} * C{a4;a4<i2>}", true,
                    false),
+               //////////////// TNs w antisymmetric tensors
+               // unlike the nonsymmetric/symmetric cases we need to check for
+               // the phase
+               // also the change in the order of named indices produced by
+               // canonicalize_slots may absorb the phase ... so these tests are
+               // not robust due to relying on specific canonical order (which
+               // will change by changing bliss heuristics, colors, etc.)
+               //
                // spin-orbital CC cases suggested by Bimal testing
                // these differ by a sign ...
                std::make_tuple(L"g{i1,i4;a1,a4}:A * t{a4;i4}:A",
@@ -443,11 +451,18 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
                std::make_tuple(L"g{i_2,i_3;a_2,a_3}:A * t{a_2;i_1}:A",
                                L"g{i_3,i_4;a_3,a_4}:A * t{a_4;i_1}:A", true,
                                true),
-               // 2
+               // 2a
                std::make_tuple(
                    L"g{i_3,i_4;a_3,a_4}:A * t{a_3;i_1}:A * t{a_4;i_2}:A",
                    L"g{i_3,i_4;a_3,a_4}:A * t{a_4;i_1}:A * t{a_3;i_2}:A", true,
                    true),
+               // 2b: unlike its equivalent counterpart 2a the order of named
+               // indices is different for the 2 TNs, which cancels out the
+               // phase change
+               std::make_tuple(
+                   L"g{i_3,i_4;a_3,a_4}:A * t{a_3;i_1}:A * t{a_4;i_2}:A",
+                   L"g{i_3,i_4;a_3,a_4}:A * t{a_3;i_2}:A * t{a_4;i_1}:A", true,
+                   false),
            }) {
         std::wcout << "============== " << input1
                    << " ===============" << std::endl;
