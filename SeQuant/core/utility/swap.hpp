@@ -19,6 +19,15 @@ class SwapCountable;
 template <typename T>
 class SwapCountableRef;
 
+template <typename T>
+void swap(SwapCountable<T>& a, SwapCountable<T>& b);
+template <typename T>
+bool operator<(const SwapCountable<T>& a, const SwapCountable<T>& b);
+template <typename T>
+void swap(const SwapCountableRef<T>& a, const SwapCountableRef<T>& b);
+template <typename T>
+bool operator<(const SwapCountableRef<T>& a, const SwapCountableRef<T>& b);
+
 /// counted swap for types whose default swap is not counted
 template <typename T>
 void counted_swap(T& a, T& b);
@@ -46,8 +55,8 @@ struct SwapCounter {
   std::atomic<bool> even_num_of_swaps_;
   void toggle() { even_num_of_swaps_ = !even_num_of_swaps_; }
 
-  friend class SwapCountable<T>;
-  friend class SwapCountableRef<T>;
+  friend void swap<T>(SwapCountable<T>&, SwapCountable<T>&);
+  friend void swap<T>(const SwapCountableRef<T>&, const SwapCountableRef<T>&);
   friend void counted_swap<T>(T& a, T& b);
   friend void count_swap<T>();
 };
@@ -69,16 +78,21 @@ class SwapCountable {
  private:
   T value_;
 
-  friend void swap(SwapCountable& a, SwapCountable& b) {
-    using std::swap;
-    swap(a.value_, b.value_);
-    detail::SwapCounter<T>::thread_instance().toggle();
-  }
-
-  friend bool operator<(const SwapCountable& a, const SwapCountable& b) {
-    return a.value_ < b.value_;
-  }
+  friend void swap<T>(SwapCountable& a, SwapCountable& b);
+  friend bool operator< <T>(const SwapCountable& a, const SwapCountable& b);
 };
+
+template <typename T>
+void swap(SwapCountable<T>& a, SwapCountable<T>& b) {
+  using std::swap;
+  swap(a.value_, b.value_);
+  detail::SwapCounter<T>::thread_instance().toggle();
+}
+
+template <typename T>
+bool operator<(const SwapCountable<T>& a, const SwapCountable<T>& b) {
+  return a.value_ < b.value_;
+}
 
 /// Wraps `T&` to make its swap countable
 template <typename T>
@@ -89,18 +103,23 @@ class SwapCountableRef {
  private:
   T& ref_;
 
-  // NB swapping const wrappers swaps the payload
-  friend void swap(const SwapCountableRef& a, const SwapCountableRef& b) {
-    using std::swap;
-    swap(a.ref_, b.ref_);
-    detail::SwapCounter<T>::thread_instance().toggle();
-  }
-
-  friend bool operator<(const SwapCountableRef& a, const SwapCountableRef& b) {
-    return a.ref_ < b.ref_;
-  }
+  friend void swap<T>(const SwapCountableRef& a, const SwapCountableRef& b);
+  friend bool operator< <T>(const SwapCountableRef& a,
+                            const SwapCountableRef& b);
 };
 
+// NB swapping const wrappers swaps the payload
+template <typename T>
+void swap(const SwapCountableRef<T>& a, const SwapCountableRef<T>& b) {
+  using std::swap;
+  swap(a.ref_, b.ref_);
+  detail::SwapCounter<T>::thread_instance().toggle();
+}
+
+template <typename T>
+bool operator<(const SwapCountableRef<T>& a, const SwapCountableRef<T>& b) {
+  return a.ref_ < b.ref_;
+}
 template <typename T>
 void reset_ts_swap_counter() {
   detail::SwapCounter<T>::thread_instance().reset();
