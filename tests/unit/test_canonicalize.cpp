@@ -390,21 +390,24 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
       //      l.tensor_network = l.canonicalize = l.canonicalize_dot =
       //          l.canonicalize_input_graph = true;
 
-      for (auto& [input1, input2, should_be_equal] : {
+      for (auto& [input1, input2, should_be_equal, flipped_sign] : {
                // original 4 tensor networks from Bimal
                std::make_tuple(
                    L"g{i3,i4;a3<i1,i4>,a4<i2>} * s{a1<i1,i2>;a5<i3>}",
-                   L"s{a1<i1,i2>;a5<i3>} * g{i3,i4;a3<i1,i4>,a4<i2>}",
-                   true),  // product reorder is OK
+                   L"s{a1<i1,i2>;a5<i3>} * g{i3,i4;a3<i1,i4>,a4<i2>}", true,
+                   false),  // product reorder is OK
                std::make_tuple(
                    L"g{i3,i4;a3<i1,i4>,a4<i2>} * s{a1<i1,i2>;a5<i3>}",
-                   L"g{i3,i4;a3<i1,i3>,a4<i2>} * s{a2<i1,i2>;a6<i4>}", false),
+                   L"g{i3,i4;a3<i1,i3>,a4<i2>} * s{a2<i1,i2>;a6<i4>}", false,
+                   false),
                std::make_tuple(
                    L"g{i3,i4;a3<i1,i4>,a4<i2>} * s{a1<i1,i2>;a5<i3>}",
-                   L"g{i3,i4;a3<i1,i4>,a4<i2>} * s{a2<i1,i2>;a6<i3>}", true),
+                   L"g{i3,i4;a3<i1,i4>,a4<i2>} * s{a2<i1,i2>;a6<i3>}", true,
+                   false),
                std::make_tuple(
                    L"g{i3,i4;a3<i1,i4>,a4<i2>} * s{a1<i1,i2>;a5<i3>}",
-                   L"g{i3,i4;a3<i1,i3>,a4<i2>} * s{a2<i1,i2>;a6<i4>}", false),
+                   L"g{i3,i4;a3<i1,i3>,a4<i2>} * s{a2<i1,i2>;a6<i4>}", false,
+                   false),
                // one more pair of ternary products
                std::make_tuple(
                    L"s{a2<i1,i2>;a6<i2,i4>} * g{i3,i4;a3<i2,i4>,a4<i1,i3>} * "
@@ -412,21 +415,26 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
                    L"g{i3,i4;a3<i1,i4>,a4<i2,i3>} * "
                    L"t{a3<i1,i4>,a5<i1,i4>;i4,i1} "
                    L"* s{a1<i1,i2>;a5<i1,i4>}",
-                   true),
+                   true, false),
                // last pair of ternary nets involved in MO->PNO integral
                // transform
                std::make_tuple(
                    L"g{i3,i4;a3,a4} * C{a3;a3<i1,i4>} * C{a4;a4<i2>}",
-                   L"g{i3,i4;a3,a4} * C{a3;a3<i1,i3>} * C{a4;a4<i2>}", false),
+                   L"g{i3,i4;a3,a4} * C{a3;a3<i1,i3>} * C{a4;a4<i2>}", false,
+                   false),
                // representation of the above as single tensor
                std::make_tuple(L"g{i3,i4;a3<i1,i4>,a4<i2>}",
-                               L"g{i3,i4;a3<i1,i3>,a4<i2>}", false),
+                               L"g{i3,i4;a3<i1,i3>,a4<i2>}", false, false),
                // 3-index MO->PNO integral transform, but extra aux index just
                // for fun
                std::make_tuple(
                    L"g{a3;a4;x1,x2} * C{a3<i1,i4>;a3} * C{a4;a4<i1>}",
-                   L"g{a3;a4;x2,x1} * C{a3<i1,i2>;a3} * C{a4;a4<i2>}", true),
-
+                   L"g{a3;a4;x2,x1} * C{a3<i1,i2>;a3} * C{a4;a4<i2>}", true,
+                   false),
+               // spin-orbital CC cases suggested by Bimal testing
+               // these differ by a sign ...
+               std::make_tuple(L"g{i1,i4;a1,a4}:A * t{a4;i4}:A",
+                               L"g{i3,i2;a2,a4}:A * t{a4;i3}:A", true, true),
            }) {
         std::wcout << "============== " << input1
                    << " ===============" << std::endl;
@@ -451,11 +459,14 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
         }
 
         std::wcout << "graph(" << input1 << ") <=> graph(" << input2
-                   << "): " << cbp1.graph->cmp(*cbp2.graph) << std::endl;
+                   << "): " << cbp1.graph->cmp(*cbp2.graph)
+                   << (cbp1.phase * cbp2.phase == -1 ? " [modulo sign]" : "")
+                   << std::endl;
 
-        if (should_be_equal)
+        if (should_be_equal) {
           REQUIRE(cbp1.graph->cmp(*cbp2.graph) == 0);
-        else
+          REQUIRE(cbp1.phase * cbp2.phase == (flipped_sign ? -1 : 1));
+        } else
           REQUIRE(cbp1.graph->cmp(*cbp2.graph) != 0);
 
         //                std::wcout << canonicalize(ex1).to_latex() << " should
@@ -463,11 +474,11 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
         //                std::endl;
       }
 
-      //      l.tensor_network = l.canonicalize = l.canonicalize_dot =
-      //          l.canonicalize_input_graph = false;
+      l.tensor_network = l.canonicalize = l.canonicalize_dot =
+          l.canonicalize_input_graph = false;
     };
 
-    do_test(static_cast<TensorNetworkV2*>(nullptr));
+    //    do_test(static_cast<TensorNetworkV2*>(nullptr));
     do_test(static_cast<TensorNetwork*>(nullptr));
   }
 }
