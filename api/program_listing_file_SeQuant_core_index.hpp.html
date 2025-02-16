@@ -271,14 +271,11 @@
 <span class="cp">#define SEQUANT_INDEX_H</span>
 
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;SeQuant/core/container.hpp&gt;</span>
-<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;SeQuant/core/hash.hpp&gt;</span>
-<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;iostream&gt;</span>
-<span class="c1">// #include &lt;SeQuant/core/space.hpp&gt;</span>
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;SeQuant/core/context.hpp&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;SeQuant/core/hash.hpp&gt;</span>
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;SeQuant/core/tag.hpp&gt;</span>
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;SeQuant/core/utility/string.hpp&gt;</span>
-<span class="c1">// Only needed due to a (likely) compiler bug in Apple Clang</span>
-<span class="c1">// #include &lt;SeQuant/core/attr.hpp&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;SeQuant/core/utility/swap.hpp&gt;</span>
 
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;algorithm&gt;</span>
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;atomic&gt;</span>
@@ -288,6 +285,7 @@
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;cwchar&gt;</span>
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;functional&gt;</span>
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;initializer_list&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;iostream&gt;</span>
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;iterator&gt;</span>
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;map&gt;</span>
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;mutex&gt;</span>
@@ -931,27 +929,9 @@
 <span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">stable_sort</span><span class="p">(</span><span class="n">begin</span><span class="p">(</span><span class="n">proto_indices_</span><span class="p">),</span><span class="w"> </span><span class="n">end</span><span class="p">(</span><span class="n">proto_indices_</span><span class="p">));</span>
 <span class="p">}</span>
 
-<span class="k">class</span><span class="w"> </span><span class="nc">IndexSwapper</span><span class="w"> </span><span class="p">{</span>
-<span class="w"> </span><span class="k">public</span><span class="o">:</span>
-<span class="w">  </span><span class="n">IndexSwapper</span><span class="p">()</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">even_num_of_swaps_</span><span class="p">(</span><span class="nb">true</span><span class="p">)</span><span class="w"> </span><span class="p">{}</span>
-<span class="w">  </span><span class="k">static</span><span class="w"> </span><span class="n">IndexSwapper</span><span class="w"> </span><span class="o">&amp;</span><span class="n">thread_instance</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
-<span class="w">    </span><span class="k">static</span><span class="w"> </span><span class="k">thread_local</span><span class="w"> </span><span class="n">IndexSwapper</span><span class="w"> </span><span class="n">instance_</span><span class="p">{};</span>
-<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">instance_</span><span class="p">;</span>
-<span class="w">  </span><span class="p">}</span>
-
-<span class="w">  </span><span class="kt">bool</span><span class="w"> </span><span class="n">even_num_of_swaps</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="n">even_num_of_swaps_</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
-<span class="w">  </span><span class="kt">void</span><span class="w"> </span><span class="n">reset</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">even_num_of_swaps_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">true</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
-
-<span class="w"> </span><span class="k">private</span><span class="o">:</span>
-<span class="w">  </span><span class="n">std</span><span class="o">::</span><span class="n">atomic</span><span class="o">&lt;</span><span class="kt">bool</span><span class="o">&gt;</span><span class="w"> </span><span class="n">even_num_of_swaps_</span><span class="p">;</span>
-<span class="w">  </span><span class="kt">void</span><span class="w"> </span><span class="nf">toggle</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">even_num_of_swaps_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">!</span><span class="n">even_num_of_swaps_</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
-
-<span class="w">  </span><span class="k">friend</span><span class="w"> </span><span class="kr">inline</span><span class="w"> </span><span class="kt">void</span><span class="w"> </span><span class="nf">swap</span><span class="p">(</span><span class="n">Index</span><span class="w"> </span><span class="o">&amp;</span><span class="p">,</span><span class="w"> </span><span class="n">Index</span><span class="w"> </span><span class="o">&amp;</span><span class="p">);</span>
-<span class="p">};</span>
-
 <span class="kr">inline</span><span class="w"> </span><span class="kt">void</span><span class="w"> </span><span class="nf">swap</span><span class="p">(</span><span class="n">Index</span><span class="w"> </span><span class="o">&amp;</span><span class="n">first</span><span class="p">,</span><span class="w"> </span><span class="n">Index</span><span class="w"> </span><span class="o">&amp;</span><span class="n">second</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
 <span class="w">  </span><span class="n">std</span><span class="o">::</span><span class="n">swap</span><span class="p">(</span><span class="n">first</span><span class="p">,</span><span class="w"> </span><span class="n">second</span><span class="p">);</span>
-<span class="w">  </span><span class="n">IndexSwapper</span><span class="o">::</span><span class="n">thread_instance</span><span class="p">().</span><span class="n">toggle</span><span class="p">();</span>
+<span class="w">  </span><span class="n">detail</span><span class="o">::</span><span class="n">count_swap</span><span class="o">&lt;</span><span class="n">Index</span><span class="o">&gt;</span><span class="p">();</span>
 <span class="p">}</span>
 
 <span class="k">class</span><span class="w"> </span><span class="nc">IndexFactory</span><span class="w"> </span><span class="p">{</span>
@@ -1069,7 +1049,7 @@
             
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on Feb 10, 2025 2:46:23 PM</div>
+              Last updated on Feb 16, 2025 12:30:45 AM</div>
           </div>
           <div class="right-details">
             <div class="icons">

@@ -505,6 +505,11 @@ Files
 .. toctree::
    :maxdepth: 5
 
+   file_SeQuant_core_utility_swap.hpp.rst
+
+.. toctree::
+   :maxdepth: 5
+
    file_SeQuant_core_tag.hpp.rst
 
 .. toctree::

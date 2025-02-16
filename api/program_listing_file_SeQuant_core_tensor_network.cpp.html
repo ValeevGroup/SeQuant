@@ -279,6 +279,7 @@
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;SeQuant/core/latex.hpp&gt;</span>
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;SeQuant/core/logger.hpp&gt;</span>
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;SeQuant/core/tag.hpp&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;SeQuant/core/tensor.hpp&gt;</span>
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;SeQuant/core/tensor_network.hpp&gt;</span>
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;SeQuant/core/tensor_network/vertex_painter.hpp&gt;</span>
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;SeQuant/core/tensor_network_v2.hpp&gt;</span>
@@ -477,7 +478,7 @@
 <span class="w">      </span><span class="n">container</span><span class="o">::</span><span class="n">multimap</span><span class="o">&lt;</span><span class="kt">size_t</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">pair</span><span class="o">&lt;</span><span class="kt">size_t</span><span class="p">,</span><span class="w"> </span><span class="kt">size_t</span><span class="o">&gt;&gt;</span><span class="w"> </span><span class="n">color2idx</span><span class="p">;</span>
 <span class="w">      </span><span class="c1">// collect colors and anonymous indices sorted by colors</span>
 <span class="w">      </span><span class="kt">size_t</span><span class="w"> </span><span class="n">idx_ord</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
-<span class="w">      </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="k">auto</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="n">ttpair</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">edges_</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">      </span><span class="k">for</span><span class="w"> </span><span class="p">([[</span><span class="n">maybe_unused</span><span class="p">]]</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="n">ttpair</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">edges_</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
 <span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">is_anonymous_index_ord</span><span class="p">(</span><span class="n">idx_ord</span><span class="p">))</span><span class="w"> </span><span class="p">{</span>
 <span class="w">          </span><span class="k">auto</span><span class="w"> </span><span class="n">color</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">vcolors</span><span class="p">[</span><span class="n">idx_ord</span><span class="p">];</span>
 <span class="w">          </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">colors</span><span class="p">.</span><span class="n">find</span><span class="p">(</span><span class="n">color</span><span class="p">)</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">colors</span><span class="p">.</span><span class="n">end</span><span class="p">())</span><span class="w"> </span><span class="n">colors</span><span class="p">.</span><span class="n">insert</span><span class="p">(</span><span class="n">color</span><span class="p">);</span>
@@ -776,7 +777,7 @@
 <span class="w">    </span><span class="n">assert</span><span class="p">(</span><span class="o">!</span><span class="n">bundle</span><span class="p">.</span><span class="n">empty</span><span class="p">());</span>
 <span class="w">    </span><span class="o">++</span><span class="n">nv</span><span class="p">;</span><span class="w">  </span><span class="c1">// each symmetric protoindex bundle is a vertex</span>
 <span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">wstring</span><span class="w"> </span><span class="n">spbundle_label</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="sa">L</span><span class="s">&quot;&lt;&quot;</span><span class="p">;</span>
-<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">pi_count</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="w">    </span><span class="p">[[</span><span class="n">maybe_unused</span><span class="p">]]</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">pi_count</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
 <span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">end</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">bundle</span><span class="p">.</span><span class="n">end</span><span class="p">();</span>
 <span class="w">    </span><span class="k">auto</span><span class="w"> </span><span class="n">it</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">bundle</span><span class="p">.</span><span class="n">begin</span><span class="p">();</span>
 <span class="w">    </span><span class="n">spbundle_label</span><span class="w"> </span><span class="o">+=</span><span class="w"> </span><span class="n">it</span><span class="o">-&gt;</span><span class="n">full_label</span><span class="p">();</span>
@@ -886,7 +887,7 @@
 <span class="w">  </span><span class="n">index_cnt</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
 <span class="w">  </span><span class="n">ranges</span><span class="o">::</span><span class="n">for_each</span><span class="p">(</span><span class="n">edges_</span><span class="p">,</span><span class="w"> </span><span class="p">[</span><span class="o">&amp;</span><span class="p">](</span><span class="k">const</span><span class="w"> </span><span class="n">Edge</span><span class="w"> </span><span class="o">&amp;</span><span class="n">edge</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
 <span class="w">    </span><span class="n">assert</span><span class="p">(</span><span class="n">edge</span><span class="p">.</span><span class="n">size</span><span class="p">()</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mi">0</span><span class="p">);</span>
-<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">edge_connected</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">edge</span><span class="p">.</span><span class="n">size</span><span class="p">()</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">2</span><span class="p">;</span>
+<span class="w">    </span><span class="p">[[</span><span class="n">maybe_unused</span><span class="p">]]</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">edge_connected</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">edge</span><span class="p">.</span><span class="n">size</span><span class="p">()</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">2</span><span class="p">;</span>
 <span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="kt">int</span><span class="w"> </span><span class="n">t</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w"> </span><span class="n">t</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="n">edge</span><span class="p">.</span><span class="n">size</span><span class="p">();</span><span class="w"> </span><span class="o">++</span><span class="n">t</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
 <span class="w">      </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="o">&amp;</span><span class="n">terminal</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">edge</span><span class="p">[</span><span class="n">t</span><span class="p">];</span>
 <span class="w">      </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">tensor_ord</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">terminal</span><span class="p">.</span><span class="n">tensor_ord</span><span class="p">;</span>
@@ -1137,7 +1138,10 @@
 <span class="w">  </span><span class="c1">// distinct_named_indices = false</span>
 <span class="w">  </span><span class="k">auto</span><span class="w"> </span><span class="p">[</span><span class="n">graph</span><span class="p">,</span><span class="w"> </span><span class="n">vlabels</span><span class="p">,</span><span class="w"> </span><span class="n">vcolors</span><span class="p">,</span><span class="w"> </span><span class="n">vtypes</span><span class="p">]</span><span class="w"> </span><span class="o">=</span>
 <span class="w">      </span><span class="n">make_bliss_graph</span><span class="p">(</span><span class="o">&amp;</span><span class="n">named_indices</span><span class="p">,</span><span class="w"> </span><span class="cm">/* distinct_named_indices = */</span><span class="w"> </span><span class="nb">false</span><span class="p">);</span>
-<span class="w">  </span><span class="c1">//    graph-&gt;write_dot(std::wcout, vlabels);</span>
+<span class="w">  </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">Logger</span><span class="o">::</span><span class="n">instance</span><span class="p">().</span><span class="n">canonicalize_dot</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">wcout</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">&quot;Input graph for canonicalization:</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">;</span>
+<span class="w">    </span><span class="n">graph</span><span class="o">-&gt;</span><span class="n">write_dot</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">wcout</span><span class="p">,</span><span class="w"> </span><span class="n">vlabels</span><span class="p">);</span>
+<span class="w">  </span><span class="p">}</span>
 
 <span class="w">  </span><span class="c1">// canonize the graph</span>
 <span class="w">  </span><span class="n">bliss</span><span class="o">::</span><span class="n">Stats</span><span class="w"> </span><span class="n">stats</span><span class="p">;</span>
@@ -1155,6 +1159,7 @@
 <span class="w">      </span><span class="k">return</span><span class="w"> </span><span class="n">pvector</span><span class="p">;</span>
 <span class="w">    </span><span class="p">};</span>
 
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">wcout</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">&quot;Canonicalized graph:</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">;</span>
 <span class="w">    </span><span class="k">auto</span><span class="w"> </span><span class="n">cvlabels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">permute</span><span class="p">(</span><span class="n">vlabels</span><span class="p">,</span><span class="w"> </span><span class="n">cl</span><span class="p">);</span>
 <span class="w">    </span><span class="n">metadata</span><span class="p">.</span><span class="n">graph</span><span class="o">-&gt;</span><span class="n">write_dot</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">wcout</span><span class="p">,</span><span class="w"> </span><span class="n">cvlabels</span><span class="p">);</span>
 <span class="w">  </span><span class="p">}</span>
@@ -1226,6 +1231,115 @@
 
 <span class="w">  </span><span class="p">}</span><span class="w">  </span><span class="c1">// named indices resort to canonical order</span>
 
+<span class="w">  </span><span class="c1">// compute the phase associated with *slot* canonicalization ...</span>
+<span class="w">  </span><span class="c1">// - choose an index-independent order of slots: loop over bra then ket then</span>
+<span class="w">  </span><span class="c1">// aux slots of each tensor ... record each Index in the order of its</span>
+<span class="w">  </span><span class="c1">// appearance when iterating over slots. This is the input ordinal of this</span>
+<span class="w">  </span><span class="c1">// Index. NB We can&#39;t just use Index::full_label() to look up Index in edges_</span>
+<span class="w">  </span><span class="c1">// since this would produce label-dependent ordinals</span>
+<span class="w">  </span><span class="c1">// - canonicalization reorders slots according to the topology-based order of</span>
+<span class="w">  </span><span class="c1">// indices.</span>
+<span class="w">  </span><span class="c1">// - for each antisymmetric bra/ket bundle determine its parity according to</span>
+<span class="w">  </span><span class="c1">// the input ordinals and canonical ordinals, the product is the phase due to</span>
+<span class="w">  </span><span class="c1">// slot canonicalization</span>
+<span class="w">  </span><span class="p">{</span>
+<span class="w">    </span><span class="n">metadata</span><span class="p">.</span><span class="n">phase</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span>
+
+<span class="w">    </span><span class="c1">// iterate over tensor bra/ket/aux index slots in the canonical input order,</span>
+<span class="w">    </span><span class="c1">// for each antisymmetric bra/ket compute phase</span>
+<span class="w">    </span><span class="n">container</span><span class="o">::</span><span class="n">map</span><span class="o">&lt;</span><span class="n">Index</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="p">,</span><span class="w"> </span><span class="n">FullLabelCompare</span><span class="o">&gt;</span>
+<span class="w">        </span><span class="n">idx_inord</span><span class="p">;</span><span class="w">  </span><span class="c1">// Index -&gt; input ordinal; helps with computing the ordinals</span>
+<span class="w">                    </span><span class="c1">// during the traversal</span>
+<span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="k">auto</span><span class="w"> </span><span class="o">&amp;</span><span class="n">_t</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">tensors_</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">      </span><span class="n">assert</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">dynamic_pointer_cast</span><span class="o">&lt;</span><span class="n">Tensor</span><span class="o">&gt;</span><span class="p">(</span><span class="n">_t</span><span class="p">));</span>
+<span class="w">      </span><span class="k">auto</span><span class="w"> </span><span class="n">t</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">static_pointer_cast</span><span class="o">&lt;</span><span class="n">Tensor</span><span class="o">&gt;</span><span class="p">(</span><span class="n">_t</span><span class="p">);</span>
+
+<span class="w">      </span><span class="c1">// returns an iterator to {Index,inord} pair</span>
+<span class="w">      </span><span class="k">auto</span><span class="w"> </span><span class="n">index_inord_it</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="o">&amp;</span><span class="p">](</span><span class="k">const</span><span class="w"> </span><span class="n">Index</span><span class="w"> </span><span class="o">&amp;</span><span class="n">idx</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">auto</span><span class="w"> </span><span class="n">it</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">idx_inord</span><span class="p">.</span><span class="n">find</span><span class="p">(</span><span class="n">idx</span><span class="p">.</span><span class="n">full_label</span><span class="p">());</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">it</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">idx_inord</span><span class="p">.</span><span class="n">end</span><span class="p">())</span><span class="w"> </span><span class="p">{</span>
+<span class="w">          </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">inord</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">idx_inord</span><span class="p">.</span><span class="n">size</span><span class="p">();</span>
+<span class="w">          </span><span class="kt">bool</span><span class="w"> </span><span class="n">inserted</span><span class="p">;</span>
+<span class="w">          </span><span class="n">std</span><span class="o">::</span><span class="n">tie</span><span class="p">(</span><span class="n">it</span><span class="p">,</span><span class="w"> </span><span class="n">inserted</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">idx_inord</span><span class="p">.</span><span class="n">emplace</span><span class="p">(</span><span class="n">idx</span><span class="p">,</span><span class="w"> </span><span class="n">inord</span><span class="p">);</span>
+<span class="w">          </span><span class="n">assert</span><span class="p">(</span><span class="n">inserted</span><span class="p">);</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">it</span><span class="p">;</span>
+<span class="w">      </span><span class="p">};</span>
+
+<span class="w">      </span><span class="c1">// computes parity of a bra/ket bundle due to the reordering of its slots</span>
+<span class="w">      </span><span class="c1">// involved in the TN canonicalization</span>
+<span class="w">      </span><span class="k">auto</span><span class="w"> </span><span class="n">input_to_canonical_parity</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="o">&amp;</span><span class="p">](</span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="o">&amp;</span><span class="n">idx_rng</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">using</span><span class="w"> </span><span class="n">ranges</span><span class="o">::</span><span class="n">size</span><span class="p">;</span>
+<span class="w">        </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">sz</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">size</span><span class="p">(</span><span class="n">idx_rng</span><span class="p">);</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">sz</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="mi">2</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">  </span><span class="c1">// no phase for 1-index bundles, but still process the</span>
+<span class="w">                       </span><span class="c1">// indices to ensure ordinals are correct</span>
+<span class="w">          </span><span class="k">using</span><span class="w"> </span><span class="n">ranges</span><span class="o">::</span><span class="n">begin</span><span class="p">;</span>
+<span class="w">          </span><span class="n">index_inord_it</span><span class="p">(</span><span class="o">*</span><span class="n">begin</span><span class="p">(</span><span class="n">idx_rng</span><span class="p">));</span>
+<span class="w">          </span><span class="k">return</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span>
+<span class="w">        </span><span class="p">}</span>
+
+<span class="w">        </span><span class="k">auto</span><span class="w"> </span><span class="n">parity</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="o">&amp;</span><span class="p">](</span><span class="k">auto</span><span class="w"> </span><span class="o">&amp;</span><span class="n">rng</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">          </span><span class="n">reset_ts_swap_counter</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="o">&gt;</span><span class="p">();</span>
+<span class="w">          </span><span class="k">using</span><span class="w"> </span><span class="n">ranges</span><span class="o">::</span><span class="n">begin</span><span class="p">;</span>
+<span class="w">          </span><span class="k">using</span><span class="w"> </span><span class="n">ranges</span><span class="o">::</span><span class="n">end</span><span class="p">;</span>
+<span class="w">          </span><span class="n">bubble_sort</span><span class="p">(</span><span class="n">begin</span><span class="p">(</span><span class="n">rng</span><span class="p">),</span><span class="w"> </span><span class="n">end</span><span class="p">(</span><span class="n">rng</span><span class="p">));</span>
+<span class="w">          </span><span class="k">return</span><span class="w"> </span><span class="n">ts_swap_counter_is_even</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="o">&gt;</span><span class="p">()</span><span class="w"> </span><span class="o">?</span><span class="w"> </span><span class="o">+</span><span class="mi">1</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="mi">-1</span><span class="p">;</span>
+<span class="w">        </span><span class="p">};</span>
+
+<span class="w">        </span><span class="n">container</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="n">SwapCountable</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="o">&gt;&gt;</span><span class="w"> </span><span class="n">ordinals_input</span><span class="p">;</span>
+<span class="w">        </span><span class="n">container</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="n">SwapCountable</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="o">&gt;&gt;</span><span class="w"> </span><span class="n">ordinals_canonical</span><span class="p">;</span>
+<span class="w">        </span><span class="n">ordinals_input</span><span class="p">.</span><span class="n">reserve</span><span class="p">(</span><span class="n">sz</span><span class="p">);</span>
+<span class="w">        </span><span class="n">ordinals_canonical</span><span class="p">.</span><span class="n">reserve</span><span class="p">(</span><span class="n">sz</span><span class="p">);</span>
+<span class="w">        </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="o">&amp;</span><span class="n">idx</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">idx_rng</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">          </span><span class="c1">// input ordinal</span>
+<span class="w">          </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">inord</span><span class="p">;</span>
+<span class="w">          </span><span class="n">std</span><span class="o">::</span><span class="n">tie</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">ignore</span><span class="p">,</span><span class="w"> </span><span class="n">inord</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">*</span><span class="n">index_inord_it</span><span class="p">(</span><span class="n">idx</span><span class="p">);</span>
+<span class="w">          </span><span class="n">ordinals_input</span><span class="p">.</span><span class="n">emplace_back</span><span class="p">(</span><span class="n">inord</span><span class="p">);</span>
+
+<span class="w">          </span><span class="c1">// use canonical ordinal of the index vertex as the canonical index</span>
+<span class="w">          </span><span class="c1">// ordinal to find it need the ordinal of the corresponding vertex in</span>
+<span class="w">          </span><span class="c1">// the input graph</span>
+<span class="w">          </span><span class="k">auto</span><span class="w"> </span><span class="n">input_vertex_it</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">this</span><span class="o">-&gt;</span><span class="n">edges_</span><span class="p">.</span><span class="n">find</span><span class="p">(</span><span class="n">idx</span><span class="p">.</span><span class="n">full_label</span><span class="p">());</span>
+<span class="w">          </span><span class="n">assert</span><span class="p">(</span><span class="n">input_vertex_it</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="k">this</span><span class="o">-&gt;</span><span class="n">edges_</span><span class="p">.</span><span class="n">end</span><span class="p">());</span>
+<span class="w">          </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">inord_vertex</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">input_vertex_it</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="k">this</span><span class="o">-&gt;</span><span class="n">edges_</span><span class="p">.</span><span class="n">begin</span><span class="p">();</span>
+<span class="w">          </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">canord_vertex</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cl</span><span class="p">[</span><span class="n">inord_vertex</span><span class="p">];</span>
+
+<span class="w">          </span><span class="c1">// to which edge did this get mapped?</span>
+<span class="w">          </span><span class="c1">//          std::wcout &lt;&lt; &quot;vlabels[ord_original=&quot; &lt;&lt; inord_vertex</span>
+<span class="w">          </span><span class="c1">//                     &lt;&lt; &quot;]=&quot; &lt;&lt; vlabels[inord_vertex]</span>
+<span class="w">          </span><span class="c1">//                     &lt;&lt; &quot; -&gt; ord_canonical=&quot; &lt;&lt; canord_vertex &lt;&lt;</span>
+<span class="w">          </span><span class="c1">//                     std::endl;</span>
+<span class="w">          </span><span class="n">ordinals_canonical</span><span class="p">.</span><span class="n">emplace_back</span><span class="p">(</span><span class="n">canord_vertex</span><span class="p">);</span>
+<span class="w">        </span><span class="p">}</span>
+
+<span class="w">        </span><span class="c1">// parity = parity(original range) * parity(canonical range)</span>
+<span class="w">        </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">parity_original</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">parity</span><span class="p">(</span><span class="n">ordinals_input</span><span class="p">);</span>
+<span class="w">        </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">parity_canonical</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">parity</span><span class="p">(</span><span class="n">ordinals_canonical</span><span class="p">);</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="n">parity_original</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">parity_canonical</span><span class="p">;</span>
+<span class="w">      </span><span class="p">};</span>
+
+<span class="w">      </span><span class="c1">// canonical order of slots: bra, then ket, then aux. We only care about</span>
+<span class="w">      </span><span class="c1">// indices in tensor slots here, so no need to worry about protoindex</span>
+<span class="w">      </span><span class="c1">// slots</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">t</span><span class="o">-&gt;</span><span class="n">symmetry</span><span class="p">()</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">Symmetry</span><span class="o">::</span><span class="n">antisymm</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="c1">// bra first, then ket</span>
+<span class="w">        </span><span class="n">metadata</span><span class="p">.</span><span class="n">phase</span><span class="w"> </span><span class="o">*=</span><span class="w"> </span><span class="n">input_to_canonical_parity</span><span class="p">(</span><span class="n">t</span><span class="o">-&gt;</span><span class="n">bra</span><span class="p">());</span>
+<span class="w">        </span><span class="n">metadata</span><span class="p">.</span><span class="n">phase</span><span class="w"> </span><span class="o">*=</span><span class="w"> </span><span class="n">input_to_canonical_parity</span><span class="p">(</span><span class="n">t</span><span class="o">-&gt;</span><span class="n">ket</span><span class="p">());</span>
+<span class="w">      </span><span class="p">}</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="p">{</span><span class="w">  </span><span class="c1">// although we don&#39;t need to worry about phases, we still need</span>
+<span class="w">                </span><span class="c1">// to process all indices so that the input ordinals are correct</span>
+<span class="w">        </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="k">auto</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="n">idx</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">t</span><span class="o">-&gt;</span><span class="n">bra</span><span class="p">())</span><span class="w"> </span><span class="p">{</span>
+<span class="w">          </span><span class="n">index_inord_it</span><span class="p">(</span><span class="n">idx</span><span class="p">);</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">        </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="k">auto</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="n">idx</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">t</span><span class="o">-&gt;</span><span class="n">ket</span><span class="p">())</span><span class="w"> </span><span class="p">{</span>
+<span class="w">          </span><span class="n">index_inord_it</span><span class="p">(</span><span class="n">idx</span><span class="p">);</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">      </span><span class="p">}</span>
+<span class="w">      </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="k">auto</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="n">idx</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">t</span><span class="o">-&gt;</span><span class="n">aux</span><span class="p">())</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">index_inord_it</span><span class="p">(</span><span class="n">idx</span><span class="p">);</span>
+<span class="w">      </span><span class="p">}</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">  </span><span class="p">}</span>
+
 <span class="w">  </span><span class="k">return</span><span class="w"> </span><span class="n">metadata</span><span class="p">;</span>
 <span class="p">}</span>
 
@@ -1251,7 +1365,7 @@
             
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on Feb 10, 2025 2:46:23 PM</div>
+              Last updated on Feb 16, 2025 12:30:45 AM</div>
           </div>
           <div class="right-details">
             <div class="icons">

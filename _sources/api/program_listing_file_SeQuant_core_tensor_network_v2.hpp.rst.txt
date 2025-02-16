@@ -231,6 +231,8 @@ Program Listing for File tensor_network_v2.hpp
        container::svector<NamedIndexSet::const_iterator> named_indices_canonical;
    
        std::shared_ptr<bliss::Graph> graph;
+   
+       std::int8_t phase = +1;  // +1 or -1
      };
    
      SlotCanonicalizationMetadata canonicalize_slots(

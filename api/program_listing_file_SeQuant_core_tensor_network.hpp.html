@@ -458,8 +458,7 @@
 <span class="w">        </span><span class="p">}</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="p">{</span>
 <span class="w">          </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">logic_error</span><span class="p">(</span>
 <span class="w">              </span><span class="s">&quot;TensorNetwork::TensorNetwork: non-tensors in the given &quot;</span>
-<span class="w">              </span><span class="s">&quot;expression &quot;</span>
-<span class="w">              </span><span class="s">&quot;range&quot;</span><span class="p">);</span>
+<span class="w">              </span><span class="s">&quot;expression range&quot;</span><span class="p">);</span>
 <span class="w">        </span><span class="p">}</span>
 <span class="w">      </span><span class="p">}</span>
 <span class="w">      </span><span class="k">return</span><span class="p">;</span>
@@ -500,6 +499,8 @@
 <span class="w">    </span><span class="n">container</span><span class="o">::</span><span class="n">svector</span><span class="o">&lt;</span><span class="n">named_indices_t</span><span class="o">::</span><span class="n">const_iterator</span><span class="o">&gt;</span><span class="w"> </span><span class="n">named_indices_canonical</span><span class="p">;</span>
 
 <span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">shared_ptr</span><span class="o">&lt;</span><span class="n">bliss</span><span class="o">::</span><span class="n">Graph</span><span class="o">&gt;</span><span class="w"> </span><span class="n">graph</span><span class="p">;</span>
+
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">int8_t</span><span class="w"> </span><span class="n">phase</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">+</span><span class="mi">1</span><span class="p">;</span><span class="w">  </span><span class="c1">// +1 or -1</span>
 <span class="w">  </span><span class="p">};</span>
 
 <span class="w">  </span><span class="n">SlotCanonicalizationMetadata</span><span class="w"> </span><span class="nf">canonicalize_slots</span><span class="p">(</span>
@@ -524,6 +525,15 @@
 <span class="w">    </span><span class="p">}</span>
 <span class="w">    </span><span class="kt">bool</span><span class="w"> </span><span class="nf">operator</span><span class="p">()(</span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">wstring_view</span><span class="w"> </span><span class="o">&amp;</span><span class="n">first</span><span class="p">,</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="n">Edge</span><span class="w"> </span><span class="o">&amp;</span><span class="n">second</span><span class="p">)</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="p">{</span>
 <span class="w">      </span><span class="k">return</span><span class="w"> </span><span class="n">first</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">second</span><span class="p">.</span><span class="n">idx</span><span class="p">().</span><span class="n">full_label</span><span class="p">();</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="kt">bool</span><span class="w"> </span><span class="nf">operator</span><span class="p">()(</span><span class="k">const</span><span class="w"> </span><span class="n">Index</span><span class="w"> </span><span class="o">&amp;</span><span class="n">first</span><span class="p">,</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="n">Index</span><span class="w"> </span><span class="o">&amp;</span><span class="n">second</span><span class="p">)</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="p">{</span>
+<span class="w">      </span><span class="k">return</span><span class="w"> </span><span class="n">first</span><span class="p">.</span><span class="n">full_label</span><span class="p">()</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">second</span><span class="p">.</span><span class="n">full_label</span><span class="p">();</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="kt">bool</span><span class="w"> </span><span class="nf">operator</span><span class="p">()(</span><span class="k">const</span><span class="w"> </span><span class="n">Index</span><span class="w"> </span><span class="o">&amp;</span><span class="n">first</span><span class="p">,</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">wstring_view</span><span class="w"> </span><span class="o">&amp;</span><span class="n">second</span><span class="p">)</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="p">{</span>
+<span class="w">      </span><span class="k">return</span><span class="w"> </span><span class="n">first</span><span class="p">.</span><span class="n">full_label</span><span class="p">()</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">second</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="kt">bool</span><span class="w"> </span><span class="nf">operator</span><span class="p">()(</span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">wstring_view</span><span class="w"> </span><span class="o">&amp;</span><span class="n">first</span><span class="p">,</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="n">Index</span><span class="w"> </span><span class="o">&amp;</span><span class="n">second</span><span class="p">)</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="p">{</span>
+<span class="w">      </span><span class="k">return</span><span class="w"> </span><span class="n">first</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">second</span><span class="p">.</span><span class="n">full_label</span><span class="p">();</span>
 <span class="w">    </span><span class="p">}</span>
 <span class="w">  </span><span class="p">};</span>
 <span class="w">  </span><span class="c1">// Index -&gt; Edge, sorted by full label</span>
@@ -590,7 +600,7 @@
             
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on Feb 10, 2025 2:46:23 PM</div>
+              Last updated on Feb 16, 2025 12:30:45 AM</div>
           </div>
           <div class="right-details">
             <div class="icons">

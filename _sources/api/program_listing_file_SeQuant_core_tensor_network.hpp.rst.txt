@@ -205,8 +205,7 @@ Program Listing for File tensor_network.hpp
            } else {
              throw std::logic_error(
                  "TensorNetwork::TensorNetwork: non-tensors in the given "
-                 "expression "
-                 "range");
+                 "expression range");
            }
          }
          return;
@@ -247,6 +246,8 @@ Program Listing for File tensor_network.hpp
        container::svector<named_indices_t::const_iterator> named_indices_canonical;
    
        std::shared_ptr<bliss::Graph> graph;
+   
+       std::int8_t phase = +1;  // +1 or -1
      };
    
      SlotCanonicalizationMetadata canonicalize_slots(
@@ -271,6 +272,15 @@ Program Listing for File tensor_network.hpp
        }
        bool operator()(const std::wstring_view &first, const Edge &second) const {
          return first < second.idx().full_label();
+       }
+       bool operator()(const Index &first, const Index &second) const {
+         return first.full_label() < second.full_label();
+       }
+       bool operator()(const Index &first, const std::wstring_view &second) const {
+         return first.full_label() < second;
+       }
+       bool operator()(const std::wstring_view &first, const Index &second) const {
+         return first < second.full_label();
        }
      };
      // Index -> Edge, sorted by full label

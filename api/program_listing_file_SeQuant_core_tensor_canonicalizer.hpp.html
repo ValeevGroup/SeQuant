@@ -394,14 +394,13 @@
 <span class="w">        </span><span class="k">auto</span><span class="w"> </span><span class="n">_bra</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">bra_range</span><span class="p">(</span><span class="n">t</span><span class="p">);</span>
 <span class="w">        </span><span class="k">auto</span><span class="w"> </span><span class="n">_ket</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ket_range</span><span class="p">(</span><span class="n">t</span><span class="p">);</span>
 <span class="w">        </span><span class="c1">//      std::wcout &lt;&lt; &quot;canonicalizing &quot; &lt;&lt; to_latex(t);</span>
-<span class="w">        </span><span class="n">IndexSwapper</span><span class="o">::</span><span class="n">thread_instance</span><span class="p">().</span><span class="n">reset</span><span class="p">();</span>
+<span class="w">        </span><span class="n">reset_ts_swap_counter</span><span class="o">&lt;</span><span class="n">Index</span><span class="o">&gt;</span><span class="p">();</span>
 <span class="w">        </span><span class="c1">// std::{stable_}sort does not necessarily use swap! so must implement</span>
 <span class="w">        </span><span class="c1">// sort outselves .. thankfully ranks will be low so can stick with</span>
 <span class="w">        </span><span class="c1">// bubble</span>
 <span class="w">        </span><span class="n">bubble_sort</span><span class="p">(</span><span class="n">begin</span><span class="p">(</span><span class="n">_bra</span><span class="p">),</span><span class="w"> </span><span class="n">end</span><span class="p">(</span><span class="n">_bra</span><span class="p">),</span><span class="w"> </span><span class="n">idxcmp</span><span class="p">);</span>
 <span class="w">        </span><span class="n">bubble_sort</span><span class="p">(</span><span class="n">begin</span><span class="p">(</span><span class="n">_ket</span><span class="p">),</span><span class="w"> </span><span class="n">end</span><span class="p">(</span><span class="n">_ket</span><span class="p">),</span><span class="w"> </span><span class="n">idxcmp</span><span class="p">);</span>
-<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">is_antisymm</span><span class="p">)</span>
-<span class="w">          </span><span class="n">even</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">IndexSwapper</span><span class="o">::</span><span class="n">thread_instance</span><span class="p">().</span><span class="n">even_num_of_swaps</span><span class="p">();</span>
+<span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">is_antisymm</span><span class="p">)</span><span class="w"> </span><span class="n">even</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ts_swap_counter_is_even</span><span class="o">&lt;</span><span class="n">Index</span><span class="o">&gt;</span><span class="p">();</span>
 <span class="w">        </span><span class="c1">//      std::wcout &lt;&lt; &quot; is &quot; &lt;&lt; (even ? &quot;even&quot; : &quot;odd&quot;) &lt;&lt; &quot; and</span>
 <span class="w">        </span><span class="c1">//      produces &quot; &lt;&lt; to_latex(t) &lt;&lt; std::endl;</span>
 <span class="w">      </span><span class="p">}</span><span class="w"> </span><span class="k">break</span><span class="p">;</span>
@@ -480,7 +479,7 @@
             
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on Feb 10, 2025 2:46:23 PM</div>
+              Last updated on Feb 16, 2025 12:30:45 AM</div>
           </div>
           <div class="right-details">
             <div class="icons">

@@ -334,6 +334,7 @@
 <li><p><a class="reference internal" href="structsequant_1_1detail_1_1_null_normal_operator_canonicalizer_deregister.html#exhale-struct-structsequant-1-1detail-1-1-null-normal-operator-canonicalizer-deregister"><span class="std std-ref">Template Struct NullNormalOperatorCanonicalizerDeregister</span></a></p></li>
 <li><p><a class="reference internal" href="structsequant_1_1detail_1_1_op_id_registrar.html#exhale-struct-structsequant-1-1detail-1-1-op-id-registrar"><span class="std std-ref">Struct OpIdRegistrar</span></a></p></li>
 <li><p><a class="reference internal" href="structsequant_1_1detail_1_1rapid__simplify__visitor.html#exhale-struct-structsequant-1-1detail-1-1rapid-simplify-visitor"><span class="std std-ref">Struct rapid_simplify_visitor</span></a></p></li>
+<li><p><a class="reference internal" href="structsequant_1_1detail_1_1_swap_counter.html#exhale-struct-structsequant-1-1detail-1-1-swap-counter"><span class="std std-ref">Template Struct SwapCounter</span></a></p></li>
 <li><p><a class="reference internal" href="structsequant_1_1detail_1_1tuple__less.html#exhale-struct-structsequant-1-1detail-1-1tuple-less"><span class="std std-ref">Template Struct tuple_less</span></a></p></li>
 <li><p><a class="reference internal" href="structsequant_1_1detail_1_1zero__result.html#exhale-struct-structsequant-1-1detail-1-1zero-result"><span class="std std-ref">Struct zero_result</span></a></p></li>
 <li><dl class="simple">
@@ -595,7 +596,6 @@
 </dl>
 </li>
 <li><p><a class="reference internal" href="classsequant_1_1_index_space_registry.html#exhale-class-classsequant-1-1-index-space-registry"><span class="std std-ref">Class IndexSpaceRegistry</span></a></p></li>
-<li><p><a class="reference internal" href="classsequant_1_1_index_swapper.html#exhale-class-classsequant-1-1-index-swapper"><span class="std std-ref">Class IndexSwapper</span></a></p></li>
 <li><p><a class="reference internal" href="classsequant_1_1_labeled.html#exhale-class-classsequant-1-1-labeled"><span class="std std-ref">Class Labeled</span></a></p></li>
 <li><p><a class="reference internal" href="classsequant_1_1_n_c_product.html#exhale-class-classsequant-1-1-n-c-product"><span class="std std-ref">Class NCProduct</span></a></p></li>
 <li><p><a class="reference internal" href="classsequant_1_1_normal_operator.html#exhale-class-classsequant-1-1-normal-operator"><span class="std std-ref">Template Class NormalOperator</span></a></p></li>
@@ -620,6 +620,8 @@
 </dl>
 </li>
 <li><p><a class="reference internal" href="classsequant_1_1_sum.html#exhale-class-classsequant-1-1-sum"><span class="std std-ref">Class Sum</span></a></p></li>
+<li><p><a class="reference internal" href="classsequant_1_1_swap_countable.html#exhale-class-classsequant-1-1-swap-countable"><span class="std std-ref">Template Class SwapCountable</span></a></p></li>
+<li><p><a class="reference internal" href="classsequant_1_1_swap_countable_ref.html#exhale-class-classsequant-1-1-swap-countable-ref"><span class="std std-ref">Template Class SwapCountableRef</span></a></p></li>
 <li><p><a class="reference internal" href="classsequant_1_1_taggable.html#exhale-class-classsequant-1-1-taggable"><span class="std std-ref">Class Taggable</span></a></p></li>
 <li><dl class="simple">
 <dt><a class="reference internal" href="classsequant_1_1_tensor.html#exhale-class-classsequant-1-1-tensor"><span class="std std-ref">Class Tensor</span></a></dt><dd><ul>
@@ -749,6 +751,7 @@
 <li><p><a class="reference internal" href="file_SeQuant_core_utility_string.cpp.html#file-sequant-core-utility-string-cpp"><span class="std std-ref">File string.cpp</span></a></p></li>
 <li><p><a class="reference internal" href="file_SeQuant_core_utility_string.hpp.html#file-sequant-core-utility-string-hpp"><span class="std std-ref">File string.hpp</span></a></p></li>
 <li><p><a class="reference internal" href="file_SeQuant_core_utility_strong.hpp.html#file-sequant-core-utility-strong-hpp"><span class="std std-ref">File strong.hpp</span></a></p></li>
+<li><p><a class="reference internal" href="file_SeQuant_core_utility_swap.hpp.html#file-sequant-core-utility-swap-hpp"><span class="std std-ref">File swap.hpp</span></a></p></li>
 <li><p><a class="reference internal" href="file_SeQuant_core_utility_tuple.hpp.html#file-sequant-core-utility-tuple-hpp"><span class="std std-ref">File tuple.hpp</span></a></p></li>
 </ul>
 </dd>
@@ -966,12 +969,12 @@
 </div>
 <div class="toctree-wrapper compound">
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="namespace_sequant__%4085.html">Namespace sequant::&#64;85</a></li>
+<li class="toctree-l1"><a class="reference internal" href="namespace_sequant__%4086.html">Namespace sequant::&#64;86</a></li>
 </ul>
 </div>
 <div class="toctree-wrapper compound">
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="namespace_sequant__%4087.html">Namespace sequant::&#64;87</a></li>
+<li class="toctree-l1"><a class="reference internal" href="namespace_sequant__%4088.html">Namespace sequant::&#64;88</a></li>
 </ul>
 </div>
 <div class="toctree-wrapper compound">
@@ -1559,6 +1562,23 @@
 <li class="toctree-l4"><a class="reference internal" href="structsequant_1_1detail_1_1rapid__simplify__visitor.html#_CPPv4N7sequant6detail22rapid_simplify_visitor16simplify_productER7ExprPtr"><code class="docutils literal notranslate"><span class="pre">rapid_simplify_visitor::simplify_product()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="structsequant_1_1detail_1_1rapid__simplify__visitor.html#_CPPv4N7sequant6detail22rapid_simplify_visitor12simplify_sumER7ExprPtr"><code class="docutils literal notranslate"><span class="pre">rapid_simplify_visitor::simplify_sum()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="structsequant_1_1detail_1_1rapid__simplify__visitor.html#_CPPv4N7sequant6detail22rapid_simplify_visitor8simplifyER7ExprPtr"><code class="docutils literal notranslate"><span class="pre">rapid_simplify_visitor::simplify()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</div>
+<div class="toctree-wrapper compound">
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="structsequant_1_1detail_1_1_swap_counter.html">Template Struct SwapCounter</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="structsequant_1_1detail_1_1_swap_counter.html#struct-documentation">Struct Documentation</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="structsequant_1_1detail_1_1_swap_counter.html#_CPPv4I0EN7sequant6detail11SwapCounterE"><code class="docutils literal notranslate"><span class="pre">SwapCounter</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="structsequant_1_1detail_1_1_swap_counter.html#_CPPv4N7sequant6detail11SwapCounter11SwapCounterEv"><code class="docutils literal notranslate"><span class="pre">SwapCounter::SwapCounter()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="structsequant_1_1detail_1_1_swap_counter.html#_CPPv4NK7sequant6detail11SwapCounter17even_num_of_swapsEv"><code class="docutils literal notranslate"><span class="pre">SwapCounter::even_num_of_swaps()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="structsequant_1_1detail_1_1_swap_counter.html#_CPPv4N7sequant6detail11SwapCounter5resetEv"><code class="docutils literal notranslate"><span class="pre">SwapCounter::reset()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="structsequant_1_1detail_1_1_swap_counter.html#_CPPv4N7sequant6detail11SwapCounter15thread_instanceEv"><code class="docutils literal notranslate"><span class="pre">SwapCounter::thread_instance()</span></code></a></li>
 </ul>
 </li>
 </ul>
@@ -2996,6 +3016,9 @@
 <li class="toctree-l4"><a class="reference internal" href="structsequant_1_1_tensor_network_1_1_full_label_compare.html#_CPPv4NK7sequant13TensorNetwork16FullLabelCompareclERK4EdgeRK4Edge"><code class="docutils literal notranslate"><span class="pre">FullLabelCompare::operator()()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="structsequant_1_1_tensor_network_1_1_full_label_compare.html#_CPPv4NK7sequant13TensorNetwork16FullLabelCompareclERK4EdgeRKNSt12wstring_viewE"><code class="docutils literal notranslate"><span class="pre">FullLabelCompare::operator()()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="structsequant_1_1_tensor_network_1_1_full_label_compare.html#_CPPv4NK7sequant13TensorNetwork16FullLabelCompareclERKNSt12wstring_viewERK4Edge"><code class="docutils literal notranslate"><span class="pre">FullLabelCompare::operator()()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="structsequant_1_1_tensor_network_1_1_full_label_compare.html#_CPPv4NK7sequant13TensorNetwork16FullLabelCompareclERK5IndexRK5Index"><code class="docutils literal notranslate"><span class="pre">FullLabelCompare::operator()()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="structsequant_1_1_tensor_network_1_1_full_label_compare.html#_CPPv4NK7sequant13TensorNetwork16FullLabelCompareclERK5IndexRKNSt12wstring_viewE"><code class="docutils literal notranslate"><span class="pre">FullLabelCompare::operator()()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="structsequant_1_1_tensor_network_1_1_full_label_compare.html#_CPPv4NK7sequant13TensorNetwork16FullLabelCompareclERKNSt12wstring_viewERK5Index"><code class="docutils literal notranslate"><span class="pre">FullLabelCompare::operator()()</span></code></a></li>
 </ul>
 </li>
 </ul>
@@ -3015,6 +3038,7 @@
 <li class="toctree-l4"><a class="reference internal" href="structsequant_1_1_tensor_network_1_1_slot_canonicalization_metadata.html#_CPPv4N7sequant13TensorNetwork28SlotCanonicalizationMetadata19named_index_compareE"><code class="docutils literal notranslate"><span class="pre">SlotCanonicalizationMetadata::named_index_compare</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="structsequant_1_1_tensor_network_1_1_slot_canonicalization_metadata.html#_CPPv4N7sequant13TensorNetwork28SlotCanonicalizationMetadata23named_indices_canonicalE"><code class="docutils literal notranslate"><span class="pre">SlotCanonicalizationMetadata::named_indices_canonical</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="structsequant_1_1_tensor_network_1_1_slot_canonicalization_metadata.html#_CPPv4N7sequant13TensorNetwork28SlotCanonicalizationMetadata5graphE"><code class="docutils literal notranslate"><span class="pre">SlotCanonicalizationMetadata::graph</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="structsequant_1_1_tensor_network_1_1_slot_canonicalization_metadata.html#_CPPv4N7sequant13TensorNetwork28SlotCanonicalizationMetadata5phaseE"><code class="docutils literal notranslate"><span class="pre">SlotCanonicalizationMetadata::phase</span></code></a></li>
 </ul>
 </li>
 </ul>
@@ -3056,6 +3080,7 @@
 <li class="toctree-l4"><a class="reference internal" href="structsequant_1_1_tensor_network_v2_1_1_slot_canonicalization_metadata.html#_CPPv4N7sequant15TensorNetworkV228SlotCanonicalizationMetadata19named_index_compareE"><code class="docutils literal notranslate"><span class="pre">SlotCanonicalizationMetadata::named_index_compare</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="structsequant_1_1_tensor_network_v2_1_1_slot_canonicalization_metadata.html#_CPPv4N7sequant15TensorNetworkV228SlotCanonicalizationMetadata23named_indices_canonicalE"><code class="docutils literal notranslate"><span class="pre">SlotCanonicalizationMetadata::named_indices_canonical</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="structsequant_1_1_tensor_network_v2_1_1_slot_canonicalization_metadata.html#_CPPv4N7sequant15TensorNetworkV228SlotCanonicalizationMetadata5graphE"><code class="docutils literal notranslate"><span class="pre">SlotCanonicalizationMetadata::graph</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="structsequant_1_1_tensor_network_v2_1_1_slot_canonicalization_metadata.html#_CPPv4N7sequant15TensorNetworkV228SlotCanonicalizationMetadata5phaseE"><code class="docutils literal notranslate"><span class="pre">SlotCanonicalizationMetadata::phase</span></code></a></li>
 </ul>
 </li>
 </ul>
@@ -4297,23 +4322,6 @@
 </div>
 <div class="toctree-wrapper compound">
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="classsequant_1_1_index_swapper.html">Class IndexSwapper</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="classsequant_1_1_index_swapper.html#class-documentation">Class Documentation</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="classsequant_1_1_index_swapper.html#_CPPv4N7sequant12IndexSwapperE"><code class="docutils literal notranslate"><span class="pre">IndexSwapper</span></code></a><ul>
-<li class="toctree-l4"><a class="reference internal" href="classsequant_1_1_index_swapper.html#_CPPv4N7sequant12IndexSwapper12IndexSwapperEv"><code class="docutils literal notranslate"><span class="pre">IndexSwapper::IndexSwapper()</span></code></a></li>
-<li class="toctree-l4"><a class="reference internal" href="classsequant_1_1_index_swapper.html#_CPPv4NK7sequant12IndexSwapper17even_num_of_swapsEv"><code class="docutils literal notranslate"><span class="pre">IndexSwapper::even_num_of_swaps()</span></code></a></li>
-<li class="toctree-l4"><a class="reference internal" href="classsequant_1_1_index_swapper.html#_CPPv4N7sequant12IndexSwapper5resetEv"><code class="docutils literal notranslate"><span class="pre">IndexSwapper::reset()</span></code></a></li>
-<li class="toctree-l4"><a class="reference internal" href="classsequant_1_1_index_swapper.html#_CPPv4N7sequant12IndexSwapper15thread_instanceEv"><code class="docutils literal notranslate"><span class="pre">IndexSwapper::thread_instance()</span></code></a></li>
-</ul>
-</li>
-</ul>
-</li>
-</ul>
-</li>
-</ul>
-</div>
-<div class="toctree-wrapper compound">
-<ul>
 <li class="toctree-l1"><a class="reference internal" href="classsequant_1_1itf_1_1detail_1_1_i_t_f_generator.html">Class ITFGenerator</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="classsequant_1_1itf_1_1detail_1_1_i_t_f_generator.html#class-documentation">Class Documentation</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="classsequant_1_1itf_1_1detail_1_1_i_t_f_generator.html#_CPPv4N7sequant3itf6detail12ITFGeneratorE"><code class="docutils literal notranslate"><span class="pre">ITFGenerator</span></code></a><ul>
@@ -4886,6 +4894,34 @@
 </div>
 <div class="toctree-wrapper compound">
 <ul>
+<li class="toctree-l1"><a class="reference internal" href="classsequant_1_1_swap_countable.html">Template Class SwapCountable</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="classsequant_1_1_swap_countable.html#class-documentation">Class Documentation</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="classsequant_1_1_swap_countable.html#_CPPv4I0EN7sequant13SwapCountableE"><code class="docutils literal notranslate"><span class="pre">SwapCountable</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="classsequant_1_1_swap_countable.html#_CPPv4I0EN7sequant13SwapCountable13SwapCountableERR1U"><code class="docutils literal notranslate"><span class="pre">SwapCountable::SwapCountable()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</div>
+<div class="toctree-wrapper compound">
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="classsequant_1_1_swap_countable_ref.html">Template Class SwapCountableRef</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="classsequant_1_1_swap_countable_ref.html#class-documentation">Class Documentation</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="classsequant_1_1_swap_countable_ref.html#_CPPv4I0EN7sequant16SwapCountableRefE"><code class="docutils literal notranslate"><span class="pre">SwapCountableRef</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="classsequant_1_1_swap_countable_ref.html#_CPPv4N7sequant16SwapCountableRef16SwapCountableRefER1T"><code class="docutils literal notranslate"><span class="pre">SwapCountableRef::SwapCountableRef()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</div>
+<div class="toctree-wrapper compound">
+<ul>
 <li class="toctree-l1"><a class="reference internal" href="classsequant_1_1_taggable.html">Class Taggable</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="classsequant_1_1_taggable.html#inheritance-relationships">Inheritance Relationships</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="classsequant_1_1_taggable.html#derived-type">Derived Type</a></li>
@@ -5055,6 +5091,7 @@
 <li class="toctree-l5"><a class="reference internal" href="classsequant_1_1_tensor_network.html#_CPPv4N7sequant13TensorNetwork28SlotCanonicalizationMetadata19named_index_compareE"><code class="docutils literal notranslate"><span class="pre">TensorNetwork::SlotCanonicalizationMetadata::named_index_compare</span></code></a></li>
 <li class="toctree-l5"><a class="reference internal" href="classsequant_1_1_tensor_network.html#_CPPv4N7sequant13TensorNetwork28SlotCanonicalizationMetadata23named_indices_canonicalE"><code class="docutils literal notranslate"><span class="pre">TensorNetwork::SlotCanonicalizationMetadata::named_indices_canonical</span></code></a></li>
 <li class="toctree-l5"><a class="reference internal" href="classsequant_1_1_tensor_network.html#_CPPv4N7sequant13TensorNetwork28SlotCanonicalizationMetadata5graphE"><code class="docutils literal notranslate"><span class="pre">TensorNetwork::SlotCanonicalizationMetadata::graph</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="classsequant_1_1_tensor_network.html#_CPPv4N7sequant13TensorNetwork28SlotCanonicalizationMetadata5phaseE"><code class="docutils literal notranslate"><span class="pre">TensorNetwork::SlotCanonicalizationMetadata::phase</span></code></a></li>
 </ul>
 </li>
 </ul>
@@ -5163,6 +5200,7 @@
 <li class="toctree-l5"><a class="reference internal" href="classsequant_1_1_tensor_network_v2.html#_CPPv4N7sequant15TensorNetworkV228SlotCanonicalizationMetadata19named_index_compareE"><code class="docutils literal notranslate"><span class="pre">TensorNetworkV2::SlotCanonicalizationMetadata::named_index_compare</span></code></a></li>
 <li class="toctree-l5"><a class="reference internal" href="classsequant_1_1_tensor_network_v2.html#_CPPv4N7sequant15TensorNetworkV228SlotCanonicalizationMetadata23named_indices_canonicalE"><code class="docutils literal notranslate"><span class="pre">TensorNetworkV2::SlotCanonicalizationMetadata::named_indices_canonical</span></code></a></li>
 <li class="toctree-l5"><a class="reference internal" href="classsequant_1_1_tensor_network_v2.html#_CPPv4N7sequant15TensorNetworkV228SlotCanonicalizationMetadata5graphE"><code class="docutils literal notranslate"><span class="pre">TensorNetworkV2::SlotCanonicalizationMetadata::graph</span></code></a></li>
+<li class="toctree-l5"><a class="reference internal" href="classsequant_1_1_tensor_network_v2.html#_CPPv4N7sequant15TensorNetworkV228SlotCanonicalizationMetadata5phaseE"><code class="docutils literal notranslate"><span class="pre">TensorNetworkV2::SlotCanonicalizationMetadata::phase</span></code></a></li>
 </ul>
 </li>
 <li class="toctree-l4"><a class="reference internal" href="classsequant_1_1_tensor_network_v2.html#_CPPv4N7sequant15TensorNetworkV26VertexE"><code class="docutils literal notranslate"><span class="pre">TensorNetworkV2::Vertex</span></code></a><ul>
@@ -6263,9 +6301,9 @@
 </div>
 <div class="toctree-wrapper compound">
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="function_namespacesequant_1a29c26a57c287f8aa30cc92643c2266a8.html">Template Function sequant::bubble_sort</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="function_namespacesequant_1a29c26a57c287f8aa30cc92643c2266a8.html#function-documentation">Function Documentation</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="function_namespacesequant_1a29c26a57c287f8aa30cc92643c2266a8.html#_CPPv4I000EN7sequant11bubble_sortEv11ForwardIter8Sentinel7Compare"><code class="docutils literal notranslate"><span class="pre">bubble_sort()</span></code></a></li>
+<li class="toctree-l1"><a class="reference internal" href="function_namespacesequant_1a76ac6d4264f742c11bb19037d9686b8e.html">Template Function sequant::bubble_sort</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="function_namespacesequant_1a76ac6d4264f742c11bb19037d9686b8e.html#function-documentation">Function Documentation</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="function_namespacesequant_1a76ac6d4264f742c11bb19037d9686b8e.html#_CPPv4I000EN7sequant11bubble_sortEv11ForwardIter8Sentinel7Compare"><code class="docutils literal notranslate"><span class="pre">bubble_sort()</span></code></a></li>
 </ul>
 </li>
 </ul>
@@ -6400,6 +6438,17 @@
 <li class="toctree-l1"><a class="reference internal" href="function_namespacesequant_1ac85d29e6ef81d2006f8d95c4b0990c79.html">Template Function sequant::count_cycles</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="function_namespacesequant_1ac85d29e6ef81d2006f8d95c4b0990c79.html#function-documentation">Function Documentation</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="function_namespacesequant_1ac85d29e6ef81d2006f8d95c4b0990c79.html#_CPPv4I00EN7sequant12count_cyclesENSt6size_tERR4Seq0RK4Seq1"><code class="docutils literal notranslate"><span class="pre">count_cycles()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</div>
+<div class="toctree-wrapper compound">
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="function_namespacesequant_1a6c126d28102f914490a9f0a370f8bfa0.html">Template Function sequant::counted_swap</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="function_namespacesequant_1a6c126d28102f914490a9f0a370f8bfa0.html#function-documentation">Function Documentation</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="function_namespacesequant_1a6c126d28102f914490a9f0a370f8bfa0.html#_CPPv4I0EN7sequant12counted_swapEvR1TR1T"><code class="docutils literal notranslate"><span class="pre">counted_swap()</span></code></a></li>
 </ul>
 </li>
 </ul>
@@ -6650,6 +6699,17 @@
 <li class="toctree-l1"><a class="reference internal" href="function_namespacesequant_1_1detail_1ae87ba67a68308a46131f3a2d0fa6cef6.html">Template Function sequant::detail::compute_index_replacement_rules</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="function_namespacesequant_1_1detail_1ae87ba67a68308a46131f3a2d0fa6cef6.html#function-documentation">Function Documentation</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="function_namespacesequant_1_1detail_1ae87ba67a68308a46131f3a2d0fa6cef6.html#_CPPv4I_10StatisticsEN7sequant6detail31compute_index_replacement_rulesEN9container3mapI5Index5IndexEERNSt10shared_ptrI7ProductEERKN9container3setI5IndexEERKNSt3setI5IndexN5Index12LabelCompareEEE"><code class="docutils literal notranslate"><span class="pre">compute_index_replacement_rules()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</div>
+<div class="toctree-wrapper compound">
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="function_namespacesequant_1_1detail_1a2c97759fbfac3617e06077487324f528.html">Template Function sequant::detail::count_swap</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="function_namespacesequant_1_1detail_1a2c97759fbfac3617e06077487324f528.html#function-documentation">Function Documentation</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="function_namespacesequant_1_1detail_1a2c97759fbfac3617e06077487324f528.html#_CPPv4I0EN7sequant6detail10count_swapEvv"><code class="docutils literal notranslate"><span class="pre">count_swap()</span></code></a></li>
 </ul>
 </li>
 </ul>
@@ -10051,6 +10111,28 @@
 </div>
 <div class="toctree-wrapper compound">
 <ul>
+<li class="toctree-l1"><a class="reference internal" href="function_namespacesequant_1aa9cc423ac0dc6c792f34030f10e77050.html">Template Function sequant::operator&lt;(const SwapCountable&lt;T&gt;&amp;, const SwapCountable&lt;T&gt;&amp;)</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="function_namespacesequant_1aa9cc423ac0dc6c792f34030f10e77050.html#function-documentation">Function Documentation</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="function_namespacesequant_1aa9cc423ac0dc6c792f34030f10e77050.html#_CPPv4I0EN7sequantltEbRK13SwapCountableI1TERK13SwapCountableI1TE"><code class="docutils literal notranslate"><span class="pre">operator&lt;()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</div>
+<div class="toctree-wrapper compound">
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="function_namespacesequant_1a5932badad5fd28ad43c6bede9349c780.html">Template Function sequant::operator&lt;(const SwapCountableRef&lt;T&gt;&amp;, const SwapCountableRef&lt;T&gt;&amp;)</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="function_namespacesequant_1a5932badad5fd28ad43c6bede9349c780.html#function-documentation">Function Documentation</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="function_namespacesequant_1a5932badad5fd28ad43c6bede9349c780.html#_CPPv4I0EN7sequantltEbRK16SwapCountableRefI1TERK16SwapCountableRefI1TE"><code class="docutils literal notranslate"><span class="pre">operator&lt;()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</div>
+<div class="toctree-wrapper compound">
+<ul>
 <li class="toctree-l1"><a class="reference internal" href="function_namespacesequant_1ad8c7343916e7e7f0b9c43800c5c74922.html">Template Function sequant::operator&lt;&lt;</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="function_namespacesequant_1ad8c7343916e7e7f0b9c43800c5c74922.html#function-documentation">Function Documentation</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="function_namespacesequant_1ad8c7343916e7e7f0b9c43800c5c74922.html#_CPPv4I00EN7sequantlsERNSt13basic_ostreamI5CharT6TraitsEERNSt13basic_ostreamI5CharT6TraitsEEN15TensorNetworkV26OriginE"><code class="docutils literal notranslate"><span class="pre">operator&lt;&lt;()</span></code></a></li>
@@ -10716,6 +10798,17 @@
 </div>
 <div class="toctree-wrapper compound">
 <ul>
+<li class="toctree-l1"><a class="reference internal" href="function_namespacesequant_1a6a0cc04d98310f257e9db9f9e7f20ba0.html">Template Function sequant::reset_ts_swap_counter</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="function_namespacesequant_1a6a0cc04d98310f257e9db9f9e7f20ba0.html#function-documentation">Function Documentation</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="function_namespacesequant_1a6a0cc04d98310f257e9db9f9e7f20ba0.html#_CPPv4I0EN7sequant21reset_ts_swap_counterEvv"><code class="docutils literal notranslate"><span class="pre">reset_ts_swap_counter()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</div>
+<div class="toctree-wrapper compound">
+<ul>
 <li class="toctree-l1"><a class="reference internal" href="function_namespacesequant_1a8f92a2038b53d6392ce4623b1bfe4c66.html">Function sequant::revision</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="function_namespacesequant_1a8f92a2038b53d6392ce4623b1bfe4c66.html#function-documentation">Function Documentation</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="function_namespacesequant_1a8f92a2038b53d6392ce4623b1bfe4c66.html#_CPPv4N7sequant8revisionEv"><code class="docutils literal notranslate"><span class="pre">revision()</span></code></a></li>
@@ -10924,9 +11017,31 @@
 </div>
 <div class="toctree-wrapper compound">
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="function_namespacesequant_1ad638076d20f3590a515e9165bc6a1a71.html">Function sequant::swap</a><ul>
+<li class="toctree-l1"><a class="reference internal" href="function_namespacesequant_1ad638076d20f3590a515e9165bc6a1a71.html">Function sequant::swap(Index&amp;, Index&amp;)</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="function_namespacesequant_1ad638076d20f3590a515e9165bc6a1a71.html#function-documentation">Function Documentation</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="function_namespacesequant_1ad638076d20f3590a515e9165bc6a1a71.html#_CPPv4N7sequant4swapER5IndexR5Index"><code class="docutils literal notranslate"><span class="pre">swap()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</div>
+<div class="toctree-wrapper compound">
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="function_namespacesequant_1ac7deeccd0c79f0bee84caad38cd8cb8b.html">Template Function sequant::swap(SwapCountable&lt;T&gt;&amp;, SwapCountable&lt;T&gt;&amp;)</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="function_namespacesequant_1ac7deeccd0c79f0bee84caad38cd8cb8b.html#function-documentation">Function Documentation</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="function_namespacesequant_1ac7deeccd0c79f0bee84caad38cd8cb8b.html#_CPPv4I0EN7sequant4swapEvR13SwapCountableI1TER13SwapCountableI1TE"><code class="docutils literal notranslate"><span class="pre">swap()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</div>
+<div class="toctree-wrapper compound">
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="function_namespacesequant_1a63c3e6ca6ca5a90217cf4543c5b69ea0.html">Template Function sequant::swap(const SwapCountableRef&lt;T&gt;&amp;, const SwapCountableRef&lt;T&gt;&amp;)</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="function_namespacesequant_1a63c3e6ca6ca5a90217cf4543c5b69ea0.html#function-documentation">Function Documentation</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="function_namespacesequant_1a63c3e6ca6ca5a90217cf4543c5b69ea0.html#_CPPv4I0EN7sequant4swapEvRK16SwapCountableRefI1TERK16SwapCountableRefI1TE"><code class="docutils literal notranslate"><span class="pre">swap()</span></code></a></li>
 </ul>
 </li>
 </ul>
@@ -11562,6 +11677,17 @@
 <li class="toctree-l1"><a class="reference internal" href="function_namespacesequant_1a9879b1ce109a79d237c82a792fd91678.html">Template Function sequant::transform_reduce</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="function_namespacesequant_1a9879b1ce109a79d237c82a792fd91678.html#function-documentation">Function Documentation</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="function_namespacesequant_1a9879b1ce109a79d237c82a792fd91678.html#_CPPv4I0000EN7sequant16transform_reduceE1TRR10SizedRange1TRK17BinaryReductionOpRK10UnaryMapOp"><code class="docutils literal notranslate"><span class="pre">transform_reduce()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</div>
+<div class="toctree-wrapper compound">
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="function_namespacesequant_1ad05cdbcfe9f11d10525a67cdaa9abbfc.html">Template Function sequant::ts_swap_counter_is_even</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="function_namespacesequant_1ad05cdbcfe9f11d10525a67cdaa9abbfc.html#function-documentation">Function Documentation</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="function_namespacesequant_1ad05cdbcfe9f11d10525a67cdaa9abbfc.html#_CPPv4I0EN7sequant23ts_swap_counter_is_evenEbv"><code class="docutils literal notranslate"><span class="pre">ts_swap_counter_is_even()</span></code></a></li>
 </ul>
 </li>
 </ul>
@@ -13273,7 +13399,7 @@
             
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on Feb 10, 2025 2:46:23 PM</div>
+              Last updated on Feb 16, 2025 12:30:45 AM</div>
           </div>
           <div class="right-details">
             <div class="icons">

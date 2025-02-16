@@ -35,9 +35,9 @@ Namespaces
 
 - :ref:`namespace_sequant__@6`
 
-- :ref:`namespace_sequant__@85`
+- :ref:`namespace_sequant__@86`
 
-- :ref:`namespace_sequant__@87`
+- :ref:`namespace_sequant__@88`
 
 - :ref:`namespace_sequant__antisymm`
 
@@ -248,8 +248,6 @@ Classes
 
 - :ref:`exhale_class_classsequant_1_1_index_space_registry`
 
-- :ref:`exhale_class_classsequant_1_1_index_swapper`
-
 - :ref:`exhale_class_classsequant_1_1_labeled`
 
 - :ref:`exhale_class_classsequant_1_1_n_c_product`
@@ -271,6 +269,10 @@ Classes
 - :ref:`exhale_class_classsequant_1_1_singleton`
 
 - :ref:`exhale_class_classsequant_1_1_sum`
+
+- :ref:`exhale_class_classsequant_1_1_swap_countable`
+
+- :ref:`exhale_class_classsequant_1_1_swap_countable_ref`
 
 - :ref:`exhale_class_classsequant_1_1_taggable`
 
@@ -344,13 +346,13 @@ Functions
 
 - :ref:`exhale_function_namespacesequant_1afba3eb9a4c4c6659f0ee160004e98bc8`
 
-- :ref:`exhale_function_namespacesequant_1ae47079fe17bd46e8bd8012fb4bd67787`
+- :ref:`exhale_function_namespacesequant_1a6131cba13aaf34ebd0d52c126e79361c`
 
 - :ref:`exhale_function_namespacesequant_1aae31702484c00a1814784c51d16bd60e`
 
-- :ref:`exhale_function_namespacesequant_1a6131cba13aaf34ebd0d52c126e79361c`
-
 - :ref:`exhale_function_namespacesequant_1a0493377bc5a2010bcde7945eea92581d`
+
+- :ref:`exhale_function_namespacesequant_1ae47079fe17bd46e8bd8012fb4bd67787`
 
 - :ref:`exhale_function_namespacesequant_1a64432b1a781bc7ffd57eb8554b280f2c`
 
@@ -386,7 +388,7 @@ Functions
 
 - :ref:`exhale_function_namespacesequant_1a65db7bf1a69edaf8a0d257246b1d2486`
 
-- :ref:`exhale_function_namespacesequant_1a29c26a57c287f8aa30cc92643c2266a8`
+- :ref:`exhale_function_namespacesequant_1a76ac6d4264f742c11bb19037d9686b8e`
 
 - :ref:`exhale_function_namespacesequant_1a3bc40974e6d8fcc4e318923a1846944b`
 
@@ -413,6 +415,8 @@ Functions
 - :ref:`exhale_function_namespacesequant_1a194ed0ffaa987967006e69458ec83423`
 
 - :ref:`exhale_function_namespacesequant_1ac85d29e6ef81d2006f8d95c4b0990c79`
+
+- :ref:`exhale_function_namespacesequant_1a6c126d28102f914490a9f0a370f8bfa0`
 
 - :ref:`exhale_function_namespacesequant_1ae2b6e7fc17ca820e46cda702013c905b`
 
@@ -460,9 +464,9 @@ Functions
 
 - :ref:`exhale_function_namespacesequant_1a977be518758a9902b0d0dae2fc5d656c`
 
-- :ref:`exhale_function_namespacesequant_1ad600d7fe47c0c4f006149cd13a114bc5`
-
 - :ref:`exhale_function_namespacesequant_1af4ece5a049a3d307e03f6b2af97697ab`
+
+- :ref:`exhale_function_namespacesequant_1ad600d7fe47c0c4f006149cd13a114bc5`
 
 - :ref:`exhale_function_namespacesequant_1a43c280d1d7825ec43ef7f8d0d6f1b939`
 
@@ -500,9 +504,9 @@ Functions
 
 - :ref:`exhale_function_namespacesequant_1ad70637d2e37da4c601d03d785dac2f6c`
 
-- :ref:`exhale_function_namespacesequant_1a79cb956392d331f43b649f7875683c25`
-
 - :ref:`exhale_function_namespacesequant_1a0ff2ec38d48c9b5223d83263076186d1`
+
+- :ref:`exhale_function_namespacesequant_1a79cb956392d331f43b649f7875683c25`
 
 - :ref:`exhale_function_namespacesequant_1aeca5ee37b05742a509e08bc1f27bce81`
 
@@ -636,13 +640,9 @@ Functions
 
 - :ref:`exhale_function_namespacesequant_1ac9f738fa8770180ed240f3e2e41f1873`
 
-- :ref:`exhale_function_namespacesequant_1ae582646eac2e00a875ecc82e9d16b6bf`
-
-- :ref:`exhale_function_namespacesequant_1a24f69f16c272cb4a9bd054c7d9dc6410`
+- :ref:`exhale_function_namespacesequant_1af350f7feb1a3a7d5cbe5f22b2e25a76a`
 
 - :ref:`exhale_function_namespacesequant_1a9532eeef85be3bedb29a5573336ef2d0`
-
-- :ref:`exhale_function_namespacesequant_1af350f7feb1a3a7d5cbe5f22b2e25a76a`
 
 - :ref:`exhale_function_namespacesequant_1a630649d30cfa7e130d5e1104cc5ea2b4`
 
@@ -652,9 +652,13 @@ Functions
 
 - :ref:`exhale_function_namespacesequant_1ad554ebefd23ee4f7763d2ae01d351e2a`
 
+- :ref:`exhale_function_namespacesequant_1aa3812b7b83b1427775056ea29c490b86`
+
 - :ref:`exhale_function_namespacesequant_1acf115a162e3ca42e2882e52a282b97f4`
 
-- :ref:`exhale_function_namespacesequant_1aa3812b7b83b1427775056ea29c490b86`
+- :ref:`exhale_function_namespacesequant_1ae582646eac2e00a875ecc82e9d16b6bf`
+
+- :ref:`exhale_function_namespacesequant_1a24f69f16c272cb4a9bd054c7d9dc6410`
 
 - :ref:`exhale_function_namespacesequant_1a999ba9d32dc3a0fdcce6e25fd2e2148e`
 
@@ -692,6 +696,10 @@ Functions
 
 - :ref:`exhale_function_namespacesequant_1a06013c9e2a851d9d74431cb686c83bdd`
 
+- :ref:`exhale_function_namespacesequant_1aa9cc423ac0dc6c792f34030f10e77050`
+
+- :ref:`exhale_function_namespacesequant_1a5932badad5fd28ad43c6bede9349c780`
+
 - :ref:`exhale_function_namespacesequant_1a1b7fd49159294bfa5b46f309a8742286`
 
 - :ref:`exhale_function_namespacesequant_1af2dfc0964956a8b2aa64ee85b1e50fa8`
@@ -700,23 +708,15 @@ Functions
 
 - :ref:`exhale_function_namespacesequant_1aab6e45448e13a4ee58bf5aa71c7488e6`
 
-- :ref:`exhale_function_namespacesequant_1ad59caf9dc97b151ebf5f35038750b831`
+- :ref:`exhale_function_namespacesequant_1a0d63a69cf31e277213d1cc8ee5c74d05`
 
 - :ref:`exhale_function_namespacesequant_1aa25b5f265546eb9d0fa08516436e21d6`
 
+- :ref:`exhale_function_namespacesequant_1aec313efc5a2f86c70203f17953ee20e4`
+
 - :ref:`exhale_function_namespacesequant_1aaf7c742d3ac61b03615c69c67e462dc0`
 
-- :ref:`exhale_function_namespacesequant_1a1572a115ae7fa4a25142f573f9fa7040`
-
-- :ref:`exhale_function_namespacesequant_1af06cc45e975afcb9ae60db7b6cbbcba9`
-
-- :ref:`exhale_function_namespacesequant_1ab4a40939b4d8eb1dc68f8778c0b73930`
-
-- :ref:`exhale_function_namespacesequant_1a4f7a82ef79acb5f9253be6cf51a1bde0`
-
-- :ref:`exhale_function_namespacesequant_1a0d63a69cf31e277213d1cc8ee5c74d05`
-
-- :ref:`exhale_function_namespacesequant_1aec313efc5a2f86c70203f17953ee20e4`
+- :ref:`exhale_function_namespacesequant_1ad59caf9dc97b151ebf5f35038750b831`
 
 - :ref:`exhale_function_namespacesequant_1a46c0c8f11e5bfafde787c9cc5a8d71bf`
 
@@ -731,6 +731,14 @@ Functions
 - :ref:`exhale_function_namespacesequant_1a3c3b7708ffda618115109e073c79e0e7`
 
 - :ref:`exhale_function_namespacesequant_1a7c0c30b1a59cb0c1116251340fe95e09`
+
+- :ref:`exhale_function_namespacesequant_1a1572a115ae7fa4a25142f573f9fa7040`
+
+- :ref:`exhale_function_namespacesequant_1af06cc45e975afcb9ae60db7b6cbbcba9`
+
+- :ref:`exhale_function_namespacesequant_1ab4a40939b4d8eb1dc68f8778c0b73930`
+
+- :ref:`exhale_function_namespacesequant_1a4f7a82ef79acb5f9253be6cf51a1bde0`
 
 - :ref:`exhale_function_namespacesequant_1a2e3122d0745fee95666649dc410a57ac`
 
@@ -774,6 +782,8 @@ Functions
 
 - :ref:`exhale_function_namespacesequant_1a12360c91d5adef4acd2e0cfed34ea1f3`
 
+- :ref:`exhale_function_namespacesequant_1a6a0cc04d98310f257e9db9f9e7f20ba0`
+
 - :ref:`exhale_function_namespacesequant_1a8f92a2038b53d6392ce4623b1bfe4c66`
 
 - :ref:`exhale_function_namespacesequant_1a8fc26c92cb4ad8d84bb0c8b2924ab6e7`
@@ -782,17 +792,17 @@ Functions
 
 - :ref:`exhale_function_namespacesequant_1aad97d04e6f34c635c31b95e4ee8a4307`
 
-- :ref:`exhale_function_namespacesequant_1a5ec094513b9382a51134ee3f2361c840`
-
 - :ref:`exhale_function_namespacesequant_1a94543a94e43cc428c19ff5a306484603`
+
+- :ref:`exhale_function_namespacesequant_1a5ec094513b9382a51134ee3f2361c840`
 
 - :ref:`exhale_function_namespacesequant_1a1c3b16132e9f4974f74aa360c0559731`
 
 - :ref:`exhale_function_namespacesequant_1aaaa96bdc64b8c7aff12cbc11a94777f3`
 
-- :ref:`exhale_function_namespacesequant_1ae73c3f8b4c2d29262d54fefbf55ad619`
-
 - :ref:`exhale_function_namespacesequant_1a0ed27261fd24d3392c9b4aae23145700`
+
+- :ref:`exhale_function_namespacesequant_1ae73c3f8b4c2d29262d54fefbf55ad619`
 
 - :ref:`exhale_function_namespacesequant_1a707cedc0447e7cd5f40efcec00feb5a4`
 
@@ -814,13 +824,17 @@ Functions
 
 - :ref:`exhale_function_namespacesequant_1a1f3c19698b98abec58582b0e86310974`
 
+- :ref:`exhale_function_namespacesequant_1ac7deeccd0c79f0bee84caad38cd8cb8b`
+
+- :ref:`exhale_function_namespacesequant_1a63c3e6ca6ca5a90217cf4543c5b69ea0`
+
 - :ref:`exhale_function_namespacesequant_1ad638076d20f3590a515e9165bc6a1a71`
 
 - :ref:`exhale_function_namespacesequant_1a695d0c4e30f385152f83fa93a668e62f`
 
-- :ref:`exhale_function_namespacesequant_1a7fe703f56d6a4ba6b8ddcc707ae42c7f`
-
 - :ref:`exhale_function_namespacesequant_1a2aa324a94b1ab75d6ad40a9bafd50158`
+
+- :ref:`exhale_function_namespacesequant_1a7fe703f56d6a4ba6b8ddcc707ae42c7f`
 
 - :ref:`exhale_function_namespacesequant_1a8b58d6ccd8000e3f45d99c871b45844a`
 
@@ -840,6 +854,18 @@ Functions
 
 - :ref:`exhale_function_namespacesequant_1a77bacfa9b834eb5b0bbb7c44d52b25c1`
 
+- :ref:`exhale_function_namespacesequant_1a0218117138934de953b2eec98fa83b13`
+
+- :ref:`exhale_function_namespacesequant_1a80f616e9c6d19edacfcd8bed4a5fc2c1`
+
+- :ref:`exhale_function_namespacesequant_1a69c0f990e32a12156dc64e519f1dd7d0`
+
+- :ref:`exhale_function_namespacesequant_1ad96d44bec339597aa73d0f9e56b8115b`
+
+- :ref:`exhale_function_namespacesequant_1a7c470b6be97eed78f20e5eef7b196180`
+
+- :ref:`exhale_function_namespacesequant_1a22459d1973ac873218da6272239d3cfe`
+
 - :ref:`exhale_function_namespacesequant_1a6b026a49ebe957077486f0b2dab5c84c`
 
 - :ref:`exhale_function_namespacesequant_1ada0afc8704878dfdf9b02303185e3f19`
@@ -850,18 +876,6 @@ Functions
 
 - :ref:`exhale_function_namespacesequant_1adcc6b2bdbc08b4b884a9c7c8971b642b`
 
-- :ref:`exhale_function_namespacesequant_1a69c0f990e32a12156dc64e519f1dd7d0`
-
-- :ref:`exhale_function_namespacesequant_1ad96d44bec339597aa73d0f9e56b8115b`
-
-- :ref:`exhale_function_namespacesequant_1a7c470b6be97eed78f20e5eef7b196180`
-
-- :ref:`exhale_function_namespacesequant_1a22459d1973ac873218da6272239d3cfe`
-
-- :ref:`exhale_function_namespacesequant_1a0218117138934de953b2eec98fa83b13`
-
-- :ref:`exhale_function_namespacesequant_1a80f616e9c6d19edacfcd8bed4a5fc2c1`
-
 - :ref:`exhale_function_namespacesequant_1a44ef79b45db7e9e1fee13b372e2c0869`
 
 - :ref:`exhale_function_namespacesequant_1a77b3e24a128d11cf0b016193dd9e68b7`
@@ -870,25 +884,27 @@ Functions
 
 - :ref:`exhale_function_namespacesequant_1a14ccb9838626818330084a10cdc496b8`
 
-- :ref:`exhale_function_namespacesequant_1a7ee778d62320741894ca0634ac8112d6`
-
-- :ref:`exhale_function_namespacesequant_1ac810dbe124845f316ba0ba1a81cf976c`
-
 - :ref:`exhale_function_namespacesequant_1ac1df0a9407cf940f3b17af0a176e478a`
-
-- :ref:`exhale_function_namespacesequant_1a107d9204a84750f799d7d7adb900ef6a`
 
 - :ref:`exhale_function_namespacesequant_1a64ebcba54776ad99873ad9adeee78d1f`
 
 - :ref:`exhale_function_namespacesequant_1a8b3f62b488e9eb5152db5b5f77f182e7`
 
+- :ref:`exhale_function_namespacesequant_1a7ee778d62320741894ca0634ac8112d6`
+
+- :ref:`exhale_function_namespacesequant_1ac810dbe124845f316ba0ba1a81cf976c`
+
+- :ref:`exhale_function_namespacesequant_1a107d9204a84750f799d7d7adb900ef6a`
+
 - :ref:`exhale_function_namespacesequant_1a92314549fe0e76646271eb4e077ed789`
+
+- :ref:`exhale_function_namespacesequant_1ab87e06863676948c09289911cd355c5b`
+
+- :ref:`exhale_function_namespacesequant_1a8c09257461a7b2160aa97c6819fd9251`
 
 - :ref:`exhale_function_namespacesequant_1aab88def0a915125f5ac45d92ad8ef433`
 
 - :ref:`exhale_function_namespacesequant_1ace7f85eac4293628385605ec35c72106`
-
-- :ref:`exhale_function_namespacesequant_1a9a6f752b0f9a37e87910693349e8e745`
 
 - :ref:`exhale_function_namespacesequant_1a29889a5868cb88bf1a70a6495cbdbc6d`
 
@@ -896,15 +912,7 @@ Functions
 
 - :ref:`exhale_function_namespacesequant_1aebe8ff98f384c09bc14730a15d3858f2`
 
-- :ref:`exhale_function_namespacesequant_1a8c09257461a7b2160aa97c6819fd9251`
-
-- :ref:`exhale_function_namespacesequant_1ab87e06863676948c09289911cd355c5b`
-
-- :ref:`exhale_function_namespacesequant_1a89c1a5a9ae96434a872d2211898ecaad`
-
-- :ref:`exhale_function_namespacesequant_1a871fc070f6d873bd78e2e202a616afea`
-
-- :ref:`exhale_function_namespacesequant_1a39d724ab06625de380dda6122aba80c0`
+- :ref:`exhale_function_namespacesequant_1a9a6f752b0f9a37e87910693349e8e745`
 
 - :ref:`exhale_function_namespacesequant_1a7de0165d6211e8d301f66cc4e83db9fa`
 
@@ -913,6 +921,12 @@ Functions
 - :ref:`exhale_function_namespacesequant_1a9a4394ec8a60af48bfe4f5fa5269f98e`
 
 - :ref:`exhale_function_namespacesequant_1af6495449b17b85bec48b4e1a89f7570f`
+
+- :ref:`exhale_function_namespacesequant_1a89c1a5a9ae96434a872d2211898ecaad`
+
+- :ref:`exhale_function_namespacesequant_1a871fc070f6d873bd78e2e202a616afea`
+
+- :ref:`exhale_function_namespacesequant_1a39d724ab06625de380dda6122aba80c0`
 
 - :ref:`exhale_function_namespacesequant_1a8510feba16321a56d52a0e3adb072dc0`
 
@@ -937,6 +951,8 @@ Functions
 - :ref:`exhale_function_namespacesequant_1ad7716b333a12b80db3e33067288ded90`
 
 - :ref:`exhale_function_namespacesequant_1a9879b1ce109a79d237c82a792fd91678`
+
+- :ref:`exhale_function_namespacesequant_1ad05cdbcfe9f11d10525a67cdaa9abbfc`
 
 - :ref:`exhale_function_namespacesequant_1a86b61721e1dd2ea4d2dbf22a14e14be5`
 

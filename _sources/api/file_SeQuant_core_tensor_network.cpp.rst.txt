@@ -49,6 +49,8 @@ Includes
 
 - ``SeQuant/core/tag.hpp`` (:ref:`file_SeQuant_core_tag.hpp`)
 
+- ``SeQuant/core/tensor.hpp`` (:ref:`file_SeQuant_core_tensor.hpp`)
+
 - ``SeQuant/core/tensor_network.hpp`` (:ref:`file_SeQuant_core_tensor_network.hpp`)
 
 - ``SeQuant/core/tensor_network/vertex_painter.hpp`` (:ref:`file_SeQuant_core_tensor_network_vertex_painter.hpp`)

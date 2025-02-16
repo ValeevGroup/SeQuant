@@ -26,6 +26,7 @@ Files
 - :ref:`file_SeQuant_core_utility_string.cpp`
 - :ref:`file_SeQuant_core_utility_string.hpp`
 - :ref:`file_SeQuant_core_utility_strong.hpp`
+- :ref:`file_SeQuant_core_utility_swap.hpp`
 - :ref:`file_SeQuant_core_utility_tuple.hpp`
 
 

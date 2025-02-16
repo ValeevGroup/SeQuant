@@ -35,6 +35,8 @@ Includes
 
 - ``SeQuant/core/utility/string.hpp`` (:ref:`file_SeQuant_core_utility_string.hpp`)
 
+- ``SeQuant/core/utility/swap.hpp`` (:ref:`file_SeQuant_core_utility_swap.hpp`)
+
 - ``algorithm`` (:ref:`file_SeQuant_core_algorithm.hpp`)
 
 - ``atomic``
@@ -154,8 +156,6 @@ Classes
 - :ref:`exhale_class_classsequant_1_1_index`
 
 - :ref:`exhale_class_classsequant_1_1_index_factory`
-
-- :ref:`exhale_class_classsequant_1_1_index_swapper`
 
 
 Functions

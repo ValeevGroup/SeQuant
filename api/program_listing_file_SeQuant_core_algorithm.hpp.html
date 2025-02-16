@@ -286,8 +286,9 @@
 <span class="k">using</span><span class="w"> </span><span class="n">suitable_call_operator</span><span class="w"> </span><span class="o">=</span>
 <span class="w">    </span><span class="k">decltype</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">declval</span><span class="o">&lt;</span><span class="n">Callable</span><span class="o">&gt;</span><span class="p">()(</span><span class="n">std</span><span class="o">::</span><span class="n">declval</span><span class="o">&lt;</span><span class="n">Args</span><span class="o">&gt;</span><span class="p">()...));</span>
 
-<span class="k">template</span><span class="w"> </span><span class="o">&lt;</span><span class="k">typename</span><span class="w"> </span><span class="nc">ForwardIter</span><span class="p">,</span><span class="w"> </span><span class="k">typename</span><span class="w"> </span><span class="nc">Sentinel</span><span class="p">,</span><span class="w"> </span><span class="k">typename</span><span class="w"> </span><span class="nc">Compare</span><span class="o">&gt;</span>
-<span class="kt">void</span><span class="w"> </span><span class="n">bubble_sort</span><span class="p">(</span><span class="n">ForwardIter</span><span class="w"> </span><span class="n">begin</span><span class="p">,</span><span class="w"> </span><span class="n">Sentinel</span><span class="w"> </span><span class="n">end</span><span class="p">,</span><span class="w"> </span><span class="n">Compare</span><span class="w"> </span><span class="n">comp</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="k">template</span><span class="w"> </span><span class="o">&lt;</span><span class="k">typename</span><span class="w"> </span><span class="nc">ForwardIter</span><span class="p">,</span><span class="w"> </span><span class="k">typename</span><span class="w"> </span><span class="nc">Sentinel</span><span class="p">,</span>
+<span class="w">          </span><span class="k">typename</span><span class="w"> </span><span class="nc">Compare</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">less</span><span class="o">&lt;&gt;&gt;</span>
+<span class="kt">void</span><span class="w"> </span><span class="n">bubble_sort</span><span class="p">(</span><span class="n">ForwardIter</span><span class="w"> </span><span class="n">begin</span><span class="p">,</span><span class="w"> </span><span class="n">Sentinel</span><span class="w"> </span><span class="n">end</span><span class="p">,</span><span class="w"> </span><span class="n">Compare</span><span class="w"> </span><span class="n">comp</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{})</span><span class="w"> </span><span class="p">{</span>
 <span class="w">  </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">begin</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">end</span><span class="p">)</span><span class="w"> </span><span class="k">return</span><span class="p">;</span><span class="w">  </span><span class="c1">// no-op for empty range</span>
 <span class="w">  </span><span class="kt">bool</span><span class="w"> </span><span class="n">swapped</span><span class="p">;</span>
 <span class="w">  </span><span class="k">do</span><span class="w"> </span><span class="p">{</span>
@@ -428,7 +429,7 @@
             
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on Feb 10, 2025 2:46:23 PM</div>
+              Last updated on Feb 16, 2025 12:30:45 AM</div>
           </div>
           <div class="right-details">
             <div class="icons">
