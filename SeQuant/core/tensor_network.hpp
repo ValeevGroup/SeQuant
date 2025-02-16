@@ -216,8 +216,7 @@ class TensorNetwork {
         } else {
           throw std::logic_error(
               "TensorNetwork::TensorNetwork: non-tensors in the given "
-              "expression "
-              "range");
+              "expression range");
         }
       }
       return;
@@ -284,6 +283,11 @@ class TensorNetwork {
     /// canonicalized colored graph, use graph->cmp to compare against another
     /// to detect equivalence
     std::shared_ptr<bliss::Graph> graph;
+
+    /// if tensor network contains tensors with antisymmetric bra/ket this
+    /// reports the phase change due to permutation of slots relative to their
+    /// input order
+    std::int8_t phase = +1;  // +1 or -1
   };
 
   /// Like canonicalize(), but only use graph-based canonicalization to
@@ -335,6 +339,15 @@ class TensorNetwork {
     }
     bool operator()(const std::wstring_view &first, const Edge &second) const {
       return first < second.idx().full_label();
+    }
+    bool operator()(const Index &first, const Index &second) const {
+      return first.full_label() < second.full_label();
+    }
+    bool operator()(const Index &first, const std::wstring_view &second) const {
+      return first.full_label() < second;
+    }
+    bool operator()(const std::wstring_view &first, const Index &second) const {
+      return first < second.full_label();
     }
   };
   // Index -> Edge, sorted by full label

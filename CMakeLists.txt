@@ -262,6 +262,7 @@ set(SeQuant_src
         SeQuant/core/utility/string.hpp
         SeQuant/core/utility/string.cpp
         SeQuant/core/utility/tuple.hpp
+        SeQuant/core/utility/swap.hpp
         SeQuant/core/wick.hpp
         SeQuant/core/wick.impl.hpp
         SeQuant/core/wolfram.hpp
@@ -415,7 +416,7 @@ if (SEQUANT_IWYU)
 endif()
 
 if (SEQUANT_BENCHMARKS)
-	add_subdirectory(benchmarks)
+    add_subdirectory(benchmarks)
 endif()
 
 ### unit tests

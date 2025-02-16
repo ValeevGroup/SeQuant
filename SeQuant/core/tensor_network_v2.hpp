@@ -264,6 +264,11 @@ class TensorNetworkV2 {
     /// canonicalized colored graph, use graph->cmp to compare against another
     /// to detect equivalence
     std::shared_ptr<bliss::Graph> graph;
+
+    /// if tensor network contains tensors with antisymmetric bra/ket this
+    /// reports the phase change due to permutation of slots relative to their
+    /// input order
+    std::int8_t phase = +1;  // +1 or -1
   };
 
   /// Like canonicalize(), but only use graph-based canonicalization to

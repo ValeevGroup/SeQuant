@@ -14,4 +14,4 @@ endif()
 # postcond check
 if (NOT TARGET benchmark::benchmark)
 	message(FATAL_ERROR "FindOrFetchGoogleBenchmark could not make TARGET benchmark::benchmark available")
-endif(NOT TARGET libperm)
+endif()

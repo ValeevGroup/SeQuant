@@ -14,6 +14,7 @@
 #include <SeQuant/core/latex.hpp>
 #include <SeQuant/core/logger.hpp>
 #include <SeQuant/core/tag.hpp>
+#include <SeQuant/core/tensor.hpp>
 #include <SeQuant/core/tensor_network.hpp>
 #include <SeQuant/core/tensor_network/vertex_painter.hpp>
 #include <SeQuant/core/tensor_network_v2.hpp>
@@ -212,7 +213,7 @@ ExprPtr TensorNetwork::canonicalize(
       container::multimap<size_t, std::pair<size_t, size_t>> color2idx;
       // collect colors and anonymous indices sorted by colors
       size_t idx_ord = 0;
-      for (auto &&ttpair : edges_) {
+      for ([[maybe_unused]] auto &&ttpair : edges_) {
         if (is_anonymous_index_ord(idx_ord)) {
           auto color = vcolors[idx_ord];
           if (colors.find(color) == colors.end()) colors.insert(color);
@@ -511,7 +512,7 @@ TensorNetwork::make_bliss_graph(const named_indices_t *named_indices_ptr,
     assert(!bundle.empty());
     ++nv;  // each symmetric protoindex bundle is a vertex
     std::wstring spbundle_label = L"<";
-    std::size_t pi_count = 0;
+    [[maybe_unused]] std::size_t pi_count = 0;
     const auto end = bundle.end();
     auto it = bundle.begin();
     spbundle_label += it->full_label();
@@ -621,7 +622,7 @@ TensorNetwork::make_bliss_graph(const named_indices_t *named_indices_ptr,
   index_cnt = 0;
   ranges::for_each(edges_, [&](const Edge &edge) {
     assert(edge.size() > 0);
-    const auto edge_connected = edge.size() == 2;
+    [[maybe_unused]] const auto edge_connected = edge.size() == 2;
     for (int t = 0; t != edge.size(); ++t) {
       const auto &terminal = edge[t];
       const auto tensor_ord = terminal.tensor_ord;
@@ -872,7 +873,10 @@ TensorNetwork::SlotCanonicalizationMetadata TensorNetwork::canonicalize_slots(
   // distinct_named_indices = false
   auto [graph, vlabels, vcolors, vtypes] =
       make_bliss_graph(&named_indices, /* distinct_named_indices = */ false);
-  //    graph->write_dot(std::wcout, vlabels);
+  if (Logger::instance().canonicalize_dot) {
+    std::wcout << "Input graph for canonicalization:\n";
+    graph->write_dot(std::wcout, vlabels);
+  }
 
   // canonize the graph
   bliss::Stats stats;
@@ -890,6 +894,7 @@ TensorNetwork::SlotCanonicalizationMetadata TensorNetwork::canonicalize_slots(
       return pvector;
     };
 
+    std::wcout << "Canonicalized graph:\n";
     auto cvlabels = permute(vlabels, cl);
     metadata.graph->write_dot(std::wcout, cvlabels);
   }
@@ -960,6 +965,115 @@ TensorNetwork::SlotCanonicalizationMetadata TensorNetwork::canonicalize_slots(
     metadata.named_index_compare = std::move(named_index_compare);
 
   }  // named indices resort to canonical order
+
+  // compute the phase associated with *slot* canonicalization ...
+  // - choose an index-independent order of slots: loop over bra then ket then
+  // aux slots of each tensor ... record each Index in the order of its
+  // appearance when iterating over slots. This is the input ordinal of this
+  // Index. NB We can't just use Index::full_label() to look up Index in edges_
+  // since this would produce label-dependent ordinals
+  // - canonicalization reorders slots according to the topology-based order of
+  // indices.
+  // - for each antisymmetric bra/ket bundle determine its parity according to
+  // the input ordinals and canonical ordinals, the product is the phase due to
+  // slot canonicalization
+  {
+    metadata.phase = 1;
+
+    // iterate over tensor bra/ket/aux index slots in the canonical input order,
+    // for each antisymmetric bra/ket compute phase
+    container::map<Index, std::size_t, FullLabelCompare>
+        idx_inord;  // Index -> input ordinal; helps with computing the ordinals
+                    // during the traversal
+    for (auto &_t : tensors_) {
+      assert(std::dynamic_pointer_cast<Tensor>(_t));
+      auto t = std::static_pointer_cast<Tensor>(_t);
+
+      // returns an iterator to {Index,inord} pair
+      auto index_inord_it = [&](const Index &idx) {
+        auto it = idx_inord.find(idx.full_label());
+        if (it == idx_inord.end()) {
+          const auto inord = idx_inord.size();
+          bool inserted;
+          std::tie(it, inserted) = idx_inord.emplace(idx, inord);
+          assert(inserted);
+        }
+        return it;
+      };
+
+      // computes parity of a bra/ket bundle due to the reordering of its slots
+      // involved in the TN canonicalization
+      auto input_to_canonical_parity = [&](const auto &idx_rng) {
+        using ranges::size;
+        const auto sz = size(idx_rng);
+        if (sz < 2) {  // no phase for 1-index bundles, but still process the
+                       // indices to ensure ordinals are correct
+          using ranges::begin;
+          index_inord_it(*begin(idx_rng));
+          return 1;
+        }
+
+        auto parity = [&](auto &rng) {
+          reset_ts_swap_counter<std::size_t>();
+          using ranges::begin;
+          using ranges::end;
+          bubble_sort(begin(rng), end(rng));
+          return ts_swap_counter_is_even<std::size_t>() ? +1 : -1;
+        };
+
+        container::vector<SwapCountable<std::size_t>> ordinals_input;
+        container::vector<SwapCountable<std::size_t>> ordinals_canonical;
+        ordinals_input.reserve(sz);
+        ordinals_canonical.reserve(sz);
+        for (const auto &idx : idx_rng) {
+          // input ordinal
+          std::size_t inord;
+          std::tie(std::ignore, inord) = *index_inord_it(idx);
+          ordinals_input.emplace_back(inord);
+
+          // use canonical ordinal of the index vertex as the canonical index
+          // ordinal to find it need the ordinal of the corresponding vertex in
+          // the input graph
+          auto input_vertex_it = this->edges_.find(idx.full_label());
+          assert(input_vertex_it != this->edges_.end());
+          const auto inord_vertex = input_vertex_it - this->edges_.begin();
+          const auto canord_vertex = cl[inord_vertex];
+
+          // to which edge did this get mapped?
+          //          std::wcout << "vlabels[ord_original=" << inord_vertex
+          //                     << "]=" << vlabels[inord_vertex]
+          //                     << " -> ord_canonical=" << canord_vertex <<
+          //                     std::endl;
+          ordinals_canonical.emplace_back(canord_vertex);
+        }
+
+        // parity = parity(original range) * parity(canonical range)
+        const auto parity_original = parity(ordinals_input);
+        const auto parity_canonical = parity(ordinals_canonical);
+        return parity_original * parity_canonical;
+      };
+
+      // canonical order of slots: bra, then ket, then aux. We only care about
+      // indices in tensor slots here, so no need to worry about protoindex
+      // slots
+      if (t->symmetry() == Symmetry::antisymm) {
+        // bra first, then ket
+        metadata.phase *= input_to_canonical_parity(t->bra());
+        metadata.phase *= input_to_canonical_parity(t->ket());
+      } else {  // although we don't need to worry about phases, we still need
+                // to process all indices so that the input ordinals are correct
+        for (auto &&idx : t->bra()) {
+          index_inord_it(idx);
+        }
+        for (auto &&idx : t->ket()) {
+          index_inord_it(idx);
+        }
+      }
+      for (auto &&idx : t->aux()) {
+        index_inord_it(idx);
+      }
+    }
+  }
 
   return metadata;
 }
