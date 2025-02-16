@@ -751,8 +751,12 @@ TensorNetworkV2::canonicalize_slots(
         std::tuple<size_t, size_t, NamedIndexSet::const_iterator>;
     using cord_set_t = container::set<ord_cord_it_t, detail::tuple_less<1>>;
 
+    auto grand_index_list = ranges::views::concat(
+        edges_ | ranges::views::transform(edge2index<Edge>),
+        pure_proto_indices_);
+
     // for each named index type (as defined by named_index_compare) maps its
-    // ptr in grand_index_list_ to its ordinal in grand_index_list_ + canonical
+    // ptr in grand_index_list to its ordinal in grand_index_list + canonical
     // ordinal + its iterator in metadata.named_indices
     container::map<std::pair<const Index *, IndexSlotType>, cord_set_t,
                    decltype(named_index_compare)>
@@ -760,8 +764,8 @@ TensorNetworkV2::canonicalize_slots(
 
     // collect named indices and sort them on the fly
     size_t idx_ord = 0;
-    auto grand_index_list_end = grand_index_list_.end();
-    for (auto git = grand_index_list_.begin(); git != grand_index_list_end;
+    auto grand_index_list_end = grand_index_list.end();
+    for (auto git = grand_index_list.begin(); git != grand_index_list_end;
          ++git) {
       const auto &idx = *git;
 
@@ -781,8 +785,10 @@ TensorNetworkV2::canonicalize_slots(
             slot_type = IndexSlotType::TensorAux;
           else if (edge_it->first_vertex().getOrigin() == Origin::Bra)
             slot_type = IndexSlotType::TensorBra;
-          else  // edge_it->first_vertex().getOrigin() == Origin::Ket
+          else {
+            assert(edge_it->first_vertex().getOrigin() == Origin::Ket);
             slot_type = IndexSlotType::TensorKet;
+          }
         } else
           slot_type = IndexSlotType::SPBundle;
         const auto idxptr_slottype = std::make_pair(&idx, slot_type);
@@ -1197,9 +1203,6 @@ void TensorNetworkV2::init_edges() {
   // ... and add pure protoindices to the external indices
   ext_indices_.reserve(ext_indices_.size() + pure_proto_indices_.size());
   ext_indices_.insert(pure_proto_indices_.begin(), pure_proto_indices_.end());
-
-  grand_index_list_ = ranges::views::concat(
-      edges_ | ranges::views::transform(edge2index_), pure_proto_indices_);
 
   have_edges_ = true;
 }

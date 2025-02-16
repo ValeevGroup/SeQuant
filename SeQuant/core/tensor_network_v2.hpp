@@ -171,10 +171,6 @@ class TensorNetworkV2 {
     Index index;
   };
 
-  static inline auto edge2index_ = [](const Edge &e) -> const Index & {
-    return e.idx();
-  };
-
   struct Graph {
     /// The type used to encode the color of a vertex. The restriction of this
     /// being as 32-bit integer comes from how BLISS is trying to convert these
@@ -268,6 +264,11 @@ class TensorNetworkV2 {
     /// canonicalized colored graph, use graph->cmp to compare against another
     /// to detect equivalence
     std::shared_ptr<bliss::Graph> graph;
+
+    /// if tensor network contains tensors with antisymmetric bra/ket this
+    /// reports the phase change due to permutation of slots relative to their
+    /// input order
+    std::int8_t phase = +1;  // +1 or -1
   };
 
   /// Like canonicalize(), but only use graph-based canonicalization to
@@ -366,13 +367,6 @@ class TensorNetworkV2 {
   /// @note these will need to be processed separately from the rest
   /// to appear as vertices on the graph
   NamedIndexSet pure_proto_indices_;
-  /// grand list of all indices is view of concatenated ranges of indices in
-  /// edges_ and pure_proto_indices_
-  ranges::concat_view<
-      ranges::transform_view<ranges::ref_view<container::vector<Edge>>,
-                             decltype(edge2index_)>,
-      ranges::ref_view<NamedIndexSet>>
-      grand_index_list_;
 
   /// initializes edges_, ext_indices_, and pure_proto_indices_
   void init_edges();
@@ -425,6 +419,11 @@ std::basic_ostream<CharT, Traits> &operator<<(
       break;
   }
   return stream;
+}
+
+template <typename Edge>
+auto edge2index(const Edge &e) -> const Index & {
+  return e.idx();
 }
 
 }  // namespace sequant

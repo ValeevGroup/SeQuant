@@ -201,10 +201,6 @@ class TensorNetwork {
     static inline Terminal null_terminal_ = {};
   };
 
-  static inline auto edge2index_ = [](const Edge &e) -> const Index & {
-    return e.idx();
-  };
-
  public:
   /// @throw std::logic_error if exprptr_range contains a non-tensor
   /// @note uses RTTI
@@ -220,8 +216,7 @@ class TensorNetwork {
         } else {
           throw std::logic_error(
               "TensorNetwork::TensorNetwork: non-tensors in the given "
-              "expression "
-              "range");
+              "expression range");
         }
       }
       return;
@@ -300,6 +295,11 @@ class TensorNetwork {
     auto get_indices() const {
       return get_indices() | ranges::to<Cont>;
     }
+
+    /// if tensor network contains tensors with antisymmetric bra/ket this
+    /// reports the phase change due to permutation of slots relative to their
+    /// input order
+    std::int8_t phase = +1;  // +1 or -1
   };
 
   /// Like canonicalize(), but only use graph-based canonicalization to
@@ -352,6 +352,15 @@ class TensorNetwork {
     bool operator()(const std::wstring_view &first, const Edge &second) const {
       return first < second.idx().full_label();
     }
+    bool operator()(const Index &first, const Index &second) const {
+      return first.full_label() < second.full_label();
+    }
+    bool operator()(const Index &first, const std::wstring_view &second) const {
+      return first.full_label() < second;
+    }
+    bool operator()(const std::wstring_view &first, const Index &second) const {
+      return first < second.full_label();
+    }
   };
   // Index -> Edge, sorted by full label
   using edges_t = container::set<Edge, FullLabelCompare>;
@@ -368,12 +377,6 @@ class TensorNetwork {
   /// @note these will need to be processed separately from the rest
   /// to appear as vertices on the graph
   mutable named_indices_t pure_proto_indices_;
-  /// grand list of all indices is view of concatenated ranges of indices in
-  /// edges_ and pure_proto_indices_
-  mutable ranges::concat_view<
-      ranges::transform_view<ranges::ref_view<edges_t>, decltype(edge2index_)>,
-      ranges::ref_view<named_indices_t>>
-      grand_index_list_;
 
   // replacements of anonymous indices produced by the last call to
   // canonicalize()

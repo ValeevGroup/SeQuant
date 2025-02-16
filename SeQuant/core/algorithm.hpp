@@ -24,8 +24,9 @@ using suitable_call_operator =
     decltype(std::declval<Callable>()(std::declval<Args>()...));
 
 /// @brief bubble sort that uses swap exclusively
-template <typename ForwardIter, typename Sentinel, typename Compare>
-void bubble_sort(ForwardIter begin, Sentinel end, Compare comp) {
+template <typename ForwardIter, typename Sentinel,
+          typename Compare = std::less<>>
+void bubble_sort(ForwardIter begin, Sentinel end, Compare comp = {}) {
   if (begin == end) return;  // no-op for empty range
   bool swapped;
   do {
