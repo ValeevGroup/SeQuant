@@ -73,18 +73,19 @@ class EvalExpr {
   ///
   explicit EvalExpr(Variable const& v);
 
-  /// 
+  ///
   /// @param op Evaluation operation resulting to this object.
   /// @param res Evaluation result type that will be produced.
   /// @param expr A sequant expression corresponding to @c res.
-  /// @param ixs Canonical indices used for annotating the result's modes if @c res is tensor type.
-  ///            Possibly empty for non-tensor @c res type.
+  /// @param ixs Canonical indices used for annotating the result's modes if @c
+  ///            res is tensor type. Possibly empty for non-tensor @c res type.
   /// @param phase Phase that was part of the tensor network canonicalization.
   ///              Considered for reusing sub-expressions.
-  /// @param hash A hash value that is equal for two EvalExpr objects that produce
-  ///             the same evaluated result modulo the @c phase.
+  /// @param hash A hash value that is equal for two EvalExpr objects that
+  ///             produce the same evaluated result modulo the @c phase.
   ///
-  EvalExpr(EvalOp op, ResultType res, ExprPtr const &expr, index_vector ixs, std::int8_t phase, size_t hash);
+  EvalExpr(EvalOp op, ResultType res, ExprPtr const& expr, index_vector ixs,
+           std::int8_t phase, size_t hash);
 
   ///
   /// \brief Construct an EvalExpr object from two EvalExpr objects and an
@@ -211,6 +212,13 @@ class EvalExpr {
 };
 
 FullBinaryNode<EvalExpr> binarize(ExprPtr const&);
+
+template <typename ExprT,
+          typename = std::enable_if_t<!std::is_same_v<EvalExpr, ExprT>>>
+FullBinaryNode<ExprT> binarize(ExprPtr const& expr) {
+  static_assert(std::is_constructible_v<ExprT, EvalExpr>);
+  return transform_node(binarize(expr), [](auto&& val) { return ExprT{val}; });
+}
 
 }  // namespace sequant
 
