@@ -280,11 +280,18 @@ inline bool suffix_compare(Index const& idx1, Index const& idx2) {
 template <typename Rng, typename Idx = ranges::range_value_t<Rng>,
           typename = std::enable_if_t<std::is_same_v<Idx, Index>>>
 std::string csv_labels(Rng&& idxs) {
+  using ranges::views::concat;
   using ranges::views::intersperse;
   using ranges::views::join;
+  using ranges::views::single;
   using ranges::views::transform;
 
-  auto str = [](auto&& i) { return sequant::to_string(i.full_label()); };
+  auto str = [](Index const& i) {
+    auto v = concat(single(i.label()),                             //
+                    i.proto_indices() | transform(&Index::label))  //
+             | join;
+    return sequant::to_string(v | ranges::to<std::wstring>);
+  };
 
   return std::forward<Rng>(idxs)  //
          | transform(str)         //
