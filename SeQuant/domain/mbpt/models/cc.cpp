@@ -267,7 +267,7 @@ std::vector<ExprPtr> CC::λ_pt(size_t order, size_t rank) {
 
 std::vector<ExprPtr> CC::eom_r(nₚ np, nₕ nh) {
   assert(!unitary() && "Unitary ansatz is not yet supported");
-  assert(np > 0 || nh > 0 && "Unsupported excitation order");
+  assert((np > 0 || nh > 0) && "Unsupported excitation order");
   assert(np == nh &&
          "Only EE-EOM-CC has been tested ... remove this assert to try "
          "Fock-space EOM-CC");

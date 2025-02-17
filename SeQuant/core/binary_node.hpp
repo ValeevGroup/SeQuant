@@ -460,7 +460,7 @@ bool operator==(FullBinaryNode<T> const& lhs, FullBinaryNode<U> const& rhs) {
 template <typename T, typename F,
           typename = std::enable_if_t<std::is_invocable_v<F, T>>>
 auto transform_node(FullBinaryNode<T> const& node, F fun) {
-  using V = std::invoke_result_t<F, T>;
+  using V [[maybe_unused]] = std::invoke_result_t<F, T>;
   if (node.leaf())
     return FullBinaryNode(fun(*node));
   else {
