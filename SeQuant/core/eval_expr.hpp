@@ -73,7 +73,18 @@ class EvalExpr {
   ///
   explicit EvalExpr(Variable const& v);
 
-  EvalExpr(EvalOp, ResultType, ExprPtr const&, index_vector, size_t);
+  /// 
+  /// @param op Evaluation operation resulting to this object.
+  /// @param res Evaluation result type that will be produced.
+  /// @param expr A sequant expression corresponding to @c res.
+  /// @param ixs Canonical indices used for annotating the result's modes if @c res is tensor type.
+  ///            Possibly empty for non-tensor @c res type.
+  /// @param phase Phase that was part of the tensor network canonicalization.
+  ///              Considered for reusing sub-expressions.
+  /// @param hash A hash value that is equal for two EvalExpr objects that produce
+  ///             the same evaluated result modulo the @c phase.
+  ///
+  EvalExpr(EvalOp op, ResultType res, ExprPtr const &expr, index_vector ixs, std::int8_t phase, size_t hash);
 
   ///
   /// \brief Construct an EvalExpr object from two EvalExpr objects and an
@@ -180,6 +191,11 @@ class EvalExpr {
   ///
   [[nodiscard]] index_vector const& canon_indices() const noexcept;
 
+  ///
+  /// \return The canonicalization phase (+1 or -1).
+  ///
+  [[nodiscard]] std::int8_t canon_phase() const noexcept;
+
  private:
   EvalOp op_type_;
 
@@ -188,6 +204,8 @@ class EvalExpr {
   size_t hash_value_;
 
   index_vector canon_indices_;
+
+  std::int8_t canon_phase_{1};
 
   ExprPtr expr_;
 };
