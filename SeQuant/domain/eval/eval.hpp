@@ -263,17 +263,24 @@ ERPtr evaluate_crust(NodeT const& node, Le const& le) {
   return evaluate_core(node, le);
 }
 
+template <typename NodeT>
+inline ERPtr mult_by_phase(NodeT const& node, ERPtr res) {
+  return node->canon_phase() == 1 ? res
+                                  : res->mult_by_phase(node->canon_phase());
+}
+
 template <typename NodeT, typename Le,
           std::enable_if_t<IsLeafEvaluator<NodeT, Le>, bool>>
 ERPtr evaluate_crust(NodeT const& node, Le const& le, CacheManager& cache) {
   auto const h = hash::value(*node);
   if (auto ptr = cache.access(h); ptr) {
     log_cache_access(h, cache);
-    return ptr;
+    return mult_by_phase(node, ptr);
   } else if (cache.exists(h)) {
-    auto ptr = cache.store(h, evaluate_core(node, le, cache));
+    auto ptr =
+        cache.store(h, mult_by_phase(node, evaluate_core(node, le, cache)));
     log_cache_store(h, cache);
-    return ptr;
+    return mult_by_phase(node, ptr);
   } else {
     return evaluate_core(node, le, cache);
   }
