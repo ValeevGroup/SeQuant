@@ -48,9 +48,8 @@ sequant::EvalExpr node(sequant::EvalNode<sequant::EvalExpr> const& n,
 
 [[maybe_unused]] std::wstring tikz(
     sequant::EvalNode<sequant::EvalExpr> const& n) noexcept {
-  return n.tikz<std::wstring>(
-      [](auto&& n) { return L"$" + n->expr()->to_latex() + L"$"; },
-      [](auto&&) { return L""; });
+  return n.tikz(
+      [](auto&& n) { return L"$" + n->expr()->to_latex() + L"$"; });
 }
 
 }  // namespace
