@@ -68,7 +68,7 @@ Program Listing for File README.md
    
    ## Developers
    
-   SeQuant is developed by the [Valeev Research Group](https://valeevgroup.github.io) in the Department of Chemistry at Virginia Tech.
+   The [Valeev Research Group (VRG)](https://valeevgroup.github.io) in the Department of Chemistry at Virginia Tech kickstarted the initial design and development of SeQuant. The ongoing development of SeQuant is driven by major [contributions](https://github.com/ValeevGroup/SeQuant/graphs/contributors) from VRG and the [Köhn Group](https://www.itheoc.uni-stuttgart.de/research/koehn) in the Department of Theoretical Chemistry at University of Stuttgart. See 
    
    ## Acknowledgement
    
