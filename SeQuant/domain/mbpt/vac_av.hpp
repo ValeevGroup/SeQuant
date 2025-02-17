@@ -4,12 +4,12 @@
 using namespace sequant::mbpt;
 
 template <typename T>
-using OpConnectVec = std::vector<std::pair<T, T>>;
+using OpConnections = std::vector<std::pair<T, T>>;
 
 /// defines the default op connections
-inline OpConnectVec<mbpt::OpType> default_op_connections() {
+inline OpConnections<mbpt::OpType> default_op_connections() {
   using mbpt::OpType;
-  static const OpConnectVec<mbpt::OpType> defaults = {
+  static const OpConnections<mbpt::OpType> defaults = {
       {OpType::h, OpType::t},
       {OpType::f, OpType::t},
       {OpType::f̃, OpType::t},
@@ -34,19 +34,19 @@ inline OpConnectVec<mbpt::OpType> default_op_connections() {
 template <typename T,
           typename = std::enable_if_t<std::is_same_v<T, mbpt::OpType> ||
                                       std::is_same_v<T, std::wstring>>>
-inline OpConnectVec<T> concat(const OpConnectVec<T>& connections1,
-                              const OpConnectVec<T>& connections2) {
+inline OpConnections<T> concat(const OpConnections<T>& connections1,
+                               const OpConnections<T>& connections2) {
   return ranges::concat_view(connections1, connections2) | ranges::to_vector;
 }
 
 /// lowers representation of op connections from mbpt::OpType to labels
 /// @param[in] op_connections vector of pairs of operators to be connected
 /// @return vector of pairs of operator labels to be connected
-inline OpConnectVec<std::wstring> to_label_connections(
-    const OpConnectVec<mbpt::OpType>& op_connections) {
+inline OpConnections<std::wstring> to_label_connections(
+    const OpConnections<mbpt::OpType>& op_connections) {
   // convert mbpt::OpType to std::wstring
   using mbpt::optype2label;
-  OpConnectVec<std::wstring> op_connect_wstr;
+  OpConnections<std::wstring> op_connect_wstr;
   for (const auto& [op1, op2] : op_connections) {
     op_connect_wstr.emplace_back(optype2label.at(op1), optype2label.at(op2));
   }
@@ -89,7 +89,7 @@ inline ExprPtr lower_to_tensor_form(const ExprPtr& expr_inp) {
 /// @return the VEV
 ExprPtr vac_av(
     ExprPtr expr,
-    OpConnectVec<mbpt::OpType> op_connections = default_op_connections(),
+    OpConnections<mbpt::OpType> op_connections = default_op_connections(),
     bool skip_clone = false);
 
 /// computes the vacuum expectation value (VEV)
@@ -101,5 +101,5 @@ ExprPtr vac_av(
 /// when `opR` precedes `opL`, i.e. `opL` is to the left of `opR`
 /// @param[in] skip_clone if true, will not clone the input expression
 /// @return the VEV
-ExprPtr vac_av(ExprPtr expr, OpConnectVec<std::wstring> op_connections,
+ExprPtr vac_av(ExprPtr expr, OpConnections<std::wstring> op_connections,
                bool skip_clone = false);
