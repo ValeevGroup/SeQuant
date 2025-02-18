@@ -530,7 +530,7 @@ EvalExprNode binarize(Product const& prod) {
                 ResultType::Scalar,      //
                 dummy::make_variable(),  //
                 {},                      //
-                1,                       //
+                canon.phase,             //
                 h};
       } else {
         auto idxs = get_unique_indices(Product(ts));

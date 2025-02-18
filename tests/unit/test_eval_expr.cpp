@@ -259,24 +259,25 @@ TEST_CASE("TEST_EVAL_EXPR", "[EvalExpr]") {
     const auto t5 = tensor(Symmetry::nonsymm);
     const auto t6 = tensor(Symmetry::nonsymm);
 
-    // todo:
+#if 0
     // sum of two antisymm tensors.
-    // REQUIRE(symmetry(imed(t1, t2)) == Symmetry::antisymm);
+    REQUIRE(symmetry(imed(t1, t2)) == Symmetry::antisymm);
 
     // sum of one antisymm and one symmetric tensors
-    // REQUIRE(symmetry(imed(t1, t3)) == Symmetry::symm);
+    REQUIRE(symmetry(imed(t1, t3)) == Symmetry::symm);
 
     // sum of two symmetric tensors
-    // REQUIRE(symmetry(imed(t3, t4)) == Symmetry::symm);
+    REQUIRE(symmetry(imed(t3, t4)) == Symmetry::symm);
 
     // sum of an antisymmetric and a nonsymmetric tensors
-    // REQUIRE(symmetry(imed(t1, t5)) == Symmetry::nonsymm);
+    REQUIRE(symmetry(imed(t1, t5)) == Symmetry::nonsymm);
 
     // sum of one symmetric and one nonsymmetric tensors
-    // REQUIRE(symmetry(imed(t3, t5)) == Symmetry::nonsymm);
+    REQUIRE(symmetry(imed(t3, t5)) == Symmetry::nonsymm);
 
     // sum of two nonsymmetric tensors
-    // REQUIRE(symmetry(imed(t5, t6)) == Symmetry::nonsymm);
+    REQUIRE(symmetry(imed(t5, t6)) == Symmetry::nonsymm);
+#endif
   }
 
   SECTION("Debug") {
