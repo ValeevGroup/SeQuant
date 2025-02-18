@@ -416,18 +416,18 @@ struct ExprWithHash {
   size_t hash;
 };
 
-struct DummyLabel {
-  static constexpr std::wstring_view tensor{L"I"};
-  static constexpr std::wstring_view scalar{L"Z"};
+namespace dummy {
+inline constexpr std::wstring_view label_tensor{L"I"};
+inline constexpr std::wstring_view label_scalar{L"Z"};
 
-  template <typename... Args>
-  static ExprPtr make_tensor(Args&&... args) {
-    auto&& [b, k, a] = std::forward_as_tuple(args...);
-    return ex<Tensor>(tensor, bra(b), ket(k), aux(a));
-  }
+template <typename... Args>
+ExprPtr make_tensor(Args&&... args) {
+  return ex<Tensor>(label_tensor, std::forward<Args>(args)...);
+}
 
-  static ExprPtr make_variable() { return ex<Variable>(scalar); }
-};
+ExprPtr make_variable() { return ex<Variable>(label_scalar); }
+
+}  // namespace dummy
 
 using EvalExprNode = FullBinaryNode<EvalExpr>;
 
@@ -479,18 +479,18 @@ EvalExprNode binarize(Sum const& sum) {
     auto h = ranges::at(hs, ++i);
     if (all_tensors) {
       auto const& t = left.as_tensor();
-      return {EvalOp::Sum,                                         //
-              ResultType::Tensor,                                  //
-              DummyLabel::make_tensor(t.bra(), t.ket(), t.aux()),  //
-              left.canon_indices(),                                //
-              1,                                                   //
+      return {EvalOp::Sum,                                                   //
+              ResultType::Tensor,                                            //
+              dummy::make_tensor(bra(t.bra()), ket(t.ket()), aux(t.aux())),  //
+              left.canon_indices(),                                          //
+              1,                                                             //
               h};
     } else {
-      return {EvalOp::Sum,                  //
-              ResultType::Scalar,           //
-              DummyLabel::make_variable(),  //
-              {},                           //
-              1,                            //
+      return {EvalOp::Sum,             //
+              ResultType::Scalar,      //
+              dummy::make_variable(),  //
+              {},                      //
+              1,                       //
               h};
     }
   };
@@ -515,21 +515,17 @@ EvalExprNode binarize(Product const& prod) {
     auto h = ranges::at(hs, ++i);
     if (left->is_scalar() && right->is_scalar()) {
       // scalar * scalar
-      return {EvalOp::Prod,
-              ResultType::Scalar,
-              DummyLabel::make_variable(),
-              {},
-              1,
-              h};
+      return {
+          EvalOp::Prod, ResultType::Scalar, dummy::make_variable(), {}, 1, h};
     } else if (left->is_scalar() || right->is_scalar()) {
       // scalar * tensor or tensor * scalar
       auto const& tl = left->is_tensor() ? left : right;
       auto const& t = tl->as_tensor();
-      return {EvalOp::Prod,
-              ResultType::Tensor,
-              DummyLabel::make_tensor(t.bra(), t.ket(), t.aux()),
-              tl->canon_indices(),
-              1,
+      return {EvalOp::Prod,                                                  //
+              ResultType::Tensor,                                            //
+              dummy::make_tensor(bra(t.bra()), ket(t.ket()), aux(t.aux())),  //
+              tl->canon_indices(),                                           //
+              1,                                                             //
               h};
     } else {
       // tensor * tensor
@@ -543,19 +539,19 @@ EvalExprNode binarize(Product const& prod) {
       hash::combine(h, canon.hash_value());
       bool const scalar_result = ranges::empty(canon.get_indices());
       if (scalar_result) {
-        return {EvalOp::Prod,
-                ResultType::Scalar,
-                DummyLabel::make_variable(),
-                {},
-                1,
+        return {EvalOp::Prod,            //
+                ResultType::Scalar,      //
+                dummy::make_variable(),  //
+                {},                      //
+                1,                       //
                 h};
       } else {
         auto idxs = get_unique_indices(Product(ts));
-        return {EvalOp::Prod,
-                ResultType::Tensor,
-                DummyLabel::make_tensor(idxs.bra, idxs.ket, idxs.aux),
-                canon.get_indices<Index::index_vector>(),
-                canon.phase,
+        return {EvalOp::Prod,        //
+                ResultType::Tensor,  //
+                dummy::make_tensor(bra(idxs.bra), ket(idxs.ket), aux(idxs.aux)),
+                canon.get_indices<Index::index_vector>(),  //
+                canon.phase,                               //
                 h};
       }
     }
