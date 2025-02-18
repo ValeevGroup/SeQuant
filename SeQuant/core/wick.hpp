@@ -101,8 +101,8 @@ class WickTheorem {
       "get_default_context().spbasis() should be used to specify spin-free "
       "basis")]] WickTheorem &
   spinfree(bool sf) {
-    if (!((sf && get_default_context().spbasis() == SPBasis::spinfree) ||
-          (!sf && get_default_context().spbasis() == SPBasis::spinorbital))) {
+    if (!((sf && get_default_context(S).spbasis() == SPBasis::spinfree) ||
+          (!sf && get_default_context(S).spbasis() == SPBasis::spinorbital))) {
       throw std::invalid_argument(
           "WickTheorem::spinfree(sf): sf must match the contents of "
           "get_default_context().spbasis() (N.B. WickTheorem::spinfree() is "
@@ -567,10 +567,10 @@ class WickTheorem {
   ExprPtr compute_nopseq(const bool count_only) const {
     // precondition 1: spin-free version only supported for physical and Fermi
     // vacua
-    if (get_default_context().spbasis() == SPBasis::spinfree &&
-        !(get_default_context().vacuum() == Vacuum::Physical ||
+    if (get_default_context(S).spbasis() == SPBasis::spinfree &&
+        !(get_default_context(S).vacuum() == Vacuum::Physical ||
           (S == Statistics::FermiDirac &&
-           get_default_context().vacuum() == Vacuum::SingleProduct)))
+           get_default_context(S).vacuum() == Vacuum::SingleProduct)))
       throw std::logic_error(
           "WickTheorem::compute: spinfree=true supported only for physical "
           "vacuum and for Fermi facuum");
@@ -1373,9 +1373,9 @@ class WickTheorem {
                         // for spinfree Wick over Fermi vacuum, we need to
                         // include extra x2 factor for each cycle
                         if (S == Statistics::FermiDirac &&
-                            get_default_context().vacuum() ==
+                            get_default_context(S).vacuum() ==
                                 Vacuum::SingleProduct &&
-                            get_default_context().spbasis() ==
+                            get_default_context(S).spbasis() ==
                                 SPBasis::spinfree) {
                           auto [target_partner_indices, ncycles] =
                               state.make_target_partner_indices();
@@ -1404,9 +1404,9 @@ class WickTheorem {
                         // for spinfree Wick over Fermi vacuum, we need to
                         // include extra x2 factor for each cycle
                         if (ncycles > 0 &&
-                            get_default_context().vacuum() ==
+                            get_default_context(S).vacuum() ==
                                 Vacuum::SingleProduct &&
-                            get_default_context().spbasis() ==
+                            get_default_context(S).spbasis() ==
                                 SPBasis::spinfree) {
                           scalar_prefactor *= 1 << ncycles;
                         }
@@ -1475,8 +1475,8 @@ class WickTheorem {
 
  public:
   static bool can_contract(const Op<S> &left, const Op<S> &right,
-                           Vacuum vacuum = get_default_context().vacuum()) {
-    const auto &isr = get_default_context().index_space_registry();
+                           Vacuum vacuum = get_default_context(S).vacuum()) {
+    const auto &isr = get_default_context(S).index_space_registry();
     // for bosons can only do Wick's theorem for physical vacuum (or similar)
     if constexpr (statistics == Statistics::BoseEinstein)
       assert(vacuum == Vacuum::Physical);
@@ -1491,8 +1491,8 @@ class WickTheorem {
   }
 
   static ExprPtr contract(const Op<S> &left, const Op<S> &right,
-                          Vacuum vacuum = get_default_context().vacuum()) {
-    const auto &isr = get_default_context().index_space_registry();
+                          Vacuum vacuum = get_default_context(S).vacuum()) {
+    const auto &isr = get_default_context(S).index_space_registry();
     assert(can_contract(left, right, vacuum));
     //    assert(
     //        !left.index().has_proto_indices() &&

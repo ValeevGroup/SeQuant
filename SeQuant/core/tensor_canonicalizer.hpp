@@ -184,14 +184,13 @@ class DefaultTensorCanonicalizer : public TensorCanonicalizer {
         auto _bra = bra_range(t);
         auto _ket = ket_range(t);
         //      std::wcout << "canonicalizing " << to_latex(t);
-        IndexSwapper::thread_instance().reset();
+        reset_ts_swap_counter<Index>();
         // std::{stable_}sort does not necessarily use swap! so must implement
         // sort outselves .. thankfully ranks will be low so can stick with
         // bubble
         bubble_sort(begin(_bra), end(_bra), idxcmp);
         bubble_sort(begin(_ket), end(_ket), idxcmp);
-        if (is_antisymm)
-          even = IndexSwapper::thread_instance().even_num_of_swaps();
+        if (is_antisymm) even = ts_swap_counter_is_even<Index>();
         //      std::wcout << " is " << (even ? "even" : "odd") << " and
         //      produces " << to_latex(t) << std::endl;
       } break;

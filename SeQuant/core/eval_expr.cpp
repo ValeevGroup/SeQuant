@@ -265,9 +265,9 @@ size_t hash_imed(EvalExpr const& left, EvalExpr const& right,
   return h;
 }
 
-std::pair<container::svector<Index>,  // bra
-          container::svector<Index>   // ket
-          >
+[[maybe_unused]] std::pair<container::svector<Index>,  // bra
+                           container::svector<Index>   // ket
+                           >
 target_braket(Tensor const& t1, Tensor const& t2) noexcept {
   using ranges::contains;
   using ranges::views::concat;
