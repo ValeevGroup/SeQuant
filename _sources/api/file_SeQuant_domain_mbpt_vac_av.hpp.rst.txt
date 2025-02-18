@@ -36,17 +36,24 @@ Functions
 ---------
 
 
-- :ref:`exhale_function_vac__av_8hpp_1a6cd47d21c524dfaf22c3a371d89b5846`
+- :ref:`exhale_function_vac__av_8hpp_1afa02bc6378c010a5800d93c5998cafe6`
 
-- :ref:`exhale_function_vac__av_8hpp_1a0714297f7472d0f648e954ff2e3708ad`
+- :ref:`exhale_function_vac__av_8hpp_1a5829437b1f1e0f8ce1e9885d7808c937`
 
 - :ref:`exhale_function_vac__av_8hpp_1ae8208c25e2d14d18f20d9c33207fb300`
 
 - :ref:`exhale_function_vac__av_8hpp_1a5a0a127b69d3a475f3618d177fa28954`
 
-- :ref:`exhale_function_vac__av_8hpp_1a821a3550b9d2abd5f268f62fb2d0c38e`
+- :ref:`exhale_function_vac__av_8hpp_1afe0747f0ddc8a790a1a3e5f6edc438db`
 
-- :ref:`exhale_function_vac__av_8hpp_1a5a7a8b7c8ece2e251ea1e9eefa8c2807`
+- :ref:`exhale_function_vac__av_8hpp_1a864722e0fc877c6f2c99fbd82acab1e7`
 
-- :ref:`exhale_function_vac__av_8hpp_1ad2ce19409d1d4eb15452cd3c1334a122`
+- :ref:`exhale_function_vac__av_8hpp_1a2183940639c668d076789f3b44808e6b`
+
+
+Typedefs
+--------
+
+
+- :ref:`exhale_typedef_vac__av_8hpp_1a07d7d63f2f47a387bb12949954c6e60e`
 

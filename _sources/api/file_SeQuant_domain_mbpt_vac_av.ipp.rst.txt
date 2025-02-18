@@ -36,9 +36,9 @@ Functions
 ---------
 
 
-- :ref:`exhale_function_vac__av_8ipp_1acae2bbf42ab58e4accc076fc7a8f2587`
-
 - :ref:`exhale_function_vac__av_8ipp_1a700ceda2dd1d74bd96db41b8fecd3306`
+
+- :ref:`exhale_function_vac__av_8ipp_1acae2bbf42ab58e4accc076fc7a8f2587`
 
 
 Defines

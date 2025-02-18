@@ -52,9 +52,9 @@ Functions
 
 - :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1a7118bd19e9d14d9fe51ebe0f90c83ab3`
 
-- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1abe852643442f630a176923d66c030f93`
-
 - :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1a4c1fa777f64e1c1a086f05dd1c1aed7b`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1abe852643442f630a176923d66c030f93`
 
 - :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1a48425eefec4b9fb72ee4bc5cb21a438f`
 
