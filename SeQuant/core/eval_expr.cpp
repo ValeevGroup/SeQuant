@@ -119,6 +119,7 @@ EvalExpr::EvalExpr(EvalExpr const& left, EvalExpr const& right, EvalOp op)
     auto canon =
         tn.canonicalize_slots(TensorCanonicalizer::cardinal_tensor_labels());
     canon_indices_ = canon.get_indices() | ranges::to<index_vector>;
+    canon_phase_ = canon.phase;
   }
 }
 
