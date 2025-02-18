@@ -460,7 +460,6 @@ bool operator==(FullBinaryNode<T> const& lhs, FullBinaryNode<U> const& rhs) {
 template <typename T, typename F,
           typename = std::enable_if_t<std::is_invocable_v<F, T>>>
 auto transform_node(FullBinaryNode<T> const& node, F fun) {
-  using V [[maybe_unused]] = std::invoke_result_t<F, T>;
   if (node.leaf())
     return FullBinaryNode(fun(*node));
   else {
@@ -501,10 +500,12 @@ Node fold_left_to_node(Rng rng, F op) {
       rng | tail | move, std::move(ranges::front(rng)),
       [&op, invoke_on_node](auto&& l, auto&& r) {
         if constexpr (invoke_on_node) {
-          return FullBinaryNode(op(l, r), std::move(l), std::move(r));
+          auto&& val = op(l, r);
+          return FullBinaryNode(std::move(val), std::move(l), std::move(r));
 
         } else {
-          return FullBinaryNode(op(*l, *r), std::move(l), std::move(r));
+          auto&& val = op(*l, *r);
+          return FullBinaryNode(std::move(val), std::move(l), std::move(r));
         }
       });
 }
