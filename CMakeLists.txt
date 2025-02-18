@@ -583,6 +583,11 @@ if (BUILD_TESTING)
             examples/${example12}/${example12}.cpp)
     target_link_libraries(${example12} SeQuant)
 
+    set (example13 "eomcc")
+    add_executable(${example13} EXCLUDE_FROM_ALL
+            examples/${example13}/${example13}.cpp)
+    target_link_libraries(${example13} SeQuant)
+
     # add tests for running examples
     foreach (i RANGE ${lastexample})
         if (TARGET ${example${i}})
