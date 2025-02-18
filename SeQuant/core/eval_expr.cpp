@@ -109,20 +109,6 @@ EvalExpr::EvalExpr(EvalOp op, ResultType res, ExprPtr const& ex,
       canon_phase_{p},
       hash_value_{h} {}
 
-EvalExpr::EvalExpr(EvalExpr const& left, EvalExpr const& right, EvalOp op)
-    : op_type_{op},
-      hash_value_{hash_imed(left, right, op)},
-      expr_{make_imed(left, right, op)} {
-  result_type_ = expr_->is<Tensor>() ? ResultType::Tensor : ResultType::Scalar;
-  if (result_type() == ResultType::Tensor) {
-    auto tn = TensorNetwork(expr_);
-    auto canon =
-        tn.canonicalize_slots(TensorCanonicalizer::cardinal_tensor_labels());
-    canon_indices_ = canon.get_indices() | ranges::to<index_vector>;
-    canon_phase_ = canon.phase;
-  }
-}
-
 EvalOp EvalExpr::op_type() const noexcept { return op_type_; }
 
 ResultType EvalExpr::result_type() const noexcept { return result_type_; }
@@ -561,6 +547,8 @@ EvalExprNode binarize(Product const& prod) {
   return fold_left_to_node(factors | move, make_prod);
 }
 
+namespace impl {
+
 EvalExprNode binarize(ExprPtr const& expr) {
   if (expr->is<Constant>())  //
     return binarize(expr->as<Constant>());
@@ -579,5 +567,7 @@ EvalExprNode binarize(ExprPtr const& expr) {
 
   throw std::logic_error("Encountered unsupported expression in binarize.");
 }
+
+}  // namespace impl
 
 }  // namespace sequant

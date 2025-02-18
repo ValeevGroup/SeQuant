@@ -88,13 +88,6 @@ class EvalExpr {
            std::int8_t phase, size_t hash);
 
   ///
-  /// \brief Construct an EvalExpr object from two EvalExpr objects and an
-  ///        EvalOp. The EvalOp is either Sum or Prod.
-  ///
-  [[deprecated("Cannot use tensor-network canonicalization")]] EvalExpr(
-      EvalExpr const& left, EvalExpr const& right, EvalOp op);
-
-  ///
   /// \return The EvalOp resulting into this EvalExpr object.
   ///
   [[nodiscard]] EvalOp op_type() const noexcept;
@@ -211,13 +204,82 @@ class EvalExpr {
   ExprPtr expr_;
 };
 
-FullBinaryNode<EvalExpr> binarize(ExprPtr const&);
+namespace meta {
+template <typename, typename = void>
+constexpr bool is_eval_expr{};
 
-template <typename ExprT,
-          typename = std::enable_if_t<!std::is_same_v<EvalExpr, ExprT>>>
+template <typename T>
+constexpr bool
+    is_eval_expr<T, std::enable_if_t<std::is_convertible_v<T, EvalExpr>>>{true};
+
+template <typename, typename = void>
+constexpr bool is_eval_node{};
+
+template <typename T>
+constexpr bool
+    is_eval_node<FullBinaryNode<T>, std::enable_if_t<is_eval_expr<T>>>{true};
+
+template <typename T>
+constexpr bool is_eval_node<const FullBinaryNode<T>,
+                            std::enable_if_t<is_eval_expr<T>>>{true};
+
+template <typename, typename = void>
+constexpr bool is_eval_node_range{};
+
+template <typename Rng>
+constexpr bool is_eval_node_range<
+    Rng, std::enable_if_t<is_eval_node<meta::range_value_t<Rng>>>> = true;
+
+}  // namespace meta
+
+namespace impl {
+FullBinaryNode<EvalExpr> binarize(ExprPtr const&);
+}
+
+///
+/// Creates a binary tree of evaluation.
+///
+template <typename ExprT = EvalExpr,
+          typename = std::enable_if_t<std::is_constructible_v<ExprT, EvalExpr>>>
 FullBinaryNode<ExprT> binarize(ExprPtr const& expr) {
-  static_assert(std::is_constructible_v<ExprT, EvalExpr>);
-  return transform_node(binarize(expr), [](auto&& val) { return ExprT{val}; });
+  if constexpr (std::is_same_v<ExprT, EvalExpr>) return impl::binarize(expr);
+  return transform_node(impl::binarize(expr),
+                        [](auto&& val) { return ExprT{val}; });
+}
+
+///
+/// Converts an `EvalExpr` to `ExprPtr`.
+///
+template <typename NodeT,
+          typename = std::enable_if_t<meta::is_eval_node<NodeT>>>
+ExprPtr to_expr(NodeT const& node) {
+  auto const op = node->op_type();
+  auto const& evxpr = *node;
+
+  if (node.leaf()) return evxpr.expr();
+
+  if (op == EvalOp::Prod) {
+    auto prod = Product{};
+
+    ExprPtr lexpr = to_expr(node.left());
+    ExprPtr rexpr = to_expr(node.right());
+
+    prod.append(1, lexpr, Product::Flatten::No);
+    prod.append(1, rexpr, Product::Flatten::No);
+
+    assert(!prod.empty());
+
+    if (prod.size() == 1 && !prod.factor(0)->is<Tensor>()) {
+      return ex<Product>(Product{prod.scalar(), prod.factor(0)->begin(),
+                                 prod.factor(0)->end(), Product::Flatten::No});
+    } else {
+      return ex<Product>(std::move(prod));
+    }
+
+  } else {
+    assert(op == EvalOp::Sum && "unsupported operation type");
+    return ex<Sum>(Sum{to_expr(node.left()), to_expr(node.right())});
+  }
 }
 
 }  // namespace sequant
