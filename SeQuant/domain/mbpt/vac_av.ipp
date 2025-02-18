@@ -9,7 +9,7 @@
 
 ExprPtr vac_av(
     ExprPtr expr,
-    std::vector<std::pair<std::wstring, std::wstring>> op_connections,
+    const OpConnections<std::wstring>& op_connections,
     bool skip_clone) {
   // use cloned expr to avoid side effects
   if (!skip_clone) expr = expr->clone();
@@ -129,7 +129,7 @@ ExprPtr vac_av(
 
 ExprPtr vac_av(
     ExprPtr expr,
-    std::vector<std::pair<mbpt::OpType, mbpt::OpType>> op_connections,
+    const OpConnections<OpType>& op_connections,
     bool skip_clone) {
   return vac_av(expr, to_label_connections(op_connections), skip_clone);
 }
