@@ -13,6 +13,7 @@
 #include <utility>
 
 #include <SeQuant/core/abstract_tensor.hpp>
+#include <SeQuant/core/algorithm.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
@@ -103,18 +104,6 @@ void biparts(I n, F const& func) {
 }
 
 ///
-/// any element in the vector belongs to the integral range [-1,N)
-/// where N is the length of the [Expr] (ie. the iterable of expressions)
-///   * only applicable for binary evaluations
-///   * the integer -1 can appear in certain places: it implies the binary
-///     operation between the last two expressions
-///   * eg.
-///         * {0,1,-1,2,-1} => ( (e[0], e[1]), e[2])
-///         * {0,1,-1,2,3,-1,-1} => ((e[0], e[1]), (e[2],e[3]))
-///
-using eval_seq_t = container::svector<int>;
-
-///
 /// Represents a result of optimization on a range of expressions
 /// for a binary evaluation
 ///
@@ -126,7 +115,7 @@ struct OptRes {
   double flops;
 
   /// The evaluation sequence
-  eval_seq_t sequence;
+  EvalSequence sequence;
 };
 
 ///
@@ -187,13 +176,14 @@ container::svector<Index> diff_indices(I1 const& idxs1, I2 const& idxs2) {
 template <typename IdxToSz,
           std::enable_if_t<std::is_invocable_r_v<size_t, IdxToSz, Index>,
                            bool> = true>
-eval_seq_t single_term_opt(TensorNetwork const& network, IdxToSz const& idxsz) {
+EvalSequence single_term_opt(TensorNetwork const& network,
+                             IdxToSz const& idxsz) {
   using ranges::views::concat;
   using IndexContainer = container::svector<Index>;
   // number of terms
   auto const nt = network.tensors().size();
-  if (nt == 1) return eval_seq_t{0};
-  if (nt == 2) return eval_seq_t{0, 1, -1};
+  if (nt == 1) return EvalSequence{0};
+  if (nt == 2) return EvalSequence{0, 1, -1};
   auto nth_tensor_indices = container::svector<IndexContainer>{};
   nth_tensor_indices.reserve(nt);
 
@@ -249,7 +239,7 @@ eval_seq_t single_term_opt(TensorNetwork const& network, IdxToSz const& idxsz) {
       // evaluation of a single atomic tensor
       curr_result.flops = 0;
       curr_result.indices = std::move(nth_tensor_indices[power_pos]);
-      curr_result.sequence = eval_seq_t{static_cast<int>(power_pos++)};
+      curr_result.sequence = EvalSequence{static_cast<int>(power_pos++)};
     } else {
       curr_result.flops = curr_cost;
       curr_result.indices = std::move(curr_indices);
@@ -258,7 +248,7 @@ eval_seq_t single_term_opt(TensorNetwork const& network, IdxToSz const& idxsz) {
 
       curr_result.sequence = (first[0] < second[0] ? concat(first, second)
                                                    : concat(second, first)) |
-                             ranges::to<eval_seq_t>;
+                             ranges::to<EvalSequence>;
       curr_result.sequence.push_back(-1);
     }
   }
@@ -395,7 +385,7 @@ ExprPtr optimize(ExprPtr const& expr, IdxToSize const& idx2size,
     }
   } else if (expr->is<Sum>()) {
     auto smands = *expr | transform([&idx2size](auto&& s) {
-      return optimize(s, idx2size);
+      return optimize(s, idx2size, /* reorder_sum= */ false);
     }) | ranges::to_vector;
     auto sum = Sum{smands.begin(), smands.end()};
     return reorder_sum ? ex<Sum>(opt::reorder(sum)) : ex<Sum>(std::move(sum));

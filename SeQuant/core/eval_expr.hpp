@@ -1,6 +1,7 @@
 #ifndef SEQUANT_EVAL_EXPR_HPP
 #define SEQUANT_EVAL_EXPR_HPP
 
+#include <SeQuant/core/binary_node.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
@@ -47,21 +48,6 @@ enum class EvalOp {
 enum class ResultType { Tensor, Scalar };
 
 ///
-/// \brief Represents the outer indices and the inner indices of a nested
-/// tensor.
-///
-/// \note The nested tensor is a concept that generalizes the sequant::Tensor
-/// with and without proto indices. sequant::Tensors with proto indices have
-/// outer and inner indices, whereas, those without proto indices only have
-/// outer indices.
-///
-struct NestedTensorIndices {
-  container::svector<Index> outer, inner;
-
-  explicit NestedTensorIndices(Tensor const&);
-};
-
-///
 /// \brief The EvalExpr class represents the object that go into the nodes of
 ///        the binary tree that is used to evaluate the sequant expressions.
 ///
@@ -70,6 +56,8 @@ struct NestedTensorIndices {
 ///
 class EvalExpr {
  public:
+  using index_vector = Index::index_vector;
+
   ///
   /// \brief Construct an EvalExpr object from a tensor. The EvalOp is Id.
   ///
@@ -86,10 +74,18 @@ class EvalExpr {
   explicit EvalExpr(Variable const& v);
 
   ///
-  /// \brief Construct an EvalExpr object from two EvalExpr objects and an
-  ///        EvalOp. The EvalOp is either Sum or Prod.
+  /// @param op Evaluation operation resulting to this object.
+  /// @param res Evaluation result type that will be produced.
+  /// @param expr A sequant expression corresponding to @c res.
+  /// @param ixs Canonical indices used for annotating the result's modes if @c
+  ///            res is tensor type. Possibly empty for non-tensor @c res type.
+  /// @param phase Phase that was part of the tensor network canonicalization.
+  ///              Considered for reusing sub-expressions.
+  /// @param hash A hash value that is equal for two EvalExpr objects that
+  ///             produce the same evaluated result modulo the @c phase.
   ///
-  EvalExpr(EvalExpr const& left, EvalExpr const& right, EvalOp op);
+  EvalExpr(EvalOp op, ResultType res, ExprPtr const& expr, index_vector ixs,
+           std::int8_t phase, size_t hash);
 
   ///
   /// \return The EvalOp resulting into this EvalExpr object.
@@ -111,14 +107,6 @@ class EvalExpr {
   /// \return The hash value of this EvalExpr object.
   ///
   [[nodiscard]] size_t hash_value() const noexcept;
-
-  ///
-  /// \brief Get the unique id of this EvalExpr object. Useful for tracing. Not
-  ///        used by evaluation.
-  ///
-  /// \return The unique id of this EvalExpr object.
-  ///
-  [[nodiscard]] size_t id() const noexcept;
 
   ///
   /// \return The ExprPtr object that this EvalExpr object holds.
@@ -189,7 +177,18 @@ class EvalExpr {
   /// \return A string usable as TiledArray annotation if is_tensor() true,
   ///         empty string otherwise.
   ///
-  [[nodiscard]] std::string braket_annot() const noexcept;
+  [[nodiscard]] std::string indices_annot() const noexcept;
+
+  ///
+  /// \return Canonically ordered indices -- non-empty if this object represents
+  /// a tensor result.
+  ///
+  [[nodiscard]] index_vector const& canon_indices() const noexcept;
+
+  ///
+  /// \return The canonicalization phase (+1 or -1).
+  ///
+  [[nodiscard]] std::int8_t canon_phase() const noexcept;
 
  private:
   EvalOp op_type_;
@@ -198,14 +197,90 @@ class EvalExpr {
 
   size_t hash_value_;
 
-  size_t id_;
+  index_vector canon_indices_;
+
+  std::int8_t canon_phase_{1};
 
   ExprPtr expr_;
-
-  bool tot_;
-
-  static size_t global_id_;
 };
+
+namespace meta {
+template <typename, typename = void>
+constexpr bool is_eval_expr{};
+
+template <typename T>
+constexpr bool
+    is_eval_expr<T, std::enable_if_t<std::is_convertible_v<T, EvalExpr>>>{true};
+
+template <typename, typename = void>
+constexpr bool is_eval_node{};
+
+template <typename T>
+constexpr bool
+    is_eval_node<FullBinaryNode<T>, std::enable_if_t<is_eval_expr<T>>>{true};
+
+template <typename T>
+constexpr bool is_eval_node<const FullBinaryNode<T>,
+                            std::enable_if_t<is_eval_expr<T>>>{true};
+
+template <typename, typename = void>
+constexpr bool is_eval_node_range{};
+
+template <typename Rng>
+constexpr bool is_eval_node_range<
+    Rng, std::enable_if_t<is_eval_node<meta::range_value_t<Rng>>>> = true;
+
+}  // namespace meta
+
+namespace impl {
+FullBinaryNode<EvalExpr> binarize(ExprPtr const&);
+}
+
+///
+/// Creates a binary tree of evaluation.
+///
+template <typename ExprT = EvalExpr,
+          typename = std::enable_if_t<std::is_constructible_v<ExprT, EvalExpr>>>
+FullBinaryNode<ExprT> binarize(ExprPtr const& expr) {
+  if constexpr (std::is_same_v<ExprT, EvalExpr>) return impl::binarize(expr);
+  return transform_node(impl::binarize(expr),
+                        [](auto&& val) { return ExprT{val}; });
+}
+
+///
+/// Converts an `EvalExpr` to `ExprPtr`.
+///
+template <typename NodeT,
+          typename = std::enable_if_t<meta::is_eval_node<NodeT>>>
+ExprPtr to_expr(NodeT const& node) {
+  auto const op = node->op_type();
+  auto const& evxpr = *node;
+
+  if (node.leaf()) return evxpr.expr();
+
+  if (op == EvalOp::Prod) {
+    auto prod = Product{};
+
+    ExprPtr lexpr = to_expr(node.left());
+    ExprPtr rexpr = to_expr(node.right());
+
+    prod.append(1, lexpr, Product::Flatten::No);
+    prod.append(1, rexpr, Product::Flatten::No);
+
+    assert(!prod.empty());
+
+    if (prod.size() == 1 && !prod.factor(0)->is<Tensor>()) {
+      return ex<Product>(Product{prod.scalar(), prod.factor(0)->begin(),
+                                 prod.factor(0)->end(), Product::Flatten::No});
+    } else {
+      return ex<Product>(std::move(prod));
+    }
+
+  } else {
+    assert(op == EvalOp::Sum && "unsupported operation type");
+    return ex<Sum>(Sum{to_expr(node.left()), to_expr(node.right())});
+  }
+}
 
 }  // namespace sequant
 

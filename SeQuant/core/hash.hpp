@@ -142,6 +142,24 @@ inline void range(std::size_t& seed, It first, It last) {
   //  assert(seed == seed_ref);
 }
 
+///
+/// Hash a range such that the order of elements does not affect the result hash
+/// value.
+///
+template <typename It>
+inline std::size_t range_unordered(It begin, It end) {
+  return sequant_boost::hash_unordered_range(begin, end);
+}
+
+///
+/// Hash a range such that the order of elements does not affect the result hash
+/// value.
+///
+template <typename It>
+inline void range_unordered(size_t& seed, It begin, It end) {
+  sequant_boost::hash_unordered_range(seed, begin, end);
+}
+
 /// specialization of boost::hash_range(begin,end) that guarantees to hash a
 /// _range_ consisting of a single object to the same value as the hash of that
 /// object itself

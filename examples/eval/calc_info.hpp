@@ -9,7 +9,6 @@
 #include <examples/eval/options.hpp>
 
 #include <SeQuant/core/container.hpp>
-#include <SeQuant/core/eval_node.hpp>
 #include <SeQuant/core/optimize.hpp>
 #include <SeQuant/domain/eval/eval.hpp>
 #include <SeQuant/domain/mbpt/spin.hpp>
@@ -17,7 +16,6 @@
 #include <range/v3/view.hpp>
 
 #include <cstddef>
-#include <iomanip>
 
 namespace sequant::eval {
 
@@ -73,7 +71,7 @@ struct CalcInfo {
     using ranges::views::transform;
     auto trimmed = opt::tail_factor(expr);
     return *trimmed | transform([st = optm_opts.single_term](auto expr) {
-      return eval_node<ExprT>(st ? optimize(expr) : expr);
+      return binarize<ExprT>(st ? optimize(expr) : expr);
     }) | ranges::to_vector;
   }
 };

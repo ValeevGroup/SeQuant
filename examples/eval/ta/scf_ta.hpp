@@ -48,7 +48,7 @@ class SequantEvalScfTA final : public SequantEvalScf {
         L"f{i1;a1} * t{a1;i1} + g{i1,i2;a1,a2} * "
         L"(1/4 * t{a1,a2;i1,i2} + 1/2 t{a1;i1} * t{a2;i2})";
     static auto const node =
-        eval_node<EvalExprTA>(parse_expr(energy_expr, Symmetry::antisymm));
+        binarize<EvalExprTA>(parse_expr(energy_expr, Symmetry::antisymm));
 
     return evaluate(node, data_world_)->template get<double>();
   }
@@ -81,21 +81,10 @@ class SequantEvalScfTA final : public SequantEvalScf {
     using ranges::views::transform;
     using ranges::views::zip;
 
-    auto tnsr_to_bk_labels_sorted = [](Tensor const& tnsr) -> std::string {
-      auto bra_sorted = tnsr.bra() | ranges::to_vector;
-      auto ket_sorted = tnsr.ket() | ranges::to_vector;
-      ranges::sort(bra_sorted, Index::LabelCompare{});
-      ranges::sort(ket_sorted, Index::LabelCompare{});
-      return concat(bra_sorted, ket_sorted) | transform(&Index::label) |
-             transform([](auto&& lbl) { return sequant::to_string(lbl); }) |
-             intersperse(",") | join | ranges::to<std::string>;
-    };
-
     auto rs = repeat_n(Tensor_t{}, info_.eqn_opts.excit) | ranges::to_vector;
 
     for (auto&& [r, n] : zip(rs, nodes_)) {
-      auto const target_indices =
-          tnsr_to_bk_labels_sorted((*n.begin())->as_tensor());
+      auto const& target_indices = ranges::front(n)->annot();
       auto st = info_.eqn_opts.spintrace;
       auto cm = info_.optm_opts.reuse_imeds;
       if (st && cm) {

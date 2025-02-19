@@ -1230,7 +1230,7 @@ ExprPtr TensorNetworkV2::do_individual_canonicalization(
   for (auto &tensor : tensors_) {
     auto nondefault_canonizer_ptr =
         TensorCanonicalizer::nondefault_instance_ptr(tensor->_label());
-    const TensorCanonicalizer &tensor_canonizer =
+    [[maybe_unused]] const TensorCanonicalizer &tensor_canonizer =
         nondefault_canonizer_ptr ? *nondefault_canonizer_ptr : canonicalizer;
 
     auto bp = canonicalizer.apply(*tensor);
