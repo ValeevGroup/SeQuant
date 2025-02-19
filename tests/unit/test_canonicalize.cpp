@@ -463,6 +463,14 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
                    L"g{i_3,i_4;a_3,a_4}:A * t{a_3;i_1}:A * t{a_4;i_2}:A",
                    L"g{i_3,i_4;a_3,a_4}:A * t{a_3;i_2}:A * t{a_4;i_1}:A", true,
                    false),
+               // 3: matching "constant" TNs (TNs without named indices)
+               //    also needs canonicalization
+               std::make_tuple(L"g{i_2,i_3;a_2,a_3}:A * t{a_2,a_3;i_2,i_3}:A",
+                               L"g{i_4,i_1;a_2,a_3}:A * t{a_2,a_3;i_4,i_1}:A",
+                               true, false),
+               std::make_tuple(L"g{i_2,i_3;a_2,a_3}:A * t{a_2,a_3;i_2,i_3}:A",
+                               L"g{i_1,i_4;a_2,a_3}:A * t{a_2,a_3;i_4,i_1}:A",
+                               true, true),
            }) {
         std::wcout << "============== " << input1
                    << " ===============" << std::endl;
@@ -471,7 +479,7 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
         auto cbp1 = tn1.canonicalize_slots(
             TensorCanonicalizer::cardinal_tensor_labels());
         std::wcout << "canonical order of named indices:\n";
-        for (const auto idx_it : cbp1.named_indices_canonical) {
+        for (const auto& idx_it : cbp1.named_indices_canonical) {
           std::wcout << idx_it->to_latex() << "\n";
         }
 
@@ -482,7 +490,7 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
         auto cbp2 = tn2.canonicalize_slots(
             TensorCanonicalizer::cardinal_tensor_labels());
         std::wcout << "canonical order of named indices:\n";
-        for (const auto idx_it : cbp2.named_indices_canonical) {
+        for (const auto& idx_it : cbp2.named_indices_canonical) {
           std::wcout << idx_it->to_latex() << "\n";
         }
 
@@ -502,8 +510,8 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
         //                std::endl;
       }
 
-      l.tensor_network = l.canonicalize = l.canonicalize_dot =
-          l.canonicalize_input_graph = false;
+      //      l.tensor_network = l.canonicalize = l.canonicalize_dot =
+      //          l.canonicalize_input_graph = false;
     };
 
     //    do_test(static_cast<TensorNetworkV2*>(nullptr));

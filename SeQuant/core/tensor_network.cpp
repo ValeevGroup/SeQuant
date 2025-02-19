@@ -978,9 +978,11 @@ TensorNetwork::SlotCanonicalizationMetadata TensorNetwork::canonicalize_slots(
   // since this would produce label-dependent ordinals
   // - canonicalization reorders slots according to the topology-based order of
   // indices.
-  // - for each antisymmetric bra/ket bundle determine its parity according to
-  // the input ordinals and canonical ordinals, the product is the phase due to
-  // slot canonicalization
+  // - for each symmetric/antisymmetric bra/ket bundle canonical
+  // order of slots is in lexicographic order of the canonical
+  // ordinals of the edges connected to them, such slot reordering
+  // induces a phase for antisymmetric bundles. determine the phase by
+  // computing the parity of the canonical ordinal sequence
   {
     metadata.phase = 1;
 
@@ -1025,18 +1027,11 @@ TensorNetwork::SlotCanonicalizationMetadata TensorNetwork::canonicalize_slots(
           return ts_swap_counter_is_even<std::size_t>() ? +1 : -1;
         };
 
-        container::vector<SwapCountable<std::size_t>> ordinals_input;
         container::vector<SwapCountable<std::size_t>> ordinals_canonical;
-        ordinals_input.reserve(sz);
         ordinals_canonical.reserve(sz);
         for (const auto &idx : idx_rng) {
-          // input ordinal
-          std::size_t inord;
-          std::tie(std::ignore, inord) = *index_inord_it(idx);
-          ordinals_input.emplace_back(inord);
-
           // use canonical ordinal of the index vertex as the canonical index
-          // ordinal to find it need the ordinal of the corresponding vertex in
+          // ordinal, to find it need the ordinal of the corresponding vertex in
           // the input graph
           auto input_vertex_it = this->edges_.find(idx.full_label());
           assert(input_vertex_it != this->edges_.end());
@@ -1051,10 +1046,8 @@ TensorNetwork::SlotCanonicalizationMetadata TensorNetwork::canonicalize_slots(
           ordinals_canonical.emplace_back(canord_vertex);
         }
 
-        // parity = parity(original range) * parity(canonical range)
-        const auto parity_original = parity(ordinals_input);
         const auto parity_canonical = parity(ordinals_canonical);
-        return parity_original * parity_canonical;
+        return parity_canonical;
       };
 
       // canonical order of slots: bra, then ket, then aux. We only care about
