@@ -382,6 +382,9 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
   }
 
   SECTION("TN isomorphism") {
+    enum { Eq, NEq };
+    enum { Plus, Minus };
+
     // Case 7: with protoindices
     auto do_test = [&](auto* tn) {
       using TN = std::remove_pointer_t<decltype(tn)>;
@@ -390,24 +393,24 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
       //      l.tensor_network = l.canonicalize = l.canonicalize_dot =
       //          l.canonicalize_input_graph = true;
 
-      for (auto& [input1, input2, should_be_equal, flipped_sign] : {
+      for (const auto& [input1, input2, eq, phase] : {
                // original 4 tensor networks from Bimal
                std::make_tuple(
                    L"g{i3,i4;a3<i1,i4>,a4<i2>} * s{a1<i1,i2>;a5<i3>}",
-                   L"s{a1<i1,i2>;a5<i3>} * g{i3,i4;a3<i1,i4>,a4<i2>}", true,
-                   false),  // product reorder is OK
+                   L"s{a1<i1,i2>;a5<i3>} * g{i3,i4;a3<i1,i4>,a4<i2>}", Eq,
+                   Plus),  // product reorder is OK
                std::make_tuple(
                    L"g{i3,i4;a3<i1,i4>,a4<i2>} * s{a1<i1,i2>;a5<i3>}",
-                   L"g{i3,i4;a3<i1,i3>,a4<i2>} * s{a2<i1,i2>;a6<i4>}", false,
-                   false),
+                   L"g{i3,i4;a3<i1,i3>,a4<i2>} * s{a2<i1,i2>;a6<i4>}", NEq,
+                   Plus),
                std::make_tuple(
                    L"g{i3,i4;a3<i1,i4>,a4<i2>} * s{a1<i1,i2>;a5<i3>}",
-                   L"g{i3,i4;a3<i1,i4>,a4<i2>} * s{a2<i1,i2>;a6<i3>}", true,
-                   false),
+                   L"g{i3,i4;a3<i1,i4>,a4<i2>} * s{a2<i1,i2>;a6<i3>}", Eq,
+                   Plus),
                std::make_tuple(
                    L"g{i3,i4;a3<i1,i4>,a4<i2>} * s{a1<i1,i2>;a5<i3>}",
-                   L"g{i3,i4;a3<i1,i3>,a4<i2>} * s{a2<i1,i2>;a6<i4>}", false,
-                   false),
+                   L"g{i3,i4;a3<i1,i3>,a4<i2>} * s{a2<i1,i2>;a6<i4>}", NEq,
+                   Plus),
                // one more pair of ternary products
                std::make_tuple(
                    L"s{a2<i1,i2>;a6<i2,i4>} * g{i3,i4;a3<i2,i4>,a4<i1,i3>} * "
@@ -415,62 +418,75 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
                    L"g{i3,i4;a3<i1,i4>,a4<i2,i3>} * "
                    L"t{a3<i1,i4>,a5<i1,i4>;i4,i1} "
                    L"* s{a1<i1,i2>;a5<i1,i4>}",
-                   true, false),
+                   Eq, Plus),
                // last pair of ternary nets involved in MO->PNO integral
                // transform
                std::make_tuple(
                    L"g{i3,i4;a3,a4} * C{a3;a3<i1,i4>} * C{a4;a4<i2>}",
-                   L"g{i3,i4;a3,a4} * C{a3;a3<i1,i3>} * C{a4;a4<i2>}", false,
-                   false),
+                   L"g{i3,i4;a3,a4} * C{a3;a3<i1,i3>} * C{a4;a4<i2>}", NEq,
+                   Plus),
                // representation of the above as single tensor
                std::make_tuple(L"g{i3,i4;a3<i1,i4>,a4<i2>}",
-                               L"g{i3,i4;a3<i1,i3>,a4<i2>}", false, false),
+                               L"g{i3,i4;a3<i1,i3>,a4<i2>}", NEq, Plus),
                // 3-index MO->PNO integral transform, but extra aux index just
                // for fun
                std::make_tuple(
                    L"g{a3;a4;x1,x2} * C{a3<i1,i4>;a3} * C{a4;a4<i1>}",
-                   L"g{a3;a4;x2,x1} * C{a3<i1,i2>;a3} * C{a4;a4<i2>}", true,
-                   false),
+                   L"g{a3;a4;x2,x1} * C{a3<i1,i2>;a3} * C{a4;a4<i2>}", Eq,
+                   Plus),
                //////////////// TNs w antisymmetric tensors
                // unlike the nonsymmetric/symmetric cases we need to check for
-               // the phase
-               // also the change in the order of named indices produced by
-               // canonicalize_slots may absorb the phase ... so these tests are
-               // not robust due to relying on specific canonical order (which
-               // will change by changing bliss heuristics, colors, etc.)
+               // the phase due to canonical reordering of the slots
+               // N.B. these tests are not robust due to relying on specific
+               // canonical order (which will change by changing bliss
+               // heuristics, colors, etc.)
                //
                // spin-orbital CC cases suggested by Bimal testing
                // these differ by a sign ...
                std::make_tuple(L"g{i1,i4;a1,a4}:A * t{a4;i4}:A",
-                               L"g{i3,i2;a2,a4}:A * t{a4;i3}:A", true, true),
+                               L"g{i3,i2;a2,a4}:A * t{a4;i3}:A", Eq, Minus),
                // more spin-orbital CC cases suggested by Bimal
                // 1
                std::make_tuple(L"g{i_2,i_3;a_2,a_3}:A * t{a_2;i_1}:A",
-                               L"g{i_3,i_4;a_3,a_4}:A * t{a_3;i_1}:A", true,
-                               false),
+                               L"g{i_3,i_4;a_3,a_4}:A * t{a_3;i_1}:A", Eq,
+                               Plus),
                std::make_tuple(L"g{i_2,i_3;a_2,a_3}:A * t{a_2;i_1}:A",
-                               L"g{i_3,i_4;a_3,a_4}:A * t{a_4;i_1}:A", true,
-                               true),
+                               L"g{i_3,i_4;a_3,a_4}:A * t{a_4;i_1}:A", Eq,
+                               Minus),
                // 2a
                std::make_tuple(
                    L"g{i_3,i_4;a_3,a_4}:A * t{a_3;i_1}:A * t{a_4;i_2}:A",
-                   L"g{i_3,i_4;a_3,a_4}:A * t{a_4;i_1}:A * t{a_3;i_2}:A", true,
-                   true),
+                   L"g{i_3,i_4;a_3,a_4}:A * t{a_4;i_1}:A * t{a_3;i_2}:A", Eq,
+                   Minus),
                // 2b: unlike its equivalent counterpart 2a the order of named
                // indices is different for the 2 TNs, which cancels out the
                // phase change
                std::make_tuple(
                    L"g{i_3,i_4;a_3,a_4}:A * t{a_3;i_1}:A * t{a_4;i_2}:A",
-                   L"g{i_3,i_4;a_3,a_4}:A * t{a_3;i_2}:A * t{a_4;i_1}:A", true,
-                   false),
+                   L"g{i_3,i_4;a_3,a_4}:A * t{a_3;i_2}:A * t{a_4;i_1}:A", Eq,
+                   Plus),
                // 3: matching "constant" TNs (TNs without named indices)
                //    also needs canonicalization
                std::make_tuple(L"g{i_2,i_3;a_2,a_3}:A * t{a_2,a_3;i_2,i_3}:A",
                                L"g{i_4,i_1;a_2,a_3}:A * t{a_2,a_3;i_4,i_1}:A",
-                               true, false),
+                               Eq, Plus),
                std::make_tuple(L"g{i_2,i_3;a_2,a_3}:A * t{a_2,a_3;i_2,i_3}:A",
                                L"g{i_1,i_4;a_2,a_3}:A * t{a_2,a_3;i_4,i_1}:A",
-                               true, true),
+                               Eq, Minus),
+               // 4: more complexity, with triples, CSV, and antisymmetry
+               std::make_tuple(
+                   L"g{i_2,i_3;a_2,a_3}:A * t{a_1,a_2,a_3;i_1,i_2,i_3}:A",
+                   L"g{i_1,i_3;a_2,a_3}:A * t{a_1,a_2,a_3;i_1,i_2,i_3}:A", Eq,
+                   Minus),
+               std::make_tuple(
+                   L"g{i_2,i_3;a_2,a_3}:A * t{a_1<i_1>,a_2,a_3;i_1,i_2,i_3}:A",
+                   L"g{i_2,i_3;a_1,a_3}:A * t{a_3,a_2<i_1>,a_1;i_1,i_2,i_3}:A",
+                   Eq, Plus),
+               std::make_tuple(L"g{i_2,i_3;a_2,a_3}:A * "
+                               L"t{a_1<i_1,i_4>,a_2,a_3;i_1,i_2,i_3}:A",
+                               L"g{i_4,i_1;a_1,a_3}:A * "
+                               L"t{a_3,a_2<i_5,i_2>,a_1;i_1,i_4,i_2}:A",
+                               Eq, Minus),
            }) {
         std::wcout << "============== " << input1
                    << " ===============" << std::endl;
@@ -499,9 +515,9 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
                    << (cbp1.phase * cbp2.phase == -1 ? " [modulo sign]" : "")
                    << std::endl;
 
-        if (should_be_equal) {
+        if (eq == Eq) {
           REQUIRE(cbp1.graph->cmp(*cbp2.graph) == 0);
-          REQUIRE(cbp1.phase * cbp2.phase == (flipped_sign ? -1 : 1));
+          REQUIRE(cbp1.phase * cbp2.phase == (phase == Minus ? -1 : 1));
         } else
           REQUIRE(cbp1.graph->cmp(*cbp2.graph) != 0);
 
