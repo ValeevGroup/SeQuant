@@ -179,6 +179,7 @@ class TensorNetworkV2 {
 
     std::unique_ptr<bliss::Graph> bliss_graph;
     std::vector<std::wstring> vertex_labels;
+    std::vector<std::optional<std::wstring>> vertex_texlabels;
     std::vector<VertexColor> vertex_colors;
     std::vector<VertexType> vertex_types;
 

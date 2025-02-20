@@ -421,8 +421,8 @@ class TensorNetwork {
   /// @param[in] distinct_named_indices if false, will use same color for all
   /// named indices that have same Index::color(), else will use distinct color
   /// for each
-  /// @return {shared_ptr to Graph, vector of vertex labels, vector of vertex
-  /// colors, vector of vertex types}
+  /// @return {shared_ptr to Graph, vector of vertex labels, vector of optional
+  /// vertex TeX labels, vector of vertex colors, vector of vertex types}
 
   /// @note Rules for constructing the graph:
   ///   - Indices with protoindices are connected to their protoindices,
@@ -440,7 +440,8 @@ class TensorNetwork {
   ///     with the color of symm/antisymm terminals augmented by the
   ///     terminal's type (bra/ket).
   std::tuple<std::shared_ptr<bliss::Graph>, std::vector<std::wstring>,
-             std::vector<std::size_t>, std::vector<VertexType>>
+             std::vector<std::optional<std::wstring>>, std::vector<std::size_t>,
+             std::vector<VertexType>>
   make_bliss_graph(const named_indices_t *named_indices = nullptr,
                    bool distinct_named_indices = true) const;
 };

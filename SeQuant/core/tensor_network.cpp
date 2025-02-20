@@ -177,7 +177,7 @@ ExprPtr TensorNetwork::canonicalize(
 
     // make the graph
     // named indices are not renamed, so each gets a distinct color
-    auto [graph, vlabels, vcolors, vtypes] =
+    auto [graph, vlabels, vtexlabels, vcolors, vtypes] =
         make_bliss_graph(&named_indices, /* distinct_named_indices = */ true);
     //    graph->write_dot(std::wcout, vlabels);
 
@@ -439,9 +439,19 @@ ExprPtr TensorNetwork::canonicalize(
 }
 
 std::tuple<std::shared_ptr<bliss::Graph>, std::vector<std::wstring>,
-           std::vector<std::size_t>, std::vector<VertexType>>
+           std::vector<std::optional<std::wstring>>, std::vector<std::size_t>,
+           std::vector<VertexType>>
 TensorNetwork::make_bliss_graph(const named_indices_t *named_indices_ptr,
                                 bool distinct_named_indices) const {
+  auto make_texlabel = [&](const auto &t) {
+    using T = std::remove_cvref_t<decltype(t)>;
+    std::wstring result;
+    if constexpr (std::is_same_v<T, Index>) {
+      result = L"$" + to_latex(t) + L"$";
+    }
+    return result;
+  };
+
   // must call init_edges() prior to calling this
   if (edges_.empty()) {
     init_edges();
@@ -457,7 +467,9 @@ TensorNetwork::make_bliss_graph(const named_indices_t *named_indices_ptr,
   // results
   std::shared_ptr<bliss::Graph> graph;
   const auto nidx = edges_.size() + pure_proto_indices_.size();
-  std::vector<std::wstring> vertex_labels(nidx);   // the size will be updated
+  std::vector<std::wstring> vertex_labels(nidx);  // the size will be updated
+  std::vector<std::optional<std::wstring>> vertex_texlabels(
+      nidx);                                       // the size will be updated
   std::vector<std::size_t> vertex_color(nidx, 0);  // the size will be updated
   std::vector<VertexType> vertex_type(nidx);       // the size will be updated
 
@@ -480,6 +492,7 @@ TensorNetwork::make_bliss_graph(const named_indices_t *named_indices_ptr,
     const Index &idx = edge.idx();
     ++nv;  // each index is a vertex
     vertex_labels.at(index_cnt) = idx.full_label();
+    vertex_texlabels.at(index_cnt) = make_texlabel(idx);
     vertex_type.at(index_cnt) = VertexType::Index;
     vertex_color.at(index_cnt) = colorizer(idx);
 
@@ -502,6 +515,7 @@ TensorNetwork::make_bliss_graph(const named_indices_t *named_indices_ptr,
   ranges::for_each(pure_proto_indices_, [&](const Index &idx) {
     ++nv;  // each index is a vertex
     vertex_labels.at(index_cnt) = idx.full_label();
+    vertex_texlabels.at(index_cnt) = make_texlabel(idx);
     vertex_type.at(index_cnt) = VertexType::Index;
     vertex_color.at(index_cnt) = colorizer(idx);
     index_cnt++;
@@ -512,16 +526,22 @@ TensorNetwork::make_bliss_graph(const named_indices_t *named_indices_ptr,
     assert(!bundle.empty());
     ++nv;  // each symmetric protoindex bundle is a vertex
     std::wstring spbundle_label = L"<";
+    std::wstring spbundle_texlabel = L"$\\langle";
     [[maybe_unused]] std::size_t pi_count = 0;
     const auto end = bundle.end();
     auto it = bundle.begin();
     spbundle_label += it->full_label();
+    spbundle_texlabel += it->to_latex();
     for (++it; it != end; ++it) {
       spbundle_label += L",";
       spbundle_label += it->full_label();
+      spbundle_texlabel += L",";
+      spbundle_texlabel += it->to_latex();
     }
     spbundle_label += L">";
-    vertex_labels.push_back(spbundle_label);
+    spbundle_texlabel += L"\\rangle$";
+    vertex_labels.emplace_back(std::move(spbundle_label));
+    vertex_texlabels.emplace_back(std::move(spbundle_texlabel));
     vertex_type.push_back(VertexType::SPBundle);
     vertex_color.push_back(colorizer(bundle));
     spbundle_cnt++;
@@ -538,6 +558,7 @@ TensorNetwork::make_bliss_graph(const named_indices_t *named_indices_ptr,
     ++nv;
     const auto tlabel = label(*t);
     vertex_labels.emplace_back(tlabel);
+    vertex_texlabels.emplace_back(std::nullopt);
     vertex_type.emplace_back(VertexType::TensorCore);
     vertex_color.push_back(colorizer(*t));
 
@@ -548,14 +569,16 @@ TensorNetwork::make_bliss_graph(const named_indices_t *named_indices_ptr,
     auto &tref = *t;
     if (symmetry(tref) != Symmetry::nonsymm) {
       nv += 3;
-      vertex_labels.push_back(
+      vertex_labels.emplace_back(
           std::wstring(L"bra") + to_wstring(bra_rank(tref)) +
           ((symmetry(tref) == Symmetry::antisymm) ? L"a" : L"s"));
+      vertex_texlabels.emplace_back(std::nullopt);
       vertex_type.push_back(VertexType::TensorBra);
       vertex_color.push_back(colorizer(BraGroup{0}));
-      vertex_labels.push_back(
+      vertex_labels.emplace_back(
           std::wstring(L"ket") + to_wstring(ket_rank(tref)) +
           ((symmetry(tref) == Symmetry::antisymm) ? L"a" : L"s"));
+      vertex_texlabels.emplace_back(std::nullopt);
       vertex_type.push_back(VertexType::TensorKet);
       if (braket_symmetry(tref) == BraKetSymmetry::symm) {
         // Use BraGroup for kets as well as they are supposed to be
@@ -564,9 +587,10 @@ TensorNetwork::make_bliss_graph(const named_indices_t *named_indices_ptr,
       } else {
         vertex_color.push_back(colorizer(KetGroup{0}));
       }
-      vertex_labels.push_back(
+      vertex_labels.emplace_back(
           std::wstring(L"bk") +
           ((symmetry(tref) == Symmetry::antisymm) ? L"a" : L"s"));
+      vertex_texlabels.emplace_back(std::nullopt);
       vertex_type.push_back(VertexType::Particle);
       // Color bk node in same color as tensor core
       vertex_color.push_back(colorizer(tref));
@@ -579,13 +603,15 @@ TensorNetwork::make_bliss_graph(const named_indices_t *named_indices_ptr,
       for (size_t p = 0; p != rank; ++p) {
         nv += 3;
         auto pstr = to_wstring(p + 1);
-        vertex_labels.push_back(std::wstring(L"bra") + pstr);
+        vertex_labels.emplace_back(std::wstring(L"bra") + pstr);
+        vertex_texlabels.emplace_back(std::nullopt);
         vertex_type.push_back(VertexType::TensorBra);
         const bool distinguishable_particles =
             particle_symmetry(tref) == ParticleSymmetry::nonsymm;
         vertex_color.push_back(
             colorizer(BraGroup{distinguishable_particles ? p : 0}));
-        vertex_labels.push_back(std::wstring(L"ket") + pstr);
+        vertex_labels.emplace_back(std::wstring(L"ket") + pstr);
+        vertex_texlabels.emplace_back(std::nullopt);
         vertex_type.push_back(VertexType::TensorKet);
         if (braket_symmetry(tref) == BraKetSymmetry::symm) {
           // Use BraGroup for kets as well as they are supposed to be
@@ -596,7 +622,8 @@ TensorNetwork::make_bliss_graph(const named_indices_t *named_indices_ptr,
           vertex_color.push_back(
               colorizer(KetGroup{distinguishable_particles ? p : 0}));
         }
-        vertex_labels.push_back(std::wstring(L"bk") + pstr);
+        vertex_labels.emplace_back(std::wstring(L"bk") + pstr);
+        vertex_texlabels.emplace_back(std::nullopt);
         vertex_type.push_back(VertexType::Particle);
         vertex_color.push_back(colorizer(tref));
       }
@@ -607,6 +634,7 @@ TensorNetwork::make_bliss_graph(const named_indices_t *named_indices_ptr,
       nv += 1;
       auto pstr = to_wstring(p + 1);
       vertex_labels.push_back(std::wstring(L"aux") + pstr);
+      vertex_texlabels.emplace_back(std::nullopt);
       vertex_type.push_back(VertexType::TensorAux);
       vertex_color.push_back(colorizer(AuxGroup{p}));
     }
@@ -718,7 +746,7 @@ TensorNetwork::make_bliss_graph(const named_indices_t *named_indices_ptr,
     graph->change_color(vertex, color);
   }
 
-  return {graph, vertex_labels, vertex_color, vertex_type};
+  return {graph, vertex_labels, vertex_texlabels, vertex_color, vertex_type};
 }
 
 void TensorNetwork::init_edges() const {
@@ -875,7 +903,7 @@ TensorNetwork::SlotCanonicalizationMetadata TensorNetwork::canonicalize_slots(
   // make the graph
   // only slots (hence, attr) of named indices define their color, so
   // distinct_named_indices = false
-  auto [graph, vlabels, vcolors, vtypes] =
+  auto [graph, vlabels, vtexlabels, vcolors, vtypes] =
       make_bliss_graph(&named_indices, /* distinct_named_indices = */ false);
   if (Logger::instance().canonicalize_dot) {
     std::wcout << "Input graph for canonicalization:\n";
@@ -898,9 +926,10 @@ TensorNetwork::SlotCanonicalizationMetadata TensorNetwork::canonicalize_slots(
       return pvector;
     };
 
-    std::wcout << "Canonicalized graph:\n";
     auto cvlabels = permute(vlabels, cl);
-    metadata.graph->write_dot(std::wcout, cvlabels);
+    auto cvtexlabels = permute(vtexlabels, cl);
+    std::wcout << "Canonicalized graph:\n";
+    metadata.graph->write_dot(std::wcout, cvlabels, cvtexlabels);
   }
 
   // produce named indices sorted by named_index_compare first, then by
