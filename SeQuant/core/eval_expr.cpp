@@ -84,8 +84,9 @@ EvalExpr::EvalExpr(Tensor const& tnsr)
   auto md =
       tn.canonicalize_slots(TensorCanonicalizer::cardinal_tensor_labels());
   hash_value_ = md.hash_value();
-  canon_indices_ = md.get_indices() | ranges::to<index_vector>;
   canon_phase_ = md.phase;
+  canon_indices_ = is_tot(tnsr) ? md.get_indices() | ranges::to<index_vector>
+                                : tnsr.indices() | ranges::to<index_vector>;
 }
 
 EvalExpr::EvalExpr(Constant const& c)
