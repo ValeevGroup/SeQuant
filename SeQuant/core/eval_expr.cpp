@@ -79,14 +79,19 @@ EvalExpr::EvalExpr(Tensor const& tnsr)
     : op_type_{EvalOp::Id},
       result_type_{ResultType::Tensor},
       expr_{tnsr.clone()} {
-  ExprPtrList tlist{expr_};
-  auto tn = TensorNetwork(tlist);
-  auto md =
-      tn.canonicalize_slots(TensorCanonicalizer::cardinal_tensor_labels());
-  hash_value_ = md.hash_value();
-  canon_phase_ = md.phase;
-  canon_indices_ = is_tot(tnsr) ? md.get_indices() | ranges::to<index_vector>
-                                : tnsr.indices() | ranges::to<index_vector>;
+  if (is_tot(tnsr)) {
+    ExprPtrList tlist{expr_};
+    auto tn = TensorNetwork(tlist);
+    auto md =
+        tn.canonicalize_slots(TensorCanonicalizer::cardinal_tensor_labels());
+    hash_value_ = md.hash_value();
+    canon_phase_ = md.phase;
+    canon_indices_ = md.get_indices() | ranges::to<index_vector>;
+  } else {
+    hash_value_ = hash_terminal_tensor(tnsr);
+    canon_phase_ = 1;
+    canon_indices_ = tnsr.indices() | ranges::to<index_vector>;
+  }
 }
 
 EvalExpr::EvalExpr(Constant const& c)
