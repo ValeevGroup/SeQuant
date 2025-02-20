@@ -304,10 +304,10 @@ ExprPtr expand_antisymm(const Tensor& tensor, bool skip_spinsymm) {
   auto get_phase = [](const Tensor& t) {
     container::svector<Index> bra(t.bra().begin(), t.bra().end());
     container::svector<Index> ket(t.ket().begin(), t.ket().end());
-    IndexSwapper::thread_instance().reset();
-    bubble_sort(std::begin(bra), std::end(bra), std::less<Index>{});
-    bubble_sort(std::begin(ket), std::end(ket), std::less<Index>{});
-    return IndexSwapper::thread_instance().even_num_of_swaps() ? 1 : -1;
+    reset_ts_swap_counter<Index>();
+    bubble_sort(std::begin(bra), std::end(bra));
+    bubble_sort(std::begin(ket), std::end(ket));
+    return ts_swap_counter_is_even<Index>() ? 1 : -1;
   };
 
   // Generate a sum of asymmetric tensors if the input tensor is antisymmetric
@@ -476,10 +476,9 @@ ExprPtr expand_A_op(const Product& product) {
       container::svector<Index> transformed_list;
       for (const auto& [key, val] : map) transformed_list.push_back(val);
 
-      IndexSwapper::thread_instance().reset();
-      bubble_sort(std::begin(transformed_list), std::end(transformed_list),
-                  std::less<Index>{});
-      phase = IndexSwapper::thread_instance().even_num_of_swaps() ? 1 : -1;
+      reset_ts_swap_counter<Index>();
+      bubble_sort(std::begin(transformed_list), std::end(transformed_list));
+      phase = ts_swap_counter_is_even<Index>() ? 1 : -1;
     }
 
     Product new_product{};
@@ -564,9 +563,9 @@ ExprPtr symmetrize_expr(const Product& product) {
   auto get_phase = [](const container::map<Index, Index>& map) {
     container::svector<Index> idx_list;
     for (const auto& [key, val] : map) idx_list.push_back(val);
-    IndexSwapper::thread_instance().reset();
-    bubble_sort(std::begin(idx_list), std::end(idx_list), std::less<Index>{});
-    return IndexSwapper::thread_instance().even_num_of_swaps() ? 1 : -1;
+    reset_ts_swap_counter<Index>();
+    bubble_sort(std::begin(idx_list), std::end(idx_list));
+    return ts_swap_counter_is_even<Index>() ? 1 : -1;
   };
 
   container::svector<container::map<Index, Index>> maps;
@@ -676,11 +675,13 @@ ExprPtr expand_P_op(const Product& product) {
       if (term->is<Tensor>()) {
         auto new_tensor = term->as<Tensor>();
         new_tensor.transform_indices(map);
+        new_tensor.reset_tags();
         new_product.append(1, ex<Tensor>(new_tensor));
       }
     }
     result->append(ex<Product>(new_product));
   }  // map_list
+
   return result;
 }
 

@@ -6,14 +6,11 @@
 #define SEQUANT_INDEX_H
 
 #include <SeQuant/core/container.hpp>
-#include <SeQuant/core/hash.hpp>
-#include <iostream>
-// #include <SeQuant/core/space.hpp>
 #include <SeQuant/core/context.hpp>
+#include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/tag.hpp>
 #include <SeQuant/core/utility/string.hpp>
-// Only needed due to a (likely) compiler bug in Apple Clang
-// #include <SeQuant/core/attr.hpp>
+#include <SeQuant/core/utility/swap.hpp>
 
 #include <algorithm>
 #include <atomic>
@@ -23,6 +20,7 @@
 #include <cwchar>
 #include <functional>
 #include <initializer_list>
+#include <iostream>
 #include <iterator>
 #include <map>
 #include <mutex>
@@ -868,28 +866,10 @@ void Index::canonicalize_proto_indices() {
     std::stable_sort(begin(proto_indices_), end(proto_indices_));
 }
 
-class IndexSwapper {
- public:
-  IndexSwapper() : even_num_of_swaps_(true) {}
-  static IndexSwapper &thread_instance() {
-    static thread_local IndexSwapper instance_{};
-    return instance_;
-  }
-
-  bool even_num_of_swaps() const { return even_num_of_swaps_; }
-  void reset() { even_num_of_swaps_ = true; }
-
- private:
-  std::atomic<bool> even_num_of_swaps_;
-  void toggle() { even_num_of_swaps_ = !even_num_of_swaps_; }
-
-  friend inline void swap(Index &, Index &);
-};
-
 /// swap operator helps tracking # of swaps
 inline void swap(Index &first, Index &second) {
   std::swap(first, second);
-  IndexSwapper::thread_instance().toggle();
+  detail::count_swap<Index>();
 }
 
 /// Generates temporary indices

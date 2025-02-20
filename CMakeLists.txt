@@ -102,6 +102,7 @@ set(SEQUANT_INSTALL_DOCDIR "${SEQUANT_INSTALL_SHAREDIR}/doc"
         CACHE PATH "SeQuant DOC install directory")
 set(SEQUANT_INSTALL_CMAKEDIR "lib/cmake/sequant"
         CACHE PATH "SeQuant CMAKE install directory")
+option(SEQUANT_BENCHMARKS "Enable SeQuant benchmarks" OFF)
 
 ############################
 # Additional build variables
@@ -252,6 +253,8 @@ set(SeQuant_src
         SeQuant/core/tensor_network/vertex_painter.hpp
         SeQuant/core/timer.hpp
         SeQuant/core/utility/context.hpp
+        SeQuant/core/utility/expr_diff.cpp
+        SeQuant/core/utility/expr_diff.hpp
         SeQuant/core/utility/indices.hpp
         SeQuant/core/utility/macros.hpp
         SeQuant/core/utility/nodiscard.hpp
@@ -259,6 +262,7 @@ set(SeQuant_src
         SeQuant/core/utility/string.hpp
         SeQuant/core/utility/string.cpp
         SeQuant/core/utility/tuple.hpp
+        SeQuant/core/utility/swap.hpp
         SeQuant/core/wick.hpp
         SeQuant/core/wick.impl.hpp
         SeQuant/core/wolfram.hpp
@@ -409,6 +413,10 @@ if (SEQUANT_IWYU)
         )
         set_property(TARGET SeQuant PROPERTY CXX_INCLUDE_WHAT_YOU_USE ${iwyu_options_and_path})
     endif()
+endif()
+
+if (SEQUANT_BENCHMARKS)
+    add_subdirectory(benchmarks)
 endif()
 
 ### unit tests
