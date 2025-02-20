@@ -497,8 +497,6 @@ EvalExprNode binarize(Product const& prod) {
   auto factors = prod.factors()                                             //
                  | transform([](ExprPtr const& x) { return binarize(x); })  //
                  | ranges::to_vector;
-  if (prod.scalar() != 1)
-    factors.emplace_back(EvalExpr{Constant{prod.scalar()}});
 
   auto hvals = factors | transform([](auto&& n) { return n->hash_value(); });
 
@@ -550,7 +548,22 @@ EvalExprNode binarize(Product const& prod) {
     }
   };
 
-  return fold_left_to_node(factors | move, make_prod);
+  if (prod.scalar() == 1) {
+    return fold_left_to_node(factors | move, make_prod);
+  } else {
+    auto left = fold_left_to_node(factors | move, make_prod);
+    auto right = binarize(Constant{prod.scalar()});
+
+    auto h = left->hash_value();
+    hash::combine(h, right->hash_value());
+    auto result = EvalExpr{EvalOp::Prod,           //
+                           left->result_type(),    //
+                           left->expr(),           //
+                           left->canon_indices(),  //
+                           1,                      //
+                           h};
+    return EvalExprNode{std::move(result), std::move(left), std::move(right)};
+  }
 }
 
 namespace impl {
