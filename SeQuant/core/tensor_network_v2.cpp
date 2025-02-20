@@ -671,6 +671,16 @@ TensorNetworkV2::canonicalize_slots(
       return idxptr1->space() < idxptr2->space();
     };
 
+  // N.B. support for slot canonicalization of antisymmetric tensors is not yet
+  // available, use TN::canonicalize_slots
+  ranges::for_each(tensors_, [&](const auto &t) {
+    if (t->_symmetry() == Symmetry::antisymm &&
+        (t->_bra_rank() > 1 || t->_ket_rank() > 1))
+      throw std::runtime_error(
+          "TensornetworkV2::canonicalize_slots does not support antisymmetric "
+          "tensors yet, use TensorNetwork::canonicalize_slots");
+  });
+
   TensorNetworkV2::SlotCanonicalizationMetadata metadata;
 
   if (Logger::instance().canonicalize) {
