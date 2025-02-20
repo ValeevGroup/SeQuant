@@ -29,6 +29,7 @@ namespace bliss {
 class AbstractGraph;
 }
 
+#include <cstdint>
 #include <cstdio>
 #include <iomanip>
 #include <iostream>
