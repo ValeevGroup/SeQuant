@@ -183,14 +183,20 @@ class S : public sequant::Singleton<S<T>> {
 TEST_CASE("Singleton", "[utilities]") {
   using namespace sequant;
   using namespace sequant::singleton;
+
+  constexpr auto nthreads = 5;
+
   // default-constructible Singleton
   {
     std::vector<std::thread> threads;
-    for (int c = 0; c != 5; ++c)
-      threads.emplace_back([]() {
-        CHECK(Singleton<S<EnableDefaultCtor>>::instance().s() == 0);
+    std::vector<int> thread_results(nthreads, -1);
+    for (int t = 0; t != nthreads; ++t) {
+      threads.emplace_back([&result = thread_results[t]]() {
+        result = Singleton<S<EnableDefaultCtor>>::instance().s();
       });
+    }
     for (auto&& thr : threads) thr.join();
+    for (auto result : thread_results) CHECK(result == 0);
     CHECK_THROWS_AS(Singleton<S<EnableDefaultCtor>>::set_instance(1),
                     std::logic_error);
     CHECK(Singleton<S<EnableDefaultCtor>>::instance().s() == 0);
@@ -199,24 +205,38 @@ TEST_CASE("Singleton", "[utilities]") {
   {
     {
       std::vector<std::thread> threads;
-      for (int c = 0; c != 5; ++c)
-        threads.emplace_back([]() {
-          CHECK_THROWS_AS(Singleton<S<DisableDefaultCtor>>::instance().s(),
-                          std::logic_error);
+      std::vector<int> thread_results(nthreads, -1);
+      for (int t = 0; t != nthreads; ++t) {
+        threads.emplace_back([&result = thread_results[t]]() {
+          try {
+            Singleton<S<DisableDefaultCtor>>::instance().s();
+          } catch (std::logic_error&) {
+            result = 0;
+            return;
+          } catch (...) {
+            result = 1;
+            return;
+          }
+          result = 2;
         });
+      }
+      for (auto&& thr : threads) thr.join();
       CHECK(Singleton<S<DisableDefaultCtor>>::instance_ptr() == nullptr);
-      for (auto&& thr : threads) thr.join();
+      for (auto result : thread_results) CHECK(result == 0);
+      CHECK_NOTHROW(Singleton<S<DisableDefaultCtor>>::set_instance(1));
+      {
+        std::vector<std::thread> threads;
+        std::vector<int> thread_results(nthreads, -1);
+        for (int t = 0; t != nthreads; ++t) {
+          threads.emplace_back([&result = thread_results[t]]() {
+            result = Singleton<S<DisableDefaultCtor>>::instance().s();
+          });
+        }
+        for (auto&& thr : threads) thr.join();
+        for (auto result : thread_results) CHECK(result == 1);
+        CHECK(Singleton<S<DisableDefaultCtor>>::instance().s() == 1);
+      }
     }
-    CHECK_NOTHROW(Singleton<S<DisableDefaultCtor>>::set_instance(1));
-    {
-      std::vector<std::thread> threads;
-      for (int c = 0; c != 5; ++c)
-        threads.emplace_back([]() {
-          CHECK(Singleton<S<DisableDefaultCtor>>::instance().s() == 1);
-        });
-      for (auto&& thr : threads) thr.join();
-    }
-    CHECK(Singleton<S<DisableDefaultCtor>>::instance().s() == 1);
   }
 }
 
