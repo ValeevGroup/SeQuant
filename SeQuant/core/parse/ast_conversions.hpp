@@ -269,6 +269,13 @@ ExprPtr ast_to_expr(const parse::ast::NullaryValue &value,
       if ((fit = ranges::find(FNOperator::labels(), tensor.name)) !=
           ranges::end(FNOperator::labels())) {
         assert(ranges::size(auxiliaries) == 0);
+        assert(!tensor.symmetry.has_value() ||
+               ((tensor.symmetry.value().perm_symm ==
+                     ast::SymmetrySpec::unspecified ||
+                 tensor.symmetry.value().perm_symm == 'A') &&
+                (tensor.symmetry.value().particle_symm ==
+                     ast::SymmetrySpec::unspecified ||
+                 tensor.symmetry.value().particle_symm == 'S')));
         Vacuum vac = fit == ranges::begin(FNOperator::labels())
                          ? Vacuum::Physical
                          : Vacuum::SingleProduct;
@@ -279,6 +286,13 @@ ExprPtr ast_to_expr(const parse::ast::NullaryValue &value,
       if ((bit = ranges::find(BNOperator::labels(), tensor.name)) !=
           ranges::end(BNOperator::labels())) {
         assert(ranges::size(auxiliaries) == 0);
+        assert(!tensor.symmetry.has_value() ||
+               ((tensor.symmetry.value().perm_symm ==
+                     ast::SymmetrySpec::unspecified ||
+                 tensor.symmetry.value().perm_symm == 'S') &&
+                (tensor.symmetry.value().particle_symm ==
+                     ast::SymmetrySpec::unspecified ||
+                 tensor.symmetry.value().particle_symm == 'S')));
         Vacuum vac = bit == ranges::begin(BNOperator::labels())
                          ? Vacuum::Physical
                          : Vacuum::SingleProduct;

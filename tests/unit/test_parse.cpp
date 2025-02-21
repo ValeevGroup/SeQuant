@@ -427,7 +427,7 @@ TEST_CASE("deparse", "[parse]") {
       L"T1{}:N-N-N + T2{;;x_1}:N-N-N * T3{;;x_1}:N-N-N + T4{a_1;;x_2}:S-C-S * "
       L"T5{;a_1;x_2}:S-S-S",
       L"q1 * q2^* * q3",
-      L"1/2 ã{i_1;i_2}"};
+      L"1/2 ã{i_1;i_2} * b̃{i_3;i_4}"};
 
   for (const std::wstring& current : expressions) {
     ExprPtr expression = parse_expr(current);
