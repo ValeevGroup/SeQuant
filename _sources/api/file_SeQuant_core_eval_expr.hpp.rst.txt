@@ -25,6 +25,8 @@ Includes
 --------
 
 
+- ``SeQuant/core/binary_node.hpp`` (:ref:`file_SeQuant_core_binary_node.hpp`)
+
 - ``SeQuant/core/container.hpp`` (:ref:`file_SeQuant_core_container.hpp`)
 
 - ``SeQuant/core/expr.hpp`` (:ref:`file_SeQuant_core_expr.hpp`)
@@ -56,12 +58,14 @@ Namespaces
 
 - :ref:`namespace_sequant`
 
+- :ref:`namespace_sequant__impl`
+
+- :ref:`namespace_sequant__meta`
+
 
 Classes
 -------
 
-
-- :ref:`exhale_struct_structsequant_1_1_nested_tensor_indices`
 
 - :ref:`exhale_class_classsequant_1_1_eval_expr`
 
@@ -73,4 +77,24 @@ Enums
 - :ref:`exhale_enum_namespacesequant_1a7bf79a2794f3cc1f2f2ab156a5242c0c`
 
 - :ref:`exhale_enum_namespacesequant_1a9517b28099d86f3b2c0d4799125f5931`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1a19983971ffacc64c1a17b61be3f1ac00`
+
+- :ref:`exhale_function_namespacesequant_1a69ad4b9bf42de3094a548ab772f6bff0`
+
+
+Variables
+---------
+
+
+- :ref:`exhale_variable_namespacesequant_1_1meta_1a06efcb544309967c13c13b51718f5f69`
+
+- :ref:`exhale_variable_namespacesequant_1_1meta_1a4db74bbbf72d6b4dff3368bebab7c6aa`
+
+- :ref:`exhale_variable_namespacesequant_1_1meta_1a5be0f972e1f1d2749d227f82a6c89661`
 

@@ -47,6 +47,8 @@ Included By
 
 - :ref:`file_SeQuant_core_abstract_tensor.hpp`
 
+- :ref:`file_SeQuant_core_algorithm.hpp`
+
 - :ref:`file_SeQuant_core_asy_cost.cpp`
 
 - :ref:`file_SeQuant_core_asy_cost.hpp`

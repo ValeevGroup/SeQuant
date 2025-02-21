@@ -123,6 +123,10 @@ Functions
 
 - :ref:`exhale_function_namespacesequant_1_1hash_1a93fe63e731c0b4d320d349d46e224e53`
 
+- :ref:`exhale_function_namespacesequant_1_1hash_1acc041a51c1958b3d9c4b6a93254a85de`
+
+- :ref:`exhale_function_namespacesequant_1_1hash_1a52918eaa6331829f53459d9b0cb7971e`
+
 - :ref:`exhale_function_namespacesequant_1_1hash_1a7fc5cf68b16d900d946d7b72045d5128`
 
 - :ref:`exhale_function_namespacesequant_1ac06e008393f595f8c41d06771520f054`

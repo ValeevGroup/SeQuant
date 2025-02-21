@@ -39,6 +39,8 @@ Included By
 -----------
 
 
+- :ref:`file_SeQuant_core_eval_expr.cpp`
+
 - :ref:`file_SeQuant_core_expr.cpp`
 
 - :ref:`file_SeQuant_core_tensor.cpp`

@@ -347,7 +347,8 @@
 
 <span class="n">CacheManager</span><span class="w"> </span><span class="n">CacheManager</span><span class="o">::</span><span class="n">empty</span><span class="p">()</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="n">CacheManager</span><span class="p">{{}};</span><span class="w"> </span><span class="p">}</span>
 
-<span class="k">template</span><span class="w"> </span><span class="o">&lt;</span><span class="k">typename</span><span class="w"> </span><span class="nc">NodeT</span><span class="p">,</span><span class="w"> </span><span class="k">typename</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">enable_if_t</span><span class="o">&lt;</span><span class="n">IsEvalNode</span><span class="o">&lt;</span><span class="n">NodeT</span><span class="o">&gt;&gt;&gt;</span>
+<span class="k">template</span><span class="w"> </span><span class="o">&lt;</span><span class="k">typename</span><span class="w"> </span><span class="nc">NodeT</span><span class="p">,</span>
+<span class="w">          </span><span class="k">typename</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">enable_if_t</span><span class="o">&lt;</span><span class="n">meta</span><span class="o">::</span><span class="n">is_eval_node</span><span class="o">&lt;</span><span class="n">NodeT</span><span class="o">&gt;&gt;&gt;</span>
 <span class="kt">void</span><span class="w"> </span><span class="n">max_cache</span><span class="p">(</span><span class="n">NodeT</span><span class="w"> </span><span class="k">const</span><span class="o">&amp;</span><span class="w"> </span><span class="n">node</span><span class="p">,</span><span class="w">  </span><span class="c1">//</span>
 <span class="w">               </span><span class="n">CacheManager</span><span class="o">&amp;</span><span class="w"> </span><span class="n">cm</span><span class="p">,</span><span class="w">   </span><span class="c1">//</span>
 <span class="w">               </span><span class="n">AsyCost</span><span class="o">&amp;</span><span class="w"> </span><span class="n">curr</span><span class="p">,</span><span class="w">      </span><span class="c1">//</span>
@@ -376,7 +377,7 @@
 <span class="p">}</span>
 
 <span class="n">AsyCost</span><span class="w"> </span><span class="n">peak_cache</span><span class="p">(</span><span class="n">Sum</span><span class="w"> </span><span class="k">const</span><span class="o">&amp;</span><span class="w"> </span><span class="n">expr</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
-<span class="w">  </span><span class="k">auto</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="n">nodes</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">expr</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="n">ranges</span><span class="o">::</span><span class="n">views</span><span class="o">::</span><span class="n">transform</span><span class="p">(</span><span class="n">eval_node</span><span class="o">&lt;</span><span class="n">EvalExpr</span><span class="o">&gt;</span><span class="p">);</span>
+<span class="w">  </span><span class="k">auto</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="n">nodes</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">expr</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="n">ranges</span><span class="o">::</span><span class="n">views</span><span class="o">::</span><span class="n">transform</span><span class="p">(</span><span class="n">binarize</span><span class="o">&lt;</span><span class="n">EvalExpr</span><span class="o">&gt;</span><span class="p">);</span>
 <span class="w">  </span><span class="k">auto</span><span class="w"> </span><span class="n">cm</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cache_manager</span><span class="p">(</span><span class="n">nodes</span><span class="p">);</span>
 <span class="w">  </span><span class="k">auto</span><span class="w"> </span><span class="n">max</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">AsyCost</span><span class="o">::</span><span class="n">zero</span><span class="p">();</span>
 <span class="w">  </span><span class="k">auto</span><span class="w"> </span><span class="n">curr</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">AsyCost</span><span class="o">::</span><span class="n">zero</span><span class="p">();</span>
@@ -406,7 +407,7 @@
             
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on Feb 20, 2025 11:49:24 PM</div>
+              Last updated on Feb 21, 2025 7:54:06 PM</div>
           </div>
           <div class="right-details">
             <div class="icons">

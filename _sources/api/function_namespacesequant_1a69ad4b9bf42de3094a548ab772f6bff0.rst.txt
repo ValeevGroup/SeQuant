@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a69ad4b9bf42de3094a548ab772f6bff0:
+
+Template Function sequant::to_expr
+==================================
+
+- Defined in :ref:`file_SeQuant_core_eval_expr.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::to_expr(NodeT const&)
+   :project: SeQuant

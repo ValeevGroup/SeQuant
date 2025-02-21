@@ -152,6 +152,16 @@ Program Listing for File hash.hpp
    }
    
    template <typename It>
+   inline std::size_t range_unordered(It begin, It end) {
+     return sequant_boost::hash_unordered_range(begin, end);
+   }
+   
+   template <typename It>
+   inline void range_unordered(size_t& seed, It begin, It end) {
+     sequant_boost::hash_unordered_range(seed, begin, end);
+   }
+   
+   template <typename It>
    std::size_t hash_range(It begin, It end) {
      if (begin != end) {
        std::size_t seed = hash_value(*begin);

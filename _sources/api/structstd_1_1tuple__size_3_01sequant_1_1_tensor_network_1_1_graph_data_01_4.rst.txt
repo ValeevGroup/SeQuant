@@ -1,0 +1,26 @@
+.. _exhale_struct_structstd_1_1tuple__size_3_01sequant_1_1_tensor_network_1_1_graph_data_01_4:
+
+Template Struct tuple_size< sequant::TensorNetwork::GraphData >
+===============================================================
+
+- Defined in :ref:`file_SeQuant_core_tensor_network.hpp`
+
+
+Inheritance Relationships
+-------------------------
+
+Base Type
+*********
+
+- ``public integral_constant< size_t, 5 >``
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: std::tuple_size< sequant::TensorNetwork::GraphData >
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

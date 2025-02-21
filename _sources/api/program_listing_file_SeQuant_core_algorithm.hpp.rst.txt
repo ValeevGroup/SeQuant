@@ -17,7 +17,9 @@ Program Listing for File algorithm.hpp
    #ifndef SEQUANT_ALGORITHM_HPP
    #define SEQUANT_ALGORITHM_HPP
    
+   #include <SeQuant/core/container.hpp>
    #include <SeQuant/core/meta.hpp>
+   
    #include <boost/dynamic_bitset.hpp>
    #include <range/v3/view.hpp>
    
@@ -150,6 +152,17 @@ Program Listing for File algorithm.hpp
      auto bits = iota(size_t{0}) | transform([&bs](auto i) { return bs.at(i); });
      return zip(it, bits) | filter([](auto&& kv) { return std::get<1>(kv); }) |
             transform([](auto&& kv) { return std::get<0>(kv); });
+   }
+   
+   using EvalSequence = container::svector<int>;
+   
+   template <typename Rng>
+   auto inits(Rng const& rng) {
+     using ranges::views::slice;
+     using ranges::views::transform;
+     return rng | transform([n = 0, &rng](auto&& val) mutable {
+              return slice(rng, 0, ++n);
+            });
    }
    
    }  // namespace sequant

@@ -337,7 +337,7 @@
 
 <span class="c1">// clang-format off</span>
 <span class="k">auto</span><span class="w"> </span><span class="n">word_components</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">x3</span><span class="o">::</span><span class="n">unicode</span><span class="o">::</span><span class="n">alnum</span>
-<span class="w">                       </span><span class="o">|</span><span class="w"> </span><span class="n">x3</span><span class="o">::</span><span class="n">char_</span><span class="p">(</span><span class="sc">&#39;_&#39;</span><span class="p">)</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="n">x3</span><span class="o">::</span><span class="n">unicode</span><span class="o">::</span><span class="n">char_</span><span class="p">(</span><span class="sa">L</span><span class="sc">&#39;⁔&#39;</span><span class="p">)</span>
+<span class="w">                       </span><span class="o">|</span><span class="w"> </span><span class="n">x3</span><span class="o">::</span><span class="n">char_</span><span class="p">(</span><span class="sc">&#39;_&#39;</span><span class="p">)</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="n">x3</span><span class="o">::</span><span class="n">unicode</span><span class="o">::</span><span class="n">char_</span><span class="p">(</span><span class="sa">L</span><span class="sc">&#39;⁔&#39;</span><span class="p">)</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="n">x3</span><span class="o">::</span><span class="n">unicode</span><span class="o">::</span><span class="n">char_</span><span class="p">(</span><span class="sa">L</span><span class="sc">&#39;̃&#39;</span><span class="p">)</span>
 <span class="w">                       </span><span class="c1">// Superscript and Subscript block</span>
 <span class="w">                       </span><span class="o">|</span><span class="w"> </span><span class="p">(</span><span class="n">x3</span><span class="o">::</span><span class="n">unicode</span><span class="o">::</span><span class="n">char_</span><span class="p">(</span><span class="n">to_char_type</span><span class="p">(</span><span class="mh">0x2070</span><span class="p">),</span><span class="w"> </span><span class="n">to_char_type</span><span class="p">(</span><span class="mh">0x209F</span><span class="p">))</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">x3</span><span class="o">::</span><span class="n">unicode</span><span class="o">::</span><span class="n">unassigned</span><span class="p">)</span>
 <span class="w">                       </span><span class="c1">// These are defined in the Latin-1 Supplement block and thus need to be listed explicitly</span>
@@ -518,7 +518,7 @@
             
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on Feb 20, 2025 11:49:24 PM</div>
+              Last updated on Feb 21, 2025 7:54:06 PM</div>
           </div>
           <div class="right-details">
             <div class="icons">

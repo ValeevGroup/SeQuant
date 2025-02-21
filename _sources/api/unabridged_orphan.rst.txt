@@ -205,11 +205,6 @@ Files
 .. toctree::
    :maxdepth: 5
 
-   file_SeQuant_domain_eval_eval.cpp.rst
-
-.. toctree::
-   :maxdepth: 5
-
    file_SeQuant_domain_eval_eval.hpp.rst
 
 .. toctree::

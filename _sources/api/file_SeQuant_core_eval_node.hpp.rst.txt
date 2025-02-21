@@ -41,6 +41,8 @@ Included By
 -----------
 
 
+- :ref:`file_SeQuant_core_eval_expr.cpp`
+
 - :ref:`file_SeQuant_core_optimize_optimize.cpp`
 
 - :ref:`file_SeQuant_domain_eval_cache_manager.cpp`
@@ -83,15 +85,9 @@ Functions
 
 - :ref:`exhale_function_namespacesequant_1acab4cb56007fd0234e4e50cb5644b9e6`
 
-- :ref:`exhale_function_namespacesequant_1a43c280d1d7825ec43ef7f8d0d6f1b939`
-
-- :ref:`exhale_function_namespacesequant_1aad3c0058664f7dd296a0001452f8d000`
-
 - :ref:`exhale_function_namespacesequant_1ad87336ae3651a9bdeca591845c4227ea`
 
 - :ref:`exhale_function_namespacesequant_1a7b045a5c2e6d4bd488eaa1b64c796daf`
-
-- :ref:`exhale_function_namespacesequant_1ac1dadebbbfc2de8e5b187ef6d1f9e36b`
 
 
 Typedefs
@@ -112,12 +108,6 @@ Variables
 - :ref:`exhale_variable_eval__node_8hpp_1a6b81f93248dd3d8f5555f4ed4611d983`
 
 - :ref:`exhale_variable_eval__node_8hpp_1a4335192943e111d6f1b0696f97a1738a`
-
-- :ref:`exhale_variable_namespacesequant_1afd63aea3c6861fd4f3123427de29fa89`
-
-- :ref:`exhale_variable_namespacesequant_1a3bd314ee5ff6c15b4b2a11e42be69de4`
-
-- :ref:`exhale_variable_namespacesequant_1ab5e1ca79d2de9542f7e0ed8d9fd96488`
 
 - :ref:`exhale_variable_eval__node_8hpp_1a10bafb4b6eef32c348d5dde9d4613c38`
 

@@ -270,7 +270,9 @@
 <span class="cp">#ifndef SEQUANT_ALGORITHM_HPP</span>
 <span class="cp">#define SEQUANT_ALGORITHM_HPP</span>
 
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;SeQuant/core/container.hpp&gt;</span>
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;SeQuant/core/meta.hpp&gt;</span>
+
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;boost/dynamic_bitset.hpp&gt;</span>
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;range/v3/view.hpp&gt;</span>
 
@@ -405,6 +407,17 @@
 <span class="w">         </span><span class="n">transform</span><span class="p">([](</span><span class="k">auto</span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">kv</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">get</span><span class="o">&lt;</span><span class="mi">0</span><span class="o">&gt;</span><span class="p">(</span><span class="n">kv</span><span class="p">);</span><span class="w"> </span><span class="p">});</span>
 <span class="p">}</span>
 
+<span class="k">using</span><span class="w"> </span><span class="n">EvalSequence</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">container</span><span class="o">::</span><span class="n">svector</span><span class="o">&lt;</span><span class="kt">int</span><span class="o">&gt;</span><span class="p">;</span>
+
+<span class="k">template</span><span class="w"> </span><span class="o">&lt;</span><span class="k">typename</span><span class="w"> </span><span class="nc">Rng</span><span class="o">&gt;</span>
+<span class="k">auto</span><span class="w"> </span><span class="n">inits</span><span class="p">(</span><span class="n">Rng</span><span class="w"> </span><span class="k">const</span><span class="o">&amp;</span><span class="w"> </span><span class="n">rng</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="k">using</span><span class="w"> </span><span class="n">ranges</span><span class="o">::</span><span class="n">views</span><span class="o">::</span><span class="n">slice</span><span class="p">;</span>
+<span class="w">  </span><span class="k">using</span><span class="w"> </span><span class="n">ranges</span><span class="o">::</span><span class="n">views</span><span class="o">::</span><span class="n">transform</span><span class="p">;</span>
+<span class="w">  </span><span class="k">return</span><span class="w"> </span><span class="n">rng</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="n">transform</span><span class="p">([</span><span class="n">n</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="o">&amp;</span><span class="n">rng</span><span class="p">](</span><span class="k">auto</span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">val</span><span class="p">)</span><span class="w"> </span><span class="k">mutable</span><span class="w"> </span><span class="p">{</span>
+<span class="w">           </span><span class="k">return</span><span class="w"> </span><span class="n">slice</span><span class="p">(</span><span class="n">rng</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="o">++</span><span class="n">n</span><span class="p">);</span>
+<span class="w">         </span><span class="p">});</span>
+<span class="p">}</span>
+
 <span class="p">}</span><span class="w">  </span><span class="c1">// namespace sequant</span>
 
 <span class="cp">#endif  </span><span class="c1">// SEQUANT_ALGORITHM_HPP</span>
@@ -429,7 +442,7 @@
             
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on Feb 20, 2025 11:49:24 PM</div>
+              Last updated on Feb 21, 2025 7:54:06 PM</div>
           </div>
           <div class="right-details">
             <div class="icons">

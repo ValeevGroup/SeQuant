@@ -47,8 +47,6 @@ Functions
 ---------
 
 
-- :ref:`exhale_function_namespacesequant_1a9532eeef85be3bedb29a5573336ef2d0`
-
 - :ref:`exhale_function_namespacesequant_1a999ba9d32dc3a0fdcce6e25fd2e2148e`
 
 - :ref:`exhale_function_namespacesequant_1a8b27eb76fdeb9c0b9410f66bb7f0a0cc`

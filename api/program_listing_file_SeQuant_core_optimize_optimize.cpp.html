@@ -363,7 +363,7 @@
 <span class="w">    </span><span class="p">};</span>
 
 <span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="k">auto</span><span class="w"> </span><span class="k">const</span><span class="o">&amp;</span><span class="w"> </span><span class="n">term</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">expr</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
-<span class="w">      </span><span class="k">auto</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="n">node</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">eval_node</span><span class="o">&lt;</span><span class="n">EvalExpr</span><span class="o">&gt;</span><span class="p">(</span><span class="n">term</span><span class="p">);</span>
+<span class="w">      </span><span class="k">auto</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="n">node</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">binarize</span><span class="p">(</span><span class="n">term</span><span class="p">);</span>
 <span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">has_only_single_atom</span><span class="p">(</span><span class="n">term</span><span class="p">))</span><span class="w"> </span><span class="p">{</span>
 <span class="w">        </span><span class="n">visitor</span><span class="p">(</span><span class="n">node</span><span class="p">);</span>
 <span class="w">      </span><span class="p">}</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="p">{</span>
@@ -583,7 +583,7 @@
             
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on Feb 20, 2025 11:49:24 PM</div>
+              Last updated on Feb 21, 2025 7:54:06 PM</div>
           </div>
           <div class="right-details">
             <div class="icons">

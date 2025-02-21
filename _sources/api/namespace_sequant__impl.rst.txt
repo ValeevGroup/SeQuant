@@ -1,0 +1,13 @@
+
+.. _namespace_sequant__impl:
+
+Namespace sequant::impl
+=======================
+
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1_1impl_1a7cabbe62ed6706fc677111408b3bc95b`

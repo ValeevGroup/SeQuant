@@ -270,6 +270,7 @@
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;SeQuant/core/abstract_tensor.hpp&gt;</span>
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;SeQuant/core/expr.hpp&gt;</span>
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;SeQuant/core/index.hpp&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;SeQuant/core/op.hpp&gt;</span>
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;SeQuant/core/tensor.hpp&gt;</span>
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;SeQuant/core/tensor_canonicalizer.hpp&gt;</span>
 
@@ -278,7 +279,8 @@
 <span class="n">Tensor</span><span class="o">::~</span><span class="n">Tensor</span><span class="p">()</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">default</span><span class="p">;</span>
 
 <span class="kt">void</span><span class="w"> </span><span class="nf">Tensor::assert_nonreserved_label</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">wstring_view</span><span class="w"> </span><span class="n">label</span><span class="p">)</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="p">{</span>
-<span class="w">  </span><span class="c1">// assert(label != overlap_label());</span>
+<span class="w">  </span><span class="n">assert</span><span class="p">(</span><span class="o">!</span><span class="n">ranges</span><span class="o">::</span><span class="n">contains</span><span class="p">(</span><span class="n">FNOperator</span><span class="o">::</span><span class="n">labels</span><span class="p">(),</span><span class="w"> </span><span class="n">label</span><span class="p">)</span><span class="w"> </span><span class="o">&amp;&amp;</span>
+<span class="w">         </span><span class="o">!</span><span class="n">ranges</span><span class="o">::</span><span class="n">contains</span><span class="p">(</span><span class="n">BNOperator</span><span class="o">::</span><span class="n">labels</span><span class="p">(),</span><span class="w"> </span><span class="n">label</span><span class="p">));</span>
 <span class="p">}</span>
 
 <span class="kt">void</span><span class="w"> </span><span class="nf">Tensor::adjoint</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
@@ -326,7 +328,7 @@
             
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on Feb 20, 2025 11:49:24 PM</div>
+              Last updated on Feb 21, 2025 7:54:06 PM</div>
           </div>
           <div class="right-details">
             <div class="icons">

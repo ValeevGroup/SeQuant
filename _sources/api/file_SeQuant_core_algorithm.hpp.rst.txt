@@ -25,6 +25,8 @@ Includes
 --------
 
 
+- ``SeQuant/core/container.hpp`` (:ref:`file_SeQuant_core_container.hpp`)
+
 - ``SeQuant/core/meta.hpp``
 
 - ``algorithm`` (:ref:`file_SeQuant_core_algorithm.hpp`)
@@ -51,6 +53,8 @@ Included By
 
 - :ref:`file_SeQuant_core_expr.cpp`
 
+- :ref:`file_SeQuant_core_optimize.hpp`
+
 - :ref:`file_SeQuant_core_tensor_network.cpp`
 
 - :ref:`file_SeQuant_core_tensor_network_v2.cpp`
@@ -75,6 +79,8 @@ Functions
 
 - :ref:`exhale_function_namespacesequant_1a76ac6d4264f742c11bb19037d9686b8e`
 
+- :ref:`exhale_function_namespacesequant_1a0b02572642a937415bf42e47899d6647`
+
 - :ref:`exhale_function_namespacesequant_1a1f2111e048cde79c5edaf1371d65bf50`
 
 - :ref:`exhale_function_namespacesequant_1a9fb532127bfd2f2fa6242f3a82772b42`
@@ -85,6 +91,8 @@ Functions
 Typedefs
 --------
 
+
+- :ref:`exhale_typedef_namespacesequant_1a1635f01fc0a05c311a8ffdd1d4f79126`
 
 - :ref:`exhale_typedef_namespacesequant_1a29942dea09dd6e9780b9507ad0feaf86`
 

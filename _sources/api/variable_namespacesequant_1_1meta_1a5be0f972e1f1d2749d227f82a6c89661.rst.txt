@@ -1,0 +1,14 @@
+.. _exhale_variable_namespacesequant_1_1meta_1a5be0f972e1f1d2749d227f82a6c89661:
+
+Variable sequant::meta::is_eval_node_range
+==========================================
+
+- Defined in :ref:`file_SeQuant_core_eval_expr.hpp`
+
+
+Variable Documentation
+----------------------
+
+
+.. doxygenvariable:: sequant::meta::is_eval_node_range
+   :project: SeQuant

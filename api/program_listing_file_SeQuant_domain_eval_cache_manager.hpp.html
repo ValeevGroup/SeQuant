@@ -343,7 +343,7 @@
 <span class="p">};</span><span class="w">  </span><span class="c1">// CacheManager</span>
 
 <span class="k">template</span><span class="w"> </span><span class="o">&lt;</span><span class="k">typename</span><span class="w"> </span><span class="nc">NodesI</span><span class="p">,</span>
-<span class="w">          </span><span class="k">typename</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">enable_if_t</span><span class="o">&lt;</span><span class="n">IsIterableOfEvalNodes</span><span class="o">&lt;</span><span class="n">NodesI</span><span class="o">&gt;&gt;&gt;</span>
+<span class="w">          </span><span class="k">typename</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">enable_if_t</span><span class="o">&lt;</span><span class="n">meta</span><span class="o">::</span><span class="n">is_eval_node_range</span><span class="o">&lt;</span><span class="n">NodesI</span><span class="o">&gt;&gt;&gt;</span>
 <span class="n">CacheManager</span><span class="w"> </span><span class="n">cache_manager</span><span class="p">(</span><span class="n">NodesI</span><span class="w"> </span><span class="k">const</span><span class="o">&amp;</span><span class="w"> </span><span class="n">nodes</span><span class="p">,</span>
 <span class="w">                           </span><span class="kt">size_t</span><span class="w"> </span><span class="n">min_repeats</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">2</span><span class="p">)</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span>
 <span class="w">  </span><span class="k">auto</span><span class="w"> </span><span class="n">imed_counts</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">container</span><span class="o">::</span><span class="n">map</span><span class="o">&lt;</span><span class="kt">size_t</span><span class="p">,</span><span class="w"> </span><span class="kt">size_t</span><span class="o">&gt;</span><span class="p">{};</span>
@@ -402,7 +402,7 @@
             
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on Feb 20, 2025 11:49:24 PM</div>
+              Last updated on Feb 21, 2025 7:54:06 PM</div>
           </div>
           <div class="right-details">
             <div class="icons">

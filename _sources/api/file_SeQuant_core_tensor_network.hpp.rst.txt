@@ -65,6 +65,8 @@ Included By
 -----------
 
 
+- :ref:`file_SeQuant_core_eval_expr.cpp`
+
 - :ref:`file_SeQuant_core_expr.cpp`
 
 - :ref:`file_SeQuant_core_optimize.hpp`
@@ -84,6 +86,8 @@ Namespaces
 
 - :ref:`namespace_sequant`
 
+- :ref:`namespace_std`
+
 
 Classes
 -------
@@ -93,7 +97,21 @@ Classes
 
 - :ref:`exhale_struct_structsequant_1_1_tensor_network_1_1_full_label_compare`
 
+- :ref:`exhale_struct_structsequant_1_1_tensor_network_1_1_graph_data`
+
 - :ref:`exhale_struct_structsequant_1_1_tensor_network_1_1_slot_canonicalization_metadata`
+
+- :ref:`exhale_struct_structstd_1_1tuple__element_3_010_00_01sequant_1_1_tensor_network_1_1_graph_data_01_4`
+
+- :ref:`exhale_struct_structstd_1_1tuple__element_3_011_00_01sequant_1_1_tensor_network_1_1_graph_data_01_4`
+
+- :ref:`exhale_struct_structstd_1_1tuple__element_3_012_00_01sequant_1_1_tensor_network_1_1_graph_data_01_4`
+
+- :ref:`exhale_struct_structstd_1_1tuple__element_3_013_00_01sequant_1_1_tensor_network_1_1_graph_data_01_4`
+
+- :ref:`exhale_struct_structstd_1_1tuple__element_3_014_00_01sequant_1_1_tensor_network_1_1_graph_data_01_4`
+
+- :ref:`exhale_struct_structstd_1_1tuple__size_3_01sequant_1_1_tensor_network_1_1_graph_data_01_4`
 
 - :ref:`exhale_class_classsequant_1_1_tensor_network`
 

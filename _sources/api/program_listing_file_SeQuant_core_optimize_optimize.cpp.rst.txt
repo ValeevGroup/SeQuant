@@ -110,7 +110,7 @@ Program Listing for File optimize.cpp
        };
    
        for (auto const& term : expr) {
-         auto const node = eval_node<EvalExpr>(term);
+         auto const node = binarize(term);
          if (has_only_single_atom(term)) {
            visitor(node);
          } else {

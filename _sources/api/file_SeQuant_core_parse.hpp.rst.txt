@@ -31,6 +31,8 @@ Includes
 
 - ``SeQuant/core/index.hpp`` (:ref:`file_SeQuant_core_index.hpp`)
 
+- ``SeQuant/core/op.hpp`` (:ref:`file_SeQuant_core_op.hpp`)
+
 - ``SeQuant/core/tensor.hpp`` (:ref:`file_SeQuant_core_tensor.hpp`)
 
 - ``stdexcept``

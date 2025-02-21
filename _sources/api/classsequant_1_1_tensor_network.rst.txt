@@ -16,6 +16,7 @@ Nested Types
 - :ref:`exhale_class_classsequant_1_1_tensor_network_1_1_edge`
 - :ref:`exhale_struct_structsequant_1_1_tensor_network_1_1_edge_1_1_terminal`
 - :ref:`exhale_struct_structsequant_1_1_tensor_network_1_1_full_label_compare`
+- :ref:`exhale_struct_structsequant_1_1_tensor_network_1_1_graph_data`
 - :ref:`exhale_struct_structsequant_1_1_tensor_network_1_1_slot_canonicalization_metadata`
 
 

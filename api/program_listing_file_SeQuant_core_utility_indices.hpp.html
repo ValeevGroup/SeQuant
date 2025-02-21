@@ -509,6 +509,29 @@
 <span class="w">  </span><span class="k">return</span><span class="w"> </span><span class="p">(</span><span class="n">s1</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">s2</span><span class="p">)</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">s1</span><span class="p">.</span><span class="n">value</span><span class="p">()</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">s2</span><span class="p">.</span><span class="n">value</span><span class="p">();</span>
 <span class="p">}</span>
 
+<span class="k">template</span><span class="w"> </span><span class="o">&lt;</span><span class="k">typename</span><span class="w"> </span><span class="nc">Rng</span><span class="p">,</span><span class="w"> </span><span class="k">typename</span><span class="w"> </span><span class="nc">Idx</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ranges</span><span class="o">::</span><span class="n">range_value_t</span><span class="o">&lt;</span><span class="n">Rng</span><span class="o">&gt;</span><span class="p">,</span>
+<span class="w">          </span><span class="k">typename</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">enable_if_t</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="n">is_same_v</span><span class="o">&lt;</span><span class="n">Idx</span><span class="p">,</span><span class="w"> </span><span class="n">Index</span><span class="o">&gt;&gt;&gt;</span>
+<span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="w"> </span><span class="n">csv_labels</span><span class="p">(</span><span class="n">Rng</span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">idxs</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="k">using</span><span class="w"> </span><span class="n">ranges</span><span class="o">::</span><span class="n">views</span><span class="o">::</span><span class="n">concat</span><span class="p">;</span>
+<span class="w">  </span><span class="k">using</span><span class="w"> </span><span class="n">ranges</span><span class="o">::</span><span class="n">views</span><span class="o">::</span><span class="n">intersperse</span><span class="p">;</span>
+<span class="w">  </span><span class="k">using</span><span class="w"> </span><span class="n">ranges</span><span class="o">::</span><span class="n">views</span><span class="o">::</span><span class="n">join</span><span class="p">;</span>
+<span class="w">  </span><span class="k">using</span><span class="w"> </span><span class="n">ranges</span><span class="o">::</span><span class="n">views</span><span class="o">::</span><span class="n">single</span><span class="p">;</span>
+<span class="w">  </span><span class="k">using</span><span class="w"> </span><span class="n">ranges</span><span class="o">::</span><span class="n">views</span><span class="o">::</span><span class="n">transform</span><span class="p">;</span>
+
+<span class="w">  </span><span class="k">auto</span><span class="w"> </span><span class="n">str</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[](</span><span class="n">Index</span><span class="w"> </span><span class="k">const</span><span class="o">&amp;</span><span class="w"> </span><span class="n">i</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">auto</span><span class="w"> </span><span class="n">v</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">concat</span><span class="p">(</span><span class="n">single</span><span class="p">(</span><span class="n">i</span><span class="p">.</span><span class="n">label</span><span class="p">()),</span><span class="w">                             </span><span class="c1">//</span>
+<span class="w">                    </span><span class="n">i</span><span class="p">.</span><span class="n">proto_indices</span><span class="p">()</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="n">transform</span><span class="p">(</span><span class="o">&amp;</span><span class="n">Index</span><span class="o">::</span><span class="n">label</span><span class="p">))</span><span class="w">  </span><span class="c1">//</span>
+<span class="w">             </span><span class="o">|</span><span class="w"> </span><span class="n">join</span><span class="p">;</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">sequant</span><span class="o">::</span><span class="n">to_string</span><span class="p">(</span><span class="n">v</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="n">ranges</span><span class="o">::</span><span class="n">to</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="n">wstring</span><span class="o">&gt;</span><span class="p">);</span>
+<span class="w">  </span><span class="p">};</span>
+
+<span class="w">  </span><span class="k">return</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">forward</span><span class="o">&lt;</span><span class="n">Rng</span><span class="o">&gt;</span><span class="p">(</span><span class="n">idxs</span><span class="p">)</span><span class="w">  </span><span class="c1">//</span>
+<span class="w">         </span><span class="o">|</span><span class="w"> </span><span class="n">transform</span><span class="p">(</span><span class="n">str</span><span class="p">)</span><span class="w">         </span><span class="c1">//</span>
+<span class="w">         </span><span class="o">|</span><span class="w"> </span><span class="n">intersperse</span><span class="p">(</span><span class="s">&quot;,&quot;</span><span class="p">)</span><span class="w">       </span><span class="c1">//</span>
+<span class="w">         </span><span class="o">|</span><span class="w"> </span><span class="n">join</span><span class="w">                   </span><span class="c1">//</span>
+<span class="w">         </span><span class="o">|</span><span class="w"> </span><span class="n">ranges</span><span class="o">::</span><span class="n">to</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="o">&gt;</span><span class="p">;</span>
+<span class="p">}</span>
+
 <span class="p">}</span><span class="w">  </span><span class="c1">// namespace sequant</span>
 
 <span class="cp">#endif  </span><span class="c1">// SEQUANT_CORE_UTILITY_INDICES_HPP</span>
@@ -533,7 +556,7 @@
             
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on Feb 20, 2025 11:49:24 PM</div>
+              Last updated on Feb 21, 2025 7:54:06 PM</div>
           </div>
           <div class="right-details">
             <div class="icons">

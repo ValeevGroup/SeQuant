@@ -521,7 +521,9 @@ Program Listing for File op.hpp
    
      static const container::svector<std::wstring> &labels();
    
-     std::wstring_view label() const override;
+     std::wstring_view label() const override {
+       return vacuum() == Vacuum::Physical ? labels()[0] : labels()[1];
+     }
    
      std::wstring to_latex() const override {
        std::wstring result;

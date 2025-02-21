@@ -27,6 +27,8 @@ Includes
 
 - ``SeQuant/core/abstract_tensor.hpp`` (:ref:`file_SeQuant_core_abstract_tensor.hpp`)
 
+- ``SeQuant/core/algorithm.hpp`` (:ref:`file_SeQuant_core_algorithm.hpp`)
+
 - ``SeQuant/core/container.hpp`` (:ref:`file_SeQuant_core_container.hpp`)
 
 - ``SeQuant/core/expr.hpp`` (:ref:`file_SeQuant_core_expr.hpp`)
@@ -96,5 +98,5 @@ Variables
 
 - :ref:`exhale_variable_optimize_8hpp_1af529b4a3079403e31c1517777e3134fe`
 
-- :ref:`exhale_variable_optimize_8hpp_1a892fe85ab419bccbbe5d5f2eecc3c86a`
+- :ref:`exhale_variable_optimize_8hpp_1ae5fc76b8ef7dadc78e5f9078889e820e`
 
