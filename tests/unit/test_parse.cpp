@@ -187,6 +187,52 @@ TEST_CASE("parse_expr", "[parse]") {
     REQUIRE(t3.particle_symmetry() == ParticleSymmetry::nonsymm);
   }
 
+  SECTION("NormalOperator") {
+    {
+      using NOp = FNOperator;
+      auto expr = parse_expr(L"a{i1;a1}");
+      REQUIRE(expr->is<NOp>());
+      REQUIRE(expr->as<NOp>().label() == NOp::labels()[0]);
+      REQUIRE(expr->as<NOp>().creators().size() == 1);
+      REQUIRE(expr->as<NOp>().creators().at(0).index().label() == L"a_1");
+      REQUIRE(expr->as<NOp>().annihilators().size() == 1);
+      REQUIRE(expr->as<NOp>().annihilators().at(0).index() == L"i_1");
+      REQUIRE(expr->as<NOp>().vacuum() == Vacuum::Physical);
+    }
+    {
+      using NOp = FNOperator;
+      auto expr = parse_expr(L"ã{i1;}");
+      REQUIRE(expr->is<NOp>());
+      REQUIRE(expr->as<NOp>().label() == NOp::labels()[1]);
+      REQUIRE(expr->as<NOp>().creators().size() == 0);
+      REQUIRE(expr->as<NOp>().annihilators().size() == 1);
+      REQUIRE(expr->as<NOp>().annihilators().at(0).index() == L"i_1");
+      REQUIRE(expr->as<NOp>().vacuum() == Vacuum::SingleProduct);
+    }
+
+    {
+      using NOp = BNOperator;
+      auto expr = parse_expr(L"b{i1;a1}");
+      REQUIRE(expr->is<NOp>());
+      REQUIRE(expr->as<NOp>().label() == NOp::labels()[0]);
+      REQUIRE(expr->as<NOp>().creators().size() == 1);
+      REQUIRE(expr->as<NOp>().creators().at(0).index().label() == L"a_1");
+      REQUIRE(expr->as<NOp>().annihilators().size() == 1);
+      REQUIRE(expr->as<NOp>().annihilators().at(0).index() == L"i_1");
+      REQUIRE(expr->as<NOp>().vacuum() == Vacuum::Physical);
+    }
+    {
+      using NOp = BNOperator;
+      auto expr = parse_expr(L"b̃{;a1}");
+      REQUIRE(expr->is<NOp>());
+      REQUIRE(expr->as<NOp>().label() == NOp::labels()[1]);
+      REQUIRE(expr->as<NOp>().creators().size() == 1);
+      REQUIRE(expr->as<NOp>().creators().at(0).index().label() == L"a_1");
+      REQUIRE(expr->as<NOp>().annihilators().size() == 0);
+      REQUIRE(expr->as<NOp>().vacuum() == Vacuum::SingleProduct);
+    }
+  }
+
   SECTION("Constant") {
     REQUIRE(parse_expr(L"1/2")->is<Constant>());
     REQUIRE(parse_expr(L"0/2")->is<Constant>());
@@ -380,7 +426,8 @@ TEST_CASE("deparse", "[parse]") {
       L"1/2 (a + b) * c",
       L"T1{}:N-N-N + T2{;;x_1}:N-N-N * T3{;;x_1}:N-N-N + T4{a_1;;x_2}:S-C-S * "
       L"T5{;a_1;x_2}:S-S-S",
-      L"q1 * q2^* * q3"};
+      L"q1 * q2^* * q3",
+      L"1/2 ã{i_1;i_2} * b̃{i_3;i_4}"};
 
   for (const std::wstring& current : expressions) {
     ExprPtr expression = parse_expr(current);

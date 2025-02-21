@@ -78,7 +78,6 @@ ExprPtr CC::sim_tr(ExprPtr expr, size_t commutator_rank) {
 std::vector<ExprPtr> CC::t(size_t commutator_rank, size_t pmax, size_t pmin) {
   pmax = (pmax == std::numeric_limits<size_t>::max() ? N : pmax);
 
-  assert(commutator_rank >= 1 && "commutator rank should be >= 1");
   assert(pmax >= pmin && "pmax should be >= pmin");
 
   // 1. construct hbar(op) in canonical form
@@ -267,7 +266,7 @@ std::vector<ExprPtr> CC::λ_pt(size_t order, size_t rank) {
 
 std::vector<ExprPtr> CC::eom_r(nₚ np, nₕ nh) {
   assert(!unitary() && "Unitary ansatz is not yet supported");
-  assert(np > 0 || nh > 0 && "Unsupported excitation order");
+  assert((np > 0 || nh > 0) && "Unsupported excitation order");
   assert(np == nh &&
          "Only EE-EOM-CC has been tested ... remove this assert to try "
          "Fock-space EOM-CC");

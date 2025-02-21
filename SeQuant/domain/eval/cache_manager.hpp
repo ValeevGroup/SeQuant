@@ -125,7 +125,7 @@ class CacheManager {
 /// \see CacheManager
 ///
 template <typename NodesI,
-          typename = std::enable_if_t<IsIterableOfEvalNodes<NodesI>>>
+          typename = std::enable_if_t<meta::is_eval_node_range<NodesI>>>
 CacheManager cache_manager(NodesI const& nodes,
                            size_t min_repeats = 2) noexcept {
   auto imed_counts = container::map<size_t, size_t>{};

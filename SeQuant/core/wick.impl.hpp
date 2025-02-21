@@ -615,7 +615,8 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
           const auto &vtypes = g.vertex_types;
 #else
           TensorNetwork tn(expr_input_->as<Product>().factors());
-          auto [graph, vlabels, vcolors, vtypes] = tn.make_bliss_graph();
+          auto [graph, vlabels, vtexlabels, vcolors, vtypes] =
+              tn.make_bliss_graph();
 #endif
           const auto n = vlabels.size();
           assert(vtypes.size() == n);

@@ -3,12 +3,16 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/eval_expr.hpp>
+#include <SeQuant/core/eval_node.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/tensor.hpp>
+#include <SeQuant/core/tensor_canonicalizer.hpp>
+#include <SeQuant/core/tensor_network.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/wstring.hpp>
+#include <SeQuant/external/bliss/graph.hh>
 
 #include <range/v3/action.hpp>
 #include <range/v3/algorithm.hpp>
@@ -45,28 +49,6 @@ std::wstring_view const var_label = L"Z";
 
 }  // namespace
 
-NestedTensorIndices::NestedTensorIndices(const sequant::Tensor& tnsr) {
-  using ranges::views::join;
-  using ranges::views::transform;
-
-  for (auto&& ix : tnsr.aux()) {
-    assert(!ix.has_proto_indices() &&
-           "Aux indices with proto indices not supported");
-    outer.emplace_back(ix);
-  }
-
-  auto append_unique = [](auto& cont, auto const& el) {
-    if (!ranges::contains(cont, el)) cont.emplace_back(el);
-  };
-
-  for (Index const& ix : tnsr.const_braket())
-    append_unique(ix.has_proto_indices() ? inner : outer, ix);
-
-  for (Index const& ix :
-       tnsr.const_braket() | transform(&Index::proto_indices) | join)
-    append_unique(outer, ix);
-}
-
 std::string to_label_annotation(const Index& idx) {
   using namespace ranges::views;
   using ranges::to;
@@ -77,65 +59,64 @@ std::string to_label_annotation(const Index& idx) {
           ranges::views::join | to<std::string>);
 }
 
-std::string EvalExpr::braket_annot() const noexcept {
+std::string EvalExpr::indices_annot() const noexcept {
+  using ranges::views::filter;
+  using ranges::views::join;
+  using ranges::views::transform;
+
   if (!is_tensor()) return {};
+  auto outer = csv_labels(canon_indices_  //
+                          | filter(ranges::not_fn(&Index::has_proto_indices)));
 
-  // given an iterable of sequant::Index objects, returns a string made
-  // of their full labels separated by comma
-  //   eg. (a_1^{i_1,i_2},a_2^{i_2,i_3}) -> "a_1i_1i_2,a_2i_2i_3"
-  //   eg. (i_1, i_2) -> "i_1,i_2"
-  auto annot = [](auto&& ixs) -> std::string {
-    using namespace ranges::views;
+  auto inner = csv_labels(canon_indices_  //
+                          | filter(&Index::has_proto_indices));
 
-    auto annotations = ixs | transform(to_label_annotation);
-
-    return annotations                      //
-           | intersperse(std::string{","})  //
-           | join                           //
-           | ranges::to<std::string>;
-  };
-
-  auto nested = NestedTensorIndices{as_tensor()};
-
-  return nested.inner.empty()  //
-             ? annot(nested.outer)
-             : annot(nested.outer) + ";" + annot(nested.inner);
+  return outer + (inner.empty() ? "" : (";" + inner));
 }
 
-size_t EvalExpr::global_id_{};
+EvalExpr::index_vector const& EvalExpr::canon_indices() const noexcept {
+  return canon_indices_;
+}
 
 EvalExpr::EvalExpr(Tensor const& tnsr)
     : op_type_{EvalOp::Id},
       result_type_{ResultType::Tensor},
-      hash_value_{hash_terminal_tensor(tnsr)},
-      id_{},
-      expr_{tnsr.clone()},
-      tot_{is_tot(tnsr)} {}
+      expr_{tnsr.clone()} {
+  if (is_tot(tnsr)) {
+    ExprPtrList tlist{expr_};
+    auto tn = TensorNetwork(tlist);
+    auto md =
+        tn.canonicalize_slots(TensorCanonicalizer::cardinal_tensor_labels());
+    hash_value_ = md.hash_value();
+    canon_phase_ = md.phase;
+    canon_indices_ = md.get_indices() | ranges::to<index_vector>;
+  } else {
+    hash_value_ = hash_terminal_tensor(tnsr);
+    canon_phase_ = 1;
+    canon_indices_ = tnsr.indices() | ranges::to<index_vector>;
+  }
+}
 
 EvalExpr::EvalExpr(Constant const& c)
     : op_type_{EvalOp::Id},
       result_type_{ResultType::Scalar},
       hash_value_{hash::value(c)},
-      id_{},
-      expr_{c.clone()},
-      tot_{false} {}
+      expr_{c.clone()} {}
 
 EvalExpr::EvalExpr(Variable const& v)
     : op_type_{EvalOp::Id},
       result_type_{ResultType::Scalar},
       hash_value_{hash::value(v)},
-      id_{},
-      expr_{v.clone()},
-      tot_{false} {}
+      expr_{v.clone()} {}
 
-EvalExpr::EvalExpr(EvalExpr const& left, EvalExpr const& right, EvalOp op)
+EvalExpr::EvalExpr(EvalOp op, ResultType res, ExprPtr const& ex,
+                   index_vector ixs, std::int8_t p, size_t h)
     : op_type_{op},
-      hash_value_{hash_imed(left, right, op)},
-      id_{++global_id_},
-      expr_{make_imed(left, right, op)} {
-  result_type_ = expr_->is<Tensor>() ? ResultType::Tensor : ResultType::Scalar;
-  tot_ = expr_->is<Tensor>() && is_tot(expr_->as<Tensor>());
-}
+      result_type_{res},
+      expr_{ex.clone()},
+      canon_indices_{std::move(ixs)},
+      canon_phase_{p},
+      hash_value_{h} {}
 
 EvalOp EvalExpr::op_type() const noexcept { return op_type_; }
 
@@ -143,11 +124,11 @@ ResultType EvalExpr::result_type() const noexcept { return result_type_; }
 
 size_t EvalExpr::hash_value() const noexcept { return hash_value_; }
 
-size_t EvalExpr::id() const noexcept { return id_; }
-
 ExprPtr EvalExpr::expr() const noexcept { return expr_; }
 
-bool EvalExpr::tot() const noexcept { return tot_; }
+bool EvalExpr::tot() const noexcept {
+  return ranges::any_of(canon_indices(), &Index::has_proto_indices);
+}
 
 std::wstring EvalExpr::to_latex() const noexcept { return expr_->to_latex(); }
 
@@ -179,22 +160,16 @@ Variable const& EvalExpr::as_variable() const noexcept {
 
 std::string EvalExpr::label() const noexcept {
   if (is_tensor())
-    return to_string(as_tensor().label()) + "(" + braket_annot() + ")";
+    return to_string(as_tensor().label()) + "(" + indices_annot() + ")";
   else if (is_constant()) {
-    auto const& c = as_constant();
-    auto real = Constant{c.value().real()}.value<double>();
-    auto imag = Constant{c.value().imag()}.value<double>();
-    assert(real != 0 || imag != 0);
-    std::string r = std::to_string(real);
-    std::string i = std::to_string(imag);
-    if (real == 0) return i;
-    if (imag == 0) return r;
-    return "(" + r + "," + i + ")";
+    return sequant::to_string(sequant::to_latex(as_constant()));
   } else {
     assert(is_variable());
     return to_string(as_variable().label());
   }
 }
+
+std::int8_t EvalExpr::canon_phase() const noexcept { return canon_phase_; }
 
 namespace {
 
@@ -263,46 +238,6 @@ size_t hash_imed(EvalExpr const& left, EvalExpr const& right,
     hash::combine(h, hash_tensor_pair_topology(left.expr()->as<Tensor>(),
                                                right.expr()->as<Tensor>()));
   return h;
-}
-
-[[maybe_unused]] std::pair<container::svector<Index>,  // bra
-                           container::svector<Index>   // ket
-                           >
-target_braket(Tensor const& t1, Tensor const& t2) noexcept {
-  using ranges::contains;
-  using ranges::views::concat;
-  using ranges::views::filter;
-  using idx_container = container::svector<Index>;
-
-  // find contracted indices
-  const auto contracted_indices =
-      concat(t1.bra() | filter([&](const auto& idx) {
-               return contains(t2.ket(), idx);
-             }),
-             t1.ket() | filter([&](const auto& idx) {
-               return contains(t2.bra(), idx);
-             })) |
-      ranges::to<idx_container>();
-
-  // combine free bra indices
-  const auto result_bra = concat(t1.bra() | filter([&](const auto& idx) {
-                                   return !contains(contracted_indices, idx);
-                                 }),
-                                 t2.bra() | filter([&](const auto& idx) {
-                                   return !contains(contracted_indices, idx);
-                                 })) |
-                          ranges::to<idx_container>();
-
-  // combine free ket indices
-  const auto result_ket = concat(t1.ket() | filter([&](const auto& idx) {
-                                   return !contains(contracted_indices, idx);
-                                 }),
-                                 t2.ket() | filter([&](const auto& idx) {
-                                   return !contains(contracted_indices, idx);
-                                 })) |
-                          ranges::to<idx_container>();
-
-  return std::make_pair(result_bra, result_ket);
 }
 
 Symmetry tensor_symmetry_sum(EvalExpr const& left,
@@ -458,5 +393,203 @@ ExprPtr make_imed(EvalExpr const& left, EvalExpr const& right,
   }
 }
 }  // namespace
+
+///
+/// \brief Calls canon_hash on all inits subranges.
+/// \see inits
+/// \see canon_hash
+///
+template <typename Rng>
+auto imed_hashes(Rng const& rng) {
+  using ranges::views::transform;
+  return inits(rng) | transform([](auto&& v) {
+           return hash::range_unordered(ranges::begin(v), ranges::end(v));
+         });
+}
+
+struct ExprWithHash {
+  ExprPtr expr;
+  size_t hash;
+};
+
+namespace dummy {
+inline constexpr std::wstring_view label_tensor{L"I"};
+inline constexpr std::wstring_view label_scalar{L"Z"};
+
+template <typename... Args>
+ExprPtr make_tensor(Args&&... args) {
+  return ex<Tensor>(label_tensor, std::forward<Args>(args)...);
+}
+
+ExprPtr make_variable() { return ex<Variable>(label_scalar); }
+
+}  // namespace dummy
+
+using EvalExprNode = FullBinaryNode<EvalExpr>;
+
+///
+/// \brief Collect tensors appearing as a factor at the leaf node of a product
+///        sub-tree, or, at the root node of a sum sub-tree.
+///
+template <typename Rng>
+void collect_tensor_factors(EvalExprNode const& node,  //
+                            Rng& collect) {
+  static_assert(std::is_same_v<ranges::range_value_t<Rng>, ExprWithHash>);
+
+  if (auto op = node->op_type();
+      node->is_tensor() && op == EvalOp::Id || op == EvalOp::Sum)
+    collect.emplace_back(ExprWithHash{node->expr(), node->hash_value()});
+  else if (node->op_type() == EvalOp::Prod && !node.leaf()) {
+    collect_tensor_factors(node.left(), collect);
+    collect_tensor_factors(node.right(), collect);
+  }
+}
+
+EvalExprNode binarize(Constant const& c) { return EvalExprNode{EvalExpr{c}}; }
+
+EvalExprNode binarize(Variable const& v) { return EvalExprNode{EvalExpr{v}}; }
+
+EvalExprNode binarize(Tensor const& t) { return EvalExprNode{EvalExpr{t}}; }
+
+EvalExprNode binarize(Sum const& sum) {
+  using ranges::views::move;
+  using ranges::views::transform;
+  auto summands = sum.summands()                                             //
+                  | transform([](ExprPtr const& x) { return binarize(x); })  //
+                  | ranges::to_vector;
+
+  bool const all_tensors =
+      ranges::all_of(summands, [](auto&& n) { return n->is_tensor(); });
+
+  bool const all_scalars =
+      ranges::all_of(summands, [](auto&& n) { return n->is_scalar(); });
+
+  assert(all_tensors | all_scalars);
+
+  auto hvals = summands | transform([](auto&& n) { return n->hash_value(); });
+
+  auto make_sum = [i = 0,                    //
+                   hs = imed_hashes(hvals),  //
+                   all_tensors](EvalExpr const& left,
+                                EvalExpr const& right) mutable -> EvalExpr {
+    auto h = ranges::at(hs, ++i);
+    if (all_tensors) {
+      auto const& t = left.as_tensor();
+      return {EvalOp::Sum,                                                   //
+              ResultType::Tensor,                                            //
+              dummy::make_tensor(bra(t.bra()), ket(t.ket()), aux(t.aux())),  //
+              left.canon_indices(),                                          //
+              1,                                                             //
+              h};
+    } else {
+      return {EvalOp::Sum,             //
+              ResultType::Scalar,      //
+              dummy::make_variable(),  //
+              {},                      //
+              1,                       //
+              h};
+    }
+  };
+
+  return fold_left_to_node(summands | move, make_sum);
+}
+
+EvalExprNode binarize(Product const& prod) {
+  using ranges::views::move;
+  using ranges::views::transform;
+  auto factors = prod.factors()                                             //
+                 | transform([](ExprPtr const& x) { return binarize(x); })  //
+                 | ranges::to_vector;
+
+  auto hvals = factors | transform([](auto&& n) { return n->hash_value(); });
+
+  auto make_prod = [i = 0, hs = imed_hashes(hvals)](
+                       EvalExprNode const& left,
+                       EvalExprNode const& right) mutable -> EvalExpr {
+    auto h = ranges::at(hs, ++i);
+    if (left->is_scalar() && right->is_scalar()) {
+      // scalar * scalar
+      return {
+          EvalOp::Prod, ResultType::Scalar, dummy::make_variable(), {}, 1, h};
+    } else if (left->is_scalar() || right->is_scalar()) {
+      // scalar * tensor or tensor * scalar
+      auto const& tl = left->is_tensor() ? left : right;
+      auto const& t = tl->as_tensor();
+      return {EvalOp::Prod,                                                  //
+              ResultType::Tensor,                                            //
+              dummy::make_tensor(bra(t.bra()), ket(t.ket()), aux(t.aux())),  //
+              tl->canon_indices(),                                           //
+              1,                                                             //
+              h};
+    } else {
+      // tensor * tensor
+      container::svector<ExprWithHash> subfacs;
+      collect_tensor_factors(left, subfacs);
+      collect_tensor_factors(right, subfacs);
+      auto ts = subfacs | transform([](auto&& t) { return t.expr; });
+      auto tn = TensorNetwork(ts);
+      auto canon =
+          tn.canonicalize_slots(TensorCanonicalizer::cardinal_tensor_labels());
+      hash::combine(h, canon.hash_value());
+      bool const scalar_result = ranges::empty(canon.get_indices());
+      if (scalar_result) {
+        return {EvalOp::Prod,            //
+                ResultType::Scalar,      //
+                dummy::make_variable(),  //
+                {},                      //
+                canon.phase,             //
+                h};
+      } else {
+        auto idxs = get_unique_indices(Product(ts));
+        return {EvalOp::Prod,        //
+                ResultType::Tensor,  //
+                dummy::make_tensor(bra(idxs.bra), ket(idxs.ket), aux(idxs.aux)),
+                canon.get_indices<Index::index_vector>(),  //
+                canon.phase,                               //
+                h};
+      }
+    }
+  };
+
+  if (prod.scalar() == 1) {
+    return fold_left_to_node(factors | move, make_prod);
+  } else {
+    auto left = fold_left_to_node(factors | move, make_prod);
+    auto right = binarize(Constant{prod.scalar()});
+
+    auto h = left->hash_value();
+    hash::combine(h, right->hash_value());
+    auto result = EvalExpr{EvalOp::Prod,           //
+                           left->result_type(),    //
+                           left->expr(),           //
+                           left->canon_indices(),  //
+                           1,                      //
+                           h};
+    return EvalExprNode{std::move(result), std::move(left), std::move(right)};
+  }
+}
+
+namespace impl {
+
+EvalExprNode binarize(ExprPtr const& expr) {
+  if (expr->is<Constant>())  //
+    return binarize(expr->as<Constant>());
+
+  if (expr->is<Variable>())  //
+    return binarize(expr->as<Variable>());
+
+  if (expr->is<Tensor>())  //
+    return binarize(expr->as<Tensor>());
+
+  if (expr->is<Sum>())  //
+    return binarize(expr->as<Sum>());
+
+  if (expr->is<Product>())  //
+    return binarize(expr->as<Product>());
+
+  throw std::logic_error("Encountered unsupported expression in binarize.");
+}
+
+}  // namespace impl
 
 }  // namespace sequant

@@ -98,7 +98,7 @@ container::vector<container::vector<size_t>> clusters(Sum const& expr) {
     };
 
     for (auto const& term : expr) {
-      auto const node = eval_node<EvalExpr>(term);
+      auto const node = binarize(term);
       if (has_only_single_atom(term)) {
         visitor(node);
       } else {

@@ -4,6 +4,7 @@
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
+#include <SeQuant/core/op.hpp>
 #include <SeQuant/core/tensor.hpp>
 
 #include <stdexcept>
@@ -96,6 +97,8 @@ std::wstring deparse(const Expr &expr, bool annot_sym = true);
 std::wstring deparse(const Product &product, bool annot_sym);
 std::wstring deparse(const Sum &sum, bool annot_sym);
 std::wstring deparse(const Tensor &tensor, bool annot_sym = true);
+template <Statistics S>
+std::wstring deparse(const NormalOperator<S> &nop);
 std::wstring deparse(const Variable &variable);
 std::wstring deparse(const Constant &constant);
 std::wstring deparse(const Index &index);

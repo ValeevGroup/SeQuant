@@ -4,6 +4,7 @@
 #include <SeQuant/core/complex.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
+#include <SeQuant/core/op.hpp>
 #include <SeQuant/core/tensor.hpp>
 
 #include <range/v3/all.hpp>
@@ -30,6 +31,21 @@ std::wstring deparse_indices(const Range& indices) {
     deparsed += deparse(indices[i]);
 
     if (i + 1 < indices.size()) {
+      deparsed += L",";
+    }
+  }
+
+  return deparsed;
+}
+
+template <typename Range>
+std::wstring deparse_ops(const Range& ops) {
+  std::wstring deparsed;
+
+  for (std::size_t i = 0; i < ops.size(); ++i) {
+    deparsed += deparse(ops[i].index());
+
+    if (i + 1 < ops.size()) {
       deparsed += L",";
     }
   }
@@ -135,6 +151,10 @@ std::wstring deparse(const Expr& expr, bool annot_sym) {
   using namespace details;
   if (expr.is<Tensor>())
     return deparse(expr.as<Tensor>(), annot_sym);
+  else if (expr.is<FNOperator>())
+    return deparse(expr.as<FNOperator>());
+  else if (expr.is<BNOperator>())
+    return deparse(expr.as<BNOperator>());
   else if (expr.is<Sum>())
     return deparse(expr.as<Sum>(), annot_sym);
   else if (expr.is<Product>())
@@ -188,6 +208,23 @@ std::wstring deparse(Tensor const& tensor, bool annot_sym) {
 
   return deparsed;
 }
+
+template <Statistics S>
+std::wstring deparse(NormalOperator<S> const& nop) {
+  std::wstring deparsed(nop.label());
+  deparsed += L"{" + details::deparse_ops(nop.annihilators());
+  if (nop.ncreators() > 0) {
+    deparsed += L";" + details::deparse_ops(nop.creators());
+  }
+  deparsed += L"}";
+
+  return deparsed;
+}
+
+template std::wstring deparse<Statistics::FermiDirac>(
+    NormalOperator<Statistics::FermiDirac> const& nop);
+template std::wstring deparse<Statistics::BoseEinstein>(
+    NormalOperator<Statistics::BoseEinstein> const& nop);
 
 std::wstring deparse(const Constant& constant) {
   return details::deparse_scalar(constant.value());

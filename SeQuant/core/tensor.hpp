@@ -84,6 +84,8 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
 
   /// asserts that @p label is not reserved
   /// @note Tensor with reserved labels are constructed using friends of Tensor
+  ///       or are to be avoided to avoid confusion with other tensorials like
+  ///       NormalOperator
   /// @param label a Tensor label candidate
   void assert_nonreserved_label(std::wstring_view label) const;
 
