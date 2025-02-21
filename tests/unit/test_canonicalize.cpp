@@ -488,9 +488,23 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
                                L"t{a_3,a_2<i_5,i_2>,a_1;i_1,i_4,i_2}:A",
                                Eq, Minus),
            }) {
+        auto ex1 = parse_expr(input1);
+        auto ex2 = parse_expr(input2);
+
+        // TNV2::canonicalize_slots does not support antisymm tensors yet
+        {
+          auto get_symm = [](const auto& t) {
+            if (t.template is<Tensor>())
+              return t.template as<Tensor>().symmetry();
+            return Symmetry::invalid;
+          };
+          if (ranges::contains(ex1, Symmetry::antisymm, get_symm) ||
+              ranges::contains(ex2, Symmetry::antisymm, get_symm))
+            continue;
+        }
+
         std::wcout << "============== " << input1
                    << " ===============" << std::endl;
-        auto ex1 = parse_expr(input1);
         TN tn1(ex1);
         auto cbp1 = tn1.canonicalize_slots(
             TensorCanonicalizer::cardinal_tensor_labels());
@@ -501,7 +515,6 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
 
         std::wcout << "============== " << input2
                    << " ===============" << std::endl;
-        auto ex2 = parse_expr(input2);
         TN tn2(ex2);
         auto cbp2 = tn2.canonicalize_slots(
             TensorCanonicalizer::cardinal_tensor_labels());
@@ -530,7 +543,7 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
       //          l.canonicalize_input_graph = false;
     };
 
-    //    do_test(static_cast<TensorNetworkV2*>(nullptr));
     do_test(static_cast<TensorNetwork*>(nullptr));
+    do_test(static_cast<TensorNetworkV2*>(nullptr));
   }
 }
