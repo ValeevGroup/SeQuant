@@ -213,9 +213,14 @@ TEST_CASE("TensorNetwork", "[elements]") {
     auto gdata = tn.make_bliss_graph();
     const auto& [graph, vlabels, vtexlabels, vcolors, vtypes] = gdata;
 
-    // create dot
+    // test dot representation
+    // N.B. cluster tensor vertices only
     std::basic_ostringstream<wchar_t> oss;
-    REQUIRE_NOTHROW(graph->write_dot(oss, vlabels, vtexlabels));
+    REQUIRE_NOTHROW(graph->write_dot(
+        oss, vlabels, vtexlabels,
+        {.vertex_to_subgraph = [&](std::size_t vertex_ordinal) {
+          return gdata.vertex_to_tensor_cluster(vertex_ordinal);
+        }}));
     // std::wcout << "oss.str() = " << std::endl << oss.str() << std::endl;
     const std::wstring actual = oss.str();
     // clang-format off
@@ -282,6 +287,7 @@ TEST_CASE("TensorNetwork", "[elements]") {
 "v19 [ label=\"κ_4\", texlbl=\"${\\kappa_4}$\", color=\"#e174c5\", fillcolor=\"#e1e8c5\" ];\n"
 "v19 -- v26\n"
 "v19 -- v45\n"
+"subgraph cluster0 {\n"
 "v20 [ label=\"A\", color=\"#257a61\", fillcolor=\"#94f4c2\" ];\n"
 "v20 -- v23\n"
 "v21 [ label=\"bra2a\", color=\"#06d223\", fillcolor=\"#30d28c\" ];\n"
@@ -289,6 +295,8 @@ TEST_CASE("TensorNetwork", "[elements]") {
 "v22 [ label=\"ket2a\", color=\"#c849cb\", fillcolor=\"#c892cb\" ];\n"
 "v22 -- v23\n"
 "v23 [ label=\"bka\", color=\"#257a61\", fillcolor=\"#94f4c2\" ];\n"
+"}\n"
+"subgraph cluster1 {\n"
 "v24 [ label=\"g\", color=\"#300a49\", fillcolor=\"#c05092\" ];\n"
 "v24 -- v27\n"
 "v25 [ label=\"bra2a\", color=\"#06d223\", fillcolor=\"#30d28c\" ];\n"
@@ -296,6 +304,8 @@ TEST_CASE("TensorNetwork", "[elements]") {
 "v26 [ label=\"ket2a\", color=\"#c849cb\", fillcolor=\"#c892cb\" ];\n"
 "v26 -- v27\n"
 "v27 [ label=\"bka\", color=\"#300a49\", fillcolor=\"#c05092\" ];\n"
+"}\n"
+"subgraph cluster2 {\n"
 "v28 [ label=\"t\", color=\"#e812d9\", fillcolor=\"#e890d9\" ];\n"
 "v28 -- v31\n"
 "v29 [ label=\"bra2a\", color=\"#06d223\", fillcolor=\"#30d28c\" ];\n"
@@ -303,6 +313,8 @@ TEST_CASE("TensorNetwork", "[elements]") {
 "v30 [ label=\"ket2a\", color=\"#c849cb\", fillcolor=\"#c892cb\" ];\n"
 "v30 -- v31\n"
 "v31 [ label=\"bka\", color=\"#e812d9\", fillcolor=\"#e890d9\" ];\n"
+"}\n"
+"subgraph cluster3 {\n"
 "v32 [ label=\"t\", color=\"#e812d9\", fillcolor=\"#e890d9\" ];\n"
 "v32 -- v35\n"
 "v33 [ label=\"bra2a\", color=\"#06d223\", fillcolor=\"#30d28c\" ];\n"
@@ -310,6 +322,8 @@ TEST_CASE("TensorNetwork", "[elements]") {
 "v34 [ label=\"ket2a\", color=\"#c849cb\", fillcolor=\"#c892cb\" ];\n"
 "v34 -- v35\n"
 "v35 [ label=\"bka\", color=\"#e812d9\", fillcolor=\"#e890d9\" ];\n"
+"}\n"
+"subgraph cluster4 {\n"
 "v36 [ label=\"t\", color=\"#e812d9\", fillcolor=\"#e890d9\" ];\n"
 "v36 -- v39\n"
 "v37 [ label=\"bra2a\", color=\"#06d223\", fillcolor=\"#30d28c\" ];\n"
@@ -317,6 +331,8 @@ TEST_CASE("TensorNetwork", "[elements]") {
 "v38 [ label=\"ket2a\", color=\"#c849cb\", fillcolor=\"#c892cb\" ];\n"
 "v38 -- v39\n"
 "v39 [ label=\"bka\", color=\"#e812d9\", fillcolor=\"#e890d9\" ];\n"
+"}\n"
+"subgraph cluster5 {\n"
 "v40 [ label=\"ã\", color=\"#2a13ee\", fillcolor=\"#a898ee\" ];\n"
 "v40 -- v43\n"
 "v41 [ label=\"bra2a\", color=\"#06d223\", fillcolor=\"#30d28c\" ];\n"
@@ -324,6 +340,8 @@ TEST_CASE("TensorNetwork", "[elements]") {
 "v42 [ label=\"ket2a\", color=\"#c849cb\", fillcolor=\"#c892cb\" ];\n"
 "v42 -- v43\n"
 "v43 [ label=\"bka\", color=\"#2a13ee\", fillcolor=\"#a898ee\" ];\n"
+"}\n"
+"subgraph cluster6 {\n"
 "v44 [ label=\"ã\", color=\"#2a13ee\", fillcolor=\"#a898ee\" ];\n"
 "v44 -- v47\n"
 "v45 [ label=\"bra2a\", color=\"#06d223\", fillcolor=\"#30d28c\" ];\n"
@@ -331,6 +349,8 @@ TEST_CASE("TensorNetwork", "[elements]") {
 "v46 [ label=\"ket2a\", color=\"#c849cb\", fillcolor=\"#c892cb\" ];\n"
 "v46 -- v47\n"
 "v47 [ label=\"bka\", color=\"#2a13ee\", fillcolor=\"#a898ee\" ];\n"
+"}\n"
+"subgraph cluster7 {\n"
 "v48 [ label=\"ã\", color=\"#2a13ee\", fillcolor=\"#a898ee\" ];\n"
 "v48 -- v51\n"
 "v49 [ label=\"bra2a\", color=\"#06d223\", fillcolor=\"#30d28c\" ];\n"
@@ -338,6 +358,8 @@ TEST_CASE("TensorNetwork", "[elements]") {
 "v50 [ label=\"ket2a\", color=\"#c849cb\", fillcolor=\"#c892cb\" ];\n"
 "v50 -- v51\n"
 "v51 [ label=\"bka\", color=\"#2a13ee\", fillcolor=\"#a898ee\" ];\n"
+"}\n"
+"subgraph cluster8 {\n"
 "v52 [ label=\"ã\", color=\"#2a13ee\", fillcolor=\"#a898ee\" ];\n"
 "v52 -- v55\n"
 "v53 [ label=\"bra2a\", color=\"#06d223\", fillcolor=\"#30d28c\" ];\n"
@@ -345,6 +367,8 @@ TEST_CASE("TensorNetwork", "[elements]") {
 "v54 [ label=\"ket2a\", color=\"#c849cb\", fillcolor=\"#c892cb\" ];\n"
 "v54 -- v55\n"
 "v55 [ label=\"bka\", color=\"#2a13ee\", fillcolor=\"#a898ee\" ];\n"
+"}\n"
+"subgraph cluster9 {\n"
 "v56 [ label=\"ã\", color=\"#2a13ee\", fillcolor=\"#a898ee\" ];\n"
 "v56 -- v59\n"
 "v57 [ label=\"bra2a\", color=\"#06d223\", fillcolor=\"#30d28c\" ];\n"
@@ -352,6 +376,7 @@ TEST_CASE("TensorNetwork", "[elements]") {
 "v58 [ label=\"ket2a\", color=\"#c849cb\", fillcolor=\"#c892cb\" ];\n"
 "v58 -- v59\n"
 "v59 [ label=\"bka\", color=\"#2a13ee\", fillcolor=\"#a898ee\" ];\n"
+"}\n"
 "}\n";
     // clang-format on
 
