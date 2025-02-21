@@ -582,9 +582,13 @@ class NormalOperator : public Operator<S>,
   }
 
   /// @return all possible values returned by label() for this operator type
+  /// @internal labels()[0] is the label used for physical vacuum, and
+  /// labels()[1] for independent-particle vacuum
   static const container::svector<std::wstring> &labels();
 
-  std::wstring_view label() const override;
+  std::wstring_view label() const override {
+    return vacuum() == Vacuum::Physical ? labels()[0] : labels()[1];
+  }
 
   std::wstring to_latex() const override {
     std::wstring result;
