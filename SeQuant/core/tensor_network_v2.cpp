@@ -790,15 +790,21 @@ TensorNetworkV2::canonicalize_slots(
         if (idx_ord < edges_.size()) {
           auto edge_it = edges_.begin();
           std::advance(edge_it, idx_ord);
-          // for named indices edges are always disconnected
-          assert(edge_it->vertex_count() == 1);
-          if (edge_it->first_vertex().getOrigin() == Origin::Aux)
-            slot_type = IndexSlotType::TensorAux;
-          else if (edge_it->first_vertex().getOrigin() == Origin::Bra)
-            slot_type = IndexSlotType::TensorBra;
-          else {
-            assert(edge_it->first_vertex().getOrigin() == Origin::Ket);
-            slot_type = IndexSlotType::TensorKet;
+          // there are 2 possibilities: its index edge is disconnected or
+          // connected ... the latter would only occur if this index is named
+          // due to also being a protoindex on one of the named indices!
+          if (edge_it->vertex_count() == 1) {
+            if (edge_it->first_vertex().getOrigin() == Origin::Aux)
+              slot_type = IndexSlotType::TensorAux;
+            else if (edge_it->first_vertex().getOrigin() == Origin::Bra)
+              slot_type = IndexSlotType::TensorBra;
+            else {
+              assert(edge_it->first_vertex().getOrigin() == Origin::Ket);
+              slot_type = IndexSlotType::TensorKet;
+            }
+          } else {  // if
+            assert(edge_it->vertex_count() == 2);
+            slot_type = IndexSlotType::SPBundle;
           }
         } else
           slot_type = IndexSlotType::SPBundle;
@@ -1231,6 +1237,25 @@ void TensorNetworkV2::init_edges() {
                  << std::endl;
     }
   }
+
+  // some external indices will have protoindices that are NOT among
+  // pure_proto_indices_, e.g.
+  // i2 in f_i2^{a2^{i1,i2}} t_{a2^{i1,i2}a3^{i1,i2}}^{i2,i1}
+  // is not added to ext_indices_ due to being among doubly-connected edges_
+  // and thus is not among pure_proto_indices_, but it needs to be
+  // and external index due to a3^{i1,i2} being an external index
+  NamedIndexSet ext_proto_indices;
+  ranges::for_each(ext_indices_, [&](const auto &idx) {
+    ranges::for_each(idx.proto_indices(), [&](const auto &pidx) {
+      if (!pure_proto_indices_.contains(
+              pidx))  // only add indices that not already in
+                      // pure_proto_indices_, which will be added to
+                      // ext_indices_ below
+        ext_proto_indices.emplace(pidx);
+    });
+  });
+  ext_indices_.reserve(ext_indices_.size() + ext_proto_indices.size());
+  ext_indices_.insert(ext_proto_indices.begin(), ext_proto_indices.end());
 
   // ... and add pure protoindices to the external indices
   ext_indices_.reserve(ext_indices_.size() + pure_proto_indices_.size());

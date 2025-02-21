@@ -371,6 +371,8 @@ class TensorNetwork {
   // sorted by *label* (not full label) of the corresponding value (Index)
   // this ensures that proto indices are not considered and all internal indices
   // have unique labels (not full labels)
+  // N.B. this may contain some indices in pure_proto_indices_ if there are
+  // externals indices that depend on them
   mutable named_indices_t ext_indices_;
   /// some proto indices may not be in edges_ if they appear exclusively among
   /// proto indices

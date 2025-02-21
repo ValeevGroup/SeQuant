@@ -434,6 +434,22 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
                    L"g{a3;a4;x1,x2} * C{a3<i1,i4>;a3} * C{a4;a4<i1>}",
                    L"g{a3;a4;x2,x1} * C{a3<i1,i2>;a3} * C{a4;a4<i2>}", Eq,
                    Plus),
+               // TNs discovered during CSV evaluation that did not deduce
+               // external indices correctly
+               std::make_tuple(
+                   L"f{i2;a2<i1,i2>} * t{a2<i1,i2>,a3<i1,i2>;i2,i1}",
+                   L"f{i1;a2<i1,i2>} * t{a2<i1,i2>,a3<i1,i2>;i2,i1}",  // f_i2
+                                                                       // ->
+                                                                       // f_i1
+                   NEq, Plus),
+               std::make_tuple(
+                   L"f{i2;a2<i1,i2>} * t{a2<i1,i2>,a3<i1,i2>;i2,i1}",
+                   L"f{i1;a2<i1,i2>} * t{a3<i1,i2>,a2<i1,i2>;i2,i1}",  // f_i2
+                                                                       // ->
+                                                                       // f_i1,
+                                                                       // a2 <->
+                                                                       // a3
+                   Eq, Plus),
                //////////////// TNs w antisymmetric tensors
                // unlike the nonsymmetric/symmetric cases we need to check for
                // the phase due to canonical reordering of the slots
