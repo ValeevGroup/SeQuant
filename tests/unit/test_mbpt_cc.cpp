@@ -37,46 +37,61 @@ TEST_CASE("EOM-CC", "[mbpt/cc]") {
   using namespace sequant::mbpt;
 
   SECTION("EOM-CCSD") {
+    const auto N = 2;
+    auto cc = CC{N};
     SEQUANT_PROFILE_SINGLE("EE-EOM-CCSD R", {
-      const auto N = 2;
-      const auto K_occ = 2;
-      const auto K_uocc = 2;
-      const auto eqs = CC{N}.eom_r(nₚ(K_uocc), nₕ(K_occ));
+      const auto np = 2;
+      const auto nh = 2;
+      const auto eqs = cc.eom_r(nₚ(np), nₕ(nh));
       for (auto k = 1; k < eqs.size(); ++k) REQUIRE(eqs[k]);
 
-      if (N == 2 && K_occ == 2 && K_uocc == 2) {
-        REQUIRE(size(eqs[1]) == 21);
-        REQUIRE(size(eqs[2]) == 53);
-      }
+      REQUIRE(size(eqs[1]) == 21);
+      REQUIRE(size(eqs[2]) == 53);
+    });
+
+    SEQUANT_PROFILE_SINGLE("IP-EOM-CCSD R", {
+      const auto np = 1;
+      const auto nh = 2;
+      const auto eqs = cc.eom_r(nₚ(np), nₕ(nh));
+      for (auto k = 0; k < eqs.size(); ++k) REQUIRE(eqs[k]);
+
+      REQUIRE(size(eqs[0]) == 9);
+      REQUIRE(size(eqs[1]) == 32);
+    });
+
+    SEQUANT_PROFILE_SINGLE("EA-EOM-CCSD R", {
+      const auto np = 2;
+      const auto nh = 1;
+      const auto eqs = cc.eom_r(nₚ(np), nₕ(nh));
+      for (auto k = 0; k < eqs.size(); ++k) REQUIRE(eqs[k]);
+
+      REQUIRE(size(eqs[0]) == 9);
+      REQUIRE(size(eqs[1]) == 32);
     });
 
     SEQUANT_PROFILE_SINGLE("EE-EOM-CCSD L", {
-      const auto N = 2;
-      const auto K_occ = 2;
-      const auto K_uocc = 2;
-      const auto eqs = CC{N}.eom_l(nₚ(K_uocc), nₕ(K_occ));
+      const auto np = 2;
+      const auto nh = 2;
+      const auto eqs = cc.eom_l(nₚ(np), nₕ(nh));
       for (auto k = 1; k < eqs.size(); ++k) REQUIRE(eqs[k]);
 
-      if (N == 2 && K_occ == 2 && K_uocc == 2) {
-        REQUIRE(size(eqs[1]) == 43);
-        REQUIRE(size(eqs[2]) == 31);
-      }
+      REQUIRE(size(eqs[1]) == 43);
+      REQUIRE(size(eqs[2]) == 31);
     });
   }  // SECTION("EOM-CCSD")
 
   SECTION("EOM-CCSDT") {
+    const auto N = 3;
+    auto cc = CC{N};
     SEQUANT_PROFILE_SINGLE("EE-EOM-CCSDT R", {
-      const auto N = 3;
-      const auto K_occ = 3;
-      const auto K_uocc = 3;
-      const auto eqs = CC{N}.eom_r(nₚ(K_uocc), nₕ(K_occ));
+      const auto np = 3;
+      const auto nh = 3;
+      const auto eqs = cc.eom_r(nₚ(np), nₕ(nh));
       for (auto k = 1; k < eqs.size(); ++k) REQUIRE(eqs[k]);
 
-      if (N == 3 && K_occ == 3 && K_uocc == 3) {
-        REQUIRE(size(eqs[1]) == 22);
-        REQUIRE(size(eqs[2]) == 62);
-        REQUIRE(size(eqs[3]) == 99);
-      }
+      REQUIRE(size(eqs[1]) == 22);
+      REQUIRE(size(eqs[2]) == 62);
+      REQUIRE(size(eqs[3]) == 99);
     });
   }  // SECTION("EOM-CCSDT")
 

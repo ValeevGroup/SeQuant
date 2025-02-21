@@ -440,13 +440,6 @@ auto evaluate(NodesT const& nodes,  //
 /// \param layout The layout of the resulting tensor. It is a permutation of the
 ///               result of node->annot().
 ///
-/// \param perm_groups A vector of 3-element arrays of size_t. Each array
-///                    represents a group of indices that are particle
-///                    symmetric. The first two elements of the array are the
-///                    indices of the bra and ket of the resulting tensor,
-///                    respectively, and the third element is the number of
-///                    symmetric indices in the group.
-///
 /// \param le A leaf evaluator that takes an EvalNode and returns a tensor
 ///           (TA::TArrayD, btas::Tensor<double>, etc.) or a constant (double,
 ///           complex<double>, etc.).
@@ -458,46 +451,19 @@ auto evaluate(NodesT const& nodes,  //
 /// \see EvalResult to know more about the return type.
 ///
 template <typename NodeT, typename Annot, typename Le, typename... Args>
-auto evaluate_symm(NodeT const& node, Annot const& layout,
-                   container::svector<std::array<size_t, 3>> const& perm_groups,
-                   Le const& le, Args&&... args) {
-  container::svector<std::array<size_t, 3>> pgs;
-  if (perm_groups.empty()) {
-    // asked for symmetrization without specifying particle
-    // symmetric index ranges assume both bra indices and ket indices are
-    // symmetric in the particle exchange
-
-    ExprPtr expr_ptr{};
-    if constexpr (IsIterableOfEvaluableNodes<NodeT>) {
-      expr_ptr = (*std::begin(node))->expr();
-    } else {
-      expr_ptr = node->expr();
-    }
-    assert(expr_ptr->is<Tensor>());
-    auto const& t = expr_ptr->as<Tensor>();
-    assert(t.bra_rank() == t.ket_rank());
-
-    size_t const half_rank = t.bra_rank();
-    pgs = {{0, half_rank, half_rank}};
-  }
-
+auto evaluate_symm(NodeT const& node, Annot const& layout, Le const& le,
+                   Args&&... args) {
   auto result = evaluate(node, layout, le, std::forward<Args>(args)...);
 
 #ifdef SEQUANT_EVAL_TRACE
-  auto&& [res, time] = timed_eval([&]() {
-    return result->symmetrize(perm_groups.empty() ? pgs : perm_groups);
-  });
-
-  log_eval("[SYMMETRIZE] (bra pos, ket pos, length) ",                   //
-           perm_groups_string(perm_groups.empty() ? pgs : perm_groups),  //
-           "  ",                                                         //
-           time.count(),                                                 //
+  auto&& [res, time] = timed_eval([&]() { return result->symmetrize(); });
+  log_eval("[SYMMETRIZE] (layout) ",  //
+           "(", layout, ") ",         //
+           time.count(),              //
            "\n");
-
   return res;
-
 #else
-  return result->symmetrize(perm_groups.empty() ? pgs : perm_groups);
+  return result->symmetrize();
 #endif
 }
 
@@ -507,13 +473,6 @@ auto evaluate_symm(NodeT const& node, Annot const& layout,
 ///
 /// \param layout The layout of the resulting tensor. It is a permutation of the
 ///               result of node->annot().
-///
-/// \param perm_groups A vector of 3-element arrays of size_t. Each array
-///                    represents a group of indices that are particle
-///                    anti-symmetric. The first two elements of the array are
-///                    the indices of the bra and ket of the resulting tensor,
-///                    respectively, and the third element is the number of
-///                    symmetric indices in the group.
 ///
 /// \param le A leaf evaluator that takes an EvalNode and returns a tensor
 ///           (TA::TArrayD, btas::Tensor<double>, etc.) or a constant (double,
@@ -527,18 +486,12 @@ auto evaluate_symm(NodeT const& node, Annot const& layout,
 ///
 template <typename NodeT, typename Annot, typename Le,
           typename... Args>
-auto evaluate_antisymm(
-    NodeT const& node,                                             //
-    Annot const& layout,                                           //
-    container::svector<std::array<size_t, 3>> const& perm_groups,  //
-    Le const& le,                                                  //
-    Args&&... args) {
-  container::svector<std::array<size_t, 3>> pgs;
-  if (perm_groups.empty()) {
-    // asked for anti-symmetrization without specifying particle
-    // antisymmetric index ranges assume both bra indices and ket indices are
-    // antisymmetric in the particle exchange
-
+auto evaluate_antisymm(NodeT const& node,    //
+                       Annot const& layout,  //
+                       Le const& le,         //
+                       Args&&... args) {
+  size_t bra_rank;
+  {
     ExprPtr expr_ptr{};
     if constexpr (IsIterableOfEvaluableNodes<NodeT>) {
       expr_ptr = (*std::begin(node))->expr();
@@ -547,26 +500,20 @@ auto evaluate_antisymm(
     }
     assert(expr_ptr->is<Tensor>());
     auto const& t = expr_ptr->as<Tensor>();
-    assert(t.bra_rank() == t.ket_rank());
-
-    size_t const half_rank = t.bra_rank();
-    pgs = {{0, half_rank, half_rank}};
+    bra_rank = t.bra_rank();
   }
 
   auto result = evaluate(node, layout, le, std::forward<Args>(args)...);
-
 #ifdef SEQUANT_EVAL_TRACE
-  auto&& [res, time] = timed_eval([&]() {
-    return result->antisymmetrize(perm_groups.empty() ? pgs : perm_groups);
-  });
-  log_eval("[ANTISYMMETRIZE] (bra pos, ket pos, length) ",               //
-           perm_groups_string(perm_groups.empty() ? pgs : perm_groups),  //
-           "  ",                                                         //
-           time.count(),                                                 //
+  auto&& [res, time] =
+      timed_eval([&]() { return result->antisymmetrize(bra_rank); });
+  log_eval("[ANTISYMMETRIZE] (bra rank, layout) ",  //
+           "(", bra_rank, ", ", layout, ") ",       //
+           time.count(),                            //
            "\n");
   return res;
 #else
-  return result->antisymmetrize(perm_groups.empty() ? pgs : perm_groups);
+  return result->antisymmetrize(bra_rank);
 #endif
 }
 

@@ -87,10 +87,10 @@ inline ExprPtr lower_to_tensor_form(const ExprPtr& expr_inp) {
 /// by default_op_connections() .
 /// @param[in] skip_clone if true, will not clone the input expression
 /// @return the VEV
-ExprPtr vac_av(
-    ExprPtr expr,
-    OpConnections<mbpt::OpType> op_connections = default_op_connections(),
-    bool skip_clone = false);
+ExprPtr vac_av(ExprPtr expr,
+               const OpConnections<mbpt::OpType>& op_connections =
+                   default_op_connections(),
+               bool skip_clone = false);
 
 /// computes the vacuum expectation value (VEV)
 
@@ -101,5 +101,5 @@ ExprPtr vac_av(
 /// when `opR` precedes `opL`, i.e. `opL` is to the left of `opR`
 /// @param[in] skip_clone if true, will not clone the input expression
 /// @return the VEV
-ExprPtr vac_av(ExprPtr expr, OpConnections<std::wstring> op_connections,
+ExprPtr vac_av(ExprPtr expr, const OpConnections<std::wstring>& op_connections,
                bool skip_clone = false);

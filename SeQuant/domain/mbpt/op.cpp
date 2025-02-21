@@ -282,7 +282,7 @@ qns_t combine(qns_t a, qns_t b) {
     }
     return result;
   } else {
-    throw "unsupported vacuum context.";
+    throw std::runtime_error("Unsupported vacuum context.");
   }
 }
 
@@ -953,24 +953,31 @@ ExprPtr R(nann na, ncre nc, const cre<IndexSpace>& cre_space,
   assert(na > 0 || nc > 0);
   ExprPtr result;
 
-  for (std::int64_t ra = na, rc = nc; ra > 0 || rc > 0; --ra, --rc) {
+  std::int64_t ra = na, rc = nc;
+  while (ra >= 0 && rc >= 0) {
+    if (ra == 0 && rc == 0) break;
     result += R_(nann(ra), ncre(rc), cre_space, ann_space);
+    if (ra == 0 || rc == 0) break;
+    --ra;
+    --rc;
   }
   return result;
 }
 
-ExprPtr R(nₚ np, nₕ nh) {
-  assert(np >= 0 && nh >= 0);
-  return R(nann(nh), ncre(np));
-}
+ExprPtr R(nₚ np, nₕ nh) { return R(nann(nh), ncre(np)); }
 
 ExprPtr L(nann na, ncre nc, const cre<IndexSpace>& cre_space,
           const ann<IndexSpace>& ann_space) {
   assert(na > 0 || nc > 0);
   ExprPtr result;
 
-  for (std::int64_t ra = na, rc = nc; ra > 0 || rc > 0; --ra, --rc) {
+  std::int64_t ra = na, rc = nc;
+  while (ra >= 0 && rc >= 0) {
+    if (ra == 0 && rc == 0) break;
     result += L_(nann(ra), ncre(rc), cre_space, ann_space);
+    if (ra == 0 || rc == 0) break;
+    --ra;
+    --rc;
   }
   return result;
 }
