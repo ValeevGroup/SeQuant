@@ -65,21 +65,13 @@ std::string EvalExpr::indices_annot() const noexcept {
   using ranges::views::transform;
 
   if (!is_tensor()) return {};
+  auto outer = csv_labels(canon_indices_  //
+                          | filter(ranges::not_fn(&Index::has_proto_indices)));
 
-  if (!tot()) return csv_labels(canon_indices_);
+  auto inner = csv_labels(canon_indices_  //
+                          | filter(&Index::has_proto_indices));
 
-  auto outer = canon_indices_                                       //
-               | filter(ranges::not_fn(&Index::has_proto_indices))  //
-               | ranges::to_vector;
-  auto inner = canon_indices_  //
-               | filter(&Index::has_proto_indices);
-
-  for (auto&& i : inner                                   //
-                      | transform(&Index::proto_indices)  //
-                      | join)
-    if (!ranges::contains(outer, i)) outer.emplace_back(i);
-
-  return csv_labels(outer) + ";" + csv_labels(inner);
+  return outer + (inner.empty() ? "" : (";" + inner));
 }
 
 EvalExpr::index_vector const& EvalExpr::canon_indices() const noexcept {
