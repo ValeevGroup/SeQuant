@@ -6,7 +6,7 @@
 <link rel="index" title="Index" href="../genindex.html" /><link rel="search" title="Search" href="../search.html" />
 
     <!-- Generated with Sphinx 7.4.7 and Furo 2024.08.06 -->
-        <title>Function vac_av(ExprPtr, OpConnections&lt;std::wstring&gt;, bool) - SeQuant Documentation</title>
+        <title>Variable beg - SeQuant Documentation</title>
       <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=8f2a1f02" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=354aac6f" />
     <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
@@ -241,7 +241,7 @@
         </a>
         <div class="content-icon-container">
           <div class="view-this-page">
-  <a class="muted-link" href="../_sources/api/function_vac__av_8hpp_1a2183940639c668d076789f3b44808e6b.rst.txt" title="View this page">
+  <a class="muted-link" href="../_sources/api/variable_eval__result_8hpp_1a75c5d15657caa75d1c6c96766cbdc167.rst.txt" title="View this page">
     <svg><use href="#svg-eye"></use></svg>
     <span class="visually-hidden">View this page</span>
   </a>
@@ -260,30 +260,17 @@
           </label>
         </div>
         <article role="main" id="furo-main-content">
-          <section id="function-vac-av-exprptr-opconnections-std-wstring-bool">
-<span id="exhale-function-vac-av-8hpp-1a2183940639c668d076789f3b44808e6b"></span><h1>Function vac_av(ExprPtr, OpConnections&lt;std::wstring&gt;, bool)<a class="headerlink" href="#function-vac-av-exprptr-opconnections-std-wstring-bool" title="Link to this heading">¶</a></h1>
+          <section id="variable-beg">
+<span id="exhale-variable-eval-result-8hpp-1a75c5d15657caa75d1c6c96766cbdc167"></span><h1>Variable beg<a class="headerlink" href="#variable-beg" title="Link to this heading">¶</a></h1>
 <ul class="simple">
-<li><p>Defined in <a class="reference internal" href="file_SeQuant_domain_mbpt_vac_av.hpp.html#file-sequant-domain-mbpt-vac-av-hpp"><span class="std std-ref">File vac_av.hpp</span></a></p></li>
+<li><p>Defined in <a class="reference internal" href="file_SeQuant_domain_eval_eval_result.hpp.html#file-sequant-domain-eval-eval-result-hpp"><span class="std std-ref">File eval_result.hpp</span></a></p></li>
 </ul>
-<section id="function-documentation">
-<h2>Function Documentation<a class="headerlink" href="#function-documentation" title="Link to this heading">¶</a></h2>
-<dl class="cpp function">
-<dt class="sig sig-object cpp" id="_CPPv46vac_av7ExprPtr13OpConnectionsINSt7wstringEEb">
-<span id="_CPPv36vac_av7ExprPtr13OpConnectionsINSt7wstringEEb"></span><span id="_CPPv26vac_av7ExprPtr13OpConnectionsINSt7wstringEEb"></span><span id="vac_av__ExprPtr.OpConnections:std::wstring:.b"></span><span class="target" id="vac__av_8hpp_1a2183940639c668d076789f3b44808e6b"></span><span class="n"><span class="pre">ExprPtr</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">vac_av</span></span></span><span class="sig-paren">(</span><span class="n"><span class="pre">ExprPtr</span></span><span class="w"> </span><span class="n sig-param"><span class="pre">expr</span></span>, <a class="reference internal" href="typedef_vac__av_8hpp_1a07d7d63f2f47a387bb12949954c6e60e.html#_CPPv4I0E13OpConnections" title="OpConnections"><span class="n"><span class="pre">OpConnections</span></span></a><span class="p"><span class="pre">&lt;</span></span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">wstring</span></span><span class="p"><span class="pre">&gt;</span></span><span class="w"> </span><span class="n sig-param"><span class="pre">op_connections</span></span>, <span class="kt"><span class="pre">bool</span></span><span class="w"> </span><span class="n sig-param"><span class="pre">skip_clone</span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="k"><span class="pre">false</span></span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv46vac_av7ExprPtr13OpConnectionsINSt7wstringEEb" title="Link to this definition">¶</a><br /></dt>
-<dd><p>computes the vacuum expectation value (VEV) </p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>expr</strong> – <strong>[in]</strong> input expression </p></li>
-<li><p><strong>op_connections</strong> – <strong>[in]</strong> list of pairs of operator labels to be connected; connections are defined left-to-right, i.e., pair <code class="docutils literal notranslate"><span class="pre">{opL,opR}</span></code> declares that <code class="docutils literal notranslate"><span class="pre">opL</span></code> and <code class="docutils literal notranslate"><span class="pre">opR</span></code> are to be connected when <code class="docutils literal notranslate"><span class="pre">opR</span></code> precedes <code class="docutils literal notranslate"><span class="pre">opL</span></code>, i.e. <code class="docutils literal notranslate"><span class="pre">opL</span></code> is to the left of <code class="docutils literal notranslate"><span class="pre">opR</span></code></p></li>
-<li><p><strong>skip_clone</strong> – <strong>[in]</strong> if true, will not clone the input expression </p></li>
-</ul>
-</dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>the VEV </p>
-</dd>
-</dl>
-</dd></dl>
+<section id="variable-documentation">
+<h2>Variable Documentation<a class="headerlink" href="#variable-documentation" title="Link to this heading">¶</a></h2>
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv43beg">
+<span id="_CPPv33beg"></span><span id="_CPPv23beg"></span><span id="beg__perm_t::iterator"></span><span class="target" id="eval__result_8hpp_1a75c5d15657caa75d1c6c96766cbdc167"></span><span class="n"><span class="pre">perm_t</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">iterator</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">beg</span></span></span><a class="headerlink" href="#_CPPv43beg" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
 
 </section>
 </section>
@@ -305,7 +292,7 @@
             
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on Feb 21, 2025 7:54:06 PM</div>
+              Last updated on Feb 21, 2025 8:23:19 PM</div>
           </div>
           <div class="right-details">
             <div class="icons">
@@ -329,9 +316,9 @@
         <div class="toc-tree-container">
           <div class="toc-tree">
             <ul>
-<li><a class="reference internal" href="#">Function vac_av(ExprPtr, OpConnections&lt;std::wstring&gt;, bool)</a><ul>
-<li><a class="reference internal" href="#function-documentation">Function Documentation</a><ul>
-<li><a class="reference internal" href="#_CPPv46vac_av7ExprPtr13OpConnectionsINSt7wstringEEb"><code class="docutils literal notranslate"><span class="pre">vac_av()</span></code></a></li>
+<li><a class="reference internal" href="#">Variable beg</a><ul>
+<li><a class="reference internal" href="#variable-documentation">Variable Documentation</a><ul>
+<li><a class="reference internal" href="#_CPPv43beg"><code class="docutils literal notranslate"><span class="pre">beg</span></code></a></li>
 </ul>
 </li>
 </ul>

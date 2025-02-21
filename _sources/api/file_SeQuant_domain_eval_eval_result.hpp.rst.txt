@@ -43,8 +43,6 @@ Includes
 
 - ``memory``
 
-- ``range/v3/algorithm.hpp``
-
 - ``range/v3/numeric.hpp``
 
 - ``range/v3/view.hpp``
@@ -108,13 +106,23 @@ Variables
 ---------
 
 
+- :ref:`exhale_variable_eval__result_8hpp_1a75c5d15657caa75d1c6c96766cbdc167`
+
+- :ref:`exhale_variable_eval__result_8hpp_1a5f53b330034a602c8c8b818cbda4fed0`
+
 - :ref:`exhale_variable_eval__result_8hpp_1a528bc2e4543f7a3e17fe8fa8808ec84a`
 
+- :ref:`exhale_variable_eval__result_8hpp_1ace54e762093af58ec956fceb31c188ba`
+
 - :ref:`exhale_variable_eval__result_8hpp_1ad52986295279c4146e59b5675798e256`
+
+- :ref:`exhale_variable_eval__result_8hpp_1a821be61f63e2b947c7a925bb3dd9bfd5`
 
 - :ref:`exhale_variable_eval__result_8hpp_1a103447f0113670deaa9808fd2b447311`
 
 - :ref:`exhale_variable_eval__result_8hpp_1a8133307333be4be0fa29bdddf0dbce5c`
+
+- :ref:`exhale_variable_eval__result_8hpp_1a854352f53b148adc24983a58a1866d66`
 
 - :ref:`exhale_variable_eval__result_8hpp_1a4ac88fa6cddf06725697df3dffa9de7b`
 

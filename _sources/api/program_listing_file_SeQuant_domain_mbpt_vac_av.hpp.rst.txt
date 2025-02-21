@@ -75,11 +75,11 @@ Program Listing for File vac_av.hpp
    }
    
    
-   ExprPtr vac_av(
-       ExprPtr expr,
-       OpConnections<mbpt::OpType> op_connections = default_op_connections(),
-       bool skip_clone = false);
+   ExprPtr vac_av(ExprPtr expr,
+                  const OpConnections<mbpt::OpType>& op_connections =
+                      default_op_connections(),
+                  bool skip_clone = false);
    
    
-   ExprPtr vac_av(ExprPtr expr, OpConnections<std::wstring> op_connections,
+   ExprPtr vac_av(ExprPtr expr, const OpConnections<std::wstring>& op_connections,
                   bool skip_clone = false);

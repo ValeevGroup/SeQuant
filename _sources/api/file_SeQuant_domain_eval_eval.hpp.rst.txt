@@ -90,15 +90,15 @@ Functions
 
 - :ref:`exhale_function_namespacesequant_1a9e77ca1c042a46648f894e41a0fe7f09`
 
-- :ref:`exhale_function_namespacesequant_1a429e19804f67f8f148a60404b3b4d2e1`
+- :ref:`exhale_function_namespacesequant_1a943364c7e77d7a47c268af0d8db47f7b`
 
 - :ref:`exhale_function_namespacesequant_1af27086da99ee4f6c0f663c9b22eb4877`
 
-- :ref:`exhale_function_namespacesequant_1a2f77cd22d1a79db688baecf8605ad394`
-
 - :ref:`exhale_function_namespacesequant_1a7ccf50b632430352b8a5747391836909`
 
-- :ref:`exhale_function_namespacesequant_1ac61275c8f1d1a7058f7b02f01ba4aba9`
+- :ref:`exhale_function_namespacesequant_1a2f77cd22d1a79db688baecf8605ad394`
+
+- :ref:`exhale_function_namespacesequant_1a1efce1468e9bdea65173cda4978ed359`
 
 - :ref:`exhale_function_namespacesequant_1a26a0aee529d8e19fe84d2ff4e94df22a`
 

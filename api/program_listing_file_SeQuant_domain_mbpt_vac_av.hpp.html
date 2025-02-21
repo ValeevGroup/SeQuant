@@ -328,13 +328,13 @@
 <span class="p">}</span>
 
 
-<span class="n">ExprPtr</span><span class="w"> </span><span class="n">vac_av</span><span class="p">(</span>
-<span class="w">    </span><span class="n">ExprPtr</span><span class="w"> </span><span class="n">expr</span><span class="p">,</span>
-<span class="w">    </span><span class="n">OpConnections</span><span class="o">&lt;</span><span class="n">mbpt</span><span class="o">::</span><span class="n">OpType</span><span class="o">&gt;</span><span class="w"> </span><span class="n">op_connections</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">default_op_connections</span><span class="p">(),</span>
-<span class="w">    </span><span class="kt">bool</span><span class="w"> </span><span class="n">skip_clone</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">false</span><span class="p">);</span>
+<span class="n">ExprPtr</span><span class="w"> </span><span class="n">vac_av</span><span class="p">(</span><span class="n">ExprPtr</span><span class="w"> </span><span class="n">expr</span><span class="p">,</span>
+<span class="w">               </span><span class="k">const</span><span class="w"> </span><span class="n">OpConnections</span><span class="o">&lt;</span><span class="n">mbpt</span><span class="o">::</span><span class="n">OpType</span><span class="o">&gt;&amp;</span><span class="w"> </span><span class="n">op_connections</span><span class="w"> </span><span class="o">=</span>
+<span class="w">                   </span><span class="n">default_op_connections</span><span class="p">(),</span>
+<span class="w">               </span><span class="kt">bool</span><span class="w"> </span><span class="n">skip_clone</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">false</span><span class="p">);</span>
 
 
-<span class="n">ExprPtr</span><span class="w"> </span><span class="nf">vac_av</span><span class="p">(</span><span class="n">ExprPtr</span><span class="w"> </span><span class="n">expr</span><span class="p">,</span><span class="w"> </span><span class="n">OpConnections</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="n">wstring</span><span class="o">&gt;</span><span class="w"> </span><span class="n">op_connections</span><span class="p">,</span>
+<span class="n">ExprPtr</span><span class="w"> </span><span class="nf">vac_av</span><span class="p">(</span><span class="n">ExprPtr</span><span class="w"> </span><span class="n">expr</span><span class="p">,</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="n">OpConnections</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="n">wstring</span><span class="o">&gt;&amp;</span><span class="w"> </span><span class="n">op_connections</span><span class="p">,</span>
 <span class="w">               </span><span class="kt">bool</span><span class="w"> </span><span class="n">skip_clone</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">false</span><span class="p">);</span>
 </pre></div>
 </div>
@@ -357,7 +357,7 @@
             
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on Feb 21, 2025 7:54:06 PM</div>
+              Last updated on Feb 21, 2025 8:23:19 PM</div>
           </div>
           <div class="right-details">
             <div class="icons">
