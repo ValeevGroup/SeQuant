@@ -412,6 +412,61 @@ class TensorNetwork {
   const auto &idxrepl() const { return idxrepl_; };
 
  public:
+  /// contains bliss::Graph representation of TN + metadata
+  /// @note it works with structured bindings
+  struct GraphData {
+    /// this is the type used as color by bliss::Graph
+    using VertexColor = unsigned int;
+
+    /// bliss::Graph
+    std::shared_ptr<bliss::Graph> graph;
+    /// vertex labels
+    std::vector<std::wstring> vertex_labels;
+    /// optional vertex TeX labels usable for dot2tex
+    std::vector<std::optional<std::wstring>> vertex_texlabels;
+    /// vertex colors
+    std::vector<VertexColor> vertex_colors;
+    /// vertex types
+    std::vector<VertexType> vertex_types;
+
+    /// maps vertex ordinal to tensor cluster ordinal
+    /// @note usable as blis::Graph::DotOptions::vertex_to_subgraph
+    std::optional<std::size_t> vertex_to_tensor_cluster(
+        std::size_t vertex) const;
+
+    template <std::size_t Index>
+    auto &&get() & {
+      return get_helper<Index>(*this);
+    }
+
+    template <std::size_t Index>
+    auto &&get() && {
+      return get_helper<Index>(*this);
+    }
+
+    template <std::size_t Index>
+    auto &&get() const & {
+      return get_helper<Index>(*this);
+    }
+
+    template <std::size_t Index>
+    auto &&get() const && {
+      return get_helper<Index>(*this);
+    }
+
+   private:
+    template <std::size_t Index, typename T>
+    static auto &&get_helper(T &&t) {
+      static_assert(Index < 5,
+                    "Index out of bounds for TensorNetwork::GraphData");
+      if constexpr (Index == 0) return std::forward<T>(t).graph;
+      if constexpr (Index == 1) return std::forward<T>(t).vertex_labels;
+      if constexpr (Index == 2) return std::forward<T>(t).vertex_texlabels;
+      if constexpr (Index == 3) return std::forward<T>(t).vertex_colors;
+      if constexpr (Index == 4) return std::forward<T>(t).vertex_types;
+    }
+  };
+
   /// @brief converts the network into a Bliss graph whose vertices are indices
   /// and tensor vertex representations
   /// @param[in] named_indices pointer to the set of named indices (ordinarily,
@@ -422,7 +477,8 @@ class TensorNetwork {
   /// named indices that have same Index::color(), else will use distinct color
   /// for each
   /// @return {shared_ptr to Graph, vector of vertex labels, vector of optional
-  /// vertex TeX labels, vector of vertex colors, vector of vertex types}
+  /// vertex TeX labels, vector of vertex colors, vector of vertex types,
+  /// vector of cluster ordinals for each vertex}
 
   /// @note Rules for constructing the graph:
   ///   - Indices with protoindices are connected to their protoindices,
@@ -439,13 +495,47 @@ class TensorNetwork {
   ///   tensor; terminal vertices are colored by the color of its tensor,
   ///     with the color of symm/antisymm terminals augmented by the
   ///     terminal's type (bra/ket).
-  std::tuple<std::shared_ptr<bliss::Graph>, std::vector<std::wstring>,
-             std::vector<std::optional<std::wstring>>, std::vector<std::size_t>,
-             std::vector<VertexType>>
-  make_bliss_graph(const named_indices_t *named_indices = nullptr,
-                   bool distinct_named_indices = true) const;
+  GraphData make_bliss_graph(const named_indices_t *named_indices = nullptr,
+                             bool distinct_named_indices = true) const;
 };
 
 }  // namespace sequant
+
+namespace std {
+template <>
+struct tuple_size<sequant::TensorNetwork::GraphData>
+    : integral_constant<size_t, 5> {};
+
+template <>
+struct tuple_element<0, sequant::TensorNetwork::GraphData> {
+  using type =
+      decltype(std::declval<sequant::TensorNetwork::GraphData>().graph);
+};
+
+template <>
+struct tuple_element<1, sequant::TensorNetwork::GraphData> {
+  using type =
+      decltype(std::declval<sequant::TensorNetwork::GraphData>().vertex_labels);
+};
+
+template <>
+struct tuple_element<2, sequant::TensorNetwork::GraphData> {
+  using type = decltype(std::declval<sequant::TensorNetwork::GraphData>()
+                            .vertex_texlabels);
+};
+
+template <>
+struct tuple_element<3, sequant::TensorNetwork::GraphData> {
+  using type =
+      decltype(std::declval<sequant::TensorNetwork::GraphData>().vertex_colors);
+};
+
+template <>
+struct tuple_element<4, sequant::TensorNetwork::GraphData> {
+  using type =
+      decltype(std::declval<sequant::TensorNetwork::GraphData>().vertex_types);
+};
+
+}  // namespace std
 
 #endif  // SEQUANT_TENSOR_NETWORK_H

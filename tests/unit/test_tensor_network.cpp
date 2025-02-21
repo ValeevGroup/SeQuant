@@ -210,7 +210,8 @@ TEST_CASE("TensorNetwork", "[elements]") {
 
     // make graph
     REQUIRE_NOTHROW(tn.make_bliss_graph());
-    auto [graph, vlabels, vtexlabels, vcolors, vtypes] = tn.make_bliss_graph();
+    auto gdata = tn.make_bliss_graph();
+    const auto& [graph, vlabels, vtexlabels, vcolors, vtypes] = gdata;
 
     // create dot
     std::basic_ostringstream<wchar_t> oss;

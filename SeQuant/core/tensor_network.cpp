@@ -36,6 +36,23 @@
 
 namespace sequant {
 
+std::optional<std::size_t> TensorNetwork::GraphData::vertex_to_tensor_cluster(
+    std::size_t vertex) const {
+  const auto vertex_type = vertex_types.at(vertex);
+  if (vertex_type == VertexType::Index || vertex_type == VertexType::SPBundle)
+    return std::nullopt;
+
+  std::size_t tensor_idx = 0;
+  for (std::size_t i = 0; i <= vertex; ++i) {
+    if (vertex_types[i] == VertexType::TensorCore) {
+      ++tensor_idx;
+    }
+  }
+
+  assert(tensor_idx > 0);
+  return tensor_idx - 1;
+}
+
 ExprPtr TensorNetwork::canonicalize(
     const container::vector<std::wstring> &cardinal_tensor_labels, bool fast,
     const named_indices_t *named_indices_ptr) {
@@ -438,11 +455,9 @@ ExprPtr TensorNetwork::canonicalize(
                                                         : canon_byproduct;
 }
 
-std::tuple<std::shared_ptr<bliss::Graph>, std::vector<std::wstring>,
-           std::vector<std::optional<std::wstring>>, std::vector<std::size_t>,
-           std::vector<VertexType>>
-TensorNetwork::make_bliss_graph(const named_indices_t *named_indices_ptr,
-                                bool distinct_named_indices) const {
+TensorNetwork::GraphData TensorNetwork::make_bliss_graph(
+    const named_indices_t *named_indices_ptr,
+    bool distinct_named_indices) const {
   auto make_texlabel = [&](const auto &t) {
     using T = std::remove_cvref_t<decltype(t)>;
     std::wstring result;
@@ -469,9 +484,10 @@ TensorNetwork::make_bliss_graph(const named_indices_t *named_indices_ptr,
   const auto nidx = edges_.size() + pure_proto_indices_.size();
   std::vector<std::wstring> vertex_labels(nidx);  // the size will be updated
   std::vector<std::optional<std::wstring>> vertex_texlabels(
-      nidx);                                       // the size will be updated
-  std::vector<std::size_t> vertex_color(nidx, 0);  // the size will be updated
-  std::vector<VertexType> vertex_type(nidx);       // the size will be updated
+      nidx);  // the size will be updated
+  std::vector<GraphData::VertexColor> vertex_color(
+      nidx, 0);                               // the size will be updated
+  std::vector<VertexType> vertex_type(nidx);  // the size will be updated
 
   // compute # of vertices
   size_t nv = 0;
@@ -746,7 +762,11 @@ TensorNetwork::make_bliss_graph(const named_indices_t *named_indices_ptr,
     graph->change_color(vertex, color);
   }
 
-  return {graph, vertex_labels, vertex_texlabels, vertex_color, vertex_type};
+  return {.graph = std::move(graph),
+          .vertex_labels = std::move(vertex_labels),
+          .vertex_texlabels = std::move(vertex_texlabels),
+          .vertex_colors = std::move(vertex_color),
+          .vertex_types = std::move(vertex_type)};
 }
 
 void TensorNetwork::init_edges() const {
