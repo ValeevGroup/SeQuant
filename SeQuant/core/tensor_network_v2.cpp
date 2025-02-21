@@ -368,7 +368,7 @@ void TensorNetworkV2::canonicalize_graph(const NamedIndexSet &named_indices) {
     }
     std::wcout << "Canonicalized graph:\n";
     bliss::Graph *cgraph = graph.bliss_graph->permute(canonize_perm);
-    cgraph->write_dot(std::wcout, {}, {}, true);
+    cgraph->write_dot(std::wcout, {}, {}, {.display_colors = true});
     auto cvlabels = permute(graph.vertex_labels, canonize_perm);
     std::wcout << "with our labels:\n";
     cgraph->write_dot(std::wcout, cvlabels);
@@ -737,7 +737,7 @@ TensorNetworkV2::canonicalize_slots(
       std::wcout << i << " -> " << canonize_perm[i] << "\n";
     }
     std::wcout << "Canonicalized graph:\n";
-    metadata.graph->write_dot(std::wcout, {}, {}, true);
+    metadata.graph->write_dot(std::wcout, {}, {}, {.display_colors = true});
     auto cvlabels = permute(graph.vertex_labels, canonize_perm);
     auto cvtexlabels = permute(graph.vertex_texlabels, canonize_perm);
     std::wcout << "with our labels:\n";

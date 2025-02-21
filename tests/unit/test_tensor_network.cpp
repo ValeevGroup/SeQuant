@@ -880,13 +880,16 @@ TEST_CASE("TensorNetworkV2", "[elements]") {
         if (first_graph->cmp(*second_graph) != 0) {
           std::wstringstream stream;
           stream << "First graph:\n";
-          first_graph->write_dot(stream, first_labels, {}, true);
+          first_graph->write_dot(stream, first_labels, {},
+                                 {.display_colors = true});
           stream << "Second graph:\n";
-          second_graph->write_dot(stream, second_labels, {}, true);
+          second_graph->write_dot(stream, second_labels, {},
+                                  {.display_colors = true});
           stream << "TN graph:\n";
           auto [wick_graph, labels, texlabels, d1, d2] =
               TensorNetwork(first).make_bliss_graph();
-          wick_graph->write_dot(stream, labels, texlabels, true);
+          wick_graph->write_dot(stream, labels, texlabels,
+                                {.display_colors = true});
 
           FAIL(to_string(stream.str()));
         }
