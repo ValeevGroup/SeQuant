@@ -508,6 +508,8 @@ class EvalResult {
 
   [[nodiscard]] bool has_value() const noexcept;
 
+  [[nodiscard]] virtual ERPtr mult_by_phase(std::int8_t) const = 0;
+
   ///
   /// \return Cast the type-erased data to the type \tparam T, and return a ref.
   ///
@@ -610,6 +612,10 @@ class EvalScalar final : public EvalResult {
     throw unimplemented_method("antisymmetrize");
   }
 
+  [[nodiscard]] ERPtr mult_by_phase(std::int8_t factor) const override {
+    return eval_result<EvalScalar<T>>(value() * T(factor));
+  }
+
  private:
   [[nodiscard]] id_t type_id() const noexcept override {
     return id_for_type<EvalScalar<T>>();
@@ -699,6 +705,12 @@ class EvalTensorTA final : public EvalResult {
                         a.this_annot);
     decltype(result)::wait_for_lazy_cleanup(result.world());
     return eval_result<this_type>(std::move(result));
+  }
+
+  [[nodiscard]] ERPtr mult_by_phase(std::int8_t factor) const override {
+    auto pre = get<ArrayT>();
+    TA::scale(pre, numeric_type(factor));
+    return eval_result<this_type>(std::move(pre));
   }
 
   [[nodiscard]] ERPtr permute(
@@ -833,6 +845,12 @@ class EvalTensorOfTensorTA final : public EvalResult {
     }
   }
 
+  [[nodiscard]] ERPtr mult_by_phase(std::int8_t factor) const override {
+    auto pre = get<ArrayT>();
+    TA::scale(pre, numeric_type(factor));
+    return eval_result<this_type>(std::move(pre));
+  }
+
   [[nodiscard]] ERPtr permute(
       std::array<std::any, 2> const& ann) const override {
     auto const pre_annot = std::any_cast<std::string>(ann[0]);
@@ -931,6 +949,12 @@ class EvalTensorBTAS final : public EvalResult {
                    numeric_type{0},           //
                    result, a.this_annot);
     return eval_result<EvalTensorBTAS<T>>(std::move(result));
+  }
+
+  [[nodiscard]] ERPtr mult_by_phase(std::int8_t factor) const override {
+    auto pre = get<T>();
+    btas::scal(numeric_type(factor), pre);
+    return eval_result<EvalTensorBTAS<T>>(std::move(pre));
   }
 
   [[nodiscard]] ERPtr permute(

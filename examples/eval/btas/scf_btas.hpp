@@ -50,7 +50,7 @@ class SequantEvalScfBTAS final : public SequantEvalScf {
         L"f{i1;a1} * t{a1;i1} + g{i1,i2;a1,a2} * "
         L"(1/4 * t{a1,a2;i1,i2} + 1/2 t{a1;i1} * t{a2;i2})";
     static auto const node =
-        eval_node<EvalExprBTAS>(parse_expr(energy_expr, Symmetry::antisymm));
+        binarize<EvalExprBTAS>(parse_expr(energy_expr, Symmetry::antisymm));
 
     return evaluate(node, data_world_)->template get<double>();
   }

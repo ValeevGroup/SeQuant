@@ -11,12 +11,6 @@ inline bool operator==(const ExprPtr &left, const ExprPtr &right) {
   return *left == *right;
 }
 
-#if __cplusplus <= 201703L
-inline bool operator!=(const ExprPtr &left, const ExprPtr &right) {
-  return !(left == right);
-}
-#endif
-
 inline ExprPtr operator*(const ExprPtr &left, const ExprPtr &right) {
   if (left.is<Constant>() && right.is<Constant>()) {
     auto c_ = left->clone();

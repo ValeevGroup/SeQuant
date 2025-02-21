@@ -156,41 +156,17 @@ constexpr bool IsLeafEvaluator<
 ///
 class EvalExprTA final : public EvalExpr {
  public:
-  ///
-  /// \return String annotation for TA::DistArray.
-  ///
-  [[nodiscard]] std::string const& annot() const;
+  template <typename... Args, typename = std::enable_if_t<
+                                  std::is_constructible_v<EvalExpr, Args...>>>
+  EvalExprTA(Args&&... args) : EvalExpr{std::forward<Args>(args)...} {
+    annot_ = indices_annot();
+  }
 
-  ///
-  /// \brief Construct an EvalExprTA from a Tensor.
-  ///
-  /// \see EvalExpr(Tensor const&).
-  ///
-  explicit EvalExprTA(Tensor const&);
-
-  ///
-  /// \brief Construct an EvalExprTA from a Constant.
-  ///
-  /// \see EvalExpr(Constant const&).
-  ///
-  explicit EvalExprTA(Constant const&);
-
-  ///
-  /// \brief Construct an EvalExprTA from a Variable.
-  ///
-  /// \see EvalExpr(Variable const&).
-  ///
-  explicit EvalExprTA(Variable const&);
-
-  ///
-  /// \brief Construct an EvalExprTA from two EvalExprTA and an EvalOp.
-  /// \see EvalExpr(EvalExpr const&, EvalExpr const&, EvalOp).
-  ///
-  EvalExprTA(EvalExprTA const&, EvalExprTA const&, EvalOp);
+  [[nodiscard]] inline auto const& annot() const noexcept { return annot_; }
 
  private:
   std::string annot_;
-};  // class EvalExprTA
+};
 
 ///
 /// \brief This class extends the EvalExpr class by adding a annot() method so
@@ -200,38 +176,16 @@ class EvalExprBTAS final : public EvalExpr {
  public:
   using annot_t = container::svector<long>;
 
+  template <typename... Args, typename = std::enable_if_t<
+                                  std::is_constructible_v<EvalExpr, Args...>>>
+  EvalExprBTAS(Args&&... args) : EvalExpr{std::forward<Args>(args)...} {
+    annot_ = index_hash(canon_indices()) | ranges::to<annot_t>;
+  }
+
   ///
   /// \return Annotation (container::svector<long>) for BTAS::Tensor.
   ///
-  [[nodiscard]] annot_t const& annot() const noexcept;
-
-  ///
-  /// \brief Construct an EvalExprBTAS from a Tensor.
-  ///
-  /// \see EvalExpr(Tensor const&).
-  ///
-  explicit EvalExprBTAS(Tensor const&) noexcept;
-
-  ///
-  /// \brief Construct an EvalExprBTAS from a Constant.
-  ///
-  /// \see EvalExpr(Constant const&).
-  ///
-  explicit EvalExprBTAS(Constant const&) noexcept;
-
-  ///
-  /// \brief Construct an EvalExprBTAS from a Variable.
-  ///
-  /// \see EvalExpr(Variable const&).
-  ///
-  explicit EvalExprBTAS(Variable const&) noexcept;
-
-  ///
-  /// \brief Construct an EvalExprBTAS from two EvalExprBTAS and an EvalOp.
-  ///
-  /// \see EvalExpr(EvalExpr const&, EvalExpr const&, EvalOp).
-  ///
-  EvalExprBTAS(EvalExprBTAS const&, EvalExprBTAS const&, EvalOp) noexcept;
+  [[nodiscard]] inline annot_t const& annot() const noexcept { return annot_; }
 
  private:
   annot_t annot_;
@@ -309,17 +263,24 @@ ERPtr evaluate_crust(NodeT const& node, Le const& le) {
   return evaluate_core(node, le);
 }
 
+template <typename NodeT>
+inline ERPtr mult_by_phase(NodeT const& node, ERPtr res) {
+  return node->canon_phase() == 1 ? res
+                                  : res->mult_by_phase(node->canon_phase());
+}
+
 template <typename NodeT, typename Le,
           std::enable_if_t<IsLeafEvaluator<NodeT, Le>, bool>>
 ERPtr evaluate_crust(NodeT const& node, Le const& le, CacheManager& cache) {
   auto const h = hash::value(*node);
   if (auto ptr = cache.access(h); ptr) {
     log_cache_access(h, cache);
-    return ptr;
+    return mult_by_phase(node, ptr);
   } else if (cache.exists(h)) {
-    auto ptr = cache.store(h, evaluate_core(node, le, cache));
+    auto ptr =
+        cache.store(h, mult_by_phase(node, evaluate_core(node, le, cache)));
     log_cache_store(h, cache);
-    return ptr;
+    return mult_by_phase(node, ptr);
   } else {
     return evaluate_core(node, le, cache);
   }

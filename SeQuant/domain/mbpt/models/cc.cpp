@@ -78,7 +78,6 @@ ExprPtr CC::sim_tr(ExprPtr expr, size_t commutator_rank) {
 std::vector<ExprPtr> CC::t(size_t commutator_rank, size_t pmax, size_t pmin) {
   pmax = (pmax == std::numeric_limits<size_t>::max() ? N : pmax);
 
-  assert(commutator_rank >= 1 && "commutator rank should be >= 1");
   assert(pmax >= pmin && "pmax should be >= pmin");
 
   // 1. construct hbar(op) in canonical form

@@ -231,7 +231,7 @@ std::string diff(const Expr &lhs, const Expr &rhs) {
   auto lhs_begin = std::begin(lhs);
   auto lhs_end = std::end(lhs);
   auto rhs_begin = std::begin(rhs);
-  auto rhs_end = std::end(rhs);
+  [[maybe_unused]] auto rhs_end = std::end(rhs);
 
   auto lhs_size = std::distance(lhs_begin, lhs_end);
   auto rhs_size = std::distance(lhs_begin, lhs_end);

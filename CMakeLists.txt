@@ -52,17 +52,17 @@ vgkit_cmake_git_metadata()
 # make SeQuant project
 project(SeQuant LANGUAGES CXX VERSION "${SEQUANT_VERSION}" DESCRIPTION "SEcond QUANTization toolkit")
 
-# need C++17, insist on strict standard
-set(CMAKE_CXX_STANDARD 17 CACHE STRING "C++ ISO Standard version")
-if (NOT (CMAKE_CXX_STANDARD EQUAL 17 OR CMAKE_CXX_STANDARD EQUAL 20))
-    message(FATAL_ERROR "C++ 2017 ISO Standard or higher is required to compile SeQuant")
+# need C++20, insist on strict standard
+set(CMAKE_CXX_STANDARD 20 CACHE STRING "C++ ISO Standard version")
+if (CMAKE_CXX_STANDARD LESS 20)
+    message(FATAL_ERROR "C++ 2020 ISO Standard or higher is required to compile SeQuant")
 endif ()
 # C++20 is only configurable via compile features with cmake 3.12 and older
 if (CMAKE_CXX_STANDARD EQUAL 20 AND CMAKE_VERSION VERSION_LESS 3.12.0)
     cmake_minimum_required(VERSION 3.12.0)
 endif ()
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_EXTENSIONS OFF CACHE BOOL "Whether to use extensions of C++  ISO Standard version")
+set(CMAKE_CXX_EXTENSIONS OFF CACHE BOOL "Whether to use extensions of C++ ISO Standard version")
 
 # Enable ccache if not already enabled by symlink masquerading
 if (NOT CMAKE_CXX_COMPILER MATCHES ".*/ccache$")
@@ -113,8 +113,8 @@ option(SEQUANT_IWYU "Whether to use the include-what-you-use tool (if found)" OF
 # SeQuant package options
 ##########################
 
-option(ENABLE_TBB "Enable TBB as an optional prerequisite for C++17's parallel STL (if PSTL is not supported will use of standard C++11 concurrency)" OFF)
-add_feature_info(TBB ENABLE_TBB "Intel Thread-Building Blocks is an optional prerequisite for C++17's parallel STL")
+option(ENABLE_TBB "Enable TBB as an optional prerequisite for C++'s parallel STL (if PSTL is not supported will use of standard C++11 concurrency)" OFF)
+add_feature_info(TBB ENABLE_TBB "Intel Thread-Building Blocks is an optional prerequisite for C++'s parallel STL")
 
 option(SEQUANT_EVAL_TESTS "Enable building of evaluation tests (if true, will look for and/or build TiledArray)" OFF)
 add_feature_info(EVAL_TESTS SEQUANT_EVAL_TESTS "Build evaluation tests (if true, will look for and/or build TiledArray)")
@@ -139,7 +139,7 @@ add_feature_info(BUILD_DOCS SEQUANT_BUILD_DOCS "Build SeQuant documentation. Dox
 # provided automatically
 find_package(Threads REQUIRED)
 
-# PSTL (used by g++-9 and clang++-8 in c++17 mode) needs TBB
+# PSTL (used by g++-9 and clang++-8 in c++17+ mode) needs TBB
 if ((${CMAKE_CXX_COMPILER_ID} STREQUAL "GNU" AND
         ${CMAKE_CXX_COMPILER_VERSION} VERSION_GREATER 9) OR
 (${CMAKE_CXX_COMPILER_ID} STREQUAL "Clang" AND
@@ -185,6 +185,7 @@ add_library(SeQuant-bliss
         SeQuant/external/bliss/bliss_C.cc
         SeQuant/external/bliss/bliss_C.h
         )
+target_link_libraries(SeQuant-bliss PUBLIC range-v3::range-v3)
 
 set(SeQuant_src
         ${PROJECT_BINARY_DIR}/SeQuant/version.hpp
@@ -307,7 +308,6 @@ if (TARGET tiledarray)
     list(APPEND SeQuant_src
             SeQuant/domain/eval/cache_manager.cpp
             SeQuant/domain/eval/cache_manager.hpp
-            SeQuant/domain/eval/eval.cpp
             SeQuant/domain/eval/eval.hpp
             SeQuant/domain/eval/eval_result.cpp
             SeQuant/domain/eval/eval_result.hpp
@@ -356,7 +356,7 @@ target_include_directories(SeQuant PUBLIC
         $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}>
         $<BUILD_INTERFACE:${PROJECT_BINARY_DIR}>
         $<INSTALL_INTERFACE:${CMAKE_INSTALL_PREFIX}/include>)
-target_compile_features(SeQuant INTERFACE "cxx_std_17")
+target_compile_features(SeQuant INTERFACE "cxx_std_20")
 if (SEQUANT_EVAL_TRACE)
     target_compile_definitions(SeQuant PUBLIC SEQUANT_EVAL_TRACE=1)
 endif ()
@@ -408,7 +408,7 @@ if (SEQUANT_IWYU)
     if (iwyu_path)
         set(iwyu_options_and_path
             "${iwyu_path}"
-            -Xiwyu --cxx17ns
+            -Xiwyu --cxx20ns
             -Xiwyu --no_comments
         )
         set_property(TARGET SeQuant PROPERTY CXX_INCLUDE_WHAT_YOU_USE ${iwyu_options_and_path})

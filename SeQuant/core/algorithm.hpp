@@ -5,7 +5,9 @@
 #ifndef SEQUANT_ALGORITHM_HPP
 #define SEQUANT_ALGORITHM_HPP
 
+#include <SeQuant/core/container.hpp>
 #include <SeQuant/core/meta.hpp>
+
 #include <boost/dynamic_bitset.hpp>
 #include <range/v3/view.hpp>
 
@@ -158,6 +160,31 @@ auto subsequence(Iterable const& it, boost::dynamic_bitset<> const& bs) {
   auto bits = iota(size_t{0}) | transform([&bs](auto i) { return bs.at(i); });
   return zip(it, bits) | filter([](auto&& kv) { return std::get<1>(kv); }) |
          transform([](auto&& kv) { return std::get<0>(kv); });
+}
+
+///
+/// All elements in the vector belong to the integral range [-1,N)
+/// where N is the length of the [Expr] (ie. the iterable of expressions)
+///   * only applicable for binary evaluations
+///   * the integer -1 can appear in certain places: it implies the binary
+///     operation between the last two expressions
+///   * eg.
+///         * {0,1,-1,2,-1} => ( (e[0], e[1]), e[2])
+///         * {0,1,-1,2,3,-1,-1} => ((e[0], e[1]), (e[2],e[3]))
+///
+using EvalSequence = container::svector<int>;
+
+///
+/// Given a range [a_0, a_1, ..., a_n] returns a range of sliced views of
+/// lengths 1 through n: [[a_0], [a_0, a_1], ..., [a_0, a_1, ..., a_n]].
+///
+template <typename Rng>
+auto inits(Rng const& rng) {
+  using ranges::views::slice;
+  using ranges::views::transform;
+  return rng | transform([n = 0, &rng](auto&& val) mutable {
+           return slice(rng, 0, ++n);
+         });
 }
 
 }  // namespace sequant

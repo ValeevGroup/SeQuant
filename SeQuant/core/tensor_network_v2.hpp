@@ -179,6 +179,7 @@ class TensorNetworkV2 {
 
     std::unique_ptr<bliss::Graph> bliss_graph;
     std::vector<std::wstring> vertex_labels;
+    std::vector<std::optional<std::wstring>> vertex_texlabels;
     std::vector<VertexColor> vertex_colors;
     std::vector<VertexType> vertex_types;
 
@@ -361,6 +362,8 @@ class TensorNetworkV2 {
   /// sorted by *label* (not full label) of the corresponding value (Index)
   /// this ensures that proto indices are not considered and all internal
   /// indices have unique labels (not full labels)
+  /// N.B. this may contain some indices in pure_proto_indices_ if there are
+  /// externals indices that depend on them
   NamedIndexSet ext_indices_;
   /// some proto indices may not be in edges_ if they appear exclusively among
   /// proto indices

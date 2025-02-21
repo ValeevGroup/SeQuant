@@ -74,6 +74,7 @@ struct SymmetrySpec : boost::spirit::x3::position_tagged {
   char particle_symm = unspecified;
 };
 
+// represents AbstractTensor, i.e. Tensor or NormalOperator
 struct Tensor : boost::spirit::x3::position_tagged {
   std::wstring name;
   IndexGroups indices;
