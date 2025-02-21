@@ -8,6 +8,7 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
+#include <SeQuant/core/op.hpp>
 #include <SeQuant/core/parse.hpp>
 #include <SeQuant/core/parse/ast.hpp>
 #include <SeQuant/core/space.hpp>
@@ -263,6 +264,27 @@ ExprPtr ast_to_expr(const parse::ast::NullaryValue &value,
           to_symmetries(tensor.symmetry, default_symms.get(),
                         position_cache.get(), begin.get());
 
+      // create NormalOperator or Tensor
+      decltype(ranges::begin(FNOperator::labels())) fit;
+      if ((fit = ranges::find(FNOperator::labels(), tensor.name)) !=
+          ranges::end(FNOperator::labels())) {
+        assert(ranges::size(auxiliaries) == 0);
+        Vacuum vac = fit == ranges::begin(FNOperator::labels())
+                         ? Vacuum::Physical
+                         : Vacuum::SingleProduct;
+        return ex<FNOperator>(cre(std::move(ketIndices)),
+                              ann(std::move(braIndices)), vac);
+      }
+      decltype(ranges::begin(BNOperator::labels())) bit;
+      if ((bit = ranges::find(BNOperator::labels(), tensor.name)) !=
+          ranges::end(BNOperator::labels())) {
+        assert(ranges::size(auxiliaries) == 0);
+        Vacuum vac = bit == ranges::begin(BNOperator::labels())
+                         ? Vacuum::Physical
+                         : Vacuum::SingleProduct;
+        return ex<BNOperator>(cre(std::move(ketIndices)),
+                              ann(std::move(braIndices)), vac);
+      }
       return ex<Tensor>(tensor.name, bra(std::move(braIndices)),
                         ket(std::move(ketIndices)), aux(std::move(auxiliaries)),
                         perm_symm, braket_symm, particle_symm);
