@@ -576,7 +576,7 @@ TensorNetwork::GraphData TensorNetwork::make_bliss_graph(
     ++nv;
     const auto tlabel = label(*t);
     vertex_labels.emplace_back(tlabel);
-    vertex_texlabels.emplace_back(std::nullopt);
+    vertex_texlabels.emplace_back(L"$" + utf_to_latex(tlabel) + L"$");
     vertex_type.emplace_back(VertexType::TensorCore);
     vertex_color.push_back(colorizer(*t));
 
