@@ -73,8 +73,9 @@ ExprPtr TensorNetwork::canonicalize(
   }
 
   // - resort tensors (this cannot be done in Product::canonicalize since that
-  // requires analysis of commutativity ... here we are dealing with tensors
-  // only and are free to reorder)
+  // requires generic analysis of commutativity ... here we are dealing with
+  // tensors only, so if either tensor in a pair of adjacent
+  // tensors is a cnumber, they can be reordered
   using ranges::views::zip;
   using std::begin;
   using std::end;
@@ -196,7 +197,7 @@ ExprPtr TensorNetwork::canonicalize(
     // named indices are not renamed, so each gets a distinct color
     auto [graph, vlabels, vtexlabels, vcolors, vtypes] =
         make_bliss_graph(&named_indices, /* distinct_named_indices = */ true);
-    //    graph->write_dot(std::wcout, vlabels);
+    //    graph->write_dot(std::wcout, vlabels, vtexlabels);
 
     // canonize the graph
     bliss::Stats stats;
@@ -214,7 +215,8 @@ ExprPtr TensorNetwork::canonicalize(
 
       bliss::Graph *cgraph = graph->permute(cl);
       auto cvlabels = permute(vlabels, cl);
-      cgraph->write_dot(std::wcout, cvlabels);
+      auto cvtexlabels = permute(vtexlabels, cl);
+      cgraph->write_dot(std::wcout, cvlabels, cvtexlabels);
       delete cgraph;
     }
 

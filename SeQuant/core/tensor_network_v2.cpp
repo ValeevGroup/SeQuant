@@ -719,7 +719,8 @@ TensorNetworkV2::canonicalize_slots(
 
   if (Logger::instance().canonicalize_input_graph) {
     std::wcout << "Input graph for canonicalization:\n";
-    graph.bliss_graph->write_dot(std::wcout, graph.vertex_labels);
+    graph.bliss_graph->write_dot(std::wcout, graph.vertex_labels,
+                                 graph.vertex_texlabels);
   }
 
   // canonize the graph
