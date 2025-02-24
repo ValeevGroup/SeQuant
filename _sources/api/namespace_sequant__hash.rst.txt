@@ -30,9 +30,9 @@ Functions
 
 - :ref:`exhale_function_namespacesequant_1_1hash_1a9396a30bcac59a99a1418df117391864`
 
-- :ref:`exhale_function_namespacesequant_1_1hash_1a03d04dae60cc048d2e506d880405906c`
-
 - :ref:`exhale_function_namespacesequant_1_1hash_1aca3b67cf0ea2617aa26030ef8e0a2ce6`
+
+- :ref:`exhale_function_namespacesequant_1_1hash_1a03d04dae60cc048d2e506d880405906c`
 
 - :ref:`exhale_function_namespacesequant_1_1hash_1ae0df3b24d161aae375c70408e949b41a`
 

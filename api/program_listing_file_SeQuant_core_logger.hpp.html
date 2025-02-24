@@ -312,6 +312,7 @@
 <span class="k">template</span><span class="w"> </span><span class="o">&lt;</span><span class="k">typename</span><span class="p">...</span><span class="w"> </span><span class="n">Args</span><span class="o">&gt;</span>
 <span class="kt">void</span><span class="w"> </span><span class="n">write_log</span><span class="p">(</span><span class="n">Logger</span><span class="o">&amp;</span><span class="w"> </span><span class="n">l</span><span class="p">,</span><span class="w"> </span><span class="n">Args</span><span class="w"> </span><span class="k">const</span><span class="o">&amp;</span><span class="p">...</span><span class="w"> </span><span class="n">args</span><span class="p">)</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span>
 <span class="w">  </span><span class="p">((</span><span class="o">*</span><span class="n">l</span><span class="p">.</span><span class="n">stream</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">args</span><span class="p">),</span><span class="w"> </span><span class="p">...);</span>
+<span class="w">  </span><span class="p">(</span><span class="o">*</span><span class="n">l</span><span class="p">.</span><span class="n">stream</span><span class="p">).</span><span class="n">flush</span><span class="p">();</span>
 <span class="p">}</span>
 
 <span class="p">}</span><span class="w">  </span><span class="c1">// namespace sequant</span>
@@ -338,7 +339,7 @@
             
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on Feb 21, 2025 8:23:19 PM</div>
+              Last updated on Feb 24, 2025 9:43:39 PM</div>
           </div>
           <div class="right-details">
             <div class="icons">
