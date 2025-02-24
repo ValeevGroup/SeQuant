@@ -53,6 +53,8 @@ Included By
 
 - :ref:`file_SeQuant_core_parse_parse.cpp`
 
+- :ref:`file_SeQuant_domain_eval_eval.hpp`
+
 
 
 
