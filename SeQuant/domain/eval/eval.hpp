@@ -5,6 +5,7 @@
 #include <SeQuant/core/eval_node.hpp>
 #include <SeQuant/core/logger.hpp>
 #include <SeQuant/core/meta.hpp>
+#include <SeQuant/core/parse.hpp>
 #include <SeQuant/core/tensor.hpp>
 #include <SeQuant/domain/eval/cache_manager.hpp>
 #include <SeQuant/domain/eval/eval_result.hpp>
@@ -328,10 +329,17 @@ auto evaluate(NodesT const& nodes, Le const& le, Args&&... args) {
   auto end = std::end(nodes);
   assert(iter != end);
 
+#ifdef SEQUANT_EVAL_TRACE
+  log_eval("[TERM] ", " ", to_string(deparse(to_expr(*iter))), "\n");
+#endif
+
   auto result = evaluate(*iter, le, std::forward<Args>(args)...);
   auto const pnode_label = (*iter)->label();
 
   for (++iter; iter != end; ++iter) {
+#ifdef SEQUANT_EVAL_TRACE
+    log_eval("[TERM] ", " ", to_string(deparse(to_expr(*iter))), "\n");
+#endif
     auto right = evaluate(*iter, le, std::forward<Args>(args)...);
 #ifdef SEQUANT_EVAL_TRACE
     auto&& time = timed_eval_inplace([&]() { result->add_inplace(*right); });
@@ -370,6 +378,9 @@ template <typename NodeT, typename Annot, typename Le, typename... Args,
 auto evaluate(NodeT const& node,    //
               Annot const& layout,  //
               Le const& le, Args&&... args) {
+#ifdef SEQUANT_EVAL_TRACE
+  log_eval("[TERM] ", " ", to_string(deparse(to_expr(node))), "\n");
+#endif
   auto result = evaluate_crust(node, le, std::forward<Args>(args)...);
 
 #ifdef SEQUANT_EVAL_TRACE
@@ -413,9 +424,15 @@ auto evaluate(NodesT const& nodes,  //
   assert(iter != end);
   auto const pnode_label = (*iter)->label();
 
-  auto result = evaluate(*iter, layout, le, std::forward<Args>(args)...);
+#ifdef SEQUANT_EVAL_TRACE
+  log_eval("[TERM] ", " ", to_string(deparse(to_expr(*iter))), "\n");
+#endif
 
+  auto result = evaluate(*iter, layout, le, std::forward<Args>(args)...);
   for (++iter; iter != end; ++iter) {
+#ifdef SEQUANT_EVAL_TRACE
+    log_eval("[TERM] ", " ", to_string(deparse(to_expr(*iter))), "\n");
+#endif
     auto right = evaluate(*iter, layout, le, std::forward<Args>(args)...);
 #ifdef SEQUANT_EVAL_TRACE
     auto&& time = timed_eval_inplace([&]() { result->add_inplace(*right); });
@@ -426,6 +443,7 @@ auto evaluate(NodesT const& nodes,  //
              "  ",              //
              time.count(),      //
              "\n");
+
 #else
     result->add_inplace(*right);
 #endif
