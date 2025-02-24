@@ -57,6 +57,7 @@ struct Logger : public Singleton<Logger> {
 template <typename... Args>
 void write_log(Logger& l, Args const&... args) noexcept {
   ((*l.stream << args), ...);
+  (*l.stream).flush();
 }
 
 }  // namespace sequant
