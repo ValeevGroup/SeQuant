@@ -278,6 +278,7 @@ ExprPtr csv_transform(ExprPtr const& expr,
   else if (expr->is<Tensor>()) {
     auto const& tnsr = expr->as<Tensor>();
     if (!ranges::contains(csv_tensors, tnsr.label())) return expr;
+    if (ranges::none_of(tnsr.indices(), &Index::has_proto_indices)) return expr;
     return csv_transform_impl(tnsr, coeff_tensor_label);
   } else if (expr->is<Product>()) {
     auto const& prod = expr->as<Product>();
