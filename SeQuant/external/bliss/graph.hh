@@ -679,6 +679,7 @@ class Graph : public AbstractGraph {
   void write_dot(const char* const file_name);
 
   /// options for generating dot file
+  template <typename Char, typename Traits>
   struct DotOptions {
     /// if true, display colored vertices using color values
     /// to RGB colors;
@@ -691,6 +692,8 @@ class Graph : public AbstractGraph {
     std::uint16_t fillcolor_saturation_nbits = 3;
     /// if nonnull, specifies a callable that maps vertex ordinal to subgraph ordinal; returning std::nullopt means vertex is not part of a subgraph
     std::function<std::optional<std::uint64_t>(std::size_t)> vertex_to_subgraph = {};
+    /// extra content for node section
+    std::basic_string<Char, Traits> nodeextras = {};
   };
 
   /// @brief  writes a dot file, optionally using user-supplied labels and
@@ -707,7 +710,7 @@ class Graph : public AbstractGraph {
   void write_dot(std::basic_ostream<Char, Traits>& os,
                  const StringSequence& vertex_labels = StringSequence{},
                  const OptStringSequence& vertex_texlabels = OptStringSequence{},
-                 DotOptions options = {.display_colors=std::nullopt, .fillcolor_saturation_nbits=3, .vertex_to_subgraph = {}}) {
+                 DotOptions<Char,Traits> options = {.display_colors=std::nullopt, .fillcolor_saturation_nbits=3, .vertex_to_subgraph = {}, .nodeextras = {}}) {
     using std::size;
     const auto nvertices = size(vertex_labels);
     const bool have_labels = nvertices > 0;
@@ -759,7 +762,7 @@ class Graph : public AbstractGraph {
       return stream.str();
     };
 
-    os << "graph g {\nnode [ style=filled, penwidth=2, margin=0];\n";
+    os << "graph g {\nnode [ style=filled, penwidth=2, margin=0" << (options.nodeextras.empty() ? "" : ",") << options.nodeextras << "];\n";
 
     using clusters_t = std::multimap<std::int64_t,std::size_t>;  // cluster id -> vertex ordinals
     clusters_t clusters;
