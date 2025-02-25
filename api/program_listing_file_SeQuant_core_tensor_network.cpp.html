@@ -338,8 +338,9 @@
 <span class="w">  </span><span class="p">}</span>
 
 <span class="w">  </span><span class="c1">// - resort tensors (this cannot be done in Product::canonicalize since that</span>
-<span class="w">  </span><span class="c1">// requires analysis of commutativity ... here we are dealing with tensors</span>
-<span class="w">  </span><span class="c1">// only and are free to reorder)</span>
+<span class="w">  </span><span class="c1">// requires generic analysis of commutativity ... here we are dealing with</span>
+<span class="w">  </span><span class="c1">// tensors only, so if either tensor in a pair of adjacent</span>
+<span class="w">  </span><span class="c1">// tensors is a cnumber, they can be reordered</span>
 <span class="w">  </span><span class="k">using</span><span class="w"> </span><span class="n">ranges</span><span class="o">::</span><span class="n">views</span><span class="o">::</span><span class="n">zip</span><span class="p">;</span>
 <span class="w">  </span><span class="k">using</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">begin</span><span class="p">;</span>
 <span class="w">  </span><span class="k">using</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">end</span><span class="p">;</span>
@@ -461,7 +462,7 @@
 <span class="w">    </span><span class="c1">// named indices are not renamed, so each gets a distinct color</span>
 <span class="w">    </span><span class="k">auto</span><span class="w"> </span><span class="p">[</span><span class="n">graph</span><span class="p">,</span><span class="w"> </span><span class="n">vlabels</span><span class="p">,</span><span class="w"> </span><span class="n">vtexlabels</span><span class="p">,</span><span class="w"> </span><span class="n">vcolors</span><span class="p">,</span><span class="w"> </span><span class="n">vtypes</span><span class="p">]</span><span class="w"> </span><span class="o">=</span>
 <span class="w">        </span><span class="n">make_bliss_graph</span><span class="p">(</span><span class="o">&amp;</span><span class="n">named_indices</span><span class="p">,</span><span class="w"> </span><span class="cm">/* distinct_named_indices = */</span><span class="w"> </span><span class="nb">true</span><span class="p">);</span>
-<span class="w">    </span><span class="c1">//    graph-&gt;write_dot(std::wcout, vlabels);</span>
+<span class="w">    </span><span class="c1">//    graph-&gt;write_dot(std::wcout, vlabels, vtexlabels);</span>
 
 <span class="w">    </span><span class="c1">// canonize the graph</span>
 <span class="w">    </span><span class="n">bliss</span><span class="o">::</span><span class="n">Stats</span><span class="w"> </span><span class="n">stats</span><span class="p">;</span>
@@ -479,7 +480,8 @@
 
 <span class="w">      </span><span class="n">bliss</span><span class="o">::</span><span class="n">Graph</span><span class="w"> </span><span class="o">*</span><span class="n">cgraph</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">graph</span><span class="o">-&gt;</span><span class="n">permute</span><span class="p">(</span><span class="n">cl</span><span class="p">);</span>
 <span class="w">      </span><span class="k">auto</span><span class="w"> </span><span class="n">cvlabels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">permute</span><span class="p">(</span><span class="n">vlabels</span><span class="p">,</span><span class="w"> </span><span class="n">cl</span><span class="p">);</span>
-<span class="w">      </span><span class="n">cgraph</span><span class="o">-&gt;</span><span class="n">write_dot</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">wcout</span><span class="p">,</span><span class="w"> </span><span class="n">cvlabels</span><span class="p">);</span>
+<span class="w">      </span><span class="k">auto</span><span class="w"> </span><span class="n">cvtexlabels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">permute</span><span class="p">(</span><span class="n">vtexlabels</span><span class="p">,</span><span class="w"> </span><span class="n">cl</span><span class="p">);</span>
+<span class="w">      </span><span class="n">cgraph</span><span class="o">-&gt;</span><span class="n">write_dot</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">wcout</span><span class="p">,</span><span class="w"> </span><span class="n">cvlabels</span><span class="p">,</span><span class="w"> </span><span class="n">cvtexlabels</span><span class="p">);</span>
 <span class="w">      </span><span class="k">delete</span><span class="w"> </span><span class="n">cgraph</span><span class="p">;</span>
 <span class="w">    </span><span class="p">}</span>
 
@@ -839,7 +841,7 @@
 <span class="w">    </span><span class="o">++</span><span class="n">nv</span><span class="p">;</span>
 <span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">tlabel</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">label</span><span class="p">(</span><span class="o">*</span><span class="n">t</span><span class="p">);</span>
 <span class="w">    </span><span class="n">vertex_labels</span><span class="p">.</span><span class="n">emplace_back</span><span class="p">(</span><span class="n">tlabel</span><span class="p">);</span>
-<span class="w">    </span><span class="n">vertex_texlabels</span><span class="p">.</span><span class="n">emplace_back</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">nullopt</span><span class="p">);</span>
+<span class="w">    </span><span class="n">vertex_texlabels</span><span class="p">.</span><span class="n">emplace_back</span><span class="p">(</span><span class="sa">L</span><span class="s">&quot;$&quot;</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">utf_to_latex</span><span class="p">(</span><span class="n">tlabel</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="sa">L</span><span class="s">&quot;$&quot;</span><span class="p">);</span>
 <span class="w">    </span><span class="n">vertex_type</span><span class="p">.</span><span class="n">emplace_back</span><span class="p">(</span><span class="n">VertexType</span><span class="o">::</span><span class="n">TensorCore</span><span class="p">);</span>
 <span class="w">    </span><span class="n">vertex_color</span><span class="p">.</span><span class="n">push_back</span><span class="p">(</span><span class="n">colorizer</span><span class="p">(</span><span class="o">*</span><span class="n">t</span><span class="p">));</span>
 
@@ -1436,7 +1438,7 @@
             
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on Feb 24, 2025 11:32:49 PM</div>
+              Last updated on Feb 25, 2025 11:33:38 PM</div>
           </div>
           <div class="right-details">
             <div class="icons">

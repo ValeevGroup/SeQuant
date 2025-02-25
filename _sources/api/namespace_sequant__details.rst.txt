@@ -16,8 +16,8 @@ Functions
 
 - :ref:`exhale_function_namespacesequant_1_1details_1a956db5f186d4b7eaf5f87a67dc8afa05`
 
-- :ref:`exhale_function_namespacesequant_1_1details_1ab91f9798037aad2741ce95cbdcc091f0`
-
 - :ref:`exhale_function_namespacesequant_1_1details_1a5afcee3867de08455497af875cfb3994`
 
 - :ref:`exhale_function_namespacesequant_1_1details_1a1d5884a8146adebe0b2e7e20897c49ca`
+
+- :ref:`exhale_function_namespacesequant_1_1details_1ab91f9798037aad2741ce95cbdcc091f0`

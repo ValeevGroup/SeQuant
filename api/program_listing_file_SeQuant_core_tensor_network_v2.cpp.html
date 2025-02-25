@@ -978,7 +978,8 @@
 
 <span class="w">  </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">Logger</span><span class="o">::</span><span class="n">instance</span><span class="p">().</span><span class="n">canonicalize_input_graph</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
 <span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">wcout</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">&quot;Input graph for canonicalization:</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">;</span>
-<span class="w">    </span><span class="n">graph</span><span class="p">.</span><span class="n">bliss_graph</span><span class="o">-&gt;</span><span class="n">write_dot</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">wcout</span><span class="p">,</span><span class="w"> </span><span class="n">graph</span><span class="p">.</span><span class="n">vertex_labels</span><span class="p">);</span>
+<span class="w">    </span><span class="n">graph</span><span class="p">.</span><span class="n">bliss_graph</span><span class="o">-&gt;</span><span class="n">write_dot</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">wcout</span><span class="p">,</span><span class="w"> </span><span class="n">graph</span><span class="p">.</span><span class="n">vertex_labels</span><span class="p">,</span>
+<span class="w">                                 </span><span class="n">graph</span><span class="p">.</span><span class="n">vertex_texlabels</span><span class="p">);</span>
 <span class="w">  </span><span class="p">}</span>
 
 <span class="w">  </span><span class="c1">// canonize the graph</span>
@@ -1136,8 +1137,9 @@
 <span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="n">AbstractTensor</span><span class="w"> </span><span class="o">&amp;</span><span class="n">tensor</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">*</span><span class="n">tensors_</span><span class="p">.</span><span class="n">at</span><span class="p">(</span><span class="n">tensor_idx</span><span class="p">);</span>
 
 <span class="w">    </span><span class="c1">// Tensor core</span>
-<span class="w">    </span><span class="n">graph</span><span class="p">.</span><span class="n">vertex_labels</span><span class="p">.</span><span class="n">emplace_back</span><span class="p">(</span><span class="n">label</span><span class="p">(</span><span class="n">tensor</span><span class="p">));</span>
-<span class="w">    </span><span class="n">graph</span><span class="p">.</span><span class="n">vertex_texlabels</span><span class="p">.</span><span class="n">emplace_back</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">nullopt</span><span class="p">);</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">tlabel</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">label</span><span class="p">(</span><span class="n">tensor</span><span class="p">);</span>
+<span class="w">    </span><span class="n">graph</span><span class="p">.</span><span class="n">vertex_labels</span><span class="p">.</span><span class="n">emplace_back</span><span class="p">(</span><span class="n">tlabel</span><span class="p">);</span>
+<span class="w">    </span><span class="n">graph</span><span class="p">.</span><span class="n">vertex_texlabels</span><span class="p">.</span><span class="n">emplace_back</span><span class="p">(</span><span class="sa">L</span><span class="s">&quot;$&quot;</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">utf_to_latex</span><span class="p">(</span><span class="n">tlabel</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="sa">L</span><span class="s">&quot;$&quot;</span><span class="p">);</span>
 <span class="w">    </span><span class="n">graph</span><span class="p">.</span><span class="n">vertex_types</span><span class="p">.</span><span class="n">emplace_back</span><span class="p">(</span><span class="n">VertexType</span><span class="o">::</span><span class="n">TensorCore</span><span class="p">);</span>
 <span class="w">    </span><span class="n">graph</span><span class="p">.</span><span class="n">vertex_colors</span><span class="p">.</span><span class="n">push_back</span><span class="p">(</span><span class="n">colorizer</span><span class="p">(</span><span class="n">tensor</span><span class="p">));</span>
 
@@ -1581,7 +1583,7 @@
             
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on Feb 24, 2025 11:32:49 PM</div>
+              Last updated on Feb 25, 2025 11:33:38 PM</div>
           </div>
           <div class="right-details">
             <div class="icons">
