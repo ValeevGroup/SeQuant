@@ -265,6 +265,50 @@ ExprPtr csv_transform_impl(Tensor const& tnsr,
   return ex<Product>(std::move(result));
 }
 
+ExprPtr csv_aotransform_impl(Tensor const& tnsr,
+                             std::wstring_view coeff_tensor_label) {
+  using ranges::views::transform;
+
+  if (ranges::none_of(tnsr.const_braket(), &Index::has_proto_indices))
+    return nullptr;
+
+  assert(ranges::none_of(tnsr.aux(), &Index::has_proto_indices));
+  assert(get_default_context().index_space_registry());
+  assert(get_default_context().index_space_registry()->contains(L"μ"));
+  auto aospace = get_default_context().index_space_registry()->retrieve(L"μ");
+
+  Product result;
+  container::svector<Index> rbra, rket;
+
+  rbra.reserve(tnsr.bra_rank());
+  for (auto&& idx : tnsr.bra()) {
+    if (idx.has_proto_indices()) {
+      Index aoidx = Index::make_tmp_index(aospace);
+      result.append(
+          1, ex<Tensor>(coeff_tensor_label, bra({idx}), ket({aoidx}), aux({})));
+      rbra.emplace_back(std::move(aoidx));
+    } else
+      rbra.emplace_back(idx);
+  }
+
+  rket.reserve(tnsr.ket_rank());
+  for (auto&& idx : tnsr.ket()) {
+    if (idx.has_proto_indices()) {
+      Index aoidx = Index::make_tmp_index(aospace);
+      result.append(
+          1, ex<Tensor>(coeff_tensor_label, bra({aoidx}), ket({idx}), aux({})));
+      rket.emplace_back(std::move(aoidx));
+    } else
+      rket.emplace_back(idx);
+  }
+
+  auto tnsr_ao =
+      ex<Tensor>(tnsr.label(), bra(rbra), ket(rket), aux(), tnsr.symmetry(),
+                 tnsr.braket_symmetry(), tnsr.particle_symmetry());
+
+  return ex<Product>(std::move(result));
+}
+
 ExprPtr csv_transform(ExprPtr const& expr,
                       std::wstring const& coeff_tensor_label,
                       container::svector<std::wstring> const& csv_tensors) {
