@@ -616,10 +616,15 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
 #else
           TensorNetwork tn(expr_input_->as<Product>().factors());
           auto [graph, vlabels, vtexlabels, vcolors, vtypes] =
-              tn.make_bliss_graph();
+              tn.make_bliss_graph(
+                  {/* need labels to find normal operators */ .make_labels =
+                       true,
+                   .make_texlabels = false});
 #endif
-          const auto n = vlabels.size();
-          assert(vtypes.size() == n);
+          const auto n = vtypes.size();
+          assert(vcolors.size() == n);
+          assert(vlabels.size() == n);
+          assert(vtexlabels.size() == 0);
           const auto &tn_edges = tn.edges();
           const auto &tn_tensors = tn.tensors();
 

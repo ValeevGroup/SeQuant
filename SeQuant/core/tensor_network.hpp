@@ -469,15 +469,29 @@ class TensorNetwork {
     }
   };
 
+  /// options for generating bliss Graph
+  struct BlissGraphOptions {
+    /// pointer to the set of named indices (ordinarily,
+    /// this includes all external indices);
+    ///            default is nullptr, which means use all external indices for
+    ///            named indices
+    const named_indices_t *named_indices = nullptr;
+
+    /// if false, will use same color for all
+    /// named indices that have same Index::color(), else will use distinct
+    /// color for each
+    bool distinct_named_indices = true;
+
+    /// if false, will not generate the labels
+    bool make_labels = true;
+
+    /// if false, will not generate the TeX labels
+    bool make_texlabels = true;
+  };
+
   /// @brief converts the network into a Bliss graph whose vertices are indices
   /// and tensor vertex representations
-  /// @param[in] named_indices pointer to the set of named indices (ordinarily,
-  /// this includes all external indices);
-  ///            default is nullptr, which means use all external indices for
-  ///            named indices
-  /// @param[in] distinct_named_indices if false, will use same color for all
-  /// named indices that have same Index::color(), else will use distinct color
-  /// for each
+  /// @param[in] options the options for generating the graph
   /// @return {shared_ptr to Graph, vector of vertex labels, vector of optional
   /// vertex TeX labels, vector of vertex colors, vector of vertex types,
   /// vector of cluster ordinals for each vertex}
@@ -497,8 +511,11 @@ class TensorNetwork {
   ///   tensor; terminal vertices are colored by the color of its tensor,
   ///     with the color of symm/antisymm terminals augmented by the
   ///     terminal's type (bra/ket).
-  GraphData make_bliss_graph(const named_indices_t *named_indices = nullptr,
-                             bool distinct_named_indices = true) const;
+  GraphData make_bliss_graph(const BlissGraphOptions &options = {
+                                 .named_indices = nullptr,
+                                 .distinct_named_indices = true,
+                                 .make_labels = true,
+                                 .make_texlabels = true}) const;
 };
 
 }  // namespace sequant

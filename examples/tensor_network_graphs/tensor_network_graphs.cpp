@@ -113,8 +113,9 @@ int main(int argc, char **argv) {
       }
 
       auto [graph, vlabels, vtexlabels, vcolors, vtypes] =
-          network->make_bliss_graph(use_named_indices ? nullptr
-                                                      : &empty_named_indices);
+          network->make_bliss_graph(
+              {.named_indices =
+                   (use_named_indices ? nullptr : &empty_named_indices)});
       std::wcout << "Graph for '" << to_latex(expr) << "'\n";
       graph->write_dot(std::wcout, vlabels);
     } else {

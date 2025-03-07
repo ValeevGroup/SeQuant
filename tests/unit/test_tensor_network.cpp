@@ -208,8 +208,9 @@ TEST_CASE("TensorNetwork", "[elements]") {
     // std::wcout << "A2*H2*T2*T2*T2 = " << to_latex(tmp) << std::endl;
     TensorNetwork tn(tmp->as<Product>().factors());
 
-    // make graph
-    REQUIRE_NOTHROW(tn.make_bliss_graph());
+    // make graph, with all labels
+    REQUIRE_NOTHROW(
+        tn.make_bliss_graph({.make_labels = true, .make_texlabels = true}));
     auto gdata = tn.make_bliss_graph();
     const auto& [graph, vlabels, vtexlabels, vcolors, vtypes] = gdata;
 
@@ -382,6 +383,20 @@ TEST_CASE("TensorNetwork", "[elements]") {
 
     REQUIRE(actual == expected);
 
+    // make sure can generate without labels also
+    REQUIRE_NOTHROW(
+        tn.make_bliss_graph({.make_labels = true, .make_texlabels = false})
+            .vertex_texlabels.size() == 0);
+    REQUIRE_NOTHROW(
+        tn.make_bliss_graph({.make_labels = false, .make_texlabels = true})
+            .vertex_labels.size() == 0);
+    {
+      auto g =
+          tn.make_bliss_graph({.make_labels = false, .make_texlabels = false});
+      REQUIRE_NOTHROW(g.vertex_labels.size() == 0 &&
+                      g.vertex_texlabels.size() == 0);
+    }
+
     // compute automorphism group
     {
       bliss::Stats stats;
@@ -443,9 +458,9 @@ TEST_CASE("TensorNetwork", "[elements]") {
       // N.B. treat all indices as dummy so that the automorphism ignores the
       using named_indices_t = TensorNetwork::named_indices_t;
       named_indices_t indices{};
-      REQUIRE_NOTHROW(tn.make_bliss_graph(&indices));
+      REQUIRE_NOTHROW(tn.make_bliss_graph({.named_indices = &indices}));
       auto [graph, vlabels, vtexlabels, vcolors, vtypes] =
-          tn.make_bliss_graph(&indices);
+          tn.make_bliss_graph({.named_indices = &indices});
 
       // create dot
       {
