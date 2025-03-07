@@ -375,9 +375,22 @@ Program Listing for File tensor_network.hpp
        }
      };
    
+     struct BlissGraphOptions {
+       const named_indices_t *named_indices = nullptr;
    
-     GraphData make_bliss_graph(const named_indices_t *named_indices = nullptr,
-                                bool distinct_named_indices = true) const;
+       bool distinct_named_indices = true;
+   
+       bool make_labels = true;
+   
+       bool make_texlabels = true;
+     };
+   
+   
+     GraphData make_bliss_graph(const BlissGraphOptions &options = {
+                                    .named_indices = nullptr,
+                                    .distinct_named_indices = true,
+                                    .make_labels = true,
+                                    .make_texlabels = true}) const;
    };
    
    }  // namespace sequant

@@ -93,6 +93,8 @@ Classes
 -------
 
 
+- :ref:`exhale_struct_structsequant_1_1_tensor_network_1_1_bliss_graph_options`
+
 - :ref:`exhale_struct_structsequant_1_1_tensor_network_1_1_edge_1_1_terminal`
 
 - :ref:`exhale_struct_structsequant_1_1_tensor_network_1_1_full_label_compare`

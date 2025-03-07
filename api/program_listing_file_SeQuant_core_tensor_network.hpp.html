@@ -628,9 +628,22 @@
 <span class="w">    </span><span class="p">}</span>
 <span class="w">  </span><span class="p">};</span>
 
+<span class="w">  </span><span class="k">struct</span><span class="w"> </span><span class="nc">BlissGraphOptions</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="n">named_indices_t</span><span class="w"> </span><span class="o">*</span><span class="n">named_indices</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">nullptr</span><span class="p">;</span>
 
-<span class="w">  </span><span class="n">GraphData</span><span class="w"> </span><span class="nf">make_bliss_graph</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">named_indices_t</span><span class="w"> </span><span class="o">*</span><span class="n">named_indices</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">nullptr</span><span class="p">,</span>
-<span class="w">                             </span><span class="kt">bool</span><span class="w"> </span><span class="n">distinct_named_indices</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">true</span><span class="p">)</span><span class="w"> </span><span class="k">const</span><span class="p">;</span>
+<span class="w">    </span><span class="kt">bool</span><span class="w"> </span><span class="n">distinct_named_indices</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">true</span><span class="p">;</span>
+
+<span class="w">    </span><span class="kt">bool</span><span class="w"> </span><span class="n">make_labels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">true</span><span class="p">;</span>
+
+<span class="w">    </span><span class="kt">bool</span><span class="w"> </span><span class="n">make_texlabels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">true</span><span class="p">;</span>
+<span class="w">  </span><span class="p">};</span>
+
+
+<span class="w">  </span><span class="n">GraphData</span><span class="w"> </span><span class="nf">make_bliss_graph</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">BlissGraphOptions</span><span class="w"> </span><span class="o">&amp;</span><span class="n">options</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                                 </span><span class="p">.</span><span class="n">named_indices</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">nullptr</span><span class="p">,</span>
+<span class="w">                                 </span><span class="p">.</span><span class="n">distinct_named_indices</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">true</span><span class="p">,</span>
+<span class="w">                                 </span><span class="p">.</span><span class="n">make_labels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">true</span><span class="p">,</span>
+<span class="w">                                 </span><span class="p">.</span><span class="n">make_texlabels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">true</span><span class="p">})</span><span class="w"> </span><span class="k">const</span><span class="p">;</span>
 <span class="p">};</span>
 
 <span class="p">}</span><span class="w">  </span><span class="c1">// namespace sequant</span>
@@ -694,7 +707,7 @@
             
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on Feb 25, 2025 11:33:38 PM</div>
+              Last updated on Mar 7, 2025 1:50:40 AM</div>
           </div>
           <div class="right-details">
             <div class="icons">

@@ -270,6 +270,7 @@
 <section id="nested-types">
 <h3>Nested Types<a class="headerlink" href="#nested-types" title="Link to this heading">¶</a></h3>
 <ul class="simple">
+<li><p><a class="reference internal" href="structsequant_1_1_tensor_network_1_1_bliss_graph_options.html#exhale-struct-structsequant-1-1-tensor-network-1-1-bliss-graph-options"><span class="std std-ref">Struct TensorNetwork::BlissGraphOptions</span></a></p></li>
 <li><p><a class="reference internal" href="classsequant_1_1_tensor_network_1_1_edge.html#exhale-class-classsequant-1-1-tensor-network-1-1-edge"><span class="std std-ref">Class TensorNetwork::Edge</span></a></p></li>
 <li><p><a class="reference internal" href="structsequant_1_1_tensor_network_1_1_edge_1_1_terminal.html#exhale-struct-structsequant-1-1-tensor-network-1-1-edge-1-1-terminal"><span class="std std-ref">Struct Edge::Terminal</span></a></p></li>
 <li><p><a class="reference internal" href="structsequant_1_1_tensor_network_1_1_full_label_compare.html#exhale-struct-structsequant-1-1-tensor-network-1-1-full-label-compare"><span class="std std-ref">Struct TensorNetwork::FullLabelCompare</span></a></p></li>
@@ -418,8 +419,8 @@
 </dd></dl>
 
 <dl class="cpp function">
-<dt class="sig sig-object cpp" id="_CPPv4NK7sequant13TensorNetwork16make_bliss_graphEPK15named_indices_tb">
-<span id="_CPPv3NK7sequant13TensorNetwork16make_bliss_graphEPK15named_indices_tb"></span><span id="_CPPv2NK7sequant13TensorNetwork16make_bliss_graphEPK15named_indices_tb"></span><span id="sequant::TensorNetwork::make_bliss_graph__named_indices_tCP.bC"></span><span class="target" id="classsequant_1_1_tensor_network_1a51ddc8c05a3be606452047a1f5f2a559"></span><a class="reference internal" href="#_CPPv4N7sequant13TensorNetwork9GraphDataE" title="sequant::TensorNetwork::GraphData"><span class="n"><span class="pre">GraphData</span></span></a><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">make_bliss_graph</span></span></span><span class="sig-paren">(</span><span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4N7sequant13TensorNetwork15named_indices_tE" title="sequant::TensorNetwork::named_indices_t"><span class="n"><span class="pre">named_indices_t</span></span></a><span class="w"> </span><span class="p"><span class="pre">*</span></span><span class="n sig-param"><span class="pre">named_indices</span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="k"><span class="pre">nullptr</span></span>, <span class="kt"><span class="pre">bool</span></span><span class="w"> </span><span class="n sig-param"><span class="pre">distinct_named_indices</span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="k"><span class="pre">true</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant13TensorNetwork16make_bliss_graphEPK15named_indices_tb" title="Link to this definition">¶</a><br /></dt>
+<dt class="sig sig-object cpp">
+<span class="target" id="classsequant_1_1_tensor_network_1a8cabaed312ceb940011950406fd11adb"></span><span class="sig-name descname"><span class="pre">GraphData</span> <span class="pre">make_bliss_graph</span> <span class="pre">(const</span> <span class="pre">BlissGraphOptions</span> <span class="pre">&amp;options={</span> <span class="pre">.named_indices=nullptr,.distinct_named_indices=true,.make_labels=true,.make_texlabels=true})</span> <span class="pre">const</span></span></dt>
 <dd><p>converts the network into a Bliss graph whose vertices are indices and tensor vertex representations </p>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
@@ -434,10 +435,7 @@
 </div>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>named_indices</strong> – <strong>[in]</strong> pointer to the set of named indices (ordinarily, this includes all external indices); default is nullptr, which means use all external indices for named indices </p></li>
-<li><p><strong>distinct_named_indices</strong> – <strong>[in]</strong> if false, will use same color for all named indices that have same <a class="reference internal" href="classsequant_1_1_index.html#classsequant_1_1_index_1ae348f056ca506bf2d71e933b7ae7b2d9"><span class="std std-ref">Index::color()</span></a>, else will use distinct color for each </p></li>
-</ul>
+<dd class="field-odd"><p><strong>options</strong> – <strong>[in]</strong> the options for generating the graph </p>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
 <dd class="field-even"><p>{shared_ptr to Graph, vector of vertex labels, vector of optional vertex TeX labels, vector of vertex colors, vector of vertex types, vector of cluster ordinals for each vertex} </p>
@@ -454,6 +452,39 @@
 <dd></dd></dl>
 
 </div>
+<dl class="cpp struct">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant13TensorNetwork17BlissGraphOptionsE">
+<span id="_CPPv3N7sequant13TensorNetwork17BlissGraphOptionsE"></span><span id="_CPPv2N7sequant13TensorNetwork17BlissGraphOptionsE"></span><span id="sequant::TensorNetwork::BlissGraphOptions"></span><span class="target" id="structsequant_1_1_tensor_network_1_1_bliss_graph_options"></span><span class="k"><span class="pre">struct</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">BlissGraphOptions</span></span></span><a class="headerlink" href="#_CPPv4N7sequant13TensorNetwork17BlissGraphOptionsE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>options for generating bliss Graph </p>
+<div class="breathe-sectiondef docutils container">
+<p class="breathe-sectiondef-title rubric" id="breathe-section-title-public-members">Public Members</p>
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant13TensorNetwork17BlissGraphOptions13named_indicesE">
+<span id="_CPPv3N7sequant13TensorNetwork17BlissGraphOptions13named_indicesE"></span><span id="_CPPv2N7sequant13TensorNetwork17BlissGraphOptions13named_indicesE"></span><span id="sequant::TensorNetwork::BlissGraphOptions::named_indices__named_indices_tCP"></span><span class="target" id="structsequant_1_1_tensor_network_1_1_bliss_graph_options_1a9b624e2dfbc71fac2f478fe4fd781ea6"></span><span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4N7sequant13TensorNetwork15named_indices_tE" title="sequant::TensorNetwork::named_indices_t"><span class="n"><span class="pre">named_indices_t</span></span></a><span class="w"> </span><span class="p"><span class="pre">*</span></span><span class="sig-name descname"><span class="n"><span class="pre">named_indices</span></span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="k"><span class="pre">nullptr</span></span><a class="headerlink" href="#_CPPv4N7sequant13TensorNetwork17BlissGraphOptions13named_indicesE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>pointer to the set of named indices (ordinarily, this includes all external indices); default is nullptr, which means use all external indices for named indices </p>
+</dd></dl>
+
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant13TensorNetwork17BlissGraphOptions22distinct_named_indicesE">
+<span id="_CPPv3N7sequant13TensorNetwork17BlissGraphOptions22distinct_named_indicesE"></span><span id="_CPPv2N7sequant13TensorNetwork17BlissGraphOptions22distinct_named_indicesE"></span><span id="sequant::TensorNetwork::BlissGraphOptions::distinct_named_indices__b"></span><span class="target" id="structsequant_1_1_tensor_network_1_1_bliss_graph_options_1a862c5e45a472185c1475bbec8ab26a1b"></span><span class="kt"><span class="pre">bool</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">distinct_named_indices</span></span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="k"><span class="pre">true</span></span><a class="headerlink" href="#_CPPv4N7sequant13TensorNetwork17BlissGraphOptions22distinct_named_indicesE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>if false, will use same color for all named indices that have same <a class="reference internal" href="classsequant_1_1_index.html#classsequant_1_1_index_1ae348f056ca506bf2d71e933b7ae7b2d9"><span class="std std-ref">Index::color()</span></a>, else will use distinct color for each </p>
+</dd></dl>
+
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant13TensorNetwork17BlissGraphOptions11make_labelsE">
+<span id="_CPPv3N7sequant13TensorNetwork17BlissGraphOptions11make_labelsE"></span><span id="_CPPv2N7sequant13TensorNetwork17BlissGraphOptions11make_labelsE"></span><span id="sequant::TensorNetwork::BlissGraphOptions::make_labels__b"></span><span class="target" id="structsequant_1_1_tensor_network_1_1_bliss_graph_options_1a2e75d02d95475c65636c62894fdb0a5c"></span><span class="kt"><span class="pre">bool</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">make_labels</span></span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="k"><span class="pre">true</span></span><a class="headerlink" href="#_CPPv4N7sequant13TensorNetwork17BlissGraphOptions11make_labelsE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>if false, will not generate the labels </p>
+</dd></dl>
+
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant13TensorNetwork17BlissGraphOptions14make_texlabelsE">
+<span id="_CPPv3N7sequant13TensorNetwork17BlissGraphOptions14make_texlabelsE"></span><span id="_CPPv2N7sequant13TensorNetwork17BlissGraphOptions14make_texlabelsE"></span><span id="sequant::TensorNetwork::BlissGraphOptions::make_texlabels__b"></span><span class="target" id="structsequant_1_1_tensor_network_1_1_bliss_graph_options_1a937cf5683f011d0110743a54f18592ea"></span><span class="kt"><span class="pre">bool</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">make_texlabels</span></span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="k"><span class="pre">true</span></span><a class="headerlink" href="#_CPPv4N7sequant13TensorNetwork17BlissGraphOptions14make_texlabelsE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>if false, will not generate the TeX labels </p>
+</dd></dl>
+
+</div>
+</dd></dl>
+
 <dl class="cpp class">
 <dt class="sig sig-object cpp" id="_CPPv4N7sequant13TensorNetwork4EdgeE">
 <span id="_CPPv3N7sequant13TensorNetwork4EdgeE"></span><span id="_CPPv2N7sequant13TensorNetwork4EdgeE"></span><span id="sequant::TensorNetwork::Edge"></span><span class="target" id="classsequant_1_1_tensor_network_1_1_edge"></span><span class="k"><span class="pre">class</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">Edge</span></span></span><a class="headerlink" href="#_CPPv4N7sequant13TensorNetwork4EdgeE" title="Link to this definition">¶</a><br /></dt>
@@ -782,7 +813,7 @@
             
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on Feb 25, 2025 11:33:38 PM</div>
+              Last updated on Mar 7, 2025 1:50:40 AM</div>
           </div>
           <div class="right-details">
             <div class="icons">
@@ -823,8 +854,14 @@
 <li><a class="reference internal" href="#_CPPv4NK7sequant13TensorNetwork5edgesEv"><code class="docutils literal notranslate"><span class="pre">edges()</span></code></a></li>
 <li><a class="reference internal" href="#_CPPv4NK7sequant13TensorNetwork11ext_indicesEv"><code class="docutils literal notranslate"><span class="pre">ext_indices()</span></code></a></li>
 <li><a class="reference internal" href="#_CPPv4NK7sequant13TensorNetwork7idxreplEv"><code class="docutils literal notranslate"><span class="pre">idxrepl()</span></code></a></li>
-<li><a class="reference internal" href="#_CPPv4NK7sequant13TensorNetwork16make_bliss_graphEPK15named_indices_tb"><code class="docutils literal notranslate"><span class="pre">make_bliss_graph()</span></code></a></li>
 <li><a class="reference internal" href="#_CPPv4N7sequant13TensorNetwork8max_rankE"><code class="docutils literal notranslate"><span class="pre">max_rank</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant13TensorNetwork17BlissGraphOptionsE"><code class="docutils literal notranslate"><span class="pre">sequant::TensorNetwork::BlissGraphOptions</span></code></a><ul>
+<li><a class="reference internal" href="#_CPPv4N7sequant13TensorNetwork17BlissGraphOptions13named_indicesE"><code class="docutils literal notranslate"><span class="pre">named_indices</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant13TensorNetwork17BlissGraphOptions22distinct_named_indicesE"><code class="docutils literal notranslate"><span class="pre">distinct_named_indices</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant13TensorNetwork17BlissGraphOptions11make_labelsE"><code class="docutils literal notranslate"><span class="pre">make_labels</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant13TensorNetwork17BlissGraphOptions14make_texlabelsE"><code class="docutils literal notranslate"><span class="pre">make_texlabels</span></code></a></li>
+</ul>
+</li>
 <li><a class="reference internal" href="#_CPPv4N7sequant13TensorNetwork4EdgeE"><code class="docutils literal notranslate"><span class="pre">sequant::TensorNetwork::Edge</span></code></a><ul>
 <li><a class="reference internal" href="#_CPPv4N7sequant13TensorNetwork4Edge4EdgeEv"><code class="docutils literal notranslate"><span class="pre">Edge()</span></code></a></li>
 <li><a class="reference internal" href="#_CPPv4N7sequant13TensorNetwork4Edge4EdgeERK8Terminal"><code class="docutils literal notranslate"><span class="pre">Edge()</span></code></a></li>

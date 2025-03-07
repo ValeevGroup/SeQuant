@@ -46,9 +46,9 @@ Functions
 
 - :ref:`exhale_function_vac__av_8hpp_1afe0747f0ddc8a790a1a3e5f6edc438db`
 
-- :ref:`exhale_function_vac__av_8hpp_1a62e6294fd72f6c6b0afb03db0352ec65`
-
 - :ref:`exhale_function_vac__av_8hpp_1a8cd9faceb889841032c0c12cc714ba2f`
+
+- :ref:`exhale_function_vac__av_8hpp_1a62e6294fd72f6c6b0afb03db0352ec65`
 
 
 Typedefs

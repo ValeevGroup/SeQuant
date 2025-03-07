@@ -856,10 +856,15 @@
 <span class="cp">#else</span>
 <span class="w">          </span><span class="n">TensorNetwork</span><span class="w"> </span><span class="nf">tn</span><span class="p">(</span><span class="n">expr_input_</span><span class="o">-&gt;</span><span class="n">as</span><span class="o">&lt;</span><span class="n">Product</span><span class="o">&gt;</span><span class="p">().</span><span class="n">factors</span><span class="p">());</span>
 <span class="w">          </span><span class="k">auto</span><span class="w"> </span><span class="p">[</span><span class="n">graph</span><span class="p">,</span><span class="w"> </span><span class="n">vlabels</span><span class="p">,</span><span class="w"> </span><span class="n">vtexlabels</span><span class="p">,</span><span class="w"> </span><span class="n">vcolors</span><span class="p">,</span><span class="w"> </span><span class="n">vtypes</span><span class="p">]</span><span class="w"> </span><span class="o">=</span>
-<span class="w">              </span><span class="n">tn</span><span class="p">.</span><span class="n">make_bliss_graph</span><span class="p">();</span>
+<span class="w">              </span><span class="n">tn</span><span class="p">.</span><span class="n">make_bliss_graph</span><span class="p">(</span>
+<span class="w">                  </span><span class="p">{</span><span class="cm">/* need labels to find normal operators */</span><span class="w"> </span><span class="p">.</span><span class="n">make_labels</span><span class="w"> </span><span class="o">=</span>
+<span class="w">                       </span><span class="nb">true</span><span class="p">,</span>
+<span class="w">                   </span><span class="p">.</span><span class="n">make_texlabels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">false</span><span class="p">});</span>
 <span class="cp">#endif</span>
-<span class="w">          </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">n</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">vlabels</span><span class="p">.</span><span class="n">size</span><span class="p">();</span>
-<span class="w">          </span><span class="n">assert</span><span class="p">(</span><span class="n">vtypes</span><span class="p">.</span><span class="n">size</span><span class="p">()</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">n</span><span class="p">);</span>
+<span class="w">          </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">n</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">vtypes</span><span class="p">.</span><span class="n">size</span><span class="p">();</span>
+<span class="w">          </span><span class="n">assert</span><span class="p">(</span><span class="n">vcolors</span><span class="p">.</span><span class="n">size</span><span class="p">()</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">n</span><span class="p">);</span>
+<span class="w">          </span><span class="n">assert</span><span class="p">(</span><span class="n">vlabels</span><span class="p">.</span><span class="n">size</span><span class="p">()</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">n</span><span class="p">);</span>
+<span class="w">          </span><span class="n">assert</span><span class="p">(</span><span class="n">vtexlabels</span><span class="p">.</span><span class="n">size</span><span class="p">()</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="p">);</span>
 <span class="w">          </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="o">&amp;</span><span class="n">tn_edges</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">tn</span><span class="p">.</span><span class="n">edges</span><span class="p">();</span>
 <span class="w">          </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="o">&amp;</span><span class="n">tn_tensors</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">tn</span><span class="p">.</span><span class="n">tensors</span><span class="p">();</span>
 
@@ -1335,7 +1340,7 @@
             
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on Feb 25, 2025 11:33:38 PM</div>
+              Last updated on Mar 7, 2025 1:50:40 AM</div>
           </div>
           <div class="right-details">
             <div class="icons">
