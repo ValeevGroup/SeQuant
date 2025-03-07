@@ -9,6 +9,7 @@
 #include <SeQuant/core/space.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/spin.hpp>
+#include "SeQuant/domain/mbpt/lcao.hpp"
 
 TEST_CASE("IndexSpace", "[elements]") {
   using namespace sequant;
@@ -175,5 +176,23 @@ TEST_CASE("IndexSpace", "[elements]") {
     REQUIRE(f12_base_spaces_sf[2].base_key() == L"a");
     REQUIRE(f12_base_spaces_sf[3].base_key() == L"g");
     REQUIRE(f12_base_spaces_sf[4].base_key() == L"α'");
+  }
+
+  SECTION("AO spaces") {
+    auto isr = sequant::mbpt::make_min_sr_spaces();
+    REQUIRE_NOTHROW(mbpt::add_ao_spaces(isr));
+
+    // OBS AO space ...
+    REQUIRE_NOTHROW(isr->retrieve(L"μ"));
+    auto μ = isr->retrieve(L"μ");
+    REQUIRE(bitset_t(μ.qns()) & bitset_t(mbpt::LCAOQNS::ao));
+    REQUIRE(!(bitset_t(μ.qns()) & bitset_t(mbpt::LCAOQNS::lcao)));
+
+    /// has same type as occupied space but differ by QNS
+    REQUIRE_NOTHROW(isr->retrieve(L"i"));
+    auto i = isr->retrieve(L"i");
+    REQUIRE(μ.type() == i.type());
+    REQUIRE(μ.qns() != i.qns());
+    REQUIRE(μ != i);
   }
 }

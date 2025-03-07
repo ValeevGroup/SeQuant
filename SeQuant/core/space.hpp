@@ -5,9 +5,7 @@
 #ifndef SEQUANT_SPACE_H
 #define SEQUANT_SPACE_H
 
-#include <bitset>
-#include <cassert>
-#include <cmath>
+#include <SeQuant/core/fwd.hpp>
 
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/container.hpp>
@@ -16,15 +14,11 @@
 
 #include <range/v3/algorithm/any_of.hpp>
 
+#include <bitset>
+#include <cassert>
+#include <cmath>
+
 namespace sequant {
-
-namespace bitset {
-using type = int32_t;
-constexpr type reserved = 0x80000000;
-constexpr type null = 0x00000000;
-}  // namespace bitset
-
-using bitset_t = bitset::type;
 
 class QuantumNumbersAttr;  // used to constrain TypeAttr ctor
 

@@ -3,6 +3,7 @@
 //
 
 #include <SeQuant/domain/mbpt/convention.hpp>
+#include <SeQuant/domain/mbpt/lcao.hpp>
 #include <SeQuant/domain/mbpt/op.hpp>
 #include <SeQuant/domain/mbpt/spin.hpp>
 
@@ -64,6 +65,18 @@ void add_fermi_spin(std::shared_ptr<IndexSpaceRegistry>& isr) {
   result->hole_space(isr->hole_space(nulltype_ok));
   result->complete_space(isr->complete_space(nulltype_ok));
   isr = std::move(result);
+}
+
+void add_ao_spaces(std::shared_ptr<IndexSpaceRegistry>& isr) {
+  // matches the MPQC layout, see spindex.h
+  isr->add(IndexSpace{L"μ", 0b00001, LCAOQNS::ao})  // OBS AO
+      .add(IndexSpace{L"Α", 0b00010, LCAOQNS::ao})  // VBS AO
+      .add_union(L"Γ", {L"μ", L"Α"})                // VBS+ = OBS + VBS
+      .add(IndexSpace{L"Κ", 0b00100, LCAOQNS::ao})  // DFBS AO
+      .add(IndexSpace{L"α", 0b01000, LCAOQNS::ao})  // ABS AO in F12 methods
+      .add_union(L"ρ", {L"μ", L"α"})                // ABS+ = OBS + ABS
+      .add_union(L"Ρ", {L"Γ", L"α"})                // VABS+ = VBS+ + ABS
+      ;
 }
 
 std::shared_ptr<IndexSpaceRegistry> make_min_sr_spaces() {
