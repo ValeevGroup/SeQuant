@@ -186,7 +186,6 @@ TEST_CASE("IndexSpace", "[elements]") {
     REQUIRE_NOTHROW(isr->retrieve(L"μ"));
     auto μ = isr->retrieve(L"μ");
     REQUIRE(bitset_t(μ.qns()) & bitset_t(mbpt::LCAOQNS::ao));
-    REQUIRE(!(bitset_t(μ.qns()) & bitset_t(mbpt::LCAOQNS::lcao)));
 
     /// has same type as occupied space but differ by QNS
     REQUIRE_NOTHROW(isr->retrieve(L"i"));
@@ -194,5 +193,21 @@ TEST_CASE("IndexSpace", "[elements]") {
     REQUIRE(μ.type() == i.type());
     REQUIRE(μ.qns() != i.qns());
     REQUIRE(μ != i);
+  }
+
+  SECTION("PAO spaces") {
+    auto isr = sequant::mbpt::make_min_sr_spaces();
+    REQUIRE_NOTHROW(mbpt::add_pao_spaces(isr));
+
+    // OBS PAO space ...
+    REQUIRE_NOTHROW(isr->retrieve(L"̃μ"));
+    auto μtilde = isr->retrieve(L"̃μ");
+    REQUIRE(bitset_t(μtilde.qns()) & bitset_t(mbpt::LCAOQNS::pao));
+
+    /// has same type as unoccupied space but differ by QNS
+    auto obs_uocc = isr->retrieve(isr->particle_space(), mbpt::Spin::any);
+    REQUIRE(μtilde.type() == obs_uocc.type());
+    REQUIRE(μtilde.qns() != obs_uocc.qns());
+    REQUIRE(μtilde != obs_uocc);
   }
 }

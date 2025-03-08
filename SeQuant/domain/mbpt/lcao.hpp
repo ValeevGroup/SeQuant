@@ -9,12 +9,13 @@
 
 namespace sequant::mbpt {
 
-/// quantum numbers tags related to spin
-/// \note spin quantum number takes 2 rightmost bits
+/// quantum numbers tags related to LCAO basis traits
+/// \note sLCAO basis traits use 3rd and 4th rightmost bits
 enum class LCAOQNS : bitset_t {
-  lcao = 0b000000,
   ao = 0b000100,
-  mask = lcao | ao
+  pao = 0b001000,  // projected AO space denotes unoccupied spaces made from AO
+                   // basis and orthogonal to occupied orbitals
+  mask = ao | pao
 };
 
 }  // namespace sequant::mbpt

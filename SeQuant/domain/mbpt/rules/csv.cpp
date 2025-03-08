@@ -28,8 +28,11 @@ ExprPtr csv_transform_impl(Tensor const& tnsr, const IndexSpace& csv_basis,
 
   // shortcut for the CSV overlap if csv_basis is orthonormal (assume LCAO bases
   // are orthonormal!)
-  const bool csv_basis_is_orthonormal =
-      bitset_t(csv_basis.qns()) & bitset_t(LCAOQNS::lcao);
+  const bool csv_basis_is_ao =
+      bitset_t(csv_basis.qns()) & bitset_t(LCAOQNS::ao);
+  const bool csv_basis_is_pao =
+      bitset_t(csv_basis.qns()) & bitset_t(LCAOQNS::pao);
+  const bool csv_basis_is_orthonormal = !(csv_basis_is_ao || csv_basis_is_pao);
   if (csv_basis_is_orthonormal && tnsr.label() == overlap_label()) {
     assert(tnsr.bra_rank() == 1     //
            && tnsr.ket_rank() == 1  //
