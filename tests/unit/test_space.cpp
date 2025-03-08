@@ -9,6 +9,7 @@
 #include <SeQuant/core/space.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/spin.hpp>
+#include "SeQuant/domain/mbpt/lcao.hpp"
 
 TEST_CASE("IndexSpace", "[elements]") {
   using namespace sequant;
@@ -175,5 +176,38 @@ TEST_CASE("IndexSpace", "[elements]") {
     REQUIRE(f12_base_spaces_sf[2].base_key() == L"a");
     REQUIRE(f12_base_spaces_sf[3].base_key() == L"g");
     REQUIRE(f12_base_spaces_sf[4].base_key() == L"α'");
+  }
+
+  SECTION("AO spaces") {
+    auto isr = sequant::mbpt::make_min_sr_spaces();
+    REQUIRE_NOTHROW(mbpt::add_ao_spaces(isr));
+
+    // OBS AO space ...
+    REQUIRE_NOTHROW(isr->retrieve(L"μ"));
+    auto μ = isr->retrieve(L"μ");
+    REQUIRE(bitset_t(μ.qns()) & bitset_t(mbpt::LCAOQNS::ao));
+
+    /// has same type as occupied space but differ by QNS
+    REQUIRE_NOTHROW(isr->retrieve(L"i"));
+    auto i = isr->retrieve(L"i");
+    REQUIRE(μ.type() == i.type());
+    REQUIRE(μ.qns() != i.qns());
+    REQUIRE(μ != i);
+  }
+
+  SECTION("PAO spaces") {
+    auto isr = sequant::mbpt::make_min_sr_spaces();
+    REQUIRE_NOTHROW(mbpt::add_pao_spaces(isr));
+
+    // OBS PAO space ...
+    REQUIRE_NOTHROW(isr->retrieve(L"̃μ"));
+    auto μtilde = isr->retrieve(L"̃μ");
+    REQUIRE(bitset_t(μtilde.qns()) & bitset_t(mbpt::LCAOQNS::pao));
+
+    /// has same type as unoccupied space but differ by QNS
+    auto obs_uocc = isr->retrieve(isr->particle_space(), mbpt::Spin::any);
+    REQUIRE(μtilde.type() == obs_uocc.type());
+    REQUIRE(μtilde.qns() != obs_uocc.qns());
+    REQUIRE(μtilde != obs_uocc);
   }
 }

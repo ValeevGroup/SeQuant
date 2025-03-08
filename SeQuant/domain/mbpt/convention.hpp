@@ -31,6 +31,14 @@ std::wstring decorate_label(std::wstring label, bool up);
 /// @brief add fermionic spin spaces to registry
 void add_fermi_spin(std::shared_ptr<IndexSpaceRegistry>& isr);
 
+/// @brief add AO spaces to registry
+void add_ao_spaces(std::shared_ptr<IndexSpaceRegistry>& isr);
+
+/// @brief add PAO spaces to registry
+
+/// expects \p isr to have a defined particle space
+void add_pao_spaces(std::shared_ptr<IndexSpaceRegistry>& isr);
+
 /// @name built-in definitions of IndexSpace
 /// @{
 
