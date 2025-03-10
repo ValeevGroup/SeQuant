@@ -4,7 +4,7 @@
 
 #include "SeQuant/domain/mbpt/rules/csv.hpp"
 
-#include "SeQuant/domain/mbpt/lcao.hpp"
+#include "SeQuant/domain/mbpt/space_qns.hpp"
 
 #include "SeQuant/core/tensor.hpp"
 #include "SeQuant/core/utility/indices.hpp"

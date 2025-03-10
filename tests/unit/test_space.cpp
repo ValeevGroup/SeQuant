@@ -9,7 +9,7 @@
 #include <SeQuant/core/space.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/spin.hpp>
-#include "SeQuant/domain/mbpt/lcao.hpp"
+#include "SeQuant/domain/mbpt/space_qns.hpp"
 
 TEST_CASE("IndexSpace", "[elements]") {
   using namespace sequant;

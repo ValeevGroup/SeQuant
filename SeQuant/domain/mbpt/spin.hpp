@@ -7,6 +7,8 @@
 
 #include <SeQuant/domain/mbpt/fwd.hpp>
 
+#include <SeQuant/domain/mbpt/space_qns.hpp>
+
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
@@ -21,22 +23,6 @@
 namespace sequant {
 
 namespace mbpt {
-
-/// quantum numbers tags related to spin
-/// \note spin quantum number takes 2 rightmost bits since there are 3 possible
-/// states (any/no spin, spin-up, spin-down)
-enum class Spin : bitset_t {
-  alpha = 0b000001,
-  beta = 0b000010,
-  any = alpha | beta,  // using 2 bits so that overlap and union work expected
-                       // (any & alpha = alpha, alpha | beta = any)
-  // syntax sugar
-  free = any,
-  none = any,
-  up = alpha,
-  down = beta,
-  mask = any
-};
 
 // Spin is a scoped enum, hence not implicitly convertible to
 // QuantumNumbersAttr::bitset_t

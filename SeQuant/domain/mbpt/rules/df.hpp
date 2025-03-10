@@ -5,6 +5,8 @@
 #ifndef MPQC_DOMAIN_MBPT_RULES_DF_HPP
 #define MPQC_DOMAIN_MBPT_RULES_DF_HPP
 
+#include "SeQuant/domain/mbpt/space_qns.hpp"
+
 #include "SeQuant/core/expr.hpp"
 
 namespace sequant::mbpt {
