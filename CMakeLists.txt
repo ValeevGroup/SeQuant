@@ -216,6 +216,7 @@ set(SeQuant_src
         SeQuant/core/hugenholtz.hpp
         SeQuant/core/index.cpp
         SeQuant/core/index.hpp
+        SeQuant/core/index_space_registry.cpp
         SeQuant/core/index_space_registry.hpp
         SeQuant/core/interval.hpp
         SeQuant/core/latex.cpp
