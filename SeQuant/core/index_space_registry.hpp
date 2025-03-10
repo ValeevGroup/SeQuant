@@ -102,6 +102,8 @@ class IndexSpaceRegistry {
   /// copy constructor
   IndexSpaceRegistry(const IndexSpaceRegistry& other)
       : spaces_(other.spaces_),
+        physical_particle_attribute_mask_(
+            other.physical_particle_attribute_mask_),
         vacocc_(other.vacocc_),
         refocc_(other.refocc_),
         complete_(other.complete_),
@@ -111,6 +113,8 @@ class IndexSpaceRegistry {
   /// move constructor
   IndexSpaceRegistry(IndexSpaceRegistry&& other)
       : spaces_(std::move(other.spaces_)),
+        physical_particle_attribute_mask_(
+            std::move(other.physical_particle_attribute_mask_)),
         vacocc_(std::move(other.vacocc_)),
         refocc_(std::move(other.refocc_)),
         complete_(std::move(other.complete_)),
@@ -120,6 +124,7 @@ class IndexSpaceRegistry {
   /// copy assignment operator
   IndexSpaceRegistry& operator=(const IndexSpaceRegistry& other) {
     spaces_ = other.spaces_;
+    physical_particle_attribute_mask_ = other.physical_particle_attribute_mask_;
     vacocc_ = other.vacocc_;
     refocc_ = other.refocc_;
     complete_ = other.complete_;
@@ -131,6 +136,8 @@ class IndexSpaceRegistry {
   /// move assignment operator
   IndexSpaceRegistry& operator=(IndexSpaceRegistry&& other) {
     spaces_ = std::move(other.spaces_);
+    physical_particle_attribute_mask_ =
+        std::move(other.physical_particle_attribute_mask_);
     vacocc_ = std::move(other.vacocc_);
     refocc_ = std::move(other.refocc_);
     complete_ = std::move(other.complete_);
