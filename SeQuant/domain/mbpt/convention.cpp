@@ -90,7 +90,7 @@ void add_ao_spaces(std::shared_ptr<IndexSpaceRegistry>& isr, bool vbs,
 
 void add_pao_spaces(std::shared_ptr<IndexSpaceRegistry>& isr) {
   auto uocc_space = isr->particle_space(/* nulltype_ok = */ false);
-  isr->add(IndexSpace{L"̃μ", uocc_space, LCAOQNS::pao})  // OBS PAO
+  isr->add(IndexSpace{L"μ̃", uocc_space, LCAOQNS::pao})  // OBS PAO
       ;
 }
 

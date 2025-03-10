@@ -200,8 +200,8 @@ TEST_CASE("IndexSpace", "[elements]") {
     REQUIRE_NOTHROW(mbpt::add_pao_spaces(isr));
 
     // OBS PAO space ...
-    REQUIRE_NOTHROW(isr->retrieve(L"̃μ"));
-    auto μtilde = isr->retrieve(L"̃μ");
+    REQUIRE_NOTHROW(isr->retrieve(L"μ̃"));
+    auto μtilde = isr->retrieve(L"μ̃");
     REQUIRE(bitset_t(μtilde.qns()) & bitset_t(mbpt::LCAOQNS::pao));
 
     /// has same type as unoccupied space but differ by QNS
