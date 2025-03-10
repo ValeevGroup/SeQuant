@@ -36,6 +36,7 @@ constexpr auto is_particle = IsParticle{};
 
 }  // namespace space_tags
 
+// clang-format off
 /// @brief set of known IndexSpace objects
 
 /// Each IndexSpace object has hardwired base key (label) that gives
@@ -54,6 +55,31 @@ constexpr auto is_particle = IsParticle{};
 /// multiple registries share same set of spaces but have different
 /// specifications of vacuum, reference, etc.; this is useful for providing
 /// different contexts for fermions and bosons, for example.
+///
+/// Spaces that can be occupied by physical particles need to be
+/// introspected for their structure, occupancy, etc. The registry provides the
+/// API needed for dealing with such states.
+/// - IndexSpaceRegistry::physical_particle_attribute_mask specify which states are occupied by
+/// physical particles
+/// - every space occupied by physical particles is a union of basis
+/// ("base") spaces. IndexSpaceRegistry::is_base detects such spaces and
+/// IndexSpaceRegistry::base_space_types/IndexSpaceRegistry::base_spaces report the list of base spaces
+/// - in SingleProduct vacuum IndexSpaceRegistry::is_pure_occupied/IndexSpaceRegistry::is_pure_unoccupied report
+/// whether a space is occupied or unoccupied (always the case for base
+/// spaces, but neither may be true for composite  spaces)
+/// - IndexSpaceRegistry::vacuum_occupied_space report whether a space has nonzero occupancy
+/// in the vacuum state (that defines the normal order); this is needed to
+/// apply Wick theorem with Fermi vacuum
+/// - IndexSpaceRegistry::reference_occupied_space reports whether a space has nonzero occupancy
+/// in the reference state used to compute reference
+/// expectation value; only needed for computing expectation values when the
+/// vacuum state does not match the expectation value state.
+/// - IndexSpaceRegistry::complete_space specifies which spaces comprise the entirety of Hilbert
+/// space; needed for creating general operators in mbpt/op
+/// - IndexSpaceRegistry::particle_space and IndexSpaceRegistry::hole_space specify in which space particles/holes
+/// can be created successfully from the reference state; this is a
+/// convenience for making operators
+// clang-format on
 class IndexSpaceRegistry {
  public:
   /// default constructor creates a registry containing only IndexSpace::null
@@ -76,6 +102,8 @@ class IndexSpaceRegistry {
   /// copy constructor
   IndexSpaceRegistry(const IndexSpaceRegistry& other)
       : spaces_(other.spaces_),
+        physical_particle_attribute_mask_(
+            other.physical_particle_attribute_mask_),
         vacocc_(other.vacocc_),
         refocc_(other.refocc_),
         complete_(other.complete_),
@@ -85,6 +113,8 @@ class IndexSpaceRegistry {
   /// move constructor
   IndexSpaceRegistry(IndexSpaceRegistry&& other)
       : spaces_(std::move(other.spaces_)),
+        physical_particle_attribute_mask_(
+            std::move(other.physical_particle_attribute_mask_)),
         vacocc_(std::move(other.vacocc_)),
         refocc_(std::move(other.refocc_)),
         complete_(std::move(other.complete_)),
@@ -94,6 +124,7 @@ class IndexSpaceRegistry {
   /// copy assignment operator
   IndexSpaceRegistry& operator=(const IndexSpaceRegistry& other) {
     spaces_ = other.spaces_;
+    physical_particle_attribute_mask_ = other.physical_particle_attribute_mask_;
     vacocc_ = other.vacocc_;
     refocc_ = other.refocc_;
     complete_ = other.complete_;
@@ -105,6 +136,8 @@ class IndexSpaceRegistry {
   /// move assignment operator
   IndexSpaceRegistry& operator=(IndexSpaceRegistry&& other) {
     spaces_ = std::move(other.spaces_);
+    physical_particle_attribute_mask_ =
+        std::move(other.physical_particle_attribute_mask_);
     vacocc_ = std::move(other.vacocc_);
     refocc_ = std::move(other.refocc_);
     complete_ = std::move(other.complete_);
@@ -512,67 +545,6 @@ class IndexSpaceRegistry {
     return this->add(IS);
   }
 
-  /// @brief returns the list of _basis_ IndexSpace::Type objects
-
-  /// A base IndexSpace::Type object has 1 bit in its bitstring.
-  /// @sa IndexSpaceRegistry::is_base
-  /// @return (memoized) set of base IndexSpace::Type objects, sorted in
-  /// increasing order
-  const std::vector<IndexSpace::Type>& base_space_types() const {
-    if (!base_space_types_) {
-      auto types = *spaces_ | ranges::views::transform([](const auto& s) {
-        return s.type();
-      }) | ranges::views::filter([](const auto& t) { return is_base(t); }) |
-                   ranges::views::unique | ranges::to_vector;
-      ranges::sort(types, [](auto t1, auto t2) { return t1 < t2; });
-      std::scoped_lock guard{mtx_memoized_};
-      if (!base_space_types_) {
-        base_space_types_ =
-            std::make_shared<std::vector<IndexSpace::Type>>(std::move(types));
-      }
-    }
-    return *base_space_types_;
-  }
-
-  /// @brief returns the list of _basis_ IndexSpace objects
-
-  /// A base IndexSpace object has 1 bit in its type() bitstring.
-  /// @sa IndexSpaceRegistry::is_base
-  /// @return (memoized) set of base IndexSpace objects, sorted in the order of
-  /// increasing type()
-  const std::vector<IndexSpace>& base_spaces() const {
-    if (!base_spaces_) {
-      auto spaces =
-          *spaces_ |
-          ranges::views::filter([](const auto& s) { return is_base(s); }) |
-          ranges::views::unique | ranges::to_vector;
-      ranges::sort(spaces,
-                   [](auto s1, auto s2) { return s1.type() < s2.type(); });
-      std::scoped_lock guard{mtx_memoized_};
-      if (!base_spaces_) {
-        base_spaces_ =
-            std::make_shared<std::vector<IndexSpace>>(std::move(spaces));
-      }
-    }
-    return *base_spaces_;
-  }
-
-  /// @brief checks if an IndexSpace is in the basis
-  /// @param IS IndexSpace
-  /// @return true if @p IS is in the basis
-  /// @sa base_spaces
-  static bool is_base(const IndexSpace& IS) {
-    return has_single_bit(IS.type().to_int32());
-  }
-
-  /// @brief checks if an IndexSpace::Type is in the basis
-  /// @param t IndexSpace::Type
-  /// @return true if @p t is in the basis
-  /// @sa space_type_basis
-  static bool is_base(const IndexSpace::Type& t) {
-    return has_single_bit(t.to_int32());
-  }
-
   /// @brief clear the contents of *this
   /// @return reference to `this`
   IndexSpaceRegistry& clear() {
@@ -719,6 +691,96 @@ class IndexSpaceRegistry {
     return this->unIon(this->retrieve(std::forward<S1>(space1_key)),
                        this->retrieve(std::forward<S2>(space2_key)));
   }
+
+  /// @name physical particle space structure introspection
+  /// @{
+
+  /// @brief sets the mask of attributes of `IndexSpace`s  that can be occupied
+  /// by physical particles.
+
+  /// Some states do not correspond to physical particles, but may be present
+  /// in the registry. Such spaces are not considered when e.g. determining
+  /// the base spaces.
+  /// @param m the mask of attributes of `IndexSpace`s  that can be occupied by
+  /// physical particles.
+  void physical_particle_attribute_mask(bitset_t m);
+
+  /// @brief accesses the mask of attributes of `IndexSpace`s  that can be
+  /// occupied by physical particles.
+
+  /// Some states do not correspond to physical particles, but may be present
+  /// in the registry. Such spaces are not considered when e.g. determining
+  /// the base spaces.
+  /// @return the mask of attributes of `IndexSpace`s  that can be occupied by
+  /// physical particles.
+  bitset_t physical_particle_attribute_mask() const;
+
+  /// @brief returns the list of _basis_ IndexSpace::Type objects
+
+  /// A base IndexSpace::Type object has 1 bit in its bitstring.
+  /// @sa IndexSpaceRegistry::is_base
+  /// @return (memoized) set of base IndexSpace::Type objects, sorted in
+  /// increasing order
+  const std::vector<IndexSpace::Type>& base_space_types() const {
+    if (!base_space_types_) {
+      auto types = *spaces_ | ranges::views::transform([](const auto& s) {
+        return s.type();
+      }) | ranges::views::filter([](const auto& t) { return is_base(t); }) |
+                   ranges::views::unique | ranges::to_vector;
+      ranges::sort(types, [](auto t1, auto t2) { return t1 < t2; });
+      std::scoped_lock guard{mtx_memoized_};
+      if (!base_space_types_) {
+        base_space_types_ =
+            std::make_shared<std::vector<IndexSpace::Type>>(std::move(types));
+      }
+    }
+    return *base_space_types_;
+  }
+
+  /// @brief returns the list of _basis_ IndexSpace objects
+
+  /// A base IndexSpace object has 1 bit in its type() bitstring.
+  /// @sa IndexSpaceRegistry::is_base
+  /// @return (memoized) set of base IndexSpace objects, sorted in the order of
+  /// increasing type()
+  const std::vector<IndexSpace>& base_spaces() const {
+    if (!base_spaces_) {
+      auto spaces =
+          *spaces_ |
+          ranges::views::filter([this](const auto& s) { return is_base(s); }) |
+          ranges::views::unique | ranges::to_vector;
+      ranges::sort(spaces,
+                   [](auto s1, auto s2) { return s1.type() < s2.type(); });
+      std::scoped_lock guard{mtx_memoized_};
+      if (!base_spaces_) {
+        base_spaces_ =
+            std::make_shared<std::vector<IndexSpace>>(std::move(spaces));
+      }
+    }
+    return *base_spaces_;
+  }
+
+  /// @brief checks if an IndexSpace is in the basis
+  /// @param IS IndexSpace
+  /// @return true if @p IS is in the basis
+  /// @sa base_spaces
+  bool is_base(const IndexSpace& IS) const {
+    // is base if has base type and has no bits outsize of the physical particle
+    // attribute mask
+    return is_base(IS.type()) &&
+           ((bitset_t(IS.qns()) & (~(physical_particle_attribute_mask()))) ==
+            0);
+  }
+
+  /// @brief checks if an IndexSpace::Type is in the basis
+  /// @param t IndexSpace::Type
+  /// @return true if @p t is in the basis
+  /// @sa space_type_basis
+  static bool is_base(const IndexSpace::Type& t) {
+    return has_single_bit(t.to_int32());
+  }
+
+  /// @}
 
   /// @brief an @c IndexSpace is occupied with respect to the fermi vacuum or a
   /// subset of that space
@@ -1121,9 +1183,13 @@ class IndexSpaceRegistry {
 
   /// @}
 
+  /// @}
+
  private:
   // N.B. need transparent comparator, see https://stackoverflow.com/a/35525806
   std::shared_ptr<container::set<IndexSpace, IndexSpace::KeyCompare>> spaces_;
+
+  bitset_t physical_particle_attribute_mask_ = bitset::null;
 
   // memoized data
   mutable std::shared_ptr<std::vector<IndexSpace::Type>> base_space_types_;
@@ -1143,7 +1209,7 @@ class IndexSpaceRegistry {
   }
 
   /// @brief find an IndexSpace from its attr. return nullspace if not present.
-  /// @param find the IndexSpace via it's @c attr
+  /// @param attr the attribute of the IndexSpace
   const IndexSpace& find_by_attr(const IndexSpace::Attr& attr) const {
     for (auto&& space : *spaces_) {
       if (space.attr() == attr) {
@@ -1277,7 +1343,7 @@ class IndexSpaceRegistry {
 
   /// for a base space return its extent, for a composite space compute as a sum
   /// of extents of base subspaces
-  /// @param s an IndexSpace object
+  /// @param space_attr the IndexSpace attribute
   /// @return the approximate size of the space
   unsigned long compute_approximate_size(
       const IndexSpace::Attr& space_attr) const {
@@ -1287,8 +1353,8 @@ class IndexSpaceRegistry {
       // compute_approximate_size is used when populating the registry
       // so don't use base_spaces() here
       unsigned long size = ranges::accumulate(
-          *spaces_ | ranges::views::filter([&space_attr](auto& s) {
-            return s.qns() == space_attr.qns() && is_base(s) &&
+          *spaces_ | ranges::views::filter([this, &space_attr](auto& s) {
+            return s.qns() == space_attr.qns() && is_base(s.type()) &&
                    space_attr.type().intersection(s.type());
           }),
           0ul, [](unsigned long size, const IndexSpace& s) {
