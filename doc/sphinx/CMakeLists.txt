@@ -3,13 +3,16 @@ find_package(Sphinx)
 if (SPHINX_FOUND)
 
     # Check if required python modules are available
+    if (NOT TARGET Python::Interpreter)
+        find_package(Python COMPONENTS Interpreter REQUIRED)
+    endif()
     file(STRINGS ${CMAKE_CURRENT_SOURCE_DIR}/requirements.txt SPHINX_PYTHON_MODULES)
     foreach (module ${SPHINX_PYTHON_MODULES})
         STRING(REGEX REPLACE ">=.*" "" module ${module}) # Remove version tags
-        execute_process(COMMAND python -c "import ${module}"
+        execute_process(COMMAND ${Python_EXECUTABLE} -c "import ${module}"
                 RESULT_VARIABLE PYMODULE_CHECK_EXITCODE ERROR_QUIET)
         if (NOT PYMODULE_CHECK_EXITCODE EQUAL 0)
-            message(WARNING "Docs: Required python module ${module} is not found")
+            message(FATAL_ERROR "SEQUANT_BUILD_DOCS=ON: Required python module ${module} is not found; execute '${Python_EXECUTABLE} -m pip install -r ${CMAKE_CURRENT_SOURCE_DIR}/requirements.txt' to install the pre-requisite python packages")
         endif()
     endforeach()
 
