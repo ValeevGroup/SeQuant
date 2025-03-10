@@ -187,12 +187,12 @@ TEST_CASE("IndexSpace", "[elements]") {
     auto μ = isr->retrieve(L"μ");
     REQUIRE(bitset_t(μ.qns()) & bitset_t(mbpt::LCAOQNS::ao));
 
-    /// has same type as occupied space but differ by QNS
-    REQUIRE_NOTHROW(isr->retrieve(L"i"));
-    auto i = isr->retrieve(L"i");
-    REQUIRE(μ.type() == i.type());
-    REQUIRE(μ.qns() != i.qns());
-    REQUIRE(μ != i);
+    /// has same type as p but differ by QNS
+    REQUIRE_NOTHROW(isr->retrieve(L"p"));
+    auto p = isr->retrieve(L"p");
+    REQUIRE(μ.type() == p.type());
+    REQUIRE(μ.qns() != p.qns());
+    REQUIRE(μ != p);
   }
 
   SECTION("PAO spaces") {

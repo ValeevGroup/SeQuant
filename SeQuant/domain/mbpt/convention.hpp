@@ -32,7 +32,14 @@ std::wstring decorate_label(std::wstring label, bool up);
 void add_fermi_spin(std::shared_ptr<IndexSpaceRegistry>& isr);
 
 /// @brief add AO spaces to registry
-void add_ao_spaces(std::shared_ptr<IndexSpaceRegistry>& isr);
+
+/// @param isr the IndexSpaceRegistry to which add the AO spaces
+/// @param vbs if true, have separate virtual basis
+void add_ao_spaces(std::shared_ptr<IndexSpaceRegistry>& isr, bool vbs = false,
+                   bool abs = false);
+
+/// @brief add DF spaces to registry
+void add_df_spaces(std::shared_ptr<IndexSpaceRegistry>& isr);
 
 /// @brief add PAO spaces to registry
 
