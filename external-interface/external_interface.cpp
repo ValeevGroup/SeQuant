@@ -101,14 +101,12 @@ ProcessingOptions extractProcessingOptions(const json &details) {
 	return options;
 }
 
-itf::Result toItfResult(std::wstring_view resultName, const ExprPtr &expr, const ItfContext &ctx,
+itf::Result toItfResult(const ResultExpr &result, const ItfContext &ctx,
 						bool importResultTensor) {
-	IndexGroups externals = get_unique_indices(expr);
-
 	// TODO: Handle symmetry of result tensor
-	Tensor result(resultName, bra(externals.bra), ket(externals.ket), aux(externals.aux));
+	Tensor resultTensor(result.label(), bra(result.bra()), ket(result.ket()), aux(result.aux()));
 
-	return itf::Result(expr, result, importResultTensor);
+	return itf::Result(result.expression(), resultTensor, importResultTensor);
 }
 
 void generateITF(const json &blocks, std::string_view out_file, const IndexSpaceMeta &spaceMeta) {
@@ -136,35 +134,39 @@ void generateITF(const json &blocks, std::string_view out_file, const IndexSpace
 			std::ifstream in(input_file);
 			const std::string input(std::istreambuf_iterator< char >(in), {});
 
-			sequant::ExprPtr expression = sequant::parse_expr(toUtf16(input), Symmetry::antisymm);
+			sequant::ResultExpr result = sequant::parse_result_expr(toUtf16(input), Symmetry::antisymm);
 
-			spdlog::debug("Initial equation is:\n{}", expression);
+			if (current_result.contains("name")) {
+				result.set_label(toUtf16(current_result.at("name").get<std::string>()));
+			}
+
+			spdlog::debug("Initial equation is:\n{}", result);
 
 			ProcessingOptions options = extractProcessingOptions(current_result);
 
-			expression = postProcess(expression, spaceMeta, options);
+			result = postProcess(result, spaceMeta, options);
 
-			spdlog::debug("Fully processed equation is:\n{}", expression);
+			spdlog::debug("Fully processed equation is:\n{}", result);
 
-			std::wstring resultName = toUtf16(current_result.at("name").get< std::string >());
-
-			if (needsSymmetrization(expression)) {
-				std::optional< ExprPtr > symmetrizer = popTensor(expression, L"S");
+			if (needsSymmetrization(result.expression())) {
+				std::optional< ExprPtr > symmetrizer = popTensor(result.expression(), L"S");
 				assert(symmetrizer.has_value());
 
-				spdlog::debug("After popping S tensor:\n{}", expression);
+				ResultExpr symmetrizedResult = result;
+				result.set_label(symmetrizedResult.label() + L"u");
 
-				IndexGroups externals = get_unique_indices(symmetrizer.value());
-				results.push_back(toItfResult(resultName + L"u", expression, context, false));
+				spdlog::debug("After popping S tensor:\n{}", result);
 
-				ExprPtr symmetrization = generateResultSymmetrization(resultName + L"u", externals);
+				results.push_back(toItfResult(result, context, false));
 
-				spdlog::debug("Result symmetrization via\n{}", symmetrization);
+				symmetrizedResult.expression() = generateResultSymmetrization(symmetrizedResult, result.label());
+
+				spdlog::debug("Result symmetrization via\n{}", symmetrizedResult);
 
 				results.push_back(
-					toItfResult(resultName, std::move(symmetrization), context, current_result.value("import", true)));
+					toItfResult(symmetrizedResult, context, current_result.value("import", true)));
 			} else {
-				results.push_back(toItfResult(resultName, expression, context, current_result.value("import", true)));
+				results.push_back(toItfResult(result, context, current_result.value("import", true)));
 			}
 		}
 

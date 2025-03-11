@@ -2,6 +2,7 @@
 
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
+#include <SeQuant/core/result_expr.hpp>
 #include <SeQuant/core/space.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/string.hpp>
@@ -207,6 +208,17 @@ bool needsSymmetrization(const sequant::ExprPtr &expression) {
 	return containsSymmetrizer;
 }
 
+sequant::ExprPtr generateResultSymmetrization(const ResultExpr &result, std::wstring_view precursorName) {
+	IndexGroups< std::vector< Index > > externals;
+
+	for (const auto [bra, ket] : result.index_particle_grouping< std::pair< Index, Index > >()) {
+		externals.bra.push_back(bra);
+		externals.ket.push_back(ket);
+	}
+
+	return generateResultSymmetrization(precursorName, externals);
+}
+
 sequant::ExprPtr generateResultSymmetrization(std::wstring_view precursorName,
 											  const sequant::IndexGroups< std::vector< sequant::Index > > &externals) {
 	assert(externals.bra.size() == externals.ket.size());
@@ -222,8 +234,6 @@ sequant::ExprPtr generateResultSymmetrization(std::wstring_view precursorName,
 			symKet.push_back(externals.ket[(i + j) % externals.ket.size()]);
 		}
 
-		// TODO: indices are not yet in canonical order for the tensor
-		// Note: if sorting them, use stable sort to not undo the symmetrization permutations
 		symmetrization += ex< Tensor >(precursorName, bra(std::move(symBra)), ket(std::move(symKet)), aux(externals.aux));
 	}
 

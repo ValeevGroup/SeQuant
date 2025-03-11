@@ -4,6 +4,7 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr_fwd.hpp>
 #include <SeQuant/core/index.hpp>
+#include <SeQuant/core/result_expr.hpp>
 #include <SeQuant/core/space.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 
@@ -42,6 +43,8 @@ sequant::container::svector< sequant::container::svector< sequant::Index > >
 std::optional< sequant::ExprPtr > popTensor(sequant::ExprPtr &expression, std::wstring_view label);
 
 bool needsSymmetrization(const sequant::ExprPtr &expression);
+
+sequant::ExprPtr generateResultSymmetrization(const sequant::ResultExpr &result, std::wstring_view precursorName);
 
 sequant::ExprPtr generateResultSymmetrization(std::wstring_view precursorName,
 											  const sequant::IndexGroups< std::vector< sequant::Index > > &externals);

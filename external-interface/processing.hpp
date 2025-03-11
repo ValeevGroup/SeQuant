@@ -3,7 +3,7 @@
 
 #include "utils.hpp"
 
-#include <SeQuant/core/expr_fwd.hpp>
+#include <SeQuant/core/result_expr.hpp>
 
 enum class SpinTracing {
 	None,
@@ -26,7 +26,7 @@ struct ProcessingOptions {
 	bool expand_symmetrizer            = false;
 };
 
-sequant::ExprPtr postProcess(const sequant::ExprPtr &expression, const IndexSpaceMeta &space_meta,
+sequant::ResultExpr postProcess(sequant::ResultExpr expression, const IndexSpaceMeta &space_meta,
 							 const ProcessingOptions &options = {});
 
 #endif

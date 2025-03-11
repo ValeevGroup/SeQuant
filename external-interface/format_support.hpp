@@ -8,6 +8,7 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/rational.hpp>
+#include <SeQuant/core/result_expr.hpp>
 #include <SeQuant/core/tensor.hpp>
 #include <SeQuant/core/utility/string.hpp>
 
@@ -104,26 +105,41 @@ template<> struct fmt::formatter< sequant::Expr > : fmt::formatter< std::string_
 	template< typename FormatContext >
 	auto format(const sequant::Expr &expr, FormatContext &ctx) const -> decltype(ctx.out()) {
 		if (expr.is< sequant::Tensor >()) {
-			return format_to(ctx.out(), "{}", expr.as< sequant::Tensor >());
+			return fmt::format_to(ctx.out(), "{}", expr.as< sequant::Tensor >());
 		} else if (expr.is< sequant::Constant >()) {
-			return format_to(ctx.out(), "{}", expr.as< sequant::Constant >());
+			return fmt::format_to(ctx.out(), "{}", expr.as< sequant::Constant >());
 		} else if (expr.is< sequant::Variable >()) {
-			return format_to(ctx.out(), "{}", expr.as< sequant::Variable >());
+			return fmt::format_to(ctx.out(), "{}", expr.as< sequant::Variable >());
 		} else if (expr.is< sequant::Sum >()) {
-			return format_to(ctx.out(), "{}", expr.as< sequant::Sum >());
+			return fmt::format_to(ctx.out(), "{}", expr.as< sequant::Sum >());
 		} else if (expr.is< sequant::Product >()) {
-			return format_to(ctx.out(), "{}", expr.as< sequant::Product >());
+			return fmt::format_to(ctx.out(), "{}", expr.as< sequant::Product >());
 		} else {
-			return format_to(ctx.out(), "<Unknown expression type>)");
+			return fmt::format_to(ctx.out(), "<Unknown expression type>)");
 		}
 	}
 };
 
-// Expr
+// ExprPtr
 template<> struct fmt::formatter< sequant::ExprPtr > : fmt::formatter< std::string_view > {
 	template< typename FormatContext >
 	auto format(const sequant::ExprPtr &expr, FormatContext &ctx) const -> decltype(ctx.out()) {
-		return format_to(ctx.out(), "{}", *expr);
+		return fmt::format_to(ctx.out(), "{}", *expr);
+	}
+};
+
+// ResultExpr
+template<> struct fmt::formatter< sequant::ResultExpr > : fmt::formatter< std::string_view > {
+	template< typename FormatContext >
+	auto format(const sequant::ResultExpr &result, FormatContext &ctx) const -> decltype(ctx.out()) {
+		std::string label = result.has_label() ? sequant::toUtf8(result.label()) : "?";
+
+		if (result.bra().empty() && result.ket().empty() && result.aux().empty()) {
+			return fmt::format_to(ctx.out(), "{} =\n{}", label, result.expression());
+		}
+
+		return fmt::format_to(ctx.out(), "{}[{};{};{}] =\n{}", label, fmt::join(result.bra(), ", "), fmt::join(result.ket(), ", "),
+						 fmt::join(result.aux(), ", "), result.expression());
 	}
 };
 

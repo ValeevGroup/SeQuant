@@ -6,6 +6,7 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/optimize.hpp>
+#include <SeQuant/core/result_expr.hpp>
 #include <SeQuant/core/tensor.hpp>
 
 #include <SeQuant/domain/mbpt/spin.hpp>
@@ -14,32 +15,36 @@
 
 using namespace sequant;
 
-ExprPtr postProcess(const ExprPtr &expression, const IndexSpaceMeta &spaceMeta, const ProcessingOptions &options) {
-	if (expression.is< Constant >() || expression.is< Variable >()) {
-		return expression;
+ResultExpr postProcess(ResultExpr result, const IndexSpaceMeta &spaceMeta, const ProcessingOptions &options) {
+	if (result.expression().is< Constant >() || result.expression().is< Variable >()) {
+		return result;
 	}
 
 	ExprPtr processed;
+	const container::svector< container::svector< Index > > externals =
+		result.index_particle_grouping< container::svector< Index > >();
+
+
 	if (options.density_fitting) {
 		throw std::runtime_error("DF insertion not yet implemented");
 	}
 
 	switch (options.spintrace) {
 		case SpinTracing::None:
-			processed = expression->clone();
+			processed = result.expression()->clone();
 			break;
 		case SpinTracing::ClosedShell:
 		case SpinTracing::Rigorous:
 			// Spintracing expects to be fed a sum
-			if (!expression.is< Sum >()) {
-				processed = ex< Sum >(ExprPtrList{ expression->clone() });
+			if (!result.expression().is< Sum >()) {
+				processed = ex< Sum >(ExprPtrList{ result.expression()->clone() });
 			} else {
-				processed = expression->clone();
+				processed = result.expression()->clone();
 			}
 			break;
 	}
 
-	container::svector< container::svector< Index > > externals = getExternalIndexPairs(processed);
+	assert(processed);
 
 	if (options.expand_symmetrizer) {
 		spdlog::debug("Fully expanding all antisymmetrizers before spintracing...");
@@ -91,5 +96,7 @@ ExprPtr postProcess(const ExprPtr &expression, const IndexSpaceMeta &spaceMeta, 
 		}
 	}
 
-	return processed;
+	result.expression() = std::move(processed);
+
+	return result;
 }
