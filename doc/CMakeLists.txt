@@ -70,6 +70,9 @@ if (SPHINX_FOUND)
         )
     endif ()
 
+    # copy index.rst to the build directory
+    file(COPY ${SPHINX_SOURCE_DIR}/index.rst DESTINATION ${SPHINX_BUILD_DIR})
+
     # Configure Sphinx conf.py
     configure_file(
             ${SPHINX_SOURCE_DIR}/conf.py.in
