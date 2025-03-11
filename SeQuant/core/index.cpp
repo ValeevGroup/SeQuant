@@ -7,6 +7,7 @@
 #include <SeQuant/core/latex.hpp>
 #include <SeQuant/core/wstring.hpp>
 
+#include <format>
 #include <unordered_map>
 
 namespace sequant {
