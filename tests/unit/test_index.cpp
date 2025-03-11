@@ -284,6 +284,24 @@ TEST_CASE("Index", "[elements][index]") {
     std::wstring a1_r_str = to_latex(a1_r);
     REQUIRE(a1_r_str == L"{a→_1^{{i_1}{i_2^{{i_3}{i_4}}}}}");
     get_default_context().mutable_index_space_registry()->remove(L"a→");
+
+    auto const old_registy = get_default_context().index_space_registry();
+    auto registry = get_default_context().mutable_index_space_registry();
+
+    if (!registry->contains(L"μ̃")) {
+      auto uocc_space = registry->particle_space(/* nulltype_ok = */ false);
+      registry->add(
+          IndexSpace{L"μ̃", uocc_space, mbpt::LCAOQNS::pao})  // OBS PAO
+          ;
+      if (!registry->contains(L"f̌"))
+        registry->add(IndexSpace{L"f̌", registry->retrieve(L"μ̃").type(),
+                                 mbpt::LCAOQNS::ao});
+    }
+
+    REQUIRE(Index(L"μ̃_1").to_latex() == L"{\\tilde{\\mu}_1}");
+    REQUIRE(Index(L"f̌_22").to_latex() == L"{\\check{f}_{22}}");
+
+    *get_default_context().mutable_index_space_registry() = *old_registy;
   }
 
   /*SECTION("wolfram") {
