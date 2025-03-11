@@ -109,12 +109,13 @@ std::vector<Contraction> to_contractions(const Product &product,
       IndexGroups intermediateIndexGroups = get_unique_indices(factor);
 
       // Collect all intermediate indices and sort them such that the order of
-      // index spaces is the canonical one within ITF (largest space leftmost).
+      // index spaces is the canonical one within ITF
       // This is possible, because the index ordering of intermediates is
       // arbitrary
       std::vector<Index> intermediateIndices;
       intermediateIndices.reserve(intermediateIndexGroups.bra.size() +
-                                  intermediateIndexGroups.ket.size());
+                                  intermediateIndexGroups.ket.size() +
+                                  intermediateIndexGroups.aux.size());
       intermediateIndices.insert(intermediateIndices.end(),
                                  intermediateIndexGroups.bra.begin(),
                                  intermediateIndexGroups.bra.end());
@@ -497,7 +498,10 @@ std::wstring to_itf(const Tensor &tensor, const Context &ctx,
   std::wstring tags;
   std::wstring indices;
 
-  for (const Index &current : tensor.braket()) {
+  // Note that it is important to iterate over the auxiliary indices first as
+  // ITF expects those the be listed first
+  for (const Index &current :
+       ranges::views::concat(tensor.aux(), tensor.bra(), tensor.ket())) {
     IndexComponents components = decomposeIndex(current);
 
     assert(components.id <= 7);
