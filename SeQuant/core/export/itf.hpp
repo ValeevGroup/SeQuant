@@ -112,20 +112,20 @@ template <typename Container,
               std::remove_const_t<std::remove_reference_t<Container>>,
               itf::CodeBlock>>>
 std::wstring to_itf(Container &&container) {
+  using ContainerType = std::remove_const_t<std::remove_reference_t<Container>>;
   static_assert(
-      std::is_same_v<typename Container::value_type, itf::CodeBlock> ||
-      std::is_same_v<std::remove_const_t<typename Container::value_type>,
-                     ExprPtr>);
+      std::is_same_v<typename ContainerType::value_type, itf::CodeBlock> ||
+      std::is_same_v<typename ContainerType::value_type, ExprPtr>);
   itf::detail::ITFGenerator generator;
 
-  if constexpr (std::is_same_v<typename Container::value_type,
+  if constexpr (std::is_same_v<typename ContainerType::value_type,
                                itf::CodeBlock>) {
     for (const itf::CodeBlock &current : container) {
       generator.addBlock(current);
     }
   } else {
     static_assert(
-        std::is_same_v<typename Container::value_type, itf::Result>,
+        std::is_same_v<typename ContainerType::value_type, itf::Result>,
         "Container::value_type must either be itf::CodeBlock or itf::Result");
 
     itf::CodeBlock block(L"Generate_Results",
