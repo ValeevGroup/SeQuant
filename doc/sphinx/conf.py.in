@@ -15,53 +15,30 @@ html_title = "SeQuant Documentation"
 # Extensions
 extensions = [
     'sphinx.ext.autodoc',
-    'sphinx.ext.intersphinx',
     'sphinx.ext.mathjax',
+    'sphinx.ext.graphviz',  # Added for Graphviz support
     "sphinx_copybutton",
     'breathe',
     'exhale',
     "myst_parser"
 ]
 
+# Breathe Configuration
+# We use breathe to generate documentation from Doxygen XML files
+breathe_projects = {"SeQuant": "./../doxygen/xml"}  # Paths should be relative to the conf.py file
+breathe_default_project = "SeQuant"
+
 # Exhale Configuration
-# Warning: This generates files in the specified folder
 exhale_args = {
     "containmentFolder": "./api",
     "rootFileName": "library_root.rst",
     "doxygenStripFromPath": "..",
     "rootFileTitle": "API Reference",
-    "createTreeView": False,
-    "contentsDirectives": False,  # Not needed for themes like furo
+    "createTreeView": True,  # Enable tree view for better API navigation
+    "treeViewIsBootstrap": True,
+    "exhaleExecutesDoxygen": False,  # We run Doxygen separately
+    "exhaleDoxygenStdin": "",
 }
-
-html_last_updated_fmt = '%x %X'
-
-# HTML options: theme specific, this is for Furo
-html_css_files = [
-    "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/fontawesome.min.css",
-    "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/solid.min.css",
-    "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/brands.min.css",
-]
-
-html_theme_options = {
-    "top_of_page_buttons": ["view"],
-    "footer_icons": [
-        {
-            "name": "GitHub",
-            "url": "https://github.com/ValeevGroup/SeQuant",
-            "html": "",
-            "class": "fa-brands fa-solid fa-github fa-2x",
-        },
-    ],
-}
-
-primary_domain = "cpp"  # Primary Code Language
-latex_engine = 'xelatex'  # Use xeLatex for support for unicode characters
-
-# Breathe Configuration
-# We use breathe to generate documentation from Doxygen XML files
-breath_projects = {"SeQuant": "./../doxygen/xml"}  # Paths should be relative to the conf.py file
-breathe_default_project = "SeQuant"
 
 # Current default in Sphinx is MathJax v3, but we are using v4
 # see https://stackoverflow.com/questions/78813688/mathjax-rendering-issue-in-sphinx-with-symbol
@@ -83,3 +60,45 @@ myst_enable_extensions = [
     "substitution",
     "tasklist",
 ]
+
+# HTML options for Furo theme
+html_css_files = [
+    "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/fontawesome.min.css",
+    "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/solid.min.css",
+    "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/brands.min.css",
+]
+
+html_theme_options = {
+    "top_of_page_buttons": ["view"],
+    "footer_icons": [
+        {
+            "name": "GitHub",
+            "url": "https://github.com/ValeevGroup/SeQuant",
+            "html": "",
+            "class": "fa-brands fa-solid fa-github fa-2x",
+        },
+    ],
+    # Navigation sidebar settings
+    "sidebar_hide_name": False,
+    "light_css_variables": {
+        "sidebar-item-font-size": "0.95em",
+    },
+}
+
+html_last_updated_fmt = '%x %X'
+primary_domain = "cpp"  # Primary Code Language
+latex_engine = 'xelatex'  # Use xeLatex for support for unicode characters
+
+# Graphviz configuration
+graphviz_output_format = 'svg'
+
+# Configure document sources based on directory structure
+html_sidebars = {
+    "**": [
+        "sidebar/brand.html",
+        "sidebar/search.html",
+        "sidebar/scroll-start.html",
+        "sidebar/navigation.html",
+        "sidebar/scroll-end.html",
+    ]
+}
