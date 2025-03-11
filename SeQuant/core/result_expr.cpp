@@ -26,6 +26,8 @@ bool ResultExpr::has_label() const { return m_label.has_value(); }
 
 const std::wstring &ResultExpr::label() const { return m_label.value(); }
 
+void ResultExpr::set_label(std::wstring label) { m_label = std::move(label); }
+
 Symmetry ResultExpr::symmetry() const { return m_symm; }
 
 void ResultExpr::set_symmetry(Symmetry symm) { m_symm = symm; }
@@ -46,6 +48,10 @@ const ResultExpr::IndexContainer &ResultExpr::bra() const {
 
 const ResultExpr::IndexContainer &ResultExpr::ket() const {
   return m_ketIndices;
+}
+
+const ResultExpr::IndexContainer &ResultExpr::aux() const {
+  return m_auxIndices;
 }
 
 const ExprPtr &ResultExpr::expression() const { return m_expr; }

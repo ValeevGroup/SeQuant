@@ -10,6 +10,7 @@
 #include <initializer_list>
 #include <optional>
 #include <string>
+#include <type_traits>
 
 namespace sequant {
 
@@ -35,6 +36,8 @@ class ResultExpr {
   bool has_label() const;
   const std::wstring &label() const;
 
+  void set_label(std::wstring label);
+
   Symmetry symmetry() const;
   void set_symmetry(Symmetry symm);
 
@@ -46,6 +49,7 @@ class ResultExpr {
 
   const IndexContainer &bra() const;
   const IndexContainer &ket() const;
+  const IndexContainer &aux() const;
 
   const ExprPtr &expression() const;
   ExprPtr &expression();
@@ -56,6 +60,8 @@ class ResultExpr {
 
     assert(m_braIndices.size() == m_ketIndices.size() &&
            "Not yet generalized to particle non-conserving results");
+    assert(m_auxIndices.empty() &&
+           "Not yet clear how auxiliary indices should be handled");
 
     groups.reserve(m_braIndices.size());
 
@@ -63,8 +69,17 @@ class ResultExpr {
     // based on the particle they belong to and that bra and
     // ket indices are assigned to the same set of particles.
     for (std::size_t i = 0; i < m_braIndices.size(); ++i) {
-      groups.emplace_back(
-          std::initializer_list<Index>{m_braIndices.at(i), m_ketIndices.at(i)});
+      if constexpr (std::is_constructible_v<Group,
+                                            std::initializer_list<Index>>) {
+        groups.emplace_back(std::initializer_list<Index>{m_braIndices.at(i),
+                                                         m_ketIndices.at(i)});
+      } else {
+        static_assert(
+            std::is_constructible_v<Group, Index, Index>,
+            "Group is expected to be constructible from two indices or from an "
+            "initializer_list of indices");
+        groups.emplace_back(m_braIndices.at(i), m_ketIndices.at(i));
+      }
     }
 
     return groups;
@@ -78,6 +93,7 @@ class ResultExpr {
   ParticleSymmetry m_psymm = ParticleSymmetry::nonsymm;
   IndexContainer m_braIndices;
   IndexContainer m_ketIndices;
+  IndexContainer m_auxIndices;
   std::optional<std::wstring> m_label;
 };
 
