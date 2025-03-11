@@ -3,7 +3,7 @@
 
 .. toctree::
    :caption: Quickstart
-   :maxdepth: 2
+   :maxdepth: 1
    :hidden:
 
    user/installing
@@ -11,18 +11,20 @@
    user/docs
 
 .. toctree::
-   :caption: Advanced Documentation
-   :maxdepth: 2
+   :caption: Advanced Features
+   :maxdepth: 1
    :hidden:
 
    user/cc
-   user/eval
+   user/spin_tracing
+   user/evaluation
 
 .. toctree::
    :caption: Internal Documentation
-   :maxdepth: 2
+   :maxdepth: 1
    :hidden:
 
+   internal/docs_advanced
    internal/tnc
    internal/wick
 

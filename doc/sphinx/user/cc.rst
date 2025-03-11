@@ -17,36 +17,26 @@ CC amplitude equations
     using namespace sequant::mbpt;
     // Traditional CCSD
     auto t_eqs = CC{2}.t();
-    std::wcout << "R[1]: " << to_latex(t_eqs[1]) << std::endl
-               << "R[2]: " << to_latex(t_eqs[2]) << std::endl;
+    std::wcout << "R[1]: " << to_latex(t_eqs[1]) << "\n"
+               << "R[2]: " << to_latex(t_eqs[2]) << "\n";
 
     auto l_eqs = CC{2}.λ();
-    std::wcout << "L[1]: " << to_latex(l_eqs[1]) << std::endl
-               << "L[2]: " << to_latex(l_eqs[2]) << std::endl;
+    std::wcout << "L[1]: " << to_latex(l_eqs[1]) << "\n"
+               << "L[2]: " << to_latex(l_eqs[2]) << "\n";
 
     // Unitary CCSD
     auto Ut_eqs = CC{2, CC::Ansatz::U}.t();
-    std::wcout << "R[1]: " << to_latex(Ut_eqs[1]) << std::endl
-               << "R[2]: " << to_latex(Ut_eqs[2]) << std::endl;
+    std::wcout << "R[1]: " << to_latex(Ut_eqs[1]) << "\n"
+               << "R[2]: " << to_latex(Ut_eqs[2]) << "\n";
 
 
 EOM-CC equations
-^^^^^^^^^^^^^^^^
-
-.. note::
-    EOM-CC methods only support traditional ansatz for now
+^^^^^^^^^^^^^^^^^^
 
 .. code-block:: c++
 
     using namespace sequant::mbpt;
     // EE-EOM-CCSD
     auto r_eqs = CC{2}.eom_r(nₚ(2), nₕ(2));
-    std::wcout << "R[1]: " << to_latex(r_eqs[1]) << std::endl
-               << "R[2]: " << to_latex(r_eqs[2]) << std::endl;
-
-
-
-.. _spin-tracing:
-
-Spin-tracing generated expressions
-----------------------------------
+    std::wcout << "R[1]: " << to_latex(r_eqs[1]) << "\n"
+               << "R[2]: " << to_latex(r_eqs[2]) << "\n";
