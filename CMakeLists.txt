@@ -633,6 +633,10 @@ if (SEQUANT_BUILD_DOCS)
     add_subdirectory(doc)
 endif ()
 
+####### External interface ########
+
+add_subdirectory(external-interface)
+
 
 ##########################
 # export SeQuant
