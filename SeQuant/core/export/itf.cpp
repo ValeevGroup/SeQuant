@@ -607,9 +607,9 @@ std::wstring ITFGenerator::generate() const {
 
       itf += L"\n";
     }
-
-    itf += L"\n---- end\n";
   }
+
+  itf += L"\n---- end\n";
 
   return itf;
 }
