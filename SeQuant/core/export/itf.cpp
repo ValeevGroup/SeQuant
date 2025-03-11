@@ -179,7 +179,9 @@ std::vector<Contraction> to_contractions(const ExprPtr &expression,
   std::wstring itfCode;
 
   if (expression.is<Constant>()) {
-    throw std::invalid_argument("Can't transform constants into contractions");
+    // Make use of special One[] tensor to represent adding constants
+    return {Contraction{expression.as<Constant>().value().real(), resultTensor,
+                        Tensor(L"One", {}, {}, {})}};
   } else if (expression.is<Tensor>()) {
     return {Contraction{1, resultTensor, expression.as<Tensor>(), {}}};
   } else if (expression.is<Product>()) {
