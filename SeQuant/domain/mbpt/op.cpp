@@ -420,6 +420,17 @@ OpMaker<S>::OpMaker(OpType op, ncre nc, nann na) {
 }
 
 template <Statistics S>
+OpMaker<S>::OpMaker(OpType op, ncre nc, nann na, naux nbatch)
+    : OpMaker(op, nc, na) {
+  if (nbatch == 0) return;
+  assert(nbatch > 0);
+  auto isr = get_default_context().index_space_registry();
+  assert(isr->retrieve(L"Z"));  // Z is the batch space
+  const auto batch_space = isr->retrieve(L"Z");
+  batch_spaces_ = IndexSpaceContainer(nbatch, batch_space);
+}
+
+template <Statistics S>
 OpMaker<S>::OpMaker(OpType op, std::size_t rank)
     : OpMaker(op, ncre(rank), nann(rank)) {}
 
@@ -455,6 +466,18 @@ ExprPtr OpMaker<S>::operator()(std::optional<UseDepIdx> dep,
     }
   }
 
+  // if batching indices are given, use them
+  if (batch_spaces_.has_value()) {
+    return make(
+        cre_spaces_, ann_spaces_, *batch_spaces_,
+        [this, opsymm_opt](const auto& creidxs, const auto& annidxs,
+                           const auto& batchidxs, Symmetry opsymm) {
+          return ex<Tensor>(to_wstring(op_), bra(creidxs), ket(annidxs),
+                            aux(batchidxs), opsymm_opt ? *opsymm_opt : opsymm);
+        },
+        dep ? *dep : UseDepIdx::None);
+  }
+  // else no batching
   return make(
       cre_spaces_, ann_spaces_,
       [this, opsymm_opt](const auto& creidxs, const auto& annidxs,
