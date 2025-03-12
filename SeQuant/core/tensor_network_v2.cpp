@@ -1270,6 +1270,10 @@ container::svector<std::pair<long, long>> TensorNetworkV2::factorize() {
   abort();  // not yet implemented
 }
 
+size_t TensorNetworkV2::SlotCanonicalizationMetadata::hash_value() const {
+  return graph->get_hash();
+}
+
 ExprPtr TensorNetworkV2::canonicalize_individual_tensor_blocks(
     const NamedIndexSet &named_indices) {
   return do_individual_canonicalization(

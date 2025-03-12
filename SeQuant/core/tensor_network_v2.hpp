@@ -13,6 +13,8 @@
 #include <SeQuant/core/tensor_network/slot.hpp>
 #include <SeQuant/core/tensor_network/vertex.hpp>
 
+#include <range/v3/range/traits.hpp>
+
 #include <cassert>
 #include <cstdlib>
 #include <iosfwd>
@@ -209,7 +211,7 @@ class TensorNetworkV2 {
                                   !std::is_base_of_v<Expr, ExprPtrRange>>>
   TensorNetworkV2(const ExprPtrRange &exprptr_range) {
     static_assert(
-        std::is_base_of_v<ExprPtr, typename ExprPtrRange::value_type>);
+        std::is_base_of_v<ExprPtr, ranges::range_value_t<ExprPtrRange>>);
     for (const ExprPtr &current : exprptr_range) {
       add_expr(*current);
     }
@@ -265,6 +267,18 @@ class TensorNetworkV2 {
     /// canonicalized colored graph, use graph->cmp to compare against another
     /// to detect equivalence
     std::shared_ptr<bliss::Graph> graph;
+
+    [[nodiscard]] size_t hash_value() const;
+
+    [[nodiscard]] inline auto get_index_view() const {
+      return named_indices_canonical  //
+             | ranges::views::indirect;
+    }
+
+    template <typename Cont>
+    auto get_indices() const {
+      return get_index_view() | ranges::to<Cont>;
+    }
 
     /// if tensor network contains tensors with antisymmetric bra/ket this
     /// reports the phase change due to permutation of slots relative to their

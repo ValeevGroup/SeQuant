@@ -624,14 +624,13 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
           const auto n = vtypes.size();
           assert(vcolors.size() == n);
           assert(vlabels.size() == n);
-          assert(vtexlabels.size() == 0);
           const auto &tn_edges = tn.edges();
           const auto &tn_tensors = tn.tensors();
 
           if (Logger::instance().wick_topology) {
             std::basic_ostringstream<wchar_t> oss;
 #if USE_TENSOR_NETWORK_V2
-            graph->write_dot(oss, vlabels, true);
+            graph->write_dot(oss, vlabels);
 #else
             graph->write_dot(oss, vlabels);
 #endif
