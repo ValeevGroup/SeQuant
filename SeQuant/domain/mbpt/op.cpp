@@ -405,16 +405,16 @@ OpMaker<S>::OpMaker(OpType op, ncre nc, nann na) {
   assert(nc > 0 || na > 0);
   switch (to_class(op)) {
     case OpClass::ex:
-      cre_spaces_ = decltype(cre_spaces_)(nc, get_particle_space(Spin::any));
-      ann_spaces_ = decltype(ann_spaces_)(na, get_hole_space(Spin::any));
+      cre_spaces_ = IndexSpaceContainer(nc, get_particle_space(Spin::any));
+      ann_spaces_ = IndexSpaceContainer(na, get_hole_space(Spin::any));
       break;
     case OpClass::deex:
-      cre_spaces_ = decltype(cre_spaces_)(nc, get_hole_space(Spin::any));
-      ann_spaces_ = decltype(ann_spaces_)(na, get_particle_space(Spin::any));
+      cre_spaces_ = IndexSpaceContainer(nc, get_hole_space(Spin::any));
+      ann_spaces_ = IndexSpaceContainer(na, get_particle_space(Spin::any));
       break;
     case OpClass::gen:
-      cre_spaces_ = decltype(cre_spaces_)(nc, get_complete_space(Spin::any));
-      ann_spaces_ = decltype(ann_spaces_)(na, get_complete_space(Spin::any));
+      cre_spaces_ = IndexSpaceContainer(nc, get_complete_space(Spin::any));
+      ann_spaces_ = IndexSpaceContainer(na, get_complete_space(Spin::any));
       break;
   }
 }
@@ -429,8 +429,8 @@ OpMaker<S>::OpMaker(OpType op, ncre nc, nann na,
                     const ann<IndexSpace>& ann_space) {
   op_ = op;
   assert(nc > 0 || na > 0);
-  cre_spaces_ = decltype(cre_spaces_)(nc, cre_space);
-  ann_spaces_ = decltype(ann_spaces_)(na, ann_space);
+  cre_spaces_ = IndexSpaceContainer(nc, cre_space);
+  ann_spaces_ = IndexSpaceContainer(na, ann_space);
 }
 
 template <Statistics S>

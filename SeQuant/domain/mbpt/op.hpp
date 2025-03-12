@@ -550,6 +550,8 @@ namespace mbpt {
 // clang-format on
 template <Statistics S>
 class OpMaker {
+  using IndexSpaceContainer = container::svector<IndexSpace>;
+
  public:
   /// @param[in] op the operator type
   /// @param[in] cre_list list of creator indices
@@ -688,8 +690,9 @@ class OpMaker {
 
  protected:
   OpType op_;
-  container::svector<IndexSpace> cre_spaces_;
-  container::svector<IndexSpace> ann_spaces_;
+  IndexSpaceContainer cre_spaces_;
+  IndexSpaceContainer ann_spaces_;
+  std::optional<IndexSpaceContainer> batch_ = std::nullopt;
 
   OpMaker(OpType op);
 
