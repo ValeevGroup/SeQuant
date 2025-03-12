@@ -31,7 +31,7 @@ template<> struct fmt::formatter< sequant::Tensor > : fmt::formatter< std::strin
 	template< typename FormatContext >
 	auto format(const sequant::Tensor &tensor, FormatContext &ctx) const -> decltype(ctx.out()) {
 		return fmt::format_to(ctx.out(), "{}[{};{};{}]", sequant::toUtf8(tensor.label()), fmt::join(tensor.bra(), ", "),
-						 fmt::join(tensor.ket(), ", "), fmt::join(tensor.aux(), ", "));
+							  fmt::join(tensor.ket(), ", "), fmt::join(tensor.aux(), ", "));
 	}
 };
 
@@ -138,8 +138,8 @@ template<> struct fmt::formatter< sequant::ResultExpr > : fmt::formatter< std::s
 			return fmt::format_to(ctx.out(), "{} =\n{}", label, result.expression());
 		}
 
-		return fmt::format_to(ctx.out(), "{}[{};{};{}] =\n{}", label, fmt::join(result.bra(), ", "), fmt::join(result.ket(), ", "),
-						 fmt::join(result.aux(), ", "), result.expression());
+		return fmt::format_to(ctx.out(), "{}[{};{};{}] =\n{}", label, fmt::join(result.bra(), ", "),
+							  fmt::join(result.ket(), ", "), fmt::join(result.aux(), ", "), result.expression());
 	}
 };
 

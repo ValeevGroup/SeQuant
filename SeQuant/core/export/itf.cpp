@@ -281,8 +281,8 @@ void one_electron_integral_remapper(ExprPtr &expr,
 }
 
 template <typename BraContainer, typename KetContainer>
-bool isExceptionalJ(const BraContainer &braIndices, const KetContainer &ketIndices,
-                    const Context &ctx) {
+bool isExceptionalJ(const BraContainer &braIndices,
+                    const KetContainer &ketIndices, const Context &ctx) {
   assert(braIndices.size() == 2);
   assert(ketIndices.size() == 2);
   // integrals with 3 external (virtual) indices ought to be converted to
