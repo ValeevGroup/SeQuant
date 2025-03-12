@@ -838,7 +838,8 @@ TensorNetworkV2::canonicalize_slots(
 }
 
 TensorNetworkV2::Graph TensorNetworkV2::create_graph(
-    const NamedIndexSet *named_indices_ptr, bool distinct_named_indices) const {
+    const NamedIndexSet *named_indices_ptr, bool distinct_named_indices,
+    container::map<Index, std::size_t> *idx_to_vertex) const {
   assert(have_edges_);
 
   // initialize named_indices by default to all external indices
@@ -1132,6 +1133,10 @@ TensorNetworkV2::Graph TensorNetworkV2::create_graph(
   for (const auto [vertex, color] :
        ranges::views::enumerate(graph.vertex_colors)) {
     graph.bliss_graph->change_color(vertex, color);
+  }
+
+  if (idx_to_vertex) {
+    *idx_to_vertex = std::move(index_vertices);
   }
 
   return graph;
