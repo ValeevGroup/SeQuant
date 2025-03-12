@@ -89,7 +89,7 @@ EvalExpr::EvalExpr(Tensor const& tnsr)
         tn.canonicalize_slots(TensorCanonicalizer::cardinal_tensor_labels());
     hash_value_ = md.hash_value();
     canon_phase_ = md.phase;
-    canon_indices_ = md.get_indices() | ranges::to<index_vector>;
+    canon_indices_ = md.get_indices<index_vector>();
   } else {
     hash_value_ = hash_terminal_tensor(tnsr);
     canon_phase_ = 1;
@@ -531,7 +531,7 @@ EvalExprNode binarize(Product const& prod) {
       auto canon =
           tn.canonicalize_slots(TensorCanonicalizer::cardinal_tensor_labels());
       hash::combine(h, canon.hash_value());
-      bool const scalar_result = ranges::empty(canon.get_indices());
+      bool const scalar_result = canon.named_indices_canonical.empty();
       if (scalar_result) {
         return {EvalOp::Prod,            //
                 ResultType::Scalar,      //
