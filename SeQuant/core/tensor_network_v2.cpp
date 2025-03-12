@@ -671,16 +671,6 @@ TensorNetworkV2::canonicalize_slots(
       return idxptr1->space() < idxptr2->space();
     };
 
-  // N.B. support for slot canonicalization of antisymmetric tensors is not yet
-  // available, use TN::canonicalize_slots
-  ranges::for_each(tensors_, [&](const auto &t) {
-    if (t->_symmetry() == Symmetry::antisymm &&
-        (t->_bra_rank() > 1 || t->_ket_rank() > 1))
-      throw std::runtime_error(
-          "TensornetworkV2::canonicalize_slots does not support antisymmetric "
-          "tensors yet, use TensorNetwork::canonicalize_slots");
-  });
-
   TensorNetworkV2::SlotCanonicalizationMetadata metadata;
 
   if (Logger::instance().canonicalize) {
@@ -713,8 +703,9 @@ TensorNetworkV2::canonicalize_slots(
   // make the graph
   // only slots (hence, attr) of named indices define their color, so
   // distinct_named_indices = false
-  Graph graph =
-      create_graph(&named_indices, /* distinct_named_indices = */ false);
+  container::map<Index, std::size_t> idx_to_vertex;
+  Graph graph = create_graph(&named_indices, /*distinct_named_indices*/ false,
+                             &idx_to_vertex);
   // graph.bliss_graph->write_dot(std::wcout, graph.vertex_labels);
 
   if (Logger::instance().canonicalize_input_graph) {
@@ -747,6 +738,7 @@ TensorNetworkV2::canonicalize_slots(
 
   // maps index ordinal to vertex ordinal
   container::map<std::size_t, std::size_t> index_idx_to_vertex;
+  container::map<Index, unsigned int> index_to_canon_vertex;
   std::size_t index_idx = 0;
   for (std::size_t vertex = 0; vertex < graph.vertex_types.size(); ++vertex) {
     if (graph.vertex_types[vertex] == VertexType::Index) {
@@ -833,6 +825,56 @@ TensorNetworkV2::canonicalize_slots(
     metadata.named_index_compare = std::move(named_index_compare);
 
   }  // named indices resort to canonical order
+
+  // - For each bra/ket bundle canonical order of slots is the lexicographic
+  //   order of the canonicalized vertices representing the contained indices.
+  // - Reordering indices into this canonical order incurs a phase change if the
+  //   index bundle is antisymmetric.
+  // - Determine this phase change by determining the parity of index
+  //   permutations required to arrive at canonical form
+  metadata.phase = 1;
+  container::vector<std::size_t> vertices;
+  for (const AbstractTensor &tensor : tensors_ | ranges::views::indirect) {
+    if (symmetry(tensor) != Symmetry::antisymm) {
+      // Only antisymmetric tensors (or rather: their indices) can incur a phase
+      // change due to index permutation
+      continue;
+    }
+
+    vertices.clear();
+
+    // Note that the current assumption is that auxiliary indices don't have
+    // permutational symmetry, let alone being antisymmetric. Hence, we don't
+    // have to include them in the iteration.
+    // Note2: have to create dedicated container to hold ranges as an
+    // initializer list will only return const entries upon iteration and one
+    // can't iterate over const ranges.
+    std::vector index_groups = {tensor._bra(), tensor._ket()};
+    for (auto &indices : index_groups) {
+      using ranges::size;
+      std::size_t n_indices = size(indices);
+
+      if (n_indices < 2) {
+        // If there are < 2 indices, no two indices could have been swapped
+        continue;
+      }
+
+      vertices.reserve(n_indices);
+
+      for (const Index &idx : indices) {
+        const std::size_t vertex = idx_to_vertex.at(idx);
+        vertices.push_back(canonize_perm[vertex]);
+      }
+
+      reset_ts_swap_counter<std::size_t>();
+      bubble_sort(vertices.begin(), vertices.end());
+      if (ts_swap_counter_is_even<std::size_t>()) {
+        // Performed an uneven amount of pairwise exchanges -> this incurs a
+        // phase change
+        metadata.phase *= -1;
+      }
+    }
+  }
 
   return metadata;
 }
