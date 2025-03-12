@@ -46,6 +46,9 @@ void add_df_spaces(std::shared_ptr<IndexSpaceRegistry>& isr);
 /// expects \p isr to have a defined particle space
 void add_pao_spaces(std::shared_ptr<IndexSpaceRegistry>& isr);
 
+/// @brief add batching spaces to registry
+void add_batching_spaces(std::shared_ptr<IndexSpaceRegistry>& isr);
+
 /// @name built-in definitions of IndexSpace
 /// @{
 

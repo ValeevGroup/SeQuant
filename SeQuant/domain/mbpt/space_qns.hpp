@@ -40,6 +40,13 @@ enum class LCAOQNS : bitset_t {
 /// \note TensorFactorization basis traits use 5th rightmost bits
 enum class TensorFactorizationQNS : bitset_t { df = 0b010000, mask = df };
 
+/// tags related to batching
+/// \note BatchingQNS uses the 6th rightmost bit
+enum class BatchingQNS : bitset_t {
+  batch = 0b100000,  // for batching tensors
+  mask = batch
+};
+
 }  // namespace sequant::mbpt
 
 #endif  // MPQC_DOMAIN_MBPT_SPACE_QNS_HPP

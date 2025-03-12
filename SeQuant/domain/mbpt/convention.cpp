@@ -100,6 +100,11 @@ void add_df_spaces(std::shared_ptr<IndexSpaceRegistry>& isr) {
       ;
 }
 
+void add_batching_spaces(std::shared_ptr<IndexSpaceRegistry>& isr) {
+  // Z will the index registered for the batch space
+  isr->add(IndexSpace{L"Z", 0b000001, BatchingQNS::batch});
+}
+
 std::shared_ptr<IndexSpaceRegistry> make_min_sr_spaces() {
   auto isr = std::make_shared<IndexSpaceRegistry>();
 
