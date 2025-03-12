@@ -6,7 +6,7 @@
 #define SEQUANT_WICK_IMPL_HPP
 
 // change to 1 to try TNV2
-#define USE_TENSOR_NETWORK_V2 1
+#define USE_TENSOR_NETWORK_V2 0
 
 #include <SeQuant/core/bliss.hpp>
 #include <SeQuant/core/logger.hpp>
