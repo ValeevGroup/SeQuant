@@ -193,6 +193,9 @@ TEST_CASE("IndexSpace", "[elements]") {
     REQUIRE(μ.type() == p.type());
     REQUIRE(μ.qns() != p.qns());
     REQUIRE(μ != p);
+
+    // ordering
+    REQUIRE(isr->retrieve(L"i") < isr->retrieve(L"μ"));
   }
 
   SECTION("PAO spaces") {
@@ -209,5 +212,8 @@ TEST_CASE("IndexSpace", "[elements]") {
     REQUIRE(μtilde.type() == obs_uocc.type());
     REQUIRE(μtilde.qns() != obs_uocc.qns());
     REQUIRE(μtilde != obs_uocc);
+
+    // ordering
+    REQUIRE(isr->retrieve(L"i") < isr->retrieve(L"μ̃"));
   }
 }
