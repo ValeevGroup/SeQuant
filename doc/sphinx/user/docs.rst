@@ -19,6 +19,6 @@ Now you can build the documentation using CMake. The documentation will be gener
     mkdir build
     cd build
     cmake -DSEQUANT_BUILD_DOCS=ON ..
-    cmake --build . --target sequant-doc
+    cmake --build . --target doc-sequant
 
 See :doc:`../internal/docs_advanced` for more information on the documentation structure and how to add new documentation.

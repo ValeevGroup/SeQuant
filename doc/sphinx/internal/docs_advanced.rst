@@ -28,7 +28,7 @@ To build the documentation, run the following commands:
 .. code-block:: bash
 
     cmake -B build
-    cmake --build build --target sequant-doc
+    cmake --build build --target doc-sequant
 
 This will generate both Doxygen and Sphinx documentation. The output directories are:
 
