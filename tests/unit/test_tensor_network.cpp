@@ -837,6 +837,26 @@ TEST_CASE("TensorNetworkV2", "[elements]") {
       }
     }
 
+    SECTION("special") {
+      auto factors =
+          parse_expr(
+              L"S{i_1;a_1<i_1>}:N-C-S g{i_2,a_1<i_1>;a_2<i_2>,i_1}:N-C-S "
+              L"t{a_2<i_2>;i_2}:N-C-S")
+              ->as<Product>()
+              .factors();
+
+      TensorNetworkV2 tn(factors);
+
+      ExprPtr factor =
+          tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(), false);
+      ExprPtr result = to_product(tn.tensors());
+      if (factor) {
+        result *= factor;
+      }
+
+      REQUIRE(result);
+    }
+
 #ifndef SEQUANT_SKIP_LONG_TESTS
     SECTION("Exhaustive SRCC example") {
       // Note: the exact canonical form written here is implementation-defined
