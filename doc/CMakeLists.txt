@@ -10,18 +10,16 @@ if (DOXYGEN_FOUND)
     set(DOXYGEN_OUTPUT_DIR ${PROJECT_BINARY_DIR}/doc/doxygen)
     file(MAKE_DIRECTORY ${DOXYGEN_OUTPUT_DIR})
 
+    # Check for dot support
+    if(DOXYGEN_HAVE_DOT)
+        set(DOXYGEN_DOT_FOUND YES)
+    endif()
+
     # Configure Doxyfile
     configure_file(
             ${CMAKE_CURRENT_SOURCE_DIR}/doxygen/Doxyfile.in
             ${DOXYGEN_OUTPUT_DIR}/Doxyfile @ONLY
     )
-
-    # Set dot path if available
-    if(TARGET DOXYGEN_HAVE_DOT)
-        get_target_property(DOT_EXECUTABLE Doxygen::dot IMPORTED_LOCATION)
-        get_filename_component(DOXYGEN_DOT_PATH "${DOT_EXECUTABLE}" DIRECTORY)
-        file(TO_NATIVE_PATH "${DOXYGEN_DOT_PATH}" DOXYGEN_DOT_PATH)
-    endif()
 
     # Doxygen build target
     add_custom_target_subproject(sequant doxygen
