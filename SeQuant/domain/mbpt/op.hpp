@@ -527,6 +527,42 @@ ExprPtr vac_av(ExprPtr expr,
 mbpt::qns_t adjoint(mbpt::qns_t qns);
 
 namespace mbpt {
+namespace detail {
+/// @brief Creates a vector of indices based on the given spaces
+/// @param spaces A vector of IndexSpaces
+/// @return A vector of Index objects
+inline container::svector<Index> make_idx_vector(
+    const container::svector<IndexSpace>& spaces) {
+  container::svector<Index> result;
+  const auto n = spaces.size();
+  result.reserve(n);
+  for (size_t i = 0; i != n; ++i) {
+    auto space = spaces[i];
+    result.push_back(Index::make_tmp_index(space));
+  }
+  return result;
+}
+
+/// @brief Creates a vector of dependent indices based on the given spaces and
+/// protoindices
+/// @param spaces a vector of IndexSpaces representing the spaces for which
+/// indices are to be created
+/// @param protoidxs A vector of protoindices that the new indices will depend
+/// on
+/// @return A vector of Index objects
+inline container::svector<Index> make_depidx_vector(
+    const container::svector<IndexSpace>& spaces,
+    const container::svector<Index>& protoidxs) {
+  const auto n = spaces.size();
+  container::svector<Index> result;
+  result.reserve(n);
+  for (size_t i = 0; i != n; ++i) {
+    auto space = spaces[i];
+    result.push_back(Index::make_tmp_index(space, protoidxs, true));
+  }
+  return result;
+}
+}  // namespace detail
 
 // clang-format off
 /// @brief makes a tensor-level many-body operator
@@ -599,6 +635,15 @@ class OpMaker {
     None
   };
 
+  /// struct to hold the information about the operator
+  struct OpInfo {
+    container::svector<Index> creidxs;  //!< creator indices
+    container::svector<Index> annidxs;  //!< annihilator indices
+    sequant::intmax_t mult;             //!< normalization factor
+    Symmetry opsymm;                    //!< symmetry of the operator
+    UseDepIdx dep;                      //!< dependency of the bra/ket indices
+  };
+
   // clang-format off
   /// @param[in] dep_opt if given, controls whether bra (`*dep_opt == UseDepIdx::Bra`)
   /// / ket (`*dep_opt == UseDepIdx::Ket`) indices
@@ -613,19 +658,20 @@ class OpMaker {
   ExprPtr operator()(std::optional<UseDepIdx> dep_opt = {},
                      std::optional<Symmetry> opsymm_opt = {}) const;
 
-  /// @tparam TensorGenerator callable with signature
-  /// `TensorGenerator(range<Index>, range<Index>, Symmetry)` that returns a
-  /// Tensor with the respective bra/cre and ket/ann indices and of the given
-  /// symmetry
-  /// @param[in] creators creator indices
-  /// @param[in] annihilators annihilator indices
-  /// @param[in] tensor_generator the callable that generates the tensor
-  /// @param[in] dep whether to use dependent indices
-  template <typename TensorGenerator>
-  static ExprPtr make(const container::svector<IndexSpace>& creators,
-                      const container::svector<IndexSpace>& annihilators,
-                      TensorGenerator&& tensor_generator,
-                      UseDepIdx dep = UseDepIdx::None) {
+  /// @brief Creates an OpInfo struct containing creator and annihilator
+  /// indices,
+  ///        normalization factor, symmetry, and dependency information.
+  /// @param cre_spaces A container of IndexSpace objects representing the
+  /// creator indices
+  /// @param ann_spaces A container of IndexSpace objects representing the
+  /// annihilator indices
+  /// @param dep An optional parameter specifying the dependency of indices.
+  /// @return An OpInfo struct containing the created indices, normalization
+  /// factor,
+  ///         symmetry, and dependency information.
+  static OpInfo build_op_info(const IndexSpaceContainer& cre_spaces,
+                              const IndexSpaceContainer& ann_spaces,
+                              UseDepIdx dep = UseDepIdx::None) {
     const bool symm =
         get_default_context().spbasis() ==
         SPBasis::spinorbital;  // antisymmetrize if spin-orbital basis
@@ -633,64 +679,119 @@ class OpMaker {
     const auto dep_ket = dep == UseDepIdx::Ket;
 
     // not sure what it means to use nonsymmetric operator if nbra != nket
-    if (!symm) assert(ranges::size(creators) == ranges::size(annihilators));
-
-    auto make_idx_vector = [](const auto& spacetypes) {
-      container::svector<Index> result;
-      const auto n = spacetypes.size();
-      result.reserve(n);
-      for (size_t i = 0; i != n; ++i) {
-        auto space = spacetypes[i];
-        result.push_back(Index::make_tmp_index(space));
-      }
-      return result;
-    };
-
-    auto make_depidx_vector = [](const auto& spacetypes, auto&& protoidxs) {
-      const auto n = spacetypes.size();
-      container::svector<Index> result;
-      result.reserve(n);
-      for (size_t i = 0; i != n; ++i) {
-        auto space = spacetypes[i];
-        result.push_back(Index::make_tmp_index(space, protoidxs, true));
-      }
-      return result;
-    };
+    if (!symm) assert(ranges::size(cre_spaces) == ranges::size(ann_spaces));
 
     container::svector<Index> creidxs, annidxs;
     if (dep_bra) {
-      annidxs = make_idx_vector(annihilators);
-      creidxs = make_depidx_vector(creators, annidxs);
+      annidxs = detail::make_idx_vector(ann_spaces);
+      creidxs = detail::make_depidx_vector(cre_spaces, annidxs);
     } else if (dep_ket) {
-      creidxs = make_idx_vector(creators);
-      annidxs = make_depidx_vector(annihilators, creidxs);
+      creidxs = detail::make_idx_vector(cre_spaces);
+      annidxs = detail::make_depidx_vector(ann_spaces, creidxs);
     } else {
-      creidxs = make_idx_vector(creators);
-      annidxs = make_idx_vector(annihilators);
+      creidxs = detail::make_idx_vector(cre_spaces);
+      annidxs = detail::make_idx_vector(ann_spaces);
     }
 
     using ranges::size;
     const auto mult =
-        symm ? factorial(size(creators)) * factorial(size(annihilators))
-             : factorial(size(creators));
+        symm ? factorial(size(cre_spaces)) * factorial(size(ann_spaces))
+             : factorial(size(cre_spaces));
     const auto opsymm = symm ? (S == Statistics::FermiDirac ? Symmetry::antisymm
                                                             : Symmetry::symm)
                              : Symmetry::nonsymm;
-    return ex<Constant>(rational{1, mult}) *
-           tensor_generator(creidxs, annidxs, opsymm) *
-           ex<NormalOperator<S>>(cre(creidxs), ann(annidxs),
+
+    return OpInfo{creidxs, annidxs, mult, opsymm, dep};
+  }
+
+  /// @tparam TensorGenerator callable with signature
+  /// `TensorGenerator(range<Index>, range<Index>, Symmetry)` that returns a
+  /// Tensor with the respective bra/cre and ket/ann indices and of the given
+  /// symmetry
+  /// @param[in] cre_spaces creator IndexSpaces
+  /// @param[in] ann_spaces annihilator IndexSpaces
+  /// @param[in] tensor_generator the callable that generates the tensor
+  /// @param[in] dep whether to use dependent indices
+  template <typename TensorGenerator>
+  static ExprPtr make(const IndexSpaceContainer& cre_spaces,
+                      const IndexSpaceContainer& ann_spaces,
+                      TensorGenerator&& tensor_generator,
+                      UseDepIdx dep = UseDepIdx::None) {
+    const auto op_info = build_op_info(cre_spaces, ann_spaces, dep);
+
+    const auto t =
+        tensor_generator(op_info.creidxs, op_info.annidxs, op_info.opsymm);
+    return ex<Constant>(rational{1, op_info.mult}) * t *
+           ex<NormalOperator<S>>(cre(op_info.creidxs), ann(op_info.annidxs),
                                  get_default_context().vacuum());
   }
 
+  /// @tparam TensorGenerator callable with signature
+  /// `TensorGenerator(range<Index>, range<Index>, Symmetry)` that returns a
+  /// Tensor with the respective bra/cre and ket/ann indices and of the given
+  /// symmetry
+  /// @param[in] cre_spaces creator IndexSpaces as an initializer list
+  /// @param[in] ann_spaces annihilator IndexSpaces as an initializer list
+  /// @param[in] tensor_generator the callable that generates the tensor
+  /// @param[in] csv whether to use dependent indices
+  template <typename TensorGenerator>
+  static ExprPtr make(std::initializer_list<IndexSpace::Type> cre_spaces,
+                      std::initializer_list<IndexSpace::Type> ann_spaces,
+                      TensorGenerator&& tensor_generator,
+                      UseDepIdx csv = UseDepIdx::None) {
+    IndexSpaceContainer cre_vec(cre_spaces.begin(), cre_spaces.end());
+    IndexSpaceContainer ann_vec(ann_spaces.begin(), ann_spaces.end());
+    return OpMaker::make(cre_vec, ann_vec,
+                         std::forward<TensorGenerator>(tensor_generator), csv);
+  }
+
+  /// @tparam TensorGenerator callable with signature
+  /// `TensorGenerator(range<Index>, range<Index>, range<Index>, Symmetry)` that
+  /// returns a Tensor with the respective bra/cre, ket/ann, and batch indices
+  /// and of the given symmetry
+  /// @param[in] cre_spaces creator IndexSpaces
+  /// @param[in] ann_spaces annihilator IndexSpaces
+  /// @param[in] batch_spaces batch IndexSpaces
+  /// @param[in] tensor_generator the callable that generates the tensor
+  /// @param[in] dep whether to use dependent indices
+  template <typename TensorGenerator>
+  static ExprPtr make(const IndexSpaceContainer& cre_spaces,
+                      const IndexSpaceContainer& ann_spaces,
+                      const IndexSpaceContainer& batch_spaces,
+                      TensorGenerator&& tensor_generator,
+                      UseDepIdx dep = UseDepIdx::None) {
+    const auto op_info = build_op_info(cre_spaces, ann_spaces, dep);
+    assert(!batch_spaces.empty());
+    assert(get_default_context().index_space_registry()->retrieve(L"Z"));
+    const auto batchidx = detail::make_idx_vector(batch_spaces);
+
+    const auto t = tensor_generator(op_info.creidxs, op_info.annidxs, batchidx,
+                                    op_info.opsymm);
+
+    return ex<Constant>(rational{1, op_info.mult}) * t *
+           ex<NormalOperator<S>>(cre(op_info.creidxs), ann(op_info.annidxs),
+                                 get_default_context().vacuum());
+  }
+
+  /// @tparam TensorGenerator callable with signature
+  /// `TensorGenerator(range<Index>, range<Index>, range<Index>, Symmetry)` that
+  /// returns a Tensor with the respective bra/cre, ket/ann, and batch indices
+  /// and of the given symmetry
+  /// @param[in] creators creator IndexSpaces as an initializer list
+  /// @param[in] annihilators annihilator IndexSpaces as an initializer list
+  /// @param[in] batch_spaces batch IndexSpaces as an initializer list
+  /// @param[in] tensor_generator the callable that generates the tensor
+  /// @param[in] csv whether to use dependent indices
   template <typename TensorGenerator>
   static ExprPtr make(std::initializer_list<IndexSpace::Type> creators,
                       std::initializer_list<IndexSpace::Type> annihilators,
+                      std::initializer_list<IndexSpace::Type> batch_spaces,
                       TensorGenerator&& tensor_generator,
                       UseDepIdx csv = UseDepIdx::None) {
-    container::svector<IndexSpace> cre_vec(creators.begin(), creators.end());
-    container::svector<IndexSpace> ann_vec(annihilators.begin(),
-                                           annihilators.end());
-    return OpMaker::make(cre_vec, ann_vec,
+    IndexSpaceContainer cre_vec(creators.begin(), creators.end());
+    IndexSpaceContainer ann_vec(annihilators.begin(), annihilators.end());
+    IndexSpaceContainer batch_vec(batch_spaces.begin(), batch_spaces.end());
+    return OpMaker::make(cre_vec, ann_vec, batch_spaces,
                          std::forward<TensorGenerator>(tensor_generator), csv);
   }
 
@@ -698,7 +799,7 @@ class OpMaker {
   OpType op_;
   IndexSpaceContainer cre_spaces_;
   IndexSpaceContainer ann_spaces_;
-  std::optional<IndexSpaceContainer> batch_ = std::nullopt;
+  std::optional<IndexSpaceContainer> batch_spaces_ = std::nullopt;
 
   OpMaker(OpType op);
 
