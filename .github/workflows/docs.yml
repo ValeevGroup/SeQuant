@@ -31,7 +31,7 @@ jobs:
       - name: Build Docs
         working-directory: ${{github.workspace}}/build
         run: |
-          cmake $GITHUB_WORKSPACE -DCMAKE_BUILD_TYPE=$BUILD_TYPE $BUILD_CONFIG
+          cmake $GITHUB_WORKSPACE $BUILD_CONFIG
           cmake --build . --target sphinx-sequant
 
       - name: Deploy to gh-pages
