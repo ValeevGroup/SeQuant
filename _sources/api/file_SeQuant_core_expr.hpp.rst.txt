@@ -8,6 +8,11 @@ File expr.hpp
 
 .. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
 
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
 Definition (``SeQuant/core/expr.hpp``)
 --------------------------------------
 
@@ -171,13 +176,9 @@ Classes
 
 - :ref:`exhale_struct_structsequant_1_1_expr_1_1is__shared__ptr__of__expr_3_01_expr_ptr_00_01void_01_4`
 
-- :ref:`exhale_struct_structsequant_1_1_expr_1_1is__shared__ptr__of__expr_3_01std_1_1shared__ptr_3_01_t_01_4_00_01std_bb3533b4d54bb13a35fe574fcb225ae9`
-
 - :ref:`exhale_struct_structsequant_1_1_expr_1_1is__shared__ptr__of__expr__or__derived`
 
 - :ref:`exhale_struct_structsequant_1_1_expr_1_1is__shared__ptr__of__expr__or__derived_3_01_expr_ptr_00_01void_01_4`
-
-- :ref:`exhale_struct_structsequant_1_1_expr_1_1is__shared__ptr__of__expr__or__derived_3_01std_1_1shared__ptr_3_01_t_0b9041721e7914bd1fb6a6a0536a3b3b6`
 
 - :ref:`exhale_class_classsequant_1_1_constant`
 
@@ -220,9 +221,9 @@ Functions
 
 - :ref:`exhale_function_namespacesequant_1a24f69f16c272cb4a9bd054c7d9dc6410`
 
-- :ref:`exhale_function_namespacesequant_1af06cc45e975afcb9ae60db7b6cbbcba9`
-
 - :ref:`exhale_function_namespacesequant_1ab4a40939b4d8eb1dc68f8778c0b73930`
+
+- :ref:`exhale_function_namespacesequant_1af06cc45e975afcb9ae60db7b6cbbcba9`
 
 - :ref:`exhale_function_namespacesequant_1a4f7a82ef79acb5f9253be6cf51a1bde0`
 

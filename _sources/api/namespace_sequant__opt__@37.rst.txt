@@ -4,3 +4,10 @@
 Namespace sequant::opt::@37
 ===========================
 
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+
+

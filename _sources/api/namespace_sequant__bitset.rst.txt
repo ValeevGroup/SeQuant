@@ -5,6 +5,13 @@ Namespace sequant::bitset
 =========================
 
 
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+
+
+
 
 Typedefs
 --------

@@ -8,6 +8,11 @@ File index_space_registry.hpp
 
 .. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
 
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
 Definition (``SeQuant/core/index_space_registry.hpp``)
 ------------------------------------------------------
 

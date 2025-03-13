@@ -5,6 +5,13 @@ Namespace sequant::impl
 =======================
 
 
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+
+
+
 
 Functions
 ---------

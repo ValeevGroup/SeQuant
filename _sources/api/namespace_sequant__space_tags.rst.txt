@@ -5,6 +5,13 @@ Namespace sequant::space_tags
 =============================
 
 
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+
+
+
 
 Classes
 -------

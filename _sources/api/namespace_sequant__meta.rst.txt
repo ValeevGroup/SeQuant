@@ -5,14 +5,19 @@ Namespace sequant::meta
 =======================
 
 
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+
+
+
 
 Classes
 -------
 
 
 - :ref:`exhale_struct_structsequant_1_1meta_1_1char__type`
-
-- :ref:`exhale_struct_structsequant_1_1meta_1_1char__type_3_01_t_00_01std_1_1enable__if__t_3_01is__basic__string__convc91e62bf4b0e46ade68a32f8c3774434`
 
 
 Typedefs

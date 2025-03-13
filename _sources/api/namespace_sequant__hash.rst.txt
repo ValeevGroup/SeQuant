@@ -5,16 +5,19 @@ Namespace sequant::hash
 =======================
 
 
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+
+
+
 
 Classes
 -------
 
 
 - :ref:`exhale_struct_structsequant_1_1hash_1_1__`
-
-- :ref:`exhale_struct_structsequant_1_1hash_1_1___3_01_t_00_01std_1_1enable__if__t_3_9_07_9_07has__hash__value__v_3_01261c55baf69cf93eb99e41176b7d1d0a`
-
-- :ref:`exhale_struct_structsequant_1_1hash_1_1___3_01_t_00_01std_1_1enable__if__t_3_9_07has__hash__value__v_3_01_t_01ac0237a12262a65cbf508f969ea10192`
 
 
 Enums
@@ -30,9 +33,9 @@ Functions
 
 - :ref:`exhale_function_namespacesequant_1_1hash_1a9396a30bcac59a99a1418df117391864`
 
-- :ref:`exhale_function_namespacesequant_1_1hash_1aca3b67cf0ea2617aa26030ef8e0a2ce6`
-
 - :ref:`exhale_function_namespacesequant_1_1hash_1a03d04dae60cc048d2e506d880405906c`
+
+- :ref:`exhale_function_namespacesequant_1_1hash_1aca3b67cf0ea2617aa26030ef8e0a2ce6`
 
 - :ref:`exhale_function_namespacesequant_1_1hash_1ae0df3b24d161aae375c70408e949b41a`
 

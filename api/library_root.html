@@ -9,7 +9,9 @@
         <title>API Reference - SeQuant Documentation</title>
       <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=8f2a1f02" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=354aac6f" />
+    <link rel="stylesheet" type="text/css" href="../_static/graphviz.css?v=fd3f3429" />
     <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../_static/bootstrap-treeview/bootstrap-treeview.min.css?v=8176a87d" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo-extensions.css?v=302659d7" />
     <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/fontawesome.min.css" />
     <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/solid.min.css" />
@@ -22,6 +24,7 @@
   body {
     --color-code-background: #f8f8f8;
   --color-code-foreground: black;
+  --sidebar-item-font-size: 0.95em;
   
   }
   @media not print {
@@ -202,15 +205,23 @@
   <input type="hidden" name="area" value="default">
 </form>
 <div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
-  <p class="caption" role="heading"><span class="caption-text">Getting Started</span></p>
+  <p class="caption" role="heading"><span class="caption-text">Quickstart</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="../source/installing.html">Installation Guide</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../source/using.html">Using SeQuant</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user/installing.html">Installation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user/using.html">Using SeQuant</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user/docs.html">Building the Documentation</a></li>
 </ul>
-<p class="caption" role="heading"><span class="caption-text">Advanced Topics</span></p>
+<p class="caption" role="heading"><span class="caption-text">Advanced Features</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="../source/cc.html">Coupled-Cluster Class</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../source/eval.html">Interpreting and Evaluating Expressions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user/cc.html">Coupled-Cluster Class</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user/spin_tracing.html">Spin Tracing Expressions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user/evaluation.html">Interpreting and Evaluating Expressions</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Internal Documentation</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../internal/docs_advanced.html">Documentation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../internal/tnc.html">Tensor Network Canonicalizer</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../internal/wick.html">Wick Theorem</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
 <ul>
@@ -223,9 +234,7 @@
 <li class="toctree-l1"><a class="reference external" href="https://valeevgroup.github.io">Valeev Research Group</a></li>
 </ul>
 
-</div>
-</div>
-
+</div></div>
       </div>
       
     </div>
@@ -268,7 +277,7 @@
 <dt class="sig sig-object cpp">
 <span class="target" id="indexpage"></span><em><span class="pre">page</span></em> <span class="sig-name descname"><span class="pre">SeQuant:</span> <span class="pre">Symbolic</span> <span class="pre">Tensor</span> <span class="pre">Algebra</span> <span class="pre">in</span> <span class="pre">C++</span></span></dt>
 <dd><p><span class="target" id="index_1md__r_e_a_d_m_e"></span> [<img alt="https://img.shields.io/badge/License-GPLv3-blue.svg" src="https://img.shields.io/badge/License-GPLv3-blue.svg" />
-](h) <a class="reference external" href="https://github.com/ValeevGroup/SeQuant/actions/workflows/cmake.yml"></a> <a class="reference external" href="https://valeevgroup.github.io/SeQuant"></a></p>
+]() <a class="reference external" href="https://github.com/ValeevGroup/SeQuant/actions/workflows/cmake.yml"></a> <a class="reference external" href="https://valeevgroup.github.io/SeQuant"></a></p>
 <p><em>Synopsis</em></p>
 <p>SeQuant is a framework for performing symbolic algebra of tensors over scalar fields (regular tensors) and over operator fields (tensor operators in, e.g., quantum many-body physics). In addition to symbolic manipulation it can numerically evaluate (with an appropriate external tensor backend) general tensor algebra expressions.</p>
 <p>Computer algebra systems (CAS) like SeQuant are typically implemented within generic CAS like Mathematica or Maple, or using high-level languages like Python. In fact, version 1 of SeQuant was written in Mathematica. However, the performance of high-level languages not sufficient for practical use cases. SeQuant is written in C++ and is designed to be as efficient as possible without loss of generality.</p>
@@ -307,585 +316,6 @@
 <p>Development of SeQuant has been possible thanks to the support of the US National Science Foundation (award 2217081) and the US Department of Energy (awards DE-SC0022327 and DE-SC0022263) </p>
 </dd></dl>
 
-<section id="class-hierarchy">
-<h3>Class Hierarchy<a class="headerlink" href="#class-hierarchy" title="Link to this heading">¶</a></h3>
-<ul class="simple">
-<li><dl class="simple">
-<dt><a class="reference internal" href="namespace_sequant.html#namespace-sequant"><span class="std std-ref">Namespace sequant</span></a></dt><dd><ul>
-<li><dl class="simple">
-<dt><a class="reference internal" href="namespace_sequant__%4014.html#namespace-sequant-14"><span class="std std-ref">Namespace sequant::&#64;14</span></a></dt><dd><ul>
-<li><p><a class="reference internal" href="enum_namespacesequant_1_1_0d14_1a152dd3f68e8245f0ba6b8b7e301193dd.html#exhale-enum-namespacesequant-1-1-0d14-1a152dd3f68e8245f0ba6b8b7e301193dd"><span class="std std-ref">Enum NodePos</span></a></p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt><a class="reference internal" href="namespace_sequant__detail.html#namespace-sequant-detail"><span class="std std-ref">Namespace sequant::detail</span></a></dt><dd><ul>
-<li><p><a class="reference internal" href="structsequant_1_1detail_1_1expand__visitor.html#exhale-struct-structsequant-1-1detail-1-1expand-visitor"><span class="std std-ref">Struct expand_visitor</span></a></p></li>
-<li><p><a class="reference internal" href="structsequant_1_1detail_1_1has__boost__hash__value.html#exhale-struct-structsequant-1-1detail-1-1has-boost-hash-value"><span class="std std-ref">Template Struct has_boost_hash_value</span></a></p></li>
-<li><p><a class="reference internal" href="structsequant_1_1detail_1_1has__boost__hash__value_3_01_t_00_01std_1_1void__t_3_01decltype_07seq36a582b8a5d5b63abb0d025aa8b8a9c0.html#exhale-struct-structsequant-1-1detail-1-1has-boost-hash-value-3-01-t-00-01std-1-1void-t-3-01decltype-07seq36a582b8a5d5b63abb0d025aa8b8a9c0"><span class="std std-ref">Template Struct has_boost_hash_value&lt; T, std::void_t&lt; decltype(sequant_boost::hash_value(std::declval&lt; const T &amp; &gt;, ())) &gt; &gt;</span></a></p></li>
-<li><p><a class="reference internal" href="structsequant_1_1detail_1_1has__hash__value.html#exhale-struct-structsequant-1-1detail-1-1has-hash-value"><span class="std std-ref">Template Struct has_hash_value</span></a></p></li>
-<li><p><a class="reference internal" href="structsequant_1_1detail_1_1has__hash__value_3_01_t_00_01std_1_1void__t_3_01decltype_07hash__valu232d7e075f4e4c7b9ae22728891f494e.html#exhale-struct-structsequant-1-1detail-1-1has-hash-value-3-01-t-00-01std-1-1void-t-3-01decltype-07hash-valu232d7e075f4e4c7b9ae22728891f494e"><span class="std std-ref">Template Struct has_hash_value&lt; T, std::void_t&lt; decltype(hash_value(std::declval&lt; const T &amp; &gt;, ())) &gt; &gt;</span></a></p></li>
-<li><p><a class="reference internal" href="structsequant_1_1detail_1_1has__hash__value__member__fn__helper.html#exhale-struct-structsequant-1-1detail-1-1has-hash-value-member-fn-helper"><span class="std std-ref">Template Struct has_hash_value_member_fn_helper</span></a></p></li>
-<li><p><a class="reference internal" href="structsequant_1_1detail_1_1has__hash__value__member__fn__helper_3_01_t_00_01std_1_1void__t_3_01d9a99bdda517383f729b2774fe7100dab.html#exhale-struct-structsequant-1-1detail-1-1has-hash-value-member-fn-helper-3-01-t-00-01std-1-1void-t-3-01d9a99bdda517383f729b2774fe7100dab"><span class="std std-ref">Template Struct has_hash_value_member_fn_helper&lt; T, std::void_t&lt; decltype(std::declval&lt; const T &amp; &gt;, ().hash_value()) &gt; &gt;</span></a></p></li>
-<li><p><a class="reference internal" href="structsequant_1_1detail_1_1_implicit_context_resetter.html#exhale-struct-structsequant-1-1detail-1-1-implicit-context-resetter"><span class="std std-ref">Template Struct ImplicitContextResetter</span></a></p></li>
-<li><p><a class="reference internal" href="structsequant_1_1detail_1_1_no_discard.html#exhale-struct-structsequant-1-1detail-1-1-no-discard"><span class="std std-ref">Template Struct NoDiscard</span></a></p></li>
-<li><p><a class="reference internal" href="structsequant_1_1detail_1_1not__in.html#exhale-struct-structsequant-1-1detail-1-1not-in"><span class="std std-ref">Template Struct not_in</span></a></p></li>
-<li><p><a class="reference internal" href="structsequant_1_1detail_1_1_null_normal_operator_canonicalizer_deregister.html#exhale-struct-structsequant-1-1detail-1-1-null-normal-operator-canonicalizer-deregister"><span class="std std-ref">Template Struct NullNormalOperatorCanonicalizerDeregister</span></a></p></li>
-<li><p><a class="reference internal" href="structsequant_1_1detail_1_1_op_id_registrar.html#exhale-struct-structsequant-1-1detail-1-1-op-id-registrar"><span class="std std-ref">Struct OpIdRegistrar</span></a></p></li>
-<li><p><a class="reference internal" href="structsequant_1_1detail_1_1rapid__simplify__visitor.html#exhale-struct-structsequant-1-1detail-1-1rapid-simplify-visitor"><span class="std std-ref">Struct rapid_simplify_visitor</span></a></p></li>
-<li><p><a class="reference internal" href="structsequant_1_1detail_1_1_swap_counter.html#exhale-struct-structsequant-1-1detail-1-1-swap-counter"><span class="std std-ref">Template Struct SwapCounter</span></a></p></li>
-<li><p><a class="reference internal" href="structsequant_1_1detail_1_1tuple__less.html#exhale-struct-structsequant-1-1detail-1-1tuple-less"><span class="std std-ref">Template Struct tuple_less</span></a></p></li>
-<li><p><a class="reference internal" href="structsequant_1_1detail_1_1zero__result.html#exhale-struct-structsequant-1-1detail-1-1zero-result"><span class="std std-ref">Struct zero_result</span></a></p></li>
-<li><dl class="simple">
-<dt><a class="reference internal" href="classsequant_1_1detail_1_1any__comparable.html#exhale-class-classsequant-1-1detail-1-1any-comparable"><span class="std std-ref">Class any_comparable</span></a></dt><dd><ul>
-<li><p><a class="reference internal" href="structsequant_1_1detail_1_1any__comparable_1_1impl.html#exhale-struct-structsequant-1-1detail-1-1any-comparable-1-1impl"><span class="std std-ref">Template Struct any_comparable::impl</span></a></p></li>
-<li><p><a class="reference internal" href="structsequant_1_1detail_1_1any__comparable_1_1impl__base.html#exhale-struct-structsequant-1-1detail-1-1any-comparable-1-1impl-base"><span class="std std-ref">Struct any_comparable::impl_base</span></a></p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><p><a class="reference internal" href="classsequant_1_1detail_1_1bad__any__comparable__cast.html#exhale-class-classsequant-1-1detail-1-1bad-any-comparable-cast"><span class="std std-ref">Class bad_any_comparable_cast</span></a></p></li>
-<li><p><a class="reference internal" href="classsequant_1_1detail_1_1strong__type__base.html#exhale-class-classsequant-1-1detail-1-1strong-type-base"><span class="std std-ref">Template Class strong_type_base</span></a></p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt><a class="reference internal" href="namespace_sequant__hash.html#namespace-sequant-hash"><span class="std std-ref">Namespace sequant::hash</span></a></dt><dd><ul>
-<li><p><a class="reference internal" href="structsequant_1_1hash_1_1__.html#exhale-struct-structsequant-1-1hash-1-1"><span class="std std-ref">Template Struct _</span></a></p></li>
-<li><p><a class="reference internal" href="structsequant_1_1hash_1_1___3_01_t_00_01std_1_1enable__if__t_3_9_07_9_07has__hash__value__v_3_01261c55baf69cf93eb99e41176b7d1d0a.html#exhale-struct-structsequant-1-1hash-1-1-3-01-t-00-01std-1-1enable-if-t-3-9-07-9-07has-hash-value-v-3-01261c55baf69cf93eb99e41176b7d1d0a"><span class="std std-ref">Template Struct _&lt; T, std::enable_if_t&lt; !(!(has_hash_value_v&lt; T &gt;, )&amp;&amp;meta::is_range_v&lt; T &gt;, ) &gt; &gt;</span></a></p></li>
-<li><p><a class="reference internal" href="structsequant_1_1hash_1_1___3_01_t_00_01std_1_1enable__if__t_3_9_07has__hash__value__v_3_01_t_01ac0237a12262a65cbf508f969ea10192.html#exhale-struct-structsequant-1-1hash-1-1-3-01-t-00-01std-1-1enable-if-t-3-9-07has-hash-value-v-3-01-t-01ac0237a12262a65cbf508f969ea10192"><span class="std std-ref">Template Struct _&lt; T, std::enable_if_t&lt; !(has_hash_value_v&lt; T &gt;, )&amp;&amp;meta::is_range_v&lt; T &gt; &gt; &gt;</span></a></p></li>
-<li><p><a class="reference internal" href="enum_namespacesequant_1_1hash_1a2171c960ce3ad03716d6a2d2e0d2b540.html#exhale-enum-namespacesequant-1-1hash-1a2171c960ce3ad03716d6a2d2e0d2b540"><span class="std std-ref">Enum Impl</span></a></p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt><a class="reference internal" href="namespace_sequant__itf.html#namespace-sequant-itf"><span class="std std-ref">Namespace sequant::itf</span></a></dt><dd><ul>
-<li><dl class="simple">
-<dt><a class="reference internal" href="namespace_sequant__itf__detail.html#namespace-sequant-itf-detail"><span class="std std-ref">Namespace sequant::itf::detail</span></a></dt><dd><ul>
-<li><p><a class="reference internal" href="structsequant_1_1itf_1_1detail_1_1_code_section.html#exhale-struct-structsequant-1-1itf-1-1detail-1-1-code-section"><span class="std std-ref">Struct CodeSection</span></a></p></li>
-<li><p><a class="reference internal" href="structsequant_1_1itf_1_1detail_1_1_contraction.html#exhale-struct-structsequant-1-1itf-1-1detail-1-1-contraction"><span class="std std-ref">Struct Contraction</span></a></p></li>
-<li><p><a class="reference internal" href="structsequant_1_1itf_1_1detail_1_1_index_components.html#exhale-struct-structsequant-1-1itf-1-1detail-1-1-index-components"><span class="std std-ref">Struct IndexComponents</span></a></p></li>
-<li><p><a class="reference internal" href="structsequant_1_1itf_1_1detail_1_1_tensor_block_compare.html#exhale-struct-structsequant-1-1itf-1-1detail-1-1-tensor-block-compare"><span class="std std-ref">Struct TensorBlockCompare</span></a></p></li>
-<li><p><a class="reference internal" href="classsequant_1_1itf_1_1detail_1_1_i_t_f_generator.html#exhale-class-classsequant-1-1itf-1-1detail-1-1-i-t-f-generator"><span class="std std-ref">Class ITFGenerator</span></a></p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><p><a class="reference internal" href="structsequant_1_1itf_1_1_code_block.html#exhale-struct-structsequant-1-1itf-1-1-code-block"><span class="std std-ref">Struct CodeBlock</span></a></p></li>
-<li><p><a class="reference internal" href="structsequant_1_1itf_1_1_index_type_comparer.html#exhale-struct-structsequant-1-1itf-1-1-index-type-comparer"><span class="std std-ref">Struct IndexTypeComparer</span></a></p></li>
-<li><p><a class="reference internal" href="structsequant_1_1itf_1_1_result.html#exhale-struct-structsequant-1-1itf-1-1-result"><span class="std std-ref">Struct Result</span></a></p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt><a class="reference internal" href="namespace_sequant__mbpt.html#namespace-sequant-mbpt"><span class="std std-ref">Namespace sequant::mbpt</span></a></dt><dd><ul>
-<li><p><a class="reference internal" href="structsequant_1_1mbpt_1_1default__qns__tag.html#exhale-struct-structsequant-1-1mbpt-1-1default-qns-tag"><span class="std std-ref">Struct default_qns_tag</span></a></p></li>
-<li><p><a class="reference internal" href="classsequant_1_1mbpt_1_1_c_c.html#exhale-class-classsequant-1-1mbpt-1-1-c-c"><span class="std std-ref">Class CC</span></a></p></li>
-<li><dl class="simple">
-<dt><a class="reference internal" href="classsequant_1_1mbpt_1_1_context.html#exhale-class-classsequant-1-1mbpt-1-1-context"><span class="std std-ref">Class Context</span></a></dt><dd><ul>
-<li><p><a class="reference internal" href="structsequant_1_1mbpt_1_1_context_1_1_defaults.html#exhale-struct-structsequant-1-1mbpt-1-1-context-1-1-defaults"><span class="std std-ref">Struct Context::Defaults</span></a></p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><p><a class="reference internal" href="classsequant_1_1mbpt_1_1_operator.html#exhale-class-classsequant-1-1mbpt-1-1-operator"><span class="std std-ref">Template Class Operator</span></a></p></li>
-<li><p><a class="reference internal" href="classsequant_1_1mbpt_1_1_operator_3_01void_00_01_s_01_4.html#exhale-class-classsequant-1-1mbpt-1-1-operator-3-01void-00-01-s-01-4"><span class="std std-ref">Template Class Operator&lt; void, S &gt;</span></a></p></li>
-<li><p><a class="reference internal" href="classsequant_1_1mbpt_1_1_op_maker.html#exhale-class-classsequant-1-1mbpt-1-1-op-maker"><span class="std std-ref">Template Class OpMaker</span></a></p></li>
-<li><p><a class="reference internal" href="classsequant_1_1mbpt_1_1_quantum_number_change.html#exhale-class-classsequant-1-1mbpt-1-1-quantum-number-change"><span class="std std-ref">Template Class QuantumNumberChange</span></a></p></li>
-<li><p><a class="reference internal" href="enum_namespacesequant_1_1mbpt_1a085298ac5894ca08279f64ead1348a31.html#exhale-enum-namespacesequant-1-1mbpt-1a085298ac5894ca08279f64ead1348a31"><span class="std std-ref">Enum Convention</span></a></p></li>
-<li><p><a class="reference internal" href="enum_namespacesequant_1_1mbpt_1a7906af1f79606057e6c1710dc1b554e3.html#exhale-enum-namespacesequant-1-1mbpt-1a7906af1f79606057e6c1710dc1b554e3"><span class="std std-ref">Enum CSV</span></a></p></li>
-<li><p><a class="reference internal" href="enum_namespacesequant_1_1mbpt_1a4c0e601427ac8aa692f8ff00aa093802.html#exhale-enum-namespacesequant-1-1mbpt-1a4c0e601427ac8aa692f8ff00aa093802"><span class="std std-ref">Enum OpClass</span></a></p></li>
-<li><p><a class="reference internal" href="enum_namespacesequant_1_1mbpt_1a2cc7a68fd11662b8066472d4d8fa998a.html#exhale-enum-namespacesequant-1-1mbpt-1a2cc7a68fd11662b8066472d4d8fa998a"><span class="std std-ref">Enum OpType</span></a></p></li>
-<li><p><a class="reference internal" href="enum_namespacesequant_1_1mbpt_1aa81103a146de75a6c3517274e9f931f7.html#exhale-enum-namespacesequant-1-1mbpt-1aa81103a146de75a6c3517274e9f931f7"><span class="std std-ref">Enum Spin</span></a></p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt><a class="reference internal" href="namespace_sequant__meta.html#namespace-sequant-meta"><span class="std std-ref">Namespace sequant::meta</span></a></dt><dd><ul>
-<li><p><a class="reference internal" href="structsequant_1_1meta_1_1char__type.html#exhale-struct-structsequant-1-1meta-1-1char-type"><span class="std std-ref">Template Struct char_type</span></a></p></li>
-<li><p><a class="reference internal" href="structsequant_1_1meta_1_1char__type_3_01_t_00_01std_1_1enable__if__t_3_01is__basic__string__convc91e62bf4b0e46ade68a32f8c3774434.html#exhale-struct-structsequant-1-1meta-1-1char-type-3-01-t-00-01std-1-1enable-if-t-3-01is-basic-string-convc91e62bf4b0e46ade68a32f8c3774434"><span class="std std-ref">Template Struct char_type&lt; T, std::enable_if_t&lt; is_basic_string_convertible_v&lt; T &gt; &gt; &gt;</span></a></p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt><a class="reference internal" href="namespace_sequant__opt.html#namespace-sequant-opt"><span class="std std-ref">Namespace sequant::opt</span></a></dt><dd><ul>
-<li><p><a class="reference internal" href="classsequant_1_1opt_1_1_fusion.html#exhale-class-classsequant-1-1opt-1-1-fusion"><span class="std std-ref">Class Fusion</span></a></p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt><a class="reference internal" href="namespace_sequant__parse.html#namespace-sequant-parse"><span class="std std-ref">Namespace sequant::parse</span></a></dt><dd><ul>
-<li><dl class="simple">
-<dt><a class="reference internal" href="namespace_sequant__parse__actions.html#namespace-sequant-parse-actions"><span class="std std-ref">Namespace sequant::parse::actions</span></a></dt><dd><ul>
-<li><p><a class="reference internal" href="structsequant_1_1parse_1_1actions_1_1process__addend.html#exhale-struct-structsequant-1-1parse-1-1actions-1-1process-addend"><span class="std std-ref">Struct process_addend</span></a></p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt><a class="reference internal" href="namespace_sequant__parse__ast.html#namespace-sequant-parse-ast"><span class="std std-ref">Namespace sequant::parse::ast</span></a></dt><dd><ul>
-<li><p><a class="reference internal" href="structsequant_1_1parse_1_1ast_1_1_index.html#exhale-struct-structsequant-1-1parse-1-1ast-1-1-index"><span class="std std-ref">Struct Index</span></a></p></li>
-<li><p><a class="reference internal" href="structsequant_1_1parse_1_1ast_1_1_index_groups.html#exhale-struct-structsequant-1-1parse-1-1ast-1-1-index-groups"><span class="std std-ref">Struct IndexGroups</span></a></p></li>
-<li><p><a class="reference internal" href="structsequant_1_1parse_1_1ast_1_1_index_label.html#exhale-struct-structsequant-1-1parse-1-1ast-1-1-index-label"><span class="std std-ref">Struct IndexLabel</span></a></p></li>
-<li><p><a class="reference internal" href="structsequant_1_1parse_1_1ast_1_1_number.html#exhale-struct-structsequant-1-1parse-1-1ast-1-1-number"><span class="std std-ref">Struct Number</span></a></p></li>
-<li><p><a class="reference internal" href="structsequant_1_1parse_1_1ast_1_1_product.html#exhale-struct-structsequant-1-1parse-1-1ast-1-1-product"><span class="std std-ref">Struct Product</span></a></p></li>
-<li><p><a class="reference internal" href="structsequant_1_1parse_1_1ast_1_1_sum.html#exhale-struct-structsequant-1-1parse-1-1ast-1-1-sum"><span class="std std-ref">Struct Sum</span></a></p></li>
-<li><p><a class="reference internal" href="structsequant_1_1parse_1_1ast_1_1_symmetry_spec.html#exhale-struct-structsequant-1-1parse-1-1ast-1-1-symmetry-spec"><span class="std std-ref">Struct SymmetrySpec</span></a></p></li>
-<li><p><a class="reference internal" href="structsequant_1_1parse_1_1ast_1_1_tensor.html#exhale-struct-structsequant-1-1parse-1-1ast-1-1-tensor"><span class="std std-ref">Struct Tensor</span></a></p></li>
-<li><p><a class="reference internal" href="structsequant_1_1parse_1_1ast_1_1_variable.html#exhale-struct-structsequant-1-1parse-1-1ast-1-1-variable"><span class="std std-ref">Struct Variable</span></a></p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt><a class="reference internal" href="namespace_sequant__parse__helpers.html#namespace-sequant-parse-helpers"><span class="std std-ref">Namespace sequant::parse::helpers</span></a></dt><dd><ul>
-<li><p><a class="reference internal" href="structsequant_1_1parse_1_1helpers_1_1annotate__position.html#exhale-struct-structsequant-1-1parse-1-1helpers-1-1annotate-position"><span class="std std-ref">Struct annotate_position</span></a></p></li>
-<li><p><a class="reference internal" href="structsequant_1_1parse_1_1helpers_1_1error__handler.html#exhale-struct-structsequant-1-1parse-1-1helpers-1-1error-handler"><span class="std std-ref">Struct error_handler</span></a></p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><p><a class="reference internal" href="structsequant_1_1parse_1_1_expr_rule.html#exhale-struct-structsequant-1-1parse-1-1-expr-rule"><span class="std std-ref">Struct ExprRule</span></a></p></li>
-<li><p><a class="reference internal" href="structsequant_1_1parse_1_1_index_group_rule.html#exhale-struct-structsequant-1-1parse-1-1-index-group-rule"><span class="std std-ref">Struct IndexGroupRule</span></a></p></li>
-<li><p><a class="reference internal" href="structsequant_1_1parse_1_1_index_label_rule.html#exhale-struct-structsequant-1-1parse-1-1-index-label-rule"><span class="std std-ref">Struct IndexLabelRule</span></a></p></li>
-<li><p><a class="reference internal" href="structsequant_1_1parse_1_1_index_rule.html#exhale-struct-structsequant-1-1parse-1-1-index-rule"><span class="std std-ref">Struct IndexRule</span></a></p></li>
-<li><p><a class="reference internal" href="structsequant_1_1parse_1_1_number_rule.html#exhale-struct-structsequant-1-1parse-1-1-number-rule"><span class="std std-ref">Struct NumberRule</span></a></p></li>
-<li><p><a class="reference internal" href="structsequant_1_1parse_1_1_product_rule.html#exhale-struct-structsequant-1-1parse-1-1-product-rule"><span class="std std-ref">Struct ProductRule</span></a></p></li>
-<li><p><a class="reference internal" href="structsequant_1_1parse_1_1_sum_rule.html#exhale-struct-structsequant-1-1parse-1-1-sum-rule"><span class="std std-ref">Struct SumRule</span></a></p></li>
-<li><p><a class="reference internal" href="structsequant_1_1parse_1_1_symmetry_spec_rule.html#exhale-struct-structsequant-1-1parse-1-1-symmetry-spec-rule"><span class="std std-ref">Struct SymmetrySpecRule</span></a></p></li>
-<li><p><a class="reference internal" href="structsequant_1_1parse_1_1_tensor_rule.html#exhale-struct-structsequant-1-1parse-1-1-tensor-rule"><span class="std std-ref">Struct TensorRule</span></a></p></li>
-<li><p><a class="reference internal" href="structsequant_1_1parse_1_1_variable_rule.html#exhale-struct-structsequant-1-1parse-1-1-variable-rule"><span class="std std-ref">Struct VariableRule</span></a></p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt><a class="reference internal" href="namespace_sequant__space_tags.html#namespace-sequant-space-tags"><span class="std std-ref">Namespace sequant::space_tags</span></a></dt><dd><ul>
-<li><p><a class="reference internal" href="structsequant_1_1space__tags_1_1_is_complete.html#exhale-struct-structsequant-1-1space-tags-1-1-is-complete"><span class="std std-ref">Struct IsComplete</span></a></p></li>
-<li><p><a class="reference internal" href="structsequant_1_1space__tags_1_1_is_hole.html#exhale-struct-structsequant-1-1space-tags-1-1-is-hole"><span class="std std-ref">Struct IsHole</span></a></p></li>
-<li><p><a class="reference internal" href="structsequant_1_1space__tags_1_1_is_particle.html#exhale-struct-structsequant-1-1space-tags-1-1-is-particle"><span class="std std-ref">Struct IsParticle</span></a></p></li>
-<li><p><a class="reference internal" href="structsequant_1_1space__tags_1_1_is_reference_occupied.html#exhale-struct-structsequant-1-1space-tags-1-1-is-reference-occupied"><span class="std std-ref">Struct IsReferenceOccupied</span></a></p></li>
-<li><p><a class="reference internal" href="structsequant_1_1space__tags_1_1_is_vacuum_occupied.html#exhale-struct-structsequant-1-1space-tags-1-1-is-vacuum-occupied"><span class="std std-ref">Struct IsVacuumOccupied</span></a></p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><p><a class="reference internal" href="structsequant_1_1_aux_group.html#exhale-struct-structsequant-1-1-aux-group"><span class="std std-ref">Struct AuxGroup</span></a></p></li>
-<li><p><a class="reference internal" href="structsequant_1_1_bra_group.html#exhale-struct-structsequant-1-1-bra-group"><span class="std std-ref">Struct BraGroup</span></a></p></li>
-<li><p><a class="reference internal" href="structsequant_1_1_canonical_tensor_compare.html#exhale-struct-structsequant-1-1-canonical-tensor-compare"><span class="std std-ref">Template Struct CanonicalTensorCompare</span></a></p></li>
-<li><p><a class="reference internal" href="structsequant_1_1_complex.html#exhale-struct-structsequant-1-1-complex"><span class="std std-ref">Template Struct Complex</span></a></p></li>
-<li><p><a class="reference internal" href="structsequant_1_1default__idxptr__slottype__lesscompare.html#exhale-struct-structsequant-1-1default-idxptr-slottype-lesscompare"><span class="std std-ref">Struct default_idxptr_slottype_lesscompare</span></a></p></li>
-<li><p><a class="reference internal" href="structsequant_1_1_error_handler.html#exhale-struct-structsequant-1-1-error-handler"><span class="std std-ref">Template Struct ErrorHandler</span></a></p></li>
-<li><p><a class="reference internal" href="structsequant_1_1_expr_with_hash.html#exhale-struct-structsequant-1-1-expr-with-hash"><span class="std std-ref">Struct ExprWithHash</span></a></p></li>
-<li><p><a class="reference internal" href="structsequant_1_1_flops.html#exhale-struct-structsequant-1-1-flops"><span class="std std-ref">Struct Flops</span></a></p></li>
-<li><p><a class="reference internal" href="structsequant_1_1_flops_with_symm.html#exhale-struct-structsequant-1-1-flops-with-symm"><span class="std std-ref">Struct FlopsWithSymm</span></a></p></li>
-<li><p><a class="reference internal" href="structsequant_1_1_full_label_index_locator.html#exhale-struct-structsequant-1-1-full-label-index-locator"><span class="std std-ref">Struct FullLabelIndexLocator</span></a></p></li>
-<li><p><a class="reference internal" href="structsequant_1_1_index_groups.html#exhale-struct-structsequant-1-1-index-groups"><span class="std std-ref">Template Struct IndexGroups</span></a></p></li>
-<li><p><a class="reference internal" href="structsequant_1_1_in_order.html#exhale-struct-structsequant-1-1-in-order"><span class="std std-ref">Struct InOrder</span></a></p></li>
-<li><p><a class="reference internal" href="structsequant_1_1is__tensor.html#exhale-struct-structsequant-1-1is-tensor"><span class="std std-ref">Template Struct is_tensor</span></a></p></li>
-<li><p><a class="reference internal" href="structsequant_1_1space__tags_1_1_is_complete.html#exhale-struct-structsequant-1-1space-tags-1-1-is-complete"><span class="std std-ref">Struct IsComplete</span></a></p></li>
-<li><p><a class="reference internal" href="structsequant_1_1space__tags_1_1_is_hole.html#exhale-struct-structsequant-1-1space-tags-1-1-is-hole"><span class="std std-ref">Struct IsHole</span></a></p></li>
-<li><p><a class="reference internal" href="structsequant_1_1space__tags_1_1_is_particle.html#exhale-struct-structsequant-1-1space-tags-1-1-is-particle"><span class="std std-ref">Struct IsParticle</span></a></p></li>
-<li><p><a class="reference internal" href="structsequant_1_1space__tags_1_1_is_reference_occupied.html#exhale-struct-structsequant-1-1space-tags-1-1-is-reference-occupied"><span class="std std-ref">Struct IsReferenceOccupied</span></a></p></li>
-<li><p><a class="reference internal" href="structsequant_1_1space__tags_1_1_is_vacuum_occupied.html#exhale-struct-structsequant-1-1space-tags-1-1-is-vacuum-occupied"><span class="std std-ref">Struct IsVacuumOccupied</span></a></p></li>
-<li><p><a class="reference internal" href="structsequant_1_1_ket_group.html#exhale-struct-structsequant-1-1-ket-group"><span class="std std-ref">Struct KetGroup</span></a></p></li>
-<li><p><a class="reference internal" href="structsequant_1_1_logger.html#exhale-struct-structsequant-1-1-logger"><span class="std std-ref">Struct Logger</span></a></p></li>
-<li><p><a class="reference internal" href="structsequant_1_1_memory.html#exhale-struct-structsequant-1-1-memory"><span class="std std-ref">Struct Memory</span></a></p></li>
-<li><p><a class="reference internal" href="structsequant_1_1_parse_error.html#exhale-struct-structsequant-1-1-parse-error"><span class="std std-ref">Struct ParseError</span></a></p></li>
-<li><p><a class="reference internal" href="structsequant_1_1_particle_group.html#exhale-struct-structsequant-1-1-particle-group"><span class="std std-ref">Struct ParticleGroup</span></a></p></li>
-<li><p><a class="reference internal" href="structsequant_1_1_post_order.html#exhale-struct-structsequant-1-1-post-order"><span class="std std-ref">Struct PostOrder</span></a></p></li>
-<li><p><a class="reference internal" href="structsequant_1_1_pre_order.html#exhale-struct-structsequant-1-1-pre-order"><span class="std std-ref">Struct PreOrder</span></a></p></li>
-<li><p><a class="reference internal" href="structsequant_1_1space__tags_1_1_is_complete.html#exhale-struct-structsequant-1-1space-tags-1-1-is-complete"><span class="std std-ref">Struct IsComplete</span></a></p></li>
-<li><p><a class="reference internal" href="structsequant_1_1space__tags_1_1_is_hole.html#exhale-struct-structsequant-1-1space-tags-1-1-is-hole"><span class="std std-ref">Struct IsHole</span></a></p></li>
-<li><p><a class="reference internal" href="structsequant_1_1space__tags_1_1_is_particle.html#exhale-struct-structsequant-1-1space-tags-1-1-is-particle"><span class="std std-ref">Struct IsParticle</span></a></p></li>
-<li><p><a class="reference internal" href="structsequant_1_1space__tags_1_1_is_reference_occupied.html#exhale-struct-structsequant-1-1space-tags-1-1-is-reference-occupied"><span class="std std-ref">Struct IsReferenceOccupied</span></a></p></li>
-<li><p><a class="reference internal" href="structsequant_1_1space__tags_1_1_is_vacuum_occupied.html#exhale-struct-structsequant-1-1space-tags-1-1-is-vacuum-occupied"><span class="std std-ref">Struct IsVacuumOccupied</span></a></p></li>
-<li><p><a class="reference internal" href="structsequant_1_1_tensor_block_compare.html#exhale-struct-structsequant-1-1-tensor-block-compare"><span class="std std-ref">Struct TensorBlockCompare</span></a></p></li>
-<li><p><a class="reference internal" href="structsequant_1_1_tensor_block_index_comparer.html#exhale-struct-structsequant-1-1-tensor-block-index-comparer"><span class="std std-ref">Struct TensorBlockIndexComparer</span></a></p></li>
-<li><p><a class="reference internal" href="structsequant_1_1_tensor_index_comparer.html#exhale-struct-structsequant-1-1-tensor-index-comparer"><span class="std std-ref">Struct TensorIndexComparer</span></a></p></li>
-<li><p><a class="reference internal" href="structsequant_1_1_tensor_of_tensor_indices.html#exhale-struct-structsequant-1-1-tensor-of-tensor-indices"><span class="std std-ref">Template Struct TensorOfTensorIndices</span></a></p></li>
-<li><p><a class="reference internal" href="classsequant_1_1_abstract_tensor.html#exhale-class-classsequant-1-1-abstract-tensor"><span class="std std-ref">Class AbstractTensor</span></a></p></li>
-<li><p><a class="reference internal" href="classsequant_1_1antisymm__element.html#exhale-class-classsequant-1-1antisymm-element"><span class="std std-ref">Class antisymm_element</span></a></p></li>
-<li><p><a class="reference internal" href="classsequant_1_1antisymmetrize.html#exhale-class-classsequant-1-1antisymmetrize"><span class="std std-ref">Class antisymmetrize</span></a></p></li>
-<li><dl class="simple">
-<dt><a class="reference internal" href="classsequant_1_1_asy_cost.html#exhale-class-classsequant-1-1-asy-cost"><span class="std std-ref">Class AsyCost</span></a></dt><dd><ul>
-<li><p><a class="reference internal" href="classsequant_1_1_asy_cost_1_1_asy_cost_entry.html#exhale-class-classsequant-1-1-asy-cost-1-1-asy-cost-entry"><span class="std std-ref">Class AsyCost::AsyCostEntry</span></a></p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt><a class="reference internal" href="classsequant_1_1_cache_manager.html#exhale-class-classsequant-1-1-cache-manager"><span class="std std-ref">Class CacheManager</span></a></dt><dd><ul>
-<li><p><a class="reference internal" href="structsequant_1_1_cache_manager_1_1access__by.html#exhale-struct-structsequant-1-1-cache-manager-1-1access-by"><span class="std std-ref">Template Struct CacheManager::access_by</span></a></p></li>
-<li><p><a class="reference internal" href="classsequant_1_1_cache_manager_1_1entry.html#exhale-class-classsequant-1-1-cache-manager-1-1entry"><span class="std std-ref">Class CacheManager::entry</span></a></p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><p><a class="reference internal" href="classsequant_1_1_constant.html#exhale-class-classsequant-1-1-constant"><span class="std std-ref">Class Constant</span></a></p></li>
-<li><dl class="simple">
-<dt><a class="reference internal" href="classsequant_1_1_context.html#exhale-class-classsequant-1-1-context"><span class="std std-ref">Class Context</span></a></dt><dd><ul>
-<li><p><a class="reference internal" href="structsequant_1_1_context_1_1_defaults.html#exhale-struct-structsequant-1-1-context-1-1-defaults"><span class="std std-ref">Struct Context::Defaults</span></a></p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><p><a class="reference internal" href="classsequant_1_1_c_product.html#exhale-class-classsequant-1-1-c-product"><span class="std std-ref">Class CProduct</span></a></p></li>
-<li><p><a class="reference internal" href="classsequant_1_1_default_tensor_canonicalizer.html#exhale-class-classsequant-1-1-default-tensor-canonicalizer"><span class="std std-ref">Class DefaultTensorCanonicalizer</span></a></p></li>
-<li><p><a class="reference internal" href="classsequant_1_1_eval_expr.html#exhale-class-classsequant-1-1-eval-expr"><span class="std std-ref">Class EvalExpr</span></a></p></li>
-<li><p><a class="reference internal" href="classsequant_1_1_eval_expr_b_t_a_s.html#exhale-class-classsequant-1-1-eval-expr-b-t-a-s"><span class="std std-ref">Class EvalExprBTAS</span></a></p></li>
-<li><p><a class="reference internal" href="classsequant_1_1_eval_expr_t_a.html#exhale-class-classsequant-1-1-eval-expr-t-a"><span class="std std-ref">Class EvalExprTA</span></a></p></li>
-<li><p><a class="reference internal" href="classsequant_1_1_eval_result.html#exhale-class-classsequant-1-1-eval-result"><span class="std std-ref">Class EvalResult</span></a></p></li>
-<li><p><a class="reference internal" href="classsequant_1_1_eval_scalar.html#exhale-class-classsequant-1-1-eval-scalar"><span class="std std-ref">Template Class EvalScalar</span></a></p></li>
-<li><p><a class="reference internal" href="classsequant_1_1_eval_tensor_b_t_a_s.html#exhale-class-classsequant-1-1-eval-tensor-b-t-a-s"><span class="std std-ref">Template Class EvalTensorBTAS</span></a></p></li>
-<li><p><a class="reference internal" href="classsequant_1_1_eval_tensor_of_tensor_t_a.html#exhale-class-classsequant-1-1-eval-tensor-of-tensor-t-a"><span class="std std-ref">Template Class EvalTensorOfTensorTA</span></a></p></li>
-<li><p><a class="reference internal" href="classsequant_1_1_eval_tensor_t_a.html#exhale-class-classsequant-1-1-eval-tensor-t-a"><span class="std std-ref">Template Class EvalTensorTA</span></a></p></li>
-<li><dl class="simple">
-<dt><a class="reference internal" href="classsequant_1_1_expr.html#exhale-class-classsequant-1-1-expr"><span class="std std-ref">Class Expr</span></a></dt><dd><ul>
-<li><p><a class="reference internal" href="structsequant_1_1_expr_1_1cursor.html#exhale-struct-structsequant-1-1-expr-1-1cursor"><span class="std std-ref">Struct Expr::cursor</span></a></p></li>
-<li><p><a class="reference internal" href="structsequant_1_1_expr_1_1is__shared__ptr__of__expr.html#exhale-struct-structsequant-1-1-expr-1-1is-shared-ptr-of-expr"><span class="std std-ref">Template Struct Expr::is_shared_ptr_of_expr</span></a></p></li>
-<li><p><a class="reference internal" href="structsequant_1_1_expr_1_1is__shared__ptr__of__expr_3_01_expr_ptr_00_01void_01_4.html#exhale-struct-structsequant-1-1-expr-1-1is-shared-ptr-of-expr-3-01-expr-ptr-00-01void-01-4"><span class="std std-ref">Template Struct Expr::is_shared_ptr_of_expr&lt; ExprPtr, void &gt;</span></a></p></li>
-<li><p><a class="reference internal" href="structsequant_1_1_expr_1_1is__shared__ptr__of__expr__or__derived.html#exhale-struct-structsequant-1-1-expr-1-1is-shared-ptr-of-expr-or-derived"><span class="std std-ref">Template Struct Expr::is_shared_ptr_of_expr_or_derived</span></a></p></li>
-<li><p><a class="reference internal" href="structsequant_1_1_expr_1_1is__shared__ptr__of__expr__or__derived_3_01_expr_ptr_00_01void_01_4.html#exhale-struct-structsequant-1-1-expr-1-1is-shared-ptr-of-expr-or-derived-3-01-expr-ptr-00-01void-01-4"><span class="std std-ref">Template Struct Expr::is_shared_ptr_of_expr_or_derived&lt; ExprPtr, void &gt;</span></a></p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt><a class="reference internal" href="classsequant_1_1expr__range.html#exhale-class-classsequant-1-1expr-range"><span class="std std-ref">Class expr_range</span></a></dt><dd><ul>
-<li><p><a class="reference internal" href="structsequant_1_1expr__range_1_1cursor.html#exhale-struct-structsequant-1-1expr-range-1-1cursor"><span class="std std-ref">Struct expr_range::cursor</span></a></p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><p><a class="reference internal" href="classsequant_1_1_expr_ptr.html#exhale-class-classsequant-1-1-expr-ptr"><span class="std std-ref">Class ExprPtr</span></a></p></li>
-<li><dl class="simple">
-<dt><a class="reference internal" href="classsequant_1_1flattened__rangenest.html#exhale-class-classsequant-1-1flattened-rangenest"><span class="std std-ref">Template Class flattened_rangenest</span></a></dt><dd><ul>
-<li><p><a class="reference internal" href="structsequant_1_1flattened__rangenest_1_1cursor.html#exhale-struct-structsequant-1-1flattened-rangenest-1-1cursor"><span class="std std-ref">Struct flattened_rangenest::cursor</span></a></p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><p><a class="reference internal" href="classsequant_1_1_full_binary_node.html#exhale-class-classsequant-1-1-full-binary-node"><span class="std std-ref">Template Class FullBinaryNode</span></a></p></li>
-<li><p><a class="reference internal" href="classsequant_1_1_hugenholtz_vertex.html#exhale-class-classsequant-1-1-hugenholtz-vertex"><span class="std std-ref">Template Class HugenholtzVertex</span></a></p></li>
-<li><dl class="simple">
-<dt><a class="reference internal" href="classsequant_1_1_index.html#exhale-class-classsequant-1-1-index"><span class="std std-ref">Class Index</span></a></dt><dd><ul>
-<li><p><a class="reference internal" href="structsequant_1_1_index_1_1_full_label_compare.html#exhale-struct-structsequant-1-1-index-1-1-full-label-compare"><span class="std std-ref">Struct Index::FullLabelCompare</span></a></p></li>
-<li><p><a class="reference internal" href="structsequant_1_1_index_1_1_label_compare.html#exhale-struct-structsequant-1-1-index-1-1-label-compare"><span class="std std-ref">Struct Index::LabelCompare</span></a></p></li>
-<li><p><a class="reference internal" href="structsequant_1_1_index_1_1_type_compare.html#exhale-struct-structsequant-1-1-index-1-1-type-compare"><span class="std std-ref">Struct Index::TypeCompare</span></a></p></li>
-<li><p><a class="reference internal" href="structsequant_1_1_index_1_1_type_equality.html#exhale-struct-structsequant-1-1-index-1-1-type-equality"><span class="std std-ref">Struct Index::TypeEquality</span></a></p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><p><a class="reference internal" href="classsequant_1_1_index_factory.html#exhale-class-classsequant-1-1-index-factory"><span class="std std-ref">Class IndexFactory</span></a></p></li>
-<li><dl class="simple">
-<dt><a class="reference internal" href="classsequant_1_1_index_space.html#exhale-class-classsequant-1-1-index-space"><span class="std std-ref">Class IndexSpace</span></a></dt><dd><ul>
-<li><p><a class="reference internal" href="structsequant_1_1_index_space_1_1_attr.html#exhale-struct-structsequant-1-1-index-space-1-1-attr"><span class="std std-ref">Struct IndexSpace::Attr</span></a></p></li>
-<li><p><a class="reference internal" href="structsequant_1_1_index_space_1_1bad__key.html#exhale-struct-structsequant-1-1-index-space-1-1bad-key"><span class="std std-ref">Struct IndexSpace::bad_key</span></a></p></li>
-<li><p><a class="reference internal" href="structsequant_1_1_index_space_1_1_key_compare.html#exhale-struct-structsequant-1-1-index-space-1-1-key-compare"><span class="std std-ref">Struct IndexSpace::KeyCompare</span></a></p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><p><a class="reference internal" href="classsequant_1_1_index_space_registry.html#exhale-class-classsequant-1-1-index-space-registry"><span class="std std-ref">Class IndexSpaceRegistry</span></a></p></li>
-<li><p><a class="reference internal" href="classsequant_1_1_labeled.html#exhale-class-classsequant-1-1-labeled"><span class="std std-ref">Class Labeled</span></a></p></li>
-<li><p><a class="reference internal" href="classsequant_1_1_n_c_product.html#exhale-class-classsequant-1-1-n-c-product"><span class="std std-ref">Class NCProduct</span></a></p></li>
-<li><p><a class="reference internal" href="classsequant_1_1_normal_operator.html#exhale-class-classsequant-1-1-normal-operator"><span class="std std-ref">Template Class NormalOperator</span></a></p></li>
-<li><p><a class="reference internal" href="classsequant_1_1_normal_operator_sequence.html#exhale-class-classsequant-1-1-normal-operator-sequence"><span class="std std-ref">Template Class NormalOperatorSequence</span></a></p></li>
-<li><p><a class="reference internal" href="classsequant_1_1_null_tensor_canonicalizer.html#exhale-class-classsequant-1-1-null-tensor-canonicalizer"><span class="std std-ref">Class NullTensorCanonicalizer</span></a></p></li>
-<li><dl class="simple">
-<dt><a class="reference internal" href="classsequant_1_1_op.html#exhale-class-classsequant-1-1-op"><span class="std std-ref">Template Class Op</span></a></dt><dd><ul>
-<li><p><a class="reference internal" href="structsequant_1_1_op_1_1_type_compare.html#exhale-struct-structsequant-1-1-op-1-1-type-compare"><span class="std std-ref">Struct Op::TypeCompare</span></a></p></li>
-<li><p><a class="reference internal" href="structsequant_1_1_op_1_1_type_equality.html#exhale-struct-structsequant-1-1-op-1-1-type-equality"><span class="std std-ref">Struct Op::TypeEquality</span></a></p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><p><a class="reference internal" href="classsequant_1_1_operator.html#exhale-class-classsequant-1-1-operator"><span class="std std-ref">Template Class Operator</span></a></p></li>
-<li><p><a class="reference internal" href="classsequant_1_1_product.html#exhale-class-classsequant-1-1-product"><span class="std std-ref">Class Product</span></a></p></li>
-<li><p><a class="reference internal" href="classsequant_1_1_quantum_numbers_attr.html#exhale-class-classsequant-1-1-quantum-numbers-attr"><span class="std std-ref">Class QuantumNumbersAttr</span></a></p></li>
-<li><dl class="simple">
-<dt><a class="reference internal" href="classsequant_1_1_singleton.html#exhale-class-classsequant-1-1-singleton"><span class="std std-ref">Template Class Singleton</span></a></dt><dd><ul>
-<li><p><a class="reference internal" href="structsequant_1_1_singleton_1_1is__default__constructible__helper.html#exhale-struct-structsequant-1-1-singleton-1-1is-default-constructible-helper"><span class="std std-ref">Template Struct Singleton::is_default_constructible_helper</span></a></p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><p><a class="reference internal" href="classsequant_1_1_sum.html#exhale-class-classsequant-1-1-sum"><span class="std std-ref">Class Sum</span></a></p></li>
-<li><p><a class="reference internal" href="classsequant_1_1_swap_countable.html#exhale-class-classsequant-1-1-swap-countable"><span class="std std-ref">Template Class SwapCountable</span></a></p></li>
-<li><p><a class="reference internal" href="classsequant_1_1_swap_countable_ref.html#exhale-class-classsequant-1-1-swap-countable-ref"><span class="std std-ref">Template Class SwapCountableRef</span></a></p></li>
-<li><p><a class="reference internal" href="classsequant_1_1_taggable.html#exhale-class-classsequant-1-1-taggable"><span class="std std-ref">Class Taggable</span></a></p></li>
-<li><dl class="simple">
-<dt><a class="reference internal" href="classsequant_1_1_tensor.html#exhale-class-classsequant-1-1-tensor"><span class="std std-ref">Class Tensor</span></a></dt><dd><ul>
-<li><p><a class="reference internal" href="structsequant_1_1_tensor_1_1reserved__tag.html#exhale-struct-structsequant-1-1-tensor-1-1reserved-tag"><span class="std std-ref">Struct Tensor::reserved_tag</span></a></p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><p><a class="reference internal" href="classsequant_1_1_tensor_block_canonicalizer.html#exhale-class-classsequant-1-1-tensor-block-canonicalizer"><span class="std std-ref">Class TensorBlockCanonicalizer</span></a></p></li>
-<li><p><a class="reference internal" href="classsequant_1_1_tensor_canonicalizer.html#exhale-class-classsequant-1-1-tensor-canonicalizer"><span class="std std-ref">Class TensorCanonicalizer</span></a></p></li>
-<li><dl class="simple">
-<dt><a class="reference internal" href="classsequant_1_1_tensor_network.html#exhale-class-classsequant-1-1-tensor-network"><span class="std std-ref">Class TensorNetwork</span></a></dt><dd><ul>
-<li><p><a class="reference internal" href="structsequant_1_1_tensor_network_1_1_bliss_graph_options.html#exhale-struct-structsequant-1-1-tensor-network-1-1-bliss-graph-options"><span class="std std-ref">Struct TensorNetwork::BlissGraphOptions</span></a></p></li>
-<li><p><a class="reference internal" href="structsequant_1_1_tensor_network_1_1_full_label_compare.html#exhale-struct-structsequant-1-1-tensor-network-1-1-full-label-compare"><span class="std std-ref">Struct TensorNetwork::FullLabelCompare</span></a></p></li>
-<li><p><a class="reference internal" href="structsequant_1_1_tensor_network_1_1_graph_data.html#exhale-struct-structsequant-1-1-tensor-network-1-1-graph-data"><span class="std std-ref">Struct TensorNetwork::GraphData</span></a></p></li>
-<li><p><a class="reference internal" href="structsequant_1_1_tensor_network_1_1_slot_canonicalization_metadata.html#exhale-struct-structsequant-1-1-tensor-network-1-1-slot-canonicalization-metadata"><span class="std std-ref">Struct TensorNetwork::SlotCanonicalizationMetadata</span></a></p></li>
-<li><dl class="simple">
-<dt><a class="reference internal" href="classsequant_1_1_tensor_network_1_1_edge.html#exhale-class-classsequant-1-1-tensor-network-1-1-edge"><span class="std std-ref">Class TensorNetwork::Edge</span></a></dt><dd><ul>
-<li><p><a class="reference internal" href="structsequant_1_1_tensor_network_1_1_edge_1_1_terminal.html#exhale-struct-structsequant-1-1-tensor-network-1-1-edge-1-1-terminal"><span class="std std-ref">Struct Edge::Terminal</span></a></p></li>
-</ul>
-</dd>
-</dl>
-</li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt><a class="reference internal" href="classsequant_1_1_tensor_network_v2.html#exhale-class-classsequant-1-1-tensor-network-v2"><span class="std std-ref">Class TensorNetworkV2</span></a></dt><dd><ul>
-<li><p><a class="reference internal" href="structsequant_1_1_tensor_network_v2_1_1_graph.html#exhale-struct-structsequant-1-1-tensor-network-v2-1-1-graph"><span class="std std-ref">Struct TensorNetworkV2::Graph</span></a></p></li>
-<li><p><a class="reference internal" href="structsequant_1_1_tensor_network_v2_1_1_slot_canonicalization_metadata.html#exhale-struct-structsequant-1-1-tensor-network-v2-1-1-slot-canonicalization-metadata"><span class="std std-ref">Struct TensorNetworkV2::SlotCanonicalizationMetadata</span></a></p></li>
-<li><p><a class="reference internal" href="classsequant_1_1_tensor_network_v2_1_1_edge.html#exhale-class-classsequant-1-1-tensor-network-v2-1-1-edge"><span class="std std-ref">Class TensorNetworkV2::Edge</span></a></p></li>
-<li><p><a class="reference internal" href="classsequant_1_1_tensor_network_v2_1_1_vertex.html#exhale-class-classsequant-1-1-tensor-network-v2-1-1-vertex"><span class="std std-ref">Class TensorNetworkV2::Vertex</span></a></p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><p><a class="reference internal" href="classsequant_1_1_timer_pool.html#exhale-class-classsequant-1-1-timer-pool"><span class="std std-ref">Template Class TimerPool</span></a></p></li>
-<li><p><a class="reference internal" href="classsequant_1_1_type_attr.html#exhale-class-classsequant-1-1-type-attr"><span class="std std-ref">Class TypeAttr</span></a></p></li>
-<li><p><a class="reference internal" href="classsequant_1_1_variable.html#exhale-class-classsequant-1-1-variable"><span class="std std-ref">Class Variable</span></a></p></li>
-<li><p><a class="reference internal" href="classsequant_1_1_vertex_painter.html#exhale-class-classsequant-1-1-vertex-painter"><span class="std std-ref">Class VertexPainter</span></a></p></li>
-<li><dl class="simple">
-<dt><a class="reference internal" href="classsequant_1_1_wick_theorem.html#exhale-class-classsequant-1-1-wick-theorem"><span class="std std-ref">Template Class WickTheorem</span></a></dt><dd><ul>
-<li><p><a class="reference internal" href="structsequant_1_1_wick_theorem_1_1access__by.html#exhale-struct-structsequant-1-1-wick-theorem-1-1access-by"><span class="std std-ref">Template Struct WickTheorem::access_by</span></a></p></li>
-<li><p><a class="reference internal" href="structsequant_1_1_wick_theorem_1_1_nontensor_wick_state.html#exhale-struct-structsequant-1-1-wick-theorem-1-1-nontensor-wick-state"><span class="std std-ref">Struct WickTheorem::NontensorWickState</span></a></p></li>
-<li><p><a class="reference internal" href="classsequant_1_1_wick_theorem_1_1_stats.html#exhale-class-classsequant-1-1-wick-theorem-1-1-stats"><span class="std std-ref">Class WickTheorem::Stats</span></a></p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><p><a class="reference internal" href="enum_namespacesequant_1a0990b523fdb49d7c838857bec0bbbf6f.html#exhale-enum-namespacesequant-1a0990b523fdb49d7c838857bec0bbbf6f"><span class="std std-ref">Enum Action</span></a></p></li>
-<li><p><a class="reference internal" href="enum_namespacesequant_1a77a100102aa705742fa050ab1c0d3dc6.html#exhale-enum-namespacesequant-1a77a100102aa705742fa050ab1c0d3dc6"><span class="std std-ref">Enum BraKetPos</span></a></p></li>
-<li><p><a class="reference internal" href="enum_namespacesequant_1a8fa350a3e3719764fcc1ce8aeddaea46.html#exhale-enum-namespacesequant-1a8fa350a3e3719764fcc1ce8aeddaea46"><span class="std std-ref">Enum BraKetSymmetry</span></a></p></li>
-<li><p><a class="reference internal" href="enum_namespacesequant_1a7bf79a2794f3cc1f2f2ab156a5242c0c.html#exhale-enum-namespacesequant-1a7bf79a2794f3cc1f2f2ab156a5242c0c"><span class="std std-ref">Enum EvalOp</span></a></p></li>
-<li><p><a class="reference internal" href="enum_namespacesequant_1ab2a0753a7ea201ff961c26c581dfb192.html#exhale-enum-namespacesequant-1ab2a0753a7ea201ff961c26c581dfb192"><span class="std std-ref">Enum IndexSlotType</span></a></p></li>
-<li><p><a class="reference internal" href="enum_namespacesequant_1a03158c7d13fd7e3c714b834bf3492164.html#exhale-enum-namespacesequant-1a03158c7d13fd7e3c714b834bf3492164"><span class="std std-ref">Enum IndexSpaceMetric</span></a></p></li>
-<li><p><a class="reference internal" href="enum_namespacesequant_1a9130bd036deb119cc1bf7a8acceed847.html#exhale-enum-namespacesequant-1a9130bd036deb119cc1bf7a8acceed847"><span class="std std-ref">Enum ParticleSymmetry</span></a></p></li>
-<li><p><a class="reference internal" href="enum_namespacesequant_1a9517b28099d86f3b2c0d4799125f5931.html#exhale-enum-namespacesequant-1a9517b28099d86f3b2c0d4799125f5931"><span class="std std-ref">Enum ResultType</span></a></p></li>
-<li><p><a class="reference internal" href="enum_namespacesequant_1a78aab8bd907ae4e1585c729c79703fd3.html#exhale-enum-namespacesequant-1a78aab8bd907ae4e1585c729c79703fd3"><span class="std std-ref">Enum SPBasis</span></a></p></li>
-<li><p><a class="reference internal" href="enum_namespacesequant_1ac51aaf1e35bf9fe90a2282a6cdb2c1fe.html#exhale-enum-namespacesequant-1ac51aaf1e35bf9fe90a2282a6cdb2c1fe"><span class="std std-ref">Enum Statistics</span></a></p></li>
-<li><p><a class="reference internal" href="enum_namespacesequant_1a80bc8a00a0036a84c252e8a64db4c485.html#exhale-enum-namespacesequant-1a80bc8a00a0036a84c252e8a64db4c485"><span class="std std-ref">Enum Symmetry</span></a></p></li>
-<li><p><a class="reference internal" href="enum_namespacesequant_1ab0861d36226ce47001355beff3bc28a9.html#exhale-enum-namespacesequant-1ab0861d36226ce47001355beff3bc28a9"><span class="std std-ref">Enum TensorIndexSlotType</span></a></p></li>
-<li><p><a class="reference internal" href="enum_namespacesequant_1a27c1015914fed77818b3cd447345f196.html#exhale-enum-namespacesequant-1a27c1015914fed77818b3cd447345f196"><span class="std std-ref">Enum Vacuum</span></a></p></li>
-<li><p><a class="reference internal" href="enum_namespacesequant_1abc1f577f3e668a1f2fe7cc88e9f01104.html#exhale-enum-namespacesequant-1abc1f577f3e668a1f2fe7cc88e9f01104"><span class="std std-ref">Enum VertexType</span></a></p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt><a class="reference internal" href="namespace_std.html#namespace-std"><span class="std std-ref">Namespace std</span></a></dt><dd><ul>
-<li><p><a class="reference internal" href="structstd_1_1tuple__element_3_010_00_01sequant_1_1_tensor_network_1_1_graph_data_01_4.html#exhale-struct-structstd-1-1tuple-element-3-010-00-01sequant-1-1-tensor-network-1-1-graph-data-01-4"><span class="std std-ref">Template Struct tuple_element&lt; 0, sequant::TensorNetwork::GraphData &gt;</span></a></p></li>
-<li><p><a class="reference internal" href="structstd_1_1tuple__element_3_011_00_01sequant_1_1_tensor_network_1_1_graph_data_01_4.html#exhale-struct-structstd-1-1tuple-element-3-011-00-01sequant-1-1-tensor-network-1-1-graph-data-01-4"><span class="std std-ref">Template Struct tuple_element&lt; 1, sequant::TensorNetwork::GraphData &gt;</span></a></p></li>
-<li><p><a class="reference internal" href="structstd_1_1tuple__element_3_012_00_01sequant_1_1_tensor_network_1_1_graph_data_01_4.html#exhale-struct-structstd-1-1tuple-element-3-012-00-01sequant-1-1-tensor-network-1-1-graph-data-01-4"><span class="std std-ref">Template Struct tuple_element&lt; 2, sequant::TensorNetwork::GraphData &gt;</span></a></p></li>
-<li><p><a class="reference internal" href="structstd_1_1tuple__element_3_013_00_01sequant_1_1_tensor_network_1_1_graph_data_01_4.html#exhale-struct-structstd-1-1tuple-element-3-013-00-01sequant-1-1-tensor-network-1-1-graph-data-01-4"><span class="std std-ref">Template Struct tuple_element&lt; 3, sequant::TensorNetwork::GraphData &gt;</span></a></p></li>
-<li><p><a class="reference internal" href="structstd_1_1tuple__element_3_014_00_01sequant_1_1_tensor_network_1_1_graph_data_01_4.html#exhale-struct-structstd-1-1tuple-element-3-014-00-01sequant-1-1-tensor-network-1-1-graph-data-01-4"><span class="std std-ref">Template Struct tuple_element&lt; 4, sequant::TensorNetwork::GraphData &gt;</span></a></p></li>
-<li><p><a class="reference internal" href="structstd_1_1tuple__size_3_01sequant_1_1_tensor_network_1_1_graph_data_01_4.html#exhale-struct-structstd-1-1tuple-size-3-01sequant-1-1-tensor-network-1-1-graph-data-01-4"><span class="std std-ref">Template Struct tuple_size&lt; sequant::TensorNetwork::GraphData &gt;</span></a></p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><p><a class="reference internal" href="structsequant_1_1_expr_1_1is__shared__ptr__of__expr_3_01std_1_1shared__ptr_3_01_t_01_4_00_01std_bb3533b4d54bb13a35fe574fcb225ae9.html#exhale-struct-structsequant-1-1-expr-1-1is-shared-ptr-of-expr-3-01std-1-1shared-ptr-3-01-t-01-4-00-01std-bb3533b4d54bb13a35fe574fcb225ae9"><span class="std std-ref">Template Struct is_shared_ptr_of_expr&lt; std::shared_ptr&lt; T &gt;, std::enable_if_t&lt; is_expr_v&lt; T &gt; &gt; &gt;</span></a></p></li>
-<li><p><a class="reference internal" href="structsequant_1_1_expr_1_1is__shared__ptr__of__expr__or__derived_3_01std_1_1shared__ptr_3_01_t_0b9041721e7914bd1fb6a6a0536a3b3b6.html#exhale-struct-structsequant-1-1-expr-1-1is-shared-ptr-of-expr-or-derived-3-01std-1-1shared-ptr-3-01-t-0b9041721e7914bd1fb6a6a0536a3b3b6"><span class="std std-ref">Template Struct is_shared_ptr_of_expr_or_derived&lt; std::shared_ptr&lt; T &gt;, std::enable_if_t&lt; is_an_expr_v&lt; T &gt; &gt; &gt;</span></a></p></li>
-<li><p><a class="reference internal" href="structsequant_1_1_singleton_1_1is__default__constructible__helper_3_01_t_00_01std_1_1void__t_3_01decltype_07_t_02_03_08_4_01_4.html#exhale-struct-structsequant-1-1-singleton-1-1is-default-constructible-helper-3-01-t-00-01std-1-1void-t-3-01decltype-07-t-02-03-08-4-01-4"><span class="std std-ref">Template Struct is_default_constructible_helper&lt; T, std::void_t&lt; decltype(T{}) &gt; &gt;</span></a></p></li>
-</ul>
-</section>
-<section id="file-hierarchy">
-<h3>File Hierarchy<a class="headerlink" href="#file-hierarchy" title="Link to this heading">¶</a></h3>
-<ul class="simple">
-<li><dl class="simple">
-<dt><a class="reference internal" href="dir_SeQuant.html#dir-sequant"><span class="std std-ref">Directory SeQuant</span></a></dt><dd><ul>
-<li><dl class="simple">
-<dt><a class="reference internal" href="dir_SeQuant_core.html#dir-sequant-core"><span class="std std-ref">Directory core</span></a></dt><dd><ul>
-<li><dl class="simple">
-<dt><a class="reference internal" href="dir_SeQuant_core_export.html#dir-sequant-core-export"><span class="std std-ref">Directory export</span></a></dt><dd><ul>
-<li><p><a class="reference internal" href="file_SeQuant_core_export_itf.cpp.html#file-sequant-core-export-itf-cpp"><span class="std std-ref">File itf.cpp</span></a></p></li>
-<li><p><a class="reference internal" href="file_SeQuant_core_export_itf.hpp.html#file-sequant-core-export-itf-hpp"><span class="std std-ref">File itf.hpp</span></a></p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt><a class="reference internal" href="dir_SeQuant_core_optimize.html#dir-sequant-core-optimize"><span class="std std-ref">Directory optimize</span></a></dt><dd><ul>
-<li><p><a class="reference internal" href="file_SeQuant_core_optimize_fusion.cpp.html#file-sequant-core-optimize-fusion-cpp"><span class="std std-ref">File fusion.cpp</span></a></p></li>
-<li><p><a class="reference internal" href="file_SeQuant_core_optimize_fusion.hpp.html#file-sequant-core-optimize-fusion-hpp"><span class="std std-ref">File fusion.hpp</span></a></p></li>
-<li><p><a class="reference internal" href="file_SeQuant_core_optimize_optimize.cpp.html#file-sequant-core-optimize-optimize-cpp"><span class="std std-ref">File optimize.cpp</span></a></p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt><a class="reference internal" href="dir_SeQuant_core_parse.html#dir-sequant-core-parse"><span class="std std-ref">Directory parse</span></a></dt><dd><ul>
-<li><p><a class="reference internal" href="file_SeQuant_core_parse_ast.hpp.html#file-sequant-core-parse-ast-hpp"><span class="std std-ref">File ast.hpp</span></a></p></li>
-<li><p><a class="reference internal" href="file_SeQuant_core_parse_ast_conversions.hpp.html#file-sequant-core-parse-ast-conversions-hpp"><span class="std std-ref">File ast_conversions.hpp</span></a></p></li>
-<li><p><a class="reference internal" href="file_SeQuant_core_parse_deparse.cpp.html#file-sequant-core-parse-deparse-cpp"><span class="std std-ref">File deparse.cpp</span></a></p></li>
-<li><p><a class="reference internal" href="file_SeQuant_core_parse_parse.cpp.html#file-sequant-core-parse-parse-cpp"><span class="std std-ref">File parse.cpp</span></a></p></li>
-<li><p><a class="reference internal" href="file_SeQuant_core_parse_semantic_actions.hpp.html#file-sequant-core-parse-semantic-actions-hpp"><span class="std std-ref">File semantic_actions.hpp</span></a></p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt><a class="reference internal" href="dir_SeQuant_core_tensor_network.html#dir-sequant-core-tensor-network"><span class="std std-ref">Directory tensor_network</span></a></dt><dd><ul>
-<li><p><a class="reference internal" href="file_SeQuant_core_tensor_network_canonicals.hpp.html#file-sequant-core-tensor-network-canonicals-hpp"><span class="std std-ref">File canonicals.hpp</span></a></p></li>
-<li><p><a class="reference internal" href="file_SeQuant_core_tensor_network_slot.hpp.html#file-sequant-core-tensor-network-slot-hpp"><span class="std std-ref">File slot.hpp</span></a></p></li>
-<li><p><a class="reference internal" href="file_SeQuant_core_tensor_network_vertex.hpp.html#file-sequant-core-tensor-network-vertex-hpp"><span class="std std-ref">File vertex.hpp</span></a></p></li>
-<li><p><a class="reference internal" href="file_SeQuant_core_tensor_network_vertex_painter.cpp.html#file-sequant-core-tensor-network-vertex-painter-cpp"><span class="std std-ref">File vertex_painter.cpp</span></a></p></li>
-<li><p><a class="reference internal" href="file_SeQuant_core_tensor_network_vertex_painter.hpp.html#file-sequant-core-tensor-network-vertex-painter-hpp"><span class="std std-ref">File vertex_painter.hpp</span></a></p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt><a class="reference internal" href="dir_SeQuant_core_utility.html#dir-sequant-core-utility"><span class="std std-ref">Directory utility</span></a></dt><dd><ul>
-<li><p><a class="reference internal" href="file_SeQuant_core_utility_context.hpp.html#file-sequant-core-utility-context-hpp"><span class="std std-ref">File context.hpp</span></a></p></li>
-<li><p><a class="reference internal" href="file_SeQuant_core_utility_expr_diff.cpp.html#file-sequant-core-utility-expr-diff-cpp"><span class="std std-ref">File expr_diff.cpp</span></a></p></li>
-<li><p><a class="reference internal" href="file_SeQuant_core_utility_expr_diff.hpp.html#file-sequant-core-utility-expr-diff-hpp"><span class="std std-ref">File expr_diff.hpp</span></a></p></li>
-<li><p><a class="reference internal" href="file_SeQuant_core_utility_indices.hpp.html#file-sequant-core-utility-indices-hpp"><span class="std std-ref">File indices.hpp</span></a></p></li>
-<li><p><a class="reference internal" href="file_SeQuant_core_utility_macros.hpp.html#file-sequant-core-utility-macros-hpp"><span class="std std-ref">File macros.hpp</span></a></p></li>
-<li><p><a class="reference internal" href="file_SeQuant_core_utility_nodiscard.hpp.html#file-sequant-core-utility-nodiscard-hpp"><span class="std std-ref">File nodiscard.hpp</span></a></p></li>
-<li><p><a class="reference internal" href="file_SeQuant_core_utility_singleton.hpp.html#file-sequant-core-utility-singleton-hpp"><span class="std std-ref">File singleton.hpp</span></a></p></li>
-<li><p><a class="reference internal" href="file_SeQuant_core_utility_string.cpp.html#file-sequant-core-utility-string-cpp"><span class="std std-ref">File string.cpp</span></a></p></li>
-<li><p><a class="reference internal" href="file_SeQuant_core_utility_string.hpp.html#file-sequant-core-utility-string-hpp"><span class="std std-ref">File string.hpp</span></a></p></li>
-<li><p><a class="reference internal" href="file_SeQuant_core_utility_strong.hpp.html#file-sequant-core-utility-strong-hpp"><span class="std std-ref">File strong.hpp</span></a></p></li>
-<li><p><a class="reference internal" href="file_SeQuant_core_utility_swap.hpp.html#file-sequant-core-utility-swap-hpp"><span class="std std-ref">File swap.hpp</span></a></p></li>
-<li><p><a class="reference internal" href="file_SeQuant_core_utility_tuple.hpp.html#file-sequant-core-utility-tuple-hpp"><span class="std std-ref">File tuple.hpp</span></a></p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><p><a class="reference internal" href="file_SeQuant_core_abstract_tensor.hpp.html#file-sequant-core-abstract-tensor-hpp"><span class="std std-ref">File abstract_tensor.hpp</span></a></p></li>
-<li><p><a class="reference internal" href="file_SeQuant_core_algorithm.hpp.html#file-sequant-core-algorithm-hpp"><span class="std std-ref">File algorithm.hpp</span></a></p></li>
-<li><p><a class="reference internal" href="file_SeQuant_core_any.hpp.html#file-sequant-core-any-hpp"><span class="std std-ref">File any.hpp</span></a></p></li>
-<li><p><a class="reference internal" href="file_SeQuant_core_asy_cost.cpp.html#file-sequant-core-asy-cost-cpp"><span class="std std-ref">File asy_cost.cpp</span></a></p></li>
-<li><p><a class="reference internal" href="file_SeQuant_core_asy_cost.hpp.html#file-sequant-core-asy-cost-hpp"><span class="std std-ref">File asy_cost.hpp</span></a></p></li>
-<li><p><a class="reference internal" href="file_SeQuant_core_attr.hpp.html#file-sequant-core-attr-hpp"><span class="std std-ref">File attr.hpp</span></a></p></li>
-<li><p><a class="reference internal" href="file_SeQuant_core_binary_node.hpp.html#file-sequant-core-binary-node-hpp"><span class="std std-ref">File binary_node.hpp</span></a></p></li>
-<li><p><a class="reference internal" href="file_SeQuant_core_bliss.hpp.html#file-sequant-core-bliss-hpp"><span class="std std-ref">File bliss.hpp</span></a></p></li>
-<li><p><a class="reference internal" href="file_SeQuant_core_complex.hpp.html#file-sequant-core-complex-hpp"><span class="std std-ref">File complex.hpp</span></a></p></li>
-<li><p><a class="reference internal" href="file_SeQuant_core_container.hpp.html#file-sequant-core-container-hpp"><span class="std std-ref">File container.hpp</span></a></p></li>
-<li><p><a class="reference internal" href="file_SeQuant_core_context.cpp.html#file-sequant-core-context-cpp"><span class="std std-ref">File context.cpp</span></a></p></li>
-<li><p><a class="reference internal" href="file_SeQuant_core_context.hpp.html#file-sequant-core-context-hpp"><span class="std std-ref">File context.hpp</span></a></p></li>
-<li><p><a class="reference internal" href="file_SeQuant_core_eval_expr.cpp.html#file-sequant-core-eval-expr-cpp"><span class="std std-ref">File eval_expr.cpp</span></a></p></li>
-<li><p><a class="reference internal" href="file_SeQuant_core_eval_expr.hpp.html#file-sequant-core-eval-expr-hpp"><span class="std std-ref">File eval_expr.hpp</span></a></p></li>
-<li><p><a class="reference internal" href="file_SeQuant_core_eval_node.hpp.html#file-sequant-core-eval-node-hpp"><span class="std std-ref">File eval_node.hpp</span></a></p></li>
-<li><p><a class="reference internal" href="file_SeQuant_core_expr.cpp.html#file-sequant-core-expr-cpp"><span class="std std-ref">File expr.cpp</span></a></p></li>
-<li><p><a class="reference internal" href="file_SeQuant_core_expr.hpp.html#file-sequant-core-expr-hpp"><span class="std std-ref">File expr.hpp</span></a></p></li>
-<li><p><a class="reference internal" href="file_SeQuant_core_expr_algorithm.hpp.html#file-sequant-core-expr-algorithm-hpp"><span class="std std-ref">File expr_algorithm.hpp</span></a></p></li>
-<li><p><a class="reference internal" href="file_SeQuant_core_expr_fwd.hpp.html#file-sequant-core-expr-fwd-hpp"><span class="std std-ref">File expr_fwd.hpp</span></a></p></li>
-<li><p><a class="reference internal" href="file_SeQuant_core_expr_operator.hpp.html#file-sequant-core-expr-operator-hpp"><span class="std std-ref">File expr_operator.hpp</span></a></p></li>
-<li><p><a class="reference internal" href="file_SeQuant_core_fwd.hpp.html#file-sequant-core-fwd-hpp"><span class="std std-ref">File fwd.hpp</span></a></p></li>
-<li><p><a class="reference internal" href="file_SeQuant_core_hash.cpp.html#file-sequant-core-hash-cpp"><span class="std std-ref">File hash.cpp</span></a></p></li>
-<li><p><a class="reference internal" href="file_SeQuant_core_hash.hpp.html#file-sequant-core-hash-hpp"><span class="std std-ref">File hash.hpp</span></a></p></li>
-<li><p><a class="reference internal" href="file_SeQuant_core_hugenholtz.hpp.html#file-sequant-core-hugenholtz-hpp"><span class="std std-ref">File hugenholtz.hpp</span></a></p></li>
-<li><p><a class="reference internal" href="file_SeQuant_core_index.cpp.html#file-sequant-core-index-cpp"><span class="std std-ref">File index.cpp</span></a></p></li>
-<li><p><a class="reference internal" href="file_SeQuant_core_index.hpp.html#file-sequant-core-index-hpp"><span class="std std-ref">File index.hpp</span></a></p></li>
-<li><p><a class="reference internal" href="file_SeQuant_core_index_space_registry.hpp.html#file-sequant-core-index-space-registry-hpp"><span class="std std-ref">File index_space_registry.hpp</span></a></p></li>
-<li><p><a class="reference internal" href="file_SeQuant_core_interval.hpp.html#file-sequant-core-interval-hpp"><span class="std std-ref">File interval.hpp</span></a></p></li>
-<li><p><a class="reference internal" href="file_SeQuant_core_latex.cpp.html#file-sequant-core-latex-cpp"><span class="std std-ref">File latex.cpp</span></a></p></li>
-<li><p><a class="reference internal" href="file_SeQuant_core_latex.hpp.html#file-sequant-core-latex-hpp"><span class="std std-ref">File latex.hpp</span></a></p></li>
-<li><p><a class="reference internal" href="file_SeQuant_core_latex.ipp.html#file-sequant-core-latex-ipp"><span class="std std-ref">File latex.ipp</span></a></p></li>
-<li><p><a class="reference internal" href="file_SeQuant_core_logger.hpp.html#file-sequant-core-logger-hpp"><span class="std std-ref">File logger.hpp</span></a></p></li>
-<li><p><a class="reference internal" href="file_SeQuant_core_math.hpp.html#file-sequant-core-math-hpp"><span class="std std-ref">File math.hpp</span></a></p></li>
-<li><p><a class="reference internal" href="file_SeQuant_core_op.cpp.html#file-sequant-core-op-cpp"><span class="std std-ref">File op.cpp</span></a></p></li>
-<li><p><a class="reference internal" href="file_SeQuant_core_op.hpp.html#file-sequant-core-op-hpp"><span class="std std-ref">File op.hpp</span></a></p></li>
-<li><p><a class="reference internal" href="file_SeQuant_core_optimize.hpp.html#file-sequant-core-optimize-hpp"><span class="std std-ref">File optimize.hpp</span></a></p></li>
-<li><p><a class="reference internal" href="file_SeQuant_core_parse.hpp.html#file-sequant-core-parse-hpp"><span class="std std-ref">File parse.hpp</span></a></p></li>
-<li><p><a class="reference internal" href="file_SeQuant_core_ranges.hpp.html#file-sequant-core-ranges-hpp"><span class="std std-ref">File ranges.hpp</span></a></p></li>
-<li><p><a class="reference internal" href="file_SeQuant_core_rational.hpp.html#file-sequant-core-rational-hpp"><span class="std std-ref">File rational.hpp</span></a></p></li>
-<li><p><a class="reference internal" href="file_SeQuant_core_runtime.cpp.html#file-sequant-core-runtime-cpp"><span class="std std-ref">File runtime.cpp</span></a></p></li>
-<li><p><a class="reference internal" href="file_SeQuant_core_runtime.hpp.html#file-sequant-core-runtime-hpp"><span class="std std-ref">File runtime.hpp</span></a></p></li>
-<li><p><a class="reference internal" href="file_SeQuant_core_space.hpp.html#file-sequant-core-space-hpp"><span class="std std-ref">File space.hpp</span></a></p></li>
-<li><p><a class="reference internal" href="file_SeQuant_core_tag.hpp.html#file-sequant-core-tag-hpp"><span class="std std-ref">File tag.hpp</span></a></p></li>
-<li><p><a class="reference internal" href="file_SeQuant_core_tensor.cpp.html#file-sequant-core-tensor-cpp"><span class="std std-ref">File tensor.cpp</span></a></p></li>
-<li><p><a class="reference internal" href="file_SeQuant_core_tensor.hpp.html#file-sequant-core-tensor-hpp"><span class="std std-ref">File tensor.hpp</span></a></p></li>
-<li><p><a class="reference internal" href="file_SeQuant_core_tensor_canonicalizer.cpp.html#file-sequant-core-tensor-canonicalizer-cpp"><span class="std std-ref">File tensor_canonicalizer.cpp</span></a></p></li>
-<li><p><a class="reference internal" href="file_SeQuant_core_tensor_canonicalizer.hpp.html#file-sequant-core-tensor-canonicalizer-hpp"><span class="std std-ref">File tensor_canonicalizer.hpp</span></a></p></li>
-<li><p><a class="reference internal" href="file_SeQuant_core_tensor_network.cpp.html#file-sequant-core-tensor-network-cpp"><span class="std std-ref">File tensor_network.cpp</span></a></p></li>
-<li><p><a class="reference internal" href="file_SeQuant_core_tensor_network.hpp.html#file-sequant-core-tensor-network-hpp"><span class="std std-ref">File tensor_network.hpp</span></a></p></li>
-<li><p><a class="reference internal" href="file_SeQuant_core_tensor_network_v2.cpp.html#file-sequant-core-tensor-network-v2-cpp"><span class="std std-ref">File tensor_network_v2.cpp</span></a></p></li>
-<li><p><a class="reference internal" href="file_SeQuant_core_tensor_network_v2.hpp.html#file-sequant-core-tensor-network-v2-hpp"><span class="std std-ref">File tensor_network_v2.hpp</span></a></p></li>
-<li><p><a class="reference internal" href="file_SeQuant_core_timer.hpp.html#file-sequant-core-timer-hpp"><span class="std std-ref">File timer.hpp</span></a></p></li>
-<li><p><a class="reference internal" href="file_SeQuant_core_wick.hpp.html#file-sequant-core-wick-hpp"><span class="std std-ref">File wick.hpp</span></a></p></li>
-<li><p><a class="reference internal" href="file_SeQuant_core_wick.impl.hpp.html#file-sequant-core-wick-impl-hpp"><span class="std std-ref">File wick.impl.hpp</span></a></p></li>
-<li><p><a class="reference internal" href="file_SeQuant_core_wolfram.hpp.html#file-sequant-core-wolfram-hpp"><span class="std std-ref">File wolfram.hpp</span></a></p></li>
-<li><p><a class="reference internal" href="file_SeQuant_core_wstring.hpp.html#file-sequant-core-wstring-hpp"><span class="std std-ref">File wstring.hpp</span></a></p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt><a class="reference internal" href="dir_SeQuant_domain.html#dir-sequant-domain"><span class="std std-ref">Directory domain</span></a></dt><dd><ul>
-<li><dl class="simple">
-<dt><a class="reference internal" href="dir_SeQuant_domain_eval.html#dir-sequant-domain-eval"><span class="std std-ref">Directory eval</span></a></dt><dd><ul>
-<li><p><a class="reference internal" href="file_SeQuant_domain_eval_cache_manager.cpp.html#file-sequant-domain-eval-cache-manager-cpp"><span class="std std-ref">File cache_manager.cpp</span></a></p></li>
-<li><p><a class="reference internal" href="file_SeQuant_domain_eval_cache_manager.hpp.html#file-sequant-domain-eval-cache-manager-hpp"><span class="std std-ref">File cache_manager.hpp</span></a></p></li>
-<li><p><a class="reference internal" href="file_SeQuant_domain_eval_eval.hpp.html#file-sequant-domain-eval-eval-hpp"><span class="std std-ref">File eval.hpp</span></a></p></li>
-<li><p><a class="reference internal" href="file_SeQuant_domain_eval_eval_result.cpp.html#file-sequant-domain-eval-eval-result-cpp"><span class="std std-ref">File eval_result.cpp</span></a></p></li>
-<li><p><a class="reference internal" href="file_SeQuant_domain_eval_eval_result.hpp.html#file-sequant-domain-eval-eval-result-hpp"><span class="std std-ref">File eval_result.hpp</span></a></p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><dl class="simple">
-<dt><a class="reference internal" href="dir_SeQuant_domain_mbpt.html#dir-sequant-domain-mbpt"><span class="std std-ref">Directory mbpt</span></a></dt><dd><ul>
-<li><dl class="simple">
-<dt><a class="reference internal" href="dir_SeQuant_domain_mbpt_models.html#dir-sequant-domain-mbpt-models"><span class="std std-ref">Directory models</span></a></dt><dd><ul>
-<li><p><a class="reference internal" href="file_SeQuant_domain_mbpt_models_cc.cpp.html#file-sequant-domain-mbpt-models-cc-cpp"><span class="std std-ref">File cc.cpp</span></a></p></li>
-<li><p><a class="reference internal" href="file_SeQuant_domain_mbpt_models_cc.hpp.html#file-sequant-domain-mbpt-models-cc-hpp"><span class="std std-ref">File cc.hpp</span></a></p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><p><a class="reference internal" href="file_SeQuant_domain_mbpt_antisymmetrizer.cpp.html#file-sequant-domain-mbpt-antisymmetrizer-cpp"><span class="std std-ref">File antisymmetrizer.cpp</span></a></p></li>
-<li><p><a class="reference internal" href="file_SeQuant_domain_mbpt_antisymmetrizer.hpp.html#file-sequant-domain-mbpt-antisymmetrizer-hpp"><span class="std std-ref">File antisymmetrizer.hpp</span></a></p></li>
-<li><p><a class="reference internal" href="file_SeQuant_domain_mbpt_context.cpp.html#file-sequant-domain-mbpt-context-cpp"><span class="std std-ref">File context.cpp</span></a></p></li>
-<li><p><a class="reference internal" href="file_SeQuant_domain_mbpt_context.hpp.html#file-sequant-domain-mbpt-context-hpp"><span class="std std-ref">File context.hpp</span></a></p></li>
-<li><p><a class="reference internal" href="file_SeQuant_domain_mbpt_convention.cpp.html#file-sequant-domain-mbpt-convention-cpp"><span class="std std-ref">File convention.cpp</span></a></p></li>
-<li><p><a class="reference internal" href="file_SeQuant_domain_mbpt_convention.hpp.html#file-sequant-domain-mbpt-convention-hpp"><span class="std std-ref">File convention.hpp</span></a></p></li>
-<li><p><a class="reference internal" href="file_SeQuant_domain_mbpt_fwd.hpp.html#file-sequant-domain-mbpt-fwd-hpp"><span class="std std-ref">File fwd.hpp</span></a></p></li>
-<li><p><a class="reference internal" href="file_SeQuant_domain_mbpt_op.cpp.html#file-sequant-domain-mbpt-op-cpp"><span class="std std-ref">File op.cpp</span></a></p></li>
-<li><p><a class="reference internal" href="file_SeQuant_domain_mbpt_op.hpp.html#file-sequant-domain-mbpt-op-hpp"><span class="std std-ref">File op.hpp</span></a></p></li>
-<li><p><a class="reference internal" href="file_SeQuant_domain_mbpt_op.ipp.html#file-sequant-domain-mbpt-op-ipp"><span class="std std-ref">File op.ipp</span></a></p></li>
-<li><p><a class="reference internal" href="file_SeQuant_domain_mbpt_rdm.cpp.html#file-sequant-domain-mbpt-rdm-cpp"><span class="std std-ref">File rdm.cpp</span></a></p></li>
-<li><p><a class="reference internal" href="file_SeQuant_domain_mbpt_rdm.hpp.html#file-sequant-domain-mbpt-rdm-hpp"><span class="std std-ref">File rdm.hpp</span></a></p></li>
-<li><p><a class="reference internal" href="file_SeQuant_domain_mbpt_spin.cpp.html#file-sequant-domain-mbpt-spin-cpp"><span class="std std-ref">File spin.cpp</span></a></p></li>
-<li><p><a class="reference internal" href="file_SeQuant_domain_mbpt_spin.hpp.html#file-sequant-domain-mbpt-spin-hpp"><span class="std std-ref">File spin.hpp</span></a></p></li>
-<li><p><a class="reference internal" href="file_SeQuant_domain_mbpt_vac_av.hpp.html#file-sequant-domain-mbpt-vac-av-hpp"><span class="std std-ref">File vac_av.hpp</span></a></p></li>
-<li><p><a class="reference internal" href="file_SeQuant_domain_mbpt_vac_av.ipp.html#file-sequant-domain-mbpt-vac-av-ipp"><span class="std std-ref">File vac_av.ipp</span></a></p></li>
-</ul>
-</dd>
-</dl>
-</li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><p><a class="reference internal" href="file_SeQuant_version.cpp.html#file-sequant-version-cpp"><span class="std std-ref">File version.cpp</span></a></p></li>
-</ul>
-</dd>
-</dl>
-</li>
-<li><p><a class="reference internal" href="file_README.md.html#file-readme-md"><span class="std std-ref">File README.md</span></a></p></li>
-</ul>
-</section>
 <section id="full-api">
 <h3>Full API<a class="headerlink" href="#full-api" title="Link to this heading">¶</a></h3>
 <section id="namespaces">
@@ -1214,10 +644,7 @@
 </div>
 <div class="toctree-wrapper compound">
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="namespace_std.html">Namespace std</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="namespace_std.html#classes">Classes</a></li>
-</ul>
-</li>
+<li class="toctree-l1"><a class="reference internal" href="namespace_std.html">Namespace std</a></li>
 </ul>
 </div>
 </section>
@@ -1434,21 +861,6 @@
 </div>
 <div class="toctree-wrapper compound">
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="structsequant_1_1detail_1_1has__boost__hash__value_3_01_t_00_01std_1_1void__t_3_01decltype_07seq36a582b8a5d5b63abb0d025aa8b8a9c0.html">Template Struct has_boost_hash_value&lt; T, std::void_t&lt; decltype(sequant_boost::hash_value(std::declval&lt; const T &amp; &gt;, ())) &gt; &gt;</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="structsequant_1_1detail_1_1has__boost__hash__value_3_01_t_00_01std_1_1void__t_3_01decltype_07seq36a582b8a5d5b63abb0d025aa8b8a9c0.html#inheritance-relationships">Inheritance Relationships</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="structsequant_1_1detail_1_1has__boost__hash__value_3_01_t_00_01std_1_1void__t_3_01decltype_07seq36a582b8a5d5b63abb0d025aa8b8a9c0.html#base-type">Base Type</a></li>
-</ul>
-</li>
-<li class="toctree-l2"><a class="reference internal" href="structsequant_1_1detail_1_1has__boost__hash__value_3_01_t_00_01std_1_1void__t_3_01decltype_07seq36a582b8a5d5b63abb0d025aa8b8a9c0.html#struct-documentation">Struct Documentation</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="structsequant_1_1detail_1_1has__boost__hash__value_3_01_t_00_01std_1_1void__t_3_01decltype_07seq36a582b8a5d5b63abb0d025aa8b8a9c0.html#_CPPv4I0EN7sequant6detail20has_boost_hash_valueI1TNSt6void_tIDTclN13sequant_boost10hash_valueEclNSt7declvalIRK1TEEEEEEEEE"><code class="docutils literal notranslate"><span class="pre">sequant::detail::has_boost_hash_value&lt;</span> <span class="pre">T,</span> <span class="pre">std::void_t&lt;</span> <span class="pre">decltype(sequant_boost::hash_value(std::declval&lt;</span> <span class="pre">const</span> <span class="pre">T</span> <span class="pre">&amp;</span> <span class="pre">&gt;()))&gt;</span> <span class="pre">&gt;</span></code></a></li>
-</ul>
-</li>
-</ul>
-</li>
-</ul>
-</div>
-<div class="toctree-wrapper compound">
-<ul>
 <li class="toctree-l1"><a class="reference internal" href="structsequant_1_1detail_1_1has__hash__value.html">Template Struct has_hash_value</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="structsequant_1_1detail_1_1has__hash__value.html#inheritance-relationships">Inheritance Relationships</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="structsequant_1_1detail_1_1has__hash__value.html#base-type">Base Type</a></li>
@@ -1464,21 +876,6 @@
 </div>
 <div class="toctree-wrapper compound">
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="structsequant_1_1detail_1_1has__hash__value_3_01_t_00_01std_1_1void__t_3_01decltype_07hash__valu232d7e075f4e4c7b9ae22728891f494e.html">Template Struct has_hash_value&lt; T, std::void_t&lt; decltype(hash_value(std::declval&lt; const T &amp; &gt;, ())) &gt; &gt;</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="structsequant_1_1detail_1_1has__hash__value_3_01_t_00_01std_1_1void__t_3_01decltype_07hash__valu232d7e075f4e4c7b9ae22728891f494e.html#inheritance-relationships">Inheritance Relationships</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="structsequant_1_1detail_1_1has__hash__value_3_01_t_00_01std_1_1void__t_3_01decltype_07hash__valu232d7e075f4e4c7b9ae22728891f494e.html#base-type">Base Type</a></li>
-</ul>
-</li>
-<li class="toctree-l2"><a class="reference internal" href="structsequant_1_1detail_1_1has__hash__value_3_01_t_00_01std_1_1void__t_3_01decltype_07hash__valu232d7e075f4e4c7b9ae22728891f494e.html#struct-documentation">Struct Documentation</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="structsequant_1_1detail_1_1has__hash__value_3_01_t_00_01std_1_1void__t_3_01decltype_07hash__valu232d7e075f4e4c7b9ae22728891f494e.html#_CPPv4I0EN7sequant6detail14has_hash_valueI1TNSt6void_tIDTcl10hash_valueclNSt7declvalIRK1TEEEEEEEEE"><code class="docutils literal notranslate"><span class="pre">sequant::detail::has_hash_value&lt;</span> <span class="pre">T,</span> <span class="pre">std::void_t&lt;</span> <span class="pre">decltype(hash_value(std::declval&lt;</span> <span class="pre">const</span> <span class="pre">T</span> <span class="pre">&amp;</span> <span class="pre">&gt;()))&gt;</span> <span class="pre">&gt;</span></code></a></li>
-</ul>
-</li>
-</ul>
-</li>
-</ul>
-</div>
-<div class="toctree-wrapper compound">
-<ul>
 <li class="toctree-l1"><a class="reference internal" href="structsequant_1_1detail_1_1has__hash__value__member__fn__helper.html">Template Struct has_hash_value_member_fn_helper</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="structsequant_1_1detail_1_1has__hash__value__member__fn__helper.html#inheritance-relationships">Inheritance Relationships</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="structsequant_1_1detail_1_1has__hash__value__member__fn__helper.html#base-type">Base Type</a></li>
@@ -1486,21 +883,6 @@
 </li>
 <li class="toctree-l2"><a class="reference internal" href="structsequant_1_1detail_1_1has__hash__value__member__fn__helper.html#struct-documentation">Struct Documentation</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="structsequant_1_1detail_1_1has__hash__value__member__fn__helper.html#_CPPv4I00EN7sequant6detail31has_hash_value_member_fn_helperE"><code class="docutils literal notranslate"><span class="pre">sequant::detail::has_hash_value_member_fn_helper</span></code></a></li>
-</ul>
-</li>
-</ul>
-</li>
-</ul>
-</div>
-<div class="toctree-wrapper compound">
-<ul>
-<li class="toctree-l1"><a class="reference internal" href="structsequant_1_1detail_1_1has__hash__value__member__fn__helper_3_01_t_00_01std_1_1void__t_3_01d9a99bdda517383f729b2774fe7100dab.html">Template Struct has_hash_value_member_fn_helper&lt; T, std::void_t&lt; decltype(std::declval&lt; const T &amp; &gt;, ().hash_value()) &gt; &gt;</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="structsequant_1_1detail_1_1has__hash__value__member__fn__helper_3_01_t_00_01std_1_1void__t_3_01d9a99bdda517383f729b2774fe7100dab.html#inheritance-relationships">Inheritance Relationships</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="structsequant_1_1detail_1_1has__hash__value__member__fn__helper_3_01_t_00_01std_1_1void__t_3_01d9a99bdda517383f729b2774fe7100dab.html#base-type">Base Type</a></li>
-</ul>
-</li>
-<li class="toctree-l2"><a class="reference internal" href="structsequant_1_1detail_1_1has__hash__value__member__fn__helper_3_01_t_00_01std_1_1void__t_3_01d9a99bdda517383f729b2774fe7100dab.html#struct-documentation">Struct Documentation</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="structsequant_1_1detail_1_1has__hash__value__member__fn__helper_3_01_t_00_01std_1_1void__t_3_01d9a99bdda517383f729b2774fe7100dab.html#_CPPv4I0EN7sequant6detail31has_hash_value_member_fn_helperI1TNSt6void_tIDTcldtclNSt7declvalIRK1TEEE10hash_valueEEEEEE"><code class="docutils literal notranslate"><span class="pre">sequant::detail::has_hash_value_member_fn_helper&lt;</span> <span class="pre">T,</span> <span class="pre">std::void_t&lt;</span> <span class="pre">decltype(std::declval&lt;</span> <span class="pre">const</span> <span class="pre">T</span> <span class="pre">&amp;</span> <span class="pre">&gt;().hash_value())&gt;</span> <span class="pre">&gt;</span></code></a></li>
 </ul>
 </li>
 </ul>
@@ -1725,21 +1107,6 @@
 </div>
 <div class="toctree-wrapper compound">
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="structsequant_1_1_expr_1_1is__shared__ptr__of__expr_3_01std_1_1shared__ptr_3_01_t_01_4_00_01std_bb3533b4d54bb13a35fe574fcb225ae9.html">Template Struct is_shared_ptr_of_expr&lt; std::shared_ptr&lt; T &gt;, std::enable_if_t&lt; is_expr_v&lt; T &gt; &gt; &gt;</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="structsequant_1_1_expr_1_1is__shared__ptr__of__expr_3_01std_1_1shared__ptr_3_01_t_01_4_00_01std_bb3533b4d54bb13a35fe574fcb225ae9.html#inheritance-relationships">Inheritance Relationships</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="structsequant_1_1_expr_1_1is__shared__ptr__of__expr_3_01std_1_1shared__ptr_3_01_t_01_4_00_01std_bb3533b4d54bb13a35fe574fcb225ae9.html#base-type">Base Type</a></li>
-</ul>
-</li>
-<li class="toctree-l2"><a class="reference internal" href="structsequant_1_1_expr_1_1is__shared__ptr__of__expr_3_01std_1_1shared__ptr_3_01_t_01_4_00_01std_bb3533b4d54bb13a35fe574fcb225ae9.html#struct-documentation">Struct Documentation</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="structsequant_1_1_expr_1_1is__shared__ptr__of__expr_3_01std_1_1shared__ptr_3_01_t_01_4_00_01std_bb3533b4d54bb13a35fe574fcb225ae9.html#_CPPv4I0EN7sequant4Expr21is_shared_ptr_of_exprINSt10shared_ptrI1TEENSt11enable_if_tI9is_expr_vI1TEEEEE"><code class="docutils literal notranslate"><span class="pre">sequant::Expr::is_shared_ptr_of_expr&lt;</span> <span class="pre">std::shared_ptr&lt;</span> <span class="pre">T</span> <span class="pre">&gt;,</span> <span class="pre">std::enable_if_t&lt;</span> <span class="pre">is_expr_v&lt;</span> <span class="pre">T</span> <span class="pre">&gt;</span> <span class="pre">&gt;</span> <span class="pre">&gt;</span></code></a></li>
-</ul>
-</li>
-</ul>
-</li>
-</ul>
-</div>
-<div class="toctree-wrapper compound">
-<ul>
 <li class="toctree-l1"><a class="reference internal" href="structsequant_1_1_expr_1_1is__shared__ptr__of__expr__or__derived.html">Template Struct Expr::is_shared_ptr_of_expr_or_derived</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="structsequant_1_1_expr_1_1is__shared__ptr__of__expr__or__derived.html#nested-relationships">Nested Relationships</a></li>
 <li class="toctree-l2"><a class="reference internal" href="structsequant_1_1_expr_1_1is__shared__ptr__of__expr__or__derived.html#inheritance-relationships">Inheritance Relationships</a><ul>
@@ -1764,21 +1131,6 @@
 </li>
 <li class="toctree-l2"><a class="reference internal" href="structsequant_1_1_expr_1_1is__shared__ptr__of__expr__or__derived_3_01_expr_ptr_00_01void_01_4.html#struct-documentation">Struct Documentation</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="structsequant_1_1_expr_1_1is__shared__ptr__of__expr__or__derived_3_01_expr_ptr_00_01void_01_4.html#_CPPv4IEN7sequant4Expr32is_shared_ptr_of_expr_or_derivedI7ExprPtrvEE"><code class="docutils literal notranslate"><span class="pre">sequant::Expr::is_shared_ptr_of_expr_or_derived&lt;</span> <span class="pre">ExprPtr,</span> <span class="pre">void</span> <span class="pre">&gt;</span></code></a></li>
-</ul>
-</li>
-</ul>
-</li>
-</ul>
-</div>
-<div class="toctree-wrapper compound">
-<ul>
-<li class="toctree-l1"><a class="reference internal" href="structsequant_1_1_expr_1_1is__shared__ptr__of__expr__or__derived_3_01std_1_1shared__ptr_3_01_t_0b9041721e7914bd1fb6a6a0536a3b3b6.html">Template Struct is_shared_ptr_of_expr_or_derived&lt; std::shared_ptr&lt; T &gt;, std::enable_if_t&lt; is_an_expr_v&lt; T &gt; &gt; &gt;</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="structsequant_1_1_expr_1_1is__shared__ptr__of__expr__or__derived_3_01std_1_1shared__ptr_3_01_t_0b9041721e7914bd1fb6a6a0536a3b3b6.html#inheritance-relationships">Inheritance Relationships</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="structsequant_1_1_expr_1_1is__shared__ptr__of__expr__or__derived_3_01std_1_1shared__ptr_3_01_t_0b9041721e7914bd1fb6a6a0536a3b3b6.html#base-type">Base Type</a></li>
-</ul>
-</li>
-<li class="toctree-l2"><a class="reference internal" href="structsequant_1_1_expr_1_1is__shared__ptr__of__expr__or__derived_3_01std_1_1shared__ptr_3_01_t_0b9041721e7914bd1fb6a6a0536a3b3b6.html#struct-documentation">Struct Documentation</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="structsequant_1_1_expr_1_1is__shared__ptr__of__expr__or__derived_3_01std_1_1shared__ptr_3_01_t_0b9041721e7914bd1fb6a6a0536a3b3b6.html#_CPPv4I0EN7sequant4Expr32is_shared_ptr_of_expr_or_derivedINSt10shared_ptrI1TEENSt11enable_if_tI12is_an_expr_vI1TEEEEE"><code class="docutils literal notranslate"><span class="pre">sequant::Expr::is_shared_ptr_of_expr_or_derived&lt;</span> <span class="pre">std::shared_ptr&lt;</span> <span class="pre">T</span> <span class="pre">&gt;,</span> <span class="pre">std::enable_if_t&lt;</span> <span class="pre">is_an_expr_v&lt;</span> <span class="pre">T</span> <span class="pre">&gt;</span> <span class="pre">&gt;</span> <span class="pre">&gt;</span></code></a></li>
 </ul>
 </li>
 </ul>
@@ -1899,34 +1251,6 @@
 <li class="toctree-l1"><a class="reference internal" href="structsequant_1_1hash_1_1__.html">Template Struct _</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="structsequant_1_1hash_1_1__.html#struct-documentation">Struct Documentation</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="structsequant_1_1hash_1_1__.html#_CPPv4I00EN7sequant4hash1_E"><code class="docutils literal notranslate"><span class="pre">sequant::hash::_</span></code></a></li>
-</ul>
-</li>
-</ul>
-</li>
-</ul>
-</div>
-<div class="toctree-wrapper compound">
-<ul>
-<li class="toctree-l1"><a class="reference internal" href="structsequant_1_1hash_1_1___3_01_t_00_01std_1_1enable__if__t_3_9_07_9_07has__hash__value__v_3_01261c55baf69cf93eb99e41176b7d1d0a.html">Template Struct _&lt; T, std::enable_if_t&lt; !(!(has_hash_value_v&lt; T &gt;, )&amp;&amp;meta::is_range_v&lt; T &gt;, ) &gt; &gt;</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="structsequant_1_1hash_1_1___3_01_t_00_01std_1_1enable__if__t_3_9_07_9_07has__hash__value__v_3_01261c55baf69cf93eb99e41176b7d1d0a.html#struct-documentation">Struct Documentation</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="structsequant_1_1hash_1_1___3_01_t_00_01std_1_1enable__if__t_3_9_07_9_07has__hash__value__v_3_01261c55baf69cf93eb99e41176b7d1d0a.html#_CPPv4I0EN7sequant4hash1_I1TNSt11enable_if_tIXntntcv16has_hash_value_vI1TEadadN4meta10is_range_vI1TEEEEEEE"><code class="docutils literal notranslate"><span class="pre">sequant::hash::_&lt;</span> <span class="pre">T,</span> <span class="pre">std::enable_if_t&lt;!(!(has_hash_value_v&lt;</span> <span class="pre">T</span> <span class="pre">&gt;)&amp;&amp;meta::is_range_v&lt;</span> <span class="pre">T</span> <span class="pre">&gt;)&gt;</span> <span class="pre">&gt;</span></code></a><ul>
-<li class="toctree-l4"><a class="reference internal" href="structsequant_1_1hash_1_1___3_01_t_00_01std_1_1enable__if__t_3_9_07_9_07has__hash__value__v_3_01261c55baf69cf93eb99e41176b7d1d0a.html#_CPPv4NK7sequant4hash1_I1TNSt11enable_if_tIXntntcv16has_hash_value_vI1TEadadN4meta10is_range_vI1TEEEEEEclERK1T"><code class="docutils literal notranslate"><span class="pre">operator()()</span></code></a></li>
-</ul>
-</li>
-</ul>
-</li>
-</ul>
-</li>
-</ul>
-</div>
-<div class="toctree-wrapper compound">
-<ul>
-<li class="toctree-l1"><a class="reference internal" href="structsequant_1_1hash_1_1___3_01_t_00_01std_1_1enable__if__t_3_9_07has__hash__value__v_3_01_t_01ac0237a12262a65cbf508f969ea10192.html">Template Struct _&lt; T, std::enable_if_t&lt; !(has_hash_value_v&lt; T &gt;, )&amp;&amp;meta::is_range_v&lt; T &gt; &gt; &gt;</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="structsequant_1_1hash_1_1___3_01_t_00_01std_1_1enable__if__t_3_9_07has__hash__value__v_3_01_t_01ac0237a12262a65cbf508f969ea10192.html#struct-documentation">Struct Documentation</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="structsequant_1_1hash_1_1___3_01_t_00_01std_1_1enable__if__t_3_9_07has__hash__value__v_3_01_t_01ac0237a12262a65cbf508f969ea10192.html#_CPPv4I0EN7sequant4hash1_I1TNSt11enable_if_tIXntcv16has_hash_value_vI1TEadadN4meta10is_range_vI1TEEEEEEE"><code class="docutils literal notranslate"><span class="pre">sequant::hash::_&lt;</span> <span class="pre">T,</span> <span class="pre">std::enable_if_t&lt;!(has_hash_value_v&lt;</span> <span class="pre">T</span> <span class="pre">&gt;)&amp;&amp;meta::is_range_v&lt;</span> <span class="pre">T</span> <span class="pre">&gt;</span> <span class="pre">&gt;</span> <span class="pre">&gt;</span></code></a><ul>
-<li class="toctree-l4"><a class="reference internal" href="structsequant_1_1hash_1_1___3_01_t_00_01std_1_1enable__if__t_3_9_07has__hash__value__v_3_01_t_01ac0237a12262a65cbf508f969ea10192.html#_CPPv4NK7sequant4hash1_I1TNSt11enable_if_tIXntcv16has_hash_value_vI1TEadadN4meta10is_range_vI1TEEEEEEclERK1T"><code class="docutils literal notranslate"><span class="pre">operator()()</span></code></a></li>
-</ul>
-</li>
 </ul>
 </li>
 </ul>
@@ -2381,20 +1705,6 @@
 <li class="toctree-l1"><a class="reference internal" href="structsequant_1_1meta_1_1char__type.html">Template Struct char_type</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="structsequant_1_1meta_1_1char__type.html#struct-documentation">Struct Documentation</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="structsequant_1_1meta_1_1char__type.html#_CPPv4I00EN7sequant4meta9char_typeE"><code class="docutils literal notranslate"><span class="pre">sequant::meta::char_type</span></code></a></li>
-</ul>
-</li>
-</ul>
-</li>
-</ul>
-</div>
-<div class="toctree-wrapper compound">
-<ul>
-<li class="toctree-l1"><a class="reference internal" href="structsequant_1_1meta_1_1char__type_3_01_t_00_01std_1_1enable__if__t_3_01is__basic__string__convc91e62bf4b0e46ade68a32f8c3774434.html">Template Struct char_type&lt; T, std::enable_if_t&lt; is_basic_string_convertible_v&lt; T &gt; &gt; &gt;</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="structsequant_1_1meta_1_1char__type_3_01_t_00_01std_1_1enable__if__t_3_01is__basic__string__convc91e62bf4b0e46ade68a32f8c3774434.html#struct-documentation">Struct Documentation</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="structsequant_1_1meta_1_1char__type_3_01_t_00_01std_1_1enable__if__t_3_01is__basic__string__convc91e62bf4b0e46ade68a32f8c3774434.html#_CPPv4I0EN7sequant4meta9char_typeI1TNSt11enable_if_tI29is_basic_string_convertible_vI1TEEEEE"><code class="docutils literal notranslate"><span class="pre">sequant::meta::char_type&lt;</span> <span class="pre">T,</span> <span class="pre">std::enable_if_t&lt;</span> <span class="pre">is_basic_string_convertible_v&lt;</span> <span class="pre">T</span> <span class="pre">&gt;</span> <span class="pre">&gt;</span> <span class="pre">&gt;</span></code></a><ul>
-<li class="toctree-l4"><a class="reference internal" href="structsequant_1_1meta_1_1char__type_3_01_t_00_01std_1_1enable__if__t_3_01is__basic__string__convc91e62bf4b0e46ade68a32f8c3774434.html#_CPPv4N7sequant4meta9char_typeI1TNSt11enable_if_tI29is_basic_string_convertible_vI1TEEEE4typeE"><code class="docutils literal notranslate"><span class="pre">type</span></code></a></li>
-</ul>
-</li>
 </ul>
 </li>
 </ul>
@@ -2891,21 +2201,6 @@
 </div>
 <div class="toctree-wrapper compound">
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="structsequant_1_1_singleton_1_1is__default__constructible__helper_3_01_t_00_01std_1_1void__t_3_01decltype_07_t_02_03_08_4_01_4.html">Template Struct is_default_constructible_helper&lt; T, std::void_t&lt; decltype(T{}) &gt; &gt;</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="structsequant_1_1_singleton_1_1is__default__constructible__helper_3_01_t_00_01std_1_1void__t_3_01decltype_07_t_02_03_08_4_01_4.html#inheritance-relationships">Inheritance Relationships</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="structsequant_1_1_singleton_1_1is__default__constructible__helper_3_01_t_00_01std_1_1void__t_3_01decltype_07_t_02_03_08_4_01_4.html#base-type">Base Type</a></li>
-</ul>
-</li>
-<li class="toctree-l2"><a class="reference internal" href="structsequant_1_1_singleton_1_1is__default__constructible__helper_3_01_t_00_01std_1_1void__t_3_01decltype_07_t_02_03_08_4_01_4.html#struct-documentation">Struct Documentation</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="structsequant_1_1_singleton_1_1is__default__constructible__helper_3_01_t_00_01std_1_1void__t_3_01decltype_07_t_02_03_08_4_01_4.html#_CPPv4I0EN7sequant9Singleton31is_default_constructible_helperI1TNSt6void_tIDTcl1TEEEEEE"><code class="docutils literal notranslate"><span class="pre">sequant::Singleton::is_default_constructible_helper&lt;</span> <span class="pre">T,</span> <span class="pre">std::void_t&lt;</span> <span class="pre">decltype(T{})&gt;</span> <span class="pre">&gt;</span></code></a></li>
-</ul>
-</li>
-</ul>
-</li>
-</ul>
-</div>
-<div class="toctree-wrapper compound">
-<ul>
 <li class="toctree-l1"><a class="reference internal" href="structsequant_1_1space__tags_1_1_is_complete.html">Struct IsComplete</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="structsequant_1_1space__tags_1_1_is_complete.html#struct-documentation">Struct Documentation</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="structsequant_1_1space__tags_1_1_is_complete.html#_CPPv4N7sequant10space_tags10IsCompleteE"><code class="docutils literal notranslate"><span class="pre">sequant::space_tags::IsComplete</span></code></a></li>
@@ -3234,91 +2529,6 @@
 <li class="toctree-l4"><a class="reference internal" href="structsequant_1_1_wick_theorem_1_1_nontensor_wick_state.html#_CPPv4I00EN7sequant11WickTheorem18NontensorWickState9uptri_idxEDa1T1T1U"><code class="docutils literal notranslate"><span class="pre">uptri_idx()</span></code></a></li>
 </ul>
 </li>
-</ul>
-</li>
-</ul>
-</li>
-</ul>
-</div>
-<div class="toctree-wrapper compound">
-<ul>
-<li class="toctree-l1"><a class="reference internal" href="structstd_1_1tuple__element_3_010_00_01sequant_1_1_tensor_network_1_1_graph_data_01_4.html">Template Struct tuple_element&lt; 0, sequant::TensorNetwork::GraphData &gt;</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="structstd_1_1tuple__element_3_010_00_01sequant_1_1_tensor_network_1_1_graph_data_01_4.html#struct-documentation">Struct Documentation</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="structstd_1_1tuple__element_3_010_00_01sequant_1_1_tensor_network_1_1_graph_data_01_4.html#_CPPv4IENSt13tuple_elementIXL0EEN7sequant13TensorNetwork9GraphDataEEE"><code class="docutils literal notranslate"><span class="pre">std::tuple_element&lt;</span> <span class="pre">0,</span> <span class="pre">sequant::TensorNetwork::GraphData</span> <span class="pre">&gt;</span></code></a><ul>
-<li class="toctree-l4"><a class="reference internal" href="structstd_1_1tuple__element_3_010_00_01sequant_1_1_tensor_network_1_1_graph_data_01_4.html#_CPPv4NSt13tuple_elementIXL0EEN7sequant13TensorNetwork9GraphDataEE4typeE"><code class="docutils literal notranslate"><span class="pre">type</span></code></a></li>
-</ul>
-</li>
-</ul>
-</li>
-</ul>
-</li>
-</ul>
-</div>
-<div class="toctree-wrapper compound">
-<ul>
-<li class="toctree-l1"><a class="reference internal" href="structstd_1_1tuple__element_3_011_00_01sequant_1_1_tensor_network_1_1_graph_data_01_4.html">Template Struct tuple_element&lt; 1, sequant::TensorNetwork::GraphData &gt;</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="structstd_1_1tuple__element_3_011_00_01sequant_1_1_tensor_network_1_1_graph_data_01_4.html#struct-documentation">Struct Documentation</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="structstd_1_1tuple__element_3_011_00_01sequant_1_1_tensor_network_1_1_graph_data_01_4.html#_CPPv4IENSt13tuple_elementIXL1EEN7sequant13TensorNetwork9GraphDataEEE"><code class="docutils literal notranslate"><span class="pre">std::tuple_element&lt;</span> <span class="pre">1,</span> <span class="pre">sequant::TensorNetwork::GraphData</span> <span class="pre">&gt;</span></code></a><ul>
-<li class="toctree-l4"><a class="reference internal" href="structstd_1_1tuple__element_3_011_00_01sequant_1_1_tensor_network_1_1_graph_data_01_4.html#_CPPv4NSt13tuple_elementIXL1EEN7sequant13TensorNetwork9GraphDataEE4typeE"><code class="docutils literal notranslate"><span class="pre">type</span></code></a></li>
-</ul>
-</li>
-</ul>
-</li>
-</ul>
-</li>
-</ul>
-</div>
-<div class="toctree-wrapper compound">
-<ul>
-<li class="toctree-l1"><a class="reference internal" href="structstd_1_1tuple__element_3_012_00_01sequant_1_1_tensor_network_1_1_graph_data_01_4.html">Template Struct tuple_element&lt; 2, sequant::TensorNetwork::GraphData &gt;</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="structstd_1_1tuple__element_3_012_00_01sequant_1_1_tensor_network_1_1_graph_data_01_4.html#struct-documentation">Struct Documentation</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="structstd_1_1tuple__element_3_012_00_01sequant_1_1_tensor_network_1_1_graph_data_01_4.html#_CPPv4IENSt13tuple_elementIXL2EEN7sequant13TensorNetwork9GraphDataEEE"><code class="docutils literal notranslate"><span class="pre">std::tuple_element&lt;</span> <span class="pre">2,</span> <span class="pre">sequant::TensorNetwork::GraphData</span> <span class="pre">&gt;</span></code></a><ul>
-<li class="toctree-l4"><a class="reference internal" href="structstd_1_1tuple__element_3_012_00_01sequant_1_1_tensor_network_1_1_graph_data_01_4.html#_CPPv4NSt13tuple_elementIXL2EEN7sequant13TensorNetwork9GraphDataEE4typeE"><code class="docutils literal notranslate"><span class="pre">type</span></code></a></li>
-</ul>
-</li>
-</ul>
-</li>
-</ul>
-</li>
-</ul>
-</div>
-<div class="toctree-wrapper compound">
-<ul>
-<li class="toctree-l1"><a class="reference internal" href="structstd_1_1tuple__element_3_013_00_01sequant_1_1_tensor_network_1_1_graph_data_01_4.html">Template Struct tuple_element&lt; 3, sequant::TensorNetwork::GraphData &gt;</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="structstd_1_1tuple__element_3_013_00_01sequant_1_1_tensor_network_1_1_graph_data_01_4.html#struct-documentation">Struct Documentation</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="structstd_1_1tuple__element_3_013_00_01sequant_1_1_tensor_network_1_1_graph_data_01_4.html#_CPPv4IENSt13tuple_elementIXL3EEN7sequant13TensorNetwork9GraphDataEEE"><code class="docutils literal notranslate"><span class="pre">std::tuple_element&lt;</span> <span class="pre">3,</span> <span class="pre">sequant::TensorNetwork::GraphData</span> <span class="pre">&gt;</span></code></a><ul>
-<li class="toctree-l4"><a class="reference internal" href="structstd_1_1tuple__element_3_013_00_01sequant_1_1_tensor_network_1_1_graph_data_01_4.html#_CPPv4NSt13tuple_elementIXL3EEN7sequant13TensorNetwork9GraphDataEE4typeE"><code class="docutils literal notranslate"><span class="pre">type</span></code></a></li>
-</ul>
-</li>
-</ul>
-</li>
-</ul>
-</li>
-</ul>
-</div>
-<div class="toctree-wrapper compound">
-<ul>
-<li class="toctree-l1"><a class="reference internal" href="structstd_1_1tuple__element_3_014_00_01sequant_1_1_tensor_network_1_1_graph_data_01_4.html">Template Struct tuple_element&lt; 4, sequant::TensorNetwork::GraphData &gt;</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="structstd_1_1tuple__element_3_014_00_01sequant_1_1_tensor_network_1_1_graph_data_01_4.html#struct-documentation">Struct Documentation</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="structstd_1_1tuple__element_3_014_00_01sequant_1_1_tensor_network_1_1_graph_data_01_4.html#_CPPv4IENSt13tuple_elementIXL4EEN7sequant13TensorNetwork9GraphDataEEE"><code class="docutils literal notranslate"><span class="pre">std::tuple_element&lt;</span> <span class="pre">4,</span> <span class="pre">sequant::TensorNetwork::GraphData</span> <span class="pre">&gt;</span></code></a><ul>
-<li class="toctree-l4"><a class="reference internal" href="structstd_1_1tuple__element_3_014_00_01sequant_1_1_tensor_network_1_1_graph_data_01_4.html#_CPPv4NSt13tuple_elementIXL4EEN7sequant13TensorNetwork9GraphDataEE4typeE"><code class="docutils literal notranslate"><span class="pre">type</span></code></a></li>
-</ul>
-</li>
-</ul>
-</li>
-</ul>
-</li>
-</ul>
-</div>
-<div class="toctree-wrapper compound">
-<ul>
-<li class="toctree-l1"><a class="reference internal" href="structstd_1_1tuple__size_3_01sequant_1_1_tensor_network_1_1_graph_data_01_4.html">Template Struct tuple_size&lt; sequant::TensorNetwork::GraphData &gt;</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="structstd_1_1tuple__size_3_01sequant_1_1_tensor_network_1_1_graph_data_01_4.html#inheritance-relationships">Inheritance Relationships</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="structstd_1_1tuple__size_3_01sequant_1_1_tensor_network_1_1_graph_data_01_4.html#base-type">Base Type</a></li>
-</ul>
-</li>
-<li class="toctree-l2"><a class="reference internal" href="structstd_1_1tuple__size_3_01sequant_1_1_tensor_network_1_1_graph_data_01_4.html#struct-documentation">Struct Documentation</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="structstd_1_1tuple__size_3_01sequant_1_1_tensor_network_1_1_graph_data_01_4.html#_CPPv4IENSt10tuple_sizeIN7sequant13TensorNetwork9GraphDataEEE"><code class="docutils literal notranslate"><span class="pre">std::tuple_size&lt;</span> <span class="pre">sequant::TensorNetwork::GraphData</span> <span class="pre">&gt;</span></code></a></li>
 </ul>
 </li>
 </ul>
@@ -4038,10 +3248,8 @@
 </li>
 <li class="toctree-l4"><a class="reference internal" href="classsequant_1_1_expr.html#_CPPv4I00EN7sequant4Expr21is_shared_ptr_of_exprE"><code class="docutils literal notranslate"><span class="pre">sequant::Expr::is_shared_ptr_of_expr</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="classsequant_1_1_expr.html#_CPPv4IEN7sequant4Expr21is_shared_ptr_of_exprI7ExprPtrvEE"><code class="docutils literal notranslate"><span class="pre">sequant::Expr::is_shared_ptr_of_expr&lt;</span> <span class="pre">ExprPtr,</span> <span class="pre">void</span> <span class="pre">&gt;</span></code></a></li>
-<li class="toctree-l4"><a class="reference internal" href="classsequant_1_1_expr.html#_CPPv4I0EN7sequant4Expr21is_shared_ptr_of_exprINSt10shared_ptrI1TEENSt11enable_if_tI9is_expr_vI1TEEEEE"><code class="docutils literal notranslate"><span class="pre">sequant::Expr::is_shared_ptr_of_expr&lt;</span> <span class="pre">std::shared_ptr&lt;</span> <span class="pre">T</span> <span class="pre">&gt;,</span> <span class="pre">std::enable_if_t&lt;</span> <span class="pre">is_expr_v&lt;</span> <span class="pre">T</span> <span class="pre">&gt;</span> <span class="pre">&gt;</span> <span class="pre">&gt;</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="classsequant_1_1_expr.html#_CPPv4I00EN7sequant4Expr32is_shared_ptr_of_expr_or_derivedE"><code class="docutils literal notranslate"><span class="pre">sequant::Expr::is_shared_ptr_of_expr_or_derived</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="classsequant_1_1_expr.html#_CPPv4IEN7sequant4Expr32is_shared_ptr_of_expr_or_derivedI7ExprPtrvEE"><code class="docutils literal notranslate"><span class="pre">sequant::Expr::is_shared_ptr_of_expr_or_derived&lt;</span> <span class="pre">ExprPtr,</span> <span class="pre">void</span> <span class="pre">&gt;</span></code></a></li>
-<li class="toctree-l4"><a class="reference internal" href="classsequant_1_1_expr.html#_CPPv4I0EN7sequant4Expr32is_shared_ptr_of_expr_or_derivedINSt10shared_ptrI1TEENSt11enable_if_tI12is_an_expr_vI1TEEEEE"><code class="docutils literal notranslate"><span class="pre">sequant::Expr::is_shared_ptr_of_expr_or_derived&lt;</span> <span class="pre">std::shared_ptr&lt;</span> <span class="pre">T</span> <span class="pre">&gt;,</span> <span class="pre">std::enable_if_t&lt;</span> <span class="pre">is_an_expr_v&lt;</span> <span class="pre">T</span> <span class="pre">&gt;</span> <span class="pre">&gt;</span> <span class="pre">&gt;</span></code></a></li>
 </ul>
 </li>
 </ul>
@@ -13983,7 +13191,87 @@
 </li>
 </ul>
 </div>
-</section>
+<script type="text/javascript">
+    /* NOTE: if you are reading this, Exhale generated this directly. */
+    $(document).ready(function() {
+        /* Inspired by very informative answer to get color of links:
+           https://stackoverflow.com/a/2707837/3814202 */
+        var $fake_link = $('<a href="#"></a>').hide().appendTo("body");
+        var linkColor = $fake_link.css("color");
+        $fake_link.remove();
+
+        var $fake_p = $('<p class="text-muted"></p>').hide().appendTo("body");
+        var iconColor = $fake_p.css("color");
+        $fake_p.remove();
+
+        /* After much deliberation, using JavaScript directly to enforce that the
+         * link and glyphicon receive different colors is fruitless, because the
+         * bootstrap treeview library will overwrite the style every time.  Instead,
+         * leaning on the library code itself to append some styling to the head,
+         * I choose to mix a couple of things:
+         *
+         * 1. Set the `color` property of bootstrap treeview globally, this would
+         *    normally affect the color of both the link text and the icon.
+         * 2. Apply custom forced styling of the glyphicon itself in order to make
+         *    it a little more clear to the user (via different colors) that the
+         *    act of clicking the icon and the act of clicking the link text perform
+         *    different actions.  The icon expands, the text navigates to the page.
+         */
+         // Part 1: use linkColor as a parameter to bootstrap treeview
+
+         // apply the page view hierarchy if it exists
+         var page_h = $("#page-treeView");
+         if (page_h.length) {
+             page_h.treeview({
+                 data: getPageHierarchyTree(),
+                 enableLinks: true,
+                 color: linkColor,
+                 showTags: true,
+                 collapseIcon: "glyphicon glyphicon-minus",
+                 expandIcon: "glyphicon glyphicon-plus",
+                 levels: 1,
+                 onhoverColor: "#F5F5F5"
+             });
+         }
+
+         // apply the class view hierarchy if it exists
+         var class_h = $("#class-treeView");
+         if (class_h.length) {
+             class_h.treeview({
+                 data: getClassHierarchyTree(),
+                 enableLinks: true,
+                 color: linkColor,
+                 showTags: true,
+                 collapseIcon: "glyphicon glyphicon-minus",
+                 expandIcon: "glyphicon glyphicon-plus",
+                 levels: 1,
+                 onhoverColor: "#F5F5F5"
+             });
+         }
+
+         // apply the file view hierarchy if it exists
+         var file_h = $("#file-treeView");
+         if (file_h.length) {
+             file_h.treeview({
+                 data: getFileHierarchyTree(),
+                 enableLinks: true,
+                 color: linkColor,
+                 showTags: true,
+                 collapseIcon: "glyphicon glyphicon-minus",
+                 expandIcon: "glyphicon glyphicon-plus",
+                 levels: 1,
+                 onhoverColor: "#F5F5F5"
+             });
+         }
+
+         // Part 2: override the style of the glyphicons by injecting some CSS
+         $('<style type="text/css" id="exhaleTreeviewOverride">' +
+           '    .treeview span[class~=icon] { '                 +
+           '        color: ' + iconColor + ' ! important;'       +
+           '    }'                                              +
+           '</style>').appendTo('head');
+    });
+</script></section>
 </section>
 </section>
 </section>
@@ -14005,7 +13293,7 @@
             
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on Mar 7, 2025 1:50:40 AM</div>
+              Last updated on Mar 13, 2025 4:51:13 PM</div>
           </div>
           <div class="right-details">
             <div class="icons">
@@ -14031,8 +13319,6 @@
             <ul>
 <li><a class="reference internal" href="#">API Reference</a><ul>
 <li><a class="reference internal" href="#sequant-symbolic-tensor-algebra-in-c">SeQuant: Symbolic Tensor Algebra in C++</a><ul>
-<li><a class="reference internal" href="#class-hierarchy">Class Hierarchy</a></li>
-<li><a class="reference internal" href="#file-hierarchy">File Hierarchy</a></li>
 <li><a class="reference internal" href="#full-api">Full API</a><ul>
 <li><a class="reference internal" href="#namespaces">Namespaces</a><ul>
 </ul>
@@ -14076,6 +13362,7 @@
     <script src="../_static/scripts/furo.js?v=5fa4622c"></script>
     <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
     <script src="../_static/copybutton.js?v=f281be69"></script>
+    <script src="../_static/bootstrap-treeview/bootstrap-treeview.min.js?v=6a1e96b4"></script>
     <script>window.MathJax = {"options": {"processHtmlClass": "tex2jax_process|mathjax_process|math|output_area"}}</script>
     <script defer="defer" src="https://cdn.jsdelivr.net/npm/mathjax@4.0.0-beta.3/tex-mml-chtml.js"></script>
     </body>

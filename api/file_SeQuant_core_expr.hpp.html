@@ -9,7 +9,9 @@
         <title>File expr.hpp - SeQuant Documentation</title>
       <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=8f2a1f02" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=354aac6f" />
+    <link rel="stylesheet" type="text/css" href="../_static/graphviz.css?v=fd3f3429" />
     <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../_static/bootstrap-treeview/bootstrap-treeview.min.css?v=8176a87d" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo-extensions.css?v=302659d7" />
     <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/fontawesome.min.css" />
     <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/solid.min.css" />
@@ -22,6 +24,7 @@
   body {
     --color-code-background: #f8f8f8;
   --color-code-foreground: black;
+  --sidebar-item-font-size: 0.95em;
   
   }
   @media not print {
@@ -202,15 +205,23 @@
   <input type="hidden" name="area" value="default">
 </form>
 <div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
-  <p class="caption" role="heading"><span class="caption-text">Getting Started</span></p>
+  <p class="caption" role="heading"><span class="caption-text">Quickstart</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="../source/installing.html">Installation Guide</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../source/using.html">Using SeQuant</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user/installing.html">Installation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user/using.html">Using SeQuant</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user/docs.html">Building the Documentation</a></li>
 </ul>
-<p class="caption" role="heading"><span class="caption-text">Advanced Topics</span></p>
+<p class="caption" role="heading"><span class="caption-text">Advanced Features</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="../source/cc.html">Coupled-Cluster Class</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../source/eval.html">Interpreting and Evaluating Expressions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user/cc.html">Coupled-Cluster Class</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user/spin_tracing.html">Spin Tracing Expressions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user/evaluation.html">Interpreting and Evaluating Expressions</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Internal Documentation</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../internal/docs_advanced.html">Documentation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../internal/tnc.html">Tensor Network Canonicalizer</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../internal/wick.html">Wick Theorem</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
 <ul>
@@ -223,9 +234,7 @@
 <li class="toctree-l1"><a class="reference external" href="https://valeevgroup.github.io">Valeev Research Group</a></li>
 </ul>
 
-</div>
-</div>
-
+</div></div>
       </div>
       
     </div>
@@ -263,6 +272,19 @@
           <section id="file-expr-hpp">
 <span id="file-sequant-core-expr-hpp"></span><h1>File expr.hpp<a class="headerlink" href="#file-expr-hpp" title="Link to this heading">¶</a></h1>
 <p>↰ <a class="reference internal" href="dir_SeQuant_core.html#dir-sequant-core"><span class="std std-ref">Parent directory</span></a> (<code class="docutils literal notranslate"><span class="pre">SeQuant/core</span></code>)</p>
+<nav class="contents local" id="contents">
+<p class="topic-title">Contents</p>
+<ul class="simple">
+<li><p><a class="reference internal" href="#definition-sequant-core-expr-hpp" id="id1">Definition (<code class="docutils literal notranslate"><span class="pre">SeQuant/core/expr.hpp</span></code>)</a></p></li>
+<li><p><a class="reference internal" href="#includes" id="id2">Includes</a></p></li>
+<li><p><a class="reference internal" href="#included-by" id="id3">Included By</a></p></li>
+<li><p><a class="reference internal" href="#namespaces" id="id4">Namespaces</a></p></li>
+<li><p><a class="reference internal" href="#classes" id="id5">Classes</a></p></li>
+<li><p><a class="reference internal" href="#functions" id="id6">Functions</a></p></li>
+<li><p><a class="reference internal" href="#typedefs" id="id7">Typedefs</a></p></li>
+<li><p><a class="reference internal" href="#variables" id="id8">Variables</a></p></li>
+</ul>
+</nav>
 <section id="definition-sequant-core-expr-hpp">
 <h2>Definition (<code class="docutils literal notranslate"><span class="pre">SeQuant/core/expr.hpp</span></code>)<a class="headerlink" href="#definition-sequant-core-expr-hpp" title="Link to this heading">¶</a></h2>
 <div class="toctree-wrapper compound">
@@ -353,10 +375,8 @@
 <li><p><a class="reference internal" href="structsequant_1_1_expr_1_1cursor.html#exhale-struct-structsequant-1-1-expr-1-1cursor"><span class="std std-ref">Struct Expr::cursor</span></a></p></li>
 <li><p><a class="reference internal" href="structsequant_1_1_expr_1_1is__shared__ptr__of__expr.html#exhale-struct-structsequant-1-1-expr-1-1is-shared-ptr-of-expr"><span class="std std-ref">Template Struct Expr::is_shared_ptr_of_expr</span></a></p></li>
 <li><p><a class="reference internal" href="structsequant_1_1_expr_1_1is__shared__ptr__of__expr_3_01_expr_ptr_00_01void_01_4.html#exhale-struct-structsequant-1-1-expr-1-1is-shared-ptr-of-expr-3-01-expr-ptr-00-01void-01-4"><span class="std std-ref">Template Struct Expr::is_shared_ptr_of_expr&lt; ExprPtr, void &gt;</span></a></p></li>
-<li><p><a class="reference internal" href="structsequant_1_1_expr_1_1is__shared__ptr__of__expr_3_01std_1_1shared__ptr_3_01_t_01_4_00_01std_bb3533b4d54bb13a35fe574fcb225ae9.html#exhale-struct-structsequant-1-1-expr-1-1is-shared-ptr-of-expr-3-01std-1-1shared-ptr-3-01-t-01-4-00-01std-bb3533b4d54bb13a35fe574fcb225ae9"><span class="std std-ref">Template Struct is_shared_ptr_of_expr&lt; std::shared_ptr&lt; T &gt;, std::enable_if_t&lt; is_expr_v&lt; T &gt; &gt; &gt;</span></a></p></li>
 <li><p><a class="reference internal" href="structsequant_1_1_expr_1_1is__shared__ptr__of__expr__or__derived.html#exhale-struct-structsequant-1-1-expr-1-1is-shared-ptr-of-expr-or-derived"><span class="std std-ref">Template Struct Expr::is_shared_ptr_of_expr_or_derived</span></a></p></li>
 <li><p><a class="reference internal" href="structsequant_1_1_expr_1_1is__shared__ptr__of__expr__or__derived_3_01_expr_ptr_00_01void_01_4.html#exhale-struct-structsequant-1-1-expr-1-1is-shared-ptr-of-expr-or-derived-3-01-expr-ptr-00-01void-01-4"><span class="std std-ref">Template Struct Expr::is_shared_ptr_of_expr_or_derived&lt; ExprPtr, void &gt;</span></a></p></li>
-<li><p><a class="reference internal" href="structsequant_1_1_expr_1_1is__shared__ptr__of__expr__or__derived_3_01std_1_1shared__ptr_3_01_t_0b9041721e7914bd1fb6a6a0536a3b3b6.html#exhale-struct-structsequant-1-1-expr-1-1is-shared-ptr-of-expr-or-derived-3-01std-1-1shared-ptr-3-01-t-0b9041721e7914bd1fb6a6a0536a3b3b6"><span class="std std-ref">Template Struct is_shared_ptr_of_expr_or_derived&lt; std::shared_ptr&lt; T &gt;, std::enable_if_t&lt; is_an_expr_v&lt; T &gt; &gt; &gt;</span></a></p></li>
 <li><p><a class="reference internal" href="classsequant_1_1_constant.html#exhale-class-classsequant-1-1-constant"><span class="std std-ref">Class Constant</span></a></p></li>
 <li><p><a class="reference internal" href="classsequant_1_1_c_product.html#exhale-class-classsequant-1-1-c-product"><span class="std std-ref">Class CProduct</span></a></p></li>
 <li><p><a class="reference internal" href="classsequant_1_1_expr.html#exhale-class-classsequant-1-1-expr"><span class="std std-ref">Class Expr</span></a></p></li>
@@ -380,8 +400,8 @@
 <li><p><a class="reference internal" href="function_namespacesequant_1af4ece5a049a3d307e03f6b2af97697ab.html#exhale-function-namespacesequant-1af4ece5a049a3d307e03f6b2af97697ab"><span class="std std-ref">Function sequant::end(ExprPtr&amp;)</span></a></p></li>
 <li><p><a class="reference internal" href="function_namespacesequant_1af4f19f545e6cd169b63cae9380ec8a40.html#exhale-function-namespacesequant-1af4f19f545e6cd169b63cae9380ec8a40"><span class="std std-ref">Template Function sequant::ex</span></a></p></li>
 <li><p><a class="reference internal" href="function_namespacesequant_1a24f69f16c272cb4a9bd054c7d9dc6410.html#exhale-function-namespacesequant-1a24f69f16c272cb4a9bd054c7d9dc6410"><span class="std std-ref">Function sequant::operator!=(const Expr&amp;, const Expr&amp;)</span></a></p></li>
-<li><p><a class="reference internal" href="function_namespacesequant_1af06cc45e975afcb9ae60db7b6cbbcba9.html#exhale-function-namespacesequant-1af06cc45e975afcb9ae60db7b6cbbcba9"><span class="std std-ref">Function sequant::operator==(const ExprPtr&amp;, std::nullptr_t)</span></a></p></li>
 <li><p><a class="reference internal" href="function_namespacesequant_1ab4a40939b4d8eb1dc68f8778c0b73930.html#exhale-function-namespacesequant-1ab4a40939b4d8eb1dc68f8778c0b73930"><span class="std std-ref">Function sequant::operator==(std::nullptr_t, const ExprPtr&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1af06cc45e975afcb9ae60db7b6cbbcba9.html#exhale-function-namespacesequant-1af06cc45e975afcb9ae60db7b6cbbcba9"><span class="std std-ref">Function sequant::operator==(const ExprPtr&amp;, std::nullptr_t)</span></a></p></li>
 <li><p><a class="reference internal" href="function_namespacesequant_1a4f7a82ef79acb5f9253be6cf51a1bde0.html#exhale-function-namespacesequant-1a4f7a82ef79acb5f9253be6cf51a1bde0"><span class="std std-ref">Function sequant::operator==(const Expr&amp;, const Expr&amp;)</span></a></p></li>
 <li><p><a class="reference internal" href="function_namespacesequant_1af0948cfc462ccc7967a31e2cf87318f6.html#exhale-function-namespacesequant-1af0948cfc462ccc7967a31e2cf87318f6"><span class="std std-ref">Function sequant::size(const Expr&amp;)</span></a></p></li>
 <li><p><a class="reference internal" href="function_namespacesequant_1a437ad10a56bd65379c519b985070f255.html#exhale-function-namespacesequant-1a437ad10a56bd65379c519b985070f255"><span class="std std-ref">Function sequant::size(const ExprPtr&amp;)</span></a></p></li>
@@ -423,7 +443,7 @@
             
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on Mar 7, 2025 1:50:40 AM</div>
+              Last updated on Mar 13, 2025 4:51:13 PM</div>
           </div>
           <div class="right-details">
             <div class="icons">
@@ -473,5 +493,6 @@
     <script src="../_static/scripts/furo.js?v=5fa4622c"></script>
     <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
     <script src="../_static/copybutton.js?v=f281be69"></script>
+    <script src="../_static/bootstrap-treeview/bootstrap-treeview.min.js?v=6a1e96b4"></script>
     </body>
 </html>

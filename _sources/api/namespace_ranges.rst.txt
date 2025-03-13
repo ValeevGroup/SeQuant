@@ -4,3 +4,10 @@
 Namespace ranges
 ================
 
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+
+

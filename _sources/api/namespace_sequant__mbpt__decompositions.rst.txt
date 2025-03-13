@@ -5,6 +5,13 @@ Namespace sequant::mbpt::decompositions
 =======================================
 
 
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+
+
+
 
 Functions
 ---------

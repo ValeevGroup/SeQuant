@@ -1,37 +1,44 @@
-
-
 .. include:: ../../../README.md
    :parser: myst_parser.sphinx_
 
+.. toctree::
+   :caption: Quickstart
+   :maxdepth: 1
+   :hidden:
+
+   user/installing
+   user/using
+   user/docs
 
 .. toctree::
-    :caption: Getting Started
-    :hidden:
-    :maxdepth: 2
+   :caption: Advanced Features
+   :maxdepth: 1
+   :hidden:
 
-    source/installing
-    source/using
-
-
-.. toctree::
-    :caption: Advanced Topics
-    :maxdepth: 2
-    :hidden:
-
-    source/cc
-    source/eval
+   user/cc
+   user/spin_tracing
+   user/evaluation
 
 .. toctree::
-    :caption: API Reference
-    :maxdepth: 1
-    :hidden:
+   :caption: Internal Documentation
+   :maxdepth: 1
+   :hidden:
 
-    genindex
+   internal/docs_advanced
+   internal/tnc
+   internal/wick
 
 .. toctree::
-    :caption: See Also
-    :hidden:
+   :caption: API Reference
+   :maxdepth: 1
+   :hidden:
 
-    TiledArray <https://valeevgroup.github.io/tiledarray>
-    Massively Parallel Quantum Chemistry <https://valeevgroup.github.io/mpqc>
-    Valeev Research Group <https://valeevgroup.github.io>
+   genindex
+
+.. toctree::
+   :caption: See Also
+   :hidden:
+
+   TiledArray <https://valeevgroup.github.io/tiledarray>
+   Massively Parallel Quantum Chemistry <https://valeevgroup.github.io/mpqc>
+   Valeev Research Group <https://valeevgroup.github.io>

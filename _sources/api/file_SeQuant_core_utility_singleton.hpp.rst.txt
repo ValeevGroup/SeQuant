@@ -8,6 +8,11 @@ File singleton.hpp
 
 .. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
 
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
 Definition (``SeQuant/core/utility/singleton.hpp``)
 ---------------------------------------------------
 
@@ -58,8 +63,6 @@ Classes
 
 
 - :ref:`exhale_struct_structsequant_1_1_singleton_1_1is__default__constructible__helper`
-
-- :ref:`exhale_struct_structsequant_1_1_singleton_1_1is__default__constructible__helper_3_01_t_00_01std_1_1void__t_3_01decltype_07_t_02_03_08_4_01_4`
 
 - :ref:`exhale_class_classsequant_1_1_singleton`
 

@@ -10,19 +10,9 @@ STL namespace.
 
 
 
+.. contents:: Contents
+   :local:
+   :backlinks: none
 
-Classes
--------
 
 
-- :ref:`exhale_struct_structstd_1_1tuple__element_3_010_00_01sequant_1_1_tensor_network_1_1_graph_data_01_4`
-
-- :ref:`exhale_struct_structstd_1_1tuple__element_3_011_00_01sequant_1_1_tensor_network_1_1_graph_data_01_4`
-
-- :ref:`exhale_struct_structstd_1_1tuple__element_3_012_00_01sequant_1_1_tensor_network_1_1_graph_data_01_4`
-
-- :ref:`exhale_struct_structstd_1_1tuple__element_3_013_00_01sequant_1_1_tensor_network_1_1_graph_data_01_4`
-
-- :ref:`exhale_struct_structstd_1_1tuple__element_3_014_00_01sequant_1_1_tensor_network_1_1_graph_data_01_4`
-
-- :ref:`exhale_struct_structstd_1_1tuple__size_3_01sequant_1_1_tensor_network_1_1_graph_data_01_4`

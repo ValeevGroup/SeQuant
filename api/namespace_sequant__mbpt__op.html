@@ -9,7 +9,9 @@
         <title>Namespace sequant::mbpt::op - SeQuant Documentation</title>
       <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=8f2a1f02" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=354aac6f" />
+    <link rel="stylesheet" type="text/css" href="../_static/graphviz.css?v=fd3f3429" />
     <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../_static/bootstrap-treeview/bootstrap-treeview.min.css?v=8176a87d" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo-extensions.css?v=302659d7" />
     <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/fontawesome.min.css" />
     <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/solid.min.css" />
@@ -22,6 +24,7 @@
   body {
     --color-code-background: #f8f8f8;
   --color-code-foreground: black;
+  --sidebar-item-font-size: 0.95em;
   
   }
   @media not print {
@@ -202,15 +205,23 @@
   <input type="hidden" name="area" value="default">
 </form>
 <div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
-  <p class="caption" role="heading"><span class="caption-text">Getting Started</span></p>
+  <p class="caption" role="heading"><span class="caption-text">Quickstart</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="../source/installing.html">Installation Guide</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../source/using.html">Using SeQuant</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user/installing.html">Installation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user/using.html">Using SeQuant</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user/docs.html">Building the Documentation</a></li>
 </ul>
-<p class="caption" role="heading"><span class="caption-text">Advanced Topics</span></p>
+<p class="caption" role="heading"><span class="caption-text">Advanced Features</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="../source/cc.html">Coupled-Cluster Class</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../source/eval.html">Interpreting and Evaluating Expressions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user/cc.html">Coupled-Cluster Class</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user/spin_tracing.html">Spin Tracing Expressions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../user/evaluation.html">Interpreting and Evaluating Expressions</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Internal Documentation</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../internal/docs_advanced.html">Documentation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../internal/tnc.html">Tensor Network Canonicalizer</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../internal/wick.html">Wick Theorem</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
 <ul>
@@ -223,9 +234,7 @@
 <li class="toctree-l1"><a class="reference external" href="https://valeevgroup.github.io">Valeev Research Group</a></li>
 </ul>
 
-</div>
-</div>
-
+</div></div>
       </div>
       
     </div>
@@ -263,6 +272,13 @@
           <section id="namespace-sequant-mbpt-op">
 <span id="id1"></span><h1>Namespace sequant::mbpt::op<a class="headerlink" href="#namespace-sequant-mbpt-op" title="Link to this heading">¶</a></h1>
 <p>the namespace containing MBPT operators</p>
+<nav class="contents local" id="contents">
+<p class="topic-title">Contents</p>
+<ul class="simple">
+<li><p><a class="reference internal" href="#namespaces" id="id2">Namespaces</a></p></li>
+<li><p><a class="reference internal" href="#functions" id="id3">Functions</a></p></li>
+</ul>
+</nav>
 <section id="namespaces">
 <h2>Namespaces<a class="headerlink" href="#namespaces" title="Link to this heading">¶</a></h2>
 <ul class="simple">
@@ -275,12 +291,12 @@
 <ul class="simple">
 <li><p><a class="reference internal" href="function_namespacesequant_1_1mbpt_1_1op_1ad67f54f3ff8adb05956c715b3155de7b.html#exhale-function-namespacesequant-1-1mbpt-1-1op-1ad67f54f3ff8adb05956c715b3155de7b"><span class="std std-ref">Function sequant::mbpt::op::A</span></a></p></li>
 <li><p><a class="reference internal" href="function_namespacesequant_1_1mbpt_1_1op_1a2e40b49c3201b4472e29a6f116433182.html#exhale-function-namespacesequant-1-1mbpt-1-1op-1a2e40b49c3201b4472e29a6f116433182"><span class="std std-ref">Function sequant::mbpt::op::can_change_qns</span></a></p></li>
-<li><p><a class="reference internal" href="function_namespacesequant_1_1mbpt_1_1op_1a71085738dbaeb28335934c1393032a9a.html#exhale-function-namespacesequant-1-1mbpt-1-1op-1a71085738dbaeb28335934c1393032a9a"><span class="std std-ref">Function sequant::mbpt::op::DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(A)</span></a></p></li>
 <li><p><a class="reference internal" href="function_namespacesequant_1_1mbpt_1_1op_1aca74f1417232ad545883f39d51c95373.html#exhale-function-namespacesequant-1-1mbpt-1-1op-1aca74f1417232ad545883f39d51c95373"><span class="std std-ref">Function sequant::mbpt::op::DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(R_)</span></a></p></li>
 <li><p><a class="reference internal" href="function_namespacesequant_1_1mbpt_1_1op_1ae3872bc86eddfaf827173dd8bf3f5272.html#exhale-function-namespacesequant-1-1mbpt-1-1op-1ae3872bc86eddfaf827173dd8bf3f5272"><span class="std std-ref">Function sequant::mbpt::op::DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(L_)</span></a></p></li>
 <li><p><a class="reference internal" href="function_namespacesequant_1_1mbpt_1_1op_1af161234050fe577073b8bbd6c7e84932.html#exhale-function-namespacesequant-1-1mbpt-1-1op-1af161234050fe577073b8bbd6c7e84932"><span class="std std-ref">Function sequant::mbpt::op::DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(R)</span></a></p></li>
 <li><p><a class="reference internal" href="function_namespacesequant_1_1mbpt_1_1op_1ad97f824dc8e70f3d08efa66c0f1b1777.html#exhale-function-namespacesequant-1-1mbpt-1-1op-1ad97f824dc8e70f3d08efa66c0f1b1777"><span class="std std-ref">Function sequant::mbpt::op::DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(L)</span></a></p></li>
 <li><p><a class="reference internal" href="function_namespacesequant_1_1mbpt_1_1op_1a6c5129991470bb898128bf0afe47fc58.html#exhale-function-namespacesequant-1-1mbpt-1-1op-1a6c5129991470bb898128bf0afe47fc58"><span class="std std-ref">Function sequant::mbpt::op::DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(P)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1_1mbpt_1_1op_1a71085738dbaeb28335934c1393032a9a.html#exhale-function-namespacesequant-1-1mbpt-1-1op-1a71085738dbaeb28335934c1393032a9a"><span class="std std-ref">Function sequant::mbpt::op::DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(A)</span></a></p></li>
 <li><p><a class="reference internal" href="function_namespacesequant_1_1mbpt_1_1op_1a9de560ef59769defc4edfb41bbea232e.html#exhale-function-namespacesequant-1-1mbpt-1-1op-1a9de560ef59769defc4edfb41bbea232e"><span class="std std-ref">Function sequant::mbpt::op::F</span></a></p></li>
 <li><p><a class="reference internal" href="function_namespacesequant_1_1mbpt_1_1op_1ac389de58f04c5ccf7279da092b6adc0c.html#exhale-function-namespacesequant-1-1mbpt-1-1op-1ac389de58f04c5ccf7279da092b6adc0c"><span class="std std-ref">Function sequant::mbpt::op::H</span></a></p></li>
 <li><p><a class="reference internal" href="function_namespacesequant_1_1mbpt_1_1op_1a05b191934b7ec6df3870136088c9cc7e.html#exhale-function-namespacesequant-1-1mbpt-1-1op-1a05b191934b7ec6df3870136088c9cc7e"><span class="std std-ref">Function sequant::mbpt::op::H_</span></a></p></li>
@@ -329,7 +345,7 @@
             
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on Mar 7, 2025 1:50:40 AM</div>
+              Last updated on Mar 13, 2025 4:51:13 PM</div>
           </div>
           <div class="right-details">
             <div class="icons">
@@ -373,5 +389,6 @@
     <script src="../_static/scripts/furo.js?v=5fa4622c"></script>
     <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
     <script src="../_static/copybutton.js?v=f281be69"></script>
+    <script src="../_static/bootstrap-treeview/bootstrap-treeview.min.js?v=6a1e96b4"></script>
     </body>
 </html>

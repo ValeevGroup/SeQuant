@@ -4,3 +4,10 @@
 Namespace sequant::@87
 ======================
 
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+
+

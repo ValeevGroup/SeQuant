@@ -12,7 +12,7 @@ Program Listing for File README.md
 
    # SeQuant: Symbolic Tensor Algebra in C++
    
-   [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](h)
+   [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)]()
    [![Linux/MacOS Build](https://github.com/ValeevGroup/SeQuant/actions/workflows/cmake.yml/badge.svg)](https://github.com/ValeevGroup/SeQuant/actions/workflows/cmake.yml)
    [![Docs](https://github.com/ValeevGroup/SeQuant/actions/workflows/docs.yml/badge.svg)](https://valeevgroup.github.io/SeQuant)
    

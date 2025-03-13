@@ -5,6 +5,13 @@ Namespace boost::numeric
 ========================
 
 
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+
+
+
 
 Functions
 ---------
