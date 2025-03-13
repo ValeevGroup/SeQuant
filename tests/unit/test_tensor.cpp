@@ -16,6 +16,7 @@
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/tag.hpp>
 #include <SeQuant/core/tensor.hpp>
+#include <SeQuant/domain/mbpt/context.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 
 #include <cstddef>
@@ -117,6 +118,24 @@ TEST_CASE("Tensor", "[elements]") {
     REQUIRE(!t.bra()[1].tag().has_value());
     REQUIRE(!t.ket()[0].tag().has_value());
     REQUIRE(!t.ket()[1].tag().has_value());
+
+    SECTION("proto indices") {
+      Tensor tensor = parse_expr(L"g{i2,a1<i1>;a2<i2>,i1}")->as<Tensor>();
+
+      // Swap columns of g
+      std::map<Index, Index> idxmap = {
+          {Index{L"i_2"}, Index{L"a_1", {L"i_1"}}},
+          {Index{L"a_1", {L"i_1"}}, Index{L"i_2"}},
+          {Index{L"a_2", {L"i_2"}}, Index{L"i_1"}},
+          {Index{L"i_1"}, Index{L"a_2", {L"i_2"}}},
+      };
+
+      const Tensor expected =
+          parse_expr(L"g{a1<i1>,i2;i1,a2<i2>}")->as<Tensor>();
+      tensor.transform_indices(idxmap);
+
+      REQUIRE(tensor == expected);
+    }
   }  // SECTION("index transformation")
 
   SECTION("hash") {
