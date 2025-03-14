@@ -421,203 +421,202 @@ endif()
 
 ### unit tests
 include(CTest)
+# need catch2
+include(FindOrFetchCatch2)
+include(Catch)
 
-if (BUILD_TESTING)
+if (NOT BUILD_TESTING)
+	set(BUILD_BY_DEFAULT "EXCLUDE_FROM_ALL")
+endif()
 
-    # need catch2
-    include(FindOrFetchCatch2)
-    include(Catch)
 
-    set(utests_src
-            tests/unit/catch2_sequant.hpp
-            tests/unit/test_space.cpp
-            tests/unit/test_index.cpp
-            tests/unit/test_op.cpp
-            tests/unit/test_wick.cpp
-            tests/unit/test_tensor.cpp
-            tests/unit/test_bliss.cpp
-            tests/unit/test_expr.cpp
-            tests/unit/test_iterator.cpp
-            tests/unit/test_mbpt.cpp
-            tests/unit/test_mbpt_cc.cpp
-            tests/unit/test_tensor_network.cpp
-            tests/unit/test_spin.cpp
-            tests/unit/test_canonicalize.cpp
-            tests/unit/test_expr.cpp
-            tests/unit/test_parse.cpp
-            tests/unit/test_eval_expr.cpp
-            tests/unit/test_binary_node.cpp
-            tests/unit/test_asy_cost.cpp
-            tests/unit/test_eval_node.cpp
-            tests/unit/test_optimize.cpp
-            tests/unit/test_fusion.cpp
-            tests/unit/test_runtime.cpp
-            tests/unit/test_math.cpp
-            tests/unit/test_string.cpp
-            tests/unit/test_latex.cpp
-            tests/unit/test_utilities.cpp
-            tests/unit/test_export.cpp
-            tests/unit/test_meta.cpp
-            )
+set(utests_src
+		tests/unit/catch2_sequant.hpp
+		tests/unit/test_space.cpp
+		tests/unit/test_index.cpp
+		tests/unit/test_op.cpp
+		tests/unit/test_wick.cpp
+		tests/unit/test_tensor.cpp
+		tests/unit/test_bliss.cpp
+		tests/unit/test_expr.cpp
+		tests/unit/test_iterator.cpp
+		tests/unit/test_mbpt.cpp
+		tests/unit/test_mbpt_cc.cpp
+		tests/unit/test_tensor_network.cpp
+		tests/unit/test_spin.cpp
+		tests/unit/test_canonicalize.cpp
+		tests/unit/test_expr.cpp
+		tests/unit/test_parse.cpp
+		tests/unit/test_eval_expr.cpp
+		tests/unit/test_binary_node.cpp
+		tests/unit/test_asy_cost.cpp
+		tests/unit/test_eval_node.cpp
+		tests/unit/test_optimize.cpp
+		tests/unit/test_fusion.cpp
+		tests/unit/test_runtime.cpp
+		tests/unit/test_math.cpp
+		tests/unit/test_string.cpp
+		tests/unit/test_latex.cpp
+		tests/unit/test_utilities.cpp
+		tests/unit/test_export.cpp
+		tests/unit/test_meta.cpp
+		)
 
-    if (TARGET tiledarray)
-        list(APPEND utests_src
-                tests/unit/test_eval_ta.cpp
-                tests/unit/test_eval_btas.cpp
-                tests/unit/test_cache_manager.cpp
-                )
-        set_source_files_properties(
-                tests/unit/test_eval_btas.cpp tests/unit/test_eval_ta.cpp PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
-    endif (TARGET tiledarray)
+if (TARGET tiledarray)
+	list(APPEND utests_src
+			tests/unit/test_eval_ta.cpp
+			tests/unit/test_eval_btas.cpp
+			tests/unit/test_cache_manager.cpp
+			)
+	set_source_files_properties(
+			tests/unit/test_eval_btas.cpp tests/unit/test_eval_ta.cpp PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
+endif (TARGET tiledarray)
 
-    set(utests_deps SeQuant Catch2::Catch2)
+set(utests_deps SeQuant Catch2::Catch2)
 
-    set(unit_test_executable unit_tests-sequant)
-    add_executable(${unit_test_executable} EXCLUDE_FROM_ALL
-            tests/unit/test_main.cpp
-            tests/unit/test_config.hpp
-            ${utests_src})
-    target_link_libraries(${unit_test_executable} ${utests_deps})
-    if (TARGET tiledarray)
-        target_link_libraries(${unit_test_executable} tiledarray)
-        target_compile_definitions(${unit_test_executable} PRIVATE SEQUANT_HAS_TILEDARRAY)
-    endif (TARGET tiledarray)
-    add_test(sequant/unit/build "${CMAKE_COMMAND}" --build ${CMAKE_BINARY_DIR}
-            --target ${unit_test_executable})
+set(unit_test_executable unit_tests-sequant)
+add_executable(${unit_test_executable} ${BUILD_BY_DEFAULT}
+		tests/unit/test_main.cpp
+		tests/unit/test_config.hpp
+		${utests_src})
+target_link_libraries(${unit_test_executable} ${utests_deps})
+if (TARGET tiledarray)
+	target_link_libraries(${unit_test_executable} tiledarray)
+	target_compile_definitions(${unit_test_executable} PRIVATE SEQUANT_HAS_TILEDARRAY)
+endif (TARGET tiledarray)
+add_test(sequant/unit/build "${CMAKE_COMMAND}" --build ${CMAKE_BINARY_DIR}
+		--target ${unit_test_executable})
 
-    catch_discover_tests(
-        ${unit_test_executable}
-        TEST_PREFIX "sequant/"
-        WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}/tests/unit"
-        PROPERTIES DEPENDS sequant/unit/build
-    )
+catch_discover_tests(
+	${unit_test_executable}
+	TEST_PREFIX "sequant/"
+	WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}/tests/unit"
+	PROPERTIES DEPENDS sequant/unit/build
+)
 
-    ####### Integration tests aka "examples" ########
+####### Integration tests aka "examples" ########
 
-    # if target examples-sequant does not exist yet, create it
-    if (NOT TARGET examples-sequant)
-        add_custom_target_subproject(sequant examples)
-    endif()
+# if target examples-sequant does not exist yet, create it
+if (NOT TARGET examples-sequant)
+	add_custom_target_subproject(sequant examples)
+endif()
 
-    # Single-Reference Coupled-Cluster equation generation
-    # (spin-orbital)
-    set(example0 srcc)
-    add_executable(${example0} EXCLUDE_FROM_ALL
-            examples/${example0}/${example0}.cpp)
-    target_link_libraries(${example0} SeQuant)
-    # N.B. empty space, to appease foreach
-    set(${example0}_cmdline_args " ;3 t std so;3 t csv so;3 lambda std so;3 lambda csv so;2 t std sf;2 t csv sf;2 lambda std sf;2 lambda csv sf")
+# Single-Reference Coupled-Cluster equation generation
+# (spin-orbital)
+set(example0 srcc)
+add_executable(${example0} ${BUILD_BY_DEFAULT}
+		examples/${example0}/${example0}.cpp)
+target_link_libraries(${example0} SeQuant)
+# N.B. empty space, to appease foreach
+set(${example0}_cmdline_args " ;3 t std so;3 t csv so;3 lambda std so;3 lambda csv so;2 t std sf;2 t csv sf;2 lambda std sf;2 lambda csv sf")
 
-    if (TARGET Eigen3::Eigen)  # these examples require Eigen for full functionality
-      # Single-Reference closed-shell Coupled-Cluster equation
-      # generation (fast spin-traced)
-      set(example1 stcc)
-      add_executable(${example1} EXCLUDE_FROM_ALL
-              examples/${example1}/${example1}.cpp)
-      target_link_libraries(${example1} SeQuant)
+if (TARGET Eigen3::Eigen)  # these examples require Eigen for full functionality
+  # Single-Reference closed-shell Coupled-Cluster equation
+  # generation (fast spin-traced)
+  set(example1 stcc)
+  add_executable(${example1} ${BUILD_BY_DEFAULT}
+		  examples/${example1}/${example1}.cpp)
+  target_link_libraries(${example1} SeQuant)
 
-      # Single-Reference closed-shell Coupled-Cluster equation
-      # generation (rigorous spin-traced)
-      set(example2 stcc_rigorous)
-      add_executable(${example2} EXCLUDE_FROM_ALL
-            examples/${example2}/${example2}.cpp)
-      target_link_libraries(${example2} SeQuant)
-    endif()
+  # Single-Reference closed-shell Coupled-Cluster equation
+  # generation (rigorous spin-traced)
+  set(example2 stcc_rigorous)
+  add_executable(${example2} ${BUILD_BY_DEFAULT}
+		examples/${example2}/${example2}.cpp)
+  target_link_libraries(${example2} SeQuant)
+endif()
 
-    # Single-Reference open-shell equation generation (spin-traced)
-    set(example3 osstcc)
-    add_executable(${example3} EXCLUDE_FROM_ALL
-            examples/${example3}/${example3}.cpp)
-    target_link_libraries(${example3} SeQuant)
+# Single-Reference open-shell equation generation (spin-traced)
+set(example3 osstcc)
+add_executable(${example3} ${BUILD_BY_DEFAULT}
+		examples/${example3}/${example3}.cpp)
+target_link_libraries(${example3} SeQuant)
 
-    # uccf12 example moved to MPQC
+# uccf12 example moved to MPQC
 
-    set(example_eval_src
-            examples/eval/eval_utils.hpp
-            examples/eval/options.hpp
-            examples/eval/options.cpp
-            examples/eval/data_info.hpp
-            examples/eval/data_info.cpp
-            examples/eval/calc_info.hpp
-            examples/eval/calc_info.cpp
-            examples/eval/scf.hpp
-            examples/eval/scf.cpp
-            )
+set(example_eval_src
+		examples/eval/eval_utils.hpp
+		examples/eval/options.hpp
+		examples/eval/options.cpp
+		examples/eval/data_info.hpp
+		examples/eval/data_info.cpp
+		examples/eval/calc_info.hpp
+		examples/eval/calc_info.cpp
+		examples/eval/scf.hpp
+		examples/eval/scf.cpp
+		)
 
-    if (TARGET tiledarray)
-        set(example5 eval_ta)
-        add_executable(${example5} EXCLUDE_FROM_ALL
-                ${example_eval_src}
-                examples/eval/ta/data_world_ta.hpp
-                examples/eval/ta/scf_ta.hpp
-                examples/eval/ta/main.cpp)
-        target_link_libraries(${example5} SeQuant tiledarray)
-    endif (TARGET tiledarray)
+if (TARGET tiledarray)
+	set(example5 eval_ta)
+	add_executable(${example5} ${BUILD_BY_DEFAULT}
+			${example_eval_src}
+			examples/eval/ta/data_world_ta.hpp
+			examples/eval/ta/scf_ta.hpp
+			examples/eval/ta/main.cpp)
+	target_link_libraries(${example5} SeQuant tiledarray)
+endif (TARGET tiledarray)
 
-    set(example6 antisymmetrizer_test)
-    add_executable(${example6} EXCLUDE_FROM_ALL
-            examples/${example6}/${example6}.cpp)
-    target_link_libraries(${example6} SeQuant)
-    target_compile_definitions(${example6} PRIVATE SEQUANT_HAS_TILEDARRAY)
+set(example6 antisymmetrizer_test)
+add_executable(${example6} ${BUILD_BY_DEFAULT}
+		examples/${example6}/${example6}.cpp)
+target_link_libraries(${example6} SeQuant)
+target_compile_definitions(${example6} PRIVATE SEQUANT_HAS_TILEDARRAY)
 
-    if (BTAS_SOURCE_DIR)
-        set(example7 eval_btas)
-        add_executable(${example7} EXCLUDE_FROM_ALL
-                ${example_eval_src}
-                examples/eval/btas/data_world_btas.hpp
-                examples/eval/btas/scf_btas.hpp
-                examples/eval/btas/main.cpp)
-        target_include_directories(${example7} PUBLIC ${BTAS_SOURCE_DIR})
-        target_link_libraries(${example7} SeQuant)
-    endif (BTAS_SOURCE_DIR)
+if (BTAS_SOURCE_DIR)
+	set(example7 eval_btas)
+	add_executable(${example7} ${BUILD_BY_DEFAULT}
+			${example_eval_src}
+			examples/eval/btas/data_world_btas.hpp
+			examples/eval/btas/scf_btas.hpp
+			examples/eval/btas/main.cpp)
+	target_include_directories(${example7} PUBLIC ${BTAS_SOURCE_DIR})
+	target_link_libraries(${example7} SeQuant)
+endif (BTAS_SOURCE_DIR)
 
-    set(lastexample 13)
-    foreach (i RANGE 8 ${lastexample})
-      math(EXPR s "${i} - 7") # map 8..13 -> 1..6
-      set(example${i} synopsis${s})
-      add_executable(${example${i}} EXCLUDE_FROM_ALL
-              examples/synopsis/${example${i}}.cpp)
-      target_link_libraries(${example${i}} SeQuant)
-    endforeach ()
+set(lastexample 13)
+foreach (i RANGE 8 ${lastexample})
+  math(EXPR s "${i} - 7") # map 8..13 -> 1..6
+  set(example${i} synopsis${s})
+  add_executable(${example${i}} ${BUILD_BY_DEFAULT}
+		  examples/synopsis/${example${i}}.cpp)
+  target_link_libraries(${example${i}} SeQuant)
+endforeach ()
 
-    set(example12 "tensor_network_graphs")
-    add_executable(${example12} EXCLUDE_FROM_ALL
-            examples/${example12}/${example12}.cpp)
-    target_link_libraries(${example12} SeQuant)
+set(example12 "tensor_network_graphs")
+add_executable(${example12} ${BUILD_BY_DEFAULT}
+		examples/${example12}/${example12}.cpp)
+target_link_libraries(${example12} SeQuant)
 
-    set (example13 "eomcc")
-    add_executable(${example13} EXCLUDE_FROM_ALL
-            examples/${example13}/${example13}.cpp)
-    target_link_libraries(${example13} SeQuant)
+set (example13 "eomcc")
+add_executable(${example13} ${BUILD_BY_DEFAULT}
+		examples/${example13}/${example13}.cpp)
+target_link_libraries(${example13} SeQuant)
 
-    # add tests for running examples
-    foreach (i RANGE ${lastexample})
-        if (TARGET ${example${i}})
-            add_dependencies(examples-sequant ${example${i}})
-            add_test(sequant/example/${example${i}}/build "${CMAKE_COMMAND}"
-                    --build ${CMAKE_BINARY_DIR} --target ${example${i}})
-            if (NOT DEFINED ${example${i}}_cmdline_args)
-                set(${example${i}}_cmdline_args " ") # N.B. empty space, to appease foreach
-            endif()
-            set(${example${i}}_run_counter 0)
-            foreach (args ${${example${i}}_cmdline_args})
-                string(REPLACE " " ";" args "${args}")
-                add_test(NAME sequant/example/${example${i}}/run/${${example${i}}_run_counter}
-                         COMMAND ${example${i}} ${args}
-                         WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/examples)
-                set_tests_properties(sequant/example/${example${i}}/run/${${example${i}}_run_counter}
-                         PROPERTIES DEPENDS sequant/example/${example${i}}/build)
-                math(EXPR ${example${i}}_run_counter "${${example${i}}_run_counter} + 1")
-            endforeach()
-        endif ()
-    endforeach ()
+# add tests for running examples
+foreach (i RANGE ${lastexample})
+	if (TARGET ${example${i}})
+		add_dependencies(examples-sequant ${example${i}})
+		add_test(sequant/example/${example${i}}/build "${CMAKE_COMMAND}"
+				--build ${CMAKE_BINARY_DIR} --target ${example${i}})
+		if (NOT DEFINED ${example${i}}_cmdline_args)
+			set(${example${i}}_cmdline_args " ") # N.B. empty space, to appease foreach
+		endif()
+		set(${example${i}}_run_counter 0)
+		foreach (args ${${example${i}}_cmdline_args})
+			string(REPLACE " " ";" args "${args}")
+			add_test(NAME sequant/example/${example${i}}/run/${${example${i}}_run_counter}
+					 COMMAND ${example${i}} ${args}
+					 WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/examples)
+			set_tests_properties(sequant/example/${example${i}}/run/${${example${i}}_run_counter}
+					 PROPERTIES DEPENDS sequant/example/${example${i}}/build)
+			math(EXPR ${example${i}}_run_counter "${${example${i}}_run_counter} + 1")
+		endforeach()
+	endif ()
+endforeach ()
 
-    # target for running ALL tests
-    add_custom_target_subproject(sequant check
-            USES_TERMINAL COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure -R "^sequant")
-else (BUILD_TESTING)
-    add_custom_target_subproject(sequant check USES_TERMINAL COMMAND echo "WARNING: SeQuant testing disabled. To enable, give -DBUILD_TESTING=ON to cmake")
-endif (BUILD_TESTING)
+# target for running ALL tests
+add_custom_target_subproject(sequant check
+		USES_TERMINAL COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure -R "^sequant")
 
 ####### Python ########
 
