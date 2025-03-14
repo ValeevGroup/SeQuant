@@ -425,8 +425,8 @@ OpMaker<S>::OpMaker(OpType op, ncre nc, nann na, naux nbatch)
   if (nbatch == 0) return;
   assert(nbatch > 0);
   auto isr = get_default_context().index_space_registry();
-  assert(isr->retrieve(L"Z"));  // Z is the batch space
-  const auto batch_space = isr->retrieve(L"Z");
+  assert(isr->retrieve(L"z"));  // z is the batch space
+  const auto batch_space = isr->retrieve(L"z");
   batch_spaces_ = IndexSpaceContainer(nbatch, batch_space);
 }
 
