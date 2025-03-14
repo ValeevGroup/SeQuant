@@ -112,9 +112,13 @@ option(SEQUANT_IWYU "Whether to use the include-what-you-use tool (if found)" OF
 ##########################
 # SeQuant package options
 ##########################
+include(CTest)
 
 option(ENABLE_TBB "Enable TBB as an optional prerequisite for C++'s parallel STL (if PSTL is not supported will use of standard C++11 concurrency)" OFF)
 add_feature_info(TBB ENABLE_TBB "Intel Thread-Building Blocks is an optional prerequisite for C++'s parallel STL")
+
+option(SEQUANT_TESTS "Enable building of test cases" ${BUILD_TESTING})
+add_feature_info(TESTS SEQUANT_TESTS "Enable building of test cases")
 
 option(SEQUANT_EVAL_TESTS "Enable building of evaluation tests (if true, will look for and/or build TiledArray)" OFF)
 add_feature_info(EVAL_TESTS SEQUANT_EVAL_TESTS "Build evaluation tests (if true, will look for and/or build TiledArray)")
@@ -420,12 +424,10 @@ if (SEQUANT_BENCHMARKS)
 endif()
 
 ### unit tests
-include(CTest)
-# need catch2
 include(FindOrFetchCatch2)
 include(Catch)
 
-if (NOT BUILD_TESTING)
+if (NOT SEQUANT_TESTS)
 	set(BUILD_BY_DEFAULT "EXCLUDE_FROM_ALL")
 endif()
 
