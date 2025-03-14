@@ -426,6 +426,7 @@ if (BUILD_TESTING)
 
     # need catch2
     include(FindOrFetchCatch2)
+    include(Catch)
 
     set(utests_src
             tests/unit/catch2_sequant.hpp
@@ -484,11 +485,12 @@ if (BUILD_TESTING)
     add_test(sequant/unit/build "${CMAKE_COMMAND}" --build ${CMAKE_BINARY_DIR}
             --target ${unit_test_executable})
 
-    add_test(NAME sequant/unit/run
-            COMMAND ${unit_test_executable})
-    set_tests_properties(sequant/unit/run
-            PROPERTIES DEPENDS sequant/unit/build
-            WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/tests/unit)
+    catch_discover_tests(
+        ${unit_test_executable}
+        TEST_PREFIX "sequant/"
+        WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}/tests/unit"
+        PROPERTIES DEPENDS sequant/unit/build
+    )
 
     ####### Integration tests aka "examples" ########
 
@@ -612,7 +614,7 @@ if (BUILD_TESTING)
 
     # target for running ALL tests
     add_custom_target_subproject(sequant check
-            USES_TERMINAL COMMAND ${CMAKE_CTEST_COMMAND} -V -R "'sequant/(unit|example)'")
+            USES_TERMINAL COMMAND ${CMAKE_CTEST_COMMAND} -V -R "^sequant")
 else (BUILD_TESTING)
     add_custom_target_subproject(sequant check USES_TERMINAL COMMAND echo "WARNING: SeQuant testing disabled. To enable, give -DBUILD_TESTING=ON to cmake")
 endif (BUILD_TESTING)
