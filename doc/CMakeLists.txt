@@ -137,3 +137,5 @@ if (SEQUANT_BUILD_DOCS)
     # `html` is a standard GNU  target: https://www.gnu.org/prep/standards/html_node/Standard-Targets.html#Standard-Targets
     add_custom_target_subproject(sequant html DEPENDS doc-sequant)
 endif()
+
+add_subdirectory(examples)
