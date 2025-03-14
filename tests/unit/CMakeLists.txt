@@ -45,13 +45,11 @@ if (TARGET tiledarray)
         "test_eval_ta.cpp"
         PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON
     )
+    target_link_libraries(unit_tests-sequant PRIVATE tiledarray)
+    target_compile_definitions(unit_tests-sequant PRIVATE SEQUANT_HAS_TILEDARRAY)
 endif (TARGET tiledarray)
 
 target_link_libraries(unit_tests-sequant SeQuant Catch2)
-if (TARGET tiledarray)
-    target_link_libraries(unit_tests-sequant tiledarray)
-    target_compile_definitions(unit_tests-sequant PRIVATE SEQUANT_HAS_TILEDARRAY)
-endif (TARGET tiledarray)
 
 if (SEQUANT_TESTS)
     catch_discover_tests(
