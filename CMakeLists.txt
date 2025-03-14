@@ -614,7 +614,7 @@ if (BUILD_TESTING)
 
     # target for running ALL tests
     add_custom_target_subproject(sequant check
-            USES_TERMINAL COMMAND ${CMAKE_CTEST_COMMAND} -V -R "^sequant")
+            USES_TERMINAL COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure -R "^sequant")
 else (BUILD_TESTING)
     add_custom_target_subproject(sequant check USES_TERMINAL COMMAND echo "WARNING: SeQuant testing disabled. To enable, give -DBUILD_TESTING=ON to cmake")
 endif (BUILD_TESTING)
