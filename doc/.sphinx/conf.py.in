@@ -7,8 +7,8 @@ version = "@SEQUANT_VERSION@"
 
 # General Configuration
 exclude_patterns = ['_build', 'Thumbs.db', "/external/*", ".*", "CMakeLists.txt"]
-templates_path = ['@SPHINX_SOURCE_DIR@/_templates']
-html_static_path = ['@SPHINX_SOURCE_DIR@/_static']
+templates_path = ['@SEQUANT_SPHINX_SOURCE_DIR@/_templates']
+html_static_path = ['@SEQUANT_SPHINX_SOURCE_DIR@/_static']
 html_theme = 'furo'  # "sphinx_rtd_theme", "furo"
 html_title = "SeQuant Documentation"
 
@@ -20,18 +20,18 @@ extensions = [
     "sphinx_copybutton",
     "myst_parser",
     "sphinx_design",
-    @SPHINX_EXTRA_EXTENSIONS@
+    @SEQUANT_SPHINX_EXTRA_EXTENSIONS@
 ]
 
 # Breathe Configuration
 # We use breathe to generate documentation from Doxygen XML files
-@SPHINX_BREATHE_PROJECTS@
+@SEQUANT_SPHINX_BREATHE_PROJECTS@
 breathe_default_project = "SeQuant"
 
 # Exhale Configuration
 exhale_args = {
     # note: this is required to be a subdirectory to wherever the other sources live
-    "containmentFolder": "@SPHINX_API_DOCS_DIR@",
+    "containmentFolder": "@SEQUANT_SPHINX_API_DOCS_DIR@",
     "rootFileName": "library_root.rst",
     "doxygenStripFromPath": "..",
     "rootFileTitle": "API Reference",
