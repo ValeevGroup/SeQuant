@@ -12,19 +12,19 @@ file(MAKE_DIRECTORY ${DOXYGEN_OUTPUT_DIR})
 
 # Configure Doxyfile
 configure_file(
-		${CMAKE_CURRENT_SOURCE_DIR}/doxygen/Doxyfile.in
-		${DOXYGEN_OUTPUT_DIR}/Doxyfile @ONLY
+        ${CMAKE_CURRENT_SOURCE_DIR}/doxygen/Doxyfile.in
+        ${DOXYGEN_OUTPUT_DIR}/Doxyfile @ONLY
 )
 
 doxygen_add_docs(
-	doxygen-sequant
-	COMMENT "Generating API documentation via Doxygen"
-	CONFIG_FILE "${DOXYGEN_OUTPUT_DIR}/Doxyfile"
+    doxygen-sequant
+    COMMENT "Generating API documentation via Doxygen"
+    CONFIG_FILE "${DOXYGEN_OUTPUT_DIR}/Doxyfile"
 )
 
 # Ensure the config file installed via sphinx-cmake pip package can be found
 if ("${Python_EXECUTABLE}" MATCHES "(.+)/bin/python[^/]*")
-	list(APPEND CMAKE_PREFIX_PATH "${CMAKE_MATCH_1}")
+    list(APPEND CMAKE_PREFIX_PATH "${CMAKE_MATCH_1}")
 endif()
 
 # Find Sphinx for documentation generation
@@ -46,32 +46,32 @@ file(STRINGS ${SPHINX_SOURCE_DIR}/requirements.txt SPHINX_RAW_MODULES)
 
 set(SPHINX_PYTHON_MODULES "")
 foreach (module ${SPHINX_RAW_MODULES})
-	string(REGEX REPLACE "#.*" "" module_clean ${module})  # Remove comments
-	string(STRIP ${module_clean} module_clean)  # Remove whitespace
-	if (NOT "${module_clean}" STREQUAL "" AND NOT "${module_clean}" STREQUAL "sphinx-cmake")
-		list(APPEND SPHINX_PYTHON_MODULES ${module_clean})
-	endif ()
+    string(REGEX REPLACE "#.*" "" module_clean ${module})  # Remove comments
+    string(STRIP ${module_clean} module_clean)  # Remove whitespace
+    if (NOT "${module_clean}" STREQUAL "" AND NOT "${module_clean}" STREQUAL "sphinx-cmake")
+        list(APPEND SPHINX_PYTHON_MODULES ${module_clean})
+    endif ()
 endforeach ()
 
 set(SPHINX_MISSING_MODULES "")
 foreach(module ${SPHINX_PYTHON_MODULES})
-	execute_process(
-			COMMAND ${Python_EXECUTABLE} -c "import ${module}"
-			RESULT_VARIABLE module_result
-			ERROR_QUIET
-	)
-	if(NOT module_result EQUAL 0)
-		list(APPEND SPHINX_MISSING_MODULES ${module})
-	endif()
+    execute_process(
+            COMMAND ${Python_EXECUTABLE} -c "import ${module}"
+            RESULT_VARIABLE module_result
+            ERROR_QUIET
+    )
+    if(NOT module_result EQUAL 0)
+        list(APPEND SPHINX_MISSING_MODULES ${module})
+    endif()
 endforeach()
 
 if (SPHINX_MISSING_MODULES)
-	message(FATAL_ERROR
-			"The following Python modules required for Sphinx documentation are missing:\n"
-			"  ${SPHINX_MISSING_MODULES}\n"
-			"Run the following command to install them:\n"
-			"  '${Python_EXECUTABLE} -m pip install -r ${CMAKE_CURRENT_SOURCE_DIR}/sphinx/requirements.txt'\n"
-	)
+    message(FATAL_ERROR
+            "The following Python modules required for Sphinx documentation are missing:\n"
+            "  ${SPHINX_MISSING_MODULES}\n"
+            "Run the following command to install them:\n"
+            "  '${Python_EXECUTABLE} -m pip install -r ${CMAKE_CURRENT_SOURCE_DIR}/sphinx/requirements.txt'\n"
+    )
 endif ()
 
 # copy index.rst to the build directory
@@ -80,30 +80,30 @@ file(COPY ${SPHINX_SOURCE_DIR}/index.rst DESTINATION ${SPHINX_BUILD_DIR})
 # Configure Sphinx conf.py
 string(TIMESTAMP CURRENT_YEAR "%Y")
 configure_file(
-		${SPHINX_SOURCE_DIR}/conf.py.in
-		${SPHINX_BUILD_DIR}/conf.py @ONLY
+        ${SPHINX_SOURCE_DIR}/conf.py.in
+        ${SPHINX_BUILD_DIR}/conf.py @ONLY
 )
 
 # Copy documentation sources, excluding _static directory
 set(SOURCE_DIRS user internal api)
 
 foreach (dir ${SOURCE_DIRS})
-	if (IS_DIRECTORY ${SPHINX_SOURCE_DIR}/${dir})
-		file(COPY ${SPHINX_SOURCE_DIR}/${dir} DESTINATION ${SPHINX_BUILD_DIR})
-	endif ()
+    if (IS_DIRECTORY ${SPHINX_SOURCE_DIR}/${dir})
+        file(COPY ${SPHINX_SOURCE_DIR}/${dir} DESTINATION ${SPHINX_BUILD_DIR})
+    endif ()
 endforeach ()
 
 sphinx_add_docs(
-	sphinx-sequant
-	COMMENT "Generating HTML documentation via Sphinx"
-	WORKING_DIRECTORY "${SPHINX_BUILD_DIR}"
-	BUILDER html
-	CONFIG_DIRECTORY "${SPHINX_BUILD_DIR}"
-	SOURCE_DIRECTORY "${SPHINX_BUILD_DIR}"
-	OUTPUT_DIRECTORY "${SPHINX_HTML_DIR}"
-	DEFINE breathe_projects.SeQuant=${PROJECT_BINARY_DIR}/doc/doxygen/xml
-	DEPENDS doxygen-sequant
-	FRESH_ENV
+    sphinx-sequant
+    COMMENT "Generating HTML documentation via Sphinx"
+    WORKING_DIRECTORY "${SPHINX_BUILD_DIR}"
+    BUILDER html
+    CONFIG_DIRECTORY "${SPHINX_BUILD_DIR}"
+    SOURCE_DIRECTORY "${SPHINX_BUILD_DIR}"
+    OUTPUT_DIRECTORY "${SPHINX_HTML_DIR}"
+    DEFINE breathe_projects.SeQuant=${PROJECT_BINARY_DIR}/doc/doxygen/xml
+    DEPENDS doxygen-sequant
+    FRESH_ENV
 )
 
 # Add Sphinx to main documentation target
