@@ -158,6 +158,12 @@ template <Statistics S>
 class Operator<void, S> : public Expr, public Labeled {
  protected:
   Operator() = default;
+
+  /// @brief Constructs an Operator with a label generator and a tensor form
+  /// generator
+  /// @param label_generator A function that generates a label for the operator
+  /// @param tensor_form_generator A function that generates the tensor form of
+  /// the operator
   Operator(std::function<std::wstring_view()> label_generator,
            std::function<ExprPtr()> tensor_form_generator)
       : label_generator_(std::move(label_generator)),
@@ -166,11 +172,13 @@ class Operator<void, S> : public Expr, public Labeled {
  public:
   virtual ~Operator() = default;
 
+  /// @return label of the operator
   std::wstring_view label() const override {
     assert(label_generator_);
     return label_generator_();
   }
 
+  /// @return tensor form of the operator
   virtual ExprPtr tensor_form() const {
     assert(tensor_form_generator_);
     return tensor_form_generator_();
@@ -821,6 +829,13 @@ class Operator : public Operator<void, S> {
   Operator();
 
  public:
+  /// @brief Constructs an operator with the given label and tensor form and
+  /// quantum number action
+  /// @param label_generator a function that generates the label for the
+  /// operator
+  /// @param tensor_form_generator a function that generates the tensor form of
+  /// the operator
+  /// @param qn_action a function that modifies the quantum numbers
   Operator(std::function<std::wstring_view()> label_generator,
            std::function<ExprPtr()> tensor_form_generator,
            std::function<void(QuantumNumbers&)> qn_action);
