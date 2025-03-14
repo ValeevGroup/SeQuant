@@ -6,9 +6,9 @@ author = 'SeQuant developers'
 version = "@SEQUANT_VERSION@"
 
 # General Configuration
-exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store', "/external/*"]
-templates_path = ['@PROJECT_SOURCE_DIR@/doc/sphinx/_templates']
-html_static_path = ['@PROJECT_SOURCE_DIR@/doc/sphinx/_static']
+exclude_patterns = ['_build', 'Thumbs.db', "/external/*", ".*", "CMakeLists.txt"]
+templates_path = ['@SPHINX_SOURCE_DIR@/_templates']
+html_static_path = ['@SPHINX_SOURCE_DIR@/_static']
 html_theme = 'furo'  # "sphinx_rtd_theme", "furo"
 html_title = "SeQuant Documentation"
 
@@ -30,7 +30,8 @@ breathe_default_project = "SeQuant"
 
 # Exhale Configuration
 exhale_args = {
-    "containmentFolder": "@SPHINX_BUILD_DIR@/api",
+    # note: this is required to be a subdirectory to wherever the other sources live
+    "containmentFolder": "@SPHINX_DOCS_DIR@/api",
     "rootFileName": "library_root.rst",
     "doxygenStripFromPath": "..",
     "rootFileTitle": "API Reference",
