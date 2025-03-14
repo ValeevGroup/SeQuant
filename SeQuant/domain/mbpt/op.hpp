@@ -859,10 +859,10 @@ class Operator : public Operator<void, S> {
 
   void adjoint() override;
 
-  bool is_adjoint_ = false;
-
  private:
   std::function<void(QuantumNumbers&)> qn_action_;
+
+  bool is_adjoint_ = false;
 
   bool less_than_rank_of(const this_type& that) const;
 
