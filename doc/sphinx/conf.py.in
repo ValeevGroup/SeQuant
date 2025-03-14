@@ -7,8 +7,8 @@ version = "@SEQUANT_VERSION@"
 
 # General Configuration
 exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store', "/external/*"]
-templates_path = ['_templates']
-html_static_path = ['_static']
+templates_path = ['@PROJECT_SOURCE_DIR@/doc/sphinx/_templates']
+html_static_path = ['@PROJECT_SOURCE_DIR@/doc/sphinx/_static']
 html_theme = 'furo'  # "sphinx_rtd_theme", "furo"
 html_title = "SeQuant Documentation"
 
