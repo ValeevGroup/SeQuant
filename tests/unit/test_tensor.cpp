@@ -25,7 +25,7 @@
 #include <string_view>
 #include <type_traits>
 
-TEST_CASE("Tensor", "[elements]") {
+TEST_CASE("tensor", "[elements]") {
   using namespace sequant;
 
   SECTION("constructors") {
@@ -176,5 +176,4 @@ TEST_CASE("Tensor", "[elements]") {
             L"{{F^{{i_2}}_{{i_1}}}{\\tilde{a}^{{i_1}}_{{i_2}}}}");
 
   }  // SECTION("adjoint")
-
-}  // TEST_CASE("Tensor")
+}

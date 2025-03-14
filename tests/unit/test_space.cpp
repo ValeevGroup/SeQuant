@@ -10,7 +10,7 @@
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/spin.hpp>
 
-TEST_CASE("IndexSpace", "[elements]") {
+TEST_CASE("index_space", "[elements]") {
   using namespace sequant;
 
   SECTION("registry synopsis") {

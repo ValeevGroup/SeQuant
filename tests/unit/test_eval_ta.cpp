@@ -268,557 +268,571 @@ class rand_tensor_yield {
 };
 }  // namespace
 
-TEST_CASE("TEST_EVAL_USING_TA", "[eval]") {
-  using ranges::views::transform;
-  using sequant::EvalExprTA;
-  using sequant::evaluate;
-  using sequant::evaluate_antisymm;
-  using sequant::evaluate_symm;
+TEST_CASE("eval_with_tiledarray", "[eval]") {
+  SECTION("real") {
+    using ranges::views::transform;
+    using sequant::EvalExprTA;
+    using sequant::evaluate;
+    using sequant::evaluate_antisymm;
+    using sequant::evaluate_symm;
 
-  using TA::TArrayD;
+    using TA::TArrayD;
 
-  auto parse_antisymm = [](auto const& xpr) {
-    return parse_expr(xpr, sequant::Symmetry::antisymm);
-  };
+    auto parse_antisymm = [](auto const& xpr) {
+      return parse_expr(xpr, sequant::Symmetry::antisymm);
+    };
 
-  // tnsr is assumed to be single-tiled
-  auto norm = [](TArrayD const& tnsr) { return TA::norm2(tnsr); };
+    // tnsr is assumed to be single-tiled
+    auto norm = [](TArrayD const& tnsr) { return TA::norm2(tnsr); };
 
-  auto& world = TA::get_default_world();
+    auto& world = TA::get_default_world();
 
-  const size_t nocc = 2, nvirt = 20;
-  auto yield_ = rand_tensor_yield<double, TA::DensePolicy>{world, nocc, nvirt};
-  auto yield = [&yield_](std::wstring_view lbl) -> TA::TArrayD const& {
-    return yield_(lbl)->get<TA::TArrayD>();
-  };
+    const size_t nocc = 2, nvirt = 20;
+    auto yield_ =
+        rand_tensor_yield<double, TA::DensePolicy>{world, nocc, nvirt};
+    auto yield = [&yield_](std::wstring_view lbl) -> TA::TArrayD const& {
+      return yield_(lbl)->get<TA::TArrayD>();
+    };
 
-  auto yield_d = [&yield_](std::wstring_view lbl) ->
-      typename TA::TArrayD::numeric_type {
-        return yield_(lbl)->get<typename TA::TArrayD::numeric_type>();
-      };
+    auto yield_d = [&yield_](std::wstring_view lbl) ->
+        typename TA::TArrayD::numeric_type {
+          return yield_(lbl)->get<typename TA::TArrayD::numeric_type>();
+        };
 
-  auto eval = [&yield_](sequant::ExprPtr const& expr,
-                        std::string const& target_labels) {
-    return evaluate(eval_node(expr), target_labels, yield_)->get<TA::TArrayD>();
-  };
+    auto eval = [&yield_](sequant::ExprPtr const& expr,
+                          std::string const& target_labels) {
+      return evaluate(eval_node(expr), target_labels, yield_)
+          ->get<TA::TArrayD>();
+    };
 
-  auto eval_symm = [&yield_](sequant::ExprPtr const& expr,
-                             std::string const& target_labels) {
-    return evaluate_symm(eval_node(expr), target_labels, yield_)
-        ->get<TA::TArrayD>();
-  };
+    auto eval_symm = [&yield_](sequant::ExprPtr const& expr,
+                               std::string const& target_labels) {
+      return evaluate_symm(eval_node(expr), target_labels, yield_)
+          ->get<TA::TArrayD>();
+    };
 
-  auto eval_antisymm = [&yield_](sequant::ExprPtr const& expr,
-                                 std::string const& target_labels) {
-    return evaluate_antisymm(eval_node(expr), target_labels, yield_)
-        ->get<TA::TArrayD>();
-  };
+    auto eval_antisymm = [&yield_](sequant::ExprPtr const& expr,
+                                   std::string const& target_labels) {
+      return evaluate_antisymm(eval_node(expr), target_labels, yield_)
+          ->get<TA::TArrayD>();
+    };
 
-  SECTION("summation") {
-    auto expr1 = parse_antisymm(L"t_{a1}^{i1} + f_{i1}^{a1}");
+    SECTION("summation") {
+      auto expr1 = parse_antisymm(L"t_{a1}^{i1} + f_{i1}^{a1}");
 
-    auto sum1_eval = eval(expr1, "i_1,a_1");
+      auto sum1_eval = eval(expr1, "i_1,a_1");
 
-    auto sum1_man = TArrayD{};
-    sum1_man("i1,a1") =
-        yield(L"t{a1;i1}")("a1,i1") + yield(L"f{i1;a1}")("i1,a1");
+      auto sum1_man = TArrayD{};
+      sum1_man("i1,a1") =
+          yield(L"t{a1;i1}")("a1,i1") + yield(L"f{i1;a1}")("i1,a1");
 
-    REQUIRE(norm(sum1_man) == Catch::Approx(norm(sum1_eval)));
+      REQUIRE(norm(sum1_man) == Catch::Approx(norm(sum1_eval)));
 
-    auto expr2 = parse_antisymm(L"2 * t_{a1}^{i1} + 3/2 * f_{i1}^{a1}");
+      auto expr2 = parse_antisymm(L"2 * t_{a1}^{i1} + 3/2 * f_{i1}^{a1}");
 
-    auto sum2_eval = eval(expr2, "i_1,a_1");
+      auto sum2_eval = eval(expr2, "i_1,a_1");
 
-    auto sum2_man = TArrayD{};
-    sum2_man("i1,a1") =
-        2 * yield(L"t{a1;i1}")("a1,i1") + 1.5 * yield(L"f{i1;a1}")("i1,a1");
+      auto sum2_man = TArrayD{};
+      sum2_man("i1,a1") =
+          2 * yield(L"t{a1;i1}")("a1,i1") + 1.5 * yield(L"f{i1;a1}")("i1,a1");
 
-    REQUIRE(norm(sum2_man) == Catch::Approx(norm(sum2_eval)));
+      REQUIRE(norm(sum2_man) == Catch::Approx(norm(sum2_eval)));
+    }
+
+    SECTION("product") {
+      auto expr1 =
+          parse_antisymm(L"1/2 * g_{i2,i4}^{a2,a4} * t_{a1,a2}^{i1,i2}");
+      auto prod1_eval = eval(expr1, "i_4,a_1,a_4,i_1");
+
+      TArrayD prod1_man{};
+      prod1_man("i4,a1,a4,i1") = 1 / 2.0 *
+                                 yield(L"g{i2,i4;a2,a4}")("i2,i4,a2,a4") *
+                                 yield(L"t{a1,a2;i1,i2}")("a1,a2,i1,i2");
+
+      REQUIRE(norm(prod1_man) == Catch::Approx(norm(prod1_eval)));
+
+      auto expr2 = parse_antisymm(
+          L"-1/4 * g_{i3,i4}^{a3,a4} * t_{a2,a4}^{i1,i2} * t_{a1,a3}^{ i3, "
+          L"i4}");
+      auto prod2_eval = eval(expr2, "a_1,a_2,i_1,i_2");
+
+      auto prod2_man = TArrayD{};
+      prod2_man("a1,a2,i1,i2") = -1 / 4.0 *
+                                 yield(L"g{i3,i4;a3,a4}")("i3,i4,a3,a4") *
+                                 yield(L"t{a2,a4;i1,i2}")("a2,a4,i1,i2") *
+                                 yield(L"t{a1,a3;i3,i4}")("a1,a3,i3,i4");
+
+      REQUIRE(norm(prod2_man) == Catch::Approx(norm(prod2_eval)));
+
+      auto expr3 = sequant::parse_expr(L"R_{a1}^{i1,i3} * f_{i3}^{i2}");
+      auto prod3_eval = eval(expr3, "a_1,i_1,i_2");
+      auto prod3_man = TArrayD{};
+      prod3_man("a1,i1,i2") =
+          yield(L"R{a1;i1,i3}")("a1,i1,i3") * yield(L"f{i3;i2}")("i3,i2");
+      REQUIRE(norm(prod3_man) == Catch::Approx(norm(prod3_eval)));
+
+      auto expr4 = sequant::parse_expr(
+          L"1/4 * R_{a1,a2,a3}^{i2,i3} * g_{i2,i3}^{i1,a3}");
+      auto prod4_eval = eval(expr4, "i_1,a_1,a_2");
+      auto prod4_man = TArrayD{};
+      prod4_man("i1,a1,a2") = 1 / 4.0 *
+                              yield(L"R{a1,a2,a3;i2,i3}")("a1,a2,a3,i2,i3") *
+                              yield(L"g{i2,i3;i1,a3}")("i2,i3,i1,a3");
+      REQUIRE(norm(prod4_man) == Catch::Approx(norm(prod4_eval)));
+    }
+
+    SECTION("sum and product") {
+      auto expr1 = parse_antisymm(
+          L"-1/4 * g_{i3,i4}^{a3,a4} * t_{a2,a4}^{i1,i2} * t_{a1,a3}^{i3,i4}"
+          " + "
+          " 1/16 * g_{i3,i4}^{a3,a4} * t_{a1,a2}^{i3,i4} * t_{a3,a4}^{i1,i2}");
+      auto eval1 = eval(expr1, "a_1,a_2,i_1,i_2");
+
+      auto man1 = TArrayD{};
+      man1("a1,a2,i1,i2") = -1.0 / 4 * yield(L"g{i3,i4;a3,a4}")("i3,i4,a3,a4") *
+                                yield(L"t{a2,a4;i1,i2}")("a2,a4,i1,i2") *
+                                yield(L"t{a1,a3;i3,i4}")("a1,a3,i3,i4") +
+                            1.0 / 16 * yield(L"g{i3,i4;a3,a4}")("i3,i4,a3,a4") *
+                                yield(L"t{a1,a2;i3,i4}")("a1,a2,i3,i4") *
+                                yield(L"t{a3,a4;i1,i2}")("a3,a4,i1,i2");
+
+      REQUIRE(norm(man1) == Catch::Approx(norm(eval1)));
+
+      auto expr2 = sequant::parse_expr(
+          L"1/4 * R_{a1,a2,a3}^{i2,i3} * g_{i2,i3}^{i1,a3} + R_{a1,a3}^{i1} * "
+          L"f_{i2}^{a3} * t_{a2}^{i2}");
+      auto eval2 = eval(expr2, "i_1,a_1,a_2");
+
+      auto man2 = TArrayD{};
+      man2("i1,a1,a2") =
+          1 / 4.0 * yield(L"R{a1,a2,a3;i2,i3}")("a1,a2,a3,i2,i3") *
+              yield(L"g{i2,i3;i1,a3}")("i2,i3,i1,a3") +
+          yield(L"R{a1,a3;i1}")("a1,a3,i1") * yield(L"f{i2;a3}")("i2,a3") *
+              yield(L"t{a2;i2}")("a2,i2");
+      REQUIRE(norm(man2) == Catch::Approx(norm(eval2)));
+    }
+
+    SECTION("variable at leaves") {
+      auto expr2 =
+          parse_antisymm(L"(α * 2 * t_{a1}^{i1} * β) + (3/2 * f_{i1}^{a1})");
+
+      auto sum2_eval = eval(expr2, "i_1,a_1");
+
+      auto sum2_man = TArrayD{};
+      sum2_man("i1,a1") =
+          yield_d(L"α") * 2 * yield(L"t{a1;i1}")("a1,i1") * yield_d(L"β") +
+          1.5 * yield(L"f{i1;a1}")("i1,a1");
+
+      REQUIRE(norm(sum2_man) == Catch::Approx(norm(sum2_eval)));
+    }
+
+    SECTION("Antisymmetrization") {
+      auto expr1 = parse_antisymm(L"1/2 * g_{i1, i2}^{a1, a2}");
+      auto eval1 = eval_antisymm(expr1, "i_1,i_2,a_1,a_2");
+      auto const& arr1 = yield(L"g{i1,i2;a1,a2}");
+
+      auto man1 = TArrayD{};
+      man1("0,1,2,3") =
+          arr1("0,1,2,3") - arr1("1,0,2,3") + arr1("1,0,3,2") - arr1("0,1,3,2");
+
+      man1("0,1,2,3") = 0.5 * man1("0,1,2,3");
+
+      REQUIRE(norm(man1) == Catch::Approx(norm(eval1)));
+
+      TArrayD zero1;
+      zero1("0,1,2,3") = man1("0,1,2,3") - eval1("0,1,2,3");
+
+      // https://github.com/catchorg/Catch2/issues/1444
+      REQUIRE(norm(zero1) == Catch::Approx(0).margin(
+                                 100 * std::numeric_limits<double>::epsilon()));
+
+      // odd-ranked tensor
+      auto expr2 = parse_antisymm(L"g_{i1, i2, i3}^{a1, a2}");
+      auto eval2 = eval_antisymm(expr2, "i_1,i_2,i_3,a_1,a_2");
+      auto const& arr2 = yield(L"g{i1,i2,i3;a1,a2}");
+
+      auto man2 = TArrayD{};
+      man2("0,1,2,3,4") =
+          arr2("0,1,2,3,4") - arr2("1,0,2,3,4") + arr2("1,2,0,3,4") -
+          arr2("2,1,0,3,4") + arr2("2,0,1,3,4") - arr2("0,2,1,3,4") -
+          arr2("0,1,2,4,3") + arr2("1,0,2,4,3") - arr2("1,2,0,4,3") +
+          arr2("2,1,0,4,3") - arr2("2,0,1,4,3") + arr2("0,2,1,4,3");
+      TArrayD zero2;
+      zero2("0,1,2,3,4") = man2("0,1,2,3,4") - eval2("0,1,2,3,4");
+      REQUIRE(norm(zero2) == Catch::Approx(0).margin(
+                                 100 * std::numeric_limits<double>::epsilon()));
+
+      auto expr3 = parse_antisymm(L"R_{a1,a2}^{}");
+      auto eval3 = eval_antisymm(expr3, "a_1,a_2");
+      auto const& arr3 = yield(L"R{a1,a2;}");
+      auto man3 = TArrayD{};
+      man3("0,1") = arr3("0,1") - arr3("1,0");
+
+      TArrayD zero3;
+      zero3("0,1") = man3("0,1") - eval3("0,1");
+      REQUIRE(norm(zero3) == Catch::Approx(0).margin(
+                                 100 * std::numeric_limits<double>::epsilon()));
+    }
+
+    SECTION("Symmetrization") {
+      auto expr1 = parse_antisymm(L"1/2 * g_{i1, i2}^{a1, a2}");
+      auto eval1 = eval_symm(expr1, "i_1,i_2,a_1,a_2");
+      auto const& arr1 = yield(L"g{i1,i2;a1,a2}");
+
+      auto man1 = TArrayD{};
+      man1("0,1,2,3") = arr1("0,1,2,3") + arr1("1,0,3,2");
+      man1("0,1,2,3") = 0.5 * man1("0,1,2,3");
+
+      REQUIRE(norm(man1) == Catch::Approx(norm(eval1)));
+
+      auto expr2 = parse_antisymm(L"g_{i1,i2,i3}^{a1,a2,a3}");
+
+      auto eval2 = eval_symm(expr2, "i_1,i_2,i_3,a_1,a_2,a_3");
+      auto const& arr2 = yield(L"g{i1,i2,i3;a1,a2,a3}");
+      TArrayD man2;
+      man2("0,1,2,3,4,5") = arr2("0,1,2,3,4,5") + arr2("0,2,1,3,5,4") +
+                            arr2("2,0,1,5,3,4") + arr2("2,1,0,5,4,3") +
+                            arr2("1,2,0,4,5,3") + arr2("1,0,2,4,3,5");
+
+      REQUIRE(norm(man2) == Catch::Approx(norm(eval2)));
+    }
+
+    SECTION("Others") {
+      using namespace std::string_literals;
+      auto expr1 = parse_antisymm(
+          L"-1/4 * g_{i3,i4}^{a3,a4} * t_{a2,a4}^{i1,i2} * t_{a1,a3}^{i3,i4}"
+          " + "
+          " 1/16 * g_{i3,i4}^{a3,a4} * t_{a1,a2}^{i3,i4} * t_{a3,a4}^{i1,i2}");
+
+      auto eval1 = evaluate(eval_node(expr1), "i_1,i_2,a_1,a_2"s, yield_)
+                       ->get<TA::TArrayD>();
+
+      auto nodes1 = *expr1 | ranges::views::transform([](auto&& x) {
+        return eval_node(x);
+      }) | ranges::to_vector;
+
+      auto eval2 =
+          evaluate(nodes1, "i_1,i_2,a_1,a_2"s, yield_)->get<TA::TArrayD>();
+
+      REQUIRE(norm(eval1) == Catch::Approx(norm(eval2)));
+    }
   }
 
-  SECTION("product") {
-    auto expr1 = parse_antisymm(L"1/2 * g_{i2,i4}^{a2,a4} * t_{a1,a2}^{i1,i2}");
-    auto prod1_eval = eval(expr1, "i_4,a_1,a_4,i_1");
+  SECTION("complex") {
+    using TArrayC = TA::DistArray<TA::Tensor<std::complex<double>>>;
+    auto norm = [](TArrayC const& tnsr) { return TA::norm2(tnsr); };
 
-    TArrayD prod1_man{};
-    prod1_man("i4,a1,a4,i1") = 1 / 2.0 *
-                               yield(L"g{i2,i4;a2,a4}")("i2,i4,a2,a4") *
-                               yield(L"t{a1,a2;i1,i2}")("a1,a2,i1,i2");
+    const size_t nocc = 2, nvirt = 20;
+    auto& world = TA::get_default_world();
 
-    REQUIRE(norm(prod1_man) == Catch::Approx(norm(prod1_eval)));
+    auto yield_ = rand_tensor_yield<std::complex<double>, TA::DensePolicy>{
+        world, nocc, nvirt};
 
-    auto expr2 = parse_antisymm(
-        L"-1/4 * g_{i3,i4}^{a3,a4} * t_{a2,a4}^{i1,i2} * t_{a1,a3}^{ i3, i4}");
-    auto prod2_eval = eval(expr2, "a_1,a_2,i_1,i_2");
+    auto yield = [&yield_](std::wstring_view lbl) -> TArrayC const& {
+      return yield_(lbl)->get<TArrayC>();
+    };
 
-    auto prod2_man = TArrayD{};
-    prod2_man("a1,a2,i1,i2") = -1 / 4.0 *
-                               yield(L"g{i3,i4;a3,a4}")("i3,i4,a3,a4") *
-                               yield(L"t{a2,a4;i1,i2}")("a2,a4,i1,i2") *
-                               yield(L"t{a1,a3;i3,i4}")("a1,a3,i3,i4");
+    auto eval = [&yield_](sequant::ExprPtr const& expr,
+                          std::string const& target_labels) {
+      return evaluate(eval_node(expr), target_labels, yield_)->get<TArrayC>();
+    };
 
-    REQUIRE(norm(prod2_man) == Catch::Approx(norm(prod2_eval)));
+    auto eval_symm = [&yield_](sequant::ExprPtr const& expr,
+                               std::string const& target_labels) {
+      return evaluate_symm(eval_node(expr), target_labels, yield_)
+          ->get<TArrayC>();
+    };
 
-    auto expr3 = sequant::parse_expr(L"R_{a1}^{i1,i3} * f_{i3}^{i2}");
-    auto prod3_eval = eval(expr3, "a_1,i_1,i_2");
-    auto prod3_man = TArrayD{};
-    prod3_man("a1,i1,i2") =
-        yield(L"R{a1;i1,i3}")("a1,i1,i3") * yield(L"f{i3;i2}")("i3,i2");
-    REQUIRE(norm(prod3_man) == Catch::Approx(norm(prod3_eval)));
+    auto eval_antisymm = [&yield_](sequant::ExprPtr const& expr,
+                                   std::string const& target_labels) {
+      return evaluate_antisymm(eval_node(expr), target_labels, yield_)
+          ->get<TArrayC>();
+    };
 
-    auto expr4 =
-        sequant::parse_expr(L"1/4 * R_{a1,a2,a3}^{i2,i3} * g_{i2,i3}^{i1,a3}");
-    auto prod4_eval = eval(expr4, "i_1,a_1,a_2");
-    auto prod4_man = TArrayD{};
-    prod4_man("i1,a1,a2") = 1 / 4.0 *
-                            yield(L"R{a1,a2,a3;i2,i3}")("a1,a2,a3,i2,i3") *
-                            yield(L"g{i2,i3;i1,a3}")("i2,i3,i1,a3");
-    REQUIRE(norm(prod4_man) == Catch::Approx(norm(prod4_eval)));
-  }
-
-  SECTION("sum and product") {
-    auto expr1 = parse_antisymm(
-        L"-1/4 * g_{i3,i4}^{a3,a4} * t_{a2,a4}^{i1,i2} * t_{a1,a3}^{i3,i4}"
-        " + "
-        " 1/16 * g_{i3,i4}^{a3,a4} * t_{a1,a2}^{i3,i4} * t_{a3,a4}^{i1,i2}");
-    auto eval1 = eval(expr1, "a_1,a_2,i_1,i_2");
-
-    auto man1 = TArrayD{};
-    man1("a1,a2,i1,i2") = -1.0 / 4 * yield(L"g{i3,i4;a3,a4}")("i3,i4,a3,a4") *
-                              yield(L"t{a2,a4;i1,i2}")("a2,a4,i1,i2") *
-                              yield(L"t{a1,a3;i3,i4}")("a1,a3,i3,i4") +
-                          1.0 / 16 * yield(L"g{i3,i4;a3,a4}")("i3,i4,a3,a4") *
-                              yield(L"t{a1,a2;i3,i4}")("a1,a2,i3,i4") *
-                              yield(L"t{a3,a4;i1,i2}")("a3,a4,i1,i2");
-
-    REQUIRE(norm(man1) == Catch::Approx(norm(eval1)));
-
-    auto expr2 = sequant::parse_expr(
-        L"1/4 * R_{a1,a2,a3}^{i2,i3} * g_{i2,i3}^{i1,a3} + R_{a1,a3}^{i1} * "
-        L"f_{i2}^{a3} * t_{a2}^{i2}");
-    auto eval2 = eval(expr2, "i_1,a_1,a_2");
-
-    auto man2 = TArrayD{};
-    man2("i1,a1,a2") = 1 / 4.0 * yield(L"R{a1,a2,a3;i2,i3}")("a1,a2,a3,i2,i3") *
-                           yield(L"g{i2,i3;i1,a3}")("i2,i3,i1,a3") +
-                       yield(L"R{a1,a3;i1}")("a1,a3,i1") *
-                           yield(L"f{i2;a3}")("i2,a3") *
-                           yield(L"t{a2;i2}")("a2,i2");
-    REQUIRE(norm(man2) == Catch::Approx(norm(eval2)));
-  }
-
-  SECTION("variable at leaves") {
-    auto expr2 =
-        parse_antisymm(L"(α * 2 * t_{a1}^{i1} * β) + (3/2 * f_{i1}^{a1})");
-
-    auto sum2_eval = eval(expr2, "i_1,a_1");
-
-    auto sum2_man = TArrayD{};
-    sum2_man("i1,a1") =
-        yield_d(L"α") * 2 * yield(L"t{a1;i1}")("a1,i1") * yield_d(L"β") +
-        1.5 * yield(L"f{i1;a1}")("i1,a1");
-
-    REQUIRE(norm(sum2_man) == Catch::Approx(norm(sum2_eval)));
-  }
-
-  SECTION("Antisymmetrization") {
-    auto expr1 = parse_antisymm(L"1/2 * g_{i1, i2}^{a1, a2}");
-    auto eval1 = eval_antisymm(expr1, "i_1,i_2,a_1,a_2");
-    auto const& arr1 = yield(L"g{i1,i2;a1,a2}");
-
-    auto man1 = TArrayD{};
-    man1("0,1,2,3") =
-        arr1("0,1,2,3") - arr1("1,0,2,3") + arr1("1,0,3,2") - arr1("0,1,3,2");
-
-    man1("0,1,2,3") = 0.5 * man1("0,1,2,3");
-
-    REQUIRE(norm(man1) == Catch::Approx(norm(eval1)));
-
-    TArrayD zero1;
-    zero1("0,1,2,3") = man1("0,1,2,3") - eval1("0,1,2,3");
-
-    // https://github.com/catchorg/Catch2/issues/1444
-    REQUIRE(norm(zero1) == Catch::Approx(0).margin(
-                               100 * std::numeric_limits<double>::epsilon()));
-
-    // odd-ranked tensor
-    auto expr2 = parse_antisymm(L"g_{i1, i2, i3}^{a1, a2}");
-    auto eval2 = eval_antisymm(expr2, "i_1,i_2,i_3,a_1,a_2");
-    auto const& arr2 = yield(L"g{i1,i2,i3;a1,a2}");
-
-    auto man2 = TArrayD{};
-    man2("0,1,2,3,4") =
-        arr2("0,1,2,3,4") - arr2("1,0,2,3,4") + arr2("1,2,0,3,4") -
-        arr2("2,1,0,3,4") + arr2("2,0,1,3,4") - arr2("0,2,1,3,4") -
-        arr2("0,1,2,4,3") + arr2("1,0,2,4,3") - arr2("1,2,0,4,3") +
-        arr2("2,1,0,4,3") - arr2("2,0,1,4,3") + arr2("0,2,1,4,3");
-    TArrayD zero2;
-    zero2("0,1,2,3,4") = man2("0,1,2,3,4") - eval2("0,1,2,3,4");
-    REQUIRE(norm(zero2) == Catch::Approx(0).margin(
-                               100 * std::numeric_limits<double>::epsilon()));
-
-    auto expr3 = parse_antisymm(L"R_{a1,a2}^{}");
-    auto eval3 = eval_antisymm(expr3, "a_1,a_2");
-    auto const& arr3 = yield(L"R{a1,a2;}");
-    auto man3 = TArrayD{};
-    man3("0,1") = arr3("0,1") - arr3("1,0");
-
-    TArrayD zero3;
-    zero3("0,1") = man3("0,1") - eval3("0,1");
-    REQUIRE(norm(zero3) == Catch::Approx(0).margin(
-                               100 * std::numeric_limits<double>::epsilon()));
-  }
-
-  SECTION("Symmetrization") {
-    auto expr1 = parse_antisymm(L"1/2 * g_{i1, i2}^{a1, a2}");
-    auto eval1 = eval_symm(expr1, "i_1,i_2,a_1,a_2");
-    auto const& arr1 = yield(L"g{i1,i2;a1,a2}");
-
-    auto man1 = TArrayD{};
-    man1("0,1,2,3") = arr1("0,1,2,3") + arr1("1,0,3,2");
-    man1("0,1,2,3") = 0.5 * man1("0,1,2,3");
-
-    REQUIRE(norm(man1) == Catch::Approx(norm(eval1)));
-
-    auto expr2 = parse_antisymm(L"g_{i1,i2,i3}^{a1,a2,a3}");
-
-    auto eval2 = eval_symm(expr2, "i_1,i_2,i_3,a_1,a_2,a_3");
-    auto const& arr2 = yield(L"g{i1,i2,i3;a1,a2,a3}");
-    TArrayD man2;
-    man2("0,1,2,3,4,5") = arr2("0,1,2,3,4,5") + arr2("0,2,1,3,5,4") +
-                          arr2("2,0,1,5,3,4") + arr2("2,1,0,5,4,3") +
-                          arr2("1,2,0,4,5,3") + arr2("1,0,2,4,3,5");
-
-    REQUIRE(norm(man2) == Catch::Approx(norm(eval2)));
-  }
-
-  SECTION("Others") {
+    using namespace sequant;
     using namespace std::string_literals;
-    auto expr1 = parse_antisymm(
-        L"-1/4 * g_{i3,i4}^{a3,a4} * t_{a2,a4}^{i1,i2} * t_{a1,a3}^{i3,i4}"
-        " + "
-        " 1/16 * g_{i3,i4}^{a3,a4} * t_{a1,a2}^{i3,i4} * t_{a3,a4}^{i1,i2}");
 
-    auto eval1 = evaluate(eval_node(expr1), "i_1,i_2,a_1,a_2"s, yield_)
-                     ->get<TA::TArrayD>();
+    SECTION("summation") {
+      auto expr1 = parse_expr(L"t_{a1}^{i1} + f_{i1}^{a1}");
 
-    auto nodes1 = *expr1 | ranges::views::transform([](auto&& x) {
-      return eval_node(x);
-    }) | ranges::to_vector;
+      auto sum1_eval = eval(expr1, "i_1,a_1");
 
-    auto eval2 =
-        evaluate(nodes1, "i_1,i_2,a_1,a_2"s, yield_)->get<TA::TArrayD>();
+      auto sum1_man = TArrayC{};
+      sum1_man("i1,a1") =
+          yield(L"t{a1;i1}")("a1,i1") + yield(L"f{i1;a1}")("i1,a1");
 
-    REQUIRE(norm(eval1) == Catch::Approx(norm(eval2)));
-  }
-}
+      // todo:
+      REQUIRE(norm(sum1_man) == Catch::Approx(norm(sum1_eval)));
 
-TEST_CASE("TEST_EVAL_USING_TA_COMPLEX", "[eval]") {
-  using TArrayC = TA::DistArray<TA::Tensor<std::complex<double>>>;
-  auto norm = [](TArrayC const& tnsr) { return TA::norm2(tnsr); };
+      auto expr2 = parse_expr(L"2 * t_{a1}^{i1} + 3/2 * f_{i1}^{a1}");
 
-  const size_t nocc = 2, nvirt = 20;
-  auto& world = TA::get_default_world();
+      auto sum2_eval = eval(expr2, "i_1,a_1");
 
-  auto yield_ = rand_tensor_yield<std::complex<double>, TA::DensePolicy>{
-      world, nocc, nvirt};
+      auto sum2_man = TArrayC{};
+      sum2_man("i1,a1") =
+          std::complex<double>{2} * yield(L"t{a1;i1}")("a1,i1") +
+          std::complex<double>{1.5} * yield(L"f{i1;a1}")("i1,a1");
 
-  auto yield = [&yield_](std::wstring_view lbl) -> TArrayC const& {
-    return yield_(lbl)->get<TArrayC>();
-  };
-
-  auto eval = [&yield_](sequant::ExprPtr const& expr,
-                        std::string const& target_labels) {
-    return evaluate(eval_node(expr), target_labels, yield_)->get<TArrayC>();
-  };
-
-  auto eval_symm = [&yield_](sequant::ExprPtr const& expr,
-                             std::string const& target_labels) {
-    return evaluate_symm(eval_node(expr), target_labels, yield_)
-        ->get<TArrayC>();
-  };
-
-  auto eval_antisymm = [&yield_](sequant::ExprPtr const& expr,
-                                 std::string const& target_labels) {
-    return evaluate_antisymm(eval_node(expr), target_labels, yield_)
-        ->get<TArrayC>();
-  };
-
-  using namespace sequant;
-  using namespace std::string_literals;
-
-  SECTION("summation") {
-    auto expr1 = parse_expr(L"t_{a1}^{i1} + f_{i1}^{a1}");
-
-    auto sum1_eval = eval(expr1, "i_1,a_1");
-
-    auto sum1_man = TArrayC{};
-    sum1_man("i1,a1") =
-        yield(L"t{a1;i1}")("a1,i1") + yield(L"f{i1;a1}")("i1,a1");
-
-    // todo:
-    REQUIRE(norm(sum1_man) == Catch::Approx(norm(sum1_eval)));
-
-    auto expr2 = parse_expr(L"2 * t_{a1}^{i1} + 3/2 * f_{i1}^{a1}");
-
-    auto sum2_eval = eval(expr2, "i_1,a_1");
-
-    auto sum2_man = TArrayC{};
-    sum2_man("i1,a1") = std::complex<double>{2} * yield(L"t{a1;i1}")("a1,i1") +
-                        std::complex<double>{1.5} * yield(L"f{i1;a1}")("i1,a1");
-
-    REQUIRE(norm(sum2_man) == Catch::Approx(norm(sum2_eval)));
-  }
-
-  SECTION("product") {
-    auto expr1 = parse_expr(L"1/2 * g_{i2,i4}^{a2,a4} * t_{a1,a2}^{i1,i2}");
-    auto prod1_eval = eval(expr1, "i_4,a_1,a_4,i_1");
-
-    TArrayC prod1_man{};
-    prod1_man("i4,a1,a4,i1") = std::complex<double>{1 / 2.0} *
-                               yield(L"g{i2,i4;a2,a4}")("i2,i4,a2,a4") *
-                               yield(L"t{a1,a2;i1,i2}")("a1,a2,i1,i2");
-
-    REQUIRE(norm(prod1_man) == Catch::Approx(norm(prod1_eval)));
-
-    auto expr2 = parse_expr(
-        L"-1/4 * g_{i3,i4}^{a3,a4} * t_{a2,a4}^{i1,i2} * t_{a1,a3}^{ i3, i4}");
-    auto prod2_eval = eval(expr2, "a_1,a_2,i_1,i_2");
-
-    auto prod2_man = TArrayC{};
-    prod2_man("a1,a2,i1,i2") = std::complex<double>{-1 / 4.0} *
-                               yield(L"g{i3,i4;a3,a4}")("i3,i4,a3,a4") *
-                               yield(L"t{a2,a4;i1,i2}")("a2,a4,i1,i2") *
-                               yield(L"t{a1,a3;i3,i4}")("a1,a3,i3,i4");
-
-    REQUIRE(norm(prod2_man) == Catch::Approx(norm(prod2_eval)));
-
-    auto expr3 = sequant::parse_expr(L"R_{a1}^{i1,i3} * f_{i3}^{i2}");
-    auto prod3_eval = eval(expr3, "a_1,i_1,i_2");
-    auto prod3_man = TArrayC{};
-    prod3_man("a1,i1,i2") =
-        yield(L"R{a1;i1,i3}")("a1,i1,i3") * yield(L"f{i3;i2}")("i3,i2");
-    REQUIRE(norm(prod3_man) == Catch::Approx(norm(prod3_eval)));
-
-    auto expr4 =
-        sequant::parse_expr(L"1/4 * R_{a1,a2,a3}^{i2,i3} * g_{i2,i3}^{i1,a3}");
-    auto prod4_eval = eval(expr4, "i_1,a_1,a_2");
-    auto prod4_man = TArrayC{};
-    prod4_man("i1,a1,a2") = 1 / 4.0 *
-                            yield(L"R{a1,a2,a3;i2,i3}")("a1,a2,a3,i2,i3") *
-                            yield(L"g{i2,i3;i1,a3}")("i2,i3,i1,a3");
-    REQUIRE(norm(prod4_man) == Catch::Approx(norm(prod4_eval)));
-  }
-
-  SECTION("sum and product") {
-    auto expr1 = parse_expr(
-        L"-1/4 * g_{i3,i4}^{a3,a4} * t_{a2,a4}^{i1,i2} * t_{a1,a3}^{i3,i4}"
-        " + "
-        " 1/16 * g_{i3,i4}^{a3,a4} * t_{a1,a2}^{i3,i4} * t_{a3,a4}^{i1,i2}");
-    auto eval1 = eval(expr1, "a_1,a_2,i_1,i_2");
-
-    auto man1 = TArrayC{};
-    man1("a1,a2,i1,i2") = std::complex<double>{-1.0 / 4} *
-                              yield(L"g{i3,i4;a3,a4}")("i3,i4,a3,a4") *
-                              yield(L"t{a2,a4;i1,i2}")("a2,a4,i1,i2") *
-                              yield(L"t{a1,a3;i3,i4}")("a1,a3,i3,i4") +
-                          std::complex<double>{1.0 / 16} *
-                              yield(L"g{i3,i4;a3,a4}")("i3,i4,a3,a4") *
-                              yield(L"t{a1,a2;i3,i4}")("a1,a2,i3,i4") *
-                              yield(L"t{a3,a4;i1,i2}")("a3,a4,i1,i2");
-
-    REQUIRE(norm(man1) == Catch::Approx(norm(eval1)));
-
-    auto expr2 = sequant::parse_expr(
-        L"1/4 * R_{a1,a2,a3}^{i2,i3} * g_{i2,i3}^{i1,a3} + R_{a1,a3}^{i1} * "
-        L"f_{i2}^{a3} * t_{a2}^{i2}");
-    auto eval2 = eval(expr2, "i_1,a_1,a_2");
-
-    auto man2 = TArrayC{};
-    man2("i1,a1,a2") = 1 / 4.0 * yield(L"R{a1,a2,a3;i2,i3}")("a1,a2,a3,i2,i3") *
-                           yield(L"g{i2,i3;i1,a3}")("i2,i3,i1,a3") +
-                       yield(L"R{a1,a3;i1}")("a1,a3,i1") *
-                           yield(L"f{i2;a3}")("i2,a3") *
-                           yield(L"t{a2;i2}")("a2,i2");
-    REQUIRE(norm(man2) == Catch::Approx(norm(eval2)));
-  }
-
-  SECTION("Antisymmetrization") {
-    auto expr1 = parse_expr(L"1/2 * g_{i1, i2}^{a1, a2}");
-    auto eval1 = eval_antisymm(expr1, "i_1,i_2,a_1,a_2");
-    auto const& arr1 = yield(L"g{i1,i2;a1,a2}");
-
-    auto man1 = TArrayC{};
-    man1("0,1,2,3") =
-        arr1("0,1,2,3") - arr1("1,0,2,3") + arr1("1,0,3,2") - arr1("0,1,3,2");
-
-    man1("0,1,2,3") = std::complex<double>{0.5} * man1("0,1,2,3");
-
-    REQUIRE(norm(man1) == Catch::Approx(norm(eval1)));
-
-    TArrayC zero1;
-    zero1("0,1,2,3") = man1("0,1,2,3") - eval1("0,1,2,3");
-
-    // todo: Catch::Approx(0.0) == 0 fails. probably update catch2 version
-    // REQUIRE(Approx(norm(zero1)) == 0);
-
-    // odd-ranked tensor
-    auto expr2 = parse_expr(L"g_{i1, i2, i3}^{a1, a2}");
-    auto eval2 = eval_antisymm(expr2, "i_1,i_2,i_3,a_1,a_2");
-    auto const& arr2 = yield(L"g{i1,i2,i3;a1,a2}");
-
-    auto man2 = TArrayC{};
-    man2("0,1,2,3,4") =
-        arr2("0,1,2,3,4") - arr2("1,0,2,3,4") + arr2("1,2,0,3,4") -
-        arr2("2,1,0,3,4") + arr2("2,0,1,3,4") - arr2("0,2,1,3,4") -
-        arr2("0,1,2,4,3") + arr2("1,0,2,4,3") - arr2("1,2,0,4,3") +
-        arr2("2,1,0,4,3") - arr2("2,0,1,4,3") + arr2("0,2,1,4,3");
-    TArrayC zero2;
-    zero2("0,1,2,3,4") = man2("0,1,2,3,4") - eval2("0,1,2,3,4");
-    REQUIRE(norm(zero2) == Catch::Approx(0).margin(
-                               100 * std::numeric_limits<double>::epsilon()));
-
-    auto expr3 = parse_expr(L"R_{a1,a2}^{}");
-    auto eval3 = eval_antisymm(expr3, "a_1,a_2");
-    auto const& arr3 = yield(L"R{a1,a2;}");
-    auto man3 = TArrayC{};
-    man3("0,1") = arr3("0,1") - arr3("1,0");
-
-    TArrayC zero3;
-    zero3("0,1") = man3("0,1") - eval3("0,1");
-    REQUIRE(norm(zero3) == Catch::Approx(0).margin(
-                               100 * std::numeric_limits<double>::epsilon()));
-  }
-
-  SECTION("Symmetrization") {
-    auto expr1 = parse_expr(L"1/2 * g_{i1, i2}^{a1, a2}");
-    auto eval1 = eval_symm(expr1, "i_1,i_2,a_1,a_2");
-    auto const& arr1 = yield(L"g{i1,i2;a1,a2}");
-
-    auto man1 = TArrayC{};
-    man1("0,1,2,3") = arr1("0,1,2,3") + arr1("1,0,3,2");
-    man1("0,1,2,3") = 0.5 * man1("0,1,2,3");
-
-    REQUIRE(norm(man1) == Catch::Approx(norm(eval1)));
-
-    auto expr2 = parse_expr(L"g_{i1,i2,i3}^{a1,a2,a3}");
-
-    auto eval2 = eval_symm(expr2, "i_1,i_2,i_3,a_1,a_2,a_3");
-    auto const& arr2 = yield(L"g{i1,i2,i3;a1,a2,a3}");
-    TArrayC man2;
-    man2("0,1,2,3,4,5") = arr2("0,1,2,3,4,5") + arr2("0,2,1,3,5,4") +
-                          arr2("2,0,1,5,3,4") + arr2("2,1,0,5,4,3") +
-                          arr2("1,2,0,4,5,3") + arr2("1,0,2,4,3,5");
-
-    REQUIRE(norm(man2) == Catch::Approx(norm(eval2)));
-  }
-
-  SECTION("Others") {
-    using namespace std::string_literals;
-    auto expr1 = parse_expr(
-        L"-1/4 * g_{i3,i4}^{a3,a4} * t_{a2,a4}^{i1,i2} * t_{a1,a3}^{i3,i4}"
-        " + "
-        " 1/16 * g_{i3,i4}^{a3,a4} * t_{a1,a2}^{i3,i4} * t_{a3,a4}^{i1,i2}");
-
-    auto eval1 =
-        evaluate(eval_node(expr1), "i_1,i_2,a_1,a_2"s, yield_)->get<TArrayC>();
-
-    auto nodes1 = *expr1 | ranges::views::transform([](auto&& x) {
-      return eval_node(x);
-    }) | ranges::to_vector;
-
-    auto eval2 = evaluate(nodes1, "i_1,i_2,a_1,a_2"s, yield_)->get<TArrayC>();
-
-    REQUIRE(norm(eval1) == Catch::Approx(norm(eval2)));
-  }
-}
-
-TEST_CASE("TEST_EVAL_USING_TA_TOT", "[eval_tot]") {
-  using namespace sequant;
-
-  //
-  // eg: approx_equal("i,j;a,b", arr1, arr2)
-  // - arr1 and arr2 are DistArrays with equal TiledRange and matching Range for
-  //   the inner tensors at the corresponding tile positions.
-  // - 'i', 'j', 'a', and 'b' are dummy indices that annotate the modes of outer
-  //   and inner tensors. Why? Because TA::norm2 function is not supported for
-  //   tensor-of-tensor tiles
-  //
-  auto approx_equal = [](std::string const& annot, auto const& lhs,
-                         auto const& rhs) -> bool {
-    return Catch::Approx(lhs(annot).dot(lhs(annot))) ==
-           rhs(annot).dot(rhs(annot));
-  };
-
-  auto& world = TA::get_default_world();
-
-  size_t const nocc = 2;
-  size_t const nvirt = 3;
-
-  rand_tensor_yield<int> yield{world, nocc, nvirt};
-
-  using ArrayT = typename decltype(yield)::array_type;
-  using ArrayToT = typename decltype(yield)::array_tot_type;
-  using NumericT = typename decltype(yield)::numeric_type;
-
-  SECTION("T_times_ToT_to_ToT") {
-    constexpr std::wstring_view expr_str =
-        L"3"
-        L" * "
-        L"f{i3;i1}"
-        L" * "
-        L"t{a3<i2,i3>,a4<i2,i3>;i2,i3}";
-    auto const node = eval_node(parse_expr(expr_str));
-    std::string const target_layout{"i_1,i_2,i_3;a_3i_2i_3,a_4i_2i_3"};
-    auto result = evaluate(node, target_layout, yield)->get<ArrayToT>();
-    ArrayToT ref;
-    {
-      auto const& lhs = yield(L"f{i3;i1}")->get<ArrayT>();
-      auto const& rhs = yield(L"t{a3<i2,i3>,a4<i2,i3>;i2,i3}")->get<ArrayToT>();
-      ref = TA::einsum(lhs("i_3,i_1"), rhs("i_2,i_3;a_3i_2i_3,a_4i_2i_3"),
-                       target_layout);
-      ref(target_layout) = 3 * ref(target_layout);
+      REQUIRE(norm(sum2_man) == Catch::Approx(norm(sum2_eval)));
     }
-    REQUIRE(approx_equal("i,j,k;a,b", result, ref));
+
+    SECTION("product") {
+      auto expr1 = parse_expr(L"1/2 * g_{i2,i4}^{a2,a4} * t_{a1,a2}^{i1,i2}");
+      auto prod1_eval = eval(expr1, "i_4,a_1,a_4,i_1");
+
+      TArrayC prod1_man{};
+      prod1_man("i4,a1,a4,i1") = std::complex<double>{1 / 2.0} *
+                                 yield(L"g{i2,i4;a2,a4}")("i2,i4,a2,a4") *
+                                 yield(L"t{a1,a2;i1,i2}")("a1,a2,i1,i2");
+
+      REQUIRE(norm(prod1_man) == Catch::Approx(norm(prod1_eval)));
+
+      auto expr2 = parse_expr(
+          L"-1/4 * g_{i3,i4}^{a3,a4} * t_{a2,a4}^{i1,i2} * t_{a1,a3}^{ i3, "
+          L"i4}");
+      auto prod2_eval = eval(expr2, "a_1,a_2,i_1,i_2");
+
+      auto prod2_man = TArrayC{};
+      prod2_man("a1,a2,i1,i2") = std::complex<double>{-1 / 4.0} *
+                                 yield(L"g{i3,i4;a3,a4}")("i3,i4,a3,a4") *
+                                 yield(L"t{a2,a4;i1,i2}")("a2,a4,i1,i2") *
+                                 yield(L"t{a1,a3;i3,i4}")("a1,a3,i3,i4");
+
+      REQUIRE(norm(prod2_man) == Catch::Approx(norm(prod2_eval)));
+
+      auto expr3 = sequant::parse_expr(L"R_{a1}^{i1,i3} * f_{i3}^{i2}");
+      auto prod3_eval = eval(expr3, "a_1,i_1,i_2");
+      auto prod3_man = TArrayC{};
+      prod3_man("a1,i1,i2") =
+          yield(L"R{a1;i1,i3}")("a1,i1,i3") * yield(L"f{i3;i2}")("i3,i2");
+      REQUIRE(norm(prod3_man) == Catch::Approx(norm(prod3_eval)));
+
+      auto expr4 = sequant::parse_expr(
+          L"1/4 * R_{a1,a2,a3}^{i2,i3} * g_{i2,i3}^{i1,a3}");
+      auto prod4_eval = eval(expr4, "i_1,a_1,a_2");
+      auto prod4_man = TArrayC{};
+      prod4_man("i1,a1,a2") = 1 / 4.0 *
+                              yield(L"R{a1,a2,a3;i2,i3}")("a1,a2,a3,i2,i3") *
+                              yield(L"g{i2,i3;i1,a3}")("i2,i3,i1,a3");
+      REQUIRE(norm(prod4_man) == Catch::Approx(norm(prod4_eval)));
+    }
+
+    SECTION("sum and product") {
+      auto expr1 = parse_expr(
+          L"-1/4 * g_{i3,i4}^{a3,a4} * t_{a2,a4}^{i1,i2} * t_{a1,a3}^{i3,i4}"
+          " + "
+          " 1/16 * g_{i3,i4}^{a3,a4} * t_{a1,a2}^{i3,i4} * t_{a3,a4}^{i1,i2}");
+      auto eval1 = eval(expr1, "a_1,a_2,i_1,i_2");
+
+      auto man1 = TArrayC{};
+      man1("a1,a2,i1,i2") = std::complex<double>{-1.0 / 4} *
+                                yield(L"g{i3,i4;a3,a4}")("i3,i4,a3,a4") *
+                                yield(L"t{a2,a4;i1,i2}")("a2,a4,i1,i2") *
+                                yield(L"t{a1,a3;i3,i4}")("a1,a3,i3,i4") +
+                            std::complex<double>{1.0 / 16} *
+                                yield(L"g{i3,i4;a3,a4}")("i3,i4,a3,a4") *
+                                yield(L"t{a1,a2;i3,i4}")("a1,a2,i3,i4") *
+                                yield(L"t{a3,a4;i1,i2}")("a3,a4,i1,i2");
+
+      REQUIRE(norm(man1) == Catch::Approx(norm(eval1)));
+
+      auto expr2 = sequant::parse_expr(
+          L"1/4 * R_{a1,a2,a3}^{i2,i3} * g_{i2,i3}^{i1,a3} + R_{a1,a3}^{i1} * "
+          L"f_{i2}^{a3} * t_{a2}^{i2}");
+      auto eval2 = eval(expr2, "i_1,a_1,a_2");
+
+      auto man2 = TArrayC{};
+      man2("i1,a1,a2") =
+          1 / 4.0 * yield(L"R{a1,a2,a3;i2,i3}")("a1,a2,a3,i2,i3") *
+              yield(L"g{i2,i3;i1,a3}")("i2,i3,i1,a3") +
+          yield(L"R{a1,a3;i1}")("a1,a3,i1") * yield(L"f{i2;a3}")("i2,a3") *
+              yield(L"t{a2;i2}")("a2,i2");
+      REQUIRE(norm(man2) == Catch::Approx(norm(eval2)));
+    }
+
+    SECTION("Antisymmetrization") {
+      auto expr1 = parse_expr(L"1/2 * g_{i1, i2}^{a1, a2}");
+      auto eval1 = eval_antisymm(expr1, "i_1,i_2,a_1,a_2");
+      auto const& arr1 = yield(L"g{i1,i2;a1,a2}");
+
+      auto man1 = TArrayC{};
+      man1("0,1,2,3") =
+          arr1("0,1,2,3") - arr1("1,0,2,3") + arr1("1,0,3,2") - arr1("0,1,3,2");
+
+      man1("0,1,2,3") = std::complex<double>{0.5} * man1("0,1,2,3");
+
+      REQUIRE(norm(man1) == Catch::Approx(norm(eval1)));
+
+      TArrayC zero1;
+      zero1("0,1,2,3") = man1("0,1,2,3") - eval1("0,1,2,3");
+
+      // todo: Catch::Approx(0.0) == 0 fails. probably update catch2 version
+      // REQUIRE(Approx(norm(zero1)) == 0);
+
+      // odd-ranked tensor
+      auto expr2 = parse_expr(L"g_{i1, i2, i3}^{a1, a2}");
+      auto eval2 = eval_antisymm(expr2, "i_1,i_2,i_3,a_1,a_2");
+      auto const& arr2 = yield(L"g{i1,i2,i3;a1,a2}");
+
+      auto man2 = TArrayC{};
+      man2("0,1,2,3,4") =
+          arr2("0,1,2,3,4") - arr2("1,0,2,3,4") + arr2("1,2,0,3,4") -
+          arr2("2,1,0,3,4") + arr2("2,0,1,3,4") - arr2("0,2,1,3,4") -
+          arr2("0,1,2,4,3") + arr2("1,0,2,4,3") - arr2("1,2,0,4,3") +
+          arr2("2,1,0,4,3") - arr2("2,0,1,4,3") + arr2("0,2,1,4,3");
+      TArrayC zero2;
+      zero2("0,1,2,3,4") = man2("0,1,2,3,4") - eval2("0,1,2,3,4");
+      REQUIRE(norm(zero2) == Catch::Approx(0).margin(
+                                 100 * std::numeric_limits<double>::epsilon()));
+
+      auto expr3 = parse_expr(L"R_{a1,a2}^{}");
+      auto eval3 = eval_antisymm(expr3, "a_1,a_2");
+      auto const& arr3 = yield(L"R{a1,a2;}");
+      auto man3 = TArrayC{};
+      man3("0,1") = arr3("0,1") - arr3("1,0");
+
+      TArrayC zero3;
+      zero3("0,1") = man3("0,1") - eval3("0,1");
+      REQUIRE(norm(zero3) == Catch::Approx(0).margin(
+                                 100 * std::numeric_limits<double>::epsilon()));
+    }
+
+    SECTION("Symmetrization") {
+      auto expr1 = parse_expr(L"1/2 * g_{i1, i2}^{a1, a2}");
+      auto eval1 = eval_symm(expr1, "i_1,i_2,a_1,a_2");
+      auto const& arr1 = yield(L"g{i1,i2;a1,a2}");
+
+      auto man1 = TArrayC{};
+      man1("0,1,2,3") = arr1("0,1,2,3") + arr1("1,0,3,2");
+      man1("0,1,2,3") = 0.5 * man1("0,1,2,3");
+
+      REQUIRE(norm(man1) == Catch::Approx(norm(eval1)));
+
+      auto expr2 = parse_expr(L"g_{i1,i2,i3}^{a1,a2,a3}");
+
+      auto eval2 = eval_symm(expr2, "i_1,i_2,i_3,a_1,a_2,a_3");
+      auto const& arr2 = yield(L"g{i1,i2,i3;a1,a2,a3}");
+      TArrayC man2;
+      man2("0,1,2,3,4,5") = arr2("0,1,2,3,4,5") + arr2("0,2,1,3,5,4") +
+                            arr2("2,0,1,5,3,4") + arr2("2,1,0,5,4,3") +
+                            arr2("1,2,0,4,5,3") + arr2("1,0,2,4,3,5");
+
+      REQUIRE(norm(man2) == Catch::Approx(norm(eval2)));
+    }
+
+    SECTION("Others") {
+      using namespace std::string_literals;
+      auto expr1 = parse_expr(
+          L"-1/4 * g_{i3,i4}^{a3,a4} * t_{a2,a4}^{i1,i2} * t_{a1,a3}^{i3,i4}"
+          " + "
+          " 1/16 * g_{i3,i4}^{a3,a4} * t_{a1,a2}^{i3,i4} * t_{a3,a4}^{i1,i2}");
+
+      auto eval1 = evaluate(eval_node(expr1), "i_1,i_2,a_1,a_2"s, yield_)
+                       ->get<TArrayC>();
+
+      auto nodes1 = *expr1 | ranges::views::transform([](auto&& x) {
+        return eval_node(x);
+      }) | ranges::to_vector;
+
+      auto eval2 = evaluate(nodes1, "i_1,i_2,a_1,a_2"s, yield_)->get<TArrayC>();
+
+      REQUIRE(norm(eval1) == Catch::Approx(norm(eval2)));
+    }
   }
 
-  SECTION("ToT_times_ToT_to_ToT") {
-    constexpr std::wstring_view expr_str =
-        L"I{a4<i2,i3>,a1<i1,i2>;i1,i2}"
-        L" * "
-        L"s{a2<i1,i2>;a4<i2,i3>}";
+  SECTION("tot") {
+    using namespace sequant;
 
-    auto const node = eval_node(parse_expr(expr_str));
-    std::string const target_layout{"i_2,i_1;a_1i_1i_2,a_2i_1i_2"};
+    //
+    // eg: approx_equal("i,j;a,b", arr1, arr2)
+    // - arr1 and arr2 are DistArrays with equal TiledRange and matching Range
+    // for
+    //   the inner tensors at the corresponding tile positions.
+    // - 'i', 'j', 'a', and 'b' are dummy indices that annotate the modes of
+    // outer
+    //   and inner tensors. Why? Because TA::norm2 function is not supported for
+    //   tensor-of-tensor tiles
+    //
+    auto approx_equal = [](std::string const& annot, auto const& lhs,
+                           auto const& rhs) -> bool {
+      return Catch::Approx(lhs(annot).dot(lhs(annot))) ==
+             rhs(annot).dot(rhs(annot));
+    };
 
-    auto result = evaluate(node, target_layout, yield)->get<ArrayToT>();
+    auto& world = TA::get_default_world();
 
-    ArrayToT ref;
-    {
-      auto const& lhs = yield(L"I{a4<i2,i3>,a1<i1,i2>;i1,i2}")->get<ArrayToT>();
-      auto const& rhs = yield(L"s{a2<i1,i2>;a4<i2,i3>}")->get<ArrayToT>();
-      ref = TA::einsum(lhs("i_1,i_2,i_3;a_4i_2i_3,a_1i_1i_2"),
-                       rhs("i_1,i_2,i_3;a_2i_1i_2,a_4i_2i_3"), target_layout);
+    size_t const nocc = 2;
+    size_t const nvirt = 3;
+
+    rand_tensor_yield<int> yield{world, nocc, nvirt};
+
+    using ArrayT = typename decltype(yield)::array_type;
+    using ArrayToT = typename decltype(yield)::array_tot_type;
+    using NumericT = typename decltype(yield)::numeric_type;
+
+    SECTION("T_times_ToT_to_ToT") {
+      constexpr std::wstring_view expr_str =
+          L"3"
+          L" * "
+          L"f{i3;i1}"
+          L" * "
+          L"t{a3<i2,i3>,a4<i2,i3>;i2,i3}";
+      auto const node = eval_node(parse_expr(expr_str));
+      std::string const target_layout{"i_1,i_2,i_3;a_3i_2i_3,a_4i_2i_3"};
+      auto result = evaluate(node, target_layout, yield)->get<ArrayToT>();
+      ArrayToT ref;
+      {
+        auto const& lhs = yield(L"f{i3;i1}")->get<ArrayT>();
+        auto const& rhs =
+            yield(L"t{a3<i2,i3>,a4<i2,i3>;i2,i3}")->get<ArrayToT>();
+        ref = TA::einsum(lhs("i_3,i_1"), rhs("i_2,i_3;a_3i_2i_3,a_4i_2i_3"),
+                         target_layout);
+        ref(target_layout) = 3 * ref(target_layout);
+      }
+      REQUIRE(approx_equal("i,j,k;a,b", result, ref));
     }
-    REQUIRE(approx_equal("i,j;a,b", result, ref));
-  }
 
-  SECTION("ToT_times_ToT_to_Scalar") {
-    constexpr std::wstring_view expr_str =
-        L"I{a1<i1,i2>,a2<i1,i2>;i1,i2}"
-        L" * "
-        L"g{i1,i2;a2<i1,i2>,a1<i1,i2>}";
-    auto const node = eval_node(parse_expr(expr_str));
+    SECTION("ToT_times_ToT_to_ToT") {
+      constexpr std::wstring_view expr_str =
+          L"I{a4<i2,i3>,a1<i1,i2>;i1,i2}"
+          L" * "
+          L"s{a2<i1,i2>;a4<i2,i3>}";
 
-    auto result = evaluate(node, yield)->get<NumericT>();
+      auto const node = eval_node(parse_expr(expr_str));
+      std::string const target_layout{"i_2,i_1;a_1i_1i_2,a_2i_1i_2"};
 
-    NumericT ref;
-    {
-      auto const& lhs = yield(L"I{a1<i1,i2>,a2<i1,i2>;i1,i2}")->get<ArrayToT>();
-      auto const& rhs = yield(L"g{i1,i2;a2<i1,i2>,a1<i1,i2>}")->get<ArrayToT>();
-      ref = TA::dot(lhs("i_1,i_2;a_1i_1i_2,a_2i_1i_2"),
-                    rhs("i_1,i_2;a_2i_1i_2,a_1i_1i_2"));
+      auto result = evaluate(node, target_layout, yield)->get<ArrayToT>();
+
+      ArrayToT ref;
+      {
+        auto const& lhs =
+            yield(L"I{a4<i2,i3>,a1<i1,i2>;i1,i2}")->get<ArrayToT>();
+        auto const& rhs = yield(L"s{a2<i1,i2>;a4<i2,i3>}")->get<ArrayToT>();
+        ref = TA::einsum(lhs("i_1,i_2,i_3;a_4i_2i_3,a_1i_1i_2"),
+                         rhs("i_1,i_2,i_3;a_2i_1i_2,a_4i_2i_3"), target_layout);
+      }
+      REQUIRE(approx_equal("i,j;a,b", result, ref));
     }
-    REQUIRE(result == Catch::Approx(ref));
+
+    SECTION("ToT_times_ToT_to_Scalar") {
+      constexpr std::wstring_view expr_str =
+          L"I{a1<i1,i2>,a2<i1,i2>;i1,i2}"
+          L" * "
+          L"g{i1,i2;a2<i1,i2>,a1<i1,i2>}";
+      auto const node = eval_node(parse_expr(expr_str));
+
+      auto result = evaluate(node, yield)->get<NumericT>();
+
+      NumericT ref;
+      {
+        auto const& lhs =
+            yield(L"I{a1<i1,i2>,a2<i1,i2>;i1,i2}")->get<ArrayToT>();
+        auto const& rhs =
+            yield(L"g{i1,i2;a2<i1,i2>,a1<i1,i2>}")->get<ArrayToT>();
+        ref = TA::dot(lhs("i_1,i_2;a_1i_1i_2,a_2i_1i_2"),
+                      rhs("i_1,i_2;a_2i_1i_2,a_1i_1i_2"));
+      }
+      REQUIRE(result == Catch::Approx(ref));
+    }
   }
 }

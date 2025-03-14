@@ -15,7 +15,7 @@
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 
-TEST_CASE("Op", "[elements]") {
+TEST_CASE("op", "[elements]") {
   using namespace sequant;
 
   SECTION("constructors") {
@@ -447,5 +447,4 @@ TEST_CASE("Op", "[elements]") {
     REQUIRE(adjoint(FNOperator(nop1)).commutes_with(adjoint(FNOperator(nop2))));
     REQUIRE(adjoint(FNOperator(nop2)).commutes_with(adjoint(FNOperator(nop1))));
   }
-
-}  // TEST_CASE("Op")
+}

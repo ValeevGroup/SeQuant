@@ -36,7 +36,7 @@
 
 #include <range/v3/all.hpp>
 
-TEST_CASE("Spin", "[spin]") {
+TEST_CASE("spin", "[spin]") {
   using namespace sequant;
 
   TensorCanonicalizer::register_instance(

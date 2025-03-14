@@ -145,7 +145,7 @@ struct latex_visitor {
   std::wstring result{};
 };
 
-TEST_CASE("Expr", "[elements]") {
+TEST_CASE("expr", "[elements]") {
   using namespace sequant;
   SECTION("constructors") {
     REQUIRE_NOTHROW(std::make_shared<Constant>(2));
@@ -667,102 +667,101 @@ TEST_CASE("Expr", "[elements]") {
     REQUIRE(ex2->commutes_with(*ex2));
   }
 
-}  // TEST_CASE("Expr")
+  SECTION("expr_ptr") {
+    using namespace sequant;
 
-TEST_CASE("ExprPtr", "[elements]") {
-  using namespace sequant;
+    SECTION("constructors") {
+      REQUIRE_NOTHROW(ExprPtr{});
+      REQUIRE_NOTHROW(ExprPtr{std::make_shared<Constant>(2)});
+      const auto ex_two = std::make_shared<Constant>(2);
+      REQUIRE_NOTHROW(ExprPtr{ex_two});
+      ExprPtr ex;
+      REQUIRE_NOTHROW(ex = std::make_shared<Constant>(2));
+      REQUIRE_NOTHROW(ex = ex_two);
+      ExprPtr ex2 = std::make_shared<Constant>(1);
+      REQUIRE_NOTHROW(ExprPtr{ex2});
+      REQUIRE_NOTHROW(ex = ex2);
+    }
 
-  SECTION("constructors") {
-    REQUIRE_NOTHROW(ExprPtr{});
-    REQUIRE_NOTHROW(ExprPtr{std::make_shared<Constant>(2)});
-    const auto ex_two = std::make_shared<Constant>(2);
-    REQUIRE_NOTHROW(ExprPtr{ex_two});
-    ExprPtr ex;
-    REQUIRE_NOTHROW(ex = std::make_shared<Constant>(2));
-    REQUIRE_NOTHROW(ex = ex_two);
-    ExprPtr ex2 = std::make_shared<Constant>(1);
-    REQUIRE_NOTHROW(ExprPtr{ex2});
-    REQUIRE_NOTHROW(ex = ex2);
+    SECTION("basic use") {
+      ExprPtr ex1 = ex<Constant>(1);
+      REQUIRE_NOTHROW(to_latex(ex1));
+      REQUIRE_NOTHROW(ex1->to_latex());
+    }
+
+    SECTION("clone") {
+      ExprPtr ex1 = ex<Constant>(1);
+      ExprPtr ex2;
+      REQUIRE_NOTHROW(ex2 = ex1.clone());
+      CHECK(ex1);
+      CHECK(ex1->as<Constant>().value() == ex2->as<Constant>().value());
+      auto ex1_ptr = ex1.get();
+      REQUIRE_NOTHROW(ex2 = std::move(ex1).clone());
+      CHECK(!ex1);
+      CHECK(ex2);
+      CHECK(ex2.get() == ex1_ptr);
+    }
+
+    SECTION("iteration") {
+      const auto ex1 = ex<Dummy>();
+      REQUIRE(begin(*ex1) == end(*ex1));
+      REQUIRE(size(*ex1) == 0);
+      REQUIRE(begin(ex1) == end(ex1));
+      REQUIRE(cbegin(ex1) == cend(ex1));
+      REQUIRE(size(ex1) == 0);
+
+      const auto ex2 = ex<Constant>(2);
+      REQUIRE(begin(*ex2) == end(*ex2));
+      REQUIRE(size(*ex2) == 0);
+      REQUIRE(begin(ex2) == end(ex2));
+      REQUIRE(size(ex2) == 0);
+
+      const auto ex3 = ex<VecExpr<double>>();
+      REQUIRE(begin(*ex3) == end(*ex3));
+      REQUIRE(size(*ex3) == 0);
+      REQUIRE(begin(ex3) == end(ex3));
+      REQUIRE(size(ex3) == 0);
+      REQUIRE(begin(ex3->expr()) == end(ex3->expr()));
+      REQUIRE(size(ex3->expr()) == 0);
+
+      const auto ex4 =
+          ex<VecExpr<double>>(std::initializer_list<double>{1.0, 2.0, 3.0});
+      CHECK(begin(*ex4) == end(*ex4));
+      CHECK(size(*ex4) == 0);
+      CHECK(begin(ex4) == end(ex4));
+      CHECK(size(ex4) == 0);
+      CHECK(begin(ex4->expr()) == end(ex4->expr()));
+      CHECK(size(ex4->expr()) == 0);
+      CHECK(begin(ex4.as<VecExpr<double>>()) != end(ex4.as<VecExpr<double>>()));
+      CHECK(size(ex4.as<VecExpr<double>>()) == 3);
+    }
+
+    SECTION("operators") {
+      ExprPtr ex1 = ex<Constant>(1);
+      ExprPtr ex2 = ex<Constant>(2);
+      REQUIRE_NOTHROW(ex1 + ex2);
+      REQUIRE_NOTHROW(ex1 - ex2);
+      REQUIRE_NOTHROW(ex1 * ex2);
+      REQUIRE_NOTHROW(ex1 += ex2);
+      REQUIRE_NOTHROW(ex1 -= ex2);
+      REQUIRE_NOTHROW(ex1 *= ex2);
+      ex1 = ex<Constant>(1);
+      ex1 += ex2;
+      CHECK(ex1 == ex<Constant>(3));
+      ex1 -= ex2;
+      CHECK(ex1 == ex<Constant>(1));
+      ex1 *= ex2;
+      CHECK(ex1 == ex<Constant>(2));
+
+      ExprPtr ex3;
+      REQUIRE_NOTHROW(ex3 += ex2);
+      CHECK(ex3 == ex2);
+      ex3.reset();
+      REQUIRE_NOTHROW(ex3 -= ex2);
+      CHECK(ex3 == ex<Constant>(-1) * ex2);
+      ex3.reset();
+      REQUIRE_NOTHROW(ex3 *= ex2);
+      CHECK(ex3 == ex2);
+    }
   }
-
-  SECTION("basic use") {
-    ExprPtr ex1 = ex<Constant>(1);
-    REQUIRE_NOTHROW(to_latex(ex1));
-    REQUIRE_NOTHROW(ex1->to_latex());
-  }
-
-  SECTION("clone") {
-    ExprPtr ex1 = ex<Constant>(1);
-    ExprPtr ex2;
-    REQUIRE_NOTHROW(ex2 = ex1.clone());
-    CHECK(ex1);
-    CHECK(ex1->as<Constant>().value() == ex2->as<Constant>().value());
-    auto ex1_ptr = ex1.get();
-    REQUIRE_NOTHROW(ex2 = std::move(ex1).clone());
-    CHECK(!ex1);
-    CHECK(ex2);
-    CHECK(ex2.get() == ex1_ptr);
-  }
-
-  SECTION("iteration") {
-    const auto ex1 = ex<Dummy>();
-    REQUIRE(begin(*ex1) == end(*ex1));
-    REQUIRE(size(*ex1) == 0);
-    REQUIRE(begin(ex1) == end(ex1));
-    REQUIRE(cbegin(ex1) == cend(ex1));
-    REQUIRE(size(ex1) == 0);
-
-    const auto ex2 = ex<Constant>(2);
-    REQUIRE(begin(*ex2) == end(*ex2));
-    REQUIRE(size(*ex2) == 0);
-    REQUIRE(begin(ex2) == end(ex2));
-    REQUIRE(size(ex2) == 0);
-
-    const auto ex3 = ex<VecExpr<double>>();
-    REQUIRE(begin(*ex3) == end(*ex3));
-    REQUIRE(size(*ex3) == 0);
-    REQUIRE(begin(ex3) == end(ex3));
-    REQUIRE(size(ex3) == 0);
-    REQUIRE(begin(ex3->expr()) == end(ex3->expr()));
-    REQUIRE(size(ex3->expr()) == 0);
-
-    const auto ex4 =
-        ex<VecExpr<double>>(std::initializer_list<double>{1.0, 2.0, 3.0});
-    CHECK(begin(*ex4) == end(*ex4));
-    CHECK(size(*ex4) == 0);
-    CHECK(begin(ex4) == end(ex4));
-    CHECK(size(ex4) == 0);
-    CHECK(begin(ex4->expr()) == end(ex4->expr()));
-    CHECK(size(ex4->expr()) == 0);
-    CHECK(begin(ex4.as<VecExpr<double>>()) != end(ex4.as<VecExpr<double>>()));
-    CHECK(size(ex4.as<VecExpr<double>>()) == 3);
-  }
-
-  SECTION("operators") {
-    ExprPtr ex1 = ex<Constant>(1);
-    ExprPtr ex2 = ex<Constant>(2);
-    REQUIRE_NOTHROW(ex1 + ex2);
-    REQUIRE_NOTHROW(ex1 - ex2);
-    REQUIRE_NOTHROW(ex1 * ex2);
-    REQUIRE_NOTHROW(ex1 += ex2);
-    REQUIRE_NOTHROW(ex1 -= ex2);
-    REQUIRE_NOTHROW(ex1 *= ex2);
-    ex1 = ex<Constant>(1);
-    ex1 += ex2;
-    CHECK(ex1 == ex<Constant>(3));
-    ex1 -= ex2;
-    CHECK(ex1 == ex<Constant>(1));
-    ex1 *= ex2;
-    CHECK(ex1 == ex<Constant>(2));
-
-    ExprPtr ex3;
-    REQUIRE_NOTHROW(ex3 += ex2);
-    CHECK(ex3 == ex2);
-    ex3.reset();
-    REQUIRE_NOTHROW(ex3 -= ex2);
-    CHECK(ex3 == ex<Constant>(-1) * ex2);
-    ex3.reset();
-    REQUIRE_NOTHROW(ex3 *= ex2);
-    CHECK(ex3 == ex2);
-  }
-}  // TEST_CASE("ExprPtr")
+}
