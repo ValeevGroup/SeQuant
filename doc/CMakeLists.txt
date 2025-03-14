@@ -7,13 +7,18 @@ find_package(Python 3.9 COMPONENTS Interpreter REQUIRED)
 # Find Doxygen for API documentation
 find_package(Doxygen 1.9.2 REQUIRED)
 
-set(DOXYGEN_OUTPUT_DIR ${PROJECT_BINARY_DIR}/doc/doxygen)
-file(MAKE_DIRECTORY ${DOXYGEN_OUTPUT_DIR})
+set(DOXYGEN_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/.doxygen")
+set(DOXYGEN_OUTPUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/.doxygen")
+
+file(REAL_PATH "${DOXYGEN_SOURCE_DIR}" DOXYGEN_SOURCE_DIR)
+file(REAL_PATH "${DOXYGEN_OUTPUT_DIR}" DOXYGEN_OUTPUT_DIR)
+
+file(MAKE_DIRECTORY "${DOXYGEN_OUTPUT_DIR}")
 
 # Configure Doxyfile
 configure_file(
-        ${CMAKE_CURRENT_SOURCE_DIR}/doxygen/Doxyfile.in
-        ${DOXYGEN_OUTPUT_DIR}/Doxyfile @ONLY
+	${DOXYGEN_SOURCE_DIR}/Doxyfile.in
+    ${DOXYGEN_OUTPUT_DIR}/Doxyfile @ONLY
 )
 
 doxygen_add_docs(
@@ -30,13 +35,19 @@ endif()
 # Find Sphinx for documentation generation
 find_package(Sphinx REQUIRED)
 
-set(SPHINX_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/sphinx)
-set(SPHINX_BUILD_DIR ${PROJECT_BINARY_DIR}/doc/sphinx)
+set(SPHINX_DOCS_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
+set(SPHINX_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/.sphinx")
+set(SPHINX_BUILD_DIR "${CMAKE_CURRENT_BINARY_DIR}/.sphinx")
+set(SPHINX_HTML_DIR ${CMAKE_CURRENT_BINARY_DIR}/html)
 
+# Directories need to exist in order for REAL_PATH to work properly
+file(MAKE_DIRECTORY "${SPHINX_BUILD_DIR}")
+file(MAKE_DIRECTORY "${SPHINX_HTML_DIR}")
+
+file(REAL_PATH "${SPHINX_DOCS_DIR}" SPHINX_DOCS_DIR)
 file(REAL_PATH "${SPHINX_SOURCE_DIR}" SPHINX_SOURCE_DIR)
 file(REAL_PATH "${SPHINX_BUILD_DIR}" SPHINX_BUILD_DIR)
-
-set(SPHINX_HTML_DIR ${SPHINX_BUILD_DIR}/html)
+file(REAL_PATH "${SPHINX_HTML_DIR}" SPHINX_HTML_DIR)
 
 # Ensure output directories exist
 file(MAKE_DIRECTORY ${SPHINX_BUILD_DIR} ${SPHINX_HTML_DIR})
@@ -74,9 +85,6 @@ if (SPHINX_MISSING_MODULES)
     )
 endif ()
 
-# copy index.rst to the build directory
-file(COPY ${SPHINX_SOURCE_DIR}/index.rst DESTINATION ${SPHINX_BUILD_DIR})
-
 # Configure Sphinx conf.py
 string(TIMESTAMP CURRENT_YEAR "%Y")
 configure_file(
@@ -84,24 +92,15 @@ configure_file(
         ${SPHINX_BUILD_DIR}/conf.py @ONLY
 )
 
-# Copy documentation sources, excluding _static directory
-set(SOURCE_DIRS user internal api)
-
-foreach (dir ${SOURCE_DIRS})
-    if (IS_DIRECTORY ${SPHINX_SOURCE_DIR}/${dir})
-        file(COPY ${SPHINX_SOURCE_DIR}/${dir} DESTINATION ${SPHINX_BUILD_DIR})
-    endif ()
-endforeach ()
-
 sphinx_add_docs(
     sphinx-sequant
     COMMENT "Generating HTML documentation via Sphinx"
     WORKING_DIRECTORY "${SPHINX_BUILD_DIR}"
     BUILDER html
-    CONFIG_DIRECTORY "${SPHINX_BUILD_DIR}"
-    SOURCE_DIRECTORY "${SPHINX_BUILD_DIR}"
+	SOURCE_DIRECTORY "${SPHINX_DOCS_DIR}"
+	CONFIG_DIRECTORY "${SPHINX_BUILD_DIR}"
     OUTPUT_DIRECTORY "${SPHINX_HTML_DIR}"
-    DEFINE breathe_projects.SeQuant=${PROJECT_BINARY_DIR}/doc/doxygen/xml
+	DEFINE breathe_projects.SeQuant=${DOXYGEN_OUTPUT_DIR}/xml
     DEPENDS doxygen-sequant
     FRESH_ENV
 )
