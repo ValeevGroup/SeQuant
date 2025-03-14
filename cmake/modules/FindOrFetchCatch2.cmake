@@ -3,6 +3,7 @@ if (NOT TARGET Catch2::Catch2)
     include(${vg_cmake_kit_SOURCE_DIR}/modules/VRGFindOrFetchPackage.cmake)
     VRGFindOrFetchPackage(Catch2 "https://github.com/catchorg/Catch2.git" "${SEQUANT_TRACKED_CATCH2_TAG}"
             ADD_SUBDIR
+			ADD_SUBDIR_EXCLUDE_FROM_ALL
             CONFIG_SUBDIR
             FIND_PACKAGE_ARGS 3
     )
