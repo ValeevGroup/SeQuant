@@ -1,2 +1,5 @@
 Getting started
 ===============
+
+.. toctree::
+   using
