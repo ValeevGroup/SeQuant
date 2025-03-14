@@ -31,7 +31,7 @@ breathe_default_project = "SeQuant"
 # Exhale Configuration
 exhale_args = {
     # note: this is required to be a subdirectory to wherever the other sources live
-    "containmentFolder": "@SPHINX_DOCS_DIR@/api",
+    "containmentFolder": "@SPHINX_API_DOCS_DIR@",
     "rootFileName": "library_root.rst",
     "doxygenStripFromPath": "..",
     "rootFileTitle": "API Reference",
