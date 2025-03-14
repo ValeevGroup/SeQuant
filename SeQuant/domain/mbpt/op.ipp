@@ -23,6 +23,16 @@ Operator<QuantumNumbers, S>::Operator(
       qn_action_(std::move(qn_action)) {}
 
 template <typename QuantumNumbers, Statistics S>
+Operator<QuantumNumbers, S>::Operator(
+    std::function<std::wstring_view()> label_generator,
+    std::function<ExprPtr()> tensor_form_generator,
+    std::function<void(QuantumNumbers&)> qn_action, size_t batch_idx_rank)
+  : Operator(std::move(label_generator), std::move(tensor_form_generator),
+             std::move(qn_action)) {
+  batch_idx_rank_ = batch_idx_rank;
+}
+
+template <typename QuantumNumbers, Statistics S>
 Operator<QuantumNumbers, S>::~Operator() = default;
 
 template <typename QuantumNumbers, Statistics S>

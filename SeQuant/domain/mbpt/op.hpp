@@ -840,6 +840,19 @@ class Operator : public Operator<void, S> {
            std::function<ExprPtr()> tensor_form_generator,
            std::function<void(QuantumNumbers&)> qn_action);
 
+  /// @brief Constructs an operator with the given label and tensor form and
+  /// quantum number action
+  /// @param label_generator a function that generates the label for the
+  /// operator
+  /// @param tensor_form_generator a function that generates the tensor form of
+  /// the operator
+  /// @param qn_action a function that modifies the quantum numbers
+  /// @param batch_idx_rank the rank of the batch index
+  Operator(std::function<std::wstring_view()> label_generator,
+           std::function<ExprPtr()> tensor_form_generator,
+           std::function<void(QuantumNumbers&)> qn_action,
+           size_t batch_idx_rank);
+
   virtual ~Operator();
 
   /// evaluates the result of applying this operator to \p qns
@@ -878,6 +891,8 @@ class Operator : public Operator<void, S> {
   std::function<void(QuantumNumbers&)> qn_action_;
 
   bool is_adjoint_ = false;
+
+  std::optional<size_t> batch_idx_rank_ = std::nullopt;
 
   bool less_than_rank_of(const this_type& that) const;
 
