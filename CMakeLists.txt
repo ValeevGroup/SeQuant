@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.27)
+cmake_minimum_required(VERSION 3.27) # 3.27 required for CONFIG_FILE option in doxygen_add_docs
 
 # Preload versions/tags of all dependencies ====================================
 include(external/versions.cmake)
