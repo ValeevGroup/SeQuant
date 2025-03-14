@@ -74,7 +74,7 @@ PROJECT_ICON           =
 # entered, it will be relative to the location where doxygen was started. If
 # left blank the current directory will be used.
 
-OUTPUT_DIRECTORY       = @DOXYGEN_OUTPUT_DIR@
+OUTPUT_DIRECTORY       = @SEQUANT_DOXYGEN_OUTPUT_DIR@
 
 # If the CREATE_SUBDIRS tag is set to YES then doxygen will create up to 4096
 # sub-directories (in 2 levels) under the output directory of each output format
@@ -821,7 +821,7 @@ FILE_VERSION_FILTER    =
 # DoxygenLayout.xml, doxygen will parse it automatically even if the LAYOUT_FILE
 # tag is left empty.
 
-LAYOUT_FILE            = @DOXYGEN_SOURCE_DIR@/layout.xml
+LAYOUT_FILE            = @SEQUANT_DOXYGEN_SOURCE_DIR@/layout.xml
 
 # The CITE_BIB_FILES tag can be used to specify one or more bib files containing
 # the reference definitions. This must be a list of .bib files. The .bib
@@ -1307,7 +1307,7 @@ HTML_FILE_EXTENSION    = .html
 # of the possible markers and block names see the documentation.
 # This tag requires that the tag GENERATE_HTML is set to YES.
 
-HTML_HEADER            = @DOXYGEN_SOURCE_DIR@/header.html
+HTML_HEADER            = @SEQUANT_DOXYGEN_SOURCE_DIR@/header.html
 
 # The HTML_FOOTER tag can be used to specify a user-defined HTML footer for each
 # generated HTML page. If the tag is left blank doxygen will generate a standard
@@ -1317,7 +1317,7 @@ HTML_HEADER            = @DOXYGEN_SOURCE_DIR@/header.html
 # that doxygen normally uses.
 # This tag requires that the tag GENERATE_HTML is set to YES.
 
-HTML_FOOTER            = @DOXYGEN_SOURCE_DIR@/footer.html
+HTML_FOOTER            = @SEQUANT_DOXYGEN_SOURCE_DIR@/footer.html
 
 # The HTML_STYLESHEET tag can be used to specify a user-defined cascading style
 # sheet that is used by each HTML page. It can be used to fine-tune the look of
@@ -1347,7 +1347,7 @@ HTML_STYLESHEET        =
 # documentation.
 # This tag requires that the tag GENERATE_HTML is set to YES.
 
-HTML_EXTRA_STYLESHEET  = @DOXYGEN_SOURCE_DIR@/customdoxygen.css
+HTML_EXTRA_STYLESHEET  = @SEQUANT_DOXYGEN_SOURCE_DIR@/customdoxygen.css
 
 # The HTML_EXTRA_FILES tag can be used to specify one or more extra images or
 # other source files which should be copied to the HTML output directory. Note
@@ -1357,10 +1357,10 @@ HTML_EXTRA_STYLESHEET  = @DOXYGEN_SOURCE_DIR@/customdoxygen.css
 # files will be copied as-is; there are no commands or markers available.
 # This tag requires that the tag GENERATE_HTML is set to YES.
 
-HTML_EXTRA_FILES       = @DOXYGEN_SOURCE_DIR@/doxy-boot.js \
-                         @DOXYGEN_SOURCE_DIR@/jquery.smartmenus.js \
-                         @DOXYGEN_SOURCE_DIR@/addons/bootstrap/jquery.smartmenus.bootstrap.js \
-                         @DOXYGEN_SOURCE_DIR@/addons/bootstrap/jquery.smartmenus.bootstrap.css
+HTML_EXTRA_FILES       = @SEQUANT_DOXYGEN_SOURCE_DIR@/doxy-boot.js \
+                         @SEQUANT_DOXYGEN_SOURCE_DIR@/jquery.smartmenus.js \
+                         @SEQUANT_DOXYGEN_SOURCE_DIR@/addons/bootstrap/jquery.smartmenus.bootstrap.js \
+                         @SEQUANT_DOXYGEN_SOURCE_DIR@/addons/bootstrap/jquery.smartmenus.bootstrap.css
 
 # The HTML_COLORSTYLE tag can be used to specify if the generated HTML output
 # should be rendered with a dark or light theme.
