@@ -9,6 +9,10 @@ if (NOT TARGET Catch2::Catch2)
     if (TARGET Catch2 AND NOT TARGET Catch2::Catch2)
         add_library(Catch2::Catch2 ALIAS Catch2)
     endif()
+
+	if (Catch2_SOURCE_DIR)
+		list(APPEND CMAKE_MODULE_PATH "${Catch2_SOURCE_DIR}/extras")
+	endif()
 endif()
 
 # postcond check
