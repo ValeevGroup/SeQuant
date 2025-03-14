@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.15.0) # need list(PREPEND for toolchains
+cmake_minimum_required(VERSION 3.24)
 
 # Preload versions/tags of all dependencies ====================================
 include(external/versions.cmake)
