@@ -30,7 +30,7 @@ breathe_default_project = "SeQuant"
 
 # Exhale Configuration
 exhale_args = {
-    "containmentFolder": "./api",
+    "containmentFolder": "@SPHINX_BUILD_DIR@/api",
     "rootFileName": "library_root.rst",
     "doxygenStripFromPath": "..",
     "rootFileTitle": "API Reference",

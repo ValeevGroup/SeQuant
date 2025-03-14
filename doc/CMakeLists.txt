@@ -33,11 +33,20 @@ add_custom_target_subproject(sequant doxygen
 # Link Doxygen to main documentation target
 add_dependencies(doc-sequant doxygen-sequant)
 
+# Ensure the config file installed via sphinx-cmake pip package can be found
+if ("${Python_EXECUTABLE}" MATCHES "(.+)/bin/python[^/]*")
+	list(APPEND CMAKE_PREFIX_PATH "${CMAKE_MATCH_1}")
+endif()
+
 # Find Sphinx for documentation generation
 find_package(Sphinx REQUIRED)
 
 set(SPHINX_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/sphinx)
 set(SPHINX_BUILD_DIR ${PROJECT_BINARY_DIR}/doc/sphinx)
+
+file(REAL_PATH "${SPHINX_SOURCE_DIR}" SPHINX_SOURCE_DIR)
+file(REAL_PATH "${SPHINX_BUILD_DIR}" SPHINX_BUILD_DIR)
+
 set(SPHINX_HTML_DIR ${SPHINX_BUILD_DIR}/html)
 
 # Ensure output directories exist
@@ -50,7 +59,7 @@ set(SPHINX_PYTHON_MODULES "")
 foreach (module ${SPHINX_RAW_MODULES})
 	string(REGEX REPLACE "#.*" "" module_clean ${module})  # Remove comments
 	string(STRIP ${module_clean} module_clean)  # Remove whitespace
-	if (NOT "${module_clean}" STREQUAL "")
+	if (NOT "${module_clean}" STREQUAL "" AND NOT "${module_clean}" STREQUAL "sphinx-cmake")
 		list(APPEND SPHINX_PYTHON_MODULES ${module_clean})
 	endif ()
 endforeach ()
@@ -95,16 +104,18 @@ foreach (dir ${SOURCE_DIRS})
 	endif ()
 endforeach ()
 
-# Sphinx build target
-add_custom_target_subproject(sequant sphinx
-		COMMAND ${SPHINX_EXECUTABLE} -E -b html -j auto -a
-		-Dbreathe_projects.SeQuant=${PROJECT_BINARY_DIR}/doc/doxygen/xml
-		${SPHINX_BUILD_DIR} ${SPHINX_HTML_DIR}
-		WORKING_DIRECTORY ${SPHINX_BUILD_DIR}
-		COMMENT "Building HTML documentation with Sphinx"
-		VERBATIM USES_TERMINAL
+sphinx_add_docs(
+	sphinx-sequant
+	COMMENT "Generating HTML documentation via Sphinx"
+	WORKING_DIRECTORY "${SPHINX_BUILD_DIR}"
+	BUILDER html
+	CONFIG_DIRECTORY "${SPHINX_BUILD_DIR}"
+	SOURCE_DIRECTORY "${SPHINX_BUILD_DIR}"
+	OUTPUT_DIRECTORY "${SPHINX_HTML_DIR}"
+	DEFINE breathe_projects.SeQuant=${PROJECT_BINARY_DIR}/doc/doxygen/xml
+	DEPENDS doxygen-sequant
+	FRESH_ENV
 )
-add_dependencies(sphinx-sequant doxygen-sequant)
 
 # Add Sphinx to main documentation target
 add_dependencies(doc-sequant sphinx-sequant)
