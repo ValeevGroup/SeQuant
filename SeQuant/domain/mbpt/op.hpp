@@ -954,8 +954,8 @@ ExprPtr Λ(std::size_t K);
 /// @brief Makes generic right-hand replacement operator
 /// @param na number of annihilators
 /// @param nc number of creators
-/// @param particle_space IndexSpace corresponding to the particle space
-/// @param hole_space IndexSpace corresponding to the hole space
+/// @param cre_space IndexSpace on which creators act
+/// @param ann_space IndexSpace on which annihilators act
 ExprPtr R_(
     nann na, ncre nc,
     const cre<IndexSpace>& cre_space = cre(get_particle_space(Spin::any)),
@@ -970,8 +970,8 @@ DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(R_);
 /// @brief Makes generic left-hand replacement operator
 /// @param na number of annihilators
 /// @param nc number of creators
-/// @param particle_space IndexSpace corresponding to the particle space
-/// @param hole_space IndexSpace corresponding to the hole space
+/// @param cre_space IndexSpace on which creators act
+/// @param ann_space IndexSpace on which annihilators act
 ExprPtr L_(
     nann na, ncre nc,
     const cre<IndexSpace>& cre_space = cre(get_hole_space(Spin::any)),
@@ -1083,7 +1083,7 @@ ExprPtr Λ(std::size_t K);
 /// @param na number of annihilators
 /// @param nc number of creators
 /// @param cre_space IndexSpace on which creators act
-/// @param hole_space IndexSpace on which annihilators act
+/// @param ann_space IndexSpace on which annihilators act
 ExprPtr R_(
     nann na, ncre nc,
     const cre<IndexSpace>& cre_space = cre(get_particle_space(Spin::any)),
@@ -1099,7 +1099,7 @@ DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(R_);
 /// @param na number of annihilators
 /// @param nc number of creators
 /// @param cre_space IndexSpace on which creators act
-/// @param hole_space IndexSpace on which annihilators act
+/// @param ann_space IndexSpace on which annihilators act
 ExprPtr L_(
     nann na, ncre nc,
     const cre<IndexSpace>& cre_space = cre(get_hole_space(Spin::any)),
@@ -1115,7 +1115,7 @@ DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(L_);
 /// @param na number of annihilators
 /// @param nc number of creators
 /// @param cre_space IndexSpace on which creators act
-/// @param hole_space IndexSpace on which annihilators act
+/// @param ann_space IndexSpace on which annihilators act
 /// @return `R_(na,nc) + R_(na-1,nc-1) + ...`
 ExprPtr R(nann na, ncre nc,
           const cre<IndexSpace>& cre_space = cre(get_particle_space(Spin::any)),
@@ -1132,7 +1132,7 @@ DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(R);
 /// @param na number of annihilators
 /// @param nc number of creators
 /// @param cre_space IndexSpace on which creators act
-/// @param hole_space IndexSpace on which annihilators act
+/// @param ann_space IndexSpace on which annihilators act
 /// @return `L_(na,nc) + L_(na-1,nc-1) + ...`
 ExprPtr L(
     nann na, ncre nc,
