@@ -26,7 +26,7 @@ jobs:
           cmake -E make_directory ${{github.workspace}}/build
           sudo apt-get update
           sudo apt-get install -y ninja-build libboost-all-dev doxygen
-          pip install -r doc/sphinx/requirements.txt
+          pip install -r doc/.sphinx/requirements.txt
 
       - name: Build Docs
         working-directory: ${{github.workspace}}/build
