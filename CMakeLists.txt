@@ -431,6 +431,19 @@ if (NOT SEQUANT_TESTS)
 	set(BUILD_BY_DEFAULT "EXCLUDE_FROM_ALL")
 endif()
 
+function(build_test_as_needed TARGET_NAME TEST_PREFIX DEPENDENT_TESTS)
+	if (SEQUANT_TESTS)
+		# Tests are built by default -> no need to add extra build steps
+		return()
+	endif()
+
+	add_test("${TEST_PREFIX}/build" "${CMAKE_COMMAND}" --build "${CMAKE_BINARY_DIR}" --target "${TARGET_NAME}")
+
+	foreach(current IN LISTS ${DEPENDENT_TESTS})
+		set_tests_properties("${current}" PROPERTIES DEPENDS "${TEST_PREFIX}/build")
+	endforeach()
+endfunction()
+
 
 set(utests_src
 		tests/unit/catch2_sequant.hpp
@@ -486,15 +499,23 @@ if (TARGET tiledarray)
 	target_link_libraries(${unit_test_executable} tiledarray)
 	target_compile_definitions(${unit_test_executable} PRIVATE SEQUANT_HAS_TILEDARRAY)
 endif (TARGET tiledarray)
-add_test(sequant/unit/build "${CMAKE_COMMAND}" --build ${CMAKE_BINARY_DIR}
-		--target ${unit_test_executable})
 
-catch_discover_tests(
-	${unit_test_executable}
-	TEST_PREFIX "sequant/"
-	WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}/tests/unit"
-	PROPERTIES DEPENDS sequant/unit/build
-)
+if (SEQUANT_TESTS)
+	catch_discover_tests(
+		${unit_test_executable}
+		TEST_PREFIX "sequant/"
+		WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}/tests/unit"
+	)
+else()
+	add_test(
+		NAME "sequant/unit"
+		COMMAND ${unit_test_executable}
+		WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}/tests/unit"
+	)
+	set(TEST_NAMES "sequant/unit")
+	build_test_as_needed(${unit_test_executable} "sequant/unit" TEST_NAMES)
+endif()
+
 
 ####### Integration tests aka "examples" ########
 
@@ -598,21 +619,21 @@ target_link_libraries(${example13} SeQuant)
 foreach (i RANGE ${lastexample})
 	if (TARGET ${example${i}})
 		add_dependencies(examples-sequant ${example${i}})
-		add_test(sequant/example/${example${i}}/build "${CMAKE_COMMAND}"
-				--build ${CMAKE_BINARY_DIR} --target ${example${i}})
 		if (NOT DEFINED ${example${i}}_cmdline_args)
 			set(${example${i}}_cmdline_args " ") # N.B. empty space, to appease foreach
 		endif()
 		set(${example${i}}_run_counter 0)
+		set(VARIANTS "")
 		foreach (args ${${example${i}}_cmdline_args})
 			string(REPLACE " " ";" args "${args}")
-			add_test(NAME sequant/example/${example${i}}/run/${${example${i}}_run_counter}
+			add_test(NAME sequant/example/${example${i}}/${${example${i}}_run_counter}
 					 COMMAND ${example${i}} ${args}
 					 WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/examples)
-			set_tests_properties(sequant/example/${example${i}}/run/${${example${i}}_run_counter}
-					 PROPERTIES DEPENDS sequant/example/${example${i}}/build)
+			list(APPEND VARIANTS "sequant/example/${example${i}}/${${example${i}}_run_counter}")
 			math(EXPR ${example${i}}_run_counter "${${example${i}}_run_counter} + 1")
 		endforeach()
+
+		build_test_as_needed(${example${i}} "sequant/example/${example${i}}" VARIANTS)
 	endif ()
 endforeach ()
 
