@@ -80,6 +80,7 @@ endif ()
 file(COPY ${SPHINX_SOURCE_DIR}/index.rst DESTINATION ${SPHINX_BUILD_DIR})
 
 # Configure Sphinx conf.py
+string(TIMESTAMP CURRENT_YEAR "%Y")
 configure_file(
 		${SPHINX_SOURCE_DIR}/conf.py.in
 		${SPHINX_BUILD_DIR}/conf.py @ONLY

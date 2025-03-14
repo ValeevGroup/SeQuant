@@ -1,8 +1,8 @@
 # Configuration file for the Sphinx documentation builder.
 
 project = '@PROJECT_NAME@'
-copyright = '2024, Valeev Research Group'
-author = 'Valeev Research Group'
+copyright = '@CURRENT_YEAR@, SeQuant developers'
+author = 'SeQuant developers'
 version = "@SEQUANT_VERSION@"
 
 # General Configuration
