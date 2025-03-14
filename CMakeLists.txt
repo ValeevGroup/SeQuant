@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.24)
+cmake_minimum_required(VERSION 3.27)
 
 # Preload versions/tags of all dependencies ====================================
 include(external/versions.cmake)
