@@ -18,7 +18,8 @@ This is achieved by the following SeQuant program:
 
 .. literalinclude:: /examples/user/getting_started/wick.cpp
    :language: cpp
-   :lines: 10-19
+   :start-after: start-snippet-1
+   :end-before: end-snippet-1
    :dedent: 2
 
 .. hint:: 
@@ -47,7 +48,8 @@ to products of normal composite operators, e.g,
 
 .. literalinclude:: /examples/user/getting_started/wick.cpp
    :language: cpp
-   :lines: 26-40
+   :start-after: start-snippet-2
+   :end-before: end-snippet-2
    :dedent: 2
 
 produces
@@ -63,7 +65,8 @@ Same algebra can be performed for bosons:
 
 .. literalinclude:: /examples/user/getting_started/wick.cpp
    :language: cpp
-   :lines: 45-51
+   :start-after: start-snippet-3
+   :end-before: end-snippet-3
    :dedent: 2
 
 .. math::
