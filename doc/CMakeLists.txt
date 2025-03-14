@@ -4,28 +4,32 @@ add_custom_target_subproject(sequant doc)
 # Find Python for Sphinx dependencies
 find_package(Python 3.9 COMPONENTS Interpreter REQUIRED)
 
-# Find Doxygen for API documentation
-find_package(Doxygen 1.9.2 REQUIRED)
+option(SEQUANT_GENERATE_API_DOCS "Use Doxygen to generate API docs" ON)
 
-set(DOXYGEN_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/.doxygen")
-set(DOXYGEN_OUTPUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/.doxygen")
+if (SEQUANT_GENERATE_API_DOCS)
+    find_package(Doxygen 1.9.2 REQUIRED)
 
-file(REAL_PATH "${DOXYGEN_SOURCE_DIR}" DOXYGEN_SOURCE_DIR)
-file(REAL_PATH "${DOXYGEN_OUTPUT_DIR}" DOXYGEN_OUTPUT_DIR)
+    set(DOXYGEN_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/.doxygen")
+    set(DOXYGEN_OUTPUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/.doxygen")
 
-file(MAKE_DIRECTORY "${DOXYGEN_OUTPUT_DIR}")
+    file(REAL_PATH "${DOXYGEN_SOURCE_DIR}" DOXYGEN_SOURCE_DIR)
+    file(REAL_PATH "${DOXYGEN_OUTPUT_DIR}" DOXYGEN_OUTPUT_DIR)
 
-# Configure Doxyfile
-configure_file(
-	${DOXYGEN_SOURCE_DIR}/Doxyfile.in
-    ${DOXYGEN_OUTPUT_DIR}/Doxyfile @ONLY
-)
+    file(MAKE_DIRECTORY "${DOXYGEN_OUTPUT_DIR}")
 
-doxygen_add_docs(
-    doxygen-sequant
-    COMMENT "Generating API documentation via Doxygen"
-    CONFIG_FILE "${DOXYGEN_OUTPUT_DIR}/Doxyfile"
-)
+    # Configure Doxyfile
+    configure_file(
+        ${DOXYGEN_SOURCE_DIR}/Doxyfile.in
+        ${DOXYGEN_OUTPUT_DIR}/Doxyfile @ONLY
+    )
+
+    doxygen_add_docs(
+        doxygen-sequant
+        COMMENT "Generating API documentation via Doxygen"
+        CONFIG_FILE "${DOXYGEN_OUTPUT_DIR}/Doxyfile"
+    )
+endif()
+
 
 # Ensure the config file installed via sphinx-cmake pip package can be found
 if ("${Python_EXECUTABLE}" MATCHES "(.+)/bin/python[^/]*")
@@ -34,6 +38,7 @@ endif()
 
 # Find Sphinx for documentation generation
 find_package(Sphinx REQUIRED)
+
 
 set(SPHINX_DOCS_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
 set(SPHINX_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/.sphinx")
@@ -49,8 +54,6 @@ file(REAL_PATH "${SPHINX_SOURCE_DIR}" SPHINX_SOURCE_DIR)
 file(REAL_PATH "${SPHINX_BUILD_DIR}" SPHINX_BUILD_DIR)
 file(REAL_PATH "${SPHINX_HTML_DIR}" SPHINX_HTML_DIR)
 
-# Ensure output directories exist
-file(MAKE_DIRECTORY ${SPHINX_BUILD_DIR} ${SPHINX_HTML_DIR})
 
 # Check required Python modules from requirements.txt
 file(STRINGS ${SPHINX_SOURCE_DIR}/requirements.txt SPHINX_RAW_MODULES)
@@ -60,7 +63,7 @@ set(MODULE_SKIP_CHECK_REGEX "^(sphinx-cmake|sphinx-design)$")
 foreach (module ${SPHINX_RAW_MODULES})
     string(REGEX REPLACE "#.*" "" module_clean ${module})  # Remove comments
     string(STRIP ${module_clean} module_clean)  # Remove whitespace
-	if (NOT "${module_clean}" STREQUAL "" AND NOT "${module_clean}" MATCHES "${MODULE_SKIP_CHECK_REGEX}")
+    if (NOT "${module_clean}" STREQUAL "" AND NOT "${module_clean}" MATCHES "${MODULE_SKIP_CHECK_REGEX}")
         list(APPEND SPHINX_PYTHON_MODULES ${module_clean})
     endif ()
 endforeach ()
@@ -86,6 +89,16 @@ if (SPHINX_MISSING_MODULES)
     )
 endif ()
 
+
+if (SEQUANT_GENERATE_API_DOCS)
+    set(SPHINX_DOXYGEN_OPTIONS
+        "DEPENDS" "doxygen-sequant"
+    )
+    set(SPHINX_EXTRA_EXTENSIONS "'breathe','exhale',")
+    set(SPHINX_BREATHE_PROJECTS "breathe_projects = {\"SeQuant\": \"${DOXYGEN_OUTPUT_DIR}/xml\"}")
+endif()
+
+
 # Configure Sphinx conf.py
 string(TIMESTAMP CURRENT_YEAR "%Y")
 configure_file(
@@ -93,16 +106,16 @@ configure_file(
         ${SPHINX_BUILD_DIR}/conf.py @ONLY
 )
 
+
 sphinx_add_docs(
     sphinx-sequant
     COMMENT "Generating HTML documentation via Sphinx"
     WORKING_DIRECTORY "${SPHINX_BUILD_DIR}"
     BUILDER html
-	SOURCE_DIRECTORY "${SPHINX_DOCS_DIR}"
-	CONFIG_DIRECTORY "${SPHINX_BUILD_DIR}"
+    SOURCE_DIRECTORY "${SPHINX_DOCS_DIR}"
+    CONFIG_DIRECTORY "${SPHINX_BUILD_DIR}"
     OUTPUT_DIRECTORY "${SPHINX_HTML_DIR}"
-	DEFINE breathe_projects.SeQuant=${DOXYGEN_OUTPUT_DIR}/xml
-    DEPENDS doxygen-sequant
+    ${SPHINX_DOXYGEN_OPTIONS}
     FRESH_ENV
 )
 

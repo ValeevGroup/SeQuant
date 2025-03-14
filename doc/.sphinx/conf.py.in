@@ -18,15 +18,14 @@ extensions = [
     'sphinx.ext.mathjax',
     'sphinx.ext.graphviz',  # Added for Graphviz support
     "sphinx_copybutton",
-    'breathe',
-    'exhale',
     "myst_parser",
-    "sphinx_design"
+    "sphinx_design",
+    @SPHINX_EXTRA_EXTENSIONS@
 ]
 
 # Breathe Configuration
 # We use breathe to generate documentation from Doxygen XML files
-breathe_projects = {"SeQuant": "./../doxygen/xml"}  # Paths should be relative to the conf.py file
+@SPHINX_BREATHE_PROJECTS@
 breathe_default_project = "SeQuant"
 
 # Exhale Configuration
