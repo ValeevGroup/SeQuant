@@ -82,7 +82,7 @@ if (SPHINX_MISSING_MODULES)
             "The following Python modules required for Sphinx documentation are missing:\n"
             "  ${SPHINX_MISSING_MODULES}\n"
             "Run the following command to install them:\n"
-            "  '${Python_EXECUTABLE} -m pip install -r ${CMAKE_CURRENT_SOURCE_DIR}/sphinx/requirements.txt'\n"
+            "  '${Python_EXECUTABLE} -m pip install -r ${CMAKE_CURRENT_SOURCE_DIR}/.sphinx/requirements.txt'\n"
     )
 endif ()
 
