@@ -11,7 +11,7 @@
 
 #include <range/v3/all.hpp>
 
-TEST_CASE("TEST BINARY_NODE", "[FullBinaryNode]") {
+TEST_CASE("binary_node", "[FullBinaryNode]") {
   using ranges::views::iota;
   using ranges::views::take;
   using sequant::FullBinaryNode;

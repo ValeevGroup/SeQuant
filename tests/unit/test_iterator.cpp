@@ -18,7 +18,7 @@
 
 #include <range/v3/all.hpp>
 
-TEST_CASE("Iterators", "[elements]") {
+TEST_CASE("iterators", "[elements]") {
   using namespace sequant;
 
   SECTION("constructor") {
@@ -143,5 +143,4 @@ TEST_CASE("Iterators", "[elements]") {
       REQUIRE(ranges::get_cursor(end(rng2)).ordinal() == 10);
     }
   }
-
-}  // TEST_CASE("Iterators")
+}

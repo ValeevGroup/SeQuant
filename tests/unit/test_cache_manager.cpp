@@ -16,7 +16,7 @@ struct CacheManager::access_by<TestCacheManager> {
 
 }  // namespace sequant
 
-TEST_CASE("TEST_CACHE_MANAGER", "[cache_manager]") {
+TEST_CASE("cache_manager", "[cache_manager]") {
   using ranges::views::concat;
   using ranges::views::zip;
   using manager_type = sequant::CacheManager;

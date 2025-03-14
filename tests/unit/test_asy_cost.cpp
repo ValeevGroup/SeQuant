@@ -20,7 +20,7 @@ struct MatFlops {
   }
 };
 
-TEST_CASE("TEST ASY_COST", "[AsyCost]") {
+TEST_CASE("asy_cost", "[AsyCost]") {
   using sequant::AsyCost;
   using sequant::rational;
 
