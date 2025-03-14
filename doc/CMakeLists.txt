@@ -10,28 +10,17 @@ find_package(Doxygen 1.9.2 REQUIRED)
 set(DOXYGEN_OUTPUT_DIR ${PROJECT_BINARY_DIR}/doc/doxygen)
 file(MAKE_DIRECTORY ${DOXYGEN_OUTPUT_DIR})
 
-# Check for dot support
-if(DOXYGEN_HAVE_DOT)
-	set(DOXYGEN_DOT_FOUND YES)
-endif()
-
 # Configure Doxyfile
 configure_file(
 		${CMAKE_CURRENT_SOURCE_DIR}/doxygen/Doxyfile.in
 		${DOXYGEN_OUTPUT_DIR}/Doxyfile @ONLY
 )
 
-# Doxygen build target
-add_custom_target_subproject(sequant doxygen
-		COMMAND Doxygen::doxygen ${DOXYGEN_OUTPUT_DIR}/Doxyfile
-		WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-		COMMENT "Generating API documentation with Doxygen"
-		VERBATIM USES_TERMINAL
-		SOURCES ${DOXYGEN_OUTPUT_DIR}/Doxyfile
+doxygen_add_docs(
+	doxygen-sequant
+	COMMENT "Generating API documentation via Doxygen"
+	CONFIG_FILE "${DOXYGEN_OUTPUT_DIR}/Doxyfile"
 )
-
-# Link Doxygen to main documentation target
-add_dependencies(doc-sequant doxygen-sequant)
 
 # Ensure the config file installed via sphinx-cmake pip package can be found
 if ("${Python_EXECUTABLE}" MATCHES "(.+)/bin/python[^/]*")
