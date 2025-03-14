@@ -38,7 +38,7 @@ const Context& get_default_mbpt_context();
 void set_default_mbpt_context(const Context& ctx);
 
 void reset_default_mbpt_context();
-[[nodiscard]] detail::ImplicitContextResetter<Context>
+[[nodiscard]] sequant::detail::ImplicitContextResetter<Context>
 set_scoped_default_mbpt_context(const Context& ctx);
 
 }  // namespace sequant::mbpt
