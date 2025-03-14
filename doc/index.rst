@@ -1,39 +1,20 @@
-.. include:: ../README.md
-   :parser: myst_parser.sphinx_
+.. include:: README.rst
 
 .. toctree::
-   :caption: Quickstart
-   :maxdepth: 1
+   :caption: User
+   :maxdepth: 2
    :hidden:
 
-   user/installing
-   user/using
-   user/docs
+   Getting started <user/getting_started/index>
+   Installation <user/getting_started/installing>
+   Guide <user/guide/index>
 
 .. toctree::
-   :caption: Advanced Features
-   :maxdepth: 1
-   :hidden:
+   :caption: Developer
+   :maxdepth: 2
 
-   user/cc
-   user/spin_tracing
-   user/evaluation
-
-.. toctree::
-   :caption: Internal Documentation
-   :maxdepth: 1
-   :hidden:
-
-   internal/docs_advanced
-   internal/tnc
-   internal/wick
-
-.. toctree::
-   :caption: API Reference
-   :maxdepth: 1
-   :hidden:
-
-   genindex
+   Developer docs <developer/index>
+   API reference <genindex>
 
 .. toctree::
    :caption: See Also

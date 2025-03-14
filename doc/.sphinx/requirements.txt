@@ -1,5 +1,6 @@
 sphinx
 sphinx-cmake
+sphinx-design
 breathe
 exhale
 furo

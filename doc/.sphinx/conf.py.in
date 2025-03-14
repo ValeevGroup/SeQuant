@@ -20,7 +20,8 @@ extensions = [
     "sphinx_copybutton",
     'breathe',
     'exhale',
-    "myst_parser"
+    "myst_parser",
+    "sphinx_design"
 ]
 
 # Breathe Configuration
