@@ -5,8 +5,8 @@
 #ifndef SEQUANT_EVAL_CALC_INFO_HPP
 #define SEQUANT_EVAL_CALC_INFO_HPP
 
-#include <examples/eval/data_info.hpp>
-#include <examples/eval/options.hpp>
+#include <data_info.hpp>
+#include <options.hpp>
 
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/optimize.hpp>

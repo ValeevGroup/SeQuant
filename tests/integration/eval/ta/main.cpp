@@ -10,8 +10,8 @@
 #include <SeQuant/domain/mbpt/context.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 
-#include <examples/eval/calc_info.hpp>
-#include <examples/eval/ta/scf_ta.hpp>
+#include <calc_info.hpp>
+#include <ta/scf_ta.hpp>
 
 template <typename Os>
 Os& operator<<(Os& os, sequant::eval::CalcInfo const& info) {

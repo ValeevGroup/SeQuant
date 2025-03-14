@@ -5,8 +5,8 @@
 #ifndef SEQUANT_EVAL_DATA_WORLD_BTAS_HPP
 #define SEQUANT_EVAL_DATA_WORLD_BTAS_HPP
 
-#include <examples/eval/data_info.hpp>
-#include <examples/eval/eval_utils.hpp>
+#include <data_info.hpp>
+#include <eval_utils.hpp>
 
 #include <btas/btas.h>
 #include <SeQuant/core/container.hpp>

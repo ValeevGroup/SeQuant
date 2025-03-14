@@ -15,6 +15,7 @@ add_library(eval_shared STATIC EXCLUDE_FROM_ALL
 	"scf.cpp"
 )
 target_link_libraries(eval_shared PUBLIC SeQuant)
+target_include_directories(eval_shared PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
 
 if (TARGET tiledarray)
     set(example5 eval_ta)

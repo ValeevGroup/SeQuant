@@ -10,8 +10,8 @@
 #include <SeQuant/domain/mbpt/context.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 
-#include <examples/eval/btas/scf_btas.hpp>
-#include <examples/eval/calc_info.hpp>
+#include <btas/scf_btas.hpp>
+#include <calc_info.hpp>
 
 ///
 /// excitation (2 = ccsd (default) through 6 supported)
