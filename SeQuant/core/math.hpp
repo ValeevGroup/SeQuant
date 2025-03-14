@@ -5,8 +5,9 @@
 #ifndef SEQUANT_CORE_MATH_HPP
 #define SEQUANT_CORE_MATH_HPP
 
-#include <assert.h>
 #include <SeQuant/core/rational.hpp>
+
+#include <cassert>
 #include <cstddef>
 
 namespace sequant {
