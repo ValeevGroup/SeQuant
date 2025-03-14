@@ -56,10 +56,11 @@ file(MAKE_DIRECTORY ${SPHINX_BUILD_DIR} ${SPHINX_HTML_DIR})
 file(STRINGS ${SPHINX_SOURCE_DIR}/requirements.txt SPHINX_RAW_MODULES)
 
 set(SPHINX_PYTHON_MODULES "")
+set(MODULE_SKIP_CHECK_REGEX "^(sphinx-cmake|sphinx-design)$")
 foreach (module ${SPHINX_RAW_MODULES})
     string(REGEX REPLACE "#.*" "" module_clean ${module})  # Remove comments
     string(STRIP ${module_clean} module_clean)  # Remove whitespace
-    if (NOT "${module_clean}" STREQUAL "" AND NOT "${module_clean}" STREQUAL "sphinx-cmake")
+	if (NOT "${module_clean}" STREQUAL "" AND NOT "${module_clean}" MATCHES "${MODULE_SKIP_CHECK_REGEX}")
         list(APPEND SPHINX_PYTHON_MODULES ${module_clean})
     endif ()
 endforeach ()
