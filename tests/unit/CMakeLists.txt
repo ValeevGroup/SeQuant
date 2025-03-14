@@ -43,6 +43,7 @@ if (TARGET tiledarray)
     set_source_files_properties(
         "test_eval_btas.cpp"
         "test_eval_ta.cpp"
+        "test_main.cpp"
         PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON
     )
     target_link_libraries(unit_tests-sequant PRIVATE tiledarray)
