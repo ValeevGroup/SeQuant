@@ -8,7 +8,7 @@
 #include <cstddef>
 #include <iostream>
 
-#include <examples/eval/calc_info.hpp>
+#include <calc_info.hpp>
 
 namespace sequant::eval {
 
