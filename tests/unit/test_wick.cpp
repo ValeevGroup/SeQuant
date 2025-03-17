@@ -51,7 +51,7 @@ auto compute_nontensor_wick(WickTheorem<Statistics::FermiDirac>& wick) {
 }  // namespace sequant
 
 #if 1
-TEST_CASE("WickTheorem", "[algorithms][wick]") {
+TEST_CASE("wick", "[algorithms][wick]") {
   using namespace sequant;
 
   TensorCanonicalizer::register_instance(
@@ -1137,6 +1137,5 @@ TEST_CASE("WickTheorem", "[algorithms][wick]") {
     });
 #endif
   }
-
-}  // TEST_CASE("WickTheorem")
+}
 #endif

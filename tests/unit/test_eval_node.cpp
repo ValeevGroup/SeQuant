@@ -51,7 +51,7 @@ sequant::EvalExpr node(sequant::EvalNode<sequant::EvalExpr> const& n,
 
 }  // namespace
 
-TEST_CASE("TEST EVAL_NODE", "[EvalNode]") {
+TEST_CASE("eval_node", "[EvalNode]") {
   using namespace sequant;
   auto L = Npos::L;
   auto R = Npos::R;

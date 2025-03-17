@@ -49,7 +49,7 @@
 #include <SeQuant/core/timer.hpp>
 #include <range/v3/all.hpp>
 
-TEST_CASE("TensorNetwork", "[elements]") {
+TEST_CASE("tensor_network", "[elements]") {
   using namespace sequant;
   using namespace sequant::mbpt;
   using sequant::Context;
@@ -634,8 +634,7 @@ TEST_CASE("TensorNetwork", "[elements]") {
     }
 
   }  // SECTION("misc1")
-
-}  // TEST_CASE("TensorNetwork")
+}
 
 template <typename Container>
 std::vector<sequant::ExprPtr> to_tensors(const Container& cont) {
@@ -670,7 +669,7 @@ class TensorNetworkV2Accessor {
 };
 }  // namespace sequant
 
-TEST_CASE("TensorNetworkV2", "[elements]") {
+TEST_CASE("tensor_network_v2", "[elements]") {
   using namespace sequant;
   using namespace sequant::mbpt;
   using sequant::Context;
@@ -1347,5 +1346,4 @@ TEST_CASE("TensorNetworkV2", "[elements]") {
     }
 
   }  // SECTION("misc1")
-
-}  // TEST_CASE("TensorNetworkV2")
+}
