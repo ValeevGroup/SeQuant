@@ -49,7 +49,7 @@
 #include <SeQuant/core/timer.hpp>
 #include <range/v3/all.hpp>
 
-TEST_CASE("TensorNetwork", "[elements]") {
+TEST_CASE("tensor_network", "[elements]") {
   using namespace sequant;
   using namespace sequant::mbpt;
   using sequant::Context;
@@ -489,8 +489,7 @@ TEST_CASE("TensorNetwork", "[elements]") {
       // std::wcout << oss.str() << std::endl;
     }
   }  // SECTION("misc1")
-
-}  // TEST_CASE("TensorNetwork")
+}
 
 template <typename Container>
 std::vector<sequant::ExprPtr> to_tensors(const Container& cont) {
@@ -525,7 +524,7 @@ class TensorNetworkV2Accessor {
 };
 }  // namespace sequant
 
-TEST_CASE("TensorNetworkV2", "[elements]") {
+TEST_CASE("tensor_network_v2", "[elements]") {
   using namespace sequant;
   using namespace sequant::mbpt;
   using sequant::Context;
@@ -1026,4 +1025,54 @@ TEST_CASE("TensorNetworkV2", "[elements]") {
     }  // SECTION("idempotency")
 
   }  // SECTION("canonicalizer")
-}  // TEST_CASE("TensorNetworkV2")
+
+  SECTION("misc1") {
+    if (false) {
+      Index::reset_tmp_index();
+      // TN1 from manuscript
+      auto g = ex<Tensor>(L"g", bra{L"i_3", L"i_4"}, ket{L"a_3", L"a_4"},
+                          Symmetry::antisymm);
+      auto ta = ex<Tensor>(L"t", bra{L"a_1", L"a_3"}, ket{L"i_1", L"i_2"},
+                           Symmetry::antisymm);
+      auto tb = ex<Tensor>(L"t", bra{L"a_2", L"a_4"}, ket{L"i_3", L"i_4"},
+                           Symmetry::antisymm);
+
+      auto tmp = g * ta * tb;
+      // std::wcout << "TN1 = " << to_latex(tmp) << std::endl;
+      TensorNetworkV2 tn(tmp->as<Product>().factors());
+
+      // make graph
+      // N.B. treat all indices as dummy so that the automorphism ignores the
+      using named_indices_t = TensorNetworkV2::NamedIndexSet;
+      named_indices_t indices{};
+      REQUIRE_NOTHROW(tn.create_graph(&indices));
+      TensorNetworkV2::Graph graph = tn.create_graph(&indices);
+
+      // create dot
+      {
+        std::basic_ostringstream<wchar_t> oss;
+        REQUIRE_NOTHROW(graph.bliss_graph->write_dot(oss, graph.vertex_labels));
+        // std::wcout << "oss.str() = " << std::endl << oss.str() <<
+        // std::endl;
+      }
+
+      bliss::Stats stats;
+      graph.bliss_graph->set_splitting_heuristic(bliss::Graph::shs_fsm);
+
+      std::vector<std::vector<unsigned int>> aut_generators;
+      auto save_aut = [&aut_generators](const unsigned int n,
+                                        const unsigned int* aut) {
+        aut_generators.emplace_back(aut, aut + n);
+      };
+      graph.bliss_graph->find_automorphisms(
+          stats, &bliss::aut_hook<decltype(save_aut)>, &save_aut);
+      CHECK(aut_generators.size() ==
+            2);  // there are 2 generators, i1<->i2, i3<->i4
+
+      std::basic_ostringstream<wchar_t> oss;
+      bliss::print_auts(aut_generators, oss, graph.vertex_labels);
+      CHECK(oss.str() == L"({i_3},{i_4})\n({i_1},{i_2})\n");
+      // std::wcout << oss.str() << std::endl;
+    }
+  }
+}

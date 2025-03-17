@@ -178,7 +178,7 @@ container::svector<long> tidxs(std::wstring const& csv) noexcept {
 
 }  // namespace
 
-TEST_CASE("TEST_EVAL_USING_BTAS", "[eval_btas]") {
+TEST_CASE("eval_with_btas", "[eval_btas]") {
   using ranges::views::transform;
   using namespace sequant;
   using namespace sequant;

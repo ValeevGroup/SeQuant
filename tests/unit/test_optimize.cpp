@@ -26,7 +26,7 @@ sequant::ExprPtr extract(sequant::ExprPtr expr,
   return result;
 }
 
-TEST_CASE("TEST_OPTIMIZE", "[optimize]") {
+TEST_CASE("optimize", "[optimize]") {
   using namespace sequant;
 
   // for optimization tests, set index space sizes

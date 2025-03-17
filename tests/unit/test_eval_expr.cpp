@@ -39,7 +39,7 @@ EvalExpr result_expr(EvalExpr const& left, EvalExpr const& right, EvalOp op) {
 
 }  // namespace sequant
 
-TEST_CASE("TEST_EVAL_EXPR", "[EvalExpr]") {
+TEST_CASE("eval_expr", "[EvalExpr]") {
   using namespace std::string_literals;
   using sequant::EvalExpr;
   using namespace sequant;
