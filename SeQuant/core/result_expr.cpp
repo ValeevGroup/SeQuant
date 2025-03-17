@@ -72,4 +72,9 @@ const ExprPtr &ResultExpr::expression() const { return m_expr; }
 
 ExprPtr &ResultExpr::expression() { return m_expr; }
 
+ResultExpr ResultExpr::clone() const {
+  return ResultExpr(m_braIndices, m_ketIndices, m_auxIndices, m_symm, m_bksymm,
+                    m_psymm, m_label, m_expr->clone());
+}
+
 }  // namespace sequant

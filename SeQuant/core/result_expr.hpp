@@ -58,6 +58,8 @@ class ResultExpr {
   const ExprPtr &expression() const;
   ExprPtr &expression();
 
+  ResultExpr clone() const;
+
   template <typename Group>
   container::svector<Group> index_particle_grouping() const {
     container::svector<Group> groups;
