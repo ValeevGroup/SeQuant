@@ -72,15 +72,15 @@ Functions
 
 - :ref:`exhale_function_namespacesequant_1ac1df0a9407cf940f3b17af0a176e478a`
 
-- :ref:`exhale_function_namespacesequant_1a503cf8d3ae170139a42cd48b825f71b6`
-
-- :ref:`exhale_function_namespacesequant_1abc926a389b0e598b9dc7a5080a312cc9`
-
-- :ref:`exhale_function_namespacesequant_1a15fb23d91f85feaef1a30a5cb4532234`
-
 - :ref:`exhale_function_namespacesequant_1a8510feba16321a56d52a0e3adb072dc0`
 
 - :ref:`exhale_function_namespacesequant_1ac7231d7d8f6cf5d867197772c613d22f`
 
 - :ref:`exhale_function_namespacesequant_1aef40fb885cd272e3785dd6b51651e931`
+
+- :ref:`exhale_function_namespacesequant_1a503cf8d3ae170139a42cd48b825f71b6`
+
+- :ref:`exhale_function_namespacesequant_1abc926a389b0e598b9dc7a5080a312cc9`
+
+- :ref:`exhale_function_namespacesequant_1a15fb23d91f85feaef1a30a5cb4532234`
 
