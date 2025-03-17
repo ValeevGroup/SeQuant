@@ -251,7 +251,8 @@ auto permute(const ArrayLike &vector, const Permutation &perm) {
 
 template <typename ReplacementMap>
 void apply_index_replacements(AbstractTensor &tensor,
-                              const ReplacementMap &replacements) {
+                              const ReplacementMap &replacements,
+                              const bool self_consistent) {
 #ifndef NDEBUG
   // assert that tensors' indices are not tagged since going to tag indices
   assert(ranges::none_of(
@@ -261,16 +262,17 @@ void apply_index_replacements(AbstractTensor &tensor,
   bool pass_mutated;
   do {
     pass_mutated = transform_indices(tensor, replacements);
-  } while (pass_mutated);  // transform till stops changing
+  } while (self_consistent && pass_mutated);  // transform till stops changing
 
   reset_tags(tensor);
 }
 
 template <typename ArrayLike, typename ReplacementMap>
 void apply_index_replacements(ArrayLike &tensors,
-                              const ReplacementMap &replacements) {
+                              const ReplacementMap &replacements,
+                              const bool self_consistent) {
   for (auto &tensor : tensors) {
-    apply_index_replacements(*tensor, replacements);
+    apply_index_replacements(*tensor, replacements, self_consistent);
   }
 }
 
@@ -450,7 +452,7 @@ void TensorNetworkV2::canonicalize_graph(const NamedIndexSet &named_indices) {
     }
   }
 
-  apply_index_replacements(tensors_, idxrepl);
+  apply_index_replacements(tensors_, idxrepl, true);
 
   // Perform particle-1,2-swaps as indicated by the graph canonization
   for (std::size_t i = 0; i < tensors_.size(); ++i) {
@@ -492,7 +494,7 @@ void TensorNetworkV2::canonicalize_graph(const NamedIndexSet &named_indices) {
               << " with " << to_latex(idxpair.second) << std::endl;
         }
       }
-      apply_index_replacements(tensor, idxrepl);
+      apply_index_replacements(tensor, idxrepl, false);
     }
   }
 
@@ -639,7 +641,7 @@ ExprPtr TensorNetworkV2::canonicalize(
     }
   }
 
-  apply_index_replacements(tensors_, idxrepl);
+  apply_index_replacements(tensors_, idxrepl, true);
 
   byproduct *= canonicalize_individual_tensors(named_indices);
 
