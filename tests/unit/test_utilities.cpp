@@ -3,6 +3,7 @@
 
 #include "catch2_sequant.hpp"
 
+#include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/parse.hpp>
@@ -10,6 +11,7 @@
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/singleton.hpp>
 #include <SeQuant/core/utility/strong.hpp>
+#include <SeQuant/core/utility/transform_expr.hpp>
 
 #include <codecvt>
 #include <iostream>
@@ -278,5 +280,32 @@ TEST_CASE("utilities", "[utilities]") {
 
     // "D d;" does not compile, but this does
     D d(1);
+  }
+
+  SECTION("transform_expr") {
+    using namespace sequant;
+    {
+      ExprPtr expr =
+          parse_expr(L"- g{a1,i2;a2,i1} t{a2;i2} + 2 g{a1,i2;i1,a2} t{a2;i2}");
+      container::map<Index, Index> idxmap = {{Index{L"i_1"}, Index{L"i_2"}},
+                                             {Index{L"i_2"}, Index{L"i_1"}}};
+      auto transformed_result = transform_expr(expr, idxmap);
+      REQUIRE(transformed_result->is<Sum>());
+      REQUIRE(transformed_result->size() == 2);
+      REQUIRE_THAT(
+          transformed_result,
+          EquivalentTo(
+              "- g{a1,i1;a2,i2} t{a2;i1} + 2 g{a1,i1;i2,a2} t{a2;i1}"));
+    }
+    {
+      ExprPtr expr =
+          parse_expr(L"- g{i2,a1;i1,a2} + 2 g{i2,a1;a2,i1} t{a2;i2}");
+      container::map<Index, Index> idxmap = {{Index{L"i_1"}, Index{L"i_2"}},
+                                             {Index{L"i_2"}, Index{L"i_1"}}};
+      auto transformed_result = transform_expr(expr, idxmap);
+      REQUIRE_THAT(
+          transformed_result,
+          EquivalentTo("- g{i1,a1;i2,a2} + 2 g{i1,a1;a2,i2} t{a2;i1}"));
+    }
   }
 }

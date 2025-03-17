@@ -201,6 +201,8 @@ set(SeQuant_src
         SeQuant/core/asy_cost.hpp
         SeQuant/core/attr.hpp
         SeQuant/core/binary_node.hpp
+		SeQuant/core/biorthogonalize.cpp
+		SeQuant/core/biorthogonalize.hpp
         SeQuant/core/bliss.hpp
         SeQuant/core/complex.hpp
         SeQuant/core/container.hpp
@@ -265,9 +267,12 @@ set(SeQuant_src
         SeQuant/core/utility/indices.hpp
         SeQuant/core/utility/macros.hpp
         SeQuant/core/utility/nodiscard.hpp
+        SeQuant/core/utility/permutation.hpp
         SeQuant/core/utility/singleton.hpp
         SeQuant/core/utility/string.hpp
         SeQuant/core/utility/string.cpp
+        SeQuant/core/utility/transform_expr.cpp
+        SeQuant/core/utility/transform_expr.hpp
         SeQuant/core/utility/tuple.hpp
         SeQuant/core/utility/swap.hpp
         SeQuant/core/wick.hpp

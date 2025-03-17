@@ -2,6 +2,7 @@
 #include "format_support.hpp"
 #include "utils.hpp"
 
+#include <SeQuant/core/biorthogonalize.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
@@ -9,6 +10,7 @@
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/result_expr.hpp>
 #include <SeQuant/core/tensor.hpp>
+#include <SeQuant/core/utility/transform_expr.hpp>
 
 #include <SeQuant/domain/mbpt/spin.hpp>
 
