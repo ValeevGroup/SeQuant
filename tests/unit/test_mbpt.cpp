@@ -48,7 +48,8 @@ TEST_CASE("mbpt", "[mbpt]") {
 
         REQUIRE(f1.label() == L"f");
 
-        {  // exact compare of intervals
+        {
+          // exact compare of intervals
           using namespace boost::numeric::interval_lib::compare::possible;
           REQUIRE(operator==(
               f1()[0], general_type_qns(1)[0]));  // produces single replacement
@@ -83,7 +84,8 @@ TEST_CASE("mbpt", "[mbpt]") {
         REQUIRE(f_gg.label() == L"f");
         REQUIRE(f_uo.label() == L"f");
 
-        {  // comparison
+        {
+          // comparison
 
           // exact
           REQUIRE((f_uo() == excitation_type_qns(
@@ -110,7 +112,9 @@ TEST_CASE("mbpt", "[mbpt]") {
            the
                                 // total number of creators/annihilators, the
                                 // interval logic does not constrain it
-                                */ //most of these seem like artifacts of fixed interval logic. we can add them back if needed
+                                */
+          // most of these seem like artifacts of fixed interval logic. we can
+          // add them back if needed
 
           /*REQUIRE(
               f_uo().in(excitation_type_qns(1)));  // f_uo can produce single
@@ -146,17 +150,17 @@ TEST_CASE("mbpt", "[mbpt]") {
           doubly-excited
            */
         }
-        {  // equal compare
-           // using namespace
-           // boost::numeric::interval_lib::compare::lexicographic;
-           // REQUIRE(f1(qns_t{0, 0}) == qns_t{-1, 1}); // not same as below due
-           // to interaction with Catch could do REQUIRE(operator==(f1(qns_t{0,
-           // 0}), qns_t{-1, 1})); but equal is shorter
-           //        REQUIRE(equal(f1(qns_t{0, 0}), qns_t{-1, 1}));
-           //        REQUIRE(equal(f1(qns_t{-1, 1}), qns_t{-2, 2}));
+        {
+          // equal compare
+          // using namespace
+          // boost::numeric::interval_lib::compare::lexicographic;
+          // REQUIRE(f1(qns_t{0, 0}) == qns_t{-1, 1}); // not same as below due
+          // to interaction with Catch could do REQUIRE(operator==(f1(qns_t{0,
+          // 0}), qns_t{-1, 1})); but equal is shorter
+          //        REQUIRE(equal(f1(qns_t{0, 0}), qns_t{-1, 1}));
+          //        REQUIRE(equal(f1(qns_t{-1, 1}), qns_t{-2, 2}));
         }
       }
-
     }  // SECTION("constructor")
 
     SECTION("to_latex") {
@@ -179,7 +183,6 @@ TEST_CASE("mbpt", "[mbpt]") {
       REQUIRE(to_latex(lambda2) == L"{\\hat{\\lambda}_{2}}");
       REQUIRE(to_latex(r_2_1) == L"{\\hat{R}_{2,1}}");
       REQUIRE(to_latex(r_1_2) == L"{\\hat{R}_{1,2}}");
-
     }  // SECTION("to_latex")
 
     SECTION("canonicalize") {
@@ -207,6 +210,12 @@ TEST_CASE("mbpt", "[mbpt]") {
       REQUIRE(to_latex(simplify(t1 * l2)) ==
               L"{{\\hat{t}_{1}}{\\hat{\\lambda}_{2}}}");
 
+      REQUIRE(to_latex(simplify(t1 + t1)) ==
+              to_latex(simplify(ex<Constant>(2) * t1)));
+
+      REQUIRE(to_latex(simplify(t1 + t1 + t2)) ==
+              to_latex(simplify(ex<Constant>(2) * t1 + t2)));
+
       auto t = t1 + t2;
 
       {
@@ -225,7 +234,6 @@ TEST_CASE("mbpt", "[mbpt]") {
                        ex<Constant>(3) * f * t1 * t2 * t2 +
                        ex<Constant>(3) * f * t1 * t1 * t2));
       }
-
     }  // SECTION("canonicalize")
 
     SECTION("adjoint") {
@@ -275,7 +283,6 @@ TEST_CASE("mbpt", "[mbpt]") {
       REQUIRE(to_latex(adjoint(r_1_2_adj).as<Expr>()) == L"{\\hat{R}_{1,2}}");
       REQUIRE(to_latex(adjoint(lambda2_adj).as<Expr>()) ==
               L"{\\hat{\\lambda}_{2}}");
-
     }  // SECTION("adjoint")
 
     SECTION("screen") {
@@ -308,7 +315,6 @@ TEST_CASE("mbpt", "[mbpt]") {
       auto vev2_op = op::vac_av(expr2);
       auto vev2_t = tensor::vac_av(expr2_tnsr);  // no operator level screening
       REQUIRE(to_latex(vev2_op) == to_latex(vev2_t));
-
     }  // SECTION("screen")
 
     SECTION("predefined") {
@@ -447,15 +453,16 @@ TEST_CASE("mbpt", "[mbpt]") {
     SECTION("SRSO") {
       // H**T12**T12 -> R2
       SEQUANT_PROFILE_SINGLE("wick(H**T12**T12 -> R2)", {
-        auto result = t::vac_av(t::A(nₚ(-2)) * t::H(2) * t::T(2) * t::T(2),
+        auto result = t::vac_av(t::A(nₚ(-2)) * t::H(2) * t ::T(2) * t::T(2),
                                 {{1, 2}, {1, 3}});
 
         //      std::wcout << "H*T12*T12 -> R2 = " << to_latex_align(result, 20)
         //                 << std::endl;
         REQUIRE(result->size() == 15);
 
-        {  // check against op
-          auto result_op = o::vac_av(o::P(nₚ(2)) * o::H() * o::T(2) * o::T(2));
+        {
+          // check against op
+          auto result_op = o::vac_av(o::P(nₚ(2)) * o::H() * o ::T(2) * o::T(2));
           REQUIRE(result_op->size() ==
                   result->size());  // as compact as result ..
           REQUIRE(simplify(result_op - result) ==
@@ -465,7 +472,7 @@ TEST_CASE("mbpt", "[mbpt]") {
 
       // H2**T3**T3 -> R4
       SEQUANT_PROFILE_SINGLE("wick(H2**T3**T3 -> R4)", {
-        auto result = t::vac_av(t::A(nₚ(-4)) * t::H_(2) * t::T_(3) * t::T_(3),
+        auto result = t::vac_av(t::A(nₚ(-4)) * t::H_(2) * t ::T_(3) * t::T_(3),
                                 {{1, 2}, {1, 3}});
 
         std::wcout << "H2**T3**T3 -> R4 = " << to_latex_align(result, 20)
@@ -530,7 +537,7 @@ TEST_CASE("mbpt", "[mbpt]") {
 
       // H2**T2**T2 -> R2
       SEQUANT_PROFILE_SINGLE("wick(H2**T2**T2 -> R2)", {
-        auto result = t::vac_av(t::A(nₚ(-2)) * t::H_(2) * t::T_(2) * t::T_(2),
+        auto result = t::vac_av(t::A(nₚ(-2)) * t::H_(2) * t ::T_(2) * t::T_(2),
                                 {{1, 2}, {1, 3}});
 
         std::wcout << "H2**T2**T2 -> R2 = " << to_latex_align(result, 20)
@@ -573,24 +580,28 @@ TEST_CASE("mbpt", "[mbpt]") {
       // H2**T2 -> 0
       // std::wcout << "H_(2) * T_(2) = " << to_latex(H_(2) * T_(2)) <<
       // std::endl;
-    SEQUANT_PROFILE_SINGLE("wick(H2**T2 -> 0)", {
-      {
+      SEQUANT_PROFILE_SINGLE("wick(H2**T2 -> 0)", {
+                             {
 
-std::wcout << "multireference start" << std::endl;
-auto result = t::vac_av(t::H_(2) * t::T_(2), {{0, 1}});
+                             std::wcout << "multireference start" << std::endl;
+                             auto result = t::vac_av(t::H_(2) * t::T_(2), {{0, 1
+                               }});
 
-{
+                             {
         std::wcout << " multireference H2*T2 -> 0 = "
                    << to_latex_align(result, 0, 1) << std::endl;
-}
+                             }
 
-auto result_wo_top =
-    t::vac_av(t::H_(2) * t::T_(2), {{0, 1}}, /* use_topology = */ false);
+                             auto result_wo_top =
+                             t::vac_av(t::H_(2) * t::T_(2), {{0, 1}},
+                               /* use_topology = */ false);
 
-auto dif = simplify(result - result_wo_top);
-std::wcout <<" multireference topology difference" << to_latex(dif) << std::endl;
+                             auto dif = simplify(result - result_wo_top);
+                             std::wcout <<" multireference topology difference"
+                             << to_latex(dif) << std::endl;
 
-REQUIRE(simplify(result - result_wo_top) == ex<Constant>(0));
+                             REQUIRE(simplify(result - result_wo_top) == ex<
+                               Constant>(0));
     }
 
     // now compute using physical vacuum
@@ -613,7 +624,7 @@ REQUIRE(simplify(result - result_wo_top) == ex<Constant>(0));
     auto result = t::vac_av(t::H_(2) * t::T_(2) * t::T_(2), {{0, 1}},
                             /* use_topology = */ false);
     // now with topology use
-    auto result_top = t::vac_av(t::H_(2) * t::T_(2) * t::T_(2), {{0, 1}},
+    auto result_top = t::vac_av(t::H_(2) * t::T_(2) * t ::T_(2), {{0, 1}},
                                 /* use_topology = */ true);
 
     REQUIRE(simplify(result - result_top) == ex<Constant>(0));
@@ -630,7 +641,6 @@ REQUIRE(simplify(result - result_wo_top) == ex<Constant>(0));
       }
     });
 #endif
-
 }  // SECTION("MRSO")
 
 SECTION("MRSF") {
@@ -650,21 +660,22 @@ SECTION("MRSF") {
     //                       << std::endl;
     //          }
 
-    {  // make sure get same result without use of topology
-      auto result_wo_top =
-          t::vac_av(t::H_(2) * t::T_(2), {{0, 1}}, /* use_topology = */ false);
+    {
+      // make sure get same result without use of topology
+      auto result_wo_top = t::vac_av(t::H_(2) * t::T_(2), {{0, 1}},
+                                     /* use_topology = */ false);
 
       REQUIRE(simplify(result - result_wo_top) == ex<Constant>(0));
     }
 
-    {  // make sure get same result using operators
+    {
+      // make sure get same result using operators
       auto result_op = o::vac_av(o::H_(2) * o::T_(2));
 
       REQUIRE(result_op->size() == result->size());
       REQUIRE(simplify(result - result_op) == ex<Constant>(0));
     }
   });
-
 }  // SECTION("MRSF")
 }
 }
