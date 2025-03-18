@@ -4,6 +4,23 @@
 
 namespace sequant {
 
+bool ResultExpr::ResultCmp::operator()(const ResultExpr &lhs,
+                                       const ResultExpr &rhs) const {
+  if (lhs.has_label() != rhs.has_label()) {
+    return false;
+  }
+
+  if (lhs.has_label() && lhs.label() != rhs.label()) {
+    return false;
+  }
+
+  return lhs.symmetry() == rhs.symmetry() &&
+         lhs.braket_symmetry() == rhs.braket_symmetry() &&
+         lhs.particle_symmetry() == rhs.particle_symmetry() &&
+         lhs.bra() == rhs.bra() && lhs.ket() == rhs.ket() &&
+         lhs.aux() == rhs.aux();
+}
+
 ResultExpr::ResultExpr(const Tensor &tensor, ExprPtr expression)
     : m_expr(std::move(expression)),
       m_symm(tensor.symmetry()),

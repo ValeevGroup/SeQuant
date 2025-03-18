@@ -21,6 +21,10 @@ class ResultExpr {
  public:
   using IndexContainer = container::svector<Index>;
 
+  struct ResultCmp {
+    bool operator()(const ResultExpr &lhs, const ResultExpr &rhs) const;
+  };
+
   ResultExpr(const Tensor &tensor, ExprPtr expression);
   ResultExpr(const Variable &variable, ExprPtr expression);
   ResultExpr(IndexContainer bra, IndexContainer ket, IndexContainer aux,
