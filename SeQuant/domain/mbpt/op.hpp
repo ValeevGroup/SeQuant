@@ -887,6 +887,11 @@ class Operator : public Operator<void, S> {
 
   void adjoint() override;
 
+  /// @return the batch index rank of the operator
+  [[nodiscard]] std::optional<size_t> batch_idx_rank() const {
+    return batch_idx_rank_;
+  }
+
  private:
   std::function<void(QuantumNumbers&)> qn_action_;
 

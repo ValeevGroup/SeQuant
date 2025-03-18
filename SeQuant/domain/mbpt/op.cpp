@@ -324,6 +324,21 @@ std::wstring to_latex(const mbpt::Operator<mbpt::qns_t, S>& op) {
     base_lbl.pop_back();
   }
 
+  const bool has_batch = op.batch_idx_rank().has_value();
+  auto add_batch_suffix = [&op](std::wstring& str) {
+    std::wstring batch_suffix = L"[";
+    const auto idx_rank = *op.batch_idx_rank();
+    for (std::size_t i = 1; i <= idx_rank; ++i) {
+      batch_suffix += L"{z}_{" + std::to_wstring(i) + L"}";
+      if (i != idx_rank) {
+        batch_suffix += L", ";
+      }
+    }
+    batch_suffix += L"]";
+    str += L"{" + batch_suffix + L"}";
+    return str;
+  };
+
   auto it = label2optype.find(base_lbl);
   OpType optype = OpType::invalid;
   if (it != label2optype.end()) {  // handle special cases
@@ -333,7 +348,7 @@ std::wstring to_latex(const mbpt::Operator<mbpt::qns_t, S>& op) {
         result += L"_{" + std::to_wstring(op()[0].upper()) + L"}";
       }
       result += L"}";
-      return result;
+      return has_batch ? add_batch_suffix(result) : result;
     }
   }
   std::wstring baseline_char = is_adjoint ? L"^" : L"_";
@@ -387,7 +402,7 @@ std::wstring to_latex(const mbpt::Operator<mbpt::qns_t, S>& op) {
     }
   }
   result += L"}";
-  return result;
+  return has_batch ? add_batch_suffix(result) : result;
 }
 
 }  // namespace sequant
