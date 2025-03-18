@@ -143,6 +143,7 @@ container::svector< ResultExpr > postProcess(ResultExpr result, const IndexSpace
 
 	switch (options.spintrace) {
 		case SpinTracing::None:
+			processed = { result };
 			break;
 		case SpinTracing::ClosedShell:
 			processed = closed_shell_spintrace(result);
