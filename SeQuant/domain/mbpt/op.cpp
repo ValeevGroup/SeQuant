@@ -710,11 +710,16 @@ ExprPtr S(std::int64_t K) {
       OpType::S, cre(creators), ann(annihilators))(dep, {Symmetry::nonsymm});
 }
 
-ExprPtr H_pt(std::size_t order, std::size_t R) {
+ExprPtr H_pt(std::size_t order, std::size_t R, std::size_t nbatch) {
   assert(order == 1 &&
-         "sequant::sr::H_pt(): only supports first order perturbation");
+         "sequant::mbpt::H_pt(): only supports first order perturbation");
   assert(R > 0);
-  return OpMaker<Statistics::FermiDirac>(OpType::h_1, R)();
+  if (nbatch != 0) {
+    assert(nbatch > 0);
+    assert(get_default_context().index_space_registry()->contains(L"z"));
+  }
+  return OpMaker<Statistics::FermiDirac>(OpType::h_1, ncre(R), nann(R),
+                                         naux(nbatch))();
 }
 
 ExprPtr T_pt_(std::size_t order, std::size_t K) {
@@ -909,13 +914,13 @@ ExprPtr P(nₚ np, nₕ nh) {
   }
 }
 
-ExprPtr H_pt(std::size_t order, std::size_t R) {
+ExprPtr H_pt(std::size_t order, std::size_t R, std::size_t nbatch) {
   assert(R > 0);
   assert(order == 1 && "only first order perturbation is supported now");
   return ex<op_t>(
       []() -> std::wstring_view { return optype2label.at(OpType::h_1); },
-      [=]() -> ExprPtr { return tensor::H_pt(order, R); },
-      [=](qnc_t& qns) { qns = combine(general_type_qns(R), qns); });
+      [=]() -> ExprPtr { return tensor::H_pt(order, R, nbatch); },
+      [=](qnc_t& qns) { qns = combine(general_type_qns(R), qns); }, nbatch);
 }
 
 ExprPtr T_pt_(std::size_t order, std::size_t K) {

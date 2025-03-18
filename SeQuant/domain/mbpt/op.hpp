@@ -1015,8 +1015,9 @@ ExprPtr S(std::int64_t K);
 /// @brief Makes perturbation operator of rank \p R
 /// @param order order of perturbation
 /// @param R rank of the operator,`R = 1` implies one-body perturbation
+/// @param nbatch rank of optional auxiliary/batching index [default is 0]
 /// @pre `order==1`, only first order perturbation is supported now
-ExprPtr H_pt(std::size_t order, std::size_t R);
+ExprPtr H_pt(std::size_t order, std::size_t R, std::size_t nbatch = 0);
 
 /// @brief Makes perturbed particle-conserving excitation operator of rank \p K
 /// @param order order of perturbation
@@ -1177,8 +1178,9 @@ ExprPtr S(std::int64_t K);
 /// @brief Makes perturbation operator of rank \p R
 /// @param order order of perturbation
 /// @param R rank of the operator,`R = 1` implies one-body perturbation
+/// @param nbatch rank of optional auxiliary/batching index [default is 0]
 /// @pre `order==1`, only first order perturbation is supported now
-ExprPtr H_pt(std::size_t order, std::size_t R);
+ExprPtr H_pt(std::size_t order, std::size_t R, std::size_t nbatch = 0);
 
 /// @brief Makes perturbed particle-conserving excitation operator of rank \p K
 /// @param order order of perturbation
