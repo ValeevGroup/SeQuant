@@ -393,28 +393,26 @@ ExprPtr Sum::canonicalize_impl(bool multipass) {
           });
       const auto nidentical = plast_it - first_it;
       assert(nidentical > 1);
+      // combine all identical summands into a Product
       auto reduce_range = [first_it, this, nidentical](auto &begin, auto &end) {
-        if ((*first_it)->template is<Tensor>()) {
-          Product tensor_as_Product{};
-          tensor_as_Product.append(nidentical, (*first_it)->as<Tensor>());
-          (*first_it) = std::make_shared<Product>(tensor_as_Product);
+        if (!(*first_it)->is<Product>()) {
+          auto product_form = std::make_shared<Product>();
+          product_form->append(nidentical, (*first_it)->as<Expr>());
+          *first_it = product_form;
           this->summands_.erase(first_it + 1, end);
-        } else if ((*first_it)->template is<Product>()) {
-          auto &prod = (*first_it)->template as<Product>();
+        } else {
+          auto &prod = (*first_it)->as<Product>();
           for (auto it = begin + 1; it != end; ++it) {
-            if ((*it)->template is<Tensor>()) {
-              Product tensor_as_Product{};
-              tensor_as_Product.append(1, (*it)->template as<Tensor>());
-              (*it) = std::make_shared<Product>(tensor_as_Product);
+            if (!(*it)->template is<Product>()) {
+              auto product_form = std::make_shared<Product>();
+              product_form->append(1, (*it)->template as<Expr>());
+              *it = product_form;
             }
-            if ((*it)->template is<Product>()) {
-              prod.add_identical((*it)->template as<Product>());
-            }
+            prod.add_identical((*it)->template as<Product>());
           }
-          auto summands_to_erase = std::pair{first_it + 1, end};
-          if (prod.is_zero()) summands_to_erase.first = first_it;
-          this->summands_.erase(summands_to_erase.first,
-                                summands_to_erase.second);
+          auto erase_range = std::make_pair(first_it + 1, end);
+          if (prod.is_zero()) erase_range.first = first_it;
+          this->summands_.erase(erase_range.first, erase_range.second);
         }
       };
       reduce_range(first_it, plast_it);
