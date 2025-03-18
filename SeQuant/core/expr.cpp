@@ -185,10 +185,22 @@ ExprPtr Product::canonicalize_impl(bool rapid) {
                      return factor.template is<Variable>();
                    }) |
                    ranges::to_vector;
+  // sort variables
+  ranges::sort(variables, [](const auto &first, const auto &second) {
+    return first.template as<Variable>().label() <
+           second.template as<Variable>().label();
+  });
+
   factors_ = factors_ | ranges::views::filter([](const auto &factor) {
                return !factor.template is<Variable>();
              }) |
              ranges::to<decltype(factors_)>;
+
+  // if there are no factors, insert variables back and return
+  if (factors_.empty()) {
+    factors_.insert(factors_.begin(), variables.begin(), variables.end());
+    return {};
+  }
 
   auto contains_nontensors = ranges::any_of(factors_, [](const auto &factor) {
     return std::dynamic_pointer_cast<AbstractTensor>(factor) == nullptr;
@@ -268,12 +280,7 @@ ExprPtr Product::canonicalize_impl(bool rapid) {
           });
     }
   }
-
-  // sort and reinsert Variables at the front
-  ranges::sort(variables, [](const auto &first, const auto &second) {
-    return first.template as<Variable>().label() <
-           second.template as<Variable>().label();
-  });
+  // reinsert Variables at the front
   factors_.insert(factors_.begin(), variables.begin(), variables.end());
 
   // TODO evaluate product of Tensors (turn this into Products of Products)
