@@ -6,13 +6,78 @@
 #include <SeQuant/core/utility/permutation.hpp>
 #include <SeQuant/core/utility/transform_expr.hpp>
 
-#ifdef SEQUANT_HAS_EIGEN
 #include <Eigen/Eigenvalues>
-#endif
 
 #include <algorithm>
 
 namespace sequant {
+
+Eigen::MatrixXd permutational_overlap_matrix(std::size_t n_particles) {
+  const auto n = boost::numeric_cast<Eigen::Index>(factorial(n_particles));
+
+  // The matrix only contains integer entries but all operations we want to do
+  // with the matrix will (in general) require non-integer scalars which in
+  // Eigen only works if you start from a non-integer matrix.
+  Eigen::MatrixXd M(n, n);
+  M.setZero();
+
+  std::size_t n_row = 0;
+  container::svector<int> v(n_particles), v1(n_particles);
+  std::iota(v.begin(), v.end(), 0);
+  std::iota(v1.begin(), v1.end(), 0);
+
+  container::svector<double> permutation_vector;
+  permutation_vector.reserve(n);
+  do {
+    permutation_vector.clear();
+    do {
+      permutation_vector.push_back(std::pow(-2, sequant::count_cycles(v1, v)));
+    } while (std::next_permutation(v.begin(), v.end()));
+
+    // TODO: M is symmetric -> we could make use of that in its construction
+    M.row(n_row) = Eigen::Map<Eigen::VectorXd, Eigen::Unaligned>(
+        permutation_vector.data(), permutation_vector.size());
+
+    ++n_row;
+  } while (std::next_permutation(v1.begin(), v1.end()));
+
+  if (n_particles % 2 != 0) {
+    M *= -1;
+  }
+
+  return M;
+}
+
+container::svector<rational> compute_biorth_coeffs(std::size_t n_particles,
+                                                   double threshold) {
+  auto perm_ovlp_mat = permutational_overlap_matrix(n_particles);
+  assert(perm_ovlp_mat.rows() == perm_ovlp_mat.cols());
+  assert(perm_ovlp_mat == perm_ovlp_mat.transpose());
+
+  // Find Pseudo Inverse, get 1st row only
+  auto decomp =
+      Eigen::CompleteOrthogonalDecomposition<decltype(perm_ovlp_mat)>();
+  decomp.setThreshold(threshold);
+  decomp.compute(perm_ovlp_mat);
+  Eigen::MatrixXd pinv = decomp.pseudoInverse();
+
+  // We need to normalize to the amount of non-zero eigenvalues via
+  // normalization = #eigenvalues / #non-zero eigenvalues
+  // Since perm_ovlp_mat is symmetric, it is diagonalizable and for every
+  // diagonalizable matrix, its rank equals the amount of non-zero eigenvalues.
+  double normalization =
+      static_cast<double>(perm_ovlp_mat.rows()) / decomp.rank();
+
+  container::svector<double> bt_coeff_dvec;
+  bt_coeff_dvec.resize(pinv.rows());
+  Eigen::VectorXd::Map(&bt_coeff_dvec[0], bt_coeff_dvec.size()) =
+      pinv.row(0) * normalization;
+
+  return bt_coeff_dvec | ranges::views::transform([&](double d) {
+           return to_rational(d, threshold);
+         }) |
+         ranges::to<container::svector<rational>>();
+}
 
 ExprPtr biorthogonal_transform(
     const sequant::ExprPtr& expr,
@@ -24,90 +89,8 @@ ExprPtr biorthogonal_transform(
 
   using sequant::container::svector;
 
-  // Coefficients
-  container::svector<rational> bt_coeff_vec;
-  {
-#ifdef SEQUANT_HAS_EIGEN
-    using namespace Eigen;
-    // Dimension of permutation matrix is n_particles!
-    const auto n = boost::numeric_cast<Eigen::Index>(factorial(n_particles));
-
-    // Permutation matrix
-    Eigen::Matrix<double, Dynamic, Dynamic> M(n, n);
-    {
-      M.setZero();
-      size_t n_row = 0;
-      svector<int> v(n_particles), v1(n_particles);
-      std::iota(v.begin(), v.end(), 0);
-      std::iota(v1.begin(), v1.end(), 0);
-      do {
-        container::svector<double> permutation_vector;
-        do {
-          permutation_vector.push_back(
-              std::pow(-2, sequant::count_cycles(v1, v)));
-        } while (std::next_permutation(v.begin(), v.end()));
-        Eigen::VectorXd pv_eig = Eigen::Map<Eigen::VectorXd, Eigen::Unaligned>(
-            permutation_vector.data(), permutation_vector.size());
-        M.row(n_row) = pv_eig;
-        ++n_row;
-      } while (std::next_permutation(v1.begin(), v1.end()));
-      M *= std::pow(-1, n_particles);
-    }
-
-    // Normalization constant
-    double scalar;
-    {
-      auto nonZero = [&threshold](const double& d) {
-        using std::abs;
-        return abs(d) > threshold;
-      };
-
-      // Solve system of equations
-      SelfAdjointEigenSolver<MatrixXd> eig_solver(M);
-      container::svector<double> eig_vals(eig_solver.eigenvalues().size());
-      VectorXd::Map(&eig_vals[0], eig_solver.eigenvalues().size()) =
-          eig_solver.eigenvalues();
-
-      double non0count =
-          std::count_if(eig_vals.begin(), eig_vals.end(), nonZero);
-      scalar = eig_vals.size() / non0count;
-    }
-
-    // Find Pseudo Inverse, get 1st row only
-    MatrixXd pinv = M.completeOrthogonalDecomposition().pseudoInverse();
-    container::svector<double> bt_coeff_dvec;
-    bt_coeff_dvec.resize(pinv.rows());
-    VectorXd::Map(&bt_coeff_dvec[0], bt_coeff_dvec.size()) =
-        pinv.row(0) * scalar;
-    bt_coeff_vec.reserve(bt_coeff_dvec.size());
-    ranges::for_each(bt_coeff_dvec, [&bt_coeff_vec, threshold](double c) {
-      bt_coeff_vec.emplace_back(to_rational(c, threshold));
-    });
-
-//    std::cout << "n_particles = " << n_particles << "\n bt_coeff_vec = ";
-//    std::copy(bt_coeff_vec.begin(), bt_coeff_vec.end(),
-//              std::ostream_iterator<rational>(std::cout, " "));
-//    std::cout << "\n";
-#else
-    // hardwire coefficients for n_particles = 1, 2, 3
-    switch (n_particles) {
-      case 1:
-        bt_coeff_vec = {ratio(1, 2)};
-        break;
-      case 2:
-        bt_coeff_vec = {ratio(1, 3), ratio(1, 6)};
-        break;
-      case 3:
-        bt_coeff_vec = {ratio(17, 120), ratio(-1, 120), ratio(-1, 120),
-                        ratio(-7, 120), ratio(-7, 120), ratio(-1, 120)};
-        break;
-      default:
-        throw std::runtime_error(
-            "biorthogonal_transform requires Eigen library for n_particles > "
-            "3.");
-    }
-#endif
-  }
+  container::svector<rational> coeffs =
+      compute_biorth_coeffs(n_particles, threshold);
 
   // Transformation maps
   container::svector<container::map<Index, Index>> bt_maps;
@@ -132,7 +115,7 @@ ExprPtr biorthogonal_transform(
   }
 
   // If this assertion fails, change the threshold parameter
-  assert(bt_coeff_vec.size() == bt_maps.size());
+  assert(coeffs.size() == bt_maps.size());
 
   // Checks if the replacement map is a canonical sequence
   auto is_canonical = [](const container::map<Index, Index>& idx_map) {
@@ -144,7 +127,7 @@ ExprPtr biorthogonal_transform(
 
   // Scale transformed expressions and append
   Sum bt_expr{};
-  auto coeff_it = bt_coeff_vec.begin();
+  auto coeff_it = coeffs.begin();
   for (auto&& map : bt_maps) {
     const auto v = *coeff_it;
     if (is_canonical(map))
