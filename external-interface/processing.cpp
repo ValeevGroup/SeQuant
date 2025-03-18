@@ -2,7 +2,7 @@
 #include "format_support.hpp"
 #include "utils.hpp"
 
-#include <SeQuant/core/biorthogonalize.hpp>
+#include <SeQuant/core/biorthogonalization.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>

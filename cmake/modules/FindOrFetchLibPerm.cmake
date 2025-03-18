@@ -1,7 +1,6 @@
 if (NOT TARGET libperm)
-
     include(${vg_cmake_kit_SOURCE_DIR}/modules/VRGFindOrFetchPackage.cmake)
-    VRGFindOrFetchPackage(libperm "https://github.com/Krzmbrzl/libPerm.git" "v1.8.0"
+    VRGFindOrFetchPackage(libperm "https://github.com/Krzmbrzl/libPerm.git" "develop"
             ADD_SUBDIR
             CONFIG_SUBDIR
     )

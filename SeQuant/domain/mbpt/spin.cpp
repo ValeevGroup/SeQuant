@@ -2,7 +2,7 @@
 
 #include <SeQuant/core/algorithm.hpp>
 #include <SeQuant/core/attr.hpp>
-#include <SeQuant/core/biorthogonalize.hpp>
+#include <SeQuant/core/biorthogonalization.hpp>
 #include <SeQuant/core/expr_algorithm.hpp>
 #include <SeQuant/core/expr_operator.hpp>
 #include <SeQuant/core/math.hpp>

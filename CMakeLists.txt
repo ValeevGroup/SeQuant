@@ -201,8 +201,8 @@ set(SeQuant_src
         SeQuant/core/asy_cost.hpp
         SeQuant/core/attr.hpp
         SeQuant/core/binary_node.hpp
-		SeQuant/core/biorthogonalize.cpp
-		SeQuant/core/biorthogonalize.hpp
+        SeQuant/core/biorthogonalization.cpp
+        SeQuant/core/biorthogonalization.hpp
         SeQuant/core/bliss.hpp
         SeQuant/core/complex.hpp
         SeQuant/core/container.hpp
@@ -334,6 +334,7 @@ set_source_files_properties(
 )
 
 target_link_libraries(SeQuant PUBLIC range-v3::range-v3 Boost::regex Boost::locale Boost::headers SeQuant-bliss Threads::Threads)
+target_link_libraries(SeQuant PRIVATE $<BUILD_INTERFACE:libperm::libperm>)
 # modularized Boost has finer grained targets than just Boost::headers
 if (Boost_IS_MODULARIZED)
     target_link_libraries(SeQuant PUBLIC
@@ -452,6 +453,7 @@ endfunction()
 
 set(utests_src
 		tests/unit/catch2_sequant.hpp
+		tests/unit/test_biorthogonalization.cpp
 		tests/unit/test_space.cpp
 		tests/unit/test_index.cpp
 		tests/unit/test_op.cpp
