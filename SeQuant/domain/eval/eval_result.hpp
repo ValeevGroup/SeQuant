@@ -622,6 +622,38 @@ class EvalScalar final : public EvalResult {
   }
 };
 
+namespace detail {
+
+template <typename DA>
+auto retile_occ_Nto1(const DA& da) {
+  auto target_ranges =
+      da.trange() | ranges::views::transform([](const auto& trange1) {
+        if (trange1.extent() == 3 && trange1.tiles_range().extent() == 1) {
+          return TA::TiledRange1::make_uniform(3, 1);
+        } else
+          return trange1;
+      }) |
+      ranges::to_vector;
+  auto target_trange = TA::TiledRange(target_ranges);
+  return TA::retile(da, target_trange);
+}
+
+template <typename DA>
+auto retile_occ_1toN(const DA& da) {
+  auto target_ranges =
+      da.trange() | ranges::views::transform([](const auto& trange1) {
+        if (trange1.extent() == 3 && trange1.tiles_range().extent() == 3) {
+          return TA::TiledRange1::make_uniform(3, 3);
+        } else
+          return trange1;
+      }) |
+      ranges::to_vector;
+  auto target_trange = TA::TiledRange(target_ranges);
+  return TA::retile(da, target_trange);
+}
+
+}  // namespace detail
+
 ///
 /// \brief EvalResult for a tensor value of TA::DistArray type.
 /// \tparam ArrayT TA::DistArray type. Tile type of ArrayT is regular tensor of
@@ -704,6 +736,12 @@ class EvalTensorTA final : public EvalResult {
     result = TA::einsum(get<ArrayT>()(a.lannot), other.get<ArrayT>()(a.rannot),
                         a.this_annot);
     decltype(result)::wait_for_lazy_cleanup(result.world());
+    auto result_retiled = detail::retile_occ_1toN(TA::einsum(
+        detail::retile_occ_Nto1(get<ArrayT>())(a.lannot),
+        detail::retile_occ_Nto1(other.get<ArrayT>())(a.rannot), a.this_annot));
+    decltype(result)::wait_for_lazy_cleanup(result.world());
+    // TODO ensure result == result_retiled
+
     return eval_result<this_type>(std::move(result));
   }
 
