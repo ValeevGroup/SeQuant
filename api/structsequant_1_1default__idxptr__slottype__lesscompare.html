@@ -281,9 +281,13 @@
 <span id="_CPPv3N7sequant35default_idxptr_slottype_lesscompareE"></span><span id="_CPPv2N7sequant35default_idxptr_slottype_lesscompareE"></span><span id="sequant::default_idxptr_slottype_lesscompare"></span><span class="target" id="structsequant_1_1default__idxptr__slottype__lesscompare"></span><span class="k"><span class="pre">struct</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">default_idxptr_slottype_lesscompare</span></span></span><a class="headerlink" href="#_CPPv4N7sequant35default_idxptr_slottype_lesscompareE" title="Link to this definition">¶</a><br /></dt>
 <dd><p>to produce the “canonical” layout of tensors/TNs this is used by canonicalize_slots to sort BEFORE sorting by topological canonical order produced by bliss::Graph:<ul class="simple">
 <li><p>first order by # of protoindices</p></li>
-<li><p>then, order by index slot types: bra, ket, aux, spbundle (matches the order of entries in IndexSlotType) </p></li>
+<li><p><p>then, order by index slot types: spbundle, bra, ket, aux(matches</p>
+<p>the order of entries in IndexSlotType).</p>
+</p></li>
+<li><p>then, by space</p></li>
 </ul>
 </p>
+<p>N.B. spbundle is at the front to make CSV tensor layout “natural”, with all occupieds (in particular the spbundle-only occupieds) first. E.g. we want g^{a&lt;ij&gt; b&lt;ij&gt;}_{k l} to be laid out with ij first, since in any tensor product involving such indices will treat ij as batch indices, hence it’s best to make them as “slow” as possible (in row-major layout) </p>
 <div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric" id="breathe-section-title-public-functions">Public Functions</p>
 <dl class="cpp function">
@@ -314,7 +318,7 @@
             
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on Mar 17, 2025 9:55:48 AM</div>
+              Last updated on Mar 19, 2025 10:25:33 AM</div>
           </div>
           <div class="right-details">
             <div class="icons">

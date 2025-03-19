@@ -90,14 +90,6 @@ Functions
 ---------
 
 
-- :ref:`exhale_function_namespacesequant_1ae2b6e7fc17ca820e46cda702013c905b`
-
-- :ref:`exhale_function_namespacesequant_1a2675645ef37f2fc8a8c1dcc464e412e0`
-
-- :ref:`exhale_function_namespacesequant_1abac9e1d5c3632f41aab33873a15e397e`
-
-- :ref:`exhale_function_namespacesequant_1a362b02f31d72b4fb7ea643ae969f82c8`
-
 - :ref:`exhale_function_namespacesequant_1_1opt_1a8d6dd66c2606214e3190ea878e84de89`
 
 - :ref:`exhale_function_namespacesequant_1_1opt_1af6fc7be814aa005561ba962d5b4c3212`

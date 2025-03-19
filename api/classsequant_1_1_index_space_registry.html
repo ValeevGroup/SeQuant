@@ -281,7 +281,17 @@
 <span id="_CPPv3N7sequant18IndexSpaceRegistryE"></span><span id="_CPPv2N7sequant18IndexSpaceRegistryE"></span><span id="sequant::IndexSpaceRegistry"></span><span class="target" id="classsequant_1_1_index_space_registry"></span><span class="k"><span class="pre">class</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">IndexSpaceRegistry</span></span></span><a class="headerlink" href="#_CPPv4N7sequant18IndexSpaceRegistryE" title="Link to this definition">¶</a><br /></dt>
 <dd><p>set of known <a class="reference internal" href="classsequant_1_1_index_space.html#classsequant_1_1_index_space"><span class="std std-ref">IndexSpace</span></a> objects </p>
 <p>Each <a class="reference internal" href="classsequant_1_1_index_space.html#classsequant_1_1_index_space"><span class="std std-ref">IndexSpace</span></a> object has hardwired base key (label) that gives indexed expressions appropriate semantics; e.g., spaces referred to by indices in <span class="math notranslate nohighlight">\( t_{p_1}^{i_1} \)</span> are defined if <a class="reference internal" href="classsequant_1_1_index_space.html#classsequant_1_1_index_space"><span class="std std-ref">IndexSpace</span></a> objects with base keys <span class="math notranslate nohighlight">\( p \)</span> and <span class="math notranslate nohighlight">\( i \)</span> are registered. Since index spaces have set-theoretic semantics, the user must provide complete set of unions/intersects of the base spaces to cover all possible <a class="reference internal" href="classsequant_1_1_index_space.html#classsequant_1_1_index_space"><span class="std std-ref">IndexSpace</span></a> objects that can be generated in their program.</p>
-<p>Registry contains 2 parts: set of <a class="reference internal" href="classsequant_1_1_index_space.html#classsequant_1_1_index_space"><span class="std std-ref">IndexSpace</span></a> objects (managed by a <code class="docutils literal notranslate"><span class="pre">std::shared_ptr</span></code>, see <a class="reference internal" href="#classsequant_1_1_index_space_registry_1a7d2a8e7113e29efb425d16fcb600a98b"><span class="std std-ref">IndexSpaceRegistry::spaces()</span></a>) and specification of various spaces (vacuum, reference, complete, etc.). Copy semantics is thus partially shallow, with spaces shared between copies. This allows to have multiple registries share same set of spaces but have different specifications of vacuum, reference, etc.; this is useful for providing different contexts for fermions and bosons, for example. </p>
+<p>Registry contains 2 parts: set of <a class="reference internal" href="classsequant_1_1_index_space.html#classsequant_1_1_index_space"><span class="std std-ref">IndexSpace</span></a> objects (managed by a <code class="docutils literal notranslate"><span class="pre">std::shared_ptr</span></code>, see <a class="reference internal" href="#classsequant_1_1_index_space_registry_1a7d2a8e7113e29efb425d16fcb600a98b"><span class="std std-ref">IndexSpaceRegistry::spaces()</span></a>) and specification of various spaces (vacuum, reference, complete, etc.). Copy semantics is thus partially shallow, with spaces shared between copies. This allows to have multiple registries share same set of spaces but have different specifications of vacuum, reference, etc.; this is useful for providing different contexts for fermions and bosons, for example.</p>
+<p>Spaces that can be occupied by physical particles need to be introspected for their structure, occupancy, etc. The registry provides the API needed for dealing with such states.<ul class="simple">
+<li><p><a class="reference internal" href="#classsequant_1_1_index_space_registry_1a923d00e5df678d60290b509f7aa0de26"><span class="std std-ref">IndexSpaceRegistry::physical_particle_attribute_mask</span></a> specify which states are occupied by physical particles</p></li>
+<li><p>every space occupied by physical particles is a union of basis (“base”) spaces. <a class="reference internal" href="#classsequant_1_1_index_space_registry_1a219790311d6cbfe6f38989c45866d642"><span class="std std-ref">IndexSpaceRegistry::is_base</span></a> detects such spaces and <a class="reference internal" href="#classsequant_1_1_index_space_registry_1adc15ffe804d7b0675913550c9b93a268"><span class="std std-ref">IndexSpaceRegistry::base_space_types</span></a>/IndexSpaceRegistry<a class="reference internal" href="#classsequant_1_1_index_space_registry_1afa7ff77ca6dd6c8a85e5ccbfc8159333"><span class="std std-ref">base_spaces</span></a> report the list of base spaces</p></li>
+<li><p>in SingleProduct vacuum <a class="reference internal" href="#classsequant_1_1_index_space_registry_1ada1e932a4307745f9cf84068f245bba5"><span class="std std-ref">IndexSpaceRegistry::is_pure_occupied</span></a>/IndexSpaceRegistry<a class="reference internal" href="#classsequant_1_1_index_space_registry_1a711e4a4501450b3e6c45edb1f8dcb972"><span class="std std-ref">is_pure_unoccupied</span></a> report whether a space is occupied or unoccupied (always the case for base spaces, but neither may be true for composite spaces)</p></li>
+<li><p><a class="reference internal" href="#classsequant_1_1_index_space_registry_1ab3b0d94e163cd06860f44b4b2d94e27b"><span class="std std-ref">IndexSpaceRegistry::vacuum_occupied_space</span></a> report whether a space has nonzero occupancy in the vacuum state (that defines the normal order); this is needed to apply Wick theorem with Fermi vacuum</p></li>
+<li><p><a class="reference internal" href="#classsequant_1_1_index_space_registry_1a692f54a415a1c029e4a7d2c3a1213a4d"><span class="std std-ref">IndexSpaceRegistry::reference_occupied_space</span></a> reports whether a space has nonzero occupancy in the reference state used to compute reference expectation value; only needed for computing expectation values when the vacuum state does not match the expectation value state.</p></li>
+<li><p><a class="reference internal" href="#classsequant_1_1_index_space_registry_1a803c02baf8d24681cbb6b2357ed08f61"><span class="std std-ref">IndexSpaceRegistry::complete_space</span></a> specifies which spaces comprise the entirety of Hilbert space; needed for creating general operators in mbpt/op</p></li>
+<li><p><a class="reference internal" href="#classsequant_1_1_index_space_registry_1a712b16f23bdd6331350d97f1d22cfaec"><span class="std std-ref">IndexSpaceRegistry::particle_space</span></a> and <a class="reference internal" href="#classsequant_1_1_index_space_registry_1ac10ec078cdf9ebcb84d37c52b69aa748"><span class="std std-ref">IndexSpaceRegistry::hole_space</span></a> specify in which space particles/holes can be created successfully from the reference state; this is a convenience for making operators </p></li>
+</ul>
+</p>
 <div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric" id="breathe-section-title-adding-indexspace-objects-to-the-registry">adding IndexSpace objects to the registry</p>
 <dl class="cpp function">
@@ -365,6 +375,103 @@
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
 <dd class="field-even"><p>reference to <code class="docutils literal notranslate"><span class="pre">this</span></code></p>
+</dd>
+</dl>
+</dd></dl>
+
+</div>
+<div class="breathe-sectiondef docutils container">
+<p class="breathe-sectiondef-title rubric" id="breathe-section-title-physical-particle-space-structure-introspection">physical particle space structure introspection</p>
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant18IndexSpaceRegistry32physical_particle_attribute_maskE8bitset_t">
+<span id="_CPPv3N7sequant18IndexSpaceRegistry32physical_particle_attribute_maskE8bitset_t"></span><span id="_CPPv2N7sequant18IndexSpaceRegistry32physical_particle_attribute_maskE8bitset_t"></span><span id="sequant::IndexSpaceRegistry::physical_particle_attribute_mask__bitset_t"></span><span class="target" id="classsequant_1_1_index_space_registry_1a923d00e5df678d60290b509f7aa0de26"></span><span class="kt"><span class="pre">void</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">physical_particle_attribute_mask</span></span></span><span class="sig-paren">(</span><a class="reference internal" href="typedef_namespacesequant_1a2201b50706fed2b2e8ab9813740d6725.html#_CPPv4N7sequant8bitset_tE" title="sequant::bitset_t"><span class="n"><span class="pre">bitset_t</span></span></a><span class="w"> </span><span class="n sig-param"><span class="pre">m</span></span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N7sequant18IndexSpaceRegistry32physical_particle_attribute_maskE8bitset_t" title="Link to this definition">¶</a><br /></dt>
+<dd><p>sets the mask of attributes of <code class="docutils literal notranslate"><a class="reference internal" href="classsequant_1_1_index_space.html#classsequant_1_1_index_space"><span class="std std-ref"><span class="pre">IndexSpace</span></span></a></code>s that can be occupied by physical particles. </p>
+<p>Some states do not correspond to physical particles, but may be present in the registry. Such spaces are not considered when e.g. determining the base spaces. </p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>m</strong> – the mask of attributes of <code class="docutils literal notranslate"><a class="reference internal" href="classsequant_1_1_index_space.html#classsequant_1_1_index_space"><span class="std std-ref"><span class="pre">IndexSpace</span></span></a></code>s that can be occupied by physical particles. </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant18IndexSpaceRegistry32physical_particle_attribute_maskEv">
+<span id="_CPPv3NK7sequant18IndexSpaceRegistry32physical_particle_attribute_maskEv"></span><span id="_CPPv2NK7sequant18IndexSpaceRegistry32physical_particle_attribute_maskEv"></span><span id="sequant::IndexSpaceRegistry::physical_particle_attribute_maskC"></span><span class="target" id="classsequant_1_1_index_space_registry_1aebf94da0e933a7417df496e3b5bbd293"></span><a class="reference internal" href="typedef_namespacesequant_1a2201b50706fed2b2e8ab9813740d6725.html#_CPPv4N7sequant8bitset_tE" title="sequant::bitset_t"><span class="n"><span class="pre">bitset_t</span></span></a><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">physical_particle_attribute_mask</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant18IndexSpaceRegistry32physical_particle_attribute_maskEv" title="Link to this definition">¶</a><br /></dt>
+<dd><p>accesses the mask of attributes of <code class="docutils literal notranslate"><a class="reference internal" href="classsequant_1_1_index_space.html#classsequant_1_1_index_space"><span class="std std-ref"><span class="pre">IndexSpace</span></span></a></code>s that can be occupied by physical particles. </p>
+<p>Some states do not correspond to physical particles, but may be present in the registry. Such spaces are not considered when e.g. determining the base spaces. </p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>the mask of attributes of <code class="docutils literal notranslate"><a class="reference internal" href="classsequant_1_1_index_space.html#classsequant_1_1_index_space"><span class="std std-ref"><span class="pre">IndexSpace</span></span></a></code>s that can be occupied by physical particles. </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant18IndexSpaceRegistry16base_space_typesEv">
+<span id="_CPPv3NK7sequant18IndexSpaceRegistry16base_space_typesEv"></span><span id="_CPPv2NK7sequant18IndexSpaceRegistry16base_space_typesEv"></span><span id="sequant::IndexSpaceRegistry::base_space_typesC"></span><span class="target" id="classsequant_1_1_index_space_registry_1adc15ffe804d7b0675913550c9b93a268"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">const</span></span><span class="w"> </span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">vector</span></span><span class="p"><span class="pre">&lt;</span></span><a class="reference internal" href="classsequant_1_1_index_space.html#_CPPv4N7sequant10IndexSpaceE" title="sequant::IndexSpace"><span class="n"><span class="pre">IndexSpace</span></span></a><span class="p"><span class="pre">::</span></span><a class="reference internal" href="classsequant_1_1_index_space.html#_CPPv4N7sequant10IndexSpace4TypeE" title="sequant::IndexSpace::Type"><span class="n"><span class="pre">Type</span></span></a><span class="p"><span class="pre">&gt;</span></span><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="sig-name descname"><span class="n"><span class="pre">base_space_types</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant18IndexSpaceRegistry16base_space_typesEv" title="Link to this definition">¶</a><br /></dt>
+<dd><p>returns the list of <em>basis</em> <a class="reference internal" href="classsequant_1_1_index_space.html#classsequant_1_1_index_space_1aeb8c86b22ef087d7aeef3d98c5894c22"><span class="std std-ref">IndexSpace::Type</span></a> objects </p>
+<p>A base <a class="reference internal" href="classsequant_1_1_index_space.html#classsequant_1_1_index_space_1aeb8c86b22ef087d7aeef3d98c5894c22"><span class="std std-ref">IndexSpace::Type</span></a> object has 1 bit in its bitstring. <div class="admonition seealso">
+<p class="admonition-title">See also</p>
+<p><a class="reference internal" href="#classsequant_1_1_index_space_registry_1a219790311d6cbfe6f38989c45866d642"><span class="std std-ref">IndexSpaceRegistry::is_base</span></a></p>
+</div>
+</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>(memoized) set of base <a class="reference internal" href="classsequant_1_1_index_space.html#classsequant_1_1_index_space_1aeb8c86b22ef087d7aeef3d98c5894c22"><span class="std std-ref">IndexSpace::Type</span></a> objects, sorted in increasing order </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant18IndexSpaceRegistry11base_spacesEv">
+<span id="_CPPv3NK7sequant18IndexSpaceRegistry11base_spacesEv"></span><span id="_CPPv2NK7sequant18IndexSpaceRegistry11base_spacesEv"></span><span id="sequant::IndexSpaceRegistry::base_spacesC"></span><span class="target" id="classsequant_1_1_index_space_registry_1afa7ff77ca6dd6c8a85e5ccbfc8159333"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">const</span></span><span class="w"> </span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">vector</span></span><span class="p"><span class="pre">&lt;</span></span><a class="reference internal" href="classsequant_1_1_index_space.html#_CPPv4N7sequant10IndexSpaceE" title="sequant::IndexSpace"><span class="n"><span class="pre">IndexSpace</span></span></a><span class="p"><span class="pre">&gt;</span></span><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="sig-name descname"><span class="n"><span class="pre">base_spaces</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant18IndexSpaceRegistry11base_spacesEv" title="Link to this definition">¶</a><br /></dt>
+<dd><p>returns the list of <em>basis</em> <a class="reference internal" href="classsequant_1_1_index_space.html#classsequant_1_1_index_space"><span class="std std-ref">IndexSpace</span></a> objects </p>
+<p>A base <a class="reference internal" href="classsequant_1_1_index_space.html#classsequant_1_1_index_space"><span class="std std-ref">IndexSpace</span></a> object has 1 bit in its type() bitstring. <div class="admonition seealso">
+<p class="admonition-title">See also</p>
+<p><a class="reference internal" href="#classsequant_1_1_index_space_registry_1a219790311d6cbfe6f38989c45866d642"><span class="std std-ref">IndexSpaceRegistry::is_base</span></a></p>
+</div>
+</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>(memoized) set of base <a class="reference internal" href="classsequant_1_1_index_space.html#classsequant_1_1_index_space"><span class="std std-ref">IndexSpace</span></a> objects, sorted in the order of increasing type() </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant18IndexSpaceRegistry7is_baseERK10IndexSpace">
+<span id="_CPPv3NK7sequant18IndexSpaceRegistry7is_baseERK10IndexSpace"></span><span id="_CPPv2NK7sequant18IndexSpaceRegistry7is_baseERK10IndexSpace"></span><span id="sequant::IndexSpaceRegistry::is_base__IndexSpaceCRC"></span><span class="target" id="classsequant_1_1_index_space_registry_1a219790311d6cbfe6f38989c45866d642"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="kt"><span class="pre">bool</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">is_base</span></span></span><span class="sig-paren">(</span><span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="classsequant_1_1_index_space.html#_CPPv4N7sequant10IndexSpaceE" title="sequant::IndexSpace"><span class="n"><span class="pre">IndexSpace</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">IS</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant18IndexSpaceRegistry7is_baseERK10IndexSpace" title="Link to this definition">¶</a><br /></dt>
+<dd><p>checks if an <a class="reference internal" href="classsequant_1_1_index_space.html#classsequant_1_1_index_space"><span class="std std-ref">IndexSpace</span></a> is in the basis </p>
+<p><div class="admonition seealso">
+<p class="admonition-title">See also</p>
+<p><a class="reference internal" href="#classsequant_1_1_index_space_registry_1afa7ff77ca6dd6c8a85e5ccbfc8159333"><span class="std std-ref">base_spaces</span></a></p>
+</div>
+</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>IS</strong> – <a class="reference internal" href="classsequant_1_1_index_space.html#classsequant_1_1_index_space"><span class="std std-ref">IndexSpace</span></a></p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>true if <code class="docutils literal notranslate"><span class="pre">IS</span></code> is in the basis </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant18IndexSpaceRegistry7is_baseERKN10IndexSpace4TypeE">
+<span id="_CPPv3N7sequant18IndexSpaceRegistry7is_baseERKN10IndexSpace4TypeE"></span><span id="_CPPv2N7sequant18IndexSpaceRegistry7is_baseERKN10IndexSpace4TypeE"></span><span id="sequant::IndexSpaceRegistry::is_base__IndexSpace::TypeCR"></span><span class="target" id="classsequant_1_1_index_space_registry_1a0466add37e4c8f89c3ef53c16ed9ad49"></span><span class="k"><span class="pre">static</span></span><span class="w"> </span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="kt"><span class="pre">bool</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">is_base</span></span></span><span class="sig-paren">(</span><span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="classsequant_1_1_index_space.html#_CPPv4N7sequant10IndexSpaceE" title="sequant::IndexSpace"><span class="n"><span class="pre">IndexSpace</span></span></a><span class="p"><span class="pre">::</span></span><a class="reference internal" href="classsequant_1_1_index_space.html#_CPPv4N7sequant10IndexSpace4TypeE" title="sequant::IndexSpace::Type"><span class="n"><span class="pre">Type</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">t</span></span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N7sequant18IndexSpaceRegistry7is_baseERKN10IndexSpace4TypeE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>checks if an <a class="reference internal" href="classsequant_1_1_index_space.html#classsequant_1_1_index_space_1aeb8c86b22ef087d7aeef3d98c5894c22"><span class="std std-ref">IndexSpace::Type</span></a> is in the basis </p>
+<p><div class="admonition seealso">
+<p class="admonition-title">See also</p>
+<p>space_type_basis </p>
+</div>
+</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>t</strong> – <a class="reference internal" href="classsequant_1_1_index_space.html#classsequant_1_1_index_space_1aeb8c86b22ef087d7aeef3d98c5894c22"><span class="std std-ref">IndexSpace::Type</span></a></p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>true if <code class="docutils literal notranslate"><span class="pre">t</span></code> is in the basis </p>
 </dd>
 </dl>
 </dd></dl>
@@ -1084,38 +1191,6 @@
 </dd></dl>
 
 <dl class="cpp function">
-<dt class="sig sig-object cpp" id="_CPPv4NK7sequant18IndexSpaceRegistry16base_space_typesEv">
-<span id="_CPPv3NK7sequant18IndexSpaceRegistry16base_space_typesEv"></span><span id="_CPPv2NK7sequant18IndexSpaceRegistry16base_space_typesEv"></span><span id="sequant::IndexSpaceRegistry::base_space_typesC"></span><span class="target" id="classsequant_1_1_index_space_registry_1adc15ffe804d7b0675913550c9b93a268"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">const</span></span><span class="w"> </span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">vector</span></span><span class="p"><span class="pre">&lt;</span></span><a class="reference internal" href="classsequant_1_1_index_space.html#_CPPv4N7sequant10IndexSpaceE" title="sequant::IndexSpace"><span class="n"><span class="pre">IndexSpace</span></span></a><span class="p"><span class="pre">::</span></span><a class="reference internal" href="classsequant_1_1_index_space.html#_CPPv4N7sequant10IndexSpace4TypeE" title="sequant::IndexSpace::Type"><span class="n"><span class="pre">Type</span></span></a><span class="p"><span class="pre">&gt;</span></span><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="sig-name descname"><span class="n"><span class="pre">base_space_types</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant18IndexSpaceRegistry16base_space_typesEv" title="Link to this definition">¶</a><br /></dt>
-<dd><p>returns the list of <em>basis</em> <a class="reference internal" href="classsequant_1_1_index_space.html#classsequant_1_1_index_space_1aeb8c86b22ef087d7aeef3d98c5894c22"><span class="std std-ref">IndexSpace::Type</span></a> objects </p>
-<p>A base <a class="reference internal" href="classsequant_1_1_index_space.html#classsequant_1_1_index_space_1aeb8c86b22ef087d7aeef3d98c5894c22"><span class="std std-ref">IndexSpace::Type</span></a> object has 1 bit in its bitstring. <div class="admonition seealso">
-<p class="admonition-title">See also</p>
-<p><a class="reference internal" href="#classsequant_1_1_index_space_registry_1af38c0b120cf26aabbe06b42661496a6e"><span class="std std-ref">IndexSpaceRegistry::is_base</span></a></p>
-</div>
-</p>
-<dl class="field-list simple">
-<dt class="field-odd">Returns<span class="colon">:</span></dt>
-<dd class="field-odd"><p>(memoized) set of base <a class="reference internal" href="classsequant_1_1_index_space.html#classsequant_1_1_index_space_1aeb8c86b22ef087d7aeef3d98c5894c22"><span class="std std-ref">IndexSpace::Type</span></a> objects, sorted in increasing order </p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="cpp function">
-<dt class="sig sig-object cpp" id="_CPPv4NK7sequant18IndexSpaceRegistry11base_spacesEv">
-<span id="_CPPv3NK7sequant18IndexSpaceRegistry11base_spacesEv"></span><span id="_CPPv2NK7sequant18IndexSpaceRegistry11base_spacesEv"></span><span id="sequant::IndexSpaceRegistry::base_spacesC"></span><span class="target" id="classsequant_1_1_index_space_registry_1afa7ff77ca6dd6c8a85e5ccbfc8159333"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">const</span></span><span class="w"> </span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">vector</span></span><span class="p"><span class="pre">&lt;</span></span><a class="reference internal" href="classsequant_1_1_index_space.html#_CPPv4N7sequant10IndexSpaceE" title="sequant::IndexSpace"><span class="n"><span class="pre">IndexSpace</span></span></a><span class="p"><span class="pre">&gt;</span></span><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="sig-name descname"><span class="n"><span class="pre">base_spaces</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant18IndexSpaceRegistry11base_spacesEv" title="Link to this definition">¶</a><br /></dt>
-<dd><p>returns the list of <em>basis</em> <a class="reference internal" href="classsequant_1_1_index_space.html#classsequant_1_1_index_space"><span class="std std-ref">IndexSpace</span></a> objects </p>
-<p>A base <a class="reference internal" href="classsequant_1_1_index_space.html#classsequant_1_1_index_space"><span class="std std-ref">IndexSpace</span></a> object has 1 bit in its type() bitstring. <div class="admonition seealso">
-<p class="admonition-title">See also</p>
-<p><a class="reference internal" href="#classsequant_1_1_index_space_registry_1af38c0b120cf26aabbe06b42661496a6e"><span class="std std-ref">IndexSpaceRegistry::is_base</span></a></p>
-</div>
-</p>
-<dl class="field-list simple">
-<dt class="field-odd">Returns<span class="colon">:</span></dt>
-<dd class="field-odd"><p>(memoized) set of base <a class="reference internal" href="classsequant_1_1_index_space.html#classsequant_1_1_index_space"><span class="std std-ref">IndexSpace</span></a> objects, sorted in the order of increasing type() </p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="cpp function">
 <dt class="sig sig-object cpp" id="_CPPv4N7sequant18IndexSpaceRegistry5clearEv">
 <span id="_CPPv3N7sequant18IndexSpaceRegistry5clearEv"></span><span id="_CPPv2N7sequant18IndexSpaceRegistry5clearEv"></span><span id="sequant::IndexSpaceRegistry::clear"></span><span class="target" id="classsequant_1_1_index_space_registry_1ab90278429dd906a75652af7d9f457cba"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4N7sequant18IndexSpaceRegistryE" title="sequant::IndexSpaceRegistry"><span class="n"><span class="pre">IndexSpaceRegistry</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="sig-name descname"><span class="n"><span class="pre">clear</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N7sequant18IndexSpaceRegistry5clearEv" title="Link to this definition">¶</a><br /></dt>
 <dd><p>clear the contents of *this </p>
@@ -1300,47 +1375,6 @@
 </dd></dl>
 
 </div>
-<div class="breathe-sectiondef docutils container">
-<p class="breathe-sectiondef-title rubric" id="breathe-section-title-public-static-functions">Public Static Functions</p>
-<dl class="cpp function">
-<dt class="sig sig-object cpp" id="_CPPv4N7sequant18IndexSpaceRegistry7is_baseERK10IndexSpace">
-<span id="_CPPv3N7sequant18IndexSpaceRegistry7is_baseERK10IndexSpace"></span><span id="_CPPv2N7sequant18IndexSpaceRegistry7is_baseERK10IndexSpace"></span><span id="sequant::IndexSpaceRegistry::is_base__IndexSpaceCR"></span><span class="target" id="classsequant_1_1_index_space_registry_1af38c0b120cf26aabbe06b42661496a6e"></span><span class="k"><span class="pre">static</span></span><span class="w"> </span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="kt"><span class="pre">bool</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">is_base</span></span></span><span class="sig-paren">(</span><span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="classsequant_1_1_index_space.html#_CPPv4N7sequant10IndexSpaceE" title="sequant::IndexSpace"><span class="n"><span class="pre">IndexSpace</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">IS</span></span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N7sequant18IndexSpaceRegistry7is_baseERK10IndexSpace" title="Link to this definition">¶</a><br /></dt>
-<dd><p>checks if an <a class="reference internal" href="classsequant_1_1_index_space.html#classsequant_1_1_index_space"><span class="std std-ref">IndexSpace</span></a> is in the basis </p>
-<p><div class="admonition seealso">
-<p class="admonition-title">See also</p>
-<p><a class="reference internal" href="#classsequant_1_1_index_space_registry_1afa7ff77ca6dd6c8a85e5ccbfc8159333"><span class="std std-ref">base_spaces</span></a></p>
-</div>
-</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>IS</strong> – <a class="reference internal" href="classsequant_1_1_index_space.html#classsequant_1_1_index_space"><span class="std std-ref">IndexSpace</span></a></p>
-</dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>true if <code class="docutils literal notranslate"><span class="pre">IS</span></code> is in the basis </p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="cpp function">
-<dt class="sig sig-object cpp" id="_CPPv4N7sequant18IndexSpaceRegistry7is_baseERKN10IndexSpace4TypeE">
-<span id="_CPPv3N7sequant18IndexSpaceRegistry7is_baseERKN10IndexSpace4TypeE"></span><span id="_CPPv2N7sequant18IndexSpaceRegistry7is_baseERKN10IndexSpace4TypeE"></span><span id="sequant::IndexSpaceRegistry::is_base__IndexSpace::TypeCR"></span><span class="target" id="classsequant_1_1_index_space_registry_1a0466add37e4c8f89c3ef53c16ed9ad49"></span><span class="k"><span class="pre">static</span></span><span class="w"> </span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="kt"><span class="pre">bool</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">is_base</span></span></span><span class="sig-paren">(</span><span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="classsequant_1_1_index_space.html#_CPPv4N7sequant10IndexSpaceE" title="sequant::IndexSpace"><span class="n"><span class="pre">IndexSpace</span></span></a><span class="p"><span class="pre">::</span></span><a class="reference internal" href="classsequant_1_1_index_space.html#_CPPv4N7sequant10IndexSpace4TypeE" title="sequant::IndexSpace::Type"><span class="n"><span class="pre">Type</span></span></a><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">t</span></span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N7sequant18IndexSpaceRegistry7is_baseERKN10IndexSpace4TypeE" title="Link to this definition">¶</a><br /></dt>
-<dd><p>checks if an <a class="reference internal" href="classsequant_1_1_index_space.html#classsequant_1_1_index_space_1aeb8c86b22ef087d7aeef3d98c5894c22"><span class="std std-ref">IndexSpace::Type</span></a> is in the basis </p>
-<p><div class="admonition seealso">
-<p class="admonition-title">See also</p>
-<p>space_type_basis </p>
-</div>
-</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>t</strong> – <a class="reference internal" href="classsequant_1_1_index_space.html#classsequant_1_1_index_space_1aeb8c86b22ef087d7aeef3d98c5894c22"><span class="std std-ref">IndexSpace::Type</span></a></p>
-</dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>true if <code class="docutils literal notranslate"><span class="pre">t</span></code> is in the basis </p>
-</dd>
-</dl>
-</dd></dl>
-
-</div>
 </dd></dl>
 
 </section>
@@ -1363,7 +1397,7 @@
             
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on Mar 17, 2025 9:55:48 AM</div>
+              Last updated on Mar 19, 2025 10:25:33 AM</div>
           </div>
           <div class="right-details">
             <div class="icons">
@@ -1395,6 +1429,12 @@
 <li><a class="reference internal" href="#_CPPv4I00Dp00EN7sequant18IndexSpaceRegistry9add_unIonER18IndexSpaceRegistryRR1SNSt16initializer_listI17IndexSpaceOrLabelEEDpRR12OptionalArgs"><code class="docutils literal notranslate"><span class="pre">add_unIon()</span></code></a></li>
 <li><a class="reference internal" href="#_CPPv4I00Dp00EN7sequant18IndexSpaceRegistry9add_unionER18IndexSpaceRegistryRR1SNSt16initializer_listI17IndexSpaceOrLabelEEDpRR12OptionalArgs"><code class="docutils literal notranslate"><span class="pre">add_union()</span></code></a></li>
 <li><a class="reference internal" href="#_CPPv4I00Dp00EN7sequant18IndexSpaceRegistry16add_intersectionER18IndexSpaceRegistryRR1SNSt16initializer_listI17IndexSpaceOrLabelEEDpRR12OptionalArgs"><code class="docutils literal notranslate"><span class="pre">add_intersection()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant18IndexSpaceRegistry32physical_particle_attribute_maskE8bitset_t"><code class="docutils literal notranslate"><span class="pre">physical_particle_attribute_mask()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant18IndexSpaceRegistry32physical_particle_attribute_maskEv"><code class="docutils literal notranslate"><span class="pre">physical_particle_attribute_mask()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant18IndexSpaceRegistry16base_space_typesEv"><code class="docutils literal notranslate"><span class="pre">base_space_types()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant18IndexSpaceRegistry11base_spacesEv"><code class="docutils literal notranslate"><span class="pre">base_spaces()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant18IndexSpaceRegistry7is_baseERK10IndexSpace"><code class="docutils literal notranslate"><span class="pre">is_base()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant18IndexSpaceRegistry7is_baseERKN10IndexSpace4TypeE"><code class="docutils literal notranslate"><span class="pre">is_base()</span></code></a></li>
 <li><a class="reference internal" href="#_CPPv4N7sequant18IndexSpaceRegistry21vacuum_occupied_spaceERKN10IndexSpace4TypeE"><code class="docutils literal notranslate"><span class="pre">vacuum_occupied_space()</span></code></a></li>
 <li><a class="reference internal" href="#_CPPv4N7sequant18IndexSpaceRegistry21vacuum_occupied_spaceEN9container3mapIN10IndexSpace14QuantumNumbersEN10IndexSpace4TypeEEE"><code class="docutils literal notranslate"><span class="pre">vacuum_occupied_space()</span></code></a></li>
 <li><a class="reference internal" href="#_CPPv4N7sequant18IndexSpaceRegistry21vacuum_occupied_spaceERK10IndexSpace"><code class="docutils literal notranslate"><span class="pre">vacuum_occupied_space()</span></code></a></li>
@@ -1448,8 +1488,6 @@
 <li><a class="reference internal" href="#_CPPv4N7sequant18IndexSpaceRegistry6removeERK10IndexSpace"><code class="docutils literal notranslate"><span class="pre">remove()</span></code></a></li>
 <li><a class="reference internal" href="#_CPPv4I00EN7sequant18IndexSpaceRegistry6removeER18IndexSpaceRegistryRR1S"><code class="docutils literal notranslate"><span class="pre">remove()</span></code></a></li>
 <li><a class="reference internal" href="#_CPPv4N7sequant18IndexSpaceRegistry7replaceERK10IndexSpace"><code class="docutils literal notranslate"><span class="pre">replace()</span></code></a></li>
-<li><a class="reference internal" href="#_CPPv4NK7sequant18IndexSpaceRegistry16base_space_typesEv"><code class="docutils literal notranslate"><span class="pre">base_space_types()</span></code></a></li>
-<li><a class="reference internal" href="#_CPPv4NK7sequant18IndexSpaceRegistry11base_spacesEv"><code class="docutils literal notranslate"><span class="pre">base_spaces()</span></code></a></li>
 <li><a class="reference internal" href="#_CPPv4N7sequant18IndexSpaceRegistry5clearEv"><code class="docutils literal notranslate"><span class="pre">clear()</span></code></a></li>
 <li><a class="reference internal" href="#_CPPv4NK7sequant18IndexSpaceRegistry18valid_intersectionERK10IndexSpaceRK10IndexSpace"><code class="docutils literal notranslate"><span class="pre">valid_intersection()</span></code></a></li>
 <li><a class="reference internal" href="#_CPPv4NK7sequant18IndexSpaceRegistry12intersectionERK10IndexSpaceRK10IndexSpace"><code class="docutils literal notranslate"><span class="pre">intersection()</span></code></a></li>
@@ -1462,8 +1500,6 @@
 <li><a class="reference internal" href="#_CPPv4NK7sequant18IndexSpaceRegistry17contains_occupiedERK10IndexSpace"><code class="docutils literal notranslate"><span class="pre">contains_occupied()</span></code></a></li>
 <li><a class="reference internal" href="#_CPPv4NK7sequant18IndexSpaceRegistry19contains_unoccupiedERK10IndexSpace"><code class="docutils literal notranslate"><span class="pre">contains_unoccupied()</span></code></a></li>
 <li><a class="reference internal" href="#_CPPv4NK7sequant18IndexSpaceRegistry23vacuum_unoccupied_spaceERKN10IndexSpace14QuantumNumbersE"><code class="docutils literal notranslate"><span class="pre">vacuum_unoccupied_space()</span></code></a></li>
-<li><a class="reference internal" href="#_CPPv4N7sequant18IndexSpaceRegistry7is_baseERK10IndexSpace"><code class="docutils literal notranslate"><span class="pre">is_base()</span></code></a></li>
-<li><a class="reference internal" href="#_CPPv4N7sequant18IndexSpaceRegistry7is_baseERKN10IndexSpace4TypeE"><code class="docutils literal notranslate"><span class="pre">is_base()</span></code></a></li>
 </ul>
 </li>
 </ul>

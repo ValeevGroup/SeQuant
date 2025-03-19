@@ -34,6 +34,8 @@ Includes
 
 - ``SeQuant/core/container.hpp`` (:ref:`file_SeQuant_core_container.hpp`)
 
+- ``SeQuant/core/fwd.hpp`` (:ref:`file_SeQuant_core_fwd.hpp`)
+
 - ``SeQuant/core/utility/string.hpp`` (:ref:`file_SeQuant_core_utility_string.hpp`)
 
 - ``SeQuant/core/wstring.hpp`` (:ref:`file_SeQuant_core_wstring.hpp`)
@@ -75,8 +77,6 @@ Namespaces
 
 - :ref:`namespace_sequant`
 
-- :ref:`namespace_sequant__bitset`
-
 
 Classes
 -------
@@ -101,31 +101,13 @@ Functions
 
 - :ref:`exhale_function_namespacesequant_1af457c712ea93671abc344a6696e2e657`
 
-- :ref:`exhale_function_namespacesequant_1a3e63e86bb1509bbbd71fe2fc6cf71407`
-
 - :ref:`exhale_function_namespacesequant_1a2519aa981b383cebb103e8e49fbcb50d`
+
+- :ref:`exhale_function_namespacesequant_1a3e63e86bb1509bbbd71fe2fc6cf71407`
 
 - :ref:`exhale_function_namespacesequant_1ac9f738fa8770180ed240f3e2e41f1873`
 
 - :ref:`exhale_function_namespacesequant_1a06013c9e2a851d9d74431cb686c83bdd`
 
 - :ref:`exhale_function_namespacesequant_1aa25b5f265546eb9d0fa08516436e21d6`
-
-
-Typedefs
---------
-
-
-- :ref:`exhale_typedef_namespacesequant_1_1bitset_1a392c9bdebe70a8280160d4dd4e1c31c9`
-
-- :ref:`exhale_typedef_namespacesequant_1a2201b50706fed2b2e8ab9813740d6725`
-
-
-Variables
----------
-
-
-- :ref:`exhale_variable_namespacesequant_1_1bitset_1a481f2d280e76ae124f2ed254f796a29a`
-
-- :ref:`exhale_variable_namespacesequant_1_1bitset_1a3487ba40ecda3f6d9d6368761c7a8385`
 

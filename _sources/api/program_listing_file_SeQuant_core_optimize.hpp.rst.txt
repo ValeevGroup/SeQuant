@@ -314,13 +314,6 @@ Program Listing for File optimize.hpp
    
    ExprPtr optimize(ExprPtr const& expr, bool reorder_sum = true);
    
-   ExprPtr density_fit(ExprPtr const& expr, std::wstring const& aux_label);
-   
-   ExprPtr csv_transform(ExprPtr const& expr,
-                         std::wstring const& coeff_tensor_label = L"C",
-                         container::svector<std::wstring> const& csv_tensors = {
-                             L"f", L"g"});
-   
    }  // namespace sequant
    
    #endif  // SEQUANT_OPTIMIZE_OPTIMIZE_HPP

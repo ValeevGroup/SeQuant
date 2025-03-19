@@ -16,6 +16,7 @@ Subdirectories
 --------------
 
 - :ref:`dir_SeQuant_domain_mbpt_models`
+- :ref:`dir_SeQuant_domain_mbpt_rules`
 
 
 Files
@@ -33,6 +34,7 @@ Files
 - :ref:`file_SeQuant_domain_mbpt_op.ipp`
 - :ref:`file_SeQuant_domain_mbpt_rdm.cpp`
 - :ref:`file_SeQuant_domain_mbpt_rdm.hpp`
+- :ref:`file_SeQuant_domain_mbpt_space_qns.hpp`
 - :ref:`file_SeQuant_domain_mbpt_spin.cpp`
 - :ref:`file_SeQuant_domain_mbpt_spin.hpp`
 - :ref:`file_SeQuant_domain_mbpt_vac_av.hpp`

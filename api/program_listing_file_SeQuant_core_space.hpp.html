@@ -279,9 +279,7 @@
 <span class="cp">#ifndef SEQUANT_SPACE_H</span>
 <span class="cp">#define SEQUANT_SPACE_H</span>
 
-<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;bitset&gt;</span>
-<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;cassert&gt;</span>
-<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;cmath&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;SeQuant/core/fwd.hpp&gt;</span>
 
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;SeQuant/core/attr.hpp&gt;</span>
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;SeQuant/core/container.hpp&gt;</span>
@@ -290,15 +288,11 @@
 
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;range/v3/algorithm/any_of.hpp&gt;</span>
 
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;bitset&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;cassert&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;cmath&gt;</span>
+
 <span class="k">namespace</span><span class="w"> </span><span class="nn">sequant</span><span class="w"> </span><span class="p">{</span>
-
-<span class="k">namespace</span><span class="w"> </span><span class="nn">bitset</span><span class="w"> </span><span class="p">{</span>
-<span class="k">using</span><span class="w"> </span><span class="n">type</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kt">int32_t</span><span class="p">;</span>
-<span class="k">constexpr</span><span class="w"> </span><span class="n">type</span><span class="w"> </span><span class="n">reserved</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mh">0x80000000</span><span class="p">;</span>
-<span class="k">constexpr</span><span class="w"> </span><span class="n">type</span><span class="w"> </span><span class="n">null</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mh">0x00000000</span><span class="p">;</span>
-<span class="p">}</span><span class="w">  </span><span class="c1">// namespace bitset</span>
-
-<span class="k">using</span><span class="w"> </span><span class="n">bitset_t</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">bitset</span><span class="o">::</span><span class="n">type</span><span class="p">;</span>
 
 <span class="k">class</span><span class="w"> </span><span class="nc">QuantumNumbersAttr</span><span class="p">;</span><span class="w">  </span><span class="c1">// used to constrain TypeAttr ctor</span>
 
@@ -706,7 +700,7 @@
             
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on Mar 17, 2025 9:55:48 AM</div>
+              Last updated on Mar 19, 2025 10:25:33 AM</div>
           </div>
           <div class="right-details">
             <div class="icons">

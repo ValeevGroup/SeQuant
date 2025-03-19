@@ -38,6 +38,8 @@ Includes
 
 - ``SeQuant/core/wstring.hpp`` (:ref:`file_SeQuant_core_wstring.hpp`)
 
+- ``format``
+
 - ``unordered_map``
 
 

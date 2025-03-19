@@ -63,6 +63,11 @@ Directories
 
    dir_SeQuant_domain_mbpt_models.rst
 
+.. toctree::
+   :maxdepth: 5
+
+   dir_SeQuant_domain_mbpt_rules.rst
+
 Files
 *****
 
@@ -200,7 +205,27 @@ Files
 .. toctree::
    :maxdepth: 5
 
+   file_SeQuant_domain_mbpt_rules_csv.cpp.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   file_SeQuant_domain_mbpt_rules_csv.hpp.rst
+
+.. toctree::
+   :maxdepth: 5
+
    file_SeQuant_core_parse_deparse.cpp.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   file_SeQuant_domain_mbpt_rules_df.cpp.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   file_SeQuant_domain_mbpt_rules_df.hpp.rst
 
 .. toctree::
    :maxdepth: 5
@@ -311,6 +336,11 @@ Files
    :maxdepth: 5
 
    file_SeQuant_core_index.hpp.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   file_SeQuant_core_index_space_registry.cpp.rst
 
 .. toctree::
    :maxdepth: 5
@@ -471,6 +501,11 @@ Files
    :maxdepth: 5
 
    file_SeQuant_core_space.hpp.rst
+
+.. toctree::
+   :maxdepth: 5
+
+   file_SeQuant_domain_mbpt_space_qns.hpp.rst
 
 .. toctree::
    :maxdepth: 5

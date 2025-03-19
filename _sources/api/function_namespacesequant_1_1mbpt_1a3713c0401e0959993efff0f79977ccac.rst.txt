@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1mbpt_1a3713c0401e0959993efff0f79977ccac:
+
+Function sequant::mbpt::add_df_spaces
+=====================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_convention.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::mbpt::add_df_spaces(std::shared_ptr<IndexSpaceRegistry>&)
+   :project: SeQuant

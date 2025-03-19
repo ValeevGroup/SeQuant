@@ -3,7 +3,7 @@
 Typedef sequant::bitset::type
 =============================
 
-- Defined in :ref:`file_SeQuant_core_space.hpp`
+- Defined in :ref:`file_SeQuant_core_fwd.hpp`
 
 
 Typedef Documentation

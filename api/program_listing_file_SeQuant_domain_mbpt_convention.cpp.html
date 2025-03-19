@@ -278,6 +278,8 @@
 
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;SeQuant/domain/mbpt/convention.hpp&gt;</span>
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;SeQuant/domain/mbpt/op.hpp&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;SeQuant/domain/mbpt/rules/df.hpp&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;SeQuant/domain/mbpt/space_qns.hpp&gt;</span>
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;SeQuant/domain/mbpt/spin.hpp&gt;</span>
 
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;SeQuant/core/context.hpp&gt;</span>
@@ -340,6 +342,39 @@
 <span class="w">  </span><span class="n">isr</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">move</span><span class="p">(</span><span class="n">result</span><span class="p">);</span>
 <span class="p">}</span>
 
+<span class="kt">void</span><span class="w"> </span><span class="nf">add_ao_spaces</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">shared_ptr</span><span class="o">&lt;</span><span class="n">IndexSpaceRegistry</span><span class="o">&gt;&amp;</span><span class="w"> </span><span class="n">isr</span><span class="p">,</span><span class="w"> </span><span class="kt">bool</span><span class="w"> </span><span class="n">vbs</span><span class="p">,</span>
+<span class="w">                   </span><span class="kt">bool</span><span class="w"> </span><span class="n">abs</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="c1">// matches the MPQC layout, see spindex.h</span>
+<span class="w">  </span><span class="c1">// this will not work for MR</span>
+<span class="w">  </span><span class="k">auto</span><span class="w"> </span><span class="n">obs_lcao</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">isr</span><span class="o">-&gt;</span><span class="n">retrieve</span><span class="p">(</span><span class="n">vbs</span><span class="w"> </span><span class="o">?</span><span class="w"> </span><span class="sa">L</span><span class="s">&quot;m&quot;</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="sa">L</span><span class="s">&quot;p&quot;</span><span class="p">);</span>
+<span class="w">  </span><span class="n">isr</span><span class="o">-&gt;</span><span class="n">add</span><span class="p">(</span><span class="n">IndexSpace</span><span class="p">{</span><span class="sa">L</span><span class="s">&quot;μ&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">obs_lcao</span><span class="p">.</span><span class="n">type</span><span class="p">(),</span><span class="w"> </span><span class="n">LCAOQNS</span><span class="o">::</span><span class="n">ao</span><span class="p">});</span><span class="w">  </span><span class="c1">// OBS AO</span>
+<span class="w">  </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">vbs</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">auto</span><span class="w"> </span><span class="n">vbs_lcao</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">isr</span><span class="o">-&gt;</span><span class="n">retrieve</span><span class="p">(</span><span class="sa">L</span><span class="s">&quot;e&quot;</span><span class="p">);</span>
+<span class="w">    </span><span class="n">isr</span><span class="o">-&gt;</span><span class="n">add</span><span class="p">(</span><span class="n">IndexSpace</span><span class="p">{</span><span class="sa">L</span><span class="s">&quot;Α&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">vbs_lcao</span><span class="p">.</span><span class="n">type</span><span class="p">(),</span><span class="w"> </span><span class="n">LCAOQNS</span><span class="o">::</span><span class="n">ao</span><span class="p">})</span><span class="w">  </span><span class="c1">// VBS AO</span>
+<span class="w">        </span><span class="p">.</span><span class="n">add_union</span><span class="p">(</span><span class="sa">L</span><span class="s">&quot;Γ&quot;</span><span class="p">,</span><span class="w"> </span><span class="p">{</span><span class="sa">L</span><span class="s">&quot;μ&quot;</span><span class="p">,</span><span class="w"> </span><span class="sa">L</span><span class="s">&quot;Α&quot;</span><span class="p">});</span><span class="w">  </span><span class="c1">// VBS+ = OBS + VBS</span>
+<span class="w">  </span><span class="p">}</span>
+<span class="w">  </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">abs</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">auto</span><span class="w"> </span><span class="n">abs_lcao</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">isr</span><span class="o">-&gt;</span><span class="n">retrieve</span><span class="p">(</span><span class="sa">L</span><span class="s">&quot;α&#39;&quot;</span><span class="p">);</span>
+<span class="w">    </span><span class="n">isr</span><span class="o">-&gt;</span><span class="n">add</span><span class="p">(</span><span class="n">IndexSpace</span><span class="p">{</span><span class="sa">L</span><span class="s">&quot;σ&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">abs_lcao</span><span class="p">.</span><span class="n">type</span><span class="p">(),</span>
+<span class="w">                        </span><span class="n">LCAOQNS</span><span class="o">::</span><span class="n">ao</span><span class="p">})</span><span class="w">  </span><span class="c1">// ABS AO in F12 methods</span>
+<span class="w">        </span><span class="p">.</span><span class="n">add_union</span><span class="p">(</span><span class="sa">L</span><span class="s">&quot;ρ&quot;</span><span class="p">,</span><span class="w"> </span><span class="p">{</span><span class="sa">L</span><span class="s">&quot;μ&quot;</span><span class="p">,</span><span class="w"> </span><span class="sa">L</span><span class="s">&quot;σ&quot;</span><span class="p">});</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">vbs</span><span class="p">)</span><span class="w">                               </span><span class="c1">// ABS+ = OBS + ABS</span>
+<span class="w">      </span><span class="n">isr</span><span class="o">-&gt;</span><span class="n">add_union</span><span class="p">(</span><span class="sa">L</span><span class="s">&quot;Ρ&quot;</span><span class="p">,</span><span class="w"> </span><span class="p">{</span><span class="sa">L</span><span class="s">&quot;Γ&quot;</span><span class="p">,</span><span class="w"> </span><span class="sa">L</span><span class="s">&quot;σ&quot;</span><span class="p">});</span><span class="w">  </span><span class="c1">// VABS+ = VBS+ + ABS</span>
+<span class="w">  </span><span class="p">}</span>
+<span class="p">}</span>
+
+<span class="kt">void</span><span class="w"> </span><span class="nf">add_pao_spaces</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">shared_ptr</span><span class="o">&lt;</span><span class="n">IndexSpaceRegistry</span><span class="o">&gt;&amp;</span><span class="w"> </span><span class="n">isr</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="k">auto</span><span class="w"> </span><span class="n">uocc_space</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">isr</span><span class="o">-&gt;</span><span class="n">particle_space</span><span class="p">(</span><span class="cm">/* nulltype_ok = */</span><span class="w"> </span><span class="nb">false</span><span class="p">);</span>
+<span class="w">  </span><span class="n">isr</span><span class="o">-&gt;</span><span class="n">add</span><span class="p">(</span><span class="n">IndexSpace</span><span class="p">{</span><span class="sa">L</span><span class="s">&quot;μ̃&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">uocc_space</span><span class="p">,</span><span class="w"> </span><span class="n">LCAOQNS</span><span class="o">::</span><span class="n">pao</span><span class="p">})</span><span class="w">  </span><span class="c1">// OBS PAO</span>
+<span class="w">      </span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="kt">void</span><span class="w"> </span><span class="nf">add_df_spaces</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">shared_ptr</span><span class="o">&lt;</span><span class="n">IndexSpaceRegistry</span><span class="o">&gt;&amp;</span><span class="w"> </span><span class="n">isr</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="c1">// matches the MPQC layout, see spindex.h</span>
+<span class="w">  </span><span class="n">isr</span><span class="o">-&gt;</span><span class="n">add</span><span class="p">(</span><span class="n">IndexSpace</span><span class="p">{</span><span class="sa">L</span><span class="s">&quot;Κ&quot;</span><span class="p">,</span><span class="w"> </span><span class="mb">0b00001</span><span class="p">,</span><span class="w"> </span><span class="n">TensorFactorizationQNS</span><span class="o">::</span><span class="n">df</span><span class="p">})</span><span class="w">  </span><span class="c1">// DFBS AO</span>
+<span class="w">      </span><span class="p">;</span>
+<span class="p">}</span>
+
 <span class="n">std</span><span class="o">::</span><span class="n">shared_ptr</span><span class="o">&lt;</span><span class="n">IndexSpaceRegistry</span><span class="o">&gt;</span><span class="w"> </span><span class="n">make_min_sr_spaces</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
 <span class="w">  </span><span class="k">auto</span><span class="w"> </span><span class="n">isr</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">make_shared</span><span class="o">&lt;</span><span class="n">IndexSpaceRegistry</span><span class="o">&gt;</span><span class="p">();</span>
 
@@ -347,6 +382,7 @@
 <span class="w">      </span><span class="p">.</span><span class="n">add</span><span class="p">(</span><span class="sa">L</span><span class="s">&quot;a&quot;</span><span class="p">,</span><span class="w"> </span><span class="mb">0b10</span><span class="p">,</span><span class="w"> </span><span class="n">is_particle</span><span class="p">)</span>
 <span class="w">      </span><span class="p">.</span><span class="n">add_union</span><span class="p">(</span><span class="sa">L</span><span class="s">&quot;p&quot;</span><span class="p">,</span><span class="w"> </span><span class="p">{</span><span class="sa">L</span><span class="s">&quot;i&quot;</span><span class="p">,</span><span class="w"> </span><span class="sa">L</span><span class="s">&quot;a&quot;</span><span class="p">},</span><span class="w"> </span><span class="n">is_complete</span><span class="p">);</span>
 <span class="w">  </span><span class="n">add_fermi_spin</span><span class="p">(</span><span class="n">isr</span><span class="p">);</span>
+<span class="w">  </span><span class="n">isr</span><span class="o">-&gt;</span><span class="n">physical_particle_attribute_mask</span><span class="p">(</span><span class="n">bitset_t</span><span class="p">(</span><span class="n">Spin</span><span class="o">::</span><span class="n">mask</span><span class="p">));</span>
 
 <span class="w">  </span><span class="k">return</span><span class="w"> </span><span class="n">isr</span><span class="p">;</span>
 <span class="p">}</span>
@@ -371,6 +407,7 @@
 <span class="w">      </span><span class="p">.</span><span class="n">add_union</span><span class="p">(</span><span class="sa">L</span><span class="s">&quot;p&quot;</span><span class="p">,</span><span class="w"> </span><span class="p">{</span><span class="sa">L</span><span class="s">&quot;M&quot;</span><span class="p">,</span><span class="w"> </span><span class="sa">L</span><span class="s">&quot;E&quot;</span><span class="p">},</span><span class="w"> </span><span class="n">is_complete</span><span class="p">);</span>
 
 <span class="w">  </span><span class="n">add_fermi_spin</span><span class="p">(</span><span class="n">isr</span><span class="p">);</span>
+<span class="w">  </span><span class="n">isr</span><span class="o">-&gt;</span><span class="n">physical_particle_attribute_mask</span><span class="p">(</span><span class="n">bitset_t</span><span class="p">(</span><span class="n">Spin</span><span class="o">::</span><span class="n">mask</span><span class="p">));</span>
 
 <span class="w">  </span><span class="k">return</span><span class="w"> </span><span class="n">isr</span><span class="p">;</span>
 <span class="p">}</span>
@@ -387,6 +424,7 @@
 <span class="w">      </span><span class="p">.</span><span class="n">add_union</span><span class="p">(</span><span class="sa">L</span><span class="s">&quot;x&quot;</span><span class="p">,</span><span class="w"> </span><span class="p">{</span><span class="sa">L</span><span class="s">&quot;i&quot;</span><span class="p">,</span><span class="w"> </span><span class="sa">L</span><span class="s">&quot;a&quot;</span><span class="p">})</span>
 <span class="w">      </span><span class="p">.</span><span class="n">add_union</span><span class="p">(</span><span class="sa">L</span><span class="s">&quot;p&quot;</span><span class="p">,</span><span class="w"> </span><span class="p">{</span><span class="sa">L</span><span class="s">&quot;m&quot;</span><span class="p">,</span><span class="w"> </span><span class="sa">L</span><span class="s">&quot;e&quot;</span><span class="p">},</span><span class="w"> </span><span class="n">is_complete</span><span class="p">);</span>
 <span class="w">  </span><span class="n">add_fermi_spin</span><span class="p">(</span><span class="n">isr</span><span class="p">);</span>
+<span class="w">  </span><span class="n">isr</span><span class="o">-&gt;</span><span class="n">physical_particle_attribute_mask</span><span class="p">(</span><span class="n">bitset_t</span><span class="p">(</span><span class="n">Spin</span><span class="o">::</span><span class="n">mask</span><span class="p">));</span>
 
 <span class="w">  </span><span class="k">return</span><span class="w"> </span><span class="n">isr</span><span class="p">;</span>
 <span class="p">}</span>
@@ -409,6 +447,7 @@
 <span class="w">      </span><span class="p">.</span><span class="n">add_union</span><span class="p">(</span><span class="sa">L</span><span class="s">&quot;H&quot;</span><span class="p">,</span><span class="w"> </span><span class="p">{</span><span class="sa">L</span><span class="s">&quot;i&quot;</span><span class="p">,</span><span class="w"> </span><span class="sa">L</span><span class="s">&quot;α&quot;</span><span class="p">})</span>
 <span class="w">      </span><span class="p">.</span><span class="n">add_union</span><span class="p">(</span><span class="sa">L</span><span class="s">&quot;κ&quot;</span><span class="p">,</span><span class="w"> </span><span class="p">{</span><span class="sa">L</span><span class="s">&quot;p&quot;</span><span class="p">,</span><span class="w"> </span><span class="sa">L</span><span class="s">&quot;α&#39;&quot;</span><span class="p">},</span><span class="w"> </span><span class="n">is_complete</span><span class="p">);</span>
 <span class="w">  </span><span class="n">add_fermi_spin</span><span class="p">(</span><span class="n">isr</span><span class="p">);</span>
+<span class="w">  </span><span class="n">isr</span><span class="o">-&gt;</span><span class="n">physical_particle_attribute_mask</span><span class="p">(</span><span class="n">bitset_t</span><span class="p">(</span><span class="n">Spin</span><span class="o">::</span><span class="n">mask</span><span class="p">));</span>
 
 <span class="w">  </span><span class="k">return</span><span class="w"> </span><span class="n">isr</span><span class="p">;</span>
 <span class="p">}</span>
@@ -432,7 +471,10 @@
 <span class="w">      </span><span class="p">.</span><span class="n">add_union</span><span class="p">(</span><span class="sa">L</span><span class="s">&quot;p&quot;</span><span class="p">,</span><span class="w"> </span><span class="p">{</span><span class="sa">L</span><span class="s">&quot;m&quot;</span><span class="p">,</span><span class="w"> </span><span class="sa">L</span><span class="s">&quot;x&quot;</span><span class="p">,</span><span class="w"> </span><span class="sa">L</span><span class="s">&quot;e&quot;</span><span class="p">})</span>
 <span class="w">      </span><span class="p">.</span><span class="n">add_union</span><span class="p">(</span><span class="sa">L</span><span class="s">&quot;κ&quot;</span><span class="p">,</span><span class="w"> </span><span class="p">{</span><span class="sa">L</span><span class="s">&quot;p&quot;</span><span class="p">,</span><span class="w"> </span><span class="sa">L</span><span class="s">&quot;α&#39;&quot;</span><span class="p">},</span><span class="w"> </span><span class="n">is_complete</span><span class="p">);</span>
 
-<span class="w">  </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">ignore_spin</span><span class="p">)</span><span class="w"> </span><span class="n">add_fermi_spin</span><span class="p">(</span><span class="n">isr</span><span class="p">);</span>
+<span class="w">  </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">ignore_spin</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">add_fermi_spin</span><span class="p">(</span><span class="n">isr</span><span class="p">);</span>
+<span class="w">    </span><span class="n">isr</span><span class="o">-&gt;</span><span class="n">physical_particle_attribute_mask</span><span class="p">(</span><span class="n">bitset_t</span><span class="p">(</span><span class="n">Spin</span><span class="o">::</span><span class="n">mask</span><span class="p">));</span>
+<span class="w">  </span><span class="p">}</span>
 
 <span class="w">  </span><span class="k">return</span><span class="w"> </span><span class="n">isr</span><span class="p">;</span>
 <span class="p">}</span>
@@ -489,7 +531,7 @@
             
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on Mar 17, 2025 9:55:48 AM</div>
+              Last updated on Mar 19, 2025 10:25:33 AM</div>
           </div>
           <div class="right-details">
             <div class="icons">

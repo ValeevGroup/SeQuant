@@ -48,7 +48,9 @@ Program Listing for File index_space_registry.hpp
    
    }  // namespace space_tags
    
+   // clang-format off
    
+   // clang-format on
    class IndexSpaceRegistry {
     public:
      IndexSpaceRegistry()
@@ -65,6 +67,8 @@ Program Listing for File index_space_registry.hpp
    
      IndexSpaceRegistry(const IndexSpaceRegistry& other)
          : spaces_(other.spaces_),
+           physical_particle_attribute_mask_(
+               other.physical_particle_attribute_mask_),
            vacocc_(other.vacocc_),
            refocc_(other.refocc_),
            complete_(other.complete_),
@@ -73,6 +77,8 @@ Program Listing for File index_space_registry.hpp
    
      IndexSpaceRegistry(IndexSpaceRegistry&& other)
          : spaces_(std::move(other.spaces_)),
+           physical_particle_attribute_mask_(
+               std::move(other.physical_particle_attribute_mask_)),
            vacocc_(std::move(other.vacocc_)),
            refocc_(std::move(other.refocc_)),
            complete_(std::move(other.complete_)),
@@ -81,6 +87,7 @@ Program Listing for File index_space_registry.hpp
    
      IndexSpaceRegistry& operator=(const IndexSpaceRegistry& other) {
        spaces_ = other.spaces_;
+       physical_particle_attribute_mask_ = other.physical_particle_attribute_mask_;
        vacocc_ = other.vacocc_;
        refocc_ = other.refocc_;
        complete_ = other.complete_;
@@ -91,6 +98,8 @@ Program Listing for File index_space_registry.hpp
    
      IndexSpaceRegistry& operator=(IndexSpaceRegistry&& other) {
        spaces_ = std::move(other.spaces_);
+       physical_particle_attribute_mask_ =
+           std::move(other.physical_particle_attribute_mask_);
        vacocc_ = std::move(other.vacocc_);
        refocc_ = std::move(other.refocc_);
        complete_ = std::move(other.complete_);
@@ -397,49 +406,6 @@ Program Listing for File index_space_registry.hpp
        return this->add(IS);
      }
    
-   
-     const std::vector<IndexSpace::Type>& base_space_types() const {
-       if (!base_space_types_) {
-         auto types = *spaces_ | ranges::views::transform([](const auto& s) {
-           return s.type();
-         }) | ranges::views::filter([](const auto& t) { return is_base(t); }) |
-                      ranges::views::unique | ranges::to_vector;
-         ranges::sort(types, [](auto t1, auto t2) { return t1 < t2; });
-         std::scoped_lock guard{mtx_memoized_};
-         if (!base_space_types_) {
-           base_space_types_ =
-               std::make_shared<std::vector<IndexSpace::Type>>(std::move(types));
-         }
-       }
-       return *base_space_types_;
-     }
-   
-   
-     const std::vector<IndexSpace>& base_spaces() const {
-       if (!base_spaces_) {
-         auto spaces =
-             *spaces_ |
-             ranges::views::filter([](const auto& s) { return is_base(s); }) |
-             ranges::views::unique | ranges::to_vector;
-         ranges::sort(spaces,
-                      [](auto s1, auto s2) { return s1.type() < s2.type(); });
-         std::scoped_lock guard{mtx_memoized_};
-         if (!base_spaces_) {
-           base_spaces_ =
-               std::make_shared<std::vector<IndexSpace>>(std::move(spaces));
-         }
-       }
-       return *base_spaces_;
-     }
-   
-     static bool is_base(const IndexSpace& IS) {
-       return has_single_bit(IS.type().to_int32());
-     }
-   
-     static bool is_base(const IndexSpace::Type& t) {
-       return has_single_bit(t.to_int32());
-     }
-   
      IndexSpaceRegistry& clear() {
        *this = IndexSpaceRegistry{};
        return *this;
@@ -554,6 +520,61 @@ Program Listing for File index_space_registry.hpp
        return this->unIon(this->retrieve(std::forward<S1>(space1_key)),
                           this->retrieve(std::forward<S2>(space2_key)));
      }
+   
+   
+   
+     void physical_particle_attribute_mask(bitset_t m);
+   
+   
+     bitset_t physical_particle_attribute_mask() const;
+   
+   
+     const std::vector<IndexSpace::Type>& base_space_types() const {
+       if (!base_space_types_) {
+         auto types = *spaces_ | ranges::views::transform([](const auto& s) {
+           return s.type();
+         }) | ranges::views::filter([](const auto& t) { return is_base(t); }) |
+                      ranges::views::unique | ranges::to_vector;
+         ranges::sort(types, [](auto t1, auto t2) { return t1 < t2; });
+         std::scoped_lock guard{mtx_memoized_};
+         if (!base_space_types_) {
+           base_space_types_ =
+               std::make_shared<std::vector<IndexSpace::Type>>(std::move(types));
+         }
+       }
+       return *base_space_types_;
+     }
+   
+   
+     const std::vector<IndexSpace>& base_spaces() const {
+       if (!base_spaces_) {
+         auto spaces =
+             *spaces_ |
+             ranges::views::filter([this](const auto& s) { return is_base(s); }) |
+             ranges::views::unique | ranges::to_vector;
+         ranges::sort(spaces,
+                      [](auto s1, auto s2) { return s1.type() < s2.type(); });
+         std::scoped_lock guard{mtx_memoized_};
+         if (!base_spaces_) {
+           base_spaces_ =
+               std::make_shared<std::vector<IndexSpace>>(std::move(spaces));
+         }
+       }
+       return *base_spaces_;
+     }
+   
+     bool is_base(const IndexSpace& IS) const {
+       // is base if has base type and has no bits outsize of the physical particle
+       // attribute mask
+       return is_base(IS.type()) &&
+              ((bitset_t(IS.qns()) & (~(physical_particle_attribute_mask()))) ==
+               0);
+     }
+   
+     static bool is_base(const IndexSpace::Type& t) {
+       return has_single_bit(t.to_int32());
+     }
+   
    
      bool is_pure_occupied(const IndexSpace& IS) const {
        if (!IS) {
@@ -821,9 +842,12 @@ Program Listing for File index_space_registry.hpp
      }
    
    
+   
     private:
      // N.B. need transparent comparator, see https://stackoverflow.com/a/35525806
      std::shared_ptr<container::set<IndexSpace, IndexSpace::KeyCompare>> spaces_;
+   
+     bitset_t physical_particle_attribute_mask_ = bitset::null;
    
      // memoized data
      mutable std::shared_ptr<std::vector<IndexSpace::Type>> base_space_types_;
@@ -979,8 +1003,8 @@ Program Listing for File index_space_registry.hpp
          // compute_approximate_size is used when populating the registry
          // so don't use base_spaces() here
          unsigned long size = ranges::accumulate(
-             *spaces_ | ranges::views::filter([&space_attr](auto& s) {
-               return s.qns() == space_attr.qns() && is_base(s) &&
+             *spaces_ | ranges::views::filter([this, &space_attr](auto& s) {
+               return s.qns() == space_attr.qns() && is_base(s.type()) &&
                       space_attr.type().intersection(s.type());
              }),
              0ul, [](unsigned long size, const IndexSpace& s) {

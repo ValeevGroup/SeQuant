@@ -272,7 +272,7 @@
           <section id="enum-spin">
 <span id="exhale-enum-namespacesequant-1-1mbpt-1aa81103a146de75a6c3517274e9f931f7"></span><h1>Enum Spin<a class="headerlink" href="#enum-spin" title="Link to this heading">¶</a></h1>
 <ul class="simple">
-<li><p>Defined in <a class="reference internal" href="file_SeQuant_domain_mbpt_spin.hpp.html#file-sequant-domain-mbpt-spin-hpp"><span class="std std-ref">File spin.hpp</span></a></p></li>
+<li><p>Defined in <a class="reference internal" href="file_SeQuant_domain_mbpt_space_qns.hpp.html#file-sequant-domain-mbpt-space-qns-hpp"><span class="std std-ref">File space_qns.hpp</span></a></p></li>
 </ul>
 <section id="enum-documentation">
 <h2>Enum Documentation<a class="headerlink" href="#enum-documentation" title="Link to this heading">¶</a></h2>
@@ -282,7 +282,7 @@
 <dd><p>quantum numbers tags related to spin </p>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
-<p>spin quantum number takes 2 rightmost bits </p>
+<p>spin quantum number takes 2 rightmost bits since there are 3 possible states (any/no spin, spin-up, spin-down) </p>
 </div>
 <p><em>Values:</em></p>
 <dl class="cpp enumerator">
@@ -306,8 +306,23 @@
 <dd></dd></dl>
 
 <dl class="cpp enumerator">
-<dt class="sig sig-object cpp" id="_CPPv4N7sequant4mbpt4Spin8spinmaskE">
-<span id="_CPPv3N7sequant4mbpt4Spin8spinmaskE"></span><span id="_CPPv2N7sequant4mbpt4Spin8spinmaskE"></span><span class="target" id="namespacesequant_1_1mbpt_1aa81103a146de75a6c3517274e9f931f7a8f197e3967c677d9de17afbfd8066e39"></span><span class="k"><span class="pre">enumerator</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">spinmask</span></span></span><a class="headerlink" href="#_CPPv4N7sequant4mbpt4Spin8spinmaskE" title="Link to this definition">¶</a><br /></dt>
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant4mbpt4Spin4noneE">
+<span id="_CPPv3N7sequant4mbpt4Spin4noneE"></span><span id="_CPPv2N7sequant4mbpt4Spin4noneE"></span><span class="target" id="namespacesequant_1_1mbpt_1aa81103a146de75a6c3517274e9f931f7a334c4a4c42fdb79d7ebc3e73b517e6f8"></span><span class="k"><span class="pre">enumerator</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">none</span></span></span><a class="headerlink" href="#_CPPv4N7sequant4mbpt4Spin4noneE" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp enumerator">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant4mbpt4Spin2upE">
+<span id="_CPPv3N7sequant4mbpt4Spin2upE"></span><span id="_CPPv2N7sequant4mbpt4Spin2upE"></span><span class="target" id="namespacesequant_1_1mbpt_1aa81103a146de75a6c3517274e9f931f7a46c48bec0d282018b9d167eef7711b2c"></span><span class="k"><span class="pre">enumerator</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">up</span></span></span><a class="headerlink" href="#_CPPv4N7sequant4mbpt4Spin2upE" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp enumerator">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant4mbpt4Spin4downE">
+<span id="_CPPv3N7sequant4mbpt4Spin4downE"></span><span id="_CPPv2N7sequant4mbpt4Spin4downE"></span><span class="target" id="namespacesequant_1_1mbpt_1aa81103a146de75a6c3517274e9f931f7a74e8333ad11685ff3bdae589c8f6e34d"></span><span class="k"><span class="pre">enumerator</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">down</span></span></span><a class="headerlink" href="#_CPPv4N7sequant4mbpt4Spin4downE" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp enumerator">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant4mbpt4Spin4maskE">
+<span id="_CPPv3N7sequant4mbpt4Spin4maskE"></span><span id="_CPPv2N7sequant4mbpt4Spin4maskE"></span><span class="target" id="namespacesequant_1_1mbpt_1aa81103a146de75a6c3517274e9f931f7af2ce11ebf110993621bedd8e747d7b1b"></span><span class="k"><span class="pre">enumerator</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">mask</span></span></span><a class="headerlink" href="#_CPPv4N7sequant4mbpt4Spin4maskE" title="Link to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 </dd></dl>
@@ -332,7 +347,7 @@
             
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on Mar 17, 2025 9:55:48 AM</div>
+              Last updated on Mar 19, 2025 10:25:33 AM</div>
           </div>
           <div class="right-details">
             <div class="icons">
@@ -363,7 +378,10 @@
 <li><a class="reference internal" href="#_CPPv4N7sequant4mbpt4Spin4betaE"><code class="docutils literal notranslate"><span class="pre">beta</span></code></a></li>
 <li><a class="reference internal" href="#_CPPv4N7sequant4mbpt4Spin3anyE"><code class="docutils literal notranslate"><span class="pre">any</span></code></a></li>
 <li><a class="reference internal" href="#_CPPv4N7sequant4mbpt4Spin4freeE"><code class="docutils literal notranslate"><span class="pre">free</span></code></a></li>
-<li><a class="reference internal" href="#_CPPv4N7sequant4mbpt4Spin8spinmaskE"><code class="docutils literal notranslate"><span class="pre">spinmask</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant4mbpt4Spin4noneE"><code class="docutils literal notranslate"><span class="pre">none</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant4mbpt4Spin2upE"><code class="docutils literal notranslate"><span class="pre">up</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant4mbpt4Spin4downE"><code class="docutils literal notranslate"><span class="pre">down</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant4mbpt4Spin4maskE"><code class="docutils literal notranslate"><span class="pre">mask</span></code></a></li>
 </ul>
 </li>
 </ul>

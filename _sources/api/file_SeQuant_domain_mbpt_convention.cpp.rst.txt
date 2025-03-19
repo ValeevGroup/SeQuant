@@ -40,6 +40,10 @@ Includes
 
 - ``SeQuant/domain/mbpt/op.hpp`` (:ref:`file_SeQuant_domain_mbpt_op.hpp`)
 
+- ``SeQuant/domain/mbpt/rules/df.hpp`` (:ref:`file_SeQuant_domain_mbpt_rules_df.hpp`)
+
+- ``SeQuant/domain/mbpt/space_qns.hpp`` (:ref:`file_SeQuant_domain_mbpt_space_qns.hpp`)
+
 - ``SeQuant/domain/mbpt/spin.hpp`` (:ref:`file_SeQuant_domain_mbpt_spin.hpp`)
 
 - ``cassert``
@@ -72,7 +76,13 @@ Functions
 ---------
 
 
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1ab6b4f3b6747d337c95d1690e7d684477`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1a3713c0401e0959993efff0f79977ccac`
+
 - :ref:`exhale_function_namespacesequant_1_1mbpt_1a0e001494800d6d8675412f9b676d94f9`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1a707f97a9e87f038179edd04b604ed026`
 
 - :ref:`exhale_function_namespacesequant_1_1mbpt_1ac5e5ddeccd4147dd8c8452cba7cc3d06`
 

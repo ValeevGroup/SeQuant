@@ -51,6 +51,7 @@ Files
 - :ref:`file_SeQuant_core_hugenholtz.hpp`
 - :ref:`file_SeQuant_core_index.cpp`
 - :ref:`file_SeQuant_core_index.hpp`
+- :ref:`file_SeQuant_core_index_space_registry.cpp`
 - :ref:`file_SeQuant_core_index_space_registry.hpp`
 - :ref:`file_SeQuant_core_interval.hpp`
 - :ref:`file_SeQuant_core_latex.cpp`

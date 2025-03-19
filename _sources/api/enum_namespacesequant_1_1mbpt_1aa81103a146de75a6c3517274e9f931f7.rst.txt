@@ -3,7 +3,7 @@
 Enum Spin
 =========
 
-- Defined in :ref:`file_SeQuant_domain_mbpt_spin.hpp`
+- Defined in :ref:`file_SeQuant_domain_mbpt_space_qns.hpp`
 
 
 Enum Documentation

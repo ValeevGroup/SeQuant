@@ -301,6 +301,15 @@
 <span class="kt">void</span><span class="w"> </span><span class="nf">add_fermi_spin</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">shared_ptr</span><span class="o">&lt;</span><span class="n">IndexSpaceRegistry</span><span class="o">&gt;&amp;</span><span class="w"> </span><span class="n">isr</span><span class="p">);</span>
 
 
+<span class="kt">void</span><span class="w"> </span><span class="nf">add_ao_spaces</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">shared_ptr</span><span class="o">&lt;</span><span class="n">IndexSpaceRegistry</span><span class="o">&gt;&amp;</span><span class="w"> </span><span class="n">isr</span><span class="p">,</span><span class="w"> </span><span class="kt">bool</span><span class="w"> </span><span class="n">vbs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">false</span><span class="p">,</span>
+<span class="w">                   </span><span class="kt">bool</span><span class="w"> </span><span class="n">abs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">false</span><span class="p">);</span>
+
+<span class="kt">void</span><span class="w"> </span><span class="nf">add_df_spaces</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">shared_ptr</span><span class="o">&lt;</span><span class="n">IndexSpaceRegistry</span><span class="o">&gt;&amp;</span><span class="w"> </span><span class="n">isr</span><span class="p">);</span>
+
+
+<span class="kt">void</span><span class="w"> </span><span class="nf">add_pao_spaces</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">shared_ptr</span><span class="o">&lt;</span><span class="n">IndexSpaceRegistry</span><span class="o">&gt;&amp;</span><span class="w"> </span><span class="n">isr</span><span class="p">);</span>
+
+
 <span class="n">std</span><span class="o">::</span><span class="n">shared_ptr</span><span class="o">&lt;</span><span class="n">IndexSpaceRegistry</span><span class="o">&gt;</span><span class="w"> </span><span class="n">make_min_sr_spaces</span><span class="p">();</span>
 
 <span class="n">std</span><span class="o">::</span><span class="n">shared_ptr</span><span class="o">&lt;</span><span class="n">IndexSpaceRegistry</span><span class="o">&gt;</span><span class="w"> </span><span class="n">make_F12_sr_spaces</span><span class="p">();</span>
@@ -342,7 +351,7 @@
             
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on Mar 17, 2025 9:55:48 AM</div>
+              Last updated on Mar 19, 2025 10:25:33 AM</div>
           </div>
           <div class="right-details">
             <div class="icons">

@@ -1,0 +1,58 @@
+
+.. _file_SeQuant_domain_mbpt_rules_df.cpp:
+
+File df.cpp
+===========
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_domain_mbpt_rules>` (``SeQuant/domain/mbpt/rules``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/domain/mbpt/rules/df.cpp``)
+-------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_domain_mbpt_rules_df.cpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/tensor.hpp`` (:ref:`file_SeQuant_core_tensor.hpp`)
+
+- ``SeQuant/domain/mbpt/rules/df.hpp`` (:ref:`file_SeQuant_domain_mbpt_rules_df.hpp`)
+
+
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+- :ref:`namespace_sequant__mbpt`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1a6776506a54deecdbf1841cc5053a2957`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1a15d7cd7ac32724e62aa2e550f8b30dca`
+

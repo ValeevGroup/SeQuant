@@ -83,6 +83,7 @@ Program Listing for File op.hpp
      h,    
      f,    
      f̃,    
+     s,    
      θ,    
      g,    
      t,    
@@ -96,17 +97,18 @@ Program Listing for File op.hpp
      C,    
      RDM,  
      RDMCumulant,  
-     δ,            
-     h_1,          
-     t_1,          
-     λ_1,          
-     invalid       
+     δ,  
+     h_1,     
+     t_1,     
+     λ_1,     
+     invalid  
    };
    
    inline const container::map<OpType, std::wstring> optype2label{
        {OpType::h, L"h"},
        {OpType::f, L"f"},
        {OpType::f̃, L"f̃"},
+       {OpType::s, overlap_label()},
        {OpType::g, L"g"},
        {OpType::θ, L"θ"},
        {OpType::t, L"t"},

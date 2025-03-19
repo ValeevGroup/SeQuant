@@ -26,12 +26,12 @@ Program Listing for File slot.hpp
    
    
    enum class IndexSlotType {
+     SPBundle,
      TensorBra,
      TensorKet,
      TensorBraKet,
      TensorAux,
      TensorAuxAux,
-     SPBundle,
    
      Invalid
    };
