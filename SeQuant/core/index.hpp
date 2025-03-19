@@ -648,6 +648,7 @@ class Index : public Taggable {
     if (!mutated) {
       bool proto_indices_transformed = false;
       for (auto &&subidx : proto_indices_) {
+        assert(!subidx.has_proto_indices());
         if (subidx.transform(index_map)) proto_indices_transformed = true;
       }
       if (proto_indices_transformed) {

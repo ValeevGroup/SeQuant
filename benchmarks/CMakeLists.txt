@@ -5,6 +5,7 @@ add_executable(sequant_benchmarks
 	"main.cpp"
 	"simplify.cpp"
 	"spintrace.cpp"
+	"tensor_network.cpp"
 	"wick.cpp"
 )
 
