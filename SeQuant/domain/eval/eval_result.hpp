@@ -654,9 +654,8 @@ auto retile_occ_1toN(const DA& da) {
 
 template <TA::DeNest DeNestFlag = TA::DeNest::False, typename Array,
           typename ArrayL, typename ArrayR>
-[[nodiscard]] bool equal_retiled_eval(Array const& not_unit_result,
-                                      ArrayL const& left, ArrayR const& right,
-                                      Annot<std::string> const& annot) {
+void equal_retiled_eval(Array const& not_unit_result, ArrayL const& left,
+                        ArrayR const& right, Annot<std::string> const& annot) {
   struct {
     ArrayL l;
     ArrayR r;
@@ -664,13 +663,26 @@ template <TA::DeNest DeNestFlag = TA::DeNest::False, typename Array,
   unit_tiled.l = retile_occ_Nto1(left);
   unit_tiled.r = retile_occ_Nto1(right);
 
-  auto result = retile_occ_1toN(
-      TA::einsum<DeNestFlag>(unit_tiled.l(annot.lannot),
-                             unit_tiled.r(annot.rannot), annot.this_annot));
+  auto result_pretile = TA::einsum<DeNestFlag>(
+      unit_tiled.l(annot.lannot), unit_tiled.r(annot.rannot), annot.this_annot);
+  auto result = retile_occ_1toN(result_pretile);
   Array diff;
   diff(annot.this_annot) =
       not_unit_result(annot.this_annot) - result(annot.this_annot);
-  return TA::norm2(diff) <= TA::SparsePolicy::shape_type::threshold();
+  auto norm = TA::norm2(diff);
+  auto ok = norm <= 1e-4;  // TA::SparsePolicy::shape_type::threshold();
+  std::cout << std::format("{} * {} = {} {}: {:.3e}\n", annot.lannot,
+                           annot.rannot, annot.this_annot,
+                           (ok ? "OK" : "NotOK"), norm);
+  if (!ok) {
+    std::cout << "Expected:\n" << retile_occ_Nto1(not_unit_result) << std::endl;
+    std::cout << "Got:\n" << result_pretile << std::endl;
+    std::cout << "Diff:\n" << retile_occ_Nto1(diff) << std::endl;
+    auto temp =
+        TA::einsum<DeNestFlag>(unit_tiled.l(annot.lannot),
+                               unit_tiled.r(annot.rannot), annot.this_annot);
+  }
+  if (!ok) abort();
 }
 
 }  // namespace detail
@@ -757,8 +769,7 @@ class EvalTensorTA final : public EvalResult {
     result = TA::einsum(get<ArrayT>()(a.lannot), other.get<ArrayT>()(a.rannot),
                         a.this_annot);
 
-    assert(detail::equal_retiled_eval(result, get<ArrayT>(),
-                                      other.get<ArrayT>(), a));
+    detail::equal_retiled_eval(result, get<ArrayT>(), other.get<ArrayT>(), a);
 
     return eval_result<this_type>(std::move(result));
   }
@@ -883,8 +894,9 @@ class EvalTensorOfTensorTA final : public EvalResult {
           TA::einsum(get<ArrayT>()(a.lannot),
                      other.get<compatible_regular_distarray_type>()(a.rannot),
                      a.this_annot);
-      assert(detail::equal_retiled_eval(result, get<ArrayT>(),
-                                        other.get<ArrayT>(), a));
+      detail::equal_retiled_eval(result, get<ArrayT>(),
+                                 other.get<compatible_regular_distarray_type>(),
+                                 a);
 
       return eval_result<this_type>(std::move(result));
 
@@ -893,8 +905,8 @@ class EvalTensorOfTensorTA final : public EvalResult {
       auto result = TA::einsum<TA::DeNest::True>(
           get<ArrayT>()(a.lannot), other.get<ArrayT>()(a.rannot), a.this_annot);
 
-      assert(detail::equal_retiled_eval<TA::DeNest::True>(
-          result, get<ArrayT>(), other.get<ArrayT>(), a));
+      detail::equal_retiled_eval<TA::DeNest::True>(result, get<ArrayT>(),
+                                                   other.get<ArrayT>(), a);
 
       return eval_result<that_type>(std::move(result));
 
@@ -903,8 +915,7 @@ class EvalTensorOfTensorTA final : public EvalResult {
       auto result = TA::einsum(get<ArrayT>()(a.lannot),
                                other.get<ArrayT>()(a.rannot), a.this_annot);
 
-      assert(detail::equal_retiled_eval(result, get<ArrayT>(),
-                                        other.get<ArrayT>(), a));
+      detail::equal_retiled_eval(result, get<ArrayT>(), other.get<ArrayT>(), a);
 
       return eval_result<this_type>(std::move(result));
     } else {
