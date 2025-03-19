@@ -281,6 +281,14 @@ class QuantumNumberChange
   }
   bool operator!=(const this_type& b) const { return !this->operator==(b); }
 
+  bool operator<(const this_type& that) const {
+    return ranges::lexicographical_compare(
+        *this, that, [](const interval_t& a, const interval_t& b) {
+          if (a.lower() != b.lower()) return a.lower() < b.lower();
+          return a.upper() < b.upper();
+        });
+  }
+
   // determines the number of physical vacuum creators and annihilators for the
   // active particle and hole space from the Context. for general operators this
   // is not defined. for example: O_{e_1}^{i_1 m_1} a_{i_1 m_1}^{e_1} asking for
