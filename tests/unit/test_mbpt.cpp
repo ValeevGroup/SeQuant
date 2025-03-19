@@ -193,6 +193,7 @@ TEST_CASE("mbpt", "[mbpt]") {
       auto l1 = Λ_(1);
       auto t2 = T_(2);
       auto l2 = Λ_(2);
+      auto h_pt = H_pt(1, 1);
       REQUIRE(to_latex(f * t1 * t2) == to_latex(canonicalize(f * t2 * t1)));
       REQUIRE(to_latex(canonicalize(f * t1 * t2)) ==
               to_latex(canonicalize(f * t2 * t1)));
@@ -215,6 +216,12 @@ TEST_CASE("mbpt", "[mbpt]") {
 
       REQUIRE(to_latex(simplify(t1 + t1 + t2)) ==
               to_latex(simplify(ex<Constant>(2) * t1 + t2)));
+
+      REQUIRE(to_latex(simplify(f + f)) ==
+              to_latex(simplify(ex<Constant>(2) * f)));
+
+      REQUIRE(to_latex(simplify(h_pt + h_pt + f)) ==
+              to_latex(simplify(ex<Constant>(2) * h_pt + f)));
 
       auto t = t1 + t2;
 
