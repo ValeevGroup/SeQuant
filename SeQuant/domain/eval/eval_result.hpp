@@ -652,6 +652,27 @@ auto retile_occ_1toN(const DA& da) {
   return TA::retile(da, target_trange);
 }
 
+template <TA::DeNest DeNestFlag = TA::DeNest::False, typename Array,
+          typename ArrayL, typename ArrayR>
+[[nodiscard]] bool equal_retiled_eval(Array const& not_unit_result,
+                                      ArrayL const& left, ArrayR const& right,
+                                      Annot<std::string> const& annot) {
+  struct {
+    ArrayL l;
+    ArrayR r;
+  } unit_tiled;
+  unit_tiled.l = retile_occ_Nto1(left);
+  unit_tiled.r = retile_occ_Nto1(right);
+
+  auto result = retile_occ_1toN(
+      TA::einsum<DeNestFlag>(unit_tiled.l(annot.lannot),
+                             unit_tiled.r(annot.rannot), annot.this_annot));
+  Array diff;
+  diff(annot.this_annot) =
+      not_unit_result(annot.this_annot) - result(annot.this_annot);
+  return TA::norm2(diff) <= TA::SparsePolicy::shape_type::threshold();
+}
+
 }  // namespace detail
 
 ///
@@ -735,12 +756,9 @@ class EvalTensorTA final : public EvalResult {
 
     result = TA::einsum(get<ArrayT>()(a.lannot), other.get<ArrayT>()(a.rannot),
                         a.this_annot);
-    decltype(result)::wait_for_lazy_cleanup(result.world());
-    auto result_retiled = detail::retile_occ_1toN(TA::einsum(
-        detail::retile_occ_Nto1(get<ArrayT>())(a.lannot),
-        detail::retile_occ_Nto1(other.get<ArrayT>())(a.rannot), a.this_annot));
-    decltype(result)::wait_for_lazy_cleanup(result.world());
-    // TODO ensure result == result_retiled
+
+    assert(detail::equal_retiled_eval(result, get<ArrayT>(),
+                                      other.get<ArrayT>(), a));
 
     return eval_result<this_type>(std::move(result));
   }
@@ -865,18 +883,29 @@ class EvalTensorOfTensorTA final : public EvalResult {
           TA::einsum(get<ArrayT>()(a.lannot),
                      other.get<compatible_regular_distarray_type>()(a.rannot),
                      a.this_annot);
+      assert(detail::equal_retiled_eval(result, get<ArrayT>(),
+                                        other.get<ArrayT>(), a));
+
       return eval_result<this_type>(std::move(result));
 
     } else if (other.is<this_type>() && DeNestFlag == TA::DeNest::True) {
       // ToT * ToT -> T
       auto result = TA::einsum<TA::DeNest::True>(
           get<ArrayT>()(a.lannot), other.get<ArrayT>()(a.rannot), a.this_annot);
+
+      assert(detail::equal_retiled_eval<TA::DeNest::True>(
+          result, get<ArrayT>(), other.get<ArrayT>(), a));
+
       return eval_result<that_type>(std::move(result));
 
     } else if (other.is<this_type>() && DeNestFlag == TA::DeNest::False) {
       // ToT * ToT -> ToT
       auto result = TA::einsum(get<ArrayT>()(a.lannot),
                                other.get<ArrayT>()(a.rannot), a.this_annot);
+
+      assert(detail::equal_retiled_eval(result, get<ArrayT>(),
+                                        other.get<ArrayT>(), a));
+
       return eval_result<this_type>(std::move(result));
     } else {
       throw invalid_operand();
