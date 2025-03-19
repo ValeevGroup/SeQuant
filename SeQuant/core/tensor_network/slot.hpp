@@ -27,6 +27,8 @@ enum class TensorIndexSlotType {
 /// @sa TensorNetwork
 /// @sa TensorNetworkV2
 enum class IndexSlotType {
+  /// only part of proto index bundles
+  SPBundle,
   /// in bra tensor vector index slot
   TensorBra,
   /// in ket tensor vector index slot
@@ -37,8 +39,6 @@ enum class IndexSlotType {
   TensorAux,
   /// connecting two tensor aux index slots
   TensorAuxAux,
-  /// only part of proto index bundles
-  SPBundle,
 
   Invalid
 };

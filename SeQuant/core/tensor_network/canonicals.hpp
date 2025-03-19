@@ -11,8 +11,15 @@ namespace sequant {
 /// canonicalize_slots to sort BEFORE sorting by topological canonical
 /// order produced by bliss::Graph:
 /// - first order by # of protoindices
-/// - then, order by index slot types: bra, ket, aux, spbundle (matches
-/// the order of entries in IndexSlotType)
+/// - then, order by index slot types: spbundle, bra, ket, aux(matches
+/// the order of entries in IndexSlotType).
+/// - then, by space
+///
+/// N.B. spbundle is at the front to make CSV tensor layout "natural", with all
+/// occupieds (in particular the spbundle-only occupieds) first. E.g. we want
+/// g^{a<ij> b<ij>}_{k l} to be laid out with ij first, since in
+/// any tensor product involving such indices will treat ij as batch indices,
+/// hence it's best to make them as "slow" as possible (in row-major layout)
 struct default_idxptr_slottype_lesscompare {
   template <typename IdxPtrPlusSlotType>
   bool operator()(const IdxPtrPlusSlotType& idxptr_slottype1,
