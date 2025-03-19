@@ -12,7 +12,7 @@
 
 #include <iostream>
 
-TEST_CASE("Context", "[runtime]") {
+TEST_CASE("context", "[runtime]") {
   using namespace sequant;
 
   CHECK_NOTHROW(get_default_context());
@@ -71,5 +71,4 @@ TEST_CASE("Context", "[runtime]") {
   }
   // leaving scope resets the context back
   CHECK(get_default_context() == initial_ctx);
-
-}  // TEST_CASE("Index")
+}

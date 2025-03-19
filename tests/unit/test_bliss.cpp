@@ -28,7 +28,7 @@ constexpr const bool use_colors = true;
   fprintf((FILE*)param, "\n");
 }
 
-TEST_CASE("Bliss", "[elements]") {
+TEST_CASE("bliss", "[elements]") {
   SECTION("basic operation") {
     const int n = 16;  // # of vertices
 
@@ -159,5 +159,4 @@ TEST_CASE("Bliss", "[elements]") {
 
     REQUIRE(cg1->cmp(*cg2) == 0);
   }
-
-}  // TEST_CASE("Bliss")
+}

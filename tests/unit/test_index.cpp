@@ -12,7 +12,7 @@
 
 #include <iostream>
 
-TEST_CASE("Index", "[elements][index]") {
+TEST_CASE("index", "[elements][index]") {
   using namespace sequant;
 
   SECTION("constructors") {
@@ -340,5 +340,4 @@ TEST_CASE("Index", "[elements][index]") {
             L"particleIndex[\"\\!\\(\\*SubscriptBox[\\(κ\\), "
             L"\\(1\\)]\\)\",particleSpace[occupied,virtual,othervirtual]]");
   }*/
-
-}  // TEST_CASE("Index")
+}

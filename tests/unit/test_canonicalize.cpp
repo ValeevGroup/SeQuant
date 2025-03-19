@@ -23,13 +23,15 @@
 
 #include <range/v3/all.hpp>
 
-TEST_CASE("Canonicalizer", "[algorithms]") {
+TEST_CASE("canonicalization", "[algorithms]") {
   using namespace sequant;
 
   TensorCanonicalizer::register_instance(
       std::make_shared<DefaultTensorCanonicalizer>());
-  auto ctx_resetter = set_scoped_default_context(
-      Context(sequant::mbpt::make_legacy_spaces(), Vacuum::SingleProduct));
+  auto isr = sequant::mbpt::make_legacy_spaces();
+  mbpt::add_pao_spaces(isr);
+  auto ctx_resetter =
+      set_scoped_default_context(Context(isr, Vacuum::SingleProduct));
 
   SECTION("Tensors") {
     {
@@ -503,6 +505,10 @@ TEST_CASE("Canonicalizer", "[algorithms]") {
                                L"g{i_4,i_1;a_1,a_3}:A * "
                                L"t{a_3,a_2<i_5,i_2>,a_1;i_1,i_4,i_2}:A",
                                Eq, Minus),
+               ///////////////////////////// tensors with PAOs
+               // These produce same layout, but are different
+               std::make_tuple(L"C{μ̃_1;a_3<i_3>}:N", L"C{a_1<i_2>;μ̃_1}:N", NEq,
+                               Plus),
            }) {
         auto ex1 = parse_expr(input1);
         auto ex2 = parse_expr(input2);

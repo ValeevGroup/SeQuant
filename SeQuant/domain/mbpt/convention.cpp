@@ -81,10 +81,11 @@ void add_ao_spaces(std::shared_ptr<IndexSpaceRegistry>& isr, bool vbs,
   }
   if (abs) {
     auto abs_lcao = isr->retrieve(L"α'");
-    isr->add(IndexSpace{L"α", abs_lcao.type(),
-                        LCAOQNS::ao})    // ABS AO in F12 methods
-        .add_union(L"ρ", {L"μ", L"α"})   // ABS+ = OBS + ABS
-        .add_union(L"Ρ", {L"Γ", L"α"});  // VABS+ = VBS+ + ABS
+    isr->add(IndexSpace{L"σ", abs_lcao.type(),
+                        LCAOQNS::ao})  // ABS AO in F12 methods
+        .add_union(L"ρ", {L"μ", L"σ"});
+    if (vbs)                               // ABS+ = OBS + ABS
+      isr->add_union(L"Ρ", {L"Γ", L"σ"});  // VABS+ = VBS+ + ABS
   }
 }
 
