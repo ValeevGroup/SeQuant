@@ -7,6 +7,7 @@
 #include <SeQuant/core/latex.hpp>
 #include <SeQuant/core/wstring.hpp>
 
+#include <format>
 #include <unordered_map>
 
 namespace sequant {
@@ -18,32 +19,20 @@ const std::size_t Index::min_tmp_index() {
 void Index::reset_tmp_index() { tmp_index_accessor() = min_tmp_index() - 1; }
 
 std::wstring Index::to_latex() const {
-  auto protect_subscript = [](const std::wstring_view str) {
-    auto subsc_pos = str.rfind(L'_');
-    if (subsc_pos == std::wstring_view::npos)
-      return std::wstring(str);
-    else {
-      assert(subsc_pos + 1 < str.size());
-      if (subsc_pos + 2 == str.size())  // don't protect single character
-        return std::wstring(str);
-      std::wstring result = std::wstring(str.substr(0, subsc_pos + 1)) + L"{" +
-                            std::wstring(str.substr(subsc_pos + 1)) + L"}";
-      return result;
-    }
-  };
-
-  std::wstring result;
-  result = L"{";
-  result += protect_subscript(this->label());
-  if (this->has_proto_indices()) {
-    result += L"^{";
-    for (const auto& pi : this->proto_indices()) {
-      result += pi.to_latex();
-    }
-    result += L"}";
+  std::wstring protos{};
+  if (has_proto_indices()) {
+    protos += L"^{";
+    for (auto&& pidx : proto_indices()) protos += pidx.to_latex();
+    protos += L"}";
   }
-  result += L"}";
-  return utf_to_latex(result);
+  auto [lbl, sfx_] = split_label();
+
+  std::wstring sfx{};
+  if (!sfx_.empty())
+    sfx = std::format(L"_{}",
+                      sfx_.size() == 1 ? sfx_ : std::format(L"{{{}}}", sfx_));
+
+  return std::format(L"{{{}{}{}}}", utf_to_latex(lbl), sfx, protos);
 }
 
 std::string Index::ascii_label() const {

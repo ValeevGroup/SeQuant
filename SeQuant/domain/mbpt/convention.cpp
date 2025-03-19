@@ -4,6 +4,8 @@
 
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/op.hpp>
+#include <SeQuant/domain/mbpt/rules/df.hpp>
+#include <SeQuant/domain/mbpt/space_qns.hpp>
 #include <SeQuant/domain/mbpt/spin.hpp>
 
 #include <SeQuant/core/context.hpp>
@@ -66,6 +68,39 @@ void add_fermi_spin(std::shared_ptr<IndexSpaceRegistry>& isr) {
   isr = std::move(result);
 }
 
+void add_ao_spaces(std::shared_ptr<IndexSpaceRegistry>& isr, bool vbs,
+                   bool abs) {
+  // matches the MPQC layout, see spindex.h
+  // this will not work for MR
+  auto obs_lcao = isr->retrieve(vbs ? L"m" : L"p");
+  isr->add(IndexSpace{L"μ", obs_lcao.type(), LCAOQNS::ao});  // OBS AO
+  if (vbs) {
+    auto vbs_lcao = isr->retrieve(L"e");
+    isr->add(IndexSpace{L"Α", vbs_lcao.type(), LCAOQNS::ao})  // VBS AO
+        .add_union(L"Γ", {L"μ", L"Α"});  // VBS+ = OBS + VBS
+  }
+  if (abs) {
+    auto abs_lcao = isr->retrieve(L"α'");
+    isr->add(IndexSpace{L"σ", abs_lcao.type(),
+                        LCAOQNS::ao})  // ABS AO in F12 methods
+        .add_union(L"ρ", {L"μ", L"σ"});
+    if (vbs)                               // ABS+ = OBS + ABS
+      isr->add_union(L"Ρ", {L"Γ", L"σ"});  // VABS+ = VBS+ + ABS
+  }
+}
+
+void add_pao_spaces(std::shared_ptr<IndexSpaceRegistry>& isr) {
+  auto uocc_space = isr->particle_space(/* nulltype_ok = */ false);
+  isr->add(IndexSpace{L"μ̃", uocc_space, LCAOQNS::pao})  // OBS PAO
+      ;
+}
+
+void add_df_spaces(std::shared_ptr<IndexSpaceRegistry>& isr) {
+  // matches the MPQC layout, see spindex.h
+  isr->add(IndexSpace{L"Κ", 0b00001, TensorFactorizationQNS::df})  // DFBS AO
+      ;
+}
+
 std::shared_ptr<IndexSpaceRegistry> make_min_sr_spaces() {
   auto isr = std::make_shared<IndexSpaceRegistry>();
 
@@ -73,6 +108,7 @@ std::shared_ptr<IndexSpaceRegistry> make_min_sr_spaces() {
       .add(L"a", 0b10, is_particle)
       .add_union(L"p", {L"i", L"a"}, is_complete);
   add_fermi_spin(isr);
+  isr->physical_particle_attribute_mask(bitset_t(Spin::mask));
 
   return isr;
 }
@@ -97,6 +133,7 @@ std::shared_ptr<IndexSpaceRegistry> make_mr_spaces() {
       .add_union(L"p", {L"M", L"E"}, is_complete);
 
   add_fermi_spin(isr);
+  isr->physical_particle_attribute_mask(bitset_t(Spin::mask));
 
   return isr;
 }
@@ -113,6 +150,7 @@ std::shared_ptr<IndexSpaceRegistry> make_sr_spaces() {
       .add_union(L"x", {L"i", L"a"})
       .add_union(L"p", {L"m", L"e"}, is_complete);
   add_fermi_spin(isr);
+  isr->physical_particle_attribute_mask(bitset_t(Spin::mask));
 
   return isr;
 }
@@ -135,6 +173,7 @@ std::shared_ptr<IndexSpaceRegistry> make_F12_sr_spaces() {
       .add_union(L"H", {L"i", L"α"})
       .add_union(L"κ", {L"p", L"α'"}, is_complete);
   add_fermi_spin(isr);
+  isr->physical_particle_attribute_mask(bitset_t(Spin::mask));
 
   return isr;
 }
@@ -158,7 +197,10 @@ std::shared_ptr<IndexSpaceRegistry> make_legacy_spaces(bool ignore_spin) {
       .add_union(L"p", {L"m", L"x", L"e"})
       .add_union(L"κ", {L"p", L"α'"}, is_complete);
 
-  if (!ignore_spin) add_fermi_spin(isr);
+  if (!ignore_spin) {
+    add_fermi_spin(isr);
+    isr->physical_particle_attribute_mask(bitset_t(Spin::mask));
+  }
 
   return isr;
 }

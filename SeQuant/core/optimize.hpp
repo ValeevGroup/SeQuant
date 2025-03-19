@@ -406,33 +406,6 @@ ExprPtr optimize(ExprPtr const& expr, IdxToSize const& idx2size,
 /// \return Optimized expression for lower evaluation cost.
 ExprPtr optimize(ExprPtr const& expr, bool reorder_sum = true);
 
-///
-/// Converts the 4-center 'g' tensors into a product of two rank-3 tensors.
-///
-/// \param expr The expression to be density-fit.
-/// \param aux_label The label of the introduced auxilliary index. eg. 'x', 'p'.
-/// \return The density-fit expression if 'g' of rank-4 present, otherwise the
-///         input expression itself will be returned.
-///
-ExprPtr density_fit(ExprPtr const& expr, std::wstring const& aux_label);
-
-///
-/// Converts the tensors in CSV basis into a product of full-basis
-/// tensors times the CSV-transformation tensors.
-///
-/// \param expr The expression to be CSV-transformed.
-/// \param coeff_tensor_label The label of the CSV-tranformation tensors that
-///                           will be introduced.
-/// \param csv_tensors The label of the CSV-basis tensors that will be
-///                    written as the transformed product. Eg. 'f', 'g'.
-/// \return The CSV-transformed expression if CSV-tensors with labels present
-///         in @c csv_tensors appear in @c expr. Otherwise returns the input
-///         expression itself.
-ExprPtr csv_transform(ExprPtr const& expr,
-                      std::wstring const& coeff_tensor_label = L"C",
-                      container::svector<std::wstring> const& csv_tensors = {
-                          L"f", L"g"});
-
 }  // namespace sequant
 
 #endif  // SEQUANT_OPTIMIZE_OPTIMIZE_HPP

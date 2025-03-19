@@ -7,6 +7,8 @@
 
 #include <SeQuant/domain/mbpt/fwd.hpp>
 
+#include <SeQuant/domain/mbpt/space_qns.hpp>
+
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
@@ -21,17 +23,6 @@
 namespace sequant {
 
 namespace mbpt {
-
-/// quantum numbers tags related to spin
-/// \note spin quantum number takes 2 rightmost bits
-enum class Spin : bitset_t {
-  alpha = 0b000001,
-  beta = 0b000010,
-  any = 0b000011,  // both bits set so that overlap and union work as expected
-                   // (any & alpha = alpha, alpha | beta = any)
-  free = any,      // syntax sugar
-  spinmask = 0b000011  // coincides with any
-};
 
 // Spin is a scoped enum, hence not implicitly convertible to
 // QuantumNumbersAttr::bitset_t
@@ -59,14 +50,14 @@ inline Spin operator&(Spin s1, Spin s2) {
 /// converts QuantumNumbersAttr to Spin
 /// @note this filters out all bits not used in Spin
 inline Spin to_spin(const QuantumNumbersAttr& t) {
-  assert((t.to_int32() & static_cast<int>(Spin::spinmask)) != 0);
-  return static_cast<Spin>(static_cast<Spin>(t.to_int32()) & Spin::spinmask);
+  assert((t.to_int32() & static_cast<int>(Spin::mask)) != 0);
+  return static_cast<Spin>(static_cast<Spin>(t.to_int32()) & Spin::mask);
 }
 
 /// removes spin annotation in QuantumNumbersAttr by unsetting the bits used by
 /// Spin
 inline QuantumNumbersAttr spinannotation_remove(const QuantumNumbersAttr& t) {
-  return t.intersection(QuantumNumbersAttr(~Spin::spinmask));
+  return t.intersection(QuantumNumbersAttr(~Spin::mask));
 }
 
 /// removes spin annotation, if any
