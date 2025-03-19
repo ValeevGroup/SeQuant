@@ -1022,31 +1022,37 @@ ExprPtr H_pt(std::size_t order, std::size_t R, std::size_t nbatch = 0);
 /// @brief Makes perturbed particle-conserving excitation operator of rank \p K
 /// @param order order of perturbation
 /// @param K rank of the excitation operator
+/// @param nbatch rank of optional auxiliary/batching index [default is 0]
 /// @pre `order==1`, only first order perturbation is supported now
-ExprPtr T_pt_(std::size_t order, std::size_t K);
+ExprPtr T_pt_(std::size_t order, std::size_t K, size_t nbatch = 0);
 
 /// @brief Makes sum of perturbed particle-conserving excitation operators up to
 /// rank \p K
 /// @param order order of perturbation
 /// @param K rank up to which the sum is to be formed
+/// @param nbatch rank of optional auxiliary/batching index [default is 0]
 /// @param skip1 if true, skips single excitations
 /// @pre `order==1`, only first order perturbation is supported now
-ExprPtr T_pt(std::size_t order, std::size_t K, bool skip1 = false);
+ExprPtr T_pt(std::size_t order, std::size_t K, size_t nbatch = 0,
+             bool skip1 = false);
 
 /// @brief Makes perturbed particle-conserving deexcitation operator of
 /// rank \p K
 /// @param order order of perturbation
 /// @param K rank of the deexcitation operator
+/// @param nbatch rank of optional auxiliary/batching index [default is 0]
 /// @pre `order==1`, only first order perturbation is supported now
-ExprPtr Λ_pt_(std::size_t order, std::size_t K);
+ExprPtr Λ_pt_(std::size_t order, std::size_t K, size_t nbatch = 0);
 
 /// @brief Makes sum of perturbed particle-conserving deexcitation operators up
 /// to rank \p K
 /// @param order order of perturbation
 /// @param K rank up to which the sum is to be formed
+/// @param nbatch rank of optional auxiliary/batching index [default is 0]
 /// @param skip1 if true, skips single deexcitations
 /// @pre `order==1`, only first order perturbation is supported now
-ExprPtr Λ_pt(std::size_t order, std::size_t K, bool skip1 = false);
+ExprPtr Λ_pt(std::size_t order, std::size_t K, size_t nbatch = 0,
+             bool skip1 = false);
 }  // namespace tensor
 }  // namespace op
 
@@ -1185,31 +1191,37 @@ ExprPtr H_pt(std::size_t order, std::size_t R, std::size_t nbatch = 0);
 /// @brief Makes perturbed particle-conserving excitation operator of rank \p K
 /// @param order order of perturbation
 /// @param K rank of the excitation operator
+/// @param nbatch rank of optional auxiliary/batching index [default is 0]
 /// @pre `order==1`, only first order perturbation is supported now
-ExprPtr T_pt_(std::size_t order, std::size_t K);
+ExprPtr T_pt_(std::size_t order, std::size_t K, size_t nbatch = 0);
 
 /// @brief Makes sum of perturbed particle-conserving excitation operators up to
 /// rank \p K
 /// @param order order of perturbation
 /// @param K rank up to which the sum is to be formed
+/// @param nbatch rank of optional auxiliary/batching index [default is 0]
 /// @param skip1 if true, skips single excitations
 /// @pre `order==1`, only first order perturbation is supported now
-ExprPtr T_pt(std::size_t order, std::size_t K, bool skip1 = false);
+ExprPtr T_pt(std::size_t order, std::size_t K, size_t nbatch = 0,
+             bool skip1 = false);
 
 /// @brief Makes perturbed particle-conserving deexcitation operator of
 /// rank \p K
 /// @param order order of perturbation
 /// @param K rank of the deexcitation operator
+/// @param nbatch rank of optional auxiliary/batching index [default is 0]
 /// @pre `order==1`, only first order perturbation is supported now
-ExprPtr Λ_pt_(std::size_t order, std::size_t K);
+ExprPtr Λ_pt_(std::size_t order, std::size_t K, size_t nbatch = 0);
 
 /// @brief Makes sum of perturbed particle-conserving deexcitation operators up
 /// to rank \p K
 /// @param order order of perturbation
 /// @param K rank up to which the sum is to be formed
+/// @param nbatch rank of optional auxiliary/batching index [default is 0]
 /// @param skip1 if true, skips single deexcitations
 /// @pre `order==1`, only first order perturbation is supported now
-ExprPtr Λ_pt(std::size_t order, std::size_t K, bool skip1 = false);
+ExprPtr Λ_pt(std::size_t order, std::size_t K, size_t nbatch = 0,
+             bool skip1 = false);
 
 bool raises_vacuum_up_to_rank(const ExprPtr& op_or_op_product,
                               const unsigned long k);

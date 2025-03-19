@@ -714,40 +714,47 @@ ExprPtr H_pt(std::size_t order, std::size_t R, std::size_t nbatch) {
   assert(order == 1 &&
          "sequant::mbpt::H_pt(): only supports first order perturbation");
   assert(R > 0);
-  if (nbatch != 0) {
-    assert(nbatch > 0);
+  if (nbatch != 0)
     assert(get_default_context().index_space_registry()->contains(L"z"));
-  }
   return OpMaker<Statistics::FermiDirac>(OpType::h_1, ncre(R), nann(R),
                                          naux(nbatch))();
 }
 
-ExprPtr T_pt_(std::size_t order, std::size_t K) {
+ExprPtr T_pt_(std::size_t order, std::size_t K, std::size_t nbatch) {
   assert(order == 1 &&
          "sequant::sr::T_pt_(): only supports first order perturbation");
-  return OpMaker<Statistics::FermiDirac>(OpType::t_1, K)();
+  if (nbatch != 0)
+    assert(get_default_context().index_space_registry()->contains(L"z"));
+  return OpMaker<Statistics::FermiDirac>(OpType::t_1, ncre(K), nann(K),
+                                         naux(nbatch))();
 }
 
-ExprPtr T_pt(std::size_t order, std::size_t K, bool skip1) {
+ExprPtr T_pt(std::size_t order, std::size_t K, std::size_t nbatch, bool skip1) {
   assert(K > (skip1 ? 1 : 0));
   ExprPtr result;
   for (auto k = (skip1 ? 2ul : 1ul); k <= K; ++k) {
-    result = k > 1 ? result + tensor::T_pt_(order, k) : tensor::T_pt_(order, k);
+    result = k > 1 ? result + tensor::T_pt_(order, k, nbatch)
+                   : tensor::T_pt_(order, k, nbatch);
   }
   return result;
 }
 
-ExprPtr Λ_pt_(std::size_t order, std::size_t K) {
+ExprPtr Λ_pt_(std::size_t order, std::size_t K, std::size_t nbatch) {
   assert(order == 1 &&
          "sequant::sr::Λ_pt_(): only supports first order perturbation");
-  return OpMaker<Statistics::FermiDirac>(OpType::λ_1, K)();
+  if (nbatch != 0)
+    assert(get_default_context().index_space_registry()->contains(L"z"));
+
+  return OpMaker<Statistics::FermiDirac>(OpType::λ_1, ncre(K), nann(K),
+                                         naux(nbatch))();
 }
 
-ExprPtr Λ_pt(std::size_t order, std::size_t K, bool skip1) {
+ExprPtr Λ_pt(std::size_t order, std::size_t K, std::size_t nbatch, bool skip1) {
   assert(K > (skip1 ? 1 : 0));
   ExprPtr result;
   for (auto k = (skip1 ? 2ul : 1ul); k <= K; ++k) {
-    result = k > 1 ? result + tensor::Λ_pt_(order, k) : tensor::Λ_pt_(order, k);
+    result = k > 1 ? result + tensor::Λ_pt_(order, k, nbatch)
+                   : tensor::Λ_pt_(order, k, nbatch);
   }
   return result;
 }
@@ -923,38 +930,39 @@ ExprPtr H_pt(std::size_t order, std::size_t R, std::size_t nbatch) {
       [=](qnc_t& qns) { qns = combine(general_type_qns(R), qns); }, nbatch);
 }
 
-ExprPtr T_pt_(std::size_t order, std::size_t K) {
+ExprPtr T_pt_(std::size_t order, std::size_t K, std::size_t nbatch) {
   assert(K > 0);
   assert(order == 1 && "only first order perturbation is supported now");
   return ex<op_t>(
       []() -> std::wstring_view { return optype2label.at(OpType::t_1); },
       [=]() -> ExprPtr { return tensor::T_pt_(order, K); },
-      [=](qnc_t& qns) { qns = combine(excitation_type_qns(K), qns); });
+      [=](qnc_t& qns) { qns = combine(excitation_type_qns(K), qns); }, nbatch);
 }
 
-ExprPtr T_pt(std::size_t order, std::size_t K, bool skip1) {
+ExprPtr T_pt(std::size_t order, std::size_t K, std::size_t nbatch, bool skip1) {
   assert(K > (skip1 ? 1 : 0));
   ExprPtr result;
   for (auto k = (skip1 ? 2ul : 1ul); k <= K; ++k) {
-    result = k > 1 ? result + T_pt_(order, k) : T_pt_(order, k);
+    result = k > 1 ? result + T_pt_(order, k, nbatch) : T_pt_(order, k, nbatch);
   }
   return result;
 }
 
-ExprPtr Λ_pt_(std::size_t order, std::size_t K) {
+ExprPtr Λ_pt_(std::size_t order, std::size_t K, std::size_t nbatch) {
   assert(K > 0);
   assert(order == 1 && "only first order perturbation is supported now");
   return ex<op_t>(
       []() -> std::wstring_view { return optype2label.at(OpType::λ_1); },
       [=]() -> ExprPtr { return tensor::Λ_pt_(order, K); },
-      [=](qnc_t& qns) { qns = combine(deexcitation_type_qns(K), qns); });
+      [=](qnc_t& qns) { qns = combine(deexcitation_type_qns(K), qns); },
+      nbatch);
 }
 
-ExprPtr Λ_pt(std::size_t order, std::size_t K, bool skip1) {
+ExprPtr Λ_pt(std::size_t order, std::size_t K, std::size_t nbatch, bool skip1) {
   assert(K > (skip1 ? 1 : 0));
   ExprPtr result;
   for (auto k = (skip1 ? 2ul : 1ul); k <= K; ++k) {
-    result = k > 1 ? result + Λ_pt_(order, k) : Λ_pt_(order, k);
+    result = k > 1 ? result + Λ_pt_(order, k, nbatch) : Λ_pt_(order, k, nbatch);
   }
   return result;
 }
