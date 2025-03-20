@@ -58,14 +58,14 @@ template <typename... Args>
 void log_eval(Args const&... args) noexcept {
 #ifdef SEQUANT_EVAL_TRACE
   auto l = Logger::instance();
-  if (l.log_level_eval > 0) write_log(l, "[EVAL] ", args...);
+  if (l.eval.level > 0) write_log(l, "[EVAL] ", args...);
 #endif
 }
 
 [[maybe_unused]] void log_cache_access(size_t key, CacheManager const& cm) {
 #ifdef SEQUANT_EVAL_TRACE
   auto l = Logger::instance();
-  if (l.log_level_eval > 0) {
+  if (l.eval.level > 0) {
     assert(cm.exists(key));
     auto max_l = cm.max_life(key);
     auto cur_l = cm.life(key);
@@ -83,7 +83,7 @@ void log_eval(Args const&... args) noexcept {
 [[maybe_unused]] void log_cache_store(size_t key, CacheManager const& cm) {
 #ifdef SEQUANT_EVAL_TRACE
   auto l = Logger::instance();
-  if (l.log_level_eval > 0) {
+  if (l.eval.level > 0) {
     assert(cm.exists(key));
     write_log(l,  //
               "[CACHE] Stored key: ", key, ".\n");
