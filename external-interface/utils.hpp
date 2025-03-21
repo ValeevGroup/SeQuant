@@ -9,7 +9,6 @@
 #include <SeQuant/core/utility/indices.hpp>
 
 #include <map>
-#include <optional>
 #include <string>
 
 class IndexSpaceMeta {
@@ -39,8 +38,6 @@ private:
 
 sequant::container::svector< sequant::container::svector< sequant::Index > >
 	getExternalIndexPairs(const sequant::ExprPtr &expression);
-
-std::optional< sequant::ExprPtr > popTensor(sequant::ExprPtr &expression, std::wstring_view label);
 
 bool needsSymmetrization(const sequant::ExprPtr &expression);
 

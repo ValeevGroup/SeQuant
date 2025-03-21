@@ -25,7 +25,7 @@ void custom_biorthogonalize(container::svector< ResultExpr > &exprs) {
 	if (externals.size() < 2) {
 		// Singles or scalar
 		for (ResultExpr &current : exprs) {
-			std::optional< ExprPtr > symmetrizer = popTensor(current.expression(), L"S");
+			std::optional< ExprPtr > symmetrizer = pop_tensor(current.expression(), L"S");
 			current.expression()                 = biorthogonal_transform(current.expression(), externals);
 			current.expression()                 = simplify(current.expression());
 			if (symmetrizer) {
@@ -45,7 +45,7 @@ void custom_biorthogonalize(container::svector< ResultExpr > &exprs) {
 	if (braSpacesSame && ketSpacesSame) {
 		// P0, P2, I2
 		for (ResultExpr &current : exprs) {
-			std::optional< ExprPtr > symmetrizer = popTensor(current.expression(), L"S");
+			std::optional< ExprPtr > symmetrizer = pop_tensor(current.expression(), L"S");
 			current.expression()                 = biorthogonal_transform(current.expression(), externals);
 			current.expression()                 = simplify(current.expression());
 			if (symmetrizer) {
@@ -85,7 +85,7 @@ void custom_biorthogonalize(container::svector< ResultExpr > &exprs) {
 			permutation = { { { externals[0][1], externals[1][1] }, { externals[1][1], externals[0][1] } } };
 		}
 
-		std::optional< ExprPtr > symmetrizer = popTensor(current.expression(), L"S");
+		std::optional< ExprPtr > symmetrizer = pop_tensor(current.expression(), L"S");
 
 		ExprPtr permuted = current.expression().clone();
 		permuted         = transform_expr(permuted, permutation);
@@ -174,9 +174,9 @@ container::svector< ResultExpr > postProcess(ResultExpr result, const IndexSpace
 
 	for (ResultExpr &current : processed) {
 		if (options.factorize_to_binary) {
-			std::optional< ExprPtr > symmetrizer = popTensor(current.expression(), L"S");
+			std::optional< ExprPtr > symmetrizer = pop_tensor(current.expression(), L"S");
 			if (!symmetrizer.has_value()) {
-				symmetrizer = popTensor(current.expression(), L"A");
+				symmetrizer = pop_tensor(current.expression(), L"A");
 			}
 
 			current.expression() = optimize(current.expression());

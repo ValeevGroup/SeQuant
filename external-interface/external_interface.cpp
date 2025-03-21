@@ -8,6 +8,7 @@
 #include <SeQuant/core/parse.hpp>
 #include <SeQuant/core/runtime.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
+#include <SeQuant/core/utility/expr.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/string.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
@@ -186,7 +187,7 @@ void generateITF(const json &blocks, std::string_view out_file, const Processing
 					spdlog::debug("Fully processed equation is:\n{}", current);
 
 					if (needsSymmetrization(current.expression())) {
-						std::optional< ExprPtr > symmetrizer = popTensor(current.expression(), L"S");
+						std::optional< ExprPtr > symmetrizer = pop_tensor(current.expression(), L"S");
 						assert(symmetrizer.has_value());
 
 						Tensor resultTensor(current.label(), bra(current.bra()), ket(current.ket()), aux(current.aux()),
