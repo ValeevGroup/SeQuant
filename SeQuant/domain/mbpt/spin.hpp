@@ -251,16 +251,6 @@ ExprPtr closed_shell_spintrace(
 
 container::svector<ResultExpr> closed_shell_spintrace(ResultExpr expr);
 
-///
-/// \brief Given a OpType::A or OpType::S tensor, generates a list of external
-///        indices.
-/// \note The argument tensor must have a label of 'S' or 'A' do denote that
-///       it is OpType::S or OpType::A respectively.
-/// \return a vector of external index groups, `{{P.ket(0), P.bra(0)},
-/// {P.ket(1), P.bra(1)}, ...}`, where `P` is the symmetrizer/antisymmetrizer
-/// tensor.
-container::svector<container::svector<Index>> external_indices(Tensor const&);
-
 /// @brief Transforms Coupled cluster from spin orbital to spatial orbitals
 /// @details The external indices are deduced from Antisymmetrization operator
 /// @param expr ExprPtr to Sum type with spin orbital indices

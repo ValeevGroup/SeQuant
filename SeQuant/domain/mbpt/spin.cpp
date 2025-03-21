@@ -10,6 +10,7 @@
 #include <SeQuant/core/result_expr.hpp>
 #include <SeQuant/core/space.hpp>
 #include <SeQuant/core/tensor.hpp>
+#include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/permutation.hpp>
 #include <SeQuant/core/utility/swap.hpp>
 
@@ -914,48 +915,6 @@ ExprPtr closed_shell_spintrace(
   } else {
     throw std::runtime_error("Invalid Expr type in closed_shell_spintrace");
   }
-}
-
-container::svector<container::svector<Index>> external_indices(
-    const ExprPtr& expr) {
-  // Generate external index list from the projection manifold operator
-  // (symmetrizer or antisymmetrizer)
-  Tensor P{};
-  for (const auto& prod : *expr) {
-    if (prod->is<Product>()) {
-      auto tensor = prod->as<Product>().factor(0)->as<Tensor>();
-      if (tensor.label() == L"A" || tensor.label() == L"S") {
-        P = tensor;
-        break;
-      }
-    }
-  }
-
-  container::svector<container::svector<Index>> ext_index_groups;
-  if (P) {  // if have the projection manifold operator
-    assert(P.bra_rank() != 0 &&
-           "Could not generate external index groups due to "
-           "absence of (anti)symmetrizer (A or S) operator in expression.");
-    assert(P.bra_rank() == P.ket_rank());
-    ext_index_groups.resize(P.rank());
-    for (std::size_t i = 0; i != P.rank(); ++i) {
-      ext_index_groups[i] = container::svector<Index>{P.ket()[i], P.bra()[i]};
-    }
-  }
-  return ext_index_groups;
-}
-
-container::svector<container::svector<Index>> external_indices(
-    Tensor const& t) {
-  using ranges::views::transform;
-  using ranges::views::zip;
-
-  assert(t.label() == L"S" || t.label() == L"A");
-  assert(t.bra_rank() == t.ket_rank());
-  return zip(t.ket(), t.bra()) | transform([](auto const& pair) {
-           return container::svector<Index>{pair.first, pair.second};
-         }) |
-         ranges::to<container::svector<container::svector<Index>>>;
 }
 
 ExprPtr closed_shell_CC_spintrace(ExprPtr const& expr) {
