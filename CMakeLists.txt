@@ -222,6 +222,7 @@ set(SeQuant_src
         SeQuant/core/hugenholtz.hpp
         SeQuant/core/index.cpp
         SeQuant/core/index.hpp
+        SeQuant/core/index_space_registry.cpp
         SeQuant/core/index_space_registry.hpp
         SeQuant/core/interval.hpp
         SeQuant/core/latex.cpp
@@ -283,16 +284,22 @@ set(SeQuant_src
         SeQuant/domain/mbpt/context.cpp
         SeQuant/domain/mbpt/convention.cpp
         SeQuant/domain/mbpt/convention.hpp
-        SeQuant/domain/mbpt/models/cc.cpp
-        SeQuant/domain/mbpt/models/cc.hpp
         SeQuant/domain/mbpt/op.cpp
         SeQuant/domain/mbpt/op.hpp
         SeQuant/domain/mbpt/op.ipp
         SeQuant/domain/mbpt/rdm.cpp
         SeQuant/domain/mbpt/rdm.hpp
+        SeQuant/domain/mbpt/space_qns.hpp
         SeQuant/domain/mbpt/spin.cpp
         SeQuant/domain/mbpt/spin.hpp
-        SeQuant/domain/mbpt/vac_av.ipp)
+        SeQuant/domain/mbpt/vac_av.ipp
+        SeQuant/domain/mbpt/models/cc.cpp
+        SeQuant/domain/mbpt/models/cc.hpp
+        SeQuant/domain/mbpt/rules/df.cpp
+        SeQuant/domain/mbpt/rules/df.hpp
+        SeQuant/domain/mbpt/rules/csv.cpp
+        SeQuant/domain/mbpt/rules/csv.hpp
+)
 
 ### optional prereqs
 if (SEQUANT_EVAL_TESTS)
