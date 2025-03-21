@@ -14,8 +14,11 @@
 #include <SeQuant/core/wstring.hpp>
 #include <SeQuant/domain/mbpt/op.hpp>
 
+#include <range/v3/algorithm.hpp>
+
 #include <algorithm>
 #include <cassert>
+#include <sstream>
 #include <string>
 #include <type_traits>
 #include <variant>
@@ -69,6 +72,35 @@ template <>
 struct StringMaker<sequant::Index> {
   static std::string convert(const sequant::Index &idx) {
     return sequant::to_string(idx.full_label());
+  }
+};
+
+template <>
+struct StringMaker<sequant::ResultExpr> {
+  static std::string convert(const sequant::ResultExpr &res) {
+    std::stringstream sstream;
+    if (res.has_label()) {
+      sstream << sequant::to_string(res.label());
+    } else {
+      sstream << "?";
+    }
+
+    using IndexString = StringMaker<sequant::Index>;
+    sstream << "{";
+    sstream << (res.bra() | ranges::views::transform(IndexString::convert) |
+                ranges::views::join(", "));
+    sstream << ";";
+    sstream << (res.ket() | ranges::views::transform(IndexString::convert) |
+                ranges::views::join(", "));
+    sstream << ";";
+    sstream << (res.aux() | ranges::views::transform(IndexString::convert) |
+                ranges::views::join(", "));
+    sstream << "}";
+
+    sstream << " = "
+            << StringMaker<sequant::ExprPtr>::convert(res.expression());
+
+    return sstream.str();
   }
 };
 
@@ -160,8 +192,7 @@ class ExpressionMatcher : public Catch::Matchers::MatcherGenericBase {
   }
 
   std::string describe() const override {
-    return Subclass::comparison_requirement() + ": " +
-           Catch::Detail::stringify(m_expr);
+    return Subclass::comparison_requirement() + ": " + stringify(m_expr);
   }
 
  protected:
@@ -183,6 +214,14 @@ class ExpressionMatcher : public Catch::Matchers::MatcherGenericBase {
     }();
 
     return *clone == self;
+  }
+
+  std::string stringify(const ExprVar &expr) const {
+    if (std::holds_alternative<sequant::ResultExpr>(expr)) {
+      return Catch::Detail::stringify(std::get<sequant::ResultExpr>(expr));
+    }
+
+    return Catch::Detail::stringify(std::get<sequant::ExprPtr>(expr));
   }
 };
 
