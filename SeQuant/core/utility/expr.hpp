@@ -5,9 +5,9 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
 
+#include <optional>
 #include <string>
 #include <string_view>
-#include <optional>
 
 namespace sequant {
 
@@ -25,14 +25,14 @@ ExprPtr transform_expr(const ExprPtr& expr,
                        const container::map<Index, Index>& index_replacements,
                        Constant::scalar_type scaling_factor = 1);
 
-/// @brief Searches for tensors with the given label and removes them from the given expression
-/// Note: The function assumes that there don't exist multiple tensors of that name that differ
-/// in their indexing.
-/// 
+/// @brief Searches for tensors with the given label and removes them from the
+/// given expression Note: The function assumes that there don't exist multiple
+/// tensors of that name that differ in their indexing.
+///
 /// @param expression The expression to modify
 /// @param label The label of the tensor that shall be removed
 /// @returns The removed tensor, if any occurrance has been found
-std::optional< ExprPtr > pop_tensor(ExprPtr &expression, std::wstring_view label);
+std::optional<ExprPtr> pop_tensor(ExprPtr& expression, std::wstring_view label);
 
 }  // namespace sequant
 

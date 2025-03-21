@@ -6,9 +6,9 @@
 #include <bitset>
 #include <cassert>
 #include <climits>
+#include <optional>
 #include <sstream>
 #include <string>
-#include <optional>
 
 namespace sequant {
 
@@ -335,68 +335,69 @@ ExprPtr transform_expr(const ExprPtr &expr,
   }
 }
 
-std::optional< ExprPtr > pop_tensor(ExprPtr &expression, std::wstring_view label) {
-	std::optional< ExprPtr > tensor;
+std::optional<ExprPtr> pop_tensor(ExprPtr &expression,
+                                  std::wstring_view label) {
+  std::optional<ExprPtr> tensor;
 
-	if (expression->is< Sum >()) {
-		Sum result{};
+  if (expression->is<Sum>()) {
+    Sum result{};
 
-		for (ExprPtr &term : expression.as< Sum >()) {
-			std::optional< ExprPtr > popped = pop_tensor(term, label);
-			if (!tensor.has_value()) {
-				tensor = popped;
-			}
-			assert(tensor == popped);
+    for (ExprPtr &term : expression.as<Sum>()) {
+      std::optional<ExprPtr> popped = pop_tensor(term, label);
+      if (!tensor.has_value()) {
+        tensor = popped;
+      }
+      assert(tensor == popped);
 
-			result.append(std::move(term));
-		}
+      result.append(std::move(term));
+    }
 
-		expression.as< Sum >() = std::move(result);
+    expression.as<Sum>() = std::move(result);
 
-		return tensor;
-	}
+    return tensor;
+  }
 
-	if (expression->is< Product >()) {
-		Product result;
-		result.scale(expression.as< Product >().scalar());
+  if (expression->is<Product>()) {
+    Product result;
+    result.scale(expression.as<Product>().scalar());
 
-		for (ExprPtr &factor : expression.as< Product >().factors()) {
-			std::optional< ExprPtr > popped = pop_tensor(factor, label);
-			if (!tensor.has_value()) {
-				tensor = popped;
-			}
-			assert(!popped.has_value() || tensor == popped);
+    for (ExprPtr &factor : expression.as<Product>().factors()) {
+      std::optional<ExprPtr> popped = pop_tensor(factor, label);
+      if (!tensor.has_value()) {
+        tensor = popped;
+      }
+      assert(!popped.has_value() || tensor == popped);
 
-			if (!factor.is< Constant >() || !factor.as< Constant >().is_zero()) {
-				result.append(1, std::move(factor), Product::Flatten::No);
-			}
-		}
+      if (!factor.is<Constant>() || !factor.as<Constant>().is_zero()) {
+        result.append(1, std::move(factor), Product::Flatten::No);
+      }
+    }
 
-		if (result.size() > 1 || (result.size() == 1 && result.scalar() != 1)) {
-			expression.as< Product >() = std::move(result);
-		} else if (result.size() == 1) {
-			expression = std::move(result.factor(0));
-		} else {
-			expression = ex< Constant >(0);
-		}
+    if (result.size() > 1 || (result.size() == 1 && result.scalar() != 1)) {
+      expression.as<Product>() = std::move(result);
+    } else if (result.size() == 1) {
+      expression = std::move(result.factor(0));
+    } else {
+      expression = ex<Constant>(0);
+    }
 
-		return tensor;
-	}
+    return tensor;
+  }
 
-	if (expression->is< Tensor >()) {
-		if (expression.as< Tensor >().label() == label) {
-			tensor     = expression;
-			expression = ex< Constant >(0);
-		}
+  if (expression->is<Tensor>()) {
+    if (expression.as<Tensor>().label() == label) {
+      tensor = expression;
+      expression = ex<Constant>(0);
+    }
 
-		return tensor;
-	}
+    return tensor;
+  }
 
-	if (expression->is< Constant >() || expression->is< Variable >()) {
-		return tensor;
-	}
+  if (expression->is<Constant>() || expression->is<Variable>()) {
+    return tensor;
+  }
 
-	throw std::runtime_error("Unhandled expression type in pop_tensor");
+  throw std::runtime_error("Unhandled expression type in pop_tensor");
 }
 
 }  // namespace sequant
