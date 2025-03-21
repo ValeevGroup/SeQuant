@@ -262,8 +262,8 @@ set(SeQuant_src
         SeQuant/core/tensor_network/vertex_painter.hpp
         SeQuant/core/timer.hpp
         SeQuant/core/utility/context.hpp
-        SeQuant/core/utility/expr_diff.cpp
-        SeQuant/core/utility/expr_diff.hpp
+        SeQuant/core/utility/expr.cpp
+        SeQuant/core/utility/expr.hpp
         SeQuant/core/utility/indices.hpp
         SeQuant/core/utility/macros.hpp
         SeQuant/core/utility/nodiscard.hpp
@@ -271,8 +271,6 @@ set(SeQuant_src
         SeQuant/core/utility/singleton.hpp
         SeQuant/core/utility/string.hpp
         SeQuant/core/utility/string.cpp
-        SeQuant/core/utility/transform_expr.cpp
-        SeQuant/core/utility/transform_expr.hpp
         SeQuant/core/utility/tuple.hpp
         SeQuant/core/utility/swap.hpp
         SeQuant/core/wick.hpp

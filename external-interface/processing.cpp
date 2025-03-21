@@ -10,7 +10,7 @@
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/result_expr.hpp>
 #include <SeQuant/core/tensor.hpp>
-#include <SeQuant/core/utility/transform_expr.hpp>
+#include <SeQuant/core/utility/expr.hpp>
 
 #include <SeQuant/domain/mbpt/spin.hpp>
 

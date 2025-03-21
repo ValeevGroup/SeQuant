@@ -8,10 +8,10 @@
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/parse.hpp>
 #include <SeQuant/core/tensor.hpp>
+#include <SeQuant/core/utility/expr.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/singleton.hpp>
 #include <SeQuant/core/utility/strong.hpp>
-#include <SeQuant/core/utility/transform_expr.hpp>
 
 #include <codecvt>
 #include <iostream>
