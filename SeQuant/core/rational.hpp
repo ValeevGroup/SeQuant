@@ -174,6 +174,10 @@ inline std::wstring to_wolfram(const rational& t) {
            to_wolfram(denominator(t)) + L"]";
 }
 
+/// @brief Returns the absolute value of a rational number
+/// @param r a sequant::rational object
+inline rational abs(const rational& r) { return numerator(r) < 0 ? -r : r; }
+
 }  // namespace sequant
 
 #endif  // SEQUANT_CORE_RATIONAL_H

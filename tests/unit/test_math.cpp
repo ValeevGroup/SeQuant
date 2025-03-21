@@ -38,6 +38,13 @@ TEST_CASE("math", "[elements]") {
       REQUIRE(to_rational(M_E) == rational{23225, 8544});
       REQUIRE_THROWS_AS(to_rational(std::nan("NaN")), std::invalid_argument);
     }
+
+    SECTION("abs") {
+      REQUIRE(abs(to_rational((1. / 3))) == rational{1, 3});
+      REQUIRE(abs(to_rational(-1. / 3)) == rational{1, 3});
+      REQUIRE(abs(to_rational(1. / -4)) == rational{1, 4});
+      REQUIRE(abs(to_rational(-0.25)) == rational{1, 4});
+    }
   }
 
   SECTION("factorial") {
