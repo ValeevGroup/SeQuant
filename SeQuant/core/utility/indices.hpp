@@ -217,7 +217,7 @@ IndexGroups<Container> get_unique_indices(const Product& product) {
 /// Obtains the set of unique (non-repeated) indices used in the given
 /// expression
 template <typename Container>
-IndexGroups<Container> get_unique_indices(const ExprPtr& expr) {
+IndexGroups<Container> get_unique_indices(const Expr& expr) {
   if (expr.is<Constant>()) {
     return get_unique_indices<Container>(expr.as<Constant>());
   } else if (expr.is<Variable>()) {
@@ -232,6 +232,10 @@ IndexGroups<Container> get_unique_indices(const ExprPtr& expr) {
     throw std::runtime_error(
         "Encountered unsupported expression type in get_unique_indices");
   }
+}
+template <typename Container>
+IndexGroups<Container> get_unique_indices(const ExprPtr& expr) {
+  return get_unique_indices<Container>(*expr);
 }
 
 template <typename Container = std::vector<Index>, typename Rng>
