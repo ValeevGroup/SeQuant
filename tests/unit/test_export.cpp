@@ -35,21 +35,40 @@ std::vector<std::vector<std::size_t>> twoElectronIntegralSymmetries() {
 #define CAPTURE_EXPR(expr) \
   INFO(#expr " := " << ::Catch::StringMaker<sequant::ExprPtr>::convert(expr))
 
+class ItfContext : public sequant::itf::Context {
+ public:
+  ItfContext() = default;
+
+  int compare(const sequant::Index &lhs, const sequant::Index &rhs) const {
+    return rhs.space().type().to_int32() - lhs.space().type().to_int32();
+  }
+
+  std::wstring get_base_label(const sequant::IndexSpace &space) const {
+    return L"a";
+  }
+  std::wstring get_tag(const sequant::IndexSpace &space) const { return L"b"; }
+  std::wstring get_name(const sequant::IndexSpace &space) const {
+    return L"tenshi";
+  }
+};
+
 TEST_CASE("export", "[exports]") {
   using namespace sequant;
 
   SECTION("itf") {
+    const ItfContext ctx;
+
     SECTION("remap_integrals") {
       using namespace sequant::itf::detail;
       SECTION("Unchanged") {
         auto expr = parse_expr(L"t{i1;a1}");
         auto remapped = expr;
-        remap_integrals(expr);
+        remap_integrals(expr, ctx);
         REQUIRE(remapped == expr);
 
         expr = parse_expr(L"t{i1;a1} f{a1;i1} + first{a1;i1} second{i1;a1}");
         remapped = expr;
-        remap_integrals(expr);
+        remap_integrals(expr, ctx);
         REQUIRE(remapped == expr);
       }
 
@@ -68,7 +87,7 @@ TEST_CASE("export", "[exports]") {
                 ket{indices[indexPerm[2]], indices[indexPerm[3]]});
 
             auto transformed = integralExpr;
-            remap_integrals(transformed);
+            remap_integrals(transformed, ctx);
 
             CAPTURE(indexPerm);
             CAPTURE_EXPR(integralExpr);
@@ -93,7 +112,7 @@ TEST_CASE("export", "[exports]") {
                 ket{indices[indexPerm[2]], indices[indexPerm[3]]});
 
             auto transformed = integralExpr;
-            remap_integrals(transformed);
+            remap_integrals(transformed, ctx);
 
             CAPTURE(indexPerm);
             CAPTURE_EXPR(integralExpr);
@@ -118,7 +137,7 @@ TEST_CASE("export", "[exports]") {
                 ket{indices[indexPerm[2]], indices[indexPerm[3]]});
 
             auto transformed = integralExpr;
-            remap_integrals(transformed);
+            remap_integrals(transformed, ctx);
 
             CAPTURE(indexPerm);
             CAPTURE_EXPR(integralExpr);
@@ -145,7 +164,7 @@ TEST_CASE("export", "[exports]") {
                 ket{indices[indexPerm[2]], indices[indexPerm[3]]});
 
             auto transformed = integralExpr;
-            remap_integrals(transformed);
+            remap_integrals(transformed, ctx);
 
             CAPTURE(indexPerm);
             CAPTURE_EXPR(integralExpr);
@@ -170,7 +189,7 @@ TEST_CASE("export", "[exports]") {
                 ket{indices[indexPerm[2]], indices[indexPerm[3]]});
 
             auto transformed = integralExpr;
-            remap_integrals(transformed);
+            remap_integrals(transformed, ctx);
 
             CAPTURE(indexPerm);
             CAPTURE_EXPR(integralExpr);
@@ -187,7 +206,7 @@ TEST_CASE("export", "[exports]") {
           ExprPtr expr = parse_expr(L"f{i2;i1} + f{a1;a2}");
           const ExprPtr expected = parse_expr(L"f{i1;i2} + f{a1;a2}");
 
-          remap_integrals(expr);
+          remap_integrals(expr, ctx);
 
           CAPTURE_EXPR(expr);
           CAPTURE_EXPR(expected);
@@ -198,7 +217,7 @@ TEST_CASE("export", "[exports]") {
           ExprPtr expr = parse_expr(L"f{a1;i1} + f{i1;a1}");
           const ExprPtr expected = parse_expr(L"f{a1;i1} + f{a1;i1}");
 
-          remap_integrals(expr);
+          remap_integrals(expr, ctx);
 
           CAPTURE_EXPR(expr);
           CAPTURE_EXPR(expected);

@@ -1,11 +1,12 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/tensor.hpp>
-#include <SeQuant/core/utility/expr_diff.hpp>
+#include <SeQuant/core/utility/expr.hpp>
 #include <SeQuant/core/utility/string.hpp>
 
 #include <bitset>
 #include <cassert>
 #include <climits>
+#include <optional>
 #include <sstream>
 #include <string>
 
@@ -282,6 +283,121 @@ std::string diff(const Expr &lhs, const Expr &rhs) {
   }
 
   return diff_str;
+}
+
+ExprPtr transform_expr(const ExprPtr &expr,
+                       const container::map<Index, Index> &index_replacements,
+                       Constant::scalar_type scaling_factor) {
+  if (expr->is<Constant>() || expr->is<Variable>()) {
+    return ex<Constant>(scaling_factor) * expr;
+  }
+
+  auto transform_tensor = [&index_replacements](const Tensor &tensor) {
+    auto result = std::make_shared<Tensor>(tensor);
+    result->transform_indices(index_replacements);
+    result->reset_tags();
+    return result;
+  };
+
+  auto transform_product = [&transform_tensor,
+                            &scaling_factor](const Product &product) {
+    auto result = std::make_shared<Product>();
+    result->scale(product.scalar());
+    for (auto &&term : product) {
+      if (term->is<Tensor>()) {
+        auto tensor = term->as<Tensor>();
+        result->append(1, transform_tensor(tensor));
+      } else if (term->is<Variable>() || term->is<Constant>()) {
+        result->append(1, term->clone());
+      } else {
+        throw std::runtime_error("Invalid Expr type in transform_product");
+      }
+    }
+    result->scale(scaling_factor);
+    return result;
+  };
+
+  if (expr->is<Tensor>()) {
+    auto result =
+        ex<Constant>(scaling_factor) * transform_tensor(expr->as<Tensor>());
+    return result;
+  } else if (expr->is<Product>()) {
+    auto result = transform_product(expr->as<Product>());
+    return result;
+  } else if (expr->is<Sum>()) {
+    auto result = std::make_shared<Sum>();
+    for (auto &term : *expr) {
+      result->append(transform_expr(term, index_replacements, scaling_factor));
+    }
+    return result;
+  } else {
+    throw std::runtime_error("Invalid Expr type in transform_expr");
+  }
+}
+
+std::optional<ExprPtr> pop_tensor(ExprPtr &expression,
+                                  std::wstring_view label) {
+  std::optional<ExprPtr> tensor;
+
+  if (expression->is<Sum>()) {
+    Sum result{};
+
+    for (ExprPtr &term : expression.as<Sum>()) {
+      std::optional<ExprPtr> popped = pop_tensor(term, label);
+      if (!tensor.has_value()) {
+        tensor = popped;
+      }
+      assert(tensor == popped);
+
+      result.append(std::move(term));
+    }
+
+    expression.as<Sum>() = std::move(result);
+
+    return tensor;
+  }
+
+  if (expression->is<Product>()) {
+    Product result;
+    result.scale(expression.as<Product>().scalar());
+
+    for (ExprPtr &factor : expression.as<Product>().factors()) {
+      std::optional<ExprPtr> popped = pop_tensor(factor, label);
+      if (!tensor.has_value()) {
+        tensor = popped;
+      }
+      assert(!popped.has_value() || tensor == popped);
+
+      if (!factor.is<Constant>() || !factor.as<Constant>().is_zero()) {
+        result.append(1, std::move(factor), Product::Flatten::No);
+      }
+    }
+
+    if (result.size() > 1 || (result.size() == 1 && result.scalar() != 1)) {
+      expression.as<Product>() = std::move(result);
+    } else if (result.size() == 1) {
+      expression = std::move(result.factor(0));
+    } else {
+      expression = ex<Constant>(0);
+    }
+
+    return tensor;
+  }
+
+  if (expression->is<Tensor>()) {
+    if (expression.as<Tensor>().label() == label) {
+      tensor = expression;
+      expression = ex<Constant>(0);
+    }
+
+    return tensor;
+  }
+
+  if (expression->is<Constant>() || expression->is<Variable>()) {
+    return tensor;
+  }
+
+  throw std::runtime_error("Unhandled expression type in pop_tensor");
 }
 
 }  // namespace sequant

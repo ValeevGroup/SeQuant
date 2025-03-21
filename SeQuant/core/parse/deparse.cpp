@@ -5,6 +5,7 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/op.hpp>
+#include <SeQuant/core/result_expr.hpp>
 #include <SeQuant/core/tensor.hpp>
 
 #include <range/v3/all.hpp>
@@ -165,6 +166,31 @@ std::wstring deparse(const Expr& expr, bool annot_sym) {
     return deparse(expr.as<Variable>());
   else
     throw std::runtime_error("Unsupported expr type for deparse!");
+}
+
+std::wstring deparse(const ResultExpr& result, bool annot_sym) {
+  std::wstring deparsed;
+  if (result.has_label()) {
+    deparsed += result.label();
+  } else {
+    deparsed += L"?";
+  }
+
+  if (!result.bra().empty() || !result.ket().empty()) {
+    deparsed += L"{";
+    deparsed += details::deparse_indices(result.bra());
+    deparsed += L";";
+    deparsed += details::deparse_indices(result.ket());
+    deparsed += L"}";
+
+    if (annot_sym) {
+      deparsed += L":" + details::deparse_symm(result.symmetry()) + L"-" +
+                  details::deparse_symm(result.braket_symmetry()) + L"-" +
+                  details::deparse_symm(result.particle_symmetry());
+    }
+  }
+
+  return deparsed + L" = " + deparse(result.expression(), annot_sym);
 }
 
 std::wstring deparse(const Index& index) {
