@@ -351,7 +351,7 @@
 <span class="w">  </span><span class="k">auto</span><span class="w"> </span><span class="n">xtnsr</span><span class="w"> </span><span class="o">=</span>
 <span class="w">      </span><span class="n">ex</span><span class="o">&lt;</span><span class="n">Tensor</span><span class="o">&gt;</span><span class="p">(</span><span class="n">tnsr</span><span class="p">.</span><span class="n">label</span><span class="p">(),</span><span class="w"> </span><span class="n">bra</span><span class="p">(</span><span class="n">rbra</span><span class="p">),</span><span class="w"> </span><span class="n">ket</span><span class="p">(</span><span class="n">rket</span><span class="p">),</span><span class="w"> </span><span class="n">aux</span><span class="p">(),</span><span class="w"> </span><span class="n">tnsr</span><span class="p">.</span><span class="n">symmetry</span><span class="p">(),</span>
 <span class="w">                 </span><span class="n">tnsr</span><span class="p">.</span><span class="n">braket_symmetry</span><span class="p">(),</span><span class="w"> </span><span class="n">tnsr</span><span class="p">.</span><span class="n">particle_symmetry</span><span class="p">());</span>
-<span class="w">  </span><span class="n">result</span><span class="p">.</span><span class="n">append</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">move</span><span class="p">(</span><span class="n">xtnsr</span><span class="p">));</span>
+<span class="w">  </span><span class="n">result</span><span class="p">.</span><span class="n">prepend</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">move</span><span class="p">(</span><span class="n">xtnsr</span><span class="p">));</span>
 
 <span class="w">  </span><span class="k">return</span><span class="w"> </span><span class="n">ex</span><span class="o">&lt;</span><span class="n">Product</span><span class="o">&gt;</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">move</span><span class="p">(</span><span class="n">result</span><span class="p">));</span>
 <span class="p">}</span>
@@ -414,7 +414,7 @@
             
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on Mar 23, 2025 9:38:27 PM</div>
+              Last updated on Mar 23, 2025 9:39:00 PM</div>
           </div>
           <div class="right-details">
             <div class="icons">
