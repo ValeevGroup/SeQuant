@@ -39,7 +39,7 @@ struct Logger : public Singleton<Logger> {
 
     /// the stream for logging; can be set to nullptr
     std::ostream* stream;
-  } eval = {1, &std::cout};
+  } eval = {0, nullptr};
 
  private:
   friend class Singleton<Logger>;

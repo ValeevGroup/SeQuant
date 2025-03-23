@@ -384,24 +384,18 @@ auto particle_antisymmetrize_btas(btas::Tensor<Args...> const& arr,
 
 template <typename... Args>
 inline void log_result(Args const&... args) noexcept {
-#ifdef SEQUANT_EVAL_TRACE
-  auto l = Logger::instance();
+  auto& l = Logger::instance();
   if (l.eval.level > 1) write_log(l, args...);
-#endif
 }
 
 template <typename... Args>
 inline void log_ta(Args const&... args) noexcept {
-#ifdef SEQUANT_EVAL_TRACE
   log_result("[TA] ", args...);
-#endif
 }
 
 template <typename... Args>
 inline void log_constant(Args const&... args) noexcept {
-#ifdef SEQUANT_EVAL_TRACE
   log_result("[CONST] ", args...);
-#endif
 }
 
 }  // namespace
