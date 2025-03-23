@@ -51,4 +51,47 @@ TEST_CASE("biorthogonalization", "[Biorthogonalization]") {
       REQUIRE_THAT(actual, EquivalentTo(expected_outputs.at(i)));
     }
   }
+
+  SECTION("ResultExpr") {
+    std::vector<std::vector<std::wstring>> inputs = {
+        {L"R{a1;i1} = t{a1;i1}"},
+        {L"R{i1,i2;a1,a2} = S{i1,i2;a1,a2}:S g{a1,a2;i1,i2}"}};
+    std::vector<std::vector<std::wstring>> expected_outputs = {
+        {L"R{a1;i1} = 1/2 t{a1;i1}"},
+        {L"R{a1,a2;i1,i2} = S{i1,i2;a1,a2}:S 1/6 (2 g{a1,a2;i1,i2} + "
+         L"g{a2,a1;i1,i2})"}};
+
+    REQUIRE(inputs.size() == expected_outputs.size());
+
+    for (std::size_t i = 0; i < inputs.size(); ++i) {
+      CAPTURE(i);
+
+      REQUIRE(inputs.at(i).size() == expected_outputs.at(i).size());
+
+      container::svector<ResultExpr> expressions;
+      container::svector<ResultExpr> expected;
+      std::optional<ExprPtr> symmetrizer;
+      for (std::size_t k = 0; i < inputs.at(i).size(); ++i) {
+        ResultExpr parsed = parse_result_expr(inputs.at(i).at(k));
+        symmetrizer = pop_tensor(parsed.expression(), L"S");
+        expressions.push_back(parsed);
+
+        expected.push_back(parse_result_expr(expected_outputs.at(i).at(k)));
+      }
+
+      biorthogonal_transform(expressions);
+
+      if (symmetrizer.has_value()) {
+        for (ResultExpr &current : expressions) {
+          current.expression() *= symmetrizer.value();
+          current.expression() = simplify(current.expression());
+        }
+      }
+
+      for (std::size_t k = 0; k < expected.size(); ++k) {
+        CAPTURE(k);
+        REQUIRE_THAT(expected.at(k), EquivalentTo(expressions.at(k)));
+      }
+    }
+  }
 }
