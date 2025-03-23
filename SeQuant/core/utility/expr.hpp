@@ -21,9 +21,9 @@ std::string diff(const Expr& lhs, const Expr& rhs);
 /// @param index_replacements index replacement map
 /// @param scaling_factor to scale the result
 /// @return a substituted and scaled expression pointer
-ExprPtr transform_expr(const ExprPtr& expr,
-                       const container::map<Index, Index>& index_replacements,
-                       Constant::scalar_type scaling_factor = 1);
+[[nodiscard]] ExprPtr transform_expr(
+    const ExprPtr& expr, const container::map<Index, Index>& index_replacements,
+    Constant::scalar_type scaling_factor = 1);
 
 /// @brief Searches for tensors with the given label and removes them from the
 /// given expression Note: The function assumes that there don't exist multiple
