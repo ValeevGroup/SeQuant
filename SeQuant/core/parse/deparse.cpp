@@ -7,14 +7,12 @@
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/result_expr.hpp>
 #include <SeQuant/core/tensor.hpp>
+#include <SeQuant/core/utility/string.hpp>
 
 #include <range/v3/all.hpp>
 
 #include <cassert>
-#include <codecvt>
 #include <cstddef>
-#include <locale>
-#include <memory>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -128,16 +126,7 @@ std::wstring deparse_scalar(const Constant::scalar_type& scalar) {
     }
   }
 
-  SEQUANT_PRAGMA_CLANG(diagnostic push)
-  SEQUANT_PRAGMA_CLANG(diagnostic ignored "-Wdeprecated-declarations")
-  SEQUANT_PRAGMA_GCC(diagnostic push)
-  SEQUANT_PRAGMA_GCC(diagnostic ignored "-Wdeprecated-declarations")
-
-  std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
-  return converter.from_bytes(deparsed);
-
-  SEQUANT_PRAGMA_CLANG(diagnostic pop)
-  SEQUANT_PRAGMA_GCC(diagnostic pop)
+  return to_wstring(deparsed);
 }
 
 }  // namespace details
