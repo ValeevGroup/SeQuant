@@ -26,7 +26,6 @@ struct Logger : public Singleton<Logger> {
   bool simplify = false;
   bool tensor_network = false;
 
-  /// This is used only if configured with SEQUANT_EVAL_TRACE=ON
   struct {
     ///
     /// Evaluation log verbosity level

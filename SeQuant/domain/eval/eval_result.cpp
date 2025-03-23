@@ -11,7 +11,7 @@ bool EvalResult::has_value() const noexcept { return value_.has_value(); }
 
 void log_ta_tensor_host_memory_use(madness::World& world,
                                    std::string_view label) {
-#if defined(TA_TENSOR_MEM_PROFILE) && defined(SEQUANT_EVAL_TRACE)
+#if defined(TA_TENSOR_MEM_PROFILE)
   auto logger = Logger::instance();
   if (logger.eval.level < 3) return;
   std::vector<std::uint64_t> hwsize(world.size(), 0);
