@@ -240,7 +240,7 @@ ExprPtr create_expr_for(const ParticlePairings& ref_pairing,
   ExprPtr expr = base_exprs.at(idx)->clone();
 
   if (!replacements.empty()) {
-    transform_expr(expr, replacements);
+    expr = transform_expr(expr, replacements);
   }
 
   return expr;
