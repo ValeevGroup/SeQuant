@@ -36,9 +36,11 @@ Program Listing for File logger.hpp
      bool simplify = false;
      bool tensor_network = false;
    
-     size_t log_level_eval = 1;
+     struct {
+       size_t level;
    
-     std::ostream* stream = &std::cout;
+       std::ostream* stream;
+     } eval = {1, &std::cout};
    
     private:
      friend class Singleton<Logger>;
@@ -58,8 +60,10 @@ Program Listing for File logger.hpp
    
    template <typename... Args>
    void write_log(Logger& l, Args const&... args) noexcept {
-     ((*l.stream << args), ...);
-     (*l.stream).flush();
+     if (l.eval.stream) {
+       ((*l.eval.stream << args), ...);
+       (*l.eval.stream).flush();
+     }
    }
    
    }  // namespace sequant

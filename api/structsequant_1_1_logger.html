@@ -347,14 +347,20 @@
 <dd></dd></dl>
 
 <dl class="cpp var">
-<dt class="sig sig-object cpp" id="_CPPv4N7sequant6Logger14log_level_evalE">
-<span id="_CPPv3N7sequant6Logger14log_level_evalE"></span><span id="_CPPv2N7sequant6Logger14log_level_evalE"></span><span id="sequant::Logger::log_level_eval__s"></span><span class="target" id="structsequant_1_1_logger_1adce4a59423a83ea4110153ef06bf2797"></span><span class="n"><span class="pre">size_t</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">log_level_eval</span></span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="m"><span class="pre">1</span></span><a class="headerlink" href="#_CPPv4N7sequant6Logger14log_level_evalE" title="Link to this definition">¶</a><br /></dt>
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant6Logger5levelE">
+<span id="_CPPv3N7sequant6Logger5levelE"></span><span id="_CPPv2N7sequant6Logger5levelE"></span><span id="sequant::Logger::level__s"></span><span class="target" id="structsequant_1_1_logger_1a6158fa1b0ae2b7be57873b038489b724"></span><span class="n"><span class="pre">size_t</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">level</span></span></span><a class="headerlink" href="#_CPPv4N7sequant6Logger5levelE" title="Link to this definition">¶</a><br /></dt>
 <dd><p>Evaluation log verbosity level 0: No log. 1: Log what is being evaluated in the evaluation tree (independent of tensor algebra backend (TA/BTAS etc.) 2: Also log invocation of tensor algebra backend within sequant. 3: Also log TiledArray memory use. </p>
 </dd></dl>
 
 <dl class="cpp var">
 <dt class="sig sig-object cpp" id="_CPPv4N7sequant6Logger6streamE">
-<span id="_CPPv3N7sequant6Logger6streamE"></span><span id="_CPPv2N7sequant6Logger6streamE"></span><span id="sequant::Logger::stream__osP"></span><span class="target" id="structsequant_1_1_logger_1aff7e93b76875b0e6089d78f807736f5d"></span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">ostream</span></span><span class="w"> </span><span class="p"><span class="pre">*</span></span><span class="sig-name descname"><span class="n"><span class="pre">stream</span></span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="o"><span class="pre">&amp;</span></span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">cout</span></span><a class="headerlink" href="#_CPPv4N7sequant6Logger6streamE" title="Link to this definition">¶</a><br /></dt>
+<span id="_CPPv3N7sequant6Logger6streamE"></span><span id="_CPPv2N7sequant6Logger6streamE"></span><span id="sequant::Logger::stream__osP"></span><span class="target" id="structsequant_1_1_logger_1aff7e93b76875b0e6089d78f807736f5d"></span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">ostream</span></span><span class="w"> </span><span class="p"><span class="pre">*</span></span><span class="sig-name descname"><span class="n"><span class="pre">stream</span></span></span><a class="headerlink" href="#_CPPv4N7sequant6Logger6streamE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>the stream for logging; can be set to nullptr </p>
+</dd></dl>
+
+<dl class="cpp var">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant6Logger4evalE">
+<span id="_CPPv3N7sequant6Logger4evalE"></span><span id="_CPPv2N7sequant6Logger4evalE"></span><span id="sequant::Logger::eval__sequant::Logger"></span><span class="target" id="structsequant_1_1_logger_1a50a47413199aa69dbfca40e67919c396"></span><span class="k"><span class="pre">struct</span></span><span class="w"> </span><span class="n"><span class="pre">sequant</span></span><span class="p"><span class="pre">::</span></span><a class="reference internal" href="#_CPPv4N7sequant6LoggerE" title="sequant::Logger"><span class="n"><span class="pre">Logger</span></span></a><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">eval</span></span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="p"><span class="pre">{</span></span><span class="m"><span class="pre">1</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="o"><span class="pre">&amp;</span></span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">cout</span></span><span class="p"><span class="pre">}</span></span><a class="headerlink" href="#_CPPv4N7sequant6Logger4evalE" title="Link to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 </div>
@@ -380,7 +386,7 @@
             
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on Mar 19, 2025 10:25:33 AM</div>
+              Last updated on Mar 23, 2025 3:10:20 PM</div>
           </div>
           <div class="right-details">
             <div class="icons">
@@ -422,8 +428,9 @@
 <li><a class="reference internal" href="#_CPPv4N7sequant6Logger16canonicalize_dotE"><code class="docutils literal notranslate"><span class="pre">canonicalize_dot</span></code></a></li>
 <li><a class="reference internal" href="#_CPPv4N7sequant6Logger8simplifyE"><code class="docutils literal notranslate"><span class="pre">simplify</span></code></a></li>
 <li><a class="reference internal" href="#_CPPv4N7sequant6Logger14tensor_networkE"><code class="docutils literal notranslate"><span class="pre">tensor_network</span></code></a></li>
-<li><a class="reference internal" href="#_CPPv4N7sequant6Logger14log_level_evalE"><code class="docutils literal notranslate"><span class="pre">log_level_eval</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant6Logger5levelE"><code class="docutils literal notranslate"><span class="pre">level</span></code></a></li>
 <li><a class="reference internal" href="#_CPPv4N7sequant6Logger6streamE"><code class="docutils literal notranslate"><span class="pre">stream</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant6Logger4evalE"><code class="docutils literal notranslate"><span class="pre">eval</span></code></a></li>
 </ul>
 </li>
 </ul>

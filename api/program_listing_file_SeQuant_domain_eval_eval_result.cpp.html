@@ -287,7 +287,7 @@
 <span class="w">                                   </span><span class="n">std</span><span class="o">::</span><span class="n">string_view</span><span class="w"> </span><span class="n">label</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
 <span class="cp">#if defined(TA_TENSOR_MEM_PROFILE) &amp;&amp; defined(SEQUANT_EVAL_TRACE)</span>
 <span class="w">  </span><span class="k">auto</span><span class="w"> </span><span class="n">logger</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Logger</span><span class="o">::</span><span class="n">instance</span><span class="p">();</span>
-<span class="w">  </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">logger</span><span class="p">.</span><span class="n">log_level_eval</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="mi">3</span><span class="p">)</span><span class="w"> </span><span class="k">return</span><span class="p">;</span>
+<span class="w">  </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">logger</span><span class="p">.</span><span class="n">eval</span><span class="p">.</span><span class="n">level</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="mi">3</span><span class="p">)</span><span class="w"> </span><span class="k">return</span><span class="p">;</span>
 <span class="w">  </span><span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="o">&gt;</span><span class="w"> </span><span class="n">hwsize</span><span class="p">(</span><span class="n">world</span><span class="p">.</span><span class="n">size</span><span class="p">(),</span><span class="w"> </span><span class="mi">0</span><span class="p">);</span>
 <span class="w">  </span><span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="o">&gt;</span><span class="w"> </span><span class="n">currsize</span><span class="p">(</span><span class="n">world</span><span class="p">.</span><span class="n">size</span><span class="p">(),</span><span class="w"> </span><span class="mi">0</span><span class="p">);</span>
 <span class="w">  </span><span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">uint64_t</span><span class="o">&gt;</span><span class="w"> </span><span class="n">actsize</span><span class="p">(</span><span class="n">world</span><span class="p">.</span><span class="n">size</span><span class="p">(),</span><span class="w"> </span><span class="mi">0</span><span class="p">);</span>
@@ -349,7 +349,7 @@
             
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on Mar 19, 2025 10:25:33 AM</div>
+              Last updated on Mar 23, 2025 3:10:20 PM</div>
           </div>
           <div class="right-details">
             <div class="icons">
