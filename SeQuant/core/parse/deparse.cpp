@@ -99,6 +99,10 @@ std::wstring deparse_symm(ParticleSymmetry symm) {
 }
 
 std::wstring deparse_scalar(const Constant::scalar_type& scalar) {
+  if (scalar == 0) {
+    return L"0";
+  }
+
   const auto& real = scalar.real();
   const auto& realNumerator = boost::multiprecision::numerator(real);
   const auto& realDenominator = boost::multiprecision::denominator(real);
@@ -125,6 +129,8 @@ std::wstring deparse_scalar(const Constant::scalar_type& scalar) {
       deparsed += "/" + imagDenominator.str();
     }
   }
+
+  assert(!deparsed.empty());
 
   return to_wstring(deparsed);
 }
