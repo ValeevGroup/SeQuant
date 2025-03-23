@@ -590,24 +590,18 @@
 
 <span class="k">template</span><span class="w"> </span><span class="o">&lt;</span><span class="k">typename</span><span class="p">...</span><span class="w"> </span><span class="n">Args</span><span class="o">&gt;</span>
 <span class="kr">inline</span><span class="w"> </span><span class="kt">void</span><span class="w"> </span><span class="n">log_result</span><span class="p">(</span><span class="n">Args</span><span class="w"> </span><span class="k">const</span><span class="o">&amp;</span><span class="p">...</span><span class="w"> </span><span class="n">args</span><span class="p">)</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span>
-<span class="cp">#ifdef SEQUANT_EVAL_TRACE</span>
-<span class="w">  </span><span class="k">auto</span><span class="w"> </span><span class="n">l</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Logger</span><span class="o">::</span><span class="n">instance</span><span class="p">();</span>
+<span class="w">  </span><span class="k">auto</span><span class="o">&amp;</span><span class="w"> </span><span class="n">l</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Logger</span><span class="o">::</span><span class="n">instance</span><span class="p">();</span>
 <span class="w">  </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">l</span><span class="p">.</span><span class="n">eval</span><span class="p">.</span><span class="n">level</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="n">write_log</span><span class="p">(</span><span class="n">l</span><span class="p">,</span><span class="w"> </span><span class="n">args</span><span class="p">...);</span>
-<span class="cp">#endif</span>
 <span class="p">}</span>
 
 <span class="k">template</span><span class="w"> </span><span class="o">&lt;</span><span class="k">typename</span><span class="p">...</span><span class="w"> </span><span class="n">Args</span><span class="o">&gt;</span>
 <span class="kr">inline</span><span class="w"> </span><span class="kt">void</span><span class="w"> </span><span class="n">log_ta</span><span class="p">(</span><span class="n">Args</span><span class="w"> </span><span class="k">const</span><span class="o">&amp;</span><span class="p">...</span><span class="w"> </span><span class="n">args</span><span class="p">)</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span>
-<span class="cp">#ifdef SEQUANT_EVAL_TRACE</span>
 <span class="w">  </span><span class="n">log_result</span><span class="p">(</span><span class="s">&quot;[TA] &quot;</span><span class="p">,</span><span class="w"> </span><span class="n">args</span><span class="p">...);</span>
-<span class="cp">#endif</span>
 <span class="p">}</span>
 
 <span class="k">template</span><span class="w"> </span><span class="o">&lt;</span><span class="k">typename</span><span class="p">...</span><span class="w"> </span><span class="n">Args</span><span class="o">&gt;</span>
 <span class="kr">inline</span><span class="w"> </span><span class="kt">void</span><span class="w"> </span><span class="n">log_constant</span><span class="p">(</span><span class="n">Args</span><span class="w"> </span><span class="k">const</span><span class="o">&amp;</span><span class="p">...</span><span class="w"> </span><span class="n">args</span><span class="p">)</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span>
-<span class="cp">#ifdef SEQUANT_EVAL_TRACE</span>
 <span class="w">  </span><span class="n">log_result</span><span class="p">(</span><span class="s">&quot;[CONST] &quot;</span><span class="p">,</span><span class="w"> </span><span class="n">args</span><span class="p">...);</span>
-<span class="cp">#endif</span>
 <span class="p">}</span>
 
 <span class="p">}</span><span class="w">  </span><span class="c1">// namespace</span>
@@ -1136,7 +1130,7 @@
             
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on Mar 23, 2025 3:10:20 PM</div>
+              Last updated on Mar 23, 2025 9:38:27 PM</div>
           </div>
           <div class="right-details">
             <div class="icons">

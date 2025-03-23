@@ -62,9 +62,9 @@ Functions
 ---------
 
 
-- :ref:`exhale_function_namespacesequant_1a92314549fe0e76646271eb4e077ed789`
+- :ref:`exhale_function_namespacesequant_1ab87e06863676948c09289911cd355c5b`
 
 - :ref:`exhale_function_namespacesequant_1a8c09257461a7b2160aa97c6819fd9251`
 
-- :ref:`exhale_function_namespacesequant_1ab87e06863676948c09289911cd355c5b`
+- :ref:`exhale_function_namespacesequant_1a92314549fe0e76646271eb4e077ed789`
 

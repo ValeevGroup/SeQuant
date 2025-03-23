@@ -40,7 +40,7 @@ Program Listing for File logger.hpp
        size_t level;
    
        std::ostream* stream;
-     } eval = {1, &std::cout};
+     } eval = {0, nullptr};
    
     private:
      friend class Singleton<Logger>;
