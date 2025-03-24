@@ -195,6 +195,8 @@ ExprPtr create_expr_for(const ParticlePairings& ref_pairing,
                         const perm::Permutation& perm,
                         const container::svector<ParticlePairings>& pairings,
                         const container::svector<ExprPtr>& base_exprs) {
+  // Note: perm only applies to the p->second for every pair p in ref_pairing
+
   // assert that all pairings are sorted w.r.t. first
   assert(std::all_of(pairings.begin(), pairings.end(),
                      [](const ParticlePairings& pairing) {
