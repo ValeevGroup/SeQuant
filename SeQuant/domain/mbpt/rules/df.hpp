@@ -6,6 +6,7 @@
 #define MPQC_DOMAIN_MBPT_RULES_DF_HPP
 
 #include <SeQuant/core/expr_fwd.hpp>
+#include <SeQuant/core/space.hpp>
 
 namespace sequant::mbpt {
 
@@ -17,8 +18,7 @@ namespace sequant::mbpt {
 /// \return The density-fit expression if 'g' of rank-4 present, otherwise the
 ///         input expression itself will be returned.
 ///
-[[nodiscard]] ExprPtr density_fit(ExprPtr const& expr,
-                                  std::wstring const& aux_label);
+[[nodiscard]] ExprPtr density_fit(ExprPtr const& expr, IndexSpace aux_space);
 
 }  // namespace sequant::mbpt
 

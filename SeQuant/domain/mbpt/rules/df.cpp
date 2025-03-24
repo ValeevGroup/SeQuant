@@ -24,11 +24,11 @@ ExprPtr density_fit_impl(Tensor const& tnsr, Index const& aux_idx) {
   return ex<Product>(1, ExprPtrList{t1, t2});
 }
 
-ExprPtr density_fit(ExprPtr const& expr, std::wstring const& aux_label) {
+ExprPtr density_fit(ExprPtr const& expr, IndexSpace aux_space) {
   using ranges::views::transform;
   if (expr->is<Sum>())
-    return ex<Sum>(*expr | transform([&aux_label](auto&& x) {
-      return density_fit(x, aux_label);
+    return ex<Sum>(*expr | transform([&aux_space](auto&& x) {
+      return density_fit(x, aux_space);
     }));
 
   else if (expr->is<Tensor>()) {
@@ -37,7 +37,7 @@ ExprPtr density_fit(ExprPtr const& expr, std::wstring const& aux_label) {
         && g.bra_rank() == 2  //
         && g.ket_rank() == 2  //
         && ranges::none_of(g.indices(), &Index::has_proto_indices))
-      return density_fit_impl(expr->as<Tensor>(), Index(aux_label + L"_1"));
+      return density_fit_impl(expr->as<Tensor>(), Index(L"1", aux_space));
     else
       return expr;
   } else if (expr->is<Product>()) {
@@ -49,8 +49,8 @@ ExprPtr density_fit(ExprPtr const& expr, std::wstring const& aux_label) {
     for (auto&& f : prod.factors())
       if (f.is<Tensor>() && f.as<Tensor>().label() == L"g") {
         auto const& g = f->as<Tensor>();
-        auto g_df = density_fit_impl(
-            g, Index(aux_label + L"_" + std::to_wstring(++aux_ix)));
+        auto g_df =
+            density_fit_impl(g, Index(std::to_wstring(++aux_ix), aux_space));
         result.append(1, std::move(g_df), Product::Flatten::Yes);
       } else {
         result.append(1, f, Product::Flatten::No);

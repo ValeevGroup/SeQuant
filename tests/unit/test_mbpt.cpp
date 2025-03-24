@@ -689,7 +689,10 @@ SECTION("rules") {
 
       ExprPtr input_expr = parse_expr(inputs.at(i));
 
-      ExprPtr actual = mbpt::density_fit(input_expr, L"x");
+      IndexSpace aux_space =
+          get_default_context().index_space_registry()->retrieve(L"x");
+
+      ExprPtr actual = mbpt::density_fit(input_expr, aux_space);
 
       REQUIRE_THAT(actual, EquivalentTo(expected.at(i)));
     }
