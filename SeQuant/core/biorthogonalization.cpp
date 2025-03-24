@@ -239,24 +239,31 @@ ExprPtr create_expr_for(const ParticlePairings& ref_pairing,
   container::map<Index, Index> replacements;
   for (std::size_t i = 0; i < base.size(); ++i) {
     std::size_t ref_idx = perm->image(i);
-    if (base.at(i) == ref_pairing.at(ref_idx)) {
+
+    const bool differs_in_first = base[i].first != ref_pairing[i].first;
+    const bool differs_in_second =
+        base[i].second != ref_pairing[ref_idx].second;
+
+    if (!differs_in_first && !differs_in_second) {
       // This particle pairing is identical
       continue;
     }
 
-    // Note: we can only permute indices of the same space. Everything else
-    // would lead to nonsensical expressions
+    assert(differs_in_first || differs_in_second);
 
-    if (base[i].first != ref_pairing[ref_idx].first &&
-        base[i].first.space() == ref_pairing[ref_idx].first.space()) {
-      replacements.insert(
-          std::make_pair(base[i].first, ref_pairing[ref_idx].first));
-    } else {
-      assert(base[i].second != ref_pairing[ref_idx].second);
-      assert(base[i].second.space() == ref_pairing[ref_idx].second.space());
-
-      replacements.insert(
-          std::make_pair(base[i].second, ref_pairing[ref_idx].second));
+    if (differs_in_first) {
+      if (base[i].first.space() == ref_pairing[i].first.space()) {
+        replacements.insert(
+            std::make_pair(base[i].first, ref_pairing[ref_idx].first));
+        continue;
+      }
+    }
+    if (differs_in_second) {
+      if (base[i].second.space() == ref_pairing[i].second.space()) {
+        replacements.insert(
+            std::make_pair(base[i].second, ref_pairing[ref_idx].second));
+        continue;
+      }
     }
   }
 
