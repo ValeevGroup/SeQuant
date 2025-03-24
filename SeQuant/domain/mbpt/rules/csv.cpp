@@ -111,9 +111,11 @@ ExprPtr csv_transform(ExprPtr const& expr, const IndexSpace& csv_basis,
     for (auto&& f : prod.factors()) {
       auto trans =
           csv_transform(f, csv_basis, coeff_tensor_label, tensor_labels);
-      result.append(1, trans ? trans : f,
-                    (f->is<Product>() || f->is<Sum>()) ? Product::Flatten::No
-                                                       : Product::Flatten::Yes);
+      // N.B. do not flatten the product to ensure that CSV transform of
+      // each factor is performed before assembling the final product
+      // this way for DF-factorized integrals each DF factor is transformed
+      // to CSV basis before DF reconstruction
+      result.append(1, trans ? trans : f, Product::Flatten::No);
     }
 
     return ex<Product>(std::move(result));
