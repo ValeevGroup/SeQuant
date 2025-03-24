@@ -1,5 +1,5 @@
 #include <catch2/catch_test_macros.hpp>
-#include <catch2/generators/catch_generators_all.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
 
 #include "catch2_sequant.hpp"
 
@@ -83,6 +83,25 @@ TEST_CASE("biorthogonalization", "[Biorthogonalization]") {
         CAPTURE(k);
         REQUIRE_THAT(expected.at(k), EquivalentTo(expressions.at(k)));
       }
+    }
+  }
+
+  SECTION("error") {
+    const std::vector<std::vector<std::wstring>> inputs = {
+        {L"R{i1,u1;a1,u2} = X{i1,u1;a1,u2}"},
+    };
+
+    for (const std::vector<std::wstring> &current_inputs : inputs) {
+      CAPTURE(current_inputs);
+      container::svector<ResultExpr> expressions;
+
+      for (const std::wstring &str : current_inputs) {
+        expressions.push_back(parse_result_expr(str));
+      }
+
+      REQUIRE_THROWS_WITH(
+          biorthogonal_transform(expressions),
+          Catch::Matchers::ContainsSubstring("Missing explicit expression"));
     }
   }
 }
