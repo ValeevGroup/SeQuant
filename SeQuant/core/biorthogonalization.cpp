@@ -254,6 +254,8 @@ void biorthogonal_transform(container::svector<ResultExpr>& result_exprs,
 
   // We expect all ResultExpr objects to be equal except for the permutation of
   // indices
+  // Also, we are assuming that all given ResultExpr objects are
+  // particle-symmetric
   assert(std::all_of(
       result_exprs.begin(), result_exprs.end(), [&](const ResultExpr& expr) {
         return expr.has_label() == result_exprs.front().has_label() &&
@@ -291,6 +293,10 @@ void biorthogonal_transform(container::svector<ResultExpr>& result_exprs,
                std::is_permutation(expr.aux().begin(), expr.aux().end(),
                                    result_exprs.front().aux().begin());
       }));
+  assert(std::all_of(result_exprs.begin(), result_exprs.end(),
+                     [](const ResultExpr& res) {
+                       return res.particle_symmetry() == ParticleSymmetry::symm;
+                     }));
 
   auto externals = result_exprs |
                    ranges::views::transform([](const ResultExpr& expr) {
