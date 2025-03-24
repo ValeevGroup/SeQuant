@@ -202,14 +202,22 @@ ExprPtr create_expr_for(const ParticlePairings& ref_pairing,
                                              compare_first_less<IndexPair>{});
                      }));
 
+  container::set<std::pair<IndexSpace, IndexSpace>> ref_space_pairing;
+  ref_space_pairing.reserve(ref_pairing.size());
+  for (std::size_t i = 0; i < ref_pairing.size(); ++i) {
+    ref_space_pairing.insert(
+        std::make_pair(ref_pairing[i].first.space(),
+                       ref_pairing[perm->image(i)].second.space()));
+  }
+
   auto it = std::find_if(
       pairings.begin(), pairings.end(), [&](const ParticlePairings& p) {
         assert(p.size() == ref_pairing.size());
 
-        for (std::size_t i = 0; i < ref_pairing.size(); ++i) {
-          if (p.at(i).first != ref_pairing.at(i).first ||
-              p.at(i).second.space() !=
-                  ref_pairing.at(perm->image(i)).second.space()) {
+        for (const IndexPair& pair : p) {
+          if (ref_space_pairing.find(
+                  std::make_pair(pair.first.space(), pair.second.space())) ==
+              ref_space_pairing.end()) {
             return false;
           }
         }
