@@ -56,16 +56,13 @@ auto timed_eval_inplace(F&& fun, Args&&... args) {
 
 template <typename... Args>
 void log_eval(Args const&... args) noexcept {
-#ifdef SEQUANT_EVAL_TRACE
-  auto l = Logger::instance();
-  if (l.log_level_eval > 0) write_log(l, "[EVAL] ", args...);
-#endif
+  auto& l = Logger::instance();
+  if (l.eval.level > 0) write_log(l, "[EVAL] ", args...);
 }
 
 [[maybe_unused]] void log_cache_access(size_t key, CacheManager const& cm) {
-#ifdef SEQUANT_EVAL_TRACE
-  auto l = Logger::instance();
-  if (l.log_level_eval > 0) {
+  auto& l = Logger::instance();
+  if (l.eval.level > 0) {
     assert(cm.exists(key));
     auto max_l = cm.max_life(key);
     auto cur_l = cm.life(key);
@@ -77,20 +74,17 @@ void log_eval(Args const&... args) noexcept {
                 "[CACHE] Released key: ", key, ".\n");
     }
   }
-#endif
 }
 
 [[maybe_unused]] void log_cache_store(size_t key, CacheManager const& cm) {
-#ifdef SEQUANT_EVAL_TRACE
-  auto l = Logger::instance();
-  if (l.log_level_eval > 0) {
+  auto& l = Logger::instance();
+  if (l.eval.level > 0) {
     assert(cm.exists(key));
     write_log(l,  //
               "[CACHE] Stored key: ", key, ".\n");
     // because storing automatically implies immediately accessing it
     log_cache_access(key, cm);
   }
-#endif
 }
 
 [[maybe_unused]] std::string perm_groups_string(
@@ -204,16 +198,12 @@ template <typename NodeT, typename Le, typename... Args,
           std::enable_if_t<IsLeafEvaluator<NodeT, Le>, bool> = true>
 ERPtr evaluate_core(NodeT const& node, Le const& le, Args&&... args) {
   if (node.leaf()) {
-#ifdef SEQUANT_EVAL_TRACE
     auto&& [res, time] = timed_eval(le, node);
     log_eval(node->is_constant()   ? "[CONSTANT] "
              : node->is_variable() ? "[VARIABLE] "
                                    : "[TENSOR] ",
              node->label(), "  ", time.count(), "\n");
     return res;
-#else
-    return le(node);
-#endif
   } else {
     ERPtr const left =
         evaluate_crust(node.left(), le, std::forward<Args>(args)...);
@@ -227,20 +217,15 @@ ERPtr evaluate_core(NodeT const& node, Le const& le, Args&&... args) {
                                       node.right()->annot(), node->annot()};
 
     if (node->op_type() == EvalOp::Sum) {
-#ifdef SEQUANT_EVAL_TRACE
       auto&& [res, time] = timed_eval([&]() { return left->sum(*right, ann); });
       log_eval("[SUM] ", node.left()->label(), " + ", node.right()->label(),
                " = ", node->label(), "  ", time.count(), "\n");
       return res;
-#else
-      return left->sum(*right, ann);
-#endif
     } else {
       assert(node->op_type() == EvalOp::Prod);
       auto const de_nest =
           node.left()->tot() && node.right()->tot() && !node->tot();
 
-#ifdef SEQUANT_EVAL_TRACE
       auto&& [res, time] = timed_eval([&]() {
         return left->prod(*right, ann,
                           de_nest ? TA::DeNest::True : TA::DeNest::False);
@@ -249,11 +234,6 @@ ERPtr evaluate_core(NodeT const& node, Le const& le, Args&&... args) {
       log_eval("[PRODUCT] ", node.left()->label(), " * ", node.right()->label(),
                " = ", node->label(), "  ", time.count(), "\n");
       return res;
-#else
-
-      return left->prod(*right, ann,
-                        de_nest ? TA::DeNest::True : TA::DeNest::False);
-#endif
     }
   }
 }
@@ -329,19 +309,14 @@ auto evaluate(NodesT const& nodes, Le const& le, Args&&... args) {
   auto end = std::end(nodes);
   assert(iter != end);
 
-#ifdef SEQUANT_EVAL_TRACE
   log_eval("[TERM] ", " ", to_string(deparse(to_expr(*iter))), "\n");
-#endif
 
   auto result = evaluate(*iter, le, std::forward<Args>(args)...);
   auto const pnode_label = (*iter)->label();
 
   for (++iter; iter != end; ++iter) {
-#ifdef SEQUANT_EVAL_TRACE
     log_eval("[TERM] ", " ", to_string(deparse(to_expr(*iter))), "\n");
-#endif
     auto right = evaluate(*iter, le, std::forward<Args>(args)...);
-#ifdef SEQUANT_EVAL_TRACE
     auto&& time = timed_eval_inplace([&]() { result->add_inplace(*right); });
     log_eval("[ADD_INPLACE] ",  //
              pnode_label,       //
@@ -350,9 +325,6 @@ auto evaluate(NodesT const& nodes, Le const& le, Args&&... args) {
              "  ",              //
              time.count(),      //
              "\n");
-#else
-    result->add_inplace(*right);
-#endif
   }
 
   return result;
@@ -378,21 +350,14 @@ template <typename NodeT, typename Annot, typename Le, typename... Args,
 auto evaluate(NodeT const& node,    //
               Annot const& layout,  //
               Le const& le, Args&&... args) {
-#ifdef SEQUANT_EVAL_TRACE
   log_eval("[TERM] ", " ", to_string(deparse(to_expr(node))), "\n");
-#endif
   auto result = evaluate_crust(node, le, std::forward<Args>(args)...);
 
-#ifdef SEQUANT_EVAL_TRACE
   auto&& [res, time] = timed_eval([&]() {
     return result->permute(std::array<std::any, 2>{node->annot(), layout});
   });
   log_eval("[PERMUTE] ", node->label(), "  ", time.count(), "\n");
   return res;
-
-#else
-  return result->permute(std::array<std::any, 2>{node->annot(), layout});
-#endif
 }
 
 ///
@@ -424,17 +389,12 @@ auto evaluate(NodesT const& nodes,  //
   assert(iter != end);
   auto const pnode_label = (*iter)->label();
 
-#ifdef SEQUANT_EVAL_TRACE
   log_eval("[TERM] ", " ", to_string(deparse(to_expr(*iter))), "\n");
-#endif
 
   auto result = evaluate(*iter, layout, le, std::forward<Args>(args)...);
   for (++iter; iter != end; ++iter) {
-#ifdef SEQUANT_EVAL_TRACE
     log_eval("[TERM] ", " ", to_string(deparse(to_expr(*iter))), "\n");
-#endif
     auto right = evaluate(*iter, layout, le, std::forward<Args>(args)...);
-#ifdef SEQUANT_EVAL_TRACE
     auto&& time = timed_eval_inplace([&]() { result->add_inplace(*right); });
     log_eval("[ADD_INPLACE] ",  //
              pnode_label,       //
@@ -443,10 +403,6 @@ auto evaluate(NodesT const& nodes,  //
              "  ",              //
              time.count(),      //
              "\n");
-
-#else
-    result->add_inplace(*right);
-#endif
   }
   return result;
 }
@@ -473,16 +429,12 @@ auto evaluate_symm(NodeT const& node, Annot const& layout, Le const& le,
                    Args&&... args) {
   auto result = evaluate(node, layout, le, std::forward<Args>(args)...);
 
-#ifdef SEQUANT_EVAL_TRACE
   auto&& [res, time] = timed_eval([&]() { return result->symmetrize(); });
   log_eval("[SYMMETRIZE] (layout) ",  //
            "(", layout, ") ",         //
            time.count(),              //
            "\n");
   return res;
-#else
-  return result->symmetrize();
-#endif
 }
 
 ///
@@ -522,7 +474,6 @@ auto evaluate_antisymm(NodeT const& node,    //
   }
 
   auto result = evaluate(node, layout, le, std::forward<Args>(args)...);
-#ifdef SEQUANT_EVAL_TRACE
   auto&& [res, time] =
       timed_eval([&]() { return result->antisymmetrize(bra_rank); });
   log_eval("[ANTISYMMETRIZE] (bra rank, layout) ",  //
@@ -530,9 +481,6 @@ auto evaluate_antisymm(NodeT const& node,    //
            time.count(),                            //
            "\n");
   return res;
-#else
-  return result->antisymmetrize(bra_rank);
-#endif
 }
 
 }  // namespace sequant
