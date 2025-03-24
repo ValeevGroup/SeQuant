@@ -33,8 +33,7 @@ ExprPtr density_fit(ExprPtr const& expr, std::wstring const& aux_label) {
     auto const& g = expr->as<Tensor>();
     if (g.label() == L"g"     //
         && g.bra_rank() == 2  //
-        && g.ket_rank() == 2  //
-        && ranges::none_of(g.indices(), &Index::has_proto_indices))
+        && g.ket_rank() == 2)
       return density_fit_impl(expr->as<Tensor>(), Index(aux_label + L"_1"));
     else
       return expr;
