@@ -72,6 +72,8 @@ TEST_CASE("biorthogonalization", "[Biorthogonalization]") {
 
       biorthogonal_transform(expressions);
 
+      REQUIRE(expected.size() == expressions.size());
+
       for (std::size_t k = 0; k < expected.size(); ++k) {
         CAPTURE(k);
         REQUIRE_THAT(expected.at(k), EquivalentTo(expressions.at(k)));
