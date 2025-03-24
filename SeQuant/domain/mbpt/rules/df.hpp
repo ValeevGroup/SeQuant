@@ -13,8 +13,8 @@
 namespace sequant::mbpt {
 
 ///
-/// Converts the 4-center (2-electron integral) tensors into a product of two
-/// rank-3 tensors.
+/// Converts the 4-center (2-electron integral) tensors into a (antisymmetrized)
+/// product of two rank-3 tensors.
 ///
 /// \param expr The expression to be density-fit.
 /// \param aux_space The index space representing the auxiliary indices

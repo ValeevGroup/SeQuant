@@ -8,6 +8,8 @@
 #include <SeQuant/core/space.hpp>
 #include <SeQuant/core/tensor.hpp>
 
+#include <range/v3/view.hpp>
+
 #include <string_view>
 
 namespace sequant::mbpt {
@@ -24,7 +26,16 @@ ExprPtr density_fit_impl(Tensor const& tnsr, Index const& aux_idx,
   auto t2 = ex<Tensor>(factor_label, bra({ranges::back(tnsr.bra())}),
                        ket({ranges::back(tnsr.ket())}), aux({aux_idx}));
 
-  return ex<Product>(1, ExprPtrList{t1, t2});
+  if (tnsr.symmetry() == Symmetry::antisymm) {
+    auto t3 = ex<Tensor>(factor_label, bra({ranges::back(tnsr.bra())}),
+                         ket({ranges::front(tnsr.ket())}), aux({aux_idx}));
+
+    auto t4 = ex<Tensor>(factor_label, bra({ranges::front(tnsr.bra())}),
+                         ket({ranges::back(tnsr.ket())}), aux({aux_idx}));
+    return t1 * t2 - t3 * t4;
+  }
+
+  return t1 * t2;
 }
 
 ExprPtr density_fit(ExprPtr const& expr, IndexSpace aux_space,
