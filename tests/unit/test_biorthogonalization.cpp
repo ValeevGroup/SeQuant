@@ -62,7 +62,7 @@ TEST_CASE("biorthogonalization", "[Biorthogonalization]") {
     REQUIRE(inputs.size() == expected_outputs.size());
 
     for (std::size_t i = 0; i < inputs.size(); ++i) {
-      CAPTURE(i);
+      CAPTURE(inputs.at(i));
 
       REQUIRE(inputs.at(i).size() == expected_outputs.at(i).size());
 
