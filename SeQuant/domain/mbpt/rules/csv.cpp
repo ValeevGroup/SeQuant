@@ -78,9 +78,9 @@ ExprPtr csv_transform_impl(Tensor const& tnsr, const IndexSpace& csv_basis,
       rket.emplace_back(idx);
   }
 
-  auto xtnsr =
-      ex<Tensor>(tnsr.label(), bra(rbra), ket(rket), aux(), tnsr.symmetry(),
-                 tnsr.braket_symmetry(), tnsr.particle_symmetry());
+  auto xtnsr = ex<Tensor>(tnsr.label(), bra(rbra), ket(rket), tnsr.aux(),
+                          tnsr.symmetry(), tnsr.braket_symmetry(),
+                          tnsr.particle_symmetry());
   result.prepend(1, std::move(xtnsr));
 
   return ex<Product>(std::move(result));
