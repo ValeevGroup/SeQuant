@@ -8,36 +8,42 @@
 #include <SeQuant/core/space.hpp>
 #include <SeQuant/core/tensor.hpp>
 
+#include <string_view>
+
 namespace sequant::mbpt {
 
-ExprPtr density_fit_impl(Tensor const& tnsr, Index const& aux_idx) {
+ExprPtr density_fit_impl(Tensor const& tnsr, Index const& aux_idx,
+                         std::wstring_view factor_label) {
   assert(tnsr.bra_rank() == 2     //
          && tnsr.ket_rank() == 2  //
          && tnsr.aux_rank() == 0);
 
-  auto t1 = ex<Tensor>(L"g", bra({ranges::front(tnsr.bra())}),
+  auto t1 = ex<Tensor>(factor_label, bra({ranges::front(tnsr.bra())}),
                        ket({ranges::front(tnsr.ket())}), aux({aux_idx}));
 
-  auto t2 = ex<Tensor>(L"g", bra({ranges::back(tnsr.bra())}),
+  auto t2 = ex<Tensor>(factor_label, bra({ranges::back(tnsr.bra())}),
                        ket({ranges::back(tnsr.ket())}), aux({aux_idx}));
 
   return ex<Product>(1, ExprPtrList{t1, t2});
 }
 
-ExprPtr density_fit(ExprPtr const& expr, IndexSpace aux_space) {
+ExprPtr density_fit(ExprPtr const& expr, IndexSpace aux_space,
+                    std::wstring_view tensor_label,
+                    std::wstring_view factor_label) {
   using ranges::views::transform;
   if (expr->is<Sum>())
-    return ex<Sum>(*expr | transform([&aux_space](auto&& x) {
-      return density_fit(x, aux_space);
+    return ex<Sum>(*expr | transform([&](auto&& x) {
+      return density_fit(x, aux_space, tensor_label, factor_label);
     }));
 
   else if (expr->is<Tensor>()) {
-    auto const& g = expr->as<Tensor>();
-    if (g.label() == L"g"     //
-        && g.bra_rank() == 2  //
-        && g.ket_rank() == 2  //
-        && ranges::none_of(g.indices(), &Index::has_proto_indices))
-      return density_fit_impl(expr->as<Tensor>(), Index(L"1", aux_space));
+    auto const& tensor = expr->as<Tensor>();
+    if (tensor.label() == tensor_label  //
+        && tensor.bra_rank() == 2       //
+        && tensor.ket_rank() == 2       //
+        && ranges::none_of(tensor.indices(), &Index::has_proto_indices))
+      return density_fit_impl(expr->as<Tensor>(), Index(L"1", aux_space),
+                              factor_label);
     else
       return expr;
   } else if (expr->is<Product>()) {
@@ -49,8 +55,8 @@ ExprPtr density_fit(ExprPtr const& expr, IndexSpace aux_space) {
     for (auto&& f : prod.factors())
       if (f.is<Tensor>() && f.as<Tensor>().label() == L"g") {
         auto const& g = f->as<Tensor>();
-        auto g_df =
-            density_fit_impl(g, Index(std::to_wstring(++aux_ix), aux_space));
+        auto g_df = density_fit_impl(
+            g, Index(std::to_wstring(++aux_ix), aux_space), factor_label);
         result.append(1, std::move(g_df), Product::Flatten::Yes);
       } else {
         result.append(1, f, Product::Flatten::No);
