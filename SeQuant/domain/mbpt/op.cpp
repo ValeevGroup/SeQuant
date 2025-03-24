@@ -935,7 +935,7 @@ ExprPtr T_pt_(std::size_t order, std::size_t K, std::size_t nbatch) {
   assert(order == 1 && "only first order perturbation is supported now");
   return ex<op_t>(
       []() -> std::wstring_view { return optype2label.at(OpType::t_1); },
-      [=]() -> ExprPtr { return tensor::T_pt_(order, K); },
+      [=]() -> ExprPtr { return tensor::T_pt_(order, K, nbatch); },
       [=](qnc_t& qns) { qns = combine(excitation_type_qns(K), qns); }, nbatch);
 }
 
@@ -953,7 +953,7 @@ ExprPtr Λ_pt_(std::size_t order, std::size_t K, std::size_t nbatch) {
   assert(order == 1 && "only first order perturbation is supported now");
   return ex<op_t>(
       []() -> std::wstring_view { return optype2label.at(OpType::λ_1); },
-      [=]() -> ExprPtr { return tensor::Λ_pt_(order, K); },
+      [=]() -> ExprPtr { return tensor::Λ_pt_(order, K, nbatch); },
       [=](qnc_t& qns) { qns = combine(deexcitation_type_qns(K), qns); },
       nbatch);
 }
