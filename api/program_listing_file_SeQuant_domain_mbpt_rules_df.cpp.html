@@ -307,8 +307,7 @@
 <span class="w">    </span><span class="k">auto</span><span class="w"> </span><span class="k">const</span><span class="o">&amp;</span><span class="w"> </span><span class="n">g</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">expr</span><span class="o">-&gt;</span><span class="n">as</span><span class="o">&lt;</span><span class="n">Tensor</span><span class="o">&gt;</span><span class="p">();</span>
 <span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">g</span><span class="p">.</span><span class="n">label</span><span class="p">()</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="sa">L</span><span class="s">&quot;g&quot;</span><span class="w">     </span><span class="c1">//</span>
 <span class="w">        </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">g</span><span class="p">.</span><span class="n">bra_rank</span><span class="p">()</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">2</span><span class="w">  </span><span class="c1">//</span>
-<span class="w">        </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">g</span><span class="p">.</span><span class="n">ket_rank</span><span class="p">()</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">2</span><span class="w">  </span><span class="c1">//</span>
-<span class="w">        </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">ranges</span><span class="o">::</span><span class="n">none_of</span><span class="p">(</span><span class="n">g</span><span class="p">.</span><span class="n">indices</span><span class="p">(),</span><span class="w"> </span><span class="o">&amp;</span><span class="n">Index</span><span class="o">::</span><span class="n">has_proto_indices</span><span class="p">))</span>
+<span class="w">        </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">g</span><span class="p">.</span><span class="n">ket_rank</span><span class="p">()</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">2</span><span class="p">)</span>
 <span class="w">      </span><span class="k">return</span><span class="w"> </span><span class="n">density_fit_impl</span><span class="p">(</span><span class="n">expr</span><span class="o">-&gt;</span><span class="n">as</span><span class="o">&lt;</span><span class="n">Tensor</span><span class="o">&gt;</span><span class="p">(),</span><span class="w"> </span><span class="n">Index</span><span class="p">(</span><span class="n">aux_label</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="sa">L</span><span class="s">&quot;_1&quot;</span><span class="p">));</span>
 <span class="w">    </span><span class="k">else</span>
 <span class="w">      </span><span class="k">return</span><span class="w"> </span><span class="n">expr</span><span class="p">;</span>
@@ -354,7 +353,7 @@
             
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on Mar 23, 2025 9:39:00 PM</div>
+              Last updated on Mar 24, 2025 8:35:36 PM</div>
           </div>
           <div class="right-details">
             <div class="icons">

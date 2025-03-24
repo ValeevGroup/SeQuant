@@ -58,7 +58,7 @@ Program Listing for File optimize.hpp
    namespace opt {
    
    template <typename IdxToSz, typename Idxs,
-             std::enable_if_t<std::is_invocable_r_v<size_t, IdxToSz, Index>,
+             std::enable_if_t<std::is_invocable_r_v<size_t, IdxToSz, const Index&>,
                               bool> = true>
    double ops_count(IdxToSz const& idxsz, Idxs const& idxs) {
      auto oixs = tot_indices(idxs);
@@ -128,7 +128,7 @@ Program Listing for File optimize.hpp
    }
    
    template <typename IdxToSz,
-             std::enable_if_t<std::is_invocable_r_v<size_t, IdxToSz, Index>,
+             std::enable_if_t<std::is_invocable_r_v<size_t, IdxToSz, const Index&>,
                               bool> = true>
    EvalSequence single_term_opt(TensorNetwork const& network,
                                 IdxToSz const& idxsz) {
@@ -254,9 +254,8 @@ Program Listing for File optimize.hpp
    
    Sum reorder(Sum const& sum);
    
-   template <typename IdxToSize,
-             typename =
-                 std::enable_if_t<std::is_invocable_r_v<size_t, IdxToSize, Index>>>
+   template <typename IdxToSize, typename = std::enable_if_t<std::is_invocable_r_v<
+                                     size_t, IdxToSize, const Index&>>>
    ExprPtr optimize(ExprPtr const& expr, IdxToSize const& idx2size,
                     bool reorder_sum) {
      using ranges::views::transform;
