@@ -2,9 +2,11 @@
 // Created by Eduard Valeyev on 3/8/25.
 //
 
-#include "SeQuant/domain/mbpt/rules/df.hpp"
+#include <SeQuant/domain/mbpt/rules/df.hpp>
 
-#include "SeQuant/core/tensor.hpp"
+#include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/space.hpp>
+#include <SeQuant/core/tensor.hpp>
 
 namespace sequant::mbpt {
 
