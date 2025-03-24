@@ -59,7 +59,7 @@ namespace opt {
 /// \return flops count
 ///
 template <typename IdxToSz, typename Idxs,
-          std::enable_if_t<std::is_invocable_r_v<size_t, IdxToSz, Index>,
+          std::enable_if_t<std::is_invocable_r_v<size_t, IdxToSz, const Index&>,
                            bool> = true>
 double ops_count(IdxToSz const& idxsz, Idxs const& idxs) {
   auto oixs = tot_indices(idxs);
@@ -174,7 +174,7 @@ container::svector<Index> diff_indices(I1 const& idxs1, I2 const& idxs2) {
 ///         equivalent optimal sequences then the result is the one that keeps
 ///         the order of tensors in the network as original as possible.
 template <typename IdxToSz,
-          std::enable_if_t<std::is_invocable_r_v<size_t, IdxToSz, Index>,
+          std::enable_if_t<std::is_invocable_r_v<size_t, IdxToSz, const Index&>,
                            bool> = true>
 EvalSequence single_term_opt(TensorNetwork const& network,
                              IdxToSz const& idxsz) {
@@ -337,9 +337,8 @@ Sum reorder(Sum const& sum);
 /// \param reorder_sum If true, the summands are reordered so that terms with
 ///                    common sub-expressions appear closer to each other.
 /// \return Optimized expression for lower evaluation cost.
-template <typename IdxToSize,
-          typename =
-              std::enable_if_t<std::is_invocable_r_v<size_t, IdxToSize, Index>>>
+template <typename IdxToSize, typename = std::enable_if_t<std::is_invocable_r_v<
+                                  size_t, IdxToSize, const Index&>>>
 ExprPtr optimize(ExprPtr const& expr, IdxToSize const& idx2size,
                  bool reorder_sum) {
   using ranges::views::transform;
