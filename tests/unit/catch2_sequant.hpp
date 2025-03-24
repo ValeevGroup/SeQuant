@@ -20,6 +20,7 @@
 #include <cassert>
 #include <sstream>
 #include <string>
+#include <string_view>
 #include <type_traits>
 #include <variant>
 
@@ -86,15 +87,16 @@ struct StringMaker<sequant::ResultExpr> {
     }
 
     using IndexString = StringMaker<sequant::Index>;
+    using namespace std::literals;
     sstream << "{";
     sstream << (res.bra() | ranges::views::transform(IndexString::convert) |
-                ranges::views::join(", "));
+                ranges::views::join(", "sv) | ranges::to<std::string>());
     sstream << ";";
     sstream << (res.ket() | ranges::views::transform(IndexString::convert) |
-                ranges::views::join(", "));
+                ranges::views::join(", "sv) | ranges::to<std::string>());
     sstream << ";";
     sstream << (res.aux() | ranges::views::transform(IndexString::convert) |
-                ranges::views::join(", "));
+                ranges::views::join(", "sv) | ranges::to<std::string>());
     sstream << "}";
 
     sstream << " = "
