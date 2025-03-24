@@ -8,11 +8,16 @@
 #include <SeQuant/core/utility/expr.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 
+#include <SeQuant/domain/mbpt/convention.hpp>
+
 #include <string>
 #include <vector>
 
 TEST_CASE("biorthogonalization", "[Biorthogonalization]") {
   using namespace sequant;
+
+  auto resetter = set_scoped_default_context(
+      Context(mbpt::make_mr_spaces(), Vacuum::SingleProduct));
 
   SECTION("plain ExprPtr") {
     const std::vector<std::wstring> inputs = {
