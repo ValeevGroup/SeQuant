@@ -19,7 +19,8 @@ namespace sequant::mbpt {
 /// \return The density-fit expression if 'g' of rank-4 present, otherwise the
 ///         input expression itself will be returned.
 ///
-ExprPtr density_fit(ExprPtr const& expr, std::wstring const& aux_label);
+[[nodiscard]] ExprPtr density_fit(ExprPtr const& expr,
+                                  std::wstring const& aux_label);
 
 }  // namespace sequant::mbpt
 
