@@ -63,7 +63,7 @@ TEST_CASE("biorthogonalization", "[Biorthogonalization]") {
 
       container::svector<ResultExpr> expressions;
       container::svector<ResultExpr> expected;
-      for (std::size_t k = 0; i < inputs.at(i).size(); ++i) {
+      for (std::size_t k = 0; k < inputs.at(i).size(); ++k) {
         ResultExpr parsed = parse_result_expr(inputs.at(i).at(k));
         expressions.push_back(parsed);
 
