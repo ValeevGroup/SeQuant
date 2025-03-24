@@ -18,6 +18,13 @@
 
 namespace sequant {
 
+template <typename T>
+struct compare_first_less {
+  bool operator()(const T& lhs, const T& rhs) const {
+    return lhs.first < rhs.first;
+  }
+};
+
 using IndexPair = std::pair<Index, Index>;
 using ParticlePairings = container::svector<IndexPair>;
 
@@ -164,9 +171,8 @@ Eigen::MatrixXd compute_biorth_coeffs(std::size_t n_particles,
 }
 
 void sort_pairings(ParticlePairings& pairing) {
-  std::stable_sort(
-      pairing.begin(), pairing.end(),
-      [](const auto& lhs, const auto& rhs) { return lhs.first < rhs.first; });
+  std::stable_sort(pairing.begin(), pairing.end(),
+                   compare_first_less<IndexPair>{});
 }
 
 std::size_t rank_transformation_perms(const ParticlePairings& reference,
