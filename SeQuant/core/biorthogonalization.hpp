@@ -25,7 +25,7 @@ void biorthogonal_transform(ResultExpr& expr,
 void biorthogonal_transform(container::svector<ResultExpr>& exprs,
                             double threshold = default_biorth_threshold);
 
-ExprPtr biorthogonal_transform(
+[[nodiscard]] ExprPtr biorthogonal_transform(
     const ExprPtr& expr,
     const container::svector<container::svector<sequant::Index>>&
         ext_index_groups = {},
