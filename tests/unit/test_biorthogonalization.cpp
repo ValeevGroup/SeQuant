@@ -37,16 +37,9 @@ TEST_CASE("biorthogonalization", "[Biorthogonalization]") {
 
       ExprPtr input_expr = parse_expr(inputs.at(i));
 
-      std::optional<ExprPtr> symmetrizer = pop_tensor(input_expr, L"S");
-
       auto externals = external_indices(input_expr);
 
       ExprPtr actual = biorthogonal_transform(input_expr, externals);
-
-      if (symmetrizer.has_value()) {
-        actual = symmetrizer.value() * actual;
-        simplify(actual);
-      }
 
       REQUIRE_THAT(actual, EquivalentTo(expected_outputs.at(i)));
     }
@@ -70,23 +63,14 @@ TEST_CASE("biorthogonalization", "[Biorthogonalization]") {
 
       container::svector<ResultExpr> expressions;
       container::svector<ResultExpr> expected;
-      std::optional<ExprPtr> symmetrizer;
       for (std::size_t k = 0; i < inputs.at(i).size(); ++i) {
         ResultExpr parsed = parse_result_expr(inputs.at(i).at(k));
-        symmetrizer = pop_tensor(parsed.expression(), L"S");
         expressions.push_back(parsed);
 
         expected.push_back(parse_result_expr(expected_outputs.at(i).at(k)));
       }
 
       biorthogonal_transform(expressions);
-
-      if (symmetrizer.has_value()) {
-        for (ResultExpr &current : expressions) {
-          current.expression() *= symmetrizer.value();
-          current.expression() = simplify(current.expression());
-        }
-      }
 
       for (std::size_t k = 0; k < expected.size(); ++k) {
         CAPTURE(k);
