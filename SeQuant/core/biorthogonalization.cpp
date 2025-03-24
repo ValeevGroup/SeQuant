@@ -219,12 +219,11 @@ ExprPtr create_expr_for(const ParticlePairings& ref_pairing,
 
   if (it == pairings.end()) {
     throw std::runtime_error(
-        "Missing required explicit expression for index pairing for "
+        "Missing explicit expression for a required index pairing in "
         "biorthogonalization");
   }
 
   auto idx = std::distance(pairings.begin(), it);
-
   const ParticlePairings& base = *it;
 
   assert(base.size() == ref_pairing.size());
