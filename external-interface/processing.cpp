@@ -12,6 +12,7 @@
 #include <SeQuant/core/tensor.hpp>
 #include <SeQuant/core/utility/expr.hpp>
 
+#include <SeQuant/domain/mbpt/rules/df.hpp>
 #include <SeQuant/domain/mbpt/spin.hpp>
 
 #include <spdlog/spdlog.h>
@@ -29,7 +30,8 @@ container::svector< ResultExpr > postProcess(ResultExpr result, const IndexSpace
 
 
 	if (options.density_fitting) {
-		throw std::runtime_error("DF insertion not yet implemented");
+		IndexSpace aux_space = get_default_context().index_space_registry()->retrieve(L"F");
+		result.expression()  = mbpt::density_fit(result.expression(), aux_space, L"g", L"DF");
 	}
 
 	switch (options.spintrace) {
