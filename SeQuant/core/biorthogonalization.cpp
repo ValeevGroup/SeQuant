@@ -178,6 +178,10 @@ void sort_pairings(ParticlePairings& pairing) {
 std::size_t rank_transformation_perms(const ParticlePairings& reference,
                                       const ParticlePairings& current) {
   assert(reference.size() == current.size());
+  assert(std::is_sorted(reference.begin(), reference.end(),
+                        compare_first_less<IndexPair>{}));
+  assert(std::is_sorted(current.begin(), current.end(),
+                        compare_first_less<IndexPair>{}));
 
   perm::Permutation perm = perm::computeTransformationPermutation(
       reference, current, [](const IndexPair& lhs, const IndexPair& rhs) {
@@ -191,7 +195,13 @@ ExprPtr create_expr_for(const ParticlePairings& ref_pairing,
                         const perm::Permutation& perm,
                         const container::svector<ParticlePairings>& pairings,
                         const container::svector<ExprPtr>& base_exprs) {
-  // TODO: assert that all pairings are sorted w.r.t. first
+  // assert that all pairings are sorted w.r.t. first
+  assert(std::all_of(pairings.begin(), pairings.end(),
+                     [](const ParticlePairings& pairing) {
+                       return std::is_sorted(pairing.begin(), pairing.end(),
+                                             compare_first_less<IndexPair>{});
+                     }));
+
   auto it = std::find_if(
       pairings.begin(), pairings.end(), [&](const ParticlePairings& p) {
         assert(p.size() == ref_pairing.size());
