@@ -51,13 +51,25 @@ TEST_CASE("biorthogonalization", "[Biorthogonalization]") {
   }
 
   SECTION("ResultExpr") {
-    std::vector<std::vector<std::wstring>> inputs = {
+    const std::vector<std::vector<std::wstring>> inputs = {
         {L"R{a1;i1} = t{a1;i1}"},
-        {L"R{i1,i2;a1,a2} = S{i1,i2;a1,a2}:S g{a1,a2;i1,i2}"}};
-    std::vector<std::vector<std::wstring>> expected_outputs = {
+        {L"R{i1,i2;a1,a2} = S{i1,i2;a1,a2}:S g{a1,a2;i1,i2}"},
+        {L"R{i1,u1;a1,a2} = S{a1,a2;}:S g{i1,u1;a1,a2}"},
+        {L"R{i1,i2;a1,u1} = S{;i1,i2}:S g{i1,i2;a1,u1}"},
+        {L"R{i1,u1;a1,u2} = X{i1,u1;a1,u2}",
+         L"R{u1,i1;a1,u2} = Y{u1,i1;a1,u2}"},
+    };
+    const std::vector<std::vector<std::wstring>> expected_outputs = {
         {L"R{a1;i1} = 1/2 t{a1;i1}"},
-        {L"R{a1,a2;i1,i2} = S{i1,i2;a1,a2}:S 1/6 (2 g{a1,a2;i1,i2} + "
-         L"g{a2,a1;i1,i2})"}};
+        {L"R{a1,a2;i1,i2} = S{i1,i2;a1,a2}:S 1/6 (2 g{a1,a2;i1,i2} "
+         "+ g{a2,a1;i1,i2})"},
+        {L"R{i1,u1;a1,a2} = S{a1,a2;}:S 1/6 ( 2 g{i1,u1;a1,a2} "
+         "+ g{i1,u1;a2,a1} )"},
+        {L"R{i1,i2;a1,u1} = S{;i1,i2}:S 1/6 ( 2 g{i1,i2;a1,u1} "
+         "+  g{i1,i2;a1,u1} )"},
+        {L"R{i1,u1;a1,u2} = 1/3 X{i1,u1;a1,u2} + 1/6 Y{u1,i1;a1,u2}",
+         L"R{u1,i1;a1,u2} = 1/3 Y{u1,i1;a1,u2} + 1/6 X{i1,u1;a1,u2}"},
+    };
 
     REQUIRE(inputs.size() == expected_outputs.size());
 
