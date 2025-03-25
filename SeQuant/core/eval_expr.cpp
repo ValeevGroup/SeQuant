@@ -9,7 +9,7 @@
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/tensor.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
-#include <SeQuant/core/tensor_network.hpp>
+#include <SeQuant/core/tensor_network_v2.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/wstring.hpp>
 #include <SeQuant/external/bliss/graph.hh>
@@ -84,12 +84,12 @@ EvalExpr::EvalExpr(Tensor const& tnsr)
       expr_{tnsr.clone()} {
   if (is_tot(tnsr)) {
     ExprPtrList tlist{expr_};
-    auto tn = TensorNetwork(tlist);
+    auto tn = TensorNetworkV2(tlist);
     auto md =
         tn.canonicalize_slots(TensorCanonicalizer::cardinal_tensor_labels());
     hash_value_ = md.hash_value();
     canon_phase_ = md.phase;
-    canon_indices_ = md.get_indices() | ranges::to<index_vector>;
+    canon_indices_ = md.get_indices<index_vector>();
   } else {
     hash_value_ = hash_terminal_tensor(tnsr);
     canon_phase_ = 1;
@@ -527,11 +527,11 @@ EvalExprNode binarize(Product const& prod) {
       collect_tensor_factors(left, subfacs);
       collect_tensor_factors(right, subfacs);
       auto ts = subfacs | transform([](auto&& t) { return t.expr; });
-      auto tn = TensorNetwork(ts);
+      auto tn = TensorNetworkV2(ts);
       auto canon =
           tn.canonicalize_slots(TensorCanonicalizer::cardinal_tensor_labels());
       hash::combine(h, canon.hash_value());
-      bool const scalar_result = ranges::empty(canon.get_indices());
+      bool const scalar_result = canon.named_indices_canonical.empty();
       if (scalar_result) {
         return {EvalOp::Prod,            //
                 ResultType::Scalar,      //

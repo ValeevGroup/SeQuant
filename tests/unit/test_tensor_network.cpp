@@ -226,159 +226,159 @@ TEST_CASE("tensor_network", "[elements]") {
     const std::wstring actual = oss.str();
     // clang-format off
     const std::wstring expected =
-        L"graph g {\n"
-"node [ style=filled, penwidth=2, margin=0];\n"
-"v0 [ label=\"a_1\", texlbl=\"${a_1}$\", color=\"#13db00\", fillcolor=\"#98db04\" ];\n"
-"v0 -- v29\n"
-"v0 -- v58\n"
-"v1 [ label=\"a_2\", texlbl=\"${a_2}$\", color=\"#13db00\", fillcolor=\"#98db04\" ];\n"
-"v1 -- v29\n"
-"v1 -- v58\n"
-"v2 [ label=\"a_3\", texlbl=\"${a_3}$\", color=\"#13db00\", fillcolor=\"#98db04\" ];\n"
-"v2 -- v33\n"
-"v2 -- v54\n"
-"v3 [ label=\"a_4\", texlbl=\"${a_4}$\", color=\"#13db00\", fillcolor=\"#98db04\" ];\n"
-"v3 -- v33\n"
-"v3 -- v54\n"
-"v4 [ label=\"a_5\", texlbl=\"${a_5}$\", color=\"#13db00\", fillcolor=\"#98db04\" ];\n"
-"v4 -- v37\n"
-"v4 -- v50\n"
-"v5 [ label=\"a_6\", texlbl=\"${a_6}$\", color=\"#13db00\", fillcolor=\"#98db04\" ];\n"
-"v5 -- v37\n"
-"v5 -- v50\n"
-"v6 [ label=\"a_7\", texlbl=\"${a_7}$\", color=\"#13db00\", fillcolor=\"#98db04\" ];\n"
-"v6 -- v22\n"
-"v6 -- v41\n"
-"v7 [ label=\"a_8\", texlbl=\"${a_8}$\", color=\"#13db00\", fillcolor=\"#98db04\" ];\n"
-"v7 -- v22\n"
-"v7 -- v41\n"
-"v8 [ label=\"i_1\", texlbl=\"${i_1}$\", color=\"#3e2d55\", fillcolor=\"#f8b4aa\" ];\n"
-"v8 -- v30\n"
-"v8 -- v57\n"
-"v9 [ label=\"i_2\", texlbl=\"${i_2}$\", color=\"#3e2d55\", fillcolor=\"#f8b4aa\" ];\n"
-"v9 -- v30\n"
-"v9 -- v57\n"
-"v10 [ label=\"i_3\", texlbl=\"${i_3}$\", color=\"#3e2d55\", fillcolor=\"#f8b4aa\" ];\n"
-"v10 -- v34\n"
-"v10 -- v53\n"
-"v11 [ label=\"i_4\", texlbl=\"${i_4}$\", color=\"#3e2d55\", fillcolor=\"#f8b4aa\" ];\n"
-"v11 -- v34\n"
-"v11 -- v53\n"
-"v12 [ label=\"i_5\", texlbl=\"${i_5}$\", color=\"#3e2d55\", fillcolor=\"#f8b4aa\" ];\n"
-"v12 -- v38\n"
-"v12 -- v49\n"
-"v13 [ label=\"i_6\", texlbl=\"${i_6}$\", color=\"#3e2d55\", fillcolor=\"#f8b4aa\" ];\n"
-"v13 -- v38\n"
-"v13 -- v49\n"
-"v14 [ label=\"i_7\", texlbl=\"${i_7}$\", color=\"#3e2d55\", fillcolor=\"#f8b4aa\" ];\n"
-"v14 -- v21\n"
-"v14 -- v42\n"
-"v15 [ label=\"i_8\", texlbl=\"${i_8}$\", color=\"#3e2d55\", fillcolor=\"#f8b4aa\" ];\n"
-"v15 -- v21\n"
-"v15 -- v42\n"
-"v16 [ label=\"κ_1\", texlbl=\"${\\kappa_1}$\", color=\"#e174c5\", fillcolor=\"#e1e8c5\" ];\n"
-"v16 -- v25\n"
-"v16 -- v46\n"
-"v17 [ label=\"κ_2\", texlbl=\"${\\kappa_2}$\", color=\"#e174c5\", fillcolor=\"#e1e8c5\" ];\n"
-"v17 -- v25\n"
-"v17 -- v46\n"
-"v18 [ label=\"κ_3\", texlbl=\"${\\kappa_3}$\", color=\"#e174c5\", fillcolor=\"#e1e8c5\" ];\n"
-"v18 -- v26\n"
-"v18 -- v45\n"
-"v19 [ label=\"κ_4\", texlbl=\"${\\kappa_4}$\", color=\"#e174c5\", fillcolor=\"#e1e8c5\" ];\n"
-"v19 -- v26\n"
-"v19 -- v45\n"
-"subgraph cluster0 {\n"
-"v20 [ label=\"A\", texlbl=\"$A$\", color=\"#257a61\", fillcolor=\"#94f4c2\" ];\n"
-"v20 -- v23\n"
-"v21 [ label=\"bra2a\", color=\"#06d223\", fillcolor=\"#30d28c\" ];\n"
-"v21 -- v23\n"
-"v22 [ label=\"ket2a\", color=\"#c849cb\", fillcolor=\"#c892cb\" ];\n"
-"v22 -- v23\n"
-"v23 [ label=\"bka\", color=\"#257a61\", fillcolor=\"#94f4c2\" ];\n"
-"}\n"
-"subgraph cluster1 {\n"
-"v24 [ label=\"g\", texlbl=\"$g$\", color=\"#300a49\", fillcolor=\"#c05092\" ];\n"
-"v24 -- v27\n"
-"v25 [ label=\"bra2a\", color=\"#06d223\", fillcolor=\"#30d28c\" ];\n"
-"v25 -- v27\n"
-"v26 [ label=\"ket2a\", color=\"#c849cb\", fillcolor=\"#c892cb\" ];\n"
-"v26 -- v27\n"
-"v27 [ label=\"bka\", color=\"#300a49\", fillcolor=\"#c05092\" ];\n"
-"}\n"
-"subgraph cluster2 {\n"
-"v28 [ label=\"t\", texlbl=\"$t$\", color=\"#e812d9\", fillcolor=\"#e890d9\" ];\n"
-"v28 -- v31\n"
-"v29 [ label=\"bra2a\", color=\"#06d223\", fillcolor=\"#30d28c\" ];\n"
-"v29 -- v31\n"
-"v30 [ label=\"ket2a\", color=\"#c849cb\", fillcolor=\"#c892cb\" ];\n"
-"v30 -- v31\n"
-"v31 [ label=\"bka\", color=\"#e812d9\", fillcolor=\"#e890d9\" ];\n"
-"}\n"
-"subgraph cluster3 {\n"
-"v32 [ label=\"t\", texlbl=\"$t$\", color=\"#e812d9\", fillcolor=\"#e890d9\" ];\n"
-"v32 -- v35\n"
-"v33 [ label=\"bra2a\", color=\"#06d223\", fillcolor=\"#30d28c\" ];\n"
-"v33 -- v35\n"
-"v34 [ label=\"ket2a\", color=\"#c849cb\", fillcolor=\"#c892cb\" ];\n"
-"v34 -- v35\n"
-"v35 [ label=\"bka\", color=\"#e812d9\", fillcolor=\"#e890d9\" ];\n"
-"}\n"
-"subgraph cluster4 {\n"
-"v36 [ label=\"t\", texlbl=\"$t$\", color=\"#e812d9\", fillcolor=\"#e890d9\" ];\n"
-"v36 -- v39\n"
-"v37 [ label=\"bra2a\", color=\"#06d223\", fillcolor=\"#30d28c\" ];\n"
-"v37 -- v39\n"
-"v38 [ label=\"ket2a\", color=\"#c849cb\", fillcolor=\"#c892cb\" ];\n"
-"v38 -- v39\n"
-"v39 [ label=\"bka\", color=\"#e812d9\", fillcolor=\"#e890d9\" ];\n"
-"}\n"
-"subgraph cluster5 {\n"
-"v40 [ label=\"ã\", texlbl=\"$\\tilde{a}$\", color=\"#2a13ee\", fillcolor=\"#a898ee\" ];\n"
-"v40 -- v43\n"
-"v41 [ label=\"bra2a\", color=\"#06d223\", fillcolor=\"#30d28c\" ];\n"
-"v41 -- v43\n"
-"v42 [ label=\"ket2a\", color=\"#c849cb\", fillcolor=\"#c892cb\" ];\n"
-"v42 -- v43\n"
-"v43 [ label=\"bka\", color=\"#2a13ee\", fillcolor=\"#a898ee\" ];\n"
-"}\n"
-"subgraph cluster6 {\n"
-"v44 [ label=\"ã\", texlbl=\"$\\tilde{a}$\", color=\"#2a13ee\", fillcolor=\"#a898ee\" ];\n"
-"v44 -- v47\n"
-"v45 [ label=\"bra2a\", color=\"#06d223\", fillcolor=\"#30d28c\" ];\n"
-"v45 -- v47\n"
-"v46 [ label=\"ket2a\", color=\"#c849cb\", fillcolor=\"#c892cb\" ];\n"
-"v46 -- v47\n"
-"v47 [ label=\"bka\", color=\"#2a13ee\", fillcolor=\"#a898ee\" ];\n"
-"}\n"
-"subgraph cluster7 {\n"
-"v48 [ label=\"ã\", texlbl=\"$\\tilde{a}$\", color=\"#2a13ee\", fillcolor=\"#a898ee\" ];\n"
-"v48 -- v51\n"
-"v49 [ label=\"bra2a\", color=\"#06d223\", fillcolor=\"#30d28c\" ];\n"
-"v49 -- v51\n"
-"v50 [ label=\"ket2a\", color=\"#c849cb\", fillcolor=\"#c892cb\" ];\n"
-"v50 -- v51\n"
-"v51 [ label=\"bka\", color=\"#2a13ee\", fillcolor=\"#a898ee\" ];\n"
-"}\n"
-"subgraph cluster8 {\n"
-"v52 [ label=\"ã\", texlbl=\"$\\tilde{a}$\", color=\"#2a13ee\", fillcolor=\"#a898ee\" ];\n"
-"v52 -- v55\n"
-"v53 [ label=\"bra2a\", color=\"#06d223\", fillcolor=\"#30d28c\" ];\n"
-"v53 -- v55\n"
-"v54 [ label=\"ket2a\", color=\"#c849cb\", fillcolor=\"#c892cb\" ];\n"
-"v54 -- v55\n"
-"v55 [ label=\"bka\", color=\"#2a13ee\", fillcolor=\"#a898ee\" ];\n"
-"}\n"
-"subgraph cluster9 {\n"
-"v56 [ label=\"ã\", texlbl=\"$\\tilde{a}$\", color=\"#2a13ee\", fillcolor=\"#a898ee\" ];\n"
-"v56 -- v59\n"
-"v57 [ label=\"bra2a\", color=\"#06d223\", fillcolor=\"#30d28c\" ];\n"
-"v57 -- v59\n"
-"v58 [ label=\"ket2a\", color=\"#c849cb\", fillcolor=\"#c892cb\" ];\n"
-"v58 -- v59\n"
-"v59 [ label=\"bka\", color=\"#2a13ee\", fillcolor=\"#a898ee\" ];\n"
-"}\n"
-"}\n";
+		L"graph g {\n"
+		L"node [ style=filled, penwidth=2, margin=0];\n"
+		L"v0 [ label=\"a_1\", texlbl=\"${a_1}$\", color=\"#13db00\", fillcolor=\"#98db04\" ];\n"
+		L"v0 -- v22\n"
+		L"v0 -- v41\n"
+		L"v1 [ label=\"a_2\", texlbl=\"${a_2}$\", color=\"#13db00\", fillcolor=\"#98db04\" ];\n"
+		L"v1 -- v22\n"
+		L"v1 -- v41\n"
+		L"v2 [ label=\"a_3\", texlbl=\"${a_3}$\", color=\"#13db00\", fillcolor=\"#98db04\" ];\n"
+		L"v2 -- v29\n"
+		L"v2 -- v58\n"
+		L"v3 [ label=\"a_4\", texlbl=\"${a_4}$\", color=\"#13db00\", fillcolor=\"#98db04\" ];\n"
+		L"v3 -- v29\n"
+		L"v3 -- v58\n"
+		L"v4 [ label=\"a_5\", texlbl=\"${a_5}$\", color=\"#13db00\", fillcolor=\"#98db04\" ];\n"
+		L"v4 -- v33\n"
+		L"v4 -- v54\n"
+		L"v5 [ label=\"a_6\", texlbl=\"${a_6}$\", color=\"#13db00\", fillcolor=\"#98db04\" ];\n"
+		L"v5 -- v33\n"
+		L"v5 -- v54\n"
+		L"v6 [ label=\"a_7\", texlbl=\"${a_7}$\", color=\"#13db00\", fillcolor=\"#98db04\" ];\n"
+		L"v6 -- v37\n"
+		L"v6 -- v50\n"
+		L"v7 [ label=\"a_8\", texlbl=\"${a_8}$\", color=\"#13db00\", fillcolor=\"#98db04\" ];\n"
+		L"v7 -- v37\n"
+		L"v7 -- v50\n"
+		L"v8 [ label=\"i_1\", texlbl=\"${i_1}$\", color=\"#3e2d55\", fillcolor=\"#f8b4aa\" ];\n"
+		L"v8 -- v21\n"
+		L"v8 -- v42\n"
+		L"v9 [ label=\"i_2\", texlbl=\"${i_2}$\", color=\"#3e2d55\", fillcolor=\"#f8b4aa\" ];\n"
+		L"v9 -- v21\n"
+		L"v9 -- v42\n"
+		L"v10 [ label=\"i_3\", texlbl=\"${i_3}$\", color=\"#3e2d55\", fillcolor=\"#f8b4aa\" ];\n"
+		L"v10 -- v30\n"
+		L"v10 -- v57\n"
+		L"v11 [ label=\"i_4\", texlbl=\"${i_4}$\", color=\"#3e2d55\", fillcolor=\"#f8b4aa\" ];\n"
+		L"v11 -- v30\n"
+		L"v11 -- v57\n"
+		L"v12 [ label=\"i_5\", texlbl=\"${i_5}$\", color=\"#3e2d55\", fillcolor=\"#f8b4aa\" ];\n"
+		L"v12 -- v34\n"
+		L"v12 -- v53\n"
+		L"v13 [ label=\"i_6\", texlbl=\"${i_6}$\", color=\"#3e2d55\", fillcolor=\"#f8b4aa\" ];\n"
+		L"v13 -- v34\n"
+		L"v13 -- v53\n"
+		L"v14 [ label=\"i_7\", texlbl=\"${i_7}$\", color=\"#3e2d55\", fillcolor=\"#f8b4aa\" ];\n"
+		L"v14 -- v38\n"
+		L"v14 -- v49\n"
+		L"v15 [ label=\"i_8\", texlbl=\"${i_8}$\", color=\"#3e2d55\", fillcolor=\"#f8b4aa\" ];\n"
+		L"v15 -- v38\n"
+		L"v15 -- v49\n"
+		L"v16 [ label=\"κ_1\", texlbl=\"${\\kappa_1}$\", color=\"#e174c5\", fillcolor=\"#e1e8c5\" ];\n"
+		L"v16 -- v25\n"
+		L"v16 -- v46\n"
+		L"v17 [ label=\"κ_2\", texlbl=\"${\\kappa_2}$\", color=\"#e174c5\", fillcolor=\"#e1e8c5\" ];\n"
+		L"v17 -- v25\n"
+		L"v17 -- v46\n"
+		L"v18 [ label=\"κ_3\", texlbl=\"${\\kappa_3}$\", color=\"#e174c5\", fillcolor=\"#e1e8c5\" ];\n"
+		L"v18 -- v26\n"
+		L"v18 -- v45\n"
+		L"v19 [ label=\"κ_4\", texlbl=\"${\\kappa_4}$\", color=\"#e174c5\", fillcolor=\"#e1e8c5\" ];\n"
+		L"v19 -- v26\n"
+		L"v19 -- v45\n"
+		L"subgraph cluster0 {\n"
+		L"v20 [ label=\"A\", texlbl=\"$A$\", color=\"#257a61\", fillcolor=\"#94f4c2\" ];\n"
+		L"v20 -- v23\n"
+		L"v21 [ label=\"bra2a\", color=\"#06d223\", fillcolor=\"#30d28c\" ];\n"
+		L"v21 -- v23\n"
+		L"v22 [ label=\"ket2a\", color=\"#c849cb\", fillcolor=\"#c892cb\" ];\n"
+		L"v22 -- v23\n"
+		L"v23 [ label=\"bka\", color=\"#257a61\", fillcolor=\"#94f4c2\" ];\n"
+		L"}\n"
+		L"subgraph cluster1 {\n"
+		L"v24 [ label=\"g\", texlbl=\"$g$\", color=\"#300a49\", fillcolor=\"#c05092\" ];\n"
+		L"v24 -- v27\n"
+		L"v25 [ label=\"bra2a\", color=\"#06d223\", fillcolor=\"#30d28c\" ];\n"
+		L"v25 -- v27\n"
+		L"v26 [ label=\"ket2a\", color=\"#c849cb\", fillcolor=\"#c892cb\" ];\n"
+		L"v26 -- v27\n"
+		L"v27 [ label=\"bka\", color=\"#300a49\", fillcolor=\"#c05092\" ];\n"
+		L"}\n"
+		L"subgraph cluster2 {\n"
+		L"v28 [ label=\"t\", texlbl=\"$t$\", color=\"#e812d9\", fillcolor=\"#e890d9\" ];\n"
+		L"v28 -- v31\n"
+		L"v29 [ label=\"bra2a\", color=\"#06d223\", fillcolor=\"#30d28c\" ];\n"
+		L"v29 -- v31\n"
+		L"v30 [ label=\"ket2a\", color=\"#c849cb\", fillcolor=\"#c892cb\" ];\n"
+		L"v30 -- v31\n"
+		L"v31 [ label=\"bka\", color=\"#e812d9\", fillcolor=\"#e890d9\" ];\n"
+		L"}\n"
+		L"subgraph cluster3 {\n"
+		L"v32 [ label=\"t\", texlbl=\"$t$\", color=\"#e812d9\", fillcolor=\"#e890d9\" ];\n"
+		L"v32 -- v35\n"
+		L"v33 [ label=\"bra2a\", color=\"#06d223\", fillcolor=\"#30d28c\" ];\n"
+		L"v33 -- v35\n"
+		L"v34 [ label=\"ket2a\", color=\"#c849cb\", fillcolor=\"#c892cb\" ];\n"
+		L"v34 -- v35\n"
+		L"v35 [ label=\"bka\", color=\"#e812d9\", fillcolor=\"#e890d9\" ];\n"
+		L"}\n"
+		L"subgraph cluster4 {\n"
+		L"v36 [ label=\"t\", texlbl=\"$t$\", color=\"#e812d9\", fillcolor=\"#e890d9\" ];\n"
+		L"v36 -- v39\n"
+		L"v37 [ label=\"bra2a\", color=\"#06d223\", fillcolor=\"#30d28c\" ];\n"
+		L"v37 -- v39\n"
+		L"v38 [ label=\"ket2a\", color=\"#c849cb\", fillcolor=\"#c892cb\" ];\n"
+		L"v38 -- v39\n"
+		L"v39 [ label=\"bka\", color=\"#e812d9\", fillcolor=\"#e890d9\" ];\n"
+		L"}\n"
+		L"subgraph cluster5 {\n"
+		L"v40 [ label=\"ã\", texlbl=\"$\\tilde{a}$\", color=\"#2a13ee\", fillcolor=\"#a898ee\" ];\n"
+		L"v40 -- v43\n"
+		L"v41 [ label=\"bra2a\", color=\"#06d223\", fillcolor=\"#30d28c\" ];\n"
+		L"v41 -- v43\n"
+		L"v42 [ label=\"ket2a\", color=\"#c849cb\", fillcolor=\"#c892cb\" ];\n"
+		L"v42 -- v43\n"
+		L"v43 [ label=\"bka\", color=\"#2a13ee\", fillcolor=\"#a898ee\" ];\n"
+		L"}\n"
+		L"subgraph cluster6 {\n"
+		L"v44 [ label=\"ã\", texlbl=\"$\\tilde{a}$\", color=\"#2a13ee\", fillcolor=\"#a898ee\" ];\n"
+		L"v44 -- v47\n"
+		L"v45 [ label=\"bra2a\", color=\"#06d223\", fillcolor=\"#30d28c\" ];\n"
+		L"v45 -- v47\n"
+		L"v46 [ label=\"ket2a\", color=\"#c849cb\", fillcolor=\"#c892cb\" ];\n"
+		L"v46 -- v47\n"
+		L"v47 [ label=\"bka\", color=\"#2a13ee\", fillcolor=\"#a898ee\" ];\n"
+		L"}\n"
+		L"subgraph cluster7 {\n"
+		L"v48 [ label=\"ã\", texlbl=\"$\\tilde{a}$\", color=\"#2a13ee\", fillcolor=\"#a898ee\" ];\n"
+		L"v48 -- v51\n"
+		L"v49 [ label=\"bra2a\", color=\"#06d223\", fillcolor=\"#30d28c\" ];\n"
+		L"v49 -- v51\n"
+		L"v50 [ label=\"ket2a\", color=\"#c849cb\", fillcolor=\"#c892cb\" ];\n"
+		L"v50 -- v51\n"
+		L"v51 [ label=\"bka\", color=\"#2a13ee\", fillcolor=\"#a898ee\" ];\n"
+		L"}\n"
+		L"subgraph cluster8 {\n"
+		L"v52 [ label=\"ã\", texlbl=\"$\\tilde{a}$\", color=\"#2a13ee\", fillcolor=\"#a898ee\" ];\n"
+		L"v52 -- v55\n"
+		L"v53 [ label=\"bra2a\", color=\"#06d223\", fillcolor=\"#30d28c\" ];\n"
+		L"v53 -- v55\n"
+		L"v54 [ label=\"ket2a\", color=\"#c849cb\", fillcolor=\"#c892cb\" ];\n"
+		L"v54 -- v55\n"
+		L"v55 [ label=\"bka\", color=\"#2a13ee\", fillcolor=\"#a898ee\" ];\n"
+		L"}\n"
+		L"subgraph cluster9 {\n"
+		L"v56 [ label=\"ã\", texlbl=\"$\\tilde{a}$\", color=\"#2a13ee\", fillcolor=\"#a898ee\" ];\n"
+		L"v56 -- v59\n"
+		L"v57 [ label=\"bra2a\", color=\"#06d223\", fillcolor=\"#30d28c\" ];\n"
+		L"v57 -- v59\n"
+		L"v58 [ label=\"ket2a\", color=\"#c849cb\", fillcolor=\"#c892cb\" ];\n"
+		L"v58 -- v59\n"
+		L"v59 [ label=\"bka\", color=\"#2a13ee\", fillcolor=\"#a898ee\" ];\n"
+		L"}\n"
+		L"}\n";
     // clang-format on
 
     REQUIRE(actual == expected);
@@ -415,18 +415,19 @@ TEST_CASE("tensor_network", "[elements]") {
       const std::wstring expected =
           L"(18,19)\n"
           L"(16,17)\n"
+          L"(8,9)\n"
+          L"(0,1)\n"
           L"(14,15)\n"
           L"(6,7)\n"
           L"(12,13)\n"
-          L"(4,5)\n"
           L"(10,11)\n"
-          L"(8,9)\n"
+          L"(4,5)\n"
           L"(2,3)\n"
-          L"(0,1)\n"
-          L"(0,2)(1,3)(8,10)(9,11)(28,32)(29,33)(30,34)(31,35)(52,56)(53,57)("
+          L"(2,4)(3,5)(10,12)(11,13)(28,32)(29,33)(30,34)(31,35)(52,56)(53,57)("
           L"54,58)(55,59)\n"
-          L"(2,4)(3,5)(10,12)(11,13)(32,36)(33,37)(34,38)(35,39)(48,52)(49,53)("
+          L"(4,6)(5,7)(12,14)(13,15)(32,36)(33,37)(34,38)(35,39)(48,52)(49,53)("
           L"50,54)(51,55)\n";
+
       REQUIRE(actual == expected);
 
       // change to 1 to user vertex labels rather than indices
@@ -487,152 +488,6 @@ TEST_CASE("tensor_network", "[elements]") {
       CHECK(oss.str() == L"({i_3},{i_4})\n({i_1},{i_2})\n");
       // std::wcout << oss.str() << std::endl;
     }
-
-    // profile canonicalization for synthetic tests in
-    // DOI 10.1016/j.cpc.2018.02.014
-    if (false) {
-      for (auto testcase : {0, 1, 2, 3}) {
-        // - testcase=0,2 are "equivalent" and correspond to the "frustrated"
-        //   case in Section 5.3 of DOI 10.1016/j.cpc.2018.02.014
-        // - testcase=1 corresponds to the "frustrated" case in Section 5.4 of
-        //   DOI 10.1016/j.cpc.2018.02.014
-        // - testcase=3 corresponds to the "No symmetry dummy"
-        //   case in Section 5.1 of DOI 10.1016/j.cpc.2018.02.014
-        if (testcase == 0)
-          std::wcout
-              << "canonicalizing network with 1 totally-symmetric tensor with "
-                 "N indices and 1 asymmetric tensor with N indices\n";
-        else if (testcase == 3)
-          std::wcout << "canonicalizing network with 1 asymmetric tensor with "
-                        "N indices and 1 asymmetric tensor with N indices\n";
-        else
-          std::wcout << "canonicalizing network with n equivalent asymmetric "
-                        "tensors with N/n indices each and 1 asymmetric tensor "
-                        "with N indices\n";
-
-        std::wcout << "N,n,min_time,geommean_time,max_time\n";
-
-        for (auto N :
-             {1, 2, 4, 8, 16, 32, 64, 128, 256}) {  // total number of indices
-
-          int n;
-          switch (testcase) {
-            case 0:
-              n = 1;
-              break;
-            case 1:
-              n = N / 2;
-              break;
-            case 2:
-              n = N;
-              break;
-            case 3:
-              n = 1;
-              break;
-            default:
-              abort();
-          }
-          if (n == 0 || n > N) continue;
-
-          auto ctx_resetter = set_scoped_default_context(
-              (static_cast<std::size_t>(N) > Index::min_tmp_index())
-                  ? Context(get_default_context())
-                        .set_first_dummy_index_ordinal(N + 1)
-                  : get_default_context());
-
-          // make list of indices
-          std::vector<Index> indices;
-          for (auto i = 0; i != N; ++i) {
-            std::wostringstream oss;
-            oss << "i_" << i;
-            indices.emplace_back(oss.str());
-          }
-          std::random_device rd;
-
-          // randomly sample connectivity between bra and ket tensors
-          const auto S = 10;  // how many samples to take
-
-          auto product_time =
-              1.;  // product of all times, need to get geometric mean
-          auto min_time =
-              std::numeric_limits<double>::max();  // total time for all samples
-          auto max_time =
-              std::numeric_limits<double>::min();  // total time for all samples
-          for (auto s = 0; s != S; ++s) {
-            // make tensors of independently (and randomly) permuted
-            // contravariant and covariant indices
-            auto contravariant_indices = indices;
-            auto covariant_indices = indices;
-
-            std::shuffle(contravariant_indices.begin(),
-                         contravariant_indices.end(), std::mt19937{rd()});
-            std::shuffle(covariant_indices.begin(), covariant_indices.end(),
-                         std::mt19937{rd()});
-
-            auto utensors =
-                covariant_indices | ranges::views::chunk(N / n) |
-                ranges::views::transform([&](const auto& idxs) {
-                  return ex<Tensor>(
-                      L"u", bra(idxs), ket{},
-                      (testcase == 3
-                           ? Symmetry::nonsymm
-                           : ((n == 1) ? Symmetry::symm : Symmetry::nonsymm)));
-                }) |
-                ranges::to_vector;
-            CHECK(utensors.size() == static_cast<std::size_t>(n));
-            auto dtensors =
-                contravariant_indices | ranges::views::chunk(N) |
-                ranges::views::transform([&](const auto& idxs) {
-                  return ex<Tensor>(L"d", bra{}, ket(idxs), Symmetry::nonsymm);
-                }) |
-                ranges::to_vector;
-            CHECK(dtensors.size() == 1);
-
-            ExprPtr expr;
-            for (auto g = 0; g != n; ++g) {
-              if (g == 0)
-                expr = utensors[0] * dtensors[0];
-              else
-                expr = expr * utensors[g];
-            }
-
-            TensorNetwork tn(expr->as<Product>().factors());
-
-            // produce misc data for publication
-            if (false && s == 0) {
-              std::wcout << "N=" << N << " n=" << n << " expr:\n"
-                         << expr->to_latex() << std::endl;
-
-              // make graph
-              REQUIRE_NOTHROW(tn.make_bliss_graph());
-              auto [graph, vlabels, vtexlabels, vcolors, vtypes] =
-                  tn.make_bliss_graph();
-
-              // create dot
-              std::basic_ostringstream<wchar_t> oss;
-              REQUIRE_NOTHROW(graph->write_dot(oss, vlabels));
-              std::wcout << "bliss graph:" << std::endl
-                         << oss.str() << std::endl;
-            }
-
-            sequant::TimerPool<> timer;
-            timer.start();
-            tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(),
-                            false);
-            timer.stop();
-            const auto elapsed_seconds = timer.read();
-            product_time *= elapsed_seconds;
-            min_time = std::min(min_time, elapsed_seconds);
-            max_time = std::max(max_time, elapsed_seconds);
-          }
-
-          const auto geommean_time = std::pow(product_time, 1. / S);
-          std::wcout << N << "," << n << "," << min_time << "," << geommean_time
-                     << "," << max_time << "\n";
-        }
-      }
-    }
-
   }  // SECTION("misc1")
 }
 
@@ -981,6 +836,26 @@ TEST_CASE("tensor_network_v2", "[elements]") {
       }
     }
 
+    SECTION("special") {
+      auto factors =
+          parse_expr(
+              L"S{i_1;a_1<i_1>}:N-C-S g{i_2,a_1<i_1>;a_2<i_2>,i_1}:N-C-S "
+              L"t{a_2<i_2>;i_2}:N-C-S")
+              ->as<Product>()
+              .factors();
+
+      TensorNetworkV2 tn(factors);
+
+      ExprPtr factor =
+          tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(), false);
+      ExprPtr result = to_product(tn.tensors());
+      if (factor) {
+        result *= factor;
+      }
+
+      REQUIRE(result);
+    }
+
 #ifndef SEQUANT_SKIP_LONG_TESTS
     SECTION("Exhaustive SRCC example") {
       // Note: the exact canonical form written here is implementation-defined
@@ -1199,151 +1074,5 @@ TEST_CASE("tensor_network_v2", "[elements]") {
       CHECK(oss.str() == L"({i_3},{i_4})\n({i_1},{i_2})\n");
       // std::wcout << oss.str() << std::endl;
     }
-
-    // profile canonicalization for synthetic tests in
-    // DOI 10.1016/j.cpc.2018.02.014
-    if (false) {
-      for (auto testcase : {0, 1, 2, 3}) {
-        // - testcase=0,2 are "equivalent" and correspond to the "frustrated"
-        //   case in Section 5.3 of DOI 10.1016/j.cpc.2018.02.014
-        // - testcase=1 corresponds to the "frustrated" case in Section 5.4 of
-        //   DOI 10.1016/j.cpc.2018.02.014
-        // - testcase=3 corresponds to the "No symmetry dummy"
-        //   case in Section 5.1 of DOI 10.1016/j.cpc.2018.02.014
-        if (testcase == 0)
-          std::wcout << "canonicalizing network with 1 totally-symmetric "
-                        "tensor with "
-                        "N indices and 1 asymmetric tensor with N indices\n";
-        else if (testcase == 3)
-          std::wcout << "canonicalizing network with 1 asymmetric tensor with "
-                        "N indices and 1 asymmetric tensor with N indices\n";
-        else
-          std::wcout << "canonicalizing network with n equivalent asymmetric "
-                        "tensors with N/n indices each and 1 asymmetric tensor "
-                        "with N indices\n";
-
-        std::wcout << "N,n,min_time,geommean_time,max_time\n";
-
-        for (auto N :
-             {1, 2, 4, 8, 16, 32, 64, 128, 256}) {  // total number of indices
-
-          int n;
-          switch (testcase) {
-            case 0:
-              n = 1;
-              break;
-            case 1:
-              n = N / 2;
-              break;
-            case 2:
-              n = N;
-              break;
-            case 3:
-              n = 1;
-              break;
-            default:
-              abort();
-          }
-          if (n == 0 || n > N) continue;
-
-          auto ctx_resetter = set_scoped_default_context(
-              (static_cast<std::size_t>(N) > Index::min_tmp_index())
-                  ? Context(get_default_context())
-                        .set_first_dummy_index_ordinal(N + 1)
-                  : get_default_context());
-
-          // make list of indices
-          std::vector<Index> indices;
-          for (auto i = 0; i != N; ++i) {
-            std::wostringstream oss;
-            oss << "i_" << i;
-            indices.emplace_back(oss.str());
-          }
-          std::random_device rd;
-
-          // randomly sample connectivity between bra and ket tensors
-          const auto S = 10;  // how many samples to take
-
-          auto product_time =
-              1.;  // product of all times, need to get geometric mean
-          auto min_time = std::numeric_limits<double>::max();  // total time for
-                                                               // all samples
-          auto max_time = std::numeric_limits<double>::min();  // total time for
-                                                               // all samples
-          for (auto s = 0; s != S; ++s) {
-            // make tensors of independently (and randomly) permuted
-            // contravariant and covariant indices
-            auto contravariant_indices = indices;
-            auto covariant_indices = indices;
-
-            std::shuffle(contravariant_indices.begin(),
-                         contravariant_indices.end(), std::mt19937{rd()});
-            std::shuffle(covariant_indices.begin(), covariant_indices.end(),
-                         std::mt19937{rd()});
-
-            auto utensors =
-                covariant_indices | ranges::views::chunk(N / n) |
-                ranges::views::transform([&](const auto& idxs) {
-                  return ex<Tensor>(
-                      L"u", bra(idxs), ket{},
-                      (testcase == 3
-                           ? Symmetry::nonsymm
-                           : ((n == 1) ? Symmetry::symm : Symmetry::nonsymm)));
-                }) |
-                ranges::to_vector;
-            CHECK(utensors.size() == static_cast<std::size_t>(n));
-            auto dtensors =
-                contravariant_indices | ranges::views::chunk(N) |
-                ranges::views::transform([&](const auto& idxs) {
-                  return ex<Tensor>(L"d", bra{}, ket(idxs), Symmetry::nonsymm);
-                }) |
-                ranges::to_vector;
-            CHECK(dtensors.size() == 1);
-
-            ExprPtr expr;
-            for (auto g = 0; g != n; ++g) {
-              if (g == 0)
-                expr = utensors[0] * dtensors[0];
-              else
-                expr = expr * utensors[g];
-            }
-
-            TensorNetworkV2 tn(expr->as<Product>().factors());
-
-            // produce misc data for publication
-            if (false && s == 0) {
-              std::wcout << "N=" << N << " n=" << n << " expr:\n"
-                         << expr->to_latex() << std::endl;
-
-              // make graph
-              REQUIRE_NOTHROW(tn.create_graph());
-              TensorNetworkV2::Graph graph = tn.create_graph();
-
-              // create dot
-              std::basic_ostringstream<wchar_t> oss;
-              REQUIRE_NOTHROW(
-                  graph.bliss_graph->write_dot(oss, graph.vertex_labels));
-              std::wcout << "bliss graph:" << std::endl
-                         << oss.str() << std::endl;
-            }
-
-            sequant::TimerPool<> timer;
-            timer.start();
-            tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(),
-                            false);
-            timer.stop();
-            const auto elapsed_seconds = timer.read();
-            product_time *= elapsed_seconds;
-            min_time = std::min(min_time, elapsed_seconds);
-            max_time = std::max(max_time, elapsed_seconds);
-          }
-
-          const auto geommean_time = std::pow(product_time, 1. / S);
-          std::wcout << N << "," << n << "," << min_time << "," << geommean_time
-                     << "," << max_time << "\n";
-        }
-      }
-    }
-
-  }  // SECTION("misc1")
+  }
 }

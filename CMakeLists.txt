@@ -126,9 +126,6 @@ add_feature_info(EVAL_TESTS SEQUANT_EVAL_TESTS "Build evaluation tests (if true,
 option(SEQUANT_PYTHON "Build SeQuant python module" OFF)
 add_feature_info(PYTHON SEQUANT_PYTHON "PySeQuant: Python bindings to SeQuant")
 
-option(SEQUANT_EVAL_TRACE "Enable tracing of the expression interpretation (configure TiledArray with TA_TENSOR_MEM_PROFILE=ON to trace memory use)" OFF)
-add_feature_info(EVAL_TRACE SEQUANT_EVAL_TRACE "Trace expression interpretation")
-
 option(SEQUANT_USE_SYSTEM_BOOST_HASH "Use system Boost for hashing? Set to OFF to make hashing independent of Boost, thus value-portable" ON)
 add_feature_info(SEQUANT_USE_SYSTEM_BOOST_HASH SEQUANT_USE_SYSTEM_BOOST_HASH "SeQuant uses system Boost for hashing (thus results depend on the Boost version)")
 

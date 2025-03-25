@@ -51,10 +51,8 @@ ExprPtr density_fit(ExprPtr const& expr, IndexSpace aux_space,
     auto const& tensor = expr->as<Tensor>();
     if (tensor.label() == tensor_label  //
         && tensor.bra_rank() == 2       //
-        && tensor.ket_rank() == 2       //
-        && ranges::none_of(tensor.indices(), &Index::has_proto_indices))
-      return density_fit_impl(expr->as<Tensor>(), Index(L"1", aux_space),
-                              factor_label);
+        && tensor.ket_rank() == 2)
+      return density_fit_impl(tensor, Index(L"1", aux_space), factor_label);
     else
       return expr;
   } else if (expr->is<Product>()) {
