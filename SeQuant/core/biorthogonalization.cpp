@@ -95,38 +95,6 @@ Eigen::MatrixXd permutational_overlap_matrix(std::size_t n_particles) {
     M *= -1;
   }
 
-  // std::cout << M.format(Eigen::IOFormat()) << std::endl;
-
-  assert(M.isApprox(M.transpose()));
-
-  return M;
-
-  std::size_t n_row = 0;
-  container::svector<int> v(n_particles), v1(n_particles);
-  std::iota(v.begin(), v.end(), 0);
-  std::iota(v1.begin(), v1.end(), 0);
-
-  container::svector<double> permutation_vector;
-  permutation_vector.reserve(n);
-  do {
-    permutation_vector.clear();
-    do {
-      permutation_vector.push_back(std::pow(-2, sequant::count_cycles(v1, v)));
-    } while (std::next_permutation(v.begin(), v.end()));
-
-    // TODO: M is symmetric -> we could make use of that in its construction
-    M.row(n_row) = Eigen::Map<Eigen::VectorXd, Eigen::Unaligned>(
-        permutation_vector.data(), permutation_vector.size());
-
-    ++n_row;
-  } while (std::next_permutation(v1.begin(), v1.end()));
-
-  if (n_particles % 2 != 0) {
-    M *= -1;
-  }
-
-  std::cout << M.format(Eigen::IOFormat()) << std::endl;
-
   assert(M.isApprox(M.transpose()));
 
   return M;
@@ -138,7 +106,7 @@ Eigen::MatrixXd compute_biorth_coeffs(std::size_t n_particles,
   assert(perm_ovlp_mat.rows() == perm_ovlp_mat.cols());
   assert(perm_ovlp_mat.isApprox(perm_ovlp_mat.transpose()));
 
-  // Find Pseudo Inverse, get 1st row only
+  // Find Pseudo Inverse
   auto decomp =
       Eigen::CompleteOrthogonalDecomposition<decltype(perm_ovlp_mat)>();
   decomp.setThreshold(threshold);
@@ -158,16 +126,6 @@ Eigen::MatrixXd compute_biorth_coeffs(std::size_t n_particles,
   pinv *= normalization;
 
   return pinv;
-
-  // container::svector<double> bt_coeff_dvec;
-  // bt_coeff_dvec.resize(pinv.rows());
-  // Eigen::VectorXd::Map(&bt_coeff_dvec[0], bt_coeff_dvec.size()) =
-  //    pinv.row(0) * normalization;
-
-  // return bt_coeff_dvec | ranges::views::transform([&](double d) {
-  //         return to_rational(d, threshold);
-  //       }) |
-  //       ranges::to<container::svector<rational>>();
 }
 
 void sort_pairings(ParticlePairings& pairing) {
@@ -373,39 +331,6 @@ void biorthogonal_transform(container::svector<ResultExpr>& result_exprs,
 
     simplify(result_exprs.at(i).expression());
   }
-
-  //   container::svector<Index> perm_indices =
-  //      externals |
-  //      ranges::views::transform([](const auto& pair) { return pair.second; })
-  //      | ranges::to<decltype(perm_indices)>();
-  //
-  //   container::svector<ExprPtr> transformed(exprs.size(), ex<Constant>(0));
-  //
-  //   for (std::size_t i = 0; i < coefficients.size(); ++i) {
-  //    // Locate or create expression with that index pairing
-  //    // TODO: For finding which ResultExpr to use to select/generate
-  //    equations
-  //    // from, compare external indices only by space to find a result of the
-  //    same
-  //    // block in order to use index replacements to generate the required
-  //    // equations
-  //    ExprPtr current = get_expr_for(perm_indices, exprs);
-  //
-  //    // Figure out what results to add this contribution to
-  //    // TODO: This information can be extracted from rank() of the external
-  //    index
-  //    // perm
-  //
-  //    // Add expression times corresponding factor to transformed results
-  //
-  //    std::next_permutation(perm_indices.begin(), perm_indices.end());
-  //  }
-  //
-  //   assert(transformed.size() == exprs.size());
-  //
-  //   for (std::size_t i = 0; i < exprs.size(); ++i) {
-  //    exprs[i].expression() = std::move(transformed[i]);
-  //  }
 }
 
 ExprPtr biorthogonal_transform(
@@ -426,61 +351,6 @@ ExprPtr biorthogonal_transform(
   biorthogonal_transform(res, threshold);
 
   return res.expression();
-  // assert(!ext_index_groups.empty());
-  // const auto n_particles = ext_index_groups.size();
-
-  // using sequant::container::svector;
-
-  // container::svector<rational> coeffs =
-  //     compute_biorth_coeffs(n_particles, threshold);
-
-  //// Transformation maps
-  // container::svector<container::map<Index, Index>> bt_maps;
-  //{
-  //   container::svector<Index> idx_list(ext_index_groups.size());
-
-  //  for (std::size_t i = 0; i != ext_index_groups.size(); ++i) {
-  //    idx_list[i] = *ext_index_groups[i].begin();
-  //  }
-
-  //  const container::svector<Index> const_idx_list = idx_list;
-
-  //  do {
-  //    container::map<Index, Index> map;
-  //    auto const_list_ptr = const_idx_list.begin();
-  //    for (auto& i : idx_list) {
-  //      map.emplace(*const_list_ptr, i);
-  //      const_list_ptr++;
-  //    }
-  //    bt_maps.push_back(map);
-  //  } while (std::next_permutation(idx_list.begin(), idx_list.end()));
-  //}
-
-  //// If this assertion fails, change the threshold parameter
-  // assert(coeffs.size() == bt_maps.size());
-
-  //// Checks if the replacement map is a canonical sequence
-  // auto is_canonical = [](const container::map<Index, Index>& idx_map) {
-  //   bool canonical = true;
-  //   for (auto&& pair : idx_map)
-  //     if (pair.first != pair.second) return false;
-  //   return canonical;
-  // };
-
-  //// Scale transformed expressions and append
-  // Sum bt_expr{};
-  // auto coeff_it = coeffs.begin();
-  // for (auto&& map : bt_maps) {
-  //   const auto v = *coeff_it;
-  //   if (is_canonical(map))
-  //     bt_expr.append(ex<Constant>(v) * expr->clone());
-  //   else
-  //     bt_expr.append(ex<Constant>(v) *
-  //                    sequant::transform_expr(expr->clone(), map));
-  //   coeff_it++;
-  // }
-  // ExprPtr result = std::make_shared<Sum>(bt_expr);
-  // return result;
 }
 
 }  // namespace sequant
