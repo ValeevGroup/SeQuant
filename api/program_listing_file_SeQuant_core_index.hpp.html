@@ -740,6 +740,7 @@
 <span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">mutated</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
 <span class="w">      </span><span class="kt">bool</span><span class="w"> </span><span class="n">proto_indices_transformed</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">false</span><span class="p">;</span>
 <span class="w">      </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="k">auto</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="n">subidx</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">proto_indices_</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="n">assert</span><span class="p">(</span><span class="o">!</span><span class="n">subidx</span><span class="p">.</span><span class="n">has_proto_indices</span><span class="p">());</span>
 <span class="w">        </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">subidx</span><span class="p">.</span><span class="n">transform</span><span class="p">(</span><span class="n">index_map</span><span class="p">))</span><span class="w"> </span><span class="n">proto_indices_transformed</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">true</span><span class="p">;</span>
 <span class="w">      </span><span class="p">}</span>
 <span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">proto_indices_transformed</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
@@ -1058,7 +1059,7 @@
             
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on Mar 24, 2025 8:35:36 PM</div>
+              Last updated on Mar 25, 2025 7:38:02 AM</div>
           </div>
           <div class="right-details">
             <div class="icons">

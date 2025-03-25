@@ -291,7 +291,7 @@
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;SeQuant/core/container.hpp&gt;</span>
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;SeQuant/core/expr.hpp&gt;</span>
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;SeQuant/core/index.hpp&gt;</span>
-<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;SeQuant/core/tensor_network.hpp&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;SeQuant/core/tensor_network_v2.hpp&gt;</span>
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;SeQuant/core/utility/indices.hpp&gt;</span>
 
 <span class="cp">#if __cplusplus &gt;= 202002L</span>
@@ -392,7 +392,7 @@
 <span class="k">template</span><span class="w"> </span><span class="o">&lt;</span><span class="k">typename</span><span class="w"> </span><span class="nc">IdxToSz</span><span class="p">,</span>
 <span class="w">          </span><span class="n">std</span><span class="o">::</span><span class="n">enable_if_t</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="n">is_invocable_r_v</span><span class="o">&lt;</span><span class="kt">size_t</span><span class="p">,</span><span class="w"> </span><span class="n">IdxToSz</span><span class="p">,</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="n">Index</span><span class="o">&amp;&gt;</span><span class="p">,</span>
 <span class="w">                           </span><span class="kt">bool</span><span class="o">&gt;</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">true</span><span class="o">&gt;</span>
-<span class="n">EvalSequence</span><span class="w"> </span><span class="n">single_term_opt</span><span class="p">(</span><span class="n">TensorNetwork</span><span class="w"> </span><span class="k">const</span><span class="o">&amp;</span><span class="w"> </span><span class="n">network</span><span class="p">,</span>
+<span class="n">EvalSequence</span><span class="w"> </span><span class="n">single_term_opt</span><span class="p">(</span><span class="n">TensorNetworkV2</span><span class="w"> </span><span class="k">const</span><span class="o">&amp;</span><span class="w"> </span><span class="n">network</span><span class="p">,</span>
 <span class="w">                             </span><span class="n">IdxToSz</span><span class="w"> </span><span class="k">const</span><span class="o">&amp;</span><span class="w"> </span><span class="n">idxsz</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
 <span class="w">  </span><span class="k">using</span><span class="w"> </span><span class="n">ranges</span><span class="o">::</span><span class="n">views</span><span class="o">::</span><span class="n">concat</span><span class="p">;</span>
 <span class="w">  </span><span class="k">using</span><span class="w"> </span><span class="n">IndexContainer</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">container</span><span class="o">::</span><span class="n">svector</span><span class="o">&lt;</span><span class="n">Index</span><span class="o">&gt;</span><span class="p">;</span>
@@ -489,7 +489,7 @@
 <span class="w">                               </span><span class="n">prod</span><span class="p">.</span><span class="n">factors</span><span class="p">().</span><span class="n">end</span><span class="p">(),</span><span class="w"> </span><span class="n">Product</span><span class="o">::</span><span class="n">Flatten</span><span class="o">::</span><span class="n">No</span><span class="p">});</span>
 <span class="w">  </span><span class="k">auto</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="n">tensors</span><span class="w"> </span><span class="o">=</span>
 <span class="w">      </span><span class="n">prod</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="n">filter</span><span class="p">(</span><span class="o">&amp;</span><span class="n">ExprPtr</span><span class="o">::</span><span class="k">template</span><span class="w"> </span><span class="n">is</span><span class="o">&lt;</span><span class="n">Tensor</span><span class="o">&gt;</span><span class="p">)</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="n">ranges</span><span class="o">::</span><span class="n">to_vector</span><span class="p">;</span>
-<span class="w">  </span><span class="k">auto</span><span class="w"> </span><span class="n">seq</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">single_term_opt</span><span class="p">(</span><span class="n">TensorNetwork</span><span class="p">{</span><span class="n">tensors</span><span class="p">},</span><span class="w"> </span><span class="n">idxsz</span><span class="p">);</span>
+<span class="w">  </span><span class="k">auto</span><span class="w"> </span><span class="n">seq</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">single_term_opt</span><span class="p">(</span><span class="n">TensorNetworkV2</span><span class="p">{</span><span class="n">tensors</span><span class="p">},</span><span class="w"> </span><span class="n">idxsz</span><span class="p">);</span>
 <span class="w">  </span><span class="k">auto</span><span class="w"> </span><span class="n">result</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">container</span><span class="o">::</span><span class="n">svector</span><span class="o">&lt;</span><span class="n">ExprPtr</span><span class="o">&gt;</span><span class="p">{};</span>
 <span class="w">  </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="k">auto</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">seq</span><span class="p">)</span>
 <span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">-1</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
@@ -599,7 +599,7 @@
             
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on Mar 24, 2025 8:35:36 PM</div>
+              Last updated on Mar 25, 2025 7:38:02 AM</div>
           </div>
           <div class="right-details">
             <div class="icons">

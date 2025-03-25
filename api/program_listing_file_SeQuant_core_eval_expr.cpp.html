@@ -283,7 +283,7 @@
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;SeQuant/core/index.hpp&gt;</span>
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;SeQuant/core/tensor.hpp&gt;</span>
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;SeQuant/core/tensor_canonicalizer.hpp&gt;</span>
-<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;SeQuant/core/tensor_network.hpp&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;SeQuant/core/tensor_network_v2.hpp&gt;</span>
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;SeQuant/core/utility/indices.hpp&gt;</span>
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;SeQuant/core/wstring.hpp&gt;</span>
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;SeQuant/external/bliss/graph.hh&gt;</span>
@@ -358,12 +358,12 @@
 <span class="w">      </span><span class="n">expr_</span><span class="p">{</span><span class="n">tnsr</span><span class="p">.</span><span class="n">clone</span><span class="p">()}</span><span class="w"> </span><span class="p">{</span>
 <span class="w">  </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">is_tot</span><span class="p">(</span><span class="n">tnsr</span><span class="p">))</span><span class="w"> </span><span class="p">{</span>
 <span class="w">    </span><span class="n">ExprPtrList</span><span class="w"> </span><span class="n">tlist</span><span class="p">{</span><span class="n">expr_</span><span class="p">};</span>
-<span class="w">    </span><span class="k">auto</span><span class="w"> </span><span class="n">tn</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">TensorNetwork</span><span class="p">(</span><span class="n">tlist</span><span class="p">);</span>
+<span class="w">    </span><span class="k">auto</span><span class="w"> </span><span class="n">tn</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">TensorNetworkV2</span><span class="p">(</span><span class="n">tlist</span><span class="p">);</span>
 <span class="w">    </span><span class="k">auto</span><span class="w"> </span><span class="n">md</span><span class="w"> </span><span class="o">=</span>
 <span class="w">        </span><span class="n">tn</span><span class="p">.</span><span class="n">canonicalize_slots</span><span class="p">(</span><span class="n">TensorCanonicalizer</span><span class="o">::</span><span class="n">cardinal_tensor_labels</span><span class="p">());</span>
 <span class="w">    </span><span class="n">hash_value_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">md</span><span class="p">.</span><span class="n">hash_value</span><span class="p">();</span>
 <span class="w">    </span><span class="n">canon_phase_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">md</span><span class="p">.</span><span class="n">phase</span><span class="p">;</span>
-<span class="w">    </span><span class="n">canon_indices_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">md</span><span class="p">.</span><span class="n">get_indices</span><span class="p">()</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="n">ranges</span><span class="o">::</span><span class="n">to</span><span class="o">&lt;</span><span class="n">index_vector</span><span class="o">&gt;</span><span class="p">;</span>
+<span class="w">    </span><span class="n">canon_indices_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">md</span><span class="p">.</span><span class="n">get_indices</span><span class="o">&lt;</span><span class="n">index_vector</span><span class="o">&gt;</span><span class="p">();</span>
 <span class="w">  </span><span class="p">}</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="p">{</span>
 <span class="w">    </span><span class="n">hash_value_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">hash_terminal_tensor</span><span class="p">(</span><span class="n">tnsr</span><span class="p">);</span>
 <span class="w">    </span><span class="n">canon_phase_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span>
@@ -775,11 +775,11 @@
 <span class="w">      </span><span class="n">collect_tensor_factors</span><span class="p">(</span><span class="n">left</span><span class="p">,</span><span class="w"> </span><span class="n">subfacs</span><span class="p">);</span>
 <span class="w">      </span><span class="n">collect_tensor_factors</span><span class="p">(</span><span class="n">right</span><span class="p">,</span><span class="w"> </span><span class="n">subfacs</span><span class="p">);</span>
 <span class="w">      </span><span class="k">auto</span><span class="w"> </span><span class="n">ts</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">subfacs</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="n">transform</span><span class="p">([](</span><span class="k">auto</span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">t</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="n">t</span><span class="p">.</span><span class="n">expr</span><span class="p">;</span><span class="w"> </span><span class="p">});</span>
-<span class="w">      </span><span class="k">auto</span><span class="w"> </span><span class="n">tn</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">TensorNetwork</span><span class="p">(</span><span class="n">ts</span><span class="p">);</span>
+<span class="w">      </span><span class="k">auto</span><span class="w"> </span><span class="n">tn</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">TensorNetworkV2</span><span class="p">(</span><span class="n">ts</span><span class="p">);</span>
 <span class="w">      </span><span class="k">auto</span><span class="w"> </span><span class="n">canon</span><span class="w"> </span><span class="o">=</span>
 <span class="w">          </span><span class="n">tn</span><span class="p">.</span><span class="n">canonicalize_slots</span><span class="p">(</span><span class="n">TensorCanonicalizer</span><span class="o">::</span><span class="n">cardinal_tensor_labels</span><span class="p">());</span>
 <span class="w">      </span><span class="n">hash</span><span class="o">::</span><span class="n">combine</span><span class="p">(</span><span class="n">h</span><span class="p">,</span><span class="w"> </span><span class="n">canon</span><span class="p">.</span><span class="n">hash_value</span><span class="p">());</span>
-<span class="w">      </span><span class="kt">bool</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="n">scalar_result</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ranges</span><span class="o">::</span><span class="n">empty</span><span class="p">(</span><span class="n">canon</span><span class="p">.</span><span class="n">get_indices</span><span class="p">());</span>
+<span class="w">      </span><span class="kt">bool</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="n">scalar_result</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">canon</span><span class="p">.</span><span class="n">named_indices_canonical</span><span class="p">.</span><span class="n">empty</span><span class="p">();</span>
 <span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">scalar_result</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
 <span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="p">{</span><span class="n">EvalOp</span><span class="o">::</span><span class="n">Prod</span><span class="p">,</span><span class="w">            </span><span class="c1">//</span>
 <span class="w">                </span><span class="n">ResultType</span><span class="o">::</span><span class="n">Scalar</span><span class="p">,</span><span class="w">      </span><span class="c1">//</span>
@@ -862,7 +862,7 @@
             
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on Mar 24, 2025 8:35:36 PM</div>
+              Last updated on Mar 25, 2025 7:38:02 AM</div>
           </div>
           <div class="right-details">
             <div class="icons">

@@ -40,7 +40,7 @@ Includes
 
 - ``SeQuant/core/index.hpp`` (:ref:`file_SeQuant_core_index.hpp`)
 
-- ``SeQuant/core/tensor_network.hpp`` (:ref:`file_SeQuant_core_tensor_network.hpp`)
+- ``SeQuant/core/tensor_network_v2.hpp`` (:ref:`file_SeQuant_core_tensor_network_v2.hpp`)
 
 - ``SeQuant/core/utility/indices.hpp`` (:ref:`file_SeQuant_core_utility_indices.hpp`)
 

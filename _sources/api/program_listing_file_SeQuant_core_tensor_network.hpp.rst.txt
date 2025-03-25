@@ -249,14 +249,14 @@ Program Listing for File tensor_network.hpp
    
        [[nodiscard]] size_t hash_value() const;
    
-       [[nodiscard]] inline auto get_indices() const {
+       [[nodiscard]] inline auto get_index_view() const {
          return named_indices_canonical  //
                 | ranges::views::indirect;
        }
    
        template <typename Cont>
        auto get_indices() const {
-         return get_indices() | ranges::to<Cont>;
+         return get_index_view() | ranges::to<Cont>;
        }
    
        std::int8_t phase = +1;  // +1 or -1

@@ -52,6 +52,8 @@ Includes
 
 - ``memory``
 
+- ``range/v3/range/traits.hpp``
+
 - ``stdexcept``
 
 - ``string`` (:ref:`file_SeQuant_core_utility_string.cpp`)
@@ -71,6 +73,12 @@ Includes
 Included By
 -----------
 
+
+- :ref:`file_SeQuant_core_eval_expr.cpp`
+
+- :ref:`file_SeQuant_core_expr.cpp`
+
+- :ref:`file_SeQuant_core_optimize.hpp`
 
 - :ref:`file_SeQuant_core_tensor_network.cpp`
 

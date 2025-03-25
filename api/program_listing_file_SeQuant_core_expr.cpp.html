@@ -282,7 +282,7 @@
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;SeQuant/core/logger.hpp&gt;</span>
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;SeQuant/core/tensor.hpp&gt;</span>
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;SeQuant/core/tensor_canonicalizer.hpp&gt;</span>
-<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;SeQuant/core/tensor_network.hpp&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;SeQuant/core/tensor_network_v2.hpp&gt;</span>
 
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;range/v3/all.hpp&gt;</span>
 
@@ -470,7 +470,7 @@
 <span class="w">  </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">contains_nontensors</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w">  </span><span class="c1">// tensor network canonization is a special case</span>
 <span class="w">                               </span><span class="c1">// that&#39;s done in</span>
 <span class="w">                               </span><span class="c1">// TensorNetwork</span>
-<span class="w">    </span><span class="n">TensorNetwork</span><span class="w"> </span><span class="nf">tn</span><span class="p">(</span><span class="n">factors_</span><span class="p">);</span>
+<span class="w">    </span><span class="n">TensorNetworkV2</span><span class="w"> </span><span class="nf">tn</span><span class="p">(</span><span class="n">factors_</span><span class="p">);</span>
 <span class="w">    </span><span class="k">auto</span><span class="w"> </span><span class="n">canon_factor</span><span class="w"> </span><span class="o">=</span>
 <span class="w">        </span><span class="n">tn</span><span class="p">.</span><span class="n">canonicalize</span><span class="p">(</span><span class="n">TensorCanonicalizer</span><span class="o">::</span><span class="n">cardinal_tensor_labels</span><span class="p">(),</span><span class="w"> </span><span class="n">rapid</span><span class="p">);</span>
 <span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="o">&amp;</span><span class="n">tensors</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">tn</span><span class="p">.</span><span class="n">tensors</span><span class="p">();</span>
@@ -725,7 +725,7 @@
             
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on Mar 24, 2025 8:35:36 PM</div>
+              Last updated on Mar 25, 2025 7:38:02 AM</div>
           </div>
           <div class="right-details">
             <div class="icons">

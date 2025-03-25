@@ -873,14 +873,13 @@
 <span class="w">          </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">n</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">vtypes</span><span class="p">.</span><span class="n">size</span><span class="p">();</span>
 <span class="w">          </span><span class="n">assert</span><span class="p">(</span><span class="n">vcolors</span><span class="p">.</span><span class="n">size</span><span class="p">()</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">n</span><span class="p">);</span>
 <span class="w">          </span><span class="n">assert</span><span class="p">(</span><span class="n">vlabels</span><span class="p">.</span><span class="n">size</span><span class="p">()</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">n</span><span class="p">);</span>
-<span class="w">          </span><span class="n">assert</span><span class="p">(</span><span class="n">vtexlabels</span><span class="p">.</span><span class="n">size</span><span class="p">()</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="p">);</span>
 <span class="w">          </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="o">&amp;</span><span class="n">tn_edges</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">tn</span><span class="p">.</span><span class="n">edges</span><span class="p">();</span>
 <span class="w">          </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="o">&amp;</span><span class="n">tn_tensors</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">tn</span><span class="p">.</span><span class="n">tensors</span><span class="p">();</span>
 
 <span class="w">          </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">Logger</span><span class="o">::</span><span class="n">instance</span><span class="p">().</span><span class="n">wick_topology</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
 <span class="w">            </span><span class="n">std</span><span class="o">::</span><span class="n">basic_ostringstream</span><span class="o">&lt;</span><span class="kt">wchar_t</span><span class="o">&gt;</span><span class="w"> </span><span class="n">oss</span><span class="p">;</span>
 <span class="cp">#if USE_TENSOR_NETWORK_V2</span>
-<span class="w">            </span><span class="n">graph</span><span class="o">-&gt;</span><span class="n">write_dot</span><span class="p">(</span><span class="n">oss</span><span class="p">,</span><span class="w"> </span><span class="n">vlabels</span><span class="p">,</span><span class="w"> </span><span class="nb">true</span><span class="p">);</span>
+<span class="w">            </span><span class="n">graph</span><span class="o">-&gt;</span><span class="n">write_dot</span><span class="p">(</span><span class="n">oss</span><span class="p">,</span><span class="w"> </span><span class="n">vlabels</span><span class="p">);</span>
 <span class="cp">#else</span>
 <span class="w">            </span><span class="n">graph</span><span class="o">-&gt;</span><span class="n">write_dot</span><span class="p">(</span><span class="n">oss</span><span class="p">,</span><span class="w"> </span><span class="n">vlabels</span><span class="p">);</span>
 <span class="cp">#endif</span>
@@ -1349,7 +1348,7 @@
             
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on Mar 24, 2025 8:35:36 PM</div>
+              Last updated on Mar 25, 2025 7:38:02 AM</div>
           </div>
           <div class="right-details">
             <div class="icons">

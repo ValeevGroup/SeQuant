@@ -519,7 +519,8 @@
 
 <span class="k">template</span><span class="w"> </span><span class="o">&lt;</span><span class="k">typename</span><span class="w"> </span><span class="nc">ReplacementMap</span><span class="o">&gt;</span>
 <span class="kt">void</span><span class="w"> </span><span class="n">apply_index_replacements</span><span class="p">(</span><span class="n">AbstractTensor</span><span class="w"> </span><span class="o">&amp;</span><span class="n">tensor</span><span class="p">,</span>
-<span class="w">                              </span><span class="k">const</span><span class="w"> </span><span class="n">ReplacementMap</span><span class="w"> </span><span class="o">&amp;</span><span class="n">replacements</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                              </span><span class="k">const</span><span class="w"> </span><span class="n">ReplacementMap</span><span class="w"> </span><span class="o">&amp;</span><span class="n">replacements</span><span class="p">,</span>
+<span class="w">                              </span><span class="k">const</span><span class="w"> </span><span class="kt">bool</span><span class="w"> </span><span class="n">self_consistent</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
 <span class="cp">#ifndef NDEBUG</span>
 <span class="w">  </span><span class="c1">// assert that tensors&#39; indices are not tagged since going to tag indices</span>
 <span class="w">  </span><span class="n">assert</span><span class="p">(</span><span class="n">ranges</span><span class="o">::</span><span class="n">none_of</span><span class="p">(</span>
@@ -529,16 +530,17 @@
 <span class="w">  </span><span class="kt">bool</span><span class="w"> </span><span class="n">pass_mutated</span><span class="p">;</span>
 <span class="w">  </span><span class="k">do</span><span class="w"> </span><span class="p">{</span>
 <span class="w">    </span><span class="n">pass_mutated</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">transform_indices</span><span class="p">(</span><span class="n">tensor</span><span class="p">,</span><span class="w"> </span><span class="n">replacements</span><span class="p">);</span>
-<span class="w">  </span><span class="p">}</span><span class="w"> </span><span class="k">while</span><span class="w"> </span><span class="p">(</span><span class="n">pass_mutated</span><span class="p">);</span><span class="w">  </span><span class="c1">// transform till stops changing</span>
+<span class="w">  </span><span class="p">}</span><span class="w"> </span><span class="k">while</span><span class="w"> </span><span class="p">(</span><span class="n">self_consistent</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">pass_mutated</span><span class="p">);</span><span class="w">  </span><span class="c1">// transform till stops changing</span>
 
 <span class="w">  </span><span class="n">reset_tags</span><span class="p">(</span><span class="n">tensor</span><span class="p">);</span>
 <span class="p">}</span>
 
 <span class="k">template</span><span class="w"> </span><span class="o">&lt;</span><span class="k">typename</span><span class="w"> </span><span class="nc">ArrayLike</span><span class="p">,</span><span class="w"> </span><span class="k">typename</span><span class="w"> </span><span class="nc">ReplacementMap</span><span class="o">&gt;</span>
 <span class="kt">void</span><span class="w"> </span><span class="n">apply_index_replacements</span><span class="p">(</span><span class="n">ArrayLike</span><span class="w"> </span><span class="o">&amp;</span><span class="n">tensors</span><span class="p">,</span>
-<span class="w">                              </span><span class="k">const</span><span class="w"> </span><span class="n">ReplacementMap</span><span class="w"> </span><span class="o">&amp;</span><span class="n">replacements</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                              </span><span class="k">const</span><span class="w"> </span><span class="n">ReplacementMap</span><span class="w"> </span><span class="o">&amp;</span><span class="n">replacements</span><span class="p">,</span>
+<span class="w">                              </span><span class="k">const</span><span class="w"> </span><span class="kt">bool</span><span class="w"> </span><span class="n">self_consistent</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
 <span class="w">  </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="k">auto</span><span class="w"> </span><span class="o">&amp;</span><span class="n">tensor</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">tensors</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
-<span class="w">    </span><span class="n">apply_index_replacements</span><span class="p">(</span><span class="o">*</span><span class="n">tensor</span><span class="p">,</span><span class="w"> </span><span class="n">replacements</span><span class="p">);</span>
+<span class="w">    </span><span class="n">apply_index_replacements</span><span class="p">(</span><span class="o">*</span><span class="n">tensor</span><span class="p">,</span><span class="w"> </span><span class="n">replacements</span><span class="p">,</span><span class="w"> </span><span class="n">self_consistent</span><span class="p">);</span>
 <span class="w">  </span><span class="p">}</span>
 <span class="p">}</span>
 
@@ -718,7 +720,7 @@
 <span class="w">    </span><span class="p">}</span>
 <span class="w">  </span><span class="p">}</span>
 
-<span class="w">  </span><span class="n">apply_index_replacements</span><span class="p">(</span><span class="n">tensors_</span><span class="p">,</span><span class="w"> </span><span class="n">idxrepl</span><span class="p">);</span>
+<span class="w">  </span><span class="n">apply_index_replacements</span><span class="p">(</span><span class="n">tensors_</span><span class="p">,</span><span class="w"> </span><span class="n">idxrepl</span><span class="p">,</span><span class="w"> </span><span class="nb">true</span><span class="p">);</span>
 
 <span class="w">  </span><span class="c1">// Perform particle-1,2-swaps as indicated by the graph canonization</span>
 <span class="w">  </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">tensors_</span><span class="p">.</span><span class="n">size</span><span class="p">();</span><span class="w"> </span><span class="o">++</span><span class="n">i</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
@@ -760,7 +762,7 @@
 <span class="w">              </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">&quot; with &quot;</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">to_latex</span><span class="p">(</span><span class="n">idxpair</span><span class="p">.</span><span class="n">second</span><span class="p">)</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">endl</span><span class="p">;</span>
 <span class="w">        </span><span class="p">}</span>
 <span class="w">      </span><span class="p">}</span>
-<span class="w">      </span><span class="n">apply_index_replacements</span><span class="p">(</span><span class="n">tensor</span><span class="p">,</span><span class="w"> </span><span class="n">idxrepl</span><span class="p">);</span>
+<span class="w">      </span><span class="n">apply_index_replacements</span><span class="p">(</span><span class="n">tensor</span><span class="p">,</span><span class="w"> </span><span class="n">idxrepl</span><span class="p">,</span><span class="w"> </span><span class="nb">false</span><span class="p">);</span>
 <span class="w">    </span><span class="p">}</span>
 <span class="w">  </span><span class="p">}</span>
 
@@ -907,7 +909,7 @@
 <span class="w">    </span><span class="p">}</span>
 <span class="w">  </span><span class="p">}</span>
 
-<span class="w">  </span><span class="n">apply_index_replacements</span><span class="p">(</span><span class="n">tensors_</span><span class="p">,</span><span class="w"> </span><span class="n">idxrepl</span><span class="p">);</span>
+<span class="w">  </span><span class="n">apply_index_replacements</span><span class="p">(</span><span class="n">tensors_</span><span class="p">,</span><span class="w"> </span><span class="n">idxrepl</span><span class="p">,</span><span class="w"> </span><span class="nb">true</span><span class="p">);</span>
 
 <span class="w">  </span><span class="n">byproduct</span><span class="w"> </span><span class="o">*=</span><span class="w"> </span><span class="n">canonicalize_individual_tensors</span><span class="p">(</span><span class="n">named_indices</span><span class="p">);</span>
 
@@ -938,16 +940,6 @@
 <span class="w">      </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="o">&amp;</span><span class="p">[</span><span class="n">idxptr2</span><span class="p">,</span><span class="w"> </span><span class="n">slottype2</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">idxptr_slottype_2</span><span class="p">;</span>
 <span class="w">      </span><span class="k">return</span><span class="w"> </span><span class="n">idxptr1</span><span class="o">-&gt;</span><span class="n">space</span><span class="p">()</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">idxptr2</span><span class="o">-&gt;</span><span class="n">space</span><span class="p">();</span>
 <span class="w">    </span><span class="p">};</span>
-
-<span class="w">  </span><span class="c1">// N.B. support for slot canonicalization of antisymmetric tensors is not yet</span>
-<span class="w">  </span><span class="c1">// available, use TN::canonicalize_slots</span>
-<span class="w">  </span><span class="n">ranges</span><span class="o">::</span><span class="n">for_each</span><span class="p">(</span><span class="n">tensors_</span><span class="p">,</span><span class="w"> </span><span class="p">[</span><span class="o">&amp;</span><span class="p">](</span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="o">&amp;</span><span class="n">t</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
-<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">t</span><span class="o">-&gt;</span><span class="n">_symmetry</span><span class="p">()</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">Symmetry</span><span class="o">::</span><span class="n">antisymm</span><span class="w"> </span><span class="o">&amp;&amp;</span>
-<span class="w">        </span><span class="p">(</span><span class="n">t</span><span class="o">-&gt;</span><span class="n">_bra_rank</span><span class="p">()</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="n">t</span><span class="o">-&gt;</span><span class="n">_ket_rank</span><span class="p">()</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mi">1</span><span class="p">))</span>
-<span class="w">      </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">runtime_error</span><span class="p">(</span>
-<span class="w">          </span><span class="s">&quot;TensornetworkV2::canonicalize_slots does not support antisymmetric &quot;</span>
-<span class="w">          </span><span class="s">&quot;tensors yet, use TensorNetwork::canonicalize_slots&quot;</span><span class="p">);</span>
-<span class="w">  </span><span class="p">});</span>
 
 <span class="w">  </span><span class="n">TensorNetworkV2</span><span class="o">::</span><span class="n">SlotCanonicalizationMetadata</span><span class="w"> </span><span class="n">metadata</span><span class="p">;</span>
 
@@ -981,8 +973,9 @@
 <span class="w">  </span><span class="c1">// make the graph</span>
 <span class="w">  </span><span class="c1">// only slots (hence, attr) of named indices define their color, so</span>
 <span class="w">  </span><span class="c1">// distinct_named_indices = false</span>
-<span class="w">  </span><span class="n">Graph</span><span class="w"> </span><span class="n">graph</span><span class="w"> </span><span class="o">=</span>
-<span class="w">      </span><span class="n">create_graph</span><span class="p">(</span><span class="o">&amp;</span><span class="n">named_indices</span><span class="p">,</span><span class="w"> </span><span class="cm">/* distinct_named_indices = */</span><span class="w"> </span><span class="nb">false</span><span class="p">);</span>
+<span class="w">  </span><span class="n">container</span><span class="o">::</span><span class="n">map</span><span class="o">&lt;</span><span class="n">Index</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="o">&gt;</span><span class="w"> </span><span class="n">idx_to_vertex</span><span class="p">;</span>
+<span class="w">  </span><span class="n">Graph</span><span class="w"> </span><span class="n">graph</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">create_graph</span><span class="p">(</span><span class="o">&amp;</span><span class="n">named_indices</span><span class="p">,</span><span class="w"> </span><span class="cm">/*distinct_named_indices*/</span><span class="w"> </span><span class="nb">false</span><span class="p">,</span>
+<span class="w">                             </span><span class="o">&amp;</span><span class="n">idx_to_vertex</span><span class="p">);</span>
 <span class="w">  </span><span class="c1">// graph.bliss_graph-&gt;write_dot(std::wcout, graph.vertex_labels);</span>
 
 <span class="w">  </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">Logger</span><span class="o">::</span><span class="n">instance</span><span class="p">().</span><span class="n">canonicalize_input_graph</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
@@ -1015,6 +1008,7 @@
 
 <span class="w">  </span><span class="c1">// maps index ordinal to vertex ordinal</span>
 <span class="w">  </span><span class="n">container</span><span class="o">::</span><span class="n">map</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="o">&gt;</span><span class="w"> </span><span class="n">index_idx_to_vertex</span><span class="p">;</span>
+<span class="w">  </span><span class="n">container</span><span class="o">::</span><span class="n">map</span><span class="o">&lt;</span><span class="n">Index</span><span class="p">,</span><span class="w"> </span><span class="kt">unsigned</span><span class="w"> </span><span class="kt">int</span><span class="o">&gt;</span><span class="w"> </span><span class="n">index_to_canon_vertex</span><span class="p">;</span>
 <span class="w">  </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">index_idx</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
 <span class="w">  </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">vertex</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span><span class="w"> </span><span class="n">vertex</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">graph</span><span class="p">.</span><span class="n">vertex_types</span><span class="p">.</span><span class="n">size</span><span class="p">();</span><span class="w"> </span><span class="o">++</span><span class="n">vertex</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
 <span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">graph</span><span class="p">.</span><span class="n">vertex_types</span><span class="p">[</span><span class="n">vertex</span><span class="p">]</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">VertexType</span><span class="o">::</span><span class="n">Index</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
@@ -1102,11 +1096,62 @@
 
 <span class="w">  </span><span class="p">}</span><span class="w">  </span><span class="c1">// named indices resort to canonical order</span>
 
+<span class="w">  </span><span class="c1">// - For each bra/ket bundle canonical order of slots is the lexicographic</span>
+<span class="w">  </span><span class="c1">//   order of the canonicalized vertices representing the contained indices.</span>
+<span class="w">  </span><span class="c1">// - Reordering indices into this canonical order incurs a phase change if the</span>
+<span class="w">  </span><span class="c1">//   index bundle is antisymmetric.</span>
+<span class="w">  </span><span class="c1">// - Determine this phase change by determining the parity of index</span>
+<span class="w">  </span><span class="c1">//   permutations required to arrive at canonical form</span>
+<span class="w">  </span><span class="n">metadata</span><span class="p">.</span><span class="n">phase</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span>
+<span class="w">  </span><span class="n">container</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="o">&gt;</span><span class="w"> </span><span class="n">vertices</span><span class="p">;</span>
+<span class="w">  </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">AbstractTensor</span><span class="w"> </span><span class="o">&amp;</span><span class="n">tensor</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">tensors_</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="n">ranges</span><span class="o">::</span><span class="n">views</span><span class="o">::</span><span class="n">indirect</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">symmetry</span><span class="p">(</span><span class="n">tensor</span><span class="p">)</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="n">Symmetry</span><span class="o">::</span><span class="n">antisymm</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">      </span><span class="c1">// Only antisymmetric tensors (or rather: their indices) can incur a phase</span>
+<span class="w">      </span><span class="c1">// change due to index permutation</span>
+<span class="w">      </span><span class="k">continue</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+
+<span class="w">    </span><span class="n">vertices</span><span class="p">.</span><span class="n">clear</span><span class="p">();</span>
+
+<span class="w">    </span><span class="c1">// Note that the current assumption is that auxiliary indices don&#39;t have</span>
+<span class="w">    </span><span class="c1">// permutational symmetry, let alone being antisymmetric. Hence, we don&#39;t</span>
+<span class="w">    </span><span class="c1">// have to include them in the iteration.</span>
+<span class="w">    </span><span class="c1">// Note2: have to create dedicated container to hold ranges as an</span>
+<span class="w">    </span><span class="c1">// initializer list will only return const entries upon iteration and one</span>
+<span class="w">    </span><span class="c1">// can&#39;t iterate over const ranges.</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="w"> </span><span class="n">index_groups</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="n">tensor</span><span class="p">.</span><span class="n">_bra</span><span class="p">(),</span><span class="w"> </span><span class="n">tensor</span><span class="p">.</span><span class="n">_ket</span><span class="p">()};</span>
+<span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="k">auto</span><span class="w"> </span><span class="o">&amp;</span><span class="n">indices</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">index_groups</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">      </span><span class="k">using</span><span class="w"> </span><span class="n">ranges</span><span class="o">::</span><span class="n">size</span><span class="p">;</span>
+<span class="w">      </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">n_indices</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">size</span><span class="p">(</span><span class="n">indices</span><span class="p">);</span>
+
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">n_indices</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="mi">2</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="c1">// If there are &lt; 2 indices, no two indices could have been swapped</span>
+<span class="w">        </span><span class="k">continue</span><span class="p">;</span>
+<span class="w">      </span><span class="p">}</span>
+
+<span class="w">      </span><span class="n">vertices</span><span class="p">.</span><span class="n">reserve</span><span class="p">(</span><span class="n">n_indices</span><span class="p">);</span>
+
+<span class="w">      </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">Index</span><span class="w"> </span><span class="o">&amp;</span><span class="n">idx</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">indices</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">vertex</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">idx_to_vertex</span><span class="p">.</span><span class="n">at</span><span class="p">(</span><span class="n">idx</span><span class="p">);</span>
+<span class="w">        </span><span class="n">vertices</span><span class="p">.</span><span class="n">push_back</span><span class="p">(</span><span class="n">canonize_perm</span><span class="p">[</span><span class="n">vertex</span><span class="p">]);</span>
+<span class="w">      </span><span class="p">}</span>
+
+<span class="w">      </span><span class="n">reset_ts_swap_counter</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="o">&gt;</span><span class="p">();</span>
+<span class="w">      </span><span class="n">bubble_sort</span><span class="p">(</span><span class="n">vertices</span><span class="p">.</span><span class="n">begin</span><span class="p">(),</span><span class="w"> </span><span class="n">vertices</span><span class="p">.</span><span class="n">end</span><span class="p">());</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">ts_swap_counter_is_even</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="o">&gt;</span><span class="p">())</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="c1">// Performed an uneven amount of pairwise exchanges -&gt; this incurs a</span>
+<span class="w">        </span><span class="c1">// phase change</span>
+<span class="w">        </span><span class="n">metadata</span><span class="p">.</span><span class="n">phase</span><span class="w"> </span><span class="o">*=</span><span class="w"> </span><span class="mi">-1</span><span class="p">;</span>
+<span class="w">      </span><span class="p">}</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">  </span><span class="p">}</span>
+
 <span class="w">  </span><span class="k">return</span><span class="w"> </span><span class="n">metadata</span><span class="p">;</span>
 <span class="p">}</span>
 
 <span class="n">TensorNetworkV2</span><span class="o">::</span><span class="n">Graph</span><span class="w"> </span><span class="n">TensorNetworkV2</span><span class="o">::</span><span class="n">create_graph</span><span class="p">(</span>
-<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="n">NamedIndexSet</span><span class="w"> </span><span class="o">*</span><span class="n">named_indices_ptr</span><span class="p">,</span><span class="w"> </span><span class="kt">bool</span><span class="w"> </span><span class="n">distinct_named_indices</span><span class="p">)</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="n">NamedIndexSet</span><span class="w"> </span><span class="o">*</span><span class="n">named_indices_ptr</span><span class="p">,</span><span class="w"> </span><span class="kt">bool</span><span class="w"> </span><span class="n">distinct_named_indices</span><span class="p">,</span>
+<span class="w">    </span><span class="n">container</span><span class="o">::</span><span class="n">map</span><span class="o">&lt;</span><span class="n">Index</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="o">&gt;</span><span class="w"> </span><span class="o">*</span><span class="n">idx_to_vertex</span><span class="p">)</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="p">{</span>
 <span class="w">  </span><span class="n">assert</span><span class="p">(</span><span class="n">have_edges_</span><span class="p">);</span>
 
 <span class="w">  </span><span class="c1">// initialize named_indices by default to all external indices</span>
@@ -1402,6 +1447,10 @@
 <span class="w">    </span><span class="n">graph</span><span class="p">.</span><span class="n">bliss_graph</span><span class="o">-&gt;</span><span class="n">change_color</span><span class="p">(</span><span class="n">vertex</span><span class="p">,</span><span class="w"> </span><span class="n">color</span><span class="p">);</span>
 <span class="w">  </span><span class="p">}</span>
 
+<span class="w">  </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">idx_to_vertex</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="o">*</span><span class="n">idx_to_vertex</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">move</span><span class="p">(</span><span class="n">index_vertices</span><span class="p">);</span>
+<span class="w">  </span><span class="p">}</span>
+
 <span class="w">  </span><span class="k">return</span><span class="w"> </span><span class="n">graph</span><span class="p">;</span>
 <span class="p">}</span>
 
@@ -1538,6 +1587,10 @@
 <span class="w">  </span><span class="n">abort</span><span class="p">();</span><span class="w">  </span><span class="c1">// not yet implemented</span>
 <span class="p">}</span>
 
+<span class="kt">size_t</span><span class="w"> </span><span class="n">TensorNetworkV2</span><span class="o">::</span><span class="n">SlotCanonicalizationMetadata</span><span class="o">::</span><span class="n">hash_value</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="k">return</span><span class="w"> </span><span class="n">graph</span><span class="o">-&gt;</span><span class="n">get_hash</span><span class="p">();</span>
+<span class="p">}</span>
+
 <span class="n">ExprPtr</span><span class="w"> </span><span class="n">TensorNetworkV2</span><span class="o">::</span><span class="n">canonicalize_individual_tensor_blocks</span><span class="p">(</span>
 <span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="n">NamedIndexSet</span><span class="w"> </span><span class="o">&amp;</span><span class="n">named_indices</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
 <span class="w">  </span><span class="k">return</span><span class="w"> </span><span class="n">do_individual_canonicalization</span><span class="p">(</span>
@@ -1592,7 +1645,7 @@
             
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on Mar 24, 2025 8:35:36 PM</div>
+              Last updated on Mar 25, 2025 7:38:02 AM</div>
           </div>
           <div class="right-details">
             <div class="icons">

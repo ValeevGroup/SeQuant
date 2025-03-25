@@ -429,8 +429,8 @@
 </dd></dl>
 
 <dl class="cpp function">
-<dt class="sig sig-object cpp" id="_CPPv4NK7sequant15TensorNetworkV212create_graphEPK13NamedIndexSetb">
-<span id="_CPPv3NK7sequant15TensorNetworkV212create_graphEPK13NamedIndexSetb"></span><span id="_CPPv2NK7sequant15TensorNetworkV212create_graphEPK13NamedIndexSetb"></span><span id="sequant::TensorNetworkV2::create_graph__NamedIndexSetCP.bC"></span><span class="target" id="classsequant_1_1_tensor_network_v2_1a273623ac380f1bd199799c86475967d3"></span><a class="reference internal" href="#_CPPv4N7sequant15TensorNetworkV25GraphE" title="sequant::TensorNetworkV2::Graph"><span class="n"><span class="pre">Graph</span></span></a><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">create_graph</span></span></span><span class="sig-paren">(</span><span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4N7sequant15TensorNetworkV213NamedIndexSetE" title="sequant::TensorNetworkV2::NamedIndexSet"><span class="n"><span class="pre">NamedIndexSet</span></span></a><span class="w"> </span><span class="p"><span class="pre">*</span></span><span class="n sig-param"><span class="pre">named_indices</span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="k"><span class="pre">nullptr</span></span>, <span class="kt"><span class="pre">bool</span></span><span class="w"> </span><span class="n sig-param"><span class="pre">distinct_named_indices</span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="k"><span class="pre">true</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant15TensorNetworkV212create_graphEPK13NamedIndexSetb" title="Link to this definition">¶</a><br /></dt>
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant15TensorNetworkV212create_graphEPK13NamedIndexSetbPN9container3mapI5IndexNSt6size_tEEE">
+<span id="_CPPv3NK7sequant15TensorNetworkV212create_graphEPK13NamedIndexSetbPN9container3mapI5IndexNSt6size_tEEE"></span><span id="_CPPv2NK7sequant15TensorNetworkV212create_graphEPK13NamedIndexSetbPN9container3mapI5IndexNSt6size_tEEE"></span><span id="sequant::TensorNetworkV2::create_graph__NamedIndexSetCP.b.container::map:Index.std::s:PC"></span><span class="target" id="classsequant_1_1_tensor_network_v2_1a62b1550ba8c2811b69759d35f50417df"></span><a class="reference internal" href="#_CPPv4N7sequant15TensorNetworkV25GraphE" title="sequant::TensorNetworkV2::Graph"><span class="n"><span class="pre">Graph</span></span></a><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">create_graph</span></span></span><span class="sig-paren">(</span><span class="k"><span class="pre">const</span></span><span class="w"> </span><a class="reference internal" href="#_CPPv4N7sequant15TensorNetworkV213NamedIndexSetE" title="sequant::TensorNetworkV2::NamedIndexSet"><span class="n"><span class="pre">NamedIndexSet</span></span></a><span class="w"> </span><span class="p"><span class="pre">*</span></span><span class="n sig-param"><span class="pre">named_indices</span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="k"><span class="pre">nullptr</span></span>, <span class="kt"><span class="pre">bool</span></span><span class="w"> </span><span class="n sig-param"><span class="pre">distinct_named_indices</span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="k"><span class="pre">true</span></span>, <span class="n"><span class="pre">container</span></span><span class="p"><span class="pre">::</span></span><a class="reference internal" href="typedef_namespacesequant_1_1container_1a8cf49ee47e89d12fc0a09e70ef760674.html#_CPPv4I000EN7sequant9container3mapE" title="sequant::container::map"><span class="n"><span class="pre">map</span></span></a><span class="p"><span class="pre">&lt;</span></span><a class="reference internal" href="classsequant_1_1_index.html#_CPPv4N7sequant5IndexE" title="sequant::Index"><span class="n"><span class="pre">Index</span></span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">size_t</span></span><span class="p"><span class="pre">&gt;</span></span><span class="w"> </span><span class="p"><span class="pre">*</span></span><span class="n sig-param"><span class="pre">idx_to_vertex</span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="k"><span class="pre">nullptr</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant15TensorNetworkV212create_graphEPK13NamedIndexSetbPN9container3mapI5IndexNSt6size_tEEE" title="Link to this definition">¶</a><br /></dt>
 <dd><p>converts the network into a Bliss graph whose vertices are indices and tensor vertex representations </p>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
@@ -448,6 +448,7 @@
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>named_indices</strong> – <strong>[in]</strong> pointer to the set of named indices (ordinarily, this includes all external indices); default is nullptr, which means use all external indices for named indices </p></li>
 <li><p><strong>distinct_named_indices</strong> – <strong>[in]</strong> if false, will use same color for all named indices that have same <a class="reference internal" href="classsequant_1_1_index.html#classsequant_1_1_index_1ae348f056ca506bf2d71e933b7ae7b2d9"><span class="std std-ref">Index::color()</span></a>, else will use distinct color for each </p></li>
+<li><p><strong>idx_to_vertex</strong> – <strong>[out]</strong> A map of indices to the corresponding vertices in the graph representation. If this is not nullptr, the pointed-to map gets overwritten with the one containing the relevant information. </p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
@@ -613,6 +614,24 @@
 
 </div>
 <div class="breathe-sectiondef docutils container">
+<p class="breathe-sectiondef-title rubric" id="breathe-section-title-public-functions">Public Functions</p>
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant15TensorNetworkV228SlotCanonicalizationMetadata10hash_valueEv">
+<span id="_CPPv3NK7sequant15TensorNetworkV228SlotCanonicalizationMetadata10hash_valueEv"></span><span id="_CPPv2NK7sequant15TensorNetworkV228SlotCanonicalizationMetadata10hash_valueEv"></span><span id="sequant::TensorNetworkV2::SlotCanonicalizationMetadata::hash_valueC"></span><span class="target" id="structsequant_1_1_tensor_network_v2_1_1_slot_canonicalization_metadata_1a95971297fbaa69914f18264c88ce7e6b"></span><span class="n"><span class="pre">size_t</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">hash_value</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant15TensorNetworkV228SlotCanonicalizationMetadata10hash_valueEv" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant15TensorNetworkV228SlotCanonicalizationMetadata14get_index_viewEv">
+<span id="_CPPv3NK7sequant15TensorNetworkV228SlotCanonicalizationMetadata14get_index_viewEv"></span><span id="_CPPv2NK7sequant15TensorNetworkV228SlotCanonicalizationMetadata14get_index_viewEv"></span><span id="sequant::TensorNetworkV2::SlotCanonicalizationMetadata::get_index_viewC"></span><span class="target" id="structsequant_1_1_tensor_network_v2_1_1_slot_canonicalization_metadata_1a0e99e9023f95d6e75b51ed2be1aa1da6"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="kt"><span class="pre">auto</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">get_index_view</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant15TensorNetworkV228SlotCanonicalizationMetadata14get_index_viewEv" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4I0ENK7sequant15TensorNetworkV228SlotCanonicalizationMetadata11get_indicesEDav">
+<span id="_CPPv3I0ENK7sequant15TensorNetworkV228SlotCanonicalizationMetadata11get_indicesEv"></span><span id="_CPPv2I0ENK7sequant15TensorNetworkV228SlotCanonicalizationMetadata11get_indicesEv"></span><span class="k"><span class="pre">template</span></span><span class="p"><span class="pre">&lt;</span></span><span class="k"><span class="pre">typename</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">Cont</span></span></span><span class="p"><span class="pre">&gt;</span></span><br /><span class="target" id="structsequant_1_1_tensor_network_v2_1_1_slot_canonicalization_metadata_1a85e11a0e3b7ea95edeabfd09ae0ab91f"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="kt"><span class="pre">auto</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">get_indices</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4I0ENK7sequant15TensorNetworkV228SlotCanonicalizationMetadata11get_indicesEDav" title="Link to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+</div>
+<div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric" id="breathe-section-title-public-members">Public Members</p>
 <dl class="cpp var">
 <dt class="sig sig-object cpp" id="_CPPv4N7sequant15TensorNetworkV228SlotCanonicalizationMetadata13named_indicesE">
@@ -712,7 +731,7 @@
             
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on Mar 24, 2025 8:35:36 PM</div>
+              Last updated on Mar 25, 2025 7:38:02 AM</div>
           </div>
           <div class="right-details">
             <div class="icons">
@@ -760,7 +779,7 @@
 <li><a class="reference internal" href="#_CPPv4N7sequant15TensorNetworkV29factorizeEv"><code class="docutils literal notranslate"><span class="pre">factorize()</span></code></a></li>
 <li><a class="reference internal" href="#_CPPv4NK7sequant15TensorNetworkV25edgesEv"><code class="docutils literal notranslate"><span class="pre">edges()</span></code></a></li>
 <li><a class="reference internal" href="#_CPPv4NK7sequant15TensorNetworkV211ext_indicesEv"><code class="docutils literal notranslate"><span class="pre">ext_indices()</span></code></a></li>
-<li><a class="reference internal" href="#_CPPv4NK7sequant15TensorNetworkV212create_graphEPK13NamedIndexSetb"><code class="docutils literal notranslate"><span class="pre">create_graph()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant15TensorNetworkV212create_graphEPK13NamedIndexSetbPN9container3mapI5IndexNSt6size_tEEE"><code class="docutils literal notranslate"><span class="pre">create_graph()</span></code></a></li>
 <li><a class="reference internal" href="#_CPPv4N7sequant15TensorNetworkV24EdgeE"><code class="docutils literal notranslate"><span class="pre">sequant::TensorNetworkV2::Edge</span></code></a><ul>
 <li><a class="reference internal" href="#_CPPv4N7sequant15TensorNetworkV24Edge4EdgeEv"><code class="docutils literal notranslate"><span class="pre">Edge()</span></code></a></li>
 <li><a class="reference internal" href="#_CPPv4N7sequant15TensorNetworkV24Edge4EdgeE6Vertex"><code class="docutils literal notranslate"><span class="pre">Edge()</span></code></a></li>
@@ -788,6 +807,9 @@
 </li>
 <li><a class="reference internal" href="#_CPPv4N7sequant15TensorNetworkV228SlotCanonicalizationMetadataE"><code class="docutils literal notranslate"><span class="pre">sequant::TensorNetworkV2::SlotCanonicalizationMetadata</span></code></a><ul>
 <li><a class="reference internal" href="#_CPPv4N7sequant15TensorNetworkV228SlotCanonicalizationMetadata21named_index_compare_tE"><code class="docutils literal notranslate"><span class="pre">named_index_compare_t</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant15TensorNetworkV228SlotCanonicalizationMetadata10hash_valueEv"><code class="docutils literal notranslate"><span class="pre">hash_value()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant15TensorNetworkV228SlotCanonicalizationMetadata14get_index_viewEv"><code class="docutils literal notranslate"><span class="pre">get_index_view()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4I0ENK7sequant15TensorNetworkV228SlotCanonicalizationMetadata11get_indicesEDav"><code class="docutils literal notranslate"><span class="pre">get_indices()</span></code></a></li>
 <li><a class="reference internal" href="#_CPPv4N7sequant15TensorNetworkV228SlotCanonicalizationMetadata13named_indicesE"><code class="docutils literal notranslate"><span class="pre">named_indices</span></code></a></li>
 <li><a class="reference internal" href="#_CPPv4N7sequant15TensorNetworkV228SlotCanonicalizationMetadata19named_index_compareE"><code class="docutils literal notranslate"><span class="pre">named_index_compare</span></code></a></li>
 <li><a class="reference internal" href="#_CPPv4N7sequant15TensorNetworkV228SlotCanonicalizationMetadata23named_indices_canonicalE"><code class="docutils literal notranslate"><span class="pre">named_indices_canonical</span></code></a></li>

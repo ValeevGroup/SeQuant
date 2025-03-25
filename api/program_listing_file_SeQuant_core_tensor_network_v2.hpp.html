@@ -287,6 +287,8 @@
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;SeQuant/core/tensor_network/slot.hpp&gt;</span>
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;SeQuant/core/tensor_network/vertex.hpp&gt;</span>
 
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;range/v3/range/traits.hpp&gt;</span>
+
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;cassert&gt;</span>
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;cstdlib&gt;</span>
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;iosfwd&gt;</span>
@@ -464,7 +466,7 @@
 <span class="w">                                  </span><span class="o">!</span><span class="n">std</span><span class="o">::</span><span class="n">is_base_of_v</span><span class="o">&lt;</span><span class="n">Expr</span><span class="p">,</span><span class="w"> </span><span class="n">ExprPtrRange</span><span class="o">&gt;&gt;&gt;</span>
 <span class="w">  </span><span class="n">TensorNetworkV2</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">ExprPtrRange</span><span class="w"> </span><span class="o">&amp;</span><span class="n">exprptr_range</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
 <span class="w">    </span><span class="k">static_assert</span><span class="p">(</span>
-<span class="w">        </span><span class="n">std</span><span class="o">::</span><span class="n">is_base_of_v</span><span class="o">&lt;</span><span class="n">ExprPtr</span><span class="p">,</span><span class="w"> </span><span class="k">typename</span><span class="w"> </span><span class="nc">ExprPtrRange</span><span class="o">::</span><span class="n">value_type</span><span class="o">&gt;</span><span class="p">);</span>
+<span class="w">        </span><span class="n">std</span><span class="o">::</span><span class="n">is_base_of_v</span><span class="o">&lt;</span><span class="n">ExprPtr</span><span class="p">,</span><span class="w"> </span><span class="n">ranges</span><span class="o">::</span><span class="n">range_value_t</span><span class="o">&lt;</span><span class="n">ExprPtrRange</span><span class="o">&gt;&gt;</span><span class="p">);</span>
 <span class="w">    </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">ExprPtr</span><span class="w"> </span><span class="o">&amp;</span><span class="n">current</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">exprptr_range</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
 <span class="w">      </span><span class="n">add_expr</span><span class="p">(</span><span class="o">*</span><span class="n">current</span><span class="p">);</span>
 <span class="w">    </span><span class="p">}</span>
@@ -495,6 +497,18 @@
 
 <span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">shared_ptr</span><span class="o">&lt;</span><span class="n">bliss</span><span class="o">::</span><span class="n">Graph</span><span class="o">&gt;</span><span class="w"> </span><span class="n">graph</span><span class="p">;</span>
 
+<span class="w">    </span><span class="p">[[</span><span class="n">nodiscard</span><span class="p">]]</span><span class="w"> </span><span class="kt">size_t</span><span class="w"> </span><span class="n">hash_value</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="p">;</span>
+
+<span class="w">    </span><span class="p">[[</span><span class="n">nodiscard</span><span class="p">]]</span><span class="w"> </span><span class="kr">inline</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">get_index_view</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="p">{</span>
+<span class="w">      </span><span class="k">return</span><span class="w"> </span><span class="n">named_indices_canonical</span><span class="w">  </span><span class="c1">//</span>
+<span class="w">             </span><span class="o">|</span><span class="w"> </span><span class="n">ranges</span><span class="o">::</span><span class="n">views</span><span class="o">::</span><span class="n">indirect</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+
+<span class="w">    </span><span class="k">template</span><span class="w"> </span><span class="o">&lt;</span><span class="k">typename</span><span class="w"> </span><span class="nc">Cont</span><span class="o">&gt;</span>
+<span class="w">    </span><span class="k">auto</span><span class="w"> </span><span class="n">get_indices</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="p">{</span>
+<span class="w">      </span><span class="k">return</span><span class="w"> </span><span class="n">get_index_view</span><span class="p">()</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="n">ranges</span><span class="o">::</span><span class="n">to</span><span class="o">&lt;</span><span class="n">Cont</span><span class="o">&gt;</span><span class="p">;</span>
+<span class="w">    </span><span class="p">}</span>
+
 <span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="kt">int8_t</span><span class="w"> </span><span class="n">phase</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">+</span><span class="mi">1</span><span class="p">;</span><span class="w">  </span><span class="c1">// +1 or -1</span>
 <span class="w">  </span><span class="p">};</span>
 
@@ -517,8 +531,10 @@
 <span class="w">  </span><span class="p">}</span>
 
 
-<span class="w">  </span><span class="n">Graph</span><span class="w"> </span><span class="n">create_graph</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">NamedIndexSet</span><span class="w"> </span><span class="o">*</span><span class="n">named_indices</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">nullptr</span><span class="p">,</span>
-<span class="w">                     </span><span class="kt">bool</span><span class="w"> </span><span class="n">distinct_named_indices</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">true</span><span class="p">)</span><span class="w"> </span><span class="k">const</span><span class="p">;</span>
+<span class="w">  </span><span class="n">Graph</span><span class="w"> </span><span class="n">create_graph</span><span class="p">(</span>
+<span class="w">      </span><span class="k">const</span><span class="w"> </span><span class="n">NamedIndexSet</span><span class="w"> </span><span class="o">*</span><span class="n">named_indices</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">nullptr</span><span class="p">,</span>
+<span class="w">      </span><span class="kt">bool</span><span class="w"> </span><span class="n">distinct_named_indices</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">true</span><span class="p">,</span>
+<span class="w">      </span><span class="n">container</span><span class="o">::</span><span class="n">map</span><span class="o">&lt;</span><span class="n">Index</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="o">&gt;</span><span class="w"> </span><span class="o">*</span><span class="n">idx_to_vertex</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">nullptr</span><span class="p">)</span><span class="w"> </span><span class="k">const</span><span class="p">;</span>
 
 <span class="w"> </span><span class="k">private</span><span class="o">:</span>
 <span class="w">  </span><span class="n">container</span><span class="o">::</span><span class="n">svector</span><span class="o">&lt;</span><span class="n">AbstractTensorPtr</span><span class="o">&gt;</span><span class="w"> </span><span class="n">tensors_</span><span class="p">;</span>
@@ -602,7 +618,7 @@
             
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on Mar 24, 2025 8:35:36 PM</div>
+              Last updated on Mar 25, 2025 7:38:02 AM</div>
           </div>
           <div class="right-details">
             <div class="icons">
