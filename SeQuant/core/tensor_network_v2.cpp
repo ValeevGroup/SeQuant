@@ -251,7 +251,8 @@ auto permute(const ArrayLike &vector, const Permutation &perm) {
 
 template <typename ReplacementMap>
 void apply_index_replacements(AbstractTensor &tensor,
-                              const ReplacementMap &replacements) {
+                              const ReplacementMap &replacements,
+                              const bool self_consistent) {
 #ifndef NDEBUG
   // assert that tensors' indices are not tagged since going to tag indices
   assert(ranges::none_of(
@@ -261,16 +262,17 @@ void apply_index_replacements(AbstractTensor &tensor,
   bool pass_mutated;
   do {
     pass_mutated = transform_indices(tensor, replacements);
-  } while (pass_mutated);  // transform till stops changing
+  } while (self_consistent && pass_mutated);  // transform till stops changing
 
   reset_tags(tensor);
 }
 
 template <typename ArrayLike, typename ReplacementMap>
 void apply_index_replacements(ArrayLike &tensors,
-                              const ReplacementMap &replacements) {
+                              const ReplacementMap &replacements,
+                              const bool self_consistent) {
   for (auto &tensor : tensors) {
-    apply_index_replacements(*tensor, replacements);
+    apply_index_replacements(*tensor, replacements, self_consistent);
   }
 }
 
@@ -450,7 +452,7 @@ void TensorNetworkV2::canonicalize_graph(const NamedIndexSet &named_indices) {
     }
   }
 
-  apply_index_replacements(tensors_, idxrepl);
+  apply_index_replacements(tensors_, idxrepl, true);
 
   // Perform particle-1,2-swaps as indicated by the graph canonization
   for (std::size_t i = 0; i < tensors_.size(); ++i) {
@@ -492,7 +494,7 @@ void TensorNetworkV2::canonicalize_graph(const NamedIndexSet &named_indices) {
               << " with " << to_latex(idxpair.second) << std::endl;
         }
       }
-      apply_index_replacements(tensor, idxrepl);
+      apply_index_replacements(tensor, idxrepl, false);
     }
   }
 
@@ -639,7 +641,7 @@ ExprPtr TensorNetworkV2::canonicalize(
     }
   }
 
-  apply_index_replacements(tensors_, idxrepl);
+  apply_index_replacements(tensors_, idxrepl, true);
 
   byproduct *= canonicalize_individual_tensors(named_indices);
 
@@ -670,16 +672,6 @@ TensorNetworkV2::canonicalize_slots(
       const auto &[idxptr2, slottype2] = idxptr_slottype_2;
       return idxptr1->space() < idxptr2->space();
     };
-
-  // N.B. support for slot canonicalization of antisymmetric tensors is not yet
-  // available, use TN::canonicalize_slots
-  ranges::for_each(tensors_, [&](const auto &t) {
-    if (t->_symmetry() == Symmetry::antisymm &&
-        (t->_bra_rank() > 1 || t->_ket_rank() > 1))
-      throw std::runtime_error(
-          "TensornetworkV2::canonicalize_slots does not support antisymmetric "
-          "tensors yet, use TensorNetwork::canonicalize_slots");
-  });
 
   TensorNetworkV2::SlotCanonicalizationMetadata metadata;
 
@@ -713,8 +705,9 @@ TensorNetworkV2::canonicalize_slots(
   // make the graph
   // only slots (hence, attr) of named indices define their color, so
   // distinct_named_indices = false
-  Graph graph =
-      create_graph(&named_indices, /* distinct_named_indices = */ false);
+  container::map<Index, std::size_t> idx_to_vertex;
+  Graph graph = create_graph(&named_indices, /*distinct_named_indices*/ false,
+                             &idx_to_vertex);
   // graph.bliss_graph->write_dot(std::wcout, graph.vertex_labels);
 
   if (Logger::instance().canonicalize_input_graph) {
@@ -747,6 +740,7 @@ TensorNetworkV2::canonicalize_slots(
 
   // maps index ordinal to vertex ordinal
   container::map<std::size_t, std::size_t> index_idx_to_vertex;
+  container::map<Index, unsigned int> index_to_canon_vertex;
   std::size_t index_idx = 0;
   for (std::size_t vertex = 0; vertex < graph.vertex_types.size(); ++vertex) {
     if (graph.vertex_types[vertex] == VertexType::Index) {
@@ -834,11 +828,62 @@ TensorNetworkV2::canonicalize_slots(
 
   }  // named indices resort to canonical order
 
+  // - For each bra/ket bundle canonical order of slots is the lexicographic
+  //   order of the canonicalized vertices representing the contained indices.
+  // - Reordering indices into this canonical order incurs a phase change if the
+  //   index bundle is antisymmetric.
+  // - Determine this phase change by determining the parity of index
+  //   permutations required to arrive at canonical form
+  metadata.phase = 1;
+  container::vector<std::size_t> vertices;
+  for (const AbstractTensor &tensor : tensors_ | ranges::views::indirect) {
+    if (symmetry(tensor) != Symmetry::antisymm) {
+      // Only antisymmetric tensors (or rather: their indices) can incur a phase
+      // change due to index permutation
+      continue;
+    }
+
+    vertices.clear();
+
+    // Note that the current assumption is that auxiliary indices don't have
+    // permutational symmetry, let alone being antisymmetric. Hence, we don't
+    // have to include them in the iteration.
+    // Note2: have to create dedicated container to hold ranges as an
+    // initializer list will only return const entries upon iteration and one
+    // can't iterate over const ranges.
+    std::vector index_groups = {tensor._bra(), tensor._ket()};
+    for (auto &indices : index_groups) {
+      using ranges::size;
+      std::size_t n_indices = size(indices);
+
+      if (n_indices < 2) {
+        // If there are < 2 indices, no two indices could have been swapped
+        continue;
+      }
+
+      vertices.reserve(n_indices);
+
+      for (const Index &idx : indices) {
+        const std::size_t vertex = idx_to_vertex.at(idx);
+        vertices.push_back(canonize_perm[vertex]);
+      }
+
+      reset_ts_swap_counter<std::size_t>();
+      bubble_sort(vertices.begin(), vertices.end());
+      if (ts_swap_counter_is_even<std::size_t>()) {
+        // Performed an uneven amount of pairwise exchanges -> this incurs a
+        // phase change
+        metadata.phase *= -1;
+      }
+    }
+  }
+
   return metadata;
 }
 
 TensorNetworkV2::Graph TensorNetworkV2::create_graph(
-    const NamedIndexSet *named_indices_ptr, bool distinct_named_indices) const {
+    const NamedIndexSet *named_indices_ptr, bool distinct_named_indices,
+    container::map<Index, std::size_t> *idx_to_vertex) const {
   assert(have_edges_);
 
   // initialize named_indices by default to all external indices
@@ -1134,6 +1179,10 @@ TensorNetworkV2::Graph TensorNetworkV2::create_graph(
     graph.bliss_graph->change_color(vertex, color);
   }
 
+  if (idx_to_vertex) {
+    *idx_to_vertex = std::move(index_vertices);
+  }
+
   return graph;
 }
 
@@ -1268,6 +1317,10 @@ void TensorNetworkV2::init_edges() {
 
 container::svector<std::pair<long, long>> TensorNetworkV2::factorize() {
   abort();  // not yet implemented
+}
+
+size_t TensorNetworkV2::SlotCanonicalizationMetadata::hash_value() const {
+  return graph->get_hash();
 }
 
 ExprPtr TensorNetworkV2::canonicalize_individual_tensor_blocks(

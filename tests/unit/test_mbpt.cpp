@@ -317,7 +317,7 @@ TEST_CASE("mbpt", "[mbpt]") {
       auto theta1 = θ(1)->as<op_t>();
       // std::wcout << "theta1: " << to_latex(simplify(theta1.tensor_form()));
       REQUIRE(to_latex(simplify(theta1.tensor_form())) ==
-              L"{{\\theta^{{p_1}}_{{p_2}}}{\\tilde{a}^{{p_2}}_{{p_1}}}}");
+              L"{{\\theta^{{p_2}}_{{p_1}}}{\\tilde{a}^{{p_1}}_{{p_2}}}}");
 
       auto R_2 = R_(2)->as<op_t>();
       //    std::wcout << "R_2: " << to_latex(simplify(R_2.tensor_form())) <<
