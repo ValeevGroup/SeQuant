@@ -314,7 +314,7 @@ std::vector<ExprPtr> open_shell_CC_spintrace(const ExprPtr& expr);
 /// building block for more specialized spin-tracing functions
 ExprPtr spintrace(
     const ExprPtr& expr,
-    container::svector<container::svector<Index>> ext_index_groups = {},
+    const container::svector<container::svector<Index>>& ext_index_groups = {},
     bool spinfree_index_spaces = true);
 
 ResultExpr spintrace(ResultExpr expr, bool spinfree_index_spaces = true);
