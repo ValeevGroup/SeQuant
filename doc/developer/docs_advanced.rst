@@ -32,8 +32,8 @@ To build the documentation, run the following commands:
 
 This will generate both Doxygen and Sphinx documentation. The output directories are:
 
-- **Doxygen HTML:** ``build/doc/doxygen/html/``
-- **Sphinx HTML:** ``build/doc/sphinx/html/``
+- **Doxygen HTML:** ``build/doc/.doxygen/html/``
+- **Sphinx HTML:** ``build/doc/html/``
 
 
 How It Works

@@ -8,15 +8,15 @@ SeQuant uses a combination of `Doxygen <https://www.doxygen.nl/>`_, `Sphinx <htt
 Dependencies
 ------------------------------------------------
 Building the documentation requires several Python packages. You can install them using pip. The required packages are listed in the
-``requirements.txt`` file in the ``doc/sphinx`` directory. You can install them using the following command:
+``requirements.txt`` file in the ``doc/.sphinx`` directory. You can install them using the following command:
 
 .. code-block:: bash
 
     pip install -r doc/.sphinx/requirements.txt
 
 This will install the required packages, including Sphinx, Breathe, Exhale, and others.
-Now you can build the documentation using CMake. The documentation will be generated in the ``doc/html`` directory. You can open the ``index.html``
-file in your web browser to view the documentation.
+Now you can build the documentation using CMake. The documentation will be generated in ``doc/html`` under your build directory. You can open the
+``index.html`` file in your web browser to view the documentation.
 
 .. code-block:: bash
 
