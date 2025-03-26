@@ -439,10 +439,6 @@ if (SEQUANT_PYTHON)
     add_subdirectory(python)
 endif ()
 
-####### External interface ########
-
-add_subdirectory(external-interface)
-
 
 ##########################
 # export SeQuant
