@@ -23,7 +23,7 @@ This is achieved by the following SeQuant program:
    :dedent: 2
 
 .. hint:: 
-   All *core* user-facing SeQuant code lives in C++ namespace :code:`sequant`, and the shwon code assumes this namespace has been imported via
+   All *core* user-facing SeQuant code lives in C++ namespace :code:`sequant`, and the shown code assumes this namespace has been imported via
    :code:`using namespace sequant`.
 
 Running this program should produce a LaTeX expression for this formula:
