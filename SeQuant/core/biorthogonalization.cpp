@@ -339,13 +339,15 @@ ExprPtr biorthogonal_transform(
         ext_index_groups,
     const double threshold) {
   ResultExpr res(
-      ext_index_groups | ranges::views::transform([](const auto& pair) {
-        return pair.at(0);
-      }) | ranges::to<container::svector<Index>>(),
-      ext_index_groups | ranges::views::transform([](const auto& pair) {
-        return pair.at(1);
-      }) | ranges::to<container::svector<Index>>(),
-      container::svector<Index>{}, Symmetry::nonsymm, BraKetSymmetry::nonsymm,
+      bra(ext_index_groups | ranges::views::transform([](const auto& pair) {
+            return pair.at(0);
+          }) |
+          ranges::to<container::svector<Index>>()),
+      ket(ext_index_groups | ranges::views::transform([](const auto& pair) {
+            return pair.at(1);
+          }) |
+          ranges::to<container::svector<Index>>()),
+      aux(IndexList{}), Symmetry::nonsymm, BraKetSymmetry::nonsymm,
       ParticleSymmetry::symm, {}, expr);
 
   biorthogonal_transform(res, threshold);

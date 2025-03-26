@@ -5,6 +5,7 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
+#include <SeQuant/core/tensor.hpp>
 
 #include <cassert>
 #include <initializer_list>
@@ -38,10 +39,15 @@ class ResultExpr {
 
   ResultExpr(const Tensor &tensor, ExprPtr expression);
   ResultExpr(const Variable &variable, ExprPtr expression);
-  ResultExpr(IndexContainer bra, IndexContainer ket, IndexContainer aux,
+
+  template <typename Range1, typename Range2, typename Range3>
+  ResultExpr(bra<Range1> &&bra, ket<Range2> &&ket, aux<Range3> &&aux,
              Symmetry symm, BraKetSymmetry braket_symm,
              ParticleSymmetry particle_symm, std::optional<std::wstring> label,
-             ExprPtr expression);
+             ExprPtr expr)
+      : ResultExpr(std::forward<Range1>(bra), std::forward<Range2>(ket),
+                   std::forward<Range3>(aux), symm, braket_symm, particle_symm,
+                   std::move(label), std::move(expr)) {}
 
   ResultExpr(const ResultExpr &other) = default;
   ResultExpr(ResultExpr &&other) = default;
@@ -115,6 +121,11 @@ class ResultExpr {
 
  private:
   ExprPtr m_expr;
+
+  ResultExpr(IndexContainer bra, IndexContainer ket, IndexContainer aux,
+             Symmetry symm, BraKetSymmetry braket_symm,
+             ParticleSymmetry particle_symm, std::optional<std::wstring> label,
+             ExprPtr expression);
 
   Symmetry m_symm = Symmetry::nonsymm;
   BraKetSymmetry m_bksymm = BraKetSymmetry::nonsymm;

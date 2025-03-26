@@ -170,13 +170,15 @@ template <typename Container, typename TraceFunction, typename... Args>
     ResultExpr result = [&]() {
       assert(expr.has_label());
       if (permuteBra) {
-        return ResultExpr(permIndices, expr.ket(), expr.aux(), expr.symmetry(),
-                          expr.braket_symmetry(), expr.particle_symmetry(),
-                          expr.label(), std::move(expression));
+        return ResultExpr(bra(permIndices), ket(expr.ket()), aux(expr.aux()),
+                          expr.symmetry(), expr.braket_symmetry(),
+                          expr.particle_symmetry(), expr.label(),
+                          std::move(expression));
       } else {
-        return ResultExpr(expr.bra(), permIndices, expr.aux(), expr.symmetry(),
-                          expr.braket_symmetry(), expr.particle_symmetry(),
-                          expr.label(), std::move(expression));
+        return ResultExpr(bra(expr.bra()), ket(permIndices), aux(expr.aux()),
+                          expr.symmetry(), expr.braket_symmetry(),
+                          expr.particle_symmetry(), expr.label(),
+                          std::move(expression));
       }
     }();
 
