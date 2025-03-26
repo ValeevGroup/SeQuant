@@ -1677,7 +1677,7 @@ ExprPtr spintrace(
         result->append(spinfree_index_spaces ? remove_spin(st_expr) : st_expr);
       } else if (spin_expr->is<Product>()) {
         auto st_expr = spin_trace_product(spin_expr->as<Product>());
-        if (st_expr->size() != 0) {
+        if (!st_expr->is<Constant>() || st_expr->as<Constant>().value() != 0) {
           result->append(spinfree_index_spaces ? remove_spin(st_expr)
                                                : st_expr);
         }

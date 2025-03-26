@@ -253,11 +253,26 @@ TEST_CASE("spin", "[spin]") {
   }
 
   SECTION("Tensor") {
-    const auto expr = ex<Constant>(rational{1, 4}) *
-                      ex<Tensor>(L"g", bra{L"p_1", L"p_2"}, ket{L"p_3", L"p_4"},
-                                 Symmetry::antisymm);
-    auto result = spintrace(expr, {{L"p_1", L"p_3"}, {L"p_2", L"p_4"}});
-    REQUIRE_THAT(result, EquivalentTo("-1/2 g{p1,p2;p4,p3} + g{p1,p2;p3,p4}"));
+    {
+      const auto expr = ex<Constant>(rational{1, 4}) *
+                        ex<Tensor>(L"g", bra{L"p_1", L"p_2"},
+                                   ket{L"p_3", L"p_4"}, Symmetry::antisymm);
+      auto result = spintrace(expr, {{L"p_1", L"p_3"}, {L"p_2", L"p_4"}});
+      REQUIRE_THAT(result,
+                   EquivalentTo("-1/2 g{p1,p2;p4,p3} + g{p1,p2;p3,p4}"));
+    }
+    {
+      // Note the provided external index pairings which is different from the
+      // way this tensor is written down Also, the prefactor of -1 is important
+      // as this forces the code to take a path where it traces a product which
+      // ends up as a single tensor (due to an additional factor of -1 induces
+      // by the chosen pairing of external indices)
+      ExprPtr expr = parse_expr(L"- g{p1,p2;p3,p4}:A");
+      ExprPtr result = spintrace(expr, {{L"p_1", L"p_4"}, {L"p_2", L"p_3"}});
+
+      REQUIRE_THAT(result,
+                   EquivalentTo(L"4 g{p1,p2;p4,p3} - 2 g{p1,p2;p3,p4}"));
+    }
   }
 
   SECTION("Product") {
