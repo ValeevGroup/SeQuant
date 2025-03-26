@@ -7,3 +7,5 @@ foreach(current IN LISTS EXECUTABLE_SOURCES)
     add_executable(${name} ${current})
     target_link_libraries(${name} SeQuant)
 endforeach()
+
+add_subdirectory(external-interface)

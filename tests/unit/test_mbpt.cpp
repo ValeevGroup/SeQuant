@@ -16,6 +16,7 @@
 #include <SeQuant/domain/mbpt/context.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/op.hpp>
+#include <SeQuant/domain/mbpt/rules/df.hpp>
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers.hpp>
@@ -666,5 +667,38 @@ SECTION("MRSF") {
   });
 
 }  // SECTION("MRSF")
+}
+
+SECTION("rules") {
+  using namespace sequant;
+
+  SECTION("density-fit") {
+    const std::vector<std::wstring> inputs = {
+        L"t{a1,a2;i1,i2} t{a3;i3}",
+        L"t{a1,a2;i1,i2} g{i1,i2;a1,a2}",
+        L"t{a1,a2;i1,i2} g{i1,i2;a1,a2}:A",
+    };
+    const std::vector<std::wstring> expected = {
+        L"t{a1,a2;i1,i2} t{a3;i3}",
+        L"t{a1,a2;i1,i2} B{i1;a1;x_1} B{i2;a2;x_1}",
+        L"t{a1,a2;i1,i2} (B{i1;a1;x_1} B{i2;a2;x_1} "
+        "- B{i2;a1;x_1} B{i1;a2;x_1})",
+    };
+
+    REQUIRE(inputs.size() == expected.size());
+
+    for (std::size_t i = 0; i < inputs.size(); ++i) {
+      CAPTURE(inputs.at(i));
+
+      ExprPtr input_expr = parse_expr(inputs.at(i));
+
+      const IndexSpace aux_space =
+          get_default_context().index_space_registry()->retrieve(L"x");
+
+      ExprPtr actual = mbpt::density_fit(input_expr, aux_space, L"g", L"B");
+
+      REQUIRE_THAT(actual, EquivalentTo(expected.at(i)));
+    }
+  }
 }
 }

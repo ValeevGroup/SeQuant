@@ -80,6 +80,7 @@ endif ()
 list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake/modules/")
 
 set(FETCHCONTENT_UPDATES_DISCONNECTED OFF CACHE BOOL "Enables UPDATE_DISCONNECTED behavior for all content population")
+include(CTest)
 include(FetchContent)
 include(AddCustomTargetSubproject)
 include(FeatureSummary)
@@ -188,6 +189,8 @@ set(SeQuant_src
         SeQuant/core/asy_cost.hpp
         SeQuant/core/attr.hpp
         SeQuant/core/binary_node.hpp
+        SeQuant/core/biorthogonalization.cpp
+        SeQuant/core/biorthogonalization.hpp
         SeQuant/core/bliss.hpp
         SeQuant/core/complex.hpp
         SeQuant/core/container.hpp
@@ -227,6 +230,8 @@ set(SeQuant_src
         SeQuant/core/parse.hpp
         SeQuant/core/ranges.hpp
         SeQuant/core/rational.hpp
+        SeQuant/core/result_expr.cpp
+        SeQuant/core/result_expr.hpp
         SeQuant/core/runtime.cpp
         SeQuant/core/runtime.hpp
         SeQuant/core/space.hpp
@@ -246,11 +251,12 @@ set(SeQuant_src
         SeQuant/core/tensor_network/vertex_painter.hpp
         SeQuant/core/timer.hpp
         SeQuant/core/utility/context.hpp
-        SeQuant/core/utility/expr_diff.cpp
-        SeQuant/core/utility/expr_diff.hpp
+        SeQuant/core/utility/expr.cpp
+        SeQuant/core/utility/expr.hpp
         SeQuant/core/utility/indices.hpp
         SeQuant/core/utility/macros.hpp
         SeQuant/core/utility/nodiscard.hpp
+        SeQuant/core/utility/permutation.hpp
         SeQuant/core/utility/singleton.hpp
         SeQuant/core/utility/string.hpp
         SeQuant/core/utility/string.cpp
@@ -323,6 +329,7 @@ set_source_files_properties(
 )
 
 target_link_libraries(SeQuant PUBLIC range-v3::range-v3 Boost::regex Boost::locale Boost::headers SeQuant-bliss Threads::Threads)
+target_link_libraries(SeQuant PRIVATE $<BUILD_INTERFACE:libperm::libperm>)
 # modularized Boost has finer grained targets than just Boost::headers
 if (Boost_IS_MODULARIZED)
     target_link_libraries(SeQuant PUBLIC
@@ -423,7 +430,6 @@ if (SEQUANT_BENCHMARKS)
 endif()
 
 
-
 ####### Python ########
 
 if (SEQUANT_PYTHON)
@@ -448,11 +454,6 @@ install(FILES ${PROJECT_BINARY_DIR}/SeQuant/version.hpp
 # Create the version file
 write_basic_package_version_file(sequant-config-version.cmake
         VERSION ${SEQUANT_VERSION} COMPATIBILITY AnyNewerVersion)
-
-# Create the targets file
-export(EXPORT sequant
-        NAMESPACE SeQuant::
-        FILE "${PROJECT_BINARY_DIR}/sequant-targets.cmake")
 
 ## Create the configure file
 configure_package_config_file(cmake/sequant-config.cmake.in

@@ -16,22 +16,15 @@
 
 namespace sequant {
 
-std::wstring to_itf(const itf::CodeBlock &block) {
-  itf::detail::ITFGenerator generator;
+std::wstring to_itf(const itf::CodeBlock &block, const itf::Context &ctx) {
+  itf::detail::ITFGenerator generator(ctx);
   generator.addBlock(block);
   return generator.generate();
 }
 
 namespace itf {
 
-struct IndexTypeComparer {
-  bool operator()(const IndexSpace::Type &lhs,
-                  const IndexSpace::Type &rhs) const {
-    assert(get_default_context().index_space_registry()->retrieve("i").type() <
-           get_default_context().index_space_registry()->retrieve("a").type());
-    return lhs < rhs;
-  }
-};
+Context::~Context() {}
 
 Result::Result(ExprPtr expression, Tensor resultTensor, bool importResultTensor)
     : expression(std::move(expression)),
@@ -82,19 +75,35 @@ bool TensorBlockCompare::operator()(const Tensor &lhs,
 }
 
 std::vector<Contraction> to_contractions(const ExprPtr &expression,
-                                         const Tensor &resultTensor);
+                                         const Tensor &resultTensor,
+                                         const Context &ctx);
+
+Tensor to_tensor(const Expr &expr) {
+  if (expr.is<Tensor>()) {
+    return expr.as<Tensor>();
+  }
+
+  if (expr.is<Variable>()) {
+    // A variable can be seen as a tensor without indices
+    return Tensor(std::wstring(expr.as<Variable>().label()), {}, {}, {});
+  }
+
+  throw std::runtime_error(
+      "Invalid Expr type encountered (can't be converted to a Tensor) in "
+      "to_tensor");
+}
 
 std::vector<Contraction> to_contractions(const Product &product,
-                                         const Tensor &resultTensor) {
+                                         const Tensor &resultTensor,
+                                         const Context &ctx) {
   static std::size_t intermediateCounter = 1;
 
   if (product.factors().size() == 1) {
-    assert(product.factor(0).is<Tensor>());
     assert(product.scalar().imag() == 0);
 
     return {Contraction{product.scalar().real(),
                         resultTensor,
-                        product.factor(0).as<Tensor>(),
+                        to_tensor(*product.factor(0)),
                         {}}};
   }
 
@@ -114,12 +123,13 @@ std::vector<Contraction> to_contractions(const Product &product,
       IndexGroups intermediateIndexGroups = get_unique_indices(factor);
 
       // Collect all intermediate indices and sort them such that the order of
-      // index spaces is the canonical one within ITF (largest space leftmost).
+      // index spaces is the canonical one within ITF
       // This is possible, because the index ordering of intermediates is
       // arbitrary
       std::vector<Index> intermediateIndices;
       intermediateIndices.reserve(intermediateIndexGroups.bra.size() +
-                                  intermediateIndexGroups.ket.size());
+                                  intermediateIndexGroups.ket.size() +
+                                  intermediateIndexGroups.aux.size());
       intermediateIndices.insert(intermediateIndices.end(),
                                  intermediateIndexGroups.bra.begin(),
                                  intermediateIndexGroups.bra.end());
@@ -130,16 +140,9 @@ std::vector<Contraction> to_contractions(const Product &product,
                                  intermediateIndexGroups.aux.begin(),
                                  intermediateIndexGroups.aux.end());
       std::sort(intermediateIndices.begin(), intermediateIndices.end(),
-                [](const Index &lhs, const Index &rhs) {
-                  IndexTypeComparer cmp;
-                  if (cmp(lhs.space().type(), rhs.space().type())) {
-                    return false;
-                  } else if (cmp(rhs.space().type(), lhs.space().type())) {
-                    return true;
-                  } else {
-                    // Indices are of same space
-                    return lhs < rhs;
-                  }
+                [&ctx](const Index &lhs, const Index &rhs) {
+                  int result = ctx.compare(lhs, rhs);
+                  return result == 0 ? lhs < rhs : result < 0;
                 });
 
       std::array<wchar_t, 64> intermediateName;
@@ -153,7 +156,7 @@ std::vector<Contraction> to_contractions(const Product &product,
                           ket(std::vector<Index>{}));
 
       std::vector<Contraction> intermediateContractions =
-          to_contractions(factor, intermediate);
+          to_contractions(factor, intermediate, ctx);
       contractions.reserve(contractions.size() +
                            intermediateContractions.size());
       contractions.insert(
@@ -176,32 +179,35 @@ std::vector<Contraction> to_contractions(const Product &product,
   assert(product.scalar().imag() == 0);
   contractions.push_back(Contraction{
       product.scalar().real(), resultTensor,
-      lhsIntermediate == intermediates.end() ? product.factor(0).as<Tensor>()
+      lhsIntermediate == intermediates.end() ? to_tensor(*product.factor(0))
                                              : lhsIntermediate->second,
-      rhsIntermediate == intermediates.end() ? product.factor(1).as<Tensor>()
+      rhsIntermediate == intermediates.end() ? to_tensor(*product.factor(1))
                                              : rhsIntermediate->second});
 
   return contractions;
 }
 
 std::vector<Contraction> to_contractions(const ExprPtr &expression,
-                                         const Tensor &resultTensor) {
+                                         const Tensor &resultTensor,
+                                         const Context &ctx) {
   std::wstring itfCode;
 
   if (expression.is<Constant>()) {
-    throw std::invalid_argument("Can't transform constants into contractions");
+    // Make use of special One[] tensor to represent adding constants
+    return {Contraction{expression.as<Constant>().value().real(), resultTensor,
+                        Tensor(L"One", {}, {}, {})}};
   } else if (expression.is<Tensor>()) {
     return {Contraction{1, resultTensor, expression.as<Tensor>(), {}}};
   } else if (expression.is<Product>()) {
     // Separate into binary contractions
-    return to_contractions(expression.as<Product>(), resultTensor);
+    return to_contractions(expression.as<Product>(), resultTensor, ctx);
   } else if (expression.is<Sum>()) {
     // Process each summand
     std::vector<Contraction> contractions;
 
     for (const ExprPtr &summand : expression.as<Sum>().summands()) {
       std::vector<Contraction> currentContractions =
-          to_contractions(summand, resultTensor);
+          to_contractions(summand, resultTensor, ctx);
 
       contractions.reserve(contractions.size() + currentContractions.size());
       contractions.insert(contractions.end(),
@@ -239,8 +245,9 @@ bool isSpacePattern(const IndexContainer &indices,
   return true;
 }
 
-void one_electron_integral_remapper(
-    ExprPtr &expr, const std::wstring_view integralTensorLabel) {
+void one_electron_integral_remapper(ExprPtr &expr,
+                                    const std::wstring_view integralTensorLabel,
+                                    const Context &ctx) {
   if (!expr.is<Tensor>()) {
     return;
   }
@@ -257,50 +264,43 @@ void one_electron_integral_remapper(
 
   auto braIndices = tensor.bra();
   auto ketIndices = tensor.ket();
-  assert(tensor.aux().empty());
-
-  IndexTypeComparer cmp;
 
   // Use the bra-ket (hermitian) symmetry of the integrals to exchange creators
   // and annihilators such that the larger index space is on the left (in the
   // bra)
-  if (cmp(braIndices[0].space().type(), ketIndices[0].space().type())) {
+  int res = ctx.compare(ketIndices[0], braIndices[0]);
+  if (res < 0) {
     std::swap(braIndices[0], ketIndices[0]);
-  } else if (braIndices[0].space().type() == ketIndices[0].space().type() &&
-             ketIndices[0] < braIndices[0]) {
+  } else if (res == 0 && ketIndices[0] < braIndices[0]) {
     // Cosmetic exchange to arrive at a more canonical index ordering
     std::swap(braIndices[0], ketIndices[0]);
   }
 
   expr = ex<Tensor>(tensor.label(), bra(std::move(braIndices)),
-                    ket(std::move(ketIndices)), tensor.aux());
+                    ket(std::move(ketIndices)), aux(tensor.aux()));
 }
 
 template <typename BraContainer, typename KetContainer>
 bool isExceptionalJ(const BraContainer &braIndices,
-                    const KetContainer &ketIndices) {
+                    const KetContainer &ketIndices, const Context &ctx) {
   assert(braIndices.size() == 2);
   assert(ketIndices.size() == 2);
   // integrals with 3 external (virtual) indices ought to be converted to
   // J-integrals
-  return braIndices[0].space().type() == get_default_context()
-                                             .index_space_registry()
-                                             ->retrieve("a")
-                                             .type() &&
-         braIndices[1].space().type() == get_default_context()
-                                             .index_space_registry()
-                                             ->retrieve("a")
-                                             .type() &&
-         ketIndices[0].space().type() == get_default_context()
-                                             .index_space_registry()
-                                             ->retrieve("a")
-                                             .type() &&
-         ketIndices[1].space().type() !=
-             get_default_context().index_space_registry()->retrieve("a").type();
+  // Here, we generalize this to all integrals for which the bra indices and
+  // the first ket index are of the same space and that space compares less
+  // than the space of the bras.
+  // TODO: outsource determining of exceptional Js to context
+  const bool bras_are_same = ctx.compare(braIndices[0], braIndices[1]) == 0;
+  const bool kets_are_ordered = ctx.compare(ketIndices[0], ketIndices[1]) < 0;
+  const bool first_ket_same_as_bra =
+      ctx.compare(ketIndices[0], braIndices[0]) == 0;
+  return bras_are_same && kets_are_ordered && first_ket_same_as_bra;
 }
 
-void two_electron_integral_remapper(
-    ExprPtr &expr, const std::wstring_view integralTensorLabel) {
+void two_electron_integral_remapper(ExprPtr &expr,
+                                    const std::wstring_view integralTensorLabel,
+                                    const Context &ctx) {
   if (!expr.is<Tensor>()) {
     return;
   }
@@ -320,8 +320,6 @@ void two_electron_integral_remapper(
   auto ketIndices = tensor.ket();
   assert(tensor.aux().empty());
 
-  IndexTypeComparer cmp;
-
   // Step 1: Use 8-fold permutational symmetry of spin-summed integrals
   // to bring indices into a canonical order in terms of the index
   // spaces they belong to. Note: This symmetry is generated by the two
@@ -334,7 +332,7 @@ void two_electron_integral_remapper(
 
   // Step 1a: Particle-intern bra-ket symmetry
   for (std::size_t i = 0; i < braIndices.size(); ++i) {
-    if (cmp(braIndices.at(i).space().type(), ketIndices.at(i).space().type())) {
+    if (ctx.compare(ketIndices.at(i), braIndices.at(i)) < 0) {
       // This bra index belongs to a smaller space than the ket index ->
       // swap them
       std::swap(braIndices[i], ketIndices[i]);
@@ -343,12 +341,10 @@ void two_electron_integral_remapper(
 
   // Step 1b: Particle-1,2-symmetry
   bool switchColumns = false;
-  if (braIndices[0].space().type() != braIndices[1].space().type()) {
-    switchColumns =
-        cmp(braIndices[0].space().type(), braIndices[1].space().type());
-  } else if (ketIndices[0].space().type() != ketIndices[1].space().type()) {
-    switchColumns =
-        cmp(ketIndices[0].space().type(), ketIndices[1].space().type());
+  if (int res = ctx.compare(braIndices[1], braIndices[0]); res != 0) {
+    switchColumns = res < 0;
+  } else if (int res = ctx.compare(ketIndices[1], ketIndices[0]); res != 0) {
+    switchColumns = res < 0;
   }
 
   if (switchColumns) {
@@ -368,8 +364,8 @@ void two_electron_integral_remapper(
   Index *particle2_1 = nullptr;
   Index *particle2_2 = nullptr;
 
-  if (isExceptionalJ(braIndices, ketIndices) ||
-      cmp(braIndices[1].space().type(), ketIndices[0].space().type())) {
+  if (isExceptionalJ(braIndices, ketIndices, ctx) ||
+      ctx.compare(ketIndices[0], braIndices[1]) < 0) {
     std::swap(braIndices[1], ketIndices[0]);
     tensorLabel = L"J";
 
@@ -412,16 +408,24 @@ void two_electron_integral_remapper(
                     ket(std::move(ketIndices)), tensor.aux());
 }
 
-void integral_remapper(ExprPtr &expr, std::wstring_view oneElectronIntegralName,
-                       std::wstring_view twoElectronIntegralName) {
-  two_electron_integral_remapper(expr, twoElectronIntegralName);
-  one_electron_integral_remapper(expr, oneElectronIntegralName);
+void integral_remapper(ExprPtr &expr, const Context &ctx,
+                       std::wstring_view oneElectronIntegralName,
+                       std::wstring_view twoElectronIntegralName,
+                       std::wstring_view dfTensorName) {
+  two_electron_integral_remapper(expr, twoElectronIntegralName, ctx);
+  one_electron_integral_remapper(expr, oneElectronIntegralName, ctx);
+  // We can reuse the same logic for the DF tensors
+  one_electron_integral_remapper(expr, dfTensorName, ctx);
 }
 
-void remap_integrals(ExprPtr &expr, std::wstring_view oneElectronIntegralName,
-                     std::wstring_view twoElectronIntegralName) {
-  auto remapper = std::bind(integral_remapper, std::placeholders::_1,
-                            oneElectronIntegralName, twoElectronIntegralName);
+void remap_integrals(ExprPtr &expr, const Context &ctx,
+                     std::wstring_view oneElectronIntegralName,
+                     std::wstring_view twoElectronIntegralName,
+                     std::wstring_view dfTensorName) {
+  auto remapper = [&](ExprPtr &expr) {
+    return integral_remapper(expr, ctx, oneElectronIntegralName,
+                             twoElectronIntegralName, dfTensorName);
+  };
 
   const bool visitedRoot = expr->visit(remapper, true);
 
@@ -430,6 +434,8 @@ void remap_integrals(ExprPtr &expr, std::wstring_view oneElectronIntegralName,
   }
 }
 
+ITFGenerator::ITFGenerator(const Context &ctx) : m_ctx(&ctx) {}
+
 void ITFGenerator::addBlock(const itf::CodeBlock &block) {
   m_codes.reserve(m_codes.size() + block.results.size());
 
@@ -437,10 +443,10 @@ void ITFGenerator::addBlock(const itf::CodeBlock &block) {
 
   for (const Result &currentResult : block.results) {
     ExprPtr expression = currentResult.expression;
-    remap_integrals(expression);
+    remap_integrals(expression, *m_ctx);
 
     contractionBlocks.push_back(
-        to_contractions(expression, currentResult.resultTensor));
+        to_contractions(expression, currentResult.resultTensor, *m_ctx));
 
     if (currentResult.importResultTensor) {
       m_importedTensors.insert(currentResult.resultTensor);
@@ -450,23 +456,21 @@ void ITFGenerator::addBlock(const itf::CodeBlock &block) {
 
     // If we encounter a tensor in an expression that we have not yet seen
     // before, it must be an imported tensor (otherwise the expression would be
-    // invalid)
-    expression->visit(
-        [this](const ExprPtr &expr) {
-          if (expr.is<Tensor>()) {
-            const Tensor &tensor = expr.as<Tensor>();
-            if (m_createdTensors.find(tensor) == m_createdTensors.end()) {
-              m_importedTensors.insert(tensor);
-            }
-            m_encounteredIndices.insert(tensor.braket().begin(),
-                                        tensor.braket().end());
-          }
-        },
-        true);
-
-    // Now go through all result tensors of the contractions that we have
-    // produced and add all new tensors to the set of created tensors
+    // invalid).
+    // Additionally, all result tensors that we find in the produced
+    // contractions that is not imported must be created in order for the
+    // expression to be valid.
     for (const Contraction &currentContraction : contractionBlocks.back()) {
+      if (m_createdTensors.find(currentContraction.lhs) ==
+          m_createdTensors.end()) {
+        m_importedTensors.insert(currentContraction.lhs);
+      }
+      if (currentContraction.rhs.has_value()) {
+        if (m_createdTensors.find(currentContraction.rhs.value()) ==
+            m_createdTensors.end()) {
+          m_importedTensors.insert(currentContraction.rhs.value());
+        }
+      }
       if (m_importedTensors.find(currentContraction.result) ==
           m_importedTensors.end()) {
         m_createdTensors.insert(currentContraction.result);
@@ -506,28 +510,22 @@ std::map<IndexSpace, std::set<std::size_t>> indicesBySpace(
   return indexMap;
 }
 
-std::wstring to_itf(const Tensor &tensor, bool includeIndexing = true) {
+std::wstring to_itf(const Tensor &tensor, const Context &ctx,
+                    bool includeIndexing = true) {
   std::wstring tags;
   std::wstring indices;
 
-  for (const Index &current : tensor.braket()) {
+  // Note that it is important to iterate over the auxiliary indices first as
+  // ITF expects those the be listed first
+  for (const Index &current :
+       ranges::views::concat(tensor.aux(), tensor.bra(), tensor.ket())) {
     IndexComponents components = decomposeIndex(current);
 
     assert(components.id <= 7);
-
-    if (components.space.type() ==
-        get_default_context().index_space_registry()->retrieve("i").type()) {
-      tags += L"c";
-      indices += static_cast<wchar_t>(L'i' + components.id);
-    } else if (components.space.type() == get_default_context()
-                                              .index_space_registry()
-                                              ->retrieve("a")
-                                              .type()) {
-      tags += L"e";
-      indices += static_cast<wchar_t>(L'a' + components.id);
-    } else {
-      throw std::runtime_error("Encountered unhandled index space type");
-    }
+    tags += ctx.get_tag(current.space());
+    assert(ctx.get_base_label(current.space()).size() == 1);
+    indices += static_cast<wchar_t>(ctx.get_base_label(current.space())[0] +
+                                    components.id);
   }
 
   return std::wstring(tensor.label()) + (tags.empty() ? L"" : L":" + tags) +
@@ -544,43 +542,51 @@ std::wstring ITFGenerator::generate() const {
   std::map<IndexSpace, std::set<std::size_t>> indexGroups =
       indicesBySpace(m_encounteredIndices);
   for (auto iter = indexGroups.begin(); iter != indexGroups.end(); ++iter) {
-    wchar_t baseLabel;
-    std::wstring spaceLabel;
-    std::wstring spaceTag;
-    if (iter->first.type() ==
-        get_default_context().index_space_registry()->retrieve("i").type()) {
-      baseLabel = L'i';
-      spaceLabel = L"Closed";
-      spaceTag = L"c";
-    } else if (iter->first.type() == get_default_context()
-                                         .index_space_registry()
-                                         ->retrieve("a")
-                                         .type()) {
-      baseLabel = L'a';
-      spaceLabel = L"External";
-      spaceTag = L"e";
-    } else {
-      throw std::runtime_error("Encountered unhandled index space type");
+    const IndexSpace &space = iter->first;
+
+    std::wstring label = m_ctx->get_base_label(space);
+    if (label.size() != 1) {
+      throw std::runtime_error(
+          "Base labels are restricted to a size of 1 (at the moment)");
     }
+    wchar_t baseLabel = label[0];
+
+    std::wstring spaceName = m_ctx->get_name(space);
+    std::wstring spaceTag = m_ctx->get_tag(space);
 
     itf += L"index-space: ";
     for (std::size_t i : iter->second) {
       assert(i <= 7);
       itf += static_cast<wchar_t>(baseLabel + i);
     }
-    itf += L", " + spaceLabel + L", " + spaceTag + L"\n";
+    itf += L", " + spaceName + L", " + spaceTag + L"\n";
   }
 
   itf += L"\n";
 
   // Tensor declarations
   for (const Tensor &current : m_importedTensors) {
-    itf +=
-        L"tensor: " + to_itf(current) + L", " + to_itf(current, false) + L"\n";
+    if (current.indices().size() == 0 && current.label() == L"One") {
+      // The One[] tensor exists implicitly
+      continue;
+    }
+
+    itf += L"tensor: " + to_itf(current, *m_ctx) + L", " +
+           to_itf(current, *m_ctx, false) + L"\n";
   }
   itf += L"\n";
   for (const Tensor &current : m_createdTensors) {
-    itf += L"tensor: " + to_itf(current) + L", !Create{type:disk}\n";
+    if (current.indices().size() == 0 && current.label() == L"One") {
+      // The One[] tensor exists implicitly
+      continue;
+    }
+
+    itf += L"tensor: " + to_itf(current, *m_ctx);
+    if (current.indices().size() > 0) {
+      itf += +L", !Create{type:disk}\n";
+    } else {
+      itf += +L", !Create{type:scalar}\n";
+    }
   }
   itf += L"\n\n";
 
@@ -593,45 +599,61 @@ std::wstring ITFGenerator::generate() const {
     for (const std::vector<Contraction> &currentBlock :
          currentSection.contractionBlocks) {
       for (const Contraction &currentContraction : currentBlock) {
+        if (currentContraction.factor == 0) {
+          if (currentContraction.lhs.label() == L"One" &&
+              !currentContraction.rhs.has_value()) {
+            // This is likely the only contraction belonging to the given result
+            // meaning that we simply want to explicitly set it to zero
+            itf +=
+                L"alloc " + to_itf(currentContraction.result, *m_ctx) + L"\n";
+            itf +=
+                L"store " + to_itf(currentContraction.result, *m_ctx) + L"\n";
+          }
+
+          continue;
+        }
+
         // For now we'll do a really silly contribution-by-contribution
         // load-process-store strategy
         if (allocatedTensors.find(currentContraction.result) ==
             allocatedTensors.end()) {
-          itf += L"alloc " + to_itf(currentContraction.result) + L"\n";
+          itf += L"alloc " + to_itf(currentContraction.result, *m_ctx) + L"\n";
           allocatedTensors.insert(currentContraction.result);
         } else {
-          itf += L"load " + to_itf(currentContraction.result) + L"\n";
+          itf += L"load " + to_itf(currentContraction.result, *m_ctx) + L"\n";
         }
-        itf += L"load " + to_itf(currentContraction.lhs) + L"\n";
+        itf += L"load " + to_itf(currentContraction.lhs, *m_ctx) + L"\n";
         if (currentContraction.rhs.has_value()) {
-          itf += L"load " + to_itf(currentContraction.rhs.value()) + L"\n";
+          itf +=
+              L"load " + to_itf(currentContraction.rhs.value(), *m_ctx) + L"\n";
         }
 
-        itf += L"." + to_itf(currentContraction.result) + L" ";
+        itf += L"." + to_itf(currentContraction.result, *m_ctx) + L" ";
         int sign = currentContraction.factor < 0 ? -1 : 1;
 
         itf += (sign < 0 ? L"-= " : L"+= ");
         if (currentContraction.factor * sign != 1) {
           itf += to_wstring(currentContraction.factor * sign) + L" * ";
         }
-        itf += to_itf(currentContraction.lhs) +
+        itf += to_itf(currentContraction.lhs, *m_ctx) +
                (currentContraction.rhs.has_value()
-                    ? L" " + to_itf(currentContraction.rhs.value())
+                    ? L" " + to_itf(currentContraction.rhs.value(), *m_ctx)
                     : L"") +
                L"\n";
 
         if (currentContraction.rhs.has_value()) {
-          itf += L"drop " + to_itf(currentContraction.rhs.value()) + L"\n";
+          itf +=
+              L"drop " + to_itf(currentContraction.rhs.value(), *m_ctx) + L"\n";
         }
-        itf += L"drop " + to_itf(currentContraction.lhs) + L"\n";
-        itf += L"store " + to_itf(currentContraction.result) + L"\n";
+        itf += L"drop " + to_itf(currentContraction.lhs, *m_ctx) + L"\n";
+        itf += L"store " + to_itf(currentContraction.result, *m_ctx) + L"\n";
       }
 
       itf += L"\n";
     }
-
-    itf += L"\n---- end\n";
   }
+
+  itf += L"\n---- end\n";
 
   return itf;
 }
