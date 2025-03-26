@@ -256,11 +256,8 @@ TEST_CASE("spin", "[spin]") {
     const auto expr = ex<Constant>(rational{1, 4}) *
                       ex<Tensor>(L"g", bra{L"p_1", L"p_2"}, ket{L"p_3", L"p_4"},
                                  Symmetry::antisymm);
-    auto result = spintrace(expr);
-    REQUIRE(result->is<Sum>());
-    canonicalize(result);
-    REQUIRE(result->size() == 2);
-    REQUIRE_THAT(result, EquivalentTo("- g{p1,p2;p4,p3} + g{p1,p2;p3,p4}"));
+    auto result = spintrace(expr, {{L"p_1", L"p_3"}, {L"p_2", L"p_4"}});
+    REQUIRE_THAT(result, EquivalentTo("-1/2 g{p1,p2;p4,p3} + g{p1,p2;p3,p4}"));
   }
 
   SECTION("Product") {
