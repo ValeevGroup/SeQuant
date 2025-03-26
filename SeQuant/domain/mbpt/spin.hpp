@@ -240,7 +240,7 @@ ExprPtr closed_shell_spintrace(
     const ExprPtr& expr,
     const container::svector<container::svector<Index>>& ext_index_groups = {});
 
-container::svector<ResultExpr> closed_shell_spintrace(ResultExpr expr);
+container::svector<ResultExpr> closed_shell_spintrace(const ResultExpr& expr);
 
 /// @brief Transforms Coupled cluster from spin orbital to spatial orbitals
 /// @details The external indices are deduced from Antisymmetrization operator
@@ -317,7 +317,8 @@ ExprPtr spintrace(
     const container::svector<container::svector<Index>>& ext_index_groups = {},
     bool spinfree_index_spaces = true);
 
-ResultExpr spintrace(ResultExpr expr, bool spinfree_index_spaces = true);
+container::svector<ResultExpr> spintrace(const ResultExpr& expr,
+                                         bool spinfree_index_spaces = true);
 
 /// @brief Factorize S out of terms
 /// @details Given an expression, permute indices and check if a given product

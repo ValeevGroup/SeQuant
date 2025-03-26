@@ -66,7 +66,7 @@ container::svector< ResultExpr > postProcess(ResultExpr result, const IndexSpace
 			processed = closed_shell_spintrace(result);
 			break;
 		case SpinTracing::Rigorous:
-			processed.push_back(spintrace(result));
+			processed = spintrace(result);
 			break;
 	}
 

@@ -75,6 +75,124 @@ void reset_idx_tags(const ExprPtr& expr) {
       true);
 }
 
+template <typename Container, typename TraceFunction, typename... Args>
+[[nodiscard]] Container wrap_trace(const ResultExpr& expr,
+                                   TraceFunction&& tracer, Args&&... args) {
+  bool searchForNonEquivalentResults = expr.symmetry() != Symmetry::nonsymm;
+  searchForNonEquivalentResults &=
+      expr.bra().size() > 1 || expr.ket().size() > 1;
+  const bool brasSameSpace = std::all_of(
+      expr.bra().begin(), expr.bra().end(),
+      [&](const Index& idx) { return idx.space() == expr.bra()[0].space(); });
+  const bool ketsSameSpace = std::all_of(
+      expr.ket().begin(), expr.ket().end(),
+      [&](const Index& idx) { return idx.space() == expr.ket()[0].space(); });
+  searchForNonEquivalentResults &= !brasSameSpace && !ketsSameSpace;
+
+  if (!searchForNonEquivalentResults) {
+    ResultExpr traced = expr.clone();
+    traced.expression() =
+        tracer(traced.expression(),
+               traced.index_particle_grouping<container::svector<Index>>(),
+               std::forward<Args>(args)...);
+
+    traced.set_symmetry(Symmetry::nonsymm);
+
+    return {std::move(traced)};
+  }
+
+  assert(expr.symmetry() == Symmetry::antisymm ||
+         expr.symmetry() == Symmetry::symm);
+
+  // TODO: Do we have to track the sign?
+  const bool permuteBra = expr.bra().size() >= expr.ket().size();
+  auto permIndices = permuteBra ? expr.bra() : expr.ket();
+  const std::size_t unchangedSize =
+      permuteBra ? expr.ket().size() : expr.bra().size();
+
+  [[maybe_unused]] auto get_phase = [](auto container) {
+    reset_ts_swap_counter<Index>();
+    bubble_sort(container.begin(), container.end(), std::less<Index>{});
+    return ts_swap_counter_is_even<Index>() ? 1 : -1;
+  };
+
+  reset_ts_swap_counter<Index>();
+  bubble_sort(permIndices.begin(), permIndices.end(), std::less<Index>{});
+  const int initialSign = ts_swap_counter_is_even<Index>() ? 1 : -1;
+  const auto originalIndices = permIndices;
+
+  container::svector<container::set<std::pair<IndexSpace, IndexSpace>>>
+      idxPairings;
+
+  Container resultSet;
+
+  // For next_permutation to work in this context, permIndices must be sorted
+  assert(std::is_sorted(permIndices.begin(), permIndices.end()));
+
+  int sign = initialSign;
+  do {
+    const int currentSign = sign;
+    // std::next_permutation creates one lexicographical permutation after the
+    // other, which should imply that the phase should alternate between
+    // iterations.
+    sign *= -1;
+    assert(currentSign == get_phase(permIndices) * initialSign);
+
+    container::set<std::pair<IndexSpace, IndexSpace>> currentPairing;
+
+    for (std::size_t i = 0; i < unchangedSize; ++i) {
+      if (permuteBra) {
+        currentPairing.insert(
+            std::make_pair(permIndices[i].space(), expr.ket()[i].space()));
+      } else {
+        currentPairing.insert(
+            std::make_pair(expr.bra()[i].space(), permIndices[i].space()));
+      }
+    }
+
+    for (std::size_t i = unchangedSize; i < permIndices.size(); ++i) {
+      currentPairing.insert(
+          std::make_pair(permIndices[i].space(), IndexSpace::null));
+    }
+
+    if (std::find(idxPairings.begin(), idxPairings.end(), currentPairing) !=
+        idxPairings.end()) {
+      continue;
+    }
+
+    // Found a new index pairing
+
+    ExprPtr expression = expr.expression().clone();
+
+    expression *= ex<Constant>(currentSign);
+    expression = simplify(expression);
+
+    ResultExpr result = [&]() {
+      assert(expr.has_label());
+      if (permuteBra) {
+        return ResultExpr(permIndices, expr.ket(), expr.aux(), expr.symmetry(),
+                          expr.braket_symmetry(), expr.particle_symmetry(),
+                          expr.label(), std::move(expression));
+      } else {
+        return ResultExpr(expr.bra(), permIndices, expr.aux(), expr.symmetry(),
+                          expr.braket_symmetry(), expr.particle_symmetry(),
+                          expr.label(), std::move(expression));
+      }
+    }();
+
+    result.expression() =
+        tracer(result.expression(),
+               result.index_particle_grouping<container::svector<Index>>(),
+               std::forward<Args>(args)...);
+
+    result.set_symmetry(Symmetry::nonsymm);
+
+    resultSet.push_back(std::move(result));
+  } while (std::next_permutation(permIndices.begin(), permIndices.end()));
+
+  return resultSet;
+}
+
 }  // namespace detail
 
 Index make_spinalpha(const Index& idx) {
@@ -946,126 +1064,12 @@ ExprPtr closed_shell_CC_spintrace(ExprPtr const& expr) {
   return st_expr;
 }
 
-container::svector<ResultExpr> closed_shell_spintrace(ResultExpr expr) {
-  bool searchForNonEquivalentResults = expr.symmetry() != Symmetry::nonsymm;
-  searchForNonEquivalentResults &=
-      expr.bra().size() > 1 || expr.ket().size() > 1;
-  const bool brasSameSpace = std::all_of(
-      expr.bra().begin(), expr.bra().end(),
-      [&](const Index& idx) { return idx.space() == expr.bra()[0].space(); });
-  const bool ketsSameSpace = std::all_of(
-      expr.ket().begin(), expr.ket().end(),
-      [&](const Index& idx) { return idx.space() == expr.ket()[0].space(); });
-  searchForNonEquivalentResults &= !brasSameSpace && !ketsSameSpace;
+container::svector<ResultExpr> closed_shell_spintrace(const ResultExpr& expr) {
+  using TraceFunction = ExprPtr (*)(
+      const ExprPtr&, const container::svector<container::svector<Index>>&);
 
-  if (!searchForNonEquivalentResults) {
-    expr.expression() = closed_shell_spintrace(
-        expr.expression(),
-        expr.index_particle_grouping<container::svector<Index>>());
-
-    expr.set_symmetry(Symmetry::nonsymm);
-
-    return {std::move(expr)};
-  }
-
-  assert(expr.symmetry() == Symmetry::antisymm ||
-         expr.symmetry() == Symmetry::symm);
-
-  // TODO: Do we have to track the sign?
-  const bool permuteBra = expr.bra().size() >= expr.ket().size();
-  auto permIndices = permuteBra ? expr.bra() : expr.ket();
-  const std::size_t unchangedSize =
-      permuteBra ? expr.ket().size() : expr.bra().size();
-
-  auto get_phase = [](auto container) {
-    reset_ts_swap_counter<Index>();
-    bubble_sort(container.begin(), container.end(), std::less<Index>{});
-    return ts_swap_counter_is_even<Index>() ? 1 : -1;
-  };
-
-  reset_ts_swap_counter<Index>();
-  bubble_sort(permIndices.begin(), permIndices.end(), std::less<Index>{});
-  const int initialSign = ts_swap_counter_is_even<Index>() ? 1 : -1;
-  const auto originalIndices = permIndices;
-
-  container::svector<container::set<std::pair<IndexSpace, IndexSpace>>>
-      idxPairings;
-
-  container::svector<ResultExpr> resultSet;
-
-  int sign = initialSign;
-  do {
-    const int currentSign = sign;
-    // std::next_permutation creates one lexicographical permutation after the
-    // other, which should imply that the phase should alternate between
-    // iterations.
-    sign *= -1;
-    assert(currentSign == get_phase(permIndices) * initialSign);
-
-    container::set<std::pair<IndexSpace, IndexSpace>> currentPairing;
-
-    for (std::size_t i = 0; i < unchangedSize; ++i) {
-      if (permuteBra) {
-        currentPairing.insert(
-            std::make_pair(permIndices[i].space(), expr.ket()[i].space()));
-      } else {
-        currentPairing.insert(
-            std::make_pair(expr.bra()[i].space(), permIndices[i].space()));
-      }
-    }
-
-    for (std::size_t i = unchangedSize; i < permIndices.size(); ++i) {
-      currentPairing.insert(
-          std::make_pair(permIndices[i].space(), IndexSpace::null));
-    }
-
-    if (std::find(idxPairings.begin(), idxPairings.end(), currentPairing) !=
-        idxPairings.end()) {
-      continue;
-    }
-
-    // Found a new index pairing
-
-    container::map<Index, Index> idxReplacements;
-
-    for (std::size_t i = 0; i < permIndices.size(); ++i) {
-      if (permIndices[i] != originalIndices[i]) {
-        idxReplacements.insert({originalIndices[i], permIndices[i]});
-        idxReplacements.insert({permIndices[i], originalIndices[i]});
-      }
-    }
-
-    ExprPtr expression = expr.expression().clone();
-    // expression->visit([&](ExprPtr &expr) { if (expr.is<Tensor>())
-    // expr.as<Tensor>().transform_indices(idxReplacements); }, true);
-    detail::reset_idx_tags(expression);
-
-    expression *= ex<Constant>(currentSign);
-    expression = simplify(expression);
-
-    ResultExpr result = [&]() {
-      assert(expr.has_label());
-      if (permuteBra) {
-        return ResultExpr(permIndices, expr.ket(), expr.aux(), expr.symmetry(),
-                          expr.braket_symmetry(), expr.particle_symmetry(),
-                          expr.label(), std::move(expression));
-      } else {
-        return ResultExpr(expr.bra(), permIndices, expr.aux(), expr.symmetry(),
-                          expr.braket_symmetry(), expr.particle_symmetry(),
-                          expr.label(), std::move(expression));
-      }
-    }();
-
-    result.expression() = closed_shell_spintrace(
-        result.expression(),
-        result.index_particle_grouping<container::svector<Index>>());
-
-    result.set_symmetry(Symmetry::nonsymm);
-
-    resultSet.push_back(std::move(result));
-  } while (std::next_permutation(permIndices.begin(), permIndices.end()));
-
-  return resultSet;
+  return detail::wrap_trace<container::svector<ResultExpr>>(
+      expr, static_cast<TraceFunction>(&closed_shell_spintrace));
 }
 
 ExprPtr closed_shell_CC_spintrace_rigorous(ExprPtr const& expr) {
@@ -1732,15 +1736,14 @@ ExprPtr spintrace(
   return result;
 }  // ExprPtr spintrace
 
-ResultExpr spintrace(ResultExpr expr, bool spinfree_index_spaces) {
-  expr.expression() =
-      spintrace(expr.expression(),
-                expr.index_particle_grouping<container::svector<Index>>(),
-                spinfree_index_spaces);
+container::svector<ResultExpr> spintrace(const ResultExpr& expr,
+                                         bool spinfree_index_spaces) {
+  using TraceFunction =
+      ExprPtr (*)(const ExprPtr&,
+                  const container::svector<container::svector<Index>>&, bool);
 
-  expr.set_symmetry(Symmetry::nonsymm);
-
-  return expr;
+  return detail::wrap_trace<container::svector<ResultExpr>>(
+      expr, static_cast<TraceFunction>(&spintrace), spinfree_index_spaces);
 }
 
 ExprPtr factorize_S(const ExprPtr& expression,

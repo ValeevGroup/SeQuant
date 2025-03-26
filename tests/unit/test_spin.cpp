@@ -1353,35 +1353,71 @@ SECTION("Open-shell spin-tracing") {
 }
 
 SECTION("ResultExpr") {
-  SECTION("closed_shell") {
-    ResultExpr result = parse_result_expr(
-        L"R{i1,i2,i3;a1,a2,a3}:A = 1/12 * A{i1,i2,i3;a1,a2,a3}:A f{i4;i1} "
-        L"t{a1,a2,a3;i2,i3,i4}:A");
+  auto resetter = set_scoped_default_context(
+      Context(mbpt::make_mr_spaces(), Vacuum::SingleProduct));
 
-    const ExprPtr expected = closed_shell_spintrace(
-        result.expression().clone(),
-        {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}, {L"i_3", L"a_3"}});
+  const std::vector<std::wstring> inputs = {
+      L"R = 1/4",
+      L"R = Var",
+      L"R{p1,p2;p3,p4}:A = g{p1,p2;p3,p4}:A",
+      L"R = f{i1;a1} t{a1;i1}",
+      L"R = 1/2 Var g{i1,i2;a1,a2}:A t{a1;i1} t{a2;i2}",
+      L"R{a1,a2;i1,u1}:A = g{a1,a2;i1,u1}:A",
+      L"R{a1,u1;i1,i2}:A = g{a1,u1;i1,i2}:A",
+      L"R{a1,u1;i1,u2}:A = g{a1,u1;i1,u2}:A",
+      L"R{a1,u1;i1,u2}:A = f{a1;i1}:A γ{u1;u2}:A + g{a1,u1;i1,u3}:A γ{u3;u2}:A",
+  };
+  const std::vector<std::vector<std::wstring>> expected_outputs = {
+      {L"R = 1/4"},
+      {L"R = Var"},
+      {L"R{p1,p2;p3,p4} = 4 g{p1,p2;p3,p4} - 2 g{p2,p1;p3,p4}"},
+      {L"R = 2 f{i1;a1} t{a1;i1}"},
+      {L"R = 2 Var * g{i_1,i_2;a_1,a_2} * t{a_1;i_1} * t{a_2;i_2}"
+       " - 1 Var * g{i_1,i_2;a_1,a_2} * t{a_1;i_2} * t{a_2;i_1}"},
+      {L"R{a1,a2;i1,u1} = 4 g{a1,a2;i1,u1} - 2 g{a2,a1;i1,u1}"},
+      {L"R{a1,u1;i1,i2} = 4 g{a1,u1;i1,i2} - 2 g{a1,u1;i2,i1}"},
+      {L"R{a1,u1;u2,i1} = 4 g{u1,a1;i1,u2} - 2 g{u1,a1;u2,i1}",
+       L"R{a1,u1;i1,u2} = 4 g{a1,u1;i1,u2} - 2 g{u1,a1;i1,u2}"},
+      {
+          L"R{a1,u1;u2,i1} = -2 f{a1;i1} γ{u1;u2} "
+          "- 2 g{a1,u1;i1,u3} γ{u3;u2} "
+          "+ 4 g{a1,u1;u3,i1} γ{u3;u2}",
+          L"R{a1,u1;i1,u2} = 4 f{a1;i1} γ{u1;u2} "
+          "+ 4 g{a1,u1;i1,u3} γ{u3;u2} "
+          "- 2 g{a1,u1;u3,i1} γ{u3;u2}",
+      },
+  };
 
-    container::svector<ResultExpr> traced = closed_shell_spintrace(result);
+  REQUIRE(inputs.size() == expected_outputs.size());
 
-    REQUIRE(traced.size() == 1);
-    REQUIRE(traced[0].expression() == expected);
-    REQUIRE(traced[0].symmetry() == Symmetry::nonsymm);
-    REQUIRE(traced[0].particle_symmetry() == ParticleSymmetry::symm);
-  }
-  SECTION("rigorous") {
-    ResultExpr result = parse_result_expr(
-        L"R{i1,i2;e1,e2}:A = 1/4 A{i1,i2;e1,e2}:A g{i3,i4;e3,e4}:A "
-        L"t{e3,e4;i2,i3}:A t{e1,e2;i1,i4}:A");
+  for (std::size_t i = 0; i < inputs.size(); ++i) {
+    CAPTURE(inputs.at(i));
+    const ResultExpr input = parse_result_expr(inputs.at(i));
 
-    const ExprPtr expected = spintrace(result.expression().clone(),
-                                       {{L"i_1", L"e_1"}, {L"i_2", L"e_2"}});
+    container::svector<ResultExpr> expected;
+    for (std::size_t k = 0; k < expected_outputs.at(i).size(); ++k) {
+      expected.push_back(parse_result_expr(expected_outputs.at(i).at(k)));
+    }
 
-    ResultExpr traced = spintrace(result);
+    SECTION("closed_shell" + std::to_string(i)) {
+      container::svector<ResultExpr> actual =
+          closed_shell_spintrace(input.clone());
 
-    REQUIRE(traced.expression() == expected);
-    REQUIRE(traced.symmetry() == Symmetry::nonsymm);
-    REQUIRE(traced.particle_symmetry() == ParticleSymmetry::symm);
+      REQUIRE(actual.size() == expected.size());
+      for (std::size_t k = 0; k < expected.size(); ++k) {
+        CAPTURE(k);
+        REQUIRE_THAT(actual.at(k), EquivalentTo(expected.at(k)));
+      }
+    }
+    SECTION("rigorous" + std::to_string(i)) {
+      container::svector<ResultExpr> actual = spintrace(input.clone());
+
+      REQUIRE(actual.size() == expected.size());
+      for (std::size_t k = 0; k < expected.size(); ++k) {
+        CAPTURE(k);
+        REQUIRE_THAT(actual.at(k), EquivalentTo(expected.at(k)));
+      }
+    }
   }
 }
 }
