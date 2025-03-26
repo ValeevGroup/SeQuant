@@ -17,6 +17,17 @@ namespace sequant {
 class Tensor;
 class Variable;
 
+/// Represents an expression containing a left-hand-side of the form
+/// <lhs> = <expression>
+/// Thus, objects of this class are used to keep track of the result
+/// of a given expression as well as the expression itself.
+///
+/// This is particularly important when it comes to tracking the exact
+/// pairing (and symmetry) of external indices in cases the given
+/// expression computes a tensorial property.
+///
+/// Importantly, it is possible to track the result without giving
+/// an explicit name (label) to it.
 class ResultExpr {
  public:
   using IndexContainer = container::svector<Index>;
@@ -64,6 +75,13 @@ class ResultExpr {
 
   ResultExpr clone() const;
 
+  /// Obtains the exact grouping (pairing) of indices in the result. Typically,
+  /// this represents particle-assignments (i.e. indices in the same group are
+  /// associated with the same particle in the underlying theory).
+  ///
+  /// @tparam Group The type of the object to represent an index group. Must be
+  /// constructible from an initializer_list<Index> or from a set of two
+  /// indices. This allows for pair/tuple and vector-like types.
   template <typename Group>
   container::svector<Group> index_particle_grouping() const {
     container::svector<Group> groups;
