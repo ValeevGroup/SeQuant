@@ -36,7 +36,7 @@ Program Listing for File convention.hpp
    
    std::wstring decorate_label(std::wstring label, bool up);
    
-   void add_fermi_spin(std::shared_ptr<IndexSpaceRegistry>& isr);
+   void add_fermi_spin(IndexSpaceRegistry& isr);
    
    
    void add_ao_spaces(std::shared_ptr<IndexSpaceRegistry>& isr, bool vbs = false,

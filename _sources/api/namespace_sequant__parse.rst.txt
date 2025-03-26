@@ -42,6 +42,8 @@ Classes
 
 - :ref:`exhale_struct_structsequant_1_1parse_1_1_product_rule`
 
+- :ref:`exhale_struct_structsequant_1_1parse_1_1_result_rule`
+
 - :ref:`exhale_struct_structsequant_1_1parse_1_1_sum_rule`
 
 - :ref:`exhale_struct_structsequant_1_1parse_1_1_symmetry_spec_rule`
@@ -55,7 +57,7 @@ Functions
 ---------
 
 
-- :ref:`exhale_function_namespacesequant_1_1parse_1a22ad03e410290898c7159a53f9515078`
+- :ref:`exhale_function_namespacesequant_1_1parse_1a06fbb6f76074fcb79bbc2e1ca96a8f74`
 
 
 Variables
@@ -101,6 +103,10 @@ Variables
 - :ref:`exhale_variable_namespacesequant_1_1parse_1ae20ee2e2959cc61c668e9bfb7267958b`
 
 - :ref:`exhale_variable_namespacesequant_1_1parse_1af51f1ec4e126db4b8fc1e27577c674b8`
+
+- :ref:`exhale_variable_namespacesequant_1_1parse_1aad0f331040151dd7d00b1f30792f36f7`
+
+- :ref:`exhale_variable_namespacesequant_1_1parse_1af26cf2744381ed156ec86aa172af48b6`
 
 - :ref:`exhale_variable_namespacesequant_1_1parse_1a216013d274cf847e6ca306e7b5dbedb0`
 

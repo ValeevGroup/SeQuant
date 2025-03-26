@@ -32,6 +32,8 @@ Files
 - :ref:`file_SeQuant_core_asy_cost.hpp`
 - :ref:`file_SeQuant_core_attr.hpp`
 - :ref:`file_SeQuant_core_binary_node.hpp`
+- :ref:`file_SeQuant_core_biorthogonalization.cpp`
+- :ref:`file_SeQuant_core_biorthogonalization.hpp`
 - :ref:`file_SeQuant_core_bliss.hpp`
 - :ref:`file_SeQuant_core_complex.hpp`
 - :ref:`file_SeQuant_core_container.hpp`
@@ -65,6 +67,8 @@ Files
 - :ref:`file_SeQuant_core_parse.hpp`
 - :ref:`file_SeQuant_core_ranges.hpp`
 - :ref:`file_SeQuant_core_rational.hpp`
+- :ref:`file_SeQuant_core_result_expr.cpp`
+- :ref:`file_SeQuant_core_result_expr.hpp`
 - :ref:`file_SeQuant_core_runtime.cpp`
 - :ref:`file_SeQuant_core_runtime.hpp`
 - :ref:`file_SeQuant_core_space.hpp`

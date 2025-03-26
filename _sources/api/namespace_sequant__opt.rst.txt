@@ -36,7 +36,7 @@ Namespaces
 ----------
 
 
-- :ref:`namespace_sequant__opt__@38`
+- :ref:`namespace_sequant__opt__@40`
 
 
 Classes

@@ -269,15 +269,15 @@
 <span class="c1">// Created by Robert Adam on 2023-09-20</span>
 <span class="c1">//</span>
 
-<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;SeQuant/core/parse.hpp&gt;</span>
-<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;SeQuant/core/parse/ast.hpp&gt;</span>
-<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;SeQuant/core/parse/ast_conversions.hpp&gt;</span>
-<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;SeQuant/core/parse/semantic_actions.hpp&gt;</span>
-
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;SeQuant/core/attr.hpp&gt;</span>
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;SeQuant/core/container.hpp&gt;</span>
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;SeQuant/core/expr.hpp&gt;</span>
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;SeQuant/core/index.hpp&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;SeQuant/core/parse.hpp&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;SeQuant/core/parse/ast.hpp&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;SeQuant/core/parse/ast_conversions.hpp&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;SeQuant/core/parse/semantic_actions.hpp&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;SeQuant/core/result_expr.hpp&gt;</span>
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;SeQuant/core/space.hpp&gt;</span>
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;SeQuant/core/tensor.hpp&gt;</span>
 
@@ -289,11 +289,19 @@
 
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;algorithm&gt;</span>
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;cassert&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;cstddef&gt;</span>
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;cstdint&gt;</span>
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;functional&gt;</span>
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;iostream&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;iterator&gt;</span>
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;memory&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;optional&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;stdexcept&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;string&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;string_view&gt;</span>
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;type_traits&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;utility&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;vector&gt;</span>
 
 <span class="k">namespace</span><span class="w"> </span><span class="nn">sequant</span><span class="w"> </span><span class="p">{</span>
 
@@ -311,6 +319,7 @@
 <span class="k">struct</span><span class="w"> </span><span class="nc">ProductRule</span><span class="p">;</span>
 <span class="k">struct</span><span class="w"> </span><span class="nc">SumRule</span><span class="p">;</span>
 <span class="k">struct</span><span class="w"> </span><span class="nc">ExprRule</span><span class="p">;</span>
+<span class="k">struct</span><span class="w"> </span><span class="nc">ResultExprRule</span><span class="p">;</span>
 <span class="k">struct</span><span class="w"> </span><span class="nc">IndexLabelRule</span><span class="p">;</span>
 <span class="k">struct</span><span class="w"> </span><span class="nc">IndexRule</span><span class="p">;</span>
 <span class="k">struct</span><span class="w"> </span><span class="nc">IndexGroupRule</span><span class="p">;</span>
@@ -325,6 +334,7 @@
 <span class="n">x3</span><span class="o">::</span><span class="n">rule</span><span class="o">&lt;</span><span class="n">ProductRule</span><span class="p">,</span><span class="w"> </span><span class="n">ast</span><span class="o">::</span><span class="n">Product</span><span class="o">&gt;</span><span class="w"> </span><span class="n">product</span><span class="p">{</span><span class="s">&quot;Product&quot;</span><span class="p">};</span>
 <span class="n">x3</span><span class="o">::</span><span class="n">rule</span><span class="o">&lt;</span><span class="n">SumRule</span><span class="p">,</span><span class="w"> </span><span class="n">ast</span><span class="o">::</span><span class="n">Sum</span><span class="o">&gt;</span><span class="w"> </span><span class="n">sum</span><span class="p">{</span><span class="s">&quot;Sum&quot;</span><span class="p">};</span>
 <span class="n">x3</span><span class="o">::</span><span class="n">rule</span><span class="o">&lt;</span><span class="n">ExprRule</span><span class="p">,</span><span class="w"> </span><span class="n">ast</span><span class="o">::</span><span class="n">Sum</span><span class="o">&gt;</span><span class="w"> </span><span class="n">expr</span><span class="p">{</span><span class="s">&quot;Expression&quot;</span><span class="p">};</span>
+<span class="n">x3</span><span class="o">::</span><span class="n">rule</span><span class="o">&lt;</span><span class="n">ResultExprRule</span><span class="p">,</span><span class="w"> </span><span class="n">ast</span><span class="o">::</span><span class="n">ResultExpr</span><span class="o">&gt;</span><span class="w"> </span><span class="n">resultExpr</span><span class="p">{</span><span class="s">&quot;ResultExpr&quot;</span><span class="p">};</span>
 
 <span class="c1">// Auxiliaries</span>
 <span class="n">x3</span><span class="o">::</span><span class="n">rule</span><span class="o">&lt;</span><span class="k">struct</span><span class="w"> </span><span class="nc">NameRule</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">wstring</span><span class="o">&gt;</span><span class="w"> </span><span class="n">name</span><span class="p">{</span><span class="s">&quot;Name&quot;</span><span class="p">};</span>
@@ -395,10 +405,12 @@
 <span class="k">auto</span><span class="w"> </span><span class="n">sum_def</span><span class="w">          </span><span class="o">=</span><span class="w"> </span><span class="n">first_addend</span><span class="w"> </span><span class="o">&gt;&gt;</span><span class="w"> </span><span class="o">*</span><span class="n">addend</span><span class="p">;</span>
 
 <span class="k">auto</span><span class="w"> </span><span class="n">expr_def</span><span class="w">         </span><span class="o">=</span><span class="w"> </span><span class="o">-</span><span class="n">sum</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">x3</span><span class="o">::</span><span class="n">eoi</span><span class="p">;</span>
+
+<span class="k">auto</span><span class="w"> </span><span class="n">resultExpr_def</span><span class="w">       </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="n">tensor</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="n">variable</span><span class="p">)</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="p">(</span><span class="sa">L</span><span class="sc">&#39;=&#39;</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="n">x3</span><span class="o">::</span><span class="n">lit</span><span class="p">(</span><span class="sa">L</span><span class="s">&quot;-&gt;&quot;</span><span class="p">))</span><span class="w"> </span><span class="o">&gt;&gt;</span><span class="w"> </span><span class="n">expr</span><span class="p">;</span>
 <span class="c1">// clang-format on</span>
 
 <span class="n">BOOST_SPIRIT_DEFINE</span><span class="p">(</span><span class="n">name</span><span class="p">,</span><span class="w"> </span><span class="n">number</span><span class="p">,</span><span class="w"> </span><span class="n">variable</span><span class="p">,</span><span class="w"> </span><span class="n">index_label</span><span class="p">,</span><span class="w"> </span><span class="n">index</span><span class="p">,</span><span class="w"> </span><span class="n">index_groups</span><span class="p">,</span>
-<span class="w">                    </span><span class="n">tensor</span><span class="p">,</span><span class="w"> </span><span class="n">product</span><span class="p">,</span><span class="w"> </span><span class="n">sum</span><span class="p">,</span><span class="w"> </span><span class="n">expr</span><span class="p">,</span><span class="w"> </span><span class="n">symmetry_spec</span><span class="p">);</span>
+<span class="w">                    </span><span class="n">tensor</span><span class="p">,</span><span class="w"> </span><span class="n">product</span><span class="p">,</span><span class="w"> </span><span class="n">sum</span><span class="p">,</span><span class="w"> </span><span class="n">expr</span><span class="p">,</span><span class="w"> </span><span class="n">symmetry_spec</span><span class="p">,</span><span class="w"> </span><span class="n">resultExpr</span><span class="p">);</span>
 
 <span class="k">struct</span><span class="w"> </span><span class="nc">position_cache_tag</span><span class="p">;</span>
 <span class="k">struct</span><span class="w"> </span><span class="nc">error_handler_tag</span><span class="p">;</span>
@@ -433,6 +445,7 @@
 <span class="k">struct</span><span class="w"> </span><span class="nc">ProductRule</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">helpers</span><span class="o">::</span><span class="n">annotate_position</span><span class="p">,</span><span class="w"> </span><span class="n">helpers</span><span class="o">::</span><span class="n">error_handler</span><span class="w"> </span><span class="p">{};</span>
 <span class="k">struct</span><span class="w"> </span><span class="nc">SumRule</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">helpers</span><span class="o">::</span><span class="n">annotate_position</span><span class="p">,</span><span class="w"> </span><span class="n">helpers</span><span class="o">::</span><span class="n">error_handler</span><span class="w"> </span><span class="p">{};</span>
 <span class="k">struct</span><span class="w"> </span><span class="nc">ExprRule</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">helpers</span><span class="o">::</span><span class="n">annotate_position</span><span class="p">,</span><span class="w"> </span><span class="n">helpers</span><span class="o">::</span><span class="n">error_handler</span><span class="w"> </span><span class="p">{};</span>
+<span class="k">struct</span><span class="w"> </span><span class="nc">ResultRule</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">helpers</span><span class="o">::</span><span class="n">annotate_position</span><span class="p">,</span><span class="w"> </span><span class="n">helpers</span><span class="o">::</span><span class="n">error_handler</span><span class="w"> </span><span class="p">{};</span>
 <span class="k">struct</span><span class="w"> </span><span class="nc">IndexLabelRule</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">helpers</span><span class="o">::</span><span class="n">annotate_position</span><span class="p">,</span><span class="w"> </span><span class="n">helpers</span><span class="o">::</span><span class="n">error_handler</span><span class="w"> </span><span class="p">{};</span>
 <span class="k">struct</span><span class="w"> </span><span class="nc">IndexRule</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">helpers</span><span class="o">::</span><span class="n">annotate_position</span><span class="p">,</span><span class="w"> </span><span class="n">helpers</span><span class="o">::</span><span class="n">error_handler</span><span class="w"> </span><span class="p">{};</span>
 <span class="k">struct</span><span class="w"> </span><span class="nc">IndexGroupRule</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">helpers</span><span class="o">::</span><span class="n">annotate_position</span><span class="p">,</span><span class="w"> </span><span class="n">helpers</span><span class="o">::</span><span class="n">error_handler</span><span class="w"> </span><span class="p">{};</span>
@@ -454,24 +467,23 @@
 <span class="w">  </span><span class="p">}</span>
 <span class="p">};</span>
 
-<span class="n">ExprPtr</span><span class="w"> </span><span class="nf">parse_expr</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">wstring_view</span><span class="w"> </span><span class="n">input</span><span class="p">,</span><span class="w"> </span><span class="n">Symmetry</span><span class="w"> </span><span class="n">perm_symm</span><span class="p">,</span>
-<span class="w">                   </span><span class="n">BraKetSymmetry</span><span class="w"> </span><span class="n">braket_symm</span><span class="p">,</span><span class="w"> </span><span class="n">ParticleSymmetry</span><span class="w"> </span><span class="n">particle_symm</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="k">template</span><span class="w"> </span><span class="o">&lt;</span><span class="k">typename</span><span class="w"> </span><span class="nc">AST</span><span class="p">,</span><span class="w"> </span><span class="k">typename</span><span class="w"> </span><span class="nc">StartRule</span><span class="p">,</span><span class="w"> </span><span class="k">typename</span><span class="w"> </span><span class="nc">PositionCache</span><span class="o">&gt;</span>
+<span class="n">AST</span><span class="w"> </span><span class="n">do_parse</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">StartRule</span><span class="w"> </span><span class="o">&amp;</span><span class="n">start</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">wstring_view</span><span class="w"> </span><span class="n">input</span><span class="p">,</span>
+<span class="w">             </span><span class="n">PositionCache</span><span class="w"> </span><span class="o">&amp;</span><span class="n">positions</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
 <span class="w">  </span><span class="k">using</span><span class="w"> </span><span class="n">iterator_type</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">decltype</span><span class="p">(</span><span class="n">input</span><span class="p">)</span><span class="o">::</span><span class="n">iterator</span><span class="p">;</span>
-<span class="w">  </span><span class="n">x3</span><span class="o">::</span><span class="n">position_cache</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="n">iterator_type</span><span class="o">&gt;&gt;</span><span class="w"> </span><span class="n">positions</span><span class="p">(</span><span class="n">input</span><span class="p">.</span><span class="n">begin</span><span class="p">(),</span>
-<span class="w">                                                           </span><span class="n">input</span><span class="p">.</span><span class="n">end</span><span class="p">());</span>
 
 <span class="w">  </span><span class="n">ErrorHandler</span><span class="o">&lt;</span><span class="n">iterator_type</span><span class="o">&gt;</span><span class="w"> </span><span class="n">error_handler</span><span class="p">(</span><span class="n">input</span><span class="p">.</span><span class="n">begin</span><span class="p">());</span>
 
-<span class="w">  </span><span class="n">parse</span><span class="o">::</span><span class="n">ast</span><span class="o">::</span><span class="n">Sum</span><span class="w"> </span><span class="n">ast</span><span class="p">;</span>
+<span class="w">  </span><span class="n">AST</span><span class="w"> </span><span class="n">ast</span><span class="p">;</span>
 
 <span class="w">  </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">parser</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">x3</span><span class="o">::</span><span class="n">with</span><span class="o">&lt;</span><span class="n">parse</span><span class="o">::</span><span class="n">error_handler_tag</span><span class="o">&gt;</span><span class="p">(</span>
 <span class="w">      </span><span class="n">std</span><span class="o">::</span><span class="n">ref</span><span class="p">(</span><span class="n">error_handler</span><span class="p">))[</span><span class="n">x3</span><span class="o">::</span><span class="n">with</span><span class="o">&lt;</span><span class="n">parse</span><span class="o">::</span><span class="n">position_cache_tag</span><span class="o">&gt;</span><span class="p">(</span>
-<span class="w">      </span><span class="n">std</span><span class="o">::</span><span class="n">ref</span><span class="p">(</span><span class="n">positions</span><span class="p">))[</span><span class="n">parse</span><span class="o">::</span><span class="n">expr</span><span class="p">]];</span>
+<span class="w">      </span><span class="n">std</span><span class="o">::</span><span class="n">ref</span><span class="p">(</span><span class="n">positions</span><span class="p">))[</span><span class="n">start</span><span class="p">]];</span>
 
-<span class="w">  </span><span class="k">auto</span><span class="w"> </span><span class="n">start</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">input</span><span class="p">.</span><span class="n">begin</span><span class="p">();</span>
+<span class="w">  </span><span class="k">auto</span><span class="w"> </span><span class="n">begin</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">input</span><span class="p">.</span><span class="n">begin</span><span class="p">();</span>
 <span class="w">  </span><span class="k">try</span><span class="w"> </span><span class="p">{</span>
 <span class="w">    </span><span class="kt">bool</span><span class="w"> </span><span class="n">success</span><span class="w"> </span><span class="o">=</span>
-<span class="w">        </span><span class="n">x3</span><span class="o">::</span><span class="n">phrase_parse</span><span class="p">(</span><span class="n">start</span><span class="p">,</span><span class="w"> </span><span class="n">input</span><span class="p">.</span><span class="n">end</span><span class="p">(),</span><span class="w"> </span><span class="n">parser</span><span class="p">,</span><span class="w"> </span><span class="n">x3</span><span class="o">::</span><span class="n">unicode</span><span class="o">::</span><span class="n">space</span><span class="p">,</span><span class="w"> </span><span class="n">ast</span><span class="p">);</span>
+<span class="w">        </span><span class="n">x3</span><span class="o">::</span><span class="n">phrase_parse</span><span class="p">(</span><span class="n">begin</span><span class="p">,</span><span class="w"> </span><span class="n">input</span><span class="p">.</span><span class="n">end</span><span class="p">(),</span><span class="w"> </span><span class="n">parser</span><span class="p">,</span><span class="w"> </span><span class="n">x3</span><span class="o">::</span><span class="n">unicode</span><span class="o">::</span><span class="n">space</span><span class="p">,</span><span class="w"> </span><span class="n">ast</span><span class="p">);</span>
 
 <span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">success</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
 <span class="w">      </span><span class="c1">// Normally, this shouldn&#39;t happen as any error should itself throw a</span>
@@ -479,10 +491,10 @@
 <span class="w">      </span><span class="k">throw</span><span class="w"> </span><span class="n">ParseError</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="n">input</span><span class="p">.</span><span class="n">size</span><span class="p">(),</span>
 <span class="w">                       </span><span class="s">&quot;Parsing was unsuccessful for an unknown reason&quot;</span><span class="p">);</span>
 <span class="w">    </span><span class="p">}</span>
-<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">start</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="n">input</span><span class="p">.</span><span class="n">end</span><span class="p">())</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">begin</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="n">input</span><span class="p">.</span><span class="n">end</span><span class="p">())</span><span class="w"> </span><span class="p">{</span>
 <span class="w">      </span><span class="c1">// This should also not happen as the parser requires matching EOI</span>
-<span class="w">      </span><span class="k">throw</span><span class="w"> </span><span class="n">ParseError</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">distance</span><span class="p">(</span><span class="n">input</span><span class="p">.</span><span class="n">begin</span><span class="p">(),</span><span class="w"> </span><span class="n">start</span><span class="p">),</span>
-<span class="w">                       </span><span class="n">std</span><span class="o">::</span><span class="n">distance</span><span class="p">(</span><span class="n">start</span><span class="p">,</span><span class="w"> </span><span class="n">input</span><span class="p">.</span><span class="n">end</span><span class="p">()),</span>
+<span class="w">      </span><span class="k">throw</span><span class="w"> </span><span class="n">ParseError</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">distance</span><span class="p">(</span><span class="n">input</span><span class="p">.</span><span class="n">begin</span><span class="p">(),</span><span class="w"> </span><span class="n">begin</span><span class="p">),</span>
+<span class="w">                       </span><span class="n">std</span><span class="o">::</span><span class="n">distance</span><span class="p">(</span><span class="n">begin</span><span class="p">,</span><span class="w"> </span><span class="n">input</span><span class="p">.</span><span class="n">end</span><span class="p">()),</span>
 <span class="w">                       </span><span class="s">&quot;Couldn&#39;t parse the entire input&quot;</span><span class="p">);</span>
 <span class="w">    </span><span class="p">}</span>
 <span class="w">  </span><span class="p">}</span><span class="w"> </span><span class="k">catch</span><span class="w"> </span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">boost</span><span class="o">::</span><span class="n">spirit</span><span class="o">::</span><span class="n">x3</span><span class="o">::</span><span class="n">expectation_failure</span><span class="o">&lt;</span><span class="n">iterator_type</span><span class="o">&gt;</span><span class="w"> </span><span class="o">&amp;</span><span class="n">e</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
@@ -492,10 +504,57 @@
 <span class="w">    </span><span class="k">throw</span><span class="p">;</span>
 <span class="w">  </span><span class="p">}</span>
 
+<span class="w">  </span><span class="k">return</span><span class="w"> </span><span class="n">ast</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="n">parse</span><span class="o">::</span><span class="n">transform</span><span class="o">::</span><span class="n">DefaultSymmetries</span><span class="w"> </span><span class="n">to_default_symms</span><span class="p">(</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">optional</span><span class="o">&lt;</span><span class="n">Symmetry</span><span class="o">&gt;</span><span class="w"> </span><span class="o">&amp;</span><span class="n">perm_symm</span><span class="p">,</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">optional</span><span class="o">&lt;</span><span class="n">BraKetSymmetry</span><span class="o">&gt;</span><span class="w"> </span><span class="o">&amp;</span><span class="n">braket_symm</span><span class="p">,</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">optional</span><span class="o">&lt;</span><span class="n">ParticleSymmetry</span><span class="o">&gt;</span><span class="w"> </span><span class="o">&amp;</span><span class="n">particle_symm</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="k">const</span><span class="w"> </span><span class="n">Context</span><span class="w"> </span><span class="o">&amp;</span><span class="n">ctx</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">get_default_context</span><span class="p">();</span>
+
+<span class="w">  </span><span class="n">parse</span><span class="o">::</span><span class="n">transform</span><span class="o">::</span><span class="n">DefaultSymmetries</span><span class="w"> </span><span class="n">symms</span><span class="p">{</span>
+<span class="w">      </span><span class="n">Symmetry</span><span class="o">::</span><span class="n">nonsymm</span><span class="p">,</span><span class="w"> </span><span class="n">ctx</span><span class="p">.</span><span class="n">braket_symmetry</span><span class="p">(),</span><span class="w"> </span><span class="n">ParticleSymmetry</span><span class="o">::</span><span class="n">symm</span><span class="p">};</span>
+
+<span class="w">  </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">perm_symm</span><span class="p">.</span><span class="n">has_value</span><span class="p">())</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">get</span><span class="o">&lt;</span><span class="mi">0</span><span class="o">&gt;</span><span class="p">(</span><span class="n">symms</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">perm_symm</span><span class="p">.</span><span class="n">value</span><span class="p">();</span>
+<span class="w">  </span><span class="p">}</span>
+<span class="w">  </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">braket_symm</span><span class="p">.</span><span class="n">has_value</span><span class="p">())</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">get</span><span class="o">&lt;</span><span class="mi">1</span><span class="o">&gt;</span><span class="p">(</span><span class="n">symms</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">braket_symm</span><span class="p">.</span><span class="n">value</span><span class="p">();</span>
+<span class="w">  </span><span class="p">}</span>
+<span class="w">  </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">particle_symm</span><span class="p">.</span><span class="n">has_value</span><span class="p">())</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">get</span><span class="o">&lt;</span><span class="mi">2</span><span class="o">&gt;</span><span class="p">(</span><span class="n">symms</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">particle_symm</span><span class="p">.</span><span class="n">value</span><span class="p">();</span>
+<span class="w">  </span><span class="p">}</span>
+
+<span class="w">  </span><span class="k">return</span><span class="w"> </span><span class="n">symms</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="n">ResultExpr</span><span class="w"> </span><span class="n">parse_result_expr</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">wstring_view</span><span class="w"> </span><span class="n">input</span><span class="p">,</span>
+<span class="w">                             </span><span class="n">std</span><span class="o">::</span><span class="n">optional</span><span class="o">&lt;</span><span class="n">Symmetry</span><span class="o">&gt;</span><span class="w"> </span><span class="n">perm_symm</span><span class="p">,</span>
+<span class="w">                             </span><span class="n">std</span><span class="o">::</span><span class="n">optional</span><span class="o">&lt;</span><span class="n">BraKetSymmetry</span><span class="o">&gt;</span><span class="w"> </span><span class="n">braket_symm</span><span class="p">,</span>
+<span class="w">                             </span><span class="n">std</span><span class="o">::</span><span class="n">optional</span><span class="o">&lt;</span><span class="n">ParticleSymmetry</span><span class="o">&gt;</span><span class="w"> </span><span class="n">particle_symm</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="k">using</span><span class="w"> </span><span class="n">iterator_type</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">decltype</span><span class="p">(</span><span class="n">input</span><span class="p">)</span><span class="o">::</span><span class="n">iterator</span><span class="p">;</span>
+<span class="w">  </span><span class="n">x3</span><span class="o">::</span><span class="n">position_cache</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="n">iterator_type</span><span class="o">&gt;&gt;</span><span class="w"> </span><span class="n">positions</span><span class="p">(</span><span class="n">input</span><span class="p">.</span><span class="n">begin</span><span class="p">(),</span>
+<span class="w">                                                           </span><span class="n">input</span><span class="p">.</span><span class="n">end</span><span class="p">());</span>
+<span class="w">  </span><span class="k">auto</span><span class="w"> </span><span class="n">ast</span><span class="w"> </span><span class="o">=</span>
+<span class="w">      </span><span class="n">do_parse</span><span class="o">&lt;</span><span class="n">parse</span><span class="o">::</span><span class="n">ast</span><span class="o">::</span><span class="n">ResultExpr</span><span class="o">&gt;</span><span class="p">(</span><span class="n">parse</span><span class="o">::</span><span class="n">resultExpr</span><span class="p">,</span><span class="w"> </span><span class="n">input</span><span class="p">,</span><span class="w"> </span><span class="n">positions</span><span class="p">);</span>
+
+<span class="w">  </span><span class="k">return</span><span class="w"> </span><span class="n">parse</span><span class="o">::</span><span class="n">transform</span><span class="o">::</span><span class="n">ast_to_result</span><span class="p">(</span>
+<span class="w">      </span><span class="n">ast</span><span class="p">,</span><span class="w"> </span><span class="n">positions</span><span class="p">,</span><span class="w"> </span><span class="n">input</span><span class="p">.</span><span class="n">begin</span><span class="p">(),</span>
+<span class="w">      </span><span class="n">to_default_symms</span><span class="p">(</span><span class="n">perm_symm</span><span class="p">,</span><span class="w"> </span><span class="n">braket_symm</span><span class="p">,</span><span class="w"> </span><span class="n">particle_symm</span><span class="p">));</span>
+<span class="p">}</span>
+
+<span class="n">ExprPtr</span><span class="w"> </span><span class="n">parse_expr</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">wstring_view</span><span class="w"> </span><span class="n">input</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">optional</span><span class="o">&lt;</span><span class="n">Symmetry</span><span class="o">&gt;</span><span class="w"> </span><span class="n">perm_symm</span><span class="p">,</span>
+<span class="w">                   </span><span class="n">std</span><span class="o">::</span><span class="n">optional</span><span class="o">&lt;</span><span class="n">BraKetSymmetry</span><span class="o">&gt;</span><span class="w"> </span><span class="n">braket_symm</span><span class="p">,</span>
+<span class="w">                   </span><span class="n">std</span><span class="o">::</span><span class="n">optional</span><span class="o">&lt;</span><span class="n">ParticleSymmetry</span><span class="o">&gt;</span><span class="w"> </span><span class="n">particle_symm</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="k">using</span><span class="w"> </span><span class="n">iterator_type</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">decltype</span><span class="p">(</span><span class="n">input</span><span class="p">)</span><span class="o">::</span><span class="n">iterator</span><span class="p">;</span>
+<span class="w">  </span><span class="n">x3</span><span class="o">::</span><span class="n">position_cache</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="n">iterator_type</span><span class="o">&gt;&gt;</span><span class="w"> </span><span class="n">positions</span><span class="p">(</span><span class="n">input</span><span class="p">.</span><span class="n">begin</span><span class="p">(),</span>
+<span class="w">                                                           </span><span class="n">input</span><span class="p">.</span><span class="n">end</span><span class="p">());</span>
+<span class="w">  </span><span class="k">auto</span><span class="w"> </span><span class="n">ast</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">do_parse</span><span class="o">&lt;</span><span class="n">parse</span><span class="o">::</span><span class="n">ast</span><span class="o">::</span><span class="n">Sum</span><span class="o">&gt;</span><span class="p">(</span><span class="n">parse</span><span class="o">::</span><span class="n">expr</span><span class="p">,</span><span class="w"> </span><span class="n">input</span><span class="p">,</span><span class="w"> </span><span class="n">positions</span><span class="p">);</span>
+
 <span class="w">  </span><span class="k">return</span><span class="w"> </span><span class="n">parse</span><span class="o">::</span><span class="n">transform</span><span class="o">::</span><span class="n">ast_to_expr</span><span class="p">(</span>
 <span class="w">      </span><span class="n">ast</span><span class="p">,</span><span class="w"> </span><span class="n">positions</span><span class="p">,</span><span class="w"> </span><span class="n">input</span><span class="p">.</span><span class="n">begin</span><span class="p">(),</span>
-<span class="w">      </span><span class="n">parse</span><span class="o">::</span><span class="n">transform</span><span class="o">::</span><span class="n">DefaultSymmetries</span><span class="p">{</span><span class="n">perm_symm</span><span class="p">,</span><span class="w"> </span><span class="n">braket_symm</span><span class="p">,</span>
-<span class="w">                                          </span><span class="n">particle_symm</span><span class="p">});</span>
+<span class="w">      </span><span class="n">to_default_symms</span><span class="p">(</span><span class="n">perm_symm</span><span class="p">,</span><span class="w"> </span><span class="n">braket_symm</span><span class="p">,</span><span class="w"> </span><span class="n">particle_symm</span><span class="p">));</span>
 <span class="p">}</span>
 
 <span class="p">}</span><span class="w">  </span><span class="c1">// namespace sequant</span>
@@ -520,7 +579,7 @@
             
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on Mar 26, 2025 10:21:23 AM</div>
+              Last updated on Mar 26, 2025 12:17:33 PM</div>
           </div>
           <div class="right-details">
             <div class="icons">

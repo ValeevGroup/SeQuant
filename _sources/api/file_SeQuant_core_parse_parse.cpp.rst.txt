@@ -46,6 +46,8 @@ Includes
 
 - ``SeQuant/core/parse/semantic_actions.hpp`` (:ref:`file_SeQuant_core_parse_semantic_actions.hpp`)
 
+- ``SeQuant/core/result_expr.hpp`` (:ref:`file_SeQuant_core_result_expr.hpp`)
+
 - ``SeQuant/core/space.hpp`` (:ref:`file_SeQuant_core_space.hpp`)
 
 - ``SeQuant/core/tensor.hpp`` (:ref:`file_SeQuant_core_tensor.hpp`)
@@ -62,15 +64,31 @@ Includes
 
 - ``cassert``
 
+- ``cstddef``
+
 - ``cstdint``
 
 - ``functional``
 
 - ``iostream``
 
+- ``iterator``
+
 - ``memory``
 
+- ``optional``
+
+- ``stdexcept``
+
+- ``string`` (:ref:`file_SeQuant_core_utility_string.cpp`)
+
+- ``string_view``
+
 - ``type_traits``
+
+- ``utility`` (:ref:`file_SeQuant_core_utility_context.hpp`)
+
+- ``vector``
 
 
 
@@ -110,6 +128,8 @@ Classes
 
 - :ref:`exhale_struct_structsequant_1_1parse_1_1_product_rule`
 
+- :ref:`exhale_struct_structsequant_1_1parse_1_1_result_rule`
+
 - :ref:`exhale_struct_structsequant_1_1parse_1_1_sum_rule`
 
 - :ref:`exhale_struct_structsequant_1_1parse_1_1_symmetry_spec_rule`
@@ -123,9 +143,15 @@ Functions
 ---------
 
 
-- :ref:`exhale_function_namespacesequant_1_1parse_1a22ad03e410290898c7159a53f9515078`
+- :ref:`exhale_function_namespacesequant_1aa3724baacef9bdfec8244e84ed82843e`
 
-- :ref:`exhale_function_namespacesequant_1ab604f2c3fea2134e0d986e65d3bbd3e4`
+- :ref:`exhale_function_namespacesequant_1_1parse_1a06fbb6f76074fcb79bbc2e1ca96a8f74`
+
+- :ref:`exhale_function_namespacesequant_1a461a9cff3a7e14396fc9f2ee65607c2b`
+
+- :ref:`exhale_function_namespacesequant_1aa7e570662fbfdcf72718e105b481a7f0`
+
+- :ref:`exhale_function_namespacesequant_1a1daf02d6665d0f1fc878004a3bdb2869`
 
 
 Defines
@@ -178,6 +204,10 @@ Variables
 - :ref:`exhale_variable_namespacesequant_1_1parse_1ae20ee2e2959cc61c668e9bfb7267958b`
 
 - :ref:`exhale_variable_namespacesequant_1_1parse_1af51f1ec4e126db4b8fc1e27577c674b8`
+
+- :ref:`exhale_variable_namespacesequant_1_1parse_1aad0f331040151dd7d00b1f30792f36f7`
+
+- :ref:`exhale_variable_namespacesequant_1_1parse_1af26cf2744381ed156ec86aa172af48b6`
 
 - :ref:`exhale_variable_namespacesequant_1_1parse_1a216013d274cf847e6ca306e7b5dbedb0`
 

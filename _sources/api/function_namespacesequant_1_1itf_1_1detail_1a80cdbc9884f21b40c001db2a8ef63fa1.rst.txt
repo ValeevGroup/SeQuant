@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1itf_1_1detail_1a80cdbc9884f21b40c001db2a8ef63fa1:
+
+Function sequant::itf::detail::to_itf
+=====================================
+
+- Defined in :ref:`file_SeQuant_core_export_itf.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::itf::detail::to_itf(const Tensor&, const Context&, bool)
+   :project: SeQuant

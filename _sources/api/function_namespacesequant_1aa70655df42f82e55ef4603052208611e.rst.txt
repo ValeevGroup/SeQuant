@@ -3,7 +3,7 @@
 Function sequant::transform_expr
 ================================
 
-- Defined in :ref:`file_SeQuant_domain_mbpt_spin.cpp`
+- Defined in :ref:`file_SeQuant_core_utility_expr.cpp`
 
 
 Function Documentation

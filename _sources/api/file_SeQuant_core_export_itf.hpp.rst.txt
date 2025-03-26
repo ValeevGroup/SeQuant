@@ -34,6 +34,8 @@ Includes
 
 - ``SeQuant/core/tensor.hpp`` (:ref:`file_SeQuant_core_tensor.hpp`)
 
+- ``functional``
+
 - ``optional``
 
 - ``set``
@@ -82,6 +84,8 @@ Classes
 
 - :ref:`exhale_struct_structsequant_1_1itf_1_1_result`
 
+- :ref:`exhale_class_classsequant_1_1itf_1_1_context`
+
 - :ref:`exhale_class_classsequant_1_1itf_1_1detail_1_1_i_t_f_generator`
 
 
@@ -89,5 +93,5 @@ Functions
 ---------
 
 
-- :ref:`exhale_function_namespacesequant_1ac9217c6b789b3d79193a54a6064d2b23`
+- :ref:`exhale_function_namespacesequant_1ae3321e838a92388d11bfe253b519db36`
 

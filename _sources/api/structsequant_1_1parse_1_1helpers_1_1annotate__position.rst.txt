@@ -18,6 +18,7 @@ Derived Types
 - ``public sequant::parse::IndexRule`` (:ref:`exhale_struct_structsequant_1_1parse_1_1_index_rule`)
 - ``public sequant::parse::NumberRule`` (:ref:`exhale_struct_structsequant_1_1parse_1_1_number_rule`)
 - ``public sequant::parse::ProductRule`` (:ref:`exhale_struct_structsequant_1_1parse_1_1_product_rule`)
+- ``public sequant::parse::ResultRule`` (:ref:`exhale_struct_structsequant_1_1parse_1_1_result_rule`)
 - ``public sequant::parse::SumRule`` (:ref:`exhale_struct_structsequant_1_1parse_1_1_sum_rule`)
 - ``public sequant::parse::SymmetrySpecRule`` (:ref:`exhale_struct_structsequant_1_1parse_1_1_symmetry_spec_rule`)
 - ``public sequant::parse::TensorRule`` (:ref:`exhale_struct_structsequant_1_1parse_1_1_tensor_rule`)

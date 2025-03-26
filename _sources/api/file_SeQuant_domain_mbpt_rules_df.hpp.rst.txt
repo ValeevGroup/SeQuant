@@ -30,9 +30,11 @@ Includes
 --------
 
 
-- ``SeQuant/core/expr.hpp`` (:ref:`file_SeQuant_core_expr.hpp`)
+- ``SeQuant/core/expr_fwd.hpp`` (:ref:`file_SeQuant_core_expr_fwd.hpp`)
 
-- ``SeQuant/domain/mbpt/space_qns.hpp`` (:ref:`file_SeQuant_domain_mbpt_space_qns.hpp`)
+- ``SeQuant/core/space.hpp`` (:ref:`file_SeQuant_core_space.hpp`)
+
+- ``string_view``
 
 
 

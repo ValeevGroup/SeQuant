@@ -80,7 +80,7 @@ Functions
 
 - :ref:`exhale_function_namespacesequant_1_1mbpt_1a3713c0401e0959993efff0f79977ccac`
 
-- :ref:`exhale_function_namespacesequant_1_1mbpt_1a0e001494800d6d8675412f9b676d94f9`
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1ad132f0eed893f8b1486d69846edd8ddd`
 
 - :ref:`exhale_function_namespacesequant_1_1mbpt_1a707f97a9e87f038179edd04b604ed026`
 

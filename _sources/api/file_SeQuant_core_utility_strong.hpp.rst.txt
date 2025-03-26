@@ -30,6 +30,8 @@ Includes
 --------
 
 
+- ``SeQuant/core/meta.hpp``
+
 - ``utility`` (:ref:`file_SeQuant_core_utility_context.hpp`)
 
 

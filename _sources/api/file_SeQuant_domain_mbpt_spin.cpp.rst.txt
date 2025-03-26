@@ -34,6 +34,8 @@ Includes
 
 - ``SeQuant/core/attr.hpp`` (:ref:`file_SeQuant_core_attr.hpp`)
 
+- ``SeQuant/core/biorthogonalization.hpp`` (:ref:`file_SeQuant_core_biorthogonalization.hpp`)
+
 - ``SeQuant/core/expr_algorithm.hpp`` (:ref:`file_SeQuant_core_expr_algorithm.hpp`)
 
 - ``SeQuant/core/expr_operator.hpp`` (:ref:`file_SeQuant_core_expr_operator.hpp`)
@@ -42,9 +44,17 @@ Includes
 
 - ``SeQuant/core/rational.hpp`` (:ref:`file_SeQuant_core_rational.hpp`)
 
+- ``SeQuant/core/result_expr.hpp`` (:ref:`file_SeQuant_core_result_expr.hpp`)
+
 - ``SeQuant/core/space.hpp`` (:ref:`file_SeQuant_core_space.hpp`)
 
 - ``SeQuant/core/tensor.hpp`` (:ref:`file_SeQuant_core_tensor.hpp`)
+
+- ``SeQuant/core/utility/indices.hpp`` (:ref:`file_SeQuant_core_utility_indices.hpp`)
+
+- ``SeQuant/core/utility/permutation.hpp`` (:ref:`file_SeQuant_core_utility_permutation.hpp`)
+
+- ``SeQuant/core/utility/swap.hpp`` (:ref:`file_SeQuant_core_utility_swap.hpp`)
 
 - ``SeQuant/domain/mbpt/spin.hpp`` (:ref:`file_SeQuant_domain_mbpt_spin.hpp`)
 
@@ -122,8 +132,6 @@ Functions
 
 - :ref:`exhale_function_namespacesequant_1a64432b1a781bc7ffd57eb8554b280f2c`
 
-- :ref:`exhale_function_namespacesequant_1abf91e6ba929de81989e494c217a51ac8`
-
 - :ref:`exhale_function_namespacesequant_1a2fd6f7c59eae96654d0657a078d1cd49`
 
 - :ref:`exhale_function_namespacesequant_1a6911b938169abf8e3de1616fa8e4424c`
@@ -132,7 +140,13 @@ Functions
 
 - :ref:`exhale_function_namespacesequant_1afa65b1375f02c1bc0a71556ee6097572`
 
+- :ref:`exhale_function_namespacesequant_1a671574aab7af5e6e3c04563451820ba8`
+
 - :ref:`exhale_function_namespacesequant_1_1detail_1a3b68f2623ef3b31a5d04846b75276bd6`
+
+- :ref:`exhale_function_namespacesequant_1_1detail_1a89f36d804f5db6e7128b98c8e8da4665`
+
+- :ref:`exhale_function_namespacesequant_1_1detail_1ad5426992244e5c13e9a8129dad659a90`
 
 - :ref:`exhale_function_namespacesequant_1a6492953455422a5903841b72a2c73539`
 
@@ -146,15 +160,11 @@ Functions
 
 - :ref:`exhale_function_namespacesequant_1a79cb956392d331f43b649f7875683c25`
 
-- :ref:`exhale_function_namespacesequant_1aeca5ee37b05742a509e08bc1f27bce81`
-
-- :ref:`exhale_function_namespacesequant_1a189e6e5be8596e3591bb4c46214af16e`
-
 - :ref:`exhale_function_namespacesequant_1a7fb4b5eecf1f7a9def14ddf891089b42`
 
 - :ref:`exhale_function_namespacesequant_1ab4080d1930c5ba22da9ffb6c36b34b41`
 
-- :ref:`exhale_function_namespacesequant_1ae2e9d23d1c2532491d386ab0f606daf2`
+- :ref:`exhale_function_namespacesequant_1aa8759ff6f370e1341881b90766b9b1e7`
 
 - :ref:`exhale_function_namespacesequant_1a745f7070c7fe7ac8767c67d77902221b`
 
@@ -188,7 +198,9 @@ Functions
 
 - :ref:`exhale_function_namespacesequant_1a2a66be5fad043d767d1e00f01f21ecd3`
 
-- :ref:`exhale_function_namespacesequant_1ab1eb124ad34bdf339ceafcbe7f0bebd7`
+- :ref:`exhale_function_namespacesequant_1a4d0f966fb7b53b3e179387bca67ad7cf`
+
+- :ref:`exhale_function_namespacesequant_1a791f02c49f55e08a2343df1e214c5f4c`
 
 - :ref:`exhale_function_namespacesequant_1a695d0c4e30f385152f83fa93a668e62f`
 
@@ -199,6 +211,4 @@ Functions
 - :ref:`exhale_function_namespacesequant_1a8b58d6ccd8000e3f45d99c871b45844a`
 
 - :ref:`exhale_function_namespacesequant_1a05a60d7f5af9f324247f9d517d5a9ac0`
-
-- :ref:`exhale_function_namespacesequant_1aa70655df42f82e55ef4603052208611e`
 

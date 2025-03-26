@@ -44,6 +44,8 @@ Included By
 -----------
 
 
+- :ref:`file_SeQuant_core_biorthogonalization.cpp`
+
 - :ref:`file_SeQuant_core_eval_node.hpp`
 
 - :ref:`file_SeQuant_core_wick.hpp`

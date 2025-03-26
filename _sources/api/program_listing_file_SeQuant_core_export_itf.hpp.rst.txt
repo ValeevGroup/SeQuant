@@ -20,6 +20,7 @@ Program Listing for File itf.hpp
    #include <SeQuant/core/expr.hpp>
    #include <SeQuant/core/tensor.hpp>
    
+   #include <functional>
    #include <optional>
    #include <set>
    #include <string>
@@ -49,15 +50,26 @@ Program Listing for File itf.hpp
      CodeBlock(std::wstring blockName, std::vector<Result> results);
    };
    
+   class Context {
+    public:
+     virtual ~Context();
+   
+     virtual int compare(const Index &lhs, const Index &rhs) const = 0;
+     virtual std::wstring get_base_label(const IndexSpace &space) const = 0;
+     virtual std::wstring get_tag(const IndexSpace &space) const = 0;
+     virtual std::wstring get_name(const IndexSpace &space) const = 0;
+   };
+   
    namespace detail {
    
    struct TensorBlockCompare {
      bool operator()(const Tensor &lhs, const Tensor &rhs) const;
    };
    
-   void remap_integrals(ExprPtr &expr,
+   void remap_integrals(ExprPtr &expr, const Context &ctx,
                         std::wstring_view oneElectronIntegralName = L"f",
-                        std::wstring_view twoElectronIntegralName = L"g");
+                        std::wstring_view twoElectronIntegralName = L"g",
+                        std::wstring_view dfTensorName = L"DF");
    
    struct Contraction {
      rational factor;
@@ -74,7 +86,7 @@ Program Listing for File itf.hpp
    
    class ITFGenerator {
     public:
-     ITFGenerator() = default;
+     ITFGenerator(const itf::Context &ctx);
    
      void addBlock(const itf::CodeBlock &block);
    
@@ -85,33 +97,34 @@ Program Listing for File itf.hpp
      std::set<Tensor, TensorBlockCompare> m_importedTensors;
      std::set<Tensor, TensorBlockCompare> m_createdTensors;
      std::vector<CodeSection> m_codes;
+     const Context *m_ctx;
    };
    
    }  // namespace detail
    
    }  // namespace itf
    
-   std::wstring to_itf(const itf::CodeBlock &block);
+   std::wstring to_itf(const itf::CodeBlock &block, const itf::Context &ctx);
    
    template <typename Container,
              typename = std::enable_if_t<!std::is_same_v<
                  std::remove_const_t<std::remove_reference_t<Container>>,
                  itf::CodeBlock>>>
-   std::wstring to_itf(Container &&container) {
+   std::wstring to_itf(Container &&container, const itf::Context &ctx) {
+     using ContainerType = std::remove_const_t<std::remove_reference_t<Container>>;
      static_assert(
-         std::is_same_v<typename Container::value_type, itf::CodeBlock> ||
-         std::is_same_v<std::remove_const_t<typename Container::value_type>,
-                        ExprPtr>);
-     itf::detail::ITFGenerator generator;
+         std::is_same_v<typename ContainerType::value_type, itf::CodeBlock> ||
+         std::is_same_v<typename ContainerType::value_type, ExprPtr>);
+     itf::detail::ITFGenerator generator(ctx);
    
-     if constexpr (std::is_same_v<typename Container::value_type,
+     if constexpr (std::is_same_v<typename ContainerType::value_type,
                                   itf::CodeBlock>) {
        for (const itf::CodeBlock &current : container) {
          generator.addBlock(current);
        }
      } else {
        static_assert(
-           std::is_same_v<typename Container::value_type, itf::Result>,
+           std::is_same_v<typename ContainerType::value_type, itf::Result>,
            "Container::value_type must either be itf::CodeBlock or itf::Result");
    
        itf::CodeBlock block(L"Generate_Results",

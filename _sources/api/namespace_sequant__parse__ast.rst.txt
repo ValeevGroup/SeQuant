@@ -27,6 +27,8 @@ Classes
 
 - :ref:`exhale_struct_structsequant_1_1parse_1_1ast_1_1_product`
 
+- :ref:`exhale_struct_structsequant_1_1parse_1_1ast_1_1_result_expr`
+
 - :ref:`exhale_struct_structsequant_1_1parse_1_1ast_1_1_sum`
 
 - :ref:`exhale_struct_structsequant_1_1parse_1_1ast_1_1_symmetry_spec`

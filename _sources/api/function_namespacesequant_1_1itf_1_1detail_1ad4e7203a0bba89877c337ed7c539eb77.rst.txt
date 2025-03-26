@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1itf_1_1detail_1ad4e7203a0bba89877c337ed7c539eb77:
+
+Function sequant::itf::detail::to_contractions(const ExprPtr&, const Tensor&, const Context&)
+=============================================================================================
+
+- Defined in :ref:`file_SeQuant_core_export_itf.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::itf::detail::to_contractions(const ExprPtr&, const Tensor&, const Context&)
+   :project: SeQuant

@@ -3,7 +3,7 @@
 Function sequant::diff
 ======================
 
-- Defined in :ref:`file_SeQuant_core_utility_expr_diff.cpp`
+- Defined in :ref:`file_SeQuant_core_utility_expr.cpp`
 
 
 Function Documentation

@@ -44,6 +44,8 @@ Includes
 
 - ``string`` (:ref:`file_SeQuant_core_utility_string.cpp`)
 
+- ``variant``
+
 - ``vector``
 
 
@@ -86,6 +88,8 @@ Classes
 
 - :ref:`exhale_struct_structsequant_1_1parse_1_1ast_1_1_product`
 
+- :ref:`exhale_struct_structsequant_1_1parse_1_1ast_1_1_result_expr`
+
 - :ref:`exhale_struct_structsequant_1_1parse_1_1ast_1_1_sum`
 
 - :ref:`exhale_struct_structsequant_1_1parse_1_1ast_1_1_symmetry_spec`
@@ -99,6 +103,10 @@ Functions
 ---------
 
 
+- :ref:`exhale_function_ast_8hpp_1a2cec8e03a95282b7312545f2c2d3c82d`
+
+- :ref:`exhale_function_ast_8hpp_1a3508ebb0f538a39e988de08bf2283189`
+
 - :ref:`exhale_function_ast_8hpp_1abc32465f1db33ecd01dee6338751b446`
 
 - :ref:`exhale_function_ast_8hpp_1a40f60977f510d83b38bebc423bb27de9`
@@ -107,15 +115,13 @@ Functions
 
 - :ref:`exhale_function_ast_8hpp_1aa18db2677f2e4507fec03dbc5848ddb1`
 
+- :ref:`exhale_function_ast_8hpp_1a66bbae2c17a5148fbff76360eef9cb7b`
+
 - :ref:`exhale_function_ast_8hpp_1a493fa891e6da49665c379ca179465182`
 
 - :ref:`exhale_function_ast_8hpp_1abf590a273e5113fbc54dc9ca6719a45b`
 
 - :ref:`exhale_function_ast_8hpp_1acb28cd7887651cff374b9049c28c7e7c`
-
-- :ref:`exhale_function_ast_8hpp_1a2cec8e03a95282b7312545f2c2d3c82d`
-
-- :ref:`exhale_function_ast_8hpp_1a3508ebb0f538a39e988de08bf2283189`
 
 
 Defines

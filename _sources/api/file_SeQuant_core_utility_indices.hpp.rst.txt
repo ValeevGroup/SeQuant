@@ -40,9 +40,11 @@ Includes
 
 - ``algorithm`` (:ref:`file_SeQuant_core_algorithm.hpp`)
 
-- ``set``
+- ``optional``
 
-- ``tuple`` (:ref:`file_SeQuant_core_utility_tuple.hpp`)
+- ``range/v3/view.hpp``
+
+- ``set``
 
 - ``type_traits``
 
@@ -62,7 +64,11 @@ Included By
 
 - :ref:`file_SeQuant_core_optimize_optimize.cpp`
 
+- :ref:`file_SeQuant_core_result_expr.cpp`
+
 - :ref:`file_SeQuant_domain_mbpt_rules_csv.cpp`
+
+- :ref:`file_SeQuant_domain_mbpt_spin.cpp`
 
 
 
@@ -95,6 +101,10 @@ Functions
 
 - :ref:`exhale_function_namespacesequant_1_1detail_1addf8be11c7ffd789829be77a37f7ff37`
 
+- :ref:`exhale_function_namespacesequant_1a803893b07c8cde45bd90e9111727e0fa`
+
+- :ref:`exhale_function_namespacesequant_1adbbb293a56ff6373d1935fe454092a24`
+
 - :ref:`exhale_function_namespacesequant_1ad3a0936a566597248d20e2dd924a0642`
 
 - :ref:`exhale_function_namespacesequant_1af3378e211033b815ded22fc08c161a3e`
@@ -108,6 +118,8 @@ Functions
 - :ref:`exhale_function_namespacesequant_1a63ea8fc50bb2f25bf1672e7182421f13`
 
 - :ref:`exhale_function_namespacesequant_1a83708a06e2d866abf2b00cef9f324225`
+
+- :ref:`exhale_function_namespacesequant_1a8e28c2f4ad60409636bfc70865af5ef8`
 
 - :ref:`exhale_function_namespacesequant_1a1f3c19698b98abec58582b0e86310974`
 

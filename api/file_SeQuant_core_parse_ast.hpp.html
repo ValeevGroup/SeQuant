@@ -296,6 +296,7 @@
 <li><p><code class="docutils literal notranslate"><span class="pre">boost/variant.hpp</span></code></p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">cstdint</span></code></p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">string</span></code> (<a class="reference internal" href="file_SeQuant_core_utility_string.cpp.html#file-sequant-core-utility-string-cpp"><span class="std std-ref">File string.cpp</span></a>)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">variant</span></code></p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">vector</span></code></p></li>
 </ul>
 </section>
@@ -323,6 +324,7 @@
 <li><p><a class="reference internal" href="structsequant_1_1parse_1_1ast_1_1_index_label.html#exhale-struct-structsequant-1-1parse-1-1ast-1-1-index-label"><span class="std std-ref">Struct IndexLabel</span></a></p></li>
 <li><p><a class="reference internal" href="structsequant_1_1parse_1_1ast_1_1_number.html#exhale-struct-structsequant-1-1parse-1-1ast-1-1-number"><span class="std std-ref">Struct Number</span></a></p></li>
 <li><p><a class="reference internal" href="structsequant_1_1parse_1_1ast_1_1_product.html#exhale-struct-structsequant-1-1parse-1-1ast-1-1-product"><span class="std std-ref">Struct Product</span></a></p></li>
+<li><p><a class="reference internal" href="structsequant_1_1parse_1_1ast_1_1_result_expr.html#exhale-struct-structsequant-1-1parse-1-1ast-1-1-result-expr"><span class="std std-ref">Struct ResultExpr</span></a></p></li>
 <li><p><a class="reference internal" href="structsequant_1_1parse_1_1ast_1_1_sum.html#exhale-struct-structsequant-1-1parse-1-1ast-1-1-sum"><span class="std std-ref">Struct Sum</span></a></p></li>
 <li><p><a class="reference internal" href="structsequant_1_1parse_1_1ast_1_1_symmetry_spec.html#exhale-struct-structsequant-1-1parse-1-1ast-1-1-symmetry-spec"><span class="std std-ref">Struct SymmetrySpec</span></a></p></li>
 <li><p><a class="reference internal" href="structsequant_1_1parse_1_1ast_1_1_tensor.html#exhale-struct-structsequant-1-1parse-1-1ast-1-1-tensor"><span class="std std-ref">Struct Tensor</span></a></p></li>
@@ -332,15 +334,16 @@
 <section id="functions">
 <h2>Functions<a class="headerlink" href="#functions" title="Link to this heading">¶</a></h2>
 <ul class="simple">
+<li><p><a class="reference internal" href="function_ast_8hpp_1a2cec8e03a95282b7312545f2c2d3c82d.html#exhale-function-ast-8hpp-1a2cec8e03a95282b7312545f2c2d3c82d"><span class="std std-ref">Function BOOST_FUSION_ADAPT_STRUCT(sequant::parse::ast::IndexGroups, bra, ket, auxiliaries, reverse_bra_ket)</span></a></p></li>
+<li><p><a class="reference internal" href="function_ast_8hpp_1a3508ebb0f538a39e988de08bf2283189.html#exhale-function-ast-8hpp-1a3508ebb0f538a39e988de08bf2283189"><span class="std std-ref">Function BOOST_FUSION_ADAPT_STRUCT(sequant::parse::ast::SymmetrySpec, perm_symm, braket_symm, particle_symm)</span></a></p></li>
 <li><p><a class="reference internal" href="function_ast_8hpp_1abc32465f1db33ecd01dee6338751b446.html#exhale-function-ast-8hpp-1abc32465f1db33ecd01dee6338751b446"><span class="std std-ref">Function BOOST_FUSION_ADAPT_STRUCT(sequant::parse::ast::Tensor, name, indices, symmetry)</span></a></p></li>
 <li><p><a class="reference internal" href="function_ast_8hpp_1a40f60977f510d83b38bebc423bb27de9.html#exhale-function-ast-8hpp-1a40f60977f510d83b38bebc423bb27de9"><span class="std std-ref">Function BOOST_FUSION_ADAPT_STRUCT(sequant::parse::ast::Product, factors)</span></a></p></li>
 <li><p><a class="reference internal" href="function_ast_8hpp_1a13fefbef18801cb58baa30b7ad236b95.html#exhale-function-ast-8hpp-1a13fefbef18801cb58baa30b7ad236b95"><span class="std std-ref">Function BOOST_FUSION_ADAPT_STRUCT(sequant::parse::ast::IndexLabel, label, id)</span></a></p></li>
 <li><p><a class="reference internal" href="function_ast_8hpp_1aa18db2677f2e4507fec03dbc5848ddb1.html#exhale-function-ast-8hpp-1aa18db2677f2e4507fec03dbc5848ddb1"><span class="std std-ref">Function BOOST_FUSION_ADAPT_STRUCT(sequant::parse::ast::Sum, summands)</span></a></p></li>
+<li><p><a class="reference internal" href="function_ast_8hpp_1a66bbae2c17a5148fbff76360eef9cb7b.html#exhale-function-ast-8hpp-1a66bbae2c17a5148fbff76360eef9cb7b"><span class="std std-ref">Function BOOST_FUSION_ADAPT_STRUCT(sequant::parse::ast::ResultExpr, lhs, rhs)</span></a></p></li>
 <li><p><a class="reference internal" href="function_ast_8hpp_1a493fa891e6da49665c379ca179465182.html#exhale-function-ast-8hpp-1a493fa891e6da49665c379ca179465182"><span class="std std-ref">Function BOOST_FUSION_ADAPT_STRUCT(sequant::parse::ast::Index, label, protoLabels)</span></a></p></li>
 <li><p><a class="reference internal" href="function_ast_8hpp_1abf590a273e5113fbc54dc9ca6719a45b.html#exhale-function-ast-8hpp-1abf590a273e5113fbc54dc9ca6719a45b"><span class="std std-ref">Function BOOST_FUSION_ADAPT_STRUCT(sequant::parse::ast::Number, numerator, denominator)</span></a></p></li>
 <li><p><a class="reference internal" href="function_ast_8hpp_1acb28cd7887651cff374b9049c28c7e7c.html#exhale-function-ast-8hpp-1acb28cd7887651cff374b9049c28c7e7c"><span class="std std-ref">Function BOOST_FUSION_ADAPT_STRUCT(sequant::parse::ast::Variable, name, conjugated)</span></a></p></li>
-<li><p><a class="reference internal" href="function_ast_8hpp_1a2cec8e03a95282b7312545f2c2d3c82d.html#exhale-function-ast-8hpp-1a2cec8e03a95282b7312545f2c2d3c82d"><span class="std std-ref">Function BOOST_FUSION_ADAPT_STRUCT(sequant::parse::ast::IndexGroups, bra, ket, auxiliaries, reverse_bra_ket)</span></a></p></li>
-<li><p><a class="reference internal" href="function_ast_8hpp_1a3508ebb0f538a39e988de08bf2283189.html#exhale-function-ast-8hpp-1a3508ebb0f538a39e988de08bf2283189"><span class="std std-ref">Function BOOST_FUSION_ADAPT_STRUCT(sequant::parse::ast::SymmetrySpec, perm_symm, braket_symm, particle_symm)</span></a></p></li>
 </ul>
 </section>
 <section id="defines">
@@ -374,7 +377,7 @@
             
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on Mar 26, 2025 10:21:23 AM</div>
+              Last updated on Mar 26, 2025 12:17:33 PM</div>
           </div>
           <div class="right-details">
             <div class="icons">

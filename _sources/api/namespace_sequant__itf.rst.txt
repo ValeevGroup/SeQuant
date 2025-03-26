@@ -26,9 +26,9 @@ Classes
 
 - :ref:`exhale_struct_structsequant_1_1itf_1_1_code_block`
 
-- :ref:`exhale_struct_structsequant_1_1itf_1_1_index_type_comparer`
-
 - :ref:`exhale_struct_structsequant_1_1itf_1_1_result`
+
+- :ref:`exhale_class_classsequant_1_1itf_1_1_context`
 
 
 Functions

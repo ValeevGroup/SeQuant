@@ -92,6 +92,10 @@ Included By
 
 - :ref:`file_SeQuant_core_abstract_tensor.hpp`
 
+- :ref:`file_SeQuant_core_biorthogonalization.cpp`
+
+- :ref:`file_SeQuant_core_biorthogonalization.hpp`
+
 - :ref:`file_SeQuant_core_eval_expr.cpp`
 
 - :ref:`file_SeQuant_core_eval_expr.hpp`
@@ -110,6 +114,8 @@ Included By
 
 - :ref:`file_SeQuant_core_parse_parse.cpp`
 
+- :ref:`file_SeQuant_core_result_expr.hpp`
+
 - :ref:`file_SeQuant_core_tensor.cpp`
 
 - :ref:`file_SeQuant_core_tensor.hpp`
@@ -126,7 +132,11 @@ Included By
 
 - :ref:`file_SeQuant_core_tensor_network_v2.hpp`
 
+- :ref:`file_SeQuant_core_utility_expr.hpp`
+
 - :ref:`file_SeQuant_core_utility_indices.hpp`
+
+- :ref:`file_SeQuant_core_utility_permutation.hpp`
 
 - :ref:`file_SeQuant_domain_eval_eval_result.hpp`
 

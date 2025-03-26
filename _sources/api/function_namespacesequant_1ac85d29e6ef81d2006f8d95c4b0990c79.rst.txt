@@ -3,7 +3,7 @@
 Template Function sequant::count_cycles
 =======================================
 
-- Defined in :ref:`file_SeQuant_domain_mbpt_spin.hpp`
+- Defined in :ref:`file_SeQuant_core_utility_permutation.hpp`
 
 
 Function Documentation

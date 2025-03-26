@@ -66,6 +66,10 @@ Included By
 
 - :ref:`file_SeQuant_domain_mbpt_op.hpp`
 
+- :ref:`file_SeQuant_domain_mbpt_rules_df.cpp`
+
+- :ref:`file_SeQuant_domain_mbpt_rules_df.hpp`
+
 - :ref:`file_SeQuant_domain_mbpt_spin.cpp`
 
 

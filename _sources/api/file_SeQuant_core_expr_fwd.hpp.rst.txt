@@ -42,7 +42,7 @@ Included By
 
 - :ref:`file_SeQuant_core_fwd.hpp`
 
-- :ref:`file_SeQuant_core_utility_expr_diff.hpp`
+- :ref:`file_SeQuant_domain_mbpt_rules_df.hpp`
 
 
 

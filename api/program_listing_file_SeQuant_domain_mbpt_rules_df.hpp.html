@@ -272,13 +272,16 @@
 <span class="cp">#ifndef MPQC_DOMAIN_MBPT_RULES_DF_HPP</span>
 <span class="cp">#define MPQC_DOMAIN_MBPT_RULES_DF_HPP</span>
 
-<span class="cp">#include</span><span class="w"> </span><span class="cpf">&quot;SeQuant/domain/mbpt/space_qns.hpp&quot;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;SeQuant/core/expr_fwd.hpp&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;SeQuant/core/space.hpp&gt;</span>
 
-<span class="cp">#include</span><span class="w"> </span><span class="cpf">&quot;SeQuant/core/expr.hpp&quot;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;string_view&gt;</span>
 
 <span class="k">namespace</span><span class="w"> </span><span class="nn">sequant</span><span class="o">::</span><span class="nn">mbpt</span><span class="w"> </span><span class="p">{</span>
 
-<span class="n">ExprPtr</span><span class="w"> </span><span class="nf">density_fit</span><span class="p">(</span><span class="n">ExprPtr</span><span class="w"> </span><span class="k">const</span><span class="o">&amp;</span><span class="w"> </span><span class="n">expr</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">wstring</span><span class="w"> </span><span class="k">const</span><span class="o">&amp;</span><span class="w"> </span><span class="n">aux_label</span><span class="p">);</span>
+<span class="p">[[</span><span class="n">nodiscard</span><span class="p">]]</span><span class="w"> </span><span class="n">ExprPtr</span><span class="w"> </span><span class="n">density_fit</span><span class="p">(</span><span class="n">ExprPtr</span><span class="w"> </span><span class="k">const</span><span class="o">&amp;</span><span class="w"> </span><span class="n">expr</span><span class="p">,</span><span class="w"> </span><span class="n">IndexSpace</span><span class="w"> </span><span class="n">aux_space</span><span class="p">,</span>
+<span class="w">                                  </span><span class="n">std</span><span class="o">::</span><span class="n">wstring_view</span><span class="w"> </span><span class="n">tensor_label</span><span class="p">,</span>
+<span class="w">                                  </span><span class="n">std</span><span class="o">::</span><span class="n">wstring_view</span><span class="w"> </span><span class="n">factor_label</span><span class="p">);</span>
 
 <span class="p">}</span><span class="w">  </span><span class="c1">// namespace sequant::mbpt</span>
 
@@ -304,7 +307,7 @@
             
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on Mar 26, 2025 10:21:23 AM</div>
+              Last updated on Mar 26, 2025 12:17:33 PM</div>
           </div>
           <div class="right-details">
             <div class="icons">
