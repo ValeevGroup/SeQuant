@@ -4,13 +4,15 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include "catch2_sequant.hpp"
+
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/latex.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 
 #include <iostream>
 
-TEST_CASE("Index", "[elements][index]") {
+TEST_CASE("index", "[elements][index]") {
   using namespace sequant;
 
   SECTION("constructors") {
@@ -42,6 +44,7 @@ TEST_CASE("Index", "[elements][index]") {
       REQUIRE(i3.proto_indices().size() == 2);
       REQUIRE(i3.proto_indices()[0] == i1);
       REQUIRE(i3.proto_indices()[1] == i2);
+      REQUIRE(i3.full_label() == L"i_3<i_1, i_2>");
 
       REQUIRE_NOTHROW(Index(L"i_4", {L"i_1", L"i_2"}));
       Index i4(L"i_4", {L"i_1", L"i_2"});
@@ -52,6 +55,7 @@ TEST_CASE("Index", "[elements][index]") {
       REQUIRE(i4.proto_indices().size() == 2);
       REQUIRE(i4.proto_indices()[0] == i1);
       REQUIRE(i4.proto_indices()[1] == i2);
+      REQUIRE(i4.full_label() == L"i_4<i_1, i_2>");
 
       // nonsymmetric proto indices
       REQUIRE_NOTHROW(Index(L"i_5", {i2, i1}, false));
@@ -62,6 +66,7 @@ TEST_CASE("Index", "[elements][index]") {
       REQUIRE(i5.proto_indices().size() == 2);
       REQUIRE(i5.proto_indices()[0] == i2);
       REQUIRE(i5.proto_indices()[1] == i1);
+      REQUIRE(i5.full_label() == L"i_5<i_2, i_1>");
 
       // one of the proto indices is a proto index
       REQUIRE_NOTHROW(Index(L"i_6", {i1, i5}, false));
@@ -72,6 +77,7 @@ TEST_CASE("Index", "[elements][index]") {
       REQUIRE(i6.proto_indices().size() == 2);
       REQUIRE(i6.proto_indices()[0] == i1);
       REQUIRE(i6.proto_indices()[1] == i5);
+      REQUIRE(i6.full_label() == L"i_6<i_1, i_5<i_2, i_1>>");
 
       // symmetric proto indices
       REQUIRE_NOTHROW(Index(L"i_7", {i2, i1}));
@@ -82,6 +88,7 @@ TEST_CASE("Index", "[elements][index]") {
       REQUIRE(i7.proto_indices().size() == 2);
       REQUIRE(i7.proto_indices()[0] == i1);  // !!
       REQUIRE(i7.proto_indices()[1] == i2);  // !!
+      REQUIRE(i7.full_label() == L"i_7<i_1, i_2>");
 
 #ifndef NDEBUG
       REQUIRE_THROWS(Index(L"i_4", isr->retrieve(L"i_4"), {i1, i1}));
@@ -132,9 +139,15 @@ TEST_CASE("Index", "[elements][index]") {
     // compare by qns, then tag, then space, then label, then proto indices
     Index i1(L"i_1");
     Index i2(L"i_2");
+    Index i3(L"i_11");
     REQUIRE(i1 < i2);
     REQUIRE(!(i2 < i1));
     REQUIRE(!(i1 < i1));
+    REQUIRE(i1 < i3);
+    REQUIRE(!(i3 < i1));
+    REQUIRE(i2 < i3);
+    REQUIRE(!(i3 < i2));
+    REQUIRE(!(i3 < i3));
     Index a1(L"a_2");
     REQUIRE(i1 < a1);
     REQUIRE(!(a1 < i1));
@@ -271,6 +284,24 @@ TEST_CASE("Index", "[elements][index]") {
     std::wstring a1_r_str = to_latex(a1_r);
     REQUIRE(a1_r_str == L"{a→_1^{{i_1}{i_2^{{i_3}{i_4}}}}}");
     get_default_context().mutable_index_space_registry()->remove(L"a→");
+
+    auto const old_registy = get_default_context().index_space_registry();
+    auto registry = get_default_context().mutable_index_space_registry();
+
+    if (!registry->contains(L"μ̃")) {
+      auto uocc_space = registry->particle_space(/* nulltype_ok = */ false);
+      registry->add(
+          IndexSpace{L"μ̃", uocc_space, mbpt::LCAOQNS::pao})  // OBS PAO
+          ;
+      if (!registry->contains(L"f̌"))
+        registry->add(IndexSpace{L"f̌", registry->retrieve(L"μ̃").type(),
+                                 mbpt::LCAOQNS::ao});
+    }
+
+    REQUIRE(Index(L"μ̃_1").to_latex() == L"{\\tilde{\\mu}_1}");
+    REQUIRE(Index(L"f̌_22").to_latex() == L"{\\check{f}_{22}}");
+
+    *get_default_context().mutable_index_space_registry() = *old_registy;
   }
 
   /*SECTION("wolfram") {
@@ -309,5 +340,4 @@ TEST_CASE("Index", "[elements][index]") {
             L"particleIndex[\"\\!\\(\\*SubscriptBox[\\(κ\\), "
             L"\\(1\\)]\\)\",particleSpace[occupied,virtual,othervirtual]]");
   }*/
-
-}  // TEST_CASE("Index")
+}

@@ -504,18 +504,27 @@ void preprocess(EvalNode<T> &tree, PreprocessResult &result, ExportContext &ctx,
 template <typename T, typename Context>
 void export_expression(EvalNode<T> expression, Generator<Context> &generator,
                        Context ctx = {}) {
+  if (true || Logger::instance().export_equations) {
+    std::cout << "Input equation tree:\n"
+              << expression.tikz(
+                     [](const EvalNode<T> &node) {
+                       return "$" + toUtf8(to_latex(node->expr())) + "$";
+                     },
+                     [](const EvalNode<T>) -> std::string { return ""; })
+              << "\n";
+  }
+
   details::PreprocessResult result;
   preprocess(expression, result, ctx);
 
-  if (Logger::instance().export_equations) {
-    Logger &logger = Logger::instance();
-    *logger.stream << "Pre-processed equation tree:\n"
-                   << expression.template tikz<std::string>(
-                          [](const EvalNode<T> &node) {
-                            return "$" + toUtf8(to_latex(node->expr())) + "$";
-                          },
-                          [](const EvalNode<T>) -> std::string { return ""; })
-                   << "\n";
+  if (true || Logger::instance().export_equations) {
+    std::cout << "Pre-processed equation tree:\n"
+              << expression.tikz(
+                     [](const EvalNode<T> &node) {
+                       return "$" + toUtf8(to_latex(node->expr())) + "$";
+                     },
+                     [](const EvalNode<T>) -> std::string { return ""; })
+              << "\n";
   }
 
   for (const Index &idx : result.indices) {

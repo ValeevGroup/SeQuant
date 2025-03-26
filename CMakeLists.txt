@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.15.0) # need list(PREPEND for toolchains
+cmake_minimum_required(VERSION 3.27) # 3.27 required for CONFIG_FILE option in doxygen_add_docs
 
 # Preload versions/tags of all dependencies ====================================
 include(external/versions.cmake)
@@ -52,17 +52,17 @@ vgkit_cmake_git_metadata()
 # make SeQuant project
 project(SeQuant LANGUAGES CXX VERSION "${SEQUANT_VERSION}" DESCRIPTION "SEcond QUANTization toolkit")
 
-# need C++17, insist on strict standard
-set(CMAKE_CXX_STANDARD 17 CACHE STRING "C++ ISO Standard version")
-if (NOT (CMAKE_CXX_STANDARD EQUAL 17 OR CMAKE_CXX_STANDARD EQUAL 20))
-    message(FATAL_ERROR "C++ 2017 ISO Standard or higher is required to compile SeQuant")
+# need C++20, insist on strict standard
+set(CMAKE_CXX_STANDARD 20 CACHE STRING "C++ ISO Standard version")
+if (CMAKE_CXX_STANDARD LESS 20)
+    message(FATAL_ERROR "C++ 2020 ISO Standard or higher is required to compile SeQuant")
 endif ()
 # C++20 is only configurable via compile features with cmake 3.12 and older
 if (CMAKE_CXX_STANDARD EQUAL 20 AND CMAKE_VERSION VERSION_LESS 3.12.0)
     cmake_minimum_required(VERSION 3.12.0)
 endif ()
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_EXTENSIONS OFF CACHE BOOL "Whether to use extensions of C++  ISO Standard version")
+set(CMAKE_CXX_EXTENSIONS OFF CACHE BOOL "Whether to use extensions of C++ ISO Standard version")
 
 # Enable ccache if not already enabled by symlink masquerading
 if (NOT CMAKE_CXX_COMPILER MATCHES ".*/ccache$")
@@ -80,6 +80,7 @@ endif ()
 list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake/modules/")
 
 set(FETCHCONTENT_UPDATES_DISCONNECTED OFF CACHE BOOL "Enables UPDATE_DISCONNECTED behavior for all content population")
+include(CTest)
 include(FetchContent)
 include(AddCustomTargetSubproject)
 include(FeatureSummary)
@@ -102,6 +103,7 @@ set(SEQUANT_INSTALL_DOCDIR "${SEQUANT_INSTALL_SHAREDIR}/doc"
         CACHE PATH "SeQuant DOC install directory")
 set(SEQUANT_INSTALL_CMAKEDIR "lib/cmake/sequant"
         CACHE PATH "SeQuant CMAKE install directory")
+option(SEQUANT_BENCHMARKS "Enable SeQuant benchmarks" OFF)
 
 ############################
 # Additional build variables
@@ -112,23 +114,14 @@ option(SEQUANT_IWYU "Whether to use the include-what-you-use tool (if found)" OF
 # SeQuant package options
 ##########################
 
-option(ENABLE_TBB "Enable TBB as an optional prerequisite for C++17's parallel STL (if PSTL is not supported will use of standard C++11 concurrency)" OFF)
-add_feature_info(TBB ENABLE_TBB "Intel Thread-Building Blocks is an optional prerequisite for C++17's parallel STL")
-
-option(SEQUANT_EVAL_TESTS "Enable building of evaluation tests (if true, will look for and/or build TiledArray)" OFF)
-add_feature_info(EVAL_TESTS SEQUANT_EVAL_TESTS "Build evaluation tests (if true, will look for and/or build TiledArray)")
+option(ENABLE_TBB "Enable TBB as an optional prerequisite for C++'s parallel STL (if PSTL is not supported will use of standard C++11 concurrency)" OFF)
+add_feature_info(TBB ENABLE_TBB "Intel Thread-Building Blocks is an optional prerequisite for C++'s parallel STL")
 
 option(SEQUANT_PYTHON "Build SeQuant python module" OFF)
 add_feature_info(PYTHON SEQUANT_PYTHON "PySeQuant: Python bindings to SeQuant")
 
-option(SEQUANT_EVAL_TRACE "Enable tracing of the expression interpretation (configure TiledArray with TA_TENSOR_MEM_PROFILE=ON to trace memory use)" OFF)
-add_feature_info(EVAL_TRACE SEQUANT_EVAL_TRACE "Trace expression interpretation")
-
 option(SEQUANT_USE_SYSTEM_BOOST_HASH "Use system Boost for hashing? Set to OFF to make hashing independent of Boost, thus value-portable" ON)
 add_feature_info(SEQUANT_USE_SYSTEM_BOOST_HASH SEQUANT_USE_SYSTEM_BOOST_HASH "SeQuant uses system Boost for hashing (thus results depend on the Boost version)")
-
-option(SEQUANT_BUILD_DOCS "Build SeQuant documentation using Doxygen and Sphinx" OFF)
-add_feature_info(BUILD_DOCS SEQUANT_BUILD_DOCS "Build SeQuant documentation. Doxygen and Sphinx are required.")
 
 ##########################
 # Prerequisites
@@ -138,7 +131,7 @@ add_feature_info(BUILD_DOCS SEQUANT_BUILD_DOCS "Build SeQuant documentation. Dox
 # provided automatically
 find_package(Threads REQUIRED)
 
-# PSTL (used by g++-9 and clang++-8 in c++17 mode) needs TBB
+# PSTL (used by g++-9 and clang++-8 in c++17+ mode) needs TBB
 if ((${CMAKE_CXX_COMPILER_ID} STREQUAL "GNU" AND
         ${CMAKE_CXX_COMPILER_VERSION} VERSION_GREATER 9) OR
 (${CMAKE_CXX_COMPILER_ID} STREQUAL "Clang" AND
@@ -184,11 +177,11 @@ add_library(SeQuant-bliss
         SeQuant/external/bliss/bliss_C.cc
         SeQuant/external/bliss/bliss_C.h
         )
+target_link_libraries(SeQuant-bliss PUBLIC range-v3::range-v3)
 
 set(SeQuant_src
         ${PROJECT_BINARY_DIR}/SeQuant/version.hpp
         SeQuant/version.cpp
-        SeQuant/core/abstract_tensor.cpp
         SeQuant/core/abstract_tensor.hpp
         SeQuant/core/algorithm.hpp
         SeQuant/core/any.hpp
@@ -196,6 +189,8 @@ set(SeQuant_src
         SeQuant/core/asy_cost.hpp
         SeQuant/core/attr.hpp
         SeQuant/core/binary_node.hpp
+        SeQuant/core/biorthogonalization.cpp
+        SeQuant/core/biorthogonalization.hpp
         SeQuant/core/bliss.hpp
         SeQuant/core/complex.hpp
         SeQuant/core/container.hpp
@@ -222,10 +217,12 @@ set(SeQuant_src
         SeQuant/core/expr.hpp
         SeQuant/core/expr_algorithm.hpp
         SeQuant/core/expr_operator.hpp
+        SeQuant/core/hash.cpp
         SeQuant/core/hash.hpp
         SeQuant/core/hugenholtz.hpp
         SeQuant/core/index.cpp
         SeQuant/core/index.hpp
+        SeQuant/core/index_space_registry.cpp
         SeQuant/core/index_space_registry.hpp
         SeQuant/core/interval.hpp
         SeQuant/core/latex.cpp
@@ -245,40 +242,64 @@ set(SeQuant_src
         SeQuant/core/parse.hpp
         SeQuant/core/ranges.hpp
         SeQuant/core/rational.hpp
+        SeQuant/core/result_expr.cpp
+        SeQuant/core/result_expr.hpp
         SeQuant/core/runtime.cpp
         SeQuant/core/runtime.hpp
         SeQuant/core/space.hpp
         SeQuant/core/tag.hpp
         SeQuant/core/tensor.cpp
         SeQuant/core/tensor.hpp
+        SeQuant/core/tensor_canonicalizer.cpp
+        SeQuant/core/tensor_canonicalizer.hpp
         SeQuant/core/tensor_network.cpp
         SeQuant/core/tensor_network.hpp
+        SeQuant/core/tensor_network_v2.cpp
+        SeQuant/core/tensor_network_v2.hpp
+        SeQuant/core/tensor_network/canonicals.hpp
+        SeQuant/core/tensor_network/slot.hpp
+        SeQuant/core/tensor_network/vertex.hpp
+        SeQuant/core/tensor_network/vertex_painter.cpp
+        SeQuant/core/tensor_network/vertex_painter.hpp
         SeQuant/core/timer.hpp
         SeQuant/core/utility/context.hpp
+        SeQuant/core/utility/expr.cpp
+        SeQuant/core/utility/expr.hpp
         SeQuant/core/utility/indices.hpp
         SeQuant/core/utility/macros.hpp
         SeQuant/core/utility/nodiscard.hpp
+        SeQuant/core/utility/permutation.hpp
         SeQuant/core/utility/singleton.hpp
         SeQuant/core/utility/string.hpp
         SeQuant/core/utility/string.cpp
+        SeQuant/core/utility/tuple.hpp
+        SeQuant/core/utility/swap.hpp
         SeQuant/core/wick.hpp
         SeQuant/core/wick.impl.hpp
         SeQuant/core/wolfram.hpp
         SeQuant/core/wstring.hpp
+        SeQuant/domain/mbpt/antisymmetrizer.cpp
         SeQuant/domain/mbpt/antisymmetrizer.hpp
         SeQuant/domain/mbpt/context.hpp
         SeQuant/domain/mbpt/context.cpp
         SeQuant/domain/mbpt/convention.cpp
         SeQuant/domain/mbpt/convention.hpp
-        SeQuant/domain/mbpt/models/cc.cpp
-        SeQuant/domain/mbpt/models/cc.hpp
         SeQuant/domain/mbpt/op.cpp
         SeQuant/domain/mbpt/op.hpp
         SeQuant/domain/mbpt/op.ipp
+        SeQuant/domain/mbpt/rdm.cpp
         SeQuant/domain/mbpt/rdm.hpp
+        SeQuant/domain/mbpt/space_qns.hpp
         SeQuant/domain/mbpt/spin.cpp
         SeQuant/domain/mbpt/spin.hpp
-        SeQuant/domain/mbpt/vac_av.ipp)
+        SeQuant/domain/mbpt/vac_av.ipp
+        SeQuant/domain/mbpt/models/cc.cpp
+        SeQuant/domain/mbpt/models/cc.hpp
+        SeQuant/domain/mbpt/rules/df.cpp
+        SeQuant/domain/mbpt/rules/df.hpp
+        SeQuant/domain/mbpt/rules/csv.cpp
+        SeQuant/domain/mbpt/rules/csv.hpp
+)
 
 ### optional prereqs
 if (SEQUANT_EVAL_TESTS)
@@ -303,7 +324,6 @@ if (TARGET tiledarray)
     list(APPEND SeQuant_src
             SeQuant/domain/eval/cache_manager.cpp
             SeQuant/domain/eval/cache_manager.hpp
-            SeQuant/domain/eval/eval.cpp
             SeQuant/domain/eval/eval.hpp
             SeQuant/domain/eval/eval_result.cpp
             SeQuant/domain/eval/eval_result.hpp
@@ -321,11 +341,13 @@ set_source_files_properties(
 )
 
 target_link_libraries(SeQuant PUBLIC range-v3::range-v3 Boost::regex Boost::locale Boost::headers SeQuant-bliss Threads::Threads)
+target_link_libraries(SeQuant PRIVATE $<BUILD_INTERFACE:libperm::libperm>)
 # modularized Boost has finer grained targets than just Boost::headers
 if (Boost_IS_MODULARIZED)
     target_link_libraries(SeQuant PUBLIC
             Boost::container
             Boost::container_hash
+            Boost::hana
             Boost::multiprecision
             Boost::numeric_conversion
             Boost::numeric_interval
@@ -351,7 +373,7 @@ target_include_directories(SeQuant PUBLIC
         $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}>
         $<BUILD_INTERFACE:${PROJECT_BINARY_DIR}>
         $<INSTALL_INTERFACE:${CMAKE_INSTALL_PREFIX}/include>)
-target_compile_features(SeQuant INTERFACE "cxx_std_17")
+target_compile_features(SeQuant INTERFACE "cxx_std_20")
 if (SEQUANT_EVAL_TRACE)
     target_compile_definitions(SeQuant PUBLIC SEQUANT_EVAL_TRACE=1)
 endif ()
@@ -403,199 +425,22 @@ if (SEQUANT_IWYU)
     if (iwyu_path)
         set(iwyu_options_and_path
             "${iwyu_path}"
-            -Xiwyu --cxx17ns
+            -Xiwyu --cxx20ns
             -Xiwyu --no_comments
         )
         set_property(TARGET SeQuant PROPERTY CXX_INCLUDE_WHAT_YOU_USE ${iwyu_options_and_path})
     endif()
 endif()
 
-### unit tests
-include(CTest)
 
-if (BUILD_TESTING)
+add_subdirectory(utilities)
+add_subdirectory(tests)
+add_subdirectory(doc)
 
-    # need catch2
-    include(FindOrFetchCatch2)
+if (SEQUANT_BENCHMARKS)
+    add_subdirectory(benchmarks)
+endif()
 
-    set(utests_src
-            tests/unit/test_space.cpp
-            tests/unit/test_index.cpp
-            tests/unit/test_op.cpp
-            tests/unit/test_wick.cpp
-            tests/unit/test_tensor.cpp
-            tests/unit/test_bliss.cpp
-            tests/unit/test_expr.cpp
-            tests/unit/test_iterator.cpp
-            tests/unit/test_mbpt.cpp
-            tests/unit/test_mbpt_cc.cpp
-            tests/unit/test_tensor_network.cpp
-            tests/unit/test_spin.cpp
-            tests/unit/test_canonicalize.cpp
-            tests/unit/test_expr.cpp
-            tests/unit/test_parse.cpp
-            tests/unit/test_eval_expr.cpp
-            tests/unit/test_binary_node.cpp
-            tests/unit/test_asy_cost.cpp
-            tests/unit/test_eval_node.cpp
-            tests/unit/test_optimize.cpp
-            tests/unit/test_fusion.cpp
-            tests/unit/test_runtime.cpp
-            tests/unit/test_math.cpp
-            tests/unit/test_string.cpp
-            tests/unit/test_latex.cpp
-            tests/unit/test_utilities.cpp
-            tests/unit/test_export.cpp
-            tests/unit/test_meta.cpp
-            )
-
-    if (TARGET tiledarray)
-        list(APPEND utests_src
-                tests/unit/test_eval_ta.cpp
-                tests/unit/test_eval_btas.cpp
-                tests/unit/test_cache_manager.cpp
-                )
-        set_source_files_properties(
-                tests/unit/test_eval_btas.cpp tests/unit/test_eval_ta.cpp PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
-    endif (TARGET tiledarray)
-
-    set(utests_deps SeQuant Catch2::Catch2)
-
-    set(unit_test_executable unit_tests-sequant)
-    add_executable(${unit_test_executable} EXCLUDE_FROM_ALL
-            tests/unit/test_main.cpp
-            tests/unit/test_config.hpp
-            ${utests_src})
-    target_link_libraries(${unit_test_executable} ${utests_deps})
-    if (TARGET tiledarray)
-        target_link_libraries(${unit_test_executable} tiledarray)
-        target_compile_definitions(${unit_test_executable} PRIVATE SEQUANT_HAS_TILEDARRAY)
-    endif (TARGET tiledarray)
-    add_test(sequant/unit/build "${CMAKE_COMMAND}" --build ${CMAKE_BINARY_DIR}
-            --target ${unit_test_executable})
-
-    add_test(NAME sequant/unit/run
-            COMMAND ${unit_test_executable})
-    set_tests_properties(sequant/unit/run
-            PROPERTIES DEPENDS sequant/unit/build
-            WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/tests/unit)
-
-    ####### Integration tests aka "examples" ########
-
-    # if target examples-sequant does not exist yet, create it
-    if (NOT TARGET examples-sequant)
-        add_custom_target_subproject(sequant examples)
-    endif()
-
-    # Single-Reference Coupled-Cluster equation generation
-    # (spin-orbital)
-    set(example0 srcc)
-    add_executable(${example0} EXCLUDE_FROM_ALL
-            examples/${example0}/${example0}.cpp)
-    target_link_libraries(${example0} SeQuant)
-    # N.B. empty space, to appease foreach
-    set(${example0}_cmdline_args " ;3 t std so;3 t csv so;3 lambda std so;3 lambda csv so;2 t std sf;2 t csv sf;2 lambda std sf;2 lambda csv sf")
-
-    if (TARGET Eigen3::Eigen)  # these examples require Eigen for full functionality
-      # Single-Reference closed-shell Coupled-Cluster equation
-      # generation (fast spin-traced)
-      set(example1 stcc)
-      add_executable(${example1} EXCLUDE_FROM_ALL
-              examples/${example1}/${example1}.cpp)
-      target_link_libraries(${example1} SeQuant)
-
-      # Single-Reference closed-shell Coupled-Cluster equation
-      # generation (rigorous spin-traced)
-      set(example2 stcc_rigorous)
-      add_executable(${example2} EXCLUDE_FROM_ALL
-            examples/${example2}/${example2}.cpp)
-      target_link_libraries(${example2} SeQuant)
-    endif()
-
-    # Single-Reference open-shell equation generation (spin-traced)
-    set(example3 osstcc)
-    add_executable(${example3} EXCLUDE_FROM_ALL
-            examples/${example3}/${example3}.cpp)
-    target_link_libraries(${example3} SeQuant)
-
-    # uccf12 example moved to MPQC
-
-    set(example_eval_src
-            examples/eval/eval_utils.hpp
-            examples/eval/options.hpp
-            examples/eval/options.cpp
-            examples/eval/data_info.hpp
-            examples/eval/data_info.cpp
-            examples/eval/calc_info.hpp
-            examples/eval/calc_info.cpp
-            examples/eval/scf.hpp
-            examples/eval/scf.cpp
-            )
-
-    if (TARGET tiledarray)
-        set(example5 eval_ta)
-        add_executable(${example5} EXCLUDE_FROM_ALL
-                ${example_eval_src}
-                examples/eval/ta/data_world_ta.hpp
-                examples/eval/ta/scf_ta.hpp
-                examples/eval/ta/main.cpp)
-        target_link_libraries(${example5} SeQuant tiledarray)
-    endif (TARGET tiledarray)
-
-    set(example6 antisymmetrizer_test)
-    add_executable(${example6} EXCLUDE_FROM_ALL
-            examples/${example6}/${example6}.cpp)
-    target_link_libraries(${example6} SeQuant)
-    target_compile_definitions(${example6} PRIVATE SEQUANT_HAS_TILEDARRAY)
-
-    if (BTAS_SOURCE_DIR)
-        set(example7 eval_btas)
-        add_executable(${example7} EXCLUDE_FROM_ALL
-                ${example_eval_src}
-                examples/eval/btas/data_world_btas.hpp
-                examples/eval/btas/scf_btas.hpp
-                examples/eval/btas/main.cpp)
-        target_include_directories(${example7} PUBLIC ${BTAS_SOURCE_DIR})
-        target_link_libraries(${example7} SeQuant)
-    endif (BTAS_SOURCE_DIR)
-
-    set(lastexample 13)
-    foreach (i RANGE 8 ${lastexample})
-      math(EXPR s "${i} - 7") # map 8..13 -> 1..6
-      set(example${i} synopsis${s})
-      add_executable(${example${i}} EXCLUDE_FROM_ALL
-              examples/synopsis/${example${i}}.cpp)
-      target_link_libraries(${example${i}} SeQuant)
-    endforeach ()
-
-    # add tests for running examples
-    foreach (i RANGE ${lastexample})
-        if (TARGET ${example${i}})
-            add_dependencies(examples-sequant ${example${i}})
-            add_test(sequant/example/${example${i}}/build "${CMAKE_COMMAND}"
-                    --build ${CMAKE_BINARY_DIR} --target ${example${i}})
-            if (NOT DEFINED ${example${i}}_cmdline_args)
-                set(${example${i}}_cmdline_args " ") # N.B. empty space, to appease foreach
-            endif()
-            set(${example${i}}_run_counter 0)
-            foreach (args ${${example${i}}_cmdline_args})
-                string(REPLACE " " ";" args "${args}")
-                add_test(NAME sequant/example/${example${i}}/run/${${example${i}}_run_counter}
-                         COMMAND ${example${i}} ${args}
-                         WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/examples)
-                set_tests_properties(sequant/example/${example${i}}/run/${${example${i}}_run_counter}
-                         PROPERTIES DEPENDS sequant/example/${example${i}}/build)
-                math(EXPR ${example${i}}_run_counter "${${example${i}}_run_counter} + 1")
-            endforeach()
-        endif ()
-    endforeach ()
-
-    # target for running ALL tests
-    add_custom_target_subproject(sequant check
-            USES_TERMINAL COMMAND ${CMAKE_CTEST_COMMAND} -V -R "'sequant/(unit|example)'")
-else (BUILD_TESTING)
-    add_custom_target_subproject(sequant check USES_TERMINAL COMMAND echo "WARNING: SeQuant testing disabled. To enable, give -DBUILD_TESTING=ON to cmake")
-endif (BUILD_TESTING)
 
 ####### Python ########
 
@@ -604,11 +449,6 @@ if (SEQUANT_PYTHON)
         message(FATAL_ERROR "Python module requires CMAKE_POSITION_INDEPENDENT_CODE=ON")
     endif ()
     add_subdirectory(python)
-endif ()
-
-####### DOCS ########
-if (SEQUANT_BUILD_DOCS)
-    add_subdirectory(doc)
 endif ()
 
 
@@ -626,11 +466,6 @@ install(FILES ${PROJECT_BINARY_DIR}/SeQuant/version.hpp
 # Create the version file
 write_basic_package_version_file(sequant-config-version.cmake
         VERSION ${SEQUANT_VERSION} COMPATIBILITY AnyNewerVersion)
-
-# Create the targets file
-export(EXPORT sequant
-        NAMESPACE SeQuant::
-        FILE "${PROJECT_BINARY_DIR}/sequant-targets.cmake")
 
 ## Create the configure file
 configure_package_config_file(cmake/sequant-config.cmake.in

@@ -6,6 +6,7 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/optimize.hpp>
+#include <SeQuant/core/utility/indices.hpp>
 
 #include <range/v3/iterator/basic_iterator.hpp>
 #include <range/v3/range/access.hpp>
@@ -97,7 +98,7 @@ container::vector<container::vector<size_t>> clusters(Sum const& expr) {
     };
 
     for (auto const& term : expr) {
-      auto const node = eval_node<EvalExpr>(term);
+      auto const node = binarize(term);
       if (has_only_single_atom(term)) {
         visitor(node);
       } else {
@@ -158,9 +159,10 @@ Sum reorder(Sum const& sum) {
 
 }  // namespace opt
 
-ExprPtr optimize(ExprPtr const& expr) {
+ExprPtr optimize(ExprPtr const& expr, bool reorder_sum) {
   return opt::optimize(
-      expr, [](Index const& ix) { return ix.space().approximate_size(); });
+      expr, [](Index const& ix) { return ix.space().approximate_size(); },
+      reorder_sum);
 }
 
 }  // namespace sequant

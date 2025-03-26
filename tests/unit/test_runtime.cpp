@@ -4,13 +4,15 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include "catch2_sequant.hpp"
+
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 
 #include <iostream>
 
-TEST_CASE("Context", "[runtime]") {
+TEST_CASE("context", "[runtime]") {
   using namespace sequant;
 
   CHECK_NOTHROW(get_default_context());
@@ -69,5 +71,4 @@ TEST_CASE("Context", "[runtime]") {
   }
   // leaving scope resets the context back
   CHECK(get_default_context() == initial_ctx);
-
-}  // TEST_CASE("Index")
+}

@@ -14,10 +14,10 @@ jobs:
       fail-fast: false
       matrix:
         build_type : [ Release, Debug ]
-        os : [ macos-latest, ubuntu-22.04 ]
+        os : [ macos-latest, ubuntu-24.04 ]
         include:
-          - os: ubuntu-22.04
-            cxx: /usr/bin/g++-10
+          - os: ubuntu-24.04
+            cxx: /usr/bin/g++-14
           - os: macos-latest
             cxx: clang++
 
@@ -36,10 +36,12 @@ jobs:
         -DCMAKE_UNITY_BUILD=${{ matrix.build_type == 'Debug' }}
         -DMPIEXEC_PREFLAGS='--bind-to;none;--allow-run-as-root'
         -DCMAKE_PREFIX_PATH='/usr/local/opt/boost'
+        -DSEQUANT_TESTS=ON
         -DSEQUANT_EVAL_TESTS=ON
         -DSEQUANT_USE_SYSTEM_BOOST_HASH=OFF
         -DCMAKE_CXX_STANDARD=20
         -DCMAKE_CXX_EXTENSIONS=OFF
+        -DSEQUANT_BENCHMARKS=ON
     steps:
     - uses: actions/checkout@v4
 
@@ -50,13 +52,13 @@ jobs:
 
     - name: Install prerequisite MacOS packages
       if: ${{ matrix.os == 'macos-latest' }}
-      run: brew install ninja boost eigen open-mpi ccache catch2
+      run: brew install ninja boost eigen open-mpi ccache
 
     - name: Install prerequisites Ubuntu packages
-      if: ${{ matrix.os == 'ubuntu-22.04' }}
+      if: ${{ matrix.os == 'ubuntu-24.04' }}
       run: |
         sudo apt-get update
-        sudo apt-get install ninja-build liblapack-dev libboost-dev libboost-locale-dev libboost-random-dev libboost-regex-dev libeigen3-dev openmpi-bin libopenmpi-dev ccache
+        sudo apt-get install ninja-build g++-14 liblapack-dev libboost-dev libboost-locale-dev libboost-random-dev libboost-regex-dev libeigen3-dev openmpi-bin libopenmpi-dev ccache
     - name: Prepare ccache timestamp
       id: ccache_cache_timestamp
       shell: cmake -P {0}

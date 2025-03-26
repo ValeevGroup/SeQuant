@@ -1,35 +1,24 @@
+#include <catch2/catch_all.hpp>
+#include <catch2/catch_test_macros.hpp>
+
+#include <SeQuant/core/eval_expr.hpp>
 #include <SeQuant/core/eval_node.hpp>
 #include <SeQuant/core/export/export.hpp>
+#include <SeQuant/core/export/itf.hpp>
 #include <SeQuant/core/export/julia_itensor.hpp>
 #include <SeQuant/core/export/julia_tensor_kit.hpp>
 #include <SeQuant/core/export/julia_tensor_operations.hpp>
 #include <SeQuant/core/export/text_generator.hpp>
 #include <SeQuant/core/optimize.hpp>
+#include <SeQuant/core/parse.hpp>
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/utility/string.hpp>
-#include <catch2/catch_all.hpp>
-#include <catch2/catch_test_macros.hpp>
-
 #include <SeQuant/domain/mbpt/spin.hpp>
 
-#include <SeQuant/core/export/itf.hpp>
-#include <SeQuant/core/parse.hpp>
+#include "catch2_sequant.hpp"
 
 #include <string>
 #include <vector>
-
-namespace Catch {
-
-// Note: Again, template specialization doesn't seem to be used from inside
-// ::Catch::Details::stringify for some reason
-template <>
-struct StringMaker<sequant::ExprPtr> {
-  static std::string convert(const sequant::ExprPtr &expr) {
-    return sequant::toUtf8(sequant::deparse(expr, false));
-  }
-};
-
-}  // namespace Catch
 
 std::vector<std::vector<std::size_t>> twoElectronIntegralSymmetries() {
   // Symmetries of spin-summed (skeleton) two-electron integrals
@@ -54,10 +43,24 @@ std::vector<std::vector<std::size_t>> twoElectronIntegralSymmetries() {
   };
 }
 
-#define CAPTURE_EXPR(expr) \
-  INFO(#expr " := " << ::Catch::StringMaker<sequant::ExprPtr>::convert(expr))
+class ItfContext : public sequant::itf::Context {
+ public:
+  ItfContext() = default;
 
-TEST_CASE("Export capabilities", "[exports]") {
+  int compare(const sequant::Index &lhs, const sequant::Index &rhs) const {
+    return rhs.space().type().to_int32() - lhs.space().type().to_int32();
+  }
+
+  std::wstring get_base_label(const sequant::IndexSpace &space) const {
+    return L"a";
+  }
+  std::wstring get_tag(const sequant::IndexSpace &space) const { return L"b"; }
+  std::wstring get_name(const sequant::IndexSpace &space) const {
+    return L"tenshi";
+  }
+};
+
+TEST_CASE("export", "[exports]") {
   using namespace sequant;
 
   SECTION("Tree processing") {
@@ -65,7 +68,7 @@ TEST_CASE("Export capabilities", "[exports]") {
     SECTION("basics") {
       SECTION("binary_dot") {
         ExprPtr expr = parse_expr(L"A{a1;i1} B{i1;a1}");
-        auto tree = eval_node<EvalExpr>(expr);
+        auto tree = binarize(expr);
 
         export_expression(tree, generator);
 
@@ -90,7 +93,7 @@ TEST_CASE("Export capabilities", "[exports]") {
 
       SECTION("binary_contract") {
         ExprPtr expr = parse_expr(L"A{a1;i2} B{i1;a1}");
-        auto tree = eval_node<EvalExpr>(expr);
+        auto tree = binarize(expr);
 
         export_expression(tree, generator);
 
@@ -114,7 +117,7 @@ TEST_CASE("Export capabilities", "[exports]") {
       }
       SECTION("ternary") {
         ExprPtr expr = parse_expr(L"A{a2;i2} B{i2;a1} C{i1;a2}");
-        auto tree = eval_node<EvalExpr>(expr);
+        auto tree = binarize(expr);
 
         export_expression(tree, generator);
 
@@ -147,7 +150,7 @@ TEST_CASE("Export capabilities", "[exports]") {
     }
     SECTION("scalar * tensor") {
       ExprPtr expr = parse_expr(L"42 * A{a1;i1}");
-      auto tree = eval_node<EvalExpr>(expr);
+      auto tree = binarize(expr);
 
       export_expression(tree, generator);
 
@@ -168,7 +171,7 @@ TEST_CASE("Export capabilities", "[exports]") {
     }
     SECTION("constant scalar factor") {
       ExprPtr expr = parse_expr(L"5 * A{a2;i2} B{i2;a1}");
-      auto tree = eval_node<EvalExpr>(expr);
+      auto tree = binarize(expr);
 
       export_expression(tree, generator);
 
@@ -193,7 +196,7 @@ TEST_CASE("Export capabilities", "[exports]") {
     }
     SECTION("variable scalar factor") {
       ExprPtr expr = parse_expr(L"myVar * A{a2;i2} B{i2;a1}");
-      auto tree = eval_node<EvalExpr>(expr);
+      auto tree = binarize(expr);
 
       export_expression(tree, generator);
 
@@ -222,7 +225,7 @@ TEST_CASE("Export capabilities", "[exports]") {
     }
 
     SECTION("binary + ternary") {
-      auto tree = eval_node<EvalExpr>(
+      auto tree = binarize(
           parse_expr(L"A{a1;i1} B{i1;i2} + A{a1;i1} B{i1;i3} C{i3;i2}"));
 
       export_expression(tree, generator);
@@ -284,7 +287,7 @@ TEST_CASE("Export capabilities", "[exports]") {
        * which allows to not have C in memory while computing I from A and B,
        * even in with stack-like memory model.
        */
-      auto tree = eval_node<EvalExpr>(
+      auto tree = binarize(
           ex<Product>(ExprPtrList{second, first}, Product::Flatten::No));
 
       export_expression(tree, generator);
@@ -326,7 +329,7 @@ TEST_CASE("Export capabilities", "[exports]") {
         ExprPtr second = parse_expr(L"C{a2;i4} D{i3;a2}");
         ExprPtr third = parse_expr(L"E{i2;a3}");
 
-        auto tree = eval_node<EvalExpr>(ex<Product>(
+        auto tree = binarize(ex<Product>(
             ExprPtrList{
                 ex<Product>(ExprPtrList{first, third}, Product::Flatten::No),
                 second},
@@ -383,7 +386,7 @@ TEST_CASE("Export capabilities", "[exports]") {
         ExprPtr first = parse_expr(L"A{a1;i1} B{i2;a1}");
         ExprPtr second = parse_expr(L"C{i1;i3}");
 
-        auto tree = eval_node<EvalExpr>(
+        auto tree = binarize(
             ex<Product>(ExprPtrList{first, second}, Product::Flatten::No));
 
         export_expression(tree, generator);
@@ -420,7 +423,7 @@ TEST_CASE("Export capabilities", "[exports]") {
         REQUIRE(generator.get_generated_code() == expected);
       }
       SECTION("Duplicate leaf tensors") {
-        auto tree = eval_node<EvalExpr>(parse_expr(L"A{a1;i1} A{a1;i1}"));
+        auto tree = binarize(parse_expr(L"A{a1;i1} A{a1;i1}"));
 
         export_expression(tree, generator);
 
@@ -443,7 +446,7 @@ TEST_CASE("Export capabilities", "[exports]") {
     }
     SECTION("sum") {
       SECTION("unary + unary") {
-        auto tree = eval_node<EvalExpr>(parse_expr(L"A{a1;i1} + B{a1;i1}"));
+        auto tree = binarize(parse_expr(L"A{a1;i1} + B{a1;i1}"));
 
         export_expression(tree, generator);
 
@@ -466,8 +469,8 @@ TEST_CASE("Export capabilities", "[exports]") {
         REQUIRE(generator.get_generated_code() == expected);
       }
       SECTION("binary + binary") {
-        auto tree = eval_node<EvalExpr>(
-            parse_expr(L"A{a1;i1} B{a2;i2} + A{a1;i1} B{a2;i2}"));
+        auto tree =
+            binarize(parse_expr(L"A{a1;i1} B{a2;i2} + A{a1;i1} B{a2;i2}"));
 
         export_expression(tree, generator);
 
@@ -498,8 +501,7 @@ TEST_CASE("Export capabilities", "[exports]") {
         REQUIRE(generator.get_generated_code() == expected);
       }
       SECTION("binary + unary") {
-        auto tree =
-            eval_node<EvalExpr>(parse_expr(L"A{a1;i2} B{i2;i1} + C{a1;i1}"));
+        auto tree = binarize(parse_expr(L"A{a1;i2} B{i2;i1} + C{a1;i1}"));
 
         export_expression(tree, generator);
 
@@ -527,8 +529,7 @@ TEST_CASE("Export capabilities", "[exports]") {
         REQUIRE(generator.get_generated_code() == expected);
       }
       SECTION("unary + unary + unary") {
-        auto tree =
-            eval_node<EvalExpr>(parse_expr(L"A{a1;i1} + B{a1;i1} + C{a1;i1}"));
+        auto tree = binarize(parse_expr(L"A{a1;i1} + B{a1;i1} + C{a1;i1}"));
 
         export_expression(tree, generator);
 
@@ -557,9 +558,9 @@ TEST_CASE("Export capabilities", "[exports]") {
         REQUIRE(generator.get_generated_code() == expected);
       }
       SECTION("sum of index perms") {
-        auto tree = eval_node<EvalExpr>(
-            parse_expr(L"-1 g{a_2,i_3;a_3,i_1} * t{a_1,a_3;i_3,i_2} + "
-                       L"2 g{a_1,i_3;i_1,a_3} * t{a_2,a_3;i_2,i_3}"));
+        auto tree =
+            binarize(parse_expr(L"-1 g{a_2,i_3;a_3,i_1} * t{a_1,a_3;i_3,i_2} + "
+                                L"2 g{a_1,i_3;i_1,a_3} * t{a_2,a_3;i_2,i_3}"));
 
         export_expression(tree, generator);
 
@@ -594,9 +595,9 @@ TEST_CASE("Export capabilities", "[exports]") {
         REQUIRE(generator.get_generated_code() == expected);
       }
       SECTION("dot + dot") {
-        auto tree = eval_node<EvalExpr>(
-            parse_expr(L"2 g{i_1,i_2;a_1,a_2} * t{a_1,a_2;i_1,i_2} - "
-                       L"g{i_1,i_2;a_1,a_2} * t{a_1,a_2;i_2,i_1}"));
+        auto tree =
+            binarize(parse_expr(L"2 g{i_1,i_2;a_1,a_2} * t{a_1,a_2;i_1,i_2} - "
+                                L"g{i_1,i_2;a_1,a_2} * t{a_1,a_2;i_2,i_1}"));
 
         export_expression(tree, generator);
 
@@ -628,7 +629,7 @@ TEST_CASE("Export capabilities", "[exports]") {
       }
     }
     SECTION("Intermediate with same shape as summation result") {
-      auto tree = eval_node<EvalExpr>(
+      auto tree = binarize(
           parse_expr(L"A{a1;i1} B{i1;i2} + ( A{a1;i1} B{i1;i3} ) C{i3;i2}"));
 
       export_expression(tree, generator);
@@ -667,171 +668,146 @@ TEST_CASE("Export capabilities", "[exports]") {
     }
   }
 
-  SECTION("remap_integrals") {
-    using namespace sequant::itf::detail;
-    SECTION("Unchanged") {
-      auto expr = parse_expr(L"t{i1;a1}");
-      auto remapped = expr;
-      remap_integrals(expr);
-      REQUIRE(remapped == expr);
+  SECTION("itf") {
+    const ItfContext ctx;
 
-      expr = parse_expr(L"t{i1;a1} f{a1;i1} + first{a1;i1} second{i1;a1}");
-      remapped = expr;
-      remap_integrals(expr);
-      REQUIRE(remapped == expr);
-    }
+    SECTION("remap_integrals") {
+      using namespace sequant::itf::detail;
+      SECTION("Unchanged") {
+        auto expr = parse_expr(L"t{i1;a1}");
+        auto remapped = expr;
+        remap_integrals(expr, ctx);
+        REQUIRE(remapped == expr);
 
-    SECTION("K") {
-      SECTION("occ,occ,occ,occ") {
-        std::vector<Index> indices = {L"i_1", L"i_2", L"i_3", L"i_4"};
-        REQUIRE(indices.size() == 4);
-        const ExprPtr expected = parse_expr(L"K{i1,i2;i3,i4}");
+        expr = parse_expr(L"t{i1;a1} f{a1;i1} + first{a1;i1} second{i1;a1}");
+        remapped = expr;
+        remap_integrals(expr, ctx);
+        REQUIRE(remapped == expr);
+      }
 
-        for (const std::vector<std::size_t> &indexPerm :
-             twoElectronIntegralSymmetries()) {
-          REQUIRE(indexPerm.size() == 4);
+      SECTION("K") {
+        SECTION("occ,occ,occ,occ") {
+          std::vector<Index> indices = {L"i_1", L"i_2", L"i_3", L"i_4"};
+          REQUIRE(indices.size() == 4);
 
-          ExprPtr integralExpr = ex<Tensor>(
-              L"g", bra{indices[indexPerm[0]], indices[indexPerm[1]]},
-              ket{indices[indexPerm[2]], indices[indexPerm[3]]});
+          for (const std::vector<std::size_t> &indexPerm :
+               twoElectronIntegralSymmetries()) {
+            REQUIRE(indexPerm.size() == 4);
 
-          auto transformed = integralExpr;
-          remap_integrals(transformed);
+            ExprPtr integralExpr = ex<Tensor>(
+                L"g", bra{indices[indexPerm[0]], indices[indexPerm[1]]},
+                ket{indices[indexPerm[2]], indices[indexPerm[3]]});
 
-          CAPTURE(indexPerm);
-          CAPTURE_EXPR(integralExpr);
-          CAPTURE_EXPR(transformed);
-          CAPTURE_EXPR(expected);
+            auto transformed = integralExpr;
+            remap_integrals(transformed, ctx);
 
-          REQUIRE(transformed == expected);
+            CAPTURE(indexPerm);
+            REQUIRE_THAT(transformed, EquivalentTo("K{i1,i2;i3,i4}"));
+          }
+        }
+
+        SECTION("virt,virt,occ,occ") {
+          std::vector<Index> indices = {L"a_1", L"a_2", L"i_1", L"i_2"};
+          REQUIRE(indices.size() == 4);
+
+          for (const std::vector<std::size_t> &indexPerm :
+               twoElectronIntegralSymmetries()) {
+            REQUIRE(indexPerm.size() == 4);
+
+            ExprPtr integralExpr = ex<Tensor>(
+                L"g", bra{indices[indexPerm[0]], indices[indexPerm[1]]},
+                ket{indices[indexPerm[2]], indices[indexPerm[3]]});
+
+            auto transformed = integralExpr;
+            remap_integrals(transformed, ctx);
+
+            CAPTURE(indexPerm);
+
+            REQUIRE_THAT(transformed, EquivalentTo("K{a1,a2;i1,i2}"));
+          }
+        }
+
+        SECTION("virt,virt,virt,virt") {
+          std::vector<Index> indices = {L"a_1", L"a_2", L"a_3", L"a_4"};
+          REQUIRE(indices.size() == 4);
+
+          for (const std::vector<std::size_t> &indexPerm :
+               twoElectronIntegralSymmetries()) {
+            REQUIRE(indexPerm.size() == 4);
+
+            ExprPtr integralExpr = ex<Tensor>(
+                L"g", bra{indices[indexPerm[0]], indices[indexPerm[1]]},
+                ket{indices[indexPerm[2]], indices[indexPerm[3]]});
+
+            auto transformed = integralExpr;
+            remap_integrals(transformed, ctx);
+
+            CAPTURE(indexPerm);
+
+            REQUIRE_THAT(transformed, EquivalentTo("K{a1,a2;a3,a4}"));
+          }
         }
       }
 
-      SECTION("virt,virt,occ,occ") {
-        std::vector<Index> indices = {L"a_1", L"a_2", L"i_1", L"i_2"};
-        REQUIRE(indices.size() == 4);
-        const ExprPtr expected = parse_expr(L"K{a1,a2;i1,i2}");
+      SECTION("J") {
+        SECTION("virt,occ,virt,occ") {
+          std::vector<Index> indices = {L"a_1", L"i_1", L"a_2", L"i_2"};
+          REQUIRE(indices.size() == 4);
 
-        for (const std::vector<std::size_t> &indexPerm :
-             twoElectronIntegralSymmetries()) {
-          REQUIRE(indexPerm.size() == 4);
+          for (const std::vector<std::size_t> &indexPerm :
+               twoElectronIntegralSymmetries()) {
+            REQUIRE(indexPerm.size() == 4);
 
-          ExprPtr integralExpr = ex<Tensor>(
-              L"g", bra{indices[indexPerm[0]], indices[indexPerm[1]]},
-              ket{indices[indexPerm[2]], indices[indexPerm[3]]});
+            ExprPtr integralExpr = ex<Tensor>(
+                L"g", bra{indices[indexPerm[0]], indices[indexPerm[1]]},
+                ket{indices[indexPerm[2]], indices[indexPerm[3]]});
 
-          auto transformed = integralExpr;
-          remap_integrals(transformed);
+            auto transformed = integralExpr;
+            remap_integrals(transformed, ctx);
 
-          CAPTURE(indexPerm);
-          CAPTURE_EXPR(integralExpr);
-          CAPTURE_EXPR(transformed);
-          CAPTURE_EXPR(expected);
+            CAPTURE(indexPerm);
 
-          REQUIRE(transformed == expected);
+            REQUIRE_THAT(transformed, EquivalentTo("J{a1,a2;i1,i2}"));
+          }
+        }
+
+        SECTION("virt,occ,virt,virt") {
+          std::vector<Index> indices = {L"a_1", L"i_1", L"a_2", L"a_3"};
+          REQUIRE(indices.size() == 4);
+
+          for (const std::vector<std::size_t> &indexPerm :
+               twoElectronIntegralSymmetries()) {
+            REQUIRE(indexPerm.size() == 4);
+
+            ExprPtr integralExpr = ex<Tensor>(
+                L"g", bra{indices[indexPerm[0]], indices[indexPerm[1]]},
+                ket{indices[indexPerm[2]], indices[indexPerm[3]]});
+
+            auto transformed = integralExpr;
+            remap_integrals(transformed, ctx);
+
+            CAPTURE(indexPerm);
+
+            REQUIRE_THAT(transformed, EquivalentTo("J{a1,a2;a3,i1}"));
+          }
         }
       }
 
-      SECTION("virt,virt,virt,virt") {
-        std::vector<Index> indices = {L"a_1", L"a_2", L"a_3", L"a_4"};
-        REQUIRE(indices.size() == 4);
-        const ExprPtr expected = parse_expr(L"K{a1,a2;a3,a4}");
+      SECTION("f") {
+        SECTION("same_space") {
+          ExprPtr expr = parse_expr(L"f{i2;i1} + f{a1;a2}");
 
-        for (const std::vector<std::size_t> &indexPerm :
-             twoElectronIntegralSymmetries()) {
-          REQUIRE(indexPerm.size() == 4);
+          remap_integrals(expr, ctx);
 
-          ExprPtr integralExpr = ex<Tensor>(
-              L"g", bra{indices[indexPerm[0]], indices[indexPerm[1]]},
-              ket{indices[indexPerm[2]], indices[indexPerm[3]]});
-
-          auto transformed = integralExpr;
-          remap_integrals(transformed);
-
-          CAPTURE(indexPerm);
-          CAPTURE_EXPR(integralExpr);
-          CAPTURE_EXPR(transformed);
-          CAPTURE_EXPR(expected);
-
-          REQUIRE(transformed == expected);
+          REQUIRE_THAT(expr, EquivalentTo("f{i1;i2} + f{a1;a2}"));
         }
-      }
-    }
+        SECTION("different_space") {
+          ExprPtr expr = parse_expr(L"f{a1;i1} + f{i1;a1}");
 
-    SECTION("J") {
-      SECTION("virt,occ,virt,occ") {
-        std::vector<Index> indices = {L"a_1", L"i_1", L"a_2", L"i_2"};
-        REQUIRE(indices.size() == 4);
-        const ExprPtr expected = parse_expr(L"J{a1,a2;i1,i2}");
+          remap_integrals(expr, ctx);
 
-        for (const std::vector<std::size_t> &indexPerm :
-             twoElectronIntegralSymmetries()) {
-          REQUIRE(indexPerm.size() == 4);
-
-          ExprPtr integralExpr = ex<Tensor>(
-              L"g", bra{indices[indexPerm[0]], indices[indexPerm[1]]},
-              ket{indices[indexPerm[2]], indices[indexPerm[3]]});
-
-          auto transformed = integralExpr;
-          remap_integrals(transformed);
-
-          CAPTURE(indexPerm);
-          CAPTURE_EXPR(integralExpr);
-          CAPTURE_EXPR(transformed);
-          CAPTURE_EXPR(expected);
-
-          REQUIRE(transformed == expected);
+          REQUIRE_THAT(expr, EquivalentTo("f{a1;i1} + f{a1;i1}"));
         }
-      }
-
-      SECTION("virt,occ,virt,virt") {
-        std::vector<Index> indices = {L"a_1", L"i_1", L"a_2", L"a_3"};
-        REQUIRE(indices.size() == 4);
-        const ExprPtr expected = parse_expr(L"J{a1,a2;a3,i1}");
-
-        for (const std::vector<std::size_t> &indexPerm :
-             twoElectronIntegralSymmetries()) {
-          REQUIRE(indexPerm.size() == 4);
-
-          ExprPtr integralExpr = ex<Tensor>(
-              L"g", bra{indices[indexPerm[0]], indices[indexPerm[1]]},
-              ket{indices[indexPerm[2]], indices[indexPerm[3]]});
-
-          auto transformed = integralExpr;
-          remap_integrals(transformed);
-
-          CAPTURE(indexPerm);
-          CAPTURE_EXPR(integralExpr);
-          CAPTURE_EXPR(transformed);
-          CAPTURE_EXPR(expected);
-
-          REQUIRE(transformed == expected);
-        }
-      }
-    }
-
-    SECTION("f") {
-      SECTION("same_space") {
-        ExprPtr expr = parse_expr(L"f{i2;i1} + f{a1;a2}");
-        const ExprPtr expected = parse_expr(L"f{i1;i2} + f{a1;a2}");
-
-        remap_integrals(expr);
-
-        CAPTURE_EXPR(expr);
-        CAPTURE_EXPR(expected);
-
-        REQUIRE(expr == expected);
-      }
-      SECTION("different_space") {
-        ExprPtr expr = parse_expr(L"f{a1;i1} + f{i1;a1}");
-        const ExprPtr expected = parse_expr(L"f{a1;i1} + f{a1;i1}");
-
-        remap_integrals(expr);
-
-        CAPTURE_EXPR(expr);
-        CAPTURE_EXPR(expected);
-
-        REQUIRE(expr == expected);
       }
     }
   }
@@ -856,7 +832,7 @@ TEST_CASE("Export capabilities", "[exports]") {
       SECTION("represent complex") {
         Complex<rational> z1(1.0, -2.0);
         auto c = ex<Constant>(z1);
-        auto tree = eval_node<EvalExpr>(c * ex<Variable>(L"Dummy"));
+        auto tree = binarize(c * ex<Variable>(L"Dummy"));
         export_expression(tree, generator);
         std::string expected =
             "\n"
@@ -871,7 +847,7 @@ TEST_CASE("Export capabilities", "[exports]") {
       SECTION("complex scalar addition") {
         // z1 and z2 are complex scalars to be read from disc
         ExprPtr expr = parse_expr(L"z1 + z2");
-        auto tree = eval_node<EvalExpr>(expr);
+        auto tree = binarize(expr);
         export_expression(tree, generator);
         std::string expected =
             "\n"
@@ -887,14 +863,14 @@ TEST_CASE("Export capabilities", "[exports]") {
 
       SECTION("proto indices") {
         ExprPtr expr = parse_expr(L"g{i1<a1>;}+u{i1<a1>;}");
-        auto tree = eval_node<EvalExpr>(expr);
+        auto tree = binarize(expr);
         REQUIRE_THROWS_WITH(export_expression(tree, generator, ctx),
                             "Proto Indices are not (yet) supported!");
       }
 
       SECTION("binary contraction") {
         ExprPtr expr = parse_expr(L"g{i_1,i_2;a_1,a_2} * T2{a_1,a_2;i_3,i_4}");
-        auto tree = eval_node<EvalExpr>(expr);
+        auto tree = binarize(expr);
 
         export_expression(tree, generator, ctx);
 
@@ -913,7 +889,7 @@ TEST_CASE("Export capabilities", "[exports]") {
       }
       SECTION("ternary") {
         ExprPtr expr = parse_expr(L"A{a2;i2} B{i2;a1} C{i1;a2}");
-        auto tree = eval_node<EvalExpr>(expr);
+        auto tree = binarize(expr);
 
         export_expression(tree, generator, ctx);
 
@@ -939,7 +915,7 @@ TEST_CASE("Export capabilities", "[exports]") {
         ExprPtr expr = parse_expr(
             L"2 g{i_1,i_2;a_1,a_2} * T2{a_1,a_2;i_1,i_2} - 1 "
             L"g{i_1,i_2;a_1,a_2} * T2{a_1,a_2;i_2,i_1}");
-        auto tree = eval_node<EvalExpr>(expr);
+        auto tree = binarize(expr);
         export_expression(tree, generator, ctx);
         std::string expected =
             "\n"
@@ -963,7 +939,7 @@ TEST_CASE("Export capabilities", "[exports]") {
       }
 
       SECTION("binary + ternary") {
-        auto tree = eval_node<EvalExpr>(
+        auto tree = binarize(
             parse_expr(L"A{a1;i1} B{i1;i2} + A{a1;i1} B{i1;i3} C{i3;i2}"));
 
         export_expression(tree, generator, ctx);
@@ -999,7 +975,7 @@ TEST_CASE("Export capabilities", "[exports]") {
 
       SECTION("binary contraction") {
         ExprPtr expr = parse_expr(L"g{i_1,i_2;a_1,a_2} * T2{a_1,a_2;i_3,i_4}");
-        auto tree = eval_node<EvalExpr>(expr);
+        auto tree = binarize(expr);
 
         export_expression(tree, generator, ctx);
 
@@ -1022,7 +998,7 @@ TEST_CASE("Export capabilities", "[exports]") {
 
       SECTION("ternary") {
         ExprPtr expr = parse_expr(L"A{a2;i2} B{i2;a1} C{i1;a2}");
-        auto tree = eval_node<EvalExpr>(expr);
+        auto tree = binarize(expr);
 
         export_expression(tree, generator, ctx);
 
@@ -1048,7 +1024,7 @@ TEST_CASE("Export capabilities", "[exports]") {
         ExprPtr expr = parse_expr(
             L"2 g{i_1,i_2;a_1,a_2} * T2{a_1,a_2;i_1,i_2} - 1 "
             L"g{i_1,i_2;a_1,a_2} * T2{a_1,a_2;i_2,i_1}");
-        auto tree = eval_node<EvalExpr>(expr);
+        auto tree = binarize(expr);
         export_expression(tree, generator, ctx);
         std::string expected =
             "\n"
@@ -1076,7 +1052,7 @@ TEST_CASE("Export capabilities", "[exports]") {
       }
 
       SECTION("binary + ternary") {
-        auto tree = eval_node<EvalExpr>(
+        auto tree = binarize(
             parse_expr(L"A{a1;i1} B{i1;i2} + A{a1;i1} B{i1;i3} C{i3;i2}"));
 
         export_expression(tree, generator, ctx);
@@ -1112,7 +1088,7 @@ TEST_CASE("Export capabilities", "[exports]") {
 
       SECTION("binary contraction") {
         ExprPtr expr = parse_expr(L"g{i_1,i_2;a_1,a_2} * T2{a_1,a_2;i_3,i_4}");
-        auto tree = eval_node<EvalExpr>(expr);
+        auto tree = binarize(expr);
 
         export_expression(tree, generator, ctx);
 
@@ -1140,7 +1116,7 @@ TEST_CASE("Export capabilities", "[exports]") {
 
       SECTION("ternary") {
         ExprPtr expr = parse_expr(L"A{a2;i2} B{i2;a1} C{i1;a2}");
-        auto tree = eval_node<EvalExpr>(expr);
+        auto tree = binarize(expr);
 
         export_expression(tree, generator, ctx);
 
@@ -1170,7 +1146,7 @@ TEST_CASE("Export capabilities", "[exports]") {
         ExprPtr expr = parse_expr(
             L"2 g{i_1,i_2;a_1,a_2} * T2{a_1,a_2;i_1,i_2} - 1 "
             L"g{i_1,i_2;a_1,a_2} * T2{a_1,a_2;i_2,i_1}");
-        auto tree = eval_node<EvalExpr>(expr);
+        auto tree = binarize(expr);
         export_expression(tree, generator, ctx);
         std::string expected =
             "i_1 = Index(nocc, \"i_1\")\n"
@@ -1201,7 +1177,7 @@ TEST_CASE("Export capabilities", "[exports]") {
       }
 
       SECTION("binary + ternary") {
-        auto tree = eval_node<EvalExpr>(
+        auto tree = binarize(
             parse_expr(L"A{a1;i1} B{i1;i2} + A{a1;i1} B{i1;i3} C{i3;i2}"));
 
         export_expression(tree, generator, ctx);
@@ -1236,5 +1212,3 @@ TEST_CASE("Export capabilities", "[exports]") {
     }
   }
 }
-
-#undef CAPTURE_EXPR

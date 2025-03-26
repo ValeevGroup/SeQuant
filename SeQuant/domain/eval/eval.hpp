@@ -5,6 +5,7 @@
 #include <SeQuant/core/eval_node.hpp>
 #include <SeQuant/core/logger.hpp>
 #include <SeQuant/core/meta.hpp>
+#include <SeQuant/core/parse.hpp>
 #include <SeQuant/core/tensor.hpp>
 #include <SeQuant/domain/eval/cache_manager.hpp>
 #include <SeQuant/domain/eval/eval_result.hpp>
@@ -12,6 +13,7 @@
 #include <btas/btas.h>
 #include <tiledarray.h>
 
+#include <chrono>
 #include <range/v3/numeric.hpp>
 #include <range/v3/view.hpp>
 
@@ -24,18 +26,43 @@ namespace sequant {
 
 namespace {
 
+///
+/// Invokes @c fun on @c args and returns a pair of the result, and
+/// the time duration as @c std::chrono::duration<double>.
+///
+template <typename F, typename... Args>
+auto timed_eval(F&& fun, Args&&... args) {
+  using Clock = std::chrono::high_resolution_clock;
+  auto tstart = Clock::now();
+  auto&& res = std::forward<F>(fun)(std::forward<Args>(args)...);
+  auto tend = Clock::now();
+  return std::pair{std::move(res),
+                   std::chrono::duration<double>(tend - tstart)};
+}
+
+///
+/// Invokes @c fun that returns void on the arguments @c args and returns the
+/// time duration as @c std::chrono::duration<double>.
+template <
+    typename F, typename... Args,
+    std::enable_if_t<std::is_invocable_r_v<void, F, Args...>, bool> = true>
+auto timed_eval_inplace(F&& fun, Args&&... args) {
+  using Clock = std::chrono::high_resolution_clock;
+  auto tstart = Clock::now();
+  std::forward<F>(fun)(std::forward<Args>(args)...);
+  auto tend = Clock::now();
+  return std::chrono::duration<double>(tend - tstart);
+}
+
 template <typename... Args>
 void log_eval(Args const&... args) noexcept {
-#ifdef SEQUANT_EVAL_TRACE
-  auto l = Logger::instance();
-  if (l->log_level_eval > 0) write_log(l, "[EVAL] ", args...);
-#endif
+  auto& l = Logger::instance();
+  if (l.eval.level > 0) write_log(l, "[EVAL] ", args...);
 }
 
 [[maybe_unused]] void log_cache_access(size_t key, CacheManager const& cm) {
-#ifdef SEQUANT_EVAL_TRACE
-  auto l = Logger::instance();
-  if (l->log_level_eval > 0) {
+  auto& l = Logger::instance();
+  if (l.eval.level > 0) {
     assert(cm.exists(key));
     auto max_l = cm.max_life(key);
     auto cur_l = cm.life(key);
@@ -47,20 +74,17 @@ void log_eval(Args const&... args) noexcept {
                 "[CACHE] Released key: ", key, ".\n");
     }
   }
-#endif
 }
 
 [[maybe_unused]] void log_cache_store(size_t key, CacheManager const& cm) {
-#ifdef SEQUANT_EVAL_TRACE
-  auto l = Logger::instance();
-  if (l->log_level_eval > 0) {
+  auto& l = Logger::instance();
+  if (l.eval.level > 0) {
     assert(cm.exists(key));
     write_log(l,  //
               "[CACHE] Stored key: ", key, ".\n");
     // because storing automatically implies immediately accessing it
     log_cache_access(key, cm);
   }
-#endif
 }
 
 [[maybe_unused]] std::string perm_groups_string(
@@ -127,41 +151,17 @@ constexpr bool IsLeafEvaluator<
 ///
 class EvalExprTA final : public EvalExpr {
  public:
-  ///
-  /// \return String annotation for TA::DistArray.
-  ///
-  [[nodiscard]] std::string const& annot() const;
+  template <typename... Args, typename = std::enable_if_t<
+                                  std::is_constructible_v<EvalExpr, Args...>>>
+  EvalExprTA(Args&&... args) : EvalExpr{std::forward<Args>(args)...} {
+    annot_ = indices_annot();
+  }
 
-  ///
-  /// \brief Construct an EvalExprTA from a Tensor.
-  ///
-  /// \see EvalExpr(Tensor const&).
-  ///
-  explicit EvalExprTA(Tensor const&);
-
-  ///
-  /// \brief Construct an EvalExprTA from a Constant.
-  ///
-  /// \see EvalExpr(Constant const&).
-  ///
-  explicit EvalExprTA(Constant const&);
-
-  ///
-  /// \brief Construct an EvalExprTA from a Variable.
-  ///
-  /// \see EvalExpr(Variable const&).
-  ///
-  explicit EvalExprTA(Variable const&);
-
-  ///
-  /// \brief Construct an EvalExprTA from two EvalExprTA and an EvalOp.
-  /// \see EvalExpr(EvalExpr const&, EvalExpr const&, EvalOp).
-  ///
-  EvalExprTA(EvalExprTA const&, EvalExprTA const&, EvalOp);
+  [[nodiscard]] inline auto const& annot() const noexcept { return annot_; }
 
  private:
   std::string annot_;
-};  // class EvalExprTA
+};
 
 ///
 /// \brief This class extends the EvalExpr class by adding a annot() method so
@@ -171,38 +171,16 @@ class EvalExprBTAS final : public EvalExpr {
  public:
   using annot_t = container::svector<long>;
 
+  template <typename... Args, typename = std::enable_if_t<
+                                  std::is_constructible_v<EvalExpr, Args...>>>
+  EvalExprBTAS(Args&&... args) : EvalExpr{std::forward<Args>(args)...} {
+    annot_ = index_hash(canon_indices()) | ranges::to<annot_t>;
+  }
+
   ///
   /// \return Annotation (container::svector<long>) for BTAS::Tensor.
   ///
-  [[nodiscard]] annot_t const& annot() const noexcept;
-
-  ///
-  /// \brief Construct an EvalExprBTAS from a Tensor.
-  ///
-  /// \see EvalExpr(Tensor const&).
-  ///
-  explicit EvalExprBTAS(Tensor const&) noexcept;
-
-  ///
-  /// \brief Construct an EvalExprBTAS from a Constant.
-  ///
-  /// \see EvalExpr(Constant const&).
-  ///
-  explicit EvalExprBTAS(Constant const&) noexcept;
-
-  ///
-  /// \brief Construct an EvalExprBTAS from a Variable.
-  ///
-  /// \see EvalExpr(Variable const&).
-  ///
-  explicit EvalExprBTAS(Variable const&) noexcept;
-
-  ///
-  /// \brief Construct an EvalExprBTAS from two EvalExprBTAS and an EvalOp.
-  ///
-  /// \see EvalExpr(EvalExpr const&, EvalExpr const&, EvalOp).
-  ///
-  EvalExprBTAS(EvalExprBTAS const&, EvalExprBTAS const&, EvalOp) noexcept;
+  [[nodiscard]] inline annot_t const& annot() const noexcept { return annot_; }
 
  private:
   annot_t annot_;
@@ -220,11 +198,12 @@ template <typename NodeT, typename Le, typename... Args,
           std::enable_if_t<IsLeafEvaluator<NodeT, Le>, bool> = true>
 ERPtr evaluate_core(NodeT const& node, Le const& le, Args&&... args) {
   if (node.leaf()) {
+    auto&& [res, time] = timed_eval(le, node);
     log_eval(node->is_constant()   ? "[CONSTANT] "
              : node->is_variable() ? "[VARIABLE] "
                                    : "[TENSOR] ",
-             node->label(), "\n");
-    return le(node);
+             node->label(), "  ", time.count(), "\n");
+    return res;
   } else {
     ERPtr const left =
         evaluate_crust(node.left(), le, std::forward<Args>(args)...);
@@ -238,19 +217,23 @@ ERPtr evaluate_core(NodeT const& node, Le const& le, Args&&... args) {
                                       node.right()->annot(), node->annot()};
 
     if (node->op_type() == EvalOp::Sum) {
+      auto&& [res, time] = timed_eval([&]() { return left->sum(*right, ann); });
       log_eval("[SUM] ", node.left()->label(), " + ", node.right()->label(),
-               " = ", node->label(), "\n");
-
-      return left->sum(*right, ann);
+               " = ", node->label(), "  ", time.count(), "\n");
+      return res;
     } else {
       assert(node->op_type() == EvalOp::Prod);
-
-      log_eval("[PRODUCT] ", node.left()->label(), " * ", node.right()->label(),
-               " = ", node->label(), "\n");
       auto const de_nest =
           node.left()->tot() && node.right()->tot() && !node->tot();
-      return left->prod(*right, ann,
-                        de_nest ? TA::DeNest::True : TA::DeNest::False);
+
+      auto&& [res, time] = timed_eval([&]() {
+        return left->prod(*right, ann,
+                          de_nest ? TA::DeNest::True : TA::DeNest::False);
+      });
+
+      log_eval("[PRODUCT] ", node.left()->label(), " * ", node.right()->label(),
+               " = ", node->label(), "  ", time.count(), "\n");
+      return res;
     }
   }
 }
@@ -261,17 +244,24 @@ ERPtr evaluate_crust(NodeT const& node, Le const& le) {
   return evaluate_core(node, le);
 }
 
+template <typename NodeT>
+inline ERPtr mult_by_phase(NodeT const& node, ERPtr res) {
+  return node->canon_phase() == 1 ? res
+                                  : res->mult_by_phase(node->canon_phase());
+}
+
 template <typename NodeT, typename Le,
           std::enable_if_t<IsLeafEvaluator<NodeT, Le>, bool>>
 ERPtr evaluate_crust(NodeT const& node, Le const& le, CacheManager& cache) {
   auto const h = hash::value(*node);
   if (auto ptr = cache.access(h); ptr) {
     log_cache_access(h, cache);
-    return ptr;
+    return mult_by_phase(node, ptr);
   } else if (cache.exists(h)) {
-    auto ptr = cache.store(h, evaluate_core(node, le, cache));
+    auto ptr =
+        cache.store(h, mult_by_phase(node, evaluate_core(node, le, cache)));
     log_cache_store(h, cache);
-    return ptr;
+    return mult_by_phase(node, ptr);
   } else {
     return evaluate_core(node, le, cache);
   }
@@ -319,11 +309,22 @@ auto evaluate(NodesT const& nodes, Le const& le, Args&&... args) {
   auto end = std::end(nodes);
   assert(iter != end);
 
+  log_eval("[TERM] ", " ", to_string(deparse(to_expr(*iter))), "\n");
+
   auto result = evaluate(*iter, le, std::forward<Args>(args)...);
+  auto const pnode_label = (*iter)->label();
 
   for (++iter; iter != end; ++iter) {
+    log_eval("[TERM] ", " ", to_string(deparse(to_expr(*iter))), "\n");
     auto right = evaluate(*iter, le, std::forward<Args>(args)...);
-    result->add_inplace(*right);
+    auto&& time = timed_eval_inplace([&]() { result->add_inplace(*right); });
+    log_eval("[ADD_INPLACE] ",  //
+             pnode_label,       //
+             " += ",            //
+             (*iter)->label(),  //
+             "  ",              //
+             time.count(),      //
+             "\n");
   }
 
   return result;
@@ -349,11 +350,14 @@ template <typename NodeT, typename Annot, typename Le, typename... Args,
 auto evaluate(NodeT const& node,    //
               Annot const& layout,  //
               Le const& le, Args&&... args) {
+  log_eval("[TERM] ", " ", to_string(deparse(to_expr(node))), "\n");
   auto result = evaluate_crust(node, le, std::forward<Args>(args)...);
 
-  log_eval("[PERMUTE] ", node->label(), "\n");
-
-  return result->permute(std::array<std::any, 2>{node->annot(), layout});
+  auto&& [res, time] = timed_eval([&]() {
+    return result->permute(std::array<std::any, 2>{node->annot(), layout});
+  });
+  log_eval("[PERMUTE] ", node->label(), "  ", time.count(), "\n");
+  return res;
 }
 
 ///
@@ -385,14 +389,20 @@ auto evaluate(NodesT const& nodes,  //
   assert(iter != end);
   auto const pnode_label = (*iter)->label();
 
+  log_eval("[TERM] ", " ", to_string(deparse(to_expr(*iter))), "\n");
+
   auto result = evaluate(*iter, layout, le, std::forward<Args>(args)...);
-
   for (++iter; iter != end; ++iter) {
+    log_eval("[TERM] ", " ", to_string(deparse(to_expr(*iter))), "\n");
     auto right = evaluate(*iter, layout, le, std::forward<Args>(args)...);
-
-    log_eval("[ADD_INPLACE] ", (*iter)->label(), " += ", pnode_label, "\n");
-
-    result->add_inplace(*right);
+    auto&& time = timed_eval_inplace([&]() { result->add_inplace(*right); });
+    log_eval("[ADD_INPLACE] ",  //
+             pnode_label,       //
+             " += ",            //
+             (*iter)->label(),  //
+             "  ",              //
+             time.count(),      //
+             "\n");
   }
   return result;
 }
@@ -403,13 +413,6 @@ auto evaluate(NodesT const& nodes,  //
 ///
 /// \param layout The layout of the resulting tensor. It is a permutation of the
 ///               result of node->annot().
-///
-/// \param perm_groups A vector of 3-element arrays of size_t. Each array
-///                    represents a group of indices that are particle
-///                    symmetric. The first two elements of the array are the
-///                    indices of the bra and ket of the resulting tensor,
-///                    respectively, and the third element is the number of
-///                    symmetric indices in the group.
 ///
 /// \param le A leaf evaluator that takes an EvalNode and returns a tensor
 ///           (TA::TArrayD, btas::Tensor<double>, etc.) or a constant (double,
@@ -422,35 +425,16 @@ auto evaluate(NodesT const& nodes,  //
 /// \see EvalResult to know more about the return type.
 ///
 template <typename NodeT, typename Annot, typename Le, typename... Args>
-auto evaluate_symm(NodeT const& node, Annot const& layout,
-                   container::svector<std::array<size_t, 3>> const& perm_groups,
-                   Le const& le, Args&&... args) {
-  container::svector<std::array<size_t, 3>> pgs;
-  if (perm_groups.empty()) {
-    // asked for symmetrization without specifying particle
-    // symmetric index ranges assume both bra indices and ket indices are
-    // symmetric in the particle exchange
-
-    ExprPtr expr_ptr{};
-    if constexpr (IsIterableOfEvaluableNodes<NodeT>) {
-      expr_ptr = (*std::begin(node))->expr();
-    } else {
-      expr_ptr = node->expr();
-    }
-    assert(expr_ptr->is<Tensor>());
-    auto const& t = expr_ptr->as<Tensor>();
-    assert(t.bra_rank() == t.ket_rank());
-
-    size_t const half_rank = t.bra_rank();
-    pgs = {{0, half_rank, half_rank}};
-  }
-
+auto evaluate_symm(NodeT const& node, Annot const& layout, Le const& le,
+                   Args&&... args) {
   auto result = evaluate(node, layout, le, std::forward<Args>(args)...);
 
-  log_eval("[SYMMETRIZE] (bra pos, ket pos, length) ",
-           perm_groups_string(perm_groups.empty() ? pgs : perm_groups), "\n");
-
-  return result->symmetrize(perm_groups.empty() ? pgs : perm_groups);
+  auto&& [res, time] = timed_eval([&]() { return result->symmetrize(); });
+  log_eval("[SYMMETRIZE] (layout) ",  //
+           "(", layout, ") ",         //
+           time.count(),              //
+           "\n");
+  return res;
 }
 
 ///
@@ -459,13 +443,6 @@ auto evaluate_symm(NodeT const& node, Annot const& layout,
 ///
 /// \param layout The layout of the resulting tensor. It is a permutation of the
 ///               result of node->annot().
-///
-/// \param perm_groups A vector of 3-element arrays of size_t. Each array
-///                    represents a group of indices that are particle
-///                    anti-symmetric. The first two elements of the array are
-///                    the indices of the bra and ket of the resulting tensor,
-///                    respectively, and the third element is the number of
-///                    symmetric indices in the group.
 ///
 /// \param le A leaf evaluator that takes an EvalNode and returns a tensor
 ///           (TA::TArrayD, btas::Tensor<double>, etc.) or a constant (double,
@@ -479,18 +456,12 @@ auto evaluate_symm(NodeT const& node, Annot const& layout,
 ///
 template <typename NodeT, typename Annot, typename Le,
           typename... Args>
-auto evaluate_antisymm(
-    NodeT const& node,                                             //
-    Annot const& layout,                                           //
-    container::svector<std::array<size_t, 3>> const& perm_groups,  //
-    Le const& le,                                                  //
-    Args&&... args) {
-  container::svector<std::array<size_t, 3>> pgs;
-  if (perm_groups.empty()) {
-    // asked for anti-symmetrization without specifying particle
-    // antisymmetric index ranges assume both bra indices and ket indices are
-    // antisymmetric in the particle exchange
-
+auto evaluate_antisymm(NodeT const& node,    //
+                       Annot const& layout,  //
+                       Le const& le,         //
+                       Args&&... args) {
+  size_t bra_rank;
+  {
     ExprPtr expr_ptr{};
     if constexpr (IsIterableOfEvaluableNodes<NodeT>) {
       expr_ptr = (*std::begin(node))->expr();
@@ -499,18 +470,17 @@ auto evaluate_antisymm(
     }
     assert(expr_ptr->is<Tensor>());
     auto const& t = expr_ptr->as<Tensor>();
-    assert(t.bra_rank() == t.ket_rank());
-
-    size_t const half_rank = t.bra_rank();
-    pgs = {{0, half_rank, half_rank}};
+    bra_rank = t.bra_rank();
   }
 
   auto result = evaluate(node, layout, le, std::forward<Args>(args)...);
-
-  log_eval("[ANTISYMMETRIZE] (bra pos, ket pos, length) ",
-           perm_groups_string(perm_groups.empty() ? pgs : perm_groups), "\n");
-
-  return result->antisymmetrize(perm_groups.empty() ? pgs : perm_groups);
+  auto&& [res, time] =
+      timed_eval([&]() { return result->antisymmetrize(bra_rank); });
+  log_eval("[ANTISYMMETRIZE] (bra rank, layout) ",  //
+           "(", bra_rank, ", ", layout, ") ",       //
+           time.count(),                            //
+           "\n");
+  return res;
 }
 
 }  // namespace sequant

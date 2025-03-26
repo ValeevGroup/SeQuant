@@ -82,7 +82,8 @@ container::set<size_t> CacheManager::keys() const noexcept {
 
 CacheManager CacheManager::empty() noexcept { return CacheManager{{}}; }
 
-template <typename NodeT, typename = std::enable_if_t<IsEvalNode<NodeT>>>
+template <typename NodeT,
+          typename = std::enable_if_t<meta::is_eval_node<NodeT>>>
 void max_cache(NodeT const& node,  //
                CacheManager& cm,   //
                AsyCost& curr,      //
@@ -111,7 +112,7 @@ void max_cache(NodeT const& node,  //
 }
 
 AsyCost peak_cache(Sum const& expr) {
-  auto const nodes = expr | ranges::views::transform(eval_node<EvalExpr>);
+  auto const nodes = expr | ranges::views::transform(binarize<EvalExpr>);
   auto cm = cache_manager(nodes);
   auto max = AsyCost::zero();
   auto curr = AsyCost::zero();

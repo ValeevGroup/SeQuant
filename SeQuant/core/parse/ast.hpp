@@ -7,12 +7,14 @@
 
 #define BOOST_SPIRIT_X3_UNICODE
 #include <boost/fusion/include/adapt_struct.hpp>
+#include <boost/optional.hpp>
 #include <boost/spirit/home/x3.hpp>
 #include <boost/spirit/home/x3/support/ast/position_tagged.hpp>
 #include <boost/variant.hpp>
 
 #include <cstdint>
 #include <string>
+#include <variant>
 #include <vector>
 
 namespace sequant::parse::ast {
@@ -55,26 +57,35 @@ struct Variable : boost::spirit::x3::position_tagged {
 struct IndexGroups : boost::spirit::x3::position_tagged {
   std::vector<Index> bra;
   std::vector<Index> ket;
+  std::vector<Index> auxiliaries;
   bool reverse_bra_ket;
 
   IndexGroups(std::vector<Index> bra = {}, std::vector<Index> ket = {},
-              bool reverse_bra_ket = {})
+              std::vector<Index> auxiliaries = {}, bool reverse_bra_ket = {})
       : bra(std::move(bra)),
         ket(std::move(ket)),
+        auxiliaries(std::move(auxiliaries)),
         reverse_bra_ket(reverse_bra_ket) {}
 };
 
+struct SymmetrySpec : boost::spirit::x3::position_tagged {
+  static constexpr char unspecified = '\0';
+  char perm_symm = unspecified;
+  char braket_symm = unspecified;
+  char particle_symm = unspecified;
+};
+
+// represents AbstractTensor, i.e. Tensor or NormalOperator
 struct Tensor : boost::spirit::x3::position_tagged {
-  static constexpr char unspecified_symmetry = '\0';
   std::wstring name;
   IndexGroups indices;
-  char symmetry;
+  boost::optional<SymmetrySpec> symmetry;
 
   Tensor(std::wstring name = {}, IndexGroups indices = {},
-         char symmetry = unspecified_symmetry)
+         boost::optional<SymmetrySpec> symmetry = {})
       : name(std::move(name)),
         indices(std::move(indices)),
-        symmetry(symmetry) {}
+        symmetry(std::move(symmetry)) {}
 };
 
 struct Product;
@@ -115,6 +126,17 @@ Product::Product(std::vector<NullaryValue> factors)
 
 Sum::Sum(std::vector<Product> summands) : summands(std::move(summands)) {}
 
+struct ResultExpr : boost::spirit::x3::position_tagged {
+  std::variant<Tensor, Variable> lhs;
+  Sum rhs;
+
+  ResultExpr(Variable variable = {}, Sum expr = {})
+      : lhs(std::move(variable)), rhs(std::move(expr)) {}
+
+  ResultExpr(Tensor tensor, Sum expr)
+      : lhs(std::move(tensor)), rhs(std::move(expr)) {}
+};
+
 }  // namespace sequant::parse::ast
 
 BOOST_FUSION_ADAPT_STRUCT(sequant::parse::ast::IndexLabel, label, id);
@@ -122,10 +144,13 @@ BOOST_FUSION_ADAPT_STRUCT(sequant::parse::ast::Index, label, protoLabels);
 BOOST_FUSION_ADAPT_STRUCT(sequant::parse::ast::Number, numerator, denominator);
 BOOST_FUSION_ADAPT_STRUCT(sequant::parse::ast::Variable, name, conjugated);
 BOOST_FUSION_ADAPT_STRUCT(sequant::parse::ast::IndexGroups, bra, ket,
-                          reverse_bra_ket);
+                          auxiliaries, reverse_bra_ket);
+BOOST_FUSION_ADAPT_STRUCT(sequant::parse::ast::SymmetrySpec, perm_symm,
+                          braket_symm, particle_symm);
 BOOST_FUSION_ADAPT_STRUCT(sequant::parse::ast::Tensor, name, indices, symmetry);
 
 BOOST_FUSION_ADAPT_STRUCT(sequant::parse::ast::Product, factors);
 BOOST_FUSION_ADAPT_STRUCT(sequant::parse::ast::Sum, summands);
+BOOST_FUSION_ADAPT_STRUCT(sequant::parse::ast::ResultExpr, lhs, rhs);
 
 #endif  // SEQUANT_CORE_PARSE_AST_HPP

@@ -1,5 +1,7 @@
 #include <catch2/catch_test_macros.hpp>
 
+#include "catch2_sequant.hpp"
+
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/optimize/fusion.hpp>
 #include <SeQuant/core/parse.hpp>
@@ -9,7 +11,7 @@
 #include <string_view>
 #include <vector>
 
-TEST_CASE("TEST_FUSION", "[optimize]") {
+TEST_CASE("fusion", "[optimize]") {
   using sequant::opt::Fusion;
   using namespace sequant;
   std::vector<std::array<std::wstring_view, 3>> fused_terms{

@@ -4,6 +4,8 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include "catch2_sequant.hpp"
+
 #include <SeQuant/core/algorithm.hpp>
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/ranges.hpp>
@@ -16,7 +18,7 @@
 
 #include <range/v3/all.hpp>
 
-TEST_CASE("Iterators", "[elements]") {
+TEST_CASE("iterators", "[elements]") {
   using namespace sequant;
 
   SECTION("constructor") {
@@ -141,5 +143,4 @@ TEST_CASE("Iterators", "[elements]") {
       REQUIRE(ranges::get_cursor(end(rng2)).ordinal() == 10);
     }
   }
-
-}  // TEST_CASE("Iterators")
+}

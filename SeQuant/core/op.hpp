@@ -582,9 +582,13 @@ class NormalOperator : public Operator<S>,
   }
 
   /// @return all possible values returned by label() for this operator type
+  /// @internal labels()[0] is the label used for physical vacuum, and
+  /// labels()[1] for independent-particle vacuum
   static const container::svector<std::wstring> &labels();
 
-  std::wstring_view label() const override;
+  std::wstring_view label() const override {
+    return vacuum() == Vacuum::Physical ? labels()[0] : labels()[1];
+  }
 
   std::wstring to_latex() const override {
     std::wstring result;
@@ -788,13 +792,20 @@ class NormalOperator : public Operator<S>,
            ranges::views::transform(
                [](auto &&op) -> const Index & { return op.index(); });
   }
+  AbstractTensor::const_any_view_randsz _aux() const override final {
+    return {};
+  }
   AbstractTensor::const_any_view_rand _braket() const override final {
     return ranges::views::concat(annihilators(), creators()) |
            ranges::views::transform(
                [](auto &&op) -> const Index & { return op.index(); });
   }
+  AbstractTensor::const_any_view_rand _indices() const override final {
+    return _braket();
+  }
   std::size_t _bra_rank() const override final { return nannihilators(); }
   std::size_t _ket_rank() const override final { return ncreators(); }
+  std::size_t _aux_rank() const override final { return 0; }
   Symmetry _symmetry() const override final {
     return (S == Statistics::FermiDirac
                 ? (get_default_context(S).spbasis() == SPBasis::spinorbital
@@ -842,7 +853,17 @@ class NormalOperator : public Operator<S>,
            ranges::views::transform(
                [](auto &&op) -> Index & { return op.index(); });
   }
+  AbstractTensor::any_view_randsz _aux_mutable() override final { return {}; }
 };
+
+static_assert(
+    is_tensor_v<NormalOperator<Statistics::FermiDirac>>,
+    "The NormalOperator<Statistics::FermiDirac> class does not fulfill the "
+    "requirements of the Tensor interface");
+static_assert(
+    is_tensor_v<NormalOperator<Statistics::BoseEinstein>>,
+    "The NormalOperator<Statistics::BoseEinstein> class does not fulfill the "
+    "requirements of the Tensor interface");
 
 template <Statistics S>
 bool operator==(const NormalOperator<S> &op1, const NormalOperator<S> &op2) {

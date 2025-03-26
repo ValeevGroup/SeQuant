@@ -4,8 +4,11 @@
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
+#include <SeQuant/core/op.hpp>
+#include <SeQuant/core/result_expr.hpp>
 #include <SeQuant/core/tensor.hpp>
 
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -44,7 +47,25 @@ struct ParseError : std::runtime_error {
 ///                '1.0/2.0 * t{i1;a1} * f{i1; a1}' same as above
 ///                't{i1,i2; a1<i1,i2>, a2<i1,i2>}' a tensor having indices with proto indices.
 ///                                                a1<i1,i2> is an index with i1 and i2 as proto-indices.
-/// \param tensor_sym The symmetry of all atomic tensors in the
+///             Every tensor may optionally be annoted with index symmetry specifications. The general syntax is
+///             <tensorSpec> [:<perm symm> [-<braket symm> [-<particle symm>]]]
+///             (no whitespace is allowed at this place). Examples are
+///             't{i1;i2}:A', 't{i1;i2}:A-S', 't{i1;i2}:N-C-S'
+///             Possible values for <perm symm> are
+///             - 'A' for antisymmetry (sequant::Symmetry::antisymm)
+///             - 'S' for symmetric (sequant::Symmetry::symm)
+///             - 'N' for non-symmetric (sequant::Symmetry::nonsymm)
+///             Possible values for <braket symm> are
+///             - 'C' for antisymmetry (sequant::BraKetSymmetry::conjugate)
+///             - 'S' for symmetric (sequant::BraKetSymmetry::symm)
+///             - 'N' for non-symmetric (sequant::BraKetSymmetry::nonsymm)
+///             Possible values for <particle symm> are
+///             - 'S' for symmetric (sequant::ParticleSymmetry::symm)
+///             - 'N' for non-symmetric (sequant::ParticleSymmetry::nonsymm)
+/// \param perm_symm Default index permutation symmetry to be used if tensors don't specify a permutation
+///                  symmetry explicitly.
+/// \param braket_symm Default BraKet symmetry to be used if tensors don't specify a BraKet symmetry explicitly.
+/// \param particle_symm Default particle symmetry to be used if tensors don't specify a particle symmetry explicitly.
 ///                   @c raw expression. Explicit tensor symmetry can
 ///                   be annotated in the expression itself. In that case, the
 ///                   annotated symmetry will be used.
@@ -54,7 +75,14 @@ struct ParseError : std::runtime_error {
 /// \return SeQuant expression.
 // clang-format on
 ExprPtr parse_expr(std::wstring_view raw,
-                   Symmetry tensor_sym = Symmetry::nonsymm);
+                   std::optional<Symmetry> perm_symm = {},
+                   std::optional<BraKetSymmetry> braket_symm = {},
+                   std::optional<ParticleSymmetry> particle_symm = {});
+
+ResultExpr parse_result_expr(
+    std::wstring_view raw, std::optional<Symmetry> perm_symm = {},
+    std::optional<BraKetSymmetry> braket_symm = {},
+    std::optional<ParticleSymmetry> particle_symm = {});
 
 ///
 /// Get a parsable string from an expression.
@@ -71,11 +99,14 @@ ExprPtr parse_expr(std::wstring_view raw,
 /// \param annot_sym Whether to add sequant::Symmetry annotation
 ///                  to each Tensor string.
 /// \return wstring of the expression.
+std::wstring deparse(const ResultExpr &expr, bool annot_sym = true);
 std::wstring deparse(const ExprPtr &expr, bool annot_sym = true);
 std::wstring deparse(const Expr &expr, bool annot_sym = true);
 std::wstring deparse(const Product &product, bool annot_sym);
 std::wstring deparse(const Sum &sum, bool annot_sym);
 std::wstring deparse(const Tensor &tensor, bool annot_sym = true);
+template <Statistics S>
+std::wstring deparse(const NormalOperator<S> &nop);
 std::wstring deparse(const Variable &variable);
 std::wstring deparse(const Constant &constant);
 std::wstring deparse(const Index &index);

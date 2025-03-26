@@ -7,7 +7,8 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/logger.hpp>
 #include <SeQuant/core/tensor.hpp>
-#include <SeQuant/core/tensor_network.hpp>
+#include <SeQuant/core/tensor_canonicalizer.hpp>
+#include <SeQuant/core/tensor_network_v2.hpp>
 
 #include <range/v3/all.hpp>
 
@@ -89,6 +90,8 @@ ExprPtr &ExprPtr::operator*=(const ExprPtr &other) {
   }
   return *this;
 }
+
+std::size_t ExprPtr::size() const { return this->get()->size(); }
 
 std::wstring ExprPtr::to_latex() const { return as_shared_ptr()->to_latex(); }
 
@@ -193,7 +196,7 @@ ExprPtr Product::canonicalize_impl(bool rapid) {
   if (!contains_nontensors) {  // tensor network canonization is a special case
                                // that's done in
                                // TensorNetwork
-    TensorNetwork tn(factors_);
+    TensorNetworkV2 tn(factors_);
     auto canon_factor =
         tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(), rapid);
     const auto &tensors = tn.tensors();

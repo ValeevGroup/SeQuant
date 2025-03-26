@@ -4,7 +4,6 @@
 #include <pybind11/boost/container/small_vector.h>
 #include <pybind11/complex.h>
 #include <pybind11/pybind11.h>
-#include <pybind11/shared_ptr.h>
 #include <pybind11/stl.h>
 
 namespace py = pybind11;

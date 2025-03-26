@@ -27,7 +27,7 @@ static std::recursive_mutex ctx_mtx;  // used to protect the context
 const Context& get_default_context(Statistics s) {
   std::scoped_lock lock(ctx_mtx);
   auto& contexts =
-      detail::get_implicit_context<std::map<Statistics, Context>>();
+      detail::get_implicit_context<container::map<Statistics, Context>>();
   auto it = contexts.find(s);
   /// default for arbitrary statistics is initialized lazily here
   if (it == contexts.end() && s == Statistics::Arbitrary) {
@@ -44,7 +44,7 @@ const Context& get_default_context(Statistics s) {
 void set_default_context(const Context& ctx, Statistics s) {
   std::scoped_lock lock(ctx_mtx);
   auto& contexts =
-      detail::implicit_context_instance<std::map<Statistics, Context>>();
+      detail::implicit_context_instance<container::map<Statistics, Context>>();
   auto it = contexts.find(s);
   if (it != contexts.end()) {
     it->second = ctx;
@@ -53,7 +53,7 @@ void set_default_context(const Context& ctx, Statistics s) {
   }
 }
 
-void set_default_context(const std::map<Statistics, Context>& ctxs) {
+void set_default_context(const container::map<Statistics, Context>& ctxs) {
   for (const auto& [s, ctx] : ctxs) {
     set_default_context(ctx, s);
   }
@@ -61,19 +61,21 @@ void set_default_context(const std::map<Statistics, Context>& ctxs) {
 
 void reset_default_context() {
   std::scoped_lock lock(ctx_mtx);
-  detail::reset_implicit_context<std::map<Statistics, Context>>();
+  detail::reset_implicit_context<container::map<Statistics, Context>>();
 }
 
-[[nodiscard]] detail::ImplicitContextResetter<std::map<Statistics, Context>>
-set_scoped_default_context(const std::map<Statistics, Context>& ctx) {
+[[nodiscard]] detail::ImplicitContextResetter<
+    container::map<Statistics, Context>>
+set_scoped_default_context(const container::map<Statistics, Context>& ctx) {
   std::scoped_lock lock(ctx_mtx);
   return detail::set_scoped_implicit_context(ctx);
 }
 
-[[nodiscard]] detail::ImplicitContextResetter<std::map<Statistics, Context>>
+[[nodiscard]] detail::ImplicitContextResetter<
+    container::map<Statistics, Context>>
 set_scoped_default_context(const Context& ctx) {
   return detail::set_scoped_implicit_context(
-      std::map<Statistics, Context>{{Statistics::Arbitrary, ctx}});
+      container::map<Statistics, Context>{{Statistics::Arbitrary, ctx}});
 }
 
 Context::Context(std::shared_ptr<IndexSpaceRegistry> isr, Vacuum vac,

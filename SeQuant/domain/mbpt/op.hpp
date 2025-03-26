@@ -74,6 +74,7 @@ enum class OpType {
   f,    //!< Fock operator
   f̃,    //!< closed Fock operator (i.e. Fock operator due to fully-occupied
         //!< orbitals)
+  s,    //!< 1-body overlap
   θ,    //!< general fock space operator
   g,    //!< 2-body Coulomb
   t,    //!< cluster amplitudes
@@ -87,18 +88,20 @@ enum class OpType {
   C,    //!< cabs singles op
   RDM,  //!< RDM
   RDMCumulant,  //!< RDM cumulant
-  δ,            //!< Kronecker delta (=identity) operator
-  h_1,          //!< Hamiltonian perturbation
-  t_1,          //!< first order perturbed excitation cluster operator
-  λ_1,          //!< first order perturbed deexcitation cluster operator
-  invalid       //!< invalid operator
+  δ,  //!< Kronecker delta (=identity) operator; same as overlap, but the latter
+      //!< is too special for all uses
+  h_1,     //!< Hamiltonian perturbation
+  t_1,     //!< first order perturbed excitation cluster operator
+  λ_1,     //!< first order perturbed deexcitation cluster operator
+  invalid  //!< invalid operator
 };
 
 /// maps operator types to their labels
-inline const std::map<OpType, std::wstring> optype2label{
+inline const container::map<OpType, std::wstring> optype2label{
     {OpType::h, L"h"},
     {OpType::f, L"f"},
     {OpType::f̃, L"f̃"},
+    {OpType::s, overlap_label()},
     {OpType::g, L"g"},
     {OpType::θ, L"θ"},
     {OpType::t, L"t"},
@@ -119,10 +122,10 @@ inline const std::map<OpType, std::wstring> optype2label{
     {OpType::λ_1, L"λ¹"}};
 
 /// maps operator labels to their types
-inline const std::map<std::wstring, OpType> label2optype =
+inline const container::map<std::wstring, OpType> label2optype =
     ranges::views::zip(ranges::views::values(optype2label),
                        ranges::views::keys(optype2label)) |
-    ranges::to<std::map<std::wstring, OpType>>();
+    ranges::to<container::map<std::wstring, OpType>>();
 
 /// Operator character relative to Fermi vacuum
 enum class OpClass { ex, deex, gen };

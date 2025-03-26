@@ -5,9 +5,18 @@
 #ifndef SEQUANT_WICK_IMPL_HPP
 #define SEQUANT_WICK_IMPL_HPP
 
+// change to 1 to try TNV2
+#define USE_TENSOR_NETWORK_V2 0
+
 #include <SeQuant/core/bliss.hpp>
 #include <SeQuant/core/logger.hpp>
+#include <SeQuant/core/tensor_canonicalizer.hpp>
+#if USE_TENSOR_NETWORK_V2
+#include <SeQuant/core/tensor_network_v2.hpp>
+#else
 #include <SeQuant/core/tensor_network.hpp>
+#endif
+#include <SeQuant/core/tensor_network/vertex.hpp>
 
 #ifdef SEQUANT_HAS_EXECUTION_HEADER
 #include <execution>
@@ -238,7 +247,7 @@ inline bool apply_index_replacement_rules(
       const auto &factor = *it;
       if (factor->is<Tensor>()) {
         auto &tensor = factor->as<Tensor>();
-        assert(ranges::none_of(tensor.const_braket(), [](const Index &idx) {
+        assert(ranges::none_of(tensor.const_indices(), [](const Index &idx) {
           return idx.tag().has_value();
         }));
       }
@@ -363,7 +372,7 @@ void reduce_wick_impl(std::shared_ptr<Product> &expr,
       std::set<Index, Index::LabelCompare> all_indices;
       ranges::for_each(*expr, [&all_indices](const auto &factor) {
         if (factor->template is<Tensor>()) {
-          ranges::for_each(factor->template as<const Tensor>().braket(),
+          ranges::for_each(factor->template as<const Tensor>().indices(),
                            [&all_indices](const Index &idx) {
                              [[maybe_unused]] auto result =
                                  all_indices.insert(idx);
@@ -596,17 +605,35 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
                 << "WickTheorem<S>::compute: input to topology computation = "
                 << to_latex(expr_input_) << std::endl;
 
-          // construct graph representation of the tensor product
+            // construct graph representation of the tensor product
+#if USE_TENSOR_NETWORK_V2
+          TensorNetworkV2 tn(expr_input_->as<Product>().factors());
+          auto g = tn.create_graph();
+          const auto &graph = g.bliss_graph;
+          const auto &vlabels = g.vertex_labels;
+          const auto &vcolors = g.vertex_colors;
+          const auto &vtypes = g.vertex_types;
+#else
           TensorNetwork tn(expr_input_->as<Product>().factors());
-          auto [graph, vlabels, vcolors, vtypes] = tn.make_bliss_graph();
-          const auto n = vlabels.size();
-          assert(vtypes.size() == n);
+          auto [graph, vlabels, vtexlabels, vcolors, vtypes] =
+              tn.make_bliss_graph(
+                  {/* need labels to find normal operators */ .make_labels =
+                       true,
+                   .make_texlabels = false});
+#endif
+          const auto n = vtypes.size();
+          assert(vcolors.size() == n);
+          assert(vlabels.size() == n);
           const auto &tn_edges = tn.edges();
           const auto &tn_tensors = tn.tensors();
 
           if (Logger::instance().wick_topology) {
             std::basic_ostringstream<wchar_t> oss;
+#if USE_TENSOR_NETWORK_V2
             graph->write_dot(oss, vlabels);
+#else
+            graph->write_dot(oss, vlabels);
+#endif
             std::wcout
                 << "WickTheorem<S>::compute: colored graph produced from TN = "
                 << std::endl
@@ -640,14 +667,13 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
             // ordinal can be computed by counting
             std::size_t nop_ord = 0;
             for (size_t v = 0; v != n; ++v) {
-              if (vtypes[v] == TensorNetwork::VertexType::TensorCore &&
+              if (vtypes[v] == VertexType::TensorCore &&
                   (std::find(nop_labels_begin, nop_labels_end, vlabels[v]) !=
                    nop_labels_end)) {
                 auto insertion_result = nop_vidx_ord.emplace(v, nop_ord++);
                 assert(insertion_result.second);
               }
-              if (vtypes[v] == TensorNetwork::VertexType::Index &&
-                  !input_->empty()) {
+              if (vtypes[v] == VertexType::Index && !input_->empty()) {
                 auto &idx = (tn_edges.begin() + v)->idx();
                 auto idx_it_in_opseq = ranges::find_if(
                     opseq_view,
@@ -710,7 +736,7 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
             // using each automorphism generator
             for (auto &&aut : aut_generators) {
               // skip automorphism generators that involve vertices that are
-              // not part of vertices
+              // not part of list `vertices`
               // this prevents topology exploitation for spin-free Wick
               // TODO learn how to compute partitions correctly for
               //      spin-free cases
@@ -882,26 +908,56 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
           auto exclude_index_vertex_pair = [&tn_tensors, &tn_edges](size_t v1,
                                                                     size_t v2) {
             // v1 and v2 are vertex indices and also index the edges in the
-            // TensorNetwork
+            // WickGraph
             assert(v1 < tn_edges.size());
             assert(v2 < tn_edges.size());
             const auto &edge1 = *(tn_edges.begin() + v1);
             const auto &edge2 = *(tn_edges.begin() + v2);
-            auto connected_to_same_nop = [&tn_tensors](int term1, int term2) {
-              if (term1 == term2 && term1 != 0) {
-                auto tensor_idx = std::abs(term1) - 1;
-                const std::shared_ptr<AbstractTensor> &tensor_ptr =
-                    tn_tensors.at(tensor_idx);
-                if (std::dynamic_pointer_cast<NormalOperator<S>>(tensor_ptr))
-                  return true;
+            auto connected_to_same_nop =
+                [&tn_tensors](const auto &edge1, const auto &edge2) -> bool {
+              const auto nt1 =
+#if USE_TENSOR_NETWORK_V2
+                  edge1.vertex_count();
+#else
+                  edge1.size();
+#endif
+              assert(nt1 <= 2);
+              const auto nt2 =
+#if USE_TENSOR_NETWORK_V2
+                  edge2.vertex_count();
+#else
+                  edge2.size();
+#endif
+              assert(nt2 <= 2);
+              for (auto i1 = 0; i1 != nt1; ++i1) {
+                const auto tensor1_ord =
+#if USE_TENSOR_NETWORK_V2
+                    i1 == 0 ? edge1.first_vertex().getTerminalIndex()
+                            : edge1.second_vertex().getTerminalIndex();
+#else
+                    edge1[i1].tensor_ord;
+#endif
+                for (auto i2 = 0; i2 != nt2; ++i2) {
+                  const auto tensor2_ord =
+#if USE_TENSOR_NETWORK_V2
+                      i2 == 0 ? edge2.first_vertex().getTerminalIndex()
+                              : edge2.second_vertex().getTerminalIndex();
+#else
+                      edge2[i2].tensor_ord;
+#endif
+                  if (tensor1_ord == tensor2_ord) {
+                    auto tensor_ord = tensor1_ord;
+                    const std::shared_ptr<AbstractTensor> &tensor_ptr =
+                        tn_tensors.at(tensor_ord);
+                    if (std::dynamic_pointer_cast<NormalOperator<S>>(
+                            tensor_ptr))
+                      return true;
+                  }
+                }
               }
               return false;
             };
-            const bool exclude =
-                !(connected_to_same_nop(edge1.first(), edge2.first()) ||
-                  connected_to_same_nop(edge1.first(), edge2.second()) ||
-                  connected_to_same_nop(edge1.second(), edge2.first()) ||
-                  connected_to_same_nop(edge1.second(), edge2.second()));
+            const bool exclude = !connected_to_same_nop(edge1, edge2);
             return exclude;
           };
 
@@ -911,6 +967,8 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
           int index_npartitions = -1;
           std::tie(index_vidx2pidx, index_npartitions) = compute_partitions(
               index_vidx_ord, /* nontrivial_partitions_only = */ false,
+              /* this is to ensure that each index partition only involves
+                 indices attached to bra or to ket of same nop */
               exclude_index_vertex_pair);
 
           if (!index_vidx2pidx.empty()) {

@@ -15,9 +15,9 @@ namespace sequant {
 /// _replaced_ (i.e. `&expr` may be mutated by call)
 /// @return \p expr to facilitate chaining
 inline ExprPtr& canonicalize(ExprPtr& expr) {
-  const auto biproduct = expr->canonicalize();
-  if (biproduct && biproduct->is<Constant>()) {
-    expr = biproduct * expr;
+  const auto byproduct = expr->canonicalize();
+  if (byproduct && byproduct->is<Constant>()) {
+    expr = byproduct * expr;
   }
   return expr;
 }
@@ -27,9 +27,9 @@ inline ExprPtr& canonicalize(ExprPtr& expr) {
 /// @param[in] expr_rv rvalue-ref-to-expression to be canonicalized
 /// @return canonicalized form of \p expr_rv
 inline ExprPtr canonicalize(ExprPtr&& expr_rv) {
-  const auto biproduct = expr_rv->canonicalize();
-  if (biproduct && biproduct->is<Constant>()) {
-    expr_rv = biproduct * expr_rv;
+  const auto byproduct = expr_rv->canonicalize();
+  if (byproduct && byproduct->is<Constant>()) {
+    expr_rv = byproduct * expr_rv;
   }
   return std::move(expr_rv);
 }

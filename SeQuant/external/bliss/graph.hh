@@ -29,12 +29,18 @@ namespace bliss {
 class AbstractGraph;
 }
 
+#include <array>
+#include <cstdint>
 #include <cstdio>
+#include <functional>
 #include <iomanip>
 #include <iostream>
 #include <iterator>
+#include <locale>
+#include <map>
 #include <optional>
 #include <vector>
+
 #include "bignum.hh"
 #include "heap.hh"
 #include "kqueue.hh"
@@ -42,6 +48,9 @@ class AbstractGraph;
 #include "orbit.hh"
 #include "partition.hh"
 #include "uintseqhash.hh"
+
+#include <range/v3/algorithm/for_each.hpp>
+#include <range/v3/view/iota.hpp>
 
 namespace bliss {
 
@@ -669,49 +678,131 @@ class Graph : public AbstractGraph {
    */
   void write_dot(const char* const file_name);
 
+  /// options for generating dot file
+  template <typename Char, typename Traits>
+  struct DotOptions {
+    /// if true, display colored vertices using color values
+    /// to RGB colors;
+    ///        if false, color value is appended to the vertex label; by default
+    ///        set to true/false if vertex_labels are given/not given
+    std::optional<bool> display_colors = std::nullopt;
+    /// specifies the saturation applied to fillcolor of colored vertices
+    /// 0 means use same fillcolor as the vertex color
+    /// n>0 shifts each channel of RGB color left by n bits
+    std::uint16_t fillcolor_saturation_nbits = 3;
+    /// if nonnull, specifies a callable that maps vertex ordinal to subgraph ordinal; returning std::nullopt means vertex is not part of a subgraph
+    std::function<std::optional<std::uint64_t>(std::size_t)> vertex_to_subgraph = {};
+    /// extra content for node section
+    std::basic_string<Char, Traits> nodeextras = {};
+  };
+
   /// @brief  writes a dot file, optionally using user-supplied labels and
   /// converting color values to colors
   /// @tparam Char a character type
   /// @tparam Traits a stream traits type
   /// @param os the output stream
-  /// @param vertex_labels the optional vertex labels
-  /// @param display_colors if true, display colored vertices using color values
-  /// to RGB colors;
-  ///        if false, color value is appended to the vertex label; by default
-  ///        set to true/false if vertex_labels are given/not given
+  /// @param vertex_labels the optional vertex labels, used for `label` attributes of nodes
+  /// @param vertex_texlabels the optional vertex labels, used for `texlbl` attributes of nodes
+  /// @param options options for generating dot file
   template <typename Char, typename Traits,
-            typename StringSequence = std::vector<std::basic_string<Char>>>
+            typename StringSequence = std::vector<std::basic_string<Char>>,
+            typename OptStringSequence = std::vector<std::optional<std::basic_string<Char>>>>
   void write_dot(std::basic_ostream<Char, Traits>& os,
                  const StringSequence& vertex_labels = StringSequence{},
-                 std::optional<bool> display_colors = std::nullopt) {
+                 const OptStringSequence& vertex_texlabels = OptStringSequence{},
+                 DotOptions<Char,Traits> options = {.display_colors=std::nullopt, .fillcolor_saturation_nbits=3, .vertex_to_subgraph = {}, .nodeextras = {}}) {
     using std::size;
     const auto nvertices = size(vertex_labels);
     const bool have_labels = nvertices > 0;
-    const bool rgb_colors = display_colors.value_or(have_labels);
+    const bool have_texlabels = size(vertex_texlabels) > 0;
+    assert(!have_texlabels || size(vertex_texlabels) == nvertices);
+    const bool rgb_colors = options.display_colors.value_or(have_labels);
 
     remove_duplicate_edges();
 
-    auto int_to_rgb = [](unsigned int i) {
+    // converts int color to RGB string; increase xsat (xsat <= 8) to try to increase saturation by this many bits
+    auto int_to_rgb = [](std::uint32_t i, unsigned int xsat = 0) {
+      assert(xsat <= 8);
+      // RGB has channel strides of {256^2, 256, 1} for a total range of [0, 256^3)
+      // map 32-bit int to RGB by using channel strides of {s^2, s, 1}, where s=(2^32)^(1/3) = 1626
+      constexpr std::uint32_t s = 1626;
+      constexpr std::uint32_t ss = s*s;
+      std::array<std::uint32_t,3> rgb_int; // 0 -> R, 1 -> G, 2 -> B
+      rgb_int[0] = i/ss;
+      rgb_int[1] = (i-rgb_int[0]*ss)/s;
+      rgb_int[2] = (i-rgb_int[0]*ss - rgb_int[1]*s);
+      for(int k=0; k!=3; ++k) rgb_int[k]=(rgb_int[k]*256)/s;  // rescale to 8 bits per channel
+
+      // increase saturation, if needed
+      if (xsat > 0) {
+        // for each channel saturate independently
+        for (int k = 0; k != 3; ++k) {
+          int nsatbits = xsat;
+          while (nsatbits > 0) {
+            // do we have this many unset significant bits in this channel?
+            bool can_sat = true;
+            if ((rgb_int[k] >> (8 - nsatbits)) > 0) can_sat = false;
+            if (can_sat) {
+              rgb_int[k] = rgb_int[k] == 0 ? (1<<(nsatbits-1)) : (rgb_int[k] << nsatbits);
+              break;
+            } else
+              nsatbits--;
+          }
+        }
+      }
+
+      // rebuild integer
+      i = rgb_int[0] * (1<<16) + rgb_int[1] * (1<<8) + rgb_int[2];
+
       std::basic_stringstream<Char> stream;
+      // Set locale of this stream to C to avoid any kind of thousands separator
+      stream.imbue(std::locale::classic());
       stream << std::setfill(Char('0')) << std::setw(6) << std::hex
-             << ((i << 8) >> 8);
+             << i;
       return stream.str();
     };
 
-    os << "graph g {\n";
+    os << "graph g {\nnode [ style=filled, penwidth=2, margin=0" << (options.nodeextras.empty() ? "" : ",") << options.nodeextras << "];\n";
 
-    unsigned int vnum = 0;
-    for (std::vector<Vertex>::iterator vi = vertices.begin();
-         vi != vertices.end(); vi++, vnum++) {
-      Vertex& v = *vi;
-      os << "v" << vnum << " [label=\"";
+    using clusters_t = std::multimap<std::int64_t,std::size_t>;  // cluster id -> vertex ordinals
+    clusters_t clusters;
+    ranges::for_each(ranges::views::iota(0ul, vertices.size()),
+                       [&](auto vertex_ordinal) {
+                       // -1 is reserved
+                       const std::int64_t cluster_ordinal = options.vertex_to_subgraph ? options.vertex_to_subgraph(vertex_ordinal).value_or(-1) : -1;
+                       clusters.emplace(cluster_ordinal, vertex_ordinal);
+                     });
+
+    std::optional<std::int64_t> current_cluster_ordinal;
+    for (auto& [cluster_ordinal, vertex_ordinal] : clusters) {
+      auto vnum = vertex_ordinal;
+      Vertex& v = vertices.at(vertex_ordinal);
+
+      // start of a new cluster? start new subgraph
+      if (!current_cluster_ordinal.has_value() || (current_cluster_ordinal.has_value() && cluster_ordinal != current_cluster_ordinal.value())) {
+        if (current_cluster_ordinal.value_or(-1) != -1) os << "}\n";
+        current_cluster_ordinal = cluster_ordinal;
+        if (current_cluster_ordinal.value_or(-1) != -1) {
+          os << "subgraph cluster" << cluster_ordinal << " {\n";
+        }
+      }
+
+      os << "v" << vnum << " [ label=\"";
       if (have_labels) {
         assert(vnum < nvertices);
         os << vertex_labels[vnum];
       } else
         os << vnum;
+      if (have_texlabels) {
+        assert(vnum < nvertices);
+        if (vertex_texlabels[vnum].has_value()) {
+          os << "\", texlbl=\"" << vertex_texlabels[vnum].value();
+        }
+      }
       if (rgb_colors) {
-        os << "\"; color=\"#" << int_to_rgb(v.color) << "\"];\n";
+        auto color = int_to_rgb(v.color);
+        auto satcolor = int_to_rgb(v.color, options.fillcolor_saturation_nbits);  // use saturated color for fill since transparency is not supported by all renderers (e.g. TikZ)
+        os << "\", color=\"#" << color << "\", fillcolor=\"#" << satcolor << "\" ];\n";
       } else {
         os << ":" << v.color << "\"];\n";
       }
@@ -722,6 +813,11 @@ class Graph : public AbstractGraph {
       }
     }
 
+    // close the last subgraph
+    if (current_cluster_ordinal.has_value() && current_cluster_ordinal.value() != -1)
+      os << "}\n";
+
+    // end of graph
     os << "}" << std::endl;
   }
 

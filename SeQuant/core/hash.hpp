@@ -22,6 +22,8 @@ namespace sequant_boost = boost;
 
 namespace sequant {
 
+class ExprPtr;
+
 namespace hash {
 
 /// the hashing versions known to SeQuant (N.B. hashing changed in Boost 1.81)
@@ -89,6 +91,8 @@ auto hash_value(const T& obj) {
   return sequant_boost::hash_value(obj);
 }
 
+std::size_t hash_value(const ExprPtr& expr);
+
 // clang-format off
 // rationale:
 // boost::hash_combine is busted ... it dispatches to one of 3 implementations (all line numbers refer to boost 1.72.0):
@@ -136,6 +140,24 @@ inline void range(std::size_t& seed, It first, It last) {
     hash::combine(seed, *first);
   }
   //  assert(seed == seed_ref);
+}
+
+///
+/// Hash a range such that the order of elements does not affect the result hash
+/// value.
+///
+template <typename It>
+inline std::size_t range_unordered(It begin, It end) {
+  return sequant_boost::hash_unordered_range(begin, end);
+}
+
+///
+/// Hash a range such that the order of elements does not affect the result hash
+/// value.
+///
+template <typename It>
+inline void range_unordered(size_t& seed, It begin, It end) {
+  sequant_boost::hash_unordered_range(seed, begin, end);
 }
 
 /// specialization of boost::hash_range(begin,end) that guarantees to hash a

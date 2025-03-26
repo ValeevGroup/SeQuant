@@ -1,5 +1,7 @@
 #include <catch2/catch_test_macros.hpp>
 
+#include "catch2_sequant.hpp"
+
 #include <SeQuant/core/algorithm.hpp>
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/expr.hpp>
@@ -24,18 +26,21 @@ sequant::ExprPtr extract(sequant::ExprPtr expr,
   return result;
 }
 
-TEST_CASE("TEST_OPTIMIZE", "[optimize]") {
+TEST_CASE("optimize", "[optimize]") {
   using namespace sequant;
 
-  // for optimization tests, set occupied and unoccupied index extents
+  // for optimization tests, set index space sizes
   {
     auto reg = get_default_context().mutable_index_space_registry();
     auto occ = reg->retrieve_ptr(L"i");
     auto uocc = reg->retrieve_ptr(L"a");
+    auto aux = reg->retrieve_ptr(L"x");
     assert(occ);
     assert(uocc);
+    assert(aux);
     occ->approximate_size(10);
     uocc->approximate_size(100);
+    aux->approximate_size(4);
     assert(uocc->approximate_size() == 100);
   }
 
@@ -143,6 +148,37 @@ TEST_CASE("TEST_OPTIMIZE", "[optimize]") {
     REQUIRE(extract(res6, {3, 0}) == prod6.at(3));
     REQUIRE(extract(res6, {3, 1}) == prod6.at(5));
     REQUIRE(extract(res6, {4}) == prod6.at(4));
+
+    //
+    // single-term optimization including tensors with auxiliary indices
+    //
+    auto prod7 = parse_expr(
+                     L"DF{a_1;a_3;x_1} "  // T1
+                     "DF{a_2;i_1;x_1} "   // T2
+                     "t{a_3;i_2}"         // T3
+                     )
+                     ->as<Product>();
+    auto res7 = single_term_opt(prod7);
+
+    // this is the one we want to find
+    // (T1 T3) T2: V^2 O^1 A^1 + V^2 O^2 A^1 best if nvirt > nocc and nvirt >
+    // nact
+    REQUIRE(extract(res7, {0, 0}) == prod7.at(0));
+    REQUIRE(extract(res7, {0, 1}) == prod7.at(2));
+    REQUIRE(extract(res7, {1}) == prod7.at(1));
+
+    auto prod8 = parse_expr(
+                     L"T1{i_1;i_2;x_1,x_2,x_3,x_4} T2{i_2;i_1;x_5,x_6,x_7,x_8} "
+                     L"T3{i_3;;x_1,x_2,x_3,x_4} T4{i_4;;x_5,x_6,x_7,x_8}")
+                     ->as<Product>();
+    auto res8 = single_term_opt(prod8);
+
+    // this is the one we want to find
+    // (T1 T3)(T2 T4)
+    REQUIRE(extract(res8, {0, 0}) == prod8.at(0));
+    REQUIRE(extract(res8, {0, 1}) == prod8.at(2));
+    REQUIRE(extract(res8, {1, 0}) == prod8.at(1));
+    REQUIRE(extract(res8, {1, 1}) == prod8.at(3));
   }
 
   SECTION("Ensure single-value sums/products are not discarded") {

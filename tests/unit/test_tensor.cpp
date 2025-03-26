@@ -4,6 +4,8 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include "catch2_sequant.hpp"
+
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
@@ -14,6 +16,7 @@
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/tag.hpp>
 #include <SeQuant/core/tensor.hpp>
+#include <SeQuant/domain/mbpt/context.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 
 #include <cstddef>
@@ -23,7 +26,7 @@
 #include <string_view>
 #include <type_traits>
 
-TEST_CASE("Tensor", "[elements]") {
+TEST_CASE("tensor", "[elements]") {
   using namespace sequant;
 
   SECTION("constructors") {
@@ -32,6 +35,7 @@ TEST_CASE("Tensor", "[elements]") {
     REQUIRE(!t1);
     REQUIRE(t1.bra_rank() == 0);
     REQUIRE(t1.ket_rank() == 0);
+    REQUIRE(t1.aux_rank() == 0);
     REQUIRE(t1.rank() == 0);
     REQUIRE(t1.symmetry() == Symmetry::invalid);
     REQUIRE(t1.braket_symmetry() == BraKetSymmetry::invalid);
@@ -43,33 +47,41 @@ TEST_CASE("Tensor", "[elements]") {
     REQUIRE(t2);
     REQUIRE(t2.bra_rank() == 1);
     REQUIRE(t2.ket_rank() == 1);
+    REQUIRE(t2.aux_rank() == 0);
     REQUIRE(t2.rank() == 1);
+    REQUIRE(t2.const_indices().size() == 2);
     REQUIRE(t2.symmetry() == Symmetry::nonsymm);
     REQUIRE(t2.braket_symmetry() == BraKetSymmetry::conjugate);
     REQUIRE(t2.particle_symmetry() == ParticleSymmetry::symm);
     REQUIRE(t2.label() == L"F");
 
-    REQUIRE_NOTHROW(Tensor(L"N", bra{L"i_1"}, ket{}));
-    auto t3 = Tensor(L"N", bra{L"i_1"}, ket{});
+    REQUIRE_NOTHROW(Tensor(L"N", bra{L"i_1"}, ket{}, aux{L"a_1"}));
+    auto t3 = Tensor(L"N", bra{L"i_1"}, ket{}, aux{L"a_1"});
     REQUIRE(t3);
     REQUIRE(t3.bra_rank() == 1);
     REQUIRE(t3.ket_rank() == 0);
+    REQUIRE(t3.aux_rank() == 1);
     REQUIRE_THROWS(t3.rank());
+    REQUIRE(t3.const_indices().size() == 2);
     REQUIRE(t3.symmetry() == Symmetry::nonsymm);
     REQUIRE(t3.braket_symmetry() == BraKetSymmetry::conjugate);
     REQUIRE(t3.particle_symmetry() == ParticleSymmetry::symm);
     REQUIRE(t3.label() == L"N");
 
     REQUIRE_NOTHROW(Tensor(L"g", bra{Index{L"i_1"}, Index{L"i_2"}},
-                           ket{Index{L"i_3"}, Index{L"i_4"}}, Symmetry::nonsymm,
+                           ket{Index{L"i_3"}, Index{L"i_4"}},
+                           aux{Index{L"i_5"}}, Symmetry::nonsymm,
                            BraKetSymmetry::symm, ParticleSymmetry::nonsymm));
     auto t4 = Tensor(L"g", bra{Index{L"i_1"}, Index{L"i_2"}},
-                     ket{Index{L"i_3"}, Index{L"i_4"}}, Symmetry::nonsymm,
-                     BraKetSymmetry::symm, ParticleSymmetry::nonsymm);
+                     ket{Index{L"i_3"}, Index{L"i_4"}}, aux{Index{L"i_5"}},
+                     Symmetry::nonsymm, BraKetSymmetry::symm,
+                     ParticleSymmetry::nonsymm);
     REQUIRE(t4);
     REQUIRE(t4.bra_rank() == 2);
     REQUIRE(t4.ket_rank() == 2);
+    REQUIRE(t4.aux_rank() == 1);
     REQUIRE(t4.rank() == 2);
+    REQUIRE(t4.const_indices().size() == 5);
     REQUIRE(t4.symmetry() == Symmetry::nonsymm);
     REQUIRE(t4.braket_symmetry() == BraKetSymmetry::symm);
     REQUIRE(t4.particle_symmetry() == ParticleSymmetry::nonsymm);
@@ -78,7 +90,8 @@ TEST_CASE("Tensor", "[elements]") {
 
   SECTION("index transformation") {
     auto t = Tensor(L"g", bra{Index{L"i_1"}, Index{L"i_2"}},
-                    ket{Index{L"i_3"}, Index{L"i_4"}}, Symmetry::antisymm);
+                    ket{Index{L"i_3"}, Index{L"i_4"}}, aux{Index{L"i_5"}},
+                    Symmetry::antisymm);
     std::map<Index, Index> idxmap = {{Index{L"i_1"}, Index{L"i_2"}},
                                      {Index{L"i_2"}, Index{L"i_1"}}};
     REQUIRE(t.transform_indices(idxmap));
@@ -91,18 +104,38 @@ TEST_CASE("Tensor", "[elements]") {
     REQUIRE(!t.ket()[0].tag().has_value());
     REQUIRE(!t.ket()[1].tag().has_value());
     REQUIRE(t == Tensor(L"g", bra{Index{L"i_2"}, Index{L"i_1"}},
-                        ket{Index{L"i_3"}, Index{L"i_4"}}, Symmetry::antisymm));
+                        ket{Index{L"i_3"}, Index{L"i_4"}}, aux{Index{L"i_5"}},
+                        Symmetry::antisymm));
     // tagged indices are protected, so no replacements the second goaround
     REQUIRE(!t.transform_indices(idxmap));
     t.reset_tags();
     REQUIRE(t.transform_indices(idxmap));
     REQUIRE(t == Tensor(L"g", bra{Index{L"i_1"}, Index{L"i_2"}},
-                        ket{Index{L"i_3"}, Index{L"i_4"}}, Symmetry::antisymm));
+                        ket{Index{L"i_3"}, Index{L"i_4"}}, aux{Index{L"i_5"}},
+                        Symmetry::antisymm));
     t.reset_tags();
     REQUIRE(!t.bra()[0].tag().has_value());
     REQUIRE(!t.bra()[1].tag().has_value());
     REQUIRE(!t.ket()[0].tag().has_value());
     REQUIRE(!t.ket()[1].tag().has_value());
+
+    SECTION("proto indices") {
+      Tensor tensor = parse_expr(L"g{i2,a1<i1>;a2<i2>,i1}")->as<Tensor>();
+
+      // Swap columns of g
+      std::map<Index, Index> idxmap = {
+          {Index{L"i_2"}, Index{L"a_1", {L"i_1"}}},
+          {Index{L"a_1", {L"i_1"}}, Index{L"i_2"}},
+          {Index{L"a_2", {L"i_2"}}, Index{L"i_1"}},
+          {Index{L"i_1"}, Index{L"a_2", {L"i_2"}}},
+      };
+
+      const Tensor expected =
+          parse_expr(L"g{a1<i1>,i2;i1,a2<i2>}")->as<Tensor>();
+      tensor.transform_indices(idxmap);
+
+      REQUIRE(tensor == expected);
+    }
   }  // SECTION("index transformation")
 
   SECTION("hash") {
@@ -115,11 +148,23 @@ TEST_CASE("Tensor", "[elements]") {
     REQUIRE_NOTHROW(t2_hash = hash_value(t2));
     REQUIRE(t1_hash != t2_hash);
 
+    auto t3 = Tensor(L"F", bra{L"i_2"}, ket{L"i_1"}, aux{L"i_3"});
+    size_t t3_hash;
+    REQUIRE_NOTHROW(t3_hash = hash_value(t3));
+    REQUIRE(t2_hash != t3_hash);
+    REQUIRE(t1_hash != t3_hash);
+
   }  // SECTION("hash")
 
   SECTION("latex") {
     auto t1 = Tensor(L"F", bra{L"i_1"}, ket{L"i_2"});
     REQUIRE(to_latex(t1) == L"{F^{{i_2}}_{{i_1}}}");
+
+    auto t2 = Tensor(L"F", bra{L"i_1"}, ket{L"i_2"}, aux{L"i_3"});
+    REQUIRE(to_latex(t2) == L"{F^{{i_2}}_{{i_1}}[{i_3}]}");
+
+    auto t3 = Tensor(L"F", bra{L"i_1"}, ket{L"i_2"}, aux{L"i_3", L"i_4"});
+    REQUIRE(to_latex(t3) == L"{F^{{i_2}}_{{i_1}}[{i_3},{i_4}]}");
 
     auto h1 = ex<Tensor>(L"F", bra{L"i_1"}, ket{L"i_2"}) *
               ex<FNOperator>(cre({L"i_1"}), ann({L"i_2"}));
@@ -141,7 +186,7 @@ TEST_CASE("Tensor", "[elements]") {
     REQUIRE(to_latex(t1) == L"{t^{{i_1}}_{{a_1}}}");
 
     auto h1 = ex<Tensor>(L"F", bra{L"i_1"}, ket{L"i_2"}) *
-              ex<FNOperator>(cre({L"i_1"}), ann({L"i_2"}));
+              ex<FNOperator>(cre{L"i_1"}, ann{L"i_2"});
     h1 = adjoint(h1);
     REQUIRE(to_latex(h1) ==
             L"{{\\tilde{a}^{{i_2}}_{{i_1}}}{F^{{i_1}}_{{i_2}}}}");
@@ -150,5 +195,4 @@ TEST_CASE("Tensor", "[elements]") {
             L"{{F^{{i_2}}_{{i_1}}}{\\tilde{a}^{{i_1}}_{{i_2}}}}");
 
   }  // SECTION("adjoint")
-
-}  // TEST_CASE("Tensor")
+}

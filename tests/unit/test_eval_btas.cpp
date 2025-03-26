@@ -1,6 +1,8 @@
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
+#include "catch2_sequant.hpp"
+
 #include <SeQuant/core/optimize.hpp>
 #include <SeQuant/core/parse.hpp>
 #include <SeQuant/domain/eval/eval.hpp>
@@ -16,7 +18,17 @@
 namespace {
 
 auto eval_node(sequant::ExprPtr const& expr) {
-  return sequant::eval_node<sequant::EvalExprBTAS>(expr);
+  using namespace sequant;
+  auto node = binarize(expr);
+  return transform_node(node, [](auto&& val) {
+    if (val.is_tensor()) {
+      return EvalExprBTAS(
+          val.op_type(), val.result_type(), val.expr(),
+          val.as_tensor().indices() | ranges::to<EvalExpr::index_vector>(),
+          val.canon_phase(), val.hash_value());
+    } else
+      return EvalExprBTAS(val);
+  });
 }
 
 static auto const idx_rgx = boost::wregex{L"([ia])([↑↓])?_?(\\d+)"};
@@ -166,7 +178,7 @@ container::svector<long> tidxs(std::wstring const& csv) noexcept {
 
 }  // namespace
 
-TEST_CASE("TEST_EVAL_USING_BTAS", "[eval]") {
+TEST_CASE("eval_with_btas", "[eval_btas]") {
   using ranges::views::transform;
   using namespace sequant;
   using namespace sequant;
@@ -189,14 +201,14 @@ TEST_CASE("TEST_EVAL_USING_BTAS", "[eval]") {
 
   auto eval_symm = [&yield_](sequant::ExprPtr const& expr,
                              container::svector<long> const& target_labels) {
-    return evaluate_symm(eval_node(expr), target_labels, {}, yield_)
+    return evaluate_symm(eval_node(expr), target_labels, yield_)
         ->get<BTensorD>();
   };
 
   auto eval_antisymm = [&yield_](
                            sequant::ExprPtr const& expr,
                            container::svector<long> const& target_labels) {
-    return evaluate_antisymm(eval_node(expr), target_labels, {}, yield_)
+    return evaluate_antisymm(eval_node(expr), target_labels, yield_)
         ->get<BTensorD>();
   };
 
@@ -314,6 +326,24 @@ TEST_CASE("TEST_EVAL_USING_BTAS", "[eval]") {
     btas::scal(0.5, man1);
 
     REQUIRE(norm(eval1) == Catch::Approx(norm(man1)));
+
+    auto expr2 = parse_antisymm(L"R_{a1,a2}^{i1}");
+    auto tidx2 = tidxs(L"a_1,a_2,i_1");
+    auto eval2 = eval_antisymm(expr2, tidx2);
+
+    auto const& r = yield(L"R{v,v;o}");
+    BTensorD man2{r.range()}, temp2{r.range()};
+    man2.fill(0.0);
+    temp2.fill(0.0);
+
+    man2 += BTensorD{permute(r, {0, 1, 2})};
+
+    temp2 += BTensorD{permute(r, {1, 0, 2})};
+    btas::scal(-1.0, temp2);
+    man2 += temp2;
+    temp2.clear();
+
+    REQUIRE(norm(eval2) == Catch::Approx(norm(man2)));
   }
 
   SECTION("Symmetrization") {

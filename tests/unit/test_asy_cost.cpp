@@ -3,6 +3,8 @@
 #include <SeQuant/core/asy_cost.hpp>
 #include <SeQuant/core/rational.hpp>
 
+#include "catch2_sequant.hpp"
+
 #include <cmath>
 #include <cstddef>
 #include <string>
@@ -18,7 +20,7 @@ struct MatFlops {
   }
 };
 
-TEST_CASE("TEST ASY_COST", "[AsyCost]") {
+TEST_CASE("asy_cost", "[AsyCost]") {
   using sequant::AsyCost;
   using sequant::rational;
 

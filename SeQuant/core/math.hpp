@@ -5,8 +5,10 @@
 #ifndef SEQUANT_CORE_MATH_HPP
 #define SEQUANT_CORE_MATH_HPP
 
-#include <assert.h>
 #include <SeQuant/core/rational.hpp>
+
+#include <atomic>
+#include <cassert>
 #include <cstddef>
 
 namespace sequant {
@@ -53,34 +55,47 @@ inline sequant::intmax_t factorial(std::size_t n) {
     return values[n];
   else {
     // this memoizes values for n>n_max_precomputed
-    static std::shared_ptr<std::vector<sequant::intmax_t>> memvals;
+#if defined(__cpp_lib_atomic_shared_ptr) && \
+    __cpp_lib_atomic_shared_ptr >= 201711L
+    using ValHolder =
+        std::atomic<std::shared_ptr<std::vector<sequant::intmax_t>>>;
+    auto load = [](auto &&holder) { return holder.load(); };
+    auto store = [](auto &&holder, ValHolder::value_type arg) {
+      holder.store(std::move(arg));
+    };
+#else
+    using ValHolder = std::shared_ptr<std::vector<sequant::intmax_t>>;
+    auto load = [](auto &&holder) { return std::atomic_load(&holder); };
+    auto store = [](auto &&holder, ValHolder arg) {
+      std::atomic_store(&holder, std::move(arg));
+    };
+#endif
+    static ValHolder memvals;
     // used to serialize access to memvals
     static std::mutex memvals_mutex;
 
     const std::size_t n_in_memvals = n - n_max_precomputed - 1;
-    const auto memvals_handle = std::atomic_load(&memvals);
+    const auto memvals_handle = load(memvals);
     if (memvals_handle && memvals_handle->size() > n_in_memvals) {
       return (*memvals_handle)[n_in_memvals];
     } else {
       std::lock_guard<std::mutex> lock(memvals_mutex);
       // memvals might have been updated while we were waiting for the lock
       // hence reload the state
-      const auto memvals_handle =
-          memvals;  // nonatomic read OK since I'm the only writer
+      const auto memvals_handle = load(memvals);
       if (memvals_handle && memvals_handle->size() > n_in_memvals) {
         return (*memvals_handle)[n_in_memvals];
       } else {
-        decltype(memvals) new_memvals =
-            std::make_shared<std::vector<sequant::intmax_t>>(
-                memvals_handle
-                    ? *memvals_handle
-                    : std::vector<sequant::intmax_t>{});  // copy old memvals
+        auto new_memvals = std::make_shared<std::vector<sequant::intmax_t>>(
+            memvals_handle
+                ? *memvals_handle
+                : std::vector<sequant::intmax_t>{});  // copy old memvals
         new_memvals->reserve(n_in_memvals + 1);
         for (auto i = new_memvals->size(); i <= n_in_memvals; ++i)
           new_memvals->emplace_back(
               (i == 0 ? values[n_max_precomputed] : new_memvals->back()) *
               (i + n_max_precomputed + 1));
-        std::atomic_store(&memvals, new_memvals);
+        store(memvals, new_memvals);
         return (*new_memvals)[n_in_memvals];
       }
     }

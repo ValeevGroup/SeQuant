@@ -4,6 +4,8 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include "catch2_sequant.hpp"
+
 #include <SeQuant/core/math.hpp>
 #include <SeQuant/core/meta.hpp>
 #include <SeQuant/core/rational.hpp>
@@ -19,27 +21,25 @@
 
 #include <range/v3/all.hpp>
 
-TEST_CASE("Rational", "[elements]") {
+TEST_CASE("math", "[elements]") {
   using namespace sequant;
 
-  [[maybe_unused]] auto print = [](rational r) {
-    return sequant::to_wstring(numerator(r)) + L"/" +
-           sequant::to_wstring(denominator(r));
-  };
-  SECTION("to_rational") {
-    REQUIRE(to_rational(1. / 3) == rational{1, 3});
-    REQUIRE(to_rational(1. / 3, 0.) ==
-            rational{6004799503160661ull, 18014398509481984ull});
-    REQUIRE(to_rational(1. / 7) == rational{1, 7});
-    REQUIRE(to_rational(M_PI) == rational{99023, 31520});
-    REQUIRE(to_rational(M_E) == rational{23225, 8544});
-    REQUIRE_THROWS_AS(to_rational(std::nan("NaN")), std::invalid_argument);
+  SECTION("rational") {
+    [[maybe_unused]] auto print = [](rational r) {
+      return sequant::to_wstring(numerator(r)) + L"/" +
+             sequant::to_wstring(denominator(r));
+    };
+    SECTION("to_rational") {
+      REQUIRE(to_rational(1. / 3) == rational{1, 3});
+      REQUIRE(to_rational(1. / 3, 0.) ==
+              rational{6004799503160661ull, 18014398509481984ull});
+      REQUIRE(to_rational(1. / 7) == rational{1, 7});
+      REQUIRE(to_rational(M_PI) == rational{99023, 31520});
+      REQUIRE(to_rational(M_E) == rational{23225, 8544});
+      REQUIRE_THROWS_AS(to_rational(std::nan("NaN")), std::invalid_argument);
+    }
   }
 
-}  // TEST_CASE("Rational")
-
-TEST_CASE("Factorial", "[math]") {
-  using namespace sequant;
   SECTION("factorial") {
     REQUIRE(sequant::to_string(sequant::factorial(30)) ==
             "265252859812191058636308480000000");
@@ -61,4 +61,4 @@ TEST_CASE("Factorial", "[math]") {
             "175999932299156089414639761565182862536979208272237582511852109168"
             "64000000000000000000000000");
   }
-}  // TEST_CASE("Factorial")
+}

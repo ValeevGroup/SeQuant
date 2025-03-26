@@ -4,11 +4,20 @@
 
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/op.hpp>
+#include <SeQuant/domain/mbpt/rules/df.hpp>
+#include <SeQuant/domain/mbpt/space_qns.hpp>
 #include <SeQuant/domain/mbpt/spin.hpp>
 
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/index.hpp>
-#include <SeQuant/core/tensor.hpp>
+#include <SeQuant/core/space.hpp>
+
+#include <cassert>
+#include <cstdlib>
+#include <memory>
+#include <string>
+#include <string_view>
+#include <vector>
 
 namespace sequant {
 namespace mbpt {
@@ -35,9 +44,10 @@ void load(Convention conv) {
   set_default_context(sequant::Context(isr, Vacuum::SingleProduct));
 }
 
-void add_fermi_spin(std::shared_ptr<IndexSpaceRegistry>& isr) {
-  auto result = std::make_shared<IndexSpaceRegistry>();
-  for (auto&& space : *isr) {
+void add_fermi_spin(IndexSpaceRegistry& isr) {
+  IndexSpaceRegistry result;
+
+  for (auto&& space : isr) {
     if (space.base_key() != L"") {
       IndexSpace spin_any(space.base_key(), space.type(), Spin::any,
                           space.approximate_size());
@@ -45,18 +55,52 @@ void add_fermi_spin(std::shared_ptr<IndexSpaceRegistry>& isr) {
                          space.type(), Spin::alpha, space.approximate_size());
       IndexSpace spin_down(spinannotation_add(space.base_key(), Spin::beta),
                            space.type(), Spin::beta, space.approximate_size());
-      result->add(spin_any);
-      result->add(spin_up);
-      result->add(spin_down);
+      result.add(spin_any);
+      result.add(spin_up);
+      result.add(spin_down);
     }
   }
   const bool nulltype_ok = true;
-  result->reference_occupied_space(isr->reference_occupied_space(nulltype_ok));
-  result->vacuum_occupied_space(isr->vacuum_occupied_space(nulltype_ok));
-  result->particle_space(isr->particle_space(nulltype_ok));
-  result->hole_space(isr->hole_space(nulltype_ok));
-  result->complete_space(isr->complete_space(nulltype_ok));
+  result.reference_occupied_space(isr.reference_occupied_space(nulltype_ok));
+  result.vacuum_occupied_space(isr.vacuum_occupied_space(nulltype_ok));
+  result.particle_space(isr.particle_space(nulltype_ok));
+  result.hole_space(isr.hole_space(nulltype_ok));
+  result.complete_space(isr.complete_space(nulltype_ok));
+
   isr = std::move(result);
+}
+
+void add_ao_spaces(std::shared_ptr<IndexSpaceRegistry>& isr, bool vbs,
+                   bool abs) {
+  // matches the MPQC layout, see spindex.h
+  // this will not work for MR
+  auto obs_lcao = isr->retrieve(vbs ? L"m" : L"p");
+  isr->add(IndexSpace{L"μ", obs_lcao.type(), LCAOQNS::ao});  // OBS AO
+  if (vbs) {
+    auto vbs_lcao = isr->retrieve(L"e");
+    isr->add(IndexSpace{L"Α", vbs_lcao.type(), LCAOQNS::ao})  // VBS AO
+        .add_union(L"Γ", {L"μ", L"Α"});  // VBS+ = OBS + VBS
+  }
+  if (abs) {
+    auto abs_lcao = isr->retrieve(L"α'");
+    isr->add(IndexSpace{L"σ", abs_lcao.type(),
+                        LCAOQNS::ao})  // ABS AO in F12 methods
+        .add_union(L"ρ", {L"μ", L"σ"});
+    if (vbs)                               // ABS+ = OBS + ABS
+      isr->add_union(L"Ρ", {L"Γ", L"σ"});  // VABS+ = VBS+ + ABS
+  }
+}
+
+void add_pao_spaces(std::shared_ptr<IndexSpaceRegistry>& isr) {
+  auto uocc_space = isr->particle_space(/* nulltype_ok = */ false);
+  isr->add(IndexSpace{L"μ̃", uocc_space, LCAOQNS::pao})  // OBS PAO
+      ;
+}
+
+void add_df_spaces(std::shared_ptr<IndexSpaceRegistry>& isr) {
+  // matches the MPQC layout, see spindex.h
+  isr->add(IndexSpace{L"Κ", 0b00001, TensorFactorizationQNS::df})  // DFBS AO
+      ;
 }
 
 std::shared_ptr<IndexSpaceRegistry> make_min_sr_spaces() {
@@ -65,7 +109,8 @@ std::shared_ptr<IndexSpaceRegistry> make_min_sr_spaces() {
   isr->add(L"i", 0b01, is_vacuum_occupied, is_reference_occupied, is_hole)
       .add(L"a", 0b10, is_particle)
       .add_union(L"p", {L"i", L"a"}, is_complete);
-  add_fermi_spin(isr);
+  add_fermi_spin(*isr);
+  isr->physical_particle_attribute_mask(bitset_t(Spin::mask));
 
   return isr;
 }
@@ -89,7 +134,8 @@ std::shared_ptr<IndexSpaceRegistry> make_mr_spaces() {
       .add_union(L"A", {L"u", L"a"}, is_particle)
       .add_union(L"p", {L"M", L"E"}, is_complete);
 
-  add_fermi_spin(isr);
+  add_fermi_spin(*isr);
+  isr->physical_particle_attribute_mask(bitset_t(Spin::mask));
 
   return isr;
 }
@@ -105,7 +151,8 @@ std::shared_ptr<IndexSpaceRegistry> make_sr_spaces() {
       .add_union(L"e", {L"a", L"g"})
       .add_union(L"x", {L"i", L"a"})
       .add_union(L"p", {L"m", L"e"}, is_complete);
-  add_fermi_spin(isr);
+  add_fermi_spin(*isr);
+  isr->physical_particle_attribute_mask(bitset_t(Spin::mask));
 
   return isr;
 }
@@ -127,7 +174,8 @@ std::shared_ptr<IndexSpaceRegistry> make_F12_sr_spaces() {
       .add_union(L"α", {L"e", L"α'"})
       .add_union(L"H", {L"i", L"α"})
       .add_union(L"κ", {L"p", L"α'"}, is_complete);
-  add_fermi_spin(isr);
+  add_fermi_spin(*isr);
+  isr->physical_particle_attribute_mask(bitset_t(Spin::mask));
 
   return isr;
 }
@@ -151,7 +199,10 @@ std::shared_ptr<IndexSpaceRegistry> make_legacy_spaces(bool ignore_spin) {
       .add_union(L"p", {L"m", L"x", L"e"})
       .add_union(L"κ", {L"p", L"α'"}, is_complete);
 
-  if (!ignore_spin) add_fermi_spin(isr);
+  if (!ignore_spin) {
+    add_fermi_spin(*isr);
+    isr->physical_particle_attribute_mask(bitset_t(Spin::mask));
+  }
 
   return isr;
 }
@@ -165,7 +216,7 @@ make_fermi_and_bose_spaces() {
       .add(L"a", 0b010)               // fermi unoccupied
       .add_union(L"p", {L"i", L"a"})  // fermi all
       ;
-  add_fermi_spin(isr);
+  add_fermi_spin(*isr);
   isr->add(L"β", 0b100);  // bose
 
   auto fermi_isr = std::make_shared<IndexSpaceRegistry>(isr->spaces());

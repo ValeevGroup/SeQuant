@@ -78,7 +78,6 @@ ExprPtr CC::sim_tr(ExprPtr expr, size_t commutator_rank) {
 std::vector<ExprPtr> CC::t(size_t commutator_rank, size_t pmax, size_t pmin) {
   pmax = (pmax == std::numeric_limits<size_t>::max() ? N : pmax);
 
-  assert(commutator_rank >= 1 && "commutator rank should be >= 1");
   assert(pmax >= pmin && "pmax should be >= pmin");
 
   // 1. construct hbar(op) in canonical form
@@ -126,14 +125,13 @@ std::vector<ExprPtr> CC::λ(size_t commutator_rank) {
   const auto One = ex<Constant>(1);
   auto lhbar = simplify((One + Λ(N)) * hbar);
 
-  const auto op_connect =
-      concat(default_op_connections(),
-             std::vector<std::pair<OpType, OpType>>{{OpType::h, OpType::A},
-                                                    {OpType::f, OpType::A},
-                                                    {OpType::g, OpType::A},
-                                                    {OpType::h, OpType::S},
-                                                    {OpType::f, OpType::S},
-                                                    {OpType::g, OpType::S}});
+  const auto op_connect = concat(default_op_connections(),
+                                 OpConnections<OpType>{{OpType::h, OpType::A},
+                                                       {OpType::f, OpType::A},
+                                                       {OpType::g, OpType::A},
+                                                       {OpType::h, OpType::S},
+                                                       {OpType::f, OpType::S},
+                                                       {OpType::g, OpType::S}});
 
   // 2. project onto each manifold, screen, lower to tensor form and wick it
   std::vector<ExprPtr> result(N + 1);
@@ -179,32 +177,30 @@ std::vector<ExprPtr> CC::t_pt(size_t order, size_t rank) {
   assert(ansatz_ == Ansatz::T && "unitary ansatz is not yet supported");
 
   // construct h1_bar
-
   // truncate h1_bar at rank 2 for one-body perturbation
   // operator and at rank 4 for two-body perturbation operator
   const auto h1_truncate_at = rank == 1 ? 2 : 4;
-
-  auto h1_bar = sim_tr(H_pt(1, rank), h1_truncate_at);
+  const auto h1_bar = sim_tr(H_pt(1, rank), h1_truncate_at);
 
   // construct [hbar, T(1)]
-  auto hbar_pert = sim_tr(H(), 3) * T_pt(order, N);
+  const auto hbar_pert = sim_tr(H(), 3) * T_pt(order, N);
 
   // [Eq. 34, WIREs Comput Mol Sci. 2019; 9:e1406]
-  auto expr = simplify(h1_bar + hbar_pert);
+  const auto expr = simplify(h1_bar + hbar_pert);
 
   // connectivity:
   // connect t and t1 with {h,f,g}
   // connect h1 with t
   const auto op_connect =
       concat(default_op_connections(),
-             std::vector<std::pair<OpType, OpType>>{{OpType::h, OpType::t_1},
-                                                    {OpType::f, OpType::t_1},
-                                                    {OpType::g, OpType::t_1},
-                                                    {OpType::h_1, OpType::t}});
+             OpConnections<OpType>{{OpType::h, OpType::t_1},
+                                   {OpType::f, OpType::t_1},
+                                   {OpType::g, OpType::t_1},
+                                   {OpType::h_1, OpType::t}});
 
   std::vector<ExprPtr> result(N + 1);
   for (auto p = N; p >= 1; --p) {
-    auto freq_term = ex<Variable>(L"ω") * P(nₚ(p)) * T_pt_(order, p);
+    const auto freq_term = ex<Variable>(L"ω") * P(nₚ(p)) * T_pt_(order, p);
     result.at(p) = vac_av(P(nₚ(p)) * expr, op_connect) - vac_av(freq_term);
   }
   return result;
@@ -220,21 +216,20 @@ std::vector<ExprPtr> CC::λ_pt(size_t order, size_t rank) {
   assert(ansatz_ == Ansatz::T && "unitary ansatz is not yet supported");
 
   // construct hbar
-  auto hbar = sim_tr(H(), 4);
+  const auto hbar = sim_tr(H(), 4);
 
   // construct h1_bar
-
   // truncate h1_bar at rank 2 for one-body perturbation
   // operator and at rank 4 for two-body perturbation operator
   const auto h1_truncate_at = rank == 1 ? 2 : 4;
+  const auto h1_bar = sim_tr(H_pt(1, rank), h1_truncate_at);
 
-  auto h1_bar = sim_tr(H_pt(1, rank), h1_truncate_at);
   // construct [hbar, T(1)]
-  auto hbar_pert = sim_tr(H(), 3) * T_pt(order, N);
+  const auto hbar_pert = sim_tr(H(), 3) * T_pt(order, N);
 
   // [Eq. 35, WIREs Comput Mol Sci. 2019; 9:e1406]
   const auto One = ex<Constant>(1);
-  auto expr =
+  const auto expr =
       simplify((One + Λ(N)) * (h1_bar + hbar_pert) + Λ_pt(order, N) * hbar);
 
   // connectivity:
@@ -244,22 +239,22 @@ std::vector<ExprPtr> CC::λ_pt(size_t order, size_t rank) {
   // h1 with projectors
   const auto op_connect =
       concat(default_op_connections(),
-             std::vector<std::pair<OpType, OpType>>{{OpType::h, OpType::t_1},
-                                                    {OpType::f, OpType::t_1},
-                                                    {OpType::g, OpType::t_1},
-                                                    {OpType::h_1, OpType::t},
-                                                    {OpType::h, OpType::A},
-                                                    {OpType::f, OpType::A},
-                                                    {OpType::g, OpType::A},
-                                                    {OpType::h, OpType::S},
-                                                    {OpType::f, OpType::S},
-                                                    {OpType::g, OpType::S},
-                                                    {OpType::h_1, OpType::A},
-                                                    {OpType::h_1, OpType::S}});
+             OpConnections<OpType>{{OpType::h, OpType::t_1},
+                                   {OpType::f, OpType::t_1},
+                                   {OpType::g, OpType::t_1},
+                                   {OpType::h_1, OpType::t},
+                                   {OpType::h, OpType::A},
+                                   {OpType::f, OpType::A},
+                                   {OpType::g, OpType::A},
+                                   {OpType::h, OpType::S},
+                                   {OpType::f, OpType::S},
+                                   {OpType::g, OpType::S},
+                                   {OpType::h_1, OpType::A},
+                                   {OpType::h_1, OpType::S}});
 
   std::vector<ExprPtr> result(N + 1);
   for (auto p = N; p >= 1; --p) {
-    auto freq_term = ex<Variable>(L"ω") * Λ_pt_(order, p) * P(nₚ(-p));
+    const auto freq_term = ex<Variable>(L"ω") * Λ_pt_(order, p) * P(nₚ(-p));
     result.at(p) = vac_av(expr * P(nₚ(-p)), op_connect) + vac_av(freq_term);
   }
   return result;
@@ -267,10 +262,7 @@ std::vector<ExprPtr> CC::λ_pt(size_t order, size_t rank) {
 
 std::vector<ExprPtr> CC::eom_r(nₚ np, nₕ nh) {
   assert(!unitary() && "Unitary ansatz is not yet supported");
-  assert(np > 0 || nh > 0 && "Unsupported excitation order");
-  assert(np == nh &&
-         "Only EE-EOM-CC has been tested ... remove this assert to try "
-         "Fock-space EOM-CC");
+  assert((np > 0 || nh > 0) && "Unsupported excitation order");
 
   if (np != nh)
     assert(
@@ -278,30 +270,31 @@ std::vector<ExprPtr> CC::eom_r(nₚ np, nₕ nh) {
         "spin-free basis does not yet support non particle-conserving cases");
 
   // construct hbar
-  auto hbar = sim_tr(H(), 4);
+  const auto hbar = sim_tr(H(), 4);
 
   // hbar * R
-  auto hbar_R = hbar * R(np, nh);
+  const auto hbar_R = hbar * R(np, nh);
 
   // connectivity:
   // default connections + connect R with {h,f,g}
-  const auto op_connect =
-      concat(default_op_connections(),
-             std::vector<std::pair<OpType, OpType>>{{OpType::h, OpType::R},
-                                                    {OpType::f, OpType::R},
-                                                    {OpType::g, OpType::R}});
+  const auto op_connect = concat(default_op_connections(),
+                                 OpConnections<OpType>{{OpType::h, OpType::R},
+                                                       {OpType::f, OpType::R},
+                                                       {OpType::g, OpType::R}});
 
   // initialize result vector
   std::vector<ExprPtr> result;
-  using std::max;
-  auto idx = max(np, nh);  // index for populating the result vector
-  result.resize(idx + 1);
+  using std::min;
+  result.resize(min(np, nh) + 1);  // for EE first element will be empty
 
-  // start from the highest excitation order, go down to the lowest possible
-  for (std::int64_t rp = np, rh = nh; rp > 0 || rh > 0; --rp, --rh) {
+  std::int64_t rp = np, rh = nh;
+  while (rp >= 0 && rh >= 0) {
+    if (rp == 0 && rh == 0) break;
     // project with <rp, rh| (i.e., multiply P(rp, rh)) and compute VEV
-    result.at(idx) = vac_av(P(nₚ(rp), nₕ(rh)) * hbar_R, op_connect);
-    idx--;  // index decrement
+    result.at(min(rp, rh)) = vac_av(P(nₚ(rp), nₕ(rh)) * hbar_R, op_connect);
+    if (rp == 0 || rh == 0) break;
+    rp--;
+    rh--;
   }
 
   return result;
@@ -309,43 +302,41 @@ std::vector<ExprPtr> CC::eom_r(nₚ np, nₕ nh) {
 
 std::vector<ExprPtr> CC::eom_l(nₚ np, nₕ nh) {
   assert(!unitary() && "Unitary ansatz is not yet supported");
-  assert(np > 0 || nh > 0 && "Unsupported excitation order");
-  assert(np == nh &&
-         "Only EE-EOM-CC has been tested ... remove this assert to try "
-         "Fock-space EOM-CC");
+  assert((np > 0 || nh > 0) && "Unsupported excitation order");
 
   if (np != nh)
     assert(get_default_context().spbasis() != SPBasis::spinfree &&
            "spin-free basis does not support non particle-conserving cases");
 
   // construct hbar
-  auto hbar = sim_tr(H(), 4);
+  const auto hbar = sim_tr(H(), 4);
 
   // L * hbar
-  auto L_hbar = L(np, nh) * hbar;
+  const auto L_hbar = L(np, nh) * hbar;
 
   // connectivity:
   // default connections + connect H with projectors
-  const auto op_connect =
-      concat(default_op_connections(),
-             std::vector<std::pair<OpType, OpType>>{{OpType::h, OpType::A},
-                                                    {OpType::f, OpType::A},
-                                                    {OpType::g, OpType::A},
-                                                    {OpType::h, OpType::S},
-                                                    {OpType::f, OpType::S},
-                                                    {OpType::g, OpType::S}});
+  const auto op_connect = concat(default_op_connections(),
+                                 OpConnections<OpType>{{OpType::h, OpType::A},
+                                                       {OpType::f, OpType::A},
+                                                       {OpType::g, OpType::A},
+                                                       {OpType::h, OpType::S},
+                                                       {OpType::f, OpType::S},
+                                                       {OpType::g, OpType::S}});
 
   // initialize result vector
   std::vector<ExprPtr> result;
-  using std::max;
-  auto idx = max(np, nh);  // index for populating the result vector
-  result.resize(idx + 1);
+  using std::min;
+  result.resize(min(nh, np) + 1);  // for EE first element will be empty
 
-  // start from the highest excitation order, go down to the lowest possible
-  for (std::int64_t rp = np, rh = nh; rp > 0 || rh > 0; --rp, --rh) {
-    // right project with |rp,rh> (i.e., multiply P(-np, -rh)) and compute VEV
-    result.at(idx) = vac_av(L_hbar * P(nₚ(-rp), nₕ(-rh)), op_connect);
-    idx--;  // index decrement
+  std::int64_t rp = np, rh = nh;
+  while (rp >= 0 && rh >= 0) {
+    if (rp == 0 && rh == 0) break;
+    // right project with |rp,rh> (i.e., multiply P(-rp, -rh)) and compute VEV
+    result.at(min(rp, rh)) = vac_av(L_hbar * P(nₚ(-rp), nₕ(-rh)), op_connect);
+    if (rp == 0 || rh == 0) break;
+    rp--;
+    rh--;
   }
 
   return result;

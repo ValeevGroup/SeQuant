@@ -9,7 +9,7 @@
 
 ExprPtr vac_av(
     ExprPtr expr,
-    std::vector<std::pair<std::wstring, std::wstring>> op_connections,
+    const OpConnections<std::wstring>& op_connections,
     bool skip_clone) {
   // use cloned expr to avoid side effects
   if (!skip_clone) expr = expr->clone();
@@ -37,7 +37,7 @@ ExprPtr vac_av(
     // compute connections
     std::vector<std::pair<int, int>> connections;
     {
-      std::map<std::wstring, std::vector<int>>
+      container::map<std::wstring, std::vector<int>>
           oplbl2pos;  // maps operator labels to the operator positions in the
                       // product
       int pos = 0;
@@ -124,13 +124,12 @@ ExprPtr vac_av(
   } else if (expr.is<Constant>() || expr.is<Variable>()) {
     return expr;  // vacuum is normalized
   }
-  throw std::invalid_argument(
-      "mpbt::*::vac_av(expr): unknown expression type");
+  throw std::invalid_argument("mpbt::*::vac_av(expr): unknown expression type");
 }
 
 ExprPtr vac_av(
     ExprPtr expr,
-    std::vector<std::pair<mbpt::OpType, mbpt::OpType>> op_connections,
+    const OpConnections<OpType>& op_connections,
     bool skip_clone) {
   return vac_av(expr, to_label_connections(op_connections), skip_clone);
 }

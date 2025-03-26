@@ -3,15 +3,28 @@
 
 #include <iostream>
 #include <memory>
-#include <range/v3/numeric/accumulate.hpp>
+#include <ostream>
 #include <sstream>
 #include <stdexcept>
 #include <utility>
+
+#include <range/v3/numeric/accumulate.hpp>
+#include <range/v3/view.hpp>
 
 namespace sequant {
 
 template <typename>
 class FullBinaryNode;
+
+namespace meta {
+
+template <typename>
+constexpr bool is_full_binary_node{false};
+
+template <typename T>
+constexpr bool is_full_binary_node<FullBinaryNode<T>>{true};
+
+}  // namespace meta
 
 /// Full-binary node visit orders.
 enum class TreeTraversal {
@@ -92,7 +105,7 @@ struct VisitAll {};
 /// \param f Visitor.
 ///
 template <TreeTraversal order, typename T, typename V, typename NodeType>
-void visit(FullBinaryNode<T> const& node, V const& f, NodeType) {
+void visit(FullBinaryNode<T> const& node, V f, NodeType) {
   using Node = FullBinaryNode<T>;
   static_assert(std::is_same_v<NodeType, VisitLeaf> ||
                     std::is_same_v<NodeType, VisitInternal> ||
@@ -356,8 +369,7 @@ class FullBinaryNode {
   /// \param order Tree traversal order(s) to invoke the visitor for.
   ///
   template <typename F>
-  void visit(F const& visitor,
-             TreeTraversal order = TreeTraversal::PreOrder) const {
+  void visit(F visitor, TreeTraversal order = TreeTraversal::PreOrder) const {
     TRAVERSAL_TO_TEMPLATE_ARG(order, sequant::visit,
                               (*this, visitor, VisitAll{}));
   }
@@ -373,7 +385,7 @@ class FullBinaryNode {
   /// \param order Tree traversal order(s) to invoke the visitor for.
   ///
   template <typename F>
-  void visit_internal(F const& visitor,
+  void visit_internal(F visitor,
                       TreeTraversal order = TreeTraversal::PreOrder) const {
     TRAVERSAL_TO_TEMPLATE_ARG(order, sequant::visit,
                               (*this, visitor, VisitInternal{}));
@@ -390,22 +402,19 @@ class FullBinaryNode {
   /// \param order Tree traversal order(s) to invoke the visitor for.
   ///
   template <typename F>
-  void visit_leaf(F const& visitor,
+  void visit_leaf(F visitor,
                   TreeTraversal order = TreeTraversal::PreOrder) const {
     TRAVERSAL_TO_TEMPLATE_ARG(order, sequant::visit,
                               (*this, visitor, VisitLeaf{}));
   }
 
  private:
-  template <typename Ostream, typename F>
-  [[maybe_unused]] int digraph(Ostream& os, F const& label_gen,
-                               int count = 0) const {
+  template <typename F, typename Os>
+  [[maybe_unused]] int digraph(F label_gen, Os& os, int count) const {
     os << "node" << count << "[label=" << label_gen(*this) << "];\n";
-
     if (this->leaf()) return count;
-
-    auto lcount = left().digraph(os, label_gen, count + 1);
-    auto rcount = right().digraph(os, label_gen, lcount + 1);
+    auto lcount = left().digraph(label_gen, os, count + 1);
+    auto rcount = right().digraph(label_gen, os, lcount + 1);
     os << "node" << count << " -> "
        << "node" << count + 1 << ";\n";
     os << "node" << count << " -> "
@@ -415,8 +424,7 @@ class FullBinaryNode {
   }
 
   template <typename Ostream, typename F, typename G>
-  void tikz(Ostream& os, F const& label_gen, G const& spec_gen,
-            size_t indent = 2) const {
+  void tikz(Ostream& os, F label_gen, G spec_gen, size_t indent = 2) const {
     auto pad = [](Ostream& o, size_t i) {
       for (size_t j = 0; j < i; ++j) o << " ";
     };
@@ -441,28 +449,40 @@ class FullBinaryNode {
   }
 
  public:
-  template <typename string_t, typename F>
-  string_t digraph(F const& label_gen, string_t const& graph_name = {}) const {
-    static_assert(std::is_invocable_r_v<string_t, F, FullBinaryNode<T> const&>,
-                  "node label generator F(FullBinaryNode<T> const &) should "
-                  "return string_t");
-
-    auto oss = std::basic_ostringstream{string_t{}};
+  template <typename F,
+            typename String = std::invoke_result_t<F, FullBinaryNode>>
+  String digraph(F label_gen,
+                 std::basic_string_view<typename String::value_type>
+                     graph_name = {}) const {
+    auto oss = std::basic_ostringstream{String{}};
 
     oss << "digraph " << graph_name << "{\n";
-    this->digraph(oss, label_gen, 0);
+    this->digraph(label_gen, oss, 0);
     oss << "}";
     oss.flush();
 
     return oss.str();
   }
 
-  template <typename string_t>
-  string_t tikz(
-      std::function<string_t(FullBinaryNode<T> const&)> label_gen,
-      std::function<string_t(FullBinaryNode<T> const&)> spec_gen) const {
-    auto oss = std::basic_ostringstream{string_t{}};
-    oss << "\\tikz{\n\\";
+  ///
+  /// \param label_gen Generates the label for tikz nodes.
+  /// \param spec_gen Generates the node spec that goes into the square
+  ///                 bracket of tikz node statement.
+  /// \note Make sure the following are present in the preamble.
+  ///
+  ///                  @c \usepackage{tikz}
+  ///                  @c \usetikzlibrary{graphs,graphdrawing}
+  ///                  @c \usegdlibrary{trees}
+  ///
+  /// \return TikZ graph.
+
+  template <typename L,
+            typename String = std::invoke_result_t<L, FullBinaryNode>,
+            typename S = std::function<String(FullBinaryNode)>>
+  String tikz(
+      L label_gen, S spec_gen = [](auto&&) { return String{}; }) const {
+    auto oss = std::basic_ostringstream{String{}};
+    oss << "\\tikz[binary tree layout]{\n\\";
     tikz(oss, label_gen, spec_gen);
     oss << "\n}";
     oss.flush();
@@ -476,6 +496,63 @@ bool operator==(FullBinaryNode<T> const& lhs, FullBinaryNode<U> const& rhs) {
   return ((*lhs == *rhs) &&
           ((lhs.leaf() && rhs.leaf()) ||
            (lhs.left() == rhs.left() && lhs.right() == rhs.right())));
+}
+
+///
+/// \return A new binary node where each node value is the result of applying @c
+///         fun on the argument node value.
+///
+template <typename T, typename F,
+          typename = std::enable_if_t<std::is_invocable_v<F, T>>>
+auto transform_node(FullBinaryNode<T> const& node, F fun) {
+  if (node.leaf())
+    return FullBinaryNode(fun(*node));
+  else {
+    return FullBinaryNode(fun(*node), transform_node(node.left(), fun),
+                          transform_node(node.right(), fun));
+  }
+}
+
+///
+/// \brief Accumulates the given range of binary nodes into a single binary node
+///        using a given operation to generate the internal node values.
+///
+/// \tparam Node The FullBinaryNode type.
+/// \param rng A range of Node objects.
+/// \param op A binary function that returns Node::value_type.
+///           The signature could be `op(Node, Node) -> Node::value_type` or
+///           `op(Node::value_type, Node::value_type) -> Node::value_type`.
+/// \return A binary node with subtrees built by left-folding given range.
+///
+template <typename Rng,                                //
+          typename F,                                  //
+          typename Node = ranges::range_value_t<Rng>,  //
+          typename = std::enable_if_t<meta::is_full_binary_node<Node>>>
+Node fold_left_to_node(Rng rng, F op) {
+  using Value = typename Node::value_type;
+
+  constexpr bool invoke_on_value =  //
+      std::is_invocable_r_v<Value, F, Value, Value>;
+
+  constexpr bool invoke_on_node =  //
+      std::is_invocable_r_v<Value, F, Node, Node>;
+
+  static_assert(invoke_on_value || invoke_on_node);
+
+  using ranges::views::move;
+  using ranges::views::tail;
+  return ranges::accumulate(
+      rng | tail | move, std::move(ranges::front(rng)),
+      [&op, invoke_on_node](auto&& l, auto&& r) {
+        if constexpr (invoke_on_node) {
+          auto&& val = op(l, r);
+          return FullBinaryNode(std::move(val), std::move(l), std::move(r));
+
+        } else {
+          auto&& val = op(*l, *r);
+          return FullBinaryNode(std::move(val), std::move(l), std::move(r));
+        }
+      });
 }
 
 }  // namespace sequant

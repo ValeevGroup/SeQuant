@@ -5,14 +5,17 @@
 #include <SeQuant/core/abstract_tensor.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
+#include <SeQuant/core/op.hpp>
 #include <SeQuant/core/tensor.hpp>
+#include <SeQuant/core/tensor_canonicalizer.hpp>
 
 namespace sequant {
 
 Tensor::~Tensor() = default;
 
 void Tensor::assert_nonreserved_label(std::wstring_view label) const {
-  // assert(label != overlap_label());
+  assert(!ranges::contains(FNOperator::labels(), label) &&
+         !ranges::contains(BNOperator::labels(), label));
 }
 
 void Tensor::adjoint() {

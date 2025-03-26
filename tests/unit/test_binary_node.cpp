@@ -2,6 +2,8 @@
 
 #include <SeQuant/core/binary_node.hpp>
 
+#include "catch2_sequant.hpp"
+
 #include <array>
 #include <cstddef>
 #include <string>
@@ -9,7 +11,7 @@
 
 #include <range/v3/all.hpp>
 
-TEST_CASE("TEST BINARY_NODE", "[FullBinaryNode]") {
+TEST_CASE("binary_node", "[FullBinaryNode]") {
   using ranges::views::iota;
   using ranges::views::take;
   using sequant::FullBinaryNode;
@@ -138,21 +140,20 @@ TEST_CASE("TEST BINARY_NODE", "[FullBinaryNode]") {
     auto label_gen_str = [](auto const& n) { return std::to_string(*n); };
     auto label_gen_wstr = [](auto const& n) { return std::to_wstring(*n); };
 
-    REQUIRE(node1.digraph<std::string>(label_gen_str, "node1") ==
+    REQUIRE(node1.digraph(label_gen_str, "node1") ==
             std::string{"digraph node1{\n"
                         "node0[label=1];\n"
                         "}"});
 
-    REQUIRE(node2.digraph<std::string>(label_gen_str) ==
-            std::string{"digraph {\n"
-                        "node0[label=3];\n"
-                        "node1[label=1];\n"
-                        "node2[label=2];\n"
-                        "node0 -> node1;\n"
-                        "node0 -> node2;\n"
-                        "}"});
+    REQUIRE(node2.digraph(label_gen_str) == std::string{"digraph {\n"
+                                                        "node0[label=3];\n"
+                                                        "node1[label=1];\n"
+                                                        "node2[label=2];\n"
+                                                        "node0 -> node1;\n"
+                                                        "node0 -> node2;\n"
+                                                        "}"});
 
-    REQUIRE(node3.digraph<std::wstring>(label_gen_wstr, L"node3") ==
+    REQUIRE(node3.digraph(label_gen_wstr, L"node3") ==
             std::wstring{L"digraph node3{\n"
                          "node0[label=6];\n"
                          "node1[label=3];\n"
@@ -165,7 +166,7 @@ TEST_CASE("TEST BINARY_NODE", "[FullBinaryNode]") {
                          "node0 -> node4;\n"
                          "}"});
 
-    REQUIRE(node4.digraph<std::wstring>(label_gen_wstr, L"node4") ==
+    REQUIRE(node4.digraph(label_gen_wstr, L"node4") ==
             std::wstring{L"digraph node4{\n"
                          "node0[label=6];\n"
                          "node1[label=1];\n"
