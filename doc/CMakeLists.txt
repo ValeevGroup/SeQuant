@@ -40,9 +40,6 @@ if (SEQUANT_BUILD_DOCS)
         list(APPEND CMAKE_PREFIX_PATH "${CMAKE_MATCH_1}")
     endif()
 
-    # Find Sphinx for documentation generation
-    find_package(Sphinx REQUIRED)
-
 
     set(SEQUANT_SPHINX_DOCS_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
     set(SEQUANT_SPHINX_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/.sphinx")
@@ -100,6 +97,10 @@ if (SEQUANT_BUILD_DOCS)
                 "  '${Python_EXECUTABLE} -m pip install -r ${CMAKE_CURRENT_SOURCE_DIR}/.sphinx/requirements.txt'\n"
         )
     endif ()
+
+
+    # Find Sphinx for documentation generation
+    find_package(Sphinx REQUIRED)
 
 
     if (SEQUANT_GENERATE_API_DOCS)
