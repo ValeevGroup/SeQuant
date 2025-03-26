@@ -1,0 +1,8 @@
+sphinx
+sphinx-cmake
+sphinx-design
+breathe
+exhale
+furo
+sphinx_copybutton
+myst_parser
