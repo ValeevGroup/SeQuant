@@ -12,40 +12,43 @@
 #include <string>
 
 class IndexSpaceMeta {
-public:
-	struct Entry {
-		std::wstring tag;
-		std::wstring name;
-	};
+ public:
+  struct Entry {
+    std::wstring tag;
+    std::wstring name;
+  };
 
-	IndexSpaceMeta() = default;
+  IndexSpaceMeta() = default;
 
-	std::size_t getSize(const sequant::IndexSpace &space) const;
+  std::size_t getSize(const sequant::IndexSpace &space) const;
 
-	std::size_t getSize(const sequant::Index &index) const;
+  std::size_t getSize(const sequant::Index &index) const;
 
-	std::wstring getLabel(const sequant::IndexSpace &space) const;
+  std::wstring getLabel(const sequant::IndexSpace &space) const;
 
-	std::wstring getName(const sequant::IndexSpace &space) const;
+  std::wstring getName(const sequant::IndexSpace &space) const;
 
-	std::wstring getTag(const sequant::IndexSpace &space) const;
+  std::wstring getTag(const sequant::IndexSpace &space) const;
 
-	void registerSpace(sequant::IndexSpace space, Entry entry);
+  void registerSpace(sequant::IndexSpace space, Entry entry);
 
-private:
-	std::map< sequant::IndexSpace, Entry > m_entries;
+ private:
+  std::map<sequant::IndexSpace, Entry> m_entries;
 };
 
-sequant::container::svector< sequant::container::svector< sequant::Index > >
-	getExternalIndexPairs(const sequant::ExprPtr &expression);
+sequant::container::svector<sequant::container::svector<sequant::Index> >
+getExternalIndexPairs(const sequant::ExprPtr &expression);
 
 bool needsSymmetrization(const sequant::ExprPtr &expression);
 
-sequant::ExprPtr generateResultSymmetrization(const sequant::ResultExpr &result, std::wstring_view precursorName);
+sequant::ExprPtr generateResultSymmetrization(const sequant::ResultExpr &result,
+                                              std::wstring_view precursorName);
 
-sequant::ExprPtr generateResultSymmetrization(const sequant::Tensor &result, std::wstring_view precursorName);
+sequant::ExprPtr generateResultSymmetrization(const sequant::Tensor &result,
+                                              std::wstring_view precursorName);
 
-sequant::ExprPtr generateResultSymmetrization(std::wstring_view precursorName,
-											  const sequant::IndexGroups< std::vector< sequant::Index > > &externals);
+sequant::ExprPtr generateResultSymmetrization(
+    std::wstring_view precursorName,
+    const sequant::IndexGroups<std::vector<sequant::Index> > &externals);
 
 #endif

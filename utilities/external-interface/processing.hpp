@@ -7,29 +7,29 @@
 #include <SeQuant/core/result_expr.hpp>
 
 enum class SpinTracing {
-	None,
-	ClosedShell,
-	Rigorous,
+  None,
+  ClosedShell,
+  Rigorous,
 };
 
 enum class ProjectionTransformation {
-	None,
-	Biorthogonal,
+  None,
+  Biorthogonal,
 };
 
 struct ProcessingOptions {
-	ProcessingOptions() = default;
+  ProcessingOptions() = default;
 
-	bool density_fitting               = false;
-	SpinTracing spintrace              = SpinTracing::Rigorous;
-	ProjectionTransformation transform = ProjectionTransformation::None;
-	bool factorize_to_binary           = true;
-	bool expand_symmetrizer            = false;
-	bool term_by_term                  = false;
+  bool density_fitting = false;
+  SpinTracing spintrace = SpinTracing::Rigorous;
+  ProjectionTransformation transform = ProjectionTransformation::None;
+  bool factorize_to_binary = true;
+  bool expand_symmetrizer = false;
+  bool term_by_term = false;
 };
 
-sequant::container::svector< sequant::ResultExpr > postProcess(sequant::ResultExpr expression,
-															   const IndexSpaceMeta &space_meta,
-															   const ProcessingOptions &options = {});
+sequant::container::svector<sequant::ResultExpr> postProcess(
+    sequant::ResultExpr expression, const IndexSpaceMeta &space_meta,
+    const ProcessingOptions &options = {});
 
 #endif
