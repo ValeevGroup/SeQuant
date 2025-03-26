@@ -434,6 +434,58 @@ TEST_CASE("mbpt", "[mbpt]") {
           L"2}}"
           L"_{\\textvisiblespace\\,{a_1}}}}\\bigr) }");
     }
+
+    SECTION("batching") {
+      // update context to use batching index
+      auto isr = sequant::mbpt::make_legacy_spaces();
+      mbpt::add_batching_spaces(isr);
+      auto ctx_resetter =
+          set_scoped_default_context(Context(isr, Vacuum::SingleProduct));
+      REQUIRE_NOTHROW(
+          get_default_context().index_space_registry()->retrieve(L"z"));
+
+      using namespace mbpt::op;
+      // ctors (pert_order == 1, rank, batch)
+      REQUIRE_NOTHROW(op::H_pt(1, 1, 1));
+      REQUIRE_NOTHROW(op::H_pt(1, 2, 2));
+      REQUIRE_NOTHROW(op::T_pt(1, 3, 2));
+
+      // operations
+      auto h1 = op::H_pt(1, 1, 1);
+      auto h1_2 = op::H_pt(1, 1, 2);
+      auto pt1 = op::T_pt(1, 2, 1);
+
+      auto sum1 = h1 + h1;
+      simplify(sum1);
+      REQUIRE(to_latex(sum1) == L"{{{2}}{\\hat{h¹}}{[{z}_{1}]}}");
+      auto sum2 = h1 + pt1;
+      simplify(sum2);
+      REQUIRE(to_latex(sum2) ==
+              L"{ \\bigl({\\hat{t¹}_{1}}{[{z}_{1}]} + "
+              L"{\\hat{t¹}_{2}}{[{z}_{1}]} + {\\hat{h¹}}{[{z}_{1}]}\\bigr) }");
+
+      // TODO: Confirm if the products have the intended behavior
+      auto pdt1 = h1 * h1_2;
+      simplify(pdt1);
+      std::wcout << "pdt1: " << to_latex(pdt1) << std::endl;
+      REQUIRE(to_latex(pdt1) ==
+              L"{{\\hat{h¹}}{[{z}_{1}]}{\\hat{h¹}}{[{z}_{1}, {z}_{2}]}}");
+
+      auto pdt2 = h1 * pt1;
+      simplify(pdt2);
+      std::wcout << "pdt1: " << to_latex(pdt2) << std::endl;
+      REQUIRE(to_latex(pdt2) ==
+              L"{ \\bigl({{\\hat{h¹}}{[{z}_{1}]}{\\hat{t¹}_{1}}{[{z}_{1}]}} + "
+              L"{{\\hat{h¹}}{[{z}_{1}]}{\\hat{t¹}_{2}}{[{z}_{1}]}}\\bigr) }");
+
+      // TODO: Enable tensor level tests later after fixing the canonicalization
+      // of aux index
+
+      // auto sum1_t = lower_to_tensor_form(sum1);
+      // std::wcout << "sum1_t: " << to_latex(sum1_t) << std::endl;
+      // auto sum2_t = lower_to_tensor_form(sum2);
+      // std::wcout << "sum2_t: " << to_latex(sum2_t) << std::endl;
+    }
   }
 
   SECTION("wick") {
