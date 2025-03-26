@@ -5,7 +5,7 @@
 
    Getting started <user/getting_started/index>
    Installation <user/getting_started/installing>
-   Guide <user/guide/index>
+   User Guide <user/guide/index>
 
 .. toctree::
    :caption: Developer
