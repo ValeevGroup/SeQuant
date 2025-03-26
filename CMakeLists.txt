@@ -80,6 +80,7 @@ endif ()
 list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake/modules/")
 
 set(FETCHCONTENT_UPDATES_DISCONNECTED OFF CACHE BOOL "Enables UPDATE_DISCONNECTED behavior for all content population")
+include(CTest)
 include(FetchContent)
 include(AddCustomTargetSubproject)
 include(FeatureSummary)
