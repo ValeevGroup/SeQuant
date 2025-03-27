@@ -60,9 +60,20 @@ bool is_tot(Tensor const& t) noexcept {
   return ranges::any_of(t.const_indices(), &Index::has_proto_indices);
 }
 
-std::wstring_view const var_label = L"Z";
-
 }  // namespace
+
+namespace dummy {
+inline constexpr std::wstring_view label_tensor{L"I"};
+inline constexpr std::wstring_view label_scalar{L"Z"};
+
+template <typename... Args>
+ExprPtr make_tensor(Args&&... args) {
+  return ex<Tensor>(label_tensor, std::forward<Args>(args)...);
+}
+
+ExprPtr make_variable() { return ex<Variable>(label_scalar); }
+
+}  // namespace dummy
 
 std::string to_label_annotation(const Index& idx) {
   using namespace ranges::views;
@@ -346,7 +357,8 @@ ExprPtr make_sum(EvalExpr const& left, EvalExpr const& right) noexcept {
   auto ts = tensor_symmetry_sum(left, right);
   auto ps = particle_symmetry(ts);
   auto bks = get_default_context().braket_symmetry();
-  return ex<Tensor>(L"I", t1.bra(), t1.ket(), t1.aux(), ts, bks, ps);
+  return dummy::make_tensor(bra(t1.bra()), ket(t1.ket()), aux(t1.aux()), ts,
+                            bks, ps);
 }
 
 ExprPtr make_prod(EvalExpr const& left, EvalExpr const& right) noexcept {
@@ -358,14 +370,14 @@ ExprPtr make_prod(EvalExpr const& left, EvalExpr const& right) noexcept {
   auto [b, k, a] = get_uncontracted_indices(t1, t2);
   if (b.empty() && k.empty() && a.empty()) {
     // dot product
-    return ex<Variable>(var_label);
+    return dummy::make_variable();
   } else {
     // regular tensor product
     auto ts = tensor_symmetry_prod(left, right);
     auto ps = particle_symmetry(ts);
     auto bks = get_default_context().braket_symmetry();
-    return ex<Tensor>(L"I", bra(std::move(b)), ket(std::move(k)),
-                      aux(std::move(a)), ts, bks, ps);
+    return dummy::make_tensor(bra(std::move(b)), ket(std::move(k)),
+                              aux(std::move(a)), ts, bks, ps);
   }
 }
 
@@ -379,15 +391,15 @@ ExprPtr make_imed(EvalExpr const& left, EvalExpr const& right,
   if (lres == ResultType::Scalar && rres == ResultType::Scalar) {
     // scalar (+|*) scalar
 
-    return ex<Variable>(var_label);
-
+    return dummy::make_variable();
   } else if (lres == ResultType::Scalar && rres == ResultType::Tensor) {
     // scalar (*) tensor
 
     assert(op == EvalOp::Prod && "scalar + tensor not supported");
     auto const& t = right.expr()->as<Tensor>();
-    return ex<Tensor>(Tensor{L"I", t.bra(), t.ket(), t.aux(), t.symmetry(),
-                             t.braket_symmetry(), t.particle_symmetry()});
+    return dummy::make_tensor(bra(t.bra()), ket(t.ket()), aux(t.aux()),
+                              t.symmetry(), t.braket_symmetry(),
+                              t.particle_symmetry());
 
   } else if (lres == ResultType::Tensor && rres == ResultType::Scalar) {
     // tensor (*) scalar
@@ -430,19 +442,6 @@ struct ExprWithHash {
   ExprPtr expr;
   size_t hash;
 };
-
-namespace dummy {
-inline constexpr std::wstring_view label_tensor{L"I"};
-inline constexpr std::wstring_view label_scalar{L"Z"};
-
-template <typename... Args>
-ExprPtr make_tensor(Args&&... args) {
-  return ex<Tensor>(label_tensor, std::forward<Args>(args)...);
-}
-
-ExprPtr make_variable() { return ex<Variable>(label_scalar); }
-
-}  // namespace dummy
 
 using EvalExprNode = FullBinaryNode<EvalExpr>;
 
