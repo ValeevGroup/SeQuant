@@ -26,6 +26,7 @@
 #include <cmath>
 #include <iterator>
 #include <memory>
+#include <ranges>
 #include <string_view>
 #include <tuple>
 #include <type_traits>
@@ -67,8 +68,28 @@ inline constexpr std::wstring_view label_tensor{L"I"};
 inline constexpr std::wstring_view label_scalar{L"Z"};
 
 template <typename... Args>
-ExprPtr make_tensor(Args&&... args) {
-  return ex<Tensor>(label_tensor, std::forward<Args>(args)...);
+ExprPtr make_tensor(Args&&... arg_list) {
+  auto process_arg = [](auto& arg) {
+    using ArgType = std::remove_cvref_t<decltype(arg)>;
+    if constexpr (std::ranges::range<ArgType>) {
+      if constexpr (std::is_same_v<Index,
+                                   std::remove_cvref_t<
+                                       std::ranges::range_value_t<ArgType>>>) {
+        // This function is creating intermediate tensors, which don't come with
+        // an externally provided "correct"/canonical order of its indices.
+        // Hence, we are free to define our own canonical order, which we
+        // conveniently set to the indices being sorted in each group.
+        using std::ranges::begin;
+        using std::ranges::end;
+        std::sort(begin(arg), end(arg));
+      }
+    }
+  };
+
+  // Iterate over variadic parameter list and apply process_arg to each entry
+  (process_arg(arg_list), ...);
+
+  return ex<Tensor>(label_tensor, std::forward<Args>(arg_list)...);
 }
 
 ExprPtr make_variable() { return ex<Variable>(label_scalar); }
