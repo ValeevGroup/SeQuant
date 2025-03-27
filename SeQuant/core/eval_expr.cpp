@@ -24,14 +24,10 @@
 #include <atomic>
 #include <cassert>
 #include <cmath>
-#include <iterator>
-#include <memory>
 #include <ranges>
 #include <string_view>
-#include <tuple>
 #include <type_traits>
 #include <utility>
-#include <vector>
 
 namespace sequant {
 
