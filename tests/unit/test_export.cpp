@@ -60,7 +60,7 @@ class ItfContext : public sequant::itf::Context {
   }
 };
 
-TEST_CASE("export", "[exports]") {
+TEST_CASE("export", "[export]") {
   using namespace sequant;
 
   SECTION("Tree processing") {
