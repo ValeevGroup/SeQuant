@@ -108,7 +108,7 @@ TEST_CASE("eval_node", "[EvalNode]") {
                  EquivalentTo("g{i3,i4; a3,a4}:A"));
 
     REQUIRE_THAT(node(node2, {L, R}).as_tensor(),
-                 EquivalentTo("I{a1,a2,a3,a4;i3,i4,i1,i2}:N"));
+                 EquivalentTo("I{a1,a2,a3,a4;i1,i2,i3,i4}:N"));
 
     REQUIRE_THAT(node(node2, {L, R, L}).as_tensor(),
                  EquivalentTo("t{a1,a2;i3,i4}:A"));
