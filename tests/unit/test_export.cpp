@@ -423,23 +423,25 @@ TEST_CASE("export", "[export]") {
         REQUIRE(generator.get_generated_code() == expected);
       }
       SECTION("Duplicate leaf tensors") {
-        auto tree = binarize(parse_expr(L"A{a1;i1} A{a1;i1}"));
+        auto tree = binarize(parse_expr(L"A{a1;i1} A{a2;i2}"));
 
         export_expression(tree, generator);
 
         std::string expected =
             "Declare index i_1\n"
+            "Declare index i_2\n"
             "Declare index a_1\n"
+            "Declare index a_2\n"
             "\n"
             "Declare tensor A[a_1, i_1]\n"
-            "Declare tensor I[a_1, a_1, i_1, i_1]\n"
+            "Declare tensor I[a_1, a_2, i_1, i_2]\n"
             "\n"
-            "Create I[a_1, a_1, i_1, i_1] and initialize to zero\n"
+            "Create I[a_1, a_2, i_1, i_2] and initialize to zero\n"
             // Note that we only load A once, even though we use it twice
             "Load A[a_1, i_1]\n"
-            "Compute I[a_1, a_1, i_1, i_1] += A[a_1, i_1] A[a_1, i_1]\n"
+            "Compute I[a_1, a_2, i_1, i_2] += A[a_1, i_1] A[a_2, i_2]\n"
             "Unload A[a_1, i_1]\n"
-            "Persist I[a_1, a_1, i_1, i_1]\n";
+            "Persist I[a_1, a_2, i_1, i_2]\n";
 
         REQUIRE(generator.get_generated_code() == expected);
       }
