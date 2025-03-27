@@ -455,7 +455,7 @@ install(FILES ${PROJECT_BINARY_DIR}/SeQuant/version.hpp
 write_basic_package_version_file(sequant-config-version.cmake
         VERSION ${SEQUANT_VERSION} COMPATIBILITY AnyNewerVersion)
 
-# Create the targets file
+# Make SeQuant consumable from the build directory without installation
 export(EXPORT sequant
         NAMESPACE SeQuant::
         FILE "${PROJECT_BINARY_DIR}/sequant-targets.cmake")
