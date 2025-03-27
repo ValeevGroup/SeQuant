@@ -9,6 +9,9 @@ set(SEQUANT_TRACKED_RANGEV3_PREVIOUS_TAG d800a032132512a54c291ce55a2a43e0460591c
 set(SEQUANT_TRACKED_TILEDARRAY_TAG fb5d5b80427cc937238a757ccec0cb313090528d)
 set(SEQUANT_TRACKED_TILEDARRAY_PREVIOUS_TAG c10f8d5cade2e6040d28958f04189d6ae578c00a)
 
+set(SEQUANT_TRACKED_LIBPERM_TAG 8e4afd1461baffa5d829c8fed059f5a172a3b060)
+set(SEQUANT_TRACKED_LIBPERM_PREVIOUS_TAG 8e4afd1461baffa5d829c8fed059f5a172a3b060)
+
 # oldest Boost we can tolerate ... with some compilers should be able to use an earlier version, but:
 # - Boost.ContainerHash <1.81 uses unary_function that has been deprecated in C++11 and removed in C++17:
 #   https://github.com/boostorg/container_hash/blob/boost-1.80.0/include/boost/container_hash/hash.hpp#L132
