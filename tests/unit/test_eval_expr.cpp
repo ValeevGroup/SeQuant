@@ -139,6 +139,18 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
                 ) == ResultType::Scalar);
   }
 
+  SECTION("result expr") {
+    ExprPtr expr = parse_expr(L"2 var");
+    ExprPtr res = binarize(expr)->expr();
+    REQUIRE(res->is<Variable>());
+    REQUIRE(*res != *expr);
+
+    expr = parse_expr(L"2 t{a1;i1}");
+    res = binarize(expr)->expr();
+    REQUIRE(res->is<Tensor>());
+    REQUIRE(*res != *expr);
+  }
+
   SECTION("Sequant expression") {
     const auto& str_t1 = L"g_{a1,a2}^{a3,a4}";
     const auto& str_t2 = L"t_{a3,a4}^{i1,i2}";
