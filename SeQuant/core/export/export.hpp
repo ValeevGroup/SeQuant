@@ -504,7 +504,7 @@ void preprocess(EvalNode<T> &tree, PreprocessResult &result, ExportContext &ctx,
 template <typename T, typename Context>
 void export_expression(EvalNode<T> expression, Generator<Context> &generator,
                        Context ctx = {}) {
-  if (true || Logger::instance().export_equations) {
+  if (Logger::instance().export_equations) {
     std::cout << "Input equation tree:\n"
               << expression.tikz(
                      [](const EvalNode<T> &node) {
@@ -517,7 +517,7 @@ void export_expression(EvalNode<T> expression, Generator<Context> &generator,
   details::PreprocessResult result;
   preprocess(expression, result, ctx);
 
-  if (true || Logger::instance().export_equations) {
+  if (Logger::instance().export_equations) {
     std::cout << "Pre-processed equation tree:\n"
               << expression.tikz(
                      [](const EvalNode<T> &node) {
