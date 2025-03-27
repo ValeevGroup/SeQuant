@@ -17,7 +17,7 @@ FetchContent_Declare(
 	URL https://github.com/nlohmann/json/releases/download/v3.11.3/json.tar.xz
 )
 
-set(SPDLOG_USE_STD_FORMAT OFF CACHE "" INTERNAL FORCE)
+set(SPDLOG_USE_STD_FORMAT OFF CACHE INTERNAL "" FORCE)
 
 FetchContent_MakeAvailable(cli11 json spdlog)
 
