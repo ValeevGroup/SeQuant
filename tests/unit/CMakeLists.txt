@@ -51,7 +51,7 @@ if (TARGET tiledarray)
     target_compile_definitions(unit_tests-sequant PRIVATE SEQUANT_HAS_TILEDARRAY)
 endif (TARGET tiledarray)
 
-target_link_libraries(unit_tests-sequant PRIVATE SeQuant Catch2)
+target_link_libraries(unit_tests-sequant PRIVATE SeQuant Catch2 dtl::dtl)
 
 if (SEQUANT_TESTS)
     catch_discover_tests(

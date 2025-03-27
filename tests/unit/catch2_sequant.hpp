@@ -16,6 +16,8 @@
 
 #include <range/v3/algorithm.hpp>
 
+#include <dtl/dtl.hpp>
+
 #include <algorithm>
 #include <cassert>
 #include <sstream>
@@ -109,6 +111,70 @@ struct StringMaker<sequant::ResultExpr> {
 }  // namespace Catch
 
 namespace {
+
+/// Matches two strings for equality. However, if they are not equal,
+/// this matcher will produce a line-based diff of the strings rather than just
+/// dumping the value of the string to the console
+class StringDiffMatcher : public Catch::Matchers::MatcherGenericBase {
+ public:
+  template <typename String>
+  StringDiffMatcher(const String &str) {
+    if constexpr (std::is_same_v<String, std::string>) {
+      expected_ = str;
+    } else if constexpr (std::is_same_v<String, std::wstring> ||
+                         std::is_same_v<String, std::wstring_view> ||
+                         std::is_same_v<String, wchar_t *>) {
+      expected_ = sequant::toUtf8(str);
+    } else {
+      expected_ = std::string(str);
+    }
+  }
+
+  bool match(const std::string &input) const {
+    if (expected_ == input) {
+      return true;
+    }
+
+    // Compute and save diff
+    std::vector<std::string> expected_lines = to_lines(expected_);
+    decltype(expected_lines) actual_lines = to_lines(input);
+
+    dtl::Diff<std::string, decltype(expected_lines)> diff(actual_lines,
+                                                          expected_lines);
+    diff.compose();
+    diff.composeUnifiedHunks();
+
+    std::stringstream sstream;
+    diff.printUnifiedFormat(sstream);
+
+    diff_ = sstream.str();
+
+    return false;
+  }
+
+  std::string describe() const override {
+    return "requires modification:\n" + diff_;
+  }
+
+ private:
+  std::string expected_;
+  // We need to work around the fact that the match function is required to be
+  // const, so the diff (which we can only compute inside match()) can be
+  // updated there.
+  mutable std::string diff_;
+
+  static std::vector<std::string> to_lines(const std::string &input) {
+    std::vector<std::string> lines;
+
+    std::istringstream in(input);
+
+    for (std::string line; std::getline(in, line);) {
+      lines.push_back(std::move(line));
+    }
+
+    return lines;
+  }
+};
 
 using ExprVar = std::variant<sequant::ExprPtr, sequant::ResultExpr>;
 
@@ -263,6 +329,11 @@ EquivalentToMatcher EquivalentTo(T &&expression) {
 template <typename T>
 SimplifiesToMatcher SimplifiesTo(T &&expression) {
   return SimplifiesToMatcher(std::forward<T>(expression));
+}
+
+template <typename String>
+StringDiffMatcher DiffedStringEquals(String &&str) {
+  return StringDiffMatcher(std::forward<String>(str));
 }
 
 #endif
