@@ -35,6 +35,7 @@ add_executable(unit_tests-sequant ${BUILD_BY_DEFAULT}
 )
 
 target_compile_definitions(unit_tests-sequant PRIVATE SEQUANT_UNIT_TESTS_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+target_link_libraries(unit_tests-sequant PRIVATE Boost::boost)
 
 if (TARGET tiledarray)
     target_sources(unit_tests-sequant

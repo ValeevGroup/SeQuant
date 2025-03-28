@@ -27,6 +27,9 @@ class JuliaTensorOperationsGeneratorContext : public ExportContext {
 
   std::string get_tags(const Tensor &tensor) const;
 
+  void set_tag(const IndexSpace &space, std::string tag);
+  void set_dim(const IndexSpace &space, std::string dim);
+
  protected:
   TagMap m_index_tags;
   DimMap m_index_dims;

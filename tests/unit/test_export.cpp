@@ -17,6 +17,9 @@
 
 #include "catch2_sequant.hpp"
 
+#include <boost/algorithm/string.hpp>
+
+#include <algorithm>
 #include <filesystem>
 #include <fstream>
 #include <optional>
@@ -115,6 +118,80 @@ std::set<std::string> known_format_names(std::tuple<Generator...> generators) {
   return names;
 }
 
+void configure_context_defaults(TextGeneratorContext &ctx) {}
+
+void configure_context_defaults(JuliaTensorOperationsGeneratorContext &ctx) {
+  auto registry = get_default_context().index_space_registry();
+  IndexSpace occ = registry->retrieve("i");
+  IndexSpace virt = registry->retrieve("a");
+
+  ctx.set_dim(occ, "nocc");
+  ctx.set_dim(virt, "nv");
+
+  ctx.set_tag(occ, "o");
+  ctx.set_tag(virt, "v");
+}
+
+void add_to_context(TextGeneratorContext &ctx, std::string_view key,
+                    std::string_view value) {
+  throw std::runtime_error(
+      "TextGeneratorContext doesn't support specifications");
+}
+void add_to_context(JuliaTensorOperationsGeneratorContext &ctx,
+                    std::string_view key, std::string_view value) {
+  auto parse_space_map = [](std::string_view spec) {
+    auto pos = spec.find("->");
+    if (pos == std::string_view::npos) {
+      throw std::runtime_error("Malformed space map");
+    }
+
+    std::string space(spec.substr(0, pos));
+    std::string map(spec.substr(pos + 2));
+
+    boost::trim(space);
+    boost::trim(map);
+
+    return std::make_pair(
+        get_default_context().index_space_registry()->retrieve(space),
+        std::string(map));
+  };
+
+  if (key == "tag") {
+    auto [space, tag] = parse_space_map(value);
+    ctx.set_tag(space, tag);
+  } else if (key == "dim") {
+    auto [space, dim] = parse_space_map(value);
+    ctx.set_dim(space, dim);
+  } else {
+    throw std::runtime_error(
+        "Unsupported key in Julia context specification '" + std::string(key) +
+        "'");
+  }
+}
+
+template <typename Context>
+void add_to_context(Context &ctx, const std::string &line) {
+  auto pos = line.find(":");
+  if (pos == std::string::npos) {
+    throw std::runtime_error(
+        "Malformed context specification: missing ':' in '" + line + "'");
+  }
+
+  std::string key = line.substr(0, pos);
+  boost::trim(key);
+  std::string value = line.substr(pos + 1);
+  boost::trim(value);
+
+  if (key.empty()) {
+    throw std::runtime_error("Malformed context specification: Empty key");
+  }
+  if (value.empty()) {
+    throw std::runtime_error("Malformed context specification: Empty value");
+  }
+
+  add_to_context(ctx, key, value);
+}
+
 TEMPLATE_LIST_TEST_CASE("export_tests", "[export]", KnownGenerators) {
   using CurrentGen = TestType;
   using CurrentCtx = CurrentGen::Context;
@@ -130,8 +207,6 @@ TEMPLATE_LIST_TEST_CASE("export_tests", "[export]", KnownGenerators) {
       enumerate_export_tests();
   REQUIRE(!test_files.empty());
 
-  bool skippedAll = true;
-
   for (const std::filesystem::path &current : test_files) {
     const std::string section_name =
         current.filename().string() + " - " + CurrentGen{}.get_format_name();
@@ -140,6 +215,8 @@ TEMPLATE_LIST_TEST_CASE("export_tests", "[export]", KnownGenerators) {
       CurrentGen generator;
       CurrentCtx context;
 
+      configure_context_defaults(context);
+
       // Parse test file
       std::optional<std::string> expected_output;
       std::string expression;
@@ -147,10 +224,12 @@ TEMPLATE_LIST_TEST_CASE("export_tests", "[export]", KnownGenerators) {
         std::ifstream in(current.native());
         bool finished_expr = false;
         bool inside_meta = false;
+        bool set_format = false;
         std::string current_format;
         for (std::string line; std::getline(in, line);) {
           if (line.starts_with("=====")) {
             finished_expr = true;
+            set_format = false;
             inside_meta = !inside_meta;
           } else if (!finished_expr) {
             expression += line;
@@ -159,11 +238,16 @@ TEMPLATE_LIST_TEST_CASE("export_tests", "[export]", KnownGenerators) {
               // Comment
               continue;
             }
-            // To avoid spurious spaces
-            REQUIRE(!line.ends_with(" "));
-            REQUIRE(!line.starts_with(" "));
-            current_format = line;
-            REQUIRE(known_formats.find(current_format) != known_formats.end());
+            if (!set_format) {
+              current_format = boost::trim_copy(line);
+              if (known_formats.find(current_format) == known_formats.end()) {
+                FAIL("Unknown format '" + current_format + "'");
+              }
+              set_format = true;
+            } else if (current_format == generator.get_format_name()) {
+              // Context definition
+              add_to_context(context, line);
+            }
           } else if (current_format == generator.get_format_name()) {
             if (expected_output.has_value()) {
               expected_output.value() += "\n";
@@ -179,7 +263,6 @@ TEMPLATE_LIST_TEST_CASE("export_tests", "[export]", KnownGenerators) {
         // This is not a test case for the current generator
         continue;
       }
-      skippedAll = false;
 
       REQUIRE(!expression.empty());
 
@@ -193,10 +276,6 @@ TEMPLATE_LIST_TEST_CASE("export_tests", "[export]", KnownGenerators) {
       REQUIRE_THAT(generator.get_generated_code(),
                    DiffedStringEquals(expected_output.value()));
     }
-  }
-
-  if (skippedAll) {
-    SKIP("No test cases for this generator");
   }
 }
 

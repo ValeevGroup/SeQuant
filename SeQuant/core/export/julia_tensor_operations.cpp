@@ -46,4 +46,14 @@ std::string JuliaTensorOperationsGeneratorContext::get_tags(
   return tags;
 }
 
+void JuliaTensorOperationsGeneratorContext::set_tag(const IndexSpace &space,
+                                                    std::string tag) {
+  m_index_tags[space] = std::move(tag);
+}
+
+void JuliaTensorOperationsGeneratorContext::set_dim(const IndexSpace &space,
+                                                    std::string dim) {
+  m_index_dims[space] = std::move(dim);
+}
+
 }  // namespace sequant
