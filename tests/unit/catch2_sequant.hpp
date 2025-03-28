@@ -172,6 +172,11 @@ class StringDiffMatcher : public Catch::Matchers::MatcherGenericBase {
       lines.push_back(std::move(line));
     }
 
+    if (input.ends_with('\n')) {
+      // Add terminating empty line
+      lines.emplace_back("");
+    }
+
     return lines;
   }
 };
