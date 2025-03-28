@@ -108,7 +108,7 @@ template <CacheCheck Cache = CacheCheck::Checked, meta::can_evaluate Node,
           typename F>
   requires meta::leaf_node_evaluator<Node, F>
 ERPtr evaluate(Node const& node,  //
-               F le,              //
+               F const& le,       //
                CacheManager& cache) {
   if constexpr (Cache == CacheCheck::Checked) {  // return from cache if found
 
@@ -198,7 +198,7 @@ template <meta::can_evaluate Node, typename F>
   requires meta::leaf_node_evaluator<Node, F>  //
 ERPtr evaluate(Node const& node,               //
                auto const& layout,             //
-               F le,                           //
+               F const& le,                    //
                CacheManager& cache) {
   log_term("[TERM]", " ", to_string(deparse(to_expr(node))), '\n');
   struct {
@@ -227,7 +227,7 @@ template <meta::can_evaluate_range Nodes, typename F>
   requires meta::leaf_node_evaluator<std::ranges::range_value_t<Nodes>, F>
 ERPtr evaluate(Nodes const& nodes,  //
                auto const& layout,  //
-               F le, CacheManager& cache) {
+               F const& le, CacheManager& cache) {
   ERPtr result;
 
   for (auto&& n : nodes) {
