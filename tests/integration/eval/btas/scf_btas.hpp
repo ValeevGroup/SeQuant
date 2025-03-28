@@ -89,7 +89,8 @@ class SequantEvalScfBTAS final : public SequantEvalScf {
       auto k = tnsr.ket() | ranges::to_vector;
       ranges::sort(b, Index::LabelCompare{});
       ranges::sort(k, Index::LabelCompare{});
-      return index_hash(concat(b, k)) | ranges::to<EvalExprBTAS::annot_t>;
+      return EvalExprBTAS::index_hash(concat(b, k)) |
+             ranges::to<EvalExprBTAS::annot_t>;
     };
 
     auto rs = repeat_n(Tensor_t{}, info_.eqn_opts.excit) | ranges::to_vector;
