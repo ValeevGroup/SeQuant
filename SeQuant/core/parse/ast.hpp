@@ -14,6 +14,7 @@
 
 #include <cstdint>
 #include <string>
+#include <variant>
 #include <vector>
 
 namespace sequant::parse::ast {
@@ -125,6 +126,17 @@ Product::Product(std::vector<NullaryValue> factors)
 
 Sum::Sum(std::vector<Product> summands) : summands(std::move(summands)) {}
 
+struct ResultExpr : boost::spirit::x3::position_tagged {
+  std::variant<Tensor, Variable> lhs;
+  Sum rhs;
+
+  ResultExpr(Variable variable = {}, Sum expr = {})
+      : lhs(std::move(variable)), rhs(std::move(expr)) {}
+
+  ResultExpr(Tensor tensor, Sum expr)
+      : lhs(std::move(tensor)), rhs(std::move(expr)) {}
+};
+
 }  // namespace sequant::parse::ast
 
 BOOST_FUSION_ADAPT_STRUCT(sequant::parse::ast::IndexLabel, label, id);
@@ -139,5 +151,6 @@ BOOST_FUSION_ADAPT_STRUCT(sequant::parse::ast::Tensor, name, indices, symmetry);
 
 BOOST_FUSION_ADAPT_STRUCT(sequant::parse::ast::Product, factors);
 BOOST_FUSION_ADAPT_STRUCT(sequant::parse::ast::Sum, summands);
+BOOST_FUSION_ADAPT_STRUCT(sequant::parse::ast::ResultExpr, lhs, rhs);
 
 #endif  // SEQUANT_CORE_PARSE_AST_HPP

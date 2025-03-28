@@ -16,6 +16,7 @@
 #include <SeQuant/domain/mbpt/context.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/op.hpp>
+#include <SeQuant/domain/mbpt/rules/df.hpp>
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers.hpp>
@@ -330,7 +331,7 @@ TEST_CASE("mbpt", "[mbpt]") {
       auto theta1 = θ(1)->as<op_t>();
       // std::wcout << "theta1: " << to_latex(simplify(theta1.tensor_form()));
       REQUIRE(to_latex(simplify(theta1.tensor_form())) ==
-              L"{{\\theta^{{p_1}}_{{p_2}}}{\\tilde{a}^{{p_2}}_{{p_1}}}}");
+              L"{{\\theta^{{p_2}}_{{p_1}}}{\\tilde{a}^{{p_1}}_{{p_2}}}}");
 
       auto R_2 = R_(2)->as<op_t>();
       //    std::wcout << "R_2: " << to_latex(simplify(R_2.tensor_form())) <<
@@ -684,5 +685,38 @@ SECTION("MRSF") {
     }
   });
 }  // SECTION("MRSF")
+}
+
+SECTION("rules") {
+  using namespace sequant;
+
+  SECTION("density-fit") {
+    const std::vector<std::wstring> inputs = {
+        L"t{a1,a2;i1,i2} t{a3;i3}",
+        L"t{a1,a2;i1,i2} g{i1,i2;a1,a2}",
+        L"t{a1,a2;i1,i2} g{i1,i2;a1,a2}:A",
+    };
+    const std::vector<std::wstring> expected = {
+        L"t{a1,a2;i1,i2} t{a3;i3}",
+        L"t{a1,a2;i1,i2} B{i1;a1;x_1} B{i2;a2;x_1}",
+        L"t{a1,a2;i1,i2} (B{i1;a1;x_1} B{i2;a2;x_1} "
+        "- B{i2;a1;x_1} B{i1;a2;x_1})",
+    };
+
+    REQUIRE(inputs.size() == expected.size());
+
+    for (std::size_t i = 0; i < inputs.size(); ++i) {
+      CAPTURE(inputs.at(i));
+
+      ExprPtr input_expr = parse_expr(inputs.at(i));
+
+      const IndexSpace aux_space =
+          get_default_context().index_space_registry()->retrieve(L"x");
+
+      ExprPtr actual = mbpt::density_fit(input_expr, aux_space, L"g", L"B");
+
+      REQUIRE_THAT(actual, EquivalentTo(expected.at(i)));
+    }
+  }
 }
 }

@@ -243,16 +243,36 @@ TEST_CASE("spin", "[spin]") {
     REQUIRE_THAT(result, EquivalentTo("1/4"));
     REQUIRE_THAT(swap_spin(exprPtr), EquivalentTo("1/4"));
   }
+  SECTION("Variable") {
+    auto exprPtr = ex<Variable>(L"Var");
+    auto result = spintrace(exprPtr);
+    REQUIRE(result->is<Variable>());
+    REQUIRE(result->is_atom());
+    REQUIRE(result->as<Variable>().label() == L"Var");
+    REQUIRE(to_latex(swap_spin(exprPtr->clone())) == to_latex(exprPtr));
+  }
 
   SECTION("Tensor") {
-    const auto expr = ex<Constant>(rational{1, 4}) *
-                      ex<Tensor>(L"g", bra{L"p_1", L"p_2"}, ket{L"p_3", L"p_4"},
-                                 Symmetry::antisymm);
-    auto result = spintrace(expr);
-    REQUIRE(result->is<Sum>());
-    canonicalize(result);
-    REQUIRE(result->size() == 2);
-    REQUIRE_THAT(result, EquivalentTo("- g{p1,p2;p4,p3} + g{p1,p2;p3,p4}"));
+    {
+      const auto expr = ex<Constant>(rational{1, 4}) *
+                        ex<Tensor>(L"g", bra{L"p_1", L"p_2"},
+                                   ket{L"p_3", L"p_4"}, Symmetry::antisymm);
+      auto result = spintrace(expr, {{L"p_1", L"p_3"}, {L"p_2", L"p_4"}});
+      REQUIRE_THAT(result,
+                   EquivalentTo("-1/2 g{p1,p2;p4,p3} + g{p1,p2;p3,p4}"));
+    }
+    {
+      // Note the provided external index pairings which is different from the
+      // way this tensor is written down Also, the prefactor of -1 is important
+      // as this forces the code to take a path where it traces a product which
+      // ends up as a single tensor (due to an additional factor of -1 induces
+      // by the chosen pairing of external indices)
+      ExprPtr expr = parse_expr(L"- g{p1,p2;p3,p4}:A");
+      ExprPtr result = spintrace(expr, {{L"p_1", L"p_4"}, {L"p_2", L"p_3"}});
+
+      REQUIRE_THAT(result,
+                   EquivalentTo(L"4 g{p1,p2;p4,p3} - 2 g{p1,p2;p3,p4}"));
+    }
   }
 
   SECTION("Product") {
@@ -277,6 +297,28 @@ TEST_CASE("spin", "[spin]") {
                    EquivalentTo("- g{i1,i2;a1,a2} t{a1;i2} t{a2;i1} "
                                 "+ 2 g{i1,i2;a1,a2} t{a1;i1} t{a2;i2}"));
     }
+  }
+
+  SECTION("Scaled Product with variable") {
+    ExprPtr expr = parse_expr(L"1/2 Var g{i1,i2;a1,a2}:A t{a1;i1} t{a2;i2}");
+    auto result = spintrace(expr, {{L"i_1", L"a_1"}});
+    canonicalize(result);
+    REQUIRE_THAT(
+        result,
+        EquivalentTo(
+            L"2 Var * g{i_1,i_2;a_1,a_2}:N * t{a_1;i_1}:N * t{a_2;i_2}:N"
+            " - 1 Var * g{i_1,i_2;a_1,a_2}:N * t{a_1;i_2}:N * t{a_2;i_1}:N"));
+  }
+
+  SECTION("Tensor times variable") {
+    ResultExpr expr = parse_result_expr(
+        L"R2{a1,a2;i1,i2}:A = 1/4 A{i1,i2;a1,a2}:A INTkx{a1,a2;i1,i2}:A H");
+    auto results = closed_shell_spintrace(expr);
+    REQUIRE_THAT(
+        results.at(0),
+        EquivalentTo(L"R2{a_1,a_2;i_1,i_2}:N = -1 H * S{i_1,i_2;a_1,a_2}:N "
+                     L"* INTkx{a_1,a_2;i_2,i_1}:N + 2 H * "
+                     L"S{i_1,i_2;a_1,a_2}:N * INTkx{a_1,a_2;i_1,i_2}:N"));
   }
 
   SECTION("Sum") {
@@ -574,32 +616,6 @@ SECTION("Symmetrize expression") {
   }
 }
 
-SECTION("Transform expression") {
-  // - A * g * t1
-  const auto input = ex<Constant>(-1) *
-                     ex<Tensor>(L"A", bra{L"i_1"}, ket{L"a_1"}) *
-                     ex<Tensor>(L"g", bra{L"i_2", L"a_1"}, ket{L"i_1", L"a_2"},
-                                Symmetry::antisymm) *
-                     ex<Tensor>(L"t", bra{L"a_2"}, ket{L"i_2"});
-  auto result =
-      ex<Constant>(rational{1, 2}) * spintrace(input, {{L"i_1", L"a_1"}});
-  expand(result);
-  rapid_simplify(result);
-  canonicalize(result);
-  REQUIRE_THAT(
-      result,
-      EquivalentTo("- g{a1,i2;a2,i1} t{a2;i2} + 2 g{a1,i2;i1,a2} t{a2;i2}"));
-
-  container::map<Index, Index> idxmap = {{Index{L"i_1"}, Index{L"i_2"}},
-                                         {Index{L"i_2"}, Index{L"i_1"}}};
-  auto transformed_result = transform_expr(result, idxmap);
-  REQUIRE(transformed_result->is<Sum>());
-  REQUIRE(transformed_result->size() == 2);
-  REQUIRE_THAT(
-      transformed_result,
-      EquivalentTo("- g{a1,i1;a2,i2} t{a2;i1} + 2 g{a1,i1;i2,a2} t{a2;i1}"));
-}
-
 SECTION("Swap bra kets") {
   // Constant
   {
@@ -680,31 +696,6 @@ SECTION("Closed-shell spintrace CCSD") {
     rapid_simplify(result);
     canonicalize(result);
     REQUIRE_THAT(result, EquivalentTo("f{a1;i1}"));
-  }
-
-  {
-    // Transform indices in an expression
-    // - A * g * t1
-    const auto input = ex<Constant>(-1) *
-                       ex<Tensor>(L"A", bra{L"i_1"}, ket{L"a_1"}) *
-                       ex<Tensor>(L"g", bra{L"i_2", L"a_1"},
-                                  ket{L"i_1", L"a_2"}, Symmetry::antisymm) *
-                       ex<Tensor>(L"t", bra{L"a_2"}, ket{L"i_2"});
-    auto result =
-        ex<Constant>(rational{1, 2}) * spintrace(input, {{L"i_1", L"a_1"}});
-    simplify(result);
-
-    REQUIRE(
-        to_latex(result) ==
-        L"{ \\bigl( - {{g^{{i_1}{a_2}}_{{i_2}{a_1}}}{t^{{i_2}}_{{a_2}}}} + "
-        L"{{{2}}{g^{{a_2}{i_1}}_{{i_2}{a_1}}}{t^{{i_2}}_{{a_2}}}}\\bigr) }");
-    container::map<Index, Index> idxmap = {{Index{L"i_1"}, Index{L"i_2"}},
-                                           {Index{L"i_2"}, Index{L"i_1"}}};
-    auto transformed_result = transform_expr(result, idxmap);
-    REQUIRE(
-        to_latex(transformed_result) ==
-        L"{ \\bigl( - {{g^{{i_2}{a_2}}_{{i_1}{a_1}}}{t^{{i_1}}_{{a_2}}}} + "
-        L"{{{2}}{g^{{a_2}{i_2}}_{{i_1}{a_1}}}{t^{{i_1}}_{{a_2}}}}\\bigr) }");
   }
 
   {
@@ -1358,6 +1349,75 @@ SECTION("Open-shell spin-tracing") {
     auto result2 = open_shell_spintrace(
         input2, {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}, {L"i_3", L"a_3"}});
     REQUIRE(result2[1]->size() == 24);
+  }
+}
+
+SECTION("ResultExpr") {
+  auto resetter = set_scoped_default_context(
+      Context(mbpt::make_mr_spaces(), Vacuum::SingleProduct));
+
+  const std::vector<std::wstring> inputs = {
+      L"R = 1/4",
+      L"R = Var",
+      L"R{p1,p2;p3,p4}:A = g{p1,p2;p3,p4}:A",
+      L"R = f{i1;a1} t{a1;i1}",
+      L"R = 1/2 Var g{i1,i2;a1,a2}:A t{a1;i1} t{a2;i2}",
+      L"R{a1,a2;i1,u1}:A = g{a1,a2;i1,u1}:A",
+      L"R{a1,u1;i1,i2}:A = g{a1,u1;i1,i2}:A",
+      L"R{a1,u1;i1,u2}:A = g{a1,u1;i1,u2}:A",
+      L"R{a1,u1;i1,u2}:A = f{a1;i1}:A γ{u1;u2}:A + g{a1,u1;i1,u3}:A γ{u3;u2}:A",
+  };
+  const std::vector<std::vector<std::wstring>> expected_outputs = {
+      {L"R = 1/4"},
+      {L"R = Var"},
+      {L"R{p1,p2;p3,p4} = 4 g{p1,p2;p3,p4} - 2 g{p2,p1;p3,p4}"},
+      {L"R = 2 f{i1;a1} t{a1;i1}"},
+      {L"R = 2 Var * g{i_1,i_2;a_1,a_2} * t{a_1;i_1} * t{a_2;i_2}"
+       " - 1 Var * g{i_1,i_2;a_1,a_2} * t{a_1;i_2} * t{a_2;i_1}"},
+      {L"R{a1,a2;i1,u1} = 4 g{a1,a2;i1,u1} - 2 g{a2,a1;i1,u1}"},
+      {L"R{a1,u1;i1,i2} = 4 g{a1,u1;i1,i2} - 2 g{a1,u1;i2,i1}"},
+      {L"R{a1,u1;u2,i1} = 4 g{u1,a1;i1,u2} - 2 g{u1,a1;u2,i1}",
+       L"R{a1,u1;i1,u2} = 4 g{a1,u1;i1,u2} - 2 g{u1,a1;i1,u2}"},
+      {
+          L"R{a1,u1;u2,i1} = -2 f{a1;i1} γ{u1;u2} "
+          "- 2 g{a1,u1;i1,u3} γ{u3;u2} "
+          "+ 4 g{a1,u1;u3,i1} γ{u3;u2}",
+          L"R{a1,u1;i1,u2} = 4 f{a1;i1} γ{u1;u2} "
+          "+ 4 g{a1,u1;i1,u3} γ{u3;u2} "
+          "- 2 g{a1,u1;u3,i1} γ{u3;u2}",
+      },
+  };
+
+  REQUIRE(inputs.size() == expected_outputs.size());
+
+  for (std::size_t i = 0; i < inputs.size(); ++i) {
+    CAPTURE(inputs.at(i));
+    const ResultExpr input = parse_result_expr(inputs.at(i));
+
+    container::svector<ResultExpr> expected;
+    for (std::size_t k = 0; k < expected_outputs.at(i).size(); ++k) {
+      expected.push_back(parse_result_expr(expected_outputs.at(i).at(k)));
+    }
+
+    SECTION("closed_shell" + std::to_string(i)) {
+      container::svector<ResultExpr> actual =
+          closed_shell_spintrace(input.clone());
+
+      REQUIRE(actual.size() == expected.size());
+      for (std::size_t k = 0; k < expected.size(); ++k) {
+        CAPTURE(k);
+        REQUIRE_THAT(actual.at(k), EquivalentTo(expected.at(k)));
+      }
+    }
+    SECTION("rigorous" + std::to_string(i)) {
+      container::svector<ResultExpr> actual = spintrace(input.clone());
+
+      REQUIRE(actual.size() == expected.size());
+      for (std::size_t k = 0; k < expected.size(); ++k) {
+        CAPTURE(k);
+        REQUIRE_THAT(actual.at(k), EquivalentTo(expected.at(k)));
+      }
+    }
   }
 }
 }
