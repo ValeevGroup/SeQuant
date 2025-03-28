@@ -158,8 +158,8 @@ class rand_tensor_yield {
         .first->second;
   }
 
-  template <typename T, typename = std::enable_if_t<sequant::IsEvaluable<T>>>
-  sequant::ERPtr operator()(T const& node) const {
+  sequant::ERPtr operator()(
+      sequant::meta::can_evaluate auto const& node) const {
     using namespace sequant;
     if (node->is_tensor()) return (*this)(node->as_tensor());
 

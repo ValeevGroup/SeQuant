@@ -13,11 +13,8 @@
 
 namespace sequant {
 
-template <typename T, typename = std::enable_if_t<meta::is_eval_expr<T>>>
-using EvalNode = FullBinaryNode<T>;
-
-template <typename ExprT>
-ExprPtr linearize_eval_node(EvalNode<ExprT> const& node) {
+template <meta::eval_node Node>
+ExprPtr linearize_eval_node(Node const& node) {
   if (node.leaf()) return to_expr(node);
 
   ExprPtr lres = linearize_eval_node(node.left());

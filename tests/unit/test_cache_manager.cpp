@@ -1,4 +1,5 @@
 #include <SeQuant/domain/eval/cache_manager.hpp>
+#include <SeQuant/domain/eval/eval_result.hpp>
 #include <iostream>
 #include <range/v3/view.hpp>
 

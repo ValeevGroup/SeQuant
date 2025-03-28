@@ -102,8 +102,8 @@ class rand_tensor_yield {
     return success.first->second;
   }
 
-  template <typename T, typename = std::enable_if_t<sequant::IsEvaluable<T>>>
-  sequant::ERPtr operator()(T const& node) const {
+  sequant::ERPtr operator()(
+      sequant::meta::can_evaluate auto const& node) const {
     using namespace sequant;
     if (node->result_type() == sequant::ResultType::Tensor) {
       assert(node->expr()->template is<sequant::Tensor>());
@@ -144,11 +144,12 @@ template <
         ,
         bool> = true>
 container::svector<long> tidxs(Iterable const& indices) noexcept {
-  return sequant::index_hash(indices) | ranges::to<container::svector<long>>;
+  return sequant::EvalExprBTAS::index_hash(indices) |
+         ranges::to<container::svector<long>>;
 }
 
 container::svector<long> tidxs(Tensor const& tnsr) noexcept {
-  return sequant::index_hash(tnsr.const_braket()) |
+  return sequant::EvalExprBTAS::index_hash(tnsr.const_braket()) |
          ranges::to<container::svector<long>>;
 }
 
@@ -201,6 +202,7 @@ TEST_CASE("eval_with_btas", "[eval_btas]") {
 
   auto eval_symm = [&yield_](sequant::ExprPtr const& expr,
                              container::svector<long> const& target_labels) {
+    auto cache = sequant::CacheManager::empty();
     return evaluate_symm(eval_node(expr), target_labels, yield_)
         ->get<BTensorD>();
   };

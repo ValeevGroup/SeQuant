@@ -315,6 +315,7 @@ if (TARGET tiledarray)
             SeQuant/domain/eval/eval.hpp
             SeQuant/domain/eval/eval_result.cpp
             SeQuant/domain/eval/eval_result.hpp
+            SeQuant/domain/eval/eval_fwd.hpp
             )
 endif ()
 

@@ -189,8 +189,7 @@ class DataWorldTA {
     return slice;
   }
 
-  template <typename NodeT, typename = std::enable_if_t<IsEvaluable<NodeT>>>
-  ERPtr operator()(NodeT const& n) const {
+  ERPtr operator()(sequant::meta::can_evaluate auto const& n) const {
     using numeric_type = typename Tensor_t::numeric_type;
     if (n->result_type() == ResultType::Scalar) {
       assert(n->expr()->template is<Constant>());

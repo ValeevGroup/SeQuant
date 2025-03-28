@@ -104,7 +104,7 @@ void max_cache(NodeT const& node,  //
       curr += Memory{}(node);
       max = std::max(curr, max);
       // simulate cache store
-      auto s = cm.store(k, eval_result<EvalScalar<double>>(0));
+      auto s = cm.store(k, nullptr);
       //      std::cout << "[STORE][" << k << "]\n";
       //      std::cout << "[ACCESS][" << k << "]\n";
     }

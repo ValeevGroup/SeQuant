@@ -148,25 +148,40 @@ class EvalExpr {
   [[nodiscard]] bool is_variable() const noexcept;
 
   ///
+  /// \return True if the evaluation is terminal (eg. a leaf tensor).
+  ///
+  [[nodiscard]] bool is_id() const noexcept;
+
+  ///
+  /// \return True if the evaluation is a product.
+  ///
+  [[nodiscard]] bool is_prod() const noexcept;
+
+  ///
+  /// \return True if the evaluation is a sum.
+  ///
+  [[nodiscard]] bool is_sum() const noexcept;
+
+  ///
   /// \brief Calls to<Tensor>() on ExprPtr held by this object.
   ///
   /// \return Tensor const&
   ///
-  [[nodiscard]] Tensor const& as_tensor() const noexcept;
+  [[nodiscard]] Tensor const& as_tensor() const;
 
   ///
   /// \brief Calls to<Constant>() on ExprPtr held by this object.
   ///
   /// \return Constant const&.
   ///
-  [[nodiscard]] Constant const& as_constant() const noexcept;
+  [[nodiscard]] Constant const& as_constant() const;
 
   ///
   /// \brief Calls to<Variable>() on ExprPtr held by this object.
   ///
   /// \return Variable const&
   ///
-  [[nodiscard]] Variable const& as_variable() const noexcept;
+  [[nodiscard]] Variable const& as_variable() const;
 
   ///
   /// \brief Get the label for this object useful for logging.
@@ -205,6 +220,8 @@ class EvalExpr {
 };
 
 namespace meta {
+
+namespace {
 template <typename, typename = void>
 constexpr bool is_eval_expr{};
 
@@ -219,22 +236,26 @@ template <typename T>
 constexpr bool
     is_eval_node<FullBinaryNode<T>, std::enable_if_t<is_eval_expr<T>>>{true};
 
-template <typename T>
-constexpr bool is_eval_node<const FullBinaryNode<T>,
-                            std::enable_if_t<is_eval_expr<T>>>{true};
+}  // namespace
 
-template <typename, typename = void>
-constexpr bool is_eval_node_range{};
+template <typename T>
+concept eval_expr = is_eval_expr<T>;
+
+template <typename T>
+concept eval_node = is_eval_node<std::remove_cvref_t<T>>;
 
 template <typename Rng>
-constexpr bool is_eval_node_range<
-    Rng, std::enable_if_t<is_eval_node<meta::range_value_t<Rng>>>> = true;
+concept eval_node_range =
+    std::ranges::range<Rng> && eval_node<std::ranges::range_value_t<Rng>>;
 
 }  // namespace meta
 
 namespace impl {
 FullBinaryNode<EvalExpr> binarize(ExprPtr const&);
 }
+
+template <meta::eval_expr T>
+using EvalNode = FullBinaryNode<T>;
 
 ///
 /// Creates a binary tree of evaluation.

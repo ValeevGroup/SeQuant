@@ -5,7 +5,7 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/eval_node.hpp>
 #include <SeQuant/core/expr.hpp>
-#include <SeQuant/domain/eval/eval_result.hpp>
+#include <SeQuant/domain/eval/eval_fwd.hpp>
 
 #include <memory>
 #include <range/v3/view.hpp>
@@ -124,9 +124,7 @@ class CacheManager {
 ///
 /// \see CacheManager
 ///
-template <typename NodesI,
-          typename = std::enable_if_t<meta::is_eval_node_range<NodesI>>>
-CacheManager cache_manager(NodesI const& nodes,
+CacheManager cache_manager(meta::eval_node_range auto const& nodes,
                            size_t min_repeats = 2) noexcept {
   auto imed_counts = container::map<size_t, size_t>{};
 

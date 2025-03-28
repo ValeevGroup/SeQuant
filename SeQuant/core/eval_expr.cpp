@@ -146,17 +146,17 @@ bool EvalExpr::is_variable() const noexcept {
   return expr().is<Variable>() && result_type() == ResultType::Scalar;
 }
 
-Tensor const& EvalExpr::as_tensor() const noexcept {
-  return expr().as<Tensor>();
-}
+bool EvalExpr::is_id() const noexcept { return op_type() == EvalOp::Id; }
 
-Constant const& EvalExpr::as_constant() const noexcept {
-  return expr().as<Constant>();
-}
+bool EvalExpr::is_sum() const noexcept { return op_type() == EvalOp::Sum; }
 
-Variable const& EvalExpr::as_variable() const noexcept {
-  return expr().as<Variable>();
-}
+bool EvalExpr::is_prod() const noexcept { return op_type() == EvalOp::Prod; }
+
+Tensor const& EvalExpr::as_tensor() const { return expr().as<Tensor>(); }
+
+Constant const& EvalExpr::as_constant() const { return expr().as<Constant>(); }
+
+Variable const& EvalExpr::as_variable() const { return expr().as<Variable>(); }
 
 std::string EvalExpr::label() const noexcept {
   if (is_tensor())

@@ -6,6 +6,7 @@
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/logger.hpp>
+#include <SeQuant/domain/eval/eval_fwd.hpp>
 
 #include <TiledArray/einsum/tiledarray.h>
 #include <btas/btas.h>
@@ -32,29 +33,6 @@ namespace {
   return std::logic_error{"Not implemented in this derived class: "s +
                           msg.data()};
 }
-
-///
-/// \brief This class represents a triplet of annotations used in a tensor
-///        contraction or summation.
-///
-/// \tparam T Annotation type eg. TA::DistArray takes std::string.
-///
-template <typename T>
-struct Annot {
-  explicit Annot(std::array<std::any, 3> const& a)
-      : lannot(std::any_cast<T>(a[0])),
-        rannot(std::any_cast<T>(a[1])),
-        this_annot(std::any_cast<T>(a[2])) {}
-
-  /// Annotation of the left operand.
-  T const lannot;
-
-  /// Annotation of the right operand.
-  T const rannot;
-
-  /// Annotation of the result.
-  T const this_annot;
-};
 
 // It is an iterator type
 template <typename It>
@@ -155,27 +133,6 @@ std::string ords_to_annot(RngOfOrdinals const& ords) {
   auto to_str = [](auto x) { return std::to_string(x); };
   return ords | transform(to_str) | intersperse(std::string{","}) | join |
          ranges::to<std::string>;
-}
-
-///
-/// \param bk iterable of Index objects.
-/// \return vector of long-type hash values
-///         of the labels of indices in \c bk
-///
-template <typename Iterable>
-auto index_hash(Iterable const& bk) {
-  return ranges::views::transform(bk, [](auto const& idx) {
-    //
-    // WARNING!
-    // The BTAS expects index types to be long by default.
-    // There is no straight-forward way to turn the default.
-    // Hence, here we explicitly cast the size_t values to long
-    // Which is a potentially narrowing conversion leading to
-    // integral overflow. Hence, the values in the returned
-    // container are mixed negative and positive integers (long type)
-    //
-    return static_cast<long>(sequant::hash::value(Index{idx}.label()));
-  });
 }
 
 ///
@@ -408,10 +365,6 @@ inline void log_constant(Args const&... args) noexcept {
 /// \param label string to prepend to the profile
 void log_ta_tensor_host_memory_use(madness::World& world,
                                    std::string_view label = "");
-
-class EvalResult;
-
-using ERPtr = std::shared_ptr<EvalResult>;
 
 ///
 /// \brief Factory function for EvalResult objects.
