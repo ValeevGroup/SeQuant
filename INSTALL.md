@@ -17,7 +17,7 @@ While in the SeQuant source directory:
     * [libPerm](https://github.com/Krzmbrzl/libPerm), tag 8e4afd1461baffa5d829c8fed059f5a172a3b060, *if not found, SeQuant will download and build libPerm*
   * optional:
     * for building coupled-cluster evaluation tests:
-      * [TiledArray](https://github.com/ValeevGroup/tiledarray.git), tag 4a646d0c96cd0283eb34185aaf5f5b6fcc302bb2
+      * [TiledArray](https://github.com/ValeevGroup/tiledarray.git), tag 04b635a967f4754276e192e5d923305f54089a4f
     * for building `stcc*` test programs
         * [Eigen](http://eigen.tuxfamily.org/), version 3
 
