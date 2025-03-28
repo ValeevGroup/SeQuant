@@ -13,6 +13,10 @@ namespace sequant {
 
 class Tensor;
 
+namespace detail {
+std::size_t next_eval_expr_id();
+}
+
 ///
 /// \brief The EvalOp enum
 ///
@@ -108,10 +112,15 @@ class EvalExpr {
   ///
   [[nodiscard]] size_t hash_value() const noexcept;
 
+  /// \ return The ID of this object
+  [[nodiscard]] std::size_t id() const noexcept;
+
   ///
   /// \return The ExprPtr object that this EvalExpr object holds.
   ///
   [[nodiscard]] ExprPtr expr() const noexcept;
+
+  void set_expr(ExprPtr expr);
 
   ///
   /// \return True if this EvalExpr object contains a sequant tensor with
@@ -196,6 +205,8 @@ class EvalExpr {
   ResultType result_type_;
 
   size_t hash_value_;
+
+  std::size_t id_ = detail::next_eval_expr_id();
 
   index_vector canon_indices_;
 
