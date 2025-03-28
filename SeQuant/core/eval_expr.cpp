@@ -557,14 +557,38 @@ EvalExprNode binarize(Product const& prod) {
     auto left = fold_left_to_node(factors | move, make_prod);
     auto right = binarize(Constant{prod.scalar()});
 
-    auto h = left->hash_value();
-    hash::combine(h, right->hash_value());
-    auto result = EvalExpr{EvalOp::Prod,           //
-                           left->result_type(),    //
-                           left->expr(),           //
-                           left->canon_indices(),  //
-                           1,                      //
-                           h};
+    auto result = [&]() -> EvalExpr {
+      assert(!factors.empty());
+      EvalExpr res = *left;
+
+      if (factors.size() == 1) {
+        // Special case for when the product is just a scalar times a leaf
+        // In this case, we need to make sure to use a different label for
+        // the result (otherwise, we'd have the semantic of this expression
+        // being meant to overwrite the contained leaf with the scaled version)
+        auto imed = make_imed(*left, *right, EvalOp::Prod);
+
+        if (imed.is<Constant>()) {
+          res = EvalExpr(imed.as<Constant>());
+        } else if (imed.is<Variable>()) {
+          res = EvalExpr(imed.as<Variable>());
+        } else if (imed.is<Tensor>()) {
+          res = EvalExpr(imed.as<Tensor>());
+        } else {
+          throw std::runtime_error(
+              "Encountered unexpected intermediate type during binarization");
+        }
+      }
+
+      auto h = res.hash_value();
+      hash::combine(h, right->hash_value());
+      return EvalExpr{EvalOp::Prod,         //
+                      res.result_type(),    //
+                      res.expr(),           //
+                      res.canon_indices(),  //
+                      1,                    //
+                      h};
+    }();
     return EvalExprNode{std::move(result), std::move(left), std::move(right)};
   }
 }
