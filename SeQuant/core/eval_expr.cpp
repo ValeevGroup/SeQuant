@@ -559,9 +559,18 @@ EvalExprNode binarize(Product const& prod) {
 
     auto h = left->hash_value();
     hash::combine(h, right->hash_value());
+
+    ExprPtr result_expr = left->expr();
+    if (left->result_type() == ResultType::Tensor &&
+        left->op_type() == EvalOp::Id) {
+      auto const& t = left->as_tensor();
+      result_expr =
+          dummy::make_tensor(bra(t.bra()), ket(t.ket()), aux(t.aux()));
+    }
+
     auto result = EvalExpr{EvalOp::Prod,           //
                            left->result_type(),    //
-                           left->expr(),           //
+                           result_expr,            //
                            left->canon_indices(),  //
                            1,                      //
                            h};

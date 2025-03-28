@@ -289,5 +289,11 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
                      ->as<Tensor>()};
 
     REQUIRE_NOTHROW(result_expr(t1, t2, EvalOp::Prod));
+
+    auto const node = binarize(parse_expr(L"42 t{a1;i1}"));
+    REQUIRE(node->op_type() == EvalOp::Prod);
+    REQUIRE(node->is_tensor());
+    REQUIRE(!node.leaf());
+    REQUIRE(node->as_tensor().label() != L"t");
   }
 }
