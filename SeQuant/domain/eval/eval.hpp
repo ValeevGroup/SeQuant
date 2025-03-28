@@ -9,7 +9,7 @@
 #include <SeQuant/core/tensor.hpp>
 #include <SeQuant/domain/eval/cache_manager.hpp>
 #include <SeQuant/domain/eval/eval_fwd.hpp>
-#include <SeQuant/domain/eval/eval_result.hpp>
+#include <SeQuant/domain/eval/result.hpp>
 
 #include <btas/btas.h>
 #include <tiledarray.h>
@@ -107,12 +107,12 @@ enum struct CacheCheck { Checked, Unchecked };
 template <CacheCheck Cache = CacheCheck::Checked, meta::can_evaluate Node,
           typename F>
   requires meta::leaf_node_evaluator<Node, F>
-ERPtr evaluate(Node const& node,  //
-               F const& le,       //
-               CacheManager& cache) {
+ResultPtr evaluate(Node const& node,  //
+                   F const& le,       //
+                   CacheManager& cache) {
   if constexpr (Cache == CacheCheck::Checked) {  // return from cache if found
 
-    auto mult_by_phase = [phase = node->canon_phase()](ERPtr res) {
+    auto mult_by_phase = [phase = node->canon_phase()](ResultPtr res) {
       return phase == 1 ? res : res->mult_by_phase(phase);
     };
 
@@ -130,7 +130,7 @@ ERPtr evaluate(Node const& node,  //
     }
   }
 
-  ERPtr result;
+  ResultPtr result;
 
   Seconds seconds;
   size_t bytes;
@@ -138,8 +138,8 @@ ERPtr evaluate(Node const& node,  //
   if (node.leaf()) {
     seconds = timed_eval_inplace([&]() { result = le(node); });
   } else {
-    ERPtr const left = evaluate(node.left(), le, cache);
-    ERPtr const right = evaluate(node.right(), le, cache);
+    ResultPtr const left = evaluate(node.left(), le, cache);
+    ResultPtr const right = evaluate(node.right(), le, cache);
 
     assert(left);
     assert(right);
@@ -196,13 +196,13 @@ ERPtr evaluate(Node const& node,  //
 
 template <meta::can_evaluate Node, typename F>
   requires meta::leaf_node_evaluator<Node, F>  //
-ERPtr evaluate(Node const& node,               //
-               auto const& layout,             //
-               F const& le,                    //
-               CacheManager& cache) {
+ResultPtr evaluate(Node const& node,           //
+                   auto const& layout,         //
+                   F const& le,                //
+                   CacheManager& cache) {
   log_term("[TERM]", " ", to_string(deparse(to_expr(node))), '\n');
   struct {
-    ERPtr pre, post;
+    ResultPtr pre, post;
   } result;
   result.pre = evaluate(node, le, cache);
 
@@ -225,10 +225,10 @@ ERPtr evaluate(Node const& node,               //
 
 template <meta::can_evaluate_range Nodes, typename F>
   requires meta::leaf_node_evaluator<std::ranges::range_value_t<Nodes>, F>
-ERPtr evaluate(Nodes const& nodes,  //
-               auto const& layout,  //
-               F const& le, CacheManager& cache) {
-  ERPtr result;
+ResultPtr evaluate(Nodes const& nodes,  //
+                   auto const& layout,  //
+                   F const& le, CacheManager& cache) {
+  ResultPtr result;
 
   for (auto&& n : nodes) {
     if (!result) {
@@ -238,7 +238,7 @@ ERPtr evaluate(Nodes const& nodes,  //
 
     size_t bytes;
     Seconds seconds;
-    ERPtr pre = evaluate(n, layout, le, cache);
+    ResultPtr pre = evaluate(n, layout, le, cache);
     seconds = timed_eval_inplace([&]() { result->add_inplace(*pre); });
     bytes = result->size_in_bytes() + pre->size_in_bytes();
 
@@ -256,16 +256,16 @@ ERPtr evaluate(Nodes const& nodes,  //
 
 template <typename... Args>
   requires(!last_type_is_cache_manager<Args...>)
-ERPtr evaluate(Args&&... args) {
+ResultPtr evaluate(Args&&... args) {
   auto cache = CacheManager::empty();
   return evaluate(std::forward<Args>(args)..., cache);
 }
 
 template <typename... Args>
-[[deprecated]] ERPtr evaluate_symm(Args&&... args) {
-  ERPtr pre = evaluate(std::forward<Args>(args)...);
+[[deprecated]] ResultPtr evaluate_symm(Args&&... args) {
+  ResultPtr pre = evaluate(std::forward<Args>(args)...);
   assert(pre);
-  ERPtr result;
+  ResultPtr result;
   auto seconds = timed_eval_inplace([&]() { result = pre->symmetrize(); });
   size_t bytes = pre->size_in_bytes() + result->size_in_bytes();
 
@@ -289,7 +289,7 @@ template <typename... Args>
 }
 
 template <typename... Args>
-[[deprecated]] ERPtr evaluate_antisymm(Args&&... args) {
+[[deprecated]] ResultPtr evaluate_antisymm(Args&&... args) {
   size_t bra_rank;
   std::string node_label;  // for logging
   auto&& arg0 = std::get<0>(std::forward_as_tuple(std::forward<Args>(args)...));
@@ -300,10 +300,10 @@ template <typename... Args>
     bra_rank = arg0->as_tensor().bra_rank();
   }
 
-  ERPtr pre = evaluate(std::forward<Args>(args)...);
+  ResultPtr pre = evaluate(std::forward<Args>(args)...);
   assert(pre);
 
-  ERPtr result;
+  ResultPtr result;
   auto seconds =
       timed_eval_inplace([&]() { result = pre->antisymmetrize(bra_rank); });
   size_t bytes = pre->size_in_bytes() + result->size_in_bytes();

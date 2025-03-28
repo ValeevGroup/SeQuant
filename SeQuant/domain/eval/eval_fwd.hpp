@@ -12,9 +12,9 @@
 namespace sequant {
 
 struct CacheManager;
-struct EvalResult;
+struct Result;
 
-using ERPtr = std::shared_ptr<EvalResult>;
+using ResultPtr = std::shared_ptr<Result>;
 
 namespace meta {
 
@@ -36,7 +36,7 @@ concept can_evaluate_range =
 template <typename Node, typename F>
 concept leaf_node_evaluator =
     can_evaluate<Node> && requires(F f, Node const& n) {
-      { f(n) } -> std::same_as<ERPtr>;
+      { f(n) } -> std::same_as<ResultPtr>;
     };
 
 template <typename C>

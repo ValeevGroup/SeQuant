@@ -27,14 +27,14 @@ class CacheManager {
 
     size_t life_c;
 
-    ERPtr data_p;
+    ResultPtr data_p;
 
    public:
     explicit entry(size_t count) noexcept;
 
-    [[nodiscard]] ERPtr access() noexcept;
+    [[nodiscard]] ResultPtr access() noexcept;
 
-    void store(ERPtr data) noexcept;
+    void store(ResultPtr data) noexcept;
 
     void reset() noexcept;
 
@@ -47,7 +47,7 @@ class CacheManager {
 
   };  // entry
 
-  static ERPtr store(entry& entry, ERPtr data) noexcept;
+  static ResultPtr store(entry& entry, ResultPtr data) noexcept;
 
   container::map<key_type, entry> cache_map_;
 
@@ -66,8 +66,8 @@ class CacheManager {
   /// @brief Access cached data.
   ///
   /// @param key The that identifies the cached data.
-  /// @return ERPtr to EvalResult
-  ERPtr access(key_type key) noexcept;
+  /// @return ResultPtr to Result
+  ResultPtr access(key_type key) noexcept;
 
   ///
   /// @param key The key to identify the cached data.
@@ -77,7 +77,7 @@ class CacheManager {
   ///         entry. Passing @c key that was not present during construction of
   ///         this CacheManager object, stores nothing, but still returns a
   ///         valid pointer to @c data.
-  [[nodiscard]] ERPtr store(key_type key, ERPtr data) noexcept;
+  [[nodiscard]] ResultPtr store(key_type key, ResultPtr data) noexcept;
 
   ///
   /// \brief Check if the key exists in the database: does not check if cache

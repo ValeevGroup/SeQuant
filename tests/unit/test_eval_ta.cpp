@@ -135,7 +135,8 @@ class rand_tensor_yield {
   TA::World& world;
   size_t nocc_;
   size_t nvirt_;
-  mutable sequant::container::map<std::wstring, sequant::ERPtr> label_to_er_;
+  mutable sequant::container::map<std::wstring, sequant::ResultPtr>
+      label_to_er_;
 
  public:
   using array_type = TA::DistArray<TA::Tensor<NumericT>, TAPolicyT>;
@@ -146,8 +147,8 @@ class rand_tensor_yield {
   rand_tensor_yield(TA::World& world_, size_t nocc, size_t nvirt)
       : world{world_}, nocc_{nocc}, nvirt_{nvirt} {}
 
-  sequant::ERPtr operator()(sequant::Variable const& var) const {
-    using result_t = sequant::EvalScalar<NumericT>;
+  sequant::ResultPtr operator()(sequant::Variable const& var) const {
+    using result_t = sequant::ResultScalar<NumericT>;
 
     auto make_var = []() {
       return sequant::eval_result<result_t>(
@@ -158,7 +159,7 @@ class rand_tensor_yield {
         .first->second;
   }
 
-  sequant::ERPtr operator()(
+  sequant::ResultPtr operator()(
       sequant::meta::can_evaluate auto const& node) const {
     using namespace sequant;
     if (node->is_tensor()) return (*this)(node->as_tensor());
@@ -167,13 +168,13 @@ class rand_tensor_yield {
 
     assert(node->is_constant());
 
-    using result_t = EvalScalar<NumericT>;
+    using result_t = ResultScalar<NumericT>;
 
     auto d = (node->as_constant()).template value<NumericT>();
     return eval_result<result_t>(d);
   }
 
-  sequant::ERPtr operator()(sequant::Tensor const& tnsr) const {
+  sequant::ResultPtr operator()(sequant::Tensor const& tnsr) const {
     using namespace ranges::views;
     using namespace sequant;
 
@@ -184,7 +185,7 @@ class rand_tensor_yield {
       return found->second;
     }
 
-    ERPtr result{nullptr};
+    ResultPtr result{nullptr};
     auto isr = get_default_context().index_space_registry();
 
     auto make_extents = [this, &isr](auto&& ixs) -> container::svector<size_t> {
@@ -216,7 +217,7 @@ class rand_tensor_yield {
       for (auto it = array.begin(); it != array.end(); ++it)
         if (array.is_local(it.index()))
           *it = world.taskq.add(random_tensor<NumericT>, it.make_range());
-      result = eval_result<EvalTensorTA<ArrayT>>(array);
+      result = eval_result<ResultTensorTA<ArrayT>>(array);
     } else {
       // tensor of tensor
       using ArrayT = TA::DistArray<TA::Tensor<TA::Tensor<NumericT>>, TAPolicyT>;
@@ -234,11 +235,11 @@ class rand_tensor_yield {
         if (array.is_local(it.index()))
           *it = world.taskq.add(make_tile, it.make_range());
 
-      result = eval_result<EvalTensorOfTensorTA<ArrayT>>(array);
+      result = eval_result<ResultTensorOfTensorTA<ArrayT>>(array);
     }
 
     auto success = label_to_er_.emplace(label, result);
-    assert(success.second && "couldn't store ERPtr!");
+    assert(success.second && "couldn't store ResultPtr!");
     //    std::cout << "label = [" << sequant::to_string(label)
     //              << "] NotFound in cache. Creating.." << std::endl;
     assert(success.first->second);
@@ -250,19 +251,19 @@ class rand_tensor_yield {
   ///  - 't_vvoo', 'f_ov' for generic tensor key strings
   ///  - 't{a1,a2;i1,i2}', 'f{i1;a1}' supported by sequant::parse_expr
   ///
-  /// \return ERPtr
+  /// \return ResultPtr
   ///
-  /// \note The ERPtr should already exist in the cache otherwise throws.
+  /// \note The ResultPtr should already exist in the cache otherwise throws.
   ///       This overload is only intended to access already existing ERPtrs
   ///       from the cache. To create a new cache entry use the
   ///       operator()(Tesnor const&) overload.
   ///
-  sequant::ERPtr operator()(std::wstring_view label) const {
+  sequant::ResultPtr operator()(std::wstring_view label) const {
     auto&& found = label_to_er_.find(label.data());
     if (found == label_to_er_.end())
       found = label_to_er_.find(tensor_to_key(label));
     if (found == label_to_er_.end())
-      throw std::runtime_error{"attempted access of non-existent ERPtr!"};
+      throw std::runtime_error{"attempted access of non-existent ResultPtr!"};
     return found->second;
   }
 };

@@ -13,13 +13,13 @@ CacheManager::entry::entry(size_t count) noexcept
       life_c{count},    //
       data_p{nullptr} {}
 
-ERPtr CacheManager::entry::access() noexcept {
+ResultPtr CacheManager::entry::access() noexcept {
   if (!data_p) return nullptr;
 
   return decay() == 0 ? std::move(data_p) : data_p;
 }
 
-void CacheManager::entry::store(ERPtr data) noexcept { data_p = data; }
+void CacheManager::entry::store(ResultPtr data) noexcept { data_p = data; }
 
 void CacheManager::entry::reset() noexcept {
   life_c = max_life;
@@ -38,7 +38,8 @@ void CacheManager::entry::reset() noexcept {
   return life_c > 0 ? static_cast<int>(--life_c) : 0;
 }
 
-ERPtr CacheManager::store(CacheManager::entry& entry, ERPtr data) noexcept {
+ResultPtr CacheManager::store(CacheManager::entry& entry,
+                              ResultPtr data) noexcept {
   entry.store(data);
   return entry.access();
 }
@@ -47,14 +48,14 @@ void CacheManager::reset() noexcept {
   for (auto&& [k, v] : cache_map_) v.reset();
 }
 
-ERPtr CacheManager::access(key_type key) noexcept {
+ResultPtr CacheManager::access(key_type key) noexcept {
   if (auto&& found = cache_map_.find(key); found != cache_map_.end())
     return found->second.access();
 
   return nullptr;
 }
 
-ERPtr CacheManager::store(key_type key, ERPtr data) noexcept {
+ResultPtr CacheManager::store(key_type key, ResultPtr data) noexcept {
   if (auto&& found = cache_map_.find(key); found != cache_map_.end())
     return store(found->second, data);
   return data;

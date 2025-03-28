@@ -6,7 +6,7 @@
 #include <SeQuant/core/optimize.hpp>
 #include <SeQuant/core/parse.hpp>
 #include <SeQuant/domain/eval/eval.hpp>
-#include <SeQuant/domain/eval/eval_result.hpp>
+#include <SeQuant/domain/eval/result.hpp>
 
 #include <btas/btas.h>
 #include <btas/tensor_func.h>
@@ -51,7 +51,7 @@ class rand_tensor_yield {
  private:
   size_t const nocc_;
   size_t const nvirt_;
-  mutable std::map<std::wstring, sequant::ERPtr> label_to_tnsr_;
+  mutable std::map<std::wstring, sequant::ResultPtr> label_to_tnsr_;
 
  public:
   rand_tensor_yield(size_t noccupied, size_t nvirtual)
@@ -82,7 +82,7 @@ class rand_tensor_yield {
     return result;
   }
 
-  sequant::ERPtr operator()(sequant::Tensor const& tnsr) const {
+  sequant::ResultPtr operator()(sequant::Tensor const& tnsr) const {
     using namespace sequant;
     std::wstring const label = tensor_to_key(tnsr);
     if (auto&& found = label_to_tnsr_.find(label);
@@ -94,7 +94,7 @@ class rand_tensor_yield {
     }
     auto t = make_rand_tensor(tnsr);
     auto&& success = label_to_tnsr_.emplace(
-        label, eval_result<EvalTensorBTAS<Tensor_t>>(std::move(t)));
+        label, eval_result<ResultTensorBTAS<Tensor_t>>(std::move(t)));
     assert(success.second && "couldn't store tensor!");
     //    std::wcout << "label = [" << label << "] NotFound in cache.
     //    Creating.."
@@ -102,7 +102,7 @@ class rand_tensor_yield {
     return success.first->second;
   }
 
-  sequant::ERPtr operator()(
+  sequant::ResultPtr operator()(
       sequant::meta::can_evaluate auto const& node) const {
     using namespace sequant;
     if (node->result_type() == sequant::ResultType::Tensor) {
@@ -110,7 +110,7 @@ class rand_tensor_yield {
       return (*this)(node->expr()->template as<sequant::Tensor>());
     }
 
-    using result_t = EvalScalar<double>;
+    using result_t = ResultScalar<double>;
 
     assert(node->expr()->template is<sequant::Constant>());
     auto d = node->as_constant().template value<double>();
@@ -123,7 +123,7 @@ class rand_tensor_yield {
   /// \note The tensor should be already present in the yielder cache
   ///       otherwise throws assertion error. To avoid that use the other
   ///       overload of operator() that takes sequant::Tensor const&
-  sequant::ERPtr operator()(std::wstring_view label) const {
+  sequant::ResultPtr operator()(std::wstring_view label) const {
     auto&& found = label_to_tnsr_.find(label.data());
     if (found == label_to_tnsr_.end()) {
       assert(false && "attempted access of non-existent tensor!");
