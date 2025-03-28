@@ -28,3 +28,61 @@ Unload I[a_2, a_1]
 Persist I[i_1, a_1]
 
 =================================================
+Julia (TensorOperations)
+=================================================
+
+
+I_ov = zeros(Float64, nocc, nv)
+I_vv = zeros(Float64, nv, nv)
+A_vo = deserialize("A_vo.jlbin")
+B_ov = deserialize("B_ov.jlbin")
+@tensor I_vv[ a_2, a_1 ] += A_vo[ a_2, i_2 ] * B_ov[ i_2, a_1 ]
+B_ov = nothing
+A_vo = nothing
+C_ov = deserialize("C_ov.jlbin")
+@tensor I_ov[ i_1, a_1 ] += I_vv[ a_2, a_1 ] * C_ov[ i_1, a_2 ]
+C_ov = nothing
+I_vv = nothing
+return I_ov
+
+=================================================
+Julia (TensorKit)
+=================================================
+
+
+I_ov = TensorMap(zeros(Float64, nocc, nv), ℝ^nocc, ℝ^nv)
+I_vv = TensorMap(zeros(Float64, nv, nv), ℝ^nv, ℝ^nv)
+A_vo = TensorMap(deserialize("A_vo.jlbin"), ℝ^nv, ℝ^nocc)
+B_ov = TensorMap(deserialize("B_ov.jlbin"), ℝ^nocc, ℝ^nv)
+@tensor I_vv[ a_2, a_1 ] += A_vo[ a_2, i_2 ] * B_ov[ i_2, a_1 ]
+B_ov = nothing
+A_vo = nothing
+C_ov = TensorMap(deserialize("C_ov.jlbin"), ℝ^nocc, ℝ^nv)
+@tensor I_ov[ i_1, a_1 ] += I_vv[ a_2, a_1 ] * C_ov[ i_1, a_2 ]
+C_ov = nothing
+I_vv = nothing
+return I_ov
+
+=================================================
+Julia (ITensor)
+=================================================
+i_1 = Index(nocc, "i_1")
+i_2 = Index(nocc, "i_2")
+a_1 = Index(nv, "a_1")
+a_2 = Index(nv, "a_2")
+
+
+I_ov = ITensor(zeros(Float64, nocc, nv), i_1, a_1)
+I_vv = ITensor(zeros(Float64, nv, nv), a_2, a_1)
+A_vo = ITensor(deserialize("A_vo.jlbin"), a_2, i_2)
+B_ov = ITensor(deserialize("B_ov.jlbin"), i_2, a_1)
+I_vv += A_vo * B_ov
+B_ov = nothing
+A_vo = nothing
+C_ov = ITensor(deserialize("C_ov.jlbin"), i_1, a_2)
+I_ov += I_vv * C_ov
+C_ov = nothing
+I_vv = nothing
+return I_ov
+
+=================================================
