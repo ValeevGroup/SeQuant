@@ -17,8 +17,14 @@
 
 #include "catch2_sequant.hpp"
 
+#include <filesystem>
+#include <fstream>
+#include <optional>
 #include <string>
+#include <tuple>
 #include <vector>
+
+using namespace sequant;
 
 std::vector<std::vector<std::size_t>> twoElectronIntegralSymmetries() {
   // Symmetries of spin-summed (skeleton) two-electron integrals
@@ -60,616 +66,141 @@ class ItfContext : public sequant::itf::Context {
   }
 };
 
-TEST_CASE("export", "[export]") {
-  using namespace sequant;
+std::vector<std::filesystem::path> enumerate_export_tests() {
+#ifndef SEQUANT_UNIT_TESTS_SOURCE_DIR
+#error \
+    "Need source dir for unit tests in order to locate directory for export test files"
+#endif
+  std::filesystem::path base_dir = SEQUANT_UNIT_TESTS_SOURCE_DIR;
+  base_dir /= "export_tests";
 
-  SECTION("Tree processing") {
-    TextGenerator generator;
-    SECTION("basics") {
-      SECTION("binary_dot") {
-        ExprPtr expr = parse_expr(L"A{a1;i1} B{i1;a1}");
-        auto tree = binarize(expr);
+  if (!std::filesystem::is_directory(base_dir)) {
+    throw std::runtime_error("Invalid base dir for export tests");
+  }
 
-        export_expression(tree, generator);
+  std::vector<std::filesystem::path> files;
 
-        std::string expected =
-            "Declare index i_1\n"
-            "Declare index a_1\n"
-            "\n"
-            "Declare variable Z\n"
-            "\n"
-            "Declare tensor A[a_1, i_1]\n"
-            "Declare tensor B[i_1, a_1]\n"
-            "\n"
-            "Create Z and initialize to zero\n"
-            "Load A[a_1, i_1]\n"
-            "Load B[i_1, a_1]\n"
-            "Compute Z += A[a_1, i_1] B[i_1, a_1]\n"
-            "Unload B[i_1, a_1]\n"
-            "Unload A[a_1, i_1]\n"
-            "Persist Z\n";
-        REQUIRE(generator.get_generated_code() == expected);
-      }
-
-      SECTION("binary_contract") {
-        ExprPtr expr = parse_expr(L"A{a1;i2} B{i1;a1}");
-        auto tree = binarize(expr);
-
-        export_expression(tree, generator);
-
-        std::string expected =
-            "Declare index i_1\n"
-            "Declare index i_2\n"
-            "Declare index a_1\n"
-            "\n"
-            "Declare tensor A[a_1, i_2]\n"
-            "Declare tensor B[i_1, a_1]\n"
-            "Declare tensor I[i_1, i_2]\n"
-            "\n"
-            "Create I[i_1, i_2] and initialize to zero\n"
-            "Load A[a_1, i_2]\n"
-            "Load B[i_1, a_1]\n"
-            "Compute I[i_1, i_2] += A[a_1, i_2] B[i_1, a_1]\n"
-            "Unload B[i_1, a_1]\n"
-            "Unload A[a_1, i_2]\n"
-            "Persist I[i_1, i_2]\n";
-        REQUIRE(generator.get_generated_code() == expected);
-      }
-      SECTION("ternary") {
-        ExprPtr expr = parse_expr(L"A{a2;i2} B{i2;a1} C{i1;a2}");
-        auto tree = binarize(expr);
-
-        export_expression(tree, generator);
-
-        std::string expected =
-            "Declare index i_1\n"
-            "Declare index i_2\n"
-            "Declare index a_1\n"
-            "Declare index a_2\n"
-            "\n"
-            "Declare tensor A[a_2, i_2]\n"
-            "Declare tensor B[i_2, a_1]\n"
-            "Declare tensor C[i_1, a_2]\n"
-            "Declare tensor I[i_1, a_1]\n"
-            "Declare tensor I[a_2, a_1]\n"
-            "\n"
-            "Create I[i_1, a_1] and initialize to zero\n"
-            "Create I[a_2, a_1] and initialize to zero\n"
-            "Load A[a_2, i_2]\n"
-            "Load B[i_2, a_1]\n"
-            "Compute I[a_2, a_1] += A[a_2, i_2] B[i_2, a_1]\n"
-            "Unload B[i_2, a_1]\n"
-            "Unload A[a_2, i_2]\n"
-            "Load C[i_1, a_2]\n"
-            "Compute I[i_1, a_1] += I[a_2, a_1] C[i_1, a_2]\n"
-            "Unload C[i_1, a_2]\n"
-            "Unload I[a_2, a_1]\n"
-            "Persist I[i_1, a_1]\n";
-        REQUIRE(generator.get_generated_code() == expected);
-      }
-    }
-    SECTION("scalar * tensor") {
-      ExprPtr expr = parse_expr(L"42 * A{a1;i1}");
-      auto tree = binarize(expr);
-
-      export_expression(tree, generator);
-
-      std::string expected =
-          "Declare index i_1\n"
-          "Declare index a_1\n"
-          "\n"
-          "Declare tensor A[a_1, i_1]\n"
-          "Declare tensor I[a_1, i_1]\n"
-          "\n"
-          "Create I[a_1, i_1] and initialize to zero\n"
-          "Load A[a_1, i_1]\n"
-          "Compute I[a_1, i_1] += 42 A[a_1, i_1]\n"
-          "Unload A[a_1, i_1]\n"
-          "Persist I[a_1, i_1]\n";
-
-      REQUIRE(generator.get_generated_code() == expected);
-    }
-    SECTION("constant scalar factor") {
-      ExprPtr expr = parse_expr(L"5 * A{a2;i2} B{i2;a1}");
-      auto tree = binarize(expr);
-
-      export_expression(tree, generator);
-
-      std::string expected =
-          "Declare index i_2\n"
-          "Declare index a_1\n"
-          "Declare index a_2\n"
-          "\n"
-          "Declare tensor A[a_2, i_2]\n"
-          "Declare tensor B[i_2, a_1]\n"
-          "Declare tensor I[a_2, a_1]\n"
-          "\n"
-          "Create I[a_2, a_1] and initialize to zero\n"
-          "Load A[a_2, i_2]\n"
-          "Load B[i_2, a_1]\n"
-          "Compute I[a_2, a_1] += 5 A[a_2, i_2] B[i_2, a_1]\n"
-          "Unload B[i_2, a_1]\n"
-          "Unload A[a_2, i_2]\n"
-          "Persist I[a_2, a_1]\n";
-
-      REQUIRE(generator.get_generated_code() == expected);
-    }
-    SECTION("variable scalar factor") {
-      ExprPtr expr = parse_expr(L"myVar * A{a2;i2} B{i2;a1}");
-      auto tree = binarize(expr);
-
-      export_expression(tree, generator);
-
-      std::string expected =
-          "Declare index i_2\n"
-          "Declare index a_1\n"
-          "Declare index a_2\n"
-          "\n"
-          "Declare variable myVar\n"
-          "\n"
-          "Declare tensor A[a_2, i_2]\n"
-          "Declare tensor B[i_2, a_1]\n"
-          "Declare tensor I[a_2, a_1]\n"
-          "\n"
-          "Create I[a_2, a_1] and initialize to zero\n"
-          "Load A[a_2, i_2]\n"
-          "Load B[i_2, a_1]\n"
-          "Load myVar\n"
-          "Compute I[a_2, a_1] += myVar A[a_2, i_2] B[i_2, a_1]\n"
-          "Unload myVar\n"
-          "Unload B[i_2, a_1]\n"
-          "Unload A[a_2, i_2]\n"
-          "Persist I[a_2, a_1]\n";
-
-      REQUIRE(generator.get_generated_code() == expected);
-    }
-
-    SECTION("binary + ternary") {
-      auto tree = binarize(
-          parse_expr(L"A{a1;i1} B{i1;i2} + A{a1;i1} B{i1;i3} C{i3;i2}"));
-
-      export_expression(tree, generator);
-
-      std::string expected =
-          "Declare index i_1\n"
-          "Declare index i_2\n"
-          "Declare index i_3\n"
-          "Declare index a_1\n"
-          "\n"
-          "Declare tensor A[a_1, i_1]\n"
-          "Declare tensor B[i_1, i_3]\n"
-          "Declare tensor C[i_3, i_2]\n"
-          "Declare tensor I[a_1, i_2]\n"
-          "Declare tensor I2[a_1, i_3]\n"
-          "\n"
-          "Create I[a_1, i_2] and initialize to zero\n"
-          "Create I2[a_1, i_3] and initialize to zero\n"
-          "Load A[a_1, i_1]\n"
-          "Load B[i_1, i_3]\n"
-          "Compute I2[a_1, i_3] += A[a_1, i_1] B[i_1, i_3]\n"
-          "Unload B[i_1, i_3]\n"
-          "Unload A[a_1, i_1]\n"
-          "Load C[i_3, i_2]\n"
-          "Compute I[a_1, i_2] += I2[a_1, i_3] C[i_3, i_2]\n"
-          "Unload C[i_3, i_2]\n"
-          "Unload I2[a_1, i_3]\n"
-          "Load A[a_1, i_1]\n"
-          "Load B[i_1, i_2]\n"
-          "Compute I[a_1, i_2] += A[a_1, i_1] B[i_1, i_2]\n"
-          "Unload B[i_1, i_2]\n"
-          "Unload A[a_1, i_1]\n"
-          "Persist I[a_1, i_2]\n";
-
-      REQUIRE(generator.get_generated_code() == expected);
-    }
-
-    SECTION("tree rebalancing") {
-      ExprPtr first = parse_expr(L"A{a1;i1} B{a2;a1}");
-      ExprPtr second = parse_expr(L"C{i1;a3}");
-
-      /*
-       * Note that we are creating the expression tree
-       *
-       *                    R
-       *                  /   \
-       *                 C     I
-       *                     /   \
-       *                    A     B
-       * which is suboptimal for evaluation as this requires (for a backend that
-       * can only deal with stack-like memory allocations) to have R, C, I, A
-       * and B in memory all at the same time. Thus, this tree has to be
-       * rearranged to
-       *                    R
-       *                  /   \
-       *                 I     C
-       *               /   \
-       *              A     B
-       * which allows to not have C in memory while computing I from A and B,
-       * even in with stack-like memory model.
-       */
-      auto tree = binarize(
-          ex<Product>(ExprPtrList{second, first}, Product::Flatten::No));
-
-      export_expression(tree, generator);
-
-      std::string expected =
-          "Declare index i_1\n"
-          "Declare index a_1\n"
-          "Declare index a_2\n"
-          "Declare index a_3\n"
-          "\n"
-          "Declare tensor A[a_1, i_1]\n"
-          "Declare tensor B[a_2, a_1]\n"
-          "Declare tensor C[i_1, a_3]\n"
-          "Declare tensor I[a_2, i_1]\n"
-          "Declare tensor I[a_2, a_3]\n"
-          "\n"
-          "Create I[a_2, a_3] and initialize to zero\n"
-          "Create I[a_2, i_1] and initialize to zero\n"
-          "Load A[a_1, i_1]\n"
-          "Load B[a_2, a_1]\n"
-          "Compute I[a_2, i_1] += A[a_1, i_1] B[a_2, a_1]\n"
-          "Unload B[a_2, a_1]\n"
-          "Unload A[a_1, i_1]\n"
-          "Load C[i_1, a_3]\n"
-          "Compute I[a_2, a_3] += I[a_2, i_1] C[i_1, a_3]\n"
-          "Unload C[i_1, a_3]\n"
-          "Unload I[a_2, i_1]\n"
-          "Persist I[a_2, a_3]\n";
-
-      REQUIRE(generator.get_generated_code() == expected);
-    }
-    SECTION("duplicate tensor blocks") {
-      SECTION("non-overlapping") {
-        // Computation of first and second leads to an intermediate of the same
-        // shape/dimension. Since these two results are not needed
-        // simultaneously, we can allocate a single tensor for one and reuse it
-        // for the other (after having reset it to zero before)
-        ExprPtr first = parse_expr(L"A{a1;i2} B{i1;a1}");
-        ExprPtr second = parse_expr(L"C{a2;i4} D{i3;a2}");
-        ExprPtr third = parse_expr(L"E{i2;a3}");
-
-        auto tree = binarize(ex<Product>(
-            ExprPtrList{
-                ex<Product>(ExprPtrList{first, third}, Product::Flatten::No),
-                second},
-            Product::Flatten::No));
-
-        export_expression(tree, generator);
-
-        std::string expected =
-            "Declare index i_1\n"
-            "Declare index i_2\n"
-            "Declare index i_3\n"
-            "Declare index i_4\n"
-            "Declare index a_1\n"
-            "Declare index a_2\n"
-            "Declare index a_3\n"
-            "\n"
-            "Declare tensor A[a_1, i_2]\n"
-            "Declare tensor B[i_1, a_1]\n"
-            "Declare tensor C[a_2, i_4]\n"
-            "Declare tensor D[i_3, a_2]\n"
-            "Declare tensor E[i_2, a_3]\n"
-            "Declare tensor I[i_1, i_2]\n"
-            "Declare tensor I[i_1, a_3]\n"
-            "Declare tensor I[i_1, i_3, i_4, a_3]\n"
-            "\n"
-            "Create I[i_1, i_3, i_4, a_3] and initialize to zero\n"
-            "Create I[i_1, a_3] and initialize to zero\n"
-            "Create I[i_1, i_2] and initialize to zero\n"
-            "Load A[a_1, i_2]\n"
-            "Load B[i_1, a_1]\n"
-            "Compute I[i_1, i_2] += A[a_1, i_2] B[i_1, a_1]\n"
-            "Unload B[i_1, a_1]\n"
-            "Unload A[a_1, i_2]\n"
-            "Load E[i_2, a_3]\n"
-            "Compute I[i_1, a_3] += I[i_1, i_2] E[i_2, a_3]\n"
-            "Unload E[i_2, a_3]\n"
-            "Unload I[i_1, i_2]\n"
-            // TODO: Instead of unloading I and then loading
-            // it again, we could simply keep it loaded instead.
-            "Load I[i_3, i_4] and set it to zero\n"
-            "Load C[a_2, i_4]\n"
-            "Load D[i_3, a_2]\n"
-            "Compute I[i_3, i_4] += C[a_2, i_4] D[i_3, a_2]\n"
-            "Unload D[i_3, a_2]\n"
-            "Unload C[a_2, i_4]\n"
-            "Compute I[i_1, i_3, i_4, a_3] += I[i_1, a_3] I[i_3, i_4]\n"
-            "Unload I[i_3, i_4]\n"
-            "Unload I[i_1, a_3]\n"
-            "Persist I[i_1, i_3, i_4, a_3]\n";
-
-        REQUIRE(generator.get_generated_code() == expected);
-      }
-      SECTION("overlapping") {
-        ExprPtr first = parse_expr(L"A{a1;i1} B{i2;a1}");
-        ExprPtr second = parse_expr(L"C{i1;i3}");
-
-        auto tree = binarize(
-            ex<Product>(ExprPtrList{first, second}, Product::Flatten::No));
-
-        export_expression(tree, generator);
-
-        std::string expected =
-            "Declare index i_1\n"
-            "Declare index i_2\n"
-            "Declare index i_3\n"
-            "Declare index a_1\n"
-            "\n"
-            "Declare tensor A[a_1, i_1]\n"
-            "Declare tensor B[i_2, a_1]\n"
-            "Declare tensor C[i_1, i_3]\n"
-            "Declare tensor I[i_2, i_3]\n"
-            // Note that in this case both I tensors have to be used
-            // at the same time (at some point) and therefore we have
-            // to  have different tensors, even though they have the
-            // same shape.
-            "Declare tensor I2[i_2, i_1]\n"
-            "\n"
-            "Create I[i_2, i_3] and initialize to zero\n"
-            "Create I2[i_2, i_1] and initialize to zero\n"
-            "Load A[a_1, i_1]\n"
-            "Load B[i_2, a_1]\n"
-            "Compute I2[i_2, i_1] += A[a_1, i_1] B[i_2, a_1]\n"
-            "Unload B[i_2, a_1]\n"
-            "Unload A[a_1, i_1]\n"
-            "Load C[i_1, i_3]\n"
-            "Compute I[i_2, i_3] += I2[i_2, i_1] C[i_1, i_3]\n"
-            "Unload C[i_1, i_3]\n"
-            "Unload I2[i_2, i_1]\n"
-            "Persist I[i_2, i_3]\n";
-
-        REQUIRE(generator.get_generated_code() == expected);
-      }
-      SECTION("Duplicate leaf tensors") {
-        auto tree = binarize(parse_expr(L"A{a1;i1} A{a2;i2}"));
-
-        export_expression(tree, generator);
-
-        std::string expected =
-            "Declare index i_1\n"
-            "Declare index i_2\n"
-            "Declare index a_1\n"
-            "Declare index a_2\n"
-            "\n"
-            "Declare tensor A[a_1, i_1]\n"
-            "Declare tensor I[a_1, a_2, i_1, i_2]\n"
-            "\n"
-            "Create I[a_1, a_2, i_1, i_2] and initialize to zero\n"
-            // Note that we only load A once, even though we use it twice
-            "Load A[a_1, i_1]\n"
-            "Compute I[a_1, a_2, i_1, i_2] += A[a_1, i_1] A[a_2, i_2]\n"
-            "Unload A[a_1, i_1]\n"
-            "Persist I[a_1, a_2, i_1, i_2]\n";
-
-        REQUIRE(generator.get_generated_code() == expected);
-      }
-    }
-    SECTION("sum") {
-      SECTION("unary + unary") {
-        auto tree = binarize(parse_expr(L"A{a1;i1} + B{a1;i1}"));
-
-        export_expression(tree, generator);
-
-        std::string expected =
-            "Declare index i_1\n"
-            "Declare index a_1\n"
-            "\n"
-            "Declare tensor A[a_1, i_1]\n"
-            "Declare tensor B[a_1, i_1]\n"
-            "Declare tensor I[a_1, i_1]\n"
-            "\n"
-            "Create I[a_1, i_1] and initialize to zero\n"
-            "Load A[a_1, i_1]\n"
-            "Load B[a_1, i_1]\n"
-            "Compute I[a_1, i_1] += A[a_1, i_1] + B[a_1, i_1]\n"
-            "Unload B[a_1, i_1]\n"
-            "Unload A[a_1, i_1]\n"
-            "Persist I[a_1, i_1]\n";
-
-        REQUIRE(generator.get_generated_code() == expected);
-      }
-      SECTION("binary + binary") {
-        auto tree =
-            binarize(parse_expr(L"A{a1;i1} B{a2;i2} + A{a1;i1} B{a2;i2}"));
-
-        export_expression(tree, generator);
-
-        std::string expected =
-            "Declare index i_1\n"
-            "Declare index i_2\n"
-            "Declare index a_1\n"
-            "Declare index a_2\n"
-            "\n"
-            "Declare tensor A[a_1, i_1]\n"
-            "Declare tensor B[a_2, i_2]\n"
-            "Declare tensor I[a_1, a_2, i_1, i_2]\n"
-            "\n"
-            "Create I[a_1, a_2, i_1, i_2] and initialize to zero\n"
-            "Load A[a_1, i_1]\n"
-            "Load B[a_2, i_2]\n"
-            "Compute I[a_1, a_2, i_1, i_2] += A[a_1, i_1] B[a_2, i_2]\n"
-            "Unload B[a_2, i_2]\n"
-            "Unload A[a_1, i_1]\n"
-            // TODO: there is some unload/load pairs that could be removed
-            "Load A[a_1, i_1]\n"
-            "Load B[a_2, i_2]\n"
-            "Compute I[a_1, a_2, i_1, i_2] += A[a_1, i_1] B[a_2, i_2]\n"
-            "Unload B[a_2, i_2]\n"
-            "Unload A[a_1, i_1]\n"
-            "Persist I[a_1, a_2, i_1, i_2]\n";
-
-        REQUIRE(generator.get_generated_code() == expected);
-      }
-      SECTION("binary + unary") {
-        auto tree = binarize(parse_expr(L"A{a1;i2} B{i2;i1} + C{a1;i1}"));
-
-        export_expression(tree, generator);
-
-        std::string expected =
-            "Declare index i_1\n"
-            "Declare index i_2\n"
-            "Declare index a_1\n"
-            "\n"
-            "Declare tensor A[a_1, i_2]\n"
-            "Declare tensor B[i_2, i_1]\n"
-            "Declare tensor C[a_1, i_1]\n"
-            "Declare tensor I[a_1, i_1]\n"
-            "\n"
-            "Create I[a_1, i_1] and initialize to zero\n"
-            "Load A[a_1, i_2]\n"
-            "Load B[i_2, i_1]\n"
-            "Compute I[a_1, i_1] += A[a_1, i_2] B[i_2, i_1]\n"
-            "Unload B[i_2, i_1]\n"
-            "Unload A[a_1, i_2]\n"
-            "Load C[a_1, i_1]\n"
-            "Compute I[a_1, i_1] += C[a_1, i_1]\n"
-            "Unload C[a_1, i_1]\n"
-            "Persist I[a_1, i_1]\n";
-
-        REQUIRE(generator.get_generated_code() == expected);
-      }
-      SECTION("unary + unary + unary") {
-        auto tree = binarize(parse_expr(L"A{a1;i1} + B{a1;i1} + C{a1;i1}"));
-
-        export_expression(tree, generator);
-
-        std::string expected =
-            "Declare index i_1\n"
-            "Declare index a_1\n"
-            "\n"
-            "Declare tensor A[a_1, i_1]\n"
-            "Declare tensor B[a_1, i_1]\n"
-            "Declare tensor C[a_1, i_1]\n"
-            "Declare tensor I[a_1, i_1]\n"
-            "\n"
-            "Create I[a_1, i_1] and initialize to zero\n"
-            "Load A[a_1, i_1]\n"
-            "Load B[a_1, i_1]\n"
-            // TODO: Doing I += A and I += B separately would reduce
-            // the amount of tensors that have to be loaded simultaneously
-            "Compute I[a_1, i_1] += A[a_1, i_1] + B[a_1, i_1]\n"
-            "Unload B[a_1, i_1]\n"
-            "Unload A[a_1, i_1]\n"
-            "Load C[a_1, i_1]\n"
-            "Compute I[a_1, i_1] += C[a_1, i_1]\n"
-            "Unload C[a_1, i_1]\n"
-            "Persist I[a_1, i_1]\n";
-
-        REQUIRE(generator.get_generated_code() == expected);
-      }
-      SECTION("sum of index perms") {
-        auto tree =
-            binarize(parse_expr(L"-1 g{a_2,i_3;a_3,i_1} * t{a_1,a_3;i_3,i_2} + "
-                                L"2 g{a_1,i_3;i_1,a_3} * t{a_2,a_3;i_2,i_3}"));
-
-        export_expression(tree, generator);
-
-        std::string expected =
-            "Declare index i_1\n"
-            "Declare index i_2\n"
-            "Declare index i_3\n"
-            "Declare index a_1\n"
-            "Declare index a_2\n"
-            "Declare index a_3\n"
-            "\n"
-            "Declare tensor I[a_1, a_2, i_1, i_2]\n"
-            "Declare tensor g[a_1, i_3, i_1, a_3]\n"
-            "Declare tensor g[a_2, i_3, a_3, i_1]\n"
-            "Declare tensor t[a_1, a_3, i_3, i_2]\n"
-            "\n"
-            "Create I[a_1, a_2, i_1, i_2] and initialize to zero\n"
-            "Load g[a_2, i_3, a_3, i_1]\n"
-            "Load t[a_1, a_3, i_3, i_2]\n"
-            "Compute I[a_1, a_2, i_1, i_2] += -1 g[a_2, i_3, a_3, i_1] "
-            "t[a_1, a_3, i_3, i_2]\n"
-            "Unload t[a_1, a_3, i_3, i_2]\n"
-            "Unload g[a_2, i_3, a_3, i_1]\n"
-            "Load g[a_1, i_3, i_1, a_3]\n"
-            "Load t[a_2, a_3, i_2, i_3]\n"
-            "Compute I[a_1, a_2, i_1, i_2] += 2 g[a_1, i_3, i_1, a_3] "
-            "t[a_2, a_3, i_2, i_3]\n"
-            "Unload t[a_2, a_3, i_2, i_3]\n"
-            "Unload g[a_1, i_3, i_1, a_3]\n"
-            "Persist I[a_1, a_2, i_1, i_2]\n";
-
-        REQUIRE(generator.get_generated_code() == expected);
-      }
-      SECTION("dot + dot") {
-        auto tree =
-            binarize(parse_expr(L"2 g{i_1,i_2;a_1,a_2} * t{a_1,a_2;i_1,i_2} - "
-                                L"g{i_1,i_2;a_1,a_2} * t{a_1,a_2;i_2,i_1}"));
-
-        export_expression(tree, generator);
-
-        std::string expected =
-            "Declare index i_1\n"
-            "Declare index i_2\n"
-            "Declare index a_1\n"
-            "Declare index a_2\n"
-            "\n"
-            "Declare variable Z\n"
-            "\n"
-            "Declare tensor g[i_1, i_2, a_1, a_2]\n"
-            "Declare tensor t[a_1, a_2, i_1, i_2]\n"
-            "\n"
-            "Create Z and initialize to zero\n"
-            "Load g[i_1, i_2, a_1, a_2]\n"
-            "Load t[a_1, a_2, i_1, i_2]\n"
-            "Compute Z += 2 g[i_1, i_2, a_1, a_2] t[a_1, a_2, i_1, i_2]\n"
-            "Unload t[a_1, a_2, i_1, i_2]\n"
-            "Unload g[i_1, i_2, a_1, a_2]\n"
-            "Load g[i_1, i_2, a_1, a_2]\n"
-            "Load t[a_1, a_2, i_2, i_1]\n"
-            "Compute Z += -1 g[i_1, i_2, a_1, a_2] t[a_1, a_2, i_2, i_1]\n"
-            "Unload t[a_1, a_2, i_2, i_1]\n"
-            "Unload g[i_1, i_2, a_1, a_2]\n"
-            "Persist Z\n";
-
-        REQUIRE(generator.get_generated_code() == expected);
-      }
-    }
-    SECTION("Intermediate with same shape as summation result") {
-      auto tree = binarize(
-          parse_expr(L"A{a1;i1} B{i1;i2} + ( A{a1;i1} B{i1;i3} ) C{i3;i2}"));
-
-      export_expression(tree, generator);
-
-      std::string expected =
-          "Declare index i_1\n"
-          "Declare index i_2\n"
-          "Declare index i_3\n"
-          "Declare index a_1\n"
-          "\n"
-          "Declare tensor A[a_1, i_1]\n"
-          "Declare tensor B[i_1, i_3]\n"
-          "Declare tensor C[i_3, i_2]\n"
-          "Declare tensor I[a_1, i_2]\n"
-          "Declare tensor I2[a_1, i_3]\n"
-          "\n"
-          "Create I[a_1, i_2] and initialize to zero\n"
-          "Create I2[a_1, i_3] and initialize to zero\n"
-          "Load A[a_1, i_1]\n"
-          "Load B[i_1, i_3]\n"
-          "Compute I2[a_1, i_3] += A[a_1, i_1] B[i_1, i_3]\n"
-          "Unload B[i_1, i_3]\n"
-          "Unload A[a_1, i_1]\n"
-          "Load C[i_3, i_2]\n"
-          "Compute I[a_1, i_2] += I2[a_1, i_3] C[i_3, i_2]\n"
-          "Unload C[i_3, i_2]\n"
-          "Unload I2[a_1, i_3]\n"
-          "Load A[a_1, i_1]\n"
-          "Load B[i_1, i_2]\n"
-          "Compute I[a_1, i_2] += A[a_1, i_1] B[i_1, i_2]\n"
-          "Unload B[i_1, i_2]\n"
-          "Unload A[a_1, i_1]\n"
-          "Persist I[a_1, i_2]\n";
-
-      REQUIRE(generator.get_generated_code() == expected);
+  for (std::filesystem::path current :
+       std::filesystem::directory_iterator(base_dir)) {
+    if (current.extension() == ".export_test") {
+      files.push_back(std::move(current));
     }
   }
 
+  return files;
+}
+
+// clang-format off
+using KnownGenerators = std::tuple<
+    TextGenerator<TextGeneratorContext>,
+    JuliaITensorGenerator<JuliaITensorGeneratorContext>,
+    JuliaTensorKitGenerator<JuliaTensorKitGeneratorContext>,
+    JuliaTensorOperationsGenerator<JuliaTensorOperationsGeneratorContext>
+>;
+// clang-format on
+
+template <typename Generator>
+std::string get_format_name() {
+  Generator g;
+
+  return g.get_format_name();
+}
+
+template <typename... Generator>
+std::set<std::string> known_format_names(std::tuple<Generator...> generators) {
+  std::set<std::string> names;
+
+  (names.insert(get_format_name<Generator>()), ...);
+
+  return names;
+}
+
+TEMPLATE_LIST_TEST_CASE("export_tests", "[export]", KnownGenerators) {
+  using CurrentGen = TestType;
+  using CurrentCtx = CurrentGen::Context;
+
+  // Safe-guard that template magic works
+  const std::size_t n_generators = 4;
+
+  const std::set<std::string> known_formats =
+      known_format_names(KnownGenerators{});
+  REQUIRE(known_formats.size() == n_generators);
+
+  const std::vector<std::filesystem::path> test_files =
+      enumerate_export_tests();
+  REQUIRE(!test_files.empty());
+
+  bool skippedAll = true;
+
+  for (const std::filesystem::path &current : test_files) {
+    const std::string section_name =
+        current.filename().string() + " - " + CurrentGen{}.get_format_name();
+
+    SECTION(section_name) {
+      CurrentGen generator;
+      CurrentCtx context;
+
+      // Parse test file
+      std::optional<std::string> expected_output;
+      std::string expression;
+      {
+        std::ifstream in(current.native());
+        bool finished_expr = false;
+        bool inside_meta = false;
+        std::string current_format;
+        for (std::string line; std::getline(in, line);) {
+          if (line.starts_with("=====")) {
+            finished_expr = true;
+            inside_meta = !inside_meta;
+          } else if (!finished_expr) {
+            expression += line;
+          } else if (inside_meta) {
+            if (line.starts_with("#")) {
+              // Comment
+              continue;
+            }
+            // To avoid spurious spaces
+            REQUIRE(!line.ends_with(" "));
+            REQUIRE(!line.starts_with(" "));
+            current_format = line;
+            REQUIRE(known_formats.find(current_format) != known_formats.end());
+          } else if (current_format == generator.get_format_name()) {
+            if (expected_output.has_value()) {
+              expected_output.value() += "\n";
+              expected_output.value() += line;
+            } else {
+              expected_output = line;
+            }
+          }
+        }
+      }
+
+      if (!expected_output.has_value()) {
+        // This is not a test case for the current generator
+        continue;
+      }
+      skippedAll = false;
+
+      REQUIRE(!expression.empty());
+
+      ExprPtr input = parse_expr(to_wstring(expression));
+      // CAPTURE(*input);
+
+      auto tree = binarize(input);
+
+      export_expression(tree, generator, context);
+
+      REQUIRE_THAT(generator.get_generated_code(),
+                   DiffedStringEquals(expected_output.value()));
+    }
+  }
+
+  if (skippedAll) {
+    SKIP("No test cases for this generator");
+  }
+}
+
+TEST_CASE("export", "[export]") {
   SECTION("itf") {
     const ItfContext ctx;
 

@@ -34,6 +34,8 @@ add_executable(unit_tests-sequant ${BUILD_BY_DEFAULT}
     "test_wick.cpp"
 )
 
+target_compile_definitions(unit_tests-sequant PRIVATE SEQUANT_UNIT_TESTS_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+
 if (TARGET tiledarray)
     target_sources(unit_tests-sequant
         PRIVATE

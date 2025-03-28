@@ -1,0 +1,38 @@
+( A{a1;i1} B{i2;a1} ) C{i1;i3}
+
+=================================================
+# Computation of I = A * B leads to a result that has
+# the same shape as I2 = I * C. However, since I is
+# part of the expression for the computation of I2,
+# both tensors are required at the same time, meaing
+# we actuall require these to be two separate and
+# independent tensors.
+=================================================
+=================================================
+Plain Text
+=================================================
+Declare index i_1
+Declare index i_2
+Declare index i_3
+Declare index a_1
+
+Declare tensor A[a_1, i_1]
+Declare tensor B[i_2, a_1]
+Declare tensor C[i_1, i_3]
+Declare tensor I[i_2, i_3]
+Declare tensor I2[i_2, i_1]
+
+Create I[i_2, i_3] and initialize to zero
+Create I2[i_2, i_1] and initialize to zero
+Load A[a_1, i_1]
+Load B[i_2, a_1]
+Compute I2[i_2, i_1] += A[a_1, i_1] B[i_2, a_1]
+Unload B[i_2, a_1]
+Unload A[a_1, i_1]
+Load C[i_1, i_3]
+Compute I[i_2, i_3] += I2[i_2, i_1] C[i_1, i_3]
+Unload C[i_1, i_3]
+Unload I2[i_2, i_1]
+Persist I[i_2, i_3]
+
+=================================================

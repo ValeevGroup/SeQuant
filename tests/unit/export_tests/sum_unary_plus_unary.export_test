@@ -1,0 +1,21 @@
+A{a1;i1} + B{a1;i1}
+
+=================================================
+Plain Text
+=================================================
+Declare index i_1
+Declare index a_1
+
+Declare tensor A[a_1, i_1]
+Declare tensor B[a_1, i_1]
+Declare tensor I[a_1, i_1]
+
+Create I[a_1, i_1] and initialize to zero
+Load A[a_1, i_1]
+Load B[a_1, i_1]
+Compute I[a_1, i_1] += A[a_1, i_1] + B[a_1, i_1]
+Unload B[a_1, i_1]
+Unload A[a_1, i_1]
+Persist I[a_1, i_1]
+
+=================================================
