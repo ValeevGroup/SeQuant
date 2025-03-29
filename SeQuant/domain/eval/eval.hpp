@@ -105,6 +105,17 @@ enum struct CacheCheck { Checked, Unchecked };
 
 }  // namespace
 
+///
+/// \tparam Cache If CacheCache::Checked (default) the @param cache will be
+///               checked before evaluating. It is used to detect the base case
+///               for recursion to prevent infinite recursion.
+/// \param node A node that can be evaluated using @param le as the leaf
+///             evaluator.
+/// \param le The leaf evaluator that satisfies
+///           @code meta::leaf_node_evaluator<Node, F>.
+/// \param cache The cache for common sub-expression elimination.
+/// \return Evaluated result as ResultPtr.
+///
 template <CacheCheck Cache = CacheCheck::Checked, meta::can_evaluate Node,
           typename F>
   requires meta::leaf_node_evaluator<Node, F>
@@ -195,6 +206,16 @@ ResultPtr evaluate(Node const& node,  //
   return result;
 }
 
+///
+/// \param node A node that can be evaluated using @param le as the leaf
+///             evaluator.
+/// \param layout The layout of the final result. Only meaningful if the result
+///               has a layout (or supports permutation) eg. a tensor.
+/// \param le The leaf evaluator that satisfies
+///           @code meta::leaf_node_evaluator<Node, F>.
+/// \param cache The cache for common sub-expression elimination.
+/// \return Evaluated result as ResultPtr.
+///
 template <meta::can_evaluate Node, typename F>
   requires meta::leaf_node_evaluator<Node, F>  //
 ResultPtr evaluate(Node const& node,           //
@@ -223,7 +244,21 @@ ResultPtr evaluate(Node const& node,           //
 
   return result.post;
 }
-
+///
+/// \param nodes A range of node that can be evaluated using @param le as the
+///              leaf evaluator. The evaluation result of the elements of
+///              @param nodes will be summed up.
+///
+/// \param layout The layout of the final result. Only meaningful if the result
+///               has a layout (or supports permutation) eg. a tensor.
+///               The results of each element from @param nodes will be permuted
+///               to this layout before being summed.
+///
+/// \param le The leaf evaluator that satisfies
+///           @code meta::leaf_node_evaluator<Node, F>.
+/// \param cache The cache for common sub-expression elimination.
+/// \return Evaluated result as ResultPtr.
+///
 template <meta::can_evaluate_range Nodes, typename F>
   requires meta::leaf_node_evaluator<std::ranges::range_value_t<Nodes>, F>
 ResultPtr evaluate(Nodes const& nodes,  //
@@ -255,6 +290,12 @@ ResultPtr evaluate(Nodes const& nodes,  //
   return result;
 }
 
+///
+/// \brief Evaluate given node (or a range of nodes) using an empty cache
+///        manager. Calls the other @code evalaute function overloads.
+/// \see evaluate.
+/// \return Evaluated result as ResultPtr.
+///
 template <typename... Args>
   requires(!last_type_is_cache_manager<Args...>)
 ResultPtr evaluate(Args&&... args) {
@@ -262,6 +303,13 @@ ResultPtr evaluate(Args&&... args) {
   return evaluate(std::forward<Args>(args)..., cache);
 }
 
+///
+/// \brief Calls @code evaluate followd by the particle-symmetrization function.
+///        The number of particles is inferred by the tensor present in the
+///        evaluation node(s). Presence of odd-ranked tensors in the evaluation
+///        node(s) is an error.
+/// \return Evaluated result as ResultPtr.
+///
 template <typename... Args>
 [[deprecated]] ResultPtr evaluate_symm(Args&&... args) {
   ResultPtr pre = evaluate(std::forward<Args>(args)...);
@@ -289,6 +337,12 @@ template <typename... Args>
   return result;
 }
 
+///
+/// \brief Calls @code evaluate followd by the anti-symmetrization function on
+///        the bra indices and the ket indices. The bra and ket indices are
+///        inferred from the evaluation node(s).
+/// \return Evaluated result as ResultPtr.
+///
 template <typename... Args>
 [[deprecated]] ResultPtr evaluate_antisymm(Args&&... args) {
   size_t bra_rank;
