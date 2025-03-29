@@ -31,9 +31,9 @@ class DataWorldBTAS {
 
   Tensor_t F_pq;
 
-  container::vector<ERPtr> Ts;
+  container::vector<ResultPtr> Ts;
 
-  mutable container::map<size_t, ERPtr> cache_;
+  mutable container::map<size_t, ResultPtr> cache_;
 
  public:
   DataWorldBTAS(DataInfo const& info, size_t excit)
@@ -67,7 +67,7 @@ class DataWorldBTAS {
       auto range = ::btas::Range{
           concat(repeat_n(nvirt, bk_rank), repeat_n(nocc, bk_rank)) |
           ranges::to_vector};
-      Ts.emplace_back(eval_result<EvalTensorBTAS<Tensor_t>>(Tensor_t{range}));
+      Ts.emplace_back(eval_result<ResultTensorBTAS<Tensor_t>>(Tensor_t{range}));
       auto& t = Ts[i]->template get<Tensor_t>();
       t.fill(0);
     }
@@ -153,13 +153,12 @@ class DataWorldBTAS {
     return slice;
   }
 
-  template <typename NodeT, typename = std::enable_if_t<IsEvaluable<NodeT>>>
-  ERPtr operator()(NodeT const& n) const {
+  ResultPtr operator()(meta::can_evaluate auto const& n) const {
     using numeric_type = typename Tensor_t::numeric_type;
     if (n->result_type() == ResultType::Scalar) {
       assert(n->expr()->template is<Constant>());
       auto d = n->as_constant().template value<numeric_type>();
-      return eval_result<EvalScalar<numeric_type>>(d);
+      return eval_result<ResultScalar<numeric_type>>(d);
     }
 
     assert(n->result_type() == ResultType::Tensor &&
@@ -175,7 +174,7 @@ class DataWorldBTAS {
       return exists->second;
     else {
       auto tnsr =
-          eval_result<EvalTensorBTAS<Tensor_t>>((*this)(n->as_tensor()));
+          eval_result<ResultTensorBTAS<Tensor_t>>((*this)(n->as_tensor()));
       auto stored = cache_.emplace(h, std::move(tnsr));
       assert(stored.second && "failed to store tensor");
       return stored.first->second;
