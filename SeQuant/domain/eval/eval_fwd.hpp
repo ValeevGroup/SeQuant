@@ -139,20 +139,5 @@ struct Annot {
   T const this_annot;
 };
 
-// namespace meta {
-
-// namespace {
-// template <typename, typename = void>
-// constexpr bool is_annot{true};
-
-// // template <typename T>
-// // constexpr bool is_annot<Annot<T>>{true};
-
-// }  // namespace
-// template <typename T>
-// concept annot = is_annot<T>;
-
-// }  // namespace meta
-
 }  // namespace sequant
 #endif  // SEQUANT_EVAL_FWD_HPP
