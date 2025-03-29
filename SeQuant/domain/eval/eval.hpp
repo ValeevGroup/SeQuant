@@ -55,7 +55,8 @@ template <typename... Args>
 void log_term(Args const&... args) noexcept {
   auto& l = Logger::instance();
   if constexpr (sizeof...(Args))
-    if (l.eval.level > 0) write_log(l, "[TERM]", args..., '\n');
+    if (l.eval.level > 0)
+      write_log(l, "[TERM]", std::format(" | {}", args)..., '\n');
 }
 
 [[maybe_unused]] void log_cache_access(size_t key, CacheManager const& cm) {
@@ -200,7 +201,7 @@ ResultPtr evaluate(Node const& node,           //
                    auto const& layout,         //
                    F const& le,                //
                    CacheManager& cache) {
-  log_term("[TERM]", " ", to_string(deparse(to_expr(node))), '\n');
+  log_term(to_string(deparse(to_expr(node))));
   struct {
     ResultPtr pre, post;
   } result;
