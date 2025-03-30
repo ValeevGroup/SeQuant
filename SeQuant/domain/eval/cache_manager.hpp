@@ -42,6 +42,8 @@ class CacheManager {
 
     [[nodiscard]] size_t max_life_count() const noexcept;
 
+    [[nodiscard]] size_t size_in_bytes() const noexcept;
+
    private:
     [[nodiscard]] int decay() noexcept;
 
@@ -98,6 +100,16 @@ class CacheManager {
   /// \return A set of all the keys present in the cache manager.
   ///
   [[nodiscard]] container::set<size_t> keys() const noexcept;
+
+  ///
+  /// \return The number of entries with life_count greater than zero.
+  ///
+  [[nodiscard]] size_t alive_count() const noexcept;
+
+  ///
+  /// \return Returns the sum of `Result::size_in_bytes` of alive entries.
+  ///
+  [[nodiscard]] size_t size_in_bytes() const noexcept;
 
   ///
   /// Get an empty cache manager.

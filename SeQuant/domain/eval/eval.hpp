@@ -59,31 +59,26 @@ void log_term(Args const&... args) noexcept {
       write_log(l, "[TERM]", std::format(" | {}", args)..., '\n');
 }
 
-[[maybe_unused]] void log_cache_access(size_t key, CacheManager const& cm) {
+template <typename... Args>
+void log_cache(Args const&... args) noexcept {
   auto& l = Logger::instance();
-  if (l.eval.level > 0) {
-    assert(cm.exists(key));
-    auto max_l = cm.max_life(key);
-    auto cur_l = cm.life(key);
-    write_log(l,                                    //
-              "[CACHE] Accessed key: ", key, ". ",  //
-              cur_l, "/", max_l, " lives remain.\n");
-    if (cur_l == 0) {
-      write_log(l,  //
-                "[CACHE] Released key: ", key, ".\n");
-    }
-  }
+  if constexpr (sizeof...(Args))
+    if (l.eval.level > 0)
+      write_log(l, "[CACHE]", std::format(" | {}", args)..., '\n');
 }
 
-[[maybe_unused]] void log_cache_store(size_t key, CacheManager const& cm) {
-  auto& l = Logger::instance();
-  if (l.eval.level > 0) {
-    assert(cm.exists(key));
-    write_log(l,  //
-              "[CACHE] Stored key: ", key, ".\n");
-    // because storing automatically implies immediately accessing it
-    log_cache_access(key, cm);
-  }
+void log_cache_access(size_t key, CacheManager const& cm) {
+  auto const cur_l = cm.life(key);
+  auto const max_l = cm.max_life(key);
+  bool const release = cur_l == 0;
+  bool const store = cur_l + 1 == max_l;
+  log_cache(release ? "RELEASE"
+            : store ? "STORE"
+                    : "ACCESS",
+            key,                                 //
+            std::format("{}/{}", cur_l, max_l),  //
+            cm.alive_count(),                    //
+            std::format("{}B", cm.size_in_bytes()));
 }
 
 [[maybe_unused]] std::string perm_groups_string(
@@ -135,7 +130,7 @@ ResultPtr evaluate(Node const& node,  //
     } else if (cache.exists(h)) {
       auto ptr = cache.store(
           h, mult_by_phase(evaluate<CacheCheck::Unchecked>(node, le, cache)));
-      log_cache_store(h, cache);
+      log_cache_access(h, cache);
       return mult_by_phase(ptr);
     } else {
       // do nothing

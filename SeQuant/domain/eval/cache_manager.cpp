@@ -3,6 +3,7 @@
 //
 
 #include <SeQuant/domain/eval/cache_manager.hpp>
+#include <SeQuant/domain/eval/result.hpp>
 
 #include <SeQuant/core/eval_node.hpp>
 
@@ -32,6 +33,10 @@ void CacheManager::entry::reset() noexcept {
 
 [[nodiscard]] size_t CacheManager::entry::max_life_count() const noexcept {
   return max_life;
+}
+
+size_t CacheManager::entry::size_in_bytes() const noexcept {
+  return data_p ? data_p->size_in_bytes() : 0;
 }
 
 [[nodiscard]] int CacheManager::entry::decay() noexcept {
@@ -79,6 +84,18 @@ int CacheManager::max_life(key_type key) const noexcept {
 
 container::set<size_t> CacheManager::keys() const noexcept {
   return ranges::views::keys(cache_map_) | ranges::to<container::set<size_t>>;
+}
+
+size_t CacheManager::alive_count() const noexcept {
+  using ranges::views::values;
+  return ranges::count_if(cache_map_ | values, &entry::life_count);
+}
+
+size_t CacheManager::size_in_bytes() const noexcept {
+  using ranges::views::transform;
+  using ranges::views::values;
+  return ranges::accumulate(
+      cache_map_ | values | transform(&entry::size_in_bytes), 0);
 }
 
 CacheManager CacheManager::empty() noexcept { return CacheManager{{}}; }
