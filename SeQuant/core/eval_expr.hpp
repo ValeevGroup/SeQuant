@@ -21,10 +21,10 @@ class Tensor;
 enum class EvalOp {
 
   ///
-  /// \brief Represents the identity evaluation. It is not a binary operation
+  /// \brief Represents the atomic evaluation. It is not a binary operation
   ///        per se. An atomic tensor or an atomic constant is always evaluated
   ///        this way.
-  Id,
+  Atom,
 
   ///
   /// \brief Represents the sum of two EvalExpr objects. Such as a tensor plus
@@ -43,7 +43,7 @@ enum class EvalOp {
 /// \brief The ResultType enum.
 ///
 /// \details Represents the type of the result of @c EvalOp on two EvalExpr
-///          objects (or, single EvalExpr object if the EvalOp is Id).
+///          objects (or, single EvalExpr object if the EvalOp is Atom).
 ///
 enum class ResultType { Tensor, Scalar };
 
@@ -59,17 +59,17 @@ class EvalExpr {
   using index_vector = Index::index_vector;
 
   ///
-  /// \brief Construct an EvalExpr object from a tensor. The EvalOp is Id.
+  /// \brief Construct an EvalExpr object from a tensor. The EvalOp is Atom.
   ///
   explicit EvalExpr(Tensor const& tnsr);
 
   ///
-  /// \brief Construct an EvalExpr object from a Constant. The EvalOp is Id.
+  /// \brief Construct an EvalExpr object from a Constant. The EvalOp is Atom.
   ///
   explicit EvalExpr(Constant const& c);
 
   ///
-  /// \brief Construct an EvalExpr object from a Variable. The EvalOp is Id.
+  /// \brief Construct an EvalExpr object from a Variable. The EvalOp is Atom.
   ///
   explicit EvalExpr(Variable const& v);
 
@@ -150,7 +150,7 @@ class EvalExpr {
   ///
   /// \return True if the evaluation is terminal (eg. a leaf tensor).
   ///
-  [[nodiscard]] bool is_id() const noexcept;
+  [[nodiscard]] bool is_atom() const noexcept;
 
   ///
   /// \return True if the evaluation is a product.

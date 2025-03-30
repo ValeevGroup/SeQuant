@@ -64,7 +64,7 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
 
     auto x1 = EvalExpr(t1);
 
-    REQUIRE(x1.op_type() == EvalOp::Id);
+    REQUIRE(x1.op_type() == EvalOp::Atom);
 
     auto p1 = parse_expr(L"g_{i3,a1}^{i1,i2} * t_{a2}^{a3}");
 
@@ -72,9 +72,9 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
     const auto& c3 = EvalExpr{p1->at(1)->as<Tensor>()};
 
     auto x2 = EvalExpr(parse_expr(L"1/2")->as<Constant>());
-    REQUIRE(x2.op_type() == EvalOp::Id);
+    REQUIRE(x2.op_type() == EvalOp::Atom);
 
-    REQUIRE(EvalExpr{Variable{L"λ"}}.op_type() == EvalOp::Id);
+    REQUIRE(EvalExpr{Variable{L"λ"}}.op_type() == EvalOp::Atom);
   }
 
   SECTION("ResultType types") {

@@ -79,7 +79,7 @@ EvalExpr::index_vector const& EvalExpr::canon_indices() const noexcept {
 }
 
 EvalExpr::EvalExpr(Tensor const& tnsr)
-    : op_type_{EvalOp::Id},
+    : op_type_{EvalOp::Atom},
       result_type_{ResultType::Tensor},
       expr_{tnsr.clone()} {
   if (is_tot(tnsr)) {
@@ -98,13 +98,13 @@ EvalExpr::EvalExpr(Tensor const& tnsr)
 }
 
 EvalExpr::EvalExpr(Constant const& c)
-    : op_type_{EvalOp::Id},
+    : op_type_{EvalOp::Atom},
       result_type_{ResultType::Scalar},
       hash_value_{hash::value(c)},
       expr_{c.clone()} {}
 
 EvalExpr::EvalExpr(Variable const& v)
-    : op_type_{EvalOp::Id},
+    : op_type_{EvalOp::Atom},
       result_type_{ResultType::Scalar},
       hash_value_{hash::value(v)},
       expr_{v.clone()} {}
@@ -146,7 +146,7 @@ bool EvalExpr::is_variable() const noexcept {
   return expr().is<Variable>() && result_type() == ResultType::Scalar;
 }
 
-bool EvalExpr::is_id() const noexcept { return op_type() == EvalOp::Id; }
+bool EvalExpr::is_atom() const noexcept { return op_type() == EvalOp::Atom; }
 
 bool EvalExpr::is_sum() const noexcept { return op_type() == EvalOp::Sum; }
 
@@ -352,7 +352,7 @@ ExprPtr make_prod(EvalExpr const& left, EvalExpr const& right) noexcept {
 
 ExprPtr make_imed(EvalExpr const& left, EvalExpr const& right,
                   EvalOp op) noexcept {
-  assert(op != EvalOp::Id);
+  assert(op != EvalOp::Atom);
 
   auto lres = left.result_type();
   auto rres = right.result_type();
@@ -437,7 +437,7 @@ void collect_tensor_factors(EvalExprNode const& node,  //
   static_assert(std::is_same_v<ranges::range_value_t<Rng>, ExprWithHash>);
 
   if (auto op = node->op_type();
-      node->is_tensor() && op == EvalOp::Id || op == EvalOp::Sum)
+      node->is_tensor() && op == EvalOp::Atom || op == EvalOp::Sum)
     collect.emplace_back(ExprWithHash{node->expr(), node->hash_value()});
   else if (node->op_type() == EvalOp::Prod && !node.leaf()) {
     collect_tensor_factors(node.left(), collect);

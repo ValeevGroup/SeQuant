@@ -184,7 +184,7 @@ ResultPtr evaluate(Node const& node,  //
       log.annot = node->label();
     } else {
       log.type = node->is_prod() ? "PROD" : node->is_sum() ? "SUM" : "ID";
-      log.annot = node->is_id()
+      log.annot = node->is_atom()
                       ? node->label()
                       : std::format("{} {} {} -> {}",               //
                                     node.left()->label(),           //
