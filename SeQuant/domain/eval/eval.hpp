@@ -217,7 +217,7 @@ ResultPtr evaluate(Node const& node,           //
                    auto const& layout,         //
                    F const& le,                //
                    CacheManager& cache) {
-  log_term(to_string(deparse(to_expr(node))));
+  log_term("BEGIN", to_string(deparse(to_expr(node))));
   struct {
     ResultPtr pre, post;
   } result;
@@ -236,9 +236,10 @@ ResultPtr evaluate(Node const& node,           //
              std::format("{}B", bytes),   //
              node->label());
   }
-
+  log_term("END", to_string(deparse(to_expr(node))));
   return result.post;
 }
+
 ///
 /// \param nodes A range of node that can be evaluated using @param le as the
 ///              leaf evaluator. The evaluation result of the elements of
