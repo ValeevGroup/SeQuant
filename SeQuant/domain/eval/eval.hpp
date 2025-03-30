@@ -311,7 +311,7 @@ ResultPtr evaluate(Args&&... args) {
 /// \return Evaluated result as ResultPtr.
 ///
 template <typename... Args>
-[[deprecated]] ResultPtr evaluate_symm(Args&&... args) {
+ResultPtr evaluate_symm(Args&&... args) {
   ResultPtr pre = evaluate(std::forward<Args>(args)...);
   assert(pre);
   ResultPtr result;
@@ -344,7 +344,7 @@ template <typename... Args>
 /// \return Evaluated result as ResultPtr.
 ///
 template <typename... Args>
-[[deprecated]] ResultPtr evaluate_antisymm(Args&&... args) {
+ResultPtr evaluate_antisymm(Args&&... args) {
   size_t bra_rank;
   std::string node_label;  // for logging
   auto&& arg0 = std::get<0>(std::forward_as_tuple(std::forward<Args>(args)...));
