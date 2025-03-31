@@ -99,9 +99,12 @@ class GenerationVisitor {
     const bool create =
         !isLeaf && !usedExprBefore && loadStrategy == LoadStrategy::Create;
     const bool load = !create && !alreadyLoaded;
-    const bool zeroCreate = !!(zeroStrategy & ZeroStrategy::ZeroOnCreate);
-    const bool zeroLoad = !!(zeroStrategy & ZeroStrategy::ZeroOnLoad);
-    const bool zeroReuse = !!(zeroStrategy & ZeroStrategy::ZeroOnReuse);
+    const bool zeroCreate =
+        static_cast<bool>(zeroStrategy & ZeroStrategy::ZeroOnCreate);
+    const bool zeroLoad =
+        static_cast<bool>(zeroStrategy & ZeroStrategy::ZeroOnLoad);
+    const bool zeroReuse =
+        static_cast<bool>(zeroStrategy & ZeroStrategy::ZeroOnReuse);
 
     if (create) {
       m_generator.create(expr, zeroCreate, m_ctx);
