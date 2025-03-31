@@ -243,8 +243,11 @@ ResultPtr evaluate(Node const& node,           //
                    auto const& layout,         //
                    F const& le,                //
                    CacheManager& cache) {
-  if constexpr (trace(EvalTrace))
-    log_term("BEGIN", to_string(deparse(to_expr(node))));
+  std::string xpr;
+  if constexpr (trace(EvalTrace)) {
+    xpr = to_string(deparse(to_expr(node)));
+    log_term("BEGIN", xpr);
+  }
 
   struct {
     ResultPtr pre, post;
@@ -267,7 +270,7 @@ ResultPtr evaluate(Node const& node,           //
              std::format("{}B", bytes),   //
              node->label());
 
-    log_term("END", to_string(deparse(to_expr(node))));
+    log_term("END", xpr);
   }
   return result.post;
 }
