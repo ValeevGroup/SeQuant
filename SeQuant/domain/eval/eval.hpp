@@ -189,16 +189,19 @@ ResultPtr evaluate(Node const& node,  //
     if (node.leaf()) {
       log.type = node->is_constant()   ? "CONSTANT"
                  : node->is_variable() ? "VARIABLE"
-                                       : "TENSOR";
+                 : node->is_tensor()   ? "TENSOR"
+                                       : "??";
       log.annot = node->label();
       log.bytes = result->size_in_bytes();
     } else {
-      log.type = node->is_product() ? "PRODUCT" : node->is_sum() ? "SUM" : "ID";
+      log.type = node->is_product() ? "PRODUCT" : node->is_sum() ? "SUM" : "??";
       log.annot = node->is_primary()
                       ? node->label()
-                      : std::format("{} {} {} -> {}",                  //
-                                    node.left()->label(),              //
-                                    (node->is_product() ? "*" : "+"),  //
+                      : std::format("{} {} {} -> {}",      //
+                                    node.left()->label(),  //
+                                    (node->is_product() ? "*"
+                                     : node->is_sum()   ? "+"
+                                                        : "??"),  //
                                     node.right()->label(), node->label());
       log.bytes = left->size_in_bytes()     //
                   + right->size_in_bytes()  //
