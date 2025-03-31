@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <array>
+#include <iterator>
 #include <optional>
 #include <ranges>
 #include <set>
@@ -592,13 +593,16 @@ std::set<T, Compare> combine_and_clear_pp_results(Range &&range) {
 
   for (PreprocessResult &current : range) {
     if constexpr (is_index) {
-      combined.insert(current.indices.begin(), current.indices.end());
+      combined.insert(std::make_move_iterator(current.indices.begin()),
+                      std::make_move_iterator(current.indices.end()));
       current.indices.clear();
     } else if constexpr (is_variable) {
-      combined.insert(current.variables.begin(), current.variables.end());
+      combined.insert(std::make_move_iterator(current.variables.begin()),
+                      std::make_move_iterator(current.variables.end()));
       current.variables.clear();
     } else if constexpr (is_tensor) {
-      combined.insert(current.tensors.begin(), current.tensors.end());
+      combined.insert(std::make_move_iterator(current.tensors.begin()),
+                      std::make_move_iterator(current.tensors.end()));
       current.tensors.clear();
     }
   }
