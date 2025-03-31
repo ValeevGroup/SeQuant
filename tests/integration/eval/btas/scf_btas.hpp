@@ -84,6 +84,16 @@ class SequantEvalScfBTAS final : public SequantEvalScf {
     using ranges::views::transform;
     using ranges::views::zip;
 
+    using Evaluator = ResultPtr (*)(
+        std::vector<EvalNodeBTAS> const&, EvalExprBTAS::annot_t const&,
+        DataWorldBTAS<Tensor_t> const&, CacheManager&);
+
+    constexpr auto funcs =
+        std::array{std::array<Evaluator, 2>{evaluate_antisymm<Trace::Off>,
+                                            evaluate_antisymm<Trace::On>},
+                   std::array<Evaluator, 2>{evaluate_symm<Trace::Off>,
+                                            evaluate_symm<Trace::On>}};
+
     auto sorted_annot = [](Tensor const& tnsr) {
       auto b = tnsr.bra() | ranges::to_vector;
       auto k = tnsr.ket() | ranges::to_vector;
@@ -99,19 +109,8 @@ class SequantEvalScfBTAS final : public SequantEvalScf {
 
     for (auto&& [r, n] : zip(rs, nodes_)) {
       auto const& target_indices = ranges::front(n)->annot();
-      if (st && log) {
-        r = evaluate_symm<Trace::On>(n, target_indices, data_world_, cman_)
-                ->template get<Tensor_t>();
-      } else if (st) {
-        r = evaluate_symm<Trace::Off>(n, target_indices, data_world_, cman_)
-                ->template get<Tensor_t>();
-      } else if (log) {
-        r = evaluate_antisymm<Trace::On>(n, target_indices, data_world_, cman_)
-                ->template get<Tensor_t>();
-      } else {
-        r = evaluate_antisymm<Trace::Off>(n, target_indices, data_world_, cman_)
-                ->template get<Tensor_t>();
-      }
+      r = funcs[st][log](n, target_indices, data_world_, cman_)
+              ->template get<Tensor_t>();
     }
 
     data_world_.update_amplitudes(rs);
