@@ -534,21 +534,29 @@ void preprocess_and_maybe_log(EvalNode<T> &tree, PreprocessResult &result,
 
 template <typename T, typename Context>
 void export_expression(EvalNode<T> &expression, Generator<Context> &generator,
-                       Context &ctx, PreprocessResult &pp_result) {
-  for (const Index &idx : pp_result.indices) {
-    generator.declare(idx, ctx);
+                       Context &ctx, PreprocessResult &pp_result,
+                       bool declare_indices, bool declare_variables,
+                       bool declare_tensors) {
+  if (declare_indices) {
+    for (const Index &idx : pp_result.indices) {
+      generator.declare(idx, ctx);
+    }
+    generator.all_indices_declared(pp_result.indices.size());
   }
-  generator.all_indices_declared(pp_result.indices.size());
 
-  for (const Variable &var : pp_result.variables) {
-    generator.declare(var, ctx);
+  if (declare_variables) {
+    for (const Variable &var : pp_result.variables) {
+      generator.declare(var, ctx);
+    }
+    generator.all_variables_declared(pp_result.variables.size());
   }
-  generator.all_variables_declared(pp_result.variables.size());
 
-  for (const Tensor &tensor : pp_result.tensors) {
-    generator.declare(tensor, ctx);
+  if (declare_tensors) {
+    for (const Tensor &tensor : pp_result.tensors) {
+      generator.declare(tensor, ctx);
+    }
+    generator.all_tensors_declared(pp_result.tensors.size());
   }
-  generator.all_tensors_declared(pp_result.tensors.size());
 
   details::GenerationVisitor<T, Context> visitor(generator, ctx,
                                                  pp_result.scalarFactors);
@@ -704,8 +712,10 @@ void export_groups(Range groups, Generator<Context> &generator,
     }
 
     for (EvalNode<T> &current_tree : current_group) {
-      details::export_expression(current_tree, generator, ctx,
-                                 pp_results.at(pp_idx));
+      details::export_expression(
+          current_tree, generator, ctx, pp_results.at(pp_idx),
+          declare_indices_per_section, declare_variables_per_section,
+          declare_tensors_per_section);
       pp_idx++;
     }
 
