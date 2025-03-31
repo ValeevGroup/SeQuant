@@ -701,7 +701,7 @@ void export_groups(Range groups, Generator<Context> &generator,
     details::declare_all(tensors, generator, ctx);
   }
 
-  // Now initialize the actual code generation
+  // Now initiate the actual code generation
   std::size_t pp_idx = 0;
   for (ExpressionGroup<T> &current_group : groups) {
     bool end_section = false;
