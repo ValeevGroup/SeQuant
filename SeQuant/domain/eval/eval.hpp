@@ -44,28 +44,17 @@ auto timed_eval_inplace(F&& fun, Args&&... args) {
 }
 
 template <typename... Args>
-void log_eval(Args const&... args) noexcept {
+void log_tag(std::string_view tag, Args const&... args) {
   auto& l = Logger::instance();
   if constexpr (sizeof...(Args))
     if (l.eval.level > 0)
-      write_log(l, "[EVAL]", std::format(" | {}", args)..., '\n');
+      write_log(l, std::format("[{}]", tag), std::format(" | {}", args)...,
+                '\n');
 }
 
-template <typename... Args>
-void log_term(Args const&... args) noexcept {
-  auto& l = Logger::instance();
-  if constexpr (sizeof...(Args))
-    if (l.eval.level > 0)
-      write_log(l, "[TERM]", std::format(" | {}", args)..., '\n');
-}
-
-template <typename... Args>
-void log_cache(Args const&... args) noexcept {
-  auto& l = Logger::instance();
-  if constexpr (sizeof...(Args))
-    if (l.eval.level > 0)
-      write_log(l, "[CACHE]", std::format(" | {}", args)..., '\n');
-}
+auto log_eval = [](auto const&... args) { log_tag("EVAL", args...); };
+auto log_cache = [](auto const&... args) { log_tag("CACHE", args...); };
+auto log_term = [](auto const&... args) { log_tag("TERM", args...); };
 
 void log_cache_access(size_t key, CacheManager const& cm) {
   auto const cur_l = cm.life(key);
