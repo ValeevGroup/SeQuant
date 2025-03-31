@@ -100,7 +100,17 @@ enum struct CacheCheck { Checked, Unchecked };
 
 }  // namespace
 
+enum struct Trace { On, Off, Default = Off };
+static_assert(Trace::Default == Trace::On || Trace::Default == Trace::Off);
+
+namespace {
+[[nodiscard]] consteval bool trace(Trace t) noexcept { return t == Trace::On; }
+}  // namespace
+
 ///
+/// \tparam EvalTrace If Trace::On, trace is written to the logger's stream.
+///                   Default is to follow Trace::Default, which is itself
+///                   equal to Trace::On or Trace::Off.
 /// \tparam Cache If CacheCache::Checked (default) the @param cache will be
 ///               checked before evaluating. It is used to detect the base case
 ///               for recursion to prevent infinite recursion.
@@ -111,7 +121,8 @@ enum struct CacheCheck { Checked, Unchecked };
 /// \param cache The cache for common sub-expression elimination.
 /// \return Evaluated result as ResultPtr.
 ///
-template <CacheCheck Cache = CacheCheck::Checked, meta::can_evaluate Node,
+template <Trace EvalTrace = Trace::Default,
+          CacheCheck Cache = CacheCheck::Checked, meta::can_evaluate Node,
           typename F>
   requires meta::leaf_node_evaluator<Node, F>
 ResultPtr evaluate(Node const& node,  //
@@ -125,12 +136,15 @@ ResultPtr evaluate(Node const& node,  //
 
     auto const h = hash::value(*node);
     if (auto ptr = cache.access(h); ptr) {
-      log_cache_access(h, cache);
+      if constexpr (trace(EvalTrace)) log_cache_access(h, cache);
+
       return mult_by_phase(ptr);
     } else if (cache.exists(h)) {
       auto ptr = cache.store(
-          h, mult_by_phase(evaluate<CacheCheck::Unchecked>(node, le, cache)));
-      log_cache_access(h, cache);
+          h, mult_by_phase(
+                 evaluate<EvalTrace, CacheCheck::Unchecked>(node, le, cache)));
+      if constexpr (trace(EvalTrace)) log_cache_access(h, cache);
+
       return mult_by_phase(ptr);
     } else {
       // do nothing
@@ -138,21 +152,18 @@ ResultPtr evaluate(Node const& node,  //
   }
 
   ResultPtr result;
+  ResultPtr left;
+  ResultPtr right;
 
   Seconds seconds;
-  size_t bytes;
 
   if (node.leaf()) {
     seconds = timed_eval_inplace([&]() { result = le(node); });
   } else {
-    ResultPtr const left = evaluate(node.left(), le, cache);
-    ResultPtr const right = evaluate(node.right(), le, cache);
-
+    left = evaluate<EvalTrace>(node.left(), le, cache);
+    right = evaluate<EvalTrace>(node.right(), le, cache);
     assert(left);
     assert(right);
-
-    bytes += left->size_in_bytes();
-    bytes += right->size_in_bytes();
 
     std::array<std::any, 3> const ann{node.left()->annot(),
                                       node.right()->annot(), node->annot()};
@@ -171,17 +182,18 @@ ResultPtr evaluate(Node const& node,  //
 
   assert(result);
 
-  bytes += result->size_in_bytes();
-
-  {  // logging
+  // logging
+  if constexpr (trace(EvalTrace)) {
     struct {
       std::string type, annot;
+      size_t bytes;
     } log;
     if (node.leaf()) {
       log.type = node->is_constant()   ? "CONSTANT"
                  : node->is_variable() ? "VARIABLE"
                                        : "TENSOR";
       log.annot = node->label();
+      log.bytes = result->size_in_bytes();
     } else {
       log.type = node->is_prod() ? "PROD" : node->is_sum() ? "SUM" : "ID";
       log.annot = node->is_atom()
@@ -190,11 +202,13 @@ ResultPtr evaluate(Node const& node,  //
                                     node.left()->label(),           //
                                     (node->is_prod() ? "*" : "+"),  //
                                     node.right()->label(), node->label());
+      log.bytes += right->size_in_bytes()  //
+                   + result->size_in_bytes();
     }
 
-    log_eval(log.type,                    //
-             std::format("{}", seconds),  //
-             std::format("{}B", bytes),   //
+    log_eval(log.type,                       //
+             std::format("{}", seconds),     //
+             std::format("{}B", log.bytes),  //
              log.annot);
   }
 
@@ -202,6 +216,9 @@ ResultPtr evaluate(Node const& node,  //
 }
 
 ///
+/// \tparam EvalTrace If Trace::On, trace is written to the logger's stream.
+///                   Default is to follow Trace::Default, which is itself
+///                   equal to Trace::On or Trace::Off.
 /// \param node A node that can be evaluated using @param le as the leaf
 ///             evaluator.
 /// \param layout The layout of the final result. Only meaningful if the result
@@ -211,36 +228,45 @@ ResultPtr evaluate(Node const& node,  //
 /// \param cache The cache for common sub-expression elimination.
 /// \return Evaluated result as ResultPtr.
 ///
-template <meta::can_evaluate Node, typename F>
+template <Trace EvalTrace = Trace::Default, meta::can_evaluate Node, typename F>
   requires meta::leaf_node_evaluator<Node, F>  //
 ResultPtr evaluate(Node const& node,           //
                    auto const& layout,         //
                    F const& le,                //
                    CacheManager& cache) {
-  log_term("BEGIN", to_string(deparse(to_expr(node))));
+  if constexpr (trace(EvalTrace))
+    log_term("BEGIN", to_string(deparse(to_expr(node))));
+
   struct {
     ResultPtr pre, post;
   } result;
-  result.pre = evaluate(node, le, cache);
+
+  result.pre = evaluate<EvalTrace>(node, le, cache);
 
   auto seconds = timed_eval_inplace([&]() {
     result.post =
         result.pre->permute(std::array<std::any, 2>{node->annot(), layout});
   });
+
   assert(result.post);
 
-  {  // logging
+  // logging
+  if constexpr (trace(EvalTrace)) {
     auto bytes = result.pre->size_in_bytes() + result.post->size_in_bytes();
     log_eval("PERMUTE",                   //
              std::format("{}", seconds),  //
              std::format("{}B", bytes),   //
              node->label());
+
+    log_term("END", to_string(deparse(to_expr(node))));
   }
-  log_term("END", to_string(deparse(to_expr(node))));
   return result.post;
 }
 
 ///
+/// \tparam EvalTrace If Trace::On, trace is written to the logger's stream.
+///                   Default is to follow Trace::Default, which is itself
+///                   equal to Trace::On or Trace::Off.
 /// \param nodes A range of node that can be evaluated using @param le as the
 ///              leaf evaluator. The evaluation result of the elements of
 ///              @param nodes will be summed up.
@@ -255,7 +281,8 @@ ResultPtr evaluate(Node const& node,           //
 /// \param cache The cache for common sub-expression elimination.
 /// \return Evaluated result as ResultPtr.
 ///
-template <meta::can_evaluate_range Nodes, typename F>
+template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
+          typename F>
   requires meta::leaf_node_evaluator<std::ranges::range_value_t<Nodes>, F>
 ResultPtr evaluate(Nodes const& nodes,  //
                    auto const& layout,  //
@@ -264,18 +291,16 @@ ResultPtr evaluate(Nodes const& nodes,  //
 
   for (auto&& n : nodes) {
     if (!result) {
-      result = evaluate(n, layout, le, cache);
+      result = evaluate<EvalTrace>(n, layout, le, cache);
       continue;
     }
 
-    size_t bytes;
-    Seconds seconds;
-    ResultPtr pre = evaluate(n, layout, le, cache);
-    seconds = timed_eval_inplace([&]() { result->add_inplace(*pre); });
-    bytes = result->size_in_bytes() + pre->size_in_bytes();
+    ResultPtr pre = evaluate<EvalTrace>(n, layout, le, cache);
+    auto seconds = timed_eval_inplace([&]() { result->add_inplace(*pre); });
 
     // logging
-    {
+    if constexpr (trace(EvalTrace)) {
+      auto bytes = result->size_in_bytes() + pre->size_in_bytes();
       log_eval("ADD_INPLACE",               //
                std::format("{}", seconds),  //
                std::format("{}B", bytes),   //
@@ -287,35 +312,40 @@ ResultPtr evaluate(Nodes const& nodes,  //
 }
 
 ///
+/// \tparam EvalTrace If Trace::On, trace is written to the logger's stream.
+///                   Default is to follow Trace::Default, which is itself
+///                   equal to Trace::On or Trace::Off.
 /// \brief Evaluate given node (or a range of nodes) using an empty cache
 ///        manager. Calls the other @code evalaute function overloads.
 /// \see evaluate.
 /// \return Evaluated result as ResultPtr.
 ///
-template <typename... Args>
+template <Trace EvalTrace = Trace::Default, typename... Args>
   requires(!last_type_is_cache_manager<Args...>)
 ResultPtr evaluate(Args&&... args) {
   auto cache = CacheManager::empty();
-  return evaluate(std::forward<Args>(args)..., cache);
+  return evaluate<EvalTrace>(std::forward<Args>(args)..., cache);
 }
 
 ///
+/// \tparam EvalTrace If Trace::On, trace is written to the logger's stream.
+///                   Default is to follow Trace::Default, which is itself
+///                   equal to Trace::On or Trace::Off.
 /// \brief Calls @code evaluate followd by the particle-symmetrization function.
 ///        The number of particles is inferred by the tensor present in the
 ///        evaluation node(s). Presence of odd-ranked tensors in the evaluation
 ///        node(s) is an error.
 /// \return Evaluated result as ResultPtr.
 ///
-template <typename... Args>
+template <Trace EvalTrace = Trace::Default, typename... Args>
 ResultPtr evaluate_symm(Args&&... args) {
-  ResultPtr pre = evaluate(std::forward<Args>(args)...);
+  ResultPtr pre = evaluate<EvalTrace>(std::forward<Args>(args)...);
   assert(pre);
   ResultPtr result;
   auto seconds = timed_eval_inplace([&]() { result = pre->symmetrize(); });
-  size_t bytes = pre->size_in_bytes() + result->size_in_bytes();
 
   // logging
-  {
+  if constexpr (trace(EvalTrace)) {
     auto&& arg0 =
         std::get<0>(std::forward_as_tuple(std::forward<Args>(args)...));
     std::string node_label;
@@ -324,6 +354,7 @@ ResultPtr evaluate_symm(Args&&... args) {
     else
       node_label = arg0->label();
 
+    size_t bytes = pre->size_in_bytes() + result->size_in_bytes();
     log_eval("SYMMETRIZE",                //
              std::format("{}", seconds),  //
              std::format("{}B", bytes),   //
@@ -334,12 +365,15 @@ ResultPtr evaluate_symm(Args&&... args) {
 }
 
 ///
+/// \tparam EvalTrace If Trace::On, trace is written to the logger's stream.
+///                   Default is to follow Trace::Default, which is itself
+///                   equal to Trace::On or Trace::Off.
 /// \brief Calls @code evaluate followd by the anti-symmetrization function on
 ///        the bra indices and the ket indices. The bra and ket indices are
 ///        inferred from the evaluation node(s).
 /// \return Evaluated result as ResultPtr.
 ///
-template <typename... Args>
+template <Trace EvalTrace = Trace::Default, typename... Args>
 ResultPtr evaluate_antisymm(Args&&... args) {
   size_t bra_rank;
   std::string node_label;  // for logging
@@ -351,16 +385,16 @@ ResultPtr evaluate_antisymm(Args&&... args) {
     bra_rank = arg0->as_tensor().bra_rank();
   }
 
-  ResultPtr pre = evaluate(std::forward<Args>(args)...);
+  ResultPtr pre = evaluate<EvalTrace>(std::forward<Args>(args)...);
   assert(pre);
 
   ResultPtr result;
   auto seconds =
       timed_eval_inplace([&]() { result = pre->antisymmetrize(bra_rank); });
-  size_t bytes = pre->size_in_bytes() + result->size_in_bytes();
 
   // logging
-  {
+  if constexpr (trace(EvalTrace)) {
+    size_t bytes = pre->size_in_bytes() + result->size_in_bytes();
     log_eval("ANTISYMMETRIZE",            //
              std::format("{}", seconds),  //
              std::format("{}B", bytes),   //
