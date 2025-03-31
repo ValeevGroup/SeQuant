@@ -419,8 +419,10 @@ ResultPtr evaluate_antisymm(Args&&... args) {
   if constexpr (meta::can_evaluate_range<decltype(arg0)>) {
     assert(!ranges::empty(arg0));
     bra_rank = ranges::front(arg0)->as_tensor().bra_rank();
+    node_label = ranges::front(arg0)->label();
   } else {
     bra_rank = arg0->as_tensor().bra_rank();
+    node_label = arg0->label();
   }
 
   ResultPtr pre = evaluate<EvalTrace>(std::forward<Args>(args)...);
