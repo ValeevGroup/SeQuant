@@ -404,8 +404,8 @@ void preprocess(ExprType expr, ExportContext &ctx, Node &node,
 ///   subtree is always larger (or equally large) than its right one.
 ///   This ensures that we have to have the least amount of tensors loaded
 ///   at the same time, when generating code for a backend which only supports
-///   stack-like memory allocations (e.g. when A is allocated before B, A
-///   must be deleted before B can be deleted).
+///   stack-like memory allocations (e.g. when A is allocated before B, B
+///   must be deleted before A can be deleted).
 /// - Rename intermediate tensors that have the same name and describe the same
 ///   tensor block, which are required as two separate entities at the same
 ///   time when evaluating the tree (thus a single tensor object is
