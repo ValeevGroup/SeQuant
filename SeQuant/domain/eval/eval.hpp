@@ -100,7 +100,16 @@ enum struct CacheCheck { Checked, Unchecked };
 
 }  // namespace
 
-enum struct Trace { On, Off, Default = Off };
+enum struct Trace {
+  On,
+  Off,
+  Default =
+#ifdef SEQUANT_EVAL_TRACE
+      On
+#else
+      Off
+#endif
+};
 static_assert(Trace::Default == Trace::On || Trace::Default == Trace::Off);
 
 namespace {
