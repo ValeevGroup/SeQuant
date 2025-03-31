@@ -211,8 +211,9 @@ ResultPtr evaluate(Node const& node,  //
                                     node.left()->label(),           //
                                     (node->is_prod() ? "*" : "+"),  //
                                     node.right()->label(), node->label());
-      log.bytes += right->size_in_bytes()  //
-                   + result->size_in_bytes();
+      log.bytes = left->size_in_bytes()     //
+                  + right->size_in_bytes()  //
+                  + result->size_in_bytes();
     }
 
     log_eval(log.type,                       //
