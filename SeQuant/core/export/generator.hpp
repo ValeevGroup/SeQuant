@@ -60,9 +60,12 @@ class Generator {
   virtual void declare(const Variable &variable, const Context &ctx) = 0;
   virtual void declare(const Tensor &tensor, const Context &ctx) = 0;
 
+  virtual void all_indices_declared(std::size_t amount) = 0;
+  virtual void all_variables_declared(std::size_t amount) = 0;
+  virtual void all_tensors_declared(std::size_t amount) = 0;
+
   virtual void insert_comment(const std::string &comment,
                               const Context &ctx) = 0;
-  virtual void insert_blank_lines(std::size_t count, const Context &ctx) = 0;
 
   virtual std::string get_generated_code() const = 0;
 

@@ -159,14 +159,26 @@ class TextGenerator : public Generator<Context> {
     m_generated += "Declare tensor " + represent(tensor, ctx) + "\n";
   }
 
-  void insert_comment(const std::string &comment, const Context &ctx) override {
-    m_generated += "// " + comment + "\n";
-  }
-
-  void insert_blank_lines(std::size_t count, const Context &ctx) override {
-    for (std::size_t i = 0; i < count; ++i) {
+  void all_indices_declared(std::size_t amount) override {
+    if (amount > 0) {
       m_generated += "\n";
     }
+  }
+
+  void all_variables_declared(std::size_t amount) override {
+    if (amount > 0) {
+      m_generated += "\n";
+    }
+  }
+
+  void all_tensors_declared(std::size_t amount) override {
+    if (amount > 0) {
+      m_generated += "\n";
+    }
+  }
+
+  void insert_comment(const std::string &comment, const Context &ctx) override {
+    m_generated += "// " + comment + "\n";
   }
 
   std::string get_generated_code() const override { return m_generated; }

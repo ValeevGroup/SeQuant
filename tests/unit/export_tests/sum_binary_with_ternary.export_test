@@ -35,8 +35,6 @@ Persist I[a_1, i_2]
 =================================================
 Julia (TensorOperations)
 =================================================
-
-
 I_vo = zeros(Float64, nv, nocc)
 I2_vo = zeros(Float64, nv, nocc)
 A_vo = deserialize("A_vo.jlbin")
@@ -58,8 +56,6 @@ return I_vo
 =================================================
 Julia (TensorKit)
 =================================================
-
-
 I_vo = TensorMap(zeros(Float64, nv, nocc), ℝ^nv, ℝ^nocc)
 I2_vo = TensorMap(zeros(Float64, nv, nocc), ℝ^nv, ℝ^nocc)
 A_vo = TensorMap(deserialize("A_vo.jlbin"), ℝ^nv, ℝ^nocc)
@@ -85,7 +81,6 @@ i_1 = Index(nocc, "i_1")
 i_2 = Index(nocc, "i_2")
 i_3 = Index(nocc, "i_3")
 a_1 = Index(nv, "a_1")
-
 
 I_vo = ITensor(zeros(Float64, nv, nocc), a_1, i_2)
 I2_vo = ITensor(zeros(Float64, nv, nocc), a_1, i_3)

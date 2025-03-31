@@ -29,9 +29,6 @@ Persist Z
 =================================================
 Julia (TensorOperations)
 =================================================
-
-
-
 Z = 0.0
 g_oovv = deserialize("g_oovv.jlbin")
 t_vvoo = deserialize("t_vvoo.jlbin")
@@ -48,9 +45,6 @@ return Z
 =================================================
 Julia (TensorKit)
 =================================================
-
-
-
 Z = 0.0
 g_oovv = TensorMap(deserialize("g_oovv.jlbin"), ℝ^nocc ⊗ ℝ^nocc, ℝ^nv ⊗ ℝ^nv)
 t_vvoo = TensorMap(deserialize("t_vvoo.jlbin"), ℝ^nv ⊗ ℝ^nv, ℝ^nocc ⊗ ℝ^nocc)
@@ -71,8 +65,6 @@ i_1 = Index(nocc, "i_1")
 i_2 = Index(nocc, "i_2")
 a_1 = Index(nv, "a_1")
 a_2 = Index(nv, "a_2")
-
-
 
 tmpvar = 0.0
 Z = ITensor(tmpvar)

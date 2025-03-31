@@ -203,14 +203,14 @@ class JuliaTensorOperationsGenerator : public Generator<Context> {
     (void)ctx;
   }
 
+  void all_indices_declared(std::size_t amount) override { (void)amount; }
+
+  void all_variables_declared(std::size_t amount) override { (void)amount; }
+
+  void all_tensors_declared(std::size_t amount) override { (void)amount; }
+
   void insert_comment(const std::string &comment, const Context &ctx) override {
     m_generated += "# " + comment + "\n";
-  }
-
-  void insert_blank_lines(std::size_t count, const Context &ctx) override {
-    for (std::size_t i = 0; i < count; ++i) {
-      m_generated += "\n";
-    }
   }
 
   std::string get_generated_code() const override { return m_generated; }

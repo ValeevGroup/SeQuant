@@ -533,26 +533,17 @@ void export_expression(EvalNode<T> expression, Generator<Context> &generator,
   for (const Index &idx : result.indices) {
     generator.declare(idx, ctx);
   }
-
-  if (!result.indices.empty()) {
-    generator.insert_blank_lines(1, ctx);
-  }
+  generator.all_indices_declared(result.indices.size());
 
   for (const Variable &var : result.variables) {
     generator.declare(var, ctx);
   }
-
-  if (!result.variables.empty()) {
-    generator.insert_blank_lines(1, ctx);
-  }
+  generator.all_variables_declared(result.variables.size());
 
   for (const Tensor &tensor : result.tensors) {
     generator.declare(tensor, ctx);
   }
-
-  if (!result.tensors.empty()) {
-    generator.insert_blank_lines(1, ctx);
-  }
+  generator.all_tensors_declared(result.tensors.size());
 
   details::GenerationVisitor<T, Context> visitor(generator, ctx,
                                                  result.scalarFactors);
