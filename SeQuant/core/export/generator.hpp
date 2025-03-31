@@ -83,6 +83,9 @@ class Generator {
                                    const Context &ctx) = 0;
   virtual void end_named_section(std::string_view name, const Context &ctx) = 0;
 
+  virtual void begin_expression(const Context &ctx) = 0;
+  virtual void end_expression(const Context &ctx) = 0;
+
   virtual std::string get_generated_code() const = 0;
 
  protected:

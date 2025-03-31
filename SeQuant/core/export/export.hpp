@@ -558,6 +558,8 @@ void export_expression(EvalNode<T> &expression, Generator<Context> &generator,
     generator.all_tensors_declared(pp_result.tensors.size());
   }
 
+  generator.begin_expression(ctx);
+
   details::GenerationVisitor<T, Context> visitor(generator, ctx,
                                                  pp_result.scalarFactors);
   expression.visit(
@@ -565,6 +567,8 @@ void export_expression(EvalNode<T> &expression, Generator<Context> &generator,
         visitor(node, context);
       },
       TreeTraversal::PreAndPostOrder);
+
+  generator.end_expression(ctx);
 }
 
 template <typename Range, typename Context>

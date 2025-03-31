@@ -239,6 +239,14 @@ class JuliaTensorOperationsGenerator : public Generator<Context> {
     std::abort();
   }
 
+  void begin_expression(const Context &ctx) override {
+    if (!m_generated.empty() && m_generated.back() != '\n') {
+      m_generated += "\n";
+    }
+  }
+
+  void end_expression(const Context &ctx) override {}
+
   std::string get_generated_code() const override { return m_generated; }
 
  protected:
