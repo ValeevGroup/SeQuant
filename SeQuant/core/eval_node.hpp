@@ -24,7 +24,7 @@ ExprPtr linearize_eval_node(Node const& node) {
   assert(rres);
 
   if (node->op_type() == EvalOp::Sum) return ex<Sum>(ExprPtrList{lres, rres});
-  assert(node->op_type() == EvalOp::Prod);
+  assert(node->op_type() == EvalOp::Product);
   return ex<Product>(
       Product{1, ExprPtrList{lres, rres}, Product::Flatten::Yes});
 }
@@ -113,8 +113,8 @@ struct Flops {
             typename = std::enable_if_t<meta::is_eval_node<NodeT>>>
   [[nodiscard]] AsyCost operator()(NodeT const& n) const {
     if (n.leaf()) return AsyCost::zero();
-    if (n->op_type() == EvalOp::Prod  //
-        && n.left()->is_tensor()      //
+    if (n->op_type() == EvalOp::Product  //
+        && n.left()->is_tensor()         //
         && n.right()->is_tensor()) {
       auto const idx_count = ContractedIndexCount{n};
       auto c = AsyCost{idx_count.unique_occs(), idx_count.unique_virts()};
@@ -190,7 +190,7 @@ struct FlopsWithSymm {
         cost = tsymm == Symmetry::symm
                    ? cost / (factorial(tbrank) * factorial(tkrank))
                    : cost / factorial(tbrank);
-      else if (op == EvalOp::Prod) {
+      else if (op == EvalOp::Product) {
         auto const lsymm = n.left()->as_tensor().symmetry();
         auto const rsymm = n.right()->as_tensor().symmetry();
         cost = (lsymm == rsymm && lsymm == Symmetry::nonsymm)

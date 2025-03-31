@@ -63,7 +63,7 @@ auto eval_node(sequant::ExprPtr const& expr) {
   auto node = binarize(expr);
   return transform_node(node, [](auto&& val) {
     if (val.is_tensor()) {
-      return EvalExprTA(val.op_type(), val.result_type(), val.expr(),
+      return EvalExprTA(*val.op_type(), val.result_type(), val.expr(),
                         NestedTensorIndices(val.as_tensor()).outer_inner() |
                             ranges::to<EvalExpr::index_vector>(),
                         val.canon_phase(), val.hash_value());

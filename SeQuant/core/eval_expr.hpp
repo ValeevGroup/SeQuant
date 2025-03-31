@@ -14,17 +14,9 @@ namespace sequant {
 class Tensor;
 
 ///
-/// \brief The EvalOp enum
-///
-/// \details The EvalOp enum is used to distinguish between the different binary
-///          operations that can be performed on two EvalExpr objects.
+/// \brief defines types of binary
+///        operations that can be performed on two EvalExpr objects.
 enum class EvalOp {
-
-  ///
-  /// \brief Represents the atomic evaluation. It is not a binary operation
-  ///        per se. An atomic tensor or an atomic constant is always evaluated
-  ///        this way.
-  Atom,
 
   ///
   /// \brief Represents the sum of two EvalExpr objects. Such as a tensor plus
@@ -36,47 +28,47 @@ enum class EvalOp {
   ///        times a tensor, a constant times a constant, or a tensor times a
   ///        constant
   ///        (in either order).
-  Prod
+  Product
 };
 
 ///
 /// \brief The ResultType enum.
 ///
 /// \details Represents the type of the result of @c EvalOp on two EvalExpr
-///          objects (or, single EvalExpr object if the EvalOp is Atom).
+///          objects (or, single EvalExpr object if `this->is_primary()`).
 ///
 enum class ResultType { Tensor, Scalar };
 
 ///
-/// \brief The EvalExpr class represents the object that go into the nodes of
-///        the binary tree that is used to evaluate the sequant expressions.
+/// \brief The EvalExpr is a building block of binary trees used to evaluate
+/// expressions.
 ///
-/// \details The EvalExpr class itself is not a proper node. It is rather a data
-///          that a node should hold.
+/// \details The EvalExpr class itself is not a proper node of the binary tree.
+/// It is rather a data that a node should hold.
 ///
 class EvalExpr {
  public:
   using index_vector = Index::index_vector;
 
   ///
-  /// \brief Construct an EvalExpr object from a tensor. The EvalOp is Atom.
+  /// \brief Construct an EvalExpr object from a tensor.
   ///
   explicit EvalExpr(Tensor const& tnsr);
 
   ///
-  /// \brief Construct an EvalExpr object from a Constant. The EvalOp is Atom.
+  /// \brief Construct an EvalExpr object from a Constant.
   ///
   explicit EvalExpr(Constant const& c);
 
   ///
-  /// \brief Construct an EvalExpr object from a Variable. The EvalOp is Atom.
+  /// \brief Construct an EvalExpr object from a Variable.
   ///
   explicit EvalExpr(Variable const& v);
 
   ///
   /// @param op Evaluation operation resulting to this object.
   /// @param res Evaluation result type that will be produced.
-  /// @param expr A sequant expression corresponding to @c res.
+  /// @param expr A SeQuant expression corresponding to @c res.
   /// @param ixs Canonical indices used for annotating the result's modes if @c
   ///            res is tensor type. Possibly empty for non-tensor @c res type.
   /// @param phase Phase that was part of the tensor network canonicalization.
@@ -88,9 +80,10 @@ class EvalExpr {
            std::int8_t phase, size_t hash);
 
   ///
-  /// \return The EvalOp resulting into this EvalExpr object.
+  /// \return Operation type of this expression, or null if this is a primary
+  /// expression.
   ///
-  [[nodiscard]] EvalOp op_type() const noexcept;
+  [[nodiscard]] const std::optional<EvalOp>& op_type() const noexcept;
 
   ///
   /// \return The ResultType of the evaluation performed on this node.
@@ -114,7 +107,7 @@ class EvalExpr {
   [[nodiscard]] ExprPtr expr() const noexcept;
 
   ///
-  /// \return True if this EvalExpr object contains a sequant tensor with
+  /// \return True if this EvalExpr object contains a SeQuant tensor with
   ///         proto-indices, false otherwise.
   ///
   [[nodiscard]] bool tot() const noexcept;
@@ -148,17 +141,18 @@ class EvalExpr {
   [[nodiscard]] bool is_variable() const noexcept;
 
   ///
-  /// \return True if the evaluation is terminal (eg. a leaf tensor).
+  /// \return True if this is a primary expression (i.e. a leaf on expression
+  /// tree)
   ///
-  [[nodiscard]] bool is_atom() const noexcept;
+  [[nodiscard]] bool is_primary() const noexcept;
 
   ///
-  /// \return True if the evaluation is a product.
+  /// \return True if this expression is a product.
   ///
-  [[nodiscard]] bool is_prod() const noexcept;
+  [[nodiscard]] bool is_product() const noexcept;
 
   ///
-  /// \return True if the evaluation is a sum.
+  /// \return True if this expression is a sum.
   ///
   [[nodiscard]] bool is_sum() const noexcept;
 
@@ -206,7 +200,7 @@ class EvalExpr {
   [[nodiscard]] std::int8_t canon_phase() const noexcept;
 
  private:
-  EvalOp op_type_;
+  std::optional<EvalOp> op_type_ = std::nullopt;
 
   ResultType result_type_;
 
@@ -279,7 +273,7 @@ ExprPtr to_expr(NodeT const& node) {
 
   if (node.leaf()) return evxpr.expr();
 
-  if (op == EvalOp::Prod) {
+  if (op == EvalOp::Product) {
     auto prod = Product{};
 
     ExprPtr lexpr = to_expr(node.left());

@@ -179,7 +179,7 @@ ResultPtr evaluate(Node const& node,  //
     if (node->op_type() == EvalOp::Sum) {
       timed_eval_inplace([&]() { result = left->sum(*right, ann); });
     } else {
-      assert(node->op_type() == EvalOp::Prod);
+      assert(node->op_type() == EvalOp::Product);
       auto const de_nest =
           node.left()->tot() && node.right()->tot() && !node->tot();
       timed_eval_inplace([&]() {
@@ -204,12 +204,12 @@ ResultPtr evaluate(Node const& node,  //
       log.annot = node->label();
       log.bytes = result->size_in_bytes();
     } else {
-      log.type = node->is_prod() ? "PROD" : node->is_sum() ? "SUM" : "ID";
-      log.annot = node->is_atom()
+      log.type = node->is_product() ? "PRODUCT" : node->is_sum() ? "SUM" : "ID";
+      log.annot = node->is_primary()
                       ? node->label()
-                      : std::format("{} {} {} -> {}",               //
-                                    node.left()->label(),           //
-                                    (node->is_prod() ? "*" : "+"),  //
+                      : std::format("{} {} {} -> {}",                  //
+                                    node.left()->label(),              //
+                                    (node->is_product() ? "*" : "+"),  //
                                     node.right()->label(), node->label());
       log.bytes = left->size_in_bytes()     //
                   + right->size_in_bytes()  //

@@ -31,9 +31,9 @@ Constant parse_constant(std::wstring_view c) {
 }
 
 EvalExpr result_expr(EvalExpr const& left, EvalExpr const& right, EvalOp op) {
-  assert(op == EvalOp::Prod || op == EvalOp::Sum);
-  auto xpr = op == EvalOp::Prod ? left.expr() * right.expr()
-                                : left.expr() + right.expr();
+  assert(op == EvalOp::Product || op == EvalOp::Sum);
+  auto xpr = op == EvalOp::Product ? left.expr() * right.expr()
+                                   : left.expr() + right.expr();
   return *binarize(xpr);
 }
 
@@ -64,7 +64,7 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
 
     auto x1 = EvalExpr(t1);
 
-    REQUIRE(x1.op_type() == EvalOp::Atom);
+    REQUIRE(!x1.op_type());
 
     auto p1 = parse_expr(L"g_{i3,a1}^{i1,i2} * t_{a2}^{a3}");
 
@@ -72,9 +72,9 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
     const auto& c3 = EvalExpr{p1->at(1)->as<Tensor>()};
 
     auto x2 = EvalExpr(parse_expr(L"1/2")->as<Constant>());
-    REQUIRE(x2.op_type() == EvalOp::Atom);
+    REQUIRE(!x2.op_type());
 
-    REQUIRE(EvalExpr{Variable{L"λ"}}.op_type() == EvalOp::Atom);
+    REQUIRE(!EvalExpr{Variable{L"λ"}}.op_type());
   }
 
   SECTION("ResultType types") {
@@ -99,25 +99,25 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
     REQUIRE(result_type(         //
                 T(L"X{i1;a1}"),  //
                 T(L"Y{a1;i1}"),  //
-                EvalOp::Prod     //
+                EvalOp::Product  //
                 ) == ResultType::Scalar);
 
     REQUIRE(result_type(                //
                 T(L"X{i1,i2; a3,a4}"),  //
                 T(L"Y{a3,a4; a1,a2}"),  //
-                EvalOp::Prod            //
+                EvalOp::Product         //
                 ) == ResultType::Tensor);
 
     REQUIRE(result_type(         //
                 T(L"X{i1;a1}"),  //
                 C(L"2.5"),       //
-                EvalOp::Prod     //
+                EvalOp::Product  //
                 ) == ResultType::Tensor);
 
-    REQUIRE(result_type(      //
-                C(L"1.5"),    //
-                C(L"2.5"),    //
-                EvalOp::Prod  //
+    REQUIRE(result_type(         //
+                C(L"1.5"),       //
+                C(L"2.5"),       //
+                EvalOp::Product  //
                 ) == ResultType::Scalar);
 
     REQUIRE(result_type(     //
@@ -140,7 +140,7 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
     REQUIRE(*t1 == x1.expr()->as<Tensor>());
     REQUIRE(*t2 == x2.expr()->as<Tensor>());
 
-    const auto& x3 = result_expr(x1, x2, EvalOp::Prod);
+    const auto& x3 = result_expr(x1, x2, EvalOp::Product);
 
     REQUIRE_NOTHROW(x3.expr()->as<Tensor>());
 
@@ -154,15 +154,15 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
                                                  L"a_2"} |
         ranges::to<container::set<std::wstring_view>>;
 
-    REQUIRE(x3.op_type() == EvalOp::Prod);
+    REQUIRE(x3.op_type() == EvalOp::Product);
 
     REQUIRE(prod_indices == expected_indices);
 
     const auto t4 = parse_tensor(L"g_{i3,i4}^{a3,a4}");
     const auto t5 = parse_tensor(L"I_{a1,a2,a3,a4}^{i1,i2,i3,i4}");
 
-    const auto& x45 = result_expr(EvalExpr{t4}, EvalExpr{t5}, EvalOp::Prod);
-    const auto& x54 = result_expr(EvalExpr{t5}, EvalExpr{t4}, EvalOp::Prod);
+    const auto& x45 = result_expr(EvalExpr{t4}, EvalExpr{t5}, EvalOp::Product);
+    const auto& x54 = result_expr(EvalExpr{t5}, EvalExpr{t4}, EvalOp::Product);
 
     REQUIRE(x45.to_latex() == parse_expr(L"I_{a1,a2}^{i1,i2}")->to_latex());
     REQUIRE(x45.to_latex() == x54.to_latex());
@@ -176,8 +176,8 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
     const auto& x1 = EvalExpr{t1};
     const auto& x2 = EvalExpr{t2};
 
-    const auto& x12 = result_expr(x1, x2, EvalOp::Prod);
-    const auto& x21 = result_expr(x2, x1, EvalOp::Prod);
+    const auto& x12 = result_expr(x1, x2, EvalOp::Product);
+    const auto& x21 = result_expr(x2, x1, EvalOp::Product);
 
     REQUIRE(x1.hash_value() == x2.hash_value());
     REQUIRE(x12.hash_value() == x21.hash_value());
@@ -193,7 +193,7 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
     const auto t1 = parse_tensor(L"g_{i3,i4}^{i1,i2}", Symmetry::antisymm);
     const auto t2 = parse_tensor(L"t_{a1,a2}^{i3,i4}", Symmetry::antisymm);
 
-    const auto x12 = result_expr(EvalExpr{t1}, EvalExpr{t2}, EvalOp::Prod);
+    const auto x12 = result_expr(EvalExpr{t1}, EvalExpr{t2}, EvalOp::Product);
 
     // todo:
     // REQUIRE(x12.expr()->as<Tensor>().symmetry() == Symmetry::antisymm);
@@ -204,7 +204,7 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
     const auto t4 =
         parse_expr(L"t_{a1,a2}^{i3,i4}", Symmetry::symm)->as<Tensor>();
 
-    const auto x34 = result_expr(EvalExpr{t3}, EvalExpr{t4}, EvalOp::Prod);
+    const auto x34 = result_expr(EvalExpr{t3}, EvalExpr{t4}, EvalOp::Product);
 
     // todo:
     // REQUIRE(x34.expr()->as<Tensor>().symmetry() == Symmetry::symm);
@@ -213,7 +213,7 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
     const auto t5 = parse_expr(L"f_{i1}^{a1}", Symmetry::nonsymm)->as<Tensor>();
     const auto t6 = parse_expr(L"f_{i2}^{a2}", Symmetry::nonsymm)->as<Tensor>();
 
-    const auto& x56 = result_expr(EvalExpr{t5}, EvalExpr{t6}, EvalOp::Prod);
+    const auto& x56 = result_expr(EvalExpr{t5}, EvalExpr{t6}, EvalOp::Product);
 
     // todo:
     // REQUIRE(x56.expr()->as<Tensor>().symmetry() == Symmetry::antisymm);
@@ -222,7 +222,7 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
     const auto t7 = parse_tensor(L"g_{a1,a2}^{i1,a3}", Symmetry::antisymm);
     const auto t8 = parse_tensor(L"t_{a3}^{i2}", Symmetry::antisymm);
 
-    const auto x78 = result_expr(EvalExpr{t7}, EvalExpr{t8}, EvalOp::Prod);
+    const auto x78 = result_expr(EvalExpr{t7}, EvalExpr{t8}, EvalOp::Product);
 
     // todo:
     // REQUIRE(x78.expr()->as<Tensor>().symmetry() == Symmetry::nonsymm);
@@ -232,7 +232,7 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
         parse_expr(L"g_{a1,a2}^{a3,a4}", Symmetry::antisymm)->as<Tensor>();
     auto const t10 =
         parse_expr(L"t_{a3,a4}^{i1,i2}", Symmetry::symm)->as<Tensor>();
-    auto const x910 = result_expr(EvalExpr{t9}, EvalExpr{t10}, EvalOp::Prod);
+    auto const x910 = result_expr(EvalExpr{t9}, EvalExpr{t10}, EvalOp::Product);
     // todo:
     // REQUIRE(x910.expr()->as<Tensor>().symmetry() == Symmetry::symm);
   }
@@ -288,6 +288,6 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
         EvalExpr{parse_expr(L"O{a_2<i_1,i_2>;a_2<i_3,i_2>}", Symmetry::nonsymm)
                      ->as<Tensor>()};
 
-    REQUIRE_NOTHROW(result_expr(t1, t2, EvalOp::Prod));
+    REQUIRE_NOTHROW(result_expr(t1, t2, EvalOp::Product));
   }
 }
