@@ -94,24 +94,26 @@ class SequantEvalScfBTAS final : public SequantEvalScf {
     };
 
     auto rs = repeat_n(Tensor_t{}, info_.eqn_opts.excit) | ranges::to_vector;
+    auto st = info_.eqn_opts.spintrace;
+    auto log = Logger::instance().eval.level > 0;
+
     for (auto&& [r, n] : zip(rs, nodes_)) {
-      auto const target_indices = sorted_annot((*n.begin())->as_tensor());
-      auto st = info_.eqn_opts.spintrace;
-      auto cm = info_.optm_opts.reuse_imeds;
-      if (st && cm) {
-        r = evaluate_symm(n, target_indices, data_world_, cman_)
+      auto const& target_indices = ranges::front(n)->annot();
+      if (st && log) {
+        r = evaluate_symm<Trace::On>(n, target_indices, data_world_, cman_)
                 ->template get<Tensor_t>();
-      } else if (st && !cm) {
-        r = evaluate_symm(n, target_indices, data_world_)
+      } else if (st) {
+        r = evaluate_symm<Trace::Off>(n, target_indices, data_world_, cman_)
                 ->template get<Tensor_t>();
-      } else if (!st && cm) {
-        r = evaluate_antisymm(n, target_indices, data_world_, cman_)
+      } else if (log) {
+        r = evaluate_antisymm<Trace::On>(n, target_indices, data_world_, cman_)
                 ->template get<Tensor_t>();
       } else {
-        r = evaluate_antisymm(n, target_indices, data_world_)
+        r = evaluate_antisymm<Trace::Off>(n, target_indices, data_world_, cman_)
                 ->template get<Tensor_t>();
       }
     }
+
     data_world_.update_amplitudes(rs);
     return info_.eqn_opts.spintrace ? energy_spin_free_orbital()
                                     : energy_spin_orbital();
