@@ -315,6 +315,35 @@ ResultPtr evaluate(Nodes const& nodes,  //
 /// \tparam EvalTrace If Trace::On, trace is written to the logger's stream.
 ///                   Default is to follow Trace::Default, which is itself
 ///                   equal to Trace::On or Trace::Off.
+/// \param nodes A range of node that can be evaluated using @param le as the
+///              leaf evaluator. The evaluation result of the elements of
+///              @param nodes will be summed up.
+///
+/// \param le The leaf evaluator that satisfies
+///           @code meta::leaf_node_evaluator<Node, F>.
+/// \param cache The cache for common sub-expression elimination.
+/// \return Evaluated result as ResultPtr.
+/// \note Because this function takes no layout argument, it is only useful
+///       to evaluate summations of the elements in the @param nodes when they
+///       are scalar results.
+///
+template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
+          typename F>
+  requires meta::leaf_node_evaluator<std::ranges::range_value_t<Nodes>, F>
+ResultPtr evaluate(Nodes const& nodes,  //
+                   F const& le, CacheManager& cache) {
+  using annot_type = decltype([](std::ranges::range_value_t<Nodes> const& n) {
+    return n->annot();
+  });
+
+  static_assert(std::is_default_constructible_v<annot_type>);
+  return evaluate(nodes, annot_type{}, le, cache);
+}
+
+///
+/// \tparam EvalTrace If Trace::On, trace is written to the logger's stream.
+///                   Default is to follow Trace::Default, which is itself
+///                   equal to Trace::On or Trace::Off.
 /// \brief Evaluate given node (or a range of nodes) using an empty cache
 ///        manager. Calls the other @code evalaute function overloads.
 /// \see evaluate.
