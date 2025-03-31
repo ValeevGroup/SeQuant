@@ -6,9 +6,15 @@
 #include <SeQuant/core/index.hpp>
 
 #include <string>
+#include <string_view>
 #include <type_traits>
 
 namespace sequant {
+
+enum class DeclarationScope {
+  Global,
+  Section,
+};
 
 /// Abstract base class for all (code) generators
 template <typename C>
@@ -24,6 +30,12 @@ class Generator {
   virtual ~Generator() = default;
 
   virtual std::string get_format_name() const = 0;
+
+  virtual bool supports_named_sections() const = 0;
+
+  virtual DeclarationScope index_declaration_scope() const = 0;
+  virtual DeclarationScope variable_declaration_scope() const = 0;
+  virtual DeclarationScope tensor_declaration_scope() const = 0;
 
   virtual std::string represent(const Index &idx, const Context &ctx) const = 0;
   virtual std::string represent(const Tensor &tensor,
@@ -66,6 +78,10 @@ class Generator {
 
   virtual void insert_comment(const std::string &comment,
                               const Context &ctx) = 0;
+
+  virtual void begin_named_section(std::string_view name,
+                                   const Context &ctx) = 0;
+  virtual void end_named_section(std::string_view name, const Context &ctx) = 0;
 
   virtual std::string get_generated_code() const = 0;
 

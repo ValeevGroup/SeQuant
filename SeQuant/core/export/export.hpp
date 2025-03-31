@@ -4,13 +4,16 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/eval_node.hpp>
 #include <SeQuant/core/export/context.hpp>
+#include <SeQuant/core/export/expression_group.hpp>
 #include <SeQuant/core/export/generator.hpp>
 #include <SeQuant/core/export/utils.hpp>
 #include <SeQuant/core/logger.hpp>
 
-#include <functional>
+#include <algorithm>
+#include <array>
 #include <optional>
-#include <stack>
+#include <ranges>
+#include <set>
 #include <stdexcept>
 #include <tuple>
 #include <type_traits>
@@ -502,56 +505,214 @@ void preprocess(EvalNode<T> &tree, PreprocessResult &result, ExportContext &ctx,
   }
 }
 
-}  // namespace details
+template <typename T>
+void preprocess_and_maybe_log(EvalNode<T> &tree, PreprocessResult &result,
+                              ExportContext &ctx) {
+  if (Logger::instance().export_equations) {
+    std::cout << "Tree before preprocessing:\n"
+              << tree.tikz(
+                     [](const EvalNode<T> &node) {
+                       return "$" + toUtf8(to_latex(node->expr())) + "$";
+                     },
+                     [](const EvalNode<T>) -> std::string { return ""; })
+              << "\n";
+  }
+
+  preprocess(tree, result, ctx);
+
+  if (Logger::instance().export_equations) {
+    std::cout << "Tree after pre-processing:\n"
+              << tree.tikz(
+                     [](const EvalNode<T> &node) {
+                       return "$" + toUtf8(to_latex(node->expr())) + "$";
+                     },
+                     [](const EvalNode<T>) -> std::string { return ""; })
+              << "\n";
+  }
+}
 
 template <typename T, typename Context>
-void export_expression(EvalNode<T> expression, Generator<Context> &generator,
-                       Context ctx = {}) {
-  if (Logger::instance().export_equations) {
-    std::cout << "Input equation tree:\n"
-              << expression.tikz(
-                     [](const EvalNode<T> &node) {
-                       return "$" + toUtf8(to_latex(node->expr())) + "$";
-                     },
-                     [](const EvalNode<T>) -> std::string { return ""; })
-              << "\n";
-  }
-
-  details::PreprocessResult result;
-  preprocess(expression, result, ctx);
-
-  if (Logger::instance().export_equations) {
-    std::cout << "Pre-processed equation tree:\n"
-              << expression.tikz(
-                     [](const EvalNode<T> &node) {
-                       return "$" + toUtf8(to_latex(node->expr())) + "$";
-                     },
-                     [](const EvalNode<T>) -> std::string { return ""; })
-              << "\n";
-  }
-
-  for (const Index &idx : result.indices) {
+void export_expression(EvalNode<T> &expression, Generator<Context> &generator,
+                       Context &ctx, PreprocessResult &pp_result) {
+  for (const Index &idx : pp_result.indices) {
     generator.declare(idx, ctx);
   }
-  generator.all_indices_declared(result.indices.size());
+  generator.all_indices_declared(pp_result.indices.size());
 
-  for (const Variable &var : result.variables) {
+  for (const Variable &var : pp_result.variables) {
     generator.declare(var, ctx);
   }
-  generator.all_variables_declared(result.variables.size());
+  generator.all_variables_declared(pp_result.variables.size());
 
-  for (const Tensor &tensor : result.tensors) {
+  for (const Tensor &tensor : pp_result.tensors) {
     generator.declare(tensor, ctx);
   }
-  generator.all_tensors_declared(result.tensors.size());
+  generator.all_tensors_declared(pp_result.tensors.size());
 
   details::GenerationVisitor<T, Context> visitor(generator, ctx,
-                                                 result.scalarFactors);
+                                                 pp_result.scalarFactors);
   expression.visit(
       [&visitor](const FullBinaryNode<T> &node, TreeTraversal context) {
         visitor(node, context);
       },
       TreeTraversal::PreAndPostOrder);
+}
+
+template <typename Range, typename Context>
+  requires std::ranges::range<Range>
+void declare_all(const Range &range, Generator<Context> &generator,
+                 Context &ctx) {
+  using RangeType = std::ranges::range_value_t<Range>;
+
+  for (const RangeType &val : range) {
+    generator.declare(val, ctx);
+  }
+
+  using std::ranges::size;
+  if constexpr (std::is_same_v<RangeType, Tensor>) {
+    generator.all_tensors_declared(size(range));
+  } else if constexpr (std::is_same_v<RangeType, Variable>) {
+    generator.all_variables_declared(size(range));
+  } else {
+    static_assert(std::is_same_v<RangeType, Index>);
+    generator.all_indices_declared(size(range));
+  }
+}
+
+template <typename T, typename Compare = std::less<T>, typename Range>
+  requires std::ranges::range<Range> &&
+           std::is_same_v<std::ranges::range_value_t<Range>, PreprocessResult>
+std::set<T, Compare> combine_and_clear_pp_results(Range &&range) {
+  std::set<T, Compare> combined;
+
+  constexpr bool is_index = std::is_same_v<T, Index>;
+  constexpr bool is_variable = std::is_same_v<T, Variable>;
+  constexpr bool is_tensor = std::is_same_v<T, Tensor>;
+  static_assert(is_index || is_variable || is_tensor);
+
+  for (PreprocessResult &current : range) {
+    if constexpr (is_index) {
+      combined.insert(current.indices.begin(), current.indices.end());
+      current.indices.clear();
+    } else if constexpr (is_variable) {
+      combined.insert(current.variables.begin(), current.variables.end());
+      current.variables.clear();
+    } else if constexpr (is_tensor) {
+      combined.insert(current.tensors.begin(), current.tensors.end());
+      current.tensors.clear();
+    }
+  }
+
+  return combined;
+}
+
+}  // namespace details
+
+template <typename T, typename Context>
+void export_group(ExpressionGroup<T> group, Generator<Context> &generator,
+                  Context ctx = {}) {
+  export_groups<T, Context>(std::array{std::move(group)}, generator,
+                            std::move(ctx));
+}
+
+template <typename T, typename Context>
+void export_expression(EvalNode<T> expression, Generator<Context> &generator,
+                       Context ctx = {}) {
+  export_groups<T, Context>(
+      std::array{ExpressionGroup<T>{std::move(expression)}}, generator,
+      std::move(ctx));
+}
+
+template <typename T, typename Context, typename Range>
+  requires std::ranges::range<std::remove_cvref_t<Range>> &&
+           std::is_same_v<std::ranges::range_value_t<Range>,
+                          ExpressionGroup<T>> &&
+           (!std::is_const_v<Range>)
+void export_groups(Range groups, Generator<Context> &generator,
+                   Context ctx = {}) {
+  using std::ranges::size;
+
+  if (size(groups) > 1) {
+    if (!generator.supports_named_sections()) {
+      throw std::runtime_error("The generator for '" +
+                               generator.get_format_name() +
+                               "' doesn't support named sections");
+    }
+
+    for (const ExpressionGroup<T> &current : groups) {
+      if (!current.is_named()) {
+        throw std::runtime_error(
+            "Can't have unnamed groups when exporting multiple groups at once");
+      }
+    }
+  }
+
+  const bool declare_indices_per_section =
+      generator.index_declaration_scope() == DeclarationScope::Section;
+  assert(declare_indices_per_section ||
+         generator.index_declaration_scope() == DeclarationScope::Global);
+  const bool declare_variables_per_section =
+      generator.variable_declaration_scope() == DeclarationScope::Section;
+  assert(declare_variables_per_section ||
+         generator.variable_declaration_scope() == DeclarationScope::Global);
+  const bool declare_tensors_per_section =
+      generator.tensor_declaration_scope() == DeclarationScope::Section;
+  assert(declare_tensors_per_section ||
+         generator.tensor_declaration_scope() == DeclarationScope::Global);
+
+  // First step: preprocessing of all expressions
+  container::svector<details::PreprocessResult> pp_results;
+  for (ExpressionGroup<T> &current_group : groups) {
+    pp_results.reserve(pp_results.size() + size(groups));
+
+    for (EvalNode<T> &current_tree : current_group) {
+      pp_results.emplace_back();
+      details::preprocess_and_maybe_log(current_tree, pp_results.back(), ctx);
+    }
+  }
+
+  // Perform global declarations
+  if (!declare_indices_per_section) {
+    std::set<Index> indices =
+        details::combine_and_clear_pp_results<Index>(pp_results);
+    details::declare_all(indices, generator, ctx);
+  }
+  if (!declare_variables_per_section) {
+    std::set<Variable> variables =
+        details::combine_and_clear_pp_results<Variable>(pp_results);
+    details::declare_all(variables, generator, ctx);
+  }
+  if (!declare_tensors_per_section) {
+    std::set<Tensor, TensorBlockCompare> tensors =
+        details::combine_and_clear_pp_results<Tensor, TensorBlockCompare>(
+            pp_results);
+    details::declare_all(tensors, generator, ctx);
+  }
+
+  // Now initialize the actual code generation
+  std::size_t pp_idx = 0;
+  for (ExpressionGroup<T> &current_group : groups) {
+    bool end_section = false;
+    if (generator.supports_named_sections() && current_group.is_named()) {
+      ctx.set_current_section_name(current_group.name());
+      generator.begin_named_section(current_group.name(), ctx);
+      end_section = true;
+    }
+
+    for (EvalNode<T> &current_tree : current_group) {
+      details::export_expression(current_tree, generator, ctx,
+                                 pp_results.at(pp_idx));
+      pp_idx++;
+    }
+
+    if (end_section) {
+      generator.end_named_section(current_group.name(), ctx);
+    }
+
+    ctx.clear_current_section_name();
+  }
+
+  assert(pp_idx == pp_results.size());
 }
 
 }  // namespace sequant

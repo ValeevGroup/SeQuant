@@ -9,6 +9,10 @@
 #include <SeQuant/core/tensor.hpp>
 #include <SeQuant/core/utility/string.hpp>
 
+#include <cstdlib>
+#include <string>
+#include <string_view>
+
 namespace sequant {
 
 /// Context class for the @see JuliaTensorOperationsGenerator generator
@@ -45,6 +49,20 @@ class JuliaTensorOperationsGenerator : public Generator<Context> {
 
   std::string get_format_name() const override {
     return "Julia (TensorOperations)";
+  }
+
+  bool supports_named_sections() const override { return false; }
+
+  DeclarationScope index_declaration_scope() const override {
+    return DeclarationScope::Global;
+  }
+
+  DeclarationScope variable_declaration_scope() const override {
+    return DeclarationScope::Global;
+  }
+
+  DeclarationScope tensor_declaration_scope() const override {
+    return DeclarationScope::Global;
   }
 
   std::string represent(const Index &idx, const Context &ctx) const override {
@@ -211,6 +229,14 @@ class JuliaTensorOperationsGenerator : public Generator<Context> {
 
   void insert_comment(const std::string &comment, const Context &ctx) override {
     m_generated += "# " + comment + "\n";
+  }
+
+  void begin_named_section(std::string_view name, const Context &ctx) override {
+    std::abort();
+  }
+
+  void end_named_section(std::string_view name, const Context &ctx) override {
+    std::abort();
   }
 
   std::string get_generated_code() const override { return m_generated; }

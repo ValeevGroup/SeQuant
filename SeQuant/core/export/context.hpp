@@ -6,6 +6,8 @@
 #include <SeQuant/core/tensor.hpp>
 
 #include <map>
+#include <optional>
+#include <string>
 
 namespace sequant {
 
@@ -60,9 +62,15 @@ class ExportContext {
   virtual bool rewrite(Tensor &tensor) const;
   virtual bool rewrite(Variable &variable) const;
 
+  virtual bool inside_named_section() const;
+  virtual const std::string &current_section_name() const;
+  virtual void set_current_section_name(std::string name);
+  virtual void clear_current_section_name();
+
  private:
   TensorStrategyMap m_tensorStrategies;
   VariableStrategyMap m_variableStrategies;
+  std::optional<std::string> m_currentSection;
 };
 
 }  // namespace sequant

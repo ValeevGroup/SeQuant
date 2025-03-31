@@ -9,6 +9,7 @@
 
 #include <sstream>
 #include <string>
+#include <string_view>
 
 namespace sequant {
 
@@ -21,6 +22,20 @@ class TextGenerator : public Generator<Context> {
   ~TextGenerator() = default;
 
   std::string get_format_name() const override { return "Plain Text"; }
+
+  bool supports_named_sections() const override { return true; }
+
+  DeclarationScope index_declaration_scope() const override {
+    return DeclarationScope::Global;
+  }
+
+  DeclarationScope variable_declaration_scope() const override {
+    return DeclarationScope::Section;
+  }
+
+  DeclarationScope tensor_declaration_scope() const override {
+    return DeclarationScope::Section;
+  }
 
   std::string represent(const Index &idx, const Context &ctx) const override {
     return toUtf8(idx.label());
@@ -179,6 +194,15 @@ class TextGenerator : public Generator<Context> {
 
   void insert_comment(const std::string &comment, const Context &ctx) override {
     m_generated += "// " + comment + "\n";
+  }
+
+  void begin_named_section(std::string_view name, const Context &ctx) override {
+    insert_comment("TODO: begin section named '" + std::string(name) + "'",
+                   ctx);
+  }
+
+  void end_named_section(std::string_view name, const Context &ctx) override {
+    insert_comment("TODO: end section named '" + std::string(name) + "'", ctx);
   }
 
   std::string get_generated_code() const override { return m_generated; }

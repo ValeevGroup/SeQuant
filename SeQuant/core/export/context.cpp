@@ -113,4 +113,18 @@ bool ExportContext::rewrite(Tensor &tensor) const { return false; }
 
 bool ExportContext::rewrite(Variable &variable) const { return false; }
 
+bool ExportContext::inside_named_section() const {
+  return m_currentSection.has_value();
+}
+
+const std::string &ExportContext::current_section_name() const {
+  return m_currentSection.value();
+}
+
+void ExportContext::set_current_section_name(std::string name) {
+  m_currentSection = std::move(name);
+}
+
+void ExportContext::clear_current_section_name() { m_currentSection.reset(); }
+
 }  // namespace sequant
