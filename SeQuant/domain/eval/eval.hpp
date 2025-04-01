@@ -236,6 +236,9 @@ ResultPtr evaluate(Node const& node,           //
                    auto const& layout,         //
                    F const& le,                //
                    CacheManager& cache) {
+  // if the layout is not the default constructed value need to permute
+  bool const perm = layout != decltype(layout){};
+
   std::string xpr;
   if constexpr (trace(EvalTrace)) {
     xpr = to_string(deparse(to_expr(node)));
@@ -249,20 +252,22 @@ ResultPtr evaluate(Node const& node,           //
   result.pre = evaluate<EvalTrace>(node, le, cache);
 
   auto seconds = timed_eval_inplace([&]() {
-    result.post =
-        result.pre->permute(std::array<std::any, 2>{node->annot(), layout});
+    result.post = perm ? result.pre->permute(
+                             std::array<std::any, 2>{node->annot(), layout})
+                       : result.pre;
   });
 
   assert(result.post);
 
   // logging
   if constexpr (trace(EvalTrace)) {
-    auto bytes = result.pre->size_in_bytes() + result.post->size_in_bytes();
-    log_eval("PERMUTE",                   //
-             std::format("{}", seconds),  //
-             std::format("{}B", bytes),   //
-             node->label());
-
+    if (perm) {
+      auto bytes = result.pre->size_in_bytes() + result.post->size_in_bytes();
+      log_eval("PERMUTE",                   //
+               std::format("{}", seconds),  //
+               std::format("{}B", bytes),   //
+               node->label());
+    }
     log_term("END", xpr);
   }
   return result.post;
