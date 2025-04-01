@@ -15,11 +15,14 @@ template <typename T>
 class ExpressionGroup {
  private:
   using container_type = container::svector<EvalNode<T>>;
+  using node_data_type = T;
 
  public:
   using iterator = container_type::iterator;
   using const_iterator = container_type::const_iterator;
 
+  explicit ExpressionGroup(std::optional<std::string> name = {})
+      : ExpressionGroup(container_type{}, std::move(name)) {}
   explicit ExpressionGroup(EvalNode<T> expression)
       : ExpressionGroup(container_type{std::move(expression)}, {}) {}
   ExpressionGroup(EvalNode<T> expression, std::optional<std::string> name)
@@ -42,6 +45,10 @@ class ExpressionGroup {
   const_iterator end() const { return m_expressions.end(); }
   const_iterator cbegin() const { return m_expressions.cbegin(); }
   const_iterator cend() const { return m_expressions.cend(); }
+
+  std::size_t size() const { return m_expressions.size(); }
+
+  void add(EvalNode<T> expr) { m_expressions.emplace_back(std::move(expr)); }
 
  private:
   container::svector<EvalNode<T>> m_expressions;
