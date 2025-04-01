@@ -4,6 +4,7 @@
 #include <SeQuant/core/eval_expr.hpp>
 #include <SeQuant/core/eval_node.hpp>
 #include <SeQuant/core/export/export.hpp>
+#include <SeQuant/core/export/expression_group.hpp>
 #include <SeQuant/core/export/itf.hpp>
 #include <SeQuant/core/export/julia_itensor.hpp>
 #include <SeQuant/core/export/julia_tensor_kit.hpp>
@@ -12,6 +13,7 @@
 #include <SeQuant/core/optimize.hpp>
 #include <SeQuant/core/parse.hpp>
 #include <SeQuant/core/rational.hpp>
+#include <SeQuant/core/result_expr.hpp>
 #include <SeQuant/core/utility/string.hpp>
 #include <SeQuant/domain/mbpt/spin.hpp>
 
@@ -19,7 +21,6 @@
 
 #include <boost/algorithm/string.hpp>
 
-#include <algorithm>
 #include <filesystem>
 #include <fstream>
 #include <optional>
@@ -192,6 +193,44 @@ void add_to_context(Context &ctx, const std::string &line) {
   add_to_context(ctx, key, value);
 }
 
+std::vector<ExpressionGroup<EvalExpr>> parse_expression_spec(
+    const std::string &spec) {
+  std::vector<ExpressionGroup<EvalExpr>> groups;
+
+  std::istringstream in(spec);
+
+  for (std::string line; std::getline(in, line);) {
+    boost::trim(line);
+    if (line.empty()) {
+      continue;
+    }
+
+    if (line.starts_with("section") && line.ends_with(":")) {
+      std::string name = line.substr(7, line.size() - 7 - 1);
+      boost::trim(name);
+      assert(!name.empty());
+      groups.emplace_back(std::move(name));
+      continue;
+    }
+
+    if (groups.empty()) {
+      groups.emplace_back();
+    }
+
+    try {
+      ResultExpr res = parse_result_expr(to_wstring(line));
+      groups.back().add(binarize(res));
+    } catch (...) {
+      ExprPtr expr = parse_expr(to_wstring(line));
+
+      std::wcout << deparse(expr) << std::endl;
+      groups.back().add(binarize(expr));
+    }
+  }
+
+  return groups;
+}
+
 TEMPLATE_LIST_TEST_CASE("export_tests", "[export]", KnownGenerators) {
   using CurrentGen = TestType;
   using CurrentCtx = CurrentGen::Context;
@@ -219,7 +258,7 @@ TEMPLATE_LIST_TEST_CASE("export_tests", "[export]", KnownGenerators) {
 
       // Parse test file
       std::optional<std::string> expected_output;
-      std::string expression;
+      std::string expression_spec;
       {
         std::ifstream in(current.native());
         bool finished_expr = false;
@@ -232,7 +271,8 @@ TEMPLATE_LIST_TEST_CASE("export_tests", "[export]", KnownGenerators) {
             set_format = false;
             inside_meta = !inside_meta;
           } else if (!finished_expr) {
-            expression += line;
+            expression_spec += line;
+            expression_spec += "\n";
           } else if (inside_meta) {
             if (line.starts_with("#")) {
               // Comment
@@ -264,14 +304,12 @@ TEMPLATE_LIST_TEST_CASE("export_tests", "[export]", KnownGenerators) {
         continue;
       }
 
-      REQUIRE(!expression.empty());
+      REQUIRE(!expression_spec.empty());
 
-      ExprPtr input = parse_expr(to_wstring(expression));
-      // CAPTURE(*input);
+      auto groups = parse_expression_spec(expression_spec);
+      REQUIRE(!groups.empty());
 
-      auto tree = binarize(input);
-
-      export_expression(tree, generator, context);
+      export_groups<EvalExpr>(groups, generator, context);
 
       REQUIRE_THAT(generator.get_generated_code(),
                    DiffedStringEquals(expected_output.value()));
