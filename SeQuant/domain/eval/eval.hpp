@@ -44,28 +44,17 @@ auto timed_eval_inplace(F&& fun, Args&&... args) {
 }
 
 template <typename... Args>
-void log_eval(Args const&... args) noexcept {
+void log_tag(std::string_view tag, Args const&... args) {
   auto& l = Logger::instance();
   if constexpr (sizeof...(Args))
     if (l.eval.level > 0)
-      write_log(l, "[EVAL]", std::format(" | {}", args)..., '\n');
+      write_log(l, std::format("[{}]", tag), std::format(" | {}", args)...,
+                '\n');
 }
 
-template <typename... Args>
-void log_term(Args const&... args) noexcept {
-  auto& l = Logger::instance();
-  if constexpr (sizeof...(Args))
-    if (l.eval.level > 0)
-      write_log(l, "[TERM]", std::format(" | {}", args)..., '\n');
-}
-
-template <typename... Args>
-void log_cache(Args const&... args) noexcept {
-  auto& l = Logger::instance();
-  if constexpr (sizeof...(Args))
-    if (l.eval.level > 0)
-      write_log(l, "[CACHE]", std::format(" | {}", args)..., '\n');
-}
+auto log_eval = [](auto const&... args) { log_tag("EVAL", args...); };
+auto log_cache = [](auto const&... args) { log_tag("CACHE", args...); };
+auto log_term = [](auto const&... args) { log_tag("TERM", args...); };
 
 void log_cache_access(size_t key, CacheManager const& cm) {
   auto const cur_l = cm.life(key);
@@ -200,16 +189,19 @@ ResultPtr evaluate(Node const& node,  //
     if (node.leaf()) {
       log.type = node->is_constant()   ? "CONSTANT"
                  : node->is_variable() ? "VARIABLE"
-                                       : "TENSOR";
+                 : node->is_tensor()   ? "TENSOR"
+                                       : "??";
       log.annot = node->label();
       log.bytes = result->size_in_bytes();
     } else {
-      log.type = node->is_product() ? "PRODUCT" : node->is_sum() ? "SUM" : "ID";
+      log.type = node->is_product() ? "PRODUCT" : node->is_sum() ? "SUM" : "??";
       log.annot = node->is_primary()
                       ? node->label()
-                      : std::format("{} {} {} -> {}",                  //
-                                    node.left()->label(),              //
-                                    (node->is_product() ? "*" : "+"),  //
+                      : std::format("{} {} {} -> {}",      //
+                                    node.left()->label(),  //
+                                    (node->is_product() ? "*"
+                                     : node->is_sum()   ? "+"
+                                                        : "??"),  //
                                     node.right()->label(), node->label());
       log.bytes = left->size_in_bytes()     //
                   + right->size_in_bytes()  //
@@ -244,6 +236,9 @@ ResultPtr evaluate(Node const& node,           //
                    auto const& layout,         //
                    F const& le,                //
                    CacheManager& cache) {
+  // if the layout is not the default constructed value need to permute
+  bool const perm = layout != decltype(layout){};
+
   std::string xpr;
   if constexpr (trace(EvalTrace)) {
     xpr = to_string(deparse(to_expr(node)));
@@ -257,20 +252,22 @@ ResultPtr evaluate(Node const& node,           //
   result.pre = evaluate<EvalTrace>(node, le, cache);
 
   auto seconds = timed_eval_inplace([&]() {
-    result.post =
-        result.pre->permute(std::array<std::any, 2>{node->annot(), layout});
+    result.post = perm ? result.pre->permute(
+                             std::array<std::any, 2>{node->annot(), layout})
+                       : result.pre;
   });
 
   assert(result.post);
 
   // logging
   if constexpr (trace(EvalTrace)) {
-    auto bytes = result.pre->size_in_bytes() + result.post->size_in_bytes();
-    log_eval("PERMUTE",                   //
-             std::format("{}", seconds),  //
-             std::format("{}B", bytes),   //
-             node->label());
-
+    if (perm) {
+      auto bytes = result.pre->size_in_bytes() + result.post->size_in_bytes();
+      log_eval("PERMUTE",                   //
+               std::format("{}", seconds),  //
+               std::format("{}B", bytes),   //
+               node->label());
+    }
     log_term("END", xpr);
   }
   return result.post;
