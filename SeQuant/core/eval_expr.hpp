@@ -5,6 +5,7 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
+#include <SeQuant/core/result_expr.hpp>
 
 #include <cstddef>
 #include <string>
@@ -248,14 +249,32 @@ FullBinaryNode<EvalExpr> binarize(ExprPtr const&);
 }
 
 ///
-/// Creates a binary tree of evaluation.
+/// Creates a binary tree for evaluation.
 ///
-template <typename ExprT = EvalExpr,
-          typename = std::enable_if_t<std::is_constructible_v<ExprT, EvalExpr>>>
+template <typename ExprT = EvalExpr>
+  requires std::is_constructible_v<ExprT, EvalExpr>
 FullBinaryNode<ExprT> binarize(ExprPtr const& expr) {
   if constexpr (std::is_same_v<ExprT, EvalExpr>) return impl::binarize(expr);
   return transform_node(impl::binarize(expr),
                         [](auto&& val) { return ExprT{val}; });
+}
+
+///
+/// Creates a binary tree for evaluation.
+///
+template <typename ExprT = EvalExpr>
+  requires std::is_constructible_v<ExprT, EvalExpr>
+FullBinaryNode<ExprT> binarize(ResultExpr const& res) {
+  auto tree = binarize(res.expression());
+
+  if (res.has_label()) {
+    // TODO: Ensure root node has the label of the given ResultExpr
+    // If the tree only contains the root, the semantically correct
+    // thing would (likely?) be to add a new root node with the current
+    // result as the new root in order to encode lhs = rhs
+  }
+
+  return tree;
 }
 
 ///
