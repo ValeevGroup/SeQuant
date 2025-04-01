@@ -240,7 +240,7 @@ class JuliaTensorOperationsGenerator : public Generator<Context> {
   }
 
   void begin_expression(const Context &ctx) override {
-    if (!m_generated.empty() && m_generated.back() != '\n') {
+    if (!m_generated.empty() && !m_generated.ends_with("\n\n")) {
       m_generated += "\n";
     }
   }
