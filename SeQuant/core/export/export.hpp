@@ -15,6 +15,7 @@
 #include <optional>
 #include <ranges>
 #include <set>
+#include <span>
 #include <stdexcept>
 #include <tuple>
 #include <type_traits>
@@ -534,30 +535,7 @@ void preprocess_and_maybe_log(EvalNode<T> &tree, PreprocessResult &result,
 
 template <typename T, typename Context>
 void export_expression(EvalNode<T> &expression, Generator<Context> &generator,
-                       Context &ctx, PreprocessResult &pp_result,
-                       bool declare_indices, bool declare_variables,
-                       bool declare_tensors) {
-  if (declare_indices) {
-    for (const Index &idx : pp_result.indices) {
-      generator.declare(idx, ctx);
-    }
-    generator.all_indices_declared(pp_result.indices.size());
-  }
-
-  if (declare_variables) {
-    for (const Variable &var : pp_result.variables) {
-      generator.declare(var, ctx);
-    }
-    generator.all_variables_declared(pp_result.variables.size());
-  }
-
-  if (declare_tensors) {
-    for (const Tensor &tensor : pp_result.tensors) {
-      generator.declare(tensor, ctx);
-    }
-    generator.all_tensors_declared(pp_result.tensors.size());
-  }
-
+                       Context &ctx, PreprocessResult &pp_result) {
   generator.begin_expression(ctx);
 
   details::GenerationVisitor<T, Context> visitor(generator, ctx,
@@ -622,6 +600,30 @@ std::set<T, Compare> combine_and_clear_pp_results(Range &&range) {
   return combined;
 }
 
+template <DeclarationScope scope, typename Range, typename Context>
+  requires std::ranges::range<Range> && (!std::is_const_v<Range>)
+void handle_declarations(Range &&range, Generator<Context> &generator,
+                         Context &ctx) {
+  if (generator.index_declaration_scope() == scope) {
+    std::set<Index> indices =
+        details::combine_and_clear_pp_results<Index>(range);
+    details::declare_all(indices, generator, ctx);
+  }
+
+  if (generator.variable_declaration_scope() == scope) {
+    std::set<Variable> variables =
+        details::combine_and_clear_pp_results<Variable>(range);
+    details::declare_all(variables, generator, ctx);
+  }
+
+  if (generator.tensor_declaration_scope() == scope) {
+    std::set<Tensor, TensorBlockCompare> tensors =
+        details::combine_and_clear_pp_results<Tensor, TensorBlockCompare>(
+            range);
+    details::declare_all(tensors, generator, ctx);
+  }
+}
+
 }  // namespace details
 
 template <typename T, typename Context>
@@ -663,18 +665,11 @@ void export_groups(Range groups, Generator<Context> &generator,
     }
   }
 
-  const bool declare_indices_per_section =
-      generator.index_declaration_scope() == DeclarationScope::Section;
-  assert(declare_indices_per_section ||
-         generator.index_declaration_scope() == DeclarationScope::Global);
-  const bool declare_variables_per_section =
-      generator.variable_declaration_scope() == DeclarationScope::Section;
-  assert(declare_variables_per_section ||
-         generator.variable_declaration_scope() == DeclarationScope::Global);
-  const bool declare_tensors_per_section =
-      generator.tensor_declaration_scope() == DeclarationScope::Section;
-  assert(declare_tensors_per_section ||
-         generator.tensor_declaration_scope() == DeclarationScope::Global);
+  const DeclarationScope index_decl_scope = generator.index_declaration_scope();
+  const DeclarationScope variable_decl_scope =
+      generator.variable_declaration_scope();
+  const DeclarationScope tensor_decl_scope =
+      generator.tensor_declaration_scope();
 
   // First step: preprocessing of all expressions
   container::svector<details::PreprocessResult> pp_results;
@@ -688,22 +683,8 @@ void export_groups(Range groups, Generator<Context> &generator,
   }
 
   // Perform global declarations
-  if (!declare_indices_per_section) {
-    std::set<Index> indices =
-        details::combine_and_clear_pp_results<Index>(pp_results);
-    details::declare_all(indices, generator, ctx);
-  }
-  if (!declare_variables_per_section) {
-    std::set<Variable> variables =
-        details::combine_and_clear_pp_results<Variable>(pp_results);
-    details::declare_all(variables, generator, ctx);
-  }
-  if (!declare_tensors_per_section) {
-    std::set<Tensor, TensorBlockCompare> tensors =
-        details::combine_and_clear_pp_results<Tensor, TensorBlockCompare>(
-            pp_results);
-    details::declare_all(tensors, generator, ctx);
-  }
+  details::handle_declarations<DeclarationScope::Global>(pp_results, generator,
+                                                         ctx);
 
   // Now initiate the actual code generation
   std::size_t pp_idx = 0;
@@ -715,11 +696,17 @@ void export_groups(Range groups, Generator<Context> &generator,
       end_section = true;
     }
 
+    // Handle section-level declarations
+    assert(pp_results.size() >= pp_idx + size(current_group));
+    details::handle_declarations<DeclarationScope::Section>(
+        std::span(&pp_results.at(pp_idx), size(current_group)), generator, ctx);
+
     for (EvalNode<T> &current_tree : current_group) {
-      details::export_expression(
-          current_tree, generator, ctx, pp_results.at(pp_idx),
-          declare_indices_per_section, declare_variables_per_section,
-          declare_tensors_per_section);
+      // Handle expression-level declarations
+      details::handle_declarations<DeclarationScope::Expression>(
+          std::span{&pp_results.at(pp_idx), 1}, generator, ctx);
+      details::export_expression(current_tree, generator, ctx,
+                                 pp_results.at(pp_idx));
       pp_idx++;
     }
 

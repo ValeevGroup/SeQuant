@@ -14,6 +14,7 @@ namespace sequant {
 enum class DeclarationScope {
   Global,
   Section,
+  Expression,
 };
 
 /// Abstract base class for all (code) generators
