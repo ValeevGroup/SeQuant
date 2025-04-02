@@ -192,6 +192,12 @@ TEST_CASE("index", "[elements][index]") {
     REQUIRE(p2A < p1A);
   }
 
+  SECTION("ordinal") {
+    REQUIRE(Index(L"i_0").ordinal() == 0);
+    REQUIRE(Index(L"i_1").ordinal() == 1);
+    REQUIRE(Index(L"i_5").ordinal() == 5);
+  }
+
   SECTION("hashing") {
     REQUIRE_NOTHROW(hash_value(Index{}));
     Index i1(L"i_1");
