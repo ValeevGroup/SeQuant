@@ -561,12 +561,12 @@ void declare_all(const Range &range, Generator<Context> &generator,
 
   using std::ranges::size;
   if constexpr (std::is_same_v<RangeType, Tensor>) {
-    generator.all_tensors_declared(size(range));
+    generator.all_tensors_declared(size(range), ctx);
   } else if constexpr (std::is_same_v<RangeType, Variable>) {
-    generator.all_variables_declared(size(range));
+    generator.all_variables_declared(size(range), ctx);
   } else {
     static_assert(std::is_same_v<RangeType, Index>);
-    generator.all_indices_declared(size(range));
+    generator.all_indices_declared(size(range), ctx);
   }
 }
 

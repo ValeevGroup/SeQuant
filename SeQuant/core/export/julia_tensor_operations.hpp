@@ -221,11 +221,20 @@ class JuliaTensorOperationsGenerator : public Generator<Context> {
     (void)ctx;
   }
 
-  void all_indices_declared(std::size_t amount) override { (void)amount; }
+  void all_indices_declared(std::size_t amount, const Context &ctx) override {
+    (void)amount;
+    (void)ctx;
+  }
 
-  void all_variables_declared(std::size_t amount) override { (void)amount; }
+  void all_variables_declared(std::size_t amount, const Context &ctx) override {
+    (void)amount;
+    (void)ctx;
+  }
 
-  void all_tensors_declared(std::size_t amount) override { (void)amount; }
+  void all_tensors_declared(std::size_t amount, const Context &ctx) override {
+    (void)amount;
+    (void)ctx;
+  }
 
   void insert_comment(const std::string &comment, const Context &ctx) override {
     m_generated += "# " + comment + "\n";
