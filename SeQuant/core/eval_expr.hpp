@@ -265,13 +265,48 @@ FullBinaryNode<ExprT> binarize(ExprPtr const& expr) {
 template <typename ExprT = EvalExpr>
   requires std::is_constructible_v<ExprT, EvalExpr>
 FullBinaryNode<ExprT> binarize(ResultExpr const& res) {
-  auto tree = binarize(res.expression());
+  FullBinaryNode<ExprT> tree = [&]() {
+    if (res.expression().size() == 0) {
+      // Expressions of size zero are terminal expressions such as Variable,
+      // Tensor and Constant Binarizing a binary expression will yield a tree
+      // consisting only of a root node, representing said terminal expression.
+      // However, for a ResultExpr there is always the semantic of having an lhs
+      // that gets set to the rhs's value, where the rhs is the expression.
+      // Hence, we always want to the root node of a binarized ResultExpr to
+      // represent the lhs, which must never be the same as the rhs (as this
+      // would imply a semantic of overwriting itself).
+      // Since we can't express a simple A = B in a full binary tree, we have
+      // to instead write it as A = B * 1.
+      assert(!res.expression()
+                  .is<Constant>());  // Product will always self-simplify to
+                                     // terminal in this case
+      auto prod =
+          ex<Product>(1, ExprPtrList{res.expression()}, Product::Flatten::No);
+      return binarize(prod);
+    }
 
-  if (res.has_label()) {
-    // TODO: Ensure root node has the label of the given ResultExpr
-    // If the tree only contains the root, the semantically correct
-    // thing would (likely?) be to add a new root node with the current
-    // result as the new root in order to encode lhs = rhs
+    return binarize(res.expression());
+  }();
+
+  const bool is_scalar =
+      res.bra().empty() && res.ket().empty() && res.aux().empty();
+
+  if (is_scalar) {
+    if (res.has_label()) {
+      tree->expr().template as<Variable>().set_label(res.label());
+    }
+  } else {
+    Tensor& tensor = tree->expr().template as<Tensor>();
+
+    if (res.has_label()) {
+      tensor.set_label(res.label());
+    }
+
+    assert(tensor.const_indices().size() ==
+           res.bra().size() + res.ket().size() + res.aux().size());
+    tensor.set_bra(res.bra());
+    tensor.set_ket(res.ket());
+    tensor.set_aux(res.aux());
   }
 
   return tree;
