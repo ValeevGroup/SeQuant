@@ -112,7 +112,9 @@ void max_cache(NodeT const& node,  //
 }
 
 AsyCost peak_cache(Sum const& expr) {
-  auto const nodes = expr | ranges::views::transform(binarize<EvalExpr>);
+  using BinarizeFunc = FullBinaryNode<EvalExpr> (*)(const ExprPtr&);
+  auto const nodes = expr | ranges::views::transform(
+                                static_cast<BinarizeFunc>(&binarize<EvalExpr>));
   auto cm = cache_manager(nodes);
   auto max = AsyCost::zero();
   auto curr = AsyCost::zero();
