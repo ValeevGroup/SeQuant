@@ -44,7 +44,7 @@ class TextGenerator : public Generator<Context> {
   std::string represent(const Tensor &tensor,
                         const Context &ctx) const override {
     std::string representation = toUtf8(tensor.label()) + "[";
-    const auto &indices = tensor.const_braket();
+    const auto &indices = tensor.const_indices();
 
     for (std::size_t i = 0; i < indices.size(); ++i) {
       representation += represent(indices[i], ctx);

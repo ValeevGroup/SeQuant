@@ -75,7 +75,7 @@ class JuliaTensorOperationsGenerator : public Generator<Context> {
 
   std::string represent(const Tensor &tensor,
                         const Context &ctx) const override {
-    const auto &indices = tensor.const_braket();
+    const auto &indices = tensor.const_indices();
     std::string representation = tensor_name(tensor, ctx);
 
     representation += "[ ";
@@ -322,7 +322,7 @@ class JuliaTensorOperationsGenerator : public Generator<Context> {
     std::string code = tensor_name(tensor, ctx);
     code += " = zeros(Float64";
 
-    for (const Index &idx : tensor.const_braket()) {
+    for (const Index &idx : tensor.const_indices()) {
       code += ", ";
       code += ctx.get_dim(idx.space());
     }

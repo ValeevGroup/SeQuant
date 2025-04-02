@@ -39,7 +39,7 @@ class JuliaTensorKitGenerator : public JuliaTensorOperationsGenerator<Context> {
     Base::m_generated += Base::tensor_name(tensor, ctx);
     Base::m_generated += " = TensorMap(zeros(Float64";
 
-    for (const Index &idx : tensor.const_braket()) {
+    for (const Index &idx : tensor.const_indices()) {
       std::string dim = ctx.get_dim(idx.space());
 
       Base::m_generated += ", ";
@@ -72,7 +72,7 @@ class JuliaTensorKitGenerator : public JuliaTensorOperationsGenerator<Context> {
   std::string domain(const Tensor &tensor, const Context &ctx) const {
     std::string domain;
 
-    const auto &indices = tensor.const_braket();
+    const auto &indices = tensor.const_indices();
     const std::size_t braRank = tensor.bra_rank();
 
     if (braRank == 0 && indices.size() > 0) {

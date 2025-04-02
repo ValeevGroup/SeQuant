@@ -42,7 +42,7 @@ class JuliaITensorGenerator : public JuliaTensorOperationsGenerator<Context> {
     Base::m_generated += Base::tensor_name(tensor, ctx);
     Base::m_generated += " = ITensor(zeros(Float64";
 
-    for (const Index &idx : tensor.const_braket()) {
+    for (const Index &idx : tensor.const_indices()) {
       Base::m_generated += ", ";
       Base::m_generated += ctx.get_dim(idx.space());
     }
@@ -119,7 +119,7 @@ class JuliaITensorGenerator : public JuliaTensorOperationsGenerator<Context> {
   std::string index_set(const Tensor &tensor, const Context &ctx) const {
     std::string set;
 
-    const auto &indices = tensor.const_braket();
+    const auto &indices = tensor.const_indices();
     for (std::size_t i = 0; i < indices.size(); ++i) {
       set += Base::represent(indices[i], ctx);
 
