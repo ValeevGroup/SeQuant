@@ -250,12 +250,28 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
 
   /// @return "core" label of the tensor
   std::wstring_view label() const override { return label_; }
+  void set_label(std::wstring label) {
+    label_ = std::move(label);
+    reset_hash_value();
+  }
   /// @return the bra index range
   const auto &bra() const { return bra_; }
+  void set_bra(index_container_type indices) {
+    bra_ = sequant::bra(std::move(indices));
+    reset_hash_value();
+  }
   /// @return the ket index range
   const auto &ket() const { return ket_; }
+  void set_ket(index_container_type indices) {
+    ket_ = sequant::ket(std::move(indices));
+    reset_hash_value();
+  }
   /// @return the aux index range
   const auto &aux() const { return aux_; }
+  void set_aux(index_container_type indices) {
+    aux_ = sequant::aux(std::move(indices));
+    reset_hash_value();
+  }
   /// @return concatenated view of the bra and ket index ranges
   auto braket() const { return ranges::views::concat(bra_, ket_); }
   /// @return concatenated view of all indices of this tensor (bra, ket and
