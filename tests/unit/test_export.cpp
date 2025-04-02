@@ -222,8 +222,6 @@ std::vector<ExpressionGroup<EvalExpr>> parse_expression_spec(
       groups.back().add(binarize(res));
     } catch (...) {
       ExprPtr expr = parse_expr(to_wstring(line));
-
-      std::wcout << deparse(expr) << std::endl;
       groups.back().add(binarize(expr));
     }
   }
