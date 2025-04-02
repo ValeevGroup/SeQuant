@@ -168,12 +168,12 @@ ResultPtr evaluate(Node const& node,  //
     std::array<std::any, 3> const ann{node.left()->annot(),
                                       node.right()->annot(), node->annot()};
     if (node->op_type() == EvalOp::Sum) {
-      timed_eval_inplace([&]() { result = left->sum(*right, ann); });
+      time = timed_eval_inplace([&]() { result = left->sum(*right, ann); });
     } else {
       assert(node->op_type() == EvalOp::Product);
       auto const de_nest =
           node.left()->tot() && node.right()->tot() && !node->tot();
-      timed_eval_inplace([&]() {
+      time = timed_eval_inplace([&]() {
         result = left->prod(*right, ann,
                             de_nest ? TA::DeNest::True : TA::DeNest::False);
       });
