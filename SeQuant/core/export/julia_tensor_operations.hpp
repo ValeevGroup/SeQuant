@@ -236,7 +236,12 @@ class JuliaTensorOperationsGenerator : public Generator<Context> {
     (void)ctx;
   }
 
-  void declarations_done(DeclarationScope scope, const Context &ctx) override {
+  void begin_declarations(DeclarationScope scope, const Context &ctx) override {
+    (void)scope;
+    (void)ctx;
+  }
+
+  void end_declarations(DeclarationScope scope, const Context &ctx) override {
     (void)scope;
     (void)ctx;
   }
@@ -260,6 +265,10 @@ class JuliaTensorOperationsGenerator : public Generator<Context> {
   }
 
   void end_expression(const Context &ctx) override {}
+
+  void begin_export(const Context &ctx) override { m_generated.clear(); }
+
+  void end_export(const Context &ctx) override {}
 
   std::string get_generated_code() const override { return m_generated; }
 

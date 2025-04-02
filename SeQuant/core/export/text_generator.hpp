@@ -212,7 +212,10 @@ class TextGenerator : public Generator<Context> {
     }
   }
 
-  void declarations_done(DeclarationScope scope, const Context &ctx) override {
+  void begin_declarations(DeclarationScope scope, const Context &ctx) override {
+  }
+
+  void end_declarations(DeclarationScope scope, const Context &ctx) override {
     if (scope == DeclarationScope::Section && ctx.inside_named_section()) {
       m_generated += ")\n";
     }
@@ -239,6 +242,10 @@ class TextGenerator : public Generator<Context> {
       m_generated += "\n";
     }
   }
+
+  void begin_export(const Context &ctx) override { m_generated.clear(); }
+
+  void end_export(const Context &ctx) override {}
 
   void end_expression(const Context &ctx) override {}
 

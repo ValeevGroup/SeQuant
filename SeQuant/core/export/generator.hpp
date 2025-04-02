@@ -78,8 +78,9 @@ class Generator {
                                       const Context &ctx) = 0;
   virtual void all_tensors_declared(std::size_t amount, const Context &ctx) = 0;
 
-  virtual void declarations_done(DeclarationScope scope,
-                                 const Context &ctx) = 0;
+  virtual void begin_declarations(DeclarationScope scope,
+                                  const Context &ctx) = 0;
+  virtual void end_declarations(DeclarationScope scope, const Context &ctx) = 0;
 
   virtual void insert_comment(const std::string &comment,
                               const Context &ctx) = 0;
@@ -90,6 +91,9 @@ class Generator {
 
   virtual void begin_expression(const Context &ctx) = 0;
   virtual void end_expression(const Context &ctx) = 0;
+
+  virtual void begin_export(const Context &ctx) = 0;
+  virtual void end_export(const Context &ctx) = 0;
 
   virtual std::string get_generated_code() const = 0;
 

@@ -604,6 +604,8 @@ template <DeclarationScope scope, typename Range, typename Context>
   requires std::ranges::range<Range> && (!std::is_const_v<Range>)
 void handle_declarations(Range &&range, Generator<Context> &generator,
                          Context &ctx) {
+  generator.begin_declarations(scope, ctx);
+
   if (generator.index_declaration_scope() == scope) {
     std::set<Index> indices =
         details::combine_and_clear_pp_results<Index>(range);
@@ -623,7 +625,7 @@ void handle_declarations(Range &&range, Generator<Context> &generator,
     details::declare_all(tensors, generator, ctx);
   }
 
-  generator.declarations_done(scope, ctx);
+  generator.end_declarations(scope, ctx);
 }
 
 }  // namespace details
@@ -666,6 +668,8 @@ void export_groups(Range groups, Generator<Context> &generator,
       }
     }
   }
+
+  generator.begin_export(ctx);
 
   const DeclarationScope index_decl_scope = generator.index_declaration_scope();
   const DeclarationScope variable_decl_scope =
@@ -720,6 +724,8 @@ void export_groups(Range groups, Generator<Context> &generator,
   }
 
   assert(pp_idx == pp_results.size());
+
+  generator.end_export(ctx);
 }
 
 }  // namespace sequant
