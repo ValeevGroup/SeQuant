@@ -1,0 +1,24 @@
+ECC = g{i1,i2;a1,a2} t{a1,a2;i1,i2}
+
+=================================================
+Plain Text
+=================================================
+Declare index i_1
+Declare index i_2
+Declare index a_1
+Declare index a_2
+
+Declare variable ECC
+
+Declare tensor g[i_1, i_2, a_1, a_2]
+Declare tensor t[a_1, a_2, i_1, i_2]
+
+Create ECC and initialize to zero
+Load g[i_1, i_2, a_1, a_2]
+Load t[a_1, a_2, i_1, i_2]
+Compute ECC += g[i_1, i_2, a_1, a_2] t[a_1, a_2, i_1, i_2]
+Unload t[a_1, a_2, i_1, i_2]
+Unload g[i_1, i_2, a_1, a_2]
+Persist ECC
+
+=================================================
