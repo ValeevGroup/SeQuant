@@ -1,9 +1,8 @@
 #ifndef SEQUANT_BINARY_NODE_HPP
 #define SEQUANT_BINARY_NODE_HPP
 
-#include <iostream>
+#include <cassert>
 #include <memory>
-#include <ostream>
 #include <sstream>
 #include <stdexcept>
 #include <utility>
@@ -538,6 +537,9 @@ Node fold_left_to_node(Rng rng, F op) {
       std::is_invocable_r_v<Value, F, Node, Node>;
 
   static_assert(invoke_on_value || invoke_on_node);
+
+  using ranges::size;
+  assert(size(rng) > 0);
 
   using ranges::views::move;
   using ranges::views::tail;
