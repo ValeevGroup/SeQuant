@@ -32,10 +32,10 @@ using Seconds = std::chrono::duration<double>;
 ///
 /// Invokes @c fun that returns void on the arguments @c args and returns the
 /// time duration as @c std::chrono::duration<double>.
-template <
-    typename F, typename... Args,
-    std::enable_if_t<std::is_invocable_r_v<void, F, Args...>, bool> = true>
-auto timed_eval_inplace(F&& fun, Args&&... args) {
+template <typename F, typename... Args>
+auto timed_eval_inplace(F&& fun, Args&&... args)
+  requires(std::is_invocable_r_v<void, F, Args...>)
+{
   using Clock = std::chrono::high_resolution_clock;
   auto tstart = Clock::now();
   std::forward<F>(fun)(std::forward<Args>(args)...);
