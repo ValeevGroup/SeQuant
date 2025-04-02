@@ -530,6 +530,10 @@ EvalExprNode binarize(Sum const& sum) {
 }
 
 EvalExprNode binarize(Product const& prod) {
+  if (prod.factors().empty()) {
+    return binarize(Constant(prod.scalar()));
+  }
+
   using ranges::views::move;
   using ranges::views::transform;
   auto factors = prod.factors()                                             //
