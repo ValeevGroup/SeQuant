@@ -622,6 +622,8 @@ void handle_declarations(Range &&range, Generator<Context> &generator,
             range);
     details::declare_all(tensors, generator, ctx);
   }
+
+  generator.declarations_done(scope, ctx);
 }
 
 }  // namespace details

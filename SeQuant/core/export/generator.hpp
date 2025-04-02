@@ -78,6 +78,9 @@ class Generator {
                                       const Context &ctx) = 0;
   virtual void all_tensors_declared(std::size_t amount, const Context &ctx) = 0;
 
+  virtual void declarations_done(DeclarationScope scope,
+                                 const Context &ctx) = 0;
+
   virtual void insert_comment(const std::string &comment,
                               const Context &ctx) = 0;
 
