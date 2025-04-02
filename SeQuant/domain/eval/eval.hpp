@@ -27,20 +27,22 @@ namespace sequant {
 
 namespace {
 
-using Seconds = std::chrono::duration<double>;
+using Nanoseconds = std::chrono::nanoseconds;
+
+inline auto as_bytes(size_t bytes) { return std::format("{}B", bytes); }
 
 ///
 /// Invokes @c fun that returns void on the arguments @c args and returns the
 /// time duration as @c std::chrono::duration<double>.
 template <typename F, typename... Args>
-auto timed_eval_inplace(F&& fun, Args&&... args)
+[[nodiscard]] auto timed_eval_inplace(F&& fun, Args&&... args)
   requires(std::is_invocable_r_v<void, F, Args...>)
 {
   using Clock = std::chrono::high_resolution_clock;
   auto tstart = Clock::now();
   std::forward<F>(fun)(std::forward<Args>(args)...);
   auto tend = Clock::now();
-  return Seconds(tend - tstart);
+  return Nanoseconds{tend - tstart};
 }
 
 template <typename... Args>
@@ -67,7 +69,7 @@ void log_cache_access(size_t key, CacheManager const& cm) {
             key,                                 //
             std::format("{}/{}", cur_l, max_l),  //
             cm.alive_count(),                    //
-            std::format("{}B", cm.size_in_bytes()));
+            as_bytes(cm.size_in_bytes()));
 }
 
 [[maybe_unused]] std::string perm_groups_string(
@@ -153,10 +155,10 @@ ResultPtr evaluate(Node const& node,  //
   ResultPtr left;
   ResultPtr right;
 
-  Seconds seconds;
+  Nanoseconds time;
 
   if (node.leaf()) {
-    seconds = timed_eval_inplace([&]() { result = le(node); });
+    time = timed_eval_inplace([&]() { result = le(node); });
   } else {
     left = evaluate<EvalTrace>(node.left(), le, cache);
     right = evaluate<EvalTrace>(node.right(), le, cache);
@@ -208,9 +210,9 @@ ResultPtr evaluate(Node const& node,  //
                   + result->size_in_bytes();
     }
 
-    log_eval(log.type,                       //
-             std::format("{}", seconds),     //
-             std::format("{}B", log.bytes),  //
+    log_eval(log.type,             //
+             time,                 //
+             as_bytes(log.bytes),  //
              log.annot);
   }
 
@@ -251,7 +253,7 @@ ResultPtr evaluate(Node const& node,           //
 
   result.pre = evaluate<EvalTrace>(node, le, cache);
 
-  auto seconds = timed_eval_inplace([&]() {
+  auto time = timed_eval_inplace([&]() {
     result.post = perm ? result.pre->permute(
                              std::array<std::any, 2>{node->annot(), layout})
                        : result.pre;
@@ -263,9 +265,9 @@ ResultPtr evaluate(Node const& node,           //
   if constexpr (trace(EvalTrace)) {
     if (perm) {
       auto bytes = result.pre->size_in_bytes() + result.post->size_in_bytes();
-      log_eval("PERMUTE",                   //
-               std::format("{}", seconds),  //
-               std::format("{}B", bytes),   //
+      log_eval("PERMUTE",        //
+               time,             //
+               as_bytes(bytes),  //
                node->label());
     }
     log_term("END", xpr);
@@ -306,14 +308,14 @@ ResultPtr evaluate(Nodes const& nodes,  //
     }
 
     ResultPtr pre = evaluate<EvalTrace>(n, layout, le, cache);
-    auto seconds = timed_eval_inplace([&]() { result->add_inplace(*pre); });
+    auto time = timed_eval_inplace([&]() { result->add_inplace(*pre); });
 
     // logging
     if constexpr (trace(EvalTrace)) {
       auto bytes = result->size_in_bytes() + pre->size_in_bytes();
-      log_eval("ADD_INPLACE",               //
-               std::format("{}", seconds),  //
-               std::format("{}B", bytes),   //
+      log_eval("ADD_INPLACE",    //
+               time,             //
+               as_bytes(bytes),  //
                n->label());
     }
   }
@@ -381,7 +383,7 @@ ResultPtr evaluate_symm(Args&&... args) {
   ResultPtr pre = evaluate<EvalTrace>(std::forward<Args>(args)...);
   assert(pre);
   ResultPtr result;
-  auto seconds = timed_eval_inplace([&]() { result = pre->symmetrize(); });
+  auto time = timed_eval_inplace([&]() { result = pre->symmetrize(); });
 
   // logging
   if constexpr (trace(EvalTrace)) {
@@ -394,9 +396,9 @@ ResultPtr evaluate_symm(Args&&... args) {
       node_label = arg0->label();
 
     size_t bytes = pre->size_in_bytes() + result->size_in_bytes();
-    log_eval("SYMMETRIZE",                //
-             std::format("{}", seconds),  //
-             std::format("{}B", bytes),   //
+    log_eval("SYMMETRIZE",     //
+             time,             //
+             as_bytes(bytes),  //
              node_label);
   }
 
@@ -430,15 +432,15 @@ ResultPtr evaluate_antisymm(Args&&... args) {
   assert(pre);
 
   ResultPtr result;
-  auto seconds =
+  auto time =
       timed_eval_inplace([&]() { result = pre->antisymmetrize(bra_rank); });
 
   // logging
   if constexpr (trace(EvalTrace)) {
     size_t bytes = pre->size_in_bytes() + result->size_in_bytes();
-    log_eval("ANTISYMMETRIZE",            //
-             std::format("{}", seconds),  //
-             std::format("{}B", bytes),   //
+    log_eval("ANTISYMMETRIZE",  //
+             time,              //
+             as_bytes(bytes),   //
              node_label);
   }
   return result;
