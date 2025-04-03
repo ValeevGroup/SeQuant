@@ -10,12 +10,14 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/parse.hpp>
+#include <SeQuant/core/result_expr.hpp>
 #include <SeQuant/core/tensor.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 
 #include <initializer_list>
 #include <memory>
+#include <set>
 #include <string>
 #include <string_view>
 
@@ -47,16 +49,27 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
       std::make_shared<sequant::DefaultTensorCanonicalizer>());
 
   SECTION("Constructors") {
+    std::set<std::size_t> ids;
     auto t1 = parse_tensor(L"t_{i1, i2}^{a1, a2}");
 
     REQUIRE_NOTHROW(EvalExpr{t1});
+    ids.insert(EvalExpr{t1}.id());
 
     auto p1 = parse_expr(L"g_{i3,a1}^{i1,i2} * t_{a2}^{a3}");
 
     const auto& c2 = EvalExpr{p1->at(0)->as<Tensor>()};
     const auto& c3 = EvalExpr{p1->at(1)->as<Tensor>()};
 
+    ids.insert(c2.id());
+    ids.insert(c3.id());
+
     REQUIRE_NOTHROW(EvalExpr{Variable{L"λ"}});
+    ids.insert(EvalExpr{Variable{L"λ"}}.id());
+
+    REQUIRE_NOTHROW(EvalExpr{Constant{1}});
+    ids.insert(EvalExpr{Constant{1}}.id());
+
+    REQUIRE(ids.size() == 5);
   }
 
   SECTION("EvalExpr::EvalOp types") {
@@ -125,6 +138,52 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
                 C(L"2.5"),   //
                 EvalOp::Sum  //
                 ) == ResultType::Scalar);
+  }
+
+  SECTION("result expr") {
+    ExprPtr expr = parse_expr(L"2 var");
+    ExprPtr root_expr = binarize(expr)->expr();
+    REQUIRE(root_expr->is<Variable>());
+    REQUIRE(*root_expr != *expr);
+
+    expr = parse_expr(L"2 t{a1;i1}");
+    root_expr = binarize(expr)->expr();
+    REQUIRE(root_expr->is<Tensor>());
+    REQUIRE(*root_expr != *expr);
+
+    // The binarized tree shall respect the label of the ResultExpr
+    ResultExpr res = parse_result_expr(L"E = g{i1,i2;a1,a2} t{a1,a2;i1,i2}");
+    root_expr = binarize(res)->expr();
+    REQUIRE(root_expr.is<Variable>());
+    REQUIRE(root_expr.as<Variable>().label() == L"E");
+
+    // The binarized tree shall respect the indexing of the ResultExpr
+    res = parse_result_expr(L"Result{a2;i2} = g{i1,i2;a1,a2} t{a1;i1}");
+    root_expr = binarize(res)->expr();
+    REQUIRE(root_expr.is<Tensor>());
+    REQUIRE(root_expr.as<Tensor>() ==
+            Tensor(L"Result", bra(IndexList{L"a_2"}), ket(IndexList{L"i_2"})));
+
+    // continued ->  check that changing indexing in result changes indexing in
+    // tree
+    res = parse_result_expr(L"Result{i2;a2} = g{i1,i2;a1,a2} t{a1;i1}");
+    root_expr = binarize(res)->expr();
+    REQUIRE(root_expr.is<Tensor>());
+    REQUIRE(root_expr.as<Tensor>() ==
+            Tensor(L"Result", bra(IndexList{L"i_2"}), ket(IndexList{L"a_2"})));
+
+    // The name-respecting property shall also hold for terminals
+    res = parse_result_expr(L"Other = Var");
+    root_expr = binarize(res)->expr();
+    REQUIRE(root_expr.is<Variable>());
+    REQUIRE(root_expr.as<Variable>().label() == L"Other");
+
+    res = parse_result_expr(L"Amplitude{i1;a1} = t{a1;i1}");
+    root_expr = binarize(res)->expr();
+    REQUIRE(root_expr.is<Tensor>());
+    REQUIRE(root_expr.as<Tensor>() == Tensor(L"Amplitude",
+                                             bra(IndexList{L"i_1"}),
+                                             ket(IndexList{L"a_1"})));
   }
 
   SECTION("Sequant expression") {
