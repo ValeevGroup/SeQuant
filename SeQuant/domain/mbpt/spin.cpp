@@ -1562,6 +1562,22 @@ ExprPtr spintrace(
     return expression;
   }
 
+#ifndef NDEBUG
+  // Verify that the amount of external indices matches the amount of indices in
+  // ext_index_groups
+  auto count_indices = [](const auto& range) {
+    auto sizes = range | ranges::views::transform(
+                             [](const auto& list) { return list.size(); });
+    return std::accumulate(sizes.begin(), sizes.end(), 0);
+  };
+  auto determined_externals =
+      external_indices<container::svector<container::svector<Index>>>(
+          expression);
+
+  assert(count_indices(ext_index_groups) ==
+         count_indices(determined_externals));
+#endif
+
   // This function must be used for tensors with spin-specific indices only. If
   // the spin-symmetry is conserved: the tensor is expanded; else: zero is
   // returned.
