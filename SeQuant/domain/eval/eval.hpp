@@ -25,67 +25,189 @@
 
 namespace sequant {
 
+namespace log {
+
+using Duration = std::chrono::nanoseconds;
+
+struct Bytes {
+  size_t value;
+};
+
+template <typename... T>
+  requires((std::same_as<ResultPtr, T> && ...))
+[[nodiscard]] auto bytes(T const&... args) {
+  return Bytes{(args->size_in_bytes() + ...)};
+}
+
+[[nodiscard]] inline auto bytes(CacheManager const& cman) {
+  return cman.size_in_bytes();
+}
+
+[[nodiscard]] constexpr std::string to_string(Bytes bs) noexcept {
+  return std::format("{}B", bs.value);
+}
+
+enum struct EvalMode {
+  Constant,
+  Variable,
+  Tensor,
+  Permute,
+  Product,
+  MultByPhase,
+  Sum,
+  SumInplace,
+  Symmetrize,
+  Antisymmetrize,
+  Unknown
+};
+
+[[nodiscard]] EvalMode eval_mode(meta::eval_node auto const& node) {
+  if (node.leaf()) {
+    return node->is_constant()   ? EvalMode::Constant
+           : node->is_variable() ? EvalMode::Variable
+           : node->is_tensor()   ? EvalMode::Tensor
+                                 : EvalMode::Unknown;
+  } else {
+    return node->is_product() ? EvalMode::Product
+           : node->is_sum()   ? EvalMode::Sum
+                              : EvalMode::Unknown;
+  }
+}
+
+[[nodiscard]] constexpr auto to_string(EvalMode mode) noexcept {
+  return (mode == EvalMode::Constant)         ? "Constant"
+         : (mode == EvalMode::Variable)       ? "Variable"
+         : (mode == EvalMode::Tensor)         ? "Tensor"
+         : (mode == EvalMode::Permute)        ? "Permute"
+         : (mode == EvalMode::Product)        ? "Product"
+         : (mode == EvalMode::MultByPhase)    ? "MultByPhase"
+         : (mode == EvalMode::Sum)            ? "Sum"
+         : (mode == EvalMode::SumInplace)     ? "SumInplace"
+         : (mode == EvalMode::Symmetrize)     ? "Symmetrize"
+         : (mode == EvalMode::Antisymmetrize) ? "Antisymmetrize"
+                                              : "??";
+}
+
+enum struct CacheMode { Store, Access, Release };
+
+[[nodiscard]] constexpr auto to_string(CacheMode mode) noexcept {
+  return (mode == CacheMode::Store)    ? "Store"
+         : (mode == CacheMode::Access) ? "Access"
+                                       : "Release";
+}
+
+enum struct TermMode { Begin, End };
+
+[[nodiscard]] constexpr auto to_string(TermMode mode) noexcept {
+  return (mode == TermMode::Begin) ? "Begin" : "End";
+}
+
+struct EvalStat {
+  EvalMode mode;
+  Duration time;
+  Bytes memory;
+};
+
+struct CacheStat {
+  CacheMode mode;
+  size_t key;
+  int curr_life, max_life;
+  size_t num_alive;
+  Bytes memory;
+};
+
+template <typename Arg, typename... Args>
+void log(Arg const& arg, Args const&... args) {
+  auto& l = Logger::instance();
+  if (l.eval.level > 0) write_log(l, arg, std::format(" | {}", args)..., '\n');
+}
+
+template <typename... Args>
+auto eval(EvalStat const& stat, Args const&... args) {
+  log("Eval",                  //
+      to_string(stat.mode),    //
+      stat.time,               //
+      to_string(stat.memory),  //
+      args...);
+}
+
+template <typename... Args>
+auto cache(CacheStat const& stat, Args const&... args) {
+  log("Cache",                                              //
+      to_string(stat.mode),                                 //
+      stat.key,                                             //
+      std::format("{}/{}", stat.curr_life, stat.max_life),  //
+      stat.num_alive,                                       //
+      to_string(stat.memory),                               //
+      args...);
+}
+
+template <typename... Args>
+auto cache(size_t key, CacheManager const& cm, Args const&... args) {
+  using CacheMode::Access;
+  using CacheMode::Release;
+  using CacheMode::Store;
+  auto const cur_l = cm.life(key);
+  auto const max_l = cm.max_life(key);
+  bool const release = cur_l == 0;
+  bool const store = cur_l + 1 == max_l;
+  cache(CacheStat{.key = key,
+                  .curr_life = cur_l,
+                  .max_life = max_l,
+                  .num_alive = cm.alive_count(),
+                  .memory = bytes(cm),
+                  .mode = store     ? Store
+                          : release ? Release
+                                    : Access},
+        args...);
+}
+
+inline auto term(TermMode mode, std::string_view term) {
+  log("Term", to_string(mode), term);
+}
+
+[[nodiscard]] auto label(meta::eval_node auto const& node) {
+  return node->is_primary()
+             ? node->label()
+             : std::format("{} {} {} -> {}", node.left()->label(),
+                           (node->is_product() ? "*"
+                            : node->is_sum()   ? "+"
+                                               : "??"),  //
+                           node.right()->label(), node->label());
+}
+
+}  // namespace log
+
 namespace {
-
-using Nanoseconds = std::chrono::nanoseconds;
-
-inline auto as_bytes(size_t bytes) { return std::format("{}B", bytes); }
 
 ///
 /// Invokes @c fun that returns void on the arguments @c args and returns the
 /// time duration as @c std::chrono::duration<double>.
 template <typename F, typename... Args>
-[[nodiscard]] auto timed_eval_inplace(F&& fun, Args&&... args)
+[[nodiscard]] log::Duration timed_eval_inplace(F&& fun, Args&&... args)
   requires(std::is_invocable_r_v<void, F, Args...>)
 {
   using Clock = std::chrono::high_resolution_clock;
   auto tstart = Clock::now();
   std::forward<F>(fun)(std::forward<Args>(args)...);
   auto tend = Clock::now();
-  return Nanoseconds{tend - tstart};
-}
-
-template <typename... Args>
-void log_tag(std::string_view tag, Args const&... args) {
-  auto& l = Logger::instance();
-  if constexpr (sizeof...(Args))
-    if (l.eval.level > 0)
-      write_log(l, std::format("[{}]", tag), std::format(" | {}", args)...,
-                '\n');
-}
-
-auto log_eval = [](auto const&... args) { log_tag("EVAL", args...); };
-auto log_cache = [](auto const&... args) { log_tag("CACHE", args...); };
-auto log_term = [](auto const&... args) { log_tag("TERM", args...); };
-
-void log_cache_access(size_t key, CacheManager const& cm) {
-  auto const cur_l = cm.life(key);
-  auto const max_l = cm.max_life(key);
-  bool const release = cur_l == 0;
-  bool const store = cur_l + 1 == max_l;
-  log_cache(release ? "RELEASE"
-            : store ? "STORE"
-                    : "ACCESS",
-            key,                                 //
-            std::format("{}/{}", cur_l, max_l),  //
-            cm.alive_count(),                    //
-            as_bytes(cm.size_in_bytes()));
-}
-
-[[maybe_unused]] std::string perm_groups_string(
-    container::svector<std::array<size_t, 3>> const& perm_groups) {
-  std::string result;
-  for (auto const& g : perm_groups)
-    result += "(" + std::to_string(g[0]) + "," + std::to_string(g[1]) + "," +
-              std::to_string(g[2]) + ") ";
-  result.pop_back();  // remove last space
-  return result;
+  return {tend - tstart};
 }
 
 template <typename... Args>
 concept last_type_is_cache_manager =
     std::same_as<CacheManager, std::remove_cvref_t<std::tuple_element_t<
                                    sizeof...(Args) - 1, std::tuple<Args...>>>>;
+
+template <typename... Args>
+auto&& arg0(Args&&... args) {
+  return std::get<0>(std::forward_as_tuple(std::forward<Args>(args)...));
+}
+
+auto&& node0(auto&& val) { return std::forward<decltype(val)>(val); }
+auto&& node0(std::ranges::range auto&& rng) {
+  return ranges::front(std::forward<decltype(rng)>(rng));
+}
 
 enum struct CacheCheck { Checked, Unchecked };
 
@@ -136,14 +258,14 @@ ResultPtr evaluate(Node const& node,  //
 
     auto const h = hash::value(*node);
     if (auto ptr = cache.access(h); ptr) {
-      if constexpr (trace(EvalTrace)) log_cache_access(h, cache);
+      if constexpr (trace(EvalTrace)) log::cache(h, cache);
 
       return mult_by_phase(ptr);
     } else if (cache.exists(h)) {
       auto ptr = cache.store(
           h, mult_by_phase(
                  evaluate<EvalTrace, CacheCheck::Unchecked>(node, le, cache)));
-      if constexpr (trace(EvalTrace)) log_cache_access(h, cache);
+      if constexpr (trace(EvalTrace)) log::cache(h, cache);
 
       return mult_by_phase(ptr);
     } else {
@@ -155,7 +277,7 @@ ResultPtr evaluate(Node const& node,  //
   ResultPtr left;
   ResultPtr right;
 
-  Nanoseconds time;
+  log::Duration time;
 
   if (node.leaf()) {
     time = timed_eval_inplace([&]() { result = le(node); });
@@ -184,36 +306,12 @@ ResultPtr evaluate(Node const& node,  //
 
   // logging
   if constexpr (trace(EvalTrace)) {
-    struct {
-      std::string type, annot;
-      size_t bytes;
-    } log;
-    if (node.leaf()) {
-      log.type = node->is_constant()   ? "CONSTANT"
-                 : node->is_variable() ? "VARIABLE"
-                 : node->is_tensor()   ? "TENSOR"
-                                       : "??";
-      log.annot = node->label();
-      log.bytes = result->size_in_bytes();
-    } else {
-      log.type = node->is_product() ? "PRODUCT" : node->is_sum() ? "SUM" : "??";
-      log.annot = node->is_primary()
-                      ? node->label()
-                      : std::format("{} {} {} -> {}",      //
-                                    node.left()->label(),  //
-                                    (node->is_product() ? "*"
-                                     : node->is_sum()   ? "+"
-                                                        : "??"),  //
-                                    node.right()->label(), node->label());
-      log.bytes = left->size_in_bytes()     //
-                  + right->size_in_bytes()  //
-                  + result->size_in_bytes();
-    }
-
-    log_eval(log.type,             //
-             time,                 //
-             as_bytes(log.bytes),  //
-             log.annot);
+    auto stat =
+        log::EvalStat{.mode = log::eval_mode(node),
+                      .time = time,
+                      .memory = node.leaf() ? log::bytes(result)
+                                            : log::bytes(left, right, result)};
+    log::eval(stat, log::label(node));
   }
 
   return result;
@@ -244,7 +342,7 @@ ResultPtr evaluate(Node const& node,           //
   std::string xpr;
   if constexpr (trace(EvalTrace)) {
     xpr = to_string(deparse(to_expr(node)));
-    log_term("BEGIN", xpr);
+    log::term(log::TermMode::Begin, xpr);
   }
 
   struct {
@@ -264,13 +362,12 @@ ResultPtr evaluate(Node const& node,           //
   // logging
   if constexpr (trace(EvalTrace)) {
     if (perm) {
-      auto bytes = result.pre->size_in_bytes() + result.post->size_in_bytes();
-      log_eval("PERMUTE",        //
-               time,             //
-               as_bytes(bytes),  //
-               node->label());
+      auto stat = log::EvalStat{.mode = log::EvalMode::Permute,
+                                .time = time,
+                                .memory = log::bytes(result.pre, result.post)};
+      log::eval(stat, node->label());
     }
-    log_term("END", xpr);
+    log::term(log::TermMode::End, xpr);
   }
   return result.post;
 }
@@ -312,11 +409,10 @@ ResultPtr evaluate(Nodes const& nodes,  //
 
     // logging
     if constexpr (trace(EvalTrace)) {
-      auto bytes = result->size_in_bytes() + pre->size_in_bytes();
-      log_eval("ADD_INPLACE",    //
-               time,             //
-               as_bytes(bytes),  //
-               n->label());
+      auto stat = log::EvalStat{.mode = log::EvalMode::SumInplace,
+                                .time = time,
+                                .memory = log::bytes(result, pre)};
+      log::eval(stat, n->label());
     }
   }
 
@@ -387,19 +483,10 @@ ResultPtr evaluate_symm(Args&&... args) {
 
   // logging
   if constexpr (trace(EvalTrace)) {
-    auto&& arg0 =
-        std::get<0>(std::forward_as_tuple(std::forward<Args>(args)...));
-    std::string node_label;
-    if constexpr (meta::can_evaluate_range<decltype(arg0)>)
-      node_label = ranges::front(arg0)->label();
-    else
-      node_label = arg0->label();
-
-    size_t bytes = pre->size_in_bytes() + result->size_in_bytes();
-    log_eval("SYMMETRIZE",     //
-             time,             //
-             as_bytes(bytes),  //
-             node_label);
+    auto stat = log::EvalStat{.mode = log::EvalMode::Symmetrize,
+                              .time = time,
+                              .memory = log::bytes(pre, result)};
+    log::eval(stat, node0(arg0(std::forward<Args>(args)...))->label());
   }
 
   return result;
@@ -416,32 +503,21 @@ ResultPtr evaluate_symm(Args&&... args) {
 ///
 template <Trace EvalTrace = Trace::Default, typename... Args>
 ResultPtr evaluate_antisymm(Args&&... args) {
-  size_t bra_rank;
-  std::string node_label;  // for logging
-  auto&& arg0 = std::get<0>(std::forward_as_tuple(std::forward<Args>(args)...));
-  if constexpr (meta::can_evaluate_range<decltype(arg0)>) {
-    assert(!ranges::empty(arg0));
-    bra_rank = ranges::front(arg0)->as_tensor().bra_rank();
-    node_label = ranges::front(arg0)->label();
-  } else {
-    bra_rank = arg0->as_tensor().bra_rank();
-    node_label = arg0->label();
-  }
-
   ResultPtr pre = evaluate<EvalTrace>(std::forward<Args>(args)...);
   assert(pre);
 
+  auto const& n0 = node0(arg0(std::forward<Args>(args)...));
+
   ResultPtr result;
-  auto time =
-      timed_eval_inplace([&]() { result = pre->antisymmetrize(bra_rank); });
+  auto time = timed_eval_inplace(
+      [&]() { result = pre->antisymmetrize(n0->as_tensor().bra_rank()); });
 
   // logging
   if constexpr (trace(EvalTrace)) {
-    size_t bytes = pre->size_in_bytes() + result->size_in_bytes();
-    log_eval("ANTISYMMETRIZE",  //
-             time,              //
-             as_bytes(bytes),   //
-             node_label);
+    auto stat = log::EvalStat{.mode = log::EvalMode::Antisymmetrize,
+                              .time = time,
+                              .memory = log::bytes(pre, result)};
+    log::eval(stat, n0->label());
   }
   return result;
 }
