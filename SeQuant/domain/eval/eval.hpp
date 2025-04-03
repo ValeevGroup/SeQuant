@@ -252,8 +252,21 @@ ResultPtr evaluate(Node const& node,  //
                    CacheManager& cache) {
   if constexpr (Cache == CacheCheck::Checked) {  // return from cache if found
 
-    auto mult_by_phase = [phase = node->canon_phase()](ResultPtr res) {
-      return phase == 1 ? res : res->mult_by_phase(phase);
+    auto mult_by_phase = [&node](ResultPtr res) {
+      auto phase = node->canon_phase();
+      if (phase == 1) return res;
+
+      ResultPtr post;
+      auto time =
+          timed_eval_inplace([&]() { post = res->mult_by_phase(phase); });
+
+      if constexpr (trace(EvalTrace)) {
+        auto stat = log::EvalStat{.mode = log::EvalMode::MultByPhase,
+                                  .time = time,
+                                  .memory = log::bytes(res, post)};
+        log::eval(stat, node->label());
+      }
+      return post;
     };
 
     auto const h = hash::value(*node);
