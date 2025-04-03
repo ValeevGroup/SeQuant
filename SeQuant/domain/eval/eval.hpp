@@ -151,14 +151,14 @@ auto cache(size_t key, CacheManager const& cm, Args const&... args) {
   auto const max_l = cm.max_life(key);
   bool const release = cur_l == 0;
   bool const store = cur_l + 1 == max_l;
-  cache(CacheStat{.key = key,
+  cache(CacheStat{.mode = store     ? Store
+                          : release ? Release
+                                    : Access,
+                  .key = key,
                   .curr_life = cur_l,
                   .max_life = max_l,
                   .num_alive = cm.alive_count(),
-                  .memory = bytes(cm),
-                  .mode = store     ? Store
-                          : release ? Release
-                                    : Access},
+                  .memory = bytes(cm)},
         args...);
 }
 
