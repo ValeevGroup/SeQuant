@@ -213,11 +213,17 @@
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="../user/getting_started/installing.html">Installation</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../user/guide/index.html">User Guide</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../user/guide/index.html">User Guide</a><input class="toctree-checkbox" id="toctree-checkbox-2" name="toctree-checkbox-2" role="switch" type="checkbox"/><label for="toctree-checkbox-2"><div class="visually-hidden">Toggle navigation of User Guide</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../user/guide/cc.html">Coupled-Cluster Class</a></li>
+</ul>
+</li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Developer</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="../developer/index.html">Developer docs</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../developer/index.html">Developer docs</a><input class="toctree-checkbox" id="toctree-checkbox-3" name="toctree-checkbox-3" role="switch" type="checkbox"/><label for="toctree-checkbox-3"><div class="visually-hidden">Toggle navigation of Developer docs</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../developer/documentation.html">Documentation Guide</a></li>
+</ul>
+</li>
 <li class="toctree-l1"><a class="reference internal" href="../genindex.html">API reference</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">See Also</span></p>
@@ -334,16 +340,16 @@
 <section id="functions">
 <h2>Functions<a class="headerlink" href="#functions" title="Link to this heading">¶</a></h2>
 <ul class="simple">
-<li><p><a class="reference internal" href="function_ast_8hpp_1a3508ebb0f538a39e988de08bf2283189.html#exhale-function-ast-8hpp-1a3508ebb0f538a39e988de08bf2283189"><span class="std std-ref">Function BOOST_FUSION_ADAPT_STRUCT(sequant::parse::ast::SymmetrySpec, perm_symm, braket_symm, particle_symm)</span></a></p></li>
-<li><p><a class="reference internal" href="function_ast_8hpp_1abc32465f1db33ecd01dee6338751b446.html#exhale-function-ast-8hpp-1abc32465f1db33ecd01dee6338751b446"><span class="std std-ref">Function BOOST_FUSION_ADAPT_STRUCT(sequant::parse::ast::Tensor, name, indices, symmetry)</span></a></p></li>
-<li><p><a class="reference internal" href="function_ast_8hpp_1a40f60977f510d83b38bebc423bb27de9.html#exhale-function-ast-8hpp-1a40f60977f510d83b38bebc423bb27de9"><span class="std std-ref">Function BOOST_FUSION_ADAPT_STRUCT(sequant::parse::ast::Product, factors)</span></a></p></li>
-<li><p><a class="reference internal" href="function_ast_8hpp_1a13fefbef18801cb58baa30b7ad236b95.html#exhale-function-ast-8hpp-1a13fefbef18801cb58baa30b7ad236b95"><span class="std std-ref">Function BOOST_FUSION_ADAPT_STRUCT(sequant::parse::ast::IndexLabel, label, id)</span></a></p></li>
 <li><p><a class="reference internal" href="function_ast_8hpp_1aa18db2677f2e4507fec03dbc5848ddb1.html#exhale-function-ast-8hpp-1aa18db2677f2e4507fec03dbc5848ddb1"><span class="std std-ref">Function BOOST_FUSION_ADAPT_STRUCT(sequant::parse::ast::Sum, summands)</span></a></p></li>
 <li><p><a class="reference internal" href="function_ast_8hpp_1a66bbae2c17a5148fbff76360eef9cb7b.html#exhale-function-ast-8hpp-1a66bbae2c17a5148fbff76360eef9cb7b"><span class="std std-ref">Function BOOST_FUSION_ADAPT_STRUCT(sequant::parse::ast::ResultExpr, lhs, rhs)</span></a></p></li>
 <li><p><a class="reference internal" href="function_ast_8hpp_1a493fa891e6da49665c379ca179465182.html#exhale-function-ast-8hpp-1a493fa891e6da49665c379ca179465182"><span class="std std-ref">Function BOOST_FUSION_ADAPT_STRUCT(sequant::parse::ast::Index, label, protoLabels)</span></a></p></li>
+<li><p><a class="reference internal" href="function_ast_8hpp_1a13fefbef18801cb58baa30b7ad236b95.html#exhale-function-ast-8hpp-1a13fefbef18801cb58baa30b7ad236b95"><span class="std std-ref">Function BOOST_FUSION_ADAPT_STRUCT(sequant::parse::ast::IndexLabel, label, id)</span></a></p></li>
 <li><p><a class="reference internal" href="function_ast_8hpp_1abf590a273e5113fbc54dc9ca6719a45b.html#exhale-function-ast-8hpp-1abf590a273e5113fbc54dc9ca6719a45b"><span class="std std-ref">Function BOOST_FUSION_ADAPT_STRUCT(sequant::parse::ast::Number, numerator, denominator)</span></a></p></li>
 <li><p><a class="reference internal" href="function_ast_8hpp_1acb28cd7887651cff374b9049c28c7e7c.html#exhale-function-ast-8hpp-1acb28cd7887651cff374b9049c28c7e7c"><span class="std std-ref">Function BOOST_FUSION_ADAPT_STRUCT(sequant::parse::ast::Variable, name, conjugated)</span></a></p></li>
 <li><p><a class="reference internal" href="function_ast_8hpp_1a2cec8e03a95282b7312545f2c2d3c82d.html#exhale-function-ast-8hpp-1a2cec8e03a95282b7312545f2c2d3c82d"><span class="std std-ref">Function BOOST_FUSION_ADAPT_STRUCT(sequant::parse::ast::IndexGroups, bra, ket, auxiliaries, reverse_bra_ket)</span></a></p></li>
+<li><p><a class="reference internal" href="function_ast_8hpp_1a3508ebb0f538a39e988de08bf2283189.html#exhale-function-ast-8hpp-1a3508ebb0f538a39e988de08bf2283189"><span class="std std-ref">Function BOOST_FUSION_ADAPT_STRUCT(sequant::parse::ast::SymmetrySpec, perm_symm, braket_symm, particle_symm)</span></a></p></li>
+<li><p><a class="reference internal" href="function_ast_8hpp_1abc32465f1db33ecd01dee6338751b446.html#exhale-function-ast-8hpp-1abc32465f1db33ecd01dee6338751b446"><span class="std std-ref">Function BOOST_FUSION_ADAPT_STRUCT(sequant::parse::ast::Tensor, name, indices, symmetry)</span></a></p></li>
+<li><p><a class="reference internal" href="function_ast_8hpp_1a40f60977f510d83b38bebc423bb27de9.html#exhale-function-ast-8hpp-1a40f60977f510d83b38bebc423bb27de9"><span class="std std-ref">Function BOOST_FUSION_ADAPT_STRUCT(sequant::parse::ast::Product, factors)</span></a></p></li>
 </ul>
 </section>
 <section id="defines">
@@ -377,7 +383,7 @@
             
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on Mar 28, 2025 2:00:37 AM</div>
+              Last updated on Apr 3, 2025 12:06:55 PM</div>
           </div>
           <div class="right-details">
             <div class="icons">

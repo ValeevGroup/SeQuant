@@ -1,2 +1,5 @@
 Developer documentation
 =======================
+
+.. toctree::
+   documentation

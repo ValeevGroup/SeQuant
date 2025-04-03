@@ -3,7 +3,7 @@
   <head><meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width,initial-scale=1"/>
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
-<link rel="index" title="Index" href="../genindex.html" /><link rel="search" title="Search" href="../search.html" />
+<link rel="index" title="Index" href="../genindex.html" /><link rel="search" title="Search" href="../search.html" /><link rel="prev" title="Developer documentation" href="index.html" />
 
     <!-- Generated with Sphinx 7.4.7 and Furo 2024.08.06 -->
         <title>Documentation Guide - SeQuant Documentation</title>
@@ -213,11 +213,17 @@
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="../user/getting_started/installing.html">Installation</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../user/guide/index.html">User Guide</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../user/guide/index.html">User Guide</a><input class="toctree-checkbox" id="toctree-checkbox-2" name="toctree-checkbox-2" role="switch" type="checkbox"/><label for="toctree-checkbox-2"><div class="visually-hidden">Toggle navigation of User Guide</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../user/guide/cc.html">Coupled-Cluster Class</a></li>
+</ul>
+</li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">Developer</span></p>
-<ul>
-<li class="toctree-l1"><a class="reference internal" href="index.html">Developer docs</a></li>
+<ul class="current">
+<li class="toctree-l1 current has-children"><a class="reference internal" href="index.html">Developer docs</a><input checked="" class="toctree-checkbox" id="toctree-checkbox-3" name="toctree-checkbox-3" role="switch" type="checkbox"/><label for="toctree-checkbox-3"><div class="visually-hidden">Toggle navigation of Developer docs</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul class="current">
+<li class="toctree-l2 current current-page"><a class="current reference internal" href="#">Documentation Guide</a></li>
+</ul>
+</li>
 <li class="toctree-l1"><a class="reference internal" href="../genindex.html">API reference</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">See Also</span></p>
@@ -243,7 +249,7 @@
         </a>
         <div class="content-icon-container">
           <div class="view-this-page">
-  <a class="muted-link" href="../_sources/developer/docs_advanced.rst.txt" title="View this page">
+  <a class="muted-link" href="../_sources/developer/documentation.rst.txt" title="View this page">
     <svg><use href="#svg-eye"></use></svg>
     <span class="visually-hidden">View this page</span>
   </a>
@@ -264,23 +270,43 @@
         <article role="main" id="furo-main-content">
           <section id="documentation-guide">
 <h1>Documentation Guide<a class="headerlink" href="#documentation-guide" title="Link to this heading">¶</a></h1>
+<p>SeQuant uses a combination of <a class="reference external" href="https://www.doxygen.nl/">Doxygen</a>, <a class="reference external" href="https://www.sphinx-doc.org/en/master/">Sphinx</a> and
+<a class="reference external" href="https://breathe.readthedocs.io/en/latest/">Breathe</a> to build documentation. For building the documentation locally, configure CMake with
+<cite>-DSEQUANT_BUILD_DOCS=ON</cite>.</p>
 <p>The <code class="docutils literal notranslate"><span class="pre">doc</span></code> directory contains the documentation for SeQuant, including user guides, API references, and advanced internal documentation. The documentation is generated using <a class="reference external" href="https://www.doxygen.nl/">Doxygen</a> and <a class="reference external" href="https://www.sphinx-doc.org/en/master/">Sphinx</a> .</p>
+<section id="dependencies">
+<h2>Dependencies<a class="headerlink" href="#dependencies" title="Link to this heading">¶</a></h2>
+<p>Building the documentation requires several Python packages. You can install them using pip. The required packages are listed in the
+<code class="docutils literal notranslate"><span class="pre">requirements.txt</span></code> file in the <code class="docutils literal notranslate"><span class="pre">doc/.sphinx</span></code> directory. You can install them using the following command:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>pip<span class="w"> </span>install<span class="w"> </span>-r<span class="w"> </span>doc/.sphinx/requirements.txt
+</pre></div>
+</div>
+<p>This will install the required packages, including Sphinx, Breathe, Exhale, and others.
+Now you can build the documentation using CMake. The documentation will be generated in <code class="docutils literal notranslate"><span class="pre">doc/html</span></code> under your build directory. You can open the
+<code class="docutils literal notranslate"><span class="pre">index.html</span></code> file in your web browser to view the documentation.</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>mkdir<span class="w"> </span>build
+<span class="nb">cd</span><span class="w"> </span>build
+cmake<span class="w"> </span>-DSEQUANT_BUILD_DOCS<span class="o">=</span>ON<span class="w"> </span>..
+cmake<span class="w"> </span>--build<span class="w"> </span>.<span class="w"> </span>--target<span class="w"> </span>doc-sequant
+</pre></div>
+</div>
+</section>
 <section id="directory-structure">
 <h2>Directory Structure<a class="headerlink" href="#directory-structure" title="Link to this heading">¶</a></h2>
 <ul class="simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">CMakeLists.txt</span></code> - Main build file for all documentation</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">doxygen/</span></code> - Doxygen configuration for API reference documentation</p>
+<li><p><code class="docutils literal notranslate"><span class="pre">.doxygen/</span></code> - Doxygen configuration for API reference documentation</p>
 <ul>
 <li><p><code class="docutils literal notranslate"><span class="pre">Doxyfile.in</span></code> - Doxygen configuration template</p></li>
 </ul>
 </li>
-<li><p><code class="docutils literal notranslate"><span class="pre">sphinx/</span></code> - Sphinx documentation source files</p>
+<li><p><code class="docutils literal notranslate"><span class="pre">.sphinx/</span></code> - Sphinx documentation source files</p>
 <ul>
 <li><p><code class="docutils literal notranslate"><span class="pre">conf.py.in</span></code> - Sphinx configuration template</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">index.rst</span></code> - Main index file for documentation</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">requirements.txt</span></code> - Python dependencies for building docs</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">user/</span></code> - User-facing documentation: basic usage guides, installation instructions, etc.</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">internal/</span></code> - Advanced internal documentation</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">developer/</span></code> - Advanced developer documentation</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">api/</span></code> - API documentation (generated by Exhale/Breathe)</p></li>
 </ul>
 </li>
@@ -311,7 +337,7 @@ cmake<span class="w"> </span>--build<span class="w"> </span>build<span class="w"
 </section>
 <section id="adding-new-documentation">
 <h2>Adding New Documentation<a class="headerlink" href="#adding-new-documentation" title="Link to this heading">¶</a></h2>
-<p>All user-facing documentation should be added to the <code class="docutils literal notranslate"><span class="pre">sphinx/user/</span></code> directory. Internal documentation can be added to the <code class="docutils literal notranslate"><span class="pre">sphinx/internal/</span></code> directory.</p>
+<p>All user-facing documentation should be added to the <code class="docutils literal notranslate"><span class="pre">.sphinx/user/</span></code> directory. Internal documentation can be added to the <code class="docutils literal notranslate"><span class="pre">.sphinx/developer/</span></code> directory.</p>
 <p>New documentation files should be written in reStructuredText format and included in the appropriate <code class="docutils literal notranslate"><span class="pre">toctree</span></code> section of <code class="docutils literal notranslate"><span class="pre">index.rst</span></code> files. For a quick reference on reStructuredText syntax, see <a class="reference external" href="https://github.com/ralsina/rst-cheatsheet/blob/master/rst-cheatsheet.rst">this sheet</a>.</p>
 <section id="examples-of-restructuredtext-syntax">
 <h3>Examples of reStructuredText Syntax<a class="headerlink" href="#examples-of-restructuredtext-syntax" title="Link to this heading">¶</a></h3>
@@ -428,7 +454,17 @@ cmake<span class="w"> </span>--build<span class="w"> </span>build<span class="w"
         
         <div class="related-pages">
           
-          
+          <a class="prev-page" href="index.html">
+              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
+              <div class="page-info">
+                <div class="context">
+                  <span>Previous</span>
+                </div>
+                
+                <div class="title">Developer documentation</div>
+                
+              </div>
+            </a>
         </div>
         <div class="bottom-of-page">
           <div class="left-details">
@@ -439,7 +475,7 @@ cmake<span class="w"> </span>--build<span class="w"> </span>build<span class="w"
             
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on Mar 28, 2025 2:00:37 AM</div>
+              Last updated on Apr 3, 2025 12:06:55 PM</div>
           </div>
           <div class="right-details">
             <div class="icons">
@@ -464,6 +500,7 @@ cmake<span class="w"> </span>--build<span class="w"> </span>build<span class="w"
           <div class="toc-tree">
             <ul>
 <li><a class="reference internal" href="#">Documentation Guide</a><ul>
+<li><a class="reference internal" href="#dependencies">Dependencies</a></li>
 <li><a class="reference internal" href="#directory-structure">Directory Structure</a></li>
 <li><a class="reference internal" href="#building-documentation">Building Documentation</a></li>
 <li><a class="reference internal" href="#how-it-works">How It Works</a></li>
