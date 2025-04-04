@@ -264,7 +264,7 @@ ResultPtr evaluate(Node const& node,  //
         auto stat = log::EvalStat{.mode = log::EvalMode::MultByPhase,
                                   .time = time,
                                   .memory = log::bytes(res, post)};
-        log::eval(stat, node->label());
+        log::eval(stat, std::format("{} * {}", phase, node->label()));
       }
       return post;
     };
