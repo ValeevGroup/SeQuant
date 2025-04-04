@@ -1075,4 +1075,22 @@ TEST_CASE("tensor_network_v2", "[elements]") {
       // std::wcout << oss.str() << std::endl;
     }
   }
+
+  SECTION("debug") {
+    auto const prod1 =
+        parse_expr(L"g{i_2,i_3;a_2,a_3}:A-C-S * t{a_2;i_2}:A-C-S")
+            ->as<Product>();
+    auto const prod2 =
+        parse_expr(L"g{i_2,i_3;a_2,a_3}:A-C-S * t{a_2;i_3}:A-C-S")
+            ->as<Product>();
+
+    auto tn1 = TensorNetworkV2(prod1.factors());
+    auto tn2 = TensorNetworkV2(prod2.factors());
+    auto const canon1 =
+        tn1.canonicalize_slots(TensorCanonicalizer::cardinal_tensor_labels());
+    auto const canon2 =
+        tn2.canonicalize_slots(TensorCanonicalizer::cardinal_tensor_labels());
+    REQUIRE(canon1.hash_value() == canon2.hash_value());
+    CHECK_FALSE(canon1.phase == canon2.phase);
+  }
 }
