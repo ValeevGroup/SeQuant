@@ -60,12 +60,14 @@ void SequantEvalScf::scf(std::basic_ostream<wchar_t>& log) {
   };
 
   if (info_.log_opts.level > 0) log << header_str << std::endl;
+  Logger::instance().eval.stream = &std::cout;
 
   double ediff = 0;
   double norm_diff = 0;
   size_t iter = 0;
   do {
     auto t_beg_iter = HRC::now();
+    Logger::instance().eval.level = iter == 0 ? 1 : 0;
 
     ++iter;
     reset_cache();

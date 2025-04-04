@@ -9,8 +9,9 @@
 #include <options.hpp>
 
 #include <SeQuant/core/container.hpp>
+#include <SeQuant/core/eval_expr.hpp>
 #include <SeQuant/core/optimize.hpp>
-#include <SeQuant/domain/eval/eval.hpp>
+#include <SeQuant/domain/eval/cache_manager.hpp>
 #include <SeQuant/domain/mbpt/spin.hpp>
 
 #include <range/v3/view.hpp>
