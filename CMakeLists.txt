@@ -149,6 +149,7 @@ check_cxx_execution_header(SEQUANT)
 
 # Ranges-V3
 include(FindOrFetchRangeV3)
+set(RANGE_V3_DOCS OFF) # Disable cloning of range-v3 docs repo
 
 # Boost will be added after defining SeQuant
 include(external/boost.cmake)
