@@ -96,13 +96,19 @@ reference state, respectively. To simplify symbolic manipulation of such express
 to define their set-theoretic relationships. The following example illustrates the full space denoted by :math:`p` partitioned into occupied :math:`i`
 and unoccupied :math:`a` base subspaces:
 
-.. literalinclude:: /examples/user/getting_started/index_space_registry_1.cpp
+.. literalinclude:: /examples/user/getting_started/index_space_registry.cpp
    :language: cpp
+   :start-after: start-snippet-1
+   :end-before: end-snippet-1
+   :dedent: 2
 
 This and other vocabularies commonly used in quantum many-body context are supported out-of-the-box by SeQuant; their definitions are in :code:`SeQuant/domain/mbpt/convention.hpp`. The previous example is equivalent to the following:
 
-.. literalinclude:: /examples/user/getting_started/index_space_registry_2.cpp
+.. literalinclude:: /examples/user/getting_started/index_space_registry.cpp
    :language: cpp
+   :start-after: start-snippet-2
+   :end-before: end-snippet-2
+   :dedent: 2
 
 Bitset representation of index spaces allows to define set-theoretic operations naturally. Bitset-based representation is used not only for index space *type* attribute (:code:`IndexSpace::Type`) but also for the *quantum numbers* attribute (:code:`IndexSpace::QuantumNumbers`). The latter can be used to represent spin quantum numbers, particle types, etc.
 The main difference of the last example with the original example is that the :code:`make_min_sr_spaces()` factory changes the quantum numbers used by default (:code:`mbpt::Spin::any`) to make spin algebraic manipulations (like tracing out spin degrees of freedom) easier. Users can create their own definitions to suit their needs, but the vast majority of users will not need to venture outside of the predefined vocabularies.
