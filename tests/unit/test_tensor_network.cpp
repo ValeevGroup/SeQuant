@@ -2,6 +2,7 @@
 // Created by Eduard Valeyev on 3/23/18.
 //
 
+#include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
 
 #include "catch2_sequant.hpp"
@@ -48,6 +49,35 @@
 
 #include <SeQuant/core/timer.hpp>
 #include <range/v3/all.hpp>
+
+using namespace sequant;
+
+TEMPLATE_TEST_CASE("tensor_network_shared", "[elements]", TensorNetwork,
+                   TensorNetworkV2) {
+  using TN = TestType;
+
+  SECTION("canonicalize_slots") {
+    SECTION("phase_difference") {
+      const Product prod1 =
+          parse_expr(L"g{i_2,i_3;a_2,a_3}:A-C-S * t{a_2;i_2}:A-C-S")
+              ->as<Product>();
+      const Product prod2 =
+          parse_expr(L"g{i_2,i_3;a_2,a_3}:A-C-S * t{a_2;i_3}:A-C-S")
+              ->as<Product>();
+
+      TN tn1(prod1.factors());
+      TN tn2(prod2.factors());
+
+      const auto& canon1 =
+          tn1.canonicalize_slots(TensorCanonicalizer::cardinal_tensor_labels());
+      const auto& canon2 =
+          tn2.canonicalize_slots(TensorCanonicalizer::cardinal_tensor_labels());
+
+      REQUIRE(canon1.hash_value() == canon2.hash_value());
+      REQUIRE(canon1.phase != canon2.phase);
+    }
+  }
+}
 
 TEST_CASE("tensor_network", "[elements]") {
   using namespace sequant;
