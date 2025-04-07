@@ -229,6 +229,20 @@ ExprPtr make_tensor(Args&&... args) {
   return ex<Tensor>(label_tensor, std::forward<Args>(args)...);
 }
 
+ExprPtr make_tensor(Tensor const& t, bool with_symm) {
+  return with_symm ? ex<Tensor>(label_tensor,           //
+                                bra(t.bra()),           //
+                                ket(t.ket()),           //
+                                aux(t.aux()),           //
+                                t.symmetry(),           //
+                                t.braket_symmetry(),    //
+                                t.particle_symmetry())  //
+                   : ex<Tensor>(label_tensor,           //
+                                bra(t.bra()),           //
+                                ket(t.ket()),           //
+                                aux(t.aux()));
+}
+
 ExprPtr make_variable() { return ex<Variable>(label_scalar); }
 
 }  // namespace dummy
@@ -368,11 +382,17 @@ EvalExprNode binarize(Product const& prod) {
     auto left = fold_left_to_node(factors | move, make_prod);
     auto right = binarize(Constant{prod.scalar()});
 
+    auto expr = left->is_tensor()     ? dummy::make_tensor(left->as_tensor(),
+                                                           /*with_symm = */ false)
+                : left->is_constant() ? (left->expr() * right->expr())
+                                      : dummy::make_variable();
+    auto type = left->is_tensor() ? ResultType::Tensor : ResultType::Scalar;
+
     auto h = left->hash_value();
     hash::combine(h, right->hash_value());
     auto result = EvalExpr{EvalOp::Product,        //
-                           left->result_type(),    //
-                           left->expr(),           //
+                           type,                   //
+                           expr,                   //
                            left->canon_indices(),  //
                            1,                      //
                            h};
