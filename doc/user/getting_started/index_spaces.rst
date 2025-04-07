@@ -40,26 +40,33 @@ In most cases we are interested in using SeQuant to manipulate expressions invol
 
 .. literalinclude:: /examples/user/getting_started/index_spaces.cpp
    :language: cpp
+   :start-after: start-snippet-1
+   :end-before: end-snippet-1
+   :dedent: 2
 
 However, to deal with the single-product vacuum it is necessary to register at least one space and announce it as occupied in the vacuum state:
 
-.. code-block:: c++
-
-    isr.add(L"y", 0b01).vacuum_occupied_space(L"i");
+.. literalinclude:: /examples/user/getting_started/index_spaces.cpp
+   :language: cpp
+   :start-after: start-snippet-2
+   :end-before: end-snippet-2
+   :dedent: 2
 
 or, shorter,
 
-.. code-block:: c++
-
-    isr.add(L"y", 0b01, is_vacuum_occupied);
+.. literalinclude:: /examples/user/getting_started/index_spaces.cpp
+   :language: cpp
+   :start-after: start-snippet-3
+   :end-before: end-snippet-3
+   :dedent: 2
 
 It is also necessary to specify the *complete* space (union of all base spaces) so that the the space of unoccupied SP states can be determined:
 
-.. code-block:: c++
-
-    isr.add(L"y", 0b01, is_vacuum_occupied)
-       .add(L"z", 0b10)
-       .add(L"p", 0b11, is_complete);
+.. literalinclude:: /examples/user/getting_started/index_spaces.cpp
+   :language: cpp
+   :start-after: start-snippet-4
+   :end-before: end-snippet-4
+   :dedent: 2
 
 The Wick's theorem code itself is independent of the choice of vacuum:
 
