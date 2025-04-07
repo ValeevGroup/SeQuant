@@ -48,9 +48,9 @@ Useful CMake Variables
    * - CMake Variable
      - Default
      - Description
-   * - `BUILD_TESTING <https://cmake.org/cmake/help/latest/module/CTest.html>`_
-     - ON
-     - Enables unit tests targets, e.g. `check-sequant`.
+   * - SEQUANT_TESTS
+     - BUILD_TESTING
+     - Enables test targets, e.g. `check-sequant`.
    * - `CMAKE_CXX_COMPILER <https://cmake.org/cmake/help/latest/variable/CMAKE_LANG_COMPILER.html#variable:CMAKE_%3CLANG%3E_COMPILER>`_
      -
      - Specifies the C++ compiler to use.
