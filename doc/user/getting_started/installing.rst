@@ -65,7 +65,7 @@ Useful CMake Variables
      - Use `mimalloc <https://github.com/microsoft/mimalloc>`_ for fast memory allocation.
    * - SEQUANT_BUILD_DOCS
      - OFF
-     - Enables building of the documentation. See :ref:`/developer/documentation` for detailed information.
+     - Enables building of the documentation. See :ref:`documentation-guide` for detailed information.
    * - SEQUANT_PYTHON
      - OFF
      - Enables building of Python bindings.
