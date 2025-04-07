@@ -48,9 +48,6 @@ Useful CMake Variables
    * - CMake Variable
      - Default
      - Description
-   * - SEQUANT_TESTS
-     - BUILD_TESTING
-     - Enables test targets, e.g. `check-sequant`.
    * - `CMAKE_CXX_COMPILER <https://cmake.org/cmake/help/latest/variable/CMAKE_LANG_COMPILER.html#variable:CMAKE_%3CLANG%3E_COMPILER>`_
      -
      - Specifies the C++ compiler to use.
@@ -60,6 +57,9 @@ Useful CMake Variables
    * - `CMAKE_INSTALL_PREFIX <https://cmake.org/cmake/help/latest/variable/CMAKE_INSTALL_PREFIX.html>`_
      -
      - The installation path for SeQuant.
+   * - SEQUANT_TESTS
+     - `BUILD_TESTING <https://cmake.org/cmake/help/latest/variable/BUILD_TESTING.html>`_
+     - Enables test targets, e.g. `check-sequant`.
    * - SEQUANT_MIMALLOC
      - OFF
      - Use `mimalloc <https://github.com/microsoft/mimalloc>`_ for fast memory allocation.
@@ -69,15 +69,15 @@ Useful CMake Variables
    * - SEQUANT_PYTHON
      - OFF
      - Enables building of Python bindings.
-   * - Boost_FETCH_IF_MISSING
-     - OFF
-     - If set to ON, SeQuant will download and build Boost if it is not found by `find_package(Boost ...)`; this is not recommended.
    * - SEQUANT_USE_SYSTEM_BOOST_HASH
      - ON
      - Use system Boost for hashing? Set to OFF to make hashing independent of Boost, thus value-portable
    * - SEQUANT_IWYU
      - OFF
      - Whether to use the `include-what-you-use <https://github.com/include-what-you-use/include-what-you-use>`_ tool (if found)
+   * - Boost_FETCH_IF_MISSING
+     - OFF
+     - If set to ON, SeQuant will download and build Boost if it is not found by `find_package(Boost ...)`; this is not recommended.
    * - ENABLE_TBB
      - OFF
      - Enable TBB as an optional prerequisite for C++'s parallel STL
