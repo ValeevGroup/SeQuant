@@ -1,5 +1,5 @@
 Documentation Guide
-========================
+====================
 
 SeQuant uses a combination of `Doxygen <https://www.doxygen.nl/>`_, `Sphinx <https://www.sphinx-doc.org/en/master/>`_ and
 `Breathe <https://breathe.readthedocs.io/en/latest/>`_ to build documentation. For building the documentation locally, configure CMake with
@@ -43,10 +43,8 @@ After all dependencies are installed, you can build the documentation using ``CM
 
 .. code-block:: bash
 
-    mkdir build
-    cd build
-    cmake -DSEQUANT_BUILD_DOCS=ON ..
-    cmake --build . --target doc-sequant
+    cmake -B build -S . -DSEQUANT_BUILD_DOCS=ON ..
+    cmake --build . --target html-sequant
 
 This will generate both Doxygen and Sphinx documentation. The output directories are:
 
