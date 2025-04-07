@@ -17,6 +17,7 @@
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/tensor_network/vertex_painter.hpp>
 #include <SeQuant/core/tensor_network_v2.hpp>
+#include <SeQuant/core/utility/swap.hpp>
 #include <SeQuant/core/utility/tuple.hpp>
 #include <SeQuant/core/wstring.hpp>
 
@@ -835,15 +836,13 @@ TensorNetworkV2::canonicalize_slots(
   // - Determine this phase change by determining the parity of index
   //   permutations required to arrive at canonical form
   metadata.phase = 1;
-  container::vector<std::size_t> vertices;
+  container::svector<SwapCountable<std::size_t>> vertices;
   for (const AbstractTensor &tensor : tensors_ | ranges::views::indirect) {
     if (symmetry(tensor) != Symmetry::antisymm) {
       // Only antisymmetric tensors (or rather: their indices) can incur a phase
       // change due to index permutation
       continue;
     }
-
-    vertices.clear();
 
     // Note that the current assumption is that auxiliary indices don't have
     // permutational symmetry, let alone being antisymmetric. Hence, we don't
@@ -861,16 +860,17 @@ TensorNetworkV2::canonicalize_slots(
         continue;
       }
 
+      vertices.clear();
       vertices.reserve(n_indices);
 
       for (const Index &idx : indices) {
         const std::size_t vertex = idx_to_vertex.at(idx);
-        vertices.push_back(canonize_perm[vertex]);
+        vertices.emplace_back(canonize_perm[vertex]);
       }
 
       reset_ts_swap_counter<std::size_t>();
       bubble_sort(vertices.begin(), vertices.end());
-      if (ts_swap_counter_is_even<std::size_t>()) {
+      if (!ts_swap_counter_is_even<std::size_t>()) {
         // Performed an uneven amount of pairwise exchanges -> this incurs a
         // phase change
         metadata.phase *= -1;
