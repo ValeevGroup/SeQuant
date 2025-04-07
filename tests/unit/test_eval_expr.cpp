@@ -129,14 +129,16 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
 
   SECTION("result expr") {
     ExprPtr expr = parse_expr(L"2 var");
-    ExprPtr res = binarize(expr)->expr();
-    REQUIRE(res->is<Variable>());
-    REQUIRE(*res != *expr);
+    auto node = binarize(expr);
+    REQUIRE(node->expr().is<Variable>());
+    REQUIRE_FALSE(node->label() == node.left()->label());
+    REQUIRE_FALSE(node->label() == node.right()->label());
 
     expr = parse_expr(L"2 t{a1;i1}");
-    res = binarize(expr)->expr();
-    REQUIRE(res->is<Tensor>());
-    REQUIRE(*res != *expr);
+    node = binarize(expr);
+    REQUIRE(node->expr().is<Tensor>());
+    REQUIRE_FALSE(node->label() == node.left()->label());
+    REQUIRE_FALSE(node->label() == node.right()->label());
   }
 
   SECTION("Sequant expression") {
