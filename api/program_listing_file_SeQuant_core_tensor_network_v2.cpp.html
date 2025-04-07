@@ -290,6 +290,7 @@
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;SeQuant/core/tensor_canonicalizer.hpp&gt;</span>
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;SeQuant/core/tensor_network/vertex_painter.hpp&gt;</span>
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;SeQuant/core/tensor_network_v2.hpp&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;SeQuant/core/utility/swap.hpp&gt;</span>
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;SeQuant/core/utility/tuple.hpp&gt;</span>
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;SeQuant/core/wstring.hpp&gt;</span>
 
@@ -1102,15 +1103,13 @@
 <span class="w">  </span><span class="c1">// - Determine this phase change by determining the parity of index</span>
 <span class="w">  </span><span class="c1">//   permutations required to arrive at canonical form</span>
 <span class="w">  </span><span class="n">metadata</span><span class="p">.</span><span class="n">phase</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">;</span>
-<span class="w">  </span><span class="n">container</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="o">&gt;</span><span class="w"> </span><span class="n">vertices</span><span class="p">;</span>
+<span class="w">  </span><span class="n">container</span><span class="o">::</span><span class="n">svector</span><span class="o">&lt;</span><span class="n">SwapCountable</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="o">&gt;&gt;</span><span class="w"> </span><span class="n">vertices</span><span class="p">;</span>
 <span class="w">  </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">AbstractTensor</span><span class="w"> </span><span class="o">&amp;</span><span class="n">tensor</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">tensors_</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="n">ranges</span><span class="o">::</span><span class="n">views</span><span class="o">::</span><span class="n">indirect</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
 <span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">symmetry</span><span class="p">(</span><span class="n">tensor</span><span class="p">)</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="n">Symmetry</span><span class="o">::</span><span class="n">antisymm</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
 <span class="w">      </span><span class="c1">// Only antisymmetric tensors (or rather: their indices) can incur a phase</span>
 <span class="w">      </span><span class="c1">// change due to index permutation</span>
 <span class="w">      </span><span class="k">continue</span><span class="p">;</span>
 <span class="w">    </span><span class="p">}</span>
-
-<span class="w">    </span><span class="n">vertices</span><span class="p">.</span><span class="n">clear</span><span class="p">();</span>
 
 <span class="w">    </span><span class="c1">// Note that the current assumption is that auxiliary indices don&#39;t have</span>
 <span class="w">    </span><span class="c1">// permutational symmetry, let alone being antisymmetric. Hence, we don&#39;t</span>
@@ -1128,16 +1127,17 @@
 <span class="w">        </span><span class="k">continue</span><span class="p">;</span>
 <span class="w">      </span><span class="p">}</span>
 
+<span class="w">      </span><span class="n">vertices</span><span class="p">.</span><span class="n">clear</span><span class="p">();</span>
 <span class="w">      </span><span class="n">vertices</span><span class="p">.</span><span class="n">reserve</span><span class="p">(</span><span class="n">n_indices</span><span class="p">);</span>
 
 <span class="w">      </span><span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">Index</span><span class="w"> </span><span class="o">&amp;</span><span class="n">idx</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">indices</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
 <span class="w">        </span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">vertex</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">idx_to_vertex</span><span class="p">.</span><span class="n">at</span><span class="p">(</span><span class="n">idx</span><span class="p">);</span>
-<span class="w">        </span><span class="n">vertices</span><span class="p">.</span><span class="n">push_back</span><span class="p">(</span><span class="n">canonize_perm</span><span class="p">[</span><span class="n">vertex</span><span class="p">]);</span>
+<span class="w">        </span><span class="n">vertices</span><span class="p">.</span><span class="n">emplace_back</span><span class="p">(</span><span class="n">canonize_perm</span><span class="p">[</span><span class="n">vertex</span><span class="p">]);</span>
 <span class="w">      </span><span class="p">}</span>
 
 <span class="w">      </span><span class="n">reset_ts_swap_counter</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="o">&gt;</span><span class="p">();</span>
 <span class="w">      </span><span class="n">bubble_sort</span><span class="p">(</span><span class="n">vertices</span><span class="p">.</span><span class="n">begin</span><span class="p">(),</span><span class="w"> </span><span class="n">vertices</span><span class="p">.</span><span class="n">end</span><span class="p">());</span>
-<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">ts_swap_counter_is_even</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="o">&gt;</span><span class="p">())</span><span class="w"> </span><span class="p">{</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">ts_swap_counter_is_even</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="o">&gt;</span><span class="p">())</span><span class="w"> </span><span class="p">{</span>
 <span class="w">        </span><span class="c1">// Performed an uneven amount of pairwise exchanges -&gt; this incurs a</span>
 <span class="w">        </span><span class="c1">// phase change</span>
 <span class="w">        </span><span class="n">metadata</span><span class="p">.</span><span class="n">phase</span><span class="w"> </span><span class="o">*=</span><span class="w"> </span><span class="mi">-1</span><span class="p">;</span>
@@ -1644,7 +1644,7 @@
             
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on Apr 7, 2025 9:02:55 AM</div>
+              Last updated on Apr 7, 2025 10:30:13 AM</div>
           </div>
           <div class="right-details">
             <div class="icons">

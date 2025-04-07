@@ -40,6 +40,8 @@ Included By
 
 - :ref:`file_SeQuant_core_index.hpp`
 
+- :ref:`file_SeQuant_core_tensor_network_v2.cpp`
+
 - :ref:`file_SeQuant_domain_mbpt_spin.cpp`
 
 
