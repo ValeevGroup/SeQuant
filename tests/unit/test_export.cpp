@@ -123,7 +123,17 @@ std::set<std::string> known_format_names(std::tuple<Generator...> generators) {
 
 void configure_context_defaults(TextGeneratorContext &ctx) {}
 
-void configure_context_defaults(ItfGeneratorContext &ctx) {}
+void configure_context_defaults(ItfGeneratorContext &ctx) {
+  auto registry = get_default_context().index_space_registry();
+  IndexSpace occ = registry->retrieve("i");
+  IndexSpace virt = registry->retrieve("a");
+
+  ctx.set_tag(occ, "c");
+  ctx.set_tag(virt, "e");
+
+  ctx.set_name(occ, "Closed");
+  ctx.set_name(virt, "External");
+}
 
 void configure_context_defaults(JuliaTensorOperationsGeneratorContext &ctx) {
   auto registry = get_default_context().index_space_registry();

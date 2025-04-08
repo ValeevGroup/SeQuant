@@ -33,6 +33,7 @@ class Generator {
   virtual std::string get_format_name() const = 0;
 
   virtual bool supports_named_sections() const = 0;
+  virtual bool requires_named_sections() const = 0;
 
   virtual DeclarationScope index_declaration_scope() const = 0;
   virtual DeclarationScope variable_declaration_scope() const = 0;

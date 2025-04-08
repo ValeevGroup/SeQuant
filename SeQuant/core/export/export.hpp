@@ -695,11 +695,17 @@ void export_groups(Range groups, Generator<Context> &generator,
   // Now initiate the actual code generation
   std::size_t pp_idx = 0;
   for (ExpressionGroup<T> &current_group : groups) {
-    bool end_section = false;
-    if (generator.supports_named_sections() && current_group.is_named()) {
-      ctx.set_current_section_name(current_group.name());
-      generator.begin_named_section(current_group.name(), ctx);
-      end_section = true;
+    std::string section_name;
+    if (generator.supports_named_sections()) {
+      if (current_group.is_named()) {
+        ctx.set_current_section_name(current_group.name());
+        generator.begin_named_section(current_group.name(), ctx);
+        section_name = current_group.name();
+      } else if (generator.requires_named_sections()) {
+        section_name = "unnamed";
+        ctx.set_current_section_name(section_name);
+        generator.begin_named_section(section_name, ctx);
+      }
     }
 
     // Handle section-level declarations
@@ -716,8 +722,8 @@ void export_groups(Range groups, Generator<Context> &generator,
       pp_idx++;
     }
 
-    if (end_section) {
-      generator.end_named_section(current_group.name(), ctx);
+    if (!section_name.empty()) {
+      generator.end_named_section(section_name, ctx);
     }
 
     ctx.clear_current_section_name();

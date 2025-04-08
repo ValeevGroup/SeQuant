@@ -1,9 +1,11 @@
 #ifndef SEQUANT_CORE_EXPORT_ITFGENERATOR_HPP
 #define SEQUANT_CORE_EXPORT_ITFGENERATOR_HPP
 
+#include <SeQuant/core/container.hpp>
 #include <SeQuant/core/export/context.hpp>
 #include <SeQuant/core/export/generator.hpp>
 #include <SeQuant/core/export/text_generator.hpp>
+#include <SeQuant/core/export/utils.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/space.hpp>
@@ -11,7 +13,6 @@
 #include <SeQuant/core/utility/string.hpp>
 
 #include <cassert>
-#include <map>
 #include <optional>
 #include <sstream>
 #include <string>
@@ -21,8 +22,11 @@ namespace sequant {
 
 class ItfGeneratorContext : public ExportContext {
  public:
-  using TagMap = std::map<IndexSpace, std::string>;
-  using NameMap = std::map<IndexSpace, std::string>;
+  using TagMap = container::map<IndexSpace, std::string>;
+  using NameMap = container::map<IndexSpace, std::string>;
+  using TensorImportMap =
+      container::map<Tensor, std::string, TensorBlockCompare>;
+  using VariableImportMap = container::map<Variable, std::string>;
 
   ItfGeneratorContext() = default;
   ~ItfGeneratorContext() = default;
@@ -36,9 +40,21 @@ class ItfGeneratorContext : public ExportContext {
   std::optional<std::string> import_name(const Tensor &tensor) const;
   std::optional<std::string> import_name(const Variable &variable) const;
 
+  void set_name(const IndexSpace &space, std::string name);
+
+  void set_tag(const IndexSpace &space, std::string tag);
+
+  void set_import_name(const Tensor &tensor, std::string name);
+  void set_import_name(const Variable &variable, std::string name);
+
+  bool rewrite(Tensor &tensor) const override;
+
  private:
-  TagMap m_index_tags;
   NameMap m_space_names;
+  TagMap m_tags;
+  TensorImportMap m_tensor_imports;
+  VariableImportMap m_variable_imports;
+  container::map<IndexSpace, char> m_index_label_limits;
 };
 
 template <typename Context = ItfGeneratorContext>
@@ -50,6 +66,8 @@ class ItfGenerator : public Generator<Context> {
   std::string get_format_name() const override { return "ITF"; }
 
   bool supports_named_sections() const override { return true; }
+
+  bool requires_named_sections() const override { return true; }
 
   DeclarationScope index_declaration_scope() const override {
     return DeclarationScope::Global;
@@ -241,18 +259,18 @@ class ItfGenerator : public Generator<Context> {
 
   void all_indices_declared(std::size_t amount, const Context &ctx) override {
     if (amount > 0) {
-      m_generated += "\n\n";
+      m_generated += "\n";
     }
   }
 
   void all_variables_declared(std::size_t amount, const Context &ctx) override {
-    if (amount > 0 && !ctx.inside_named_section()) {
+    if (amount > 0) {
       m_generated += "\n";
     }
   }
 
   void all_tensors_declared(std::size_t amount, const Context &ctx) override {
-    if (amount > 0 && !ctx.inside_named_section()) {
+    if (amount > 0) {
       m_generated += "\n";
     }
   }
@@ -265,7 +283,7 @@ class ItfGenerator : public Generator<Context> {
 
   void end_declarations(DeclarationScope scope, const Context &ctx) override {
     if (scope == DeclarationScope::Global) {
-      m_generated += "\n\n";
+      m_generated += "\n";
     }
   }
 

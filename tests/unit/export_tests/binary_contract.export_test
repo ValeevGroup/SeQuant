@@ -57,3 +57,28 @@ A_vo = nothing
 return I_oo
 
 =================================================
+ITF
+=================================================
+---- decl
+index-space: j, Closed, c
+index-space: k, Closed, c
+index-space: b, External, e
+
+tensor: A:ec[bk], !Create{type:disk}
+tensor: B:ce[jb], !Create{type:disk}
+tensor: I:cc[jk], !Create{type:disk}
+
+
+---- code("unnamed")
+alloc I:cc[jk]
+load A:ec[bk]
+load B:ce[jb]
+.I:cc[jk] += A:ec[bk] B:ce[jb]
+drop B:ce[jb]
+drop A:ec[bk]
+store I:cc[jk]
+
+
+---- end
+
+=================================================

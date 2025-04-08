@@ -25,6 +25,8 @@ class TextGenerator : public Generator<Context> {
 
   bool supports_named_sections() const override { return true; }
 
+  bool requires_named_sections() const override { return false; }
+
   DeclarationScope index_declaration_scope() const override {
     return DeclarationScope::Global;
   }

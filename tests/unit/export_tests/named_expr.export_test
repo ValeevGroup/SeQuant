@@ -22,3 +22,30 @@ Unload g[i_1, i_2, a_1, a_2]
 Persist ECC
 
 =================================================
+ITF
+=================================================
+---- decl
+index-space: j, Closed, c
+index-space: k, Closed, c
+index-space: b, External, e
+index-space: c, External, e
+
+tensor: ECC[], !Create{type:scalar}
+
+tensor: K:eecc[bcjk], !Create{type:disk}
+tensor: t:eecc[bcjk], !Create{type:disk}
+
+
+---- code("unnamed")
+alloc ECC[]
+load K:eecc[bcjk]
+load t:eecc[bcjk]
+.ECC[] += K:eecc[bcjk] t:eecc[bcjk]
+drop t:eecc[bcjk]
+drop K:eecc[bcjk]
+store ECC[]
+
+
+---- end
+
+=================================================

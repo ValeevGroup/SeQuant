@@ -53,6 +53,8 @@ class JuliaTensorOperationsGenerator : public Generator<Context> {
 
   bool supports_named_sections() const override { return false; }
 
+  bool requires_named_sections() const override { return false; }
+
   DeclarationScope index_declaration_scope() const override {
     return DeclarationScope::Global;
   }
