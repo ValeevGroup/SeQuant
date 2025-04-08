@@ -29,6 +29,11 @@ int main() {
   // end-snippet-3
 
   // start-snippet-4
+  auto c_htt_v1 =
+      ex<Constant>(rational(1, 2)) * commutator(commutator(H, t2), t2);
+  // end-snippet-4
+
+  // start-snippet-5
   auto t2_0 = ex<Constant>(rational(1, 4)) *
               ex<Tensor>(L"t", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"},
                          Symmetry::antisymm) *
@@ -41,7 +46,7 @@ int main() {
 
   auto c_htt =
       ex<Constant>(rational(1, 4)) * commutator(commutator(H, t2_0), t2_1);
-  // end-snippet-4
+  // end-snippet-5
 
   return 0;
 }
