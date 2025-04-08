@@ -40,9 +40,11 @@ Commutator of the Hamiltonian and cluster operator is trivially composed:
 Note the use of :code:`simplify` to rewrite an expression in a simpler form. Its role will be emphasized later.
 Unfortunately, we immediately run into the limitation of the "pedestrian" approach. Namely, the double commutator cannot be correctly obtained as
 
-.. code-block:: c++
-
-    auto c_htt = ex<Constant>(rational(1, 2)) * commutator(commutator(H, t2), t2);
+.. literalinclude:: /examples/user/getting_started/ccd_pedestrian.cpp
+   :language: cpp
+   :start-after: start-snippet-4
+   :end-before: end-snippet-4
+   :dedent: 2
 
 due to the explicit use of specific dummy indices in the definition of :code:`t2`. Using it more than once in a given product will produce an expresson where each dummy index appears more than 2 times, breaking the Einstein summation convention.
 
@@ -51,8 +53,8 @@ to use :math:`\hat{t}_2` more than once in an expression we must make several ve
 
 .. literalinclude:: /examples/user/getting_started/ccd_pedestrian.cpp
    :language: cpp
-   :start-after: start-snippet-4
-   :end-before: end-snippet-4
+   :start-after: start-snippet-5
+   :end-before: end-snippet-5
    :dedent: 2
 
 This is too error-prone for making complex expressions. A better way is to represent :math:`\hat{t}_2` by an object that generates tensor form with unique dummy indices generated on the fly. in SeQuant such MBPT *operators* live in :code:`mbpt` namespace. The entire CCD amplitude equation is evaluated as follows:

@@ -310,7 +310,8 @@ Commutator of the Hamiltonian and cluster operator is trivially composed:</p>
 </div>
 <p>Note the use of <code class="code docutils literal notranslate"><span class="pre">simplify</span></code> to rewrite an expression in a simpler form. Its role will be emphasized later.
 Unfortunately, we immediately run into the limitation of the “pedestrian” approach. Namely, the double commutator cannot be correctly obtained as</p>
-<div class="highlight-c++ notranslate"><div class="highlight"><pre><span></span><span class="k">auto</span><span class="w"> </span><span class="n">c_htt</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ex</span><span class="o">&lt;</span><span class="n">Constant</span><span class="o">&gt;</span><span class="p">(</span><span class="n">rational</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">))</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">commutator</span><span class="p">(</span><span class="n">commutator</span><span class="p">(</span><span class="n">H</span><span class="p">,</span><span class="w"> </span><span class="n">t2</span><span class="p">),</span><span class="w"> </span><span class="n">t2</span><span class="p">);</span>
+<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="k">auto</span><span class="w"> </span><span class="n">c_htt_v1</span><span class="w"> </span><span class="o">=</span>
+<span class="w">    </span><span class="n">ex</span><span class="o">&lt;</span><span class="n">Constant</span><span class="o">&gt;</span><span class="p">(</span><span class="n">rational</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">))</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">commutator</span><span class="p">(</span><span class="n">commutator</span><span class="p">(</span><span class="n">H</span><span class="p">,</span><span class="w"> </span><span class="n">t2</span><span class="p">),</span><span class="w"> </span><span class="n">t2</span><span class="p">);</span>
 </pre></div>
 </div>
 <p>due to the explicit use of specific dummy indices in the definition of <code class="code docutils literal notranslate"><span class="pre">t2</span></code>. Using it more than once in a given product will produce an expresson where each dummy index appears more than 2 times, breaking the Einstein summation convention.</p>
@@ -422,7 +423,7 @@ R4<span class="o">(</span>expS4<span class="o">)</span><span class="w"> </span>h
             
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on Apr 8, 2025 1:33:48 PM</div>
+              Last updated on Apr 8, 2025 4:33:04 PM</div>
           </div>
           <div class="right-details">
             <div class="icons">

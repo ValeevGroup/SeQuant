@@ -88,21 +88,21 @@ Functions
 
 - :ref:`exhale_function_namespacesequant_1a77b3e24a128d11cf0b016193dd9e68b7`
 
-- :ref:`exhale_function_namespacesequant_1a14ccb9838626818330084a10cdc496b8`
-
 - :ref:`exhale_function_namespacesequant_1ab6e3d096b7f17459531d00a378dc5e80`
 
-- :ref:`exhale_function_namespacesequant_1ac810dbe124845f316ba0ba1a81cf976c`
+- :ref:`exhale_function_namespacesequant_1a14ccb9838626818330084a10cdc496b8`
 
 - :ref:`exhale_function_namespacesequant_1a7ee778d62320741894ca0634ac8112d6`
+
+- :ref:`exhale_function_namespacesequant_1ac810dbe124845f316ba0ba1a81cf976c`
 
 - :ref:`exhale_function_namespacesequant_1aab88def0a915125f5ac45d92ad8ef433`
 
 - :ref:`exhale_function_namespacesequant_1ace7f85eac4293628385605ec35c72106`
 
-- :ref:`exhale_function_namespacesequant_1a871fc070f6d873bd78e2e202a616afea`
-
 - :ref:`exhale_function_namespacesequant_1a89c1a5a9ae96434a872d2211898ecaad`
+
+- :ref:`exhale_function_namespacesequant_1a871fc070f6d873bd78e2e202a616afea`
 
 
 Typedefs
