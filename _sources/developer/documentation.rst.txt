@@ -1,11 +1,13 @@
+.. _documentation-guide:
+
 Documentation Guide
-========================
+====================
 
 SeQuant uses a combination of `Doxygen <https://www.doxygen.nl/>`_, `Sphinx <https://www.sphinx-doc.org/en/master/>`_ and
 `Breathe <https://breathe.readthedocs.io/en/latest/>`_ to build documentation. For building the documentation locally, configure CMake with
 `-DSEQUANT_BUILD_DOCS=ON`.
 
-The ``doc`` directory contains the documentation for SeQuant, including user guides, API references, and advanced internal documentation. The documentation is generated using `Doxygen <https://www.doxygen.nl/>`_ and `Sphinx <https://www.sphinx-doc.org/en/master/>`_ .
+The ``doc`` directory contains the documentation for SeQuant, including user guides, API references, and advanced internal documentation.
 
 Dependencies
 ------------------------------------------------
@@ -17,15 +19,6 @@ Building the documentation requires several Python packages. You can install the
     pip install -r doc/.sphinx/requirements.txt
 
 This will install the required packages, including Sphinx, Breathe, Exhale, and others.
-Now you can build the documentation using CMake. The documentation will be generated in ``doc/html`` under your build directory. You can open the
-``index.html`` file in your web browser to view the documentation.
-
-.. code-block:: bash
-
-    mkdir build
-    cd build
-    cmake -DSEQUANT_BUILD_DOCS=ON ..
-    cmake --build . --target doc-sequant
 
 Directory Structure
 -------------------
@@ -47,12 +40,13 @@ Directory Structure
 Building Documentation
 ----------------------
 
-To build the documentation, run the following commands:
+After all dependencies are installed, you can build the documentation using ``CMake``. The documentation will be generated in ``doc/html`` under your build directory. You can open the
+``index.html`` file in your web browser to view the documentation.
 
 .. code-block:: bash
 
-    cmake -B build
-    cmake --build build --target doc-sequant
+    cmake -B build -S . -DSEQUANT_BUILD_DOCS=ON ..
+    cmake --build . --target html-sequant
 
 This will generate both Doxygen and Sphinx documentation. The output directories are:
 

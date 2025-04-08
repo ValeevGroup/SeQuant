@@ -89,9 +89,9 @@ Functions
 ---------
 
 
-- :ref:`exhale_function_namespacesequant_1abb43df794dbd2663991665437459e8ff`
-
 - :ref:`exhale_function_namespacesequant_1a4e6daa8c05a50598d16b73a24969f6bd`
+
+- :ref:`exhale_function_namespacesequant_1abb43df794dbd2663991665437459e8ff`
 
 - :ref:`exhale_function_namespacesequant_1af94c81c0406c3b6899bdc32dd50aaca0`
 

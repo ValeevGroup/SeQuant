@@ -209,7 +209,9 @@
   <p class="caption" role="heading"><span class="caption-text">User</span></p>
 <ul>
 <li class="toctree-l1 has-children"><a class="reference internal" href="../user/getting_started/index.html">Getting started</a><input class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><div class="visually-hidden">Toggle navigation of Getting started</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
-<li class="toctree-l2"><a class="reference internal" href="../user/getting_started/using.html">Using SeQuant</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user/getting_started/wick.html">Wick’s Theorem</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user/getting_started/index_spaces.html">Register Index Spaces</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user/getting_started/operators.html">Operators</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="../user/getting_started/installing.html">Installation</a></li>
@@ -269,11 +271,11 @@
         </div>
         <article role="main" id="furo-main-content">
           <section id="documentation-guide">
-<h1>Documentation Guide<a class="headerlink" href="#documentation-guide" title="Link to this heading">¶</a></h1>
+<span id="id1"></span><h1>Documentation Guide<a class="headerlink" href="#documentation-guide" title="Link to this heading">¶</a></h1>
 <p>SeQuant uses a combination of <a class="reference external" href="https://www.doxygen.nl/">Doxygen</a>, <a class="reference external" href="https://www.sphinx-doc.org/en/master/">Sphinx</a> and
 <a class="reference external" href="https://breathe.readthedocs.io/en/latest/">Breathe</a> to build documentation. For building the documentation locally, configure CMake with
 <cite>-DSEQUANT_BUILD_DOCS=ON</cite>.</p>
-<p>The <code class="docutils literal notranslate"><span class="pre">doc</span></code> directory contains the documentation for SeQuant, including user guides, API references, and advanced internal documentation. The documentation is generated using <a class="reference external" href="https://www.doxygen.nl/">Doxygen</a> and <a class="reference external" href="https://www.sphinx-doc.org/en/master/">Sphinx</a> .</p>
+<p>The <code class="docutils literal notranslate"><span class="pre">doc</span></code> directory contains the documentation for SeQuant, including user guides, API references, and advanced internal documentation.</p>
 <section id="dependencies">
 <h2>Dependencies<a class="headerlink" href="#dependencies" title="Link to this heading">¶</a></h2>
 <p>Building the documentation requires several Python packages. You can install them using pip. The required packages are listed in the
@@ -281,15 +283,7 @@
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>pip<span class="w"> </span>install<span class="w"> </span>-r<span class="w"> </span>doc/.sphinx/requirements.txt
 </pre></div>
 </div>
-<p>This will install the required packages, including Sphinx, Breathe, Exhale, and others.
-Now you can build the documentation using CMake. The documentation will be generated in <code class="docutils literal notranslate"><span class="pre">doc/html</span></code> under your build directory. You can open the
-<code class="docutils literal notranslate"><span class="pre">index.html</span></code> file in your web browser to view the documentation.</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>mkdir<span class="w"> </span>build
-<span class="nb">cd</span><span class="w"> </span>build
-cmake<span class="w"> </span>-DSEQUANT_BUILD_DOCS<span class="o">=</span>ON<span class="w"> </span>..
-cmake<span class="w"> </span>--build<span class="w"> </span>.<span class="w"> </span>--target<span class="w"> </span>doc-sequant
-</pre></div>
-</div>
+<p>This will install the required packages, including Sphinx, Breathe, Exhale, and others.</p>
 </section>
 <section id="directory-structure">
 <h2>Directory Structure<a class="headerlink" href="#directory-structure" title="Link to this heading">¶</a></h2>
@@ -314,9 +308,10 @@ cmake<span class="w"> </span>--build<span class="w"> </span>.<span class="w"> </
 </section>
 <section id="building-documentation">
 <h2>Building Documentation<a class="headerlink" href="#building-documentation" title="Link to this heading">¶</a></h2>
-<p>To build the documentation, run the following commands:</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>cmake<span class="w"> </span>-B<span class="w"> </span>build
-cmake<span class="w"> </span>--build<span class="w"> </span>build<span class="w"> </span>--target<span class="w"> </span>doc-sequant
+<p>After all dependencies are installed, you can build the documentation using <code class="docutils literal notranslate"><span class="pre">CMake</span></code>. The documentation will be generated in <code class="docutils literal notranslate"><span class="pre">doc/html</span></code> under your build directory. You can open the
+<code class="docutils literal notranslate"><span class="pre">index.html</span></code> file in your web browser to view the documentation.</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>cmake<span class="w"> </span>-B<span class="w"> </span>build<span class="w"> </span>-S<span class="w"> </span>.<span class="w"> </span>-DSEQUANT_BUILD_DOCS<span class="o">=</span>ON<span class="w"> </span>..
+cmake<span class="w"> </span>--build<span class="w"> </span>.<span class="w"> </span>--target<span class="w"> </span>html-sequant
 </pre></div>
 </div>
 <p>This will generate both Doxygen and Sphinx documentation. The output directories are:</p>
@@ -475,7 +470,7 @@ cmake<span class="w"> </span>--build<span class="w"> </span>build<span class="w"
             
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on Apr 7, 2025 10:30:13 AM</div>
+              Last updated on Apr 8, 2025 1:33:48 PM</div>
           </div>
           <div class="right-details">
             <div class="icons">
