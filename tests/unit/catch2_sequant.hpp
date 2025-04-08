@@ -10,12 +10,19 @@
 #include <SeQuant/core/meta.hpp>
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/parse.hpp>
+#include <SeQuant/core/result_expr.hpp>
 #include <SeQuant/core/wstring.hpp>
 #include <SeQuant/domain/mbpt/op.hpp>
 
+#include <range/v3/algorithm.hpp>
+
+#include <algorithm>
 #include <cassert>
+#include <sstream>
 #include <string>
+#include <string_view>
 #include <type_traits>
+#include <variant>
 
 namespace Catch {
 
@@ -69,23 +76,75 @@ struct StringMaker<sequant::Index> {
   }
 };
 
+template <>
+struct StringMaker<sequant::ResultExpr> {
+  static std::string convert(const sequant::ResultExpr &res) {
+    std::stringstream sstream;
+    if (res.has_label()) {
+      sstream << sequant::to_string(res.label());
+    } else {
+      sstream << "?";
+    }
+
+    using IndexString = StringMaker<sequant::Index>;
+    using namespace std::literals;
+    sstream << "{";
+    sstream << (res.bra() | ranges::views::transform(IndexString::convert) |
+                ranges::views::join(", "sv) | ranges::to<std::string>());
+    sstream << ";";
+    sstream << (res.ket() | ranges::views::transform(IndexString::convert) |
+                ranges::views::join(", "sv) | ranges::to<std::string>());
+    sstream << ";";
+    sstream << (res.aux() | ranges::views::transform(IndexString::convert) |
+                ranges::views::join(", "sv) | ranges::to<std::string>());
+    sstream << "}";
+
+    sstream << " = "
+            << StringMaker<sequant::ExprPtr>::convert(res.expression());
+
+    return sstream.str();
+  }
+};
+
 }  // namespace Catch
 
 namespace {
+
+using ExprVar = std::variant<sequant::ExprPtr, sequant::ResultExpr>;
 
 /// Converts the given expression-like object into an actual ExprPtr.
 /// It accepts either an actual expression object (as Expr & or ExprPtr) or
 /// a (w)string-like object which will then be parsed to yield the actual
 /// expression object.
 template <typename T>
-sequant::ExprPtr to_expression(T &&expression) {
+ExprVar to_expression(T &&expression) {
+  using std::begin;
+  using std::end;
+
   if constexpr (std::is_convertible_v<T, std::string>) {
-    return sequant::parse_expr(
-        sequant::to_wstring(std::string(std::forward<T>(expression))),
-        sequant::Symmetry::nonsymm);
+    std::wstring string = sequant::to_wstring(std::forward<T>(expression));
+
+    if (std::find(begin(string), end(string), L'=') != end(string)) {
+      return sequant::parse_result_expr(
+          sequant::to_wstring(std::string(std::forward<T>(expression))),
+          sequant::Symmetry::nonsymm);
+    } else {
+      return sequant::parse_expr(
+          sequant::to_wstring(std::string(std::forward<T>(expression))),
+          sequant::Symmetry::nonsymm);
+    }
   } else if constexpr (std::is_convertible_v<T, std::wstring>) {
-    return sequant::parse_expr(std::wstring(std::forward<T>(expression)),
-                               sequant::Symmetry::nonsymm);
+    if (std::find(begin(expression), end(expression), L'=') !=
+        end(expression)) {
+      return sequant::parse_result_expr(
+          std::wstring(std::forward<T>(expression)),
+          sequant::Symmetry::nonsymm);
+    } else {
+      return sequant::parse_expr(std::wstring(std::forward<T>(expression)),
+                                 sequant::Symmetry::nonsymm);
+    }
+  } else if constexpr (std::is_convertible_v<T, sequant::ResultExpr>) {
+    return expression;
   } else if constexpr (std::is_convertible_v<T, sequant::Expr>) {
     // Clone in order to not have to worry about later modification
     return expression.clone();
@@ -104,29 +163,68 @@ class ExpressionMatcher : public Catch::Matchers::MatcherGenericBase {
   template <typename T>
   ExpressionMatcher(T &&expression)
       : m_expr(to_expression(std::forward<T>(expression))) {
-    assert(m_expr);
-    Subclass::pre_comparison(m_expr);
+    if (std::holds_alternative<sequant::ResultExpr>(m_expr)) {
+      Subclass::pre_comparison(
+          std::get<sequant::ResultExpr>(m_expr).expression());
+    } else {
+      Subclass::pre_comparison(std::get<sequant::ExprPtr>(m_expr));
+    }
   }
 
-  bool match(const sequant::ExprPtr &expr) const { return match(*expr); }
+  bool match(const sequant::ResultExpr &res) const {
+    if (!std::holds_alternative<sequant::ResultExpr>(m_expr)) {
+      return false;
+    }
+
+    const sequant::ResultExpr &self = std::get<sequant::ResultExpr>(m_expr);
+
+    return self.has_label() == res.has_label() && self.label() == res.label() &&
+           self.symmetry() == res.symmetry() &&
+           self.braket_symmetry() == res.braket_symmetry() &&
+           self.particle_symmetry() == res.particle_symmetry() &&
+           do_match(*res.expression());
+  }
+
+  bool match(const sequant::ExprPtr &expr) const {
+    return std::holds_alternative<sequant::ExprPtr>(m_expr) && do_match(*expr);
+  }
 
   bool match(const sequant::Expr &expr) const {
+    return std::holds_alternative<sequant::ExprPtr>(m_expr) && do_match(expr);
+  }
+
+  std::string describe() const override {
+    return Subclass::comparison_requirement() + ": " + stringify(m_expr);
+  }
+
+ protected:
+  ExprVar m_expr;
+
+  bool do_match(const sequant::Expr &expr) const {
     // Never modify the expression that we are trying to check in order to avoid
     // side-effects
     sequant::ExprPtr clone = expr.clone();
 
     Subclass::pre_comparison(clone);
 
-    return *clone == *m_expr;
+    const sequant::Expr &self = [&]() -> const sequant::Expr & {
+      if (std::holds_alternative<sequant::ResultExpr>(m_expr)) {
+        return *std::get<sequant::ResultExpr>(m_expr).expression();
+      }
+
+      return *std::get<sequant::ExprPtr>(m_expr);
+    }();
+
+    return *clone == self;
   }
 
-  std::string describe() const override {
-    return Subclass::comparison_requirement() + ": " +
-           Catch::Detail::stringify(m_expr);
-  }
+  std::string stringify(const ExprVar &expr) const {
+    if (std::holds_alternative<sequant::ResultExpr>(expr)) {
+      return Catch::Detail::stringify(std::get<sequant::ResultExpr>(expr));
+    }
 
- protected:
-  sequant::ExprPtr m_expr;
+    return Catch::Detail::stringify(std::get<sequant::ExprPtr>(expr));
+  }
 };
 
 /// Matches that the tested expression is equivalent to the given one. Two

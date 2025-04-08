@@ -5,15 +5,14 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/op.hpp>
+#include <SeQuant/core/result_expr.hpp>
 #include <SeQuant/core/tensor.hpp>
+#include <SeQuant/core/utility/string.hpp>
 
 #include <range/v3/all.hpp>
 
 #include <cassert>
-#include <codecvt>
 #include <cstddef>
-#include <locale>
-#include <memory>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -100,6 +99,10 @@ std::wstring deparse_symm(ParticleSymmetry symm) {
 }
 
 std::wstring deparse_scalar(const Constant::scalar_type& scalar) {
+  if (scalar == 0) {
+    return L"0";
+  }
+
   const auto& real = scalar.real();
   const auto& realNumerator = boost::multiprecision::numerator(real);
   const auto& realDenominator = boost::multiprecision::denominator(real);
@@ -127,16 +130,9 @@ std::wstring deparse_scalar(const Constant::scalar_type& scalar) {
     }
   }
 
-  SEQUANT_PRAGMA_CLANG(diagnostic push)
-  SEQUANT_PRAGMA_CLANG(diagnostic ignored "-Wdeprecated-declarations")
-  SEQUANT_PRAGMA_GCC(diagnostic push)
-  SEQUANT_PRAGMA_GCC(diagnostic ignored "-Wdeprecated-declarations")
+  assert(!deparsed.empty());
 
-  std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
-  return converter.from_bytes(deparsed);
-
-  SEQUANT_PRAGMA_CLANG(diagnostic pop)
-  SEQUANT_PRAGMA_GCC(diagnostic pop)
+  return to_wstring(deparsed);
 }
 
 }  // namespace details
@@ -165,6 +161,31 @@ std::wstring deparse(const Expr& expr, bool annot_sym) {
     return deparse(expr.as<Variable>());
   else
     throw std::runtime_error("Unsupported expr type for deparse!");
+}
+
+std::wstring deparse(const ResultExpr& result, bool annot_sym) {
+  std::wstring deparsed;
+  if (result.has_label()) {
+    deparsed += result.label();
+  } else {
+    deparsed += L"?";
+  }
+
+  if (!result.bra().empty() || !result.ket().empty()) {
+    deparsed += L"{";
+    deparsed += details::deparse_indices(result.bra());
+    deparsed += L";";
+    deparsed += details::deparse_indices(result.ket());
+    deparsed += L"}";
+
+    if (annot_sym) {
+      deparsed += L":" + details::deparse_symm(result.symmetry()) + L"-" +
+                  details::deparse_symm(result.braket_symmetry()) + L"-" +
+                  details::deparse_symm(result.particle_symmetry());
+    }
+  }
+
+  return deparsed + L" = " + deparse(result.expression(), annot_sym);
 }
 
 std::wstring deparse(const Index& index) {

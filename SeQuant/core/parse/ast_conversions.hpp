@@ -11,6 +11,7 @@
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/parse.hpp>
 #include <SeQuant/core/parse/ast.hpp>
+#include <SeQuant/core/result_expr.hpp>
 #include <SeQuant/core/space.hpp>
 #include <SeQuant/core/tensor.hpp>
 #include <SeQuant/core/utility/string.hpp>
@@ -238,91 +239,91 @@ ExprPtr ast_to_expr(const parse::ast::Sum &sum,
                     const DefaultSymmetries &default_symms);
 
 template <typename PositionCache, typename Iterator>
+struct Transformer {
+  std::reference_wrapper<const PositionCache> position_cache;
+  std::reference_wrapper<const Iterator> begin;
+  std::reference_wrapper<const DefaultSymmetries> default_symms;
+
+  ExprPtr operator()(const parse::ast::Product &product) const {
+    return ast_to_expr<PositionCache>(product, position_cache.get(),
+                                      begin.get(), default_symms.get());
+  }
+
+  ExprPtr operator()(const parse::ast::Sum &sum) const {
+    return ast_to_expr<PositionCache>(sum, position_cache.get(), begin.get(),
+                                      default_symms.get());
+  }
+
+  ExprPtr operator()(const parse::ast::Tensor &tensor) const {
+    auto [braIndices, ketIndices, auxiliaries] =
+        make_indices(tensor.indices, position_cache.get(), begin.get());
+
+    auto [perm_symm, braket_symm, particle_symm] =
+        to_symmetries(tensor.symmetry, default_symms.get(),
+                      position_cache.get(), begin.get());
+
+    // create NormalOperator or Tensor
+    decltype(ranges::begin(FNOperator::labels())) fit;
+    if ((fit = ranges::find(FNOperator::labels(), tensor.name)) !=
+        ranges::end(FNOperator::labels())) {
+      assert(ranges::size(auxiliaries) == 0);
+      assert(!tensor.symmetry.has_value() ||
+             ((tensor.symmetry.value().perm_symm ==
+                   ast::SymmetrySpec::unspecified ||
+               tensor.symmetry.value().perm_symm == 'A') &&
+              (tensor.symmetry.value().particle_symm ==
+                   ast::SymmetrySpec::unspecified ||
+               tensor.symmetry.value().particle_symm == 'S')));
+      Vacuum vac = fit == ranges::begin(FNOperator::labels())
+                       ? Vacuum::Physical
+                       : Vacuum::SingleProduct;
+      return ex<FNOperator>(cre(std::move(ketIndices)),
+                            ann(std::move(braIndices)), vac);
+    }
+    decltype(ranges::begin(BNOperator::labels())) bit;
+    if ((bit = ranges::find(BNOperator::labels(), tensor.name)) !=
+        ranges::end(BNOperator::labels())) {
+      assert(ranges::size(auxiliaries) == 0);
+      assert(!tensor.symmetry.has_value() ||
+             ((tensor.symmetry.value().perm_symm ==
+                   ast::SymmetrySpec::unspecified ||
+               tensor.symmetry.value().perm_symm == 'S') &&
+              (tensor.symmetry.value().particle_symm ==
+                   ast::SymmetrySpec::unspecified ||
+               tensor.symmetry.value().particle_symm == 'S')));
+      Vacuum vac = bit == ranges::begin(BNOperator::labels())
+                       ? Vacuum::Physical
+                       : Vacuum::SingleProduct;
+      return ex<BNOperator>(cre(std::move(ketIndices)),
+                            ann(std::move(braIndices)), vac);
+    }
+    return ex<Tensor>(tensor.name, bra(std::move(braIndices)),
+                      ket(std::move(ketIndices)), aux(std::move(auxiliaries)),
+                      perm_symm, braket_symm, particle_symm);
+  }
+
+  ExprPtr operator()(const parse::ast::Variable &variable) const {
+    ExprPtr var = ex<Variable>(variable.name);
+
+    if (variable.conjugated) {
+      var->as<Variable>().conjugate();
+    }
+
+    return var;
+  }
+
+  ExprPtr operator()(const parse::ast::Number &number) const {
+    return ex<Constant>(to_constant(number, position_cache.get(), begin.get()));
+  }
+};
+
+template <typename PositionCache, typename Iterator>
 ExprPtr ast_to_expr(const parse::ast::NullaryValue &value,
                     const PositionCache &position_cache, const Iterator &begin,
-                    const DefaultSymmetries &default_symms) {
-  struct Transformer {
-    std::reference_wrapper<const PositionCache> position_cache;
-    std::reference_wrapper<const Iterator> begin;
-    std::reference_wrapper<const DefaultSymmetries> default_symms;
-
-    ExprPtr operator()(const parse::ast::Product &product) const {
-      return ast_to_expr<PositionCache>(product, position_cache.get(),
-                                        begin.get(), default_symms.get());
-    }
-
-    ExprPtr operator()(const parse::ast::Sum &sum) const {
-      return ast_to_expr<PositionCache>(sum, position_cache.get(), begin.get(),
-                                        default_symms.get());
-    }
-
-    ExprPtr operator()(const parse::ast::Tensor &tensor) const {
-      auto [braIndices, ketIndices, auxiliaries] =
-          make_indices(tensor.indices, position_cache.get(), begin.get());
-
-      auto [perm_symm, braket_symm, particle_symm] =
-          to_symmetries(tensor.symmetry, default_symms.get(),
-                        position_cache.get(), begin.get());
-
-      // create NormalOperator or Tensor
-      decltype(ranges::begin(FNOperator::labels())) fit;
-      if ((fit = ranges::find(FNOperator::labels(), tensor.name)) !=
-          ranges::end(FNOperator::labels())) {
-        assert(ranges::size(auxiliaries) == 0);
-        assert(!tensor.symmetry.has_value() ||
-               ((tensor.symmetry.value().perm_symm ==
-                     ast::SymmetrySpec::unspecified ||
-                 tensor.symmetry.value().perm_symm == 'A') &&
-                (tensor.symmetry.value().particle_symm ==
-                     ast::SymmetrySpec::unspecified ||
-                 tensor.symmetry.value().particle_symm == 'S')));
-        Vacuum vac = fit == ranges::begin(FNOperator::labels())
-                         ? Vacuum::Physical
-                         : Vacuum::SingleProduct;
-        return ex<FNOperator>(cre(std::move(ketIndices)),
-                              ann(std::move(braIndices)), vac);
-      }
-      decltype(ranges::begin(BNOperator::labels())) bit;
-      if ((bit = ranges::find(BNOperator::labels(), tensor.name)) !=
-          ranges::end(BNOperator::labels())) {
-        assert(ranges::size(auxiliaries) == 0);
-        assert(!tensor.symmetry.has_value() ||
-               ((tensor.symmetry.value().perm_symm ==
-                     ast::SymmetrySpec::unspecified ||
-                 tensor.symmetry.value().perm_symm == 'S') &&
-                (tensor.symmetry.value().particle_symm ==
-                     ast::SymmetrySpec::unspecified ||
-                 tensor.symmetry.value().particle_symm == 'S')));
-        Vacuum vac = bit == ranges::begin(BNOperator::labels())
-                         ? Vacuum::Physical
-                         : Vacuum::SingleProduct;
-        return ex<BNOperator>(cre(std::move(ketIndices)),
-                              ann(std::move(braIndices)), vac);
-      }
-      return ex<Tensor>(tensor.name, bra(std::move(braIndices)),
-                        ket(std::move(ketIndices)), aux(std::move(auxiliaries)),
-                        perm_symm, braket_symm, particle_symm);
-    }
-
-    ExprPtr operator()(const parse::ast::Variable &variable) const {
-      ExprPtr var = ex<Variable>(variable.name);
-
-      if (variable.conjugated) {
-        var->as<Variable>().conjugate();
-      }
-
-      return var;
-    }
-
-    ExprPtr operator()(const parse::ast::Number &number) const {
-      return ex<Constant>(
-          to_constant(number, position_cache.get(), begin.get()));
-    }
-  };
-
+                    DefaultSymmetries default_symms) {
   return boost::apply_visitor(
-      Transformer{std::ref(position_cache), std::ref(begin),
-                  std::ref(default_symms)},
+      Transformer<PositionCache, Iterator>{
+          std::ref(position_cache), std::ref(begin), std::ref(default_symms)},
       value);
 }
 
@@ -396,6 +397,28 @@ ExprPtr ast_to_expr(const parse::ast::Sum &sum,
       });
 
   return ex<Sum>(std::move(summands));
+}
+
+template <typename PositionCache, typename Iterator>
+ResultExpr ast_to_result(const parse::ast::ResultExpr &result,
+                         const PositionCache &position_cache,
+                         const Iterator &begin,
+                         DefaultSymmetries default_symms) {
+  ExprPtr lhs = std::visit(
+      Transformer<PositionCache, Iterator>{
+          std::ref(position_cache), std::ref(begin), std::ref(default_symms)},
+      result.lhs);
+  ExprPtr rhs = ast_to_expr(result.rhs, position_cache, begin, default_symms);
+
+  if (lhs.is<Tensor>()) {
+    return {std::move(lhs.as<Tensor>()), std::move(rhs)};
+  } else if (lhs.is<Variable>()) {
+    return {std::move(lhs.as<Variable>()), std::move(rhs)};
+  } else {
+    auto [offset, length] = get_pos(result.lhs, position_cache, begin);
+    throw ParseError(offset, length,
+                     "LHS of a ResultExpr must be a Tensor or a Variable");
+  }
 }
 
 }  // namespace sequant::parse::transform

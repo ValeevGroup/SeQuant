@@ -5,6 +5,8 @@
 #ifndef SEQUANT_CORE_UTILITY_STRONG_HPP
 #define SEQUANT_CORE_UTILITY_STRONG_HPP
 
+#include <SeQuant/core/meta.hpp>
+
 #include <utility>
 
 namespace sequant::detail {

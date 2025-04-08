@@ -416,6 +416,50 @@ TEST_CASE("parsing", "[parse]") {
     }
   }
 
+  SECTION("parse_result_expr") {
+    using namespace sequant;
+
+    SECTION("constant") {
+      ResultExpr result = parse_result_expr(L"A = 3");
+
+      REQUIRE(result.has_label());
+      REQUIRE(result.label() == L"A");
+      REQUIRE(result.bra().empty());
+      REQUIRE(result.ket().empty());
+      REQUIRE(result.symmetry() == Symmetry::nonsymm);
+      REQUIRE(result.braket_symmetry() == BraKetSymmetry::nonsymm);
+      REQUIRE(result.particle_symmetry() == ParticleSymmetry::nonsymm);
+
+      REQUIRE(result.expression().is<Constant>());
+      REQUIRE(result.expression().as<Constant>().value<int>() == 3);
+    }
+    SECTION("contraction") {
+      ResultExpr result =
+          parse_result_expr(L"R{i1,i2;e1,e2}:A = f{e2;e3} t{e1,e3;i1,i2}");
+
+      REQUIRE(result.has_label());
+      REQUIRE(result.label() == L"R");
+      REQUIRE(result.bra().size() == 2);
+      REQUIRE(result.bra()[0].full_label() == L"i_1");
+      REQUIRE(result.bra()[1].full_label() == L"i_2");
+      REQUIRE(result.ket().size() == 2);
+      REQUIRE(result.ket()[0].full_label() == L"e_1");
+      REQUIRE(result.ket()[1].full_label() == L"e_2");
+      REQUIRE(result.symmetry() == Symmetry::antisymm);
+      REQUIRE(result.braket_symmetry() ==
+              get_default_context().braket_symmetry());
+      REQUIRE(result.particle_symmetry() == ParticleSymmetry::symm);
+
+      REQUIRE(result.expression().is<Product>());
+      const Product& prod = result.expression().as<Product>();
+      REQUIRE(prod.size() == 2);
+      REQUIRE(prod.factor(0).is<Tensor>());
+      REQUIRE(prod.factor(0).as<Tensor>().label() == L"f");
+      REQUIRE(prod.factor(1).is<Tensor>());
+      REQUIRE(prod.factor(1).as<Tensor>().label() == L"t");
+    }
+  }
+
   SECTION("deparse") {
     using namespace sequant;
 
@@ -437,6 +481,22 @@ TEST_CASE("parsing", "[parse]") {
       ExprPtr expression = parse_expr(current);
 
       REQUIRE(deparse(expression, true) == current);
+    }
+
+    SECTION("result_expressions") {
+      std::vector<std::wstring> expressions = {
+          L"A = 5",
+          L"A = g{i_1,i_2;e_1,e_2}:S-N-S * t{e_1,e_2;i_1,i_2}:N-N-S",
+          L"R{i_1,i_2;e_1,e_2}:A-N-S = f{e_2;e_3}:A-N-S * "
+          L"t{e_1,e_3;i_1,i_2}:A-N-S + "
+          L"g{i_1,i_2;e_1,e_2}:A-N-S",
+      };
+
+      for (const std::wstring& current : expressions) {
+        ResultExpr result = parse_result_expr(current);
+
+        REQUIRE(deparse(result, true) == current);
+      }
     }
   }
 }

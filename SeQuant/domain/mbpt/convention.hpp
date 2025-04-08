@@ -29,7 +29,7 @@ void load(Convention conv = Convention::Minimal);
 std::wstring decorate_label(std::wstring label, bool up);
 
 /// @brief add fermionic spin spaces to registry
-void add_fermi_spin(std::shared_ptr<IndexSpaceRegistry>& isr);
+void add_fermi_spin(IndexSpaceRegistry& isr);
 
 /// @brief add AO spaces to registry
 

@@ -17,7 +17,7 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
-#include <SeQuant/core/tensor_network.hpp>
+#include <SeQuant/core/tensor_network_v2.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 
 #if __cplusplus >= 202002L
@@ -59,7 +59,7 @@ namespace opt {
 /// \return flops count
 ///
 template <typename IdxToSz, typename Idxs,
-          std::enable_if_t<std::is_invocable_r_v<size_t, IdxToSz, Index>,
+          std::enable_if_t<std::is_invocable_r_v<size_t, IdxToSz, const Index&>,
                            bool> = true>
 double ops_count(IdxToSz const& idxsz, Idxs const& idxs) {
   auto oixs = tot_indices(idxs);
@@ -174,9 +174,9 @@ container::svector<Index> diff_indices(I1 const& idxs1, I2 const& idxs2) {
 ///         equivalent optimal sequences then the result is the one that keeps
 ///         the order of tensors in the network as original as possible.
 template <typename IdxToSz,
-          std::enable_if_t<std::is_invocable_r_v<size_t, IdxToSz, Index>,
+          std::enable_if_t<std::is_invocable_r_v<size_t, IdxToSz, const Index&>,
                            bool> = true>
-EvalSequence single_term_opt(TensorNetwork const& network,
+EvalSequence single_term_opt(TensorNetworkV2 const& network,
                              IdxToSz const& idxsz) {
   using ranges::views::concat;
   using IndexContainer = container::svector<Index>;
@@ -289,7 +289,7 @@ ExprPtr single_term_opt(Product const& prod, IdxToSz const& idxsz) {
                                prod.factors().end(), Product::Flatten::No});
   auto const tensors =
       prod | filter(&ExprPtr::template is<Tensor>) | ranges::to_vector;
-  auto seq = single_term_opt(TensorNetwork{tensors}, idxsz);
+  auto seq = single_term_opt(TensorNetworkV2{tensors}, idxsz);
   auto result = container::svector<ExprPtr>{};
   for (auto i : seq)
     if (i == -1) {
@@ -337,9 +337,8 @@ Sum reorder(Sum const& sum);
 /// \param reorder_sum If true, the summands are reordered so that terms with
 ///                    common sub-expressions appear closer to each other.
 /// \return Optimized expression for lower evaluation cost.
-template <typename IdxToSize,
-          typename =
-              std::enable_if_t<std::is_invocable_r_v<size_t, IdxToSize, Index>>>
+template <typename IdxToSize, typename = std::enable_if_t<std::is_invocable_r_v<
+                                  size_t, IdxToSize, const Index&>>>
 ExprPtr optimize(ExprPtr const& expr, IdxToSize const& idx2size,
                  bool reorder_sum) {
   using ranges::views::transform;

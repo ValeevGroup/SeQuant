@@ -5,8 +5,10 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/op.hpp>
+#include <SeQuant/core/result_expr.hpp>
 #include <SeQuant/core/tensor.hpp>
 
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -73,9 +75,14 @@ struct ParseError : std::runtime_error {
 /// \return SeQuant expression.
 // clang-format on
 ExprPtr parse_expr(std::wstring_view raw,
-                   Symmetry perm_symm = Symmetry::nonsymm,
-                   BraKetSymmetry braket_symm = BraKetSymmetry::nonsymm,
-                   ParticleSymmetry particle_symm = ParticleSymmetry::symm);
+                   std::optional<Symmetry> perm_symm = {},
+                   std::optional<BraKetSymmetry> braket_symm = {},
+                   std::optional<ParticleSymmetry> particle_symm = {});
+
+ResultExpr parse_result_expr(
+    std::wstring_view raw, std::optional<Symmetry> perm_symm = {},
+    std::optional<BraKetSymmetry> braket_symm = {},
+    std::optional<ParticleSymmetry> particle_symm = {});
 
 ///
 /// Get a parsable string from an expression.
@@ -92,6 +99,7 @@ ExprPtr parse_expr(std::wstring_view raw,
 /// \param annot_sym Whether to add sequant::Symmetry annotation
 ///                  to each Tensor string.
 /// \return wstring of the expression.
+std::wstring deparse(const ResultExpr &expr, bool annot_sym = true);
 std::wstring deparse(const ExprPtr &expr, bool annot_sym = true);
 std::wstring deparse(const Expr &expr, bool annot_sym = true);
 std::wstring deparse(const Product &product, bool annot_sym);

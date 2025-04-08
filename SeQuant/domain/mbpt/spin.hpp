@@ -12,6 +12,7 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
+#include <SeQuant/core/result_expr.hpp>
 #include <SeQuant/core/tensor.hpp>
 
 #include <cassert>
@@ -107,15 +108,6 @@ std::wstring spinannotation_replacе(WS&& label, Spin s) {
 
 // make null-spin idx
 [[nodiscard]] Index make_spinfree(const Index& idx);
-
-/// @brief Applies index replacement rules to an ExprPtr
-/// @param expr ExprPtr to transform
-/// @param index_replacements index replacement map
-/// @param scaling_factor to scale the result
-/// @return a substituted and scaled expression pointer
-ExprPtr transform_expr(const ExprPtr& expr,
-                       const container::map<Index, Index>& index_replacements,
-                       Constant::scalar_type scaling_factor = 1);
 
 /// @brief Preserving particle symmetry, swaps bra and ket labels on all tensors
 /// in an expression
@@ -236,53 +228,6 @@ container::svector<container::map<Index, Index>> S_replacement_maps(
 /// @brief Expand S operator
 ExprPtr S_maps(const ExprPtr& expr);
 
-/// @brief Returns the number of cycles
-
-/// Counts the number of cycles of a permutation represented in a 2-line form
-/// by stacking \p v0 and \p v1 on top of each other.
-/// @tparam Seq0 (reference to) a container type
-/// @tparam Seq1 (reference to) a container type
-/// @param v0 first sequence; if passed as an rvalue reference, it is moved from
-/// @param[in] v1 second sequence
-/// @pre \p v0 is a permutation of \p v1
-/// @return the number of cycles
-template <typename Seq0, typename Seq1>
-std::size_t count_cycles(Seq0&& v0, const Seq1& v1) {
-  std::remove_reference_t<Seq0> v(std::forward<Seq0>(v0));
-  using T = std::decay_t<decltype(v[0])>;
-  assert(ranges::is_permutation(v, v1));
-
-  auto make_null = []() -> T {
-    if constexpr (std::is_arithmetic_v<T>) {
-      return -1;
-    } else if constexpr (std::is_same_v<T, Index>) {
-      return L"p_50";
-    } else  // unreachable
-      abort();
-  };
-
-  std::size_t n_cycles = 0;
-  const auto null = make_null();
-  assert(ranges::contains(v, null) == false);
-  assert(ranges::contains(v1, null) == false);
-  for (auto it = v.begin(); it != v.end(); ++it) {
-    if (*it != null) {
-      n_cycles++;
-      auto idx = std::distance(v.begin(), it);
-      auto it0 = it;
-      auto it1 = std::find(v1.begin(), v1.end(), *it0);
-      auto idx1 = std::distance(v1.begin(), it1);
-      do {
-        it0 = std::find(v.begin(), v.end(), v[idx1]);
-        it1 = std::find(v1.begin(), v1.end(), *it0);
-        idx1 = std::distance(v1.begin(), it1);
-        *it0 = null;
-      } while (idx1 != idx);
-    }
-  }
-  return n_cycles;
-};
-
 /// @brief Transforms an expression from spin orbital to spatial orbitals
 /// @details This functions is designed for integrating spin out of expression
 /// with Coupled Cluster equations in mind.
@@ -295,15 +240,7 @@ ExprPtr closed_shell_spintrace(
     const ExprPtr& expr,
     const container::svector<container::svector<Index>>& ext_index_groups = {});
 
-///
-/// \brief Given a OpType::A or OpType::S tensor, generates a list of external
-///        indices.
-/// \note The argument tensor must have a label of 'S' or 'A' do denote that
-///       it is OpType::S or OpType::A respectively.
-/// \return a vector of external index groups, `{{P.ket(0), P.bra(0)},
-/// {P.ket(1), P.bra(1)}, ...}`, where `P` is the symmetrizer/antisymmetrizer
-/// tensor.
-container::svector<container::svector<Index>> external_indices(Tensor const&);
+container::svector<ResultExpr> closed_shell_spintrace(const ResultExpr& expr);
 
 /// @brief Transforms Coupled cluster from spin orbital to spatial orbitals
 /// @details The external indices are deduced from Antisymmetrization operator
@@ -316,7 +253,7 @@ ExprPtr closed_shell_CC_spintrace(ExprPtr const& expr);
 ExprPtr closed_shell_CC_spintrace_rigorous(ExprPtr const& expr);
 
 /// Collect all indices from an expression
-auto index_list(const ExprPtr& expr);
+container::set<Index, Index::LabelCompare> index_list(const ExprPtr& expr);
 
 /// @brief Swap spin labels in a tensor
 Tensor swap_spin(const Tensor& t);
@@ -377,8 +314,11 @@ std::vector<ExprPtr> open_shell_CC_spintrace(const ExprPtr& expr);
 /// building block for more specialized spin-tracing functions
 ExprPtr spintrace(
     const ExprPtr& expr,
-    container::svector<container::svector<Index>> ext_index_groups = {},
+    const container::svector<container::svector<Index>>& ext_index_groups = {},
     bool spinfree_index_spaces = true);
+
+container::svector<ResultExpr> spintrace(const ResultExpr& expr,
+                                         bool spinfree_index_spaces = true);
 
 /// @brief Factorize S out of terms
 /// @details Given an expression, permute indices and check if a given product
@@ -389,12 +329,6 @@ ExprPtr spintrace(
 ExprPtr factorize_S(const ExprPtr& expression,
                     std::initializer_list<IndexList> ext_index_groups,
                     bool fast_method = true);
-
-ExprPtr biorthogonal_transform(
-    const sequant::ExprPtr& expr,
-    const container::svector<container::svector<sequant::Index>>&
-        ext_index_groups = {},
-    double threshold = 1.e-12);
 
 }  // namespace sequant
 

@@ -384,24 +384,18 @@ auto particle_antisymmetrize_btas(btas::Tensor<Args...> const& arr,
 
 template <typename... Args>
 inline void log_result(Args const&... args) noexcept {
-#ifdef SEQUANT_EVAL_TRACE
-  auto l = Logger::instance();
-  if (l.log_level_eval > 1) write_log(l, args...);
-#endif
+  auto& l = Logger::instance();
+  if (l.eval.level > 1) write_log(l, args...);
 }
 
 template <typename... Args>
 inline void log_ta(Args const&... args) noexcept {
-#ifdef SEQUANT_EVAL_TRACE
   log_result("[TA] ", args...);
-#endif
 }
 
 template <typename... Args>
 inline void log_constant(Args const&... args) noexcept {
-#ifdef SEQUANT_EVAL_TRACE
   log_result("[CONST] ", args...);
-#endif
 }
 
 }  // namespace
@@ -528,6 +522,9 @@ class EvalResult {
     return const_cast<EvalResult&>(*this).get<T>();
   }
 
+  /// @return the size of the object in bytes
+  [[nodiscard]] virtual std::size_t size_in_bytes() const = 0;
+
  protected:
   template <typename T,
             typename = std::enable_if_t<!std::is_convertible_v<T, EvalResult>>>
@@ -620,6 +617,8 @@ class EvalScalar final : public EvalResult {
   [[nodiscard]] id_t type_id() const noexcept override {
     return id_for_type<EvalScalar<T>>();
   }
+
+  [[nodiscard]] std::size_t size_in_bytes() const final { return sizeof(T); }
 };
 
 ///
@@ -748,6 +747,14 @@ class EvalTensorTA final : public EvalResult {
   [[nodiscard]] ERPtr antisymmetrize(size_t bra_rank) const override {
     return eval_result<this_type>(
         particle_antisymmetrize_ta(get<ArrayT>(), bra_rank));
+  }
+
+ private:
+  [[nodiscard]] std::size_t size_in_bytes() const final {
+    auto& v = get<ArrayT>();
+    auto local_size = TA::size_of<TA::MemorySpace::Host>(v);
+    v.world().gop.sum(local_size);
+    return local_size;
   }
 };
 
@@ -888,6 +895,14 @@ class EvalTensorOfTensorTA final : public EvalResult {
     // not implemented yet
     return nullptr;
   }
+
+ private:
+  [[nodiscard]] std::size_t size_in_bytes() const final {
+    auto& v = get<ArrayT>();
+    auto local_size = TA::size_of<TA::MemorySpace::Host>(v);
+    v.world().gop.sum(local_size);
+    return local_size;
+  }
 };
 
 ///
@@ -980,6 +995,14 @@ class EvalTensorBTAS final : public EvalResult {
   [[nodiscard]] ERPtr antisymmetrize(size_t bra_rank) const override {
     return eval_result<EvalTensorBTAS<T>>(
         particle_antisymmetrize_btas(get<T>(), bra_rank));
+  }
+
+ private:
+  [[nodiscard]] std::size_t size_in_bytes() const final {
+    static_assert(std::is_arithmetic_v<typename T::value_type>);
+    const auto& tensor = get<T>();
+    // only count data
+    return tensor.range().volume() * sizeof(T);
   }
 };
 

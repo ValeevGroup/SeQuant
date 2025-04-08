@@ -69,6 +69,11 @@ with open(version_cmake_path) as inf:
                 rangev3_old_tag = tokens[2]
             else:
                 rangev3_new_tag = tokens[2]
+        elif tokens[1].find('LIBPERM') != -1:
+            if tokens[1].find('PREVIOUS') != -1:
+                libperm_old_tag = tokens[2]
+            else:
+                libperm_new_tag = tokens[2]
 
 any_files_changed = False
 
@@ -77,6 +82,9 @@ any_files_changed |= replace_dep_id(topsrc, 'md', 'TiledArray', ta_old_tag, ta_n
 
 # Range-v3 tag in INSTALL.md
 any_files_changed |= replace_dep_id(topsrc, 'md', 'Range-V3', rangev3_old_tag, rangev3_new_tag, '', '')
+
+# libPerm tag in INSTALL.md
+any_files_changed |= replace_dep_id(topsrc, 'md', 'libPerm', libperm_old_tag, libperm_new_tag, '', '')
 
 if any_files_changed:
     sys.exit(1)

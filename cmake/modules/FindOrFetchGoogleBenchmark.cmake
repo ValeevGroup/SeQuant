@@ -7,6 +7,7 @@ if (NOT TARGET benchmark::benchmark)
 
     VRGFindOrFetchPackage(benchmark "https://github.com/google/benchmark.git" "v1.9.1"
             ADD_SUBDIR
+			ADD_SUBDIR_EXCLUDE_FROM_ALL
             CONFIG_SUBDIR
     )
 endif()
