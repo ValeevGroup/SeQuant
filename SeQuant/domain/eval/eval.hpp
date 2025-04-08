@@ -43,7 +43,7 @@ template <typename... T>
   return cman.size_in_bytes();
 }
 
-[[nodiscard]] constexpr auto to_string(Bytes bs) noexcept {
+[[nodiscard]] inline auto to_string(Bytes bs) noexcept {
   return std::format("{}B", bs.value);
 }
 
