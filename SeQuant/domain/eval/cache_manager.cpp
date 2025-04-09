@@ -87,8 +87,10 @@ container::set<size_t> CacheManager::keys() const noexcept {
 }
 
 size_t CacheManager::alive_count() const noexcept {
+  using ranges::views::transform;
   using ranges::views::values;
-  return ranges::count_if(cache_map_ | values, &entry::life_count);
+  return ranges::accumulate(cache_map_ | values | transform(&entry::life_count),
+                            0);
 }
 
 size_t CacheManager::size_in_bytes() const noexcept {
