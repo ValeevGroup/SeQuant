@@ -278,7 +278,7 @@ TEST_CASE("spin", "[spin]") {
   SECTION("Product") {
     const auto expr = ex<Tensor>(L"f", bra{L"i_1"}, ket{L"a_1"}) *
                       ex<Tensor>(L"t", bra{L"a_1"}, ket{L"i_1"});
-    auto result = spintrace(expr, {{L"i_1", L"a_1"}});
+    auto result = spintrace(expr);
     canonicalize(result);
     REQUIRE_THAT(result, EquivalentTo("2 f{i1;a1} t{a1;i1}"));
   }
@@ -291,7 +291,7 @@ TEST_CASE("spin", "[spin]") {
                                    ket{L"a_1", L"a_2"}, Symmetry::antisymm) *
                         ex<Tensor>(L"t", bra{L"a_1"}, ket{L"i_1"}) *
                         ex<Tensor>(L"t", bra{L"a_2"}, ket{L"i_2"});
-      auto result = spintrace(expr, {{L"i_1", L"a_1"}});
+      auto result = spintrace(expr);
       canonicalize(result);
       REQUIRE_THAT(result,
                    EquivalentTo("- g{i1,i2;a1,a2} t{a1;i2} t{a2;i1} "
@@ -301,7 +301,7 @@ TEST_CASE("spin", "[spin]") {
 
   SECTION("Scaled Product with variable") {
     ExprPtr expr = parse_expr(L"1/2 Var g{i1,i2;a1,a2}:A t{a1;i1} t{a2;i2}");
-    auto result = spintrace(expr, {{L"i_1", L"a_1"}});
+    auto result = spintrace(expr);
     canonicalize(result);
     REQUIRE_THAT(
         result,
