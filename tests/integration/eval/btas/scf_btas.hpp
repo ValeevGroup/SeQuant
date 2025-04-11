@@ -84,33 +84,35 @@ class SequantEvalScfBTAS final : public SequantEvalScf {
     using ranges::views::transform;
     using ranges::views::zip;
 
+    using Evaluator = ResultPtr (*)(
+        std::vector<EvalNodeBTAS> const&, EvalExprBTAS::annot_t const&,
+        DataWorldBTAS<Tensor_t> const&, CacheManager&);
+
+    constexpr auto funcs =
+        std::array{std::array<Evaluator, 2>{evaluate_antisymm<Trace::Off>,
+                                            evaluate_antisymm<Trace::On>},
+                   std::array<Evaluator, 2>{evaluate_symm<Trace::Off>,
+                                            evaluate_symm<Trace::On>}};
+
     auto sorted_annot = [](Tensor const& tnsr) {
       auto b = tnsr.bra() | ranges::to_vector;
       auto k = tnsr.ket() | ranges::to_vector;
       ranges::sort(b, Index::LabelCompare{});
       ranges::sort(k, Index::LabelCompare{});
-      return index_hash(concat(b, k)) | ranges::to<EvalExprBTAS::annot_t>;
+      return EvalExprBTAS::index_hash(concat(b, k)) |
+             ranges::to<EvalExprBTAS::annot_t>;
     };
 
     auto rs = repeat_n(Tensor_t{}, info_.eqn_opts.excit) | ranges::to_vector;
+    auto st = info_.eqn_opts.spintrace;
+    auto log = Logger::instance().eval.level > 0;
+
     for (auto&& [r, n] : zip(rs, nodes_)) {
-      auto const target_indices = sorted_annot((*n.begin())->as_tensor());
-      auto st = info_.eqn_opts.spintrace;
-      auto cm = info_.optm_opts.reuse_imeds;
-      if (st && cm) {
-        r = evaluate_symm(n, target_indices, data_world_, cman_)
-                ->template get<Tensor_t>();
-      } else if (st && !cm) {
-        r = evaluate_symm(n, target_indices, data_world_)
-                ->template get<Tensor_t>();
-      } else if (!st && cm) {
-        r = evaluate_antisymm(n, target_indices, data_world_, cman_)
-                ->template get<Tensor_t>();
-      } else {
-        r = evaluate_antisymm(n, target_indices, data_world_)
-                ->template get<Tensor_t>();
-      }
+      auto const& target_indices = ranges::front(n)->annot();
+      r = funcs[st][log](n, target_indices, data_world_, cman_)
+              ->template get<Tensor_t>();
     }
+
     data_world_.update_amplitudes(rs);
     return info_.eqn_opts.spintrace ? energy_spin_free_orbital()
                                     : energy_spin_orbital();
