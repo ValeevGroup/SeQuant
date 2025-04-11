@@ -83,9 +83,9 @@ Functions
 
 - :ref:`exhale_function_namespacesequant_1_1mbpt_1a707f97a9e87f038179edd04b604ed026`
 
-- :ref:`exhale_function_namespacesequant_1_1mbpt_1a3a9b9e1e889f2aa6951cac0b59dce769`
-
 - :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1a2e40b49c3201b4472e29a6f116433182`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1a3a9b9e1e889f2aa6951cac0b59dce769`
 
 - :ref:`exhale_function_namespacesequant_1_1mbpt_1ab6d4886b1e83d70b0616a5ffb1915d72`
 
@@ -111,9 +111,9 @@ Functions
 
 - :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1a71085738dbaeb28335934c1393032a9a`
 
-- :ref:`exhale_function_namespacesequant_1_1mbpt_1a7cb793919553f2c3387eab53ee55b590`
-
 - :ref:`exhale_function_namespacesequant_1_1mbpt_1afc8c0e61721e9d23ef85730471b7d5ce`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1a7cb793919553f2c3387eab53ee55b590`
 
 - :ref:`exhale_function_namespacesequant_1_1mbpt_1a0248265022a5b013c2921ce601d65ed1`
 
@@ -175,19 +175,19 @@ Functions
 
 - :ref:`exhale_function_namespacesequant_1_1mbpt_1a6718b7ab3b1feafd83385424e9c5e2f0`
 
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1acfa27645ec0f814f01319c8774427f07`
+
 - :ref:`exhale_function_namespacesequant_1_1mbpt_1ae73803f79b5a220ce58bef248ee9514a`
 
 - :ref:`exhale_function_namespacesequant_1_1mbpt_1a28cee5d3740dcb2c47b58c53ee195546`
 
-- :ref:`exhale_function_namespacesequant_1_1mbpt_1acfa27645ec0f814f01319c8774427f07`
-
 - :ref:`exhale_function_namespacesequant_1_1mbpt_1a4608ea0875d63a4cca2fbc1596700374`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1a7ab482903fc560710dee956768cf3859`
 
 - :ref:`exhale_function_namespacesequant_1_1mbpt_1aeba14ceb736042ab684545ac7debbee9`
 
 - :ref:`exhale_function_namespacesequant_1_1mbpt_1af6b4b030942b2d3377fb5935fe3f9b33`
-
-- :ref:`exhale_function_namespacesequant_1_1mbpt_1a7ab482903fc560710dee956768cf3859`
 
 - :ref:`exhale_function_namespacesequant_1_1mbpt_1aa154204f57996d1821a900a94006470d`
 
@@ -217,9 +217,9 @@ Functions
 
 - :ref:`exhale_function_namespacesequant_1_1mbpt_1aabcc035b4c21f33ad0b6f7eea1e381af`
 
-- :ref:`exhale_function_namespacesequant_1_1mbpt_1adff7394d815b475511b23e3b3b2c2e5a`
-
 - :ref:`exhale_function_namespacesequant_1_1mbpt_1a05536e81518f61cc33277c50cc8d83a2`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1adff7394d815b475511b23e3b3b2c2e5a`
 
 - :ref:`exhale_function_namespacesequant_1_1mbpt_1a46ed9d5faab8f288471e94d3b324579e`
 

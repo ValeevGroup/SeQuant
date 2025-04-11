@@ -1836,6 +1836,22 @@
 <span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">expression</span><span class="p">;</span>
 <span class="w">  </span><span class="p">}</span>
 
+<span class="cp">#ifndef NDEBUG</span>
+<span class="w">  </span><span class="c1">// Verify that the amount of external indices matches the amount of indices in</span>
+<span class="w">  </span><span class="c1">// ext_index_groups</span>
+<span class="w">  </span><span class="k">auto</span><span class="w"> </span><span class="n">count_indices</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[](</span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="o">&amp;</span><span class="w"> </span><span class="n">range</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">auto</span><span class="w"> </span><span class="n">sizes</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">range</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="n">ranges</span><span class="o">::</span><span class="n">views</span><span class="o">::</span><span class="n">transform</span><span class="p">(</span>
+<span class="w">                             </span><span class="p">[](</span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="o">&amp;</span><span class="w"> </span><span class="n">list</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="n">list</span><span class="p">.</span><span class="n">size</span><span class="p">();</span><span class="w"> </span><span class="p">});</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">accumulate</span><span class="p">(</span><span class="n">sizes</span><span class="p">.</span><span class="n">begin</span><span class="p">(),</span><span class="w"> </span><span class="n">sizes</span><span class="p">.</span><span class="n">end</span><span class="p">(),</span><span class="w"> </span><span class="mi">0</span><span class="p">);</span>
+<span class="w">  </span><span class="p">};</span>
+<span class="w">  </span><span class="k">auto</span><span class="w"> </span><span class="n">determined_externals</span><span class="w"> </span><span class="o">=</span>
+<span class="w">      </span><span class="n">external_indices</span><span class="o">&lt;</span><span class="n">container</span><span class="o">::</span><span class="n">svector</span><span class="o">&lt;</span><span class="n">container</span><span class="o">::</span><span class="n">svector</span><span class="o">&lt;</span><span class="n">Index</span><span class="o">&gt;&gt;&gt;</span><span class="p">(</span>
+<span class="w">          </span><span class="n">expression</span><span class="p">);</span>
+
+<span class="w">  </span><span class="n">assert</span><span class="p">(</span><span class="n">count_indices</span><span class="p">(</span><span class="n">ext_index_groups</span><span class="p">)</span><span class="w"> </span><span class="o">==</span>
+<span class="w">         </span><span class="n">count_indices</span><span class="p">(</span><span class="n">determined_externals</span><span class="p">));</span>
+<span class="cp">#endif</span>
+
 <span class="w">  </span><span class="c1">// This function must be used for tensors with spin-specific indices only. If</span>
 <span class="w">  </span><span class="c1">// the spin-symmetry is conserved: the tensor is expanded; else: zero is</span>
 <span class="w">  </span><span class="c1">// returned.</span>
@@ -2309,7 +2325,7 @@
             
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on Apr 8, 2025 4:33:04 PM</div>
+              Last updated on Apr 11, 2025 8:08:38 AM</div>
           </div>
           <div class="right-details">
             <div class="icons">
