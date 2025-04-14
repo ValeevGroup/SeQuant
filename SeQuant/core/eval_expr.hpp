@@ -5,6 +5,7 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
+#include <SeQuant/core/result_expr.hpp>
 
 #include <cstddef>
 #include <string>
@@ -12,6 +13,10 @@
 namespace sequant {
 
 class Tensor;
+
+namespace detail {
+std::size_t next_eval_expr_id();
+}
 
 ///
 /// \brief The EvalOp enum
@@ -108,10 +113,15 @@ class EvalExpr {
   ///
   [[nodiscard]] size_t hash_value() const noexcept;
 
+  /// \ return The ID of this object
+  [[nodiscard]] std::size_t id() const noexcept;
+
   ///
   /// \return The ExprPtr object that this EvalExpr object holds.
   ///
   [[nodiscard]] ExprPtr expr() const noexcept;
+
+  void set_expr(ExprPtr expr);
 
   ///
   /// \return True if this EvalExpr object contains a sequant tensor with
@@ -197,6 +207,8 @@ class EvalExpr {
 
   size_t hash_value_;
 
+  std::size_t id_ = detail::next_eval_expr_id();
+
   index_vector canon_indices_;
 
   std::int8_t canon_phase_{1};
@@ -237,14 +249,67 @@ FullBinaryNode<EvalExpr> binarize(ExprPtr const&);
 }
 
 ///
-/// Creates a binary tree of evaluation.
+/// Creates a binary tree for evaluation.
 ///
-template <typename ExprT = EvalExpr,
-          typename = std::enable_if_t<std::is_constructible_v<ExprT, EvalExpr>>>
+template <typename ExprT = EvalExpr>
+  requires std::is_constructible_v<ExprT, EvalExpr>
 FullBinaryNode<ExprT> binarize(ExprPtr const& expr) {
   if constexpr (std::is_same_v<ExprT, EvalExpr>) return impl::binarize(expr);
   return transform_node(impl::binarize(expr),
                         [](auto&& val) { return ExprT{val}; });
+}
+
+///
+/// Creates a binary tree for evaluation.
+///
+template <typename ExprT = EvalExpr>
+  requires std::is_constructible_v<ExprT, EvalExpr>
+FullBinaryNode<ExprT> binarize(ResultExpr const& res) {
+  FullBinaryNode<ExprT> tree = [&]() {
+    if (res.expression().size() == 0) {
+      // Expressions of size zero are terminal expressions such as Variable,
+      // Tensor and Constant Binarizing a binary expression will yield a tree
+      // consisting only of a root node, representing said terminal expression.
+      // However, for a ResultExpr there is always the semantic of having an lhs
+      // that gets set to the rhs's value, where the rhs is the expression.
+      // Hence, we always want to the root node of a binarized ResultExpr to
+      // represent the lhs, which must never be the same as the rhs (as this
+      // would imply a semantic of overwriting itself).
+      // Since we can't express a simple A = B in a full binary tree, we have
+      // to instead write it as A = B * 1.
+      assert(!res.expression()
+                  .is<Constant>());  // Product will always self-simplify to
+                                     // terminal in this case
+      auto prod =
+          ex<Product>(1, ExprPtrList{res.expression()}, Product::Flatten::No);
+      return binarize(prod);
+    }
+
+    return binarize(res.expression());
+  }();
+
+  const bool is_scalar =
+      res.bra().empty() && res.ket().empty() && res.aux().empty();
+
+  if (is_scalar) {
+    if (res.has_label()) {
+      tree->expr().template as<Variable>().set_label(res.label());
+    }
+  } else {
+    Tensor& tensor = tree->expr().template as<Tensor>();
+
+    if (res.has_label()) {
+      tensor.set_label(res.label());
+    }
+
+    assert(tensor.const_indices().size() ==
+           res.bra().size() + res.ket().size() + res.aux().size());
+    tensor.set_bra(res.bra());
+    tensor.set_ket(res.ket());
+    tensor.set_aux(res.aux());
+  }
+
+  return tree;
 }
 
 ///
