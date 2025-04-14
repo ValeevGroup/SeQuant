@@ -213,6 +213,8 @@ set(SeQuant_src
         SeQuant/core/export/julia_tensor_operations.cpp
         SeQuant/core/export/julia_tensor_kit.hpp
         SeQuant/core/export/julia_itensor.hpp
+        SeQuant/core/export/reordering_context.cpp
+        SeQuant/core/export/reordering_context.hpp
         SeQuant/core/export/utils.cpp
         SeQuant/core/export/utils.hpp
         SeQuant/core/expr.cpp

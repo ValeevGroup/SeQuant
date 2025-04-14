@@ -10,12 +10,15 @@
 #include <SeQuant/core/export/julia_itensor.hpp>
 #include <SeQuant/core/export/julia_tensor_kit.hpp>
 #include <SeQuant/core/export/julia_tensor_operations.hpp>
+#include <SeQuant/core/export/reordering_context.hpp>
 #include <SeQuant/core/export/text_generator.hpp>
+#include <SeQuant/core/index_space_registry.hpp>
 #include <SeQuant/core/optimize.hpp>
 #include <SeQuant/core/parse.hpp>
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/result_expr.hpp>
 #include <SeQuant/core/utility/string.hpp>
+#include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/spin.hpp>
 
 #include "catch2_sequant.hpp"
@@ -245,9 +248,19 @@ std::vector<ExpressionGroup<EvalExpr>> parse_expression_spec(
   return groups;
 }
 
+[[nodiscard]] auto to_export_context() {
+  auto reg = std::make_shared<IndexSpaceRegistry>();
+  reg->add(L"i", 0b01, is_particle, 10);
+  reg->add(L"a", 0b10, is_vacuum_occupied, is_reference_occupied, is_hole, 100);
+
+  return set_scoped_default_context(Context(std::move(reg)));
+}
+
 TEMPLATE_LIST_TEST_CASE("export_tests", "[export]", KnownGenerators) {
   using CurrentGen = TestType;
   using CurrentCtx = CurrentGen::Context;
+
+  auto resetter = to_export_context();
 
   // Safe-guard that template magic works
   const std::size_t n_generators = 5;
@@ -332,6 +345,56 @@ TEMPLATE_LIST_TEST_CASE("export_tests", "[export]", KnownGenerators) {
 }
 
 TEST_CASE("export", "[export]") {
+  auto resetter = to_export_context();
+
+  SECTION("reordering_context") {
+    std::vector<std::pair<std::wstring, std::array<std::string, 3>>> tests = {
+        // Unchanged
+        {L"t{a1;i1}", {"t{a1;i1}", "t{a1;i1}", "t{a1;i1}"}},
+        // Bra resorting
+        {L"t{a1,i1}:S-N-S",
+         {"t{;;i1,a1}:N", "t{a1,i1}:S-N-S", "t{a1,i1}:S-N-S"}},
+        {L"t{i1,a1}:S-N-S",
+         {"t{i1,a1}:S-N-S", "t{;;a1,i1}:N", "t{i1,a1}:S-N-S"}},
+        // Ket resorting
+        {L"t{;a1,i1}:S-N-S",
+         {"t{;;i1,a1}:N", "t{;a1,i1}:S-N-S", "t{;a1,i1}:S-N-S"}},
+        {L"t{;i1,a1}:S-N-S",
+         {"t{;i1,a1}:S-N-S", "t{;;a1,i1}:N", "t{;i1,a1}:S-N-S"}},
+        // BraKet swapping
+        {L"t{a1;i1}:N-S", {"t{;;i1,a1}:N-N", "t{a1;i1}:N-S", "t{a1;i1}:N-S"}},
+        {L"t{i1;a1}:N-S", {"t{i1;a1}:N-S", "t{;;a1,i1}:N-N", "t{i1;a1}:N-S"}},
+        // Aux prioritization
+        {L"t{i1;;a1}", {"t{i1;;a1}", "t{;;a1,i1}", "t{i1;;a1}"}},
+        {L"t{a1;;i1}", {"t{;;i1,a1}", "t{a1;;i1}", "t{a1;;i1}"}},
+    };
+
+    ReorderingContext ctx(MemoryLayout::Unspecified);
+
+    for (MemoryLayout layout :
+         {MemoryLayout::RowMajor, MemoryLayout::ColumnMajor,
+          MemoryLayout::Unspecified}) {
+      CAPTURE(layout);
+
+      ctx.set_memory_layout(layout);
+
+      for (const auto &[input, candidates] : tests) {
+        CAPTURE(toUtf8(input));
+
+        const std::string &expected =
+            candidates.at(static_cast<std::size_t>(layout));
+
+        Tensor tensor =
+            parse_expr(input, Symmetry::nonsymm, BraKetSymmetry::nonsymm,
+                       ParticleSymmetry::nonsymm)
+                ->as<Tensor>();
+        bool rewritten = ctx.rewrite(tensor);
+        REQUIRE_THAT(tensor, EquivalentTo(expected));
+        REQUIRE(rewritten == (toUtf8(input) != expected));
+      }
+    }
+  }
+
   SECTION("itf") {
     const ItfContext ctx;
 
