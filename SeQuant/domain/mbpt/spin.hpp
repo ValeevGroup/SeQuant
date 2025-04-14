@@ -304,7 +304,6 @@ ExprPtr closed_shell_spintrace(
     const ExprPtr& expression,
     const container::svector<container::svector<Index>>& ext_index_groups,
     bool is_core_terms = false);
-
 ///
 /// \brief Given a OpType::A or OpType::S tensor, generates a list of external
 ///        indices.
@@ -322,8 +321,6 @@ container::svector<container::svector<Index>> external_indices(Tensor const&);
 ExprPtr closed_shell_CC_spintrace(
     ExprPtr const& expr,
     bool is_core_terms = false);
-ExprPtr verify_cleanup_t3r3_symbolically(const ExprPtr& core_terms);
-ExprPtr closed_shell_CC_spintrace_with_verification(ExprPtr const& expr, bool is_core_terms = false);
 /// \brief Same as \c closed_shell_CC_spintrace except internally uses
 ///        \c sequant::spintrace instead of sequant::closed_shell_spintrace.
 ExprPtr closed_shell_CC_spintrace_rigorous(ExprPtr const& expr);
