@@ -202,7 +202,8 @@ ERPtr evaluate_core(NodeT const& node, Le const& le, Args&&... args) {
     log_eval(node->is_constant()   ? "[CONSTANT] "
              : node->is_variable() ? "[VARIABLE] "
                                    : "[TENSOR] ",
-             node->label(), "  ", time.count(), "\n");
+             node->label(), "  ", time.count(), "  ", res->size_in_bytes(),
+             "\n");
     return res;
   } else {
     ERPtr const left =
@@ -219,7 +220,8 @@ ERPtr evaluate_core(NodeT const& node, Le const& le, Args&&... args) {
     if (node->op_type() == EvalOp::Sum) {
       auto&& [res, time] = timed_eval([&]() { return left->sum(*right, ann); });
       log_eval("[SUM] ", node.left()->label(), " + ", node.right()->label(),
-               " = ", node->label(), "  ", time.count(), "\n");
+               " = ", node->label(), "  ", time.count(), "  ",
+               res->size_in_bytes(), "\n");
       return res;
     } else {
       assert(node->op_type() == EvalOp::Prod);
@@ -232,7 +234,8 @@ ERPtr evaluate_core(NodeT const& node, Le const& le, Args&&... args) {
       });
 
       log_eval("[PRODUCT] ", node.left()->label(), " * ", node.right()->label(),
-               " = ", node->label(), "  ", time.count(), "\n");
+               " = ", node->label(), "  ", time.count(), "  ",
+               res->size_in_bytes(), "\n");
       return res;
     }
   }
@@ -356,7 +359,8 @@ auto evaluate(NodeT const& node,    //
   auto&& [res, time] = timed_eval([&]() {
     return result->permute(std::array<std::any, 2>{node->annot(), layout});
   });
-  log_eval("[PERMUTE] ", node->label(), "  ", time.count(), "\n");
+  log_eval("[PERMUTE] ", node->label(), "  ", time.count(), "  ",
+           res->size_in_bytes(), "\n");
   return res;
 }
 
