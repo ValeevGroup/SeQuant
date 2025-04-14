@@ -14,6 +14,7 @@
 
 #include <cassert>
 #include <optional>
+#include <span>
 #include <sstream>
 #include <string>
 #include <string_view>
@@ -48,6 +49,13 @@ class ItfGeneratorContext : public ReorderingContext {
   void set_import_name(const Tensor &tensor, std::string name);
   void set_import_name(const Variable &variable, std::string name);
 
+  const std::wstring two_electron_integral_label() const {
+    return m_integral_label;
+  }
+  void set_two_electron_integral_label(std::wstring label) {
+    m_integral_label = std::move(label);
+  }
+
   bool rewrite(Tensor &tensor) const override;
 
  private:
@@ -56,6 +64,10 @@ class ItfGeneratorContext : public ReorderingContext {
   TensorImportMap m_tensor_imports;
   VariableImportMap m_variable_imports;
   container::map<IndexSpace, char> m_index_label_limits;
+  std::wstring m_integral_label = L"g";
+
+ protected:
+  bool is_exceptional_J(std::span<Index> bra, std::span<Index> ket) const;
 };
 
 template <typename Context = ItfGeneratorContext>

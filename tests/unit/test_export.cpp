@@ -396,6 +396,126 @@ TEST_CASE("export", "[export]") {
   }
 
   SECTION("itf") {
+    std::wstring int_label = L"g";
+    ItfGeneratorContext ctx;
+    ctx.set_two_electron_integral_label(int_label);
+
+    SECTION("remap_integrals") {
+      using namespace sequant::itf::detail;
+      SECTION("Unchanged") {
+        Tensor tensor = parse_expr(L"t{i1;a1}:N-N-N")->as<Tensor>();
+        bool rewritten = ctx.rewrite(tensor);
+        REQUIRE_THAT(tensor, EquivalentTo("t{i1;a1}:N-N-N"));
+        REQUIRE_FALSE(rewritten);
+
+        tensor = parse_expr(int_label + L"{a1;i1}:N-N-N")->as<Tensor>();
+        rewritten = ctx.rewrite(tensor);
+        REQUIRE_THAT(tensor, EquivalentTo("g{a1;i1}:N-N-N"));
+      }
+
+      SECTION("K") {
+        SECTION("occ,occ,occ,occ") {
+          std::vector<Index> indices = {L"i_1", L"i_2", L"i_3", L"i_4"};
+          REQUIRE(indices.size() == 4);
+
+          for (const std::vector<std::size_t> &indexPerm :
+               twoElectronIntegralSymmetries()) {
+            CAPTURE(indexPerm);
+
+            REQUIRE(indexPerm.size() == 4);
+
+            Tensor integral(int_label,
+                            bra{indices[indexPerm[0]], indices[indexPerm[1]]},
+                            ket{indices[indexPerm[2]], indices[indexPerm[3]]});
+
+            bool rewritten = ctx.rewrite(integral);
+            REQUIRE_THAT(integral, EquivalentTo("K{i1,i2;i3,i4}"));
+            REQUIRE(rewritten);
+          }
+        }
+
+        SECTION("virt,virt,occ,occ") {
+          std::vector<Index> indices = {L"a_1", L"a_2", L"i_1", L"i_2"};
+          REQUIRE(indices.size() == 4);
+
+          for (const std::vector<std::size_t> &indexPerm :
+               twoElectronIntegralSymmetries()) {
+            CAPTURE(indexPerm);
+            REQUIRE(indexPerm.size() == 4);
+
+            Tensor integral(int_label,
+                            bra{indices[indexPerm[0]], indices[indexPerm[1]]},
+                            ket{indices[indexPerm[2]], indices[indexPerm[3]]});
+
+            bool rewritten = ctx.rewrite(integral);
+            REQUIRE_THAT(integral, EquivalentTo("K{a1,a2;i1,i2}"));
+            REQUIRE(rewritten);
+          }
+        }
+
+        SECTION("virt,virt,virt,virt") {
+          std::vector<Index> indices = {L"a_1", L"a_2", L"a_3", L"a_4"};
+          REQUIRE(indices.size() == 4);
+
+          for (const std::vector<std::size_t> &indexPerm :
+               twoElectronIntegralSymmetries()) {
+            CAPTURE(indexPerm);
+            REQUIRE(indexPerm.size() == 4);
+
+            Tensor integral(int_label,
+                            bra{indices[indexPerm[0]], indices[indexPerm[1]]},
+                            ket{indices[indexPerm[2]], indices[indexPerm[3]]});
+
+            bool rewritten = ctx.rewrite(integral);
+            REQUIRE_THAT(integral, EquivalentTo("K{a1,a2;a3,a4}"));
+            REQUIRE(rewritten);
+          }
+        }
+      }
+
+      SECTION("J") {
+        SECTION("virt,occ,virt,occ") {
+          std::vector<Index> indices = {L"a_1", L"i_1", L"a_2", L"i_2"};
+          REQUIRE(indices.size() == 4);
+
+          for (const std::vector<std::size_t> &indexPerm :
+               twoElectronIntegralSymmetries()) {
+            CAPTURE(indexPerm);
+            REQUIRE(indexPerm.size() == 4);
+
+            Tensor integral(int_label,
+                            bra{indices[indexPerm[0]], indices[indexPerm[1]]},
+                            ket{indices[indexPerm[2]], indices[indexPerm[3]]});
+
+            bool rewritten = ctx.rewrite(integral);
+            REQUIRE_THAT(integral, EquivalentTo("J{a1,a2;i1,i2}"));
+            REQUIRE(rewritten);
+          }
+        }
+
+        SECTION("virt,occ,virt,virt") {
+          std::vector<Index> indices = {L"a_1", L"i_1", L"a_2", L"a_3"};
+          REQUIRE(indices.size() == 4);
+
+          for (const std::vector<std::size_t> &indexPerm :
+               twoElectronIntegralSymmetries()) {
+            CAPTURE(indexPerm);
+            REQUIRE(indexPerm.size() == 4);
+
+            Tensor integral(int_label,
+                            bra{indices[indexPerm[0]], indices[indexPerm[1]]},
+                            ket{indices[indexPerm[2]], indices[indexPerm[3]]});
+
+            bool rewritten = ctx.rewrite(integral);
+            REQUIRE_THAT(integral, EquivalentTo("J{a1,a2;a3,i1}"));
+            REQUIRE(rewritten);
+          }
+        }
+      }
+    }
+  }
+
+  SECTION("itf_old") {
     const ItfContext ctx;
 
     SECTION("remap_integrals") {
