@@ -90,14 +90,14 @@ size_t CacheManager::alive_count() const noexcept {
   using ranges::views::transform;
   using ranges::views::values;
   return ranges::accumulate(cache_map_ | values | transform(&entry::life_count),
-                            0);
+                            size_t{0});
 }
 
 size_t CacheManager::size_in_bytes() const noexcept {
   using ranges::views::transform;
   using ranges::views::values;
   return ranges::accumulate(
-      cache_map_ | values | transform(&entry::size_in_bytes), 0);
+      cache_map_ | values | transform(&entry::size_in_bytes), size_t{0});
 }
 
 CacheManager CacheManager::empty() noexcept { return CacheManager{{}}; }
