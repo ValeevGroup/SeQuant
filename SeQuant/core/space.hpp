@@ -405,7 +405,7 @@ class IndexSpace {
 
   /// Default ctor creates null space (with null label, type and quantum
   /// numbers)
-  IndexSpace() noexcept {}
+  IndexSpace() noexcept = default;
 
   const static IndexSpace null;
 
@@ -449,9 +449,9 @@ class IndexSpace {
   void approximate_size(size_t n) { approximate_size_ = n; }
 
  private:
-  Attr attr_;
-  std::wstring base_key_;
-  std::size_t approximate_size_;
+  Attr attr_ = {};
+  std::wstring base_key_ = {};
+  std::size_t approximate_size_ = {};
 
   static std::wstring to_wstring(std::wstring_view key) {
     return std::wstring(key.begin(), key.end());
