@@ -237,10 +237,14 @@ std::vector<ExpressionGroup<EvalExpr>> parse_expression_spec(
     }
 
     try {
-      ResultExpr res = parse_result_expr(to_wstring(line));
+      ResultExpr res =
+          parse_result_expr(to_wstring(line), Symmetry::nonsymm,
+                            BraKetSymmetry::nonsymm, ParticleSymmetry::nonsymm);
       groups.back().add(binarize(res));
     } catch (...) {
-      ExprPtr expr = parse_expr(to_wstring(line));
+      ExprPtr expr =
+          parse_expr(to_wstring(line), Symmetry::nonsymm,
+                     BraKetSymmetry::nonsymm, ParticleSymmetry::nonsymm);
       groups.back().add(binarize(expr));
     }
   }
