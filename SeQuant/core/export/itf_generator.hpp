@@ -3,7 +3,7 @@
 
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/export/context.hpp>
-#include <SeQuant/core/export/generator.hpp>
+#include <SeQuant/core/export/reordering_context.hpp>
 #include <SeQuant/core/export/text_generator.hpp>
 #include <SeQuant/core/export/utils.hpp>
 #include <SeQuant/core/expr.hpp>
@@ -20,7 +20,7 @@
 
 namespace sequant {
 
-class ItfGeneratorContext : public ExportContext {
+class ItfGeneratorContext : public ReorderingContext {
  public:
   using TagMap = container::map<IndexSpace, std::string>;
   using NameMap = container::map<IndexSpace, std::string>;
@@ -28,7 +28,8 @@ class ItfGeneratorContext : public ExportContext {
       container::map<Tensor, std::string, TensorBlockCompare>;
   using VariableImportMap = container::map<Variable, std::string>;
 
-  ItfGeneratorContext() = default;
+  ItfGeneratorContext()
+      : ReorderingContext(MemoryLayout::ColumnMajor, assume_real_orbitals{}){};
   ~ItfGeneratorContext() = default;
 
   std::string index_name(const IndexSpace &space, std::size_t ordinal) const;

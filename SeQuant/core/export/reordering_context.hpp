@@ -40,6 +40,10 @@ class ReorderingContext : public ExportContext {
  private:
   MemoryLayout m_layout;
   bool m_real_orbitals;
+
+ protected:
+  bool is_ordered(const IndexSpace &lhs, const IndexSpace &rhs) const;
+  bool needs_swap(const IndexSpace &lhs, const IndexSpace &rhs) const;
 };
 
 }  // namespace sequant

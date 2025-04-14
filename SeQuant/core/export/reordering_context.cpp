@@ -6,34 +6,6 @@
 
 namespace sequant {
 
-struct IndexSpaceSizeComparer {
-  IndexSpaceSizeComparer(MemoryLayout layout) : layout(layout) {}
-
-  bool operator()(const Index &lhs, const Index &rhs) const {
-    return (*this)(lhs.space(), rhs.space());
-  }
-
-  // If index spaces are sorted based on this comparison, the largest index
-  // space will end up in the slot with greatest cache-locality
-  bool operator()(const IndexSpace &lhs, const IndexSpace &rhs) const {
-    switch (layout) {
-      case MemoryLayout::RowMajor:
-        // Fastest index is right-most in [abcd]
-        return lhs.approximate_size() < rhs.approximate_size();
-      case MemoryLayout::ColumnMajor:
-        // Fastest index is left-most in [abcd]
-        return lhs.approximate_size() > rhs.approximate_size();
-      case MemoryLayout::Unspecified:
-        return false;
-    }
-
-    assert(false);
-    return false;
-  }
-
-  MemoryLayout layout;
-};
-
 template <typename Range>
   requires std::ranges::range<Range> &&
            std::is_same_v<std::ranges::range_value_t<Range>, Index>
@@ -76,18 +48,17 @@ bool ReorderingContext::rewrite(Tensor &tensor) const {
   using std::ranges::begin;
   using std::ranges::end;
 
-  const IndexSpaceSizeComparer cmp(m_layout);
-  const auto needs_swap = [&](const IndexSpace &lhs, const IndexSpace &rhs) {
-    return lhs != rhs && !cmp(lhs, rhs);
+  auto comparator = [this](const Index &lhs, const Index &rhs) {
+    return this->is_ordered(lhs.space(), rhs.space());
   };
 
   // Note: In theory we could apply the same logic to antisymmetric index
   // groups but reordering those might incur a sign change, which we can't
   // represent by simply changing the Tensor object
   bool sort_bra = tensor.symmetry() == Symmetry::symm &&
-                  !std::ranges::is_sorted(tensor.bra(), cmp);
+                  !std::ranges::is_sorted(tensor.bra(), comparator);
   bool sort_ket = tensor.symmetry() == Symmetry::symm &&
-                  !std::ranges::is_sorted(tensor.ket(), cmp);
+                  !std::ranges::is_sorted(tensor.ket(), comparator);
 
   IndexSpace relevant_bra = sort_bra ? max_space_size_idx(tensor.bra())
                                      : relevant_space(tensor.bra(), m_layout);
@@ -132,18 +103,18 @@ bool ReorderingContext::rewrite(Tensor &tensor) const {
 
   if (sort_bra) {
     if (swap_braket) {
-      std::sort(indices.begin() + second_begin_idx, indices.end(), cmp);
+      std::sort(indices.begin() + second_begin_idx, indices.end(), comparator);
     } else {
       std::sort(indices.begin() + first_begin_idx,
-                indices.begin() + second_begin_idx, cmp);
+                indices.begin() + second_begin_idx, comparator);
     }
   }
   if (sort_ket) {
     if (swap_braket) {
       std::sort(indices.begin() + first_begin_idx,
-                indices.begin() + second_begin_idx, cmp);
+                indices.begin() + second_begin_idx, comparator);
     } else {
-      std::sort(indices.begin() + second_begin_idx, indices.end(), cmp);
+      std::sort(indices.begin() + second_begin_idx, indices.end(), comparator);
     }
   }
 
@@ -154,6 +125,28 @@ bool ReorderingContext::rewrite(Tensor &tensor) const {
   tensor = Tensor(tensor.label(), bra(), ket(), aux(std::move(indices)));
 
   return true;
+}
+
+bool ReorderingContext::is_ordered(const IndexSpace &lhs,
+                                   const IndexSpace &rhs) const {
+  switch (m_layout) {
+    case MemoryLayout::RowMajor:
+      // Fastest index is right-most in [abcd]
+      return lhs.approximate_size() <= rhs.approximate_size();
+    case MemoryLayout::ColumnMajor:
+      // Fastest index is left-most in [abcd]
+      return lhs.approximate_size() >= rhs.approximate_size();
+    case MemoryLayout::Unspecified:
+      return false;
+  }
+
+  assert(false);
+  return false;
+}
+
+bool ReorderingContext::needs_swap(const IndexSpace &lhs,
+                                   const IndexSpace &rhs) const {
+  return lhs != rhs && !is_ordered(lhs, rhs);
 }
 
 }  // namespace sequant
