@@ -19,7 +19,8 @@ Files
 - :ref:`file_SeQuant_domain_eval_cache_manager.cpp`
 - :ref:`file_SeQuant_domain_eval_cache_manager.hpp`
 - :ref:`file_SeQuant_domain_eval_eval.hpp`
-- :ref:`file_SeQuant_domain_eval_eval_result.cpp`
-- :ref:`file_SeQuant_domain_eval_eval_result.hpp`
+- :ref:`file_SeQuant_domain_eval_eval_fwd.hpp`
+- :ref:`file_SeQuant_domain_eval_result.cpp`
+- :ref:`file_SeQuant_domain_eval_result.hpp`
 
 

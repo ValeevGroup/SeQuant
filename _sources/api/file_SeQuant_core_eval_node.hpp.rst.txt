@@ -88,18 +88,11 @@ Functions
 ---------
 
 
-- :ref:`exhale_function_namespacesequant_1acab4cb56007fd0234e4e50cb5644b9e6`
+- :ref:`exhale_function_namespacesequant_1a078de15ae346d262eed273b0516540c6`
 
-- :ref:`exhale_function_namespacesequant_1ad87336ae3651a9bdeca591845c4227ea`
+- :ref:`exhale_function_namespacesequant_1aef83cec256560574ec11e77f271ff615`
 
-- :ref:`exhale_function_namespacesequant_1a7b045a5c2e6d4bd488eaa1b64c796daf`
-
-
-Typedefs
---------
-
-
-- :ref:`exhale_typedef_namespacesequant_1a25135b0aeaefabca7c130e4ea759f2f7`
+- :ref:`exhale_function_namespacesequant_1aa6510967fc3fe6d5651e4d9d8a38f9c0`
 
 
 Variables

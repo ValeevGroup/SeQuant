@@ -217,6 +217,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../user/getting_started/installing.html">Installation</a></li>
 <li class="toctree-l1 has-children"><a class="reference internal" href="../user/guide/index.html">User Guide</a><input class="toctree-checkbox" id="toctree-checkbox-2" name="toctree-checkbox-2" role="switch" type="checkbox"/><label for="toctree-checkbox-2"><div class="visually-hidden">Toggle navigation of User Guide</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
 <li class="toctree-l2"><a class="reference internal" href="../user/guide/cc.html">Coupled-Cluster Class</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user/guide/evaluation.html">Evaluation Trace Analysis Using Nushell</a></li>
 </ul>
 </li>
 </ul>
@@ -283,7 +284,8 @@
 <li><p><a class="reference internal" href="#classes" id="id5">Classes</a></p></li>
 <li><p><a class="reference internal" href="#enums" id="id6">Enums</a></p></li>
 <li><p><a class="reference internal" href="#functions" id="id7">Functions</a></p></li>
-<li><p><a class="reference internal" href="#variables" id="id8">Variables</a></p></li>
+<li><p><a class="reference internal" href="#typedefs" id="id8">Typedefs</a></p></li>
+<li><p><a class="reference internal" href="#variables" id="id9">Variables</a></p></li>
 </ul>
 </nav>
 <section id="definition-sequant-core-eval-expr-hpp">
@@ -311,6 +313,7 @@
 <li><p><a class="reference internal" href="file_SeQuant_core_eval_expr.cpp.html#file-sequant-core-eval-expr-cpp"><span class="std std-ref">File eval_expr.cpp</span></a></p></li>
 <li><p><a class="reference internal" href="file_SeQuant_core_eval_node.hpp.html#file-sequant-core-eval-node-hpp"><span class="std std-ref">File eval_node.hpp</span></a></p></li>
 <li><p><a class="reference internal" href="file_SeQuant_core_optimize_optimize.cpp.html#file-sequant-core-optimize-optimize-cpp"><span class="std std-ref">File optimize.cpp</span></a></p></li>
+<li><p><a class="reference internal" href="file_SeQuant_domain_eval_eval_fwd.hpp.html#file-sequant-domain-eval-eval-fwd-hpp"><span class="std std-ref">File eval_fwd.hpp</span></a></p></li>
 </ul>
 </section>
 <section id="namespaces">
@@ -319,12 +322,15 @@
 <li><p><a class="reference internal" href="namespace_sequant.html#namespace-sequant"><span class="std std-ref">Namespace sequant</span></a></p></li>
 <li><p><a class="reference internal" href="namespace_sequant__impl.html#namespace-sequant-impl"><span class="std std-ref">Namespace sequant::impl</span></a></p></li>
 <li><p><a class="reference internal" href="namespace_sequant__meta.html#namespace-sequant-meta"><span class="std std-ref">Namespace sequant::meta</span></a></p></li>
+<li><p><a class="reference internal" href="namespace_sequant__meta__detail.html#namespace-sequant-meta-detail"><span class="std std-ref">Namespace sequant::meta::detail</span></a></p></li>
 </ul>
 </section>
 <section id="classes">
 <h2>Classes<a class="headerlink" href="#classes" title="Link to this heading">¶</a></h2>
 <ul class="simple">
 <li><p><a class="reference internal" href="classsequant_1_1_eval_expr.html#exhale-class-classsequant-1-1-eval-expr"><span class="std std-ref">Class EvalExpr</span></a></p></li>
+<li><p><a class="reference internal" href="classsequant_1_1_eval_expr_b_t_a_s.html#exhale-class-classsequant-1-1-eval-expr-b-t-a-s"><span class="std std-ref">Class EvalExprBTAS</span></a></p></li>
+<li><p><a class="reference internal" href="classsequant_1_1_eval_expr_t_a.html#exhale-class-classsequant-1-1-eval-expr-t-a"><span class="std std-ref">Class EvalExprTA</span></a></p></li>
 </ul>
 </section>
 <section id="enums">
@@ -338,15 +344,20 @@
 <h2>Functions<a class="headerlink" href="#functions" title="Link to this heading">¶</a></h2>
 <ul class="simple">
 <li><p><a class="reference internal" href="function_namespacesequant_1a19983971ffacc64c1a17b61be3f1ac00.html#exhale-function-namespacesequant-1a19983971ffacc64c1a17b61be3f1ac00"><span class="std std-ref">Template Function sequant::binarize(ExprPtr const&amp;)</span></a></p></li>
-<li><p><a class="reference internal" href="function_namespacesequant_1a69ad4b9bf42de3094a548ab772f6bff0.html#exhale-function-namespacesequant-1a69ad4b9bf42de3094a548ab772f6bff0"><span class="std std-ref">Template Function sequant::to_expr</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a113162cb7fd937a9cfbfdf1bb47a4a01.html#exhale-function-namespacesequant-1a113162cb7fd937a9cfbfdf1bb47a4a01"><span class="std std-ref">Function sequant::to_expr</span></a></p></li>
+</ul>
+</section>
+<section id="typedefs">
+<h2>Typedefs<a class="headerlink" href="#typedefs" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p><a class="reference internal" href="typedef_namespacesequant_1a1a5f729f49e32e272bc8feaed6efb15b.html#exhale-typedef-namespacesequant-1a1a5f729f49e32e272bc8feaed6efb15b"><span class="std std-ref">Typedef sequant::EvalNode</span></a></p></li>
 </ul>
 </section>
 <section id="variables">
 <h2>Variables<a class="headerlink" href="#variables" title="Link to this heading">¶</a></h2>
 <ul class="simple">
-<li><p><a class="reference internal" href="variable_namespacesequant_1_1meta_1a06efcb544309967c13c13b51718f5f69.html#exhale-variable-namespacesequant-1-1meta-1a06efcb544309967c13c13b51718f5f69"><span class="std std-ref">Variable sequant::meta::is_eval_expr</span></a></p></li>
-<li><p><a class="reference internal" href="variable_namespacesequant_1_1meta_1a4db74bbbf72d6b4dff3368bebab7c6aa.html#exhale-variable-namespacesequant-1-1meta-1a4db74bbbf72d6b4dff3368bebab7c6aa"><span class="std std-ref">Variable sequant::meta::is_eval_node</span></a></p></li>
-<li><p><a class="reference internal" href="variable_namespacesequant_1_1meta_1a5be0f972e1f1d2749d227f82a6c89661.html#exhale-variable-namespacesequant-1-1meta-1a5be0f972e1f1d2749d227f82a6c89661"><span class="std std-ref">Variable sequant::meta::is_eval_node_range</span></a></p></li>
+<li><p><a class="reference internal" href="variable_namespacesequant_1_1meta_1_1detail_1a9ecac57f3ab312a889b8952becb14dec.html#exhale-variable-namespacesequant-1-1meta-1-1detail-1a9ecac57f3ab312a889b8952becb14dec"><span class="std std-ref">Variable sequant::meta::detail::is_eval_expr</span></a></p></li>
+<li><p><a class="reference internal" href="variable_namespacesequant_1_1meta_1_1detail_1a978e2b869c1917781266622cbed996fe.html#exhale-variable-namespacesequant-1-1meta-1-1detail-1a978e2b869c1917781266622cbed996fe"><span class="std std-ref">Variable sequant::meta::detail::is_eval_node</span></a></p></li>
 </ul>
 </section>
 </section>
@@ -368,7 +379,7 @@
             
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on Apr 11, 2025 8:08:38 AM</div>
+              Last updated on Apr 15, 2025 8:41:08 PM</div>
           </div>
           <div class="right-details">
             <div class="icons">
@@ -400,6 +411,7 @@
 <li><a class="reference internal" href="#classes">Classes</a></li>
 <li><a class="reference internal" href="#enums">Enums</a></li>
 <li><a class="reference internal" href="#functions">Functions</a></li>
+<li><a class="reference internal" href="#typedefs">Typedefs</a></li>
 <li><a class="reference internal" href="#variables">Variables</a></li>
 </ul>
 </li>

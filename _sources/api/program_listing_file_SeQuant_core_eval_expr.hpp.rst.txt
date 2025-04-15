@@ -27,11 +27,9 @@ Program Listing for File eval_expr.hpp
    
    enum class EvalOp {
    
-     Id,
-   
      Sum,
    
-     Prod
+     Product
    };
    
    enum class ResultType { Tensor, Scalar };
@@ -49,7 +47,7 @@ Program Listing for File eval_expr.hpp
      EvalExpr(EvalOp op, ResultType res, ExprPtr const& expr, index_vector ixs,
               std::int8_t phase, size_t hash);
    
-     [[nodiscard]] EvalOp op_type() const noexcept;
+     [[nodiscard]] const std::optional<EvalOp>& op_type() const noexcept;
    
      [[nodiscard]] ResultType result_type() const noexcept;
    
@@ -69,11 +67,17 @@ Program Listing for File eval_expr.hpp
    
      [[nodiscard]] bool is_variable() const noexcept;
    
-     [[nodiscard]] Tensor const& as_tensor() const noexcept;
+     [[nodiscard]] bool is_primary() const noexcept;
    
-     [[nodiscard]] Constant const& as_constant() const noexcept;
+     [[nodiscard]] bool is_product() const noexcept;
    
-     [[nodiscard]] Variable const& as_variable() const noexcept;
+     [[nodiscard]] bool is_sum() const noexcept;
+   
+     [[nodiscard]] Tensor const& as_tensor() const;
+   
+     [[nodiscard]] Constant const& as_constant() const;
+   
+     [[nodiscard]] Variable const& as_variable() const;
    
      [[nodiscard]] std::string label() const noexcept;
    
@@ -84,7 +88,7 @@ Program Listing for File eval_expr.hpp
      [[nodiscard]] std::int8_t canon_phase() const noexcept;
    
     private:
-     EvalOp op_type_;
+     std::optional<EvalOp> op_type_ = std::nullopt;
    
      ResultType result_type_;
    
@@ -97,7 +101,54 @@ Program Listing for File eval_expr.hpp
      ExprPtr expr_;
    };
    
+   class EvalExprTA final : public EvalExpr {
+    public:
+     template <typename... Args, typename = std::enable_if_t<
+                                     std::is_constructible_v<EvalExpr, Args...>>>
+     EvalExprTA(Args&&... args) : EvalExpr{std::forward<Args>(args)...} {
+       annot_ = indices_annot();
+     }
+   
+     [[nodiscard]] inline auto const& annot() const noexcept { return annot_; }
+   
+    private:
+     std::string annot_;
+   };
+   
+   class EvalExprBTAS final : public EvalExpr {
+    public:
+     using annot_t = container::svector<long>;
+   
+     template <typename Iterable>
+     static auto index_hash(Iterable const& bk) {
+       return ranges::views::transform(bk, [](auto const& idx) {
+         //
+         // WARNING!
+         // The BTAS uses long for scalar indexing by default.
+         // Hence, here we explicitly cast the size_t values to long
+         // Which is a potentially narrowing conversion leading to
+         // integral overflow. Hence, the values in the returned
+         // container are mixed negative and positive integers (long type)
+         //
+         return static_cast<long>(sequant::hash::value(Index{idx}.label()));
+       });
+     }
+   
+     template <typename... Args, typename = std::enable_if_t<
+                                     std::is_constructible_v<EvalExpr, Args...>>>
+     EvalExprBTAS(Args&&... args) : EvalExpr{std::forward<Args>(args)...} {
+       annot_ = index_hash(canon_indices()) | ranges::to<annot_t>;
+     }
+   
+     [[nodiscard]] inline annot_t const& annot() const noexcept { return annot_; }
+   
+    private:
+     annot_t annot_;
+   };
+   
    namespace meta {
+   
+   namespace detail {
    template <typename, typename = void>
    constexpr bool is_eval_expr{};
    
@@ -112,22 +163,26 @@ Program Listing for File eval_expr.hpp
    constexpr bool
        is_eval_node<FullBinaryNode<T>, std::enable_if_t<is_eval_expr<T>>>{true};
    
-   template <typename T>
-   constexpr bool is_eval_node<const FullBinaryNode<T>,
-                               std::enable_if_t<is_eval_expr<T>>>{true};
+   }  // namespace detail
    
-   template <typename, typename = void>
-   constexpr bool is_eval_node_range{};
+   template <typename T>
+   concept eval_expr = detail::is_eval_expr<T>;
+   
+   template <typename T>
+   concept eval_node = detail::is_eval_node<std::remove_cvref_t<T>>;
    
    template <typename Rng>
-   constexpr bool is_eval_node_range<
-       Rng, std::enable_if_t<is_eval_node<meta::range_value_t<Rng>>>> = true;
+   concept eval_node_range =
+       std::ranges::range<Rng> && eval_node<std::ranges::range_value_t<Rng>>;
    
    }  // namespace meta
    
    namespace impl {
    FullBinaryNode<EvalExpr> binarize(ExprPtr const&);
    }
+   
+   template <meta::eval_expr T>
+   using EvalNode = FullBinaryNode<T>;
    
    template <typename ExprT = EvalExpr,
              typename = std::enable_if_t<std::is_constructible_v<ExprT, EvalExpr>>>
@@ -137,15 +192,13 @@ Program Listing for File eval_expr.hpp
                            [](auto&& val) { return ExprT{val}; });
    }
    
-   template <typename NodeT,
-             typename = std::enable_if_t<meta::is_eval_node<NodeT>>>
-   ExprPtr to_expr(NodeT const& node) {
+   ExprPtr to_expr(meta::eval_node auto const& node) {
      auto const op = node->op_type();
      auto const& evxpr = *node;
    
      if (node.leaf()) return evxpr.expr();
    
-     if (op == EvalOp::Prod) {
+     if (op == EvalOp::Product) {
        auto prod = Product{};
    
        ExprPtr lexpr = to_expr(node.left());

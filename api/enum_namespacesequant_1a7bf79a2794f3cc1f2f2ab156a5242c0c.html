@@ -217,6 +217,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../user/getting_started/installing.html">Installation</a></li>
 <li class="toctree-l1 has-children"><a class="reference internal" href="../user/guide/index.html">User Guide</a><input class="toctree-checkbox" id="toctree-checkbox-2" name="toctree-checkbox-2" role="switch" type="checkbox"/><label for="toctree-checkbox-2"><div class="visually-hidden">Toggle navigation of User Guide</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
 <li class="toctree-l2"><a class="reference internal" href="../user/guide/cc.html">Coupled-Cluster Class</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user/guide/evaluation.html">Evaluation Trace Analysis Using Nushell</a></li>
 </ul>
 </li>
 </ul>
@@ -280,15 +281,8 @@
 <dl class="cpp enum-class">
 <dt class="sig sig-object cpp" id="_CPPv4N7sequant6EvalOpE">
 <span id="_CPPv3N7sequant6EvalOpE"></span><span id="_CPPv2N7sequant6EvalOpE"></span><span class="target" id="namespacesequant_1a7bf79a2794f3cc1f2f2ab156a5242c0c"></span><span class="k"><span class="pre">enum</span></span><span class="w"> </span><span class="k"><span class="pre">class</span></span><span class="w"> </span><span class="sig-prename descclassname"><span class="n"><span class="pre">sequant</span></span><span class="p"><span class="pre">::</span></span></span><span class="sig-name descname"><span class="n"><span class="pre">EvalOp</span></span></span><a class="headerlink" href="#_CPPv4N7sequant6EvalOpE" title="Link to this definition">¶</a><br /></dt>
-<dd><p>The EvalOp enum. </p>
-<p>The EvalOp enum is used to distinguish between the different binary operations that can be performed on two <a class="reference internal" href="classsequant_1_1_eval_expr.html#classsequant_1_1_eval_expr"><span class="std std-ref">EvalExpr</span></a> objects. </p>
+<dd><p>defines types of binary operations that can be performed on two <a class="reference internal" href="classsequant_1_1_eval_expr.html#classsequant_1_1_eval_expr"><span class="std std-ref">EvalExpr</span></a> objects. </p>
 <p><em>Values:</em></p>
-<dl class="cpp enumerator">
-<dt class="sig sig-object cpp" id="_CPPv4N7sequant6EvalOp2IdE">
-<span id="_CPPv3N7sequant6EvalOp2IdE"></span><span id="_CPPv2N7sequant6EvalOp2IdE"></span><span class="target" id="namespacesequant_1a7bf79a2794f3cc1f2f2ab156a5242c0ca490aa6e856ccf208a054389e47ce0d06"></span><span class="k"><span class="pre">enumerator</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">Id</span></span></span><a class="headerlink" href="#_CPPv4N7sequant6EvalOp2IdE" title="Link to this definition">¶</a><br /></dt>
-<dd><p>Represents the identity evaluation. It is not a binary operation per se. An atomic tensor or an atomic constant is always evaluated this way. </p>
-</dd></dl>
-
 <dl class="cpp enumerator">
 <dt class="sig sig-object cpp" id="_CPPv4N7sequant6EvalOp3SumE">
 <span id="_CPPv3N7sequant6EvalOp3SumE"></span><span id="_CPPv2N7sequant6EvalOp3SumE"></span><span class="target" id="namespacesequant_1a7bf79a2794f3cc1f2f2ab156a5242c0caa0ec87054b5e5b7847d0d8780a01a3d5"></span><span class="k"><span class="pre">enumerator</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">Sum</span></span></span><a class="headerlink" href="#_CPPv4N7sequant6EvalOp3SumE" title="Link to this definition">¶</a><br /></dt>
@@ -296,8 +290,8 @@
 </dd></dl>
 
 <dl class="cpp enumerator">
-<dt class="sig sig-object cpp" id="_CPPv4N7sequant6EvalOp4ProdE">
-<span id="_CPPv3N7sequant6EvalOp4ProdE"></span><span id="_CPPv2N7sequant6EvalOp4ProdE"></span><span class="target" id="namespacesequant_1a7bf79a2794f3cc1f2f2ab156a5242c0ca362a33c23b08e4a32a4ec53fbb82cccd"></span><span class="k"><span class="pre">enumerator</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">Prod</span></span></span><a class="headerlink" href="#_CPPv4N7sequant6EvalOp4ProdE" title="Link to this definition">¶</a><br /></dt>
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant6EvalOp7ProductE">
+<span id="_CPPv3N7sequant6EvalOp7ProductE"></span><span id="_CPPv2N7sequant6EvalOp7ProductE"></span><span class="target" id="namespacesequant_1a7bf79a2794f3cc1f2f2ab156a5242c0cadeb10517653c255364175796ace3553f"></span><span class="k"><span class="pre">enumerator</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">Product</span></span></span><a class="headerlink" href="#_CPPv4N7sequant6EvalOp7ProductE" title="Link to this definition">¶</a><br /></dt>
 <dd><p>Represents the product of two <a class="reference internal" href="classsequant_1_1_eval_expr.html#classsequant_1_1_eval_expr"><span class="std std-ref">EvalExpr</span></a> objects. Such as tensor times a tensor, a constant times a constant, or a tensor times a constant (in either order). </p>
 </dd></dl>
 
@@ -323,7 +317,7 @@
             
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on Apr 11, 2025 8:08:38 AM</div>
+              Last updated on Apr 15, 2025 8:41:08 PM</div>
           </div>
           <div class="right-details">
             <div class="icons">
@@ -350,9 +344,8 @@
 <li><a class="reference internal" href="#">Enum EvalOp</a><ul>
 <li><a class="reference internal" href="#enum-documentation">Enum Documentation</a><ul>
 <li><a class="reference internal" href="#_CPPv4N7sequant6EvalOpE"><code class="docutils literal notranslate"><span class="pre">EvalOp</span></code></a><ul>
-<li><a class="reference internal" href="#_CPPv4N7sequant6EvalOp2IdE"><code class="docutils literal notranslate"><span class="pre">Id</span></code></a></li>
 <li><a class="reference internal" href="#_CPPv4N7sequant6EvalOp3SumE"><code class="docutils literal notranslate"><span class="pre">Sum</span></code></a></li>
-<li><a class="reference internal" href="#_CPPv4N7sequant6EvalOp4ProdE"><code class="docutils literal notranslate"><span class="pre">Prod</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant6EvalOp7ProductE"><code class="docutils literal notranslate"><span class="pre">Product</span></code></a></li>
 </ul>
 </li>
 </ul>

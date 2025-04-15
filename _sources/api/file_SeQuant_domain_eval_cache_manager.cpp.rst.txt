@@ -34,6 +34,8 @@ Includes
 
 - ``SeQuant/domain/eval/cache_manager.hpp`` (:ref:`file_SeQuant_domain_eval_cache_manager.hpp`)
 
+- ``SeQuant/domain/eval/result.hpp`` (:ref:`file_SeQuant_domain_eval_result.hpp`)
+
 
 
 
@@ -50,7 +52,7 @@ Functions
 ---------
 
 
-- :ref:`exhale_function_namespacesequant_1ae6999e1985877fa71d6b4e261c0b2966`
+- :ref:`exhale_function_namespacesequant_1ad69c0540210a5562e0c25ff92b3574aa`
 
 - :ref:`exhale_function_namespacesequant_1ae55da56ce85f7d3d869769dd4f1cbf5e`
 

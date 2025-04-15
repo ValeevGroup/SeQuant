@@ -217,6 +217,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../user/getting_started/installing.html">Installation</a></li>
 <li class="toctree-l1 has-children"><a class="reference internal" href="../user/guide/index.html">User Guide</a><input class="toctree-checkbox" id="toctree-checkbox-2" name="toctree-checkbox-2" role="switch" type="checkbox"/><label for="toctree-checkbox-2"><div class="visually-hidden">Toggle navigation of User Guide</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
 <li class="toctree-l2"><a class="reference internal" href="../user/guide/cc.html">Coupled-Cluster Class</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user/guide/evaluation.html">Evaluation Trace Analysis Using Nushell</a></li>
 </ul>
 </li>
 </ul>
@@ -314,21 +315,21 @@
 
 <dl class="cpp function">
 <dt class="sig sig-object cpp" id="_CPPv4N7sequant12CacheManager6accessE8key_type">
-<span id="_CPPv3N7sequant12CacheManager6accessE8key_type"></span><span id="_CPPv2N7sequant12CacheManager6accessE8key_type"></span><span id="sequant::CacheManager::access__key_type"></span><span class="target" id="classsequant_1_1_cache_manager_1aefbf58d49cf645bc01140212ee54196c"></span><a class="reference internal" href="typedef_namespacesequant_1a436a4cd79515db56afff7b00dcd44e08.html#_CPPv4N7sequant5ERPtrE" title="sequant::ERPtr"><span class="n"><span class="pre">ERPtr</span></span></a><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">access</span></span></span><span class="sig-paren">(</span><a class="reference internal" href="#_CPPv4N7sequant12CacheManager8key_typeE" title="sequant::CacheManager::key_type"><span class="n"><span class="pre">key_type</span></span></a><span class="w"> </span><span class="n sig-param"><span class="pre">key</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">noexcept</span></span><a class="headerlink" href="#_CPPv4N7sequant12CacheManager6accessE8key_type" title="Link to this definition">¶</a><br /></dt>
+<span id="_CPPv3N7sequant12CacheManager6accessE8key_type"></span><span id="_CPPv2N7sequant12CacheManager6accessE8key_type"></span><span id="sequant::CacheManager::access__key_type"></span><span class="target" id="classsequant_1_1_cache_manager_1a9341b833a408013d88ec7358287ed344"></span><span class="n"><span class="pre">ResultPtr</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">access</span></span></span><span class="sig-paren">(</span><a class="reference internal" href="#_CPPv4N7sequant12CacheManager8key_typeE" title="sequant::CacheManager::key_type"><span class="n"><span class="pre">key_type</span></span></a><span class="w"> </span><span class="n sig-param"><span class="pre">key</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">noexcept</span></span><a class="headerlink" href="#_CPPv4N7sequant12CacheManager6accessE8key_type" title="Link to this definition">¶</a><br /></dt>
 <dd><p>Access cached data. </p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><p><strong>key</strong> – The that identifies the cached data. </p>
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>ERPtr to <a class="reference internal" href="classsequant_1_1_eval_result.html#classsequant_1_1_eval_result"><span class="std std-ref">EvalResult</span></a></p>
+<dd class="field-even"><p>ResultPtr to <a class="reference internal" href="classsequant_1_1_result.html#classsequant_1_1_result"><span class="std std-ref">Result</span></a></p>
 </dd>
 </dl>
 </dd></dl>
 
 <dl class="cpp function">
-<dt class="sig sig-object cpp" id="_CPPv4N7sequant12CacheManager5storeE8key_type5ERPtr">
-<span id="_CPPv3N7sequant12CacheManager5storeE8key_type5ERPtr"></span><span id="_CPPv2N7sequant12CacheManager5storeE8key_type5ERPtr"></span><span id="sequant::CacheManager::store__key_type.ERPtr"></span><span class="target" id="classsequant_1_1_cache_manager_1a76974e982c5041ef073bca23a12c098e"></span><a class="reference internal" href="typedef_namespacesequant_1a436a4cd79515db56afff7b00dcd44e08.html#_CPPv4N7sequant5ERPtrE" title="sequant::ERPtr"><span class="n"><span class="pre">ERPtr</span></span></a><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">store</span></span></span><span class="sig-paren">(</span><a class="reference internal" href="#_CPPv4N7sequant12CacheManager8key_typeE" title="sequant::CacheManager::key_type"><span class="n"><span class="pre">key_type</span></span></a><span class="w"> </span><span class="n sig-param"><span class="pre">key</span></span>, <a class="reference internal" href="typedef_namespacesequant_1a436a4cd79515db56afff7b00dcd44e08.html#_CPPv4N7sequant5ERPtrE" title="sequant::ERPtr"><span class="n"><span class="pre">ERPtr</span></span></a><span class="w"> </span><span class="n sig-param"><span class="pre">data</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">noexcept</span></span><a class="headerlink" href="#_CPPv4N7sequant12CacheManager5storeE8key_type5ERPtr" title="Link to this definition">¶</a><br /></dt>
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant12CacheManager5storeE8key_type9ResultPtr">
+<span id="_CPPv3N7sequant12CacheManager5storeE8key_type9ResultPtr"></span><span id="_CPPv2N7sequant12CacheManager5storeE8key_type9ResultPtr"></span><span id="sequant::CacheManager::store__key_type.ResultPtr"></span><span class="target" id="classsequant_1_1_cache_manager_1a5a4e3a8244f90a331f4738ec7bb734d8"></span><span class="n"><span class="pre">ResultPtr</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">store</span></span></span><span class="sig-paren">(</span><a class="reference internal" href="#_CPPv4N7sequant12CacheManager8key_typeE" title="sequant::CacheManager::key_type"><span class="n"><span class="pre">key_type</span></span></a><span class="w"> </span><span class="n sig-param"><span class="pre">key</span></span>, <span class="n"><span class="pre">ResultPtr</span></span><span class="w"> </span><span class="n sig-param"><span class="pre">data</span></span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">noexcept</span></span><a class="headerlink" href="#_CPPv4N7sequant12CacheManager5storeE8key_type9ResultPtr" title="Link to this definition">¶</a><br /></dt>
 <dd><dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
@@ -366,6 +367,26 @@
 <dd><dl class="field-list simple">
 <dt class="field-odd">Returns<span class="colon">:</span></dt>
 <dd class="field-odd"><p>A set of all the keys present in the cache manager. </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant12CacheManager11alive_countEv">
+<span id="_CPPv3NK7sequant12CacheManager11alive_countEv"></span><span id="_CPPv2NK7sequant12CacheManager11alive_countEv"></span><span id="sequant::CacheManager::alive_countC"></span><span class="target" id="classsequant_1_1_cache_manager_1aa5edb29ed5adc117ebdc5539d16ea44b"></span><span class="n"><span class="pre">size_t</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">alive_count</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><span class="w"> </span><span class="k"><span class="pre">noexcept</span></span><a class="headerlink" href="#_CPPv4NK7sequant12CacheManager11alive_countEv" title="Link to this definition">¶</a><br /></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>The number of entries with life_count greater than zero. </p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4NK7sequant12CacheManager13size_in_bytesEv">
+<span id="_CPPv3NK7sequant12CacheManager13size_in_bytesEv"></span><span id="_CPPv2NK7sequant12CacheManager13size_in_bytesEv"></span><span id="sequant::CacheManager::size_in_bytesC"></span><span class="target" id="classsequant_1_1_cache_manager_1a7ca0c1c0e6f8686561707e61f878d425"></span><span class="n"><span class="pre">size_t</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">size_in_bytes</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><span class="w"> </span><span class="k"><span class="pre">noexcept</span></span><a class="headerlink" href="#_CPPv4NK7sequant12CacheManager13size_in_bytesEv" title="Link to this definition">¶</a><br /></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Returns the sum of <code class="docutils literal notranslate"><a class="reference internal" href="classsequant_1_1_result.html#classsequant_1_1_result_1a67d784b304df0386e82bbb1af2363b2f"><span class="std std-ref"><span class="pre">Result::size_in_bytes</span></span></a></code> of alive entries. </p>
 </dd>
 </dl>
 </dd></dl>
@@ -415,7 +436,7 @@
             
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on Apr 11, 2025 8:08:38 AM</div>
+              Last updated on Apr 15, 2025 8:41:08 PM</div>
           </div>
           <div class="right-details">
             <div class="icons">
@@ -450,11 +471,13 @@
 <li><a class="reference internal" href="#_CPPv4I0EN7sequant12CacheManager12CacheManagerERR9Iterable1"><code class="docutils literal notranslate"><span class="pre">CacheManager()</span></code></a></li>
 <li><a class="reference internal" href="#_CPPv4N7sequant12CacheManager5resetEv"><code class="docutils literal notranslate"><span class="pre">reset()</span></code></a></li>
 <li><a class="reference internal" href="#_CPPv4N7sequant12CacheManager6accessE8key_type"><code class="docutils literal notranslate"><span class="pre">access()</span></code></a></li>
-<li><a class="reference internal" href="#_CPPv4N7sequant12CacheManager5storeE8key_type5ERPtr"><code class="docutils literal notranslate"><span class="pre">store()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4N7sequant12CacheManager5storeE8key_type9ResultPtr"><code class="docutils literal notranslate"><span class="pre">store()</span></code></a></li>
 <li><a class="reference internal" href="#_CPPv4NK7sequant12CacheManager6existsE8key_type"><code class="docutils literal notranslate"><span class="pre">exists()</span></code></a></li>
 <li><a class="reference internal" href="#_CPPv4NK7sequant12CacheManager4lifeE8key_type"><code class="docutils literal notranslate"><span class="pre">life()</span></code></a></li>
 <li><a class="reference internal" href="#_CPPv4NK7sequant12CacheManager8max_lifeE8key_type"><code class="docutils literal notranslate"><span class="pre">max_life()</span></code></a></li>
 <li><a class="reference internal" href="#_CPPv4NK7sequant12CacheManager4keysEv"><code class="docutils literal notranslate"><span class="pre">keys()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant12CacheManager11alive_countEv"><code class="docutils literal notranslate"><span class="pre">alive_count()</span></code></a></li>
+<li><a class="reference internal" href="#_CPPv4NK7sequant12CacheManager13size_in_bytesEv"><code class="docutils literal notranslate"><span class="pre">size_in_bytes()</span></code></a></li>
 <li><a class="reference internal" href="#_CPPv4N7sequant12CacheManager5emptyEv"><code class="docutils literal notranslate"><span class="pre">empty()</span></code></a></li>
 <li><a class="reference internal" href="#_CPPv4I0EN7sequant12CacheManager9access_byE"><code class="docutils literal notranslate"><span class="pre">sequant::CacheManager::access_by</span></code></a></li>
 </ul>

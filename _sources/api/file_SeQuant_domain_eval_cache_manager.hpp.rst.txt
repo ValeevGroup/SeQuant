@@ -38,7 +38,7 @@ Includes
 
 - ``SeQuant/core/expr.hpp`` (:ref:`file_SeQuant_core_expr.hpp`)
 
-- ``SeQuant/domain/eval/eval_result.hpp`` (:ref:`file_SeQuant_domain_eval_eval_result.hpp`)
+- ``SeQuant/domain/eval/eval_fwd.hpp`` (:ref:`file_SeQuant_domain_eval_eval_fwd.hpp`)
 
 - ``memory``
 
@@ -79,5 +79,5 @@ Functions
 ---------
 
 
-- :ref:`exhale_function_namespacesequant_1a3bc40974e6d8fcc4e318923a1846944b`
+- :ref:`exhale_function_namespacesequant_1a9bdd3a01e384a2770e2ff95de90a4bc8`
 

@@ -54,6 +54,8 @@ Included By
 
 - :ref:`file_SeQuant_core_optimize_optimize.cpp`
 
+- :ref:`file_SeQuant_domain_eval_eval_fwd.hpp`
+
 
 
 
@@ -67,12 +69,18 @@ Namespaces
 
 - :ref:`namespace_sequant__meta`
 
+- :ref:`namespace_sequant__meta__detail`
+
 
 Classes
 -------
 
 
 - :ref:`exhale_class_classsequant_1_1_eval_expr`
+
+- :ref:`exhale_class_classsequant_1_1_eval_expr_b_t_a_s`
+
+- :ref:`exhale_class_classsequant_1_1_eval_expr_t_a`
 
 
 Enums
@@ -90,16 +98,21 @@ Functions
 
 - :ref:`exhale_function_namespacesequant_1a19983971ffacc64c1a17b61be3f1ac00`
 
-- :ref:`exhale_function_namespacesequant_1a69ad4b9bf42de3094a548ab772f6bff0`
+- :ref:`exhale_function_namespacesequant_1a113162cb7fd937a9cfbfdf1bb47a4a01`
+
+
+Typedefs
+--------
+
+
+- :ref:`exhale_typedef_namespacesequant_1a1a5f729f49e32e272bc8feaed6efb15b`
 
 
 Variables
 ---------
 
 
-- :ref:`exhale_variable_namespacesequant_1_1meta_1a06efcb544309967c13c13b51718f5f69`
+- :ref:`exhale_variable_namespacesequant_1_1meta_1_1detail_1a9ecac57f3ab312a889b8952becb14dec`
 
-- :ref:`exhale_variable_namespacesequant_1_1meta_1a4db74bbbf72d6b4dff3368bebab7c6aa`
-
-- :ref:`exhale_variable_namespacesequant_1_1meta_1a5be0f972e1f1d2749d227f82a6c89661`
+- :ref:`exhale_variable_namespacesequant_1_1meta_1_1detail_1a978e2b869c1917781266622cbed996fe`
 

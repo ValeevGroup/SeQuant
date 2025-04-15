@@ -3,7 +3,7 @@
 Function sequant::log_ta_tensor_host_memory_use
 ===============================================
 
-- Defined in :ref:`file_SeQuant_domain_eval_eval_result.cpp`
+- Defined in :ref:`file_SeQuant_domain_eval_result.cpp`
 
 
 Function Documentation

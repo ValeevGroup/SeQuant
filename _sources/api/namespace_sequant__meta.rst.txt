@@ -13,6 +13,13 @@ Namespace sequant::meta
 
 
 
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant__meta__detail`
+
+
 Classes
 -------
 
@@ -34,12 +41,6 @@ Variables
 
 
 - :ref:`exhale_variable_namespacesequant_1_1meta_1aacddf4c95bac108b32c0e4a201d0a4ba`
-
-- :ref:`exhale_variable_namespacesequant_1_1meta_1a06efcb544309967c13c13b51718f5f69`
-
-- :ref:`exhale_variable_namespacesequant_1_1meta_1a4db74bbbf72d6b4dff3368bebab7c6aa`
-
-- :ref:`exhale_variable_namespacesequant_1_1meta_1a5be0f972e1f1d2749d227f82a6c89661`
 
 - :ref:`exhale_variable_namespacesequant_1_1meta_1adcb303db8cd737ab8a4c7cb2675dd04e`
 

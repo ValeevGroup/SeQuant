@@ -217,6 +217,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../user/getting_started/installing.html">Installation</a></li>
 <li class="toctree-l1 has-children"><a class="reference internal" href="../user/guide/index.html">User Guide</a><input class="toctree-checkbox" id="toctree-checkbox-2" name="toctree-checkbox-2" role="switch" type="checkbox"/><label for="toctree-checkbox-2"><div class="visually-hidden">Toggle navigation of User Guide</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
 <li class="toctree-l2"><a class="reference internal" href="../user/guide/cc.html">Coupled-Cluster Class</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user/guide/evaluation.html">Evaluation Trace Analysis Using Nushell</a></li>
 </ul>
 </li>
 </ul>
@@ -317,7 +318,7 @@
 <li><p><a class="reference internal" href="file_SeQuant_core_tensor_network.cpp.html#file-sequant-core-tensor-network-cpp"><span class="std std-ref">File tensor_network.cpp</span></a></p></li>
 <li><p><a class="reference internal" href="file_SeQuant_core_tensor_network_vertex_painter.cpp.html#file-sequant-core-tensor-network-vertex-painter-cpp"><span class="std std-ref">File vertex_painter.cpp</span></a></p></li>
 <li><p><a class="reference internal" href="file_SeQuant_core_tensor_network_v2.cpp.html#file-sequant-core-tensor-network-v2-cpp"><span class="std std-ref">File tensor_network_v2.cpp</span></a></p></li>
-<li><p><a class="reference internal" href="file_SeQuant_domain_eval_eval_result.hpp.html#file-sequant-domain-eval-eval-result-hpp"><span class="std std-ref">File eval_result.hpp</span></a></p></li>
+<li><p><a class="reference internal" href="file_SeQuant_domain_eval_result.hpp.html#file-sequant-domain-eval-result-hpp"><span class="std std-ref">File result.hpp</span></a></p></li>
 <li><p><a class="reference internal" href="file_SeQuant_domain_mbpt_op.hpp.html#file-sequant-domain-mbpt-op-hpp"><span class="std std-ref">File op.hpp</span></a></p></li>
 </ul>
 </section>
@@ -348,12 +349,12 @@
 <h2>Functions<a class="headerlink" href="#functions" title="Link to this heading">¶</a></h2>
 <ul class="simple">
 <li><p><a class="reference internal" href="function_namespacesequant_1_1hash_1a9396a30bcac59a99a1418df117391864.html#exhale-function-namespacesequant-1-1hash-1a9396a30bcac59a99a1418df117391864"><span class="std std-ref">Template Function sequant::hash::combine</span></a></p></li>
-<li><p><a class="reference internal" href="function_namespacesequant_1_1hash_1a03d04dae60cc048d2e506d880405906c.html#exhale-function-namespacesequant-1-1hash-1a03d04dae60cc048d2e506d880405906c"><span class="std std-ref">Template Function sequant::hash::hash_range(size_t&amp;, It, It)</span></a></p></li>
 <li><p><a class="reference internal" href="function_namespacesequant_1_1hash_1aca3b67cf0ea2617aa26030ef8e0a2ce6.html#exhale-function-namespacesequant-1-1hash-1aca3b67cf0ea2617aa26030ef8e0a2ce6"><span class="std std-ref">Template Function sequant::hash::hash_range(It, It)</span></a></p></li>
-<li><p><a class="reference internal" href="function_namespacesequant_1_1hash_1a93fe63e731c0b4d320d349d46e224e53.html#exhale-function-namespacesequant-1-1hash-1a93fe63e731c0b4d320d349d46e224e53"><span class="std std-ref">Template Function sequant::hash::range(std::size_t&amp;, It, It)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1_1hash_1a03d04dae60cc048d2e506d880405906c.html#exhale-function-namespacesequant-1-1hash-1a03d04dae60cc048d2e506d880405906c"><span class="std std-ref">Template Function sequant::hash::hash_range(size_t&amp;, It, It)</span></a></p></li>
 <li><p><a class="reference internal" href="function_namespacesequant_1_1hash_1ae0df3b24d161aae375c70408e949b41a.html#exhale-function-namespacesequant-1-1hash-1ae0df3b24d161aae375c70408e949b41a"><span class="std std-ref">Template Function sequant::hash::range(It, It)</span></a></p></li>
-<li><p><a class="reference internal" href="function_namespacesequant_1_1hash_1a52918eaa6331829f53459d9b0cb7971e.html#exhale-function-namespacesequant-1-1hash-1a52918eaa6331829f53459d9b0cb7971e"><span class="std std-ref">Template Function sequant::hash::range_unordered(size_t&amp;, It, It)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1_1hash_1a93fe63e731c0b4d320d349d46e224e53.html#exhale-function-namespacesequant-1-1hash-1a93fe63e731c0b4d320d349d46e224e53"><span class="std std-ref">Template Function sequant::hash::range(std::size_t&amp;, It, It)</span></a></p></li>
 <li><p><a class="reference internal" href="function_namespacesequant_1_1hash_1acc041a51c1958b3d9c4b6a93254a85de.html#exhale-function-namespacesequant-1-1hash-1acc041a51c1958b3d9c4b6a93254a85de"><span class="std std-ref">Template Function sequant::hash::range_unordered(It, It)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1_1hash_1a52918eaa6331829f53459d9b0cb7971e.html#exhale-function-namespacesequant-1-1hash-1a52918eaa6331829f53459d9b0cb7971e"><span class="std std-ref">Template Function sequant::hash::range_unordered(size_t&amp;, It, It)</span></a></p></li>
 <li><p><a class="reference internal" href="function_namespacesequant_1_1hash_1a7fc5cf68b16d900d946d7b72045d5128.html#exhale-function-namespacesequant-1-1hash-1a7fc5cf68b16d900d946d7b72045d5128"><span class="std std-ref">Template Function sequant::hash::value</span></a></p></li>
 <li><p><a class="reference internal" href="function_namespacesequant_1ac06e008393f595f8c41d06771520f054.html#exhale-function-namespacesequant-1ac06e008393f595f8c41d06771520f054"><span class="std std-ref">Template Function sequant::hash_value(const T&amp;)</span></a></p></li>
 <li><p><a class="reference internal" href="function_namespacesequant_1a85f4c12085c8bf5ff31527a7a79f781b.html#exhale-function-namespacesequant-1a85f4c12085c8bf5ff31527a7a79f781b"><span class="std std-ref">Function sequant::hash_version</span></a></p></li>
@@ -386,7 +387,7 @@
             
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on Apr 11, 2025 8:08:38 AM</div>
+              Last updated on Apr 15, 2025 8:41:08 PM</div>
           </div>
           <div class="right-details">
             <div class="icons">

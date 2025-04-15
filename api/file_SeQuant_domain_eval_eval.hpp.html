@@ -217,6 +217,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../user/getting_started/installing.html">Installation</a></li>
 <li class="toctree-l1 has-children"><a class="reference internal" href="../user/guide/index.html">User Guide</a><input class="toctree-checkbox" id="toctree-checkbox-2" name="toctree-checkbox-2" role="switch" type="checkbox"/><label for="toctree-checkbox-2"><div class="visually-hidden">Toggle navigation of User Guide</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
 <li class="toctree-l2"><a class="reference internal" href="../user/guide/cc.html">Coupled-Cluster Class</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user/guide/evaluation.html">Evaluation Trace Analysis Using Nushell</a></li>
 </ul>
 </li>
 </ul>
@@ -278,10 +279,6 @@
 <ul class="simple">
 <li><p><a class="reference internal" href="#definition-sequant-domain-eval-eval-hpp" id="id1">Definition (<code class="docutils literal notranslate"><span class="pre">SeQuant/domain/eval/eval.hpp</span></code>)</a></p></li>
 <li><p><a class="reference internal" href="#includes" id="id2">Includes</a></p></li>
-<li><p><a class="reference internal" href="#namespaces" id="id3">Namespaces</a></p></li>
-<li><p><a class="reference internal" href="#classes" id="id4">Classes</a></p></li>
-<li><p><a class="reference internal" href="#functions" id="id5">Functions</a></p></li>
-<li><p><a class="reference internal" href="#variables" id="id6">Variables</a></p></li>
 </ul>
 </nav>
 <section id="definition-sequant-domain-eval-eval-hpp">
@@ -302,7 +299,8 @@
 <li><p><code class="docutils literal notranslate"><span class="pre">SeQuant/core/parse.hpp</span></code> (<a class="reference internal" href="file_SeQuant_core_parse.hpp.html#file-sequant-core-parse-hpp"><span class="std std-ref">File parse.hpp</span></a>)</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">SeQuant/core/tensor.hpp</span></code> (<a class="reference internal" href="file_SeQuant_core_tensor.hpp.html#file-sequant-core-tensor-hpp"><span class="std std-ref">File tensor.hpp</span></a>)</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">SeQuant/domain/eval/cache_manager.hpp</span></code> (<a class="reference internal" href="file_SeQuant_domain_eval_cache_manager.hpp.html#file-sequant-domain-eval-cache-manager-hpp"><span class="std std-ref">File cache_manager.hpp</span></a>)</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">SeQuant/domain/eval/eval_result.hpp</span></code> (<a class="reference internal" href="file_SeQuant_domain_eval_eval_result.hpp.html#file-sequant-domain-eval-eval-result-hpp"><span class="std std-ref">File eval_result.hpp</span></a>)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">SeQuant/domain/eval/eval_fwd.hpp</span></code> (<a class="reference internal" href="file_SeQuant_domain_eval_eval_fwd.hpp.html#file-sequant-domain-eval-eval-fwd-hpp"><span class="std std-ref">File eval_fwd.hpp</span></a>)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">SeQuant/domain/eval/result.hpp</span></code> (<a class="reference internal" href="file_SeQuant_domain_eval_result.hpp.html#file-sequant-domain-eval-result-hpp"><span class="std std-ref">File result.hpp</span></a>)</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">any</span></code> (<a class="reference internal" href="file_SeQuant_core_any.hpp.html#file-sequant-core-any-hpp"><span class="std std-ref">File any.hpp</span></a>)</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">btas/btas.h</span></code></p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">chrono</span></code></p></li>
@@ -312,41 +310,6 @@
 <li><p><code class="docutils literal notranslate"><span class="pre">stdexcept</span></code></p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">tiledarray.h</span></code></p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">type_traits</span></code></p></li>
-</ul>
-</section>
-<section id="namespaces">
-<h2>Namespaces<a class="headerlink" href="#namespaces" title="Link to this heading">¶</a></h2>
-<ul class="simple">
-<li><p><a class="reference internal" href="namespace_sequant.html#namespace-sequant"><span class="std std-ref">Namespace sequant</span></a></p></li>
-</ul>
-</section>
-<section id="classes">
-<h2>Classes<a class="headerlink" href="#classes" title="Link to this heading">¶</a></h2>
-<ul class="simple">
-<li><p><a class="reference internal" href="classsequant_1_1_eval_expr_b_t_a_s.html#exhale-class-classsequant-1-1-eval-expr-b-t-a-s"><span class="std std-ref">Class EvalExprBTAS</span></a></p></li>
-<li><p><a class="reference internal" href="classsequant_1_1_eval_expr_t_a.html#exhale-class-classsequant-1-1-eval-expr-t-a"><span class="std std-ref">Class EvalExprTA</span></a></p></li>
-</ul>
-</section>
-<section id="functions">
-<h2>Functions<a class="headerlink" href="#functions" title="Link to this heading">¶</a></h2>
-<ul class="simple">
-<li><p><a class="reference internal" href="function_namespacesequant_1a4e6daa8c05a50598d16b73a24969f6bd.html#exhale-function-namespacesequant-1a4e6daa8c05a50598d16b73a24969f6bd"><span class="std std-ref">Template Function sequant::evaluate(NodesT const&amp;, Le const&amp;, Args&amp;&amp;…)</span></a></p></li>
-<li><p><a class="reference internal" href="function_namespacesequant_1af94c81c0406c3b6899bdc32dd50aaca0.html#exhale-function-namespacesequant-1af94c81c0406c3b6899bdc32dd50aaca0"><span class="std std-ref">Template Function sequant::evaluate(NodeT const&amp;, Annot const&amp;, Le const&amp;, Args&amp;&amp;…)</span></a></p></li>
-<li><p><a class="reference internal" href="function_namespacesequant_1a9e77ca1c042a46648f894e41a0fe7f09.html#exhale-function-namespacesequant-1a9e77ca1c042a46648f894e41a0fe7f09"><span class="std std-ref">Template Function sequant::evaluate(NodesT const&amp;, Annot const&amp;, Le const&amp;, Args&amp;&amp;…)</span></a></p></li>
-<li><p><a class="reference internal" href="function_namespacesequant_1abb43df794dbd2663991665437459e8ff.html#exhale-function-namespacesequant-1abb43df794dbd2663991665437459e8ff"><span class="std std-ref">Template Function sequant::evaluate(NodeT const&amp;, Le&amp;&amp;, Args&amp;&amp;…)</span></a></p></li>
-<li><p><a class="reference internal" href="function_namespacesequant_1a943364c7e77d7a47c268af0d8db47f7b.html#exhale-function-namespacesequant-1a943364c7e77d7a47c268af0d8db47f7b"><span class="std std-ref">Template Function sequant::evaluate_antisymm</span></a></p></li>
-<li><p><a class="reference internal" href="function_namespacesequant_1af27086da99ee4f6c0f663c9b22eb4877.html#exhale-function-namespacesequant-1af27086da99ee4f6c0f663c9b22eb4877"><span class="std std-ref">Template Function sequant::evaluate_core</span></a></p></li>
-<li><p><a class="reference internal" href="function_namespacesequant_1a7ccf50b632430352b8a5747391836909.html#exhale-function-namespacesequant-1a7ccf50b632430352b8a5747391836909"><span class="std std-ref">Template Function sequant::evaluate_crust(NodeT const&amp;, Le const&amp;)</span></a></p></li>
-<li><p><a class="reference internal" href="function_namespacesequant_1a2f77cd22d1a79db688baecf8605ad394.html#exhale-function-namespacesequant-1a2f77cd22d1a79db688baecf8605ad394"><span class="std std-ref">Template Function sequant::evaluate_crust(NodeT const&amp;, Le const&amp;, CacheManager&amp;)</span></a></p></li>
-<li><p><a class="reference internal" href="function_namespacesequant_1a1efce1468e9bdea65173cda4978ed359.html#exhale-function-namespacesequant-1a1efce1468e9bdea65173cda4978ed359"><span class="std std-ref">Template Function sequant::evaluate_symm</span></a></p></li>
-<li><p><a class="reference internal" href="function_namespacesequant_1a26a0aee529d8e19fe84d2ff4e94df22a.html#exhale-function-namespacesequant-1a26a0aee529d8e19fe84d2ff4e94df22a"><span class="std std-ref">Template Function sequant::mult_by_phase</span></a></p></li>
-</ul>
-</section>
-<section id="variables">
-<h2>Variables<a class="headerlink" href="#variables" title="Link to this heading">¶</a></h2>
-<ul class="simple">
-<li><p><a class="reference internal" href="variable_namespacesequant_1a86b34e9f6b93d64980c4fceb9a4cc3dc.html#exhale-variable-namespacesequant-1a86b34e9f6b93d64980c4fceb9a4cc3dc"><span class="std std-ref">Variable sequant::IsLeafEvaluator</span></a></p></li>
-<li><p><a class="reference internal" href="variable_namespacesequant_1abbdcc38ec0144d350f806c53ef164402.html#exhale-variable-namespacesequant-1abbdcc38ec0144d350f806c53ef164402"><span class="std std-ref">Template Variable sequant::IsLeafEvaluator&lt; NodeT, CacheManager, void &gt;</span></a></p></li>
 </ul>
 </section>
 </section>
@@ -368,7 +331,7 @@
             
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on Apr 11, 2025 8:08:38 AM</div>
+              Last updated on Apr 15, 2025 8:41:08 PM</div>
           </div>
           <div class="right-details">
             <div class="icons">
@@ -395,10 +358,6 @@
 <li><a class="reference internal" href="#">File eval.hpp</a><ul>
 <li><a class="reference internal" href="#definition-sequant-domain-eval-eval-hpp">Definition (<code class="docutils literal notranslate"><span class="pre">SeQuant/domain/eval/eval.hpp</span></code>)</a></li>
 <li><a class="reference internal" href="#includes">Includes</a></li>
-<li><a class="reference internal" href="#namespaces">Namespaces</a></li>
-<li><a class="reference internal" href="#classes">Classes</a></li>
-<li><a class="reference internal" href="#functions">Functions</a></li>
-<li><a class="reference internal" href="#variables">Variables</a></li>
 </ul>
 </li>
 </ul>
