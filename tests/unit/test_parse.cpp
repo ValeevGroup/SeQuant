@@ -249,7 +249,7 @@ TEST_CASE("parsing", "[parse]") {
     }
 
     SECTION("Variable") {
-      // sequant variable is just a label followed by an optional ^*
+      // SeQuant variable is just a label followed by an optional ^*
       // to denote if the variable is conjugated
       REQUIRE(parse_expr(L"a")->is<Variable>());
       REQUIRE(parse_expr(L"α")->is<Variable>());
