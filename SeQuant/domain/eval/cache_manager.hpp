@@ -44,6 +44,8 @@ class CacheManager {
 
     [[nodiscard]] size_t size_in_bytes() const noexcept;
 
+    [[nodiscard]] bool alive() const noexcept;
+
    private:
     [[nodiscard]] int decay() noexcept;
 

@@ -39,6 +39,10 @@ size_t CacheManager::entry::size_in_bytes() const noexcept {
   return data_p ? data_p->size_in_bytes() : 0;
 }
 
+bool CacheManager::entry::alive() const noexcept {
+  return data_p ? true : false;
+}
+
 [[nodiscard]] int CacheManager::entry::decay() noexcept {
   return life_c > 0 ? static_cast<int>(--life_c) : 0;
 }
@@ -87,9 +91,13 @@ container::set<size_t> CacheManager::keys() const noexcept {
 }
 
 size_t CacheManager::alive_count() const noexcept {
+  using ranges::views::filter;
   using ranges::views::transform;
   using ranges::views::values;
-  return ranges::accumulate(cache_map_ | values | transform(&entry::life_count),
+  return ranges::accumulate(cache_map_                            //
+                                | values                          //
+                                | filter(&entry::alive)           //
+                                | transform(&entry::life_count),  //
                             size_t{0});
 }
 
