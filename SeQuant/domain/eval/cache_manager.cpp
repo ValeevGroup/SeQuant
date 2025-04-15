@@ -20,7 +20,9 @@ ResultPtr CacheManager::entry::access() noexcept {
   return decay() == 0 ? std::move(data_p) : data_p;
 }
 
-void CacheManager::entry::store(ResultPtr data) noexcept { data_p = data; }
+void CacheManager::entry::store(ResultPtr&& data) noexcept {
+  data_p = std::move(data);
+}
 
 void CacheManager::entry::reset() noexcept {
   life_c = max_life;
@@ -48,8 +50,8 @@ bool CacheManager::entry::alive() const noexcept {
 }
 
 ResultPtr CacheManager::store(CacheManager::entry& entry,
-                              ResultPtr data) noexcept {
-  entry.store(data);
+                              ResultPtr&& data) noexcept {
+  entry.store(std::move(data));
   return entry.access();
 }
 
@@ -66,7 +68,7 @@ ResultPtr CacheManager::access(key_type key) noexcept {
 
 ResultPtr CacheManager::store(key_type key, ResultPtr data) noexcept {
   if (auto&& found = cache_map_.find(key); found != cache_map_.end())
-    return store(found->second, data);
+    return store(found->second, std::move(data));
   return data;
 }
 

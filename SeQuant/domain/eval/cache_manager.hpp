@@ -34,7 +34,7 @@ class CacheManager {
 
     [[nodiscard]] ResultPtr access() noexcept;
 
-    void store(ResultPtr data) noexcept;
+    void store(ResultPtr&& data) noexcept;
 
     void reset() noexcept;
 
@@ -51,7 +51,7 @@ class CacheManager {
 
   };  // entry
 
-  static ResultPtr store(entry& entry, ResultPtr data) noexcept;
+  static ResultPtr store(entry& entry, ResultPtr&& data) noexcept;
 
   container::map<key_type, entry> cache_map_;
 
