@@ -14,10 +14,10 @@ While in the SeQuant source directory:
       - [Boost.Regex](https://www.boost.org/doc/libs/master/libs/regex/doc/html/index.html)
       - [Boost.Locale](https://www.boost.org/doc/libs/master/libs/locale/doc/html/index.html)
     * [Range-V3](https://github.com/ericniebler/range-v3.git), tag 0.12.0, *if not found, SeQuant will download and build Range-V3*
-    * [libPerm](https://github.com/Krzmbrzl/libPerm), tag a083f6275716d745b405dc89e75e2de5e459788e, *if not found, SeQuant will download and build libPerm*
+    * [libPerm](https://github.com/Krzmbrzl/libPerm), tag 8e4afd1461baffa5d829c8fed059f5a172a3b060, *if not found, SeQuant will download and build libPerm*
   * optional:
     * for building coupled-cluster evaluation tests:
-      * [TiledArray](https://github.com/ValeevGroup/tiledarray.git), tag ce692b587e6d9c0381eb7ac5eed7c148f0abe19d
+      * [TiledArray](https://github.com/ValeevGroup/tiledarray.git), tag 131ed04c989a5c6022d13e0dfe848d7112ffa9e4
     * for building `stcc*` test programs
         * [Eigen](http://eigen.tuxfamily.org/), version 3
 
