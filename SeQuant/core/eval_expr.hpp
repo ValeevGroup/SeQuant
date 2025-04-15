@@ -249,8 +249,7 @@ class EvalExprBTAS final : public EvalExpr {
     return ranges::views::transform(bk, [](auto const& idx) {
       //
       // WARNING!
-      // The BTAS expects index types to be long by default.
-      // There is no straight-forward way to turn the default.
+      // The BTAS uses long for scalar indexing by default.
       // Hence, here we explicitly cast the size_t values to long
       // Which is a potentially narrowing conversion leading to
       // integral overflow. Hence, the values in the returned

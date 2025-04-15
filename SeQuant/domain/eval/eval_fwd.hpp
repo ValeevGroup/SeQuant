@@ -13,7 +13,7 @@ class CacheManager;
 class Result;
 
 ///
-/// \brief Pointer to the evaluated result.
+/// \brief Managed pointer to the result of an evaluation.
 ///
 using ResultPtr = std::shared_ptr<Result>;
 
