@@ -366,6 +366,8 @@ inline void log_constant(Args const&... args) noexcept {
 void log_ta_tensor_host_memory_use(madness::World& world,
                                    std::string_view label = "");
 
+/******************************************************************************/
+
 ///
 /// \brief Factory function for Result objects.
 ///
@@ -378,6 +380,29 @@ template <typename T, typename... Args>
 ResultPtr eval_result(Args&&... args) noexcept {
   return std::make_shared<T>(std::forward<Args>(args)...);
 }
+
+///
+/// \brief This class represents a triplet of annotations used in a tensor
+///        contraction or summation.
+///
+/// \tparam T Annotation type eg. TA::DistArray takes std::string.
+///
+template <typename T>
+struct Annot {
+  explicit Annot(std::array<std::any, 3> const& a)
+      : lannot(std::any_cast<T>(a[0])),
+        rannot(std::any_cast<T>(a[1])),
+        this_annot(std::any_cast<T>(a[2])) {}
+
+  /// Annotation of the left operand.
+  T const lannot;
+
+  /// Annotation of the right operand.
+  T const rannot;
+
+  /// Annotation of the result.
+  T const this_annot;
+};
 
 ///
 /// \brief A type-erased class for the result of an evaluation. An object of
