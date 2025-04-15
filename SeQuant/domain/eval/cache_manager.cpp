@@ -110,11 +110,9 @@ size_t CacheManager::size_in_bytes() const noexcept {
 
 CacheManager CacheManager::empty() noexcept { return CacheManager{{}}; }
 
-template <typename NodeT,
-          typename = std::enable_if_t<meta::is_eval_node<NodeT>>>
-void max_cache(NodeT const& node,  //
-               CacheManager& cm,   //
-               AsyCost& curr,      //
+void max_cache(meta::eval_node auto const& node,  //
+               CacheManager& cm,                  //
+               AsyCost& curr,                     //
                AsyCost& max) {
   auto const k = hash::value(*node);
   if (auto ptr = cm.access(k); ptr) {
