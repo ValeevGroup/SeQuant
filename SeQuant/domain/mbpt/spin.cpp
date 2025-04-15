@@ -784,12 +784,125 @@ ExprPtr S_maps(const ExprPtr& expr) {
   return result;
 }
 
-// In spin.cpp file:
-
 ExprPtr closed_shell_spintrace(
     const ExprPtr& expression,
-    const container::svector<container::svector<Index>>& ext_index_groups,
-    bool is_core_terms) {  // Removed default value here
+    const container::svector<container::svector<Index>>& ext_index_groups) {
+  // Symmetrize and expression
+  // Partially expand the antisymmetrizer and write it in terms of S operator.
+  // See symmetrize_expr(expr) function for implementation details. We want an
+  // expression with non-symmetric tensors, hence we are partially expanding the
+  // antisymmetrizer (A) and fully expanding the anti-symmetric tensors to
+  // non-symmetric.
+  auto symm_and_expand = [](const ExprPtr& expr) {
+    auto temp = expr;
+    if (has_tensor(temp, L"A")) temp = symmetrize_expr(temp);
+    temp = expand_antisymm(temp);
+    rapid_simplify(temp);
+    return temp;
+  };
+  auto expr = symm_and_expand(expression);
+
+  // Index tags are cleaned prior to calling the fast canonicalizer
+  auto reset_idx_tags = [](ExprPtr& expr) {
+    if (expr->is<Tensor>()) expr->as<Tensor>().reset_tags();
+  };
+
+  // Cleanup index tags
+  expr->visit(reset_idx_tags);  // This call is REQUIRED
+  expand(expr);                 // This call is REQUIRED
+  simplify(expr);  // full simplify to combine terms before count_cycles
+
+  // Lambda for spin-tracing a product term
+  // For closed-shell case, a spin-traced result is a product term scaled by
+  // 2^{n_cycles}, where n_cycles are counted by the lambda function described
+  // above. For every product term, the bra indices on all tensors are merged
+  // into a single list, so are the ket indices. External indices are
+  // substituted with either one of the index (because the two vectors should be
+  // permutations of each other to count cycles). All tensors must be nonsymm.
+  auto trace_product = [&ext_index_groups](const Product& product) {
+    // Remove S if present in a product
+    Product temp_product{};
+    temp_product.scale(product.scalar());
+    if (product.factor(0)->as<Tensor>().label() == L"S") {
+      for (auto&& term : product.factors()) {
+        if (term->is<Tensor>() && term->as<Tensor>().label() != L"S")
+          temp_product.append(1, term, Product::Flatten::No);
+      }
+    } else {
+      temp_product = product;
+    }
+
+    auto get_ket_indices = [](const Product& prod) {
+      container::svector<Index> ket_idx;
+      for (auto&& t : prod) {
+        if (t->is<Tensor>())
+          ranges::for_each(t->as<Tensor>().ket(), [&ket_idx](const Index& idx) {
+            ket_idx.push_back(idx);
+          });
+      }
+      return ket_idx;
+    };
+    auto product_kets = get_ket_indices(temp_product);
+
+    auto get_bra_indices = [](const Product& prod) {
+      container::svector<Index> bra_idx;
+      for (auto&& t : prod) {
+        if (t->is<Tensor>())
+          ranges::for_each(t->as<Tensor>().bra(), [&bra_idx](const Index& idx) {
+            bra_idx.push_back(idx);
+          });
+      }
+      return bra_idx;
+    };
+    auto product_bras = get_bra_indices(temp_product);
+
+    auto substitute_ext_idx = [&product_bras, &product_kets](
+                                  const container::svector<Index>& idx_pair) {
+      assert(idx_pair.size() == 2);
+      const auto& what = idx_pair[0];
+      const auto& with = idx_pair[1];
+      std::replace(product_bras.begin(), product_bras.end(), what, with);
+      std::replace(product_kets.begin(), product_kets.end(), what, with);
+    };
+
+    // Substitute indices from external index list
+    ranges::for_each(ext_index_groups, substitute_ext_idx);
+
+    auto n_cycles = count_cycles(product_kets, product_bras);
+
+    auto result = std::make_shared<Product>(product);
+    result->scale(pow2(n_cycles));
+    return result;
+  };
+
+  if (expr->is<Constant>())
+    return expr;
+  else if (expr->is<Tensor>())
+    return trace_product(
+        (ex<Constant>(1) * expr)->as<Product>());  // expand_all(expr);
+  else if (expr->is<Product>())
+    return trace_product(expr->as<Product>());
+  else if (expr->is<Sum>()) {
+    auto result = std::make_shared<Sum>();
+    for (auto&& summand : *expr) {
+      if (summand->is<Product>()) {
+        result->append(trace_product(summand->as<Product>()));
+      } else if (summand->is<Tensor>()) {
+        result->append(
+            trace_product((ex<Constant>(1) * summand)->as<Product>()));
+      } else  // summand->is<Constant>()
+        result->append(summand);
+    }
+    return result;
+  } else
+    return nullptr;
+}
+
+
+// this wroks for each term, but not working for cck calc
+ExprPtr closed_shell_spintrace_core_terms(
+    const ExprPtr& expression,
+    const container::svector<container::svector<Index>>& ext_index_groups) {
   // Symmetrize and expression
   // Partially expand the antisymmetrizer and write it in terms of S operator.
   // See symmetrize_expr(expr) function for implementation details. We want an
@@ -797,33 +910,22 @@ ExprPtr closed_shell_spintrace(
   // antisymmetrizer (A) and fully expanding the anti-symmetric tensors to
   // non-symmetric.
 
-  const auto expansion_time_0 = std::chrono::high_resolution_clock::now();
-  auto partially_or_fully_expand = [&is_core_terms](const ExprPtr& expr) {
-    auto temp = expr;
-    if(has_tensor(temp, L"A")) {
-      if (is_core_terms) {
-        // no partial expansion, only fully expansion (for compact core terms)
-        temp = expand_A_op(temp);
-      } else {
-        temp = symmetrize_expr(temp);
-        // temp = expand_A_op(temp);
-      }
-    }
+// No partial expansion, only fully expansion (for compact core terms)
+  auto fully_expand = [](const ExprPtr& expr) {
+    auto temp= expr;
+    if(has_tensor(temp, L"A")) temp =expand_A_op(temp);
     temp = expand_antisymm(temp);
     rapid_simplify(temp);
     return temp;
   };
-  auto expr = partially_or_fully_expand(expression);
-const auto expansion_time_1 = std::chrono::high_resolution_clock::now();
-  std::chrono::duration<double> expansion_time = expansion_time_1 - expansion_time_0;
-  printf("Expansion_time: %5.3f sec.\n", expansion_time.count());
+  auto expr = fully_expand(expression);
+
   // Index tags are cleaned prior to calling the fast canonicalizer
   auto reset_idx_tags = [](ExprPtr& expr) {
     if (expr->is<Tensor>()) expr->as<Tensor>().reset_tags();
   };
 
   // Cleanup index tags
-
   expr->visit(reset_idx_tags);  // This call is REQUIRED
   expand(expr);                 // This call is REQUIRED
   simplify(expr);  // full simplify to combine terms before count_cycles
@@ -956,44 +1058,237 @@ container::svector<container::svector<Index>> external_indices(
          ranges::to<container::svector<container::svector<Index>>>;
 }
 
-
-ExprPtr closed_shell_CC_spintrace(ExprPtr const& expr, bool is_core_terms) {  // Removed default value here
+ExprPtr closed_shell_CC_spintrace(ExprPtr const& expr) {
   assert(expr->is<Sum>());
   using ranges::views::transform;
 
   auto const ext_idxs = external_indices(expr);
   int residual_order = ext_idxs.size();
-
   printf("\n----- Processing Residual R%d -----\n", residual_order);
 
+  // First, run the original function to get the result (to ensure it works properly)
   const auto spintracing_time_0 = std::chrono::high_resolution_clock::now();
-  auto st_expr = closed_shell_spintrace(expr, ext_idxs, is_core_terms);
+  printf("Input expression size: %zu\n", expr->size());
+  auto st_expr = closed_shell_spintrace(expr, ext_idxs);
+  printf("Output expression size: %zu\n", st_expr->size());
   const auto spintracing_time_1 = std::chrono::high_resolution_clock::now();
   std::chrono::duration<double> spintracing_time = spintracing_time_1 - spintracing_time_0;
-  printf("R%d Spintrace time: %5.3f sec.\n", residual_order, spintracing_time.count());
+  printf("R%d Complete spintrace time: %5.3f sec.\n", residual_order, spintracing_time.count());
+  printf("Average time per output term: %5.6f sec.\n", spintracing_time.count() / st_expr->size());
 
-  const auto canon_time_0 = std::chrono::high_resolution_clock::now();
+  // Now, time individual terms with detailed profiling
+  std::chrono::duration<double> cumulative_individual_time(0);
+  size_t total_output_terms = 0;
+  double max_term_time = 0.0;
+  size_t max_term_index = 0;
+  double min_term_time = std::numeric_limits<double>::max();
+  size_t min_term_index = 0;
+
+  printf("\n----- Term-by-Term Profiling -----\n");
+  printf("Term | Input Size | Output Size | Time (sec) | Time/Term (ms) | Expansion Ratio\n");
+  printf("---------------------------------------------------------------------------\n");
+
+  for (auto it = expr->begin(); it != expr->end(); ++it) {
+    const auto term_time_0 = std::chrono::high_resolution_clock::now();
+
+    // Create a Sum with just this term to process
+    auto single_term = std::make_shared<Sum>();
+    single_term->append((*it)->clone());
+
+    // Process just this term - but don't use the result
+    auto processed_term = closed_shell_spintrace(single_term, ext_idxs);
+    size_t output_size = processed_term->size();
+    total_output_terms += output_size;
+
+    const auto term_time_1 = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> term_time = term_time_1 - term_time_0;
+
+    // Track min/max times
+    double time_sec = term_time.count();
+    if (time_sec > max_term_time) {
+      max_term_time = time_sec;
+      max_term_index = std::distance(expr->begin(), it) + 1;
+    }
+    if (time_sec < min_term_time) {
+      min_term_time = time_sec;
+      min_term_index = std::distance(expr->begin(), it) + 1;
+    }
+
+    // Add to cumulative time
+    cumulative_individual_time += term_time;
+
+    // Calculate time per output term in milliseconds
+    double time_per_term_ms = (output_size > 0) ?
+                            (term_time.count() * 1000.0 / output_size) : 0;
+
+    // Calculate expansion ratio
+    double expansion_ratio = (single_term->size() > 0) ?
+                            (double)output_size / single_term->size() : 0;
+
+    // Print detailed profiling for this term
+    printf("%4ld | %10zu | %11zu | %10.3f | %13.3f\n",
+           std::distance(expr->begin(), it) + 1,
+           single_term->size(),
+           output_size,
+           term_time.count(),
+           time_per_term_ms);
+  }
+
+  // Print summary statistics
+  printf("\n----- Profiling Summary -----\n");
+  printf("Total input terms: %zu\n", expr->size());
+  printf("Total output terms from individual processing: %zu\n", total_output_terms);
+  printf("Total output terms from complete processing: %zu\n", st_expr->size());
+  // printf("Actual expansion ratio: %.2f\n", (double)st_expr->size() / expr->size());
+  printf("Sum of individual expansion ratio: %.2f\n", (double)total_output_terms / expr->size());
+
+  printf("Sum of individual term times: %5.3f sec.\n", cumulative_individual_time.count());
+  printf("Complete processing time: %5.3f sec.\n", spintracing_time.count());
+  printf("Overhead: %5.3f sec (%.2f%%)\n",
+         spintracing_time.count() - cumulative_individual_time.count(),
+         (spintracing_time.count() - cumulative_individual_time.count()) * 100 / spintracing_time.count());
+
+  printf("Fastest term: #%zu (%.6f sec)\n", min_term_index, min_term_time);
+  printf("Slowest term: #%zu (%.6f sec)\n", max_term_index, max_term_time);
+  printf("Average time per term: %.6f sec\n", cumulative_individual_time.count() / expr->size());
+
+  std::wcout << "Number of terms at first: " << st_expr->size() << std::endl;
+
   canonicalize(st_expr);
-  const auto canon_time_1 = std::chrono::high_resolution_clock::now();
-  std::chrono::duration<double> canon_time = canon_time_1 - canon_time_0;
-  printf("R%d Canonicalize time: %5.3f sec.\n", residual_order, canon_time.count());
-    // For core terms, we don't remove S operator and have additional processing
 
+  if (!ext_idxs.empty()) {
+    // Remove S operator
+    for (auto& term : *st_expr) {
+      if (term->is<Product>()) term = remove_tensor(term->as<Product>(), L"S");
+    }
+
+    // Biorthogonal transformation
+    st_expr = biorthogonal_transform(st_expr, ext_idxs);
+    simplify(st_expr);
+    std::wcout << "Number of terms after biorthogonal transform: " << st_expr->size() << std::endl;
+
+    auto bixs = ext_idxs | transform([](auto&& vec) { return vec[1]; });
+    auto kixs = ext_idxs | transform([](auto&& vec) { return vec[0]; });
+    st_expr =
+        ex<Tensor>(Tensor{L"S", bra(std::move(bixs)), ket(std::move(kixs))}) *
+        st_expr;
+  }
+
+  simplify(st_expr);
+
+  return st_expr;
+}
+
+ExprPtr closed_shell_CC_spintrace_core_terms(ExprPtr const& expr) {
+  assert(expr->is<Sum>());
+  using ranges::views::transform;
+
+  auto const ext_idxs = external_indices(expr);
+  int residual_order = ext_idxs.size();
+  printf("\n----- Processing Residual R%d -----\n", residual_order);
+
+  // First, run the original function to get the result (to ensure it works properly)
+  const auto spintracing_time_0 = std::chrono::high_resolution_clock::now();
+  printf("Input expression size: %zu\n", expr->size());
+  auto st_expr = closed_shell_spintrace_core_terms(expr, ext_idxs);
+  printf("Output expression size: %zu\n", st_expr->size());
+  const auto spintracing_time_1 = std::chrono::high_resolution_clock::now();
+  std::chrono::duration<double> spintracing_time = spintracing_time_1 - spintracing_time_0;
+  printf("R%d Complete spintrace_core time: %5.3f sec.\n", residual_order, spintracing_time.count());
+  printf("Average time per output term: %5.6f sec.\n", spintracing_time.count() / st_expr->size());
+
+  // Now, time individual terms with detailed profiling
+  std::chrono::duration<double> cumulative_individual_time(0);
+  size_t total_output_terms = 0;
+  double max_term_time = 0.0;
+  size_t max_term_index = 0;
+  double min_term_time = std::numeric_limits<double>::max();
+  size_t min_term_index = 0;
+
+  printf("\n----- Term-by-Term Profiling -----\n");
+  printf("Term | Input Size | Output Size | Time (sec) | Time/Term (ms) | Expansion Ratio\n");
+  printf("---------------------------------------------------------------------------\n");
+
+  for (auto it = expr->begin(); it != expr->end(); ++it) {
+    const auto term_time_0 = std::chrono::high_resolution_clock::now();
+
+    // Create a Sum with just this term to process
+    auto single_term = std::make_shared<Sum>();
+    single_term->append((*it)->clone());
+
+    // Process just this term - but don't use the result
+    auto processed_term = closed_shell_spintrace_core_terms(single_term, ext_idxs);
+    size_t output_size = processed_term->size();
+    total_output_terms += output_size;
+
+    const auto term_time_1 = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> term_time = term_time_1 - term_time_0;
+
+    // Track min/max times
+    double time_sec = term_time.count();
+    if (time_sec > max_term_time) {
+      max_term_time = time_sec;
+      max_term_index = std::distance(expr->begin(), it) + 1;
+    }
+    if (time_sec < min_term_time) {
+      min_term_time = time_sec;
+      min_term_index = std::distance(expr->begin(), it) + 1;
+    }
+
+    // Add to cumulative time
+    cumulative_individual_time += term_time;
+
+    // Calculate time per output term in milliseconds
+    double time_per_term_ms = (output_size > 0) ?
+                            (term_time.count() * 1000.0 / output_size) : 0;
+
+    // Calculate expansion ratio
+    double expansion_ratio = (single_term->size() > 0) ?
+                            (double)output_size / single_term->size() : 0;
+
+    // Print detailed profiling for this term
+    printf("%4ld | %10zu | %11zu | %10.3f | %13.3f\n",
+           std::distance(expr->begin(), it) + 1,
+           single_term->size(),
+           output_size,
+           term_time.count(),
+           time_per_term_ms);
+  }
+
+  // Print summary statistics
+  printf("\n----- Profiling Summary -----\n");
+  printf("Total input terms: %zu\n", expr->size());
+  printf("Total output terms from individual processing: %zu\n", total_output_terms);
+  printf("Total output terms from complete processing: %zu\n", st_expr->size());
+  // printf("Actual expansion ratio: %.2f\n", (double)st_expr->size() / expr->size());
+  printf("Sum of individual expansion ratio: %.2f\n", (double)total_output_terms / expr->size());
+
+  printf("Sum of individual term times: %5.3f sec.\n", cumulative_individual_time.count());
+  printf("Complete processing time: %5.3f sec.\n", spintracing_time.count());
+  printf("Overhead: %5.3f sec (%.2f%%)\n",
+         spintracing_time.count() - cumulative_individual_time.count(),
+         (spintracing_time.count() - cumulative_individual_time.count()) * 100 / spintracing_time.count());
+
+  printf("Fastest term: #%zu (%.6f sec)\n", min_term_index, min_term_time);
+  printf("Slowest term: #%zu (%.6f sec)\n", max_term_index, max_term_time);
+  printf("Average time per term: %.6f sec\n", cumulative_individual_time.count() / expr->size());
+
+  // Keeping the rest of the function as is
+  canonicalize(st_expr);
   const auto biT_time_0 = std::chrono::high_resolution_clock::now();
-    if (is_core_terms) {
-      if (!ext_idxs.empty()) {
+  if (!ext_idxs.empty()) {
     // std::wcout << "size of st_expr before biorthogonal transform " << st_expr.size() << std::endl;
     st_expr = biorthogonal_transform(st_expr, ext_idxs);
   }
-      const auto biT_time_1 = std::chrono::high_resolution_clock::now();
-      std::chrono::duration<double> biortho_T_time = biT_time_1 - biT_time_0;
-        printf("R%d Bioerho-transform time: %5.3f sec.\n", residual_order, biortho_T_time.count());
+  const auto biT_time_1 = std::chrono::high_resolution_clock::now();
+  std::chrono::duration<double> biortho_T_time = biT_time_1 - biT_time_0;
+  printf("R%d Bioerho-transform time: %5.3f sec.\n", residual_order, biortho_T_time.count());
 
-      const auto f_simlify_time_0 = std::chrono::high_resolution_clock::now();
-      simplify(st_expr);
-      const auto f_simplify_time_1 = std::chrono::high_resolution_clock::now();
-      std::chrono::duration<double> f_simplify_time = f_simplify_time_1 - f_simlify_time_0;
-      printf("R%d Frist-Simplify time: %5.3f sec.\n", residual_order, f_simplify_time.count());  // std::wcout << "reordered after biorthogonal: " << sequant::to_latex_align(sequant::ex<sequant::Sum>(sequant::opt::reorder(st_expr->as<sequant::Sum>())), 0, 4) << std::endl;
+  const auto f_simlify_time_0 = std::chrono::high_resolution_clock::now();
+  simplify(st_expr);
+  const auto f_simplify_time_1 = std::chrono::high_resolution_clock::now();
+  std::chrono::duration<double> f_simplify_time = f_simplify_time_1 - f_simlify_time_0;
+  printf("R%d Frist-Simplify time: %5.3f sec.\n", residual_order, f_simplify_time.count());  // std::wcout << "reordered after biorthogonal: " << sequant::to_latex_align(sequant::ex<sequant::Sum>(sequant::opt::reorder(st_expr->as<sequant::Sum>())), 0, 4) << std::endl;
 
   // to use st_expr->front() we need to fist simplify the
   // std::wcout << "after biorthogonal transform and simplify: " << to_latex(st_expr->front()) << std::endl;
@@ -1131,101 +1426,57 @@ ExprPtr closed_shell_CC_spintrace(ExprPtr const& expr, bool is_core_terms) {  //
     // now replace the filtered result with my verified result
     result_expr = verified_result;
 }
-*/
-  } else {
+
+  */} else {
     // for r1 and r2, just return the simplified expression without hash-based filtering
     result_expr = st_expr;
     std::wcout << "Skipping hash-based filtering for r1 and r2" << std::endl;
   }
 
   // now I need S, becaue I picked multiple larg coefs of each set of terms. so apply S tensor multiplication just once at the end
-      const auto core_addingS_time_0 = std::chrono::high_resolution_clock::now();
-   auto bixs = ext_idxs | transform([](auto&& vec) { return vec[1]; });
-   auto kixs = ext_idxs | transform([](auto&& vec) { return vec[0]; });
-   result_expr = ex<Tensor>(Tensor{L"S", bra(std::move(bixs)), ket(std::move(kixs))}) * result_expr;
-      const auto core_addingS_time_1 = std::chrono::high_resolution_clock::now();
-      std::chrono::duration<double> core_addingS_time = core_addingS_time_1 - core_addingS_time_0;
-      printf("R%d Add-S time: %5.3f sec.\n", residual_order, core_addingS_time.count());
-      const auto norm_time_0 = std::chrono::high_resolution_clock::now();
+  const auto core_addingS_time_0 = std::chrono::high_resolution_clock::now();
+  auto bixs = ext_idxs | transform([](auto&& vec) { return vec[1]; });
+  auto kixs = ext_idxs | transform([](auto&& vec) { return vec[0]; });
+  result_expr = ex<Tensor>(Tensor{L"S", bra(std::move(bixs)), ket(std::move(kixs))}) * result_expr;
+  const auto core_addingS_time_1 = std::chrono::high_resolution_clock::now();
+  std::chrono::duration<double> core_addingS_time = core_addingS_time_1 - core_addingS_time_0;
+  printf("R%d Add-S time: %5.3f sec.\n", residual_order, core_addingS_time.count());
+  const auto norm_time_0 = std::chrono::high_resolution_clock::now();
 
-      rational normalization_factor;
-      switch(ext_idxs.size()) {
-        case 1:  // r1
-          normalization_factor = rational(1, 1);  // No normalization needed
-        break;
-        case 2:  // r2
-          normalization_factor = rational(1, 2);  // 1/2 for doubles
-        break;
-        case 3:  // r3
-          normalization_factor = rational(1, 5);  // 1/6 for triples * 6/5
-        break;
-        case 4:
-          normalization_factor = rational(1, 23); // 1/24 * 24/23
-        break;
-      }
-      result_expr = ex<Constant>(normalization_factor) * result_expr;
-      const auto norm_time_1 = std::chrono::high_resolution_clock::now();
-      std::chrono::duration<double> norm_time = norm_time_1 - norm_time_0;
-      printf("R%d Normalization time: %5.3f sec.\n", residual_order, norm_time.count());  // std::wcout << "final eqns after symm: " << sequant::to_latex_align(sequant::ex<sequant::Sum>(sequant::opt::reorder(result_expr->as<sequant::Sum>())), 0, 4) << std::endl;
+  rational normalization_factor;
+  switch(ext_idxs.size()) {
+    case 1:  // r1
+      normalization_factor = rational(1, 1);  // No normalization needed
+    break;
+    case 2:  // r2
+      normalization_factor = rational(1, 2);  // 1/2 for doubles
+    break;
+    case 3:  // r3
+      normalization_factor = rational(1, 5);  // 1/6 for triples * 6/5
+    break;
+    case 4:
+      normalization_factor = rational(1, 23); // 1/24 * 24/23
+    break;
+  }
+  result_expr = ex<Constant>(normalization_factor) * result_expr;
+  const auto norm_time_1 = std::chrono::high_resolution_clock::now();
+  std::chrono::duration<double> norm_time = norm_time_1 - norm_time_0;
+  printf("R%d Normalization time: %5.3f sec.\n", residual_order, norm_time.count());  // std::wcout << "final eqns after symm: " << sequant::to_latex_align(sequant::ex<sequant::Sum>(sequant::opt::reorder(result_expr->as<sequant::Sum>())), 0, 4) << std::endl;
 
-   // result_expr = remove_tensor(result_expr, L"S");
+  // result_expr = remove_tensor(result_expr, L"S");
 
-      const auto t_simlify_time_0 = std::chrono::high_resolution_clock::now();
-      simplify(result_expr);
-      const auto t_simplify_time_1 = std::chrono::high_resolution_clock::now();
-      std::chrono::duration<double> t_simplify_time = t_simplify_time_1 - t_simlify_time_0;
-      printf("R%d Tird-Simplify time: %5.3f sec.\n", residual_order, t_simplify_time.count());  // std::wcout << "final eqns after symm: " << sequant::to_latex_align(sequant::ex<sequant::Sum>(sequant::opt::reorder(result_expr->as<sequant::Sum>())), 0, 4) << std::endl;
+  const auto t_simlify_time_0 = std::chrono::high_resolution_clock::now();
+  simplify(result_expr);
+  const auto t_simplify_time_1 = std::chrono::high_resolution_clock::now();
+  std::chrono::duration<double> t_simplify_time = t_simplify_time_1 - t_simlify_time_0;
+  printf("R%d Tird-Simplify time: %5.3f sec.\n", residual_order, t_simplify_time.count());  // std::wcout << "final eqns after symm: " << sequant::to_latex_align(sequant::ex<sequant::Sum>(sequant::opt::reorder(result_expr->as<sequant::Sum>())), 0, 4) << std::endl;
 
-      std::wcout << "Number of Biorthogonal Core Terms after symm and normalization: " << result_expr.size() << std::endl;
+  std::wcout << "Number of Biorthogonal Core Terms after symm and normalization: " << result_expr.size() << std::endl;
   // std::wcout << "final eqns after symm: " << sequant::to_latex_align(sequant::ex<sequant::Sum>(sequant::opt::reorder(result_expr->as<sequant::Sum>())), 0, 4) << std::endl;
 
   return result_expr;
-    }else {
-      if (!ext_idxs.empty()) {
-        // original sequant eqns: Remove S operator
-        const auto removeS_time_0 = std::chrono::high_resolution_clock::now();
-        for (auto& term : *st_expr) {
-          if (term->is<Product>()) term = remove_tensor(term->as<Product>(), L"S");
-        }
-        const auto removeS_time_1 = std::chrono::high_resolution_clock::now();
-        std::chrono::duration<double> removeS_time = removeS_time_1 - removeS_time_0;
-        // printf("old_removeS_time: %5.3f sec.\n", removeS_time.count());
-        printf("R%d Remove-S time: %5.3f sec.\n", residual_order, removeS_time.count());
-
-
-        const auto biortho_time_0 = std::chrono::high_resolution_clock::now();
-        // Biorthogonal transformation
-        st_expr = biorthogonal_transform(st_expr, ext_idxs);
-        const auto biortho_time_1 = std::chrono::high_resolution_clock::now();
-        std::chrono::duration<double> biortho_time = biortho_time_1 - biortho_time_0;
-        printf("R%d Biortho-transform time: %5.3f sec.\n", residual_order, biortho_time.count());
-
-        const auto addingS_time_0 = std::chrono::high_resolution_clock::now();
-        auto bixs = ext_idxs | transform([](auto&& vec) { return vec[1]; });
-        auto kixs = ext_idxs | transform([](auto&& vec) { return vec[0]; });
-        using sequant::factorial;
-        st_expr =
-            ex<Tensor>(Tensor{L"S", bra(std::move(bixs)), ket(std::move(kixs))}) *
-            st_expr;
-        const auto addingS_time_1 = std::chrono::high_resolution_clock::now();
-        std::chrono::duration<double> addingS_time = addingS_time_1 - addingS_time_0;
-        printf("R%d Add-S time: %5.3f sec.\n", residual_order, addingS_time.count());
-
-        // st_expr = remove_tensor(st_expr, L"S");
-
-        const auto simlify_time_0 = std::chrono::high_resolution_clock::now();
-        simplify(st_expr);
-        const auto simplify_time_1 = std::chrono::high_resolution_clock::now();
-        std::chrono::duration<double> simplify_time = simplify_time_1 - simlify_time_0;
-        printf("R%d Simplify time: %5.3f sec.\n", residual_order, simplify_time.count());
-        // std::wcout << "eqns: " << sequant::to_latex_align(sequant::ex<sequant::Sum>(sequant::opt::reorder(st_expr->as<sequant::Sum>())), 0, 4) << std::endl;
-        std::wcout << "old eqns, # of terms: " << st_expr.size() << std::endl;
-    }
-  }
-
-  simplify(st_expr);
-  return st_expr;
 }
+
 
 ExprPtr closed_shell_CC_spintrace_rigorous(ExprPtr const& expr) {
   assert(expr->is<Sum>());
