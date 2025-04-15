@@ -406,8 +406,8 @@ struct Annot {
 
 ///
 /// \brief A type-erased class for the result of an evaluation. An object of
-///        this class can represent a tensor (eg. TA::TArrayD,
-///        btas::Tesnor<double>, etc.) or a scalar (eg. double, complex<double>
+///        this class can represent a tensor (eg. TA::DistArray,
+///        btas::Tensor, etc.) or a scalar (eg. double, std::complex
 ///        etc.).
 ///
 class Result {

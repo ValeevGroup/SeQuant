@@ -256,7 +256,7 @@ class rand_tensor_yield {
   /// \note The ResultPtr should already exist in the cache otherwise throws.
   ///       This overload is only intended to access already existing ERPtrs
   ///       from the cache. To create a new cache entry use the
-  ///       operator()(Tesnor const&) overload.
+  ///       operator()(Tensor const&) overload.
   ///
   sequant::ResultPtr operator()(std::wstring_view label) const {
     auto&& found = label_to_er_.find(label.data());
