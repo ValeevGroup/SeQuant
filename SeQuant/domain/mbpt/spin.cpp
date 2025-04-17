@@ -1373,141 +1373,143 @@ ExprPtr closed_shell_CC_spintrace_core_terms(ExprPtr const& expr) {
            s_simplify_time.count());
     std::wcout << "Number of Biorthogonal Core Terms: " << result_expr.size()
                << std::endl;
-    // std::wcout << "reordered hash filtered r3: " <<
-    // sequant::to_latex_align(sequant::ex<sequant::Sum>(sequant::opt::reorder(result_expr->as<sequant::Sum>())),
-    // 0, 4) << std::endl;
-    /*
-        // symbolic verification for r3 here
-        if (ext_idxs.size() == 3) {  // Confirm we're dealing with r3
-         std::wcout << "Applying symbolic verification for r3..." << std::endl;
 
-        // to create a new Sum to hold verified terms
-         auto verified_result = std::make_shared<Sum>();
+    // symbolic verification for r3 here
+    if (ext_idxs.size() == 3) {  // Confirm we're dealing with r3
+      std::wcout << "Applying symbolic verification for r3..." << std::endl;
 
-        // here we extract the indices needed for permutations
-         container::svector<Index> idx_list(3);
-         for (size_t i = 0; i < 3; i++) {
-            idx_list[i] = ext_idxs[i][0];  // First index from each group
+      // to create a new Sum to hold verified terms
+      auto verified_result = std::make_shared<Sum>();
+
+      // here we extract the indices needed for permutations
+      container::svector<Index> idx_list(3);
+      for (size_t i = 0; i < 3; i++) {
+        idx_list[i] = ext_idxs[i][0];  // First index from each group
+      }
+
+      // to process all the terms with the permutations
+      for (auto& term : *result_expr) {
+        if (!term->is<Product>()) {
+          verified_result->append(term->clone());
+          continue;
         }
+        auto original_term = term->clone();
+        rational adjusted_coeff = rational(-1, 6) * rational(6, 5);
+        verified_result->append(original_term);
 
-        // to process all the terms with the permutations
-         for (auto& term : *result_expr) {
-            if (!term->is<Product>()) {
-                verified_result->append(term->clone());
-                continue;
-            }
-            auto original_term = term->clone();
-            rational adjusted_coeff = rational(-1, 6) * rational(6, 5);
-            verified_result->append(original_term);
+        container::map<Index, Index> perm1;
+        perm1[idx_list[1]] = idx_list[2];
+        perm1[idx_list[2]] = idx_list[1];
 
-            container::map<Index, Index> perm1;
-            perm1[idx_list[1]] = idx_list[2];
-            perm1[idx_list[2]] = idx_list[1];
+        container::map<Index, Index> perm2;
+        perm2[idx_list[0]] = idx_list[1];
+        perm2[idx_list[1]] = idx_list[0];
 
-            container::map<Index, Index> perm2;
-            perm2[idx_list[0]] = idx_list[1];
-            perm2[idx_list[1]] = idx_list[0];
+        container::map<Index, Index> perm3;
+        perm3[idx_list[0]] = idx_list[2];
+        perm3[idx_list[1]] = idx_list[0];
+        perm3[idx_list[2]] = idx_list[1];
 
-            container::map<Index, Index> perm3;
-            perm3[idx_list[0]] = idx_list[2];
-            perm3[idx_list[1]] = idx_list[0];
-            perm3[idx_list[2]] = idx_list[1];
+        container::map<Index, Index> perm4;
+        perm4[idx_list[0]] = idx_list[1];
+        perm4[idx_list[1]] = idx_list[2];
+        perm4[idx_list[2]] = idx_list[0];
 
-            container::map<Index, Index> perm4;
-            perm4[idx_list[0]] = idx_list[1];
-            perm4[idx_list[1]] = idx_list[2];
-            perm4[idx_list[2]] = idx_list[0];
+        container::map<Index, Index> perm5;
+        perm5[idx_list[0]] = idx_list[2];
+        perm5[idx_list[2]] = idx_list[0];
 
-            container::map<Index, Index> perm5;
-            perm5[idx_list[0]] = idx_list[2];
-            perm5[idx_list[2]] = idx_list[0];
+        rational adjusted_coeffs = rational(-1, 6) * rational(6, 5);
+        verified_result->append(transform_expr(term, perm1, adjusted_coeffs));
+        verified_result->append(transform_expr(term, perm2, adjusted_coeffs));
+        verified_result->append(transform_expr(term, perm3, adjusted_coeffs));
+        verified_result->append(transform_expr(term, perm4, adjusted_coeffs));
+        verified_result->append(transform_expr(term, perm5, adjusted_coeffs));
+      }
 
-            rational adjusted_coeffs = rational(-1, 6) * rational(6, 5);
-            verified_result->append(transform_expr(term, perm1, adjusted_coeffs));
-            verified_result->append(transform_expr(term, perm2, adjusted_coeffs));
-            verified_result->append(transform_expr(term, perm3, adjusted_coeffs));
-            verified_result->append(transform_expr(term, perm4, adjusted_coeffs));
-            verified_result->append(transform_expr(term, perm5, adjusted_coeffs));
-        }
+      std::wcout << "Before simplify, number of terms after verification: "
+                 << verified_result->size() << std::endl;
+      simplify(verified_result);
+      std::wcout << "After simplify, number of terms after verification: "
+                 << verified_result->size() << std::endl;
+      // std::wcout << "verified eqns: " <<
+      // sequant::to_latex_align(sequant::ex<sequant::Sum>(sequant::opt::reorder(verified_result->as<sequant::Sum>())),
+      // 0, 4) << std::endl;
 
-        std::wcout << "Before simplify, number of terms after verification: " << verified_result->size() << std::endl;
-        simplify(verified_result);
-        std::wcout << "After simplify, number of terms after verification: " << verified_result->size() << std::endl;
-      // std::wcout << "verified eqns: " << sequant::to_latex_align(sequant::ex<sequant::Sum>(sequant::opt::reorder(verified_result->as<sequant::Sum>())), 0, 4) << std::endl;
-
-        // now replace the filtered result with my verified result
-        result_expr = verified_result;
+      // now replace the filtered result with my verified result
+      result_expr = verified_result;
     }
 
-      */} else {
-      // for r1 and r2, just return the simplified expression without hash-based
-      // filtering
-      result_expr = st_expr;
-      std::wcout << "Skipping hash-based filtering for r1 and r2" << std::endl;
-    }
+    */
+  } else {
+    // for r1 and r2, just return the simplified expression without hash-based
+    // filtering
+    result_expr = st_expr;
+    std::wcout << "Skipping hash-based filtering for r1 and r2" << std::endl;
+  }
 
-    // now I need S, becaue I picked multiple larg coefs of each set of terms.
-    // so apply S tensor multiplication just once at the end
-    const auto core_addingS_time_0 = std::chrono::high_resolution_clock::now();
-    auto bixs = ext_idxs | transform([](auto&& vec) { return vec[1]; });
-    auto kixs = ext_idxs | transform([](auto&& vec) { return vec[0]; });
-    result_expr =
-        ex<Tensor>(Tensor{L"S", bra(std::move(bixs)), ket(std::move(kixs))}) *
-        result_expr;
-    const auto core_addingS_time_1 = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<double> core_addingS_time =
-        core_addingS_time_1 - core_addingS_time_0;
-    // printf("R%d Add-S time: %5.3f sec.\n", residual_order,
-    // core_addingS_time.count());
-    const auto norm_time_0 = std::chrono::high_resolution_clock::now();
+  // now I need S, becaue I picked multiple larg coefs of each set of terms.
+  // so apply S tensor multiplication just once at the end
+  const auto core_addingS_time_0 = std::chrono::high_resolution_clock::now();
+  auto bixs = ext_idxs | transform([](auto&& vec) { return vec[1]; });
+  auto kixs = ext_idxs | transform([](auto&& vec) { return vec[0]; });
+  result_expr =
+      ex<Tensor>(Tensor{L"S", bra(std::move(bixs)), ket(std::move(kixs))}) *
+      result_expr;
+  const auto core_addingS_time_1 = std::chrono::high_resolution_clock::now();
+  std::chrono::duration<double> core_addingS_time =
+      core_addingS_time_1 - core_addingS_time_0;
+  // printf("R%d Add-S time: %5.3f sec.\n", residual_order,
+  // core_addingS_time.count());
+  const auto norm_time_0 = std::chrono::high_resolution_clock::now();
 
-    rational normalization_factor;
-    switch (ext_idxs.size()) {
-      case 1:                                   // r1
-        normalization_factor = rational(1, 1);  // No normalization needed
-        break;
-      case 2:                                   // r2
-        normalization_factor = rational(1, 2);  // 1/2 for doubles
-        break;
-      case 3:                                   // r3
-        normalization_factor = rational(1, 5);  // 1/6 for triples * 6/5
-        break;
-      case 4:
-        normalization_factor = rational(
-            1, 23);  // 1/24 (for normalization) * 24/23 (recaling for cleanup)
-        break;
-    }
-    result_expr = ex<Constant>(normalization_factor) * result_expr;
-    const auto norm_time_1 = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<double> norm_time = norm_time_1 - norm_time_0;
-    printf(
-        "R%d Normalization time: %5.3f sec.\n", residual_order,
-        norm_time
-            .count());  // std::wcout << "final eqns after symm: " <<
-                        // sequant::to_latex_align(sequant::ex<sequant::Sum>(sequant::opt::reorder(result_expr->as<sequant::Sum>())),
-                        // 0, 4) << std::endl;
+  rational normalization_factor;
+  switch (ext_idxs.size()) {
+    case 1:                                   // r1
+      normalization_factor = rational(1, 1);  // No normalization needed
+      break;
+    case 2:                                   // r2
+      normalization_factor = rational(1, 2);  // 1/2 for doubles
+      break;
+    case 3:                                   // r3
+      normalization_factor = rational(1, 5);  // 1/6 for triples * 6/5
+      break;
+    case 4:
+      normalization_factor = rational(
+          1, 23);  // 1/24 (for normalization) * 24/23 (recaling for cleanup)
+      break;
+  }
+  result_expr = ex<Constant>(normalization_factor) * result_expr;
+  const auto norm_time_1 = std::chrono::high_resolution_clock::now();
+  std::chrono::duration<double> norm_time = norm_time_1 - norm_time_0;
+  printf(
+      "R%d Normalization time: %5.3f sec.\n", residual_order,
+      norm_time
+          .count());  // std::wcout << "final eqns after symm: " <<
+                      // sequant::to_latex_align(sequant::ex<sequant::Sum>(sequant::opt::reorder(result_expr->as<sequant::Sum>())),
+                      // 0, 4) << std::endl;
 
-    // result_expr = remove_tensor(result_expr, L"S");
+  // result_expr = remove_tensor(result_expr, L"S");
 
-    const auto t_simlify_time_0 = std::chrono::high_resolution_clock::now();
-    simplify(result_expr);
-    const auto t_simplify_time_1 = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<double> t_simplify_time =
-        t_simplify_time_1 - t_simlify_time_0;
-    printf(
-        "R%d Tird-Simplify time: %5.3f sec.\n", residual_order,
-        t_simplify_time
-            .count());  // std::wcout << "final eqns after symm: " <<
-                        // sequant::to_latex_align(sequant::ex<sequant::Sum>(sequant::opt::reorder(result_expr->as<sequant::Sum>())),
-                        // 0, 4) << std::endl;
+  const auto t_simlify_time_0 = std::chrono::high_resolution_clock::now();
+  simplify(result_expr);
+  const auto t_simplify_time_1 = std::chrono::high_resolution_clock::now();
+  std::chrono::duration<double> t_simplify_time =
+      t_simplify_time_1 - t_simlify_time_0;
+  printf(
+      "R%d Tird-Simplify time: %5.3f sec.\n", residual_order,
+      t_simplify_time
+          .count());  // std::wcout << "final eqns after symm: " <<
+                      // sequant::to_latex_align(sequant::ex<sequant::Sum>(sequant::opt::reorder(result_expr->as<sequant::Sum>())),
+                      // 0, 4) << std::endl;
 
-    // std::wcout << "Number of Biorthogonal Core Terms after symm and
-    // normalization: " << result_expr.size() << std::endl; std::wcout << "final
-    // eqns after symm: " <<
-    // sequant::to_latex_align(sequant::ex<sequant::Sum>(sequant::opt::reorder(result_expr->as<sequant::Sum>())),
-    // 0, 4) << std::endl;
+  // std::wcout << "Number of Biorthogonal Core Terms after symm and
+  // normalization: " << result_expr.size() << std::endl; std::wcout << "final
+  // eqns after symm: " <<
+  // sequant::to_latex_align(sequant::ex<sequant::Sum>(sequant::opt::reorder(result_expr->as<sequant::Sum>())),
+  // 0, 4) << std::endl;
 
-    return result_expr;
+  return result_expr;
 }
 
 ExprPtr closed_shell_CC_spintrace_rigorous(ExprPtr const& expr) {
