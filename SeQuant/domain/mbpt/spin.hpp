@@ -252,6 +252,13 @@ ExprPtr closed_shell_CC_spintrace(ExprPtr const& expr);
 ///        \c sequant::spintrace instead of sequant::closed_shell_spintrace.
 ExprPtr closed_shell_CC_spintrace_rigorous(ExprPtr const& expr);
 
+ExprPtr closed_shell_spintrace_core_terms(
+    ExprPtr const& expr,
+    const container::svector<container::svector<Index>>& ext_index_groups);
+
+/// @return compact biorthogonal core terms
+ExprPtr closed_shell_CC_spintrace_core_terms(ExprPtr const& expr);
+
 /// Collect all indices from an expression
 container::set<Index, Index::LabelCompare> index_list(const ExprPtr& expr);
 
