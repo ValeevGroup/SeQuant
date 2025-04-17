@@ -412,6 +412,10 @@ ExprPtr biorthogonal_transform(
         ext_index_groups = {},
     double threshold = 1.e-12);
 
+ExprPtr biorthogonal_transform_core_terms(
+    const ExprPtr& expr,
+    const container::svector<container::svector<Index>>& ext_index_groups,
+    const double threshold = 1e-10);
 }  // namespace sequant
 
 #endif  // SEQUANT_DOMAIN_MBPT_SPIN_HPP
