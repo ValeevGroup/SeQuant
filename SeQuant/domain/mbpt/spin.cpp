@@ -1373,74 +1373,76 @@ ExprPtr closed_shell_CC_spintrace_core_terms(ExprPtr const& expr) {
            s_simplify_time.count());
     std::wcout << "Number of Biorthogonal Core Terms: " << result_expr.size()
                << std::endl;
+    /*
+        // symbolic verification for r3 here
+        if (ext_idxs.size() == 3) {  // Confirm we're dealing with r3
+          std::wcout << "Applying symbolic verification for r3..." << std::endl;
 
-    // symbolic verification for r3 here
-    if (ext_idxs.size() == 3) {  // Confirm we're dealing with r3
-      std::wcout << "Applying symbolic verification for r3..." << std::endl;
+          // to create a new Sum to hold verified terms
+          auto verified_result = std::make_shared<Sum>();
 
-      // to create a new Sum to hold verified terms
-      auto verified_result = std::make_shared<Sum>();
+          // here we extract the indices needed for permutations
+          container::svector<Index> idx_list(3);
+          for (size_t i = 0; i < 3; i++) {
+            idx_list[i] = ext_idxs[i][0];  // First index from each group
+          }
 
-      // here we extract the indices needed for permutations
-      container::svector<Index> idx_list(3);
-      for (size_t i = 0; i < 3; i++) {
-        idx_list[i] = ext_idxs[i][0];  // First index from each group
-      }
+          // to process all the terms with the permutations
+          for (auto& term : *result_expr) {
+            if (!term->is<Product>()) {
+              verified_result->append(term->clone());
+              continue;
+            }
+            auto original_term = term->clone();
+            rational adjusted_coeff = rational(-1, 6) * rational(6, 5);
+            verified_result->append(original_term);
 
-      // to process all the terms with the permutations
-      for (auto& term : *result_expr) {
-        if (!term->is<Product>()) {
-          verified_result->append(term->clone());
-          continue;
+            container::map<Index, Index> perm1;
+            perm1[idx_list[1]] = idx_list[2];
+            perm1[idx_list[2]] = idx_list[1];
+
+            container::map<Index, Index> perm2;
+            perm2[idx_list[0]] = idx_list[1];
+            perm2[idx_list[1]] = idx_list[0];
+
+            container::map<Index, Index> perm3;
+            perm3[idx_list[0]] = idx_list[2];
+            perm3[idx_list[1]] = idx_list[0];
+            perm3[idx_list[2]] = idx_list[1];
+
+            container::map<Index, Index> perm4;
+            perm4[idx_list[0]] = idx_list[1];
+            perm4[idx_list[1]] = idx_list[2];
+            perm4[idx_list[2]] = idx_list[0];
+
+            container::map<Index, Index> perm5;
+            perm5[idx_list[0]] = idx_list[2];
+            perm5[idx_list[2]] = idx_list[0];
+
+            rational adjusted_coeffs = rational(-1, 6) * rational(6, 5);
+            verified_result->append(transform_expr(term, perm1,
+       adjusted_coeffs)); verified_result->append(transform_expr(term, perm2,
+       adjusted_coeffs)); verified_result->append(transform_expr(term, perm3,
+       adjusted_coeffs)); verified_result->append(transform_expr(term, perm4,
+       adjusted_coeffs)); verified_result->append(transform_expr(term, perm5,
+       adjusted_coeffs));
+          }
+
+          std::wcout << "Before simplify, number of terms after verification: "
+                     << verified_result->size() << std::endl;
+          simplify(verified_result);
+          std::wcout << "After simplify, number of terms after verification: "
+                     << verified_result->size() << std::endl;
+          // std::wcout << "verified eqns: " <<
+          //
+       sequant::to_latex_align(sequant::ex<sequant::Sum>(sequant::opt::reorder(verified_result->as<sequant::Sum>())),
+          // 0, 4) << std::endl;
+
+          // now replace the filtered result with my verified result
+          result_expr = verified_result;
         }
-        auto original_term = term->clone();
-        rational adjusted_coeff = rational(-1, 6) * rational(6, 5);
-        verified_result->append(original_term);
 
-        container::map<Index, Index> perm1;
-        perm1[idx_list[1]] = idx_list[2];
-        perm1[idx_list[2]] = idx_list[1];
-
-        container::map<Index, Index> perm2;
-        perm2[idx_list[0]] = idx_list[1];
-        perm2[idx_list[1]] = idx_list[0];
-
-        container::map<Index, Index> perm3;
-        perm3[idx_list[0]] = idx_list[2];
-        perm3[idx_list[1]] = idx_list[0];
-        perm3[idx_list[2]] = idx_list[1];
-
-        container::map<Index, Index> perm4;
-        perm4[idx_list[0]] = idx_list[1];
-        perm4[idx_list[1]] = idx_list[2];
-        perm4[idx_list[2]] = idx_list[0];
-
-        container::map<Index, Index> perm5;
-        perm5[idx_list[0]] = idx_list[2];
-        perm5[idx_list[2]] = idx_list[0];
-
-        rational adjusted_coeffs = rational(-1, 6) * rational(6, 5);
-        verified_result->append(transform_expr(term, perm1, adjusted_coeffs));
-        verified_result->append(transform_expr(term, perm2, adjusted_coeffs));
-        verified_result->append(transform_expr(term, perm3, adjusted_coeffs));
-        verified_result->append(transform_expr(term, perm4, adjusted_coeffs));
-        verified_result->append(transform_expr(term, perm5, adjusted_coeffs));
-      }
-
-      std::wcout << "Before simplify, number of terms after verification: "
-                 << verified_result->size() << std::endl;
-      simplify(verified_result);
-      std::wcout << "After simplify, number of terms after verification: "
-                 << verified_result->size() << std::endl;
-      // std::wcout << "verified eqns: " <<
-      // sequant::to_latex_align(sequant::ex<sequant::Sum>(sequant::opt::reorder(verified_result->as<sequant::Sum>())),
-      // 0, 4) << std::endl;
-
-      // now replace the filtered result with my verified result
-      result_expr = verified_result;
-    }
-
-    */
+        */
   } else {
     // for r1 and r2, just return the simplified expression without hash-based
     // filtering
