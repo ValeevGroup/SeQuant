@@ -1155,11 +1155,12 @@ ExprPtr closed_shell_CC_spintrace(ExprPtr const& expr) {
         std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> old_f_simplify_time =
         old_f_simplify_time_1 - old_f_simlify_time_0;
-    printf("R%d Frist-Simplify time: %5.3f sec.\n", residual_order,
-           old_f_simplify_time
-               .count());  // std::wcout << "reordered after biorthogonal: " <<
-                           // sequant::to_latex_align(sequant::ex<sequant::Sum>(sequant::opt::reorder(st_expr->as<sequant::Sum>())),
-                           // 0, 4) << std::endl;
+    printf(
+        "R%d Frist-Simplify time: %5.3f sec.\n", residual_order,
+        old_f_simplify_time
+            .count());  // std::wcout << "reordered after biorthogonal: " <<
+                        // sequant::to_latex_align(sequant::ex<sequant::Sum>(sequant::opt::reorder(st_expr->as<sequant::Sum>())),
+                        // 0, 4) << std::endl;
 
     std::wcout << "Number of terms after biorthogonal transform: "
                << st_expr->size() << std::endl;
@@ -1275,11 +1276,12 @@ ExprPtr closed_shell_CC_spintrace_core_terms(ExprPtr const& expr) {
   const auto f_simplify_time_1 = std::chrono::high_resolution_clock::now();
   std::chrono::duration<double> f_simplify_time =
       f_simplify_time_1 - f_simlify_time_0;
-  printf("R%d Frist-Simplify time: %5.3f sec.\n", residual_order,
-         f_simplify_time
-             .count());  // std::wcout << "reordered after biorthogonal: " <<
-                         // sequant::to_latex_align(sequant::ex<sequant::Sum>(sequant::opt::reorder(st_expr->as<sequant::Sum>())),
-                         // 0, 4) << std::endl;
+  printf(
+      "R%d Frist-Simplify time: %5.3f sec.\n", residual_order,
+      f_simplify_time
+          .count());  // std::wcout << "reordered after biorthogonal: " <<
+                      // sequant::to_latex_align(sequant::ex<sequant::Sum>(sequant::opt::reorder(st_expr->as<sequant::Sum>())),
+                      // 0, 4) << std::endl;
   // std::wcout << "final eqns after symm: " <<
   // sequant::to_latex_align(sequant::ex<sequant::Sum>(sequant::opt::reorder(st_expr->as<sequant::Sum>())),
   // 0, 4) << std::endl;
@@ -1371,9 +1373,9 @@ ExprPtr closed_shell_CC_spintrace_core_terms(ExprPtr const& expr) {
            s_simplify_time.count());
     std::wcout << "Number of Biorthogonal Core Terms: " << result_expr.size()
                << std::endl;
-  // std::wcout << "reordered hash filtered r3: " <<
-  // sequant::to_latex_align(sequant::ex<sequant::Sum>(sequant::opt::reorder(result_expr->as<sequant::Sum>())),
-  // 0, 4) << std::endl;
+    // std::wcout << "reordered hash filtered r3: " <<
+    // sequant::to_latex_align(sequant::ex<sequant::Sum>(sequant::opt::reorder(result_expr->as<sequant::Sum>())),
+    // 0, 4) << std::endl;
     /*
         // symbolic verification for r3 here
         if (ext_idxs.size() == 3) {  // Confirm we're dealing with r3
@@ -1478,10 +1480,12 @@ ExprPtr closed_shell_CC_spintrace_core_terms(ExprPtr const& expr) {
     result_expr = ex<Constant>(normalization_factor) * result_expr;
     const auto norm_time_1 = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> norm_time = norm_time_1 - norm_time_0;
-    printf("R%d Normalization time: %5.3f sec.\n", residual_order,
-           norm_time.count());  // std::wcout << "final eqns after symm: " <<
-                                // sequant::to_latex_align(sequant::ex<sequant::Sum>(sequant::opt::reorder(result_expr->as<sequant::Sum>())),
-                                // 0, 4) << std::endl;
+    printf(
+        "R%d Normalization time: %5.3f sec.\n", residual_order,
+        norm_time
+            .count());  // std::wcout << "final eqns after symm: " <<
+                        // sequant::to_latex_align(sequant::ex<sequant::Sum>(sequant::opt::reorder(result_expr->as<sequant::Sum>())),
+                        // 0, 4) << std::endl;
 
     // result_expr = remove_tensor(result_expr, L"S");
 
@@ -1492,9 +1496,10 @@ ExprPtr closed_shell_CC_spintrace_core_terms(ExprPtr const& expr) {
         t_simplify_time_1 - t_simlify_time_0;
     printf(
         "R%d Tird-Simplify time: %5.3f sec.\n", residual_order,
-        t_simplify_time.count());  // std::wcout << "final eqns after symm: " <<
-                                   // sequant::to_latex_align(sequant::ex<sequant::Sum>(sequant::opt::reorder(result_expr->as<sequant::Sum>())),
-                                   // 0, 4) << std::endl;
+        t_simplify_time
+            .count());  // std::wcout << "final eqns after symm: " <<
+                        // sequant::to_latex_align(sequant::ex<sequant::Sum>(sequant::opt::reorder(result_expr->as<sequant::Sum>())),
+                        // 0, 4) << std::endl;
 
     // std::wcout << "Number of Biorthogonal Core Terms after symm and
     // normalization: " << result_expr.size() << std::endl; std::wcout << "final
