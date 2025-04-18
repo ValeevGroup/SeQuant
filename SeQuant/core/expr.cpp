@@ -185,10 +185,22 @@ ExprPtr Product::canonicalize_impl(bool rapid) {
                      return factor.template is<Variable>();
                    }) |
                    ranges::to_vector;
+  // sort variables
+  ranges::sort(variables, [](const auto &first, const auto &second) {
+    return first.template as<Variable>().label() <
+           second.template as<Variable>().label();
+  });
+
   factors_ = factors_ | ranges::views::filter([](const auto &factor) {
                return !factor.template is<Variable>();
              }) |
              ranges::to<decltype(factors_)>;
+
+  // if there are no factors, insert variables back and return
+  if (factors_.empty()) {
+    factors_.insert(factors_.begin(), variables.begin(), variables.end());
+    return {};
+  }
 
   auto contains_nontensors = ranges::any_of(factors_, [](const auto &factor) {
     return std::dynamic_pointer_cast<AbstractTensor>(factor) == nullptr;
@@ -268,12 +280,7 @@ ExprPtr Product::canonicalize_impl(bool rapid) {
           });
     }
   }
-
-  // sort and reinsert Variables at the front
-  ranges::sort(variables, [](const auto &first, const auto &second) {
-    return first.template as<Variable>().label() <
-           second.template as<Variable>().label();
-  });
+  // reinsert Variables at the front
   factors_.insert(factors_.begin(), variables.begin(), variables.end());
 
   // TODO evaluate product of Tensors (turn this into Products of Products)
@@ -393,26 +400,25 @@ ExprPtr Sum::canonicalize_impl(bool multipass) {
           });
       const auto nidentical = plast_it - first_it;
       assert(nidentical > 1);
-      // combine all identical summands into a Product
+      // combine all identical summands into Product
       auto reduce_range = [first_it, this, nidentical](auto &begin, auto &end) {
-        if (!(*first_it)->is<Product>()) {
+        if ((*first_it)->is<Product>()) {  // handle group of Products
+          auto &prod = (*first_it)->as<Product>();
+          for (auto it = begin + 1; it != end; ++it) {
+            // convert to Product if not already
+            if (!(*it)->template is<Product>()) {
+              *it = std::make_shared<Product>(1, ExprPtrList{*it});
+            }
+            if ((*it)->template is<Product>()) {
+              prod.add_identical((*it)->template as<Product>());
+            }
+          }
+          this->summands_.erase(prod.is_zero() ? first_it : first_it + 1, end);
+        } else {  // handle all other types
           auto product_form = std::make_shared<Product>();
           product_form->append(nidentical, (*first_it)->as<Expr>());
           *first_it = product_form;
           this->summands_.erase(first_it + 1, end);
-        } else {
-          auto &prod = (*first_it)->as<Product>();
-          for (auto it = begin + 1; it != end; ++it) {
-            if (!(*it)->template is<Product>()) {
-              auto product_form = std::make_shared<Product>();
-              product_form->append(1, (*it)->template as<Expr>());
-              *it = product_form;
-            }
-            prod.add_identical((*it)->template as<Product>());
-          }
-          auto erase_range = std::make_pair(first_it + 1, end);
-          if (prod.is_zero()) erase_range.first = first_it;
-          this->summands_.erase(erase_range.first, erase_range.second);
         }
       };
       reduce_range(first_it, plast_it);

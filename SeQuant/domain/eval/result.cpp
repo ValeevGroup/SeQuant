@@ -1,13 +1,13 @@
-#include <SeQuant/domain/eval/eval_result.hpp>
+#include <SeQuant/domain/eval/result.hpp>
 
 namespace sequant {
 
-EvalResult::id_t EvalResult::next_id() noexcept {
+Result::id_t Result::next_id() noexcept {
   static std::atomic<id_t> grand_type_id = 0;
   return ++grand_type_id;
 }
 
-bool EvalResult::has_value() const noexcept { return value_.has_value(); }
+bool Result::has_value() const noexcept { return value_.has_value(); }
 
 void log_ta_tensor_host_memory_use(madness::World& world,
                                    std::string_view label) {

@@ -5,11 +5,10 @@
 #ifndef SEQUANT_EVAL_SCF_TA_HPP
 #define SEQUANT_EVAL_SCF_TA_HPP
 
-#include <SeQuant/domain/eval/eval.hpp>
-
 #include <SeQuant/core/container.hpp>
-#include <SeQuant/core/eval_node.hpp>
 #include <SeQuant/core/parse.hpp>
+#include <SeQuant/domain/eval/cache_manager.hpp>
+#include <SeQuant/domain/eval/eval.hpp>
 
 #include <calc_info.hpp>
 #include <data_info.hpp>
@@ -81,25 +80,24 @@ class SequantEvalScfTA final : public SequantEvalScf {
     using ranges::views::transform;
     using ranges::views::zip;
 
+    using Evaluator =
+        ResultPtr (*)(std::vector<EvalNodeTA> const&, std::string const&,
+                      DataWorldTA<Tensor_t> const&, CacheManager&);
+
+    constexpr auto funcs =
+        std::array{std::array<Evaluator, 2>{evaluate_antisymm<Trace::Off>,
+                                            evaluate_antisymm<Trace::On>},
+                   std::array<Evaluator, 2>{evaluate_symm<Trace::Off>,
+                                            evaluate_symm<Trace::On>}};
+
     auto rs = repeat_n(Tensor_t{}, info_.eqn_opts.excit) | ranges::to_vector;
+    auto st = info_.eqn_opts.spintrace;
+    auto log = Logger::instance().eval.level > 0;
 
     for (auto&& [r, n] : zip(rs, nodes_)) {
       auto const& target_indices = ranges::front(n)->annot();
-      auto st = info_.eqn_opts.spintrace;
-      auto cm = info_.optm_opts.reuse_imeds;
-      if (st && cm) {
-        r = evaluate_symm(n, target_indices, data_world_, cman_)
-                ->template get<Tensor_t>();
-      } else if (st && !cm) {
-        r = evaluate_symm(n, target_indices, data_world_)
-                ->template get<Tensor_t>();
-      } else if (!st && cm) {
-        r = evaluate_antisymm(n, target_indices, data_world_, cman_)
-                ->template get<Tensor_t>();
-      } else {
-        r = evaluate_antisymm(n, target_indices, data_world_)
-                ->template get<Tensor_t>();
-      }
+      r = funcs[st][log](n, target_indices, data_world_, cman_)
+              ->template get<Tensor_t>();
     }
 
     data_world_.update_amplitudes(rs);

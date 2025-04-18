@@ -13,11 +13,8 @@
 
 namespace sequant {
 
-template <typename T, typename = std::enable_if_t<meta::is_eval_expr<T>>>
-using EvalNode = FullBinaryNode<T>;
-
-template <typename ExprT>
-ExprPtr linearize_eval_node(EvalNode<ExprT> const& node) {
+template <meta::eval_node Node>
+ExprPtr linearize_eval_node(Node const& node) {
   if (node.leaf()) return to_expr(node);
 
   ExprPtr lres = linearize_eval_node(node.left());
@@ -27,7 +24,7 @@ ExprPtr linearize_eval_node(EvalNode<ExprT> const& node) {
   assert(rres);
 
   if (node->op_type() == EvalOp::Sum) return ex<Sum>(ExprPtrList{lres, rres});
-  assert(node->op_type() == EvalOp::Prod);
+  assert(node->op_type() == EvalOp::Product);
   return ex<Product>(
       Product{1, ExprPtrList{lres, rres}, Product::Flatten::Yes});
 }
@@ -49,9 +46,7 @@ enum NodePos { Left = 0, Right, This };
 
 class ContractedIndexCount {
  public:
-  template <typename NodeT,
-            typename = std::enable_if_t<meta::is_eval_node<NodeT>>>
-  explicit ContractedIndexCount(NodeT const& n) {
+  explicit ContractedIndexCount(meta::eval_node auto const& n) {
     auto const L = NodePos::Left;
     auto const R = NodePos::Right;
     auto const T = NodePos::This;
@@ -112,12 +107,10 @@ class ContractedIndexCount {
 ///        - Cost of evaluation of children nodes are not counted.
 ///
 struct Flops {
-  template <typename NodeT,
-            typename = std::enable_if_t<meta::is_eval_node<NodeT>>>
-  [[nodiscard]] AsyCost operator()(NodeT const& n) const {
+  [[nodiscard]] AsyCost operator()(meta::eval_node auto const& n) const {
     if (n.leaf()) return AsyCost::zero();
-    if (n->op_type() == EvalOp::Prod  //
-        && n.left()->is_tensor()      //
+    if (n->op_type() == EvalOp::Product  //
+        && n.left()->is_tensor()         //
         && n.right()->is_tensor()) {
       auto const idx_count = ContractedIndexCount{n};
       auto c = AsyCost{idx_count.unique_occs(), idx_count.unique_virts()};
@@ -141,9 +134,7 @@ struct Flops {
 ///         counted.
 ///
 struct Memory {
-  template <typename NodeT,
-            typename = std::enable_if_t<meta::is_eval_node<NodeT>>>
-  [[nodiscard]] AsyCost operator()(NodeT const& n) const {
+  [[nodiscard]] AsyCost operator()(meta::eval_node auto const& n) const {
     AsyCost result;
     auto add_cost = [&result](ExprPtr const& expr) {
       result += expr.is<Tensor>() ? AsyCost{occ_virt(expr.as<Tensor>())}
@@ -165,9 +156,7 @@ struct Memory {
 /// \note The cost of evaluation of leaf nodes is assumed to be zero.
 ///
 struct FlopsWithSymm {
-  template <typename NodeT,
-            typename = std::enable_if_t<meta::is_eval_node<NodeT>>>
-  [[nodiscard]] AsyCost operator()(NodeT const& n) const {
+  [[nodiscard]] AsyCost operator()(meta::eval_node auto const& n) const {
     auto cost = Flops{}(n);
     if (n.leaf() || !(n->is_tensor()            //
                       && n.left()->is_tensor()  //
@@ -193,7 +182,7 @@ struct FlopsWithSymm {
         cost = tsymm == Symmetry::symm
                    ? cost / (factorial(tbrank) * factorial(tkrank))
                    : cost / factorial(tbrank);
-      else if (op == EvalOp::Prod) {
+      else if (op == EvalOp::Product) {
         auto const lsymm = n.left()->as_tensor().symmetry();
         auto const rsymm = n.right()->as_tensor().symmetry();
         cost = (lsymm == rsymm && lsymm == Symmetry::nonsymm)
@@ -219,10 +208,11 @@ struct FlopsWithSymm {
 ///                AsyCost object. @see AsyCost.
 /// \return The asymptotic cost of evaluating the given node.
 ///
-template <typename NodeT, typename F = Flops,
-          typename = std::enable_if_t<meta::is_eval_node<NodeT>>,
-          typename = std::enable_if_t<std::is_invocable_r_v<AsyCost, F, NodeT>>>
-AsyCost asy_cost(NodeT const& node, F const& cost_fn = {}) {
+template <meta::eval_node Node, typename F = Flops>
+  requires requires(F const& fn, Node const& n) {
+    { fn(n) } -> std::same_as<AsyCost>;
+  }
+AsyCost asy_cost(Node const& node, F const& cost_fn = {}) {
   return node.leaf() ? cost_fn(node)
                      : asy_cost(node.left(), cost_fn) +
                            asy_cost(node.right(), cost_fn) + cost_fn(node);
@@ -235,11 +225,9 @@ AsyCost asy_cost(NodeT const& node, F const& cost_fn = {}) {
 ///        evaluating the node and its children.
 /// \return The minimum storage required for evaluating the given node.
 ///
-template <typename NodeT,
-          typename = std::enable_if_t<meta::is_eval_node<NodeT>>>
-AsyCost min_storage(NodeT const& node) {
+AsyCost min_storage(meta::eval_node auto const& node) {
   auto result = AsyCost::zero();
-  auto visitor = [&result](NodeT const& n) {
+  auto visitor = [&result](meta::eval_node auto const& n) {
     auto cost = AsyCost::zero();
     if (n.leaf() && n->is_tensor())
       cost = AsyCost{occ_virt(n->as_tensor())};

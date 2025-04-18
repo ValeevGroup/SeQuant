@@ -335,8 +335,8 @@ Container external_indices(const Expr& expr) {
   std::optional<Tensor> symmetrizer;
   expr.visit(
       [&](const ExprPtr& expr) {
-        if (expr.is<Tensor>() && expr.as<Tensor>().label() == L"S" ||
-            expr.as<Tensor>().label() == L"A") {
+        if (expr.is<Tensor>() && (expr.as<Tensor>().label() == L"S" ||
+                                  expr.as<Tensor>().label() == L"A")) {
           assert(!symmetrizer.has_value() ||
                  symmetrizer.value() == expr.as<Tensor>());
           symmetrizer = expr.as<Tensor>();

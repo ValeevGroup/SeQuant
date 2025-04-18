@@ -194,10 +194,9 @@ API documentation is automatically generated from the source code using Doxygen 
      * @param b The second parameter.
      * @return The result of the operation.
      */
-    template<typename T>
+    template <typename T>
     T add(T a, T b) {
-        if constexpr (std::is_arithmetic_v<T>) {
-            return a + b;
+      return a + b;
     }
 
 Ensure that all functions, classes, and methods in the C++ source code are properly documented using this format for accurate API documentation generation.
