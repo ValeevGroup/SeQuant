@@ -181,6 +181,24 @@ TEST_CASE("canonicalization", "[algorithms]") {
                  EquivalentTo("1/2 t{p1;p3} t{p2;p4} B{p3;p1;p5} B{p4;p2;p5}"));
   }
 
+  SECTION("Sum of Variables") {
+    {
+      auto input =
+          ex<Variable>(L"q1") + ex<Variable>(L"q1") + ex<Variable>(L"q2");
+      simplify(input);
+      canonicalize(input);
+      REQUIRE_THAT(input, SimplifiesTo("q2 + 2 q1"));
+    }
+
+    {
+      auto input =
+          ex<Variable>(L"q1") * ex<Variable>(L"q1") + ex<Variable>(L"q2");
+      simplify(input);
+      canonicalize(input);
+      REQUIRE_THAT(input, SimplifiesTo("q2 + q1 * q1"));
+    }
+  }
+
   SECTION("Sum of Products") {
     {
       // CASE 1: Non-symmetric tensors
