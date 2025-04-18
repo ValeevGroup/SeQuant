@@ -154,6 +154,7 @@ Program Listing for File op.hpp
    class Operator<void, S> : public Expr, public Labeled {
     protected:
      Operator() = default;
+   
      Operator(std::function<std::wstring_view()> label_generator,
               std::function<ExprPtr()> tensor_form_generator)
          : label_generator_(std::move(label_generator)),
@@ -256,6 +257,14 @@ Program Listing for File op.hpp
            [](const auto& ia, const auto& ib) { return equal(ia, ib); });
      }
      bool operator!=(const this_type& b) const { return !this->operator==(b); }
+   
+     bool operator<(const this_type& that) const {
+       return ranges::lexicographical_compare(
+           *this, that, [](const interval_t& a, const interval_t& b) {
+             if (a.lower() != b.lower()) return a.lower() < b.lower();
+             return a.upper() < b.upper();
+           });
+     }
    
      // determines the number of physical vacuum creators and annihilators for the
      // active particle and hole space from the Context. for general operators this

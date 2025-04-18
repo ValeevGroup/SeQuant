@@ -302,14 +302,9 @@
 <dl class="cpp function">
 <dt class="sig sig-object cpp" id="_CPPv4NK7sequant4mbpt8OperatorIv1SE5labelEv">
 <span id="_CPPv3NK7sequant4mbpt8OperatorIv1SE5labelEv"></span><span id="_CPPv2NK7sequant4mbpt8OperatorIv1SE5labelEv"></span><span id="sequant::mbpt::Operator:void.S:::labelC"></span><span class="target" id="classsequant_1_1mbpt_1_1_operator_3_01void_00_01_s_01_4_1ab0b838408f971bb58632fa4994f286a5"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">wstring_view</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">label</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><span class="w"> </span><span class="k"><span class="pre">override</span></span><a class="headerlink" href="#_CPPv4NK7sequant4mbpt8OperatorIv1SE5labelEv" title="Link to this definition">¶</a><br /></dt>
-<dd><p><div class="admonition seealso">
-<p class="admonition-title">See also</p>
-<p><a class="reference internal" href="classsequant_1_1_expr.html#classsequant_1_1_expr_1afb469a8a7b1e366e2bdef75e97deff7b"><span class="std std-ref">to_latex()</span></a> for producing unique string representation </p>
-</div>
-</p>
-<dl class="field-list simple">
+<dd><dl class="field-list simple">
 <dt class="field-odd">Returns<span class="colon">:</span></dt>
-<dd class="field-odd"><p>object’s label. 2 objects that are not equal can return same label, i.e. the label does not identify the object uniquely. Thus labels can be viewed as immutable string tags that for some object types can be used for sorting and other purposes. </p>
+<dd class="field-odd"><p>label of the operator </p>
 </dd>
 </dl>
 </dd></dl>
@@ -317,7 +312,12 @@
 <dl class="cpp function">
 <dt class="sig sig-object cpp" id="_CPPv4NK7sequant4mbpt8OperatorIv1SE11tensor_formEv">
 <span id="_CPPv3NK7sequant4mbpt8OperatorIv1SE11tensor_formEv"></span><span id="_CPPv2NK7sequant4mbpt8OperatorIv1SE11tensor_formEv"></span><span id="sequant::mbpt::Operator:void.S:::tensor_formC"></span><span class="target" id="classsequant_1_1mbpt_1_1_operator_3_01void_00_01_s_01_4_1a1c5db636262e827548979e647c34bcfa"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="k"><span class="pre">virtual</span></span><span class="w"> </span><a class="reference internal" href="classsequant_1_1_expr_ptr.html#_CPPv4N7sequant7ExprPtrE" title="sequant::ExprPtr"><span class="n"><span class="pre">ExprPtr</span></span></a><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">tensor_form</span></span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><span class="w"> </span><span class="k"><span class="pre">const</span></span><a class="headerlink" href="#_CPPv4NK7sequant4mbpt8OperatorIv1SE11tensor_formEv" title="Link to this definition">¶</a><br /></dt>
-<dd></dd></dl>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>tensor form of the operator </p>
+</dd>
+</dl>
+</dd></dl>
 
 <dl class="cpp function">
 <dt class="sig sig-object cpp" id="_CPPv4NK7sequant4mbpt8OperatorIv1SE10is_cnumberEv">
@@ -336,7 +336,16 @@
 <dl class="cpp function">
 <dt class="sig sig-object cpp" id="_CPPv4N7sequant4mbpt8OperatorIv1SE8OperatorENSt8functionIFNSt12wstring_viewEvEEENSt8functionIF7ExprPtrvEEE">
 <span id="_CPPv3N7sequant4mbpt8OperatorIv1SE8OperatorENSt8functionIFNSt12wstring_viewEvEEENSt8functionIF7ExprPtrvEEE"></span><span id="_CPPv2N7sequant4mbpt8OperatorIv1SE8OperatorENSt8functionIFNSt12wstring_viewEvEEENSt8functionIF7ExprPtrvEEE"></span><span class="target" id="classsequant_1_1mbpt_1_1_operator_3_01void_00_01_s_01_4_1a96c1937c63d7a5c03ccf599554922d48"></span><span class="k"><span class="pre">inline</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">Operator</span></span></span><span class="sig-paren">(</span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">function</span></span><span class="p"><span class="pre">&lt;</span></span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">wstring_view</span></span><span class="p"><span class="pre">(</span></span><span class="p"><span class="pre">)</span></span><span class="p"><span class="pre">&gt;</span></span><span class="w"> </span><span class="n sig-param"><span class="pre">label_generator</span></span>, <span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">function</span></span><span class="p"><span class="pre">&lt;</span></span><a class="reference internal" href="classsequant_1_1_expr_ptr.html#_CPPv4N7sequant7ExprPtrE" title="sequant::ExprPtr"><span class="n"><span class="pre">ExprPtr</span></span></a><span class="p"><span class="pre">(</span></span><span class="p"><span class="pre">)</span></span><span class="p"><span class="pre">&gt;</span></span><span class="w"> </span><span class="n sig-param"><span class="pre">tensor_form_generator</span></span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N7sequant4mbpt8OperatorIv1SE8OperatorENSt8functionIFNSt12wstring_viewEvEEENSt8functionIF7ExprPtrvEEE" title="Link to this definition">¶</a><br /></dt>
-<dd></dd></dl>
+<dd><p>Constructs an <a class="reference internal" href="classsequant_1_1mbpt_1_1_operator.html#classsequant_1_1mbpt_1_1_operator"><span class="std std-ref">Operator</span></a> with a label generator and a tensor form generator. </p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>label_generator</strong> – A function that generates a label for the operator </p></li>
+<li><p><strong>tensor_form_generator</strong> – A function that generates the tensor form of the operator </p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
 
 </div>
 </dd></dl>
@@ -361,7 +370,7 @@
             
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on Apr 15, 2025 8:41:08 PM</div>
+              Last updated on Apr 18, 2025 3:06:25 PM</div>
           </div>
           <div class="right-details">
             <div class="icons">
