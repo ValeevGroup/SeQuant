@@ -80,7 +80,7 @@ Useful CMake Variables
      - Whether to use the `include-what-you-use <https://github.com/include-what-you-use/include-what-you-use>`_ tool (if found)
    * - Boost_FETCH_IF_MISSING
      - OFF
-     - If set to ON, SeQuant will download and build Boost if it is not found by `find_package(Boost ...)`; this is not recommended.
+     - If set to ON, SeQuant will download and build Boost if it is not found by ``find_package(Boost ...)``; this is not recommended.
    * - ENABLE_TBB
      - OFF
      - Enable TBB as an optional prerequisite for C++'s parallel STL
