@@ -59,7 +59,10 @@ Useful CMake Variables
      - The installation path for SeQuant.
    * - SEQUANT_TESTS
      - `BUILD_TESTING <https://cmake.org/cmake/help/latest/variable/BUILD_TESTING.html>`_
-     - Enables test targets, e.g. `check-sequant`.
+     - Enables test targets, e.g. ``check-sequant``.
+   * - SEQUANT_EVAL_TESTS
+     - OFF
+     - Enables SeQuant evaluation tests using ``TiledArray`` and ``BTAS``.
    * - SEQUANT_MIMALLOC
      - OFF
      - Use `mimalloc <https://github.com/microsoft/mimalloc>`_ for fast memory allocation.
