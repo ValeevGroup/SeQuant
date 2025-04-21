@@ -50,11 +50,11 @@ int main() {
 
   // IP-EOM-CCSD (ionization potential)
   auto ip_eqs = CC{2}.eom_r(nₚ(0), nₕ(1));
-  std::wcout << "IP-R1: " << to_latex(ip_eqs[1]) << "\n";
+  std::wcout << "IP-R1: " << to_latex(ip_eqs[0]) << "\n";
 
   // EA-EOM-CCSD (electron attachment)
   auto ea_eqs = CC{2}.eom_r(nₚ(1), nₕ(0));
-  std::wcout << "EA-R1: " << to_latex(ea_eqs[1]) << "\n";
+  std::wcout << "EA-R1: " << to_latex(ea_eqs[0]) << "\n";
   // end-snippet-2
 
   // start-snippet-3
