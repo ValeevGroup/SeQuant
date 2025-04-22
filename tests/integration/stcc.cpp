@@ -63,8 +63,8 @@ int main(int argc, char* argv[]) {
   std::vector<ExprPtr> cc_st_r(cc_r.size());
   for (auto i = 1; i < cc_r.size(); ++i) {
     const auto tstart = std::chrono::high_resolution_clock::now();
-    // cc_st_r[i] = sequant::closed_shell_CC_spintrace(cc_r[i]);
-    cc_st_r[i] = sequant::closed_shell_CC_spintrace_core_terms(cc_r[i]);
+    cc_st_r[i] = sequant::closed_shell_CC_spintrace(cc_r[i]);
+    // cc_st_r[i] = sequant::closed_shell_CC_spintrace_core_terms(cc_r[i]);
 
     auto tstop = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> time_elapsed = tstop - tstart;
