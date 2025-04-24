@@ -1303,17 +1303,14 @@ ExprPtr closed_shell_CC_spintrace_core_terms(ExprPtr const& expr) {
   // std::chrono::duration<double> f_simplify_time = f_simplify_time_1 -
   // f_simlify_time_0; printf("R%d Frist-Simplify time: %5.3f sec.\n",
   // residual_order,f_simplify_time.count());
-  std::wcout << "reordered after biorthogonal, no simplify: "
-             << sequant::to_latex_align(
-                    sequant::ex<sequant::Sum>(
-                        sequant::opt::reorder(st_expr->as<sequant::Sum>())),
-                    0, 4)
-             << std::endl;
-  // std::wcout << "final eqns after symm: " <<
-  // sequant::to_latex_align(sequant::ex<sequant::Sum>(sequant::opt::reorder(st_expr->as<sequant::Sum>())),0,
-  // 4) << std::endl;
+  // std::wcout << "reordered after biorthogonal, no simplify: "
+  //            << sequant::to_latex_align(
+  //                   ex<Sum>(
+  //                       opt::reorder(st_expr->as<Sum>())),
+  //                   0, 4)
+  //            << std::endl;
 
-  // to use st_expr->front() we need to fist simplify the
+  // to use st_expr->front() we need to fist simplify them
   // std::wcout << "after biorthogonal transform and simplify: " <<
   // to_latex(st_expr->front()) << std::endl;
   std::wcout << "Number of terms after biorthogonal transform: "
@@ -1525,18 +1522,8 @@ ExprPtr closed_shell_CC_spintrace_core_terms(ExprPtr const& expr) {
   const auto t_simplify_time_1 = std::chrono::high_resolution_clock::now();
   std::chrono::duration<double> t_simplify_time =
       t_simplify_time_1 - t_simlify_time_0;
-  printf(
-      "R%d Simplify time: %5.3f sec.\n", residual_order,
-      t_simplify_time
-          .count());  // std::wcout << "final eqns after symm: " <<
-                      // sequant::to_latex_align(sequant::ex<sequant::Sum>(sequant::opt::reorder(result_expr->as<sequant::Sum>())),
-                      // 0, 4) << std::endl;
-
-  // std::wcout << "Number of Biorthogonal Core Terms after symm and
-  // normalization: " << result_expr.size() << std::endl; std::wcout << "final
-  // eqns after symm: " <<
-  // sequant::to_latex_align(sequant::ex<sequant::Sum>(sequant::opt::reorder(result_expr->as<sequant::Sum>())),
-  // 0, 4) << std::endl;
+  printf("R%d Simplify time: %5.3f sec.\n", residual_order,
+         t_simplify_time.count());
 
   return result_expr;
 }

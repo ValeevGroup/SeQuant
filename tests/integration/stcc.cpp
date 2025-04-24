@@ -31,7 +31,7 @@ int main(int argc, char* argv[]) {
   // std::wcout.sync_with_stdio(true);
   // std::wcerr.sync_with_stdio(true);
 
-  // set global locale
+  // set global locale, keep precision as what it was, but global locale
   std::wcout.precision(std::numeric_limits<double>::max_digits10);
   std::wcerr.precision(std::numeric_limits<double>::max_digits10);
   sequant::set_locale();
