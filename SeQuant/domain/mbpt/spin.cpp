@@ -40,6 +40,8 @@
 #include <string_view>
 #include <unordered_map>
 #include <utility>
+
+#include "SeQuant/core/tensor_canonicalizer.hpp"
 #include "SeQuant/core/tensor_network_v2.hpp"
 
 namespace sequant {
