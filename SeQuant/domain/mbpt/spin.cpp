@@ -40,7 +40,7 @@
 #include <string_view>
 #include <unordered_map>
 #include <utility>
-#include "SeQuant/core/tensor_network.hpp"
+#include "SeQuant/core/tensor_network_v2.hpp"
 
 namespace sequant {
 
@@ -1346,7 +1346,7 @@ ExprPtr closed_shell_CC_spintrace_core_terms(ExprPtr const& expr) {
       if (!term.is<Product>()) continue;  // skip non-Product terms
       auto pdt = term.as<Product>();
       auto scalar_i = pdt.scalar();
-      auto tn = sequant::TensorNetwork(pdt);
+      auto tn = sequant::TensorNetworkV2(pdt);
       auto res_hashvalue =
           tn.canonicalize_slots(TensorCanonicalizer::cardinal_tensor_labels())
               .hash_value();
