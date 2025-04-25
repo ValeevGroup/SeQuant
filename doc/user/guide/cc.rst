@@ -15,12 +15,12 @@ where :math:`|\Phi_0\rangle` is a reference determinant (typically Hartree-Fock)
 
 where :math:`\hat{T}_n` generates :math:`n`-fold excited determinants. For computational tractability, the cluster operator is usually truncated. For example, CCSD includes only single and double excitations (:math:`\hat{T} = \hat{T}_1 + \hat{T}_2`).
 
-The SeQuant ``CC`` class (see :class:`sequant::mbpt::CC`) provides a powerful symbolic algebra engine for deriving the complex equations that arise in CC theory for both ground and excited states. It supports various formulations of the CC method, including traditional, unitary, and orbital-optimized ansätze.
+The ``CC`` class (see :class:`sequant::mbpt::CC`) provides a convenient interface for setting up and processing CC equations using SeQuant’s symbolic algebra engine. It supports various CC formulations, including traditional, unitary, and orbital-optimized ansätze.
 
 Overview
 --------
 
-The ``sequant::mbpt::CC`` class is a derivation engine for generating CC equations. It can derive:
+The ``sequant::mbpt::CC`` class can be used to derive:
 
 - Ground state amplitude equations
 - λ (de-excitation) amplitude equations
@@ -64,7 +64,7 @@ Ground State Amplitudes
                           size_t pmax = std::numeric_limits<size_t>::max(),
                           size_t pmin = 0);
 
-Derives the equations for the :math:`t` amplitudes (:math:`\langle \Phi_P|\bar{H}|0 \rangle = 0`) up to specified excitation levels.
+Derives the equations for the :math:`t` amplitudes (:math:`\langle \Phi_P|\bar{H}|Phi_0 \rangle = 0`) up to specified excitation levels.
 
 .. code-block:: cpp
 
