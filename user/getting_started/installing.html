@@ -344,33 +344,37 @@ cmake<span class="w"> </span>--build<span class="w"> </span>build<span class="w"
 </tr>
 <tr class="row-odd"><td><p>SEQUANT_TESTS</p></td>
 <td><p><a class="reference external" href="https://cmake.org/cmake/help/latest/variable/BUILD_TESTING.html">BUILD_TESTING</a></p></td>
-<td><p>Enables test targets, e.g. <cite>check-sequant</cite>.</p></td>
+<td><p>Enables test targets, e.g. <code class="docutils literal notranslate"><span class="pre">check-sequant</span></code>.</p></td>
 </tr>
-<tr class="row-even"><td><p>SEQUANT_MIMALLOC</p></td>
+<tr class="row-even"><td><p>SEQUANT_EVAL_TESTS</p></td>
+<td><p>OFF</p></td>
+<td><p>Enables SeQuant evaluation tests using <code class="docutils literal notranslate"><span class="pre">TiledArray</span></code> and <code class="docutils literal notranslate"><span class="pre">BTAS</span></code>.</p></td>
+</tr>
+<tr class="row-odd"><td><p>SEQUANT_MIMALLOC</p></td>
 <td><p>OFF</p></td>
 <td><p>Use <a class="reference external" href="https://github.com/microsoft/mimalloc">mimalloc</a> for fast memory allocation.</p></td>
 </tr>
-<tr class="row-odd"><td><p>SEQUANT_BUILD_DOCS</p></td>
+<tr class="row-even"><td><p>SEQUANT_BUILD_DOCS</p></td>
 <td><p>OFF</p></td>
 <td><p>Enables building of the documentation. See <a class="reference internal" href="../../developer/documentation.html#documentation-guide"><span class="std std-ref">Documentation Guide</span></a> for detailed information.</p></td>
 </tr>
-<tr class="row-even"><td><p>SEQUANT_PYTHON</p></td>
+<tr class="row-odd"><td><p>SEQUANT_PYTHON</p></td>
 <td><p>OFF</p></td>
 <td><p>Enables building of Python bindings.</p></td>
 </tr>
-<tr class="row-odd"><td><p>SEQUANT_USE_SYSTEM_BOOST_HASH</p></td>
+<tr class="row-even"><td><p>SEQUANT_USE_SYSTEM_BOOST_HASH</p></td>
 <td><p>ON</p></td>
 <td><p>Use system Boost for hashing? Set to OFF to make hashing independent of Boost, thus value-portable</p></td>
 </tr>
-<tr class="row-even"><td><p>SEQUANT_IWYU</p></td>
+<tr class="row-odd"><td><p>SEQUANT_IWYU</p></td>
 <td><p>OFF</p></td>
 <td><p>Whether to use the <a class="reference external" href="https://github.com/include-what-you-use/include-what-you-use">include-what-you-use</a> tool (if found)</p></td>
 </tr>
-<tr class="row-odd"><td><p>Boost_FETCH_IF_MISSING</p></td>
+<tr class="row-even"><td><p>Boost_FETCH_IF_MISSING</p></td>
 <td><p>OFF</p></td>
-<td><p>If set to ON, SeQuant will download and build Boost if it is not found by <cite>find_package(Boost …)</cite>; this is not recommended.</p></td>
+<td><p>If set to ON, SeQuant will download and build Boost if it is not found by <code class="docutils literal notranslate"><span class="pre">find_package(Boost</span> <span class="pre">...)</span></code>; this is not recommended.</p></td>
 </tr>
-<tr class="row-even"><td><p>ENABLE_TBB</p></td>
+<tr class="row-odd"><td><p>ENABLE_TBB</p></td>
 <td><p>OFF</p></td>
 <td><p>Enable TBB as an optional prerequisite for C++’s parallel STL</p></td>
 </tr>
@@ -428,7 +432,7 @@ cmake<span class="w"> </span>--build<span class="w"> </span>build<span class="w"
             
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on Apr 18, 2025 3:06:25 PM</div>
+              Last updated on Apr 25, 2025 2:45:59 PM</div>
           </div>
           <div class="right-details">
             <div class="icons">

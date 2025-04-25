@@ -273,38 +273,177 @@
         <article role="main" id="furo-main-content">
           <section id="coupled-cluster-class">
 <h1>Coupled-Cluster Class<a class="headerlink" href="#coupled-cluster-class" title="Link to this heading">¶</a></h1>
-<p>SeQuant’s coupled-cluster (CC) class (see <a class="reference internal" href="../../api/classsequant_1_1mbpt_1_1_c_c.html#_CPPv4N7sequant4mbpt2CCE" title="sequant::mbpt::CC"><code class="xref cpp cpp-class docutils literal notranslate"><span class="pre">sequant::mbpt::CC</span></code></a>) supports derivations of ground and excited state methods,
-using traditional, unitary and orbital-optimized ansatze (see <a class="reference internal" href="../../api/classsequant_1_1mbpt_1_1_c_c.html#_CPPv4N7sequant4mbpt2CC6AnsatzE" title="sequant::mbpt::CC::Ansatz"><code class="xref cpp cpp-enum docutils literal notranslate"><span class="pre">sequant::mbpt::CC::Ansatz</span></code></a>).
-Expressions are generated in spin-orbital basis, and they can post-processed using SeQuant’s spin-tracing capabilities.</p>
+<p>Coupled-cluster (CC) theory is one of the most accurate and widely used quantum chemistry methods for describing electron correlation in molecular systems. It represents the many-electron wavefunction using an exponential ansatz:</p>
+<div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[|\Psi_{\text{CC}}\rangle = e^{\hat{T}}|\Phi_0\rangle\]</div>
+</div>
+<p>where <span class="math notranslate nohighlight">\(|\Phi_0\rangle\)</span> is a reference determinant (typically Hartree-Fock), and <span class="math notranslate nohighlight">\(\hat{T}\)</span> is a cluster operator that generates excited determinants. The cluster operator is typically expanded as:</p>
+<div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[\hat{T} = \hat{T}_1 + \hat{T}_2 + \hat{T}_3 + \ldots\]</div>
+</div>
+<p>where <span class="math notranslate nohighlight">\(\hat{T}_n\)</span> generates <span class="math notranslate nohighlight">\(n\)</span>-fold excited determinants. For computational tractability, the cluster operator is usually truncated. For example, CCSD includes only single and double excitations (<span class="math notranslate nohighlight">\(\hat{T} = \hat{T}_1 + \hat{T}_2\)</span>).</p>
+<p>The <code class="docutils literal notranslate"><span class="pre">CC</span></code> class (see <a class="reference internal" href="../../api/classsequant_1_1mbpt_1_1_c_c.html#_CPPv4N7sequant4mbpt2CCE" title="sequant::mbpt::CC"><code class="xref cpp cpp-class docutils literal notranslate"><span class="pre">sequant::mbpt::CC</span></code></a>) provides a convenient interface for setting up and processing CC equations using SeQuant’s symbolic algebra engine. It supports various CC formulations, including traditional, unitary, and orbital-optimized ansätze.</p>
+<section id="overview">
+<h2>Overview<a class="headerlink" href="#overview" title="Link to this heading">¶</a></h2>
+<p>The <code class="docutils literal notranslate"><span class="pre">sequant::mbpt::CC</span></code> class can be used to derive:</p>
+<ul class="simple">
+<li><p>Ground state amplitude equations</p></li>
+<li><p>λ (de-excitation) amplitude equations</p></li>
+<li><p>Equation-of-motion (EOM) CC equations for excited states</p></li>
+<li><p>Response equations for properties and perturbations</p></li>
+</ul>
+<p>Expressions are generated in spin-orbital basis and can be post-processed using SeQuant’s spin-tracing capabilities. See <a class="reference internal" href="#cc-spin-tracing"><span class="std std-ref">Spin Tracing of Expressions</span></a> for more details.</p>
+</section>
+<section id="ansatz-options">
+<h2>Ansatz Options<a class="headerlink" href="#ansatz-options" title="Link to this heading">¶</a></h2>
+<p>The <code class="docutils literal notranslate"><span class="pre">CC</span></code> class supports several CC ansätze through the <code class="docutils literal notranslate"><span class="pre">CC::Ansatz</span></code> enum (see <a class="reference internal" href="../../api/classsequant_1_1mbpt_1_1_c_c.html#_CPPv4N7sequant4mbpt2CC6AnsatzE" title="sequant::mbpt::CC::Ansatz"><code class="xref cpp cpp-enum docutils literal notranslate"><span class="pre">sequant::mbpt::CC::Ansatz</span></code></a>):</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">Ansatz::T</span></code>: Traditional CC ansatz, where the wavefunction is represented as <span class="math notranslate nohighlight">\(|\Psi_{\text{CC}}\rangle = e^{\hat{T}}|\Phi_0\rangle\)</span>. This is the standard approach used in most implementations.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">Ansatz::oT</span></code>: Orbital-optimized traditional ansatz. Singles amplitudes (<span class="math notranslate nohighlight">\(\hat{T}_1\)</span>) are excluded from the cluster operator, with orbital optimization performed instead.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">Ansatz::U</span></code>: Unitary CC ansatz, where the wavefunction is represented as <span class="math notranslate nohighlight">\(|\Psi_{\text{UCC}}\rangle = e^{\hat{T} - \hat{T}^\dagger}|\Phi_0\rangle\)</span>. Particularly useful for quantum computing applications.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">Ansatz::oU</span></code>: Orbital-optimized unitary ansatz, combines both unitary and orbital optimized ansätze.</p></li>
+</ul>
+</section>
+<section id="key-methods">
+<h2>Key Methods<a class="headerlink" href="#key-methods" title="Link to this heading">¶</a></h2>
+<section id="similarity-transformation">
+<h3>Similarity Transformation<a class="headerlink" href="#similarity-transformation" title="Link to this heading">¶</a></h3>
+<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="n">ExprPtr</span><span class="w"> </span><span class="nf">sim_tr</span><span class="p">(</span><span class="n">ExprPtr</span><span class="w"> </span><span class="n">expr</span><span class="p">,</span><span class="w"> </span><span class="kt">size_t</span><span class="w"> </span><span class="n">r</span><span class="p">);</span>
+</pre></div>
+</div>
+<p>Performs the similarity transformation of an operator. For traditional CC, this computes <span class="math notranslate nohighlight">\(\bar{O} = e^{-\hat{T}} \hat{O} e^{\hat{T}}\)</span> expanded as a series of nested commutators truncated at order <code class="docutils literal notranslate"><span class="pre">r</span></code>, where <span class="math notranslate nohighlight">\(\hat{O}\)</span> is the operator to be transformed.</p>
+</section>
+<section id="ground-state-amplitudes">
+<h3>Ground State Amplitudes<a class="headerlink" href="#ground-state-amplitudes" title="Link to this heading">¶</a></h3>
+<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="n">ExprPtr</span><span class="o">&gt;</span><span class="w"> </span><span class="n">t</span><span class="p">(</span><span class="kt">size_t</span><span class="w"> </span><span class="n">commutator_rank</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">4</span><span class="p">,</span>
+<span class="w">                       </span><span class="kt">size_t</span><span class="w"> </span><span class="n">pmax</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">numeric_limits</span><span class="o">&lt;</span><span class="kt">size_t</span><span class="o">&gt;::</span><span class="n">max</span><span class="p">(),</span>
+<span class="w">                       </span><span class="kt">size_t</span><span class="w"> </span><span class="n">pmin</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span><span class="p">);</span>
+</pre></div>
+</div>
+<p>Derives the equations for the <span class="math notranslate nohighlight">\(t\)</span> amplitudes (<span class="math notranslate nohighlight">\(\langle \Phi_P|\bar{H}|Phi_0 \rangle = 0\)</span>) up to specified excitation levels.</p>
+<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="n">ExprPtr</span><span class="o">&gt;</span><span class="w"> </span><span class="n">λ</span><span class="p">(</span><span class="kt">size_t</span><span class="w"> </span><span class="n">commutator_rank</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">4</span><span class="p">);</span>
+</pre></div>
+</div>
+<p>Derives the equations for the <span class="math notranslate nohighlight">\(\lambda\)</span> de-excitation amplitudes.</p>
+</section>
+<section id="coupled-cluster-response">
+<h3>Coupled-Cluster Response<a class="headerlink" href="#coupled-cluster-response" title="Link to this heading">¶</a></h3>
+<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="n">ExprPtr</span><span class="o">&gt;</span><span class="w"> </span><span class="n">t_pt</span><span class="p">(</span><span class="kt">size_t</span><span class="w"> </span><span class="n">order</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="kt">size_t</span><span class="w"> </span><span class="n">rank</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">);</span>
+<span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="n">ExprPtr</span><span class="o">&gt;</span><span class="w"> </span><span class="n">λ_pt</span><span class="p">(</span><span class="kt">size_t</span><span class="w"> </span><span class="n">order</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="kt">size_t</span><span class="w"> </span><span class="n">rank</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">);</span>
+</pre></div>
+</div>
+<p>Derives perturbed amplitude equations for response theory calculations.</p>
+</section>
+<section id="equation-of-motion-coupled-cluster">
+<h3>Equation-of-Motion Coupled-Cluster<a class="headerlink" href="#equation-of-motion-coupled-cluster" title="Link to this heading">¶</a></h3>
+<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="n">ExprPtr</span><span class="o">&gt;</span><span class="w"> </span><span class="n">eom_r</span><span class="p">(</span><span class="n">nₚ</span><span class="w"> </span><span class="n">np</span><span class="p">,</span><span class="w"> </span><span class="n">nₕ</span><span class="w"> </span><span class="n">nh</span><span class="p">);</span>
+<span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="n">ExprPtr</span><span class="o">&gt;</span><span class="w"> </span><span class="n">eom_l</span><span class="p">(</span><span class="n">nₚ</span><span class="w"> </span><span class="n">np</span><span class="p">,</span><span class="w"> </span><span class="n">nₕ</span><span class="w"> </span><span class="n">nh</span><span class="p">);</span>
+</pre></div>
+</div>
+<p>Derives equation-of-motion coupled-cluster (EOM-CC) equations for excited states. The <code class="docutils literal notranslate"><span class="pre">eom_r</span></code> method generates equations for the right eigenvectors, while <code class="docutils literal notranslate"><span class="pre">eom_l</span></code> generates equations for the left eigenvectors.</p>
+</section>
+</section>
 <section id="examples">
 <h2>Examples<a class="headerlink" href="#examples" title="Link to this heading">¶</a></h2>
-<p>Here are some examples of using the CC class for deriving expressions.</p>
-<section id="cc-amplitude-equations">
-<h3>CC amplitude equations<a class="headerlink" href="#cc-amplitude-equations" title="Link to this heading">¶</a></h3>
-<div class="highlight-c++ notranslate"><div class="highlight"><pre><span></span><span class="k">using</span><span class="w"> </span><span class="k">namespace</span><span class="w"> </span><span class="nn">sequant</span><span class="o">::</span><span class="nn">mbpt</span><span class="p">;</span>
-<span class="c1">// Traditional CCSD</span>
+<p>The following examples demonstrate how to use the <code class="docutils literal notranslate"><span class="pre">CC</span></code> class to derive CC equations for various ansätze and excitation levels.</p>
+<p>From this point onward, assume the following namespaces are imported, and the <code class="docutils literal notranslate"><span class="pre">sequant::Context</span></code> is configured as shown.</p>
+<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="k">using</span><span class="w"> </span><span class="k">namespace</span><span class="w"> </span><span class="nn">sequant</span><span class="p">;</span>
+<span class="k">using</span><span class="w"> </span><span class="k">namespace</span><span class="w"> </span><span class="nn">sequant</span><span class="o">::</span><span class="nn">mbpt</span><span class="p">;</span>
+<span class="n">set_default_context</span><span class="p">(</span><span class="n">Context</span><span class="p">(</span><span class="n">make_min_sr_spaces</span><span class="p">(),</span><span class="w"> </span><span class="n">Vacuum</span><span class="o">::</span><span class="n">SingleProduct</span><span class="p">));</span>
+</pre></div>
+</div>
+<section id="ground-state-cc-amplitude-equations">
+<h3>Ground State CC Amplitude Equations<a class="headerlink" href="#ground-state-cc-amplitude-equations" title="Link to this heading">¶</a></h3>
+<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="c1">// Traditional CCSD</span>
 <span class="k">auto</span><span class="w"> </span><span class="n">t_eqs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">CC</span><span class="p">{</span><span class="mi">2</span><span class="p">}.</span><span class="n">t</span><span class="p">();</span>
-<span class="n">std</span><span class="o">::</span><span class="n">wcout</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">&quot;R[1]: &quot;</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">to_latex</span><span class="p">(</span><span class="n">t_eqs</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">&quot;</span><span class="se">\n</span><span class="s">&quot;</span>
-<span class="w">           </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">&quot;R[2]: &quot;</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">to_latex</span><span class="p">(</span><span class="n">t_eqs</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">&quot;</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">;</span>
+<span class="n">std</span><span class="o">::</span><span class="n">wcout</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">&quot;T1: &quot;</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">to_latex</span><span class="p">(</span><span class="n">t_eqs</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">&quot;</span><span class="se">\n</span><span class="s">&quot;</span>
+<span class="w">           </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">&quot;T2: &quot;</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">to_latex</span><span class="p">(</span><span class="n">t_eqs</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">&quot;</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">;</span>
 
+<span class="c1">// Lambda equations</span>
 <span class="k">auto</span><span class="w"> </span><span class="n">l_eqs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">CC</span><span class="p">{</span><span class="mi">2</span><span class="p">}.</span><span class="n">λ</span><span class="p">();</span>
-<span class="n">std</span><span class="o">::</span><span class="n">wcout</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">&quot;L[1]: &quot;</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">to_latex</span><span class="p">(</span><span class="n">l_eqs</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">&quot;</span><span class="se">\n</span><span class="s">&quot;</span>
-<span class="w">           </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">&quot;L[2]: &quot;</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">to_latex</span><span class="p">(</span><span class="n">l_eqs</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">&quot;</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">;</span>
+<span class="n">std</span><span class="o">::</span><span class="n">wcout</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">&quot;λ1: &quot;</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">to_latex</span><span class="p">(</span><span class="n">l_eqs</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">&quot;</span><span class="se">\n</span><span class="s">&quot;</span>
+<span class="w">           </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">&quot;λ2: &quot;</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">to_latex</span><span class="p">(</span><span class="n">l_eqs</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">&quot;</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">;</span>
 
 <span class="c1">// Unitary CCSD</span>
-<span class="k">auto</span><span class="w"> </span><span class="n">Ut_eqs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">CC</span><span class="p">{</span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="n">CC</span><span class="o">::</span><span class="n">Ansatz</span><span class="o">::</span><span class="n">U</span><span class="p">}.</span><span class="n">t</span><span class="p">();</span>
-<span class="n">std</span><span class="o">::</span><span class="n">wcout</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">&quot;R[1]: &quot;</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">to_latex</span><span class="p">(</span><span class="n">Ut_eqs</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">&quot;</span><span class="se">\n</span><span class="s">&quot;</span>
-<span class="w">           </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">&quot;R[2]: &quot;</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">to_latex</span><span class="p">(</span><span class="n">Ut_eqs</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">&quot;</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">;</span>
+<span class="k">auto</span><span class="w"> </span><span class="n">Ut_eqs</span><span class="w"> </span><span class="o">=</span>
+<span class="w">    </span><span class="n">CC</span><span class="p">{</span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="n">CC</span><span class="o">::</span><span class="n">Ansatz</span><span class="o">::</span><span class="n">U</span><span class="p">}.</span><span class="n">t</span><span class="p">(</span><span class="mi">4</span><span class="p">);</span><span class="w">  </span><span class="c1">// Use 4th-order commutator expansion</span>
+<span class="n">std</span><span class="o">::</span><span class="n">wcout</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">&quot;T1 (UCC): &quot;</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">to_latex</span><span class="p">(</span><span class="n">Ut_eqs</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">&quot;</span><span class="se">\n</span><span class="s">&quot;</span>
+<span class="w">           </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">&quot;T2 (UCC): &quot;</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">to_latex</span><span class="p">(</span><span class="n">Ut_eqs</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">&quot;</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">;</span>
+
+<span class="c1">// Orbital-optimized CCSD</span>
+<span class="k">auto</span><span class="w"> </span><span class="n">oT_eqs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">CC</span><span class="p">{</span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="n">CC</span><span class="o">::</span><span class="n">Ansatz</span><span class="o">::</span><span class="n">oT</span><span class="p">}.</span><span class="n">t</span><span class="p">();</span>
+<span class="n">std</span><span class="o">::</span><span class="n">wcout</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">&quot;T2 (oT): &quot;</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">to_latex</span><span class="p">(</span><span class="n">oT_eqs</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">&quot;</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">;</span>
 </pre></div>
 </div>
 </section>
 <section id="eom-cc-equations">
-<h3>EOM-CC equations<a class="headerlink" href="#eom-cc-equations" title="Link to this heading">¶</a></h3>
-<div class="highlight-c++ notranslate"><div class="highlight"><pre><span></span><span class="k">using</span><span class="w"> </span><span class="k">namespace</span><span class="w"> </span><span class="nn">sequant</span><span class="o">::</span><span class="nn">mbpt</span><span class="p">;</span>
-<span class="c1">// EE-EOM-CCSD</span>
+<h3>EOM-CC Equations<a class="headerlink" href="#eom-cc-equations" title="Link to this heading">¶</a></h3>
+<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="c1">// EE-EOM-CCSD (excitation energy)</span>
 <span class="k">auto</span><span class="w"> </span><span class="n">r_eqs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">CC</span><span class="p">{</span><span class="mi">2</span><span class="p">}.</span><span class="n">eom_r</span><span class="p">(</span><span class="n">nₚ</span><span class="p">(</span><span class="mi">2</span><span class="p">),</span><span class="w"> </span><span class="n">nₕ</span><span class="p">(</span><span class="mi">2</span><span class="p">));</span>
-<span class="n">std</span><span class="o">::</span><span class="n">wcout</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">&quot;R[1]: &quot;</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">to_latex</span><span class="p">(</span><span class="n">r_eqs</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">&quot;</span><span class="se">\n</span><span class="s">&quot;</span>
-<span class="w">           </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">&quot;R[2]: &quot;</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">to_latex</span><span class="p">(</span><span class="n">r_eqs</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">&quot;</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">;</span>
+<span class="n">std</span><span class="o">::</span><span class="n">wcout</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">&quot;R1: &quot;</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">to_latex</span><span class="p">(</span><span class="n">r_eqs</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">&quot;</span><span class="se">\n</span><span class="s">&quot;</span>
+<span class="w">           </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">&quot;R2: &quot;</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">to_latex</span><span class="p">(</span><span class="n">r_eqs</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">&quot;</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">;</span>
+
+<span class="c1">//  EE-EOM-CCSD Left eigenvectors</span>
+<span class="k">auto</span><span class="w"> </span><span class="n">ee_l_eqs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">CC</span><span class="p">{</span><span class="mi">2</span><span class="p">}.</span><span class="n">eom_l</span><span class="p">(</span><span class="n">nₚ</span><span class="p">(</span><span class="mi">2</span><span class="p">),</span><span class="w"> </span><span class="n">nₕ</span><span class="p">(</span><span class="mi">2</span><span class="p">));</span>
+<span class="n">std</span><span class="o">::</span><span class="n">wcout</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">&quot;L1: &quot;</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">to_latex</span><span class="p">(</span><span class="n">l_eqs</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">&quot;</span><span class="se">\n</span><span class="s">&quot;</span>
+<span class="w">           </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">&quot;L2: &quot;</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">to_latex</span><span class="p">(</span><span class="n">l_eqs</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">&quot;</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">;</span>
+
+<span class="c1">// IP-EOM-CCSD (ionization potential)</span>
+<span class="k">auto</span><span class="w"> </span><span class="n">ip_eqs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">CC</span><span class="p">{</span><span class="mi">2</span><span class="p">}.</span><span class="n">eom_r</span><span class="p">(</span><span class="n">nₚ</span><span class="p">(</span><span class="mi">0</span><span class="p">),</span><span class="w"> </span><span class="n">nₕ</span><span class="p">(</span><span class="mi">1</span><span class="p">));</span>
+<span class="n">std</span><span class="o">::</span><span class="n">wcout</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">&quot;IP-R1: &quot;</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">to_latex</span><span class="p">(</span><span class="n">ip_eqs</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">&quot;</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">;</span>
+
+<span class="c1">// EA-EOM-CCSD (electron attachment)</span>
+<span class="k">auto</span><span class="w"> </span><span class="n">ea_eqs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">CC</span><span class="p">{</span><span class="mi">2</span><span class="p">}.</span><span class="n">eom_r</span><span class="p">(</span><span class="n">nₚ</span><span class="p">(</span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="n">nₕ</span><span class="p">(</span><span class="mi">0</span><span class="p">));</span>
+<span class="n">std</span><span class="o">::</span><span class="n">wcout</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">&quot;EA-R1: &quot;</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">to_latex</span><span class="p">(</span><span class="n">ea_eqs</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">&quot;</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">;</span>
+</pre></div>
+</div>
+</section>
+<section id="response-and-perturbation-equations">
+<h3>Response and Perturbation Equations<a class="headerlink" href="#response-and-perturbation-equations" title="Link to this heading">¶</a></h3>
+<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="c1">// First-order perturbed amplitude equations</span>
+<span class="k">auto</span><span class="w"> </span><span class="n">t_pt</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">CC</span><span class="p">{</span><span class="mi">2</span><span class="p">}.</span><span class="n">t_pt</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">);</span>
+<span class="n">std</span><span class="o">::</span><span class="n">wcout</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">&quot;T1 perturbed: &quot;</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">to_latex</span><span class="p">(</span><span class="n">t_pt</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">&quot;</span><span class="se">\n</span><span class="s">&quot;</span>
+<span class="w">           </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">&quot;T2 perturbed: &quot;</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">to_latex</span><span class="p">(</span><span class="n">t_pt</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">&quot;</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">;</span>
+
+<span class="c1">// First-order perturbed Lambda amplitude equations</span>
+<span class="k">auto</span><span class="w"> </span><span class="n">l_pt</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">CC</span><span class="p">{</span><span class="mi">2</span><span class="p">}.</span><span class="n">λ_pt</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">);</span>
+<span class="n">std</span><span class="o">::</span><span class="n">wcout</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">&quot;λ1 perturbed: &quot;</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">to_latex</span><span class="p">(</span><span class="n">l_pt</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">&quot;</span><span class="se">\n</span><span class="s">&quot;</span>
+<span class="w">           </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">&quot;λ2 perturbed: &quot;</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">to_latex</span><span class="p">(</span><span class="n">l_pt</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">&quot;</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">;</span>
+</pre></div>
+</div>
+</section>
+</section>
+<section id="advanced-usage">
+<h2>Advanced Usage<a class="headerlink" href="#advanced-usage" title="Link to this heading">¶</a></h2>
+<section id="truncating-the-commutator-expansion">
+<h3>Truncating the Commutator Expansion<a class="headerlink" href="#truncating-the-commutator-expansion" title="Link to this heading">¶</a></h3>
+<p>For traditional CC with two-body Hamiltonians, the commutator expansion is truncated at the a 4th-order. However, for unitary CC or other Hamiltonians, you may need to explicitly set the commutator rank:</p>
+<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="c1">// Unitary CCSDT with 6th-order commutator expansion</span>
+<span class="k">auto</span><span class="w"> </span><span class="n">Ut_ccsdt</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">CC</span><span class="p">{</span><span class="mi">3</span><span class="p">,</span><span class="w"> </span><span class="n">CC</span><span class="o">::</span><span class="n">Ansatz</span><span class="o">::</span><span class="n">U</span><span class="p">}.</span><span class="n">t</span><span class="p">(</span><span class="mi">6</span><span class="p">);</span>
+</pre></div>
+</div>
+</section>
+<section id="spin-tracing-of-expressions">
+<span id="cc-spin-tracing"></span><h3>Spin Tracing of Expressions<a class="headerlink" href="#spin-tracing-of-expressions" title="Link to this heading">¶</a></h3>
+<p>Equations generated by the <code class="docutils literal notranslate"><span class="pre">CC</span></code> class are in spin-orbital basis. SeQuant also provides capability to transform these equations into spin-traced forms.</p>
+<p>Make sure to include the <code class="docutils literal notranslate"><span class="pre">&lt;SeQuant/domain/mbpt/spin.hpp&gt;</span></code> header to access spin-tracing functions.</p>
+<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="c1">// Generate CCSD R2 equation</span>
+<span class="k">auto</span><span class="w"> </span><span class="n">ccsd_eqs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">CC</span><span class="p">{</span><span class="mi">2</span><span class="p">}.</span><span class="n">t</span><span class="p">();</span>
+<span class="k">auto</span><span class="w"> </span><span class="n">t2_eq</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">t_eqs</span><span class="p">[</span><span class="mi">2</span><span class="p">];</span>
+
+<span class="c1">// Convert to the closed-shell spin-traced form</span>
+<span class="k">auto</span><span class="w"> </span><span class="n">t2_cs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">closed_shell_CC_spintrace</span><span class="p">(</span><span class="n">t2_eq</span><span class="p">);</span>
+<span class="n">std</span><span class="o">::</span><span class="n">wcout</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">&quot;Closed-shell spin-traced CCSD-R2: &quot;</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">to_latex</span><span class="p">(</span><span class="n">t2_cs</span><span class="p">)</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">&quot;</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">;</span>
+
+<span class="c1">// Convert to the open-shell spin-traced form</span>
+<span class="k">auto</span><span class="w"> </span><span class="n">t2_os</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">open_shell_CC_spintrace</span><span class="p">(</span>
+<span class="w">    </span><span class="n">t2_eq</span><span class="p">);</span><span class="w">  </span><span class="c1">// vector of expressions: {ɑɑ, ɑβ, ββ} blocks</span>
+<span class="n">std</span><span class="o">::</span><span class="n">wcout</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">&quot;Open-shell spin-traced CCSD-R2:</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">;</span>
+<span class="k">for</span><span class="w"> </span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="o">&amp;</span><span class="w"> </span><span class="n">eq</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">t2_os</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="n">std</span><span class="o">::</span><span class="n">wcout</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">to_latex</span><span class="p">(</span><span class="n">eq</span><span class="p">)</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">&quot;</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">;</span>
+<span class="p">}</span>
 </pre></div>
 </div>
 </section>
@@ -346,7 +485,7 @@ Expressions are generated in spin-orbital basis, and they can post-processed usi
             
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on Apr 18, 2025 3:06:25 PM</div>
+              Last updated on Apr 25, 2025 2:45:59 PM</div>
           </div>
           <div class="right-details">
             <div class="icons">
@@ -371,9 +510,24 @@ Expressions are generated in spin-orbital basis, and they can post-processed usi
           <div class="toc-tree">
             <ul>
 <li><a class="reference internal" href="#">Coupled-Cluster Class</a><ul>
+<li><a class="reference internal" href="#overview">Overview</a></li>
+<li><a class="reference internal" href="#ansatz-options">Ansatz Options</a></li>
+<li><a class="reference internal" href="#key-methods">Key Methods</a><ul>
+<li><a class="reference internal" href="#similarity-transformation">Similarity Transformation</a></li>
+<li><a class="reference internal" href="#ground-state-amplitudes">Ground State Amplitudes</a></li>
+<li><a class="reference internal" href="#coupled-cluster-response">Coupled-Cluster Response</a></li>
+<li><a class="reference internal" href="#equation-of-motion-coupled-cluster">Equation-of-Motion Coupled-Cluster</a></li>
+</ul>
+</li>
 <li><a class="reference internal" href="#examples">Examples</a><ul>
-<li><a class="reference internal" href="#cc-amplitude-equations">CC amplitude equations</a></li>
-<li><a class="reference internal" href="#eom-cc-equations">EOM-CC equations</a></li>
+<li><a class="reference internal" href="#ground-state-cc-amplitude-equations">Ground State CC Amplitude Equations</a></li>
+<li><a class="reference internal" href="#eom-cc-equations">EOM-CC Equations</a></li>
+<li><a class="reference internal" href="#response-and-perturbation-equations">Response and Perturbation Equations</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#advanced-usage">Advanced Usage</a><ul>
+<li><a class="reference internal" href="#truncating-the-commutator-expansion">Truncating the Commutator Expansion</a></li>
+<li><a class="reference internal" href="#spin-tracing-of-expressions">Spin Tracing of Expressions</a></li>
 </ul>
 </li>
 </ul>
@@ -395,5 +549,7 @@ Expressions are generated in spin-orbital basis, and they can post-processed usi
     <script src="../../_static/copybutton.js?v=f281be69"></script>
     <script src="../../_static/design-tabs.js?v=f930bc37"></script>
     <script src="../../_static/bootstrap-treeview/bootstrap-treeview.min.js?v=6a1e96b4"></script>
+    <script>window.MathJax = {"options": {"processHtmlClass": "tex2jax_process|mathjax_process|math|output_area"}}</script>
+    <script defer="defer" src="https://cdn.jsdelivr.net/npm/mathjax@4.0.0-beta.3/tex-mml-chtml.js"></script>
     </body>
 </html>

@@ -1,42 +1,162 @@
 Coupled-Cluster Class
-==========================
+======================
 
-SeQuant's coupled-cluster (CC) class (see :class:`sequant::mbpt::CC`) supports derivations of ground and excited state methods,
-using traditional, unitary and orbital-optimized ansatze (see :enum:`sequant::mbpt::CC::Ansatz`).
-Expressions are generated in spin-orbital basis, and they can post-processed using SeQuant's spin-tracing capabilities.
+Coupled-cluster (CC) theory is one of the most accurate and widely used quantum chemistry methods for describing electron correlation in molecular systems. It represents the many-electron wavefunction using an exponential ansatz:
+
+.. math::
+
+   |\Psi_{\text{CC}}\rangle = e^{\hat{T}}|\Phi_0\rangle
+
+where :math:`|\Phi_0\rangle` is a reference determinant (typically Hartree-Fock), and :math:`\hat{T}` is a cluster operator that generates excited determinants. The cluster operator is typically expanded as:
+
+.. math::
+
+   \hat{T} = \hat{T}_1 + \hat{T}_2 + \hat{T}_3 + \ldots
+
+where :math:`\hat{T}_n` generates :math:`n`-fold excited determinants. For computational tractability, the cluster operator is usually truncated. For example, CCSD includes only single and double excitations (:math:`\hat{T} = \hat{T}_1 + \hat{T}_2`).
+
+The ``CC`` class (see :class:`sequant::mbpt::CC`) provides a convenient interface for setting up and processing CC equations using SeQuant’s symbolic algebra engine. It supports various CC formulations, including traditional, unitary, and orbital-optimized ansätze.
+
+Overview
+--------
+
+The ``sequant::mbpt::CC`` class can be used to derive:
+
+- Ground state amplitude equations
+- λ (de-excitation) amplitude equations
+- Equation-of-motion (EOM) CC equations for excited states
+- Response equations for properties and perturbations
+
+Expressions are generated in spin-orbital basis and can be post-processed using SeQuant's spin-tracing capabilities. See :ref:`cc-spin-tracing` for more details.
+
+
+Ansatz Options
+--------------
+
+The ``CC`` class supports several CC ansätze through the ``CC::Ansatz`` enum (see :enum:`sequant::mbpt::CC::Ansatz`):
+
+- ``Ansatz::T``: Traditional CC ansatz, where the wavefunction is represented as :math:`|\Psi_{\text{CC}}\rangle = e^{\hat{T}}|\Phi_0\rangle`. This is the standard approach used in most implementations.
+
+- ``Ansatz::oT``: Orbital-optimized traditional ansatz. Singles amplitudes (:math:`\hat{T}_1`) are excluded from the cluster operator, with orbital optimization performed instead.
+
+- ``Ansatz::U``: Unitary CC ansatz, where the wavefunction is represented as :math:`|\Psi_{\text{UCC}}\rangle = e^{\hat{T} - \hat{T}^\dagger}|\Phi_0\rangle`. Particularly useful for quantum computing applications.
+
+- ``Ansatz::oU``: Orbital-optimized unitary ansatz, combines both unitary and orbital optimized ansätze.
+
+Key Methods
+----------
+
+Similarity Transformation
+^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. code-block:: cpp
+
+   ExprPtr sim_tr(ExprPtr expr, size_t r);
+
+Performs the similarity transformation of an operator. For traditional CC, this computes :math:`\bar{O} = e^{-\hat{T}} \hat{O} e^{\hat{T}}` expanded as a series of nested commutators truncated at order ``r``, where :math:`\hat{O}` is the operator to be transformed.
+
+Ground State Amplitudes
+^^^^^^^^^^^^^^^^^^^^^^^
+
+.. code-block:: cpp
+
+   std::vector<ExprPtr> t(size_t commutator_rank = 4,
+                          size_t pmax = std::numeric_limits<size_t>::max(),
+                          size_t pmin = 0);
+
+Derives the equations for the :math:`t` amplitudes (:math:`\langle \Phi_P|\bar{H}|Phi_0 \rangle = 0`) up to specified excitation levels.
+
+.. code-block:: cpp
+
+   std::vector<ExprPtr> λ(size_t commutator_rank = 4);
+
+Derives the equations for the :math:`\lambda` de-excitation amplitudes.
+
+Coupled-Cluster Response
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. code-block:: cpp
+
+   std::vector<ExprPtr> t_pt(size_t order = 1, size_t rank = 1);
+   std::vector<ExprPtr> λ_pt(size_t order = 1, size_t rank = 1);
+
+Derives perturbed amplitude equations for response theory calculations.
+
+Equation-of-Motion Coupled-Cluster
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. code-block:: cpp
+
+   std::vector<ExprPtr> eom_r(nₚ np, nₕ nh);
+   std::vector<ExprPtr> eom_l(nₚ np, nₕ nh);
+
+Derives equation-of-motion coupled-cluster (EOM-CC) equations for excited states. The ``eom_r`` method generates equations for the right eigenvectors, while ``eom_l`` generates equations for the left eigenvectors.
 
 Examples
 --------
-Here are some examples of using the CC class for deriving expressions.
 
-CC amplitude equations
-^^^^^^^^^^^^^^^^^^^^^^
+The following examples demonstrate how to use the ``CC`` class to derive CC equations for various ansätze and excitation levels.
 
-.. code-block:: c++
+From this point onward, assume the following namespaces are imported, and the ``sequant::Context`` is configured as shown.
 
-    using namespace sequant::mbpt;
-    // Traditional CCSD
-    auto t_eqs = CC{2}.t();
-    std::wcout << "R[1]: " << to_latex(t_eqs[1]) << "\n"
-               << "R[2]: " << to_latex(t_eqs[2]) << "\n";
+.. literalinclude:: /examples/user/cc.cpp
+   :language: cpp
+   :start-after: start-snippet-0
+   :end-before: end-snippet-0
+   :dedent: 2
 
-    auto l_eqs = CC{2}.λ();
-    std::wcout << "L[1]: " << to_latex(l_eqs[1]) << "\n"
-               << "L[2]: " << to_latex(l_eqs[2]) << "\n";
+Ground State CC Amplitude Equations
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-    // Unitary CCSD
-    auto Ut_eqs = CC{2, CC::Ansatz::U}.t();
-    std::wcout << "R[1]: " << to_latex(Ut_eqs[1]) << "\n"
-               << "R[2]: " << to_latex(Ut_eqs[2]) << "\n";
+.. literalinclude:: /examples/user/cc.cpp
+   :language: cpp
+   :start-after: start-snippet-1
+   :end-before: end-snippet-1
+   :dedent: 2
 
+EOM-CC Equations
+^^^^^^^^^^^^^^^^
 
-EOM-CC equations
-^^^^^^^^^^^^^^^^^^
+.. literalinclude:: /examples/user/cc.cpp
+   :language: cpp
+   :start-after: start-snippet-2
+   :end-before: end-snippet-2
+   :dedent: 2
 
-.. code-block:: c++
+Response and Perturbation Equations
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-    using namespace sequant::mbpt;
-    // EE-EOM-CCSD
-    auto r_eqs = CC{2}.eom_r(nₚ(2), nₕ(2));
-    std::wcout << "R[1]: " << to_latex(r_eqs[1]) << "\n"
-               << "R[2]: " << to_latex(r_eqs[2]) << "\n";
+.. literalinclude:: /examples/user/cc.cpp
+   :language: cpp
+   :start-after: start-snippet-3
+   :end-before: end-snippet-3
+   :dedent: 2
+
+Advanced Usage
+-------------
+
+Truncating the Commutator Expansion
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+For traditional CC with two-body Hamiltonians, the commutator expansion is truncated at the a 4th-order. However, for unitary CC or other Hamiltonians, you may need to explicitly set the commutator rank:
+
+.. literalinclude:: /examples/user/cc.cpp
+   :language: cpp
+   :start-after: start-snippet-4
+   :end-before: end-snippet-4
+   :dedent: 2
+
+.. _cc-spin-tracing:
+
+Spin Tracing of Expressions
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Equations generated by the ``CC`` class are in spin-orbital basis. SeQuant also provides capability to transform these equations into spin-traced forms.
+
+Make sure to include the ``<SeQuant/domain/mbpt/spin.hpp>`` header to access spin-tracing functions.
+
+.. literalinclude:: /examples/user/cc.cpp
+   :language: cpp
+   :start-after: start-snippet-5
+   :end-before: end-snippet-5
+   :dedent: 2
