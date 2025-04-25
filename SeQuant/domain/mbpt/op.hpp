@@ -158,6 +158,12 @@ template <Statistics S>
 class Operator<void, S> : public Expr, public Labeled {
  protected:
   Operator() = default;
+
+  /// @brief Constructs an Operator with a label generator and a tensor form
+  /// generator
+  /// @param label_generator A function that generates a label for the operator
+  /// @param tensor_form_generator A function that generates the tensor form of
+  /// the operator
   Operator(std::function<std::wstring_view()> label_generator,
            std::function<ExprPtr()> tensor_form_generator)
       : label_generator_(std::move(label_generator)),
@@ -166,11 +172,13 @@ class Operator<void, S> : public Expr, public Labeled {
  public:
   virtual ~Operator() = default;
 
+  /// @return label of the operator
   std::wstring_view label() const override {
     assert(label_generator_);
     return label_generator_();
   }
 
+  /// @return tensor form of the operator
   virtual ExprPtr tensor_form() const {
     assert(tensor_form_generator_);
     return tensor_form_generator_();
@@ -283,6 +291,14 @@ class QuantumNumberChange
         [](const auto& ia, const auto& ib) { return equal(ia, ib); });
   }
   bool operator!=(const this_type& b) const { return !this->operator==(b); }
+
+  bool operator<(const this_type& that) const {
+    return ranges::lexicographical_compare(
+        *this, that, [](const interval_t& a, const interval_t& b) {
+          if (a.lower() != b.lower()) return a.lower() < b.lower();
+          return a.upper() < b.upper();
+        });
+  }
 
   // determines the number of physical vacuum creators and annihilators for the
   // active particle and hole space from the Context. for general operators this
@@ -711,6 +727,13 @@ class Operator : public Operator<void, S> {
   Operator();
 
  public:
+  /// @brief Constructs an operator with the given label and tensor form and
+  /// quantum number action
+  /// @param label_generator a function that generates the label for the
+  /// operator
+  /// @param tensor_form_generator a function that generates the tensor form of
+  /// the operator
+  /// @param qn_action a function that modifies the quantum numbers
   Operator(std::function<std::wstring_view()> label_generator,
            std::function<ExprPtr()> tensor_form_generator,
            std::function<void(QuantumNumbers&)> qn_action);
@@ -814,8 +837,8 @@ ExprPtr Λ(std::size_t K);
 /// @brief Makes generic right-hand replacement operator
 /// @param na number of annihilators
 /// @param nc number of creators
-/// @param particle_space IndexSpace corresponding to the particle space
-/// @param hole_space IndexSpace corresponding to the hole space
+/// @param cre_space IndexSpace on which creators act
+/// @param ann_space IndexSpace on which annihilators act
 ExprPtr R_(
     nann na, ncre nc,
     const cre<IndexSpace>& cre_space = cre(get_particle_space(Spin::any)),
@@ -830,8 +853,8 @@ DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(R_);
 /// @brief Makes generic left-hand replacement operator
 /// @param na number of annihilators
 /// @param nc number of creators
-/// @param particle_space IndexSpace corresponding to the particle space
-/// @param hole_space IndexSpace corresponding to the hole space
+/// @param cre_space IndexSpace on which creators act
+/// @param ann_space IndexSpace on which annihilators act
 ExprPtr L_(
     nann na, ncre nc,
     const cre<IndexSpace>& cre_space = cre(get_hole_space(Spin::any)),
@@ -943,7 +966,7 @@ ExprPtr Λ(std::size_t K);
 /// @param na number of annihilators
 /// @param nc number of creators
 /// @param cre_space IndexSpace on which creators act
-/// @param hole_space IndexSpace on which annihilators act
+/// @param ann_space IndexSpace on which annihilators act
 ExprPtr R_(
     nann na, ncre nc,
     const cre<IndexSpace>& cre_space = cre(get_particle_space(Spin::any)),
@@ -959,7 +982,7 @@ DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(R_);
 /// @param na number of annihilators
 /// @param nc number of creators
 /// @param cre_space IndexSpace on which creators act
-/// @param hole_space IndexSpace on which annihilators act
+/// @param ann_space IndexSpace on which annihilators act
 ExprPtr L_(
     nann na, ncre nc,
     const cre<IndexSpace>& cre_space = cre(get_hole_space(Spin::any)),
@@ -975,7 +998,7 @@ DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(L_);
 /// @param na number of annihilators
 /// @param nc number of creators
 /// @param cre_space IndexSpace on which creators act
-/// @param hole_space IndexSpace on which annihilators act
+/// @param ann_space IndexSpace on which annihilators act
 /// @return `R_(na,nc) + R_(na-1,nc-1) + ...`
 ExprPtr R(nann na, ncre nc,
           const cre<IndexSpace>& cre_space = cre(get_particle_space(Spin::any)),
@@ -992,7 +1015,7 @@ DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(R);
 /// @param na number of annihilators
 /// @param nc number of creators
 /// @param cre_space IndexSpace on which creators act
-/// @param hole_space IndexSpace on which annihilators act
+/// @param ann_space IndexSpace on which annihilators act
 /// @return `L_(na,nc) + L_(na-1,nc-1) + ...`
 ExprPtr L(
     nann na, ncre nc,

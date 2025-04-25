@@ -59,7 +59,10 @@ Useful CMake Variables
      - The installation path for SeQuant.
    * - SEQUANT_TESTS
      - `BUILD_TESTING <https://cmake.org/cmake/help/latest/variable/BUILD_TESTING.html>`_
-     - Enables test targets, e.g. `check-sequant`.
+     - Enables test targets, e.g. ``check-sequant``.
+   * - SEQUANT_EVAL_TESTS
+     - OFF
+     - Enables SeQuant evaluation tests using ``TiledArray`` and ``BTAS``.
    * - SEQUANT_MIMALLOC
      - OFF
      - Use `mimalloc <https://github.com/microsoft/mimalloc>`_ for fast memory allocation.
@@ -77,7 +80,7 @@ Useful CMake Variables
      - Whether to use the `include-what-you-use <https://github.com/include-what-you-use/include-what-you-use>`_ tool (if found)
    * - Boost_FETCH_IF_MISSING
      - OFF
-     - If set to ON, SeQuant will download and build Boost if it is not found by `find_package(Boost ...)`; this is not recommended.
+     - If set to ON, SeQuant will download and build Boost if it is not found by ``find_package(Boost ...)``; this is not recommended.
    * - ENABLE_TBB
      - OFF
      - Enable TBB as an optional prerequisite for C++'s parallel STL
