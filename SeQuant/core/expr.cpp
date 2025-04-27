@@ -15,6 +15,10 @@
 #include <thread>
 #include <vector>
 
+#ifdef SEQUANT_USE_OPENMP
+#include <omp.h>
+#endif
+
 namespace sequant {
 
 ExprPtr ExprPtr::clone() const & {
@@ -351,6 +355,10 @@ ExprPtr Sum::canonicalize_impl(bool multipass) {
   for (auto pass = 0; pass != npasses; ++pass) {
     // recursively canonicalize summands ...
     const auto nsubexpr = ranges::size(*this);
+
+#ifdef SEQUANT_USE_OPENMP
+#pragma omp parallel for schedule(dynamic)
+#endif
     for (std::size_t i = 0; i != nsubexpr; ++i) {
       auto bp = (pass % 2 == 0) ? summands_[i]->rapid_canonicalize()
                                 : summands_[i]->canonicalize();
