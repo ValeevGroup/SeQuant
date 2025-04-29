@@ -115,8 +115,6 @@ Functions
 
 - :ref:`exhale_function_namespacesequant_1ab3abe86363b66a63c0e8521acb0ec014`
 
-- :ref:`exhale_function_namespacesequant_1a487a6641646c9ffacdf5ea5e8865d679`
-
 - :ref:`exhale_function_namespacesequant_1a4b6ae3dc30ac2f12ea826de6c05175f3`
 
 - :ref:`exhale_function_namespacesequant_1acf61bf30e938f1bcd39a19117443ab74`
@@ -124,4 +122,6 @@ Functions
 - :ref:`exhale_function_namespacesequant_1a3c3b7708ffda618115109e073c79e0e7`
 
 - :ref:`exhale_function_namespacesequant_1a7c0c30b1a59cb0c1116251340fe95e09`
+
+- :ref:`exhale_function_namespacesequant_1a487a6641646c9ffacdf5ea5e8865d679`
 
