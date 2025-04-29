@@ -15,9 +15,7 @@
 #include <thread>
 #include <vector>
 
-#ifdef SEQUANT_USE_OPENMP
-#include <omp.h>
-#endif
+#include <SeQuant/core/runtime.hpp>
 
 namespace sequant {
 
@@ -356,19 +354,16 @@ ExprPtr Sum::canonicalize_impl(bool multipass) {
     // recursively canonicalize summands ...
     const auto nsubexpr = ranges::size(*this);
 
-#ifdef SEQUANT_USE_OPENMP
-#pragma omp parallel for schedule(dynamic)
-#endif
-    for (std::size_t i = 0; i != nsubexpr; ++i) {
-      auto bp = (pass % 2 == 0) ? summands_[i]->rapid_canonicalize()
-                                : summands_[i]->canonicalize();
+    // direct access to summands, using for_each to parallelize
+    sequant::for_each(summands_, [this, pass](ExprPtr &summand) {
+      auto bp = (pass % 2 == 0) ? summand->rapid_canonicalize()
+                                : summand->canonicalize();
       if (bp) {
         assert(bp->template is<Constant>());
-        summands_[i] =
-            ex<Product>(std::static_pointer_cast<Constant>(bp)->value(),
-                        ExprPtrList{summands_[i]});
+        summand = ex<Product>(std::static_pointer_cast<Constant>(bp)->value(),
+                              ExprPtrList{summand});
       }
-    };
+    });
 
     if (Logger::instance().canonicalize)
       std::wcout << "Sum::canonicalize_impl (pass=" << pass

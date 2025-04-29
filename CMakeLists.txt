@@ -117,9 +117,6 @@ option(SEQUANT_IWYU "Whether to use the include-what-you-use tool (if found)" OF
 option(ENABLE_TBB "Enable TBB as an optional prerequisite for C++'s parallel STL (if PSTL is not supported will use of standard C++11 concurrency)" OFF)
 add_feature_info(TBB ENABLE_TBB "Intel Thread-Building Blocks is an optional prerequisite for C++'s parallel STL")
 
-option(ENABLE_OPENMP "Enable OpenMP support" OFF)
-add_feature_info(OPENMP ENABLE_OPENMP "Enable OpenMP for parallel execution")
-
 option(SEQUANT_PYTHON "Build SeQuant python module" OFF)
 add_feature_info(PYTHON SEQUANT_PYTHON "PySeQuant: Python bindings to SeQuant")
 
@@ -325,18 +322,6 @@ endif ()
 add_library(SeQuant
         ${SeQuant_src}
         )
-
-if (ENABLE_OPENMP)
-    find_package(OpenMP REQUIRED)
-    if (OpenMP_CXX_FOUND)
-        message(STATUS "OpenMP support enabled")
-        target_compile_definitions(SeQuant PUBLIC SEQUANT_USE_OPENMP)
-        target_link_libraries(SeQuant PUBLIC OpenMP::OpenMP_CXX)
-    else()
-        message(FATAL_ERROR "OpenMP requested but not found.")
-    endif()
-endif()
-
 # feed SEQUANT_GIT_REVISION and SEQUANT_GIT_DESCRIPTION to SeQuant/version.cpp only to avoid recompiling everything
 set_source_files_properties(
         SeQuant/version.cpp
