@@ -8,13 +8,13 @@
 #include <SeQuant/core/logger.hpp>
 #include <SeQuant/core/tensor.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
-#include <SeQuant/core/tensor_network_v2.hpp>
+#include <SeQuant/core/tensor_network.hpp>
 
 #include <range/v3/all.hpp>
 
+#include <SeQuant/core/runtime.hpp>
 #include <thread>
 #include <vector>
-
 namespace sequant {
 
 ExprPtr ExprPtr::clone() const & {
@@ -196,7 +196,7 @@ ExprPtr Product::canonicalize_impl(bool rapid) {
   if (!contains_nontensors) {  // tensor network canonization is a special case
                                // that's done in
                                // TensorNetwork
-    TensorNetworkV2 tn(factors_);
+    TensorNetwork tn(factors_);
     auto canon_factor =
         tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(), rapid);
     const auto &tensors = tn.tensors();
@@ -344,16 +344,27 @@ ExprPtr Sum::canonicalize_impl(bool multipass) {
   for (auto pass = 0; pass != npasses; ++pass) {
     // recursively canonicalize summands ...
     const auto nsubexpr = ranges::size(*this);
-    for (std::size_t i = 0; i != nsubexpr; ++i) {
-      auto bp = (pass % 2 == 0) ? summands_[i]->rapid_canonicalize()
-                                : summands_[i]->canonicalize();
+
+    // for (std::size_t i = 0; i != nsubexpr; ++i) {
+    //   auto bp = (pass % 2 == 0) ? summands_[i]->rapid_canonicalize()
+    //                             : summands_[i]->canonicalize();
+    //   if (bp) {
+    //     assert(bp->template is<Constant>());
+    //     summands_[i] =
+    //         ex<Product>(std::static_pointer_cast<Constant>(bp)->value(),
+    //                     ExprPtrList{summands_[i]});
+    //   }
+    // };
+
+    sequant::for_each(summands_, [this, pass](ExprPtr &summand) {
+      auto bp = (pass % 2 == 0) ? summand->rapid_canonicalize()
+                                : summand->canonicalize();
       if (bp) {
         assert(bp->template is<Constant>());
-        summands_[i] =
-            ex<Product>(std::static_pointer_cast<Constant>(bp)->value(),
-                        ExprPtrList{summands_[i]});
+        summand = ex<Product>(std::static_pointer_cast<Constant>(bp)->value(),
+                              ExprPtrList{summand});
       }
-    };
+    });
 
     if (Logger::instance().canonicalize)
       std::wcout << "Sum::canonicalize_impl (pass=" << pass
