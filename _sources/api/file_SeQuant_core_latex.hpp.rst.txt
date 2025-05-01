@@ -82,9 +82,9 @@ Functions
 ---------
 
 
-- :ref:`exhale_function_namespacesequant_1a41716bdbda99a76165e127f722b4578c`
-
 - :ref:`exhale_function_namespacesequant_1adcb7995ddb394de3fd6d6543ce0992db`
+
+- :ref:`exhale_function_namespacesequant_1a41716bdbda99a76165e127f722b4578c`
 
 - :ref:`exhale_function_namespacesequant_1a1733ca1f73f803b5a51b6d117dd2705d`
 
@@ -98,7 +98,7 @@ Functions
 
 - :ref:`exhale_function_namespacesequant_1a22459d1973ac873218da6272239d3cfe`
 
-- :ref:`exhale_function_namespacesequant_1a27d85d524fa3339535a7e4ec65249fb3`
-
 - :ref:`exhale_function_namespacesequant_1a86b61721e1dd2ea4d2dbf22a14e14be5`
+
+- :ref:`exhale_function_namespacesequant_1a27d85d524fa3339535a7e4ec65249fb3`
 

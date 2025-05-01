@@ -56,6 +56,8 @@ Included By
 -----------
 
 
+- :ref:`file_SeQuant_core_eval_expr.cpp`
+
 - :ref:`file_SeQuant_core_parse_ast_conversions.hpp`
 
 - :ref:`file_SeQuant_core_parse_deparse.cpp`
