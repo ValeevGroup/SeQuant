@@ -166,12 +166,12 @@ class GenerationVisitor {
     assert(!node.leaf());
 
     // Assemble the expression that should be evaluated
-    ExprPtr expression;
+    container::svector<ExprPtr> expressions;
     switch (node->op_type()) {
       case EvalOp::Prod:
-        expression =
+        expressions.push_back(
             ex<Product>(ExprPtrList{node.left()->expr(), node.right()->expr()},
-                        Product::Flatten::No);
+                        Product::Flatten::No));
         break;
       case EvalOp::Sum: {
         const bool leftSame = node.left()->expr() == node->expr();
@@ -186,13 +186,16 @@ class GenerationVisitor {
           // This is of the form S = S + A
           // However, we always imply += semantics and therefore we reinterpret
           // this as S += A meaning that the actual expression is only A
-          expression = node.right()->expr();
+          expressions.push_back(node.right()->expr());
         } else if (rightSame) {
           // See above
-          expression = node.left()->expr();
+          expressions.push_back(node.left()->expr());
         } else {
-          expression =
-              ex<Sum>(ExprPtrList{node.left()->expr(), node.right()->expr()});
+          // Genuine S = A + B which we re-interpret as
+          // S += A
+          // S += B
+          expressions.push_back(node.left()->expr());
+          expressions.push_back(node.right()->expr());
         }
         break;
       }
@@ -201,7 +204,7 @@ class GenerationVisitor {
             "Computation must not consist of an ID operation");
     }
 
-    assert(expression);
+    assert(!expressions.empty());
 
     // Account for any scalar prefactor(s) and if there are
     // variables among them, make sure to load them first
@@ -231,16 +234,20 @@ class GenerationVisitor {
         m_variableUses[variables.back()]++;
       }
 
-      expression = iter->second * expression;
+      for (ExprPtr &current : expressions) {
+        current = iter->second * current;
+      }
     }
 
-    switch (node->result_type()) {
-      case ResultType::Tensor:
-        m_generator.compute(*expression, node->as_tensor(), m_ctx);
-        break;
-      case ResultType::Scalar:
-        m_generator.compute(*expression, node->as_variable(), m_ctx);
-        break;
+    for (ExprPtr current : expressions) {
+      switch (node->result_type()) {
+        case ResultType::Tensor:
+          m_generator.compute(*current, node->as_tensor(), m_ctx);
+          break;
+        case ResultType::Scalar:
+          m_generator.compute(*current, node->as_variable(), m_ctx);
+          break;
+      }
     }
 
     // Drop loaded variables
