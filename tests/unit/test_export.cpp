@@ -212,9 +212,8 @@ void add_to_context(Context &ctx, const std::string &line) {
   add_to_context(ctx, key, value);
 }
 
-std::vector<ExpressionGroup<EvalExpr>> parse_expression_spec(
-    const std::string &spec) {
-  std::vector<ExpressionGroup<EvalExpr>> groups;
+std::vector<ExpressionGroup<>> parse_expression_spec(const std::string &spec) {
+  std::vector<ExpressionGroup<>> groups;
 
   std::istringstream in(spec);
 

@@ -2,6 +2,7 @@
 #define SEQUANT_CORE_EXPORT_EXPRESSION_GROUP_HPP
 
 #include <SeQuant/core/container.hpp>
+#include <SeQuant/core/eval_expr.hpp>
 #include <SeQuant/core/eval_node.hpp>
 
 #include <optional>
@@ -11,7 +12,7 @@ namespace sequant {
 
 /// Groups multiple expressions together that are supposed to be exported as a
 /// single (named) group (e.g. in a function).
-template <typename T>
+template <typename T = EvalExpr>
 class ExpressionGroup {
  private:
   using container_type = container::svector<EvalNode<T>>;
