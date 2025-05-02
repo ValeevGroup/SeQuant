@@ -33,26 +33,28 @@ class ItfGeneratorContext : public ReorderingContext {
       : ReorderingContext(MemoryLayout::ColumnMajor, assume_real_orbitals{}){};
   ~ItfGeneratorContext() = default;
 
-  std::string index_name(const IndexSpace &space, std::size_t ordinal) const;
+  virtual std::string index_name(const IndexSpace &space,
+                                 std::size_t ordinal) const;
 
-  std::string get_name(const IndexSpace &space) const;
+  virtual std::string get_name(const IndexSpace &space) const;
 
-  std::string get_tag(const IndexSpace &space) const;
+  virtual std::string get_tag(const IndexSpace &space) const;
 
-  std::optional<std::string> import_name(const Tensor &tensor) const;
-  std::optional<std::string> import_name(const Variable &variable) const;
+  virtual std::optional<std::string> import_name(const Tensor &tensor) const;
+  virtual std::optional<std::string> import_name(
+      const Variable &variable) const;
 
-  void set_name(const IndexSpace &space, std::string name);
+  virtual void set_name(const IndexSpace &space, std::string name);
 
-  void set_tag(const IndexSpace &space, std::string tag);
+  virtual void set_tag(const IndexSpace &space, std::string tag);
 
-  void set_import_name(const Tensor &tensor, std::string name);
-  void set_import_name(const Variable &variable, std::string name);
+  virtual void set_import_name(const Tensor &tensor, std::string name);
+  virtual void set_import_name(const Variable &variable, std::string name);
 
-  const std::wstring two_electron_integral_label() const {
+  virtual const std::wstring two_electron_integral_label() const {
     return m_integral_label;
   }
-  void set_two_electron_integral_label(std::wstring label) {
+  virtual void set_two_electron_integral_label(std::wstring label) {
     m_integral_label = std::move(label);
   }
 
