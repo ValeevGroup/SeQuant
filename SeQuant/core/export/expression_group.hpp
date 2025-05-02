@@ -35,6 +35,16 @@ class ExpressionGroup {
     assert(!m_name.has_value() || !m_name.value().empty());
   }
 
+  template <typename Range>
+    requires std::ranges::range<Range> &&
+             std::is_same_v<std::ranges::range_value_t<Range>,
+                            typename container_type::value_type>
+  explicit ExpressionGroup(const Range &rng,
+                           std::optional<std::string> name = {})
+      : ExpressionGroup(
+            container_type(std::ranges::begin(rng), std::ranges::end(rng)),
+            std::move(name)) {}
+
   bool is_named() const { return m_name.has_value(); }
 
   const std::string name() const { return m_name.value(); }
