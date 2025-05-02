@@ -7,14 +7,11 @@
 namespace sequant::details {
 
 void rename(Tensor &tensor, std::size_t counter) {
-  tensor = Tensor(std::wstring(tensor.label()) + std::to_wstring(counter),
-                  tensor.bra(), tensor.ket(), tensor.symmetry(),
-                  tensor.braket_symmetry(), tensor.particle_symmetry());
+  tensor.set_label(std::wstring(tensor.label()) + std::to_wstring(counter));
 }
 
 void rename(Variable &variable, std::size_t counter) {
-  variable =
-      Variable(std::wstring(variable.label()) + std::to_wstring(counter));
+  variable.set_label(std::wstring(variable.label()) + std::to_wstring(counter));
 }
 
 }  // namespace sequant::details
