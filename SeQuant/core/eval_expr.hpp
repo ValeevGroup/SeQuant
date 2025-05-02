@@ -268,7 +268,7 @@ FullBinaryNode<ExprT> binarize(ResultExpr const& res) {
   FullBinaryNode<ExprT> tree = [&]() {
     if (res.expression().size() == 0) {
       // Expressions of size zero are terminal expressions such as Variable,
-      // Tensor and Constant Binarizing a binary expression will yield a tree
+      // Tensor and Constant. Binarizing a binary expression will yield a tree
       // consisting only of a root node, representing said terminal expression.
       // However, for a ResultExpr there is always the semantic of having an lhs
       // that gets set to the rhs's value, where the rhs is the expression.
