@@ -39,6 +39,5 @@ How do we use it for operator algebra?
 - This enables SeQuant to **screen out expressions that would yield zero**, before applying Wick's Theorem without much computational overhead.
 - ``QuantumNumberChange`` is also used **check if two operators commute with each other**, which is crucial for reducing the expression to its compact canonical form.
 
-
 Illustrative Examples
 ---------------------
