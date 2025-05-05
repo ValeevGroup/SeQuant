@@ -335,15 +335,23 @@ bool prune_scalar(ExportNode<T> &node, ExportNode<T> &parent,
     factor = parentFactor * factor;
   }
 
+  ExportNode<T> fill_in = [&]() {
+    if (node->id() == parent.left()->id()) {
+      return std::move(parent.right());
+    } else {
+      assert(node->id() == parent.right()->id());
+      return std::move(parent.left());
+    }
+  }();
+
+  if (!fill_in.leaf()) {
+    fill_in->set_expr(std::move(parent->expr()));
+  }
+
   // We can only do the moving after finishing access to node as
   // node might become unreferenced and thus deleted once its parent
   // is overwritten.
-  if (node->id() == parent.left()->id()) {
-    parent = std::move(parent.right());
-  } else {
-    assert(node->id() == parent.right()->id());
-    parent = std::move(parent.left());
-  }
+  parent = std::move(fill_in);
 
   result.scalarFactors[parent->id()] = std::move(factor);
 
