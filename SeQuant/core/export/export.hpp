@@ -195,31 +195,6 @@ class GenerationVisitor {
             expressions.push_back(node.right()->expr());
             break;
         }
-#if 0
-        const bool leftSame = node.left()->expr() == node->expr();
-        const bool rightSame = node.right()->expr() == node->expr();
-        if (leftSame && rightSame) {
-          // This is of the form S = S + S
-          // which should only happen in case the preprocessing step has
-          // flushed down the summation to lower nodes, turning the current
-          // node into a no-op (only needed to keep the binary tree connected).
-          return;
-        } else if (leftSame) {
-          // This is of the form S = S + A
-          // However, we always imply += semantics and therefore we reinterpret
-          // this as S += A meaning that the actual expression is only A
-          expressions.push_back(node.right()->expr());
-        } else if (rightSame) {
-          // See above
-          expressions.push_back(node.left()->expr());
-        } else {
-          // Genuine S = A + B which we re-interpret as
-          // S += A
-          // S += B
-          expressions.push_back(node.left()->expr());
-          expressions.push_back(node.right()->expr());
-        }
-#endif
         break;
       }
       case EvalOp::Id:
