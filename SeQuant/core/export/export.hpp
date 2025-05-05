@@ -400,7 +400,7 @@ void preprocess(ExprType expr, ExportContext &ctx, Node &node,
 
   if constexpr (std::is_same_v<ExprType, Tensor>) {
     result.tensors.insert(expr);
-    const auto &indices = expr.const_braket();
+    const auto &indices = expr.const_indices();
     result.indices.insert(indices.begin(), indices.end());
 
     result.tensorReferences[expr]++;
