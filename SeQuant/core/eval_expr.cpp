@@ -21,7 +21,6 @@
 #include <range/v3/view.hpp>
 
 #include <algorithm>
-#include <atomic>
 #include <cassert>
 #include <cmath>
 #include <ranges>
@@ -30,20 +29,6 @@
 #include <utility>
 
 namespace sequant {
-
-std::size_t detail::next_eval_expr_id() {
-  static std::atomic<std::size_t> next_id = 0;
-
-  std::size_t id = next_id.load();
-
-  // This ensures that we are updating next_id with the next id while
-  // also ensuring that no other thread is currently producing the same
-  // id that this one is doing.
-  while (!next_id.compare_exchange_weak(id, id + 1)) {
-  }
-
-  return id;
-}
 
 namespace {
 
@@ -167,11 +152,7 @@ ResultType EvalExpr::result_type() const noexcept { return result_type_; }
 
 size_t EvalExpr::hash_value() const noexcept { return hash_value_; }
 
-std::size_t EvalExpr::id() const noexcept { return id_; }
-
 ExprPtr EvalExpr::expr() const noexcept { return expr_; }
-
-void EvalExpr::set_expr(ExprPtr expr) { expr_ = std::move(expr); }
 
 bool EvalExpr::tot() const noexcept {
   return ranges::any_of(canon_indices(), &Index::has_proto_indices);

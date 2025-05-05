@@ -2,8 +2,8 @@
 #define SEQUANT_CORE_EXPORT_EXPRESSION_GROUP_HPP
 
 #include <SeQuant/core/container.hpp>
-#include <SeQuant/core/eval_expr.hpp>
-#include <SeQuant/core/eval_node.hpp>
+#include <SeQuant/core/export/export_expr.hpp>
+#include <SeQuant/core/export/export_node.hpp>
 
 #include <optional>
 #include <string>
@@ -12,10 +12,10 @@ namespace sequant {
 
 /// Groups multiple expressions together that are supposed to be exported as a
 /// single (named) group (e.g. in a function).
-template <typename T = EvalExpr>
+template <typename T = ExportExpr>
 class ExpressionGroup {
  private:
-  using container_type = container::svector<EvalNode<T>>;
+  using container_type = container::svector<ExportNode<T>>;
   using node_data_type = T;
 
  public:
@@ -24,9 +24,9 @@ class ExpressionGroup {
 
   explicit ExpressionGroup(std::optional<std::string> name = {})
       : ExpressionGroup(container_type{}, std::move(name)) {}
-  explicit ExpressionGroup(EvalNode<T> expression)
+  explicit ExpressionGroup(ExportNode<T> expression)
       : ExpressionGroup(container_type{std::move(expression)}, {}) {}
-  ExpressionGroup(EvalNode<T> expression, std::optional<std::string> name)
+  ExpressionGroup(ExportNode<T> expression, std::optional<std::string> name)
       : ExpressionGroup(container_type{std::move(expression)},
                         std::move(name)) {}
   explicit ExpressionGroup(container_type expressions)
@@ -59,10 +59,10 @@ class ExpressionGroup {
 
   std::size_t size() const { return m_expressions.size(); }
 
-  void add(EvalNode<T> expr) { m_expressions.emplace_back(std::move(expr)); }
+  void add(ExportNode<T> expr) { m_expressions.emplace_back(std::move(expr)); }
 
  private:
-  container::svector<EvalNode<T>> m_expressions;
+  container::svector<ExportNode<T>> m_expressions;
   std::optional<std::string> m_name;
 };
 

@@ -203,6 +203,10 @@ set(SeQuant_src
         SeQuant/core/export/context.hpp
         SeQuant/core/export/export.cpp
         SeQuant/core/export/export.hpp
+        SeQuant/core/export/export_expr.cpp
+        SeQuant/core/export/export_expr.hpp
+        SeQuant/core/export/compute_selection.cpp
+        SeQuant/core/export/compute_selection.hpp
         SeQuant/core/export/generator.hpp
         SeQuant/core/export/itf.cpp
         SeQuant/core/export/itf.hpp

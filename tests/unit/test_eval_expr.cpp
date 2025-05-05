@@ -49,27 +49,18 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
       std::make_shared<sequant::DefaultTensorCanonicalizer>());
 
   SECTION("Constructors") {
-    std::set<std::size_t> ids;
     auto t1 = parse_tensor(L"t_{i1, i2}^{a1, a2}");
 
     REQUIRE_NOTHROW(EvalExpr{t1});
-    ids.insert(EvalExpr{t1}.id());
 
     auto p1 = parse_expr(L"g_{i3,a1}^{i1,i2} * t_{a2}^{a3}");
 
     const auto& c2 = EvalExpr{p1->at(0)->as<Tensor>()};
     const auto& c3 = EvalExpr{p1->at(1)->as<Tensor>()};
 
-    ids.insert(c2.id());
-    ids.insert(c3.id());
-
     REQUIRE_NOTHROW(EvalExpr{Variable{L"λ"}});
-    ids.insert(EvalExpr{Variable{L"λ"}}.id());
 
     REQUIRE_NOTHROW(EvalExpr{Constant{1}});
-    ids.insert(EvalExpr{Constant{1}}.id());
-
-    REQUIRE(ids.size() == 5);
   }
 
   SECTION("EvalExpr::EvalOp types") {

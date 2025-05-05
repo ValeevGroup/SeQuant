@@ -1,9 +1,9 @@
 #include <catch2/catch_all.hpp>
 #include <catch2/catch_test_macros.hpp>
 
-#include <SeQuant/core/eval_expr.hpp>
-#include <SeQuant/core/eval_node.hpp>
 #include <SeQuant/core/export/export.hpp>
+#include <SeQuant/core/export/export_expr.hpp>
+#include <SeQuant/core/export/export_node.hpp>
 #include <SeQuant/core/export/expression_group.hpp>
 #include <SeQuant/core/export/itf.hpp>
 #include <SeQuant/core/export/itf_generator.hpp>
@@ -239,12 +239,12 @@ std::vector<ExpressionGroup<>> parse_expression_spec(const std::string &spec) {
       ResultExpr res =
           parse_result_expr(to_wstring(line), Symmetry::nonsymm,
                             BraKetSymmetry::nonsymm, ParticleSymmetry::nonsymm);
-      groups.back().add(binarize(res));
+      groups.back().add(to_export_tree(res));
     } catch (...) {
       ExprPtr expr =
           parse_expr(to_wstring(line), Symmetry::nonsymm,
                      BraKetSymmetry::nonsymm, ParticleSymmetry::nonsymm);
-      groups.back().add(binarize(expr));
+      groups.back().add(to_export_tree(expr));
     }
   }
 
@@ -339,7 +339,7 @@ TEMPLATE_LIST_TEST_CASE("export_tests", "[export]", KnownGenerators) {
       auto groups = parse_expression_spec(expression_spec);
       REQUIRE(!groups.empty());
 
-      export_groups<EvalExpr>(groups, generator, context);
+      export_groups<>(groups, generator, context);
 
       REQUIRE_THAT(generator.get_generated_code(),
                    DiffedStringEquals(expected_output.value()));
@@ -660,5 +660,21 @@ TEST_CASE("export", "[export]") {
         }
       }
     }
+  }
+}
+
+TEST_CASE("ExportExpr", "[export]") {
+  SECTION("id & equality") {
+    Variable v(L"V");
+
+    ExportExpr e1(v);
+    ExportExpr e2(v);
+
+    REQUIRE(e1.id() != e2.id());
+    REQUIRE(e1 != e2);
+
+    ExportExpr e3 = e1;
+    REQUIRE(e1.id() == e3.id());
+    REQUIRE(e1 == e3);
   }
 }

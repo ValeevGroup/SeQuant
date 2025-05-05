@@ -2,12 +2,17 @@
 #define SEQUANT_CORE_EXPORT_EXPORT_HPP
 
 #include <SeQuant/core/container.hpp>
-#include <SeQuant/core/eval_node.hpp>
+#include <SeQuant/core/eval_expr.hpp>
+#include <SeQuant/core/export/compute_selection.hpp>
 #include <SeQuant/core/export/context.hpp>
+#include <SeQuant/core/export/export_expr.hpp>
+#include <SeQuant/core/export/export_node.hpp>
 #include <SeQuant/core/export/expression_group.hpp>
 #include <SeQuant/core/export/generator.hpp>
 #include <SeQuant/core/export/utils.hpp>
+#include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/logger.hpp>
+#include <SeQuant/core/result_expr.hpp>
 
 #include <algorithm>
 #include <array>
@@ -27,13 +32,13 @@ namespace details {
 template <typename NodeData, typename Context>
 class GenerationVisitor {
  public:
-  using NodeID = std::decay_t<decltype(std::declval<EvalExpr>().id())>;
+  using NodeID = std::decay_t<decltype(std::declval<ExportExpr>().id())>;
 
   GenerationVisitor(Generator<Context> &generator, Context &ctx,
                     const std::unordered_map<NodeID, ExprPtr> &scalarFactors)
       : m_generator(generator), m_ctx(ctx), m_scalarFactors(scalarFactors) {}
 
-  void operator()(const EvalNode<NodeData> &node, TreeTraversal context) {
+  void operator()(const ExportNode<NodeData> &node, TreeTraversal context) {
     // Note the context for leaf nodes is always TreeTraversal::Any
     switch (context) {
       case TreeTraversal::PreOrder:
@@ -121,7 +126,7 @@ class GenerationVisitor {
     }
   }
 
-  void load_or_create(const EvalNode<NodeData> &node) {
+  void load_or_create(const ExportNode<NodeData> &node) {
     if (node->is_constant()) {
       // Constants don't need to be loaded/created
       return;
@@ -161,7 +166,7 @@ class GenerationVisitor {
     }
   }
 
-  void process_computation(const EvalNode<NodeData> &node) {
+  void process_computation(const ExportNode<NodeData> &node) {
     assert(node->op_type() != EvalOp::Id);
     assert(!node.leaf());
 
@@ -174,6 +179,23 @@ class GenerationVisitor {
                         Product::Flatten::No));
         break;
       case EvalOp::Sum: {
+        switch (node->compute_selection()) {
+          case ComputeSelection::None:
+            // This node only exists for tree connectivity purposes. No explicit
+            // computation that should be exported.
+            return;
+          case ComputeSelection::Left:
+            expressions.push_back(node.left()->expr());
+            break;
+          case ComputeSelection::Right:
+            expressions.push_back(node.right()->expr());
+            break;
+          case ComputeSelection::Both:
+            expressions.push_back(node.left()->expr());
+            expressions.push_back(node.right()->expr());
+            break;
+        }
+#if 0
         const bool leftSame = node.left()->expr() == node->expr();
         const bool rightSame = node.right()->expr() == node->expr();
         if (leftSame && rightSame) {
@@ -197,6 +219,7 @@ class GenerationVisitor {
           expressions.push_back(node.left()->expr());
           expressions.push_back(node.right()->expr());
         }
+#endif
         break;
       }
       case EvalOp::Id:
@@ -283,7 +306,7 @@ struct PreprocessResult {
 };
 
 template <typename T>
-bool prune_scalar(EvalNode<T> &node, EvalNode<T> &parent,
+bool prune_scalar(ExportNode<T> &node, ExportNode<T> &parent,
                   PreprocessResult &result) {
   if (!node.leaf() || !node->is_scalar()) {
     return false;
@@ -426,8 +449,8 @@ void preprocess(ExprType expr, ExportContext &ctx, Node &node,
 /// encoded in this tree.
 ///
 template <typename T>
-void preprocess(EvalNode<T> &tree, PreprocessResult &result, ExportContext &ctx,
-                EvalNode<T> *parent = nullptr) {
+void preprocess(ExportNode<T> &tree, PreprocessResult &result,
+                ExportContext &ctx, ExportNode<T> *parent = nullptr) {
   // Pruning can only be done if
   // - tree is not a leaf (if we prune that, the tree has vanished)
   // - pruning the tree does NOT turn it into a single-leaf tree
@@ -475,15 +498,20 @@ void preprocess(EvalNode<T> &tree, PreprocessResult &result, ExportContext &ctx,
     // being created. Instead, we flush the top-most result of the
     // addition downwards, making use of the += semantic that is assumed
     // for all computations.
+    // Note the explicit flushing down of the result name is required in
+    // case the top-level summation node has a different name than the
+    // intermediate nodes.
+    ComputeSelection selection = ComputeSelection::Both;
     if (!tree.left().leaf()) {
       tree.left()->set_expr(tree->expr());
+      selection &= ~ComputeSelection::Left;
     }
     if (!tree.right().leaf()) {
       tree.right()->set_expr(tree->expr());
+      selection &= ~ComputeSelection::Right;
     }
 
-    // TODO: mark fully flushed results explicitly as only existing for
-    // tree connectivity reasons.
+    tree->set_compute_selection(selection);
   }
 
   if (tree.left().size() < tree.right().size()) {
@@ -515,33 +543,33 @@ void preprocess(EvalNode<T> &tree, PreprocessResult &result, ExportContext &ctx,
 }
 
 template <typename T>
-void preprocess_and_maybe_log(EvalNode<T> &tree, PreprocessResult &result,
+void preprocess_and_maybe_log(ExportNode<T> &tree, PreprocessResult &result,
                               ExportContext &ctx) {
-  if (Logger::instance().export_equations) {
+  if (true || Logger::instance().export_equations) {
     std::cout << "Tree before preprocessing:\n"
               << tree.tikz(
-                     [](const EvalNode<T> &node) {
+                     [](const ExportNode<T> &node) {
                        return "$" + toUtf8(to_latex(node->expr())) + "$";
                      },
-                     [](const EvalNode<T>) -> std::string { return ""; })
+                     [](const ExportNode<T>) -> std::string { return ""; })
               << "\n";
   }
 
   preprocess(tree, result, ctx);
 
-  if (Logger::instance().export_equations) {
+  if (true || Logger::instance().export_equations) {
     std::cout << "Tree after pre-processing:\n"
               << tree.tikz(
-                     [](const EvalNode<T> &node) {
+                     [](const ExportNode<T> &node) {
                        return "$" + toUtf8(to_latex(node->expr())) + "$";
                      },
-                     [](const EvalNode<T>) -> std::string { return ""; })
+                     [](const ExportNode<T>) -> std::string { return ""; })
               << "\n";
   }
 }
 
 template <typename T, typename Context>
-void export_expression(EvalNode<T> &expression, Generator<Context> &generator,
+void export_expression(ExportNode<T> &expression, Generator<Context> &generator,
                        Context &ctx, PreprocessResult &pp_result) {
   generator.begin_expression(ctx);
 
@@ -637,22 +665,22 @@ void handle_declarations(Range &&range, Generator<Context> &generator,
 
 }  // namespace details
 
-template <typename T, typename Context>
+template <typename T = ExportExpr, typename Context>
 void export_group(ExpressionGroup<T> group, Generator<Context> &generator,
                   Context ctx = {}) {
   export_groups<T, Context>(std::array{std::move(group)}, generator,
                             std::move(ctx));
 }
 
-template <typename T, typename Context>
-void export_expression(EvalNode<T> expression, Generator<Context> &generator,
+template <typename T = ExportExpr, typename Context>
+void export_expression(ExportNode<T> expression, Generator<Context> &generator,
                        Context ctx = {}) {
   export_groups<T, Context>(
       std::array{ExpressionGroup<T>{std::move(expression)}}, generator,
       std::move(ctx));
 }
 
-template <typename T, typename Context, typename Range>
+template <typename T = ExportExpr, typename Context, typename Range>
   requires std::ranges::range<std::remove_cvref_t<Range>> &&
            std::is_same_v<std::ranges::range_value_t<Range>,
                           ExpressionGroup<T>> &&
@@ -689,7 +717,7 @@ void export_groups(Range groups, Generator<Context> &generator,
   for (ExpressionGroup<T> &current_group : groups) {
     pp_results.reserve(pp_results.size() + size(groups));
 
-    for (EvalNode<T> &current_tree : current_group) {
+    for (ExportNode<T> &current_tree : current_group) {
       pp_results.emplace_back();
       details::preprocess_and_maybe_log(current_tree, pp_results.back(), ctx);
     }
@@ -720,7 +748,7 @@ void export_groups(Range groups, Generator<Context> &generator,
     details::handle_declarations<DeclarationScope::Section>(
         std::span(&pp_results.at(pp_idx), size(current_group)), generator, ctx);
 
-    for (EvalNode<T> &current_tree : current_group) {
+    for (ExportNode<T> &current_tree : current_group) {
       // Handle expression-level declarations
       details::handle_declarations<DeclarationScope::Expression>(
           std::span{&pp_results.at(pp_idx), 1}, generator, ctx);
@@ -739,6 +767,16 @@ void export_groups(Range groups, Generator<Context> &generator,
   assert(pp_idx == pp_results.size());
 
   generator.end_export(ctx);
+}
+
+template <typename NodeData = ExportExpr>
+ExportNode<NodeData> to_export_tree(const ExprPtr &expr) {
+  return binarize<NodeData>(expr);
+}
+
+template <typename NodeData = ExportExpr>
+ExportNode<NodeData> to_export_tree(const ResultExpr &expr) {
+  return binarize<NodeData>(expr);
 }
 
 }  // namespace sequant
