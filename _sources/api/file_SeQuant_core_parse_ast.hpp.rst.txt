@@ -103,10 +103,6 @@ Functions
 ---------
 
 
-- :ref:`exhale_function_ast_8hpp_1a13fefbef18801cb58baa30b7ad236b95`
-
-- :ref:`exhale_function_ast_8hpp_1aa18db2677f2e4507fec03dbc5848ddb1`
-
 - :ref:`exhale_function_ast_8hpp_1a66bbae2c17a5148fbff76360eef9cb7b`
 
 - :ref:`exhale_function_ast_8hpp_1a493fa891e6da49665c379ca179465182`
@@ -122,6 +118,10 @@ Functions
 - :ref:`exhale_function_ast_8hpp_1abc32465f1db33ecd01dee6338751b446`
 
 - :ref:`exhale_function_ast_8hpp_1a40f60977f510d83b38bebc423bb27de9`
+
+- :ref:`exhale_function_ast_8hpp_1a13fefbef18801cb58baa30b7ad236b95`
+
+- :ref:`exhale_function_ast_8hpp_1aa18db2677f2e4507fec03dbc5848ddb1`
 
 
 Defines
