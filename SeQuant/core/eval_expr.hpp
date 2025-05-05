@@ -282,10 +282,10 @@ FullBinaryNode<ExprT> binarize(ResultExpr const& res) {
                                      // terminal in this case
       auto prod =
           ex<Product>(1, ExprPtrList{res.expression()}, Product::Flatten::No);
-      return binarize(prod);
+      return binarize<ExprT>(prod);
     }
 
-    return binarize(res.expression());
+    return binarize<ExprT>(res.expression());
   }();
 
   const bool is_scalar =
