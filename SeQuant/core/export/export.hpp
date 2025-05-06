@@ -475,6 +475,10 @@ void preprocess(ExportNode<T> &tree, PreprocessResult &result,
     return;
   }
 
+  if (tree.left().size() < tree.right().size()) {
+    std::swap(tree.left(), tree.right());
+  }
+
   if (tree->op_type() == EvalOp::Sum) {
     // We don't want to explicitly encode addition of non-leaf
     // nodes in the tree as that could lead to unnecessary intermediates
@@ -495,10 +499,6 @@ void preprocess(ExportNode<T> &tree, PreprocessResult &result,
     }
 
     tree->set_compute_selection(selection);
-  }
-
-  if (tree.left().size() < tree.right().size()) {
-    std::swap(tree.left(), tree.right());
   }
 
   preprocess(tree.left(), result, ctx, &tree);
