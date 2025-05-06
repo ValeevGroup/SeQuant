@@ -5,6 +5,7 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/tensor.hpp>
 
+#include <limits>
 #include <map>
 #include <optional>
 #include <string>
@@ -67,10 +68,18 @@ class ExportContext {
   virtual void set_current_section_name(std::string name);
   virtual void clear_current_section_name();
 
+  virtual bool has_current_expression_id() const;
+  virtual std::size_t current_expression_id() const;
+  virtual void set_current_expression_id(std::size_t id);
+  virtual void clear_current_expression_id();
+
  private:
-  TensorStrategyMap m_tensorStrategies;
-  VariableStrategyMap m_variableStrategies;
+  static constexpr std::size_t GLOBAL = std::numeric_limits<std::size_t>::max();
+
+  std::map<std::size_t, TensorStrategyMap> m_tensorStrategies;
+  std::map<std::size_t, VariableStrategyMap> m_variableStrategies;
   std::optional<std::string> m_currentSection;
+  std::optional<std::size_t> m_currentExpressionID;
 };
 
 }  // namespace sequant

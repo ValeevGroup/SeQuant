@@ -554,6 +554,8 @@ void preprocess_and_maybe_log(ExportNode<T> &tree, PreprocessResult &result,
 template <typename T, typename Context>
 void export_expression(ExportNode<T> &expression, Generator<Context> &generator,
                        Context &ctx, PreprocessResult &pp_result) {
+  ctx.set_current_expression_id(expression->id());
+
   generator.begin_expression(ctx);
 
   details::GenerationVisitor<T, Context> visitor(generator, ctx,
@@ -565,6 +567,8 @@ void export_expression(ExportNode<T> &expression, Generator<Context> &generator,
       TreeTraversal::PreAndPostOrder);
 
   generator.end_expression(ctx);
+
+  ctx.clear_current_expression_id();
 }
 
 template <typename Range, typename Context>
@@ -702,7 +706,12 @@ void export_groups(Range groups, Generator<Context> &generator,
 
     for (ExportNode<T> &current_tree : current_group) {
       pp_results.emplace_back();
+
+      ctx.set_current_expression_id(current_tree->id());
+
       details::preprocess_and_maybe_log(current_tree, pp_results.back(), ctx);
+
+      ctx.clear_current_expression_id();
     }
   }
 
@@ -735,8 +744,10 @@ void export_groups(Range groups, Generator<Context> &generator,
       // Handle expression-level declarations
       details::handle_declarations<DeclarationScope::Expression>(
           std::span{&pp_results.at(pp_idx), 1}, generator, ctx);
+
       details::export_expression(current_tree, generator, ctx,
                                  pp_results.at(pp_idx));
+
       pp_idx++;
     }
 
