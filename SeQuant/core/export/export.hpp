@@ -539,7 +539,7 @@ void preprocess(ExportNode<T> &tree, PreprocessResult &result,
 template <typename T>
 void preprocess_and_maybe_log(ExportNode<T> &tree, PreprocessResult &result,
                               ExportContext &ctx) {
-  if (true || Logger::instance().export_equations) {
+  if (Logger::instance().export_equations) {
     std::cout << "Tree before preprocessing:\n"
               << tree.tikz(
                      [](const ExportNode<T> &node) {
@@ -551,7 +551,7 @@ void preprocess_and_maybe_log(ExportNode<T> &tree, PreprocessResult &result,
 
   preprocess(tree, result, ctx);
 
-  if (true || Logger::instance().export_equations) {
+  if (Logger::instance().export_equations) {
     std::cout << "Tree after pre-processing:\n"
               << tree.tikz(
                      [](const ExportNode<T> &node) {
