@@ -281,13 +281,14 @@ struct PreprocessResult {
 };
 
 template <typename T>
-bool prune_scalar(ExportNode<T> &node, ExportNode<T> &parent,
-                  PreprocessResult &result) {
+bool prune_scalar(ExportNode<T> &node, PreprocessResult &result) {
   if (!node.leaf() || !node->is_scalar()) {
     return false;
   }
 
-  const auto iter = result.scalarFactors.find(parent->id());
+  assert(!node.root());
+
+  const auto iter = result.scalarFactors.find(node.parent()->id());
   ExprPtr parentFactor =
       iter == result.scalarFactors.end() ? nullptr : iter->second;
 
@@ -311,24 +312,24 @@ bool prune_scalar(ExportNode<T> &node, ExportNode<T> &parent,
   }
 
   ExportNode<T> fill_in = [&]() {
-    if (node->id() == parent.left()->id()) {
-      return std::move(parent.right());
+    if (node->id() == node.parent().left()->id()) {
+      return std::move(node.parent().right());
     } else {
-      assert(node->id() == parent.right()->id());
-      return std::move(parent.left());
+      assert(node->id() == node.parent().right()->id());
+      return std::move(node.parent().left());
     }
   }();
 
   if (!fill_in.leaf()) {
-    fill_in->set_expr(std::move(parent->expr()));
+    fill_in->set_expr(std::move(node.parent()->expr()));
   }
+
+  result.scalarFactors[fill_in->id()] = std::move(factor);
 
   // We can only do the moving after finishing access to node as
   // node might become unreferenced and thus deleted once its parent
   // is overwritten.
-  parent = std::move(fill_in);
-
-  result.scalarFactors[parent->id()] = std::move(factor);
+  node.parent() = std::move(fill_in);
 
   return true;
 }
@@ -338,7 +339,7 @@ void rename(Variable &variable, std::size_t counter);
 
 template <typename ExprType, typename Node>
 void preprocess(ExprType expr, ExportContext &ctx, Node &node,
-                const Node *parent, PreprocessResult &result) {
+                PreprocessResult &result) {
   static_assert(
       std::is_same_v<ExprType, Tensor> || std::is_same_v<ExprType, Variable>,
       "This function currently only works for tensors and variables");
@@ -373,7 +374,8 @@ void preprocess(ExprType expr, ExportContext &ctx, Node &node,
     // keep adding sub-results to the final sum without the need for explicit
     // intermediates for each step of the summation.
     // Also, we don't want to mess with the final result tensor.
-    const bool handleReuse = parent && (*parent)->op_type() != EvalOp::Sum;
+    const bool handleReuse =
+        !node.root() && node.parent()->op_type() != EvalOp::Sum;
 
     // Special handling for result objects that have been used before
     // However, for any object that is the result of a sum,
@@ -433,42 +435,42 @@ void preprocess(ExprType expr, ExportContext &ctx, Node &node,
 ///
 template <typename T>
 void preprocess(ExportNode<T> &tree, PreprocessResult &result,
-                ExportContext &ctx, ExportNode<T> *parent = nullptr) {
+                ExportContext &ctx) {
   // Pruning can only be done if
   // - tree is not a leaf (if we prune that, the tree has vanished)
   // - pruning the tree does NOT turn it into a single-leaf tree
   // - if it does turn it into a leaf, then parent must be non-zero
   //   (so we can store the scalar factor on that)
   while (!tree.leaf() &&
-         (parent || !tree.left().leaf() || !tree.right().leaf()) &&
-         prune_scalar(tree.left(), tree, result)) {
+         (!tree.root() || !tree.left().leaf() || !tree.right().leaf()) &&
+         prune_scalar(tree.left(), result)) {
     // In case the pruning led to tree becoming a leaf, we have to move the
     // pruned scalar factor out to its parent in order to be properly accounted
     // for (as leafs only get loaded and never computed)
     if (auto iter = result.scalarFactors.find(tree->id());
         iter != result.scalarFactors.end() && tree.leaf()) {
-      assert(parent);
+      assert(!tree.root());
       ExprPtr factor = std::move(iter->second);
       result.scalarFactors.erase(iter);
-      result.scalarFactors[(*parent)->id()] = std::move(factor);
+      result.scalarFactors[tree.parent()->id()] = std::move(factor);
     }
   }
   while (!tree.leaf() &&
-         (parent || !tree.left().leaf() || !tree.right().leaf()) &&
-         prune_scalar(tree.right(), tree, result)) {
+         (!tree.root() || !tree.left().leaf() || !tree.right().leaf()) &&
+         prune_scalar(tree.right(), result)) {
     if (auto iter = result.scalarFactors.find(tree->id());
         iter != result.scalarFactors.end() && tree.leaf()) {
-      assert(parent);
+      assert(!tree.root());
       ExprPtr factor = std::move(iter->second);
       result.scalarFactors.erase(iter);
-      result.scalarFactors[(*parent)->id()] = std::move(factor);
+      result.scalarFactors[tree.parent()->id()] = std::move(factor);
     }
   }
 
   if (tree->is_tensor()) {
-    preprocess<Tensor>(tree->as_tensor(), ctx, tree, parent, result);
+    preprocess<Tensor>(tree->as_tensor(), ctx, tree, result);
   } else if (tree->is_variable()) {
-    preprocess<Variable>(tree->as_variable(), ctx, tree, parent, result);
+    preprocess<Variable>(tree->as_variable(), ctx, tree, result);
   }
 
   if (tree.leaf()) {
@@ -501,8 +503,8 @@ void preprocess(ExportNode<T> &tree, PreprocessResult &result,
     tree->set_compute_selection(selection);
   }
 
-  preprocess(tree.left(), result, ctx, &tree);
-  preprocess(tree.right(), result, ctx, &tree);
+  preprocess(tree.left(), result, ctx);
+  preprocess(tree.right(), result, ctx);
 
   // Mark tensors/variables as no longer in use
   if (tree.left()->is_tensor()) {
