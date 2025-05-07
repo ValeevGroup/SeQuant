@@ -322,6 +322,13 @@ bool prune_scalar(ExportNode<T> &node, PreprocessResult &result) {
 
   if (!fill_in.leaf()) {
     fill_in->set_expr(std::move(node.parent()->expr()));
+  } else if (!node.parent().root()) {
+    if (node.parent()->id() == node.parent().parent().left()->id()) {
+      node.parent().parent()->select_left();
+    } else {
+      assert(node.parent()->id() == node.parent().parent().right()->id());
+      node.parent().parent()->select_right();
+    }
   }
 
   result.scalarFactors[fill_in->id()] = std::move(factor);
