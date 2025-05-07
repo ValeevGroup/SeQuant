@@ -186,23 +186,27 @@ class FullBinaryNode {
 
   node_ptr right_{nullptr};
 
+  FullBinaryNode<T>* parent_{nullptr};
+
   node_ptr deep_copy() const {
     return leaf() ? std::make_unique<FullBinaryNode<T>>(data_)
                   : std::make_unique<FullBinaryNode<T>>(
                         data_, left_->deep_copy(), right_->deep_copy());
   }
 
-  static node_ptr const& checked_ptr_access(node_ptr const& n) {
+  template <typename Ptr>
+  static Ptr const& checked_ptr_access(Ptr const& n) {
     if (n)
       return n;
     else
       throw std::runtime_error(
-          "Dereferenced nullptr: use leaf() method to check leaf node.");
+          "Dereferenced nullptr: use leaf() or root() methods to check for "
+          "leaf and root nodes");
   }
 
  public:
   ///
-  /// Construct an internal node with emtpy left and right nodes.
+  /// Construct an internal node with empty left and right nodes.
   ///
   /// \param d Data in the internal node.
   explicit FullBinaryNode(T d) : data_{std::move(d)} {}
@@ -214,9 +218,9 @@ class FullBinaryNode {
   /// \param l Data in the left node.
   /// \param r Data in the right node.
   FullBinaryNode(T d, T l, T r)
-      : data_{std::move(d)},
-        left_{std::make_unique<FullBinaryNode>(std::move(l))},
-        right_{std::make_unique<FullBinaryNode>(std::move(r))} {}
+      : FullBinaryNode(std::move(d),
+                       std::make_unique<FullBinaryNode>(std::move(l)),
+                       std::make_unique<FullBinaryNode>(std::move(r))) {}
 
   ///
   /// Constructs an internal node with left and right nodes.
@@ -225,9 +229,9 @@ class FullBinaryNode {
   /// \param l Left node.
   /// \param r Right node
   FullBinaryNode(T d, FullBinaryNode<T> l, FullBinaryNode<T> r)
-      : data_{std::move(d)},
-        left_{std::make_unique<FullBinaryNode<T>>(std::move(l))},
-        right_{std::make_unique<FullBinaryNode<T>>(std::move(r))} {}
+      : FullBinaryNode(std::move(d),
+                       std::make_unique<FullBinaryNode<T>>(std::move(l)),
+                       std::make_unique<FullBinaryNode<T>>(std::move(r))) {}
 
   ///
   /// Constructs an internal node with left and right node pointers.
@@ -236,22 +240,50 @@ class FullBinaryNode {
   /// \param l Left node pointer.
   /// \param r Right node pointer.
   FullBinaryNode(T d, node_ptr&& l, node_ptr&& r)
-      : data_{std::move(d)}, left_{std::move(l)}, right_{std::move(r)} {}
+      : data_{std::move(d)}, left_{std::move(l)}, right_{std::move(r)} {
+    if (left_) {
+      left_->parent_ = this;
+    }
+    if (right_) {
+      right_->parent_ = this;
+    }
+  }
 
   FullBinaryNode(FullBinaryNode<T> const& other)
       : data_{other.data_},
         left_{other.left_ ? other.left_->deep_copy() : nullptr},
-        right_{other.right_ ? other.right_->deep_copy() : nullptr} {}
+        right_{other.right_ ? other.right_->deep_copy() : nullptr},
+        parent_(nullptr) {
+    if (left_) {
+      left_->parent_ = this;
+    }
+    if (right_) {
+      right_->parent_ = this;
+    }
+  }
 
   FullBinaryNode& operator=(FullBinaryNode<T> const& other) {
     auto temp = other.deep_copy();
     data_ = std::move(temp->data_);
     left_ = std::move(temp->left_);
     right_ = std::move(temp->right_);
+    if (left_) {
+      left_->parent_ = this;
+    }
+    if (right_) {
+      right_->parent_ = this;
+    }
+    // parent_ remains unchanged
     return *this;
   }
 
-  FullBinaryNode(FullBinaryNode<T>&&) = default;
+  FullBinaryNode(FullBinaryNode<T>&& other) : data_(other.data_) {
+    // Note: we explicitly have to initialize data_ in the member initializer
+    // list as not doing that would impose default-constructibility on T. The
+    // assumption is that all halfway decent compilers will optimize this extra
+    // copy away.
+    *this = std::move(other);
+  }
 
   FullBinaryNode& operator=(FullBinaryNode<T>&& node) {
     data_ = std::move(node.data_);
@@ -264,6 +296,15 @@ class FullBinaryNode {
 
     left_ = std::move(node.left_);
     right_ = std::move(node.right_);
+
+    if (left_) {
+      left_->parent_ = this;
+    }
+    if (right_) {
+      right_->parent_ = this;
+    }
+
+    // parent_ remains unchanged
 
     return *this;
   }
@@ -287,6 +328,28 @@ class FullBinaryNode {
   /// \note Left and right children are nullptr like
   ///
   [[nodiscard]] bool leaf() const { return !(left_ || right_); }
+
+  ///
+  /// \brief Check if the object is a root node
+  ///
+  /// \return Whether this node represents the root in its respective tree
+  [[nodiscard]] bool root() const { return !parent_; }
+
+  ///
+  /// \return The parent node
+  /// \note This assumes that this object is not a root node
+  ///
+  [[nodiscard]] const FullBinaryNode<T>& parent() const {
+    return *checked_ptr_access(parent_);
+  }
+
+  ///
+  /// \return The parent node
+  /// \note This assumes that this object is not a root node
+  ///
+  [[nodiscard]] FullBinaryNode<T>& parent() {
+    return *checked_ptr_access(parent_);
+  }
 
   ///
   /// \return Size of the tree rooted at this node

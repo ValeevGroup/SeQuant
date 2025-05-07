@@ -22,23 +22,54 @@ TEST_CASE("binary_node", "[FullBinaryNode]") {
     REQUIRE_NOTHROW(FullBinaryNode{'a', 'b', 'c'});
     REQUIRE_NOTHROW(
         FullBinaryNode{'a', FullBinaryNode{'b'}, FullBinaryNode{'c'}});
+
+    FullBinaryNode node{'a', FullBinaryNode{'b'}, FullBinaryNode{'c'}};
+    REQUIRE(&node.left().parent() == &node);
+    REQUIRE(&node.right().parent() == &node);
+    REQUIRE(node.root());
   }
 
   SECTION("copy ctor and assign") {
     auto const n1 = FullBinaryNode{'a', 'b', 'c'};
-    auto const n2{n1};
+    auto n2{n1};
     REQUIRE(&n1 != &n2);
     REQUIRE(n1 == n2);
+    REQUIRE(&n1.left().parent() == &n1);
+    REQUIRE(&n1.right().parent() == &n1);
+    REQUIRE(&n2.left().parent() == &n2);
+    REQUIRE(&n2.right().parent() == &n2);
 
     auto const n3 = n1;
     REQUIRE(&n1 != &n3);
     REQUIRE(n1 == n3);
+    REQUIRE(&n1.left().parent() == &n1);
+    REQUIRE(&n1.right().parent() == &n1);
+    REQUIRE(&n3.left().parent() == &n3);
+    REQUIRE(&n3.right().parent() == &n3);
+
+    REQUIRE(!n3.left().root());
+    auto n4 = n3.left();
+    REQUIRE(n4.root());
+
+    n2.left() = n4;
+    REQUIRE(!n2.left().root());
+    REQUIRE(&n2.left().parent() == &n2);
   }
 
   SECTION("move ctor and assign") {
     auto n1{FullBinaryNode{1, 2, 3}};
     auto n2 = std::move(n1);
     REQUIRE(n2 == FullBinaryNode{1, 2, 3});
+    REQUIRE(&n2.left().parent() == &n2);
+    REQUIRE(&n2.right().parent() == &n2);
+
+    REQUIRE(!n2.left().root());
+    auto n3 = std::move(n2.left());
+    REQUIRE(n3.root());
+
+    n2.left() = FullBinaryNode(1);
+    REQUIRE(!n2.left().root());
+    REQUIRE(&n2.left().parent() == &n2);
   }
 
   SECTION("derefence") {
