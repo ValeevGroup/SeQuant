@@ -85,10 +85,11 @@ LoadStrategy ExportContext::loadStrategy(const Variable &variable) const {
   return LoadStrategy::Create;
 }
 
-void ExportContext::setLoadStrategy(const Tensor &tensor,
-                                    LoadStrategy strategy) {
-  std::size_t id =
-      has_current_expression_id() ? current_expression_id() : GLOBAL;
+void ExportContext::setLoadStrategy(
+    const Tensor &tensor, LoadStrategy strategy,
+    const std::optional<std::size_t> &expression_id) {
+  std::size_t id = expression_id.value_or(
+      has_current_expression_id() ? current_expression_id() : GLOBAL);
 
   auto iter = m_tensorStrategies[id].find(tensor);
 
@@ -99,10 +100,11 @@ void ExportContext::setLoadStrategy(const Tensor &tensor,
   }
 }
 
-void ExportContext::setLoadStrategy(const Variable &variable,
-                                    LoadStrategy strategy) {
-  std::size_t id =
-      has_current_expression_id() ? current_expression_id() : GLOBAL;
+void ExportContext::setLoadStrategy(
+    const Variable &variable, LoadStrategy strategy,
+    const std::optional<std::size_t> &expression_id) {
+  std::size_t id = expression_id.value_or(
+      has_current_expression_id() ? current_expression_id() : GLOBAL);
 
   auto iter = m_variableStrategies[id].find(variable);
 
@@ -157,10 +159,11 @@ ZeroStrategy ExportContext::zeroStrategy(const Variable &variable) const {
   return ZeroStrategy::ZeroOnCreate;
 }
 
-void ExportContext::setZeroStrategy(const Tensor &tensor,
-                                    ZeroStrategy strategy) {
-  std::size_t id =
-      has_current_expression_id() ? current_expression_id() : GLOBAL;
+void ExportContext::setZeroStrategy(
+    const Tensor &tensor, ZeroStrategy strategy,
+    const std::optional<std::size_t> &expression_id) {
+  std::size_t id = expression_id.value_or(
+      has_current_expression_id() ? current_expression_id() : GLOBAL);
 
   auto iter = m_tensorStrategies[id].find(tensor);
 
@@ -171,10 +174,11 @@ void ExportContext::setZeroStrategy(const Tensor &tensor,
   }
 }
 
-void ExportContext::setZeroStrategy(const Variable &variable,
-                                    ZeroStrategy strategy) {
-  std::size_t id =
-      has_current_expression_id() ? current_expression_id() : GLOBAL;
+void ExportContext::setZeroStrategy(
+    const Variable &variable, ZeroStrategy strategy,
+    const std::optional<std::size_t> &expression_id) {
+  std::size_t id = expression_id.value_or(
+      has_current_expression_id() ? current_expression_id() : GLOBAL);
 
   auto iter = m_variableStrategies[id].find(variable);
 

@@ -52,13 +52,21 @@ class ExportContext {
 
   virtual LoadStrategy loadStrategy(const Tensor &tensor) const;
   virtual LoadStrategy loadStrategy(const Variable &variable) const;
-  virtual void setLoadStrategy(const Tensor &tensor, LoadStrategy strategy);
-  virtual void setLoadStrategy(const Variable &variable, LoadStrategy strategy);
+  virtual void setLoadStrategy(
+      const Tensor &tensor, LoadStrategy strategy,
+      const std::optional<std::size_t> &expression_id = {});
+  virtual void setLoadStrategy(
+      const Variable &variable, LoadStrategy strategy,
+      const std::optional<std::size_t> &expression_id = {});
 
   virtual ZeroStrategy zeroStrategy(const Tensor &tensor) const;
   virtual ZeroStrategy zeroStrategy(const Variable &variable) const;
-  virtual void setZeroStrategy(const Tensor &tensor, ZeroStrategy strategy);
-  virtual void setZeroStrategy(const Variable &variable, ZeroStrategy strategy);
+  virtual void setZeroStrategy(
+      const Tensor &tensor, ZeroStrategy strategy,
+      const std::optional<std::size_t> &expression_id = {});
+  virtual void setZeroStrategy(
+      const Variable &variable, ZeroStrategy strategy,
+      const std::optional<std::size_t> &expression_id = {});
 
   virtual bool rewrite(Tensor &tensor) const;
   virtual bool rewrite(Variable &variable) const;
