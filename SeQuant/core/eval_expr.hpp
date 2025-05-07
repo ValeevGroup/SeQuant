@@ -48,6 +48,8 @@ enum class EvalOp {
 ///
 enum class ResultType { Tensor, Scalar };
 
+struct EvalOpSetter;
+
 ///
 /// \brief The EvalExpr class represents the object that go into the nodes of
 ///        the binary tree that is used to evaluate the sequant expressions.
@@ -57,6 +59,7 @@ enum class ResultType { Tensor, Scalar };
 ///
 class EvalExpr {
  public:
+  friend struct EvalOpSetter;
   using index_vector = Index::index_vector;
 
   ///
@@ -205,6 +208,10 @@ class EvalExpr {
   ExprPtr expr_;
 };
 
+struct EvalOpSetter {
+  void set(EvalExpr& expr, EvalOp op) { expr.op_type_ = op; }
+};
+
 namespace meta {
 template <typename, typename = void>
 constexpr bool is_eval_expr{};
@@ -254,31 +261,28 @@ FullBinaryNode<ExprT> binarize(ExprPtr const& expr) {
 template <typename ExprT = EvalExpr>
   requires std::is_constructible_v<ExprT, EvalExpr>
 FullBinaryNode<ExprT> binarize(ResultExpr const& res) {
-  FullBinaryNode<ExprT> tree = [&]() {
-    if (res.expression().size() == 0) {
-      // Expressions of size zero are terminal expressions such as Variable,
-      // Tensor and Constant. Binarizing a binary expression will yield a tree
-      // consisting only of a root node, representing said terminal expression.
-      // However, for a ResultExpr there is always the semantic of having an lhs
-      // that gets set to the rhs's value, where the rhs is the expression.
-      // Hence, we always want to the root node of a binarized ResultExpr to
-      // represent the lhs, which must never be the same as the rhs (as this
-      // would imply a semantic of overwriting itself).
-      // Since we can't express a simple A = B in a full binary tree, we have
-      // to instead write it as A = B * 1.
-      assert(!res.expression()
-                  .is<Constant>());  // Product will always self-simplify to
-                                     // terminal in this case
-      auto prod =
-          ex<Product>(1, ExprPtrList{res.expression()}, Product::Flatten::No);
-      return binarize<ExprT>(prod);
-    }
-
-    return binarize<ExprT>(res.expression());
-  }();
+  FullBinaryNode<ExprT> tree = binarize<ExprT>(res.expression());
 
   const bool is_scalar =
       res.bra().empty() && res.ket().empty() && res.aux().empty();
+
+  if (tree.size() < 2) {
+    // We want to have a result node with the result from the ResultExpr.
+    // In order for that to work, we need a dedicated result node in the first
+    // place. Hence, we adapt the represented expression for terminals to be
+    // that terminal multiplied by 1.
+    ExprT result = [&]() {
+      if (is_scalar) {
+        return *binarize<ExprT>(ex<Variable>(res.result_as_variable()));
+      }
+      return *binarize<ExprT>(ex<Tensor>(res.result_as_tensor()));
+    }();
+    EvalOpSetter{}.set(result, EvalOp::Prod);
+
+    tree = FullBinaryNode<ExprT>(std::move(result), std::move(tree),
+                                 binarize<ExprT>(ex<Constant>(1)));
+  }
+  assert(tree.size() > 1);
 
   if (is_scalar) {
     if (res.has_label()) {
