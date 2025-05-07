@@ -22,6 +22,8 @@ class ExportExpr : public EvalExpr {
 
   /// @returns The ID of this object. IDs uniquely determine the object identity
   [[nodiscard]] std::size_t id() const;
+  /// Sets the ID of this object
+  void set_id(std::size_t id);
 
   /// @returns The ComputeSelection for this object
   [[nodiscard]] ComputeSelection compute_selection() const;

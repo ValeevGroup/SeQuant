@@ -331,6 +331,8 @@ bool prune_scalar(ExportNode<T> &node, PreprocessResult &result) {
     }
   }
 
+  fill_in->set_id(node.parent()->id());
+
   result.scalarFactors[fill_in->id()] = std::move(factor);
 
   // We can only do the moving after finishing access to node as

@@ -25,6 +25,8 @@ ExportExpr::ExportExpr(const EvalExpr &other) : EvalExpr(other) {}
 
 std::size_t ExportExpr::id() const { return m_id; }
 
+void ExportExpr::set_id(std::size_t id) { m_id = id; }
+
 ComputeSelection ExportExpr::compute_selection() const { return m_selection; }
 
 void ExportExpr::set_compute_selection(ComputeSelection selection) {
