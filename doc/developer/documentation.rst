@@ -5,7 +5,7 @@ Documentation Guide
 
 SeQuant uses a combination of `Doxygen <https://www.doxygen.nl/>`_, `Sphinx <https://www.sphinx-doc.org/en/master/>`_ and
 `Breathe <https://breathe.readthedocs.io/en/latest/>`_ to build documentation. For building the documentation locally, configure CMake with
-`-DSEQUANT_BUILD_DOCS=ON`.
+``-DSEQUANT_BUILD_DOCS=ON``.
 
 The ``doc`` directory contains the documentation for SeQuant, including user guides, API references, and advanced internal documentation.
 
@@ -194,10 +194,9 @@ API documentation is automatically generated from the source code using Doxygen 
      * @param b The second parameter.
      * @return The result of the operation.
      */
-    template<typename T>
+    template <typename T>
     T add(T a, T b) {
-        if constexpr (std::is_arithmetic_v<T>) {
-            return a + b;
+      return a + b;
     }
 
 Ensure that all functions, classes, and methods in the C++ source code are properly documented using this format for accurate API documentation generation.

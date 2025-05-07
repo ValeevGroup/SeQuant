@@ -70,14 +70,14 @@ TEST_CASE("eval_node", "[EvalNode]") {
     // a full binary tree.
     node = binarize(parse_result_expr(L"R{a1;i1} = f{a1;i1}"));
     REQUIRE(!node.leaf());
-    REQUIRE(node->op_type() == EvalOp::Prod);
+    REQUIRE(node->op_type() == EvalOp::Product);
     REQUIRE(node->as_tensor().label() == L"R");
     REQUIRE(((node.left()->is_tensor() && node.right()->is_scalar()) ||
              (node.right()->is_tensor() && node.left()->is_scalar())));
 
     node = binarize(parse_result_expr(L"R = Var"));
     REQUIRE(!node.leaf());
-    REQUIRE(node->op_type() == EvalOp::Prod);
+    REQUIRE(node->op_type() == EvalOp::Product);
     REQUIRE(node->as_variable().label() == L"R");
     REQUIRE(((node.left()->is_variable() && node.right()->is_scalar()) ||
              (node.right()->is_variable() && node.left()->is_scalar())));
@@ -155,7 +155,7 @@ TEST_CASE("eval_node", "[EvalNode]") {
     REQUIRE_THAT(node1.left().right()->as_tensor(),
                  EquivalentTo("Y{a1,a2;i1,i2}:A"));
 
-    REQUIRE(node1.right()->op_type() == EvalOp::Prod);
+    REQUIRE(node1.right()->op_type() == EvalOp::Product);
     REQUIRE_THAT(node1.right()->as_tensor(),
                  EquivalentTo("I{a1,a2;i1,i2}:N-C-N"));
     REQUIRE_THAT(node1.right().left()->as_tensor(),
@@ -168,8 +168,8 @@ TEST_CASE("eval_node", "[EvalNode]") {
     auto prod1 = parse_expr(L"a * b * c");
     auto node1 = eval_node(prod1);
 
-    REQUIRE(node1->op_type() == EvalOp::Prod);
-    REQUIRE(node1.left()->op_type() == EvalOp::Prod);
+    REQUIRE(node1->op_type() == EvalOp::Product);
+    REQUIRE(node1.left()->op_type() == EvalOp::Product);
 
     REQUIRE(node(node1, {}).is_variable());
     REQUIRE(node(node1, {L}).is_variable());

@@ -167,13 +167,13 @@ class GenerationVisitor {
   }
 
   void process_computation(const ExportNode<NodeData> &node) {
-    assert(node->op_type() != EvalOp::Id);
     assert(!node.leaf());
+    assert(node->op_type().has_value());
 
     // Assemble the expression that should be evaluated
     container::svector<ExprPtr> expressions;
-    switch (node->op_type()) {
-      case EvalOp::Prod:
+    switch (node->op_type().value()) {
+      case EvalOp::Product:
         expressions.push_back(
             ex<Product>(ExprPtrList{node.left()->expr(), node.right()->expr()},
                         Product::Flatten::No));
@@ -197,9 +197,6 @@ class GenerationVisitor {
         }
         break;
       }
-      case EvalOp::Id:
-        throw std::runtime_error(
-            "Computation must not consist of an ID operation");
     }
 
     assert(!expressions.empty());
