@@ -25,11 +25,7 @@ std::size_t IndexSpaceMeta::getSize(const Index &index) const {
   return getSize(index.space());
 }
 
-std::wstring IndexSpaceMeta::getLabel(const IndexSpace &space) const {
-  return space.base_key();
-}
-
-std::wstring IndexSpaceMeta::getName(const IndexSpace &space) const {
+std::string IndexSpaceMeta::getName(const IndexSpace &space) const {
   auto iter = m_entries.find(space);
   if (iter == m_entries.end()) {
     throw std::runtime_error("No known name for index space " +
@@ -39,7 +35,7 @@ std::wstring IndexSpaceMeta::getName(const IndexSpace &space) const {
   return iter->second.name;
 }
 
-std::wstring IndexSpaceMeta::getTag(const IndexSpace &space) const {
+std::string IndexSpaceMeta::getTag(const IndexSpace &space) const {
   auto iter = m_entries.find(space);
   if (iter == m_entries.end()) {
     throw std::runtime_error("No known tag for index space " +

@@ -85,9 +85,15 @@ container::svector<ResultExpr> postProcess(ResultExpr result,
     case ProjectionTransformation::None:
       break;
     case ProjectionTransformation::Biorthogonal:
+      // TODO: figure out where processing of S operator goes wrong
+      auto symm = pop_tensor(processed.at(0).expression(), L"S");
       biorthogonal_transform(processed);
+      if (symm.has_value()) {
+        processed.at(0).expression() =
+            simplify(symm.value() * processed.at(0).expression());
+      }
 
-      for (const ResultExpr &current : processed) {
+      for (ResultExpr &current : processed) {
         spdlog::debug("Expression after biorthogonal transformation:\n{}",
                       current);
       }
