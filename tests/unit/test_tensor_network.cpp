@@ -548,7 +548,10 @@ class TensorNetworkV2Accessor {
       const sequant::TensorNetwork::named_indices_t* named_indices = nullptr) {
     tn.canonicalize_graph(named_indices ? *named_indices : tn.ext_indices_);
     tn.init_edges();
-    auto graph = tn.create_graph(named_indices);
+    auto graph = tn.create_graph(
+        {.named_indices = named_indices,
+         .make_labels = Logger::instance().canonicalize_dot,
+         .make_texlabels = Logger::instance().canonicalize_dot});
     return std::make_pair(std::move(graph.bliss_graph), graph.vertex_labels);
   }
 };
@@ -1075,8 +1078,26 @@ TEST_CASE("tensor_network_v2", "[elements]") {
       // N.B. treat all indices as dummy so that the automorphism ignores the
       using named_indices_t = TensorNetworkV2::NamedIndexSet;
       named_indices_t indices{};
-      REQUIRE_NOTHROW(tn.create_graph(&indices));
-      TensorNetworkV2::Graph graph = tn.create_graph(&indices);
+      REQUIRE_NOTHROW(tn.create_graph({.named_indices = &indices}));
+      TensorNetworkV2::Graph graph =
+          tn.create_graph({.named_indices = &indices});
+
+      // can disable label production
+      {
+        // make sure can generate without labels also
+        REQUIRE_NOTHROW(
+            tn.create_graph({.make_labels = true, .make_texlabels = false})
+                .vertex_texlabels.size() == 0);
+        REQUIRE_NOTHROW(
+            tn.create_graph({.make_labels = false, .make_texlabels = true})
+                .vertex_labels.size() == 0);
+        {
+          auto g =
+              tn.create_graph({.make_labels = false, .make_texlabels = false});
+          REQUIRE_NOTHROW(g.vertex_labels.size() == 0 &&
+                          g.vertex_texlabels.size() == 0);
+        }
+      }
 
       // create dot
       {
