@@ -344,6 +344,95 @@ void Sum::adjoint() {
   *this = Sum(ranges::begin(adj_summands), ranges::end(adj_summands));
 }
 
+#define canon_sum
+#ifdef canon_sum
+// modified using hash map but with original structure
+ExprPtr Sum::canonicalize_impl(bool multipass) {
+  if (Logger::instance().canonicalize)
+    std::wcout << "Sum::canonicalize_impl: input = "
+               << to_latex_align(shared_from_this()) << std::endl;
+
+  const auto npasses = multipass ? 3 : 1;
+  for (auto pass = 0; pass != npasses; ++pass) {
+    // recursively canonicalize summands ...
+    const auto nsubexpr = ranges::size(*this);
+
+    // direct access to summands, using for_each to parallelize
+    sequant::for_each(summands_, [this, pass](ExprPtr &summand) {
+      auto bp = (pass % 2 == 0) ? summand->rapid_canonicalize()
+                                : summand->canonicalize();
+      if (bp) {
+        assert(bp->template is<Constant>());
+        summand = ex<Product>(std::static_pointer_cast<Constant>(bp)->value(),
+                              ExprPtrList{summand});
+      }
+    });
+
+    if (Logger::instance().canonicalize)
+      std::wcout << "Sum::canonicalize_impl (pass=" << pass
+                 << "): after canonicalizing summands = "
+                 << to_latex_align(shared_from_this()) << std::endl;
+
+    // using hash map like core terms (more efficient than sorting + scanning)
+    std::unordered_map<size_t, std::vector<size_t>> hash_groups;
+    for (size_t i = 0; i < summands_.size(); ++i) {
+      hash_groups[summands_[i]->hash_value()].push_back(i);
+    }
+
+    for (const auto &[hash_value, indices] : hash_groups) {
+      if (indices.size() <= 1)
+        continue;  // Skip if only one term with this hash
+
+      // (similar to the adjacent_find approach)
+      auto first_index = indices[0];
+
+      // combine all identical summands
+      if (summands_[first_index]->is<Product>()) {  // handle group of Products
+        auto &prod = summands_[first_index]->as<Product>();
+        for (size_t i = 1; i < indices.size(); ++i) {
+          auto idx = indices[i];
+          // convert to Product if not already
+          if (!summands_[idx]->template is<Product>()) {
+            summands_[idx] =
+                std::make_shared<Product>(1, ExprPtrList{summands_[idx]});
+          }
+          prod.add_identical(summands_[idx]->template as<Product>());
+        }
+
+        // extra terms for removal (set to nullptr)
+        for (size_t i = 1; i < indices.size(); ++i) {
+          summands_[indices[i]] = nullptr;
+        }
+      } else {  // handle all other types
+        auto product_form = std::make_shared<Product>();
+        product_form->append(indices.size(),
+                             summands_[first_index]->as<Expr>());
+        summands_[first_index] = product_form;
+
+        // additional terms for removal
+        for (size_t i = 1; i < indices.size(); ++i) {
+          summands_[indices[i]] = nullptr;
+        }
+      }
+    }
+
+    // remove additional terms
+    summands_.erase(
+        std::remove_if(summands_.begin(), summands_.end(),
+                       [](const ExprPtr &expr) { return expr == nullptr; }),
+        summands_.end());
+
+    if (Logger::instance().canonicalize)
+      std::wcout << "Sum::canonicalize_impl (pass=" << pass
+                 << "): after reducing summands = "
+                 << to_latex_align(shared_from_this()) << std::endl;
+  }
+
+  return {};
+}
+
+#else
+// Original+ fro_each
 ExprPtr Sum::canonicalize_impl(bool multipass) {
   if (Logger::instance().canonicalize)
     std::wcout << "Sum::canonicalize_impl: input = "
@@ -433,5 +522,5 @@ ExprPtr Sum::canonicalize_impl(bool multipass) {
 
   return {};  // side effects are absorbed into summands
 }
-
+#endif
 }  // namespace sequant

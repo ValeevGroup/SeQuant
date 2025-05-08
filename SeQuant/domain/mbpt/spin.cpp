@@ -1218,72 +1218,6 @@ ExprPtr closed_shell_CC_spintrace_core_terms(ExprPtr const& expr) {
       spintracing_time_1 - spintracing_time_0;
   printf("R%d Complete spintrace_core time: %5.3f sec.\n", residual_order,
          spintracing_time.count());
-  // printf("Average time per output term: %5.6f sec.\n",
-  // spintracing_time.count() / st_expr->size());
-  /*
-    // here, individual terms profiling
-    std::chrono::duration<double> cumulative_individual_time(0);
-    size_t total_output_terms = 0;
-
-    printf("\n----- Term-by-Term Profiling -----\n");
-    printf(
-        "Term | Input Size | Output Size | Time (sec) | Time/Term (ms)\n");  //
-    printing
-                                                                             //
-    such
-                                                                             //
-    a
-                                                                             //
-    table printf(
-        "------------------------------------------------------------------\n");
-
-    for (auto it = expr->begin(); it != expr->end(); ++it) {
-      const auto term_time_0 = std::chrono::high_resolution_clock::now();
-
-      // to create a Sum with just this term to process
-      auto single_term = std::make_shared<Sum>();
-      single_term->append((*it)->clone());
-
-      // to process just this term
-      auto processed_term =
-          closed_shell_spintrace_core_terms(single_term, ext_idxs);
-      size_t output_size = processed_term->size();
-      total_output_terms += output_size;
-
-      const auto term_time_1 = std::chrono::high_resolution_clock::now();
-      std::chrono::duration<double> term_time = term_time_1 - term_time_0;
-
-      // add to cumulative time, to sum over all the terms
-      cumulative_individual_time += term_time;
-      // calculate time per output term in milliseconds (because we have diff
-      // ouput terms)
-      double time_per_term_ms =
-          (output_size > 0) ? (term_time.count() * 1000.0 / output_size) : 0;
-
-      printf("%4ld | %10zu | %11zu | %10.3f | %13.3f\n",  // have been set to
-    have
-                                                          // table shape
-             std::distance(expr->begin(), it) + 1, single_term->size(),
-             output_size, term_time.count(), time_per_term_ms);
-    }
-
-    printf("\n----- Profiling Summary -----\n");
-    printf("Total input terms: %zu\n", expr->size());
-    printf("Total output terms from individual processing: %zu\n",
-           total_output_terms);
-    printf("Total output terms from complete processing: %zu\n",
-    st_expr->size()); printf("** Sum of individual term times: %5.3f sec.\n",
-           cumulative_individual_time.count());
-    printf("** Complete processing time: %5.3f sec.\n",
-    spintracing_time.count()); printf("* Overhead: %5.3f sec (%.2f%%)\n",
-           spintracing_time.count() - cumulative_individual_time.count(),
-           (spintracing_time.count() - cumulative_individual_time.count()) * 100
-    / spintracing_time.count());
-  */
-  // printf("Average time per term: %.6f sec\n",
-  // cumulative_individual_time.count() / expr->size());
-
-  // no changing here
   canonicalize(st_expr);
 
   std::wcout << "Number of terms before biorthogonal transform: "
@@ -1299,22 +1233,6 @@ ExprPtr closed_shell_CC_spintrace_core_terms(ExprPtr const& expr) {
            biortho_T_time.count());
   }
 
-  // const auto f_simlify_time_0 = std::chrono::high_resolution_clock::now();
-  // simplify(st_expr);
-  // const auto f_simplify_time_1 = std::chrono::high_resolution_clock::now();
-  // std::chrono::duration<double> f_simplify_time = f_simplify_time_1 -
-  // f_simlify_time_0; printf("R%d Frist-Simplify time: %5.3f sec.\n",
-  // residual_order,f_simplify_time.count());
-  // std::wcout << "reordered after biorthogonal, no simplify: "
-  //            << sequant::to_latex_align(
-  //                   ex<Sum>(
-  //                       opt::reorder(st_expr->as<Sum>())),
-  //                   0, 4)
-  //            << std::endl;
-
-  // to use st_expr->front() we need to fist simplify them
-  // std::wcout << "after biorthogonal transform and simplify: " <<
-  // to_latex(st_expr->front()) << std::endl;
   std::wcout << "Number of terms after biorthogonal transform: "
              << st_expr.size() << std::endl;
   // bool variable
@@ -1390,85 +1308,7 @@ ExprPtr closed_shell_CC_spintrace_core_terms(ExprPtr const& expr) {
     }
 
     result_expr = ex<Sum>(filtered_terms);
-    // const auto s_simlify_time_0 = std::chrono::high_resolution_clock::now();
-    // simplify(st_expr);
-    // const auto s_simplify_time_1 = std::chrono::high_resolution_clock::now();
-    // std::chrono::duration<double> s_simplify_time =
-    //     s_simplify_time_1 - s_simlify_time_0;
-    // printf("R%d Simplify after filtering: %5.3f sec.\n", residual_order,
-    //        s_simplify_time.count());
-    // std::wcout << "Number of Biorthogonal Core Terms: " << result_expr.size()
-    //            << std::endl;
-    /*
-        // symbolic verification for r3 here
-        if (ext_idxs.size() == 3) {  // Confirm we're dealing with r3
-          std::wcout << "Applying symbolic verification for r3..." << std::endl;
 
-          // to create a new Sum to hold verified terms
-          auto verified_result = std::make_shared<Sum>();
-
-          // here we extract the indices needed for permutations
-          container::svector<Index> idx_list(3);
-          for (size_t i = 0; i < 3; i++) {
-            idx_list[i] = ext_idxs[i][0];  // First index from each group
-          }
-
-          // to process all the terms with the permutations
-          for (auto& term : *result_expr) {
-            if (!term->is<Product>()) {
-              verified_result->append(term->clone());
-              continue;
-            }
-            auto original_term = term->clone();
-            rational adjusted_coeff = rational(-1, 6) * rational(6, 5);
-            verified_result->append(original_term);
-
-            container::map<Index, Index> perm1;
-            perm1[idx_list[1]] = idx_list[2];
-            perm1[idx_list[2]] = idx_list[1];
-
-            container::map<Index, Index> perm2;
-            perm2[idx_list[0]] = idx_list[1];
-            perm2[idx_list[1]] = idx_list[0];
-
-            container::map<Index, Index> perm3;
-            perm3[idx_list[0]] = idx_list[2];
-            perm3[idx_list[1]] = idx_list[0];
-            perm3[idx_list[2]] = idx_list[1];
-
-            container::map<Index, Index> perm4;
-            perm4[idx_list[0]] = idx_list[1];
-            perm4[idx_list[1]] = idx_list[2];
-            perm4[idx_list[2]] = idx_list[0];
-
-            container::map<Index, Index> perm5;
-            perm5[idx_list[0]] = idx_list[2];
-            perm5[idx_list[2]] = idx_list[0];
-
-            rational adjusted_coeffs = rational(-1, 6) * rational(6, 5);
-            verified_result->append(transform_expr(term, perm1,
-       adjusted_coeffs)); verified_result->append(transform_expr(term, perm2,
-       adjusted_coeffs)); verified_result->append(transform_expr(term, perm3,
-       adjusted_coeffs)); verified_result->append(transform_expr(term, perm4,
-       adjusted_coeffs)); verified_result->append(transform_expr(term, perm5,
-       adjusted_coeffs));
-          }
-
-          std::wcout << "Before simplify, number of terms after verification: "
-                     << verified_result->size() << std::endl;
-          simplify(verified_result);
-          std::wcout << "After simplify, number of terms after verification: "
-                     << verified_result->size() << std::endl;
-          // std::wcout << "verified eqns: " <<
-          //
-       sequant::to_latex_align(sequant::ex<sequant::Sum>(sequant::opt::reorder(verified_result->as<sequant::Sum>())),
-          // 0, 4) << std::endl;
-
-          // now replace the filtered result with my verified result
-          result_expr = verified_result;
-        }
-
-        */
   } else {
     // for r1 and r2, just return the simplified expression without hash-based
     // filtering
