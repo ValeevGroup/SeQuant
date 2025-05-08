@@ -64,7 +64,7 @@ Ground State Amplitudes
                           size_t pmax = std::numeric_limits<size_t>::max(),
                           size_t pmin = 0);
 
-Derives the equations for the :math:`t` amplitudes (:math:`\langle \Phi_P|\bar{H}|Phi_0 \rangle = 0`) up to specified excitation levels.
+Derives the equations for the :math:`t` amplitudes (:math:`\langle \Phi_P|\bar{H}|\Phi_0 \rangle = 0`) up to specified excitation levels.
 
 .. code-block:: cpp
 
