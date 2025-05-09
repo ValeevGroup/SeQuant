@@ -14,6 +14,8 @@ Declare tensor g[i_1, i_2, a_1, a_2]
 Create I[i_1, i_2, a_1, a_2] and initialize to zero
 Load g[i_1, i_2, a_1, a_2]
 Compute I[i_1, i_2, a_1, a_2] += 1/2 g[i_1, i_2, a_1, a_2]
+Unload g[i_1, i_2, a_1, a_2]
+Load g[i_1, i_2, a_1, a_2]
 Compute I[i_1, i_2, a_1, a_2] += 1/2 g[i_1, i_2, a_1, a_2]
 Unload g[i_1, i_2, a_1, a_2]
 Persist I[i_1, i_2, a_1, a_2]

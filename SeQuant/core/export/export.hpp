@@ -278,12 +278,13 @@ struct PreprocessResult {
 };
 
 template <typename T>
-bool prune_scalar(ExportNode<T> &node, PreprocessResult &result) {
+bool prune_scalar_factor(ExportNode<T> &node, PreprocessResult &result) {
   if (!node.leaf() || !node->is_scalar()) {
     return false;
   }
 
   assert(!node.root());
+  assert(node.parent()->op_type() == EvalOp::Product);
 
   const auto iter = result.scalarFactors.find(node.parent()->id());
   ExprPtr parentFactor =
@@ -442,14 +443,34 @@ void preprocess(ExprType expr, ExportContext &ctx, Node &node,
 template <typename T>
 void preprocess(ExportNode<T> &tree, PreprocessResult &result,
                 ExportContext &ctx) {
-  // Pruning can only be done if
-  // - tree is not a leaf (if we prune that, the tree has vanished)
-  // - pruning the tree does NOT turn it into a single-leaf tree
-  // - if it does turn it into a leaf, then parent must be non-zero
-  //   (so we can store the scalar factor on that)
-  while (!tree.leaf() &&
-         (!tree.root() || !tree.left().leaf() || !tree.right().leaf()) &&
-         prune_scalar(tree.left(), result)) {
+  auto may_prune = [](const EvalNode<T> &tree) {
+    // Tree must represent a product and must itself not be a leaf (pruning that
+    // would make the tree vanish)
+    if (tree->op_type() != EvalOp::Product || tree.leaf()) {
+      return false;
+    }
+
+    // If left and right nodes are both leafs, then pruning either of
+    // them will turn the tree into a leaf node (representing the
+    // non-pruned subtree)
+    const bool can_turn_tree_into_leaf =
+        tree.left().leaf() && tree.right().leaf();
+
+    // Pruning in a way that turns this tree into a leaf is only acceptable if
+    // - This tree has a parent node. That's required because terminal nodes
+    //   don't trigger any computation during export. Hence, existence of a
+    //   parent node ensures that the parent triggers the computation which will
+    //   contain the tree as well as the separately stored scalar factor.
+    // - The parent node represents a product. If it doesn't, the entire concept
+    //   of storing a scalar factor on it to be added to the computation
+    //   produces incorrect results.
+    const bool may_turn_tree_into_leaf =
+        !tree.root() && tree.parent()->op_type() == EvalOp::Product;
+
+    return !can_turn_tree_into_leaf || may_turn_tree_into_leaf;
+  };
+
+  while (may_prune(tree) && prune_scalar_factor(tree.left(), result)) {
     // In case the pruning led to tree becoming a leaf, we have to move the
     // pruned scalar factor out to its parent in order to be properly accounted
     // for (as leafs only get loaded and never computed)
@@ -461,9 +482,7 @@ void preprocess(ExportNode<T> &tree, PreprocessResult &result,
       result.scalarFactors[tree.parent()->id()] = std::move(factor);
     }
   }
-  while (!tree.leaf() &&
-         (!tree.root() || !tree.left().leaf() || !tree.right().leaf()) &&
-         prune_scalar(tree.right(), result)) {
+  while (may_prune(tree) && prune_scalar_factor(tree.right(), result)) {
     if (auto iter = result.scalarFactors.find(tree->id());
         iter != result.scalarFactors.end() && tree.leaf()) {
       assert(!tree.root());
