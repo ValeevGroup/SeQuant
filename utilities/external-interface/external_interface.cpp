@@ -4,6 +4,7 @@
 
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/export/export.hpp>
+#include <SeQuant/core/export/generation_optimizer.hpp>
 #include <SeQuant/core/export/export_expr.hpp>
 #include <SeQuant/core/export/export_node.hpp>
 #include <SeQuant/core/export/expression_group.hpp>
@@ -123,6 +124,8 @@ ExportNode<> prepareForExport(const ResultExpr &result, ItfContext &ctx,
   if (result.produces_tensor()) {
     if (importResult) {
       assert(result.has_label());
+      // TODO: doesn't account for tagging (i.e. R1 vs R1:ec) nor for reordering
+      // of indices
       ctx.set_import_name(result.result_as_tensor(), toUtf8(result.label()));
     }
     if (createResult) {
@@ -174,7 +177,7 @@ void generateITF(const json &blocks, std::string_view out_file,
                  const ProcessingOptions &defaults,
                  const IndexSpaceMeta &spaceMeta) {
   ItfContext context(spaceMeta);
-  ItfGenerator<ItfContext> generator;
+  GenerationOptimizer<ItfGenerator<ItfContext>> generator;
 
   for (const json &current_block : blocks) {
     const std::string block_name = current_block.at("name");

@@ -350,7 +350,8 @@ set_source_files_properties(
 )
 
 target_link_libraries(SeQuant PUBLIC range-v3::range-v3 Boost::regex Boost::locale Boost::headers SeQuant-bliss Threads::Threads)
-target_link_libraries(SeQuant PRIVATE $<BUILD_INTERFACE:libperm::libperm>)
+target_link_libraries(SeQuant PRIVATE libperm::libperm)
+target_link_libraries(SeQuant PUBLIC polymorphic_variant::polymorphic_variant)
 # modularized Boost has finer grained targets than just Boost::headers
 if (Boost_IS_MODULARIZED)
     target_link_libraries(SeQuant PUBLIC

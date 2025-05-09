@@ -5,6 +5,7 @@
 #include <SeQuant/core/export/export_expr.hpp>
 #include <SeQuant/core/export/export_node.hpp>
 #include <SeQuant/core/export/expression_group.hpp>
+#include <SeQuant/core/export/generation_optimizer.hpp>
 #include <SeQuant/core/export/itf.hpp>
 #include <SeQuant/core/export/itf_generator.hpp>
 #include <SeQuant/core/export/julia_itensor.hpp>
@@ -394,6 +395,83 @@ TEST_CASE("export", "[export]") {
         bool rewritten = ctx.rewrite(tensor);
         REQUIRE_THAT(tensor, EquivalentTo(expected));
         REQUIRE(rewritten == (toUtf8(input) != expected));
+      }
+    }
+  }
+
+  SECTION("generation_optimizer") {
+    GenerationOptimizer<TextGenerator<TextGeneratorContext>> generator;
+    TextGeneratorContext ctx;
+
+    Variable v1{L"v1"};
+    Variable v2{L"v2"};
+    Variable v3{L"v3"};
+
+    SECTION("unchanged") {
+      generator.create(v1, true, ctx);
+      generator.load(v2, false, ctx);
+      generator.compute(*parse_expr(L"2 v2"), v1, ctx);
+      generator.unload(v2, ctx);
+      generator.persist(v1, ctx);
+
+      generator.end_expression(ctx);
+
+      REQUIRE_THAT(generator.get_generated_code(),
+                   DiffedStringEquals("Create v1 and initialize to zero\n"
+                                      "Load v2\n"
+                                      "Compute v1 += 2 v2\n"
+                                      "Unload v2\n"
+                                      "Persist v1\n"));
+    }
+    SECTION("elided load/unload") {
+      SECTION("single") {
+        export_expression(
+            to_export_tree(canonicalize(parse_expr(L"2 v2 + 4 v2 v3"))),
+            generator, ctx);
+
+        REQUIRE_THAT(generator.get_generated_code(),
+                     DiffedStringEquals("Declare variable Z\n"
+                                        "Declare variable v2\n"
+                                        "Declare variable v3\n"
+                                        "\n"
+                                        "Create Z and initialize to zero\n"
+                                        "Load v2\n"
+                                        "Load v3\n"
+                                        "Compute Z += 4 v2 v3\n"
+                                        "Unload v3\n"
+                                        "Compute Z += 2 v2\n"
+                                        "Unload v2\n"
+                                        "Persist Z\n"));
+      }
+      SECTION("multiple") {
+        export_expression(to_export_tree(canonicalize(
+                              parse_expr(L"2 g{i1,i2;a1,a2} t{a1,a2;i1,i2} "
+                                         "- g{i1,i2;a1,a2} t{a2,a1;i1,i2}"))),
+                          generator, ctx);
+
+        REQUIRE_THAT(
+            generator.get_generated_code(),
+            DiffedStringEquals(
+                "Declare index i_1\n"
+                "Declare index i_2\n"
+                "Declare index a_1\n"
+                "Declare index a_2\n"
+                "\n"
+                "Declare variable Z\n"
+                "\n"
+                "Declare tensor g[i_1, i_2, a_1, a_2]\n"
+                "Declare tensor t[a_1, a_2, i_1, i_2]\n"
+                "\n"
+                "Create Z and initialize to zero\n"
+                "Load g[i_1, i_2, a_1, a_2]\n"
+                "Load t[a_1, a_2, i_1, i_2]\n"
+                "Compute Z += 2 g[i_1, i_2, a_1, a_2] t[a_1, a_2, i_1, i_2]\n"
+                "Compute Z += -1 g[i_1, i_2, a_1, a_2] t[a_1, a_2, i_2, i_1]\n"
+                "Unload t[a_1, a_2, i_2, i_1]\n"
+                "Unload g[i_1, i_2, a_1, a_2]\n"
+                "Persist Z\n"
+
+                ));
       }
     }
   }
