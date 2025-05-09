@@ -9,7 +9,7 @@ Context and Usage
 In SeQuant, the ``mbpt::Operator`` class is a symbolic object that encodes the quantum number transformation properties of many-body operators.
 The ``mbpt::Operator`` class is used to construct fundamental building blocks of quantum chemistry Hamiltonians and other many-body operators.
 
-For example, functions like ``H_()``, ``T_()``, ``Λ_()``, ``R_()``, and ``L_()``  in the ``mbpt::op`` namespace all return instances of ``Operator`` (or expressions built from them), each representing a specific type of many-body operator (Hamiltonian, excitation, deexcitation, etc.).
+For example, functions like ``H_()``, ``T_()``, ``Λ_()``, ``R_()``, and ``L_()``  in the ``mbpt::op`` namespace all return instances of ``Operator`` (or expressions built from them), each representing a specific type of many-body operator (Hamiltonian, excitation, deexcitation, etc).
 
 When you call ``T_(K)`` or ``Λ_(K)`` in the ``mbpt::op`` namespace, you are constructing a symbolic excitation or deexcitation operator of rank ``K``. The returned object is an ``Operator`` that knows:
 
@@ -39,5 +39,56 @@ How do we use it for operator algebra?
 - This enables SeQuant to **screen out expressions that would yield zero**, before applying Wick's Theorem without much computational overhead.
 - ``QuantumNumberChange`` is also used **check if two operators commute with each other**, which is crucial for reducing the expression to its compact canonical form.
 
-Illustrative Examples
----------------------
+.. seealso::
+  There are convenient helper functions available in ``sequant::mbpt`` namespace for constructing different types of ``QuantumNumberChange`` objects.
+  For example, see ``sequant::mbpt::excitation_type_qns``.
+
+Examples
+--------
+
+Let's look at some examples using the following SeQuant context:
+
+.. literalinclude:: /examples/user/operator.cpp
+   :language: cpp
+   :start-after: start-snippet-0
+   :end-before: end-snippet-0
+   :dedent: 2
+
+Constructing an ``Operator``
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. literalinclude:: /examples/user/operator.cpp
+   :language: cpp
+   :start-after: start-snippet-1
+   :end-before: end-snippet-1
+   :dedent: 2
+
+The components of the ``Operator`` can be accessed as follows:
+
+.. literalinclude:: /examples/user/operator.cpp
+   :language: cpp
+   :start-after: start-snippet-2
+   :end-before: end-snippet-2
+   :dedent: 2
+
+Expression construction and screening
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. literalinclude:: /examples/user/operator.cpp
+   :language: cpp
+   :start-after: start-snippet-3
+   :end-before: end-snippet-3
+   :dedent: 2
+
+Vacuum averaging and final expression
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The ``sequant::mbpt::op::vac_av`` function can be used to compute the vacuum average of an operator level expression.
+
+.. literalinclude:: /examples/user/operator.cpp
+   :language: cpp
+   :start-after: start-snippet-4
+   :end-before: end-snippet-4
+   :dedent: 2
+
+.. note:: ``op::P`` is a projection operator which can be used to construct an excited bra or ket manifold based on the input.
