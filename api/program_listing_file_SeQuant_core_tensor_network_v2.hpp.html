@@ -441,6 +441,7 @@
 <span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="n">optional</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="n">wstring</span><span class="o">&gt;&gt;</span><span class="w"> </span><span class="n">vertex_texlabels</span><span class="p">;</span>
 <span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="n">VertexColor</span><span class="o">&gt;</span><span class="w"> </span><span class="n">vertex_colors</span><span class="p">;</span>
 <span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="n">VertexType</span><span class="o">&gt;</span><span class="w"> </span><span class="n">vertex_types</span><span class="p">;</span>
+<span class="w">    </span><span class="n">container</span><span class="o">::</span><span class="n">map</span><span class="o">&lt;</span><span class="n">Index</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="o">&gt;</span><span class="w"> </span><span class="n">idx_to_vertex</span><span class="p">;</span>
 
 <span class="w">    </span><span class="n">Graph</span><span class="p">()</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">default</span><span class="p">;</span>
 
@@ -532,11 +533,25 @@
 <span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">ext_indices_</span><span class="p">;</span>
 <span class="w">  </span><span class="p">}</span>
 
+<span class="w">  </span><span class="k">struct</span><span class="w"> </span><span class="nc">CreateGraphOptions</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="n">NamedIndexSet</span><span class="w"> </span><span class="o">*</span><span class="n">named_indices</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">nullptr</span><span class="p">;</span>
 
-<span class="w">  </span><span class="n">Graph</span><span class="w"> </span><span class="n">create_graph</span><span class="p">(</span>
-<span class="w">      </span><span class="k">const</span><span class="w"> </span><span class="n">NamedIndexSet</span><span class="w"> </span><span class="o">*</span><span class="n">named_indices</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">nullptr</span><span class="p">,</span>
-<span class="w">      </span><span class="kt">bool</span><span class="w"> </span><span class="n">distinct_named_indices</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">true</span><span class="p">,</span>
-<span class="w">      </span><span class="n">container</span><span class="o">::</span><span class="n">map</span><span class="o">&lt;</span><span class="n">Index</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="o">&gt;</span><span class="w"> </span><span class="o">*</span><span class="n">idx_to_vertex</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">nullptr</span><span class="p">)</span><span class="w"> </span><span class="k">const</span><span class="p">;</span>
+<span class="w">    </span><span class="kt">bool</span><span class="w"> </span><span class="n">distinct_named_indices</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">true</span><span class="p">;</span>
+
+<span class="w">    </span><span class="kt">bool</span><span class="w"> </span><span class="n">make_labels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">true</span><span class="p">;</span>
+
+<span class="w">    </span><span class="kt">bool</span><span class="w"> </span><span class="n">make_texlabels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">true</span><span class="p">;</span>
+
+<span class="w">    </span><span class="kt">bool</span><span class="w"> </span><span class="n">make_idx_to_vertex</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">false</span><span class="p">;</span>
+<span class="w">  </span><span class="p">};</span>
+
+
+<span class="w">  </span><span class="n">Graph</span><span class="w"> </span><span class="nf">create_graph</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">CreateGraphOptions</span><span class="w"> </span><span class="o">&amp;</span><span class="n">options</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span>
+<span class="w">                         </span><span class="p">.</span><span class="n">named_indices</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">nullptr</span><span class="p">,</span>
+<span class="w">                         </span><span class="p">.</span><span class="n">distinct_named_indices</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">true</span><span class="p">,</span>
+<span class="w">                         </span><span class="p">.</span><span class="n">make_labels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">true</span><span class="p">,</span>
+<span class="w">                         </span><span class="p">.</span><span class="n">make_texlabels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">true</span><span class="p">,</span>
+<span class="w">                         </span><span class="p">.</span><span class="n">make_idx_to_vertex</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">false</span><span class="p">})</span><span class="w"> </span><span class="k">const</span><span class="p">;</span>
 
 <span class="w"> </span><span class="k">private</span><span class="o">:</span>
 <span class="w">  </span><span class="n">container</span><span class="o">::</span><span class="n">svector</span><span class="o">&lt;</span><span class="n">AbstractTensorPtr</span><span class="o">&gt;</span><span class="w"> </span><span class="n">tensors_</span><span class="p">;</span>
@@ -620,7 +635,7 @@
             
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on May 6, 2025 7:36:18 PM</div>
+              Last updated on May 9, 2025 2:41:59 PM</div>
           </div>
           <div class="right-details">
             <div class="icons">

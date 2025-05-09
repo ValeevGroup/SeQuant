@@ -102,6 +102,8 @@ Classes
 -------
 
 
+- :ref:`exhale_struct_structsequant_1_1_tensor_network_v2_1_1_create_graph_options`
+
 - :ref:`exhale_struct_structsequant_1_1_tensor_network_v2_1_1_graph`
 
 - :ref:`exhale_struct_structsequant_1_1_tensor_network_v2_1_1_slot_canonicalization_metadata`

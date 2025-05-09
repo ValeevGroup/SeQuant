@@ -177,6 +177,7 @@ Program Listing for File tensor_network_v2.hpp
        std::vector<std::optional<std::wstring>> vertex_texlabels;
        std::vector<VertexColor> vertex_colors;
        std::vector<VertexType> vertex_types;
+       container::map<Index, std::size_t> idx_to_vertex;
    
        Graph() = default;
    
@@ -268,11 +269,25 @@ Program Listing for File tensor_network_v2.hpp
        return ext_indices_;
      }
    
+     struct CreateGraphOptions {
+       const NamedIndexSet *named_indices = nullptr;
    
-     Graph create_graph(
-         const NamedIndexSet *named_indices = nullptr,
-         bool distinct_named_indices = true,
-         container::map<Index, std::size_t> *idx_to_vertex = nullptr) const;
+       bool distinct_named_indices = true;
+   
+       bool make_labels = true;
+   
+       bool make_texlabels = true;
+   
+       bool make_idx_to_vertex = false;
+     };
+   
+   
+     Graph create_graph(const CreateGraphOptions &options = {
+                            .named_indices = nullptr,
+                            .distinct_named_indices = true,
+                            .make_labels = true,
+                            .make_texlabels = true,
+                            .make_idx_to_vertex = false}) const;
    
     private:
      container::svector<AbstractTensorPtr> tensors_;
