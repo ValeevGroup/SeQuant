@@ -1,0 +1,61 @@
+ECC = 2 g{i1,i2;a1,a2} t{a1,a2;i1,i2} - g{i1,i2;a1,a2} t{a1,a2;i2,i1}
+
+=================================================
+Plain Text
+=================================================
+Declare index i_1
+Declare index i_2
+Declare index a_1
+Declare index a_2
+
+Declare variable ECC
+
+Declare tensor g[i_1, i_2, a_1, a_2]
+Declare tensor t[a_1, a_2, i_1, i_2]
+
+Create ECC and initialize to zero
+Load g[i_1, i_2, a_1, a_2]
+Load t[a_1, a_2, i_1, i_2]
+Compute ECC += 2 g[i_1, i_2, a_1, a_2] t[a_1, a_2, i_1, i_2]
+Unload t[a_1, a_2, i_1, i_2]
+Unload g[i_1, i_2, a_1, a_2]
+Load g[i_1, i_2, a_1, a_2]
+Load t[a_1, a_2, i_2, i_1]
+Compute ECC += -1 g[i_1, i_2, a_1, a_2] t[a_1, a_2, i_2, i_1]
+Unload t[a_1, a_2, i_2, i_1]
+Unload g[i_1, i_2, a_1, a_2]
+Persist ECC
+
+=================================================
+ITF
+=================================================
+---- decl
+index-space: j, Closed, c
+index-space: k, Closed, c
+index-space: b, External, e
+index-space: c, External, e
+
+tensor: ECC[], !Create{type:scalar}
+
+tensor: K:eecc[bcjk], !Create{type:disk}
+tensor: t:eecc[bcjk], !Create{type:disk}
+
+
+---- code("unnamed")
+alloc ECC[]
+load K:eecc[bcjk]
+load t:eecc[bcjk]
+.ECC[] += 2 * K:eecc[bcjk] t:eecc[bcjk]
+drop t:eecc[bcjk]
+drop K:eecc[bcjk]
+load K:eecc[bcjk]
+load t:eecc[bckj]
+.ECC[] += -1 * K:eecc[bcjk] t:eecc[bckj]
+drop t:eecc[bckj]
+drop K:eecc[bcjk]
+store ECC[]
+
+
+---- end
+
+=================================================

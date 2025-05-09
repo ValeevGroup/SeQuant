@@ -859,6 +859,8 @@ class Variable : public Expr, public Labeled {
   /// @warning conjugation does not change it
   std::wstring_view label() const override;
 
+  void set_label(std::wstring label);
+
   /// complex-conjugates this
   void conjugate();
 

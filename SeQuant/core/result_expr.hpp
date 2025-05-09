@@ -119,6 +119,22 @@ class ResultExpr {
     return groups;
   }
 
+  Tensor result_as_tensor(std::wstring default_label = L"Unnamed") const {
+    return Tensor(m_label.has_value() ? m_label.value() : default_label,
+                  sequant::bra(m_braIndices), sequant::ket(m_ketIndices),
+                  sequant::aux(m_auxIndices), m_symm, m_bksymm, m_psymm);
+  }
+
+  Variable result_as_variable(std::wstring default_label = L"Unnamed") const {
+    assert(!produces_tensor());
+    return Variable(m_label.has_value() ? m_label.value() : default_label);
+  }
+
+  bool produces_tensor() const {
+    return !m_braIndices.empty() || !m_ketIndices.empty() ||
+           !m_auxIndices.empty();
+  }
+
  private:
   ExprPtr m_expr;
 

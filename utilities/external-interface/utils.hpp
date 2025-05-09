@@ -14,8 +14,8 @@
 class IndexSpaceMeta {
  public:
   struct Entry {
-    std::wstring tag;
-    std::wstring name;
+    std::string tag;
+    std::string name;
   };
 
   IndexSpaceMeta() = default;
@@ -24,11 +24,9 @@ class IndexSpaceMeta {
 
   std::size_t getSize(const sequant::Index &index) const;
 
-  std::wstring getLabel(const sequant::IndexSpace &space) const;
+  std::string getName(const sequant::IndexSpace &space) const;
 
-  std::wstring getName(const sequant::IndexSpace &space) const;
-
-  std::wstring getTag(const sequant::IndexSpace &space) const;
+  std::string getTag(const sequant::IndexSpace &space) const;
 
   void registerSpace(sequant::IndexSpace space, Entry entry);
 

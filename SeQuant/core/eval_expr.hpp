@@ -5,6 +5,7 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
+#include <SeQuant/core/result_expr.hpp>
 
 #include <cstddef>
 #include <string>
@@ -39,6 +40,8 @@ enum class EvalOp {
 ///
 enum class ResultType { Tensor, Scalar };
 
+struct EvalOpSetter;
+
 ///
 /// \brief The EvalExpr is a building block of binary trees used to evaluate
 /// expressions.
@@ -48,6 +51,7 @@ enum class ResultType { Tensor, Scalar };
 ///
 class EvalExpr {
  public:
+  friend struct EvalOpSetter;
   using index_vector = Index::index_vector;
 
   ///
@@ -199,7 +203,7 @@ class EvalExpr {
   ///
   [[nodiscard]] std::int8_t canon_phase() const noexcept;
 
- private:
+ protected:
   std::optional<EvalOp> op_type_ = std::nullopt;
 
   ResultType result_type_;
@@ -211,6 +215,10 @@ class EvalExpr {
   std::int8_t canon_phase_{1};
 
   ExprPtr expr_;
+};
+
+struct EvalOpSetter {
+  void set(EvalExpr& expr, EvalOp op) { expr.op_type_ = op; }
 };
 
 ///
@@ -327,14 +335,64 @@ template <meta::eval_expr T>
 using EvalNode = FullBinaryNode<T>;
 
 ///
-/// Creates a binary tree of evaluation.
+/// Creates a binary tree for evaluation.
 ///
-template <typename ExprT = EvalExpr,
-          typename = std::enable_if_t<std::is_constructible_v<ExprT, EvalExpr>>>
+template <typename ExprT = EvalExpr>
+  requires std::is_constructible_v<ExprT, EvalExpr>
 FullBinaryNode<ExprT> binarize(ExprPtr const& expr) {
   if constexpr (std::is_same_v<ExprT, EvalExpr>) return impl::binarize(expr);
   return transform_node(impl::binarize(expr),
                         [](auto&& val) { return ExprT{val}; });
+}
+
+///
+/// Creates a binary tree for evaluation.
+///
+template <typename ExprT = EvalExpr>
+  requires std::is_constructible_v<ExprT, EvalExpr>
+FullBinaryNode<ExprT> binarize(ResultExpr const& res) {
+  FullBinaryNode<ExprT> tree = binarize<ExprT>(res.expression());
+
+  const bool is_scalar =
+      res.bra().empty() && res.ket().empty() && res.aux().empty();
+
+  if (tree.size() < 2) {
+    // We want to have a result node with the result from the ResultExpr.
+    // In order for that to work, we need a dedicated result node in the first
+    // place. Hence, we adapt the represented expression for terminals to be
+    // that terminal multiplied by 1.
+    ExprT result = [&]() {
+      if (is_scalar) {
+        return *binarize<ExprT>(ex<Variable>(res.result_as_variable()));
+      }
+      return *binarize<ExprT>(ex<Tensor>(res.result_as_tensor()));
+    }();
+    EvalOpSetter{}.set(result, EvalOp::Product);
+
+    tree = FullBinaryNode<ExprT>(std::move(result), std::move(tree),
+                                 binarize<ExprT>(ex<Constant>(1)));
+  }
+  assert(tree.size() > 1);
+
+  if (is_scalar) {
+    if (res.has_label()) {
+      tree->expr().template as<Variable>().set_label(res.label());
+    }
+  } else {
+    Tensor& tensor = tree->expr().template as<Tensor>();
+
+    if (res.has_label()) {
+      tensor.set_label(res.label());
+    }
+
+    assert(tensor.const_indices().size() ==
+           res.bra().size() + res.ket().size() + res.aux().size());
+    tensor.set_bra(res.bra());
+    tensor.set_ket(res.ket());
+    tensor.set_aux(res.aux());
+  }
+
+  return tree;
 }
 
 ///
