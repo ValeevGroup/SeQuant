@@ -5,6 +5,12 @@ SeQuant is a general-purpose symbolic tensor algebra, but the primary use case i
 using SeQuant for this purpose.
 
 .. toctree::
+   :hidden:
+
    wick
    index_spaces
    operators
+
+.. include:: wick.rst
+.. include:: index_spaces.rst
+.. include:: operators.rst
