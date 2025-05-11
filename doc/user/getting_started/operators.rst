@@ -29,7 +29,7 @@ The normal-ordered Hamiltonian is defined similarly as a sum of 1- and 2-body co
    :dedent: 2
 
 Note that the compact definition of the Hamiltonian is due to the use of the union (:math:`p`) of base occupied (:math:`i`) and unoccupied (:math:`a`) spaces. Many other symbolic algebras only support use of nonoverlapping base spaces, in terms of which Hamiltonian and other tensor expressions would have a much more verbose form.
-Commutator of the Hamiltonian and cluster operator is trivially composed:
+The commutator of the Hamiltonian and cluster operators is trivially composed:
 
 .. literalinclude:: /examples/user/getting_started/ccd_pedestrian.cpp
    :language: cpp

@@ -1,47 +1,82 @@
 Operator Interface for Symbolic Many-Body Algebra
 =================================================
 
-The ``mbpt::Operator`` class provides a convenient interface for symbolic many-body operators in SeQuant.
-It is designed to represent, manipulate, and algebraically combine operators such as the Hamiltonian, excitation/deexcitation operators, and general tensor operators, all within a context-aware, quantum-number-tracking framework.
+Motivation
+----------
 
-Context and Usage
------------------
-In SeQuant, the ``mbpt::Operator`` class is a symbolic object that encodes the quantum number transformation properties of many-body operators.
-The ``mbpt::Operator`` class is used to construct fundamental building blocks of quantum chemistry Hamiltonians and other many-body operators.
+The ``mbpt::Operator`` class represents an abstract Fock-space many-body operator, such as the Hamiltonian operator, that can be used within SeQuant expressions.
+We already saw `earlier <../getting_started/operators.html>`_ that
+the lower-level *tensor* representation of such operators involves specific index labels which makes tensor
+representation  inconvenient when multiple instances of the same operator occur.
+For example, consider a general 1-body operator
 
-For example, functions like ``H_()``, ``T_()``, ``Λ_()``, ``R_()``, and ``L_()``  in the ``mbpt::op`` namespace all return instances of ``Operator`` (or expressions built from them), each representing a specific type of many-body operator (Hamiltonian, excitation, deexcitation, etc).
+.. math::
+    \hat{o}_1 \equiv o^{p_1}_{p_2} a_{p_2}^{p_1}.
 
-When you call ``T_(K)`` or ``Λ_(K)`` in the ``mbpt::op`` namespace, you are constructing a symbolic excitation or deexcitation operator of rank ``K``. The returned object is an ``Operator`` that knows:
+The abstract representation :math:`\hat{o}_1` is convenient for efficient algebraic manipulations such as expansion and simplication:
 
-- Its label (e.g., "T" or "Λ")
-- Corresponding :class:`sequant::Tensor` object (indices, rank, symmetry)
-- How it changes the quantum numbers of a state it acts upon
+.. math::
+    \left(1 + \hat{o}_1\right)^2 \equiv = 1 + \hat{o}_1 + \hat{o}_1 + \hat{o}_1^2 = 1 + 2 \hat{o}_1 + \hat{o}_1^2
 
-This allows you to write code that manipulates operators at a high level, while the system automatically handles all the quantum number bookkeeping and algebraic rules.
-This also enables efficient screening of terms using the quantum number tracking (e.g., number of creators and annihilators in each :class:`sequant::IndexSpace`), and context-aware operator algebra.
+The tensor form is less convenient for such manipulations for 2 reasons:
 
+- lowering multiple instances of :math:`\hat{o}_1` such as in its square :math:`\hat{o}_1^2 \equiv \hat{o}_1 \hat{o}_1` to the tensor form is context-sensitive since one must avoid index reuse:
 
-``QuantumNumberChange``: The Key Part of Operator Interface
------------------------------------------------------------
-The ``QuantumNumberChange`` class is a utility for representing how a many-body operator changes the quantum numbers of a state.
-For an ``Operator`` object, this typically means tracking the number of particle and hole creators/annihilators in each relevant ``IndexSpace``.
+  .. math::
+      \hat{o}_1^2 = o^{p_1}_ {p_2} a_{p_2}^{p_1} o^{p_3}_{p_4} a_{p_4}^{p_3}
+- operating on tensor forms of many-body operators involves frequent use of canonicalization, such as to be able to simplify :math:`\hat{o}_1 + \hat{o}_1` in the following tensor form
 
-How does this work?
-^^^^^^^^^^^^^^^^^^^
-- Each ``QuantumNumberChange`` instance stores, for each tracked subspace, an interval (e.g., "between 0 and 2 particles created").
-- The number and meaning of these intervals is determined by the current ``sequant::Context`` (e.g., physical vacuum vs. single-product vacuum, number of base spaces etc).
-- This allows the system to represent not just definite quantum number changes, but also operators with variable action.
+  .. math::
+      \hat{o}_1 + \hat{o}_1 = o^{p_1}_ {p_2} a_{p_2}^{p_1} + o^{p_3}_{p_4} a_{p_4}^{p_3}
 
-How do we use it for operator algebra?
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-- ``QuantumNumberChange`` is the type used by the ``Operator`` class to track quantum number changes.
-- When two operators are multiplied, their quantum number changes are combined using the rules encoded in ``QuantumNumberChange``.
-- This enables SeQuant to **screen out expressions that would yield zero**, before applying Wick's Theorem without much computational overhead.
-- ``QuantumNumberChange`` is also used **check if two operators commute with each other**, which is crucial for reducing the expression to its compact canonical form.
+  to
+
+  .. math::
+      2 \hat{o}_1 = 2 o^{p_1}_ {p_2} a_{p_2}^{p_1}
+
+  requires canonicalization of each term before attempting simplification. In the abstract form simplifying :math:`\hat{o}_1 + \hat{o}_1` to :math:`2 \hat{o}_1` is as simple as if :math:`\hat{o}_1` were a scalar.
+
+To be useful for more than just algebraic simplification the abstract operator form
+must include enough detail to determine what products of such operators do to quantum numbers (e.g., occupation numbers)
+of a Fock-space state. Each ``mbpt::Operator`` thus denotes its effect on the quantum numbers. This allows efficient evaluation of
+vacuum averages of products of ``mbpt::Operator`` objects by identifying
+only the non-zero contributions.
+
+``mbpt::Operator`` Anatomy
+--------------------------
+
+``mbpt::Operator`` is constructed from 3 lambdas:
+
+- ``void -> std::wstring``: return the operator label such as "T" or "Λ"
+- ``void -> ExptPtr``: return the tensor form of the operator, and
+- ``QuantumNumberChange<>& -> void``: encodes the action on the given input state by mutating its quantum numbers given as the argument to the lambda.
+
+The quantum numbers of a state and their changes are represented by the same class, ``QuantumNumberChange<>``.
+For the Fock-space states the quantum numbers are the number of creators/annihilators. In general context the number of creators/annihilators
+must be tracked separately for multiple ``IndexSpace``s (e.g., for each hole and particle states in the particle-hole context). To support
+general operators which can create a variable number of particles and holes the numbers of creators/annihilators must be encoded
+by *intervals*. For example, if space :math:`\{p\}` is a union of hole (fully occupied in the vacuum) space :math:`\{i\}`
+and particle (fully empty in the vacuum) space :math:`\{a\}` operator :math:`\hat{o}_1` includes 4 components,
+
+.. math::
+    o^{p_1}_{p_2} a_{p_2}^{p_1} = o^{i_1}_{i_2} a_{i_2}^{i_1} + o^{i_1}_{a_2} a_{a_2}^{i_1} + o^{a_1}_{i_2} a_{i_2}^{a_1} + o^{a_1}_{a_2} a_{a_2}^{a_1},
+
+each of which is has 1 (particle or hole) creator and 1 (particle or hole) annihilator.
+The net effect of this operator on a Fock-space state is to leave its number of hole/particle
+creators/annihilators unchanged or increased by 1. E.g., its effect on a state with :math:`n`
+particle creators is produce a state with :math:`[n,n+1]` particle creators; similarly,
+action on a state with :math:`[n,m]` hole annihilators (:math:`n \leq m`) will produce a state with :math:`[n,m+1]` hole annihilators.
+
+Finally, for a product of ``mbpt::Operator`` it is possible to determine its effect on the quantum numbers of the input state using simple rules based on Wick's theorem.
+This enables SeQuant to **screen out expressions that would yield zero**, before applying Wick's theorem without much computational overhead.
+This logic can also be used to **check if two operators commute with each other**, which is crucial for reducing the expression to their compact canonical form.
+
+The use of interval arithmetic for quantum number changes allows to treat operators in their natural compact form as long as possible. E.g., :math:`\hat{o}_1` can be kept as a single term :math:`o^{p_1}_{p_2} a_{p_2}^{p_1}` rather than having to decompose
+it into individual contributions, each with definite effect on quantum numbers. This is especially useful when the number of index spaces increases.
 
 .. seealso::
-  There are convenient helper functions available in ``sequant::mbpt`` namespace for constructing different types of ``QuantumNumberChange`` objects.
-  For example, see ``sequant::mbpt::excitation_type_qns``.
+    - Although the user can construct ``mbpt::Operator`` directly, SeQuant predefines many commonly-used operators. For example, ``H_()``, ``T_()``, ``Λ_()``, ``R_()``, and ``L_()``  in the ``mbpt::op`` namespace all return instances of ``Operator`` (or expressions built from them), each representing a specific type of many-body operator (Hamiltonian, excitation, deexcitation, etc).
+    - There are convenient helper functions available in ``sequant::mbpt`` namespace for constructing different types of ``QuantumNumberChange`` objects. For example, see ``sequant::mbpt::excitation_type_qns``.
 
 Examples
 --------
