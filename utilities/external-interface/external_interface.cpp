@@ -123,6 +123,8 @@ ExportNode<> prepareForExport(const ResultExpr &result, ItfContext &ctx,
   if (result.produces_tensor()) {
     if (importResult) {
       assert(result.has_label());
+      // TODO: doesn't account for tagging (i.e. R1 vs R1:ec) nor for reordering
+      // of indices
       ctx.set_import_name(result.result_as_tensor(), toUtf8(result.label()));
     }
     if (createResult) {
