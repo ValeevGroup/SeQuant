@@ -5,6 +5,7 @@
 #include <SeQuant/core/export/export_expr.hpp>
 #include <SeQuant/core/export/export_node.hpp>
 #include <SeQuant/core/export/expression_group.hpp>
+#include <SeQuant/core/export/generation_optimizer.hpp>
 #include <SeQuant/core/export/itf.hpp>
 #include <SeQuant/core/export/itf_generator.hpp>
 #include <SeQuant/core/export/julia_itensor.hpp>
@@ -394,6 +395,114 @@ TEST_CASE("export", "[export]") {
         bool rewritten = ctx.rewrite(tensor);
         REQUIRE_THAT(tensor, EquivalentTo(expected));
         REQUIRE(rewritten == (toUtf8(input) != expected));
+      }
+    }
+  }
+
+  SECTION("generation_optimizer") {
+    GenerationOptimizer<TextGenerator<TextGeneratorContext>> generator;
+    TextGeneratorContext ctx;
+
+    Variable v1{L"v1"};
+    Variable v2{L"v2"};
+    Variable v3{L"v3"};
+
+    SECTION("unchanged") {
+      export_expression(to_export_tree(parse_result_expr(L"v1 = 2 v2")),
+                        generator, ctx);
+
+      REQUIRE_THAT(generator.get_generated_code(),
+                   DiffedStringEquals("Declare variable v1\n"
+                                      "Declare variable v2\n"
+                                      "\n"
+                                      "Create v1 and initialize to zero\n"
+                                      "Load v2\n"
+                                      "Compute v1 += 2 v2\n"
+                                      "Unload v2\n"
+                                      "Persist v1\n"));
+    }
+    SECTION("elided load/unload") {
+      SECTION("single") {
+        export_expression(
+            to_export_tree(parse_result_expr(L"v1 = 2 v2 + 4 v2 v3")),
+            generator, ctx);
+
+        REQUIRE_THAT(generator.get_generated_code(),
+                     DiffedStringEquals("Declare variable v1\n"
+                                        "Declare variable v2\n"
+                                        "Declare variable v3\n"
+                                        "\n"
+                                        "Create v1 and initialize to zero\n"
+                                        "Load v2\n"
+                                        "Load v3\n"
+                                        "Compute v1 += 4 v2 v3\n"
+                                        "Unload v3\n"
+                                        "Compute v1 += 2 v2\n"
+                                        "Unload v2\n"
+                                        "Persist v1\n"));
+      }
+      SECTION("multiple") {
+        export_expression(to_export_tree(parse_result_expr(
+                              L"ECC = 2 g{i1,i2;a1,a2} t{a1,a2;i1,i2} "
+                              "- g{i1,i2;a1,a2} t{a2,a1;i1,i2}")),
+                          generator, ctx);
+
+        REQUIRE_THAT(
+            generator.get_generated_code(),
+            DiffedStringEquals(
+                "Declare index i_1\n"
+                "Declare index i_2\n"
+                "Declare index a_1\n"
+                "Declare index a_2\n"
+                "\n"
+                "Declare variable ECC\n"
+                "\n"
+                "Declare tensor g[i_1, i_2, a_1, a_2]\n"
+                "Declare tensor t[a_1, a_2, i_1, i_2]\n"
+                "\n"
+                "Create ECC and initialize to zero\n"
+                "Load g[i_1, i_2, a_1, a_2]\n"
+                "Load t[a_1, a_2, i_1, i_2]\n"
+                "Compute ECC += 2 g[i_1, i_2, a_1, a_2] t[a_1, a_2, i_1, i_2]\n"
+                "Compute ECC += -1 g[i_1, i_2, a_1, a_2] t[a_2, a_1, i_1, "
+                "i_2]\n"
+                "Unload t[a_2, a_1, i_1, i_2]\n"
+                "Unload g[i_1, i_2, a_1, a_2]\n"
+                "Persist ECC\n"
+
+                ));
+      }
+      SECTION("multiple with reordering") {
+        // When stripping redundant load/unload operations, load of tensor C
+        // needs to be moved before the load of B in order to retain
+        // compatibility to frameworks with stack-based memory models
+        export_expression(
+            to_export_tree(parse_result_expr(
+                L"R{a1;i1} = 2 B{a1;i1} + B{a1;i1} C - C D{a1;i1}")),
+            generator, ctx);
+
+        REQUIRE_THAT(
+            generator.get_generated_code(),
+            DiffedStringEquals("Declare index i_1\n"
+                               "Declare index a_1\n"
+                               "\n"
+                               "Declare variable C\n"
+                               "\n"
+                               "Declare tensor B[a_1, i_1]\n"
+                               "Declare tensor D[a_1, i_1]\n"
+                               "Declare tensor R[a_1, i_1]\n"
+                               "\n"
+                               "Create R[a_1, i_1] and initialize to zero\n"
+                               "Load C\n"
+                               "Load B[a_1, i_1]\n"
+                               "Compute R[a_1, i_1] += 2 B[a_1, i_1]\n"
+                               "Compute R[a_1, i_1] += B[a_1, i_1] C\n"
+                               "Unload B[a_1, i_1]\n"
+                               "Load D[a_1, i_1]\n"
+                               "Compute R[a_1, i_1] += -1 C D[a_1, i_1]\n"
+                               "Unload D[a_1, i_1]\n"
+                               "Unload C\n"
+                               "Persist R[a_1, i_1]\n"));
       }
     }
   }

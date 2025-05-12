@@ -7,6 +7,7 @@
 #include <SeQuant/core/export/export_expr.hpp>
 #include <SeQuant/core/export/export_node.hpp>
 #include <SeQuant/core/export/expression_group.hpp>
+#include <SeQuant/core/export/generation_optimizer.hpp>
 #include <SeQuant/core/export/itf_generator.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/parse.hpp>
@@ -176,7 +177,7 @@ void generateITF(const json &blocks, std::string_view out_file,
                  const ProcessingOptions &defaults,
                  const IndexSpaceMeta &spaceMeta) {
   ItfContext context(spaceMeta);
-  ItfGenerator<ItfContext> generator;
+  GenerationOptimizer<ItfGenerator<ItfContext>> generator;
 
   for (const json &current_block : blocks) {
     const std::string block_name = current_block.at("name");
