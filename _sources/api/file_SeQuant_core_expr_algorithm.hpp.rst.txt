@@ -83,7 +83,7 @@ Functions
 
 - :ref:`exhale_function_namespacesequant_1a237e4a9cf9e2d2e676a4f61487b859e9`
 
-- :ref:`exhale_function_namespacesequant_1a2b8ed8d6d3723466e0b176d456113d00`
-
 - :ref:`exhale_function_namespacesequant_1a707cedc0447e7cd5f40efcec00feb5a4`
+
+- :ref:`exhale_function_namespacesequant_1a2b8ed8d6d3723466e0b176d456113d00`
 

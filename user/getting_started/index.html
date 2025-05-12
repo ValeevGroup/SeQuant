@@ -186,7 +186,7 @@
           <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
         </button>
       </div>
-      <label class="toc-overlay-icon toc-header-icon no-toc" for="__toc">
+      <label class="toc-overlay-icon toc-header-icon" for="__toc">
         <div class="visually-hidden">Toggle table of contents sidebar</div>
         <i class="icon"><svg><use href="#svg-toc"></use></svg></i>
       </label>
@@ -216,6 +216,7 @@
 </li>
 <li class="toctree-l1"><a class="reference internal" href="installing.html">Installation</a></li>
 <li class="toctree-l1 has-children"><a class="reference internal" href="../guide/index.html">User Guide</a><input class="toctree-checkbox" id="toctree-checkbox-2" name="toctree-checkbox-2" role="switch" type="checkbox"/><label for="toctree-checkbox-2"><div class="visually-hidden">Toggle navigation of User Guide</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../guide/operator.html">Operator Interface for Symbolic Many-Body Algebra</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../guide/cc.html">Coupled-Cluster Class</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../guide/evaluation.html">Evaluation Trace Analysis Using Nushell</a></li>
 </ul>
@@ -265,7 +266,7 @@
               <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
             </button>
           </div>
-          <label class="toc-overlay-icon toc-content-icon no-toc" for="__toc">
+          <label class="toc-overlay-icon toc-content-icon" for="__toc">
             <div class="visually-hidden">Toggle table of contents sidebar</div>
             <i class="icon"><svg><use href="#svg-toc"></use></svg></i>
           </label>
@@ -276,15 +277,347 @@
 <p>SeQuant is a general-purpose symbolic tensor algebra, but the primary use case is in quantum many-body physics. The following is a brief tutorial on
 using SeQuant for this purpose.</p>
 <div class="toctree-wrapper compound">
-<ul>
-<li class="toctree-l1"><a class="reference internal" href="wick.html">Wick’s Theorem</a></li>
-<li class="toctree-l1"><a class="reference internal" href="index_spaces.html">Register Index Spaces</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="index_spaces.html#quasiparticles">Quasiparticles</a></li>
-</ul>
-</li>
-<li class="toctree-l1"><a class="reference internal" href="operators.html">Operators</a></li>
-</ul>
 </div>
+<section id="wick-s-theorem">
+<h2>Wick’s Theorem<a class="headerlink" href="#wick-s-theorem" title="Link to this heading">¶</a></h2>
+<p>To get started let’s use SeQuant to apply <a class="reference external" href="https://en.wikipedia.org/wiki/Wick's_theorem">Wick’s theorem</a> to a simple product of elementary (creation
+and annihilation) fermionic operators:</p>
+<div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[a_{p_3} a_{p_4} a^\dagger_{p_1} a^\dagger_{p_2}.\]</div>
+</div>
+<p>This is achieved by the following SeQuant program:</p>
+<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="n">Index</span><span class="w"> </span><span class="n">p1</span><span class="p">(</span><span class="sa">L</span><span class="s">&quot;p_1&quot;</span><span class="p">),</span><span class="w"> </span><span class="n">p2</span><span class="p">(</span><span class="sa">L</span><span class="s">&quot;p_2&quot;</span><span class="p">),</span><span class="w"> </span><span class="n">p3</span><span class="p">(</span><span class="sa">L</span><span class="s">&quot;p_3&quot;</span><span class="p">),</span><span class="w"> </span><span class="n">p4</span><span class="p">(</span><span class="sa">L</span><span class="s">&quot;p_4&quot;</span><span class="p">);</span>
+
+<span class="k">auto</span><span class="w"> </span><span class="n">cp1</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">fcrex</span><span class="p">(</span><span class="n">p1</span><span class="p">),</span><span class="w"> </span><span class="n">cp2</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">fcrex</span><span class="p">(</span><span class="n">p2</span><span class="p">);</span>
+<span class="k">auto</span><span class="w"> </span><span class="n">ap3</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">fannx</span><span class="p">(</span><span class="n">p3</span><span class="p">),</span><span class="w"> </span><span class="n">ap4</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">fannx</span><span class="p">(</span><span class="n">p4</span><span class="p">);</span>
+
+<span class="n">std</span><span class="o">::</span><span class="n">wcout</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">to_latex</span><span class="p">(</span><span class="n">ap3</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">ap4</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">cp1</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">cp2</span><span class="p">)</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">&quot; = &quot;</span>
+<span class="w">           </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">to_latex</span><span class="p">(</span><span class="n">FWickTheorem</span><span class="p">{</span><span class="n">ap3</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">ap4</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">cp1</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">cp2</span><span class="p">}</span>
+<span class="w">                           </span><span class="p">.</span><span class="n">full_contractions</span><span class="p">(</span><span class="nb">false</span><span class="p">)</span>
+<span class="w">                           </span><span class="p">.</span><span class="n">compute</span><span class="p">())</span>
+<span class="w">           </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">endl</span><span class="p">;</span>
+</pre></div>
+</div>
+<div class="admonition hint">
+<p class="admonition-title">Hint</p>
+<p>All <em>core</em> user-facing SeQuant code lives in C++ namespace <code class="code docutils literal notranslate"><span class="pre">sequant</span></code>, and the shown code assumes this namespace has been imported via
+<code class="code docutils literal notranslate"><span class="pre">using</span> <span class="pre">namespace</span> <span class="pre">sequant</span></code>.</p>
+</div>
+<p>Running this program should produce a LaTeX expression for this formula:</p>
+<div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[{{a_ {{p_3}}}{a_ {{p_4}}}{a^{{p_1}}}{a^{{p_2}}}}
+= \bigl( - {{a^{{p_1}{p_2}}_ {{p_3}{p_4}}}} - {{s^{{p_1}}_ {{p_3}}}{s^{{p_2}}_ {{p_4}}}} + {{s^{{p_1}}_ {{p_3}}}{a^{{p_2}}_ {{p_4}}}}
+  - {{s^{{p_1}}_ {{p_4}}}{a^{{p_2}}_ {{p_3}}}} + {{s^{{p_2}}_ {{p_3}}}{s^{{p_1}}_ {{p_4}}}} - {{s^{{p_2}}_ {{p_3}}}{a^{{p_1}}_ {{p_4}}}}
+  + {{s^{{p_2}}_ {{p_4}}}{a^{{p_1}}_ {{p_3}}}}\bigr)\]</div>
+</div>
+<p>where the tensor notation is used to denote elementary and composite <em>normal-ordered</em> (or, shortly, <em>normal</em>) operators:</p>
+<div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[a^p \equiv a_p^\dagger\]</div>
+</div>
+<div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[a^{p_1 p_2 \dots p_c}_ {q_1 q_2 \dots q_a} \equiv a_ {p_1}^\dagger  a_ {p_2}^\dagger \dots a_ {p_c}^\dagger a_ {q_a} \dots a_ {q_2} a_ {q_1}\]</div>
+</div>
+<p><span class="math notranslate nohighlight">\(s^p_q \equiv \langle q | p \rangle\)</span> denotes inner products (“overlaps”) of 1-particle states. Wick’s theorem can of course be applied directly
+to products of normal composite operators, e.g,</p>
+<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="k">auto</span><span class="w"> </span><span class="n">nop1</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ex</span><span class="o">&lt;</span><span class="n">FNOperator</span><span class="o">&gt;</span><span class="p">(</span><span class="n">cre</span><span class="p">(</span><span class="n">p1</span><span class="p">,</span><span class="w"> </span><span class="n">p2</span><span class="p">),</span><span class="w"> </span><span class="n">ann</span><span class="p">(</span><span class="n">p3</span><span class="p">,</span><span class="w"> </span><span class="n">p4</span><span class="p">));</span>
+<span class="c1">// OR</span>
+<span class="c1">// auto nop1 = ex&lt;FNOperator&gt;(cre({p1, p2}), ann({p3, p4}));</span>
+<span class="c1">// OR</span>
+<span class="c1">// auto nop1 = ex&lt;FNOperator&gt;(cre(std::vector{p1, p2}),</span>
+<span class="c1">//                            ann(std::array{L&quot;p3&quot;, L&quot;p4&quot;}));</span>
+<span class="c1">// OR</span>
+<span class="c1">// auto nop1 = ex&lt;FNOperator&gt;(cre(std::set{&quot;p1&quot;, &quot;p2&quot;}),</span>
+<span class="c1">//                            ann(std::vector{L&quot;p3&quot;, L&quot;p4&quot;}));</span>
+<span class="k">auto</span><span class="w"> </span><span class="n">nop2</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ex</span><span class="o">&lt;</span><span class="n">FNOperator</span><span class="o">&gt;</span><span class="p">(</span><span class="n">cre</span><span class="p">({</span><span class="sa">L</span><span class="s">&quot;p_5&quot;</span><span class="p">}),</span><span class="w"> </span><span class="n">ann</span><span class="p">({</span><span class="sa">L</span><span class="s">&quot;p_6&quot;</span><span class="p">,</span><span class="w"> </span><span class="sa">L</span><span class="s">&quot;p_7&quot;</span><span class="p">}));</span>
+
+<span class="n">std</span><span class="o">::</span><span class="n">wcout</span>
+<span class="w">    </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">to_latex</span><span class="p">(</span><span class="n">nop1</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">nop2</span><span class="p">)</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">&quot; = &quot;</span>
+<span class="w">    </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">to_latex</span><span class="p">(</span><span class="n">FWickTheorem</span><span class="p">{</span><span class="n">nop1</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">nop2</span><span class="p">}.</span><span class="n">full_contractions</span><span class="p">(</span><span class="nb">false</span><span class="p">).</span><span class="n">compute</span><span class="p">())</span>
+<span class="w">    </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">endl</span><span class="p">;</span>
+</pre></div>
+</div>
+<p>produces</p>
+<div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[{{a^{{p_1}{p_2}}_ {{p_3}{p_4}}}{a^{␣\,{p_5}}_ {{p_6}{p_7}}}}
+= \bigl({a^{␣\,{p_1}{p_2}{p_5}}_ {{p_3}{p_4}{p_6}{p_7}}} - {{s^{{p_5}}_ {{p_4}}}{a^{␣\,{p_1}{p_2}}_ {{p_3}{p_6}{p_7}}}}
+  + {{s^{{p_5}}_ {{p_3}}}{a^{␣\,{p_1}{p_2}}_ {{p_4}{p_6}{p_7}}}}\bigr)\]</div>
+</div>
+<p>where <span class="math notranslate nohighlight">\(␣\)</span> is used in number-nonconserving operators to point out the empty “slots”.</p>
+<p>Same algebra can be performed for bosons:</p>
+<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="k">auto</span><span class="w"> </span><span class="n">nop3</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ex</span><span class="o">&lt;</span><span class="n">BNOperator</span><span class="o">&gt;</span><span class="p">(</span><span class="n">cre</span><span class="p">({</span><span class="n">p1</span><span class="p">,</span><span class="w"> </span><span class="n">p2</span><span class="p">}),</span><span class="w"> </span><span class="n">ann</span><span class="p">({</span><span class="n">p3</span><span class="p">,</span><span class="w"> </span><span class="n">p4</span><span class="p">}));</span>
+<span class="k">auto</span><span class="w"> </span><span class="n">nop4</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ex</span><span class="o">&lt;</span><span class="n">BNOperator</span><span class="o">&gt;</span><span class="p">(</span><span class="n">cre</span><span class="p">({</span><span class="sa">L</span><span class="s">&quot;p_5&quot;</span><span class="p">,</span><span class="w"> </span><span class="sa">L</span><span class="s">&quot;p_6&quot;</span><span class="p">}),</span><span class="w"> </span><span class="n">ann</span><span class="p">({</span><span class="sa">L</span><span class="s">&quot;p_7&quot;</span><span class="p">}));</span>
+
+<span class="n">std</span><span class="o">::</span><span class="n">wcout</span>
+<span class="w">    </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">to_latex</span><span class="p">(</span><span class="n">nop3</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">nop4</span><span class="p">)</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">&quot; = &quot;</span>
+<span class="w">    </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">to_latex</span><span class="p">(</span><span class="n">BWickTheorem</span><span class="p">{</span><span class="n">nop3</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">nop4</span><span class="p">}.</span><span class="n">full_contractions</span><span class="p">(</span><span class="nb">false</span><span class="p">).</span><span class="n">compute</span><span class="p">())</span>
+<span class="w">    </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">endl</span><span class="p">;</span>
+</pre></div>
+</div>
+<div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[{{b^{{p_1}{p_2}}_ {{p_3}{p_4}}}{b^{{p_5}{p_6}}_ {␣\,{p_7}}}}
+= \bigl( {b^{{p_5}{p_1}{p_2}{p_6}}_ {␣\,{p_3}{p_4}{p_7}}} + {{s^{{p_6}}_ {{p_3}}}{b^{{p_5}{p_2}{p_1}}_{␣\,{p_4}{p_7}}}}
+  + {{s^{{p_5}}_{{p_3}}}{b^{{p_1}{p_2}{p_6}}_{␣\,{p_4}{p_7}}}}
+  + {{s^{{p_6}}_{{p_4}}}{b^{{p_5}{p_1}{p_2}}_{␣\,{p_3}{p_7}}}} + {{s^{{p_5}}_{{p_4}}}{b^{{p_2}{p_1}{p_6}}_{␣\,{p_3}{p_7}}}}
+  + {{s^{{p_5}}_{{p_3}}}{s^{{p_6}}_{{p_4}}}{b^{{p_1}{p_2}}_{␣\,{p_7}}}}
+  + {{s^{{p_6}}_{{p_3}}}{s^{{p_5}}_{{p_4}}}{b^{{p_2}{p_1}}_{␣\,{p_7}}}} \bigr)\]</div>
+</div>
+<p>where <span class="math notranslate nohighlight">\(b\)</span> denotes normal bosonic operators constructed analogously with the normal fermionic operators <span class="math notranslate nohighlight">\(a\)</span></p>
+</section>
+<section id="register-index-spaces">
+<h2>Register Index Spaces<a class="headerlink" href="#register-index-spaces" title="Link to this heading">¶</a></h2>
+<p>Tensor expressions annotated by <a class="reference external" href="https://en.wikipedia.org/wiki/Abstract_index_notation">abstract indices</a> are common. In some contexts all tensor
+modes refer to the same range or underlying vector space (as in all examples shown so far); then there is no need to distinguish modes of different
+types. But in some contexts indices carry important semantic meaning. For example, the energy expression in the
+<a class="reference external" href="https://doi.org/10.1017/CBO9780511596834">coupled-cluster method</a>,</p>
+<div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[E_\mathrm{CC} =  F^{a_1}_ {i_1} t^{i_1}_ {a_1} + \frac{1}{4} \bar{g}^{a_1 a_2}_ {i_1 i_2} (t^{i_1 i_2}_ {a_1 a_2} + 2 t^{i_1}_ {a_1} t^{i_2}_ {a_2})\]</div>
+</div>
+<p>contains tensors with 2 types of modes, denoted by <span class="math notranslate nohighlight">\(i\)</span> and <span class="math notranslate nohighlight">\(a\)</span>, that represent single-particle (SP) states occupied and unoccupied in the
+reference state, respectively. To simplify symbolic manipulation of such expressions SeQuant allows to define a custom vocabulary of index spaces and
+to define their set-theoretic relationships. The following example illustrates the full space denoted by <span class="math notranslate nohighlight">\(p\)</span> partitioned into occupied <span class="math notranslate nohighlight">\(i\)</span>
+and unoccupied <span class="math notranslate nohighlight">\(a\)</span> base subspaces:</p>
+<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="k">using</span><span class="w"> </span><span class="k">namespace</span><span class="w"> </span><span class="nn">sequant</span><span class="p">;</span>
+<span class="n">IndexSpaceRegistry</span><span class="w"> </span><span class="n">isr</span><span class="p">;</span>
+
+<span class="c1">// base spaces</span>
+<span class="n">isr</span><span class="p">.</span><span class="n">add</span><span class="p">(</span><span class="sa">L</span><span class="s">&quot;i&quot;</span><span class="p">,</span><span class="w"> </span><span class="mb">0b01</span><span class="p">).</span><span class="n">add</span><span class="p">(</span><span class="sa">L</span><span class="s">&quot;a&quot;</span><span class="p">,</span><span class="w"> </span><span class="mb">0b10</span><span class="p">);</span>
+<span class="c1">// union of 2 base spaces</span>
+<span class="c1">// can create manually, as isr.add(L&quot;p&quot;, 0b11) , or explicitly ...</span>
+<span class="n">isr</span><span class="p">.</span><span class="n">add_union</span><span class="p">(</span><span class="sa">L</span><span class="s">&quot;p&quot;</span><span class="p">,</span><span class="w"> </span><span class="p">{</span><span class="sa">L</span><span class="s">&quot;i&quot;</span><span class="p">,</span><span class="w"> </span><span class="sa">L</span><span class="s">&quot;a&quot;</span><span class="p">});</span><span class="w">  </span><span class="c1">// union of i and a</span>
+
+<span class="c1">// can access unions and intersections of base and composite spaces</span>
+<span class="n">assert</span><span class="p">(</span><span class="n">isr</span><span class="p">.</span><span class="n">unIon</span><span class="p">(</span><span class="sa">L</span><span class="s">&quot;i&quot;</span><span class="p">,</span><span class="w"> </span><span class="sa">L</span><span class="s">&quot;a&quot;</span><span class="p">)</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">isr</span><span class="p">.</span><span class="n">retrieve</span><span class="p">(</span><span class="sa">L</span><span class="s">&quot;p&quot;</span><span class="p">));</span>
+<span class="n">assert</span><span class="p">(</span><span class="n">isr</span><span class="p">.</span><span class="n">intersection</span><span class="p">(</span><span class="sa">L</span><span class="s">&quot;p&quot;</span><span class="p">,</span><span class="w"> </span><span class="sa">L</span><span class="s">&quot;i&quot;</span><span class="p">)</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">isr</span><span class="p">.</span><span class="n">retrieve</span><span class="p">(</span><span class="sa">L</span><span class="s">&quot;i&quot;</span><span class="p">));</span>
+
+<span class="c1">// to use the vocabulary defined by isr use it to make a Context object and</span>
+<span class="c1">// make it the default</span>
+<span class="n">set_default_context</span><span class="p">(</span><span class="n">Context</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">move</span><span class="p">(</span><span class="n">isr</span><span class="p">)));</span>
+
+<span class="c1">// now can use space labels to construct Index objects representing said</span>
+<span class="c1">// spaces</span>
+<span class="n">Index</span><span class="w"> </span><span class="n">i1</span><span class="p">(</span><span class="sa">L</span><span class="s">&quot;i_1&quot;</span><span class="p">);</span>
+<span class="n">Index</span><span class="w"> </span><span class="n">a1</span><span class="p">(</span><span class="sa">L</span><span class="s">&quot;a_1&quot;</span><span class="p">);</span>
+<span class="n">Index</span><span class="w"> </span><span class="n">p1</span><span class="p">(</span><span class="sa">L</span><span class="s">&quot;p_1&quot;</span><span class="p">);</span>
+
+<span class="c1">// set theoretic operations on spaces</span>
+<span class="n">assert</span><span class="p">(</span><span class="n">i1</span><span class="p">.</span><span class="n">space</span><span class="p">().</span><span class="n">type</span><span class="p">().</span><span class="n">includes</span><span class="p">(</span><span class="n">a1</span><span class="p">.</span><span class="n">space</span><span class="p">().</span><span class="n">type</span><span class="p">())</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="nb">false</span><span class="p">);</span>
+</pre></div>
+</div>
+<p>This and other vocabularies commonly used in quantum many-body context are supported out-of-the-box by SeQuant; their definitions are in <code class="code docutils literal notranslate"><span class="pre">SeQuant/domain/mbpt/convention.hpp</span></code>. The previous example is equivalent to the following:</p>
+<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="k">using</span><span class="w"> </span><span class="k">namespace</span><span class="w"> </span><span class="nn">sequant</span><span class="p">;</span>
+<span class="k">using</span><span class="w"> </span><span class="k">namespace</span><span class="w"> </span><span class="nn">sequant</span><span class="o">::</span><span class="nn">mbpt</span><span class="p">;</span>
+
+<span class="c1">// makes 2 base spaces, i and a, and their union</span>
+<span class="k">auto</span><span class="w"> </span><span class="n">isr</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">make_min_sr_spaces</span><span class="p">();</span>
+<span class="n">set_default_context</span><span class="p">(</span><span class="n">Context</span><span class="p">(</span><span class="n">isr</span><span class="p">));</span>
+
+<span class="c1">// set theoretic operations on spaces</span>
+<span class="k">auto</span><span class="w"> </span><span class="n">i1</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Index</span><span class="p">(</span><span class="sa">L</span><span class="s">&quot;i_1&quot;</span><span class="p">);</span>
+<span class="k">auto</span><span class="w"> </span><span class="n">a1</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Index</span><span class="p">(</span><span class="sa">L</span><span class="s">&quot;a_1&quot;</span><span class="p">);</span>
+<span class="n">assert</span><span class="p">(</span><span class="n">i1</span><span class="p">.</span><span class="n">space</span><span class="p">().</span><span class="n">attr</span><span class="p">().</span><span class="n">intersection</span><span class="p">(</span><span class="n">a1</span><span class="p">.</span><span class="n">space</span><span class="p">().</span><span class="n">attr</span><span class="p">()).</span><span class="n">type</span><span class="p">()</span><span class="w"> </span><span class="o">==</span>
+<span class="w">       </span><span class="n">IndexSpace</span><span class="o">::</span><span class="n">Type</span><span class="o">::</span><span class="n">null</span><span class="p">);</span>
+<span class="n">assert</span><span class="p">(</span><span class="n">i1</span><span class="p">.</span><span class="n">space</span><span class="p">().</span><span class="n">attr</span><span class="p">().</span><span class="n">intersection</span><span class="p">(</span><span class="n">a1</span><span class="p">.</span><span class="n">space</span><span class="p">().</span><span class="n">attr</span><span class="p">()).</span><span class="n">qns</span><span class="p">()</span><span class="w"> </span><span class="o">==</span>
+<span class="w">       </span><span class="n">mbpt</span><span class="o">::</span><span class="n">Spin</span><span class="o">::</span><span class="n">any</span><span class="p">);</span>
+</pre></div>
+</div>
+<p>Bitset representation of index spaces allows to define set-theoretic operations naturally. Bitset-based representation is used not only for index space <em>type</em> attribute (<code class="code docutils literal notranslate"><span class="pre">IndexSpace::Type</span></code>) but also for the <em>quantum numbers</em> attribute (<code class="code docutils literal notranslate"><span class="pre">IndexSpace::QuantumNumbers</span></code>). The latter can be used to represent spin quantum numbers, particle types, etc.
+The main difference of the last example with the original example is that the <code class="code docutils literal notranslate"><span class="pre">make_min_sr_spaces()</span></code> factory changes the quantum numbers used by default (<code class="code docutils literal notranslate"><span class="pre">mbpt::Spin::any</span></code>) to make spin algebraic manipulations (like tracing out spin degrees of freedom) easier. Users can create their own definitions to suit their needs, but the vast majority of users will not need to venture outside of the predefined vocabularies.</p>
+<p>Notice that the set-theoretic operations are only partially automated. It is the user’s responsibility to define any and all unions and intersections of base spaces that they may encounter in their context. For this reason <a class="reference internal" href="../../api/classsequant_1_1_index_space_registry.html#_CPPv4N7sequant18IndexSpaceRegistryE" title="sequant::IndexSpaceRegistry"><code class="xref cpp cpp-class docutils literal notranslate"><span class="pre">sequant::IndexSpaceRegistry</span></code></a> has its own <code class="code docutils literal notranslate"><span class="pre">unIon()</span></code> and <code class="code docutils literal notranslate"><span class="pre">intersection()</span></code> methods that perform error checking to ensure that only registered spaces are defined.</p>
+<section id="quasiparticles">
+<h3>Quasiparticles<a class="headerlink" href="#quasiparticles" title="Link to this heading">¶</a></h3>
+<p>In most cases we are interested in using SeQuant to manipulate expressions involving operators in normal order relative to a vacuum state with a finite number of particles, rather than with respect to the genuine vacuum with zero particles. The choice of vacuum state as well as other related traits (whether the SP states are orthonormal, etc.) is defined by the implicit global context. The SeQuant programs until now used the genuine vacuum. The active context can be examined by calling <code class="code docutils literal notranslate"><span class="pre">get_default_context()</span></code>, changed via <code class="code docutils literal notranslate"><span class="pre">set_default_context()</span></code>, and reset to the default via <code class="code docutils literal notranslate"><span class="pre">reset_default_context()</span></code>:</p>
+<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="k">using</span><span class="w"> </span><span class="k">namespace</span><span class="w"> </span><span class="nn">sequant</span><span class="p">;</span>
+
+<span class="c1">// the default is to use genuine vacuum</span>
+<span class="n">assert</span><span class="p">(</span><span class="n">get_default_context</span><span class="p">().</span><span class="n">vacuum</span><span class="p">()</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">Vacuum</span><span class="o">::</span><span class="n">Physical</span><span class="p">);</span>
+<span class="c1">// make default IndexSpaceRegistry</span>
+<span class="n">IndexSpaceRegistry</span><span class="w"> </span><span class="n">isr</span><span class="p">;</span>
+<span class="c1">// now set the context to a single product of SP states</span>
+<span class="n">set_default_context</span><span class="p">(</span><span class="n">Context</span><span class="p">{</span><span class="n">isr</span><span class="p">,</span><span class="w"> </span><span class="n">Vacuum</span><span class="o">::</span><span class="n">SingleProduct</span><span class="p">,</span>
+<span class="w">                            </span><span class="n">IndexSpaceMetric</span><span class="o">::</span><span class="n">Unit</span><span class="p">,</span><span class="w"> </span><span class="n">BraKetSymmetry</span><span class="o">::</span><span class="n">symm</span><span class="p">});</span>
+<span class="n">assert</span><span class="p">(</span><span class="n">get_default_context</span><span class="p">().</span><span class="n">vacuum</span><span class="p">()</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">Vacuum</span><span class="o">::</span><span class="n">SingleProduct</span><span class="p">);</span>
+<span class="c1">// reset the context back to the default</span>
+<span class="n">reset_default_context</span><span class="p">();</span>
+<span class="n">assert</span><span class="p">(</span><span class="n">get_default_context</span><span class="p">().</span><span class="n">vacuum</span><span class="p">()</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">Vacuum</span><span class="o">::</span><span class="n">Physical</span><span class="p">);</span>
+</pre></div>
+</div>
+<p>However, to deal with the single-product vacuum it is necessary to register at least one space and announce it as occupied in the vacuum state:</p>
+<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="n">isr</span><span class="p">.</span><span class="n">add</span><span class="p">(</span><span class="sa">L</span><span class="s">&quot;y&quot;</span><span class="p">,</span><span class="w"> </span><span class="mb">0b01</span><span class="p">).</span><span class="n">vacuum_occupied_space</span><span class="p">(</span><span class="sa">L</span><span class="s">&quot;i&quot;</span><span class="p">);</span>
+</pre></div>
+</div>
+<p>or, shorter,</p>
+<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="n">isr</span><span class="p">.</span><span class="n">add</span><span class="p">(</span><span class="sa">L</span><span class="s">&quot;y&quot;</span><span class="p">,</span><span class="w"> </span><span class="mb">0b01</span><span class="p">,</span><span class="w"> </span><span class="n">is_vacuum_occupied</span><span class="p">);</span>
+</pre></div>
+</div>
+<p>It is also necessary to specify the <em>complete</em> space (union of all base spaces) so that the the space of unoccupied SP states can be determined:</p>
+<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="n">isr</span><span class="p">.</span><span class="n">add</span><span class="p">(</span><span class="sa">L</span><span class="s">&quot;y&quot;</span><span class="p">,</span><span class="w"> </span><span class="mb">0b01</span><span class="p">,</span><span class="w"> </span><span class="n">is_vacuum_occupied</span><span class="p">)</span>
+<span class="w">    </span><span class="p">.</span><span class="n">add</span><span class="p">(</span><span class="sa">L</span><span class="s">&quot;z&quot;</span><span class="p">,</span><span class="w"> </span><span class="mb">0b10</span><span class="p">)</span>
+<span class="w">    </span><span class="p">.</span><span class="n">add</span><span class="p">(</span><span class="sa">L</span><span class="s">&quot;p&quot;</span><span class="p">,</span><span class="w"> </span><span class="mb">0b11</span><span class="p">,</span><span class="w"> </span><span class="n">is_complete</span><span class="p">);</span>
+</pre></div>
+</div>
+<p>The Wick’s theorem code itself is independent of the choice of vacuum:</p>
+<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;SeQuant/core/context.hpp&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;SeQuant/core/wick.hpp&gt;</span>
+
+<span class="kt">int</span><span class="w"> </span><span class="nf">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="k">using</span><span class="w"> </span><span class="k">namespace</span><span class="w"> </span><span class="nn">sequant</span><span class="p">;</span>
+
+<span class="w">  </span><span class="n">set_default_context</span><span class="p">(</span><span class="n">Context</span><span class="p">{</span><span class="n">IndexSpaceRegistry</span><span class="p">{}</span>
+<span class="w">                                  </span><span class="p">.</span><span class="n">add</span><span class="p">(</span><span class="sa">L</span><span class="s">&quot;y&quot;</span><span class="p">,</span><span class="w"> </span><span class="mb">0b01</span><span class="p">,</span><span class="w"> </span><span class="n">is_vacuum_occupied</span><span class="p">)</span>
+<span class="w">                                  </span><span class="p">.</span><span class="n">add</span><span class="p">(</span><span class="sa">L</span><span class="s">&quot;z&quot;</span><span class="p">,</span><span class="w"> </span><span class="mb">0b10</span><span class="p">)</span>
+<span class="w">                                  </span><span class="p">.</span><span class="n">add</span><span class="p">(</span><span class="sa">L</span><span class="s">&quot;p&quot;</span><span class="p">,</span><span class="w"> </span><span class="mb">0b11</span><span class="p">,</span><span class="w"> </span><span class="n">is_complete</span><span class="p">),</span>
+<span class="w">                              </span><span class="n">Vacuum</span><span class="o">::</span><span class="n">SingleProduct</span><span class="p">});</span>
+
+<span class="w">  </span><span class="k">auto</span><span class="w"> </span><span class="n">cp1</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">fcrex</span><span class="p">(</span><span class="sa">L</span><span class="s">&quot;p_1&quot;</span><span class="p">),</span><span class="w"> </span><span class="n">cp2</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">fcrex</span><span class="p">(</span><span class="sa">L</span><span class="s">&quot;p_2&quot;</span><span class="p">);</span>
+<span class="w">  </span><span class="k">auto</span><span class="w"> </span><span class="n">ap3</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">fannx</span><span class="p">(</span><span class="sa">L</span><span class="s">&quot;p_3&quot;</span><span class="p">),</span><span class="w"> </span><span class="n">ap4</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">fannx</span><span class="p">(</span><span class="sa">L</span><span class="s">&quot;p_4&quot;</span><span class="p">);</span>
+
+<span class="w">  </span><span class="n">std</span><span class="o">::</span><span class="n">wcout</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">to_latex</span><span class="p">(</span><span class="n">ap3</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">cp1</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">ap4</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">cp2</span><span class="p">)</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">&quot; = &quot;</span>
+<span class="w">             </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">to_latex</span><span class="p">(</span><span class="n">FWickTheorem</span><span class="p">{</span><span class="n">ap3</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">cp1</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">ap4</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">cp2</span><span class="p">}</span>
+<span class="w">                             </span><span class="p">.</span><span class="n">full_contractions</span><span class="p">(</span><span class="nb">false</span><span class="p">)</span>
+<span class="w">                             </span><span class="p">.</span><span class="n">compute</span><span class="p">())</span>
+<span class="w">             </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">endl</span><span class="p">;</span>
+
+<span class="w">  </span><span class="k">return</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>produces</p>
+<div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[{{\tilde{a}_ {{p_3}}}{\tilde{a}^{{p_1}}}{\tilde{a}_ {{p_4}}}{\tilde{a}^{{p_2}}}} = \bigl({\tilde{a}^{{p_1}{p_2}}_ {{p_3}{p_4}}} - {{s^{{p_1}}_ {{z_1}}}{s^{{z_1}}_ {{p_3}}}{\tilde{a}^{{p_2}}_ {{p_4}}}} - {{s^{{p_2}}_ {{z_1}}}{s^{{z_1}}_ {{p_4}}}{\tilde{a}^{{p_1}}_ {{p_3}}}} - {{s^{{p_1}}_ {{y_1}}}{s^{{y_1}}_ {{p_4}}}{\tilde{a}^{{p_2}}_ {{p_3}}}}
++ {{s^{{p_2}}_ {{z_1}}}{s^{{z_1}}_ {{p_3}}}{\tilde{a}^{{p_1}}_ {{p_4}}}} + {{s^{{p_1}}_ {{z_1}}}{s^{{p_2}}_ {{z_2}}}{s^{{z_1}}_ {{p_3}}}{s^{{z_2}}_ {{p_4}}}} + {{s^{{p_1}}_ {{y_1}}}{s^{{p_2}}_ {{z_1}}}{s^{{z_1}}_ {{p_3}}}{s^{{y_1}}_ {{p_4}}}}\bigr)\]</div>
+</div>
+<p>Note that:</p>
+<ul class="simple">
+<li><p>the tilde in <span class="math notranslate nohighlight">\(\tilde{a}\)</span> denotes normal order with respect to single-product vacuum</p></li>
+<li><p>Einstein summation convention is implied, i.e., indices that appear twice in a given product (once in superscript, once in subscript) are summed over.</p></li>
+</ul>
+</section>
+</section>
+<section id="operators">
+<h2>Operators<a class="headerlink" href="#operators" title="Link to this heading">¶</a></h2>
+<p>Development of SeQuant is primarily motivated by the perturbative many-body methods, collectively referred to here as Many-Body Perturbation Theory (MBPT). Examples of such methods include the <a class="reference external" href="https://doi.org/10.1017/CBO9780511596834">coupled-cluster (CC) method</a> and <a class="reference external" href="https://doi.org/10.1103/PhysRev.139.A796">GW</a>. The typical use case is to compute canonical forms of products of operators. For example, consider the coupled-cluster doubles (CCD) method.
+<em>Amplitudes</em> <span class="math notranslate nohighlight">\(t^{i_1 i_2}_ {a_1 a_2}\)</span> of the cluster operator,</p>
+<div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[\hat{t} \equiv \hat{t}_ 2 = \frac{1}{4} t^{i_1 i_2}_ {a_1 a_2} a_ {i_1 i_2}^{a_1 a_2},\]</div>
+</div>
+<p>are determined by solving the CCD equations:</p>
+<div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[\forall i_1, i_2, a_1, a_2: \quad 0 = \langle0\vert a^{i_1 i_2}_ {a_1 a_2} \exp(-\hat{t}_ 2) \hat{H} \exp(\hat{t}_ 2) \vert 0 \rangle = \langle0\vert a^{i_1 i_2}_ {a_1 a_2} \bigl( \hat{H} + [\hat{H}, \hat{t}_ 2] + \frac{1}{2} [[\hat{H}, \hat{t}_ 2], \hat{t}_ 2] \bigr) \vert 0 \rangle.\]</div>
+</div>
+<p>A pedestrian way to compose such expression is to define a cluster operator object using SeQuant tensors and normal-ordered operators:</p>
+<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="k">auto</span><span class="w"> </span><span class="n">t2</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ex</span><span class="o">&lt;</span><span class="n">Constant</span><span class="o">&gt;</span><span class="p">(</span><span class="n">rational</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="mi">4</span><span class="p">))</span><span class="w"> </span><span class="o">*</span>
+<span class="w">          </span><span class="n">ex</span><span class="o">&lt;</span><span class="n">Tensor</span><span class="o">&gt;</span><span class="p">(</span><span class="sa">L</span><span class="s">&quot;t&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">bra</span><span class="p">{</span><span class="sa">L</span><span class="s">&quot;a_1&quot;</span><span class="p">,</span><span class="w"> </span><span class="sa">L</span><span class="s">&quot;a_2&quot;</span><span class="p">},</span><span class="w"> </span><span class="n">ket</span><span class="p">{</span><span class="sa">L</span><span class="s">&quot;i_1&quot;</span><span class="p">,</span><span class="w"> </span><span class="sa">L</span><span class="s">&quot;i_2&quot;</span><span class="p">},</span>
+<span class="w">                     </span><span class="n">Symmetry</span><span class="o">::</span><span class="n">antisymm</span><span class="p">)</span><span class="w"> </span><span class="o">*</span>
+<span class="w">          </span><span class="n">ex</span><span class="o">&lt;</span><span class="n">FNOperator</span><span class="o">&gt;</span><span class="p">(</span><span class="n">cre</span><span class="p">{</span><span class="sa">L</span><span class="s">&quot;a_1&quot;</span><span class="p">,</span><span class="w"> </span><span class="sa">L</span><span class="s">&quot;a_2&quot;</span><span class="p">},</span><span class="w"> </span><span class="n">ann</span><span class="p">{</span><span class="sa">L</span><span class="s">&quot;i_1&quot;</span><span class="p">,</span><span class="w"> </span><span class="sa">L</span><span class="s">&quot;i_2&quot;</span><span class="p">});</span>
+</pre></div>
+</div>
+<p>The normal-ordered Hamiltonian is defined similarly as a sum of 1- and 2-body contributions:</p>
+<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="k">auto</span><span class="w"> </span><span class="n">H</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ex</span><span class="o">&lt;</span><span class="n">Tensor</span><span class="o">&gt;</span><span class="p">(</span><span class="sa">L</span><span class="s">&quot;f&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">bra</span><span class="p">{</span><span class="sa">L</span><span class="s">&quot;p_1&quot;</span><span class="p">},</span><span class="w"> </span><span class="n">ket</span><span class="p">{</span><span class="sa">L</span><span class="s">&quot;p_2&quot;</span><span class="p">},</span><span class="w"> </span><span class="n">Symmetry</span><span class="o">::</span><span class="n">nonsymm</span><span class="p">)</span><span class="w"> </span><span class="o">*</span>
+<span class="w">             </span><span class="n">ex</span><span class="o">&lt;</span><span class="n">FNOperator</span><span class="o">&gt;</span><span class="p">(</span><span class="n">cre</span><span class="p">{</span><span class="sa">L</span><span class="s">&quot;p_1&quot;</span><span class="p">},</span><span class="w"> </span><span class="n">ann</span><span class="p">{</span><span class="sa">L</span><span class="s">&quot;p_2&quot;</span><span class="p">})</span><span class="w"> </span><span class="o">+</span>
+<span class="w">         </span><span class="n">ex</span><span class="o">&lt;</span><span class="n">Constant</span><span class="o">&gt;</span><span class="p">(</span><span class="n">rational</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="mi">4</span><span class="p">))</span><span class="w"> </span><span class="o">*</span>
+<span class="w">             </span><span class="n">ex</span><span class="o">&lt;</span><span class="n">Tensor</span><span class="o">&gt;</span><span class="p">(</span><span class="sa">L</span><span class="s">&quot;g&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">bra</span><span class="p">{</span><span class="sa">L</span><span class="s">&quot;p_1&quot;</span><span class="p">,</span><span class="w"> </span><span class="sa">L</span><span class="s">&quot;p_2&quot;</span><span class="p">},</span><span class="w"> </span><span class="n">ket</span><span class="p">{</span><span class="sa">L</span><span class="s">&quot;p_3&quot;</span><span class="p">,</span><span class="w"> </span><span class="sa">L</span><span class="s">&quot;p_4&quot;</span><span class="p">},</span>
+<span class="w">                        </span><span class="n">Symmetry</span><span class="o">::</span><span class="n">antisymm</span><span class="p">)</span><span class="w"> </span><span class="o">*</span>
+<span class="w">             </span><span class="n">ex</span><span class="o">&lt;</span><span class="n">FNOperator</span><span class="o">&gt;</span><span class="p">(</span><span class="n">cre</span><span class="p">{</span><span class="sa">L</span><span class="s">&quot;p_1&quot;</span><span class="p">,</span><span class="w"> </span><span class="sa">L</span><span class="s">&quot;p_2&quot;</span><span class="p">},</span><span class="w"> </span><span class="n">ann</span><span class="p">{</span><span class="sa">L</span><span class="s">&quot;p_3&quot;</span><span class="p">,</span><span class="w"> </span><span class="sa">L</span><span class="s">&quot;p_4&quot;</span><span class="p">});</span>
+</pre></div>
+</div>
+<p>Note that the compact definition of the Hamiltonian is due to the use of the union (<span class="math notranslate nohighlight">\(p\)</span>) of base occupied (<span class="math notranslate nohighlight">\(i\)</span>) and unoccupied (<span class="math notranslate nohighlight">\(a\)</span>) spaces. Many other symbolic algebras only support use of nonoverlapping base spaces, in terms of which Hamiltonian and other tensor expressions would have a much more verbose form.
+The commutator of the Hamiltonian and cluster operators is trivially composed:</p>
+<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="k">auto</span><span class="w"> </span><span class="n">commutator</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[](</span><span class="k">auto</span><span class="w"> </span><span class="n">op1</span><span class="p">,</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">op2</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="k">return</span><span class="w"> </span><span class="n">simplify</span><span class="p">(</span><span class="n">op1</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">op2</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">op2</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">op1</span><span class="p">);</span>
+<span class="p">};</span>
+
+<span class="k">auto</span><span class="w"> </span><span class="n">c_ht</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">commutator</span><span class="p">(</span><span class="n">H</span><span class="p">,</span><span class="w"> </span><span class="n">t2</span><span class="p">);</span>
+</pre></div>
+</div>
+<p>Note the use of <code class="code docutils literal notranslate"><span class="pre">simplify</span></code> to rewrite an expression in a simpler form. Its role will be emphasized later.
+Unfortunately, we immediately run into the limitation of the “pedestrian” approach. Namely, the double commutator cannot be correctly obtained as</p>
+<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="k">auto</span><span class="w"> </span><span class="n">c_htt_v1</span><span class="w"> </span><span class="o">=</span>
+<span class="w">    </span><span class="n">ex</span><span class="o">&lt;</span><span class="n">Constant</span><span class="o">&gt;</span><span class="p">(</span><span class="n">rational</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">))</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">commutator</span><span class="p">(</span><span class="n">commutator</span><span class="p">(</span><span class="n">H</span><span class="p">,</span><span class="w"> </span><span class="n">t2</span><span class="p">),</span><span class="w"> </span><span class="n">t2</span><span class="p">);</span>
+</pre></div>
+</div>
+<p>due to the explicit use of specific dummy indices in the definition of <code class="code docutils literal notranslate"><span class="pre">t2</span></code>. Using it more than once in a given product will produce an expresson where each dummy index appears more than 2 times, breaking the Einstein summation convention.</p>
+<p>The issue is actually not the reuse of the same of operator object, but the reuse of dummy indices. A straightforward, but brittle, solution is to ensure that each dummy index is only used once. E.g.,
+to use <span class="math notranslate nohighlight">\(\hat{t}_2\)</span> more than once in an expression we must make several versions of it, each with a separate set of dummy indices:</p>
+<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="k">auto</span><span class="w"> </span><span class="n">t2_0</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ex</span><span class="o">&lt;</span><span class="n">Constant</span><span class="o">&gt;</span><span class="p">(</span><span class="n">rational</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="mi">4</span><span class="p">))</span><span class="w"> </span><span class="o">*</span>
+<span class="w">            </span><span class="n">ex</span><span class="o">&lt;</span><span class="n">Tensor</span><span class="o">&gt;</span><span class="p">(</span><span class="sa">L</span><span class="s">&quot;t&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">bra</span><span class="p">{</span><span class="sa">L</span><span class="s">&quot;a_1&quot;</span><span class="p">,</span><span class="w"> </span><span class="sa">L</span><span class="s">&quot;a_2&quot;</span><span class="p">},</span><span class="w"> </span><span class="n">ket</span><span class="p">{</span><span class="sa">L</span><span class="s">&quot;i_1&quot;</span><span class="p">,</span><span class="w"> </span><span class="sa">L</span><span class="s">&quot;i_2&quot;</span><span class="p">},</span>
+<span class="w">                       </span><span class="n">Symmetry</span><span class="o">::</span><span class="n">antisymm</span><span class="p">)</span><span class="w"> </span><span class="o">*</span>
+<span class="w">            </span><span class="n">ex</span><span class="o">&lt;</span><span class="n">FNOperator</span><span class="o">&gt;</span><span class="p">(</span><span class="n">cre</span><span class="p">{</span><span class="sa">L</span><span class="s">&quot;a_1&quot;</span><span class="p">,</span><span class="w"> </span><span class="sa">L</span><span class="s">&quot;a_2&quot;</span><span class="p">},</span><span class="w"> </span><span class="n">ann</span><span class="p">{</span><span class="sa">L</span><span class="s">&quot;i_1&quot;</span><span class="p">,</span><span class="w"> </span><span class="sa">L</span><span class="s">&quot;i_2&quot;</span><span class="p">});</span>
+
+<span class="k">auto</span><span class="w"> </span><span class="n">t2_1</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ex</span><span class="o">&lt;</span><span class="n">Constant</span><span class="o">&gt;</span><span class="p">(</span><span class="n">rational</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="mi">4</span><span class="p">))</span><span class="w"> </span><span class="o">*</span>
+<span class="w">            </span><span class="n">ex</span><span class="o">&lt;</span><span class="n">Tensor</span><span class="o">&gt;</span><span class="p">(</span><span class="sa">L</span><span class="s">&quot;t&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">bra</span><span class="p">{</span><span class="sa">L</span><span class="s">&quot;a_3&quot;</span><span class="p">,</span><span class="w"> </span><span class="sa">L</span><span class="s">&quot;a_4&quot;</span><span class="p">},</span><span class="w"> </span><span class="n">ket</span><span class="p">{</span><span class="sa">L</span><span class="s">&quot;i_3&quot;</span><span class="p">,</span><span class="w"> </span><span class="sa">L</span><span class="s">&quot;i_4&quot;</span><span class="p">},</span>
+<span class="w">                       </span><span class="n">Symmetry</span><span class="o">::</span><span class="n">antisymm</span><span class="p">)</span><span class="w"> </span><span class="o">*</span>
+<span class="w">            </span><span class="n">ex</span><span class="o">&lt;</span><span class="n">FNOperator</span><span class="o">&gt;</span><span class="p">(</span><span class="n">cre</span><span class="p">{</span><span class="sa">L</span><span class="s">&quot;a_3&quot;</span><span class="p">,</span><span class="w"> </span><span class="sa">L</span><span class="s">&quot;a_4&quot;</span><span class="p">},</span><span class="w"> </span><span class="n">ann</span><span class="p">{</span><span class="sa">L</span><span class="s">&quot;i_3&quot;</span><span class="p">,</span><span class="w"> </span><span class="sa">L</span><span class="s">&quot;i_4&quot;</span><span class="p">});</span>
+
+<span class="k">auto</span><span class="w"> </span><span class="n">c_htt</span><span class="w"> </span><span class="o">=</span>
+<span class="w">    </span><span class="n">ex</span><span class="o">&lt;</span><span class="n">Constant</span><span class="o">&gt;</span><span class="p">(</span><span class="n">rational</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="mi">4</span><span class="p">))</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">commutator</span><span class="p">(</span><span class="n">commutator</span><span class="p">(</span><span class="n">H</span><span class="p">,</span><span class="w"> </span><span class="n">t2_0</span><span class="p">),</span><span class="w"> </span><span class="n">t2_1</span><span class="p">);</span>
+</pre></div>
+</div>
+<p>This is too error-prone for making complex expressions. A better way is to represent <span class="math notranslate nohighlight">\(\hat{t}_2\)</span> by an object that generates tensor form with unique dummy indices generated on the fly. in SeQuant such MBPT <em>operators</em> live in <code class="code docutils literal notranslate"><span class="pre">mbpt</span></code> namespace. The entire CCD amplitude equation is evaluated as follows:</p>
+<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;SeQuant/core/context.hpp&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;SeQuant/core/expr.hpp&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;SeQuant/core/op.hpp&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;SeQuant/core/tensor.hpp&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;SeQuant/domain/mbpt/convention.hpp&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;SeQuant/domain/mbpt/op.hpp&gt;</span>
+
+<span class="kr">inline</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">commutator</span><span class="p">(</span><span class="k">auto</span><span class="w"> </span><span class="n">op1</span><span class="p">,</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">op2</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="n">op1</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">op2</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">op2</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">op1</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
+
+<span class="kt">int</span><span class="w"> </span><span class="n">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="k">using</span><span class="w"> </span><span class="k">namespace</span><span class="w"> </span><span class="nn">sequant</span><span class="p">;</span>
+<span class="w">  </span><span class="k">using</span><span class="w"> </span><span class="k">namespace</span><span class="w"> </span><span class="nn">sequant</span><span class="o">::</span><span class="nn">mbpt</span><span class="p">;</span>
+<span class="w">  </span><span class="n">set_default_context</span><span class="p">(</span><span class="n">Context</span><span class="p">(</span><span class="n">make_min_sr_spaces</span><span class="p">(),</span><span class="w"> </span><span class="n">Vacuum</span><span class="o">::</span><span class="n">SingleProduct</span><span class="p">));</span>
+
+<span class="w">  </span><span class="k">auto</span><span class="w"> </span><span class="n">hbar</span><span class="w"> </span><span class="o">=</span>
+<span class="w">      </span><span class="n">H</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">commutator</span><span class="p">(</span><span class="n">H</span><span class="p">(</span><span class="mi">2</span><span class="p">),</span><span class="w"> </span><span class="n">T_</span><span class="p">(</span><span class="mi">2</span><span class="p">))</span><span class="w"> </span><span class="o">+</span>
+<span class="w">      </span><span class="n">ex</span><span class="o">&lt;</span><span class="n">Constant</span><span class="o">&gt;</span><span class="p">(</span><span class="n">rational</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">))</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">commutator</span><span class="p">(</span><span class="n">commutator</span><span class="p">(</span><span class="n">H</span><span class="p">(</span><span class="mi">2</span><span class="p">),</span><span class="w"> </span><span class="n">T_</span><span class="p">(</span><span class="mi">2</span><span class="p">)),</span><span class="w"> </span><span class="n">T_</span><span class="p">(</span><span class="mi">2</span><span class="p">));</span>
+<span class="w">  </span><span class="k">auto</span><span class="w"> </span><span class="n">ccd_eq</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">vac_av</span><span class="p">(</span><span class="n">P</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">hbar</span><span class="p">);</span>
+<span class="w">  </span><span class="n">std</span><span class="o">::</span><span class="n">wcout</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">&quot;&lt;&quot;</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">to_latex</span><span class="p">(</span><span class="n">P</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">hbar</span><span class="p">)</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">&quot;&gt; = &quot;</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">to_latex</span><span class="p">(</span><span class="n">ccd_eq</span><span class="p">)</span>
+<span class="w">             </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">endl</span><span class="p">;</span>
+
+<span class="w">  </span><span class="k">return</span><span class="w"> </span><span class="mi">0</span><span class="p">;</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>The result is</p>
+<div class="math-wrapper docutils container">
+<div class="math notranslate nohighlight">
+\[\bigl({{{\frac{1}{4}}}{A^{{a_1}{a_2}}_ {{i_1}{i_2}}}{\bar{g}^{{i_1}{i_2}}_ {{a_1}{a_2}}}} - {{{\frac{1}{2}}}{A^{{a_1}{a_2}}_ {{i_1}{i_2}}}{f^{{a_3}}_ {{a_1}}}{\bar{t}^{{i_1}{i_2}}_ {{a_2}{a_3}}}} - {{A^{{a_1}{a_2}}_ {{i_1}{i_2}}}{\bar{g}^{{i_1}{a_3}}_ {{i_3}{a_1}}}{\bar{t}^{{i_2}{i_3}}_ {{a_2}{a_3}}}} + {{{\frac{1}{8}}}{A^{{a_1}{a_2}}_ {{i_1}{i_2}}}{\bar{g}^{{a_3}{a_4}}_ {{a_1}{a_2}}}{\bar{t}^{{i_1}{i_2}}_ {{a_3}{a_4}}}}
++ {{{\frac{1}{8}}}{A^{{a_1}{a_2}}_ {{i_1}{i_2}}}{\bar{g}^{{i_1}{i_2}}_ {{i_3}{i_4}}}{\bar{t}^{{i_3}{i_4}}_ {{a_1}{a_2}}}} + {{{\frac{1}{2}}}{A^{{a_1}{a_2}}_ {{i_1}{i_2}}}{f^{{i_1}}_ {{i_3}}}{\bar{t}^{{i_2}{i_3}}_ {{a_1}{a_2}}}} + {{{\frac{1}{16}}}{A^{{a_1}{a_2}}_ {{i_1}{i_2}}}{\bar{g}^{{a_3}{a_4}}_ {{i_3}{i_4}}}{\bar{t}^{{i_1}{i_2}}_ {{a_3}{a_4}}}{\bar{t}^{{i_3}{i_4}}_ {{a_1}{a_2}}}}
+- {{{\frac{1}{4}}}{A^{{a_1}{a_2}}_ {{i_1}{i_2}}}{\bar{g}^{{a_3}{a_4}}_ {{i_3}{i_4}}}{\bar{t}^{{i_1}{i_3}}_ {{a_3}{a_4}}}{\bar{t}^{{i_2}{i_4}}_ {{a_1}{a_2}}}} - {{{\frac{1}{4}}}{A^{{a_1}{a_2}}_ {{i_1}{i_2}}}{\bar{g}^{{a_3}{a_4}}_ {{i_3}{i_4}}}{\bar{t}^{{i_1}{i_2}}_ {{a_1}{a_3}}}{\bar{t}^{{i_3}{i_4}}_ {{a_2}{a_4}}}}
+- {{{\frac{1}{4}}}{A^{{a_1}{a_2}}_ {{i_1}{i_2}}}{\bar{g}^{{a_3}{a_4}}_ {{i_3}{i_4}}}{\bar{t}^{{i_1}{i_3}}_ {{a_3}{a_4}}}{\bar{t}^{{i_2}{i_4}}_ {{a_1}{a_2}}}} - {{{\frac{1}{4}}}{A^{{a_1}{a_2}}_ {{i_1}{i_2}}}{\bar{g}^{{a_3}{a_4}}_ {{i_3}{i_4}}}{\bar{t}^{{i_1}{i_2}}_ {{a_1}{a_3}}}{\bar{t}^{{i_3}{i_4}}_ {{a_2}{a_4}}}}
++ {{{\frac{1}{2}}}{A^{{a_1}{a_2}}_ {{i_1}{i_2}}}{\bar{g}^{{a_3}{a_4}}_ {{i_3}{i_4}}}{\bar{t}^{{i_1}{i_3}}_ {{a_1}{a_3}}}{\bar{t}^{{i_2}{i_4}}_ {{a_2}{a_4}}}}\bigr)\]</div>
+</div>
+<p>The use of MBPT operators rather than their tensor-level forms not only solves problems with the reuse of dummy indices, but also allows to implement additional optimizations such as algebraic simplifications of complex operator expressions and avoiding evaluation of operator products whose vacuum expectation values are guaranteed to vanish. This allows very efficient derivation of complex equations, e.g. CC equations through CCSDTQ are derived in a fraction of a second on a laptop:</p>
+<div class="highlight-sh notranslate"><div class="highlight"><pre><span></span>$<span class="w"> </span>cmake<span class="w"> </span>--build<span class="w"> </span>build<span class="w"> </span>--target<span class="w"> </span>srcc
+$<span class="w"> </span><span class="nb">time</span><span class="w"> </span>build/srcc<span class="w">  </span><span class="nb">time</span><span class="w"> </span>./srcc<span class="w"> </span><span class="m">4</span><span class="w"> </span>t<span class="w"> </span>std<span class="w"> </span>so
+CC<span class="w"> </span>equations<span class="w"> </span><span class="o">[</span><span class="nv">type</span><span class="o">=</span>t,rank<span class="o">=</span><span class="m">1</span>,spinfree<span class="o">=</span>false,screen<span class="o">=</span>true,use_topology<span class="o">=</span>true,use_connectivity<span class="o">=</span>true,canonical_only<span class="o">=</span>true<span class="o">]</span><span class="w"> </span>computed<span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="m">0</span>.0027805<span class="w"> </span>seconds
+R1<span class="o">(</span>expS1<span class="o">)</span><span class="w"> </span>has<span class="w"> </span><span class="m">8</span><span class="w"> </span>terms:
+CC<span class="w"> </span>equations<span class="w"> </span><span class="o">[</span><span class="nv">type</span><span class="o">=</span>t,rank<span class="o">=</span><span class="m">2</span>,spinfree<span class="o">=</span>false,screen<span class="o">=</span>true,use_topology<span class="o">=</span>true,use_connectivity<span class="o">=</span>true,canonical_only<span class="o">=</span>true<span class="o">]</span><span class="w"> </span>computed<span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="m">0</span>.012890749999999999<span class="w"> </span>seconds
+R1<span class="o">(</span>expS2<span class="o">)</span><span class="w"> </span>has<span class="w"> </span><span class="m">14</span><span class="w"> </span>terms:
+R2<span class="o">(</span>expS2<span class="o">)</span><span class="w"> </span>has<span class="w"> </span><span class="m">31</span><span class="w"> </span>terms:
+CC<span class="w"> </span>equations<span class="w"> </span><span class="o">[</span><span class="nv">type</span><span class="o">=</span>t,rank<span class="o">=</span><span class="m">3</span>,spinfree<span class="o">=</span>false,screen<span class="o">=</span>true,use_topology<span class="o">=</span>true,use_connectivity<span class="o">=</span>true,canonical_only<span class="o">=</span>true<span class="o">]</span><span class="w"> </span>computed<span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="m">0</span>.039590500000000001<span class="w"> </span>seconds
+R1<span class="o">(</span>expS3<span class="o">)</span><span class="w"> </span>has<span class="w"> </span><span class="m">15</span><span class="w"> </span>terms:
+R2<span class="o">(</span>expS3<span class="o">)</span><span class="w"> </span>has<span class="w"> </span><span class="m">37</span><span class="w"> </span>terms:
+R3<span class="o">(</span>expS3<span class="o">)</span><span class="w"> </span>has<span class="w"> </span><span class="m">47</span><span class="w"> </span>terms:
+CC<span class="w"> </span>equations<span class="w"> </span><span class="o">[</span><span class="nv">type</span><span class="o">=</span>t,rank<span class="o">=</span><span class="m">4</span>,spinfree<span class="o">=</span>false,screen<span class="o">=</span>true,use_topology<span class="o">=</span>true,use_connectivity<span class="o">=</span>true,canonical_only<span class="o">=</span>true<span class="o">]</span><span class="w"> </span>computed<span class="w"> </span><span class="k">in</span><span class="w"> </span><span class="m">0</span>.107501417<span class="w"> </span>seconds
+R1<span class="o">(</span>expS4<span class="o">)</span><span class="w"> </span>has<span class="w"> </span><span class="m">15</span><span class="w"> </span>terms:
+R2<span class="o">(</span>expS4<span class="o">)</span><span class="w"> </span>has<span class="w"> </span><span class="m">38</span><span class="w"> </span>terms:
+R3<span class="o">(</span>expS4<span class="o">)</span><span class="w"> </span>has<span class="w"> </span><span class="m">53</span><span class="w"> </span>terms:
+R4<span class="o">(</span>expS4<span class="o">)</span><span class="w"> </span>has<span class="w"> </span><span class="m">74</span><span class="w"> </span>terms:
+./srcc<span class="w"> </span><span class="m">4</span><span class="w"> </span>t<span class="w"> </span>std<span class="w"> </span>so<span class="w">  </span><span class="m">0</span>.27s<span class="w"> </span>user<span class="w"> </span><span class="m">0</span>.41s<span class="w"> </span>system<span class="w"> </span><span class="m">100</span>%<span class="w"> </span>cpu<span class="w"> </span><span class="m">0</span>.674<span class="w"> </span>total
+</pre></div>
+</div>
+</section>
 </section>
 
         </article>
@@ -322,7 +655,7 @@ using SeQuant for this purpose.</p>
             
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on May 9, 2025 2:41:59 PM</div>
+              Last updated on May 12, 2025 8:24:43 PM</div>
           </div>
           <div class="right-details">
             <div class="icons">
@@ -334,8 +667,32 @@ using SeQuant for this purpose.</p>
         
       </footer>
     </div>
-    <aside class="toc-drawer no-toc">
+    <aside class="toc-drawer">
       
+      
+      <div class="toc-sticky toc-scroll">
+        <div class="toc-title-container">
+          <span class="toc-title">
+            On this page
+          </span>
+        </div>
+        <div class="toc-tree-container">
+          <div class="toc-tree">
+            <ul>
+<li><a class="reference internal" href="#">Getting started</a><ul>
+<li><a class="reference internal" href="#wick-s-theorem">Wick’s Theorem</a></li>
+<li><a class="reference internal" href="#register-index-spaces">Register Index Spaces</a><ul>
+<li><a class="reference internal" href="#quasiparticles">Quasiparticles</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#operators">Operators</a></li>
+</ul>
+</li>
+</ul>
+
+          </div>
+        </div>
+      </div>
       
       
     </aside>
