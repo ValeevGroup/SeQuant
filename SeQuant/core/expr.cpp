@@ -335,6 +335,100 @@ void Sum::adjoint() {
   *this = Sum(ranges::begin(adj_summands), ranges::end(adj_summands));
 }
 
+#define canon_sum
+#ifdef canon_sum
+// modified using hash map but with original structure
+ExprPtr Sum::canonicalize_impl(bool multipass) {
+  if (Logger::instance().canonicalize)
+    std::wcout << "Sum::canonicalize_impl: input = "
+               << to_latex_align(shared_from_this()) << std::endl;
+
+  const auto npasses = multipass ? 3 : 1;
+  for (auto pass = 0; pass != npasses; ++pass) {
+    // Summand canonicalization (already parallelized with OMP)
+    sequant::for_each(summands_, [this, pass](ExprPtr &summand) {
+      auto bp = (pass % 2 == 0) ? summand->rapid_canonicalize()
+                                : summand->canonicalize();
+      if (bp) {
+        assert(bp->template is<Constant>());
+        summand = ex<Product>(std::static_pointer_cast<Constant>(bp)->value(),
+                              ExprPtrList{summand});
+      }
+    });
+
+    if (Logger::instance().canonicalize)
+      std::wcout << "Sum::canonicalize_impl (pass=" << pass
+                 << "): after canonicalizing summands = "
+                 << to_latex_align(shared_from_this()) << std::endl;
+
+    // hash-based term reduction (replacing sorting + adjacent_find approach)
+    // using container::map instead of std::unordered_map
+    container::map<size_t, sequant::container::vector<size_t>> hash_groups;
+
+    // Group terms by hash value
+    for (size_t i = 0; i < summands_.size(); ++i) {
+      auto hash = summands_[i]->hash_value();
+      auto it = hash_groups.find(hash);
+      if (it == hash_groups.end()) {
+        hash_groups.insert({hash, container::vector<size_t>{i}});
+      } else {
+        it->second.push_back(i);
+      }
+    }
+
+    // Process each group with 2+ elements
+    decltype(summands_) new_summands;
+    for (const auto &pair : hash_groups) {
+      const auto &indices = pair.second;
+      if (indices.size() == 1) {
+        // Single term with this hash - just keep it
+        new_summands.push_back(summands_[indices[0]]);
+      } else {
+        // If you saw this hash before, combine all of them
+        ExprPtr combined_term;
+        if (summands_[indices[0]]->template is<Product>()) {
+          // Handle group of Products
+          auto product_copy =
+              std::static_pointer_cast<Product>(summands_[indices[0]]->clone());
+          for (size_t i = 1; i < indices.size(); ++i) {
+            if (!summands_[indices[i]]->template is<Product>()) {
+              auto as_product = std::make_shared<Product>(
+                  1, ExprPtrList{summands_[indices[i]]});
+              product_copy->add_identical(*as_product);
+            } else {
+              product_copy->add_identical(
+                  summands_[indices[i]]->template as<Product>());
+            }
+          }
+          combined_term = product_copy;
+        } else {
+          // Handle all other types
+          auto product_form = std::make_shared<Product>();
+          product_form->append(indices.size(),
+                               summands_[indices[0]]->template as<Expr>());
+          combined_term = product_form;
+        }
+        // If not zero, add to new summands
+        if (!combined_term->template is<Product>() ||
+            !combined_term->template as<Product>().is_zero()) {
+          new_summands.push_back(combined_term);
+        }
+      }
+    }
+    // Replace old summands with new ones
+    summands_.swap(new_summands);
+
+    if (Logger::instance().canonicalize)
+      std::wcout << "Sum::canonicalize_impl (pass=" << pass
+                 << "): after reducing summands = "
+                 << to_latex_align(shared_from_this()) << std::endl;
+  }
+
+  return {};  // side effects are absorbed into summands
+}
+
+#else
+// Original+ fro_each
 ExprPtr Sum::canonicalize_impl(bool multipass) {
   if (Logger::instance().canonicalize)
     std::wcout << "Sum::canonicalize_impl: input = "
@@ -345,17 +439,7 @@ ExprPtr Sum::canonicalize_impl(bool multipass) {
     // recursively canonicalize summands ...
     const auto nsubexpr = ranges::size(*this);
 
-    // for (std::size_t i = 0; i != nsubexpr; ++i) {
-    //   auto bp = (pass % 2 == 0) ? summands_[i]->rapid_canonicalize()
-    //                             : summands_[i]->canonicalize();
-    //   if (bp) {
-    //     assert(bp->template is<Constant>());
-    //     summands_[i] =
-    //         ex<Product>(std::static_pointer_cast<Constant>(bp)->value(),
-    //                     ExprPtrList{summands_[i]});
-    //   }
-    // };
-
+    // direct access to summands, using for_each to parallelize
     sequant::for_each(summands_, [this, pass](ExprPtr &summand) {
       auto bp = (pass % 2 == 0) ? summand->rapid_canonicalize()
                                 : summand->canonicalize();
@@ -404,28 +488,23 @@ ExprPtr Sum::canonicalize_impl(bool multipass) {
           });
       const auto nidentical = plast_it - first_it;
       assert(nidentical > 1);
+      // combine all identical summands into Product
       auto reduce_range = [first_it, this, nidentical](auto &begin, auto &end) {
-        if ((*first_it)->template is<Tensor>()) {
-          Product tensor_as_Product{};
-          tensor_as_Product.append(nidentical, (*first_it)->as<Tensor>());
-          (*first_it) = std::make_shared<Product>(tensor_as_Product);
-          this->summands_.erase(first_it + 1, end);
-        } else if ((*first_it)->template is<Product>()) {
-          auto &prod = (*first_it)->template as<Product>();
+        if ((*first_it)->is<Product>()) {  // handle group of Products
+          auto &prod = (*first_it)->as<Product>();
           for (auto it = begin + 1; it != end; ++it) {
-            if ((*it)->template is<Tensor>()) {
-              Product tensor_as_Product{};
-              tensor_as_Product.append(1, (*it)->template as<Tensor>());
-              (*it) = std::make_shared<Product>(tensor_as_Product);
+            // convert to Product if not already
+            if (!(*it)->template is<Product>()) {
+              *it = std::make_shared<Product>(1, ExprPtrList{*it});
             }
-            if ((*it)->template is<Product>()) {
-              prod.add_identical((*it)->template as<Product>());
-            }
+            prod.add_identical((*it)->template as<Product>());
           }
-          auto summands_to_erase = std::pair{first_it + 1, end};
-          if (prod.is_zero()) summands_to_erase.first = first_it;
-          this->summands_.erase(summands_to_erase.first,
-                                summands_to_erase.second);
+          this->summands_.erase(prod.is_zero() ? first_it : first_it + 1, end);
+        } else {  // handle all other types
+          auto product_form = std::make_shared<Product>();
+          product_form->append(nidentical, (*first_it)->as<Expr>());
+          *first_it = product_form;
+          this->summands_.erase(first_it + 1, end);
         }
       };
       reduce_range(first_it, plast_it);
@@ -437,7 +516,7 @@ ExprPtr Sum::canonicalize_impl(bool multipass) {
                  << to_latex_align(shared_from_this()) << std::endl;
   }
 
-  return {};  // side effects are absorbed into summands
+  return {};
 }
-
+#endif
 }  // namespace sequant
