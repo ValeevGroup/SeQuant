@@ -450,10 +450,6 @@ class GenerationOptimizer : public MainGenerator {
 
       while (unpaired_alloc != op_alloc) {
         assert(!(*unpaired_alloc)->pairs_with(op));
-        assert(std::find_if(m_cache.begin(), m_cache.end(),
-                            [&](const Operation &op) {
-                              return op->pairs_with(*unpaired_alloc);
-                            }) == m_cache.end());
         assert(rpos > 0);
         assert((*(m_cache.rbegin() + rpos))->pairs_with(op));
 
