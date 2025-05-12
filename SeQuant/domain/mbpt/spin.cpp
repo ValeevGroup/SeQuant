@@ -1223,7 +1223,7 @@ ExprPtr closed_shell_CC_spintrace_core_terms(ExprPtr const& expr) {
   std::wcout << "Number of terms before biorthogonal transform: "
              << st_expr.size() << std::endl;
   if (!ext_idxs.empty()) {
-    // std::wcout << "size of st_expr before biorthogonal transform " <<
+    // std::wcout << "size of st_expr before biorthogonal transform "
     // st_expr.size() << std::endl;
     const auto biT_time_0 = std::chrono::high_resolution_clock::now();
     st_expr = biorthogonal_transform(st_expr, ext_idxs);
@@ -1258,9 +1258,8 @@ ExprPtr closed_shell_CC_spintrace_core_terms(ExprPtr const& expr) {
                << std::endl;
 
     // map, modified to store same terms with multiple larg coeffs.
-    std::unordered_map<std::size_t, std::vector<ExprPtr>>
-        largest_coeff_terms;  // value is a vector of exprptr to store multiple
-                              // larg coeff terms
+    // changed from std::unordered_map to flat_map
+    container::map<std::size_t, container::vector<ExprPtr>> largest_coeff_terms;
 
     for (const auto& term : st_expr) {
       if (!term.is<Product>()) continue;  // skip non-Product terms
@@ -1275,7 +1274,7 @@ ExprPtr closed_shell_CC_spintrace_core_terms(ExprPtr const& expr) {
       auto it = largest_coeff_terms.find(res_hashvalue);
       if (it == largest_coeff_terms.end()) {
         // 1st time seeing this hash, add the term to a new vector
-        largest_coeff_terms[res_hashvalue] = {term.clone()};
+        largest_coeff_terms.insert({res_hashvalue, {term.clone()}});
       } else {
         // we've seen this hash before
         if (!it->second.empty()) {
@@ -1301,8 +1300,8 @@ ExprPtr closed_shell_CC_spintrace_core_terms(ExprPtr const& expr) {
 
     // now create a sum expression from all the collected terms
     Sum filtered_terms;
-    for (const auto& [hash, terms] : largest_coeff_terms) {
-      for (const auto& term : terms) {
+    for (const auto& pair : largest_coeff_terms) {
+      for (const auto& term : pair.second) {
         filtered_terms.append(term);
       }
     }
@@ -1353,7 +1352,7 @@ ExprPtr closed_shell_CC_spintrace_core_terms(ExprPtr const& expr) {
   printf(
       "R%d Normalization time: %5.3f sec.\n", residual_order,
       norm_time
-          .count());  // std::wcout << "final eqns after symm: " <<
+          .count());  // std::wcout << "final eqns after symm: "
                       // sequant::to_latex_align(sequant::ex<sequant::Sum>(sequant::opt::reorder(result_expr->as<sequant::Sum>())),
                       // 0, 4) << std::endl;
 
@@ -1369,6 +1368,7 @@ ExprPtr closed_shell_CC_spintrace_core_terms(ExprPtr const& expr) {
 
   return result_expr;
 }
+
 ExprPtr closed_shell_CC_spintrace_rigorous(ExprPtr const& expr) {
   assert(expr->is<Sum>());
   using ranges::views::transform;
