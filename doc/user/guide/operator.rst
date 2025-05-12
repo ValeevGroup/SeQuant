@@ -4,7 +4,7 @@ Operator Interface for Symbolic Many-Body Algebra
 Motivation
 ----------
 
-The ``mbpt::Operator`` class represents an abstract Fock-space many-body operator, such as the Hamiltonian operator, that can be used within SeQuant expressions.
+The :class:`mbpt::Operator <sequant::mbpt::Operator>` class represents an abstract Fock-space many-body operator, such as the Hamiltonian operator, that can be used within SeQuant expressions.
 We already saw `earlier <../getting_started/operators.html>`_ that
 the lower-level *tensor* representation of such operators involves specific index labels which makes tensor
 representation  inconvenient when multiple instances of the same operator occur.
@@ -45,15 +45,15 @@ only the non-zero contributions.
 ``mbpt::Operator`` Anatomy
 --------------------------
 
-``mbpt::Operator`` is constructed from 3 lambdas:
+``mbpt::Operator`` is constructed from 3 callables (e.g., lambdas):
 
-- ``void -> std::wstring``: return the operator label such as "T" or "Λ"
-- ``void -> ExptPtr``: return the tensor form of the operator, and
+- ``void -> std::wstring_view``: returns the operator label such as "T" or "Λ"
+- ``void -> ExptPtr``: returns the tensor form of the operator, and
 - ``QuantumNumberChange<>& -> void``: encodes the action on the given input state by mutating its quantum numbers given as the argument to the lambda.
 
-The quantum numbers of a state and their changes are represented by the same class, ``QuantumNumberChange<>``.
+The quantum numbers of a state and their changes are represented by the same class, :class:`mbpt::QuantumNumberChange <sequant::mbpt::QuantumNumberChange>`.
 For the Fock-space states the quantum numbers are the number of creators/annihilators. In general context the number of creators/annihilators
-must be tracked separately for multiple ``IndexSpace``s (e.g., for each hole and particle states in the particle-hole context). To support
+must be tracked separately for multiple ``IndexSpaces`` (e.g., for each hole and particle states in the particle-hole context). To support
 general operators which can create a variable number of particles and holes the numbers of creators/annihilators must be encoded
 by *intervals*. For example, if space :math:`\{p\}` is a union of hole (fully occupied in the vacuum) space :math:`\{i\}`
 and particle (fully empty in the vacuum) space :math:`\{a\}` operator :math:`\hat{o}_1` includes 4 components,
@@ -75,7 +75,7 @@ The use of interval arithmetic for quantum number changes allows to treat operat
 it into individual contributions, each with definite effect on quantum numbers. This is especially useful when the number of index spaces increases.
 
 .. seealso::
-    - Although the user can construct ``mbpt::Operator`` directly, SeQuant predefines many commonly-used operators. For example, ``H_()``, ``T_()``, ``Λ_()``, ``R_()``, and ``L_()``  in the ``mbpt::op`` namespace all return instances of ``Operator`` (or expressions built from them), each representing a specific type of many-body operator (Hamiltonian, excitation, deexcitation, etc).
+    - Although the user can construct ``mbpt::Operator`` directly, SeQuant predefines factories for many commonly-used operators. For example, functions :class:`H_ <sequant::mbpt::op::H_>`, :class:`T_ <sequant::mbpt::op::T_>`, :class:`Λ_ <sequant::mbpt::op::Λ_>`, :class:`R_ <sequant::mbpt::op::R_>`, and :class:`L_ <sequant::mbpt::op::L_>`  in the ``mbpt::op`` namespace all return instances of ``Operator`` (or expressions built from them), each representing a specific type of many-body operator (Hamiltonian, excitation, deexcitation, etc).
     - There are convenient helper functions available in ``sequant::mbpt`` namespace for constructing different types of ``QuantumNumberChange`` objects. For example, see ``sequant::mbpt::excitation_type_qns``.
 
 Examples
