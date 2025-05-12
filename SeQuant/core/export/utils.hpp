@@ -10,6 +10,7 @@ namespace sequant {
 /// belong to. Note that it explicitly does not depend on the explicit index
 /// labelling.
 struct TensorBlockCompare {
+  /// \returns Whether lhs compares less than rhs
   bool operator()(const Tensor &lhs, const Tensor &rhs) const;
 };
 
