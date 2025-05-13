@@ -26,6 +26,7 @@ class GenerationOptimizer : public MainGenerator {
   enum class OperationType {
     Create,
     Load,
+    LoadAndZero,
     Zero,
     Unload,
     Destroy,
@@ -76,13 +77,16 @@ class GenerationOptimizer : public MainGenerator {
       switch (type()) {
         case OperationType::Create:
         case OperationType::Load:
+        case OperationType::LoadAndZero:
           return other == OperationType::Destroy ||
                  other == OperationType::Persist ||
                  other == OperationType::Unload;
         case OperationType::Unload:
         case OperationType::Destroy:
         case OperationType::Persist:
-          return other == OperationType::Create || other == OperationType::Load;
+          return other == OperationType::Create ||
+                 other == OperationType::Load ||
+                 other == OperationType::LoadAndZero;
         case OperationType::Zero:
         case OperationType::Compute:
           return false;
@@ -97,6 +101,7 @@ class GenerationOptimizer : public MainGenerator {
       switch (type()) {
         case OperationType::Create:
         case OperationType::Load:
+        case OperationType::LoadAndZero:
           return MemoryAction::Allocate;
         case OperationType::Unload:
         case OperationType::Destroy:
@@ -155,23 +160,36 @@ class GenerationOptimizer : public MainGenerator {
 
   class LoadOperation final : public AbstractOperation {
    public:
-    LoadOperation(Object obj, bool set_to_zero)
-        : AbstractOperation(std::move(obj)), m_set_to_zero(set_to_zero) {}
+    LoadOperation(Object obj) : AbstractOperation(std::move(obj)) {}
 
     void execute(const Tensor &tensor, MainGenerator &generator,
                  const MainContext &ctx) override {
-      generator.MainGenerator::load(tensor, m_set_to_zero, ctx);
+      generator.MainGenerator::load(tensor, false, ctx);
     }
 
     void execute(const Variable &variable, MainGenerator &generator,
                  const MainContext &ctx) override {
-      generator.MainGenerator::load(variable, m_set_to_zero, ctx);
+      generator.MainGenerator::load(variable, false, ctx);
     }
 
     OperationType type() const override { return OperationType::Load; }
+  };
 
-   private:
-    bool m_set_to_zero;
+  class LoadAndZeroOperation final : public AbstractOperation {
+   public:
+    LoadAndZeroOperation(Object obj) : AbstractOperation(std::move(obj)) {}
+
+    void execute(const Tensor &tensor, MainGenerator &generator,
+                 const MainContext &ctx) override {
+      generator.MainGenerator::load(tensor, true, ctx);
+    }
+
+    void execute(const Variable &variable, MainGenerator &generator,
+                 const MainContext &ctx) override {
+      generator.MainGenerator::load(variable, true, ctx);
+    }
+
+    OperationType type() const override { return OperationType::LoadAndZero; }
   };
 
   class ZeroOperation final : public AbstractOperation {
@@ -267,7 +285,8 @@ class GenerationOptimizer : public MainGenerator {
 
   using Operation =
       pv::polymorphic_variant<AbstractOperation, CreateOperation, LoadOperation,
-                              ZeroOperation, UnloadOperation, DestroyOperation,
+                              LoadAndZeroOperation, ZeroOperation,
+                              UnloadOperation, DestroyOperation,
                               PersistOperation, ComputeOperation>;
 
  public:
@@ -280,7 +299,11 @@ class GenerationOptimizer : public MainGenerator {
 
   void load(const Tensor &tensor, bool set_to_zero,
             const MainContext &ctx) override {
-    m_queue.emplace_back(LoadOperation(tensor, set_to_zero));
+    if (set_to_zero) {
+      m_queue.emplace_back(LoadAndZeroOperation(tensor));
+    } else {
+      m_queue.emplace_back(LoadOperation(tensor));
+    }
   }
 
   void set_to_zero(const Tensor &tensor, const MainContext &ctx) override {
@@ -306,7 +329,11 @@ class GenerationOptimizer : public MainGenerator {
 
   void load(const Variable &variable, bool set_to_zero,
             const MainContext &ctx) override {
-    m_queue.emplace_back(LoadOperation(variable, set_to_zero));
+    if (set_to_zero) {
+      m_queue.emplace_back(LoadAndZeroOperation(variable));
+    } else {
+      m_queue.emplace_back(LoadOperation(variable));
+    }
   }
 
   void set_to_zero(const Variable &variable, const MainContext &ctx) override {
