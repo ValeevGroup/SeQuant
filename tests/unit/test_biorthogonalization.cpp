@@ -20,14 +20,12 @@ TEST_CASE("biorthogonalization", "[Biorthogonalization]") {
       Context(mbpt::make_mr_spaces(), Vacuum::SingleProduct));
 
   SECTION("plain ExprPtr") {
-    const std::vector<std::wstring> inputs = {
-        L"t{a1;i1}", L"S{i1,i2;a1,a2}:S g{a1,a2;i1,i2}",
-        L"S{a1,a2,a3;i1,i2,i3}:S t{i1,i2,i3;a1,a2,a3}"};
+    const std::vector<std::wstring> inputs = {L"t{a1;i1}", L"g{a1,a2;i1,i2}",
+                                              L"t{i1,i2,i3;a1,a2,a3}"};
     const std::vector<std::wstring> expected_outputs = {
-        L"1/2 t{a1;i1}",
-        L"S{i1,i2;a1,a2}:S 1/6 (2 g{a1,a2;i1,i2} + g{a2,a1;i1,i2})",
-        // TODO: this is not an ideal test case as this simply sums to zero
-        L"S{a1,a2,a3;i1,i2,i3}:S 1/20 ("
+        L"1/2 t{a1;i1}", L"1/6 (2 g{a1,a2;i1,i2} + g{a2,a1;i1,i2})",
+        // cmp. Wang & Knizia (2018), DOI: arXiv:1805.00565
+        L"1/120 ("
         "-7 t{i_1,i_2,i_3;a_2,a_3,a_1}:N-C-S "
         "- 7 t{i_1,i_2,i_3;a_3,a_1,a_2}:N-C-S "
         "- t{i_1,i_2,i_3;a_2,a_1,a_3}:N-C-S "
@@ -53,20 +51,17 @@ TEST_CASE("biorthogonalization", "[Biorthogonalization]") {
   SECTION("ResultExpr") {
     const std::vector<std::vector<std::wstring>> inputs = {
         {L"R{a1;i1} = t{a1;i1}"},
-        {L"R{i1,i2;a1,a2} = S{i1,i2;a1,a2}:S g{a1,a2;i1,i2}"},
-        {L"R{i1,u1;a1,a2} = S{a1,a2;}:S g{i1,u1;a1,a2}"},
-        {L"R{i1,i2;a1,u1} = S{;i1,i2}:S g{i1,i2;a1,u1}"},
+        {L"R{i1,i2;a1,a2} = g{a1,a2;i1,i2}"},
+        {L"R{i1,u1;a1,a2} = g{i1,u1;a1,a2}"},
+        {L"R{i1,i2;a1,u1} = g{i1,i2;a1,u1}"},
         {L"R{i1,u1;a1,u2} = X{i1,u1;a1,u2}",
          L"R{u1,i1;a1,u2} = Y{u1,i1;a1,u2}"},
     };
     const std::vector<std::vector<std::wstring>> expected_outputs = {
         {L"R{a1;i1} = 1/2 t{a1;i1}"},
-        {L"R{a1,a2;i1,i2} = S{i1,i2;a1,a2}:S 1/6 (2 g{a1,a2;i1,i2} "
-         "+ g{a2,a1;i1,i2})"},
-        {L"R{i1,u1;a1,a2} = S{a1,a2;}:S 1/6 ( 2 g{i1,u1;a1,a2} "
-         "+ g{i1,u1;a2,a1} )"},
-        {L"R{i1,i2;a1,u1} = S{;i1,i2}:S 1/6 ( 2 g{i1,i2;a1,u1} "
-         "+  g{i1,i2;a1,u1} )"},
+        {L"R{a1,a2;i1,i2} = 1/6 ( 2 g{a1,a2;i1,i2} + g{a2,a1;i1,i2} )"},
+        {L"R{i1,u1;a1,a2} = 1/6 ( 2 g{i1,u1;a1,a2} + g{i1,u1;a2,a1} )"},
+        {L"R{i1,i2;a1,u1} = 1/6 ( 2 g{i1,i2;a1,u1} + g{i2,i1;a1,u1} )"},
         {L"R{i1,u1;a1,u2} = 1/3 X{i1,u1;a1,u2} + 1/6 Y{u1,i1;a1,u2}",
          L"R{u1,i1;a1,u2} = 1/3 Y{u1,i1;a1,u2} + 1/6 X{i1,u1;a1,u2}"},
     };

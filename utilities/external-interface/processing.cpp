@@ -27,8 +27,8 @@ container::svector<ResultExpr> postProcess(ResultExpr result,
     return {result};
   }
 
-  container::svector<container::svector<Index> > externals =
-      result.index_particle_grouping<container::svector<Index> >();
+  container::svector<container::svector<Index>> externals =
+      result.index_particle_grouping<container::svector<Index>>();
 
   if (options.density_fitting) {
     IndexSpace aux_space =
@@ -81,17 +81,23 @@ container::svector<ResultExpr> postProcess(ResultExpr result,
     }
   }
 
+  // Remove symmetrization operators from expressions
+  container::svector<std::optional<ExprPtr>> symmetrizers;
+  symmetrizers.reserve(processed.size());
+  for (ResultExpr &current : processed) {
+    std::optional<ExprPtr> symmetrizer = pop_tensor(current.expression(), L"S");
+    if (!symmetrizer.has_value()) {
+      symmetrizer = pop_tensor(current.expression(), L"A");
+    }
+
+    symmetrizers.push_back(std::move(symmetrizer));
+  }
+
   switch (options.transform) {
     case ProjectionTransformation::None:
       break;
     case ProjectionTransformation::Biorthogonal:
-      // TODO: figure out where processing of S operator goes wrong
-      auto symm = pop_tensor(processed.at(0).expression(), L"S");
       biorthogonal_transform(processed);
-      if (symm.has_value()) {
-        processed.at(0).expression() =
-            simplify(symm.value() * processed.at(0).expression());
-      }
 
       for (ResultExpr &current : processed) {
         spdlog::debug("Expression after biorthogonal transformation:\n{}",
@@ -100,21 +106,18 @@ container::svector<ResultExpr> postProcess(ResultExpr result,
       break;
   }
 
-  for (ResultExpr &current : processed) {
-    if (options.factorize_to_binary) {
-      std::optional<ExprPtr> symmetrizer =
-          pop_tensor(current.expression(), L"S");
-      if (!symmetrizer.has_value()) {
-        symmetrizer = pop_tensor(current.expression(), L"A");
-      }
-
+  if (options.factorize_to_binary) {
+    for (ResultExpr &current : processed) {
       current.expression() = optimize(current.expression());
+    }
+  }
 
-      if (symmetrizer.has_value()) {
-        current.expression() =
-            ex<Product>(ExprPtrList{symmetrizer.value(), current.expression()},
-                        Product::Flatten::No);
-      }
+  // Add symmetrizers back into the expressions
+  for (std::size_t i = 0; i < processed.size(); ++i) {
+    if (symmetrizers.at(i).has_value()) {
+      processed.at(i).expression() = ex<Product>(
+          ExprPtrList{symmetrizers.at(i).value(), processed.at(i).expression()},
+          Product::Flatten::No);
     }
   }
 

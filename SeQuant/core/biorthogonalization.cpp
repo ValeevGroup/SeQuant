@@ -64,7 +64,7 @@ Eigen::MatrixXd permutational_overlap_matrix(std::size_t n_particles) {
   Eigen::MatrixXd M(n, n);
   M.setZero();
 
-  // TODO: Can we fill the entire matrix only by knowing the entires of one
+  // TODO: Can we fill the entire matrix only by knowing the entries of one
   // row/column? For n_particles < 4, every consecutive col/row is only rotated
   // by one compared to the one before
   for (std::size_t row = 0; row < n; ++row) {
@@ -287,6 +287,29 @@ void biorthogonal_transform(container::svector<ResultExpr>& result_exprs,
                      [](const ResultExpr& res) {
                        return res.particle_symmetry() == ParticleSymmetry::symm;
                      }));
+
+  // Furthermore, we expect that there is no symmetrization operator present in
+  // the expressions as that would imply transforming also the symmetrization
+  // operator, which is incorrect. This is because the idea during
+  // biorthogonalization is that we project onto e.g.
+  // \tilde{E}^{IJ}_{AB} = c_1 E^{IJ}_{AB} + c_2 E^{JI}_{AB}
+  // instead of E^{IJ}_{AB} directly. In either case though, the result looks
+  // like R^{IJ}_{AB} and the index pairing of the result is what determines
+  // the required symmetrization. Hence, the symmetrization operator must not
+  // be changed when transforming from one representation into the other.
+  assert(std::all_of(
+      result_exprs.begin(), result_exprs.end(), [](const ResultExpr& res) {
+        bool found = false;
+        res.expression()->visit(
+            [&](const ExprPtr& expr) {
+              if (expr->is<Tensor>() && (expr->as<Tensor>().label() == L"S" ||
+                                         expr->as<Tensor>().label() == L"A")) {
+                found = true;
+              };
+            },
+            true);
+        return !found;
+      }));
 
   auto externals = result_exprs |
                    ranges::views::transform([](const ResultExpr& expr) {
