@@ -14,6 +14,9 @@ namespace sequant {
 
 std::string ItfGeneratorContext::index_name(const IndexSpace &space,
                                             std::size_t ordinal) const {
+  assert(ordinal >= m_idx_offset);
+  ordinal -= m_idx_offset;
+
   std::string base_key = toUtf8(space.base_key());
 
   char limit = [&]() -> char {
@@ -215,6 +218,14 @@ bool ItfGeneratorContext::is_exceptional_J(std::span<Index> bra,
 
   return bras_are_same && kets_are_different && kets_are_ordered &&
          first_ket_same_as_bra;
+}
+
+std::size_t ItfGeneratorContext::index_id_offset() const {
+  return m_idx_offset;
+}
+
+void ItfGeneratorContext::set_index_id_offset(std::size_t offset) {
+  m_idx_offset = offset;
 }
 
 }  // namespace sequant

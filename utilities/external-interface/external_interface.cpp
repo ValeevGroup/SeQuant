@@ -178,6 +178,9 @@ void generateITF(const json &blocks, std::string_view out_file,
                  const ProcessingOptions &defaults,
                  const IndexSpaceMeta &spaceMeta) {
   ItfContext context(spaceMeta);
+  // We assume index IDs start at 1
+  context.set_index_id_offset(1);
+
   GenerationOptimizer<ItfGenerator<ItfContext>> generator;
 
   for (const json &current_block : blocks) {

@@ -60,6 +60,9 @@ class ItfGeneratorContext : public ReorderingContext {
 
   bool rewrite(Tensor &tensor) const override;
 
+  virtual std::size_t index_id_offset() const;
+  virtual void set_index_id_offset(std::size_t offset);
+
  private:
   NameMap m_space_names;
   TagMap m_tags;
@@ -67,6 +70,7 @@ class ItfGeneratorContext : public ReorderingContext {
   VariableImportMap m_variable_imports;
   container::map<IndexSpace, char> m_index_label_limits;
   std::wstring m_integral_label = L"g";
+  std::size_t m_idx_offset = 0;
 
  protected:
   bool is_exceptional_J(std::span<Index> bra, std::span<Index> ket) const;
