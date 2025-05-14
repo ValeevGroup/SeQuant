@@ -1145,6 +1145,7 @@ TensorNetwork::SlotCanonicalizationMetadata TensorNetwork::canonicalize_slots(
       auto input_to_canonical_parity = [&](const auto &idx_rng) {
         using ranges::size;
         const auto sz = size(idx_rng);
+        if (sz == 0) return 1;  // empty range
         if (sz < 2) {  // no phase for 1-index bundles, but still process the
                        // indices to ensure ordinals are correct
           using ranges::begin;

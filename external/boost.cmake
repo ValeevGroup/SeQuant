@@ -20,6 +20,7 @@ set(required_components
         container
         container_hash
         core
+        dynamic_bitset
         fusion
         hana
         locale
