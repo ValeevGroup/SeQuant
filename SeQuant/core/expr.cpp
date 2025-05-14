@@ -354,7 +354,7 @@ ExprPtr Sum::canonicalize_impl(bool multipass) {
 
   const auto npasses = multipass ? 3 : 1;
   for (auto pass = 0; pass != npasses; ++pass) {
-    // Summand canonicalization (already parallelized with OMP)
+    // summand canonicalization (already parallelized with OMP)
     sequant::for_each(summands_, [this, pass](ExprPtr &summand) {
       auto bp = (pass % 2 == 0) ? summand->rapid_canonicalize()
                                 : summand->canonicalize();
@@ -370,11 +370,10 @@ ExprPtr Sum::canonicalize_impl(bool multipass) {
                  << "): after canonicalizing summands = "
                  << to_latex_align(shared_from_this()) << std::endl;
 
-    // hash-based term reduction (replacing sorting + adjacent_find approach)
-    // using container::map instead of std::unordered_map
+    // using boost::container::flat_map instead of unordered_map
     container::map<size_t, sequant::container::vector<size_t>> hash_groups;
 
-    // Group terms by hash value
+    // group terms by hash value
     for (size_t i = 0; i < summands_.size(); ++i) {
       auto hash = summands_[i]->hash_value();
       auto it = hash_groups.find(hash);
@@ -384,16 +383,17 @@ ExprPtr Sum::canonicalize_impl(bool multipass) {
         it->second.push_back(i);
       }
     }
-
-    // Process each group with 2+ elements
+    // process each group
     decltype(summands_) new_summands;
+    new_summands.reserve(hash_groups.size());  // Reserve for efficiency
+
     for (const auto &pair : hash_groups) {
       const auto &indices = pair.second;
       if (indices.size() == 1) {
-        // Single term with this hash - just keep it
+        // single term with this hash - just keep it
         new_summands.push_back(summands_[indices[0]]);
       } else {
-        // If you saw this hash before, combine all of them
+        // if you saw this hash before, combine all of them
         ExprPtr combined_term;
         if (summands_[indices[0]]->template is<Product>()) {
           // Handle group of Products
@@ -417,14 +417,23 @@ ExprPtr Sum::canonicalize_impl(bool multipass) {
                                summands_[indices[0]]->template as<Expr>());
           combined_term = product_form;
         }
-        // If not zero, add to new summands
+        // if not zero, add to new summands
         if (!combined_term->template is<Product>() ||
             !combined_term->template as<Product>().is_zero()) {
           new_summands.push_back(combined_term);
         }
       }
     }
-    // Replace old summands with new ones
+    // now just sort the unique terms (efficient)
+    std::stable_sort(new_summands.begin(), new_summands.end(),
+                     [](const auto &first, const auto &second) {
+                       const auto first_size = sequant::size(first);
+                       const auto second_size = sequant::size(second);
+
+                       return (first_size == second_size)
+                                  ? *first < *second
+                                  : first_size < second_size;
+                     });
     summands_.swap(new_summands);
 
     if (Logger::instance().canonicalize)
@@ -432,10 +441,8 @@ ExprPtr Sum::canonicalize_impl(bool multipass) {
                  << "): after reducing summands = "
                  << to_latex_align(shared_from_this()) << std::endl;
   }
-
-  return {};  // side effects are absorbed into summands
+  return {};
 }
-
 #else
 // Original+ fro_each
 ExprPtr Sum::canonicalize_impl(bool multipass) {

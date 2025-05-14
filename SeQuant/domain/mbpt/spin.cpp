@@ -1074,6 +1074,9 @@ ExprPtr closed_shell_CC_spintrace(ExprPtr const& expr) {
   // const auto sm_tstop = std::chrono::high_resolution_clock::now();
   // std::chrono::duration<double> sm_time_elapsed = sp_tstop - sp_tstart;
   // printf("simplify time: %5.3f sec.\n", sm_time_elapsed.count());
+  // std::wcout << "final eqns after symm: " <<
+  // sequant::to_latex_align(sequant::ex<sequant::Sum>(sequant::opt::reorder(st_expr->as<sequant::Sum>())),
+  // 0, 4) << std::endl;
   return st_expr;
 }
 
@@ -1365,6 +1368,10 @@ ExprPtr closed_shell_CC_spintrace_core_terms(ExprPtr const& expr) {
       t_simplify_time_1 - t_simlify_time_0;
   printf("R%d Simplify time: %5.3f sec.\n", residual_order,
          t_simplify_time.count());
+
+  // std::wcout << "final eqns after symm: " <<
+  // sequant::to_latex_align(sequant::ex<sequant::Sum>(sequant::opt::reorder(result_expr->as<sequant::Sum>())),
+  // 0, 4) << std::endl;
 
   return result_expr;
 }
