@@ -71,8 +71,10 @@ class Generator {
                        const Context &ctx) = 0;
 
   virtual void declare(const Index &idx, const Context &ctx) = 0;
-  virtual void declare(const Variable &variable, const Context &ctx) = 0;
-  virtual void declare(const Tensor &tensor, const Context &ctx) = 0;
+  virtual void declare(const Variable &variable, UsageSet usage,
+                       const Context &ctx) = 0;
+  virtual void declare(const Tensor &tensor, UsageSet usage,
+                       const Context &ctx) = 0;
 
   virtual void all_indices_declared(std::size_t amount, const Context &ctx) = 0;
   virtual void all_variables_declared(std::size_t amount,

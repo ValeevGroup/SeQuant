@@ -9,6 +9,7 @@
 #include <map>
 #include <optional>
 #include <string>
+#include <type_traits>
 
 namespace sequant {
 
@@ -37,6 +38,35 @@ struct StrategyPair {
 
   LoadStrategy load = LoadStrategy::Create;
   ZeroStrategy zero = ZeroStrategy::ZeroOnCreate;
+};
+
+enum class Usage {
+  None = 0,
+  Result = 0b001,
+  Intermediate = 0b010,
+  Terminal = 0b100,
+};
+
+class UsageSet {
+ public:
+  using Value = std::underlying_type_t<Usage>;
+  UsageSet() = default;
+
+  UsageSet &operator=(Usage usage);
+  UsageSet &operator|=(Usage usage);
+  UsageSet &operator&=(Usage usage);
+
+  friend bool operator&(UsageSet set, Usage usage);
+  friend bool operator&(Usage usage, UsageSet set);
+
+  friend bool operator==(UsageSet set, Usage usage);
+  friend bool operator==(Usage usage, UsageSet set);
+
+  friend bool operator!=(UsageSet set, Usage usage);
+  friend bool operator!=(Usage usage, UsageSet set);
+
+ private:
+  Value m_val = static_cast<Value>(Usage::None);
 };
 
 class ExportContext {

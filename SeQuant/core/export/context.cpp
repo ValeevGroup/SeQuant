@@ -31,6 +31,37 @@ StrategyPair::StrategyPair(ZeroStrategy zero) : StrategyPair() {
   this->zero = zero;
 }
 
+UsageSet &UsageSet::operator=(Usage usage) {
+  m_val = static_cast<Value>(usage);
+  return *this;
+}
+
+UsageSet &UsageSet::operator|=(Usage usage) {
+  m_val |= static_cast<Value>(usage);
+  return *this;
+}
+
+UsageSet &UsageSet::operator&=(Usage usage) {
+  m_val &= static_cast<Value>(usage);
+  return *this;
+}
+
+bool operator&(UsageSet set, Usage usage) {
+  return set.m_val & static_cast<UsageSet::Value>(usage);
+}
+
+bool operator&(Usage usage, UsageSet set) { return set & usage; }
+
+bool operator==(UsageSet set, Usage usage) {
+  return set.m_val == static_cast<UsageSet::Value>(usage);
+}
+
+bool operator==(Usage usage, UsageSet set) { return set == usage; }
+
+bool operator!=(UsageSet set, Usage usage) { return !(set == usage); }
+
+bool operator!=(Usage usage, UsageSet set) { return set != usage; }
+
 ExportContext::ExportContext(TensorStrategyMap tensorMap,
                              VariableStrategyMap variableMap)
     : m_tensorStrategies({{GLOBAL, std::move(tensorMap)}}),

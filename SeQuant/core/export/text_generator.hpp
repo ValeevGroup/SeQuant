@@ -170,7 +170,8 @@ class TextGenerator : public Generator<Context> {
     m_generated += m_indent + "Declare index " + represent(idx, ctx) + "\n";
   }
 
-  void declare(const Variable &variable, const Context &ctx) override {
+  void declare(const Variable &variable, UsageSet usage,
+               const Context &ctx) override {
     if (ctx.inside_named_section()) {
       if (m_generated.back() != '(') {
         m_generated += ", ";
@@ -183,7 +184,8 @@ class TextGenerator : public Generator<Context> {
     }
   }
 
-  void declare(const Tensor &tensor, const Context &ctx) override {
+  void declare(const Tensor &tensor, UsageSet usage,
+               const Context &ctx) override {
     if (ctx.inside_named_section()) {
       if (m_generated.back() != '(') {
         m_generated += ", ";

@@ -25,6 +25,7 @@
 #include <tuple>
 #include <type_traits>
 #include <unordered_map>
+#include <utility>
 
 namespace sequant {
 
@@ -268,8 +269,8 @@ class GenerationVisitor {
 struct PreprocessResult {
   std::unordered_map<std::size_t, ExprPtr> scalarFactors;
   std::set<Index> indices;
-  std::set<Tensor, TensorBlockCompare> tensors;
-  std::set<Variable> variables;
+  std::map<Tensor, UsageSet, TensorBlockCompare> tensors;
+  std::map<Variable, UsageSet> variables;
 
   std::map<Tensor, std::size_t, TensorBlockCompare> tensorReferences;
   std::map<Variable, std::size_t> variableReferences;
@@ -302,7 +303,8 @@ bool prune_scalar_factor(ExportNode<T> &node, PreprocessResult &result) {
   assert(factor->is<Constant>() || factor->is<Variable>());
 
   if (factor->is<Variable>()) {
-    result.variables.insert(factor->as<Variable>());
+    result.variables[factor->as<Variable>()] |=
+        node.leaf() ? Usage::Terminal : Usage::Intermediate;
   }
 
   if (parentFactor) {
@@ -407,14 +409,29 @@ void preprocess(ExprType expr, ExportContext &ctx, Node &node,
     node->set_expr(ex<ExprType>(expr));
   }
 
+  Usage usage = [&]() {
+    if (node.leaf()) {
+      return Usage::Terminal;
+    }
+    if (node.root()) {
+      return Usage::Result;
+    }
+    if (node.parent()->op_type() == EvalOp::Sum) {
+      // Summation nodes are special in their use of non-terminals
+      return Usage::None;
+    }
+
+    return Usage::Intermediate;
+  }();
+
   if constexpr (std::is_same_v<ExprType, Tensor>) {
-    result.tensors.insert(expr);
+    result.tensors[expr] |= usage;
     const auto &indices = expr.const_indices();
     result.indices.insert(indices.begin(), indices.end());
 
     result.tensorReferences[expr]++;
   } else {
-    result.variables.insert(expr);
+    result.variables[expr] |= usage;
 
     result.variableReferences[expr]++;
   }
@@ -598,23 +615,34 @@ void export_expression(ExportNode<T> &expression, Generator<Context> &generator,
   ctx.clear_current_expression_id();
 }
 
-template <typename Range, typename Context>
+template <typename Expr, typename Range, typename Context>
   requires std::ranges::range<Range>
 void declare_all(const Range &range, Generator<Context> &generator,
                  Context &ctx) {
-  using RangeType = std::ranges::range_value_t<Range>;
+  using RangeValue = std::ranges::range_value_t<Range>;
 
-  for (const RangeType &val : range) {
-    generator.declare(val, ctx);
+  constexpr bool is_map = requires {
+    std::declval<RangeValue>().first;
+    std::declval<RangeValue>().second;
+  };
+
+  if constexpr (is_map) {
+    for (const auto &[expr, usage] : range) {
+      generator.declare(expr, usage, ctx);
+    }
+  } else {
+    for (const Expr &expr : range) {
+      generator.declare(expr, ctx);
+    }
   }
 
   using std::ranges::size;
-  if constexpr (std::is_same_v<RangeType, Tensor>) {
+  if constexpr (std::is_same_v<Expr, Tensor>) {
     generator.all_tensors_declared(size(range), ctx);
-  } else if constexpr (std::is_same_v<RangeType, Variable>) {
+  } else if constexpr (std::is_same_v<Expr, Variable>) {
     generator.all_variables_declared(size(range), ctx);
   } else {
-    static_assert(std::is_same_v<RangeType, Index>);
+    static_assert(std::is_same_v<Expr, Index>);
     generator.all_indices_declared(size(range), ctx);
   }
 }
@@ -622,13 +650,15 @@ void declare_all(const Range &range, Generator<Context> &generator,
 template <typename T, typename Compare = std::less<T>, typename Range>
   requires std::ranges::range<Range> &&
            std::is_same_v<std::ranges::range_value_t<Range>, PreprocessResult>
-std::set<T, Compare> combine_and_clear_pp_results(Range &&range) {
-  std::set<T, Compare> combined;
-
+auto combine_and_clear_pp_results(Range &&range) {
   constexpr bool is_index = std::is_same_v<T, Index>;
   constexpr bool is_variable = std::is_same_v<T, Variable>;
   constexpr bool is_tensor = std::is_same_v<T, Tensor>;
   static_assert(is_index || is_variable || is_tensor);
+
+  using Collection = std::conditional<is_index, std::set<T, Compare>,
+                                      std::map<T, UsageSet, Compare>>::type;
+  Collection combined;
 
   for (PreprocessResult &current : range) {
     if constexpr (is_index) {
@@ -658,20 +688,20 @@ void handle_declarations(Range &&range, Generator<Context> &generator,
   if (generator.index_declaration_scope() == scope) {
     std::set<Index> indices =
         details::combine_and_clear_pp_results<Index>(range);
-    details::declare_all(indices, generator, ctx);
+    details::declare_all<Index>(indices, generator, ctx);
   }
 
   if (generator.variable_declaration_scope() == scope) {
-    std::set<Variable> variables =
+    std::map<Variable, UsageSet> variables =
         details::combine_and_clear_pp_results<Variable>(range);
-    details::declare_all(variables, generator, ctx);
+    details::declare_all<Variable>(variables, generator, ctx);
   }
 
   if (generator.tensor_declaration_scope() == scope) {
-    std::set<Tensor, TensorBlockCompare> tensors =
+    std::map<Tensor, UsageSet, TensorBlockCompare> tensors =
         details::combine_and_clear_pp_results<Tensor, TensorBlockCompare>(
             range);
-    details::declare_all(tensors, generator, ctx);
+    details::declare_all<Tensor>(tensors, generator, ctx);
   }
 
   generator.end_declarations(scope, ctx);

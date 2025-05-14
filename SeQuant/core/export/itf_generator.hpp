@@ -249,7 +249,8 @@ class ItfGenerator : public Generator<Context> {
                    "\n";
   }
 
-  void declare(const Variable &variable, const Context &ctx) override {
+  void declare(const Variable &variable, UsageSet usage,
+               const Context &ctx) override {
     m_generated += "tensor: " + represent(variable, ctx) + ", ";
 
     std::optional<std::string> import_name = ctx.import_name(variable);
@@ -262,7 +263,8 @@ class ItfGenerator : public Generator<Context> {
     m_generated += "\n";
   }
 
-  void declare(const Tensor &tensor, const Context &ctx) override {
+  void declare(const Tensor &tensor, UsageSet usage,
+               const Context &ctx) override {
     m_generated += "tensor: " + represent(tensor, ctx) + ", ";
 
     std::optional<std::string> import_name = ctx.import_name(tensor);

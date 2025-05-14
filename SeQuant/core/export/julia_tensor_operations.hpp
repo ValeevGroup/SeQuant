@@ -213,12 +213,14 @@ class JuliaTensorOperationsGenerator : public Generator<Context> {
     (void)ctx;
   }
 
-  void declare(const Variable &variable, const Context &ctx) override {
+  void declare(const Variable &variable, UsageSet usage,
+               const Context &ctx) override {
     (void)variable;
     (void)ctx;
   }
 
-  void declare(const Tensor &tensor, const Context &ctx) override {
+  void declare(const Tensor &tensor, UsageSet usage,
+               const Context &ctx) override {
     (void)tensor;
     (void)ctx;
   }
