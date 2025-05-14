@@ -237,6 +237,10 @@ void generateITF(const json &blocks, std::string_view out_file,
              postProcess(contribution, spaceMeta, options)) {
           spdlog::debug("Fully processed equation is:\n{}", current);
 
+          if (*current.expression() == Constant(0)) {
+            continue;
+          }
+
           if (needsSymmetrization(current.expression())) {
             std::optional<ExprPtr> symmetrizer =
                 pop_tensor(current.expression(), L"S");
