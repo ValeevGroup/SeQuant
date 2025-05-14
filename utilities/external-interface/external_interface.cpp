@@ -183,6 +183,9 @@ void generateITF(const json &blocks, std::string_view out_file,
 
   GenerationOptimizer<ItfGenerator<ItfContext>> generator;
 
+  container::svector<ExpressionGroup<>> groups;
+  groups.reserve(blocks.size());
+
   for (const json &current_block : blocks) {
     const std::string block_name = current_block.at("name");
 
@@ -277,11 +280,11 @@ void generateITF(const json &blocks, std::string_view out_file,
       }
     }
 
-    export_group(ExpressionGroup<>(std::move(results),
-                                   current_block.at("name").get<std::string>()),
-                 generator, context);
+    groups.emplace_back(std::move(results),
+                        current_block.at("name").get<std::string>());
   }
 
+  export_groups(groups, generator, context);
   std::string itfCode = generator.get_generated_code();
 
   std::ofstream output(out_file.data());
