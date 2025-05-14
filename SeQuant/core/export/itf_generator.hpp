@@ -117,6 +117,21 @@ class ItfGenerator : public Generator<Context> {
     return name;
   }
 
+  std::string get_name(const Tensor &tensor, const Context &ctx) const {
+    std::string name = toUtf8(tensor.label());
+
+    const auto &indices = tensor.const_indices();
+
+    if (!indices.empty()) {
+      name += ":";
+      for (const Index &idx : indices) {
+        name += ctx.get_tag(idx.space());
+      }
+    }
+
+    return name;
+  }
+
   std::string represent(const Tensor &tensor,
                         const Context &ctx) const override {
     std::string representation = get_name(tensor, ctx);
@@ -345,21 +360,6 @@ class ItfGenerator : public Generator<Context> {
 
  private:
   std::string m_generated;
-
-  std::string get_name(const Tensor &tensor, const Context &ctx) const {
-    std::string name = toUtf8(tensor.label());
-
-    const auto &indices = tensor.const_indices();
-
-    if (!indices.empty()) {
-      name += ":";
-      for (const Index &idx : indices) {
-        name += ctx.get_tag(idx.space());
-      }
-    }
-
-    return name;
-  }
 
   std::string stringify(const Expr &expr, const Context &ctx) const {
     if (expr.is<Tensor>()) {

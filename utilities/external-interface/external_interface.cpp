@@ -129,7 +129,7 @@ ExportNode<> prepareForExport(const ResultExpr &result, const Gen &generator,
     ctx.rewrite(result_tensor);
     if (importResult) {
       ctx.set_import_name(result_tensor,
-                          generator.represent(result_tensor, ctx));
+                          generator.get_name(result_tensor, ctx));
     }
     if (createResult) {
       ctx.setLoadStrategy(result_tensor, LoadStrategy::Create, tree->id());
