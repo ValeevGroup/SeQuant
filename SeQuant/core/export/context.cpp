@@ -36,6 +36,16 @@ UsageSet &UsageSet::operator=(Usage usage) {
   return *this;
 }
 
+UsageSet &UsageSet::operator|=(UsageSet usage) {
+  m_val |= usage.m_val;
+  return *this;
+}
+
+UsageSet &UsageSet::operator&=(UsageSet usage) {
+  m_val &= usage.m_val;
+  return *this;
+}
+
 UsageSet &UsageSet::operator|=(Usage usage) {
   m_val |= static_cast<Value>(usage);
   return *this;

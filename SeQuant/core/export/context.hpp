@@ -53,6 +53,9 @@ class UsageSet {
   UsageSet() = default;
 
   UsageSet &operator=(Usage usage);
+
+  UsageSet &operator|=(UsageSet usage);
+  UsageSet &operator&=(UsageSet usage);
   UsageSet &operator|=(Usage usage);
   UsageSet &operator&=(Usage usage);
 

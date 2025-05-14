@@ -666,12 +666,16 @@ auto combine_and_clear_pp_results(Range &&range) {
                       std::make_move_iterator(current.indices.end()));
       current.indices.clear();
     } else if constexpr (is_variable) {
-      combined.insert(std::make_move_iterator(current.variables.begin()),
-                      std::make_move_iterator(current.variables.end()));
+      for (auto &[variable, usage] : current.variables) {
+        combined[std::move(variable)] |= usage;
+      }
+
       current.variables.clear();
     } else if constexpr (is_tensor) {
-      combined.insert(std::make_move_iterator(current.tensors.begin()),
-                      std::make_move_iterator(current.tensors.end()));
+      for (auto &[tensor, usage] : current.tensors) {
+        combined[std::move(tensor)] |= usage;
+      }
+
       current.tensors.clear();
     }
   }
