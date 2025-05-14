@@ -35,10 +35,10 @@ index-space: k, Closed, c
 index-space: b, External, e
 index-space: c, External, e
 
-tensor: ECC[], !Create{type:scalar}
+tensor: ECC[], ECC
 
-tensor: K:eecc[bcjk], !Create{type:disk}
-tensor: t:eecc[bcjk], !Create{type:disk}
+tensor: K:eecc[bcjk], K:eecc
+tensor: t:eecc[bcjk], t:eecc
 
 
 ---- code("unnamed")

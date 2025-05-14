@@ -119,16 +119,9 @@ class ItfGenerator : public Generator<Context> {
 
   std::string represent(const Tensor &tensor,
                         const Context &ctx) const override {
-    std::string representation = toUtf8(tensor.label());
+    std::string representation = get_name(tensor, ctx);
 
     const auto &indices = tensor.const_indices();
-
-    if (!indices.empty()) {
-      representation += ":";
-      for (const Index &idx : indices) {
-        representation += ctx.get_tag(idx.space());
-      }
-    }
 
     representation += "[";
 
@@ -254,8 +247,15 @@ class ItfGenerator : public Generator<Context> {
     m_generated += "tensor: " + represent(variable, ctx) + ", ";
 
     std::optional<std::string> import_name = ctx.import_name(variable);
-    if (import_name.has_value()) {
-      m_generated += import_name.value();
+    bool needs_import = import_name.has_value() || usage == Usage::Terminal ||
+                        usage == Usage::Result;
+
+    if (needs_import) {
+      if (import_name.has_value()) {
+        m_generated += import_name.value();
+      } else {
+        m_generated += toUtf8(variable.label());
+      }
     } else {
       m_generated += "!Create{type:scalar}";
     }
@@ -268,10 +268,18 @@ class ItfGenerator : public Generator<Context> {
     m_generated += "tensor: " + represent(tensor, ctx) + ", ";
 
     std::optional<std::string> import_name = ctx.import_name(tensor);
-    if (import_name.has_value()) {
-      m_generated += import_name.value();
+    bool needs_import = import_name.has_value() || usage == Usage::Terminal ||
+                        usage == Usage::Result;
+
+    if (needs_import) {
+      if (import_name.has_value()) {
+        m_generated += import_name.value();
+      } else {
+        m_generated += get_name(tensor, ctx);
+      }
+    } else if (usage == Usage::Intermediate) {
+      m_generated += "!Create{type:plain}";
     } else {
-      // TODO: we can use type:plain for tensors that don't need to be persisted
       m_generated += "!Create{type:disk}";
     }
 
@@ -337,6 +345,21 @@ class ItfGenerator : public Generator<Context> {
 
  private:
   std::string m_generated;
+
+  std::string get_name(const Tensor &tensor, const Context &ctx) const {
+    std::string name = toUtf8(tensor.label());
+
+    const auto &indices = tensor.const_indices();
+
+    if (!indices.empty()) {
+      name += ":";
+      for (const Index &idx : indices) {
+        name += ctx.get_tag(idx.space());
+      }
+    }
+
+    return name;
+  }
 
   std::string stringify(const Expr &expr, const Context &ctx) const {
     if (expr.is<Tensor>()) {

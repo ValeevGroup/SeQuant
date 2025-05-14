@@ -64,9 +64,9 @@ index-space: j, Closed, c
 index-space: k, Closed, c
 index-space: b, External, e
 
-tensor: A:ec[bk], !Create{type:disk}
-tensor: B:ce[jb], !Create{type:disk}
-tensor: I:cc[jk], !Create{type:disk}
+tensor: A:ec[bk], A:ec
+tensor: B:ce[jb], B:ce
+tensor: I:cc[jk], I:cc
 
 
 ---- code("unnamed")
