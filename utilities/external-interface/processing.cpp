@@ -85,12 +85,7 @@ container::svector<ResultExpr> postProcess(ResultExpr result,
   container::svector<std::optional<ExprPtr>> symmetrizers;
   symmetrizers.reserve(processed.size());
   for (ResultExpr &current : processed) {
-    std::optional<ExprPtr> symmetrizer = pop_tensor(current.expression(), L"S");
-    if (!symmetrizer.has_value()) {
-      symmetrizer = pop_tensor(current.expression(), L"A");
-    }
-
-    symmetrizers.push_back(std::move(symmetrizer));
+    symmetrizers.push_back(pop_symmetrizer(current));
   }
 
   switch (options.transform) {
@@ -99,9 +94,21 @@ container::svector<ResultExpr> postProcess(ResultExpr result,
     case ProjectionTransformation::Biorthogonal:
       biorthogonal_transform(processed);
 
-      for (ResultExpr &current : processed) {
+      for (std::size_t i = 0; i < processed.size(); ++i) {
+        // Having the symmetrizer is important for simplification to work
+        // properly but we have to remove them again to not mess with the
+        // contraction order optimization.
+        if (symmetrizers.at(i).has_value()) {
+          processed.at(i).expression() *= symmetrizers.at(i).value();
+        }
+        simplify(processed.at(i));
+
         spdlog::debug("Expression after biorthogonal transformation:\n{}",
-                      current);
+                      processed.at(i));
+
+        if (symmetrizers.at(i).has_value()) {
+          pop_symmetrizer(processed.at(i));
+        }
       }
       break;
   }

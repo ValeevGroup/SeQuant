@@ -9,6 +9,7 @@
 #include <SeQuant/core/utility/indices.hpp>
 
 #include <map>
+#include <optional>
 #include <string>
 
 class IndexSpaceMeta {
@@ -48,5 +49,7 @@ sequant::ExprPtr generateResultSymmetrization(const sequant::Tensor &result,
 sequant::ExprPtr generateResultSymmetrization(
     std::wstring_view precursorName,
     const sequant::IndexGroups<std::vector<sequant::Index> > &externals);
+
+std::optional<sequant::ExprPtr> pop_symmetrizer(sequant::ResultExpr &expr);
 
 #endif

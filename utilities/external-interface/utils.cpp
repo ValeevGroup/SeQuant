@@ -4,14 +4,13 @@
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/result_expr.hpp>
 #include <SeQuant/core/space.hpp>
+#include <SeQuant/core/utility/expr.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/string.hpp>
 
 #include <algorithm>
-#include <bitset>
 #include <cassert>
-#include <functional>
-#include <sstream>
+#include <optional>
 
 #include <range/v3/view/zip.hpp>
 
@@ -198,4 +197,14 @@ sequant::ExprPtr generateResultSymmetrization(
   }
 
   return symmetrization;
+}
+
+std::optional<ExprPtr> pop_symmetrizer(ResultExpr &expr) {
+  std::optional<ExprPtr> symmetrizer = pop_tensor(expr.expression(), L"S");
+
+  if (!symmetrizer.has_value()) {
+    symmetrizer = pop_tensor(expr.expression(), L"A");
+  }
+
+  return symmetrizer;
 }
