@@ -379,6 +379,15 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
     return *bra_hash_value_;
   }
 
+  bool operator<(const AbstractTensor &other) const override final {
+    auto *other_tensor = dynamic_cast<const Tensor *>(&other);
+    if (other_tensor) {
+      const Expr *other_expr = static_cast<const Expr *>(other_tensor);
+      return this->static_less_than(*other_expr);
+    } else
+      return false;  // TODO do we compare typeid? labels? probably the latter
+  }
+
  private:
   std::wstring label_{};
   sequant::bra<index_container_type> bra_{};
@@ -510,14 +519,6 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
     return transform_indices(index_map);
   }
   void _reset_tags() override final { reset_tags(); }
-  bool operator<(const AbstractTensor &other) const override final {
-    auto *other_tensor = dynamic_cast<const Tensor *>(&other);
-    if (other_tensor) {
-      const Expr *other_expr = static_cast<const Expr *>(other_tensor);
-      return this->static_less_than(*other_expr);
-    } else
-      return false;  // TODO do we compare typeid? labels? probably the latter
-  }
 
   AbstractTensor::any_view_randsz _bra_mutable() override final {
     this->reset_hash_value();
