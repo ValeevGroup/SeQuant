@@ -75,7 +75,7 @@ container::svector<ResultExpr> postProcess(ResultExpr result,
   }
 
   for (ResultExpr &current : processed) {
-    current.expression() = simplify(current.expression());
+    simplify(current);
     if (options.spintrace != SpinTracing::None) {
       spdlog::debug("Expression after spintracing:\n{}", current);
     }

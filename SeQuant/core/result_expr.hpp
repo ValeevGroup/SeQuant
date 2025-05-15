@@ -152,6 +152,11 @@ class ResultExpr {
   std::optional<std::wstring> m_label;
 };
 
+ResultExpr &canonicalize(ResultExpr &expr);
+ResultExpr &simplify(ResultExpr &expr);
+ResultExpr &rapid_simplify(ResultExpr &expr);
+ResultExpr &expand(ResultExpr &expr);
+
 }  // namespace sequant
 
 #endif  // SEQUANT_RESULT_EXPR_HPP
