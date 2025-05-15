@@ -1,7 +1,7 @@
 Operators
 ---------
 
-Development of SeQuant is primarily motivated by the perturbative many-body methods, collectively referred to here as Many-Body Perturbation Theory (MBPT). Examples of such methods include the Development of SeQuant is primarily motivated by the perturbative many-body methods, collectively referred to here as Many-Body Perturbation Theory (MBPT). Examples of such methods include the `coupled-cluster (CC) method <https://doi.org/10.1017/CBO9780511596834>`_ and `GW <https://doi.org/10.1103/PhysRev.139.A796>`_. The typical use case is to compute canonical forms of products of operators. For example, consider the coupled-cluster doubles (CCD) method. The typical use case is to compute canonical forms of products of operators. For example, consider the coupled-cluster doubles (CCD) method.
+Development of SeQuant is primarily motivated by the perturbative many-body methods, collectively referred to here as Many-Body Perturbation Theory (MBPT). Examples of such methods include the `coupled-cluster (CC) method <https://doi.org/10.1017/CBO9780511596834>`_ and `GW <https://doi.org/10.1103/PhysRev.139.A796>`_. The typical use case is to compute canonical forms of products of operators. For example, consider the coupled-cluster doubles (CCD) method.
 *Amplitudes* :math:`t^{i_1 i_2}_ {a_1 a_2}` of the cluster operator,
 
 .. math::
@@ -29,7 +29,7 @@ The normal-ordered Hamiltonian is defined similarly as a sum of 1- and 2-body co
    :dedent: 2
 
 Note that the compact definition of the Hamiltonian is due to the use of the union (:math:`p`) of base occupied (:math:`i`) and unoccupied (:math:`a`) spaces. Many other symbolic algebras only support use of nonoverlapping base spaces, in terms of which Hamiltonian and other tensor expressions would have a much more verbose form.
-Commutator of the Hamiltonian and cluster operator is trivially composed:
+The commutator of the Hamiltonian and cluster operators is trivially composed:
 
 .. literalinclude:: /examples/user/getting_started/ccd_pedestrian.cpp
    :language: cpp
