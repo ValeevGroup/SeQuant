@@ -54,6 +54,8 @@ TEST_CASE("biorthogonalization", "[Biorthogonalization]") {
         {L"R{i1,i2;a1,a2} = g{a1,a2;i1,i2}"},
         {L"R{i1,u1;a1,a2} = g{i1,u1;a1,a2}"},
         {L"R{i1,i2;a1,u1} = g{i1,i2;a1,u1}"},
+        {L"R{a1,a2;u1,i1} = 4 g{a1,a2;u2,i1} GAM0{u2;u1} "
+         "- 2 g{a2,a1;u2,i1} GAM0{u2;u1}"},
         {L"R{i1,u1;a1,u2} = X{i1,u1;a1,u2}",
          L"R{u1,i1;a1,u2} = Y{u1,i1;a1,u2}"},
     };
@@ -62,6 +64,7 @@ TEST_CASE("biorthogonalization", "[Biorthogonalization]") {
         {L"R{a1,a2;i1,i2} = 1/6 ( 2 g{a1,a2;i1,i2} + g{a2,a1;i1,i2} )"},
         {L"R{i1,u1;a1,a2} = 1/6 ( 2 g{i1,u1;a1,a2} + g{i1,u1;a2,a1} )"},
         {L"R{i1,i2;a1,u1} = 1/6 ( 2 g{i1,i2;a1,u1} + g{i2,i1;a1,u1} )"},
+        {L"R{a1,a2;u1,i1} = g{a1,a2;u2,i1} GAM0{u2;u1}"},
         {L"R{i1,u1;a1,u2} = 1/3 X{i1,u1;a1,u2} + 1/6 Y{u1,i1;a1,u2}",
          L"R{u1,i1;a1,u2} = 1/3 Y{u1,i1;a1,u2} + 1/6 X{i1,u1;a1,u2}"},
     };

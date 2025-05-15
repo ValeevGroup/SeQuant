@@ -15,6 +15,7 @@
 #include <libperm/Utils.hpp>
 
 #include <algorithm>
+#include <cassert>
 
 namespace sequant {
 
@@ -161,6 +162,8 @@ ExprPtr create_expr_for(const ParticlePairings& ref_pairing,
                        return std::is_sorted(pairing.begin(), pairing.end(),
                                              compare_first_less<IndexPair>{});
                      }));
+  assert(std::is_sorted(ref_pairing.begin(), ref_pairing.end(),
+                        compare_first_less<IndexPair>{}));
 
   container::set<std::pair<IndexSpace, IndexSpace>> ref_space_pairing;
   ref_space_pairing.reserve(ref_pairing.size());
@@ -170,6 +173,8 @@ ExprPtr create_expr_for(const ParticlePairings& ref_pairing,
                        ref_pairing[perm->image(i)].second.space()));
   }
 
+  // Look for a ParticlePairings object that pairs indices belonging to index
+  // spaces compatible with ref_space_pairing
   auto it = std::find_if(
       pairings.begin(), pairings.end(), [&](const ParticlePairings& p) {
         assert(p.size() == ref_pairing.size());
@@ -200,36 +205,46 @@ ExprPtr create_expr_for(const ParticlePairings& ref_pairing,
   for (std::size_t i = 0; i < base.size(); ++i) {
     std::size_t ref_idx = perm->image(i);
 
-    const bool differs_in_first = base[i].first != ref_pairing[i].first;
+    // Remember that all index pairings are sorted w.r.t. first and hence we are
+    // only looking for permutations in second
+    assert(base[i].first == ref_pairing[i].first);
     const bool differs_in_second =
         base[i].second != ref_pairing[ref_idx].second;
 
-    if (!differs_in_first && !differs_in_second) {
+    if (!differs_in_second) {
       // This particle pairing is identical
       continue;
     }
 
-    assert(differs_in_first || differs_in_second);
+    assert(differs_in_second);
 
-    if (differs_in_first) {
-      if (base[i].first.space() == ref_pairing[i].first.space()) {
-        replacements.insert(
-            std::make_pair(base[i].first, ref_pairing[ref_idx].first));
-        continue;
-      }
-    }
-    if (differs_in_second) {
-      if (base[i].second.space() == ref_pairing[i].second.space()) {
-        replacements.insert(
-            std::make_pair(base[i].second, ref_pairing[ref_idx].second));
-        continue;
-      }
+    // Note: we may only permute indices belonging to the same space
+    // (otherwise, we would produce non-sensical expressions)
+    if (base[i].second.space() == ref_pairing[ref_idx].second.space()) {
+      // base and ref_pairing differ in the second index of the current
+      // pairing and their index space matches -> can just permute them
+      replacements.insert(
+          std::make_pair(base[i].second, ref_pairing[ref_idx].second));
+    } else {
+      // Index spaces of the differing index (second) in the pairings are
+      // different as well. Since the tensors are assumed to be
+      // particle-symmetric, we can instead permute the first indices in the
+      // pairings, which are of the same space (that's guaranteed by the way we
+      // chose base).
+      assert(base[i].first.space() == ref_pairing[ref_idx].first.space());
+      replacements.insert(
+          std::make_pair(base[i].first, ref_pairing[ref_idx].first));
     }
   }
 
   ExprPtr expr = base_exprs.at(idx)->clone();
 
   if (!replacements.empty()) {
+#ifndef NDEBUG
+    for (const auto& [first, second] : replacements) {
+      assert(first.space() == second.space());
+    }
+#endif
     expr = transform_expr(expr, replacements);
   }
 
