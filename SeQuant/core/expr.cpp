@@ -370,58 +370,54 @@ ExprPtr Sum::canonicalize_impl(bool multipass) {
                  << "): after canonicalizing summands = "
                  << to_latex_align(shared_from_this()) << std::endl;
 
-    // using boost::container::flat_map instead of unordered_map
-    container::map<size_t, sequant::container::vector<size_t>> hash_groups;
-
-    // group terms by hash value
-    for (size_t i = 0; i < summands_.size(); ++i) {
-      auto hash = summands_[i]->hash_value();
+    // group terms by hash value (no need to have a vector)
+    container::map<size_t, ExprPtr> hash_groups;
+    // Process each summand
+    for (const auto &summand : summands_) {
+      auto hash = summand->hash_value();
       auto it = hash_groups.find(hash);
       if (it == hash_groups.end()) {
-        hash_groups.insert({hash, container::vector<size_t>{i}});
+        // First occurrence of this hash
+        hash_groups[hash] = summand;
       } else {
-        it->second.push_back(i);
+        // Another term with the same hash
+        if (summand->template is<Product>()) {
+          if (it->second->template is<Product>()) {
+            // Both are products - add them
+            auto &product = it->second->template as<Product>();
+            product.add_identical(summand->template as<Product>());
+          } else {
+            // Convert existing term to Product and add
+            auto product_copy =
+                std::static_pointer_cast<Product>(summand->clone());
+            auto as_product =
+                std::make_shared<Product>(1, ExprPtrList{it->second});
+            product_copy->add_identical(*as_product);
+            it->second = product_copy;
+          }
+        } else {
+          if (it->second->template is<Product>()) {
+            // Convert summand to Product and add
+            auto &product = it->second->template as<Product>();
+            auto as_product =
+                std::make_shared<Product>(1, ExprPtrList{summand});
+            product.add_identical(*as_product);
+          } else {
+            // Neither is a Product - create new Product
+            auto product_form = std::make_shared<Product>();
+            product_form->append(2, summand->template as<Expr>());
+            it->second = product_form;
+          }
+        }
       }
     }
-    // process each group
-    decltype(summands_) new_summands;
-    new_summands.reserve(hash_groups.size());  // Reserve for efficiency
 
-    for (const auto &pair : hash_groups) {
-      const auto &indices = pair.second;
-      if (indices.size() == 1) {
-        // single term with this hash - just keep it
-        new_summands.push_back(summands_[indices[0]]);
-      } else {
-        // if you saw this hash before, combine all of them
-        ExprPtr combined_term;
-        if (summands_[indices[0]]->template is<Product>()) {
-          // Handle group of Products
-          auto product_copy =
-              std::static_pointer_cast<Product>(summands_[indices[0]]->clone());
-          for (size_t i = 1; i < indices.size(); ++i) {
-            if (!summands_[indices[i]]->template is<Product>()) {
-              auto as_product = std::make_shared<Product>(
-                  1, ExprPtrList{summands_[indices[i]]});
-              product_copy->add_identical(*as_product);
-            } else {
-              product_copy->add_identical(
-                  summands_[indices[i]]->template as<Product>());
-            }
-          }
-          combined_term = product_copy;
-        } else {
-          // Handle all other types
-          auto product_form = std::make_shared<Product>();
-          product_form->append(indices.size(),
-                               summands_[indices[0]]->template as<Expr>());
-          combined_term = product_form;
-        }
-        // if not zero, add to new summands
-        if (!combined_term->template is<Product>() ||
-            !combined_term->template as<Product>().is_zero()) {
-          new_summands.push_back(combined_term);
-        }
+    decltype(summands_) new_summands;
+    new_summands.reserve(hash_groups.size());
+    for (const auto &[hash, term] : hash_groups) {
+      if (!term->template is<Product>() ||
+          !term->template as<Product>().is_zero()) {
+        new_summands.push_back(term);
       }
     }
     // now just sort the unique terms (efficient)
