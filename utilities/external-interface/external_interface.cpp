@@ -36,6 +36,7 @@
 #include <string>
 #include <string_view>
 #include <unordered_set>
+#include <variant>
 
 using nlohmann::json;
 using namespace sequant;
@@ -227,7 +228,7 @@ void generateITF(const json &blocks, std::string_view out_file,
 
       std::unordered_set<Tensor> tensorsToSymmetrize;
 
-      bool createResult = true;
+      std::set<std::variant<Tensor, Variable>> createdResults;
       for (const ResultExpr &contribution : resultParts) {
         if (resultParts.size() > 1) {
           spdlog::debug("Current contribution:\n{}", contribution);
@@ -236,6 +237,26 @@ void generateITF(const json &blocks, std::string_view out_file,
         for (ResultExpr &current :
              postProcess(contribution, spaceMeta, options)) {
           spdlog::debug("Fully processed equation is:\n{}", current);
+
+          const bool createResult = [&]() {
+            // We only want to create a given result once to not overwrite
+            // previous contributions
+            if (contribution.produces_tensor()) {
+              if (createdResults.find(current.result_as_tensor()) ==
+                  createdResults.end()) {
+                createdResults.insert(current.result_as_tensor());
+                return true;
+              }
+            } else {
+              if (createdResults.find(current.result_as_variable()) ==
+                  createdResults.end()) {
+                createdResults.insert(current.result_as_variable());
+                return true;
+              }
+            }
+
+            return false;
+          }();
 
           if (*current.expression() == Constant(0)) {
             continue;
@@ -263,10 +284,6 @@ void generateITF(const json &blocks, std::string_view out_file,
                 current, generator, context,
                 current_result.value("import", true), createResult));
           }
-
-          // For any further contributions to this result, we will
-          // not re-create it
-          createResult = false;
         }
       }
 
