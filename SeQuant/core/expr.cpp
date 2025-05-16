@@ -140,6 +140,11 @@ void Constant::adjoint() {
 
 std::wstring_view Variable::label() const { return label_; }
 
+void Variable::set_label(std::wstring label) {
+  label_ = std::move(label);
+  reset_hash_value();
+}
+
 void Variable::conjugate() { conjugated_ = !conjugated_; }
 
 bool Variable::conjugated() const { return conjugated_; }
