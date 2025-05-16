@@ -437,6 +437,34 @@ void preprocess(ExprType expr, ExportContext &ctx, Node &node,
   }
 }
 
+template <typename T>
+bool may_prune(const EvalNode<T> &tree) {
+  // Tree must represent a product and must itself not be a leaf (pruning that
+  // would make the tree vanish)
+  if (tree->op_type() != EvalOp::Product || tree.leaf()) {
+    return false;
+  }
+
+  // If left and right nodes are both leafs, then pruning either of
+  // them will turn the tree into a leaf node (representing the
+  // non-pruned subtree)
+  const bool can_turn_tree_into_leaf =
+      tree.left().leaf() && tree.right().leaf();
+
+  // Pruning in a way that turns this tree into a leaf is only acceptable if
+  // - This tree has a parent node. That's required because terminal nodes
+  //   don't trigger any computation during export. Hence, existence of a
+  //   parent node ensures that the parent triggers the computation which will
+  //   contain the tree as well as the separately stored scalar factor.
+  // - The parent node represents a product. If it doesn't, the entire concept
+  //   of storing a scalar factor on it to be added to the computation
+  //   produces incorrect results.
+  const bool may_turn_tree_into_leaf =
+      !tree.root() && tree.parent()->op_type() == EvalOp::Product;
+
+  return !can_turn_tree_into_leaf || may_turn_tree_into_leaf;
+};
+
 ///
 /// Preprocesses the provided binary tree by
 /// - removing explicit appearances of scalar leafs. We don't want them to
@@ -458,116 +486,130 @@ void preprocess(ExprType expr, ExportContext &ctx, Node &node,
 /// encoded in this tree.
 ///
 template <typename T>
-void preprocess(ExportNode<T> &tree, PreprocessResult &result,
-                ExportContext &ctx) {
-  auto may_prune = [](const EvalNode<T> &tree) {
-    // Tree must represent a product and must itself not be a leaf (pruning that
-    // would make the tree vanish)
-    if (tree->op_type() != EvalOp::Product || tree.leaf()) {
-      return false;
-    }
+class PreprocessVisitor {
+ public:
+  PreprocessVisitor(PreprocessResult &result, ExportContext &ctx)
+      : m_result(result), m_ctx(ctx) {}
 
-    // If left and right nodes are both leafs, then pruning either of
-    // them will turn the tree into a leaf node (representing the
-    // non-pruned subtree)
-    const bool can_turn_tree_into_leaf =
-        tree.left().leaf() && tree.right().leaf();
+  void operator()(ExportNode<T> &tree, TreeTraversal context) {
+    // Note the context for leaf nodes is always TreeTraversal::Any
+    switch (context) {
+      case TreeTraversal::Any:
+      case TreeTraversal::PreOrder:
+        prune_scalar_factors(tree);
+        preprocess_node_content(tree);
 
-    // Pruning in a way that turns this tree into a leaf is only acceptable if
-    // - This tree has a parent node. That's required because terminal nodes
-    //   don't trigger any computation during export. Hence, existence of a
-    //   parent node ensures that the parent triggers the computation which will
-    //   contain the tree as well as the separately stored scalar factor.
-    // - The parent node represents a product. If it doesn't, the entire concept
-    //   of storing a scalar factor on it to be added to the computation
-    //   produces incorrect results.
-    const bool may_turn_tree_into_leaf =
-        !tree.root() && tree.parent()->op_type() == EvalOp::Product;
-
-    return !can_turn_tree_into_leaf || may_turn_tree_into_leaf;
-  };
-
-  while (may_prune(tree) && prune_scalar_factor(tree.left(), result)) {
-    // In case the pruning led to tree becoming a leaf, we have to move the
-    // pruned scalar factor out to its parent in order to be properly accounted
-    // for (as leafs only get loaded and never computed)
-    if (auto iter = result.scalarFactors.find(tree->id());
-        iter != result.scalarFactors.end() && tree.leaf()) {
-      assert(!tree.root());
-      ExprPtr factor = std::move(iter->second);
-      result.scalarFactors.erase(iter);
-      result.scalarFactors[tree.parent()->id()] = std::move(factor);
-    }
-  }
-  while (may_prune(tree) && prune_scalar_factor(tree.right(), result)) {
-    if (auto iter = result.scalarFactors.find(tree->id());
-        iter != result.scalarFactors.end() && tree.leaf()) {
-      assert(!tree.root());
-      ExprPtr factor = std::move(iter->second);
-      result.scalarFactors.erase(iter);
-      result.scalarFactors[tree.parent()->id()] = std::move(factor);
+        if (!tree.leaf()) {
+          rebalance_tree(tree);
+          set_compute_selection(tree);
+        }
+        break;
+      case TreeTraversal::PostOrder:
+        if (!tree.leaf()) {
+          release_used_terms(tree);
+        }
+        break;
+      case TreeTraversal::InOrder:
+      case TreeTraversal::PreAndInOrder:
+      case TreeTraversal::PreAndPostOrder:
+      case TreeTraversal::PostAndInOrder:
+      case TreeTraversal::None:
+        // Should be unreachable
+        assert(false);
+        break;
     }
   }
 
-  if (tree->is_tensor()) {
-    preprocess<Tensor>(tree->as_tensor(), ctx, tree, result);
-  } else if (tree->is_variable()) {
-    preprocess<Variable>(tree->as_variable(), ctx, tree, result);
-  }
-
-  if (tree.leaf()) {
-    return;
-  }
-
-  if (tree.left().size() < tree.right().size()) {
-    std::swap(tree.left(), tree.right());
-  }
-
-  if (tree->op_type() == EvalOp::Sum) {
-    // We don't want to explicitly encode addition of non-leaf
-    // nodes in the tree as that could lead to unnecessary intermediates
-    // being created. Instead, we flush the top-most result of the
-    // addition downwards, making use of the += semantic that is assumed
-    // for all computations.
-    // Note the explicit flushing down of the result name is required in
-    // case the top-level summation node has a different name than the
-    // intermediate nodes.
-    ComputeSelection selection = ComputeSelection::Both;
-    if (!tree.left().leaf()) {
-      tree.left()->set_expr(tree->expr());
-      selection &= ~ComputeSelection::Left;
-    }
-    if (!tree.right().leaf()) {
-      tree.right()->set_expr(tree->expr());
-      selection &= ~ComputeSelection::Right;
+  void prune_scalar_factors(ExportNode<T> &tree) {
+    while (may_prune(tree) && prune_scalar_factor(tree.left(), m_result)) {
+      // In case the pruning led to tree becoming a leaf, we have to move the
+      // pruned scalar factor out to its parent in order to be properly
+      // accounted for (as leafs only get loaded and never computed)
+      if (auto iter = m_result.scalarFactors.find(tree->id());
+          iter != m_result.scalarFactors.end() && tree.leaf()) {
+        assert(!tree.root());
+        ExprPtr factor = std::move(iter->second);
+        m_result.scalarFactors.erase(iter);
+        m_result.scalarFactors[tree.parent()->id()] = std::move(factor);
+      }
     }
 
-    tree->set_compute_selection(selection);
+    while (may_prune(tree) && prune_scalar_factor(tree.right(), m_result)) {
+      if (auto iter = m_result.scalarFactors.find(tree->id());
+          iter != m_result.scalarFactors.end() && tree.leaf()) {
+        assert(!tree.root());
+        ExprPtr factor = std::move(iter->second);
+        m_result.scalarFactors.erase(iter);
+        m_result.scalarFactors[tree.parent()->id()] = std::move(factor);
+      }
+    }
   }
 
-  preprocess(tree.left(), result, ctx);
-  preprocess(tree.right(), result, ctx);
+  void preprocess_node_content(ExportNode<T> &node) {
+    if (node->is_tensor()) {
+      preprocess<Tensor>(node->as_tensor(), m_ctx, node, m_result);
+    } else if (node->is_variable()) {
+      preprocess<Variable>(node->as_variable(), m_ctx, node, m_result);
+    }
+  }
 
-  // Mark tensors/variables as no longer in use
-  if (tree.left()->is_tensor()) {
-    const Tensor &tensor = tree.left()->as_tensor();
-    assert(result.tensorReferences[tensor] > 0);
-    result.tensorReferences[tensor]--;
-  } else if (tree.left()->is_variable()) {
-    const Variable &variable = tree.left()->as_variable();
-    assert(result.variableReferences[variable] > 0);
-    result.variableReferences[variable]--;
+  void rebalance_tree(ExportNode<T> &tree) {
+    if (tree.left().size() < tree.right().size()) {
+      std::swap(tree.left(), tree.right());
+    }
   }
-  if (tree.right()->is_tensor()) {
-    const Tensor &tensor = tree.right()->as_tensor();
-    assert(result.tensorReferences[tensor] > 0);
-    result.tensorReferences[tensor]--;
-  } else if (tree.right()->is_variable()) {
-    const Variable &variable = tree.right()->as_variable();
-    assert(result.variableReferences[variable] > 0);
-    result.variableReferences[variable]--;
+
+  void set_compute_selection(ExportNode<T> &node) {
+    if (node->op_type() == EvalOp::Sum) {
+      // We don't want to explicitly encode addition of non-leaf
+      // nodes in the tree as that could lead to unnecessary intermediates
+      // being created. Instead, we flush the top-most result of the
+      // addition downwards, making use of the += semantic that is assumed
+      // for all computations.
+      // Note the explicit flushing down of the result name is required in
+      // case the top-level summation node has a different name than the
+      // intermediate nodes.
+      ComputeSelection selection = ComputeSelection::Both;
+      if (!node.left().leaf()) {
+        node.left()->set_expr(node->expr());
+        selection &= ~ComputeSelection::Left;
+      }
+      if (!node.right().leaf()) {
+        node.right()->set_expr(node->expr());
+        selection &= ~ComputeSelection::Right;
+      }
+
+      node->set_compute_selection(selection);
+    }
   }
-}
+
+  void release_used_terms(ExportNode<T> &node) {
+    // Mark tensors/variables as no longer in use
+    if (node.left()->is_tensor()) {
+      const Tensor &tensor = node.left()->as_tensor();
+      assert(m_result.tensorReferences[tensor] > 0);
+      m_result.tensorReferences[tensor]--;
+    } else if (node.left()->is_variable()) {
+      const Variable &variable = node.left()->as_variable();
+      assert(m_result.variableReferences[variable] > 0);
+      m_result.variableReferences[variable]--;
+    }
+
+    if (node.right()->is_tensor()) {
+      const Tensor &tensor = node.right()->as_tensor();
+      assert(m_result.tensorReferences[tensor] > 0);
+      m_result.tensorReferences[tensor]--;
+    } else if (node.right()->is_variable()) {
+      const Variable &variable = node.right()->as_variable();
+      assert(m_result.variableReferences[variable] > 0);
+      m_result.variableReferences[variable]--;
+    }
+  }
+
+ private:
+  PreprocessResult &m_result;
+  ExportContext &m_ctx;
+};
 
 template <typename T>
 void preprocess_and_maybe_log(ExportNode<T> &tree, PreprocessResult &result,
@@ -582,7 +624,10 @@ void preprocess_and_maybe_log(ExportNode<T> &tree, PreprocessResult &result,
               << "\n";
   }
 
-  preprocess(tree, result, ctx);
+  details::PreprocessVisitor<T> preprocessor(result, ctx);
+  tree.visit(preprocessor, TreeTraversal::PreAndPostOrder);
+
+  // preprocess(tree, result, ctx);
 
   if (Logger::instance().export_equations) {
     std::cout << "Tree after pre-processing:\n"
@@ -715,14 +760,14 @@ void handle_declarations(Range &&range, Generator<Context> &generator,
 
 template <typename T = ExportExpr, typename Context>
 void export_group(ExpressionGroup<T> group, Generator<Context> &generator,
-                  Context ctx = {}) {
+                  Context ctx) {
   export_groups<T, Context>(std::array{std::move(group)}, generator,
                             std::move(ctx));
 }
 
 template <typename T = ExportExpr, typename Context>
 void export_expression(ExportNode<T> expression, Generator<Context> &generator,
-                       Context ctx = {}) {
+                       Context ctx) {
   export_groups<T, Context>(
       std::array{ExpressionGroup<T>{std::move(expression)}}, generator,
       std::move(ctx));
@@ -733,8 +778,7 @@ template <typename T = ExportExpr, typename Context, typename Range>
            std::is_same_v<std::ranges::range_value_t<Range>,
                           ExpressionGroup<T>> &&
            (!std::is_const_v<Range>)
-void export_groups(Range groups, Generator<Context> &generator,
-                   Context ctx = {}) {
+void export_groups(Range groups, Generator<Context> &generator, Context ctx) {
   using std::ranges::size;
 
   if (size(groups) > 1) {
