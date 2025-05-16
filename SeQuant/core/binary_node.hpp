@@ -90,7 +90,7 @@ struct VisitInternal {};
 struct VisitAll {};
 
 template <typename Visitor, typename Node>
-bool invoce_tree_visitor(const Visitor& f, const Node& node,
+bool invoke_tree_visitor(const Visitor& f, const Node& node,
                          TreeTraversal context) {
   if constexpr (std::is_invocable_v<decltype(f), decltype(node),
                                     decltype(context)>) {
@@ -153,7 +153,7 @@ void visit(FullBinaryNode<T> const& node, V f, NodeType) {
       if constexpr (!std::is_same_v<NodeType, VisitInternal>) {
         // Note: return value can be ignored as there is no subtree to explore
         // anyway
-        invoce_tree_visitor(f, current, TreeTraversal::Any);
+        invoke_tree_visitor(f, current, TreeTraversal::Any);
       }
 
       // Move back up to parent (if any)
@@ -165,7 +165,7 @@ void visit(FullBinaryNode<T> const& node, V f, NodeType) {
       if constexpr ((order & TreeTraversal::InOrder) ==
                         TreeTraversal::InOrder &&
                     !std::is_same_v<NodeType, VisitLeaf>) {
-        if (!invoce_tree_visitor(f, current, TreeTraversal::InOrder)) {
+        if (!invoke_tree_visitor(f, current, TreeTraversal::InOrder)) {
           // Abort subtree exploration -> move to parent (if any) instead
           current_ptr = current.root() ? nullptr : &current.parent();
         }
@@ -179,7 +179,7 @@ void visit(FullBinaryNode<T> const& node, V f, NodeType) {
                     !std::is_same_v<NodeType, VisitLeaf>) {
         // return value can be ignored as there is no further subtree to
         // explore
-        invoce_tree_visitor(f, current, TreeTraversal::PostOrder);
+        invoke_tree_visitor(f, current, TreeTraversal::PostOrder);
       }
     } else {
       assert(current.root() || previous_ptr == &current.parent());
@@ -189,7 +189,7 @@ void visit(FullBinaryNode<T> const& node, V f, NodeType) {
       if constexpr ((order & TreeTraversal::PreOrder) ==
                         TreeTraversal::PreOrder &&
                     !std::is_same_v<NodeType, VisitLeaf>) {
-        if (!invoce_tree_visitor(f, current, TreeTraversal::PreOrder)) {
+        if (!invoke_tree_visitor(f, current, TreeTraversal::PreOrder)) {
           // Cancel subtree exploration and move back to parent (if any)
           current_ptr = current.root() ? nullptr : &current.parent();
         }
