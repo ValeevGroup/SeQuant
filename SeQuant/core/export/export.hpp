@@ -627,8 +627,6 @@ void preprocess_and_maybe_log(ExportNode<T> &tree, PreprocessResult &result,
   details::PreprocessVisitor<T> preprocessor(result, ctx);
   tree.visit(preprocessor, TreeTraversal::PreAndPostOrder);
 
-  // preprocess(tree, result, ctx);
-
   if (Logger::instance().export_equations) {
     std::cout << "Tree after pre-processing:\n"
               << tree.tikz(
