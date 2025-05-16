@@ -182,7 +182,8 @@ void generateITF(const json &blocks, std::string_view out_file,
   // We assume index IDs start at 1
   context.set_index_id_offset(1);
 
-  GenerationOptimizer<ItfGenerator<ItfContext>> generator;
+  ItfGenerator<ItfContext> generator;
+  // GenerationOptimizer<ItfGenerator<ItfContext>> generator;
 
   container::svector<ExpressionGroup<>> groups;
   groups.reserve(blocks.size());
