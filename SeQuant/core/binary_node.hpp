@@ -89,6 +89,34 @@ struct VisitInternal {};
 /// Visit both leaf and internal nodes.
 struct VisitAll {};
 
+template <typename Visitor, typename Node>
+bool invoce_tree_visitor(const Visitor& f, const Node& node,
+                         TreeTraversal context) {
+  if constexpr (std::is_invocable_v<decltype(f), decltype(node),
+                                    decltype(context)>) {
+    using result_type =
+        std::invoke_result_t<decltype(f), decltype(node), decltype(context)>;
+    if constexpr (std::is_same_v<result_type, void>) {
+      f(node, context);
+      return true;
+    } else {
+      return static_cast<bool>(f(node, context));
+    }
+  } else {
+    static_assert(
+        std::is_invocable_v<decltype(f), decltype(node)>,
+        "Visitor must be a (const) callable that takes a FullBinaryNode<T> "
+        "and optionally a TreeTraversal argument");
+    using result_type = std::invoke_result_t<decltype(f), decltype(node)>;
+    if constexpr (std::is_same_v<result_type, void>) {
+      f(node);
+      return true;
+    } else {
+      return f(node);
+    }
+  }
+};
+
 ///
 /// \brief Visit a full binary node.
 ///
@@ -110,58 +138,65 @@ void visit(FullBinaryNode<T> const& node, V f, NodeType) {
                     std::is_same_v<NodeType, VisitInternal> ||
                     std::is_same_v<NodeType, VisitAll>,
                 "Not sure which nodes to visit");
-  const auto invoke = [](const V& f, const Node& node,
-                         TreeTraversal context) -> bool {
-    if constexpr (std::is_invocable_v<decltype(f), decltype(node),
-                                      decltype(context)>) {
-      using result_type =
-          std::invoke_result_t<decltype(f), decltype(node), decltype(context)>;
-      if constexpr (std::is_same_v<result_type, void>) {
-        f(node, context);
-        return true;
-      } else {
-        return static_cast<bool>(f(node, context));
+
+  const Node* current_ptr = &node;
+  const Node* previous_ptr = &node;
+
+  // Implementation note: we use a loop rather than recursive function calls as
+  // the latter implicitly imposes a maximum depth of a tree we can visit
+  // without triggering a stack overflow that will crash the program.
+  while (current_ptr) {
+    const Node& current = *current_ptr;
+
+    if (current.leaf()) {
+      // Arrived at a tree's leaf
+      if constexpr (!std::is_same_v<NodeType, VisitInternal>) {
+        // Note: return value can be ignored as there is no subtree to explore
+        // anyway
+        invoce_tree_visitor(f, current, TreeTraversal::Any);
+      }
+
+      // Move back up to parent (if any)
+      current_ptr = current.root() ? nullptr : &current.parent();
+    } else if (previous_ptr == &current.left()) {
+      // Finished visiting left, now visit right
+      current_ptr = &current.right();
+
+      if constexpr ((order & TreeTraversal::InOrder) ==
+                        TreeTraversal::InOrder &&
+                    !std::is_same_v<NodeType, VisitLeaf>) {
+        if (!invoce_tree_visitor(f, current, TreeTraversal::InOrder)) {
+          // Abort subtree exploration -> move to parent (if any) instead
+          current_ptr = current.root() ? nullptr : &current.parent();
+        }
+      }
+    } else if (previous_ptr == &current.right()) {
+      // Finished visiting right, now move back up to parent (if any)
+      current_ptr = current.root() ? nullptr : &current.parent();
+
+      if constexpr ((order & TreeTraversal::PostOrder) ==
+                        TreeTraversal::PostOrder &&
+                    !std::is_same_v<NodeType, VisitLeaf>) {
+        // return value can be ignored as there is no further subtree to
+        // explore
+        invoce_tree_visitor(f, current, TreeTraversal::PostOrder);
       }
     } else {
-      static_assert(
-          std::is_invocable_v<decltype(f), decltype(node)>,
-          "Visitor must be a (const) callable that takes a FullBinaryNode<T> "
-          "and optionally a TreeTraversal argument");
-      using result_type = std::invoke_result_t<decltype(f), decltype(node)>;
-      if constexpr (std::is_same_v<result_type, void>) {
-        f(node);
-        return true;
-      } else {
-        return f(node);
+      assert(current.root() || previous_ptr == &current.parent());
+      // Coming from parent (or started at root), start by visiting left
+      current_ptr = &current.left();
+
+      if constexpr ((order & TreeTraversal::PreOrder) ==
+                        TreeTraversal::PreOrder &&
+                    !std::is_same_v<NodeType, VisitLeaf>) {
+        if (!invoce_tree_visitor(f, current, TreeTraversal::PreOrder)) {
+          // Cancel subtree exploration and move back to parent (if any)
+          current_ptr = current.root() ? nullptr : &current.parent();
+        }
       }
     }
-  };
 
-  if (node.leaf()) {
-    if constexpr (!std::is_same_v<NodeType, VisitInternal>) {
-      invoke(f, node, TreeTraversal::Any);
-    }
-  } else {
-    if constexpr ((order & TreeTraversal::PreOrder) ==
-                      TreeTraversal::PreOrder &&
-                  !std::is_same_v<NodeType, VisitLeaf>) {
-      if (!invoke(f, node, TreeTraversal::PreOrder)) return;
-    }
-
-    visit<order>(node.left(), f, NodeType{});
-
-    if constexpr ((order & TreeTraversal::InOrder) == TreeTraversal::InOrder &&
-                  !std::is_same_v<NodeType, VisitLeaf>) {
-      if (!invoke(f, node, TreeTraversal::InOrder)) return;
-    }
-
-    visit<order>(node.right(), f, NodeType{});
-
-    if constexpr ((order & TreeTraversal::PostOrder) ==
-                      TreeTraversal::PostOrder &&
-                  !std::is_same_v<NodeType, VisitLeaf>) {
-      if (!invoke(f, node, TreeTraversal::PostOrder)) return;
-    }
+    previous_ptr = &current;
   }
 }
 
