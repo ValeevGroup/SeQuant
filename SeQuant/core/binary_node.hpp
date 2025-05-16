@@ -5,6 +5,7 @@
 #include <memory>
 #include <sstream>
 #include <stdexcept>
+#include <type_traits>
 #include <utility>
 
 #include <range/v3/numeric/accumulate.hpp>
@@ -90,8 +91,7 @@ struct VisitInternal {};
 struct VisitAll {};
 
 template <typename Visitor, typename Node>
-bool invoke_tree_visitor(const Visitor& f, const Node& node,
-                         TreeTraversal context) {
+bool invoke_tree_visitor(Visitor&& f, Node&& node, TreeTraversal context) {
   if constexpr (std::is_invocable_v<decltype(f), decltype(node),
                                     decltype(context)>) {
     using result_type =
@@ -103,10 +103,9 @@ bool invoke_tree_visitor(const Visitor& f, const Node& node,
       return static_cast<bool>(f(node, context));
     }
   } else {
-    static_assert(
-        std::is_invocable_v<decltype(f), decltype(node)>,
-        "Visitor must be a (const) callable that takes a FullBinaryNode<T> "
-        "and optionally a TreeTraversal argument");
+    static_assert(std::is_invocable_v<decltype(f), decltype(node)>,
+                  "Visitor must be a callable that takes a FullBinaryNode<T> "
+                  "and optionally a TreeTraversal argument");
     using result_type = std::invoke_result_t<decltype(f), decltype(node)>;
     if constexpr (std::is_same_v<result_type, void>) {
       f(node);
@@ -116,6 +115,11 @@ bool invoke_tree_visitor(const Visitor& f, const Node& node,
     }
   }
 };
+
+template <typename Node>
+std::remove_reference_t<Node>* get_parent_ptr(Node&& node) {
+  return node.root() ? nullptr : &node.parent();
+}
 
 ///
 /// \brief Visit a full binary node.
@@ -131,16 +135,16 @@ bool invoke_tree_visitor(const Visitor& f, const Node& node,
 /// \param node Node to visit.
 /// \param f Visitor.
 ///
-template <TreeTraversal order, typename T, typename V, typename NodeType>
-void visit(FullBinaryNode<T> const& node, V f, NodeType) {
-  using Node = FullBinaryNode<T>;
+template <TreeTraversal order, typename Node, typename Visitor,
+          typename NodeType>
+void visit(Node&& node, Visitor&& f, NodeType) {
   static_assert(std::is_same_v<NodeType, VisitLeaf> ||
                     std::is_same_v<NodeType, VisitInternal> ||
                     std::is_same_v<NodeType, VisitAll>,
                 "Not sure which nodes to visit");
 
-  const Node* current_ptr = &node;
-  const Node* previous_ptr = &node;
+  std::remove_reference_t<Node>* current_ptr = &node;
+  const std::remove_cvref_t<Node>* previous_ptr = &node;
 
   // Implementation note: we use a loop rather than recursive function calls as
   // the latter implicitly imposes a maximum depth of a tree we can visit
@@ -148,55 +152,59 @@ void visit(FullBinaryNode<T> const& node, V f, NodeType) {
   while (current_ptr) {
     const Node& current = *current_ptr;
 
+    bool continue_with_subtree = true;
+
+    // Note: Invoking the visitor function may change the node object!
+    // Hence, the need to repeatedly check for whether current might be a leaf
+
     if (current.leaf()) {
       // Arrived at a tree's leaf
       if constexpr (!std::is_same_v<NodeType, VisitInternal>) {
-        // Note: return value can be ignored as there is no subtree to explore
-        // anyway
-        invoke_tree_visitor(f, current, TreeTraversal::Any);
+        continue_with_subtree =
+            invoke_tree_visitor(f, current, TreeTraversal::Any);
       }
 
-      // Move back up to parent (if any)
-      current_ptr = current.root() ? nullptr : &current.parent();
+      // Move back up to parent
+      current_ptr = get_parent_ptr(current);
     } else if (previous_ptr == &current.left()) {
-      // Finished visiting left, now visit right
-      current_ptr = &current.right();
-
       if constexpr ((order & TreeTraversal::InOrder) ==
                         TreeTraversal::InOrder &&
                     !std::is_same_v<NodeType, VisitLeaf>) {
-        if (!invoke_tree_visitor(f, current, TreeTraversal::InOrder)) {
-          // Abort subtree exploration -> move to parent (if any) instead
-          current_ptr = current.root() ? nullptr : &current.parent();
-        }
+        continue_with_subtree =
+            invoke_tree_visitor(f, current, TreeTraversal::InOrder);
       }
-    } else if (previous_ptr == &current.right()) {
-      // Finished visiting right, now move back up to parent (if any)
-      current_ptr = current.root() ? nullptr : &current.parent();
 
+      // Finished visiting left, now visit right
+      current_ptr = current.leaf() ? get_parent_ptr(current) : &current.right();
+    } else if (previous_ptr == &current.right()) {
       if constexpr ((order & TreeTraversal::PostOrder) ==
                         TreeTraversal::PostOrder &&
                     !std::is_same_v<NodeType, VisitLeaf>) {
-        // return value can be ignored as there is no further subtree to
-        // explore
-        invoke_tree_visitor(f, current, TreeTraversal::PostOrder);
+        continue_with_subtree =
+            invoke_tree_visitor(f, current, TreeTraversal::PostOrder);
       }
+
+      // Finished visiting right, now move back up to parent (if any)
+      current_ptr = get_parent_ptr(current);
     } else {
       assert(current.root() || previous_ptr == &current.parent());
-      // Coming from parent (or started at root), start by visiting left
-      current_ptr = &current.left();
-
       if constexpr ((order & TreeTraversal::PreOrder) ==
                         TreeTraversal::PreOrder &&
                     !std::is_same_v<NodeType, VisitLeaf>) {
-        if (!invoke_tree_visitor(f, current, TreeTraversal::PreOrder)) {
-          // Cancel subtree exploration and move back to parent (if any)
-          current_ptr = current.root() ? nullptr : &current.parent();
-        }
+        continue_with_subtree =
+            invoke_tree_visitor(f, current, TreeTraversal::PreOrder);
       }
+
+      // Coming from parent (or started at root), start by visiting left
+      current_ptr = current.leaf() ? get_parent_ptr(current) : &current.left();
     }
 
     previous_ptr = &current;
+
+    if (!continue_with_subtree) {
+      // Overwrite to make next target the parent (if any)
+      current_ptr = get_parent_ptr(current);
+    }
   }
 }
 
@@ -471,6 +479,12 @@ class FullBinaryNode {
                               (*this, visitor, VisitAll{}));
   }
 
+  template <typename F>
+  void visit(F visitor, TreeTraversal order = TreeTraversal::PreOrder) {
+    TRAVERSAL_TO_TEMPLATE_ARG(order, sequant::visit,
+                              (*this, visitor, VisitAll{}));
+  }
+
   ///
   /// \brief Visit the internal nodes of the tree in the order specified by the
   /// order argument.
@@ -488,6 +502,13 @@ class FullBinaryNode {
                               (*this, visitor, VisitInternal{}));
   }
 
+  template <typename F>
+  void visit_internal(F visitor,
+                      TreeTraversal order = TreeTraversal::PreOrder) {
+    TRAVERSAL_TO_TEMPLATE_ARG(order, sequant::visit,
+                              (*this, visitor, VisitInternal{}));
+  }
+
   ///
   /// \brief Visit the leaf nodes of the tree in the order specified by the
   /// order argument.
@@ -501,6 +522,12 @@ class FullBinaryNode {
   template <typename F>
   void visit_leaf(F visitor,
                   TreeTraversal order = TreeTraversal::PreOrder) const {
+    TRAVERSAL_TO_TEMPLATE_ARG(order, sequant::visit,
+                              (*this, visitor, VisitLeaf{}));
+  }
+
+  template <typename F>
+  void visit_leaf(F visitor, TreeTraversal order = TreeTraversal::PreOrder) {
     TRAVERSAL_TO_TEMPLATE_ARG(order, sequant::visit,
                               (*this, visitor, VisitLeaf{}));
   }
