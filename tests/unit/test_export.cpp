@@ -526,6 +526,43 @@ TEST_CASE("export", "[export]") {
                                "Unload C\n"
                                "Persist R[a_1, i_1]\n"));
       }
+      SECTION("reused intermediates") {
+        export_expression(to_export_tree(parse_result_expr(
+                              L"ECC = 2 K{i1,i2;a1,a2} t{a1;i1} t{a2;i2} - "
+                              L"K{i1,i2;a1,a2} t{a1;i2} t{a2;i1}")),
+                          generator, ctx);
+
+        REQUIRE_THAT(
+            generator.get_generated_code(),
+            DiffedStringEquals(
+                "Declare index i_1\n"
+                "Declare index i_2\n"
+                "Declare index a_1\n"
+                "Declare index a_2\n"
+                "\n"
+                "Declare variable ECC\n"
+                "\n"
+                "Declare tensor I[i_2, a_2]\n"
+                "Declare tensor K[i_1, i_2, a_1, a_2]\n"
+                "Declare tensor t[a_1, i_1]\n"
+                "\n"
+                "Create ECC and initialize to zero\n"
+                "Load t[a_1, i_1]\n"
+                "Create I[i_2, a_2] and initialize to zero\n"
+                "Load K[i_1, i_2, a_1, a_2]\n"
+                "Compute I[i_2, a_2] += K[i_1, i_2, a_1, a_2] t[a_1, i_1]\n"
+                "Unload K[i_1, i_2, a_1, a_2]\n"
+                "Compute ECC += 2 I[i_2, a_2] t[a_2, i_2]\n"
+                "Unload I[i_2, a_2]\n"
+                "Load I[i_1, a_2] and set it to zero\n"
+                "Load K[i_1, i_2, a_1, a_2]\n"
+                "Compute I[i_1, a_2] += K[i_1, i_2, a_1, a_2] t[a_1, i_2]\n"
+                "Unload K[i_1, i_2, a_1, a_2]\n"
+                "Compute ECC += -1 I[i_1, a_2] t[a_2, i_1]\n"
+                "Unload I[i_1, a_2]\n"
+                "Unload t[a_2, i_1]\n"
+                "Persist ECC\n"));
+      }
     }
   }
 

@@ -417,6 +417,24 @@ class GenerationOptimizer : public MainGenerator {
     return end;
   }
 
+  std::size_t distance_to_matching_alloc(const Operation &dealloc) const {
+    assert(dealloc->memory_action() == MemoryAction::Deallocate);
+
+    for (auto it = find_unpaired_allocation(m_cache.rbegin(), m_cache.rend());
+         it != m_cache.rend();
+         it = find_unpaired_allocation(it + 1, m_cache.rend())) {
+      const Operation &alloc = *it;
+
+      if (alloc->pairs_with(dealloc)) {
+        assert(std::distance(m_cache.rbegin(), it) >= 0);
+        return std::distance(m_cache.rbegin(), it);
+      }
+    }
+
+    assert(false);
+    throw std::runtime_error("Unmatched deallocation!");
+  }
+
   void process_operation_cache(MainGenerator &generator,
                                const MainContext &ctx) {
     // Remove operations that cancel each other from the queue
@@ -436,6 +454,34 @@ class GenerationOptimizer : public MainGenerator {
         }
       }
     }
+
+    std::sort(m_queue.begin(), m_queue.end(),
+              [&](const Operation &lhs, const Operation &rhs) {
+                MemoryAction lhs_action = lhs->memory_action();
+                MemoryAction rhs_action = rhs->memory_action();
+
+                if (lhs_action != rhs_action) {
+                  if (lhs_action == MemoryAction::None ||
+                      rhs_action == MemoryAction::None) {
+                    // Don't mess with the order of memory actions and
+                    // non-memory actions (e.g. computations)
+                    return false;
+                  }
+
+                  // Make sure deallocations are listed before allocations
+                  return lhs_action == MemoryAction::Deallocate;
+                }
+
+                if (lhs_action != MemoryAction::Deallocate) {
+                  // We only want to reorder deallocations
+                  return false;
+                }
+
+                // The deallocation whose matching allocation is closest, is
+                // prioritized
+                return distance_to_matching_alloc(lhs) <
+                       distance_to_matching_alloc(rhs);
+              });
 
     // Move items from the queue into the cache
     for (Operation &op : m_queue) {
