@@ -422,7 +422,8 @@ TEST_CASE("export", "[export]") {
   }
 
   SECTION("generation_optimizer") {
-    GenerationOptimizer<TextGenerator<TextGeneratorContext>> generator;
+    TextGenerator<TextGeneratorContext> textgen;
+    GenerationOptimizer<TextGenerator<TextGeneratorContext>> generator(textgen);
     TextGeneratorContext ctx;
 
     Variable v1{L"v1"};

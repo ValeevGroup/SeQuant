@@ -19,7 +19,7 @@ namespace sequant {
 namespace {}  // namespace
 
 template <typename MainGenerator, typename MainContext = MainGenerator::Context>
-class GenerationOptimizer : public MainGenerator {
+class GenerationOptimizer final : public Generator<MainContext> {
  private:
   using Object = std::variant<Tensor, Variable>;
 
@@ -144,12 +144,12 @@ class GenerationOptimizer : public MainGenerator {
 
     void execute(const Tensor &tensor, MainGenerator &generator,
                  const MainContext &ctx) override {
-      generator.MainGenerator::create(tensor, m_zero_init, ctx);
+      generator.create(tensor, m_zero_init, ctx);
     }
 
     void execute(const Variable &variable, MainGenerator &generator,
                  const MainContext &ctx) override {
-      generator.MainGenerator::create(variable, m_zero_init, ctx);
+      generator.create(variable, m_zero_init, ctx);
     }
 
     OperationType type() const override { return OperationType::Create; }
@@ -164,12 +164,12 @@ class GenerationOptimizer : public MainGenerator {
 
     void execute(const Tensor &tensor, MainGenerator &generator,
                  const MainContext &ctx) override {
-      generator.MainGenerator::load(tensor, false, ctx);
+      generator.load(tensor, false, ctx);
     }
 
     void execute(const Variable &variable, MainGenerator &generator,
                  const MainContext &ctx) override {
-      generator.MainGenerator::load(variable, false, ctx);
+      generator.load(variable, false, ctx);
     }
 
     OperationType type() const override { return OperationType::Load; }
@@ -181,12 +181,12 @@ class GenerationOptimizer : public MainGenerator {
 
     void execute(const Tensor &tensor, MainGenerator &generator,
                  const MainContext &ctx) override {
-      generator.MainGenerator::load(tensor, true, ctx);
+      generator.load(tensor, true, ctx);
     }
 
     void execute(const Variable &variable, MainGenerator &generator,
                  const MainContext &ctx) override {
-      generator.MainGenerator::load(variable, true, ctx);
+      generator.load(variable, true, ctx);
     }
 
     OperationType type() const override { return OperationType::LoadAndZero; }
@@ -198,12 +198,12 @@ class GenerationOptimizer : public MainGenerator {
 
     void execute(const Tensor &tensor, MainGenerator &generator,
                  const MainContext &ctx) override {
-      generator.MainGenerator::set_to_zero(tensor, ctx);
+      generator.set_to_zero(tensor, ctx);
     }
 
     void execute(const Variable &variable, MainGenerator &generator,
                  const MainContext &ctx) override {
-      generator.MainGenerator::set_to_zero(variable, ctx);
+      generator.set_to_zero(variable, ctx);
     }
 
     OperationType type() const override { return OperationType::Zero; }
@@ -215,12 +215,12 @@ class GenerationOptimizer : public MainGenerator {
 
     void execute(const Tensor &tensor, MainGenerator &generator,
                  const MainContext &ctx) override {
-      generator.MainGenerator::unload(tensor, ctx);
+      generator.unload(tensor, ctx);
     }
 
     void execute(const Variable &variable, MainGenerator &generator,
                  const MainContext &ctx) override {
-      generator.MainGenerator::unload(variable, ctx);
+      generator.unload(variable, ctx);
     }
 
     OperationType type() const override { return OperationType::Unload; }
@@ -232,12 +232,12 @@ class GenerationOptimizer : public MainGenerator {
 
     void execute(const Tensor &tensor, MainGenerator &generator,
                  const MainContext &ctx) override {
-      generator.MainGenerator::destroy(tensor, ctx);
+      generator.destroy(tensor, ctx);
     }
 
     void execute(const Variable &variable, MainGenerator &generator,
                  const MainContext &ctx) override {
-      generator.MainGenerator::destroy(variable, ctx);
+      generator.destroy(variable, ctx);
     }
 
     OperationType type() const override { return OperationType::Destroy; }
@@ -249,12 +249,12 @@ class GenerationOptimizer : public MainGenerator {
 
     void execute(const Tensor &tensor, MainGenerator &generator,
                  const MainContext &ctx) override {
-      generator.MainGenerator::persist(tensor, ctx);
+      generator.persist(tensor, ctx);
     }
 
     void execute(const Variable &variable, MainGenerator &generator,
                  const MainContext &ctx) override {
-      generator.MainGenerator::persist(variable, ctx);
+      generator.persist(variable, ctx);
     }
 
     OperationType type() const override { return OperationType::Persist; }
@@ -268,13 +268,13 @@ class GenerationOptimizer : public MainGenerator {
     void execute(const Tensor &result, MainGenerator &generator,
                  const MainContext &ctx) override {
       assert(m_expr);
-      generator.MainGenerator::compute(*m_expr, result, ctx);
+      generator.compute(*m_expr, result, ctx);
     }
 
     void execute(const Variable &result, MainGenerator &generator,
                  const MainContext &ctx) override {
       assert(m_expr);
-      generator.MainGenerator::compute(*m_expr, result, ctx);
+      generator.compute(*m_expr, result, ctx);
     }
 
     OperationType type() const override { return OperationType::Compute; }
@@ -290,7 +290,12 @@ class GenerationOptimizer : public MainGenerator {
                               PersistOperation, ComputeOperation>;
 
  public:
-  using MainGenerator::MainGenerator;
+  GenerationOptimizer(MainGenerator generator)
+      : m_generator(std::move(generator)) {}
+
+  std::string get_format_name() const override {
+    return m_generator.get_format_name() + " (optimized)";
+  }
 
   void create(const Tensor &tensor, bool zero_init,
               const MainContext &ctx) override {
@@ -355,33 +360,64 @@ class GenerationOptimizer : public MainGenerator {
   void compute(const Expr &expression, const Tensor &result,
                const MainContext &ctx) override {
     m_queue.emplace_back(ComputeOperation(result, expression.clone()));
-    process_operation_cache(*this, ctx);
+    process_operation_cache(ctx);
   }
 
   void compute(const Expr &expression, const Variable &result,
                const MainContext &ctx) override {
     m_queue.emplace_back(ComputeOperation(result, expression.clone()));
-    process_operation_cache(*this, ctx);
+    process_operation_cache(ctx);
   }
 
   void end_expression(const MainContext &ctx) override {
     // Assumption: Context is the same as for all queued operations
-    process_operation_cache(*this, ctx);
+    process_operation_cache(ctx);
 
     assert(m_queue.empty());
     assert(m_cache.empty());
 
-    MainGenerator::end_expression(ctx);
+    m_generator.end_expression(ctx);
   }
 
   void end_export(const MainContext &ctx) override {
     assert(m_queue.empty());
     assert(m_cache.empty());
 
-    MainGenerator::end_export(ctx);
+    m_generator.end_export(ctx);
   }
 
+  /////////////////////////////////////////////////////////
+  /////////// Pass-through implementations ////////////////
+  /////////////////////////////////////////////////////////
+
+  // clang-format off
+  bool supports_named_sections() const override { return m_generator.supports_named_sections(); }
+  bool requires_named_sections() const override { return m_generator.requires_named_sections(); }
+  DeclarationScope index_declaration_scope() const override { return m_generator.index_declaration_scope(); }
+  DeclarationScope variable_declaration_scope() const override { return m_generator.variable_declaration_scope(); }
+  DeclarationScope tensor_declaration_scope() const override { return m_generator.tensor_declaration_scope(); }
+  std::string represent(const Index &idx, const MainContext &ctx) const override { return m_generator.represent(idx, ctx); }
+  std::string represent(const Tensor &tensor, const MainContext &ctx) const override { return m_generator.represent(tensor, ctx); }
+  std::string represent(const Variable &variable, const MainContext &ctx) const override { return m_generator.represent(variable, ctx); }
+  std::string represent(const Constant &constant, const MainContext &ctx) const override { return m_generator.represent(constant, ctx); }
+  void declare(const Index &idx, const MainContext &ctx)  override { m_generator.declare(idx, ctx); }
+  void declare(const Variable &variable, UsageSet usage, const MainContext &ctx)  override { m_generator.declare(variable, usage, ctx); }
+  void declare(const Tensor &tensor, UsageSet usage, const MainContext &ctx)  override { m_generator.declare(tensor, usage, ctx); }
+  void all_indices_declared(std::size_t amount, const MainContext &ctx)  override { m_generator.all_indices_declared(amount, ctx); }
+  void all_variables_declared(std::size_t amount, const MainContext &ctx)  override { m_generator.all_variables_declared(amount, ctx); }
+  void all_tensors_declared(std::size_t amount, const MainContext &ctx)  override { m_generator.all_tensors_declared(amount, ctx); }
+  void begin_declarations(DeclarationScope scope, const MainContext &ctx) override { m_generator.begin_declarations(scope, ctx); }
+  void end_declarations(DeclarationScope scope, const MainContext &ctx) override { m_generator.end_declarations(scope, ctx); }
+  void insert_comment(const std::string &comment, const MainContext &ctx) override { m_generator.insert_comment(comment, ctx); }
+  void begin_named_section(std::string_view name, const MainContext &ctx) override { m_generator.begin_named_section(name, ctx); }
+  void end_named_section(std::string_view name, const MainContext &ctx) override { m_generator.end_named_section(name, ctx); }
+  void begin_expression(const MainContext &ctx) override { m_generator.begin_expression(ctx); }
+  void begin_export(const MainContext &ctx) override { m_generator.begin_export(ctx); }
+  std::string get_generated_code() const override { return m_generator.get_generated_code(); }
+  // clang-format on
+
  private:
+  MainGenerator m_generator;
   container::svector<Operation> m_queue;
   container::svector<Operation> m_cache;
 
@@ -435,8 +471,7 @@ class GenerationOptimizer : public MainGenerator {
     throw std::runtime_error("Unmatched deallocation!");
   }
 
-  void process_operation_cache(MainGenerator &generator,
-                               const MainContext &ctx) {
+  void process_operation_cache(const MainContext &ctx) {
     // Remove operations that cancel each other from the queue
     for (std::size_t i = 0; i < m_queue.size(); ++i) {
       const Operation &first = m_queue.at(i);
@@ -549,7 +584,7 @@ class GenerationOptimizer : public MainGenerator {
       // We have a full, memory-stack-order-preserving chain of operations
       // -> execute it
       for (Operation &operation : m_cache) {
-        operation->execute(generator, ctx);
+        operation->execute(m_generator, ctx);
       }
 
       m_cache.clear();

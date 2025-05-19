@@ -117,8 +117,8 @@ ProcessingOptions extractProcessingOptions(
   return options;
 }
 
-template <typename Gen>
-ExportNode<> prepareForExport(const ResultExpr &result, const Gen &generator,
+ExportNode<> prepareForExport(const ResultExpr &result,
+                              const ItfGenerator<ItfContext> &generator,
                               ItfContext &ctx, bool importResult,
                               bool createResult) {
   ExportNode<> tree = to_export_tree(result);
@@ -181,8 +181,8 @@ void generateITF(const json &blocks, std::string_view out_file,
   // We assume index IDs start at 1
   context.set_index_id_offset(1);
 
-  ItfGenerator<ItfContext> generator;
-  // GenerationOptimizer<ItfGenerator<ItfContext>> generator;
+  ItfGenerator<ItfContext> itfgen;
+  GenerationOptimizer<ItfGenerator<ItfContext>> generator(itfgen);
 
   container::svector<ExpressionGroup<>> groups;
   groups.reserve(blocks.size());
@@ -275,12 +275,12 @@ void generateITF(const json &blocks, std::string_view out_file,
 
             spdlog::debug("After popping S tensor:\n{}", current);
 
-            results.push_back(prepareForExport(current, generator, context,
-                                               false, createResult));
+            results.push_back(prepareForExport(current, itfgen, context, false,
+                                               createResult));
           } else {
             results.push_back(prepareForExport(
-                current, generator, context,
-                current_result.value("import", true), createResult));
+                current, itfgen, context, current_result.value("import", true),
+                createResult));
           }
         }
       }
@@ -293,9 +293,9 @@ void generateITF(const json &blocks, std::string_view out_file,
 
         spdlog::debug("Result symmetrization via\n{}", symmetrizedResult);
 
-        results.push_back(
-            prepareForExport(symmetrizedResult, generator, context,
-                             current_result.value("import", true), true));
+        results.push_back(prepareForExport(symmetrizedResult, itfgen, context,
+                                           current_result.value("import", true),
+                                           true));
       }
     }
 
