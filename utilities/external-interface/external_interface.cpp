@@ -50,7 +50,6 @@ struct std::hash<Tensor> {
 
 class ItfContext : public ItfGeneratorContext {
  public:
-  ItfContext() = default;
   ItfContext(const IndexSpaceMeta &meta) : m_meta(&meta) {}
 
   std::string get_tag(const IndexSpace &space) const override {

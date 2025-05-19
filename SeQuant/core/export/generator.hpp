@@ -22,8 +22,6 @@ template <typename C>
 class Generator {
  public:
   using Context = C;
-  static_assert(std::is_default_constructible_v<Context>,
-                "Generator context objects must be default-constructible");
   static_assert(
       std::is_base_of_v<ExportContext, Context>,
       "Generator context class must inherit from sequant::ExportContext");
