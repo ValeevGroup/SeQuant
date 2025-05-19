@@ -30,7 +30,8 @@ class ItfGeneratorContext : public ReorderingContext {
   using VariableImportMap = container::map<Variable, std::string>;
 
   ItfGeneratorContext()
-      : ReorderingContext(MemoryLayout::ColumnMajor, assume_real_orbitals{}){};
+      : ReorderingContext(MemoryLayout::ColumnMajor, assume_real_orbitals{},
+                          assume_strict_column_permutability{}){};
   ~ItfGeneratorContext() = default;
 
   virtual std::string index_name(const IndexSpace &space,

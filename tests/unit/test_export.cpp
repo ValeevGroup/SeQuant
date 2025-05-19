@@ -254,8 +254,11 @@ std::vector<ExpressionGroup<>> parse_expression_spec(const std::string &spec) {
 
 [[nodiscard]] auto to_export_context() {
   auto reg = std::make_shared<IndexSpaceRegistry>();
-  reg->add(L"i", 0b01, is_particle, 10);
-  reg->add(L"a", 0b10, is_vacuum_occupied, is_reference_occupied, is_hole, 100);
+  reg->add(L"i", 0b001, is_particle, 10);
+  reg->add(L"a", 0b010, is_vacuum_occupied, is_reference_occupied, is_hole,
+           100);
+  reg->add(L"u", 0b100, is_vacuum_occupied, is_reference_occupied, is_hole,
+           is_particle, 5);
 
   return set_scoped_default_context(Context(std::move(reg)));
 }
@@ -352,9 +355,17 @@ TEST_CASE("export", "[export]") {
   auto resetter = to_export_context();
 
   SECTION("reordering_context") {
+    REQUIRE(Index(L"i_1").space().approximate_size() >
+            Index(L"u_1").space().approximate_size());
+    REQUIRE(Index(L"a_1").space().approximate_size() >
+            Index(L"i_1").space().approximate_size());
+
     std::vector<std::pair<std::wstring, std::array<std::string, 3>>> tests = {
         // Unchanged
         {L"t{a1;i1}", {"t{a1;i1}", "t{a1;i1}", "t{a1;i1}"}},
+        {L"t{a1,a2;i1,i2}:N-N-S",
+         {"t{a1,a2;i1,i2}:N-N-S", "t{a1,a2;i1,i2}:N-N-S",
+          "t{a1,a2;i1,i2}:N-N-S"}},
         // Bra resorting
         {L"t{a1,i1}:S-N-S",
          {"t{;;i1,a1}:N", "t{a1,i1}:S-N-S", "t{a1,i1}:S-N-S"}},
@@ -365,12 +376,23 @@ TEST_CASE("export", "[export]") {
          {"t{;;i1,a1}:N", "t{;a1,i1}:S-N-S", "t{;a1,i1}:S-N-S"}},
         {L"t{;i1,a1}:S-N-S",
          {"t{;i1,a1}:S-N-S", "t{;;a1,i1}:N", "t{;i1,a1}:S-N-S"}},
+        {L"t{;u1,a1}:S-N-S",
+         {"t{;u1,a1}:S-N-S", "t{;;a1,u1}:N", "t{;u1,a1}:S-N-S"}},
         // BraKet swapping
         {L"t{a1;i1}:N-S", {"t{;;i1,a1}:N-N", "t{a1;i1}:N-S", "t{a1;i1}:N-S"}},
         {L"t{i1;a1}:N-S", {"t{i1;a1}:N-S", "t{;;a1,i1}:N-N", "t{i1;a1}:N-S"}},
         // Aux prioritization
         {L"t{i1;;a1}", {"t{i1;;a1}", "t{;;a1,i1}", "t{i1;;a1}"}},
         {L"t{a1;;i1}", {"t{;;i1,a1}", "t{a1;;i1}", "t{a1;;i1}"}},
+        // Column-resorting (particle-symmetry)
+        {L"t{i1,i2;u1,a1}:N-N-S",
+         {"t{i1,i2;u1,a1}:N-N-S", "t{;;i2,i1,a1,u1}", "t{i1,i2;u1,a1}:N-N-S"}},
+        {L"t{u1,a1;i1,i2}:N-N-S",
+         {"t{u1,a1;i1,i2}:N-N-S", "t{;;a1,u1,i2,i1}", "t{u1,a1;i1,i2}:N-N-S"}},
+        {L"t{u1,a1;i1,u2}:N-N-S",
+         {"t{u1,a1;i1,u2}:N-N-S", "t{;;a1,u1,u2,i1}", "t{u1,a1;i1,u2}:N-N-S"}},
+        {L"t{i1,u2;u1,a1}:N-N-S",
+         {"t{i1,u2;u1,a1}:N-N-S", "t{;;u2,i1,a1,u1}", "t{i1,u2;u1,a1}:N-N-S"}},
     };
 
     ReorderingContext ctx(MemoryLayout::Unspecified);
