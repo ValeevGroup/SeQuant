@@ -182,7 +182,8 @@ void generateITF(const json &blocks, std::string_view out_file,
   // We assume index IDs start at 1
   context.set_index_id_offset(1);
 
-  GenerationOptimizer<ItfGenerator<ItfContext>> generator;
+  ItfGenerator<ItfContext> generator;
+  // GenerationOptimizer<ItfGenerator<ItfContext>> generator;
 
   container::svector<ExpressionGroup<>> groups;
   groups.reserve(blocks.size());
@@ -238,6 +239,10 @@ void generateITF(const json &blocks, std::string_view out_file,
              postProcess(contribution, spaceMeta, options)) {
           spdlog::debug("Fully processed equation is:\n{}", current);
 
+          if (*current.expression() == Constant(0)) {
+            continue;
+          }
+
           const bool createResult = [&]() {
             // We only want to create a given result once to not overwrite
             // previous contributions
@@ -247,20 +252,14 @@ void generateITF(const json &blocks, std::string_view out_file,
                 createdResults.insert(current.result_as_tensor());
                 return true;
               }
-            } else {
-              if (createdResults.find(current.result_as_variable()) ==
-                  createdResults.end()) {
-                createdResults.insert(current.result_as_variable());
-                return true;
-              }
+            } else if (createdResults.find(current.result_as_variable()) ==
+                       createdResults.end()) {
+              createdResults.insert(current.result_as_variable());
+              return true;
             }
 
             return false;
           }();
-
-          if (*current.expression() == Constant(0)) {
-            continue;
-          }
 
           if (needsSymmetrization(current.expression())) {
             std::optional<ExprPtr> symmetrizer =
