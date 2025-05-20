@@ -368,60 +368,64 @@ ExprPtr Sum::canonicalize_impl(bool multipass) {
                  << "): after canonicalizing summands = "
                  << to_latex_align(shared_from_this()) << std::endl;
 
-    // ... then resort according to size, then hash values
-    using std::begin;
-    using std::end;
-    std::stable_sort(begin(summands_), end(summands_),
-                     [](const auto &first, const auto &second) {
-                       const auto first_size = sequant::size(first);
-                       const auto second_size = sequant::size(second);
+    // nested map for grouping by hash and sorting by size
+    // outer key: size, inner key: hash
+    container::map<size_t, container::map<size_t, ExprPtr>> size_hash_groups;
 
-                       return (first_size == second_size)
-                                  ? *first < *second
-                                  : first_size < second_size;
-                     });
+    // process each summand
+    for (const auto &summand : summands_) {
+      auto hash = summand->hash_value();
+      size_t term_size = sequant::size(summand);
 
-    if (Logger::instance().canonicalize)
-      std::wcout << "Sum::canonicalize_impl (pass=" << pass
-                 << "): after hash-sorting summands = "
-                 << to_latex_align(shared_from_this()) << std::endl;
-
-    // ... then reduce terms whose hash values are identical
-    auto first_it = begin(summands_);
-    auto hash_comparer = [](const auto &first, const auto &second) {
-      return first->hash_value() == second->hash_value();
-    };
-    while ((first_it = std::adjacent_find(first_it, end(summands_),
-                                          hash_comparer)) != end(summands_)) {
-      assert((*first_it)->hash_value() == (*(first_it + 1))->hash_value());
-      // find first element whose hash is not equal to (*first_it)->hash_value()
-      auto plast_it = std::find_if_not(
-          first_it + 1, end(summands_), [first_it](const auto &elem) {
-            return (*first_it)->hash_value() == elem->hash_value();
-          });
-      const auto nidentical = plast_it - first_it;
-      assert(nidentical > 1);
-      // combine all identical summands into Product
-      auto reduce_range = [first_it, this, nidentical](auto &begin, auto &end) {
-        if ((*first_it)->is<Product>()) {  // handle group of Products
-          auto &prod = (*first_it)->as<Product>();
-          for (auto it = begin + 1; it != end; ++it) {
-            // convert to Product if not already
-            if (!(*it)->template is<Product>()) {
-              *it = std::make_shared<Product>(1, ExprPtrList{*it});
-            }
-            prod.add_identical((*it)->template as<Product>());
+      auto it = size_hash_groups[term_size].find(hash);
+      if (it == size_hash_groups[term_size].end()) {
+        // first occurrence of this hash at this size
+        size_hash_groups[term_size][hash] = summand;
+      } else {
+        // another term with the same hash
+        if (summand->template is<Product>()) {
+          if (it->second->template is<Product>()) {
+            // both are products - add them
+            auto &product = it->second->template as<Product>();
+            product.add_identical(summand->template as<Product>());
+          } else {
+            // convert existing term to product and add
+            auto product_copy =
+                std::static_pointer_cast<Product>(summand->clone());
+            auto as_product =
+                std::make_shared<Product>(1, ExprPtrList{it->second});
+            product_copy->add_identical(*as_product);
+            it->second = product_copy;
           }
-          this->summands_.erase(prod.is_zero() ? first_it : first_it + 1, end);
-        } else {  // handle all other types
-          auto product_form = std::make_shared<Product>();
-          product_form->append(nidentical, (*first_it)->as<Expr>());
-          *first_it = product_form;
-          this->summands_.erase(first_it + 1, end);
+        } else {
+          if (it->second->template is<Product>()) {
+            // convert summand to product and add
+            auto &product = it->second->template as<Product>();
+            auto as_product =
+                std::make_shared<Product>(1, ExprPtrList{summand});
+            product.add_identical(*as_product);
+          } else {
+            // neither is a product - create new product
+            auto product_form = std::make_shared<Product>();
+            product_form->append(2, summand->template as<Expr>());
+            it->second = product_form;
+          }
         }
-      };
-      reduce_range(first_it, plast_it);
+      }
     }
+    decltype(summands_) new_summands;
+    new_summands.reserve(summands_.size());
+
+    // process each size group and its hash subgroups
+    for (const auto &[size, hash_map] : size_hash_groups) {
+      for (const auto &[hash, term] : hash_map) {
+        if (!term->template is<Product>() ||
+            !term->template as<Product>().is_zero()) {
+          new_summands.push_back(term);
+        }
+      }
+    }
+    summands_.swap(new_summands);
 
     if (Logger::instance().canonicalize)
       std::wcout << "Sum::canonicalize_impl (pass=" << pass
@@ -429,7 +433,7 @@ ExprPtr Sum::canonicalize_impl(bool multipass) {
                  << to_latex_align(shared_from_this()) << std::endl;
   }
 
-  return {};  // side effects are absorbed into summands
+  return {};
 }
 #else
 // original one
