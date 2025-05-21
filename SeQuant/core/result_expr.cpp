@@ -1,5 +1,6 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/expr_algorithm.hpp>
+#include <SeQuant/core/optimize.hpp>
 #include <SeQuant/core/result_expr.hpp>
 #include <SeQuant/core/tensor.hpp>
 #include <SeQuant/core/utility/indices.hpp>
@@ -116,6 +117,12 @@ ResultExpr &rapid_simplify(ResultExpr &expr) {
 
 ResultExpr &expand(ResultExpr &expr) {
   expr.expression() = expand(expr.expression());
+
+  return expr;
+}
+
+ResultExpr &optimize(ResultExpr &expr) {
+  expr.expression() = optimize(expr.expression());
 
   return expr;
 }

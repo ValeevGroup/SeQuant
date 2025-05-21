@@ -156,6 +156,7 @@ ResultExpr &canonicalize(ResultExpr &expr);
 ResultExpr &simplify(ResultExpr &expr);
 ResultExpr &rapid_simplify(ResultExpr &expr);
 ResultExpr &expand(ResultExpr &expr);
+ResultExpr &optimize(ResultExpr &expr);
 
 }  // namespace sequant
 
