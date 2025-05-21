@@ -127,4 +127,14 @@ ResultExpr &optimize(ResultExpr &expr) {
   return expr;
 }
 
+ResultExpr &canonicalize(ResultExpr &&expr) { return canonicalize(expr); }
+
+ResultExpr &simplify(ResultExpr &&expr) { return simplify(expr); }
+
+ResultExpr &rapid_simplify(ResultExpr &&expr) { return rapid_simplify(expr); }
+
+ResultExpr &expand(ResultExpr &&expr) { return expand(expr); }
+
+ResultExpr &optimize(ResultExpr &&expr) { return optimize(expr); }
+
 }  // namespace sequant

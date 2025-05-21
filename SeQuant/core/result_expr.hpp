@@ -158,6 +158,12 @@ ResultExpr &rapid_simplify(ResultExpr &expr);
 ResultExpr &expand(ResultExpr &expr);
 ResultExpr &optimize(ResultExpr &expr);
 
+[[nodiscard]] ResultExpr &canonicalize(ResultExpr &&expr);
+[[nodiscard]] ResultExpr &simplify(ResultExpr &&expr);
+[[nodiscard]] ResultExpr &rapid_simplify(ResultExpr &&expr);
+[[nodiscard]] ResultExpr &expand(ResultExpr &&expr);
+[[nodiscard]] ResultExpr &optimize(ResultExpr &&expr);
+
 }  // namespace sequant
 
 #endif  // SEQUANT_RESULT_EXPR_HPP
