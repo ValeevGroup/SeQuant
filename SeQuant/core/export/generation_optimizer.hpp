@@ -5,6 +5,7 @@
 #include <SeQuant/core/export/generator.hpp>
 #include <SeQuant/core/export/utils.hpp>
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/parse.hpp>
 #include <SeQuant/core/tensor.hpp>
 
 #include <pv/polymorphic_variant.hpp>
@@ -12,6 +13,7 @@
 #include <algorithm>
 #include <cassert>
 #include <stack>
+#include <utility>
 #include <variant>
 
 namespace sequant {
@@ -115,6 +117,57 @@ class GenerationOptimizer final : public Generator<MainContext> {
       // should not be reached
       assert(false);
       return MemoryAction::None;
+    }
+
+    std::string to_string() const {
+      std::string str;
+      switch (type()) {
+        case OperationType::Create:
+          str += "Create";
+          break;
+        case OperationType::Load:
+          str += "Load";
+          break;
+        case OperationType::LoadAndZero:
+          str += "Load&Zero";
+          break;
+        case OperationType::Zero:
+          str += "Zero";
+          break;
+        case OperationType::Unload:
+          str += "Unload";
+          break;
+        case OperationType::Destroy:
+          str += "Destroy";
+          break;
+        case OperationType::Persist:
+          str += "Persist";
+          break;
+        case OperationType::Compute:
+          str += "Compute";
+          break;
+      }
+
+      assert(!str.empty());
+
+      str += " ";
+
+      if (std::holds_alternative<Tensor>(m_object)) {
+        const Tensor &tensor = std::get<Tensor>(m_object);
+        str += toUtf8(tensor.label());
+        str += ":";
+        for (const Index &idx : tensor.indices()) {
+          str += toUtf8(idx.space().reduce_key(idx.label()));
+        }
+      } else {
+        str += toUtf8(std::get<Variable>(m_object).label());
+      }
+
+      return str;
+    }
+
+    bool operator==(const AbstractOperation &other) const {
+      return type() == other.type() && object_equals(other.m_object);
     }
 
    private:
@@ -360,21 +413,23 @@ class GenerationOptimizer final : public Generator<MainContext> {
   void compute(const Expr &expression, const Tensor &result,
                const MainContext &ctx) override {
     m_queue.emplace_back(ComputeOperation(result, expression.clone()));
-    process_operation_cache(ctx);
+    process_operation_queue();
   }
 
   void compute(const Expr &expression, const Variable &result,
                const MainContext &ctx) override {
     m_queue.emplace_back(ComputeOperation(result, expression.clone()));
-    process_operation_cache(ctx);
+    process_operation_queue();
   }
 
   void end_expression(const MainContext &ctx) override {
     // Assumption: Context is the same as for all queued operations
+    process_operation_queue();
     process_operation_cache(ctx);
 
     assert(m_queue.empty());
     assert(m_cache.empty());
+    assert(m_paired.empty());
 
     m_generator.end_expression(ctx);
   }
@@ -382,6 +437,7 @@ class GenerationOptimizer final : public Generator<MainContext> {
   void end_export(const MainContext &ctx) override {
     assert(m_queue.empty());
     assert(m_cache.empty());
+    assert(m_paired.empty());
 
     m_generator.end_export(ctx);
   }
@@ -420,6 +476,7 @@ class GenerationOptimizer final : public Generator<MainContext> {
   MainGenerator m_generator;
   container::svector<Operation> m_queue;
   container::svector<Operation> m_cache;
+  container::svector<std::pair<std::size_t, std::size_t>> m_paired;
 
   template <typename Iterator>
   static Iterator find_unpaired_allocation(Iterator begin, const Iterator end) {
@@ -453,142 +510,157 @@ class GenerationOptimizer final : public Generator<MainContext> {
     return end;
   }
 
-  std::size_t distance_to_matching_alloc(const Operation &dealloc) const {
-    assert(dealloc->memory_action() == MemoryAction::Deallocate);
-
-    for (auto it = find_unpaired_allocation(m_cache.rbegin(), m_cache.rend());
-         it != m_cache.rend();
-         it = find_unpaired_allocation(it + 1, m_cache.rend())) {
-      const Operation &alloc = *it;
-
-      if (alloc->pairs_with(dealloc)) {
-        assert(std::distance(m_cache.rbegin(), it) >= 0);
-        return std::distance(m_cache.rbegin(), it);
+  void process_operation_queue() {
+    // If two subsequent elements cancel each other, they can be erased without
+    // having to worry about potentially violating the stack-like ordering of
+    // memory operations (it will be preserved).
+    for (std::size_t i = 0; i < m_queue.size() - 1; ++i) {
+      if (m_queue[i]->cancels(m_queue.at(i + 1))) {
+        m_queue.erase(m_queue.begin() + i + 1);
+        m_queue.erase(m_queue.begin() + i);
+        // Re-visit the previous value of i in the next iteration
+        // (keep in mind that i gets incremented at the end of the loop)
+        static_assert(static_cast<decltype(i)>(-1) + 1 == 0);
+        i = std::max(i - 2, static_cast<decltype(i)>(-1));
       }
     }
 
-    assert(false);
-    throw std::runtime_error("Unmatched deallocation!");
-  }
-
-  void process_operation_cache(const MainContext &ctx) {
-    // Remove operations that cancel each other from the queue
-    for (std::size_t i = 0; i < m_queue.size(); ++i) {
+    // If, within the given block, we have two operations that cancel each other
+    // but which do not appear in subsequent order, we **might** be able to
+    // remove them both. However, this will affect mess up the stack-like
+    // ordering of memory operations in case that the cancelled operations are
+    // themselves memory operations. Hence, some care needs to be employed when
+    // attempting this. At this point, we don't have enough context information
+    // available to make this choice as this will require a bidirectional flow
+    // of information through the operation chain. This is because we are
+    // attempting to remove a pair of operations. See also:
+    // Saabas & Uustalu, Electron. Notes Theor. Comput. Sci., 190 (2007)
+    // DOI: 10.1016/j.entcs.2007.02.063
+    for (std::size_t i = 0; i < m_queue.size() - 1; ++i) {
       const Operation &first = m_queue.at(i);
 
-      for (std::size_t k = i; k < m_queue.size(); ++k) {
+      for (std::size_t k = i + 1; k < m_queue.size(); ++k) {
         const Operation &second = m_queue.at(k);
 
-        if (first->cancels(second)) {
-          m_queue.erase(m_queue.begin() + k);
-          m_queue.erase(m_queue.begin() + i);
-          // Needed to make the outer loop re-visit the current
-          // value of i
-          i--;
+        if (first->pairs_with(second)) {
+          auto pair = std::make_pair(i + m_cache.size(), k + m_cache.size());
+          assert(std::ranges::find(m_paired, pair.first,
+                                   &decltype(m_paired)::value_type::first) ==
+                 m_paired.end());
+          assert(std::ranges::find(m_paired, pair.second,
+                                   &decltype(m_paired)::value_type::second) ==
+                 m_paired.end());
+
+          m_paired.push_back(std::move(pair));
           break;
         }
       }
     }
 
-    std::sort(m_queue.begin(), m_queue.end(),
-              [&](const Operation &lhs, const Operation &rhs) {
-                MemoryAction lhs_action = lhs->memory_action();
-                MemoryAction rhs_action = rhs->memory_action();
+    m_cache.insert(m_cache.end(), std::make_move_iterator(m_queue.begin()),
+                   std::make_move_iterator(m_queue.end()));
+    m_queue.clear();
+  }
 
-                if (lhs_action != rhs_action) {
-                  if (lhs_action == MemoryAction::None ||
-                      rhs_action == MemoryAction::None) {
-                    // Don't mess with the order of memory actions and
-                    // non-memory actions (e.g. computations)
-                    return false;
-                  }
+  void optimize_operation_cache() {
+    std::size_t erased = 0;
 
-                  // Make sure deallocations are listed before allocations
-                  return lhs_action == MemoryAction::Deallocate;
-                }
+    // Process paired operations that **might** be removed, provided we can (and
+    // want to) reorder other operations to retain a consistent stack.
+    // A rigorous optimization would likely require methods as those described
+    // in the following publication:
+    // Saabas & Uustalu, Electron. Notes Theor. Comput. Sci., 190 (2007)
+    // DOI: 10.1016/j.entcs.2007.02.063
+    // In particular, this would almost certainly require explicit tracking of
+    // the memory stack during the individual operations.
+    for (auto [first_idx, second_idx] : m_paired) {
+      // Account for previously erased pairs (this simple method only works in
+      // combination with the assumptions under which we are currently doing
+      // erasures - see below)
+      assert(first_idx >= erased);
+      assert(second_idx >= erased);
+      first_idx -= erased;
+      second_idx -= erased;
 
-                if (lhs_action != MemoryAction::Deallocate) {
-                  // We only want to reorder deallocations
-                  return false;
-                }
+      assert(first_idx < m_cache.size());
+      assert(second_idx < m_cache.size());
+      assert(first_idx < second_idx);
 
-                // The deallocation whose matching allocation is closest, is
-                // prioritized
-                return distance_to_matching_alloc(lhs) <
-                       distance_to_matching_alloc(rhs);
-              });
+      const Operation &first = m_cache.at(first_idx);
+      const Operation &second = m_cache.at(second_idx);
+      assert(first->pairs_with(second));
 
-    // Move items from the queue into the cache
-    for (Operation &op : m_queue) {
-      if (op->memory_action() != MemoryAction::Deallocate) {
-        m_cache.push_back(std::move(op));
+      if (second_idx - first_idx > 2) {
+        // There is more than one intermittent operation between the pair. We
+        // skip these cases for now as the required reordering seems too
+        // complicated for the time being.
         continue;
       }
 
-      auto op_alloc = std::find_if(
-          m_cache.rbegin(), m_cache.rend(),
-          [&op](const Operation &other) { return op->pairs_with(other); });
-
-      if (op_alloc == m_cache.rend()) {
-        throw std::runtime_error(
-            "GenerationOptimizer: Attempt to deallocate object that hasn't "
-            "been allocated before!");
+      const Operation &intermittent = m_cache.at(first_idx + 1);
+      const MemoryAction intermittent_action = intermittent->memory_action();
+      if (intermittent_action == MemoryAction::None) {
+        // This case requires some more thought -> skip for now
+        continue;
       }
 
-      assert((*op_alloc)->memory_action() == MemoryAction::Allocate);
-
-      std::size_t rpos = std::distance(m_cache.rbegin(), op_alloc);
-      assert(rpos < m_cache.size());
-
-      // Search for an unpaired allocation in the range (m_cache.end(),
-      // op_alloc). That is, between where the allocation for op happens and the
-      // end of the cache (starting from the back).
-      // In such cases, we need to re-order operations in order to maintain
-      // compatibility to stack-based memory models.
-      // Example:
-      // Load B
-      // Load C
-      // Drop C
-      // Load D
-      // Drop B
-      // Here, loading of D would be the unpaired allocation we are looking for.
-      // This allocation needs to be moved before the allocation in B.
-      auto unpaired_alloc =
-          find_unpaired_allocation(m_cache.rbegin(), op_alloc);
-
-      while (unpaired_alloc != op_alloc) {
-        assert(!(*unpaired_alloc)->pairs_with(op));
-        assert(rpos > 0);
-        assert((*(m_cache.rbegin() + rpos))->pairs_with(op));
-
-        // Move the unpaired allocation to be located before the allocation
-        // of op. That is, we do
-        // M, A, B, C, X -> X, M, A, B, C
-        // where M is the allocation pairing with op and X is the
-        // unpaired allocation.
-        std::rotate(unpaired_alloc, unpaired_alloc + 1,
-                    m_cache.rbegin() + rpos + 1);
-
-        rpos -= 1;
-        op_alloc = m_cache.rbegin() + rpos;
-
-        unpaired_alloc = find_unpaired_allocation(m_cache.rbegin(), op_alloc);
+      if (intermittent_action == MemoryAction::Allocate) {
+        // Should work similar to Deallocate but hasn't been implemented yet
+        continue;
       }
 
-      m_cache.push_back(std::move(op));
+      assert(intermittent_action == MemoryAction::Deallocate);
+      // If this was an allocation, the stack model would already be violated
+      assert(first->memory_action() == MemoryAction::Deallocate);
+
+      auto alloc_it = find_unpaired_allocation(
+          m_cache.rbegin() + m_cache.size() - 1 - first_idx + 1,
+          m_cache.rend());
+      assert(alloc_it != m_cache.rend());
+      assert(std::distance(alloc_it, m_cache.rend()) > 0);
+      std::size_t first_alloc_idx = std::distance(alloc_it, m_cache.rend()) - 1;
+      assert(m_cache.at(first_alloc_idx)->pairs_with(first));
+
+      alloc_it = find_unpaired_allocation(alloc_it + 1, m_cache.rend());
+      assert(alloc_it != m_cache.rend());
+      assert(std::distance(alloc_it, m_cache.rend()) > 0);
+      std::size_t intermittent_alloc_idx =
+          std::distance(alloc_it, m_cache.rend()) - 1;
+      assert(m_cache.at(intermittent_alloc_idx)->pairs_with(intermittent));
+
+      assert(intermittent_alloc_idx < first_alloc_idx);
+      if (first_alloc_idx - intermittent_alloc_idx == 1) {
+        // The allocations happen in subsequently -> we can simply swap them
+        std::swap(m_cache.at(intermittent_alloc_idx),
+                  m_cache.at(first_alloc_idx));
+        m_cache.erase(m_cache.begin() + second_idx);
+        m_cache.erase(m_cache.begin() + first_idx);
+        erased += 2;
+        continue;
+      }
+
+      // At this point we could do a more sophisticated analysis of whether or
+      // not to reorder operations in such a way that would allow for the
+      // current pair of operations to be erased. However, this would require
+      // sophisticated analysis including a cost function to decide whether or
+      // not to move an allocation before a computation that doesn't need the
+      // allocated tensor. So there is a tradeoff between increased memory usage
+      // of the generated code and reduced I/O redundancies.
+    }
+  }
+
+  void process_operation_cache(const MainContext &ctx) {
+    assert(m_queue.empty());
+    assert(m_cache.empty() || m_cache.front()->pairs_with(m_cache.back()));
+
+    optimize_operation_cache();
+
+    for (Operation &op : m_cache) {
+      op->execute(m_generator, ctx);
     }
 
-    m_queue.clear();
-
-    if (!m_cache.empty() && m_cache.front()->pairs_with(m_cache.back())) {
-      // We have a full, memory-stack-order-preserving chain of operations
-      // -> execute it
-      for (Operation &operation : m_cache) {
-        operation->execute(m_generator, ctx);
-      }
-
-      m_cache.clear();
-    }
+    m_cache.clear();
+    m_paired.clear();
   }
 };
 

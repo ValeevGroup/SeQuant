@@ -109,6 +109,12 @@ void ItfGeneratorContext::set_import_name(const Variable &variable,
 }
 
 bool ItfGeneratorContext::rewrite(Tensor &tensor) const {
+  if (tensor.label() == L"R1" || tensor.label() == L"R2" ||
+      tensor.label() == L"T1" || tensor.label() == L"T1s" ||
+      tensor.label() == L"T2g") {
+    return false;
+  }
+
   bool modified = false;
 
   if (tensor.label() == L"g" && tensor.const_indices().size() == 4 &&

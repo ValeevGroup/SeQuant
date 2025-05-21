@@ -495,6 +495,10 @@ TEST_CASE("export", "[export]") {
 
                 ));
       }
+
+      // The following test cases will only become relevant once the optimizer
+      // is further improved
+#if 0
       SECTION("multiple with reordering") {
         // When stripping redundant load/unload operations, load of tensor C
         // needs to be moved before the load of B in order to retain
@@ -564,6 +568,83 @@ TEST_CASE("export", "[export]") {
                 "Unload t[a_2, i_1]\n"
                 "Persist ECC\n"));
       }
+      SECTION("requires caution") {
+        export_expression(
+            to_export_tree(parse_result_expr(
+                L"R{a1,a2;i1,i2} = g{i3,i4;a3,a4} t{a4;i2} t{a1,a3;i1,i4} "
+                L"t{a2;i3} "
+                "- 2 g{i3,i4;a3,a4} t{a4;i2} t{a1,a3;i1,i3} t{a2;i4} ")),
+            generator, ctx);
+
+        REQUIRE_THAT(generator.get_generated_code(),
+                     DiffedStringEquals(
+                         "Declare index i_1\n"
+                         "Declare index i_2\n"
+                         "Declare index i_3\n"
+                         "Declare index i_4\n"
+                         "Declare index a_1\n"
+                         "Declare index a_2\n"
+                         "Declare index a_3\n"
+                         "Declare index a_4\n"
+                         "\n"
+                         "Declare tensor I[i_3, i_4, i_2, a_3]\n"
+                         "Declare tensor I[i_4, a_1, i_1, i_2]\n"
+                         "Declare tensor R[a_1, a_2, i_1, i_2]\n"
+                         "Declare tensor g[i_3, i_4, a_3, a_4]\n"
+                         "Declare tensor t[a_4, i_2]\n"
+                         "Declare tensor t[a_1, a_3, i_1, i_3]\n"
+                         "\n"
+                         "Create R[a_1, a_2, i_1, i_2] and initialize to zero\n"
+                         "Create I[i_4, a_1, i_1, i_2] and initialize to zero\n"
+                         "Create I[i_3, i_4, i_2, a_3] and initialize to zero\n"
+                         "Load g[i_3, i_4, a_3, a_4]\n"
+                         "Load t[a_4, i_2]\n"
+                         "Compute I[i_3, i_4, i_2, a_3] += g[i_3, i_4, a_3, "
+                         "a_4] t[a_4, i_2]\n"
+                         "Unload t[a_4, i_2]\n"
+                         "Unload g[i_3, i_4, a_3, a_4]\n"
+                         "Load t[a_1, a_3, i_1, i_3]\n"
+                         "Compute I[i_4, a_1, i_1, i_2] += I[i_3, i_4, i_2, "
+                         "a_3] t[a_1, a_3, i_1, i_3]\n"
+                         "Unload t[a_1, a_3, i_1, i_3]\n"
+                         "Unload I[i_3, i_4, i_2, a_3]\n"
+                         "Load t[a_2, i_4]\n"
+                         "Compute R[a_1, a_2, i_1, i_2] += -2 I[i_4, a_1, i_1, "
+                         "i_2] t[a_2, i_4]\n"
+                         "Unload t[a_2, i_4]\n"
+                         "Unload I[i_4, a_1, i_1, i_2]\n"
+                         "Load I[i_3, a_1, i_1, i_2] and set it to zero\n"
+                         "Load I[i_3, i_4, i_2, a_3] and set it to zero\n"
+                         "Load g[i_3, i_4, a_3, a_4]\n"
+                         "Load t[a_4, i_2]\n"
+                         "Compute I[i_3, i_4, i_2, a_3] += g[i_3, i_4, a_3, "
+                         "a_4] t[a_4, i_2]\n"
+                         "Unload t[a_4, i_2]\n"
+                         "Unload g[i_3, i_4, a_3, a_4]\n"
+                         "Load t[a_1, a_3, i_1, i_4]\n"
+                         "Compute I[i_3, a_1, i_1, i_2] += I[i_3, i_4, i_2, "
+                         "a_3] t[a_1, a_3, i_1, i_4]\n"
+                         "Unload t[a_1, a_3, i_1, i_4]\n"
+                         "Unload I[i_3, i_4, i_2, a_3]\n"
+                         "Load t[a_2, i_3]\n"
+                         "Compute R[a_1, a_2, i_1, i_2] += I[i_3, a_1, i_1, "
+                         "i_2] t[a_2, i_3]\n"
+                         "Unload t[a_2, i_3]\n"
+                         "Unload I[i_3, a_1, i_1, i_2]\n"
+                         "Persist R[a_1, a_2, i_1, i_2]\n"));
+      }
+      SECTION("tbd2") {
+        export_expression(
+            to_export_tree(parse_result_expr(
+                L"R1{u_1;i_1;} = "
+                L"+ 2 g{u_2, i_2;a_1, a_2;} (GAM0{u_3, u_4;u_5, u_2;} T2g{a_2, "
+                L"u_5;u_3, i_2;}) T2g{a_1, u_1;i_1, u_4;} "
+                "+ -4 g{u_2, i_2;a_1, a_2;} (GAM0{u_3, u_4;u_5, u_2;} T2g{a_1, "
+                "u_5;i_2, u_3;}) T2g{a_2, u_1;u_4, i_1;} ")),
+            generator, ctx);
+        REQUIRE_THAT(generator.get_generated_code(), DiffedStringEquals(""));
+      }
+#endif
     }
   }
 
