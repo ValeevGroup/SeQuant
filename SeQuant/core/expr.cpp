@@ -6,13 +6,13 @@
 #include <SeQuant/core/algorithm.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/logger.hpp>
+#include <SeQuant/core/runtime.hpp>
 #include <SeQuant/core/tensor.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/tensor_network_v2.hpp>
 
 #include <range/v3/all.hpp>
 
-#include <SeQuant/core/runtime.hpp>
 #include <thread>
 #include <vector>
 
@@ -343,7 +343,6 @@ void Sum::adjoint() {
   *this = Sum(ranges::begin(adj_summands), ranges::end(adj_summands));
 }
 
-// optimized canonicalization
 ExprPtr Sum::canonicalize_impl(bool multipass) {
   if (Logger::instance().canonicalize)
     std::wcout << "Sum::canonicalize_impl: input = "
@@ -433,7 +432,7 @@ ExprPtr Sum::canonicalize_impl(bool multipass) {
                  << to_latex_align(shared_from_this()) << std::endl;
   }
 
-  return {};
+  return {};  // side effects are absorbed into summands
 }
 
 }  // namespace sequant
