@@ -917,21 +917,30 @@ ExprPtr S_maps(const ExprPtr& expr) {
 
 ExprPtr closed_shell_spintrace(
     const ExprPtr& expression,
-    const container::svector<container::svector<Index>>& ext_index_groups) {
+    const container::svector<container::svector<Index>>& ext_index_groups,
+    bool is_compact_set) {
   // Symmetrize and expression
   // Partially expand the antisymmetrizer and write it in terms of S operator.
   // See symmetrize_expr(expr) function for implementation details. We want an
   // expression with non-symmetric tensors, hence we are partially expanding the
   // antisymmetrizer (A) and fully expanding the anti-symmetric tensors to
   // non-symmetric.
-  auto symm_and_expand = [](const ExprPtr& expr) {
+  auto partially_or_fully_expand = [&is_compact_set](const ExprPtr& expr) {
     auto temp = expr;
-    if (has_tensor(temp, L"A")) temp = symmetrize_expr(temp);
+    if (has_tensor(temp, L"A")) {
+      if (is_compact_set) {
+        // no partial expansion, only fully expansion (for compact  set of eqns)
+        temp = expand_A_op(temp);
+      } else {
+        temp = symmetrize_expr(temp);
+        // temp = expand_A_op(temp);
+      }
+    }
     temp = expand_antisymm(temp);
     rapid_simplify(temp);
     return temp;
   };
-  auto expr = symm_and_expand(expression);
+  auto expr = partially_or_fully_expand(expression);
 
   // Index tags are cleaned prior to calling the fast canonicalizer
   detail::reset_idx_tags(expr);  // This call is REQUIRED
@@ -1045,7 +1054,7 @@ ExprPtr closed_shell_CC_spintrace(ExprPtr const& expr) {
 
   auto const ext_idxs = external_indices(expr);
   const auto sp_tstart = std::chrono::high_resolution_clock::now();
-  auto st_expr = closed_shell_spintrace(expr, ext_idxs);
+  auto st_expr = closed_shell_spintrace(expr, ext_idxs, false);
   const auto sp_tstop = std::chrono::high_resolution_clock::now();
   std::chrono::duration<double> sp_time_elapsed = sp_tstop - sp_tstart;
   printf("spint-trace time: %5.3f sec.\n", sp_time_elapsed.count());
@@ -1081,128 +1090,19 @@ ExprPtr closed_shell_CC_spintrace(ExprPtr const& expr) {
 }
 
 container::svector<ResultExpr> closed_shell_spintrace(const ResultExpr& expr) {
-  using TraceFunction = ExprPtr (*)(
-      const ExprPtr&, const container::svector<container::svector<Index>>&);
-
-  return detail::wrap_trace<container::svector<ResultExpr>>(
-      expr, static_cast<TraceFunction>(&closed_shell_spintrace));
-}
-ExprPtr closed_shell_spintrace_core_terms(
-    const ExprPtr& expression,
-    const container::svector<container::svector<Index>>& ext_index_groups) {
-  // Symmetrize and expression
-  // Partially expand the antisymmetrizer and write it in terms of S operator.
-  // See symmetrize_expr(expr) function for implementation details. We want an
-  // expression with non-symmetric tensors, hence we are partially expanding the
-  // antisymmetrizer (A) and fully expanding the anti-symmetric tensors to
-  // non-symmetric.
-  // No partial expansion, only fully expansion (for compact core terms)
-  auto fully_expand = [](const ExprPtr& expr) {
-    auto temp = expr;
-    if (has_tensor(temp, L"A")) temp = expand_A_op(temp);
-    temp = expand_antisymm(temp);
-    rapid_simplify(temp);
-    return temp;
-  };
-  auto expr = fully_expand(expression);
-
-  // Index tags are cleaned prior to calling the fast canonicalizer
-  auto reset_idx_tags = [](ExprPtr& expr) {
-    if (expr->is<Tensor>()) expr->as<Tensor>().reset_tags();
+  // Create a lambda that matches the expected TraceFunction signature
+  auto trace_func =
+      [](const ExprPtr& expression,
+         const container::svector<container::svector<Index>>& ext_index_groups)
+      -> ExprPtr {
+    return closed_shell_spintrace(expression, ext_index_groups,
+                                  false);  // is_compact_set = false
   };
 
-  // Cleanup index tags
-  expr->visit(reset_idx_tags);  // This call is REQUIRED
-  expand(expr);                 // This call is REQUIRED
-  simplify(expr);  // full simplify to combine terms before count_cycles
-
-  // Lambda for spin-tracing a product term
-  // For closed-shell case, a spin-traced result is a product term scaled by
-  // 2^{n_cycles}, where n_cycles are counted by the lambda function described
-  // above. For every product term, the bra indices on all tensors are merged
-  // into a single list, so are the ket indices. External indices are
-  // substituted with either one of the index (because the two vectors should be
-  // permutations of each other to count cycles). All tensors must be nonsymm.
-  auto trace_product = [&ext_index_groups](const Product& product) {
-    // Remove S if present in a product
-    Product temp_product{};
-    temp_product.scale(product.scalar());
-    if (product.factor(0)->as<Tensor>().label() == L"S") {
-      for (auto&& term : product.factors()) {
-        if (term->is<Tensor>() && term->as<Tensor>().label() != L"S")
-          temp_product.append(1, term, Product::Flatten::No);
-      }
-    } else {
-      temp_product = product;
-    }
-
-    auto get_ket_indices = [](const Product& prod) {
-      container::svector<Index> ket_idx;
-      for (auto&& t : prod) {
-        if (t->is<Tensor>())
-          ranges::for_each(t->as<Tensor>().ket(), [&ket_idx](const Index& idx) {
-            ket_idx.push_back(idx);
-          });
-      }
-      return ket_idx;
-    };
-    auto product_kets = get_ket_indices(temp_product);
-
-    auto get_bra_indices = [](const Product& prod) {
-      container::svector<Index> bra_idx;
-      for (auto&& t : prod) {
-        if (t->is<Tensor>())
-          ranges::for_each(t->as<Tensor>().bra(), [&bra_idx](const Index& idx) {
-            bra_idx.push_back(idx);
-          });
-      }
-      return bra_idx;
-    };
-    auto product_bras = get_bra_indices(temp_product);
-
-    auto substitute_ext_idx = [&product_bras, &product_kets](
-                                  const container::svector<Index>& idx_pair) {
-      assert(idx_pair.size() == 2);
-      const auto& what = idx_pair[0];
-      const auto& with = idx_pair[1];
-      std::replace(product_bras.begin(), product_bras.end(), what, with);
-      std::replace(product_kets.begin(), product_kets.end(), what, with);
-    };
-
-    // Substitute indices from external index list
-    ranges::for_each(ext_index_groups, substitute_ext_idx);
-
-    auto n_cycles = count_cycles(product_kets, product_bras);
-
-    auto result = std::make_shared<Product>(product);
-    result->scale(pow2(n_cycles));
-    return result;
-  };
-
-  if (expr->is<Constant>())
-    return expr;
-  else if (expr->is<Tensor>())
-    return trace_product(
-        (ex<Constant>(1) * expr)->as<Product>());  // expand_all(expr);
-  else if (expr->is<Product>())
-    return trace_product(expr->as<Product>());
-  else if (expr->is<Sum>()) {
-    auto result = std::make_shared<Sum>();
-    for (auto&& summand : *expr) {
-      if (summand->is<Product>()) {
-        result->append(trace_product(summand->as<Product>()));
-      } else if (summand->is<Tensor>()) {
-        result->append(
-            trace_product((ex<Constant>(1) * summand)->as<Product>()));
-      } else  // summand->is<Constant>()
-        result->append(summand);
-    }
-    return result;
-  } else
-    return nullptr;
+  return detail::wrap_trace<container::svector<ResultExpr>>(expr, trace_func);
 }
 
-ExprPtr closed_shell_CC_spintrace_core_terms(ExprPtr const& expr) {
+ExprPtr closed_shell_CC_spintrace_compact_set(ExprPtr const& expr) {
   assert(expr->is<Sum>());
   using ranges::views::transform;
 
@@ -1214,7 +1114,7 @@ ExprPtr closed_shell_CC_spintrace_core_terms(ExprPtr const& expr) {
   // properly)
   const auto spintracing_time_0 = std::chrono::high_resolution_clock::now();
   printf("Input expression size: %zu\n", expr->size());
-  auto st_expr = closed_shell_spintrace_core_terms(expr, ext_idxs);
+  auto st_expr = closed_shell_spintrace(expr, ext_idxs, true);
   printf("Output expression size: %zu\n", st_expr->size());
   const auto spintracing_time_1 = std::chrono::high_resolution_clock::now();
   std::chrono::duration<double> spintracing_time =
