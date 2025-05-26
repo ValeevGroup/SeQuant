@@ -291,12 +291,6 @@ bool prune_scalar_factor(ExportNode<T> &node, PreprocessResult &result) {
   ExprPtr parentFactor =
       iter == result.scalarFactors.end() ? nullptr : iter->second;
 
-  if (iter != result.scalarFactors.end()) {
-    // The parent will be overwritten, so we don't have to keep
-    // this entry around
-    result.scalarFactors.erase(iter);
-  }
-
   ExprPtr factor = std::move(node->expr());
 
   assert(factor);
@@ -530,7 +524,13 @@ class PreprocessVisitor {
         assert(!tree.root());
         ExprPtr factor = std::move(iter->second);
         m_result.scalarFactors.erase(iter);
-        m_result.scalarFactors[tree.parent()->id()] = std::move(factor);
+
+        iter = m_result.scalarFactors.find(tree.parent()->id());
+        if (iter == m_result.scalarFactors.end()) {
+          m_result.scalarFactors[tree.parent()->id()] = std::move(factor);
+        } else {
+          iter->second *= std::move(factor);
+        }
       }
     }
 
@@ -540,7 +540,13 @@ class PreprocessVisitor {
         assert(!tree.root());
         ExprPtr factor = std::move(iter->second);
         m_result.scalarFactors.erase(iter);
-        m_result.scalarFactors[tree.parent()->id()] = std::move(factor);
+
+        iter = m_result.scalarFactors.find(tree.parent()->id());
+        if (iter == m_result.scalarFactors.end()) {
+          m_result.scalarFactors[tree.parent()->id()] = std::move(factor);
+        } else {
+          iter->second *= std::move(factor);
+        }
       }
     }
   }
