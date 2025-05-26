@@ -393,6 +393,9 @@ TEST_CASE("export", "[export]") {
          {"t{u1,a1;i1,u2}:N-N-S", "t{;;a1,u1,u2,i1}", "t{u1,a1;i1,u2}:N-N-S"}},
         {L"t{i1,u2;u1,a1}:N-N-S",
          {"t{i1,u2;u1,a1}:N-N-S", "t{;;u2,i1,a1,u1}", "t{i1,u2;u1,a1}:N-N-S"}},
+        // combined
+        {L"t{u1,a1;u2,i1}:N-S-S",
+         {"t{;;u2,i1,u1,a1}", "t{;;a1,u1,i1,u2}", "t{u1,a1;u2,i1}:N-S-S"}},
     };
 
     ReorderingContext ctx(MemoryLayout::Unspecified);
