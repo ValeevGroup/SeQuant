@@ -274,8 +274,6 @@ struct PreprocessResult {
 
   std::map<Tensor, std::size_t, TensorBlockCompare> tensorReferences;
   std::map<Variable, std::size_t> variableReferences;
-
-  std::size_t renameCounter = 2;
 };
 
 template <typename T>
@@ -337,8 +335,8 @@ bool prune_scalar_factor(ExportNode<T> &node, PreprocessResult &result) {
   return true;
 }
 
-void rename(Tensor &tensor, std::size_t counter);
-void rename(Variable &variable, std::size_t counter);
+bool rename(Tensor &tensor, PreprocessResult &result);
+bool rename(Variable &variable, PreprocessResult &result);
 
 template <typename ExprType, typename Node>
 void preprocess(ExprType expr, ExportContext &ctx, Node &node,
@@ -389,7 +387,13 @@ void preprocess(ExprType expr, ExportContext &ctx, Node &node,
       if (currentlyLoaded) {
         // This expr is currently in use -> can't use it as a result as that
         // would overwrite the currently used value -> need to rename expr
-        rename(expr, result.renameCounter++);
+        if (rename(expr, result)) {
+          // We renamed expr to another expression that has been used before
+          // but is currently not used/loaded -> set to zero before adding new
+          // data
+          ctx.setZeroStrategy(expr, ZeroStrategy::AlwaysZero);
+        }
+
         storeExpr = true;
       } else {
         // This expr is reused to store a new result -> set it to zero before
