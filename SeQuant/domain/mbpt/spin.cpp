@@ -1090,15 +1090,15 @@ ExprPtr closed_shell_CC_spintrace(ExprPtr const& expr) {
 }
 
 container::svector<ResultExpr> closed_shell_spintrace(const ResultExpr& expr) {
-  // Create a lambda that matches the expected TraceFunction signature
-  auto trace_func =
+  using TraceFunction = ExprPtr (*)(
+      const ExprPtr&, const container::svector<container::svector<Index>>&);
+  // cast to the specific 2-parameter overload by specifying the exact signature
+  TraceFunction trace_func = static_cast<TraceFunction>(
       [](const ExprPtr& expression,
          const container::svector<container::svector<Index>>& ext_index_groups)
-      -> ExprPtr {
-    return closed_shell_spintrace(expression, ext_index_groups,
-                                  false);  // is_compact_set = false
-  };
-
+          -> ExprPtr {
+        return closed_shell_spintrace(expression, ext_index_groups, false);
+      });
   return detail::wrap_trace<container::svector<ResultExpr>>(expr, trace_func);
 }
 
