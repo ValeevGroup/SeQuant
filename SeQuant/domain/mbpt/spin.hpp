@@ -239,13 +239,13 @@ ExprPtr S_maps(const ExprPtr& expr);
 /// @brief 2-parameter wrapper version
 ExprPtr closed_shell_spintrace(
     const ExprPtr& expr,
-    const container::svector<container::svector<Index>>& ext_index_groups);
+    const container::svector<container::svector<Index>>& ext_index_groups = {});
 
 /// @brief 3-parameter implementation version (with default)
 ExprPtr closed_shell_spintrace(
     const ExprPtr& expr,
-    const container::svector<container::svector<Index>>& ext_index_groups = {},
-    bool is_compact_set = false);
+    const container::svector<container::svector<Index>>& ext_index_groups,
+    bool is_compact_set);
 
 container::svector<ResultExpr> closed_shell_spintrace(const ResultExpr& expr);
 
