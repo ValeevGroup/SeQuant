@@ -6,7 +6,6 @@
 #include <SeQuant/core/export/utils.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/parse.hpp>
-#include <SeQuant/core/tensor.hpp>
 
 #include <pv/polymorphic_variant.hpp>
 

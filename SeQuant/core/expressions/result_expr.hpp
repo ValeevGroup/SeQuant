@@ -1,11 +1,11 @@
-#ifndef SEQUANT_RESULT_EXPR_HPP
-#define SEQUANT_RESULT_EXPR_HPP
+#ifndef SEQUANT_EXPRESSIONS_RESULT_EXPR_HPP
+#define SEQUANT_EXPRESSIONS_RESULT_EXPR_HPP
 
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/container.hpp>
-#include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/expressions/tensor.hpp>
+#include <SeQuant/core/expressions/variable.hpp>
 #include <SeQuant/core/index.hpp>
-#include <SeQuant/core/tensor.hpp>
 
 #include <cassert>
 #include <initializer_list>
@@ -14,9 +14,6 @@
 #include <type_traits>
 
 namespace sequant {
-
-class Tensor;
-class Variable;
 
 /// Represents an expression containing a left-hand-side of the form
 /// <lhs> = <expression>
@@ -166,4 +163,4 @@ ResultExpr &optimize(ResultExpr &expr);
 
 }  // namespace sequant
 
-#endif  // SEQUANT_RESULT_EXPR_HPP
+#endif  // SEQUANT_EXPRESSIONS_RESULT_EXPR_HPP

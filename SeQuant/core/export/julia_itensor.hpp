@@ -3,9 +3,9 @@
 
 #include <SeQuant/core/export/julia_tensor_operations.hpp>
 #include <SeQuant/core/export/utils.hpp>
+#include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/space.hpp>
-#include <SeQuant/core/tensor.hpp>
 
 namespace sequant {
 

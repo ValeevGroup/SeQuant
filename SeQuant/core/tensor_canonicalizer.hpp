@@ -5,9 +5,9 @@
 #ifndef SEQUANT_CORE_TENSOR_CANONICALIZER_HPP
 #define SEQUANT_CORE_TENSOR_CANONICALIZER_HPP
 
-#include "abstract_tensor.hpp"
-#include "expr.hpp"
+#include <SeQuant/core/expr.hpp>
 
+#include <functional>
 #include <memory>
 #include <string_view>
 

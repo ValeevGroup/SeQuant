@@ -3,7 +3,6 @@
 
 #include <SeQuant/core/export/utils.hpp>
 #include <SeQuant/core/expr.hpp>
-#include <SeQuant/core/tensor.hpp>
 
 #include <limits>
 #include <map>

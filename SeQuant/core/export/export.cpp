@@ -1,6 +1,6 @@
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/export/export.hpp>
-#include <SeQuant/core/tensor.hpp>
+#include <SeQuant/core/expr.hpp>
 
 #include <cwctype>
 #include <string>

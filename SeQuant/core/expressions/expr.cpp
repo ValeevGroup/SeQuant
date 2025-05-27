@@ -2,11 +2,12 @@
 // Created by Eduard Valeyev on 2019-02-06.
 //
 
-#include <SeQuant/core/abstract_tensor.hpp>
 #include <SeQuant/core/algorithm.hpp>
-#include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/expressions/abstract_tensor.hpp>
+#include <SeQuant/core/expressions/constant.hpp>
+#include <SeQuant/core/expressions/expr.hpp>
+#include <SeQuant/core/expressions/tensor.hpp>
 #include <SeQuant/core/logger.hpp>
-#include <SeQuant/core/tensor.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/tensor_network_v2.hpp>
 

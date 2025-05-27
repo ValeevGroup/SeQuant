@@ -2,7 +2,6 @@
 
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
-#include <SeQuant/core/result_expr.hpp>
 #include <SeQuant/core/space.hpp>
 #include <SeQuant/core/utility/expr.hpp>
 #include <SeQuant/core/utility/indices.hpp>

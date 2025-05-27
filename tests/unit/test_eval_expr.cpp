@@ -2,7 +2,6 @@
 
 #include "catch2_sequant.hpp"
 
-#include <SeQuant/core/abstract_tensor.hpp>
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/context.hpp>
@@ -10,8 +9,6 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/parse.hpp>
-#include <SeQuant/core/result_expr.hpp>
-#include <SeQuant/core/tensor.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 

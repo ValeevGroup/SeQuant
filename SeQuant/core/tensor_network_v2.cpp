@@ -2,7 +2,6 @@
 // Created by Eduard Valeyev on 2019-02-26.
 //
 
-#include <SeQuant/core/abstract_tensor.hpp>
 #include <SeQuant/core/algorithm.hpp>
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/bliss.hpp>

@@ -3,13 +3,10 @@
 #include <SeQuant/core/algorithm.hpp>
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/biorthogonalization.hpp>
-#include <SeQuant/core/expr_algorithm.hpp>
-#include <SeQuant/core/expr_operator.hpp>
+#include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/math.hpp>
 #include <SeQuant/core/rational.hpp>
-#include <SeQuant/core/result_expr.hpp>
 #include <SeQuant/core/space.hpp>
-#include <SeQuant/core/tensor.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/permutation.hpp>
 #include <SeQuant/core/utility/swap.hpp>

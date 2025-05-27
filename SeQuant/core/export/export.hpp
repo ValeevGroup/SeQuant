@@ -12,7 +12,6 @@
 #include <SeQuant/core/export/utils.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/logger.hpp>
-#include <SeQuant/core/result_expr.hpp>
 
 #include <algorithm>
 #include <array>

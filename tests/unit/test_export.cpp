@@ -17,7 +17,6 @@
 #include <SeQuant/core/optimize.hpp>
 #include <SeQuant/core/parse.hpp>
 #include <SeQuant/core/rational.hpp>
-#include <SeQuant/core/result_expr.hpp>
 #include <SeQuant/core/utility/string.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/spin.hpp>

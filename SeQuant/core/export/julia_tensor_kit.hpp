@@ -2,9 +2,9 @@
 #define SEQUANT_CORE_EXPORT_JULIA_TENSOR_KIT_HPP
 
 #include <SeQuant/core/export/julia_tensor_operations.hpp>
+#include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/space.hpp>
-#include <SeQuant/core/tensor.hpp>
 
 namespace sequant {
 

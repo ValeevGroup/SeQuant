@@ -12,8 +12,6 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
-#include <SeQuant/core/result_expr.hpp>
-#include <SeQuant/core/tensor.hpp>
 
 #include <cassert>
 #include <cstddef>

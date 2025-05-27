@@ -3,8 +3,6 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/math.hpp>
-#include <SeQuant/core/result_expr.hpp>
-#include <SeQuant/core/tensor.hpp>
 #include <SeQuant/core/utility/expr.hpp>
 #include <SeQuant/core/utility/permutation.hpp>
 

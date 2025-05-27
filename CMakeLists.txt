@@ -181,8 +181,6 @@ target_link_libraries(SeQuant-bliss PUBLIC range-v3::range-v3)
 
 set(SeQuant_src
         ${PROJECT_BINARY_DIR}/SeQuant/version.hpp
-        SeQuant/version.cpp
-        SeQuant/core/abstract_tensor.hpp
         SeQuant/core/algorithm.hpp
         SeQuant/core/any.hpp
         SeQuant/core/asy_cost.cpp
@@ -199,32 +197,37 @@ set(SeQuant_src
         SeQuant/core/eval_expr.cpp
         SeQuant/core/eval_expr.hpp
         SeQuant/core/eval_node.hpp
+        SeQuant/core/export/compute_selection.cpp
+        SeQuant/core/export/compute_selection.hpp
         SeQuant/core/export/context.cpp
         SeQuant/core/export/context.hpp
         SeQuant/core/export/export.cpp
         SeQuant/core/export/export.hpp
         SeQuant/core/export/export_expr.cpp
         SeQuant/core/export/export_expr.hpp
-        SeQuant/core/export/compute_selection.cpp
-        SeQuant/core/export/compute_selection.hpp
         SeQuant/core/export/generator.hpp
         SeQuant/core/export/itf.cpp
         SeQuant/core/export/itf.hpp
         SeQuant/core/export/itf_generator.cpp
         SeQuant/core/export/itf_generator.hpp
-        SeQuant/core/export/text_generator.hpp
-        SeQuant/core/export/julia_tensor_operations.hpp
-        SeQuant/core/export/julia_tensor_operations.cpp
-        SeQuant/core/export/julia_tensor_kit.hpp
         SeQuant/core/export/julia_itensor.hpp
+        SeQuant/core/export/julia_tensor_kit.hpp
+        SeQuant/core/export/julia_tensor_operations.cpp
+        SeQuant/core/export/julia_tensor_operations.hpp
         SeQuant/core/export/reordering_context.cpp
         SeQuant/core/export/reordering_context.hpp
+        SeQuant/core/export/text_generator.hpp
         SeQuant/core/export/utils.cpp
         SeQuant/core/export/utils.hpp
-        SeQuant/core/expr.cpp
-        SeQuant/core/expr.hpp
-        SeQuant/core/expr_algorithm.hpp
-        SeQuant/core/expr_operator.hpp
+        SeQuant/core/expressions/abstract_tensor.hpp
+        SeQuant/core/expressions/expr.cpp
+        SeQuant/core/expressions/expr.hpp
+        SeQuant/core/expressions/expr_algorithms.hpp
+        SeQuant/core/expressions/expr_operators.hpp
+        SeQuant/core/expressions/result_expr.cpp
+        SeQuant/core/expressions/result_expr.hpp
+        SeQuant/core/expressions/tensor.cpp
+        SeQuant/core/expressions/tensor.hpp
         SeQuant/core/hash.cpp
         SeQuant/core/hash.hpp
         SeQuant/core/hugenholtz.hpp
@@ -234,8 +237,8 @@ set(SeQuant_src
         SeQuant/core/index_space_registry.hpp
         SeQuant/core/interval.hpp
         SeQuant/core/latex.cpp
-        SeQuant/core/latex.ipp
         SeQuant/core/latex.hpp
+        SeQuant/core/latex.ipp
         SeQuant/core/logger.hpp
         SeQuant/core/math.hpp
         SeQuant/core/meta.hpp
@@ -245,30 +248,26 @@ set(SeQuant_src
         SeQuant/core/optimize/fusion.cpp
         SeQuant/core/optimize/fusion.hpp
         SeQuant/core/optimize/optimize.cpp
+        SeQuant/core/parse.hpp
         SeQuant/core/parse/deparse.cpp
         SeQuant/core/parse/parse.cpp
-        SeQuant/core/parse.hpp
         SeQuant/core/ranges.hpp
         SeQuant/core/rational.hpp
-        SeQuant/core/result_expr.cpp
-        SeQuant/core/result_expr.hpp
         SeQuant/core/runtime.cpp
         SeQuant/core/runtime.hpp
         SeQuant/core/space.hpp
         SeQuant/core/tag.hpp
-        SeQuant/core/tensor.cpp
-        SeQuant/core/tensor.hpp
         SeQuant/core/tensor_canonicalizer.cpp
         SeQuant/core/tensor_canonicalizer.hpp
         SeQuant/core/tensor_network.cpp
         SeQuant/core/tensor_network.hpp
-        SeQuant/core/tensor_network_v2.cpp
-        SeQuant/core/tensor_network_v2.hpp
         SeQuant/core/tensor_network/canonicals.hpp
         SeQuant/core/tensor_network/slot.hpp
         SeQuant/core/tensor_network/vertex.hpp
         SeQuant/core/tensor_network/vertex_painter.cpp
         SeQuant/core/tensor_network/vertex_painter.hpp
+        SeQuant/core/tensor_network_v2.cpp
+        SeQuant/core/tensor_network_v2.hpp
         SeQuant/core/timer.hpp
         SeQuant/core/utility/context.hpp
         SeQuant/core/utility/expr.cpp
@@ -278,35 +277,36 @@ set(SeQuant_src
         SeQuant/core/utility/nodiscard.hpp
         SeQuant/core/utility/permutation.hpp
         SeQuant/core/utility/singleton.hpp
-        SeQuant/core/utility/string.hpp
         SeQuant/core/utility/string.cpp
-        SeQuant/core/utility/tuple.hpp
+        SeQuant/core/utility/string.hpp
         SeQuant/core/utility/swap.hpp
+        SeQuant/core/utility/tuple.hpp
         SeQuant/core/wick.hpp
         SeQuant/core/wick.impl.hpp
         SeQuant/core/wolfram.hpp
         SeQuant/core/wstring.hpp
         SeQuant/domain/mbpt/antisymmetrizer.cpp
         SeQuant/domain/mbpt/antisymmetrizer.hpp
-        SeQuant/domain/mbpt/context.hpp
         SeQuant/domain/mbpt/context.cpp
+        SeQuant/domain/mbpt/context.hpp
         SeQuant/domain/mbpt/convention.cpp
         SeQuant/domain/mbpt/convention.hpp
+        SeQuant/domain/mbpt/models/cc.cpp
+        SeQuant/domain/mbpt/models/cc.hpp
         SeQuant/domain/mbpt/op.cpp
         SeQuant/domain/mbpt/op.hpp
         SeQuant/domain/mbpt/op.ipp
         SeQuant/domain/mbpt/rdm.cpp
         SeQuant/domain/mbpt/rdm.hpp
+        SeQuant/domain/mbpt/rules/csv.cpp
+        SeQuant/domain/mbpt/rules/csv.hpp
+        SeQuant/domain/mbpt/rules/df.cpp
+        SeQuant/domain/mbpt/rules/df.hpp
         SeQuant/domain/mbpt/space_qns.hpp
         SeQuant/domain/mbpt/spin.cpp
         SeQuant/domain/mbpt/spin.hpp
         SeQuant/domain/mbpt/vac_av.ipp
-        SeQuant/domain/mbpt/models/cc.cpp
-        SeQuant/domain/mbpt/models/cc.hpp
-        SeQuant/domain/mbpt/rules/df.cpp
-        SeQuant/domain/mbpt/rules/df.hpp
-        SeQuant/domain/mbpt/rules/csv.cpp
-        SeQuant/domain/mbpt/rules/csv.hpp
+        SeQuant/version.cpp
 )
 
 ### optional prereqs

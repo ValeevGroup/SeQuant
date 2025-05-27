@@ -4,7 +4,6 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr_fwd.hpp>
 #include <SeQuant/core/index.hpp>
-#include <SeQuant/core/result_expr.hpp>
 #include <SeQuant/core/space.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 

@@ -8,8 +8,8 @@
 #include <SeQuant/core/asy_cost.hpp>
 #include <SeQuant/core/binary_node.hpp>
 #include <SeQuant/core/eval_expr.hpp>
+#include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/math.hpp>
-#include <SeQuant/core/tensor.hpp>
 
 namespace sequant {
 

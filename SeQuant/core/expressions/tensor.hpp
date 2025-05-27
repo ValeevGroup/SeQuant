@@ -2,14 +2,15 @@
 // Created by Eduard Valeyev on 3/23/18.
 //
 
-#ifndef SEQUANT_TENSOR_HPP
-#define SEQUANT_TENSOR_HPP
+#ifndef SEQUANT_EXPRESSIONS_TENSOR_HPP
+#define SEQUANT_EXPRESSIONS_TENSOR_HPP
 
-#include <SeQuant/core/abstract_tensor.hpp>
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/context.hpp>
-#include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/expressions/abstract_tensor.hpp>
+#include <SeQuant/core/expressions/expr.hpp>
+#include <SeQuant/core/expressions/labeled.hpp>
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/latex.hpp>
@@ -555,4 +556,4 @@ inline ExprPtr make_overlap(const Index &bra_index, const Index &ket_index) {
 
 }  // namespace sequant
 
-#endif  // SEQUANT_TENSOR_HPP
+#endif  // SEQUANT_EXPRESSIONS_TENSOR_HPP

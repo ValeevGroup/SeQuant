@@ -10,9 +10,7 @@
 #include <SeQuant/core/parse/ast.hpp>
 #include <SeQuant/core/parse/ast_conversions.hpp>
 #include <SeQuant/core/parse/semantic_actions.hpp>
-#include <SeQuant/core/result_expr.hpp>
 #include <SeQuant/core/space.hpp>
-#include <SeQuant/core/tensor.hpp>
 
 #define BOOST_SPIRIT_X3_UNICODE
 #include <boost/core/demangle.hpp>

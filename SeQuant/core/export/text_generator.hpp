@@ -3,8 +3,7 @@
 
 #include <SeQuant/core/export/context.hpp>
 #include <SeQuant/core/export/generator.hpp>
-#include <SeQuant/core/export/text_generator.hpp>
-#include <SeQuant/core/tensor.hpp>
+#include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/utility/string.hpp>
 
 #include <sstream>

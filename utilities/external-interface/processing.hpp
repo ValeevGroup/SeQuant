@@ -4,7 +4,7 @@
 #include "utils.hpp"
 
 #include <SeQuant/core/container.hpp>
-#include <SeQuant/core/result_expr.hpp>
+#include <SeQuant/core/expr.hpp>
 
 enum class SpinTracing {
   None,

@@ -10,7 +10,6 @@
 #include <SeQuant/core/meta.hpp>
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/parse.hpp>
-#include <SeQuant/core/result_expr.hpp>
 #include <SeQuant/core/wstring.hpp>
 #include <SeQuant/domain/mbpt/op.hpp>
 

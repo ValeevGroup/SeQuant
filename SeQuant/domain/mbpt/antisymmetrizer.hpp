@@ -8,7 +8,7 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/math.hpp>
 #include <SeQuant/core/op.hpp>
-#include <SeQuant/core/tensor.hpp>
+
 #include <algorithm>
 #include <iostream>
 #include <vector>

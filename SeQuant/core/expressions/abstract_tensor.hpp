@@ -8,20 +8,16 @@
 #include <SeQuant/core/algorithm.hpp>
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/container.hpp>
-#include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/expressions/expr_algorithms.hpp>
 #include <SeQuant/core/index.hpp>
 
-#include <algorithm>
 #include <cstdlib>
-#include <functional>
 #include <memory>
-#include <mutex>
 #include <ostream>
 #include <stdexcept>
 #include <string>
 #include <string_view>
 #include <typeinfo>
-#include <utility>
 
 #include <range/v3/all.hpp>
 

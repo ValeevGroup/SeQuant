@@ -1,7 +1,7 @@
 #ifndef SEQUANT_CORE_EXPORT_UTILS_HPP
 #define SEQUANT_CORE_EXPORT_UTILS_HPP
 
-#include <SeQuant/core/tensor.hpp>
+#include <SeQuant/core/expressions/tensor.hpp>
 
 namespace sequant {
 

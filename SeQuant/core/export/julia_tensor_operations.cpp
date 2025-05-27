@@ -1,7 +1,7 @@
 #include <SeQuant/core/export/julia_tensor_operations.hpp>
+#include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/space.hpp>
-#include <SeQuant/core/tensor.hpp>
 #include <SeQuant/core/utility/string.hpp>
 
 namespace sequant {
