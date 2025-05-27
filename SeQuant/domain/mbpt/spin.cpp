@@ -1089,17 +1089,19 @@ ExprPtr closed_shell_CC_spintrace(ExprPtr const& expr) {
   return st_expr;
 }
 
+// 2-parameter wrapper
+ExprPtr closed_shell_spintrace(
+    const ExprPtr& expr,
+    const container::svector<container::svector<Index>>& ext_index_groups) {
+  return closed_shell_spintrace(expr, ext_index_groups, false);
+}
+
 container::svector<ResultExpr> closed_shell_spintrace(const ResultExpr& expr) {
   using TraceFunction = ExprPtr (*)(
       const ExprPtr&, const container::svector<container::svector<Index>>&);
-  // cast to the specific 2-parameter overload by specifying the exact signature
-  TraceFunction trace_func = static_cast<TraceFunction>(
-      [](const ExprPtr& expression,
-         const container::svector<container::svector<Index>>& ext_index_groups)
-          -> ExprPtr {
-        return closed_shell_spintrace(expression, ext_index_groups, false);
-      });
-  return detail::wrap_trace<container::svector<ResultExpr>>(expr, trace_func);
+
+  return detail::wrap_trace<container::svector<ResultExpr>>(
+      expr, static_cast<TraceFunction>(&closed_shell_spintrace));
 }
 
 ExprPtr closed_shell_CC_spintrace_compact_set(ExprPtr const& expr) {
