@@ -33,6 +33,10 @@ container::svector<ResultExpr> postProcess(ResultExpr result,
         get_default_context().index_space_registry()->retrieve(L"F");
     result.expression() =
         mbpt::density_fit(result.expression(), aux_space, L"g", L"DF");
+
+    result = expand(result);
+
+    spdlog::debug("After applying density-fitting decomposition:\n{}", result);
   }
 
   switch (options.spintrace) {
