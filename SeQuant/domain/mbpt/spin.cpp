@@ -1089,19 +1089,28 @@ ExprPtr closed_shell_CC_spintrace(ExprPtr const& expr) {
   return st_expr;
 }
 
-// 2-parameter wrapper
+// 2-parameter wrapper for regular closed-shell
 ExprPtr closed_shell_spintrace(
     const ExprPtr& expr,
     const container::svector<container::svector<Index>>& ext_index_groups) {
   return closed_shell_spintrace(expr, ext_index_groups, false);
 }
+// 2-parameter wrapper for compact-set closed-shell
+ExprPtr closed_shell_spintrace_compact_set(
+    const ExprPtr& expr,
+    const container::svector<container::svector<Index>>& ext_index_groups) {
+  return closed_shell_spintrace(expr, ext_index_groups, true);
+}
 
-container::svector<ResultExpr> closed_shell_spintrace(const ResultExpr& expr) {
-  using TraceFunction = ExprPtr (*)(
-      const ExprPtr&, const container::svector<container::svector<Index>>&);
+container::svector<ResultExpr> closed_shell_spintrace(const ResultExpr& expr,
+                                                      bool is_compact_set) {
+  using TraceFunction =
+      ExprPtr (*)(const ExprPtr&,
+                  const container::svector<container::svector<Index>>&, bool);
 
   return detail::wrap_trace<container::svector<ResultExpr>>(
-      expr, static_cast<TraceFunction>(&closed_shell_spintrace));
+      expr, static_cast<TraceFunction>(&closed_shell_spintrace),
+      is_compact_set);
 }
 
 ExprPtr closed_shell_CC_spintrace_compact_set(ExprPtr const& expr) {

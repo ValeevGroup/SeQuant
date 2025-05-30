@@ -241,13 +241,18 @@ ExprPtr closed_shell_spintrace(
     const ExprPtr& expr,
     const container::svector<container::svector<Index>>& ext_index_groups = {});
 
-/// @brief 3-parameter implementation version (with default)
+ExprPtr closed_shell_spintrace_compact_set(
+    const ExprPtr& expr,
+    const container::svector<container::svector<Index>>& ext_index_groups = {});
+
+/// @brief 3-parameter implementation version (without default)
 ExprPtr closed_shell_spintrace(
     const ExprPtr& expr,
     const container::svector<container::svector<Index>>& ext_index_groups,
     bool is_compact_set);
 
-container::svector<ResultExpr> closed_shell_spintrace(const ResultExpr& expr);
+container::svector<ResultExpr> closed_shell_spintrace(
+    const ResultExpr& expr, bool is_compact_set = false);
 
 /// @brief Transforms Coupled cluster from spin orbital to spatial orbitals
 /// @details The external indices are deduced from Antisymmetrization operator
