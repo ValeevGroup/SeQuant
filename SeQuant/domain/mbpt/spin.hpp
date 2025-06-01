@@ -235,21 +235,13 @@ ExprPtr S_maps(const ExprPtr& expr);
 /// lacks proper index attributes.
 /// @param expr ExprPtr with spin orbital indices
 /// @param ext_index_groups groups of external indices
+/// @param is_compact_set if true, will produce compact expressions
 /// @return an expression with spin integrated/adapted
 /// @brief 2-parameter wrapper version
 ExprPtr closed_shell_spintrace(
     const ExprPtr& expr,
-    const container::svector<container::svector<Index>>& ext_index_groups = {});
-
-ExprPtr closed_shell_spintrace_compact_set(
-    const ExprPtr& expr,
-    const container::svector<container::svector<Index>>& ext_index_groups = {});
-
-/// @brief 3-parameter implementation version (without default)
-ExprPtr closed_shell_spintrace(
-    const ExprPtr& expr,
-    const container::svector<container::svector<Index>>& ext_index_groups,
-    bool is_compact_set);
+    const container::svector<container::svector<Index>>& ext_index_groups = {},
+    bool is_compact_set = false);
 
 container::svector<ResultExpr> closed_shell_spintrace(
     const ResultExpr& expr, bool is_compact_set = false);
