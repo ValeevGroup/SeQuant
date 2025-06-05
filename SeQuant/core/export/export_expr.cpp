@@ -1,6 +1,7 @@
 #include <SeQuant/core/eval_expr.hpp>
 #include <SeQuant/core/export/compute_selection.hpp>
 #include <SeQuant/core/export/export_expr.hpp>
+#include <SeQuant/core/utility/atomic.hpp>
 
 #include <atomic>
 #include <cstddef>
@@ -10,15 +11,7 @@ namespace sequant {
 std::size_t detail::next_export_expr_id() {
   static std::atomic<std::size_t> next_id = 0;
 
-  std::size_t id = next_id.load();
-
-  // This ensures that we are updating next_id with the next id while
-  // also ensuring that no other thread is currently producing the same
-  // id that this one is doing.
-  while (!next_id.compare_exchange_weak(id, id + 1)) {
-  }
-
-  return id;
+  return fetch_and_increment(next_id);
 }
 
 ExportExpr::ExportExpr(const EvalExpr &other) : EvalExpr(other) {}

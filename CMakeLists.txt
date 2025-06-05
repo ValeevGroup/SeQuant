@@ -269,6 +269,7 @@ set(SeQuant_src
         SeQuant/core/tensor_network_v2.cpp
         SeQuant/core/tensor_network_v2.hpp
         SeQuant/core/timer.hpp
+        SeQuant/core/utility/atomic.hpp
         SeQuant/core/utility/context.hpp
         SeQuant/core/utility/expr.cpp
         SeQuant/core/utility/expr.hpp
