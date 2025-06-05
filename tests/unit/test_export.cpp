@@ -6,7 +6,6 @@
 #include <SeQuant/core/export/export_node.hpp>
 #include <SeQuant/core/export/expression_group.hpp>
 #include <SeQuant/core/export/generation_optimizer.hpp>
-#include <SeQuant/core/export/itf.hpp>
 #include <SeQuant/core/export/itf_generator.hpp>
 #include <SeQuant/core/export/julia_itensor.hpp>
 #include <SeQuant/core/export/julia_tensor_kit.hpp>
@@ -56,23 +55,6 @@ std::vector<std::vector<std::size_t>> twoElectronIntegralSymmetries() {
       {3, 2, 1, 0},
   };
 }
-
-class ItfContext : public sequant::itf::Context {
- public:
-  ItfContext() = default;
-
-  int compare(const sequant::Index &lhs, const sequant::Index &rhs) const {
-    return rhs.space().type().to_int32() - lhs.space().type().to_int32();
-  }
-
-  std::wstring get_base_label(const sequant::IndexSpace &space) const {
-    return L"a";
-  }
-  std::wstring get_tag(const sequant::IndexSpace &space) const { return L"b"; }
-  std::wstring get_name(const sequant::IndexSpace &space) const {
-    return L"tenshi";
-  }
-};
 
 std::vector<std::filesystem::path> enumerate_export_tests() {
 #ifndef SEQUANT_UNIT_TESTS_SOURCE_DIR
@@ -656,7 +638,6 @@ TEST_CASE("export", "[export]") {
     ctx.set_two_electron_integral_label(int_label);
 
     SECTION("remap_integrals") {
-      using namespace sequant::itf::detail;
       SECTION("Unchanged") {
         Tensor tensor = parse_expr(L"t{i1;a1}:N-N-N")->as<Tensor>();
         bool rewritten = ctx.rewrite(tensor);
@@ -765,150 +746,6 @@ TEST_CASE("export", "[export]") {
             REQUIRE_THAT(integral, EquivalentTo("J{a1,a2;a3,i1}"));
             REQUIRE(rewritten);
           }
-        }
-      }
-    }
-  }
-
-  SECTION("itf_old") {
-    const ItfContext ctx;
-
-    SECTION("remap_integrals") {
-      using namespace sequant::itf::detail;
-      SECTION("Unchanged") {
-        auto expr = parse_expr(L"t{i1;a1}");
-        auto remapped = expr;
-        remap_integrals(expr, ctx);
-        REQUIRE(remapped == expr);
-
-        expr = parse_expr(L"t{i1;a1} f{a1;i1} + first{a1;i1} second{i1;a1}");
-        remapped = expr;
-        remap_integrals(expr, ctx);
-        REQUIRE(remapped == expr);
-      }
-
-      SECTION("K") {
-        SECTION("occ,occ,occ,occ") {
-          std::vector<Index> indices = {L"i_1", L"i_2", L"i_3", L"i_4"};
-          REQUIRE(indices.size() == 4);
-
-          for (const std::vector<std::size_t> &indexPerm :
-               twoElectronIntegralSymmetries()) {
-            REQUIRE(indexPerm.size() == 4);
-
-            ExprPtr integralExpr = ex<Tensor>(
-                L"g", bra{indices[indexPerm[0]], indices[indexPerm[1]]},
-                ket{indices[indexPerm[2]], indices[indexPerm[3]]});
-
-            auto transformed = integralExpr;
-            remap_integrals(transformed, ctx);
-
-            CAPTURE(indexPerm);
-            REQUIRE_THAT(transformed, EquivalentTo("K{i1,i2;i3,i4}"));
-          }
-        }
-
-        SECTION("virt,virt,occ,occ") {
-          std::vector<Index> indices = {L"a_1", L"a_2", L"i_1", L"i_2"};
-          REQUIRE(indices.size() == 4);
-
-          for (const std::vector<std::size_t> &indexPerm :
-               twoElectronIntegralSymmetries()) {
-            REQUIRE(indexPerm.size() == 4);
-
-            ExprPtr integralExpr = ex<Tensor>(
-                L"g", bra{indices[indexPerm[0]], indices[indexPerm[1]]},
-                ket{indices[indexPerm[2]], indices[indexPerm[3]]});
-
-            auto transformed = integralExpr;
-            remap_integrals(transformed, ctx);
-
-            CAPTURE(indexPerm);
-
-            REQUIRE_THAT(transformed, EquivalentTo("K{a1,a2;i1,i2}"));
-          }
-        }
-
-        SECTION("virt,virt,virt,virt") {
-          std::vector<Index> indices = {L"a_1", L"a_2", L"a_3", L"a_4"};
-          REQUIRE(indices.size() == 4);
-
-          for (const std::vector<std::size_t> &indexPerm :
-               twoElectronIntegralSymmetries()) {
-            REQUIRE(indexPerm.size() == 4);
-
-            ExprPtr integralExpr = ex<Tensor>(
-                L"g", bra{indices[indexPerm[0]], indices[indexPerm[1]]},
-                ket{indices[indexPerm[2]], indices[indexPerm[3]]});
-
-            auto transformed = integralExpr;
-            remap_integrals(transformed, ctx);
-
-            CAPTURE(indexPerm);
-
-            REQUIRE_THAT(transformed, EquivalentTo("K{a1,a2;a3,a4}"));
-          }
-        }
-      }
-
-      SECTION("J") {
-        SECTION("virt,occ,virt,occ") {
-          std::vector<Index> indices = {L"a_1", L"i_1", L"a_2", L"i_2"};
-          REQUIRE(indices.size() == 4);
-
-          for (const std::vector<std::size_t> &indexPerm :
-               twoElectronIntegralSymmetries()) {
-            REQUIRE(indexPerm.size() == 4);
-
-            ExprPtr integralExpr = ex<Tensor>(
-                L"g", bra{indices[indexPerm[0]], indices[indexPerm[1]]},
-                ket{indices[indexPerm[2]], indices[indexPerm[3]]});
-
-            auto transformed = integralExpr;
-            remap_integrals(transformed, ctx);
-
-            CAPTURE(indexPerm);
-
-            REQUIRE_THAT(transformed, EquivalentTo("J{a1,a2;i1,i2}"));
-          }
-        }
-
-        SECTION("virt,occ,virt,virt") {
-          std::vector<Index> indices = {L"a_1", L"i_1", L"a_2", L"a_3"};
-          REQUIRE(indices.size() == 4);
-
-          for (const std::vector<std::size_t> &indexPerm :
-               twoElectronIntegralSymmetries()) {
-            REQUIRE(indexPerm.size() == 4);
-
-            ExprPtr integralExpr = ex<Tensor>(
-                L"g", bra{indices[indexPerm[0]], indices[indexPerm[1]]},
-                ket{indices[indexPerm[2]], indices[indexPerm[3]]});
-
-            auto transformed = integralExpr;
-            remap_integrals(transformed, ctx);
-
-            CAPTURE(indexPerm);
-
-            REQUIRE_THAT(transformed, EquivalentTo("J{a1,a2;a3,i1}"));
-          }
-        }
-      }
-
-      SECTION("f") {
-        SECTION("same_space") {
-          ExprPtr expr = parse_expr(L"f{i2;i1} + f{a1;a2}");
-
-          remap_integrals(expr, ctx);
-
-          REQUIRE_THAT(expr, EquivalentTo("f{i1;i2} + f{a1;a2}"));
-        }
-        SECTION("different_space") {
-          ExprPtr expr = parse_expr(L"f{a1;i1} + f{i1;a1}");
-
-          remap_integrals(expr, ctx);
-
-          REQUIRE_THAT(expr, EquivalentTo("f{a1;i1} + f{a1;i1}"));
         }
       }
     }
