@@ -1,5 +1,5 @@
-#ifndef SEQUANT_CORE_EXPORT_ITFGENERATOR_HPP
-#define SEQUANT_CORE_EXPORT_ITFGENERATOR_HPP
+#ifndef SEQUANT_CORE_EXPORT_ITF_HPP
+#define SEQUANT_CORE_EXPORT_ITF_HPP
 
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/export/context.hpp>
@@ -20,7 +20,7 @@
 
 namespace sequant {
 
-class ItfGeneratorContext : public ReorderingContext {
+class ItfContext : public ReorderingContext {
  public:
   using TagMap = container::map<IndexSpace, std::string>;
   using NameMap = container::map<IndexSpace, std::string>;
@@ -28,10 +28,10 @@ class ItfGeneratorContext : public ReorderingContext {
       container::map<Tensor, std::string, TensorBlockLessThanComparator>;
   using VariableImportMap = container::map<Variable, std::string>;
 
-  ItfGeneratorContext()
+  ItfContext()
       : ReorderingContext(MemoryLayout::ColumnMajor, assume_real_orbitals{},
                           assume_strict_column_permutability{}){};
-  ~ItfGeneratorContext() = default;
+  ~ItfContext() = default;
 
   virtual std::string index_name(const IndexSpace &space,
                                  std::size_t ordinal) const;
@@ -76,7 +76,7 @@ class ItfGeneratorContext : public ReorderingContext {
   bool is_exceptional_J(std::span<Index> bra, std::span<Index> ket) const;
 };
 
-template <typename Context = ItfGeneratorContext>
+template <typename Context = ItfContext>
 class ItfGenerator : public Generator<Context> {
  public:
   ItfGenerator() = default;
@@ -402,4 +402,4 @@ class ItfGenerator : public Generator<Context> {
 
 }  // namespace sequant
 
-#endif  // SEQUANT_CORE_EXPORT_ITFGENERATOR_HPP
+#endif  // SEQUANT_CORE_EXPORT_ITF_HPP

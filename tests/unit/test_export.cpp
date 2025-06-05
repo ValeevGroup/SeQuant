@@ -6,7 +6,7 @@
 #include <SeQuant/core/export/export_node.hpp>
 #include <SeQuant/core/export/expression_group.hpp>
 #include <SeQuant/core/export/generation_optimizer.hpp>
-#include <SeQuant/core/export/itf_generator.hpp>
+#include <SeQuant/core/export/itf.hpp>
 #include <SeQuant/core/export/julia_itensor.hpp>
 #include <SeQuant/core/export/julia_tensor_kit.hpp>
 #include <SeQuant/core/export/julia_tensor_operations.hpp>
@@ -86,7 +86,7 @@ using KnownGenerators = std::tuple<
     JuliaITensorGenerator<JuliaITensorGeneratorContext>,
     JuliaTensorKitGenerator<JuliaTensorKitGeneratorContext>,
     JuliaTensorOperationsGenerator<JuliaTensorOperationsGeneratorContext>,
-	ItfGenerator<ItfGeneratorContext>
+	ItfGenerator<ItfContext>
 >;
 // clang-format on
 
@@ -108,7 +108,7 @@ std::set<std::string> known_format_names(std::tuple<Generator...> generators) {
 
 void configure_context_defaults(TextGeneratorContext &ctx) {}
 
-void configure_context_defaults(ItfGeneratorContext &ctx) {
+void configure_context_defaults(ItfContext &ctx) {
   auto registry = get_default_context().index_space_registry();
   IndexSpace occ = registry->retrieve("i");
   IndexSpace virt = registry->retrieve("a");
@@ -137,7 +137,7 @@ void add_to_context(TextGeneratorContext &ctx, std::string_view key,
   throw std::runtime_error(
       "TextGeneratorContext doesn't support specifications");
 }
-void add_to_context(ItfGeneratorContext &ctx, std::string_view key,
+void add_to_context(ItfContext &ctx, std::string_view key,
                     std::string_view value) {}
 void add_to_context(JuliaTensorOperationsGeneratorContext &ctx,
                     std::string_view key, std::string_view value) {
@@ -634,7 +634,7 @@ TEST_CASE("export", "[export]") {
 
   SECTION("itf") {
     std::wstring int_label = L"g";
-    ItfGeneratorContext ctx;
+    ItfContext ctx;
     ctx.set_two_electron_integral_label(int_label);
 
     SECTION("remap_integrals") {

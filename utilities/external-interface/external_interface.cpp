@@ -8,7 +8,7 @@
 #include <SeQuant/core/export/export_node.hpp>
 #include <SeQuant/core/export/expression_group.hpp>
 #include <SeQuant/core/export/generation_optimizer.hpp>
-#include <SeQuant/core/export/itf_generator.hpp>
+#include <SeQuant/core/export/itf.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/parse.hpp>
 #include <SeQuant/core/runtime.hpp>
@@ -48,9 +48,9 @@ struct std::hash<Tensor> {
   }
 };
 
-class ItfContext : public ItfGeneratorContext {
+class ItfExportContext : public ItfContext {
  public:
-  ItfContext(const IndexSpaceMeta &meta) : m_meta(&meta) {}
+  ItfExportContext(const IndexSpaceMeta &meta) : m_meta(&meta) {}
 
   std::string get_tag(const IndexSpace &space) const override {
     assert(m_meta);
@@ -118,8 +118,8 @@ ProcessingOptions extractProcessingOptions(
 }
 
 ExportNode<> prepareForExport(const ResultExpr &result,
-                              const ItfGenerator<ItfContext> &generator,
-                              ItfContext &ctx, bool importResult,
+                              const ItfGenerator<ItfExportContext> &generator,
+                              ItfExportContext &ctx, bool importResult,
                               bool createResult) {
   ExportNode<> tree = to_export_tree(result);
 
@@ -177,12 +177,12 @@ std::vector<ResultExpr> splitContributions(const ResultExpr &result) {
 void generateITF(const json &blocks, std::string_view out_file,
                  const ProcessingOptions &defaults,
                  const IndexSpaceMeta &spaceMeta) {
-  ItfContext context(spaceMeta);
+  ItfExportContext context(spaceMeta);
   // We assume index IDs start at 1
   context.set_index_id_offset(1);
 
-  ItfGenerator<ItfContext> itfgen;
-  GenerationOptimizer<ItfGenerator<ItfContext>> generator(itfgen);
+  ItfGenerator<ItfExportContext> itfgen;
+  GenerationOptimizer<ItfGenerator<ItfExportContext>> generator(itfgen);
 
   container::svector<ExpressionGroup<>> groups;
   groups.reserve(blocks.size());

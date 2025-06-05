@@ -1,4 +1,4 @@
-#include <SeQuant/core/export/itf_generator.hpp>
+#include <SeQuant/core/export/itf.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/space.hpp>
 #include <SeQuant/core/utility/string.hpp>
@@ -11,8 +11,8 @@
 
 namespace sequant {
 
-std::string ItfGeneratorContext::index_name(const IndexSpace &space,
-                                            std::size_t ordinal) const {
+std::string ItfContext::index_name(const IndexSpace &space,
+                                   std::size_t ordinal) const {
   assert(ordinal >= m_idx_offset);
   ordinal -= m_idx_offset;
 
@@ -45,7 +45,7 @@ std::string ItfGeneratorContext::index_name(const IndexSpace &space,
   return std::string(1, target);
 }
 
-std::string ItfGeneratorContext::get_name(const IndexSpace &space) const {
+std::string ItfContext::get_name(const IndexSpace &space) const {
   auto it = m_space_names.find(space);
 
   if (it == m_space_names.end()) {
@@ -56,7 +56,7 @@ std::string ItfGeneratorContext::get_name(const IndexSpace &space) const {
   return it->second;
 }
 
-std::string ItfGeneratorContext::get_tag(const IndexSpace &space) const {
+std::string ItfContext::get_tag(const IndexSpace &space) const {
   auto it = m_tags.find(space);
 
   if (it == m_tags.end()) {
@@ -67,8 +67,7 @@ std::string ItfGeneratorContext::get_tag(const IndexSpace &space) const {
   return it->second;
 }
 
-std::optional<std::string> ItfGeneratorContext::import_name(
-    const Tensor &tensor) const {
+std::optional<std::string> ItfContext::import_name(const Tensor &tensor) const {
   auto it = m_tensor_imports.find(tensor);
 
   if (it == m_tensor_imports.end()) {
@@ -78,7 +77,7 @@ std::optional<std::string> ItfGeneratorContext::import_name(
   return it->second;
 }
 
-std::optional<std::string> ItfGeneratorContext::import_name(
+std::optional<std::string> ItfContext::import_name(
     const Variable &variable) const {
   auto it = m_variable_imports.find(variable);
 
@@ -89,25 +88,23 @@ std::optional<std::string> ItfGeneratorContext::import_name(
   return it->second;
 }
 
-void ItfGeneratorContext::set_name(const IndexSpace &space, std::string name) {
+void ItfContext::set_name(const IndexSpace &space, std::string name) {
   m_space_names[space] = std::move(name);
 }
 
-void ItfGeneratorContext::set_tag(const IndexSpace &space, std::string tag) {
+void ItfContext::set_tag(const IndexSpace &space, std::string tag) {
   m_tags[space] = std::move(tag);
 }
 
-void ItfGeneratorContext::set_import_name(const Tensor &tensor,
-                                          std::string name) {
+void ItfContext::set_import_name(const Tensor &tensor, std::string name) {
   m_tensor_imports[tensor] = std::move(name);
 }
 
-void ItfGeneratorContext::set_import_name(const Variable &variable,
-                                          std::string name) {
+void ItfContext::set_import_name(const Variable &variable, std::string name) {
   m_variable_imports[variable] = std::move(name);
 }
 
-bool ItfGeneratorContext::rewrite(Tensor &tensor) const {
+bool ItfContext::rewrite(Tensor &tensor) const {
   bool modified = false;
 
   if (tensor.label() == L"g" && tensor.const_indices().size() == 4 &&
@@ -199,8 +196,8 @@ bool ItfGeneratorContext::rewrite(Tensor &tensor) const {
   return modified;
 }
 
-bool ItfGeneratorContext::is_exceptional_J(std::span<Index> bra,
-                                           std::span<Index> ket) const {
+bool ItfContext::is_exceptional_J(std::span<Index> bra,
+                                  std::span<Index> ket) const {
   assert(bra.size() == 2);
   assert(ket.size() == 2);
 
@@ -219,11 +216,9 @@ bool ItfGeneratorContext::is_exceptional_J(std::span<Index> bra,
          first_ket_same_as_bra;
 }
 
-std::size_t ItfGeneratorContext::index_id_offset() const {
-  return m_idx_offset;
-}
+std::size_t ItfContext::index_id_offset() const { return m_idx_offset; }
 
-void ItfGeneratorContext::set_index_id_offset(std::size_t offset) {
+void ItfContext::set_index_id_offset(std::size_t offset) {
   m_idx_offset = offset;
 }
 
