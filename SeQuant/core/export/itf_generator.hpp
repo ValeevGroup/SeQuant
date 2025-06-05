@@ -5,11 +5,11 @@
 #include <SeQuant/core/export/context.hpp>
 #include <SeQuant/core/export/reordering_context.hpp>
 #include <SeQuant/core/export/text_generator.hpp>
-#include <SeQuant/core/export/utils.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/space.hpp>
 #include <SeQuant/core/utility/string.hpp>
+#include <SeQuant/core/utility/tensor.hpp>
 
 #include <cassert>
 #include <optional>
@@ -25,7 +25,7 @@ class ItfGeneratorContext : public ReorderingContext {
   using TagMap = container::map<IndexSpace, std::string>;
   using NameMap = container::map<IndexSpace, std::string>;
   using TensorImportMap =
-      container::map<Tensor, std::string, TensorBlockCompare>;
+      container::map<Tensor, std::string, TensorBlockLessThanComparator>;
   using VariableImportMap = container::map<Variable, std::string>;
 
   ItfGeneratorContext()

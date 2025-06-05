@@ -217,8 +217,6 @@ set(SeQuant_src
         SeQuant/core/export/reordering_context.cpp
         SeQuant/core/export/reordering_context.hpp
         SeQuant/core/export/text_generator.hpp
-        SeQuant/core/export/utils.cpp
-        SeQuant/core/export/utils.hpp
         SeQuant/core/expressions/abstract_tensor.hpp
         SeQuant/core/expressions/expr.cpp
         SeQuant/core/expressions/expr.hpp
@@ -281,6 +279,7 @@ set(SeQuant_src
         SeQuant/core/utility/string.cpp
         SeQuant/core/utility/string.hpp
         SeQuant/core/utility/swap.hpp
+        SeQuant/core/utility/tensor.hpp
         SeQuant/core/utility/tuple.hpp
         SeQuant/core/wick.hpp
         SeQuant/core/wick.impl.hpp

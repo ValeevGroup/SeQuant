@@ -9,9 +9,9 @@
 #include <SeQuant/core/export/export_node.hpp>
 #include <SeQuant/core/export/expression_group.hpp>
 #include <SeQuant/core/export/generator.hpp>
-#include <SeQuant/core/export/utils.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/logger.hpp>
+#include <SeQuant/core/utility/tensor.hpp>
 
 #include <algorithm>
 #include <array>
@@ -259,7 +259,7 @@ class GenerationVisitor {
   Generator<Context> &m_generator;
   const std::unordered_map<NodeID, ExprPtr> &m_scalarFactors;
   Context &m_ctx;
-  std::map<Tensor, std::size_t, TensorBlockCompare> m_tensorUses;
+  std::map<Tensor, std::size_t, TensorBlockLessThanComparator> m_tensorUses;
   std::map<Variable, std::size_t> m_variableUses;
 
   std::optional<NodeID> m_rootID;
@@ -268,10 +268,10 @@ class GenerationVisitor {
 struct PreprocessResult {
   std::unordered_map<std::size_t, ExprPtr> scalarFactors;
   std::set<Index> indices;
-  std::map<Tensor, UsageSet, TensorBlockCompare> tensors;
+  std::map<Tensor, UsageSet, TensorBlockLessThanComparator> tensors;
   std::map<Variable, UsageSet> variables;
 
-  std::map<Tensor, std::size_t, TensorBlockCompare> tensorReferences;
+  std::map<Tensor, std::size_t, TensorBlockLessThanComparator> tensorReferences;
   std::map<Variable, std::size_t> variableReferences;
 };
 
@@ -754,8 +754,9 @@ void handle_declarations(Range &&range, Generator<Context> &generator,
   }
 
   if (generator.tensor_declaration_scope() == scope) {
-    std::map<Tensor, UsageSet, TensorBlockCompare> tensors =
-        details::combine_and_clear_pp_results<Tensor, TensorBlockCompare>(
+    std::map<Tensor, UsageSet, TensorBlockLessThanComparator> tensors =
+        details::combine_and_clear_pp_results<Tensor,
+                                              TensorBlockLessThanComparator>(
             range);
     details::declare_all<Tensor>(tensors, generator, ctx);
   }

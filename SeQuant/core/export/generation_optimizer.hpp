@@ -3,9 +3,9 @@
 
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/export/generator.hpp>
-#include <SeQuant/core/export/utils.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/parse.hpp>
+#include <SeQuant/core/utility/tensor.hpp>
 
 #include <pv/polymorphic_variant.hpp>
 
@@ -181,8 +181,8 @@ class GenerationOptimizer final : public Generator<MainContext> {
         const Tensor &lhs = std::get<Tensor>(m_object);
         const Tensor &rhs = std::get<Tensor>(other);
 
-        TensorBlockCompare cmp;
-        return !cmp(lhs, rhs) && !cmp(rhs, lhs);
+        TensorBlockEqualComparator cmp;
+        return cmp(lhs, rhs);
       }
 
       return std::get<Variable>(m_object) == std::get<Variable>(other);

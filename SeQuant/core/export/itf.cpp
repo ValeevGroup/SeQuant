@@ -5,6 +5,7 @@
 #include "itf.hpp"
 
 #include <SeQuant/core/utility/indices.hpp>
+#include <SeQuant/core/utility/tensor.hpp>
 
 #include <algorithm>
 #include <array>
@@ -574,7 +575,7 @@ std::wstring ITFGenerator::generate() const {
   for (const CodeSection &currentSection : m_codes) {
     itf += L"---- code(\"" + currentSection.name + L"\")\n";
 
-    std::set<Tensor, TensorBlockCompare> allocatedTensors;
+    std::set<Tensor, TensorBlockLessThanComparator> allocatedTensors;
 
     for (const std::vector<Contraction> &currentBlock :
          currentSection.contractionBlocks) {

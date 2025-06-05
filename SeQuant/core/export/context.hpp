@@ -1,8 +1,8 @@
 #ifndef SEQUANT_CORE_EXPORT_CONTEXT_HPP
 #define SEQUANT_CORE_EXPORT_CONTEXT_HPP
 
-#include <SeQuant/core/export/utils.hpp>
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/utility/tensor.hpp>
 
 #include <limits>
 #include <map>
@@ -73,7 +73,8 @@ class UsageSet {
 
 class ExportContext {
  public:
-  using TensorStrategyMap = std::map<Tensor, StrategyPair, TensorBlockCompare>;
+  using TensorStrategyMap =
+      std::map<Tensor, StrategyPair, TensorBlockLessThanComparator>;
   using VariableStrategyMap = std::map<Variable, StrategyPair>;
 
   ExportContext() = default;

@@ -11,6 +11,7 @@
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/singleton.hpp>
 #include <SeQuant/core/utility/strong.hpp>
+#include <SeQuant/core/utility/tensor.hpp>
 
 #include <codecvt>
 #include <iostream>
@@ -47,9 +48,9 @@ sequant::Tensor parse_tensor(std::wstring_view str) {
 }
 
 TEST_CASE("utilities", "[utilities]") {
-  SECTION("get_uncontracted_indices") {
-    using namespace sequant;
+  using namespace sequant;
 
+  SECTION("get_uncontracted_indices") {
     SECTION("dot_product") {
       std::vector<std::pair<std::wstring, std::wstring>> inputs = {
           {L"t{}", L"t{}"},
@@ -87,7 +88,6 @@ TEST_CASE("utilities", "[utilities]") {
   }
 
   SECTION("get_unique_indices") {
-    using namespace sequant;
     using namespace Catch::Matchers;
 
     SECTION("Constant") {
@@ -183,7 +183,6 @@ TEST_CASE("utilities", "[utilities]") {
   }
 
   SECTION("Singleton") {
-    using namespace sequant;
     using namespace sequant::singleton;
 
     constexpr auto nthreads = 5;
@@ -282,7 +281,6 @@ TEST_CASE("utilities", "[utilities]") {
   }
 
   SECTION("transform_expr") {
-    using namespace sequant;
     {
       ExprPtr expr =
           parse_expr(L"- g{a1,i2;a2,i1} t{a2;i2} + 2 g{a1,i2;i1,a2} t{a2;i2}");
@@ -305,6 +303,73 @@ TEST_CASE("utilities", "[utilities]") {
       REQUIRE_THAT(
           transformed_result,
           EquivalentTo("- g{i1,a1;i2,a2} + 2 g{i1,a1;a2,i2} t{a2;i1}"));
+    }
+  }
+
+  SECTION("TensorBlockComparator") {
+    SECTION("TensorBlockEqualComparator") {
+      const TensorBlockEqualComparator cmp;
+
+      std::vector<std::tuple<std::wstring, std::wstring, bool>> test_cases = {
+          {L"A{a1}", L"B{a2}", false},
+          {L"t{a1}", L"t{a2}", true},
+          {L"t{;i1}", L"t{;i8}", true},
+          {L"t{;;p3}", L"t{;;p4}", true},
+          {L"t{a1;i1;p3}", L"t{a1;i1;p4}", true},
+          {L"t{a1;}", L"t{;a1}", true},
+          {L"t{a1;}", L"t{;;a1}", true},
+          {L"t{a1;i1}", L"t{a1;p1}", false},
+          {L"t{a1;i1}", L"t{a1;i1}", true},
+          {L"t{a4;i3;p2}", L"t{a2;i1;p6}", true},
+          {L"I{;;a2,i2}", L"I{;;a1,i1}", true},
+      };
+
+      for (const auto& [lhs, rhs, equal] : test_cases) {
+        CAPTURE(toUtf8(lhs));
+        CAPTURE(toUtf8(rhs));
+
+        const Tensor lhs_tensor = parse_expr(lhs)->as<Tensor>();
+        const Tensor rhs_tensor = parse_expr(rhs)->as<Tensor>();
+        REQUIRE(cmp(lhs_tensor, rhs_tensor) == equal);
+      }
+    }
+
+    SECTION("TensorBlockLessThanComparator") {
+      const TensorBlockLessThanComparator cmp;
+      const TensorBlockEqualComparator equal_cmp;
+
+      REQUIRE(Index(L"i_1").space() < Index(L"p_1").space());
+
+      std::vector<std::tuple<std::wstring, std::wstring, bool>> test_cases = {
+          {L"A{a1}", L"B{a2}", true},
+          {L"t{a1}", L"t{a2}", false},
+          {L"t{;i1}", L"t{;i8}", false},
+          {L"t{;;p3}", L"t{;;p4}", false},
+          {L"t{a1;i1;p3}", L"t{a1;i1;p4}", false},
+          {L"t{a1;i1;p3}", L"t{a1;p4;i2}", true},
+          {L"t{a1;}", L"t{;a1}", false},
+          {L"t{a1;}", L"t{;;a1}", false},
+          {L"t{a1;i1}", L"t{a1;p1}", true},
+          {L"t{a1;i1}", L"t{a1;i1}", false},
+          {L"t{a4;i3;p2}", L"t{a2;i1;p6}", false},
+          {L"I{;;a2,i2}", L"I{;a1;i1}", false},
+      };
+
+      for (const auto& [lhs, rhs, less] : test_cases) {
+        CAPTURE(toUtf8(lhs));
+        CAPTURE(toUtf8(rhs));
+
+        const Tensor lhs_tensor = parse_expr(lhs)->as<Tensor>();
+        const Tensor rhs_tensor = parse_expr(rhs)->as<Tensor>();
+        REQUIRE(cmp(lhs_tensor, rhs_tensor) == less);
+
+        if (equal_cmp(lhs_tensor, rhs_tensor)) {
+          REQUIRE(less == false);
+          REQUIRE(cmp(rhs_tensor, lhs_tensor) == less);
+        } else {
+          REQUIRE(cmp(rhs_tensor, lhs_tensor) == !less);
+        }
+      }
     }
   }
 }

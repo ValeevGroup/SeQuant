@@ -5,8 +5,8 @@
 #ifndef SEQUANT_CORE_EXPORT_ITF_HPP
 #define SEQUANT_CORE_EXPORT_ITF_HPP
 
-#include <SeQuant/core/export/utils.hpp>
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/utility/tensor.hpp>
 
 #include <functional>
 #include <optional>
@@ -97,8 +97,8 @@ class ITFGenerator {
 
  private:
   std::set<Index> m_encounteredIndices;
-  std::set<Tensor, TensorBlockCompare> m_importedTensors;
-  std::set<Tensor, TensorBlockCompare> m_createdTensors;
+  std::set<Tensor, TensorBlockLessThanComparator> m_importedTensors;
+  std::set<Tensor, TensorBlockLessThanComparator> m_createdTensors;
   std::vector<CodeSection> m_codes;
   const Context *m_ctx;
 };
