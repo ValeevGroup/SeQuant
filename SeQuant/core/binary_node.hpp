@@ -474,15 +474,15 @@ class FullBinaryNode {
   /// \param order Tree traversal order(s) to invoke the visitor for.
   ///
   template <typename F>
-  void visit(F visitor, TreeTraversal order = TreeTraversal::PreOrder) const {
+  void visit(F&& visitor, TreeTraversal order = TreeTraversal::PreOrder) const {
     TRAVERSAL_TO_TEMPLATE_ARG(order, sequant::visit,
-                              (*this, visitor, VisitAll{}));
+                              (*this, std::forward<F>(visitor), VisitAll{}));
   }
 
   template <typename F>
-  void visit(F visitor, TreeTraversal order = TreeTraversal::PreOrder) {
+  void visit(F&& visitor, TreeTraversal order = TreeTraversal::PreOrder) {
     TRAVERSAL_TO_TEMPLATE_ARG(order, sequant::visit,
-                              (*this, visitor, VisitAll{}));
+                              (*this, std::forward<F>(visitor), VisitAll{}));
   }
 
   ///
@@ -496,17 +496,19 @@ class FullBinaryNode {
   /// \param order Tree traversal order(s) to invoke the visitor for.
   ///
   template <typename F>
-  void visit_internal(F visitor,
+  void visit_internal(F&& visitor,
                       TreeTraversal order = TreeTraversal::PreOrder) const {
-    TRAVERSAL_TO_TEMPLATE_ARG(order, sequant::visit,
-                              (*this, visitor, VisitInternal{}));
+    TRAVERSAL_TO_TEMPLATE_ARG(
+        order, sequant::visit,
+        (*this, std::forward<F>(visitor), VisitInternal{}));
   }
 
   template <typename F>
-  void visit_internal(F visitor,
+  void visit_internal(F&& visitor,
                       TreeTraversal order = TreeTraversal::PreOrder) {
-    TRAVERSAL_TO_TEMPLATE_ARG(order, sequant::visit,
-                              (*this, visitor, VisitInternal{}));
+    TRAVERSAL_TO_TEMPLATE_ARG(
+        order, sequant::visit,
+        (*this, std::forward<F>(visitor), VisitInternal{}));
   }
 
   ///
@@ -520,16 +522,16 @@ class FullBinaryNode {
   /// \param order Tree traversal order(s) to invoke the visitor for.
   ///
   template <typename F>
-  void visit_leaf(F visitor,
+  void visit_leaf(F&& visitor,
                   TreeTraversal order = TreeTraversal::PreOrder) const {
     TRAVERSAL_TO_TEMPLATE_ARG(order, sequant::visit,
-                              (*this, visitor, VisitLeaf{}));
+                              (*this, std::forward<F>(visitor), VisitLeaf{}));
   }
 
   template <typename F>
-  void visit_leaf(F visitor, TreeTraversal order = TreeTraversal::PreOrder) {
+  void visit_leaf(F&& visitor, TreeTraversal order = TreeTraversal::PreOrder) {
     TRAVERSAL_TO_TEMPLATE_ARG(order, sequant::visit,
-                              (*this, visitor, VisitLeaf{}));
+                              (*this, std::forward<F>(visitor), VisitLeaf{}));
   }
 
  private:
