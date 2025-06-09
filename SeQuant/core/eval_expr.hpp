@@ -5,8 +5,10 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
+#include <SeQuant/external/bliss/graph.hh>
 
 #include <cstddef>
+#include <memory>
 #include <string>
 
 namespace sequant {
@@ -78,9 +80,12 @@ class EvalExpr {
   ///              Considered for reusing sub-expressions.
   /// @param hash A hash value that is equal for two EvalExpr objects that
   ///             produce the same evaluated result modulo the @c phase.
+  /// @param connectivity The graph representing the connectivity. May be null
+  ///                     to indicate that no graph is present/necessary.
   ///
   EvalExpr(EvalOp op, ResultType res, ExprPtr const& expr, index_vector ixs,
-           std::int8_t phase, size_t hash);
+           std::int8_t phase, size_t hash,
+           std::shared_ptr<bliss::Graph> connectivity);
 
   ///
   /// \return Operation type of this expression, or null if this is a primary
@@ -202,12 +207,27 @@ class EvalExpr {
   ///
   [[nodiscard]] std::int8_t canon_phase() const noexcept;
 
+  ///
+  /// \return Whether this expression has a connectivity graph
+  /// \see connectivity_graph
+  ///
+  [[nodiscard]] bool has_connectivity_graph() const noexcept;
+
+  ///
+  /// \return The graph representing the connectivity of two factors in a
+  /// product \note If has_connectivity_graph returns false, this function must
+  /// not be called \see has_connectivity_graph
+  ///
+  [[nodiscard]] const bliss::Graph& connectivity_graph() const noexcept;
+
  protected:
   std::optional<EvalOp> op_type_ = std::nullopt;
 
   ResultType result_type_;
 
   size_t hash_value_;
+
+  std::shared_ptr<bliss::Graph> connectivity_;
 
   index_vector canon_indices_;
 

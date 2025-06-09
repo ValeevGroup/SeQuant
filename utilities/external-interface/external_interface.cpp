@@ -10,6 +10,7 @@
 #include <SeQuant/core/export/generation_optimizer.hpp>
 #include <SeQuant/core/export/itf.hpp>
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/optimize/common_subexpression_elimination.hpp>
 #include <SeQuant/core/parse.hpp>
 #include <SeQuant/core/runtime.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
@@ -112,6 +113,11 @@ ProcessingOptions extractProcessingOptions(
 
   if (details.contains("term_by_term")) {
     options.term_by_term = details.at("term_by_term").get<bool>();
+  }
+
+  if (details.contains("subexpression_elimination")) {
+    options.subexpression_elimination =
+        details.at("subexpression_elimination").get<bool>();
   }
 
   return options;
@@ -297,6 +303,15 @@ void generateITF(const json &blocks, std::string_view out_file,
                                            current_result.value("import", true),
                                            true));
       }
+    }
+
+    if (current_block.value("subexpression_elimination",
+                            defaults.subexpression_elimination)) {
+      eliminate_common_subexpressions(results, [](const auto &expr) {
+        // Note: the lambda is needed to make the callable usable for
+        // ExprPtr as well as ResultExpr objects
+        return to_export_tree(expr);
+      });
     }
 
     groups.emplace_back(std::move(results),

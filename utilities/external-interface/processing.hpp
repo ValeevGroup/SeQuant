@@ -26,6 +26,7 @@ struct ProcessingOptions {
   bool factorize_to_binary = true;
   bool expand_symmetrizer = false;
   bool term_by_term = false;
+  bool subexpression_elimination = true;
 };
 
 sequant::container::svector<sequant::ResultExpr> postProcess(
