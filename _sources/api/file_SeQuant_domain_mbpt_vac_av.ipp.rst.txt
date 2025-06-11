@@ -41,9 +41,9 @@ Functions
 ---------
 
 
-- :ref:`exhale_function_vac__av_8ipp_1a46dbad0591694ce9c799384673e45617`
-
 - :ref:`exhale_function_vac__av_8ipp_1aaad8e4ab485bd14050c0866f70872d92`
+
+- :ref:`exhale_function_vac__av_8ipp_1a46dbad0591694ce9c799384673e45617`
 
 
 Defines
