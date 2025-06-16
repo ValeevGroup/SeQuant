@@ -1,0 +1,12 @@
+O1{a1;i1} = 
+  + f{a1;i1} 
+  - f{i2;i1} T1{a1;i2} 
+  + f{a1;a2} T1{a2;i1} 
+  + g{i2,a1;a2,i1} T1{a2;i2} 
+  + f{i2;a2} T2{a1,a2;i1,i2} 
+  + 1/2 g{i2,i3;a2,i1} INTpp{a1,a2;i2,i3} 
+  - 1/2 g{i2,a1;a2,a3} INTpp{a2,a3;i1,i2} 
+  - f{i2;a2} T1{a2;i1} T1{a1;i2} 
+  - 1/2 g{i2,i3;a2,a3} T1{a1;i2} INTpp{a2,a3;i1,i3} 
+  + 1/2 g{i2,i3;a2,a3} T2{a1,a2;i2,i3} T1{a3;i1} 
+  + g{i2,i3;a2,a3} T2{a1,a2;i1,i2} T1{a3;i3} 
