@@ -6,9 +6,11 @@
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/tensor.hpp>
 
+#include <range/v3/view.hpp>
+
 #include <algorithm>
+#include <optional>
 #include <set>
-#include <tuple>
 #include <type_traits>
 #include <vector>
 
@@ -182,6 +184,7 @@ IndexGroups<Container> get_unique_indices(const Product& product) {
       } else {
         detail::remove_one(groups.bra, current);
         detail::remove_one(groups.ket, current);
+        detail::remove_one(groups.aux, current);
       }
     }
 
@@ -193,6 +196,7 @@ IndexGroups<Container> get_unique_indices(const Product& product) {
       } else {
         detail::remove_one(groups.bra, current);
         detail::remove_one(groups.ket, current);
+        detail::remove_one(groups.aux, current);
       }
     }
 
@@ -215,7 +219,7 @@ IndexGroups<Container> get_unique_indices(const Product& product) {
 /// Obtains the set of unique (non-repeated) indices used in the given
 /// expression
 template <typename Container>
-IndexGroups<Container> get_unique_indices(const ExprPtr& expr) {
+IndexGroups<Container> get_unique_indices(const Expr& expr) {
   if (expr.is<Constant>()) {
     return get_unique_indices<Container>(expr.as<Constant>());
   } else if (expr.is<Variable>()) {
@@ -230,6 +234,10 @@ IndexGroups<Container> get_unique_indices(const ExprPtr& expr) {
     throw std::runtime_error(
         "Encountered unsupported expression type in get_unique_indices");
   }
+}
+template <typename Container>
+IndexGroups<Container> get_unique_indices(const ExprPtr& expr) {
+  return get_unique_indices<Container>(*expr);
 }
 
 template <typename Container = std::vector<Index>, typename Rng>
@@ -298,6 +306,70 @@ std::string csv_labels(Rng&& idxs) {
          | intersperse(",")       //
          | join                   //
          | ranges::to<std::string>;
+}
+
+template <typename Container = container::svector<container::svector<Index>>>
+Container external_indices(const Expr& expr) {
+  if (!expr.is<Sum>() && !expr.is<Product>() && !expr.is<Tensor>()) {
+    return {};
+  }
+
+  if (expr.is<Tensor>()) {
+    const Tensor& tensor = expr.as<Tensor>();
+
+    Container cont(std::max(tensor.bra_rank(),
+                            std::max(tensor.ket_rank(), tensor.aux_rank())));
+    for (std::size_t i = 0; i < tensor.ket_rank(); ++i) {
+      cont.at(i).push_back(tensor.ket()[i]);
+    }
+    for (std::size_t i = 0; i < tensor.bra_rank(); ++i) {
+      cont.at(i).push_back(tensor.bra()[i]);
+    }
+    for (std::size_t i = 0; i < tensor.aux_rank(); ++i) {
+      cont.at(i).push_back(tensor.aux()[i]);
+    }
+
+    return cont;
+  }
+
+  std::optional<Tensor> symmetrizer;
+  expr.visit(
+      [&](const ExprPtr& expr) {
+        if (expr.is<Tensor>() && (expr.as<Tensor>().label() == L"S" ||
+                                  expr.as<Tensor>().label() == L"A")) {
+          assert(!symmetrizer.has_value() ||
+                 symmetrizer.value() == expr.as<Tensor>());
+          symmetrizer = expr.as<Tensor>();
+        }
+      },
+      true);
+
+  if (symmetrizer.has_value()) {
+    // Generate external index list from symmetrization operator
+    return external_indices(symmetrizer.value());
+  }
+
+  IndexGroups groups = get_unique_indices<container::svector<Index>>(expr);
+
+  Container cont(std::max(groups.bra.size(),
+                          std::max(groups.ket.size(), groups.aux.size())));
+
+  for (std::size_t i = 0; i < groups.ket.size(); ++i) {
+    cont.at(i).push_back(groups.ket[i]);
+  }
+  for (std::size_t i = 0; i < groups.bra.size(); ++i) {
+    cont.at(i).push_back(groups.bra[i]);
+  }
+  for (std::size_t i = 0; i < groups.aux.size(); ++i) {
+    cont.at(i).push_back(groups.aux[i]);
+  }
+
+  return cont;
+}
+
+template <typename Container = container::svector<container::svector<Index>>>
+Container external_indices(const ExprPtr& expr) {
+  return external_indices<Container>(*expr);
 }
 
 }  // namespace sequant

@@ -123,7 +123,8 @@ TEST_CASE("canonicalization", "[algorithms]") {
       canonicalize(input);
       REQUIRE_THAT(
           input,
-          SimplifiesTo("S{a1,a3;i1,i2} f{a2;i3} t{i_2;a_2} t{i1,i3;a1,a3}"));
+          SimplifiesTo(
+              "S{a_1,a_2;i_1,i_2} f{a_3;i_3} t{i_2;a_3} t{i_1,i_3;a_1,a_2}"));
     }
     {  // Product containing Variables
       auto q2 = ex<Variable>(L"q2");
@@ -138,10 +139,9 @@ TEST_CASE("canonicalization", "[algorithms]") {
           ex<Tensor>(L"t", bra{L"i_5", L"i_2"}, ket{L"a_1", L"a_2"},
                      Symmetry::nonsymm);
       canonicalize(input);
-      REQUIRE_THAT(
-          input,
-          SimplifiesTo(
-              "p q1 q2^* S{a1,a3;i1,i2} f{a2;i3} t {i2;a2} t{i1,i3;a1,a3}"));
+      REQUIRE_THAT(input,
+                   SimplifiesTo("p q1 q2^* S{a_1,a_2;i_1,i_2} f{a_3;i_3} "
+                                "t{i_2;a_3} t{i_1,i_3;a_1,a_2}"));
     }
     {  // Product containing adjoint of a Tensor
       auto f2 = ex<Tensor>(L"f", bra{L"a_1", L"a_2"}, ket{L"i_5", L"i_2"},
@@ -155,7 +155,8 @@ TEST_CASE("canonicalization", "[algorithms]") {
       canonicalize(input1);
       REQUIRE_THAT(
           input1,
-          SimplifiesTo("S{a1,a2;i1,i3} f{a3;i2} f⁺{i1,i2;a1,a2} t{i3;a3}"));
+          SimplifiesTo(
+              "S{a_1,a_2;i_1,i_2} f{a_3;i_3} f⁺{i_1,i_3;a_1,a_2} t{i_2;a_3}"));
       auto input2 =
           ex<Tensor>(L"S", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"},
                      Symmetry::nonsymm) *
@@ -163,10 +164,8 @@ TEST_CASE("canonicalization", "[algorithms]") {
           ex<Tensor>(L"t", bra{L"i_1"}, ket{L"a_5"}, Symmetry::nonsymm) * f2 *
           ex<Variable>(L"w") * ex<Constant>(rational{1, 2});
       canonicalize(input2);
-      REQUIRE_THAT(
-          input2,
-          SimplifiesTo(
-              "1/2 w S{a1,a2;i1,i3} f{a3;i2} f⁺{i1,i2;a1,a2} t{i3;a3}"));
+      REQUIRE_THAT(input2, SimplifiesTo("1/2 w S{a_1,a_2;i_1,i_2} f{a_3;i_3} "
+                                        "f⁺{i_1,i_3;a_1,a_2} t{i_2;a_3}"));
     }
   }
   {
@@ -180,6 +179,24 @@ TEST_CASE("canonicalization", "[algorithms]") {
     canonicalize(input);
     REQUIRE_THAT(input,
                  EquivalentTo("1/2 t{p1;p3} t{p2;p4} B{p3;p1;p5} B{p4;p2;p5}"));
+  }
+
+  SECTION("Sum of Variables") {
+    {
+      auto input =
+          ex<Variable>(L"q1") + ex<Variable>(L"q1") + ex<Variable>(L"q2");
+      simplify(input);
+      canonicalize(input);
+      REQUIRE_THAT(input, SimplifiesTo("q2 + 2 q1"));
+    }
+
+    {
+      auto input =
+          ex<Variable>(L"q1") * ex<Variable>(L"q1") + ex<Variable>(L"q2");
+      simplify(input);
+      canonicalize(input);
+      REQUIRE_THAT(input, SimplifiesTo("q2 + q1 * q1"));
+    }
   }
 
   SECTION("Sum of Products") {
@@ -198,7 +215,8 @@ TEST_CASE("canonicalization", "[algorithms]") {
               ex<Tensor>(L"t", bra{L"p_4"}, ket{L"p_2"}, Symmetry::nonsymm);
       simplify(input);
       canonicalize(input);
-      REQUIRE_THAT(input, SimplifiesTo("g{p3,p4;p1,p2} t{p1;p3} t{p2;p4}"));
+      REQUIRE_THAT(input,
+                   SimplifiesTo("g{p_1,p_2;p_3,p_4} t{p_3;p_1} t{p_4;p_2}"));
     }
 
     // CASE 2: Symmetric tensors
@@ -318,14 +336,12 @@ TEST_CASE("canonicalization", "[algorithms]") {
                        ket{L"i_2", L"i_4", L"i_3"}, Symmetry::nonsymm);
         canonicalize(term1);
         canonicalize(term2);
-        REQUIRE_THAT(
-            term1,
-            SimplifiesTo(
-                "-4 S{i1,i3,i4;a1,a2,a3} f{i2;i4} t{a1,a2,a3;i1,i2,i3}"));
-        REQUIRE_THAT(
-            term2,
-            SimplifiesTo(
-                "-4 S{i1,i3,i4;a1,a2,a3} f{i2;i4} t{a1,a2,a3;i1,i2,i3}"));
+        REQUIRE_THAT(term1,
+                     SimplifiesTo("-4 S{i_1,i_2,i_3;a_1,a_2,a_3} f{i_4;i_3} "
+                                  "t{a_1,a_2,a_3;i_1,i_4,i_2}"));
+        REQUIRE_THAT(term2,
+                     SimplifiesTo("-4 S{i_1,i_2,i_3;a_1,a_2,a_3} f{i_4;i_3} "
+                                  "t{a_1,a_2,a_3;i_1,i_4,i_2}"));
         auto sum_of_terms = term1 + term2;
         simplify(sum_of_terms);
         REQUIRE_THAT(

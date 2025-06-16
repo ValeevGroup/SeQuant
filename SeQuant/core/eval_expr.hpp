@@ -14,17 +14,9 @@ namespace sequant {
 class Tensor;
 
 ///
-/// \brief The EvalOp enum
-///
-/// \details The EvalOp enum is used to distinguish between the different binary
-///          operations that can be performed on two EvalExpr objects.
+/// \brief defines types of binary
+///        operations that can be performed on two EvalExpr objects.
 enum class EvalOp {
-
-  ///
-  /// \brief Represents the identity evaluation. It is not a binary operation
-  ///        per se. An atomic tensor or an atomic constant is always evaluated
-  ///        this way.
-  Id,
 
   ///
   /// \brief Represents the sum of two EvalExpr objects. Such as a tensor plus
@@ -36,47 +28,47 @@ enum class EvalOp {
   ///        times a tensor, a constant times a constant, or a tensor times a
   ///        constant
   ///        (in either order).
-  Prod
+  Product
 };
 
 ///
 /// \brief The ResultType enum.
 ///
 /// \details Represents the type of the result of @c EvalOp on two EvalExpr
-///          objects (or, single EvalExpr object if the EvalOp is Id).
+///          objects (or, single EvalExpr object if `this->is_primary()`).
 ///
 enum class ResultType { Tensor, Scalar };
 
 ///
-/// \brief The EvalExpr class represents the object that go into the nodes of
-///        the binary tree that is used to evaluate the sequant expressions.
+/// \brief The EvalExpr is a building block of binary trees used to evaluate
+/// expressions.
 ///
-/// \details The EvalExpr class itself is not a proper node. It is rather a data
-///          that a node should hold.
+/// \details The EvalExpr class itself is not a proper node of the binary tree.
+/// It is rather a data that a node should hold.
 ///
 class EvalExpr {
  public:
   using index_vector = Index::index_vector;
 
   ///
-  /// \brief Construct an EvalExpr object from a tensor. The EvalOp is Id.
+  /// \brief Construct an EvalExpr object from a tensor.
   ///
   explicit EvalExpr(Tensor const& tnsr);
 
   ///
-  /// \brief Construct an EvalExpr object from a Constant. The EvalOp is Id.
+  /// \brief Construct an EvalExpr object from a Constant.
   ///
   explicit EvalExpr(Constant const& c);
 
   ///
-  /// \brief Construct an EvalExpr object from a Variable. The EvalOp is Id.
+  /// \brief Construct an EvalExpr object from a Variable.
   ///
   explicit EvalExpr(Variable const& v);
 
   ///
   /// @param op Evaluation operation resulting to this object.
   /// @param res Evaluation result type that will be produced.
-  /// @param expr A sequant expression corresponding to @c res.
+  /// @param expr A SeQuant expression corresponding to @c res.
   /// @param ixs Canonical indices used for annotating the result's modes if @c
   ///            res is tensor type. Possibly empty for non-tensor @c res type.
   /// @param phase Phase that was part of the tensor network canonicalization.
@@ -88,9 +80,10 @@ class EvalExpr {
            std::int8_t phase, size_t hash);
 
   ///
-  /// \return The EvalOp resulting into this EvalExpr object.
+  /// \return Operation type of this expression, or null if this is a primary
+  /// expression.
   ///
-  [[nodiscard]] EvalOp op_type() const noexcept;
+  [[nodiscard]] const std::optional<EvalOp>& op_type() const noexcept;
 
   ///
   /// \return The ResultType of the evaluation performed on this node.
@@ -114,7 +107,7 @@ class EvalExpr {
   [[nodiscard]] ExprPtr expr() const noexcept;
 
   ///
-  /// \return True if this EvalExpr object contains a sequant tensor with
+  /// \return True if this EvalExpr object contains a SeQuant tensor with
   ///         proto-indices, false otherwise.
   ///
   [[nodiscard]] bool tot() const noexcept;
@@ -148,25 +141,41 @@ class EvalExpr {
   [[nodiscard]] bool is_variable() const noexcept;
 
   ///
+  /// \return True if this is a primary expression (i.e. a leaf on expression
+  /// tree)
+  ///
+  [[nodiscard]] bool is_primary() const noexcept;
+
+  ///
+  /// \return True if this expression is a product.
+  ///
+  [[nodiscard]] bool is_product() const noexcept;
+
+  ///
+  /// \return True if this expression is a sum.
+  ///
+  [[nodiscard]] bool is_sum() const noexcept;
+
+  ///
   /// \brief Calls to<Tensor>() on ExprPtr held by this object.
   ///
   /// \return Tensor const&
   ///
-  [[nodiscard]] Tensor const& as_tensor() const noexcept;
+  [[nodiscard]] Tensor const& as_tensor() const;
 
   ///
   /// \brief Calls to<Constant>() on ExprPtr held by this object.
   ///
   /// \return Constant const&.
   ///
-  [[nodiscard]] Constant const& as_constant() const noexcept;
+  [[nodiscard]] Constant const& as_constant() const;
 
   ///
   /// \brief Calls to<Variable>() on ExprPtr held by this object.
   ///
   /// \return Variable const&
   ///
-  [[nodiscard]] Variable const& as_variable() const noexcept;
+  [[nodiscard]] Variable const& as_variable() const;
 
   ///
   /// \brief Get the label for this object useful for logging.
@@ -191,7 +200,7 @@ class EvalExpr {
   [[nodiscard]] std::int8_t canon_phase() const noexcept;
 
  private:
-  EvalOp op_type_;
+  std::optional<EvalOp> op_type_ = std::nullopt;
 
   ResultType result_type_;
 
@@ -204,7 +213,70 @@ class EvalExpr {
   ExprPtr expr_;
 };
 
+///
+/// \brief This class extends the EvalExpr class by adding an annot() method so
+///        that it can be used to evaluate using TiledArray.
+///
+class EvalExprTA final : public EvalExpr {
+ public:
+  template <typename... Args, typename = std::enable_if_t<
+                                  std::is_constructible_v<EvalExpr, Args...>>>
+  EvalExprTA(Args&&... args) : EvalExpr{std::forward<Args>(args)...} {
+    annot_ = indices_annot();
+  }
+
+  [[nodiscard]] inline auto const& annot() const noexcept { return annot_; }
+
+ private:
+  std::string annot_;
+};
+
+///
+/// \brief This class extends the EvalExpr class by adding an annot() method so
+///        that it can be used to evaluate using BTAS.
+///
+class EvalExprBTAS final : public EvalExpr {
+ public:
+  using annot_t = container::svector<long>;
+
+  ///
+  /// \param bk iterable of Index objects.
+  /// \return vector of long-type hash values
+  ///         of the labels of indices in \c bk
+  ///
+  template <typename Iterable>
+  static auto index_hash(Iterable const& bk) {
+    return ranges::views::transform(bk, [](auto const& idx) {
+      //
+      // WARNING!
+      // The BTAS uses long for scalar indexing by default.
+      // Hence, here we explicitly cast the size_t values to long
+      // Which is a potentially narrowing conversion leading to
+      // integral overflow. Hence, the values in the returned
+      // container are mixed negative and positive integers (long type)
+      //
+      return static_cast<long>(sequant::hash::value(Index{idx}.label()));
+    });
+  }
+
+  template <typename... Args, typename = std::enable_if_t<
+                                  std::is_constructible_v<EvalExpr, Args...>>>
+  EvalExprBTAS(Args&&... args) : EvalExpr{std::forward<Args>(args)...} {
+    annot_ = index_hash(canon_indices()) | ranges::to<annot_t>;
+  }
+
+  ///
+  /// \return Annotation (container::svector<long>) for BTAS::Tensor.
+  ///
+  [[nodiscard]] inline annot_t const& annot() const noexcept { return annot_; }
+
+ private:
+  annot_t annot_;
+};
+
 namespace meta {
+
+namespace detail {
 template <typename, typename = void>
 constexpr bool is_eval_expr{};
 
@@ -219,22 +291,40 @@ template <typename T>
 constexpr bool
     is_eval_node<FullBinaryNode<T>, std::enable_if_t<is_eval_expr<T>>>{true};
 
+}  // namespace detail
+
+///
+/// \brief A type satisfies eval_expr if it is convertible to EvalExpr.
+/// \see   EvalExpr
+///
 template <typename T>
-constexpr bool is_eval_node<const FullBinaryNode<T>,
-                            std::enable_if_t<is_eval_expr<T>>>{true};
+concept eval_expr = detail::is_eval_expr<T>;
 
-template <typename, typename = void>
-constexpr bool is_eval_node_range{};
+///
+/// \brief A type satisfies eval_node if it is a FullBinaryNode of a type
+///        that satisfies the eval_expr concept.
+///
+template <typename T>
+concept eval_node = detail::is_eval_node<std::remove_cvref_t<T>>;
 
+///
+/// \brief Satisfied by a range type of eval_node objects.
+///
 template <typename Rng>
-constexpr bool is_eval_node_range<
-    Rng, std::enable_if_t<is_eval_node<meta::range_value_t<Rng>>>> = true;
+concept eval_node_range =
+    std::ranges::range<Rng> && eval_node<std::ranges::range_value_t<Rng>>;
 
 }  // namespace meta
 
 namespace impl {
 FullBinaryNode<EvalExpr> binarize(ExprPtr const&);
 }
+
+///
+/// \brief A type alias for the types that satisfy the eval_node concept.
+///
+template <meta::eval_expr T>
+using EvalNode = FullBinaryNode<T>;
 
 ///
 /// Creates a binary tree of evaluation.
@@ -250,15 +340,13 @@ FullBinaryNode<ExprT> binarize(ExprPtr const& expr) {
 ///
 /// Converts an `EvalExpr` to `ExprPtr`.
 ///
-template <typename NodeT,
-          typename = std::enable_if_t<meta::is_eval_node<NodeT>>>
-ExprPtr to_expr(NodeT const& node) {
+ExprPtr to_expr(meta::eval_node auto const& node) {
   auto const op = node->op_type();
   auto const& evxpr = *node;
 
   if (node.leaf()) return evxpr.expr();
 
-  if (op == EvalOp::Prod) {
+  if (op == EvalOp::Product) {
     auto prod = Product{};
 
     ExprPtr lexpr = to_expr(node.left());

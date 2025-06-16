@@ -5,8 +5,9 @@ if (NOT TARGET benchmark::benchmark)
 
 	set(BENCHMARK_ENABLE_TESTING OFF CACHE INTERNAL "" FORCE)
 
-    VRGFindOrFetchPackage(benchmark "https://github.com/google/benchmark.git" "v1.9.1"
+    VRGFindOrFetchPackage(benchmark "https://github.com/google/benchmark.git" "${SEQUANT_TRACKED_GOOGLEBENCHMARK_TAG}"
             ADD_SUBDIR
+			ADD_SUBDIR_EXCLUDE_FROM_ALL
             CONFIG_SUBDIR
     )
 endif()

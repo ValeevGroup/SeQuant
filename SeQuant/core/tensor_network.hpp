@@ -286,14 +286,14 @@ class TensorNetwork {
 
     [[nodiscard]] size_t hash_value() const;
 
-    [[nodiscard]] inline auto get_indices() const {
+    [[nodiscard]] inline auto get_index_view() const {
       return named_indices_canonical  //
              | ranges::views::indirect;
     }
 
     template <typename Cont>
     auto get_indices() const {
-      return get_indices() | ranges::to<Cont>;
+      return get_index_view() | ranges::to<Cont>;
     }
 
     /// if tensor network contains tensors with antisymmetric bra/ket this

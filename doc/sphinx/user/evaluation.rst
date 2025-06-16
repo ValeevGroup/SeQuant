@@ -1,2 +1,0 @@
-Interpreting and Evaluating Expressions
-=======================================
