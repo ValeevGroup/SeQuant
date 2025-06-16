@@ -822,8 +822,8 @@ TensorNetworkV2::canonicalize_slots(
 
         if (it == idx2cord.end()) {
           bool inserted;
-          std::tie(it, inserted) = idx2cord.insert(std::make_pair(
-              idxptr_slottype, cord_set_t(cord_set_t::key_compare{})));
+          std::tie(it, inserted) = idx2cord.emplace(
+              idxptr_slottype, cord_set_t(cord_set_t::key_compare{}));
           assert(inserted);
         }
         it->second.emplace(idx_ord, canonize_perm[vertex_ord],
@@ -947,7 +947,7 @@ TensorNetworkV2::Graph TensorNetworkV2::create_graph(
     graph.vertex_colors.push_back(colorizer(tensor));
 
     const std::size_t tensor_vertex = nvertex - 1;
-    tensor_vertices.insert(std::make_pair(tensor_idx, tensor_vertex));
+    tensor_vertices.emplace(tensor_idx, tensor_vertex);
 
     // Create vertices to group indices
     const Symmetry tensor_sym = symmetry(tensor);
@@ -1112,8 +1112,7 @@ TensorNetworkV2::Graph TensorNetworkV2::create_graph(
         graph.vertex_colors.push_back(colorizer(index.proto_indices()));
 
         proto_vertex = nvertex - 1;
-        proto_bundles.insert(
-            std::make_pair(index.proto_indices(), proto_vertex));
+        proto_bundles.emplace(index.proto_indices(), proto_vertex);
       }
 
       edges.push_back(std::make_pair(index_vertex, proto_vertex));
@@ -1291,7 +1290,7 @@ void TensorNetworkV2::init_edges() {
                    << std::endl;
       }
 
-      const auto &[it, inserted] = ext_indices_.insert(current.idx());
+      const auto &[it, inserted] = ext_indices_.emplace(current.idx());
       // only scenario where idx is already in ext_indices_ if it were a
       // protoindex of a previously inserted ext index ... check to ensure no
       // accidental duplicates
@@ -1302,15 +1301,11 @@ void TensorNetworkV2::init_edges() {
 
     // add proto indices to the grand list of proto indices
     for (auto &&proto_idx : current.idx().proto_indices()) {
+      // for now no recursive proto indices
       if (proto_idx.has_proto_indices())
         throw std::runtime_error(
-            "TensorNetworkV2 does not support recursive protoindices");  // for
-                                                                         // now
-                                                                         // no
-                                                                         // recursive
-                                                                         // proto
-                                                                         // indices
-      proto_indices.insert(proto_idx);
+            "TensorNetworkV2 does not support recursive protoindices");
+      proto_indices.emplace(proto_idx);
     }
   }
 
