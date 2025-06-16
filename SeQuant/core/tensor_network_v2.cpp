@@ -424,6 +424,10 @@ void TensorNetworkV2::canonicalize_graph(const NamedIndexSet &named_indices) {
   }
 
   container::map<Index, Index> idxrepl;
+  auto idxrepl_emplace = [&idxrepl](auto &&from, auto &&to) {
+    if (from != to) idxrepl.emplace(std::move(from), std::move(to));
+  };
+
   // Sort edges so that their order corresponds to the order of indices in the
   // canonical graph
   // Use this ordering to relabel anonymous indices
@@ -444,7 +448,7 @@ void TensorNetworkV2::canonicalize_graph(const NamedIndexSet &named_indices) {
       continue;
     }
 
-    idxrepl.insert(std::make_pair(idx, idxfac.make(idx)));
+    idxrepl_emplace(idx, idxfac.make(idx));
   }
 
   if (Logger::instance().canonicalize) {
@@ -482,10 +486,8 @@ void TensorNetworkV2::canonicalize_graph(const NamedIndexSet &named_indices) {
         continue;
       }
 
-      idxrepl.insert(
-          std::make_pair(bra_indices[col], bra_indices[particle_order[col]]));
-      idxrepl.insert(
-          std::make_pair(ket_indices[col], ket_indices[particle_order[col]]));
+      idxrepl_emplace(bra_indices[col], bra_indices[particle_order[col]]);
+      idxrepl_emplace(ket_indices[col], ket_indices[particle_order[col]]);
     }
 
     if (!idxrepl.empty()) {
@@ -636,7 +638,7 @@ ExprPtr TensorNetworkV2::canonicalize(
     const Index &index = edges_[i].idx();
     assert(is_anonymous_index(index));
     Index replacement = idxfac.make(index);
-    idxrepl.emplace(std::make_pair(index, replacement));
+    if (index != replacement) idxrepl.emplace(index, std::move(replacement));
   }
 
   // Done computing canonical index replacement list
