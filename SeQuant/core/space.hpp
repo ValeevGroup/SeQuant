@@ -14,9 +14,9 @@
 
 #include <range/v3/algorithm/any_of.hpp>
 
-#include <bitset>
 #include <cassert>
 #include <cmath>
+#include <string_view>
 
 namespace sequant {
 
@@ -418,6 +418,9 @@ class IndexSpace {
       : attr_(typeattr, qnattr),
         base_key_(sequant::to_wstring(std::forward<S>(type_label))),
         approximate_size_(approximate_size) {}
+
+  explicit IndexSpace(std::string_view label);
+  explicit IndexSpace(std::wstring_view label);
 
   IndexSpace(const IndexSpace &other) = default;
   IndexSpace(IndexSpace &&other) = default;

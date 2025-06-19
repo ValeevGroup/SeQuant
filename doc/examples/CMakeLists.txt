@@ -14,7 +14,7 @@ foreach(current IN LISTS EXAMPLE_CODES)
 
     set(current_name "sequant_doc_example_${counter}")
 
-    if ("$contents" MATCHES " main\\(")
+    if ("${contents}" MATCHES " main\\(")
         add_executable(${current_name} ${current})
     else()
         add_library(${current_name} ${current})
