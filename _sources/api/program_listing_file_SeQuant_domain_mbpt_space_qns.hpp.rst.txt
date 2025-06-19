@@ -14,8 +14,8 @@ Program Listing for File space_qns.hpp
    // Created by Eduard Valeyev on 3/9/25.
    //
    
-   #ifndef MPQC_DOMAIN_MBPT_SPACE_QNS_HPP
-   #define MPQC_DOMAIN_MBPT_SPACE_QNS_HPP
+   #ifndef SEQUANT_DOMAIN_MBPT_SPACE_QNS_HPP
+   #define SEQUANT_DOMAIN_MBPT_SPACE_QNS_HPP
    
    #include "SeQuant/core/fwd.hpp"
    
@@ -47,4 +47,4 @@ Program Listing for File space_qns.hpp
    
    }  // namespace sequant::mbpt
    
-   #endif  // MPQC_DOMAIN_MBPT_SPACE_QNS_HPP
+   #endif  // SEQUANT_DOMAIN_MBPT_SPACE_QNS_HPP

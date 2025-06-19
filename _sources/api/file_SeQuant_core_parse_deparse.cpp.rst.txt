@@ -80,12 +80,6 @@ Functions
 ---------
 
 
-- :ref:`exhale_function_namespacesequant_1afe276926c5c2e7724779e2048c12fe75`
-
-- :ref:`exhale_function_namespacesequant_1a4b7f044ab8d87a437e88b04b116df367`
-
-- :ref:`exhale_function_namespacesequant_1a3005a7b546fe1ae4cc7bf6b7771a28da`
-
 - :ref:`exhale_function_namespacesequant_1a9c7e7721e4b51c1b20608b63794328bb`
 
 - :ref:`exhale_function_namespacesequant_1aeed130d6a5f23cd4eedc9be19c34b379`
@@ -99,6 +93,12 @@ Functions
 - :ref:`exhale_function_namespacesequant_1abcb1341c11dcbc821a92429f891ff5fa`
 
 - :ref:`exhale_function_namespacesequant_1ae8881cdbcc57c2de4493e0e5ed835ca1`
+
+- :ref:`exhale_function_namespacesequant_1afe276926c5c2e7724779e2048c12fe75`
+
+- :ref:`exhale_function_namespacesequant_1a4b7f044ab8d87a437e88b04b116df367`
+
+- :ref:`exhale_function_namespacesequant_1a3005a7b546fe1ae4cc7bf6b7771a28da`
 
 - :ref:`exhale_function_namespacesequant_1ac949140b1ce9b06ccbb14110982ef4de`
 
