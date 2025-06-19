@@ -543,6 +543,42 @@ ExprPtr vac_av(ExprPtr expr,
 mbpt::qns_t adjoint(mbpt::qns_t qns);
 
 namespace mbpt {
+namespace detail {
+/// @brief Creates a vector of indices based on the given spaces
+/// @param spaces A vector of IndexSpaces
+/// @return A vector of Index objects
+inline container::svector<Index> make_idx_vector(
+    const container::svector<IndexSpace>& spaces) {
+  container::svector<Index> result;
+  const auto n = spaces.size();
+  result.reserve(n);
+  for (size_t i = 0; i != n; ++i) {
+    auto space = spaces[i];
+    result.push_back(Index::make_tmp_index(space));
+  }
+  return result;
+}
+
+/// @brief Creates a vector of dependent indices based on the given spaces and
+/// protoindices
+/// @param spaces a vector of IndexSpaces representing the spaces for which
+/// indices are to be created
+/// @param protoidxs A vector of protoindices that the new indices will depend
+/// on
+/// @return A vector of Index objects
+inline container::svector<Index> make_depidx_vector(
+    const container::svector<IndexSpace>& spaces,
+    const container::svector<Index>& protoidxs) {
+  const auto n = spaces.size();
+  container::svector<Index> result;
+  result.reserve(n);
+  for (size_t i = 0; i != n; ++i) {
+    auto space = spaces[i];
+    result.push_back(Index::make_tmp_index(space, protoidxs, true));
+  }
+  return result;
+}
+}  // namespace detail
 
 // clang-format off
 /// @brief makes a tensor-level many-body operator
@@ -566,6 +602,8 @@ namespace mbpt {
 // clang-format on
 template <Statistics S>
 class OpMaker {
+  using IndexSpaceContainer = container::svector<IndexSpace>;
+
  public:
   /// @param[in] op the operator type
   /// @param[in] cre_list list of creator indices
@@ -583,6 +621,12 @@ class OpMaker {
   /// @param[in] nc number of bra indices/creators
   /// @param[in] na number of ket indices/annihilators
   OpMaker(OpType op, ncre nc, nann na);
+
+  /// @param[in] op the operator type
+  /// @param[in] nc number of bra indices/creators
+  /// @param[in] na number of ket indices/annihilators
+  /// @param[in] nbatch number of auxiliary/batching indices
+  OpMaker(OpType op, ncre nc, nann na, naux nbatch);
 
   /// @brief creates a particle-conserving replacement operator
   /// @param[in] op the operator type
@@ -607,6 +651,15 @@ class OpMaker {
     None
   };
 
+  /// struct to hold the information about the operator
+  struct OpInfo {
+    container::svector<Index> creidxs;  //!< creator indices
+    container::svector<Index> annidxs;  //!< annihilator indices
+    sequant::intmax_t mult;             //!< normalization factor
+    Symmetry opsymm;                    //!< symmetry of the operator
+    UseDepIdx dep;                      //!< dependency of the bra/ket indices
+  };
+
   // clang-format off
   /// @param[in] dep_opt if given, controls whether bra (`*dep_opt == UseDepIdx::Bra`)
   /// / ket (`*dep_opt == UseDepIdx::Ket`) indices
@@ -621,19 +674,20 @@ class OpMaker {
   ExprPtr operator()(std::optional<UseDepIdx> dep_opt = {},
                      std::optional<Symmetry> opsymm_opt = {}) const;
 
-  /// @tparam TensorGenerator callable with signature
-  /// `TensorGenerator(range<Index>, range<Index>, Symmetry)` that returns a
-  /// Tensor with the respective bra/cre and ket/ann indices and of the given
-  /// symmetry
-  /// @param[in] creators creator indices
-  /// @param[in] annihilators annihilator indices
-  /// @param[in] tensor_generator the callable that generates the tensor
-  /// @param[in] dep whether to use dependent indices
-  template <typename TensorGenerator>
-  static ExprPtr make(const container::svector<IndexSpace>& creators,
-                      const container::svector<IndexSpace>& annihilators,
-                      TensorGenerator&& tensor_generator,
-                      UseDepIdx dep = UseDepIdx::None) {
+  /// @brief Creates an OpInfo struct containing creator and annihilator
+  /// indices,
+  ///        normalization factor, symmetry, and dependency information.
+  /// @param cre_spaces A container of IndexSpace objects representing the
+  /// creator indices
+  /// @param ann_spaces A container of IndexSpace objects representing the
+  /// annihilator indices
+  /// @param dep An optional parameter specifying the dependency of indices.
+  /// @return An OpInfo struct containing the created indices, normalization
+  /// factor,
+  ///         symmetry, and dependency information.
+  static OpInfo build_op_info(const IndexSpaceContainer& cre_spaces,
+                              const IndexSpaceContainer& ann_spaces,
+                              UseDepIdx dep = UseDepIdx::None) {
     const bool symm =
         get_default_context().spbasis() ==
         SPBasis::spinorbital;  // antisymmetrize if spin-orbital basis
@@ -641,71 +695,127 @@ class OpMaker {
     const auto dep_ket = dep == UseDepIdx::Ket;
 
     // not sure what it means to use nonsymmetric operator if nbra != nket
-    if (!symm) assert(ranges::size(creators) == ranges::size(annihilators));
-
-    auto make_idx_vector = [](const auto& spacetypes) {
-      container::svector<Index> result;
-      const auto n = spacetypes.size();
-      result.reserve(n);
-      for (size_t i = 0; i != n; ++i) {
-        auto space = spacetypes[i];
-        result.push_back(Index::make_tmp_index(space));
-      }
-      return result;
-    };
-
-    auto make_depidx_vector = [](const auto& spacetypes, auto&& protoidxs) {
-      const auto n = spacetypes.size();
-      container::svector<Index> result;
-      result.reserve(n);
-      for (size_t i = 0; i != n; ++i) {
-        auto space = spacetypes[i];
-        result.push_back(Index::make_tmp_index(space, protoidxs, true));
-      }
-      return result;
-    };
+    if (!symm) assert(ranges::size(cre_spaces) == ranges::size(ann_spaces));
 
     container::svector<Index> creidxs, annidxs;
     if (dep_bra) {
-      annidxs = make_idx_vector(annihilators);
-      creidxs = make_depidx_vector(creators, annidxs);
+      annidxs = detail::make_idx_vector(ann_spaces);
+      creidxs = detail::make_depidx_vector(cre_spaces, annidxs);
     } else if (dep_ket) {
-      creidxs = make_idx_vector(creators);
-      annidxs = make_depidx_vector(annihilators, creidxs);
+      creidxs = detail::make_idx_vector(cre_spaces);
+      annidxs = detail::make_depidx_vector(ann_spaces, creidxs);
     } else {
-      creidxs = make_idx_vector(creators);
-      annidxs = make_idx_vector(annihilators);
+      creidxs = detail::make_idx_vector(cre_spaces);
+      annidxs = detail::make_idx_vector(ann_spaces);
     }
 
     using ranges::size;
     const auto mult =
-        symm ? factorial(size(creators)) * factorial(size(annihilators))
-             : factorial(size(creators));
+        symm ? factorial(size(cre_spaces)) * factorial(size(ann_spaces))
+             : factorial(size(cre_spaces));
     const auto opsymm = symm ? (S == Statistics::FermiDirac ? Symmetry::antisymm
                                                             : Symmetry::symm)
                              : Symmetry::nonsymm;
-    return ex<Constant>(rational{1, mult}) *
-           tensor_generator(creidxs, annidxs, opsymm) *
-           ex<NormalOperator<S>>(cre(creidxs), ann(annidxs),
+
+    return OpInfo{creidxs, annidxs, mult, opsymm, dep};
+  }
+
+  /// @tparam TensorGenerator callable with signature
+  /// `TensorGenerator(range<Index>, range<Index>, Symmetry)` that returns a
+  /// Tensor with the respective bra/cre and ket/ann indices and of the given
+  /// symmetry
+  /// @param[in] cre_spaces creator IndexSpaces
+  /// @param[in] ann_spaces annihilator IndexSpaces
+  /// @param[in] tensor_generator the callable that generates the tensor
+  /// @param[in] dep whether to use dependent indices
+  template <typename TensorGenerator>
+  static ExprPtr make(const IndexSpaceContainer& cre_spaces,
+                      const IndexSpaceContainer& ann_spaces,
+                      TensorGenerator&& tensor_generator,
+                      UseDepIdx dep = UseDepIdx::None) {
+    const auto op_info = build_op_info(cre_spaces, ann_spaces, dep);
+
+    const auto t =
+        tensor_generator(op_info.creidxs, op_info.annidxs, op_info.opsymm);
+    return ex<Constant>(rational{1, op_info.mult}) * t *
+           ex<NormalOperator<S>>(cre(op_info.creidxs), ann(op_info.annidxs),
                                  get_default_context().vacuum());
   }
 
+  /// @tparam TensorGenerator callable with signature
+  /// `TensorGenerator(range<Index>, range<Index>, Symmetry)` that returns a
+  /// Tensor with the respective bra/cre and ket/ann indices and of the given
+  /// symmetry
+  /// @param[in] cre_spaces creator IndexSpaces as an initializer list
+  /// @param[in] ann_spaces annihilator IndexSpaces as an initializer list
+  /// @param[in] tensor_generator the callable that generates the tensor
+  /// @param[in] csv whether to use dependent indices
+  template <typename TensorGenerator>
+  static ExprPtr make(std::initializer_list<IndexSpace::Type> cre_spaces,
+                      std::initializer_list<IndexSpace::Type> ann_spaces,
+                      TensorGenerator&& tensor_generator,
+                      UseDepIdx csv = UseDepIdx::None) {
+    IndexSpaceContainer cre_vec(cre_spaces.begin(), cre_spaces.end());
+    IndexSpaceContainer ann_vec(ann_spaces.begin(), ann_spaces.end());
+    return OpMaker::make(cre_vec, ann_vec,
+                         std::forward<TensorGenerator>(tensor_generator), csv);
+  }
+
+  /// @tparam TensorGenerator callable with signature
+  /// `TensorGenerator(range<Index>, range<Index>, range<Index>, Symmetry)` that
+  /// returns a Tensor with the respective bra/cre, ket/ann, and batch indices
+  /// and of the given symmetry
+  /// @param[in] cre_spaces creator IndexSpaces
+  /// @param[in] ann_spaces annihilator IndexSpaces
+  /// @param[in] batch_spaces batch IndexSpaces
+  /// @param[in] tensor_generator the callable that generates the tensor
+  /// @param[in] dep whether to use dependent indices
+  template <typename TensorGenerator>
+  static ExprPtr make(const IndexSpaceContainer& cre_spaces,
+                      const IndexSpaceContainer& ann_spaces,
+                      const IndexSpaceContainer& batch_spaces,
+                      TensorGenerator&& tensor_generator,
+                      UseDepIdx dep = UseDepIdx::None) {
+    const auto op_info = build_op_info(cre_spaces, ann_spaces, dep);
+    assert(!batch_spaces.empty());
+    assert(get_default_context().index_space_registry()->contains(L"z"));
+    const auto batchidx = detail::make_idx_vector(batch_spaces);
+
+    const auto t = tensor_generator(op_info.creidxs, op_info.annidxs, batchidx,
+                                    op_info.opsymm);
+
+    return ex<Constant>(rational{1, op_info.mult}) * t *
+           ex<NormalOperator<S>>(cre(op_info.creidxs), ann(op_info.annidxs),
+                                 get_default_context().vacuum());
+  }
+
+  /// @tparam TensorGenerator callable with signature
+  /// `TensorGenerator(range<Index>, range<Index>, range<Index>, Symmetry)` that
+  /// returns a Tensor with the respective bra/cre, ket/ann, and batch indices
+  /// and of the given symmetry
+  /// @param[in] creators creator IndexSpaces as an initializer list
+  /// @param[in] annihilators annihilator IndexSpaces as an initializer list
+  /// @param[in] batch_spaces batch IndexSpaces as an initializer list
+  /// @param[in] tensor_generator the callable that generates the tensor
+  /// @param[in] csv whether to use dependent indices
   template <typename TensorGenerator>
   static ExprPtr make(std::initializer_list<IndexSpace::Type> creators,
                       std::initializer_list<IndexSpace::Type> annihilators,
+                      std::initializer_list<IndexSpace::Type> batch_spaces,
                       TensorGenerator&& tensor_generator,
                       UseDepIdx csv = UseDepIdx::None) {
-    container::svector<IndexSpace> cre_vec(creators.begin(), creators.end());
-    container::svector<IndexSpace> ann_vec(annihilators.begin(),
-                                           annihilators.end());
-    return OpMaker::make(cre_vec, ann_vec,
+    IndexSpaceContainer cre_vec(creators.begin(), creators.end());
+    IndexSpaceContainer ann_vec(annihilators.begin(), annihilators.end());
+    IndexSpaceContainer batch_vec(batch_spaces.begin(), batch_spaces.end());
+    return OpMaker::make(cre_vec, ann_vec, batch_spaces,
                          std::forward<TensorGenerator>(tensor_generator), csv);
   }
 
  protected:
   OpType op_;
-  container::svector<IndexSpace> cre_spaces_;
-  container::svector<IndexSpace> ann_spaces_;
+  IndexSpaceContainer cre_spaces_;
+  IndexSpaceContainer ann_spaces_;
+  std::optional<IndexSpaceContainer> batch_spaces_ = std::nullopt;
 
   OpMaker(OpType op);
 
@@ -737,6 +847,19 @@ class Operator : public Operator<void, S> {
   Operator(std::function<std::wstring_view()> label_generator,
            std::function<ExprPtr()> tensor_form_generator,
            std::function<void(QuantumNumbers&)> qn_action);
+
+  /// @brief Constructs an operator with the given label and tensor form and
+  /// quantum number action
+  /// @param label_generator a function that generates the label for the
+  /// operator
+  /// @param tensor_form_generator a function that generates the tensor form of
+  /// the operator
+  /// @param qn_action a function that modifies the quantum numbers
+  /// @param batch_idx_rank the rank of the batch index
+  Operator(std::function<std::wstring_view()> label_generator,
+           std::function<ExprPtr()> tensor_form_generator,
+           std::function<void(QuantumNumbers&)> qn_action,
+           size_t batch_idx_rank);
 
   virtual ~Operator();
 
@@ -772,10 +895,17 @@ class Operator : public Operator<void, S> {
 
   void adjoint() override;
 
-  bool is_adjoint_ = false;
+  /// @return the batch index rank of the operator
+  [[nodiscard]] std::optional<size_t> batch_idx_rank() const {
+    return batch_idx_rank_;
+  }
 
  private:
   std::function<void(QuantumNumbers&)> qn_action_;
+
+  bool is_adjoint_ = false;
+
+  std::optional<size_t> batch_idx_rank_ = std::nullopt;
 
   bool less_than_rank_of(const this_type& that) const;
 
@@ -893,37 +1023,44 @@ ExprPtr S(std::int64_t K);
 /// @brief Makes perturbation operator of rank \p R
 /// @param order order of perturbation
 /// @param R rank of the operator,`R = 1` implies one-body perturbation
+/// @param nbatch rank of optional auxiliary/batching index [default is 0]
 /// @pre `order==1`, only first order perturbation is supported now
-ExprPtr H_pt(std::size_t order, std::size_t R);
+ExprPtr H_pt(std::size_t order, std::size_t R, std::size_t nbatch = 0);
 
 /// @brief Makes perturbed particle-conserving excitation operator of rank \p K
 /// @param order order of perturbation
 /// @param K rank of the excitation operator
+/// @param nbatch rank of optional auxiliary/batching index [default is 0]
 /// @pre `order==1`, only first order perturbation is supported now
-ExprPtr T_pt_(std::size_t order, std::size_t K);
+ExprPtr T_pt_(std::size_t order, std::size_t K, size_t nbatch = 0);
 
 /// @brief Makes sum of perturbed particle-conserving excitation operators up to
 /// rank \p K
 /// @param order order of perturbation
 /// @param K rank up to which the sum is to be formed
+/// @param nbatch rank of optional auxiliary/batching index [default is 0]
 /// @param skip1 if true, skips single excitations
 /// @pre `order==1`, only first order perturbation is supported now
-ExprPtr T_pt(std::size_t order, std::size_t K, bool skip1 = false);
+ExprPtr T_pt(std::size_t order, std::size_t K, size_t nbatch = 0,
+             bool skip1 = false);
 
 /// @brief Makes perturbed particle-conserving deexcitation operator of
 /// rank \p K
 /// @param order order of perturbation
 /// @param K rank of the deexcitation operator
+/// @param nbatch rank of optional auxiliary/batching index [default is 0]
 /// @pre `order==1`, only first order perturbation is supported now
-ExprPtr Λ_pt_(std::size_t order, std::size_t K);
+ExprPtr Λ_pt_(std::size_t order, std::size_t K, size_t nbatch = 0);
 
 /// @brief Makes sum of perturbed particle-conserving deexcitation operators up
 /// to rank \p K
 /// @param order order of perturbation
 /// @param K rank up to which the sum is to be formed
+/// @param nbatch rank of optional auxiliary/batching index [default is 0]
 /// @param skip1 if true, skips single deexcitations
 /// @pre `order==1`, only first order perturbation is supported now
-ExprPtr Λ_pt(std::size_t order, std::size_t K, bool skip1 = false);
+ExprPtr Λ_pt(std::size_t order, std::size_t K, size_t nbatch = 0,
+             bool skip1 = false);
 }  // namespace tensor
 }  // namespace op
 
@@ -1055,37 +1192,44 @@ ExprPtr S(std::int64_t K);
 /// @brief Makes perturbation operator of rank \p R
 /// @param order order of perturbation
 /// @param R rank of the operator,`R = 1` implies one-body perturbation
+/// @param nbatch rank of optional auxiliary/batching index [default is 0]
 /// @pre `order==1`, only first order perturbation is supported now
-ExprPtr H_pt(std::size_t order, std::size_t R);
+ExprPtr H_pt(std::size_t order, std::size_t R, std::size_t nbatch = 0);
 
 /// @brief Makes perturbed particle-conserving excitation operator of rank \p K
 /// @param order order of perturbation
 /// @param K rank of the excitation operator
+/// @param nbatch rank of optional auxiliary/batching index [default is 0]
 /// @pre `order==1`, only first order perturbation is supported now
-ExprPtr T_pt_(std::size_t order, std::size_t K);
+ExprPtr T_pt_(std::size_t order, std::size_t K, size_t nbatch = 0);
 
 /// @brief Makes sum of perturbed particle-conserving excitation operators up to
 /// rank \p K
 /// @param order order of perturbation
 /// @param K rank up to which the sum is to be formed
+/// @param nbatch rank of optional auxiliary/batching index [default is 0]
 /// @param skip1 if true, skips single excitations
 /// @pre `order==1`, only first order perturbation is supported now
-ExprPtr T_pt(std::size_t order, std::size_t K, bool skip1 = false);
+ExprPtr T_pt(std::size_t order, std::size_t K, size_t nbatch = 0,
+             bool skip1 = false);
 
 /// @brief Makes perturbed particle-conserving deexcitation operator of
 /// rank \p K
 /// @param order order of perturbation
 /// @param K rank of the deexcitation operator
+/// @param nbatch rank of optional auxiliary/batching index [default is 0]
 /// @pre `order==1`, only first order perturbation is supported now
-ExprPtr Λ_pt_(std::size_t order, std::size_t K);
+ExprPtr Λ_pt_(std::size_t order, std::size_t K, size_t nbatch = 0);
 
 /// @brief Makes sum of perturbed particle-conserving deexcitation operators up
 /// to rank \p K
 /// @param order order of perturbation
 /// @param K rank up to which the sum is to be formed
+/// @param nbatch rank of optional auxiliary/batching index [default is 0]
 /// @param skip1 if true, skips single deexcitations
 /// @pre `order==1`, only first order perturbation is supported now
-ExprPtr Λ_pt(std::size_t order, std::size_t K, bool skip1 = false);
+ExprPtr Λ_pt(std::size_t order, std::size_t K, size_t nbatch = 0,
+             bool skip1 = false);
 
 bool raises_vacuum_up_to_rank(const ExprPtr& op_or_op_product,
                               const unsigned long k);
