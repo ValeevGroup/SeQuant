@@ -45,15 +45,15 @@ Functions
 
 - :ref:`exhale_function_vac__av_8hpp_1a5829437b1f1e0f8ce1e9885d7808c937`
 
-- :ref:`exhale_function_vac__av_8hpp_1a5a0a127b69d3a475f3618d177fa28954`
-
 - :ref:`exhale_function_vac__av_8hpp_1ae8208c25e2d14d18f20d9c33207fb300`
+
+- :ref:`exhale_function_vac__av_8hpp_1a5a0a127b69d3a475f3618d177fa28954`
 
 - :ref:`exhale_function_vac__av_8hpp_1afe0747f0ddc8a790a1a3e5f6edc438db`
 
-- :ref:`exhale_function_vac__av_8hpp_1a62e6294fd72f6c6b0afb03db0352ec65`
-
 - :ref:`exhale_function_vac__av_8hpp_1a8cd9faceb889841032c0c12cc714ba2f`
+
+- :ref:`exhale_function_vac__av_8hpp_1a62e6294fd72f6c6b0afb03db0352ec65`
 
 
 Typedefs

@@ -71,6 +71,7 @@ Files
 - :ref:`file_SeQuant_core_result_expr.hpp`
 - :ref:`file_SeQuant_core_runtime.cpp`
 - :ref:`file_SeQuant_core_runtime.hpp`
+- :ref:`file_SeQuant_core_space.cpp`
 - :ref:`file_SeQuant_core_space.hpp`
 - :ref:`file_SeQuant_core_tag.hpp`
 - :ref:`file_SeQuant_core_tensor.cpp`

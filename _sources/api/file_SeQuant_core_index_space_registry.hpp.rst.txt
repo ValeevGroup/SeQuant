@@ -60,6 +60,8 @@ Included By
 
 - :ref:`file_SeQuant_core_index_space_registry.cpp`
 
+- :ref:`file_SeQuant_core_space.cpp`
+
 - :ref:`file_SeQuant_domain_mbpt_convention.hpp`
 
 

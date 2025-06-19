@@ -530,6 +530,11 @@ Files
 .. toctree::
    :maxdepth: 5
 
+   file_SeQuant_core_space.cpp.rst
+
+.. toctree::
+   :maxdepth: 5
+
    file_SeQuant_core_space.hpp.rst
 
 .. toctree::

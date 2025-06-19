@@ -40,13 +40,13 @@ Includes
 
 - ``SeQuant/core/wstring.hpp`` (:ref:`file_SeQuant_core_wstring.hpp`)
 
-- ``bitset``
-
 - ``cassert``
 
 - ``cmath``
 
 - ``range/v3/algorithm/any_of.hpp``
+
+- ``string_view``
 
 
 
@@ -61,6 +61,8 @@ Included By
 - :ref:`file_SeQuant_core_parse_ast_conversions.hpp`
 
 - :ref:`file_SeQuant_core_parse_parse.cpp`
+
+- :ref:`file_SeQuant_core_space.cpp`
 
 - :ref:`file_SeQuant_domain_mbpt_convention.cpp`
 

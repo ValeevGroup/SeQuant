@@ -1,7 +1,7 @@
 
-.. _namespace_sequant__@94:
+.. _namespace_sequant__@95:
 
-Namespace sequant::@94
+Namespace sequant::@95
 ======================
 
 
