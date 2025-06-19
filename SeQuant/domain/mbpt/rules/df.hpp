@@ -2,8 +2,8 @@
 // Created by Eduard Valeyev on 3/8/25.
 //
 
-#ifndef MPQC_DOMAIN_MBPT_RULES_DF_HPP
-#define MPQC_DOMAIN_MBPT_RULES_DF_HPP
+#ifndef SEQUANT_DOMAIN_MBPT_RULES_DF_HPP
+#define SEQUANT_DOMAIN_MBPT_RULES_DF_HPP
 
 #include <SeQuant/core/expr_fwd.hpp>
 #include <SeQuant/core/space.hpp>
@@ -31,4 +31,4 @@ namespace sequant::mbpt {
 
 }  // namespace sequant::mbpt
 
-#endif  // MPQC_DOMAIN_MBPT_RULES_DF_HPP
+#endif  // SEQUANT_DOMAIN_MBPT_RULES_DF_HPP

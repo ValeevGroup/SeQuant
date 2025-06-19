@@ -2,8 +2,8 @@
 // Created by Eduard Valeyev on 3/9/25.
 //
 
-#ifndef MPQC_DOMAIN_MBPT_SPACE_QNS_HPP
-#define MPQC_DOMAIN_MBPT_SPACE_QNS_HPP
+#ifndef SEQUANT_DOMAIN_MBPT_SPACE_QNS_HPP
+#define SEQUANT_DOMAIN_MBPT_SPACE_QNS_HPP
 
 #include "SeQuant/core/fwd.hpp"
 
@@ -42,4 +42,4 @@ enum class TensorFactorizationQNS : bitset_t { df = 0b010000, mask = df };
 
 }  // namespace sequant::mbpt
 
-#endif  // MPQC_DOMAIN_MBPT_SPACE_QNS_HPP
+#endif  // SEQUANT_DOMAIN_MBPT_SPACE_QNS_HPP
