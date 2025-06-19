@@ -1,0 +1,21 @@
+v1 + v1 v2
+
+=================================================
+Plain Text
+=================================================
+Declare variable v1
+Declare variable Z
+Declare variable v2
+
+Create Z and initialize to zero
+Load v1
+Load v2
+Compute Z += v1 v2
+Unload v2
+Unload v1
+Load v1
+Compute Z += v1
+Unload v1
+Persist Z
+
+=================================================

@@ -12,7 +12,6 @@
 #include <type_traits>
 #include <utility>
 
-#include <SeQuant/core/abstract_tensor.hpp>
 #include <SeQuant/core/algorithm.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>

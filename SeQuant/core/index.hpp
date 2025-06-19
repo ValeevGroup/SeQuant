@@ -77,6 +77,21 @@ class Index : public Taggable {
   /// alignof is still invoked (for no good reason)
   using index_vector = container::vector<Index>;
 
+  /// @returns Ordinal of the index corresponding to the provided label. If the
+  /// label is malformed, returns nullopt.
+  static std::optional<std::size_t> get_ordinal(std::wstring_view label) {
+    const auto underscore_position = label.rfind(L'_');
+    if (underscore_position != std::wstring::npos) {
+      assert(underscore_position + 1 <
+             label.size());  // check that there is at least one char past the
+                             // underscore
+      return std::wcstol(
+          label.substr(underscore_position + 1, std::wstring::npos).data(),
+          NULL, 10);
+    } else
+      return {};
+  }
+
   Index() = default;
 
   /// @param label the label, does not need to be unique
@@ -357,6 +372,14 @@ class Index : public Taggable {
   /// @warning this does not include the proto index labels, use
   /// Index::full_label() instead
   std::wstring_view label() const { return label_; }
+
+  /// @return The ordinal of this index (e.g. 1 for i_1 and 12 for a_12)
+  std::size_t ordinal() const {
+    auto ord = Index::get_ordinal(label_);
+    assert(ord.has_value());
+
+    return ord.value();
+  }
 
   /// @return the label split into base and ordinal parts; the ordinal part is
   /// empty, if missing
@@ -744,25 +767,12 @@ class Index : public Taggable {
 
   /// throws std::invalid_argument if label_ is in reserved
   void check_nontmp_label() {
-    const auto index = label_index(label_);
+    const auto index = get_ordinal(label_);
     if (index && index > min_tmp_index()) {
       throw std::invalid_argument(
           "Index ctor: label index must be less than the value returned by "
           "min_tmp_index()");
     }
-  }
-
-  static std::optional<std::size_t> label_index(std::wstring_view label) {
-    const auto underscore_position = label.rfind(L'_');
-    if (underscore_position != std::wstring::npos) {
-      assert(underscore_position + 1 <
-             label.size());  // check that there is at least one char past the
-                             // underscore
-      return std::wcstol(
-          label.substr(underscore_position + 1, std::wstring::npos).data(),
-          NULL, 10);
-    } else
-      return {};
   }
 
   friend class IndexFactory;

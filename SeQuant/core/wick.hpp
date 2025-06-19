@@ -9,11 +9,11 @@
 #include <mutex>
 #include <utility>
 
+#include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/math.hpp>
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/ranges.hpp>
 #include <SeQuant/core/runtime.hpp>
-#include <SeQuant/core/tensor.hpp>
 
 namespace sequant {
 

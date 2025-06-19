@@ -11,9 +11,7 @@
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/parse.hpp>
 #include <SeQuant/core/parse/ast.hpp>
-#include <SeQuant/core/result_expr.hpp>
 #include <SeQuant/core/space.hpp>
-#include <SeQuant/core/tensor.hpp>
 #include <SeQuant/core/utility/string.hpp>
 
 #include <boost/variant.hpp>

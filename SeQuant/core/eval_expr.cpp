@@ -8,7 +8,6 @@
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/parse.hpp>
-#include <SeQuant/core/tensor.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/tensor_network_v2.hpp>
 #include <SeQuant/core/utility/indices.hpp>
@@ -24,13 +23,10 @@
 #include <algorithm>
 #include <cassert>
 #include <cmath>
-#include <iterator>
-#include <memory>
+#include <ranges>
 #include <string_view>
-#include <tuple>
 #include <type_traits>
 #include <utility>
-#include <vector>
 
 namespace sequant {
 
@@ -43,6 +39,48 @@ bool is_tot(Tensor const& t) noexcept {
 }
 
 }  // namespace
+
+namespace dummy {
+inline constexpr std::wstring_view label_tensor{L"I"};
+inline constexpr std::wstring_view label_scalar{L"Z"};
+
+template <typename... Args>
+ExprPtr make_tensor(Args&&... arg_list) {
+  auto process_arg = [](auto& arg) {
+    using ArgType = std::remove_cvref_t<decltype(arg)>;
+    if constexpr (std::ranges::range<ArgType>) {
+      if constexpr (std::is_same_v<Index,
+                                   std::remove_cvref_t<
+                                       std::ranges::range_value_t<ArgType>>>) {
+        // This function is creating intermediate tensors, which don't come with
+        // an externally provided "correct"/canonical order of its indices.
+        // Hence, we are free to define our own canonical order, which we
+        // conveniently set to the indices being sorted in each group.
+        using std::ranges::begin;
+        using std::ranges::end;
+        std::sort(begin(arg), end(arg));
+      }
+    }
+  };
+
+  // Iterate over variadic parameter list and apply process_arg to each entry
+  (process_arg(arg_list), ...);
+
+  return ex<Tensor>(label_tensor, std::forward<Args>(arg_list)...);
+}
+
+ExprPtr make_tensor(Tensor const& t, bool with_symm) {
+  if (with_symm) {
+    return make_tensor(bra(t.bra()), ket(t.ket()), aux(t.aux()), t.symmetry(),
+                       t.braket_symmetry(), t.particle_symmetry());
+  }
+
+  return make_tensor(bra(t.bra()), ket(t.ket()), aux(t.aux()));
+}
+
+ExprPtr make_variable() { return ex<Variable>(label_scalar); }
+
+}  // namespace dummy
 
 std::string to_label_annotation(const Index& idx) {
   using namespace ranges::views;
@@ -200,7 +238,6 @@ size_t hash_terminal_tensor(Tensor const& tnsr) noexcept {
   hash::combine(h, hash_indices(tnsr.const_indices()));
   return h;
 }
-
 }  // namespace
 
 ///
@@ -220,33 +257,6 @@ struct ExprWithHash {
   ExprPtr expr;
   size_t hash;
 };
-
-namespace dummy {
-inline constexpr std::wstring_view label_tensor{L"I"};
-inline constexpr std::wstring_view label_scalar{L"Z"};
-
-template <typename... Args>
-ExprPtr make_tensor(Args&&... args) {
-  return ex<Tensor>(label_tensor, std::forward<Args>(args)...);
-}
-
-ExprPtr make_tensor(Tensor const& t, bool with_symm) {
-  return with_symm ? ex<Tensor>(label_tensor,           //
-                                bra(t.bra()),           //
-                                ket(t.ket()),           //
-                                aux(t.aux()),           //
-                                t.symmetry(),           //
-                                t.braket_symmetry(),    //
-                                t.particle_symmetry())  //
-                   : ex<Tensor>(label_tensor,           //
-                                bra(t.bra()),           //
-                                ket(t.ket()),           //
-                                aux(t.aux()));
-}
-
-ExprPtr make_variable() { return ex<Variable>(label_scalar); }
-
-}  // namespace dummy
 
 using EvalExprNode = FullBinaryNode<EvalExpr>;
 
@@ -317,6 +327,10 @@ EvalExprNode binarize(Sum const& sum) {
 }
 
 EvalExprNode binarize(Product const& prod) {
+  if (prod.factors().empty()) {
+    return binarize(Constant(prod.scalar()));
+  }
+
   using ranges::views::move;
   using ranges::views::transform;
   auto factors = prod.factors()                                             //

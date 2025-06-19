@@ -140,7 +140,9 @@ void max_cache(meta::eval_node auto const& node,  //
 }
 
 AsyCost peak_cache(Sum const& expr) {
-  auto const nodes = expr | ranges::views::transform(binarize<EvalExpr>);
+  auto const nodes = expr | ranges::views::transform([](const auto& expr) {
+                       return binarize<EvalExpr>(expr);
+                     });
   auto cm = cache_manager(nodes);
   auto max = AsyCost::zero();
   auto curr = AsyCost::zero();

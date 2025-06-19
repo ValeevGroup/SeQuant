@@ -2,12 +2,12 @@
 // Created by Eduard Valeyev on 3/8/25.
 //
 
-#include "SeQuant/domain/mbpt/rules/csv.hpp"
+#include <SeQuant/domain/mbpt/rules/csv.hpp>
 
-#include "SeQuant/domain/mbpt/space_qns.hpp"
+#include <SeQuant/domain/mbpt/space_qns.hpp>
 
-#include "SeQuant/core/tensor.hpp"
-#include "SeQuant/core/utility/indices.hpp"
+#include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/utility/indices.hpp>
 
 namespace sequant::mbpt {
 
