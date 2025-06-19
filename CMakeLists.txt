@@ -234,6 +234,7 @@ set(SeQuant_src
         SeQuant/core/result_expr.hpp
         SeQuant/core/runtime.cpp
         SeQuant/core/runtime.hpp
+        SeQuant/core/space.cpp
         SeQuant/core/space.hpp
         SeQuant/core/tag.hpp
         SeQuant/core/tensor.cpp
