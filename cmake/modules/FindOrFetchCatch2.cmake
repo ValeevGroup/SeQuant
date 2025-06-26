@@ -1,3 +1,5 @@
+find_package(Catch2)
+
 if (NOT TARGET Catch2::Catch2)
 
     include(${vg_cmake_kit_SOURCE_DIR}/modules/VRGFindOrFetchPackage.cmake)
