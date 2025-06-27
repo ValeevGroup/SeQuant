@@ -6,6 +6,7 @@
 #define SEQUANT_ATTR_HPP
 
 #include <cassert>
+#include <cstdlib>
 #include <string>
 
 namespace sequant {
