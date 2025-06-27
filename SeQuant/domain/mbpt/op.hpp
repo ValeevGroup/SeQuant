@@ -549,14 +549,10 @@ namespace detail {
 /// @return A vector of Index objects
 inline container::svector<Index> make_idx_vector(
     const container::svector<IndexSpace>& spaces) {
-  container::svector<Index> result;
-  const auto n = spaces.size();
-  result.reserve(n);
-  for (size_t i = 0; i != n; ++i) {
-    auto space = spaces[i];
-    result.push_back(Index::make_tmp_index(space));
-  }
-  return result;
+  return spaces | ranges::views::transform([](const IndexSpace& space) {
+           return Index::make_tmp_index(space);
+         }) |
+         ranges::to<container::svector<Index>>();
 }
 
 /// @brief Creates a vector of dependent indices based on the given spaces and
@@ -569,14 +565,11 @@ inline container::svector<Index> make_idx_vector(
 inline container::svector<Index> make_depidx_vector(
     const container::svector<IndexSpace>& spaces,
     const container::svector<Index>& protoidxs) {
-  const auto n = spaces.size();
-  container::svector<Index> result;
-  result.reserve(n);
-  for (size_t i = 0; i != n; ++i) {
-    auto space = spaces[i];
-    result.push_back(Index::make_tmp_index(space, protoidxs, true));
-  }
-  return result;
+  return spaces |
+         ranges::views::transform([&protoidxs](const IndexSpace& space) {
+           return Index::make_tmp_index(space, protoidxs, true);
+         }) |
+         ranges::to<container::svector<Index>>();
 }
 }  // namespace detail
 
