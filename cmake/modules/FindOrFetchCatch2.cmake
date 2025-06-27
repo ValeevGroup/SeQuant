@@ -15,6 +15,8 @@ if (NOT TARGET Catch2::Catch2)
 
 	if (Catch2_SOURCE_DIR)
 		list(APPEND CMAKE_MODULE_PATH "${Catch2_SOURCE_DIR}/extras")
+  	elseif(Catch2_DIR)
+		list(APPEND CMAKE_MODULE_PATH "${Catch2_DIR}")
 	endif()
 endif()
 
