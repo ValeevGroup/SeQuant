@@ -81,15 +81,15 @@ Functions
 ---------
 
 
+- :ref:`exhale_function_namespacesequant_1abf91e6ba929de81989e494c217a51ac8`
+
 - :ref:`exhale_function_namespacesequant_1adb4d42e42d97df774a727a3f376c5672`
 
 - :ref:`exhale_function_namespacesequant_1af177a78c070530901125cd738dd9c418`
 
-- :ref:`exhale_function_namespacesequant_1abf91e6ba929de81989e494c217a51ac8`
+- :ref:`exhale_function_namespacesequant_1a33a7a1c129e68beec9ba2efe215e6277`
 
 - :ref:`exhale_function_namespacesequant_1ad515c9c22fe8046eb7daa7f0119501a7`
-
-- :ref:`exhale_function_namespacesequant_1a33a7a1c129e68beec9ba2efe215e6277`
 
 - :ref:`exhale_function_namespacesequant_1a039e25ec594aa3a2c0db5a634460ae30`
 

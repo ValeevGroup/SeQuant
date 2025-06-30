@@ -32,6 +32,8 @@ Includes
 
 - ``cassert``
 
+- ``cstdlib``
+
 - ``string`` (:ref:`file_SeQuant_core_utility_string.cpp`)
 
 

@@ -18,6 +18,7 @@ Program Listing for File attr.hpp
    #define SEQUANT_ATTR_HPP
    
    #include <cassert>
+   #include <cstdlib>
    #include <string>
    
    namespace sequant {
