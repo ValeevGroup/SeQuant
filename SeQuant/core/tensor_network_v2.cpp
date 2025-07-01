@@ -26,10 +26,10 @@
 #include <iterator>
 #include <limits>
 #include <numeric>
+#include <ranges>
 #include <sstream>
 #include <string>
 #include <type_traits>
-#include <variant>
 
 #include <range/v3/algorithm/for_each.hpp>
 #include <range/v3/algorithm/none_of.hpp>
@@ -926,17 +926,22 @@ TensorNetworkV2::Graph TensorNetworkV2::create_graph(
   graph.vertex_colors.reserve(vertex_count_estimate);
   graph.vertex_types.reserve(vertex_count_estimate);
 
-  container::map<ProtoBundle, std::size_t> proto_bundles;
+  container::svector<std::pair<ProtoBundle, std::size_t>> proto_bundles;
 
-  container::map<std::size_t, std::size_t> tensor_vertices;
-  tensor_vertices.reserve(tensors_.size());
+  // Mapping from the i-th tensor in tensors_ to the ID of the corresponding
+  // vertex
+  static constexpr std::size_t uninitialized_vertex =
+      std::numeric_limits<std::size_t>::max();
+  container::svector<std::size_t> tensor_vertices;
+  tensor_vertices.resize(tensors_.size(), uninitialized_vertex);
 
   container::vector<std::pair<std::size_t, std::size_t>> edges;
   edges.reserve(edges_.size() + tensors_.size());
 
   // Add vertices for tensors
   for (std::size_t tensor_idx = 0; tensor_idx < tensors_.size(); ++tensor_idx) {
-    assert(tensor_vertices.find(tensor_idx) == tensor_vertices.end());
+    assert(tensor_idx < tensor_vertices.size());
+    assert(tensor_vertices[tensor_idx] == uninitialized_vertex);
     assert(tensors_.at(tensor_idx));
     const AbstractTensor &tensor = *tensors_.at(tensor_idx);
 
@@ -950,7 +955,7 @@ TensorNetworkV2::Graph TensorNetworkV2::create_graph(
     graph.vertex_colors.push_back(colorizer(tensor));
 
     const std::size_t tensor_vertex = nvertex - 1;
-    tensor_vertices.insert(std::make_pair(tensor_idx, tensor_vertex));
+    tensor_vertices[tensor_idx] = tensor_vertex;
 
     // Create vertices to group indices
     const Symmetry tensor_sym = symmetry(tensor);
@@ -1060,9 +1065,13 @@ TensorNetworkV2::Graph TensorNetworkV2::create_graph(
   }
 
   // Now add all indices (edges_ + pure_proto_indices_) to the graph
-  container::map<Index, std::size_t> index_vertices;
+  container::vector<std::size_t> index_vertices;
+  index_vertices.resize(edges_.size() + pure_proto_indices_.size(),
+                        uninitialized_vertex);
 
-  for (const Edge &current_edge : edges_) {
+  for (std::size_t i = 0; i < edges_.size(); ++i) {
+    const Edge &current_edge = edges_[i];
+
     const Index &index = current_edge.idx();
     ++nvertex;
     if (options.make_labels)
@@ -1075,7 +1084,8 @@ TensorNetworkV2::Graph TensorNetworkV2::create_graph(
 
     const std::size_t index_vertex = nvertex - 1;
 
-    index_vertices[index] = index_vertex;
+    assert(index_vertices.at(i) == uninitialized_vertex);
+    index_vertices[i] = index_vertex;
 
     // Handle proto indices
     if (index.has_proto_indices()) {
@@ -1083,7 +1093,9 @@ TensorNetworkV2::Graph TensorNetworkV2::create_graph(
       assert(index.symmetric_proto_indices());
 
       std::size_t proto_vertex;
-      if (auto it = proto_bundles.find(index.proto_indices());
+      if (auto it =
+              std::ranges::find(proto_bundles, index.proto_indices(),
+                                &decltype(proto_bundles)::value_type::first);
           it != proto_bundles.end()) {
         proto_vertex = it->second;
       } else {
@@ -1115,8 +1127,7 @@ TensorNetworkV2::Graph TensorNetworkV2::create_graph(
         graph.vertex_colors.push_back(colorizer(index.proto_indices()));
 
         proto_vertex = nvertex - 1;
-        proto_bundles.insert(
-            std::make_pair(index.proto_indices(), proto_vertex));
+        proto_bundles.emplace_back(index.proto_indices(), proto_vertex);
       }
 
       edges.push_back(std::make_pair(index_vertex, proto_vertex));
@@ -1128,10 +1139,11 @@ TensorNetworkV2::Graph TensorNetworkV2::create_graph(
       const Vertex &vertex =
           i == 0 ? current_edge.first_vertex() : current_edge.second_vertex();
 
-      assert(tensor_vertices.find(vertex.getTerminalIndex()) !=
-             tensor_vertices.end());
+      assert(vertex.getTerminalIndex() < tensor_vertices.size());
+      assert(tensor_vertices[vertex.getTerminalIndex()] !=
+             uninitialized_vertex);
       const std::size_t tensor_vertex =
-          tensor_vertices.find(vertex.getTerminalIndex())->second;
+          tensor_vertices[vertex.getTerminalIndex()];
 
       // Store an edge connecting the index vertex to the corresponding tensor
       // vertex
@@ -1172,7 +1184,7 @@ TensorNetworkV2::Graph TensorNetworkV2::create_graph(
   }
 
   // also create vertices for pure proto indices
-  for (const auto &index : pure_proto_indices_) {
+  for (const auto &[i, index] : ranges::views::enumerate(pure_proto_indices_)) {
     ++nvertex;
     if (options.make_labels)
       graph.vertex_labels.push_back(std::wstring(index.full_label()));
@@ -1184,7 +1196,8 @@ TensorNetworkV2::Graph TensorNetworkV2::create_graph(
 
     const std::size_t index_vertex = nvertex - 1;
 
-    index_vertices[index] = index_vertex;
+    assert(index_vertices.at(i + edges_.size()) == uninitialized_vertex);
+    index_vertices[i + edges_.size()] = index_vertex;
   }
 
   // Add edges between proto index bundle vertices and all vertices of the
@@ -1192,14 +1205,31 @@ TensorNetworkV2::Graph TensorNetworkV2::create_graph(
   // bundle would be connected with vertices for i_1 and i_2
   for (const auto &[bundle, vertex] : proto_bundles) {
     for (const Index &idx : bundle) {
-      auto it = index_vertices.find(idx);
+      std::size_t idx_vertex = uninitialized_vertex;
 
-      assert(it != index_vertices.end());
-      if (it == index_vertices.end()) {
+      auto it = std::ranges::find(edges_, idx, &Edge::idx);
+      if (it != edges_.end()) {
+        assert(std::distance(edges_.begin(), it) >= 0);
+        idx_vertex = index_vertices.at(std::distance(edges_.begin(), it));
+      } else {
+        auto pure_it = pure_proto_indices_.find(idx);
+        assert(pure_it != pure_proto_indices_.end());
+
+        if (pure_it != pure_proto_indices_.end()) {
+          assert(std::distance(pure_proto_indices_.begin(),
+                               pure_proto_indices_.end()) >= 0);
+          idx_vertex = index_vertices.at(
+              std::distance(pure_proto_indices_.begin(), pure_it) +
+              edges_.size());
+        }
+      }
+
+      assert(idx_vertex != uninitialized_vertex);
+      if (idx_vertex == uninitialized_vertex) {
         std::abort();
       }
 
-      edges.push_back(std::make_pair(it->second, vertex));
+      edges.push_back(std::make_pair(idx_vertex, vertex));
     }
   }
 
@@ -1221,7 +1251,18 @@ TensorNetworkV2::Graph TensorNetworkV2::create_graph(
   }
 
   if (options.make_idx_to_vertex) {
-    graph.idx_to_vertex = std::move(index_vertices);
+    assert(index_vertices.size() == edges_.size() + pure_proto_indices_.size());
+    graph.idx_to_vertex.reserve(index_vertices.size());
+
+    for (std::size_t i = 0; i < edges_.size(); ++i) {
+      graph.idx_to_vertex.emplace(
+          std::make_pair(edges_.at(i).idx(), index_vertices.at(i)));
+    }
+    for (const auto &[i, index] :
+         ranges::views::enumerate(pure_proto_indices_)) {
+      graph.idx_to_vertex.emplace(
+          std::make_pair(index, index_vertices.at(i + edges_.size())));
+    }
   }
 
   return graph;
