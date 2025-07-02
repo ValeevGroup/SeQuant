@@ -1,0 +1,38 @@
+R = ( A{a1;i1} B{i1;a1} ) ( C{a2;i2} D{i2;a2} )
+
+=================================================
+Plain Text
+=================================================
+Declare index i_1
+Declare index i_2
+Declare index a_1
+Declare index a_2
+
+Declare variable Z
+Declare variable R
+Declare variable Z2
+
+Declare tensor A[a_1, i_1]
+Declare tensor B[i_1, a_1]
+Declare tensor C[a_2, i_2]
+Declare tensor D[i_2, a_2]
+
+Create R and initialize to zero
+Create Z and initialize to zero
+Load A[a_1, i_1]
+Load B[i_1, a_1]
+Compute Z += A[a_1, i_1] B[i_1, a_1]
+Unload B[i_1, a_1]
+Unload A[a_1, i_1]
+Create Z2 and initialize to zero
+Load C[a_2, i_2]
+Load D[i_2, a_2]
+Compute Z2 += C[a_2, i_2] D[i_2, a_2]
+Unload D[i_2, a_2]
+Unload C[a_2, i_2]
+Compute R += Z Z2
+Unload Z2
+Unload Z
+Persist R
+
+=================================================

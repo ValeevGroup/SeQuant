@@ -2,7 +2,6 @@
 // Created by Eduard Valeyev on 2019-02-19.
 //
 
-#include <SeQuant/core/abstract_tensor.hpp>
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/expr.hpp>
@@ -10,7 +9,6 @@
 #include <SeQuant/core/latex.hpp>
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/parse.hpp>
-#include <SeQuant/core/tensor.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/timer.hpp>
 #include <SeQuant/domain/mbpt/context.hpp>

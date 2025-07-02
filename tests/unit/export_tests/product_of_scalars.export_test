@@ -1,0 +1,24 @@
+E = 4 (A B) (C D)
+
+=================================================
+Plain Text
+=================================================
+Declare variable E
+Declare variable C
+Declare variable A
+Declare variable D
+Declare variable B
+
+Create E and initialize to zero
+Load B
+Load D
+Load A
+Load C
+Compute E += 4 A C B D
+Unload C
+Unload A
+Unload D
+Unload B
+Persist E
+
+=================================================

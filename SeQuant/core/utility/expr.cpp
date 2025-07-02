@@ -1,5 +1,4 @@
 #include <SeQuant/core/expr.hpp>
-#include <SeQuant/core/tensor.hpp>
 #include <SeQuant/core/utility/expr.hpp>
 #include <SeQuant/core/utility/string.hpp>
 

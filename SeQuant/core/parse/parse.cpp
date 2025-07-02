@@ -10,9 +10,7 @@
 #include <SeQuant/core/parse/ast.hpp>
 #include <SeQuant/core/parse/ast_conversions.hpp>
 #include <SeQuant/core/parse/semantic_actions.hpp>
-#include <SeQuant/core/result_expr.hpp>
 #include <SeQuant/core/space.hpp>
-#include <SeQuant/core/tensor.hpp>
 
 #define BOOST_SPIRIT_X3_UNICODE
 #include <boost/core/demangle.hpp>
@@ -230,10 +228,11 @@ AST do_parse(const StartRule &start, std::wstring_view input,
                        std::distance(begin, input.end()),
                        "Couldn't parse the entire input");
     }
-  } catch (const boost::spirit::x3::expectation_failure<iterator_type> &e) {
-    std::wcout << "Caught expectation_failure\nwhere: " << e.where()
-               << "\nwhat: " << e.what() << "\nwhich: " << e.which().data()
-               << std::endl;
+  } catch ([[maybe_unused]] const boost::spirit::x3::expectation_failure<
+           iterator_type> &e) {
+    // std::wcout << "Caught expectation_failure\nwhere: " << e.where()
+    //           << "\nwhat: " << e.what() << "\nwhich: " << e.which().data()
+    //           << std::endl;
     throw;
   }
 

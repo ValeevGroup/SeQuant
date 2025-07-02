@@ -2,8 +2,16 @@
 // Created by Eduard Valeyev on 4/2/18.
 //
 
-#ifndef SEQUANT_EXPR_OPERATOR_HPP
-#define SEQUANT_EXPR_OPERATOR_HPP
+#ifndef SEQUANT_EXPRESSIONS_OPERATORS_HPP
+#define SEQUANT_EXPRESSIONS_OPERATORS_HPP
+
+#include <SeQuant/core/expressions/constant.hpp>
+#include <SeQuant/core/expressions/expr.hpp>
+#include <SeQuant/core/expressions/expr_ptr.hpp>
+#include <SeQuant/core/expressions/product.hpp>
+#include <SeQuant/core/expressions/sum.hpp>
+
+#include <memory>
 
 namespace sequant {
 
@@ -91,4 +99,4 @@ inline ExprPtr operator-(const ExprPtr &left, const ExprPtr &right) {
 
 }  // namespace sequant
 
-#endif  // SEQUANT_EXPR_OPERATOR_HPP
+#endif  // SEQUANT_EXPRESSIONS_OPERATORS_HPP

@@ -1,5 +1,7 @@
-#include <SeQuant/core/result_expr.hpp>
-#include <SeQuant/core/tensor.hpp>
+#include <SeQuant/core/expressions/result_expr.hpp>
+#include <SeQuant/core/expressions/tensor.hpp>
+#include <SeQuant/core/expressions/variable.hpp>
+#include <SeQuant/core/optimize.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 
 namespace sequant {
@@ -93,5 +95,45 @@ ResultExpr ResultExpr::clone() const {
   return ResultExpr(m_braIndices, m_ketIndices, m_auxIndices, m_symm, m_bksymm,
                     m_psymm, m_label, m_expr->clone());
 }
+
+ResultExpr &canonicalize(ResultExpr &expr) {
+  expr.expression() = canonicalize(expr.expression());
+
+  return expr;
+}
+
+ResultExpr &simplify(ResultExpr &expr) {
+  expr.expression() = simplify(expr.expression());
+
+  return expr;
+}
+
+ResultExpr &rapid_simplify(ResultExpr &expr) {
+  expr.expression() = rapid_simplify(expr.expression());
+
+  return expr;
+}
+
+ResultExpr &expand(ResultExpr &expr) {
+  expr.expression() = expand(expr.expression());
+
+  return expr;
+}
+
+ResultExpr &optimize(ResultExpr &expr) {
+  expr.expression() = optimize(expr.expression());
+
+  return expr;
+}
+
+ResultExpr &canonicalize(ResultExpr &&expr) { return canonicalize(expr); }
+
+ResultExpr &simplify(ResultExpr &&expr) { return simplify(expr); }
+
+ResultExpr &rapid_simplify(ResultExpr &&expr) { return rapid_simplify(expr); }
+
+ResultExpr &expand(ResultExpr &&expr) { return expand(expr); }
+
+ResultExpr &optimize(ResultExpr &&expr) { return optimize(expr); }
 
 }  // namespace sequant
