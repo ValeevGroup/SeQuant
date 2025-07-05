@@ -73,16 +73,24 @@ struct TensorBlockCompare {
       return aux_rank(lhs) < aux_rank(rhs);
     }
 
-    auto lhs_indices = indices(lhs);
-    auto rhs_indices = indices(rhs);
+    // Note: Accessing bra, ket and aux individually is a lot faster
+    // than accessing the combined index() object
+#define SEQUANT_CHECK_IDX_GROUP(group)                                  \
+  auto lhs_##group = lhs._##group();                                    \
+  auto rhs_##group = rhs._##group();                                    \
+  auto lhs_##group##_end = lhs_##group.end();                           \
+  auto rhs_##group##_end = rhs_##group.end();                           \
+  for (auto lhs_it = lhs_##group.begin(), rhs_it = rhs_##group.begin(); \
+       lhs_it != lhs_##group##_end && rhs_it != rhs_##group##_end;      \
+       ++lhs_it, ++rhs_it) {                                            \
+    if (lhs_it->space() != rhs_it->space()) {                           \
+      return lhs_it->space() < rhs_it->space();                         \
+    }                                                                   \
+  }
 
-    for (auto lhs_it = lhs_indices.begin(), rhs_it = rhs_indices.begin();
-         lhs_it != lhs_indices.end() && rhs_it != rhs_indices.end();
-         ++lhs_it, ++rhs_it) {
-      if (lhs_it->space() != rhs_it->space()) {
-        return lhs_it->space() < rhs_it->space();
-      }
-    }
+    SEQUANT_CHECK_IDX_GROUP(bra);
+    SEQUANT_CHECK_IDX_GROUP(ket);
+    SEQUANT_CHECK_IDX_GROUP(aux);
 
     // Tensors are identical
     return false;
