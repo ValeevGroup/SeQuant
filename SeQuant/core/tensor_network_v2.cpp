@@ -1300,6 +1300,17 @@ void TensorNetworkV2::init_edges() {
     }
   };
 
+  std::size_t distinct_index_estimate = 0;
+  for (const AbstractTensorPtr &current : tensors_) {
+    distinct_index_estimate += bra_rank(*current);
+    distinct_index_estimate += ket_rank(*current);
+    distinct_index_estimate += aux_rank(*current);
+  }
+  // For a fully contracted tensor network 1/2 of all indices are unique
+  // so that can be regarded as a kind of lower bound
+  distinct_index_estimate /= 2;
+  edges_.reserve(distinct_index_estimate);
+
   for (std::size_t tensor_idx = 0; tensor_idx < tensors_.size(); ++tensor_idx) {
     assert(tensors_[tensor_idx]);
     const AbstractTensor &tensor = *tensors_[tensor_idx];
