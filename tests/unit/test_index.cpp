@@ -30,10 +30,21 @@ TEST_CASE("index", "[elements][index]") {
     Index i1(L"i_1");
     REQUIRE(i1.label() == L"i_1");
     REQUIRE(i1.space() == isr->retrieve(L"i"));
+    REQUIRE(i1.ordinal() == 1);
 
     Index i2(isr->retrieve(L'i'), 2);  // N.B. using retrieve(char)
     REQUIRE(i2.label() == L"i_2");
     REQUIRE(i2.space() == isr->retrieve(L"i_1"));
+    REQUIRE(i2.ordinal() == 2);
+
+    // Index::null_ordinal is reserved
+    {
+      REQUIRE_NOTHROW(Index(isr->retrieve(L"i"), Index::null_ordinal));
+      Index i(isr->retrieve(L"i"), Index::null_ordinal);
+      REQUIRE(i.label() == L"i");
+      REQUIRE(i.space() == isr->retrieve(L"i_1"));
+      REQUIRE(i.ordinal() == Index::null_ordinal);
+    }
 
     // examples with proto indices
     {
