@@ -498,13 +498,12 @@ inline bool includes(const IndexSpace &space1, const IndexSpace &space2) {
 }
 
 ///
-/// IndexSpace are equal if they have equal @c IndexSpace::type(),
-/// @c IndexSpace::qns(), and @c IndexSpace::base_key().
+/// IndexSpace are equal if they have equal @c IndexSpace::type() and
+/// @c IndexSpace::qns().
 ///
 [[nodiscard]] inline constexpr bool operator==(
     IndexSpace const &space1, IndexSpace const &space2) noexcept {
-  return space1.type() == space2.type() && space1.qns() == space2.qns() &&
-         space1.base_key() == space2.base_key();
+  return space1.type() == space2.type() && space1.qns() == space2.qns();
 }
 
 ///
