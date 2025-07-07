@@ -8,6 +8,8 @@
 #include <SeQuant/domain/mbpt/models/cc.hpp>
 #include <SeQuant/domain/mbpt/spin.hpp>
 
+// SEQUANT_DOC_EXAMPLE: DO NOT RUN
+
 int main() {
   // start-snippet-0
   using namespace sequant;
