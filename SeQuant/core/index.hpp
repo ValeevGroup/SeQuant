@@ -208,16 +208,16 @@ public:
   /// @param label the index label, does not need to be unique, but must be
   /// convertible into an IndexSpace (@sa IndexSpace::instance ); if @p label
   /// is an rvalue reference will scavenge it for the label of the new index
-  /// @warning nonexplicit to make Index creation as ergonomic as possible, at the cost of
-  /// slightly increased danger
-  template <typename String, typename Integer = std::uint64_t,
-            typename = std::enable_if_t<meta::is_basic_string_convertible_v<
-                std::remove_reference_t<String>> && std::is_integral_v<Integer>>>
+  /// @warning nonexplicit to make Index creation as ergonomic as possible, at
+  /// the cost of slightly increased danger
+  template <typename String,
+            typename = meta::EnableIfAllBasicStringConvertible<String>>
   Index(String &&label)
-      : Index(get_default_context().index_space_registry()
+      : Index(
+            get_default_context().index_space_registry()
                 ? get_default_context().index_space_registry()->retrieve(label)
-                : Index::default_space, to_ordinal(label),
-            {}) {
+                : Index::default_space,
+            to_ordinal(label), {}) {
     check_nonreserved();
   }
 
