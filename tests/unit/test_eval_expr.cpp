@@ -200,6 +200,10 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
 
     REQUIRE_FALSE(x1.hash_value() == x3.hash_value());
     REQUIRE_FALSE(x12.hash_value() == x3.hash_value());
+    auto tree1 = binarize(parse_expr(L"A C"));
+    auto tree2 = binarize(parse_expr(L"A t{a1;i1}"));
+
+    REQUIRE(tree1->hash_value() != tree2->hash_value());
   }
 
   SECTION("Symmetry of product") {

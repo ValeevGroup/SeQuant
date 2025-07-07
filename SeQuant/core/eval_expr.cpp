@@ -324,10 +324,10 @@ EvalExprNode binarize(Product const& prod) {
                  | ranges::to_vector;
 
   auto hvals = factors | transform([](auto&& n) { return n->hash_value(); });
+  auto const hs = imed_hashes(hvals) | ranges::to_vector;
 
-  auto make_prod = [i = 0, hs = imed_hashes(hvals)](
-                       EvalExprNode const& left,
-                       EvalExprNode const& right) mutable -> EvalExpr {
+  auto make_prod = [i = 0, &hs](EvalExprNode const& left,
+                                EvalExprNode const& right) mutable -> EvalExpr {
     auto h = ranges::at(hs, ++i);
     if (left->is_scalar() && right->is_scalar()) {
       // scalar * scalar
