@@ -48,12 +48,20 @@ using IndexList = std::initializer_list<Index>;
 /// @brief Index = IndexSpace + nonnegative integer ordinal
 
 /// Index is defined by an IndexSpace (IndexSpace::base_key())
-/// and a non-negative ordinal (by default can be null, see Index::null_ordinal).
+/// and a non-negative ordinal (by default can be null).
 /// Indices with ordinals greater or
 /// equal to the value returned by min_tmp_label() cannot be constructed directly.
 /// Unlike SeQuant1's ParticleIndex, Index supports dependencies
 /// between indices to be able to express e.g. hierarchical partitioning of
-/// index spaces or hierarchical nesting of spaces
+/// index spaces or hierarchical nesting of spaces.
+///
+/// Since Index objects are most of the time created from string representation,
+/// Index will use default Context's index space registry to map base labels to index spaces.
+/// Since SeQuant can still operate without explicit initialization of the default
+/// index space registry Index still supports this mode. In such mode all Index objects
+/// created from strings will use the same index space (see Index::default_space_attr)
+/// with the base label stored into its space's base_key (ordinal, if any, is used as usual).
+///
 /// @note Index and other SeQuant classes currently use wide characters to
 /// represent labels and other strings; this goes against some popular
 /// recommendations to use narrow strings (bytestrings) everywhere. The
