@@ -40,17 +40,6 @@
 
 namespace sequant {
 
-struct FullLabelIndexLocator {
-  std::wstring_view label;
-  FullLabelIndexLocator(std::wstring_view label) : label(std::move(label)) {}
-
-  bool operator()(const TensorNetworkV2::Edge &edge) const {
-    return edge.idx().full_label() == label;
-  }
-
-  bool operator()(const Index &idx) const { return idx.full_label() == label; }
-};
-
 bool tensors_commute(const AbstractTensor &lhs, const AbstractTensor &rhs) {
   // tensors commute if their colors are different or either one of them
   // is a c-number
@@ -1291,8 +1280,7 @@ void TensorNetworkV2::init_edges() {
                  << std::endl;
     }
 
-    auto it = std::find_if(edges_.begin(), edges_.end(),
-                           FullLabelIndexLocator(idx.full_label()));
+    auto it = std::ranges::find(edges_, idx, &Edge::idx);
     if (it == edges_.end()) {
       edges_.emplace_back(std::move(vertex), idx);
     } else {
