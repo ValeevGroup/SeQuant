@@ -352,10 +352,6 @@ The main difference of the last example with the original example is that the <c
 </pre></div>
 </div>
 <p>However, to deal with the single-product vacuum it is necessary to register at least one space and announce it as occupied in the vacuum state:</p>
-<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="n">isr</span><span class="p">.</span><span class="n">add</span><span class="p">(</span><span class="sa">L</span><span class="s">&quot;y&quot;</span><span class="p">,</span><span class="w"> </span><span class="mb">0b01</span><span class="p">).</span><span class="n">vacuum_occupied_space</span><span class="p">(</span><span class="sa">L</span><span class="s">&quot;i&quot;</span><span class="p">);</span>
-</pre></div>
-</div>
-<p>or, shorter,</p>
 <div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="n">isr</span><span class="p">.</span><span class="n">add</span><span class="p">(</span><span class="sa">L</span><span class="s">&quot;y&quot;</span><span class="p">,</span><span class="w"> </span><span class="mb">0b01</span><span class="p">,</span><span class="w"> </span><span class="n">is_vacuum_occupied</span><span class="p">);</span>
 </pre></div>
 </div>
@@ -440,7 +436,7 @@ The main difference of the last example with the original example is that the <c
             
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on Jul 2, 2025 3:40:21 PM</div>
+              Last updated on Jul 7, 2025 8:55:01 PM</div>
           </div>
           <div class="right-details">
             <div class="icons">
