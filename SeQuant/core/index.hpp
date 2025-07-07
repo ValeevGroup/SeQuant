@@ -883,7 +883,7 @@ class Index : public Taggable {
   /// @return true if @c index1 is identical to @c index2 , i.e. they belong to
   /// the same space, they have the same label, and the same proto-indices (if
   /// any)
-  friend bool operator==(const Index &i1, const Index &i2) {
+  friend bool operator==(const Index &i1, const Index &i2) noexcept {
     return i1.space() == i2.space() && i1.ordinal() == i2.ordinal() &&
            i1.proto_indices() == i2.proto_indices();
   }
@@ -891,7 +891,7 @@ class Index : public Taggable {
   /// @return false if @c index1 is identical to @c index2 , i.e. they belong to
   /// different spaces or they have different labels or they have different
   /// proto-indices (if any)
-  friend bool operator!=(const Index &i1, const Index &i2) {
+  friend bool operator!=(const Index &i1, const Index &i2) noexcept {
     return !(i1 == i2);
   }
 
@@ -900,7 +900,7 @@ class Index : public Taggable {
   /// @return true if @c i1 preceeds @c i2 in the canonical order; Index objects
   /// are ordered lexicographically, first by qns, followed by tags (if defined
   /// for both), then by space, then by ordinal, then by protoindices (if any)
-  friend bool operator<(const Index &i1, const Index &i2) {
+  friend bool operator<(const Index &i1, const Index &i2) noexcept {
     // compare qns, tags and spaces in that sequence
 
     auto compare_space = [&i1, &i2]() {
@@ -934,7 +934,7 @@ class Index : public Taggable {
 inline const IndexSpace Index::default_space{
     L"", IndexSpace::Type::reserved, IndexSpace::QuantumNumbers::reserved};
 
-void Index::check_for_duplicate_proto_indices() {
+void Index::check_for_duplicate_proto_indices() const {
 #ifndef NDEBUG
   if (!symmetric_proto_indices_) {  // if proto indices not symmetric, sort via
                                     // ptrs
@@ -961,13 +961,13 @@ void Index::check_for_duplicate_proto_indices() {
 #endif
 }
 
-void Index::canonicalize_proto_indices() {
+void Index::canonicalize_proto_indices() noexcept {
   if (symmetric_proto_indices_)
     std::stable_sort(begin(proto_indices_), end(proto_indices_));
 }
 
 /// swap operator helps tracking # of swaps
-inline void swap(Index &first, Index &second) {
+inline void swap(Index &first, Index &second) noexcept {
   std::swap(first, second);
   detail::count_swap<Index>();
 }

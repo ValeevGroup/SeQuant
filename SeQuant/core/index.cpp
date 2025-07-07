@@ -12,13 +12,15 @@
 
 namespace sequant {
 
-const std::size_t Index::min_tmp_index() {
+const std::size_t Index::min_tmp_index() noexcept {
   return get_default_context().first_dummy_index_ordinal();
 }
 
-void Index::reset_tmp_index() { tmp_index_accessor() = min_tmp_index() - 1; }
+void Index::reset_tmp_index() noexcept {
+  tmp_index_accessor() = min_tmp_index() - 1;
+}
 
-std::wstring Index::to_latex() const {
+std::wstring Index::to_latex() const noexcept {
   std::wstring protos{};
   if (has_proto_indices()) {
     protos += L"^{";
