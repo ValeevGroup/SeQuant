@@ -473,19 +473,19 @@ inline auto hash_value(const IndexSpace &space) {
   return result;
 }
 
-/// @return true if type2 is included in type1, i.e. intersection(type1, type2)
-/// == type2
+/// @return true if type2 is included in type1, i.e. `intersection(type1, type2)
+/// == type2`
 inline bool includes(IndexSpace::Type type1, IndexSpace::Type type2) {
   return type1.includes(type2);
 }
-/// @return true if qns2 is included in qns1, i.e. \code intersection(qns1,
-/// qns2) == qns2 \endcode is true
+/// @return true if qns2 is included in qns1, i.e.
+/// `intersection(qns1, qns2) == qns2`
 inline bool includes(IndexSpace::QuantumNumbers qns1,
                      IndexSpace::QuantumNumbers qns2) {
   return qns1.includes(qns2);
 }
-/// @return true if space2 is included in space1, i.e. intersection(space1,
-/// space2) == space2
+/// @return true if space2 is included in space1, i.e. `intersection(space1,
+/// space2) == space2`
 inline bool includes(const IndexSpace &space1, const IndexSpace &space2) {
   return space1.attr().includes(space2.attr());
 }
