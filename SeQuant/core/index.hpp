@@ -63,8 +63,14 @@ using IndexList = std::initializer_list<Index>;
 /// wide strings until further notice.
 // clang-format on
 class Index : public Taggable {
-  static constexpr std::uint64_t default_ordinal =
-      std::numeric_limits<std::uint64_t>::max();
+ public:
+  /// ordinals are represented by this type
+  using ordinal_type = std::uint64_t;
+  /// to avoid needlessly swelling the size of Index reserve one of the values
+  /// for the null_ordinal
+  static constexpr ordinal_type null_ordinal =
+      std::numeric_limits<ordinal_type>::max();
+
   static auto &tmp_index_accessor() {
     // initialized so that the first call to next_tmp_index will return
     // min_tmp_index()
@@ -72,13 +78,15 @@ class Index : public Taggable {
     return index;
   }
 
-  template <typename Integer,
-            typename = std::enable_if_t<std::is_integral_v<Integer>>>
-  std::uint64_t to_uint64_t(Integer i) {
-    if constexpr (std::is_signed_v<Integer>) {
+  ordinal_type to_ordinal(meta::integral auto i) noexcept {
+    if constexpr (std::is_signed_v<decltype(i)>) {
       assert(i >= 0);
     }
-    return static_cast<std::uint64_t>(i);
+    if constexpr (std::numeric_limits<decltype(i)>::max() >
+                  std::numeric_limits<ordinal_type>::max()) {
+      assert(i <= std::numeric_limits<ordinal_type>::max());
+    }
+    return static_cast<ordinal_type>(i);
   }
 
  public:
@@ -122,17 +130,15 @@ class Index : public Taggable {
   /// @param space (a const ref to) the IndexSpace object that specifies to this
   /// space this object belongs
   explicit Index(const IndexSpace &space)
-      : Taggable(), space_(space), ordinal_(default_ordinal) {
+      : Taggable(), space_(space), ordinal_(null_ordinal) {
     check_nonreserved();
   }
 
   /// @param space (a const ref to) the IndexSpace object that specifies to this
   /// space this object belongs
   /// @param ord the index ordinal
-  template <typename Integer,
-            typename = std::enable_if_t<std::is_integral_v<Integer>>>
-  Index(const IndexSpace &space, Integer ord)
-      : space_(space), ordinal_(to_uint64_t(ord)) {
+  Index(const IndexSpace &space, meta::integral auto ord)
+      : space_(space), ordinal_(to_ordinal(ord)) {
     check_nonreserved();
   }
 
@@ -173,10 +179,8 @@ class Index : public Taggable {
   /// i.e. duplicates are not allowed)
   /// @param symmetric_proto_indices if true, proto_indices can be permuted at
   /// will and will always be sorted
-  template <typename Integer,
-            typename = std::enable_if_t<std::is_integral_v<Integer>>>
-  Index(const IndexSpace &space, Integer ord, IndexList proto_indices,
-        bool symmetric_proto_indices = true)
+  Index(const IndexSpace &space, meta::integral auto ord,
+        IndexList proto_indices, bool symmetric_proto_indices = true)
       : Index(space, ord) {
     proto_indices_ = std::move(proto_indices);
     symmetric_proto_indices_ = symmetric_proto_indices;
@@ -191,9 +195,7 @@ class Index : public Taggable {
   /// i.e. duplicates are not allowed)
   /// @param symmetric_proto_indices if true, proto_indices can be permuted at
   /// will and will always be sorted
-  template <typename Integer,
-            typename = std::enable_if_t<std::is_integral_v<Integer>>>
-  Index(const IndexSpace &space, Integer ord,
+  Index(const IndexSpace &space, meta::integral auto ord,
         container::vector<Index> proto_indices,
         bool symmetric_proto_indices = true)
       : Index(space, ord) {
@@ -429,14 +431,13 @@ class Index : public Taggable {
   std::wstring_view label() const {
     if (!label_) {
       label_ = space_.base_key();
-      if (ordinal_ != default_ordinal)
-        *label_ += L'_' + std::to_wstring(ordinal_);
+      if (ordinal_ != null_ordinal) *label_ += L'_' + std::to_wstring(ordinal_);
     }
     return *label_;
   }
 
   /// @return the ordinal
-  std::uint64_t ordinal() const { return ordinal_; }
+  ordinal_type ordinal() const noexcept { return ordinal_; }
 
   /// @return the label split into base and ordinal parts; the ordinal part is
   /// empty, if missing
@@ -595,22 +596,24 @@ class Index : public Taggable {
   }
 
   /// @return the IndexSpace object
-  const IndexSpace &space() const { return space_; }
+  const IndexSpace &space() const noexcept { return space_; }
 
   /// @return true if this index has proto indices
-  bool has_proto_indices() const { return !proto_indices_.empty(); }
+  bool has_proto_indices() const noexcept { return !proto_indices_.empty(); }
   /// @return the list of proto indices of this index
-  const index_vector &proto_indices() const { return proto_indices_; }
+  const index_vector &proto_indices() const noexcept { return proto_indices_; }
   /// @return true if the index is symmetric with respect to the permutation of
   /// protoindices
-  bool symmetric_proto_indices() const { return symmetric_proto_indices_; }
+  bool symmetric_proto_indices() const noexcept {
+    return symmetric_proto_indices_;
+  }
   /// drops the proto indices from this Index
   /// @return a copy of this Index without proto indices
-  Index drop_proto_indices() const {
+  Index drop_proto_indices() const noexcept {
     return Index(this->label(), this->space());
   }
 
-  std::wstring to_latex() const;
+  std::wstring to_latex() const noexcept;
 
   /*template <typename... Attrs>
   std::wstring to_wolfram(Attrs &&...attrs) const {
@@ -647,10 +650,10 @@ class Index : public Taggable {
   /// @return the color of the protoindices
   /// @sa Index::color()
   template <typename Range>
-  static auto proto_indices_color(const Range &protoindex_range) {
+  static auto proto_indices_color(const Range &protoindex_range) noexcept {
     auto space_attr_view =
         protoindex_range | ranges::views::transform([](const Index &idx) {
-          return int64_t(idx.space().attr());
+          return static_cast<int64_t>(idx.space().attr());
         });
     return hash::range(ranges::begin(space_attr_view),
                        ranges::end(space_attr_view));
@@ -677,17 +680,19 @@ class Index : public Taggable {
   }
 
   /// @return the smallest index of a generated index
-  static const std::size_t min_tmp_index();
+  static const std::size_t min_tmp_index() noexcept;
 
   /// @return a unique temporary index, its value is equal to or greater than
   /// that returned by min_tmp_index()
-  static std::size_t next_tmp_index() { return ++tmp_index_accessor(); }
+  static std::size_t next_tmp_index() noexcept {
+    return ++tmp_index_accessor();
+  }
 
   /// resets the temporary index counter so that the next call to
   /// next_tmp_index() will return the value returned by min_tmp_index()
   /// @warning should only to be used when reproducibility matters (e.g. unit
   /// testing)
-  static void reset_tmp_index();
+  static void reset_tmp_index() noexcept;
 
   /// @brief index replacement
   /// replaces this object with its image in the Index map.
@@ -700,7 +705,7 @@ class Index : public Taggable {
   /// this->tag().value<int>() == 0 \endcode
   template <template <typename, typename, typename... Args> class Map,
             typename... Args>
-  bool transform(const Map<Index, Index, Args...> &index_map) {
+  bool transform(const Map<Index, Index, Args...> &index_map) noexcept {
     bool mutated = false;
 
     // outline:
@@ -808,7 +813,8 @@ class Index : public Taggable {
 
  private:
   IndexSpace space_{};
-  std::uint64_t ordinal_ = default_ordinal;
+  /// @note simulate std::optional<ordinal_type>
+  ordinal_type ordinal_ = null_ordinal;
   // an unordered set of unique indices on which this index depends on
   // whether proto_indices_ is symmetric w.r.t. permutations; if true,
   // proto_indices_ will be ordered
@@ -821,39 +827,39 @@ class Index : public Taggable {
   const static IndexSpace default_space;
 
   /// sorts proto_indices_ if symmetric_proto_indices_
-  inline void canonicalize_proto_indices();
+  inline void canonicalize_proto_indices() noexcept;
 
   /// @warning disabled if NDEBUG is defined
   /// @throw std::invalid_argument  have duplicates in proto_indices_
-  inline void check_for_duplicate_proto_indices();
+  inline void check_for_duplicate_proto_indices() const;
 
   /// throws std::invalid_argument if the ordinal is among reserved for
   /// generated Index objects
-  void check_nonreserved() {
-    if (ordinal_ != default_ordinal && ordinal_ >= min_tmp_index()) {
+  inline void check_nonreserved() const {
+    if (ordinal_ != null_ordinal && ordinal_ >= min_tmp_index()) {
       throw std::invalid_argument(
           "Index ctor: ordinal must be less than the value returned by "
           "min_tmp_index()");
     }
   }
 
-  static std::uint64_t to_ordinal(char label) { return default_ordinal; }
+  template <typename Char, typename = std::enable_if_t<meta::is_char_v<Char>>>
+  static inline ordinal_type to_ordinal(Char label) noexcept {
+    return null_ordinal;
+  }
 
-  static std::uint64_t to_ordinal(std::string_view label) {
+  static inline ordinal_type to_ordinal(std::string_view label) noexcept {
     const auto underscore_position = label.rfind('_');
     if (underscore_position != std::wstring::npos) {
-      assert(underscore_position + 1 <
-             label.size());  // check that there is at least one char past the
-      // underscore
+      // check that there is at least one char past the underscore
+      assert(underscore_position + 1 < label.size());
       return std::atol(
           label.substr(underscore_position + 1, std::string::npos).data());
     } else
-      return default_ordinal;
+      return null_ordinal;
   }
 
-  static std::uint64_t to_ordinal(wchar_t label) { return default_ordinal; }
-
-  static std::uint64_t to_ordinal(std::wstring_view label) {
+  static inline ordinal_type to_ordinal(std::wstring_view label) noexcept {
     const auto underscore_position = label.rfind(L'_');
     if (underscore_position != std::wstring::npos) {
       assert(underscore_position + 1 <
@@ -863,7 +869,7 @@ class Index : public Taggable {
           label.substr(underscore_position + 1, std::wstring::npos).data(),
           NULL, 10);
     } else
-      return default_ordinal;
+      return null_ordinal;
   }
 
   friend class IndexFactory;
@@ -871,8 +877,7 @@ class Index : public Taggable {
 
   // this ctor is only used by make_tmp_index and IndexFactory and bypasses
   // check for nontmp index
-  Index(const IndexSpace &space, std::uint64_t ordinal,
-        IndexFactoryTag) noexcept
+  Index(const IndexSpace &space, ordinal_type ordinal, IndexFactoryTag) noexcept
       : space_(space), ordinal_(ordinal), proto_indices_() {}
 
   /// @return true if @c index1 is identical to @c index2 , i.e. they belong to
