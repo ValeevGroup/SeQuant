@@ -273,10 +273,10 @@ TensorOfTensorIndices<Container> tot_indices(Rng const& idxs) {
 /// \param idx2
 /// \return True if the numeric suffix of \c idx1 is less than that of \c idx2.
 ///
-inline bool suffix_compare(Index const& idx1, Index const& idx2) {
-  auto&& s1 = idx1.suffix();
-  auto&& s2 = idx2.suffix();
-  return (s1 && s2) && s1.value() < s2.value();
+inline bool ordinal_compare(Index const& idx1, Index const& idx2) {
+  auto ord1 = idx1.ordinal();
+  auto ord2 = idx2.ordinal();
+  return (ord1 && ord2) && ord1.value() < ord2.value();
 }
 
 ///

@@ -27,14 +27,13 @@ std::wstring Index::to_latex() const noexcept {
     for (auto&& pidx : proto_indices()) protos += pidx.to_latex();
     protos += L"}";
   }
-  auto [lbl, sfx_] = split_label();
-
-  std::wstring sfx{};
-  if (!sfx_.empty())
-    sfx = std::format(L"_{}",
-                      sfx_.size() == 1 ? sfx_ : std::format(L"{{{}}}", sfx_));
-
-  return std::format(L"{{{}{}{}}}", utf_to_latex(lbl), sfx, protos);
+  std::wstring sfx;
+  if (ordinal_)
+    sfx =
+        std::format(L"_{}", *ordinal_ < 10 ? std::to_wstring(*ordinal_)
+                                           : std::format(L"{{{}}}", *ordinal_));
+  return std::format(L"{{{}{}{}}}", utf_to_latex(space().base_key()), sfx,
+                     protos);
 }
 
 std::string Index::ascii_label() const {
