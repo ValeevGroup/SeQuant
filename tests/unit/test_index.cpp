@@ -17,26 +17,28 @@ TEST_CASE("index", "[elements][index]") {
 
   SECTION("constructors") {
     auto isr = get_default_context().index_space_registry();
+
+    // default
+    REQUIRE_NOTHROW(Index{});
     Index i{};
 
-    REQUIRE_NOTHROW(
+    REQUIRE_NOTHROW(Index(std::wstring(L"i_") +
+                          std::to_wstring(Index::min_tmp_index() - 1)));
+    REQUIRE_THROWS(
         Index(std::wstring(L"i_") + std::to_wstring(Index::min_tmp_index())));
-    REQUIRE_THROWS(Index(std::wstring(L"i_") +
-                         std::to_wstring(Index::min_tmp_index() + 1)));
 
     Index i1(L"i_1");
     REQUIRE(i1.label() == L"i_1");
     REQUIRE(i1.space() == isr->retrieve(L"i"));
 
-    Index i2(L"i_2",
-             isr->retrieve(L'i'));  // N.B. using retrieve(char)
+    Index i2(isr->retrieve(L'i'), 2);  // N.B. using retrieve(char)
     REQUIRE(i2.label() == L"i_2");
     REQUIRE(i2.space() == isr->retrieve(L"i_1"));
 
     // examples with proto indices
     {
-      REQUIRE_NOTHROW(Index(L"i_3", isr->retrieve(L"i_3"), {i1, i2}));
-      Index i3(L"i_3", isr->retrieve(L"i_3"), {i1, i2});
+      REQUIRE_NOTHROW(Index(isr->retrieve(L"i"), 3, {i1, i2}));
+      Index i3(isr->retrieve(L"i"), 3, {i1, i2});
       REQUIRE(i3.label() == L"i_3");
       REQUIRE(i3.to_string() == "i_3");
       REQUIRE(i3.space() == isr->retrieve(L"i_3"));
@@ -91,7 +93,7 @@ TEST_CASE("index", "[elements][index]") {
       REQUIRE(i7.full_label() == L"i_7<i_1, i_2>");
 
 #ifndef NDEBUG
-      REQUIRE_THROWS(Index(L"i_4", isr->retrieve(L"i_4"), {i1, i1}));
+      REQUIRE_THROWS(Index(isr->retrieve(L"i"), 4, {i1, i1}));
       REQUIRE_THROWS(Index(L"i_5", {L"i_1", L"i_1"}));
 #endif
     }

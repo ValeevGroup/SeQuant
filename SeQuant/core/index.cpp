@@ -50,7 +50,7 @@ std::string Index::ascii_label() const {
        {L'ρ', "rho"},     {L'σ', "sigma"}, {L'τ', "tau"},     {L'υ', "upsilon"},
        {L'φ', "phi"},     {L'χ', "chi"},   {L'ψ', "psi"},     {L'ω', "omega"}};
 
-  std::wstring label(label_);
+  std::wstring label(this->label());
 
   std::replace(label.begin(), label.end(), L'↑', L'a');
   std::replace(label.begin(), label.end(), L'↓', L'b');

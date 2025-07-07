@@ -63,11 +63,9 @@ Index to_index(const parse::ast::Index &index,
   }
 
   try {
-    std::wstring label =
-        index.label.label + L"_" + std::to_wstring(index.label.id);
-    IndexSpace space =
-        get_default_context().index_space_registry()->retrieve(label);
-    return Index(std::move(label), std::move(space), std::move(protoIndices));
+    IndexSpace space = get_default_context().index_space_registry()->retrieve(
+        index.label.label);
+    return Index(std::move(space), index.label.id, std::move(protoIndices));
   } catch (const IndexSpace::bad_key &e) {
     auto [offset, length] = get_pos(index.label, position_cache, begin);
     throw ParseError(offset, length,

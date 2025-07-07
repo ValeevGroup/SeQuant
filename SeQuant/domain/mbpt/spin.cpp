@@ -58,8 +58,7 @@ Index make_index_with_spincase(const Index& idx, mbpt::Spin s) {
                    idx.space().type(), qns};
   auto protoindices = idx.proto_indices();
   for (auto& pidx : protoindices) pidx = make_index_with_spincase(pidx, s);
-  return Index{mbpt::spinannotation_replacе(idx.label(), s), space,
-               protoindices};
+  return Index{space, idx.ordinal(), protoindices};
 }
 
 // The argument really should be non-const but const sematics are broken
