@@ -2,13 +2,14 @@
 // Created by Eduard Valeyev on 3/20/18.
 //
 
-#ifndef SEQUANT_SPACE_H
-#define SEQUANT_SPACE_H
+#ifndef SEQUANT_CORE_SPACE_H
+#define SEQUANT_CORE_SPACE_H
 
 #include <SeQuant/core/fwd.hpp>
 
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/container.hpp>
+#include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/utility/string.hpp>
 #include <SeQuant/core/wstring.hpp>
 
@@ -464,6 +465,14 @@ class IndexSpace {
 inline const IndexSpace IndexSpace::null;
 inline const IndexSpace::Attr IndexSpace::Attr::null;
 
+inline auto hash_value(const IndexSpace &space) {
+  auto result = hash_value(static_cast<std::int64_t>(space.attr()));
+  hash::combine(result, space.base_key());
+  // approximate_size is an attribute that should not affect expression
+  // manipulation, so we do not include it in hash
+  return result;
+}
+
 /// @return true if type2 is included in type1, i.e. intersection(type1, type2)
 /// == type2
 inline bool includes(IndexSpace::Type type1, IndexSpace::Type type2) {
@@ -509,4 +518,4 @@ inline bool includes(const IndexSpace &space1, const IndexSpace &space2) {
 
 }  // namespace sequant
 
-#endif  // SEQUANT_SPACE_H
+#endif  // SEQUANT_CORE_SPACE_H
