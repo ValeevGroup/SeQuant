@@ -515,7 +515,10 @@ class Index : public Taggable {
   std::wstring_view label() const {
     if (!label_) {
       label_ = space_.base_key();
-      if (ordinal_) *label_ += L'_' + std::to_wstring(*ordinal_);
+      if (ordinal_) {
+        *label_ += L'_';
+        *label_ += std::to_wstring(*ordinal_);
+      }
     }
     return *label_;
   }
