@@ -51,7 +51,7 @@ using IndexList = std::initializer_list<Index>;
 /// and a non-negative ordinal (by default can be null, see Index::null_ordinal).
 /// Indices with ordinals greater or
 /// equal to the value returned by min_tmp_label() cannot be constructed directly.
-/// Unlike SeQuant1's ParticleIndex, Index supports dependencies
+/// Unlike `ParticleIndex` in SeQuant1, Index supports dependencies
 /// between indices to be able to express e.g. hierarchical partitioning of
 /// index spaces or hierarchical nesting of spaces
 /// @note Index and other SeQuant classes currently use wide characters to
@@ -73,6 +73,9 @@ class Index : public Taggable {
   static constexpr ordinal_type null_ordinal =
       std::numeric_limits<ordinal_type>::max();
 
+  const static IndexSpace default_space;
+
+ private:
   static auto &tmp_index_accessor() {
     // initialized so that the first call to next_tmp_index will return
     // min_tmp_index()
@@ -209,7 +212,8 @@ class Index : public Taggable {
 
   /// @param label the index label, does not need to be unique, but must be
   /// convertible into an IndexSpace (@sa IndexSpace::instance ); if @p label
-  /// is an rvalue reference will scavenge it for the label of the new index
+  /// is an rvalue reference and movable to std::wstring will scavenge it for
+  /// the label of the new index
   /// @warning nonexplicit to make Index creation as ergonomic as possible, at
   /// the cost of slightly increased danger
   template <typename String,
@@ -220,6 +224,12 @@ class Index : public Taggable {
                 ? get_default_context().index_space_registry()->retrieve(label)
                 : Index::default_space,
             to_ordinal(label), {}) {
+    if constexpr (std::is_convertible_v<String &&, std::wstring>) {
+      label_ = std::move(label);
+    } else {
+      if (space() == Index::default_space)
+        label_ = to_wstring(std::forward<String>(label));
+    }
     check_nonreserved();
   }
 
@@ -451,15 +461,11 @@ class Index : public Taggable {
   ///
   /// \return The numeric suffix if present in the label.
   ///
-  std::optional<int> suffix() const {
-    auto &&[_, s_] = split_label();
-    auto &&s = sequant::to_string(s_);
-
-    int value{};
-    if (std::from_chars(s.data(), s.data() + s.size(), value).ec == std::errc{})
-      return value;
-    else
+  std::optional<ordinal_type> suffix() const {
+    if (ordinal_ == null_ordinal)
       return std::nullopt;
+    else
+      return ordinal_;
   }
 
   /// @return A string label representable in ASCII encoding
@@ -826,8 +832,6 @@ class Index : public Taggable {
   mutable std::optional<std::wstring> label_{};
   mutable std::optional<std::wstring> full_label_;
 
-  const static IndexSpace default_space;
-
   /// sorts proto_indices_ if symmetric_proto_indices_
   inline void canonicalize_proto_indices() noexcept;
 
@@ -883,11 +887,16 @@ class Index : public Taggable {
       : space_(space), ordinal_(ordinal), proto_indices_() {}
 
   /// @return true if @c index1 is identical to @c index2 , i.e. they belong to
-  /// the same space, they have the same label, and the same proto-indices (if
+  /// the same space, they have the same ordinal, and the same proto-indices (if
   /// any)
   friend bool operator==(const Index &i1, const Index &i2) noexcept {
-    return i1.space() == i2.space() && i1.ordinal() == i2.ordinal() &&
-           i1.proto_indices() == i2.proto_indices();
+    if (i1.space() == i2.space()) {
+      return ((i1.space() != Index::default_space)
+                  ? (i1.ordinal() == i2.ordinal())
+                  : (i1.label() == i2.label())) &&
+             i1.proto_indices() == i2.proto_indices();
+    } else
+      return false;
   }
 
   /// @return false if @c index1 is identical to @c index2 , i.e. they belong to
@@ -908,6 +917,18 @@ class Index : public Taggable {
     auto compare_space = [&i1, &i2]() {
       if (i1.space() != i2.space()) {
         return i1.space() < i2.space();
+      } else if (i1.space() == Index::default_space) {
+        if (i1.label() != i2.label()) {
+          // Note: Can't simply use label1 < label2 as that won't yield expected
+          // results for e.g. i2 < i11 (which will yield false)
+          if (i1.label().size() != i2.label().size()) {
+            return i1.label().size() < i2.label().size();
+          }
+
+          return i1.label() < i2.label();
+        } else {
+          return i1.proto_indices() < i2.proto_indices();
+        }
       } else if (i1.ordinal() != i2.ordinal()) {
         return i1.ordinal() < i2.ordinal();
       } else
