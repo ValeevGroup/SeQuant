@@ -106,6 +106,13 @@ Context::Context(Vacuum vac, IndexSpaceMetric m, BraKetSymmetry bks,
       spbasis_(spb),
       first_dummy_index_ordinal_(fdio) {}
 
+Context Context::clone() const {
+  Context ctx(*this);
+  ctx.idx_space_reg_ =
+      std::make_shared<IndexSpaceRegistry>(idx_space_reg_->clone());
+  return ctx;
+}
+
 Vacuum Context::vacuum() const { return vacuum_; }
 
 std::shared_ptr<const IndexSpaceRegistry> Context::index_space_registry()
