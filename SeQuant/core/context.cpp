@@ -15,6 +15,8 @@ bool operator==(const Context& ctx1, const Context& ctx2) {
            ctx1.spbasis() == ctx2.spbasis() &&
            ctx1.first_dummy_index_ordinal() ==
                ctx2.first_dummy_index_ordinal() &&
+           ctx1.index_space_registry()->spaces() ==
+               ctx2.index_space_registry()->spaces() &&
            *ctx1.index_space_registry() == *ctx2.index_space_registry();
 }
 
