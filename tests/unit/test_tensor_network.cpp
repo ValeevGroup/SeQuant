@@ -564,7 +564,7 @@ TEST_CASE("tensor_network_v2", "[elements]") {
   namespace t = sequant::mbpt::tensor;
   namespace o = sequant::mbpt::op;
 
-  sequant::set_default_context(Context(
+  auto ctx_resetter = sequant::set_scoped_default_context(Context(
       mbpt::make_sr_spaces(), Vacuum::SingleProduct, IndexSpaceMetric::Unit,
       BraKetSymmetry::conjugate, SPBasis::spinorbital));
 

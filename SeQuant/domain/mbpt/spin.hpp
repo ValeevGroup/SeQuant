@@ -65,25 +65,27 @@ inline QuantumNumbersAttr spinannotation_remove(const QuantumNumbersAttr& t) {
 template <typename WS, typename = std::enable_if_t<
                            meta::is_wstring_or_view_v<std::decay_t<WS>>>>
 std::wstring spinannotation_remove(WS&& label) {
-  auto [base, orbital] = Index::make_split_label(label);
-  if (base.back() == L'↑' || base.back() == L'↓') {
-    base.remove_suffix(1);
-  }
-  return Index::make_merged_label(base, orbital);
+  auto view = to_basic_string_view(label);
+  assert(!ranges::contains(view, L'_'));
+  const auto has_annotation = view.back() == L'↑' || view.back() == L'↓';
+  return std::wstring{view.data(),
+                      view.data() + view.size() - (has_annotation ? 1 : 0)};
 }
 
 /// adds spin annotation to IndexSpace base label or Index (full) label
 template <typename WS, typename = std::enable_if_t<
                            meta::is_wstring_or_view_v<std::decay_t<WS>>>>
 std::wstring spinannotation_add(WS&& label, Spin s) {
-  auto [base, ordinal] = Index::make_split_label(label);
+  auto view = to_basic_string_view(label);
+  assert(!ranges::contains(view, L'_'));
+  assert(view.back() != L'↑' && view.back() != L'↓');
   switch (s) {
     case Spin::any:
-      return std::wstring(label);
+      return to_wstring(std::forward<WS>(label));
     case Spin::alpha:
-      return Index::make_merged_label(std::wstring(base) + L"↑", ordinal);
+      return to_wstring(std::forward<WS>(label)) + L'↑';
     case Spin::beta:
-      return Index::make_merged_label(std::wstring(base) + L"↓", ordinal);
+      return to_wstring(std::forward<WS>(label)) + L'↓';
     default:
       assert(false && "invalid quantum number");
       abort();

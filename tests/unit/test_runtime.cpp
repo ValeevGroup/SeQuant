@@ -65,9 +65,9 @@ TEST_CASE("context", "[runtime]") {
         mbpt::make_sr_spaces(), Vacuum::SingleProduct, IndexSpaceMetric::Unit,
         BraKetSymmetry::symm, SPBasis::spinfree));
     CHECK(get_default_context() ==
-          Context(mbpt::make_sr_spaces(), Vacuum::SingleProduct,
-                  IndexSpaceMetric::Unit, BraKetSymmetry::symm,
-                  SPBasis::spinfree));
+          Context(get_default_context().mutable_index_space_registry(),
+                  Vacuum::SingleProduct, IndexSpaceMetric::Unit,
+                  BraKetSymmetry::symm, SPBasis::spinfree));
   }
   // leaving scope resets the context back
   CHECK(get_default_context() == initial_ctx);

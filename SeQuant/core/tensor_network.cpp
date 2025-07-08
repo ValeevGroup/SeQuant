@@ -318,7 +318,7 @@ ExprPtr TensorNetwork::canonicalize(
           ord_can;  // canonically-ordered list of {ordinal in tensors_,
                     // canonical ordinal}
       container::svector<size_t>
-          ord_orig;  // originaly-ordered list of {canonical ordinal}
+          ord_orig;  // originally-ordered list of {canonical ordinal}
       for (auto &&color : colors) {
         auto beg = color2idx.lower_bound(color);
         auto end = color2idx.upper_bound(color);

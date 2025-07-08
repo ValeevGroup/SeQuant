@@ -2,13 +2,14 @@
 // Created by Eduard Valeyev on 3/20/18.
 //
 
-#ifndef SEQUANT_SPACE_H
-#define SEQUANT_SPACE_H
+#ifndef SEQUANT_CORE_SPACE_H
+#define SEQUANT_CORE_SPACE_H
 
 #include <SeQuant/core/fwd.hpp>
 
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/container.hpp>
+#include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/utility/string.hpp>
 #include <SeQuant/core/wstring.hpp>
 
@@ -464,37 +465,47 @@ class IndexSpace {
 inline const IndexSpace IndexSpace::null;
 inline const IndexSpace::Attr IndexSpace::Attr::null;
 
-/// @return true if type2 is included in type1, i.e. intersection(type1, type2)
-/// == type2
+inline auto hash_value(const IndexSpace &space) {
+  auto result = hash_value(static_cast<std::int64_t>(space.attr()));
+  hash::combine(result, space.base_key());
+  // approximate_size is an attribute that should not affect expression
+  // manipulation, so we do not include it in hash
+  return result;
+}
+
+/// @return true if type2 is included in type1, i.e. `intersection(type1, type2)
+/// == type2`
 inline bool includes(IndexSpace::Type type1, IndexSpace::Type type2) {
   return type1.includes(type2);
 }
-/// @return true if qns2 is included in qns1, i.e. \code intersection(qns1,
-/// qns2) == qns2 \endcode is true
+/// @return true if qns2 is included in qns1, i.e.
+/// `intersection(qns1, qns2) == qns2`
 inline bool includes(IndexSpace::QuantumNumbers qns1,
                      IndexSpace::QuantumNumbers qns2) {
   return qns1.includes(qns2);
 }
-/// @return true if space2 is included in space1, i.e. intersection(space1,
-/// space2) == space2
+/// @return true if space2 is included in space1, i.e. `intersection(space1,
+/// space2) == space2`
 inline bool includes(const IndexSpace &space1, const IndexSpace &space2) {
   return space1.attr().includes(space2.attr());
 }
 
-/// IndexSpace are ordered by their attributes (i.e. labels do not matter one
-/// bit)
+/// IndexSpace are ordered by their attributes and by labels
 [[nodiscard]] inline constexpr bool operator<(
     const IndexSpace &space1, const IndexSpace &space2) noexcept {
-  return space1.attr() < space2.attr();
+  if (space1.attr() != space2.attr())
+    return space1.attr() < space2.attr();
+  else
+    return space1.base_key() < space2.base_key();
 }
 
 ///
-/// IndexSpace are equal if they have equal @c IndexSpace::type(),
-/// @c IndexSpace::qns(), and @c IndexSpace::base_key().
+/// IndexSpace are equal if they have equal @c IndexSpace::attr() and
+/// @c IndexSpace::base_key().
 ///
 [[nodiscard]] inline constexpr bool operator==(
     IndexSpace const &space1, IndexSpace const &space2) noexcept {
-  return space1.type() == space2.type() && space1.qns() == space2.qns() &&
+  return space1.attr() == space2.attr() &&
          space1.base_key() == space2.base_key();
 }
 
@@ -509,4 +520,4 @@ inline bool includes(const IndexSpace &space1, const IndexSpace &space2) {
 
 }  // namespace sequant
 
-#endif  // SEQUANT_SPACE_H
+#endif  // SEQUANT_CORE_SPACE_H
