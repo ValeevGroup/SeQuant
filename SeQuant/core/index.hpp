@@ -456,19 +456,6 @@ class Index : public Taggable {
   }
 
   /// @param label an Index label (e.g., returned by Index::label())
-  /// @return @p label split into base and ordinal parts; the ordinal part is
-  /// empty, if missing
-  static std::pair<std::wstring_view, std::wstring_view> make_split_label(
-      std::wstring_view label) {
-    auto underscore_position = label.find(L'_');
-    if (underscore_position == std::wstring::npos)
-      return {label, {}};
-    else
-      return {{label.data(), underscore_position},
-              {label.begin() + underscore_position + 1}};
-  }
-
-  /// @param label an Index label (e.g., returned by Index::label())
   /// @return base part of @p label
   static std::wstring base_label(std::wstring_view label) {
     auto underscore_position = label.find(L'_');
@@ -492,20 +479,6 @@ class Index : public Taggable {
   template <typename Char, typename = std::enable_if_t<meta::is_char_v<Char>>>
   static std::wstring base_label(Char label) {
     return to_wstring(label);
-  }
-
-  /// @param base_label base part of an Index label
-  /// @param ordinal_label ordinal part of an Index label
-  /// @return @p base_label and @p ordinal_label merged
-  static std::wstring make_merged_label(std::wstring_view base_label,
-                                        std::wstring_view ordinal_label) {
-    if (ordinal_label.empty())
-      return std::wstring(base_label);
-    else {
-      auto result = std::wstring(base_label) + L'_';
-      result.append(ordinal_label);
-      return result;
-    }
   }
 
   /// @return the memoized label as a UTF-8 encoded wide-character string
