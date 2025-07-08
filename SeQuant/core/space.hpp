@@ -490,20 +490,23 @@ inline bool includes(const IndexSpace &space1, const IndexSpace &space2) {
   return space1.attr().includes(space2.attr());
 }
 
-/// IndexSpace are ordered by their attributes (i.e. labels do not matter one
-/// bit)
+/// IndexSpace are ordered by their attributes and by labels
 [[nodiscard]] inline constexpr bool operator<(
     const IndexSpace &space1, const IndexSpace &space2) noexcept {
-  return space1.attr() < space2.attr();
+  if (space1.attr() != space2.attr())
+    return space1.attr() < space2.attr();
+  else
+    return space1.base_key() < space2.base_key();
 }
 
 ///
-/// IndexSpace are equal if they have equal @c IndexSpace::type() and
-/// @c IndexSpace::qns().
+/// IndexSpace are equal if they have equal @c IndexSpace::attr() and
+/// @c IndexSpace::base_key().
 ///
 [[nodiscard]] inline constexpr bool operator==(
     IndexSpace const &space1, IndexSpace const &space2) noexcept {
-  return space1.type() == space2.type() && space1.qns() == space2.qns();
+  return space1.attr() == space2.attr() &&
+         space1.base_key() == space2.base_key();
 }
 
 ///
