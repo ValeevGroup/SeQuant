@@ -336,6 +336,10 @@ TEST_CASE("index", "[elements][index]") {
     std::wstring a1_str = to_latex(a1);
     REQUIRE(a1_str == L"{a_1^{{i_1}{i_2^{{i_3}{i_4}}}}}");
 
+    // following tests mutate index space registry, so clone the context
+    auto ctx_resetter =
+        set_scoped_default_context(get_default_context().clone());
+
     // a good test of adding new indices to the registry
     IndexSpace ar(
         L"a→",
@@ -346,7 +350,6 @@ TEST_CASE("index", "[elements][index]") {
     REQUIRE(a1_r_str == L"{a→_1^{{i_1}{i_2^{{i_3}{i_4}}}}}");
     get_default_context().mutable_index_space_registry()->remove(L"a→");
 
-    auto const old_registy = get_default_context().index_space_registry();
     auto registry = get_default_context().mutable_index_space_registry();
 
     if (!registry->contains(L"μ̃")) {
@@ -361,8 +364,6 @@ TEST_CASE("index", "[elements][index]") {
 
     REQUIRE(Index(L"μ̃_1").to_latex() == L"{\\tilde{\\mu}_1}");
     REQUIRE(Index(L"f̌_22").to_latex() == L"{\\check{f}_{22}}");
-
-    *get_default_context().mutable_index_space_registry() = *old_registy;
 
     // with default Context label is used
     {
