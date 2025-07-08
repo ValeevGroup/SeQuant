@@ -1,5 +1,3 @@
-find_package(benchmark)
-
 if (NOT TARGET benchmark::benchmark)
     include(${vg_cmake_kit_SOURCE_DIR}/modules/VRGFindOrFetchPackage.cmake)
 
