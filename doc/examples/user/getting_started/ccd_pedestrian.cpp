@@ -2,6 +2,8 @@
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/op.hpp>
 
+// SEQUANT_DOC_EXAMPLE: DO NOT RUN
+
 int main() {
   using namespace sequant;
   using namespace sequant::mbpt;
