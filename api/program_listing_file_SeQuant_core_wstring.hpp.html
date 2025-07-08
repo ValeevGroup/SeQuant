@@ -286,6 +286,7 @@
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;SeQuant/core/utility/string.hpp&gt;</span>
 
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;cmath&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;concepts&gt;</span>
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;string&gt;</span>
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;string_view&gt;</span>
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;type_traits&gt;</span>
@@ -294,17 +295,9 @@
 
 <span class="k">namespace</span><span class="w"> </span><span class="nn">sequant</span><span class="w"> </span><span class="p">{</span>
 
-<span class="k">template</span><span class="w"> </span><span class="o">&lt;</span><span class="k">typename</span><span class="w"> </span><span class="nc">T</span><span class="o">&gt;</span>
-<span class="n">std</span><span class="o">::</span><span class="n">enable_if_t</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="n">is_integral_v</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="n">decay_t</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;&gt;</span><span class="w"> </span><span class="o">&amp;&amp;</span>
-<span class="w">                     </span><span class="o">!</span><span class="n">meta</span><span class="o">::</span><span class="n">is_char_v</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="n">remove_reference_t</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;&gt;</span><span class="p">,</span>
-<span class="w">                 </span><span class="n">std</span><span class="o">::</span><span class="n">wstring</span><span class="o">&gt;</span>
-<span class="n">to_wstring</span><span class="p">(</span><span class="n">T</span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">t</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
-<span class="w">  </span><span class="k">return</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">to_wstring</span><span class="p">(</span><span class="n">t</span><span class="p">);</span>
-<span class="p">}</span>
+<span class="n">std</span><span class="o">::</span><span class="n">wstring</span><span class="w"> </span><span class="nf">to_wstring</span><span class="p">(</span><span class="n">meta</span><span class="o">::</span><span class="n">integral</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">t</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">to_wstring</span><span class="p">(</span><span class="n">t</span><span class="p">);</span><span class="w"> </span><span class="p">}</span>
 
-<span class="k">template</span><span class="w"> </span><span class="o">&lt;</span><span class="k">typename</span><span class="w"> </span><span class="nc">T</span><span class="o">&gt;</span>
-<span class="n">std</span><span class="o">::</span><span class="n">enable_if_t</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="n">is_floating_point_v</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="n">decay_t</span><span class="o">&lt;</span><span class="n">T</span><span class="o">&gt;&gt;</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">wstring</span><span class="o">&gt;</span>
-<span class="n">to_wstring</span><span class="p">(</span><span class="n">T</span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">t</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="n">std</span><span class="o">::</span><span class="n">wstring</span><span class="w"> </span><span class="nf">to_wstring</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">floating_point</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">t</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
 <span class="w">  </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">floor</span><span class="p">(</span><span class="n">t</span><span class="p">)</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">t</span><span class="p">)</span>
 <span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">to_wstring</span><span class="p">(</span><span class="k">static_cast</span><span class="o">&lt;</span><span class="kt">long</span><span class="w"> </span><span class="kt">long</span><span class="o">&gt;</span><span class="p">(</span><span class="n">t</span><span class="p">));</span>
 <span class="w">  </span><span class="k">else</span>
@@ -414,7 +407,7 @@
             
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on Jul 8, 2025 6:43:11 PM</div>
+              Last updated on Jul 8, 2025 8:37:38 PM</div>
           </div>
           <div class="right-details">
             <div class="icons">

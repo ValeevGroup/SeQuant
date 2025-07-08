@@ -58,6 +58,8 @@ Included By
 
 - :ref:`file_SeQuant_core_rational.hpp`
 
+- :ref:`file_SeQuant_core_space.hpp`
+
 - :ref:`file_SeQuant_core_tensor.hpp`
 
 - :ref:`file_SeQuant_core_tensor_network.cpp`

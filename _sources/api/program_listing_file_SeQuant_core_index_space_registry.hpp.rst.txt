@@ -108,6 +108,8 @@ Program Listing for File index_space_registry.hpp
        return *this;
      }
    
+     IndexSpaceRegistry clone() const;
+   
      const auto& spaces() const { return spaces_; }
    
      decltype(auto) begin() const { return spaces_->cbegin(); }

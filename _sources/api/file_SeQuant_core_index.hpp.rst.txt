@@ -162,6 +162,8 @@ Classes
 
 - :ref:`exhale_struct_structsequant_1_1_index_1_1_full_label_compare`
 
+- :ref:`exhale_struct_structsequant_1_1_index_1_1_index_factory_tag`
+
 - :ref:`exhale_struct_structsequant_1_1_index_1_1_label_compare`
 
 - :ref:`exhale_struct_structsequant_1_1_index_1_1_type_compare`
@@ -181,7 +183,7 @@ Functions
 
 - :ref:`exhale_function_namespacesequant_1ac8b05d7d4e23c1fd2fb086e472da556a`
 
-- :ref:`exhale_function_namespacesequant_1ad638076d20f3590a515e9165bc6a1a71`
+- :ref:`exhale_function_namespacesequant_1acdf8e98e4be7b8dee41e14ea9fc67bb4`
 
 
 Defines

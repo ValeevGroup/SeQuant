@@ -314,7 +314,7 @@
 <span class="w">    </span><span class="k">auto</span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">bra_idx</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">tnsr</span><span class="p">.</span><span class="n">bra</span><span class="p">().</span><span class="n">at</span><span class="p">(</span><span class="mi">0</span><span class="p">);</span>
 <span class="w">    </span><span class="k">auto</span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">ket_idx</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">tnsr</span><span class="p">.</span><span class="n">ket</span><span class="p">().</span><span class="n">at</span><span class="p">(</span><span class="mi">0</span><span class="p">);</span>
 
-<span class="w">    </span><span class="k">auto</span><span class="w"> </span><span class="n">dummy_idx</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">suffix_compare</span><span class="p">(</span><span class="n">bra_idx</span><span class="p">,</span><span class="w"> </span><span class="n">ket_idx</span><span class="p">)</span><span class="w">    </span><span class="c1">//</span>
+<span class="w">    </span><span class="k">auto</span><span class="w"> </span><span class="n">dummy_idx</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ordinal_compare</span><span class="p">(</span><span class="n">bra_idx</span><span class="p">,</span><span class="w"> </span><span class="n">ket_idx</span><span class="p">)</span><span class="w">   </span><span class="c1">//</span>
 <span class="w">                         </span><span class="o">?</span><span class="w"> </span><span class="n">bra_idx</span><span class="p">.</span><span class="n">drop_proto_indices</span><span class="p">()</span><span class="w">  </span><span class="c1">//</span>
 <span class="w">                         </span><span class="o">:</span><span class="w"> </span><span class="n">ket_idx</span><span class="p">.</span><span class="n">drop_proto_indices</span><span class="p">();</span>
 
@@ -419,7 +419,7 @@
             
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on Jul 8, 2025 6:43:11 PM</div>
+              Last updated on Jul 8, 2025 8:37:38 PM</div>
           </div>
           <div class="right-details">
             <div class="icons">

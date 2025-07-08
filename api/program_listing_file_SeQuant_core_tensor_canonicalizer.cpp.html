@@ -535,7 +535,7 @@
 <span class="kt">void</span><span class="w"> </span><span class="nf">DefaultTensorCanonicalizer::tag_indices</span><span class="p">(</span><span class="n">AbstractTensor</span><span class="o">&amp;</span><span class="w"> </span><span class="n">t</span><span class="p">)</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="p">{</span>
 <span class="w">  </span><span class="c1">// tag all indices as ext-&gt;true/ind-&gt;false</span>
 <span class="w">  </span><span class="n">ranges</span><span class="o">::</span><span class="n">for_each</span><span class="p">(</span><span class="n">indices</span><span class="p">(</span><span class="n">t</span><span class="p">),</span><span class="w"> </span><span class="p">[</span><span class="k">this</span><span class="p">](</span><span class="k">auto</span><span class="o">&amp;</span><span class="w"> </span><span class="n">idx</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
-<span class="w">    </span><span class="k">auto</span><span class="w"> </span><span class="n">it</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">external_indices_</span><span class="p">.</span><span class="n">find</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">wstring</span><span class="p">(</span><span class="n">idx</span><span class="p">.</span><span class="n">label</span><span class="p">()));</span>
+<span class="w">    </span><span class="k">auto</span><span class="w"> </span><span class="n">it</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">external_indices_</span><span class="p">.</span><span class="n">find</span><span class="p">(</span><span class="n">idx</span><span class="p">);</span>
 <span class="w">    </span><span class="k">auto</span><span class="w"> </span><span class="n">is_ext</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">it</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="n">external_indices_</span><span class="p">.</span><span class="n">end</span><span class="p">();</span>
 <span class="w">    </span><span class="n">idx</span><span class="p">.</span><span class="n">tag</span><span class="p">().</span><span class="n">assign</span><span class="p">(</span>
 <span class="w">        </span><span class="n">is_ext</span><span class="w"> </span><span class="o">?</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="mi">1</span><span class="p">);</span><span class="w">  </span><span class="c1">// ext -&gt; 0, int -&gt; 1, so ext will come before</span>
@@ -590,7 +590,7 @@
             
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on Jul 8, 2025 6:43:11 PM</div>
+              Last updated on Jul 8, 2025 8:37:38 PM</div>
           </div>
           <div class="right-details">
             <div class="icons">

@@ -258,10 +258,8 @@ Program Listing for File indices.hpp
      return result;
    }
    
-   inline bool suffix_compare(Index const& idx1, Index const& idx2) {
-     auto&& s1 = idx1.suffix();
-     auto&& s2 = idx2.suffix();
-     return (s1 && s2) && s1.value() < s2.value();
+   inline bool ordinal_compare(Index const& idx1, Index const& idx2) {
+     return idx1.ordinal() < idx2.ordinal();
    }
    
    template <typename Rng, typename Idx = ranges::range_value_t<Rng>,

@@ -14,6 +14,7 @@ Nested Types
 ************
 
 - :ref:`exhale_struct_structsequant_1_1_index_1_1_full_label_compare`
+- :ref:`exhale_struct_structsequant_1_1_index_1_1_index_factory_tag`
 - :ref:`exhale_struct_structsequant_1_1_index_1_1_label_compare`
 - :ref:`exhale_struct_structsequant_1_1_index_1_1_type_compare`
 - :ref:`exhale_struct_structsequant_1_1_index_1_1_type_equality`

@@ -523,10 +523,8 @@
 <span class="w">  </span><span class="k">return</span><span class="w"> </span><span class="n">result</span><span class="p">;</span>
 <span class="p">}</span>
 
-<span class="kr">inline</span><span class="w"> </span><span class="kt">bool</span><span class="w"> </span><span class="n">suffix_compare</span><span class="p">(</span><span class="n">Index</span><span class="w"> </span><span class="k">const</span><span class="o">&amp;</span><span class="w"> </span><span class="n">idx1</span><span class="p">,</span><span class="w"> </span><span class="n">Index</span><span class="w"> </span><span class="k">const</span><span class="o">&amp;</span><span class="w"> </span><span class="n">idx2</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
-<span class="w">  </span><span class="k">auto</span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">s1</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">idx1</span><span class="p">.</span><span class="n">suffix</span><span class="p">();</span>
-<span class="w">  </span><span class="k">auto</span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">s2</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">idx2</span><span class="p">.</span><span class="n">suffix</span><span class="p">();</span>
-<span class="w">  </span><span class="k">return</span><span class="w"> </span><span class="p">(</span><span class="n">s1</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">s2</span><span class="p">)</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">s1</span><span class="p">.</span><span class="n">value</span><span class="p">()</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">s2</span><span class="p">.</span><span class="n">value</span><span class="p">();</span>
+<span class="kr">inline</span><span class="w"> </span><span class="kt">bool</span><span class="w"> </span><span class="n">ordinal_compare</span><span class="p">(</span><span class="n">Index</span><span class="w"> </span><span class="k">const</span><span class="o">&amp;</span><span class="w"> </span><span class="n">idx1</span><span class="p">,</span><span class="w"> </span><span class="n">Index</span><span class="w"> </span><span class="k">const</span><span class="o">&amp;</span><span class="w"> </span><span class="n">idx2</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="k">return</span><span class="w"> </span><span class="n">idx1</span><span class="p">.</span><span class="n">ordinal</span><span class="p">()</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">idx2</span><span class="p">.</span><span class="n">ordinal</span><span class="p">();</span>
 <span class="p">}</span>
 
 <span class="k">template</span><span class="w"> </span><span class="o">&lt;</span><span class="k">typename</span><span class="w"> </span><span class="nc">Rng</span><span class="p">,</span><span class="w"> </span><span class="k">typename</span><span class="w"> </span><span class="nc">Idx</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ranges</span><span class="o">::</span><span class="n">range_value_t</span><span class="o">&lt;</span><span class="n">Rng</span><span class="o">&gt;</span><span class="p">,</span>
@@ -640,7 +638,7 @@
             
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on Jul 8, 2025 6:43:11 PM</div>
+              Last updated on Jul 8, 2025 8:37:38 PM</div>
           </div>
           <div class="right-details">
             <div class="icons">

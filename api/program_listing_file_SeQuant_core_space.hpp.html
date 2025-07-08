@@ -279,13 +279,14 @@
 <span class="c1">// Created by Eduard Valeyev on 3/20/18.</span>
 <span class="c1">//</span>
 
-<span class="cp">#ifndef SEQUANT_SPACE_H</span>
-<span class="cp">#define SEQUANT_SPACE_H</span>
+<span class="cp">#ifndef SEQUANT_CORE_SPACE_H</span>
+<span class="cp">#define SEQUANT_CORE_SPACE_H</span>
 
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;SeQuant/core/fwd.hpp&gt;</span>
 
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;SeQuant/core/attr.hpp&gt;</span>
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;SeQuant/core/container.hpp&gt;</span>
+<span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;SeQuant/core/hash.hpp&gt;</span>
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;SeQuant/core/utility/string.hpp&gt;</span>
 <span class="cp">#include</span><span class="w"> </span><span class="cpf">&lt;SeQuant/core/wstring.hpp&gt;</span>
 
@@ -655,25 +656,36 @@
 <span class="kr">inline</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="n">IndexSpace</span><span class="w"> </span><span class="n">IndexSpace</span><span class="o">::</span><span class="n">null</span><span class="p">;</span>
 <span class="kr">inline</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="n">IndexSpace</span><span class="o">::</span><span class="n">Attr</span><span class="w"> </span><span class="n">IndexSpace</span><span class="o">::</span><span class="n">Attr</span><span class="o">::</span><span class="n">null</span><span class="p">;</span>
 
-<span class="kr">inline</span><span class="w"> </span><span class="kt">bool</span><span class="w"> </span><span class="nf">includes</span><span class="p">(</span><span class="n">IndexSpace</span><span class="o">::</span><span class="n">Type</span><span class="w"> </span><span class="n">type1</span><span class="p">,</span><span class="w"> </span><span class="n">IndexSpace</span><span class="o">::</span><span class="n">Type</span><span class="w"> </span><span class="n">type2</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="kr">inline</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="n">hash_value</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">IndexSpace</span><span class="w"> </span><span class="o">&amp;</span><span class="n">space</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="k">auto</span><span class="w"> </span><span class="n">result</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">hash_value</span><span class="p">(</span><span class="k">static_cast</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="kt">int64_t</span><span class="o">&gt;</span><span class="p">(</span><span class="n">space</span><span class="p">.</span><span class="n">attr</span><span class="p">()));</span>
+<span class="w">  </span><span class="n">hash</span><span class="o">::</span><span class="n">combine</span><span class="p">(</span><span class="n">result</span><span class="p">,</span><span class="w"> </span><span class="n">space</span><span class="p">.</span><span class="n">base_key</span><span class="p">());</span>
+<span class="w">  </span><span class="c1">// approximate_size is an attribute that should not affect expression</span>
+<span class="w">  </span><span class="c1">// manipulation, so we do not include it in hash</span>
+<span class="w">  </span><span class="k">return</span><span class="w"> </span><span class="n">result</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="kr">inline</span><span class="w"> </span><span class="kt">bool</span><span class="w"> </span><span class="n">includes</span><span class="p">(</span><span class="n">IndexSpace</span><span class="o">::</span><span class="n">Type</span><span class="w"> </span><span class="n">type1</span><span class="p">,</span><span class="w"> </span><span class="n">IndexSpace</span><span class="o">::</span><span class="n">Type</span><span class="w"> </span><span class="n">type2</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
 <span class="w">  </span><span class="k">return</span><span class="w"> </span><span class="n">type1</span><span class="p">.</span><span class="n">includes</span><span class="p">(</span><span class="n">type2</span><span class="p">);</span>
 <span class="p">}</span>
-<span class="kr">inline</span><span class="w"> </span><span class="kt">bool</span><span class="w"> </span><span class="nf">includes</span><span class="p">(</span><span class="n">IndexSpace</span><span class="o">::</span><span class="n">QuantumNumbers</span><span class="w"> </span><span class="n">qns1</span><span class="p">,</span>
+<span class="kr">inline</span><span class="w"> </span><span class="kt">bool</span><span class="w"> </span><span class="n">includes</span><span class="p">(</span><span class="n">IndexSpace</span><span class="o">::</span><span class="n">QuantumNumbers</span><span class="w"> </span><span class="n">qns1</span><span class="p">,</span>
 <span class="w">                     </span><span class="n">IndexSpace</span><span class="o">::</span><span class="n">QuantumNumbers</span><span class="w"> </span><span class="n">qns2</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
 <span class="w">  </span><span class="k">return</span><span class="w"> </span><span class="n">qns1</span><span class="p">.</span><span class="n">includes</span><span class="p">(</span><span class="n">qns2</span><span class="p">);</span>
 <span class="p">}</span>
-<span class="kr">inline</span><span class="w"> </span><span class="kt">bool</span><span class="w"> </span><span class="nf">includes</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">IndexSpace</span><span class="w"> </span><span class="o">&amp;</span><span class="n">space1</span><span class="p">,</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="n">IndexSpace</span><span class="w"> </span><span class="o">&amp;</span><span class="n">space2</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="kr">inline</span><span class="w"> </span><span class="kt">bool</span><span class="w"> </span><span class="n">includes</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">IndexSpace</span><span class="w"> </span><span class="o">&amp;</span><span class="n">space1</span><span class="p">,</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="n">IndexSpace</span><span class="w"> </span><span class="o">&amp;</span><span class="n">space2</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
 <span class="w">  </span><span class="k">return</span><span class="w"> </span><span class="n">space1</span><span class="p">.</span><span class="n">attr</span><span class="p">().</span><span class="n">includes</span><span class="p">(</span><span class="n">space2</span><span class="p">.</span><span class="n">attr</span><span class="p">());</span>
 <span class="p">}</span>
 
 <span class="p">[[</span><span class="n">nodiscard</span><span class="p">]]</span><span class="w"> </span><span class="kr">inline</span><span class="w"> </span><span class="k">constexpr</span><span class="w"> </span><span class="kt">bool</span><span class="w"> </span><span class="k">operator</span><span class="o">&lt;</span><span class="p">(</span>
 <span class="w">    </span><span class="k">const</span><span class="w"> </span><span class="n">IndexSpace</span><span class="w"> </span><span class="o">&amp;</span><span class="n">space1</span><span class="p">,</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="n">IndexSpace</span><span class="w"> </span><span class="o">&amp;</span><span class="n">space2</span><span class="p">)</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span>
-<span class="w">  </span><span class="k">return</span><span class="w"> </span><span class="n">space1</span><span class="p">.</span><span class="n">attr</span><span class="p">()</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">space2</span><span class="p">.</span><span class="n">attr</span><span class="p">();</span>
+<span class="w">  </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">space1</span><span class="p">.</span><span class="n">attr</span><span class="p">()</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="n">space2</span><span class="p">.</span><span class="n">attr</span><span class="p">())</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">space1</span><span class="p">.</span><span class="n">attr</span><span class="p">()</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">space2</span><span class="p">.</span><span class="n">attr</span><span class="p">();</span>
+<span class="w">  </span><span class="k">else</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="n">space1</span><span class="p">.</span><span class="n">base_key</span><span class="p">()</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">space2</span><span class="p">.</span><span class="n">base_key</span><span class="p">();</span>
 <span class="p">}</span>
 
 <span class="p">[[</span><span class="n">nodiscard</span><span class="p">]]</span><span class="w"> </span><span class="kr">inline</span><span class="w"> </span><span class="k">constexpr</span><span class="w"> </span><span class="kt">bool</span><span class="w"> </span><span class="k">operator</span><span class="o">==</span><span class="p">(</span>
 <span class="w">    </span><span class="n">IndexSpace</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="o">&amp;</span><span class="n">space1</span><span class="p">,</span><span class="w"> </span><span class="n">IndexSpace</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="o">&amp;</span><span class="n">space2</span><span class="p">)</span><span class="w"> </span><span class="k">noexcept</span><span class="w"> </span><span class="p">{</span>
-<span class="w">  </span><span class="k">return</span><span class="w"> </span><span class="n">space1</span><span class="p">.</span><span class="n">type</span><span class="p">()</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">space2</span><span class="p">.</span><span class="n">type</span><span class="p">()</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">space1</span><span class="p">.</span><span class="n">qns</span><span class="p">()</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">space2</span><span class="p">.</span><span class="n">qns</span><span class="p">()</span><span class="w"> </span><span class="o">&amp;&amp;</span>
+<span class="w">  </span><span class="k">return</span><span class="w"> </span><span class="n">space1</span><span class="p">.</span><span class="n">attr</span><span class="p">()</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">space2</span><span class="p">.</span><span class="n">attr</span><span class="p">()</span><span class="w"> </span><span class="o">&amp;&amp;</span>
 <span class="w">         </span><span class="n">space1</span><span class="p">.</span><span class="n">base_key</span><span class="p">()</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">space2</span><span class="p">.</span><span class="n">base_key</span><span class="p">();</span>
 <span class="p">}</span>
 
@@ -684,7 +696,7 @@
 
 <span class="p">}</span><span class="w">  </span><span class="c1">// namespace sequant</span>
 
-<span class="cp">#endif  </span><span class="c1">// SEQUANT_SPACE_H</span>
+<span class="cp">#endif  </span><span class="c1">// SEQUANT_CORE_SPACE_H</span>
 </pre></div>
 </div>
 </section>
@@ -706,7 +718,7 @@
             
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on Jul 8, 2025 6:43:11 PM</div>
+              Last updated on Jul 8, 2025 8:37:38 PM</div>
           </div>
           <div class="right-details">
             <div class="icons">

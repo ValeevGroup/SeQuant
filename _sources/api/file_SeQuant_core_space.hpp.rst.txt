@@ -36,6 +36,8 @@ Includes
 
 - ``SeQuant/core/fwd.hpp`` (:ref:`file_SeQuant_core_fwd.hpp`)
 
+- ``SeQuant/core/hash.hpp`` (:ref:`file_SeQuant_core_hash.hpp`)
+
 - ``SeQuant/core/utility/string.hpp`` (:ref:`file_SeQuant_core_utility_string.hpp`)
 
 - ``SeQuant/core/wstring.hpp`` (:ref:`file_SeQuant_core_wstring.hpp`)
@@ -104,6 +106,8 @@ Classes
 Functions
 ---------
 
+
+- :ref:`exhale_function_namespacesequant_1a6f0a07cbff281a2ea6e5969fc260f11c`
 
 - :ref:`exhale_function_namespacesequant_1a3e63e86bb1509bbbd71fe2fc6cf71407`
 

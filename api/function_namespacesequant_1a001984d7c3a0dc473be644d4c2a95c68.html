@@ -6,7 +6,7 @@
 <link rel="index" title="Index" href="../genindex.html" /><link rel="search" title="Search" href="../search.html" />
 
     <!-- Generated with Sphinx 7.4.7 and Furo 2024.08.06 -->
-        <title>Template Function sequant::to_wstring(T&amp;&amp;) - SeQuant Documentation</title>
+        <title>Function sequant::to_wstring(meta::integral auto) - SeQuant Documentation</title>
       <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=8f2a1f02" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=354aac6f" />
     <link rel="stylesheet" type="text/css" href="../_static/graphviz.css?v=fd3f3429" />
@@ -253,7 +253,7 @@
         </a>
         <div class="content-icon-container">
           <div class="view-this-page">
-  <a class="muted-link" href="../_sources/api/function_namespacesequant_1a7de0165d6211e8d301f66cc4e83db9fa.rst.txt" title="View this page">
+  <a class="muted-link" href="../_sources/api/function_namespacesequant_1a001984d7c3a0dc473be644d4c2a95c68.rst.txt" title="View this page">
     <svg><use href="#svg-eye"></use></svg>
     <span class="visually-hidden">View this page</span>
   </a>
@@ -272,28 +272,19 @@
           </label>
         </div>
         <article role="main" id="furo-main-content">
-          <section id="template-function-sequant-to-wstring-t">
-<span id="exhale-function-namespacesequant-1a7de0165d6211e8d301f66cc4e83db9fa"></span><h1>Template Function sequant::to_wstring(T&amp;&amp;)<a class="headerlink" href="#template-function-sequant-to-wstring-t" title="Link to this heading">¶</a></h1>
+          <section id="function-sequant-to-wstring-meta-integral-auto">
+<span id="exhale-function-namespacesequant-1a001984d7c3a0dc473be644d4c2a95c68"></span><h1>Function sequant::to_wstring(meta::integral auto)<a class="headerlink" href="#function-sequant-to-wstring-meta-integral-auto" title="Link to this heading">¶</a></h1>
 <ul class="simple">
 <li><p>Defined in <a class="reference internal" href="file_SeQuant_core_wstring.hpp.html#file-sequant-core-wstring-hpp"><span class="std std-ref">File wstring.hpp</span></a></p></li>
 </ul>
 <section id="function-documentation">
 <h2>Function Documentation<a class="headerlink" href="#function-documentation" title="Link to this heading">¶</a></h2>
-<div class="admonition warning">
-<p class="admonition-title">Warning</p>
-<p>doxygenfunction: Unable to resolve function “sequant::to_wstring” with arguments (T&amp;&amp;) in doxygen xml output for project “SeQuant” from directory: /home/runner/work/SeQuant/SeQuant/build/doc/.doxygen/xml.
-Potential matches:
-</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>- std::wstring to_wstring(Symmetry sym)
-- std::wstring to_wstring(const rational &amp;i)
-- std::wstring to_wstring(std::wstring &amp;&amp;str_utf8)
-- template&lt;typename Backend&gt; std::wstring to_wstring(const boost::multiprecision::number&lt;Backend&gt; &amp;i)
-- template&lt;typename S, typename = meta::EnableIfAllBasicStringConvertible&lt;S&gt;&gt; std::wstring to_wstring(S &amp;&amp;str_utf8)
-- template&lt;typename T&gt; std::enable_if_t&lt;std::is_floating_point_v&lt;std::decay_t&lt;T&gt;&gt;, std::wstring&gt; to_wstring(T &amp;&amp;t)
-- template&lt;typename T&gt; std::enable_if_t&lt;std::is_integral_v&lt;std::decay_t&lt;T&gt;&gt; &amp;&amp; !meta::is_char_v&lt;std::remove_reference_t&lt;T&gt;&gt;, std::wstring&gt; to_wstring(T &amp;&amp;t)
-</pre></div>
-</div>
-</div>
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv4N7sequant10to_wstringEN4meta8integralE">
+<span id="_CPPv3N7sequant10to_wstringEN4meta8integralE"></span><span id="_CPPv2N7sequant10to_wstringEN4meta8integralE"></span><span id="sequant::to_wstring__meta::integral"></span><span class="target" id="namespacesequant_1a001984d7c3a0dc473be644d4c2a95c68"></span><span class="n"><span class="pre">std</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">wstring</span></span><span class="w"> </span><span class="sig-prename descclassname"><span class="n"><span class="pre">sequant</span></span><span class="p"><span class="pre">::</span></span></span><span class="sig-name descname"><span class="n"><span class="pre">to_wstring</span></span></span><span class="sig-paren">(</span><span class="n"><span class="pre">meta</span></span><span class="p"><span class="pre">::</span></span><span class="n"><span class="pre">integral</span></span><span class="w"> </span><span class="k"><span class="pre">auto</span></span><span class="w"> </span><span class="n sig-param"><span class="pre">t</span></span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N7sequant10to_wstringEN4meta8integralE" title="Link to this definition">¶</a><br /></dt>
+<dd><p>Converts integral type to its std::wstring representation. </p>
+</dd></dl>
+
 </section>
 </section>
 
@@ -314,7 +305,7 @@ Potential matches:
             
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on Jul 8, 2025 6:43:11 PM</div>
+              Last updated on Jul 8, 2025 8:37:38 PM</div>
           </div>
           <div class="right-details">
             <div class="icons">
@@ -338,8 +329,11 @@ Potential matches:
         <div class="toc-tree-container">
           <div class="toc-tree">
             <ul>
-<li><a class="reference internal" href="#">Template Function sequant::to_wstring(T&amp;&amp;)</a><ul>
-<li><a class="reference internal" href="#function-documentation">Function Documentation</a></li>
+<li><a class="reference internal" href="#">Function sequant::to_wstring(meta::integral auto)</a><ul>
+<li><a class="reference internal" href="#function-documentation">Function Documentation</a><ul>
+<li><a class="reference internal" href="#_CPPv4N7sequant10to_wstringEN4meta8integralE"><code class="docutils literal notranslate"><span class="pre">to_wstring()</span></code></a></li>
+</ul>
+</li>
 </ul>
 </li>
 </ul>

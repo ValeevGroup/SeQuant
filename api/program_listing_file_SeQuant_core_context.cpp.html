@@ -292,6 +292,8 @@
 <span class="w">           </span><span class="n">ctx1</span><span class="p">.</span><span class="n">spbasis</span><span class="p">()</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">ctx2</span><span class="p">.</span><span class="n">spbasis</span><span class="p">()</span><span class="w"> </span><span class="o">&amp;&amp;</span>
 <span class="w">           </span><span class="n">ctx1</span><span class="p">.</span><span class="n">first_dummy_index_ordinal</span><span class="p">()</span><span class="w"> </span><span class="o">==</span>
 <span class="w">               </span><span class="n">ctx2</span><span class="p">.</span><span class="n">first_dummy_index_ordinal</span><span class="p">()</span><span class="w"> </span><span class="o">&amp;&amp;</span>
+<span class="w">           </span><span class="n">ctx1</span><span class="p">.</span><span class="n">index_space_registry</span><span class="p">()</span><span class="o">-&gt;</span><span class="n">spaces</span><span class="p">()</span><span class="w"> </span><span class="o">==</span>
+<span class="w">               </span><span class="n">ctx2</span><span class="p">.</span><span class="n">index_space_registry</span><span class="p">()</span><span class="o">-&gt;</span><span class="n">spaces</span><span class="p">()</span><span class="w"> </span><span class="o">&amp;&amp;</span>
 <span class="w">           </span><span class="o">*</span><span class="n">ctx1</span><span class="p">.</span><span class="n">index_space_registry</span><span class="p">()</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="o">*</span><span class="n">ctx2</span><span class="p">.</span><span class="n">index_space_registry</span><span class="p">();</span>
 <span class="p">}</span>
 
@@ -354,6 +356,14 @@
 <span class="w">      </span><span class="n">container</span><span class="o">::</span><span class="n">map</span><span class="o">&lt;</span><span class="n">Statistics</span><span class="p">,</span><span class="w"> </span><span class="n">Context</span><span class="o">&gt;</span><span class="p">{{</span><span class="n">Statistics</span><span class="o">::</span><span class="n">Arbitrary</span><span class="p">,</span><span class="w"> </span><span class="n">ctx</span><span class="p">}});</span>
 <span class="p">}</span>
 
+<span class="p">[[</span><span class="n">nodiscard</span><span class="p">]]</span><span class="w"> </span><span class="n">detail</span><span class="o">::</span><span class="n">ImplicitContextResetter</span><span class="o">&lt;</span>
+<span class="w">    </span><span class="n">container</span><span class="o">::</span><span class="n">map</span><span class="o">&lt;</span><span class="n">Statistics</span><span class="p">,</span><span class="w"> </span><span class="n">Context</span><span class="o">&gt;&gt;</span>
+<span class="n">set_scoped_default_context</span><span class="p">(</span><span class="n">Context</span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">ctx</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="k">return</span><span class="w"> </span><span class="n">detail</span><span class="o">::</span><span class="n">set_scoped_implicit_context</span><span class="p">(</span>
+<span class="w">      </span><span class="n">container</span><span class="o">::</span><span class="n">map</span><span class="o">&lt;</span><span class="n">Statistics</span><span class="p">,</span><span class="w"> </span><span class="n">Context</span><span class="o">&gt;</span><span class="p">{</span>
+<span class="w">          </span><span class="p">{</span><span class="n">Statistics</span><span class="o">::</span><span class="n">Arbitrary</span><span class="p">,</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">move</span><span class="p">(</span><span class="n">ctx</span><span class="p">)}});</span>
+<span class="p">}</span>
+
 <span class="n">Context</span><span class="o">::</span><span class="n">Context</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">shared_ptr</span><span class="o">&lt;</span><span class="n">IndexSpaceRegistry</span><span class="o">&gt;</span><span class="w"> </span><span class="n">isr</span><span class="p">,</span><span class="w"> </span><span class="n">Vacuum</span><span class="w"> </span><span class="n">vac</span><span class="p">,</span>
 <span class="w">                 </span><span class="n">IndexSpaceMetric</span><span class="w"> </span><span class="n">m</span><span class="p">,</span><span class="w"> </span><span class="n">BraKetSymmetry</span><span class="w"> </span><span class="n">bks</span><span class="p">,</span><span class="w"> </span><span class="n">SPBasis</span><span class="w"> </span><span class="n">spb</span><span class="p">,</span>
 <span class="w">                 </span><span class="n">std</span><span class="o">::</span><span class="kt">size_t</span><span class="w"> </span><span class="n">fdio</span><span class="p">)</span>
@@ -381,6 +391,13 @@
 <span class="w">      </span><span class="n">braket_symmetry_</span><span class="p">(</span><span class="n">bks</span><span class="p">),</span>
 <span class="w">      </span><span class="n">spbasis_</span><span class="p">(</span><span class="n">spb</span><span class="p">),</span>
 <span class="w">      </span><span class="n">first_dummy_index_ordinal_</span><span class="p">(</span><span class="n">fdio</span><span class="p">)</span><span class="w"> </span><span class="p">{}</span>
+
+<span class="n">Context</span><span class="w"> </span><span class="n">Context</span><span class="o">::</span><span class="n">clone</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="n">Context</span><span class="w"> </span><span class="nf">ctx</span><span class="p">(</span><span class="o">*</span><span class="k">this</span><span class="p">);</span>
+<span class="w">  </span><span class="n">ctx</span><span class="p">.</span><span class="n">idx_space_reg_</span><span class="w"> </span><span class="o">=</span>
+<span class="w">      </span><span class="n">std</span><span class="o">::</span><span class="n">make_shared</span><span class="o">&lt;</span><span class="n">IndexSpaceRegistry</span><span class="o">&gt;</span><span class="p">(</span><span class="n">idx_space_reg_</span><span class="o">-&gt;</span><span class="n">clone</span><span class="p">());</span>
+<span class="w">  </span><span class="k">return</span><span class="w"> </span><span class="n">ctx</span><span class="p">;</span>
+<span class="p">}</span>
 
 <span class="n">Vacuum</span><span class="w"> </span><span class="n">Context</span><span class="o">::</span><span class="n">vacuum</span><span class="p">()</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="n">vacuum_</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
 
@@ -473,7 +490,7 @@
             
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on Jul 8, 2025 6:43:11 PM</div>
+              Last updated on Jul 8, 2025 8:37:38 PM</div>
           </div>
           <div class="right-details">
             <div class="icons">

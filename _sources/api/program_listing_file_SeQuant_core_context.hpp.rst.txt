@@ -54,8 +54,13 @@ Program Listing for File context.hpp
    
      ~Context() = default;
    
-     Context(const Context&) = default;
-     Context& operator=(const Context&) = default;
+     Context(const Context& ctx) = default;
+   
+     Context& operator=(const Context& ctx) = default;
+   
+     Context clone() const;
+   
+     Context(Context&&) = default;
    
      Vacuum vacuum() const;
      std::shared_ptr<const IndexSpaceRegistry> index_space_registry() const;
@@ -103,6 +108,10 @@ Program Listing for File context.hpp
    [[nodiscard]] detail::ImplicitContextResetter<
        container::map<Statistics, Context>>
    set_scoped_default_context(const Context& ctx);
+   
+   [[nodiscard]] detail::ImplicitContextResetter<
+       container::map<Statistics, Context>>
+   set_scoped_default_context(Context&& ctx);
    
    
    
