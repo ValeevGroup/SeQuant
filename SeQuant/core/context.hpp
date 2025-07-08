@@ -203,6 +203,13 @@ set_scoped_default_context(const container::map<Statistics, Context>& ctx);
     container::map<Statistics, Context>>
 set_scoped_default_context(const Context& ctx);
 
+/// @brief changes default context for arbitrary statistics
+/// @note equivalent to `set_scoped_default_context({{Statistics::Arbitrary,
+/// std::move(ctx)}})`
+[[nodiscard]] detail::ImplicitContextResetter<
+    container::map<Statistics, Context>>
+set_scoped_default_context(Context&& ctx);
+
 ///@}
 
 /// \name particle, hole and complete space accessors

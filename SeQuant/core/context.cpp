@@ -78,6 +78,14 @@ set_scoped_default_context(const Context& ctx) {
       container::map<Statistics, Context>{{Statistics::Arbitrary, ctx}});
 }
 
+[[nodiscard]] detail::ImplicitContextResetter<
+    container::map<Statistics, Context>>
+set_scoped_default_context(Context&& ctx) {
+  return detail::set_scoped_implicit_context(
+      container::map<Statistics, Context>{
+          {Statistics::Arbitrary, std::move(ctx)}});
+}
+
 Context::Context(std::shared_ptr<IndexSpaceRegistry> isr, Vacuum vac,
                  IndexSpaceMetric m, BraKetSymmetry bks, SPBasis spb,
                  std::size_t fdio)
