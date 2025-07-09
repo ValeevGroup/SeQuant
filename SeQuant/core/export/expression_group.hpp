@@ -46,18 +46,18 @@ class ExpressionGroup {
             container_type(std::ranges::begin(rng), std::ranges::end(rng)),
             std::move(name)) {}
 
-  bool is_named() const { return m_name.has_value(); }
+  [[nodiscard]] bool is_named() const { return m_name.has_value(); }
 
-  const std::string name() const { return m_name.value(); }
+  [[nodiscard]] const std::string &name() const { return m_name.value(); }
 
-  iterator begin() { return m_expressions.begin(); }
-  iterator end() { return m_expressions.end(); }
-  const_iterator begin() const { return m_expressions.begin(); }
-  const_iterator end() const { return m_expressions.end(); }
-  const_iterator cbegin() const { return m_expressions.cbegin(); }
-  const_iterator cend() const { return m_expressions.cend(); }
+  [[nodiscard]] iterator begin() { return m_expressions.begin(); }
+  [[nodiscard]] iterator end() { return m_expressions.end(); }
+  [[nodiscard]] const_iterator begin() const { return m_expressions.begin(); }
+  [[nodiscard]] const_iterator end() const { return m_expressions.end(); }
+  [[nodiscard]] const_iterator cbegin() const { return m_expressions.cbegin(); }
+  [[nodiscard]] const_iterator cend() const { return m_expressions.cend(); }
 
-  std::size_t size() const { return m_expressions.size(); }
+  [[nodiscard]] std::size_t size() const { return m_expressions.size(); }
 
   void add(ExportNode<T> expr) { m_expressions.emplace_back(std::move(expr)); }
 

@@ -12,8 +12,13 @@
 
 namespace sequant {
 
+/// Context for the TextGenerator
 struct TextGeneratorContext : ExportContext {};
 
+/// A dummy generator producing a plain text representation of the code. Mostly
+/// intended for having a convenient backend for tests available but it is also
+/// very useful for debugging or other cases in which a human-readable version
+/// of the code is required.
 template <typename Context = TextGeneratorContext>
 class TextGenerator : public Generator<Context> {
  public:

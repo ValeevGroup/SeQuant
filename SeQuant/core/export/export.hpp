@@ -29,11 +29,19 @@
 namespace sequant {
 
 namespace detail {
+
+/// Visitor objects that will steer code generation while visiting a given
+/// expression/evaluation tree by triggering the corresponding callbacks in the
+/// provided Generator objects.
 template <typename NodeData, typename Context>
 class GenerationVisitor {
  public:
   using NodeID = std::decay_t<decltype(std::declval<ExportExpr>().id())>;
 
+  /// @param generator The Generator to use
+  /// @param ctx The Context to use
+  /// @param scalarFactors A map of node IDs to a product of scalar factors that
+  /// need to be multiplied with the result before storing the node
   GenerationVisitor(Generator<Context> &generator, Context &ctx,
                     const std::unordered_map<NodeID, ExprPtr> &scalarFactors)
       : m_generator(generator), m_ctx(ctx), m_scalarFactors(scalarFactors) {}
@@ -265,6 +273,7 @@ class GenerationVisitor {
   std::optional<NodeID> m_rootID;
 };
 
+/// A collection of various meta-data that the preprocessing stage will collect
 struct PreprocessResult {
   std::unordered_map<std::size_t, ExprPtr> scalarFactors;
   std::set<Index> indices;
@@ -275,6 +284,11 @@ struct PreprocessResult {
   std::map<Variable, std::size_t> variableReferences;
 };
 
+/// Removes explicitly represented scalar factors from the provided tree and
+/// instead stores them separately. This yields a much more compact tree and
+/// makes subsequent visiting easier as scalar factors should simply be
+/// multiplied with the end result rather than creating intermediates
+/// themselves.
 template <typename T>
 bool prune_scalar_factor(ExportNode<T> &node, PreprocessResult &result) {
   if (!node.leaf() || !node->is_scalar()) {
@@ -334,9 +348,14 @@ bool prune_scalar_factor(ExportNode<T> &node, PreprocessResult &result) {
   return true;
 }
 
+/// Renames the given Tensor to a name that doesn't collide with any currently
+/// loaded object. This may reuse previously used/declares tensors.
 bool rename(Tensor &tensor, PreprocessResult &result);
+/// Renames the given Variable to a name that doesn't collide with any currently
+/// loaded object. This may reuse previously used/declares variables.
 bool rename(Variable &variable, PreprocessResult &result);
 
+/// Preprocesses the given expression
 template <typename ExprType, typename Node>
 void preprocess(ExprType expr, ExportContext &ctx, Node &node,
                 PreprocessResult &result) {
@@ -434,6 +453,8 @@ void preprocess(ExprType expr, ExportContext &ctx, Node &node,
   }
 }
 
+/// @returns Whether the given node may be pruned from its parent in order to be
+/// represented implicitly rather than by explicit occurrance in the tree
 template <typename T>
 bool may_prune(const EvalNode<T> &tree) {
   // Tree must represent a product and must itself not be a leaf (pruning that
@@ -620,6 +641,8 @@ class PreprocessVisitor {
   ExportContext &m_ctx;
 };
 
+/// Uses the PreprocessVisitor to perform preprocessing and, if desired, also
+/// logs the tree before and after preprocessing
 template <typename T>
 void preprocess_and_maybe_log(ExportNode<T> &tree, PreprocessResult &result,
                               ExportContext &ctx) {
@@ -647,6 +670,8 @@ void preprocess_and_maybe_log(ExportNode<T> &tree, PreprocessResult &result,
   }
 }
 
+/// Exports the given expression tree. Preprocessing is assumed to have
+/// happened before
 template <typename T, typename Context>
 void export_expression(ExportNode<T> &expression, Generator<Context> &generator,
                        Context &ctx, PreprocessResult &pp_result) {
@@ -667,6 +692,7 @@ void export_expression(ExportNode<T> &expression, Generator<Context> &generator,
   ctx.clear_current_expression_id();
 }
 
+/// Declare all objects in the provided range
 template <typename Expr, typename Range, typename Context>
   requires std::ranges::range<Range>
 void declare_all(const Range &range, Generator<Context> &generator,
@@ -699,6 +725,10 @@ void declare_all(const Range &range, Generator<Context> &generator,
   }
 }
 
+/// Combines the known T from the range of
+/// PreprocessResults and clears the respective fields of the individual result
+/// objects.
+/// @returns The combined set of known objects
 template <typename T, typename Compare = std::less<T>, typename Range>
   requires std::ranges::range<Range> &&
            std::is_same_v<std::ranges::range_value_t<Range>, PreprocessResult>
@@ -735,6 +765,7 @@ auto combine_and_clear_pp_results(Range &&range) {
   return combined;
 }
 
+/// Handle all declarations with the provided scope
 template <DeclarationScope scope, typename Range, typename Context>
   requires std::ranges::range<Range> && (!std::is_const_v<Range>)
 void handle_declarations(Range &&range, Generator<Context> &generator,
@@ -766,6 +797,9 @@ void handle_declarations(Range &&range, Generator<Context> &generator,
 
 }  // namespace detail
 
+/// Triggers export of the provided ExpressionGroup with the provided Generator
+/// @sa ExpressionGroup
+/// @sa Generator
 template <typename T = ExportExpr, typename Context>
 void export_group(ExpressionGroup<T> group, Generator<Context> &generator,
                   Context ctx) {
@@ -773,6 +807,9 @@ void export_group(ExpressionGroup<T> group, Generator<Context> &generator,
                             std::move(ctx));
 }
 
+/// Triggers export of the provided ExportNode with the provided Generator
+/// @sa ExportNode
+/// @sa Generator
 template <typename T = ExportExpr, typename Context>
 void export_expression(ExportNode<T> expression, Generator<Context> &generator,
                        Context ctx) {
@@ -781,6 +818,10 @@ void export_expression(ExportNode<T> expression, Generator<Context> &generator,
       std::move(ctx));
 }
 
+/// Triggers export of the provided range of expression groups with the provided
+/// Generator
+/// @sa ExpressionGroup
+/// @sa Generator
 template <typename T = ExportExpr, typename Context, typename Range>
   requires std::ranges::range<std::remove_cvref_t<Range>> &&
            std::is_same_v<std::ranges::range_value_t<Range>,
@@ -876,11 +917,15 @@ void export_groups(Range groups, Generator<Context> &generator, Context ctx) {
   generator.end_export(ctx);
 }
 
+/// @param expr The expression to transform
+/// @returns The corresponding ExportNode tree
 template <typename NodeData = ExportExpr>
 ExportNode<NodeData> to_export_tree(const ExprPtr &expr) {
   return binarize<NodeData>(expr);
 }
 
+/// @param expr The expression to transform
+/// @returns The corresponding ExportNode tree
 template <typename NodeData = ExportExpr>
 ExportNode<NodeData> to_export_tree(const ResultExpr &expr) {
   return binarize<NodeData>(expr);

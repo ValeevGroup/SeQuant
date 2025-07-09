@@ -9,8 +9,11 @@
 namespace sequant {
 
 namespace detail {
+/// @returns The ID for the next export expression. The returned IDs are
+/// guaranteed to be unique
+/// @note This function is reentrant
 std::size_t next_export_expr_id();
-}
+}  // namespace detail
 
 /// Dedicated Node data class to be used for exporting expressions (i.e. code
 /// generation)

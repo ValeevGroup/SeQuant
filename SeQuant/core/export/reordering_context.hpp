@@ -7,6 +7,7 @@ namespace sequant {
 
 class Tensor;
 
+/// Different ways of laying out a multidimensional tensor/array in memory
 enum class MemoryLayout {
   RowMajor,
   ColumnMajor,

@@ -14,7 +14,7 @@
 
 namespace sequant {
 
-/// Context class for the @see JuliaTensorOperationsGenerator generator
+/// Context class for the JuliaTensorOperationsGenerator
 class JuliaTensorOperationsGeneratorContext : public ExportContext {
  public:
   using TagMap = std::map<IndexSpace, std::string>;
@@ -38,8 +38,9 @@ class JuliaTensorOperationsGeneratorContext : public ExportContext {
   DimMap m_index_dims;
 };
 
-/// Code generator for the Julia language, which will make use of the
-/// TensorOperations.jl package for tensor contractions
+/// Generator for producing Julia code using the ITensor framework
+/// - https://julialang.org/
+/// - https://jutho.github.io/TensorOperations.jl
 template <typename Context = JuliaTensorOperationsGeneratorContext>
 class JuliaTensorOperationsGenerator : public Generator<Context> {
  public:

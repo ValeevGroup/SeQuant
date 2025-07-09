@@ -20,6 +20,7 @@
 
 namespace sequant {
 
+/// Context for the ItfGenerator
 class ItfContext : public ReorderingContext {
  public:
   using TagMap = container::map<IndexSpace, std::string>;
@@ -33,34 +34,54 @@ class ItfContext : public ReorderingContext {
                           assume_strict_column_permutability{}){};
   ~ItfContext() = default;
 
+  /// @returns The ITF representation of an index in the given space and with
+  /// the given ordinal
   virtual std::string index_name(const IndexSpace &space,
                                  std::size_t ordinal) const;
 
+  /// @returns The ITF representation of the given index space
   virtual std::string get_name(const IndexSpace &space) const;
 
+  /// @returns The tag corresponding to the given index space. Tags are appended
+  /// to tensor names in order to make different blocks of the same tensor
+  /// distinguishable
   virtual std::string get_tag(const IndexSpace &space) const;
 
+  /// @returns The name under which the given tensor shall be imported. If none
+  /// is obtained, the tensor will not be imported.
   virtual std::optional<std::string> import_name(const Tensor &tensor) const;
+  /// @returns The name under which the given variable shall be imported. If
+  /// none is obtained, the variable will not be imported.
   virtual std::optional<std::string> import_name(
       const Variable &variable) const;
 
+  /// Sets the name of the given index space
   virtual void set_name(const IndexSpace &space, std::string name);
 
+  /// Sets the name for the given index space
   virtual void set_tag(const IndexSpace &space, std::string tag);
 
+  /// Sets the name under which the given tensor is to be exported
   virtual void set_import_name(const Tensor &tensor, std::string name);
+  /// Sets the name under which the given variable is to be exported
   virtual void set_import_name(const Variable &variable, std::string name);
 
+  /// @returns The label of the 2-electron integral tensor
   virtual const std::wstring two_electron_integral_label() const {
     return m_integral_label;
   }
+  /// Sets the label of the 2-electron integral tensor
   virtual void set_two_electron_integral_label(std::wstring label) {
     m_integral_label = std::move(label);
   }
 
   bool rewrite(Tensor &tensor) const override;
 
+  /// @returns The offset index ordinals are using. All index ordinals are
+  /// expected to be >= this value
   virtual std::size_t index_id_offset() const;
+  /// Sets the offset index ordinals are using. All index ordinals are expected
+  /// to be >= this value
   virtual void set_index_id_offset(std::size_t offset);
 
  private:
@@ -76,6 +97,10 @@ class ItfContext : public ReorderingContext {
   bool is_exceptional_J(std::span<Index> bra, std::span<Index> ket) const;
 };
 
+/// Generator for ITF. ITF (Integrated Tensor Framework) is a domain-specific
+/// language for tensor contractions used by parts of the Molpro quantum
+/// chemistry program.
+/// WIREs Comput Mol Sci 2012, 2: 242–253 doi: 10.1002/wcms.82
 template <typename Context = ItfContext>
 class ItfGenerator : public Generator<Context> {
  public:

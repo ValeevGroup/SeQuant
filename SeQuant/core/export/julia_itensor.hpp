@@ -8,6 +8,7 @@
 
 namespace sequant {
 
+/// Context class for the JuliaITensorGenerator
 class JuliaITensorGeneratorContext
     : public JuliaTensorOperationsGeneratorContext {
  public:
@@ -15,6 +16,9 @@ class JuliaITensorGeneratorContext
       JuliaTensorOperationsGeneratorContext;
 };
 
+/// Generator for producing Julia code using the ITensor framework
+/// - https://julialang.org/
+/// - https://itensor.github.io/ITensors.jl
 template <typename Context = JuliaITensorGeneratorContext>
 class JuliaITensorGenerator : public JuliaTensorOperationsGenerator<Context> {
  private:

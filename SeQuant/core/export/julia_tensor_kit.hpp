@@ -8,7 +8,7 @@
 
 namespace sequant {
 
-// Context class for the @see JuliaTensorKitGenerator
+// Context class for the JuliaTensorKitGenerator
 class JuliaTensorKitGeneratorContext
     : public JuliaTensorOperationsGeneratorContext {
  public:
@@ -16,8 +16,9 @@ class JuliaTensorKitGeneratorContext
       JuliaTensorOperationsGeneratorContext;
 };
 
-/// Code generator for the Julia programming language, which will make use of
-/// the TensorKit.jl package for tensor contractions
+/// Generator for producing Julia code using the ITensor framework
+/// - https://julialang.org/
+/// - https://jutho.github.io/TensorKit.jl
 template <typename Context = JuliaTensorKitGeneratorContext>
 class JuliaTensorKitGenerator : public JuliaTensorOperationsGenerator<Context> {
  private:

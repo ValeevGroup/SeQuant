@@ -17,6 +17,9 @@
 
 namespace sequant {
 
+/// Wrapper for other Generators that will perform optimizations on received
+/// actions before passing them along to the wrapped generator for actual code
+/// generation.
 template <typename MainGenerator, typename MainContext = MainGenerator::Context>
 class GenerationOptimizer final : public Generator<MainContext> {
  private:
@@ -55,6 +58,8 @@ class GenerationOptimizer final : public Generator<MainContext> {
 
     virtual OperationType type() const = 0;
 
+    /// @returns Whether this operation cancels the provided operation. That is,
+    /// executing them both in sequence will result in a no-op
     bool cancels(const AbstractOperation &other) const {
       if ((type() == OperationType::Load &&
            other.type() == OperationType::Unload) ||
@@ -66,6 +71,8 @@ class GenerationOptimizer final : public Generator<MainContext> {
       return false;
     }
 
+    /// @returns Whether this operation forms a semantic pair with the provided
+    /// one
     bool pairs_with(const AbstractOperation &operation) const {
       if (!object_equals(operation.m_object)) {
         return false;
