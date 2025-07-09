@@ -564,6 +564,11 @@ ExprPtr TensorNetworkV2::canonicalize(
   // initialize named_indices by default to all external indices
   const auto &named_indices =
       named_indices_ptr == nullptr ? this->ext_indices() : *named_indices_ptr;
+  if (Logger::instance().canonicalize) {
+    std::wcout << "named_indices = ";
+    ranges::for_each(named_indices,
+                     [](auto &&i) { std::wcout << i.full_label() << L" "; });
+  }
 
   if (!fast) {
     // The graph-based canonization is required in call cases in which there are
