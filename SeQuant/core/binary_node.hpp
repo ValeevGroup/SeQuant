@@ -92,26 +92,26 @@ struct VisitAll {};
 
 template <typename Visitor, typename Node>
 bool invoke_tree_visitor(Visitor&& f, Node&& node, TreeTraversal context) {
-  if constexpr (std::is_invocable_v<decltype(f), decltype(node),
-                                    decltype(context)>) {
-    using result_type =
-        std::invoke_result_t<decltype(f), decltype(node), decltype(context)>;
+  if constexpr (std::is_invocable_v<Visitor, Node, TreeTraversal>) {
+    using result_type = std::invoke_result_t<Visitor, Node, TreeTraversal>;
     if constexpr (std::is_same_v<result_type, void>) {
-      f(node, context);
+      std::forward<Visitor>(f)(std::forward<Node>(node), context);
       return true;
     } else {
-      return static_cast<bool>(f(node, context));
+      return static_cast<bool>(
+          std::forward<Visitor>(f)(std::forward<Node>(node), context));
     }
   } else {
-    static_assert(std::is_invocable_v<decltype(f), decltype(node)>,
+    static_assert(std::is_invocable_v<Visitor, Node>,
                   "Visitor must be a callable that takes a FullBinaryNode<T> "
                   "and optionally a TreeTraversal argument");
-    using result_type = std::invoke_result_t<decltype(f), decltype(node)>;
+    using result_type = std::invoke_result_t<Visitor, Node>;
     if constexpr (std::is_same_v<result_type, void>) {
-      f(node);
+      std::forward<Visitor>(f)(std::forward<Node>(node));
       return true;
     } else {
-      return f(node);
+      return static_cast<bool>(
+          std::forward<Visitor>(f)(std::forward<Node>(node)));
     }
   }
 };
