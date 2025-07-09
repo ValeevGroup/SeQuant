@@ -14,6 +14,7 @@ Nested Types
 ************
 
 - :ref:`exhale_struct_structsequant_1_1_index_space_1_1_attr`
+- :ref:`exhale_struct_structsequant_1_1_index_space_1_1_attr_compare`
 - :ref:`exhale_struct_structsequant_1_1_index_space_1_1_key_compare`
 - :ref:`exhale_struct_structsequant_1_1_index_space_1_1bad__key`
 

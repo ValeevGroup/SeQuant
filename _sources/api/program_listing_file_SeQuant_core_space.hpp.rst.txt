@@ -43,6 +43,8 @@ Program Listing for File space.hpp
    
      const static TypeAttr null;
    
+     const static TypeAttr reserved;
+   
    
      explicit constexpr TypeAttr(bitset_t bitset) noexcept : bitset(bitset) {
        assert((this->bitset & bitset::reserved) == bitset::null);
@@ -112,8 +114,6 @@ Program Listing for File space.hpp
    
      friend class Index;
    
-     const static TypeAttr reserved;
-   
      static TypeAttr make_reserved() {
        TypeAttr result;
        result.bitset = 0x80000000;
@@ -129,6 +129,8 @@ Program Listing for File space.hpp
      constexpr QuantumNumbersAttr() noexcept = default;
    
      const static QuantumNumbersAttr null;
+   
+     const static QuantumNumbersAttr reserved;
    
    
      explicit constexpr QuantumNumbersAttr(bitset_t bitset) noexcept
@@ -204,8 +206,6 @@ Program Listing for File space.hpp
    
      friend class Index;
    
-     const static QuantumNumbersAttr reserved;
-   
      static QuantumNumbersAttr make_reserved() {
        QuantumNumbersAttr result;
        result.bitset = bitset::reserved;
@@ -232,6 +232,8 @@ Program Listing for File space.hpp
        Attr &operator=(Attr &&) = default;
    
        const static Attr null;
+   
+       const static Attr reserved;
    
        constexpr const TypeAttr &type() const {
          return static_cast<const TypeAttr &>(*this);
@@ -282,6 +284,11 @@ Program Listing for File space.hpp
            return this->qns() < other.qns();
          }
        }
+   
+       static Attr make_reserved() {
+         Attr result{Type::reserved, QuantumNumbers::reserved};
+         return result;
+       }
      };  // struct Attr
    
      using Type = TypeAttr;
@@ -320,6 +327,19 @@ Program Listing for File space.hpp
        }
        bool operator()(const std::wstring_view &a, const std::wstring &b) const {
          return a < b;
+       }
+     };
+   
+     struct AttrCompare {
+       using is_transparent = void;
+       bool operator()(const IndexSpace &a, const IndexSpace &b) const {
+         return a.attr() < b.attr();
+       }
+       bool operator()(const IndexSpace &a, const IndexSpace::Attr &b) const {
+         return a.attr() < b;
+       }
+       bool operator()(const IndexSpace::Attr &a, const IndexSpace &b) const {
+         return a < b.attr();
        }
      };
    
@@ -390,6 +410,8 @@ Program Listing for File space.hpp
    
    inline const IndexSpace IndexSpace::null;
    inline const IndexSpace::Attr IndexSpace::Attr::null;
+   inline const IndexSpace::Attr IndexSpace::Attr::reserved =
+       IndexSpace::Attr::make_reserved();
    
    inline auto hash_value(const IndexSpace &space) {
      auto result = hash_value(static_cast<std::int64_t>(space.attr()));
