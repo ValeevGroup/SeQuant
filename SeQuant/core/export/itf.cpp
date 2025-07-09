@@ -185,9 +185,10 @@ bool ItfContext::rewrite(Tensor &tensor) const {
       }
     }
 
-    tensor = Tensor(std::move(label), sequant::bra(std::move(bra)),
-                    sequant::ket(std::move(ket)), aux(), tensor.symmetry(),
-                    tensor.braket_symmetry(), tensor.particle_symmetry());
+    tensor =
+        Tensor(std::move(label), sequant::bra(std::move(bra)),
+               sequant::ket(std::move(ket)), tensor.aux(), tensor.symmetry(),
+               tensor.braket_symmetry(), tensor.particle_symmetry());
 
     modified = true;
   }
