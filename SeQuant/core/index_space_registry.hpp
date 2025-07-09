@@ -293,18 +293,27 @@ class IndexSpaceRegistry {
     auto it = spaces_->find(IS.base_key());
     if (it != spaces_->end()) {
       throw std::invalid_argument(
-          "IndexSpaceRegistry::add(is): already have an IndexSpace associated "
-          "with is.base_key(); if you are trying to replace the IndexSpace use "
-          "IndexSpaceRegistry::replace(is)");
+          (std::string("IndexSpaceRegistry::add(is): already have an "
+                       "IndexSpace associated "
+                       "with is.base_key()=") +
+           to_string(IS.base_key()) +
+           "; if you are trying to replace the IndexSpace use "
+           "IndexSpaceRegistry::replace(is)")
+              .c_str());
     } else {
       // make sure there are no duplicate IndexSpaces whose attribute is
       // IS.attr()
       if (ranges::any_of(*spaces_,
                          [&IS](auto&& is) { return IS.attr() == is.attr(); })) {
         throw std::invalid_argument(
-            "IndexSpaceRegistry::add(is): already have an IndexSpace "
-            "associated with is.attr(); if you are trying to replace the "
-            "IndexSpace use IndexSpaceRegistry::replace(is)");
+            std::string(
+                "IndexSpaceRegistry::add(is): already have an IndexSpace "
+                "associated with is.attr()={type=" +
+                std::to_string(IS.attr().type().to_int32()) +
+                ",qns=" + std::to_string(IS.attr().qns().to_int32()) +
+                "}; if you are trying to replace the "
+                "IndexSpace use IndexSpaceRegistry::replace(is)")
+                .c_str());
       }
       spaces_->emplace(IS);
     }
