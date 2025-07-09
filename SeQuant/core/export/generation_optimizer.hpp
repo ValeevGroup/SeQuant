@@ -17,8 +17,6 @@
 
 namespace sequant {
 
-namespace {}  // namespace
-
 template <typename MainGenerator, typename MainContext = MainGenerator::Context>
 class GenerationOptimizer final : public Generator<MainContext> {
  private:
