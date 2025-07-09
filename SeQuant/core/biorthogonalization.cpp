@@ -166,9 +166,8 @@ ExprPtr create_expr_for(const ParticlePairings& ref_pairing,
   container::set<std::pair<IndexSpace, IndexSpace>> ref_space_pairing;
   ref_space_pairing.reserve(ref_pairing.size());
   for (std::size_t i = 0; i < ref_pairing.size(); ++i) {
-    ref_space_pairing.insert(
-        std::make_pair(ref_pairing[i].first.space(),
-                       ref_pairing[perm->image(i)].second.space()));
+    ref_space_pairing.emplace(ref_pairing[i].first.space(),
+                              ref_pairing[perm->image(i)].second.space());
   }
 
   // Look for a ParticlePairings object that pairs indices belonging to index
@@ -221,8 +220,7 @@ ExprPtr create_expr_for(const ParticlePairings& ref_pairing,
     if (base[i].second.space() == ref_pairing[ref_idx].second.space()) {
       // base and ref_pairing differ in the second index of the current
       // pairing and their index space matches -> can just permute them
-      replacements.insert(
-          std::make_pair(base[i].second, ref_pairing[ref_idx].second));
+      replacements.emplace(base[i].second, ref_pairing[ref_idx].second);
     } else {
       // Index spaces of the differing index (second) in the pairings are
       // different as well. Since the tensors are assumed to be
@@ -230,8 +228,7 @@ ExprPtr create_expr_for(const ParticlePairings& ref_pairing,
       // pairings, which are of the same space (that's guaranteed by the way we
       // chose base).
       assert(base[i].first.space() == ref_pairing[ref_idx].first.space());
-      replacements.insert(
-          std::make_pair(base[i].first, ref_pairing[ref_idx].first));
+      replacements.emplace(base[i].first, ref_pairing[ref_idx].first);
     }
   }
 
