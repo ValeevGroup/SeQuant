@@ -5,7 +5,7 @@
 #include <cwctype>
 #include <string>
 
-namespace sequant::details {
+namespace sequant::detail {
 
 auto get_with_default(const auto &map, const auto &key, auto def_value) {
   auto it = map.find(key);
@@ -64,4 +64,4 @@ bool rename(Variable &variable, PreprocessResult &result) {
          result.variableReferences.end();
 }
 
-}  // namespace sequant::details
+}  // namespace sequant::detail

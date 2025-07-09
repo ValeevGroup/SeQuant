@@ -28,7 +28,7 @@
 
 namespace sequant {
 
-namespace details {
+namespace detail {
 template <typename NodeData, typename Context>
 class GenerationVisitor {
  public:
@@ -633,7 +633,7 @@ void preprocess_and_maybe_log(ExportNode<T> &tree, PreprocessResult &result,
               << "\n";
   }
 
-  details::PreprocessVisitor<T> preprocessor(result, ctx);
+  detail::PreprocessVisitor<T> preprocessor(result, ctx);
   tree.visit(preprocessor, TreeTraversal::PreAndPostOrder);
 
   if (Logger::instance().export_equations) {
@@ -654,8 +654,8 @@ void export_expression(ExportNode<T> &expression, Generator<Context> &generator,
 
   generator.begin_expression(ctx);
 
-  details::GenerationVisitor<T, Context> visitor(generator, ctx,
-                                                 pp_result.scalarFactors);
+  detail::GenerationVisitor<T, Context> visitor(generator, ctx,
+                                                pp_result.scalarFactors);
   expression.visit(
       [&visitor](const FullBinaryNode<T> &node, TreeTraversal context) {
         visitor(node, context);
@@ -743,28 +743,28 @@ void handle_declarations(Range &&range, Generator<Context> &generator,
 
   if (generator.index_declaration_scope() == scope) {
     std::set<Index> indices =
-        details::combine_and_clear_pp_results<Index>(range);
-    details::declare_all<Index>(indices, generator, ctx);
+        detail::combine_and_clear_pp_results<Index>(range);
+    detail::declare_all<Index>(indices, generator, ctx);
   }
 
   if (generator.variable_declaration_scope() == scope) {
     std::map<Variable, UsageSet> variables =
-        details::combine_and_clear_pp_results<Variable>(range);
-    details::declare_all<Variable>(variables, generator, ctx);
+        detail::combine_and_clear_pp_results<Variable>(range);
+    detail::declare_all<Variable>(variables, generator, ctx);
   }
 
   if (generator.tensor_declaration_scope() == scope) {
     std::map<Tensor, UsageSet, TensorBlockLessThanComparator> tensors =
-        details::combine_and_clear_pp_results<Tensor,
-                                              TensorBlockLessThanComparator>(
+        detail::combine_and_clear_pp_results<Tensor,
+                                             TensorBlockLessThanComparator>(
             range);
-    details::declare_all<Tensor>(tensors, generator, ctx);
+    detail::declare_all<Tensor>(tensors, generator, ctx);
   }
 
   generator.end_declarations(scope, ctx);
 }
 
-}  // namespace details
+}  // namespace detail
 
 template <typename T = ExportExpr, typename Context>
 void export_group(ExpressionGroup<T> group, Generator<Context> &generator,
@@ -813,7 +813,7 @@ void export_groups(Range groups, Generator<Context> &generator, Context ctx) {
       generator.tensor_declaration_scope();
 
   // First step: preprocessing of all expressions
-  container::svector<details::PreprocessResult> pp_results;
+  container::svector<detail::PreprocessResult> pp_results;
   for (ExpressionGroup<T> &current_group : groups) {
     pp_results.reserve(pp_results.size() + size(groups));
 
@@ -822,15 +822,15 @@ void export_groups(Range groups, Generator<Context> &generator, Context ctx) {
 
       ctx.set_current_expression_id(current_tree->id());
 
-      details::preprocess_and_maybe_log(current_tree, pp_results.back(), ctx);
+      detail::preprocess_and_maybe_log(current_tree, pp_results.back(), ctx);
 
       ctx.clear_current_expression_id();
     }
   }
 
   // Perform global declarations
-  details::handle_declarations<DeclarationScope::Global>(pp_results, generator,
-                                                         ctx);
+  detail::handle_declarations<DeclarationScope::Global>(pp_results, generator,
+                                                        ctx);
 
   // Now initiate the actual code generation
   std::size_t pp_idx = 0;
@@ -850,16 +850,16 @@ void export_groups(Range groups, Generator<Context> &generator, Context ctx) {
 
     // Handle section-level declarations
     assert(pp_results.size() >= pp_idx + size(current_group));
-    details::handle_declarations<DeclarationScope::Section>(
+    detail::handle_declarations<DeclarationScope::Section>(
         std::span(&pp_results.at(pp_idx), size(current_group)), generator, ctx);
 
     for (ExportNode<T> &current_tree : current_group) {
       // Handle expression-level declarations
-      details::handle_declarations<DeclarationScope::Expression>(
+      detail::handle_declarations<DeclarationScope::Expression>(
           std::span{&pp_results.at(pp_idx), 1}, generator, ctx);
 
-      details::export_expression(current_tree, generator, ctx,
-                                 pp_results.at(pp_idx));
+      detail::export_expression(current_tree, generator, ctx,
+                                pp_results.at(pp_idx));
 
       pp_idx++;
     }
