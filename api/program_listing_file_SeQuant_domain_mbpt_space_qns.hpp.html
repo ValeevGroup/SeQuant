@@ -291,14 +291,15 @@
 <span class="k">enum</span><span class="w"> </span><span class="k">class</span><span class="w"> </span><span class="nc">Spin</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">bitset_t</span><span class="w"> </span><span class="p">{</span>
 <span class="w">  </span><span class="n">alpha</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mb">0b000001</span><span class="p">,</span>
 <span class="w">  </span><span class="n">beta</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mb">0b000010</span><span class="p">,</span>
-<span class="w">  </span><span class="n">any</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">alpha</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="n">beta</span><span class="p">,</span><span class="w">  </span><span class="c1">// using 2 bits so that overlap and union work expected</span>
-<span class="w">                       </span><span class="c1">// (any &amp; alpha = alpha, alpha | beta = any)</span>
-<span class="w">  </span><span class="c1">// syntax sugar</span>
+<span class="w">  </span><span class="n">any</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">alpha</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="n">beta</span><span class="p">,</span>
+<span class="w">  </span><span class="c1">// syntactic sugar</span>
 <span class="w">  </span><span class="n">free</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">any</span><span class="p">,</span>
 <span class="w">  </span><span class="n">none</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">any</span><span class="p">,</span>
 <span class="w">  </span><span class="n">up</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">alpha</span><span class="p">,</span>
 <span class="w">  </span><span class="n">down</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">beta</span><span class="p">,</span>
-<span class="w">  </span><span class="n">mask</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">any</span>
+<span class="w">  </span><span class="n">mask</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">any</span><span class="p">,</span>
+<span class="w">  </span><span class="c1">// only used by legacy code</span>
+<span class="w">  </span><span class="n">null</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mb">0b000000</span>
 <span class="p">};</span>
 
 <span class="k">enum</span><span class="w"> </span><span class="k">class</span><span class="w"> </span><span class="nc">LCAOQNS</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">bitset_t</span><span class="w"> </span><span class="p">{</span>
@@ -334,7 +335,7 @@
             
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on Jul 9, 2025 11:31:56 AM</div>
+              Last updated on Jul 9, 2025 2:16:19 PM</div>
           </div>
           <div class="right-details">
             <div class="icons">

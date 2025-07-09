@@ -462,18 +462,27 @@
 <span class="w">    </span><span class="k">auto</span><span class="w"> </span><span class="n">it</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">spaces_</span><span class="o">-&gt;</span><span class="n">find</span><span class="p">(</span><span class="n">IS</span><span class="p">.</span><span class="n">base_key</span><span class="p">());</span>
 <span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">it</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="n">spaces_</span><span class="o">-&gt;</span><span class="n">end</span><span class="p">())</span><span class="w"> </span><span class="p">{</span>
 <span class="w">      </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">invalid_argument</span><span class="p">(</span>
-<span class="w">          </span><span class="s">&quot;IndexSpaceRegistry::add(is): already have an IndexSpace associated &quot;</span>
-<span class="w">          </span><span class="s">&quot;with is.base_key(); if you are trying to replace the IndexSpace use &quot;</span>
-<span class="w">          </span><span class="s">&quot;IndexSpaceRegistry::replace(is)&quot;</span><span class="p">);</span>
+<span class="w">          </span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="p">(</span><span class="s">&quot;IndexSpaceRegistry::add(is): already have an &quot;</span>
+<span class="w">                       </span><span class="s">&quot;IndexSpace associated &quot;</span>
+<span class="w">                       </span><span class="s">&quot;with is.base_key()=&quot;</span><span class="p">)</span><span class="w"> </span><span class="o">+</span>
+<span class="w">           </span><span class="n">to_string</span><span class="p">(</span><span class="n">IS</span><span class="p">.</span><span class="n">base_key</span><span class="p">())</span><span class="w"> </span><span class="o">+</span>
+<span class="w">           </span><span class="s">&quot;; if you are trying to replace the IndexSpace use &quot;</span>
+<span class="w">           </span><span class="s">&quot;IndexSpaceRegistry::replace(is)&quot;</span><span class="p">)</span>
+<span class="w">              </span><span class="p">.</span><span class="n">c_str</span><span class="p">());</span>
 <span class="w">    </span><span class="p">}</span><span class="w"> </span><span class="k">else</span><span class="w"> </span><span class="p">{</span>
 <span class="w">      </span><span class="c1">// make sure there are no duplicate IndexSpaces whose attribute is</span>
 <span class="w">      </span><span class="c1">// IS.attr()</span>
 <span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">ranges</span><span class="o">::</span><span class="n">any_of</span><span class="p">(</span><span class="o">*</span><span class="n">spaces_</span><span class="p">,</span>
 <span class="w">                         </span><span class="p">[</span><span class="o">&amp;</span><span class="n">IS</span><span class="p">](</span><span class="k">auto</span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">is</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="n">IS</span><span class="p">.</span><span class="n">attr</span><span class="p">()</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">is</span><span class="p">.</span><span class="n">attr</span><span class="p">();</span><span class="w"> </span><span class="p">}))</span><span class="w"> </span><span class="p">{</span>
 <span class="w">        </span><span class="k">throw</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">invalid_argument</span><span class="p">(</span>
-<span class="w">            </span><span class="s">&quot;IndexSpaceRegistry::add(is): already have an IndexSpace &quot;</span>
-<span class="w">            </span><span class="s">&quot;associated with is.attr(); if you are trying to replace the &quot;</span>
-<span class="w">            </span><span class="s">&quot;IndexSpace use IndexSpaceRegistry::replace(is)&quot;</span><span class="p">);</span>
+<span class="w">            </span><span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="p">(</span>
+<span class="w">                </span><span class="s">&quot;IndexSpaceRegistry::add(is): already have an IndexSpace &quot;</span>
+<span class="w">                </span><span class="s">&quot;associated with is.attr()={type=&quot;</span><span class="w"> </span><span class="o">+</span>
+<span class="w">                </span><span class="n">std</span><span class="o">::</span><span class="n">to_string</span><span class="p">(</span><span class="n">IS</span><span class="p">.</span><span class="n">attr</span><span class="p">().</span><span class="n">type</span><span class="p">().</span><span class="n">to_int32</span><span class="p">())</span><span class="w"> </span><span class="o">+</span>
+<span class="w">                </span><span class="s">&quot;,qns=&quot;</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">to_string</span><span class="p">(</span><span class="n">IS</span><span class="p">.</span><span class="n">attr</span><span class="p">().</span><span class="n">qns</span><span class="p">().</span><span class="n">to_int32</span><span class="p">())</span><span class="w"> </span><span class="o">+</span>
+<span class="w">                </span><span class="s">&quot;}; if you are trying to replace the &quot;</span>
+<span class="w">                </span><span class="s">&quot;IndexSpace use IndexSpaceRegistry::replace(is)&quot;</span><span class="p">)</span>
+<span class="w">                </span><span class="p">.</span><span class="n">c_str</span><span class="p">());</span>
 <span class="w">      </span><span class="p">}</span>
 <span class="w">      </span><span class="n">spaces_</span><span class="o">-&gt;</span><span class="n">emplace</span><span class="p">(</span><span class="n">IS</span><span class="p">);</span>
 <span class="w">    </span><span class="p">}</span>
@@ -487,7 +496,7 @@
 <span class="w">                          </span><span class="n">OptionalArgs</span><span class="o">&amp;&amp;</span><span class="p">...</span><span class="w"> </span><span class="n">args</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
 <span class="w">    </span><span class="k">auto</span><span class="w"> </span><span class="n">h_args</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">boost</span><span class="o">::</span><span class="n">hana</span><span class="o">::</span><span class="n">make_tuple</span><span class="p">(</span><span class="n">args</span><span class="p">...);</span>
 
-<span class="w">    </span><span class="c1">// process IndexSpace::QuantumNumbers, set to default is not given</span>
+<span class="w">    </span><span class="c1">// process IndexSpace::QuantumNumbers, set to default if not given</span>
 <span class="w">    </span><span class="k">auto</span><span class="w"> </span><span class="n">h_qns</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">boost</span><span class="o">::</span><span class="n">hana</span><span class="o">::</span><span class="n">filter</span><span class="p">(</span><span class="n">h_args</span><span class="p">,</span><span class="w"> </span><span class="p">[](</span><span class="k">auto</span><span class="w"> </span><span class="n">arg</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
 <span class="w">      </span><span class="k">return</span><span class="w"> </span><span class="n">boost</span><span class="o">::</span><span class="n">hana</span><span class="o">::</span><span class="n">type_c</span><span class="o">&lt;</span><span class="k">decltype</span><span class="p">(</span><span class="n">arg</span><span class="p">)</span><span class="o">&gt;</span><span class="w"> </span><span class="o">==</span>
 <span class="w">             </span><span class="n">boost</span><span class="o">::</span><span class="n">hana</span><span class="o">::</span><span class="n">type_c</span><span class="o">&lt;</span><span class="n">IndexSpace</span><span class="o">::</span><span class="n">QuantumNumbers</span><span class="o">&gt;</span><span class="p">;</span>
@@ -1310,7 +1319,7 @@
             
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on Jul 9, 2025 11:31:56 AM</div>
+              Last updated on Jul 9, 2025 2:16:19 PM</div>
           </div>
           <div class="right-details">
             <div class="icons">

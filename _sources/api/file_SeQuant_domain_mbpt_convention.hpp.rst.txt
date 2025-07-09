@@ -62,6 +62,8 @@ Enums
 
 - :ref:`exhale_enum_namespacesequant_1_1mbpt_1a085298ac5894ca08279f64ead1348a31`
 
+- :ref:`exhale_enum_namespacesequant_1_1mbpt_1a1d5f9a7e3ff0385e8dcd67f6f15cb64d`
+
 
 Functions
 ---------

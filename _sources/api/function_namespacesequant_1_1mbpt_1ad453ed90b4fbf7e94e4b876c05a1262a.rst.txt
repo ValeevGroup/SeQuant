@@ -1,4 +1,4 @@
-.. _exhale_function_namespacesequant_1_1mbpt_1a9f2b0006877b64283f05f0c848841cb7:
+.. _exhale_function_namespacesequant_1_1mbpt_1ad453ed90b4fbf7e94e4b876c05a1262a:
 
 Function sequant::mbpt::make_legacy_spaces
 ==========================================

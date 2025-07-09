@@ -24,16 +24,17 @@ Program Listing for File space_qns.hpp
    // SeQuant/mbpt definitions of IndexSpace QNs
    
    enum class Spin : bitset_t {
-     alpha = 0b000001,
-     beta = 0b000010,
-     any = alpha | beta,  // using 2 bits so that overlap and union work expected
-                          // (any & alpha = alpha, alpha | beta = any)
-     // syntax sugar
-     free = any,
-     none = any,
-     up = alpha,
-     down = beta,
-     mask = any
+     alpha = 0b000001,  
+     beta = 0b000010,   
+     any = alpha | beta,
+     // syntactic sugar
+     free = any,   
+     none = any,   
+     up = alpha,   
+     down = beta,  
+     mask = any,   
+     // only used by legacy code
+     null = 0b000000
    };
    
    enum class LCAOQNS : bitset_t {

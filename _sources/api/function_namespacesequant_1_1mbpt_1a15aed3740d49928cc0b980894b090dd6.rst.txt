@@ -1,4 +1,4 @@
-.. _exhale_function_namespacesequant_1_1mbpt_1a425d7ce59ccefc391ed870b51ca0b8ca:
+.. _exhale_function_namespacesequant_1_1mbpt_1a15aed3740d49928cc0b980894b090dd6:
 
 Function sequant::mbpt::make_min_sr_spaces
 ==========================================

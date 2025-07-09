@@ -1,4 +1,4 @@
-.. _exhale_function_namespacesequant_1_1mbpt_1a6718b7ab3b1feafd83385424e9c5e2f0:
+.. _exhale_function_namespacesequant_1_1mbpt_1ad9536fe471377205e86e0fbb953b0878:
 
 Function sequant::mbpt::make_sr_spaces
 ======================================

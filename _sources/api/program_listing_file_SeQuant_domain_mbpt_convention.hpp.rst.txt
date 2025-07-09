@@ -32,7 +32,14 @@ Program Listing for File convention.hpp
      QCiFS  
    };
    
-   void load(Convention conv = Convention::Minimal);
+   enum class SpinConvention {
+     None,  
+     Default,  
+     Legacy,  
+   };
+   
+   void load(Convention conv = Convention::Minimal,
+             SpinConvention spconv = SpinConvention::Default);
    
    std::wstring decorate_label(std::wstring label, bool up);
    
@@ -48,20 +55,24 @@ Program Listing for File convention.hpp
    void add_pao_spaces(std::shared_ptr<IndexSpaceRegistry>& isr);
    
    
-   std::shared_ptr<IndexSpaceRegistry> make_min_sr_spaces();
+   std::shared_ptr<IndexSpaceRegistry> make_min_sr_spaces(
+       SpinConvention scv = SpinConvention::Default);
    
-   std::shared_ptr<IndexSpaceRegistry> make_F12_sr_spaces();
+   std::shared_ptr<IndexSpaceRegistry> make_F12_sr_spaces(
+       SpinConvention spconv = SpinConvention::Default);
    
-   std::shared_ptr<IndexSpaceRegistry> make_mr_spaces();
+   std::shared_ptr<IndexSpaceRegistry> make_mr_spaces(
+       SpinConvention spconv = SpinConvention::Default);
    
-   std::shared_ptr<IndexSpaceRegistry> make_sr_spaces();
+   std::shared_ptr<IndexSpaceRegistry> make_sr_spaces(
+       SpinConvention spconv = SpinConvention::Default);
    
    std::shared_ptr<IndexSpaceRegistry> make_legacy_spaces(
-       bool ignore_spin = false);
+       SpinConvention spconv = SpinConvention::Default);
    
    std::pair<std::shared_ptr<IndexSpaceRegistry>,
              std::shared_ptr<IndexSpaceRegistry>>
-   make_fermi_and_bose_spaces();
+   make_fermi_and_bose_spaces(SpinConvention spconv = SpinConvention::Default);
    
    
    }  // namespace mbpt

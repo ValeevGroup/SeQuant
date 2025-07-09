@@ -297,7 +297,14 @@
 <span class="w">  </span><span class="n">QCiFS</span>
 <span class="p">};</span>
 
-<span class="kt">void</span><span class="w"> </span><span class="nf">load</span><span class="p">(</span><span class="n">Convention</span><span class="w"> </span><span class="n">conv</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Convention</span><span class="o">::</span><span class="n">Minimal</span><span class="p">);</span>
+<span class="k">enum</span><span class="w"> </span><span class="k">class</span><span class="w"> </span><span class="nc">SpinConvention</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="n">None</span><span class="p">,</span>
+<span class="w">  </span><span class="n">Default</span><span class="p">,</span>
+<span class="w">  </span><span class="n">Legacy</span><span class="p">,</span>
+<span class="p">};</span>
+
+<span class="kt">void</span><span class="w"> </span><span class="nf">load</span><span class="p">(</span><span class="n">Convention</span><span class="w"> </span><span class="n">conv</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Convention</span><span class="o">::</span><span class="n">Minimal</span><span class="p">,</span>
+<span class="w">          </span><span class="n">SpinConvention</span><span class="w"> </span><span class="n">spconv</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">SpinConvention</span><span class="o">::</span><span class="n">Default</span><span class="p">);</span>
 
 <span class="n">std</span><span class="o">::</span><span class="n">wstring</span><span class="w"> </span><span class="nf">decorate_label</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">wstring</span><span class="w"> </span><span class="n">label</span><span class="p">,</span><span class="w"> </span><span class="kt">bool</span><span class="w"> </span><span class="n">up</span><span class="p">);</span>
 
@@ -313,20 +320,24 @@
 <span class="kt">void</span><span class="w"> </span><span class="nf">add_pao_spaces</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">shared_ptr</span><span class="o">&lt;</span><span class="n">IndexSpaceRegistry</span><span class="o">&gt;&amp;</span><span class="w"> </span><span class="n">isr</span><span class="p">);</span>
 
 
-<span class="n">std</span><span class="o">::</span><span class="n">shared_ptr</span><span class="o">&lt;</span><span class="n">IndexSpaceRegistry</span><span class="o">&gt;</span><span class="w"> </span><span class="n">make_min_sr_spaces</span><span class="p">();</span>
+<span class="n">std</span><span class="o">::</span><span class="n">shared_ptr</span><span class="o">&lt;</span><span class="n">IndexSpaceRegistry</span><span class="o">&gt;</span><span class="w"> </span><span class="n">make_min_sr_spaces</span><span class="p">(</span>
+<span class="w">    </span><span class="n">SpinConvention</span><span class="w"> </span><span class="n">scv</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">SpinConvention</span><span class="o">::</span><span class="n">Default</span><span class="p">);</span>
 
-<span class="n">std</span><span class="o">::</span><span class="n">shared_ptr</span><span class="o">&lt;</span><span class="n">IndexSpaceRegistry</span><span class="o">&gt;</span><span class="w"> </span><span class="n">make_F12_sr_spaces</span><span class="p">();</span>
+<span class="n">std</span><span class="o">::</span><span class="n">shared_ptr</span><span class="o">&lt;</span><span class="n">IndexSpaceRegistry</span><span class="o">&gt;</span><span class="w"> </span><span class="n">make_F12_sr_spaces</span><span class="p">(</span>
+<span class="w">    </span><span class="n">SpinConvention</span><span class="w"> </span><span class="n">spconv</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">SpinConvention</span><span class="o">::</span><span class="n">Default</span><span class="p">);</span>
 
-<span class="n">std</span><span class="o">::</span><span class="n">shared_ptr</span><span class="o">&lt;</span><span class="n">IndexSpaceRegistry</span><span class="o">&gt;</span><span class="w"> </span><span class="n">make_mr_spaces</span><span class="p">();</span>
+<span class="n">std</span><span class="o">::</span><span class="n">shared_ptr</span><span class="o">&lt;</span><span class="n">IndexSpaceRegistry</span><span class="o">&gt;</span><span class="w"> </span><span class="n">make_mr_spaces</span><span class="p">(</span>
+<span class="w">    </span><span class="n">SpinConvention</span><span class="w"> </span><span class="n">spconv</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">SpinConvention</span><span class="o">::</span><span class="n">Default</span><span class="p">);</span>
 
-<span class="n">std</span><span class="o">::</span><span class="n">shared_ptr</span><span class="o">&lt;</span><span class="n">IndexSpaceRegistry</span><span class="o">&gt;</span><span class="w"> </span><span class="n">make_sr_spaces</span><span class="p">();</span>
+<span class="n">std</span><span class="o">::</span><span class="n">shared_ptr</span><span class="o">&lt;</span><span class="n">IndexSpaceRegistry</span><span class="o">&gt;</span><span class="w"> </span><span class="n">make_sr_spaces</span><span class="p">(</span>
+<span class="w">    </span><span class="n">SpinConvention</span><span class="w"> </span><span class="n">spconv</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">SpinConvention</span><span class="o">::</span><span class="n">Default</span><span class="p">);</span>
 
 <span class="n">std</span><span class="o">::</span><span class="n">shared_ptr</span><span class="o">&lt;</span><span class="n">IndexSpaceRegistry</span><span class="o">&gt;</span><span class="w"> </span><span class="n">make_legacy_spaces</span><span class="p">(</span>
-<span class="w">    </span><span class="kt">bool</span><span class="w"> </span><span class="n">ignore_spin</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">false</span><span class="p">);</span>
+<span class="w">    </span><span class="n">SpinConvention</span><span class="w"> </span><span class="n">spconv</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">SpinConvention</span><span class="o">::</span><span class="n">Default</span><span class="p">);</span>
 
 <span class="n">std</span><span class="o">::</span><span class="n">pair</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="n">shared_ptr</span><span class="o">&lt;</span><span class="n">IndexSpaceRegistry</span><span class="o">&gt;</span><span class="p">,</span>
 <span class="w">          </span><span class="n">std</span><span class="o">::</span><span class="n">shared_ptr</span><span class="o">&lt;</span><span class="n">IndexSpaceRegistry</span><span class="o">&gt;&gt;</span>
-<span class="n">make_fermi_and_bose_spaces</span><span class="p">();</span>
+<span class="n">make_fermi_and_bose_spaces</span><span class="p">(</span><span class="n">SpinConvention</span><span class="w"> </span><span class="n">spconv</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">SpinConvention</span><span class="o">::</span><span class="n">Default</span><span class="p">);</span>
 
 
 <span class="p">}</span><span class="w">  </span><span class="c1">// namespace mbpt</span>
@@ -354,7 +365,7 @@
             
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on Jul 9, 2025 11:31:56 AM</div>
+              Last updated on Jul 9, 2025 2:16:19 PM</div>
           </div>
           <div class="right-details">
             <div class="icons">

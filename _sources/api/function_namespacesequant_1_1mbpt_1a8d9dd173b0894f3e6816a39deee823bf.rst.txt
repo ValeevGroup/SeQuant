@@ -1,4 +1,4 @@
-.. _exhale_function_namespacesequant_1_1mbpt_1ac5e5ddeccd4147dd8c8452cba7cc3d06:
+.. _exhale_function_namespacesequant_1_1mbpt_1a8d9dd173b0894f3e6816a39deee823bf:
 
 Function sequant::mbpt::load
 ============================
@@ -10,5 +10,5 @@ Function Documentation
 ----------------------
 
 
-.. doxygenfunction:: sequant::mbpt::load(Convention)
+.. doxygenfunction:: sequant::mbpt::load(Convention, SpinConvention)
    :project: SeQuant
