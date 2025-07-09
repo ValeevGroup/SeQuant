@@ -331,7 +331,7 @@ class IndexSpaceRegistry {
                           OptionalArgs&&... args) {
     auto h_args = boost::hana::make_tuple(args...);
 
-    // process IndexSpace::QuantumNumbers, set to default is not given
+    // process IndexSpace::QuantumNumbers, set to default if not given
     auto h_qns = boost::hana::filter(h_args, [](auto arg) {
       return boost::hana::type_c<decltype(arg)> ==
              boost::hana::type_c<IndexSpace::QuantumNumbers>;
