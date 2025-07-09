@@ -38,6 +38,10 @@ class TypeAttr {
   /// the null TypeAttr
   const static TypeAttr null;
 
+  /// first (most significant) bit reserved for creating default space used by
+  /// Index that is distinct from the null space
+  const static TypeAttr reserved;
+
   /// @brief Constructs from a bitset representation
 
   /// @warning first (most significant) bit is reserved for internal use
@@ -127,10 +131,6 @@ class TypeAttr {
 
   friend class Index;
 
-  /// first (most significant) bit reserved for creating default space used by
-  /// Index that is distinct from the null space
-  const static TypeAttr reserved;
-
   /// makes reserved object
   static TypeAttr make_reserved() {
     TypeAttr result;
@@ -151,6 +151,10 @@ class QuantumNumbersAttr {
 
   /// the null TypeAttr
   const static QuantumNumbersAttr null;
+
+  /// first (most significant) bit reserved for creating default space used by
+  /// Index that is distinct from the null space
+  const static QuantumNumbersAttr reserved;
 
   /// @brief Constructs from a bitset representation
 
@@ -244,10 +248,6 @@ class QuantumNumbersAttr {
 
   friend class Index;
 
-  /// first (most significant) bit reserved for creating default space used by
-  /// Index that is distinct from the null space
-  const static QuantumNumbersAttr reserved;
-
   /// makes reserved object
   static QuantumNumbersAttr make_reserved() {
     QuantumNumbersAttr result;
@@ -287,7 +287,12 @@ class IndexSpace {
     Attr &operator=(const Attr &) = default;
     Attr &operator=(Attr &&) = default;
 
+    /// the null Attr
     const static Attr null;
+
+    /// this Attr is reserved for creating default space used by
+    /// Index that is distinct from the null space
+    const static Attr reserved;
 
     constexpr const TypeAttr &type() const {
       return static_cast<const TypeAttr &>(*this);
@@ -350,6 +355,12 @@ class IndexSpace {
         return this->qns() < other.qns();
       }
     }
+
+    /// makes reserved object
+    static Attr make_reserved() {
+      Attr result{Type::reserved, QuantumNumbers::reserved};
+      return result;
+    }
   };  // struct Attr
 
   using Type = TypeAttr;
@@ -390,6 +401,19 @@ class IndexSpace {
     }
     bool operator()(const std::wstring_view &a, const std::wstring &b) const {
       return a < b;
+    }
+  };
+
+  struct AttrCompare {
+    using is_transparent = void;
+    bool operator()(const IndexSpace &a, const IndexSpace &b) const {
+      return a.attr() < b.attr();
+    }
+    bool operator()(const IndexSpace &a, const IndexSpace::Attr &b) const {
+      return a.attr() < b;
+    }
+    bool operator()(const IndexSpace::Attr &a, const IndexSpace &b) const {
+      return a < b.attr();
     }
   };
 
@@ -464,6 +488,8 @@ class IndexSpace {
 
 inline const IndexSpace IndexSpace::null;
 inline const IndexSpace::Attr IndexSpace::Attr::null;
+inline const IndexSpace::Attr IndexSpace::Attr::reserved =
+    IndexSpace::Attr::make_reserved();
 
 inline auto hash_value(const IndexSpace &space) {
   auto result = hash_value(static_cast<std::int64_t>(space.attr()));

@@ -976,7 +976,7 @@ class Index : public Taggable {
 };  // class Index
 
 inline const IndexSpace::Attr Index::default_space_attr{
-    IndexSpace::Type::reserved, IndexSpace::QuantumNumbers::reserved};
+    IndexSpace::Attr::reserved};
 
 void Index::check_for_duplicate_proto_indices() const {
 #ifndef NDEBUG
