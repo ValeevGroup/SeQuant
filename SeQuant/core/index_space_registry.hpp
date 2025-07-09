@@ -161,8 +161,9 @@ class IndexSpaceRegistry {
   /// found
   template <typename S, typename = meta::EnableIfAllBasicStringConvertible<S>>
   const IndexSpace* retrieve_ptr(S&& label) const {
-    return const_cast<IndexSpaceRegistry*>(this)->retrieve_ptr(
-        std::forward<S>(label));
+    auto it =
+        spaces_->find(IndexSpace::reduce_key(to_basic_string_view(label)));
+    return it != spaces_->end() ? &(*it) : nullptr;
   }
 
   /// @brief retrieve a pointer to IndexSpace from the registry by the label
@@ -172,27 +173,9 @@ class IndexSpaceRegistry {
   /// found
   template <typename S, typename = meta::EnableIfAllBasicStringConvertible<S>>
   IndexSpace* retrieve_ptr(S&& label) {
-    const auto label_view = to_basic_string_view(label);
-    auto contains_underscore = [&]() {
-      return label_view.find(L'_') != label_view.npos;
-    };
-    assert(contains_underscore() == false);
-    if constexpr (std::is_same_v<meta::char_t<S>, wchar_t>) {
-      // auto it =
-      //     spaces_->find(label_view);
-      auto it = std::find_if(
-          spaces_->begin(), spaces_->end(),
-          [&](const auto& s) { return s.base_key() == label_view; });
-      return it != spaces_->end() ? &(*it) : nullptr;
-    } else {
-      const auto wlabel = to_wstring(label);
-      // auto it =
-      //     spaces_->find(wlabel);
-      auto it =
-          std::find_if(spaces_->begin(), spaces_->end(),
-                       [&](const auto& s) { return s.base_key() == wlabel; });
-      return it != spaces_->end() ? &(*it) : nullptr;
-    }
+    auto it =
+        spaces_->find(IndexSpace::reduce_key(to_basic_string_view(label)));
+    return it != spaces_->end() ? &(*it) : nullptr;
   }
 
   /// @brief retrieve an IndexSpace from the registry by the label
