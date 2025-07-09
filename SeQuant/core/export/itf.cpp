@@ -107,8 +107,9 @@ void ItfContext::set_import_name(const Variable &variable, std::string name) {
 bool ItfContext::rewrite(Tensor &tensor) const {
   bool modified = false;
 
-  if (tensor.label() == L"g" && tensor.const_indices().size() == 4 &&
-      tensor.bra_rank() == 2 && tensor.ket_rank() == 2) {
+  if (tensor.label() == m_integral_label &&
+      tensor.const_indices().size() == 4 && tensor.bra_rank() == 2 &&
+      tensor.ket_rank() == 2) {
     // These are the 2-electron integrals. They posses intra-particle braket
     // symmetry, that is in g^{pq}_{rs} we can exchange p with r, without also
     // swapping q with s. This symmetry can currently not be represented within
