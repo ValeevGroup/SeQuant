@@ -138,7 +138,7 @@ class DefaultTensorCanonicalizer : public TensorCanonicalizer {
   template <typename IndexContainer>
   DefaultTensorCanonicalizer(IndexContainer&& external_indices) {
     ranges::for_each(external_indices, [this](const Index& idx) {
-      this->external_indices_.emplace(idx.label(), idx);
+      this->external_indices_.emplace(idx);
     });
   }
   virtual ~DefaultTensorCanonicalizer() = default;
@@ -227,7 +227,7 @@ class DefaultTensorCanonicalizer : public TensorCanonicalizer {
   }
 
  private:
-  container::map<std::wstring, Index> external_indices_;
+  container::set<Index> external_indices_;
 
  protected:
   void tag_indices(AbstractTensor& t) const;

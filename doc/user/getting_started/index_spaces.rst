@@ -52,20 +52,12 @@ However, to deal with the single-product vacuum it is necessary to register at l
    :end-before: end-snippet-2
    :dedent: 2
 
-or, shorter,
+It is also necessary to specify the *complete* space (union of all base spaces) so that the the space of unoccupied SP states can be determined:
 
 .. literalinclude:: /examples/user/getting_started/index_spaces.cpp
    :language: cpp
    :start-after: start-snippet-3
    :end-before: end-snippet-3
-   :dedent: 2
-
-It is also necessary to specify the *complete* space (union of all base spaces) so that the the space of unoccupied SP states can be determined:
-
-.. literalinclude:: /examples/user/getting_started/index_spaces.cpp
-   :language: cpp
-   :start-after: start-snippet-4
-   :end-before: end-snippet-4
    :dedent: 2
 
 The Wick's theorem code itself is independent of the choice of vacuum:

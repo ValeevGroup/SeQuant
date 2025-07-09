@@ -266,16 +266,15 @@ TensorOfTensorIndices<Container> tot_indices(Rng const& idxs) {
 }
 
 ///
-/// Does the numeric comparison of the index suffixes using less-than operator.
+/// Does the numeric comparison of the index ordinals using less-than operator.
 ///
 /// \param idx1
 /// \param idx2
-/// \return True if the numeric suffix of \c idx1 is less than that of \c idx2.
+/// \return True if the ordinal of \c idx1 is less than that of \c idx2. Since
+/// ordinals are optional, the semantics is that of std::optional
 ///
-inline bool suffix_compare(Index const& idx1, Index const& idx2) {
-  auto&& s1 = idx1.suffix();
-  auto&& s2 = idx2.suffix();
-  return (s1 && s2) && s1.value() < s2.value();
+inline bool ordinal_compare(Index const& idx1, Index const& idx2) {
+  return idx1.ordinal() < idx2.ordinal();
 }
 
 ///

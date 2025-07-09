@@ -48,8 +48,8 @@ TEST_CASE("spin", "[spin]") {
 
   SECTION("protoindices supported") {
     auto isr = get_default_context().index_space_registry();
-    Index i1(L"i_1", isr->retrieve(L"i"));
-    Index a1(L"a_1", isr->retrieve(L"a"), {i1});
+    Index i1(L"i_1");
+    Index a1(L"a_1", {i1});
 
     const auto expr =
         ex<Tensor>(L"t", bra{i1}, ket{a1}) * ex<Tensor>(L"F", bra{a1}, ket{i1});
@@ -68,9 +68,9 @@ TEST_CASE("spin", "[spin]") {
   }
 
   SECTION("ASCII label") {
-    IndexSpace pup(L"p", 0b011, mbpt::Spin::alpha);
-    IndexSpace pdown(L"p", 0b011, mbpt::Spin::beta);
-    IndexSpace alphaup(L"α", 0b110, mbpt::Spin::alpha);
+    IndexSpace pup(L"p↑", 0b011, mbpt::Spin::alpha);
+    IndexSpace pdown(L"p↓", 0b011, mbpt::Spin::beta);
+    IndexSpace alphaup(L"α↑", 0b110, mbpt::Spin::alpha);
 
     auto p1 = Index(L"p↑_1", pup);
     auto p2 = Index(L"p↓_2", pdown);
@@ -100,10 +100,10 @@ TEST_CASE("spin", "[spin]") {
     auto p2 = Index(L"p_2", {L"p", 0b11, mbpt::Spin::any});
     auto p2_b = Index(L"p↓_2", {L"p↓", 0b11, mbpt::Spin::beta});
 
-    auto p_i = Index(L"p", {L"p", 0b11, mbpt::Spin::any}, {i});
-    auto p1_i = Index(L"p_1", {L"p", 0b11, mbpt::Spin::any}, {i});
-    auto p_i1 = Index(L"p", {L"p", 0b11, mbpt::Spin::any}, {i1});
-    auto p1_i1 = Index(L"p_1", {L"p", 0b11, mbpt::Spin::any}, {i1});
+    auto p_i = Index({L"p", 0b11, mbpt::Spin::any}, {i});
+    auto p1_i = Index({L"p", 0b11, mbpt::Spin::any}, 1, {i});
+    auto p_i1 = Index({L"p", 0b11, mbpt::Spin::any}, {i1});
+    auto p1_i1 = Index({L"p", 0b11, mbpt::Spin::any}, 1, {i1});
 
     // make_spinalpha
     {

@@ -529,7 +529,7 @@ struct rapid_simplify_visitor {
   }
 
   /// simplifies a Sum ... generally Sum::{ap,pre}pend simplify automatically,
-  /// but the user code may transforms sums in a way that the same
+  /// but the user code may transform sums in a way that the same
   /// simplifications need to be applied here
   bool simplify_sum(ExprPtr& expr) {
     bool mutated = false;

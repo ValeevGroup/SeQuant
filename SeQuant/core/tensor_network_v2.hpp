@@ -183,6 +183,7 @@ class TensorNetworkV2 {
     std::vector<std::optional<std::wstring>> vertex_texlabels;
     std::vector<VertexColor> vertex_colors;
     std::vector<VertexType> vertex_types;
+    container::map<Index, std::size_t> idx_to_vertex;
 
     Graph() = default;
 
@@ -332,18 +333,32 @@ class TensorNetworkV2 {
     return ext_indices_;
   }
 
+  /// options for generating Graph from an object of this type
+  struct CreateGraphOptions {
+    /// pointer to the set of named indices (ordinarily,
+    /// this includes all external indices);
+    /// default is nullptr, which means use all external indices for
+    /// named indices
+    const NamedIndexSet *named_indices = nullptr;
+
+    /// if false, will use same color for all
+    /// named indices that have same Index::color(), else will use distinct
+    /// color for each
+    bool distinct_named_indices = true;
+
+    /// if false, will not generate the labels
+    bool make_labels = true;
+
+    /// if false, will not generate the TeX labels
+    bool make_texlabels = true;
+
+    /// if false, will not generate the Index->vertex map
+    bool make_idx_to_vertex = false;
+  };
+
   /// @brief converts the network into a Bliss graph whose vertices are indices
   /// and tensor vertex representations
-  /// @param[in] named_indices pointer to the set of named indices (ordinarily,
-  /// this includes all external indices);
-  ///            default is nullptr, which means use all external indices for
-  ///            named indices
-  /// @param[in] distinct_named_indices if false, will use same color for all
-  /// named indices that have same Index::color(), else will use distinct color
-  /// for each
-  /// @param[out] idx_to_vertex A map of indices to the corresponding vertices
-  /// in the graph representation. If this is not nullptr, the pointed-to map
-  /// gets overwritten with the one containing the relevant information.
+  /// @param[in] options the options for generating the graph
   /// @return The created Graph object
 
   /// @note Rules for constructing the graph:
@@ -361,10 +376,12 @@ class TensorNetworkV2 {
   ///   tensor; terminal vertices are colored by the color of its tensor,
   ///     with the color of symm/antisymm terminals augmented by the
   ///     terminal's type (bra/ket).
-  Graph create_graph(
-      const NamedIndexSet *named_indices = nullptr,
-      bool distinct_named_indices = true,
-      container::map<Index, std::size_t> *idx_to_vertex = nullptr) const;
+  Graph create_graph(const CreateGraphOptions &options = {
+                         .named_indices = nullptr,
+                         .distinct_named_indices = true,
+                         .make_labels = true,
+                         .make_texlabels = true,
+                         .make_idx_to_vertex = false}) const;
 
  private:
   /// list of tensors

@@ -24,7 +24,7 @@ See detailed documentation at [https://valeevgroup.github.io/SeQuant/](https://v
 
 The short version:
 
-- configure (from top SeQuant source dfirectory): `cmake -B build -S . -DCMAKE_INSTALL_PREFIX=/path/where/sequant/to/be/installed`
+- configure (from top SeQuant source dfirectory): `cmake -B build -S . -DCMAKE_INSTALL_PREFIX=/path/to/where/sequant/to/be/installed`
 - build and install: `cmake --build build --target install`
 
 For detailed instructions see [SeQuant: Installation Guide](https://valeevgroup.github.io/SeQuant/user/getting_started/installing.html).
@@ -46,7 +46,7 @@ if (NOT TARGET SeQuant::SeQuant)
     cmake_minimum_required(VERSION 3.14.0)  # for FetchContent_MakeAvailable
     include(FetchContent)
     FetchContent_Declare(sequant
-            GIT_REPOSITORY      https://github.com/ValeevGroup/SeQuant2.git
+            GIT_REPOSITORY      https://github.com/ValeevGroup/SeQuant.git
             )
     FetchContent_MakeAvailable(sequant)
     add_library(SeQuant::SeQuant ALIAS SeQuant)

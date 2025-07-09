@@ -15,6 +15,8 @@ bool operator==(const Context& ctx1, const Context& ctx2) {
            ctx1.spbasis() == ctx2.spbasis() &&
            ctx1.first_dummy_index_ordinal() ==
                ctx2.first_dummy_index_ordinal() &&
+           ctx1.index_space_registry()->spaces() ==
+               ctx2.index_space_registry()->spaces() &&
            *ctx1.index_space_registry() == *ctx2.index_space_registry();
 }
 
@@ -78,6 +80,14 @@ set_scoped_default_context(const Context& ctx) {
       container::map<Statistics, Context>{{Statistics::Arbitrary, ctx}});
 }
 
+[[nodiscard]] detail::ImplicitContextResetter<
+    container::map<Statistics, Context>>
+set_scoped_default_context(Context&& ctx) {
+  return detail::set_scoped_implicit_context(
+      container::map<Statistics, Context>{
+          {Statistics::Arbitrary, std::move(ctx)}});
+}
+
 Context::Context(std::shared_ptr<IndexSpaceRegistry> isr, Vacuum vac,
                  IndexSpaceMetric m, BraKetSymmetry bks, SPBasis spb,
                  std::size_t fdio)
@@ -105,6 +115,13 @@ Context::Context(Vacuum vac, IndexSpaceMetric m, BraKetSymmetry bks,
       braket_symmetry_(bks),
       spbasis_(spb),
       first_dummy_index_ordinal_(fdio) {}
+
+Context Context::clone() const {
+  Context ctx(*this);
+  ctx.idx_space_reg_ =
+      std::make_shared<IndexSpaceRegistry>(idx_space_reg_->clone());
+  return ctx;
+}
 
 Vacuum Context::vacuum() const { return vacuum_; }
 

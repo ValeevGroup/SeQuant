@@ -105,7 +105,7 @@ class ItfGenerator : public Generator<Context> {
       throw std::runtime_error("ITF doesn't support proto indices");
     }
 
-    const std::size_t ordinal = idx.ordinal();
+    const std::size_t ordinal = idx.ordinal().value();
 
     std::string name = ctx.index_name(idx.space(), ordinal);
     assert(!name.empty());

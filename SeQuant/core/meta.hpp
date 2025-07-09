@@ -148,6 +148,19 @@ struct is_char<const T> : is_char<T> {};
 template <class T>
 static constexpr bool is_char_v = is_char<T>::value;
 
+///////// unlike std::is_integral, this is false for boolean and character types
+template <typename T>
+struct is_integral
+    : std::bool_constant<std::is_integral_v<T> && !std::is_same_v<T, bool> &&
+                         !is_char_v<T>> {};
+template <typename T>
+struct is_integral<const T> : is_integral<T> {};
+template <class T>
+static constexpr bool is_integral_v = is_integral<T>::value;
+/// `T` is integral is non-boolean and non-character
+template <class T>
+concept integral = is_integral_v<T>;
+
 ///////// string literal to std::string, if possible
 template <typename T, typename Enabler = void>
 struct literal_to_string {

@@ -251,6 +251,7 @@ set(SeQuant_src
         SeQuant/core/rational.hpp
         SeQuant/core/runtime.cpp
         SeQuant/core/runtime.hpp
+        SeQuant/core/space.cpp
         SeQuant/core/space.hpp
         SeQuant/core/tag.hpp
         SeQuant/core/tensor_canonicalizer.cpp

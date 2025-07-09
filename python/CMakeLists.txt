@@ -49,7 +49,7 @@ if (BUILD_TESTING)
            FIXTURES_REQUIRED PYSEQUANT_MODULE
            ENVIRONMENT "${SEQUANT_TEST_PYTHON_ENVVARS}")
 
-  unset(MPQC_TEST_PYTHON_ENVVARS)
+  unset(SEQUANT_TEST_PYTHON_ENVVARS)
 
   add_dependencies(check-sequant python-sequant)
 

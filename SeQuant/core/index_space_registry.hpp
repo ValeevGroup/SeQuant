@@ -146,6 +146,9 @@ class IndexSpaceRegistry {
     return *this;
   }
 
+  /// deep copy of this object, creates a copy of its spaces
+  IndexSpaceRegistry clone() const;
+
   const auto& spaces() const { return spaces_; }
 
   decltype(auto) begin() const { return spaces_->cbegin(); }

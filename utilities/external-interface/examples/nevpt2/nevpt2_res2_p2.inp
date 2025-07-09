@@ -1,0 +1,4 @@
+R2{a1,a2;i1,i2} =
+  + 1/4 A{i1,i2;a1,a2} g{a1,a2;i1,i2}
+  - 1/2 A{i1,i2;a1,a2} HAM_D{i3;i2} T2g{a1,a2;i1,i3}
+  + 1/2 A{i1,i2;a1,a2} HAM_D{a2;a3} T2g{a1,a3;i1,i2}
