@@ -129,8 +129,8 @@ std::remove_reference_t<Node>* get_parent_ptr(Node&& node) {
 /// argument. Optionally, can take a second argument of type TreeTraversal which
 /// indicates the context of the visitor invocation. Can optionally return a
 /// value convertible to bool to indicate whether subtree exploration for the
-/// current node shall proceed. \tparam NodeType The type of nodes to be
-/// visited.
+/// current node shall proceed.
+/// \tparam NodeType The type of nodes to be visited.
 ///                  Can be VisitInternal, VisitLeaf, or VisitAll.
 /// \param node Node to visit.
 /// \param f Visitor.
