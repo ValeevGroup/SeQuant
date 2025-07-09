@@ -12,7 +12,7 @@
 namespace sequant {
 
 /// This is represented as a "run-time" complex rational number
-class Variable : public Expr, public Labeled {
+class Variable : public Expr, public MutatableLabeled {
  public:
   Variable() = delete;
   virtual ~Variable() = default;
@@ -29,7 +29,7 @@ class Variable : public Expr, public Labeled {
   /// @warning conjugation does not change it
   std::wstring_view label() const override;
 
-  void set_label(std::wstring label);
+  void set_label(std::wstring label) override;
 
   /// complex-conjugates this
   void conjugate();

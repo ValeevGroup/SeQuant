@@ -21,6 +21,16 @@ class Labeled {
   virtual std::wstring_view label() const = 0;
 };
 
+/// A Labeled object that also allows changing the label
+class MutatableLabeled : public Labeled {
+ public:
+  using Labeled::Labeled;
+
+  /// Sets the label of this object
+  /// @param label The new label of this object
+  virtual void set_label(std::wstring label) = 0;
+};
+
 }  // namespace sequant
 
 #endif  // SEQUANT_EXPRESSIONS_LABELED_HPP

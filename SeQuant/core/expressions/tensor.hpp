@@ -44,7 +44,7 @@ DEFINE_STRONG_TYPE_FOR_RANGE_AND_RANGESIZE(aux);
 
 /// @brief a Tensor is an instance of AbstractTensor over a scalar field, i.e.
 /// Tensors have commutative addition and product operations
-class Tensor : public Expr, public AbstractTensor, public Labeled {
+class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
  private:
   using index_container_type = container::svector<Index>;
   static auto make_indices(IndexList indices) { return indices; }
@@ -251,7 +251,7 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
 
   /// @return "core" label of the tensor
   std::wstring_view label() const override { return label_; }
-  void set_label(std::wstring label) {
+  void set_label(std::wstring label) override {
     label_ = std::move(label);
     reset_hash_value();
   }
