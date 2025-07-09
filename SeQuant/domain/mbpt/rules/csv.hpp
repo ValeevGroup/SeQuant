@@ -2,8 +2,8 @@
 // Created by Eduard Valeyev on 3/8/25.
 //
 
-#ifndef MPQC_DOMAIN_MBPT_RULES_CSV_HPP
-#define MPQC_DOMAIN_MBPT_RULES_CSV_HPP
+#ifndef SEQUANT_DOMAIN_MBPT_RULES_CSV_HPP
+#define SEQUANT_DOMAIN_MBPT_RULES_CSV_HPP
 
 #include "SeQuant/core/expr.hpp"
 #include "SeQuant/core/tensor.hpp"
@@ -30,4 +30,4 @@ ExprPtr csv_transform(ExprPtr const& expr, const IndexSpace& csv_basis,
 
 }  // namespace sequant::mbpt
 
-#endif  // MPQC_DOMAIN_MBPT_RULES_CSV_HPP
+#endif  // SEQUANT_DOMAIN_MBPT_RULES_CSV_HPP

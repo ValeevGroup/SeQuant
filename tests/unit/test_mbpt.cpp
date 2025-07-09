@@ -401,16 +401,13 @@ TEST_CASE("mbpt", "[mbpt]") {
       lower_to_tensor_form(R33);
       simplify(R33);
       //    std::wcout << "R33: " << to_latex(R33) << std::endl;
-      REQUIRE(
-          to_latex(R33) ==
-          L"{ "
-          L"\\bigl({{{\\frac{1}{36}}}{\\bar{R}^{{i_1}{i_2}{i_3}}_{{a_1}{a_2}{"
-          L"a_3}}}{"
-          L"\\tilde{a}^{{a_1}{a_2}{a_3}}_{{i_1}{i_2}{i_3}}}} + "
-          L"{{R^{{i_1}}_{{a_1}}}{\\tilde{a}^{{a_1}}_{{i_1}}}} + "
-          L"{{{\\frac{1}{4}}}{\\bar{R}^{{i_1}{i_2}}_{{a_1}{a_2}}}{\\tilde{a}^"
-          L"{{a_1}{"
-          L"a_2}}_{{i_1}{i_2}}}}\\bigr) }");
+      REQUIRE(to_latex(R33) ==
+              L"{ "
+              L"\\bigl({{{\\frac{1}{36}}}{\\bar{R}^{{i_1}{i_2}{i_3}}_{{a_1}{a_"
+              L"2}{a_3}}}{\\tilde{a}^{{a_1}{a_2}{a_3}}_{{i_1}{i_2}{i_3}}}} + "
+              L"{{R^{{i_1}}_{{a_1}}}{\\tilde{a}^{{a_1}}_{{i_1}}}} + "
+              L"{{{\\frac{1}{4}}}{\\bar{R}^{{i_1}{i_2}}_{{a_1}{a_2}}}{\\tilde{"
+              L"a}^{{a_1}{a_2}}_{{i_1}{i_2}}}}\\bigr) }");
 
       auto R12 = R(nₚ(2), nₕ(1));
       lower_to_tensor_form(R12);
@@ -437,16 +434,13 @@ TEST_CASE("mbpt", "[mbpt]") {
       lower_to_tensor_form(L23);
       simplify(L23);
       // std::wcout << "L23: " << to_latex(L23) << std::endl;
-      REQUIRE(
-          to_latex(L23) ==
-          L"{ "
-          L"\\bigl({{{\\frac{1}{12}}}{\\bar{L}^{{a_1}{a_2}}_{{i_1}{i_2}{i_3}}}{"
-          L"\\tilde{a}^{{i_1}{i_2}{i_3}}_{\\textvisiblespace\\,{a_1}{a_2}}}} "
-          L"+ {{L^{}_{{i_1}}}{\\tilde{a}^{{i_1}}}} + "
-          L"{{{\\frac{1}{2}}}{\\bar{L}^{{a_1}}_{{i_1}{i_2}}}{\\tilde{a}^{{i_1}{"
-          L"i_"
-          L"2}}"
-          L"_{\\textvisiblespace\\,{a_1}}}}\\bigr) }");
+      REQUIRE(to_latex(L23) ==
+              L"{ "
+              L"\\bigl({{{\\frac{1}{2}}}{\\bar{L}^{{a_1}}_{{i_1}{i_2}}}{"
+              L"\\tilde{a}^{{i_1}{i_2}}_{\\textvisiblespace\\,{a_1}}}} + "
+              L"{{{\\frac{1}{12}}}{\\bar{L}^{{a_1}{a_2}}_{{i_1}{i_2}{i_3}}}{"
+              L"\\tilde{a}^{{i_1}{i_2}{i_3}}_{\\textvisiblespace\\,{a_1}{a_2}}}"
+              L"} + {{L^{}_{{i_1}}}{\\tilde{a}^{{i_1}}}}\\bigr) }");
     }
 
     SECTION("batching") {

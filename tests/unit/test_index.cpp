@@ -17,26 +17,40 @@ TEST_CASE("index", "[elements][index]") {
 
   SECTION("constructors") {
     auto isr = get_default_context().index_space_registry();
+
+    // default
+    REQUIRE_NOTHROW(Index{});
     Index i{};
 
-    REQUIRE_NOTHROW(
+    // ordinal-free Index
+    {
+      REQUIRE_NOTHROW(Index(L"i"));
+      Index i(L"i");
+      REQUIRE(!i.ordinal());
+    }
+
+    // labels must match the space key
+    REQUIRE_THROWS(Index(L"j"));
+
+    REQUIRE_NOTHROW(Index(std::wstring(L"i_") +
+                          std::to_wstring(Index::min_tmp_index() - 1)));
+    REQUIRE_THROWS(
         Index(std::wstring(L"i_") + std::to_wstring(Index::min_tmp_index())));
-    REQUIRE_THROWS(Index(std::wstring(L"i_") +
-                         std::to_wstring(Index::min_tmp_index() + 1)));
 
     Index i1(L"i_1");
     REQUIRE(i1.label() == L"i_1");
     REQUIRE(i1.space() == isr->retrieve(L"i"));
+    REQUIRE(i1.ordinal() == 1);
 
-    Index i2(L"i_2",
-             isr->retrieve(L'i'));  // N.B. using retrieve(char)
+    Index i2(isr->retrieve(L'i'), 2);  // N.B. using retrieve(char)
     REQUIRE(i2.label() == L"i_2");
     REQUIRE(i2.space() == isr->retrieve(L"i_1"));
+    REQUIRE(i2.ordinal() == 2);
 
     // examples with proto indices
     {
-      REQUIRE_NOTHROW(Index(L"i_3", isr->retrieve(L"i_3"), {i1, i2}));
-      Index i3(L"i_3", isr->retrieve(L"i_3"), {i1, i2});
+      REQUIRE_NOTHROW(Index(isr->retrieve(L"i"), 3, {i1, i2}));
+      Index i3(isr->retrieve(L"i"), 3, {i1, i2});
       REQUIRE(i3.label() == L"i_3");
       REQUIRE(i3.to_string() == "i_3");
       REQUIRE(i3.space() == isr->retrieve(L"i_3"));
@@ -91,7 +105,7 @@ TEST_CASE("index", "[elements][index]") {
       REQUIRE(i7.full_label() == L"i_7<i_1, i_2>");
 
 #ifndef NDEBUG
-      REQUIRE_THROWS(Index(L"i_4", isr->retrieve(L"i_4"), {i1, i1}));
+      REQUIRE_THROWS(Index(isr->retrieve(L"i"), 4, {i1, i1}));
       REQUIRE_THROWS(Index(L"i_5", {L"i_1", L"i_1"}));
 #endif
     }
@@ -105,6 +119,7 @@ TEST_CASE("index", "[elements][index]") {
       Index i2('i');
       REQUIRE(i2.label() == L"i");
       REQUIRE(i2.space() == isr->retrieve("i"));
+      REQUIRE(!i2.ordinal());
 
       // to make things interesting use F12 registry with greek letters
       Context cxt(sequant::mbpt::make_F12_sr_spaces(), Vacuum::Physical,
@@ -117,6 +132,29 @@ TEST_CASE("index", "[elements][index]") {
       REQUIRE(α.label() == L"α_2");
       REQUIRE(α.space() ==
               get_default_context().index_space_registry()->retrieve("α_1"));
+    }
+
+    // with default Context label defines Index
+    {
+      const auto ctx_resetter = set_scoped_default_context(Context{});
+      REQUIRE_NOTHROW(Index(L"i"));
+      Index i(L"i");
+      REQUIRE(i.space().base_key() == L"i");
+      REQUIRE(i.space().attr() == Index::default_space_attr);
+      REQUIRE(!i.ordinal());
+      REQUIRE(i.label() == L"i");
+      REQUIRE_NOTHROW(Index(L"j"));
+      Index j(L"j");
+      REQUIRE(j.space().base_key() == L"j");
+      REQUIRE(j.space().attr() == Index::default_space_attr);
+      REQUIRE(!j.ordinal());
+      REQUIRE(j.label() == L"j");
+      REQUIRE_NOTHROW(Index(L"j_1"));
+      Index j1(L"j_1");
+      REQUIRE(j1.space().base_key() == L"j");
+      REQUIRE(j1.space().attr() == Index::default_space_attr);
+      REQUIRE(j1.ordinal() == 1);
+      REQUIRE(j1.label() == L"j_1");
     }
   }
 
@@ -133,6 +171,17 @@ TEST_CASE("index", "[elements][index]") {
     // check copy ctor
     Index i4(i2);
     REQUIRE(i2 == i4);
+
+    // with default Context label is used for comparison
+    {
+      const auto ctx_resetter = set_scoped_default_context(Context{});
+      Index i(L"i");
+      Index j(L"j");
+      REQUIRE(i != j);
+      Index j1(L"j_1");
+      REQUIRE(i != j1);
+      REQUIRE(j != j1);
+    }
   }
 
   SECTION("ordering") {
@@ -190,6 +239,18 @@ TEST_CASE("index", "[elements][index]") {
     REQUIRE(p1A < p2A);
     p1A.tag().assign(2);
     REQUIRE(p2A < p1A);
+
+    // with default Context label is used for comparisons
+    {
+      const auto ctx_resetter = set_scoped_default_context(Context{});
+      Index i(L"i");
+      Index j(L"j");
+      REQUIRE(i < j);
+      Index j1(L"j_1");
+      REQUIRE(i < j1);
+      REQUIRE(j < j1);
+      REQUIRE(!(j1 < j1));
+    }
   }
 
   SECTION("hashing") {
@@ -275,6 +336,10 @@ TEST_CASE("index", "[elements][index]") {
     std::wstring a1_str = to_latex(a1);
     REQUIRE(a1_str == L"{a_1^{{i_1}{i_2^{{i_3}{i_4}}}}}");
 
+    // following tests mutate index space registry, so clone the context
+    auto ctx_resetter =
+        set_scoped_default_context(get_default_context().clone());
+
     // a good test of adding new indices to the registry
     IndexSpace ar(
         L"a→",
@@ -285,7 +350,6 @@ TEST_CASE("index", "[elements][index]") {
     REQUIRE(a1_r_str == L"{a→_1^{{i_1}{i_2^{{i_3}{i_4}}}}}");
     get_default_context().mutable_index_space_registry()->remove(L"a→");
 
-    auto const old_registy = get_default_context().index_space_registry();
     auto registry = get_default_context().mutable_index_space_registry();
 
     if (!registry->contains(L"μ̃")) {
@@ -301,7 +365,16 @@ TEST_CASE("index", "[elements][index]") {
     REQUIRE(Index(L"μ̃_1").to_latex() == L"{\\tilde{\\mu}_1}");
     REQUIRE(Index(L"f̌_22").to_latex() == L"{\\check{f}_{22}}");
 
-    *get_default_context().mutable_index_space_registry() = *old_registy;
+    // with default Context label is used
+    {
+      const auto ctx_resetter = set_scoped_default_context(Context{});
+      Index i(L"i");
+      REQUIRE(i.to_latex() == L"{i}");
+      Index j(L"j");
+      REQUIRE(j.to_latex() == L"{j}");
+      Index j11(L"j_11");
+      REQUIRE(j11.to_latex() == L"{j_{11}}");
+    }
   }
 
   /*SECTION("wolfram") {
