@@ -259,7 +259,8 @@ void collect_tensor_factors(EvalExprNode const& node,  //
                             Rng& collect) {
   static_assert(std::is_same_v<ranges::range_value_t<Rng>, ExprWithHash>);
 
-  if (auto op = node->op_type(); node->is_tensor() && !op || *op == EvalOp::Sum)
+  if (auto op = node->op_type();
+      node->is_tensor() && (!op || *op == EvalOp::Sum))
     collect.emplace_back(ExprWithHash{node->expr(), node->hash_value()});
   else if (node->op_type() == EvalOp::Product && !node.leaf()) {
     collect_tensor_factors(node.left(), collect);
