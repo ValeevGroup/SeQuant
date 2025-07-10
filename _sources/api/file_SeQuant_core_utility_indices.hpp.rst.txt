@@ -107,9 +107,11 @@ Functions
 
 - :ref:`exhale_function_namespacesequant_1ad3a0936a566597248d20e2dd924a0642`
 
-- :ref:`exhale_function_namespacesequant_1ae52fa524e53cee73d9afa5f00e75904e`
+- :ref:`exhale_function_namespacesequant_1a8e28c2f4ad60409636bfc70865af5ef8`
 
 - :ref:`exhale_function_namespacesequant_1af3378e211033b815ded22fc08c161a3e`
+
+- :ref:`exhale_function_namespacesequant_1ae52fa524e53cee73d9afa5f00e75904e`
 
 - :ref:`exhale_function_namespacesequant_1a390d4db82b398072ad65732f0ce5574d`
 
@@ -118,8 +120,6 @@ Functions
 - :ref:`exhale_function_namespacesequant_1a63ea8fc50bb2f25bf1672e7182421f13`
 
 - :ref:`exhale_function_namespacesequant_1a83708a06e2d866abf2b00cef9f324225`
-
-- :ref:`exhale_function_namespacesequant_1a8e28c2f4ad60409636bfc70865af5ef8`
 
 - :ref:`exhale_function_namespacesequant_1a815f680e9d072e892d3eb18f70ccdf43`
 
