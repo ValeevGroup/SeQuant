@@ -23,7 +23,16 @@ enum class Convention {
   QCiFS  //!< ``Quantum Chemistry in Fock Space'' = superset of above
 };
 
-void load(Convention conv = Convention::Minimal);
+/// @brief Conventions for representing spin quantum numbers
+enum class SpinConvention {
+  None,  //!< particles are assumed spin-free, spin bits are set to Spin::none
+  Default,  //!< fermions are assumed spin-1/2 (Spin::any, Spin::up,
+            //!< Spin::down), boson are spin-free (Spin::none)
+  Legacy,  //!< all particles are assumed spin-free, spin bits set to Spin::null
+};
+
+void load(Convention conv = Convention::Minimal,
+          SpinConvention spconv = SpinConvention::Default);
 
 /// @brief decorate IndexSpace labels with spin
 std::wstring decorate_label(std::wstring label, bool up);
@@ -50,38 +59,40 @@ void add_pao_spaces(std::shared_ptr<IndexSpaceRegistry>& isr);
 /// @{
 
 /// Most standard models only need 2 base spaces, occupied and unoccupied.
-/// This is minimal partitioning is sufficient for computing expectation values
-/// of Coupled-Cluster type operators.
-std::shared_ptr<IndexSpaceRegistry> make_min_sr_spaces();
+/// This is minimal partitioning sufficient for computing expectation values
+/// in context of single-reference MBPT.
+std::shared_ptr<IndexSpaceRegistry> make_min_sr_spaces(
+    SpinConvention scv = SpinConvention::Default);
 
 /// Common partitioning for single reference F12 calculations.
 /// notably, this set contains an other_unoccupied space, α', commonly used to
 /// construct an approximately complete representation
-std::shared_ptr<IndexSpaceRegistry> make_F12_sr_spaces();
+std::shared_ptr<IndexSpaceRegistry> make_F12_sr_spaces(
+    SpinConvention spconv = SpinConvention::Default);
 
 /// Multireference partitioning contains an active space, x, which is assumed to
-/// have partial density although it is considered unoccupied with respect to a
-/// SingleProduct Vacuum. This leads to a variety of additional composite spaces
-/// with may or may not be occupied.
-std::shared_ptr<IndexSpaceRegistry> make_mr_spaces();
+/// have partial occupancy although it is considered unoccupied with respect to
+/// a SingleProduct Vacuum. This leads to a variety of additional composite
+/// spaces with may or may not be occupied.
+std::shared_ptr<IndexSpaceRegistry> make_mr_spaces(
+    SpinConvention spconv = SpinConvention::Default);
 
 /// 'Standard' choice of partitioning orbitals in a single reference.
 /// Includes frozen_core, active_occupied, active_unoccupied, and
 /// inactive_unoccupied orbitals as base spaces.
-std::shared_ptr<IndexSpaceRegistry> make_sr_spaces();
+std::shared_ptr<IndexSpaceRegistry> make_sr_spaces(
+    SpinConvention spconv = SpinConvention::Default);
 
 /// Legacy partitioning similar to previous versions of SeQuant which had
 /// compile time hard coded partitioning. This is useful when verifying
 /// previously obtained results which have been canonicalized in this context.
-/// @param ignore_spin if true, do not add spin-specific spaces, and do not use
-/// Spin::any as IndexSpace::QuantumNumbers for spin-free space
 std::shared_ptr<IndexSpaceRegistry> make_legacy_spaces(
-    bool ignore_spin = false);
+    SpinConvention spconv = SpinConvention::Default);
 
 /// make fermi and bose space registries for multicomponent models
 std::pair<std::shared_ptr<IndexSpaceRegistry>,
           std::shared_ptr<IndexSpaceRegistry>>
-make_fermi_and_bose_spaces();
+make_fermi_and_bose_spaces(SpinConvention spconv = SpinConvention::Default);
 
 /// @}
 
