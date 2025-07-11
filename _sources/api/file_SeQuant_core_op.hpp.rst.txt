@@ -201,9 +201,9 @@ Functions
 
 - :ref:`exhale_function_namespacesequant_1abae8eae397f4fa498bdc2486da8c7860`
 
-- :ref:`exhale_function_namespacesequant_1a6b026a49ebe957077486f0b2dab5c84c`
-
 - :ref:`exhale_function_namespacesequant_1ada0afc8704878dfdf9b02303185e3f19`
+
+- :ref:`exhale_function_namespacesequant_1a6b026a49ebe957077486f0b2dab5c84c`
 
 
 Typedefs

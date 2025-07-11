@@ -835,6 +835,11 @@
 <span class="w">  </span><span class="c1">// initialize named_indices by default to all external indices</span>
 <span class="w">  </span><span class="k">const</span><span class="w"> </span><span class="k">auto</span><span class="w"> </span><span class="o">&amp;</span><span class="n">named_indices</span><span class="w"> </span><span class="o">=</span>
 <span class="w">      </span><span class="n">named_indices_ptr</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="k">nullptr</span><span class="w"> </span><span class="o">?</span><span class="w"> </span><span class="k">this</span><span class="o">-&gt;</span><span class="n">ext_indices</span><span class="p">()</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="o">*</span><span class="n">named_indices_ptr</span><span class="p">;</span>
+<span class="w">  </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">Logger</span><span class="o">::</span><span class="n">instance</span><span class="p">().</span><span class="n">canonicalize</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">std</span><span class="o">::</span><span class="n">wcout</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="s">&quot;named_indices = &quot;</span><span class="p">;</span>
+<span class="w">    </span><span class="n">ranges</span><span class="o">::</span><span class="n">for_each</span><span class="p">(</span><span class="n">named_indices</span><span class="p">,</span>
+<span class="w">                     </span><span class="p">[](</span><span class="k">auto</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="n">i</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">wcout</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="n">i</span><span class="p">.</span><span class="n">full_label</span><span class="p">()</span><span class="w"> </span><span class="o">&lt;&lt;</span><span class="w"> </span><span class="sa">L</span><span class="s">&quot; &quot;</span><span class="p">;</span><span class="w"> </span><span class="p">});</span>
+<span class="w">  </span><span class="p">}</span>
 
 <span class="w">  </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="n">fast</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
 <span class="w">    </span><span class="c1">// The graph-based canonization is required in call cases in which there are</span>
@@ -1684,7 +1689,7 @@
             
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on Jul 11, 2025 1:46:44 AM</div>
+              Last updated on Jul 11, 2025 2:10:23 AM</div>
           </div>
           <div class="right-details">
             <div class="icons">
