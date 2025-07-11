@@ -18,8 +18,10 @@ jobs:
         include:
           - os: ubuntu-24.04
             cxx: /usr/bin/g++-14
+            cxx_flags: -fsanitize=address -fsanitize=leak -fsanitize=undefined -fno-omit-frame-pointer -fno-var-tracking
           - os: macos-latest
             cxx: clang++
+            cxx_flags: -fsanitize=address -fsanitize=undefined -fno-omit-frame-pointer -fno-var-tracking
 
     name: "${{ matrix.os }}: ${{ matrix.cxx }} ${{ matrix.build_type }}"
     runs-on: ${{ matrix.os }}
@@ -29,7 +31,7 @@ jobs:
       CCACHE_DIR : ${{github.workspace}}/build/.ccache
       CCACHE_COMPRESS : true
       CCACHE_COMPRESSLEVEL : 6
-      CXXFLAGS: -fsanitize=address -fsanitize=leak -fsanitize=undefined -fno-omit-frame-pointer -fno-var-tracking
+      CXXFLAGS: ${{ matrix.cxx_flags }}
       BUILD_CONFIG : >
         -G Ninja
         -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
