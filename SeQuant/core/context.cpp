@@ -2,7 +2,9 @@
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/utility/context.hpp>
 
+#ifdef SEQUANT_CONTEXT_MANIPULATION_THREADSAFE
 #include <mutex>
+#endif
 
 namespace sequant {
 
@@ -24,10 +26,14 @@ bool operator!=(const Context& ctx1, const Context& ctx2) {
   return !(ctx1 == ctx2);
 }
 
+#ifdef SEQUANT_CONTEXT_MANIPULATION_THREADSAFE
 static std::recursive_mutex ctx_mtx;  // used to protect the context
+#endif
 
 const Context& get_default_context(Statistics s) {
+#ifdef SEQUANT_CONTEXT_MANIPULATION_THREADSAFE
   std::scoped_lock lock(ctx_mtx);
+#endif
   auto& contexts =
       detail::get_implicit_context<container::map<Statistics, Context>>();
   auto it = contexts.find(s);
@@ -44,7 +50,9 @@ const Context& get_default_context(Statistics s) {
 }
 
 void set_default_context(const Context& ctx, Statistics s) {
+#ifdef SEQUANT_CONTEXT_MANIPULATION_THREADSAFE
   std::scoped_lock lock(ctx_mtx);
+#endif
   auto& contexts =
       detail::implicit_context_instance<container::map<Statistics, Context>>();
   auto it = contexts.find(s);
@@ -62,14 +70,18 @@ void set_default_context(const container::map<Statistics, Context>& ctxs) {
 }
 
 void reset_default_context() {
+#ifdef SEQUANT_CONTEXT_MANIPULATION_THREADSAFE
   std::scoped_lock lock(ctx_mtx);
+#endif
   detail::reset_implicit_context<container::map<Statistics, Context>>();
 }
 
 [[nodiscard]] detail::ImplicitContextResetter<
     container::map<Statistics, Context>>
 set_scoped_default_context(const container::map<Statistics, Context>& ctx) {
+#ifdef SEQUANT_CONTEXT_MANIPULATION_THREADSAFE
   std::scoped_lock lock(ctx_mtx);
+#endif
   return detail::set_scoped_implicit_context(ctx);
 }
 
