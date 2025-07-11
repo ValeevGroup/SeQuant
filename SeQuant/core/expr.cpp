@@ -361,27 +361,23 @@ ExprPtr Sum::canonicalize_impl(bool multipass) {
                               ExprPtrList{summand});
       }
     });
-
     if (Logger::instance().canonicalize)
       std::wcout << "Sum::canonicalize_impl (pass=" << pass
                  << "): after canonicalizing summands = "
                  << to_latex_align(shared_from_this()) << std::endl;
-
-    // nested map for grouping by hash and sorting by size
-    // outer key: size, inner key: hash
-    container::map<size_t, container::map<size_t, ExprPtr>> size_hash_groups;
-
+    // flat map for grouping by (size, hash) pairs
+    container::map<std::pair<size_t, size_t>, ExprPtr> hash_groups;
     // process each summand
     for (const auto &summand : summands_) {
       auto hash = summand->hash_value();
       size_t term_size = sequant::size(summand);
-
-      auto it = size_hash_groups[term_size].find(hash);
-      if (it == size_hash_groups[term_size].end()) {
-        // first occurrence of this hash at this size
-        size_hash_groups[term_size][hash] = summand;
+      auto key = std::make_pair(term_size, hash);
+      auto it = hash_groups.find(key);
+      if (it == hash_groups.end()) {
+        // first occurrence of this (size, hash) pair
+        hash_groups[key] = summand;
       } else {
-        // another term with the same hash
+        // another term with the same (size, hash)
         if (summand->template is<Product>()) {
           if (it->second->template is<Product>()) {
             // both are products - add them
@@ -414,14 +410,12 @@ ExprPtr Sum::canonicalize_impl(bool multipass) {
     }
     decltype(summands_) new_summands;
     new_summands.reserve(summands_.size());
-
-    // process each size group and its hash subgroups
-    for (const auto &[size, hash_map] : size_hash_groups) {
-      for (const auto &[hash, term] : hash_map) {
-        if (!term->template is<Product>() ||
-            !term->template as<Product>().is_zero()) {
-          new_summands.push_back(term);
-        }
+    // collect all grouped terms (already sorted by size, then hash due to pair
+    // ordering)
+    for (const auto &[key, term] : hash_groups) {
+      if (!term->template is<Product>() ||
+          !term->template as<Product>().is_zero()) {
+        new_summands.push_back(term);
       }
     }
     summands_.swap(new_summands);
