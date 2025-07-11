@@ -440,15 +440,16 @@ void TensorNetworkV2::canonicalize_graph(const NamedIndexSet &named_indices) {
 
   sort_via_indices<false>(edges_, index_sorter);
 
-  for (const Edge &current : edges_) {
-    const Index &idx = current.idx();
-
-    if (!is_anonymous_index(idx)) {
-      continue;
-    }
-
-    idxrepl.insert(std::make_pair(idx, idxfac.make(idx)));
-  }
+  // there is no need to fill idxrep in canonicalize_graph. The job will be
+  // handled in canonicalize fn for (const Edge &current : edges_) {
+  //   const Index &idx = current.idx();
+  //
+  //   if (!is_anonymous_index(idx)) {
+  //     continue;
+  //   }
+  //
+  //   idxrepl.insert(std::make_pair(idx, idxfac.make(idx)));
+  // }
 
   if (Logger::instance().canonicalize) {
     for (const auto &idxpair : idxrepl) {
@@ -458,7 +459,9 @@ void TensorNetworkV2::canonicalize_graph(const NamedIndexSet &named_indices) {
     }
   }
 
-  apply_index_replacements(tensors_, idxrepl, true);
+  // followed to not filling idxrepl, there is no need to apply index
+  // replacement here. Again the job will be handled in canonicalize fn
+  // apply_index_replacements(tensors_, idxrepl, true);
 
   // Perform particle-1,2-swaps as indicated by the graph canonization
   for (std::size_t i = 0; i < tensors_.size(); ++i) {
@@ -652,7 +655,10 @@ ExprPtr TensorNetworkV2::canonicalize(
     }
   }
 
-  apply_index_replacements(tensors_, idxrepl, true);
+  // call apply index replacent only when it is necessary
+  if (!idxrepl.empty()) {
+    apply_index_replacements(tensors_, idxrepl, true);
+  }
 
   byproduct *= canonicalize_individual_tensors(named_indices);
 
