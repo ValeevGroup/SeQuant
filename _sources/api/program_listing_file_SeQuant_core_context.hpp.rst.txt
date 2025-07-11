@@ -92,6 +92,14 @@ Program Listing for File context.hpp
    
    
    
+   inline constexpr bool default_context_manipulation_threadsafe() {
+   #ifdef SEQUANT_CONTEXT_MANIPULATION_THREADSAFE
+     return true;
+   #else
+     return false;
+   #endif
+   }
+   
    const Context& get_default_context(Statistics s = Statistics::Arbitrary);
    
    void set_default_context(const Context& ctx,

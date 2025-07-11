@@ -357,6 +357,14 @@
 
 
 
+<span class="kr">inline</span><span class="w"> </span><span class="k">constexpr</span><span class="w"> </span><span class="kt">bool</span><span class="w"> </span><span class="nf">default_context_manipulation_threadsafe</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<span class="cp">#ifdef SEQUANT_CONTEXT_MANIPULATION_THREADSAFE</span>
+<span class="w">  </span><span class="k">return</span><span class="w"> </span><span class="nb">true</span><span class="p">;</span>
+<span class="cp">#else</span>
+<span class="w">  </span><span class="k">return</span><span class="w"> </span><span class="nb">false</span><span class="p">;</span>
+<span class="cp">#endif</span>
+<span class="p">}</span>
+
 <span class="k">const</span><span class="w"> </span><span class="n">Context</span><span class="o">&amp;</span><span class="w"> </span><span class="nf">get_default_context</span><span class="p">(</span><span class="n">Statistics</span><span class="w"> </span><span class="n">s</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Statistics</span><span class="o">::</span><span class="n">Arbitrary</span><span class="p">);</span>
 
 <span class="kt">void</span><span class="w"> </span><span class="nf">set_default_context</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">Context</span><span class="o">&amp;</span><span class="w"> </span><span class="n">ctx</span><span class="p">,</span>
@@ -414,7 +422,7 @@
             
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on Jul 10, 2025 5:53:08 PM</div>
+              Last updated on Jul 11, 2025 1:46:44 AM</div>
           </div>
           <div class="right-details">
             <div class="icons">

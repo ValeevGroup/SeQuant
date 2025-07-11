@@ -131,9 +131,9 @@ Functions
 
 - :ref:`exhale_function_namespacesequant_1a18069ae79cd08320a75c1d427946dc49`
 
-- :ref:`exhale_function_namespacesequant_1_1dummy_1a3596b8e5fa12c4ed5dc014fda4612eee`
-
 - :ref:`exhale_function_namespacesequant_1_1dummy_1ac5ffee4773fb1a54d2f25800a819baab`
+
+- :ref:`exhale_function_namespacesequant_1_1dummy_1a3596b8e5fa12c4ed5dc014fda4612eee`
 
 - :ref:`exhale_function_namespacesequant_1_1dummy_1a2b4381b8184612ae27226355c048ab1b`
 

@@ -78,3 +78,10 @@ Classes
 
 - :ref:`exhale_class_classsequant_1_1_context`
 
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1a070ec9990fa79db88cf841ad27346270`
+

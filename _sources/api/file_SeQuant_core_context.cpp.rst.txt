@@ -36,8 +36,6 @@ Includes
 
 - ``SeQuant/core/utility/context.hpp`` (:ref:`file_SeQuant_core_utility_context.hpp`)
 
-- ``mutex``
-
 
 
 
@@ -77,11 +75,4 @@ Functions
 - :ref:`exhale_function_namespacesequant_1a0ed27261fd24d3392c9b4aae23145700`
 
 - :ref:`exhale_function_namespacesequant_1ae73c3f8b4c2d29262d54fefbf55ad619`
-
-
-Variables
----------
-
-
-- :ref:`exhale_variable_namespacesequant_1a7b55917da76cdc221eb34363fbd442d2`
 
