@@ -1,4 +1,4 @@
-.. _exhale_function_namespacesequant_1afff28c4ec8e0207e60b8ece6c05f1e9b:
+.. _exhale_function_namespacesequant_1a69193269473c3eeb76f94536c9492caa:
 
 Template Function sequant::is_pure_qpannihilator
 ================================================
@@ -10,5 +10,5 @@ Function Documentation
 ----------------------
 
 
-.. doxygenfunction:: sequant::is_pure_qpannihilator(const Op<S>&, Vacuum)
+.. doxygenfunction:: sequant::is_pure_qpannihilator(const Op<S>&, Vacuum, const std::shared_ptr<const IndexSpaceRegistry>&)
    :project: SeQuant

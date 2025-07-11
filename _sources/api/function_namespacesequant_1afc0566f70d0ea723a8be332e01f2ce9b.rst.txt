@@ -1,4 +1,4 @@
-.. _exhale_function_namespacesequant_1af2b1a80de48486d48d70c75addea49c4:
+.. _exhale_function_namespacesequant_1afc0566f70d0ea723a8be332e01f2ce9b:
 
 Template Function sequant::is_pure_qpcreator
 ============================================
@@ -10,5 +10,5 @@ Function Documentation
 ----------------------
 
 
-.. doxygenfunction:: sequant::is_pure_qpcreator(const Op<S>&, Vacuum)
+.. doxygenfunction:: sequant::is_pure_qpcreator(const Op<S>&, Vacuum, const std::shared_ptr<const IndexSpaceRegistry>&)
    :project: SeQuant

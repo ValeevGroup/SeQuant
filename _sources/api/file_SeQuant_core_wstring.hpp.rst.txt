@@ -94,13 +94,13 @@ Functions
 
 - :ref:`exhale_function_namespacesequant_1a8b3f62b488e9eb5152db5b5f77f182e7`
 
-- :ref:`exhale_function_namespacesequant_1a9a4394ec8a60af48bfe4f5fa5269f98e`
-
-- :ref:`exhale_function_namespacesequant_1af6495449b17b85bec48b4e1a89f7570f`
-
 - :ref:`exhale_function_namespacesequant_1a001984d7c3a0dc473be644d4c2a95c68`
 
 - :ref:`exhale_function_namespacesequant_1aaf54287d033a279369da95bf4509207d`
+
+- :ref:`exhale_function_namespacesequant_1a9a4394ec8a60af48bfe4f5fa5269f98e`
+
+- :ref:`exhale_function_namespacesequant_1af6495449b17b85bec48b4e1a89f7570f`
 
 
 Defines
