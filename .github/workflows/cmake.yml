@@ -57,6 +57,7 @@ jobs:
         -DCMAKE_CXX_STANDARD=20
         -DCMAKE_CXX_EXTENSIONS=OFF
         -DSEQUANT_BENCHMARKS=${{ !matrix.valgrind && !matrix.sanitize }}
+        -DSEQUANT_SKIP_LONG_TESTS=${{ matrix.valgrind || matrix.sanitize }}
     steps:
     - uses: actions/checkout@v4
 
