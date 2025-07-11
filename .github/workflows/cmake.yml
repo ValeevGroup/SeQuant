@@ -29,6 +29,7 @@ jobs:
       CCACHE_DIR : ${{github.workspace}}/build/.ccache
       CCACHE_COMPRESS : true
       CCACHE_COMPRESSLEVEL : 6
+      CXXFLAGS: -fsanitize=address -fsanitize=leak -fsanitize=undefined -fno-omit-frame-pointer -fno-var-tracking
       BUILD_CONFIG : >
         -G Ninja
         -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
@@ -42,7 +43,6 @@ jobs:
         -DCMAKE_CXX_STANDARD=20
         -DCMAKE_CXX_EXTENSIONS=OFF
         -DSEQUANT_BENCHMARKS=ON
-        -DCMAKE_CXX_FLAGS="-fsanitize=address -fsanitize=leak -fsanitize=undefined -fno-omit-frame-pointer -fno-var-tracking"
     steps:
     - uses: actions/checkout@v4
 
