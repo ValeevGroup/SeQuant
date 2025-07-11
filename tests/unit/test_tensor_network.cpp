@@ -77,6 +77,58 @@ TEMPLATE_TEST_CASE("tensor_network_shared", "[elements]", TensorNetwork,
       REQUIRE(canon1.phase != canon2.phase);
     }
   }
+
+  SECTION("canonicalize") {
+    SECTION("need particle reorder?") {
+      {
+        Index::reset_tmp_index();
+        auto input1 = parse_expr(
+            L"t{p1,p2;p3,p4}:N-C-S t{p4,p5;p6,p7}:N-C-S t{p7,p8;p9,p1}:N-C-S");
+        // N.B. renaming external index changes local canonical order produced
+        // by TNV1 (due to the use of DefaultTensorCanonicalizer)
+        auto input2 = parse_expr(
+            L"t{p1,p2;p3,p4}:N-C-S t{p4,p5;p11,p7}:N-C-S t{p7,p8;p9,p1}:N-C-S");
+        std::wcout << "input1 = " << to_latex(input1) << std::endl;
+        std::wcout << "input2 = " << to_latex(input2) << std::endl;
+
+        {
+          TN tn1(*input1);
+          tn1.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(),
+                           false);
+          TN tn2(*input2);
+          tn2.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(),
+                           false);
+
+          // std::wcout << "tn1[0] = " <<
+          // to_latex(std::dynamic_pointer_cast<Expr>(tn1.tensors()[0])) <<
+          // "\n"; std::wcout << "tn1[1] = " <<
+          // to_latex(std::dynamic_pointer_cast<Expr>(tn1.tensors()[1])) <<
+          // "\n"; std::wcout << "tn1[2] = " <<
+          // to_latex(std::dynamic_pointer_cast<Expr>(tn1.tensors()[2])) <<
+          // "\n"; std::wcout << "tn2[0] = " <<
+          // to_latex(std::dynamic_pointer_cast<Expr>(tn2.tensors()[0])) <<
+          // "\n"; std::wcout << "tn2[1] = " <<
+          // to_latex(std::dynamic_pointer_cast<Expr>(tn2.tensors()[1])) <<
+          // "\n"; std::wcout << "tn2[2] = " <<
+          // to_latex(std::dynamic_pointer_cast<Expr>(tn2.tensors()[2])) <<
+          // "\n";
+
+          // TNv1 fails to canonicalize this correctly
+          if constexpr (std::is_same_v<TN, TensorNetworkV2>) {
+            // input2 obtained from input1 by i6 -> i11, which "frees" i6 for
+            // dummy renamings so canonical(input2) is obtained from
+            // canonical(input1) by i6 -> i11 and i7 -> i6
+            REQUIRE(tn1.tensors()[0]->_to_latex() ==
+                    tn2.tensors()[0]->_to_latex());
+            REQUIRE(ranges::equal(tn1.tensors()[1]->_bra(),
+                                  tn2.tensors()[1]->_bra()));
+            REQUIRE(ranges::equal(tn1.tensors()[2]->_ket(),
+                                  tn2.tensors()[2]->_ket()));
+          }
+        }
+      }
+    }
+  }
 }
 
 TEST_CASE("tensor_network", "[elements]") {

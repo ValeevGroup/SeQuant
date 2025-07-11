@@ -139,6 +139,11 @@ ExprPtr TensorNetwork::canonicalize(
   // been computed in init_edges)
   const auto &named_indices =
       named_indices_ptr == nullptr ? this->ext_indices() : *named_indices_ptr;
+  if (Logger::instance().canonicalize) {
+    std::wcout << "named_indices = ";
+    ranges::for_each(named_indices,
+                     [](auto &&i) { std::wcout << i.full_label() << L" "; });
+  }
 
   // helpers to filter named ("external" in traditional use case) / anonymous
   // ("internal" in traditional use case)
@@ -988,6 +993,11 @@ TensorNetwork::SlotCanonicalizationMetadata TensorNetwork::canonicalize_slots(
   const auto &named_indices =
       named_indices_ptr == nullptr ? this->ext_indices() : *named_indices_ptr;
   metadata.named_indices = named_indices;
+  if (Logger::instance().canonicalize) {
+    std::wcout << "named_indices = ";
+    ranges::for_each(named_indices,
+                     [](auto &&i) { std::wcout << i.full_label() << L" "; });
+  }
 
   // helper to filter named ("external" in traditional use case) / anonymous
   // ("internal" in traditional use case)
