@@ -77,6 +77,7 @@ TEST_CASE("mbpt_cc", "[mbpt/cc]") {
       });
     }  // SECTION("EOM-CCSD")
 
+#ifndef SEQUANT_SKIP_LONG_TESTS
     SECTION("EOM-CCSDT") {
       const auto N = 3;
       auto cc = CC{N};
@@ -91,9 +92,11 @@ TEST_CASE("mbpt_cc", "[mbpt/cc]") {
         REQUIRE(size(eqs[3]) == 99);
       });
     }  // SECTION("EOM-CCSDT")
+#endif
   }
 
   SECTION("ucc") {
+#ifndef SEQUANT_SKIP_LONG_TESTS
     SECTION("t") {
       const auto N = 2;
       const std::size_t C = 3;
@@ -112,5 +115,6 @@ TEST_CASE("mbpt_cc", "[mbpt/cc]") {
       }
 
     }  // SECTION("t")
+#endif
   }
 }
