@@ -774,8 +774,7 @@ TensorNetworkV2::canonicalize_slots(
     using cord_set_t = container::set<ord_cord_it_t, detail::tuple_less<1>>;
 
     auto grand_index_list = ranges::views::concat(
-        edges_ | ranges::views::transform(edge2index<Edge>),
-        pure_proto_indices_);
+        edges_ | ranges::views::transform(&Edge::idx), pure_proto_indices_);
 
     // for each named index type (as defined by named_index_compare) maps its
     // ptr in grand_index_list to its ordinal in grand_index_list + canonical
