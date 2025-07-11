@@ -34,6 +34,10 @@ add_executable(unit_tests-sequant ${BUILD_BY_DEFAULT}
     "test_wick.cpp"
 )
 
+if (SEQUANT_SKIP_LONG_TESTS)
+    target_compile_definitions(unit_tests-sequant PRIVATE SEQUANT_SKIP_LONG_TESTS=1)
+endif()
+
 if (TARGET tiledarray)
     target_sources(unit_tests-sequant
         PRIVATE

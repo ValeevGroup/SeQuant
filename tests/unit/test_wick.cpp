@@ -20,7 +20,6 @@
 
 #include <catch2/catch_test_macros.hpp>
 #include "catch2_sequant.hpp"
-#include "test_config.hpp"
 
 #include <range/v3/all.hpp>
 
