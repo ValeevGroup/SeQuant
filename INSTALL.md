@@ -34,6 +34,7 @@ From the SeQuant source directory run the following command to configure the bui
   * `SEQUANT_MIMALLOC` --- use [mimalloc](https://github.com/microsoft/mimalloc) for fast memory allocation
   * `SEQUANT_PYTHON` --- enables building of Python bindings
   * `Boost_FETCH_IF_MISSING` --- if set to `ON`, SeQuant will download and build Boost if it is not found by `find_package(Boost ...)`; this is not recommended. [default=OFF]
+  * `SEQUANT_CONTEXT_MANIPULATION_THREADSAFE` --- set to `OFF` if you will initialize the default context and change its state from a single thread only (most users will want to do this). [default=ON]
 
 ### Build
 
