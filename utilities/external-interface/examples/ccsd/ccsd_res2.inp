@@ -1,0 +1,24 @@
+O2{a1,a2;i1,i2} = 
+  + 1/4 A{i1,i2;a1,a2} g{a1,a2;i1,i2} 
+  + 1/2 A{i1,i2;a1,a2} g{i3,a1;i1,i2} T1{a2;i3} 
+  - 1/2 A{i1,i2;a1,a2} g{a1,a2;a3,i1} T1{a3;i2} 
+  - 1/2 A{i1,i2;a1,a2} f{i3;i2} T2{a1,a2;i1,i3} 
+  + 1/2 A{i1,i2;a1,a2} f{a2;a3} T2{a1,a3;i1,i2} 
+  + 1/2 1/4 A{i1,i2;a1,a2} g{i3,i4;i1,i2} INTpp{a1,a2;i3,i4} 
+  + A{i1,i2;a1,a2} g{i3,a2;a3,i2} T2{a1,a3;i1,i3} 
+  + 1/2 1/4 A{i1,i2;a1,a2} g{a1,a2;a3,a4} INTpp{a3,a4;i1,i2} 
+  - 1/2 1/2 A{i1,i2;a1,a2} g{i3,i4;a3,a4} T2{a1,a2;i1,i3} INTpp{a3,a4;i2,i4} 
+  + 1/4 1/4 A{i1,i2;a1,a2} g{i3,i4;a3,a4} T2{a1,a2;i3,i4} INTpp{a3,a4;i1,i2} 
+  - 1/2 1/2 A{i1,i2;a1,a2} g{i3,i4;a3,a4} T2{a1,a3;i1,i2} INTpp{a2,a4;i3,i4} 
+  + 1/2 A{i1,i2;a1,a2} g{i3,i4;a3,a4} T2{a1,a3;i1,i3} T2{a2,a4;i2,i4} 
+  - A{i1,i2;a1,a2} g{i3,a1;a3,i1} T1{a3;i2} T1{a2;i3} 
+  - 1/2 A{i1,i2;a1,a2} f{i3;a3} T2{a1,a3;i1,i2} T1{a2;i3} 
+  - 1/2 A{i1,i2;a1,a2} f{i3;a3} T2{a1,a2;i1,i3} T1{a3;i2} 
+  - A{i1,i2;a1,a2} g{i3,i4;a3,i2} T2{a1,a3;i1,i3} T1{a2;i4} 
+  - 1/2 1/2 A{i1,i2;a1,a2} g{i3,i4;a3,i1} T1{a3;i2} INTpp{a1,a2;i3,i4} 
+  + 1/2 A{i1,i2;a1,a2} g{i3,i4;a3,i2} T2{a1,a2;i1,i3} T1{a3;i4} 
+  + 1/2 1/2 A{i1,i2;a1,a2} g{i3,a1;a3,a4} T1{a2;i3} INTpp{a3,a4;i1,i2} 
+  + A{i1,i2;a1,a2} g{i3,a2;a3,a4} T2{a1,a3;i1,i3} T1{a4;i2} 
+  - 1/2 A{i1,i2;a1,a2} g{i3,a2;a3,a4} T2{a1,a3;i1,i2} T1{a4;i3} 
+  + 1/4 1/2 A{i1,i2;a1,a2} g{i3,i4;a3,a4} T1{a1;i3} T1{a2;i4} INTpp{a3,a4;i1,i2} 
+  - A{i1,i2;a1,a2} g{i3,i4;a3,a4} T2{a1,a3;i1,i3} T1{a4;i2} T1{a2;i4} 

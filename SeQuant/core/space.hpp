@@ -2,21 +2,22 @@
 // Created by Eduard Valeyev on 3/20/18.
 //
 
-#ifndef SEQUANT_SPACE_H
-#define SEQUANT_SPACE_H
+#ifndef SEQUANT_CORE_SPACE_H
+#define SEQUANT_CORE_SPACE_H
 
 #include <SeQuant/core/fwd.hpp>
 
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/container.hpp>
+#include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/utility/string.hpp>
 #include <SeQuant/core/wstring.hpp>
 
 #include <range/v3/algorithm/any_of.hpp>
 
-#include <bitset>
 #include <cassert>
 #include <cmath>
+#include <string_view>
 
 namespace sequant {
 
@@ -36,6 +37,10 @@ class TypeAttr {
 
   /// the null TypeAttr
   const static TypeAttr null;
+
+  /// first (most significant) bit reserved for creating default space used by
+  /// Index that is distinct from the null space
+  const static TypeAttr reserved;
 
   /// @brief Constructs from a bitset representation
 
@@ -126,10 +131,6 @@ class TypeAttr {
 
   friend class Index;
 
-  /// first (most significant) bit reserved for creating default space used by
-  /// Index that is distinct from the null space
-  const static TypeAttr reserved;
-
   /// makes reserved object
   static TypeAttr make_reserved() {
     TypeAttr result;
@@ -150,6 +151,10 @@ class QuantumNumbersAttr {
 
   /// the null TypeAttr
   const static QuantumNumbersAttr null;
+
+  /// first (most significant) bit reserved for creating default space used by
+  /// Index that is distinct from the null space
+  const static QuantumNumbersAttr reserved;
 
   /// @brief Constructs from a bitset representation
 
@@ -243,10 +248,6 @@ class QuantumNumbersAttr {
 
   friend class Index;
 
-  /// first (most significant) bit reserved for creating default space used by
-  /// Index that is distinct from the null space
-  const static QuantumNumbersAttr reserved;
-
   /// makes reserved object
   static QuantumNumbersAttr make_reserved() {
     QuantumNumbersAttr result;
@@ -286,7 +287,12 @@ class IndexSpace {
     Attr &operator=(const Attr &) = default;
     Attr &operator=(Attr &&) = default;
 
+    /// the null Attr
     const static Attr null;
+
+    /// this Attr is reserved for creating default space used by
+    /// Index that is distinct from the null space
+    const static Attr reserved;
 
     constexpr const TypeAttr &type() const {
       return static_cast<const TypeAttr &>(*this);
@@ -349,6 +355,12 @@ class IndexSpace {
         return this->qns() < other.qns();
       }
     }
+
+    /// makes reserved object
+    static Attr make_reserved() {
+      Attr result{Type::reserved, QuantumNumbers::reserved};
+      return result;
+    }
   };  // struct Attr
 
   using Type = TypeAttr;
@@ -392,6 +404,19 @@ class IndexSpace {
     }
   };
 
+  struct AttrCompare {
+    using is_transparent = void;
+    bool operator()(const IndexSpace &a, const IndexSpace &b) const {
+      return a.attr() < b.attr();
+    }
+    bool operator()(const IndexSpace &a, const IndexSpace::Attr &b) const {
+      return a.attr() < b;
+    }
+    bool operator()(const IndexSpace::Attr &a, const IndexSpace &b) const {
+      return a < b.attr();
+    }
+  };
+
   friend constexpr bool operator==(IndexSpace const &,
                                    IndexSpace const &) noexcept;
   friend constexpr bool operator!=(IndexSpace const &,
@@ -418,6 +443,9 @@ class IndexSpace {
       : attr_(typeattr, qnattr),
         base_key_(sequant::to_wstring(std::forward<S>(type_label))),
         approximate_size_(approximate_size) {}
+
+  explicit IndexSpace(std::string_view label);
+  explicit IndexSpace(std::wstring_view label);
 
   IndexSpace(const IndexSpace &other) = default;
   IndexSpace(IndexSpace &&other) = default;
@@ -460,38 +488,50 @@ class IndexSpace {
 
 inline const IndexSpace IndexSpace::null;
 inline const IndexSpace::Attr IndexSpace::Attr::null;
+inline const IndexSpace::Attr IndexSpace::Attr::reserved =
+    IndexSpace::Attr::make_reserved();
 
-/// @return true if type2 is included in type1, i.e. intersection(type1, type2)
-/// == type2
+inline auto hash_value(const IndexSpace &space) {
+  auto result = hash_value(static_cast<std::int64_t>(space.attr()));
+  hash::combine(result, space.base_key());
+  // approximate_size is an attribute that should not affect expression
+  // manipulation, so we do not include it in hash
+  return result;
+}
+
+/// @return true if type2 is included in type1, i.e. `intersection(type1, type2)
+/// == type2`
 inline bool includes(IndexSpace::Type type1, IndexSpace::Type type2) {
   return type1.includes(type2);
 }
-/// @return true if qns2 is included in qns1, i.e. \code intersection(qns1,
-/// qns2) == qns2 \endcode is true
+/// @return true if qns2 is included in qns1, i.e.
+/// `intersection(qns1, qns2) == qns2`
 inline bool includes(IndexSpace::QuantumNumbers qns1,
                      IndexSpace::QuantumNumbers qns2) {
   return qns1.includes(qns2);
 }
-/// @return true if space2 is included in space1, i.e. intersection(space1,
-/// space2) == space2
+/// @return true if space2 is included in space1, i.e. `intersection(space1,
+/// space2) == space2`
 inline bool includes(const IndexSpace &space1, const IndexSpace &space2) {
   return space1.attr().includes(space2.attr());
 }
 
-/// IndexSpace are ordered by their attributes (i.e. labels do not matter one
-/// bit)
+/// IndexSpace are ordered by their attributes and by labels
 [[nodiscard]] inline constexpr bool operator<(
     const IndexSpace &space1, const IndexSpace &space2) noexcept {
-  return space1.attr() < space2.attr();
+  if (space1.attr() != space2.attr())
+    return space1.attr() < space2.attr();
+  else
+    return space1.base_key() < space2.base_key();
 }
 
 ///
-/// IndexSpace are equal if they have equal @c IndexSpace::type(),
-/// @c IndexSpace::qns(), and @c IndexSpace::base_key().
+/// IndexSpace are equal if they have equal @c IndexSpace::attr() and
+/// @c IndexSpace::base_key().
 ///
 [[nodiscard]] inline constexpr bool operator==(
     IndexSpace const &space1, IndexSpace const &space2) noexcept {
-  return space1.type() == space2.type() && space1.qns() == space2.qns() &&
+  return space1.attr() == space2.attr() &&
          space1.base_key() == space2.base_key();
 }
 
@@ -506,4 +546,4 @@ inline bool includes(const IndexSpace &space1, const IndexSpace &space2) {
 
 }  // namespace sequant
 
-#endif  // SEQUANT_SPACE_H
+#endif  // SEQUANT_CORE_SPACE_H

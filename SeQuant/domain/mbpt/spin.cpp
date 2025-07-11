@@ -54,12 +54,26 @@ Index make_index_with_spincase(const Index& idx, mbpt::Spin s) {
   // to preserve rest of bits first unset spin bit, then set them to the desired
   // state
   auto qns = mbpt::spinannotation_remove(idx.space().qns()).unIon(s);
-  IndexSpace space{mbpt::spinannotation_replacе(idx.space().base_key(), s),
-                   idx.space().type(), qns};
+
+  IndexSpace space;
+  // try looking up space in registry
+  const auto label = mbpt::spinannotation_replacе(idx.space().base_key(), s);
+  if (auto isr = get_default_context().index_space_registry()) {
+    auto* space_ptr = isr->retrieve_ptr(label);
+    if (space_ptr && space_ptr->type() == idx.space().type() &&
+        space_ptr->qns() == qns) {
+      space = *space_ptr;
+    }
+  }
+  // if space not found, construct
+  if (!space) {
+    space = IndexSpace{label, idx.space().type(), qns,
+                       // N.B. assume size does not depend on spin
+                       idx.space().approximate_size()};
+  }
   auto protoindices = idx.proto_indices();
   for (auto& pidx : protoindices) pidx = make_index_with_spincase(pidx, s);
-  return Index{mbpt::spinannotation_replacе(idx.label(), s), space,
-               protoindices};
+  return Index{space, idx.ordinal(), protoindices};
 }
 
 // The argument really should be non-const but const sematics are broken

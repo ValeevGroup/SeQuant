@@ -1,0 +1,11 @@
+R1{a1;i1} =
+  + f{a1;i1}
+  - GAM0{u2;u1} g{a1,u1;u2,i1}
+  - HAM_D{i2;i1} T1s{a1;i2}
+  + HAM_D{a1;a2} T1s{a2;i1}
+  + HAM_D{i2;i1} GAM0{u2;u1} T2g{a1,u1;u2,i2}
+  - HAM_D{a1;a2} GAM0{u2;u1} T2g{a2,u1;u2,i1}
+  - GAM0{u3;u1} HAM_D{u1;u2} T2g{a1,u2;u3,i1}
+  + 1/2 GAM0{u4,u5;u1,u2} HAM_D{u1,u2;u3,u4} T2g{a1,u3;u5,i1}
+  + GAM0{u3;u1} T2g{a1,u1;u2,i1} HAM_D{u2;u3}
+  - 1/2 GAM0{u4,u5;u1,u2} T2g{a1,u1;u3,i1} HAM_D{u2,u3;u4,u5}

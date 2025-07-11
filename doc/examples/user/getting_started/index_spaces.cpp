@@ -20,18 +20,17 @@ int main() {
   // end-snippet-1
 
   // start-snippet-2
-  isr.add(L"y", 0b01).vacuum_occupied_space(L"i");
+  isr.add(L"y", 0b01, is_vacuum_occupied);
   // end-snippet-2
 
-  // start-snippet-3
-  isr.add(L"y", 0b01, is_vacuum_occupied);
-  // end-snippet-3
+  // reset isr for the next example to work
+  isr.clear();
 
-  // start-snippet-4
+  // start-snippet-3
   isr.add(L"y", 0b01, is_vacuum_occupied)
       .add(L"z", 0b10)
       .add(L"p", 0b11, is_complete);
-  // end-snippet-4
+  // end-snippet-3
 
   return 0;
 }

@@ -2,7 +2,9 @@
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/utility/context.hpp>
 
+#ifdef SEQUANT_CONTEXT_MANIPULATION_THREADSAFE
 #include <mutex>
+#endif
 
 namespace sequant {
 
@@ -15,6 +17,8 @@ bool operator==(const Context& ctx1, const Context& ctx2) {
            ctx1.spbasis() == ctx2.spbasis() &&
            ctx1.first_dummy_index_ordinal() ==
                ctx2.first_dummy_index_ordinal() &&
+           ctx1.index_space_registry()->spaces() ==
+               ctx2.index_space_registry()->spaces() &&
            *ctx1.index_space_registry() == *ctx2.index_space_registry();
 }
 
@@ -22,10 +26,14 @@ bool operator!=(const Context& ctx1, const Context& ctx2) {
   return !(ctx1 == ctx2);
 }
 
+#ifdef SEQUANT_CONTEXT_MANIPULATION_THREADSAFE
 static std::recursive_mutex ctx_mtx;  // used to protect the context
+#endif
 
 const Context& get_default_context(Statistics s) {
+#ifdef SEQUANT_CONTEXT_MANIPULATION_THREADSAFE
   std::scoped_lock lock(ctx_mtx);
+#endif
   auto& contexts =
       detail::get_implicit_context<container::map<Statistics, Context>>();
   auto it = contexts.find(s);
@@ -42,7 +50,9 @@ const Context& get_default_context(Statistics s) {
 }
 
 void set_default_context(const Context& ctx, Statistics s) {
+#ifdef SEQUANT_CONTEXT_MANIPULATION_THREADSAFE
   std::scoped_lock lock(ctx_mtx);
+#endif
   auto& contexts =
       detail::implicit_context_instance<container::map<Statistics, Context>>();
   auto it = contexts.find(s);
@@ -60,14 +70,18 @@ void set_default_context(const container::map<Statistics, Context>& ctxs) {
 }
 
 void reset_default_context() {
+#ifdef SEQUANT_CONTEXT_MANIPULATION_THREADSAFE
   std::scoped_lock lock(ctx_mtx);
+#endif
   detail::reset_implicit_context<container::map<Statistics, Context>>();
 }
 
 [[nodiscard]] detail::ImplicitContextResetter<
     container::map<Statistics, Context>>
 set_scoped_default_context(const container::map<Statistics, Context>& ctx) {
+#ifdef SEQUANT_CONTEXT_MANIPULATION_THREADSAFE
   std::scoped_lock lock(ctx_mtx);
+#endif
   return detail::set_scoped_implicit_context(ctx);
 }
 
@@ -76,6 +90,14 @@ set_scoped_default_context(const container::map<Statistics, Context>& ctx) {
 set_scoped_default_context(const Context& ctx) {
   return detail::set_scoped_implicit_context(
       container::map<Statistics, Context>{{Statistics::Arbitrary, ctx}});
+}
+
+[[nodiscard]] detail::ImplicitContextResetter<
+    container::map<Statistics, Context>>
+set_scoped_default_context(Context&& ctx) {
+  return detail::set_scoped_implicit_context(
+      container::map<Statistics, Context>{
+          {Statistics::Arbitrary, std::move(ctx)}});
 }
 
 Context::Context(std::shared_ptr<IndexSpaceRegistry> isr, Vacuum vac,
@@ -105,6 +127,13 @@ Context::Context(Vacuum vac, IndexSpaceMetric m, BraKetSymmetry bks,
       braket_symmetry_(bks),
       spbasis_(spb),
       first_dummy_index_ordinal_(fdio) {}
+
+Context Context::clone() const {
+  Context ctx(*this);
+  ctx.idx_space_reg_ =
+      std::make_shared<IndexSpaceRegistry>(idx_space_reg_->clone());
+  return ctx;
+}
 
 Vacuum Context::vacuum() const { return vacuum_; }
 

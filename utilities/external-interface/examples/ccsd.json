@@ -1,0 +1,52 @@
+{
+	"code_generation": {
+		"output_format": "itf",
+		"default_options": {
+			"density_fitting": false,
+			"term_by_term": false,
+			"spintracing": "closed_shell",
+			"projection": "biorthogonal"
+		},
+		"output_path": "ccsd.itfaa",
+		"code_blocks": [
+			{
+				"name": "Residual",
+				"results": [
+					{
+						"name": "ECC",
+						"equation_file": "ccsd/ccsd_en.inp",
+						"projection": "primitive"
+					},
+					{
+						"name": "R1",
+						"equation_file": "ccsd/ccsd_res1.inp"
+					},
+					{
+						"name": "R2",
+						"equation_file": "ccsd/ccsd_res2.inp"
+					}
+				]
+			}
+		]
+	},
+	"index_spaces": [
+		{
+			"name": "External",
+			"tag": "e",
+			"label": "a",
+			"size": 100
+		},
+		{
+			"name": "Closed",
+			"tag": "c",
+			"label": "i",
+			"size": 10
+		},
+		{
+			"name": "dummy",
+			"tag": "D",
+			"label": "p",
+			"size": 42
+		}
+	]
+}

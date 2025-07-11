@@ -23,5 +23,5 @@ add_subdirectory(integration)
 
 # target for running ALL tests
 add_custom_target_subproject(sequant check
-    USES_TERMINAL COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure -R "^sequant")
-
+    USES_TERMINAL COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure -R "^sequant"
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
