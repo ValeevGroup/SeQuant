@@ -1,7 +1,6 @@
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/op.hpp>
-#include <SeQuant/core/tensor.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/op.hpp>
 
