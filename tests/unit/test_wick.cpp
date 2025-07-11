@@ -769,7 +769,7 @@ TEST_CASE("wick", "[algorithms][wick]") {
           FNOperator(cre({L"p_9", L"p_10"}), ann({L"p_11", L"p_12"})),
           FNOperator(cre({L"p_13", L"p_14"}), ann({L"p_15", L"p_16"})),
           FNOperator(cre({L"p_17", L"p_18", L"p_19"}),
-                     ann({L"p_20", L"p_21", L"p_22"}), V));
+                     ann({L"p_20", L"p_21", L"p_22"})));
       auto wick = FWickTheorem{opseq};
       auto result = wick.use_topology(true).compute(true);
       REQUIRE(result->is<Constant>());
