@@ -8,7 +8,6 @@
 
 #include <catch2/catch_test_macros.hpp>
 #include "catch2_sequant.hpp"
-#include "test_config.hpp"
 
 TEST_CASE("mbpt_cc", "[mbpt/cc]") {
   using namespace sequant;
