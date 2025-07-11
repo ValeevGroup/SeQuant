@@ -1271,7 +1271,9 @@ void TensorNetworkV2::init_edges() {
   ext_indices_.clear();
   pure_proto_indices_.clear();
 
-  auto idx_insert = [this](const Index &idx, Vertex vertex) {
+  container::set<Edge> edge_set;
+
+  auto idx_insert = [&edge_set](const Index &idx, Vertex vertex) {
     if (Logger::instance().tensor_network) {
       std::wcout << "TensorNetworkV2::init_edges: idx=" << to_latex(idx)
                  << " attached to tensor " << vertex.getTerminalIndex() << " ("
@@ -1281,9 +1283,9 @@ void TensorNetworkV2::init_edges() {
                  << std::endl;
     }
 
-    auto it = std::ranges::find(edges_, idx, &Edge::idx);
-    if (it == edges_.end()) {
-      edges_.emplace_back(std::move(vertex), idx);
+    auto it = std::ranges::find(edge_set, idx, &Edge::idx);
+    if (it == edge_set.end()) {
+      edge_set.emplace(std::move(vertex), idx);
     } else {
       it->connect_to(std::move(vertex));
     }
@@ -1299,6 +1301,7 @@ void TensorNetworkV2::init_edges() {
   // so that can be regarded as a kind of lower bound
   distinct_index_estimate /= 2;
   edges_.reserve(distinct_index_estimate);
+  edge_set.reserve(distinct_index_estimate);
 
   for (std::size_t tensor_idx = 0; tensor_idx < tensors_.size(); ++tensor_idx) {
     assert(tensors_[tensor_idx]);
@@ -1329,6 +1332,10 @@ void TensorNetworkV2::init_edges() {
                  Vertex(Origin::Aux, tensor_idx, index_idx, Symmetry::nonsymm));
     }
   }
+
+  edges_.insert(edges_.end(), std::make_move_iterator(edge_set.begin()),
+                std::make_move_iterator(edge_set.end()));
+  edge_set.clear();
 
   // extract external indices and all protoindices (since some external indices
   // may be pure protoindices)
