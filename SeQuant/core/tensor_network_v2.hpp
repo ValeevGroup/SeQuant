@@ -460,11 +460,6 @@ std::basic_ostream<CharT, Traits> &operator<<(
   return stream;
 }
 
-template <typename Edge>
-auto edge2index(const Edge &e) -> const Index & {
-  return e.idx();
-}
-
 }  // namespace sequant
 
 #endif  // SEQUANT_TENSOR_NETWORK_H
