@@ -104,8 +104,8 @@ class WickTheorem {
     if (!((sf && get_default_context(S).spbasis() == SPBasis::spinfree) ||
           (!sf && get_default_context(S).spbasis() == SPBasis::spinorbital))) {
       throw std::invalid_argument(
-          "WickTheorem::spinfree(sf): sf must match the contents of "
-          "get_default_context().spbasis() (N.B. WickTheorem::spinfree() is "
+          "WickTheorem<S>::spinfree(sf): sf must match the contents of "
+          "get_default_context(S).spbasis() (N.B. WickTheorem::spinfree() is "
           "deprecated, no longer should be used)");
     }
     return *this;
@@ -638,6 +638,7 @@ class WickTheorem {
         : wick(wt),
           nopseq(nopseq),
           nopseq_size(nopseq.opsize()),
+          ctx(get_default_context(S)),
           level(0),
           left_op_offset(0),
           count_only(false),
@@ -656,6 +657,7 @@ class WickTheorem {
     const WickTheorem<S> &wick;        //!< the WickTheorem object using this
     NormalOperatorSequence<S> nopseq;  //!< current state of operator sequence
     std::size_t nopseq_size;           //!< current size of nopseq
+    Context ctx;                       //!< current context
     Product sp;                        //!< current prefactor
     container::svector<std::pair<Op<S>, Op<S>>>
         contractions;  //!< current list of indices of contracted {qpann,qpcre}
@@ -1090,7 +1092,8 @@ class WickTheorem {
     using std::begin;
     using std::end;
 
-    const auto &isr = get_default_context(S).index_space_registry();
+    const auto &ctx = state.ctx;
+    const auto &isr = ctx.index_space_registry();
 
     // if full contractions needed, make contractions involving first index with
     // another index, else contract any index i with index j (i<j)
@@ -1310,7 +1313,8 @@ class WickTheorem {
 
           // check if can contract these indices and
           // check connectivity constraints (if needed)
-          if (can_contract(*op_left_iter, *op_right_iter, input_->vacuum())) {
+          if (can_contract(*op_left_iter, *op_right_iter, ctx.vacuum(),
+                           ctx.index_space_registry())) {
             auto &&[is_unique, nop_top_degen] = is_topologically_unique();
             if (is_unique) {
               if (state.connect(nop_connections_,
@@ -1341,7 +1345,8 @@ class WickTheorem {
                 Product sp_copy = state.sp;
                 state.sp.append(
                     static_cast<int64_t>(nop_top_degen) * phase,
-                    contract(*op_left_iter, *op_right_iter, input_->vacuum()));
+                    contract(*op_left_iter, *op_right_iter, ctx.vacuum(),
+                             ctx.index_space_registry()));
 
                 // update the stats
                 ++stats_.num_attempted_contractions;
@@ -1375,10 +1380,8 @@ class WickTheorem {
                         // for spinfree Wick over Fermi vacuum, we need to
                         // include extra x2 factor for each cycle
                         if (S == Statistics::FermiDirac &&
-                            get_default_context(S).vacuum() ==
-                                Vacuum::SingleProduct &&
-                            get_default_context(S).spbasis() ==
-                                SPBasis::spinfree) {
+                            ctx.vacuum() == Vacuum::SingleProduct &&
+                            ctx.spbasis() == SPBasis::spinfree) {
                           auto [target_partner_indices, ncycles] =
                               state.make_target_partner_indices();
                           assert(target_partner_indices
@@ -1406,10 +1409,8 @@ class WickTheorem {
                         // for spinfree Wick over Fermi vacuum, we need to
                         // include extra x2 factor for each cycle
                         if (ncycles > 0 &&
-                            get_default_context(S).vacuum() ==
-                                Vacuum::SingleProduct &&
-                            get_default_context(S).spbasis() ==
-                                SPBasis::spinfree) {
+                            ctx.vacuum() == Vacuum::SingleProduct &&
+                            ctx.spbasis() == SPBasis::spinfree) {
                           scalar_prefactor *= 1 << ncycles;
                         }
 
@@ -1476,9 +1477,11 @@ class WickTheorem {
   }
 
  public:
-  static bool can_contract(const Op<S> &left, const Op<S> &right,
-                           Vacuum vacuum = get_default_context(S).vacuum()) {
-    const auto &isr = get_default_context(S).index_space_registry();
+  static bool can_contract(
+      const Op<S> &left, const Op<S> &right,
+      Vacuum vacuum = get_default_context(S).vacuum(),
+      const std::shared_ptr<const IndexSpaceRegistry> &isr =
+          get_default_context(S).index_space_registry()) {
     // for bosons can only do Wick's theorem for physical vacuum (or similar)
     if constexpr (statistics == Statistics::BoseEinstein)
       assert(vacuum == Vacuum::Physical);
@@ -1494,9 +1497,10 @@ class WickTheorem {
   }
 
   static ExprPtr contract(const Op<S> &left, const Op<S> &right,
-                          Vacuum vacuum = get_default_context(S).vacuum()) {
-    const auto &isr = get_default_context(S).index_space_registry();
-    assert(can_contract(left, right, vacuum));
+                          Vacuum vacuum = get_default_context(S).vacuum(),
+                          const std::shared_ptr<const IndexSpaceRegistry> &isr =
+                              get_default_context(S).index_space_registry()) {
+    assert(can_contract(left, right, vacuum, isr));
     //    assert(
     //        !left.index().has_proto_indices() &&
     //            !right.index().has_proto_indices());  // I don't think the

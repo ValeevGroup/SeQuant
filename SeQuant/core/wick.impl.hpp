@@ -46,7 +46,9 @@ template <Statistics S>
 container::map<Index, Index> compute_index_replacement_rules(
     std::shared_ptr<Product> &product,
     const container::set<Index> &external_indices,
-    const std::set<Index, Index::LabelCompare> &all_indices) {
+    const std::set<Index, Index::LabelCompare> &all_indices,
+    const std::shared_ptr<const IndexSpaceRegistry> &isr =
+        get_default_context(S).index_space_registry()) {
   expr_range exrng(product);
 
   /// this ensures that all temporary indices have unique *labels* (not just
@@ -58,9 +60,8 @@ container::map<Index, Index> compute_index_replacement_rules(
   container::map<Index /* src */, Index /* dst */> result;  // src->dst
 
   // computes an index in intersection of space1 and space2
-  auto make_intersection_index = [&idxfac](const IndexSpace &space1,
-                                           const IndexSpace &space2) {
-    auto isr = sequant::get_default_context(S).index_space_registry();
+  auto make_intersection_index = [&idxfac, &isr](const IndexSpace &space1,
+                                                 const IndexSpace &space2) {
     const auto intersection_space = isr->intersection(space1, space2);
     if (!intersection_space) throw zero_result{};
     return idxfac.make(intersection_space);
@@ -101,9 +102,8 @@ container::map<Index, Index> compute_index_replacement_rules(
   // adds src1->dst and src2->dst; if src1->dst1 and/or src2->dst2 already
   // exist the existing rules are updated to map to the intersection of dst1,
   // dst2 and dst
-  auto add_rules = [&result, &idxfac, &proto, &make_intersection_index](
+  auto add_rules = [&result, &idxfac, &proto, &make_intersection_index, &isr](
                        const Index &src1, const Index &src2, const Index &dst) {
-    auto isr = get_default_context(S).index_space_registry();
     // are there replacement rules already for src{1,2}?
     auto src1_it = result.find(src1);
     auto src2_it = result.find(src2);
@@ -176,7 +176,6 @@ container::map<Index, Index> compute_index_replacement_rules(
     }
   };
 
-  auto isr = get_default_context(S).index_space_registry();
   /// this makes the list of replacements ... we do not mutate the expressions
   /// to keep the information about which indices are related
   for (auto it = ranges::begin(exrng); it != ranges::end(exrng); ++it) {
@@ -362,8 +361,9 @@ inline bool apply_index_replacement_rules(
 /// @throw zero_result if @c expr is zero
 template <Statistics S>
 void reduce_wick_impl(std::shared_ptr<Product> &expr,
-                      const container::set<Index> &external_indices) {
-  if (get_default_context(S).metric() == IndexSpaceMetric::Unit) {
+                      const container::set<Index> &external_indices,
+                      const Context &ctx) {
+  if (ctx.metric() == IndexSpaceMetric::Unit) {
     bool pass_mutated = false;
     do {
       pass_mutated = false;
@@ -381,7 +381,7 @@ void reduce_wick_impl(std::shared_ptr<Product> &expr,
       });
 
       const auto replacement_rules = compute_index_replacement_rules<S>(
-          expr, external_indices, all_indices);
+          expr, external_indices, all_indices, ctx.index_space_registry());
 
       if (Logger::instance().wick_reduce) {
         std::wcout << "reduce_wick_impl(expr, external_indices):\n  expr = "
@@ -398,7 +398,7 @@ void reduce_wick_impl(std::shared_ptr<Product> &expr,
       }
 
       if (!replacement_rules.empty()) {
-        auto isr = get_default_context(S).index_space_registry();
+        auto isr = ctx.index_space_registry();
         pass_mutated = apply_index_replacement_rules(
             expr, replacement_rules, external_indices, all_indices, isr);
       }
@@ -1047,7 +1047,8 @@ void WickTheorem<S>::reduce(ExprPtr &expr) const {
     auto expr_cast = std::static_pointer_cast<Product>(expr);
     try {
       assert(external_indices_);
-      detail::reduce_wick_impl<S>(expr_cast, *external_indices_);
+      detail::reduce_wick_impl<S>(expr_cast, *external_indices_,
+                                  get_default_context(S));
       expr = expr_cast;
     } catch (detail::zero_result &) {
       expr = std::make_shared<Constant>(0);
@@ -1059,7 +1060,8 @@ void WickTheorem<S>::reduce(ExprPtr &expr) const {
       auto subexpr_cast = std::static_pointer_cast<Product>(subexpr);
       try {
         assert(external_indices_);
-        detail::reduce_wick_impl<S>(subexpr_cast, *external_indices_);
+        detail::reduce_wick_impl<S>(subexpr_cast, *external_indices_,
+                                    get_default_context(S));
         subexpr = subexpr_cast;
       } catch (detail::zero_result &) {
         subexpr = std::make_shared<Constant>(0);
