@@ -175,7 +175,12 @@ T transform_reduce(SizedRange&& rng, T init, const BinaryReductionOp& reduce,
 #endif
 }
 
+/// Set up the global locale settings
 void set_locale();
+
+/// @brief disables Thousands separators in the current locale
+/// @note Need this in case of JSON/CSV output
+void disable_thousands_separator();
 
 }  // namespace sequant
 
