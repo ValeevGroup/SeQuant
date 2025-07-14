@@ -1090,6 +1090,8 @@ class WickTheorem {
     using std::begin;
     using std::end;
 
+    const auto &isr = get_default_context(S).index_space_registry();
+
     // if full contractions needed, make contractions involving first index with
     // another index, else contract any index i with index j (i<j)
     auto left_op_offset = state.left_op_offset;
@@ -1098,7 +1100,7 @@ class WickTheorem {
 
     // optimization: can't contract fully if first op is not a qp annihilator
     if (full_contractions_ &&
-        !is_qpannihilator(*op_left_iter, input_->vacuum()))
+        !is_qpannihilator(*op_left_iter, input_->vacuum(), isr))
       return;
 
     const auto op_left_iter_fence =
@@ -1480,9 +1482,10 @@ class WickTheorem {
     // for bosons can only do Wick's theorem for physical vacuum (or similar)
     if constexpr (statistics == Statistics::BoseEinstein)
       assert(vacuum == Vacuum::Physical);
-    if (is_qpannihilator<S>(left, vacuum) && is_qpcreator<S>(right, vacuum)) {
-      const auto qpspace_left = qpannihilator_space<S>(left, vacuum);
-      const auto qpspace_right = qpcreator_space<S>(right, vacuum);
+    if (is_qpannihilator<S>(left, vacuum, isr) &&
+        is_qpcreator<S>(right, vacuum, isr)) {
+      const auto qpspace_left = qpannihilator_space<S>(left, vacuum, isr);
+      const auto qpspace_right = qpcreator_space<S>(right, vacuum, isr);
       const auto qpspace_common =
           isr->intersection(qpspace_left, qpspace_right);
       if (qpspace_common) return true;
@@ -1499,12 +1502,12 @@ class WickTheorem {
     //            !right.index().has_proto_indices());  // I don't think the
     //            logic is
     // correct for dependent indices
-    if (is_pure_qpannihilator<S>(left, vacuum) &&
-        is_pure_qpcreator<S>(right, vacuum))
+    if (is_pure_qpannihilator<S>(left, vacuum, isr) &&
+        is_pure_qpcreator<S>(right, vacuum, isr))
       return make_overlap(left.index(), right.index());
     else {
-      const auto qpspace_left = qpannihilator_space<S>(left, vacuum);
-      const auto qpspace_right = qpcreator_space<S>(right, vacuum);
+      const auto qpspace_left = qpannihilator_space<S>(left, vacuum, isr);
+      const auto qpspace_right = qpcreator_space<S>(right, vacuum, isr);
       const auto qpspace_common =
           isr->intersection(qpspace_left, qpspace_right);
       const auto index_common = Index::make_tmp_index(qpspace_common);
