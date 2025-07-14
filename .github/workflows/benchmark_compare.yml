@@ -42,7 +42,7 @@ jobs:
               // Manual dispatch - use provided PR number
               pullRequestNumber = parseInt('${{ github.event.inputs.pr_number }}');
             } else {
-              // Issue comment trigger - use issue number
+              // PR comment trigger - use PR number
               pullRequestNumber = context.issue.number;
             }
             
@@ -97,11 +97,9 @@ jobs:
           echo "=== Git Remotes ==="
           git remote -v
           echo "=== Base commit ==="
-          echo "Base SHA: ${{ fromJson(steps.pr.outputs.result).base_sha }}"
-          git log --oneline -1 ${{ fromJson(steps.pr.outputs.result).base_sha }} 2>/dev/null || echo "Base commit not found locally"
+          echo "${{ fromJson(steps.pr.outputs.result).base_sha }}"
           echo "=== Head commit ==="
-          echo "Head SHA: ${{ fromJson(steps.pr.outputs.result).head_sha }}"
-          git log --oneline -1 ${{ fromJson(steps.pr.outputs.result).head_sha }} 2>/dev/null || echo "Head commit not found locally"
+          echo "${{ fromJson(steps.pr.outputs.result).head_sha }}"
 
       - name: Install Dependencies
         run: |
