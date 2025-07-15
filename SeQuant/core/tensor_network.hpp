@@ -344,22 +344,16 @@ class TensorNetwork {
   struct FullLabelCompare {
     using is_transparent = void;
     bool operator()(const Edge &first, const Edge &second) const {
-      return first.idx().full_label() < second.idx().full_label();
-    }
-    bool operator()(const Edge &first, const std::wstring_view &second) const {
-      return first.idx().full_label() < second;
-    }
-    bool operator()(const std::wstring_view &first, const Edge &second) const {
-      return first < second.idx().full_label();
+      return Index::FullLabelCompare{}(first.idx(), second.idx());
     }
     bool operator()(const Index &first, const Index &second) const {
-      return first.full_label() < second.full_label();
+      return Index::FullLabelCompare{}(first, second);
     }
-    bool operator()(const Index &first, const std::wstring_view &second) const {
-      return first.full_label() < second;
+    bool operator()(const Edge &first, const Index &second) const {
+      return Index::FullLabelCompare{}(first.idx(), second);
     }
-    bool operator()(const std::wstring_view &first, const Index &second) const {
-      return first < second.full_label();
+    bool operator()(const Index &first, const Edge &second) const {
+      return Index::FullLabelCompare{}(first, second.idx());
     }
   };
   // Index -> Edge, sorted by full label
