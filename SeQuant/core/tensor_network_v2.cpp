@@ -1281,8 +1281,8 @@ void TensorNetworkV2::init_edges() {
                  << std::endl;
     }
 
-    auto it =
-        std::ranges::lower_bound(edges_, idx, std::less<Index>{}, &Edge::idx);
+    auto it = std::ranges::lower_bound(edges_, idx, Index::FullLabelCompare{},
+                                       &Edge::idx);
     if (it == edges_.end() || it->idx() != idx) {
       edges_.emplace(it, std::move(vertex), idx);
     } else {
