@@ -635,18 +635,18 @@ TEST_CASE("tensor_network_v2", "[elements]") {
 
     const Index dummy(L"a_1");
 
-    Edge e1(v1, dummy);
+    Edge e1(v1, &dummy);
     e1.connect_to(v4);
-    Edge e2(v2, dummy);
+    Edge e2(v2, &dummy);
     e2.connect_to(v3);
-    Edge e3(v3, dummy);
+    Edge e3(v3, &dummy);
     e3.connect_to(v5);
-    Edge e4(v4, dummy);
+    Edge e4(v4, &dummy);
     e4.connect_to(v6);
 
-    Edge e5(v8, dummy);
+    Edge e5(v8, &dummy);
     e5.connect_to(v6);
-    Edge e6(v8, dummy);
+    Edge e6(v8, &dummy);
     REQUIRE_THROWS_AS(e6.connect_to(v7), std::logic_error);
 
     // Due to tensor symmetries, these edges are considered equal

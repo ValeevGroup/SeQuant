@@ -87,8 +87,8 @@ class TensorNetworkV2 {
    public:
     Edge() = default;
     explicit Edge(Vertex vertex) : first(std::move(vertex)), second() {}
-    Edge(Vertex vertex, Index index)
-        : first(std::move(vertex)), second(), index(std::move(index)) {}
+    Edge(Vertex vertex, const Index *index)
+        : first(std::move(vertex)), second(), index(index) {}
 
     Edge &connect_to(Vertex vertex) {
       assert(!second.has_value());
@@ -144,7 +144,8 @@ class TensorNetworkV2 {
         return second < other.second;
       }
 
-      return index.space() < other.index.space();
+      assert(index && other.index);
+      return index->space() < other.index->space();
     }
 
     bool operator==(const Edge &other) const {
@@ -165,12 +166,15 @@ class TensorNetworkV2 {
       return second.has_value() ? 2 : (first.has_value() ? 1 : 0);
     }
 
-    const Index &idx() const { return index; }
+    const Index &idx() const {
+      assert(index);
+      return *index;
+    }
 
    private:
     std::optional<Vertex> first;
     std::optional<Vertex> second;
-    Index index;
+    const Index *index = nullptr;
   };
 
   struct Graph {
