@@ -339,7 +339,7 @@ void TensorNetworkV2::canonicalize_graph(const NamedIndexSet &named_indices) {
     init_edges();
   }
 
-  const auto is_anonymous_index = [named_indices](const Index &idx) {
+  const auto is_anonymous_index = [&named_indices](const Index &idx) {
     return named_indices.find(idx) == named_indices.end();
   };
 
