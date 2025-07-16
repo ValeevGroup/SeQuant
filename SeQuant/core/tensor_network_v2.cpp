@@ -380,18 +380,18 @@ void TensorNetworkV2::canonicalize_graph(const NamedIndexSet &named_indices) {
     delete cgraph;
   }
 
-  container::map<std::size_t, std::size_t> tensor_idx_to_vertex;
+  std::vector<std::size_t> tensor_idx_to_vertex;
+  tensor_idx_to_vertex.reserve(tensors_.size());
   container::map<std::size_t, container::svector<std::size_t, 3>>
       tensor_idx_to_particle_order;
-  container::map<std::size_t, std::size_t> index_idx_to_vertex;
+  std::vector<std::size_t> index_idx_to_vertex;
+  index_idx_to_vertex.reserve(edges_.size() + pure_proto_indices_.size());
   std::size_t tensor_idx = 0;
-  std::size_t index_idx = 0;
 
   for (std::size_t vertex = 0; vertex < graph.vertex_types.size(); ++vertex) {
     switch (graph.vertex_types[vertex]) {
       case VertexType::Index:
-        index_idx_to_vertex[index_idx] = vertex;
-        index_idx++;
+        index_idx_to_vertex.emplace_back(index_idx_to_vertex.size()) = vertex;
         break;
       case VertexType::Particle: {
         assert(tensor_idx > 0);
@@ -402,7 +402,8 @@ void TensorNetworkV2::canonicalize_graph(const NamedIndexSet &named_indices) {
         break;
       }
       case VertexType::TensorCore:
-        tensor_idx_to_vertex[tensor_idx] = vertex;
+        assert(tensor_idx_to_vertex.size() == tensor_idx);
+        tensor_idx_to_vertex.emplace_back(tensor_idx_to_vertex.size()) = vertex;
         tensor_idx++;
         break;
       case VertexType::TensorBra:
@@ -433,8 +434,10 @@ void TensorNetworkV2::canonicalize_graph(const NamedIndexSet &named_indices) {
   // Use this ordering to relabel anonymous indices
   const auto index_sorter = [&index_idx_to_vertex, &canonize_perm](
                                 std::size_t lhs_idx, std::size_t rhs_idx) {
-    const std::size_t lhs_vertex = index_idx_to_vertex.at(lhs_idx);
-    const std::size_t rhs_vertex = index_idx_to_vertex.at(rhs_idx);
+    assert(lhs_idx < index_idx_to_vertex.size());
+    const std::size_t lhs_vertex = index_idx_to_vertex[lhs_idx];
+    assert(rhs_idx < index_idx_to_vertex.size());
+    const std::size_t rhs_vertex = index_idx_to_vertex[rhs_idx];
 
     return canonize_perm[lhs_vertex] < canonize_perm[rhs_vertex];
   };
@@ -755,15 +758,14 @@ TensorNetworkV2::canonicalize_slots(
   }
 
   // maps index ordinal to vertex ordinal
-  container::map<std::size_t, std::size_t> index_idx_to_vertex;
-  container::map<Index, unsigned int> index_to_canon_vertex;
-  std::size_t index_idx = 0;
-  for (std::size_t vertex = 0; vertex < graph.vertex_types.size(); ++vertex) {
-    if (graph.vertex_types[vertex] == VertexType::Index) {
-      index_idx_to_vertex[index_idx] = vertex;
-      index_idx++;
-    }
-  }
+  const auto index_idx_to_vertex =
+      graph.vertex_types | ranges::views::filter([](const auto &vertex_type) {
+        return vertex_type == VertexType::Index;
+      }) |
+      ranges::views::enumerate | ranges::views::transform([](auto &&ord_value) {
+        return std::get<0>(ord_value);
+      }) |
+      ranges::to<std::vector>;
   assert(index_idx_to_vertex.size() ==
          edges_.size() + pure_proto_indices_.size());
 
