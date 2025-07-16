@@ -573,7 +573,7 @@ ExprPtr TensorNetworkV2::canonicalize(
   }
 
   if (!fast) {
-    // The graph-based canonization is required in call cases in which there are
+    // The graph-based canonization is required in all cases in which there are
     // indistinguishable tensors present in the expression. Their order and
     // indexing can only be determined via this rigorous canonization.
     canonicalize_graph(named_indices);
