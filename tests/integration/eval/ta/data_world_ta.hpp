@@ -9,7 +9,7 @@
 #include <eval_utils.hpp>
 
 #include <SeQuant/core/container.hpp>
-#include <SeQuant/core/tensor.hpp>
+#include <SeQuant/core/expr.hpp>
 #include <SeQuant/domain/eval/result.hpp>
 
 #include <tiledarray.h>
