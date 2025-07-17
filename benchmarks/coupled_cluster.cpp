@@ -2,7 +2,7 @@
 
 #include <SeQuant/domain/mbpt/models/cc.hpp>
 
-static constexpr std::size_t maxRank = 15;
+static constexpr std::size_t maxRank = 10;
 
 using namespace sequant;
 using namespace sequant::mbpt;

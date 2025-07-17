@@ -26,10 +26,10 @@
 #include <iterator>
 #include <limits>
 #include <numeric>
+#include <ranges>
 #include <sstream>
 #include <string>
 #include <type_traits>
-#include <variant>
 
 #include <range/v3/algorithm/for_each.hpp>
 #include <range/v3/algorithm/none_of.hpp>
@@ -39,17 +39,6 @@
 #include <range/v3/view/view.hpp>
 
 namespace sequant {
-
-struct FullLabelIndexLocator {
-  std::wstring_view label;
-  FullLabelIndexLocator(std::wstring_view label) : label(std::move(label)) {}
-
-  bool operator()(const TensorNetworkV2::Edge &edge) const {
-    return edge.idx().full_label() == label;
-  }
-
-  bool operator()(const Index &idx) const { return idx.full_label() == label; }
-};
 
 bool tensors_commute(const AbstractTensor &lhs, const AbstractTensor &rhs) {
   // tensors commute if their colors are different or either one of them
@@ -73,16 +62,24 @@ struct TensorBlockCompare {
       return aux_rank(lhs) < aux_rank(rhs);
     }
 
-    auto lhs_indices = indices(lhs);
-    auto rhs_indices = indices(rhs);
+    // Note: Accessing bra, ket and aux individually is a lot faster
+    // than accessing the combined index() object
+#define SEQUANT_CHECK_IDX_GROUP(group)                                  \
+  auto lhs_##group = lhs._##group();                                    \
+  auto rhs_##group = rhs._##group();                                    \
+  auto lhs_##group##_end = lhs_##group.end();                           \
+  auto rhs_##group##_end = rhs_##group.end();                           \
+  for (auto lhs_it = lhs_##group.begin(), rhs_it = rhs_##group.begin(); \
+       lhs_it != lhs_##group##_end && rhs_it != rhs_##group##_end;      \
+       ++lhs_it, ++rhs_it) {                                            \
+    if (lhs_it->space() != rhs_it->space()) {                           \
+      return lhs_it->space() < rhs_it->space();                         \
+    }                                                                   \
+  }
 
-    for (auto lhs_it = lhs_indices.begin(), rhs_it = rhs_indices.begin();
-         lhs_it != lhs_indices.end() && rhs_it != rhs_indices.end();
-         ++lhs_it, ++rhs_it) {
-      if (lhs_it->space() != rhs_it->space()) {
-        return lhs_it->space() < rhs_it->space();
-      }
-    }
+    SEQUANT_CHECK_IDX_GROUP(bra);
+    SEQUANT_CHECK_IDX_GROUP(ket);
+    SEQUANT_CHECK_IDX_GROUP(aux);
 
     // Tensors are identical
     return false;
@@ -342,7 +339,7 @@ void TensorNetworkV2::canonicalize_graph(const NamedIndexSet &named_indices) {
     init_edges();
   }
 
-  const auto is_anonymous_index = [named_indices](const Index &idx) {
+  const auto is_anonymous_index = [&named_indices](const Index &idx) {
     return named_indices.find(idx) == named_indices.end();
   };
 
@@ -383,18 +380,21 @@ void TensorNetworkV2::canonicalize_graph(const NamedIndexSet &named_indices) {
     delete cgraph;
   }
 
-  container::map<std::size_t, std::size_t> tensor_idx_to_vertex;
+  // maps tensor ordinal -> input vertex ordinal
+  std::vector<std::size_t> tensor_idx_to_vertex;
+  tensor_idx_to_vertex.reserve(tensors_.size());
+  std::size_t tensor_idx = 0;
+  // for nonsymmetric tensors only: maps tensor ordinal -> canonical order of
+  // its columns'/particles' vertex ordinals
   container::map<std::size_t, container::svector<std::size_t, 3>>
       tensor_idx_to_particle_order;
-  container::map<std::size_t, std::size_t> index_idx_to_vertex;
-  std::size_t tensor_idx = 0;
-  std::size_t index_idx = 0;
+  std::vector<std::size_t> index_idx_to_vertex;
+  index_idx_to_vertex.reserve(edges_.size() + pure_proto_indices_.size());
 
   for (std::size_t vertex = 0; vertex < graph.vertex_types.size(); ++vertex) {
     switch (graph.vertex_types[vertex]) {
       case VertexType::Index:
-        index_idx_to_vertex[index_idx] = vertex;
-        index_idx++;
+        index_idx_to_vertex.emplace_back(index_idx_to_vertex.size()) = vertex;
         break;
       case VertexType::Particle: {
         assert(tensor_idx > 0);
@@ -405,7 +405,8 @@ void TensorNetworkV2::canonicalize_graph(const NamedIndexSet &named_indices) {
         break;
       }
       case VertexType::TensorCore:
-        tensor_idx_to_vertex[tensor_idx] = vertex;
+        assert(tensor_idx_to_vertex.size() == tensor_idx);
+        tensor_idx_to_vertex.emplace_back(tensor_idx_to_vertex.size()) = vertex;
         tensor_idx++;
         break;
       case VertexType::TensorBra:
@@ -427,13 +428,19 @@ void TensorNetworkV2::canonicalize_graph(const NamedIndexSet &named_indices) {
   }
 
   container::map<Index, Index> idxrepl;
+  auto idxrepl_emplace = [&idxrepl](auto &&from, auto &&to) {
+    if (from != to) idxrepl.emplace(std::move(from), std::move(to));
+  };
+
   // Sort edges so that their order corresponds to the order of indices in the
   // canonical graph
   // Use this ordering to relabel anonymous indices
   const auto index_sorter = [&index_idx_to_vertex, &canonize_perm](
                                 std::size_t lhs_idx, std::size_t rhs_idx) {
-    const std::size_t lhs_vertex = index_idx_to_vertex.at(lhs_idx);
-    const std::size_t rhs_vertex = index_idx_to_vertex.at(rhs_idx);
+    assert(lhs_idx < index_idx_to_vertex.size());
+    const std::size_t lhs_vertex = index_idx_to_vertex[lhs_idx];
+    assert(rhs_idx < index_idx_to_vertex.size());
+    const std::size_t rhs_vertex = index_idx_to_vertex[rhs_idx];
 
     return canonize_perm[lhs_vertex] < canonize_perm[rhs_vertex];
   };
@@ -443,11 +450,10 @@ void TensorNetworkV2::canonicalize_graph(const NamedIndexSet &named_indices) {
   for (const Edge &current : edges_) {
     const Index &idx = current.idx();
 
-    if (!is_anonymous_index(idx)) {
-      continue;
-    }
+    const auto is_named = current.vertex_count() != 2;
+    if (is_named) continue;
 
-    idxrepl.insert(std::make_pair(idx, idxfac.make(idx)));
+    idxrepl_emplace(idx, idxfac.make(idx));
   }
 
   if (Logger::instance().canonicalize) {
@@ -457,6 +463,10 @@ void TensorNetworkV2::canonicalize_graph(const NamedIndexSet &named_indices) {
                  << to_latex(idxpair.second) << std::endl;
     }
   }
+
+  // The tensor reordering and index relabeling will make edges_ invalid
+  edges_.clear();
+  have_edges_ = false;
 
   apply_index_replacements(tensors_, idxrepl, true);
 
@@ -485,10 +495,8 @@ void TensorNetworkV2::canonicalize_graph(const NamedIndexSet &named_indices) {
         continue;
       }
 
-      idxrepl.insert(
-          std::make_pair(bra_indices[col], bra_indices[particle_order[col]]));
-      idxrepl.insert(
-          std::make_pair(ket_indices[col], ket_indices[particle_order[col]]));
+      idxrepl_emplace(bra_indices[col], bra_indices[particle_order[col]]);
+      idxrepl_emplace(ket_indices[col], ket_indices[particle_order[col]]);
     }
 
     if (!idxrepl.empty()) {
@@ -525,11 +533,6 @@ void TensorNetworkV2::canonicalize_graph(const NamedIndexSet &named_indices) {
   };
 
   sort_via_indices<true>(tensors_, tensor_sorter);
-
-  // The tensor reordering and index relabelling made the current set of edges
-  // invalid
-  edges_.clear();
-  have_edges_ = false;
 
   if (Logger::instance().canonicalize) {
     std::wcout << "TensorNetworkV2::canonicalize_graph: tensors after "
@@ -571,7 +574,7 @@ ExprPtr TensorNetworkV2::canonicalize(
   }
 
   if (!fast) {
-    // The graph-based canonization is required in call cases in which there are
+    // The graph-based canonization is required in all cases in which there are
     // indistinguishable tensors present in the expression. Their order and
     // indexing can only be determined via this rigorous canonization.
     canonicalize_graph(named_indices);
@@ -639,10 +642,13 @@ ExprPtr TensorNetworkV2::canonicalize(
     const Index &index = edges_[i].idx();
     assert(is_anonymous_index(index));
     Index replacement = idxfac.make(index);
-    idxrepl.emplace(std::make_pair(index, replacement));
+    if (index != replacement) idxrepl.emplace(index, std::move(replacement));
   }
 
   // Done computing canonical index replacement list
+  // reset edges since renamings will make them obsolete
+  edges_.clear();
+  have_edges_ = false;
 
   if (Logger::instance().canonicalize) {
     for (const auto &idxpair : idxrepl) {
@@ -663,8 +669,6 @@ ExprPtr TensorNetworkV2::canonicalize(
   // the explicit index labelling of tensors into account.
   tensor_sorter.set_blocks_only(false);
   std::stable_sort(tensors_.begin(), tensors_.end(), tensor_sorter);
-
-  have_edges_ = false;
 
   assert(byproduct->is<Constant>());
   return (byproduct->as<Constant>().value() == 1) ? nullptr : byproduct;
@@ -756,15 +760,14 @@ TensorNetworkV2::canonicalize_slots(
   }
 
   // maps index ordinal to vertex ordinal
-  container::map<std::size_t, std::size_t> index_idx_to_vertex;
-  container::map<Index, unsigned int> index_to_canon_vertex;
-  std::size_t index_idx = 0;
-  for (std::size_t vertex = 0; vertex < graph.vertex_types.size(); ++vertex) {
-    if (graph.vertex_types[vertex] == VertexType::Index) {
-      index_idx_to_vertex[index_idx] = vertex;
-      index_idx++;
-    }
-  }
+  const auto index_idx_to_vertex =
+      graph.vertex_types | ranges::views::filter([](const auto &vertex_type) {
+        return vertex_type == VertexType::Index;
+      }) |
+      ranges::views::enumerate | ranges::views::transform([](auto &&ord_value) {
+        return std::get<0>(ord_value);
+      }) |
+      ranges::to<std::vector>;
   assert(index_idx_to_vertex.size() ==
          edges_.size() + pure_proto_indices_.size());
 
@@ -775,8 +778,7 @@ TensorNetworkV2::canonicalize_slots(
     using cord_set_t = container::set<ord_cord_it_t, detail::tuple_less<1>>;
 
     auto grand_index_list = ranges::views::concat(
-        edges_ | ranges::views::transform(edge2index<Edge>),
-        pure_proto_indices_);
+        edges_ | ranges::views::transform(&Edge::idx), pure_proto_indices_);
 
     // for each named index type (as defined by named_index_compare) maps its
     // ptr in grand_index_list to its ordinal in grand_index_list + canonical
@@ -825,8 +827,8 @@ TensorNetworkV2::canonicalize_slots(
 
         if (it == idx2cord.end()) {
           bool inserted;
-          std::tie(it, inserted) = idx2cord.insert(std::make_pair(
-              idxptr_slottype, cord_set_t(cord_set_t::key_compare{})));
+          std::tie(it, inserted) = idx2cord.emplace(
+              idxptr_slottype, cord_set_t(cord_set_t::key_compare{}));
           assert(inserted);
         }
         it->second.emplace(idx_ord, canonize_perm[vertex_ord],
@@ -926,17 +928,22 @@ TensorNetworkV2::Graph TensorNetworkV2::create_graph(
   graph.vertex_colors.reserve(vertex_count_estimate);
   graph.vertex_types.reserve(vertex_count_estimate);
 
-  container::map<ProtoBundle, std::size_t> proto_bundles;
+  container::svector<std::pair<ProtoBundle, std::size_t>> proto_bundles;
 
-  container::map<std::size_t, std::size_t> tensor_vertices;
-  tensor_vertices.reserve(tensors_.size());
+  // Mapping from the i-th tensor in tensors_ to the ID of the corresponding
+  // vertex
+  static constexpr std::size_t uninitialized_vertex =
+      std::numeric_limits<std::size_t>::max();
+  container::svector<std::size_t> tensor_vertices;
+  tensor_vertices.resize(tensors_.size(), uninitialized_vertex);
 
   container::vector<std::pair<std::size_t, std::size_t>> edges;
   edges.reserve(edges_.size() + tensors_.size());
 
   // Add vertices for tensors
   for (std::size_t tensor_idx = 0; tensor_idx < tensors_.size(); ++tensor_idx) {
-    assert(tensor_vertices.find(tensor_idx) == tensor_vertices.end());
+    assert(tensor_idx < tensor_vertices.size());
+    assert(tensor_vertices[tensor_idx] == uninitialized_vertex);
     assert(tensors_.at(tensor_idx));
     const AbstractTensor &tensor = *tensors_.at(tensor_idx);
 
@@ -950,7 +957,7 @@ TensorNetworkV2::Graph TensorNetworkV2::create_graph(
     graph.vertex_colors.push_back(colorizer(tensor));
 
     const std::size_t tensor_vertex = nvertex - 1;
-    tensor_vertices.insert(std::make_pair(tensor_idx, tensor_vertex));
+    tensor_vertices[tensor_idx] = tensor_vertex;
 
     // Create vertices to group indices
     const Symmetry tensor_sym = symmetry(tensor);
@@ -1060,9 +1067,13 @@ TensorNetworkV2::Graph TensorNetworkV2::create_graph(
   }
 
   // Now add all indices (edges_ + pure_proto_indices_) to the graph
-  container::map<Index, std::size_t> index_vertices;
+  container::vector<std::size_t> index_vertices;
+  index_vertices.resize(edges_.size() + pure_proto_indices_.size(),
+                        uninitialized_vertex);
 
-  for (const Edge &current_edge : edges_) {
+  for (std::size_t i = 0; i < edges_.size(); ++i) {
+    const Edge &current_edge = edges_[i];
+
     const Index &index = current_edge.idx();
     ++nvertex;
     if (options.make_labels)
@@ -1075,7 +1086,8 @@ TensorNetworkV2::Graph TensorNetworkV2::create_graph(
 
     const std::size_t index_vertex = nvertex - 1;
 
-    index_vertices[index] = index_vertex;
+    assert(index_vertices.at(i) == uninitialized_vertex);
+    index_vertices[i] = index_vertex;
 
     // Handle proto indices
     if (index.has_proto_indices()) {
@@ -1083,7 +1095,9 @@ TensorNetworkV2::Graph TensorNetworkV2::create_graph(
       assert(index.symmetric_proto_indices());
 
       std::size_t proto_vertex;
-      if (auto it = proto_bundles.find(index.proto_indices());
+      if (auto it =
+              std::ranges::find(proto_bundles, index.proto_indices(),
+                                &decltype(proto_bundles)::value_type::first);
           it != proto_bundles.end()) {
         proto_vertex = it->second;
       } else {
@@ -1115,8 +1129,7 @@ TensorNetworkV2::Graph TensorNetworkV2::create_graph(
         graph.vertex_colors.push_back(colorizer(index.proto_indices()));
 
         proto_vertex = nvertex - 1;
-        proto_bundles.insert(
-            std::make_pair(index.proto_indices(), proto_vertex));
+        proto_bundles.emplace_back(index.proto_indices(), proto_vertex);
       }
 
       edges.push_back(std::make_pair(index_vertex, proto_vertex));
@@ -1128,10 +1141,11 @@ TensorNetworkV2::Graph TensorNetworkV2::create_graph(
       const Vertex &vertex =
           i == 0 ? current_edge.first_vertex() : current_edge.second_vertex();
 
-      assert(tensor_vertices.find(vertex.getTerminalIndex()) !=
-             tensor_vertices.end());
+      assert(vertex.getTerminalIndex() < tensor_vertices.size());
+      assert(tensor_vertices[vertex.getTerminalIndex()] !=
+             uninitialized_vertex);
       const std::size_t tensor_vertex =
-          tensor_vertices.find(vertex.getTerminalIndex())->second;
+          tensor_vertices[vertex.getTerminalIndex()];
 
       // Store an edge connecting the index vertex to the corresponding tensor
       // vertex
@@ -1172,7 +1186,7 @@ TensorNetworkV2::Graph TensorNetworkV2::create_graph(
   }
 
   // also create vertices for pure proto indices
-  for (const auto &index : pure_proto_indices_) {
+  for (const auto &[i, index] : ranges::views::enumerate(pure_proto_indices_)) {
     ++nvertex;
     if (options.make_labels)
       graph.vertex_labels.push_back(std::wstring(index.full_label()));
@@ -1184,7 +1198,8 @@ TensorNetworkV2::Graph TensorNetworkV2::create_graph(
 
     const std::size_t index_vertex = nvertex - 1;
 
-    index_vertices[index] = index_vertex;
+    assert(index_vertices.at(i + edges_.size()) == uninitialized_vertex);
+    index_vertices[i + edges_.size()] = index_vertex;
   }
 
   // Add edges between proto index bundle vertices and all vertices of the
@@ -1192,14 +1207,31 @@ TensorNetworkV2::Graph TensorNetworkV2::create_graph(
   // bundle would be connected with vertices for i_1 and i_2
   for (const auto &[bundle, vertex] : proto_bundles) {
     for (const Index &idx : bundle) {
-      auto it = index_vertices.find(idx);
+      std::size_t idx_vertex = uninitialized_vertex;
 
-      assert(it != index_vertices.end());
-      if (it == index_vertices.end()) {
+      auto it = std::ranges::find(edges_, idx, &Edge::idx);
+      if (it != edges_.end()) {
+        assert(std::distance(edges_.begin(), it) >= 0);
+        idx_vertex = index_vertices.at(std::distance(edges_.begin(), it));
+      } else {
+        auto pure_it = pure_proto_indices_.find(idx);
+        assert(pure_it != pure_proto_indices_.end());
+
+        if (pure_it != pure_proto_indices_.end()) {
+          assert(std::distance(pure_proto_indices_.begin(),
+                               pure_proto_indices_.end()) >= 0);
+          idx_vertex = index_vertices.at(
+              std::distance(pure_proto_indices_.begin(), pure_it) +
+              edges_.size());
+        }
+      }
+
+      assert(idx_vertex != uninitialized_vertex);
+      if (idx_vertex == uninitialized_vertex) {
         std::abort();
       }
 
-      edges.push_back(std::make_pair(it->second, vertex));
+      edges.push_back(std::make_pair(idx_vertex, vertex));
     }
   }
 
@@ -1221,13 +1253,25 @@ TensorNetworkV2::Graph TensorNetworkV2::create_graph(
   }
 
   if (options.make_idx_to_vertex) {
-    graph.idx_to_vertex = std::move(index_vertices);
+    assert(index_vertices.size() == edges_.size() + pure_proto_indices_.size());
+    graph.idx_to_vertex.reserve(index_vertices.size());
+
+    for (std::size_t i = 0; i < edges_.size(); ++i) {
+      graph.idx_to_vertex.emplace(
+          std::make_pair(edges_.at(i).idx(), index_vertices.at(i)));
+    }
+    for (const auto &[i, index] :
+         ranges::views::enumerate(pure_proto_indices_)) {
+      graph.idx_to_vertex.emplace(
+          std::make_pair(index, index_vertices.at(i + edges_.size())));
+    }
   }
 
   return graph;
 }
 
 void TensorNetworkV2::init_edges() {
+  have_edges_ = false;
   edges_.clear();
   ext_indices_.clear();
   pure_proto_indices_.clear();
@@ -1242,14 +1286,25 @@ void TensorNetworkV2::init_edges() {
                  << std::endl;
     }
 
-    auto it = std::find_if(edges_.begin(), edges_.end(),
-                           FullLabelIndexLocator(idx.full_label()));
-    if (it == edges_.end()) {
-      edges_.emplace_back(std::move(vertex), idx);
+    auto it = std::ranges::lower_bound(edges_, idx, Index::FullLabelCompare{},
+                                       &Edge::idx);
+    if (it == edges_.end() || it->idx() != idx) {
+      edges_.emplace(it, std::move(vertex), &idx);
     } else {
       it->connect_to(std::move(vertex));
     }
   };
+
+  std::size_t distinct_index_estimate = 0;
+  for (const AbstractTensorPtr &current : tensors_) {
+    distinct_index_estimate += bra_rank(*current);
+    distinct_index_estimate += ket_rank(*current);
+    distinct_index_estimate += aux_rank(*current);
+  }
+  // For a fully contracted tensor network 1/2 of all indices are unique
+  // so that can be regarded as a kind of lower bound
+  distinct_index_estimate /= 2;
+  edges_.reserve(distinct_index_estimate);
 
   for (std::size_t tensor_idx = 0; tensor_idx < tensors_.size(); ++tensor_idx) {
     assert(tensors_[tensor_idx]);
@@ -1294,7 +1349,7 @@ void TensorNetworkV2::init_edges() {
                    << std::endl;
       }
 
-      const auto &[it, inserted] = ext_indices_.insert(current.idx());
+      const auto &[it, inserted] = ext_indices_.emplace(current.idx());
       // only scenario where idx is already in ext_indices_ if it were a
       // protoindex of a previously inserted ext index ... check to ensure no
       // accidental duplicates
@@ -1305,15 +1360,11 @@ void TensorNetworkV2::init_edges() {
 
     // add proto indices to the grand list of proto indices
     for (auto &&proto_idx : current.idx().proto_indices()) {
+      // for now no recursive proto indices
       if (proto_idx.has_proto_indices())
         throw std::runtime_error(
-            "TensorNetworkV2 does not support recursive protoindices");  // for
-                                                                         // now
-                                                                         // no
-                                                                         // recursive
-                                                                         // proto
-                                                                         // indices
-      proto_indices.insert(proto_idx);
+            "TensorNetworkV2 does not support recursive protoindices");
+      proto_indices.emplace(proto_idx);
     }
   }
 
