@@ -559,12 +559,6 @@
 <span class="w">  </span><span class="k">mutable</span><span class="w"> </span><span class="n">edges_t</span><span class="w"> </span><span class="n">edges_</span><span class="p">;</span>
 <span class="w">  </span><span class="c1">// set to true by init_edges();</span>
 <span class="w">  </span><span class="k">mutable</span><span class="w"> </span><span class="kt">bool</span><span class="w"> </span><span class="n">have_edges_</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">false</span><span class="p">;</span>
-<span class="w">  </span><span class="c1">// ext indices do not connect tensors</span>
-<span class="w">  </span><span class="c1">// sorted by *label* (not full label) of the corresponding value (Index)</span>
-<span class="w">  </span><span class="c1">// this ensures that proto indices are not considered and all internal indices</span>
-<span class="w">  </span><span class="c1">// have unique labels (not full labels)</span>
-<span class="w">  </span><span class="c1">// N.B. this may contain some indices in pure_proto_indices_ if there are</span>
-<span class="w">  </span><span class="c1">// externals indices that depend on them</span>
 <span class="w">  </span><span class="k">mutable</span><span class="w"> </span><span class="n">named_indices_t</span><span class="w"> </span><span class="n">ext_indices_</span><span class="p">;</span>
 <span class="w">  </span><span class="k">mutable</span><span class="w"> </span><span class="n">named_indices_t</span><span class="w"> </span><span class="n">pure_proto_indices_</span><span class="p">;</span>
 
@@ -713,7 +707,7 @@
             
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on Jul 15, 2025 2:41:31 AM</div>
+              Last updated on Jul 17, 2025 3:36:54 PM</div>
           </div>
           <div class="right-details">
             <div class="icons">

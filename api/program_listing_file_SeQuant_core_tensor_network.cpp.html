@@ -1325,8 +1325,7 @@
 <span class="w">    </span><span class="k">using</span><span class="w"> </span><span class="n">cord_set_t</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">container</span><span class="o">::</span><span class="n">set</span><span class="o">&lt;</span><span class="n">ord_cord_it_t</span><span class="p">,</span><span class="w"> </span><span class="n">detail</span><span class="o">::</span><span class="n">tuple_less</span><span class="o">&lt;</span><span class="mi">1</span><span class="o">&gt;&gt;</span><span class="p">;</span>
 
 <span class="w">    </span><span class="k">auto</span><span class="w"> </span><span class="n">grand_index_list</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ranges</span><span class="o">::</span><span class="n">views</span><span class="o">::</span><span class="n">concat</span><span class="p">(</span>
-<span class="w">        </span><span class="n">edges_</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="n">ranges</span><span class="o">::</span><span class="n">views</span><span class="o">::</span><span class="n">transform</span><span class="p">(</span><span class="n">edge2index</span><span class="o">&lt;</span><span class="n">Edge</span><span class="o">&gt;</span><span class="p">),</span>
-<span class="w">        </span><span class="n">pure_proto_indices_</span><span class="p">);</span>
+<span class="w">        </span><span class="n">edges_</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="n">ranges</span><span class="o">::</span><span class="n">views</span><span class="o">::</span><span class="n">transform</span><span class="p">(</span><span class="o">&amp;</span><span class="n">Edge</span><span class="o">::</span><span class="n">idx</span><span class="p">),</span><span class="w"> </span><span class="n">pure_proto_indices_</span><span class="p">);</span>
 
 <span class="w">    </span><span class="c1">// for each named index type (as defined by named_index_compare) maps its</span>
 <span class="w">    </span><span class="c1">// ptr in grand_index_list to its ordinal in grand_index_list + canonical</span>
@@ -1518,7 +1517,7 @@
             
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on Jul 15, 2025 2:41:31 AM</div>
+              Last updated on Jul 17, 2025 3:36:54 PM</div>
           </div>
           <div class="right-details">
             <div class="icons">

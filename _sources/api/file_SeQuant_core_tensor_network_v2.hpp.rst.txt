@@ -119,7 +119,5 @@ Functions
 ---------
 
 
-- :ref:`exhale_function_namespacesequant_1a977be518758a9902b0d0dae2fc5d656c`
-
 - :ref:`exhale_function_namespacesequant_1ad8c7343916e7e7f0b9c43800c5c74922`
 

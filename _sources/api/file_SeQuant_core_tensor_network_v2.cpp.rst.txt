@@ -88,13 +88,13 @@ Includes
 
 - ``range/v3/view/view.hpp``
 
+- ``ranges`` (:ref:`file_SeQuant_core_ranges.hpp`)
+
 - ``sstream``
 
 - ``string`` (:ref:`file_SeQuant_core_utility_string.cpp`)
 
 - ``type_traits``
-
-- ``variant``
 
 
 
@@ -114,8 +114,6 @@ Classes
 
 - :ref:`exhale_struct_structsequant_1_1_canonical_tensor_compare`
 
-- :ref:`exhale_struct_structsequant_1_1_full_label_index_locator`
-
 - :ref:`exhale_struct_structsequant_1_1_tensor_block_compare`
 
 
@@ -134,4 +132,11 @@ Functions
 - :ref:`exhale_function_namespacesequant_1a1926825539c051c255ca13e910a171ef`
 
 - :ref:`exhale_function_namespacesequant_1a6bb935d923271663e3370c65a5d5fa39`
+
+
+Defines
+-------
+
+
+- :ref:`exhale_define_tensor__network__v2_8cpp_1ad5a5ca8fc1d9e7e4a6e8d3c8ee1fbe76`
 

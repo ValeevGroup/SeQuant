@@ -1034,6 +1034,7 @@
 <span class="w"> </span><span class="k">public</span><span class="o">:</span>
 <span class="w">  </span><span class="n">IndexFactory</span><span class="p">()</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">default</span><span class="p">;</span>
 <span class="w">  </span><span class="k">template</span><span class="w"> </span><span class="o">&lt;</span><span class="k">typename</span><span class="w"> </span><span class="nc">IndexValidator</span><span class="o">&gt;</span>
+<span class="w">    </span><span class="k">requires</span><span class="p">((</span><span class="n">std</span><span class="o">::</span><span class="n">is_invocable_r_v</span><span class="o">&lt;</span><span class="kt">bool</span><span class="p">,</span><span class="w"> </span><span class="n">IndexValidator</span><span class="p">,</span><span class="w"> </span><span class="k">const</span><span class="w"> </span><span class="n">Index</span><span class="w"> </span><span class="o">&amp;&gt;</span><span class="p">))</span>
 <span class="w">  </span><span class="k">explicit</span><span class="w"> </span><span class="n">IndexFactory</span><span class="p">(</span><span class="n">IndexValidator</span><span class="w"> </span><span class="n">validator</span><span class="p">,</span>
 <span class="w">                        </span><span class="kt">size_t</span><span class="w"> </span><span class="n">min_index</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Index</span><span class="o">::</span><span class="n">min_tmp_index</span><span class="p">())</span>
 <span class="w">      </span><span class="o">:</span><span class="w"> </span><span class="n">min_index_</span><span class="p">(</span><span class="n">min_index</span><span class="p">),</span><span class="w"> </span><span class="n">validator_</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">move</span><span class="p">(</span><span class="n">validator</span><span class="p">))</span><span class="w"> </span><span class="p">{</span>
@@ -1143,7 +1144,7 @@
             
             <a href="https://github.com/pradyunsg/furo">Furo</a>
             <div class="last-updated">
-              Last updated on Jul 15, 2025 2:41:31 AM</div>
+              Last updated on Jul 17, 2025 3:36:54 PM</div>
           </div>
           <div class="right-details">
             <div class="icons">
