@@ -380,13 +380,16 @@ void TensorNetworkV2::canonicalize_graph(const NamedIndexSet &named_indices) {
     delete cgraph;
   }
 
+  // maps tensor ordinal -> input vertex ordinal
   std::vector<std::size_t> tensor_idx_to_vertex;
   tensor_idx_to_vertex.reserve(tensors_.size());
+  std::size_t tensor_idx = 0;
+  // for nonsymmetric tensors only: maps tensor ordinal -> canonical order of
+  // its columns'/particles' vertex ordinals
   container::map<std::size_t, container::svector<std::size_t, 3>>
       tensor_idx_to_particle_order;
   std::vector<std::size_t> index_idx_to_vertex;
   index_idx_to_vertex.reserve(edges_.size() + pure_proto_indices_.size());
-  std::size_t tensor_idx = 0;
 
   for (std::size_t vertex = 0; vertex < graph.vertex_types.size(); ++vertex) {
     switch (graph.vertex_types[vertex]) {
@@ -447,9 +450,8 @@ void TensorNetworkV2::canonicalize_graph(const NamedIndexSet &named_indices) {
   for (const Edge &current : edges_) {
     const Index &idx = current.idx();
 
-    if (!is_anonymous_index(idx)) {
-      continue;
-    }
+    const auto is_named = current.vertex_count() != 2;
+    if (is_named) continue;
 
     idxrepl_emplace(idx, idxfac.make(idx));
   }
@@ -461,6 +463,10 @@ void TensorNetworkV2::canonicalize_graph(const NamedIndexSet &named_indices) {
                  << to_latex(idxpair.second) << std::endl;
     }
   }
+
+  // The tensor reordering and index relabeling will make edges_ invalid
+  edges_.clear();
+  have_edges_ = false;
 
   apply_index_replacements(tensors_, idxrepl, true);
 
@@ -527,11 +533,6 @@ void TensorNetworkV2::canonicalize_graph(const NamedIndexSet &named_indices) {
   };
 
   sort_via_indices<true>(tensors_, tensor_sorter);
-
-  // The tensor reordering and index relabelling made the current set of edges
-  // invalid
-  edges_.clear();
-  have_edges_ = false;
 
   if (Logger::instance().canonicalize) {
     std::wcout << "TensorNetworkV2::canonicalize_graph: tensors after "
@@ -645,6 +646,9 @@ ExprPtr TensorNetworkV2::canonicalize(
   }
 
   // Done computing canonical index replacement list
+  // reset edges since renamings will make them obsolete
+  edges_.clear();
+  have_edges_ = false;
 
   if (Logger::instance().canonicalize) {
     for (const auto &idxpair : idxrepl) {
@@ -665,8 +669,6 @@ ExprPtr TensorNetworkV2::canonicalize(
   // the explicit index labelling of tensors into account.
   tensor_sorter.set_blocks_only(false);
   std::stable_sort(tensors_.begin(), tensors_.end(), tensor_sorter);
-
-  have_edges_ = false;
 
   assert(byproduct->is<Constant>());
   return (byproduct->as<Constant>().value() == 1) ? nullptr : byproduct;
@@ -1269,6 +1271,7 @@ TensorNetworkV2::Graph TensorNetworkV2::create_graph(
 }
 
 void TensorNetworkV2::init_edges() {
+  have_edges_ = false;
   edges_.clear();
   ext_indices_.clear();
   pure_proto_indices_.clear();
