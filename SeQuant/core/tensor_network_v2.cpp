@@ -162,6 +162,10 @@ std::size_t TensorNetworkV2::Vertex::getTerminalIndex() const {
   return terminal_idx;
 }
 
+void TensorNetworkV2::Vertex::setTerminalIndex(std::size_t tidx) {
+  terminal_idx = tidx;
+}
+
 std::size_t TensorNetworkV2::Vertex::getIndexSlot() const { return index_slot; }
 
 Symmetry TensorNetworkV2::Vertex::getTerminalSymmetry() const {
@@ -342,6 +346,16 @@ void TensorNetworkV2::canonicalize_graph(const NamedIndexSet &named_indices) {
   const auto is_anonymous_index = [&named_indices](const Index &idx) {
     return named_indices.find(idx) == named_indices.end();
   };
+  // more efficient version of is_anonymous_index
+  auto is_anonymous_index_ord = [&](const std::size_t &idx_ord) {
+    assert(idx_ord < edges_.size() + pure_proto_indices_.size());
+    if (idx_ord < edges_.size()) {
+      const auto edge_it = edges_.begin() + idx_ord;
+      assert(edge_it->vertex_count() > 0);
+      return edge_it->vertex_count() == 2;
+    } else  // pure proto indices are named
+      return false;
+  };
 
   // index factory to generate anonymous indices
   IndexFactory idxfac(is_anonymous_index, 1);
@@ -382,13 +396,16 @@ void TensorNetworkV2::canonicalize_graph(const NamedIndexSet &named_indices) {
   }
   print_index_op_counters("after bliss graph canonicalization");
 
+  // maps tensor ordinal -> input vertex ordinal
   std::vector<std::size_t> tensor_idx_to_vertex;
   tensor_idx_to_vertex.reserve(tensors_.size());
+  std::size_t tensor_idx = 0;
+  // for nonsymmetric tensors only: maps tensor ordinal -> canonical order of
+  // its columns'/particles' vertex ordinals
   container::map<std::size_t, container::svector<std::size_t, 3>>
       tensor_idx_to_particle_order;
   std::vector<std::size_t> index_idx_to_vertex;
   index_idx_to_vertex.reserve(edges_.size() + pure_proto_indices_.size());
-  std::size_t tensor_idx = 0;
 
   for (std::size_t vertex = 0; vertex < graph.vertex_types.size(); ++vertex) {
     switch (graph.vertex_types[vertex]) {
@@ -431,30 +448,37 @@ void TensorNetworkV2::canonicalize_graph(const NamedIndexSet &named_indices) {
     if (from != to) idxrepl.emplace(std::move(from), std::move(to));
   };
 
-  // Sort edges so that their order corresponds to the order of indices in the
-  // canonical graph
-  // Use this ordering to relabel anonymous indices
-  const auto index_sorter = [&index_idx_to_vertex, &canonize_perm](
-                                std::size_t lhs_idx, std::size_t rhs_idx) {
-    assert(lhs_idx < index_idx_to_vertex.size());
-    const std::size_t lhs_vertex = index_idx_to_vertex[lhs_idx];
-    assert(rhs_idx < index_idx_to_vertex.size());
-    const std::size_t rhs_vertex = index_idx_to_vertex[rhs_idx];
+  // Sort index ordinals to canonical order and compute map from canonical to
+  // original ordinals Use this ordering to relabel anonymous indices
+  auto anonymous_index_orig_ord_and_canon_vertex =
+      edges_ | ranges::views::enumerate |
+      ranges::views::filter([&is_anonymous_index_ord](const auto &ord_edge) {
+        auto &&[ord, edge] = ord_edge;
+        return is_anonymous_index_ord(ord);
+      }) |
+      ranges::views::transform(
+          [&index_idx_to_vertex, &canonize_perm](auto &&ord_edge) {
+            auto &&[original_ord, edge] = ord_edge;
+            assert(original_ord < index_idx_to_vertex.size());
+            auto canonical_vertex =
+                canonize_perm[index_idx_to_vertex[original_ord]];
+            return std::pair{original_ord, canonical_vertex};
+          }) |
+      ranges::to<std::vector>;
+  ranges::sort(anonymous_index_orig_ord_and_canon_vertex,
+               [](const auto &orig_ord_and_canon_vertex_1,
+                  const auto &orig_ord_and_canon_vertex_2) {
+                 auto &&[ord1, vertex1] = orig_ord_and_canon_vertex_1;
+                 auto &&[ord2, vertex2] = orig_ord_and_canon_vertex_2;
+                 return vertex1 < vertex2;
+               });
 
-    return canonize_perm[lhs_vertex] < canonize_perm[rhs_vertex];
-  };
-
-  sort_via_indices<false>(edges_, index_sorter);
-
-  for (const Edge &current : edges_) {
-    const Index &idx = current.idx();
-
-    if (!is_anonymous_index(idx)) {
-      continue;
-    }
-
+  for (const auto &[orig_ord, canon_vertex] :
+       anonymous_index_orig_ord_and_canon_vertex) {
+    const Index &idx = edges_[orig_ord].idx();
     idxrepl_emplace(idx, idxfac.make(idx));
   }
+  print_index_op_counters("after making index replacement list");
 
   if (Logger::instance().canonicalize) {
     for (const auto &idxpair : idxrepl) {
@@ -530,11 +554,6 @@ void TensorNetworkV2::canonicalize_graph(const NamedIndexSet &named_indices) {
 
   sort_via_indices<true>(tensors_, tensor_sorter);
 
-  // The tensor reordering and index relabelling made the current set of edges
-  // invalid
-  edges_.clear();
-  have_edges_ = false;
-
   if (Logger::instance().canonicalize) {
     std::wcout << "TensorNetworkV2::canonicalize_graph: tensors after "
                   "canonicalization\n";
@@ -579,6 +598,7 @@ ExprPtr TensorNetworkV2::canonicalize(
     // indistinguishable tensors present in the expression. Their order and
     // indexing can only be determined via this rigorous canonization.
     canonicalize_graph(named_indices);
+    print_index_op_counters("after slow canonicalization");
   }
 
   // Ensure each individual tensor is written in the way that its tensor
@@ -594,8 +614,40 @@ ExprPtr TensorNetworkV2::canonicalize(
   auto tensors_with_ordinals = zip(tensors_, tensor_input_ordinals_);
   bubble_sort(begin(tensors_with_ordinals), end(tensors_with_ordinals),
               tensor_sorter);
+  // compute inverse of tensor_input_ordinals_ to map input tensor ordinals to
+  // current state
+  bool tensors_reordered = false;
+  std::vector<std::size_t> tensor_input_ordinals_inv;
+  for (std::size_t t_ord = 0; t_ord < tensor_input_ordinals_.size(); ++t_ord) {
+    auto t_ord_input = tensor_input_ordinals_[t_ord];
+    if (t_ord_input != t_ord && !tensors_reordered) {
+      tensors_reordered = true;
+      tensor_input_ordinals_inv.resize(tensor_input_ordinals_.size());
+      std::copy_n(tensor_input_ordinals_.begin(), t_ord,
+                  tensor_input_ordinals_inv.begin());
+    }
+    if (tensors_reordered) tensor_input_ordinals_inv[t_ord_input] = t_ord;
+  }
 
-  init_edges();
+  if (!have_edges_) {
+    init_edges();
+  } else {
+    // if edges_ existed before resorting tensors adjust their ordinals
+    if (tensors_reordered) {
+      for (auto &edge : edges_) {
+        const auto vcount = edge.vertex_count();
+        assert(vcount > 0);
+        auto update_vertex = [&tensor_input_ordinals_inv](Vertex &v) {
+          const auto input_tensor_idx = v.getTerminalIndex();
+          const auto current_tensor_idx =
+              tensor_input_ordinals_inv[input_tensor_idx];
+          v.setTerminalIndex(current_tensor_idx);
+        };
+        update_vertex(edge.first_vertex());
+        if (vcount == 2) update_vertex(edge.second_vertex());
+      }
+    }
+  }
 
   if (Logger::instance().canonicalize) {
     std::wcout << "TensorNetworkV2::canonicalize(" << (fast ? "fast" : "slow")
@@ -615,21 +667,15 @@ ExprPtr TensorNetworkV2::canonicalize(
     return named_indices.find(idx) == named_indices.end();
   };
 
-  // Sort edges based on the order of the tensors they connect
-  std::stable_sort(edges_.begin(), edges_.end(),
-                   [&is_named_index](const Edge &lhs, const Edge &rhs) {
-                     // Sort first by index's character (named < anonymous),
-                     // then by Edge (not by Index's full label) ... this
-                     // automatically puts named indices first
-                     const bool lhs_is_named = is_named_index(lhs.idx());
-                     const bool rhs_is_named = is_named_index(rhs.idx());
-
-                     if (lhs_is_named == rhs_is_named) {
-                       return lhs < rhs;
-                     } else {
-                       return lhs_is_named;
-                     }
-                   });
+  // Sort edge ordinals according to Edge::operator<:
+  // - named before anonymous
+  // - then by index space
+  auto sorted_edge_ord =
+      ranges::views::iota(0ul, edges_.size()) | ranges::to<std::vector>;
+  ranges::stable_sort(sorted_edge_ord,
+                      [this](const auto &ord1, const auto &ord2) {
+                        return edges_[ord1] < edges_[ord2];
+                      });
 
   // index factory to generate anonymous indices
   // -> start reindexing anonymous indices from 1
@@ -639,8 +685,10 @@ ExprPtr TensorNetworkV2::canonicalize(
 
   // Use the new order of edges as the canonical order of indices and relabel
   // accordingly (but only anonymous indices, of course)
-  for (std::size_t i = named_indices.size(); i < edges_.size(); ++i) {
-    const Index &index = edges_[i].idx();
+  for (std::size_t i = named_indices.size(); i < sorted_edge_ord.size(); ++i) {
+    const auto &edge = edges_[sorted_edge_ord[i]];
+    if (edge.vertex_count() != 2) continue;  // skip non-anonymous indices
+    const Index &index = edge.idx();
     assert(is_anonymous_index(index));
     Index replacement = idxfac.make(index);
     if (index != replacement) idxrepl.emplace(index, std::move(replacement));
@@ -1273,6 +1321,7 @@ TensorNetworkV2::Graph TensorNetworkV2::create_graph(
 }
 
 void TensorNetworkV2::init_edges() {
+  have_edges_ = false;
   edges_.clear();
   ext_indices_.clear();
   pure_proto_indices_.clear();
