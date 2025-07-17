@@ -12,6 +12,10 @@ SILENT_OUTPUT = True # Set to True to suppress command line output
 def run_command(command):
     subprocess.run(command, shell=True, check=True, capture_output=SILENT_OUTPUT, text=True)
 
+# replace slashes in branch names with dashes for file naming, otherwise it will create directories
+def process_branch_name(branch_name):
+    return branch_name.replace('/', '-')
+
 def get_current_git_state():
     try:
         # try branch name
@@ -41,33 +45,34 @@ def configure_and_build(commit, cmake_variables, benchmark_target, build_dir):
 
 def run_benchmarks(commit, benchmark_target, build_dir):
     print(f"Running benchmarks for commit: {commit}\n")
-    command = f"./{build_dir}/benchmarks/{benchmark_target} --benchmark_out_format=json --benchmark_time_unit=us --benchmark_out={commit}-results.json"
+    output = process_branch_name(commit) + "-results.json"
+    command = f"./{build_dir}/benchmarks/{benchmark_target} --benchmark_out_format=json --benchmark_time_unit=us --benchmark_out={output}"
     run_command(command)
-    print(f"Benchmarks for commit {commit} completed and results saved to {commit}-results.json\n")
+    print(f"Benchmarks for commit {commit} completed and results saved to {output}\n")
 
-def compare_benchmarks(base_commit, head_commit, metric="cpu_time"):
-    base_file = f"{base_commit}-results.json"
-    new_file = f"{head_commit}-results.json"
-    output_file = f"{base_commit}-{head_commit}-comparison.txt"
-
-    print(f"\nComparing benchmarks between {base_commit} and {head_commit} using metric: {metric}\n")
+def compare_benchmarks(base_benchmark, new_benchmark, metric="cpu_time"):
+    if metric not in ["cpu_time", "real_time"]:
+        raise ValueError("Invalid metric specified. Use 'cpu_time' or 'real_time'.")
 
     # Validate files exist and load JSON data
     try:
-        if not os.path.exists(base_file):
-            raise FileNotFoundError(f"Base file not found: {base_file}")
-        if not os.path.exists(new_file):
-            raise FileNotFoundError(f"New file not found: {new_file}")
+        if not os.path.exists(base_benchmark):
+            raise FileNotFoundError(f"Base file not found: {base_benchmark}")
+        if not os.path.exists(new_benchmark):
+            raise FileNotFoundError(f"New file not found: {new_benchmark}")
 
-        with open(base_file, 'r') as f:
+        with open(base_benchmark, 'r') as f:
             base_data = json.load(f)
-        with open(new_file, 'r') as f:
+        with open(new_benchmark, 'r') as f:
             new_data = json.load(f)
 
     except json.JSONDecodeError as e:
         raise ValueError(f"Invalid JSON format: {e}")
     except Exception as e:
         raise RuntimeError(f"Error reading files: {e}")
+
+    output_file = "benchmark-comparison.txt"
+    print(f"\nComparing benchmarks between {base_benchmark} and {new_benchmark} using metric: {metric}\n")
 
     # index benchmarks by name
     base_benchmarks = {b['name']: b for b in base_data['benchmarks']}
@@ -84,12 +89,8 @@ def compare_benchmarks(base_commit, head_commit, metric="cpu_time"):
             common_names.append(benchmark['name'])
 
     # output details
-    output_lines = []
-    output_lines.append(f"Benchmark Comparison: {base_commit} vs {head_commit}")
-    output_lines.append(f"Metric: {metric}")
-    output_lines.append(f"Time Unit: {time_unit}")
-    output_lines.append(f"Date: {os.popen('date').read().strip()}")
-    output_lines.append("")
+    output_lines = [f"Benchmark Comparison: {base_benchmark} vs {new_benchmark}", f"Metric: {metric}",
+                    f"Time Unit: {time_unit}", f"Date: {os.popen('date').read().strip()}", ""]
 
     if 'context' in base_data:
         output_lines.append("Base Benchmark Context:")
@@ -175,7 +176,9 @@ if __name__ == "__main__":
         run_benchmarks(args.head_commit, args.benchmark_target, args.build_dir)
 
         # Compare benchmarks
-        compare_benchmarks(args.base_commit, args.head_commit)
+        base_benchmark_file = process_branch_name(args.base_commit) + "-results.json"
+        new_benchmark_file = process_branch_name(args.head_commit) + "-results.json"
+        compare_benchmarks(base_benchmark_file, new_benchmark_file, metric="cpu_time")
         print("Benchmark comparison completed successfully.")
 
     except Exception as e:
