@@ -57,7 +57,6 @@ class TensorNetworkV2 {
 
     Origin getOrigin() const;
     std::size_t getTerminalIndex() const;
-    void setTerminalIndex(std::size_t tidx);
     std::size_t getIndexSlot() const;
     Symmetry getTerminalSymmetry() const;
 
@@ -158,14 +157,6 @@ class TensorNetworkV2 {
       return first.value();
     }
     const Vertex &second_vertex() const {
-      assert(second.has_value());
-      return second.value();
-    }
-    Vertex &first_vertex() {
-      assert(first.has_value());
-      return first.value();
-    }
-    Vertex &second_vertex() {
       assert(second.has_value());
       return second.value();
     }
