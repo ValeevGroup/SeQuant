@@ -354,6 +354,7 @@ void TensorNetworkV2::canonicalize_graph(const NamedIndexSet &named_indices) {
        .make_texlabels = Logger::instance().canonicalize_input_graph ||
                          Logger::instance().canonicalize_dot});
   // graph.bliss_graph->write_dot(std::wcout, graph.vertex_labels);
+  print_index_op_counters("after make bliss graph");
 
   if (Logger::instance().canonicalize_input_graph) {
     std::wcout << "Input graph for canonicalization:\n";
@@ -379,6 +380,7 @@ void TensorNetworkV2::canonicalize_graph(const NamedIndexSet &named_indices) {
     cgraph->write_dot(std::wcout, cvlabels);
     delete cgraph;
   }
+  print_index_op_counters("after bliss graph canonicalization");
 
   std::vector<std::size_t> tensor_idx_to_vertex;
   tensor_idx_to_vertex.reserve(tensors_.size());
@@ -667,6 +669,8 @@ ExprPtr TensorNetworkV2::canonicalize(
   std::stable_sort(tensors_.begin(), tensors_.end(), tensor_sorter);
 
   have_edges_ = false;
+
+  print_index_op_counters("after canonicalization");
 
   assert(byproduct->is<Constant>());
   return (byproduct->as<Constant>().value() == 1) ? nullptr : byproduct;
@@ -1402,6 +1406,7 @@ void TensorNetworkV2::init_edges() {
   ext_indices_.insert(pure_proto_indices_.begin(), pure_proto_indices_.end());
 
   have_edges_ = true;
+  print_index_op_counters("after init_edges");
 }
 
 container::svector<std::pair<long, long>> TensorNetworkV2::factorize() {

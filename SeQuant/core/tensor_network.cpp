@@ -206,6 +206,8 @@ ExprPtr TensorNetwork::canonicalize(
          .make_labels = Logger::instance().canonicalize_dot,
          .make_texlabels = Logger::instance().canonicalize_dot});
 
+    print_index_op_counters("after make bliss graph");
+
     // canonize the graph
     bliss::Stats stats;
     graph->set_splitting_heuristic(bliss::Graph::shs_fsm);
@@ -228,6 +230,8 @@ ExprPtr TensorNetwork::canonicalize(
       cgraph->write_dot(std::wcout, cvlabels, cvtexlabels);
       delete cgraph;
     }
+
+    print_index_op_counters("after bliss graph canonicalization");
 
     // make anonymous index replacement list
     {
@@ -292,6 +296,7 @@ ExprPtr TensorNetwork::canonicalize(
         }
       }
     }  // index repl
+    print_index_op_counters("after making index replacement list");
 
     // reorder *commuting* tensors_ to canonical order (defined by the core
     // indices)
@@ -371,6 +376,7 @@ ExprPtr TensorNetwork::canonicalize(
 
     }  // tensors canonizing
 
+    print_index_op_counters("after slow canonicalization");
   } else {  // fast approach uses heuristic canonization
     // simpler approach that will work perfectly as long as tensors are
     // distinguishable
@@ -460,6 +466,8 @@ ExprPtr TensorNetwork::canonicalize(
   }
   edges_.clear();
   ext_indices_.clear();
+
+  print_index_op_counters("after canonicalization");
 
   assert(canon_byproduct->is<Constant>());
   return (canon_byproduct->as<Constant>().value() == 1) ? nullptr
@@ -949,6 +957,7 @@ void TensorNetwork::init_edges() const {
   ext_indices_.insert(pure_proto_indices_.begin(), pure_proto_indices_.end());
 
   have_edges_ = true;
+  print_index_op_counters("after init_edges");
 }
 
 container::svector<std::pair<long, long>> TensorNetwork::factorize() {

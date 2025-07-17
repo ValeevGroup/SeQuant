@@ -110,6 +110,10 @@ class Index : public Taggable {
 
   Index() = default;
 
+  static inline int64_t copy_ctor_count = 0;
+  static inline int64_t copy_assignment_count = 0;
+  static inline int64_t comparison_count = 0;
+
   /// copy constructor
   /// @warning memoized data (label, full_label) is not copied
   Index(const Index &idx) noexcept
@@ -117,7 +121,9 @@ class Index : public Taggable {
         space_(idx.space_),
         ordinal_(idx.ordinal_),
         proto_indices_(idx.proto_indices_),
-        symmetric_proto_indices_(idx.symmetric_proto_indices_) {}
+        symmetric_proto_indices_(idx.symmetric_proto_indices_) {
+    ++copy_ctor_count;
+  }
 
   /// move constructor
   /// @note memoized data (label, full_label) is copied
@@ -131,6 +137,7 @@ class Index : public Taggable {
     ordinal_ = idx.ordinal_;
     proto_indices_ = idx.proto_indices_;
     symmetric_proto_indices_ = idx.symmetric_proto_indices_;
+    ++copy_assignment_count;
     return *this;
   }
 
@@ -817,7 +824,9 @@ class Index : public Taggable {
   /// comparison uses them directly for efficiency
   /// @sa Index::full_label()
   struct FullLabelCompare {
+    static inline int64_t comparison_count = 0;
     bool operator()(const Index &first, const Index &second) const {
+      ++comparison_count;
       if (first.space() != second.space())
         return first.space() < second.space();
       else if (first.ordinal() != second.ordinal())
@@ -942,6 +951,7 @@ class Index : public Taggable {
   /// are ordered lexicographically, first by qns, followed by tags (if defined
   /// for both), then by space, then by ordinal, then by protoindices (if any)
   friend bool operator<(const Index &i1, const Index &i2) noexcept {
+    ++comparison_count;
     // compare qns, tags and spaces in that sequence
 
     auto compare_space = [&i1, &i2]() {
@@ -1126,6 +1136,26 @@ auto make_indices(WstrList index_labels = {}) {
     result.push_back(Index{label});
   }
   return result;
+}
+
+constexpr auto disable_index_op_tracking = false;
+inline void reset_index_op_counters() {
+  Index::copy_ctor_count = 0;
+  Index::copy_assignment_count = 0;
+  Index::comparison_count = 0;
+  Index::FullLabelCompare::comparison_count = 0;
+}
+
+inline void print_index_op_counters(const char *tag) {
+  if constexpr (!disable_index_op_tracking) {
+    std::cout << tag << "!!!\n"
+              << "Index::copy_ctor_count=" << Index::copy_ctor_count << "\n"
+              << "Index::copy_assignment_count=" << Index::copy_assignment_count
+              << "\n"
+              << "Index::comparison_count=" << Index::comparison_count << "\n"
+              << "Index::FullLabelCompare::comparison_count="
+              << Index::FullLabelCompare::comparison_count << std::endl;
+  }
 }
 
 }  // namespace sequant
