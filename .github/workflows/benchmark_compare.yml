@@ -117,7 +117,7 @@ jobs:
           path: |
             ${{ github.workspace }}/${{ fromJson(steps.pr.outputs.result).base_sha }}-results.json
             ${{ github.workspace }}/${{ fromJson(steps.pr.outputs.result).head_sha }}-results.json
-            ${{ github.workspace }}/${{ fromJson(steps.pr.outputs.result).base_sha }}-${{ fromJson(steps.pr.outputs.result).head_sha }}-comparison.txt
+            ${{ github.workspace }}/benchmark-comparison.txt
           retention-days: 30
 
       - name: Post Results
@@ -128,7 +128,7 @@ jobs:
             const path = require('path');
 
             const prData = ${{ steps.pr.outputs.result }};
-            const comparisonFile = `${prData.base_sha}-${prData.head_sha}-comparison.txt`;
+            const comparisonFile = `benchmark-comparison.txt`;
             const comparisonPath = path.join('${{ github.workspace }}', comparisonFile);
 
             let comparisonResults = '';
