@@ -4,9 +4,10 @@ include(Catch)
 add_executable(unit_tests-sequant ${BUILD_BY_DEFAULT}
     "test_asy_cost.cpp"
     "test_binary_node.cpp"
-	"test_biorthogonalization.cpp"
+    "test_biorthogonalization.cpp"
     "test_bliss.cpp"
     "test_canonicalize.cpp"
+    "test_codegen_ta.cpp"
     "test_eval_expr.cpp"
     "test_eval_node.cpp"
     "test_export.cpp"
@@ -51,7 +52,7 @@ if (TARGET tiledarray)
     target_compile_definitions(unit_tests-sequant PRIVATE SEQUANT_HAS_TILEDARRAY)
 endif (TARGET tiledarray)
 
-target_link_libraries(unit_tests-sequant PRIVATE SeQuant Catch2)
+target_link_libraries(unit_tests-sequant PRIVATE SeQuant Catch2::Catch2)
 
 if (SEQUANT_TESTS)
     catch_discover_tests(
