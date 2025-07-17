@@ -7,7 +7,7 @@ import subprocess
 import json
 import argparse
 
-SILENT_OUTPUT = True # Set to True to suppress command line output
+SILENT_OUTPUT = False # Set to True to suppress command line output
 
 def run_command(command):
     subprocess.run(command, shell=True, check=True, capture_output=SILENT_OUTPUT, text=True)
@@ -155,6 +155,7 @@ if __name__ == "__main__":
 
     # Define CMake variables
     cmake_variables = ["-G Ninja",
+                       "-DCMAKE_BUILD_TYPE=Release",
                        "-DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON",
                        "-DSEQUANT_TESTS=OFF",
                        "-DSEQUANT_EVAL_TESTS=OFF",
