@@ -92,9 +92,23 @@ TEST_CASE("tensor", "[elements]") {
     auto t = Tensor(L"g", bra{Index{L"i_1"}, Index{L"i_2"}},
                     ket{Index{L"i_3"}, Index{L"i_4"}}, aux{Index{L"i_5"}},
                     Symmetry::antisymm);
+    // index renaming preserves slot pointers
+    const auto* slot_b0 = &(t.bra()[0]);
+    const auto* slot_b1 = &(t.bra()[1]);
+    const auto* slot_k0 = &(t.ket()[0]);
+    const auto* slot_k1 = &(t.ket()[1]);
+    const auto b0 = t.bra()[0];
+    const auto b1 = t.bra()[1];
     std::map<Index, Index> idxmap = {{Index{L"i_1"}, Index{L"i_2"}},
                                      {Index{L"i_2"}, Index{L"i_1"}}};
     REQUIRE(t.transform_indices(idxmap));
+    REQUIRE(slot_b0 == &(t.bra()[0]));
+    REQUIRE(slot_b1 == &(t.bra()[1]));
+    REQUIRE(slot_k0 == &(t.ket()[0]));
+    REQUIRE(slot_k1 == &(t.ket()[1]));
+    REQUIRE(b1 == t.bra()[0]);
+    REQUIRE(b0 == t.bra()[1]);
+
     REQUIRE(t.bra()[0].tag().has_value());
     const auto t_bra0_tag_value = t.bra()[0].tag().value<int>();
     REQUIRE(t_bra0_tag_value == 0);
@@ -122,6 +136,11 @@ TEST_CASE("tensor", "[elements]") {
     SECTION("proto indices") {
       Tensor tensor = parse_expr(L"g{i2,a1<i1>;a2<i2>,i1}")->as<Tensor>();
 
+      const auto* slot_b0 = &(tensor.bra()[0]);
+      const auto* slot_b1 = &(tensor.bra()[1]);
+      const auto* slot_k0 = &(tensor.ket()[0]);
+      const auto* slot_k1 = &(tensor.ket()[1]);
+
       // Swap columns of g
       std::map<Index, Index> idxmap = {
           {Index{L"i_2"}, Index{L"a_1", {L"i_1"}}},
@@ -135,6 +154,12 @@ TEST_CASE("tensor", "[elements]") {
       tensor.transform_indices(idxmap);
 
       REQUIRE(tensor == expected);
+
+      // verify slot stability
+      REQUIRE(slot_b0 == &(tensor.bra()[0]));
+      REQUIRE(slot_b1 == &(tensor.bra()[1]));
+      REQUIRE(slot_k0 == &(tensor.ket()[0]));
+      REQUIRE(slot_k1 == &(tensor.ket()[1]));
     }
   }  // SECTION("index transformation")
 

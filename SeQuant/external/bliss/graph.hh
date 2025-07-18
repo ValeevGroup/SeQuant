@@ -52,6 +52,8 @@ class AbstractGraph;
 #include <range/v3/algorithm/for_each.hpp>
 #include <range/v3/view/iota.hpp>
 
+#include <boost/container/small_vector.hpp>
+
 namespace bliss {
 
 /**
@@ -568,7 +570,7 @@ class Graph : public AbstractGraph {
     void sort_edges();
 
     unsigned int color;
-    std::vector<unsigned int> edges;
+    boost::container::small_vector<unsigned int, 8> edges;
     unsigned int nof_edges() const { return edges.size(); }
   };
   std::vector<Vertex> vertices;
@@ -806,7 +808,7 @@ class Graph : public AbstractGraph {
       } else {
         os << ":" << v.color << "\"];\n";
       }
-      for (std::vector<unsigned int>::const_iterator ei = v.edges.begin();
+      for (auto ei = v.edges.begin();
            ei != v.edges.end(); ei++) {
         const unsigned int vnum2 = *ei;
         if (vnum2 > vnum) os << "v" << vnum << " -- v" << vnum2 << "\n";
@@ -930,8 +932,8 @@ class Digraph : public AbstractGraph {
     void remove_duplicate_edges(std::vector<bool>& tmp);
     void sort_edges();
     unsigned int color;
-    std::vector<unsigned int> edges_out;
-    std::vector<unsigned int> edges_in;
+    boost::container::small_vector<unsigned int, 8> edges_out;
+    boost::container::small_vector<unsigned int, 8> edges_in;
     unsigned int nof_edges_in() const { return edges_in.size(); }
     unsigned int nof_edges_out() const { return edges_out.size(); }
   };

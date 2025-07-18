@@ -180,7 +180,13 @@ add_library(SeQuant-bliss
         SeQuant/external/bliss/bliss_C.cc
         SeQuant/external/bliss/bliss_C.h
         )
-target_link_libraries(SeQuant-bliss PUBLIC range-v3::range-v3)
+target_link_libraries(SeQuant-bliss PUBLIC range-v3::range-v3 Boost::headers)
+# modularized Boost has finer grained targets than just Boost::headers
+if (Boost_IS_MODULARIZED)
+    target_link_libraries(SeQuant-bliss PUBLIC
+            Boost::container
+    )
+endif()
 
 set(SeQuant_src
         ${PROJECT_BINARY_DIR}/SeQuant/version.hpp
