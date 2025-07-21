@@ -115,6 +115,7 @@ EvalExpr::EvalExpr(Tensor const& tnsr)
     : op_type_{std::nullopt},
       result_type_{ResultType::Tensor},
       expr_{tnsr.clone()} {
+  assert(!tnsr.indices().empty());
   if (is_tot(tnsr)) {
     ExprPtrList tlist{expr_};
     auto tn = TensorNetworkV2(tlist);
@@ -149,7 +150,10 @@ EvalExpr::EvalExpr(EvalOp op, ResultType res, ExprPtr const& ex,
       expr_{ex.clone()},
       canon_indices_{std::move(ixs)},
       canon_phase_{p},
-      hash_value_{h} {}
+      hash_value_{h} {
+  // Using Tensor objects to represent scalar results is just confusing
+  assert(ex->is<Tensor>() == (res == ResultType::Tensor));
+}
 
 const std::optional<EvalOp>& EvalExpr::op_type() const noexcept {
   return op_type_;
