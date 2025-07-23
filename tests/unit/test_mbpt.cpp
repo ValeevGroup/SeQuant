@@ -19,7 +19,6 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers.hpp>
 #include "catch2_sequant.hpp"
-#include "test_config.hpp"
 
 #include <iostream>
 #include <memory>
@@ -480,9 +479,6 @@ TEST_CASE("mbpt", "[mbpt]") {
         REQUIRE(result->size() == 4);
       });
 
-      const std::vector<std::pair<std::wstring, std::wstring>> new_op_connect =
-          {{L"h", L"t"}, {L"f", L"t"}, {L"g", L"t"}};
-
 #ifndef SEQUANT_SKIP_LONG_TESTS
       // the longest term in CCSDTQP
       // H2**T2**T2**T3 -> R5
@@ -491,15 +487,8 @@ TEST_CASE("mbpt", "[mbpt]") {
         SEQUANT_PROFILE_SINGLE("wick(H2**T2**T2**T3 -> R5)", {
           ref_result =
               t::vac_av(t::A(-5) * t::H_(2) * t::T_(2) * t::T_(2) * t::T_(3),
-                        new_op_connect);
+                        {{1, 2}, {1, 3}, {1, 4}});
           REQUIRE(ref_result->size() == 7);
-        });
-        // now computed using specific component of H2
-        SEQUANT_PROFILE_SINGLE("wick(H2(oo;vv)**T2**T2**T3 -> R5)", {
-          auto result = t::vac_av(
-              t::A(-5) * t::H2_oo_vv() * t::T_(2) * t::T_(2) * t::T_(3),
-              new_op_connect);
-          REQUIRE(result->size() == ref_result->size());
         });
       }
 #endif  // !defined(SEQUANT_SKIP_LONG_TESTS)

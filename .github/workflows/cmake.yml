@@ -15,13 +15,28 @@ jobs:
       matrix:
         build_type : [ Release, Debug ]
         os : [ macos-latest, ubuntu-24.04 ]
+        valgrind: [ true, false ]
+        sanitize: [ true, false ]
+        exclude:
+          - valgrind : true
+            sanitize : true
+          - build_type : Release
+            valgrind : true
+          - build_type : Release
+            sanitize : true
+          - os: macos-latest
+            sanitize: true
+          - os: macos-latest
+            valgrind: true
         include:
           - os: ubuntu-24.04
             cxx: /usr/bin/g++-14
+            sanitize_flags: -fsanitize=address -fsanitize=leak -fsanitize=undefined -fno-omit-frame-pointer -fno-var-tracking
           - os: macos-latest
             cxx: clang++
+            sanitize_flags: -fsanitize=address -fsanitize=undefined -fno-omit-frame-pointer -fno-var-tracking
 
-    name: "${{ matrix.os }}: ${{ matrix.cxx }} ${{ matrix.build_type }}"
+    name: "${{ matrix.valgrind && 'Valgrind' || matrix.sanitize && 'Sanitizers' || '' }} ${{ matrix.os }}: ${{ matrix.cxx }} ${{ matrix.build_type }}"
     runs-on: ${{ matrix.os }}
     env:
       CXX : ${{ matrix.cxx }}
@@ -33,15 +48,17 @@ jobs:
         -G Ninja
         -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
         -DBUILD_SHARED_LIBS=OFF
-        -DCMAKE_UNITY_BUILD=${{ matrix.build_type == 'Debug' }}
+        -DCMAKE_UNITY_BUILD=${{ matrix.build_type == 'Debug' || matrix.sanitize || matrix.valgrind }}
         -DMPIEXEC_PREFLAGS='--bind-to;none;--allow-run-as-root'
         -DCMAKE_PREFIX_PATH='/usr/local/opt/boost'
         -DSEQUANT_TESTS=ON
-        -DSEQUANT_EVAL_TESTS=ON
+        -DSEQUANT_EVAL_TESTS=${{ !matrix.valgrind && !matrix.sanitize }}
         -DSEQUANT_USE_SYSTEM_BOOST_HASH=OFF
         -DCMAKE_CXX_STANDARD=20
         -DCMAKE_CXX_EXTENSIONS=OFF
-        -DSEQUANT_BENCHMARKS=ON
+        -DSEQUANT_BENCHMARKS=${{ !matrix.valgrind && !matrix.sanitize }}
+        -DSEQUANT_SKIP_LONG_TESTS=${{ matrix.valgrind || matrix.sanitize }}
+        -DSEQUANT_COMPILE_DOC_EXAMPLES=${{ !matrix.valgrind }}
     steps:
     - uses: actions/checkout@v4
 
@@ -49,6 +66,14 @@ jobs:
       # Some projects don't allow in-source building, so create a separate build directory
       # We'll use this as our working directory for all subsequent commands
       run: cmake -E make_directory ${{github.workspace}}/build
+
+    - name: Set sanitizer flags
+      if: ${{ matrix.sanitize }}
+      shell: bash
+      run: |
+        if [[ '${{ matrix.sanitize }}' = 'true' ]]; then
+          echo "CXXFLAGS=${{ matrix.sanitize_flags }}" >> "$GITHUB_ENV"
+        fi
 
     - name: Install prerequisite MacOS packages
       if: ${{ matrix.os == 'macos-latest' }}
@@ -58,7 +83,7 @@ jobs:
       if: ${{ matrix.os == 'ubuntu-24.04' }}
       run: |
         sudo apt-get update
-        sudo apt-get install ninja-build g++-14 liblapack-dev libboost-dev libboost-locale-dev libboost-random-dev libboost-regex-dev libeigen3-dev openmpi-bin libopenmpi-dev ccache
+        sudo apt-get install ninja-build g++-14 liblapack-dev libboost-dev libboost-locale-dev libboost-random-dev libboost-regex-dev libeigen3-dev openmpi-bin libopenmpi-dev ccache valgrind catch2
     - name: Prepare ccache timestamp
       id: ccache_cache_timestamp
       shell: cmake -P {0}
@@ -90,9 +115,13 @@ jobs:
       run: ccache -p && ccache -z && cmake --build . && ccache -s
 
     - name: Test
+      if: ${{ !matrix.valgrind }}
       working-directory: ${{github.workspace}}/build
       shell: bash
-      # Execute tests defined by the CMake configuration.  
-      # See https://cmake.org/cmake/help/latest/manual/ctest.1.html for more detail
-      # run: ctest -C $BUILD_TYPE
-      run: cmake --build . --target check-sequant
+      run: ctest --output-on-failure -R "^sequant"
+
+    - name: Test (+ Valgrind)
+      if: ${{ matrix.valgrind }}
+      working-directory: ${{github.workspace}}/build
+      shell: bash
+      run: valgrind --error-exitcode=1 --leak-check=full ./tests/unit/unit_tests-sequant

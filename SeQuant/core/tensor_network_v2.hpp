@@ -86,8 +86,8 @@ class TensorNetworkV2 {
    public:
     Edge() = default;
     explicit Edge(Vertex vertex) : first(std::move(vertex)), second() {}
-    Edge(Vertex vertex, Index index)
-        : first(std::move(vertex)), second(), index(std::move(index)) {}
+    Edge(Vertex vertex, const Index *index)
+        : first(std::move(vertex)), second(), index(index) {}
 
     Edge &connect_to(Vertex vertex) {
       assert(!second.has_value());
@@ -143,7 +143,8 @@ class TensorNetworkV2 {
         return second < other.second;
       }
 
-      return index.space() < other.index.space();
+      assert(index && other.index);
+      return index->space() < other.index->space();
     }
 
     bool operator==(const Edge &other) const {
@@ -164,12 +165,15 @@ class TensorNetworkV2 {
       return second.has_value() ? 2 : (first.has_value() ? 1 : 0);
     }
 
-    const Index &idx() const { return index; }
+    const Index &idx() const {
+      assert(index);
+      return *index;
+    }
 
    private:
     std::optional<Vertex> first;
     std::optional<Vertex> second;
-    Index index;
+    const Index *index = nullptr;
   };
 
   struct Graph {
@@ -394,11 +398,9 @@ class TensorNetworkV2 {
   container::vector<Edge> edges_;
   bool have_edges_ = false;
   /// ext indices do not connect tensors
-  /// sorted by *label* (not full label) of the corresponding value (Index)
-  /// this ensures that proto indices are not considered and all internal
-  /// indices have unique labels (not full labels)
+  /// sorted by full label of the corresponding value (Index)
   /// N.B. this may contain some indices in pure_proto_indices_ if there are
-  /// externals indices that depend on them
+  /// external indices that depend on them
   NamedIndexSet ext_indices_;
   /// some proto indices may not be in edges_ if they appear exclusively among
   /// proto indices
@@ -457,11 +459,6 @@ std::basic_ostream<CharT, Traits> &operator<<(
       break;
   }
   return stream;
-}
-
-template <typename Edge>
-auto edge2index(const Edge &e) -> const Index & {
-  return e.idx();
 }
 
 }  // namespace sequant

@@ -157,9 +157,19 @@ bool operator==(const Context& ctx1, const Context& ctx2);
 bool operator!=(const Context& ctx1, const Context& ctx2);
 
 /// \name manipulation of implicit context for SeQuant
-/// \warning all of these are re-entrant
+/// \warning all of these are thread-safe only if
+/// default_context_manipulation_threadsafe() returns true
 
 /// @{
+
+/// \return whether context manipulation functions are thread-safe
+inline constexpr bool default_context_manipulation_threadsafe() {
+#ifdef SEQUANT_CONTEXT_MANIPULATION_THREADSAFE
+  return true;
+#else
+  return false;
+#endif
+}
 
 /// @brief access default Context for the given Statistics
 /// @param s Statistics

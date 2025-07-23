@@ -15,16 +15,20 @@ namespace sequant::mbpt {
 /// \note spin quantum number takes 2 rightmost bits since there are 3 possible
 /// states (any/no spin, spin-up, spin-down)
 enum class Spin : bitset_t {
-  alpha = 0b000001,
-  beta = 0b000010,
-  any = alpha | beta,  // using 2 bits so that overlap and union work expected
-                       // (any & alpha = alpha, alpha | beta = any)
-  // syntax sugar
-  free = any,
-  none = any,
-  up = alpha,
-  down = beta,
-  mask = any
+  alpha = 0b000001,  //!< spin-up (chemistry)
+  beta = 0b000010,   //!< spin-down (chemistry)
+  /// arbitrary spin-state represented by 2 bits
+  /// so that overlap and union work as expected
+  /// (`any & alpha = alpha`, `alpha | beta = any`, etc.)
+  any = alpha | beta,
+  // syntactic sugar
+  free = any,   //!< spin-free means spin does not matter
+  none = any,   //!< same as spin-free
+  up = alpha,   //!< spin-up (physics)
+  down = beta,  //!< spin-down (physics)
+  mask = any,   //!< spin bit mask
+  // only used by legacy code
+  null = 0b000000
 };
 
 /// quantum numbers tags related to LCAO basis traits

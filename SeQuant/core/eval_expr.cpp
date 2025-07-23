@@ -269,7 +269,8 @@ void collect_tensor_factors(EvalExprNode const& node,  //
                             Rng& collect) {
   static_assert(std::is_same_v<ranges::range_value_t<Rng>, ExprWithHash>);
 
-  if (auto op = node->op_type(); node->is_tensor() && !op || *op == EvalOp::Sum)
+  if (auto op = node->op_type();
+      node->is_tensor() && (!op || *op == EvalOp::Sum))
     collect.emplace_back(ExprWithHash{node->expr(), node->hash_value()});
   else if (node->op_type() == EvalOp::Product && !node.leaf()) {
     collect_tensor_factors(node.left(), collect);
@@ -338,10 +339,10 @@ EvalExprNode binarize(Product const& prod) {
                  | ranges::to_vector;
 
   auto hvals = factors | transform([](auto&& n) { return n->hash_value(); });
+  auto const hs = imed_hashes(hvals) | ranges::to_vector;
 
-  auto make_prod = [i = 0, hs = imed_hashes(hvals)](
-                       EvalExprNode const& left,
-                       EvalExprNode const& right) mutable -> EvalExpr {
+  auto make_prod = [i = 0, &hs](EvalExprNode const& left,
+                                EvalExprNode const& right) mutable -> EvalExpr {
     auto h = ranges::at(hs, ++i);
     if (left->is_scalar() && right->is_scalar()) {
       // scalar * scalar

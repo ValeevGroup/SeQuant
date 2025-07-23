@@ -123,6 +123,9 @@ add_feature_info(PYTHON SEQUANT_PYTHON "PySeQuant: Python bindings to SeQuant")
 option(SEQUANT_USE_SYSTEM_BOOST_HASH "Use system Boost for hashing? Set to OFF to make hashing independent of Boost, thus value-portable" ON)
 add_feature_info(SEQUANT_USE_SYSTEM_BOOST_HASH SEQUANT_USE_SYSTEM_BOOST_HASH "SeQuant uses system Boost for hashing (thus results depend on the Boost version)")
 
+option(SEQUANT_CONTEXT_MANIPULATION_THREADSAFE "Controls if the default context can be changed from multiple threads; recommended to set to OFF and setting context from main thread" ON)
+add_feature_info(SEQUANT_CONTEXT_MANIPULATION_THREADSAFE SEQUANT_CONTEXT_MANIPULATION_THREADSAFE "The default context can be changed from multiple threads")
+
 ##########################
 # Prerequisites
 ##########################
@@ -177,7 +180,13 @@ add_library(SeQuant-bliss
         SeQuant/external/bliss/bliss_C.cc
         SeQuant/external/bliss/bliss_C.h
         )
-target_link_libraries(SeQuant-bliss PUBLIC range-v3::range-v3)
+target_link_libraries(SeQuant-bliss PUBLIC range-v3::range-v3 Boost::headers)
+# modularized Boost has finer grained targets than just Boost::headers
+if (Boost_IS_MODULARIZED)
+    target_link_libraries(SeQuant-bliss PUBLIC
+            Boost::container
+    )
+endif()
 
 set(SeQuant_src
         ${PROJECT_BINARY_DIR}/SeQuant/version.hpp
@@ -347,6 +356,9 @@ set_source_files_properties(
         PROPERTIES COMPILE_DEFINITIONS
         "SEQUANT_GIT_REVISION=\"${SEQUANT_GIT_REVISION}\";SEQUANT_GIT_DESCRIPTION=\"${SEQUANT_GIT_DESCRIPTION}\""
 )
+if (SEQUANT_CONTEXT_MANIPULATION_THREADSAFE)
+  target_compile_definitions(SeQuant PUBLIC SEQUANT_CONTEXT_MANIPULATION_THREADSAFE)
+endif()
 
 target_link_libraries(SeQuant PUBLIC range-v3::range-v3 Boost::regex Boost::locale Boost::headers SeQuant-bliss Threads::Threads)
 target_link_libraries(SeQuant PRIVATE libperm::libperm)

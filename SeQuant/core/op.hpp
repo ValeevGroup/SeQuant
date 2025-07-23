@@ -188,8 +188,9 @@ bool is_annihilator(const Op<S> &op) {
 /// given vacuum, false otherwise
 template <Statistics S>
 bool is_pure_qpcreator(const Op<S> &op,
-                       Vacuum vacuum = get_default_context(S).vacuum()) {
-  const auto &isr = get_default_context(S).index_space_registry();
+                       Vacuum vacuum = get_default_context(S).vacuum(),
+                       const std::shared_ptr<const IndexSpaceRegistry> &isr =
+                           get_default_context(S).index_space_registry()) {
   switch (vacuum) {
     case Vacuum::Physical:
       return op.action() == Action::create;
@@ -209,8 +210,9 @@ bool is_pure_qpcreator(const Op<S> &op,
 /// vacuum, false otherwise
 template <Statistics S>
 bool is_qpcreator(const Op<S> &op,
-                  Vacuum vacuum = get_default_context(S).vacuum()) {
-  const auto &isr = get_default_context(S).index_space_registry();
+                  Vacuum vacuum = get_default_context(S).vacuum(),
+                  const std::shared_ptr<const IndexSpaceRegistry> &isr =
+                      get_default_context(S).index_space_registry()) {
   switch (vacuum) {
     case Vacuum::Physical:
       return op.action() == Action::create;
@@ -226,9 +228,10 @@ bool is_qpcreator(const Op<S> &op,
 };
 
 template <Statistics S>
-IndexSpace qpcreator_space(const Op<S> &op,
-                           Vacuum vacuum = get_default_context(S).vacuum()) {
-  const auto &isr = get_default_context(S).index_space_registry();
+IndexSpace qpcreator_space(
+    const Op<S> &op, Vacuum vacuum = get_default_context(S).vacuum(),
+    const std::shared_ptr<const IndexSpaceRegistry> &isr =
+        get_default_context(S).index_space_registry()) {
   switch (vacuum) {
     case Vacuum::Physical:
       return op.action() == Action::create ? op.index().space()
@@ -250,9 +253,10 @@ IndexSpace qpcreator_space(const Op<S> &op,
 /// @return true if this is a pure quasiparticle annihilator with respect to
 /// the given vacuum, false otherwise
 template <Statistics S>
-bool is_pure_qpannihilator(const Op<S> &op,
-                           Vacuum vacuum = get_default_context(S).vacuum()) {
-  const auto &isr = get_default_context(S).index_space_registry();
+bool is_pure_qpannihilator(
+    const Op<S> &op, Vacuum vacuum = get_default_context(S).vacuum(),
+    const std::shared_ptr<const IndexSpaceRegistry> &isr =
+        get_default_context(S).index_space_registry()) {
   switch (vacuum) {
     case Vacuum::Physical:
       return op.action() == Action::annihilate;
@@ -272,8 +276,9 @@ bool is_pure_qpannihilator(const Op<S> &op,
 /// given vacuum, false otherwise
 template <Statistics S>
 bool is_qpannihilator(const Op<S> &op,
-                      Vacuum vacuum = get_default_context(S).vacuum()) {
-  const auto &isr = get_default_context(S).index_space_registry();
+                      Vacuum vacuum = get_default_context(S).vacuum(),
+                      const std::shared_ptr<const IndexSpaceRegistry> &isr =
+                          get_default_context(S).index_space_registry()) {
   switch (vacuum) {
     case Vacuum::Physical:
       return op.action() == Action::annihilate;
@@ -291,8 +296,9 @@ bool is_qpannihilator(const Op<S> &op,
 
 template <Statistics S>
 IndexSpace qpannihilator_space(
-    const Op<S> &op, Vacuum vacuum = get_default_context(S).vacuum()) {
-  const auto &isr = get_default_context(S).index_space_registry();
+    const Op<S> &op, Vacuum vacuum = get_default_context(S).vacuum(),
+    const std::shared_ptr<const IndexSpaceRegistry> &isr =
+        get_default_context(S).index_space_registry()) {
   switch (vacuum) {
     case Vacuum::Physical:
       return op.action() == Action::annihilate ? op.index().space()
@@ -747,10 +753,10 @@ class NormalOperator : public Operator<S>,
     const auto &isr = get_default_context(S).index_space_registry();
     // same as WickTheorem::can_contract
     auto can_contract = [this, &isr](const Op<S> &left, const Op<S> &right) {
-      if (is_qpannihilator<S>(left, vacuum_) &&
-          is_qpcreator<S>(right, vacuum_)) {
-        const auto qpspace_left = qpannihilator_space<S>(left, vacuum_);
-        const auto qpspace_right = qpcreator_space<S>(right, vacuum_);
+      if (is_qpannihilator<S>(left, vacuum_, isr) &&
+          is_qpcreator<S>(right, vacuum_, isr)) {
+        const auto qpspace_left = qpannihilator_space<S>(left, vacuum_, isr);
+        const auto qpspace_right = qpcreator_space<S>(right, vacuum_, isr);
         const auto qpspace_common =
             isr->intersection(qpspace_left, qpspace_right);
         if (qpspace_common) return true;

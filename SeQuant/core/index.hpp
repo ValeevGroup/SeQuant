@@ -991,7 +991,7 @@ class Index : public Taggable {
 };  // class Index
 
 inline const IndexSpace::Attr Index::default_space_attr{
-    IndexSpace::Type::reserved, IndexSpace::QuantumNumbers::reserved};
+    IndexSpace::Attr::reserved};
 
 void Index::check_for_duplicate_proto_indices() const {
 #ifndef NDEBUG
@@ -1041,6 +1041,7 @@ class IndexFactory {
   /// @param min_index start indexing indices for each space with this value;
   /// must be greater than 0; the default is to use Index::min_tmp_index()
   template <typename IndexValidator>
+    requires((std::is_invocable_r_v<bool, IndexValidator, const Index &>))
   explicit IndexFactory(IndexValidator validator,
                         size_t min_index = Index::min_tmp_index())
       : min_index_(min_index), validator_(std::move(validator)) {
