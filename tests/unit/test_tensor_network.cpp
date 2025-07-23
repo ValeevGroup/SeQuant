@@ -176,18 +176,6 @@ TEMPLATE_TEST_CASE("tensor_network_shared", "[elements]", TensorNetwork,
         auto ex1 = parse_expr(input1);
         auto ex2 = parse_expr(input2);
 
-        // TNV2::canonicalize_slots does not support antisymm tensors yet
-        {
-          auto get_symm = [](const auto& t) {
-            if (t.template is<Tensor>())
-              return t.template as<Tensor>().symmetry();
-            return Symmetry::invalid;
-          };
-          if (ranges::contains(ex1, Symmetry::antisymm, get_symm) ||
-              ranges::contains(ex2, Symmetry::antisymm, get_symm))
-            continue;
-        }
-
         TN tn1(ex1);
         auto cbp1 = tn1.canonicalize_slots(
             TensorCanonicalizer::cardinal_tensor_labels());
