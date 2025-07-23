@@ -5,6 +5,8 @@ if (NOT SEQUANT_TESTS)
     set(BUILD_BY_DEFAULT "EXCLUDE_FROM_ALL")
 endif()
 
+option(SEQUANT_SKIP_LONG_TESTS "Whether to skip execution of long-running tests" OFF)
+
 function(build_test_as_needed TARGET_NAME TEST_PREFIX DEPENDENT_TESTS)
     if (SEQUANT_TESTS)
         # Tests are built by default -> no need to add extra build steps
