@@ -54,9 +54,173 @@ using namespace sequant;
 
 TEMPLATE_TEST_CASE("tensor_network_shared", "[elements]", TensorNetwork,
                    TensorNetworkV2) {
+  TensorCanonicalizer::register_instance(
+      std::make_shared<DefaultTensorCanonicalizer>());
+  auto isr = sequant::mbpt::make_legacy_spaces();
+  mbpt::add_pao_spaces(isr);
+  auto ctx_resetter =
+      set_scoped_default_context(Context(isr, Vacuum::SingleProduct));
+
   using TN = TestType;
 
   SECTION("canonicalize_slots") {
+    SECTION("TN isomorphism") {
+      enum EqEnum { Eq, NEq };
+      enum SignEnum { Plus, Minus };
+
+      // Case 7: with protoindices
+
+      auto& l = Logger::instance();
+      //      l.tensor_network = l.canonicalize = l.canonicalize_dot =
+      //          l.canonicalize_input_graph = true;
+
+      for (const auto& [input1, input2, eq, phase] : std::vector<
+               std::tuple<std::wstring, std::wstring, EqEnum, SignEnum>>{
+               // original 4 tensor networks from Bimal
+               {L"g{i3,i4;a3<i1,i4>,a4<i2>} * s{a1<i1,i2>;a5<i3>}",
+                L"s{a1<i1,i2>;a5<i3>} * g{i3,i4;a3<i1,i4>,a4<i2>}", Eq,
+                Plus},  // product reorder is OK
+               {L"g{i3,i4;a3<i1,i4>,a4<i2>} * s{a1<i1,i2>;a5<i3>}",
+                L"g{i3,i4;a3<i1,i3>,a4<i2>} * s{a2<i1,i2>;a6<i4>}", NEq, Plus},
+               {L"g{i3,i4;a3<i1,i4>,a4<i2>} * s{a1<i1,i2>;a5<i3>}",
+                L"g{i3,i4;a3<i1,i4>,a4<i2>} * s{a2<i1,i2>;a6<i3>}", Eq, Plus},
+               {L"g{i3,i4;a3<i1,i4>,a4<i2>} * s{a1<i1,i2>;a5<i3>}",
+                L"g{i3,i4;a3<i1,i3>,a4<i2>} * s{a2<i1,i2>;a6<i4>}", NEq, Plus},
+               // one more pair of ternary products
+               {L"s{a2<i1,i2>;a6<i2,i4>} * g{i3,i4;a3<i2,i4>,a4<i1,i3>} * "
+                L"t{a3<i2,i4>,a6<i2,i4>;i4,i2}",
+                L"g{i3,i4;a3<i1,i4>,a4<i2,i3>} * "
+                L"t{a3<i1,i4>,a5<i1,i4>;i4,i1} "
+                L"* s{a1<i1,i2>;a5<i1,i4>}",
+                Eq, Plus},
+               // last pair of ternary nets involved in MO->PNO integral
+               // transform
+               {L"g{i3,i4;a3,a4} * C{a3;a3<i1,i4>} * C{a4;a4<i2>}",
+                L"g{i3,i4;a3,a4} * C{a3;a3<i1,i3>} * C{a4;a4<i2>}", NEq, Plus},
+               // representation of the above as single tensor
+               {L"g{i3,i4;a3<i1,i4>,a4<i2>}", L"g{i3,i4;a3<i1,i3>,a4<i2>}", NEq,
+                Plus},
+               // 3-index MO->PNO integral transform, but extra aux index just
+               // for fun
+               {L"g{a3;a4;x1,x2} * C{a3<i1,i4>;a3} * C{a4;a4<i1>}",
+                L"g{a3;a4;x2,x1} * C{a3<i1,i2>;a3} * C{a4;a4<i2>}", Eq, Plus},
+               // TNs discovered during CSV evaluation that did not deduce
+               // external indices correctly
+               {L"f{i2;a2<i1,i2>} * t{a2<i1,i2>,a3<i1,i2>;i2,i1}",
+                L"f{i1;a2<i1,i2>} * t{a2<i1,i2>,a3<i1,i2>;i2,i1}",  // f_i2
+                                                                    // ->
+                                                                    // f_i1
+                NEq, Plus},
+               {L"f{i2;a2<i1,i2>} * t{a2<i1,i2>,a3<i1,i2>;i2,i1}",
+                L"f{i1;a2<i1,i2>} * t{a3<i1,i2>,a2<i1,i2>;i2,i1}",  // f_i2
+                                                                    // ->
+                                                                    // f_i1,
+                                                                    // a2 <->
+                                                                    // a3
+                Eq, Plus},
+
+               //////////////// TNs w antisymmetric tensors
+               // unlike the nonsymmetric/symmetric cases we need to check for
+               // the phase due to canonical reordering of the slots
+               // N.B. these tests are not robust due to relying on specific
+               // canonical order (which will change by changing bliss
+               // heuristics, colors, etc.)
+               //
+               // spin-orbital CC cases suggested by Bimal testing
+               // these differ by a sign ...
+               {L"g{i1,i4;a1,a4}:A * t{a4;i4}:A",
+                L"g{i3,i2;a2,a4}:A * t{a4;i3}:A", Eq, Minus},
+               // more spin-orbital CC cases suggested by Bimal
+               // 1
+               {L"g{i_2,i_3;a_2,a_3}:A * t{a_2;i_1}:A",
+                L"g{i_3,i_4;a_3,a_4}:A * t{a_3;i_1}:A", Eq, Plus},
+               {L"g{i_2,i_3;a_2,a_3}:A * t{a_2;i_1}:A",
+                L"g{i_3,i_4;a_3,a_4}:A * t{a_4;i_1}:A", Eq, Minus},
+               // 2a
+               {L"g{i_3,i_4;a_3,a_4}:A * t{a_3;i_1}:A * t{a_4;i_2}:A",
+                L"g{i_3,i_4;a_3,a_4}:A * t{a_4;i_1}:A * t{a_3;i_2}:A", Eq,
+                Minus},
+               // 2b: unlike its equivalent counterpart 2a the order of named
+               // indices is different for the 2 TNs, which cancels out the
+               // phase change
+               {L"g{i_3,i_4;a_3,a_4}:A * t{a_3;i_1}:A * t{a_4;i_2}:A",
+                L"g{i_3,i_4;a_3,a_4}:A * t{a_3;i_2}:A * t{a_4;i_1}:A", Eq,
+                Plus},
+               // 3: matching "constant" TNs (TNs without named indices)
+               //    also needs canonicalization
+               {L"g{i_2,i_3;a_2,a_3}:A * t{a_2,a_3;i_2,i_3}:A",
+                L"g{i_4,i_1;a_2,a_3}:A * t{a_2,a_3;i_4,i_1}:A", Eq, Plus},
+               {L"g{i_2,i_3;a_2,a_3}:A * t{a_2,a_3;i_2,i_3}:A",
+                L"g{i_1,i_4;a_2,a_3}:A * t{a_2,a_3;i_4,i_1}:A", Eq, Minus},
+               // 4: more complexity, with triples, CSV, and antisymmetry
+               {L"g{i_2,i_3;a_2,a_3}:A * t{a_1,a_2,a_3;i_1,i_2,i_3}:A",
+                L"g{i_1,i_3;a_2,a_3}:A * t{a_1,a_2,a_3;i_1,i_2,i_3}:A", Eq,
+                Minus},
+               {L"g{i_2,i_3;a_2,a_3}:A * t{a_1<i_1>,a_2,a_3;i_1,i_2,i_3}:A",
+                L"g{i_2,i_3;a_1,a_3}:A * t{a_3,a_2<i_1>,a_1;i_1,i_2,i_3}:A", Eq,
+                Plus},
+               {L"g{i_2,i_3;a_2,a_3}:A * "
+                L"t{a_1<i_1,i_4>,a_2,a_3;i_1,i_2,i_3}:A",
+                L"g{i_4,i_1;a_1,a_3}:A * "
+                L"t{a_3,a_2<i_5,i_2>,a_1;i_1,i_4,i_2}:A",
+                Eq, Minus},
+
+               ///////////////////////////// tensors with PAOs
+               // These produce same layout, but are different
+               {L"C{μ̃_1;a_3<i_3>}:N", L"C{a_1<i_2>;μ̃_1}:N", NEq, Plus},
+           }) {
+        auto ex1 = parse_expr(input1);
+        auto ex2 = parse_expr(input2);
+
+        // TNV2::canonicalize_slots does not support antisymm tensors yet
+        {
+          auto get_symm = [](const auto& t) {
+            if (t.template is<Tensor>())
+              return t.template as<Tensor>().symmetry();
+            return Symmetry::invalid;
+          };
+          if (ranges::contains(ex1, Symmetry::antisymm, get_symm) ||
+              ranges::contains(ex2, Symmetry::antisymm, get_symm))
+            continue;
+        }
+
+        std::wcout << "============== " << input1
+                   << " ===============" << std::endl;
+        TN tn1(ex1);
+        auto cbp1 = tn1.canonicalize_slots(
+            TensorCanonicalizer::cardinal_tensor_labels());
+        std::wcout << "canonical order of named indices:\n";
+        for (const auto& idx_it : cbp1.named_indices_canonical) {
+          std::wcout << idx_it->to_latex() << "\n";
+        }
+
+        std::wcout << "============== " << input2
+                   << " ===============" << std::endl;
+        TN tn2(ex2);
+        auto cbp2 = tn2.canonicalize_slots(
+            TensorCanonicalizer::cardinal_tensor_labels());
+        std::wcout << "canonical order of named indices:\n";
+        for (const auto& idx_it : cbp2.named_indices_canonical) {
+          std::wcout << idx_it->to_latex() << "\n";
+        }
+
+        std::wcout << "graph(" << input1 << ") <=> graph(" << input2
+                   << "): " << cbp1.graph->cmp(*cbp2.graph)
+                   << (cbp1.phase * cbp2.phase == -1 ? " [modulo sign]" : "")
+                   << std::endl;
+
+        if (eq == Eq) {
+          REQUIRE(cbp1.graph->cmp(*cbp2.graph) == 0);
+          REQUIRE(cbp1.phase * cbp2.phase == (phase == Minus ? -1 : 1));
+        } else
+          REQUIRE(cbp1.graph->cmp(*cbp2.graph) != 0);
+
+        //                std::wcout << canonicalize(ex1).to_latex() << " should
+        //                be equal " << canonicalize(ex2).to_latex() <<
+        //                std::endl;
+      }
+    }
+
     SECTION("phase_difference") {
       const Product prod1 =
           parse_expr(L"g{i_2,i_3;a_2,a_3}:A-C-S * t{a_2;i_2}:A-C-S")
