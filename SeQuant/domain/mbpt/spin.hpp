@@ -237,18 +237,25 @@ ExprPtr S_maps(const ExprPtr& expr);
 /// lacks proper index attributes.
 /// @param expr ExprPtr with spin orbital indices
 /// @param ext_index_groups groups of external indices
+/// @param is_compact_set if true, will produce compact expressions
 /// @return an expression with spin integrated/adapted
+/// @brief 2-parameter wrapper version
 ExprPtr closed_shell_spintrace(
     const ExprPtr& expr,
-    const container::svector<container::svector<Index>>& ext_index_groups = {});
+    const container::svector<container::svector<Index>>& ext_index_groups = {},
+    bool is_compact_set = false);
 
-container::svector<ResultExpr> closed_shell_spintrace(const ResultExpr& expr);
+container::svector<ResultExpr> closed_shell_spintrace(
+    const ResultExpr& expr, bool is_compact_set = false);
 
 /// @brief Transforms Coupled cluster from spin orbital to spatial orbitals
 /// @details The external indices are deduced from Antisymmetrization operator
 /// @param expr ExprPtr to Sum type with spin orbital indices
 /// @return an expression with spin integrated/adapted
 ExprPtr closed_shell_CC_spintrace(ExprPtr const& expr);
+
+/// @brief compact_set of eqns
+ExprPtr closed_shell_CC_spintrace_compact_set(ExprPtr const& expr);
 
 /// \brief Same as \c closed_shell_CC_spintrace except internally uses
 ///        \c sequant::spintrace instead of sequant::closed_shell_spintrace.
