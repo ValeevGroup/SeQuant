@@ -387,18 +387,14 @@ ExprPtr Sum::canonicalize_impl(bool multipass) {
             // convert existing term to product and add
             auto product_copy =
                 std::static_pointer_cast<Product>(summand->clone());
-            auto as_product =
-                std::make_shared<Product>(1, ExprPtrList{it->second});
-            product_copy->add_identical(*as_product);
+            product_copy->add_identical(it->second);
             it->second = product_copy;
           }
         } else {
           if (it->second->template is<Product>()) {
             // convert summand to product and add
             auto &product = it->second->template as<Product>();
-            auto as_product =
-                std::make_shared<Product>(1, ExprPtrList{summand});
-            product.add_identical(*as_product);
+            product.add_identical(summand);
           } else {
             // neither is a product - create new product
             auto product_form = std::make_shared<Product>();

@@ -1216,6 +1216,17 @@ class Product : public Expr {
     scalar_ += other->scalar_;
   }
 
+  void add_identical(const ExprPtr &other) {
+    if (other.is<Product>())
+      return this->add_identical(other.as<Product>());
+    else {
+      // only makes sense if this has a single factor
+      assert(this->factors_.size() == 1 &&
+             this->factors_[0]->hash_value() == other->hash_value());
+      scalar_ += 1;
+    }
+  }
+
  private:
   scalar_type scalar_ = {1, 0};
   container::svector<ExprPtr, 2> factors_{};
