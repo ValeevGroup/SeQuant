@@ -233,6 +233,34 @@ TEMPLATE_TEST_CASE("tensor_network_shared", "[elements]", TensorNetwork,
       REQUIRE(canon1.hash_value() == canon2.hash_value());
       REQUIRE(canon1.phase != canon2.phase);
     }
+
+    SECTION("Named index ordering") {
+      REQUIRE(IndexSpace("i") < IndexSpace("a"));
+
+      for (const auto [input, str_indices] :
+           std::vector<std::pair<std::wstring, std::vector<std::wstring>>>{
+               {L"G{;;a1,a2,a3,a4} T{;;i3,i2,a3,a4}",
+                {L"i_2", L"i_3", L"a_1", L"a_2"}},
+               {L"G{;;a1,a2,a3,a4} T{;;i2,i3,a3,a4}",
+                {L"i_3", L"i_2", L"a_1", L"a_2"}},
+           }) {
+        const std::vector<Index> expected_indices =
+            str_indices | ranges::views::transform([](const std::wstring& str) {
+              return Index(str);
+            }) |
+            ranges::to<std::vector>();
+
+        Product prod = parse_expr(input)->as<Product>();
+        TN tn(prod.factors());
+
+        auto meta = tn.canonicalize_slots(
+            TensorCanonicalizer::cardinal_tensor_labels());
+
+        REQUIRE(meta.template get_indices<
+                    std::decay_t<decltype(expected_indices)>>() ==
+                expected_indices);
+      }
+    }
   }
 
   SECTION("canonicalize") {

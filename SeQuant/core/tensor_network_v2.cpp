@@ -759,18 +759,6 @@ TensorNetworkV2::canonicalize_slots(
     metadata.graph->write_dot(std::wcout, cvlabels, cvtexlabels);
   }
 
-  // maps index ordinal to vertex ordinal
-  const auto index_idx_to_vertex =
-      graph.vertex_types | ranges::views::filter([](const auto &vertex_type) {
-        return vertex_type == VertexType::Index;
-      }) |
-      ranges::views::enumerate | ranges::views::transform([](auto &&ord_value) {
-        return std::get<0>(ord_value);
-      }) |
-      ranges::to<std::vector>;
-  assert(index_idx_to_vertex.size() ==
-         edges_.size() + pure_proto_indices_.size());
-
   // produce canonical list of named indices
   {
     using ord_cord_it_t =
@@ -795,9 +783,9 @@ TensorNetworkV2::canonicalize_slots(
       const auto &idx = *git;
 
       if (is_named_index(idx)) {
-        const auto vertex_ord = index_idx_to_vertex[idx_ord];
         const auto named_indices_it = metadata.named_indices.find(idx);
         assert(named_indices_it != metadata.named_indices.end());
+        const auto vertex_ord = idx_to_vertex.at(*named_indices_it);
 
         // find the entry for this index type
         IndexSlotType slot_type;
