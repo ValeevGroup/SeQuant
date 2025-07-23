@@ -1,7 +1,6 @@
 #include <benchmark/benchmark.h>
 
 #include <SeQuant/core/expr.hpp>
-#include <SeQuant/core/expr_algorithm.hpp>
 #include <SeQuant/core/parse.hpp>
 
 using namespace sequant;

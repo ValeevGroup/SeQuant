@@ -5,7 +5,6 @@
 #ifndef SEQUANT_TENSOR_NETWORK_V2_H
 #define SEQUANT_TENSOR_NETWORK_V2_H
 
-#include <SeQuant/core/abstract_tensor.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>

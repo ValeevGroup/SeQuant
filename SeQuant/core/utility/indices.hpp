@@ -4,7 +4,6 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
-#include <SeQuant/core/tensor.hpp>
 
 #include <range/v3/view.hpp>
 

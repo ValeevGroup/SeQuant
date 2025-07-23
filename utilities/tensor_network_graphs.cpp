@@ -1,7 +1,7 @@
 #include <SeQuant/core/bliss.hpp>
+#include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/parse.hpp>
 #include <SeQuant/core/runtime.hpp>
-#include <SeQuant/core/tensor.hpp>
 #include <SeQuant/core/tensor_network.hpp>
 #include <SeQuant/core/tensor_network_v2.hpp>
 #include <SeQuant/domain/mbpt/context.hpp>
