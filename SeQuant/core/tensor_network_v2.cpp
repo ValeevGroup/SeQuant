@@ -776,53 +776,50 @@ TensorNetworkV2::canonicalize_slots(
         idx2cord(named_index_compare);
 
     // collect named indices and sort them on the fly
-    size_t idx_ord = 0;
     auto grand_index_list_end = grand_index_list.end();
-    for (auto git = grand_index_list.begin(); git != grand_index_list_end;
-         ++git) {
-      const auto &idx = *git;
-
-      if (is_named_index(idx)) {
-        const auto named_indices_it = metadata.named_indices.find(idx);
-        assert(named_indices_it != metadata.named_indices.end());
-        const auto vertex_ord = idx_to_vertex.at(*named_indices_it);
-
-        // find the entry for this index type
-        IndexSlotType slot_type;
-        if (idx_ord < edges_.size()) {
-          auto edge_it = edges_.begin();
-          std::advance(edge_it, idx_ord);
-          // there are 2 possibilities: its index edge is disconnected or
-          // connected ... the latter would only occur if this index is named
-          // due to also being a protoindex on one of the named indices!
-          if (edge_it->vertex_count() == 1) {
-            if (edge_it->first_vertex().getOrigin() == Origin::Aux)
-              slot_type = IndexSlotType::TensorAux;
-            else if (edge_it->first_vertex().getOrigin() == Origin::Bra)
-              slot_type = IndexSlotType::TensorBra;
-            else {
-              assert(edge_it->first_vertex().getOrigin() == Origin::Ket);
-              slot_type = IndexSlotType::TensorKet;
-            }
-          } else {  // if
-            assert(edge_it->vertex_count() == 2);
-            slot_type = IndexSlotType::SPBundle;
-          }
-        } else
-          slot_type = IndexSlotType::SPBundle;
-        const auto idxptr_slottype = std::make_pair(&idx, slot_type);
-        auto it = idx2cord.find(idxptr_slottype);
-
-        if (it == idx2cord.end()) {
-          bool inserted;
-          std::tie(it, inserted) = idx2cord.emplace(
-              idxptr_slottype, cord_set_t(cord_set_t::key_compare{}));
-          assert(inserted);
-        }
-        it->second.emplace(idx_ord, canonize_perm[vertex_ord],
-                           named_indices_it);
+    for (auto [idx_ord, idx] : ranges::views::enumerate(grand_index_list)) {
+      if (!is_named_index(idx)) {
+        continue;
       }
-      ++idx_ord;
+
+      const auto named_indices_it = metadata.named_indices.find(idx);
+      assert(named_indices_it != metadata.named_indices.end());
+      const auto vertex_ord = idx_to_vertex.at(*named_indices_it);
+
+      // find the entry for this index type
+      IndexSlotType slot_type;
+      if (idx_ord < edges_.size()) {
+        auto edge_it = edges_.begin();
+        std::advance(edge_it, idx_ord);
+        // there are 2 possibilities: its index edge is disconnected or
+        // connected ... the latter would only occur if this index is named
+        // due to also being a protoindex on one of the named indices!
+        if (edge_it->vertex_count() == 1) {
+          if (edge_it->first_vertex().getOrigin() == Origin::Aux)
+            slot_type = IndexSlotType::TensorAux;
+          else if (edge_it->first_vertex().getOrigin() == Origin::Bra)
+            slot_type = IndexSlotType::TensorBra;
+          else {
+            assert(edge_it->first_vertex().getOrigin() == Origin::Ket);
+            slot_type = IndexSlotType::TensorKet;
+          }
+        } else {  // if
+          assert(edge_it->vertex_count() == 2);
+          slot_type = IndexSlotType::SPBundle;
+        }
+      } else
+        slot_type = IndexSlotType::SPBundle;
+      const auto idxptr_slottype = std::make_pair(&idx, slot_type);
+      auto it = idx2cord.find(idxptr_slottype);
+
+      if (it == idx2cord.end()) {
+        bool inserted;
+        std::tie(it, inserted) = idx2cord.emplace(
+            idxptr_slottype, cord_set_t(cord_set_t::key_compare{}));
+        assert(inserted);
+      }
+
+      it->second.emplace(idx_ord, canonize_perm[vertex_ord], named_indices_it);
     }
 
     // save the result
