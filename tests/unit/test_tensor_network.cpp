@@ -26,7 +26,6 @@
 
 #include <algorithm>
 #include <cmath>
-#include <codecvt>
 #include <cstdlib>
 #include <initializer_list>
 #include <iostream>
@@ -38,6 +37,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <tuple>
 #include <vector>
 
@@ -51,6 +51,7 @@
 #include <range/v3/all.hpp>
 
 using namespace sequant;
+using namespace std::literals;
 
 TEMPLATE_TEST_CASE("tensor_network_shared", "[elements]", TensorNetwork,
                    TensorNetworkV2) {
@@ -169,6 +170,9 @@ TEMPLATE_TEST_CASE("tensor_network_shared", "[elements]", TensorNetwork,
                // These produce same layout, but are different
                {L"C{μ̃_1;a_3<i_3>}:N", L"C{a_1<i_2>;μ̃_1}:N", NEq, Plus},
            }) {
+        CAPTURE(toUtf8(input1));
+        CAPTURE(toUtf8(input2));
+
         auto ex1 = parse_expr(input1);
         auto ex2 = parse_expr(input2);
 
@@ -184,30 +188,31 @@ TEMPLATE_TEST_CASE("tensor_network_shared", "[elements]", TensorNetwork,
             continue;
         }
 
-        std::wcout << "============== " << input1
-                   << " ===============" << std::endl;
         TN tn1(ex1);
         auto cbp1 = tn1.canonicalize_slots(
             TensorCanonicalizer::cardinal_tensor_labels());
-        std::wcout << "canonical order of named indices:\n";
-        for (const auto& idx_it : cbp1.named_indices_canonical) {
-          std::wcout << idx_it->to_latex() << "\n";
-        }
 
-        std::wcout << "============== " << input2
-                   << " ===============" << std::endl;
+        INFO("tn1 - Canonical order of named indices: "
+             << (cbp1.named_indices_canonical |
+                 ranges::views::transform([](const auto& idx_it) {
+                   return toUtf8(idx_it->full_label());
+                 }) |
+                 ranges::views::join(", "sv) | ranges::to<std::string>()));
+
         TN tn2(ex2);
         auto cbp2 = tn2.canonicalize_slots(
             TensorCanonicalizer::cardinal_tensor_labels());
-        std::wcout << "canonical order of named indices:\n";
-        for (const auto& idx_it : cbp2.named_indices_canonical) {
-          std::wcout << idx_it->to_latex() << "\n";
-        }
 
-        std::wcout << "graph(" << input1 << ") <=> graph(" << input2
-                   << "): " << cbp1.graph->cmp(*cbp2.graph)
-                   << (cbp1.phase * cbp2.phase == -1 ? " [modulo sign]" : "")
-                   << std::endl;
+        INFO("tn2 - Canonical order of named indices: "
+             << (cbp2.named_indices_canonical |
+                 ranges::views::transform([](const auto& idx_it) {
+                   return toUtf8(idx_it->full_label());
+                 }) |
+                 ranges::views::join(", "sv) | ranges::to<std::string>()));
+
+        INFO("graph(intput1) <=> graph(input2): "
+             << cbp1.graph->cmp(*cbp2.graph)
+             << (cbp1.phase * cbp2.phase == -1 ? " [modulo sign]" : ""));
 
         if (eq == Eq) {
           REQUIRE(cbp1.graph->cmp(*cbp2.graph) == 0);
@@ -252,8 +257,9 @@ TEMPLATE_TEST_CASE("tensor_network_shared", "[elements]", TensorNetwork,
         // by TNV1 (due to the use of DefaultTensorCanonicalizer)
         auto input2 = parse_expr(
             L"t{p1,p2;p3,p4}:N-C-S t{p4,p5;p11,p7}:N-C-S t{p7,p8;p9,p1}:N-C-S");
-        std::wcout << "input1 = " << to_latex(input1) << std::endl;
-        std::wcout << "input2 = " << to_latex(input2) << std::endl;
+
+        CAPTURE(input1);
+        CAPTURE(input2);
 
         {
           TN tn1(*input1);
