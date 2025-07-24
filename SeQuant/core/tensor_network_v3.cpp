@@ -1,5 +1,5 @@
 //
-// Created by Eduard Valeyev on 2019-02-26.
+// Created by Eduard Valeyev on 2025-24-07.
 //
 
 #include <SeQuant/core/abstract_tensor.hpp>
@@ -16,7 +16,7 @@
 #include <SeQuant/core/tag.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/tensor_network/vertex_painter.hpp>
-#include <SeQuant/core/tensor_network_v2.hpp>
+#include <SeQuant/core/tensor_network_v3.hpp>
 #include <SeQuant/core/utility/swap.hpp>
 #include <SeQuant/core/utility/tuple.hpp>
 #include <SeQuant/core/wstring.hpp>
@@ -40,8 +40,7 @@
 
 namespace sequant {
 
-inline bool tensors_commute(const AbstractTensor &lhs,
-                            const AbstractTensor &rhs) {
+bool tensors_commute(const AbstractTensor &lhs, const AbstractTensor &rhs) {
   // tensors commute if their colors are different or either one of them
   // is a c-number
   return !(color(lhs) == color(rhs) && !is_cnumber(lhs) && !is_cnumber(rhs));
@@ -148,28 +147,28 @@ struct CanonicalTensorCompare {
   }
 };
 
-TensorNetworkV2::Vertex::Vertex(Origin origin, std::size_t terminal_idx,
+TensorNetworkV3::Vertex::Vertex(Origin origin, std::size_t terminal_idx,
                                 std::size_t index_slot, Symmetry terminal_symm)
     : origin(origin),
       terminal_idx(terminal_idx),
       index_slot(index_slot),
       terminal_symm(terminal_symm) {}
 
-TensorNetworkV2::Origin TensorNetworkV2::Vertex::getOrigin() const {
+TensorNetworkV3::Origin TensorNetworkV3::Vertex::getOrigin() const {
   return origin;
 }
 
-std::size_t TensorNetworkV2::Vertex::getTerminalIndex() const {
+std::size_t TensorNetworkV3::Vertex::getTerminalIndex() const {
   return terminal_idx;
 }
 
-std::size_t TensorNetworkV2::Vertex::getIndexSlot() const { return index_slot; }
+std::size_t TensorNetworkV3::Vertex::getIndexSlot() const { return index_slot; }
 
-Symmetry TensorNetworkV2::Vertex::getTerminalSymmetry() const {
+Symmetry TensorNetworkV3::Vertex::getTerminalSymmetry() const {
   return terminal_symm;
 }
 
-bool TensorNetworkV2::Vertex::operator<(const Vertex &rhs) const {
+bool TensorNetworkV3::Vertex::operator<(const Vertex &rhs) const {
   if (terminal_idx != rhs.terminal_idx) {
     return terminal_idx < rhs.terminal_idx;
   }
@@ -191,7 +190,7 @@ bool TensorNetworkV2::Vertex::operator<(const Vertex &rhs) const {
   }
 }
 
-bool TensorNetworkV2::Vertex::operator==(const Vertex &rhs) const {
+bool TensorNetworkV3::Vertex::operator==(const Vertex &rhs) const {
   // Slot position is only taken into account for non_symmetric tensors
   const std::size_t lhs_slot =
       (terminal_symm == Symmetry::nonsymm) * index_slot;
@@ -207,7 +206,7 @@ bool TensorNetworkV2::Vertex::operator==(const Vertex &rhs) const {
          origin == rhs.origin;
 }
 
-std::size_t TensorNetworkV2::Graph::vertex_to_index_idx(
+std::size_t TensorNetworkV3::Graph::vertex_to_index_idx(
     std::size_t vertex) const {
   assert(vertex_types.at(vertex) == VertexType::Index);
 
@@ -223,7 +222,7 @@ std::size_t TensorNetworkV2::Graph::vertex_to_index_idx(
   return index_idx - 1;
 }
 
-std::size_t TensorNetworkV2::Graph::vertex_to_tensor_idx(
+std::size_t TensorNetworkV3::Graph::vertex_to_tensor_idx(
     std::size_t vertex) const {
   assert(vertex_types.at(vertex) == VertexType::TensorCore);
 
@@ -326,9 +325,9 @@ void sort_via_indices(Container &container, const Comparator &cmp) {
   }
 }
 
-void TensorNetworkV2::canonicalize_graph(const NamedIndexSet &named_indices) {
+void TensorNetworkV3::canonicalize_graph(const NamedIndexSet &named_indices) {
   if (Logger::instance().canonicalize) {
-    std::wcout << "TensorNetworkV2::canonicalize_graph: input tensors\n";
+    std::wcout << "TensorNetworkV3::canonicalize_graph: input tensors\n";
     size_t cnt = 0;
     ranges::for_each(tensors_, [&](const auto &t) {
       std::wcout << "tensor " << cnt++ << ": " << to_latex(*t) << std::endl;
@@ -459,7 +458,7 @@ void TensorNetworkV2::canonicalize_graph(const NamedIndexSet &named_indices) {
 
   if (Logger::instance().canonicalize) {
     for (const auto &idxpair : idxrepl) {
-      std::wcout << "TensorNetworkV2::canonicalize_graph: replacing "
+      std::wcout << "TensorNetworkV3::canonicalize_graph: replacing "
                  << to_latex(idxpair.first) << " with "
                  << to_latex(idxpair.second) << std::endl;
     }
@@ -504,7 +503,7 @@ void TensorNetworkV2::canonicalize_graph(const NamedIndexSet &named_indices) {
       if (Logger::instance().canonicalize) {
         for (const auto &idxpair : idxrepl) {
           std::wcout
-              << "TensorNetworkV2::canonicalize_graph: permuting particles in "
+              << "TensorNetworkV3::canonicalize_graph: permuting particles in "
               << to_latex(tensor) << " by replacing " << to_latex(idxpair.first)
               << " with " << to_latex(idxpair.second) << std::endl;
         }
@@ -536,7 +535,7 @@ void TensorNetworkV2::canonicalize_graph(const NamedIndexSet &named_indices) {
   sort_via_indices<true>(tensors_, tensor_sorter);
 
   if (Logger::instance().canonicalize) {
-    std::wcout << "TensorNetworkV2::canonicalize_graph: tensors after "
+    std::wcout << "TensorNetworkV3::canonicalize_graph: tensors after "
                   "canonicalization\n";
     size_t cnt = 0;
     ranges::for_each(tensors_, [&](const auto &t) {
@@ -545,11 +544,11 @@ void TensorNetworkV2::canonicalize_graph(const NamedIndexSet &named_indices) {
   }
 }
 
-ExprPtr TensorNetworkV2::canonicalize(
+ExprPtr TensorNetworkV3::canonicalize(
     const container::vector<std::wstring> &cardinal_tensor_labels, bool fast,
     const NamedIndexSet *named_indices_ptr) {
   if (Logger::instance().canonicalize) {
-    std::wcout << "TensorNetworkV2::canonicalize(" << (fast ? "fast" : "slow")
+    std::wcout << "TensorNetworkV3::canonicalize(" << (fast ? "fast" : "slow")
                << "): input tensors\n";
     size_t cnt = 0;
     ranges::for_each(tensors_, [&](const auto &t) {
@@ -598,7 +597,7 @@ ExprPtr TensorNetworkV2::canonicalize(
   init_edges();
 
   if (Logger::instance().canonicalize) {
-    std::wcout << "TensorNetworkV2::canonicalize(" << (fast ? "fast" : "slow")
+    std::wcout << "TensorNetworkV3::canonicalize(" << (fast ? "fast" : "slow")
                << "): tensors after initial sort\n";
     size_t cnt = 0;
     ranges::for_each(tensors_, [&](const auto &t) {
@@ -653,7 +652,7 @@ ExprPtr TensorNetworkV2::canonicalize(
 
   if (Logger::instance().canonicalize) {
     for (const auto &idxpair : idxrepl) {
-      std::wcout << "TensorNetworkV2::canonicalize(" << (fast ? "fast" : "slow")
+      std::wcout << "TensorNetworkV3::canonicalize(" << (fast ? "fast" : "slow")
                  << "): replacing " << to_latex(idxpair.first) << " with "
                  << to_latex(idxpair.second) << std::endl;
     }
@@ -675,11 +674,11 @@ ExprPtr TensorNetworkV2::canonicalize(
   return (byproduct->as<Constant>().value() == 1) ? nullptr : byproduct;
 }
 
-TensorNetworkV2::SlotCanonicalizationMetadata
-TensorNetworkV2::canonicalize_slots(
+TensorNetworkV3::SlotCanonicalizationMetadata
+TensorNetworkV3::canonicalize_slots(
     const container::vector<std::wstring> &cardinal_tensor_labels,
     const NamedIndexSet *named_indices_ptr,
-    TensorNetworkV2::SlotCanonicalizationMetadata::named_index_compare_t
+    TensorNetworkV3::SlotCanonicalizationMetadata::named_index_compare_t
         named_index_compare) {
   if (!named_index_compare)
     named_index_compare = [](const auto &idxptr_slottype_1,
@@ -689,10 +688,10 @@ TensorNetworkV2::canonicalize_slots(
       return idxptr1->space() < idxptr2->space();
     };
 
-  TensorNetworkV2::SlotCanonicalizationMetadata metadata;
+  TensorNetworkV3::SlotCanonicalizationMetadata metadata;
 
   if (Logger::instance().canonicalize) {
-    std::wcout << "TensorNetworkV2::canonicalize_slots(): input tensors\n";
+    std::wcout << "TensorNetworkV3::canonicalize_slots(): input tensors\n";
     size_t cnt = 0;
     ranges::for_each(tensors_, [&](const auto &t) {
       std::wcout << "tensor " << cnt++ << ": " << to_latex(*t) << std::endl;
@@ -885,7 +884,7 @@ TensorNetworkV2::canonicalize_slots(
   return metadata;
 }
 
-TensorNetworkV2::Graph TensorNetworkV2::create_graph(
+TensorNetworkV3::Graph TensorNetworkV3::create_graph(
     const CreateGraphOptions &options) const {
   assert(have_edges_);
 
@@ -1256,7 +1255,7 @@ TensorNetworkV2::Graph TensorNetworkV2::create_graph(
   return graph;
 }
 
-void TensorNetworkV2::init_edges() {
+void TensorNetworkV3::init_edges() {
   have_edges_ = false;
   edges_.clear();
   ext_indices_.clear();
@@ -1264,7 +1263,7 @@ void TensorNetworkV2::init_edges() {
 
   auto idx_insert = [this](const Index &idx, Vertex vertex) {
     if (Logger::instance().tensor_network) {
-      std::wcout << "TensorNetworkV2::init_edges: idx=" << to_latex(idx)
+      std::wcout << "TensorNetworkV3::init_edges: idx=" << to_latex(idx)
                  << " attached to tensor " << vertex.getTerminalIndex() << " ("
                  << vertex.getOrigin() << ") at position "
                  << vertex.getIndexSlot()
@@ -1349,7 +1348,7 @@ void TensorNetworkV2::init_edges() {
       // for now no recursive proto indices
       if (proto_idx.has_proto_indices())
         throw std::runtime_error(
-            "TensorNetworkV2 does not support recursive protoindices");
+            "TensorNetworkV3 does not support recursive protoindices");
       proto_indices.emplace(proto_idx);
     }
   }
@@ -1393,27 +1392,27 @@ void TensorNetworkV2::init_edges() {
   have_edges_ = true;
 }
 
-container::svector<std::pair<long, long>> TensorNetworkV2::factorize() {
+container::svector<std::pair<long, long>> TensorNetworkV3::factorize() {
   abort();  // not yet implemented
 }
 
-size_t TensorNetworkV2::SlotCanonicalizationMetadata::hash_value() const {
+size_t TensorNetworkV3::SlotCanonicalizationMetadata::hash_value() const {
   return graph->get_hash();
 }
 
-ExprPtr TensorNetworkV2::canonicalize_individual_tensor_blocks(
+ExprPtr TensorNetworkV3::canonicalize_individual_tensor_blocks(
     const NamedIndexSet &named_indices) {
   return do_individual_canonicalization(
       TensorBlockCanonicalizer(named_indices));
 }
 
-ExprPtr TensorNetworkV2::canonicalize_individual_tensors(
+ExprPtr TensorNetworkV3::canonicalize_individual_tensors(
     const NamedIndexSet &named_indices) {
   return do_individual_canonicalization(
       DefaultTensorCanonicalizer(named_indices));
 }
 
-ExprPtr TensorNetworkV2::do_individual_canonicalization(
+ExprPtr TensorNetworkV3::do_individual_canonicalization(
     const TensorCanonicalizer &canonicalizer) {
   ExprPtr byproduct = ex<Constant>(1);
 
