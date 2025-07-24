@@ -254,6 +254,8 @@ set(SeQuant_src
         SeQuant/core/tensor_network.hpp
         SeQuant/core/tensor_network_v2.cpp
         SeQuant/core/tensor_network_v2.hpp
+        SeQuant/core/tensor_network_v3.cpp
+        SeQuant/core/tensor_network_v3.hpp
         SeQuant/core/tensor_network/canonicals.hpp
         SeQuant/core/tensor_network/slot.hpp
         SeQuant/core/tensor_network/vertex.hpp
