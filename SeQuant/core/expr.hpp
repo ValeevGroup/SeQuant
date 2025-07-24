@@ -832,7 +832,11 @@ class Constant : public Expr {
 
  private:
   hash_type memoizing_hash() const override {
-    hash_value_ = hash::value(value_);
+    if (!hash_value_) {
+      hash_value_ = hash::value(value_);
+    } else {
+      assert(*hash_value_ == hash::value(value_));
+    }
     return *hash_value_;
   }
 
@@ -878,9 +882,18 @@ class Variable : public Expr, public Labeled {
   std::wstring label_;
   bool conjugated_ = false;
 
+  /// @return the hash of this object
   hash_type memoizing_hash() const override {
-    hash_value_ = hash::value(label_);
-    hash::combine(hash_value_.value(), conjugated_);
+    auto compute_hash = [this]() {
+      auto val = hash::value(label_);
+      hash::combine(val, conjugated_);
+      return val;
+    };
+    if (!hash_value_) {
+      hash_value_ = compute_hash();
+    } else {
+      assert(*hash_value_ == compute_hash());
+    }
     return *hash_value_;
   }
 
@@ -1266,12 +1279,11 @@ class Product : public Expr {
         return value;
       }
     };
-    // if (!hash_value_) {
-    hash_value_ = compute_hash();
-    // }
-    // else {
-    //   assert(*hash_value_ == compute_hash());
-    // }
+    if (!hash_value_) {
+      hash_value_ = compute_hash();
+    } else {
+      assert(*hash_value_ == compute_hash());
+    }
     return *hash_value_;
   }
 
@@ -1574,12 +1586,11 @@ class Sum : public Expr {
         return value;
       }
     };
-    // if (!hash_value_) {
-    hash_value_ = compute_hash();
-    // }
-    // else {
-    //   assert(*hash_value_ == compute_hash());
-    // }
+    if (!hash_value_) {
+      hash_value_ = compute_hash();
+    } else {
+      assert(*hash_value_ == compute_hash());
+    }
     return *hash_value_;
   }
 
