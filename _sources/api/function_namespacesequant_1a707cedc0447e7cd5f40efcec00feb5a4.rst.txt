@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a707cedc0447e7cd5f40efcec00feb5a4:
+
+Function sequant::simplify(ExprPtr&)
+====================================
+
+- Defined in :ref:`file_SeQuant_core_expr_algorithm.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::simplify(ExprPtr&)
+   :project: SeQuant

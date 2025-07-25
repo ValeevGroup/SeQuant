@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a3781e8bc98d5621a2282e94bc73ca7c4:
+
+Function sequant::particle_symmetry
+===================================
+
+- Defined in :ref:`file_SeQuant_core_abstract_tensor.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::particle_symmetry()
+   :project: SeQuant

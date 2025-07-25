@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a4fb2134f803040f97c457fd476d97c55:
+
+Function sequant::cbegin
+========================
+
+- Defined in :ref:`file_SeQuant_core_expr.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::cbegin(const ExprPtr&)
+   :project: SeQuant

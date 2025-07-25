@@ -1,0 +1,61 @@
+
+.. _file_SeQuant_core_timer.hpp:
+
+File timer.hpp
+==============
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core>` (``SeQuant/core``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/timer.hpp``)
+---------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_timer.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``chrono``
+
+- ``iostream``
+
+
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+
+Classes
+-------
+
+
+- :ref:`exhale_class_classsequant_1_1_timer_pool`
+
+
+Defines
+-------
+
+
+- :ref:`exhale_define_timer_8hpp_1ac6bf6986bb3b8a1388656612d30b653e`
+

@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a89cc6567669d53a5927508e64e59e76a:
+
+Function sequant::is_cnumber
+============================
+
+- Defined in :ref:`file_SeQuant_core_abstract_tensor.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::is_cnumber()
+   :project: SeQuant

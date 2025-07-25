@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1mbpt_1ae7b9c61cfe78c3d6ab060af59a220809:
+
+Template Function sequant::mbpt::is_vacuum
+==========================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_op.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::mbpt::is_vacuum(QuantumNumbers)
+   :project: SeQuant

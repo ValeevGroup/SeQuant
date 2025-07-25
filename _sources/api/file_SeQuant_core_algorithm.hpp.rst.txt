@@ -1,0 +1,103 @@
+
+.. _file_SeQuant_core_algorithm.hpp:
+
+File algorithm.hpp
+==================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core>` (``SeQuant/core``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/algorithm.hpp``)
+-------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_algorithm.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/container.hpp`` (:ref:`file_SeQuant_core_container.hpp`)
+
+- ``SeQuant/core/meta.hpp``
+
+- ``algorithm`` (:ref:`file_SeQuant_core_algorithm.hpp`)
+
+- ``boost/dynamic_bitset.hpp``
+
+- ``functional``
+
+- ``iterator``
+
+- ``range/v3/view.hpp``
+
+- ``tuple`` (:ref:`file_SeQuant_core_utility_tuple.hpp`)
+
+- ``type_traits``
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_core_abstract_tensor.hpp`
+
+- :ref:`file_SeQuant_core_expr.cpp`
+
+- :ref:`file_SeQuant_core_optimize.hpp`
+
+- :ref:`file_SeQuant_core_tensor_network.cpp`
+
+- :ref:`file_SeQuant_core_tensor_network_v2.cpp`
+
+- :ref:`file_SeQuant_domain_eval_result.hpp`
+
+- :ref:`file_SeQuant_domain_mbpt_spin.cpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1a76ac6d4264f742c11bb19037d9686b8e`
+
+- :ref:`exhale_function_namespacesequant_1a0b02572642a937415bf42e47899d6647`
+
+- :ref:`exhale_function_namespacesequant_1a1f2111e048cde79c5edaf1371d65bf50`
+
+- :ref:`exhale_function_namespacesequant_1a9fb532127bfd2f2fa6242f3a82772b42`
+
+- :ref:`exhale_function_namespacesequant_1a84696f859cef24bf983198320314ef82`
+
+
+Typedefs
+--------
+
+
+- :ref:`exhale_typedef_namespacesequant_1a1635f01fc0a05c311a8ffdd1d4f79126`
+
+- :ref:`exhale_typedef_namespacesequant_1a29942dea09dd6e9780b9507ad0feaf86`
+

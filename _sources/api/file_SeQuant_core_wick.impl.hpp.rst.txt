@@ -1,0 +1,90 @@
+
+.. _file_SeQuant_core_wick.impl.hpp:
+
+File wick.impl.hpp
+==================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core>` (``SeQuant/core``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/wick.impl.hpp``)
+-------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_wick.impl.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/bliss.hpp`` (:ref:`file_SeQuant_core_bliss.hpp`)
+
+- ``SeQuant/core/logger.hpp`` (:ref:`file_SeQuant_core_logger.hpp`)
+
+- ``SeQuant/core/tensor_canonicalizer.hpp`` (:ref:`file_SeQuant_core_tensor_canonicalizer.hpp`)
+
+- ``SeQuant/core/tensor_network.hpp`` (:ref:`file_SeQuant_core_tensor_network.hpp`)
+
+- ``SeQuant/core/tensor_network/vertex.hpp`` (:ref:`file_SeQuant_core_tensor_network_vertex.hpp`)
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_core_wick.hpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+- :ref:`namespace_sequant__detail`
+
+
+Classes
+-------
+
+
+- :ref:`exhale_struct_structsequant_1_1detail_1_1_null_normal_operator_canonicalizer_deregister`
+
+- :ref:`exhale_struct_structsequant_1_1detail_1_1zero__result`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1_1detail_1a6b853ac863527eb88053311da0695c4b`
+
+- :ref:`exhale_function_namespacesequant_1_1detail_1a4b59a563f4b4e80ba07af44ef205bc41`
+
+- :ref:`exhale_function_namespacesequant_1_1detail_1aafee11c7f4144144c709a873b643720f`
+
+- :ref:`exhale_function_namespacesequant_1ae10c6337dda9d993b1bbac6f0c1eec07`
+
+
+Defines
+-------
+
+
+- :ref:`exhale_define_wick_8impl_8hpp_1a2f3b01b1a77affa6e1ca0fd8938de695`
+

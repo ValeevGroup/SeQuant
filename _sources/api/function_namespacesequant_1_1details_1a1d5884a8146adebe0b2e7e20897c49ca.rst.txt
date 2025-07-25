@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1details_1a1d5884a8146adebe0b2e7e20897c49ca:
+
+Function sequant::details::deparse_symm(BraKetSymmetry)
+=======================================================
+
+- Defined in :ref:`file_SeQuant_core_parse_deparse.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::details::deparse_symm(BraKetSymmetry)
+   :project: SeQuant

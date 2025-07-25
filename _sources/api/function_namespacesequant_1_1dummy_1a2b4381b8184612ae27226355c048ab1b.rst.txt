@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1dummy_1a2b4381b8184612ae27226355c048ab1b:
+
+Function sequant::dummy::make_variable
+======================================
+
+- Defined in :ref:`file_SeQuant_core_eval_expr.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::dummy::make_variable()
+   :project: SeQuant

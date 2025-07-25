@@ -1,0 +1,14 @@
+.. _exhale_enum_namespacesequant_1_1mbpt_1a2cc7a68fd11662b8066472d4d8fa998a:
+
+Enum OpType
+===========
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_op.hpp`
+
+
+Enum Documentation
+------------------
+
+
+.. doxygenenum:: sequant::mbpt::OpType
+   :project: SeQuant

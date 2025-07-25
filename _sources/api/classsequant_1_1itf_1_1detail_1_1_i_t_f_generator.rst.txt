@@ -1,0 +1,17 @@
+.. _exhale_class_classsequant_1_1itf_1_1detail_1_1_i_t_f_generator:
+
+Class ITFGenerator
+==================
+
+- Defined in :ref:`file_SeQuant_core_export_itf.hpp`
+
+
+Class Documentation
+-------------------
+
+
+.. doxygenclass:: sequant::itf::detail::ITFGenerator
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

@@ -1,0 +1,14 @@
+.. _exhale_typedef_namespacesequant_1ace7a501f5466fb9a216eb835e68d354e:
+
+Typedef sequant::AbstractTensorPtr
+==================================
+
+- Defined in :ref:`file_SeQuant_core_abstract_tensor.hpp`
+
+
+Typedef Documentation
+---------------------
+
+
+.. doxygentypedef:: sequant::AbstractTensorPtr
+   :project: SeQuant

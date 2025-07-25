@@ -1,0 +1,17 @@
+.. _exhale_struct_structsequant_1_1_in_order:
+
+Struct InOrder
+==============
+
+- Defined in :ref:`file_SeQuant_core_binary_node.hpp`
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::InOrder
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

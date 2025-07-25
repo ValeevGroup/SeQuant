@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1ae3321e838a92388d11bfe253b519db36:
+
+Template Function sequant::to_itf(Container&&, const itf::Context&)
+===================================================================
+
+- Defined in :ref:`file_SeQuant_core_export_itf.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::to_itf(Container&&, const itf::Context&)
+   :project: SeQuant

@@ -1,0 +1,33 @@
+
+.. _namespace_sequant__dummy:
+
+Namespace sequant::dummy
+========================
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+
+
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1_1dummy_1ac5ffee4773fb1a54d2f25800a819baab`
+
+- :ref:`exhale_function_namespacesequant_1_1dummy_1a3596b8e5fa12c4ed5dc014fda4612eee`
+
+- :ref:`exhale_function_namespacesequant_1_1dummy_1a2b4381b8184612ae27226355c048ab1b`
+
+
+Variables
+---------
+
+
+- :ref:`exhale_variable_namespacesequant_1_1dummy_1a6d0fde619df48ebbfc96316e068466cf`
+
+- :ref:`exhale_variable_namespacesequant_1_1dummy_1a9f27854cf5372016e4965be72ff0a47d`

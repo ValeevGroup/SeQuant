@@ -1,0 +1,14 @@
+.. _exhale_variable_namespacesequant_1_1parse_1a216013d274cf847e6ca306e7b5dbedb0:
+
+Variable sequant::parse::sum
+============================
+
+- Defined in :ref:`file_SeQuant_core_parse_parse.cpp`
+
+
+Variable Documentation
+----------------------
+
+
+.. doxygenvariable:: sequant::parse::sum
+   :project: SeQuant

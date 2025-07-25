@@ -1,0 +1,14 @@
+.. _exhale_variable_namespacesequant_1_1dummy_1a6d0fde619df48ebbfc96316e068466cf:
+
+Variable sequant::dummy::label_scalar
+=====================================
+
+- Defined in :ref:`file_SeQuant_core_eval_expr.cpp`
+
+
+Variable Documentation
+----------------------
+
+
+.. doxygenvariable:: sequant::dummy::label_scalar
+   :project: SeQuant

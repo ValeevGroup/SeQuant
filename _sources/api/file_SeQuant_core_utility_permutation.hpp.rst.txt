@@ -1,0 +1,76 @@
+
+.. _file_SeQuant_core_utility_permutation.hpp:
+
+File permutation.hpp
+====================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core_utility>` (``SeQuant/core/utility``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/utility/permutation.hpp``)
+-----------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_utility_permutation.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/index.hpp`` (:ref:`file_SeQuant_core_index.hpp`)
+
+- ``algorithm`` (:ref:`file_SeQuant_core_algorithm.hpp`)
+
+- ``cassert``
+
+- ``cstddef``
+
+- ``cstdlib``
+
+- ``range/v3/algorithm.hpp``
+
+- ``set``
+
+- ``type_traits``
+
+- ``utility`` (:ref:`file_SeQuant_core_utility_context.hpp`)
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_core_biorthogonalization.cpp`
+
+- :ref:`file_SeQuant_domain_mbpt_spin.cpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1ac85d29e6ef81d2006f8d95c4b0990c79`
+

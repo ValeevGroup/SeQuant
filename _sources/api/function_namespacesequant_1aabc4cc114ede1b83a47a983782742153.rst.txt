@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1aabc4cc114ede1b83a47a983782742153:
+
+Template Function sequant::transform_node
+=========================================
+
+- Defined in :ref:`file_SeQuant_core_binary_node.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::transform_node(FullBinaryNode<T> const&, F)
+   :project: SeQuant
