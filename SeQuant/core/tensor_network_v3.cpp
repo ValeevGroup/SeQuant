@@ -15,7 +15,7 @@
 #include <SeQuant/core/logger.hpp>
 #include <SeQuant/core/tag.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
-#include <SeQuant/core/tensor_network/tn_utils.hpp>
+#include <SeQuant/core/tensor_network/utils.hpp>
 #include <SeQuant/core/tensor_network/vertex_painter.hpp>
 #include <SeQuant/core/tensor_network_v3.hpp>
 #include <SeQuant/core/utility/swap.hpp>
@@ -40,14 +40,6 @@
 #include <range/v3/view/view.hpp>
 
 namespace sequant {
-
-using tensor_network_utils::apply_index_replacements;
-using tensor_network_utils::CanonicalTensorCompare;
-using tensor_network_utils::order_to_indices;
-using tensor_network_utils::permute;
-using tensor_network_utils::sort_via_indices;
-using tensor_network_utils::TensorBlockCompare;
-using tensor_network_utils::tensors_commute;
 
 TensorNetworkV3::Vertex::Vertex(Origin origin, std::size_t terminal_idx,
                                 std::size_t index_slot, Symmetry terminal_symm)
