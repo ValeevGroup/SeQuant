@@ -978,27 +978,27 @@ SECTION("Permutation operators") {
   auto Avec2 = open_shell_A_op(A2->as<Tensor>());
   auto P3 = open_shell_P_op_vector(A3->as<Tensor>());
   auto Avec3 = open_shell_A_op(A3->as<Tensor>());
-  assert(P3[0]->size() == 0);
-  assert(P3[1]->size() == 9);
-  assert(P3[2]->size() == 9);
-  assert(P3[3]->size() == 0);
+  REQUIRE(P3[0]->size() == 0);
+  REQUIRE(P3[1]->size() == 9);
+  REQUIRE(P3[2]->size() == 9);
+  REQUIRE(P3[3]->size() == 0);
 
   auto P4 = open_shell_P_op_vector(A4->as<Tensor>());
   auto Avec4 = open_shell_A_op(A4->as<Tensor>());
-  assert(P4[0]->size() == 0);
-  assert(P4[1]->size() == 16);
-  assert(P4[2]->size() == 36);
-  assert(P4[3]->size() == 16);
-  assert(P4[4]->size() == 0);
+  REQUIRE(P4[0]->size() == 0);
+  REQUIRE(P4[1]->size() == 16);
+  REQUIRE(P4[2]->size() == 36);
+  REQUIRE(P4[3]->size() == 16);
+  REQUIRE(P4[4]->size() == 0);
 
   auto P5 = open_shell_P_op_vector(A5->as<Tensor>());
   auto Avec5 = open_shell_A_op(A5->as<Tensor>());
-  assert(P5[0]->size() == 0);
-  assert(P5[1]->size() == 25);
-  assert(P5[2]->size() == 100);
-  assert(P5[3]->size() == 100);
-  assert(P5[4]->size() == 25);
-  assert(P5[5]->size() == 0);
+  REQUIRE(P5[0]->size() == 0);
+  REQUIRE(P5[1]->size() == 25);
+  REQUIRE(P5[2]->size() == 100);
+  REQUIRE(P5[3]->size() == 100);
+  REQUIRE(P5[4]->size() == 25);
+  REQUIRE(P5[5]->size() == 0);
 }
 
 SECTION("Relation in spin P operators") {

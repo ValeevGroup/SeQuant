@@ -93,8 +93,8 @@ SECTION("EOM-CCSDT") {
 #endif
 }
 
-SECTION("ucc") {
 #ifndef SEQUANT_SKIP_LONG_TESTS
+SECTION("ucc") {
   SECTION("t") {
     const auto N = 2;
     const std::size_t C = 3;
@@ -113,6 +113,6 @@ SECTION("ucc") {
     }
 
   }  // SECTION("t")
+}  // SECTION("ucc")
 #endif
-}
 }

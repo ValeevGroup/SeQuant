@@ -406,10 +406,19 @@ class Operator : public container::svector<Op<S>>, public Expr {
   }
 
   hash_type memoizing_hash() const override {
-    using std::begin;
-    using std::end;
-    const auto &ops = static_cast<const base_type &>(*this);
-    return hash::range(begin(ops), end(ops));
+    auto compute_hash = [this]() {
+      using std::begin;
+      using std::end;
+      const auto &ops = static_cast<const base_type &>(*this);
+      auto value = hash::range(begin(ops), end(ops));
+      return value;
+    };
+    if (!hash_value_) {
+      hash_value_ = compute_hash();
+    } else {
+      assert(*hash_value_ == compute_hash());
+    }
+    return *hash_value_;
   }
 };
 

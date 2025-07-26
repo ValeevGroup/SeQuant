@@ -222,15 +222,9 @@ class compute_all {
 }  // namespace
 
 int main(int argc, char* argv[]) {
-  std::setlocale(LC_ALL, "en_US.UTF-8");
   std::wcout.precision(std::numeric_limits<double>::max_digits10);
   std::wcerr.precision(std::numeric_limits<double>::max_digits10);
-  std::wcout.sync_with_stdio(false);
-  std::wcerr.sync_with_stdio(false);
-  std::wcout.imbue(std::locale("en_US.UTF-8"));
-  std::wcerr.imbue(std::locale("en_US.UTF-8"));
-  std::wcout.sync_with_stdio(true);
-  std::wcerr.sync_with_stdio(true);
+  sequant::set_locale();
 
   // set_num_threads(1);
 

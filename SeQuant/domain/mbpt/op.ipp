@@ -170,12 +170,20 @@ std::wstring Operator<QuantumNumbers, S>::to_latex() const {
 
 template <typename QuantumNumbers, Statistics S>
 Expr::hash_type Operator<QuantumNumbers, S>::memoizing_hash() const {
-  using std::begin;
-  using std::end;
-  auto qns = (*this)(QuantumNumbers{});
-  auto val = sequant::hash::value(qns);
-  sequant::hash::combine(val, std::wstring(this->label()));
-  this->hash_value_ = val;
+  auto compute_hash = [this]() {
+    using std::begin;
+    using std::end;
+    auto qns = (*this)(QuantumNumbers{});
+    auto val = sequant::hash::value(qns);
+    sequant::hash::combine(val, std::wstring(this->label()));
+    return val;
+  };
+  if (!this->hash_value_) {
+    this->hash_value_ = compute_hash();
+  }
+  else {
+    assert(*(this->hash_value_) == compute_hash());
+  }
   return *(this->hash_value_);
 }
 
