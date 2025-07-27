@@ -602,12 +602,12 @@ TensorNetworkV3::canonicalize_slots(
         // connected ... the latter would only occur if this index is named
         // due to also being a protoindex on one of the named indices!
         if (edge_it->vertex_count() == 1) {
-          if (edge_it->first_vertex().getOrigin() == Origin::Aux)
+          if (edge_it->vertex(0).getOrigin() == Origin::Aux)
             slot_type = IndexSlotType::TensorAux;
-          else if (edge_it->first_vertex().getOrigin() == Origin::Bra)
+          else if (edge_it->vertex(0).getOrigin() == Origin::Bra)
             slot_type = IndexSlotType::TensorBra;
           else {
-            assert(edge_it->first_vertex().getOrigin() == Origin::Ket);
+            assert(edge_it->vertex(0).getOrigin() == Origin::Ket);
             slot_type = IndexSlotType::TensorKet;
           }
         } else {  // if
@@ -930,8 +930,7 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
     // Connect index to the tensor(s) it is connected to
     for (std::size_t i = 0; i < current_edge.vertex_count(); ++i) {
       assert(i <= 1);
-      const Vertex &vertex =
-          i == 0 ? current_edge.first_vertex() : current_edge.second_vertex();
+      const Vertex &vertex = current_edge.vertex(i);
 
       assert(vertex.getTerminalIndex() < tensor_vertices.size());
       assert(tensor_vertices[vertex.getTerminalIndex()] !=

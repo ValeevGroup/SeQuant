@@ -71,59 +71,57 @@ class TensorNetworkV3 {
   };
 
   // clang-format off
-  /// @brief Edge in a TensorNetworkV2 = the Index annotating it + a pair of indices to identify which Tensor terminals it's connected to
+  /// @brief a (hyper)edge in a tensor network
 
-  /// @note tensor terminals in a sequence of tensors are indexed as follows:
-  /// - >0 for bra terminals (i.e. "+7" indicated connection to a bra terminal
-  /// of 7th tensor object in the sequence)
-  /// - <0 for ket terminals
-  /// - 0 if free (not attached to any tensor objects)
-  /// - position records the terminal's location in the sequence of bra/ket
-  /// terminals (always 0 for symmetric/antisymmetric tensors) Terminal indices
-  /// are sorted by the tensor index (i.e. by the absolute value of the terminal
-  /// index), followed by position
+  /// Edge in a TensorNetworkV3 = the Index annotating it +
+  /// a list of vertices corresponding to the Tensor index slots it connects
   // clang-format on
   class Edge {
    public:
     Edge() = default;
-    explicit Edge(Vertex vertex) : first(std::move(vertex)), second() {}
-    Edge(Vertex vertex, const Index *index)
-        : first(std::move(vertex)), second(), index(index) {}
+    explicit Edge(const Vertex &vertex) : vertices{vertex} {}
+    explicit Edge(std::initializer_list<Vertex> vertices) {
+      ranges::for_each(vertices,
+                       [this](const Vertex &v) { this->add_vertex(v); });
+    }
+    Edge(const Vertex &vertex, const Index *index)
+        : vertices{vertex}, index(index) {}
+    Edge(std::initializer_list<Vertex> vertices, const Index *index)
+        : Edge(vertices) {
+      this->index = index;
+    }
 
-    Edge &connect_to(Vertex vertex) {
-      assert(!second.has_value());
-
-      if (!first.has_value()) {
-        // unconnected Edge
-        first = std::move(vertex);
+    Edge &connect_to(const Vertex &vertex) {
+      // free Edge
+      if (vertices.empty()) {
+        vertices.emplace(vertex);
       } else {
-        // - cannot connect braket slot to aux slot
-        if ((first->getOrigin() == Origin::Aux &&
+        // - cannot connect braket slots to aux slots
+        auto &first = *(vertices.begin());
+        if ((first.getOrigin() == Origin::Aux &&
              vertex.getOrigin() != Origin::Aux) ||
-            (first->getOrigin() != Origin::Aux &&
+            (first.getOrigin() != Origin::Aux &&
              vertex.getOrigin() == Origin::Aux)) {
-          throw std::logic_error(
-              "TensorNetwork::Edge::connect_to: aux slot cannot be connected "
+          throw std::invalid_argument(
+              "TensorNetworkV3::Edge::connect_to: aux slot cannot be connected "
               "to a non-aux slot");
         }
         // - can connect bra slot to ket slot, and vice versa
-        if (first->getOrigin() == Origin::Bra &&
+        if (first.getOrigin() == Origin::Bra &&
             vertex.getOrigin() != Origin::Ket) {
-          throw std::logic_error(
-              "TensorNetwork::Edge::connect_to: bra slot can only be connected "
+          throw std::invalid_argument(
+              "TensorNetworkV3::Edge::connect_to: bra slot can only be "
+              "connected "
               "to a ket slot");
         }
-        if (first->getOrigin() == Origin::Ket &&
+        if (first.getOrigin() == Origin::Ket &&
             vertex.getOrigin() != Origin::Bra) {
-          throw std::logic_error(
-              "TensorNetwork::Edge::connect_to: ket slot can only be connected "
+          throw std::invalid_argument(
+              "TensorNetworkV3::Edge::connect_to: ket slot can only be "
+              "connected "
               "to a bra slot");
         }
-        second = std::move(vertex);
-        if (second < first) {
-          // Ensure first <= second
-          std::swap(first, second);
-        }
+        add_vertex(vertex);
       }
 
       return *this;
@@ -136,12 +134,8 @@ class TensorNetworkV3 {
         return vertex_count() < other.vertex_count();
       }
 
-      if (!(first == other.first)) {
-        return first < other.first;
-      }
-
-      if (second < other.second) {
-        return second < other.second;
+      if (!(vertices == other.vertices)) {
+        return vertices < other.vertices;
       }
 
       assert(index && other.index);
@@ -149,22 +143,19 @@ class TensorNetworkV3 {
     }
 
     bool operator==(const Edge &other) const {
-      return first == other.first && second == other.second;
+      return vertices == other.vertices;
     }
 
-    const Vertex &first_vertex() const {
-      assert(first.has_value());
-      return first.value();
-    }
-    const Vertex &second_vertex() const {
-      assert(second.has_value());
-      return second.value();
+    /// @param i vertex ordinal
+    /// @return const reference to the `i`th Vertex object
+    /// @pre `this->size() > i`
+    const Vertex &vertex(std::size_t i) const {
+      assert(vertices.size() > i);
+      return *(vertices.begin() + i);
     }
 
     /// @return the number of attached terminals (0, 1, or 2)
-    std::size_t vertex_count() const {
-      return second.has_value() ? 2 : (first.has_value() ? 1 : 0);
-    }
+    std::size_t vertex_count() const { return vertices.size(); }
 
     const Index &idx() const {
       assert(index);
@@ -172,9 +163,19 @@ class TensorNetworkV3 {
     }
 
    private:
-    std::optional<Vertex> first;
-    std::optional<Vertex> second;
+    container::set<Vertex> vertices;
     const Index *index = nullptr;
+
+    /// @param vertex a vertex to be added
+    /// @throw std::invalid_argument if @p vertex is already connected by this
+    /// Edge
+    void add_vertex(const Vertex &vertex) {
+      auto [it, inserted] = this->vertices.emplace(vertex);
+      if (!inserted)
+        throw std::invalid_argument(
+            "TensorNetworkV3::Edge::add_vertex(v): v is already connected by "
+            "this Edge");
+    }
   };
 
   struct Graph {
