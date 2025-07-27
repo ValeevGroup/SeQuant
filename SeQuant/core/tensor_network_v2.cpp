@@ -203,7 +203,7 @@ void TensorNetworkV2::canonicalize_graph(const NamedIndexSet &named_indices) {
       case VertexType::Index:
         index_idx_to_vertex.emplace_back(index_idx_to_vertex.size()) = vertex;
         break;
-      case VertexType::Particle: {
+      case VertexType::TensorBraKet: {
         assert(tensor_idx > 0);
         const std::size_t base_tensor_idx = tensor_idx - 1;
         assert(symmetry(*tensors_.at(base_tensor_idx)) == Symmetry::nonsymm);
@@ -772,7 +772,7 @@ TensorNetworkV2::Graph TensorNetworkV2::create_graph(
           graph.vertex_labels.emplace_back(L"p_" + std::to_wstring(i + 1));
         if (options.make_texlabels)
           graph.vertex_texlabels.emplace_back(std::nullopt);
-        graph.vertex_types.push_back(VertexType::Particle);
+        graph.vertex_types.push_back(VertexType::TensorBraKet);
         // Particles are indistinguishable -> always use same ID
         graph.vertex_colors.push_back(colorizer(ParticleGroup{0}));
         edges.push_back(std::make_pair(tensor_vertex, nvertex - 1));

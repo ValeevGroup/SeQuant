@@ -651,7 +651,7 @@ TensorNetwork::GraphData TensorNetwork::make_bliss_graph(
       if (options.make_texlabels) {
         vertex_texlabels.emplace_back(std::nullopt);
       }
-      vertex_type.push_back(VertexType::Particle);
+      vertex_type.push_back(VertexType::TensorBraKet);
       // Color bk node in same color as tensor core
       vertex_color.push_back(colorizer(tref));
     }
@@ -697,7 +697,7 @@ TensorNetwork::GraphData TensorNetwork::make_bliss_graph(
         if (options.make_texlabels) {
           vertex_texlabels.emplace_back(std::nullopt);
         }
-        vertex_type.push_back(VertexType::Particle);
+        vertex_type.push_back(VertexType::TensorBraKet);
         vertex_color.push_back(colorizer(tref));
       }
     }

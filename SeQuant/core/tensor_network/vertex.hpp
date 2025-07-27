@@ -8,14 +8,29 @@ namespace sequant {
 
 /// @sa TensorNetwork
 /// @sa TensorNetworkV2
+/// @sa TensorNetworkV3
 enum class VertexType {
+  /// represent a Index object
   Index,
+  /// represent a bundle of indices that serve as protoindices to Index objects
   SPBundle,
+  /// represents a bra slot for an Index
   TensorBra,
+  /// represents a ket slot for an Index
   TensorKet,
+  /// represents an aux slot for an Index
   TensorAux,
+  /// represents a slot for tensor label
   TensorCore,
-  Particle
+  /// connects bra slots to the matching ket slots:
+  /// - for symmetric/antisymmetric case (i.e., tensor is
+  /// symmetric/antisymmetric w.r.t. permutation of slots within bra or ket)
+  /// all bra and ket slots connect to same braket vertex;
+  /// - for particle-symmetric case (i.e., tensor is symmetric w.r.t.
+  /// permutation of columns) there is one per column, all with the same color
+  /// - for an asymmetric case there is also one per column, all with different
+  /// colors
+  TensorBraKet
 };
 
 }  // namespace sequant
