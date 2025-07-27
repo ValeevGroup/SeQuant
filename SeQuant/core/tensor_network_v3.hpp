@@ -42,6 +42,7 @@ namespace sequant {
 /// graph), with Tensor objects represented by one or more vertices.
 class TensorNetworkV3 {
  public:
+  // for unit testing only
   friend class TensorNetworkV3Accessor;
 
   enum class Origin {
@@ -82,7 +83,7 @@ class TensorNetworkV3 {
     explicit Edge(const Vertex &vertex) : vertices{vertex} {}
     explicit Edge(std::initializer_list<Vertex> vertices) {
       ranges::for_each(vertices,
-                       [this](const Vertex &v) { this->add_vertex(v); });
+                       [this](const Vertex &v) { this->connect_to(v); });
     }
     Edge(const Vertex &vertex, const Index *index)
         : vertices{vertex}, index(index) {}
