@@ -3,9 +3,8 @@
 
 namespace sequant {
 
-VertexPainter::VertexPainter(
-    const TensorNetworkV2::NamedIndexSet &named_indices,
-    bool distinct_named_indices)
+VertexPainter::VertexPainter(const VertexPainter::NamedIndexSet &named_indices,
+                             bool distinct_named_indices)
     : used_colors_(),
       named_indices_(named_indices),
       distinct_named_indices_(distinct_named_indices) {}

@@ -42,7 +42,8 @@ struct ParticleGroup {
 /// a colored graph representing a tensor network.
 class VertexPainter {
  public:
-  using Color = TensorNetworkV2::Graph::VertexColor;
+  using Color = tensor_network::VertexColor;
+  using NamedIndexSet = tensor_network::NamedIndexSet;
   using VertexData =
       std::variant<const AbstractTensor *, Index, const ProtoBundle *, BraGroup,
                    KetGroup, AuxGroup, ParticleGroup>;
@@ -52,7 +53,7 @@ class VertexPainter {
   /// their Index::color() \param distinct_named_indices if false, will use same
   /// color for all named indices that have same Index::color(), else will use
   /// distinct color for each named_index
-  VertexPainter(const TensorNetworkV2::NamedIndexSet &named_indices,
+  VertexPainter(const NamedIndexSet &named_indices,
                 bool distinct_named_indices = true);
 
   const ColorMap &used_colors() const;
@@ -67,7 +68,7 @@ class VertexPainter {
 
  private:
   ColorMap used_colors_;
-  const TensorNetworkV2::NamedIndexSet &named_indices_;
+  const NamedIndexSet &named_indices_;
   bool distinct_named_indices_ = true;
 
   Color to_color(std::size_t color) const;

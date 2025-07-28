@@ -11,6 +11,7 @@
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/tensor_network/canonicals.hpp>
 #include <SeQuant/core/tensor_network/slot.hpp>
+#include <SeQuant/core/tensor_network/utils.hpp>
 #include <SeQuant/core/tensor_network/vertex.hpp>
 
 #include <range/v3/range/traits.hpp>
@@ -182,7 +183,7 @@ class TensorNetworkV2 {
     /// The type used to encode the color of a vertex. The restriction of this
     /// being as 32-bit integer comes from how BLISS is trying to convert these
     /// into RGB values.
-    using VertexColor = std::uint32_t;
+    using VertexColor = tensor_network::VertexColor;
 
     std::unique_ptr<bliss::Graph> bliss_graph;
     std::vector<std::wstring> vertex_labels;
@@ -234,7 +235,7 @@ class TensorNetworkV2 {
 
   const auto &tensor_input_ordinals() const { return tensor_input_ordinals_; }
 
-  using NamedIndexSet = container::set<Index, Index::FullLabelCompare>;
+  using NamedIndexSet = tensor_network::NamedIndexSet;
 
   /// @param cardinal_tensor_labels move all tensors with these labels to the
   /// front before canonicalizing indices
