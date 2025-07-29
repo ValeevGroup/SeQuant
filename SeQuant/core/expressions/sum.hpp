@@ -10,6 +10,7 @@
 
 #include <optional>
 #include <type_traits>
+#include <cassert>
 
 namespace sequant {
 
@@ -241,13 +242,30 @@ class Sum : public Expr {
                              : cursor{&summands_[0] + summands_.size()};
   };
 
+  /// @return the hash of this object
+  /// @note this ensures that hash of a Sum of a single summand is
+  /// identical to the hash of the summand itself.
   hash_type memoizing_hash() const override {
-    auto deref_summands =
-        summands() |
-        ranges::views::transform(
-            [](const ExprPtr &ptr) -> const Expr & { return *ptr; });
-    hash_value_ =
-        hash::range(ranges::begin(deref_summands), ranges::end(deref_summands));
+    auto compute_hash = [this]() {
+      if (summands_.size() == 1)
+        return summands_[0]->hash_value();
+      else {
+        auto deref_summands =
+            summands() |
+            ranges::views::transform(
+                [](const ExprPtr &ptr) -> const Expr & { return *ptr; });
+        auto value = hash::range(ranges::begin(deref_summands),
+                                 ranges::end(deref_summands));
+        return value;
+      }
+    };
+
+    if (!hash_value_) {
+      hash_value_ = compute_hash();
+    } else {
+      assert(*hash_value_ == compute_hash());
+    }
+
     return *hash_value_;
   }
 

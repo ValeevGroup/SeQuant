@@ -474,8 +474,8 @@ TEST_CASE("mbpt", "[mbpt]") {
         auto result = t::vac_av(t::A(nₚ(-4)) * t::H_(2) * t ::T_(3) * t::T_(3),
                                 {{1, 2}, {1, 3}});
 
-        std::wcout << "H2**T3**T3 -> R4 = " << to_latex_align(result, 20)
-                   << std::endl;
+        // std::wcout << "H2**T3**T3 -> R4 = " << to_latex_align(result, 20)
+        //            << std::endl;
         REQUIRE(result->size() == 4);
       });
 
@@ -512,8 +512,8 @@ TEST_CASE("mbpt", "[mbpt]") {
             auto input = t::L_(nₚ(2), nₕ(1)) * t::H() * t::R_(nₚ(2), nₕ(1));
             auto result = t::vac_av(input);
 
-            std::wcout << "<2p1h|H|2p1h(c)> = " << to_latex(result)
-                       << std::endl;
+            // std::wcout << "<2p1h|H|2p1h(c)> = " << to_latex(result)
+            //            << std::endl;
             REQUIRE(result->is<Sum>());    // sub ...
             REQUIRE(result->size() == 4);  // ... of 4 factors
           }));
@@ -545,8 +545,10 @@ TEST_CASE("mbpt", "[mbpt]") {
         auto result = t::vac_av(t::S(-2) * t::H_(2));
 
         {
-          std::wcout << "H2 -> R2 = " << to_latex_align(result, 0, 1)
-                     << std::endl;
+          // std::wcout << "H2 -> R2 = " << to_latex_align(result, 0, 1)
+          //            << std::endl;
+          REQUIRE(result->is<Sum>());
+          REQUIRE(result->size() == 2);
         }
       });
 
@@ -555,8 +557,10 @@ TEST_CASE("mbpt", "[mbpt]") {
         auto result = t::vac_av(t::S(-2) * t::H_(2) * t::T_(2), {{1, 2}});
 
         {
-          std::wcout << "H2**T2 -> R2 = " << to_latex_align(result, 0, 1)
-                     << std::endl;
+          // std::wcout << "H2**T2 -> R2 = " << to_latex_align(result, 0, 1)
+          //            << std::endl;
+          REQUIRE(result->is<Sum>());
+          REQUIRE(result->size() == 12);
         }
       });
     }  // SECTION("SRSF")

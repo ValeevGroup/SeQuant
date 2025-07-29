@@ -9,6 +9,7 @@
 #include <boost/numeric/conversion/cast.hpp>
 
 #include <string>
+#include <cassert>
 
 namespace sequant {
 
@@ -114,7 +115,11 @@ class Constant : public Expr {
   scalar_type value_;
 
   hash_type memoizing_hash() const override {
-    hash_value_ = hash::value(value_);
+    if (!hash_value_) {
+      hash_value_ = hash::value(value_);
+    } else {
+      assert(*hash_value_ == hash::value(value_));
+    }
     return *hash_value_;
   }
 
