@@ -6,9 +6,9 @@
 #include <SeQuant/core/expressions/labeled.hpp>
 #include <SeQuant/core/hash.hpp>
 
+#include <cassert>
 #include <string>
 #include <string_view>
-#include <cassert>
 
 namespace sequant {
 

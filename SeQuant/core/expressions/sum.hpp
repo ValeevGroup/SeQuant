@@ -8,9 +8,9 @@
 #include <SeQuant/core/expressions/product.hpp>
 #include <SeQuant/core/meta.hpp>
 
+#include <cassert>
 #include <optional>
 #include <type_traits>
-#include <cassert>
 
 namespace sequant {
 

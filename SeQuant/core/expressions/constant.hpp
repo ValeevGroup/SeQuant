@@ -8,8 +8,8 @@
 
 #include <boost/numeric/conversion/cast.hpp>
 
-#include <string>
 #include <cassert>
+#include <string>
 
 namespace sequant {
 

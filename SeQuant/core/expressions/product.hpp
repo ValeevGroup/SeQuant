@@ -7,8 +7,8 @@
 #include <SeQuant/core/expressions/expr_ptr.hpp>
 #include <SeQuant/core/meta.hpp>
 
-#include <string>
 #include <cassert>
+#include <string>
 #include <type_traits>
 
 namespace sequant {
@@ -340,12 +340,11 @@ class Product : public Expr {
   }
 
   void add_identical(const ExprPtr &other) {
-    if (other.is<Product>())
-      return this->add_identical(other.as<Product>());
+    if (other.is<Product>()) return this->add_identical(other.as<Product>());
 
     // only makes sense if this has a single factor
     assert(this->factors_.size() == 1 &&
-      	 this->factors_[0]->hash_value() == other->hash_value());
+           this->factors_[0]->hash_value() == other->hash_value());
     scalar_ += 1;
   }
 
