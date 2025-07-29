@@ -5,8 +5,7 @@
 #ifndef SEQUANT_DOMAIN_MBPT_RULES_CSV_HPP
 #define SEQUANT_DOMAIN_MBPT_RULES_CSV_HPP
 
-#include "SeQuant/core/expr.hpp"
-#include "SeQuant/core/tensor.hpp"
+#include <SeQuant/core/expr.hpp>
 
 namespace sequant::mbpt {
 

@@ -8,8 +8,6 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/rational.hpp>
-#include <SeQuant/core/result_expr.hpp>
-#include <SeQuant/core/tensor.hpp>
 #include <SeQuant/core/utility/string.hpp>
 
 #include <string_view>
