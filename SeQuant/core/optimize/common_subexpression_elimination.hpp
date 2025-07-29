@@ -21,8 +21,10 @@ namespace sequant {
 
 namespace cse {
 
+/// Functor to compute the hash of a given (evaluation) tree node
 template <typename TreeNode, bool force_hash_collisions = false>
 struct TreeNodeHasher {
+  /// Trait used by the C++ STL allowing heterogenous lookups
   using is_transparent = void;
 
   std::size_t operator()(const TreeNode *node) const { return (*this)(*node); }
@@ -36,8 +38,11 @@ struct TreeNodeHasher {
   }
 };
 
+// Functor to compare two trees for equivalence
+// Explicit equivalence checking mitigates (accidental) hash collisions
 template <typename TreeNode>
 struct TreeNodeEqualityComparator {
+  /// Trait used by the C++ STL allowing heterogenous lookups
   using is_transparent = void;
 
   bool operator()(const TreeNode *lhs, const TreeNode *rhs) const {
@@ -119,24 +124,32 @@ struct TreeNodeEqualityComparator {
   }
 };
 
+/// A map between (sub)tree hashes and how often they have been found
+/// This is identical to SubexpressionUsageCounts except that we store node
+/// pointers here (lower memory footprint but higher risk of dangling pointers)
 template <typename TreeNode, bool force_hash_collisions = false>
 using SubexpressionHashCollector =
     std::unordered_map<const TreeNode *, std::size_t,
                        TreeNodeHasher<TreeNode, force_hash_collisions>,
                        TreeNodeEqualityComparator<TreeNode>>;
 
+/// A map between (sub)trees and how often they have been found
 template <typename TreeNode, bool force_hash_collisions = false>
 using SubexpressionUsageCounts =
     std::unordered_map<TreeNode, std::size_t,
                        TreeNodeHasher<TreeNode, force_hash_collisions>,
                        TreeNodeEqualityComparator<TreeNode>>;
 
+/// A map between (sub)trees and the name chosen to represent the associated
+/// intermediate
 template <typename TreeNode, bool force_hash_collisions = false>
 using SubexpressionNames =
     std::unordered_map<TreeNode, std::wstring,
                        TreeNodeHasher<TreeNode, force_hash_collisions>,
                        TreeNodeEqualityComparator<TreeNode>>;
 
+/// Functor that can be used to identify common subexpressions while iterating
+/// expression trees
 template <typename TreeNode, bool force_hash_collisions = false>
 class SubexpressionIdentifier {
  public:
@@ -189,6 +202,7 @@ class SubexpressionIdentifier {
       intermediate_hashs;
 };
 
+/// Functor that will perform the elimination of previously found subexpressions
 template <std::ranges::range VectorLike, typename TreeNode,
           typename Transformer, typename LabelGenerator,
           bool force_hash_collisions = false>
@@ -318,6 +332,15 @@ struct AcceptAllPredicate {
 
 }  // namespace cse
 
+/// Takes the range of expression trees and performs common subexpression
+/// elimination on them. Evaluation trees for intermediates are inserted into
+/// the given container as needed.
+///
+/// @param expr_trees Container (vector-like) of evaluation trees
+/// @param expr_to_tree Functor that can convert ExprPtr and ResultExpr objects
+/// into suitable evaluation trees
+/// @param filter_predicate A predicate to filter out subexpressions that shall
+/// not be eliminated
 template <std::ranges::range VectorLike,
           std::regular_invocable<ExprPtr> Transformer,
           std::predicate<std::ranges::range_value_t<VectorLike>, std::size_t>
