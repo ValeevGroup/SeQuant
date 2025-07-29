@@ -30,6 +30,7 @@ ResultExpr::ResultExpr(const Tensor &tensor, ExprPtr expression)
       m_psymm(tensor.particle_symmetry()),
       m_braIndices(tensor.bra().begin(), tensor.bra().end()),
       m_ketIndices(tensor.ket().begin(), tensor.ket().end()),
+      m_auxIndices(tensor.aux().begin(), tensor.aux().end()),
       m_label(tensor.label()) {}
 
 ResultExpr::ResultExpr(const Variable &variable, ExprPtr expression)

@@ -115,6 +115,7 @@ EvalExpr::EvalExpr(Tensor const& tnsr)
     : op_type_{std::nullopt},
       result_type_{ResultType::Tensor},
       expr_{tnsr.clone()} {
+  assert(!tnsr.indices().empty());
   if (is_tot(tnsr)) {
     ExprPtrList tlist{expr_};
     auto tn = TensorNetworkV2(tlist);
@@ -123,6 +124,7 @@ EvalExpr::EvalExpr(Tensor const& tnsr)
     hash_value_ = md.hash_value();
     canon_phase_ = md.phase;
     canon_indices_ = md.get_indices<index_vector>();
+    connectivity_ = std::move(md.graph);
   } else {
     hash_value_ = hash_terminal_tensor(tnsr);
     canon_phase_ = 1;
@@ -143,13 +145,27 @@ EvalExpr::EvalExpr(Variable const& v)
       expr_{v.clone()} {}
 
 EvalExpr::EvalExpr(EvalOp op, ResultType res, ExprPtr const& ex,
-                   index_vector ixs, std::int8_t p, size_t h)
+                   index_vector ixs, std::int8_t p, size_t h,
+                   std::shared_ptr<bliss::Graph> connectivity)
     : op_type_{op},
       result_type_{res},
       expr_{ex.clone()},
       canon_indices_{std::move(ixs)},
       canon_phase_{p},
-      hash_value_{h} {}
+      hash_value_{h},
+      connectivity_{std::move(connectivity)} {
+  if (connectivity_ != nullptr) {
+    // Note: The non-const cmp function performs some internal cleanup that the
+    // comparison depends on. However, we want to be able to do const
+    // comparisons and hence we have to assume fully cleaned-up graphs which we
+    // achieve by causing a self-cleanup of the graph via the non-const cmp
+    // function.
+    connectivity_->cmp(*connectivity_);
+  }
+
+  // Using Tensor objects to represent scalar results is just confusing
+  assert(ex->is<Tensor>() == (res == ResultType::Tensor));
+}
 
 const std::optional<EvalOp>& EvalExpr::op_type() const noexcept {
   return op_type_;
@@ -207,6 +223,15 @@ std::string EvalExpr::label() const noexcept {
 }
 
 std::int8_t EvalExpr::canon_phase() const noexcept { return canon_phase_; }
+
+bool EvalExpr::has_connectivity_graph() const noexcept {
+  return connectivity_ != nullptr;
+}
+
+const bliss::Graph& EvalExpr::connectivity_graph() const noexcept {
+  assert(connectivity_ != nullptr);
+  return *connectivity_;
+}
 
 namespace {
 
@@ -313,14 +338,16 @@ EvalExprNode binarize(Sum const& sum) {
               dummy::make_tensor(bra(t.bra()), ket(t.ket()), aux(t.aux())),  //
               left.canon_indices(),                                          //
               1,                                                             //
-              h};
+              h,                                                             //
+              nullptr};
     } else {
       return {EvalOp::Sum,             //
               ResultType::Scalar,      //
               dummy::make_variable(),  //
               {},                      //
               1,                       //
-              h};
+              h,                       //
+              nullptr};
     }
   };
 
@@ -346,12 +373,9 @@ EvalExprNode binarize(Product const& prod) {
     auto h = ranges::at(hs, ++i);
     if (left->is_scalar() && right->is_scalar()) {
       // scalar * scalar
-      return {EvalOp::Product,
-              ResultType::Scalar,
-              dummy::make_variable(),
-              {},
-              1,
-              h};
+      return {
+          EvalOp::Product, ResultType::Scalar, dummy::make_variable(), {}, 1, h,
+          nullptr};
     } else if (left->is_scalar() || right->is_scalar()) {
       // scalar * tensor or tensor * scalar
       auto const& tl = left->is_tensor() ? left : right;
@@ -361,7 +385,8 @@ EvalExprNode binarize(Product const& prod) {
               dummy::make_tensor(bra(t.bra()), ket(t.ket()), aux(t.aux())),  //
               tl->canon_indices(),                                           //
               1,                                                             //
-              h};
+              h,
+              nullptr};
     } else {
       // tensor * tensor
       container::svector<ExprWithHash> subfacs;
@@ -379,7 +404,8 @@ EvalExprNode binarize(Product const& prod) {
                 dummy::make_variable(),  //
                 {},                      //
                 canon.phase,             //
-                h};
+                h,
+                std::move(canon.graph)};
       } else {
         auto idxs = get_unique_indices(Product(ts));
         return {EvalOp::Product,     //
@@ -387,7 +413,8 @@ EvalExprNode binarize(Product const& prod) {
                 dummy::make_tensor(bra(idxs.bra), ket(idxs.ket), aux(idxs.aux)),
                 canon.get_indices<Index::index_vector>(),  //
                 canon.phase,                               //
-                h};
+                h,
+                std::move(canon.graph)};
       }
     }
   };
@@ -411,7 +438,9 @@ EvalExprNode binarize(Product const& prod) {
                            expr,                   //
                            left->canon_indices(),  //
                            1,                      //
-                           h};
+                           h,                      //
+                           nullptr};
+
     return EvalExprNode{std::move(result), std::move(left), std::move(right)};
   }
 }

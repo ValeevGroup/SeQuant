@@ -132,6 +132,8 @@ class ResultExpr {
            !m_auxIndices.empty();
   }
 
+  bool operator==(const ResultExpr &other) const = default;
+
  private:
   ExprPtr m_expr;
 
