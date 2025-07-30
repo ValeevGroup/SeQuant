@@ -1231,23 +1231,34 @@ ExprPtr closed_shell_CC_spintrace_compact_set(ExprPtr const& expr) {
   // core_addingS_time.count());
   const auto norm_time_0 = std::chrono::high_resolution_clock::now();
 
-  rational normalization_factor;
-  switch (ext_idxs.size()) {
-    case 1:                                   // r1
-      normalization_factor = rational(1, 1);  // No normalization needed
-      break;
-    case 2:                                   // r2
-      normalization_factor = rational(1, 2);  // 1/2 for doubles
-      break;
-    case 3:                                   // r3
-      normalization_factor = rational(1, 5);  // 1/6 for triples * 6/5
-      break;
-    case 4:
-      normalization_factor = rational(
-          1, 23);  // 1/24 (for normalization) * 24/23 (recaling for cleanup)
-      break;
+  // rational normalization_factor;
+  // switch (ext_idxs.size()) {
+  //   case 1:                                   // r1
+  //     normalization_factor = rational(1, 1);  // No normalization needed
+  //     break;
+  //   case 2:                                   // r2
+  //     normalization_factor = rational(1, 2);  // 1/2 for doubles
+  //     break;
+  //   case 3:                                   // r3
+  //     normalization_factor = rational(1, 5);  // 1/6 for triples * 6/5
+  //     break;
+  //   case 4:
+  //     normalization_factor = rational(
+  //         1, 23);  // 1/24 (for normalization) * 24/23 (recaling for cleanup)
+  //     break;
+  // }
+  // result_expr = ex<Constant>(normalization_factor) * result_expr;
+
+  rational combined_factor;
+  if (ext_idxs.size() <= 2) {
+    combined_factor = rational(1, factorial(ext_idxs.size()));
+  } else {
+    auto fact_n = factorial(ext_idxs.size());
+    combined_factor =
+        rational(1, fact_n - 1);  // This is (1/fact_n) * (fact_n/(fact_n-1))
   }
-  result_expr = ex<Constant>(normalization_factor) * result_expr;
+  result_expr = ex<Constant>(combined_factor) * result_expr;
+
   const auto norm_time_1 = std::chrono::high_resolution_clock::now();
   std::chrono::duration<double> norm_time = norm_time_1 - norm_time_0;
   printf(
