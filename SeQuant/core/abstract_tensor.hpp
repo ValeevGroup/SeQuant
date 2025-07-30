@@ -33,9 +33,9 @@ class TensorCanonicalizer;
 
 /// AbstractTensor is a [tensor](https://en.wikipedia.org/wiki/Tensor) over
 /// general (i.e., not necessarily commutative)
-/// rings. A tensor with \f$ k \geq 0 \f$ contravariant
-/// (ket, [Dirac notation](https://en.wikipedia.org/wiki/Bra-ket_notation) ) and
-/// \f$ b \geq 0 \f$ covariant (bra) modes
+/// rings. A tensor with \f$ k \geq 0 \f$ ket
+/// (see [Dirac notation](https://en.wikipedia.org/wiki/Bra-ket_notation) ) and
+/// \f$ b \geq 0 \f$ bra modes
 /// describes elements of a tensor product of \f$ b+k \f$ vector spaces.
 /// Equivalently it represents a linear map between the tensor product
 /// of \f$ k \f$ _primal_ vector spaces to the tensor product of \f$ b \f$
@@ -95,23 +95,24 @@ class AbstractTensor {
       ranges::any_view<Index&, ranges::category::random_access |
                                    ranges::category::sized>;
 
-  /// accessor bra (covariant) indices
-  /// @return view of a contiguous range of Index objects
+  /// accessor bra indices
+  /// @return view of a contiguous range of bra Index objects
   virtual const_any_view_randsz _bra() const {
     throw missing_instantiation_for("_bra");
   }
-  /// accesses ket (contravariant) indices
-  /// @return view of a contiguous range of Index objects
+  /// accesses ket indices
+  /// @return view of a contiguous range of ket Index objects
   virtual const_any_view_randsz _ket() const {
     throw missing_instantiation_for("_ket");
   }
-  /// accesses aux (invariant) indices
-  /// @return view of a contiguous range of Index objects
+  /// accesses aux (non-vector-space) indices
+  /// @return view of a contiguous range of aux Index objects
   virtual const_any_view_randsz _aux() const {
     throw missing_instantiation_for("_aux");
   }
   /// accesses bra and ket indices
-  /// view of a not necessarily contiguous range of Index objects
+  /// @return concatenated (hence, non contiguous) view of bra and ket Index
+  /// objects
   virtual const_any_view_rand _braket() const {
     throw missing_instantiation_for("_braket");
   }
@@ -142,7 +143,9 @@ class AbstractTensor {
   virtual BraKetSymmetry _braket_symmetry() const {
     throw missing_instantiation_for("_braket_symmetry");
   }
-  /// @return the symmetry of tensor under exchange of bra and ket
+  /// @return the symmetry of tensor under exchange of matching {bra,ket} slot
+  /// pairs
+  /// @note slots are left-aligned
   virtual ParticleSymmetry _particle_symmetry() const {
     throw missing_instantiation_for("_particle_symmetry");
   }
