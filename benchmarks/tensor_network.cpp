@@ -40,23 +40,21 @@ ProductPtr create_random_network(const std::size_t testcase,
     return nullptr;
   }
 
-  container::vector<Index> covariant_indices;
+  container::vector<Index> bra_indices;
   for (auto i = 0; i != num_indices; ++i) {
-    covariant_indices.emplace_back(std::format(L"i_{}", i));
+    bra_indices.emplace_back(std::format(L"i_{}", i));
   }
 
-  auto contravariant_indices = covariant_indices;
+  auto ket_indices = bra_indices;
 
   std::random_device rd;
 
   // Randomize connectivity by randomizing index sets
-  std::shuffle(covariant_indices.begin(), covariant_indices.end(),
-               std::mt19937{rd()});
-  std::shuffle(contravariant_indices.begin(), contravariant_indices.end(),
-               std::mt19937{rd()});
+  std::shuffle(bra_indices.begin(), bra_indices.end(), std::mt19937{rd()});
+  std::shuffle(ket_indices.begin(), ket_indices.end(), std::mt19937{rd()});
 
   auto utensors =
-      covariant_indices | ranges::views::chunk(num_indices / n) |
+      bra_indices | ranges::views::chunk(num_indices / n) |
       ranges::views::transform([&](const auto& idxs) {
         return ex<Tensor>(
             L"u", bra(idxs), ket{},
@@ -68,7 +66,7 @@ ProductPtr create_random_network(const std::size_t testcase,
   assert(utensors.size() == static_cast<std::size_t>(n));
 
   auto dtensors =
-      contravariant_indices | ranges::views::chunk(num_indices) |
+      ket_indices | ranges::views::chunk(num_indices) |
       ranges::views::transform([&](const auto& idxs) {
         return ex<Tensor>(L"d", bra{}, ket(idxs), Symmetry::nonsymm);
       }) |
