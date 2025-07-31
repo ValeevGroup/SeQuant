@@ -185,14 +185,29 @@ TEST_CASE("index", "[elements][index]") {
   }
 
   SECTION("ordering") {
+    using SO = std::strong_ordering;
+
     // compare by qns, then tag, then space, then label, then proto indices
     Index i1(L"i_1");
     Index i2(L"i_2");
     Index i3(L"i_11");
+
     REQUIRE(i1 < i2);
     REQUIRE(!(i2 < i1));
+    REQUIRE(i1 <=> i2 == SO::less);
+    REQUIRE(i1 <= i2);
+    REQUIRE(!(i1 >= i2));
+
     REQUIRE(!(i1 < i1));
+    REQUIRE(i1 <=> i1 == SO::equal);
+    REQUIRE(i1 <= i1);
+    REQUIRE(i1 >= i1);
+
     REQUIRE(i1 < i3);
+    REQUIRE(i1 <=> i3 == SO::less);
+    REQUIRE(i1 <= i3);
+    REQUIRE(!(i1 >= i3));
+
     REQUIRE(!(i3 < i1));
     REQUIRE(i2 < i3);
     REQUIRE(!(i3 < i2));
@@ -204,15 +219,19 @@ TEST_CASE("index", "[elements][index]") {
     // tags override rest, but ignored if defined for one and not the other
     i2.tag().assign(1);
     REQUIRE(i1 < i2);
+    REQUIRE(i1 <=> i2 == SO::less);
     i1.tag().assign(2);
     REQUIRE(!(i1 < i2));
     REQUIRE(i2 < i1);
+    REQUIRE(i2 <=> i1 == SO::less);
     a1.tag().assign(1);
     REQUIRE(!(i1 < a1));
     REQUIRE(a1 < i1);
     REQUIRE(i2 < a1);
+    REQUIRE(i2 <=> a1 == SO::less);
     a1.tag().reset().assign(0);
     REQUIRE(a1 < i2);
+    REQUIRE(a1 <=> i2 == SO::less);
 
     // qns override rest
     IndexSpace p_upspace(L"p", 0b11, 0b01);
@@ -239,6 +258,12 @@ TEST_CASE("index", "[elements][index]") {
     REQUIRE(p1A < p2A);
     p1A.tag().assign(2);
     REQUIRE(p2A < p1A);
+    REQUIRE(p2A <=> p1A == SO::less);
+    Index i1_p1Ap2A(L"i_1", {p1A, p2A});
+    Index i1_p1Bp2A(L"i_1", {p1B, p2A});
+    REQUIRE(i1_p1Ap2A < i1_p1Bp2A);
+    REQUIRE(i1_p1Ap2A <=> i1_p1Bp2A == SO::less);
+    REQUIRE(i1_p1Ap2A <=> i1_p1Ap2A == SO::equal);
 
     // with default Context label is used for comparisons
     {
@@ -250,6 +275,9 @@ TEST_CASE("index", "[elements][index]") {
       REQUIRE(i < j1);
       REQUIRE(j < j1);
       REQUIRE(!(j1 < j1));
+      REQUIRE(i <=> j == SO::less);
+      REQUIRE(i <=> j1 == SO::less);
+      REQUIRE(j <=> j1 == SO::less);
     }
   }
 
