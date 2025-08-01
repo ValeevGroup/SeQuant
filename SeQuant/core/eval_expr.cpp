@@ -10,7 +10,7 @@
 #include <SeQuant/core/parse.hpp>
 #include <SeQuant/core/tensor.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
-#include <SeQuant/core/tensor_network_v2.hpp>
+#include <SeQuant/core/tensor_network_v3.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/wstring.hpp>
 #include <SeQuant/external/bliss/graph.hh>
@@ -79,7 +79,7 @@ EvalExpr::EvalExpr(Tensor const& tnsr)
       expr_{tnsr.clone()} {
   if (is_tot(tnsr)) {
     ExprPtrList tlist{expr_};
-    auto tn = TensorNetworkV2(tlist);
+    auto tn = TensorNetworkV3(tlist);
     auto md =
         tn.canonicalize_slots(TensorCanonicalizer::cardinal_tensor_labels());
     hash_value_ = md.hash_value();
@@ -366,7 +366,7 @@ EvalExprNode binarize(Product const& prod) {
       collect_tensor_factors(left, subfacs);
       collect_tensor_factors(right, subfacs);
       auto ts = subfacs | transform([](auto&& t) { return t.expr; });
-      auto tn = TensorNetworkV2(ts);
+      auto tn = TensorNetworkV3(ts);
       auto canon =
           tn.canonicalize_slots(TensorCanonicalizer::cardinal_tensor_labels());
       hash::combine(h, canon.hash_value());
