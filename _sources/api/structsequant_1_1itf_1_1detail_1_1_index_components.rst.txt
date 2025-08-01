@@ -1,0 +1,17 @@
+.. _exhale_struct_structsequant_1_1itf_1_1detail_1_1_index_components:
+
+Struct IndexComponents
+======================
+
+- Defined in :ref:`file_SeQuant_core_export_itf.cpp`
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::itf::detail::IndexComponents
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

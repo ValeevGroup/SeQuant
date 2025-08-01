@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1ae10c6337dda9d993b1bbac6f0c1eec07:
+
+Function sequant::extract_external_indices
+==========================================
+
+- Defined in :ref:`file_SeQuant_core_wick.impl.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::extract_external_indices(const Expr&)
+   :project: SeQuant

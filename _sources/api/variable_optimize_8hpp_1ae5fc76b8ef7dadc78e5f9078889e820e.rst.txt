@@ -1,0 +1,14 @@
+.. _exhale_variable_optimize_8hpp_1ae5fc76b8ef7dadc78e5f9078889e820e:
+
+Variable sequence
+=================
+
+- Defined in :ref:`file_SeQuant_core_optimize.hpp`
+
+
+Variable Documentation
+----------------------
+
+
+.. doxygenvariable:: sequence
+   :project: SeQuant

@@ -1,0 +1,17 @@
+.. _exhale_class_classsequant_1_1mbpt_1_1_op_maker:
+
+Template Class OpMaker
+======================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_op.hpp`
+
+
+Class Documentation
+-------------------
+
+
+.. doxygenclass:: sequant::mbpt::OpMaker
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

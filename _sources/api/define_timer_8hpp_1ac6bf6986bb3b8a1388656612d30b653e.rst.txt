@@ -1,0 +1,14 @@
+.. _exhale_define_timer_8hpp_1ac6bf6986bb3b8a1388656612d30b653e:
+
+Define SEQUANT_PROFILE_SINGLE
+=============================
+
+- Defined in :ref:`file_SeQuant_core_timer.hpp`
+
+
+Define Documentation
+--------------------
+
+
+.. doxygendefine:: SEQUANT_PROFILE_SINGLE
+   :project: SeQuant

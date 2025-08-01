@@ -1,0 +1,77 @@
+
+.. _program_listing_file_SeQuant_core_timer.hpp:
+
+Program Listing for File timer.hpp
+==================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_core_timer.hpp>` (``SeQuant/core/timer.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   //
+   // Created by Eduard Valeyev on 3/28/18.
+   //
+   
+   #ifndef SEQUANT_TIMER_HPP
+   #define SEQUANT_TIMER_HPP
+   
+   #include <chrono>
+   #include <iostream>
+   
+   namespace sequant {
+   
+   template <size_t N = 1>
+   class TimerPool {
+    public:
+     typedef std::chrono::duration<double> dur_t;
+     typedef std::chrono::high_resolution_clock clock_t;
+     typedef std::chrono::time_point<clock_t> time_point_t;
+   
+     TimerPool() {
+       clear();
+       set_now_overhead(0);
+     }
+   
+     static time_point_t now() { return clock_t::now(); }
+   
+     void set_now_overhead(size_t ns) { overhead_ = std::chrono::nanoseconds(ns); }
+   
+     void start(size_t t = 0) { tstart_[t] = now(); }
+     dur_t stop(size_t t = 0) {
+       const auto tstop = now();
+       const dur_t result = (tstop - tstart_[t]) - overhead_;
+       timers_[t] += result;
+       return result;
+     }
+     double read(size_t t = 0) const { return timers_[t].count(); }
+     void clear() {
+       for (auto t = 0; t != ntimers; ++t) {
+         timers_[t] = dur_t::zero();
+         tstart_[t] = time_point_t();
+       }
+     }
+   
+    private:
+     constexpr static auto ntimers = N;
+     dur_t timers_[ntimers];
+     time_point_t tstart_[ntimers];
+     dur_t overhead_;  // the duration of now() call ... use this to automatically
+     // adjust reported timings is you need fine-grained timing
+   };
+   
+   }  // namespace sequant
+   
+   #define SEQUANT_PROFILE_SINGLE(id, call)                       \
+     {                                                            \
+       sequant::TimerPool<> timer;                                \
+       timer.start();                                             \
+       { call; }                                                  \
+       timer.stop();                                              \
+       auto elapsed_seconds = timer.read();                       \
+       std::wcout << id << ": elapsed_time = " << std::scientific \
+                  << elapsed_seconds << " seconds" << std::endl;  \
+     }
+   
+   #endif  // SEQUANT_TIMER_HPP

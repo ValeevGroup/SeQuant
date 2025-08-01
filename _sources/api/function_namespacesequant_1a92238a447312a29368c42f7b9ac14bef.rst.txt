@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a92238a447312a29368c42f7b9ac14bef:
+
+Template Function sequant::clone
+================================
+
+- Defined in :ref:`file_SeQuant_core_expr.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::clone(Sequence&&)
+   :project: SeQuant

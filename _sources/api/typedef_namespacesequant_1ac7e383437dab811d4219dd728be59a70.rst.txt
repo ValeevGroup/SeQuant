@@ -1,0 +1,14 @@
+.. _exhale_typedef_namespacesequant_1ac7e383437dab811d4219dd728be59a70:
+
+Typedef sequant::ExprPtrList
+============================
+
+- Defined in :ref:`file_SeQuant_core_expr.hpp`
+
+
+Typedef Documentation
+---------------------
+
+
+.. doxygentypedef:: sequant::ExprPtrList
+   :project: SeQuant

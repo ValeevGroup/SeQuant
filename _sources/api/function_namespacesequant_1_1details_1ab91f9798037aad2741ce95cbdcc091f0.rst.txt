@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1details_1ab91f9798037aad2741ce95cbdcc091f0:
+
+Function sequant::details::deparse_symm(ParticleSymmetry)
+=========================================================
+
+- Defined in :ref:`file_SeQuant_core_parse_deparse.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::details::deparse_symm(ParticleSymmetry)
+   :project: SeQuant

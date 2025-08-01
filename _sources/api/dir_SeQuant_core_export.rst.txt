@@ -1,0 +1,22 @@
+.. _dir_SeQuant_core_export:
+
+
+Directory export
+================
+
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core>` (``SeQuant/core``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+*Directory path:* ``SeQuant/core/export``
+
+
+Files
+-----
+
+- :ref:`file_SeQuant_core_export_itf.cpp`
+- :ref:`file_SeQuant_core_export_itf.hpp`
+
+

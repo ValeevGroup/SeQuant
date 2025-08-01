@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a745f7070c7fe7ac8767c67d77902221b:
+
+Function sequant::make_spinalpha
+================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_spin.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::make_spinalpha(const Index&)
+   :project: SeQuant

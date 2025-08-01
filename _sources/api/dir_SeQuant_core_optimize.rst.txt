@@ -1,0 +1,23 @@
+.. _dir_SeQuant_core_optimize:
+
+
+Directory optimize
+==================
+
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core>` (``SeQuant/core``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+*Directory path:* ``SeQuant/core/optimize``
+
+
+Files
+-----
+
+- :ref:`file_SeQuant_core_optimize_fusion.cpp`
+- :ref:`file_SeQuant_core_optimize_fusion.hpp`
+- :ref:`file_SeQuant_core_optimize_optimize.cpp`
+
+

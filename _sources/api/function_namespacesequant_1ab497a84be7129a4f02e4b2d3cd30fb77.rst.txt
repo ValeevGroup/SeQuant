@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1ab497a84be7129a4f02e4b2d3cd30fb77:
+
+Function sequant::begin(const ExprPtr&)
+=======================================
+
+- Defined in :ref:`file_SeQuant_core_expr.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::begin(const ExprPtr&)
+   :project: SeQuant

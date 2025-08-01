@@ -1,0 +1,17 @@
+.. _exhale_struct_structsequant_1_1_flops:
+
+Struct Flops
+============
+
+- Defined in :ref:`file_SeQuant_core_eval_node.hpp`
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::Flops
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

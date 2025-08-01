@@ -1,0 +1,14 @@
+.. _exhale_variable_optimize_8hpp_1a786703939f61f085bd7d5b96b7a1f5cb:
+
+Variable flops
+==============
+
+- Defined in :ref:`file_SeQuant_core_optimize.hpp`
+
+
+Variable Documentation
+----------------------
+
+
+.. doxygenvariable:: flops
+   :project: SeQuant

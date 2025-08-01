@@ -1,0 +1,73 @@
+
+.. _file_SeQuant_domain_mbpt_models_cc.cpp:
+
+File cc.cpp
+===========
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_domain_mbpt_models>` (``SeQuant/domain/mbpt/models``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/domain/mbpt/models/cc.cpp``)
+--------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_domain_mbpt_models_cc.cpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/expr.hpp`` (:ref:`file_SeQuant_core_expr.hpp`)
+
+- ``SeQuant/core/rational.hpp`` (:ref:`file_SeQuant_core_rational.hpp`)
+
+- ``SeQuant/core/runtime.hpp`` (:ref:`file_SeQuant_core_runtime.hpp`)
+
+- ``SeQuant/domain/mbpt/context.hpp`` (:ref:`file_SeQuant_domain_mbpt_context.hpp`)
+
+- ``SeQuant/domain/mbpt/convention.hpp`` (:ref:`file_SeQuant_domain_mbpt_convention.hpp`)
+
+- ``SeQuant/domain/mbpt/models/cc.hpp`` (:ref:`file_SeQuant_domain_mbpt_models_cc.hpp`)
+
+- ``SeQuant/domain/mbpt/op.hpp`` (:ref:`file_SeQuant_domain_mbpt_op.hpp`)
+
+- ``SeQuant/domain/mbpt/spin.hpp`` (:ref:`file_SeQuant_domain_mbpt_spin.hpp`)
+
+- ``cassert``
+
+- ``cstdint``
+
+- ``memory``
+
+- ``new``
+
+- ``stdexcept``
+
+- ``utility`` (:ref:`file_SeQuant_core_utility_context.hpp`)
+
+
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+- :ref:`namespace_sequant__mbpt`
+

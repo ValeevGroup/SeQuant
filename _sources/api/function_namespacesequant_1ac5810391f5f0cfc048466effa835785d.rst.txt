@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1ac5810391f5f0cfc048466effa835785d:
+
+Function sequant::A_maps
+========================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_spin.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::A_maps(const Tensor&)
+   :project: SeQuant
