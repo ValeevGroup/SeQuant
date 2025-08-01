@@ -392,6 +392,9 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
       hash::range(val, begin(aux()), end(aux()));
       hash::combine(val, label_);
       hash::combine(val, symmetry_);
+      hash::combine(val, braket_symmetry_);
+      hash::combine(val, particle_symmetry_);
+      // N.B. adjointness is baked into the label
       return val;
     };
     if (!hash_value_) {
