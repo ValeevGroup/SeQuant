@@ -1925,7 +1925,7 @@ TEST_CASE("tensor_network_v3", "[elements]") {
   }  // SECTION("canonicalizer")
 
   SECTION("misc1") {
-    if (false) {
+    if (true) {
       Index::reset_tmp_index();
       // TN1 from manuscript
       auto g = ex<Tensor>(L"g", bra{L"i_3", L"i_4"}, ket{L"a_3", L"a_4"},
@@ -1986,8 +1986,13 @@ TEST_CASE("tensor_network_v3", "[elements]") {
 
       std::basic_ostringstream<wchar_t> oss;
       bliss::print_auts(aut_generators, oss, graph.vertex_labels);
-      CHECK(oss.str() == L"({i_3},{i_4})\n({i_1},{i_2})\n");
-      // std::wcout << oss.str() << std::endl;
+      auto split_into_lines = [](const std::wstring& str) {
+        return str | ranges::views::split(L'\n') |
+               ranges::to<container::set<std::wstring>>();
+      };
+      CHECK(split_into_lines(oss.str()) ==
+            split_into_lines(L"(ket_1,ket_2)(i_1,i_2)\n(bra_1,bra_2)(ket_1,ket_"
+                             L"2)(i_3,i_4)\n"));
     }
   }
 }
