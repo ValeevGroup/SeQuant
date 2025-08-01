@@ -31,7 +31,7 @@ int main(int argc, char* argv[]) {
   // std::wcout.sync_with_stdio(true);
   // std::wcerr.sync_with_stdio(true);
 
-  // // set global locale, keep precision as what it was, but global locale
+  // set global locale, keep precision as what it was, but global locale
   std::wcout.precision(std::numeric_limits<double>::max_digits10);
   std::wcerr.precision(std::numeric_limits<double>::max_digits10);
   sequant::set_locale();
@@ -57,13 +57,14 @@ int main(int argc, char* argv[]) {
   }
 
   //
-  // Closed-shell spintrace (fast)
-  std::cout << "\nClosed-shell coupled cluster spintrace with biorthogonal "
+  // Closed-shell spintrace compact-set (fast)
+  std::cout << "\n Compact set of closed-shell coupled cluster spintrace with "
+               "biorthogonal "
                "transformation:\n";
   std::vector<ExprPtr> cc_st_r(cc_r.size());
   for (auto i = 1; i < cc_r.size(); ++i) {
     const auto tstart = std::chrono::high_resolution_clock::now();
-    cc_st_r[i] = sequant::closed_shell_CC_spintrace(cc_r[i]);
+    cc_st_r[i] = sequant::closed_shell_CC_spintrace_compact_set(cc_r[i]);
 
     auto tstop = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> time_elapsed = tstop - tstart;
@@ -73,15 +74,15 @@ int main(int argc, char* argv[]) {
 
   if (NMAX == 4) {
     runtime_assert(cc_st_r.size() == 5)
-        runtime_assert(cc_st_r.at(1)->size() == 30)    // T1
-        runtime_assert(cc_st_r.at(2)->size() == 78)    // T2
-        runtime_assert(cc_st_r.at(3)->size() == 567)   // T3
-        runtime_assert(cc_st_r.at(4)->size() == 2150)  // T4
+        runtime_assert(cc_st_r.at(1)->size() == 30)   // T1
+        runtime_assert(cc_st_r.at(2)->size() == 78)   // T2
+        runtime_assert(cc_st_r.at(3)->size() == 111)  // T3
+        runtime_assert(cc_st_r.at(4)->size() == 149)  // T4
   } else if (NMAX == 3) {
     runtime_assert(cc_st_r.size() == 4)
-        runtime_assert(cc_st_r.at(1)->size() == 30)   // T1
-        runtime_assert(cc_st_r.at(2)->size() == 73)   // T2
-        runtime_assert(cc_st_r.at(3)->size() == 490)  // T3
+        runtime_assert(cc_st_r.at(1)->size() == 30)  // T1
+        runtime_assert(cc_st_r.at(2)->size() == 73)  // T2
+        runtime_assert(cc_st_r.at(3)->size() == 93)  // T3
   }
 
   return 0;

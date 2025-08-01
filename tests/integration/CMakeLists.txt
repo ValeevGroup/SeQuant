@@ -12,6 +12,8 @@ if (TARGET Eigen3::Eigen)
     list(APPEND TEST_CASES
         # Single-Reference closed-shell Coupled-Cluster equation generation (fast spin-traced)
         "stcc.cpp"
+         # Single-Reference compact-st of closed-shell Coupled-Cluster equation generation
+        "stcc_compact_set.cpp"
         # Single-Reference closed-shell Coupled-Cluster equation generation (rigorous spin-traced)
         "stcc_rigorous.cpp"
     )

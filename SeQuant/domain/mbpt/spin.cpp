@@ -925,11 +925,12 @@ ExprPtr closed_shell_spintrace(
   // expression with non-symmetric tensors, hence we are partially expanding the
   // antisymmetrizer (A) and fully expanding the anti-symmetric tensors to
   // non-symmetric.
+  // adding another option to fully expand the antisymmetrizer (for caompact set
+  // of epns)
   auto partially_or_fully_expand = [&is_compact_set](const ExprPtr& expr) {
     auto temp = expr;
     if (has_tensor(temp, L"A")) {
       if (is_compact_set) {
-        // no partial expansion, only fully expansion (for compact  set of eqns)
         temp = expand_A_op(temp);
       } else {
         temp = symmetrize_expr(temp);
@@ -1053,11 +1054,7 @@ ExprPtr closed_shell_CC_spintrace(ExprPtr const& expr) {
   using ranges::views::transform;
 
   auto const ext_idxs = external_indices(expr);
-  const auto sp_tstart = std::chrono::high_resolution_clock::now();
   auto st_expr = closed_shell_spintrace(expr, ext_idxs, false);
-  const auto sp_tstop = std::chrono::high_resolution_clock::now();
-  std::chrono::duration<double> sp_time_elapsed = sp_tstop - sp_tstart;
-  printf("spint-trace time: %5.3f sec.\n", sp_time_elapsed.count());
   canonicalize(st_expr);
 
   if (!ext_idxs.empty()) {
@@ -1067,25 +1064,14 @@ ExprPtr closed_shell_CC_spintrace(ExprPtr const& expr) {
     }
 
     // Biorthogonal transformation
-    const auto tstart = std::chrono::high_resolution_clock::now();
     st_expr = biorthogonal_transform(st_expr, ext_idxs);
-    const auto tstop = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<double> time_elapsed = tstop - tstart;
-    printf("biortho_transform time: %5.3f sec.\n", time_elapsed.count());
     auto bixs = ext_idxs | transform([](auto&& vec) { return vec[1]; });
     auto kixs = ext_idxs | transform([](auto&& vec) { return vec[0]; });
     st_expr =
         ex<Tensor>(Tensor{L"S", bra(std::move(bixs)), ket(std::move(kixs))}) *
         st_expr;
   }
-  // const auto sm_tstart = std::chrono::high_resolution_clock::now();
   simplify(st_expr);
-  // const auto sm_tstop = std::chrono::high_resolution_clock::now();
-  // std::chrono::duration<double> sm_time_elapsed = sp_tstop - sp_tstart;
-  // printf("simplify time: %5.3f sec.\n", sm_time_elapsed.count());
-  // std::wcout << "final eqns after symm: " <<
-  // sequant::to_latex_align(sequant::ex<sequant::Sum>(sequant::opt::reorder(st_expr->as<sequant::Sum>())),
-  // 0, 4) << std::endl;
   return st_expr;
 }
 
@@ -1105,61 +1091,32 @@ ExprPtr closed_shell_CC_spintrace_compact_set(ExprPtr const& expr) {
   using ranges::views::transform;
 
   auto const ext_idxs = external_indices(expr);
-  int residual_order = ext_idxs.size();
-  printf("\n----- Processing Residual R%d -----\n", residual_order);
-
-  // at first, run the original function to get the result (to ensure it works
-  // properly)
-  const auto spintracing_time_0 = std::chrono::high_resolution_clock::now();
-  printf("Input expression size: %zu\n", expr->size());
   auto st_expr = closed_shell_spintrace(expr, ext_idxs, true);
-  printf("Output expression size: %zu\n", st_expr->size());
-  const auto spintracing_time_1 = std::chrono::high_resolution_clock::now();
-  std::chrono::duration<double> spintracing_time =
-      spintracing_time_1 - spintracing_time_0;
-  printf("R%d Complete spintrace_core time: %5.3f sec.\n", residual_order,
-         spintracing_time.count());
   canonicalize(st_expr);
 
-  std::wcout << "Number of terms before biorthogonal transform: "
+  std::wcout << "Number of terms before biorthogonal transformation: "
              << st_expr.size() << std::endl;
   if (!ext_idxs.empty()) {
-    // std::wcout << "size of st_expr before biorthogonal transform "
-    // st_expr.size() << std::endl;
-    const auto biT_time_0 = std::chrono::high_resolution_clock::now();
     st_expr = biorthogonal_transform(st_expr, ext_idxs);
-    const auto biT_time_1 = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<double> biortho_T_time = biT_time_1 - biT_time_0;
-    printf("R%d Bioerho-transform time: %5.3f sec.\n", residual_order,
-           biortho_T_time.count());
   }
 
-  std::wcout << "Number of terms after biorthogonal transform: "
-             << st_expr.size() << std::endl;
-  // bool variable
   bool is_r1_or_r2 = false;
-  // check if ext_idxs has exactly 1 or 2 indices sets. so, r1 has 2 and r2 has
-  // 4?
   if (ext_idxs.size() <= 2) {
     is_r1_or_r2 = true;
 
     // using external index to have access to different r
     for (const auto& v : ext_idxs) {
-      // std::wcout << "External index set size: " << v.size() << std::endl;
       for (const auto& idx : v) {
-        // std::wcout << L"Index: " << idx.to_latex() << std::endl;
       }
     }
   }
-
-  // here apply hash-based filtering for r3 and higher (not r1 and r2)
+  // apply hash-based filtering for r3 and higher orders (skip r1 and r2)
   ExprPtr result_expr;
   if (!is_r1_or_r2) {
     std::wcout << "Applying hash-based filtering for r3 or higher..."
                << std::endl;
 
     // map, modified to store same terms with multiple larg coeffs.
-    // changed from std::unordered_map to flat_map
     container::map<std::size_t, container::vector<ExprPtr>> largest_coeff_terms;
 
     for (const auto& term : st_expr) {
@@ -1185,7 +1142,7 @@ ExprPtr closed_shell_CC_spintrace_compact_set(ExprPtr const& expr) {
           auto current_abs = abs(scalar_i);
 
           if (current_abs > existing_abs) {
-            // new term has larger coefficient, replace the vector with just
+            // if new term has larger coefficient, replace the vector with just
             // this term
             it->second.clear();
             it->second.push_back(term.clone());
@@ -1199,55 +1156,28 @@ ExprPtr closed_shell_CC_spintrace_compact_set(ExprPtr const& expr) {
       }
     }
 
-    // now create a sum expression from all the collected terms
     Sum filtered_terms;
     for (const auto& pair : largest_coeff_terms) {
       for (const auto& term : pair.second) {
         filtered_terms.append(term);
       }
     }
-
     result_expr = ex<Sum>(filtered_terms);
 
   } else {
     // for r1 and r2, just return the simplified expression without hash-based
-    // filtering
+    // filtering.
     result_expr = st_expr;
     std::wcout << "Skipping hash-based filtering for r1 and r2" << std::endl;
   }
 
-  // now I need S, becaue I picked multiple larg coefs of each set of terms.
-  // so apply S tensor multiplication just once at the end
-  const auto core_addingS_time_0 = std::chrono::high_resolution_clock::now();
+  // now I need S, becaue I picked multiple large coefficients of each set, so
+  // add S tensor just once at the end
   auto bixs = ext_idxs | transform([](auto&& vec) { return vec[1]; });
   auto kixs = ext_idxs | transform([](auto&& vec) { return vec[0]; });
   result_expr =
       ex<Tensor>(Tensor{L"S", bra(std::move(bixs)), ket(std::move(kixs))}) *
       result_expr;
-  const auto core_addingS_time_1 = std::chrono::high_resolution_clock::now();
-  std::chrono::duration<double> core_addingS_time =
-      core_addingS_time_1 - core_addingS_time_0;
-  // printf("R%d Add-S time: %5.3f sec.\n", residual_order,
-  // core_addingS_time.count());
-  const auto norm_time_0 = std::chrono::high_resolution_clock::now();
-
-  // rational normalization_factor;
-  // switch (ext_idxs.size()) {
-  //   case 1:                                   // r1
-  //     normalization_factor = rational(1, 1);  // No normalization needed
-  //     break;
-  //   case 2:                                   // r2
-  //     normalization_factor = rational(1, 2);  // 1/2 for doubles
-  //     break;
-  //   case 3:                                   // r3
-  //     normalization_factor = rational(1, 5);  // 1/6 for triples * 6/5
-  //     break;
-  //   case 4:
-  //     normalization_factor = rational(
-  //         1, 23);  // 1/24 (for normalization) * 24/23 (recaling for cleanup)
-  //     break;
-  // }
-  // result_expr = ex<Constant>(normalization_factor) * result_expr;
 
   rational combined_factor;
   if (ext_idxs.size() <= 2) {
@@ -1255,28 +1185,14 @@ ExprPtr closed_shell_CC_spintrace_compact_set(ExprPtr const& expr) {
   } else {
     auto fact_n = factorial(ext_idxs.size());
     combined_factor =
-        rational(1, fact_n - 1);  // This is (1/fact_n) * (fact_n/(fact_n-1))
+        rational(1, fact_n - 1);  // this is (1/fact_n) * (fact_n/(fact_n-1))
   }
   result_expr = ex<Constant>(combined_factor) * result_expr;
 
-  const auto norm_time_1 = std::chrono::high_resolution_clock::now();
-  std::chrono::duration<double> norm_time = norm_time_1 - norm_time_0;
-  printf(
-      "R%d Normalization time: %5.3f sec.\n", residual_order,
-      norm_time
-          .count());  // std::wcout << "final eqns after symm: "
-                      // sequant::to_latex_align(sequant::ex<sequant::Sum>(sequant::opt::reorder(result_expr->as<sequant::Sum>())),
-                      // 0, 4) << std::endl;
+  // result_expr = remove_tensor(result_expr, L"S"); // uncomment this if you
+  // want to see eqns without S in SeQuant
 
-  // result_expr = remove_tensor(result_expr, L"S");
-
-  const auto t_simlify_time_0 = std::chrono::high_resolution_clock::now();
   simplify(result_expr);
-  const auto t_simplify_time_1 = std::chrono::high_resolution_clock::now();
-  std::chrono::duration<double> t_simplify_time =
-      t_simplify_time_1 - t_simlify_time_0;
-  printf("R%d Simplify time: %5.3f sec.\n", residual_order,
-         t_simplify_time.count());
 
   // std::wcout << "final eqns after symm: " <<
   // sequant::to_latex_align(sequant::ex<sequant::Sum>(sequant::opt::reorder(result_expr->as<sequant::Sum>())),
