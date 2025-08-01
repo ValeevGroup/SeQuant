@@ -502,6 +502,7 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
   bool _is_cnumber() const override final { return true; }
   std::wstring_view _label() const override final { return label_; }
   std::wstring _to_latex() const override final { return to_latex(); }
+  std::size_t _hash_value() const override final { return this->hash_value(); }
   bool _transform_indices(
       const container::map<Index, Index> &index_map) override final {
     return transform_indices(index_map);

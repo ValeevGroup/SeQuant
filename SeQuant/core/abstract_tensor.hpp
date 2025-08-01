@@ -168,6 +168,16 @@ class AbstractTensor {
     throw missing_instantiation_for("operator<");
   }
 
+  /// hashes the tensor's identity , i.e., this includes hashes of the index
+  /// labels (ordinals)
+  /// @return hash of the tensor's identity
+  /// @warning this hash value is not invariant with respect to tensor
+  /// symmetries, i.e. permuting bra indices will not leave the hash invariant
+  /// even if the tensor is
+  virtual std::size_t _hash_value() const {
+    throw missing_instantiation_for("_hash_value");
+  }
+
   virtual bool _transform_indices(
       const container::map<Index, Index>& index_map) {
     throw missing_instantiation_for("_transform_indices");
