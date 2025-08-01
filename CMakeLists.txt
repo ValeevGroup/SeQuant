@@ -262,6 +262,7 @@ set(SeQuant_src
         SeQuant/core/utility/string.cpp
         SeQuant/core/utility/tuple.hpp
         SeQuant/core/utility/swap.hpp
+        SeQuant/core/utility/cs_cleanup.hpp
         SeQuant/core/wick.hpp
         SeQuant/core/wick.impl.hpp
         SeQuant/core/wolfram.hpp
