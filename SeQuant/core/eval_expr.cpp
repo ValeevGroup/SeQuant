@@ -108,10 +108,10 @@ EvalExpr::EvalExpr(EvalOp op, ResultType res, ExprPtr const& ex,
                    index_vector ixs, std::int8_t p, size_t h)
     : op_type_{op},
       result_type_{res},
-      expr_{ex.clone()},
+      hash_value_{h},
       canon_indices_{std::move(ixs)},
       canon_phase_{p},
-      hash_value_{h} {}
+      expr_{ex.clone()} {}
 
 const std::optional<EvalOp>& EvalExpr::op_type() const noexcept {
   return op_type_;

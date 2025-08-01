@@ -72,7 +72,7 @@ TEMPLATE_TEST_CASE("tensor_network_shared", "[elements]", TensorNetwork,
 
       // Case 7: with protoindices
 
-      auto& l = Logger::instance();
+      [[maybe_unused]] auto& l = Logger::instance();
       //      l.tensor_network = l.canonicalize = l.canonicalize_dot =
       //          l.canonicalize_input_graph = true;
 
@@ -238,7 +238,7 @@ TEMPLATE_TEST_CASE("tensor_network_shared", "[elements]", TensorNetwork,
     SECTION("Named index ordering") {
       REQUIRE(IndexSpace("i") < IndexSpace("a"));
 
-      for (const auto [input, str_indices] :
+      for (const auto& [input, str_indices] :
            std::vector<std::pair<std::wstring, std::vector<std::wstring>>>{
                {L"G{;;a1,a2,a3,a4} T{;;i3,i2,a3,a4}",
                 {L"i_2", L"i_3", L"a_1", L"a_2"}},

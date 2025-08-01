@@ -352,7 +352,7 @@ ExprPtr Sum::canonicalize_impl(bool multipass) {
   for (auto pass = 0; pass != npasses; ++pass) {
     // recursively canonicalize summands ...
     // using for_each and directly access to summands
-    sequant::for_each(summands_, [this, pass](ExprPtr &summand) {
+    sequant::for_each(summands_, [pass](ExprPtr &summand) {
       auto bp = (pass % 2 == 0) ? summand->rapid_canonicalize()
                                 : summand->canonicalize();
       if (bp) {
