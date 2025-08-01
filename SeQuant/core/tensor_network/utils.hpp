@@ -170,18 +170,32 @@ void apply_index_replacements(ArrayLike &tensors,
   }
 }
 
-template <typename Container>
-void order_to_indices(Container &container) {
-  std::vector<std::size_t> indices;
-  indices.resize(container.size());
-  std::iota(indices.begin(), indices.end(), 0);
+/// sorts a sequence of integers in the lexicographic order (w.r.t. operator<)
+/// and overwrites them with their input ordinals
+/// e.g. `{23,7,14}` is overwritten with `{1,2,0}`
+/// @param[in,out] seq on input: a sequence of integers, on output: sequence of
+/// input ordinals of the elements of sorted @p seq
+/// @return -1 if permutation is off parity, else
+template <typename IntegerSequence>
+int sort_then_replace_by_ordinals(IntegerSequence &iseq) {
+  using ranges::begin;
+  using ranges::end;
 
-  std::sort(indices.begin(), indices.end(),
-            [&container](std::size_t lhs, std::size_t rhs) {
-              return container[lhs] < container[rhs];
-            });
-  // Overwrite container contents with indices
-  std::copy(indices.begin(), indices.end(), container.begin());
+  const auto N = iseq.size();
+  auto input_ordinals =
+      ranges::views::iota(0ul, N) |
+      ranges::to<container::svector<SwapCountable<std::size_t>>>();
+
+  reset_ts_swap_counter<std::size_t>();
+  bubble_sort(begin(input_ordinals), end(input_ordinals),
+              [&iseq](std::size_t lhs, std::size_t rhs) {
+                return iseq[lhs] < iseq[rhs];
+              });
+
+  // Overwrite iseq contents with the input ordinals
+  std::copy(input_ordinals.begin(), input_ordinals.end(), iseq.begin());
+
+  return ts_swap_counter_is_even<std::size_t>() ? +1 : -1;
 }
 
 template <bool stable, typename Container, typename Comparator>

@@ -238,12 +238,19 @@ TEMPLATE_TEST_CASE("tensor_network_shared", "[elements]", TensorNetwork,
     SECTION("Named index ordering") {
       REQUIRE(IndexSpace("i") < IndexSpace("a"));
 
+      using idxvec_t = std::vector<std::wstring>;
+      constexpr bool v3 =
+          std::is_same_v<TN,
+                         TensorNetworkV3>;  // v3 colors vertices differently,
+                                            // so canonical order differs
       for (const auto& [input, str_indices] :
            std::vector<std::pair<std::wstring, std::vector<std::wstring>>>{
                {L"G{;;a1,a2,a3,a4} T{;;i3,i2,a3,a4}",
-                {L"i_2", L"i_3", L"a_1", L"a_2"}},
+                v3 ? idxvec_t{L"i_3", L"i_2", L"a_2", L"a_1"}
+                   : idxvec_t{L"i_2", L"i_3", L"a_1", L"a_2"}},
                {L"G{;;a1,a2,a3,a4} T{;;i2,i3,a3,a4}",
-                {L"i_3", L"i_2", L"a_1", L"a_2"}},
+                v3 ? idxvec_t{L"i_2", L"i_3", L"a_2", L"a_1"}
+                   : idxvec_t{L"i_3", L"i_2", L"a_1", L"a_2"}},
            }) {
         const std::vector<Index> expected_indices =
             str_indices | ranges::views::transform([](const std::wstring& str) {

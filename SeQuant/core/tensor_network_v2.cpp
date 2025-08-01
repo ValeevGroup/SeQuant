@@ -219,6 +219,9 @@ void TensorNetworkV2::canonicalize_graph(const NamedIndexSet &named_indices) {
       case VertexType::TensorBra:
       case VertexType::TensorKet:
       case VertexType::TensorAux:
+      case VertexType::TensorBraBundle:
+      case VertexType::TensorKetBundle:
+      case VertexType::TensorAuxBundle:
       case VertexType::SPBundle:
         break;
     }
@@ -229,9 +232,9 @@ void TensorNetworkV2::canonicalize_graph(const NamedIndexSet &named_indices) {
   assert(tensor_idx_to_vertex.size() == tensors_.size());
   assert(tensor_idx_to_particle_order.size() <= tensors_.size());
 
-  // order_to_indices(index_order);
+  // sort_then_replace_by_ordinals(index_order);
   for (auto &current : tensor_idx_to_particle_order) {
-    order_to_indices(current.second);
+    sort_then_replace_by_ordinals(current.second);
   }
 
   container::map<Index, Index> idxrepl;
