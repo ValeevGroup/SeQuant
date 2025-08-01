@@ -1175,9 +1175,12 @@ ExprPtr closed_shell_CC_spintrace_compact_set(ExprPtr const& expr) {
   // add S tensor just once at the end
   auto bixs = ext_idxs | transform([](auto&& vec) { return vec[1]; });
   auto kixs = ext_idxs | transform([](auto&& vec) { return vec[0]; });
-  result_expr =
-      ex<Tensor>(Tensor{L"S", bra(std::move(bixs)), ket(std::move(kixs))}) *
-      result_expr;
+
+  if (!bixs.empty() || !kixs.empty()) {
+    result_expr =
+        ex<Tensor>(Tensor{L"S", bra(std::move(bixs)), ket(std::move(kixs))}) *
+        result_expr;
+  }
 
   rational combined_factor;
   if (ext_idxs.size() <= 2) {
