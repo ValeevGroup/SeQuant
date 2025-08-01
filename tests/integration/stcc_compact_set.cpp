@@ -42,11 +42,7 @@ int main(int argc, char* argv[]) {
   TensorCanonicalizer::register_instance(
       std::make_shared<DefaultTensorCanonicalizer>());
 
-#ifndef NDEBUG
   const size_t DEFAULT_NMAX = 3;
-#else
-  const size_t DEFAULT_NMAX = 4;
-#endif
   const size_t NMAX = argc > 1 ? std::atoi(argv[1]) : DEFAULT_NMAX;
 
   // Spin-orbital coupled cluster
