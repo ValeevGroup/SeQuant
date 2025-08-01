@@ -870,6 +870,13 @@ class NormalOperator : public Operator<S>,
                [](auto &&op) -> Index & { return op.index(); });
   }
   AbstractTensor::any_view_randsz _aux_mutable() override final { return {}; }
+
+  void _permute_aux(std::span<const std::size_t> perm) override final {
+    if (perm.size() != 0)
+      throw std::invalid_argument(
+          "NormalOperator::_permute_aux(p): there are no aux indices, p must "
+          "be null");
+  }
 };
 
 static_assert(

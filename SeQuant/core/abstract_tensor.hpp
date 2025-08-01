@@ -29,6 +29,8 @@
 
 namespace sequant {
 
+enum class SlotType { Bra, Ket, Aux, BraKet };
+
 class TensorCanonicalizer;
 
 /// AbstractTensor is a [tensor](https://en.wikipedia.org/wiki/Tensor) over
@@ -184,6 +186,31 @@ class AbstractTensor {
   }
   virtual void _reset_tags() { throw missing_instantiation_for("_reset_tags"); }
 
+  /// permutes bra slots according to @p perm
+  /// @param perm from-permutation, i.e. Index in slot `permutation[i]` will be
+  /// in slot `i`
+  virtual void _permute_bra(std::span<const std::size_t> perm) {
+    permute_impl(_bra_mutable(), perm);
+  }
+  /// permutes ket slots according to @p perm
+  /// @param perm from-permutation, i.e. Index in slot `permutation[i]` will be
+  /// in slot `i`
+  virtual void _permute_ket(std::span<const std::size_t> perm) {
+    permute_impl(_ket_mutable(), perm);
+  }
+  /// permutes aux slots according to @p perm
+  /// @param perm from-permutation, i.e. Index in slot `permutation[i]` will be
+  /// in slot `i`
+  virtual void _permute_aux(std::span<const std::size_t> perm) {
+    permute_impl(_aux_mutable(), perm);
+  }
+  /// permutes braket slot groups according to @p perm
+  /// @param perm from-permutation, i.e. Index pair in slot `permutation[i]`
+  /// will be in slot `i`
+  virtual void _permute_braket(std::span<const std::size_t> perm) {
+    permute_braket_impl(_bra_mutable(), _ket_mutable(), perm);
+  }
+
  private:
   /// @return mutable view of bra
   /// @warning this is used for mutable access, flush memoized state before
@@ -205,6 +232,48 @@ class AbstractTensor {
   }
 
   friend class TensorCanonicalizer;
+
+  static void permute_impl(AbstractTensor::any_view_randsz indices,
+                           std::span<const std::size_t> perm) {
+    const auto n = indices.size();
+    assert(indices.size() == perm.size());
+    container::svector<Index> sorted_indices(n);
+    for (std::size_t i = 0; i != n; ++i) {
+      sorted_indices[i] = std::move(indices[perm[i]]);
+    }
+    for (std::size_t i = 0; i != n; ++i) {
+      indices[i] = std::move(sorted_indices[i]);
+    }
+  }
+
+  static void permute_braket_impl(AbstractTensor::any_view_randsz bra_indices,
+                                  any_view_randsz ket_indices,
+                                  std::span<const std::size_t> perm) {
+    const auto n = std::max(bra_indices.size(), ket_indices.size());
+    assert(n == perm.size());
+
+    // N.B. currently bra/ket are left aligned, i.e. there are no empty slots in
+    // the middle of bra/ket this means permutations should not mix braket slots
+    // with 2 and 1 indices
+
+    container::svector<std::pair<Index, Index>> sorted_indices(n);
+    for (std::size_t i = 0; i != bra_indices.size(); ++i) {
+      assert(perm[i] < bra_indices.size());  // this asserts that 2-index slots
+                                             // do not mix with 1-index slots
+      sorted_indices[i].first = std::move(bra_indices[perm[i]]);
+    }
+    for (std::size_t i = 0; i != ket_indices.size(); ++i) {
+      assert(perm[i] < ket_indices.size());  // this asserts that 2-index slots
+                                             // do not mix with 1-index slots
+      sorted_indices[i].second = std::move(ket_indices[perm[i]]);
+    }
+    for (std::size_t i = 0; i != bra_indices.size(); ++i) {
+      bra_indices[i] = std::move(sorted_indices[i].first);
+    }
+    for (std::size_t i = 0; i != ket_indices.size(); ++i) {
+      ket_indices[i] = std::move(sorted_indices[i].second);
+    }
+  }
 };
 
 /// @name customization points to support generic algorithms on AbstractTensor
@@ -297,9 +366,35 @@ inline bool transform_indices(AbstractTensor& t, const IndexMap& index_map) {
     return t._transform_indices(index_map_copy);
   }
 }
+
 /// Removes tags from tensor indices
 /// @param[in,out] t an AbstractTensor object whose indices will be untagged
 inline void reset_tags(AbstractTensor& t) { t._reset_tags(); }
+
+/// permutes bra slots of @p t according to @p perm
+/// @param t reference to an AbstractTensor object
+/// @param perm from-permutation, i.e. Index in input slot `permutation[i]` will
+/// be in slot `i`
+inline void permute_bra(AbstractTensor& t, std::span<const std::size_t> perm) {
+  return t._permute_bra(perm);
+}
+
+/// permutes ket slots of @p t according to @p perm
+/// @param t reference to an AbstractTensor object
+/// @param perm from-permutation, i.e. Index in input slot `permutation[i]` will
+/// be in slot `i`
+inline void permute_ket(AbstractTensor& t, std::span<const std::size_t> perm) {
+  return t._permute_ket(perm);
+}
+
+/// permutes braket slot groups of @p t according to @p perm
+/// @param t reference to an AbstractTensor object
+/// @param perm from-permutation, i.e. Index pair in input slot `permutation[i]`
+/// will be in slot `i`
+inline void permute_braket(AbstractTensor& t,
+                           std::span<const std::size_t> perm) {
+  return t._permute_braket(perm);
+}
 
 // defined in AbstractTensor
 // inline bool operator<(const AbstractTensor& first, const AbstractTensor&
