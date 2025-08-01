@@ -410,13 +410,16 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
     const auto &that_cast = static_cast<const Tensor &>(that);
     if (this->label() == that_cast.label() &&
         this->symmetry() == that_cast.symmetry() &&
+        this->braket_symmetry() == that_cast.braket_symmetry() &&
+        this->particle_symmetry() == that_cast.particle_symmetry() &&
         this->bra_rank() == that_cast.bra_rank() &&
         this->ket_rank() == that_cast.ket_rank() &&
         this->aux_rank() == that_cast.aux_rank()) {
       // compare hash values first
       if (this->hash_value() ==
           that.hash_value())  // hash values agree -> do full comparison
-        return this->bra() == that_cast.bra() && this->ket() == that_cast.ket();
+        return this->bra() == that_cast.bra() &&
+               this->ket() == that_cast.ket() && this->aux() == that_cast.aux();
       else
         return false;
     } else
