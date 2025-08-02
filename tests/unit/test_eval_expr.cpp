@@ -215,6 +215,7 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
 
     // todo:
     // REQUIRE(x12.expr()->as<Tensor>().symmetry() == Symmetry::antisymm);
+    REQUIRE(x12.expr()->as<Tensor>().symmetry() == Symmetry::nonsymm);
 
     // whole bra <-> ket contraction between two symmetric tensors
     const auto t3 =
@@ -226,6 +227,7 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
 
     // todo:
     // REQUIRE(x34.expr()->as<Tensor>().symmetry() == Symmetry::symm);
+    REQUIRE(x34.expr()->as<Tensor>().symmetry() == Symmetry::nonsymm);
 
     // outer product of the same tensor
     const auto t5 = parse_expr(L"f_{i1}^{a1}", Symmetry::nonsymm)->as<Tensor>();
@@ -235,15 +237,14 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
 
     // todo:
     // REQUIRE(x56.expr()->as<Tensor>().symmetry() == Symmetry::antisymm);
+    REQUIRE(x56.expr()->as<Tensor>().symmetry() == Symmetry::nonsymm);
 
     // contraction of some indices from a bra to a ket
     const auto t7 = parse_tensor(L"g_{a1,a2}^{i1,a3}", Symmetry::antisymm);
     const auto t8 = parse_tensor(L"t_{a3}^{i2}", Symmetry::antisymm);
 
     const auto x78 = result_expr(EvalExpr{t7}, EvalExpr{t8}, EvalOp::Product);
-
-    // todo:
-    // REQUIRE(x78.expr()->as<Tensor>().symmetry() == Symmetry::nonsymm);
+    REQUIRE(x78.expr()->as<Tensor>().symmetry() == Symmetry::nonsymm);
 
     // whole bra <-> ket contraction between symmetric and antisymmetric tensors
     auto const t9 =
@@ -253,6 +254,7 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
     auto const x910 = result_expr(EvalExpr{t9}, EvalExpr{t10}, EvalOp::Product);
     // todo:
     // REQUIRE(x910.expr()->as<Tensor>().symmetry() == Symmetry::symm);
+    REQUIRE(x910.expr()->as<Tensor>().symmetry() == Symmetry::nonsymm);
   }
 
   SECTION("Symmetry of sum") {
