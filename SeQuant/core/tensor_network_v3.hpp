@@ -351,7 +351,7 @@ class TensorNetworkV3 {
     /// if false, will use same color for all
     /// named indices that have same Index::color(), else will use distinct
     /// color for each
-    bool distinct_named_indices = true;
+    bool distinct_named_indices = false;
 
     /// if false, will not generate the labels
     bool make_labels = true;
@@ -404,7 +404,7 @@ class TensorNetworkV3 {
   // clang-format on
   Graph create_graph(const CreateGraphOptions &options = {
                          .named_indices = nullptr,
-                         .distinct_named_indices = true,
+                         .distinct_named_indices = false,
                          .make_labels = true,
                          .make_texlabels = true,
                          .make_idx_to_vertex = false}) const;
