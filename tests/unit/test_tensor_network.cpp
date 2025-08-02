@@ -308,16 +308,19 @@ TEMPLATE_TEST_CASE("tensor_network_shared", "[elements]", TensorNetwork,
           // "\n";
 
           // TNv1 fails to canonicalize this correctly
-          if constexpr (std::is_same_v<TN, TensorNetworkV2>) {
+          if constexpr (!std::is_same_v<TN, TensorNetwork>) {
             // input2 obtained from input1 by i6 -> i11, which "frees" i6 for
             // dummy renamings so canonical(input2) is obtained from
             // canonical(input1) by i6 -> i11 and i7 -> i6
-            REQUIRE(tn1.tensors()[0]->_to_latex() ==
-                    tn2.tensors()[0]->_to_latex());
-            REQUIRE(ranges::equal(tn1.tensors()[1]->_bra(),
-                                  tn2.tensors()[1]->_bra()));
-            REQUIRE(ranges::equal(tn1.tensors()[2]->_ket(),
-                                  tn2.tensors()[2]->_ket()));
+            for (int i = 0; i != tn1.tensors().size(); ++i) {
+              std::unique_ptr<AbstractTensor> t2_i(tn2.tensors()[i]->_clone());
+              container::map<Index, Index> idxrepl{
+                  {Index{L"p_11"}, Index{L"p_6"}},
+                  {Index{L"p_6"}, Index{L"p_7"}}};
+              apply_index_replacements(*t2_i, idxrepl, false);
+              REQUIRE(deparse(*(tn1.tensors()[i]), true) ==
+                      deparse(*t2_i, true));
+            }
           }
         }
       }
@@ -1768,7 +1771,7 @@ TEST_CASE("tensor_network_v3", "[elements]") {
       // writing it down, canonicalizes to the same exact form
       const Product expectedExpr =
           parse_expr(
-              L"A{i1,i2;a1,a2} g{i3,i4;a3,a4} t{a1,a3;i3,i4} t{a2,a4;i1,i2}",
+              L"A{i1,i2;a1,a2} g{i3,i4;a3,a4} t{a1,a3;i1,i2} t{a2,a4;i3,i4}",
               Symmetry::antisymm)
               .as<Product>();
 
