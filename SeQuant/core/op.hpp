@@ -797,6 +797,10 @@ class NormalOperator : public Operator<S>,
   }
 
   // these implement the AbstractTensor interface
+  NormalOperator *_clone() const override final {
+    return new NormalOperator(*this);
+  }
+
   AbstractTensor::const_any_view_randsz _bra() const override final {
     return annihilators() |
            ranges::views::transform(

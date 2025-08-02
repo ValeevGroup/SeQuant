@@ -86,6 +86,12 @@ class AbstractTensor {
  public:
   virtual ~AbstractTensor() = default;
 
+  /// clones this object
+  //// @throw missing_instantiation_for if not overloaded
+  virtual AbstractTensor* _clone() const {
+    throw missing_instantiation_for("_clone");
+  }
+
   using const_any_view_rand =
       ranges::any_view<const Index&, ranges::category::random_access>;
   using const_any_view_randsz =

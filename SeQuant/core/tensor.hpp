@@ -469,6 +469,8 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
                                         that_cast.aux().end());
   }
 
+  Tensor *_clone() const override final { return new Tensor(*this); }
+
   // these implement the AbstractTensor interface
   AbstractTensor::const_any_view_randsz _bra() const override final {
     return ranges::counted_view<const Index *>(
