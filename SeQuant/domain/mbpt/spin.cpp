@@ -1108,8 +1108,6 @@ ExprPtr closed_shell_CC_spintrace_compact_set(ExprPtr const& expr) {
   auto st_expr = closed_shell_spintrace(expr, ext_idxs, true);
   canonicalize(st_expr);
 
-  std::wcout << "Number of terms before biorthogonal transformation: "
-             << st_expr.size() << std::endl;
   if (!ext_idxs.empty()) {
     st_expr = biorthogonal_transform(st_expr, ext_idxs);
   }
@@ -1124,10 +1122,10 @@ ExprPtr closed_shell_CC_spintrace_compact_set(ExprPtr const& expr) {
       }
     }
   }
-  // apply hash-based filtering for r3 and higher orders (skip r1 and r2)
+
   ExprPtr result_expr;
   if (!is_r1_or_r2) {
-    std::wcout << "Applying hash-based filtering for r3 or higher..."
+    std::wcout << "Apply hash-based filtering for r3 and higher..."
                << std::endl;
 
     // map, modified to store same terms with multiple larg coeffs.
@@ -1179,10 +1177,8 @@ ExprPtr closed_shell_CC_spintrace_compact_set(ExprPtr const& expr) {
     result_expr = ex<Sum>(filtered_terms);
 
   } else {
-    // for r1 and r2, just return the simplified expression without hash-based
-    // filtering.
     result_expr = st_expr;
-    std::wcout << "Skipping hash-based filtering for r1 and r2" << std::endl;
+    std::wcout << "Skip hash-based filtering for r1, r2" << std::endl;
   }
 
   // now I need S, becaue I picked multiple large coefficients of each set, so
@@ -1205,9 +1201,6 @@ ExprPtr closed_shell_CC_spintrace_compact_set(ExprPtr const& expr) {
         rational(1, fact_n - 1);  // this is (1/fact_n) * (fact_n/(fact_n-1))
   }
   result_expr = ex<Constant>(combined_factor) * result_expr;
-
-  // result_expr = remove_tensor(result_expr, L"S"); // uncomment this if you
-  // want to see eqns without S in SeQuant
 
   simplify(result_expr);
 
