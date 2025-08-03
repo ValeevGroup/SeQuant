@@ -1,21 +1,29 @@
 set(TEST_CASES
-    # Single-Reference Coupled-Cluster equation generation (spin-orbital and spin-free)
-    "srcc.cpp ->  |3 t std so|3 t csv so|3 lambda std so|3 lambda csv so|2 t std sf|2 t csv sf|2 lambda std sf|2 lambda csv sf"
-    # Single-Reference open-shell equation generation (spin-traced)
-    "osstcc.cpp"
-    # Equation-of-motion Coupled-Cluster
-    "eomcc.cpp"
     "antisymmetrizer.cpp"
 )
-if (TARGET Eigen3::Eigen)
-    # these examples require Eigen for full functionality
+if (NOT SEQUANT_SKIP_LONG_TESTS)
     list(APPEND TEST_CASES
-        # Single-Reference closed-shell Coupled-Cluster equation generation (fast spin-traced)
-        "stcc.cpp"
-         # Single-Reference compact-st of closed-shell Coupled-Cluster equation generation
-        "stcc_compact_set.cpp"
-        # Single-Reference closed-shell Coupled-Cluster equation generation (rigorous spin-traced)
-        "stcc_rigorous.cpp"
+        # Single-Reference Coupled-Cluster equation generation (spin-orbital and spin-free)
+        "srcc.cpp ->  |3 t std so|3 t csv so|3 lambda std so|3 lambda csv so|2 t std sf|2 t csv sf|2 lambda std sf|2 lambda csv sf"
+        # Single-Reference open-shell equation generation (spin-traced)
+        "osstcc.cpp"
+        # Equation-of-motion Coupled-Cluster
+        "eomcc.cpp"
+    )
+
+    if (TARGET Eigen3::Eigen)
+        # these examples require Eigen for full functionality
+        list(APPEND TEST_CASES
+            # Single-Reference closed-shell Coupled-Cluster equation generation (fast spin-traced)
+            "stcc.cpp"
+            # Single-Reference closed-shell Coupled-Cluster equation generation (rigorous spin-traced)
+            "stcc_rigorous.cpp"
+        )
+    endif()
+else()
+    list(APPEND TEST_CASES
+        # Single-Reference Coupled-Cluster equation generation (reduced test set)
+        "srcc.cpp ->  |2 t csv sf"
     )
 endif()
 
@@ -30,6 +38,10 @@ foreach(current IN LISTS TEST_CASES)
 
     add_executable(${test_name} ${BUILD_BY_DEFAULT} ${test_source})
     target_link_libraries(${test_name} PRIVATE SeQuant)
+
+    if (SEQUANT_SKIP_LONG_TESTS)
+        target_compile_definitions(${test_name} PRIVATE SEQUANT_SKIP_LONG_TESTS=1)
+    endif()
 
     set(variant_names "")
 

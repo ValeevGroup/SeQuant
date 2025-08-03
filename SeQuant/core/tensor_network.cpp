@@ -139,6 +139,11 @@ ExprPtr TensorNetwork::canonicalize(
   // been computed in init_edges)
   const auto &named_indices =
       named_indices_ptr == nullptr ? this->ext_indices() : *named_indices_ptr;
+  if (Logger::instance().canonicalize) {
+    std::wcout << "named_indices = ";
+    ranges::for_each(named_indices,
+                     [](auto &&i) { std::wcout << i.full_label() << L" "; });
+  }
 
   // helpers to filter named ("external" in traditional use case) / anonymous
   // ("internal" in traditional use case)
@@ -318,7 +323,7 @@ ExprPtr TensorNetwork::canonicalize(
           ord_can;  // canonically-ordered list of {ordinal in tensors_,
                     // canonical ordinal}
       container::svector<size_t>
-          ord_orig;  // originaly-ordered list of {canonical ordinal}
+          ord_orig;  // originally-ordered list of {canonical ordinal}
       for (auto &&color : colors) {
         auto beg = color2idx.lower_bound(color);
         auto end = color2idx.upper_bound(color);
@@ -775,7 +780,7 @@ TensorNetwork::GraphData TensorNetwork::make_bliss_graph(
     for (auto &&proto_index : bundle) {
       // proto index either connects tensors (i.e. it's in edges_) OR
       // it's among pure_proto_indices_
-      auto edges_it = edges_.find(proto_index.full_label());
+      auto edges_it = edges_.find(proto_index);
       if (edges_it != edges_.end()) {
         const auto proto_index_vertex = edges_it - edges_.begin();
         graph->add_edge(spbundle_cnt, proto_index_vertex);
@@ -837,7 +842,7 @@ void TensorNetwork::init_edges() const {
                  << slot_group_ord << std::endl;
     }
     edges_t &edges = this->edges_;
-    auto it = edges.find(idx.full_label());
+    auto it = edges.find(idx);
     if (it == edges.end()) {
       edges.emplace(Edge::Terminal(tensor_idx, slot_type, slot_group_ord),
                     &idx);
@@ -988,6 +993,11 @@ TensorNetwork::SlotCanonicalizationMetadata TensorNetwork::canonicalize_slots(
   const auto &named_indices =
       named_indices_ptr == nullptr ? this->ext_indices() : *named_indices_ptr;
   metadata.named_indices = named_indices;
+  if (Logger::instance().canonicalize) {
+    std::wcout << "named_indices = ";
+    ranges::for_each(named_indices,
+                     [](auto &&i) { std::wcout << i.full_label() << L" "; });
+  }
 
   // helper to filter named ("external" in traditional use case) / anonymous
   // ("internal" in traditional use case)
@@ -1038,8 +1048,7 @@ TensorNetwork::SlotCanonicalizationMetadata TensorNetwork::canonicalize_slots(
     using cord_set_t = container::set<ord_cord_it_t, detail::tuple_less<1>>;
 
     auto grand_index_list = ranges::views::concat(
-        edges_ | ranges::views::transform(edge2index<Edge>),
-        pure_proto_indices_);
+        edges_ | ranges::views::transform(&Edge::idx), pure_proto_indices_);
 
     // for each named index type (as defined by named_index_compare) maps its
     // ptr in grand_index_list to its ordinal in grand_index_list + canonical
@@ -1130,7 +1139,7 @@ TensorNetwork::SlotCanonicalizationMetadata TensorNetwork::canonicalize_slots(
 
       // returns an iterator to {Index,inord} pair
       auto index_inord_it = [&](const Index &idx) {
-        auto it = idx_inord.find(idx.full_label());
+        auto it = idx_inord.find(idx);
         if (it == idx_inord.end()) {
           const auto inord = idx_inord.size();
           bool inserted;
@@ -1167,7 +1176,7 @@ TensorNetwork::SlotCanonicalizationMetadata TensorNetwork::canonicalize_slots(
           // use canonical ordinal of the index vertex as the canonical index
           // ordinal, to find it need the ordinal of the corresponding vertex in
           // the input graph
-          auto input_vertex_it = this->edges_.find(idx.full_label());
+          auto input_vertex_it = this->edges_.find(idx);
           assert(input_vertex_it != this->edges_.end());
           const auto inord_vertex = input_vertex_it - this->edges_.begin();
           const auto canord_vertex = cl[inord_vertex];

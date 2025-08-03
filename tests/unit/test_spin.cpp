@@ -4,7 +4,6 @@
 
 #include <catch2/catch_test_macros.hpp>
 #include "catch2_sequant.hpp"
-#include "test_config.hpp"
 
 #include <SeQuant/core/abstract_tensor.hpp>
 #include <SeQuant/core/attr.hpp>
@@ -20,9 +19,6 @@
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/spin.hpp>
-
-#include <catch2/catch_test_macros.hpp>
-#include "test_config.hpp"
 
 #include <cassert>
 #include <cstddef>
@@ -50,8 +46,8 @@ TEST_CASE("spin", "[spin]") {
 
   SECTION("protoindices supported") {
     auto isr = get_default_context().index_space_registry();
-    Index i1(L"i_1", isr->retrieve(L"i"));
-    Index a1(L"a_1", isr->retrieve(L"a"), {i1});
+    Index i1(L"i_1");
+    Index a1(L"a_1", {i1});
 
     const auto expr =
         ex<Tensor>(L"t", bra{i1}, ket{a1}) * ex<Tensor>(L"F", bra{a1}, ket{i1});
@@ -70,9 +66,9 @@ TEST_CASE("spin", "[spin]") {
   }
 
   SECTION("ASCII label") {
-    IndexSpace pup(L"p", 0b011, mbpt::Spin::alpha);
-    IndexSpace pdown(L"p", 0b011, mbpt::Spin::beta);
-    IndexSpace alphaup(L"α", 0b110, mbpt::Spin::alpha);
+    IndexSpace pup(L"p↑", 0b011, mbpt::Spin::alpha);
+    IndexSpace pdown(L"p↓", 0b011, mbpt::Spin::beta);
+    IndexSpace alphaup(L"α↑", 0b110, mbpt::Spin::alpha);
 
     auto p1 = Index(L"p↑_1", pup);
     auto p2 = Index(L"p↓_2", pdown);
@@ -102,10 +98,10 @@ TEST_CASE("spin", "[spin]") {
     auto p2 = Index(L"p_2", {L"p", 0b11, mbpt::Spin::any});
     auto p2_b = Index(L"p↓_2", {L"p↓", 0b11, mbpt::Spin::beta});
 
-    auto p_i = Index(L"p", {L"p", 0b11, mbpt::Spin::any}, {i});
-    auto p1_i = Index(L"p_1", {L"p", 0b11, mbpt::Spin::any}, {i});
-    auto p_i1 = Index(L"p", {L"p", 0b11, mbpt::Spin::any}, {i1});
-    auto p1_i1 = Index(L"p_1", {L"p", 0b11, mbpt::Spin::any}, {i1});
+    auto p_i = Index({L"p", 0b11, mbpt::Spin::any}, {i});
+    auto p1_i = Index({L"p", 0b11, mbpt::Spin::any}, 1, {i});
+    auto p_i1 = Index({L"p", 0b11, mbpt::Spin::any}, {i1});
+    auto p1_i1 = Index({L"p", 0b11, mbpt::Spin::any}, 1, {i1});
 
     // make_spinalpha
     {
@@ -1007,27 +1003,27 @@ SECTION("Permutation operators") {
   auto Avec2 = open_shell_A_op(A2->as<Tensor>());
   auto P3 = open_shell_P_op_vector(A3->as<Tensor>());
   auto Avec3 = open_shell_A_op(A3->as<Tensor>());
-  assert(P3[0]->size() == 0);
-  assert(P3[1]->size() == 9);
-  assert(P3[2]->size() == 9);
-  assert(P3[3]->size() == 0);
+  REQUIRE(P3[0]->size() == 0);
+  REQUIRE(P3[1]->size() == 9);
+  REQUIRE(P3[2]->size() == 9);
+  REQUIRE(P3[3]->size() == 0);
 
   auto P4 = open_shell_P_op_vector(A4->as<Tensor>());
   auto Avec4 = open_shell_A_op(A4->as<Tensor>());
-  assert(P4[0]->size() == 0);
-  assert(P4[1]->size() == 16);
-  assert(P4[2]->size() == 36);
-  assert(P4[3]->size() == 16);
-  assert(P4[4]->size() == 0);
+  REQUIRE(P4[0]->size() == 0);
+  REQUIRE(P4[1]->size() == 16);
+  REQUIRE(P4[2]->size() == 36);
+  REQUIRE(P4[3]->size() == 16);
+  REQUIRE(P4[4]->size() == 0);
 
   auto P5 = open_shell_P_op_vector(A5->as<Tensor>());
   auto Avec5 = open_shell_A_op(A5->as<Tensor>());
-  assert(P5[0]->size() == 0);
-  assert(P5[1]->size() == 25);
-  assert(P5[2]->size() == 100);
-  assert(P5[3]->size() == 100);
-  assert(P5[4]->size() == 25);
-  assert(P5[5]->size() == 0);
+  REQUIRE(P5[0]->size() == 0);
+  REQUIRE(P5[1]->size() == 25);
+  REQUIRE(P5[2]->size() == 100);
+  REQUIRE(P5[3]->size() == 100);
+  REQUIRE(P5[4]->size() == 25);
+  REQUIRE(P5[5]->size() == 0);
 }
 
 SECTION("Relation in spin P operators") {

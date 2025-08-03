@@ -9,6 +9,7 @@
 #include <SeQuant/core/utility/string.hpp>
 
 #include <cmath>
+#include <concepts>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -18,19 +19,11 @@
 namespace sequant {
 
 /// Converts integral type to its std::wstring representation
-template <typename T>
-std::enable_if_t<std::is_integral_v<std::decay_t<T>> &&
-                     !meta::is_char_v<std::remove_reference_t<T>>,
-                 std::wstring>
-to_wstring(T&& t) {
-  return std::to_wstring(t);
-}
+std::wstring to_wstring(meta::integral auto t) { return std::to_wstring(t); }
 
 /// Converts real type to its std::wstring representation, converting to integer
 /// if possible
-template <typename T>
-std::enable_if_t<std::is_floating_point_v<std::decay_t<T>>, std::wstring>
-to_wstring(T&& t) {
+std::wstring to_wstring(std::floating_point auto t) {
   if (std::floor(t) == t)
     return std::to_wstring(static_cast<long long>(t));
   else

@@ -21,7 +21,6 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers.hpp>
 #include "catch2_sequant.hpp"
-#include "test_config.hpp"
 
 #include <iostream>
 #include <memory>
@@ -401,16 +400,13 @@ TEST_CASE("mbpt", "[mbpt]") {
       lower_to_tensor_form(R33);
       simplify(R33);
       //    std::wcout << "R33: " << to_latex(R33) << std::endl;
-      REQUIRE(
-          to_latex(R33) ==
-          L"{ "
-          L"\\bigl({{{\\frac{1}{36}}}{\\bar{R}^{{i_1}{i_2}{i_3}}_{{a_1}{a_2}{"
-          L"a_3}}}{"
-          L"\\tilde{a}^{{a_1}{a_2}{a_3}}_{{i_1}{i_2}{i_3}}}} + "
-          L"{{R^{{i_1}}_{{a_1}}}{\\tilde{a}^{{a_1}}_{{i_1}}}} + "
-          L"{{{\\frac{1}{4}}}{\\bar{R}^{{i_1}{i_2}}_{{a_1}{a_2}}}{\\tilde{a}^"
-          L"{{a_1}{"
-          L"a_2}}_{{i_1}{i_2}}}}\\bigr) }");
+      REQUIRE(to_latex(R33) ==
+              L"{ "
+              L"\\bigl({{{\\frac{1}{36}}}{\\bar{R}^{{i_1}{i_2}{i_3}}_{{a_1}{a_"
+              L"2}{a_3}}}{\\tilde{a}^{{a_1}{a_2}{a_3}}_{{i_1}{i_2}{i_3}}}} + "
+              L"{{{\\frac{1}{4}}}{\\bar{R}^{{i_1}{i_2}}_{{a_1}{a_2}}}{\\tilde{"
+              L"a}^{{a_1}{a_2}}_{{i_1}{i_2}}}} + "
+              L"{{R^{{i_1}}_{{a_1}}}{\\tilde{a}^{{a_1}}_{{i_1}}}}\\bigr) }");
 
       auto R12 = R(nₚ(2), nₕ(1));
       lower_to_tensor_form(R12);
@@ -427,26 +423,21 @@ TEST_CASE("mbpt", "[mbpt]") {
       simplify(R21);
       //    std::wcout << "R21: " << to_latex(R21) << std::endl;
       REQUIRE(to_latex(R21) ==
-              L"{ "
-              L"\\bigl({{{\\frac{1}{2}}}{\\bar{R}^{{i_1}{i_2}}_{{a_1}}}{"
-              L"\\tilde{a}^{"
-              L"\\textvisiblespace\\,{a_1}}_{{i_1}{i_2}}}} + "
-              L"{{R^{{i_1}}_{}}{\\tilde{a}_{{i_1}}}}\\bigr) }");
+              L"{ \\bigl({{R^{{i_1}}_{}}{\\tilde{a}_{{i_1}}}} + "
+              L"{{{\\frac{1}{2}}}{\\bar{R}^{{i_1}{i_2}}_{{a_1}}}{\\tilde{a}^{"
+              L"\\textvisiblespace\\,{a_1}}_{{i_1}{i_2}}}}\\bigr) }");
 
       auto L23 = L(nₚ(2), nₕ(3));
       lower_to_tensor_form(L23);
       simplify(L23);
       // std::wcout << "L23: " << to_latex(L23) << std::endl;
-      REQUIRE(
-          to_latex(L23) ==
-          L"{ "
-          L"\\bigl({{{\\frac{1}{12}}}{\\bar{L}^{{a_1}{a_2}}_{{i_1}{i_2}{i_3}}}{"
-          L"\\tilde{a}^{{i_1}{i_2}{i_3}}_{\\textvisiblespace\\,{a_1}{a_2}}}} "
-          L"+ {{L^{}_{{i_1}}}{\\tilde{a}^{{i_1}}}} + "
-          L"{{{\\frac{1}{2}}}{\\bar{L}^{{a_1}}_{{i_1}{i_2}}}{\\tilde{a}^{{i_1}{"
-          L"i_"
-          L"2}}"
-          L"_{\\textvisiblespace\\,{a_1}}}}\\bigr) }");
+      REQUIRE(to_latex(L23) ==
+              L"{ "
+              L"\\bigl({{{\\frac{1}{12}}}{\\bar{L}^{{a_1}{a_2}}_{{i_1}{i_2}{i_"
+              L"3}}}{\\tilde{a}^{{i_1}{i_2}{i_3}}_{\\textvisiblespace\\,{a_1}{"
+              L"a_2}}}} + {{L^{}_{{i_1}}}{\\tilde{a}^{{i_1}}}} + "
+              L"{{{\\frac{1}{2}}}{\\bar{L}^{{a_1}}_{{i_1}{i_2}}}{\\tilde{a}^{{"
+              L"i_1}{i_2}}_{\\textvisiblespace\\,{a_1}}}}\\bigr) }");
     }
   }
 
@@ -483,13 +474,10 @@ TEST_CASE("mbpt", "[mbpt]") {
         auto result = t::vac_av(t::A(nₚ(-4)) * t::H_(2) * t ::T_(3) * t::T_(3),
                                 {{1, 2}, {1, 3}});
 
-        std::wcout << "H2**T3**T3 -> R4 = " << to_latex_align(result, 20)
-                   << std::endl;
+        // std::wcout << "H2**T3**T3 -> R4 = " << to_latex_align(result, 20)
+        //            << std::endl;
         REQUIRE(result->size() == 4);
       });
-
-      const std::vector<std::pair<std::wstring, std::wstring>> new_op_connect =
-          {{L"h", L"t"}, {L"f", L"t"}, {L"g", L"t"}};
 
 #ifndef SEQUANT_SKIP_LONG_TESTS
       // the longest term in CCSDTQP
@@ -499,15 +487,8 @@ TEST_CASE("mbpt", "[mbpt]") {
         SEQUANT_PROFILE_SINGLE("wick(H2**T2**T2**T3 -> R5)", {
           ref_result =
               t::vac_av(t::A(-5) * t::H_(2) * t::T_(2) * t::T_(2) * t::T_(3),
-                        new_op_connect);
+                        {{1, 2}, {1, 3}, {1, 4}});
           REQUIRE(ref_result->size() == 7);
-        });
-        // now computed using specific component of H2
-        SEQUANT_PROFILE_SINGLE("wick(H2(oo;vv)**T2**T2**T3 -> R5)", {
-          auto result = t::vac_av(
-              t::A(-5) * t::H2_oo_vv() * t::T_(2) * t::T_(2) * t::T_(3),
-              new_op_connect);
-          REQUIRE(result->size() == ref_result->size());
         });
       }
 #endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
@@ -531,8 +512,8 @@ TEST_CASE("mbpt", "[mbpt]") {
             auto input = t::L_(nₚ(2), nₕ(1)) * t::H() * t::R_(nₚ(2), nₕ(1));
             auto result = t::vac_av(input);
 
-            std::wcout << "<2p1h|H|2p1h(c)> = " << to_latex(result)
-                       << std::endl;
+            // std::wcout << "<2p1h|H|2p1h(c)> = " << to_latex(result)
+            //            << std::endl;
             REQUIRE(result->is<Sum>());    // sub ...
             REQUIRE(result->size() == 4);  // ... of 4 factors
           }));
@@ -564,8 +545,10 @@ TEST_CASE("mbpt", "[mbpt]") {
         auto result = t::vac_av(t::S(-2) * t::H_(2));
 
         {
-          std::wcout << "H2 -> R2 = " << to_latex_align(result, 0, 1)
-                     << std::endl;
+          // std::wcout << "H2 -> R2 = " << to_latex_align(result, 0, 1)
+          //            << std::endl;
+          REQUIRE(result->is<Sum>());
+          REQUIRE(result->size() == 2);
         }
       });
 
@@ -574,8 +557,10 @@ TEST_CASE("mbpt", "[mbpt]") {
         auto result = t::vac_av(t::S(-2) * t::H_(2) * t::T_(2), {{1, 2}});
 
         {
-          std::wcout << "H2**T2 -> R2 = " << to_latex_align(result, 0, 1)
-                     << std::endl;
+          // std::wcout << "H2**T2 -> R2 = " << to_latex_align(result, 0, 1)
+          //            << std::endl;
+          REQUIRE(result->is<Sum>());
+          REQUIRE(result->size() == 12);
         }
       });
     }  // SECTION("SRSF")

@@ -5,6 +5,8 @@ if (NOT SEQUANT_TESTS)
     set(BUILD_BY_DEFAULT "EXCLUDE_FROM_ALL")
 endif()
 
+option(SEQUANT_SKIP_LONG_TESTS "Whether to skip execution of long-running tests" OFF)
+
 function(build_test_as_needed TARGET_NAME TEST_PREFIX DEPENDENT_TESTS)
     if (SEQUANT_TESTS)
         # Tests are built by default -> no need to add extra build steps
@@ -23,5 +25,5 @@ add_subdirectory(integration)
 
 # target for running ALL tests
 add_custom_target_subproject(sequant check
-    USES_TERMINAL COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure -R "^sequant")
-
+    USES_TERMINAL COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure -R "^sequant"
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR})

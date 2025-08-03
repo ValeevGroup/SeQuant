@@ -84,6 +84,9 @@ Useful CMake Variables
    * - ENABLE_TBB
      - OFF
      - Enable TBB as an optional prerequisite for C++'s parallel STL
+   * - SEQUANT_CONTEXT_MANIPULATION_THREADSAFE
+     - ON
+     - If set to `OFF` the default context must be initialized and manipulated from single thread only (most users will want to do this).
 
 
 Configuring and Building

@@ -8,14 +8,22 @@ endif()
 
 file(GLOB_RECURSE EXAMPLE_CODES LIST_DIRECTORIES false CONFIGURE_DEPENDS "*.cpp")
 
+# Create a list to track runnable examples
+set(RUNNABLE_DOC_EXAMPLES "")
+
 set(counter 1)
 foreach(current IN LISTS EXAMPLE_CODES)
     file(READ "${current}" contents)
 
     set(current_name "sequant_doc_example_${counter}")
 
-    if ("$contents" MATCHES " main\\(")
+    if ("${contents}" MATCHES " main\\(")
         add_executable(${current_name} ${current})
+
+        # check if running is disabled, we do not want to run very expensive examples
+        if (NOT "${contents}" MATCHES "// SEQUANT_DOC_EXAMPLE: DO NOT RUN")
+            list(APPEND RUNNABLE_DOC_EXAMPLES ${current_name})
+        endif ()
     else()
         add_library(${current_name} ${current})
     endif()
@@ -32,3 +40,15 @@ foreach(current IN LISTS EXAMPLE_CODES)
 
     math(EXPR counter "${counter} + 1")
 endforeach()
+
+# Testing runnable examples
+if (SEQUANT_TESTS AND RUNNABLE_DOC_EXAMPLES)
+    foreach (example IN LISTS RUNNABLE_DOC_EXAMPLES)
+        # these tests should fail if any runtime issue is encountered
+        add_test(
+                NAME "sequant/doc-examples/${example}"
+                COMMAND ${example}
+                WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+        )
+    endforeach ()
+endif ()

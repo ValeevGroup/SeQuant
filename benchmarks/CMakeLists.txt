@@ -2,6 +2,7 @@ include(FindOrFetchGoogleBenchmark)
 
 add_executable(sequant_benchmarks
 	"canonicalize.cpp"
+	"coupled_cluster.cpp"
 	"main.cpp"
 	"simplify.cpp"
 	"spintrace.cpp"

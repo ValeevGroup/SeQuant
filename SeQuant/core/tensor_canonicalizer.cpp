@@ -258,7 +258,7 @@ ExprPtr NullTensorCanonicalizer::apply(AbstractTensor&) const { return {}; }
 void DefaultTensorCanonicalizer::tag_indices(AbstractTensor& t) const {
   // tag all indices as ext->true/ind->false
   ranges::for_each(indices(t), [this](auto& idx) {
-    auto it = external_indices_.find(std::wstring(idx.label()));
+    auto it = external_indices_.find(idx);
     auto is_ext = it != external_indices_.end();
     idx.tag().assign(
         is_ext ? 0 : 1);  // ext -> 0, int -> 1, so ext will come before

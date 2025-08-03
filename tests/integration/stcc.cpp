@@ -7,8 +7,9 @@
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/models/cc.hpp>
 #include <SeQuant/domain/mbpt/spin.hpp>
-#include <clocale>
 #include <fstream>
+
+#include <clocale>
 
 using namespace sequant;
 
@@ -21,17 +22,6 @@ using namespace sequant;
   }
 
 int main(int argc, char* argv[]) {
-  // std::setlocale(LC_ALL, "en_US.UTF-8");
-  // std::wcout.precision(std::numeric_limits<double>::max_digits10);
-  // std::wcerr.precision(std::numeric_limits<double>::max_digits10);
-  // std::wcout.sync_with_stdio(false);
-  // std::wcerr.sync_with_stdio(false);
-  // std::wcout.imbue(std::locale("en_US.UTF-8"));
-  // std::wcerr.imbue(std::locale("en_US.UTF-8"));
-  // std::wcout.sync_with_stdio(true);
-  // std::wcerr.sync_with_stdio(true);
-
-  // // set global locale, keep precision as what it was, but global locale
   std::wcout.precision(std::numeric_limits<double>::max_digits10);
   std::wcerr.precision(std::numeric_limits<double>::max_digits10);
   sequant::set_locale();
@@ -58,6 +48,7 @@ int main(int argc, char* argv[]) {
 
   //
   // Closed-shell spintrace (fast)
+  //
   std::cout << "\nClosed-shell coupled cluster spintrace with biorthogonal "
                "transformation:\n";
   std::vector<ExprPtr> cc_st_r(cc_r.size());

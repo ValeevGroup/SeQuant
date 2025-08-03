@@ -74,6 +74,7 @@ TEST_CASE("index_space", "[elements]") {
   SECTION("equality") {
     auto sr_isr = sequant::mbpt::make_sr_spaces();
     REQUIRE(sr_isr->retrieve(L"i") == sr_isr->retrieve(L"i"));
+    REQUIRE(sr_isr->retrieve(L"i") == IndexSpace(L"i"));
     REQUIRE(sr_isr->retrieve(L"i") != sr_isr->retrieve(L"a"));
   }
 

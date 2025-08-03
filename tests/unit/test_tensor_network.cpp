@@ -26,7 +26,6 @@
 
 #include <algorithm>
 #include <cmath>
-#include <codecvt>
 #include <cstdlib>
 #include <initializer_list>
 #include <iostream>
@@ -38,6 +37,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <tuple>
 #include <vector>
 
@@ -51,12 +51,169 @@
 #include <range/v3/all.hpp>
 
 using namespace sequant;
+using namespace std::literals;
 
 TEMPLATE_TEST_CASE("tensor_network_shared", "[elements]", TensorNetwork,
                    TensorNetworkV2) {
+  TensorCanonicalizer::register_instance(
+      std::make_shared<DefaultTensorCanonicalizer>());
+  auto isr = sequant::mbpt::make_legacy_spaces();
+  mbpt::add_pao_spaces(isr);
+  auto ctx_resetter =
+      set_scoped_default_context(Context(isr, Vacuum::SingleProduct));
+
   using TN = TestType;
 
   SECTION("canonicalize_slots") {
+    SECTION("TN isomorphism") {
+      enum EqEnum { Eq, NEq };
+      enum SignEnum { Plus, Minus };
+
+      // Case 7: with protoindices
+
+      auto& l = Logger::instance();
+      //      l.tensor_network = l.canonicalize = l.canonicalize_dot =
+      //          l.canonicalize_input_graph = true;
+
+      for (const auto& [input1, input2, eq, phase] : std::vector<
+               std::tuple<std::wstring, std::wstring, EqEnum, SignEnum>>{
+               // original 4 tensor networks from Bimal
+               {L"g{i3,i4;a3<i1,i4>,a4<i2>} * s{a1<i1,i2>;a5<i3>}",
+                L"s{a1<i1,i2>;a5<i3>} * g{i3,i4;a3<i1,i4>,a4<i2>}", Eq,
+                Plus},  // product reorder is OK
+               {L"g{i3,i4;a3<i1,i4>,a4<i2>} * s{a1<i1,i2>;a5<i3>}",
+                L"g{i3,i4;a3<i1,i3>,a4<i2>} * s{a2<i1,i2>;a6<i4>}", NEq, Plus},
+               {L"g{i3,i4;a3<i1,i4>,a4<i2>} * s{a1<i1,i2>;a5<i3>}",
+                L"g{i3,i4;a3<i1,i4>,a4<i2>} * s{a2<i1,i2>;a6<i3>}", Eq, Plus},
+               {L"g{i3,i4;a3<i1,i4>,a4<i2>} * s{a1<i1,i2>;a5<i3>}",
+                L"g{i3,i4;a3<i1,i3>,a4<i2>} * s{a2<i1,i2>;a6<i4>}", NEq, Plus},
+               // one more pair of ternary products
+               {L"s{a2<i1,i2>;a6<i2,i4>} * g{i3,i4;a3<i2,i4>,a4<i1,i3>} * "
+                L"t{a3<i2,i4>,a6<i2,i4>;i4,i2}",
+                L"g{i3,i4;a3<i1,i4>,a4<i2,i3>} * "
+                L"t{a3<i1,i4>,a5<i1,i4>;i4,i1} "
+                L"* s{a1<i1,i2>;a5<i1,i4>}",
+                Eq, Plus},
+               // last pair of ternary nets involved in MO->PNO integral
+               // transform
+               {L"g{i3,i4;a3,a4} * C{a3;a3<i1,i4>} * C{a4;a4<i2>}",
+                L"g{i3,i4;a3,a4} * C{a3;a3<i1,i3>} * C{a4;a4<i2>}", NEq, Plus},
+               // representation of the above as single tensor
+               {L"g{i3,i4;a3<i1,i4>,a4<i2>}", L"g{i3,i4;a3<i1,i3>,a4<i2>}", NEq,
+                Plus},
+               // 3-index MO->PNO integral transform, but extra aux index just
+               // for fun
+               {L"g{a3;a4;x1,x2} * C{a3<i1,i4>;a3} * C{a4;a4<i1>}",
+                L"g{a3;a4;x2,x1} * C{a3<i1,i2>;a3} * C{a4;a4<i2>}", Eq, Plus},
+               // TNs discovered during CSV evaluation that did not deduce
+               // external indices correctly
+               {L"f{i2;a2<i1,i2>} * t{a2<i1,i2>,a3<i1,i2>;i2,i1}",
+                L"f{i1;a2<i1,i2>} * t{a2<i1,i2>,a3<i1,i2>;i2,i1}",  // f_i2
+                                                                    // ->
+                                                                    // f_i1
+                NEq, Plus},
+               {L"f{i2;a2<i1,i2>} * t{a2<i1,i2>,a3<i1,i2>;i2,i1}",
+                L"f{i1;a2<i1,i2>} * t{a3<i1,i2>,a2<i1,i2>;i2,i1}",  // f_i2
+                                                                    // ->
+                                                                    // f_i1,
+                                                                    // a2 <->
+                                                                    // a3
+                Eq, Plus},
+
+               //////////////// TNs w antisymmetric tensors
+               // unlike the nonsymmetric/symmetric cases we need to check for
+               // the phase due to canonical reordering of the slots
+               // N.B. these tests are not robust due to relying on specific
+               // canonical order (which will change by changing bliss
+               // heuristics, colors, etc.)
+               //
+               // spin-orbital CC cases suggested by Bimal testing
+               // these differ by a sign ...
+               {L"g{i1,i4;a1,a4}:A * t{a4;i4}:A",
+                L"g{i3,i2;a2,a4}:A * t{a4;i3}:A", Eq, Minus},
+               // more spin-orbital CC cases suggested by Bimal
+               // 1
+               {L"g{i_2,i_3;a_2,a_3}:A * t{a_2;i_1}:A",
+                L"g{i_3,i_4;a_3,a_4}:A * t{a_3;i_1}:A", Eq, Plus},
+               {L"g{i_2,i_3;a_2,a_3}:A * t{a_2;i_1}:A",
+                L"g{i_3,i_4;a_3,a_4}:A * t{a_4;i_1}:A", Eq, Minus},
+               // 2a
+               {L"g{i_3,i_4;a_3,a_4}:A * t{a_3;i_1}:A * t{a_4;i_2}:A",
+                L"g{i_3,i_4;a_3,a_4}:A * t{a_4;i_1}:A * t{a_3;i_2}:A", Eq,
+                Minus},
+               // 2b: unlike its equivalent counterpart 2a the order of named
+               // indices is different for the 2 TNs, which cancels out the
+               // phase change
+               {L"g{i_3,i_4;a_3,a_4}:A * t{a_3;i_1}:A * t{a_4;i_2}:A",
+                L"g{i_3,i_4;a_3,a_4}:A * t{a_3;i_2}:A * t{a_4;i_1}:A", Eq,
+                Plus},
+               // 3: matching "constant" TNs (TNs without named indices)
+               //    also needs canonicalization
+               {L"g{i_2,i_3;a_2,a_3}:A * t{a_2,a_3;i_2,i_3}:A",
+                L"g{i_4,i_1;a_2,a_3}:A * t{a_2,a_3;i_4,i_1}:A", Eq, Plus},
+               {L"g{i_2,i_3;a_2,a_3}:A * t{a_2,a_3;i_2,i_3}:A",
+                L"g{i_1,i_4;a_2,a_3}:A * t{a_2,a_3;i_4,i_1}:A", Eq, Minus},
+               // 4: more complexity, with triples, CSV, and antisymmetry
+               {L"g{i_2,i_3;a_2,a_3}:A * t{a_1,a_2,a_3;i_1,i_2,i_3}:A",
+                L"g{i_1,i_3;a_2,a_3}:A * t{a_1,a_2,a_3;i_1,i_2,i_3}:A", Eq,
+                Minus},
+               {L"g{i_2,i_3;a_2,a_3}:A * t{a_1<i_1>,a_2,a_3;i_1,i_2,i_3}:A",
+                L"g{i_2,i_3;a_1,a_3}:A * t{a_3,a_2<i_1>,a_1;i_1,i_2,i_3}:A", Eq,
+                Plus},
+               {L"g{i_2,i_3;a_2,a_3}:A * "
+                L"t{a_1<i_1,i_4>,a_2,a_3;i_1,i_2,i_3}:A",
+                L"g{i_4,i_1;a_1,a_3}:A * "
+                L"t{a_3,a_2<i_5,i_2>,a_1;i_1,i_4,i_2}:A",
+                Eq, Minus},
+
+               ///////////////////////////// tensors with PAOs
+               // These produce same layout, but are different
+               {L"C{μ̃_1;a_3<i_3>}:N", L"C{a_1<i_2>;μ̃_1}:N", NEq, Plus},
+           }) {
+        CAPTURE(toUtf8(input1));
+        CAPTURE(toUtf8(input2));
+
+        auto ex1 = parse_expr(input1);
+        auto ex2 = parse_expr(input2);
+
+        TN tn1(ex1);
+        auto cbp1 = tn1.canonicalize_slots(
+            TensorCanonicalizer::cardinal_tensor_labels());
+
+        INFO("tn1 - Canonical order of named indices: "
+             << (cbp1.named_indices_canonical |
+                 ranges::views::transform([](const auto& idx_it) {
+                   return toUtf8(idx_it->full_label());
+                 }) |
+                 ranges::views::join(", "sv) | ranges::to<std::string>()));
+
+        TN tn2(ex2);
+        auto cbp2 = tn2.canonicalize_slots(
+            TensorCanonicalizer::cardinal_tensor_labels());
+
+        INFO("tn2 - Canonical order of named indices: "
+             << (cbp2.named_indices_canonical |
+                 ranges::views::transform([](const auto& idx_it) {
+                   return toUtf8(idx_it->full_label());
+                 }) |
+                 ranges::views::join(", "sv) | ranges::to<std::string>()));
+
+        INFO("graph(intput1) <=> graph(input2): "
+             << cbp1.graph->cmp(*cbp2.graph)
+             << (cbp1.phase * cbp2.phase == -1 ? " [modulo sign]" : ""));
+
+        if (eq == Eq) {
+          REQUIRE(cbp1.graph->cmp(*cbp2.graph) == 0);
+          REQUIRE(cbp1.phase * cbp2.phase == (phase == Minus ? -1 : 1));
+        } else
+          REQUIRE(cbp1.graph->cmp(*cbp2.graph) != 0);
+
+        //                std::wcout << canonicalize(ex1).to_latex() << " should
+        //                be equal " << canonicalize(ex2).to_latex() <<
+        //                std::endl;
+      }
+    }
+
     SECTION("phase_difference") {
       const Product prod1 =
           parse_expr(L"g{i_2,i_3;a_2,a_3}:A-C-S * t{a_2;i_2}:A-C-S")
@@ -75,6 +232,87 @@ TEMPLATE_TEST_CASE("tensor_network_shared", "[elements]", TensorNetwork,
 
       REQUIRE(canon1.hash_value() == canon2.hash_value());
       REQUIRE(canon1.phase != canon2.phase);
+    }
+
+    SECTION("Named index ordering") {
+      REQUIRE(IndexSpace("i") < IndexSpace("a"));
+
+      for (const auto [input, str_indices] :
+           std::vector<std::pair<std::wstring, std::vector<std::wstring>>>{
+               {L"G{;;a1,a2,a3,a4} T{;;i3,i2,a3,a4}",
+                {L"i_2", L"i_3", L"a_1", L"a_2"}},
+               {L"G{;;a1,a2,a3,a4} T{;;i2,i3,a3,a4}",
+                {L"i_3", L"i_2", L"a_1", L"a_2"}},
+           }) {
+        const std::vector<Index> expected_indices =
+            str_indices | ranges::views::transform([](const std::wstring& str) {
+              return Index(str);
+            }) |
+            ranges::to<std::vector>();
+
+        Product prod = parse_expr(input)->as<Product>();
+        TN tn(prod.factors());
+
+        auto meta = tn.canonicalize_slots(
+            TensorCanonicalizer::cardinal_tensor_labels());
+
+        REQUIRE(meta.template get_indices<
+                    std::decay_t<decltype(expected_indices)>>() ==
+                expected_indices);
+      }
+    }
+  }
+
+  SECTION("canonicalize") {
+    SECTION("need particle reorder?") {
+      {
+        Index::reset_tmp_index();
+        auto input1 = parse_expr(
+            L"t{p1,p2;p3,p4}:N-C-S t{p4,p5;p6,p7}:N-C-S t{p7,p8;p9,p1}:N-C-S");
+        // N.B. renaming external index changes local canonical order produced
+        // by TNV1 (due to the use of DefaultTensorCanonicalizer)
+        auto input2 = parse_expr(
+            L"t{p1,p2;p3,p4}:N-C-S t{p4,p5;p11,p7}:N-C-S t{p7,p8;p9,p1}:N-C-S");
+
+        CAPTURE(input1);
+        CAPTURE(input2);
+
+        {
+          TN tn1(*input1);
+          tn1.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(),
+                           false);
+          TN tn2(*input2);
+          tn2.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(),
+                           false);
+
+          // std::wcout << "tn1[0] = " <<
+          // to_latex(std::dynamic_pointer_cast<Expr>(tn1.tensors()[0])) <<
+          // "\n"; std::wcout << "tn1[1] = " <<
+          // to_latex(std::dynamic_pointer_cast<Expr>(tn1.tensors()[1])) <<
+          // "\n"; std::wcout << "tn1[2] = " <<
+          // to_latex(std::dynamic_pointer_cast<Expr>(tn1.tensors()[2])) <<
+          // "\n"; std::wcout << "tn2[0] = " <<
+          // to_latex(std::dynamic_pointer_cast<Expr>(tn2.tensors()[0])) <<
+          // "\n"; std::wcout << "tn2[1] = " <<
+          // to_latex(std::dynamic_pointer_cast<Expr>(tn2.tensors()[1])) <<
+          // "\n"; std::wcout << "tn2[2] = " <<
+          // to_latex(std::dynamic_pointer_cast<Expr>(tn2.tensors()[2])) <<
+          // "\n";
+
+          // TNv1 fails to canonicalize this correctly
+          if constexpr (std::is_same_v<TN, TensorNetworkV2>) {
+            // input2 obtained from input1 by i6 -> i11, which "frees" i6 for
+            // dummy renamings so canonical(input2) is obtained from
+            // canonical(input1) by i6 -> i11 and i7 -> i6
+            REQUIRE(tn1.tensors()[0]->_to_latex() ==
+                    tn2.tensors()[0]->_to_latex());
+            REQUIRE(ranges::equal(tn1.tensors()[1]->_bra(),
+                                  tn2.tensors()[1]->_bra()));
+            REQUIRE(ranges::equal(tn1.tensors()[2]->_ket(),
+                                  tn2.tensors()[2]->_ket()));
+          }
+        }
+      }
     }
   }
 }
@@ -255,160 +493,159 @@ TEST_CASE("tensor_network", "[elements]") {
     // std::wcout << "oss.str() = " << std::endl << oss.str() << std::endl;
     const std::wstring actual = oss.str();
     // clang-format off
-    const std::wstring expected =
-                L"graph g {\n"
-                L"node [ style=filled, penwidth=2, margin=0];\n"
-                L"v0 [ label=\"a_1\", texlbl=\"${a_1}$\", color=\"#13db00\", fillcolor=\"#98db04\" ];\n"
-                L"v0 -- v22\n"
-                L"v0 -- v41\n"
-                L"v1 [ label=\"a_2\", texlbl=\"${a_2}$\", color=\"#13db00\", fillcolor=\"#98db04\" ];\n"
-                L"v1 -- v22\n"
-                L"v1 -- v41\n"
-                L"v2 [ label=\"a_3\", texlbl=\"${a_3}$\", color=\"#13db00\", fillcolor=\"#98db04\" ];\n"
-                L"v2 -- v29\n"
-                L"v2 -- v58\n"
-                L"v3 [ label=\"a_4\", texlbl=\"${a_4}$\", color=\"#13db00\", fillcolor=\"#98db04\" ];\n"
-                L"v3 -- v29\n"
-                L"v3 -- v58\n"
-                L"v4 [ label=\"a_5\", texlbl=\"${a_5}$\", color=\"#13db00\", fillcolor=\"#98db04\" ];\n"
-                L"v4 -- v33\n"
-                L"v4 -- v54\n"
-                L"v5 [ label=\"a_6\", texlbl=\"${a_6}$\", color=\"#13db00\", fillcolor=\"#98db04\" ];\n"
-                L"v5 -- v33\n"
-                L"v5 -- v54\n"
-                L"v6 [ label=\"a_7\", texlbl=\"${a_7}$\", color=\"#13db00\", fillcolor=\"#98db04\" ];\n"
-                L"v6 -- v37\n"
-                L"v6 -- v50\n"
-                L"v7 [ label=\"a_8\", texlbl=\"${a_8}$\", color=\"#13db00\", fillcolor=\"#98db04\" ];\n"
-                L"v7 -- v37\n"
-                L"v7 -- v50\n"
-                L"v8 [ label=\"i_1\", texlbl=\"${i_1}$\", color=\"#3e2d55\", fillcolor=\"#f8b4aa\" ];\n"
-                L"v8 -- v21\n"
-                L"v8 -- v42\n"
-                L"v9 [ label=\"i_2\", texlbl=\"${i_2}$\", color=\"#3e2d55\", fillcolor=\"#f8b4aa\" ];\n"
-                L"v9 -- v21\n"
-                L"v9 -- v42\n"
-                L"v10 [ label=\"i_3\", texlbl=\"${i_3}$\", color=\"#3e2d55\", fillcolor=\"#f8b4aa\" ];\n"
-                L"v10 -- v30\n"
-                L"v10 -- v57\n"
-                L"v11 [ label=\"i_4\", texlbl=\"${i_4}$\", color=\"#3e2d55\", fillcolor=\"#f8b4aa\" ];\n"
-                L"v11 -- v30\n"
-                L"v11 -- v57\n"
-                L"v12 [ label=\"i_5\", texlbl=\"${i_5}$\", color=\"#3e2d55\", fillcolor=\"#f8b4aa\" ];\n"
-                L"v12 -- v34\n"
-                L"v12 -- v53\n"
-                L"v13 [ label=\"i_6\", texlbl=\"${i_6}$\", color=\"#3e2d55\", fillcolor=\"#f8b4aa\" ];\n"
-                L"v13 -- v34\n"
-                L"v13 -- v53\n"
-                L"v14 [ label=\"i_7\", texlbl=\"${i_7}$\", color=\"#3e2d55\", fillcolor=\"#f8b4aa\" ];\n"
-                L"v14 -- v38\n"
-                L"v14 -- v49\n"
-                L"v15 [ label=\"i_8\", texlbl=\"${i_8}$\", color=\"#3e2d55\", fillcolor=\"#f8b4aa\" ];\n"
-                L"v15 -- v38\n"
-                L"v15 -- v49\n"
-                L"v16 [ label=\"κ_1\", texlbl=\"${\\kappa_1}$\", color=\"#e174c5\", fillcolor=\"#e1e8c5\" ];\n"
-                L"v16 -- v25\n"
-                L"v16 -- v46\n"
-                L"v17 [ label=\"κ_2\", texlbl=\"${\\kappa_2}$\", color=\"#e174c5\", fillcolor=\"#e1e8c5\" ];\n"
-                L"v17 -- v25\n"
-                L"v17 -- v46\n"
-                L"v18 [ label=\"κ_3\", texlbl=\"${\\kappa_3}$\", color=\"#e174c5\", fillcolor=\"#e1e8c5\" ];\n"
-                L"v18 -- v26\n"
-                L"v18 -- v45\n"
-                L"v19 [ label=\"κ_4\", texlbl=\"${\\kappa_4}$\", color=\"#e174c5\", fillcolor=\"#e1e8c5\" ];\n"
-                L"v19 -- v26\n"
-                L"v19 -- v45\n"
-                L"subgraph cluster0 {\n"
-                L"v20 [ label=\"A\", texlbl=\"$A$\", color=\"#257a61\", fillcolor=\"#94f4c2\" ];\n"
-                L"v20 -- v23\n"
-                L"v21 [ label=\"bra2a\", color=\"#06d223\", fillcolor=\"#30d28c\" ];\n"
-                L"v21 -- v23\n"
-                L"v22 [ label=\"ket2a\", color=\"#c849cb\", fillcolor=\"#c892cb\" ];\n"
-                L"v22 -- v23\n"
-                L"v23 [ label=\"bka\", color=\"#257a61\", fillcolor=\"#94f4c2\" ];\n"
-                L"}\n"
-                L"subgraph cluster1 {\n"
-                L"v24 [ label=\"g\", texlbl=\"$g$\", color=\"#300a49\", fillcolor=\"#c05092\" ];\n"
-                L"v24 -- v27\n"
-                L"v25 [ label=\"bra2a\", color=\"#06d223\", fillcolor=\"#30d28c\" ];\n"
-                L"v25 -- v27\n"
-                L"v26 [ label=\"ket2a\", color=\"#c849cb\", fillcolor=\"#c892cb\" ];\n"
-                L"v26 -- v27\n"
-                L"v27 [ label=\"bka\", color=\"#300a49\", fillcolor=\"#c05092\" ];\n"
-                L"}\n"
-                L"subgraph cluster2 {\n"
-                L"v28 [ label=\"t\", texlbl=\"$t$\", color=\"#e812d9\", fillcolor=\"#e890d9\" ];\n"
-                L"v28 -- v31\n"
-                L"v29 [ label=\"bra2a\", color=\"#06d223\", fillcolor=\"#30d28c\" ];\n"
-                L"v29 -- v31\n"
-                L"v30 [ label=\"ket2a\", color=\"#c849cb\", fillcolor=\"#c892cb\" ];\n"
-                L"v30 -- v31\n"
-                L"v31 [ label=\"bka\", color=\"#e812d9\", fillcolor=\"#e890d9\" ];\n"
-                L"}\n"
-                L"subgraph cluster3 {\n"
-                L"v32 [ label=\"t\", texlbl=\"$t$\", color=\"#e812d9\", fillcolor=\"#e890d9\" ];\n"
-                L"v32 -- v35\n"
-                L"v33 [ label=\"bra2a\", color=\"#06d223\", fillcolor=\"#30d28c\" ];\n"
-                L"v33 -- v35\n"
-                L"v34 [ label=\"ket2a\", color=\"#c849cb\", fillcolor=\"#c892cb\" ];\n"
-                L"v34 -- v35\n"
-                L"v35 [ label=\"bka\", color=\"#e812d9\", fillcolor=\"#e890d9\" ];\n"
-                L"}\n"
-                L"subgraph cluster4 {\n"
-                L"v36 [ label=\"t\", texlbl=\"$t$\", color=\"#e812d9\", fillcolor=\"#e890d9\" ];\n"
-                L"v36 -- v39\n"
-                L"v37 [ label=\"bra2a\", color=\"#06d223\", fillcolor=\"#30d28c\" ];\n"
-                L"v37 -- v39\n"
-                L"v38 [ label=\"ket2a\", color=\"#c849cb\", fillcolor=\"#c892cb\" ];\n"
-                L"v38 -- v39\n"
-                L"v39 [ label=\"bka\", color=\"#e812d9\", fillcolor=\"#e890d9\" ];\n"
-                L"}\n"
-                L"subgraph cluster5 {\n"
-                L"v40 [ label=\"ã\", texlbl=\"$\\tilde{a}$\", color=\"#2a13ee\", fillcolor=\"#a898ee\" ];\n"
-                L"v40 -- v43\n"
-                L"v41 [ label=\"bra2a\", color=\"#06d223\", fillcolor=\"#30d28c\" ];\n"
-                L"v41 -- v43\n"
-                L"v42 [ label=\"ket2a\", color=\"#c849cb\", fillcolor=\"#c892cb\" ];\n"
-                L"v42 -- v43\n"
-                L"v43 [ label=\"bka\", color=\"#2a13ee\", fillcolor=\"#a898ee\" ];\n"
-                L"}\n"
-                L"subgraph cluster6 {\n"
-                L"v44 [ label=\"ã\", texlbl=\"$\\tilde{a}$\", color=\"#2a13ee\", fillcolor=\"#a898ee\" ];\n"
-                L"v44 -- v47\n"
-                L"v45 [ label=\"bra2a\", color=\"#06d223\", fillcolor=\"#30d28c\" ];\n"
-                L"v45 -- v47\n"
-                L"v46 [ label=\"ket2a\", color=\"#c849cb\", fillcolor=\"#c892cb\" ];\n"
-                L"v46 -- v47\n"
-                L"v47 [ label=\"bka\", color=\"#2a13ee\", fillcolor=\"#a898ee\" ];\n"
-                L"}\n"
-                L"subgraph cluster7 {\n"
-                L"v48 [ label=\"ã\", texlbl=\"$\\tilde{a}$\", color=\"#2a13ee\", fillcolor=\"#a898ee\" ];\n"
-                L"v48 -- v51\n"
-                L"v49 [ label=\"bra2a\", color=\"#06d223\", fillcolor=\"#30d28c\" ];\n"
-                L"v49 -- v51\n"
-                L"v50 [ label=\"ket2a\", color=\"#c849cb\", fillcolor=\"#c892cb\" ];\n"
-                L"v50 -- v51\n"
-                L"v51 [ label=\"bka\", color=\"#2a13ee\", fillcolor=\"#a898ee\" ];\n"
-                L"}\n"
-                L"subgraph cluster8 {\n"
-                L"v52 [ label=\"ã\", texlbl=\"$\\tilde{a}$\", color=\"#2a13ee\", fillcolor=\"#a898ee\" ];\n"
-                L"v52 -- v55\n"
-                L"v53 [ label=\"bra2a\", color=\"#06d223\", fillcolor=\"#30d28c\" ];\n"
-                L"v53 -- v55\n"
-                L"v54 [ label=\"ket2a\", color=\"#c849cb\", fillcolor=\"#c892cb\" ];\n"
-                L"v54 -- v55\n"
-                L"v55 [ label=\"bka\", color=\"#2a13ee\", fillcolor=\"#a898ee\" ];\n"
-                L"}\n"
-                L"subgraph cluster9 {\n"
-                L"v56 [ label=\"ã\", texlbl=\"$\\tilde{a}$\", color=\"#2a13ee\", fillcolor=\"#a898ee\" ];\n"
-                L"v56 -- v59\n"
-                L"v57 [ label=\"bra2a\", color=\"#06d223\", fillcolor=\"#30d28c\" ];\n"
-                L"v57 -- v59\n"
-                L"v58 [ label=\"ket2a\", color=\"#c849cb\", fillcolor=\"#c892cb\" ];\n"
-                L"v58 -- v59\n"
-                L"v59 [ label=\"bka\", color=\"#2a13ee\", fillcolor=\"#a898ee\" ];\n"
-                L"}\n"
-                L"}\n";
+    const std::wstring expected = L"graph g {\n"
+L"node [ style=filled, penwidth=2, margin=0];\n"
+L"v0 [ label=\"i_1\", texlbl=\"${i_1}$\", color=\"#3e2d55\", fillcolor=\"#f8b4aa\" ];\n"
+L"v0 -- v21\n"
+L"v0 -- v42\n"
+L"v1 [ label=\"i_2\", texlbl=\"${i_2}$\", color=\"#3e2d55\", fillcolor=\"#f8b4aa\" ];\n"
+L"v1 -- v21\n"
+L"v1 -- v42\n"
+L"v2 [ label=\"i_3\", texlbl=\"${i_3}$\", color=\"#3e2d55\", fillcolor=\"#f8b4aa\" ];\n"
+L"v2 -- v30\n"
+L"v2 -- v57\n"
+L"v3 [ label=\"i_4\", texlbl=\"${i_4}$\", color=\"#3e2d55\", fillcolor=\"#f8b4aa\" ];\n"
+L"v3 -- v30\n"
+L"v3 -- v57\n"
+L"v4 [ label=\"i_5\", texlbl=\"${i_5}$\", color=\"#3e2d55\", fillcolor=\"#f8b4aa\" ];\n"
+L"v4 -- v34\n"
+L"v4 -- v53\n"
+L"v5 [ label=\"i_6\", texlbl=\"${i_6}$\", color=\"#3e2d55\", fillcolor=\"#f8b4aa\" ];\n"
+L"v5 -- v34\n"
+L"v5 -- v53\n"
+L"v6 [ label=\"i_7\", texlbl=\"${i_7}$\", color=\"#3e2d55\", fillcolor=\"#f8b4aa\" ];\n"
+L"v6 -- v38\n"
+L"v6 -- v49\n"
+L"v7 [ label=\"i_8\", texlbl=\"${i_8}$\", color=\"#3e2d55\", fillcolor=\"#f8b4aa\" ];\n"
+L"v7 -- v38\n"
+L"v7 -- v49\n"
+L"v8 [ label=\"a_1\", texlbl=\"${a_1}$\", color=\"#13db00\", fillcolor=\"#98db04\" ];\n"
+L"v8 -- v22\n"
+L"v8 -- v41\n"
+L"v9 [ label=\"a_2\", texlbl=\"${a_2}$\", color=\"#13db00\", fillcolor=\"#98db04\" ];\n"
+L"v9 -- v22\n"
+L"v9 -- v41\n"
+L"v10 [ label=\"a_3\", texlbl=\"${a_3}$\", color=\"#13db00\", fillcolor=\"#98db04\" ];\n"
+L"v10 -- v29\n"
+L"v10 -- v58\n"
+L"v11 [ label=\"a_4\", texlbl=\"${a_4}$\", color=\"#13db00\", fillcolor=\"#98db04\" ];\n"
+L"v11 -- v29\n"
+L"v11 -- v58\n"
+L"v12 [ label=\"a_5\", texlbl=\"${a_5}$\", color=\"#13db00\", fillcolor=\"#98db04\" ];\n"
+L"v12 -- v33\n"
+L"v12 -- v54\n"
+L"v13 [ label=\"a_6\", texlbl=\"${a_6}$\", color=\"#13db00\", fillcolor=\"#98db04\" ];\n"
+L"v13 -- v33\n"
+L"v13 -- v54\n"
+L"v14 [ label=\"a_7\", texlbl=\"${a_7}$\", color=\"#13db00\", fillcolor=\"#98db04\" ];\n"
+L"v14 -- v37\n"
+L"v14 -- v50\n"
+L"v15 [ label=\"a_8\", texlbl=\"${a_8}$\", color=\"#13db00\", fillcolor=\"#98db04\" ];\n"
+L"v15 -- v37\n"
+L"v15 -- v50\n"
+L"v16 [ label=\"κ_1\", texlbl=\"${\\kappa_1}$\", color=\"#e174c5\", fillcolor=\"#e1e8c5\" ];\n"
+L"v16 -- v25\n"
+L"v16 -- v46\n"
+L"v17 [ label=\"κ_2\", texlbl=\"${\\kappa_2}$\", color=\"#e174c5\", fillcolor=\"#e1e8c5\" ];\n"
+L"v17 -- v25\n"
+L"v17 -- v46\n"
+L"v18 [ label=\"κ_3\", texlbl=\"${\\kappa_3}$\", color=\"#e174c5\", fillcolor=\"#e1e8c5\" ];\n"
+L"v18 -- v26\n"
+L"v18 -- v45\n"
+L"v19 [ label=\"κ_4\", texlbl=\"${\\kappa_4}$\", color=\"#e174c5\", fillcolor=\"#e1e8c5\" ];\n"
+L"v19 -- v26\n"
+L"v19 -- v45\n"
+L"subgraph cluster0 {\n"
+L"v20 [ label=\"A\", texlbl=\"$A$\", color=\"#257a61\", fillcolor=\"#94f4c2\" ];\n"
+L"v20 -- v23\n"
+L"v21 [ label=\"bra2a\", color=\"#06d223\", fillcolor=\"#30d28c\" ];\n"
+L"v21 -- v23\n"
+L"v22 [ label=\"ket2a\", color=\"#c849cb\", fillcolor=\"#c892cb\" ];\n"
+L"v22 -- v23\n"
+L"v23 [ label=\"bka\", color=\"#257a61\", fillcolor=\"#94f4c2\" ];\n"
+L"}\n"
+L"subgraph cluster1 {\n"
+L"v24 [ label=\"g\", texlbl=\"$g$\", color=\"#300a49\", fillcolor=\"#c05092\" ];\n"
+L"v24 -- v27\n"
+L"v25 [ label=\"bra2a\", color=\"#06d223\", fillcolor=\"#30d28c\" ];\n"
+L"v25 -- v27\n"
+L"v26 [ label=\"ket2a\", color=\"#c849cb\", fillcolor=\"#c892cb\" ];\n"
+L"v26 -- v27\n"
+L"v27 [ label=\"bka\", color=\"#300a49\", fillcolor=\"#c05092\" ];\n"
+L"}\n"
+L"subgraph cluster2 {\n"
+L"v28 [ label=\"t\", texlbl=\"$t$\", color=\"#e812d9\", fillcolor=\"#e890d9\" ];\n"
+L"v28 -- v31\n"
+L"v29 [ label=\"bra2a\", color=\"#06d223\", fillcolor=\"#30d28c\" ];\n"
+L"v29 -- v31\n"
+L"v30 [ label=\"ket2a\", color=\"#c849cb\", fillcolor=\"#c892cb\" ];\n"
+L"v30 -- v31\n"
+L"v31 [ label=\"bka\", color=\"#e812d9\", fillcolor=\"#e890d9\" ];\n"
+L"}\n"
+L"subgraph cluster3 {\n"
+L"v32 [ label=\"t\", texlbl=\"$t$\", color=\"#e812d9\", fillcolor=\"#e890d9\" ];\n"
+L"v32 -- v35\n"
+L"v33 [ label=\"bra2a\", color=\"#06d223\", fillcolor=\"#30d28c\" ];\n"
+L"v33 -- v35\n"
+L"v34 [ label=\"ket2a\", color=\"#c849cb\", fillcolor=\"#c892cb\" ];\n"
+L"v34 -- v35\n"
+L"v35 [ label=\"bka\", color=\"#e812d9\", fillcolor=\"#e890d9\" ];\n"
+L"}\n"
+L"subgraph cluster4 {\n"
+L"v36 [ label=\"t\", texlbl=\"$t$\", color=\"#e812d9\", fillcolor=\"#e890d9\" ];\n"
+L"v36 -- v39\n"
+L"v37 [ label=\"bra2a\", color=\"#06d223\", fillcolor=\"#30d28c\" ];\n"
+L"v37 -- v39\n"
+L"v38 [ label=\"ket2a\", color=\"#c849cb\", fillcolor=\"#c892cb\" ];\n"
+L"v38 -- v39\n"
+L"v39 [ label=\"bka\", color=\"#e812d9\", fillcolor=\"#e890d9\" ];\n"
+L"}\n"
+L"subgraph cluster5 {\n"
+L"v40 [ label=\"ã\", texlbl=\"$\\tilde{a}$\", color=\"#2a13ee\", fillcolor=\"#a898ee\" ];\n"
+L"v40 -- v43\n"
+L"v41 [ label=\"bra2a\", color=\"#06d223\", fillcolor=\"#30d28c\" ];\n"
+L"v41 -- v43\n"
+L"v42 [ label=\"ket2a\", color=\"#c849cb\", fillcolor=\"#c892cb\" ];\n"
+L"v42 -- v43\n"
+L"v43 [ label=\"bka\", color=\"#2a13ee\", fillcolor=\"#a898ee\" ];\n"
+L"}\n"
+L"subgraph cluster6 {\n"
+L"v44 [ label=\"ã\", texlbl=\"$\\tilde{a}$\", color=\"#2a13ee\", fillcolor=\"#a898ee\" ];\n"
+L"v44 -- v47\n"
+L"v45 [ label=\"bra2a\", color=\"#06d223\", fillcolor=\"#30d28c\" ];\n"
+L"v45 -- v47\n"
+L"v46 [ label=\"ket2a\", color=\"#c849cb\", fillcolor=\"#c892cb\" ];\n"
+L"v46 -- v47\n"
+L"v47 [ label=\"bka\", color=\"#2a13ee\", fillcolor=\"#a898ee\" ];\n"
+L"}\n"
+L"subgraph cluster7 {\n"
+L"v48 [ label=\"ã\", texlbl=\"$\\tilde{a}$\", color=\"#2a13ee\", fillcolor=\"#a898ee\" ];\n"
+L"v48 -- v51\n"
+L"v49 [ label=\"bra2a\", color=\"#06d223\", fillcolor=\"#30d28c\" ];\n"
+L"v49 -- v51\n"
+L"v50 [ label=\"ket2a\", color=\"#c849cb\", fillcolor=\"#c892cb\" ];\n"
+L"v50 -- v51\n"
+L"v51 [ label=\"bka\", color=\"#2a13ee\", fillcolor=\"#a898ee\" ];\n"
+L"}\n"
+L"subgraph cluster8 {\n"
+L"v52 [ label=\"ã\", texlbl=\"$\\tilde{a}$\", color=\"#2a13ee\", fillcolor=\"#a898ee\" ];\n"
+L"v52 -- v55\n"
+L"v53 [ label=\"bra2a\", color=\"#06d223\", fillcolor=\"#30d28c\" ];\n"
+L"v53 -- v55\n"
+L"v54 [ label=\"ket2a\", color=\"#c849cb\", fillcolor=\"#c892cb\" ];\n"
+L"v54 -- v55\n"
+L"v55 [ label=\"bka\", color=\"#2a13ee\", fillcolor=\"#a898ee\" ];\n"
+L"}\n"
+L"subgraph cluster9 {\n"
+L"v56 [ label=\"ã\", texlbl=\"$\\tilde{a}$\", color=\"#2a13ee\", fillcolor=\"#a898ee\" ];\n"
+L"v56 -- v59\n"
+L"v57 [ label=\"bra2a\", color=\"#06d223\", fillcolor=\"#30d28c\" ];\n"
+L"v57 -- v59\n"
+L"v58 [ label=\"ket2a\", color=\"#c849cb\", fillcolor=\"#c892cb\" ];\n"
+L"v58 -- v59\n"
+L"v59 [ label=\"bka\", color=\"#2a13ee\", fillcolor=\"#a898ee\" ];\n"
+L"}\n"
+L"}\n";
     // clang-format on
 
     REQUIRE(actual == expected);
@@ -445,14 +682,14 @@ TEST_CASE("tensor_network", "[elements]") {
       const std::wstring expected =
           L"(18,19)\n"
           L"(16,17)\n"
-          L"(8,9)\n"
           L"(0,1)\n"
-          L"(14,15)\n"
+          L"(8,9)\n"
           L"(6,7)\n"
-          L"(12,13)\n"
-          L"(10,11)\n"
+          L"(14,15)\n"
           L"(4,5)\n"
           L"(2,3)\n"
+          L"(12,13)\n"
+          L"(10,11)\n"
           L"(2,4)(3,5)(10,12)(11,13)(28,32)(29,33)(30,34)(31,35)(52,56)(53,57)("
           L"54,58)(55,59)\n"
           L"(4,6)(5,7)(12,14)(13,15)(32,36)(33,37)(34,38)(35,39)(48,52)(49,53)("
@@ -564,7 +801,7 @@ TEST_CASE("tensor_network_v2", "[elements]") {
   namespace t = sequant::mbpt::tensor;
   namespace o = sequant::mbpt::op;
 
-  sequant::set_default_context(Context(
+  auto ctx_resetter = sequant::set_scoped_default_context(Context(
       mbpt::make_sr_spaces(), Vacuum::SingleProduct, IndexSpaceMetric::Unit,
       BraKetSymmetry::conjugate, SPBasis::spinorbital));
 
@@ -584,18 +821,18 @@ TEST_CASE("tensor_network_v2", "[elements]") {
 
     const Index dummy(L"a_1");
 
-    Edge e1(v1, dummy);
+    Edge e1(v1, &dummy);
     e1.connect_to(v4);
-    Edge e2(v2, dummy);
+    Edge e2(v2, &dummy);
     e2.connect_to(v3);
-    Edge e3(v3, dummy);
+    Edge e3(v3, &dummy);
     e3.connect_to(v5);
-    Edge e4(v4, dummy);
+    Edge e4(v4, &dummy);
     e4.connect_to(v6);
 
-    Edge e5(v8, dummy);
+    Edge e5(v8, &dummy);
     e5.connect_to(v6);
-    Edge e6(v8, dummy);
+    Edge e6(v8, &dummy);
     REQUIRE_THROWS_AS(e6.connect_to(v7), std::logic_error);
 
     // Due to tensor symmetries, these edges are considered equal

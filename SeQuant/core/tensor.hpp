@@ -358,7 +358,7 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
   }
 
   hash_type bra_hash_value() const {
-    if (!hash_value_)  // if hash not computed, or reset, recompute
+    if (!bra_hash_value_)  // if hash not computed, or reset, recompute
       memoizing_hash();
     return *bra_hash_value_;
   }
@@ -383,15 +383,25 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
   }
 
   hash_type memoizing_hash() const override {
-    using std::begin;
-    using std::end;
-    auto val = hash::range(begin(bra()), end(bra()));
-    bra_hash_value_ = val;
-    hash::range(val, begin(ket()), end(ket()));
-    hash::range(val, begin(aux()), end(aux()));
-    hash::combine(val, label_);
-    hash::combine(val, symmetry_);
-    hash_value_ = val;
+    auto compute_hash = [this]() {
+      using std::begin;
+      using std::end;
+      auto val = hash::range(begin(bra()), end(bra()));
+      bra_hash_value_ = val;
+      hash::range(val, begin(ket()), end(ket()));
+      hash::range(val, begin(aux()), end(aux()));
+      hash::combine(val, label_);
+      hash::combine(val, symmetry_);
+      hash::combine(val, braket_symmetry_);
+      hash::combine(val, particle_symmetry_);
+      // N.B. adjointness is baked into the label
+      return val;
+    };
+    if (!hash_value_) {
+      hash_value_ = compute_hash();
+    } else {
+      assert(*hash_value_ == compute_hash());
+    }
     return *hash_value_;
   }
   void reset_hash_value() const override {
@@ -403,13 +413,16 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
     const auto &that_cast = static_cast<const Tensor &>(that);
     if (this->label() == that_cast.label() &&
         this->symmetry() == that_cast.symmetry() &&
+        this->braket_symmetry() == that_cast.braket_symmetry() &&
+        this->particle_symmetry() == that_cast.particle_symmetry() &&
         this->bra_rank() == that_cast.bra_rank() &&
         this->ket_rank() == that_cast.ket_rank() &&
         this->aux_rank() == that_cast.aux_rank()) {
       // compare hash values first
       if (this->hash_value() ==
           that.hash_value())  // hash values agree -> do full comparison
-        return this->bra() == that_cast.bra() && this->ket() == that_cast.ket();
+        return this->bra() == that_cast.bra() &&
+               this->ket() == that_cast.ket() && this->aux() == that_cast.aux();
       else
         return false;
     } else

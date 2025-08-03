@@ -222,15 +222,9 @@ class compute_all {
 }  // namespace
 
 int main(int argc, char* argv[]) {
-  std::setlocale(LC_ALL, "en_US.UTF-8");
   std::wcout.precision(std::numeric_limits<double>::max_digits10);
   std::wcerr.precision(std::numeric_limits<double>::max_digits10);
-  std::wcout.sync_with_stdio(false);
-  std::wcerr.sync_with_stdio(false);
-  std::wcout.imbue(std::locale("en_US.UTF-8"));
-  std::wcerr.imbue(std::locale("en_US.UTF-8"));
-  std::wcout.sync_with_stdio(true);
-  std::wcerr.sync_with_stdio(true);
+  sequant::set_locale();
 
   // set_num_threads(1);
 
@@ -257,8 +251,8 @@ int main(int argc, char* argv[]) {
 
   sequant::detail::OpIdRegistrar op_id_registrar;
   sequant::set_default_context(sequant::Context(
-      make_min_sr_spaces(), Vacuum::SingleProduct, IndexSpaceMetric::Unit,
-      BraKetSymmetry::conjugate, spbasis));
+      make_min_sr_spaces(SpinConvention::None), Vacuum::SingleProduct,
+      IndexSpaceMetric::Unit, BraKetSymmetry::conjugate, spbasis));
   TensorCanonicalizer::register_instance(
       std::make_shared<DefaultTensorCanonicalizer>());
 

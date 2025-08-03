@@ -12,7 +12,7 @@
 #include <cassert>
 #include <cstdio>
 #include <initializer_list>
-#include <vector>
+#include <memory>
 
 constexpr const bool use_colors = true;
 
@@ -140,11 +140,11 @@ TEST_CASE("bliss", "[elements]") {
     sg1.set_splitting_heuristic(bliss::Graph::shs_fsm);
     sg2.set_splitting_heuristic(bliss::Graph::shs_fsm);
 
-    bliss::Graph *cg1, *cg2;
+    std::unique_ptr<bliss::Graph> cg1, cg2;
 
     for (auto g = 0; g != 2; ++g) {
       auto& sg = g == 0 ? sg1 : sg2;
-      auto*& cg = g == 0 ? cg1 : cg2;
+      auto& cg = g == 0 ? cg1 : cg2;
       bliss::Stats stats;
       //    const unsigned int* cl = sg.canonical_form(stats, &report_aut,
       //    stdout);
@@ -154,7 +154,7 @@ TEST_CASE("bliss", "[elements]") {
       //        bliss::print_permutation(stdout, sg.get_nof_vertices(), cl, 1);
       //        fprintf(stdout, "\n");
 
-      cg = sg.permute(cl);
+      cg.reset(sg.permute(cl));
     }
 
     REQUIRE(cg1->cmp(*cg2) == 0);

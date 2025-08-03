@@ -832,7 +832,11 @@ class Constant : public Expr {
 
  private:
   hash_type memoizing_hash() const override {
-    hash_value_ = hash::value(value_);
+    if (!hash_value_) {
+      hash_value_ = hash::value(value_);
+    } else {
+      assert(*hash_value_ == hash::value(value_));
+    }
     return *hash_value_;
   }
 
@@ -878,9 +882,18 @@ class Variable : public Expr, public Labeled {
   std::wstring label_;
   bool conjugated_ = false;
 
+  /// @return the hash of this object
   hash_type memoizing_hash() const override {
-    hash_value_ = hash::value(label_);
-    hash::combine(hash_value_.value(), conjugated_);
+    auto compute_hash = [this]() {
+      auto val = hash::value(label_);
+      hash::combine(val, conjugated_);
+      return val;
+    };
+    if (!hash_value_) {
+      hash_value_ = compute_hash();
+    } else {
+      assert(*hash_value_ == compute_hash());
+    }
     return *hash_value_;
   }
 
@@ -1216,6 +1229,17 @@ class Product : public Expr {
     scalar_ += other->scalar_;
   }
 
+  void add_identical(const ExprPtr &other) {
+    if (other.is<Product>())
+      return this->add_identical(other.as<Product>());
+    else {
+      // only makes sense if this has a single factor
+      assert(this->factors_.size() == 1 &&
+             this->factors_[0]->hash_value() == other->hash_value());
+      scalar_ += 1;
+    }
+  }
+
  private:
   scalar_type scalar_ = {1, 0};
   container::svector<ExprPtr, 2> factors_{};
@@ -1236,15 +1260,30 @@ class Product : public Expr {
                             : cursor{&factors_[0] + factors_.size()};
   };
 
-  /// @note this hashes only the factors, not the scalar to make possible rapid
-  /// finding of identical factors
+  /// @return the hash of this object, by hashing only the factors,
+  /// not the scalar to make possible rapid finding of Products that only
+  /// differ by a factor
+  /// @note this ensures that hash of a Product involving a single factor is
+  /// identical to the hash of the factor itself.
   hash_type memoizing_hash() const override {
-    auto deref_factors =
-        factors() |
-        ranges::views::transform(
-            [](const ExprPtr &ptr) -> const Expr & { return *ptr; });
-    hash_value_ =
-        hash::range(ranges::begin(deref_factors), ranges::end(deref_factors));
+    auto compute_hash = [this]() {
+      if (factors().size() == 1)
+        return factors_[0]->hash_value();
+      else {
+        auto deref_factors =
+            factors() |
+            ranges::views::transform(
+                [](const ExprPtr &ptr) -> const Expr & { return *ptr; });
+        auto value = hash::range(ranges::begin(deref_factors),
+                                 ranges::end(deref_factors));
+        return value;
+      }
+    };
+    if (!hash_value_) {
+      hash_value_ = compute_hash();
+    } else {
+      assert(*hash_value_ == compute_hash());
+    }
     return *hash_value_;
   }
 
@@ -1530,13 +1569,28 @@ class Sum : public Expr {
                              : cursor{&summands_[0] + summands_.size()};
   };
 
+  /// @return the hash of this object
+  /// @note this ensures that hash of a Sum of a single summand is
+  /// identical to the hash of the summand itself.
   hash_type memoizing_hash() const override {
-    auto deref_summands =
-        summands() |
-        ranges::views::transform(
-            [](const ExprPtr &ptr) -> const Expr & { return *ptr; });
-    hash_value_ =
-        hash::range(ranges::begin(deref_summands), ranges::end(deref_summands));
+    auto compute_hash = [this]() {
+      if (summands_.size() == 1)
+        return summands_[0]->hash_value();
+      else {
+        auto deref_summands =
+            summands() |
+            ranges::views::transform(
+                [](const ExprPtr &ptr) -> const Expr & { return *ptr; });
+        auto value = hash::range(ranges::begin(deref_summands),
+                                 ranges::end(deref_summands));
+        return value;
+      }
+    };
+    if (!hash_value_) {
+      hash_value_ = compute_hash();
+    } else {
+      assert(*hash_value_ == compute_hash());
+    }
     return *hash_value_;
   }
 

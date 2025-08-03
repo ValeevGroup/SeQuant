@@ -221,7 +221,8 @@ struct ExprWithHash {
   size_t hash;
 };
 
-namespace dummy {
+namespace detail {
+
 inline constexpr std::wstring_view label_tensor{L"I"};
 inline constexpr std::wstring_view label_scalar{L"Z"};
 
@@ -230,23 +231,32 @@ ExprPtr make_tensor(Args&&... args) {
   return ex<Tensor>(label_tensor, std::forward<Args>(args)...);
 }
 
+template <typename... Args>
+ExprPtr make_tensor_wo_symmetries(Args&&... args) {
+  return ex<Tensor>(label_tensor, std::forward<Args>(args)...,
+                    Symmetry::nonsymm, BraKetSymmetry::nonsymm,
+                    ParticleSymmetry::nonsymm);
+}
+
 ExprPtr make_tensor(Tensor const& t, bool with_symm) {
-  return with_symm ? ex<Tensor>(label_tensor,           //
-                                bra(t.bra()),           //
-                                ket(t.ket()),           //
-                                aux(t.aux()),           //
-                                t.symmetry(),           //
-                                t.braket_symmetry(),    //
-                                t.particle_symmetry())  //
-                   : ex<Tensor>(label_tensor,           //
-                                bra(t.bra()),           //
-                                ket(t.ket()),           //
-                                aux(t.aux()));
+  if (with_symm) {
+    return ex<Tensor>(label_tensor,            //
+                      bra(t.bra()),            //
+                      ket(t.ket()),            //
+                      aux(t.aux()),            //
+                      t.symmetry(),            //
+                      t.braket_symmetry(),     //
+                      t.particle_symmetry());  //
+  } else {
+    return make_tensor_wo_symmetries(bra(t.bra()),  //
+                                     ket(t.ket()),  //
+                                     aux(t.aux()));
+  }
 }
 
 ExprPtr make_variable() { return ex<Variable>(label_scalar); }
 
-}  // namespace dummy
+}  // namespace detail
 
 using EvalExprNode = FullBinaryNode<EvalExpr>;
 
@@ -259,7 +269,8 @@ void collect_tensor_factors(EvalExprNode const& node,  //
                             Rng& collect) {
   static_assert(std::is_same_v<ranges::range_value_t<Rng>, ExprWithHash>);
 
-  if (auto op = node->op_type(); node->is_tensor() && !op || *op == EvalOp::Sum)
+  if (auto op = node->op_type();
+      node->is_tensor() && (!op || *op == EvalOp::Sum))
     collect.emplace_back(ExprWithHash{node->expr(), node->hash_value()});
   else if (node->op_type() == EvalOp::Product && !node.leaf()) {
     collect_tensor_factors(node.left(), collect);
@@ -297,18 +308,19 @@ EvalExprNode binarize(Sum const& sum) {
     auto h = ranges::at(hs, ++i);
     if (all_tensors) {
       auto const& t = left.as_tensor();
-      return {EvalOp::Sum,                                                   //
-              ResultType::Tensor,                                            //
-              dummy::make_tensor(bra(t.bra()), ket(t.ket()), aux(t.aux())),  //
-              left.canon_indices(),                                          //
-              1,                                                             //
+      return {EvalOp::Sum,         //
+              ResultType::Tensor,  //
+              detail::make_tensor_wo_symmetries(bra(t.bra()), ket(t.ket()),
+                                                aux(t.aux())),  //
+              left.canon_indices(),                             //
+              1,                                                //
               h};
     } else {
-      return {EvalOp::Sum,             //
-              ResultType::Scalar,      //
-              dummy::make_variable(),  //
-              {},                      //
-              1,                       //
+      return {EvalOp::Sum,              //
+              ResultType::Scalar,       //
+              detail::make_variable(),  //
+              {},                       //
+              1,                        //
               h};
     }
   };
@@ -324,16 +336,16 @@ EvalExprNode binarize(Product const& prod) {
                  | ranges::to_vector;
 
   auto hvals = factors | transform([](auto&& n) { return n->hash_value(); });
+  auto const hs = imed_hashes(hvals) | ranges::to_vector;
 
-  auto make_prod = [i = 0, hs = imed_hashes(hvals)](
-                       EvalExprNode const& left,
-                       EvalExprNode const& right) mutable -> EvalExpr {
+  auto make_prod = [i = 0, &hs](EvalExprNode const& left,
+                                EvalExprNode const& right) mutable -> EvalExpr {
     auto h = ranges::at(hs, ++i);
     if (left->is_scalar() && right->is_scalar()) {
       // scalar * scalar
       return {EvalOp::Product,
               ResultType::Scalar,
-              dummy::make_variable(),
+              detail::make_variable(),
               {},
               1,
               h};
@@ -341,11 +353,12 @@ EvalExprNode binarize(Product const& prod) {
       // scalar * tensor or tensor * scalar
       auto const& tl = left->is_tensor() ? left : right;
       auto const& t = tl->as_tensor();
-      return {EvalOp::Product,                                               //
-              ResultType::Tensor,                                            //
-              dummy::make_tensor(bra(t.bra()), ket(t.ket()), aux(t.aux())),  //
-              tl->canon_indices(),                                           //
-              1,                                                             //
+      return {EvalOp::Product,     //
+              ResultType::Tensor,  //
+              detail::make_tensor_wo_symmetries(bra(t.bra()), ket(t.ket()),
+                                                aux(t.aux())),  //
+              tl->canon_indices(),                              //
+              1,                                                //
               h};
     } else {
       // tensor * tensor
@@ -359,17 +372,18 @@ EvalExprNode binarize(Product const& prod) {
       hash::combine(h, canon.hash_value());
       bool const scalar_result = canon.named_indices_canonical.empty();
       if (scalar_result) {
-        return {EvalOp::Product,         //
-                ResultType::Scalar,      //
-                dummy::make_variable(),  //
-                {},                      //
-                canon.phase,             //
+        return {EvalOp::Product,          //
+                ResultType::Scalar,       //
+                detail::make_variable(),  //
+                {},                       //
+                canon.phase,              //
                 h};
       } else {
         auto idxs = get_unique_indices(Product(ts));
         return {EvalOp::Product,     //
                 ResultType::Tensor,  //
-                dummy::make_tensor(bra(idxs.bra), ket(idxs.ket), aux(idxs.aux)),
+                detail::make_tensor_wo_symmetries(bra(idxs.bra), ket(idxs.ket),
+                                                  aux(idxs.aux)),
                 canon.get_indices<Index::index_vector>(),  //
                 canon.phase,                               //
                 h};
@@ -383,10 +397,10 @@ EvalExprNode binarize(Product const& prod) {
     auto left = fold_left_to_node(factors | move, make_prod);
     auto right = binarize(Constant{prod.scalar()});
 
-    auto expr = left->is_tensor()     ? dummy::make_tensor(left->as_tensor(),
-                                                           /*with_symm = */ false)
+    auto expr = left->is_tensor()     ? detail::make_tensor(left->as_tensor(),
+                                                            /*with_symm = */ false)
                 : left->is_constant() ? (left->expr() * right->expr())
-                                      : dummy::make_variable();
+                                      : detail::make_variable();
     auto type = left->is_tensor() ? ResultType::Tensor : ResultType::Scalar;
 
     auto h = left->hash_value();

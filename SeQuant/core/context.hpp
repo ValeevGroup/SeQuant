@@ -70,8 +70,24 @@ class Context {
 
   ~Context() = default;
 
-  Context(const Context&) = default;
-  Context& operator=(const Context&) = default;
+  /// copy constructor
+  /// @param[in] ctx a Context
+  /// @warning created Context uses the same index space registry as @p ctx
+  /// @sa clone()
+  Context(const Context& ctx) = default;
+
+  /// copy assignment
+  /// @param[in] ctx a Context
+  /// @warning this object will use the same index space registry as @p ctx
+  /// @sa clone()
+  /// @return reference to this object
+  Context& operator=(const Context& ctx) = default;
+
+  /// clones this object AND its index space registry
+  /// @note created Context does not use this object's index space registry
+  Context clone() const;
+
+  Context(Context&&) = default;
 
   /// \return Vacuum of this context
   Vacuum vacuum() const;
@@ -141,9 +157,19 @@ bool operator==(const Context& ctx1, const Context& ctx2);
 bool operator!=(const Context& ctx1, const Context& ctx2);
 
 /// \name manipulation of implicit context for SeQuant
-/// \warning all of these are re-entrant
+/// \warning all of these are thread-safe only if
+/// default_context_manipulation_threadsafe() returns true
 
 /// @{
+
+/// \return whether context manipulation functions are thread-safe
+inline constexpr bool default_context_manipulation_threadsafe() {
+#ifdef SEQUANT_CONTEXT_MANIPULATION_THREADSAFE
+  return true;
+#else
+  return false;
+#endif
+}
 
 /// @brief access default Context for the given Statistics
 /// @param s Statistics
@@ -186,6 +212,13 @@ set_scoped_default_context(const container::map<Statistics, Context>& ctx);
 [[nodiscard]] detail::ImplicitContextResetter<
     container::map<Statistics, Context>>
 set_scoped_default_context(const Context& ctx);
+
+/// @brief changes default context for arbitrary statistics
+/// @note equivalent to `set_scoped_default_context({{Statistics::Arbitrary,
+/// std::move(ctx)}})`
+[[nodiscard]] detail::ImplicitContextResetter<
+    container::map<Statistics, Context>>
+set_scoped_default_context(Context&& ctx);
 
 ///@}
 

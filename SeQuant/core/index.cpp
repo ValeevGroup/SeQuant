@@ -12,27 +12,28 @@
 
 namespace sequant {
 
-const std::size_t Index::min_tmp_index() {
+const std::size_t Index::min_tmp_index() noexcept {
   return get_default_context().first_dummy_index_ordinal();
 }
 
-void Index::reset_tmp_index() { tmp_index_accessor() = min_tmp_index() - 1; }
+void Index::reset_tmp_index() noexcept {
+  tmp_index_accessor() = min_tmp_index() - 1;
+}
 
-std::wstring Index::to_latex() const {
+std::wstring Index::to_latex() const noexcept {
   std::wstring protos{};
   if (has_proto_indices()) {
     protos += L"^{";
     for (auto&& pidx : proto_indices()) protos += pidx.to_latex();
     protos += L"}";
   }
-  auto [lbl, sfx_] = split_label();
-
-  std::wstring sfx{};
-  if (!sfx_.empty())
-    sfx = std::format(L"_{}",
-                      sfx_.size() == 1 ? sfx_ : std::format(L"{{{}}}", sfx_));
-
-  return std::format(L"{{{}{}{}}}", utf_to_latex(lbl), sfx, protos);
+  std::wstring sfx;
+  if (ordinal_)
+    sfx =
+        std::format(L"_{}", *ordinal_ < 10 ? std::to_wstring(*ordinal_)
+                                           : std::format(L"{{{}}}", *ordinal_));
+  return std::format(L"{{{}{}{}}}", utf_to_latex(space().base_key()), sfx,
+                     protos);
 }
 
 std::string Index::ascii_label() const {
@@ -50,7 +51,7 @@ std::string Index::ascii_label() const {
        {L'ρ', "rho"},     {L'σ', "sigma"}, {L'τ', "tau"},     {L'υ', "upsilon"},
        {L'φ', "phi"},     {L'χ', "chi"},   {L'ψ', "psi"},     {L'ω', "omega"}};
 
-  std::wstring label(label_);
+  std::wstring label(this->label());
 
   std::replace(label.begin(), label.end(), L'↑', L'a');
   std::replace(label.begin(), label.end(), L'↓', L'b');
