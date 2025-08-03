@@ -6,24 +6,16 @@
 #include <SeQuant/core/expr_algorithm.hpp>
 #include <SeQuant/core/expr_operator.hpp>
 #include <SeQuant/core/math.hpp>
-#include <SeQuant/core/optimize.hpp>
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/result_expr.hpp>
 #include <SeQuant/core/space.hpp>
 #include <SeQuant/core/tensor.hpp>
+#include <SeQuant/core/tensor_canonicalizer.hpp>
+#include <SeQuant/core/tensor_network_v2.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/permutation.hpp>
 #include <SeQuant/core/utility/swap.hpp>
-#include <algorithm>
-#include <cassert>
-#include <cmath>
-#include <cstdint>
-#include <cstdlib>
-#include <functional>
-#include <iterator>
-#include <memory>
-#include <new>
-#include <numeric>
+
 #include <range/v3/algorithm/any_of.hpp>
 #include <range/v3/algorithm/contains.hpp>
 #include <range/v3/algorithm/count_if.hpp>
@@ -36,13 +28,21 @@
 #include <range/v3/view/interface.hpp>
 #include <range/v3/view/transform.hpp>
 #include <range/v3/view/view.hpp>
+
+#include <algorithm>
+#include <cassert>
+#include <cmath>
+#include <cstdint>
+#include <cstdlib>
+#include <functional>
+#include <iterator>
+#include <memory>
+#include <new>
+#include <numeric>
 #include <stdexcept>
 #include <string_view>
 #include <unordered_map>
 #include <utility>
-
-#include "SeQuant/core/tensor_canonicalizer.hpp"
-#include "SeQuant/core/tensor_network_v2.hpp"
 
 namespace sequant {
 
@@ -1125,8 +1125,7 @@ ExprPtr closed_shell_CC_spintrace_compact_set(ExprPtr const& expr) {
 
   ExprPtr result_expr;
   if (!is_r1_or_r2) {
-    std::wcout << "Apply hash-based filtering for r3 and higher..."
-               << std::endl;
+    std::wcout << "Apply hash-based filtering" << std::endl;
 
     // map, modified to store same terms with multiple larg coeffs.
     container::map<std::size_t, container::vector<ExprPtr>> largest_coeff_terms;
@@ -1178,7 +1177,7 @@ ExprPtr closed_shell_CC_spintrace_compact_set(ExprPtr const& expr) {
 
   } else {
     result_expr = st_expr;
-    std::wcout << "Skip hash-based filtering for r1, r2" << std::endl;
+    // std::wcout << "Skip hash-based filtering for r1, r2" << std::endl;
   }
 
   // now I need S, becaue I picked multiple large coefficients of each set, so
