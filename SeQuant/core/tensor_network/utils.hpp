@@ -198,24 +198,39 @@ int sort_then_replace_by_ordinals(IntegerSequence &iseq) {
   return ts_swap_counter_is_even<std::size_t>() ? +1 : -1;
 }
 
-template <bool stable, typename Container, typename Comparator>
-void sort_via_indices(Container &container, const Comparator &cmp) {
-  std::vector<std::size_t> indices;
-  indices.resize(container.size());
-  std::iota(indices.begin(), indices.end(), 0);
+/// type of order specifies by a less-than comparison operation
+enum class OrderType { StrictWeak, Weak };
 
-  if constexpr (stable) {
-    std::stable_sort(indices.begin(), indices.end(), cmp);
+// clang-format off
+/// @brief sorts a directly-addressable sequence via ordinals
+
+/// less-than relationship for elements `i` and `i+1` is given by `less_than(i,i+1)`
+/// @tparam OT the type of order provided by `LessThen`
+/// @param[in,out] seq on input: a directly-addressable sequence; on output: the sorted sequence
+/// @param[in] less_than less-than comparison of two ordinals defines the weak order between the corresponding elements; does not have to be strict (i.e. does not have to meet the standard Compare concept used by standard algorithms)
+/// @return ordinals of sorted elements in the input sequence
+// clang-format on
+template <OrderType OT, typename Sequence, typename LessThan>
+container::svector<std::size_t> sort_via_ordinals(Sequence &seq,
+                                                  const LessThan &less_than) {
+  const auto n = seq.size();
+  auto input_ordinals = ranges::views::iota(0ul, n) |
+                        ranges::to<container::svector<std::size_t>>();
+
+  using ranges::begin;
+  using ranges::end;
+  if constexpr (OT != OrderType::StrictWeak) {
+    bubble_sort(begin(input_ordinals), end(input_ordinals), less_than);
   } else {
-    std::sort(indices.begin(), indices.end(), cmp);
+    std::sort(begin(input_ordinals), end(input_ordinals), less_than);
   }
 
   // Bring elements in container into the order given by indices
   // (the association is container[k] = container[indices[k]])
   // -> implementation from https://stackoverflow.com/a/838789
 
-  for (std::size_t i = 0; i < container.size(); ++i) {
-    if (indices[i] == i) {
+  for (std::size_t i = 0; i < seq.size(); ++i) {
+    if (input_ordinals[i] == i) {
       // This element is already where it is supposed to be
       continue;
     }
@@ -225,14 +240,16 @@ void sort_via_indices(Container &container, const Comparator &cmp) {
     // we have to update the index-mapping referencing i to point to the new
     // location of the element that used to be at position i
     std::size_t k;
-    for (k = i + 1; k < container.size(); ++k) {
-      if (indices[k] == i) {
+    for (k = i + 1; k < seq.size(); ++k) {
+      if (input_ordinals[k] == i) {
         break;
       }
     }
-    std::swap(container[i], container[indices[i]]);
-    std::swap(indices[i], indices[k]);
+    std::swap(seq[i], seq[input_ordinals[i]]);
+    std::swap(input_ordinals[i], input_ordinals[k]);
   }
+
+  return input_ordinals;
 }
 
 namespace tensor_network {

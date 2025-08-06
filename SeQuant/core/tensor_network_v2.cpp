@@ -244,6 +244,7 @@ void TensorNetworkV2::canonicalize_graph(const NamedIndexSet &named_indices) {
 
   // Sort edges so that their order corresponds to the order of indices in the
   // canonical graph
+
   // Use this ordering to relabel anonymous indices
   const auto index_sorter = [&index_idx_to_vertex, &canonize_perm](
                                 std::size_t lhs_idx, std::size_t rhs_idx) {
@@ -255,7 +256,7 @@ void TensorNetworkV2::canonicalize_graph(const NamedIndexSet &named_indices) {
     return canonize_perm[lhs_vertex] < canonize_perm[rhs_vertex];
   };
 
-  sort_via_indices<false>(edges_, index_sorter);
+  sort_via_ordinals<OrderType::StrictWeak>(edges_, index_sorter);
 
   for (const Edge &current : edges_) {
     const Index &idx = current.idx();
@@ -323,7 +324,8 @@ void TensorNetworkV2::canonicalize_graph(const NamedIndexSet &named_indices) {
   }
 
   // Bring tensors into canonical order (analogously to how we reordered
-  // indices), but ensure to respect commutativity!
+  // indices); elements that do not commute are equivalent, due to this
+  // this specifies a non-strict weak order
   const auto tensor_sorter = [this, &canonize_perm, &tensor_idx_to_vertex](
                                  std::size_t lhs_idx, std::size_t rhs_idx) {
     const AbstractTensor &lhs = *tensors_[lhs_idx];
@@ -342,7 +344,7 @@ void TensorNetworkV2::canonicalize_graph(const NamedIndexSet &named_indices) {
     return canonize_perm[lhs_vertex] < canonize_perm[rhs_vertex];
   };
 
-  sort_via_indices<true>(tensors_, tensor_sorter);
+  sort_via_ordinals<OrderType::Weak>(tensors_, tensor_sorter);
 
   if (Logger::instance().canonicalize) {
     std::wcout << "TensorNetworkV2::canonicalize_graph: tensors after "

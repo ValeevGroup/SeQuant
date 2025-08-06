@@ -288,7 +288,7 @@ ExprPtr TensorNetworkV3::canonicalize_graph(
     return canonize_perm[lhs_vertex] < canonize_perm[rhs_vertex];
   };
 
-  sort_via_indices<false>(edges_, index_sorter);
+  sort_via_ordinals<OrderType::StrictWeak>(edges_, index_sorter);
 
   for (const Edge &current : edges_) {
     const Index &idx = current.idx();
@@ -385,10 +385,14 @@ ExprPtr TensorNetworkV3::canonicalize_graph(
     }
   }
 
-  // Bring tensors into canonical order (analogously to how we reordered
-  // indices), but ensure to respect commutativity!
-  const auto tensor_sorter = [this, &canonize_perm, &tensor_idx_to_vertex](
-                                 std::size_t lhs_idx, std::size_t rhs_idx) {
+  // Less-than relationship for tensors. Tensors that do not commute are
+  // equivalent,i .e.g tensors `a` and `b` are equivalent if
+  // `!(a<b) && !(b<a)`).
+  // Possibility of non-commutativity breaks transitivity (e.g. given tensor of
+  // operators `a` and `b` and a tensor of scalars `c` both `a<c` and `c<b`
+  // can be, but this does not imply `a<b`.
+  const auto tensor_less_than = [this, &canonize_perm, &tensor_idx_to_vertex](
+                                    std::size_t lhs_idx, std::size_t rhs_idx) {
     const AbstractTensor &lhs = *tensors_[lhs_idx];
     const AbstractTensor &rhs = *tensors_[rhs_idx];
 
@@ -405,8 +409,8 @@ ExprPtr TensorNetworkV3::canonicalize_graph(
     return canonize_perm[lhs_vertex] < canonize_perm[rhs_vertex];
   };
 
-  sort_via_indices<true>(tensors_, tensor_sorter);
-  // ouch, tensor_input_ordinals_ are not updated!!!
+  tensor_input_ordinals_ =
+      sort_via_ordinals<OrderType::Weak>(tensors_, tensor_less_than);
 
   if (Logger::instance().canonicalize) {
     std::wcout << "TensorNetworkV3::canonicalize_graph: tensors after "
