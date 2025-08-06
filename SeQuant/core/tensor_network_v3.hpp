@@ -155,7 +155,7 @@ class TensorNetworkV3 {
       return *(vertices.begin() + i);
     }
 
-    /// @return the number of attached terminals (0, 1, or 2)
+    /// @return the number of attached terminals (0 or more)
     std::size_t vertex_count() const { return vertices.size(); }
 
     const Index &idx() const {

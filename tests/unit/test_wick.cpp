@@ -972,7 +972,7 @@ TEST_CASE("wick", "[algorithms][wick]") {
       }    // use_nop_partitions
     });
 
-    // 2=body ^ 1-body ^ 2-body with dependent (PNO) indices
+    // 2-body ^ 1-body ^ 2-body with dependent (PNO) indices
     SEQUANT_PROFILE_SINGLE("wick(P2*H1*T2)", {
       auto opseq =
           ex<FNOperatorSeq>(FNOperator(cre({L"i_1", L"i_2"}),
@@ -1007,21 +1007,6 @@ TEST_CASE("wick", "[algorithms][wick]") {
           std::make_shared<DefaultTensorCanonicalizer>());
       canonicalize(wick_result_2);
       rapid_simplify(wick_result_2);
-
-      //    std::wcout << L"P2*H1*T2(PNO) = " << to_latex_align(wick_result_2)
-      //               << std::endl;
-      // it appears that the two terms are swapped when using gcc 8 on linux
-      // TODO investigate why sum canonicalization seems to produce
-      // platform-dependent results.
-      //      REQUIRE(to_latex(wick_result_2) ==
-      //              L"{ \\bigl( - {{{8}}"
-      //              L"{A^{{a_1^{{i_1}{i_2}}}{a_2^{{i_1}{i_2}}}}_{{i_1}{i_2}}}{f^{{a_"
-      //              L"3^{{i_1}{i_2}}}}_{{a_1^{{i_1}{i_2}}}}}{t^{{i_1}{i_2}}_{{a_2^{{"
-      //              L"i_1}{i_2}}}{a_3^{{i_1}{i_2}}}}}} + {{{8}}"
-      //              L"{A^{{a_1^{{i_1}{i_2}}}{a_2^{{i_1}{i_2}}}}_{{i_1}{i_2}}}{f^{{i_"
-      //              L"1}}_{{i_3}}}{t^{{i_2}{i_3}}_{{a_3^{{i_2}{i_3}}}{a_4^{{i_2}{i_3}"
-      //              L"}}}}{s^{{a_3^{{i_2}{i_3}}}}_{{a_1^{{i_1}{i_2}}}}}{s^{{a_4^{{i_"
-      //              L"2}{i_3}}}}_{{a_2^{{i_1}{i_2}}}}}}\\bigr) }");
     });
 
     // 2=body ^ 2-body ^ 2-body ^ 2-body with dependent (PNO) indices

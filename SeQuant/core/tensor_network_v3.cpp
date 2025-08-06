@@ -278,8 +278,8 @@ ExprPtr TensorNetworkV3::canonicalize_graph(
   // Sort edges so that their order corresponds to the order of indices in the
   // canonical graph
   // Use this ordering to relabel anonymous indices
-  const auto index_sorter = [&index_idx_to_vertex, &canonize_perm](
-                                std::size_t lhs_idx, std::size_t rhs_idx) {
+  const auto index_less_than = [&index_idx_to_vertex, &canonize_perm](
+                                   std::size_t lhs_idx, std::size_t rhs_idx) {
     assert(lhs_idx < index_idx_to_vertex.size());
     const std::size_t lhs_vertex = index_idx_to_vertex[lhs_idx];
     assert(rhs_idx < index_idx_to_vertex.size());
@@ -288,7 +288,7 @@ ExprPtr TensorNetworkV3::canonicalize_graph(
     return canonize_perm[lhs_vertex] < canonize_perm[rhs_vertex];
   };
 
-  sort_via_ordinals<OrderType::StrictWeak>(edges_, index_sorter);
+  sort_via_ordinals<OrderType::StrictWeak>(edges_, index_less_than);
 
   for (const Edge &current : edges_) {
     const Index &idx = current.idx();
