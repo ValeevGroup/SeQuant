@@ -229,9 +229,8 @@ container::svector<container::map<Index, Index>> S_replacement_maps(
 
 /// @brief Expand S operator
 ExprPtr S_maps(const ExprPtr& expr);
-ExprPtr expand_S_product(const Product& product);
-ExprPtr expand_S_to_full(const ExprPtr& expr);
 
+/// @brief hash-filter method for making compact set of eqns
 ExprPtr hash_filter_compact_set(
     const ExprPtr& expr,
     const container::svector<container::svector<Index>>& ext_idxs);

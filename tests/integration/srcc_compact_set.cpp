@@ -101,7 +101,7 @@ class compute_cceqvec {
             external_indices(eqvec_so[R]->at(0)->at(0)->as<Tensor>());
         eqvec_sf_ref[R] = closed_shell_spintrace(
             eqvec_so[R], ext_idxs);  // with partial expansion
-        eqvec_sf_ref[R] = expand_S_to_full(eqvec_sf_ref[R]);
+        eqvec_sf_ref[R] = S_maps(eqvec_sf_ref[R]);
 
         using ranges::views::transform;
         auto bixs = ext_idxs | transform([](auto&& vec) { return vec[0]; });
@@ -171,7 +171,7 @@ class compute_cceqvec {
               external_indices(eqvec[R]->at(0)->at(0)->as<Tensor>());
 
           // instead of removing S, expnad S to get fully expanded terms
-          eqvec[R] = expand_S_to_full(eqvec[R]);
+          eqvec[R] = S_maps(eqvec[R]);
           // Biorthogonal transformation
           eqvec[R] = biorthogonal_transform(eqvec[R], ext_idxs);
           // apply hash fiter to get compact_set eqns
