@@ -5,14 +5,14 @@
 #ifndef SEQUANT_WICK_IMPL_HPP
 #define SEQUANT_WICK_IMPL_HPP
 
-// change to 1 to try TNV2
-#define USE_TENSOR_NETWORK_V2 0
+// change to 1 to try TNV3
+#define USE_TENSOR_NETWORK_V3 0
 
 #include <SeQuant/core/bliss.hpp>
 #include <SeQuant/core/logger.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
-#if USE_TENSOR_NETWORK_V2
-#include <SeQuant/core/tensor_network_v2.hpp>
+#if USE_TENSOR_NETWORK_V3
+#include <SeQuant/core/tensor_network_v3.hpp>
 #else
 #include <SeQuant/core/tensor_network.hpp>
 #endif
@@ -606,8 +606,8 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
                 << to_latex(expr_input_) << std::endl;
 
             // construct graph representation of the tensor product
-#if USE_TENSOR_NETWORK_V2
-          TensorNetworkV2 tn(expr_input_->as<Product>().factors());
+#if USE_TENSOR_NETWORK_V3
+          TensorNetworkV3 tn(expr_input_->as<Product>().factors());
           auto g = tn.create_graph();
           const auto &graph = g.bliss_graph;
           const auto &vlabels = g.vertex_labels;
@@ -629,11 +629,7 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
 
           if (Logger::instance().wick_topology) {
             std::basic_ostringstream<wchar_t> oss;
-#if USE_TENSOR_NETWORK_V2
             graph->write_dot(oss, vlabels);
-#else
-            graph->write_dot(oss, vlabels);
-#endif
             std::wcout
                 << "WickTheorem<S>::compute: colored graph produced from TN = "
                 << std::endl
@@ -916,14 +912,14 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
             auto connected_to_same_nop =
                 [&tn_tensors](const auto &edge1, const auto &edge2) -> bool {
               const auto nt1 =
-#if USE_TENSOR_NETWORK_V2
+#if USE_TENSOR_NETWORK_V3
                   edge1.vertex_count();
 #else
                   edge1.size();
 #endif
               assert(nt1 <= 2);
               const auto nt2 =
-#if USE_TENSOR_NETWORK_V2
+#if USE_TENSOR_NETWORK_V3
                   edge2.vertex_count();
 #else
                   edge2.size();
@@ -931,17 +927,17 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
               assert(nt2 <= 2);
               for (auto i1 = 0; i1 != nt1; ++i1) {
                 const auto tensor1_ord =
-#if USE_TENSOR_NETWORK_V2
-                    i1 == 0 ? edge1.first_vertex().getTerminalIndex()
-                            : edge1.second_vertex().getTerminalIndex();
+#if USE_TENSOR_NETWORK_V3
+                    i1 == 0 ? edge1.vertex(0).getTerminalIndex()
+                            : edge1.vertex(1).getTerminalIndex();
 #else
                     edge1[i1].tensor_ord;
 #endif
                 for (auto i2 = 0; i2 != nt2; ++i2) {
                   const auto tensor2_ord =
-#if USE_TENSOR_NETWORK_V2
-                      i2 == 0 ? edge2.first_vertex().getTerminalIndex()
-                              : edge2.second_vertex().getTerminalIndex();
+#if USE_TENSOR_NETWORK_V3
+                      i2 == 0 ? edge2.vertex(0).getTerminalIndex()
+                              : edge2.vertex(1).getTerminalIndex();
 #else
                       edge2[i2].tensor_ord;
 #endif
