@@ -53,7 +53,7 @@ TEST_CASE("optimize", "[optimize]") {
       return opt::single_term_opt(prod, [](Index const& ix) {
         auto lbl = to_string(ix.label());
         auto sz = ix.space().approximate_size();
-        return ix.space().approximate_size();
+        return sz;
       });
     };
 

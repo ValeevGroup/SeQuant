@@ -23,7 +23,7 @@ namespace sequant {
 namespace details {
 
 template <typename Range>
-std::wstring deparse_indices(const Range& indices) {
+std::wstring deparse_indices(Range&& indices) {
   std::wstring deparsed;
 
   for (std::size_t i = 0; i < indices.size(); ++i) {
@@ -225,6 +225,29 @@ std::wstring deparse(Tensor const& tensor, bool annot_sym) {
     deparsed += L":" + details::deparse_symm(tensor.symmetry());
     deparsed += L"-" + details::deparse_symm(tensor.braket_symmetry());
     deparsed += L"-" + details::deparse_symm(tensor.particle_symmetry());
+  }
+
+  return deparsed;
+}
+
+std::wstring deparse(AbstractTensor const& tensor, bool annot_sym) {
+  std::wstring deparsed(tensor._label());
+  deparsed += L"{" + details::deparse_indices(tensor._bra());
+  if (tensor._ket_rank() > 0) {
+    deparsed += L";" + details::deparse_indices(tensor._ket());
+  }
+  if (tensor._aux_rank() > 0) {
+    if (tensor._ket_rank() == 0) {
+      deparsed += L";";
+    }
+    deparsed += L";" + details::deparse_indices(tensor._aux());
+  }
+  deparsed += L"}";
+
+  if (annot_sym) {
+    deparsed += L":" + details::deparse_symm(tensor._symmetry());
+    deparsed += L"-" + details::deparse_symm(tensor._braket_symmetry());
+    deparsed += L"-" + details::deparse_symm(tensor._particle_symmetry());
   }
 
   return deparsed;

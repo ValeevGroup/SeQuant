@@ -1,9 +1,9 @@
 //
-// Created by Eduard Valeyev on 2019-02-02.
+// Created by Eduard Valeyev on 2025-24-07.
 //
 
-#ifndef SEQUANT_TENSOR_NETWORK_V2_H
-#define SEQUANT_TENSOR_NETWORK_V2_H
+#ifndef SEQUANT_TENSOR_NETWORK_V3_H
+#define SEQUANT_TENSOR_NETWORK_V3_H
 
 #include <SeQuant/core/abstract_tensor.hpp>
 #include <SeQuant/core/container.hpp>
@@ -11,7 +11,6 @@
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/tensor_network/canonicals.hpp>
 #include <SeQuant/core/tensor_network/slot.hpp>
-#include <SeQuant/core/tensor_network/utils.hpp>
 #include <SeQuant/core/tensor_network/vertex.hpp>
 
 #include <range/v3/range/traits.hpp>
@@ -41,10 +40,10 @@ namespace sequant {
 /// be connected by multiple Index'es (thus edges are colored), what is
 /// canonized is actually the graph of indices (roughly the dual of the tensor
 /// graph), with Tensor objects represented by one or more vertices.
-class TensorNetworkV2 {
+class TensorNetworkV3 {
  public:
   // for unit testing only
-  friend class TensorNetworkV2Accessor;
+  friend class TensorNetworkV3Accessor;
 
   enum class Origin {
     Bra = 1,
@@ -73,59 +72,57 @@ class TensorNetworkV2 {
   };
 
   // clang-format off
-  /// @brief Edge in a TensorNetworkV2 = the Index annotating it + a pair of indices to identify which Tensor terminals it's connected to
+  /// @brief a (hyper)edge in a tensor network
 
-  /// @note tensor terminals in a sequence of tensors are indexed as follows:
-  /// - >0 for bra terminals (i.e. "+7" indicated connection to a bra terminal
-  /// of 7th tensor object in the sequence)
-  /// - <0 for ket terminals
-  /// - 0 if free (not attached to any tensor objects)
-  /// - position records the terminal's location in the sequence of bra/ket
-  /// terminals (always 0 for symmetric/antisymmetric tensors) Terminal indices
-  /// are sorted by the tensor index (i.e. by the absolute value of the terminal
-  /// index), followed by position
+  /// Edge in a TensorNetworkV3 = the Index annotating it +
+  /// a list of vertices corresponding to the Tensor index slots it connects
   // clang-format on
   class Edge {
    public:
     Edge() = default;
-    explicit Edge(Vertex vertex) : first(std::move(vertex)), second() {}
-    Edge(Vertex vertex, const Index *index)
-        : first(std::move(vertex)), second(), index(index) {}
+    explicit Edge(const Vertex &vertex) : vertices{vertex} {}
+    explicit Edge(std::initializer_list<Vertex> vertices) {
+      ranges::for_each(vertices,
+                       [this](const Vertex &v) { this->connect_to(v); });
+    }
+    Edge(const Vertex &vertex, const Index *index)
+        : vertices{vertex}, index(index) {}
+    Edge(std::initializer_list<Vertex> vertices, const Index *index)
+        : Edge(vertices) {
+      this->index = index;
+    }
 
-    Edge &connect_to(Vertex vertex) {
-      assert(!second.has_value());
-
-      if (!first.has_value()) {
-        // unconnected Edge
-        first = std::move(vertex);
+    Edge &connect_to(const Vertex &vertex) {
+      // free Edge
+      if (vertices.empty()) {
+        vertices.emplace(vertex);
       } else {
-        // - cannot connect braket slot to aux slot
-        if ((first->getOrigin() == Origin::Aux &&
+        // - cannot connect braket slots to aux slots
+        auto &first = *(vertices.begin());
+        if ((first.getOrigin() == Origin::Aux &&
              vertex.getOrigin() != Origin::Aux) ||
-            (first->getOrigin() != Origin::Aux &&
+            (first.getOrigin() != Origin::Aux &&
              vertex.getOrigin() == Origin::Aux)) {
-          throw std::logic_error(
-              "TensorNetwork::Edge::connect_to: aux slot cannot be connected "
+          throw std::invalid_argument(
+              "TensorNetworkV3::Edge::connect_to: aux slot cannot be connected "
               "to a non-aux slot");
         }
         // - can connect bra slot to ket slot, and vice versa
-        if (first->getOrigin() == Origin::Bra &&
+        if (first.getOrigin() == Origin::Bra &&
             vertex.getOrigin() != Origin::Ket) {
-          throw std::logic_error(
-              "TensorNetwork::Edge::connect_to: bra slot can only be connected "
+          throw std::invalid_argument(
+              "TensorNetworkV3::Edge::connect_to: bra slot can only be "
+              "connected "
               "to a ket slot");
         }
-        if (first->getOrigin() == Origin::Ket &&
+        if (first.getOrigin() == Origin::Ket &&
             vertex.getOrigin() != Origin::Bra) {
-          throw std::logic_error(
-              "TensorNetwork::Edge::connect_to: ket slot can only be connected "
+          throw std::invalid_argument(
+              "TensorNetworkV3::Edge::connect_to: ket slot can only be "
+              "connected "
               "to a bra slot");
         }
-        second = std::move(vertex);
-        if (second < first) {
-          // Ensure first <= second
-          std::swap(first, second);
-        }
+        add_vertex(vertex);
       }
 
       return *this;
@@ -138,12 +135,8 @@ class TensorNetworkV2 {
         return vertex_count() < other.vertex_count();
       }
 
-      if (!(first == other.first)) {
-        return first < other.first;
-      }
-
-      if (second < other.second) {
-        return second < other.second;
+      if (!(vertices == other.vertices)) {
+        return vertices < other.vertices;
       }
 
       assert(index && other.index);
@@ -151,22 +144,19 @@ class TensorNetworkV2 {
     }
 
     bool operator==(const Edge &other) const {
-      return first == other.first && second == other.second;
+      return vertices == other.vertices;
     }
 
-    const Vertex &first_vertex() const {
-      assert(first.has_value());
-      return first.value();
-    }
-    const Vertex &second_vertex() const {
-      assert(second.has_value());
-      return second.value();
+    /// @param i vertex ordinal
+    /// @return const reference to the `i`th Vertex object
+    /// @pre `this->size() > i`
+    const Vertex &vertex(std::size_t i) const {
+      assert(vertices.size() > i);
+      return *(vertices.begin() + i);
     }
 
-    /// @return the number of attached terminals (0, 1, or 2)
-    std::size_t vertex_count() const {
-      return second.has_value() ? 2 : (first.has_value() ? 1 : 0);
-    }
+    /// @return the number of attached terminals (0 or more)
+    std::size_t vertex_count() const { return vertices.size(); }
 
     const Index &idx() const {
       assert(index);
@@ -174,16 +164,26 @@ class TensorNetworkV2 {
     }
 
    private:
-    std::optional<Vertex> first;
-    std::optional<Vertex> second;
+    container::set<Vertex> vertices;
     const Index *index = nullptr;
+
+    /// @param vertex a vertex to be added
+    /// @throw std::invalid_argument if @p vertex is already connected by this
+    /// Edge
+    void add_vertex(const Vertex &vertex) {
+      auto [it, inserted] = this->vertices.emplace(vertex);
+      if (!inserted)
+        throw std::invalid_argument(
+            "TensorNetworkV3::Edge::add_vertex(v): v is already connected by "
+            "this Edge");
+    }
   };
 
   struct Graph {
     /// The type used to encode the color of a vertex. The restriction of this
     /// being as 32-bit integer comes from how BLISS is trying to convert these
     /// into RGB values.
-    using VertexColor = tensor_network::VertexColor;
+    using VertexColor = std::uint32_t;
 
     std::unique_ptr<bliss::Graph> bliss_graph;
     std::vector<std::wstring> vertex_labels;
@@ -198,7 +198,7 @@ class TensorNetworkV2 {
     std::size_t vertex_to_tensor_idx(std::size_t vertex) const;
   };
 
-  TensorNetworkV2(const Expr &expr) {
+  TensorNetworkV3(const Expr &expr) {
     if (expr.size() > 0) {
       for (const ExprPtr &subexpr : expr) {
         add_expr(*subexpr);
@@ -210,13 +210,13 @@ class TensorNetworkV2 {
     init_edges();
   }
 
-  TensorNetworkV2(const ExprPtr &expr) : TensorNetworkV2(*expr) {}
+  TensorNetworkV3(const ExprPtr &expr) : TensorNetworkV3(*expr) {}
 
   template <
       typename ExprPtrRange,
       typename = std::enable_if_t<!std::is_base_of_v<ExprPtr, ExprPtrRange> &&
                                   !std::is_base_of_v<Expr, ExprPtrRange>>>
-  TensorNetworkV2(const ExprPtrRange &exprptr_range) {
+  TensorNetworkV3(const ExprPtrRange &exprptr_range) {
     static_assert(
         std::is_base_of_v<ExprPtr, ranges::range_value_t<ExprPtrRange>>);
     for (const ExprPtr &current : exprptr_range) {
@@ -235,7 +235,7 @@ class TensorNetworkV2 {
 
   const auto &tensor_input_ordinals() const { return tensor_input_ordinals_; }
 
-  using NamedIndexSet = tensor_network::NamedIndexSet;
+  using NamedIndexSet = container::set<Index, Index::FullLabelCompare>;
 
   /// @param cardinal_tensor_labels move all tensors with these labels to the
   /// front before canonicalizing indices
@@ -363,26 +363,45 @@ class TensorNetworkV2 {
     bool make_idx_to_vertex = false;
   };
 
+  // clang-format off
   /// @brief converts the network into a Bliss graph whose vertices are indices
   /// and tensor vertex representations
   /// @param[in] options the options for generating the graph
   /// @return The created Graph object
 
   /// @note Rules for constructing the graph:
-  ///   - Indices with protoindices are connected to their protoindices,
-  ///   either directly or (if protoindices are symmetric) via a protoindex
-  ///   vertex.
-  ///   - Indices are colored by their space, which in general encodes also
-  ///   the space of the protoindices.
-  ///   - An anti/symmetric n-body tensor has 2 terminals, each connected to
-  ///   each other + to n index vertices.
-  ///   - A nonsymmetric n-body tensor has n terminals, each connected to 2
-  ///   indices and 1 tensor vertex which is connected to all n terminal
-  ///   indices.
-  ///   - tensor vertices are colored by the label+rank+symmetry of the
-  ///   tensor; terminal vertices are colored by the color of its tensor,
-  ///     with the color of symm/antisymm terminals augmented by the
-  ///     terminal's type (bra/ket).
+  ///   - symmetries are encoded by topology and color
+  ///   - vertex is introduced for an index slot or a bundle thereof, an index, and tensors core
+  ///     - bundles of slots include:
+  ///        - bra (bundle of 1 or more bra index slots)
+  ///        - ket
+  ///        - particle bundle (column of slots in covariant notation, e.g. a bundle of a bra index slot and ket index slot)
+  ///        - protoindex bundle (bundle of index slots attached to an Index)
+  ///     - N.B. lack of symmetry between slots and indices (can represent bundles of slots, but not bundles of indices) is due to the fact that index is already a plain index or an index with protoindices (i.e., a collection of plain indices)
+  ///     - to create a bundle of objects create the new "bundle" vertex and connect it to each object's vertex
+  ///       - if set of n objects has symmetry with respect to permutation described by a particular irrep of S_n the colors of the objects' vertices must be the same (else they are distinguishable)
+  ///       - for 2 objects it is not necessary to introduce a bundle vertex, but bundling is often done even for n=1 for the sake of consistency
+  ///     - vertices that can be swapped should have the same color
+  ///       - indices are colored by their space (not by label/ordinal) + the colors of their protoindices
+  ///       - slots and their bundles use custom colors (see below)
+  ///
+  ///   Consider Tensor as an example:
+  ///     - each index slot of a tensor is a vertex (b+k+a such vertices in
+  ///     an order-{b,k,a} tensor)
+  ///     - bra/ket slot vertices of an antisymmetric/symmetric tensor are
+  ///     bundled into bra/ket vertex (2 such vertices); they are subsequently bundleed into a braket vertex (1 such vertex)
+  ///     - if Tensor has asymmetric bras/kets each matching
+  ///     (corresponding to same particle ordinal) bra/ket slot vertex pair is
+  ///     bundleed into a braket vertex
+  ///     (max(b,k) such indices)
+  ///     - braket vertices bundleed into tensor core vertex
+  ///     - bra/ket slot vertices have same color for antisymmetric/symmetric
+  ///     tensors
+  ///     - for asymmetric bra/ket bra+ket+braket bundles must have same color
+  ///     if tensor is particle-symmetric, else
+  ///     - for tensors with bra<->ket symmetry matching bra and ket slot
+  ///     vertices have identical colors.
+  // clang-format on
   Graph create_graph(const CreateGraphOptions &options = {
                          .named_indices = nullptr,
                          .distinct_named_indices = false,
@@ -414,10 +433,12 @@ class TensorNetworkV2 {
   /// initializes edges_, ext_indices_, and pure_proto_indices_
   void init_edges();
 
-  /// Canonicalizes the network graph representation
-  /// Note: The explicit order of tensors and labelling of indices
-  /// remains undefined.
-  void canonicalize_graph(const NamedIndexSet &named_indices);
+  /// Canonicalizes the network graph representation using colored graph
+  /// canonicalization
+  /// @return The byproduct of canonicalization
+  /// @note this produces canonical representation that is invariant with
+  /// respect to the renaming of named indices
+  [[nodiscard]] ExprPtr canonicalize_graph(const NamedIndexSet &named_indices);
 
   /// Canonicalizes every individual tensor for itself, taking into account only
   /// tensor blocks
@@ -438,26 +459,26 @@ class TensorNetworkV2 {
     auto tensor_ptr = std::dynamic_pointer_cast<AbstractTensor>(clone);
     if (!tensor_ptr) {
       throw std::invalid_argument(
-          "TensorNetworkV2::TensorNetworkV2: tried to add non-tensor to "
+          "TensorNetworkV3::TensorNetworkV3: tried to add non-tensor to "
           "network");
     }
 
-    tensors_.push_back(std::move(tensor_ptr));
+    tensors_.emplace_back(std::move(tensor_ptr));
     tensor_input_ordinals_.push_back(tensor_input_ordinals_.size());
   }
 };
 
 template <typename CharT, typename Traits>
 std::basic_ostream<CharT, Traits> &operator<<(
-    std::basic_ostream<CharT, Traits> &stream, TensorNetworkV2::Origin origin) {
+    std::basic_ostream<CharT, Traits> &stream, TensorNetworkV3::Origin origin) {
   switch (origin) {
-    case TensorNetworkV2::Origin::Bra:
+    case TensorNetworkV3::Origin::Bra:
       stream << "Bra";
       break;
-    case TensorNetworkV2::Origin::Ket:
+    case TensorNetworkV3::Origin::Ket:
       stream << "Ket";
       break;
-    case TensorNetworkV2::Origin::Aux:
+    case TensorNetworkV3::Origin::Aux:
       stream << "Aux";
       break;
   }

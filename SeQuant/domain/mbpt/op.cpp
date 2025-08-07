@@ -1060,7 +1060,10 @@ ExprPtr vac_av(ExprPtr expr, std::vector<std::pair<int, int>> nop_connections,
   FWickTheorem wick{expr};
   wick.use_topology(use_top).set_nop_connections(nop_connections);
   wick.full_contractions(full_contractions);
-  auto result = wick.compute();
+  auto result = wick.compute(/* count_only = */ false,
+                             /* skip_input_canonicalization? true since already
+                                did simplification above */
+                             true);
   simplify(result);
 
   if (Logger::instance().wick_stats) {

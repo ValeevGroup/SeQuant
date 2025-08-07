@@ -258,6 +258,11 @@ parse::transform::DefaultSymmetries to_default_symms(
   if (particle_symm.has_value()) {
     std::get<2>(symms) = particle_symm.value();
   }
+  if (std::get<0>(symms) !=
+      Symmetry::nonsymm) {  // antisymmetry/symmetric bra and ket imply particle
+                            // symmetry
+    std::get<2>(symms) = ParticleSymmetry::symm;
+  }
 
   return symms;
 }
