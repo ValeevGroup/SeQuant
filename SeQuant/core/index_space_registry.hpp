@@ -1365,8 +1365,8 @@ class IndexSpaceRegistry {
       // compute_approximate_size is used when populating the registry
       // so don't use base_spaces() here
       unsigned long size = ranges::accumulate(
-          *spaces_ | ranges::views::filter([&space_attr](auto& s) {
-            return s.qns() == space_attr.qns() && is_base(s.type()) &&
+          *spaces_ | ranges::views::filter([this, &space_attr](auto& s) {
+            return s.qns() == space_attr.qns() && this->is_base(s.type()) &&
                    space_attr.type().intersection(s.type());
           }),
           0ul, [](unsigned long size, const IndexSpace& s) {
