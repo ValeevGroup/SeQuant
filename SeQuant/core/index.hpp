@@ -938,22 +938,26 @@ class Index : public Taggable {
 
   /// @brief The ordering operator
 
-  /// @return true if @c i1 preceeds @c i2 in the canonical order; Index objects
-  /// are ordered lexicographically, first by qns, followed by tags (if defined
+  /// The canonical order of Index objects is
+  /// lexicographical, first by qns, followed by tags (if defined
   /// for both), then by space, then by ordinal, then by protoindices (if any)
-  friend bool operator<(const Index &i1, const Index &i2) noexcept {
-    // compare qns, tags and spaces in that sequence
+  friend std::strong_ordering operator<=>(const Index &i1,
+                                          const Index &i2) noexcept {
+    using SO = std::strong_ordering;
 
     auto compare_space = [&i1, &i2]() {
       if (i1.space() != i2.space()) {
-        return i1.space() < i2.space();
+        return i1.space() < i2.space() ? SO::less : SO::greater;
       } else if (i1.space().attr() == default_space_attr &&
                  i1.space().base_key() != i2.space().base_key()) {
-        return i1.space().base_key() < i2.space().base_key();
+        return i1.space().base_key() < i2.space().base_key() ? SO::less
+                                                             : SO::greater;
       } else if (i1.ordinal_ != i2.ordinal_) {
-        return i1.ordinal_ < i2.ordinal_;
-      } else
-        return i1.proto_indices() < i2.proto_indices();
+        return i1.ordinal_ < i2.ordinal_ ? SO::less : SO::greater;
+      } else if (i1.proto_indices() == i2.proto_indices())
+        return SO::equal;
+      else
+        return i1.proto_indices() < i2.proto_indices() ? SO::less : SO::greater;
     };
 
     const auto i1_Q = i1.space().qns();
@@ -967,10 +971,10 @@ class Index : public Taggable {
         return compare_space();
       }
 
-      return i1.tag() < i2.tag();
+      return i1.tag() < i2.tag() ? SO::less : SO::greater;
     }
 
-    return i1_Q < i2_Q;
+    return i1_Q < i2_Q ? SO::less : SO::greater;
   }
 
 };  // class Index
