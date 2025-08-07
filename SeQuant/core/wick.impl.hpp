@@ -626,6 +626,16 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
           assert(vlabels.size() == n);
           const auto &tn_edges = tn.edges();
           const auto &tn_tensors = tn.tensors();
+          auto idx_vertex_to_edge = [&](const auto idx_vertex) -> const auto & {
+            assert(idx_vertex < n);
+#if USE_TENSOR_NETWORK_V3
+            const auto edge_idx = g.vertex_to_index_idx(idx_vertex);
+            assert(edge_idx < tn_edges.size());
+            return tn_edges[edge_idx];
+#else
+            return *(tn_edges.begin() + idx_vertex);
+#endif
+          };
 
           if (Logger::instance().wick_topology) {
             std::basic_ostringstream<wchar_t> oss;
@@ -670,7 +680,7 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
                 assert(insertion_result.second);
               }
               if (vtypes[v] == VertexType::Index && !input_->empty()) {
-                auto &idx = (tn_edges.begin() + v)->idx();
+                auto &idx = idx_vertex_to_edge(v).idx();
                 auto idx_it_in_opseq = ranges::find_if(
                     opseq_view,
                     [&idx](const auto &v) { return v.index() == idx; });
@@ -901,14 +911,10 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
           // Index partitions are constructed to *only* include Index
           // objects attached to the bra/ket of any NormalOperator! hence
           // need to use filter in computing partitions
-          auto exclude_index_vertex_pair = [&tn_tensors, &tn_edges](size_t v1,
-                                                                    size_t v2) {
-            // v1 and v2 are vertex indices and also index the edges in the
-            // WickGraph
-            assert(v1 < tn_edges.size());
-            assert(v2 < tn_edges.size());
-            const auto &edge1 = *(tn_edges.begin() + v1);
-            const auto &edge2 = *(tn_edges.begin() + v2);
+          auto exclude_index_vertex_pair = [&tn_tensors, &idx_vertex_to_edge](
+                                               size_t v1, size_t v2) {
+            const auto &edge1 = idx_vertex_to_edge(v1);
+            const auto &edge2 = idx_vertex_to_edge(v2);
             auto connected_to_same_nop =
                 [&tn_tensors](const auto &edge1, const auto &edge2) -> bool {
               const auto nt1 =
@@ -976,13 +982,13 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
             if (Logger::instance().wick_topology) {
               std::wcout << "WickTheorem<S>::compute: topological index "
                             "partitions:{\n";
-              ranges::for_each(index_vidx2pidx, [&tn_edges](auto &&vidx_pidx) {
-                auto &&[vidx, pidx] = vidx_pidx;
-                assert(vidx < tn_edges.size());
-                auto &idx = (tn_edges.begin() + vidx)->idx();
-                std::wcout << "Index " << idx.full_label() << " -> partition "
-                           << pidx << "\n";
-              });
+              ranges::for_each(index_vidx2pidx,
+                               [&idx_vertex_to_edge](auto &&vidx_pidx) {
+                                 auto &&[vidx, pidx] = vidx_pidx;
+                                 auto &idx = idx_vertex_to_edge(vidx).idx();
+                                 std::wcout << "Index " << idx.full_label()
+                                            << " -> partition " << pidx << "\n";
+                               });
               std::wcout << "}" << std::endl;
             }
 
