@@ -5,8 +5,8 @@
 #ifndef SEQUANT_WICK_IMPL_HPP
 #define SEQUANT_WICK_IMPL_HPP
 
-// change to 1 to try TNV3
-#define USE_TENSOR_NETWORK_V3 0
+// change to 0 to try TNV1
+#define USE_TENSOR_NETWORK_V3 1
 
 #include <SeQuant/core/bliss.hpp>
 #include <SeQuant/core/logger.hpp>
@@ -727,7 +727,9 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
           // partitions with a single partition will be reported
           // @param vertex_pair_exclude a callable that accepts 2 vertex
           // indices and returns true if the automorphism of this pair
-          // of indices is to be ignored
+          // of indices is to be ignored; this is used to disregard
+          // automorphisms of Index objects unless connected to same bra/ket
+          // of an (anti)symmetric NormalOperator.
           // @return the \c {vertex_to_partition_idx,npartitions} pair in
           // which \c vertex_to_partition_idx maps vertex indices that are
           // part of nontrivial partitions to their (1-based) partition indices
@@ -741,17 +743,14 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
 
             // using each automorphism generator
             for (auto &&aut : aut_generators) {
-              // skip automorphism generators that involve vertices that are
-              // not part of list `vertices`
-              // this prevents topology exploitation for spin-free Wick
-              // TODO learn how to compute partitions correctly for
-              //      spin-free cases
+              // skip automorphism generators that do not involve vertices
+              // in `vertices` list
               const auto nv = aut.size();
-              bool aut_contains_other_vertices = false;
-              for (std::size_t v = 0; v != nv; ++v) {
+              bool aut_contains_other_vertices = true;
+              for (auto &&[v, ord] : vertices) {
                 const auto v_is_in_aut = v != aut[v];
-                if (v_is_in_aut && !vertices.contains(v)) {
-                  aut_contains_other_vertices = true;
+                if (v_is_in_aut) {
+                  aut_contains_other_vertices = false;
                   break;
                 }
               }
@@ -915,7 +914,7 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
                                                size_t v1, size_t v2) {
             const auto &edge1 = idx_vertex_to_edge(v1);
             const auto &edge2 = idx_vertex_to_edge(v2);
-            auto connected_to_same_nop =
+            auto connected_to_bra_or_ket_of_same_symmetric_nop =
                 [&tn_tensors](const auto &edge1, const auto &edge2) -> bool {
               const auto nt1 =
 #if USE_TENSOR_NETWORK_V3
@@ -934,32 +933,55 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
               for (auto i1 = 0; i1 != nt1; ++i1) {
                 const auto tensor1_ord =
 #if USE_TENSOR_NETWORK_V3
-                    i1 == 0 ? edge1.vertex(0).getTerminalIndex()
-                            : edge1.vertex(1).getTerminalIndex();
+                    edge1.vertex(i1).getTerminalIndex();
 #else
                     edge1[i1].tensor_ord;
 #endif
                 for (auto i2 = 0; i2 != nt2; ++i2) {
                   const auto tensor2_ord =
 #if USE_TENSOR_NETWORK_V3
-                      i2 == 0 ? edge2.vertex(0).getTerminalIndex()
-                              : edge2.vertex(1).getTerminalIndex();
+                      edge2.vertex(i2).getTerminalIndex();
 #else
                       edge2[i2].tensor_ord;
 #endif
+
+                  // do not skip if connected to same ...
                   if (tensor1_ord == tensor2_ord) {
                     auto tensor_ord = tensor1_ord;
                     const std::shared_ptr<AbstractTensor> &tensor_ptr =
                         tn_tensors.at(tensor_ord);
-                    if (std::dynamic_pointer_cast<NormalOperator<S>>(
-                            tensor_ptr))
-                      return true;
+
+                    // ... (anti)symmetric ...
+                    if (tensor_ptr->_symmetry() != Symmetry::nonsymm) {
+                      const auto tensor1_slot_type =
+#if USE_TENSOR_NETWORK_V3
+                          edge1.vertex(i1).getOrigin();
+#else
+                          edge1[i1].slot_type;
+#endif
+                      const auto tensor2_slot_type =
+#if USE_TENSOR_NETWORK_V3
+                          edge2.vertex(i2).getOrigin();
+#else
+                          edge2[i2].slot_type;
+#endif
+
+                      // ... bra/ket of ...
+                      if (tensor1_slot_type == tensor2_slot_type) {
+                        // ... NormalOperator!
+                        if (std::dynamic_pointer_cast<NormalOperator<S>>(
+                                tensor_ptr)) {
+                          return true;
+                        }
+                      }
+                    }
                   }
                 }
               }
               return false;
             };
-            const bool exclude = !connected_to_same_nop(edge1, edge2);
+            const bool exclude =
+                !connected_to_bra_or_ket_of_same_symmetric_nop(edge1, edge2);
             return exclude;
           };
 
@@ -970,7 +992,8 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
           std::tie(index_vidx2pidx, index_npartitions) = compute_partitions(
               index_vidx_ord, /* nontrivial_partitions_only = */ false,
               /* this is to ensure that each index partition only involves
-                 indices attached to bra or to ket of same nop */
+                 indices attached to bra or to ket of same
+                 symmetric/antisymmetric nop.*/
               exclude_index_vertex_pair);
 
           if (!index_vidx2pidx.empty()) {
@@ -993,6 +1016,11 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
             }
 
             this->set_op_partitions(index_partitions);
+
+            // TODO determine partitions of braket index pairs to be able to
+            // exploit topology for spin-free WT note that right now indices
+            // attached to bra/ket of spin-free normal operators are excluded
+            // from index partitions above
           }
         }
 
