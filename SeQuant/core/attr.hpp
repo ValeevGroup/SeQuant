@@ -117,6 +117,21 @@ inline std::wstring to_string(Vacuum V) {
   }
 }
 
+/// describes typesetting convention for contravariant (bra, annihilation) and
+/// covariant (ket, creation) indices
+enum class BraKetTypesetting {
+  /// contravariants as subscripts
+  ContraSub,
+  CoSuper = ContraSub,
+  BraSub = ContraSub,
+  KetSuper = ContraSub,
+  /// covariant as subscripts
+  CoSub,
+  ContraSuper = CoSub,
+  BraSuper = CoSub,
+  KetSub = CoSub,
+};
+
 }  // namespace sequant
 
 #endif  // SEQUANT_ATTR_HPP
