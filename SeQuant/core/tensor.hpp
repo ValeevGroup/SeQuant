@@ -300,6 +300,7 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
   }
 
   std::wstring to_latex() const override {
+    const auto bkt = get_default_context().braket_typesetting();
     // either rank > 1 or sum of bra and ket ranks > 1
     const bool add_bar =
         bra_rank() == ket_rank() ? rank() > 1 : bra_rank() + ket_rank() > 1;
@@ -309,11 +310,20 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
       result += L"\\bar{";
     result += utf_to_latex(this->label());
     if ((this->symmetry() == Symmetry::antisymm) && add_bar) result += L"}";
-    result += L"^{";
+
+    // ket
+    result += (bkt == BraKetTypesetting::KetSub ? L"_" : L"^");
+    result += L"{";
     for (const auto &i : this->ket()) result += sequant::to_latex(i);
-    result += L"}_{";
+    result += L"}";
+
+    // bra
+    result += (bkt == BraKetTypesetting::BraSub ? L"_" : L"^");
+    result += L"{";
     for (const auto &i : this->bra()) result += sequant::to_latex(i);
     result += L"}";
+
+    // aux
     if (!this->aux_.empty()) {
       result += L"[";
       const index_container_type &__aux = this->aux();

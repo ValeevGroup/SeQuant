@@ -606,6 +606,8 @@ class NormalOperator : public Operator<S>,
   }
 
   std::wstring to_latex() const override {
+    const auto bkt = get_default_context().braket_typesetting();
+
     std::wstring result;
     result = L"{";
     if (vacuum() == Vacuum::Physical) {
@@ -618,7 +620,8 @@ class NormalOperator : public Operator<S>,
     const auto ncreators = this->ncreators();
     const auto nannihilators = this->nannihilators();
     if (ncreators > 0) {
-      result += L"^{";
+      result += (bkt == BraKetTypesetting::KetSub ? L"_" : L"^");
+      result += L"{";
       if (ncreators <
           nannihilators) {  // if have more annihilators than creators pad on
                             // the left with square underbrackets, i.e. ⎵
@@ -633,7 +636,8 @@ class NormalOperator : public Operator<S>,
       result += L"}";
     }
     if (nannihilators > 0) {
-      result += L"_{";
+      result += (bkt == BraKetTypesetting::BraSub ? L"_" : L"^");
+      result += L"{";
       if (ncreators >
           nannihilators) {  // if have more creators than annihilators pad on
                             // the left with square underbrackets, i.e. ⎵

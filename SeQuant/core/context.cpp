@@ -19,6 +19,7 @@ bool operator==(const Context& ctx1, const Context& ctx2) {
                ctx2.first_dummy_index_ordinal() &&
            ctx1.index_space_registry()->spaces() ==
                ctx2.index_space_registry()->spaces() &&
+           ctx1.braket_typesetting() == ctx2.braket_typesetting() &&
            *ctx1.index_space_registry() == *ctx2.index_space_registry();
 }
 
@@ -102,31 +103,25 @@ set_scoped_default_context(Context&& ctx) {
 
 Context::Context(std::shared_ptr<IndexSpaceRegistry> isr, Vacuum vac,
                  IndexSpaceMetric m, BraKetSymmetry bks, SPBasis spb,
-                 std::size_t fdio)
+                 std::size_t fdio, BraKetTypesetting bkt)
     : idx_space_reg_(std::move(isr)),
       vacuum_(vac),
       metric_(m),
       braket_symmetry_(bks),
       spbasis_(spb),
-      first_dummy_index_ordinal_(fdio) {}
+      first_dummy_index_ordinal_(fdio),
+      braket_typesetting_(bkt) {}
 
 Context::Context(IndexSpaceRegistry isr, Vacuum vac, IndexSpaceMetric m,
-                 BraKetSymmetry bks, SPBasis spb, std::size_t fdio)
-    : idx_space_reg_(std::make_shared<IndexSpaceRegistry>(std::move(isr))),
-      vacuum_(vac),
-      metric_(m),
-      braket_symmetry_(bks),
-      spbasis_(spb),
-      first_dummy_index_ordinal_(fdio) {}
+                 BraKetSymmetry bks, SPBasis spb, std::size_t fdio,
+                 BraKetTypesetting bkt)
+    : Context(std::make_shared<IndexSpaceRegistry>(std::move(isr)), vac, m, bks,
+              spb, fdio, bkt) {}
 
 Context::Context(Vacuum vac, IndexSpaceMetric m, BraKetSymmetry bks,
-                 SPBasis spb, std::size_t fdio)
-    : idx_space_reg_(std::make_shared<IndexSpaceRegistry>()),
-      vacuum_(vac),
-      metric_(m),
-      braket_symmetry_(bks),
-      spbasis_(spb),
-      first_dummy_index_ordinal_(fdio) {}
+                 SPBasis spb, std::size_t fdio, BraKetTypesetting bkt)
+    : Context(std::make_shared<IndexSpaceRegistry>(), vac, m, bks, spb, fdio,
+              bkt) {}
 
 Context Context::clone() const {
   Context ctx(*this);
@@ -157,6 +152,10 @@ std::size_t Context::first_dummy_index_ordinal() const {
   return first_dummy_index_ordinal_;
 }
 
+BraKetTypesetting Context::braket_typesetting() const {
+  return braket_typesetting_;
+}
+
 Context& Context::set(Vacuum vacuum) {
   vacuum_ = vacuum;
   return *this;
@@ -185,6 +184,11 @@ Context& Context::set(SPBasis spbasis) {
 Context& Context::set_first_dummy_index_ordinal(
     std::size_t first_dummy_index_ordinal) {
   first_dummy_index_ordinal_ = first_dummy_index_ordinal;
+  return *this;
+}
+
+Context& Context::set(BraKetTypesetting bkt) {
+  braket_typesetting_ = bkt;
   return *this;
 }
 

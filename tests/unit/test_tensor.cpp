@@ -183,18 +183,34 @@ TEST_CASE("tensor", "[elements]") {
 
   SECTION("latex") {
     auto t1 = Tensor(L"F", bra{L"i_1"}, ket{L"i_2"});
-    REQUIRE(to_latex(t1) == L"{F^{{i_2}}_{{i_1}}}");
-
     auto t2 = Tensor(L"F", bra{L"i_1"}, ket{L"i_2"}, aux{L"i_3"});
-    REQUIRE(to_latex(t2) == L"{F^{{i_2}}_{{i_1}}[{i_3}]}");
-
     auto t3 = Tensor(L"F", bra{L"i_1"}, ket{L"i_2"}, aux{L"i_3", L"i_4"});
-    REQUIRE(to_latex(t3) == L"{F^{{i_2}}_{{i_1}}[{i_3},{i_4}]}");
-
     auto h1 = ex<Tensor>(L"F", bra{L"i_1"}, ket{L"i_2"}) *
               ex<FNOperator>(cre({L"i_1"}), ann({L"i_2"}));
-    REQUIRE(to_latex(h1) ==
-            L"{{F^{{i_2}}_{{i_1}}}{\\tilde{a}^{{i_1}}_{{i_2}}}}");
+
+    SECTION("default typesetting") {
+      REQUIRE(to_latex(t1) == L"{F^{{i_2}}_{{i_1}}}");
+      REQUIRE(to_latex(t2) == L"{F^{{i_2}}_{{i_1}}[{i_3}]}");
+      REQUIRE(to_latex(t3) == L"{F^{{i_2}}_{{i_1}}[{i_3},{i_4}]}");
+      REQUIRE(to_latex(h1) ==
+              L"{{F^{{i_2}}_{{i_1}}}{\\tilde{a}^{{i_1}}_{{i_2}}}}");
+    }
+
+    SECTION("ketsub typesetting") {
+      Context ctx = get_default_context();
+      REQUIRE(get_default_context().braket_typesetting() ==
+              BraKetTypesetting::KetSuper);
+      ctx.set(BraKetTypesetting::KetSub);
+      auto resetter = set_scoped_default_context(ctx);
+      REQUIRE(get_default_context().braket_typesetting() ==
+              BraKetTypesetting::KetSub);
+
+      REQUIRE(to_latex(t1) == L"{F_{{i_2}}^{{i_1}}}");
+      REQUIRE(to_latex(t2) == L"{F_{{i_2}}^{{i_1}}[{i_3}]}");
+      REQUIRE(to_latex(t3) == L"{F_{{i_2}}^{{i_1}}[{i_3},{i_4}]}");
+      REQUIRE(to_latex(h1) ==
+              L"{{F_{{i_2}}^{{i_1}}}{\\tilde{a}_{{i_1}}^{{i_2}}}}");
+    }
 
   }  // SECTION("latex")
 
