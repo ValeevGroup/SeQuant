@@ -1,0 +1,70 @@
+
+.. _file_SeQuant_core_wolfram.hpp:
+
+File wolfram.hpp
+================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core>` (``SeQuant/core``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/wolfram.hpp``)
+-----------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_wolfram.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/meta.hpp``
+
+- ``SeQuant/core/wstring.hpp`` (:ref:`file_SeQuant_core_wstring.hpp`)
+
+- ``string`` (:ref:`file_SeQuant_core_utility_string.cpp`)
+
+- ``type_traits``
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_core_complex.hpp`
+
+- :ref:`file_SeQuant_core_expr.hpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1a92314549fe0e76646271eb4e077ed789`
+
+- :ref:`exhale_function_namespacesequant_1ab87e06863676948c09289911cd355c5b`
+
+- :ref:`exhale_function_namespacesequant_1a8c09257461a7b2160aa97c6819fd9251`
+

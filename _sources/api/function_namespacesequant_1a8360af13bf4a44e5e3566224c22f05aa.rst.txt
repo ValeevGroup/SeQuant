@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a8360af13bf4a44e5e3566224c22f05aa:
+
+Function sequant::overlap_label
+===============================
+
+- Defined in :ref:`file_SeQuant_core_tensor.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::overlap_label()
+   :project: SeQuant

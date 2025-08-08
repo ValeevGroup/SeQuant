@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a676e65f12c192d787cf0399f7b33692c:
+
+Function sequant::to_latex(const rational&)
+===========================================
+
+- Defined in :ref:`file_SeQuant_core_rational.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::to_latex(const rational&)
+   :project: SeQuant

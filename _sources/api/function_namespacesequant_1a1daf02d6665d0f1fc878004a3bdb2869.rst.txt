@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a1daf02d6665d0f1fc878004a3bdb2869:
+
+Function sequant::to_default_symms
+==================================
+
+- Defined in :ref:`file_SeQuant_core_parse_parse.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::to_default_symms(const std::optional<Symmetry>&, const std::optional<BraKetSymmetry>&, const std::optional<ParticleSymmetry>&)
+   :project: SeQuant

@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a9a6f752b0f9a37e87910693349e8e745:
+
+Function sequant::to_wolfram(const ExprPtr&)
+============================================
+
+- Defined in :ref:`file_SeQuant_core_expr.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::to_wolfram(const ExprPtr&)
+   :project: SeQuant

@@ -1,0 +1,27 @@
+.. _exhale_class_classsequant_1_1_abstract_tensor:
+
+Class AbstractTensor
+====================
+
+- Defined in :ref:`file_SeQuant_core_abstract_tensor.hpp`
+
+
+Inheritance Relationships
+-------------------------
+
+Derived Types
+*************
+
+- ``public sequant::NormalOperator< S >`` (:ref:`exhale_class_classsequant_1_1_normal_operator`)
+- ``public sequant::Tensor`` (:ref:`exhale_class_classsequant_1_1_tensor`)
+
+
+Class Documentation
+-------------------
+
+
+.. doxygenclass:: sequant::AbstractTensor
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

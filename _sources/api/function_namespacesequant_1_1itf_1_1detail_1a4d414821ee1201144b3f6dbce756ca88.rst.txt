@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1itf_1_1detail_1a4d414821ee1201144b3f6dbce756ca88:
+
+Function sequant::itf::detail::indicesBySpace
+=============================================
+
+- Defined in :ref:`file_SeQuant_core_export_itf.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::itf::detail::indicesBySpace(const std::set<Index>&)
+   :project: SeQuant

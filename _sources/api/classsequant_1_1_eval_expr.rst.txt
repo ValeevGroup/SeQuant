@@ -1,0 +1,27 @@
+.. _exhale_class_classsequant_1_1_eval_expr:
+
+Class EvalExpr
+==============
+
+- Defined in :ref:`file_SeQuant_core_eval_expr.hpp`
+
+
+Inheritance Relationships
+-------------------------
+
+Derived Types
+*************
+
+- ``public sequant::EvalExprBTAS`` (:ref:`exhale_class_classsequant_1_1_eval_expr_b_t_a_s`)
+- ``public sequant::EvalExprTA`` (:ref:`exhale_class_classsequant_1_1_eval_expr_t_a`)
+
+
+Class Documentation
+-------------------
+
+
+.. doxygenclass:: sequant::EvalExpr
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

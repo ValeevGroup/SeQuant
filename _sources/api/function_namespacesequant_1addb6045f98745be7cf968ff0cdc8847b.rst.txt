@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1addb6045f98745be7cf968ff0cdc8847b:
+
+Function sequant::permute_braket
+================================
+
+- Defined in :ref:`file_SeQuant_core_abstract_tensor.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::permute_braket()
+   :project: SeQuant

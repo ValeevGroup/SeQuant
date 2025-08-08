@@ -1,0 +1,17 @@
+.. _exhale_class_classsequant_1_1itf_1_1_context:
+
+Class Context
+=============
+
+- Defined in :ref:`file_SeQuant_core_export_itf.hpp`
+
+
+Class Documentation
+-------------------
+
+
+.. doxygenclass:: sequant::itf::Context
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

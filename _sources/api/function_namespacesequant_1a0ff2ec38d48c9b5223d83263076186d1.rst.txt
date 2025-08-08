@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a0ff2ec38d48c9b5223d83263076186d1:
+
+Function sequant::expand_P_op(const Product&)
+=============================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_spin.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::expand_P_op(const Product&)
+   :project: SeQuant

@@ -1,0 +1,14 @@
+.. _exhale_variable_namespacesequant_1a082cfbecb3fa099ac17e21d0714a815b:
+
+Variable sequant::adjoint_label
+===============================
+
+- Defined in :ref:`file_SeQuant_core_expr.hpp`
+
+
+Variable Documentation
+----------------------
+
+
+.. doxygenvariable:: sequant::adjoint_label
+   :project: SeQuant

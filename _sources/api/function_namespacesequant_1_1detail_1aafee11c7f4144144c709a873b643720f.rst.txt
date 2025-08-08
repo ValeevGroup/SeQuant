@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1detail_1aafee11c7f4144144c709a873b643720f:
+
+Template Function sequant::detail::reduce_wick_impl
+===================================================
+
+- Defined in :ref:`file_SeQuant_core_wick.impl.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::detail::reduce_wick_impl(std::shared_ptr<Product>&, const container::set<Index>&, const Context&)
+   :project: SeQuant

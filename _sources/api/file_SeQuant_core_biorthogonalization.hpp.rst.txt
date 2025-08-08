@@ -1,0 +1,59 @@
+
+.. _file_SeQuant_core_biorthogonalization.hpp:
+
+File biorthogonalization.hpp
+============================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core>` (``SeQuant/core``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/biorthogonalization.hpp``)
+-----------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_biorthogonalization.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/container.hpp`` (:ref:`file_SeQuant_core_container.hpp`)
+
+- ``SeQuant/core/expr.hpp`` (:ref:`file_SeQuant_core_expr.hpp`)
+
+- ``SeQuant/core/index.hpp`` (:ref:`file_SeQuant_core_index.hpp`)
+
+- ``SeQuant/core/result_expr.hpp`` (:ref:`file_SeQuant_core_result_expr.hpp`)
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_core_biorthogonalization.cpp`
+
+- :ref:`file_SeQuant_domain_mbpt_spin.cpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+

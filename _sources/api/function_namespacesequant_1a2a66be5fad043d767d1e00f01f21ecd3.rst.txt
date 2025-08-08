@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a2a66be5fad043d767d1e00f01f21ecd3:
+
+Function sequant::spin_symm_tensor
+==================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_spin.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::spin_symm_tensor(const Tensor&)
+   :project: SeQuant

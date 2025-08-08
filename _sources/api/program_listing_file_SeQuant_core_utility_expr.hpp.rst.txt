@@ -1,0 +1,36 @@
+
+.. _program_listing_file_SeQuant_core_utility_expr.hpp:
+
+Program Listing for File expr.hpp
+=================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_core_utility_expr.hpp>` (``SeQuant/core/utility/expr.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   #ifndef SEQUANT_EXPR_UTILITIES_HPP
+   #define SEQUANT_EXPR_UTILITIES_HPP
+   
+   #include <SeQuant/core/container.hpp>
+   #include <SeQuant/core/expr.hpp>
+   #include <SeQuant/core/index.hpp>
+   
+   #include <optional>
+   #include <string>
+   #include <string_view>
+   
+   namespace sequant {
+   
+   std::string diff(const Expr& lhs, const Expr& rhs);
+   
+   [[nodiscard]] ExprPtr transform_expr(
+       const ExprPtr& expr, const container::map<Index, Index>& index_replacements,
+       Constant::scalar_type scaling_factor = 1);
+   
+   std::optional<ExprPtr> pop_tensor(ExprPtr& expression, std::wstring_view label);
+   
+   }  // namespace sequant
+   
+   #endif

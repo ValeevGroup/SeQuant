@@ -1,0 +1,63 @@
+
+.. _file_SeQuant_core_utility_expr.hpp:
+
+File expr.hpp
+=============
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core_utility>` (``SeQuant/core/utility``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/utility/expr.hpp``)
+----------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_utility_expr.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/container.hpp`` (:ref:`file_SeQuant_core_container.hpp`)
+
+- ``SeQuant/core/expr.hpp`` (:ref:`file_SeQuant_core_expr.hpp`)
+
+- ``SeQuant/core/index.hpp`` (:ref:`file_SeQuant_core_index.hpp`)
+
+- ``optional``
+
+- ``string`` (:ref:`file_SeQuant_core_utility_string.cpp`)
+
+- ``string_view``
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_core_biorthogonalization.cpp`
+
+- :ref:`file_SeQuant_core_utility_expr.cpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+

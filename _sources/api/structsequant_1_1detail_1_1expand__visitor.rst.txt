@@ -1,0 +1,17 @@
+.. _exhale_struct_structsequant_1_1detail_1_1expand__visitor:
+
+Struct expand_visitor
+=====================
+
+- Defined in :ref:`file_SeQuant_core_expr_algorithm.hpp`
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::detail::expand_visitor
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

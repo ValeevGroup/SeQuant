@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1detail_1a785547f6ef47fbf695d01ec9146c5d55:
+
+Template Function sequant::detail::select_string_literal
+========================================================
+
+- Defined in :ref:`file_SeQuant_core_wstring.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::detail::select_string_literal(const char(&), const wchar_t(&))
+   :project: SeQuant

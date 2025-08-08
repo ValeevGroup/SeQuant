@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1mbpt_1a8d9dd173b0894f3e6816a39deee823bf:
+
+Function sequant::mbpt::load
+============================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_convention.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::mbpt::load(Convention, SpinConvention)
+   :project: SeQuant

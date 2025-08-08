@@ -1,0 +1,14 @@
+.. _exhale_variable_namespacesequant_1_1mbpt_1ace258c23d1c5180eb08db25def8825a9:
+
+Variable sequant::mbpt::optype2label
+====================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_op.hpp`
+
+
+Variable Documentation
+----------------------
+
+
+.. doxygenvariable:: sequant::mbpt::optype2label
+   :project: SeQuant

@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1ad70637d2e37da4c601d03d785dac2f6c:
+
+Function sequant::expand_antisymm(const ExprPtr&, bool)
+=======================================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_spin.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::expand_antisymm(const ExprPtr&, bool)
+   :project: SeQuant
