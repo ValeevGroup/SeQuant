@@ -797,6 +797,10 @@ class NormalOperator : public Operator<S>,
   }
 
   // these implement the AbstractTensor interface
+  NormalOperator *_clone() const override final {
+    return new NormalOperator(*this);
+  }
+
   AbstractTensor::const_any_view_randsz _bra() const override final {
     return annihilators() |
            ranges::views::transform(
@@ -840,6 +844,7 @@ class NormalOperator : public Operator<S>,
   bool _is_cnumber() const override final { return false; }
   std::wstring_view _label() const override final { return label(); }
   std::wstring _to_latex() const override final { return to_latex(); }
+  std::size_t _hash_value() const override final { return this->hash_value(); }
   bool _transform_indices(
       const container::map<Index, Index> &index_map) override final {
     return transform_indices(index_map);
@@ -869,6 +874,13 @@ class NormalOperator : public Operator<S>,
                [](auto &&op) -> Index & { return op.index(); });
   }
   AbstractTensor::any_view_randsz _aux_mutable() override final { return {}; }
+
+  void _permute_aux(std::span<const std::size_t> perm) override final {
+    if (perm.size() != 0)
+      throw std::invalid_argument(
+          "NormalOperator::_permute_aux(p): there are no aux indices, p must "
+          "be null");
+  }
 };
 
 static_assert(

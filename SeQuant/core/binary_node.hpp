@@ -672,7 +672,7 @@ Node fold_left_to_node(Rng rng, F op) {
   using ranges::views::tail;
   return ranges::accumulate(
       rng | tail | move, std::move(ranges::front(rng)),
-      [&op, invoke_on_node](auto&& l, auto&& r) {
+      [&op](auto&& l, auto&& r) {
         if constexpr (invoke_on_node) {
           auto&& val = op(l, r);
           return FullBinaryNode(std::move(val), std::move(l), std::move(r));

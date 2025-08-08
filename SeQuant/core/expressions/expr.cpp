@@ -10,7 +10,7 @@
 #include <SeQuant/core/logger.hpp>
 #include <SeQuant/core/runtime.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
-#include <SeQuant/core/tensor_network_v2.hpp>
+#include <SeQuant/core/tensor_network_v3.hpp>
 
 #include <range/v3/all.hpp>
 
@@ -215,7 +215,7 @@ ExprPtr Product::canonicalize_impl(bool rapid) {
   if (!contains_nontensors) {  // tensor network canonization is a special case
                                // that's done in
                                // TensorNetwork
-    TensorNetworkV2 tn(factors_);
+    TensorNetworkV3 tn(factors_);
     auto canon_factor =
         tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(), rapid);
     const auto &tensors = tn.tensors();
@@ -358,7 +358,7 @@ ExprPtr Sum::canonicalize_impl(bool multipass) {
   for (auto pass = 0; pass != npasses; ++pass) {
     // recursively canonicalize summands ...
     // using for_each and directly access to summands
-    sequant::for_each(summands_, [this, pass](ExprPtr &summand) {
+    sequant::for_each(summands_, [pass](ExprPtr &summand) {
       auto bp = (pass % 2 == 0) ? summand->rapid_canonicalize()
                                 : summand->canonicalize();
       if (bp) {

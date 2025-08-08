@@ -418,6 +418,9 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
       hash::range(val, begin(aux()), end(aux()));
       hash::combine(val, label_);
       hash::combine(val, symmetry_);
+      hash::combine(val, braket_symmetry_);
+      hash::combine(val, particle_symmetry_);
+      // N.B. adjointness is baked into the label
       return val;
     };
     if (!hash_value_) {
@@ -436,13 +439,16 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
     const auto &that_cast = static_cast<const Tensor &>(that);
     if (this->label() == that_cast.label() &&
         this->symmetry() == that_cast.symmetry() &&
+        this->braket_symmetry() == that_cast.braket_symmetry() &&
+        this->particle_symmetry() == that_cast.particle_symmetry() &&
         this->bra_rank() == that_cast.bra_rank() &&
         this->ket_rank() == that_cast.ket_rank() &&
         this->aux_rank() == that_cast.aux_rank()) {
       // compare hash values first
       if (this->hash_value() ==
           that.hash_value())  // hash values agree -> do full comparison
-        return this->bra() == that_cast.bra() && this->ket() == that_cast.ket();
+        return this->bra() == that_cast.bra() &&
+               this->ket() == that_cast.ket() && this->aux() == that_cast.aux();
       else
         return false;
     } else
@@ -489,6 +495,8 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
                                         that_cast.aux().end());
   }
 
+  Tensor *_clone() const override final { return new Tensor(*this); }
+
   // these implement the AbstractTensor interface
   AbstractTensor::const_any_view_randsz _bra() const override final {
     return ranges::counted_view<const Index *>(
@@ -522,6 +530,7 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   bool _is_cnumber() const override final { return true; }
   std::wstring_view _label() const override final { return label_; }
   std::wstring _to_latex() const override final { return to_latex(); }
+  std::size_t _hash_value() const override final { return this->hash_value(); }
   bool _transform_indices(
       const container::map<Index, Index> &index_map) override final {
     return transform_indices(index_map);

@@ -1,9 +1,9 @@
 #include <SeQuant/core/complex.hpp>
 #include <SeQuant/core/context.hpp>
+#include <SeQuant/core/expressions/tensor.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/space.hpp>
-#include <SeQuant/core/tensor.hpp>
 
 #include <iostream>
 #include <string>

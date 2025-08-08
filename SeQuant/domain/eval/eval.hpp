@@ -481,7 +481,8 @@ ResultPtr evaluate(Args&&... args) {
 /// \tparam EvalTrace If Trace::On, trace is written to the logger's stream.
 ///                   Default is to follow Trace::Default, which is itself
 ///                   equal to Trace::On or Trace::Off.
-/// \brief Calls @code evaluate followd by the particle-symmetrization function.
+/// \brief Calls @code evaluate followed by the particle-symmetrization
+///        function.
 ///        The number of particles is inferred by the tensor present in the
 ///        evaluation node(s). Presence of odd-ranked tensors in the evaluation
 ///        node(s) is an error.
@@ -509,7 +510,7 @@ ResultPtr evaluate_symm(Args&&... args) {
 /// \tparam EvalTrace If Trace::On, trace is written to the logger's stream.
 ///                   Default is to follow Trace::Default, which is itself
 ///                   equal to Trace::On or Trace::Off.
-/// \brief Calls @code evaluate followd by the anti-symmetrization function on
+/// \brief Calls @code evaluate followed by the anti-symmetrization function on
 ///        the bra indices and the ket indices. The bra and ket indices are
 ///        inferred from the evaluation node(s).
 /// \return Evaluated result as ResultPtr.

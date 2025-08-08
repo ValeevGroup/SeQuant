@@ -24,6 +24,10 @@ using suitable_call_operator =
     decltype(std::declval<Callable>()(std::declval<Args>()...));
 
 /// @brief bubble sort that uses swap exclusively
+/// @tparam ForwardIter a forward iterator
+/// @tparam Sentinel a sentinel type
+/// @tparam Compare a less-than relationship that specifies a weak order
+/// @note does not assume `Compare` to be strict, unlike `std::sort`
 template <typename ForwardIter, typename Sentinel,
           typename Compare = std::less<>>
 void bubble_sort(ForwardIter begin, Sentinel end, Compare comp = {}) {

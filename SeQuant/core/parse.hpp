@@ -103,6 +103,7 @@ std::wstring deparse(const Expr &expr, bool annot_sym = true);
 std::wstring deparse(const Product &product, bool annot_sym);
 std::wstring deparse(const Sum &sum, bool annot_sym);
 std::wstring deparse(const Tensor &tensor, bool annot_sym = true);
+std::wstring deparse(const AbstractTensor &tensor, bool annot_sym = true);
 template <Statistics S>
 std::wstring deparse(const NormalOperator<S> &nop);
 std::wstring deparse(const Variable &variable);

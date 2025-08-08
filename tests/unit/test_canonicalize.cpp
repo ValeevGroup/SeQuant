@@ -151,10 +151,9 @@ TEST_CASE("canonicalization", "[algorithms]") {
           ex<Tensor>(L"f", bra{L"a_5"}, ket{L"i_5"}, Symmetry::nonsymm) *
           ex<Tensor>(L"t", bra{L"i_1"}, ket{L"a_5"}, Symmetry::nonsymm) * f2;
       canonicalize(input1);
-      REQUIRE_THAT(
-          input1,
-          SimplifiesTo(
-              "S{a_1,a_2;i_1,i_2} f{a_3;i_3} f⁺{i_1,i_3;a_1,a_2} t{i_2;a_3}"));
+      REQUIRE_THAT(input1,
+                   SimplifiesTo("S{a_1,a_2;i_1,i_2} f{a_3;i_3} "
+                                "f⁺{i_1,i_3;a_1,a_2}:N-N-S t{i_2;a_3}"));
       auto input2 =
           ex<Tensor>(L"S", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"},
                      Symmetry::nonsymm) *
@@ -162,8 +161,9 @@ TEST_CASE("canonicalization", "[algorithms]") {
           ex<Tensor>(L"t", bra{L"i_1"}, ket{L"a_5"}, Symmetry::nonsymm) * f2 *
           ex<Variable>(L"w") * ex<Constant>(rational{1, 2});
       canonicalize(input2);
-      REQUIRE_THAT(input2, SimplifiesTo("1/2 w S{a_1,a_2;i_1,i_2} f{a_3;i_3} "
-                                        "f⁺{i_1,i_3;a_1,a_2} t{i_2;a_3}"));
+      REQUIRE_THAT(input2,
+                   SimplifiesTo("1/2 w S{a_1,a_2;i_1,i_2} f{a_3;i_3} "
+                                "f⁺{i_1,i_3;a_1,a_2}:N-N-S t{i_2;a_3}"));
     }
   }
   {
@@ -313,7 +313,7 @@ TEST_CASE("canonicalization", "[algorithms]") {
         canonicalize(input);
         REQUIRE_THAT(
             input,
-            SimplifiesTo(
+            EquivalentTo(
                 "-8 S{i1,i2,i3;a1,a2,a3} f{i4;i3} t{a1,a2,a3;i1,i4,i2}"));
       }
 
@@ -335,16 +335,16 @@ TEST_CASE("canonicalization", "[algorithms]") {
         canonicalize(term1);
         canonicalize(term2);
         REQUIRE_THAT(term1,
-                     SimplifiesTo("-4 S{i_1,i_2,i_3;a_1,a_2,a_3} f{i_4;i_3} "
+                     EquivalentTo("-4 S{i_1,i_2,i_3;a_1,a_2,a_3} f{i_4;i_3} "
                                   "t{a_1,a_2,a_3;i_1,i_4,i_2}"));
         REQUIRE_THAT(term2,
-                     SimplifiesTo("-4 S{i_1,i_2,i_3;a_1,a_2,a_3} f{i_4;i_3} "
+                     EquivalentTo("-4 S{i_1,i_2,i_3;a_1,a_2,a_3} f{i_4;i_3} "
                                   "t{a_1,a_2,a_3;i_1,i_4,i_2}"));
         auto sum_of_terms = term1 + term2;
         simplify(sum_of_terms);
         REQUIRE_THAT(
             sum_of_terms,
-            SimplifiesTo(
+            EquivalentTo(
                 "-8 S{i1,i2,i3;a1,a2,a3} f{i4;i3} t{a1,a2,a3;i1,i4,i2}"));
       }
 
@@ -364,7 +364,7 @@ TEST_CASE("canonicalization", "[algorithms]") {
                            ket{L"i_2", L"i_3", L"i_4"}, Symmetry::nonsymm);
         canonicalize(input);
         REQUIRE_THAT(
-            input, SimplifiesTo(
+            input, EquivalentTo(
                        "4 S{i1,i2,i3;a1,a2,a3} f{i4;i3} t{a1,a2,a3;i4,i1,i2}"));
       }
     }

@@ -75,6 +75,14 @@ class SwapCountable {
   template <typename U>
   explicit SwapCountable(U&& v) : value_(std::forward<U>(v)) {}
 
+  template <typename U>
+  SwapCountable& operator=(U&& v) {
+    value_ = std::forward<U>(v);
+    return *this;
+  }
+
+  operator T() const { return value_; }
+
  private:
   T value_;
 

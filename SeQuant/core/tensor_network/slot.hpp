@@ -28,7 +28,9 @@ enum class TensorIndexSlotType {
 /// @sa TensorNetworkV2
 enum class IndexSlotType {
   /// only part of proto index bundles
-  SPBundle,
+  IndexBundle,
+  /// legacy alias for IndexBundle
+  SPBundle = IndexBundle,
   /// in bra tensor vector index slot
   TensorBra,
   /// in ket tensor vector index slot
