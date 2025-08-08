@@ -4303,6 +4303,55 @@ Graph::cmp(Graph& other)
   return 0;
 }
 
+int
+Graph::cmp(const Graph& other) const
+{
+  /* Compare the numbers of vertices */
+  if(get_nof_vertices() < other.get_nof_vertices())
+    return -1;
+  if(get_nof_vertices() > other.get_nof_vertices())
+    return 1;
+  /* Compare vertex colors */
+  for(unsigned int i = 0; i < get_nof_vertices(); i++)
+    {
+      if(vertices[i].color < other.vertices[i].color)
+	return -1;
+      if(vertices[i].color > other.vertices[i].color)
+	return 1;
+    }
+
+  // Note: No edge de-duplication in the const variant
+
+  for(unsigned int i = 0; i < get_nof_vertices(); i++)
+    {
+      if(vertices[i].nof_edges() < other.vertices[i].nof_edges())
+	return -1;
+      if(vertices[i].nof_edges() > other.vertices[i].nof_edges())
+	return 1;
+    }
+  /* Compare edges */
+  for(unsigned int i = 0; i < get_nof_vertices(); i++)
+    {
+      const Vertex &v1 = vertices[i];
+      const Vertex &v2 = other.vertices[i];
+
+	  // Note: No edge sorting in the const variant
+
+      auto ei1 = v1.edges.begin();
+      auto ei2 = v2.edges.begin();
+      while(ei1 != v1.edges.end())
+	{
+	  if(*ei1 < *ei2)
+	    return -1;
+	  if(*ei1 > *ei2)
+	    return 1;
+	  ei1++;
+	  ei2++;
+	}
+    }
+  return 0;
+}
+
 
 Graph*
 Graph::permute(const std::vector<unsigned int>& perm) const

@@ -2,13 +2,13 @@
 // Created by Eduard Valeyev on 2025-24-07.
 //
 
-#include <SeQuant/core/abstract_tensor.hpp>
 #include <SeQuant/core/algorithm.hpp>
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/bliss.hpp>
 #include <SeQuant/core/complex.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/expressions/abstract_tensor.hpp>
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/latex.hpp>

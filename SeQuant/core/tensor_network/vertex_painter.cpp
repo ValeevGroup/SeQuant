@@ -1,3 +1,4 @@
+#include <SeQuant/core/expressions/abstract_tensor.hpp>
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/tensor_network/vertex_painter.hpp>
 

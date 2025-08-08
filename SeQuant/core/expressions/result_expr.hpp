@@ -1,11 +1,11 @@
-#ifndef SEQUANT_RESULT_EXPR_HPP
-#define SEQUANT_RESULT_EXPR_HPP
+#ifndef SEQUANT_EXPRESSIONS_RESULT_EXPR_HPP
+#define SEQUANT_EXPRESSIONS_RESULT_EXPR_HPP
 
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/container.hpp>
-#include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/expressions/tensor.hpp>
+#include <SeQuant/core/expressions/variable.hpp>
 #include <SeQuant/core/index.hpp>
-#include <SeQuant/core/tensor.hpp>
 
 #include <cassert>
 #include <initializer_list>
@@ -14,9 +14,6 @@
 #include <type_traits>
 
 namespace sequant {
-
-class Tensor;
-class Variable;
 
 /// Represents an expression containing a left-hand-side of the form
 /// <lhs> = <expression>
@@ -119,6 +116,24 @@ class ResultExpr {
     return groups;
   }
 
+  Tensor result_as_tensor(std::wstring default_label = L"Unnamed") const {
+    return Tensor(m_label.has_value() ? m_label.value() : default_label,
+                  sequant::bra(m_braIndices), sequant::ket(m_ketIndices),
+                  sequant::aux(m_auxIndices), m_symm, m_bksymm, m_psymm);
+  }
+
+  Variable result_as_variable(std::wstring default_label = L"Unnamed") const {
+    assert(!produces_tensor());
+    return Variable(m_label.has_value() ? m_label.value() : default_label);
+  }
+
+  bool produces_tensor() const {
+    return !m_braIndices.empty() || !m_ketIndices.empty() ||
+           !m_auxIndices.empty();
+  }
+
+  bool operator==(const ResultExpr &other) const = default;
+
  private:
   ExprPtr m_expr;
 
@@ -136,6 +151,18 @@ class ResultExpr {
   std::optional<std::wstring> m_label;
 };
 
+ResultExpr &canonicalize(ResultExpr &expr);
+ResultExpr &simplify(ResultExpr &expr);
+ResultExpr &rapid_simplify(ResultExpr &expr);
+ResultExpr &expand(ResultExpr &expr);
+ResultExpr &optimize(ResultExpr &expr);
+
+[[nodiscard]] ResultExpr &canonicalize(ResultExpr &&expr);
+[[nodiscard]] ResultExpr &simplify(ResultExpr &&expr);
+[[nodiscard]] ResultExpr &rapid_simplify(ResultExpr &&expr);
+[[nodiscard]] ResultExpr &expand(ResultExpr &&expr);
+[[nodiscard]] ResultExpr &optimize(ResultExpr &&expr);
+
 }  // namespace sequant
 
-#endif  // SEQUANT_RESULT_EXPR_HPP
+#endif  // SEQUANT_EXPRESSIONS_RESULT_EXPR_HPP

@@ -3,7 +3,6 @@
 #include <SeQuant/core/complex.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
-#include <SeQuant/core/expr_operator.hpp>
 
 #include <range/v3/algorithm.hpp>
 #include <range/v3/iterator.hpp>

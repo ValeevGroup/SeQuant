@@ -5,9 +5,9 @@
 #ifndef SEQUANT_TENSOR_NETWORK_V3_H
 #define SEQUANT_TENSOR_NETWORK_V3_H
 
-#include <SeQuant/core/abstract_tensor.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/expressions/abstract_tensor.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/tensor_network/canonicals.hpp>
 #include <SeQuant/core/tensor_network/slot.hpp>

@@ -10,7 +10,7 @@
 
 #include <btas/btas.h>
 #include <SeQuant/core/container.hpp>
-#include <SeQuant/core/tensor.hpp>
+#include <SeQuant/core/expr.hpp>
 #include <SeQuant/domain/eval/eval.hpp>
 #include <range/v3/view.hpp>
 

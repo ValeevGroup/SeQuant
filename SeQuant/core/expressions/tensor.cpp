@@ -2,11 +2,11 @@
 // Created by Eduard Valeyev on 2019-01-30.
 //
 
-#include <SeQuant/core/abstract_tensor.hpp>
-#include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/expressions/abstract_tensor.hpp>
+#include <SeQuant/core/expressions/expr.hpp>
+#include <SeQuant/core/expressions/tensor.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/op.hpp>
-#include <SeQuant/core/tensor.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 
 namespace sequant {

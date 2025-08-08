@@ -4,9 +4,9 @@
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/op.hpp>
 
-#include <SeQuant/core/abstract_tensor.hpp>
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/expressions/abstract_tensor.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 
 #include "python.h"
