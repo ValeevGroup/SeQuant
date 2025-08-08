@@ -653,7 +653,7 @@ SECTION("Swap bra kets") {
 SECTION("Closed-shell spintrace CCD") {
   // Energy expression
   {
-    {  // standard
+    {  // standard (regular_cs)
       const auto input = ex<Sum>(ExprPtrList{parse_expr(
           L"1/4 g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_1,i_2}", Symmetry::antisymm)});
       auto result = closed_shell_CC_spintrace(input);
@@ -661,7 +661,16 @@ SECTION("Closed-shell spintrace CCD") {
                    EquivalentTo(L"- g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_2,i_1} + "
                                 L"2 g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_1,i_2}"));
     }
-    {  // CSV (aka PNO)
+    {  // compact set
+      const auto input = ex<Sum>(ExprPtrList{parse_expr(
+          L"1/4 g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_1,i_2}", Symmetry::antisymm)});
+
+      auto result = closed_shell_CC_spintrace_compact_set(input);
+      REQUIRE_THAT(result,
+                   EquivalentTo(L"- g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_2,i_1} + "
+                                L"2 g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_1,i_2}"));
+    }
+    {  // CSV (aka PNO) for regular cs
       const auto pno_ccd_energy_so = parse_expr(
           L"1/4 g{a1<i1,i2>, a2<i1,i2>;i1, i2}:A-C t{i1,i2;a1<i1,i2>, "
           L"a2<i1,i2>}:A");
@@ -671,6 +680,22 @@ SECTION("Closed-shell spintrace CCD") {
           ex<Sum>(ExprPtrList{pno_ccd_energy_so});
       auto pno_ccd_energy_sf =
           closed_shell_CC_spintrace(pno_ccd_energy_so_as_sum);
+      REQUIRE_THAT(pno_ccd_energy_sf,
+                   SimplifiesTo("2 g{a1<i1,i2>,a2<i1,i2>;i1,i2}:N-C "
+                                "t{i1,i2;a1<i1,i2>,a2<i1,i2>}:N-C - "
+                                "g{a1<i1,i2>,a2<i1,i2>;i1,i2}:N-C "
+                                "t{i1,i2;a2<i1,i2>,a1<i1,i2>}:N-C"));
+    }
+    {  // CSV (aka PNO) for compact-set
+      const auto pno_ccd_energy_so = parse_expr(
+          L"1/4 g{a1<i1,i2>, a2<i1,i2>;i1, i2}:A-C t{i1,i2;a1<i1,i2>, "
+          L"a2<i1,i2>}:A");
+
+      // why???
+      const auto pno_ccd_energy_so_as_sum =
+          ex<Sum>(ExprPtrList{pno_ccd_energy_so});
+      auto pno_ccd_energy_sf =
+          closed_shell_CC_spintrace_compact_set(pno_ccd_energy_so_as_sum);
       REQUIRE_THAT(pno_ccd_energy_sf,
                    SimplifiesTo("2 g{a1<i1,i2>,a2<i1,i2>;i1,i2}:N-C "
                                 "t{i1,i2;a1<i1,i2>,a2<i1,i2>}:N-C - "
