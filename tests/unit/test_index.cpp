@@ -118,6 +118,7 @@ TEST_CASE("index", "[elements][index]") {
 #ifndef NDEBUG
       REQUIRE_THROWS(Index(isr->retrieve(L"i"), 4, {i1, i1}));
       REQUIRE_THROWS(Index(L"i_5", {L"i_1", L"i_1"}));
+      REQUIRE_THROWS(Index(L"i_5", {L"i_1", L""}));
 #endif
     }
 

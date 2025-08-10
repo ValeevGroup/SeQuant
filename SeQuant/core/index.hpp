@@ -175,7 +175,7 @@ class Index : public Taggable {
     proto_indices_ = std::move(proto_indices);
     symmetric_proto_indices_ = symmetric_proto_indices;
     canonicalize_proto_indices();
-    check_for_duplicate_proto_indices();
+    validate_proto_indices();
   }
 
   /// @param space (a const ref to) the IndexSpace object that specifies to this
@@ -191,7 +191,7 @@ class Index : public Taggable {
     proto_indices_ = std::move(proto_indices);
     symmetric_proto_indices_ = symmetric_proto_indices;
     canonicalize_proto_indices();
-    check_for_duplicate_proto_indices();
+    validate_proto_indices();
   }
 
   /// @param space (a const ref to) the IndexSpace object that specifies to this
@@ -208,7 +208,7 @@ class Index : public Taggable {
     proto_indices_ = std::move(proto_indices);
     symmetric_proto_indices_ = symmetric_proto_indices;
     canonicalize_proto_indices();
-    check_for_duplicate_proto_indices();
+    validate_proto_indices();
   }
 
   /// @param space (a const ref to) the IndexSpace object that specifies to this
@@ -223,7 +223,7 @@ class Index : public Taggable {
     proto_indices_ = std::move(proto_indices);
     symmetric_proto_indices_ = symmetric_proto_indices;
     canonicalize_proto_indices();
-    check_for_duplicate_proto_indices();
+    validate_proto_indices();
   }
 
   /// @param space (a const ref to) the IndexSpace object that specifies to this
@@ -240,7 +240,7 @@ class Index : public Taggable {
     proto_indices_ = std::move(proto_indices);
     symmetric_proto_indices_ = symmetric_proto_indices;
     canonicalize_proto_indices();
-    check_for_duplicate_proto_indices();
+    validate_proto_indices();
   }
 
   /// @param space (a const ref to) the IndexSpace object that specifies to this
@@ -258,7 +258,7 @@ class Index : public Taggable {
     proto_indices_ = std::move(proto_indices);
     symmetric_proto_indices_ = symmetric_proto_indices;
     canonicalize_proto_indices();
-    check_for_duplicate_proto_indices();
+    validate_proto_indices();
   }
 
   /// @param label the index label, does not need to be unique, but must be
@@ -324,7 +324,7 @@ class Index : public Taggable {
     } else
       proto_indices_ = std::move(proto_indices);
     canonicalize_proto_indices();
-    check_for_duplicate_proto_indices();
+    validate_proto_indices();
   }
 
   /// @brief constructs an Index using an existing Index's label and space and a
@@ -363,7 +363,7 @@ class Index : public Taggable {
       ordinal_ = index_or_index_label.ordinal_;
     }
     canonicalize_proto_indices();
-    check_for_duplicate_proto_indices();
+    validate_proto_indices();
   }
 
   /// @brief constructs an Index using an existing Index's label and proto
@@ -458,7 +458,7 @@ class Index : public Taggable {
     }
     result.symmetric_proto_indices_ = symmetric_proto_indices;
     result.canonicalize_proto_indices();
-    result.check_for_duplicate_proto_indices();
+    result.validate_proto_indices();
     return result;
   }
 
@@ -872,9 +872,11 @@ class Index : public Taggable {
   /// sorts proto_indices_ if symmetric_proto_indices_
   inline void canonicalize_proto_indices() noexcept;
 
+  /// validate protoindices
   /// @warning disabled if NDEBUG is defined
-  /// @throw std::invalid_argument  have duplicates in proto_indices_
-  inline void check_for_duplicate_proto_indices() const;
+  /// @throw std::invalid_argument if have duplicate or null indices among
+  /// protoindices
+  inline void validate_proto_indices() const;
 
   /// throws std::invalid_argument if the ordinal is among reserved for
   /// generated Index objects
@@ -990,28 +992,33 @@ inline const IndexSpace::Attr Index::default_space_attr{
     IndexSpace::Attr::reserved};
 inline const Index Index::null;
 
-void Index::check_for_duplicate_proto_indices() const {
+void Index::validate_proto_indices() const {
 #ifndef NDEBUG
-  if (!symmetric_proto_indices_) {  // if proto indices not symmetric, sort via
-                                    // ptrs
-    container::vector<Index const *> vp;
-    vp.reserve(proto_indices_.size());
-    for (size_t i = 0; i < proto_indices_.size(); ++i)
-      vp.push_back(&proto_indices_[i]);
-    std::sort(vp.begin(), vp.end(),
-              [](Index const *l, Index const *r) { return *l < *r; });
-    if (std::adjacent_find(vp.begin(), vp.end(),
-                           [](Index const *l, Index const *r) {
-                             return *l == *r;
-                           }) != vp.end()) {
-      throw std::invalid_argument(
-          "Index ctor: duplicate proto indices detected");
-    }
-  } else {  // else search directly
-    if (std::adjacent_find(begin(proto_indices_), end(proto_indices_)) !=
-        proto_indices_.end()) {
-      throw std::invalid_argument(
-          "Index ctor: duplicate proto indices detected");
+  if (!proto_indices_.empty()) {
+    if (ranges::contains(proto_indices_, null))
+      throw std::invalid_argument("Index ctor: null proto index detected");
+    if (!symmetric_proto_indices_) {  // if proto indices not symmetric, sort
+                                      // via
+      // ptrs
+      container::svector<Index const *> vp;
+      vp.reserve(proto_indices_.size());
+      for (size_t i = 0; i < proto_indices_.size(); ++i)
+        vp.push_back(&proto_indices_[i]);
+      std::sort(vp.begin(), vp.end(),
+                [](Index const *l, Index const *r) { return *l < *r; });
+      if (std::adjacent_find(vp.begin(), vp.end(),
+                             [](Index const *l, Index const *r) {
+                               return *l == *r;
+                             }) != vp.end()) {
+        throw std::invalid_argument(
+            "Index ctor: duplicate proto indices detected");
+      }
+    } else {  // else search directly
+      if (std::adjacent_find(begin(proto_indices_), end(proto_indices_)) !=
+          proto_indices_.end()) {
+        throw std::invalid_argument(
+            "Index ctor: duplicate proto indices detected");
+      }
     }
   }
 #endif
