@@ -95,12 +95,101 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
   // list of friends who can make Tensor objects with reserved labels
   friend ExprPtr make_overlap(const Index &bra_index, const Index &ket_index);
 
-  /// @throw std::invalid_argument if aux contains null indices and `NDEBUG` is
-  /// not `#define`d
-  void assert_aux_does_not_contain_null_indices() const {
+  /// validates bra, ket, and aux indices
+
+  // clang-format off
+  /// @throw std::invalid_argument if `NDEBUG` not `#define`d and:
+  ///        - `symmetry()==Symmetry::antisymm` and `bra()` or `ket()` contains null indices, or
+  ///        - `aux()` contains null indices, or
+  ///        - there are duplicate indices within bra, within ket, or within aux
+  // clang-format on
+  void validate_indices() const {
 #ifndef NDEBUG
-    if (!aux_.empty() && ranges::contains(aux_, Index::null))
+    // antisymmetric bra or ket cannot support null indices (because it is not
+    // clear what antisymmetry means if some slots can be empty; permutation of
+    // 2 empty slots is supposed to do what?)
+    if (symmetry() == Symmetry::antisymm) {
+      if (!bra_.empty() && ranges::contains(bra_, Index::null))
+        throw std::invalid_argument(
+            "Tensor ctor: found null indices in antisymmetric bra");
+      if (!ket_.empty() && ranges::contains(ket_, Index::null))
+        throw std::invalid_argument(
+            "Tensor ctor: found null indices in antisymmetric ket");
+    }
+    // matching bra and ket slots cannot be both empty ... this means that in
+    // the symmetric case either bra or ket only can contain empty slots, else
+    // by permuting bra and ket can align empty slots
+    else {
+      if (symmetry() == Symmetry::symm) {
+        const auto bra_has_nulls = ranges::contains(bra_, Index::null);
+        const auto ket_has_nulls = ranges::contains(ket_, Index::null);
+        if (bra_has_nulls && ket_has_nulls)
+          throw std::invalid_argument(
+              "Tensor ctor: found null indices in symmetric bra AND ket");
+        if (bra_has_nulls && bra_rank() > ket_rank())
+          throw std::invalid_argument(
+              "Tensor ctor: found null indices in symmetric bra, which is "
+              "longer than the ket");
+        if (ket_has_nulls && ket_rank() > bra_rank())
+          throw std::invalid_argument(
+              "Tensor ctor: found null indices in symmetric ket, which is "
+              "longer than the bra");
+      } else {  // asymmetric bra or ket
+        const auto braket_rank = std::min(bra_rank(), ket_rank());
+        for (std::size_t r = 0; r != braket_rank; ++r) {
+          if (bra_[r] == Index::null && ket_[r] == Index::null)
+            throw std::invalid_argument(
+                "Tensor ctor: found null indices in both matching slots of "
+                "asymmetric bra and ket");
+        }
+        if (bra_rank() != ket_rank()) {
+          const auto longer_bundle_type =
+              bra_rank() > ket_rank() ? SlotType::Bra : SlotType::Ket;
+          auto *longer_bundle = longer_bundle_type == SlotType::Bra
+                                    ? &bra_[0]
+                                    : &ket_[0];  // n.b. these are contiguous
+          const auto rank = std::max(bra_rank(), ket_rank());
+          for (std::size_t r = braket_rank; r != rank; ++r) {
+            if (longer_bundle[r] == Index::null)
+              throw std::invalid_argument(
+                  (std::string("Tensor ctor: found null index in a slot of "
+                               "asymmetric ") +
+                   (longer_bundle_type == SlotType::Bra ? "bra" : "ket") +
+                   " without a matching " +
+                   (longer_bundle_type == SlotType::Bra ? "ket" : "bra") +
+                   " slot")
+                      .c_str());
+          }
+        }
+      }
+    }
+    if (!aux_.empty() && ranges::contains(aux_, Index::null)) {
       throw std::invalid_argument("Tensor ctor: found null aux indices");
+    }
+    // check for duplicates
+    {
+      auto throw_if_contains_duplicates = [](const auto &indices,
+                                             const char *id) -> void {
+        // sort via ptrs
+        auto index_ptrs = indices |
+                          ranges::views::transform(
+                              [&](const Index &index) { return &index; }) |
+                          ranges::to<container::svector<Index const *>>;
+        ranges::sort(index_ptrs,
+                     [](Index const *l, Index const *r) { return *l < *r; });
+        if (ranges::adjacent_find(index_ptrs,
+                                  [](Index const *l, Index const *r) {
+                                    // N.B. multiple null indices OK
+                                    return *l == *r && *l != Index::null;
+                                  }) != index_ptrs.end())
+          throw std::invalid_argument(
+              (std::string("Tensor ctor: duplicate ") + id + " indices")
+                  .c_str());
+      };
+      throw_if_contains_duplicates(bra_, "bra");
+      throw_if_contains_duplicates(ket_, "ket");
+      throw_if_contains_duplicates(aux_, "aux");
+    }
 #endif
   }
 
@@ -129,7 +218,7 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
         symmetry_(s),
         braket_symmetry_(bks),
         particle_symmetry_(ps) {
-    assert_aux_does_not_contain_null_indices();
+    validate_indices();
     validate_symmetries();
   }
 
@@ -146,7 +235,7 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
         symmetry_(s),
         braket_symmetry_(bks),
         particle_symmetry_(ps) {
-    assert_aux_does_not_contain_null_indices();
+    validate_indices();
     validate_symmetries();
   }
 
@@ -155,6 +244,18 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
   /// @sa Tensor::operator bool()
   Tensor() = default;
   virtual ~Tensor();
+
+  // clang-format off
+  /// @name nontrivial constructors
+  /// @note if `NDEBUG` is not `#define`d and invalid combinations of indices are found, these throw `std::invalid_argument`. Specifically, these throw if
+  /// - null indices are found in any slot of antisymmetric bra or ket (it's not clear what permutation of 2 empty slots is supposed to do in general)
+  /// - null indices are found in both slots of bra-ket slot pairs:
+  ///   - this means for symmetric bra/ket null indices can only be found in either bra or ket (else can align empty slots by permutation) and then only in the shorter of the two bundles
+  ///   - for asymmetric bra/ket no pair of matching bra/ket slots can be totally empty, and no bra/ket slot without matching ket/bra counterpart can be empty
+  /// - null indices are found in any aux slot (why would empty slots be needed?)
+  /// - duplicate indices are found within bra, within ket, or within aux (but same index can appear in bra and ket, for example).
+  /// @{
+  // clang-format on
 
   /// @param label the tensor label
   /// @param bra_indices list of bra indices (or objects that can be converted
@@ -210,7 +311,7 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
          ParticleSymmetry ps = ParticleSymmetry::symm)
       : Tensor(label, bra_indices, ket_indices, aux_indices, reserved_tag{}, s,
                bks, ps) {
-    assert_aux_does_not_contain_null_indices();
+    validate_indices();
     assert_nonreserved_label(label_);
   }
 
@@ -250,9 +351,11 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
          ParticleSymmetry ps = ParticleSymmetry::symm)
       : Tensor(label, std::move(bra_indices), std::move(ket_indices),
                std::move(aux_indices), reserved_tag{}, s, bks, ps) {
-    assert_aux_does_not_contain_null_indices();
+    validate_indices();
     assert_nonreserved_label(label_);
   }
+
+  /// @}
 
   /// @return true if the Tensor is initialized
   explicit operator bool() const {

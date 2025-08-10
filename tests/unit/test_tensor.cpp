@@ -87,10 +87,92 @@ TEST_CASE("tensor", "[elements]") {
     REQUIRE(t4.particle_symmetry() == ParticleSymmetry::nonsymm);
     REQUIRE(t4.label() == L"g");
 
+    SECTION("null indices") {
+      REQUIRE_NOTHROW(
+          Tensor(L"N", bra{L""}, ket{L"i_1"}, aux{}, Symmetry::symm));
+      REQUIRE_NOTHROW(
+          Tensor(L"N", bra{L"i_1"}, ket{L""}, aux{}, Symmetry::symm));
+      REQUIRE_NOTHROW(
+          Tensor(L"N", bra{L""}, ket{L"i_1"}, aux{}, Symmetry::nonsymm));
+      REQUIRE_NOTHROW(
+          Tensor(L"N", bra{L"i_1"}, ket{L""}, aux{}, Symmetry::nonsymm));
+
+      // null indices ok in symmetric bra or ket as long as it's shorter than
+      // the counterpart
+      REQUIRE_NOTHROW(Tensor(L"N", bra{L"i_2", L"i_3", L"i_4"},
+                             ket{L"i_1", L""}, aux{}, Symmetry::symm));
+      REQUIRE_NOTHROW(Tensor(L"N", bra{L"", L"i_1"},
+                             ket{L"i_2", L"i_3", L"i_4"}, aux{},
+                             Symmetry::symm));
+
+      // null indices ok in asymmetric bra or ket as long as they are the the
+      // only in the "column"
+      REQUIRE_NOTHROW(Tensor(L"N", bra{L"", L"i_2", L"i_3"}, ket{L"i_1", L""},
+                             aux{}, Symmetry::nonsymm));
+      REQUIRE_NOTHROW(Tensor(L"N", bra{L"i_1", L""}, ket{L"", L"i_2", L"i_3"},
+                             aux{}, Symmetry::nonsymm));
+
+      // check errors
 #ifndef NDEBUG
-    REQUIRE_THROWS_AS(Tensor(L"N", bra{L"i_1"}, ket{}, aux{L""}),
-                      std::invalid_argument);
+      // no null indices in antisymmetric bra or ket
+      REQUIRE_THROWS_AS(
+          Tensor(L"N", bra{L""}, ket{L"i_1"}, aux{}, Symmetry::antisymm),
+          std::invalid_argument);
+      REQUIRE_THROWS_AS(
+          Tensor(L"N", bra{L"i_1"}, ket{L""}, aux{}, Symmetry::antisymm),
+          std::invalid_argument);
+
+      // no null indices in both symmetric bra or ket
+      REQUIRE_THROWS_AS(
+          Tensor(L"N", bra{L""}, ket{L"i_1", L""}, aux{}, Symmetry::symm),
+          std::invalid_argument);
+      REQUIRE_THROWS_AS(
+          Tensor(L"N", bra{L"i_1", L""}, ket{L""}, aux{}, Symmetry::symm),
+          std::invalid_argument);
+
+      // no null indices in the longer of symmetric bra or ket
+      REQUIRE_THROWS_AS(
+          Tensor(L"N", bra{L"i_2"}, ket{L"i_1", L""}, aux{}, Symmetry::symm),
+          std::invalid_argument);
+      REQUIRE_THROWS_AS(
+          Tensor(L"N", bra{L"i_1", L""}, ket{L"i_2"}, aux{}, Symmetry::symm),
+          std::invalid_argument);
+
+      // no paired null indices in asymmetric bra/ket
+      REQUIRE_THROWS_AS(Tensor(L"N", bra{L"i_2", L""}, ket{L"i_1", L""}, aux{},
+                               Symmetry::nonsymm),
+                        std::invalid_argument);
+
+      // no unpaired null indices in asymmetric bra/ket
+      REQUIRE_THROWS_AS(Tensor(L"N", bra{L"", L"i_2", L""}, ket{L"i_1", L""},
+                               aux{}, Symmetry::nonsymm),
+                        std::invalid_argument);
+      REQUIRE_THROWS_AS(Tensor(L"N", bra{L"i_1", L""}, ket{L"", L"i_2", L""},
+                               aux{}, Symmetry::nonsymm),
+                        std::invalid_argument);
+
+      // no null aux indices
+      REQUIRE_THROWS_AS(Tensor(L"N", bra{L"i_1"}, ket{}, aux{L""}),
+                        std::invalid_argument);
 #endif
+    }
+
+    SECTION("duplicate indices") {
+      // no duplicate indices allowed in bra, in ket, or in aux
+      // but duplicates OK across the bundles
+      REQUIRE_NOTHROW(Tensor(L"N", bra{L"i_1"}, ket{L"i_1"}, aux{L"i_2"}));
+      // null indices are ignored in duplicate checks
+      REQUIRE_NOTHROW(Tensor(L"N", bra{L"", L"", L"i_1"}, ket{L"i_1", L"i_2"},
+                             aux{L"i_3"}));
+#ifndef NDEBUG
+      REQUIRE_THROWS_AS(Tensor(L"N", bra{L"i_1", L"i_1"}, ket{}, aux{}),
+                        std::invalid_argument);
+      REQUIRE_THROWS_AS(Tensor(L"N", bra{}, ket{L"i_1", L"i_1"}, aux{}),
+                        std::invalid_argument);
+      REQUIRE_THROWS_AS(Tensor(L"N", bra{}, ket{}, aux{L"i_1", L"i_1"}),
+                        std::invalid_argument);
+#endif
+    }
   }  // SECTION("constructors")
 
   SECTION("index transformation") {
