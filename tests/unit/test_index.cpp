@@ -20,13 +20,20 @@ TEST_CASE("index", "[elements][index]") {
 
     // default
     REQUIRE_NOTHROW(Index{});
-    Index i{};
+    REQUIRE(Index{}.space() == IndexSpace{});
+    REQUIRE(Index{}.ordinal() == std::nullopt);
+    REQUIRE(Index{}.proto_indices().empty());
+    REQUIRE(Index{}.symmetric_proto_indices());
+    REQUIRE(Index{}.label().empty());
+    REQUIRE(static_cast<bool>(Index{}) == false);
+    REQUIRE(Index{} == Index::null);
 
     // ordinal-free Index
     {
       REQUIRE_NOTHROW(Index(L"i"));
       Index i(L"i");
       REQUIRE(!i.ordinal());
+      REQUIRE(static_cast<bool>(i) == true);
     }
 
     // labels must match the space key
@@ -41,6 +48,7 @@ TEST_CASE("index", "[elements][index]") {
     REQUIRE(i1.label() == L"i_1");
     REQUIRE(i1.space() == isr->retrieve(L"i"));
     REQUIRE(i1.ordinal() == 1);
+    REQUIRE(static_cast<bool>(i1) == true);
 
     Index i2(isr->retrieve(L'i'), 2);  // N.B. using retrieve(char)
     REQUIRE(i2.label() == L"i_2");

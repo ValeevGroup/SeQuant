@@ -110,6 +110,8 @@ class Index : public Taggable {
 
   Index() = default;
 
+  const static Index null;
+
   /// copy constructor
   /// @warning memoized data (label, full_label) is not copied
   Index(const Index &idx) noexcept
@@ -384,6 +386,11 @@ class Index : public Taggable {
       check_nonreserved();
     }
   }
+
+  /// return true if this is non-null
+
+  /// @return true if `*this != null`
+  explicit operator bool() const { return *this != null; }
 
   /// @brief constructs an Index using this object's label and proto indices (if
   /// any) and a new IndexSpace
@@ -981,6 +988,7 @@ class Index : public Taggable {
 
 inline const IndexSpace::Attr Index::default_space_attr{
     IndexSpace::Attr::reserved};
+inline const Index Index::null;
 
 void Index::check_for_duplicate_proto_indices() const {
 #ifndef NDEBUG
