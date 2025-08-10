@@ -27,6 +27,9 @@ TEST_CASE("index", "[elements][index]") {
     REQUIRE(Index{}.label().empty());
     REQUIRE(static_cast<bool>(Index{}) == false);
     REQUIRE(Index{} == Index::null);
+    // empty label also produces default
+    REQUIRE_NOTHROW(Index(L""));
+    REQUIRE(Index{L""} == Index{});
 
     // ordinal-free Index
     {
@@ -167,14 +170,17 @@ TEST_CASE("index", "[elements][index]") {
   }
 
   SECTION("equality") {
+    Index i{};
     Index i1(L"i_1");
     Index i2(L"i_2");
     Index i3(L"i_1");
+    REQUIRE(i == i);
     REQUIRE(i1 == i1);
     REQUIRE(!(i1 == i2));
     REQUIRE(i1 != i2);
     REQUIRE(i1 == i3);
     REQUIRE(!(i1 != i3));
+    REQUIRE(i1 != i);
 
     // check copy ctor
     Index i4(i2);
@@ -196,9 +202,15 @@ TEST_CASE("index", "[elements][index]") {
     using SO = std::strong_ordering;
 
     // compare by qns, then tag, then space, then label, then proto indices
+    Index i{};
     Index i1(L"i_1");
     Index i2(L"i_2");
     Index i3(L"i_11");
+
+    REQUIRE(!(i < i));
+    REQUIRE(!(i > i));
+    REQUIRE(i < i1);
+    REQUIRE(!(i > i1));
 
     REQUIRE(i1 < i2);
     REQUIRE(!(i2 < i1));
@@ -304,11 +316,15 @@ TEST_CASE("index", "[elements][index]") {
   }
 
   SECTION("transform") {
+    Index i{};
     Index i0(L"i_0");
     Index i1(L"i_1");
     Index i0_13(L"i_0", {L"i_1", L"i_3"});
     Index i1_13(L"i_1", {L"i_1", L"i_3"});
-    std::map<Index, Index> map{std::make_pair(Index{L"i_1"}, Index{L"i_2"})};
+    std::map<Index, Index> map{std::make_pair(Index{L"i_1"}, Index{L"i_2"}),
+                               std::make_pair(Index{}, Index{L"i_4"})};
+    REQUIRE(i.transform(map));
+    REQUIRE(i == Index{L"i_4"});
     REQUIRE(!i0.transform(map));
     REQUIRE(i0 == Index{L"i_0"});
     REQUIRE(i1.transform(map));
@@ -326,6 +342,8 @@ TEST_CASE("index", "[elements][index]") {
     auto cxt_resetter = set_scoped_default_context(cxt);
     Index alpha(L"α");
     REQUIRE(alpha.to_string() == "α");
+    Index null{};
+    REQUIRE(null.to_string() == "");
 
     SEQUANT_PRAGMA_CLANG(diagnostic push)
     SEQUANT_PRAGMA_CLANG(diagnostic ignored "-Wdeprecated-declarations")
@@ -359,6 +377,10 @@ TEST_CASE("index", "[elements][index]") {
   }
 
   SECTION("latex") {
+    Index i{};
+    REQUIRE_NOTHROW(to_latex(i));
+    REQUIRE(to_latex(i) == L"{}");
+
     Index i1(L"i_1");
     std::wstring i1_str;
     REQUIRE_NOTHROW(i1_str = to_latex(i1));
