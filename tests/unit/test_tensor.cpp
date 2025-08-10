@@ -86,6 +86,11 @@ TEST_CASE("tensor", "[elements]") {
     REQUIRE(t4.braket_symmetry() == BraKetSymmetry::symm);
     REQUIRE(t4.particle_symmetry() == ParticleSymmetry::nonsymm);
     REQUIRE(t4.label() == L"g");
+
+#ifndef NDEBUG
+    REQUIRE_THROWS_AS(Tensor(L"N", bra{L"i_1"}, ket{}, aux{L""}),
+                      std::invalid_argument);
+#endif
   }  // SECTION("constructors")
 
   SECTION("index transformation") {

@@ -95,6 +95,15 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
   // list of friends who can make Tensor objects with reserved labels
   friend ExprPtr make_overlap(const Index &bra_index, const Index &ket_index);
 
+  /// @throw std::invalid_argument if aux contains null indices and `NDEBUG` is
+  /// not `#define`d
+  void assert_aux_does_not_contain_null_indices() const {
+#ifndef NDEBUG
+    if (!aux_.empty() && ranges::contains(aux_, Index::null))
+      throw std::invalid_argument("Tensor ctor: found null aux indices");
+#endif
+  }
+
   template <typename IndexRange1, typename IndexRange2, typename IndexRange3,
             typename = std::enable_if_t<
                 (meta::is_statically_castable_v<
@@ -120,6 +129,7 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
         symmetry_(s),
         braket_symmetry_(bks),
         particle_symmetry_(ps) {
+    assert_aux_does_not_contain_null_indices();
     validate_symmetries();
   }
 
@@ -136,6 +146,7 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
         symmetry_(s),
         braket_symmetry_(bks),
         particle_symmetry_(ps) {
+    assert_aux_does_not_contain_null_indices();
     validate_symmetries();
   }
 
@@ -199,6 +210,7 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
          ParticleSymmetry ps = ParticleSymmetry::symm)
       : Tensor(label, bra_indices, ket_indices, aux_indices, reserved_tag{}, s,
                bks, ps) {
+    assert_aux_does_not_contain_null_indices();
     assert_nonreserved_label(label_);
   }
 
@@ -238,6 +250,7 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
          ParticleSymmetry ps = ParticleSymmetry::symm)
       : Tensor(label, std::move(bra_indices), std::move(ket_indices),
                std::move(aux_indices), reserved_tag{}, s, bks, ps) {
+    assert_aux_does_not_contain_null_indices();
     assert_nonreserved_label(label_);
   }
 
