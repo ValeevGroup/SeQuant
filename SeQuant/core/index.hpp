@@ -392,6 +392,9 @@ class Index : public Taggable {
   /// @return true if `*this != null`
   explicit operator bool() const { return *this != null; }
 
+  /// @return true if `*this != null`
+  bool nonnull() const { return static_cast<bool>(*this); }
+
   /// @brief constructs an Index using this object's label and proto indices (if
   /// any) and a new IndexSpace
   /// @param space (a const ref to) the IndexSpace object that specifies the
