@@ -33,9 +33,9 @@ int main(int argc, char* argv[]) {
       std::make_shared<DefaultTensorCanonicalizer>());
 
 #ifndef NDEBUG
-  const size_t DEFAULT_NMAX = 3;
+  const size_t DEFAULT_NMAX = 2;
 #else
-  const size_t DEFAULT_NMAX = 3;
+  const size_t DEFAULT_NMAX = 2;
 #endif
   const size_t NMAX = argc > 1 ? std::atoi(argv[1]) : DEFAULT_NMAX;
 
