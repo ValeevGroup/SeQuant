@@ -1094,8 +1094,9 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
 
     // Connect index to the tensor(s) it is connected to
     for (std::size_t i = 0; i < current_edge.vertex_count(); ++i) {
-      assert(i <= 1);
       const Vertex &vertex = current_edge.vertex(i);
+      if (i >= 2)  // hyperedges can only occur between aux indices
+        assert(vertex.getOrigin() == Origin::Aux);
 
       assert(vertex.getTerminalIndex() < tensor_vertices.size());
       assert(tensor_vertices[vertex.getTerminalIndex()] !=
