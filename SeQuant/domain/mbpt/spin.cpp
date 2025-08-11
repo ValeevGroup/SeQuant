@@ -929,59 +929,6 @@ ExprPtr S_maps(const ExprPtr& expr) {
   return result;
 }
 
-ExprPtr expand_S_product(const Product& product) {
-  Tensor S_tensor;
-  bool found_S = false;
-
-  for (auto&& factor : product.factors()) {
-    if (factor->is<Tensor>() && factor->as<Tensor>().label() == L"S") {
-      S_tensor = factor->as<Tensor>();
-      found_S = true;
-      break;
-    }
-  }
-  if (!found_S) return std::make_shared<Product>(product);
-
-  // generate all permutation maps from the S operator
-  auto replacement_maps = S_replacement_maps(S_tensor);
-  auto result = std::make_shared<Sum>();
-
-  for (auto&& replacement_map : replacement_maps) {
-    Product new_product{};
-    new_product.scale(product.scalar());
-
-    // apply replacement to all non-S tensors
-    auto temp_product = remove_tensor(product, L"S");
-    for (auto&& term : *temp_product) {
-      if (term->is<Tensor>()) {
-        auto new_tensor = term->as<Tensor>();
-        new_tensor.transform_indices(replacement_map);
-        new_tensor.reset_tags();
-        new_product.append(1, ex<Tensor>(new_tensor));
-      } else {
-        new_product.append(1, term->clone());
-      }
-    }
-    result->append(ex<Product>(new_product));
-  }
-  return result;
-}
-
-ExprPtr expand_S_to_full(const ExprPtr& expr) {
-  if (!has_tensor(expr, L"S")) return expr;
-
-  if (expr->is<Product>()) {
-    return expand_S_product(expr->as<Product>());
-  } else if (expr->is<Sum>()) {
-    auto result = std::make_shared<Sum>();
-    for (auto&& term : *expr) {
-      result->append(expand_S_to_full(term));
-    }
-    return result;
-  }
-  return expr;
-}
-
 ExprPtr hash_filter_compact_set(
     const ExprPtr& expr,
     const container::svector<container::svector<Index>>& ext_idxs) {
@@ -1217,7 +1164,7 @@ ExprPtr closed_shell_CC_spintrace_compact_set(ExprPtr const& expr) {
   auto st_expr = closed_shell_spintrace(expr, ext_idxs);
   // now fully expand them. this avoids the expensive spintracing of all the raw
   // terms
-  st_expr = expand_S_to_full(st_expr);
+  st_expr = S_maps(st_expr);
 
   canonicalize(st_expr);
 
