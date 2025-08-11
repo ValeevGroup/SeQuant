@@ -1505,6 +1505,20 @@ TEST_CASE("tensor_network_v3", "[elements]") {
         REQUIRE_NOTHROW(TN(u1 * u2 * u3));
         TN tn(u1 * u2 * u3);
       }
+
+      // can have empty slots
+      {
+        auto u1 = ex<Tensor>(L"u1", bra{L"i_1", L""}, ket{L"", L"i_4"},
+                             aux{L"p"}, Symmetry::nonsymm);
+        auto u2 = ex<Tensor>(L"u2", bra{L"i_2", L"", L"i_4"}, ket{L"", L"i_1"},
+                             aux{L"p"}, Symmetry::nonsymm);
+        auto u3 = ex<Tensor>(L"u3", bra{L"i_3", L"i_5"}, ket{L""}, aux{L"p"},
+                             Symmetry::symm);
+        REQUIRE_NOTHROW(TN(u1 * u2 * u3));
+        TN tn(u1 * u2 * u3);
+        REQUIRE_NOTHROW(
+            tn.create_graph({.make_labels = true, .make_texlabels = true}));
+      }
     }
 
     {  // with NormalOperators
