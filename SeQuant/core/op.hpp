@@ -840,7 +840,15 @@ class NormalOperator : public Operator<S>,
     return _braket();
   }
   std::size_t _bra_rank() const override final { return nannihilators(); }
+  std::size_t _bra_net_rank() const override final {
+    // there are no null slots in NormalOperator
+    return _bra_rank();
+  }
   std::size_t _ket_rank() const override final { return ncreators(); }
+  std::size_t _ket_net_rank() const override final {
+    // there are no null slots in NormalOperator
+    return _ket_rank();
+  }
   std::size_t _aux_rank() const override final { return 0; }
   Symmetry _symmetry() const override final {
     return (S == Statistics::FermiDirac

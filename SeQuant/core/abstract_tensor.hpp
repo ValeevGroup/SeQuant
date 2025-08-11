@@ -129,13 +129,23 @@ class AbstractTensor {
   virtual const_any_view_rand _indices() const {
     throw missing_instantiation_for("_indices");
   }
-  /// @return the number of bra indices
+  /// @return the number of bra indices (some may be null, hence this is the
+  /// gross rank)
   virtual std::size_t _bra_rank() const {
     throw missing_instantiation_for("_bra_rank");
   }
-  /// @return the number of ket indices
+  /// @return the number of nonnull bra indices
+  virtual std::size_t _bra_net_rank() const {
+    throw missing_instantiation_for("_bra_net_rank");
+  }
+  /// @return the number of ket indices (some may be null, hence this is the
+  /// gross rank)
   virtual std::size_t _ket_rank() const {
     throw missing_instantiation_for("_ket_rank");
+  }
+  /// @return the number of nonnull ket indices
+  virtual std::size_t _ket_net_rank() const {
+    throw missing_instantiation_for("_ket_net_rank");
   }
   /// @return the number of aux indices
   virtual std::size_t _aux_rank() const {
@@ -288,7 +298,9 @@ class AbstractTensor {
 inline auto braket(const AbstractTensor& t) { return t._braket(); }
 inline auto indices(const AbstractTensor& t) { return t._indices(); }
 inline auto bra_rank(const AbstractTensor& t) { return t._bra_rank(); }
+inline auto bra_net_rank(const AbstractTensor& t) { return t._bra_net_rank(); }
 inline auto ket_rank(const AbstractTensor& t) { return t._ket_rank(); }
+inline auto ket_net_rank(const AbstractTensor& t) { return t._ket_net_rank(); }
 inline auto aux_rank(const AbstractTensor& t) { return t._aux_rank(); }
 inline auto symmetry(const AbstractTensor& t) { return t._symmetry(); }
 inline auto braket_symmetry(const AbstractTensor& t) {

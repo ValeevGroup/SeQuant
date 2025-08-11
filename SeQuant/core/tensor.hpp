@@ -400,10 +400,22 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
   /// under exchange of particles (columns).
   ParticleSymmetry particle_symmetry() const { return particle_symmetry_; }
 
-  /// @return number of bra indices
+  /// @return number of bra indices (some may be null, hence this is the gross
+  /// rank)
   std::size_t bra_rank() const { return bra_.size(); }
-  /// @return number of ket indices
+  /// @return number of nonnull bra indices
+  std::size_t bra_net_rank() const {
+    return ranges::count_if(
+        bra_, [](const Index &idx) { return static_cast<bool>(idx); });
+  }
+  /// @return number of ket indices (some may be null, hence this is the gross
+  /// rank)
   std::size_t ket_rank() const { return ket_.size(); }
+  /// @return number of nonnull ket indices
+  std::size_t ket_net_rank() const {
+    return ranges::count_if(
+        ket_, [](const Index &idx) { return static_cast<bool>(idx); });
+  }
   /// @return number of aux indices
   std::size_t aux_rank() const { return aux_.size(); }
   /// @return number of indices in bra/ket
@@ -638,6 +650,8 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
   }
   std::size_t _bra_rank() const override final { return bra_rank(); }
   std::size_t _ket_rank() const override final { return ket_rank(); }
+  std::size_t _bra_net_rank() const override final { return bra_net_rank(); }
+  std::size_t _ket_net_rank() const override final { return ket_net_rank(); }
   std::size_t _aux_rank() const override final { return aux_rank(); }
   Symmetry _symmetry() const override final { return symmetry_; }
   BraKetSymmetry _braket_symmetry() const override final {

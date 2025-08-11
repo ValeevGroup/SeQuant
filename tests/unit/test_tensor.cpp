@@ -36,6 +36,8 @@ TEST_CASE("tensor", "[elements]") {
     REQUIRE(t1.bra_rank() == 0);
     REQUIRE(t1.ket_rank() == 0);
     REQUIRE(t1.aux_rank() == 0);
+    REQUIRE(t1.bra_net_rank() == 0);
+    REQUIRE(t1.ket_net_rank() == 0);
     REQUIRE(t1.rank() == 0);
     REQUIRE(t1.symmetry() == Symmetry::invalid);
     REQUIRE(t1.braket_symmetry() == BraKetSymmetry::invalid);
@@ -61,6 +63,8 @@ TEST_CASE("tensor", "[elements]") {
     REQUIRE(t3.bra_rank() == 1);
     REQUIRE(t3.ket_rank() == 0);
     REQUIRE(t3.aux_rank() == 1);
+    REQUIRE(t3.bra_net_rank() == 1);
+    REQUIRE(t3.ket_net_rank() == 0);
     REQUIRE_THROWS(t3.rank());
     REQUIRE(t3.const_indices().size() == 2);
     REQUIRE(t3.symmetry() == Symmetry::nonsymm);
@@ -90,6 +94,12 @@ TEST_CASE("tensor", "[elements]") {
     SECTION("null indices") {
       REQUIRE_NOTHROW(
           Tensor(L"N", bra{L""}, ket{L"i_1"}, aux{}, Symmetry::symm));
+      Tensor t(L"N", bra{L""}, ket{L"i_1"}, aux{}, Symmetry::symm);
+      REQUIRE(t.bra_rank() == 1);
+      REQUIRE(t.ket_rank() == 1);
+      REQUIRE(t.bra_net_rank() == 0);
+      REQUIRE(t.ket_net_rank() == 1);
+
       REQUIRE_NOTHROW(
           Tensor(L"N", bra{L"i_1"}, ket{L""}, aux{}, Symmetry::symm));
       REQUIRE_NOTHROW(
