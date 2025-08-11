@@ -134,11 +134,10 @@ TEST_CASE("index", "[elements][index]") {
       REQUIRE(!i2.ordinal());
 
       // to make things interesting use F12 registry with greek letters
-      Context cxt(sequant::mbpt::make_F12_sr_spaces(), Vacuum::Physical,
-                  get_default_context().metric(),
-                  get_default_context().braket_symmetry(),
-                  get_default_context().spbasis());
-      auto cxt_resetter = set_scoped_default_context(cxt);
+      auto ctx = get_default_context();
+      ctx.set(sequant::mbpt::make_F12_sr_spaces());
+      ctx.set(Vacuum::Physical);
+      auto ctx_resetter = set_scoped_default_context(ctx);
       Index α("α_2",
               get_default_context().index_space_registry()->retrieve("α"));
       REQUIRE(α.label() == L"α_2");
@@ -337,10 +336,10 @@ TEST_CASE("index", "[elements][index]") {
   }
 
   SECTION("to_string") {
-    auto old_cxt = get_default_context();
-    Context cxt(sequant::mbpt::make_F12_sr_spaces(), Vacuum::Physical,
-                old_cxt.metric(), old_cxt.braket_symmetry(), old_cxt.spbasis());
-    auto cxt_resetter = set_scoped_default_context(cxt);
+    auto ctx = get_default_context();
+    ctx.set(sequant::mbpt::make_F12_sr_spaces());
+    ctx.set(Vacuum::Physical);
+    auto ctx_resetter = set_scoped_default_context(ctx);
     Index alpha(L"α");
     REQUIRE(alpha.to_string() == "α");
     Index null{};
@@ -358,8 +357,9 @@ TEST_CASE("index", "[elements][index]") {
   }
 
   SECTION("label manipulation") {
-    auto context_resetter = set_scoped_default_context(
-        Context(sequant::mbpt::make_F12_sr_spaces(), Vacuum::SingleProduct));
+    auto ctx = get_default_context();
+    ctx.set(sequant::mbpt::make_F12_sr_spaces());
+    auto context_resetter = set_scoped_default_context(ctx);
     auto isr = get_default_context().index_space_registry();
     Index alpha(L"α", isr->retrieve(L"α"));
     Index alpha1(L"α_1", isr->retrieve(L"α"));

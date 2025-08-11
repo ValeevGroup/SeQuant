@@ -272,18 +272,23 @@ TEST_CASE("tensor", "[elements]") {
     auto t1 = Tensor(L"F", bra{L"i_1"}, ket{L"i_2"});
     auto t2 = Tensor(L"F", bra{L"i_1"}, ket{L"i_2"}, aux{L"i_3"});
     auto t3 = Tensor(L"F", bra{L"i_1"}, ket{L"i_2"}, aux{L"i_3", L"i_4"});
+    auto t4 = Tensor(L"F", bra{Index(L"i_1", {L"i_5", L"i_6"}), Index{}},
+                     ket{L"", L"i_2"}, aux{L"i_3", L"i_4"}, Symmetry::nonsymm);
     auto h1 = ex<Tensor>(L"F", bra{L"i_1"}, ket{L"i_2"}) *
               ex<FNOperator>(cre({L"i_1"}), ann({L"i_2"}));
 
-    SECTION("default typesetting") {
+    SECTION("default (brasub, naive) typesetting") {
       REQUIRE(to_latex(t1) == L"{F^{{i_2}}_{{i_1}}}");
       REQUIRE(to_latex(t2) == L"{F^{{i_2}}_{{i_1}}[{i_3}]}");
       REQUIRE(to_latex(t3) == L"{F^{{i_2}}_{{i_1}}[{i_3},{i_4}]}");
+      REQUIRE(to_latex(t4) ==
+              L"{F^{\\textvisiblespace{i_2}}_{{i_1^{{i_5}{i_6}}}"
+              L"\\textvisiblespace}[{i_3},{i_4}]}");
       REQUIRE(to_latex(h1) ==
               L"{{F^{{i_2}}_{{i_1}}}{\\tilde{a}^{{i_1}}_{{i_2}}}}");
     }
 
-    SECTION("ketsub typesetting") {
+    SECTION("ketsub naive typesetting") {
       Context ctx = get_default_context();
       REQUIRE(get_default_context().braket_typesetting() ==
               BraKetTypesetting::KetSuper);
@@ -295,8 +300,60 @@ TEST_CASE("tensor", "[elements]") {
       REQUIRE(to_latex(t1) == L"{F_{{i_2}}^{{i_1}}}");
       REQUIRE(to_latex(t2) == L"{F_{{i_2}}^{{i_1}}[{i_3}]}");
       REQUIRE(to_latex(t3) == L"{F_{{i_2}}^{{i_1}}[{i_3},{i_4}]}");
+      REQUIRE(to_latex(t4) ==
+              L"{F_{\\textvisiblespace{i_2}}^{{i_1^{{i_5}{i_6}}}"
+              L"\\textvisiblespace}[{i_3},{i_4}]}");
       REQUIRE(to_latex(h1) ==
               L"{{F_{{i_2}}^{{i_1}}}{\\tilde{a}_{{i_1}}^{{i_2}}}}");
+    }
+
+    SECTION("brasub tensor typesetting") {
+      Context ctx = get_default_context();
+      REQUIRE(get_default_context().braket_typesetting() ==
+              BraKetTypesetting::BraSub);
+      REQUIRE(get_default_context().braket_slot_typesetting() ==
+              BraKetSlotTypesetting::Naive);
+      ctx.set(BraKetSlotTypesetting::TensorPackage);
+      auto resetter = set_scoped_default_context(ctx);
+      REQUIRE(get_default_context().braket_typesetting() ==
+              BraKetTypesetting::BraSub);
+      REQUIRE(get_default_context().braket_slot_typesetting() ==
+              BraKetSlotTypesetting::TensorPackage);
+
+      REQUIRE(to_latex(t1) == L"{\\tensor*{F}{*^{i_2}_{i_1}}}");
+      REQUIRE(to_latex(t2) == L"{\\tensor*{F}{*^{i_2}_{i_1}}[{i_3}]}");
+      REQUIRE(to_latex(t3) == L"{\\tensor*{F}{*^{i_2}_{i_1}}[{i_3},{i_4}]}");
+      REQUIRE(
+          to_latex(t4) ==
+          L"{\\tensor*{F}{*^{}_{i_1^{{i_5}{i_6}}}*^{i_2}_{}}[{i_3},{i_4}]}");
+      REQUIRE(to_latex(h1) ==
+              L"{{\\tensor*{F}{*^{i_2}_{i_1}}}{\\tensor*{\\tilde{a}}{*^{i_1}_{"
+              L"i_2}}}}");
+    }
+
+    SECTION("ketsub tensor typesetting") {
+      Context ctx = get_default_context();
+      REQUIRE(get_default_context().braket_typesetting() ==
+              BraKetTypesetting::BraSub);
+      REQUIRE(get_default_context().braket_slot_typesetting() ==
+              BraKetSlotTypesetting::Naive);
+      ctx.set(BraKetTypesetting::KetSub);
+      ctx.set(BraKetSlotTypesetting::TensorPackage);
+      auto resetter = set_scoped_default_context(ctx);
+      REQUIRE(get_default_context().braket_typesetting() ==
+              BraKetTypesetting::KetSub);
+      REQUIRE(get_default_context().braket_slot_typesetting() ==
+              BraKetSlotTypesetting::TensorPackage);
+
+      REQUIRE(to_latex(t1) == L"{\\tensor*{F}{*^{i_1}_{i_2}}}");
+      REQUIRE(to_latex(t2) == L"{\\tensor*{F}{*^{i_1}_{i_2}}[{i_3}]}");
+      REQUIRE(to_latex(t3) == L"{\\tensor*{F}{*^{i_1}_{i_2}}[{i_3},{i_4}]}");
+      REQUIRE(
+          to_latex(t4) ==
+          L"{\\tensor*{F}{*^{i_1^{{i_5}{i_6}}}_{}*^{}_{i_2}}[{i_3},{i_4}]}");
+      REQUIRE(to_latex(h1) ==
+              L"{{\\tensor*{F}{*^{i_1}_{i_2}}}{\\tensor*{\\tilde{a}}{*^{i_2}_{"
+              L"i_1}}}}");
     }
 
   }  // SECTION("latex")

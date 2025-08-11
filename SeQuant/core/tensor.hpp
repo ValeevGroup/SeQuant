@@ -416,44 +416,64 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
   }
 
   std::wstring to_latex() const override {
-    const auto bkt = get_default_context().braket_typesetting();
+    auto &ctx = get_default_context();
+    const auto bkt = ctx.braket_typesetting();
+    const auto bkst = ctx.braket_slot_typesetting();
+
     // either rank > 1 or sum of bra and ket ranks > 1
     const bool add_bar =
         bra_rank() == ket_rank() ? rank() > 1 : bra_rank() + ket_rank() > 1;
 
-    std::wstring result = L"{";
+    std::wstring core_label;
     if ((this->symmetry() == Symmetry::antisymm) && add_bar)
-      result += L"\\bar{";
-    result += utf_to_latex(this->label());
-    if ((this->symmetry() == Symmetry::antisymm) && add_bar) result += L"}";
+      core_label += L"\\bar{";
+    core_label += utf_to_latex(this->label());
+    if ((this->symmetry() == Symmetry::antisymm) && add_bar) core_label += L"}";
 
-    // ket
-    result += (bkt == BraKetTypesetting::KetSub ? L"_" : L"^");
-    result += L"{";
-    for (const auto &i : this->ket()) result += sequant::to_latex(i);
-    result += L"}";
+    switch (bkst) {
+      case BraKetSlotTypesetting::Naive: {
+        std::wstring result = L"{";
+        result += core_label;
 
-    // bra
-    result += (bkt == BraKetTypesetting::BraSub ? L"_" : L"^");
-    result += L"{";
-    for (const auto &i : this->bra()) result += sequant::to_latex(i);
-    result += L"}";
-
-    // aux
-    if (!this->aux_.empty()) {
-      result += L"[";
-      const index_container_type &__aux = this->aux();
-      for (std::size_t i = 0; i < aux_rank(); ++i) {
-        result += sequant::to_latex(__aux[i]);
-
-        if (i + 1 < aux_rank()) {
-          result += L",";
+        // ket
+        result += (bkt == BraKetTypesetting::KetSub ? L"_" : L"^");
+        result += L"{";
+        for (const auto &i : this->ket()) {
+          result += i ? sequant::to_latex(i) : L"\\textvisiblespace";
         }
+        result += L"}";
+
+        // bra
+        result += (bkt == BraKetTypesetting::BraSub ? L"_" : L"^");
+        result += L"{";
+        for (const auto &i : this->bra()) {
+          result += i ? sequant::to_latex(i) : L"\\textvisiblespace";
+        }
+        result += L"}";
+
+        // aux
+        if (!this->aux_.empty()) {
+          result += L"[";
+          const index_container_type &__aux = this->aux();
+          for (std::size_t i = 0; i < aux_rank(); ++i) {
+            result += sequant::to_latex(__aux[i]);
+
+            if (i + 1 < aux_rank()) {
+              result += L",";
+            }
+          }
+          result += L"]";
+        }
+
+        result += L"}";
+        return result;
       }
-      result += L"]";
+
+      case BraKetSlotTypesetting::TensorPackage: {
+        return to_latex_tensor(core_label, this->_bra(), this->_ket(),
+                               this->_aux(), bkt, /* left_align = */ true);
+      }
     }
-    result += L"}";
-    return result;
   }
 
   ExprPtr canonicalize() override;

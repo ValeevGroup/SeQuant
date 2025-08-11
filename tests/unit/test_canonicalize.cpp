@@ -30,8 +30,9 @@ TEST_CASE("canonicalization", "[algorithms]") {
       std::make_shared<DefaultTensorCanonicalizer>());
   auto isr = sequant::mbpt::make_legacy_spaces();
   mbpt::add_pao_spaces(isr);
-  auto ctx_resetter =
-      set_scoped_default_context(Context(isr, Vacuum::SingleProduct));
+  auto ctx = get_default_context();
+  ctx.set(isr);
+  auto ctx_resetter = set_scoped_default_context(ctx);
 
   SECTION("Tensors") {
     {

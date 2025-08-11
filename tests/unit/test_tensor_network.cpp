@@ -60,8 +60,10 @@ TEMPLATE_TEST_CASE("tensor_network_shared", "[elements]", TensorNetwork,
       std::make_shared<DefaultTensorCanonicalizer>());
   auto isr = sequant::mbpt::make_legacy_spaces();
   mbpt::add_pao_spaces(isr);
-  auto ctx_resetter =
-      set_scoped_default_context(Context(isr, Vacuum::SingleProduct));
+  auto ctx = get_default_context();
+  ctx.set(isr);
+  ctx.set(Vacuum::SingleProduct);
+  auto ctx_resetter = set_scoped_default_context(ctx);
 
   using TN = TestType;
 
@@ -474,8 +476,10 @@ TEST_CASE("tensor_network", "[elements]") {
   }  // SECTION("canonicalizer")
 
   SECTION("bliss graph") {
-    auto ctx_resetter = set_scoped_default_context(
-        Context(sequant::mbpt::make_legacy_spaces(), Vacuum::SingleProduct));
+    auto ctx = get_default_context();
+    ctx.set(sequant::mbpt::make_legacy_spaces());
+    ctx.set(Vacuum::SingleProduct);
+    auto ctx_resetter = set_scoped_default_context(ctx);
     Index::reset_tmp_index();
     // to generate expressions in specified (i.e., platform-independent) manner
     // can't use operator expression (due to unspecified order of evaluation of
@@ -812,10 +816,6 @@ TEST_CASE("tensor_network_v2", "[elements]") {
   using sequant::Context;
   namespace t = sequant::mbpt::tensor;
   namespace o = sequant::mbpt::op;
-
-  auto ctx_resetter = sequant::set_scoped_default_context(Context(
-      mbpt::make_sr_spaces(), Vacuum::SingleProduct, IndexSpaceMetric::Unit,
-      BraKetSymmetry::conjugate, SPBasis::spinorbital));
 
   SECTION("Edges") {
     using Vertex = TensorNetworkV2::Vertex;
@@ -1401,10 +1401,6 @@ TEST_CASE("tensor_network_v3", "[elements]") {
   namespace t = sequant::mbpt::tensor;
   namespace o = sequant::mbpt::op;
   using TN = TensorNetworkV3;
-
-  auto ctx_resetter = sequant::set_scoped_default_context(Context(
-      mbpt::make_sr_spaces(), Vacuum::SingleProduct, IndexSpaceMetric::Unit,
-      BraKetSymmetry::conjugate, SPBasis::spinorbital));
 
   SECTION("Edges") {
     using Vertex = TN::Vertex;

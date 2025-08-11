@@ -606,53 +606,66 @@ class NormalOperator : public Operator<S>,
   }
 
   std::wstring to_latex() const override {
-    const auto bkt = get_default_context().braket_typesetting();
+    const auto &ctx = get_default_context();
+    const auto bkt = ctx.braket_typesetting();
+    const auto bkst = ctx.braket_slot_typesetting();
 
-    std::wstring result;
-    result = L"{";
+    std::wstring core_label;
     if (vacuum() == Vacuum::Physical) {
-      result += Op<S>::core_label();
+      core_label += Op<S>::core_label();
     } else {
-      result += L"\\tilde{";
-      result += Op<S>::core_label();
-      result += L"}";
+      core_label += L"\\tilde{";
+      core_label += Op<S>::core_label();
+      core_label += L"}";
     }
-    const auto ncreators = this->ncreators();
-    const auto nannihilators = this->nannihilators();
-    if (ncreators > 0) {
-      result += (bkt == BraKetTypesetting::KetSub ? L"_" : L"^");
-      result += L"{";
-      if (ncreators <
-          nannihilators) {  // if have more annihilators than creators pad on
-                            // the left with square underbrackets, i.e. ⎵
-        const auto iend = nannihilators - ncreators;
-        if (iend > 0) result += L"\\textvisiblespace";
-        for (size_t i = 1; i != iend; ++i) {
-          result += L"\\,\\textvisiblespace";
+
+    switch (bkst) {
+      case BraKetSlotTypesetting::Naive: {
+        std::wstring result = L"{";
+        result += core_label;
+        const auto ncreators = this->ncreators();
+        const auto nannihilators = this->nannihilators();
+        if (ncreators > 0) {
+          result += (bkt == BraKetTypesetting::KetSub ? L"_" : L"^");
+          result += L"{";
+          if (ncreators < nannihilators) {  // if have more annihilators than
+                                            // creators pad on
+            // the left with square underbrackets, i.e. ⎵
+            const auto iend = nannihilators - ncreators;
+            if (iend > 0) result += L"\\textvisiblespace";
+            for (size_t i = 1; i != iend; ++i) {
+              result += L"\\,\\textvisiblespace";
+            }
+            result += L"\\,";
+          }
+          for (const auto &o : creators()) result += o.index().to_latex();
+          result += L"}";
         }
-        result += L"\\,";
-      }
-      for (const auto &o : creators()) result += o.index().to_latex();
-      result += L"}";
-    }
-    if (nannihilators > 0) {
-      result += (bkt == BraKetTypesetting::BraSub ? L"_" : L"^");
-      result += L"{";
-      if (ncreators >
-          nannihilators) {  // if have more creators than annihilators pad on
-                            // the left with square underbrackets, i.e. ⎵
-        const auto iend = ncreators - nannihilators;
-        if (iend > 0) result += L"\\textvisiblespace";
-        for (size_t i = 1; i != iend; ++i) {
-          result += L"\\,\\textvisiblespace";
+        if (nannihilators > 0) {
+          result += (bkt == BraKetTypesetting::BraSub ? L"_" : L"^");
+          result += L"{";
+          if (ncreators > nannihilators) {  // if have more creators than
+                                            // annihilators pad on
+            // the left with square underbrackets, i.e. ⎵
+            const auto iend = ncreators - nannihilators;
+            if (iend > 0) result += L"\\textvisiblespace";
+            for (size_t i = 1; i != iend; ++i) {
+              result += L"\\,\\textvisiblespace";
+            }
+            result += L"\\,";
+          }
+          for (const auto &o : annihilators()) result += o.index().to_latex();
+          result += L"}";
         }
-        result += L"\\,";
+        result += L"}";
+        return result;
       }
-      for (const auto &o : annihilators()) result += o.index().to_latex();
-      result += L"}";
+
+      case BraKetSlotTypesetting::TensorPackage: {
+        return to_latex_tensor(core_label, this->_bra(), this->_ket(),
+                               this->_aux(), bkt, /* left_align = */ false);
+      }
     }
-    result += L"}";
-    return result;
   }
 
   /// overload base_type::erase
