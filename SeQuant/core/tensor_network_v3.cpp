@@ -1094,8 +1094,9 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
 
     // Connect index to the tensor(s) it is connected to
     for (std::size_t i = 0; i < current_edge.vertex_count(); ++i) {
-      assert(i <= 1);
       const Vertex &vertex = current_edge.vertex(i);
+      if (i >= 2)  // hyperedges can only occur between aux indices
+        assert(vertex.getOrigin() == Origin::Aux);
 
       assert(vertex.getTerminalIndex() < tensor_vertices.size());
       assert(tensor_vertices[vertex.getTerminalIndex()] !=
@@ -1209,6 +1210,8 @@ void TensorNetworkV3::init_edges() {
   pure_proto_indices_.clear();
 
   auto idx_insert = [this](const Index &idx, Vertex vertex) {
+    // skip null indices
+    if (!idx) return;
     if (Logger::instance().tensor_network) {
       std::wcout << "TensorNetworkV3::init_edges: idx=" << to_latex(idx)
                  << " attached to tensor " << vertex.getTerminalIndex() << " ("
@@ -1229,8 +1232,8 @@ void TensorNetworkV3::init_edges() {
 
   std::size_t distinct_index_estimate = 0;
   for (const AbstractTensorPtr &current : tensors_) {
-    distinct_index_estimate += bra_rank(*current);
-    distinct_index_estimate += ket_rank(*current);
+    distinct_index_estimate += bra_net_rank(*current);
+    distinct_index_estimate += ket_net_rank(*current);
     distinct_index_estimate += aux_rank(*current);
   }
   // For a fully contracted tensor network 1/2 of all indices are unique

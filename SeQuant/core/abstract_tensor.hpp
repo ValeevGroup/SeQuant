@@ -129,13 +129,23 @@ class AbstractTensor {
   virtual const_any_view_rand _indices() const {
     throw missing_instantiation_for("_indices");
   }
-  /// @return the number of bra indices
+  /// @return the number of bra indices (some may be null, hence this is the
+  /// gross rank)
   virtual std::size_t _bra_rank() const {
     throw missing_instantiation_for("_bra_rank");
   }
-  /// @return the number of ket indices
+  /// @return the number of nonnull bra indices
+  virtual std::size_t _bra_net_rank() const {
+    throw missing_instantiation_for("_bra_net_rank");
+  }
+  /// @return the number of ket indices (some may be null, hence this is the
+  /// gross rank)
   virtual std::size_t _ket_rank() const {
     throw missing_instantiation_for("_ket_rank");
+  }
+  /// @return the number of nonnull ket indices
+  virtual std::size_t _ket_net_rank() const {
+    throw missing_instantiation_for("_ket_net_rank");
   }
   /// @return the number of aux indices
   virtual std::size_t _aux_rank() const {
@@ -288,7 +298,9 @@ class AbstractTensor {
 inline auto braket(const AbstractTensor& t) { return t._braket(); }
 inline auto indices(const AbstractTensor& t) { return t._indices(); }
 inline auto bra_rank(const AbstractTensor& t) { return t._bra_rank(); }
+inline auto bra_net_rank(const AbstractTensor& t) { return t._bra_net_rank(); }
 inline auto ket_rank(const AbstractTensor& t) { return t._ket_rank(); }
+inline auto ket_net_rank(const AbstractTensor& t) { return t._ket_net_rank(); }
 inline auto aux_rank(const AbstractTensor& t) { return t._aux_rank(); }
 inline auto symmetry(const AbstractTensor& t) { return t._symmetry(); }
 inline auto braket_symmetry(const AbstractTensor& t) {
@@ -301,6 +313,116 @@ inline auto color(const AbstractTensor& t) { return t._color(); }
 inline auto is_cnumber(const AbstractTensor& t) { return t._is_cnumber(); }
 inline auto label(const AbstractTensor& t) { return t._label(); }
 inline auto to_latex(const AbstractTensor& t) { return t._to_latex(); }
+
+/// produces LaTeX representation typeset using <a
+/// href="https://ctan.org/pkg/tensor?lang=en">tensor package</a>
+
+/// @param[in] core_label the tensor core label
+/// @param[in] bra the tensor bra indices
+/// @param[in] ket the tensor ket indices
+/// @param[in] aux the tensor aux indices
+/// @param[in] bkt the typesetting convention for bra/ket (super or subscript)
+/// @param[in] left_align if true, will typeset `bra[0]` above `ket[0]`,
+/// `bra[1]` above `ket[1]`, etc.; else will typeset `bra[-1]` above `ket[-1]`,
+/// etc.
+inline std::wstring to_latex_tensor(
+    const std::wstring& core_label, AbstractTensor::const_any_view_randsz bra,
+    AbstractTensor::const_any_view_randsz ket,
+    AbstractTensor::const_any_view_randsz aux,
+    const BraKetTypesetting bkt = BraKetTypesetting::ContraSub,
+    bool left_align = true) {
+  std::wstring result = L"{\\tensor*{" + core_label + L"}{";
+
+  const auto braket_rank_max = std::max(bra.size(), ket.size());
+  const auto num_paired = std::min(bra.size(), ket.size());
+  const auto num_unpaired = braket_rank_max - num_paired;
+  const auto unpaired_type =
+      bra.size() > ket.size() ? SlotType::Bra : SlotType::Ket;
+
+  std::size_t col = 0;
+
+  // loop over left-aligned unpaired slots, if left_align==false
+  if (left_align == false) {
+    auto* unpaired_indices = unpaired_type == SlotType::Bra
+                                 ? &bra[0]
+                                 : &ket[0];  // bra/ket are contiguous
+    for (; col != num_unpaired; ++col) {
+      result += L"*^";
+      if ((bkt == BraKetTypesetting::BraSuper &&
+           unpaired_type == SlotType::Bra) ||
+          (bkt == BraKetTypesetting::KetSuper &&
+           unpaired_type == SlotType::Ket)) {
+        result += to_latex(unpaired_indices[col]);
+      } else
+        result += L"{}";
+      result += L"_";
+      if ((bkt == BraKetTypesetting::BraSub &&
+           unpaired_type == SlotType::Bra) ||
+          (bkt == BraKetTypesetting::KetSub &&
+           unpaired_type == SlotType::Ket)) {
+        result += to_latex(unpaired_indices[col]);
+      } else
+        result += L"{}";
+    }
+  }
+
+  // loop over paired indices
+  auto paired_bra =
+      unpaired_type == SlotType::Bra && left_align == false ? col : 0;
+  auto paired_ket =
+      unpaired_type == SlotType::Ket && left_align == false ? col : 0;
+  const auto paired_fence = col + num_paired;
+  for (; col != paired_fence; ++col, ++paired_bra, ++paired_ket) {
+    result += L"*^";
+    result += (bkt == BraKetTypesetting::BraSuper) ? to_latex(bra[paired_bra])
+                                                   : to_latex(ket[paired_ket]);
+    result += L"_";
+    result += (bkt == BraKetTypesetting::BraSub) ? to_latex(bra[paired_bra])
+                                                 : to_latex(ket[paired_ket]);
+  }
+
+  // loop over right-aligned unpaired slots, if left_align==true
+  if (left_align == true) {
+    auto* unpaired_indices = unpaired_type == SlotType::Bra
+                                 ? &bra[0]
+                                 : &ket[0];  // bra/ket are contiguous
+    for (; col != braket_rank_max; ++col) {
+      result += L"*^";
+      if ((bkt == BraKetTypesetting::BraSuper &&
+           unpaired_type == SlotType::Bra) ||
+          (bkt == BraKetTypesetting::KetSuper &&
+           unpaired_type == SlotType::Ket)) {
+        result += to_latex(unpaired_indices[col]);
+      } else
+        result += L"{}";
+      result += L"_";
+      if ((bkt == BraKetTypesetting::BraSub &&
+           unpaired_type == SlotType::Bra) ||
+          (bkt == BraKetTypesetting::KetSub &&
+           unpaired_type == SlotType::Ket)) {
+        result += to_latex(unpaired_indices[col]);
+      } else
+        result += L"{}";
+    }
+  }
+  result += L"}";
+
+  // aux
+  if (aux.size() != 0) {
+    result += L"[";
+    const auto aux_rank = aux.size();
+    for (std::size_t i = 0; i < aux_rank; ++i) {
+      result += sequant::to_latex(aux[i]);
+      if (i + 1 < aux_rank) {
+        result += L",";
+      }
+    }
+    result += L"]";
+  }
+
+  result += L"}";
+  return result;
+}
 
 /// Type trait for checking whether a given class fulfills the Tensor interface
 /// requirements Object @c t of a type that meets the concept must satisfy the

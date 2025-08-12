@@ -60,8 +60,10 @@ TEMPLATE_TEST_CASE("tensor_network_shared", "[elements]", TensorNetwork,
       std::make_shared<DefaultTensorCanonicalizer>());
   auto isr = sequant::mbpt::make_legacy_spaces();
   mbpt::add_pao_spaces(isr);
-  auto ctx_resetter =
-      set_scoped_default_context(Context(isr, Vacuum::SingleProduct));
+  auto ctx = get_default_context();
+  ctx.set(isr);
+  ctx.set(Vacuum::SingleProduct);
+  auto ctx_resetter = set_scoped_default_context(ctx);
 
   using TN = TestType;
 
@@ -474,8 +476,10 @@ TEST_CASE("tensor_network", "[elements]") {
   }  // SECTION("canonicalizer")
 
   SECTION("bliss graph") {
-    auto ctx_resetter = set_scoped_default_context(
-        Context(sequant::mbpt::make_legacy_spaces(), Vacuum::SingleProduct));
+    auto ctx = get_default_context();
+    ctx.set(sequant::mbpt::make_legacy_spaces());
+    ctx.set(Vacuum::SingleProduct);
+    auto ctx_resetter = set_scoped_default_context(ctx);
     Index::reset_tmp_index();
     // to generate expressions in specified (i.e., platform-independent) manner
     // can't use operator expression (due to unspecified order of evaluation of
@@ -812,10 +816,6 @@ TEST_CASE("tensor_network_v2", "[elements]") {
   using sequant::Context;
   namespace t = sequant::mbpt::tensor;
   namespace o = sequant::mbpt::op;
-
-  auto ctx_resetter = sequant::set_scoped_default_context(Context(
-      mbpt::make_sr_spaces(), Vacuum::SingleProduct, IndexSpaceMetric::Unit,
-      BraKetSymmetry::conjugate, SPBasis::spinorbital));
 
   SECTION("Edges") {
     using Vertex = TensorNetworkV2::Vertex;
@@ -1402,10 +1402,6 @@ TEST_CASE("tensor_network_v3", "[elements]") {
   namespace o = sequant::mbpt::op;
   using TN = TensorNetworkV3;
 
-  auto ctx_resetter = sequant::set_scoped_default_context(Context(
-      mbpt::make_sr_spaces(), Vacuum::SingleProduct, IndexSpaceMetric::Unit,
-      BraKetSymmetry::conjugate, SPBasis::spinorbital));
-
   SECTION("Edges") {
     using Vertex = TN::Vertex;
     using Edge = TN::Edge;
@@ -1508,6 +1504,20 @@ TEST_CASE("tensor_network_v3", "[elements]") {
         auto u3 = ex<Tensor>(L"u3", bra{L"i_3"}, ket{}, aux{L"p"});
         REQUIRE_NOTHROW(TN(u1 * u2 * u3));
         TN tn(u1 * u2 * u3);
+      }
+
+      // can have empty slots
+      {
+        auto u1 = ex<Tensor>(L"u1", bra{L"i_1", L""}, ket{L"", L"i_4"},
+                             aux{L"p"}, Symmetry::nonsymm);
+        auto u2 = ex<Tensor>(L"u2", bra{L"i_2", L"", L"i_4"}, ket{L"", L"i_1"},
+                             aux{L"p"}, Symmetry::nonsymm);
+        auto u3 = ex<Tensor>(L"u3", bra{L"i_3", L"i_5"}, ket{L""}, aux{L"p"},
+                             Symmetry::symm);
+        REQUIRE_NOTHROW(TN(u1 * u2 * u3));
+        TN tn(u1 * u2 * u3);
+        REQUIRE_NOTHROW(
+            tn.create_graph({.make_labels = true, .make_texlabels = true}));
       }
     }
 
@@ -1762,6 +1772,60 @@ TEST_CASE("tensor_network_v3", "[elements]") {
       }
 
       REQUIRE(result);
+    }
+
+    SECTION("empty slots") {
+      // Logger::instance().canonicalize = true;
+      // Logger::instance().canonicalize_input_graph = true;
+      // Logger::instance().canonicalize_dot = true;
+
+      // try 1
+      ExprPtr result_1;
+      {
+        auto u1 = ex<Tensor>(L"u1", bra{L"i_1", L""}, ket{L"", L"i_4"},
+                             aux{L"p_1"}, Symmetry::nonsymm);
+        auto u2 =
+            ex<Tensor>(L"u2", bra{L"i_2", L"", L"i_4"}, ket{L"", L"i_1", L""},
+                       aux{L"p"}, Symmetry::nonsymm);
+        auto u3 = ex<Tensor>(L"u3", bra{L"i_3", L"i_5"}, ket{}, aux{L"p"},
+                             Symmetry::symm);
+        auto u4 = ex<Tensor>(L"u4", bra{}, ket{L"i_3", L"i_5", L"i_6"},
+                             aux{L"p_1", L"p"}, Symmetry::antisymm);
+        TN tn(u1 * u2 * u3);
+
+        ExprPtr factor = tn.canonicalize(
+            TensorCanonicalizer::cardinal_tensor_labels(), false);
+        result_1 = to_product(tn.tensors());
+        if (factor) {
+          result_1 *= factor;
+        }
+      }
+
+      // try 2
+      ExprPtr result_2;
+      {
+        auto u1 = ex<Tensor>(L"u1", bra{L"i_4", L""}, ket{L"", L"i_1"},
+                             aux{L"p_1"}, Symmetry::nonsymm);
+        auto u2 =
+            ex<Tensor>(L"u2", bra{L"i_2", L"", L"i_1"}, ket{L"", L"i_4", L""},
+                       aux{L"p_2"}, Symmetry::nonsymm);
+        auto u3 = ex<Tensor>(L"u3", bra{L"i_3", L"i_5"}, ket{}, aux{L"p_2"},
+                             Symmetry::symm);
+        auto u4 = ex<Tensor>(L"u4", bra{}, ket{L"i_6", L"i_3", L"i_5"},
+                             aux{L"p_1", L"p_2"}, Symmetry::antisymm);
+        TN tn(u2 * u1 * u3);
+
+        ExprPtr factor = tn.canonicalize(
+            TensorCanonicalizer::cardinal_tensor_labels(), false);
+        result_2 = to_product(tn.tensors());
+        if (factor) {
+          result_2 *= factor;
+        }
+      }
+
+      // std::wcout << "result_1 = " << result_1.to_latex() << std::endl;
+      // std::wcout << "result_2 = " << result_2.to_latex() << std::endl;
+      REQUIRE(result_1.to_latex() == result_2.to_latex());
     }
 
 #ifndef SEQUANT_SKIP_LONG_TESTS

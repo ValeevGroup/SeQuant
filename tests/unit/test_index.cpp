@@ -20,13 +20,23 @@ TEST_CASE("index", "[elements][index]") {
 
     // default
     REQUIRE_NOTHROW(Index{});
-    Index i{};
+    REQUIRE(Index{}.space() == IndexSpace{});
+    REQUIRE(Index{}.ordinal() == std::nullopt);
+    REQUIRE(Index{}.proto_indices().empty());
+    REQUIRE(Index{}.symmetric_proto_indices());
+    REQUIRE(Index{}.label().empty());
+    REQUIRE(static_cast<bool>(Index{}) == false);
+    REQUIRE(Index{} == Index::null);
+    // empty label also produces default
+    REQUIRE_NOTHROW(Index(L""));
+    REQUIRE(Index{L""} == Index{});
 
     // ordinal-free Index
     {
       REQUIRE_NOTHROW(Index(L"i"));
       Index i(L"i");
       REQUIRE(!i.ordinal());
+      REQUIRE(static_cast<bool>(i) == true);
     }
 
     // labels must match the space key
@@ -41,6 +51,7 @@ TEST_CASE("index", "[elements][index]") {
     REQUIRE(i1.label() == L"i_1");
     REQUIRE(i1.space() == isr->retrieve(L"i"));
     REQUIRE(i1.ordinal() == 1);
+    REQUIRE(static_cast<bool>(i1) == true);
 
     Index i2(isr->retrieve(L'i'), 2);  // N.B. using retrieve(char)
     REQUIRE(i2.label() == L"i_2");
@@ -107,6 +118,7 @@ TEST_CASE("index", "[elements][index]") {
 #ifndef NDEBUG
       REQUIRE_THROWS(Index(isr->retrieve(L"i"), 4, {i1, i1}));
       REQUIRE_THROWS(Index(L"i_5", {L"i_1", L"i_1"}));
+      REQUIRE_THROWS(Index(L"i_5", {L"i_1", L""}));
 #endif
     }
 
@@ -122,11 +134,10 @@ TEST_CASE("index", "[elements][index]") {
       REQUIRE(!i2.ordinal());
 
       // to make things interesting use F12 registry with greek letters
-      Context cxt(sequant::mbpt::make_F12_sr_spaces(), Vacuum::Physical,
-                  get_default_context().metric(),
-                  get_default_context().braket_symmetry(),
-                  get_default_context().spbasis());
-      auto cxt_resetter = set_scoped_default_context(cxt);
+      auto ctx = get_default_context();
+      ctx.set(sequant::mbpt::make_F12_sr_spaces());
+      ctx.set(Vacuum::Physical);
+      auto ctx_resetter = set_scoped_default_context(ctx);
       Index α("α_2",
               get_default_context().index_space_registry()->retrieve("α"));
       REQUIRE(α.label() == L"α_2");
@@ -159,14 +170,17 @@ TEST_CASE("index", "[elements][index]") {
   }
 
   SECTION("equality") {
+    Index i{};
     Index i1(L"i_1");
     Index i2(L"i_2");
     Index i3(L"i_1");
+    REQUIRE(i == i);
     REQUIRE(i1 == i1);
     REQUIRE(!(i1 == i2));
     REQUIRE(i1 != i2);
     REQUIRE(i1 == i3);
     REQUIRE(!(i1 != i3));
+    REQUIRE(i1 != i);
 
     // check copy ctor
     Index i4(i2);
@@ -188,9 +202,15 @@ TEST_CASE("index", "[elements][index]") {
     using SO = std::strong_ordering;
 
     // compare by qns, then tag, then space, then label, then proto indices
+    Index i{};
     Index i1(L"i_1");
     Index i2(L"i_2");
     Index i3(L"i_11");
+
+    REQUIRE(!(i < i));
+    REQUIRE(!(i > i));
+    REQUIRE(i < i1);
+    REQUIRE(!(i > i1));
 
     REQUIRE(i1 < i2);
     REQUIRE(!(i2 < i1));
@@ -296,11 +316,15 @@ TEST_CASE("index", "[elements][index]") {
   }
 
   SECTION("transform") {
+    Index i{};
     Index i0(L"i_0");
     Index i1(L"i_1");
     Index i0_13(L"i_0", {L"i_1", L"i_3"});
     Index i1_13(L"i_1", {L"i_1", L"i_3"});
-    std::map<Index, Index> map{std::make_pair(Index{L"i_1"}, Index{L"i_2"})};
+    std::map<Index, Index> map{std::make_pair(Index{L"i_1"}, Index{L"i_2"}),
+                               std::make_pair(Index{}, Index{L"i_4"})};
+    REQUIRE(i.transform(map));
+    REQUIRE(i == Index{L"i_4"});
     REQUIRE(!i0.transform(map));
     REQUIRE(i0 == Index{L"i_0"});
     REQUIRE(i1.transform(map));
@@ -312,12 +336,14 @@ TEST_CASE("index", "[elements][index]") {
   }
 
   SECTION("to_string") {
-    auto old_cxt = get_default_context();
-    Context cxt(sequant::mbpt::make_F12_sr_spaces(), Vacuum::Physical,
-                old_cxt.metric(), old_cxt.braket_symmetry(), old_cxt.spbasis());
-    auto cxt_resetter = set_scoped_default_context(cxt);
+    auto ctx = get_default_context();
+    ctx.set(sequant::mbpt::make_F12_sr_spaces());
+    ctx.set(Vacuum::Physical);
+    auto ctx_resetter = set_scoped_default_context(ctx);
     Index alpha(L"α");
     REQUIRE(alpha.to_string() == "α");
+    Index null{};
+    REQUIRE(null.to_string() == "");
 
     SEQUANT_PRAGMA_CLANG(diagnostic push)
     SEQUANT_PRAGMA_CLANG(diagnostic ignored "-Wdeprecated-declarations")
@@ -331,8 +357,9 @@ TEST_CASE("index", "[elements][index]") {
   }
 
   SECTION("label manipulation") {
-    auto context_resetter = set_scoped_default_context(
-        Context(sequant::mbpt::make_F12_sr_spaces(), Vacuum::SingleProduct));
+    auto ctx = get_default_context();
+    ctx.set(sequant::mbpt::make_F12_sr_spaces());
+    auto context_resetter = set_scoped_default_context(ctx);
     auto isr = get_default_context().index_space_registry();
     Index alpha(L"α", isr->retrieve(L"α"));
     Index alpha1(L"α_1", isr->retrieve(L"α"));
@@ -351,6 +378,10 @@ TEST_CASE("index", "[elements][index]") {
   }
 
   SECTION("latex") {
+    Index i{};
+    REQUIRE_NOTHROW(to_latex(i));
+    REQUIRE(to_latex(i) == L"{}");
+
     Index i1(L"i_1");
     std::wstring i1_str;
     REQUIRE_NOTHROW(i1_str = to_latex(i1));

@@ -157,9 +157,10 @@ TEST_CASE("wick", "[algorithms][wick]") {
 
   SECTION("physical vacuum") {
     constexpr Vacuum V = Vacuum::Physical;
-    auto raii_tmp = set_scoped_default_context(
-        Context{sequant::mbpt::make_sr_spaces(), V, IndexSpaceMetric::Unit,
-                BraKetSymmetry::conjugate, SPBasis::spinorbital});
+    auto ctx = get_default_context();
+    ctx.set(sequant::mbpt::make_sr_spaces());
+    ctx.set(V);
+    auto raii_tmp = set_scoped_default_context(ctx);
 
     auto switch_to_spinfree_context = detail::NoDiscard([&]() {
       auto context_sf = get_default_context();

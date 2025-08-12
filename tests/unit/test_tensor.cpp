@@ -36,6 +36,8 @@ TEST_CASE("tensor", "[elements]") {
     REQUIRE(t1.bra_rank() == 0);
     REQUIRE(t1.ket_rank() == 0);
     REQUIRE(t1.aux_rank() == 0);
+    REQUIRE(t1.bra_net_rank() == 0);
+    REQUIRE(t1.ket_net_rank() == 0);
     REQUIRE(t1.rank() == 0);
     REQUIRE(t1.symmetry() == Symmetry::invalid);
     REQUIRE(t1.braket_symmetry() == BraKetSymmetry::invalid);
@@ -61,6 +63,8 @@ TEST_CASE("tensor", "[elements]") {
     REQUIRE(t3.bra_rank() == 1);
     REQUIRE(t3.ket_rank() == 0);
     REQUIRE(t3.aux_rank() == 1);
+    REQUIRE(t3.bra_net_rank() == 1);
+    REQUIRE(t3.ket_net_rank() == 0);
     REQUIRE_THROWS(t3.rank());
     REQUIRE(t3.const_indices().size() == 2);
     REQUIRE(t3.symmetry() == Symmetry::nonsymm);
@@ -86,6 +90,99 @@ TEST_CASE("tensor", "[elements]") {
     REQUIRE(t4.braket_symmetry() == BraKetSymmetry::symm);
     REQUIRE(t4.particle_symmetry() == ParticleSymmetry::nonsymm);
     REQUIRE(t4.label() == L"g");
+
+    SECTION("null indices") {
+      REQUIRE_NOTHROW(
+          Tensor(L"N", bra{L""}, ket{L"i_1"}, aux{}, Symmetry::symm));
+      Tensor t(L"N", bra{L""}, ket{L"i_1"}, aux{}, Symmetry::symm);
+      REQUIRE(t.bra_rank() == 1);
+      REQUIRE(t.ket_rank() == 1);
+      REQUIRE(t.bra_net_rank() == 0);
+      REQUIRE(t.ket_net_rank() == 1);
+
+      REQUIRE_NOTHROW(
+          Tensor(L"N", bra{L"i_1"}, ket{L""}, aux{}, Symmetry::symm));
+      REQUIRE_NOTHROW(
+          Tensor(L"N", bra{L""}, ket{L"i_1"}, aux{}, Symmetry::nonsymm));
+      REQUIRE_NOTHROW(
+          Tensor(L"N", bra{L"i_1"}, ket{L""}, aux{}, Symmetry::nonsymm));
+
+      // null indices ok in symmetric bra or ket as long as it's shorter than
+      // the counterpart
+      REQUIRE_NOTHROW(Tensor(L"N", bra{L"i_2", L"i_3", L"i_4"},
+                             ket{L"i_1", L""}, aux{}, Symmetry::symm));
+      REQUIRE_NOTHROW(Tensor(L"N", bra{L"", L"i_1"},
+                             ket{L"i_2", L"i_3", L"i_4"}, aux{},
+                             Symmetry::symm));
+
+      // null indices ok in asymmetric bra or ket as long as they are the the
+      // only in the "column"
+      REQUIRE_NOTHROW(Tensor(L"N", bra{L"", L"i_2", L"i_3"}, ket{L"i_1", L""},
+                             aux{}, Symmetry::nonsymm));
+      REQUIRE_NOTHROW(Tensor(L"N", bra{L"i_1", L""}, ket{L"", L"i_2", L"i_3"},
+                             aux{}, Symmetry::nonsymm));
+
+      // check errors
+#ifndef NDEBUG
+      // no null indices in antisymmetric bra or ket
+      REQUIRE_THROWS_AS(
+          Tensor(L"N", bra{L""}, ket{L"i_1"}, aux{}, Symmetry::antisymm),
+          std::invalid_argument);
+      REQUIRE_THROWS_AS(
+          Tensor(L"N", bra{L"i_1"}, ket{L""}, aux{}, Symmetry::antisymm),
+          std::invalid_argument);
+
+      // no null indices in both symmetric bra or ket
+      REQUIRE_THROWS_AS(
+          Tensor(L"N", bra{L""}, ket{L"i_1", L""}, aux{}, Symmetry::symm),
+          std::invalid_argument);
+      REQUIRE_THROWS_AS(
+          Tensor(L"N", bra{L"i_1", L""}, ket{L""}, aux{}, Symmetry::symm),
+          std::invalid_argument);
+
+      // no null indices in the longer of symmetric bra or ket
+      REQUIRE_THROWS_AS(
+          Tensor(L"N", bra{L"i_2"}, ket{L"i_1", L""}, aux{}, Symmetry::symm),
+          std::invalid_argument);
+      REQUIRE_THROWS_AS(
+          Tensor(L"N", bra{L"i_1", L""}, ket{L"i_2"}, aux{}, Symmetry::symm),
+          std::invalid_argument);
+
+      // no paired null indices in asymmetric bra/ket
+      REQUIRE_THROWS_AS(Tensor(L"N", bra{L"i_2", L""}, ket{L"i_1", L""}, aux{},
+                               Symmetry::nonsymm),
+                        std::invalid_argument);
+
+      // no unpaired null indices in asymmetric bra/ket
+      REQUIRE_THROWS_AS(Tensor(L"N", bra{L"", L"i_2", L""}, ket{L"i_1", L""},
+                               aux{}, Symmetry::nonsymm),
+                        std::invalid_argument);
+      REQUIRE_THROWS_AS(Tensor(L"N", bra{L"i_1", L""}, ket{L"", L"i_2", L""},
+                               aux{}, Symmetry::nonsymm),
+                        std::invalid_argument);
+
+      // no null aux indices
+      REQUIRE_THROWS_AS(Tensor(L"N", bra{L"i_1"}, ket{}, aux{L""}),
+                        std::invalid_argument);
+#endif
+    }
+
+    SECTION("duplicate indices") {
+      // no duplicate indices allowed in bra, in ket, or in aux
+      // but duplicates OK across the bundles
+      REQUIRE_NOTHROW(Tensor(L"N", bra{L"i_1"}, ket{L"i_1"}, aux{L"i_2"}));
+      // null indices are ignored in duplicate checks
+      REQUIRE_NOTHROW(Tensor(L"N", bra{L"", L"", L"i_1"}, ket{L"i_1", L"i_2"},
+                             aux{L"i_3"}));
+#ifndef NDEBUG
+      REQUIRE_THROWS_AS(Tensor(L"N", bra{L"i_1", L"i_1"}, ket{}, aux{}),
+                        std::invalid_argument);
+      REQUIRE_THROWS_AS(Tensor(L"N", bra{}, ket{L"i_1", L"i_1"}, aux{}),
+                        std::invalid_argument);
+      REQUIRE_THROWS_AS(Tensor(L"N", bra{}, ket{}, aux{L"i_1", L"i_1"}),
+                        std::invalid_argument);
+#endif
+    }
   }  // SECTION("constructors")
 
   SECTION("index transformation") {
@@ -185,18 +282,23 @@ TEST_CASE("tensor", "[elements]") {
     auto t1 = Tensor(L"F", bra{L"i_1"}, ket{L"i_2"});
     auto t2 = Tensor(L"F", bra{L"i_1"}, ket{L"i_2"}, aux{L"i_3"});
     auto t3 = Tensor(L"F", bra{L"i_1"}, ket{L"i_2"}, aux{L"i_3", L"i_4"});
+    auto t4 = Tensor(L"F", bra{Index(L"i_1", {L"i_5", L"i_6"}), Index{}},
+                     ket{L"", L"i_2"}, aux{L"i_3", L"i_4"}, Symmetry::nonsymm);
     auto h1 = ex<Tensor>(L"F", bra{L"i_1"}, ket{L"i_2"}) *
               ex<FNOperator>(cre({L"i_1"}), ann({L"i_2"}));
 
-    SECTION("default typesetting") {
+    SECTION("default (brasub, naive) typesetting") {
       REQUIRE(to_latex(t1) == L"{F^{{i_2}}_{{i_1}}}");
       REQUIRE(to_latex(t2) == L"{F^{{i_2}}_{{i_1}}[{i_3}]}");
       REQUIRE(to_latex(t3) == L"{F^{{i_2}}_{{i_1}}[{i_3},{i_4}]}");
+      REQUIRE(to_latex(t4) ==
+              L"{F^{\\textvisiblespace{i_2}}_{{i_1^{{i_5}{i_6}}}"
+              L"\\textvisiblespace}[{i_3},{i_4}]}");
       REQUIRE(to_latex(h1) ==
               L"{{F^{{i_2}}_{{i_1}}}{\\tilde{a}^{{i_1}}_{{i_2}}}}");
     }
 
-    SECTION("ketsub typesetting") {
+    SECTION("ketsub naive typesetting") {
       Context ctx = get_default_context();
       REQUIRE(get_default_context().braket_typesetting() ==
               BraKetTypesetting::KetSuper);
@@ -208,8 +310,60 @@ TEST_CASE("tensor", "[elements]") {
       REQUIRE(to_latex(t1) == L"{F_{{i_2}}^{{i_1}}}");
       REQUIRE(to_latex(t2) == L"{F_{{i_2}}^{{i_1}}[{i_3}]}");
       REQUIRE(to_latex(t3) == L"{F_{{i_2}}^{{i_1}}[{i_3},{i_4}]}");
+      REQUIRE(to_latex(t4) ==
+              L"{F_{\\textvisiblespace{i_2}}^{{i_1^{{i_5}{i_6}}}"
+              L"\\textvisiblespace}[{i_3},{i_4}]}");
       REQUIRE(to_latex(h1) ==
               L"{{F_{{i_2}}^{{i_1}}}{\\tilde{a}_{{i_1}}^{{i_2}}}}");
+    }
+
+    SECTION("brasub tensor typesetting") {
+      Context ctx = get_default_context();
+      REQUIRE(get_default_context().braket_typesetting() ==
+              BraKetTypesetting::BraSub);
+      REQUIRE(get_default_context().braket_slot_typesetting() ==
+              BraKetSlotTypesetting::Naive);
+      ctx.set(BraKetSlotTypesetting::TensorPackage);
+      auto resetter = set_scoped_default_context(ctx);
+      REQUIRE(get_default_context().braket_typesetting() ==
+              BraKetTypesetting::BraSub);
+      REQUIRE(get_default_context().braket_slot_typesetting() ==
+              BraKetSlotTypesetting::TensorPackage);
+
+      REQUIRE(to_latex(t1) == L"{\\tensor*{F}{*^{i_2}_{i_1}}}");
+      REQUIRE(to_latex(t2) == L"{\\tensor*{F}{*^{i_2}_{i_1}}[{i_3}]}");
+      REQUIRE(to_latex(t3) == L"{\\tensor*{F}{*^{i_2}_{i_1}}[{i_3},{i_4}]}");
+      REQUIRE(
+          to_latex(t4) ==
+          L"{\\tensor*{F}{*^{}_{i_1^{{i_5}{i_6}}}*^{i_2}_{}}[{i_3},{i_4}]}");
+      REQUIRE(to_latex(h1) ==
+              L"{{\\tensor*{F}{*^{i_2}_{i_1}}}{\\tensor*{\\tilde{a}}{*^{i_1}_{"
+              L"i_2}}}}");
+    }
+
+    SECTION("ketsub tensor typesetting") {
+      Context ctx = get_default_context();
+      REQUIRE(get_default_context().braket_typesetting() ==
+              BraKetTypesetting::BraSub);
+      REQUIRE(get_default_context().braket_slot_typesetting() ==
+              BraKetSlotTypesetting::Naive);
+      ctx.set(BraKetTypesetting::KetSub);
+      ctx.set(BraKetSlotTypesetting::TensorPackage);
+      auto resetter = set_scoped_default_context(ctx);
+      REQUIRE(get_default_context().braket_typesetting() ==
+              BraKetTypesetting::KetSub);
+      REQUIRE(get_default_context().braket_slot_typesetting() ==
+              BraKetSlotTypesetting::TensorPackage);
+
+      REQUIRE(to_latex(t1) == L"{\\tensor*{F}{*^{i_1}_{i_2}}}");
+      REQUIRE(to_latex(t2) == L"{\\tensor*{F}{*^{i_1}_{i_2}}[{i_3}]}");
+      REQUIRE(to_latex(t3) == L"{\\tensor*{F}{*^{i_1}_{i_2}}[{i_3},{i_4}]}");
+      REQUIRE(
+          to_latex(t4) ==
+          L"{\\tensor*{F}{*^{i_1^{{i_5}{i_6}}}_{}*^{}_{i_2}}[{i_3},{i_4}]}");
+      REQUIRE(to_latex(h1) ==
+              L"{{\\tensor*{F}{*^{i_1}_{i_2}}}{\\tensor*{\\tilde{a}}{*^{i_2}_{"
+              L"i_1}}}}");
     }
 
   }  // SECTION("latex")

@@ -18,6 +18,8 @@ class Context {
     constexpr static auto spbasis = sequant::SPBasis::spinorbital;
     constexpr static auto first_dummy_index_ordinal = 100;
     constexpr static auto braket_typesetting = BraKetTypesetting::ContraSub;
+    constexpr static auto braket_slot_typesetting =
+        BraKetSlotTypesetting::TensorPackage;
   };
 
   /// standard full-form constructor
@@ -29,13 +31,15 @@ class Context {
   /// @param spb single-particle basis (spin-free or spin-dependent)
   /// @param fdio first dummy index ordinal
   /// @param bkt a BraKetTypesetting object
-  explicit Context(std::shared_ptr<IndexSpaceRegistry> isr_sptr,
-                   Vacuum vac = Defaults::vacuum,
-                   IndexSpaceMetric m = Defaults::metric,
-                   BraKetSymmetry bks = Defaults::braket_symmetry,
-                   SPBasis spb = Defaults::spbasis,
-                   std::size_t fdio = Defaults::first_dummy_index_ordinal,
-                   BraKetTypesetting bkt = Defaults::braket_typesetting);
+  /// @param bkst a BraKetSlotTypesetting object
+  explicit Context(
+      std::shared_ptr<IndexSpaceRegistry> isr_sptr,
+      Vacuum vac = Defaults::vacuum, IndexSpaceMetric m = Defaults::metric,
+      BraKetSymmetry bks = Defaults::braket_symmetry,
+      SPBasis spb = Defaults::spbasis,
+      std::size_t fdio = Defaults::first_dummy_index_ordinal,
+      BraKetTypesetting bkt = Defaults::braket_typesetting,
+      BraKetSlotTypesetting bkst = Defaults::braket_slot_typesetting);
 
   /// @brief same as the standard ctor, using IndexSpaceRegistry passed by value
 
@@ -46,12 +50,15 @@ class Context {
   /// @param spb single-particle basis (spin-free or spin-dependent)
   /// @param fdio first dummy index ordinal
   /// @param bkt a BraKetTypesetting object
-  explicit Context(IndexSpaceRegistry isr, Vacuum vac = Defaults::vacuum,
-                   IndexSpaceMetric m = Defaults::metric,
-                   BraKetSymmetry bks = Defaults::braket_symmetry,
-                   SPBasis spb = Defaults::spbasis,
-                   std::size_t fdio = Defaults::first_dummy_index_ordinal,
-                   BraKetTypesetting bkt = Defaults::braket_typesetting);
+  /// @param bkst a BraKetSlotTypesetting object
+  explicit Context(
+      IndexSpaceRegistry isr, Vacuum vac = Defaults::vacuum,
+      IndexSpaceMetric m = Defaults::metric,
+      BraKetSymmetry bks = Defaults::braket_symmetry,
+      SPBasis spb = Defaults::spbasis,
+      std::size_t fdio = Defaults::first_dummy_index_ordinal,
+      BraKetTypesetting bkt = Defaults::braket_typesetting,
+      BraKetSlotTypesetting bkst = Defaults::braket_slot_typesetting);
 
   /// @brief same as the standard ctor, using default-constructed
   /// IndexSpaceRegistry
@@ -62,11 +69,14 @@ class Context {
   /// @param spb single-particle basis (spin-free or spin-dependent)
   /// @param fdio first dummy index ordinal
   /// @param bkt a BraKetTypesetting object
-  explicit Context(Vacuum vac, IndexSpaceMetric m = Defaults::metric,
-                   BraKetSymmetry bks = Defaults::braket_symmetry,
-                   SPBasis spb = Defaults::spbasis,
-                   std::size_t fdio = Defaults::first_dummy_index_ordinal,
-                   BraKetTypesetting bkt = Defaults::braket_typesetting);
+  /// @param bkst a BraKetSlotTypesetting object
+  explicit Context(
+      Vacuum vac, IndexSpaceMetric m = Defaults::metric,
+      BraKetSymmetry bks = Defaults::braket_symmetry,
+      SPBasis spb = Defaults::spbasis,
+      std::size_t fdio = Defaults::first_dummy_index_ordinal,
+      BraKetTypesetting bkt = Defaults::braket_typesetting,
+      BraKetSlotTypesetting bkst = Defaults::braket_slot_typesetting);
 
   /// default constructor, equivalent to Context(Vacuum::Physical,
   /// IndexSpaceMetric::Unit, BraKetSymmetry::conjugate,
@@ -119,6 +129,9 @@ class Context {
   /// (bra, annihilation) indices are typeset in superscript and subscript
   /// LaTeX, respectively.
   BraKetTypesetting braket_typesetting() const;
+  /// \return BraKetSlotTypesetting of this context; see BraKetSlotTypesetting
+  /// for the meaning of the possible values
+  BraKetSlotTypesetting braket_slot_typesetting() const;
 
   /// Sets the Vacuum for this context, convenient for chaining
   /// \param vacuum Vacuum
@@ -128,6 +141,10 @@ class Context {
   /// \param ISR an IndexSpaceRegistry
   /// \return ref to '*this' for chaining
   Context& set(IndexSpaceRegistry ISR);
+  /// sets the IndexSpaceRegistry for this context
+  /// \param ISR a IndexSpaceRegistry shared_ptr
+  /// \return ref to '*this' for chaining
+  Context& set(std::shared_ptr<IndexSpaceRegistry> ISR);
   /// Sets the IndexSpaceMetric for this context, convenient for chaining
   /// \param metric IndexSpaceMetric
   /// \return ref to `*this`, for chaining
@@ -148,6 +165,10 @@ class Context {
   /// \param braket_typeset BraKetTypesetting
   /// \return ref to `*this`, for chaining
   Context& set(BraKetTypesetting braket_typeset);
+  /// Sets the BraKetSlotTypesetting for this context, convenient for chaining
+  /// \param braket_slot_typeset BraKetSlotTypesetting
+  /// \return ref to `*this`, for chaining
+  Context& set(BraKetSlotTypesetting braket_slot_typeset);
 
  private:
   std::shared_ptr<IndexSpaceRegistry> idx_space_reg_ = nullptr;
@@ -157,6 +178,8 @@ class Context {
   SPBasis spbasis_ = Defaults::spbasis;
   std::size_t first_dummy_index_ordinal_ = Defaults::first_dummy_index_ordinal;
   BraKetTypesetting braket_typesetting_ = Defaults::braket_typesetting;
+  BraKetSlotTypesetting braket_slot_typesetting_ =
+      Defaults::braket_slot_typesetting;
 };
 
 /// Context object equality comparison

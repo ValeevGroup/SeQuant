@@ -117,8 +117,8 @@ inline std::wstring to_string(Vacuum V) {
   }
 }
 
-/// describes typesetting convention for contravariant (bra, annihilation) and
-/// covariant (ket, creation) indices
+/// describes LaTeX typesetting convention for contravariant (bra, annihilation)
+/// and covariant (ket, creation) indices
 enum class BraKetTypesetting {
   /// contravariants as subscripts
   ContraSub,
@@ -130,6 +130,15 @@ enum class BraKetTypesetting {
   ContraSuper = CoSub,
   BraSuper = CoSub,
   KetSub = CoSub,
+};
+
+/// describes typesetting convention for bra/ket tensor slots
+enum class BraKetSlotTypesetting {
+  /// all indices are typeset naively, with empty slots indicated by
+  /// `\testvisiblespace`
+  Naive,
+  /// tensor package is used to ensure consistent alignment of bra and ket slots
+  TensorPackage
 };
 
 }  // namespace sequant

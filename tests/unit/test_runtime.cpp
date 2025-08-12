@@ -61,13 +61,13 @@ TEST_CASE("context", "[runtime]") {
         BraKetSymmetry::symm, SPBasis::spinfree)));
     CHECK(get_default_context() == initial_ctx);
 
-    auto resetter = set_scoped_default_context(Context(
-        mbpt::make_sr_spaces(), Vacuum::SingleProduct, IndexSpaceMetric::Unit,
-        BraKetSymmetry::symm, SPBasis::spinfree));
-    CHECK(get_default_context() ==
-          Context(get_default_context().mutable_index_space_registry(),
-                  Vacuum::SingleProduct, IndexSpaceMetric::Unit,
-                  BraKetSymmetry::symm, SPBasis::spinfree));
+    auto ctx = get_default_context();
+    ctx.set(mbpt::make_sr_spaces());
+    ctx.set(BraKetSymmetry::symm);
+    ctx.set(SPBasis::spinfree);
+    const auto ctx_copy = ctx;
+    auto resetter = set_scoped_default_context(ctx);
+    CHECK(get_default_context() == ctx_copy);
   }
   // leaving scope resets the context back
   CHECK(get_default_context() == initial_ctx);

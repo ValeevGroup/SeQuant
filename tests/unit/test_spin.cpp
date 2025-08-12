@@ -954,10 +954,8 @@ SECTION("Merge P operators") {
   auto P4 = Tensor(L"P", bra{}, ket{});
   auto P12 = merge_tensors(P1, P2);
   auto P34 = merge_tensors(P3, P4);
-  auto P11 = merge_tensors(P1, P1);
   REQUIRE_THAT(P12, EquivalentTo("P{i1,i2;a1,a2}"));
   REQUIRE_THAT(P34, EquivalentTo("P{i1,i2;a1,a2}"));
-  REQUIRE_THAT(P11, EquivalentTo("P{i1,i2,i1,i2;}"));
 }
 
 SECTION("Permutation operators") {
@@ -1349,8 +1347,9 @@ SECTION("Open-shell spin-tracing") {
 }
 
 SECTION("ResultExpr") {
-  auto resetter = set_scoped_default_context(
-      Context(mbpt::make_mr_spaces(), Vacuum::SingleProduct));
+  auto ctx = get_default_context();
+  ctx.set(mbpt::make_mr_spaces());
+  auto resetter = set_scoped_default_context(ctx);
 
   const std::vector<std::wstring> inputs = {
       L"R = 1/4",
