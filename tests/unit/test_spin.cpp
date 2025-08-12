@@ -972,15 +972,47 @@ SECTION("Closed-shell spintrace CCSDT terms") {
                  ex<Tensor>(L"t", bra{L"a_3", L"a_4", L"a_5"},
                             ket{L"i_1", L"i_2", L"i_3"}, Symmetry::antisymm);
 
-    auto result = expand_A_op(input);
-    REQUIRE(result->size() == 36);
-    result = expand_antisymm(result);
-    result = closed_shell_spintrace(
+    auto result_1 = expand_A_op(input);
+    REQUIRE(result_1->size() == 36);
+    result_1 = expand_antisymm(result_1);
+    result_1 = closed_shell_spintrace(
         input, {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}, {L"i_3", L"a_3"}}, true);
-    simplify(result);
-    REQUIRE(result->size() == 18);  // 18 raw terms
+    simplify(result_1);
+    REQUIRE(result_1->size() == 18);  // 18 raw terms
     REQUIRE_THAT(
-        result,
+        result_1,
+        EquivalentTo(
+            "  8 g{a_1,a_2;a_4,a_5}:N-C-S * t{a_3,a_4,a_5;i_3,i_1,i_2}:N-C-S + "
+            "2 "
+            "g{a_1,a_2;a_4,a_5}:N-C-S * t{a_3,a_4,a_5;i_2,i_3,i_1}:N-C-S - 4 "
+            "g{a_1,a_3;a_4,a_5}:N-C-S * t{a_2,a_4,a_5;i_3,i_1,i_2}:N-C-S - 4 "
+            "g{a_2,a_3;a_4,a_5}:N-C-S * t{a_1,a_4,a_5;i_1,i_3,i_2}:N-C-S - 4 "
+            "g{a_1,a_2;a_4,a_5}:N-C-S * t{a_3,a_4,a_5;i_2,i_1,i_3}:N-C-S - 4 "
+            "g{a_2,a_3;a_4,a_5}:N-C-S * t{a_1,a_4,a_5;i_2,i_1,i_3}:N-C-S + 2 "
+            "g{a_2,a_3;a_4,a_5}:N-C-S * t{a_1,a_4,a_5;i_3,i_1,i_2}:N-C-S - 4 "
+            "g{a_1,a_2;a_4,a_5}:N-C-S * t{a_3,a_4,a_5;i_3,i_2,i_1}:N-C-S + 2 "
+            "g{a_2,a_3;a_4,a_5}:N-C-S * t{a_1,a_4,a_5;i_2,i_3,i_1}:N-C-S - 4 "
+            "g{a_1,a_2;a_4,a_5}:N-C-S * t{a_3,a_4,a_5;i_1,i_3,i_2}:N-C-S - 4 "
+            "g{a_1,a_3;a_4,a_5}:N-C-S * t{a_2,a_4,a_5;i_1,i_2,i_3}:N-C-S + 8 "
+            "g{a_2,a_3;a_4,a_5}:N-C-S * t{a_1,a_4,a_5;i_1,i_2,i_3}:N-C-S + 8 "
+            "g{a_1,a_3;a_4,a_5}:N-C-S * t{a_2,a_4,a_5;i_2,i_1,i_3}:N-C-S + 2 "
+            "g{a_1,a_3;a_4,a_5}:N-C-S * t{a_2,a_4,a_5;i_3,i_2,i_1}:N-C-S - 4 "
+            "g{a_1,a_3;a_4,a_5}:N-C-S * t{a_2,a_4,a_5;i_2,i_3,i_1}:N-C-S - 4 "
+            "g{a_2,a_3;a_4,a_5}:N-C-S * t{a_1,a_4,a_5;i_3,i_2,i_1}:N-C-S + 2 "
+            "g{a_1,a_2;a_4,a_5}:N-C-S * t{a_3,a_4,a_5;i_1,i_2,i_3}:N-C-S + 2 "
+            "g{a_1,a_3;a_4,a_5}:N-C-S * t{a_2,a_4,a_5;i_1,i_3,i_2}:N-C-S"));
+
+    // the new method, spintracing with partial expansion, then expanding by
+    // S_map
+    auto result_2 = closed_shell_spintrace(
+        input, {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}, {L"i_3", L"a_3"}});
+    simplify(result_2);
+    result_2 = S_maps(result_2);
+    simplify(result_2);
+
+    REQUIRE(result_2->size() == 18);  // 18 raw terms
+    REQUIRE_THAT(
+        result_2,
         EquivalentTo(
             "  8 g{a_1,a_2;a_4,a_5}:N-C-S * t{a_3,a_4,a_5;i_3,i_1,i_2}:N-C-S + "
             "2 "
