@@ -1774,6 +1774,60 @@ TEST_CASE("tensor_network_v3", "[elements]") {
       REQUIRE(result);
     }
 
+    SECTION("empty slots") {
+      // Logger::instance().canonicalize = true;
+      // Logger::instance().canonicalize_input_graph = true;
+      // Logger::instance().canonicalize_dot = true;
+
+      // try 1
+      ExprPtr result_1;
+      {
+        auto u1 = ex<Tensor>(L"u1", bra{L"i_1", L""}, ket{L"", L"i_4"},
+                             aux{L"p_1"}, Symmetry::nonsymm);
+        auto u2 =
+            ex<Tensor>(L"u2", bra{L"i_2", L"", L"i_4"}, ket{L"", L"i_1", L""},
+                       aux{L"p"}, Symmetry::nonsymm);
+        auto u3 = ex<Tensor>(L"u3", bra{L"i_3", L"i_5"}, ket{}, aux{L"p"},
+                             Symmetry::symm);
+        auto u4 = ex<Tensor>(L"u4", bra{}, ket{L"i_3", L"i_5", L"i_6"},
+                             aux{L"p_1", L"p"}, Symmetry::antisymm);
+        TN tn(u1 * u2 * u3);
+
+        ExprPtr factor = tn.canonicalize(
+            TensorCanonicalizer::cardinal_tensor_labels(), false);
+        result_1 = to_product(tn.tensors());
+        if (factor) {
+          result_1 *= factor;
+        }
+      }
+
+      // try 2
+      ExprPtr result_2;
+      {
+        auto u1 = ex<Tensor>(L"u1", bra{L"i_4", L""}, ket{L"", L"i_1"},
+                             aux{L"p_1"}, Symmetry::nonsymm);
+        auto u2 =
+            ex<Tensor>(L"u2", bra{L"i_2", L"", L"i_1"}, ket{L"", L"i_4", L""},
+                       aux{L"p_2"}, Symmetry::nonsymm);
+        auto u3 = ex<Tensor>(L"u3", bra{L"i_3", L"i_5"}, ket{}, aux{L"p_2"},
+                             Symmetry::symm);
+        auto u4 = ex<Tensor>(L"u4", bra{}, ket{L"i_6", L"i_3", L"i_5"},
+                             aux{L"p_1", L"p_2"}, Symmetry::antisymm);
+        TN tn(u2 * u1 * u3);
+
+        ExprPtr factor = tn.canonicalize(
+            TensorCanonicalizer::cardinal_tensor_labels(), false);
+        result_2 = to_product(tn.tensors());
+        if (factor) {
+          result_2 *= factor;
+        }
+      }
+
+      // std::wcout << "result_1 = " << result_1.to_latex() << std::endl;
+      // std::wcout << "result_2 = " << result_2.to_latex() << std::endl;
+      REQUIRE(result_1.to_latex() == result_2.to_latex());
+    }
+
 #ifndef SEQUANT_SKIP_LONG_TESTS
     SECTION("Exhaustive SRCC example") {
       // Note: the exact canonical form written here is implementation-defined
