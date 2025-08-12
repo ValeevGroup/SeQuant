@@ -1003,18 +1003,20 @@ SECTION("Closed-shell spintrace CCSDT terms") {
             "g{a_1,a_3;a_4,a_5}:N-C-S * t{a_2,a_4,a_5;i_1,i_3,i_2}:N-C-S"));
   }
 
-  // {  // new new compact set ppl, 1/24 * 6/5 for rescaling
-  //   const auto input = ex<Sum>(ExprPtrList{parse_expr(
-  //       L"1/20 A{i_1,i_2,i_3;a_1,a_2,a_3} * g{a_1,a_2;a_4,a_5}:N-C-S * "
-  //       "t{a_3,a_4,a_5;i_1,i_2,i_3}", Symmetry::antisymm)});
-  //
-  //   auto result = closed_shell_CC_spintrace_compact_set(input);
-  //   // REQUIRE(result->size()== 1); // it needs to be checked
-  //   REQUIRE_THAT(result,
-  //                EquivalentTo(L"9/25 S{i_1,i_2,i_3;a_1,a_2,a_3}:N-C-S * "
-  //                  "g{a_1,a_2;a_4,a_5}:N-C-S *
-  //                  t{a_3,a_4,a_5;i_3,i_1,i_2}:N-C-S"));
-  // }
+  {  // compact set ppl, 1/24 * 6/5 for rescaling
+    const auto input = ex<Sum>(ExprPtrList{
+        parse_expr(L"1/20 A{i_1,i_2,i_3;a_1,a_2,a_3} * "
+                   L"g{a_1,a_2;a_4,a_5}:N-C-S * t{a_3,a_4,a_5;i_1,i_2,i_3}",
+                   Symmetry::antisymm)});
+
+    auto result = closed_shell_CC_spintrace_compact_set(input);
+    // REQUIRE(result->size()== 1); // it needs to be checked
+    REQUIRE_THAT(
+        result,
+        EquivalentTo(
+            L"9/25 S{i_1,i_2,i_3;a_1,a_2,a_3}:N-C-S * "
+            "g{a_1,a_2;a_4,a_5}:N-C-S * t{a_3,a_4,a_5;i_3,i_1,i_2}:N-C-S"));
+  }
   {  // ppl term in regular_cs, gives us 4 ppl terms
     const auto input = ex<Sum>(ExprPtrList{parse_expr(
         L"1/24 A{i_1,i_2,i_3;a_1,a_2,a_3} * g{a_1,a_2;a_4,a_5}:N-C-S * "
