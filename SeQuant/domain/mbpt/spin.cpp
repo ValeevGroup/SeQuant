@@ -776,11 +776,16 @@ container::svector<container::map<Index, Index>> P_maps(const Tensor& P) {
   assert(P.bra_rank() % 2 == 0 && P.ket_rank() % 2 == 0);
   container::map<Index, Index> idx_rep;
   for (std::size_t i = 0; i != P.const_braket().size(); i += 2) {
-    idx_rep.emplace(P.const_braket().at(i), P.const_braket().at(i + 1));
-    idx_rep.emplace(P.const_braket().at(i + 1), P.const_braket().at(i));
+    auto& idx1 = P.const_braket().at(i);
+    auto& idx2 = P.const_braket().at(i + 1);
+    if (idx1.nonnull()) {
+      assert(idx2.nonnull());
+      idx_rep.emplace(P.const_braket().at(i), P.const_braket().at(i + 1));
+      idx_rep.emplace(P.const_braket().at(i + 1), P.const_braket().at(i));
+    }
   }
 
-  assert(idx_rep.size() == (P.bra_rank() + P.ket_rank()));
+  assert(idx_rep.size() == (P.bra_net_rank() + P.ket_net_rank()));
   return container::svector<container::map<Index, Index>>{idx_rep};
 }
 
@@ -1266,11 +1271,9 @@ std::vector<ExprPtr> open_shell_P_op_vector(const Tensor& A) {
       for (auto& k : beta_spin) {
         if (!alpha_spin.empty() && !beta_spin.empty()) {
           P_bra_list.emplace_back(Tensor(
-              L"P", bra{A.bra().at(j), A.bra().at(k)}, ket{}, Symmetry::nonsymm,
-              BraKetSymmetry::nonsymm, ParticleSymmetry::nonsymm));
+              L"P", bra{A.bra().at(j), A.bra().at(k)}, ket{}, Symmetry::symm));
           P_ket_list.emplace_back(Tensor(
-              L"P", bra{}, ket{A.ket().at(j), A.ket().at(k)}, Symmetry::nonsymm,
-              BraKetSymmetry::nonsymm, ParticleSymmetry::nonsymm));
+              L"P", bra{}, ket{A.ket().at(j), A.ket().at(k)}, Symmetry::symm));
         }
       }
     }
@@ -1289,14 +1292,12 @@ std::vector<ExprPtr> open_shell_P_op_vector(const Tensor& A) {
                   Tensor(L"P",
                          bra{A.bra().at(i1), A.bra().at(i3), A.bra().at(i2),
                              A.bra().at(i4)},
-                         ket{}, Symmetry::nonsymm, BraKetSymmetry::nonsymm,
-                         ParticleSymmetry::nonsymm));
+                         ket{}, Symmetry::symm));
               P_ket_list.emplace_back(
                   Tensor(L"P", bra{},
                          ket{A.ket().at(i1), A.ket().at(i3), A.ket().at(i2),
                              A.ket().at(i4)},
-                         Symmetry::nonsymm, BraKetSymmetry::nonsymm,
-                         ParticleSymmetry::nonsymm));
+                         Symmetry::symm));
             }
           }
         }

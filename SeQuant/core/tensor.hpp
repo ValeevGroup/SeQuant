@@ -108,59 +108,30 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
     // antisymmetric bra or ket cannot support null indices (because it is not
     // clear what antisymmetry means if some slots can be empty; permutation of
     // 2 empty slots is supposed to do what?)
-    if (symmetry() == Symmetry::antisymm) {
+    // by analogy symmetric bra or ket should not have null indices, but limited
+    // circumstances do allow null indices in such context ... but no use cases
+    if (symmetry() != Symmetry::nonsymm) {
       if (!bra_.empty() && ranges::contains(bra_, Index::null))
         throw std::invalid_argument(
-            "Tensor ctor: found null indices in antisymmetric bra");
+            "Tensor ctor: found null indices in symmetric/antisymmetric bra");
       if (!ket_.empty() && ranges::contains(ket_, Index::null))
         throw std::invalid_argument(
-            "Tensor ctor: found null indices in antisymmetric ket");
-    }
-    // matching bra and ket slots cannot be both empty ... this means that in
-    // the symmetric case either bra or ket only can contain empty slots, else
-    // by permuting bra and ket can align empty slots
-    else {
-      if (symmetry() == Symmetry::symm) {
-        const auto bra_has_nulls = ranges::contains(bra_, Index::null);
-        const auto ket_has_nulls = ranges::contains(ket_, Index::null);
-        if (bra_has_nulls && ket_has_nulls)
+            "Tensor ctor: found null indices in symmetric/antisymmetric ket");
+    } else {
+      // asymmetric bra or ket
+      //
+      if (bra_rank() != ket_rank()) {
+        throw std::invalid_argument(
+            "Tensor ctor: asymmetric bra and ket must have identical number of "
+            "slots; use null tensors to pad the shorter of the two, if needed");
+      }
+      const auto braket_rank = std::min(bra_rank(), ket_rank());
+      // matching bra and ket slots cannot be both empty
+      for (std::size_t r = 0; r != braket_rank; ++r) {
+        if (bra_[r] == Index::null && ket_[r] == Index::null)
           throw std::invalid_argument(
-              "Tensor ctor: found null indices in symmetric bra AND ket");
-        if (bra_has_nulls && bra_rank() > ket_rank())
-          throw std::invalid_argument(
-              "Tensor ctor: found null indices in symmetric bra, which is "
-              "longer than the ket");
-        if (ket_has_nulls && ket_rank() > bra_rank())
-          throw std::invalid_argument(
-              "Tensor ctor: found null indices in symmetric ket, which is "
-              "longer than the bra");
-      } else {  // asymmetric bra or ket
-        const auto braket_rank = std::min(bra_rank(), ket_rank());
-        for (std::size_t r = 0; r != braket_rank; ++r) {
-          if (bra_[r] == Index::null && ket_[r] == Index::null)
-            throw std::invalid_argument(
-                "Tensor ctor: found null indices in both matching slots of "
-                "asymmetric bra and ket");
-        }
-        if (bra_rank() != ket_rank()) {
-          const auto longer_bundle_type =
-              bra_rank() > ket_rank() ? SlotType::Bra : SlotType::Ket;
-          auto *longer_bundle = longer_bundle_type == SlotType::Bra
-                                    ? &bra_[0]
-                                    : &ket_[0];  // n.b. these are contiguous
-          const auto rank = std::max(bra_rank(), ket_rank());
-          for (std::size_t r = braket_rank; r != rank; ++r) {
-            if (longer_bundle[r] == Index::null)
-              throw std::invalid_argument(
-                  (std::string("Tensor ctor: found null index in a slot of "
-                               "asymmetric ") +
-                   (longer_bundle_type == SlotType::Bra ? "bra" : "ket") +
-                   " without a matching " +
-                   (longer_bundle_type == SlotType::Bra ? "ket" : "bra") +
-                   " slot")
-                      .c_str());
-          }
-        }
+              "Tensor ctor: found null indices in both matching slots of "
+              "asymmetric bra and ket");
       }
     }
     if (!aux_.empty() && ranges::contains(aux_, Index::null)) {
@@ -193,6 +164,20 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
 #endif
   }
 
+  void pad_slots_if_nonsymm() {
+    if (symmetry() == Symmetry::nonsymm && bra_.size() != ket_.size()) {
+      const auto nbra = bra_.size();
+      const auto nket = ket_.size();
+      if (nbra < nket) {
+        bra_.value().reserve(nket);
+        bra_.value().insert(bra_.end(), nket - nbra, Index::null);
+      } else {
+        ket_.value().reserve(nbra);
+        ket_.value().insert(ket_.end(), nbra - nket, Index::null);
+      }
+    }
+  }
+
   template <typename IndexRange1, typename IndexRange2, typename IndexRange3,
             typename = std::enable_if_t<
                 (meta::is_statically_castable_v<
@@ -218,6 +203,7 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
         symmetry_(s),
         braket_symmetry_(bks),
         particle_symmetry_(ps) {
+    pad_slots_if_nonsymm();
     validate_indices();
     validate_symmetries();
   }
@@ -235,6 +221,7 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
         symmetry_(s),
         braket_symmetry_(bks),
         particle_symmetry_(ps) {
+    pad_slots_if_nonsymm();
     validate_indices();
     validate_symmetries();
   }
@@ -249,10 +236,10 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
   /// @name nontrivial constructors
   /// @note if `NDEBUG` is not `#define`d and invalid combinations of indices are found, these throw `std::invalid_argument`. Specifically, these throw if
   /// - null indices are found in any slot of antisymmetric bra or ket (it's not clear what permutation of 2 empty slots is supposed to do in general)
-  /// - null indices are found in both slots of bra-ket slot pairs:
-  ///   - this means for symmetric bra/ket null indices can only be found in either bra or ket (else can align empty slots by permutation) and then only in the shorter of the two bundles
-  ///   - for asymmetric bra/ket no pair of matching bra/ket slots can be totally empty, and no bra/ket slot without matching ket/bra counterpart can be empty
+  /// - null indices are found in any slot of symmetric bra or ket: can assign consistent semantics if have empty slots in the shorter of the bra/ket, but not clear if there is a use case that demands this
+  /// - null indices are found in both slots of bra-ket slot pairs (meaning is unclear)
   /// - null indices are found in any aux slot (why would empty slots be needed?)
+  /// - asymmetric tensor has a bra/ket slot without a matching ket/bra slot; this is primarily to make operations (such as canonicalization) easier on such tensors; null indices can be used to ensure complete bra/ket bundles in asymmetric tensors
   /// - duplicate indices are found within bra, within ket, or within aux (but same index can appear in bra and ket, for example).
   /// @{
   // clang-format on
@@ -311,7 +298,6 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
          ParticleSymmetry ps = ParticleSymmetry::symm)
       : Tensor(label, bra_indices, ket_indices, aux_indices, reserved_tag{}, s,
                bks, ps) {
-    validate_indices();
     assert_nonreserved_label(label_);
   }
 
@@ -351,7 +337,6 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
          ParticleSymmetry ps = ParticleSymmetry::symm)
       : Tensor(label, std::move(bra_indices), std::move(ket_indices),
                std::move(aux_indices), reserved_tag{}, s, bks, ps) {
-    validate_indices();
     assert_nonreserved_label(label_);
   }
 

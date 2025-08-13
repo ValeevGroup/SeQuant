@@ -61,12 +61,12 @@ TEST_CASE("tensor", "[elements]") {
     auto t3 = Tensor(L"N", bra{L"i_1"}, ket{}, aux{L"a_1"});
     REQUIRE(t3);
     REQUIRE(t3.bra_rank() == 1);
-    REQUIRE(t3.ket_rank() == 0);
+    REQUIRE(t3.ket_rank() == 1);
     REQUIRE(t3.aux_rank() == 1);
     REQUIRE(t3.bra_net_rank() == 1);
     REQUIRE(t3.ket_net_rank() == 0);
-    REQUIRE_THROWS(t3.rank());
-    REQUIRE(t3.const_indices().size() == 2);
+    REQUIRE(t3.rank() == 1);
+    REQUIRE(t3.const_indices().size() == 3);
     REQUIRE(t3.symmetry() == Symmetry::nonsymm);
     REQUIRE(t3.braket_symmetry() == BraKetSymmetry::conjugate);
     REQUIRE(t3.particle_symmetry() == ParticleSymmetry::symm);
@@ -92,35 +92,27 @@ TEST_CASE("tensor", "[elements]") {
     REQUIRE(t4.label() == L"g");
 
     SECTION("null indices") {
+      // null indices ok in asymmetric bra or ket
+      REQUIRE_NOTHROW(Tensor(L"N", bra{L"", L"i_2", L"i_3"},
+                             ket{L"i_1", L"", L""}, aux{}, Symmetry::nonsymm));
+      REQUIRE_NOTHROW(Tensor(L"N", bra{L"i_1", L"", L""},
+                             ket{L"", L"i_2", L"i_3"}, aux{},
+                             Symmetry::nonsymm));
+
+      // in fact Tensor will pad asymmetric bra/ket to make "old" behavior OK
+      REQUIRE_NOTHROW(Tensor(L"N", bra{L"i_1", L"i_2", L"i_3"},
+                             ket{L"i_4", L"i_5"}, aux{}, Symmetry::nonsymm));
+      REQUIRE_NOTHROW(Tensor(L"N", bra{L"i_4", L"i_5"},
+                             ket{L"i_1", L"i_2", L"i_3"}, aux{},
+                             Symmetry::nonsymm));
+
       REQUIRE_NOTHROW(
-          Tensor(L"N", bra{L""}, ket{L"i_1"}, aux{}, Symmetry::symm));
-      Tensor t(L"N", bra{L""}, ket{L"i_1"}, aux{}, Symmetry::symm);
+          Tensor(L"N", bra{L""}, ket{L"i_1"}, aux{}, Symmetry::nonsymm));
+      Tensor t(L"N", bra{L""}, ket{L"i_1"}, aux{}, Symmetry::nonsymm);
       REQUIRE(t.bra_rank() == 1);
       REQUIRE(t.ket_rank() == 1);
       REQUIRE(t.bra_net_rank() == 0);
       REQUIRE(t.ket_net_rank() == 1);
-
-      REQUIRE_NOTHROW(
-          Tensor(L"N", bra{L"i_1"}, ket{L""}, aux{}, Symmetry::symm));
-      REQUIRE_NOTHROW(
-          Tensor(L"N", bra{L""}, ket{L"i_1"}, aux{}, Symmetry::nonsymm));
-      REQUIRE_NOTHROW(
-          Tensor(L"N", bra{L"i_1"}, ket{L""}, aux{}, Symmetry::nonsymm));
-
-      // null indices ok in symmetric bra or ket as long as it's shorter than
-      // the counterpart
-      REQUIRE_NOTHROW(Tensor(L"N", bra{L"i_2", L"i_3", L"i_4"},
-                             ket{L"i_1", L""}, aux{}, Symmetry::symm));
-      REQUIRE_NOTHROW(Tensor(L"N", bra{L"", L"i_1"},
-                             ket{L"i_2", L"i_3", L"i_4"}, aux{},
-                             Symmetry::symm));
-
-      // null indices ok in asymmetric bra or ket as long as they are the the
-      // only in the "column"
-      REQUIRE_NOTHROW(Tensor(L"N", bra{L"", L"i_2", L"i_3"}, ket{L"i_1", L""},
-                             aux{}, Symmetry::nonsymm));
-      REQUIRE_NOTHROW(Tensor(L"N", bra{L"i_1", L""}, ket{L"", L"i_2", L"i_3"},
-                             aux{}, Symmetry::nonsymm));
 
       // check errors
 #ifndef NDEBUG
@@ -132,33 +124,17 @@ TEST_CASE("tensor", "[elements]") {
           Tensor(L"N", bra{L"i_1"}, ket{L""}, aux{}, Symmetry::antisymm),
           std::invalid_argument);
 
-      // no null indices in both symmetric bra or ket
+      // no null indices in symmetric bra or ket
       REQUIRE_THROWS_AS(
-          Tensor(L"N", bra{L""}, ket{L"i_1", L""}, aux{}, Symmetry::symm),
+          Tensor(L"N", bra{L""}, ket{L"i_1"}, aux{}, Symmetry::symm),
           std::invalid_argument);
       REQUIRE_THROWS_AS(
-          Tensor(L"N", bra{L"i_1", L""}, ket{L""}, aux{}, Symmetry::symm),
-          std::invalid_argument);
-
-      // no null indices in the longer of symmetric bra or ket
-      REQUIRE_THROWS_AS(
-          Tensor(L"N", bra{L"i_2"}, ket{L"i_1", L""}, aux{}, Symmetry::symm),
-          std::invalid_argument);
-      REQUIRE_THROWS_AS(
-          Tensor(L"N", bra{L"i_1", L""}, ket{L"i_2"}, aux{}, Symmetry::symm),
+          Tensor(L"N", bra{L"i_1"}, ket{L""}, aux{}, Symmetry::symm),
           std::invalid_argument);
 
       // no paired null indices in asymmetric bra/ket
       REQUIRE_THROWS_AS(Tensor(L"N", bra{L"i_2", L""}, ket{L"i_1", L""}, aux{},
                                Symmetry::nonsymm),
-                        std::invalid_argument);
-
-      // no unpaired null indices in asymmetric bra/ket
-      REQUIRE_THROWS_AS(Tensor(L"N", bra{L"", L"i_2", L""}, ket{L"i_1", L""},
-                               aux{}, Symmetry::nonsymm),
-                        std::invalid_argument);
-      REQUIRE_THROWS_AS(Tensor(L"N", bra{L"i_1", L""}, ket{L"", L"i_2", L""},
-                               aux{}, Symmetry::nonsymm),
                         std::invalid_argument);
 
       // no null aux indices
@@ -172,8 +148,8 @@ TEST_CASE("tensor", "[elements]") {
       // but duplicates OK across the bundles
       REQUIRE_NOTHROW(Tensor(L"N", bra{L"i_1"}, ket{L"i_1"}, aux{L"i_2"}));
       // null indices are ignored in duplicate checks
-      REQUIRE_NOTHROW(Tensor(L"N", bra{L"", L"", L"i_1"}, ket{L"i_1", L"i_2"},
-                             aux{L"i_3"}));
+      REQUIRE_NOTHROW(Tensor(L"N", bra{L"", L"", L"i_1"},
+                             ket{L"i_1", L"i_2", L""}, aux{L"i_3"}));
 #ifndef NDEBUG
       REQUIRE_THROWS_AS(Tensor(L"N", bra{L"i_1", L"i_1"}, ket{}, aux{}),
                         std::invalid_argument);

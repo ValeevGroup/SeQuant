@@ -51,8 +51,8 @@ TEST_CASE("optimize", "[optimize]") {
 
     auto single_term_opt = [](Product const& prod) {
       return opt::single_term_opt(prod, [](Index const& ix) {
-        auto lbl = to_string(ix.label());
-        auto sz = ix.space().approximate_size();
+        // null space contributes x1 to the size
+        auto sz = ix.nonnull() ? ix.space().approximate_size() : 1;
         return sz;
       });
     };

@@ -1074,6 +1074,8 @@ void TensorNetworkV2::init_edges() {
   pure_proto_indices_.clear();
 
   auto idx_insert = [this](const Index &idx, Vertex vertex) {
+    if (idx.nonnull() == false) return;
+
     if (Logger::instance().tensor_network) {
       std::wcout << "TensorNetworkV2::init_edges: idx=" << to_latex(idx)
                  << " attached to tensor " << vertex.getTerminalIndex() << " ("

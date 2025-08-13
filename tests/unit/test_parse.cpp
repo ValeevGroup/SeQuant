@@ -163,8 +163,9 @@ TEST_CASE("parsing", "[parse]") {
       REQUIRE(expr->as<Tensor>().bra().size() == 2);
       REQUIRE(expr->as<Tensor>().bra().at(0).label() == L"i_1");
       REQUIRE(expr->as<Tensor>().bra().at(1).label() == L"i_2");
-      REQUIRE(expr->as<Tensor>().ket().size() == 1);
+      REQUIRE(expr->as<Tensor>().ket().size() == 2);
       REQUIRE(expr->as<Tensor>().ket().at(0).label() == L"a_1");
+      REQUIRE(expr->as<Tensor>().ket().at(1).nonnull() == false);
       REQUIRE(expr->as<Tensor>().aux().size() == 2);
       REQUIRE(expr->as<Tensor>().aux().at(0).label() == L"x_1");
       REQUIRE(expr->as<Tensor>().aux().at(1).label() == L"x_2");

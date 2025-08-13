@@ -114,7 +114,8 @@ TEST_CASE("utilities", "[utilities]") {
 
       auto indices = get_unique_indices(expression);
 
-      REQUIRE_THAT(indices.bra, UnorderedEquals(std::vector<Index>{{L"i_1"}}));
+      REQUIRE_THAT(indices.bra,
+                   UnorderedEquals(std::vector<Index>{{L"i_1", L""}}));
       REQUIRE_THAT(indices.ket,
                    UnorderedEquals(std::vector<Index>{{L"a_1", L"a_2"}}));
       REQUIRE_THAT(indices.aux, UnorderedEquals(std::vector<Index>{{L"x_1"}}));
@@ -144,7 +145,8 @@ TEST_CASE("utilities", "[utilities]") {
 
       auto indices = get_unique_indices(expression);
 
-      REQUIRE_THAT(indices.bra, UnorderedEquals(std::vector<Index>{{L"i_1"}}));
+      REQUIRE_THAT(indices.bra,
+                   UnorderedEquals(std::vector<Index>{{L"i_1", L""}}));
       REQUIRE_THAT(indices.ket,
                    UnorderedEquals(std::vector<Index>{{L"a_1", L"i_2"}}));
       REQUIRE_THAT(indices.aux, UnorderedEquals(std::vector<Index>{{L"x_1"}}));

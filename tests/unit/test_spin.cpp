@@ -948,14 +948,15 @@ SECTION("Closed-shell spintrace CCSDT terms") {
 }
 
 SECTION("Merge P operators") {
-  auto P1 = Tensor(L"P", bra{L"i_1", L"i_2"}, ket{});
-  auto P2 = Tensor(L"P", bra{}, ket{L"a_1", L"a_2"});
-  auto P3 = Tensor(L"P", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"});
-  auto P4 = Tensor(L"P", bra{}, ket{});
+  auto P1 = Tensor(L"P", bra{L"i_1", L"i_2"}, ket{}, Symmetry::symm);
+  auto P2 = Tensor(L"P", bra{}, ket{L"a_1", L"a_2"}, Symmetry::symm);
+  auto P3 =
+      Tensor(L"P", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"}, Symmetry::symm);
+  auto P4 = Tensor(L"P", bra{}, ket{}, Symmetry::symm);
   auto P12 = merge_tensors(P1, P2);
   auto P34 = merge_tensors(P3, P4);
-  REQUIRE_THAT(P12, EquivalentTo("P{i1,i2;a1,a2}"));
-  REQUIRE_THAT(P34, EquivalentTo("P{i1,i2;a1,a2}"));
+  REQUIRE_THAT(P12, EquivalentTo("P{i1,i2;a1,a2}:S"));
+  REQUIRE_THAT(P34, EquivalentTo("P{i1,i2;a1,a2}:S"));
 }
 
 SECTION("Permutation operators") {

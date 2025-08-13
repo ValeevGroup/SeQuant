@@ -1004,8 +1004,10 @@ TEST_CASE("tensor_network_v2", "[elements]") {
     SECTION("particle non-conserving") {
       const auto input1 = parse_expr(L"P{;a1,a3}");
       const auto input2 = parse_expr(L"P{a1,a3;}");
-      const std::wstring expected1 = L"{{P^{{a_1}{a_3}}_{}}}";
-      const std::wstring expected2 = L"{{P^{}_{{a_1}{a_3}}}}";
+      const std::wstring expected1 =
+          L"{{P^{{a_1}{a_3}}_{\\textvisiblespace\\textvisiblespace}}}";
+      const std::wstring expected2 =
+          L"{{P^{\\textvisiblespace\\textvisiblespace}_{{a_1}{a_3}}}}";
 
       for (int variant : {1, 2}) {
         for (bool fast : {true, false}) {
@@ -1506,13 +1508,13 @@ TEST_CASE("tensor_network_v3", "[elements]") {
         TN tn(u1 * u2 * u3);
       }
 
-      // can have empty slots
+      // can have empty slots, but only in nonsymm bra/ket
       {
         auto u1 = ex<Tensor>(L"u1", bra{L"i_1", L""}, ket{L"", L"i_4"},
                              aux{L"p"}, Symmetry::nonsymm);
         auto u2 = ex<Tensor>(L"u2", bra{L"i_2", L"", L"i_4"}, ket{L"", L"i_1"},
                              aux{L"p"}, Symmetry::nonsymm);
-        auto u3 = ex<Tensor>(L"u3", bra{L"i_3", L"i_5"}, ket{L""}, aux{L"p"},
+        auto u3 = ex<Tensor>(L"u3", bra{L"i_3", L"i_5"}, ket{}, aux{L"p"},
                              Symmetry::symm);
         REQUIRE_NOTHROW(TN(u1 * u2 * u3));
         TN tn(u1 * u2 * u3);
@@ -1641,8 +1643,10 @@ TEST_CASE("tensor_network_v3", "[elements]") {
     SECTION("particle non-conserving") {
       const auto input1 = parse_expr(L"P{;a1,a3}");
       const auto input2 = parse_expr(L"P{a1,a3;}");
-      const std::wstring expected1 = L"{{P^{{a_1}{a_3}}_{}}}";
-      const std::wstring expected2 = L"{{P^{}_{{a_1}{a_3}}}}";
+      const std::wstring expected1 =
+          L"{{P^{{a_1}{a_3}}_{\\textvisiblespace\\textvisiblespace}}}";
+      const std::wstring expected2 =
+          L"{{P^{\\textvisiblespace\\textvisiblespace}_{{a_1}{a_3}}}}";
 
       for (int variant : {1, 2}) {
         for (bool fast : {true, false}) {
