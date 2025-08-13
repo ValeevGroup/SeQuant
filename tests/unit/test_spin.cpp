@@ -555,6 +555,64 @@ SECTION("Expand Symmetrizer") {
   }
 }
 
+SECTION("partial expansion + S_maps = full expansion") {
+  auto input = ex<Constant>(rational{1, 4}) *
+               ex<Tensor>(L"A", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"},
+                          Symmetry::antisymm) *
+               ex<Tensor>(L"t", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"},
+                          Symmetry::antisymm);
+  auto result = symmetrize_expr(input);
+  REQUIRE_THAT(
+      result, SimplifiesTo(
+                  "1/4 S{i_1,i_2;a_1,a_2}:N-C-S * t{a_1,a_2;i_1,i_2}:A-C-S "
+                  "- 1/4 S{i_1,i_2;a_1,a_2}:N-C-S * t{a_1,a_2;i_2,i_1}:A-C-S"));
+  //(canonicalized: 1/2 S{i_1,i_2;a_1,a_2}:N-C-S * t{a_1,a_2;i_1,i_2}:A-C-S)
+
+  result = S_maps(result);
+  REQUIRE_THAT(
+      result,
+      SimplifiesTo(
+          "1/4 t{a_1,a_2;i_1,i_2}:A-C-S + 1/4 t{a_2,a_1;i_2,i_1}:A-C-S "
+          "- 1/4 t{a_1,a_2;i_2,i_1}:A-C-S - 1/4 t{a_2,a_1;i_1,i_2}:A-C-S"));
+  // (canonicalized: t{a_1,a_2;i_1,i_2}:A-C-S)
+
+  result = expand_A_op(input);
+  REQUIRE_THAT(
+      result,
+      SimplifiesTo(
+          "1/4 t{a_1,a_2;i_1,i_2}:A-C-S - 1/4 t{a_1,a_2;i_2,i_1}:A-C-S "
+          "- 1/4 t{a_2,a_1;i_1,i_2}:A-C-S + 1/4 t{a_2,a_1;i_2,i_1}:A-C-S"));
+  // (canonicalized: t{a_1,a_2;i_1,i_2}:A-C-S)
+}
+
+SECTION("partial spintracing + S_maps = full spintracing") {
+  auto input = ex<Constant>(rational{1, 4}) *
+               ex<Tensor>(L"A", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"},
+                          Symmetry::antisymm) *
+               ex<Tensor>(L"t", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"},
+                          Symmetry::antisymm);
+  auto result =
+      closed_shell_spintrace(input, {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}});
+  REQUIRE_THAT(
+      result,
+      EquivalentTo("-1 S{i_1,i_2;a_1,a_2}:N-C-S * t{a_1,a_2;i_2,i_1}:N-C-S "
+                   "+ 2 S{i_1,i_2;a_1,a_2}:N-C-S * t{a_1,a_2;i_1,i_2}:N-C-S"));
+  result = S_maps(result);
+  REQUIRE_THAT(
+      result, EquivalentTo(
+                  "-1 t{a_1,a_2;i_2,i_1}:N-C-S - 1 t{a_2,a_1;i_1,i_2}:N-C-S "
+                  "+ 2 t{a_1,a_2;i_1,i_2}:N-C-S + 2 t{a_2,a_1;i_2,i_1}:N-C-S"));
+  // (canonicalized: -2 t{a_1,a_2;i_2,i_1}:N-C-S + 4 t{a_1,a_2;i_1,i_2}:N-C-S)
+
+  result =
+      closed_shell_spintrace(input, {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}}, true);
+  REQUIRE_THAT(
+      result, EquivalentTo(
+                  "-1 t{a_1,a_2;i_2,i_1}:N-C-S - 1 t{a_2,a_1;i_1,i_2}:N-C-S "
+                  "+ 2 t{a_1,a_2;i_1,i_2}:N-C-S + 2 t{a_2,a_1;i_2,i_1}:N-C-S"));
+  //(canonicalized: -2 t{a_1,a_2;i_2,i_1}:N-C-S + 4 t{a_1,a_2;i_1,i_2}:N-C-S)
+}
+
 SECTION("Symmetrize expression") {
   {
     // g * t1 + g * t1
