@@ -566,7 +566,7 @@ std::wstring ITFGenerator::generate() const {
 
   // Tensor declarations
   for (const Tensor &current : m_importedTensors) {
-    if (current.indices().size() == 0 && current.label() == L"One") {
+    if (current.braketaux().size() == 0 && current.label() == L"One") {
       // The One[] tensor exists implicitly
       continue;
     }
@@ -576,13 +576,13 @@ std::wstring ITFGenerator::generate() const {
   }
   itf += L"\n";
   for (const Tensor &current : m_createdTensors) {
-    if (current.indices().size() == 0 && current.label() == L"One") {
+    if (current.braketaux().size() == 0 && current.label() == L"One") {
       // The One[] tensor exists implicitly
       continue;
     }
 
     itf += L"tensor: " + to_itf(current, *m_ctx);
-    if (current.indices().size() > 0) {
+    if (current.braketaux().size() > 0) {
       itf += +L", !Create{type:disk}\n";
     } else {
       itf += +L", !Create{type:scalar}\n";

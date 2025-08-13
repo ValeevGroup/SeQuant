@@ -139,9 +139,9 @@ PYBIND11_MODULE(_sequant, m) {
                                return std::vector<Index>(braket.begin(),
                                                          braket.end());
                              })
-      .def_property_readonly("indices", [](const Tensor &t) {
-        auto indices = t.indices();
-        return std::vector<Index>(indices.begin(), indices.end());
+      .def_property_readonly("braketaux", [](const Tensor &t) {
+        auto slots = t.braketaux();
+        return std::vector<Index>(slots.begin(), slots.end());
       });
 
   py::class_<Complex<rational>>(m, "zRational")

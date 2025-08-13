@@ -45,11 +45,12 @@ struct NestedTensorIndices {
       if (!ranges::contains(cont, el)) cont.emplace_back(el);
     };
 
-    for (Index const& ix : tnsr.const_braket())
+    for (Index const& ix : tnsr.const_braket_indices()) {
       append_unique(ix.has_proto_indices() ? inner : outer, ix);
+    }
 
     for (Index const& ix :
-         tnsr.const_braket() | transform(&Index::proto_indices) | join)
+         tnsr.const_braket_indices() | transform(&Index::proto_indices) | join)
       append_unique(outer, ix);
   }
 

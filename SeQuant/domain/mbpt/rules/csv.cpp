@@ -19,7 +19,7 @@ ExprPtr csv_transform_impl(Tensor const& tnsr, const IndexSpace& csv_basis,
                            std::wstring_view coeff_tensor_label) {
   using ranges::views::transform;
 
-  if (ranges::none_of(tnsr.const_braket(), &Index::has_proto_indices))
+  if (ranges::none_of(tnsr.const_braket_indices(), &Index::has_proto_indices))
     return nullptr;
 
   assert(ranges::none_of(tnsr.aux(), &Index::has_proto_indices));
@@ -100,7 +100,8 @@ ExprPtr csv_transform(ExprPtr const& expr, const IndexSpace& csv_basis,
   else if (expr->is<Tensor>()) {
     auto const& tnsr = expr->as<Tensor>();
     if (!ranges::contains(tensor_labels, tnsr.label())) return expr;
-    if (ranges::none_of(tnsr.indices(), &Index::has_proto_indices)) return expr;
+    if (ranges::none_of(tnsr.braketaux_indices(), &Index::has_proto_indices))
+      return expr;
     return csv_transform_impl(tnsr, csv_basis, coeff_tensor_label);
   } else if (expr->is<Product>()) {
     auto const& prod = expr->as<Product>();

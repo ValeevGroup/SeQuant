@@ -1164,7 +1164,7 @@ TEST_CASE("tensor_network_v2", "[elements]") {
       std::vector<Index> indices;
       for (std::size_t i = 0; i < expected.size(); ++i) {
         const Tensor& tensor = expected[i].as<Tensor>();
-        for (const Index& idx : tensor.indices()) {
+        for (const Index& idx : tensor.braketaux_indices()) {
           if (std::find(indices.begin(), indices.end(), idx) == indices.end()) {
             indices.push_back(idx);
           }
@@ -1856,7 +1856,7 @@ TEST_CASE("tensor_network_v3", "[elements]") {
       std::vector<Index> indices;
       for (std::size_t i = 0; i < expected.size(); ++i) {
         const Tensor& tensor = expected[i].as<Tensor>();
-        for (const Index& idx : tensor.indices()) {
+        for (const Index& idx : tensor.braketaux_indices()) {
           if (std::find(indices.begin(), indices.end(), idx) == indices.end()) {
             indices.push_back(idx);
           }

@@ -55,7 +55,7 @@ auto range1_limits(sequant::Tensor const& tensor, size_t nocc, size_t nvirt) {
   auto isr = get_default_context().index_space_registry();
   static auto const ao = isr->retrieve(L"i");
   static auto const au = isr->retrieve(L"a");
-  return tensor.const_braket() |
+  return tensor.const_braket_indices() |
          ranges::views::transform([nocc, nvirt](auto const& idx) {
            const auto& sp = idx.space();
            assert(sp == ao || sp == au);

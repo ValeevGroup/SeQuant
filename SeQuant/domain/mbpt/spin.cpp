@@ -21,6 +21,7 @@
 #include <range/v3/detail/variant.hpp>
 #include <range/v3/functional/identity.hpp>
 #include <range/v3/iterator/basic_iterator.hpp>
+#include <range/v3/range/primitives.hpp>
 #include <range/v3/utility/get.hpp>
 #include <range/v3/view/concat.hpp>
 #include <range/v3/view/interface.hpp>
@@ -365,8 +366,9 @@ bool spin_symm_tensor(const Tensor& tensor) {
 }
 
 bool same_spin_tensor(const Tensor& tensor) {
-  auto braket = tensor.braket();
-  auto spin_element = braket[0].space().qns();
+  auto braket = tensor.braket_indices();
+  assert(ranges::empty(braket) == false);
+  auto spin_element = braket.begin()->space().qns();
   return std::all_of(braket.begin(), braket.end(),
                      [&spin_element](const auto& idx) {
                        return idx.space().qns() == spin_element;
@@ -380,13 +382,13 @@ bool can_expand(const Tensor& tensor) {
 
   // indices must have specific spin
   [[maybe_unused]] auto all_have_spin = std::all_of(
-      tensor.const_braket().begin(), tensor.const_braket().end(),
-      [](const auto& idx) {
+      tensor.const_braket_indices().begin(),
+      tensor.const_braket_indices().end(), [](const auto& idx) {
         auto idx_spin = mbpt::to_spin(idx.space().qns());
         return idx_spin == mbpt::Spin::alpha || idx_spin == mbpt::Spin::beta;
       });
-  assert(std::all_of(tensor.const_braket().begin(), tensor.const_braket().end(),
-                     [](const auto& idx) {
+  assert(std::all_of(tensor.const_braket_indices().begin(),
+                     tensor.const_braket_indices().end(), [](const auto& idx) {
                        auto idx_spin = mbpt::to_spin(idx.space().qns());
                        return idx_spin == mbpt::Spin::alpha ||
                               idx_spin == mbpt::Spin::beta;
@@ -773,16 +775,18 @@ container::svector<container::map<Index, Index>> P_maps(const Tensor& P) {
   // P_ij -> {{i,j},{j,i}}
   // P_ijkl \equiv P_ij P_kl -> {{i,j},{j,i},{k,l},{l,k}}
   // P_ij^ab \equiv P_ij P^ab -> {{i,j},{j,i},{a,b},{b,a}}
-  assert(P.bra_rank() % 2 == 0 && P.ket_rank() % 2 == 0);
+  assert(P.bra_rank() > 0 && P.bra_rank() % 2 == 0 && P.ket_rank() > 0 &&
+         P.ket_rank() % 2 == 0);
   container::map<Index, Index> idx_rep;
-  for (std::size_t i = 0; i != P.const_braket().size(); i += 2) {
-    auto& idx1 = P.const_braket().at(i);
-    auto& idx2 = P.const_braket().at(i + 1);
-    if (idx1.nonnull()) {
-      assert(idx2.nonnull());
-      idx_rep.emplace(P.const_braket().at(i), P.const_braket().at(i + 1));
-      idx_rep.emplace(P.const_braket().at(i + 1), P.const_braket().at(i));
-    }
+  auto indices = P.const_braket_indices();
+  for (auto it = indices.begin(); it != indices.end(); ranges::advance(it, 2)) {
+    auto& idx1 = *it;
+    auto it_next = it;
+    ++it_next;
+    assert(it_next != indices.end());
+    auto& idx2 = *it_next;
+    idx_rep.emplace(idx1, idx2);
+    idx_rep.emplace(idx2, idx1);
   }
 
   assert(idx_rep.size() == (P.bra_net_rank() + P.ket_net_rank()));
@@ -1126,7 +1130,7 @@ ExprPtr closed_shell_CC_spintrace_rigorous(ExprPtr const& expr) {
 container::set<Index, Index::LabelCompare> index_list(const ExprPtr& expr) {
   container::set<Index, Index::LabelCompare> grand_idxlist;
   if (expr->is<Tensor>()) {
-    ranges::for_each(expr->as<Tensor>().const_indices(),
+    ranges::for_each(expr->as<Tensor>().const_braketaux_indices(),
                      [&grand_idxlist](const Index& idx) {
                        idx.reset_tag();
                        grand_idxlist.insert(idx);
@@ -1146,8 +1150,8 @@ Tensor swap_spin(const Tensor& t) {
   };
 
   // Return tensor if there are no spin labels
-  if (std::all_of(t.const_braket().begin(), t.const_braket().end(),
-                  is_any_spin)) {
+  if (std::all_of(t.const_braket_indices().begin(),
+                  t.const_braket_indices().end(), is_any_spin)) {
     return t;
   }
 

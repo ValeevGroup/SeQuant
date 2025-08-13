@@ -351,23 +351,41 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
 
   /// @return "core" label of the tensor
   std::wstring_view label() const override { return label_; }
-  /// @return the bra index range
+  /// @return the bra slot range (empty slots are occupied by null indices)
   const auto &bra() const { return bra_; }
-  /// @return the ket index range
+  /// @return the ket slot range (empty slots are occupied by null indices)
   const auto &ket() const { return ket_; }
-  /// @return the aux index range
+  /// @return the aux slot range (empty slots are occupied by null indices)
   const auto &aux() const { return aux_; }
-  /// @return concatenated view of the bra and ket index ranges
+  /// @return concatenated view of the bra and ket slot ranges
   auto braket() const { return ranges::views::concat(bra_, ket_); }
+  /// @return concatenated view of the bra and ket index ranges (i.e., nonempty
+  /// slots)
+  auto braket_indices() const {
+    return ranges::views::filter(
+        braket(), [](const Index &idx) { return idx.nonnull(); });
+  }
   /// @return concatenated view of all indices of this tensor (bra, ket and
   /// aux)
-  auto indices() const { return ranges::views::concat(bra_, ket_, aux_); }
-  /// @return view of the bra+ket index ranges
+  auto braketaux() const { return ranges::views::concat(bra_, ket_, aux_); }
+  /// @return concatenated view of all nonnull indices of this tensor (bra, ket
+  /// and aux)
+  auto braketaux_indices() const {
+    return ranges::views::filter(
+        braketaux(), [](const Index &idx) { return idx.nonnull(); });
+  }
+  /// @return view of the bra+ket slots
   /// @note this is to work around broken lookup rules
   auto const_braket() const { return this->braket(); }
-  /// @return view of all indices
+  /// @return view of the bra+ket indices
   /// @note this is to work around broken lookup rules
-  auto const_indices() const { return this->indices(); }
+  auto const_braket_indices() const { return this->braket_indices(); }
+  /// @return const view of all slots
+  /// @note this is to work around broken lookup rules
+  auto const_braketaux() const { return this->braketaux(); }
+  /// @return const view of all indices
+  /// @note this is to work around broken lookup rules
+  auto const_braketaux_indices() const { return this->braketaux_indices(); }
   /// Returns the Symmetry object describing the symmetry of the bra and ket of
   /// the Tensor, i.e. what effect swapping indices in positions @c i  and @c j
   /// in <em>either bra or ket</em> has on the elements of the Tensor;
@@ -497,7 +515,7 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
   ExprPtr clone() const override { return ex<Tensor>(*this); }
 
   void reset_tags() const {
-    ranges::for_each(indices(), [](const auto &idx) { idx.reset_tag(); });
+    ranges::for_each(braketaux(), [](const auto &idx) { idx.reset_tag(); });
   }
 
   hash_type bra_hash_value() const {
@@ -631,7 +649,7 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
     return braket();
   }
   AbstractTensor::const_any_view_rand _indices() const override final {
-    return indices();
+    return braketaux();
   }
   std::size_t _bra_rank() const override final { return bra_rank(); }
   std::size_t _ket_rank() const override final { return ket_rank(); }

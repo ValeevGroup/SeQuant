@@ -40,7 +40,7 @@ TEST_CASE("spin", "[spin]") {
 
   auto reset_idx_tags = [](ExprPtr& expr) {
     if (expr->is<Tensor>())
-      ranges::for_each(expr->as<Tensor>().const_braket(),
+      ranges::for_each(expr->as<Tensor>().const_braketaux(),
                        [](const Index& idx) { idx.reset_tag(); });
   };
 
@@ -191,7 +191,7 @@ TEST_CASE("spin", "[spin]") {
     REQUIRE_THAT(spin_swap_tensor, EquivalentTo("t{p↓1,p↑2;p↓3,p↑4}"));
 
     auto result = remove_spin(input);
-    for (auto& i : result->as<Tensor>().const_braket())
+    for (auto& i : result->as<Tensor>().const_braket_indices())
       REQUIRE(i.space().base_key() == L"p");
 
     input = ex<Tensor>(L"t", bra{p1, p3}, ket{p2, p4});
