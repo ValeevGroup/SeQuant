@@ -930,10 +930,9 @@ ExprPtr S_maps(const ExprPtr& expr) {
 }
 
 ExprPtr hash_filter_compact_set(
-    const ExprPtr& expr,
+    ExprPtr expr,
     const container::svector<container::svector<Index>>& ext_idxs) {
   if (!expr->is<Sum>()) return expr;
-
   if (ext_idxs.size() <= 2) return expr;  // always skip R1 and R2
 
   // hash filtering logic for R > 2
@@ -952,7 +951,7 @@ ExprPtr hash_filter_compact_set(
 
     auto it = largest_coeff_terms.find(hash);
     if (it == largest_coeff_terms.end()) {
-      largest_coeff_terms[hash] = {term->clone()};
+      largest_coeff_terms[hash] = {term};
     } else {
       if (!it->second.empty()) {
         auto existing_scalar = it->second[0]->as<Product>().scalar();
@@ -961,9 +960,9 @@ ExprPtr hash_filter_compact_set(
 
         if (current_abs > existing_abs) {
           it->second.clear();
-          it->second.push_back(term->clone());
+          it->second.push_back(term);
         } else if (current_abs == existing_abs) {
-          it->second.push_back(term->clone());
+          it->second.push_back(term);
         }
       }
     }
