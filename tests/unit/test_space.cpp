@@ -14,6 +14,21 @@
 TEST_CASE("index_space", "[elements]") {
   using namespace sequant;
 
+  SECTION("constructor") {
+    REQUIRE_NOTHROW(IndexSpace{});
+    REQUIRE(IndexSpace{} == IndexSpace::null);
+
+    REQUIRE_NOTHROW(IndexSpace(L"i", 0b0010, 20));
+    IndexSpace active_occupied(L"i", 0b0010, 20);
+
+    // move leave null in its wake
+    REQUIRE_NOTHROW(IndexSpace(std::move(active_occupied)));
+    REQUIRE(active_occupied == IndexSpace::null);
+    active_occupied = IndexSpace(L"i", 0b0010, 20);
+    REQUIRE_NOTHROW(IndexSpace{} = std::move(active_occupied));
+    REQUIRE(active_occupied == IndexSpace::null);
+  }
+
   SECTION("registry synopsis") {
     auto sr_isr = sequant::mbpt::make_sr_spaces();
     REQUIRE_NOTHROW(sr_isr->retrieve(L"i"));
