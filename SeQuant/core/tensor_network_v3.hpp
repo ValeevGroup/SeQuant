@@ -76,10 +76,15 @@ class TensorNetworkV3 {
 
   /// Edge in a TensorNetworkV3 = the Index annotating it +
   /// a list of vertices corresponding to the Tensor index slots it connects
+  /// @note this is move-only since using pointers to refer to Index objects
   // clang-format on
   class Edge {
    public:
     Edge() = default;
+    Edge(const Edge &) = delete;
+    Edge(Edge &&) = default;
+    Edge &operator=(const Edge &) = delete;
+    Edge &operator=(Edge &&) = default;
     explicit Edge(const Vertex &vertex) : vertices{vertex} {}
     explicit Edge(std::initializer_list<Vertex> vertices) {
       ranges::for_each(vertices,
@@ -225,6 +230,17 @@ class TensorNetworkV3 {
 
     init_edges();
   }
+
+  TensorNetworkV3(TensorNetworkV3 &&) noexcept;
+  TensorNetworkV3 &operator=(TensorNetworkV3 &&) noexcept;
+
+  /// copy constructor
+  /// @warning does not copy edges
+  TensorNetworkV3(const TensorNetworkV3 &other);
+
+  /// copy assignment
+  /// @warning does not copy edges
+  TensorNetworkV3 &operator=(const TensorNetworkV3 &other) noexcept;
 
   /// @return const reference to the sequence of tensors
   /// @note after invoking TensorNetwork::canonicalize() the order of

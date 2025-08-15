@@ -427,6 +427,24 @@ ExprPtr TensorNetworkV3::canonicalize_graph(
     return {};
 }
 
+TensorNetworkV3::TensorNetworkV3(TensorNetworkV3 &&) noexcept = default;
+TensorNetworkV3 &TensorNetworkV3::operator=(TensorNetworkV3 &&) noexcept =
+    default;
+
+TensorNetworkV3::TensorNetworkV3(const TensorNetworkV3 &other) {
+  tensors_.reserve(other.tensors_.size());
+  for (const auto &t : other.tensors_) {
+    tensors_.emplace_back(std::shared_ptr<AbstractTensor>(t->_clone()));
+  }
+  tensor_input_ordinals_ = other.tensor_input_ordinals_;
+}
+
+TensorNetworkV3 &TensorNetworkV3::operator=(
+    const TensorNetworkV3 &other) noexcept {
+  *this = TensorNetworkV3(other);
+  return *this;
+}
+
 ExprPtr TensorNetworkV3::canonicalize(
     const container::vector<std::wstring> &cardinal_tensor_labels, bool fast,
     const NamedIndexSet *named_indices_ptr) {

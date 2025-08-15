@@ -1546,7 +1546,7 @@ TEST_CASE("tensor_network_v3", "[elements]") {
       TN tn(*t1_x_t2);
 
       // edges
-      auto edges = tn.edges();
+      const auto& edges = tn.edges();
       REQUIRE(edges.size() == 3);
 
       // ext indices
