@@ -989,8 +989,8 @@ ExprPtr closed_shell_spintrace(
   // expression with non-symmetric tensors, hence we are partially expanding the
   // antisymmetrizer (A) and fully expanding the anti-symmetric tensors to
   // non-symmetric.
-  // adding another option to fully expand the antisymmetrizer (for caompact set
-  // of epns)
+  // adding another option to fully expand the antisymmetrizer (can be used for
+  // compact set of epns, but now an optimized way)
   auto partially_or_fully_expand =
       [&is_direct_full_expansion](const ExprPtr& expr) {
         auto temp = expr;
@@ -1158,43 +1158,48 @@ ExprPtr closed_shell_CC_spintrace_compact_set(ExprPtr const& expr) {
   using ranges::views::transform;
 
   auto const ext_idxs = external_indices(expr);
-
-  // spintrace with partial expansion (which is not expensive)
   auto st_expr = closed_shell_spintrace(expr, ext_idxs);
-  // now fully expand them. this avoids the expensive spintracing of all the raw
-  // terms
-  st_expr = S_maps(st_expr);
-
   canonicalize(st_expr);
 
   if (!ext_idxs.empty()) {
+    // Remove S operator to apply biorthogonal transformation
+    for (auto& term : *st_expr) {
+      if (term->is<Product>()) term = remove_tensor(term->as<Product>(), L"S");
+    }
     st_expr = biorthogonal_transform(st_expr, ext_idxs);
-  }
 
-  // apply hash filter method to get unique set of terms
-  st_expr = hash_filter_compact_set(st_expr, ext_idxs);
-
-  // add S tensor just once at the end
-  auto bixs = ext_idxs | transform([](auto&& vec) { return vec[1]; });
-  auto kixs = ext_idxs | transform([](auto&& vec) { return vec[0]; });
-  if (!bixs.empty() || !kixs.empty()) {
+    auto bixs = ext_idxs | transform([](auto&& vec) { return vec[1]; });
+    auto kixs = ext_idxs | transform([](auto&& vec) { return vec[0]; });
     st_expr =
         ex<Tensor>(Tensor{L"S", bra(std::move(bixs)), ket(std::move(kixs))}) *
         st_expr;
-  }
 
-  rational combined_factor;
-  if (ext_idxs.size() <= 2) {
-    combined_factor = rational(1, factorial(ext_idxs.size()));
-  } else {
-    auto fact_n = factorial(ext_idxs.size());
-    combined_factor =
-        rational(1, fact_n - 1);  // this is (1/fact_n) * (fact_n/(fact_n-1))
+    simplify(st_expr);
+    // now fully expand them. this avoids the expensive spintracing and also
+    // biorthogonalization of all the raw terms
+    st_expr = S_maps(st_expr);
+    // no need to canonicalize here, hash-filter includes canonicalization
+    // canonicalize(st_expr);
+
+    // apply hash filter method to get unique set of terms
+    st_expr = hash_filter_compact_set(st_expr, ext_idxs);
+    // add S tensor again
+    st_expr =
+        ex<Tensor>(Tensor{L"S", bra(std::move(bixs)), ket(std::move(kixs))}) *
+        st_expr;
+
+    rational combined_factor;
+    if (ext_idxs.size() <= 2) {
+      combined_factor = rational(1, factorial(ext_idxs.size()));
+    } else {
+      auto fact_n = factorial(ext_idxs.size());
+      combined_factor =
+          rational(1, fact_n - 1);  // this is (1/fact_n) * (fact_n/(fact_n-1))
+    }
+    st_expr = ex<Constant>(combined_factor) * st_expr;
   }
-  st_expr = ex<Constant>(combined_factor) * st_expr;
 
   simplify(st_expr);
-
   // std::wcout << "final eqns after symm: " <<
   // sequant::to_latex_align(sequant::ex<sequant::Sum>(sequant::opt::reorder(result_expr->as<sequant::Sum>())),
   // 0, 4) << std::endl;
