@@ -200,6 +200,10 @@ ExprPtr TensorNetworkV3::canonicalize_graph(
   // canonical order of its braket slots
   container::map<std::size_t, container::svector<std::size_t, 4>>
       canonical_braket_slot_order;
+  // for bra-ket symmetric tensors only: maps tensor ordinal -> canonical order
+  // of its bra and ket slot bundle vertices
+  container::map<std::size_t, std::array<std::size_t, /* bra + ket = */ 2>>
+      canonical_bra_ket_bundle_order;
 
   std::vector<std::size_t> index_idx_to_vertex;
   index_idx_to_vertex.reserve(edges_.size() + pure_proto_indices_.size());
@@ -224,6 +228,11 @@ ExprPtr TensorNetworkV3::canonicalize_graph(
         if (symm == Symmetry::symm || symm == Symmetry::antisymm) {
           canonical_slot_order[tensor_ord][bra ? 0 : 1].second.emplace_back(
               canonize_perm[vertex]);
+        }
+        const auto bksymm = braket_symmetry(tensor);
+        if (bksymm != BraKetSymmetry::nonsymm) {
+          canonical_bra_ket_bundle_order[tensor_ord][bra ? 0 : 1] =
+              canonize_perm[vertex];
         }
         break;
       }
@@ -391,6 +400,16 @@ ExprPtr TensorNetworkV3::canonicalize_graph(
       if (symmetry(tensor) == Symmetry::antisymm) {
         parity *= braparity.value_or(1) * ketparity.value_or(1);
       }
+    }
+
+    // lastly permute bra with ket bundles, if needed
+    // TODO extend to support comjugate case
+    if (braket_symmetry(tensor) != BraKetSymmetry::symm) continue;
+
+    // swap bra and ket bundles
+    if (canonical_bra_ket_bundle_order[i][0] >
+        canonical_bra_ket_bundle_order[i][1]) {
+      tensor._swap_bra_ket();
     }
   }
 

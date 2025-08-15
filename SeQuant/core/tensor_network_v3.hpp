@@ -108,21 +108,22 @@ class TensorNetworkV3 {
               "TensorNetworkV3::Edge::connect_to: aux slot cannot be connected "
               "to a non-aux slot");
         }
-        // - can connect bra slot to ket slot, and vice versa
-        if (first.getOrigin() == Origin::Bra &&
-            vertex.getOrigin() != Origin::Ket) {
-          throw std::invalid_argument(
-              "TensorNetworkV3::Edge::connect_to: bra slot can only be "
-              "connected "
-              "to a ket slot");
-        }
-        if (first.getOrigin() == Origin::Ket &&
-            vertex.getOrigin() != Origin::Bra) {
-          throw std::invalid_argument(
-              "TensorNetworkV3::Edge::connect_to: ket slot can only be "
-              "connected "
-              "to a bra slot");
-        }
+        // - can connect bra slot to ket slot, and vice versa, unless there is
+        // no distinction between primal and dual spaces if (first.getOrigin()
+        // == Origin::Bra &&
+        //     vertex.getOrigin() != Origin::Ket) {
+        //   throw std::invalid_argument(
+        //       "TensorNetworkV3::Edge::connect_to: bra slot can only be "
+        //       "connected "
+        //       "to a ket slot");
+        // }
+        // if (first.getOrigin() == Origin::Ket &&
+        //     vertex.getOrigin() != Origin::Bra) {
+        //   throw std::invalid_argument(
+        //       "TensorNetworkV3::Edge::connect_to: ket slot can only be "
+        //       "connected "
+        //       "to a bra slot");
+        // }
         add_vertex(vertex);
       }
 
