@@ -770,6 +770,16 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
                                          aux_.size());
   }
 
+  /// swaps bra and ket slots
+  void _swap_bra_ket() override final {
+    this->reset_hash_value();
+    std::swap(bra_.value(), ket_.value());
+    std::swap(bra_net_rank_, ket_net_rank_);
+
+    validate_indices();
+    canonicalize_slots();
+  }
+
 };  // class Tensor
 
 static_assert(is_tensor_v<Tensor>,

@@ -168,18 +168,44 @@ TEST_CASE("canonicalization", "[algorithms]") {
                    SimplifiesTo("1/2 w S{a_1,a_2;i_1,i_2} f{a_3;i_3} "
                                 "f⁺{i_1,i_3;a_1,a_2}:N-N-S t{i_2;a_3}"));
     }
-  }
-  {
-    auto input = ex<Constant>(rational{1, 2}) *
-                 ex<Tensor>(L"B", bra{L"p_2"}, ket{L"p_4"}, aux{L"p_5"},
-                            Symmetry::nonsymm) *
-                 ex<Tensor>(L"B", bra{L"p_1"}, ket{L"p_3"}, aux{L"p_5"},
-                            Symmetry::nonsymm) *
-                 ex<Tensor>(L"t", bra{L"p_4"}, ket{L"p_2"}, Symmetry::nonsymm) *
-                 ex<Tensor>(L"t", bra{L"p_3"}, ket{L"p_1"}, Symmetry::nonsymm);
-    canonicalize(input);
-    REQUIRE_THAT(input,
-                 EquivalentTo("1/2 t{p1;p3} t{p2;p4} B{p3;p1;p5} B{p4;p2;p5}"));
+    // with aux indices
+    {
+      auto input =
+          ex<Constant>(rational{1, 2}) *
+          ex<Tensor>(L"B", bra{L"p_2"}, ket{L"p_4"}, aux{L"p_5"},
+                     Symmetry::nonsymm) *
+          ex<Tensor>(L"B", bra{L"p_1"}, ket{L"p_3"}, aux{L"p_5"},
+                     Symmetry::nonsymm) *
+          ex<Tensor>(L"t", bra{L"p_4"}, ket{L"p_2"}, Symmetry::nonsymm) *
+          ex<Tensor>(L"t", bra{L"p_3"}, ket{L"p_1"}, Symmetry::nonsymm);
+      canonicalize(input);
+      // because bra and ket are in same space dummy renaming flips the bra and
+      // ket even though the tensors are not bra-ket symmmetric
+      REQUIRE_THAT(
+          input, EquivalentTo("1/2 t{p1;p3} t{p2;p4} B{p3;p1;p5} B{p4;p2;p5}"));
+    }
+    // with bra-ket symmetry
+    {
+      // in this example bra and ket differ, so flipping them is nontrivial and
+      // must leverage the bra-ket symmetry
+      auto input = ex<Constant>(rational{1, 2}) *
+                   ex<Tensor>(L"B", bra{L"a_2"}, ket{L"p_4"}, aux{L"p_5"},
+                              Symmetry::nonsymm, BraKetSymmetry::symm) *
+                   ex<Tensor>(L"B", bra{L"a_1"}, ket{L"p_3"}, aux{L"p_5"},
+                              Symmetry::nonsymm, BraKetSymmetry::symm) *
+                   ex<Tensor>(L"t", bra{L"p_4"}, ket{L"a_2"}, Symmetry::nonsymm,
+                              BraKetSymmetry::symm) *
+                   ex<Tensor>(L"t", bra{L"p_3"}, ket{L"a_1"}, Symmetry::nonsymm,
+                              BraKetSymmetry::symm);
+      REQUIRE_THAT(
+          input,
+          EquivalentTo(
+              "1/2 t{p3;a1}:N-S t{p4;a2}:N-S B{a1;p3;p5}:N-S B{a2;p4;p5}:N-S"));
+      REQUIRE_THAT(
+          input,
+          EquivalentTo(
+              "1/2 t{a1;p3}:N-S t{a2;p4}:N-S B{p3;a1;p5}:N-S B{p4;a2;p5}:N-S"));
+    }
   }
 
   SECTION("Sum of Variables") {
