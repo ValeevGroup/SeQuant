@@ -1170,10 +1170,11 @@ ExprPtr closed_shell_CC_spintrace_compact_set(ExprPtr const& expr) {
 
     auto bixs = ext_idxs | transform([](auto&& vec) { return vec[1]; });
     auto kixs = ext_idxs | transform([](auto&& vec) { return vec[0]; });
-    st_expr =
-        ex<Tensor>(Tensor{L"S", bra(std::move(bixs)), ket(std::move(kixs))}) *
-        st_expr;
-
+    if (bixs.size() > 1) {
+      st_expr =
+          ex<Tensor>(Tensor{L"S", bra(std::move(bixs)), ket(std::move(kixs))}) *
+          st_expr;
+    }
     simplify(st_expr);
     // now fully expand them. this avoids the expensive spintracing and also
     // biorthogonalization of all the raw terms
