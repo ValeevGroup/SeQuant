@@ -29,7 +29,10 @@
 
 namespace sequant {
 
-enum class SlotType { Bra, Ket, Aux, BraKet };
+/// index slot types
+///
+/// @note This does not include slot bundles, like braket, etc.
+enum class SlotType { Bra, Ket, Aux };
 
 class TensorCanonicalizer;
 
