@@ -1775,10 +1775,6 @@ TEST_CASE("tensor_network_v3", "[elements]") {
     }
 
     SECTION("empty slots") {
-      // Logger::instance().canonicalize = true;
-      // Logger::instance().canonicalize_input_graph = true;
-      // Logger::instance().canonicalize_dot = true;
-
       // try 1
       ExprPtr result_1;
       {

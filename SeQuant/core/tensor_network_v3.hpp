@@ -45,11 +45,7 @@ class TensorNetworkV3 {
   // for unit testing only
   friend class TensorNetworkV3Accessor;
 
-  enum class Origin {
-    Bra = 1,
-    Ket,
-    Aux,
-  };
+  using Origin = SlotType;
 
   class Vertex {
    public:
@@ -486,15 +482,15 @@ class TensorNetworkV3 {
 
 template <typename CharT, typename Traits>
 std::basic_ostream<CharT, Traits> &operator<<(
-    std::basic_ostream<CharT, Traits> &stream, TensorNetworkV3::Origin origin) {
+    std::basic_ostream<CharT, Traits> &stream, SlotType origin) {
   switch (origin) {
-    case TensorNetworkV3::Origin::Bra:
+    case SlotType::Bra:
       stream << "Bra";
       break;
-    case TensorNetworkV3::Origin::Ket:
+    case SlotType::Ket:
       stream << "Ket";
       break;
-    case TensorNetworkV3::Origin::Aux:
+    case SlotType::Aux:
       stream << "Aux";
       break;
   }
