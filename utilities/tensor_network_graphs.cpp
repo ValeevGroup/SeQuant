@@ -47,8 +47,10 @@ void print_help() {
       << "  <exe> [options] <network 1> [<network 2> [... [<network N>] ] ]\n";
   std::wcout << "Options:\n";
   std::wcout << "  --help     Shows this help message\n";
+  std::wcout
+      << "  --v1       Use original TensorNetwork (aka TensorNetworkV1)\n";
   std::wcout << "  --v2       Use TensorNetworkV2\n";
-  std::wcout << "  --v3       Use TensorNetworkV3\n";
+  std::wcout << "  --v3       Use TensorNetworkV3 [default]\n";
   std::wcout << "  --no-named Treat all indices as unnamed (even if they are "
                 "external)\n";
 }
@@ -60,7 +62,7 @@ int main(int argc, char **argv) {
       BraKetSymmetry::conjugate, SPBasis::spinorbital));
 
   bool use_named_indices = true;
-  int version = 1;
+  int version = 3;
   const TensorNetwork::named_indices_t empty_named_indices;
 
   if (argc <= 1) {
@@ -75,6 +77,9 @@ int main(int argc, char **argv) {
       return 0;
     } else if (current == L"--no-named") {
       use_named_indices = false;
+      continue;
+    } else if (current == L"--v1") {
+      version = 1;
       continue;
     } else if (current == L"--v2") {
       version = 2;
