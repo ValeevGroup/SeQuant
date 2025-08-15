@@ -352,7 +352,7 @@ class AbstractTensor {
 /// objects.
 /// @{
 inline auto braket(const AbstractTensor& t) { return t._braket(); }
-inline auto indices(const AbstractTensor& t) { return t._braketaux(); }
+inline auto braketaux(const AbstractTensor& t) { return t._braketaux(); }
 inline auto bra_rank(const AbstractTensor& t) { return t._bra_rank(); }
 inline auto bra_net_rank(const AbstractTensor& t) { return t._bra_net_rank(); }
 inline auto ket_rank(const AbstractTensor& t) { return t._ket_rank(); }
@@ -511,7 +511,7 @@ template <typename T>
 struct is_tensor
     : std::bool_constant<
           std::is_invocable_v<decltype(braket), T> &&
-          std::is_invocable_v<decltype(indices), T> &&
+          std::is_invocable_v<decltype(braketaux), T> &&
           std::is_invocable_v<decltype(bra_rank), T> &&
           std::is_invocable_v<decltype(ket_rank), T> &&
           std::is_invocable_v<decltype(aux_rank), T> &&
