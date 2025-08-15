@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a8fc26c92cb4ad8d84bb0c8b2924ab6e7:
+
+Function sequant::S_maps
+========================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_spin.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::S_maps(const ExprPtr&)
+   :project: SeQuant

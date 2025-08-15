@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a05a60d7f5af9f324247f9d517d5a9ac0:
+
+Function sequant::symmetrize_expr(const ExprPtr&)
+=================================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_spin.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::symmetrize_expr(const ExprPtr&)
+   :project: SeQuant

@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a9fb532127bfd2f2fa6242f3a82772b42:
+
+Template Function sequant::subsequence
+======================================
+
+- Defined in :ref:`file_SeQuant_core_algorithm.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::subsequence(Iterable const&, boost::dynamic_bitset<> const&)
+   :project: SeQuant

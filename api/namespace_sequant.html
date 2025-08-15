@@ -1,0 +1,949 @@
+<!doctype html>
+<html class="no-js" lang="en" data-content_root="../">
+  <head><meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width,initial-scale=1"/>
+    <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="index" title="Index" href="../genindex.html" /><link rel="search" title="Search" href="../search.html" />
+
+    <!-- Generated with Sphinx 7.4.7 and Furo 2025.07.19 -->
+        <title>Namespace sequant - SeQuant Documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=d111a655" />
+    <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=25af2a20" />
+    <link rel="stylesheet" type="text/css" href="../_static/graphviz.css?v=fd3f3429" />
+    <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../_static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="../_static/bootstrap-treeview/bootstrap-treeview.min.css?v=8176a87d" />
+    <link rel="stylesheet" type="text/css" href="../_static/styles/furo-extensions.css?v=8dab3a3b" />
+    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/fontawesome.min.css" />
+    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/solid.min.css" />
+    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/brands.min.css" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #f2f2f2;
+  --color-code-foreground: #1e1e1e;
+  --sidebar-item-font-size: 0.95em;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #2b2b2b;
+  --color-code-foreground: #f8f8f2;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #2b2b2b;
+  --color-code-foreground: #f8f8f2;
+  
+      }
+    }
+  }
+</style></head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc">
+<label class="overlay sidebar-overlay" for="__navigation">
+  <div class="visually-hidden">Hide navigation sidebar</div>
+</label>
+<label class="overlay toc-overlay" for="__toc">
+  <div class="visually-hidden">Hide table of contents sidebar</div>
+</label>
+
+<a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
+
+
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <div class="visually-hidden">Toggle site navigation sidebar</div>
+        <i class="icon"><svg><use href="#svg-menu"></use></svg></i>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="../index.html"><div class="brand">SeQuant Documentation</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle">
+          <div class="visually-hidden">Toggle Light / Dark / Auto color theme</div>
+          <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+          <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon" for="__toc">
+        <div class="visually-hidden">Toggle table of contents sidebar</div>
+        <i class="icon"><svg><use href="#svg-toc"></use></svg></i>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="../index.html">
+  
+  <span class="sidebar-brand-text">SeQuant Documentation</span>
+  
+</a><form class="sidebar-search-container" method="get" action="../search.html" role="search">
+  <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <p class="caption" role="heading"><span class="caption-text">User</span></p>
+<ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../user/getting_started/index.html">Getting started</a><input class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><div class="visually-hidden">Toggle navigation of Getting started</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../user/getting_started/wick.html">Wick’s Theorem</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user/getting_started/index_spaces.html">Register Index Spaces</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user/getting_started/operators.html">Operators</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../user/getting_started/installing.html">Installation</a></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../user/guide/index.html">User Guide</a><input class="toctree-checkbox" id="toctree-checkbox-2" name="toctree-checkbox-2" role="switch" type="checkbox"/><label for="toctree-checkbox-2"><div class="visually-hidden">Toggle navigation of User Guide</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../user/guide/operator.html">Operator Interface for Symbolic Many-Body Algebra</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user/guide/cc.html">Coupled-Cluster Class</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../user/guide/evaluation.html">Evaluation Trace Analysis Using Nushell</a></li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Developer</span></p>
+<ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../developer/index.html">Developer docs</a><input class="toctree-checkbox" id="toctree-checkbox-3" name="toctree-checkbox-3" role="switch" type="checkbox"/><label for="toctree-checkbox-3"><div class="visually-hidden">Toggle navigation of Developer docs</div><i class="icon"><svg><use href="#svg-arrow-right"></use></svg></i></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../developer/documentation.html">Documentation Guide</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../genindex.html">API reference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">See Also</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference external" href="https://valeevgroup.github.io/tiledarray">TiledArray</a></li>
+<li class="toctree-l1"><a class="reference external" href="https://valeevgroup.github.io/mpqc">Massively Parallel Quantum Chemistry</a></li>
+<li class="toctree-l1"><a class="reference external" href="https://valeevgroup.github.io">Valeev Research Group</a></li>
+</ul>
+
+</div></div>
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          <div class="view-this-page">
+  <a class="muted-link" href="../_sources/api/namespace_sequant.rst.txt" title="View this page">
+    <svg><use href="#svg-eye"></use></svg>
+    <span class="visually-hidden">View this page</span>
+  </a>
+</div><div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle">
+              <div class="visually-hidden">Toggle Light / Dark / Auto color theme</div>
+              <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+              <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon" for="__toc">
+            <div class="visually-hidden">Toggle table of contents sidebar</div>
+            <i class="icon"><svg><use href="#svg-toc"></use></svg></i>
+          </label>
+        </div>
+        <article role="main" id="furo-main-content">
+          <section id="namespace-sequant">
+<span id="id1"></span><h1>Namespace sequant<a class="headerlink" href="#namespace-sequant" title="Link to this heading">¶</a></h1>
+<p>the main namespace of the SeQuant framework</p>
+<nav class="contents local" id="contents">
+<p class="topic-title">Contents</p>
+<ul class="simple">
+<li><p><a class="reference internal" href="#detailed-description" id="id2">Detailed Description</a></p></li>
+<li><p><a class="reference internal" href="#namespaces" id="id3">Namespaces</a></p></li>
+<li><p><a class="reference internal" href="#classes" id="id4">Classes</a></p></li>
+<li><p><a class="reference internal" href="#enums" id="id5">Enums</a></p></li>
+<li><p><a class="reference internal" href="#functions" id="id6">Functions</a></p></li>
+<li><p><a class="reference internal" href="#typedefs" id="id7">Typedefs</a></p></li>
+<li><p><a class="reference internal" href="#variables" id="id8">Variables</a></p></li>
+</ul>
+</nav>
+<section id="detailed-description">
+<h2>Detailed Description<a class="headerlink" href="#detailed-description" title="Link to this heading">¶</a></h2>
+<p>Create SeQuant expression from string input.</p>
+<p>: Bimal Gaudel version: 21 July, 2021</p>
+</section>
+<section id="namespaces">
+<h2>Namespaces<a class="headerlink" href="#namespaces" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p><a class="reference internal" href="namespace_sequant__%4014.html#namespace-sequant-14"><span class="std std-ref">Namespace sequant::&#64;14</span></a></p></li>
+<li><p><a class="reference internal" href="namespace_sequant__%4016.html#namespace-sequant-16"><span class="std std-ref">Namespace sequant::&#64;16</span></a></p></li>
+<li><p><a class="reference internal" href="namespace_sequant__%4020.html#namespace-sequant-20"><span class="std std-ref">Namespace sequant::&#64;20</span></a></p></li>
+<li><p><a class="reference internal" href="namespace_sequant__%406.html#namespace-sequant-6"><span class="std std-ref">Namespace sequant::&#64;6</span></a></p></li>
+<li><p><a class="reference internal" href="namespace_sequant__%408.html#namespace-sequant-8"><span class="std std-ref">Namespace sequant::&#64;8</span></a></p></li>
+<li><p><a class="reference internal" href="namespace_sequant__%4099.html#namespace-sequant-99"><span class="std std-ref">Namespace sequant::&#64;99</span></a></p></li>
+<li><p><a class="reference internal" href="namespace_sequant__antisymm.html#namespace-sequant-antisymm"><span class="std std-ref">Namespace sequant::antisymm</span></a></p></li>
+<li><p><a class="reference internal" href="namespace_sequant__bitset.html#namespace-sequant-bitset"><span class="std std-ref">Namespace sequant::bitset</span></a></p></li>
+<li><p><a class="reference internal" href="namespace_sequant__container.html#namespace-sequant-container"><span class="std std-ref">Namespace sequant::container</span></a></p></li>
+<li><p><a class="reference internal" href="namespace_sequant__detail.html#namespace-sequant-detail"><span class="std std-ref">Namespace sequant::detail</span></a></p></li>
+<li><p><a class="reference internal" href="namespace_sequant__details.html#namespace-sequant-details"><span class="std std-ref">Namespace sequant::details</span></a></p></li>
+<li><p><a class="reference internal" href="namespace_sequant__hash.html#namespace-sequant-hash"><span class="std std-ref">Namespace sequant::hash</span></a></p></li>
+<li><p><a class="reference internal" href="namespace_sequant__impl.html#namespace-sequant-impl"><span class="std std-ref">Namespace sequant::impl</span></a></p></li>
+<li><p><a class="reference internal" href="namespace_sequant__itf.html#namespace-sequant-itf"><span class="std std-ref">Namespace sequant::itf</span></a></p></li>
+<li><p><a class="reference internal" href="namespace_sequant__mbpt.html#namespace-sequant-mbpt"><span class="std std-ref">Namespace sequant::mbpt</span></a></p></li>
+<li><p><a class="reference internal" href="namespace_sequant__meta.html#namespace-sequant-meta"><span class="std std-ref">Namespace sequant::meta</span></a></p></li>
+<li><p><a class="reference internal" href="namespace_sequant__opt.html#namespace-sequant-opt"><span class="std std-ref">Namespace sequant::opt</span></a></p></li>
+<li><p><a class="reference internal" href="namespace_sequant__parse.html#namespace-sequant-parse"><span class="std std-ref">Namespace sequant::parse</span></a></p></li>
+<li><p><a class="reference internal" href="namespace_sequant__space_tags.html#namespace-sequant-space-tags"><span class="std std-ref">Namespace sequant::space_tags</span></a></p></li>
+<li><p><a class="reference internal" href="namespace_sequant__tensor_network.html#namespace-sequant-tensor-network"><span class="std std-ref">Namespace sequant::tensor_network</span></a></p></li>
+</ul>
+</section>
+<section id="classes">
+<h2>Classes<a class="headerlink" href="#classes" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p><a class="reference internal" href="structsequant_1_1_annot.html#exhale-struct-structsequant-1-1-annot"><span class="std std-ref">Template Struct Annot</span></a></p></li>
+<li><p><a class="reference internal" href="structsequant_1_1_aux_group.html#exhale-struct-structsequant-1-1-aux-group"><span class="std std-ref">Struct AuxGroup</span></a></p></li>
+<li><p><a class="reference internal" href="structsequant_1_1_bra_group.html#exhale-struct-structsequant-1-1-bra-group"><span class="std std-ref">Struct BraGroup</span></a></p></li>
+<li><p><a class="reference internal" href="structsequant_1_1_cache_manager_1_1access__by.html#exhale-struct-structsequant-1-1-cache-manager-1-1access-by"><span class="std std-ref">Template Struct CacheManager::access_by</span></a></p></li>
+<li><p><a class="reference internal" href="structsequant_1_1_canonical_tensor_compare.html#exhale-struct-structsequant-1-1-canonical-tensor-compare"><span class="std std-ref">Template Struct CanonicalTensorCompare</span></a></p></li>
+<li><p><a class="reference internal" href="structsequant_1_1compare__first__less.html#exhale-struct-structsequant-1-1compare-first-less"><span class="std std-ref">Template Struct compare_first_less</span></a></p></li>
+<li><p><a class="reference internal" href="structsequant_1_1_complex.html#exhale-struct-structsequant-1-1-complex"><span class="std std-ref">Template Struct Complex</span></a></p></li>
+<li><p><a class="reference internal" href="structsequant_1_1_context_1_1_defaults.html#exhale-struct-structsequant-1-1-context-1-1-defaults"><span class="std std-ref">Struct Context::Defaults</span></a></p></li>
+<li><p><a class="reference internal" href="structsequant_1_1default__idxptr__slottype__lesscompare.html#exhale-struct-structsequant-1-1default-idxptr-slottype-lesscompare"><span class="std std-ref">Struct default_idxptr_slottype_lesscompare</span></a></p></li>
+<li><p><a class="reference internal" href="structsequant_1_1_error_handler.html#exhale-struct-structsequant-1-1-error-handler"><span class="std std-ref">Template Struct ErrorHandler</span></a></p></li>
+<li><p><a class="reference internal" href="structsequant_1_1_expr_1_1cursor.html#exhale-struct-structsequant-1-1-expr-1-1cursor"><span class="std std-ref">Struct Expr::cursor</span></a></p></li>
+<li><p><a class="reference internal" href="structsequant_1_1_expr_1_1is__shared__ptr__of__expr.html#exhale-struct-structsequant-1-1-expr-1-1is-shared-ptr-of-expr"><span class="std std-ref">Template Struct Expr::is_shared_ptr_of_expr</span></a></p></li>
+<li><p><a class="reference internal" href="structsequant_1_1_expr_1_1is__shared__ptr__of__expr_3_01_expr_ptr_00_01void_01_4.html#exhale-struct-structsequant-1-1-expr-1-1is-shared-ptr-of-expr-3-01-expr-ptr-00-01void-01-4"><span class="std std-ref">Template Struct Expr::is_shared_ptr_of_expr&lt; ExprPtr, void &gt;</span></a></p></li>
+<li><p><a class="reference internal" href="structsequant_1_1_expr_1_1is__shared__ptr__of__expr__or__derived.html#exhale-struct-structsequant-1-1-expr-1-1is-shared-ptr-of-expr-or-derived"><span class="std std-ref">Template Struct Expr::is_shared_ptr_of_expr_or_derived</span></a></p></li>
+<li><p><a class="reference internal" href="structsequant_1_1_expr_1_1is__shared__ptr__of__expr__or__derived_3_01_expr_ptr_00_01void_01_4.html#exhale-struct-structsequant-1-1-expr-1-1is-shared-ptr-of-expr-or-derived-3-01-expr-ptr-00-01void-01-4"><span class="std std-ref">Template Struct Expr::is_shared_ptr_of_expr_or_derived&lt; ExprPtr, void &gt;</span></a></p></li>
+<li><p><a class="reference internal" href="structsequant_1_1expr__range_1_1cursor.html#exhale-struct-structsequant-1-1expr-range-1-1cursor"><span class="std std-ref">Struct expr_range::cursor</span></a></p></li>
+<li><p><a class="reference internal" href="structsequant_1_1_expr_with_hash.html#exhale-struct-structsequant-1-1-expr-with-hash"><span class="std std-ref">Struct ExprWithHash</span></a></p></li>
+<li><p><a class="reference internal" href="structsequant_1_1flattened__rangenest_1_1cursor.html#exhale-struct-structsequant-1-1flattened-rangenest-1-1cursor"><span class="std std-ref">Struct flattened_rangenest::cursor</span></a></p></li>
+<li><p><a class="reference internal" href="structsequant_1_1_flops.html#exhale-struct-structsequant-1-1-flops"><span class="std std-ref">Struct Flops</span></a></p></li>
+<li><p><a class="reference internal" href="structsequant_1_1_flops_with_symm.html#exhale-struct-structsequant-1-1-flops-with-symm"><span class="std std-ref">Struct FlopsWithSymm</span></a></p></li>
+<li><p><a class="reference internal" href="structsequant_1_1_index_1_1_full_label_compare.html#exhale-struct-structsequant-1-1-index-1-1-full-label-compare"><span class="std std-ref">Struct Index::FullLabelCompare</span></a></p></li>
+<li><p><a class="reference internal" href="structsequant_1_1_index_1_1_index_factory_tag.html#exhale-struct-structsequant-1-1-index-1-1-index-factory-tag"><span class="std std-ref">Struct Index::IndexFactoryTag</span></a></p></li>
+<li><p><a class="reference internal" href="structsequant_1_1_index_1_1_label_compare.html#exhale-struct-structsequant-1-1-index-1-1-label-compare"><span class="std std-ref">Struct Index::LabelCompare</span></a></p></li>
+<li><p><a class="reference internal" href="structsequant_1_1_index_1_1_type_compare.html#exhale-struct-structsequant-1-1-index-1-1-type-compare"><span class="std std-ref">Struct Index::TypeCompare</span></a></p></li>
+<li><p><a class="reference internal" href="structsequant_1_1_index_1_1_type_equality.html#exhale-struct-structsequant-1-1-index-1-1-type-equality"><span class="std std-ref">Struct Index::TypeEquality</span></a></p></li>
+<li><p><a class="reference internal" href="structsequant_1_1_index_groups.html#exhale-struct-structsequant-1-1-index-groups"><span class="std std-ref">Template Struct IndexGroups</span></a></p></li>
+<li><p><a class="reference internal" href="structsequant_1_1_index_space_1_1_attr.html#exhale-struct-structsequant-1-1-index-space-1-1-attr"><span class="std std-ref">Struct IndexSpace::Attr</span></a></p></li>
+<li><p><a class="reference internal" href="structsequant_1_1_index_space_1_1_attr_compare.html#exhale-struct-structsequant-1-1-index-space-1-1-attr-compare"><span class="std std-ref">Struct IndexSpace::AttrCompare</span></a></p></li>
+<li><p><a class="reference internal" href="structsequant_1_1_index_space_1_1bad__key.html#exhale-struct-structsequant-1-1-index-space-1-1bad-key"><span class="std std-ref">Struct IndexSpace::bad_key</span></a></p></li>
+<li><p><a class="reference internal" href="structsequant_1_1_index_space_1_1_key_compare.html#exhale-struct-structsequant-1-1-index-space-1-1-key-compare"><span class="std std-ref">Struct IndexSpace::KeyCompare</span></a></p></li>
+<li><p><a class="reference internal" href="structsequant_1_1_in_order.html#exhale-struct-structsequant-1-1-in-order"><span class="std std-ref">Struct InOrder</span></a></p></li>
+<li><p><a class="reference internal" href="structsequant_1_1is__tensor.html#exhale-struct-structsequant-1-1is-tensor"><span class="std std-ref">Template Struct is_tensor</span></a></p></li>
+<li><p><a class="reference internal" href="structsequant_1_1space__tags_1_1_is_complete.html#exhale-struct-structsequant-1-1space-tags-1-1-is-complete"><span class="std std-ref">Struct IsComplete</span></a></p></li>
+<li><p><a class="reference internal" href="structsequant_1_1space__tags_1_1_is_hole.html#exhale-struct-structsequant-1-1space-tags-1-1-is-hole"><span class="std std-ref">Struct IsHole</span></a></p></li>
+<li><p><a class="reference internal" href="structsequant_1_1space__tags_1_1_is_particle.html#exhale-struct-structsequant-1-1space-tags-1-1-is-particle"><span class="std std-ref">Struct IsParticle</span></a></p></li>
+<li><p><a class="reference internal" href="structsequant_1_1space__tags_1_1_is_reference_occupied.html#exhale-struct-structsequant-1-1space-tags-1-1-is-reference-occupied"><span class="std std-ref">Struct IsReferenceOccupied</span></a></p></li>
+<li><p><a class="reference internal" href="structsequant_1_1space__tags_1_1_is_vacuum_occupied.html#exhale-struct-structsequant-1-1space-tags-1-1-is-vacuum-occupied"><span class="std std-ref">Struct IsVacuumOccupied</span></a></p></li>
+<li><p><a class="reference internal" href="structsequant_1_1_ket_group.html#exhale-struct-structsequant-1-1-ket-group"><span class="std std-ref">Struct KetGroup</span></a></p></li>
+<li><p><a class="reference internal" href="structsequant_1_1_logger.html#exhale-struct-structsequant-1-1-logger"><span class="std std-ref">Struct Logger</span></a></p></li>
+<li><p><a class="reference internal" href="structsequant_1_1_memory.html#exhale-struct-structsequant-1-1-memory"><span class="std std-ref">Struct Memory</span></a></p></li>
+<li><p><a class="reference internal" href="structsequant_1_1_op_1_1_type_compare.html#exhale-struct-structsequant-1-1-op-1-1-type-compare"><span class="std std-ref">Struct Op::TypeCompare</span></a></p></li>
+<li><p><a class="reference internal" href="structsequant_1_1_op_1_1_type_equality.html#exhale-struct-structsequant-1-1-op-1-1-type-equality"><span class="std std-ref">Struct Op::TypeEquality</span></a></p></li>
+<li><p><a class="reference internal" href="structsequant_1_1_parse_error.html#exhale-struct-structsequant-1-1-parse-error"><span class="std std-ref">Struct ParseError</span></a></p></li>
+<li><p><a class="reference internal" href="structsequant_1_1_particle_group.html#exhale-struct-structsequant-1-1-particle-group"><span class="std std-ref">Struct ParticleGroup</span></a></p></li>
+<li><p><a class="reference internal" href="structsequant_1_1_post_order.html#exhale-struct-structsequant-1-1-post-order"><span class="std std-ref">Struct PostOrder</span></a></p></li>
+<li><p><a class="reference internal" href="structsequant_1_1_pre_order.html#exhale-struct-structsequant-1-1-pre-order"><span class="std std-ref">Struct PreOrder</span></a></p></li>
+<li><p><a class="reference internal" href="structsequant_1_1_result_expr_1_1_result_cmp.html#exhale-struct-structsequant-1-1-result-expr-1-1-result-cmp"><span class="std std-ref">Struct ResultExpr::ResultCmp</span></a></p></li>
+<li><p><a class="reference internal" href="structsequant_1_1_singleton_1_1is__default__constructible__helper.html#exhale-struct-structsequant-1-1-singleton-1-1is-default-constructible-helper"><span class="std std-ref">Template Struct Singleton::is_default_constructible_helper</span></a></p></li>
+<li><p><a class="reference internal" href="structsequant_1_1space__tags_1_1_is_complete.html#exhale-struct-structsequant-1-1space-tags-1-1-is-complete"><span class="std std-ref">Struct IsComplete</span></a></p></li>
+<li><p><a class="reference internal" href="structsequant_1_1space__tags_1_1_is_hole.html#exhale-struct-structsequant-1-1space-tags-1-1-is-hole"><span class="std std-ref">Struct IsHole</span></a></p></li>
+<li><p><a class="reference internal" href="structsequant_1_1space__tags_1_1_is_particle.html#exhale-struct-structsequant-1-1space-tags-1-1-is-particle"><span class="std std-ref">Struct IsParticle</span></a></p></li>
+<li><p><a class="reference internal" href="structsequant_1_1space__tags_1_1_is_reference_occupied.html#exhale-struct-structsequant-1-1space-tags-1-1-is-reference-occupied"><span class="std std-ref">Struct IsReferenceOccupied</span></a></p></li>
+<li><p><a class="reference internal" href="structsequant_1_1space__tags_1_1_is_vacuum_occupied.html#exhale-struct-structsequant-1-1space-tags-1-1-is-vacuum-occupied"><span class="std std-ref">Struct IsVacuumOccupied</span></a></p></li>
+<li><p><a class="reference internal" href="structsequant_1_1_tensor_1_1reserved__tag.html#exhale-struct-structsequant-1-1-tensor-1-1reserved-tag"><span class="std std-ref">Struct Tensor::reserved_tag</span></a></p></li>
+<li><p><a class="reference internal" href="structsequant_1_1_tensor_block_compare.html#exhale-struct-structsequant-1-1-tensor-block-compare"><span class="std std-ref">Struct TensorBlockCompare</span></a></p></li>
+<li><p><a class="reference internal" href="structsequant_1_1_tensor_block_index_comparer.html#exhale-struct-structsequant-1-1-tensor-block-index-comparer"><span class="std std-ref">Struct TensorBlockIndexComparer</span></a></p></li>
+<li><p><a class="reference internal" href="structsequant_1_1_tensor_index_comparer.html#exhale-struct-structsequant-1-1-tensor-index-comparer"><span class="std std-ref">Struct TensorIndexComparer</span></a></p></li>
+<li><p><a class="reference internal" href="structsequant_1_1_tensor_network_1_1_bliss_graph_options.html#exhale-struct-structsequant-1-1-tensor-network-1-1-bliss-graph-options"><span class="std std-ref">Struct TensorNetwork::BlissGraphOptions</span></a></p></li>
+<li><p><a class="reference internal" href="structsequant_1_1_tensor_network_1_1_edge_1_1_terminal.html#exhale-struct-structsequant-1-1-tensor-network-1-1-edge-1-1-terminal"><span class="std std-ref">Struct Edge::Terminal</span></a></p></li>
+<li><p><a class="reference internal" href="structsequant_1_1_tensor_network_1_1_full_label_compare.html#exhale-struct-structsequant-1-1-tensor-network-1-1-full-label-compare"><span class="std std-ref">Struct TensorNetwork::FullLabelCompare</span></a></p></li>
+<li><p><a class="reference internal" href="structsequant_1_1_tensor_network_1_1_graph_data.html#exhale-struct-structsequant-1-1-tensor-network-1-1-graph-data"><span class="std std-ref">Struct TensorNetwork::GraphData</span></a></p></li>
+<li><p><a class="reference internal" href="structsequant_1_1_tensor_network_1_1_slot_canonicalization_metadata.html#exhale-struct-structsequant-1-1-tensor-network-1-1-slot-canonicalization-metadata"><span class="std std-ref">Struct TensorNetwork::SlotCanonicalizationMetadata</span></a></p></li>
+<li><p><a class="reference internal" href="structsequant_1_1_tensor_network_v2_1_1_create_graph_options.html#exhale-struct-structsequant-1-1-tensor-network-v2-1-1-create-graph-options"><span class="std std-ref">Struct TensorNetworkV2::CreateGraphOptions</span></a></p></li>
+<li><p><a class="reference internal" href="structsequant_1_1_tensor_network_v2_1_1_graph.html#exhale-struct-structsequant-1-1-tensor-network-v2-1-1-graph"><span class="std std-ref">Struct TensorNetworkV2::Graph</span></a></p></li>
+<li><p><a class="reference internal" href="structsequant_1_1_tensor_network_v2_1_1_slot_canonicalization_metadata.html#exhale-struct-structsequant-1-1-tensor-network-v2-1-1-slot-canonicalization-metadata"><span class="std std-ref">Struct TensorNetworkV2::SlotCanonicalizationMetadata</span></a></p></li>
+<li><p><a class="reference internal" href="structsequant_1_1_tensor_network_v3_1_1_create_graph_options.html#exhale-struct-structsequant-1-1-tensor-network-v3-1-1-create-graph-options"><span class="std std-ref">Struct TensorNetworkV3::CreateGraphOptions</span></a></p></li>
+<li><p><a class="reference internal" href="structsequant_1_1_tensor_network_v3_1_1_graph.html#exhale-struct-structsequant-1-1-tensor-network-v3-1-1-graph"><span class="std std-ref">Struct TensorNetworkV3::Graph</span></a></p></li>
+<li><p><a class="reference internal" href="structsequant_1_1_tensor_network_v3_1_1_slot_canonicalization_metadata.html#exhale-struct-structsequant-1-1-tensor-network-v3-1-1-slot-canonicalization-metadata"><span class="std std-ref">Struct TensorNetworkV3::SlotCanonicalizationMetadata</span></a></p></li>
+<li><p><a class="reference internal" href="structsequant_1_1_tensor_of_tensor_indices.html#exhale-struct-structsequant-1-1-tensor-of-tensor-indices"><span class="std std-ref">Template Struct TensorOfTensorIndices</span></a></p></li>
+<li><p><a class="reference internal" href="structsequant_1_1_wick_theorem_1_1access__by.html#exhale-struct-structsequant-1-1-wick-theorem-1-1access-by"><span class="std std-ref">Template Struct WickTheorem::access_by</span></a></p></li>
+<li><p><a class="reference internal" href="structsequant_1_1_wick_theorem_1_1_nontensor_wick_state.html#exhale-struct-structsequant-1-1-wick-theorem-1-1-nontensor-wick-state"><span class="std std-ref">Struct WickTheorem::NontensorWickState</span></a></p></li>
+<li><p><a class="reference internal" href="classsequant_1_1_abstract_tensor.html#exhale-class-classsequant-1-1-abstract-tensor"><span class="std std-ref">Class AbstractTensor</span></a></p></li>
+<li><p><a class="reference internal" href="classsequant_1_1antisymm__element.html#exhale-class-classsequant-1-1antisymm-element"><span class="std std-ref">Class antisymm_element</span></a></p></li>
+<li><p><a class="reference internal" href="classsequant_1_1antisymmetrize.html#exhale-class-classsequant-1-1antisymmetrize"><span class="std std-ref">Class antisymmetrize</span></a></p></li>
+<li><p><a class="reference internal" href="classsequant_1_1_asy_cost.html#exhale-class-classsequant-1-1-asy-cost"><span class="std std-ref">Class AsyCost</span></a></p></li>
+<li><p><a class="reference internal" href="classsequant_1_1_asy_cost_1_1_asy_cost_entry.html#exhale-class-classsequant-1-1-asy-cost-1-1-asy-cost-entry"><span class="std std-ref">Class AsyCost::AsyCostEntry</span></a></p></li>
+<li><p><a class="reference internal" href="classsequant_1_1_cache_manager.html#exhale-class-classsequant-1-1-cache-manager"><span class="std std-ref">Class CacheManager</span></a></p></li>
+<li><p><a class="reference internal" href="classsequant_1_1_cache_manager_1_1entry.html#exhale-class-classsequant-1-1-cache-manager-1-1entry"><span class="std std-ref">Class CacheManager::entry</span></a></p></li>
+<li><p><a class="reference internal" href="classsequant_1_1_constant.html#exhale-class-classsequant-1-1-constant"><span class="std std-ref">Class Constant</span></a></p></li>
+<li><p><a class="reference internal" href="classsequant_1_1_context.html#exhale-class-classsequant-1-1-context"><span class="std std-ref">Class Context</span></a></p></li>
+<li><p><a class="reference internal" href="classsequant_1_1_c_product.html#exhale-class-classsequant-1-1-c-product"><span class="std std-ref">Class CProduct</span></a></p></li>
+<li><p><a class="reference internal" href="classsequant_1_1_default_tensor_canonicalizer.html#exhale-class-classsequant-1-1-default-tensor-canonicalizer"><span class="std std-ref">Class DefaultTensorCanonicalizer</span></a></p></li>
+<li><p><a class="reference internal" href="classsequant_1_1_eval_expr.html#exhale-class-classsequant-1-1-eval-expr"><span class="std std-ref">Class EvalExpr</span></a></p></li>
+<li><p><a class="reference internal" href="classsequant_1_1_eval_expr_b_t_a_s.html#exhale-class-classsequant-1-1-eval-expr-b-t-a-s"><span class="std std-ref">Class EvalExprBTAS</span></a></p></li>
+<li><p><a class="reference internal" href="classsequant_1_1_eval_expr_t_a.html#exhale-class-classsequant-1-1-eval-expr-t-a"><span class="std std-ref">Class EvalExprTA</span></a></p></li>
+<li><p><a class="reference internal" href="classsequant_1_1_expr.html#exhale-class-classsequant-1-1-expr"><span class="std std-ref">Class Expr</span></a></p></li>
+<li><p><a class="reference internal" href="classsequant_1_1expr__range.html#exhale-class-classsequant-1-1expr-range"><span class="std std-ref">Class expr_range</span></a></p></li>
+<li><p><a class="reference internal" href="classsequant_1_1_expr_ptr.html#exhale-class-classsequant-1-1-expr-ptr"><span class="std std-ref">Class ExprPtr</span></a></p></li>
+<li><p><a class="reference internal" href="classsequant_1_1flattened__rangenest.html#exhale-class-classsequant-1-1flattened-rangenest"><span class="std std-ref">Template Class flattened_rangenest</span></a></p></li>
+<li><p><a class="reference internal" href="classsequant_1_1_full_binary_node.html#exhale-class-classsequant-1-1-full-binary-node"><span class="std std-ref">Template Class FullBinaryNode</span></a></p></li>
+<li><p><a class="reference internal" href="classsequant_1_1_hugenholtz_vertex.html#exhale-class-classsequant-1-1-hugenholtz-vertex"><span class="std std-ref">Template Class HugenholtzVertex</span></a></p></li>
+<li><p><a class="reference internal" href="classsequant_1_1_index.html#exhale-class-classsequant-1-1-index"><span class="std std-ref">Class Index</span></a></p></li>
+<li><p><a class="reference internal" href="classsequant_1_1_index_factory.html#exhale-class-classsequant-1-1-index-factory"><span class="std std-ref">Class IndexFactory</span></a></p></li>
+<li><p><a class="reference internal" href="classsequant_1_1_index_space.html#exhale-class-classsequant-1-1-index-space"><span class="std std-ref">Class IndexSpace</span></a></p></li>
+<li><p><a class="reference internal" href="classsequant_1_1_index_space_registry.html#exhale-class-classsequant-1-1-index-space-registry"><span class="std std-ref">Class IndexSpaceRegistry</span></a></p></li>
+<li><p><a class="reference internal" href="classsequant_1_1_labeled.html#exhale-class-classsequant-1-1-labeled"><span class="std std-ref">Class Labeled</span></a></p></li>
+<li><p><a class="reference internal" href="classsequant_1_1_n_c_product.html#exhale-class-classsequant-1-1-n-c-product"><span class="std std-ref">Class NCProduct</span></a></p></li>
+<li><p><a class="reference internal" href="classsequant_1_1_normal_operator.html#exhale-class-classsequant-1-1-normal-operator"><span class="std std-ref">Template Class NormalOperator</span></a></p></li>
+<li><p><a class="reference internal" href="classsequant_1_1_normal_operator_sequence.html#exhale-class-classsequant-1-1-normal-operator-sequence"><span class="std std-ref">Template Class NormalOperatorSequence</span></a></p></li>
+<li><p><a class="reference internal" href="classsequant_1_1_null_tensor_canonicalizer.html#exhale-class-classsequant-1-1-null-tensor-canonicalizer"><span class="std std-ref">Class NullTensorCanonicalizer</span></a></p></li>
+<li><p><a class="reference internal" href="classsequant_1_1_op.html#exhale-class-classsequant-1-1-op"><span class="std std-ref">Template Class Op</span></a></p></li>
+<li><p><a class="reference internal" href="classsequant_1_1_operator.html#exhale-class-classsequant-1-1-operator"><span class="std std-ref">Template Class Operator</span></a></p></li>
+<li><p><a class="reference internal" href="classsequant_1_1_product.html#exhale-class-classsequant-1-1-product"><span class="std std-ref">Class Product</span></a></p></li>
+<li><p><a class="reference internal" href="classsequant_1_1_quantum_numbers_attr.html#exhale-class-classsequant-1-1-quantum-numbers-attr"><span class="std std-ref">Class QuantumNumbersAttr</span></a></p></li>
+<li><p><a class="reference internal" href="classsequant_1_1_result.html#exhale-class-classsequant-1-1-result"><span class="std std-ref">Class Result</span></a></p></li>
+<li><p><a class="reference internal" href="classsequant_1_1_result_expr.html#exhale-class-classsequant-1-1-result-expr"><span class="std std-ref">Class ResultExpr</span></a></p></li>
+<li><p><a class="reference internal" href="classsequant_1_1_result_scalar.html#exhale-class-classsequant-1-1-result-scalar"><span class="std std-ref">Template Class ResultScalar</span></a></p></li>
+<li><p><a class="reference internal" href="classsequant_1_1_result_tensor_b_t_a_s.html#exhale-class-classsequant-1-1-result-tensor-b-t-a-s"><span class="std std-ref">Template Class ResultTensorBTAS</span></a></p></li>
+<li><p><a class="reference internal" href="classsequant_1_1_result_tensor_of_tensor_t_a.html#exhale-class-classsequant-1-1-result-tensor-of-tensor-t-a"><span class="std std-ref">Template Class ResultTensorOfTensorTA</span></a></p></li>
+<li><p><a class="reference internal" href="classsequant_1_1_result_tensor_t_a.html#exhale-class-classsequant-1-1-result-tensor-t-a"><span class="std std-ref">Template Class ResultTensorTA</span></a></p></li>
+<li><p><a class="reference internal" href="classsequant_1_1_singleton.html#exhale-class-classsequant-1-1-singleton"><span class="std std-ref">Template Class Singleton</span></a></p></li>
+<li><p><a class="reference internal" href="classsequant_1_1_sum.html#exhale-class-classsequant-1-1-sum"><span class="std std-ref">Class Sum</span></a></p></li>
+<li><p><a class="reference internal" href="classsequant_1_1_swap_countable.html#exhale-class-classsequant-1-1-swap-countable"><span class="std std-ref">Template Class SwapCountable</span></a></p></li>
+<li><p><a class="reference internal" href="classsequant_1_1_swap_countable_ref.html#exhale-class-classsequant-1-1-swap-countable-ref"><span class="std std-ref">Template Class SwapCountableRef</span></a></p></li>
+<li><p><a class="reference internal" href="classsequant_1_1_taggable.html#exhale-class-classsequant-1-1-taggable"><span class="std std-ref">Class Taggable</span></a></p></li>
+<li><p><a class="reference internal" href="classsequant_1_1_tensor.html#exhale-class-classsequant-1-1-tensor"><span class="std std-ref">Class Tensor</span></a></p></li>
+<li><p><a class="reference internal" href="classsequant_1_1_tensor_block_canonicalizer.html#exhale-class-classsequant-1-1-tensor-block-canonicalizer"><span class="std std-ref">Class TensorBlockCanonicalizer</span></a></p></li>
+<li><p><a class="reference internal" href="classsequant_1_1_tensor_canonicalizer.html#exhale-class-classsequant-1-1-tensor-canonicalizer"><span class="std std-ref">Class TensorCanonicalizer</span></a></p></li>
+<li><p><a class="reference internal" href="classsequant_1_1_tensor_network.html#exhale-class-classsequant-1-1-tensor-network"><span class="std std-ref">Class TensorNetwork</span></a></p></li>
+<li><p><a class="reference internal" href="classsequant_1_1_tensor_network_1_1_edge.html#exhale-class-classsequant-1-1-tensor-network-1-1-edge"><span class="std std-ref">Class TensorNetwork::Edge</span></a></p></li>
+<li><p><a class="reference internal" href="classsequant_1_1_tensor_network_v2.html#exhale-class-classsequant-1-1-tensor-network-v2"><span class="std std-ref">Class TensorNetworkV2</span></a></p></li>
+<li><p><a class="reference internal" href="classsequant_1_1_tensor_network_v2_1_1_edge.html#exhale-class-classsequant-1-1-tensor-network-v2-1-1-edge"><span class="std std-ref">Class TensorNetworkV2::Edge</span></a></p></li>
+<li><p><a class="reference internal" href="classsequant_1_1_tensor_network_v2_1_1_vertex.html#exhale-class-classsequant-1-1-tensor-network-v2-1-1-vertex"><span class="std std-ref">Class TensorNetworkV2::Vertex</span></a></p></li>
+<li><p><a class="reference internal" href="classsequant_1_1_tensor_network_v3.html#exhale-class-classsequant-1-1-tensor-network-v3"><span class="std std-ref">Class TensorNetworkV3</span></a></p></li>
+<li><p><a class="reference internal" href="classsequant_1_1_tensor_network_v3_1_1_edge.html#exhale-class-classsequant-1-1-tensor-network-v3-1-1-edge"><span class="std std-ref">Class TensorNetworkV3::Edge</span></a></p></li>
+<li><p><a class="reference internal" href="classsequant_1_1_tensor_network_v3_1_1_vertex.html#exhale-class-classsequant-1-1-tensor-network-v3-1-1-vertex"><span class="std std-ref">Class TensorNetworkV3::Vertex</span></a></p></li>
+<li><p><a class="reference internal" href="classsequant_1_1_timer_pool.html#exhale-class-classsequant-1-1-timer-pool"><span class="std std-ref">Template Class TimerPool</span></a></p></li>
+<li><p><a class="reference internal" href="classsequant_1_1_type_attr.html#exhale-class-classsequant-1-1-type-attr"><span class="std std-ref">Class TypeAttr</span></a></p></li>
+<li><p><a class="reference internal" href="classsequant_1_1_variable.html#exhale-class-classsequant-1-1-variable"><span class="std std-ref">Class Variable</span></a></p></li>
+<li><p><a class="reference internal" href="classsequant_1_1_vertex_painter.html#exhale-class-classsequant-1-1-vertex-painter"><span class="std std-ref">Class VertexPainter</span></a></p></li>
+<li><p><a class="reference internal" href="classsequant_1_1_wick_theorem.html#exhale-class-classsequant-1-1-wick-theorem"><span class="std std-ref">Template Class WickTheorem</span></a></p></li>
+<li><p><a class="reference internal" href="classsequant_1_1_wick_theorem_1_1_stats.html#exhale-class-classsequant-1-1-wick-theorem-1-1-stats"><span class="std std-ref">Class WickTheorem::Stats</span></a></p></li>
+</ul>
+</section>
+<section id="enums">
+<h2>Enums<a class="headerlink" href="#enums" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p><a class="reference internal" href="enum_namespacesequant_1a0990b523fdb49d7c838857bec0bbbf6f.html#exhale-enum-namespacesequant-1a0990b523fdb49d7c838857bec0bbbf6f"><span class="std std-ref">Enum Action</span></a></p></li>
+<li><p><a class="reference internal" href="enum_namespacesequant_1a77a100102aa705742fa050ab1c0d3dc6.html#exhale-enum-namespacesequant-1a77a100102aa705742fa050ab1c0d3dc6"><span class="std std-ref">Enum BraKetPos</span></a></p></li>
+<li><p><a class="reference internal" href="enum_namespacesequant_1aaeac2e7fab3fe003406f0355e1dc771d.html#exhale-enum-namespacesequant-1aaeac2e7fab3fe003406f0355e1dc771d"><span class="std std-ref">Enum BraKetSlotTypesetting</span></a></p></li>
+<li><p><a class="reference internal" href="enum_namespacesequant_1a8fa350a3e3719764fcc1ce8aeddaea46.html#exhale-enum-namespacesequant-1a8fa350a3e3719764fcc1ce8aeddaea46"><span class="std std-ref">Enum BraKetSymmetry</span></a></p></li>
+<li><p><a class="reference internal" href="enum_namespacesequant_1afaf36e29c08df83949893832f3979dad.html#exhale-enum-namespacesequant-1afaf36e29c08df83949893832f3979dad"><span class="std std-ref">Enum BraKetTypesetting</span></a></p></li>
+<li><p><a class="reference internal" href="enum_namespacesequant_1a7bf79a2794f3cc1f2f2ab156a5242c0c.html#exhale-enum-namespacesequant-1a7bf79a2794f3cc1f2f2ab156a5242c0c"><span class="std std-ref">Enum EvalOp</span></a></p></li>
+<li><p><a class="reference internal" href="enum_namespacesequant_1ab2a0753a7ea201ff961c26c581dfb192.html#exhale-enum-namespacesequant-1ab2a0753a7ea201ff961c26c581dfb192"><span class="std std-ref">Enum IndexSlotType</span></a></p></li>
+<li><p><a class="reference internal" href="enum_namespacesequant_1a03158c7d13fd7e3c714b834bf3492164.html#exhale-enum-namespacesequant-1a03158c7d13fd7e3c714b834bf3492164"><span class="std std-ref">Enum IndexSpaceMetric</span></a></p></li>
+<li><p><a class="reference internal" href="enum_namespacesequant_1a1d0f0496aa51a0730639b250e72e8361.html#exhale-enum-namespacesequant-1a1d0f0496aa51a0730639b250e72e8361"><span class="std std-ref">Enum OrderType</span></a></p></li>
+<li><p><a class="reference internal" href="enum_namespacesequant_1a9130bd036deb119cc1bf7a8acceed847.html#exhale-enum-namespacesequant-1a9130bd036deb119cc1bf7a8acceed847"><span class="std std-ref">Enum ParticleSymmetry</span></a></p></li>
+<li><p><a class="reference internal" href="enum_namespacesequant_1a9517b28099d86f3b2c0d4799125f5931.html#exhale-enum-namespacesequant-1a9517b28099d86f3b2c0d4799125f5931"><span class="std std-ref">Enum ResultType</span></a></p></li>
+<li><p><a class="reference internal" href="enum_namespacesequant_1ac7d4132a8d4fb318f66a268ca6433242.html#exhale-enum-namespacesequant-1ac7d4132a8d4fb318f66a268ca6433242"><span class="std std-ref">Enum SlotType</span></a></p></li>
+<li><p><a class="reference internal" href="enum_namespacesequant_1a78aab8bd907ae4e1585c729c79703fd3.html#exhale-enum-namespacesequant-1a78aab8bd907ae4e1585c729c79703fd3"><span class="std std-ref">Enum SPBasis</span></a></p></li>
+<li><p><a class="reference internal" href="enum_namespacesequant_1ac51aaf1e35bf9fe90a2282a6cdb2c1fe.html#exhale-enum-namespacesequant-1ac51aaf1e35bf9fe90a2282a6cdb2c1fe"><span class="std std-ref">Enum Statistics</span></a></p></li>
+<li><p><a class="reference internal" href="enum_namespacesequant_1a80bc8a00a0036a84c252e8a64db4c485.html#exhale-enum-namespacesequant-1a80bc8a00a0036a84c252e8a64db4c485"><span class="std std-ref">Enum Symmetry</span></a></p></li>
+<li><p><a class="reference internal" href="enum_namespacesequant_1ab0861d36226ce47001355beff3bc28a9.html#exhale-enum-namespacesequant-1ab0861d36226ce47001355beff3bc28a9"><span class="std std-ref">Enum TensorIndexSlotType</span></a></p></li>
+<li><p><a class="reference internal" href="enum_namespacesequant_1a27c1015914fed77818b3cd447345f196.html#exhale-enum-namespacesequant-1a27c1015914fed77818b3cd447345f196"><span class="std std-ref">Enum Vacuum</span></a></p></li>
+<li><p><a class="reference internal" href="enum_namespacesequant_1abc1f577f3e668a1f2fe7cc88e9f01104.html#exhale-enum-namespacesequant-1abc1f577f3e668a1f2fe7cc88e9f01104"><span class="std std-ref">Enum VertexType</span></a></p></li>
+</ul>
+</section>
+<section id="functions">
+<h2>Functions<a class="headerlink" href="#functions" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p><a class="reference internal" href="function_namespacesequant_1ac5810391f5f0cfc048466effa835785d.html#exhale-function-namespacesequant-1ac5810391f5f0cfc048466effa835785d"><span class="std std-ref">Function sequant::A_maps</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1afba3eb9a4c4c6659f0ee160004e98bc8.html#exhale-function-namespacesequant-1afba3eb9a4c4c6659f0ee160004e98bc8"><span class="std std-ref">Template Function sequant::abs</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a0493377bc5a2010bcde7945eea92581d.html#exhale-function-namespacesequant-1a0493377bc5a2010bcde7945eea92581d"><span class="std std-ref">Function sequant::adjoint(mbpt::qns_t)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a6131cba13aaf34ebd0d52c126e79361c.html#exhale-function-namespacesequant-1a6131cba13aaf34ebd0d52c126e79361c"><span class="std std-ref">Function sequant::adjoint(Action)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1aae31702484c00a1814784c51d16bd60e.html#exhale-function-namespacesequant-1aae31702484c00a1814784c51d16bd60e"><span class="std std-ref">Function sequant::adjoint(const ExprPtr&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1ae47079fe17bd46e8bd8012fb4bd67787.html#exhale-function-namespacesequant-1ae47079fe17bd46e8bd8012fb4bd67787"><span class="std std-ref">Template Function sequant::adjoint(T&amp;&amp;, std::void_t&lt;decltype(std::declval&lt;T&amp;&gt;().adjoint())&gt; *)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a64432b1a781bc7ffd57eb8554b280f2c.html#exhale-function-namespacesequant-1a64432b1a781bc7ffd57eb8554b280f2c"><span class="std std-ref">Function sequant::append_spin</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1acd29e76cc17b8342ecf99de062ad244f.html#exhale-function-namespacesequant-1acd29e76cc17b8342ecf99de062ad244f"><span class="std std-ref">Template Function sequant::apply_index_replacements(AbstractTensor&amp;, const ReplacementMap&amp;, const bool)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a7c6c9e721c7d68e1aa13d2397a1e493a.html#exhale-function-namespacesequant-1a7c6c9e721c7d68e1aa13d2397a1e493a"><span class="std std-ref">Template Function sequant::apply_index_replacements(ArrayLike&amp;, const ReplacementMap&amp;, const bool)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a078de15ae346d262eed273b0516540c6.html#exhale-function-namespacesequant-1a078de15ae346d262eed273b0516540c6"><span class="std std-ref">Template Function sequant::asy_cost</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1af965f371b1400b15899b5c030077cfbc.html#exhale-function-namespacesequant-1af965f371b1400b15899b5c030077cfbc"><span class="std std-ref">Function sequant::aux_rank</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a782bc57ebdd7f7353101c508f7d3171d.html#exhale-function-namespacesequant-1a782bc57ebdd7f7353101c508f7d3171d"><span class="std std-ref">Function sequant::bann(Index)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1ac97c877f65dd9f5ad21d2588049f4854.html#exhale-function-namespacesequant-1ac97c877f65dd9f5ad21d2588049f4854"><span class="std std-ref">Template Function sequant::bann(Index, std::initializer_list&lt;I&gt;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a8fe366142381357d5201f438bf154cfc.html#exhale-function-namespacesequant-1a8fe366142381357d5201f438bf154cfc"><span class="std std-ref">Template Function sequant::bannx</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a9c72394119763f0d198660cbf96d4525.html#exhale-function-namespacesequant-1a9c72394119763f0d198660cbf96d4525"><span class="std std-ref">Function sequant::bcre(Index)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a9063ab0ae74d35345b98849368e00671.html#exhale-function-namespacesequant-1a9063ab0ae74d35345b98849368e00671"><span class="std std-ref">Template Function sequant::bcre(Index, std::initializer_list&lt;I&gt;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a22634817a02d305ec881bba6b6393cf3.html#exhale-function-namespacesequant-1a22634817a02d305ec881bba6b6393cf3"><span class="std std-ref">Template Function sequant::bcrex</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1ab497a84be7129a4f02e4b2d3cd30fb77.html#exhale-function-namespacesequant-1ab497a84be7129a4f02e4b2d3cd30fb77"><span class="std std-ref">Function sequant::begin(const ExprPtr&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1ade3116efc18d901007d72fdc0fc208ea.html#exhale-function-namespacesequant-1ade3116efc18d901007d72fdc0fc208ea"><span class="std std-ref">Function sequant::begin(ExprPtr&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a4446f357e96ef4b660538abf33cc0623.html#exhale-function-namespacesequant-1a4446f357e96ef4b660538abf33cc0623"><span class="std std-ref">Function sequant::binarize(Product const&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a19983971ffacc64c1a17b61be3f1ac00.html#exhale-function-namespacesequant-1a19983971ffacc64c1a17b61be3f1ac00"><span class="std std-ref">Template Function sequant::binarize(ExprPtr const&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1aade921b9d1a013a42c0ca72104becbb9.html#exhale-function-namespacesequant-1aade921b9d1a013a42c0ca72104becbb9"><span class="std std-ref">Function sequant::binarize(Constant const&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1acef35bcc23ec78efaa1439ecea0ee134.html#exhale-function-namespacesequant-1acef35bcc23ec78efaa1439ecea0ee134"><span class="std std-ref">Function sequant::binarize(Variable const&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a825ba591538733e7ec751bc424722b18.html#exhale-function-namespacesequant-1a825ba591538733e7ec751bc424722b18"><span class="std std-ref">Function sequant::binarize(Tensor const&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1ac4580eebacaa46844d71f5e9b78a3b2d.html#exhale-function-namespacesequant-1ac4580eebacaa46844d71f5e9b78a3b2d"><span class="std std-ref">Function sequant::binarize(Sum const&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1af177a78c070530901125cd738dd9c418.html#exhale-function-namespacesequant-1af177a78c070530901125cd738dd9c418"><span class="std std-ref">Function sequant::biorthogonal_transform(container::svector&lt;ResultExpr&gt;&amp;, double)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1abf91e6ba929de81989e494c217a51ac8.html#exhale-function-namespacesequant-1abf91e6ba929de81989e494c217a51ac8"><span class="std std-ref">Function sequant::biorthogonal_transform(const sequant::ExprPtr&amp;, const container::svector&lt;container::svector&lt;sequant::Index&gt;&gt;&amp;, const double)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1adb4d42e42d97df774a727a3f376c5672.html#exhale-function-namespacesequant-1adb4d42e42d97df774a727a3f376c5672"><span class="std std-ref">Function sequant::biorthogonal_transform(ResultExpr&amp;, double)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a33a7a1c129e68beec9ba2efe215e6277.html#exhale-function-namespacesequant-1a33a7a1c129e68beec9ba2efe215e6277"><span class="std std-ref">Function sequant::biorthogonal_transform_copy(const ResultExpr&amp;, double)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1ad515c9c22fe8046eb7daa7f0119501a7.html#exhale-function-namespacesequant-1ad515c9c22fe8046eb7daa7f0119501a7"><span class="std std-ref">Function sequant::biorthogonal_transform_copy(const container::svector&lt;ResultExpr&gt;&amp;, double)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a7d4ebdd3d9bc8b2f5586c279bc1dd7e2.html#exhale-function-namespacesequant-1a7d4ebdd3d9bc8b2f5586c279bc1dd7e2"><span class="std std-ref">Function sequant::bra_net_rank</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1ab9d9bd3f1638ab8169b5323d0d9dd045.html#exhale-function-namespacesequant-1ab9d9bd3f1638ab8169b5323d0d9dd045"><span class="std std-ref">Function sequant::bra_rank</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a50cc3bdd8cb7728958b1b3e5fc10d48e.html#exhale-function-namespacesequant-1a50cc3bdd8cb7728958b1b3e5fc10d48e"><span class="std std-ref">Function sequant::braket</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a65db7bf1a69edaf8a0d257246b1d2486.html#exhale-function-namespacesequant-1a65db7bf1a69edaf8a0d257246b1d2486"><span class="std std-ref">Function sequant::braket_symmetry</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a76ac6d4264f742c11bb19037d9686b8e.html#exhale-function-namespacesequant-1a76ac6d4264f742c11bb19037d9686b8e"><span class="std std-ref">Template Function sequant::bubble_sort</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a9bdd3a01e384a2770e2ff95de90a4bc8.html#exhale-function-namespacesequant-1a9bdd3a01e384a2770e2ff95de90a4bc8"><span class="std std-ref">Function sequant::cache_manager</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a2fd6f7c59eae96654d0657a078d1cd49.html#exhale-function-namespacesequant-1a2fd6f7c59eae96654d0657a078d1cd49"><span class="std std-ref">Function sequant::can_expand</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1ae45d1ab781814eb2cb10455da06785f1.html#exhale-function-namespacesequant-1ae45d1ab781814eb2cb10455da06785f1"><span class="std std-ref">Function sequant::canonicalize(ExprPtr&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a175f4077c34ed84fc54c9a14547d6b6c.html#exhale-function-namespacesequant-1a175f4077c34ed84fc54c9a14547d6b6c"><span class="std std-ref">Function sequant::canonicalize(ExprPtr&amp;&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a4fb2134f803040f97c457fd476d97c55.html#exhale-function-namespacesequant-1a4fb2134f803040f97c457fd476d97c55"><span class="std std-ref">Function sequant::cbegin</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1ada68b8bbbeeb3a3d5a3077ae74186544.html#exhale-function-namespacesequant-1ada68b8bbbeeb3a3d5a3077ae74186544"><span class="std std-ref">Function sequant::cend</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a92238a447312a29368c42f7b9ac14bef.html#exhale-function-namespacesequant-1a92238a447312a29368c42f7b9ac14bef"><span class="std std-ref">Template Function sequant::clone</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a6911b938169abf8e3de1616fa8e4424c.html#exhale-function-namespacesequant-1a6911b938169abf8e3de1616fa8e4424c"><span class="std std-ref">Function sequant::closed_shell_CC_spintrace</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a293deb48eba786055cb59378e8ef44df.html#exhale-function-namespacesequant-1a293deb48eba786055cb59378e8ef44df"><span class="std std-ref">Function sequant::closed_shell_CC_spintrace_rigorous</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1afa65b1375f02c1bc0a71556ee6097572.html#exhale-function-namespacesequant-1afa65b1375f02c1bc0a71556ee6097572"><span class="std std-ref">Function sequant::closed_shell_spintrace(const ExprPtr&amp;, const container::svector&lt;container::svector&lt;Index&gt;&gt;&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a671574aab7af5e6e3c04563451820ba8.html#exhale-function-namespacesequant-1a671574aab7af5e6e3c04563451820ba8"><span class="std std-ref">Function sequant::closed_shell_spintrace(const ResultExpr&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a18069ae79cd08320a75c1d427946dc49.html#exhale-function-namespacesequant-1a18069ae79cd08320a75c1d427946dc49"><span class="std std-ref">Template Function sequant::collect_tensor_factors</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1acdb0a849c7a549fc20b032f74899d23c.html#exhale-function-namespacesequant-1acdb0a849c7a549fc20b032f74899d23c"><span class="std std-ref">Function sequant::color</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a039e25ec594aa3a2c0db5a634460ae30.html#exhale-function-namespacesequant-1a039e25ec594aa3a2c0db5a634460ae30"><span class="std std-ref">Function sequant::compute_biorth_coeffs</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a194ed0ffaa987967006e69458ec83423.html#exhale-function-namespacesequant-1a194ed0ffaa987967006e69458ec83423"><span class="std std-ref">Template Function sequant::conj</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1ac85d29e6ef81d2006f8d95c4b0990c79.html#exhale-function-namespacesequant-1ac85d29e6ef81d2006f8d95c4b0990c79"><span class="std std-ref">Template Function sequant::count_cycles</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a6c126d28102f914490a9f0a370f8bfa0.html#exhale-function-namespacesequant-1a6c126d28102f914490a9f0a370f8bfa0"><span class="std std-ref">Template Function sequant::counted_swap</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a7b888863c31ea1fa88b640f535fa20a9.html#exhale-function-namespacesequant-1a7b888863c31ea1fa88b640f535fa20a9"><span class="std std-ref">Function sequant::create_expr_for</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a342fc2ebe835a42e4010bf5c5111bf8e.html#exhale-function-namespacesequant-1a342fc2ebe835a42e4010bf5c5111bf8e"><span class="std std-ref">Template Function sequant::csv_labels</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a070ec9990fa79db88cf841ad27346270.html#exhale-function-namespacesequant-1a070ec9990fa79db88cf841ad27346270"><span class="std std-ref">Function sequant::default_context_manipulation_threadsafe</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a1d9cf2d73fad23e5d4fd2d73e7d00c23.html#exhale-function-namespacesequant-1a1d9cf2d73fad23e5d4fd2d73e7d00c23"><span class="std std-ref">Function sequant::DEFINE_STRONG_TYPE_FOR_RANGE_AND_RANGESIZE(cre)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1aeae97214d857314dbe169c351f805a61.html#exhale-function-namespacesequant-1aeae97214d857314dbe169c351f805a61"><span class="std std-ref">Function sequant::DEFINE_STRONG_TYPE_FOR_RANGE_AND_RANGESIZE(ann)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1ae2c6c0d4c1b036b287a0df7a5752cab8.html#exhale-function-namespacesequant-1ae2c6c0d4c1b036b287a0df7a5752cab8"><span class="std std-ref">Function sequant::DEFINE_STRONG_TYPE_FOR_RANGE_AND_RANGESIZE(bra)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1aa399e3729d27a657b18529a241e086bb.html#exhale-function-namespacesequant-1aa399e3729d27a657b18529a241e086bb"><span class="std std-ref">Function sequant::DEFINE_STRONG_TYPE_FOR_RANGE_AND_RANGESIZE(ket)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a38e1e232c0d81c6119d57edc4527a898.html#exhale-function-namespacesequant-1a38e1e232c0d81c6119d57edc4527a898"><span class="std std-ref">Function sequant::DEFINE_STRONG_TYPE_FOR_RANGE_AND_RANGESIZE(aux)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1ae8881cdbcc57c2de4493e0e5ed835ca1.html#exhale-function-namespacesequant-1ae8881cdbcc57c2de4493e0e5ed835ca1"><span class="std std-ref">Function sequant::deparse(const ResultExpr&amp;, bool)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1afe276926c5c2e7724779e2048c12fe75.html#exhale-function-namespacesequant-1afe276926c5c2e7724779e2048c12fe75"><span class="std std-ref">Function sequant::deparse(const ExprPtr&amp;, bool)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a4b7f044ab8d87a437e88b04b116df367.html#exhale-function-namespacesequant-1a4b7f044ab8d87a437e88b04b116df367"><span class="std std-ref">Function sequant::deparse(const Expr&amp;, bool)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a3005a7b546fe1ae4cc7bf6b7771a28da.html#exhale-function-namespacesequant-1a3005a7b546fe1ae4cc7bf6b7771a28da"><span class="std std-ref">Function sequant::deparse(const Product&amp;, bool)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a9c7e7721e4b51c1b20608b63794328bb.html#exhale-function-namespacesequant-1a9c7e7721e4b51c1b20608b63794328bb"><span class="std std-ref">Function sequant::deparse(const Sum&amp;, bool)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1aeed130d6a5f23cd4eedc9be19c34b379.html#exhale-function-namespacesequant-1aeed130d6a5f23cd4eedc9be19c34b379"><span class="std std-ref">Function sequant::deparse(const Tensor&amp;, bool)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1af6bf30d5d288740c7e40faaab8c8a99b.html#exhale-function-namespacesequant-1af6bf30d5d288740c7e40faaab8c8a99b"><span class="std std-ref">Function sequant::deparse(const AbstractTensor&amp;, bool)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1acd3c708e58c98005b82af6f0203af462.html#exhale-function-namespacesequant-1acd3c708e58c98005b82af6f0203af462"><span class="std std-ref">Template Function sequant::deparse(const NormalOperator&lt;S&gt;&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a6fd1b3e795e61a300439a4f1cd6b0436.html#exhale-function-namespacesequant-1a6fd1b3e795e61a300439a4f1cd6b0436"><span class="std std-ref">Function sequant::deparse(const Variable&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1aab4a42f481715f868c7914630cd3d2d3.html#exhale-function-namespacesequant-1aab4a42f481715f868c7914630cd3d2d3"><span class="std std-ref">Function sequant::deparse(const Constant&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1abcb1341c11dcbc821a92429f891ff5fa.html#exhale-function-namespacesequant-1abcb1341c11dcbc821a92429f891ff5fa"><span class="std std-ref">Function sequant::deparse(const Index&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1ac949140b1ce9b06ccbb14110982ef4de.html#exhale-function-namespacesequant-1ac949140b1ce9b06ccbb14110982ef4de"><span class="std std-ref">Function sequant::deparse&lt; Statistics::BoseEinstein &gt;</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a56a2d981561353ebae333513f76981bb.html#exhale-function-namespacesequant-1a56a2d981561353ebae333513f76981bb"><span class="std std-ref">Function sequant::deparse&lt; Statistics::FermiDirac &gt;</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a41716bdbda99a76165e127f722b4578c.html#exhale-function-namespacesequant-1a41716bdbda99a76165e127f722b4578c"><span class="std std-ref">Template Function sequant::diactrics_to_latex(const std::basic_string_view&lt;Char, Traits&gt;&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1adcb7995ddb394de3fd6d6543ce0992db.html#exhale-function-namespacesequant-1adcb7995ddb394de3fd6d6543ce0992db"><span class="std std-ref">Template Function sequant::diactrics_to_latex(const std::basic_string&lt;Char, Traits, Alloc&gt;&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1ad25720c9e51bc3487b81bf843dad6776.html#exhale-function-namespacesequant-1ad25720c9e51bc3487b81bf843dad6776"><span class="std std-ref">Function sequant::diff</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a1d602fe15e5a8cb07c503fc58cd67d0f.html#exhale-function-namespacesequant-1a1d602fe15e5a8cb07c503fc58cd67d0f"><span class="std std-ref">Template Function sequant::diff_indices</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a544c9181490cb5d0b5cef1763f61680e.html#exhale-function-namespacesequant-1a544c9181490cb5d0b5cef1763f61680e"><span class="std std-ref">Function sequant::diff_spaces</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1aa3724baacef9bdfec8244e84ed82843e.html#exhale-function-namespacesequant-1aa3724baacef9bdfec8244e84ed82843e"><span class="std std-ref">Template Function sequant::do_parse</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1ad600d7fe47c0c4f006149cd13a114bc5.html#exhale-function-namespacesequant-1ad600d7fe47c0c4f006149cd13a114bc5"><span class="std std-ref">Function sequant::end(const ExprPtr&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1af4ece5a049a3d307e03f6b2af97697ab.html#exhale-function-namespacesequant-1af4ece5a049a3d307e03f6b2af97697ab"><span class="std std-ref">Function sequant::end(ExprPtr&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a5967ce75234ba469f02661c3ada775ec.html#exhale-function-namespacesequant-1a5967ce75234ba469f02661c3ada775ec"><span class="std std-ref">Template Function sequant::eval_result</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1af4f19f545e6cd169b63cae9380ec8a40.html#exhale-function-namespacesequant-1af4f19f545e6cd169b63cae9380ec8a40"><span class="std std-ref">Template Function sequant::ex</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a046c20d81ebc0e26a2e6d7f279807fd6.html#exhale-function-namespacesequant-1a046c20d81ebc0e26a2e6d7f279807fd6"><span class="std std-ref">Function sequant::expand</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a6492953455422a5903841b72a2c73539.html#exhale-function-namespacesequant-1a6492953455422a5903841b72a2c73539"><span class="std std-ref">Function sequant::expand_A_op(const Product&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a7ea60aebddfa28b64cd880088002bb67.html#exhale-function-namespacesequant-1a7ea60aebddfa28b64cd880088002bb67"><span class="std std-ref">Function sequant::expand_A_op(const ExprPtr&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a3f82b6772553fedc95da4ea299972f5c.html#exhale-function-namespacesequant-1a3f82b6772553fedc95da4ea299972f5c"><span class="std std-ref">Function sequant::expand_antisymm(const Tensor&amp;, bool)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1ad70637d2e37da4c601d03d785dac2f6c.html#exhale-function-namespacesequant-1ad70637d2e37da4c601d03d785dac2f6c"><span class="std std-ref">Function sequant::expand_antisymm(const ExprPtr&amp;, bool)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a0ff2ec38d48c9b5223d83263076186d1.html#exhale-function-namespacesequant-1a0ff2ec38d48c9b5223d83263076186d1"><span class="std std-ref">Function sequant::expand_P_op(const Product&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a79cb956392d331f43b649f7875683c25.html#exhale-function-namespacesequant-1a79cb956392d331f43b649f7875683c25"><span class="std std-ref">Function sequant::expand_P_op(const ExprPtr&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a803893b07c8cde45bd90e9111727e0fa.html#exhale-function-namespacesequant-1a803893b07c8cde45bd90e9111727e0fa"><span class="std std-ref">Template Function sequant::external_indices(const Expr&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1adbbb293a56ff6373d1935fe454092a24.html#exhale-function-namespacesequant-1adbbb293a56ff6373d1935fe454092a24"><span class="std std-ref">Template Function sequant::external_indices(const ExprPtr&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1ae10c6337dda9d993b1bbac6f0c1eec07.html#exhale-function-namespacesequant-1ae10c6337dda9d993b1bbac6f0c1eec07"><span class="std std-ref">Function sequant::extract_external_indices</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a31f8e61063f41557e50dfa059c13b22d.html#exhale-function-namespacesequant-1a31f8e61063f41557e50dfa059c13b22d"><span class="std std-ref">Function sequant::factorial</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a7fb4b5eecf1f7a9def14ddf891089b42.html#exhale-function-namespacesequant-1a7fb4b5eecf1f7a9def14ddf891089b42"><span class="std std-ref">Function sequant::factorize_S</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a00ed18134e8bc7d85857eb48500120f1.html#exhale-function-namespacesequant-1a00ed18134e8bc7d85857eb48500120f1"><span class="std std-ref">Function sequant::fann(Index)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1ac9a9921e63b7afafc2338aa9e7317189.html#exhale-function-namespacesequant-1ac9a9921e63b7afafc2338aa9e7317189"><span class="std std-ref">Template Function sequant::fann(Index, std::initializer_list&lt;I&gt;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1af3ae416b27d3c00894eff3049ab73b37.html#exhale-function-namespacesequant-1af3ae416b27d3c00894eff3049ab73b37"><span class="std std-ref">Template Function sequant::fannx</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1ac6290ec75116ffe5375cef841fee7178.html#exhale-function-namespacesequant-1ac6290ec75116ffe5375cef841fee7178"><span class="std std-ref">Function sequant::fcre(Index)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a7805d2d68dc5858122638f7048c9d255.html#exhale-function-namespacesequant-1a7805d2d68dc5858122638f7048c9d255"><span class="std std-ref">Template Function sequant::fcre(Index, std::initializer_list&lt;I&gt;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1adc608ead17c4bcb8f0404491da04ed7b.html#exhale-function-namespacesequant-1adc608ead17c4bcb8f0404491da04ed7b"><span class="std std-ref">Template Function sequant::fcrex</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a9c74d51e38e03935b835dbb203884842.html#exhale-function-namespacesequant-1a9c74d51e38e03935b835dbb203884842"><span class="std std-ref">Template Function sequant::fold_left_to_node</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a4c9b5bca8dbf67d5b6d288cf1d5d90c9.html#exhale-function-namespacesequant-1a4c9b5bca8dbf67d5b6d288cf1d5d90c9"><span class="std std-ref">Template Function sequant::for_each</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a98b108007e2a0edda2db78ae7dbc051e.html#exhale-function-namespacesequant-1a98b108007e2a0edda2db78ae7dbc051e"><span class="std std-ref">Function sequant::get_complete_space</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1adce7b7bf4d068ee074635fbd97efff08.html#exhale-function-namespacesequant-1adce7b7bf4d068ee074635fbd97efff08"><span class="std std-ref">Function sequant::get_default_context</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a5df71c18ca95a2dc9964443ec44dc0d8.html#exhale-function-namespacesequant-1a5df71c18ca95a2dc9964443ec44dc0d8"><span class="std std-ref">Function sequant::get_hole_space</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a49da1604cd44fac56a26f2fdbfc1884c.html#exhale-function-namespacesequant-1a49da1604cd44fac56a26f2fdbfc1884c"><span class="std std-ref">Function sequant::get_particle_space</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1ad3a0936a566597248d20e2dd924a0642.html#exhale-function-namespacesequant-1ad3a0936a566597248d20e2dd924a0642"><span class="std std-ref">Template Function sequant::get_uncontracted_indices</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a25604f0894b9ce674cce66a29b7c876d.html#exhale-function-namespacesequant-1a25604f0894b9ce674cce66a29b7c876d"><span class="std std-ref">Template Function sequant::get_unique_indices(const Tensor&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a63ea8fc50bb2f25bf1672e7182421f13.html#exhale-function-namespacesequant-1a63ea8fc50bb2f25bf1672e7182421f13"><span class="std std-ref">Template Function sequant::get_unique_indices(const Sum&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a83708a06e2d866abf2b00cef9f324225.html#exhale-function-namespacesequant-1a83708a06e2d866abf2b00cef9f324225"><span class="std std-ref">Template Function sequant::get_unique_indices(const Product&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a8e28c2f4ad60409636bfc70865af5ef8.html#exhale-function-namespacesequant-1a8e28c2f4ad60409636bfc70865af5ef8"><span class="std std-ref">Template Function sequant::get_unique_indices(const Expr&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a390d4db82b398072ad65732f0ce5574d.html#exhale-function-namespacesequant-1a390d4db82b398072ad65732f0ce5574d"><span class="std std-ref">Template Function sequant::get_unique_indices(const Variable&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1ae52fa524e53cee73d9afa5f00e75904e.html#exhale-function-namespacesequant-1ae52fa524e53cee73d9afa5f00e75904e"><span class="std std-ref">Template Function sequant::get_unique_indices(const Constant&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1af3378e211033b815ded22fc08c161a3e.html#exhale-function-namespacesequant-1af3378e211033b815ded22fc08c161a3e"><span class="std std-ref">Template Function sequant::get_unique_indices(const ExprPtr&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a4aa9b3b5d751603b3a53e38a6041a8c1.html#exhale-function-namespacesequant-1a4aa9b3b5d751603b3a53e38a6041a8c1"><span class="std std-ref">Function sequant::git_description</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a1733ca1f73f803b5a51b6d117dd2705d.html#exhale-function-namespacesequant-1a1733ca1f73f803b5a51b6d117dd2705d"><span class="std std-ref">Template Function sequant::greek_characters_to_latex(const std::basic_string_view&lt;Char, Traits&gt;&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a17d2cf94f7badc7f7fa96d564f6814c5.html#exhale-function-namespacesequant-1a17d2cf94f7badc7f7fa96d564f6814c5"><span class="std std-ref">Template Function sequant::greek_characters_to_latex(const std::basic_string&lt;Char, Traits, Alloc&gt;&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1ab4080d1930c5ba22da9ffb6c36b34b41.html#exhale-function-namespacesequant-1ab4080d1930c5ba22da9ffb6c36b34b41"><span class="std std-ref">Function sequant::has_tensor</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a6f8474f36369dfcb3ff07b3dcaf773c9.html#exhale-function-namespacesequant-1a6f8474f36369dfcb3ff07b3dcaf773c9"><span class="std std-ref">Function sequant::hash_value(const ExprPtr&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1ac06e008393f595f8c41d06771520f054.html#exhale-function-namespacesequant-1ac06e008393f595f8c41d06771520f054"><span class="std std-ref">Template Function sequant::hash_value(const T&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a54f7e052347d3d4f5a591c8a1c488c2b.html#exhale-function-namespacesequant-1a54f7e052347d3d4f5a591c8a1c488c2b"><span class="std std-ref">Function sequant::hash_value(const Index&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a14c00772a68f75c45e897fab88cf93d9.html#exhale-function-namespacesequant-1a14c00772a68f75c45e897fab88cf93d9"><span class="std std-ref">Template Function sequant::hash_value(const Op&lt;S&gt;&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a6f0a07cbff281a2ea6e5969fc260f11c.html#exhale-function-namespacesequant-1a6f0a07cbff281a2ea6e5969fc260f11c"><span class="std std-ref">Function sequant::hash_value(const IndexSpace&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a85f4c12085c8bf5ff31527a7a79f781b.html#exhale-function-namespacesequant-1a85f4c12085c8bf5ff31527a7a79f781b"><span class="std std-ref">Function sequant::hash_version</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1aa8a75c6087354bc7e8105b41e437503f.html#exhale-function-namespacesequant-1aa8a75c6087354bc7e8105b41e437503f"><span class="std std-ref">Template Function sequant::imed_hashes</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a3e63e86bb1509bbbd71fe2fc6cf71407.html#exhale-function-namespacesequant-1a3e63e86bb1509bbbd71fe2fc6cf71407"><span class="std std-ref">Function sequant::includes(IndexSpace::Type, IndexSpace::Type)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1af457c712ea93671abc344a6696e2e657.html#exhale-function-namespacesequant-1af457c712ea93671abc344a6696e2e657"><span class="std std-ref">Function sequant::includes(IndexSpace::QuantumNumbers, IndexSpace::QuantumNumbers)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a2519aa981b383cebb103e8e49fbcb50d.html#exhale-function-namespacesequant-1a2519aa981b383cebb103e8e49fbcb50d"><span class="std std-ref">Function sequant::includes(const IndexSpace&amp;, const IndexSpace&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1aa8759ff6f370e1341881b90766b9b1e7.html#exhale-function-namespacesequant-1aa8759ff6f370e1341881b90766b9b1e7"><span class="std std-ref">Function sequant::index_list</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1ada6eacab34e391b3e13a57017aed6f94.html#exhale-function-namespacesequant-1ada6eacab34e391b3e13a57017aed6f94"><span class="std std-ref">Function sequant::indices</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a0b02572642a937415bf42e47899d6647.html#exhale-function-namespacesequant-1a0b02572642a937415bf42e47899d6647"><span class="std std-ref">Template Function sequant::inits</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a71193609bb892c00c382bed025bdc03b.html#exhale-function-namespacesequant-1a71193609bb892c00c382bed025bdc03b"><span class="std std-ref">Template Function sequant::is_annihilator</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a89cc6567669d53a5927508e64e59e76a.html#exhale-function-namespacesequant-1a89cc6567669d53a5927508e64e59e76a"><span class="std std-ref">Function sequant::is_cnumber</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a874aff47ad0849a96d8d06c59701d0ce.html#exhale-function-namespacesequant-1a874aff47ad0849a96d8d06c59701d0ce"><span class="std std-ref">Template Function sequant::is_creator</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a69193269473c3eeb76f94536c9492caa.html#exhale-function-namespacesequant-1a69193269473c3eeb76f94536c9492caa"><span class="std std-ref">Template Function sequant::is_pure_qpannihilator</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1afc0566f70d0ea723a8be332e01f2ce9b.html#exhale-function-namespacesequant-1afc0566f70d0ea723a8be332e01f2ce9b"><span class="std std-ref">Template Function sequant::is_pure_qpcreator</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a0fbe69c6b4c8fa9ced9b2a65cab2f306.html#exhale-function-namespacesequant-1a0fbe69c6b4c8fa9ced9b2a65cab2f306"><span class="std std-ref">Template Function sequant::is_qpannihilator</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a012d6760401cb6ccc9bf8c42e53368b5.html#exhale-function-namespacesequant-1a012d6760401cb6ccc9bf8c42e53368b5"><span class="std std-ref">Template Function sequant::is_qpcreator</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a3541cc28ab9743ceeb03a0baa799eacb.html#exhale-function-namespacesequant-1a3541cc28ab9743ceeb03a0baa799eacb"><span class="std std-ref">Function sequant::ket_net_rank</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a039b52413448851b812d59af83eb088b.html#exhale-function-namespacesequant-1a039b52413448851b812d59af83eb088b"><span class="std std-ref">Function sequant::ket_rank</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a0eecf6ec0dce4025a7072fa2e41c228f.html#exhale-function-namespacesequant-1a0eecf6ec0dce4025a7072fa2e41c228f"><span class="std std-ref">Function sequant::label</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1aef83cec256560574ec11e77f271ff615.html#exhale-function-namespacesequant-1aef83cec256560574ec11e77f271ff615"><span class="std std-ref">Template Function sequant::linearize_eval_node</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1afae13e036fa22d07266b1f39171dd571.html#exhale-function-namespacesequant-1afae13e036fa22d07266b1f39171dd571"><span class="std std-ref">Function sequant::log_ta_tensor_host_memory_use</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1ac8b05d7d4e23c1fd2fb086e472da556a.html#exhale-function-namespacesequant-1ac8b05d7d4e23c1fd2fb086e472da556a"><span class="std std-ref">Template Function sequant::make_indices</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a62fa48844ef915fbcd75f6f9891d3893.html#exhale-function-namespacesequant-1a62fa48844ef915fbcd75f6f9891d3893"><span class="std std-ref">Function sequant::make_overlap</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a745f7070c7fe7ac8767c67d77902221b.html#exhale-function-namespacesequant-1a745f7070c7fe7ac8767c67d77902221b"><span class="std std-ref">Function sequant::make_spinalpha</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a872db6cc7cbfc97cc8b4b9eb71e3ac2f.html#exhale-function-namespacesequant-1a872db6cc7cbfc97cc8b4b9eb71e3ac2f"><span class="std std-ref">Function sequant::make_spinbeta</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a01c92fce4088699db7e799fb69a90ec8.html#exhale-function-namespacesequant-1a01c92fce4088699db7e799fb69a90ec8"><span class="std std-ref">Function sequant::make_spinfree</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1ad69c0540210a5562e0c25ff92b3574aa.html#exhale-function-namespacesequant-1ad69c0540210a5562e0c25ff92b3574aa"><span class="std std-ref">Function sequant::max_cache</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1ae0f043d0386bc36d50f76e545f569b5b.html#exhale-function-namespacesequant-1ae0f043d0386bc36d50f76e545f569b5b"><span class="std std-ref">Function sequant::merge_tensors</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1aa6510967fc3fe6d5651e4d9d8a38f9c0.html#exhale-function-namespacesequant-1aa6510967fc3fe6d5651e4d9d8a38f9c0"><span class="std std-ref">Function sequant::min_storage</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a1f2111e048cde79c5edaf1371d65bf50.html#exhale-function-namespacesequant-1a1f2111e048cde79c5edaf1371d65bf50"><span class="std std-ref">Template Function sequant::next_permutation_parity</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1aabe9737895e799a8bf7bd97282bc67a1.html#exhale-function-namespacesequant-1aabe9737895e799a8bf7bd97282bc67a1"><span class="std std-ref">Function sequant::non_canon_simplify</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a85e346c4c8387071774ccb710ea5fe93.html#exhale-function-namespacesequant-1a85e346c4c8387071774ccb710ea5fe93"><span class="std std-ref">Template Function sequant::norm_squared</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a6f519687dbe407070b5068c0580e8821.html#exhale-function-namespacesequant-1a6f519687dbe407070b5068c0580e8821"><span class="std std-ref">Template Function sequant::normalize</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a0a938380f14557b6187e7e84aefbbe26.html#exhale-function-namespacesequant-1a0a938380f14557b6187e7e84aefbbe26"><span class="std std-ref">Function sequant::num_threads</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a274bb7e21525de8d6515ccb44880e221.html#exhale-function-namespacesequant-1a274bb7e21525de8d6515ccb44880e221"><span class="std std-ref">Function sequant::open_shell_A_op</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1af6f2d39c51ed1c196e19f3db5a9ddf6a.html#exhale-function-namespacesequant-1af6f2d39c51ed1c196e19f3db5a9ddf6a"><span class="std std-ref">Function sequant::open_shell_CC_spintrace</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a4f3eee2b68c8517373f0927f616386cb.html#exhale-function-namespacesequant-1a4f3eee2b68c8517373f0927f616386cb"><span class="std std-ref">Function sequant::open_shell_P_op_vector</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a8f44b674e4c671ceb63e39d650d26b4a.html#exhale-function-namespacesequant-1a8f44b674e4c671ceb63e39d650d26b4a"><span class="std std-ref">Function sequant::open_shell_spintrace</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a24f69f16c272cb4a9bd054c7d9dc6410.html#exhale-function-namespacesequant-1a24f69f16c272cb4a9bd054c7d9dc6410"><span class="std std-ref">Function sequant::operator!=(const Expr&amp;, const Expr&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1af350f7feb1a3a7d5cbe5f22b2e25a76a.html#exhale-function-namespacesequant-1af350f7feb1a3a7d5cbe5f22b2e25a76a"><span class="std std-ref">Template Function sequant::operator!=(const Op&lt;S&gt;&amp;, const Op&lt;S&gt;&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1ae582646eac2e00a875ecc82e9d16b6bf.html#exhale-function-namespacesequant-1ae582646eac2e00a875ecc82e9d16b6bf"><span class="std std-ref">Function sequant::operator!=(const Context&amp;, const Context&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1ac9f738fa8770180ed240f3e2e41f1873.html#exhale-function-namespacesequant-1ac9f738fa8770180ed240f3e2e41f1873"><span class="std std-ref">Function sequant::operator!=(IndexSpace const&amp;, IndexSpace const&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a630649d30cfa7e130d5e1104cc5ea2b4.html#exhale-function-namespacesequant-1a630649d30cfa7e130d5e1104cc5ea2b4"><span class="std std-ref">Function sequant::operator!=(AsyCost const&amp;, AsyCost const&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1ae571b283e3402ca207d2e5b93b3e579c.html#exhale-function-namespacesequant-1ae571b283e3402ca207d2e5b93b3e579c"><span class="std std-ref">Template Function sequant::operator!=(const Complex&lt;T&gt;&amp;, const Complex&lt;T&gt;&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a1f1efc7e03ecd96c841c129d11201e68.html#exhale-function-namespacesequant-1a1f1efc7e03ecd96c841c129d11201e68"><span class="std std-ref">Template Function sequant::operator!=(const Complex&lt;T&gt;&amp;, const X&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1ad554ebefd23ee4f7763d2ae01d351e2a.html#exhale-function-namespacesequant-1ad554ebefd23ee4f7763d2ae01d351e2a"><span class="std std-ref">Template Function sequant::operator!=(const X&amp;, const Complex&lt;T&gt;&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1aa3812b7b83b1427775056ea29c490b86.html#exhale-function-namespacesequant-1aa3812b7b83b1427775056ea29c490b86"><span class="std std-ref">Template Function sequant::operator!=(const Complex&lt;T&gt;&amp;, const T&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1acf115a162e3ca42e2882e52a282b97f4.html#exhale-function-namespacesequant-1acf115a162e3ca42e2882e52a282b97f4"><span class="std std-ref">Template Function sequant::operator!=(const T&amp;, const Complex&lt;T&gt;&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a999ba9d32dc3a0fdcce6e25fd2e2148e.html#exhale-function-namespacesequant-1a999ba9d32dc3a0fdcce6e25fd2e2148e"><span class="std std-ref">Function sequant::operator*(const ExprPtr&amp;, const ExprPtr&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1abbb55252e11d1c6f28e96abaf56ec310.html#exhale-function-namespacesequant-1abbb55252e11d1c6f28e96abaf56ec310"><span class="std std-ref">Template Function sequant::operator*(const Complex&lt;T&gt;&amp;, const Complex&lt;T&gt;&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a64cf68fed89b5b0a638c33c0f93a0b95.html#exhale-function-namespacesequant-1a64cf68fed89b5b0a638c33c0f93a0b95"><span class="std std-ref">Template Function sequant::operator*(const U&amp;, const Complex&lt;T&gt;&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1ae9fcbe62cae7eb06453685820ea97e45.html#exhale-function-namespacesequant-1ae9fcbe62cae7eb06453685820ea97e45"><span class="std std-ref">Template Function sequant::operator*(const Complex&lt;T&gt;&amp;, const U&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1aed426b97fadbbf605afff468ba48671d.html#exhale-function-namespacesequant-1aed426b97fadbbf605afff468ba48671d"><span class="std std-ref">Function sequant::operator*(AsyCost const&amp;, rational)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a65c1453f95cf92ea7f31be759e614cff.html#exhale-function-namespacesequant-1a65c1453f95cf92ea7f31be759e614cff"><span class="std std-ref">Function sequant::operator*(rational, AsyCost const&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a8b27eb76fdeb9c0b9410f66bb7f0a0cc.html#exhale-function-namespacesequant-1a8b27eb76fdeb9c0b9410f66bb7f0a0cc"><span class="std std-ref">Function sequant::operator+(const ExprPtr&amp;, const ExprPtr&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a2289a0e76a31d923a77bf4ddc8e7b46e.html#exhale-function-namespacesequant-1a2289a0e76a31d923a77bf4ddc8e7b46e"><span class="std std-ref">Template Function sequant::operator+(const Complex&lt;T&gt;&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a271c50d2fd0706347354b0a26ef761e2.html#exhale-function-namespacesequant-1a271c50d2fd0706347354b0a26ef761e2"><span class="std std-ref">Template Function sequant::operator+(const Complex&lt;T&gt;&amp;, const Complex&lt;T&gt;&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a48b0e39eadc6d82542f7b4962f59759f.html#exhale-function-namespacesequant-1a48b0e39eadc6d82542f7b4962f59759f"><span class="std std-ref">Function sequant::operator+(AsyCost const&amp;, AsyCost const&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a0549453d5699d508081b02e45846074a.html#exhale-function-namespacesequant-1a0549453d5699d508081b02e45846074a"><span class="std std-ref">Function sequant::operator-(const ExprPtr&amp;, const ExprPtr&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a6a56e41dbabad25a310c712c17aff9b7.html#exhale-function-namespacesequant-1a6a56e41dbabad25a310c712c17aff9b7"><span class="std std-ref">Template Function sequant::operator-(const Complex&lt;T&gt;&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1ae88edf6f660941e78c31cc1e8e72f798.html#exhale-function-namespacesequant-1ae88edf6f660941e78c31cc1e8e72f798"><span class="std std-ref">Template Function sequant::operator-(const Complex&lt;T&gt;&amp;, const Complex&lt;T&gt;&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1af5fa63f24bc11815a872d651b1eb7064.html#exhale-function-namespacesequant-1af5fa63f24bc11815a872d651b1eb7064"><span class="std std-ref">Function sequant::operator-(AsyCost const&amp;, AsyCost const&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1aec0e583c655a448af8385a2804114217.html#exhale-function-namespacesequant-1aec0e583c655a448af8385a2804114217"><span class="std std-ref">Template Function sequant::operator/(const Complex&lt;T&gt;&amp;, const Complex&lt;T&gt;&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1ab3abe86363b66a63c0e8521acb0ec014.html#exhale-function-namespacesequant-1ab3abe86363b66a63c0e8521acb0ec014"><span class="std std-ref">Template Function sequant::operator/(const U&amp;, const Complex&lt;T&gt;&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a60776c556b09d413dc36345fc6f721fa.html#exhale-function-namespacesequant-1a60776c556b09d413dc36345fc6f721fa"><span class="std std-ref">Function sequant::operator/(AsyCost const&amp;, rational)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a1b7fd49159294bfa5b46f309a8742286.html#exhale-function-namespacesequant-1a1b7fd49159294bfa5b46f309a8742286"><span class="std std-ref">Template Function sequant::operator&lt;(const Op&lt;S1&gt;&amp;, const Op&lt;S2&gt;&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1aa9cc423ac0dc6c792f34030f10e77050.html#exhale-function-namespacesequant-1aa9cc423ac0dc6c792f34030f10e77050"><span class="std std-ref">Template Function sequant::operator&lt;(const SwapCountable&lt;T&gt;&amp;, const SwapCountable&lt;T&gt;&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a5932badad5fd28ad43c6bede9349c780.html#exhale-function-namespacesequant-1a5932badad5fd28ad43c6bede9349c780"><span class="std std-ref">Template Function sequant::operator&lt;(const SwapCountableRef&lt;T&gt;&amp;, const SwapCountableRef&lt;T&gt;&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a06013c9e2a851d9d74431cb686c83bdd.html#exhale-function-namespacesequant-1a06013c9e2a851d9d74431cb686c83bdd"><span class="std std-ref">Function sequant::operator&lt;(const IndexSpace&amp;, const IndexSpace&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1af2dfc0964956a8b2aa64ee85b1e50fa8.html#exhale-function-namespacesequant-1af2dfc0964956a8b2aa64ee85b1e50fa8"><span class="std std-ref">Function sequant::operator&lt;(AsyCost const&amp;, AsyCost const&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1ad8c7343916e7e7f0b9c43800c5c74922.html#exhale-function-namespacesequant-1ad8c7343916e7e7f0b9c43800c5c74922"><span class="std std-ref">Template Function sequant::operator&lt;&lt;(std::basic_ostream&lt;CharT, Traits&gt;&amp;, TensorNetworkV2::Origin)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a83e59a8577f1733da4804629365af97e.html#exhale-function-namespacesequant-1a83e59a8577f1733da4804629365af97e"><span class="std std-ref">Template Function sequant::operator&lt;&lt;(std::basic_ostream&lt;CharT, Traits&gt;&amp;, TensorNetworkV3::Origin)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1aab6e45448e13a4ee58bf5aa71c7488e6.html#exhale-function-namespacesequant-1aab6e45448e13a4ee58bf5aa71c7488e6"><span class="std std-ref">Function sequant::operator&lt;=</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1af06cc45e975afcb9ae60db7b6cbbcba9.html#exhale-function-namespacesequant-1af06cc45e975afcb9ae60db7b6cbbcba9"><span class="std std-ref">Function sequant::operator==(const ExprPtr&amp;, std::nullptr_t)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1ab4a40939b4d8eb1dc68f8778c0b73930.html#exhale-function-namespacesequant-1ab4a40939b4d8eb1dc68f8778c0b73930"><span class="std std-ref">Function sequant::operator==(std::nullptr_t, const ExprPtr&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a4f7a82ef79acb5f9253be6cf51a1bde0.html#exhale-function-namespacesequant-1a4f7a82ef79acb5f9253be6cf51a1bde0"><span class="std std-ref">Function sequant::operator==(const Expr&amp;, const Expr&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a0d63a69cf31e277213d1cc8ee5c74d05.html#exhale-function-namespacesequant-1a0d63a69cf31e277213d1cc8ee5c74d05"><span class="std std-ref">Function sequant::operator==(const ExprPtr&amp;, const ExprPtr&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1aec313efc5a2f86c70203f17953ee20e4.html#exhale-function-namespacesequant-1aec313efc5a2f86c70203f17953ee20e4"><span class="std std-ref">Template Function sequant::operator==(const Op&lt;S&gt;&amp;, const Op&lt;S&gt;&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1aaf7c742d3ac61b03615c69c67e462dc0.html#exhale-function-namespacesequant-1aaf7c742d3ac61b03615c69c67e462dc0"><span class="std std-ref">Template Function sequant::operator==(const Operator&lt;S&gt;&amp;, const Operator&lt;S&gt;&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1ad59caf9dc97b151ebf5f35038750b831.html#exhale-function-namespacesequant-1ad59caf9dc97b151ebf5f35038750b831"><span class="std std-ref">Template Function sequant::operator==(const NormalOperator&lt;S&gt;&amp;, const NormalOperator&lt;S&gt;&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1aa25b5f265546eb9d0fa08516436e21d6.html#exhale-function-namespacesequant-1aa25b5f265546eb9d0fa08516436e21d6"><span class="std std-ref">Function sequant::operator==(IndexSpace const&amp;, IndexSpace const&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a46c0c8f11e5bfafde787c9cc5a8d71bf.html#exhale-function-namespacesequant-1a46c0c8f11e5bfafde787c9cc5a8d71bf"><span class="std std-ref">Function sequant::operator==(AsyCost const&amp;, AsyCost const&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1aa80fdad4b2d0af57c1000a767bc514d9.html#exhale-function-namespacesequant-1aa80fdad4b2d0af57c1000a767bc514d9"><span class="std std-ref">Template Function sequant::operator==(FullBinaryNode&lt;T&gt; const&amp;, FullBinaryNode&lt;U&gt; const&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a487a6641646c9ffacdf5ea5e8865d679.html#exhale-function-namespacesequant-1a487a6641646c9ffacdf5ea5e8865d679"><span class="std std-ref">Template Function sequant::operator==(const Complex&lt;T&gt;&amp;, const Complex&lt;T&gt;&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a4b6ae3dc30ac2f12ea826de6c05175f3.html#exhale-function-namespacesequant-1a4b6ae3dc30ac2f12ea826de6c05175f3"><span class="std std-ref">Template Function sequant::operator==(const Complex&lt;T&gt;&amp;, const X&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1acf61bf30e938f1bcd39a19117443ab74.html#exhale-function-namespacesequant-1acf61bf30e938f1bcd39a19117443ab74"><span class="std std-ref">Template Function sequant::operator==(const X&amp;, const Complex&lt;T&gt;&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a3c3b7708ffda618115109e073c79e0e7.html#exhale-function-namespacesequant-1a3c3b7708ffda618115109e073c79e0e7"><span class="std std-ref">Template Function sequant::operator==(const Complex&lt;T&gt;&amp;, const T&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a7c0c30b1a59cb0c1116251340fe95e09.html#exhale-function-namespacesequant-1a7c0c30b1a59cb0c1116251340fe95e09"><span class="std std-ref">Template Function sequant::operator==(const T&amp;, const Complex&lt;T&gt;&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a1572a115ae7fa4a25142f573f9fa7040.html#exhale-function-namespacesequant-1a1572a115ae7fa4a25142f573f9fa7040"><span class="std std-ref">Function sequant::operator==(const Context&amp;, const Context&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a2e3122d0745fee95666649dc410a57ac.html#exhale-function-namespacesequant-1a2e3122d0745fee95666649dc410a57ac"><span class="std std-ref">Function sequant::operator&gt;</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1af112ea1edb78034493a71725f25bc227.html#exhale-function-namespacesequant-1af112ea1edb78034493a71725f25bc227"><span class="std std-ref">Function sequant::operator&gt;=</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a6b58a1267416651cfa3528aaf5334513.html#exhale-function-namespacesequant-1a6b58a1267416651cfa3528aaf5334513"><span class="std std-ref">Function sequant::operator^</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1aed6e65817face9e2aa5bde963b9307ef.html#exhale-function-namespacesequant-1aed6e65817face9e2aa5bde963b9307ef"><span class="std std-ref">Function sequant::optimize</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a815f680e9d072e892d3eb18f70ccdf43.html#exhale-function-namespacesequant-1a815f680e9d072e892d3eb18f70ccdf43"><span class="std std-ref">Function sequant::ordinal_compare</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a8360af13bf4a44e5e3566224c22f05aa.html#exhale-function-namespacesequant-1a8360af13bf4a44e5e3566224c22f05aa"><span class="std std-ref">Function sequant::overlap_label</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a4e82f07216aa89295b4e4bcd9927b7e1.html#exhale-function-namespacesequant-1a4e82f07216aa89295b4e4bcd9927b7e1"><span class="std std-ref">Function sequant::P_maps</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1af545eb966d92e4143f3dc8947048166f.html#exhale-function-namespacesequant-1af545eb966d92e4143f3dc8947048166f"><span class="std std-ref">Template Function sequant::parallel_do</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a461a9cff3a7e14396fc9f2ee65607c2b.html#exhale-function-namespacesequant-1a461a9cff3a7e14396fc9f2ee65607c2b"><span class="std std-ref">Function sequant::parse_expr</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1aa7e570662fbfdcf72718e105b481a7f0.html#exhale-function-namespacesequant-1aa7e570662fbfdcf72718e105b481a7f0"><span class="std std-ref">Function sequant::parse_result_expr</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a3781e8bc98d5621a2282e94bc73ca7c4.html#exhale-function-namespacesequant-1a3781e8bc98d5621a2282e94bc73ca7c4"><span class="std std-ref">Function sequant::particle_symmetry</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1ae55da56ce85f7d3d869769dd4f1cbf5e.html#exhale-function-namespacesequant-1ae55da56ce85f7d3d869769dd4f1cbf5e"><span class="std std-ref">Function sequant::peak_cache</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a1c398f8029c6b86a5c11caa6a8147dd1.html#exhale-function-namespacesequant-1a1c398f8029c6b86a5c11caa6a8147dd1"><span class="std std-ref">Template Function sequant::permutation_parity</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a0f8671512889ee9cdc8389dc34b1fd5c.html#exhale-function-namespacesequant-1a0f8671512889ee9cdc8389dc34b1fd5c"><span class="std std-ref">Function sequant::permutational_overlap_matrix</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a32bbaadc34f90c3ee7ec513f338898c8.html#exhale-function-namespacesequant-1a32bbaadc34f90c3ee7ec513f338898c8"><span class="std std-ref">Template Function sequant::permute</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1ab04f68adc8aa8c9f112d1d2374e89da6.html#exhale-function-namespacesequant-1ab04f68adc8aa8c9f112d1d2374e89da6"><span class="std std-ref">Function sequant::permute_bra</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a33c186bbe7ae778912a6e2c63d594e39.html#exhale-function-namespacesequant-1a33c186bbe7ae778912a6e2c63d594e39"><span class="std std-ref">Function sequant::permute_braket</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1aab892d69e2d5b2e6cc044b0ca83a04fc.html#exhale-function-namespacesequant-1aab892d69e2d5b2e6cc044b0ca83a04fc"><span class="std std-ref">Function sequant::permute_ket</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a41a87bca7db2b0db779bc9cd64417451.html#exhale-function-namespacesequant-1a41a87bca7db2b0db779bc9cd64417451"><span class="std std-ref">Function sequant::pop_tensor</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a4575e3b14bbd6a2c855b7ffc610159fb.html#exhale-function-namespacesequant-1a4575e3b14bbd6a2c855b7ffc610159fb"><span class="std std-ref">Function sequant::pow2</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a3ceecd19f5ca5e670006026f89ce9998.html#exhale-function-namespacesequant-1a3ceecd19f5ca5e670006026f89ce9998"><span class="std std-ref">Template Function sequant::qpannihilator_space</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a430db67ed1c8a90a49fe20a4b06fe78d.html#exhale-function-namespacesequant-1a430db67ed1c8a90a49fe20a4b06fe78d"><span class="std std-ref">Template Function sequant::qpcreator_space</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a9ddafc35cab6fe9407bc39c5781d8444.html#exhale-function-namespacesequant-1a9ddafc35cab6fe9407bc39c5781d8444"><span class="std std-ref">Function sequant::rank_transformation_perms</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a237e4a9cf9e2d2e676a4f61487b859e9.html#exhale-function-namespacesequant-1a237e4a9cf9e2d2e676a4f61487b859e9"><span class="std std-ref">Function sequant::rapid_simplify</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a13cdc83f724cad0904471255851dc3a8.html#exhale-function-namespacesequant-1a13cdc83f724cad0904471255851dc3a8"><span class="std std-ref">Function sequant::remove_spin</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a88685d8d7e0729724cdd52c262435058.html#exhale-function-namespacesequant-1a88685d8d7e0729724cdd52c262435058"><span class="std std-ref">Function sequant::remove_tensor(const ExprPtr&amp;, std::wstring)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1aa3d2074a72e3f4cc66b88284848af148.html#exhale-function-namespacesequant-1aa3d2074a72e3f4cc66b88284848af148"><span class="std std-ref">Function sequant::remove_tensor(const Product&amp;, std::wstring)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1accd1b214bed10b62fa989e2d9dbc86f4.html#exhale-function-namespacesequant-1accd1b214bed10b62fa989e2d9dbc86f4"><span class="std std-ref">Function sequant::reset_default_context</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a12360c91d5adef4acd2e0cfed34ea1f3.html#exhale-function-namespacesequant-1a12360c91d5adef4acd2e0cfed34ea1f3"><span class="std std-ref">Function sequant::reset_tags</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a6a0cc04d98310f257e9db9f9e7f20ba0.html#exhale-function-namespacesequant-1a6a0cc04d98310f257e9db9f9e7f20ba0"><span class="std std-ref">Template Function sequant::reset_ts_swap_counter</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1abe8aa76a4f12ba369f98bf47e8e0b84b.html#exhale-function-namespacesequant-1abe8aa76a4f12ba369f98bf47e8e0b84b"><span class="std std-ref">Template Function sequant::retrieve</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a8f92a2038b53d6392ce4623b1bfe4c66.html#exhale-function-namespacesequant-1a8f92a2038b53d6392ce4623b1bfe4c66"><span class="std std-ref">Function sequant::revision</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a8fc26c92cb4ad8d84bb0c8b2924ab6e7.html#exhale-function-namespacesequant-1a8fc26c92cb4ad8d84bb0c8b2924ab6e7"><span class="std std-ref">Function sequant::S_maps</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a31ac2ecc371f5ca999f89f7c6247ed36.html#exhale-function-namespacesequant-1a31ac2ecc371f5ca999f89f7c6247ed36"><span class="std std-ref">Function sequant::S_replacement_maps</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1aad97d04e6f34c635c31b95e4ee8a4307.html#exhale-function-namespacesequant-1aad97d04e6f34c635c31b95e4ee8a4307"><span class="std std-ref">Function sequant::same_spin_tensor</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a94543a94e43cc428c19ff5a306484603.html#exhale-function-namespacesequant-1a94543a94e43cc428c19ff5a306484603"><span class="std std-ref">Function sequant::set_default_context()</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a5ec094513b9382a51134ee3f2361c840.html#exhale-function-namespacesequant-1a5ec094513b9382a51134ee3f2361c840"><span class="std std-ref">Function sequant::set_default_context()</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a1c3b16132e9f4974f74aa360c0559731.html#exhale-function-namespacesequant-1a1c3b16132e9f4974f74aa360c0559731"><span class="std std-ref">Function sequant::set_locale</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1aaaa96bdc64b8c7aff12cbc11a94777f3.html#exhale-function-namespacesequant-1aaaa96bdc64b8c7aff12cbc11a94777f3"><span class="std std-ref">Function sequant::set_num_threads</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a0ed27261fd24d3392c9b4aae23145700.html#exhale-function-namespacesequant-1a0ed27261fd24d3392c9b4aae23145700"><span class="std std-ref">Function sequant::set_scoped_default_context()</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1ae73c3f8b4c2d29262d54fefbf55ad619.html#exhale-function-namespacesequant-1ae73c3f8b4c2d29262d54fefbf55ad619"><span class="std std-ref">Function sequant::set_scoped_default_context()</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a363e51549d45e91f8949123e1192e747.html#exhale-function-namespacesequant-1a363e51549d45e91f8949123e1192e747"><span class="std std-ref">Function sequant::set_scoped_default_context()</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a707cedc0447e7cd5f40efcec00feb5a4.html#exhale-function-namespacesequant-1a707cedc0447e7cd5f40efcec00feb5a4"><span class="std std-ref">Function sequant::simplify(ExprPtr&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a2b8ed8d6d3723466e0b176d456113d00.html#exhale-function-namespacesequant-1a2b8ed8d6d3723466e0b176d456113d00"><span class="std std-ref">Function sequant::simplify(ExprPtr&amp;&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1af0948cfc462ccc7967a31e2cf87318f6.html#exhale-function-namespacesequant-1af0948cfc462ccc7967a31e2cf87318f6"><span class="std std-ref">Function sequant::size(const Expr&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a437ad10a56bd65379c519b985070f255.html#exhale-function-namespacesequant-1a437ad10a56bd65379c519b985070f255"><span class="std std-ref">Function sequant::size(const ExprPtr&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1ac004b31c28fbc4422d90883daebf9b50.html#exhale-function-namespacesequant-1ac004b31c28fbc4422d90883daebf9b50"><span class="std std-ref">Function sequant::sort_pairings</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1aee1e670b4a826f0140edc20b9c0420cd.html#exhale-function-namespacesequant-1aee1e670b4a826f0140edc20b9c0420cd"><span class="std std-ref">Template Function sequant::sort_then_replace_by_ordinals</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1abaaa7964a1f3aec5ae4e48a9eab323f0.html#exhale-function-namespacesequant-1abaaa7964a1f3aec5ae4e48a9eab323f0"><span class="std std-ref">Template Function sequant::sort_via_ordinals</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a2a66be5fad043d767d1e00f01f21ecd3.html#exhale-function-namespacesequant-1a2a66be5fad043d767d1e00f01f21ecd3"><span class="std std-ref">Function sequant::spin_symm_tensor</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a791f02c49f55e08a2343df1e214c5f4c.html#exhale-function-namespacesequant-1a791f02c49f55e08a2343df1e214c5f4c"><span class="std std-ref">Function sequant::spintrace(const ResultExpr&amp;, bool)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a4d0f966fb7b53b3e179387bca67ad7cf.html#exhale-function-namespacesequant-1a4d0f966fb7b53b3e179387bca67ad7cf"><span class="std std-ref">Function sequant::spintrace(const ExprPtr&amp;, const container::svector&lt;container::svector&lt;Index&gt;&gt;&amp;, bool)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a9fb532127bfd2f2fa6242f3a82772b42.html#exhale-function-namespacesequant-1a9fb532127bfd2f2fa6242f3a82772b42"><span class="std std-ref">Template Function sequant::subsequence</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a84696f859cef24bf983198320314ef82.html#exhale-function-namespacesequant-1a84696f859cef24bf983198320314ef82"><span class="std std-ref">Function sequant::subset_indices</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1ac7deeccd0c79f0bee84caad38cd8cb8b.html#exhale-function-namespacesequant-1ac7deeccd0c79f0bee84caad38cd8cb8b"><span class="std std-ref">Template Function sequant::swap(SwapCountable&lt;T&gt;&amp;, SwapCountable&lt;T&gt;&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a63c3e6ca6ca5a90217cf4543c5b69ea0.html#exhale-function-namespacesequant-1a63c3e6ca6ca5a90217cf4543c5b69ea0"><span class="std std-ref">Template Function sequant::swap(const SwapCountableRef&lt;T&gt;&amp;, const SwapCountableRef&lt;T&gt;&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1acdf8e98e4be7b8dee41e14ea9fc67bb4.html#exhale-function-namespacesequant-1acdf8e98e4be7b8dee41e14ea9fc67bb4"><span class="std std-ref">Function sequant::swap(Index&amp;, Index&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a695d0c4e30f385152f83fa93a668e62f.html#exhale-function-namespacesequant-1a695d0c4e30f385152f83fa93a668e62f"><span class="std std-ref">Function sequant::swap_bra_ket</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a7fe703f56d6a4ba6b8ddcc707ae42c7f.html#exhale-function-namespacesequant-1a7fe703f56d6a4ba6b8ddcc707ae42c7f"><span class="std std-ref">Function sequant::swap_spin(const ExprPtr&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a2aa324a94b1ab75d6ad40a9bafd50158.html#exhale-function-namespacesequant-1a2aa324a94b1ab75d6ad40a9bafd50158"><span class="std std-ref">Function sequant::swap_spin(const Tensor&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a8b58d6ccd8000e3f45d99c871b45844a.html#exhale-function-namespacesequant-1a8b58d6ccd8000e3f45d99c871b45844a"><span class="std std-ref">Function sequant::symmetrize_expr(const Product&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a05a60d7f5af9f324247f9d517d5a9ac0.html#exhale-function-namespacesequant-1a05a60d7f5af9f324247f9d517d5a9ac0"><span class="std std-ref">Function sequant::symmetrize_expr(const ExprPtr&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a64dd0476465ed036b6a82616625d5480.html#exhale-function-namespacesequant-1a64dd0476465ed036b6a82616625d5480"><span class="std std-ref">Function sequant::symmetry</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a6bb935d923271663e3370c65a5d5fa39.html#exhale-function-namespacesequant-1a6bb935d923271663e3370c65a5d5fa39"><span class="std std-ref">Function sequant::tensors_commute</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1aa8679c674fe3f00f592cce04f34dd980.html#exhale-function-namespacesequant-1aa8679c674fe3f00f592cce04f34dd980"><span class="std std-ref">Template Function sequant::to_basic_string_view</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a1daf02d6665d0f1fc878004a3bdb2869.html#exhale-function-namespacesequant-1a1daf02d6665d0f1fc878004a3bdb2869"><span class="std std-ref">Function sequant::to_default_symms</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a113162cb7fd937a9cfbfdf1bb47a4a01.html#exhale-function-namespacesequant-1a113162cb7fd937a9cfbfdf1bb47a4a01"><span class="std std-ref">Function sequant::to_expr</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1abb3d9949ce96af6f109745451f0d3c36.html#exhale-function-namespacesequant-1abb3d9949ce96af6f109745451f0d3c36"><span class="std std-ref">Function sequant::to_itf(const itf::CodeBlock&amp;, const itf::Context&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1ae3321e838a92388d11bfe253b519db36.html#exhale-function-namespacesequant-1ae3321e838a92388d11bfe253b519db36"><span class="std std-ref">Template Function sequant::to_itf(Container&amp;&amp;, const itf::Context&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a77bacfa9b834eb5b0bbb7c44d52b25c1.html#exhale-function-namespacesequant-1a77bacfa9b834eb5b0bbb7c44d52b25c1"><span class="std std-ref">Function sequant::to_label_annotation</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a80f616e9c6d19edacfcd8bed4a5fc2c1.html#exhale-function-namespacesequant-1a80f616e9c6d19edacfcd8bed4a5fc2c1"><span class="std std-ref">Template Function sequant::to_latex(const mbpt::Operator&lt;mbpt::qns_t, S&gt;&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a6b026a49ebe957077486f0b2dab5c84c.html#exhale-function-namespacesequant-1a6b026a49ebe957077486f0b2dab5c84c"><span class="std std-ref">Template Function sequant::to_latex(const NormalOperator&lt;S&gt;&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1ada0afc8704878dfdf9b02303185e3f19.html#exhale-function-namespacesequant-1ada0afc8704878dfdf9b02303185e3f19"><span class="std std-ref">Template Function sequant::to_latex(const NormalOperatorSequence&lt;S&gt;&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a1de63e089c98cd5769ae3386851d632e.html#exhale-function-namespacesequant-1a1de63e089c98cd5769ae3386851d632e"><span class="std std-ref">Template Function sequant::to_latex(const boost::multiprecision::number&lt;Backend&gt;&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a676e65f12c192d787cf0399f7b33692c.html#exhale-function-namespacesequant-1a676e65f12c192d787cf0399f7b33692c"><span class="std std-ref">Function sequant::to_latex(const rational&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1adcc6b2bdbc08b4b884a9c7c8971b642b.html#exhale-function-namespacesequant-1adcc6b2bdbc08b4b884a9c7c8971b642b"><span class="std std-ref">Function sequant::to_latex(const ExprPtr&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a69c0f990e32a12156dc64e519f1dd7d0.html#exhale-function-namespacesequant-1a69c0f990e32a12156dc64e519f1dd7d0"><span class="std std-ref">Template Function sequant::to_latex(T&amp;&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1ad96d44bec339597aa73d0f9e56b8115b.html#exhale-function-namespacesequant-1ad96d44bec339597aa73d0f9e56b8115b"><span class="std std-ref">Template Function sequant::to_latex(T&amp;&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a7c470b6be97eed78f20e5eef7b196180.html#exhale-function-namespacesequant-1a7c470b6be97eed78f20e5eef7b196180"><span class="std std-ref">Template Function sequant::to_latex(T&amp;&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a22459d1973ac873218da6272239d3cfe.html#exhale-function-namespacesequant-1a22459d1973ac873218da6272239d3cfe"><span class="std std-ref">Template Function sequant::to_latex(const std::complex&lt;T&gt;&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a0218117138934de953b2eec98fa83b13.html#exhale-function-namespacesequant-1a0218117138934de953b2eec98fa83b13"><span class="std std-ref">Function sequant::to_latex()</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a44ef79b45db7e9e1fee13b372e2c0869.html#exhale-function-namespacesequant-1a44ef79b45db7e9e1fee13b372e2c0869"><span class="std std-ref">Function sequant::to_latex_align</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a44882d5a84df8dbb2967363c96420faf.html#exhale-function-namespacesequant-1a44882d5a84df8dbb2967363c96420faf"><span class="std std-ref">Function sequant::to_latex_tensor</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a77b3e24a128d11cf0b016193dd9e68b7.html#exhale-function-namespacesequant-1a77b3e24a128d11cf0b016193dd9e68b7"><span class="std std-ref">Template Function sequant::to_ratio</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1ab6e3d096b7f17459531d00a378dc5e80.html#exhale-function-namespacesequant-1ab6e3d096b7f17459531d00a378dc5e80"><span class="std std-ref">Template Function sequant::to_rational(T, T, std::size_t)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a14ccb9838626818330084a10cdc496b8.html#exhale-function-namespacesequant-1a14ccb9838626818330084a10cdc496b8"><span class="std std-ref">Template Function sequant::to_rational(T)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a64ebcba54776ad99873ad9adeee78d1f.html#exhale-function-namespacesequant-1a64ebcba54776ad99873ad9adeee78d1f"><span class="std std-ref">Template Function sequant::to_string(S&amp;&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a8b3f62b488e9eb5152db5b5f77f182e7.html#exhale-function-namespacesequant-1a8b3f62b488e9eb5152db5b5f77f182e7"><span class="std std-ref">Function sequant::to_string(std::string&amp;&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a7ee778d62320741894ca0634ac8112d6.html#exhale-function-namespacesequant-1a7ee778d62320741894ca0634ac8112d6"><span class="std std-ref">Function sequant::to_string(const rational&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1ac810dbe124845f316ba0ba1a81cf976c.html#exhale-function-namespacesequant-1ac810dbe124845f316ba0ba1a81cf976c"><span class="std std-ref">Template Function sequant::to_string(const boost::multiprecision::number&lt;Backend&gt;&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1ac1df0a9407cf940f3b17af0a176e478a.html#exhale-function-namespacesequant-1ac1df0a9407cf940f3b17af0a176e478a"><span class="std std-ref">Template Function sequant::to_string(const Complex&lt;T&gt;&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a107d9204a84750f799d7d7adb900ef6a.html#exhale-function-namespacesequant-1a107d9204a84750f799d7d7adb900ef6a"><span class="std std-ref">Function sequant::to_string(Vacuum)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a92314549fe0e76646271eb4e077ed789.html#exhale-function-namespacesequant-1a92314549fe0e76646271eb4e077ed789"><span class="std std-ref">Template Function sequant::to_wolfram(T&amp;&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1ab87e06863676948c09289911cd355c5b.html#exhale-function-namespacesequant-1ab87e06863676948c09289911cd355c5b"><span class="std std-ref">Template Function sequant::to_wolfram(T&amp;&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a8c09257461a7b2160aa97c6819fd9251.html#exhale-function-namespacesequant-1a8c09257461a7b2160aa97c6819fd9251"><span class="std std-ref">Template Function sequant::to_wolfram(const std::complex&lt;T&gt;&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1aab88def0a915125f5ac45d92ad8ef433.html#exhale-function-namespacesequant-1aab88def0a915125f5ac45d92ad8ef433"><span class="std std-ref">Template Function sequant::to_wolfram(const boost::multiprecision::number&lt;Backend&gt;&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1ace7f85eac4293628385605ec35c72106.html#exhale-function-namespacesequant-1ace7f85eac4293628385605ec35c72106"><span class="std std-ref">Function sequant::to_wolfram(const rational&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a9a6f752b0f9a37e87910693349e8e745.html#exhale-function-namespacesequant-1a9a6f752b0f9a37e87910693349e8e745"><span class="std std-ref">Function sequant::to_wolfram(const ExprPtr&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a29889a5868cb88bf1a70a6495cbdbc6d.html#exhale-function-namespacesequant-1a29889a5868cb88bf1a70a6495cbdbc6d"><span class="std std-ref">Function sequant::to_wolfram(const Symmetry&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1ac5ad51312512824e669c34030e451610.html#exhale-function-namespacesequant-1ac5ad51312512824e669c34030e451610"><span class="std std-ref">Function sequant::to_wolfram(BraKetPos)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1aebe8ff98f384c09bc14730a15d3858f2.html#exhale-function-namespacesequant-1aebe8ff98f384c09bc14730a15d3858f2"><span class="std std-ref">Function sequant::to_wolfram(Action)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1aaf54287d033a279369da95bf4509207d.html#exhale-function-namespacesequant-1aaf54287d033a279369da95bf4509207d"><span class="std std-ref">Function sequant::to_wstring(std::floating_point auto)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a001984d7c3a0dc473be644d4c2a95c68.html#exhale-function-namespacesequant-1a001984d7c3a0dc473be644d4c2a95c68"><span class="std std-ref">Function sequant::to_wstring(meta::integral auto)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a9a4394ec8a60af48bfe4f5fa5269f98e.html#exhale-function-namespacesequant-1a9a4394ec8a60af48bfe4f5fa5269f98e"><span class="std std-ref">Template Function sequant::to_wstring(S&amp;&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1af6495449b17b85bec48b4e1a89f7570f.html#exhale-function-namespacesequant-1af6495449b17b85bec48b4e1a89f7570f"><span class="std std-ref">Function sequant::to_wstring(std::wstring&amp;&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a89c1a5a9ae96434a872d2211898ecaad.html#exhale-function-namespacesequant-1a89c1a5a9ae96434a872d2211898ecaad"><span class="std std-ref">Function sequant::to_wstring(const rational&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a871fc070f6d873bd78e2e202a616afea.html#exhale-function-namespacesequant-1a871fc070f6d873bd78e2e202a616afea"><span class="std std-ref">Template Function sequant::to_wstring(const boost::multiprecision::number&lt;Backend&gt;&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a39d724ab06625de380dda6122aba80c0.html#exhale-function-namespacesequant-1a39d724ab06625de380dda6122aba80c0"><span class="std std-ref">Function sequant::to_wstring(Symmetry)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a8510feba16321a56d52a0e3adb072dc0.html#exhale-function-namespacesequant-1a8510feba16321a56d52a0e3adb072dc0"><span class="std std-ref">Function sequant::toplevel_diff(const Constant&amp;, const Constant&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1ac7231d7d8f6cf5d867197772c613d22f.html#exhale-function-namespacesequant-1ac7231d7d8f6cf5d867197772c613d22f"><span class="std std-ref">Function sequant::toplevel_diff(const Variable&amp;, const Variable&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1aef40fb885cd272e3785dd6b51651e931.html#exhale-function-namespacesequant-1aef40fb885cd272e3785dd6b51651e931"><span class="std std-ref">Function sequant::toplevel_diff(const Index&amp;, const Index&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a503cf8d3ae170139a42cd48b825f71b6.html#exhale-function-namespacesequant-1a503cf8d3ae170139a42cd48b825f71b6"><span class="std std-ref">Function sequant::toplevel_diff(const Tensor&amp;, const Tensor&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1abc926a389b0e598b9dc7a5080a312cc9.html#exhale-function-namespacesequant-1abc926a389b0e598b9dc7a5080a312cc9"><span class="std std-ref">Function sequant::toplevel_diff(const Sum&amp;, const Sum&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a15fb23d91f85feaef1a30a5cb4532234.html#exhale-function-namespacesequant-1a15fb23d91f85feaef1a30a5cb4532234"><span class="std std-ref">Function sequant::toplevel_diff(const Product&amp;, const Product&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a9face8761a450f6688be610b6345af31.html#exhale-function-namespacesequant-1a9face8761a450f6688be610b6345af31"><span class="std std-ref">Template Function sequant::tot_indices</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1af89d64f68d1b5586ce2196b6bf598b25.html#exhale-function-namespacesequant-1af89d64f68d1b5586ce2196b6bf598b25"><span class="std std-ref">Function sequant::toUtf16</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a60c41e509b991c3b4d423d32d41858a4.html#exhale-function-namespacesequant-1a60c41e509b991c3b4d423d32d41858a4"><span class="std std-ref">Function sequant::toUtf8</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1aa70655df42f82e55ef4603052208611e.html#exhale-function-namespacesequant-1aa70655df42f82e55ef4603052208611e"><span class="std std-ref">Function sequant::transform_expr</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1ad7716b333a12b80db3e33067288ded90.html#exhale-function-namespacesequant-1ad7716b333a12b80db3e33067288ded90"><span class="std std-ref">Function sequant::transform_indices</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1aabc4cc114ede1b83a47a983782742153.html#exhale-function-namespacesequant-1aabc4cc114ede1b83a47a983782742153"><span class="std std-ref">Template Function sequant::transform_node</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a9879b1ce109a79d237c82a792fd91678.html#exhale-function-namespacesequant-1a9879b1ce109a79d237c82a792fd91678"><span class="std std-ref">Template Function sequant::transform_reduce</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1ad05cdbcfe9f11d10525a67cdaa9abbfc.html#exhale-function-namespacesequant-1ad05cdbcfe9f11d10525a67cdaa9abbfc"><span class="std std-ref">Template Function sequant::ts_swap_counter_is_even</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a86b61721e1dd2ea4d2dbf22a14e14be5.html#exhale-function-namespacesequant-1a86b61721e1dd2ea4d2dbf22a14e14be5"><span class="std std-ref">Template Function sequant::utf_to_latex(const std::basic_string_view&lt;Char, Traits&gt;&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a27d85d524fa3339535a7e4ec65249fb3.html#exhale-function-namespacesequant-1a27d85d524fa3339535a7e4ec65249fb3"><span class="std std-ref">Template Function sequant::utf_to_latex(const std::basic_string&lt;Char, Traits, Alloc&gt;&amp;)</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1a030dfa9e817584f051fd409f38a9eb83.html#exhale-function-namespacesequant-1a030dfa9e817584f051fd409f38a9eb83"><span class="std std-ref">Template Function sequant::wprintf</span></a></p></li>
+<li><p><a class="reference internal" href="function_namespacesequant_1aa839e62b14e81c3a5923af1600737da0.html#exhale-function-namespacesequant-1aa839e62b14e81c3a5923af1600737da0"><span class="std std-ref">Template Function sequant::write_log</span></a></p></li>
+</ul>
+</section>
+<section id="typedefs">
+<h2>Typedefs<a class="headerlink" href="#typedefs" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p><a class="reference internal" href="typedef_namespacesequant_1ace7a501f5466fb9a216eb835e68d354e.html#exhale-typedef-namespacesequant-1ace7a501f5466fb9a216eb835e68d354e"><span class="std std-ref">Typedef sequant::AbstractTensorPtr</span></a></p></li>
+<li><p><a class="reference internal" href="typedef_namespacesequant_1a2201b50706fed2b2e8ab9813740d6725.html#exhale-typedef-namespacesequant-1a2201b50706fed2b2e8ab9813740d6725"><span class="std std-ref">Typedef sequant::bitset_t</span></a></p></li>
+<li><p><a class="reference internal" href="typedef_namespacesequant_1ae068630254e047ad18d69a607a9c7489.html#exhale-typedef-namespacesequant-1ae068630254e047ad18d69a607a9c7489"><span class="std std-ref">Typedef sequant::BNOperator</span></a></p></li>
+<li><p><a class="reference internal" href="typedef_namespacesequant_1a0692a62a6e7dbed8a05f95db0f245dde.html#exhale-typedef-namespacesequant-1a0692a62a6e7dbed8a05f95db0f245dde"><span class="std std-ref">Typedef sequant::BNOperatorSeq</span></a></p></li>
+<li><p><a class="reference internal" href="typedef_namespacesequant_1afd21c16c0e05c5a81f0c518e4c28e9a2.html#exhale-typedef-namespacesequant-1afd21c16c0e05c5a81f0c518e4c28e9a2"><span class="std std-ref">Typedef sequant::BOp</span></a></p></li>
+<li><p><a class="reference internal" href="typedef_namespacesequant_1aea380cdaef751d8a0d12438b3fb62510.html#exhale-typedef-namespacesequant-1aea380cdaef751d8a0d12438b3fb62510"><span class="std std-ref">Typedef sequant::BOperator</span></a></p></li>
+<li><p><a class="reference internal" href="typedef_namespacesequant_1a8853c32b310892f0fa900466d95e3798.html#exhale-typedef-namespacesequant-1a8853c32b310892f0fa900466d95e3798"><span class="std std-ref">Typedef sequant::BWickTheorem</span></a></p></li>
+<li><p><a class="reference internal" href="typedef_namespacesequant_1a2d4193b3b962fddd47cd8a09ddeeb8e2.html#exhale-typedef-namespacesequant-1a2d4193b3b962fddd47cd8a09ddeeb8e2"><span class="std std-ref">Typedef sequant::ConstantPtr</span></a></p></li>
+<li><p><a class="reference internal" href="typedef_namespacesequant_1aef605085133dd4427c0007b88d918fc1.html#exhale-typedef-namespacesequant-1aef605085133dd4427c0007b88d918fc1"><span class="std std-ref">Typedef sequant::CProductPtr</span></a></p></li>
+<li><p><a class="reference internal" href="typedef_namespacesequant_1a74afa3535eaf938f0871577ba1b7704f.html#exhale-typedef-namespacesequant-1a74afa3535eaf938f0871577ba1b7704f"><span class="std std-ref">Typedef sequant::EvalExprNode</span></a></p></li>
+<li><p><a class="reference internal" href="typedef_namespacesequant_1a1a5f729f49e32e272bc8feaed6efb15b.html#exhale-typedef-namespacesequant-1a1a5f729f49e32e272bc8feaed6efb15b"><span class="std std-ref">Typedef sequant::EvalNode</span></a></p></li>
+<li><p><a class="reference internal" href="typedef_namespacesequant_1a1635f01fc0a05c311a8ffdd1d4f79126.html#exhale-typedef-namespacesequant-1a1635f01fc0a05c311a8ffdd1d4f79126"><span class="std std-ref">Typedef sequant::EvalSequence</span></a></p></li>
+<li><p><a class="reference internal" href="typedef_namespacesequant_1ac7e383437dab811d4219dd728be59a70.html#exhale-typedef-namespacesequant-1ac7e383437dab811d4219dd728be59a70"><span class="std std-ref">Typedef sequant::ExprPtrList</span></a></p></li>
+<li><p><a class="reference internal" href="typedef_namespacesequant_1a388e4a59478e5e1ead910ed0f0edcf5b.html#exhale-typedef-namespacesequant-1a388e4a59478e5e1ead910ed0f0edcf5b"><span class="std std-ref">Typedef sequant::ExprPtrVector</span></a></p></li>
+<li><p><a class="reference internal" href="typedef_namespacesequant_1a62d05af8788c34b87a8ddf5b042dbc88.html#exhale-typedef-namespacesequant-1a62d05af8788c34b87a8ddf5b042dbc88"><span class="std std-ref">Typedef sequant::FNOperator</span></a></p></li>
+<li><p><a class="reference internal" href="typedef_namespacesequant_1ae51e03af4f757db1a87d91a3d34b98ce.html#exhale-typedef-namespacesequant-1ae51e03af4f757db1a87d91a3d34b98ce"><span class="std std-ref">Typedef sequant::FNOperatorSeq</span></a></p></li>
+<li><p><a class="reference internal" href="typedef_namespacesequant_1a99cedd041fd32e4b2ee233a2245bef2f.html#exhale-typedef-namespacesequant-1a99cedd041fd32e4b2ee233a2245bef2f"><span class="std std-ref">Typedef sequant::FOp</span></a></p></li>
+<li><p><a class="reference internal" href="typedef_namespacesequant_1aba2f65a5fec0171aac73b513eac05fbb.html#exhale-typedef-namespacesequant-1aba2f65a5fec0171aac73b513eac05fbb"><span class="std std-ref">Typedef sequant::FOperator</span></a></p></li>
+<li><p><a class="reference internal" href="typedef_namespacesequant_1ab78692b9307cc06a9ab029b7b63d9c1e.html#exhale-typedef-namespacesequant-1ab78692b9307cc06a9ab029b7b63d9c1e"><span class="std std-ref">Typedef sequant::FWickTheorem</span></a></p></li>
+<li><p><a class="reference internal" href="typedef_namespacesequant_1ad719f07f2f20046b873453e67228bdc1.html#exhale-typedef-namespacesequant-1ad719f07f2f20046b873453e67228bdc1"><span class="std std-ref">Typedef sequant::get_support</span></a></p></li>
+<li><p><a class="reference internal" href="typedef_namespacesequant_1a96b7a6cc53c4719e06b9a12ec872472e.html#exhale-typedef-namespacesequant-1a96b7a6cc53c4719e06b9a12ec872472e"><span class="std std-ref">Typedef sequant::IndexList</span></a></p></li>
+<li><p><a class="reference internal" href="typedef_namespacesequant_1aca802264508af9fcdf0ba274315bdd4f.html#exhale-typedef-namespacesequant-1aca802264508af9fcdf0ba274315bdd4f"><span class="std std-ref">Typedef sequant::IndexPair</span></a></p></li>
+<li><p><a class="reference internal" href="typedef_namespacesequant_1a817e0c1244b279fe920e3368db52d311.html#exhale-typedef-namespacesequant-1a817e0c1244b279fe920e3368db52d311"><span class="std std-ref">Typedef sequant::intmax_t</span></a></p></li>
+<li><p><a class="reference internal" href="typedef_namespacesequant_1a65106409bb17023bf401805be621525e.html#exhale-typedef-namespacesequant-1a65106409bb17023bf401805be621525e"><span class="std std-ref">Typedef sequant::NCProductPtr</span></a></p></li>
+<li><p><a class="reference internal" href="typedef_namespacesequant_1a1fdcf540761e6cd241eb758074b1048a.html#exhale-typedef-namespacesequant-1a1fdcf540761e6cd241eb758074b1048a"><span class="std std-ref">Typedef sequant::ParticlePairings</span></a></p></li>
+<li><p><a class="reference internal" href="typedef_namespacesequant_1affaf52dbe035a2da16ffe15803b8dfbf.html#exhale-typedef-namespacesequant-1affaf52dbe035a2da16ffe15803b8dfbf"><span class="std std-ref">Typedef sequant::ProductPtr</span></a></p></li>
+<li><p><a class="reference internal" href="typedef_namespacesequant_1ad2d2da5a1bb36d20c45a2658130dc12c.html#exhale-typedef-namespacesequant-1ad2d2da5a1bb36d20c45a2658130dc12c"><span class="std std-ref">Typedef sequant::ProtoBundle</span></a></p></li>
+<li><p><a class="reference internal" href="typedef_namespacesequant_1a53573d914a7d5e14b2ab04622b02fd6d.html#exhale-typedef-namespacesequant-1a53573d914a7d5e14b2ab04622b02fd6d"><span class="std std-ref">Typedef sequant::ratio</span></a></p></li>
+<li><p><a class="reference internal" href="typedef_namespacesequant_1a324a4bdc4d7d8c50e962ef65395851a3.html#exhale-typedef-namespacesequant-1a324a4bdc4d7d8c50e962ef65395851a3"><span class="std std-ref">Typedef sequant::rational</span></a></p></li>
+<li><p><a class="reference internal" href="typedef_namespacesequant_1a29942dea09dd6e9780b9507ad0feaf86.html#exhale-typedef-namespacesequant-1a29942dea09dd6e9780b9507ad0feaf86"><span class="std std-ref">Typedef sequant::suitable_call_operator</span></a></p></li>
+<li><p><a class="reference internal" href="typedef_namespacesequant_1a65efd2744749bf1696c8e7c25348e3c4.html#exhale-typedef-namespacesequant-1a65efd2744749bf1696c8e7c25348e3c4"><span class="std std-ref">Typedef sequant::SumPtr</span></a></p></li>
+<li><p><a class="reference internal" href="typedef_namespacesequant_1ae5f5feb8b963d1149e594ed91935e9d2.html#exhale-typedef-namespacesequant-1ae5f5feb8b963d1149e594ed91935e9d2"><span class="std std-ref">Typedef sequant::TensorPtr</span></a></p></li>
+<li><p><a class="reference internal" href="typedef_namespacesequant_1a1608061d8c20932c4c66213d3484e2fb.html#exhale-typedef-namespacesequant-1a1608061d8c20932c4c66213d3484e2fb"><span class="std std-ref">Typedef sequant::VariablePtr</span></a></p></li>
+<li><p><a class="reference internal" href="typedef_namespacesequant_1a1b26ede0cd68099f86f81c9fe3d34bb1.html#exhale-typedef-namespacesequant-1a1b26ede0cd68099f86f81c9fe3d34bb1"><span class="std std-ref">Typedef sequant::WstrList</span></a></p></li>
+</ul>
+</section>
+<section id="variables">
+<h2>Variables<a class="headerlink" href="#variables" title="Link to this heading">¶</a></h2>
+<ul class="simple">
+<li><p><a class="reference internal" href="variable_namespacesequant_1a082cfbecb3fa099ac17e21d0714a815b.html#exhale-variable-namespacesequant-1a082cfbecb3fa099ac17e21d0714a815b"><span class="std std-ref">Variable sequant::adjoint_label</span></a></p></li>
+<li><p><a class="reference internal" href="variable_namespacesequant_1a6c89624f108880b0b5a6b0695eb01dcb.html#exhale-variable-namespacesequant-1a6c89624f108880b0b5a6b0695eb01dcb"><span class="std std-ref">Variable sequant::expr_ptr_comparer</span></a></p></li>
+<li><p><a class="reference internal" href="variable_namespacesequant_1a83244df45897e3f5c1c114fff2ced190.html#exhale-variable-namespacesequant-1a83244df45897e3f5c1c114fff2ced190"><span class="std std-ref">Variable sequant::has_boost_hash_value_v</span></a></p></li>
+<li><p><a class="reference internal" href="variable_namespacesequant_1a2c3de097d434fd00e5fcf08295dd075f.html#exhale-variable-namespacesequant-1a2c3de097d434fd00e5fcf08295dd075f"><span class="std std-ref">Variable sequant::has_hash_value_member_fn_v</span></a></p></li>
+<li><p><a class="reference internal" href="variable_namespacesequant_1a32a0afad0a2f8d1894e4dbd0564d4197.html#exhale-variable-namespacesequant-1a32a0afad0a2f8d1894e4dbd0564d4197"><span class="std std-ref">Variable sequant::has_hash_value_v</span></a></p></li>
+<li><p><a class="reference internal" href="variable_namespacesequant_1_1space__tags_1a3e213491a52064c5c3cf92dcda641fbd.html#exhale-variable-namespacesequant-1-1space-tags-1a3e213491a52064c5c3cf92dcda641fbd"><span class="std std-ref">Variable sequant::space_tags::is_complete</span></a></p></li>
+<li><p><a class="reference internal" href="variable_namespacesequant_1_1space__tags_1a6c11f0c43b0a1dfd809972c8013d04f3.html#exhale-variable-namespacesequant-1-1space-tags-1a6c11f0c43b0a1dfd809972c8013d04f3"><span class="std std-ref">Variable sequant::space_tags::is_hole</span></a></p></li>
+<li><p><a class="reference internal" href="variable_namespacesequant_1_1space__tags_1a453f6692f07fdb3fed4a51c75f555e3b.html#exhale-variable-namespacesequant-1-1space-tags-1a453f6692f07fdb3fed4a51c75f555e3b"><span class="std std-ref">Variable sequant::space_tags::is_particle</span></a></p></li>
+<li><p><a class="reference internal" href="variable_namespacesequant_1_1space__tags_1a1a4caee1489fee7fb8a0589fdc5714e5.html#exhale-variable-namespacesequant-1-1space-tags-1a1a4caee1489fee7fb8a0589fdc5714e5"><span class="std std-ref">Variable sequant::space_tags::is_reference_occupied</span></a></p></li>
+<li><p><a class="reference internal" href="variable_namespacesequant_1a28fdd47f23955ea2ad9956c2aa856ad3.html#exhale-variable-namespacesequant-1a28fdd47f23955ea2ad9956c2aa856ad3"><span class="std std-ref">Variable sequant::is_tensor_v</span></a></p></li>
+<li><p><a class="reference internal" href="variable_namespacesequant_1a87892389689af2c552e8af01fb0b911e.html#exhale-variable-namespacesequant-1a87892389689af2c552e8af01fb0b911e"><span class="std std-ref">Variable sequant::is_tuple_like_v</span></a></p></li>
+<li><p><a class="reference internal" href="variable_namespacesequant_1_1space__tags_1a7e1e282301f4660d5251905084be6f54.html#exhale-variable-namespacesequant-1-1space-tags-1a7e1e282301f4660d5251905084be6f54"><span class="std std-ref">Variable sequant::space_tags::is_vacuum_occupied</span></a></p></li>
+</ul>
+</section>
+</section>
+
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          
+          
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; 2025, SeQuant developers
+            </div>
+            Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
+            
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            <div class="last-updated">
+              Last updated on Aug 15, 2025 10:26:15 AM</div>
+          </div>
+          <div class="right-details">
+            <div class="icons">
+              <a class="muted-link fa-brands fa-solid fa-github fa-2x" href="https://github.com/ValeevGroup/SeQuant" aria-label="GitHub"></a>
+              
+            </div>
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer">
+      
+      
+      <div class="toc-sticky toc-scroll">
+        <div class="toc-title-container">
+          <span class="toc-title">
+            On this page
+          </span>
+        </div>
+        <div class="toc-tree-container">
+          <div class="toc-tree">
+            <ul>
+<li><a class="reference internal" href="#">Namespace sequant</a><ul>
+<li><a class="reference internal" href="#detailed-description">Detailed Description</a></li>
+<li><a class="reference internal" href="#namespaces">Namespaces</a></li>
+<li><a class="reference internal" href="#classes">Classes</a></li>
+<li><a class="reference internal" href="#enums">Enums</a></li>
+<li><a class="reference internal" href="#functions">Functions</a></li>
+<li><a class="reference internal" href="#typedefs">Typedefs</a></li>
+<li><a class="reference internal" href="#variables">Variables</a></li>
+</ul>
+</li>
+</ul>
+
+          </div>
+        </div>
+      </div>
+      
+      
+    </aside>
+  </div>
+</div><script src="../_static/documentation_options.js?v=5929fcd5"></script>
+    <script src="../_static/doctools.js?v=9a2dae69"></script>
+    <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/scripts/furo.js?v=46bd48cc"></script>
+    <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../_static/copybutton.js?v=f281be69"></script>
+    <script src="../_static/design-tabs.js?v=f930bc37"></script>
+    <script src="../_static/bootstrap-treeview/bootstrap-treeview.min.js?v=6a1e96b4"></script>
+    </body>
+</html>

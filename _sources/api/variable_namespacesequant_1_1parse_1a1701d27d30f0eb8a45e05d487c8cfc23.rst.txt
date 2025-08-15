@@ -1,0 +1,14 @@
+.. _exhale_variable_namespacesequant_1_1parse_1a1701d27d30f0eb8a45e05d487c8cfc23:
+
+Variable sequant::parse::index_groups
+=====================================
+
+- Defined in :ref:`file_SeQuant_core_parse_parse.cpp`
+
+
+Variable Documentation
+----------------------
+
+
+.. doxygenvariable:: sequant::parse::index_groups
+   :project: SeQuant

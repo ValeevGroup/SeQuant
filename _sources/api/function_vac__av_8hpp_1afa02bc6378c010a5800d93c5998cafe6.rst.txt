@@ -1,0 +1,14 @@
+.. _exhale_function_vac__av_8hpp_1afa02bc6378c010a5800d93c5998cafe6:
+
+Template Function concat
+========================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_vac_av.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: concat(const OpConnections<T>&, const OpConnections<T>&)
+   :project: SeQuant

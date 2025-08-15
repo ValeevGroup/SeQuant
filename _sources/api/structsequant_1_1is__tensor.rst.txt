@@ -1,0 +1,26 @@
+.. _exhale_struct_structsequant_1_1is__tensor:
+
+Template Struct is_tensor
+=========================
+
+- Defined in :ref:`file_SeQuant_core_abstract_tensor.hpp`
+
+
+Inheritance Relationships
+-------------------------
+
+Base Type
+*********
+
+- ``public std::bool_constant< std::is_invocable_v< decltype(braket), T > &&std::is_invocable_v< decltype(indices), T > &&std::is_invocable_v< decltype(bra_rank), T > &&std::is_invocable_v< decltype(ket_rank), T > &&std::is_invocable_v< decltype(aux_rank), T > &&std::is_invocable_v< decltype(symmetry), T > &&std::is_invocable_v< decltype(braket_symmetry), T > &&std::is_invocable_v< decltype(particle_symmetry), T > &&std::is_invocable_v< decltype(color), T > &&std::is_invocable_v< decltype(is_cnumber), T > &&std::is_invocable_v< decltype(label), T > &&std::is_invocable_v< decltype(static_cast< std::wstring(*)(const T &)>(to_latex)), T > >``
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::is_tensor
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

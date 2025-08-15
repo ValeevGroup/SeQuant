@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a01c92fce4088699db7e799fb69a90ec8:
+
+Function sequant::make_spinfree
+===============================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_spin.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::make_spinfree(const Index&)
+   :project: SeQuant

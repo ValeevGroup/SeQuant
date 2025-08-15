@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1ae0f043d0386bc36d50f76e545f569b5b:
+
+Function sequant::merge_tensors
+===============================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_spin.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::merge_tensors(const Tensor&, const Tensor&)
+   :project: SeQuant

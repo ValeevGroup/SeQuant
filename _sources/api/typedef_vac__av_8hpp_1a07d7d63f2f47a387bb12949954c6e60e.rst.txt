@@ -1,0 +1,14 @@
+.. _exhale_typedef_vac__av_8hpp_1a07d7d63f2f47a387bb12949954c6e60e:
+
+Typedef OpConnections
+=====================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_vac_av.hpp`
+
+
+Typedef Documentation
+---------------------
+
+
+.. doxygentypedef:: OpConnections
+   :project: SeQuant

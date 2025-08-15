@@ -1,0 +1,228 @@
+
+.. _program_listing_file_SeQuant_core_eval_expr.hpp:
+
+Program Listing for File eval_expr.hpp
+======================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_core_eval_expr.hpp>` (``SeQuant/core/eval_expr.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   #ifndef SEQUANT_EVAL_EXPR_HPP
+   #define SEQUANT_EVAL_EXPR_HPP
+   
+   #include <SeQuant/core/binary_node.hpp>
+   #include <SeQuant/core/container.hpp>
+   #include <SeQuant/core/expr.hpp>
+   #include <SeQuant/core/index.hpp>
+   
+   #include <cstddef>
+   #include <string>
+   
+   namespace sequant {
+   
+   class Tensor;
+   
+   enum class EvalOp {
+   
+     Sum,
+   
+     Product
+   };
+   
+   enum class ResultType { Tensor, Scalar };
+   
+   class EvalExpr {
+    public:
+     using index_vector = Index::index_vector;
+   
+     explicit EvalExpr(Tensor const& tnsr);
+   
+     explicit EvalExpr(Constant const& c);
+   
+     explicit EvalExpr(Variable const& v);
+   
+     EvalExpr(EvalOp op, ResultType res, ExprPtr const& expr, index_vector ixs,
+              std::int8_t phase, size_t hash);
+   
+     [[nodiscard]] const std::optional<EvalOp>& op_type() const noexcept;
+   
+     [[nodiscard]] ResultType result_type() const noexcept;
+   
+     [[nodiscard]] size_t hash_value() const noexcept;
+   
+     [[nodiscard]] ExprPtr expr() const noexcept;
+   
+     [[nodiscard]] bool tot() const noexcept;
+   
+     [[nodiscard]] std::wstring to_latex() const noexcept;
+   
+     [[nodiscard]] bool is_tensor() const noexcept;
+   
+     [[nodiscard]] bool is_scalar() const noexcept;
+   
+     [[nodiscard]] bool is_constant() const noexcept;
+   
+     [[nodiscard]] bool is_variable() const noexcept;
+   
+     [[nodiscard]] bool is_primary() const noexcept;
+   
+     [[nodiscard]] bool is_product() const noexcept;
+   
+     [[nodiscard]] bool is_sum() const noexcept;
+   
+     [[nodiscard]] Tensor const& as_tensor() const;
+   
+     [[nodiscard]] Constant const& as_constant() const;
+   
+     [[nodiscard]] Variable const& as_variable() const;
+   
+     [[nodiscard]] std::string label() const noexcept;
+   
+     [[nodiscard]] std::string indices_annot() const noexcept;
+   
+     [[nodiscard]] index_vector const& canon_indices() const noexcept;
+   
+     [[nodiscard]] std::int8_t canon_phase() const noexcept;
+   
+    private:
+     std::optional<EvalOp> op_type_ = std::nullopt;
+   
+     ResultType result_type_;
+   
+     size_t hash_value_;
+   
+     index_vector canon_indices_;
+   
+     std::int8_t canon_phase_{1};
+   
+     ExprPtr expr_;
+   };
+   
+   class EvalExprTA final : public EvalExpr {
+    public:
+     template <typename... Args, typename = std::enable_if_t<
+                                     std::is_constructible_v<EvalExpr, Args...>>>
+     EvalExprTA(Args&&... args) : EvalExpr{std::forward<Args>(args)...} {
+       annot_ = indices_annot();
+     }
+   
+     [[nodiscard]] inline auto const& annot() const noexcept { return annot_; }
+   
+    private:
+     std::string annot_;
+   };
+   
+   class EvalExprBTAS final : public EvalExpr {
+    public:
+     using annot_t = container::svector<long>;
+   
+     template <typename Iterable>
+     static auto index_hash(Iterable&& bk) {
+       return ranges::views::transform(
+           std::forward<Iterable>(bk), [](auto const& idx) {
+             //
+             // WARNING!
+             // The BTAS uses long for scalar indexing by default.
+             // Hence, here we explicitly cast the size_t values to long
+             // Which is a potentially narrowing conversion leading to
+             // integral overflow. Hence, the values in the returned
+             // container are mixed negative and positive integers (long type)
+             //
+             return static_cast<long>(sequant::hash::value(Index{idx}.label()));
+           });
+     }
+   
+     template <typename... Args, typename = std::enable_if_t<
+                                     std::is_constructible_v<EvalExpr, Args...>>>
+     EvalExprBTAS(Args&&... args) : EvalExpr{std::forward<Args>(args)...} {
+       annot_ = index_hash(canon_indices()) | ranges::to<annot_t>;
+     }
+   
+     [[nodiscard]] inline annot_t const& annot() const noexcept { return annot_; }
+   
+    private:
+     annot_t annot_;
+   };
+   
+   namespace meta {
+   
+   namespace detail {
+   template <typename, typename = void>
+   constexpr bool is_eval_expr{};
+   
+   template <typename T>
+   constexpr bool
+       is_eval_expr<T, std::enable_if_t<std::is_convertible_v<T, EvalExpr>>>{true};
+   
+   template <typename, typename = void>
+   constexpr bool is_eval_node{};
+   
+   template <typename T>
+   constexpr bool
+       is_eval_node<FullBinaryNode<T>, std::enable_if_t<is_eval_expr<T>>>{true};
+   
+   }  // namespace detail
+   
+   template <typename T>
+   concept eval_expr = detail::is_eval_expr<T>;
+   
+   template <typename T>
+   concept eval_node = detail::is_eval_node<std::remove_cvref_t<T>>;
+   
+   template <typename Rng>
+   concept eval_node_range =
+       std::ranges::range<Rng> && eval_node<std::ranges::range_value_t<Rng>>;
+   
+   }  // namespace meta
+   
+   namespace impl {
+   FullBinaryNode<EvalExpr> binarize(ExprPtr const&);
+   }
+   
+   template <meta::eval_expr T>
+   using EvalNode = FullBinaryNode<T>;
+   
+   template <typename ExprT = EvalExpr,
+             typename = std::enable_if_t<std::is_constructible_v<ExprT, EvalExpr>>>
+   FullBinaryNode<ExprT> binarize(ExprPtr const& expr) {
+     if constexpr (std::is_same_v<ExprT, EvalExpr>) return impl::binarize(expr);
+     return transform_node(impl::binarize(expr),
+                           [](auto&& val) { return ExprT{val}; });
+   }
+   
+   ExprPtr to_expr(meta::eval_node auto const& node) {
+     auto const op = node->op_type();
+     auto const& evxpr = *node;
+   
+     if (node.leaf()) return evxpr.expr();
+   
+     if (op == EvalOp::Product) {
+       auto prod = Product{};
+   
+       ExprPtr lexpr = to_expr(node.left());
+       ExprPtr rexpr = to_expr(node.right());
+   
+       prod.append(1, lexpr, Product::Flatten::No);
+       prod.append(1, rexpr, Product::Flatten::No);
+   
+       assert(!prod.empty());
+   
+       if (prod.size() == 1 && !prod.factor(0)->is<Tensor>()) {
+         return ex<Product>(Product{prod.scalar(), prod.factor(0)->begin(),
+                                    prod.factor(0)->end(), Product::Flatten::No});
+       } else {
+         return ex<Product>(std::move(prod));
+       }
+   
+     } else {
+       assert(op == EvalOp::Sum && "unsupported operation type");
+       return ex<Sum>(Sum{to_expr(node.left()), to_expr(node.right())});
+     }
+   }
+   
+   }  // namespace sequant
+   
+   #endif  // SEQUANT_EVAL_EXPR_HPP

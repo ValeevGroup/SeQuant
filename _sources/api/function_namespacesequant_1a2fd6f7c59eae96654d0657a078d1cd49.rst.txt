@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a2fd6f7c59eae96654d0657a078d1cd49:
+
+Function sequant::can_expand
+============================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_spin.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::can_expand(const Tensor&)
+   :project: SeQuant

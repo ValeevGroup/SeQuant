@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1ace7f85eac4293628385605ec35c72106:
+
+Function sequant::to_wolfram(const rational&)
+=============================================
+
+- Defined in :ref:`file_SeQuant_core_rational.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::to_wolfram(const rational&)
+   :project: SeQuant

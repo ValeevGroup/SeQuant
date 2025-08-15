@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1aad97d04e6f34c635c31b95e4ee8a4307:
+
+Function sequant::same_spin_tensor
+==================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_spin.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::same_spin_tensor(const Tensor&)
+   :project: SeQuant

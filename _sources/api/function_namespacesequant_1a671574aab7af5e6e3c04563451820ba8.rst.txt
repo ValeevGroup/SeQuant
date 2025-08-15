@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a671574aab7af5e6e3c04563451820ba8:
+
+Function sequant::closed_shell_spintrace(const ResultExpr&)
+===========================================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_spin.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::closed_shell_spintrace(const ResultExpr&)
+   :project: SeQuant

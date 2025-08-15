@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1itf_1_1detail_1aa7f695e34bbcaf9b818c19dfca720a88:
+
+Function sequant::itf::detail::decomposeIndex
+=============================================
+
+- Defined in :ref:`file_SeQuant_core_export_itf.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::itf::detail::decomposeIndex(const Index&)
+   :project: SeQuant

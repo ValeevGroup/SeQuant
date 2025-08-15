@@ -1,0 +1,14 @@
+.. _exhale_define_wick_8impl_8hpp_1a1e5a00abc45ccd4b3bb60ded00742ea0:
+
+Define USE_TENSOR_NETWORK_V3
+============================
+
+- Defined in :ref:`file_SeQuant_core_wick.impl.hpp`
+
+
+Define Documentation
+--------------------
+
+
+.. doxygendefine:: USE_TENSOR_NETWORK_V3
+   :project: SeQuant

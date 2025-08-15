@@ -1,0 +1,14 @@
+.. _exhale_enum_namespacesequant_1a9130bd036deb119cc1bf7a8acceed847:
+
+Enum ParticleSymmetry
+=====================
+
+- Defined in :ref:`file_SeQuant_core_attr.hpp`
+
+
+Enum Documentation
+------------------
+
+
+.. doxygenenum:: sequant::ParticleSymmetry
+   :project: SeQuant

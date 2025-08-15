@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a9ddafc35cab6fe9407bc39c5781d8444:
+
+Function sequant::rank_transformation_perms
+===========================================
+
+- Defined in :ref:`file_SeQuant_core_biorthogonalization.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::rank_transformation_perms(const ParticlePairings&, const ParticlePairings&)
+   :project: SeQuant

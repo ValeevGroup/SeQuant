@@ -1,0 +1,14 @@
+.. _exhale_function_namespacebliss_1a74d231199909b8e340fce046710ef456:
+
+Template Function bliss::aut_hook
+=================================
+
+- Defined in :ref:`file_SeQuant_core_bliss.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: bliss::aut_hook(void *, const unsigned int, const unsigned int *)
+   :project: SeQuant

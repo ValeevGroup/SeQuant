@@ -1,0 +1,72 @@
+
+.. _file_SeQuant_domain_eval_eval.hpp:
+
+File eval.hpp
+=============
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_domain_eval>` (``SeQuant/domain/eval``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/domain/eval/eval.hpp``)
+---------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_domain_eval_eval.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/container.hpp`` (:ref:`file_SeQuant_core_container.hpp`)
+
+- ``SeQuant/core/eval_node.hpp`` (:ref:`file_SeQuant_core_eval_node.hpp`)
+
+- ``SeQuant/core/logger.hpp`` (:ref:`file_SeQuant_core_logger.hpp`)
+
+- ``SeQuant/core/meta.hpp``
+
+- ``SeQuant/core/parse.hpp`` (:ref:`file_SeQuant_core_parse.hpp`)
+
+- ``SeQuant/core/tensor.hpp`` (:ref:`file_SeQuant_core_tensor.hpp`)
+
+- ``SeQuant/domain/eval/cache_manager.hpp`` (:ref:`file_SeQuant_domain_eval_cache_manager.hpp`)
+
+- ``SeQuant/domain/eval/eval_fwd.hpp`` (:ref:`file_SeQuant_domain_eval_eval_fwd.hpp`)
+
+- ``SeQuant/domain/eval/result.hpp`` (:ref:`file_SeQuant_domain_eval_result.hpp`)
+
+- ``any`` (:ref:`file_SeQuant_core_any.hpp`)
+
+- ``btas/btas.h``
+
+- ``chrono``
+
+- ``iostream``
+
+- ``range/v3/numeric.hpp``
+
+- ``range/v3/view.hpp``
+
+- ``stdexcept``
+
+- ``tiledarray.h``
+
+- ``type_traits``
+
+
+
+
+

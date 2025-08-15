@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a83e59a8577f1733da4804629365af97e:
+
+Template Function sequant::operator<<(std::basic_ostream<CharT, Traits>&, TensorNetworkV3::Origin)
+==================================================================================================
+
+- Defined in :ref:`file_SeQuant_core_tensor_network_v3.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::operator<<(std::basic_ostream<CharT, Traits>&, TensorNetworkV3::Origin)
+   :project: SeQuant

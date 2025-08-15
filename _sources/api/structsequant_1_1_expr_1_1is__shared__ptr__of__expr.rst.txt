@@ -1,0 +1,32 @@
+.. _exhale_struct_structsequant_1_1_expr_1_1is__shared__ptr__of__expr:
+
+Template Struct Expr::is_shared_ptr_of_expr
+===========================================
+
+- Defined in :ref:`file_SeQuant_core_expr.hpp`
+
+
+Nested Relationships
+--------------------
+
+This struct is a nested type of :ref:`exhale_class_classsequant_1_1_expr`.
+
+
+Inheritance Relationships
+-------------------------
+
+Base Type
+*********
+
+- ``public std::false_type``
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::Expr::is_shared_ptr_of_expr
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:
