@@ -126,8 +126,8 @@ class AbstractTensor {
   }
   /// accesses bra, ket, and aux indices
   /// @return view of a not necessarily contiguous range of Index objects
-  virtual const_any_view_rand _indices() const {
-    throw missing_instantiation_for("_indices");
+  virtual const_any_view_rand _braketaux() const {
+    throw missing_instantiation_for("_braketaux");
   }
   /// @return the number of bra indices (some may be null, hence this is the
   /// gross rank)
@@ -296,7 +296,7 @@ class AbstractTensor {
 /// objects.
 /// @{
 inline auto braket(const AbstractTensor& t) { return t._braket(); }
-inline auto indices(const AbstractTensor& t) { return t._indices(); }
+inline auto indices(const AbstractTensor& t) { return t._braketaux(); }
 inline auto bra_rank(const AbstractTensor& t) { return t._bra_rank(); }
 inline auto bra_net_rank(const AbstractTensor& t) { return t._bra_net_rank(); }
 inline auto ket_rank(const AbstractTensor& t) { return t._ket_rank(); }

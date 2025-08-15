@@ -836,7 +836,7 @@ class NormalOperator : public Operator<S>,
            ranges::views::transform(
                [](auto &&op) -> const Index & { return op.index(); });
   }
-  AbstractTensor::const_any_view_rand _indices() const override final {
+  AbstractTensor::const_any_view_rand _braketaux() const override final {
     return _braket();
   }
   std::size_t _bra_rank() const override final { return nannihilators(); }

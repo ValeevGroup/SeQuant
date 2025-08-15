@@ -648,7 +648,7 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
   AbstractTensor::const_any_view_rand _braket() const override final {
     return braket();
   }
-  AbstractTensor::const_any_view_rand _indices() const override final {
+  AbstractTensor::const_any_view_rand _braketaux() const override final {
     return braketaux();
   }
   std::size_t _bra_rank() const override final { return bra_rank(); }
