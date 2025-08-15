@@ -88,7 +88,7 @@ TEST_CASE("abstract_tensor", "[elements]") {
     SECTION("2-index") {
       for (auto& tptr : {tensor, nop}) {
         auto& t = *tptr;
-        const std::array<std::size_t, 3> pdata{1, 0, 2};
+        std::array<std::size_t, 3> pdata{1, 0, 2};
         std::span p{pdata.data(), 3};
         // permutation moves indices around, i.e. no reallocation, pointers are
         // stable

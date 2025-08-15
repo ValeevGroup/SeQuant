@@ -1004,10 +1004,8 @@ TEST_CASE("tensor_network_v2", "[elements]") {
     SECTION("particle non-conserving") {
       const auto input1 = parse_expr(L"P{;a1,a3}");
       const auto input2 = parse_expr(L"P{a1,a3;}");
-      const std::wstring expected1 =
-          L"{{P^{{a_1}{a_3}}_{\\textvisiblespace\\textvisiblespace}}}";
-      const std::wstring expected2 =
-          L"{{P^{\\textvisiblespace\\textvisiblespace}_{{a_1}{a_3}}}}";
+      const std::wstring expected1 = L"{{P^{{a_1}{a_3}}_{}}}";
+      const std::wstring expected2 = L"{{P^{}_{{a_1}{a_3}}}}";
 
       for (int variant : {1, 2}) {
         for (bool fast : {true, false}) {
@@ -1643,10 +1641,8 @@ TEST_CASE("tensor_network_v3", "[elements]") {
     SECTION("particle non-conserving") {
       const auto input1 = parse_expr(L"P{;a1,a3}");
       const auto input2 = parse_expr(L"P{a1,a3;}");
-      const std::wstring expected1 =
-          L"{{P^{{a_1}{a_3}}_{\\textvisiblespace\\textvisiblespace}}}";
-      const std::wstring expected2 =
-          L"{{P^{\\textvisiblespace\\textvisiblespace}_{{a_1}{a_3}}}}";
+      const std::wstring expected1 = L"{{P^{{a_1}{a_3}}_{}}}";
+      const std::wstring expected2 = L"{{P^{}_{{a_1}{a_3}}}}";
 
       for (int variant : {1, 2}) {
         for (bool fast : {true, false}) {

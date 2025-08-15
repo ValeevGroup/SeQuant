@@ -59,16 +59,17 @@ TEST_CASE("tensor", "[elements]") {
     REQUIRE(t2.particle_symmetry() == ParticleSymmetry::symm);
     REQUIRE(t2.label() == L"F");
 
+    // bra/kets of different rank
     REQUIRE_NOTHROW(Tensor(L"N", bra{L"i_1"}, ket{}, aux{L"a_1"}));
     auto t3 = Tensor(L"N", bra{L"i_1"}, ket{}, aux{L"a_1"});
     REQUIRE(t3);
     REQUIRE(t3.bra_rank() == 1);
-    REQUIRE(t3.ket_rank() == 1);
+    REQUIRE(t3.ket_rank() == 0);
     REQUIRE(t3.aux_rank() == 1);
     REQUIRE(t3.bra_net_rank() == 1);
     REQUIRE(t3.ket_net_rank() == 0);
-    REQUIRE(t3.rank() == 1);
-    REQUIRE(t3.const_braketaux().size() == 3);
+    REQUIRE_THROWS(t3.rank());
+    REQUIRE(t3.const_braketaux().size() == 2);
     REQUIRE(ranges::distance(t3.const_braketaux_indices().begin(),
                              t3.const_braketaux_indices().end()) == 2);
     REQUIRE(t3.symmetry() == Symmetry::nonsymm);
@@ -97,26 +98,82 @@ TEST_CASE("tensor", "[elements]") {
 
     SECTION("null indices") {
       // null indices ok in asymmetric bra or ket
-      REQUIRE_NOTHROW(Tensor(L"N", bra{L"", L"i_2", L"i_3"},
-                             ket{L"i_1", L"", L""}, aux{}, Symmetry::nonsymm));
-      REQUIRE_NOTHROW(Tensor(L"N", bra{L"i_1", L"", L""},
-                             ket{L"", L"i_2", L"i_3"}, aux{},
-                             Symmetry::nonsymm));
-
-      // in fact Tensor will pad asymmetric bra/ket to make "old" behavior OK
-      REQUIRE_NOTHROW(Tensor(L"N", bra{L"i_1", L"i_2", L"i_3"},
-                             ket{L"i_4", L"i_5"}, aux{}, Symmetry::nonsymm));
-      REQUIRE_NOTHROW(Tensor(L"N", bra{L"i_4", L"i_5"},
-                             ket{L"i_1", L"i_2", L"i_3"}, aux{},
+      REQUIRE_NOTHROW(Tensor(L"N", bra{L"i_2", L"", L"i_3"},
+                             ket{L"", L"i_1", L""}, aux{}, Symmetry::nonsymm));
+      REQUIRE_NOTHROW(Tensor(L"N", bra{L"", L"i_1", L""},
+                             ket{L"i_2", L"", L"i_3"}, aux{},
                              Symmetry::nonsymm));
 
       REQUIRE_NOTHROW(
           Tensor(L"N", bra{L""}, ket{L"i_1"}, aux{}, Symmetry::nonsymm));
       Tensor t(L"N", bra{L""}, ket{L"i_1"}, aux{}, Symmetry::nonsymm);
-      REQUIRE(t.bra_rank() == 1);
+      REQUIRE(t.bra_rank() == 0);
       REQUIRE(t.ket_rank() == 1);
       REQUIRE(t.bra_net_rank() == 0);
       REQUIRE(t.ket_net_rank() == 1);
+
+      // in fact slots of asymmetric particle-symmetric tensors are kept in
+      // canonical order
+      REQUIRE(Tensor(L"N", bra{L""}, ket{L"i_1"}, aux{}, Symmetry::nonsymm) ==
+              Tensor(L"N", bra{}, ket{L"i_1"}, aux{}, Symmetry::nonsymm));
+      REQUIRE(Tensor(L"N", bra{L"i_2", L"", L"i_3"}, ket{L"", L"i_1", L""},
+                     aux{}, Symmetry::nonsymm) ==
+              Tensor(L"N", bra{L"i_2", L"i_3"}, ket{L"", L"", L"i_1"}, aux{},
+                     Symmetry::nonsymm));
+      REQUIRE(Tensor(L"N", bra{L"", L"i_1", L""}, ket{L"i_2", L"", L"i_3"},
+                     aux{}, Symmetry::nonsymm) ==
+              Tensor(L"N", bra{L"i_1", L"", L""}, ket{L"", L"i_2", L"i_3"},
+                     aux{}, Symmetry::nonsymm));
+      REQUIRE(
+          Tensor(L"N", bra{L"", L"i_1", L"", L"i_4"},
+                 ket{L"i_2", L"", L"i_3", L"i_5"}, aux{}, Symmetry::nonsymm) ==
+          Tensor(L"N", bra{L"i_4", L"i_1", L"", L""},
+                 ket{L"i_5", L"", L"i_2", L"i_3"}, aux{}, Symmetry::nonsymm));
+      // in fact unnecessary null indices are dropped in canonicalization
+      REQUIRE(
+          Tensor(L"N", bra{L"", L"i_1", L"", L"i_4"},
+                 ket{L"i_2", L"", L"i_3", L"i_5"}, aux{}, Symmetry::nonsymm) ==
+          Tensor(L"N", bra{L"i_4", L"i_1"}, ket{L"i_5", L"", L"i_2", L"i_3"},
+                 aux{}, Symmetry::nonsymm));
+      Tensor t5(L"N", bra{L"", L"i_1", L"", L"i_4"},
+                ket{L"i_2", L"", L"i_3", L"i_5"}, aux{}, Symmetry::nonsymm);
+      REQUIRE(t5.bra_rank() == 2);
+      REQUIRE(t5.bra_net_rank() == 2);
+      REQUIRE(t5.bra()[0] == L"i_4");
+      REQUIRE(t5.bra()[1] == L"i_1");
+      REQUIRE(t5.ket_rank() == 4);
+      REQUIRE(t5.ket_net_rank() == 3);
+      REQUIRE(t5.ket()[0] == L"i_5");
+      REQUIRE(t5.ket()[1].nonnull() == false);
+      REQUIRE(t5.ket()[2] == L"i_2");
+      REQUIRE(t5.ket()[3] == L"i_3");
+
+      // but asymmetric particle-NONsymmetric tensors are kept in given order
+      REQUIRE(Tensor(L"N", bra{L""}, ket{L"i_1"}, aux{}, Symmetry::nonsymm,
+                     BraKetSymmetry::conjugate, ParticleSymmetry::nonsymm) !=
+              Tensor(L"N", bra{}, ket{L"i_1"}, aux{}, Symmetry::nonsymm,
+                     BraKetSymmetry::conjugate, ParticleSymmetry::nonsymm));
+      REQUIRE(Tensor(L"N", bra{L"", L"i_1", L"", L"i_4"},
+                     ket{L"i_2", L"", L"i_3", L"i_5"}, aux{}, Symmetry::nonsymm,
+                     BraKetSymmetry::conjugate, ParticleSymmetry::nonsymm) !=
+              Tensor(L"N", bra{L"i_4", L"i_1", L"", L""},
+                     ket{L"i_5", L"", L"i_2", L"i_3"}, aux{}, Symmetry::nonsymm,
+                     BraKetSymmetry::conjugate, ParticleSymmetry::nonsymm));
+      Tensor t6(L"N", bra{L"", L"i_1", L"", L"i_4"},
+                ket{L"i_2", L"", L"i_3", L"i_5"}, aux{}, Symmetry::nonsymm,
+                BraKetSymmetry::conjugate, ParticleSymmetry::nonsymm);
+      REQUIRE(t6.bra_rank() == 4);
+      REQUIRE(t6.bra_net_rank() == 2);
+      REQUIRE(t6.bra()[0].nonnull() == false);
+      REQUIRE(t6.bra()[1] == L"i_1");
+      REQUIRE(t6.bra()[2].nonnull() == false);
+      REQUIRE(t6.bra()[3] == L"i_4");
+      REQUIRE(t6.ket_rank() == 4);
+      REQUIRE(t6.ket_net_rank() == 3);
+      REQUIRE(t6.ket()[0] == L"i_2");
+      REQUIRE(t6.ket()[1].nonnull() == false);
+      REQUIRE(t6.ket()[2] == L"i_3");
+      REQUIRE(t6.ket()[3] == L"i_5");
 
       // check errors
 #ifndef NDEBUG
@@ -140,6 +197,14 @@ TEST_CASE("tensor", "[elements]") {
       REQUIRE_THROWS_AS(Tensor(L"N", bra{L"i_2", L""}, ket{L"i_1", L""}, aux{},
                                Symmetry::nonsymm),
                         std::invalid_argument);
+
+      // no unpaired null indices in asymmetric bra/ket
+      REQUIRE_THROWS_AS(
+          Tensor(L"N", bra{L"i_2"}, ket{L"i_1", L""}, aux{}, Symmetry::nonsymm),
+          std::invalid_argument);
+      REQUIRE_THROWS_AS(
+          Tensor(L"N", bra{L"i_2", L""}, ket{L"i_1"}, aux{}, Symmetry::nonsymm),
+          std::invalid_argument);
 
       // no null aux indices
       REQUIRE_THROWS_AS(Tensor(L"N", bra{L"i_1"}, ket{}, aux{L""}),
@@ -273,7 +338,7 @@ TEST_CASE("tensor", "[elements]") {
       REQUIRE(to_latex(t3) == L"{F^{{i_2}}_{{i_1}}[{i_3},{i_4}]}");
       REQUIRE(to_latex(t4) ==
               L"{F^{\\textvisiblespace{i_2}}_{{i_1^{{i_5}{i_6}}}"
-              L"\\textvisiblespace}[{i_3},{i_4}]}");
+              L"}[{i_3},{i_4}]}");
       REQUIRE(to_latex(h1) ==
               L"{{F^{{i_2}}_{{i_1}}}{\\tilde{a}^{{i_1}}_{{i_2}}}}");
     }
@@ -292,7 +357,7 @@ TEST_CASE("tensor", "[elements]") {
       REQUIRE(to_latex(t3) == L"{F_{{i_2}}^{{i_1}}[{i_3},{i_4}]}");
       REQUIRE(to_latex(t4) ==
               L"{F_{\\textvisiblespace{i_2}}^{{i_1^{{i_5}{i_6}}}"
-              L"\\textvisiblespace}[{i_3},{i_4}]}");
+              L"}[{i_3},{i_4}]}");
       REQUIRE(to_latex(h1) ==
               L"{{F_{{i_2}}^{{i_1}}}{\\tilde{a}_{{i_1}}^{{i_2}}}}");
     }

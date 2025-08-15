@@ -775,8 +775,7 @@ container::svector<container::map<Index, Index>> P_maps(const Tensor& P) {
   // P_ij -> {{i,j},{j,i}}
   // P_ijkl \equiv P_ij P_kl -> {{i,j},{j,i},{k,l},{l,k}}
   // P_ij^ab \equiv P_ij P^ab -> {{i,j},{j,i},{a,b},{b,a}}
-  assert(P.bra_rank() > 0 && P.bra_rank() % 2 == 0 && P.ket_rank() > 0 &&
-         P.ket_rank() % 2 == 0);
+  assert(P.bra_rank() % 2 == 0 && P.ket_rank() % 2 == 0);
   container::map<Index, Index> idx_rep;
   auto indices = P.const_braket_indices();
   for (auto it = indices.begin(); it != indices.end(); ranges::advance(it, 2)) {
