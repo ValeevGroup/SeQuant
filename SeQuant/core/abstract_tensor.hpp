@@ -222,8 +222,8 @@ class AbstractTensor {
   }
   /// permutes braket slot groups according to @p perm
   /// @param perm from-permutation, i.e. Index pair in slot `permutation[i]`
-  /// will be in slot `i`
-  virtual void _permute_braket(std::span<const std::size_t> perm) {
+  /// will end up in slot `i`
+  virtual void _permute_braket(std::span<std::size_t> perm) {
     permute_braket_impl(_bra_mutable(), _ket_mutable(), perm);
   }
 
@@ -264,7 +264,7 @@ class AbstractTensor {
 
   static void permute_braket_impl(AbstractTensor::any_view_randsz bra_indices,
                                   any_view_randsz ket_indices,
-                                  std::span<const std::size_t> perm) {
+                                  std::span<std::size_t> perm_from) {
     const auto n = std::max(bra_indices.size(), ket_indices.size());
     assert(n == perm.size());
 
@@ -519,8 +519,7 @@ inline void permute_ket(AbstractTensor& t, std::span<const std::size_t> perm) {
 /// @param t reference to an AbstractTensor object
 /// @param perm from-permutation, i.e. Index pair in input slot `permutation[i]`
 /// will be in slot `i`
-inline void permute_braket(AbstractTensor& t,
-                           std::span<const std::size_t> perm) {
+inline void permute_braket(AbstractTensor& t, std::span<std::size_t> perm) {
   return t._permute_braket(perm);
 }
 
