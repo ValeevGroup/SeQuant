@@ -909,7 +909,6 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
     const std::size_t num_braket_vertices = !is_symm ? num_particles + 1 : 1;
     const bool is_part_symm =
         particle_symmetry(tensor) == ParticleSymmetry::symm;
-    const bool is_braket_symm = braket_symmetry(tensor) == BraKetSymmetry::symm;
 
     // make braket slot bundles first
     for (std::size_t i = 0; i < num_braket_vertices; ++i) {
@@ -972,8 +971,15 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
           graph.vertex_texlabels.emplace_back(std::nullopt);
         graph.vertex_types.push_back(bra ? VertexType::TensorBraBundle
                                          : VertexType::TensorKetBundle);
-        graph.vertex_colors.push_back(bra ? colorizer(BraGroup{size})
-                                          : colorizer(KetGroup{size}));
+        tensor_network::VertexColor color;
+        if (braket_symmetry(tensor) ==
+            BraKetSymmetry::symm) {  // if have bra<->ket symmetry (not conj!),
+                                     // use same color for bra and ket
+          color = colorizer(BraGroup{size});
+        } else {
+          color = bra ? colorizer(BraGroup{size}) : colorizer(KetGroup{size});
+        }
+        graph.vertex_colors.push_back(color);
 
         const auto braket_vertex = tensor_vertex + 1;
         edges.push_back(std::make_pair(braket_vertex, nvertex));
