@@ -1162,7 +1162,7 @@ TEST_CASE("tensor_network_v2", "[elements]") {
       std::vector<Index> indices;
       for (std::size_t i = 0; i < expected.size(); ++i) {
         const Tensor& tensor = expected[i].as<Tensor>();
-        for (const Index& idx : tensor.indices()) {
+        for (const Index& idx : tensor.braketaux_indices()) {
           if (std::find(indices.begin(), indices.end(), idx) == indices.end()) {
             indices.push_back(idx);
           }
@@ -1506,13 +1506,13 @@ TEST_CASE("tensor_network_v3", "[elements]") {
         TN tn(u1 * u2 * u3);
       }
 
-      // can have empty slots
+      // can have empty slots, but only in nonsymm bra/ket
       {
         auto u1 = ex<Tensor>(L"u1", bra{L"i_1", L""}, ket{L"", L"i_4"},
                              aux{L"p"}, Symmetry::nonsymm);
         auto u2 = ex<Tensor>(L"u2", bra{L"i_2", L"", L"i_4"}, ket{L"", L"i_1"},
                              aux{L"p"}, Symmetry::nonsymm);
-        auto u3 = ex<Tensor>(L"u3", bra{L"i_3", L"i_5"}, ket{L""}, aux{L"p"},
+        auto u3 = ex<Tensor>(L"u3", bra{L"i_3", L"i_5"}, ket{}, aux{L"p"},
                              Symmetry::symm);
         REQUIRE_NOTHROW(TN(u1 * u2 * u3));
         TN tn(u1 * u2 * u3);
@@ -1852,7 +1852,7 @@ TEST_CASE("tensor_network_v3", "[elements]") {
       std::vector<Index> indices;
       for (std::size_t i = 0; i < expected.size(); ++i) {
         const Tensor& tensor = expected[i].as<Tensor>();
-        for (const Index& idx : tensor.indices()) {
+        for (const Index& idx : tensor.braketaux_indices()) {
           if (std::find(indices.begin(), indices.end(), idx) == indices.end()) {
             indices.push_back(idx);
           }

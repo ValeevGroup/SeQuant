@@ -54,9 +54,10 @@ class TensorCanonicalizer;
 ///
 /// Tensors can have the following symmetries:
 /// - Tensors can be symmetric or nonsymmetric with respect to the transposition
-///   of corresponding (first, second, etc.) modes in bra/ket mode ranges. This
-///   symmetry is used to treat particle as indistinguishable or distinguishable
-///   in many-particle quantum mechanics context.
+///   of corresponding {bra,ket} modes in bra/ket mode ranges. This
+///   symmetry is used to treat particles as indistinguishable or
+///   distinguishable in physical simulation. See more below on how such mode
+///   _bundles_ are handled.
 /// - Tensors can be symmetric, antisymmetric, and nonsymmetric
 ///   with respect to the transposition of modes within the bra or ket sets.
 ///   This symmetry is used to model the
@@ -67,8 +68,26 @@ class TensorCanonicalizer;
 ///   swap of bra with ket. This symmetry corresponds to time reversal in
 ///   physical simulation.
 ///
-/// Lastly, the supporting rings are not assumed to be scalars, hence tensor
+/// The supporting rings are not assumed to be scalars, hence tensor
 /// product supporting the concept of tensor is not necessarily commutative.
+///
+/// For some applications the pairing of bra and ket modes is important, hence
+/// it is necessary to support not only tensors where first bra mode is paired
+/// with the first ket, but it is then necessary to support bra and ket
+/// modes that are unpaired. This introduces notion of bra/ket _slots_.
+/// A slot is either occupied by a non-null Index (hence corresponds to a bra
+/// or ket mode), or empty (i.e., occupied by a null Index).
+/// Tensors with non-symmetric bras and kets can have empty slots in arbitrary
+/// positions in bra and ket slot bundles. Such tensors symmetric with
+/// respect to reordering of braket bundles (`_particle_symmetry()`)
+/// assume the canonical order of slots, defined as follows:
+/// - paired braket slot bundles (both bra and ket slots are nonempty) appear
+///    first
+/// - unpaired bra slots appear next (with ket slots empty, or without
+///   altogether is there are no unpaired ket slots)
+/// - unpaired ket slots appear next (without matching bra slots).
+///
+/// Empty aux slots are not permitted.
 ///
 /// \note This interface class defines a Tensor _concept_. All Tensor objects
 /// must fulfill the is_tensor trait (see below). To adapt an existing class
@@ -103,13 +122,15 @@ class AbstractTensor {
       ranges::any_view<Index&, ranges::category::random_access |
                                    ranges::category::sized>;
 
-  /// accessor bra indices
-  /// @return view of a contiguous range of bra Index objects
+  /// accessor for bra slots
+  /// @return view of a contiguous range of bra Index objects; empty slots
+  /// may be empty (i.e., occupied by null indices).
   virtual const_any_view_randsz _bra() const {
     throw missing_instantiation_for("_bra");
   }
-  /// accesses ket indices
-  /// @return view of a contiguous range of ket Index objects
+  /// accesses ket slots
+  /// @return view of a contiguous range of ket Index objects; empty slots
+  /// may be empty (i.e., occupied by null indices).
   virtual const_any_view_randsz _ket() const {
     throw missing_instantiation_for("_ket");
   }
@@ -118,36 +139,35 @@ class AbstractTensor {
   virtual const_any_view_randsz _aux() const {
     throw missing_instantiation_for("_aux");
   }
-  /// accesses bra and ket indices
-  /// @return concatenated (hence, non contiguous) view of bra and ket Index
-  /// objects
+  /// accesses bra and ket slots
+  /// @return concatenated (hence, non contiguous) view of bra and ket slots
   virtual const_any_view_rand _braket() const {
     throw missing_instantiation_for("_braket");
   }
   /// accesses bra, ket, and aux indices
   /// @return view of a not necessarily contiguous range of Index objects
-  virtual const_any_view_rand _indices() const {
-    throw missing_instantiation_for("_indices");
+  virtual const_any_view_rand _braketaux() const {
+    throw missing_instantiation_for("_braketaux");
   }
-  /// @return the number of bra indices (some may be null, hence this is the
+  /// @return the number of bra slots (some may be empty, hence this is the
   /// gross rank)
   virtual std::size_t _bra_rank() const {
     throw missing_instantiation_for("_bra_rank");
   }
-  /// @return the number of nonnull bra indices
+  /// @return the number of nonempty bra slots (i.e., nonnull bra indices)
   virtual std::size_t _bra_net_rank() const {
     throw missing_instantiation_for("_bra_net_rank");
   }
-  /// @return the number of ket indices (some may be null, hence this is the
+  /// @return the number of bra slots (some may be empty, hence this is the
   /// gross rank)
   virtual std::size_t _ket_rank() const {
     throw missing_instantiation_for("_ket_rank");
   }
-  /// @return the number of nonnull ket indices
+  /// @return the number of nonempty ket slots (i.e., nonnull bra indices)
   virtual std::size_t _ket_net_rank() const {
     throw missing_instantiation_for("_ket_net_rank");
   }
-  /// @return the number of aux indices
+  /// @return the number of aux slots
   virtual std::size_t _aux_rank() const {
     throw missing_instantiation_for("_aux_rank");
   }
@@ -222,8 +242,8 @@ class AbstractTensor {
   }
   /// permutes braket slot groups according to @p perm
   /// @param perm from-permutation, i.e. Index pair in slot `permutation[i]`
-  /// will be in slot `i`
-  virtual void _permute_braket(std::span<const std::size_t> perm) {
+  /// will end up in slot `i`
+  virtual void _permute_braket(std::span<std::size_t> perm) {
     permute_braket_impl(_bra_mutable(), _ket_mutable(), perm);
   }
 
@@ -264,24 +284,57 @@ class AbstractTensor {
 
   static void permute_braket_impl(AbstractTensor::any_view_randsz bra_indices,
                                   any_view_randsz ket_indices,
-                                  std::span<const std::size_t> perm) {
+                                  std::span<std::size_t> perm_from) {
     const auto n = std::max(bra_indices.size(), ket_indices.size());
-    assert(n == perm.size());
+    assert(n == perm_from.size());
 
-    // N.B. currently bra/ket are left aligned, i.e. there are no empty slots in
-    // the middle of bra/ket this means permutations should not mix braket slots
-    // with 2 and 1 indices
+    // N.B. braket slot bundles are kept in canonical order, see AbstractTensor
+    // class dox: paired bundles first, then bra (paired with null ket) and
+    // ket (unpaired).
+
+    // 1. count each type of bundles
+    std::size_t npaired = 0;
+    std::size_t nunpaired_bra = 0;
+    for (const auto& [bra_idx, ket_idx] :
+         ranges::views::zip(bra_indices, ket_indices)) {
+      if (bra_idx.nonnull()) {
+        if (ket_idx.nonnull())
+          ++npaired;
+        else
+          ++nunpaired_bra;
+      }
+    }
+    // corner case: there are only unpaired bra slots, no unpaired ket slots
+    if (bra_indices.size() > ket_indices.size()) {
+      assert(ket_indices.size() == npaired);
+      nunpaired_bra += bra_indices.size() - ket_indices.size();
+    }
+
+    // adjust perm to ensure that different types of bundles do not mix
+    // this ends up just a simple stable sort according to the bundle type
+    // i.e. bring elements of perm_from with values [0,npaired) to the front,
+    // etc.
+    ranges::stable_sort(perm_from, [&](const auto& i, const auto j) {
+      enum { paired = 0, bra_unpaired = 1, ket_unpaired = 2 };
+      auto to_type = [&](const auto& i) {
+        if (i < npaired)
+          return paired;
+        else if (i < npaired + nunpaired_bra)
+          return bra_unpaired;
+        else
+          return ket_unpaired;
+      };
+      return to_type(i) < to_type(j);
+    });
 
     container::svector<std::pair<Index, Index>> sorted_indices(n);
     for (std::size_t i = 0; i != bra_indices.size(); ++i) {
-      assert(perm[i] < bra_indices.size());  // this asserts that 2-index slots
-                                             // do not mix with 1-index slots
-      sorted_indices[i].first = std::move(bra_indices[perm[i]]);
+      assert(perm_from[i] < bra_indices.size());
+      sorted_indices[i].first = std::move(bra_indices[perm_from[i]]);
     }
     for (std::size_t i = 0; i != ket_indices.size(); ++i) {
-      assert(perm[i] < ket_indices.size());  // this asserts that 2-index slots
-                                             // do not mix with 1-index slots
-      sorted_indices[i].second = std::move(ket_indices[perm[i]]);
+      assert(perm_from[i] < ket_indices.size());
+      sorted_indices[i].second = std::move(ket_indices[perm_from[i]]);
     }
     for (std::size_t i = 0; i != bra_indices.size(); ++i) {
       bra_indices[i] = std::move(sorted_indices[i].first);
@@ -296,7 +349,7 @@ class AbstractTensor {
 /// objects.
 /// @{
 inline auto braket(const AbstractTensor& t) { return t._braket(); }
-inline auto indices(const AbstractTensor& t) { return t._indices(); }
+inline auto indices(const AbstractTensor& t) { return t._braketaux(); }
 inline auto bra_rank(const AbstractTensor& t) { return t._bra_rank(); }
 inline auto bra_net_rank(const AbstractTensor& t) { return t._bra_net_rank(); }
 inline auto ket_rank(const AbstractTensor& t) { return t._ket_rank(); }
@@ -519,8 +572,7 @@ inline void permute_ket(AbstractTensor& t, std::span<const std::size_t> perm) {
 /// @param t reference to an AbstractTensor object
 /// @param perm from-permutation, i.e. Index pair in input slot `permutation[i]`
 /// will be in slot `i`
-inline void permute_braket(AbstractTensor& t,
-                           std::span<const std::size_t> perm) {
+inline void permute_braket(AbstractTensor& t, std::span<std::size_t> perm) {
   return t._permute_braket(perm);
 }
 

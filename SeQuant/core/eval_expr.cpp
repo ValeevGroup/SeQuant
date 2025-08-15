@@ -39,7 +39,7 @@ namespace {
 size_t hash_terminal_tensor(Tensor const&) noexcept;
 
 bool is_tot(Tensor const& t) noexcept {
-  return ranges::any_of(t.const_indices(), &Index::has_proto_indices);
+  return ranges::any_of(t.const_braketaux_indices(), &Index::has_proto_indices);
 }
 
 }  // namespace
@@ -88,7 +88,7 @@ EvalExpr::EvalExpr(Tensor const& tnsr)
   } else {
     hash_value_ = hash_terminal_tensor(tnsr);
     canon_phase_ = 1;
-    canon_indices_ = tnsr.indices() | ranges::to<index_vector>;
+    canon_indices_ = tnsr.braketaux_indices() | ranges::to<index_vector>;
   }
 }
 
@@ -197,7 +197,7 @@ size_t hash_indices(T const& indices) noexcept {
 size_t hash_terminal_tensor(Tensor const& tnsr) noexcept {
   size_t h = 0;
   hash::combine(h, hash::value(tnsr.label()));
-  hash::combine(h, hash_indices(tnsr.const_indices()));
+  hash::combine(h, hash_indices(tnsr.const_braketaux()));
   return h;
 }
 

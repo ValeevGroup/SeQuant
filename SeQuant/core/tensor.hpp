@@ -108,58 +108,45 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
     // antisymmetric bra or ket cannot support null indices (because it is not
     // clear what antisymmetry means if some slots can be empty; permutation of
     // 2 empty slots is supposed to do what?)
-    if (symmetry() == Symmetry::antisymm) {
+    // by analogy symmetric bra or ket should not have null indices, but limited
+    // circumstances do allow null indices in such context ... but no use cases
+    if (symmetry() != Symmetry::nonsymm) {
       if (!bra_.empty() && ranges::contains(bra_, Index::null))
         throw std::invalid_argument(
-            "Tensor ctor: found null indices in antisymmetric bra");
+            "Tensor ctor: found null indices in symmetric/antisymmetric bra");
       if (!ket_.empty() && ranges::contains(ket_, Index::null))
         throw std::invalid_argument(
-            "Tensor ctor: found null indices in antisymmetric ket");
-    }
-    // matching bra and ket slots cannot be both empty ... this means that in
-    // the symmetric case either bra or ket only can contain empty slots, else
-    // by permuting bra and ket can align empty slots
-    else {
-      if (symmetry() == Symmetry::symm) {
-        const auto bra_has_nulls = ranges::contains(bra_, Index::null);
-        const auto ket_has_nulls = ranges::contains(ket_, Index::null);
-        if (bra_has_nulls && ket_has_nulls)
+            "Tensor ctor: found null indices in symmetric/antisymmetric ket");
+    } else {  // asymmetric tensor
+
+      // matching bra and ket slots cannot be both empty
+      const auto braket_rank = std::min(bra_rank(), ket_rank());
+      for (std::size_t r = 0; r != braket_rank; ++r) {
+        if (bra_[r] == Index::null && ket_[r] == Index::null)
           throw std::invalid_argument(
-              "Tensor ctor: found null indices in symmetric bra AND ket");
-        if (bra_has_nulls && bra_rank() > ket_rank())
-          throw std::invalid_argument(
-              "Tensor ctor: found null indices in symmetric bra, which is "
-              "longer than the ket");
-        if (ket_has_nulls && ket_rank() > bra_rank())
-          throw std::invalid_argument(
-              "Tensor ctor: found null indices in symmetric ket, which is "
-              "longer than the bra");
-      } else {  // asymmetric bra or ket
-        const auto braket_rank = std::min(bra_rank(), ket_rank());
-        for (std::size_t r = 0; r != braket_rank; ++r) {
-          if (bra_[r] == Index::null && ket_[r] == Index::null)
+              "Tensor ctor: found null indices in both matching slots of "
+              "asymmetric bra and ket");
+      }
+
+      // if bra and ket differ in size, make sure unpaired slots are not empty
+      if (bra_rank() != ket_rank()) {
+        const auto longer_bundle_type =
+            bra_rank() > ket_rank() ? SlotType::Bra : SlotType::Ket;
+        auto *longer_bundle = longer_bundle_type == SlotType::Bra
+                                  ? &bra_[0]
+                                  : &ket_[0];  // n.b. these are contiguous
+        const auto rank = std::max(bra_rank(), ket_rank());
+
+        for (std::size_t r = braket_rank; r != rank; ++r) {
+          if (longer_bundle[r] == Index::null)
             throw std::invalid_argument(
-                "Tensor ctor: found null indices in both matching slots of "
-                "asymmetric bra and ket");
-        }
-        if (bra_rank() != ket_rank()) {
-          const auto longer_bundle_type =
-              bra_rank() > ket_rank() ? SlotType::Bra : SlotType::Ket;
-          auto *longer_bundle = longer_bundle_type == SlotType::Bra
-                                    ? &bra_[0]
-                                    : &ket_[0];  // n.b. these are contiguous
-          const auto rank = std::max(bra_rank(), ket_rank());
-          for (std::size_t r = braket_rank; r != rank; ++r) {
-            if (longer_bundle[r] == Index::null)
-              throw std::invalid_argument(
-                  (std::string("Tensor ctor: found null index in a slot of "
-                               "asymmetric ") +
-                   (longer_bundle_type == SlotType::Bra ? "bra" : "ket") +
-                   " without a matching " +
-                   (longer_bundle_type == SlotType::Bra ? "ket" : "bra") +
-                   " slot")
-                      .c_str());
-          }
+                (std::string("Tensor ctor: found null index in a slot of "
+                             "asymmetric ") +
+                 (longer_bundle_type == SlotType::Bra ? "bra" : "ket") +
+                 " that does have a matching " +
+                 (longer_bundle_type == SlotType::Bra ? "ket" : "bra") +
+                 " slot")
+                    .c_str());
         }
       }
     }
@@ -193,6 +180,72 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
 #endif
   }
 
+  /// put slots/slot bundles in canonical order:
+  /// - if tensor is asymmetric but particle symmetric make sure
+  ///   braket bundles are first, then bra-only braket bundles (paired with
+  ///   empty ket slots or unpaired if there are no unpaired ket slots) then, if
+  ///   any, ket-only braket bundles (unpaired).
+  void canonicalize_slots() {
+    // if tensor is particle symmetric make sure
+    // braket bundles are first, then bra-only, then ket-only
+    if (symmetry() == Symmetry::nonsymm &&
+        particle_symmetry() == ParticleSymmetry::symm) {
+      const bool have_empty_slots =
+          bra_rank() != bra_net_rank() || ket_rank() != ket_net_rank();
+      if (have_empty_slots) {
+        decltype(bra_)::value_type canonical_bra_;
+        canonical_bra_.reserve(bra_.size());
+        decltype(ket_)::value_type canonical_ket_;
+        canonical_ket_.reserve(ket_.size());
+        std::size_t num_unpaired_bra_slots = 0;
+        std::size_t num_unpaired_ket_slots = 0;
+        // push all braket bundles first
+        for (std::size_t p = 0; p != std::min(bra_rank(), ket_rank()); ++p) {
+          const auto nonempty_bra = bra_[p].nonnull();
+          const auto nonempty_ket = ket_[p].nonnull();
+          assert(nonempty_bra ||
+                 nonempty_ket);  // validate_indices() checked this
+          if (nonempty_bra && nonempty_ket) {
+            // we know that no empty braket bundles exist, so move the indices
+            // out
+            canonical_bra_.emplace_back(std::move(bra_[p]));
+            canonical_ket_.push_back(std::move(ket_[p]));
+          } else if (nonempty_bra)
+            ++num_unpaired_bra_slots;
+          else
+            ++num_unpaired_ket_slots;
+        }
+
+        std::size_t num_bra_indices = canonical_bra_.size();
+        std::size_t num_ket_indices = canonical_ket_.size();
+        for (auto &&idx : bra_) {
+          if (idx.nonnull()) {
+            canonical_bra_.emplace_back(std::move(idx));
+            ++num_bra_indices;
+            canonical_ket_.emplace_back(Index::null);
+          }
+        }
+        for (auto &&idx : ket_) {
+          if (idx.nonnull()) {
+            canonical_ket_.emplace_back(std::move(idx));
+            ++num_ket_indices;
+          }
+        }
+        // done, assert that all nonnull indices moved out
+        assert(ranges::count_if(
+                   bra_, [](const Index &idx) { return idx.nonnull(); }) == 0);
+        ;
+        assert(ranges::count_if(
+                   ket_, [](const Index &idx) { return idx.nonnull(); }) == 0);
+        ;
+        bra_ = sequant::bra(std::move(canonical_bra_));
+        ket_ = sequant::ket(std::move(canonical_ket_));
+        bra_net_rank_ = num_bra_indices;
+        ket_net_rank_ = num_ket_indices;
+      }
+    }
+  }
+
   template <typename IndexRange1, typename IndexRange2, typename IndexRange3,
             typename = std::enable_if_t<
                 (meta::is_statically_castable_v<
@@ -217,9 +270,14 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
         aux_(make_indices(aux_indices)),
         symmetry_(s),
         braket_symmetry_(bks),
-        particle_symmetry_(ps) {
+        particle_symmetry_(ps),
+        bra_net_rank_(ranges::count_if(
+            bra_, [](const Index &idx) { return static_cast<bool>(idx); })),
+        ket_net_rank_(ranges::count_if(
+            ket_, [](const Index &idx) { return static_cast<bool>(idx); })) {
     validate_indices();
     validate_symmetries();
+    canonicalize_slots();
   }
 
   Tensor(std::wstring_view label, bra<index_container_type> &&bra_indices,
@@ -234,9 +292,14 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
         aux_(std::move(aux_indices)),
         symmetry_(s),
         braket_symmetry_(bks),
-        particle_symmetry_(ps) {
+        particle_symmetry_(ps),
+        bra_net_rank_(ranges::count_if(
+            bra_, [](const Index &idx) { return static_cast<bool>(idx); })),
+        ket_net_rank_(ranges::count_if(
+            ket_, [](const Index &idx) { return static_cast<bool>(idx); })) {
     validate_indices();
     validate_symmetries();
+    canonicalize_slots();
   }
 
  public:
@@ -249,10 +312,10 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
   /// @name nontrivial constructors
   /// @note if `NDEBUG` is not `#define`d and invalid combinations of indices are found, these throw `std::invalid_argument`. Specifically, these throw if
   /// - null indices are found in any slot of antisymmetric bra or ket (it's not clear what permutation of 2 empty slots is supposed to do in general)
-  /// - null indices are found in both slots of bra-ket slot pairs:
-  ///   - this means for symmetric bra/ket null indices can only be found in either bra or ket (else can align empty slots by permutation) and then only in the shorter of the two bundles
-  ///   - for asymmetric bra/ket no pair of matching bra/ket slots can be totally empty, and no bra/ket slot without matching ket/bra counterpart can be empty
+  /// - null indices are found in any slot of symmetric bra or ket: can assign consistent semantics if have empty slots in the shorter of the bra/ket, but not clear if there is a use case that demands this
+  /// - null indices are found in both slots of bra-ket slot pairs (meaning is unclear)
   /// - null indices are found in any aux slot (why would empty slots be needed?)
+  /// - asymmetric tensor has a bra/ket slot without a matching ket/bra slot; this is primarily to make operations (such as canonicalization) easier on such tensors; null indices can be used to ensure complete bra/ket bundles in asymmetric tensors
   /// - duplicate indices are found within bra, within ket, or within aux (but same index can appear in bra and ket, for example).
   /// @{
   // clang-format on
@@ -311,7 +374,6 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
          ParticleSymmetry ps = ParticleSymmetry::symm)
       : Tensor(label, bra_indices, ket_indices, aux_indices, reserved_tag{}, s,
                bks, ps) {
-    validate_indices();
     assert_nonreserved_label(label_);
   }
 
@@ -351,7 +413,6 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
          ParticleSymmetry ps = ParticleSymmetry::symm)
       : Tensor(label, std::move(bra_indices), std::move(ket_indices),
                std::move(aux_indices), reserved_tag{}, s, bks, ps) {
-    validate_indices();
     assert_nonreserved_label(label_);
   }
 
@@ -366,23 +427,41 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
 
   /// @return "core" label of the tensor
   std::wstring_view label() const override { return label_; }
-  /// @return the bra index range
+  /// @return the bra slot range (empty slots are occupied by null indices)
   const auto &bra() const { return bra_; }
-  /// @return the ket index range
+  /// @return the ket slot range (empty slots are occupied by null indices)
   const auto &ket() const { return ket_; }
-  /// @return the aux index range
+  /// @return the aux slot range (empty slots are occupied by null indices)
   const auto &aux() const { return aux_; }
-  /// @return concatenated view of the bra and ket index ranges
+  /// @return concatenated view of the bra and ket slot ranges
   auto braket() const { return ranges::views::concat(bra_, ket_); }
+  /// @return concatenated view of the bra and ket index ranges (i.e., nonempty
+  /// slots)
+  auto braket_indices() const {
+    return ranges::views::filter(
+        braket(), [](const Index &idx) { return idx.nonnull(); });
+  }
   /// @return concatenated view of all indices of this tensor (bra, ket and
   /// aux)
-  auto indices() const { return ranges::views::concat(bra_, ket_, aux_); }
-  /// @return view of the bra+ket index ranges
+  auto braketaux() const { return ranges::views::concat(bra_, ket_, aux_); }
+  /// @return concatenated view of all nonnull indices of this tensor (bra, ket
+  /// and aux)
+  auto braketaux_indices() const {
+    return ranges::views::filter(
+        braketaux(), [](const Index &idx) { return idx.nonnull(); });
+  }
+  /// @return view of the bra+ket slots
   /// @note this is to work around broken lookup rules
   auto const_braket() const { return this->braket(); }
-  /// @return view of all indices
+  /// @return view of the bra+ket indices
   /// @note this is to work around broken lookup rules
-  auto const_indices() const { return this->indices(); }
+  auto const_braket_indices() const { return this->braket_indices(); }
+  /// @return const view of all slots
+  /// @note this is to work around broken lookup rules
+  auto const_braketaux() const { return this->braketaux(); }
+  /// @return const view of all indices
+  /// @note this is to work around broken lookup rules
+  auto const_braketaux_indices() const { return this->braketaux_indices(); }
   /// Returns the Symmetry object describing the symmetry of the bra and ket of
   /// the Tensor, i.e. what effect swapping indices in positions @c i  and @c j
   /// in <em>either bra or ket</em> has on the elements of the Tensor;
@@ -400,22 +479,16 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
   /// under exchange of particles (columns).
   ParticleSymmetry particle_symmetry() const { return particle_symmetry_; }
 
-  /// @return number of bra indices (some may be null, hence this is the gross
-  /// rank)
+  /// @return number of bra slots (some may be occupied by null indices, hence
+  /// this is the gross rank)
   std::size_t bra_rank() const { return bra_.size(); }
-  /// @return number of nonnull bra indices
-  std::size_t bra_net_rank() const {
-    return ranges::count_if(
-        bra_, [](const Index &idx) { return static_cast<bool>(idx); });
-  }
-  /// @return number of ket indices (some may be null, hence this is the gross
-  /// rank)
+  /// @return number of nonnull bra indices (i.e. non-empty slots)
+  std::size_t bra_net_rank() const { return bra_net_rank_; }
+  /// @return number of ket slots (some may be occupied by null indices, hence
+  /// this is the gross rank)
   std::size_t ket_rank() const { return ket_.size(); }
-  /// @return number of nonnull ket indices
-  std::size_t ket_net_rank() const {
-    return ranges::count_if(
-        ket_, [](const Index &idx) { return static_cast<bool>(idx); });
-  }
+  /// @return number of nonnull ket indices  (i.e. non-empty slots)
+  std::size_t ket_net_rank() const { return ket_net_rank_; }
   /// @return number of aux indices
   std::size_t aux_rank() const { return aux_.size(); }
   /// @return number of indices in bra/ket
@@ -512,7 +585,7 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
   ExprPtr clone() const override { return ex<Tensor>(*this); }
 
   void reset_tags() const {
-    ranges::for_each(indices(), [](const auto &idx) { idx.reset_tag(); });
+    ranges::for_each(braketaux(), [](const auto &idx) { idx.reset_tag(); });
   }
 
   hash_type bra_hash_value() const {
@@ -532,6 +605,8 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
   mutable std::optional<hash_type>
       bra_hash_value_;  // memoized byproduct of memoizing_hash()
   bool is_adjoint_ = false;
+  std::size_t bra_net_rank_;
+  std::size_t ket_net_rank_;
 
   void validate_symmetries() {
     // (anti)symmetric bra or ket makes sense only for particle-symmetric
@@ -645,8 +720,8 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
   AbstractTensor::const_any_view_rand _braket() const override final {
     return braket();
   }
-  AbstractTensor::const_any_view_rand _indices() const override final {
-    return indices();
+  AbstractTensor::const_any_view_rand _braketaux() const override final {
+    return braketaux();
   }
   std::size_t _bra_rank() const override final { return bra_rank(); }
   std::size_t _ket_rank() const override final { return ket_rank(); }

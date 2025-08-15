@@ -122,8 +122,23 @@ class Index : public Taggable {
         symmetric_proto_indices_(idx.symmetric_proto_indices_) {}
 
   /// move constructor
-  /// @note memoized data (label, full_label) is copied
-  Index(Index &&) = default;
+  /// @param[in,out] idx on output: null Index
+  /// @note memoized data (label, full_label) is moved
+  Index(Index &&idx) noexcept
+      : Taggable(std::move(idx)),
+        space_(std::move(idx.space_)),
+        ordinal_(std::move(idx.ordinal_)),
+        proto_indices_(std::move(idx.proto_indices_)),
+        symmetric_proto_indices_(idx.symmetric_proto_indices_),
+        label_(std::move(idx.label_)),
+        full_label_(std::move(idx.full_label_)) {
+    idx.symmetric_proto_indices_ = true;
+    // moving std::optional surprisingly leaves a nonnull std::optional in its
+    // wake
+    idx.ordinal_ = std::nullopt;
+    idx.label_ = std::nullopt;
+    idx.full_label_ = std::nullopt;
+  }
 
   /// copy assignment
   /// @warning memoized data (label, full_label) is not copied
@@ -137,8 +152,25 @@ class Index : public Taggable {
   }
 
   /// move assignment
-  /// @note memoized data (label, full_label) is copied
-  Index &operator=(Index &&) = default;
+  /// @param[in,out] idx on output: null Index
+  /// @note memoized data (label, full_label) is moved
+  Index &operator=(Index &&idx) noexcept {
+    static_cast<Taggable &>(*this) = static_cast<Taggable &&>(idx);
+    space_ = std::move(idx.space_);
+    ordinal_ = std::move(idx.ordinal_);
+    proto_indices_ = std::move(idx.proto_indices_);
+    symmetric_proto_indices_ = idx.symmetric_proto_indices_;
+    label_ = std::move(idx.label_);
+    full_label_ = std::move(idx.full_label_);
+
+    idx.symmetric_proto_indices_ = true;
+    // moving std::optional surprisingly leaves a nonnull std::optional in its
+    // wake
+    idx.ordinal_ = std::nullopt;
+    idx.label_ = std::nullopt;
+    idx.full_label_ = std::nullopt;
+    return *this;
+  }
 
   /// @param space (a const ref to) the IndexSpace object that specifies to this
   /// space this object belongs
@@ -861,7 +893,7 @@ class Index : public Taggable {
   };
 
  private:
-  IndexSpace space_{};
+  IndexSpace space_;
   std::optional<ordinal_type> ordinal_;
   // an unordered set of unique indices on which this index depends on
   // whether proto_indices_ is symmetric w.r.t. permutations; if true,
@@ -869,7 +901,7 @@ class Index : public Taggable {
   index_vector proto_indices_{};
   bool symmetric_proto_indices_ = true;
 
-  mutable std::optional<std::wstring> label_{};
+  mutable std::optional<std::wstring> label_;
   mutable std::optional<std::wstring> full_label_;
 
   /// sorts proto_indices_ if symmetric_proto_indices_

@@ -115,6 +115,19 @@ TEST_CASE("index", "[elements][index]") {
       REQUIRE(i7.proto_indices()[1] == i2);  // !!
       REQUIRE(i7.full_label() == L"i_7<i_1, i_2>");
 
+      // move-ctor should leave null in its wake
+      REQUIRE(i7.nonnull());
+      auto i7_copy = i7;
+      i7_copy.tag();  // make tag nonnull also
+      REQUIRE(i7_copy.nonnull() == true);
+      REQUIRE_NOTHROW(Index(std::move(i7_copy)));
+      REQUIRE(i7_copy.nonnull() == false);
+      i7_copy = i7;
+      i7_copy.tag();  // make tag nonnull also
+      REQUIRE(i7_copy.nonnull() == true);
+      REQUIRE_NOTHROW(Index{} = std::move(i7_copy));
+      REQUIRE(i7_copy.nonnull() == false);
+
 #ifndef NDEBUG
       REQUIRE_THROWS(Index(isr->retrieve(L"i"), 4, {i1, i1}));
       REQUIRE_THROWS(Index(L"i_5", {L"i_1", L"i_1"}));
