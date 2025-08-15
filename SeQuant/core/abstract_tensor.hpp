@@ -249,6 +249,10 @@ class AbstractTensor {
   virtual void _permute_braket(std::span<std::size_t> perm) {
     permute_braket_impl(_bra_mutable(), _ket_mutable(), perm);
   }
+  /// swaps bra and ket slots
+  virtual void _swap_bra_ket() {
+    throw missing_instantiation_for("_swap_bra_ket");
+  }
 
  private:
   /// @return mutable view of bra
