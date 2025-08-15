@@ -10,6 +10,7 @@ int main(int argc, char *argv[]) {
   // Disable multithreading
   set_num_threads(1);
   set_locale();
+  disable_thousands_separator();
   Context fermi_ctx = Context(mbpt::make_sr_spaces(), Vacuum::SingleProduct,
                               IndexSpaceMetric::Unit, BraKetSymmetry::nonsymm,
                               SPBasis::spinorbital);
