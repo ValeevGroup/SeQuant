@@ -47,7 +47,7 @@ class Context {
     constexpr static auto vacuum = Vacuum::Physical;
     constexpr static auto metric = IndexSpaceMetric::Unit;
     constexpr static auto braket_symmetry = BraKetSymmetry::conjugate;
-    constexpr static auto spbasis = sequant::SPBasis::spinorbital;
+    constexpr static auto spbasis = sequant::SPBasis::spinor;
     constexpr static auto first_dummy_index_ordinal = 100;
     constexpr static auto braket_typesetting = BraKetTypesetting::ContraSub;
     constexpr static auto braket_slot_typesetting =
@@ -112,7 +112,7 @@ class Context {
 
   /// default constructor, equivalent to Context(Vacuum::Physical,
   /// IndexSpaceMetric::Unit, BraKetSymmetry::conjugate,
-  /// sequant::SPBasis::spinorbital, 100)
+  /// sequant::SPBasis::spinor, 100)
   /// @warning default constructor does not create an IndexSpaceRegistry, thus
   /// `this->index_space_registry()` will return nullptr
   Context() = default;
