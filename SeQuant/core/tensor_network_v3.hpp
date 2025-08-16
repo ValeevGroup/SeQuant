@@ -109,21 +109,25 @@ class TensorNetworkV3 {
               "to a non-aux slot");
         }
         // - can connect bra slot to ket slot, and vice versa, unless there is
-        // no distinction between primal and dual spaces if (first.getOrigin()
-        // == Origin::Bra &&
-        //     vertex.getOrigin() != Origin::Ket) {
-        //   throw std::invalid_argument(
-        //       "TensorNetworkV3::Edge::connect_to: bra slot can only be "
-        //       "connected "
-        //       "to a ket slot");
-        // }
-        // if (first.getOrigin() == Origin::Ket &&
-        //     vertex.getOrigin() != Origin::Bra) {
-        //   throw std::invalid_argument(
-        //       "TensorNetworkV3::Edge::connect_to: ket slot can only be "
-        //       "connected "
-        //       "to a bra slot");
-        // }
+        // no distinction between primal and dual spaces
+        if (get_default_context().braket_symmetry() != BraKetSymmetry::symm) {
+          if (first.getOrigin() == Origin::Bra &&
+              vertex.getOrigin() != Origin::Ket) {
+            throw std::invalid_argument(
+                "TensorNetworkV3::Edge::connect_to: bra slot can only be "
+                "connected "
+                "to a ket slot if default context's braket_symmetry() != "
+                "BraKetSymmetry::symm");
+          }
+          if (first.getOrigin() == Origin::Ket &&
+              vertex.getOrigin() != Origin::Bra) {
+            throw std::invalid_argument(
+                "TensorNetworkV3::Edge::connect_to: ket slot can only be "
+                "connected "
+                "to a bra slot if default context's braket_symmetry() != "
+                "BraKetSymmetry::symm");
+          }
+        }
         add_vertex(vertex);
       }
 
