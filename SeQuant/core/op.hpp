@@ -61,7 +61,7 @@ class Op {
   void adjoint() { action_ = sequant::adjoint(action_); }
 
   static std::wstring core_label() {
-    return get_default_context(S).spbasis() == SPBasis::spinorbital
+    return get_default_context(S).spbasis() == SPBasis::spinor
                ? (S == Statistics::FermiDirac ? L"a" : L"b")
                : L"E";
   }
@@ -852,7 +852,7 @@ class NormalOperator : public Operator<S>,
   std::size_t _aux_rank() const override final { return 0; }
   Symmetry _symmetry() const override final {
     return (S == Statistics::FermiDirac
-                ? (get_default_context(S).spbasis() == SPBasis::spinorbital
+                ? (get_default_context(S).spbasis() == SPBasis::spinor
                        ? Symmetry::antisymm
                        : Symmetry::nonsymm)
                 : (Symmetry::symm));

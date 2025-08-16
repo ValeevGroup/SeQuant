@@ -140,7 +140,7 @@ TEST_CASE("wick", "[algorithms][wick]") {
       SEQUANT_PRAGMA_GCC(diagnostic push)
       SEQUANT_PRAGMA_GCC(diagnostic ignored "-Wdeprecated-declarations")
 
-      if (get_default_context().spbasis() == SPBasis::spinorbital) {
+      if (get_default_context().spbasis() == SPBasis::spinor) {
         REQUIRE_NOTHROW(wick1.spinfree(false));
         REQUIRE_THROWS_AS(wick1.spinfree(true), std::invalid_argument);
       }
@@ -374,7 +374,7 @@ TEST_CASE("wick", "[algorithms][wick]") {
 
       // if Wick's theorem's result is in "canonical" (columns-matching-inputs
       // ... this is what Kutzelnigg calls generalized Wick's theorem) it works
-      // same for spinorbital and spinfree basis for physical vacuum
+      // same for spinor and spinfree basis for physical vacuum
       auto raii_tmp = switch_to_spinfree_context();
       REQUIRE_NOTHROW(wick.full_contractions(false).compute());
       auto result_sf = wick.full_contractions(false).compute();

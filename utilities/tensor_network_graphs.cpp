@@ -59,7 +59,7 @@ int main(int argc, char **argv) {
   set_locale();
   sequant::set_default_context(Context(
       mbpt::make_sr_spaces(), Vacuum::SingleProduct, IndexSpaceMetric::Unit,
-      BraKetSymmetry::conjugate, SPBasis::spinorbital));
+      BraKetSymmetry::conjugate, SPBasis::spinor));
 
   bool use_named_indices = true;
   int version = 3;

@@ -7,8 +7,40 @@
 
 namespace sequant {
 
-/// Specifies SeQuant context, such as vacuum choice, whether index
+// clang-format
+/// @brief Specifies SeQuant context, such as vacuum choice, whether index
 /// spaces are orthonormal, sizes of index spaces, etc.
+///
+/// SeQuant context contains the following information:
+/// - `vacuum`: the vacuum state used to define normal ordering of
+/// `NormalOperator`s
+/// - `metric`: whether the plain basis of vector space (ket) modes are
+/// orthonormal to their dual (bra) counterparts
+///   (`IndexSpaceMetric::Unit`) or not (`IndexSpaceMetric::General`);
+///    this affects the value of Wick contractions.
+/// - `braket_symmetry`: whether the primal (ket) and dual (bra) vector space
+/// _bases_
+///    are "equivalent" (homogenous to each other; `BraKetSymmetry::symm`),
+///    "conjugate to each other" (<a
+///    href="https://en.wikipedia.org/wiki/Antilinear_map">conjugate-homogenous</a>
+///    to each other; `BraKetSymmetry::conjugate`) or are "nonequivalent" (not
+///    homogeneous; `BraKetSymmetry::nonsymm`)
+/// - `spbasis`: whether the bra/ket bases are spinor (`SPBasis::spinor`) or
+/// spin-free (`SPBasis::spinfree`).
+/// - `first_dummy_index_ordinal`: during its operation SeQuant will generate
+///    temporary indices with orbitals greater or equal to this; to avoid
+///    duplicates user Index objects should have ordinals smaller than this
+/// - `braket_typesetting`: whether `to_latex()` typesets tensor indices of ket
+///    (covariant, primal) modes as superscript (`BraKetTypesetting::KetSuper`,
+///    default)
+//     or as subscript (`BraKetTypesetting::KetSub`); the latter is the
+//     traditional tensor convention
+/// - `braket_slot_typesetting`: whether `to_latex()` typesets tensor indices
+/// using
+///   `tensor` LaTeX package (`BraKetSlotTypesetting::TensorPackage`, default)
+///   or native typesetting (`BraKetSlotTypesetting::Naive`); the former is
+///   preferred for alignment of superscript with subscript slots.
+// clang-format off
 class Context {
  public:
   struct Defaults {

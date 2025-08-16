@@ -46,7 +46,7 @@ TEST_CASE("context", "[runtime]") {
   CHECK(get_default_context().vacuum() == Vacuum::Physical);
   CHECK(get_default_context().metric() == IndexSpaceMetric::Unit);
   CHECK(get_default_context().braket_symmetry() == BraKetSymmetry::conjugate);
-  CHECK(get_default_context().spbasis() == SPBasis::spinorbital);
+  CHECK(get_default_context().spbasis() == SPBasis::spinor);
 
   // reset back to initial context
   CHECK_NOTHROW(set_default_context(initial_ctx));

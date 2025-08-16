@@ -82,7 +82,7 @@ class compute_eomcc {
   }
 
   void operator()(bool print) {
-    assert(get_default_context().spbasis() == SPBasis::spinorbital);
+    assert(get_default_context().spbasis() == SPBasis::spinor);
     timer_pool.start(N);
     std::vector<ExprPtr> eqvec;
     switch (type) {
@@ -189,7 +189,7 @@ int main(int argc, char* argv[]) {
   sequant::detail::OpIdRegistrar op_id_registrar;
   sequant::set_default_context(sequant::Context(
       make_min_sr_spaces(), Vacuum::SingleProduct, IndexSpaceMetric::Unit,
-      BraKetSymmetry::conjugate, SPBasis::spinorbital));
+      BraKetSymmetry::conjugate, SPBasis::spinor));
   TensorCanonicalizer::register_instance(
       std::make_shared<DefaultTensorCanonicalizer>());
 
