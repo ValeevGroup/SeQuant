@@ -357,6 +357,8 @@ class AbstractTensor {
 /// @{
 inline auto braket(const AbstractTensor& t) { return t._braket(); }
 inline auto braketaux(const AbstractTensor& t) { return t._braketaux(); }
+/// @return a view of all indices; currently equivalent to braketaux
+inline auto indices(const AbstractTensor& t) { return braketaux(t); }
 inline auto bra_rank(const AbstractTensor& t) { return t._bra_rank(); }
 inline auto bra_net_rank(const AbstractTensor& t) { return t._bra_net_rank(); }
 inline auto ket_rank(const AbstractTensor& t) { return t._ket_rank(); }
