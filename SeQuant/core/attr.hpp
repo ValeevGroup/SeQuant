@@ -31,7 +31,7 @@ enum class Symmetry { symm, antisymm, nonsymm, invalid };
 enum class BraKetSymmetry { symm, conjugate, nonsymm, invalid };
 
 /// describes type of single-particle basis
-enum class SPBasis { spinorbital, spinfree };
+enum class SPBasis { spinor, spinfree };
 
 inline std::wstring to_wolfram(const Symmetry& symmetry) {
   std::wstring result;

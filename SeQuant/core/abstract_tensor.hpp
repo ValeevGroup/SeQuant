@@ -29,7 +29,10 @@
 
 namespace sequant {
 
-enum class SlotType { Bra, Ket, Aux, BraKet };
+/// index slot types
+///
+/// @note This does not include slot bundles, like braket, etc.
+enum class SlotType { Bra, Ket, Aux };
 
 class TensorCanonicalizer;
 
@@ -246,6 +249,10 @@ class AbstractTensor {
   virtual void _permute_braket(std::span<std::size_t> perm) {
     permute_braket_impl(_bra_mutable(), _ket_mutable(), perm);
   }
+  /// swaps bra and ket slots
+  virtual void _swap_bra_ket() {
+    throw missing_instantiation_for("_swap_bra_ket");
+  }
 
  private:
   /// @return mutable view of bra
@@ -349,7 +356,9 @@ class AbstractTensor {
 /// objects.
 /// @{
 inline auto braket(const AbstractTensor& t) { return t._braket(); }
-inline auto indices(const AbstractTensor& t) { return t._braketaux(); }
+inline auto braketaux(const AbstractTensor& t) { return t._braketaux(); }
+/// @return a view of all indices; currently equivalent to braketaux
+inline auto indices(const AbstractTensor& t) { return braketaux(t); }
 inline auto bra_rank(const AbstractTensor& t) { return t._bra_rank(); }
 inline auto bra_net_rank(const AbstractTensor& t) { return t._bra_net_rank(); }
 inline auto ket_rank(const AbstractTensor& t) { return t._ket_rank(); }
@@ -508,7 +517,7 @@ template <typename T>
 struct is_tensor
     : std::bool_constant<
           std::is_invocable_v<decltype(braket), T> &&
-          std::is_invocable_v<decltype(indices), T> &&
+          std::is_invocable_v<decltype(braketaux), T> &&
           std::is_invocable_v<decltype(bra_rank), T> &&
           std::is_invocable_v<decltype(ket_rank), T> &&
           std::is_invocable_v<decltype(aux_rank), T> &&

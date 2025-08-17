@@ -37,7 +37,7 @@ int main(int argc, char* argv[]) {
   sequant::set_default_context(
       Context(sequant::mbpt::make_sr_spaces(), Vacuum::SingleProduct,
               IndexSpaceMetric::Unit, BraKetSymmetry::conjugate,
-              SPBasis::spinorbital, 100, BraKetTypesetting::ContraSub,
+              SPBasis::spinor, 100, BraKetTypesetting::ContraSub,
               // to_latex() reference outputs predominantly assume the original
               // (naive) convention
               BraKetSlotTypesetting::Naive));

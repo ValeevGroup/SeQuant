@@ -45,11 +45,7 @@ class TensorNetworkV3 {
   // for unit testing only
   friend class TensorNetworkV3Accessor;
 
-  enum class Origin {
-    Bra = 1,
-    Ket,
-    Aux,
-  };
+  using Origin = SlotType;
 
   class Vertex {
    public:
@@ -76,10 +72,15 @@ class TensorNetworkV3 {
 
   /// Edge in a TensorNetworkV3 = the Index annotating it +
   /// a list of vertices corresponding to the Tensor index slots it connects
+  /// @note this is move-only since using pointers to refer to Index objects
   // clang-format on
   class Edge {
    public:
     Edge() = default;
+    Edge(const Edge &) = delete;
+    Edge(Edge &&) = default;
+    Edge &operator=(const Edge &) = delete;
+    Edge &operator=(Edge &&) = default;
     explicit Edge(const Vertex &vertex) : vertices{vertex} {}
     explicit Edge(std::initializer_list<Vertex> vertices) {
       ranges::for_each(vertices,
@@ -107,20 +108,25 @@ class TensorNetworkV3 {
               "TensorNetworkV3::Edge::connect_to: aux slot cannot be connected "
               "to a non-aux slot");
         }
-        // - can connect bra slot to ket slot, and vice versa
-        if (first.getOrigin() == Origin::Bra &&
-            vertex.getOrigin() != Origin::Ket) {
-          throw std::invalid_argument(
-              "TensorNetworkV3::Edge::connect_to: bra slot can only be "
-              "connected "
-              "to a ket slot");
-        }
-        if (first.getOrigin() == Origin::Ket &&
-            vertex.getOrigin() != Origin::Bra) {
-          throw std::invalid_argument(
-              "TensorNetworkV3::Edge::connect_to: ket slot can only be "
-              "connected "
-              "to a bra slot");
+        // - can connect bra slot to ket slot, and vice versa, unless there is
+        // no distinction between primal and dual spaces
+        if (get_default_context().braket_symmetry() != BraKetSymmetry::symm) {
+          if (first.getOrigin() == Origin::Bra &&
+              vertex.getOrigin() != Origin::Ket) {
+            throw std::invalid_argument(
+                "TensorNetworkV3::Edge::connect_to: bra slot can only be "
+                "connected "
+                "to a ket slot if default context's braket_symmetry() != "
+                "BraKetSymmetry::symm");
+          }
+          if (first.getOrigin() == Origin::Ket &&
+              vertex.getOrigin() != Origin::Bra) {
+            throw std::invalid_argument(
+                "TensorNetworkV3::Edge::connect_to: ket slot can only be "
+                "connected "
+                "to a bra slot if default context's braket_symmetry() != "
+                "BraKetSymmetry::symm");
+          }
         }
         add_vertex(vertex);
       }
@@ -225,6 +231,17 @@ class TensorNetworkV3 {
 
     init_edges();
   }
+
+  TensorNetworkV3(TensorNetworkV3 &&) noexcept;
+  TensorNetworkV3 &operator=(TensorNetworkV3 &&) noexcept;
+
+  /// copy constructor
+  /// @warning does not copy edges
+  TensorNetworkV3(const TensorNetworkV3 &other);
+
+  /// copy assignment
+  /// @warning does not copy edges
+  TensorNetworkV3 &operator=(const TensorNetworkV3 &other) noexcept;
 
   /// @return const reference to the sequence of tensors
   /// @note after invoking TensorNetwork::canonicalize() the order of
@@ -470,15 +487,15 @@ class TensorNetworkV3 {
 
 template <typename CharT, typename Traits>
 std::basic_ostream<CharT, Traits> &operator<<(
-    std::basic_ostream<CharT, Traits> &stream, TensorNetworkV3::Origin origin) {
+    std::basic_ostream<CharT, Traits> &stream, SlotType origin) {
   switch (origin) {
-    case TensorNetworkV3::Origin::Bra:
+    case SlotType::Bra:
       stream << "Bra";
       break;
-    case TensorNetworkV3::Origin::Ket:
+    case SlotType::Ket:
       stream << "Ket";
       break;
-    case TensorNetworkV3::Origin::Aux:
+    case SlotType::Aux:
       stream << "Aux";
       break;
   }

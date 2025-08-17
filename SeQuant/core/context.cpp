@@ -102,6 +102,16 @@ set_scoped_default_context(Context&& ctx) {
           {Statistics::Arbitrary, std::move(ctx)}});
 }
 
+Context::Context(ContextOptions options)
+    : idx_space_reg_(std::move(options.index_space_registry_shared_ptr)),
+      vacuum_(options.vacuum),
+      metric_(options.metric),
+      braket_symmetry_(options.braket_symmetry),
+      spbasis_(options.spbasis),
+      first_dummy_index_ordinal_(options.first_dummy_index_ordinal),
+      braket_typesetting_(options.braket_typesetting),
+      braket_slot_typesetting_(options.braket_slot_typesetting) {}
+
 Context::Context(std::shared_ptr<IndexSpaceRegistry> isr, Vacuum vac,
                  IndexSpaceMetric m, BraKetSymmetry bks, SPBasis spb,
                  std::size_t fdio, BraKetTypesetting bkt,

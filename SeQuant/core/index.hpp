@@ -67,7 +67,7 @@ using IndexList = std::initializer_list<Index>;
 /// recommendations to use narrow strings (bytestrings) everywhere. The
 /// rationale for such a choice is that this makes "character"-centric operations easy without
 /// the need to grok Unicode and to introduce extra dependencies such as
-/// [https://github.com/unicode-org/icu](ICU). Many functions accept
+/// <a href="https://github.com/unicode-org/icu">ICU</a>. Many functions accept
 /// bytestrings as input, but they are recoded to wide (but UTF-8 encoded)
 /// strings. For optimal efficiency and simplicity users are recommended to use
 /// wide strings until further notice.

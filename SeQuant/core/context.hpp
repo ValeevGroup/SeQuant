@@ -7,20 +7,89 @@
 
 namespace sequant {
 
-/// Specifies SeQuant context, such as vacuum choice, whether index
+// clang-format
+/// @brief Specifies SeQuant context, such as vacuum choice, whether index
 /// spaces are orthonormal, sizes of index spaces, etc.
+///
+/// SeQuant context contains the following information:
+/// - a IndexSpaceRegistry object: contains information about the known
+///   IndexSpace objects and their attributes; managed by shared_ptr and
+///   can be shared by multiple contexts.
+/// - `vacuum`: the vacuum state used to define normal ordering of
+/// `NormalOperator`s
+/// - `metric`: whether the plain basis of vector space (ket) modes are
+/// orthonormal to their dual (bra) counterparts
+///   (`IndexSpaceMetric::Unit`) or not (`IndexSpaceMetric::General`);
+///    this affects the value of Wick contractions.
+/// - `braket_symmetry`: whether the primal (ket) and dual (bra) vector space
+/// _bases_
+///    are "equivalent" (homogenous to each other; `BraKetSymmetry::symm`),
+///    "conjugate to each other" (<a
+///    href="https://en.wikipedia.org/wiki/Antilinear_map">conjugate-homogenous</a>
+///    to each other; `BraKetSymmetry::conjugate`) or are "nonequivalent" (not
+///    homogeneous; `BraKetSymmetry::nonsymm`)
+/// - `spbasis`: whether the bra/ket bases are spinor (`SPBasis::spinor`) or
+/// spin-free (`SPBasis::spinfree`).
+/// - `first_dummy_index_ordinal`: during its operation SeQuant will generate
+///    temporary indices with orbitals greater or equal to this; to avoid
+///    duplicates user Index objects should have ordinals smaller than this
+/// - `braket_typesetting`: whether `to_latex()` typesets tensor indices of ket
+///    (covariant, primal) modes as superscript (`BraKetTypesetting::KetSuper`,
+///    default)
+//     or as subscript (`BraKetTypesetting::KetSub`); the latter is the
+//     traditional tensor convention
+/// - `braket_slot_typesetting`: whether `to_latex()` typesets tensor indices
+/// using
+///   `tensor` LaTeX package (`BraKetSlotTypesetting::TensorPackage`, default)
+///   or native typesetting (`BraKetSlotTypesetting::Naive`); the former is
+///   preferred for alignment of superscript with subscript slots.
+// clang-format off
 class Context {
  public:
   struct Defaults {
     constexpr static auto vacuum = Vacuum::Physical;
     constexpr static auto metric = IndexSpaceMetric::Unit;
     constexpr static auto braket_symmetry = BraKetSymmetry::conjugate;
-    constexpr static auto spbasis = sequant::SPBasis::spinorbital;
+    constexpr static auto spbasis = sequant::SPBasis::spinor;
     constexpr static auto first_dummy_index_ordinal = 100;
     constexpr static auto braket_typesetting = BraKetTypesetting::ContraSub;
     constexpr static auto braket_slot_typesetting =
         BraKetSlotTypesetting::TensorPackage;
   };
+
+  /// helper for the named-parameter constructor of Context
+
+  /// see the Context documentation for detailed description
+  struct ContextOptions {
+      /// a shared_ptr to an IndexSpaceRegistry object
+      std::shared_ptr<IndexSpaceRegistry> index_space_registry_shared_ptr = nullptr;
+      /// the Vacuum object
+      Vacuum vacuum = Defaults::vacuum;
+      /// the IndexSpaceMetric object
+      IndexSpaceMetric metric = Defaults::metric;
+      /// the BraKetSymmetry object
+      BraKetSymmetry braket_symmetry = Defaults::braket_symmetry;
+      /// the SPBasis object
+      SPBasis spbasis = Defaults::spbasis;
+      /// the first dummy index ordinal
+      std::size_t first_dummy_index_ordinal = Defaults::first_dummy_index_ordinal;
+      /// the BraKetTypesetting object
+      BraKetTypesetting braket_typesetting = Defaults::braket_typesetting;
+      /// the BraKetSlotTypesetting object
+      BraKetSlotTypesetting braket_slot_typesetting =
+        Defaults::braket_slot_typesetting;
+  };
+
+  /// @brief standard named-parameter constructor
+  ///
+  /// @warning default constructor does not create an IndexSpaceRegistry, thus
+  /// `this->index_space_registry()` will return nullptr
+  /// Example:
+  /// ```cpp
+  ///   Context ctx({.vacuum = Vacuum::SingleReference, .spbasis = SPBasis::spinfree});
+  /// ```
+  Context(ContextOptions options = {.index_space_registry_shared_ptr = nullptr, .vacuum = Defaults::vacuum, .metric = Defaults::metric, .braket_symmetry =  Defaults::braket_symmetry, .spbasis = Defaults::spbasis, .first_dummy_index_ordinal = Defaults::first_dummy_index_ordinal, .braket_typesetting = Defaults::braket_typesetting, .braket_slot_typesetting =
+        Defaults::braket_slot_typesetting});
 
   /// standard full-form constructor
 
@@ -77,13 +146,6 @@ class Context {
       std::size_t fdio = Defaults::first_dummy_index_ordinal,
       BraKetTypesetting bkt = Defaults::braket_typesetting,
       BraKetSlotTypesetting bkst = Defaults::braket_slot_typesetting);
-
-  /// default constructor, equivalent to Context(Vacuum::Physical,
-  /// IndexSpaceMetric::Unit, BraKetSymmetry::conjugate,
-  /// sequant::SPBasis::spinorbital, 100)
-  /// @warning default constructor does not create an IndexSpaceRegistry, thus
-  /// `this->index_space_registry()` will return nullptr
-  Context() = default;
 
   ~Context() = default;
 
@@ -232,8 +294,7 @@ void reset_default_context();
 /// @brief changes default contexts
 /// @param ctx Context objects for one or more statistics
 /// @return a move-only ContextResetter object whose destruction will reset the
-/// default context to the previous value
-/// @example
+/// default context to the previous value. Example:
 /// ```cpp
 /// {
 ///   auto resetter = set_scoped_default_context({{Statistics::Arbitrary,

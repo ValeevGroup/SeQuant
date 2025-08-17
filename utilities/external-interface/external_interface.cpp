@@ -331,7 +331,7 @@ void generalSetup() {
 int main(int argc, char **argv) {
   set_locale();
   set_default_context(Context(Vacuum::SingleProduct, IndexSpaceMetric::Unit,
-                              BraKetSymmetry::conjugate, SPBasis::spinorbital));
+                              BraKetSymmetry::conjugate, SPBasis::spinor));
   generalSetup();
 
   CLI::App app(

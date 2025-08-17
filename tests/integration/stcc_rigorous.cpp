@@ -27,7 +27,7 @@ int main(int argc, char* argv[]) {
 
   sequant::set_default_context(Context(
       mbpt::make_min_sr_spaces(), Vacuum::SingleProduct, IndexSpaceMetric::Unit,
-      BraKetSymmetry::conjugate, SPBasis::spinorbital));
+      BraKetSymmetry::conjugate, SPBasis::spinor));
   TensorCanonicalizer::register_instance(
       std::make_shared<DefaultTensorCanonicalizer>());
 
