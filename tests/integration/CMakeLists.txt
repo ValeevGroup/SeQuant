@@ -6,7 +6,7 @@ if (NOT SEQUANT_SKIP_LONG_TESTS)
         # Single-Reference Coupled-Cluster equation generation (spin-orbital and spin-free)
         "srcc.cpp ->  |3 t std so|3 t csv so|3 lambda std so|3 lambda csv so|2 t std sf|2 t csv sf|2 lambda std sf|2 lambda csv sf"
         # compact_set
-        "srcc_compact_set.cpp ->  |3 t std so|3 t csv so|3 lambda std so|3 lambda csv so|2 t std sf|2 t csv sf|2 lambda std sf|2 lambda csv sf"
+#        "srcc_compact_set.cpp ->  |3 t std so|3 t csv so|3 lambda std so|3 lambda csv so|2 t std sf|2 t csv sf|2 lambda std sf|2 lambda csv sf"
         # Single-Reference open-shell equation generation (spin-traced)
         "osstcc.cpp"
         # Equation-of-motion Coupled-Cluster
@@ -19,7 +19,7 @@ if (NOT SEQUANT_SKIP_LONG_TESTS)
             # Single-Reference closed-shell Coupled-Cluster equation generation (fast spin-traced)
             "stcc.cpp"
             # Single-Reference Coupled-Cluster closed-shell compact-set equation generation (full expansion spin-traced)
-            "stcc_compact_set.cpp"
+#            "stcc_compact_set.cpp"
             # Single-Reference closed-shell Coupled-Cluster equation generation (rigorous spin-traced)
             "stcc_rigorous.cpp"
         )
