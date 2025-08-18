@@ -932,28 +932,29 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
 
     // make braket slot bundles first
     for (std::size_t i = 0; i < num_braket_vertices; ++i) {
-      if (options.make_labels) {
-        std::wstring label;
+      if (options.make_labels || options.make_texlabels) {
+        std::wstring base_label = L"bk";
+        std::wstring psuffix;
         if (i == 0) {  // {bra,ket} bundle -> "bk{a,s,}"
-          label = L"bk";
           switch (tensor_sym) {
             case Symmetry::symm:
-              label += L"s";
+              base_label += L"s";
               break;
             case Symmetry::antisymm:
-              label += L"a";
+              base_label += L"a";
               break;
             default:
               assert(tensor_sym != Symmetry::invalid);
           }
         } else {
-          // {bra_i,ket_i} bundle -> "bk_i+1"
-          label = L"bk_" + std::to_wstring(i);
+          psuffix = L"_" + to_wstring(i);
         }
-        graph.vertex_labels.emplace_back(label);
+        if (options.make_labels)
+          graph.vertex_labels.emplace_back(base_label + psuffix);
+        if (options.make_texlabels)
+          graph.vertex_texlabels.emplace_back(
+              base_label + ((i != 0) ? (L"\\" + psuffix) : L""));
       }
-      if (options.make_texlabels)
-        graph.vertex_texlabels.emplace_back(std::nullopt);
       graph.vertex_types.push_back(VertexType::TensorBraKet);
 
       // If tensor is particle-symmetric use same color for all braket vertices,
@@ -1044,7 +1045,9 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
           graph.vertex_labels.emplace_back((is_bra ? L"bra_" : L"ket_") +
                                            std::to_wstring(i + 1));
         if (options.make_texlabels)
-          graph.vertex_texlabels.emplace_back(std::nullopt);
+          graph.vertex_texlabels.emplace_back(
+              std::wstring(is_bra ? L"bra" : L"ket") + L"\\_" +
+              std::to_wstring(i + 1));
         graph.vertex_types.push_back(vertex_type);
         // use different colors for each index slot if not particle symmetric
         graph.vertex_colors.push_back(colorizer(BraGroup{color_id}));
@@ -1083,7 +1086,8 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
       if (options.make_labels)
         graph.vertex_labels.emplace_back(L"aux_" + std::to_wstring(i + 1));
       if (options.make_texlabels)
-        graph.vertex_texlabels.emplace_back(std::nullopt);
+        graph.vertex_texlabels.emplace_back(std::wstring(L"aux") + L"$_" +
+                                            std::to_wstring(i + 1) + L"$");
       graph.vertex_types.push_back(VertexType::TensorAux);
       graph.vertex_colors.push_back(colorizer(AuxGroup{i}));
       edges.push_back(std::make_pair(tensor_vertex, nvertex));
