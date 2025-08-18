@@ -110,9 +110,11 @@ std::size_t TensorNetworkV3::Graph::vertex_to_index_idx(
   return index_idx - 1;
 }
 
-std::size_t TensorNetworkV3::Graph::vertex_to_tensor_idx(
+std::optional<std::size_t> TensorNetworkV3::Graph::vertex_to_tensor_idx(
     std::size_t vertex) const {
-  assert(vertex_types.at(vertex) == VertexType::TensorCore);
+  const auto vertex_type = vertex_types.at(vertex);
+  if (vertex_type == VertexType::Index || vertex_type == VertexType::SPBundle)
+    return std::nullopt;
 
   std::size_t tensor_idx = 0;
   for (std::size_t i = 0; i <= vertex; ++i) {
@@ -122,7 +124,6 @@ std::size_t TensorNetworkV3::Graph::vertex_to_tensor_idx(
   }
 
   assert(tensor_idx > 0);
-
   return tensor_idx - 1;
 }
 
