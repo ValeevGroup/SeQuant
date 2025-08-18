@@ -444,11 +444,18 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
   /// @return concatenated view of all indices of this tensor (bra, ket and
   /// aux)
   auto braketaux() const { return ranges::views::concat(bra_, ket_, aux_); }
+  /// @return concatenated view of all slots
+  auto slots() const { return ranges::views::concat(bra_, ket_, aux_); }
   /// @return concatenated view of all nonnull indices of this tensor (bra, ket
   /// and aux)
   auto braketaux_indices() const {
     return ranges::views::filter(
         braketaux(), [](const Index &idx) { return idx.nonnull(); });
+  }
+  /// @return concatenated view of all nonnull indices of this tensor
+  auto indices() const {
+    return ranges::views::filter(
+        slots(), [](const Index &idx) { return idx.nonnull(); });
   }
   /// @return view of the bra+ket slots
   /// @note this is to work around broken lookup rules
@@ -459,9 +466,15 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
   /// @return const view of all slots
   /// @note this is to work around broken lookup rules
   auto const_braketaux() const { return this->braketaux(); }
+  /// @return const view of all slots
+  /// @note this is to work around broken lookup rules
+  auto const_slots() const { return this->slots(); }
   /// @return const view of all indices
   /// @note this is to work around broken lookup rules
   auto const_braketaux_indices() const { return this->braketaux_indices(); }
+  /// @return const view of all indices
+  /// @note this is to work around broken lookup rules
+  auto const_indices() const { return this->indices(); }
   /// Returns the Symmetry object describing the symmetry of the bra and ket of
   /// the Tensor, i.e. what effect swapping indices in positions @c i  and @c j
   /// in <em>either bra or ket</em> has on the elements of the Tensor;
@@ -585,7 +598,7 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
   ExprPtr clone() const override { return ex<Tensor>(*this); }
 
   void reset_tags() const {
-    ranges::for_each(braketaux(), [](const auto &idx) { idx.reset_tag(); });
+    ranges::for_each(slots(), [](const auto &idx) { idx.reset_tag(); });
   }
 
   hash_type bra_hash_value() const {
@@ -722,6 +735,9 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
   }
   AbstractTensor::const_any_view_rand _braketaux() const override final {
     return braketaux();
+  }
+  AbstractTensor::const_any_view_rand _slots() const override final {
+    return slots();
   }
   std::size_t _bra_rank() const override final { return bra_rank(); }
   std::size_t _ket_rank() const override final { return ket_rank(); }

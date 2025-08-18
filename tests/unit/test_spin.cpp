@@ -40,7 +40,7 @@ TEST_CASE("spin", "[spin]") {
 
   auto reset_idx_tags = [](ExprPtr& expr) {
     if (expr->is<Tensor>())
-      ranges::for_each(expr->as<Tensor>().const_braketaux(),
+      ranges::for_each(expr->as<Tensor>().const_slots(),
                        [](const Index& idx) { idx.reset_tag(); });
   };
 

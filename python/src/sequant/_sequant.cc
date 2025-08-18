@@ -143,6 +143,10 @@ PYBIND11_MODULE(_sequant, m) {
         auto slots = t.braketaux();
         return std::vector<Index>(slots.begin(), slots.end());
       });
+  .def_property_readonly("slots", [](const Tensor &t) {
+    auto slots = t.slots();
+    return std::vector<Index>(slots.begin(), slots.end());
+  });
 
   py::class_<Complex<rational>>(m, "zRational")
       .def_property_readonly("real",

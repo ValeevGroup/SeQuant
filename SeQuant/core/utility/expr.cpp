@@ -168,9 +168,9 @@ std::string toplevel_diff(const Tensor &lhs, const Tensor &rhs) {
            to_string(rhs.label());
   }
 
-  if (lhs.braketaux().size() != rhs.braketaux().size()) {
-    return std::to_string(lhs.braketaux().size()) + " indices vs. " +
-           std::to_string(rhs.braketaux().size()) + " indices";
+  if (lhs.slots().size() != rhs.slots().size()) {
+    return std::to_string(lhs.slots().size()) + " indices vs. " +
+           std::to_string(rhs.slots().size()) + " indices";
   }
 
   if (lhs.symmetry() != rhs.symmetry()) {

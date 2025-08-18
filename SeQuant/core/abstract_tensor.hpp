@@ -152,6 +152,11 @@ class AbstractTensor {
   virtual const_any_view_rand _braketaux() const {
     throw missing_instantiation_for("_braketaux");
   }
+  /// accesses all slots
+  /// @return view of a not necessarily contiguous range of Index objects
+  virtual const_any_view_rand _slots() const {
+    throw missing_instantiation_for("_slots");
+  }
   /// @return the number of bra slots (some may be empty, hence this is the
   /// gross rank)
   virtual std::size_t _bra_rank() const {
@@ -356,9 +361,9 @@ class AbstractTensor {
 /// objects.
 /// @{
 inline auto braket(const AbstractTensor& t) { return t._braket(); }
-inline auto braketaux(const AbstractTensor& t) { return t._braketaux(); }
-/// @return a view of all indices; currently equivalent to braketaux
-inline auto indices(const AbstractTensor& t) { return braketaux(t); }
+inline auto braketaux(const AbstractTensor& t) { return t._slots(); }
+/// @return a view of all slots
+inline auto slots(const AbstractTensor& t) { return t._slots(); }
 inline auto bra_rank(const AbstractTensor& t) { return t._bra_rank(); }
 inline auto bra_net_rank(const AbstractTensor& t) { return t._bra_net_rank(); }
 inline auto ket_rank(const AbstractTensor& t) { return t._ket_rank(); }
