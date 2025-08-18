@@ -365,6 +365,8 @@ void preprocess(ExprType expr, ExportContext &ctx, Node &node,
 
   bool storeExpr = false;
 
+  // TODO: find a way to pass usage information to this call so that indices of
+  // tensors that are only used as an intermediate can be more easily reordered
   storeExpr |= ctx.rewrite(expr);
 
   if (node.leaf()) {
@@ -442,7 +444,7 @@ void preprocess(ExprType expr, ExportContext &ctx, Node &node,
 
   if constexpr (std::is_same_v<ExprType, Tensor>) {
     result.tensors[expr] |= usage;
-    const auto &indices = expr.const_indices();
+    auto &&indices = expr.const_indices();
     result.indices.insert(indices.begin(), indices.end());
 
     result.tensorReferences[expr]++;

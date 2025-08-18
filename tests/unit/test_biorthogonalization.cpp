@@ -16,8 +16,9 @@
 TEST_CASE("biorthogonalization", "[Biorthogonalization]") {
   using namespace sequant;
 
-  auto resetter = set_scoped_default_context(
-      Context(mbpt::make_mr_spaces(), Vacuum::SingleProduct));
+  auto ctx = get_default_context();
+  ctx.set(mbpt::make_mr_spaces());
+  auto resetter = set_scoped_default_context(ctx);
 
   SECTION("plain ExprPtr") {
     const std::vector<std::wstring> inputs = {L"t{a1;i1}", L"g{a1,a2;i1,i2}",

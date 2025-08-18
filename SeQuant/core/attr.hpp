@@ -31,7 +31,7 @@ enum class Symmetry { symm, antisymm, nonsymm, invalid };
 enum class BraKetSymmetry { symm, conjugate, nonsymm, invalid };
 
 /// describes type of single-particle basis
-enum class SPBasis { spinorbital, spinfree };
+enum class SPBasis { spinor, spinfree };
 
 inline std::wstring to_wolfram(const Symmetry& symmetry) {
   std::wstring result;
@@ -116,6 +116,30 @@ inline std::wstring to_string(Vacuum V) {
       abort();
   }
 }
+
+/// describes LaTeX typesetting convention for contravariant (bra, annihilation)
+/// and covariant (ket, creation) indices
+enum class BraKetTypesetting {
+  /// contravariants as subscripts
+  ContraSub,
+  CoSuper = ContraSub,
+  BraSub = ContraSub,
+  KetSuper = ContraSub,
+  /// covariant as subscripts
+  CoSub,
+  ContraSuper = CoSub,
+  BraSuper = CoSub,
+  KetSub = CoSub,
+};
+
+/// describes typesetting convention for bra/ket tensor slots
+enum class BraKetSlotTypesetting {
+  /// all indices are typeset naively, with empty slots indicated by
+  /// `\testvisiblespace`
+  Naive,
+  /// tensor package is used to ensure consistent alignment of bra and ket slots
+  TensorPackage
+};
 
 }  // namespace sequant
 

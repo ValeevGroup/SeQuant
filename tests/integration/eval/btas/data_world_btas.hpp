@@ -112,7 +112,7 @@ class DataWorldBTAS {
 
     assert(tensor.label() != L"t");
 
-    auto const r1_limits = range1_limits(tensor, nocc, nvirt);
+    auto r1_limits = range1_limits(tensor, nocc, nvirt);
     assert(r1_limits.size() == DataInfo::fock_rank ||
            r1_limits.size() == DataInfo::eri_rank);
 

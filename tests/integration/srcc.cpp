@@ -45,7 +45,7 @@ inline const std::map<std::string, mbpt::CSV> str2uocc = {
 
 /// maps SPBasis type string to enum
 inline const std::map<std::string, SPBasis> str2spbasis = {
-    {"so", SPBasis::spinorbital}, {"sf", SPBasis::spinfree}};
+    {"so", SPBasis::spinor}, {"sf", SPBasis::spinfree}};
 
 // profiles evaluation of all CC equations for a given ex rank N with projection
 // ex rank PMIN .. P
@@ -84,7 +84,7 @@ class compute_cceqvec {
       auto context_resetter = sequant::set_scoped_default_context(
           sequant::Context(make_min_sr_spaces(), Vacuum::SingleProduct,
                            IndexSpaceMetric::Unit, BraKetSymmetry::conjugate,
-                           SPBasis::spinorbital));
+                           SPBasis::spinor));
       std::vector<ExprPtr> eqvec_so;
       switch (type) {
         case EqnType::t:
@@ -119,7 +119,7 @@ class compute_cceqvec {
       // validate known sizes of some CC residuals
       // N.B. # of equations depends on whether we use symmetric or
       // antisymmetric amplitudes
-      if (get_default_context().spbasis() == SPBasis::spinorbital) {
+      if (get_default_context().spbasis() == SPBasis::spinor) {
         if (type == EqnType::t) {
           if (R == 1 && N == 1) runtime_assert(eqvec[R]->size() == 8);
           if (R == 1 && N == 2) runtime_assert(eqvec[R]->size() == 14);

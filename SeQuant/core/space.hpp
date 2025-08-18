@@ -448,9 +448,26 @@ class IndexSpace {
   explicit IndexSpace(std::wstring_view label);
 
   IndexSpace(const IndexSpace &other) = default;
-  IndexSpace(IndexSpace &&other) = default;
+  /// move constructor
+  /// @param other[in,out] on output is null
+  /// @post state of this object is identical to the input state of @p other
+  IndexSpace(IndexSpace &&other) noexcept
+      : attr_(std::move(other.attr_)),
+        base_key_(std::move(other.base_key_)),
+        approximate_size_(std::move(other.approximate_size_)) {
+    other = null;
+  }
   IndexSpace &operator=(const IndexSpace &other) = default;
-  IndexSpace &operator=(IndexSpace &&other) = default;
+  /// move constructor
+  /// @param other[in,out] on output is null
+  /// @post state of this object is identical to the input state of @p other
+  IndexSpace &operator=(IndexSpace &&other) {
+    attr_ = std::move(other.attr_);
+    base_key_ = std::move(other.base_key_);
+    approximate_size_ = std::move(other.approximate_size_);
+    other = null;
+    return *this;
+  }
 
   const std::wstring &base_key() const { return base_key_; }
   static std::wstring_view reduce_key(std::wstring_view key) {

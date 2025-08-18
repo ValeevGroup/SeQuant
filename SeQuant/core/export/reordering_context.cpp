@@ -1,5 +1,7 @@
 #include <SeQuant/core/export/reordering_context.hpp>
 
+#include <SeQuant/core/parse.hpp>
+
 #include <algorithm>
 #include <cassert>
 #include <ranges>
@@ -150,7 +152,7 @@ bool ReorderingContext::rewrite(Tensor &tensor) const {
   }
 
   container::svector<Index> indices;
-  indices.reserve(tensor.const_indices().size());
+  indices.reserve(tensor.num_indices());
 
   if (prioritize_aux) {
     indices.insert(end(indices), begin(tensor.aux()), end(tensor.aux()));
@@ -208,7 +210,9 @@ bool ReorderingContext::rewrite(Tensor &tensor) const {
     indices.insert(end(indices), begin(tensor.aux()), end(tensor.aux()));
   }
 
-  tensor = Tensor(tensor.label(), bra(), ket(), aux(std::move(indices)));
+  tensor = Tensor(tensor.label(), bra(), ket(), aux(std::move(indices)),
+                  Symmetry::nonsymm, BraKetSymmetry::nonsymm,
+                  ParticleSymmetry::nonsymm);
 
   return true;
 }

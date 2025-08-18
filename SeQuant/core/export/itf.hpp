@@ -145,11 +145,9 @@ class ItfGenerator : public Generator<Context> {
   std::string get_name(const Tensor &tensor, const Context &ctx) const {
     std::string name = toUtf8(tensor.label());
 
-    const auto &indices = tensor.const_indices();
-
-    if (!indices.empty()) {
+    if (tensor.num_indices() > 0) {
       name += ":";
-      for (const Index &idx : indices) {
+      for (const Index &idx : tensor.const_indices()) {
         name += ctx.get_tag(idx.space());
       }
     }
@@ -161,12 +159,10 @@ class ItfGenerator : public Generator<Context> {
                         const Context &ctx) const override {
     std::string representation = get_name(tensor, ctx);
 
-    const auto &indices = tensor.const_indices();
-
     representation += "[";
 
-    for (std::size_t i = 0; i < indices.size(); ++i) {
-      representation += represent(indices[i], ctx);
+    for (const Index &idx : tensor.indices()) {
+      representation += represent(idx, ctx);
     }
 
     representation += "]";

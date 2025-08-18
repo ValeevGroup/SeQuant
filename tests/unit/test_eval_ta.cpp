@@ -45,11 +45,12 @@ struct NestedTensorIndices {
       if (!ranges::contains(cont, el)) cont.emplace_back(el);
     };
 
-    for (Index const& ix : tnsr.const_braket())
+    for (Index const& ix : tnsr.const_braket_indices()) {
       append_unique(ix.has_proto_indices() ? inner : outer, ix);
+    }
 
     for (Index const& ix :
-         tnsr.const_braket() | transform(&Index::proto_indices) | join)
+         tnsr.const_braket_indices() | transform(&Index::proto_indices) | join)
       append_unique(outer, ix);
   }
 
@@ -60,16 +61,7 @@ struct NestedTensorIndices {
 
 auto eval_node(sequant::ExprPtr const& expr) {
   using namespace sequant;
-  auto node = binarize(expr);
-  return transform_node(node, [](auto&& val) {
-    if (val.is_tensor()) {
-      return EvalExprTA(*val.op_type(), val.result_type(), val.expr(),
-                        NestedTensorIndices(val.as_tensor()).outer_inner() |
-                            ranges::to<EvalExpr::index_vector>(),
-                        val.canon_phase(), val.hash_value());
-    } else
-      return EvalExprTA(val);
-  });
+  return binarize<EvalExprTA>(expr);
 }
 
 auto tensor_to_key(sequant::Tensor const& tnsr) {

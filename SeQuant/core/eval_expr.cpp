@@ -9,7 +9,7 @@
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/parse.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
-#include <SeQuant/core/tensor_network_v2.hpp>
+#include <SeQuant/core/tensor_network_v3.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/wstring.hpp>
 #include <SeQuant/external/bliss/graph.hh>
@@ -40,7 +40,7 @@ bool is_tot(Tensor const& t) noexcept {
 
 }  // namespace
 
-namespace dummy {
+namespace detail {
 inline constexpr std::wstring_view label_tensor{L"I"};
 inline constexpr std::wstring_view label_scalar{L"Z"};
 
@@ -69,18 +69,30 @@ ExprPtr make_tensor(Args&&... arg_list) {
   return ex<Tensor>(label_tensor, std::forward<Args>(arg_list)...);
 }
 
+template <typename... Args>
+ExprPtr make_tensor_wo_symmetries(Args&&... args) {
+  return make_tensor(std::forward<Args>(args)..., Symmetry::nonsymm,
+                     BraKetSymmetry::nonsymm, ParticleSymmetry::nonsymm);
+}
+
 ExprPtr make_tensor(Tensor const& t, bool with_symm) {
   if (with_symm) {
-    return make_tensor(bra(t.bra()), ket(t.ket()), aux(t.aux()), t.symmetry(),
-                       t.braket_symmetry(), t.particle_symmetry());
+    return make_tensor(bra(t.bra()),            //
+                       ket(t.ket()),            //
+                       aux(t.aux()),            //
+                       t.symmetry(),            //
+                       t.braket_symmetry(),     //
+                       t.particle_symmetry());  //
+  } else {
+    return make_tensor_wo_symmetries(bra(t.bra()),  //
+                                     ket(t.ket()),  //
+                                     aux(t.aux()));
   }
-
-  return make_tensor(bra(t.bra()), ket(t.ket()), aux(t.aux()));
 }
 
 ExprPtr make_variable() { return ex<Variable>(label_scalar); }
 
-}  // namespace dummy
+}  // namespace detail
 
 std::string to_label_annotation(const Index& idx) {
   using namespace ranges::views;
@@ -118,7 +130,7 @@ EvalExpr::EvalExpr(Tensor const& tnsr)
   assert(!tnsr.indices().empty());
   if (is_tot(tnsr)) {
     ExprPtrList tlist{expr_};
-    auto tn = TensorNetworkV2(tlist);
+    auto tn = TensorNetworkV3(tlist);
     auto md =
         tn.canonicalize_slots(TensorCanonicalizer::cardinal_tensor_labels());
     hash_value_ = md.hash_value();
@@ -149,10 +161,10 @@ EvalExpr::EvalExpr(EvalOp op, ResultType res, ExprPtr const& ex,
                    std::shared_ptr<bliss::Graph> connectivity)
     : op_type_{op},
       result_type_{res},
-      expr_{ex.clone()},
+      hash_value_{h},
       canon_indices_{std::move(ixs)},
       canon_phase_{p},
-      hash_value_{h},
+      expr_{ex.clone()},
       connectivity_{std::move(connectivity)} {
   if (connectivity_ != nullptr) {
     // Note: The non-const cmp function performs some internal cleanup that the
@@ -260,7 +272,7 @@ size_t hash_indices(T const& indices) noexcept {
 size_t hash_terminal_tensor(Tensor const& tnsr) noexcept {
   size_t h = 0;
   hash::combine(h, hash::value(tnsr.label()));
-  hash::combine(h, hash_indices(tnsr.const_indices()));
+  hash::combine(h, hash_indices(tnsr.const_slots()));
   return h;
 }
 }  // namespace
@@ -333,20 +345,21 @@ EvalExprNode binarize(Sum const& sum) {
     auto h = ranges::at(hs, ++i);
     if (all_tensors) {
       auto const& t = left.as_tensor();
-      return {EvalOp::Sum,                                                   //
-              ResultType::Tensor,                                            //
-              dummy::make_tensor(bra(t.bra()), ket(t.ket()), aux(t.aux())),  //
-              left.canon_indices(),                                          //
-              1,                                                             //
-              h,                                                             //
+      return {EvalOp::Sum,         //
+              ResultType::Tensor,  //
+              detail::make_tensor_wo_symmetries(bra(t.bra()), ket(t.ket()),
+                                                aux(t.aux())),  //
+              left.canon_indices(),                             //
+              1,                                                //
+              h,                                                //
               nullptr};
     } else {
-      return {EvalOp::Sum,             //
-              ResultType::Scalar,      //
-              dummy::make_variable(),  //
-              {},                      //
-              1,                       //
-              h,                       //
+      return {EvalOp::Sum,              //
+              ResultType::Scalar,       //
+              detail::make_variable(),  //
+              {},                       //
+              1,                        //
+              h,                        //
               nullptr};
     }
   };
@@ -373,18 +386,23 @@ EvalExprNode binarize(Product const& prod) {
     auto h = ranges::at(hs, ++i);
     if (left->is_scalar() && right->is_scalar()) {
       // scalar * scalar
-      return {
-          EvalOp::Product, ResultType::Scalar, dummy::make_variable(), {}, 1, h,
-          nullptr};
+      return {EvalOp::Product,
+              ResultType::Scalar,
+              detail::make_variable(),
+              {},
+              1,
+              h,
+              nullptr};
     } else if (left->is_scalar() || right->is_scalar()) {
       // scalar * tensor or tensor * scalar
       auto const& tl = left->is_tensor() ? left : right;
       auto const& t = tl->as_tensor();
-      return {EvalOp::Product,                                               //
-              ResultType::Tensor,                                            //
-              dummy::make_tensor(bra(t.bra()), ket(t.ket()), aux(t.aux())),  //
-              tl->canon_indices(),                                           //
-              1,                                                             //
+      return {EvalOp::Product,     //
+              ResultType::Tensor,  //
+              detail::make_tensor_wo_symmetries(bra(t.bra()), ket(t.ket()),
+                                                aux(t.aux())),  //
+              tl->canon_indices(),                              //
+              1,                                                //
               h,
               nullptr};
     } else {
@@ -393,24 +411,25 @@ EvalExprNode binarize(Product const& prod) {
       collect_tensor_factors(left, subfacs);
       collect_tensor_factors(right, subfacs);
       auto ts = subfacs | transform([](auto&& t) { return t.expr; });
-      auto tn = TensorNetworkV2(ts);
+      auto tn = TensorNetworkV3(ts);
       auto canon =
           tn.canonicalize_slots(TensorCanonicalizer::cardinal_tensor_labels());
       hash::combine(h, canon.hash_value());
       bool const scalar_result = canon.named_indices_canonical.empty();
       if (scalar_result) {
-        return {EvalOp::Product,         //
-                ResultType::Scalar,      //
-                dummy::make_variable(),  //
-                {},                      //
-                canon.phase,             //
+        return {EvalOp::Product,          //
+                ResultType::Scalar,       //
+                detail::make_variable(),  //
+                {},                       //
+                canon.phase,              //
                 h,
                 std::move(canon.graph)};
       } else {
         auto idxs = get_unique_indices(Product(ts));
         return {EvalOp::Product,     //
                 ResultType::Tensor,  //
-                dummy::make_tensor(bra(idxs.bra), ket(idxs.ket), aux(idxs.aux)),
+                detail::make_tensor_wo_symmetries(bra(idxs.bra), ket(idxs.ket),
+                                                  aux(idxs.aux)),
                 canon.get_indices<Index::index_vector>(),  //
                 canon.phase,                               //
                 h,
@@ -425,10 +444,10 @@ EvalExprNode binarize(Product const& prod) {
     auto left = fold_left_to_node(factors | move, make_prod);
     auto right = binarize(Constant{prod.scalar()});
 
-    auto expr = left->is_tensor()     ? dummy::make_tensor(left->as_tensor(),
-                                                           /*with_symm = */ false)
+    auto expr = left->is_tensor()     ? detail::make_tensor(left->as_tensor(),
+                                                            /*with_symm = */ false)
                 : left->is_constant() ? (left->expr() * right->expr())
-                                      : dummy::make_variable();
+                                      : detail::make_variable();
     auto type = left->is_tensor() ? ResultType::Tensor : ResultType::Scalar;
 
     auto h = left->hash_value();

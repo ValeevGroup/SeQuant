@@ -6,6 +6,9 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/utility/string.hpp>
 
+#include <range/v3/view/join.hpp>
+#include <range/v3/view/transform.hpp>
+
 #include <sstream>
 #include <string>
 #include <string_view>
@@ -50,15 +53,13 @@ class TextGenerator : public Generator<Context> {
   std::string represent(const Tensor &tensor,
                         const Context &ctx) const override {
     std::string representation = toUtf8(tensor.label()) + "[";
-    const auto &indices = tensor.const_indices();
 
-    for (std::size_t i = 0; i < indices.size(); ++i) {
-      representation += represent(indices[i], ctx);
-
-      if (i + 1 < indices.size()) {
-        representation += ", ";
-      }
-    }
+    using namespace std::literals;
+    representation += tensor.const_indices() |
+                      ranges::views::transform([&](const Index &idx) {
+                        return represent(idx, ctx);
+                      }) |
+                      ranges::views::join(", "s) | ranges::to<std::string>();
 
     representation += "]";
 

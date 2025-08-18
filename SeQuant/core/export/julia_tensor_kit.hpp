@@ -6,6 +6,8 @@
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/space.hpp>
 
+#include <range/v3/view/enumerate.hpp>
+
 namespace sequant {
 
 // Context class for the JuliaTensorKitGenerator
@@ -73,24 +75,22 @@ class JuliaTensorKitGenerator : public JuliaTensorOperationsGenerator<Context> {
   std::string domain(const Tensor &tensor, const Context &ctx) const {
     std::string domain;
 
-    const auto &indices = tensor.const_indices();
     const std::size_t braRank = tensor.bra_rank();
+    const std::size_t num_indices = tensor.num_indices();
 
-    if (braRank == 0 && indices.size() > 0) {
+    if (braRank == 0 && num_indices > 0) {
       throw std::runtime_error(
           "It is not (yet) clear how to represent a zero-dimensional domain "
           "for a tensor in TensorKit");
     }
 
-    for (std::size_t i = 0; i < indices.size(); ++i) {
-      const Index &idx = indices[i];
-
+    for (const auto &[i, idx] : ranges::views::enumerate(tensor.indices())) {
       domain += "ℝ^";
       domain += ctx.get_dim(idx.space());
 
       if (i == braRank - 1) {
         domain += ", ";
-      } else if (i + 1 < indices.size()) {
+      } else if (i + 1 < num_indices) {
         domain += " ⊗ ";
       }
     }

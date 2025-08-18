@@ -54,9 +54,9 @@ TEST_CASE("optimize", "[optimize]") {
 
     auto single_term_opt = [](Product const& prod) {
       return opt::single_term_opt(prod, [](Index const& ix) {
-        auto lbl = to_string(ix.label());
-        auto sz = ix.space().approximate_size();
-        return ix.space().approximate_size();
+        // null space contributes x1 to the size
+        auto sz = ix.nonnull() ? ix.space().approximate_size() : 1;
+        return sz;
       });
     };
 
@@ -216,9 +216,9 @@ TEST_CASE("optimize", "[optimize]") {
                // requires different indexing
                {{L"R{a1,a3;i2,i3} = 2 GAM0{a1,a3;a4,a5} T2g{a4,a5;i2,i3} - "
                  L"GAM0{a1,a3;a4,a5} T2g{a4,a5;i3,i2}"},
-                {L"CSE1{;;a3,a1,i3,i2} = GAM0{a1,a3;a4,a5} T2g{a4,a5;i2,i3}",
-                 L"R{a1,a3;i2,i3} = 2 CSE1{;;a3,a1,i3,i2} - "
-                 L"CSE1{;;a3,a1,i2,i3}"}},
+                {L"CSE1{;;a3,a1,i2,i3} = GAM0{a1,a3;a4,a5} T2g{a4,a5;i2,i3}",
+                 L"R{a1,a3;i2,i3} = 2 CSE1{;;a3,a1,i2,i3} - "
+                 L"CSE1{;;a3,a1,i3,i2}"}},
                // In this case it is important that the computation of the
                // subexpression isn't simply thrown at the beginning of the
                // expression list as it depends on B, which has to be computed
@@ -232,10 +232,14 @@ TEST_CASE("optimize", "[optimize]") {
         std::vector<ResultExpr> expected;
 
         for (const std::wstring& current : inputs) {
-          expressions.push_back(binarize(parse_result_expr(current)));
+          expressions.push_back(binarize(parse_result_expr(
+              current, Symmetry::nonsymm, BraKetSymmetry::nonsymm,
+              ParticleSymmetry::nonsymm)));
         }
         for (const std::wstring& current : outputs) {
-          expected.push_back(parse_result_expr(current));
+          expected.push_back(parse_result_expr(current, Symmetry::nonsymm,
+                                               BraKetSymmetry::nonsymm,
+                                               ParticleSymmetry::nonsymm));
         }
 
         auto binarizer = [](auto&& expr) { return binarize(expr); };

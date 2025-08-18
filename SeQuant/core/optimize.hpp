@@ -191,7 +191,7 @@ EvalSequence single_term_opt(TensorNetworkV2 const& network,
 
     nth_tensor_indices.emplace_back();
     auto& ixs = nth_tensor_indices.back();
-    for (auto&& j : indices(tnsr)) ixs.emplace_back(j);
+    for (auto&& j : slots(tnsr)) ixs.emplace_back(j);
 
     ranges::sort(ixs, std::less<Index>{});
   }

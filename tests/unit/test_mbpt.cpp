@@ -292,13 +292,6 @@ TEST_CASE("mbpt", "[mbpt]") {
 
     SECTION("screen") {
       using namespace sequant::mbpt;
-      auto sr_registry = sequant::mbpt::make_sr_spaces();
-      auto old_context = get_default_context();
-      sequant::Context new_context(
-          sr_registry, old_context.vacuum(), old_context.metric(),
-          old_context.braket_symmetry(), old_context.spbasis(),
-          old_context.first_dummy_index_ordinal());
-      auto cxt_resetter = set_scoped_default_context(new_context);
       auto g_t2_t2 = H_(2) * T_(2) * T_(2);
       REQUIRE(raises_vacuum_to_rank(g_t2_t2, 2));
       REQUIRE(raises_vacuum_up_to_rank(g_t2_t2, 2));
@@ -402,9 +395,9 @@ TEST_CASE("mbpt", "[mbpt]") {
               L"{ "
               L"\\bigl({{{\\frac{1}{36}}}{\\bar{R}^{{i_1}{i_2}{i_3}}_{{a_1}{a_"
               L"2}{a_3}}}{\\tilde{a}^{{a_1}{a_2}{a_3}}_{{i_1}{i_2}{i_3}}}} + "
-              L"{{R^{{i_1}}_{{a_1}}}{\\tilde{a}^{{a_1}}_{{i_1}}}} + "
               L"{{{\\frac{1}{4}}}{\\bar{R}^{{i_1}{i_2}}_{{a_1}{a_2}}}{\\tilde{"
-              L"a}^{{a_1}{a_2}}_{{i_1}{i_2}}}}\\bigr) }");
+              L"a}^{{a_1}{a_2}}_{{i_1}{i_2}}}} + "
+              L"{{R^{{i_1}}_{{a_1}}}{\\tilde{a}^{{a_1}}_{{i_1}}}}\\bigr) }");
 
       auto R12 = R(nₚ(2), nₕ(1));
       lower_to_tensor_form(R12);
@@ -421,11 +414,9 @@ TEST_CASE("mbpt", "[mbpt]") {
       simplify(R21);
       //    std::wcout << "R21: " << to_latex(R21) << std::endl;
       REQUIRE(to_latex(R21) ==
-              L"{ "
-              L"\\bigl({{{\\frac{1}{2}}}{\\bar{R}^{{i_1}{i_2}}_{{a_1}}}{"
-              L"\\tilde{a}^{"
-              L"\\textvisiblespace\\,{a_1}}_{{i_1}{i_2}}}} + "
-              L"{{R^{{i_1}}_{}}{\\tilde{a}_{{i_1}}}}\\bigr) }");
+              L"{ \\bigl({{R^{{i_1}}_{}}{\\tilde{a}_{{i_1}}}} + "
+              L"{{{\\frac{1}{2}}}{\\bar{R}^{{i_1}{i_2}}_{{a_1}}}{\\tilde{a}^{"
+              L"\\textvisiblespace\\,{a_1}}_{{i_1}{i_2}}}}\\bigr) }");
 
       auto L23 = L(nₚ(2), nₕ(3));
       lower_to_tensor_form(L23);
@@ -433,11 +424,11 @@ TEST_CASE("mbpt", "[mbpt]") {
       // std::wcout << "L23: " << to_latex(L23) << std::endl;
       REQUIRE(to_latex(L23) ==
               L"{ "
-              L"\\bigl({{{\\frac{1}{2}}}{\\bar{L}^{{a_1}}_{{i_1}{i_2}}}{"
-              L"\\tilde{a}^{{i_1}{i_2}}_{\\textvisiblespace\\,{a_1}}}} + "
-              L"{{{\\frac{1}{12}}}{\\bar{L}^{{a_1}{a_2}}_{{i_1}{i_2}{i_3}}}{"
-              L"\\tilde{a}^{{i_1}{i_2}{i_3}}_{\\textvisiblespace\\,{a_1}{a_2}}}"
-              L"} + {{L^{}_{{i_1}}}{\\tilde{a}^{{i_1}}}}\\bigr) }");
+              L"\\bigl({{{\\frac{1}{12}}}{\\bar{L}^{{a_1}{a_2}}_{{i_1}{i_2}{i_"
+              L"3}}}{\\tilde{a}^{{i_1}{i_2}{i_3}}_{\\textvisiblespace\\,{a_1}{"
+              L"a_2}}}} + {{L^{}_{{i_1}}}{\\tilde{a}^{{i_1}}}} + "
+              L"{{{\\frac{1}{2}}}{\\bar{L}^{{a_1}}_{{i_1}{i_2}}}{\\tilde{a}^{{"
+              L"i_1}{i_2}}_{\\textvisiblespace\\,{a_1}}}}\\bigr) }");
     }
   }
 
@@ -536,9 +527,9 @@ TEST_CASE("mbpt", "[mbpt]") {
     }  // SECTION("SRSO-PNO")
 
     SECTION("SRSF") {
-      auto ctx_resetter = set_scoped_default_context(sequant::Context(
-          mbpt::make_sr_spaces(), Vacuum::SingleProduct, IndexSpaceMetric::Unit,
-          BraKetSymmetry::conjugate, SPBasis::spinfree));
+      auto ctx = get_default_context();
+      ctx.set(SPBasis::spinfree);
+      auto ctx_resetter = set_scoped_default_context(ctx);
 
       // H2 -> R2
       SEQUANT_PROFILE_SINGLE("wick(H2 -> R2)", {
@@ -566,9 +557,9 @@ TEST_CASE("mbpt", "[mbpt]") {
     }  // SECTION("SRSF")
 
     SECTION("MRSO") {
-      auto ctx_resetter = set_scoped_default_context(sequant::Context(
-          mbpt::make_mr_spaces(), Vacuum::SingleProduct, IndexSpaceMetric::Unit,
-          BraKetSymmetry::conjugate, SPBasis::spinorbital));
+      auto ctx = get_default_context();
+      ctx.set(mbpt::make_mr_spaces());
+      auto ctx_resetter = set_scoped_default_context(ctx);
 
       // H2**T2 -> 0
       // std::wcout << "H_(2) * T_(2) = " << to_latex(H_(2) * T_(2)) <<
@@ -599,9 +590,10 @@ TEST_CASE("mbpt", "[mbpt]") {
 
     // now compute using physical vacuum
     {
-      auto ctx_resetter = set_scoped_default_context(sequant::Context(
-          mbpt::make_mr_spaces(), Vacuum::Physical, IndexSpaceMetric::Unit,
-          BraKetSymmetry::conjugate, SPBasis::spinorbital));
+      auto ctx = get_default_context();
+      ctx.set(mbpt::make_mr_spaces());
+      ctx.set(Vacuum::Physical);
+      auto ctx_resetter = set_scoped_default_context(ctx);
       auto result_phys = t::vac_av(t::H_(2) * t::T_(2), {{0, 1}});
 
       {
@@ -638,9 +630,10 @@ TEST_CASE("mbpt", "[mbpt]") {
 
 SECTION("MRSF") {
   // now compute using (closed) Fermi vacuum + spinfree basis
-  auto ctx_resetter = set_scoped_default_context(sequant::Context(
-      mbpt::make_mr_spaces(), Vacuum::SingleProduct, IndexSpaceMetric::Unit,
-      BraKetSymmetry::conjugate, SPBasis::spinfree));
+  auto ctx = get_default_context();
+  ctx.set(mbpt::make_mr_spaces());
+  ctx.set(SPBasis::spinfree);
+  auto ctx_resetter = set_scoped_default_context(ctx);
 
   // H2**T2 -> 0
   std::wcout << "H_(2) * T_(2) = " << to_latex(t::H_(2) * t::T_(2))

@@ -27,13 +27,18 @@ struct TensorBlockComparator {
       return cmp(lhs.label(), rhs.label());
     }
 
-    const auto &lhs_indices = lhs.indices();
-    const auto &rhs_indices = rhs.indices();
-
-    if (lhs.indices().size() != rhs.indices().size()) {
-      Comparator<decltype(lhs_indices.size())> cmp;
-      return cmp(lhs_indices.size(), rhs_indices.size());
+    if (lhs.num_slots() != rhs.num_slots()) {
+      Comparator<decltype(lhs.num_slots())> cmp;
+      return cmp(lhs.num_slots(), rhs.num_slots());
     }
+
+    if (lhs.num_indices() != rhs.num_indices()) {
+      Comparator<decltype(lhs.num_indices())> cmp;
+      return cmp(lhs.num_indices(), rhs.num_indices());
+    }
+
+    auto &&lhs_indices = lhs.indices();
+    auto &&rhs_indices = rhs.indices();
 
     Comparator<IndexSpace> cmp;
     Selector<IndexSpace> selector;

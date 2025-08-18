@@ -19,7 +19,7 @@ ExprPtr csv_transform_impl(Tensor const& tnsr, const IndexSpace& csv_basis,
                            std::wstring_view coeff_tensor_label) {
   using ranges::views::transform;
 
-  if (ranges::none_of(tnsr.const_braket(), &Index::has_proto_indices))
+  if (ranges::none_of(tnsr.const_braket_indices(), &Index::has_proto_indices))
     return nullptr;
 
   assert(ranges::none_of(tnsr.aux(), &Index::has_proto_indices));

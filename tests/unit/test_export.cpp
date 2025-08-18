@@ -250,6 +250,8 @@ TEMPLATE_LIST_TEST_CASE("export_tests", "[export]", KnownGenerators) {
 
   auto resetter = to_export_context();
 
+  REQUIRE(Index(L"i_1") < Index(L"a_1"));
+
   // Safe-guard that template magic works
   const std::size_t n_generators = 5;
 
@@ -343,40 +345,50 @@ TEST_CASE("export", "[export]") {
 
     std::vector<std::pair<std::wstring, std::array<std::string, 3>>> tests = {
         // Unchanged
-        {L"t{a1;i1}", {"t{a1;i1}", "t{a1;i1}", "t{a1;i1}"}},
+        {L"t{a1;i1}:N-N-N",
+         {"t{a1;i1}:N-N-N", "t{a1;i1}:N-N-N", "t{a1;i1}:N-N-N"}},
         {L"t{a1,a2;i1,i2}:N-N-S",
          {"t{a1,a2;i1,i2}:N-N-S", "t{a1,a2;i1,i2}:N-N-S",
           "t{a1,a2;i1,i2}:N-N-S"}},
         // Bra resorting
         {L"t{a1,i1}:S-N-S",
-         {"t{;;i1,a1}:N", "t{a1,i1}:S-N-S", "t{a1,i1}:S-N-S"}},
+         {"t{;;i1,a1}:N-N-N", "t{a1,i1}:S-N-S", "t{a1,i1}:S-N-S"}},
         {L"t{i1,a1}:S-N-S",
-         {"t{i1,a1}:S-N-S", "t{;;a1,i1}:N", "t{i1,a1}:S-N-S"}},
+         {"t{i1,a1}:S-N-S", "t{;;a1,i1}:N-N-N", "t{i1,a1}:S-N-S"}},
         // Ket resorting
         {L"t{;a1,i1}:S-N-S",
-         {"t{;;i1,a1}:N", "t{;a1,i1}:S-N-S", "t{;a1,i1}:S-N-S"}},
+         {"t{;;i1,a1}:N-N-N", "t{;a1,i1}:S-N-S", "t{;a1,i1}:S-N-S"}},
         {L"t{;i1,a1}:S-N-S",
-         {"t{;i1,a1}:S-N-S", "t{;;a1,i1}:N", "t{;i1,a1}:S-N-S"}},
+         {"t{;i1,a1}:S-N-S", "t{;;a1,i1}:N-N-N", "t{;i1,a1}:S-N-S"}},
         {L"t{;u1,a1}:S-N-S",
-         {"t{;u1,a1}:S-N-S", "t{;;a1,u1}:N", "t{;u1,a1}:S-N-S"}},
+         {"t{;u1,a1}:S-N-S", "t{;;a1,u1}:N-N-N", "t{;u1,a1}:S-N-S"}},
         // BraKet swapping
-        {L"t{a1;i1}:N-S", {"t{;;i1,a1}:N-N", "t{a1;i1}:N-S", "t{a1;i1}:N-S"}},
-        {L"t{i1;a1}:N-S", {"t{i1;a1}:N-S", "t{;;a1,i1}:N-N", "t{i1;a1}:N-S"}},
+        {L"t{a1;i1}:N-S-N",
+         {"t{;;i1,a1}:N-N-N", "t{a1;i1}:N-S-N", "t{a1;i1}:N-S-N"}},
+        {L"t{i1;a1}:N-S-N",
+         {"t{i1;a1}:N-S-N", "t{;;a1,i1}:N-N-N", "t{i1;a1}:N-S-N"}},
         // Aux prioritization
-        {L"t{i1;;a1}", {"t{i1;;a1}", "t{;;a1,i1}", "t{i1;;a1}"}},
-        {L"t{a1;;i1}", {"t{;;i1,a1}", "t{a1;;i1}", "t{a1;;i1}"}},
+        {L"t{i1;;a1}:N-N-N",
+         {"t{i1;;a1}:N-N-N", "t{;;a1,i1}:N-N-N", "t{i1;;a1}:N-N-N"}},
+        {L"t{a1;;i1}:N-N-N",
+         {"t{;;i1,a1}:N-N-N", "t{a1;;i1}:N-N-N", "t{a1;;i1}:N-N-N"}},
         // Column-resorting (particle-symmetry)
         {L"t{i1,i2;u1,a1}:N-N-S",
-         {"t{i1,i2;u1,a1}:N-N-S", "t{;;i2,i1,a1,u1}", "t{i1,i2;u1,a1}:N-N-S"}},
+         {"t{i1,i2;u1,a1}:N-N-S", "t{;;i2,i1,a1,u1}:N-N-N",
+          "t{i1,i2;u1,a1}:N-N-S"}},
         {L"t{u1,a1;i1,i2}:N-N-S",
-         {"t{u1,a1;i1,i2}:N-N-S", "t{;;a1,u1,i2,i1}", "t{u1,a1;i1,i2}:N-N-S"}},
+         {"t{u1,a1;i1,i2}:N-N-S", "t{;;a1,u1,i2,i1}:N-N-N",
+          "t{u1,a1;i1,i2}:N-N-S"}},
         {L"t{u1,a1;i1,u2}:N-N-S",
-         {"t{u1,a1;i1,u2}:N-N-S", "t{;;a1,u1,u2,i1}", "t{u1,a1;i1,u2}:N-N-S"}},
+         {"t{u1,a1;i1,u2}:N-N-S", "t{;;a1,u1,u2,i1}:N-N-N",
+          "t{u1,a1;i1,u2}:N-N-S"}},
         {L"t{i1,u2;u1,a1}:N-N-S",
-         {"t{i1,u2;u1,a1}:N-N-S", "t{;;u2,i1,a1,u1}", "t{i1,u2;u1,a1}:N-N-S"}},
+         {"t{i1,u2;u1,a1}:N-N-S", "t{;;u2,i1,a1,u1}:N-N-N",
+          "t{i1,u2;u1,a1}:N-N-S"}},
         // combined
         {L"t{u1,a1;u2,i1}:N-S-S",
-         {"t{;;u2,i1,u1,a1}", "t{;;a1,u1,i1,u2}", "t{u1,a1;u2,i1}:N-S-S"}},
+         {"t{;;u2,i1,u1,a1}:N-N-N", "t{;;a1,u1,i1,u2}:N-N-N",
+          "t{u1,a1;u2,i1}:N-S-S"}},
     };
 
     ReorderingContext ctx(MemoryLayout::Unspecified);

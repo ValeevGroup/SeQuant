@@ -272,18 +272,19 @@ class EvalExprBTAS final : public EvalExpr {
   ///         of the labels of indices in \c bk
   ///
   template <typename Iterable>
-  static auto index_hash(Iterable const& bk) {
-    return ranges::views::transform(bk, [](auto const& idx) {
-      //
-      // WARNING!
-      // The BTAS uses long for scalar indexing by default.
-      // Hence, here we explicitly cast the size_t values to long
-      // Which is a potentially narrowing conversion leading to
-      // integral overflow. Hence, the values in the returned
-      // container are mixed negative and positive integers (long type)
-      //
-      return static_cast<long>(sequant::hash::value(Index{idx}.label()));
-    });
+  static auto index_hash(Iterable&& bk) {
+    return ranges::views::transform(
+        std::forward<Iterable>(bk), [](auto const& idx) {
+          //
+          // WARNING!
+          // The BTAS uses long for scalar indexing by default.
+          // Hence, here we explicitly cast the size_t values to long
+          // Which is a potentially narrowing conversion leading to
+          // integral overflow. Hence, the values in the returned
+          // container are mixed negative and positive integers (long type)
+          //
+          return static_cast<long>(sequant::hash::value(Index{idx}.label()));
+        });
   }
 
   template <typename... Args, typename = std::enable_if_t<
@@ -404,7 +405,7 @@ FullBinaryNode<ExprT> binarize(ResultExpr const& res) {
       tensor.set_label(res.label());
     }
 
-    assert(tensor.const_indices().size() ==
+    assert(tensor.num_slots() ==
            res.bra().size() + res.ket().size() + res.aux().size());
     tensor.set_bra(res.bra());
     tensor.set_ket(res.ket());

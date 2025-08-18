@@ -8,6 +8,9 @@
 #include <SeQuant/core/space.hpp>
 #include <SeQuant/core/utility/string.hpp>
 
+#include <range/v3/view/join.hpp>
+#include <range/v3/view/transform.hpp>
+
 #include <cstdlib>
 #include <string>
 #include <string_view>
@@ -77,18 +80,16 @@ class JuliaTensorOperationsGenerator : public Generator<Context> {
 
   std::string represent(const Tensor &tensor,
                         const Context &ctx) const override {
-    const auto &indices = tensor.const_indices();
     std::string representation = tensor_name(tensor, ctx);
 
     representation += "[ ";
 
-    for (std::size_t i = 0; i < indices.size(); ++i) {
-      representation += represent(indices[i], ctx);
-
-      if (i + 1 < indices.size()) {
-        representation += ", ";
-      }
-    }
+    using namespace std::literals;
+    representation += tensor.const_indices() |
+                      ranges::views::transform([&](const Index &idx) {
+                        return represent(idx, ctx);
+                      }) |
+                      ranges::views::join(", "s) | ranges::to<std::string>();
 
     representation += " ]";
 

@@ -246,7 +246,9 @@ class SubexpressionReplacer {
 
     ExprPtr expr = [&]() {
       if (tree->is_tensor()) {
-        return ex<Tensor>(label, bra(), ket(), aux(tree->canon_indices()));
+        return ex<Tensor>(label, bra(), ket(), aux(tree->canon_indices()),
+                          Symmetry::nonsymm, BraKetSymmetry::nonsymm,
+                          ParticleSymmetry::nonsymm);
       }
 
       return ex<Variable>(label);

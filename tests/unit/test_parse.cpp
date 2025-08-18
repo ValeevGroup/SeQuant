@@ -82,8 +82,9 @@ TEST_CASE("parsing", "[parse]") {
   SECTION("parse_expr") {
     using namespace sequant;
 
-    auto ctx_resetter = set_scoped_default_context(
-        Context(mbpt::make_sr_spaces(), Vacuum::SingleProduct));
+    auto ctx = get_default_context();
+    ctx.set(mbpt::make_sr_spaces());
+    auto ctx_resetter = set_scoped_default_context(ctx);
 
     SECTION("Scalar tensor") {
       auto expr = parse_expr(L"t{}");

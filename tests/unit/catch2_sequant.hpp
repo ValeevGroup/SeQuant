@@ -79,31 +79,24 @@ struct StringMaker<sequant::Index> {
 
 template <>
 struct StringMaker<sequant::ResultExpr> {
-  static std::string convert(const sequant::ResultExpr &res) {
-    std::stringstream sstream;
-    if (res.has_label()) {
-      sstream << sequant::to_string(res.label());
-    } else {
-      sstream << "?";
+  static std::string convert(const sequant::ResultExpr &res,
+                             bool include_canonical = true) {
+    std::string str = sequant::to_string(sequant::deparse(res, true));
+
+    if (include_canonical) {
+      sequant::ResultExpr clone = res.clone();
+      canonicalize(clone);
+      simplify(clone);
+      std::string canon_str =
+          StringMaker<sequant::ResultExpr>::convert(clone, false);
+
+      if (canon_str != str) {
+        str += " (canonicalized: " + canon_str + ")";
+      }
     }
 
-    using IndexString = StringMaker<sequant::Index>;
-    using namespace std::literals;
-    sstream << "{";
-    sstream << (res.bra() | ranges::views::transform(IndexString::convert) |
-                ranges::views::join(", "sv) | ranges::to<std::string>());
-    sstream << ";";
-    sstream << (res.ket() | ranges::views::transform(IndexString::convert) |
-                ranges::views::join(", "sv) | ranges::to<std::string>());
-    sstream << ";";
-    sstream << (res.aux() | ranges::views::transform(IndexString::convert) |
-                ranges::views::join(", "sv) | ranges::to<std::string>());
-    sstream << "}";
-
-    sstream << " = "
-            << StringMaker<sequant::ExprPtr>::convert(res.expression());
-
-    return sstream.str();
+    return str;
+    std::stringstream sstream;
   }
 };
 

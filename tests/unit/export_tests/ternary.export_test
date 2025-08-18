@@ -92,12 +92,12 @@ index-space: c, External, e
 tensor: A:ec[ck], A:ec
 tensor: B:ce[kb], B:ce
 tensor: C:ce[jc], C:ce
-tensor: I:ec[bj], I:ec
+tensor: I:ce[jb], I:ce
 tensor: I:ee[cb], !Create{type:plain}
 
 
 ---- code("unnamed")
-alloc I:ec[bj]
+alloc I:ce[jb]
 alloc I:ee[cb]
 load A:ec[ck]
 load B:ce[kb]
@@ -105,10 +105,10 @@ load B:ce[kb]
 drop B:ce[kb]
 drop A:ec[ck]
 load C:ce[jc]
-.I:ec[bj] += I:ee[cb] C:ce[jc]
+.I:ce[jb] += I:ee[cb] C:ce[jc]
 drop C:ce[jc]
 drop I:ee[cb]
-store I:ec[bj]
+store I:ce[jb]
 
 
 ---- end

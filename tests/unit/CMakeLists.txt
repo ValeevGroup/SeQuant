@@ -2,9 +2,10 @@ include(FindOrFetchCatch2)
 include(Catch)
 
 add_executable(unit_tests-sequant ${BUILD_BY_DEFAULT}
+    "test_abstract_tensor.cpp"
     "test_asy_cost.cpp"
     "test_binary_node.cpp"
-	"test_biorthogonalization.cpp"
+    "test_biorthogonalization.cpp"
     "test_bliss.cpp"
     "test_canonicalize.cpp"
     "test_eval_expr.cpp"

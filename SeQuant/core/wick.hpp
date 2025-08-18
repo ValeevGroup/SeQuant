@@ -102,7 +102,7 @@ class WickTheorem {
       "basis")]] WickTheorem &
   spinfree(bool sf) {
     if (!((sf && get_default_context(S).spbasis() == SPBasis::spinfree) ||
-          (!sf && get_default_context(S).spbasis() == SPBasis::spinorbital))) {
+          (!sf && get_default_context(S).spbasis() == SPBasis::spinor))) {
       throw std::invalid_argument(
           "WickTheorem<S>::spinfree(sf): sf must match the contents of "
           "get_default_context(S).spbasis() (N.B. WickTheorem::spinfree() is "

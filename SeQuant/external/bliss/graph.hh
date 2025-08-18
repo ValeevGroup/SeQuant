@@ -779,7 +779,7 @@ class Graph : public AbstractGraph {
 
     std::optional<std::int64_t> current_cluster_ordinal;
     for (auto& [cluster_ordinal, vertex_ordinal] : clusters) {
-      auto vnum = vertex_ordinal;
+      auto vord = vertex_ordinal;
       Vertex& v = vertices.at(vertex_ordinal);
 
       // start of a new cluster? start new subgraph
@@ -791,16 +791,16 @@ class Graph : public AbstractGraph {
         }
       }
 
-      os << "v" << vnum << " [ label=\"";
+      os << "v" << vord << " [ label=\"";
       if (have_labels) {
-        assert(vnum < nvertices);
-        os << vertex_labels[vnum];
+        assert(vord < nvertices);
+        os << vertex_labels[vord];
       } else
-        os << vnum;
+        os << vord;
       if (have_texlabels) {
-        assert(vnum < nvertices);
-        if (vertex_texlabels[vnum].has_value()) {
-          os << "\", texlbl=\"" << vertex_texlabels[vnum].value();
+        assert(vord < nvertices);
+        if (vertex_texlabels[vord].has_value()) {
+          os << "\", texlbl=\"" << vertex_texlabels[vord].value();
         }
       }
       if (rgb_colors) {
@@ -812,8 +812,21 @@ class Graph : public AbstractGraph {
       }
       for (auto ei = v.edges.begin();
            ei != v.edges.end(); ei++) {
-        const unsigned int vnum2 = *ei;
-        if (vnum2 > vnum) os << "v" << vnum << " -- v" << vnum2 << "\n";
+        const unsigned int vord2 = *ei;
+
+        bool declare_edge = false;
+        // strangely vertices get assigned to clusters where their first edge is appears
+        // so introduce all edges involving this vertex to vertices in this or later cluster
+        if (options.vertex_to_subgraph) {
+          const std::int64_t v2_cluster_ordinal = options.vertex_to_subgraph(vord2).value_or(-1);
+          declare_edge = cluster_ordinal < v2_cluster_ordinal || (cluster_ordinal == v2_cluster_ordinal && vord < vord2);
+        }
+        else {
+          // if not using clusters print edges from lesser to greater ordinal
+          declare_edge = vord < vord2;
+        }
+        if (declare_edge)
+          os << "v" << vord << " -- v" << vord2 << "\n";
       }
     }
 

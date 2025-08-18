@@ -42,12 +42,12 @@ ResultExpr::ResultExpr(IndexContainer bra, IndexContainer ket,
                        ParticleSymmetry particle_symm,
                        std::optional<std::wstring> label, ExprPtr expression)
     : m_expr(std::move(expression)),
-      m_braIndices(std::move(bra)),
-      m_ketIndices(std::move(ket)),
-      m_auxIndices(std::move(aux)),
       m_symm(symm),
       m_bksymm(braket_symm),
       m_psymm(particle_symm),
+      m_braIndices(std::move(bra)),
+      m_ketIndices(std::move(ket)),
+      m_auxIndices(std::move(aux)),
       m_label(std::move(label)) {}
 
 ResultExpr &ResultExpr::operator=(ExprPtr expression) {

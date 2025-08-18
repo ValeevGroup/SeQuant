@@ -6,6 +6,9 @@
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/space.hpp>
 
+#include <range/v3/view/join.hpp>
+#include <range/v3/view/transform.hpp>
+
 namespace sequant {
 
 /// Context class for the JuliaITensorGenerator
@@ -120,18 +123,11 @@ class JuliaITensorGenerator : public JuliaTensorOperationsGenerator<Context> {
 
  private:
   std::string index_set(const Tensor &tensor, const Context &ctx) const {
-    std::string set;
-
-    const auto &indices = tensor.const_indices();
-    for (std::size_t i = 0; i < indices.size(); ++i) {
-      set += Base::represent(indices[i], ctx);
-
-      if (i + 1 < indices.size()) {
-        set += ", ";
-      }
-    }
-
-    return set;
+    using namespace std::literals;
+    return tensor.const_indices() |
+           ranges::views::transform(
+               [&](const Index &idx) { return Base::represent(idx, ctx); }) |
+           ranges::views::join(", "s) | ranges::to<std::string>();
   }
 };
 
