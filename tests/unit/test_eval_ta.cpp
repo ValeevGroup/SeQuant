@@ -61,7 +61,17 @@ struct NestedTensorIndices {
 
 auto eval_node(sequant::ExprPtr const& expr) {
   using namespace sequant;
-  return binarize<EvalExprTA>(expr);
+  auto node = binarize(expr);
+  return transform_node(node, [](auto&& val) {
+    if (val.is_tensor()) {
+      return EvalExprTA(*val.op_type(), val.result_type(), val.expr(),
+                        NestedTensorIndices(val.as_tensor()).outer_inner() |
+                            ranges::to<EvalExpr::index_vector>(),
+                        val.canon_phase(), val.hash_value(),
+                        val.copy_connectivity_graph());
+    } else
+      return EvalExprTA(val);
+  });
 }
 
 auto tensor_to_key(sequant::Tensor const& tnsr) {

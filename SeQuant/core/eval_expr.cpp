@@ -245,6 +245,11 @@ const bliss::Graph& EvalExpr::connectivity_graph() const noexcept {
   return *connectivity_;
 }
 
+std::shared_ptr<bliss::Graph> EvalExpr::copy_connectivity_graph()
+    const noexcept {
+  return connectivity_;
+}
+
 namespace {
 
 ///

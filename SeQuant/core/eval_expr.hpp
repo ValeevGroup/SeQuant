@@ -220,6 +220,13 @@ class EvalExpr {
   ///
   [[nodiscard]] const bliss::Graph& connectivity_graph() const noexcept;
 
+  ///
+  /// \return A copy of the graph representing the connectivity of two factors
+  /// in a product
+  ///
+  [[nodiscard]] std::shared_ptr<bliss::Graph> copy_connectivity_graph()
+      const noexcept;
+
  protected:
   std::optional<EvalOp> op_type_ = std::nullopt;
 
