@@ -230,6 +230,18 @@ container::svector<container::map<Index, Index>> S_replacement_maps(
 /// @brief Expand S operator
 ExprPtr S_maps(const ExprPtr& expr);
 
+/// @brief Filters and compacts expression based on a hash-based heuristic.
+/// @details This function processes a sum expression, grouping product terms by
+/// hash of their canonicalized tensor network forms. For each group, it
+/// retains only the terms with the largest absolute scalar coefficient. This is
+/// intended to compact large expressions by keeping only the dominant terms
+/// after a hash-based grouping.
+/// This is particularly useful to eliminate the redudancy caused by
+/// biorthogonal trnasformation in coupled-cluster equations.
+/// @param expr The input expression, expected to be a `Sum` of `Product` terms.
+/// @param ext_idxs A vector of external index groups. The function will not
+/// apply the filtering logic if `ext_idxs.size()` is 2 or less.
+/// @return A new `ExprPtr` representing the filtered and compacted expression.
 ExprPtr hash_filter_compact_set(
     ExprPtr expr,
     const container::svector<container::svector<Index>>& ext_idxs);
@@ -241,7 +253,9 @@ ExprPtr hash_filter_compact_set(
 /// lacks proper index attributes.
 /// @param expr ExprPtr with spin orbital indices
 /// @param ext_index_groups groups of external indices
-/// @param is_compact_set if true, will produce compact expressions
+/// @param is_direct_full_expansion if true, will produce fully expanded
+/// expressions, which makes spintracing expensive because of the large number
+/// of terms
 /// @return an expression with spin integrated/adapted
 /// @brief 2-parameter wrapper version
 ExprPtr closed_shell_spintrace(
@@ -258,7 +272,22 @@ container::svector<ResultExpr> closed_shell_spintrace(
 /// @return an expression with spin integrated/adapted
 ExprPtr closed_shell_CC_spintrace(ExprPtr const& expr);
 
-/// @brief compact_set of eqns
+/// \brief Same as \c closed_shell_CC_spintrace except it treats expression
+/// differently. It generates a compact set expression with spin integration.
+/// It applies a specific filtering and compaction procedure. It internally
+/// expands the symmetrizer to access all individual terms. The function
+/// then uses a heuristic hash filter method to identify and retain only the
+/// most significant terms, thereby reducing the total number of terms that
+/// need to be evaluated.
+/// After the evaluation of the final expression, a `mbpt-cleanup` function
+/// is applied to restore the effects of deleted terms.
+/// To work correctly with the cleanup function, the intermediate expression
+/// is internally multiplied by a rescaling factor of $n!/(n!-1)$.
+/// If you need to print the compact-set equations, you must manually compensate
+/// for this factor and multiply the expression by $(n!-1)/n!$.
+/// @param expr ExprPtr to Sum type with spin orbital indices
+/// @return An expression pointer representing the most compact set of
+/// spin-integrated terms.
 ExprPtr closed_shell_CC_spintrace_compact_set(ExprPtr const& expr);
 
 /// \brief Same as \c closed_shell_CC_spintrace except internally uses

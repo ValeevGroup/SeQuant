@@ -990,7 +990,7 @@ ExprPtr closed_shell_spintrace(
   // antisymmetrizer (A) and fully expanding the anti-symmetric tensors to
   // non-symmetric.
   // adding another option to fully expand the antisymmetrizer (can be used for
-  // compact set of epns, but now an optimized way)
+  // compact set of epns, however it is not an optimized way)
   auto partially_or_fully_expand =
       [&is_direct_full_expansion](const ExprPtr& expr) {
         auto temp = expr;
@@ -999,7 +999,6 @@ ExprPtr closed_shell_spintrace(
             temp = expand_A_op(temp);
           } else {
             temp = symmetrize_expr(temp);
-            // temp = expand_A_op(temp);
           }
         }
         temp = expand_antisymm(temp);
@@ -1166,7 +1165,13 @@ ExprPtr closed_shell_CC_spintrace_compact_set(ExprPtr const& expr) {
     for (auto& term : *st_expr) {
       if (term->is<Product>()) term = remove_tensor(term->as<Product>(), L"S");
     }
+    const auto tstart0 = std::chrono::high_resolution_clock::now();
     st_expr = biorthogonal_transform(st_expr, ext_idxs);
+    // put the function call
+    const auto tstop0 = std::chrono::high_resolution_clock::now();
+    const auto time_elapsed =
+        std::chrono::duration_cast<std::chrono::seconds>(tstop0 - tstart0);
+    std::cout << "spintrace time: " << time_elapsed.count() << " s.\n";
 
     auto bixs = ext_idxs | transform([](auto&& vec) { return vec[1]; });
     auto kixs = ext_idxs | transform([](auto&& vec) { return vec[0]; });
