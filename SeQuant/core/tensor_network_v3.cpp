@@ -110,9 +110,11 @@ std::size_t TensorNetworkV3::Graph::vertex_to_index_idx(
   return index_idx - 1;
 }
 
-std::size_t TensorNetworkV3::Graph::vertex_to_tensor_idx(
+std::optional<std::size_t> TensorNetworkV3::Graph::vertex_to_tensor_idx(
     std::size_t vertex) const {
-  assert(vertex_types.at(vertex) == VertexType::TensorCore);
+  const auto vertex_type = vertex_types.at(vertex);
+  if (vertex_type == VertexType::Index || vertex_type == VertexType::SPBundle)
+    return std::nullopt;
 
   std::size_t tensor_idx = 0;
   for (std::size_t i = 0; i <= vertex; ++i) {
@@ -122,7 +124,6 @@ std::size_t TensorNetworkV3::Graph::vertex_to_tensor_idx(
   }
 
   assert(tensor_idx > 0);
-
   return tensor_idx - 1;
 }
 
@@ -920,6 +921,7 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
     // 2-index columns
     const std::size_t num_paired_particles =
         std::max(bra_rank(tensor), ket_rank(tensor));
+    const bool is_braket_symm = braket_symmetry(tensor) == BraKetSymmetry::symm;
 
     // vertices for braket bundles:
     // - antisymmetric/symmetric tensors only need 1 bundle for {bra,ket}
@@ -931,28 +933,29 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
 
     // make braket slot bundles first
     for (std::size_t i = 0; i < num_braket_vertices; ++i) {
-      if (options.make_labels) {
-        std::wstring label;
+      if (options.make_labels || options.make_texlabels) {
+        std::wstring base_label = L"bk";
+        std::wstring psuffix;
         if (i == 0) {  // {bra,ket} bundle -> "bk{a,s,}"
-          label = L"bk";
           switch (tensor_sym) {
             case Symmetry::symm:
-              label += L"s";
+              base_label += L"s";
               break;
             case Symmetry::antisymm:
-              label += L"a";
+              base_label += L"a";
               break;
             default:
               assert(tensor_sym != Symmetry::invalid);
           }
         } else {
-          // {bra_i,ket_i} bundle -> "bk_i+1"
-          label = L"bk_" + std::to_wstring(i);
+          psuffix = L"_" + to_wstring(i);
         }
-        graph.vertex_labels.emplace_back(label);
+        if (options.make_labels)
+          graph.vertex_labels.emplace_back(base_label + psuffix);
+        if (options.make_texlabels)
+          graph.vertex_texlabels.emplace_back(
+              base_label + ((i != 0) ? (L"\\" + psuffix) : L""));
       }
-      if (options.make_texlabels)
-        graph.vertex_texlabels.emplace_back(std::nullopt);
       graph.vertex_types.push_back(VertexType::TensorBraKet);
 
       // If tensor is particle-symmetric use same color for all braket vertices,
@@ -991,9 +994,8 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
         graph.vertex_types.push_back(bra ? VertexType::TensorBraBundle
                                          : VertexType::TensorKetBundle);
         tensor_network::VertexColor color;
-        if (braket_symmetry(tensor) ==
-            BraKetSymmetry::symm) {  // if have bra<->ket symmetry (not conj!),
-                                     // use same color for bra and ket
+        if (is_braket_symm) {  // if have bra<->ket symmetry (not conj!),
+                               // use same color for bra and ket
           color = colorizer(BraGroup{size});
         } else {
           color = bra ? colorizer(BraGroup{size}) : colorizer(KetGroup{size});
@@ -1043,10 +1045,16 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
           graph.vertex_labels.emplace_back((is_bra ? L"bra_" : L"ket_") +
                                            std::to_wstring(i + 1));
         if (options.make_texlabels)
-          graph.vertex_texlabels.emplace_back(std::nullopt);
+          graph.vertex_texlabels.emplace_back(
+              std::wstring(is_bra ? L"bra" : L"ket") + L"\\_" +
+              std::to_wstring(i + 1));
         graph.vertex_types.push_back(vertex_type);
-        // use different colors for each index slot if not particle symmetric
-        graph.vertex_colors.push_back(colorizer(BraGroup{color_id}));
+        // see color_id definition for handling of bra, ket, and and braket
+        // bundle symmetries. if symmetric wrt bra<->ket swap use same color
+        // for bra and ket bundles, else use distinct colors
+        graph.vertex_colors.push_back((is_bra || is_braket_symm)
+                                          ? colorizer(BraGroup{color_id})
+                                          : colorizer(KetGroup{color_id}));
 
         // connect to bra bundle vertex, regardless of symmetry
         {
@@ -1082,7 +1090,8 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
       if (options.make_labels)
         graph.vertex_labels.emplace_back(L"aux_" + std::to_wstring(i + 1));
       if (options.make_texlabels)
-        graph.vertex_texlabels.emplace_back(std::nullopt);
+        graph.vertex_texlabels.emplace_back(std::wstring(L"aux") + L"$_" +
+                                            std::to_wstring(i + 1) + L"$");
       graph.vertex_types.push_back(VertexType::TensorAux);
       graph.vertex_colors.push_back(colorizer(AuxGroup{i}));
       edges.push_back(std::make_pair(tensor_vertex, nvertex));

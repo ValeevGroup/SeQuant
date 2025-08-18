@@ -201,7 +201,9 @@ class TensorNetworkV3 {
     Graph() = default;
 
     std::size_t vertex_to_index_idx(std::size_t vertex) const;
-    std::size_t vertex_to_tensor_idx(std::size_t vertex) const;
+    /// maps vertex ordinal to tensor cluster ordinal
+    /// @note usable as bliss::Graph::DotOptions::vertex_to_subgraph
+    std::optional<std::size_t> vertex_to_tensor_idx(std::size_t vertex) const;
   };
 
   TensorNetworkV3(const Expr &expr) {
