@@ -921,6 +921,7 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
     // 2-index columns
     const std::size_t num_paired_particles =
         std::max(bra_rank(tensor), ket_rank(tensor));
+    const bool is_braket_symm = braket_symmetry(tensor) == BraKetSymmetry::symm;
 
     // vertices for braket bundles:
     // - antisymmetric/symmetric tensors only need 1 bundle for {bra,ket}
@@ -993,9 +994,8 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
         graph.vertex_types.push_back(bra ? VertexType::TensorBraBundle
                                          : VertexType::TensorKetBundle);
         tensor_network::VertexColor color;
-        if (braket_symmetry(tensor) ==
-            BraKetSymmetry::symm) {  // if have bra<->ket symmetry (not conj!),
-                                     // use same color for bra and ket
+        if (is_braket_symm) {  // if have bra<->ket symmetry (not conj!),
+                               // use same color for bra and ket
           color = colorizer(BraGroup{size});
         } else {
           color = bra ? colorizer(BraGroup{size}) : colorizer(KetGroup{size});
@@ -1049,8 +1049,12 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
               std::wstring(is_bra ? L"bra" : L"ket") + L"\\_" +
               std::to_wstring(i + 1));
         graph.vertex_types.push_back(vertex_type);
-        // use different colors for each index slot if not particle symmetric
-        graph.vertex_colors.push_back(colorizer(BraGroup{color_id}));
+        // see color_id definition for handling of bra, ket, and and braket
+        // bundle symmetries. if symmetric wrt bra<->ket swap use same color
+        // for bra and ket bundles, else use distinct colors
+        graph.vertex_colors.push_back((is_bra || is_braket_symm)
+                                          ? colorizer(BraGroup{color_id})
+                                          : colorizer(KetGroup{color_id}));
 
         // connect to bra bundle vertex, regardless of symmetry
         {
