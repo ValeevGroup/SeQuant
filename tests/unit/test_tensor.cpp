@@ -52,8 +52,11 @@ TEST_CASE("tensor", "[elements]") {
     REQUIRE(t2.aux_rank() == 0);
     REQUIRE(t2.rank() == 1);
     REQUIRE(t2.const_braketaux().size() == 2);
+    REQUIRE(t2.const_slots().size() == 2);
     REQUIRE(ranges::distance(t2.const_braketaux_indices().begin(),
                              t2.const_braketaux_indices().end()) == 2);
+    REQUIRE(ranges::distance(t2.const_indices().begin(),
+                             t2.const_indices().end()) == 2);
     REQUIRE(t2.symmetry() == Symmetry::nonsymm);
     REQUIRE(t2.braket_symmetry() == BraKetSymmetry::conjugate);
     REQUIRE(t2.particle_symmetry() == ParticleSymmetry::symm);
@@ -70,8 +73,11 @@ TEST_CASE("tensor", "[elements]") {
     REQUIRE(t3.ket_net_rank() == 0);
     REQUIRE_THROWS(t3.rank());
     REQUIRE(t3.const_braketaux().size() == 2);
+    REQUIRE(t3.const_slots().size() == 2);
     REQUIRE(ranges::distance(t3.const_braketaux_indices().begin(),
                              t3.const_braketaux_indices().end()) == 2);
+    REQUIRE(ranges::distance(t3.const_indices().begin(),
+                             t3.const_indices().end()) == 2);
     REQUIRE(t3.symmetry() == Symmetry::nonsymm);
     REQUIRE(t3.braket_symmetry() == BraKetSymmetry::conjugate);
     REQUIRE(t3.particle_symmetry() == ParticleSymmetry::symm);
@@ -91,6 +97,7 @@ TEST_CASE("tensor", "[elements]") {
     REQUIRE(t4.aux_rank() == 1);
     REQUIRE(t4.rank() == 2);
     REQUIRE(ranges::size(t4.const_braketaux()) == 5);
+    REQUIRE(ranges::size(t4.const_slots()) == 5);
     REQUIRE(t4.symmetry() == Symmetry::nonsymm);
     REQUIRE(t4.braket_symmetry() == BraKetSymmetry::symm);
     REQUIRE(t4.particle_symmetry() == ParticleSymmetry::nonsymm);

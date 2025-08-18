@@ -22,10 +22,10 @@ auto eval_node(sequant::ExprPtr const& expr) {
   auto node = binarize(expr);
   return transform_node(node, [](auto&& val) {
     if (val.is_tensor()) {
-      return EvalExprBTAS(*val.op_type(), val.result_type(), val.expr(),
-                          val.as_tensor().braketaux_indices() |
-                              ranges::to<EvalExpr::index_vector>(),
-                          val.canon_phase(), val.hash_value());
+      return EvalExprBTAS(
+          *val.op_type(), val.result_type(), val.expr(),
+          val.as_tensor().indices() | ranges::to<EvalExpr::index_vector>(),
+          val.canon_phase(), val.hash_value());
     } else
       return EvalExprBTAS(val);
   });

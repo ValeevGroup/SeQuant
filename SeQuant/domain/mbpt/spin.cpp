@@ -1129,7 +1129,7 @@ ExprPtr closed_shell_CC_spintrace_rigorous(ExprPtr const& expr) {
 container::set<Index, Index::LabelCompare> index_list(const ExprPtr& expr) {
   container::set<Index, Index::LabelCompare> grand_idxlist;
   if (expr->is<Tensor>()) {
-    ranges::for_each(expr->as<Tensor>().const_braketaux_indices(),
+    ranges::for_each(expr->as<Tensor>().const_indices(),
                      [&grand_idxlist](const Index& idx) {
                        idx.reset_tag();
                        grand_idxlist.insert(idx);

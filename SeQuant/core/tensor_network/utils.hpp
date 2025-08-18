@@ -149,9 +149,8 @@ void apply_index_replacements(AbstractTensor &tensor,
                               const bool self_consistent) {
 #ifndef NDEBUG
   // assert that tensors' indices are not tagged since going to tag indices
-  assert(ranges::none_of(braketaux(tensor), [](const Index &idx) {
-    return idx.tag().has_value();
-  }));
+  assert(ranges::none_of(
+      slots(tensor), [](const Index &idx) { return idx.tag().has_value(); }));
 #endif
 
   bool pass_mutated;
