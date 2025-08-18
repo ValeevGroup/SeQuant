@@ -1090,8 +1090,8 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
       if (options.make_labels)
         graph.vertex_labels.emplace_back(L"aux_" + std::to_wstring(i + 1));
       if (options.make_texlabels)
-        graph.vertex_texlabels.emplace_back(std::wstring(L"aux") + L"$_" +
-                                            std::to_wstring(i + 1) + L"$");
+        graph.vertex_texlabels.emplace_back(std::wstring(L"aux") + L"\\_" +
+                                            std::to_wstring(i + 1));
       graph.vertex_types.push_back(VertexType::TensorAux);
       graph.vertex_colors.push_back(colorizer(AuxGroup{i}));
       edges.push_back(std::make_pair(tensor_vertex, nvertex));
