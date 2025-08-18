@@ -339,6 +339,163 @@ auto particle_antisymmetrize_btas(btas::Tensor<Args...> const& arr,
   return result;
 }
 
+///
+/// \brief This function implements the MBPT cleanup of TA::DistArray to restore
+/// the effects of deleted terms in order to obtain the most compact set of
+/// equations.
+///
+/// \param arr The array to be cleaned up
+///
+/// \param bra_rank The rank of the bra indices
+///
+/// \return The cleaned TA::DistArray.
+///
+template <typename... Args>
+auto mbpt_cleanup_ta(TA::DistArray<Args...> const& arr, size_t bra_rank) {
+  using ranges::views::iota;
+  size_t const rank = arr.trange().rank();
+  assert(bra_rank <= rank);
+  size_t const ket_rank = rank - bra_rank;
+
+  if (rank <= 4) {
+    return arr;
+  }
+
+  using numeric_type = typename TA::DistArray<Args...>::numeric_type;
+
+  size_t factorial_ket = 1;
+  for (size_t i = 2; i <= ket_rank; ++i) {
+    factorial_ket *= i;
+  }
+  numeric_type norm_factor = numeric_type(1) / numeric_type(factorial_ket);
+
+  TA::DistArray<Args...> result;
+
+  perm_t perm = iota(size_t{0}, rank) | ranges::to<perm_t>;
+  perm_t bra_perm = iota(size_t{0}, bra_rank) | ranges::to<perm_t>;
+  perm_t ket_perm = iota(bra_rank, rank) | ranges::to<perm_t>;
+
+  const auto lannot = ords_to_annot(perm);
+
+  auto process_permutations = [&lannot](const TA::DistArray<Args...>& input_arr,
+                                        size_t range_rank, perm_t range_perm,
+                                        const std::string& other_annot,
+                                        bool is_bra) -> TA::DistArray<Args...> {
+    if (range_rank <= 1) return input_arr;
+    TA::DistArray<Args...> result;
+
+    auto callback = [&](int parity) {
+      const auto range_annot = ords_to_annot(range_perm);
+      const auto annot = other_annot.empty()
+                             ? range_annot
+                             : (is_bra ? range_annot + "," + other_annot
+                                       : other_annot + "," + range_annot);
+
+      // ignore parity, all permutations get same coefficient
+      numeric_type p_ = 1;
+      if (result.is_initialized()) {
+        result(lannot) += p_ * input_arr(annot);
+      } else {
+        result(lannot) = p_ * input_arr(annot);
+      }
+    };
+    antisymmetric_permutation(ParticleRange{range_perm.begin(), range_rank},
+                              callback);
+    return result;
+  };
+
+  // identity term with coefficient +1
+  result(lannot) = arr(lannot);
+
+  // process only ket permutations with coefficient norm_factor
+  if (ket_rank > 1) {
+    const auto bra_annot = bra_rank == 0 ? "" : ords_to_annot(bra_perm);
+    auto ket_result =
+        process_permutations(arr, ket_rank, ket_perm, bra_annot, false);
+
+    result(lannot) -= norm_factor * ket_result(lannot);
+  }
+
+  TA::DistArray<Args...>::wait_for_lazy_cleanup(result.world());
+  return result;
+}
+
+///
+/// \brief This function implements the MBPT cleanup of btas::Tensor to restore
+/// the effects of deleted terms in order to obtain the most compact set of
+/// equations.
+///
+/// \param arr The tensor to be cleaned up
+///
+/// \param bra_rank The rank of the bra indices
+///
+/// \return The cleaned btas::Tensor.
+///
+template <typename... Args>
+auto mbpt_cleanup_btas(btas::Tensor<Args...> const& arr, size_t bra_rank) {
+  using ranges::views::concat;
+  using ranges::views::iota;
+  size_t const rank = arr.rank();
+  assert(bra_rank <= rank);
+  size_t const ket_rank = rank - bra_rank;
+
+  if (rank <= 4) {
+    return arr;
+  }
+
+  using numeric_type = typename btas::Tensor<Args...>::numeric_type;
+
+  size_t factorial_ket = 1;
+  for (size_t i = 2; i <= ket_rank; ++i) {
+    factorial_ket *= i;
+  }
+  numeric_type norm_factor = numeric_type(1) / numeric_type(factorial_ket);
+
+  perm_t bra_perm = iota(size_t{0}, bra_rank) | ranges::to<perm_t>;
+  perm_t ket_perm = iota(bra_rank, rank) | ranges::to<perm_t>;
+  const auto lannot = iota(size_t{0}, rank) | ranges::to<perm_t>;
+
+  auto process_permutations = [&lannot](const btas::Tensor<Args...>& input_arr,
+                                        size_t range_rank, perm_t range_perm,
+                                        const perm_t& other_perm, bool is_bra) {
+    if (range_rank <= 1) return input_arr;
+    btas::Tensor<Args...> result{input_arr.range()};
+    result.fill(0);
+
+    auto callback = [&](int parity) {
+      const auto annot =
+          is_bra ? concat(range_perm, other_perm) | ranges::to<perm_t>()
+                 : concat(other_perm, range_perm) | ranges::to<perm_t>();
+
+      // ignore parity, all permutations get same coefficient
+      numeric_type p_ = 1;
+      btas::Tensor<Args...> temp;
+      btas::permute(input_arr, lannot, temp, annot);
+      btas::scal(p_, temp);
+      result += temp;
+    };
+
+    antisymmetric_permutation(ParticleRange{range_perm.begin(), range_rank},
+                              callback);
+    return result;
+  };
+
+  // identity term with coefficient +1
+  auto result = arr;
+
+  // process only ket permutations with coefficient norm_factor
+  if (ket_rank > 1) {
+    const auto bra_annot = bra_rank == 0 ? perm_t{} : bra_perm;
+    auto ket_result =
+        process_permutations(arr, ket_rank, ket_perm, bra_annot, false);
+
+    btas::scal(norm_factor, ket_result);
+    result -= ket_result;
+  }
+
+  return result;
+}
+
 template <typename... Args>
 inline void log_result(Args const&... args) noexcept {
   auto& l = Logger::instance();
@@ -479,6 +636,11 @@ class Result {
   ///
   [[nodiscard]] virtual ResultPtr antisymmetrize(size_t bra_rank) const = 0;
 
+  ///
+  /// \brief MBPT-cleanup for closed-shell compact-set equations
+  ///
+  [[nodiscard]] virtual ResultPtr mbpt_cleanup(size_t bra_rank) const = 0;
+
   [[nodiscard]] bool has_value() const noexcept;
 
   [[nodiscard]] virtual ResultPtr mult_by_phase(std::int8_t) const = 0;
@@ -587,6 +749,10 @@ class ResultScalar final : public Result {
 
   [[nodiscard]] ResultPtr antisymmetrize(size_t bra_rank) const override {
     throw unimplemented_method("antisymmetrize");
+  }
+
+  [[nodiscard]] ResultPtr mbpt_cleanup(size_t bra_rank) const override {
+    throw unimplemented_method("mbpt_cleanup");
   }
 
   [[nodiscard]] ResultPtr mult_by_phase(std::int8_t factor) const override {
@@ -728,6 +894,10 @@ class ResultTensorTA final : public Result {
   [[nodiscard]] ResultPtr antisymmetrize(size_t bra_rank) const override {
     return eval_result<this_type>(
         particle_antisymmetrize_ta(get<ArrayT>(), bra_rank));
+  }
+
+  [[nodiscard]] ResultPtr mbpt_cleanup(size_t bra_rank) const override {
+    return eval_result<this_type>(mbpt_cleanup_ta(get<ArrayT>(), bra_rank));
   }
 
  private:
@@ -878,6 +1048,12 @@ class ResultTensorOfTensorTA final : public Result {
     return nullptr;
   }
 
+  [[nodiscard]] ResultPtr mbpt_cleanup(size_t bra_rank) const override {
+    // or? throw unimplemented_method("mbpt_cleanup");
+    // not implemented yet, I think I need it for CSV
+    return nullptr;
+  }
+
  private:
   [[nodiscard]] std::size_t size_in_bytes() const final {
     auto& v = get<ArrayT>();
@@ -978,6 +1154,11 @@ class ResultTensorBTAS final : public Result {
   [[nodiscard]] ResultPtr antisymmetrize(size_t bra_rank) const override {
     return eval_result<ResultTensorBTAS<T>>(
         particle_antisymmetrize_btas(get<T>(), bra_rank));
+  }
+
+  [[nodiscard]] ResultPtr mbpt_cleanup(size_t bra_rank) const override {
+    return eval_result<ResultTensorBTAS<T>>(
+        mbpt_cleanup_btas(get<T>(), bra_rank));
   }
 
  private:

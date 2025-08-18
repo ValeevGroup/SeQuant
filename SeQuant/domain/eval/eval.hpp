@@ -58,6 +58,7 @@ enum struct EvalMode {
   SumInplace,
   Symmetrize,
   Antisymmetrize,
+  MBPTCleanup,
   Unknown
 };
 
@@ -85,6 +86,7 @@ enum struct EvalMode {
          : (mode == EvalMode::SumInplace)     ? "SumInplace"
          : (mode == EvalMode::Symmetrize)     ? "Symmetrize"
          : (mode == EvalMode::Antisymmetrize) ? "Antisymmetrize"
+         : (mode == EvalMode::MBPTCleanup)    ? "MBPTCleanup"
                                               : "??";
 }
 
@@ -528,6 +530,35 @@ ResultPtr evaluate_antisymm(Args&&... args) {
   // logging
   if constexpr (trace(EvalTrace)) {
     auto stat = log::EvalStat{.mode = log::EvalMode::Antisymmetrize,
+                              .time = time,
+                              .memory = log::bytes(pre, result)};
+    log::eval(stat, n0->label());
+  }
+  return result;
+}
+
+///
+/// \brief Calls @code evaluate followed by the MBPT cleanup function.
+///        The MBPT cleanup function restores the effects of terms that were
+///        deleted in order to obtain the most compact set of equations. It
+///        applies this transformation: result = identity - (1/ket_rank!) *
+///        sum_of_ket_permutations
+/// \return Evaluated result as ResultPtr.
+///
+template <Trace EvalTrace = Trace::Default, typename... Args>
+ResultPtr evaluate_mbpt_cleanup(Args&&... args) {
+  ResultPtr pre = evaluate<EvalTrace>(std::forward<Args>(args)...);
+  assert(pre);
+
+  auto const& n0 = node0(arg0(std::forward<Args>(args)...));
+
+  ResultPtr result;
+  auto time = timed_eval_inplace(
+      [&]() { result = pre->mbpt_cleanup(n0->as_tensor().bra_rank()); });
+
+  // logging
+  if constexpr (trace(EvalTrace)) {
+    auto stat = log::EvalStat{.mode = log::EvalMode::MBPTCleanup,
                               .time = time,
                               .memory = log::bytes(pre, result)};
     log::eval(stat, n0->label());
