@@ -5,7 +5,7 @@
 #ifndef SEQUANT_TENSOR_NETWORK_UTILITIES_HPP
 #define SEQUANT_TENSOR_NETWORK_UTILITIES_HPP
 
-#include <SeQuant/core/abstract_tensor.hpp>
+#include <SeQuant/core/expr.hpp>
 
 #include <algorithm>
 #include <iostream>

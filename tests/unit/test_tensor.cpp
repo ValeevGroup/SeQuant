@@ -15,7 +15,6 @@
 #include <SeQuant/core/meta.hpp>
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/tag.hpp>
-#include <SeQuant/core/tensor.hpp>
 #include <SeQuant/domain/mbpt/context.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 
@@ -53,6 +52,8 @@ TEST_CASE("tensor", "[elements]") {
     REQUIRE(t2.rank() == 1);
     REQUIRE(t2.const_braketaux().size() == 2);
     REQUIRE(t2.const_slots().size() == 2);
+    REQUIRE(t2.num_slots() == 2);
+    REQUIRE(t2.num_indices() == 2);
     REQUIRE(ranges::distance(t2.const_braketaux_indices().begin(),
                              t2.const_braketaux_indices().end()) == 2);
     REQUIRE(ranges::distance(t2.const_indices().begin(),
@@ -74,6 +75,8 @@ TEST_CASE("tensor", "[elements]") {
     REQUIRE_THROWS(t3.rank());
     REQUIRE(t3.const_braketaux().size() == 2);
     REQUIRE(t3.const_slots().size() == 2);
+    REQUIRE(t3.num_slots() == 2);
+    REQUIRE(t3.num_indices() == 2);
     REQUIRE(ranges::distance(t3.const_braketaux_indices().begin(),
                              t3.const_braketaux_indices().end()) == 2);
     REQUIRE(ranges::distance(t3.const_indices().begin(),
@@ -98,6 +101,7 @@ TEST_CASE("tensor", "[elements]") {
     REQUIRE(t4.rank() == 2);
     REQUIRE(ranges::size(t4.const_braketaux()) == 5);
     REQUIRE(ranges::size(t4.const_slots()) == 5);
+    REQUIRE(t4.num_slots() == 5);
     REQUIRE(t4.symmetry() == Symmetry::nonsymm);
     REQUIRE(t4.braket_symmetry() == BraKetSymmetry::symm);
     REQUIRE(t4.particle_symmetry() == ParticleSymmetry::nonsymm);
@@ -118,6 +122,8 @@ TEST_CASE("tensor", "[elements]") {
       REQUIRE(t.ket_rank() == 1);
       REQUIRE(t.bra_net_rank() == 0);
       REQUIRE(t.ket_net_rank() == 1);
+      REQUIRE(t.num_slots() == 1);
+      REQUIRE(t.num_indices() == 1);
 
       // in fact slots of asymmetric particle-symmetric tensors are kept in
       // canonical order
@@ -181,6 +187,8 @@ TEST_CASE("tensor", "[elements]") {
       REQUIRE(t6.ket()[1].nonnull() == false);
       REQUIRE(t6.ket()[2] == L"i_3");
       REQUIRE(t6.ket()[3] == L"i_5");
+      REQUIRE(t6.num_slots() == 8);
+      REQUIRE(t6.num_indices() == 5);
 
       // check errors
 #ifndef NDEBUG

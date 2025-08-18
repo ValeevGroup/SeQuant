@@ -19,16 +19,7 @@ namespace {
 
 auto eval_node(sequant::ExprPtr const& expr) {
   using namespace sequant;
-  auto node = binarize(expr);
-  return transform_node(node, [](auto&& val) {
-    if (val.is_tensor()) {
-      return EvalExprBTAS(
-          *val.op_type(), val.result_type(), val.expr(),
-          val.as_tensor().indices() | ranges::to<EvalExpr::index_vector>(),
-          val.canon_phase(), val.hash_value());
-    } else
-      return EvalExprBTAS(val);
-  });
+  return binarize<EvalExprBTAS>(expr);
 }
 
 static auto const idx_rgx = boost::wregex{L"([ia])([↑↓])?_?(\\d+)"};

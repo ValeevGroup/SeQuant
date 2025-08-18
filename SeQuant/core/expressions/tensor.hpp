@@ -2,14 +2,15 @@
 // Created by Eduard Valeyev on 3/23/18.
 //
 
-#ifndef SEQUANT_TENSOR_HPP
-#define SEQUANT_TENSOR_HPP
+#ifndef SEQUANT_EXPRESSIONS_TENSOR_HPP
+#define SEQUANT_EXPRESSIONS_TENSOR_HPP
 
-#include <SeQuant/core/abstract_tensor.hpp>
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/context.hpp>
-#include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/expressions/abstract_tensor.hpp>
+#include <SeQuant/core/expressions/expr.hpp>
+#include <SeQuant/core/expressions/labeled.hpp>
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/latex.hpp>
@@ -43,7 +44,7 @@ DEFINE_STRONG_TYPE_FOR_RANGE_AND_RANGESIZE(aux);
 
 /// @brief a Tensor is an instance of AbstractTensor over a scalar field, i.e.
 /// Tensors have commutative addition and product operations
-class Tensor : public Expr, public AbstractTensor, public Labeled {
+class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
  private:
   using index_container_type = container::svector<Index>;
   static auto make_indices(IndexList indices) { return indices; }
@@ -427,12 +428,28 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
 
   /// @return "core" label of the tensor
   std::wstring_view label() const override { return label_; }
+  void set_label(std::wstring label) override {
+    label_ = std::move(label);
+    reset_hash_value();
+  }
   /// @return the bra slot range (empty slots are occupied by null indices)
   const auto &bra() const { return bra_; }
+  void set_bra(index_container_type indices) {
+    bra_ = sequant::bra(std::move(indices));
+    reset_hash_value();
+  }
   /// @return the ket slot range (empty slots are occupied by null indices)
   const auto &ket() const { return ket_; }
+  void set_ket(index_container_type indices) {
+    ket_ = sequant::ket(std::move(indices));
+    reset_hash_value();
+  }
   /// @return the aux slot range (empty slots are occupied by null indices)
   const auto &aux() const { return aux_; }
+  void set_aux(index_container_type indices) {
+    aux_ = sequant::aux(std::move(indices));
+    reset_hash_value();
+  }
   /// @return concatenated view of the bra and ket slot ranges
   auto braket() const { return ranges::views::concat(bra_, ket_); }
   /// @return concatenated view of the bra and ket index ranges (i.e., nonempty
@@ -504,6 +521,15 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
   std::size_t ket_net_rank() const { return ket_net_rank_; }
   /// @return number of aux indices
   std::size_t aux_rank() const { return aux_.size(); }
+  /// @return number of slots
+  std::size_t num_slots() const {
+    return bra_.size() + ket_.size() + aux_.size();
+  }
+  /// @return number of indices
+  std::size_t num_indices() const {
+    return std::ranges::count_if(
+        slots(), [](const Index &idx) { return idx.nonnull(); });
+  }
   /// @return number of indices in bra/ket
   /// @throw std::logic_error if bra and ket ranks do not match
   std::size_t rank() const {
@@ -605,6 +631,15 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
     if (!bra_hash_value_)  // if hash not computed, or reset, recompute
       memoizing_hash();
     return *bra_hash_value_;
+  }
+
+  bool operator<(const AbstractTensor &other) const override final {
+    auto *other_tensor = dynamic_cast<const Tensor *>(&other);
+    if (other_tensor) {
+      const Expr *other_expr = static_cast<const Expr *>(other_tensor);
+      return this->static_less_than(*other_expr);
+    } else
+      return false;  // TODO do we compare typeid? labels? probably the latter
   }
 
  private:
@@ -744,6 +779,8 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
   std::size_t _bra_net_rank() const override final { return bra_net_rank(); }
   std::size_t _ket_net_rank() const override final { return ket_net_rank(); }
   std::size_t _aux_rank() const override final { return aux_rank(); }
+  std::size_t _num_slots() const override final { return num_slots(); }
+  std::size_t _num_indices() const override final { return num_indices(); }
   Symmetry _symmetry() const override final { return symmetry_; }
   BraKetSymmetry _braket_symmetry() const override final {
     return braket_symmetry_;
@@ -761,14 +798,6 @@ class Tensor : public Expr, public AbstractTensor, public Labeled {
     return transform_indices(index_map);
   }
   void _reset_tags() override final { reset_tags(); }
-  bool operator<(const AbstractTensor &other) const override final {
-    auto *other_tensor = dynamic_cast<const Tensor *>(&other);
-    if (other_tensor) {
-      const Expr *other_expr = static_cast<const Expr *>(other_tensor);
-      return this->static_less_than(*other_expr);
-    } else
-      return false;  // TODO do we compare typeid? labels? probably the latter
-  }
 
   AbstractTensor::any_view_randsz _bra_mutable() override final {
     this->reset_hash_value();
@@ -815,4 +844,4 @@ inline ExprPtr make_overlap(const Index &bra_index, const Index &ket_index) {
 
 }  // namespace sequant
 
-#endif  // SEQUANT_TENSOR_HPP
+#endif  // SEQUANT_EXPRESSIONS_TENSOR_HPP

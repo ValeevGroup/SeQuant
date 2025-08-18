@@ -4,7 +4,7 @@
 #include "utils.hpp"
 
 #include <SeQuant/core/container.hpp>
-#include <SeQuant/core/result_expr.hpp>
+#include <SeQuant/core/expr.hpp>
 
 enum class SpinTracing {
   None,
@@ -26,6 +26,7 @@ struct ProcessingOptions {
   bool factorize_to_binary = true;
   bool expand_symmetrizer = false;
   bool term_by_term = false;
+  bool subexpression_elimination = true;
 };
 
 sequant::container::svector<sequant::ResultExpr> postProcess(

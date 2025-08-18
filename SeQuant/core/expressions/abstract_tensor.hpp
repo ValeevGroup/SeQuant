@@ -8,20 +8,16 @@
 #include <SeQuant/core/algorithm.hpp>
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/container.hpp>
-#include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/expressions/expr_algorithms.hpp>
 #include <SeQuant/core/index.hpp>
 
-#include <algorithm>
 #include <cstdlib>
-#include <functional>
 #include <memory>
-#include <mutex>
 #include <ostream>
 #include <stdexcept>
 #include <string>
 #include <string_view>
 #include <typeinfo>
-#include <utility>
 
 #include <range/v3/all.hpp>
 
@@ -178,6 +174,14 @@ class AbstractTensor {
   /// @return the number of aux slots
   virtual std::size_t _aux_rank() const {
     throw missing_instantiation_for("_aux_rank");
+  }
+  /// @return the number of slots
+  virtual std::size_t _num_slots() const {
+    throw missing_instantiation_for("_num_slots");
+  }
+  /// @return the number of indices
+  virtual std::size_t _num_indices() const {
+    throw missing_instantiation_for("_num_indices");
   }
   /// @return the permutational symmetry of the vector space indices of
   /// the tensor
@@ -369,6 +373,8 @@ inline auto bra_net_rank(const AbstractTensor& t) { return t._bra_net_rank(); }
 inline auto ket_rank(const AbstractTensor& t) { return t._ket_rank(); }
 inline auto ket_net_rank(const AbstractTensor& t) { return t._ket_net_rank(); }
 inline auto aux_rank(const AbstractTensor& t) { return t._aux_rank(); }
+inline auto num_indices(const AbstractTensor& t) { return t._num_indices(); }
+inline auto num_slots(const AbstractTensor& t) { return t._num_slots(); }
 inline auto symmetry(const AbstractTensor& t) { return t._symmetry(); }
 inline auto braket_symmetry(const AbstractTensor& t) {
   return t._braket_symmetry();

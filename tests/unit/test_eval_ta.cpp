@@ -4,8 +4,8 @@
 #include "catch2_sequant.hpp"
 
 #include <SeQuant/core/context.hpp>
+#include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/parse.hpp>
-#include <SeQuant/core/tensor.hpp>
 #include <SeQuant/domain/eval/eval.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 
@@ -67,7 +67,8 @@ auto eval_node(sequant::ExprPtr const& expr) {
       return EvalExprTA(*val.op_type(), val.result_type(), val.expr(),
                         NestedTensorIndices(val.as_tensor()).outer_inner() |
                             ranges::to<EvalExpr::index_vector>(),
-                        val.canon_phase(), val.hash_value());
+                        val.canon_phase(), val.hash_value(),
+                        val.copy_connectivity_graph());
     } else
       return EvalExprTA(val);
   });

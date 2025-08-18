@@ -8,8 +8,6 @@
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/optimize.hpp>
 #include <SeQuant/core/rational.hpp>
-#include <SeQuant/core/result_expr.hpp>
-#include <SeQuant/core/tensor.hpp>
 #include <SeQuant/core/utility/expr.hpp>
 
 #include <SeQuant/domain/mbpt/rules/df.hpp>
@@ -27,14 +25,18 @@ container::svector<ResultExpr> postProcess(ResultExpr result,
     return {result};
   }
 
-  container::svector<container::svector<Index> > externals =
-      result.index_particle_grouping<container::svector<Index> >();
+  container::svector<container::svector<Index>> externals =
+      result.index_particle_grouping<container::svector<Index>>();
 
   if (options.density_fitting) {
     IndexSpace aux_space =
         get_default_context().index_space_registry()->retrieve(L"F");
     result.expression() =
         mbpt::density_fit(result.expression(), aux_space, L"g", L"DF");
+
+    result = expand(result);
+
+    spdlog::debug("After applying density-fitting decomposition:\n{}", result);
   }
 
   switch (options.spintrace) {
@@ -75,10 +77,17 @@ container::svector<ResultExpr> postProcess(ResultExpr result,
   }
 
   for (ResultExpr &current : processed) {
-    current.expression() = simplify(current.expression());
+    simplify(current);
     if (options.spintrace != SpinTracing::None) {
       spdlog::debug("Expression after spintracing:\n{}", current);
     }
+  }
+
+  // Remove symmetrization operators from expressions
+  container::svector<std::optional<ExprPtr>> symmetrizers;
+  symmetrizers.reserve(processed.size());
+  for (ResultExpr &current : processed) {
+    symmetrizers.push_back(pop_symmetrizer(current));
   }
 
   switch (options.transform) {
@@ -87,28 +96,37 @@ container::svector<ResultExpr> postProcess(ResultExpr result,
     case ProjectionTransformation::Biorthogonal:
       biorthogonal_transform(processed);
 
-      for (const ResultExpr &current : processed) {
+      for (std::size_t i = 0; i < processed.size(); ++i) {
+        // Having the symmetrizer is important for simplification to work
+        // properly but we have to remove them again to not mess with the
+        // contraction order optimization.
+        if (symmetrizers.at(i).has_value()) {
+          processed.at(i).expression() *= symmetrizers.at(i).value();
+        }
+        simplify(processed.at(i));
+
         spdlog::debug("Expression after biorthogonal transformation:\n{}",
-                      current);
+                      processed.at(i));
+
+        if (symmetrizers.at(i).has_value()) {
+          pop_symmetrizer(processed.at(i));
+        }
       }
       break;
   }
 
-  for (ResultExpr &current : processed) {
-    if (options.factorize_to_binary) {
-      std::optional<ExprPtr> symmetrizer =
-          pop_tensor(current.expression(), L"S");
-      if (!symmetrizer.has_value()) {
-        symmetrizer = pop_tensor(current.expression(), L"A");
-      }
-
+  if (options.factorize_to_binary) {
+    for (ResultExpr &current : processed) {
       current.expression() = optimize(current.expression());
+    }
+  }
 
-      if (symmetrizer.has_value()) {
-        current.expression() =
-            ex<Product>(ExprPtrList{symmetrizer.value(), current.expression()},
-                        Product::Flatten::No);
-      }
+  // Add symmetrizers back into the expressions
+  for (std::size_t i = 0; i < processed.size(); ++i) {
+    if (symmetrizers.at(i).has_value()) {
+      processed.at(i).expression() = ex<Product>(
+          ExprPtrList{symmetrizers.at(i).value(), processed.at(i).expression()},
+          Product::Flatten::No);
     }
   }
 

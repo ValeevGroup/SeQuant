@@ -3,8 +3,14 @@
 #include "utils.hpp"
 
 #include <SeQuant/core/context.hpp>
+#include <SeQuant/core/export/export.hpp>
+#include <SeQuant/core/export/export_expr.hpp>
+#include <SeQuant/core/export/export_node.hpp>
+#include <SeQuant/core/export/expression_group.hpp>
+#include <SeQuant/core/export/generation_optimizer.hpp>
 #include <SeQuant/core/export/itf.hpp>
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/optimize/common_subexpression_elimination.hpp>
 #include <SeQuant/core/parse.hpp>
 #include <SeQuant/core/runtime.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
@@ -26,11 +32,12 @@
 #include <cassert>
 #include <filesystem>
 #include <fstream>
-#include <iostream>
 #include <iterator>
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <unordered_set>
+#include <variant>
 
 using nlohmann::json;
 using namespace sequant;
@@ -42,33 +49,22 @@ struct std::hash<Tensor> {
   }
 };
 
-class ItfContext : public itf::Context {
+class ItfExportContext : public ItfContext {
  public:
-  ItfContext(const IndexSpaceMeta &meta) : m_meta(&meta) {}
+  ItfExportContext(const IndexSpaceMeta &meta) : m_meta(&meta) {}
 
-  int compare(const Index &lhs, const Index &rhs) const override {
-    const std::size_t lhsSize = m_meta->getSize(lhs);
-    const std::size_t rhsSize = m_meta->getSize(rhs);
-
-    // We compare indices based on the size of their associated index spaces
-    // (in descending order)
-    return static_cast<long>(rhsSize) - static_cast<long>(lhsSize);
-  }
-
-  std::wstring get_base_label(const IndexSpace &space) const override {
-    return m_meta->getLabel(space);
-  }
-
-  std::wstring get_tag(const IndexSpace &space) const override {
+  std::string get_tag(const IndexSpace &space) const override {
+    assert(m_meta);
     return m_meta->getTag(space);
   }
 
-  std::wstring get_name(const IndexSpace &space) const override {
+  std::string get_name(const IndexSpace &space) const override {
+    assert(m_meta);
     return m_meta->getName(space);
   }
 
  private:
-  const IndexSpaceMeta *m_meta;
+  const IndexSpaceMeta *m_meta = nullptr;
 };
 
 ProcessingOptions extractProcessingOptions(
@@ -119,16 +115,48 @@ ProcessingOptions extractProcessingOptions(
     options.term_by_term = details.at("term_by_term").get<bool>();
   }
 
+  if (details.contains("subexpression_elimination")) {
+    options.subexpression_elimination =
+        details.at("subexpression_elimination").get<bool>();
+  }
+
   return options;
 }
 
-itf::Result toItfResult(const ResultExpr &result, const ItfContext &ctx,
-                        bool importResultTensor) {
-  // TODO: Handle symmetry of result tensor
-  Tensor resultTensor(result.label(), bra(result.bra()), ket(result.ket()),
-                      aux(result.aux()));
+ExportNode<> prepareForExport(const ResultExpr &result,
+                              const ItfGenerator<ItfExportContext> &generator,
+                              ItfExportContext &ctx, bool importResult,
+                              bool createResult) {
+  ExportNode<> tree = to_export_tree(result);
 
-  return itf::Result(result.expression(), resultTensor, importResultTensor);
+  if (result.produces_tensor()) {
+    assert(result.has_label());
+    Tensor result_tensor = result.result_as_tensor();
+    ctx.rewrite(result_tensor);
+    if (importResult) {
+      ctx.set_import_name(result_tensor,
+                          generator.get_name(result_tensor, ctx));
+    }
+    if (createResult) {
+      ctx.setLoadStrategy(result_tensor, LoadStrategy::Create, tree->id());
+    } else {
+      ctx.setLoadStrategy(result_tensor, LoadStrategy::Load, tree->id());
+    }
+  } else {
+    if (importResult) {
+      assert(result.has_label());
+      ctx.set_import_name(result.result_as_variable(), toUtf8(result.label()));
+    }
+    if (createResult) {
+      ctx.setLoadStrategy(result.result_as_variable(), LoadStrategy::Create,
+                          tree->id());
+    } else {
+      ctx.setLoadStrategy(result.result_as_variable(), LoadStrategy::Load,
+                          tree->id());
+    }
+  }
+
+  return tree;
 }
 
 std::vector<ResultExpr> splitContributions(const ResultExpr &result) {
@@ -155,15 +183,22 @@ std::vector<ResultExpr> splitContributions(const ResultExpr &result) {
 void generateITF(const json &blocks, std::string_view out_file,
                  const ProcessingOptions &defaults,
                  const IndexSpaceMeta &spaceMeta) {
-  std::vector<itf::CodeBlock> itfBlocks;
-  ItfContext context(spaceMeta);
+  ItfExportContext context(spaceMeta);
+  // We assume index IDs start at 1
+  context.set_index_id_offset(1);
+
+  ItfGenerator<ItfExportContext> itfgen;
+  GenerationOptimizer<ItfGenerator<ItfExportContext>> generator(itfgen);
+
+  container::svector<ExpressionGroup<>> groups;
+  groups.reserve(blocks.size());
 
   for (const json &current_block : blocks) {
     const std::string block_name = current_block.at("name");
 
     spdlog::debug("Processing ITF code block '{}'", block_name);
 
-    std::vector<itf::Result> results;
+    container::svector<ExportNode<>> results;
 
     for (const json &current_result : current_block.at("results")) {
       const std::string result_name = current_result.at("name");
@@ -199,6 +234,7 @@ void generateITF(const json &blocks, std::string_view out_file,
 
       std::unordered_set<Tensor> tensorsToSymmetrize;
 
+      std::set<std::variant<Tensor, Variable>> createdResults;
       for (const ResultExpr &contribution : resultParts) {
         if (resultParts.size() > 1) {
           spdlog::debug("Current contribution:\n{}", contribution);
@@ -207,6 +243,28 @@ void generateITF(const json &blocks, std::string_view out_file,
         for (ResultExpr &current :
              postProcess(contribution, spaceMeta, options)) {
           spdlog::debug("Fully processed equation is:\n{}", current);
+
+          if (*current.expression() == Constant(0)) {
+            continue;
+          }
+
+          const bool createResult = [&]() {
+            // We only want to create a given result once to not overwrite
+            // previous contributions
+            if (contribution.produces_tensor()) {
+              if (createdResults.find(current.result_as_tensor()) ==
+                  createdResults.end()) {
+                createdResults.insert(current.result_as_tensor());
+                return true;
+              }
+            } else if (createdResults.find(current.result_as_variable()) ==
+                       createdResults.end()) {
+              createdResults.insert(current.result_as_variable());
+              return true;
+            }
+
+            return false;
+          }();
 
           if (needsSymmetrization(current.expression())) {
             std::optional<ExprPtr> symmetrizer =
@@ -223,10 +281,12 @@ void generateITF(const json &blocks, std::string_view out_file,
 
             spdlog::debug("After popping S tensor:\n{}", current);
 
-            results.push_back(toItfResult(current, context, false));
+            results.push_back(prepareForExport(current, itfgen, context, false,
+                                               createResult));
           } else {
-            results.push_back(toItfResult(
-                current, context, current_result.value("import", true)));
+            results.push_back(prepareForExport(
+                current, itfgen, context, current_result.value("import", true),
+                createResult));
           }
         }
       }
@@ -239,19 +299,29 @@ void generateITF(const json &blocks, std::string_view out_file,
 
         spdlog::debug("Result symmetrization via\n{}", symmetrizedResult);
 
-        results.push_back(toItfResult(symmetrizedResult, context,
-                                      current_result.value("import", true)));
+        results.push_back(prepareForExport(symmetrizedResult, itfgen, context,
+                                           current_result.value("import", true),
+                                           true));
       }
     }
 
-    itfBlocks.push_back(
-        itf::CodeBlock(toUtf16(current_block.at("name").get<std::string>()),
-                       std::move(results)));
+    if (current_block.value("subexpression_elimination",
+                            defaults.subexpression_elimination)) {
+      eliminate_common_subexpressions(results, [](const auto &expr) {
+        // Note: the lambda is needed to make the callable usable for
+        // ExprPtr as well as ResultExpr objects
+        return to_export_tree(expr);
+      });
+    }
+
+    groups.emplace_back(std::move(results),
+                        current_block.at("name").get<std::string>());
   }
 
-  std::wstring itfCode = to_itf(std::move(itfBlocks), context);
+  export_groups(groups, generator, context);
+  std::string itfCode = generator.get_generated_code();
 
-  std::wofstream output(out_file.data());
+  std::ofstream output(out_file.data());
   output << itfCode;
 }
 
@@ -276,7 +346,7 @@ void registerIndexSpaces(const json &spaces, IndexSpaceMeta &meta) {
   IndexSpaceRegistry &registry =
       *get_default_context().mutable_index_space_registry();
 
-  std::vector<std::pair<std::wstring, IndexSpaceMeta::Entry> > spaceList;
+  std::vector<std::pair<std::wstring, IndexSpaceMeta::Entry>> spaceList;
   spaceList.reserve(spaces.size());
 
   for (std::size_t i = 0; i < spaces.size(); ++i) {
@@ -289,15 +359,15 @@ void registerIndexSpaces(const json &spaces, IndexSpaceMeta &meta) {
     }
 
     IndexSpaceMeta::Entry entry;
-    entry.name = toUtf16(current.at("name").get<std::string>());
-    entry.tag = toUtf16(current.at("tag").get<std::string>());
+    entry.name = current.at("name").get<std::string>();
+    entry.tag = current.at("tag").get<std::string>();
 
     std::wstring label = toUtf16(current.at("label").get<std::string>());
     registry.add(label, type, size);
 
     spdlog::debug(
         "Registered index space '{}' with label '{}', tag '{}' and size {}",
-        toUtf8(entry.name), toUtf8(label), toUtf8(entry.tag), size);
+        entry.name, toUtf8(label), entry.tag, size);
 
     spaceList.push_back(std::make_pair(std::move(label), std::move(entry)));
   }

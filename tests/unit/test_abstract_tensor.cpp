@@ -6,8 +6,8 @@
 
 #include "catch2_sequant.hpp"
 
+#include "SeQuant/core/expr.hpp"
 #include "SeQuant/core/op.hpp"
-#include "SeQuant/core/tensor.hpp"
 
 #include <array>
 #include <span>

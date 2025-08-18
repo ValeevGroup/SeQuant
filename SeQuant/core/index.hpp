@@ -108,6 +108,21 @@ class Index : public Taggable {
   /// alignof is still invoked (for no good reason)
   using index_vector = container::vector<Index>;
 
+  /// @returns Ordinal of the index corresponding to the provided label. If the
+  /// label is malformed, returns nullopt.
+  static std::optional<std::size_t> get_ordinal(std::wstring_view label) {
+    const auto underscore_position = label.rfind(L'_');
+    if (underscore_position != std::wstring::npos) {
+      assert(underscore_position + 1 <
+             label.size());  // check that there is at least one char past the
+                             // underscore
+      return std::wcstol(
+          label.substr(underscore_position + 1, std::wstring::npos).data(),
+          NULL, 10);
+    } else
+      return {};
+  }
+
   Index() = default;
 
   const static Index null;

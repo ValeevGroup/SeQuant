@@ -527,6 +527,8 @@ class AbstractGraph {
  */
 class Graph : public AbstractGraph {
  public:
+  friend struct ConstGraphCmp;
+
   /**
    * The possible splitting heuristics.
    * The selected splitting heuristics affects the computed canonical
@@ -893,6 +895,27 @@ class Graph : public AbstractGraph {
    * for both graphs.
    */
   void set_splitting_heuristic(const SplittingHeuristic shs) { sh = shs; }
+
+protected:
+  /**
+   * Compare this graph with the graph \a other.
+   * Returns 0 if the graphs are equal, and a negative (positive) integer
+   * if this graph is "smaller than" ("greater than", resp.) than \a other.
+   * Note that the const version will not perform removal of duplicate edges.
+   */
+  int cmp(const Graph& other) const;
+};
+
+/**
+* WARNING: Use only if you are aware of the caveats regarding
+* the use of the const-qualified Graph::cmp function.
+*
+* Accessor for the const Graph::cmp implementation
+*/
+struct ConstGraphCmp {
+	static auto cmp(const Graph &lhs, const Graph &rhs) {
+		return lhs.cmp(rhs);
+	}
 };
 
 /**

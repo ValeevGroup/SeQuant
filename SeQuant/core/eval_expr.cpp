@@ -8,7 +8,6 @@
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/parse.hpp>
-#include <SeQuant/core/tensor.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/tensor_network_v3.hpp>
 #include <SeQuant/core/utility/indices.hpp>
@@ -24,13 +23,10 @@
 #include <algorithm>
 #include <cassert>
 #include <cmath>
-#include <iterator>
-#include <memory>
+#include <ranges>
 #include <string_view>
-#include <tuple>
 #include <type_traits>
 #include <utility>
-#include <vector>
 
 namespace sequant {
 
@@ -43,6 +39,60 @@ bool is_tot(Tensor const& t) noexcept {
 }
 
 }  // namespace
+
+namespace detail {
+inline constexpr std::wstring_view label_tensor{L"I"};
+inline constexpr std::wstring_view label_scalar{L"Z"};
+
+template <typename... Args>
+ExprPtr make_tensor(Args&&... arg_list) {
+  auto process_arg = [](auto& arg) {
+    using ArgType = std::remove_cvref_t<decltype(arg)>;
+    if constexpr (std::ranges::range<ArgType>) {
+      if constexpr (std::is_same_v<Index,
+                                   std::remove_cvref_t<
+                                       std::ranges::range_value_t<ArgType>>>) {
+        // This function is creating intermediate tensors, which don't come with
+        // an externally provided "correct"/canonical order of its indices.
+        // Hence, we are free to define our own canonical order, which we
+        // conveniently set to the indices being sorted in each group.
+        using std::ranges::begin;
+        using std::ranges::end;
+        std::sort(begin(arg), end(arg));
+      }
+    }
+  };
+
+  // Iterate over variadic parameter list and apply process_arg to each entry
+  (process_arg(arg_list), ...);
+
+  return ex<Tensor>(label_tensor, std::forward<Args>(arg_list)...);
+}
+
+template <typename... Args>
+ExprPtr make_tensor_wo_symmetries(Args&&... args) {
+  return make_tensor(std::forward<Args>(args)..., Symmetry::nonsymm,
+                     BraKetSymmetry::nonsymm, ParticleSymmetry::nonsymm);
+}
+
+ExprPtr make_tensor(Tensor const& t, bool with_symm) {
+  if (with_symm) {
+    return make_tensor(bra(t.bra()),            //
+                       ket(t.ket()),            //
+                       aux(t.aux()),            //
+                       t.symmetry(),            //
+                       t.braket_symmetry(),     //
+                       t.particle_symmetry());  //
+  } else {
+    return make_tensor_wo_symmetries(bra(t.bra()),  //
+                                     ket(t.ket()),  //
+                                     aux(t.aux()));
+  }
+}
+
+ExprPtr make_variable() { return ex<Variable>(label_scalar); }
+
+}  // namespace detail
 
 std::string to_label_annotation(const Index& idx) {
   using namespace ranges::views;
@@ -77,6 +127,7 @@ EvalExpr::EvalExpr(Tensor const& tnsr)
     : op_type_{std::nullopt},
       result_type_{ResultType::Tensor},
       expr_{tnsr.clone()} {
+  assert(!tnsr.indices().empty());
   if (is_tot(tnsr)) {
     ExprPtrList tlist{expr_};
     auto tn = TensorNetworkV3(tlist);
@@ -85,6 +136,7 @@ EvalExpr::EvalExpr(Tensor const& tnsr)
     hash_value_ = md.hash_value();
     canon_phase_ = md.phase;
     canon_indices_ = md.get_indices<index_vector>();
+    connectivity_ = std::move(md.graph);
   } else {
     hash_value_ = hash_terminal_tensor(tnsr);
     canon_phase_ = 1;
@@ -105,13 +157,27 @@ EvalExpr::EvalExpr(Variable const& v)
       expr_{v.clone()} {}
 
 EvalExpr::EvalExpr(EvalOp op, ResultType res, ExprPtr const& ex,
-                   index_vector ixs, std::int8_t p, size_t h)
+                   index_vector ixs, std::int8_t p, size_t h,
+                   std::shared_ptr<bliss::Graph> connectivity)
     : op_type_{op},
       result_type_{res},
       hash_value_{h},
       canon_indices_{std::move(ixs)},
       canon_phase_{p},
-      expr_{ex.clone()} {}
+      expr_{ex.clone()},
+      connectivity_{std::move(connectivity)} {
+  if (connectivity_ != nullptr) {
+    // Note: The non-const cmp function performs some internal cleanup that the
+    // comparison depends on. However, we want to be able to do const
+    // comparisons and hence we have to assume fully cleaned-up graphs which we
+    // achieve by causing a self-cleanup of the graph via the non-const cmp
+    // function.
+    connectivity_->cmp(*connectivity_);
+  }
+
+  // Using Tensor objects to represent scalar results is just confusing
+  assert(ex->is<Tensor>() == (res == ResultType::Tensor));
+}
 
 const std::optional<EvalOp>& EvalExpr::op_type() const noexcept {
   return op_type_;
@@ -170,6 +236,20 @@ std::string EvalExpr::label() const noexcept {
 
 std::int8_t EvalExpr::canon_phase() const noexcept { return canon_phase_; }
 
+bool EvalExpr::has_connectivity_graph() const noexcept {
+  return connectivity_ != nullptr;
+}
+
+const bliss::Graph& EvalExpr::connectivity_graph() const noexcept {
+  assert(connectivity_ != nullptr);
+  return *connectivity_;
+}
+
+std::shared_ptr<bliss::Graph> EvalExpr::copy_connectivity_graph()
+    const noexcept {
+  return connectivity_;
+}
+
 namespace {
 
 ///
@@ -200,7 +280,6 @@ size_t hash_terminal_tensor(Tensor const& tnsr) noexcept {
   hash::combine(h, hash_indices(tnsr.const_slots()));
   return h;
 }
-
 }  // namespace
 
 ///
@@ -220,43 +299,6 @@ struct ExprWithHash {
   ExprPtr expr;
   size_t hash;
 };
-
-namespace detail {
-
-inline constexpr std::wstring_view label_tensor{L"I"};
-inline constexpr std::wstring_view label_scalar{L"Z"};
-
-template <typename... Args>
-ExprPtr make_tensor(Args&&... args) {
-  return ex<Tensor>(label_tensor, std::forward<Args>(args)...);
-}
-
-template <typename... Args>
-ExprPtr make_tensor_wo_symmetries(Args&&... args) {
-  return ex<Tensor>(label_tensor, std::forward<Args>(args)...,
-                    Symmetry::nonsymm, BraKetSymmetry::nonsymm,
-                    ParticleSymmetry::nonsymm);
-}
-
-ExprPtr make_tensor(Tensor const& t, bool with_symm) {
-  if (with_symm) {
-    return ex<Tensor>(label_tensor,            //
-                      bra(t.bra()),            //
-                      ket(t.ket()),            //
-                      aux(t.aux()),            //
-                      t.symmetry(),            //
-                      t.braket_symmetry(),     //
-                      t.particle_symmetry());  //
-  } else {
-    return make_tensor_wo_symmetries(bra(t.bra()),  //
-                                     ket(t.ket()),  //
-                                     aux(t.aux()));
-  }
-}
-
-ExprPtr make_variable() { return ex<Variable>(label_scalar); }
-
-}  // namespace detail
 
 using EvalExprNode = FullBinaryNode<EvalExpr>;
 
@@ -314,14 +356,16 @@ EvalExprNode binarize(Sum const& sum) {
                                                 aux(t.aux())),  //
               left.canon_indices(),                             //
               1,                                                //
-              h};
+              h,                                                //
+              nullptr};
     } else {
       return {EvalOp::Sum,              //
               ResultType::Scalar,       //
               detail::make_variable(),  //
               {},                       //
               1,                        //
-              h};
+              h,                        //
+              nullptr};
     }
   };
 
@@ -329,6 +373,10 @@ EvalExprNode binarize(Sum const& sum) {
 }
 
 EvalExprNode binarize(Product const& prod) {
+  if (prod.factors().empty()) {
+    return binarize(Constant(prod.scalar()));
+  }
+
   using ranges::views::move;
   using ranges::views::transform;
   auto factors = prod.factors()                                             //
@@ -348,7 +396,8 @@ EvalExprNode binarize(Product const& prod) {
               detail::make_variable(),
               {},
               1,
-              h};
+              h,
+              nullptr};
     } else if (left->is_scalar() || right->is_scalar()) {
       // scalar * tensor or tensor * scalar
       auto const& tl = left->is_tensor() ? left : right;
@@ -359,7 +408,8 @@ EvalExprNode binarize(Product const& prod) {
                                                 aux(t.aux())),  //
               tl->canon_indices(),                              //
               1,                                                //
-              h};
+              h,
+              nullptr};
     } else {
       // tensor * tensor
       container::svector<ExprWithHash> subfacs;
@@ -377,7 +427,8 @@ EvalExprNode binarize(Product const& prod) {
                 detail::make_variable(),  //
                 {},                       //
                 canon.phase,              //
-                h};
+                h,
+                std::move(canon.graph)};
       } else {
         auto idxs = get_unique_indices(Product(ts));
         return {EvalOp::Product,     //
@@ -386,7 +437,8 @@ EvalExprNode binarize(Product const& prod) {
                                                   aux(idxs.aux)),
                 canon.get_indices<Index::index_vector>(),  //
                 canon.phase,                               //
-                h};
+                h,
+                std::move(canon.graph)};
       }
     }
   };
@@ -410,7 +462,9 @@ EvalExprNode binarize(Product const& prod) {
                            expr,                   //
                            left->canon_indices(),  //
                            1,                      //
-                           h};
+                           h,                      //
+                           nullptr};
+
     return EvalExprNode{std::move(result), std::move(left), std::move(right)};
   }
 }
