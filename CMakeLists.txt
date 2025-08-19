@@ -406,7 +406,10 @@ if (SEQUANT_HAS_EXECUTION_HEADER_STANDALONE OR SEQUANT_HAS_EXECUTION_HEADER_WITH
         target_include_directories(SeQuant SYSTEM PUBLIC ${TBB_INCLUDE_DIRS})
     endif ()
 endif ()
-target_include_directories(SeQuant PUBLIC
+if (NOT PROJECT_IS_TOP_LEVEL)
+    set(SEQUANT_SYSTEM "SYSTEM")
+endif()
+target_include_directories(SeQuant ${SEQUANT_SYSTEM} PUBLIC
         $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}>
         $<BUILD_INTERFACE:${PROJECT_BINARY_DIR}>
         $<INSTALL_INTERFACE:${CMAKE_INSTALL_PREFIX}/include>)
