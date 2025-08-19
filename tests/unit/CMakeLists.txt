@@ -61,6 +61,10 @@ endif (TARGET tiledarray)
 
 target_link_libraries(unit_tests-sequant PRIVATE SeQuant::SeQuant Catch2::Catch2 dtl::dtl)
 
+if (SEQUANT_WARNINGS_AS_ERRORS)
+    target_warnings_as_errors(unit_tests-sequant)
+endif()
+
 if (SEQUANT_TESTS)
     catch_discover_tests(
         unit_tests-sequant

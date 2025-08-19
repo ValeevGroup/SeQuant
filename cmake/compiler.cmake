@@ -1,0 +1,7 @@
+function(target_warnings_as_errors TARGET)
+    if (CMAKE_CXX_COMPILER_ID MATCHES "^(GNU|Clang|AppleClang)$")
+        target_compile_options("${TARGET}" PRIVATE "-Werror")
+    else()
+        message(DEBUG "Warnings-as-errors not supported for compiler '${CMAKE_CXX_COMPILER_ID}' - disabling…")
+    endif()
+endfunction()

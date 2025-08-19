@@ -43,6 +43,10 @@ foreach(current IN LISTS TEST_CASES)
         target_compile_definitions(${test_name} PRIVATE SEQUANT_SKIP_LONG_TESTS=1)
     endif()
 
+    if (SEQUANT_WARNINGS_AS_ERRORS)
+        target_warnings_as_errors(${test_name})
+    endif()
+
     set(variant_names "")
 
     if (NOT test_variants)

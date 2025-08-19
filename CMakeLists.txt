@@ -77,6 +77,7 @@ if (NOT CMAKE_CXX_COMPILER MATCHES ".*/ccache$")
     endif ()
 endif ()
 
+list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake/")
 list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake/modules/")
 
 set(FETCHCONTENT_UPDATES_DISCONNECTED OFF CACHE BOOL "Enables UPDATE_DISCONNECTED behavior for all content population")
@@ -85,6 +86,8 @@ include(FetchContent)
 include(AddCustomTargetSubproject)
 include(FeatureSummary)
 include(CMakePackageConfigHelpers)
+
+include(compiler)
 
 ##########################
 # Standard build variables
@@ -109,6 +112,7 @@ option(SEQUANT_BENCHMARKS "Enable SeQuant benchmarks" OFF)
 # Additional build variables
 ############################
 option(SEQUANT_IWYU "Whether to use the include-what-you-use tool (if found)" OFF)
+option(SEQUANT_WARNINGS_AS_ERRORS "Whether to treat compiler warnings as errors" ${PROJECT_IS_TOP_LEVEL})
 
 ##########################
 # SeQuant package options
@@ -431,6 +435,11 @@ else()
             FILES_MATCHING PATTERN "*.hpp"
             )
 endif ()
+
+if (SEQUANT_WARNINGS_AS_ERRORS)
+    target_warnings_as_errors(SeQuant)
+endif()
+
 install(TARGETS SeQuant-bliss EXPORT sequant COMPONENT sequant LIBRARY DESTINATION ${SEQUANT_INSTALL_LIBDIR})
 install(TARGETS SeQuant EXPORT sequant COMPONENT sequant LIBRARY DESTINATION ${SEQUANT_INSTALL_LIBDIR})
 install(DIRECTORY SeQuant
