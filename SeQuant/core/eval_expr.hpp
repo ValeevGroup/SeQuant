@@ -408,15 +408,17 @@ FullBinaryNode<ExprT> binarize(ResultExpr const& res) {
   } else {
     Tensor& tensor = tree->expr().template as<Tensor>();
 
-    if (res.has_label()) {
-      tensor.set_label(res.label());
-    }
+    tensor = res.result_as_tensor();
 
-    assert(tensor.num_slots() ==
-           res.bra().size() + res.ket().size() + res.aux().size());
-    tensor.set_bra(res.bra());
-    tensor.set_ket(res.ket());
-    tensor.set_aux(res.aux());
+    // if (res.has_label()) {
+    //   tensor.set_label(res.label());
+    // }
+
+    // assert(tensor.num_slots() ==
+    //        res.bra().size() + res.ket().size() + res.aux().size());
+    // tensor.set_bra(res.bra());
+    // tensor.set_ket(res.ket());
+    // tensor.set_aux(res.aux());
   }
 
   return tree;
