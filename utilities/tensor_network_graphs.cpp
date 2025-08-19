@@ -120,7 +120,7 @@ int main(int argc, char **argv) {
         if (!network.has_value()) {
           std::wcout << "Failed to construct tensor network for input '"
                      << to_latex(expr) << "'" << std::endl;
-          return 2;
+          return;
         }
 
         auto graph = network->create_graph(
