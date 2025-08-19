@@ -84,10 +84,11 @@ std::wstring spinannotation_add(WS&& label, Spin s) {
       return to_wstring(std::forward<WS>(label)) + L'↑';
     case Spin::beta:
       return to_wstring(std::forward<WS>(label)) + L'↓';
-    default:
-      assert(false && "invalid quantum number");
-      abort();
+    case Spin::null:
+      break;
   }
+  assert(false && "invalid quantum number");
+  abort();
 }
 
 /// replaces spin annotation to

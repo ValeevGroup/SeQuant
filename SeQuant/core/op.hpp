@@ -200,10 +200,13 @@ bool is_pure_qpcreator(const Op<S> &op,
              (isr->is_pure_unoccupied(op.index().space()) &&
               op.action() == Action::create);
     }
-    default:
+    case Vacuum::MultiProduct:
       throw std::logic_error(
           "is_pure_qpcreator: cannot handle MultiProduct vacuum");
   }
+
+  assert(false);
+  throw "Unreachable";
 };
 
 /// @return true if this is a quasiparticle creator with respect to the given
@@ -222,9 +225,8 @@ bool is_qpcreator(const Op<S> &op,
              (isr->contains_unoccupied(op.index().space()) &&
               op.action() == Action::create);
     }
-    default:
-      throw std::logic_error("is_qpcreator: cannot handle MultiProduct vacuum");
   }
+  throw std::logic_error("is_qpcreator: cannot handle MultiProduct vacuum");
 };
 
 template <Statistics S>
@@ -244,10 +246,8 @@ IndexSpace qpcreator_space(
                  : isr->intersection(
                        op.index().space(),
                        isr->vacuum_unoccupied_space(op.index().space().qns()));
-    default:
-      throw std::logic_error(
-          "qpcreator_space: cannot handle MultiProduct vacuum");
   }
+  throw std::logic_error("qpcreator_space: cannot handle MultiProduct vacuum");
 }
 
 /// @return true if this is a pure quasiparticle annihilator with respect to
@@ -266,10 +266,13 @@ bool is_pure_qpannihilator(
              (isr->is_pure_occupied(op.index().space()) &&
               op.action() == Action::create);
     }
-    default:
+    case Vacuum::MultiProduct:
       throw std::logic_error(
           "is_pure_qpannihilator: cannot handle MultiProduct vacuum");
   }
+
+  assert(false);
+  throw "Unreachable";
 };
 
 /// @return true if this is a quasiparticle annihilator with respect to the
@@ -288,10 +291,13 @@ bool is_qpannihilator(const Op<S> &op,
              (isr->contains_unoccupied(op.index().space()) &&
               op.action() == Action::annihilate);
     }
-    default:
+    case Vacuum::MultiProduct:
       throw std::logic_error(
           "is_qpannihilator: cannot handle MultiProduct vacuum");
   }
+
+  assert(false);
+  throw "Unreachable";
 };
 
 template <Statistics S>
@@ -311,10 +317,13 @@ IndexSpace qpannihilator_space(
                  : isr->intersection(
                        op.index().space(),
                        isr->vacuum_unoccupied_space(op.index().space().qns()));
-    default:
+    case Vacuum::MultiProduct:
       throw std::logic_error(
           "qpcreator_space: cannot handle MultiProduct vacuum");
   }
+
+  assert(false);
+  throw "Unreachable";
 }
 
 template <Statistics S = Statistics::FermiDirac>
