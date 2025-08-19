@@ -598,6 +598,9 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
                                this->_aux(), bkt, /* left_align = */ true);
       }
     }
+
+    assert(false);
+    throw "Unreachable code";
   }
 
   ExprPtr canonicalize() override;

@@ -666,6 +666,9 @@ class NormalOperator : public Operator<S>,
                                this->_aux(), bkt, /* left_align = */ false);
       }
     }
+
+    assert(false);
+    throw "Unreachable";
   }
 
   /// overload base_type::erase
