@@ -823,7 +823,8 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
                                            ? this->ext_indices()
                                            : *(options.named_indices);
 
-  VertexPainter colorizer(named_indices, options.distinct_named_indices);
+  VertexPainter<TensorNetworkV3> colorizer(named_indices,
+                                           options.distinct_named_indices);
 
   constexpr std::size_t num_tensor_components = 5;
 

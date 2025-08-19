@@ -704,7 +704,8 @@ TensorNetworkV2::Graph TensorNetworkV2::create_graph(
                                            ? this->ext_indices()
                                            : *(options.named_indices);
 
-  VertexPainter colorizer(named_indices, options.distinct_named_indices);
+  VertexPainter<TensorNetworkV2> colorizer(named_indices,
+                                           options.distinct_named_indices);
 
   // core, bra, ket, auxiliary and optionally (for non-symmetric tensors) a
   // particle vertex

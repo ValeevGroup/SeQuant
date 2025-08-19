@@ -486,7 +486,8 @@ TensorNetwork::GraphData TensorNetwork::make_bliss_graph(
                                   ? this->ext_indices()
                                   : *options.named_indices;
 
-  VertexPainter colorizer(named_indices, options.distinct_named_indices);
+  VertexPainter<TensorNetwork> colorizer(named_indices,
+                                         options.distinct_named_indices);
 
   // results
   std::shared_ptr<bliss::Graph> graph;
