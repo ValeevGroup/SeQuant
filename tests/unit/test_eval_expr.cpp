@@ -146,23 +146,23 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
     REQUIRE(root_expr.as<Variable>().label() == L"E");
 
     // The binarized tree shall respect the indexing of the ResultExpr
-    res = parse_result_expr(L"Result{a2;i2} = g{i1,i2;a1,a2} t{a1;i1}");
+    res = parse_result_expr(L"Result{a2;i2}:A-S-S = g{i1,i2;a1,a2} t{a1;i1}");
     root_expr = binarize(res)->expr();
     REQUIRE(root_expr.is<Tensor>());
     REQUIRE(root_expr.as<Tensor>() ==
             Tensor(L"Result", bra(IndexList{L"a_2"}), ket(IndexList{L"i_2"}),
-                   Symmetry::nonsymm, BraKetSymmetry::nonsymm,
-                   ParticleSymmetry::nonsymm));
+                   Symmetry::antisymm, BraKetSymmetry::symm,
+                   ParticleSymmetry::symm));
 
     // continued ->  check that changing indexing in result changes indexing in
     // tree
-    res = parse_result_expr(L"Result{i2;a2} = g{i1,i2;a1,a2} t{a1;i1}");
+    res = parse_result_expr(L"Result{i2;a2}:A-S-S = g{i1,i2;a1,a2} t{a1;i1}");
     root_expr = binarize(res)->expr();
     REQUIRE(root_expr.is<Tensor>());
     REQUIRE(root_expr.as<Tensor>() ==
             Tensor(L"Result", bra(IndexList{L"i_2"}), ket(IndexList{L"a_2"}),
-                   Symmetry::nonsymm, BraKetSymmetry::nonsymm,
-                   ParticleSymmetry::nonsymm));
+                   Symmetry::antisymm, BraKetSymmetry::symm,
+                   ParticleSymmetry::symm));
 
     // The name-respecting property shall also hold for terminals
     res = parse_result_expr(L"Other = Var");
