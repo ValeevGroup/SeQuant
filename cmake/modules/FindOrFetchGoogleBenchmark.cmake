@@ -1,16 +1,22 @@
 if (NOT TARGET benchmark::benchmark)
-    include(${vg_cmake_kit_SOURCE_DIR}/modules/VRGFindOrFetchPackage.cmake)
+    include(FetchContent)
 
-	set(BENCHMARK_ENABLE_TESTING OFF CACHE INTERNAL "" FORCE)
+    set(BENCHMARK_ENABLE_TESTING OFF CACHE INTERNAL "" FORCE)
 
-    VRGFindOrFetchPackage(benchmark "https://github.com/google/benchmark.git" "${SEQUANT_TRACKED_GOOGLEBENCHMARK_TAG}"
-            ADD_SUBDIR
-			ADD_SUBDIR_EXCLUDE_FROM_ALL
-            CONFIG_SUBDIR
+    FetchContent_Declare(
+        googlebenchmark
+        GIT_REPOSITORY "https://github.com/google/benchmark.git"
+        GIT_TAG "${SEQUANT_TRACKED_GOOGLEBENCHMARK_TAG}"
+        GIT_SHALLOW
+        EXCLUDE_FROM_ALL
+        SYSTEM
+        FIND_PACKAGE_ARGS NAMES benchmark
     )
+
+    FetchContent_MakeAvailable(googlebenchmark)
 endif()
 
 # postcond check
 if (NOT TARGET benchmark::benchmark)
-	message(FATAL_ERROR "FindOrFetchGoogleBenchmark could not make TARGET benchmark::benchmark available")
+    message(FATAL_ERROR "FindOrFetchGoogleBenchmark could not make TARGET benchmark::benchmark available")
 endif()
