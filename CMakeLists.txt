@@ -403,7 +403,7 @@ if (SEQUANT_HAS_EXECUTION_HEADER_STANDALONE OR SEQUANT_HAS_EXECUTION_HEADER_WITH
     target_compile_definitions(SeQuant PUBLIC SEQUANT_HAS_EXECUTION_HEADER)
     if (SEQUANT_HAS_EXECUTION_HEADER_WITH_TBB)
         target_link_libraries(SeQuant PUBLIC ${TBB_LIBRARIES})
-        target_include_directories(SeQuant PUBLIC ${TBB_INCLUDE_DIRS})
+        target_include_directories(SeQuant SYSTEM PUBLIC ${TBB_INCLUDE_DIRS})
     endif ()
 endif ()
 target_include_directories(SeQuant PUBLIC
