@@ -5,9 +5,9 @@
 #ifndef SEQUANT_CORE_TENSOR_CANONICALIZER_HPP
 #define SEQUANT_CORE_TENSOR_CANONICALIZER_HPP
 
-#include "abstract_tensor.hpp"
-#include "expr.hpp"
+#include <SeQuant/core/expr.hpp>
 
+#include <functional>
 #include <memory>
 #include <string_view>
 
@@ -100,9 +100,15 @@ class TensorCanonicalizer {
   static void index_pair_comparer(index_pair_comparer_t comparer);
 
  protected:
-  inline auto bra_range(AbstractTensor& t) const { return t._bra_mutable(); }
-  inline auto ket_range(AbstractTensor& t) const { return t._ket_mutable(); }
-  inline auto aux_range(AbstractTensor& t) const { return t._aux_mutable(); }
+  inline auto mutable_bra_range(AbstractTensor& t) const {
+    return t._bra_mutable();
+  }
+  inline auto mutable_ket_range(AbstractTensor& t) const {
+    return t._ket_mutable();
+  }
+  inline auto mutable_aux_range(AbstractTensor& t) const {
+    return t._aux_mutable();
+  }
 
   /// the object used to compare indices
   static index_comparer_t index_comparer_;
@@ -181,12 +187,12 @@ class DefaultTensorCanonicalizer : public TensorCanonicalizer {
     switch (s) {
       case Symmetry::antisymm:
       case Symmetry::symm: {
-        auto _bra = bra_range(t);
-        auto _ket = ket_range(t);
+        auto _bra = mutable_bra_range(t);
+        auto _ket = mutable_ket_range(t);
         //      std::wcout << "canonicalizing " << to_latex(t);
         reset_ts_swap_counter<Index>();
         // std::{stable_}sort does not necessarily use swap! so must implement
-        // sort outselves .. thankfully ranks will be low so can stick with
+        // sort ourselves .. thankfully ranks will be low so can stick with
         // bubble
         bubble_sort(begin(_bra), end(_bra), idxcmp);
         bubble_sort(begin(_ket), end(_ket), idxcmp);
@@ -198,8 +204,8 @@ class DefaultTensorCanonicalizer : public TensorCanonicalizer {
       case Symmetry::nonsymm: {
         // sort particles with bra and ket functions first,
         // then the particles with either bra or ket index
-        auto _bra = bra_range(t);
-        auto _ket = ket_range(t);
+        auto _bra = mutable_bra_range(t);
+        auto _ket = mutable_ket_range(t);
         auto _zip_braket = zip(take(_bra, _rank), take(_ket, _rank));
         bubble_sort(begin(_zip_braket), end(_zip_braket), paircmp);
         if (_bra_rank > _rank) {
@@ -218,7 +224,7 @@ class DefaultTensorCanonicalizer : public TensorCanonicalizer {
     }
 
     // TODO: Handle auxiliary index symmetries once they are introduced
-    // auto _aux = aux_range(t);
+    // auto _aux = mutable_aux_range(t);
     // ranges::sort(_aux, comp);
 
     ExprPtr result =

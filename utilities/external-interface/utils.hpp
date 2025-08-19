@@ -4,18 +4,18 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr_fwd.hpp>
 #include <SeQuant/core/index.hpp>
-#include <SeQuant/core/result_expr.hpp>
 #include <SeQuant/core/space.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 
 #include <map>
+#include <optional>
 #include <string>
 
 class IndexSpaceMeta {
  public:
   struct Entry {
-    std::wstring tag;
-    std::wstring name;
+    std::string tag;
+    std::string name;
   };
 
   IndexSpaceMeta() = default;
@@ -24,11 +24,9 @@ class IndexSpaceMeta {
 
   std::size_t getSize(const sequant::Index &index) const;
 
-  std::wstring getLabel(const sequant::IndexSpace &space) const;
+  std::string getName(const sequant::IndexSpace &space) const;
 
-  std::wstring getName(const sequant::IndexSpace &space) const;
-
-  std::wstring getTag(const sequant::IndexSpace &space) const;
+  std::string getTag(const sequant::IndexSpace &space) const;
 
   void registerSpace(sequant::IndexSpace space, Entry entry);
 
@@ -50,5 +48,7 @@ sequant::ExprPtr generateResultSymmetrization(const sequant::Tensor &result,
 sequant::ExprPtr generateResultSymmetrization(
     std::wstring_view precursorName,
     const sequant::IndexGroups<std::vector<sequant::Index> > &externals);
+
+std::optional<sequant::ExprPtr> pop_symmetrizer(sequant::ResultExpr &expr);
 
 #endif

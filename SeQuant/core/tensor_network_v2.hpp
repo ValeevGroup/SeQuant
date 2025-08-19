@@ -5,12 +5,12 @@
 #ifndef SEQUANT_TENSOR_NETWORK_V2_H
 #define SEQUANT_TENSOR_NETWORK_V2_H
 
-#include <SeQuant/core/abstract_tensor.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/tensor_network/canonicals.hpp>
 #include <SeQuant/core/tensor_network/slot.hpp>
+#include <SeQuant/core/tensor_network/utils.hpp>
 #include <SeQuant/core/tensor_network/vertex.hpp>
 
 #include <range/v3/range/traits.hpp>
@@ -42,6 +42,7 @@ namespace sequant {
 /// graph), with Tensor objects represented by one or more vertices.
 class TensorNetworkV2 {
  public:
+  // for unit testing only
   friend class TensorNetworkV2Accessor;
 
   enum class Origin {
@@ -181,7 +182,7 @@ class TensorNetworkV2 {
     /// The type used to encode the color of a vertex. The restriction of this
     /// being as 32-bit integer comes from how BLISS is trying to convert these
     /// into RGB values.
-    using VertexColor = std::uint32_t;
+    using VertexColor = tensor_network::VertexColor;
 
     std::unique_ptr<bliss::Graph> bliss_graph;
     std::vector<std::wstring> vertex_labels;
@@ -233,7 +234,7 @@ class TensorNetworkV2 {
 
   const auto &tensor_input_ordinals() const { return tensor_input_ordinals_; }
 
-  using NamedIndexSet = container::set<Index, Index::FullLabelCompare>;
+  using NamedIndexSet = tensor_network::NamedIndexSet;
 
   /// @param cardinal_tensor_labels move all tensors with these labels to the
   /// front before canonicalizing indices
@@ -349,7 +350,7 @@ class TensorNetworkV2 {
     /// if false, will use same color for all
     /// named indices that have same Index::color(), else will use distinct
     /// color for each
-    bool distinct_named_indices = true;
+    bool distinct_named_indices = false;
 
     /// if false, will not generate the labels
     bool make_labels = true;
@@ -383,7 +384,7 @@ class TensorNetworkV2 {
   ///     terminal's type (bra/ket).
   Graph create_graph(const CreateGraphOptions &options = {
                          .named_indices = nullptr,
-                         .distinct_named_indices = true,
+                         .distinct_named_indices = false,
                          .make_labels = true,
                          .make_texlabels = true,
                          .make_idx_to_vertex = false}) const;

@@ -5,7 +5,6 @@
 #ifndef SEQUANT_TENSOR_NETWORK_H
 #define SEQUANT_TENSOR_NETWORK_H
 
-#include <SeQuant/core/abstract_tensor.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
@@ -424,7 +423,7 @@ class TensorNetwork {
     std::vector<VertexType> vertex_types;
 
     /// maps vertex ordinal to tensor cluster ordinal
-    /// @note usable as blis::Graph::DotOptions::vertex_to_subgraph
+    /// @note usable as bliss::Graph::DotOptions::vertex_to_subgraph
     std::optional<std::size_t> vertex_to_tensor_cluster(
         std::size_t vertex) const;
 

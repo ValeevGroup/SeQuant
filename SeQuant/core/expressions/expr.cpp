@@ -2,14 +2,15 @@
 // Created by Eduard Valeyev on 2019-02-06.
 //
 
-#include <SeQuant/core/abstract_tensor.hpp>
 #include <SeQuant/core/algorithm.hpp>
-#include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/expressions/abstract_tensor.hpp>
+#include <SeQuant/core/expressions/constant.hpp>
+#include <SeQuant/core/expressions/expr.hpp>
+#include <SeQuant/core/expressions/tensor.hpp>
 #include <SeQuant/core/logger.hpp>
 #include <SeQuant/core/runtime.hpp>
-#include <SeQuant/core/tensor.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
-#include <SeQuant/core/tensor_network_v2.hpp>
+#include <SeQuant/core/tensor_network_v3.hpp>
 
 #include <range/v3/all.hpp>
 
@@ -141,6 +142,11 @@ void Constant::adjoint() {
 
 std::wstring_view Variable::label() const { return label_; }
 
+void Variable::set_label(std::wstring label) {
+  label_ = std::move(label);
+  reset_hash_value();
+}
+
 void Variable::conjugate() { conjugated_ = !conjugated_; }
 
 bool Variable::conjugated() const { return conjugated_; }
@@ -209,7 +215,7 @@ ExprPtr Product::canonicalize_impl(bool rapid) {
   if (!contains_nontensors) {  // tensor network canonization is a special case
                                // that's done in
                                // TensorNetwork
-    TensorNetworkV2 tn(factors_);
+    TensorNetworkV3 tn(factors_);
     auto canon_factor =
         tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(), rapid);
     const auto &tensors = tn.tensors();
@@ -352,7 +358,7 @@ ExprPtr Sum::canonicalize_impl(bool multipass) {
   for (auto pass = 0; pass != npasses; ++pass) {
     // recursively canonicalize summands ...
     // using for_each and directly access to summands
-    sequant::for_each(summands_, [this, pass](ExprPtr &summand) {
+    sequant::for_each(summands_, [pass](ExprPtr &summand) {
       auto bp = (pass % 2 == 0) ? summand->rapid_canonicalize()
                                 : summand->canonicalize();
       if (bp) {

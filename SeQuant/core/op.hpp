@@ -5,11 +5,11 @@
 #ifndef SEQUANT_CORE_OP_H
 #define SEQUANT_CORE_OP_H
 
-#include <SeQuant/core/abstract_tensor.hpp>
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/expressions/abstract_tensor.hpp>
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/hugenholtz.hpp>
 #include <SeQuant/core/index.hpp>
@@ -61,7 +61,7 @@ class Op {
   void adjoint() { action_ = sequant::adjoint(action_); }
 
   static std::wstring core_label() {
-    return get_default_context(S).spbasis() == SPBasis::spinorbital
+    return get_default_context(S).spbasis() == SPBasis::spinor
                ? (S == Statistics::FermiDirac ? L"a" : L"b")
                : L"E";
   }
@@ -606,49 +606,66 @@ class NormalOperator : public Operator<S>,
   }
 
   std::wstring to_latex() const override {
-    std::wstring result;
-    result = L"{";
+    const auto &ctx = get_default_context();
+    const auto bkt = ctx.braket_typesetting();
+    const auto bkst = ctx.braket_slot_typesetting();
+
+    std::wstring core_label;
     if (vacuum() == Vacuum::Physical) {
-      result += Op<S>::core_label();
+      core_label += Op<S>::core_label();
     } else {
-      result += L"\\tilde{";
-      result += Op<S>::core_label();
-      result += L"}";
+      core_label += L"\\tilde{";
+      core_label += Op<S>::core_label();
+      core_label += L"}";
     }
-    const auto ncreators = this->ncreators();
-    const auto nannihilators = this->nannihilators();
-    if (ncreators > 0) {
-      result += L"^{";
-      if (ncreators <
-          nannihilators) {  // if have more annihilators than creators pad on
-                            // the left with square underbrackets, i.e. ⎵
-        const auto iend = nannihilators - ncreators;
-        if (iend > 0) result += L"\\textvisiblespace";
-        for (size_t i = 1; i != iend; ++i) {
-          result += L"\\,\\textvisiblespace";
+
+    switch (bkst) {
+      case BraKetSlotTypesetting::Naive: {
+        std::wstring result = L"{";
+        result += core_label;
+        const auto ncreators = this->ncreators();
+        const auto nannihilators = this->nannihilators();
+        if (ncreators > 0) {
+          result += (bkt == BraKetTypesetting::KetSub ? L"_" : L"^");
+          result += L"{";
+          if (ncreators < nannihilators) {  // if have more annihilators than
+                                            // creators pad on
+            // the left with square underbrackets, i.e. ⎵
+            const auto iend = nannihilators - ncreators;
+            if (iend > 0) result += L"\\textvisiblespace";
+            for (size_t i = 1; i != iend; ++i) {
+              result += L"\\,\\textvisiblespace";
+            }
+            result += L"\\,";
+          }
+          for (const auto &o : creators()) result += o.index().to_latex();
+          result += L"}";
         }
-        result += L"\\,";
-      }
-      for (const auto &o : creators()) result += o.index().to_latex();
-      result += L"}";
-    }
-    if (nannihilators > 0) {
-      result += L"_{";
-      if (ncreators >
-          nannihilators) {  // if have more creators than annihilators pad on
-                            // the left with square underbrackets, i.e. ⎵
-        const auto iend = ncreators - nannihilators;
-        if (iend > 0) result += L"\\textvisiblespace";
-        for (size_t i = 1; i != iend; ++i) {
-          result += L"\\,\\textvisiblespace";
+        if (nannihilators > 0) {
+          result += (bkt == BraKetTypesetting::BraSub ? L"_" : L"^");
+          result += L"{";
+          if (ncreators > nannihilators) {  // if have more creators than
+                                            // annihilators pad on
+            // the left with square underbrackets, i.e. ⎵
+            const auto iend = ncreators - nannihilators;
+            if (iend > 0) result += L"\\textvisiblespace";
+            for (size_t i = 1; i != iend; ++i) {
+              result += L"\\,\\textvisiblespace";
+            }
+            result += L"\\,";
+          }
+          for (const auto &o : annihilators()) result += o.index().to_latex();
+          result += L"}";
         }
-        result += L"\\,";
+        result += L"}";
+        return result;
       }
-      for (const auto &o : annihilators()) result += o.index().to_latex();
-      result += L"}";
+
+      case BraKetSlotTypesetting::TensorPackage: {
+        return to_latex_tensor(core_label, this->_bra(), this->_ket(),
+                               this->_aux(), bkt, /* left_align = */ false);
+      }
     }
-    result += L"}";
-    return result;
   }
 
   /// overload base_type::erase
@@ -797,6 +814,10 @@ class NormalOperator : public Operator<S>,
   }
 
   // these implement the AbstractTensor interface
+  NormalOperator *_clone() const override final {
+    return new NormalOperator(*this);
+  }
+
   AbstractTensor::const_any_view_randsz _bra() const override final {
     return annihilators() |
            ranges::views::transform(
@@ -815,15 +836,23 @@ class NormalOperator : public Operator<S>,
            ranges::views::transform(
                [](auto &&op) -> const Index & { return op.index(); });
   }
-  AbstractTensor::const_any_view_rand _indices() const override final {
+  AbstractTensor::const_any_view_rand _slots() const override final {
     return _braket();
   }
   std::size_t _bra_rank() const override final { return nannihilators(); }
+  std::size_t _bra_net_rank() const override final {
+    // there are no null slots in NormalOperator
+    return _bra_rank();
+  }
   std::size_t _ket_rank() const override final { return ncreators(); }
+  std::size_t _ket_net_rank() const override final {
+    // there are no null slots in NormalOperator
+    return _ket_rank();
+  }
   std::size_t _aux_rank() const override final { return 0; }
   Symmetry _symmetry() const override final {
     return (S == Statistics::FermiDirac
-                ? (get_default_context(S).spbasis() == SPBasis::spinorbital
+                ? (get_default_context(S).spbasis() == SPBasis::spinor
                        ? Symmetry::antisymm
                        : Symmetry::nonsymm)
                 : (Symmetry::symm));
@@ -840,6 +869,7 @@ class NormalOperator : public Operator<S>,
   bool _is_cnumber() const override final { return false; }
   std::wstring_view _label() const override final { return label(); }
   std::wstring _to_latex() const override final { return to_latex(); }
+  std::size_t _hash_value() const override final { return this->hash_value(); }
   bool _transform_indices(
       const container::map<Index, Index> &index_map) override final {
     return transform_indices(index_map);
@@ -869,6 +899,13 @@ class NormalOperator : public Operator<S>,
                [](auto &&op) -> Index & { return op.index(); });
   }
   AbstractTensor::any_view_randsz _aux_mutable() override final { return {}; }
+
+  void _permute_aux(std::span<const std::size_t> perm) override final {
+    if (perm.size() != 0)
+      throw std::invalid_argument(
+          "NormalOperator::_permute_aux(p): there are no aux indices, p must "
+          "be null");
+  }
 };
 
 static_assert(

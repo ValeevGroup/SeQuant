@@ -7,7 +7,6 @@
 
 #include "catch2_sequant.hpp"
 
-#include <SeQuant/core/abstract_tensor.hpp>
 #include <SeQuant/core/algorithm.hpp>
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/bliss.hpp>
@@ -17,10 +16,10 @@
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/parse.hpp>
-#include <SeQuant/core/tensor.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/tensor_network.hpp>
 #include <SeQuant/core/tensor_network_v2.hpp>
+#include <SeQuant/core/tensor_network_v3.hpp>
 #include <SeQuant/core/timer.hpp>
 #include <SeQuant/core/utility/string.hpp>
 
@@ -54,13 +53,15 @@ using namespace sequant;
 using namespace std::literals;
 
 TEMPLATE_TEST_CASE("tensor_network_shared", "[elements]", TensorNetwork,
-                   TensorNetworkV2) {
+                   TensorNetworkV2, TensorNetworkV3) {
   TensorCanonicalizer::register_instance(
       std::make_shared<DefaultTensorCanonicalizer>());
   auto isr = sequant::mbpt::make_legacy_spaces();
   mbpt::add_pao_spaces(isr);
-  auto ctx_resetter =
-      set_scoped_default_context(Context(isr, Vacuum::SingleProduct));
+  auto ctx = get_default_context();
+  ctx.set(isr);
+  ctx.set(Vacuum::SingleProduct);
+  auto ctx_resetter = set_scoped_default_context(ctx);
 
   using TN = TestType;
 
@@ -71,7 +72,7 @@ TEMPLATE_TEST_CASE("tensor_network_shared", "[elements]", TensorNetwork,
 
       // Case 7: with protoindices
 
-      auto& l = Logger::instance();
+      [[maybe_unused]] auto& l = Logger::instance();
       //      l.tensor_network = l.canonicalize = l.canonicalize_dot =
       //          l.canonicalize_input_graph = true;
 
@@ -237,12 +238,19 @@ TEMPLATE_TEST_CASE("tensor_network_shared", "[elements]", TensorNetwork,
     SECTION("Named index ordering") {
       REQUIRE(IndexSpace("i") < IndexSpace("a"));
 
-      for (const auto [input, str_indices] :
+      using idxvec_t = std::vector<std::wstring>;
+      constexpr bool v3 =
+          std::is_same_v<TN,
+                         TensorNetworkV3>;  // v3 colors vertices differently,
+                                            // so canonical order differs
+      for (const auto& [input, str_indices] :
            std::vector<std::pair<std::wstring, std::vector<std::wstring>>>{
                {L"G{;;a1,a2,a3,a4} T{;;i3,i2,a3,a4}",
-                {L"i_2", L"i_3", L"a_1", L"a_2"}},
+                v3 ? idxvec_t{L"i_3", L"i_2", L"a_2", L"a_1"}
+                   : idxvec_t{L"i_2", L"i_3", L"a_1", L"a_2"}},
                {L"G{;;a1,a2,a3,a4} T{;;i2,i3,a3,a4}",
-                {L"i_3", L"i_2", L"a_1", L"a_2"}},
+                v3 ? idxvec_t{L"i_2", L"i_3", L"a_2", L"a_1"}
+                   : idxvec_t{L"i_3", L"i_2", L"a_1", L"a_2"}},
            }) {
         const std::vector<Index> expected_indices =
             str_indices | ranges::views::transform([](const std::wstring& str) {
@@ -300,16 +308,19 @@ TEMPLATE_TEST_CASE("tensor_network_shared", "[elements]", TensorNetwork,
           // "\n";
 
           // TNv1 fails to canonicalize this correctly
-          if constexpr (std::is_same_v<TN, TensorNetworkV2>) {
+          if constexpr (!std::is_same_v<TN, TensorNetwork>) {
             // input2 obtained from input1 by i6 -> i11, which "frees" i6 for
             // dummy renamings so canonical(input2) is obtained from
             // canonical(input1) by i6 -> i11 and i7 -> i6
-            REQUIRE(tn1.tensors()[0]->_to_latex() ==
-                    tn2.tensors()[0]->_to_latex());
-            REQUIRE(ranges::equal(tn1.tensors()[1]->_bra(),
-                                  tn2.tensors()[1]->_bra()));
-            REQUIRE(ranges::equal(tn1.tensors()[2]->_ket(),
-                                  tn2.tensors()[2]->_ket()));
+            for (int i = 0; i != tn1.tensors().size(); ++i) {
+              std::unique_ptr<AbstractTensor> t2_i(tn2.tensors()[i]->_clone());
+              container::map<Index, Index> idxrepl{
+                  {Index{L"p_11"}, Index{L"p_6"}},
+                  {Index{L"p_6"}, Index{L"p_7"}}};
+              apply_index_replacements(*t2_i, idxrepl, false);
+              REQUIRE(deparse(*(tn1.tensors()[i]), true) ==
+                      deparse(*t2_i, true));
+            }
           }
         }
       }
@@ -323,16 +334,17 @@ TEST_CASE("tensor_network", "[elements]") {
   using sequant::Context;
   namespace t = sequant::mbpt::tensor;
   namespace o = sequant::mbpt::op;
+  using TN = TensorNetwork;
 
   SECTION("constructors") {
     {  // with Tensors
       auto t1 = ex<Tensor>(L"F", bra{L"i_1"}, ket{L"i_2"});
       auto t2 = ex<Tensor>(L"t", bra{L"i_1"}, ket{L"i_2"});
       auto t1_x_t2 = t1 * t2;
-      REQUIRE_NOTHROW(TensorNetwork(*t1_x_t2));
+      REQUIRE_NOTHROW(TN(*t1_x_t2));
 
       auto t1_x_t2_p_t2 = t1 * (t2 + t2);  // can only use a flat tensor product
-      REQUIRE_THROWS_AS(TensorNetwork(*t1_x_t2_p_t2), std::logic_error);
+      REQUIRE_THROWS_AS(TN(*t1_x_t2_p_t2), std::logic_error);
     }
 
     {  // with NormalOperators
@@ -340,12 +352,12 @@ TEST_CASE("tensor_network", "[elements]") {
       auto t1 = ex<FNOperator>(cre({L"i_1"}), ann({L"i_2"}), V);
       auto t2 = ex<FNOperator>(cre({L"i_2"}), ann({L"i_1"}), V);
       auto t1_x_t2 = t1 * t2;
-      REQUIRE_NOTHROW(TensorNetwork(*t1_x_t2));
+      REQUIRE_NOTHROW(TN(*t1_x_t2));
     }
 
     {  // with Tensors and NormalOperators
       auto tmp = t::A(nₚ(-2)) * t::H_(2) * t::T_(2) * t::T_(2);
-      REQUIRE_NOTHROW(TensorNetwork(tmp->as<Product>().factors()));
+      REQUIRE_NOTHROW(TN(tmp->as<Product>().factors()));
     }
 
   }  // SECTION("constructors")
@@ -356,8 +368,8 @@ TEST_CASE("tensor_network", "[elements]") {
       auto t1 = ex<Tensor>(L"F", bra{L"i_1"}, ket{L"i_2"});
       auto t2 = ex<FNOperator>(cre({L"i_1"}), ann({L"i_3"}), V);
       auto t1_x_t2 = t1 * t2;
-      REQUIRE_NOTHROW(TensorNetwork(*t1_x_t2));
-      TensorNetwork tn(*t1_x_t2);
+      REQUIRE_NOTHROW(TN(*t1_x_t2));
+      TN tn(*t1_x_t2);
 
       // edges
       auto edges = tn.edges();
@@ -390,7 +402,7 @@ TEST_CASE("tensor_network", "[elements]") {
         auto t1 = ex<Tensor>(L"F", bra{L"i_1"}, ket{L"i_2"});
         auto t2 = ex<FNOperator>(cre({L"i_1"}), ann({L"i_2"}), V);
         auto t1_x_t2 = t1 * t2;
-        TensorNetwork tn(*t1_x_t2);
+        TN tn(*t1_x_t2);
         tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(), false);
 
         REQUIRE(size(tn.tensors()) == 2);
@@ -417,7 +429,7 @@ TEST_CASE("tensor_network", "[elements]") {
 
         // with all external named indices
         {
-          TensorNetwork tn(*t1_x_t2);
+          TN tn(*t1_x_t2);
           tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(), false);
 
           REQUIRE(size(tn.tensors()) == 2);
@@ -437,9 +449,9 @@ TEST_CASE("tensor_network", "[elements]") {
         // with explicit named indices
         {
           Index::reset_tmp_index();
-          TensorNetwork tn(*t1_x_t2);
+          TN tn(*t1_x_t2);
 
-          using named_indices_t = TensorNetwork::named_indices_t;
+          using named_indices_t = TN::named_indices_t;
           named_indices_t indices{Index{L"i_17"}};
           tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(), false,
                           &indices);
@@ -462,8 +474,10 @@ TEST_CASE("tensor_network", "[elements]") {
   }  // SECTION("canonicalizer")
 
   SECTION("bliss graph") {
-    auto ctx_resetter = set_scoped_default_context(
-        Context(sequant::mbpt::make_legacy_spaces(), Vacuum::SingleProduct));
+    auto ctx = get_default_context();
+    ctx.set(sequant::mbpt::make_legacy_spaces());
+    ctx.set(Vacuum::SingleProduct);
+    auto ctx_resetter = set_scoped_default_context(ctx);
     Index::reset_tmp_index();
     // to generate expressions in specified (i.e., platform-independent) manner
     // can't use operator expression (due to unspecified order of evaluation of
@@ -474,7 +488,7 @@ TEST_CASE("tensor_network", "[elements]") {
     // mbpt::sr::make_op
     canonicalize(tmp);
     // std::wcout << "A2*H2*T2*T2*T2 = " << to_latex(tmp) << std::endl;
-    TensorNetwork tn(tmp->as<Product>().factors());
+    TN tn(tmp->as<Product>().factors());
 
     // make graph, with all labels
     REQUIRE_NOTHROW(
@@ -720,11 +734,11 @@ L"}\n";
 
       auto tmp = g * ta * tb;
       // std::wcout << "TN1 = " << to_latex(tmp) << std::endl;
-      TensorNetwork tn(tmp->as<Product>().factors());
+      TN tn(tmp->as<Product>().factors());
 
       // make graph
       // N.B. treat all indices as dummy so that the automorphism ignores the
-      using named_indices_t = TensorNetwork::named_indices_t;
+      using named_indices_t = TN::named_indices_t;
       named_indices_t indices{};
       REQUIRE_NOTHROW(tn.make_bliss_graph({.named_indices = &indices}));
       auto [graph, vlabels, vtexlabels, vcolors, vtypes] =
@@ -800,10 +814,6 @@ TEST_CASE("tensor_network_v2", "[elements]") {
   using sequant::Context;
   namespace t = sequant::mbpt::tensor;
   namespace o = sequant::mbpt::op;
-
-  auto ctx_resetter = sequant::set_scoped_default_context(Context(
-      mbpt::make_sr_spaces(), Vacuum::SingleProduct, IndexSpaceMetric::Unit,
-      BraKetSymmetry::conjugate, SPBasis::spinorbital));
 
   SECTION("Edges") {
     using Vertex = TensorNetworkV2::Vertex;
@@ -1361,6 +1371,696 @@ TEST_CASE("tensor_network_v2", "[elements]") {
       bliss::print_auts(aut_generators, oss, graph.vertex_labels);
       CHECK(oss.str() == L"({i_3},{i_4})\n({i_1},{i_2})\n");
       // std::wcout << oss.str() << std::endl;
+    }
+  }
+}
+
+namespace sequant {
+class TensorNetworkV3Accessor {
+ public:
+  auto get_canonical_bliss_graph(
+      sequant::TensorNetworkV3 tn,
+      const sequant::TensorNetwork::named_indices_t* named_indices = nullptr) {
+    tn.canonicalize_graph(named_indices ? *named_indices : tn.ext_indices_);
+    tn.init_edges();
+    auto graph = tn.create_graph(
+        {.named_indices = named_indices,
+         .make_labels = Logger::instance().canonicalize_dot,
+         .make_texlabels = Logger::instance().canonicalize_dot});
+    return std::make_pair(std::move(graph.bliss_graph), graph.vertex_labels);
+  }
+};
+}  // namespace sequant
+
+TEST_CASE("tensor_network_v3", "[elements]") {
+  using namespace sequant;
+  using namespace sequant::mbpt;
+  using sequant::Context;
+  namespace t = sequant::mbpt::tensor;
+  namespace o = sequant::mbpt::op;
+  using TN = TensorNetworkV3;
+
+  SECTION("Edges") {
+    using Vertex = TN::Vertex;
+    using Edge = TN::Edge;
+    using Origin = TN::Origin;
+
+    Vertex v1(Origin::Bra, 0, 1, Symmetry::antisymm);
+    Vertex v2(Origin::Bra, 0, 0, Symmetry::antisymm);
+    Vertex v3(Origin::Ket, 1, 0, Symmetry::symm);
+    Vertex v4(Origin::Ket, 1, 3, Symmetry::symm);
+    Vertex v5(Origin::Bra, 3, 0, Symmetry::nonsymm);
+    Vertex v6(Origin::Bra, 3, 2, Symmetry::nonsymm);
+    Vertex v7(Origin::Ket, 3, 1, Symmetry::nonsymm);
+    Vertex v8(Origin::Ket, 5, 0, Symmetry::symm);
+
+    const Index dummy(L"a_1");
+
+    REQUIRE_NOTHROW(Edge(v1, &dummy));
+    Edge e1(v1, &dummy);
+    e1.connect_to(v4);
+    // cleaner: give all vertices at once
+    REQUIRE_NOTHROW(Edge({v2, v3}, &dummy));
+    Edge e2({v2, v3}, &dummy);
+    Edge e3({v3, v5}, &dummy);
+    Edge e4({v4, v6}, &dummy);
+
+    // can't connect same vertex more than once
+    REQUIRE_THROWS_AS(Edge({v4, v6, v6}), std::invalid_argument);
+    REQUIRE_THROWS_AS(e4.connect_to(v6), std::invalid_argument);
+
+    Edge e5(v8, &dummy);
+    e5.connect_to(v6);
+    Edge e6(v8, &dummy);
+    // ket cannot connect to ket
+    REQUIRE_THROWS_AS(e6.connect_to(v7), std::invalid_argument);
+
+    // Due to tensor symmetries, these edges are considered equal
+    REQUIRE(e1 == e2);
+    REQUIRE(!(e1 < e2));
+    REQUIRE(!(e2 < e1));
+
+    // Smallest terminal index wins
+    REQUIRE(!(e1 == e3));
+    REQUIRE(e1 < e3);
+    REQUIRE(!(e3 < e1));
+
+    // For non-symmetric tensors the connection slot is taken into account
+    REQUIRE(!(e3 == e4));
+    REQUIRE(e3 < e4);
+    REQUIRE(!(e4 < e3));
+
+    // Unconnected edges always come before fully connected ones
+    REQUIRE(!(e6 == e1));
+    REQUIRE(e6 < e1);
+    REQUIRE(!(e1 < e6));
+
+    // aux edges, including hyperedges
+    {
+      Vertex v9(Origin::Aux, 3, 1, Symmetry::nonsymm);
+      Vertex v10(Origin::Aux, 5, 0, Symmetry::nonsymm);
+      Vertex v11(Origin::Aux, 6, 0, Symmetry::nonsymm);
+
+      REQUIRE_NOTHROW(Edge({v9, v10}, &dummy));
+      Edge e1({v9, v10}, &dummy);
+      REQUIRE_NOTHROW(Edge({v9, v10, v11}, &dummy));
+      Edge e2({v9, v10, v11}, &dummy);
+      // order of input vertices does not matter
+      Edge e2_copy({v11, v10, v9}, &dummy);
+      REQUIRE(e2 == e2_copy);
+
+      // can't connect aux to bra
+      REQUIRE_THROWS_AS(Edge({v9, v1}, &dummy), std::invalid_argument);
+      // can't connect aux to ket
+      REQUIRE_THROWS_AS(Edge({v9, v3}, &dummy), std::invalid_argument);
+
+      // edge < hyperedge
+      REQUIRE(!(e1 == e2));
+      REQUIRE(e1 < e2);
+    }
+  }
+
+  SECTION("constructors") {
+    {  // with Tensors
+      auto t1 = ex<Tensor>(L"F", bra{L"i_1"}, ket{L"i_2"});
+      auto t2 = ex<Tensor>(L"t", bra{L"i_2"}, ket{L"i_1"});
+      auto t1_x_t2 = t1 * t2;
+      REQUIRE_NOTHROW(TN(*t1_x_t2));
+
+      auto t1_x_t2_p_t2 = t1 * (t2 + t2);  // can only use a flat tensor product
+      REQUIRE_THROWS_AS(TN(*t1_x_t2_p_t2), std::invalid_argument);
+
+      // must be covariant: no bra to bra or ket to ket
+      t2->adjoint();
+      auto t1_x_t2_adjoint = t1 * t2;
+      REQUIRE_THROWS_AS(TN(t1_x_t2_adjoint), std::invalid_argument);
+
+      // can use hyperedges with aux indices
+      {
+        auto u1 = ex<Tensor>(L"u1", bra{L"i_1"}, ket{}, aux{L"p"});
+        auto u2 = ex<Tensor>(L"u2", bra{L"i_2"}, ket{}, aux{L"p"});
+        auto u3 = ex<Tensor>(L"u3", bra{L"i_3"}, ket{}, aux{L"p"});
+        REQUIRE_NOTHROW(TN(u1 * u2 * u3));
+        TN tn(u1 * u2 * u3);
+      }
+
+      // can have empty slots, but only in nonsymm bra/ket
+      {
+        auto u1 = ex<Tensor>(L"u1", bra{L"i_1", L""}, ket{L"", L"i_4"},
+                             aux{L"p"}, Symmetry::nonsymm);
+        auto u2 = ex<Tensor>(L"u2", bra{L"i_2", L"", L"i_4"}, ket{L"", L"i_1"},
+                             aux{L"p"}, Symmetry::nonsymm);
+        auto u3 = ex<Tensor>(L"u3", bra{L"i_3", L"i_5"}, ket{}, aux{L"p"},
+                             Symmetry::symm);
+        REQUIRE_NOTHROW(TN(u1 * u2 * u3));
+        TN tn(u1 * u2 * u3);
+        REQUIRE_NOTHROW(
+            tn.create_graph({.make_labels = true, .make_texlabels = true}));
+      }
+    }
+
+    {  // with NormalOperators
+      constexpr const auto V = Vacuum::SingleProduct;
+      auto t1 = ex<FNOperator>(cre({L"i_1"}), ann({L"i_2"}), V);
+      auto t2 = ex<FNOperator>(cre({L"i_2"}), ann({L"i_1"}), V);
+      auto t1_x_t2 = t1 * t2;
+      REQUIRE_NOTHROW(TN(*t1_x_t2));
+    }
+
+    {  // with Tensors and NormalOperators
+      auto tmp = t::A(nₚ(-2)) * t::H_(2) * t::T_(2) * t::T_(2);
+      REQUIRE_NOTHROW(TN(tmp->as<Product>().factors()));
+    }
+
+  }  // SECTION("constructors")
+
+  SECTION("accessors") {
+    {
+      constexpr const auto V = Vacuum::SingleProduct;
+      auto t1 = ex<Tensor>(L"F", bra{L"i_1"}, ket{L"i_2"});
+      auto t2 = ex<FNOperator>(cre({L"i_1"}), ann({L"i_3"}), V);
+      auto t1_x_t2 = t1 * t2;
+      REQUIRE_NOTHROW(TN(*t1_x_t2));
+      TN tn(*t1_x_t2);
+
+      // edges
+      const auto& edges = tn.edges();
+      REQUIRE(edges.size() == 3);
+
+      // ext indices
+      auto ext_indices = tn.ext_indices();
+      REQUIRE(ext_indices.size() == 2);
+
+      // tensors
+      auto tensors = tn.tensors();
+      REQUIRE(size(tensors) == 2);
+      REQUIRE(std::dynamic_pointer_cast<Expr>(tensors[0]));
+      REQUIRE(std::dynamic_pointer_cast<Expr>(tensors[1]));
+      REQUIRE(*std::dynamic_pointer_cast<Expr>(tensors[0]) == *t1);
+      REQUIRE(*std::dynamic_pointer_cast<Expr>(tensors[1]) == *t2);
+    }
+  }  // SECTION("accessors")
+
+  SECTION("canonicalizer") {
+    {  // with no external indices, hence no named indices whatsoever
+      Index::reset_tmp_index();
+      constexpr const auto V = Vacuum::SingleProduct;
+      auto t1 = ex<Tensor>(L"F", bra{L"i_1"}, ket{L"i_2"});
+      auto t2 = ex<FNOperator>(cre({L"i_1"}), ann({L"i_2"}), V);
+      auto t1_x_t2 = t1 * t2;
+      TN tn(*t1_x_t2);
+      tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(), false);
+
+      REQUIRE(size(tn.tensors()) == 2);
+      REQUIRE(std::dynamic_pointer_cast<Expr>(tn.tensors()[0]));
+      REQUIRE(std::dynamic_pointer_cast<Expr>(tn.tensors()[1]));
+      //        std::wcout <<
+      //        to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[0])) <<
+      //        std::endl; std::wcout <<
+      //        to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[1])) <<
+      //        std::endl;
+      REQUIRE(to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[0])) ==
+              L"{F^{{i_2}}_{{i_1}}}");
+      REQUIRE(to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[1])) ==
+              L"{\\tilde{a}^{{i_1}}_{{i_2}}}");
+    }
+
+    {
+      Index::reset_tmp_index();
+      constexpr const auto V = Vacuum::SingleProduct;
+      auto t1 = ex<Tensor>(L"F", bra{L"i_2"}, ket{L"i_17"});
+      auto t2 = ex<FNOperator>(cre({L"i_2"}), ann({L"i_3"}), V);
+      auto t1_x_t2 = t1 * t2;
+
+      // with all external named indices
+      SECTION("implicit") {
+        TN tn(*t1_x_t2);
+        tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(), false);
+
+        REQUIRE(size(tn.tensors()) == 2);
+        REQUIRE(std::dynamic_pointer_cast<Expr>(tn.tensors()[0]));
+        REQUIRE(std::dynamic_pointer_cast<Expr>(tn.tensors()[1]));
+        // std::wcout <<
+        // to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[0])) <<
+        // std::endl; std::wcout <<
+        // to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[1])) <<
+        // std::endl;
+        REQUIRE(to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[1])) ==
+                L"{\\tilde{a}^{{i_1}}_{{i_3}}}");
+        REQUIRE(to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[0])) ==
+                L"{F^{{i_{17}}}_{{i_1}}}");
+      }
+
+      // with explicit named indices
+      SECTION("explicit") {
+        Index::reset_tmp_index();
+        TN tn(*t1_x_t2);
+
+        using named_indices_t = TN::NamedIndexSet;
+        named_indices_t indices{Index{L"i_17"}};
+        tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(), false,
+                        &indices);
+
+        REQUIRE(size(tn.tensors()) == 2);
+        REQUIRE(std::dynamic_pointer_cast<Expr>(tn.tensors()[0]));
+        REQUIRE(std::dynamic_pointer_cast<Expr>(tn.tensors()[1]));
+        //        std::wcout <<
+        //        to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[0]))
+        //        << std::endl; std::wcout <<
+        //        to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[1]))
+        //        << std::endl;
+        REQUIRE(to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[1])) ==
+                L"{\\tilde{a}^{{i_2}}_{{i_1}}}");
+        REQUIRE(to_latex(std::dynamic_pointer_cast<Expr>(tn.tensors()[0])) ==
+                L"{F^{{i_{17}}}_{{i_2}}}");
+      }
+    }
+
+    SECTION("particle non-conserving") {
+      const auto input1 = parse_expr(L"P{;a1,a3}");
+      const auto input2 = parse_expr(L"P{a1,a3;}");
+      const std::wstring expected1 = L"{{P^{{a_1}{a_3}}_{}}}";
+      const std::wstring expected2 = L"{{P^{}_{{a_1}{a_3}}}}";
+
+      for (int variant : {1, 2}) {
+        for (bool fast : {true, false}) {
+          TN tn(std::vector<ExprPtr>{variant == 1 ? input1 : input2});
+          tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(), fast);
+          REQUIRE(tn.tensors().size() == 1);
+          auto result = ex<Product>(to_tensors(tn.tensors()));
+          REQUIRE(to_latex(result) == (variant == 1 ? expected1 : expected2));
+        }
+      }
+    }
+
+    SECTION("non-symmetric") {
+      const auto input =
+          parse_expr(L"A{i9,i12;i7,i3}:A I1{i7,i3;;x5}:N I2{;i9,i12;x5}:N")
+              .as<Product>()
+              .factors();
+      const std::wstring expected =
+          L"A{i_1,i_2;i_3,i_4}:A * I1{i_3,i_4;;x_1}:N * I2{;i_1,i_2;x_1}:N";
+
+      for (bool fast : {true, false}) {
+        TN tn(input);
+        tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(), fast);
+        const auto result = ex<Product>(to_tensors(tn.tensors()));
+        REQUIRE_THAT(result, SimplifiesTo(expected));
+      }
+    }
+
+    SECTION("particle-1,2-symmetry") {
+      const std::vector<std::pair<std::wstring, std::wstring>> pairs = {
+          {L"S{i_1,i_2,i_3;a_1,a_2,a_3}:N * f{i_4;i_2}:N * "
+           L"t{a_1,a_2,a_3;i_4,i_3,i_1}:N",
+           L"S{i_1,i_2,i_3;a_1,a_2,a_3}:N * f{i_4;i_1}:N * "
+           L"t{a_1,a_2,a_3;i_2,i_3,i_4}:N"},
+          {L"Γ{o_2,o_4;o_1,o_3}:N * g{i_1,o_1;o_2,e_1}:N * "
+           L"t{o_3,e_1;o_4,i_1}:N",
+           L"Γ{o_2,o_4;o_1,o_3}:N * g{i_1,o_3;o_4,e_1}:N * "
+           L"t{o_1,e_1;o_2,i_1}:N"}};
+      for (const auto& pair : pairs) {
+        const auto first = parse_expr(pair.first).as<Product>().factors();
+        const auto second = parse_expr(pair.second).as<Product>().factors();
+
+        TensorNetworkV3Accessor accessor;
+        auto [first_graph, first_labels] =
+            accessor.get_canonical_bliss_graph(TN(first));
+        auto [second_graph, second_labels] =
+            accessor.get_canonical_bliss_graph(TN(second));
+        if (first_graph->cmp(*second_graph) != 0) {
+          std::wstringstream stream;
+          stream << "First graph:\n";
+          first_graph->write_dot(stream, first_labels, {},
+                                 {.display_colors = true});
+          stream << "Second graph:\n";
+          second_graph->write_dot(stream, second_labels, {},
+                                  {.display_colors = true});
+          stream << "TN graph:\n";
+          auto [wick_graph, labels, texlabels, d1, d2] =
+              TensorNetwork(first).make_bliss_graph();
+          wick_graph->write_dot(stream, labels, texlabels,
+                                {.display_colors = true});
+
+          FAIL(to_string(stream.str()));
+        }
+
+        TN tn1(first);
+        TN tn2(second);
+
+        tn1.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(), false);
+        tn2.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(), false);
+
+        REQUIRE(tn1.tensors().size() == tn2.tensors().size());
+        for (std::size_t i = 0; i < tn1.tensors().size(); ++i) {
+          auto t1 = std::dynamic_pointer_cast<Expr>(tn1.tensors()[i]);
+          auto t2 = std::dynamic_pointer_cast<Expr>(tn2.tensors()[i]);
+          REQUIRE(t1);
+          REQUIRE(t2);
+          REQUIRE(to_latex(t1) == to_latex(t2));
+        }
+      }
+    }
+
+    SECTION("miscellaneous") {
+      const std::vector<std::pair<std::wstring, std::wstring>> inputs = {
+          {L"g{i_1,a_1;i_2,i_3}:A * I{i_2,i_3;i_1,a_1}:A",
+           L"g{i_1,a_1;i_2,i_3}:A * I{i_2,i_3;i_1,a_1}:A"},
+          {L"g{a_1,i_1;i_2,i_3}:A * I{i_2,i_3;i_1,a_1}:A",
+           L"-1 g{i_1,a_1;i_2,i_3}:A * I{i_2,i_3;i_1,a_1}:A"},
+
+          {L"g{i_1,a_1;i_2,i_3}:N * I{i_2,i_3;i_1,a_1}:N",
+           L"g{i_1,a_1;i_2,i_3}:N * I{i_2,i_3;i_1,a_1}:N"},
+          {L"g{a_1,i_1;i_2,i_3}:N * I{i_2,i_3;i_1,a_1}:N",
+           L"g{i_1,a_1;i_2,i_3}:N * I{i_3,i_2;i_1,a_1}:N"},
+      };
+
+      for (const auto& [input, expected] : inputs) {
+        const auto input_tensors = parse_expr(input).as<Product>().factors();
+
+        TN tn(input_tensors);
+        ExprPtr factor = tn.canonicalize(
+            TensorCanonicalizer::cardinal_tensor_labels(), true);
+
+        ExprPtr prod = to_product(tn.tensors());
+        if (factor) {
+          prod = ex<Product>(
+              prod.as<Product>().scale(factor.as<Constant>().value()));
+        }
+
+        REQUIRE_THAT(prod, SimplifiesTo(expected));
+      }
+    }
+
+    SECTION("special") {
+      auto factors =
+          parse_expr(
+              L"S{i_1;a_1<i_1>}:N-C-S g{i_2,a_1<i_1>;a_2<i_2>,i_1}:N-C-S "
+              L"t{a_2<i_2>;i_2}:N-C-S")
+              ->as<Product>()
+              .factors();
+
+      TN tn(factors);
+
+      ExprPtr factor =
+          tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(), false);
+      ExprPtr result = to_product(tn.tensors());
+      if (factor) {
+        result *= factor;
+      }
+
+      REQUIRE(result);
+    }
+
+    SECTION("empty slots") {
+      // try 1
+      ExprPtr result_1;
+      {
+        auto u1 = ex<Tensor>(L"u1", bra{L"i_1", L""}, ket{L"", L"i_4"},
+                             aux{L"p_1"}, Symmetry::nonsymm);
+        auto u2 =
+            ex<Tensor>(L"u2", bra{L"i_2", L"", L"i_4"}, ket{L"", L"i_1", L""},
+                       aux{L"p"}, Symmetry::nonsymm);
+        auto u3 = ex<Tensor>(L"u3", bra{L"i_3", L"i_5"}, ket{}, aux{L"p"},
+                             Symmetry::symm);
+        auto u4 = ex<Tensor>(L"u4", bra{}, ket{L"i_3", L"i_5", L"i_6"},
+                             aux{L"p_1", L"p"}, Symmetry::antisymm);
+        TN tn(u1 * u2 * u3);
+
+        ExprPtr factor = tn.canonicalize(
+            TensorCanonicalizer::cardinal_tensor_labels(), false);
+        result_1 = to_product(tn.tensors());
+        if (factor) {
+          result_1 *= factor;
+        }
+      }
+
+      // try 2
+      ExprPtr result_2;
+      {
+        auto u1 = ex<Tensor>(L"u1", bra{L"i_4", L""}, ket{L"", L"i_1"},
+                             aux{L"p_1"}, Symmetry::nonsymm);
+        auto u2 =
+            ex<Tensor>(L"u2", bra{L"i_2", L"", L"i_1"}, ket{L"", L"i_4", L""},
+                       aux{L"p_2"}, Symmetry::nonsymm);
+        auto u3 = ex<Tensor>(L"u3", bra{L"i_3", L"i_5"}, ket{}, aux{L"p_2"},
+                             Symmetry::symm);
+        auto u4 = ex<Tensor>(L"u4", bra{}, ket{L"i_6", L"i_3", L"i_5"},
+                             aux{L"p_1", L"p_2"}, Symmetry::antisymm);
+        TN tn(u2 * u1 * u3);
+
+        ExprPtr factor = tn.canonicalize(
+            TensorCanonicalizer::cardinal_tensor_labels(), false);
+        result_2 = to_product(tn.tensors());
+        if (factor) {
+          result_2 *= factor;
+        }
+      }
+
+      // std::wcout << "result_1 = " << result_1.to_latex() << std::endl;
+      // std::wcout << "result_2 = " << result_2.to_latex() << std::endl;
+      REQUIRE(result_1.to_latex() == result_2.to_latex());
+    }
+
+#ifndef SEQUANT_SKIP_LONG_TESTS
+    SECTION("Exhaustive SRCC example") {
+      // Note: the exact canonical form written here is implementation-defined
+      // and doesn't actually matter What does, is that all equivalent ways of
+      // writing it down, canonicalizes to the same exact form
+      const Product expectedExpr =
+          parse_expr(
+              L"A{i1,i2;a1,a2} g{i3,i4;a3,a4} t{a1,a3;i1,i2} t{a2,a4;i3,i4}",
+              Symmetry::antisymm)
+              .as<Product>();
+
+      const auto expected = expectedExpr.factors();
+
+      TensorNetworkV3Accessor accessor;
+      const auto [canonical_graph, canonical_graph_labels] =
+          accessor.get_canonical_bliss_graph(TN(expected));
+
+      //      std::wcout << "Canonical graph:\n";
+      //      canonical_graph->write_dot(std::wcout, canonical_graph_labels);
+      //      std::wcout << std::endl;
+
+      std::vector<Index> indices;
+      for (std::size_t i = 0; i < expected.size(); ++i) {
+        const Tensor& tensor = expected[i].as<Tensor>();
+        for (const Index& idx : tensor.indices()) {
+          if (std::find(indices.begin(), indices.end(), idx) == indices.end()) {
+            indices.push_back(idx);
+          }
+        }
+      }
+      std::sort(indices.begin(), indices.end());
+
+      const auto original_indices = indices;
+
+      // Make sure to clone all expressions in order to not accidentally
+      // modify the ones in expected (even though they are const... the
+      // pointer-like semantics of expressions messes with const semantics)
+      std::remove_const_t<decltype(expected)> factors;
+      for (const auto& factor : expected) {
+        factors.push_back(factor.clone());
+      }
+      std::sort(factors.begin(), factors.end());
+
+      const auto is_occ = [](const Index& idx) {
+        return idx.space() == Index(L"i_1").space();
+      };
+
+      // Iterate over all tensor permutations and all permutations of possible
+      // index name swaps
+      REQUIRE(std::is_sorted(factors.begin(), factors.end()));
+      REQUIRE(std::is_sorted(indices.begin(), indices.end()));
+      REQUIRE(std::is_partitioned(indices.begin(), indices.end(), is_occ));
+      REQUIRE(std::partition_point(indices.begin(), indices.end(), is_occ) ==
+              indices.begin() + 4);
+      std::size_t total_variations = 0;
+      do {
+        do {
+          do {
+            total_variations++;
+
+            // Compute index replacements
+            container::map<Index, Index> idxrepl;
+            for (std::size_t i = 0; i < indices.size(); ++i) {
+              REQUIRE(original_indices[i].space() == indices[i].space());
+
+              idxrepl.insert(
+                  std::make_pair(original_indices.at(i), indices.at(i)));
+            }
+
+            // Apply index replacements to a copy of the current tensor
+            // permutation
+            auto copy = factors;
+            for (ExprPtr& expr : copy) {
+              expr.as<Tensor>().transform_indices(idxrepl);
+              reset_tags(expr.as<Tensor>());
+            }
+
+            TN tn(copy);
+
+            // At the heart of our canonicalization lies the fact that we can
+            // always create the uniquely defined canonical graph for a given
+            // network
+            const auto [current_graph, current_graph_labels] =
+                accessor.get_canonical_bliss_graph(tn);
+            if (current_graph->cmp(*canonical_graph) != 0) {
+              std::wcout << "Canonical graph for " << deparse(ex<Product>(copy))
+                         << ":\n";
+              current_graph->write_dot(std::wcout, current_graph_labels);
+              std::wcout << std::endl;
+            }
+            REQUIRE(current_graph->cmp(*canonical_graph) == 0);
+
+            tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(),
+                            false);
+
+            std::vector<ExprPtr> actual;
+            std::transform(tn.tensors().begin(), tn.tensors().end(),
+                           std::back_inserter(actual), [](const auto& t) {
+                             assert(std::dynamic_pointer_cast<Expr>(t));
+                             return std::dynamic_pointer_cast<Expr>(t);
+                           });
+
+            // The canonical graph must not change due to the other
+            // canonicalization steps we perform
+            REQUIRE(accessor.get_canonical_bliss_graph(TN(actual))
+                        .first->cmp(*canonical_graph) == 0);
+
+            REQUIRE(actual.size() == expected.size());
+
+            if (!std::equal(expected.begin(), expected.end(), actual.begin())) {
+              std::wostringstream sstream;
+              sstream
+                  << "Expected all tensors to be equal (actual == expected), "
+                     "but got:\n";
+              for (std::size_t i = 0; i < expected.size(); ++i) {
+                std::wstring equality =
+                    actual[i] == expected[i] ? L" == " : L" != ";
+
+                sstream << deparse(actual[i]) << equality
+                        << deparse(expected[i]) << "\n";
+              }
+              sstream << "\nInput was " << deparse(ex<Product>(factors))
+                      << "\n";
+              FAIL(to_string(sstream.str()));
+            }
+          } while (std::next_permutation(indices.begin() + 4, indices.end()));
+        } while (std::next_permutation(indices.begin(), indices.begin() + 4));
+      } while (std::next_permutation(factors.begin(), factors.end()));
+
+      // 4! (tensors) * 4! (internal indices) * 4! (external indices)
+      REQUIRE(total_variations == 24 * 24 * 24);
+    }
+#endif
+
+    SECTION("idempotency") {
+      const std::vector<std::wstring> inputs = {
+          L"F{i1;i8} g{i8,i9;i1,i7}",
+          L"A{i9,i12;i7,i3}:A I1{i7,i3;;x5}:N I2{;i9,i12;x5}:N",
+          L"f{i4;i1}:N t{a1,a2,a3;i2,i3,i4}:N S{i1,i2,i3;a1,a2,a3}:N",
+          L"P{a1,a3;} k{i8;i2}",
+          L"L{x6;;x2} P{;a1,a3}",
+      };
+
+      for (const std::wstring& current : inputs) {
+        auto factors1 = parse_expr(current).as<Product>().factors();
+        auto factors2 = parse_expr(current).as<Product>().factors();
+
+        TN reference_tn(factors1);
+        reference_tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(),
+                                  false);
+
+        TN check_tn(factors2);
+        check_tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(),
+                              false);
+
+        REQUIRE(to_latex(to_product(reference_tn.tensors())) ==
+                to_latex(to_product(check_tn.tensors())));
+
+        for (bool fast : {true, false, true, true, false, false, true}) {
+          reference_tn.canonicalize(
+              TensorCanonicalizer::cardinal_tensor_labels(), fast);
+
+          REQUIRE(to_latex(to_product(reference_tn.tensors())) ==
+                  to_latex(to_product(check_tn.tensors())));
+        }
+      }
+    }  // SECTION("idempotency")
+
+  }  // SECTION("canonicalizer")
+
+  SECTION("misc1") {
+    if (true) {
+      Index::reset_tmp_index();
+      // TN1 from manuscript
+      auto g = ex<Tensor>(L"g", bra{L"i_3", L"i_4"}, ket{L"a_3", L"a_4"},
+                          Symmetry::antisymm);
+      auto ta = ex<Tensor>(L"t", bra{L"a_1", L"a_3"}, ket{L"i_1", L"i_2"},
+                           Symmetry::antisymm);
+      auto tb = ex<Tensor>(L"t", bra{L"a_2", L"a_4"}, ket{L"i_3", L"i_4"},
+                           Symmetry::antisymm);
+
+      auto tmp = g * ta * tb;
+      // std::wcout << "TN1 = " << to_latex(tmp) << std::endl;
+      TN tn(tmp->as<Product>().factors());
+
+      // make graph
+      // N.B. treat all indices as dummy so that the automorphism ignores the
+      using named_indices_t = TN::NamedIndexSet;
+      named_indices_t indices{};
+      REQUIRE_NOTHROW(tn.create_graph({.named_indices = &indices}));
+      TN::Graph graph = tn.create_graph({.named_indices = &indices});
+
+      // can disable label production
+      {
+        // make sure can generate without labels also
+        REQUIRE_NOTHROW(
+            tn.create_graph({.make_labels = true, .make_texlabels = false})
+                .vertex_texlabels.size() == 0);
+        REQUIRE_NOTHROW(
+            tn.create_graph({.make_labels = false, .make_texlabels = true})
+                .vertex_labels.size() == 0);
+        {
+          auto g =
+              tn.create_graph({.make_labels = false, .make_texlabels = false});
+          REQUIRE_NOTHROW(g.vertex_labels.size() == 0 &&
+                          g.vertex_texlabels.size() == 0);
+        }
+      }
+
+      // create dot
+      {
+        std::basic_ostringstream<wchar_t> oss;
+        REQUIRE_NOTHROW(graph.bliss_graph->write_dot(oss, graph.vertex_labels));
+        // std::wcout << "oss.str() = " << std::endl << oss.str() <<
+        // std::endl;
+      }
+
+      bliss::Stats stats;
+      graph.bliss_graph->set_splitting_heuristic(bliss::Graph::shs_fsm);
+
+      std::vector<std::vector<unsigned int>> aut_generators;
+      auto save_aut = [&aut_generators](const unsigned int n,
+                                        const unsigned int* aut) {
+        aut_generators.emplace_back(aut, aut + n);
+      };
+      graph.bliss_graph->find_automorphisms(
+          stats, &bliss::aut_hook<decltype(save_aut)>, &save_aut);
+      CHECK(aut_generators.size() ==
+            2);  // there are 2 generators, i1<->i2, i3<->i4
+
+      std::basic_ostringstream<wchar_t> oss;
+      bliss::print_auts(aut_generators, oss, graph.vertex_labels);
+      auto split_into_lines = [](const std::wstring& str) {
+        return str | ranges::views::split(L'\n') |
+               ranges::to<container::set<std::wstring>>();
+      };
+      CHECK(split_into_lines(oss.str()) ==
+            split_into_lines(L"(ket_1,ket_2)(i_1,i_2)\n(bra_1,bra_2)(ket_1,ket_"
+                             L"2)(i_3,i_4)\n"));
     }
   }
 }

@@ -5,14 +5,14 @@
 #ifndef SEQUANT_WICK_IMPL_HPP
 #define SEQUANT_WICK_IMPL_HPP
 
-// change to 1 to try TNV2
-#define USE_TENSOR_NETWORK_V2 0
+// change to 0 to try TNV1
+#define USE_TENSOR_NETWORK_V3 1
 
 #include <SeQuant/core/bliss.hpp>
 #include <SeQuant/core/logger.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
-#if USE_TENSOR_NETWORK_V2
-#include <SeQuant/core/tensor_network_v2.hpp>
+#if USE_TENSOR_NETWORK_V3
+#include <SeQuant/core/tensor_network_v3.hpp>
 #else
 #include <SeQuant/core/tensor_network.hpp>
 #endif
@@ -246,7 +246,7 @@ inline bool apply_index_replacement_rules(
       const auto &factor = *it;
       if (factor->is<Tensor>()) {
         auto &tensor = factor->as<Tensor>();
-        assert(ranges::none_of(tensor.const_indices(), [](const Index &idx) {
+        assert(ranges::none_of(tensor.const_slots(), [](const Index &idx) {
           return idx.tag().has_value();
         }));
       }
@@ -606,8 +606,8 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
                 << to_latex(expr_input_) << std::endl;
 
             // construct graph representation of the tensor product
-#if USE_TENSOR_NETWORK_V2
-          TensorNetworkV2 tn(expr_input_->as<Product>().factors());
+#if USE_TENSOR_NETWORK_V3
+          TensorNetworkV3 tn(expr_input_->as<Product>().factors());
           auto g = tn.create_graph();
           const auto &graph = g.bliss_graph;
           const auto &vlabels = g.vertex_labels;
@@ -626,14 +626,20 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
           assert(vlabels.size() == n);
           const auto &tn_edges = tn.edges();
           const auto &tn_tensors = tn.tensors();
+          auto idx_vertex_to_edge = [&](const auto idx_vertex) -> const auto & {
+            assert(idx_vertex < n);
+#if USE_TENSOR_NETWORK_V3
+            const auto edge_idx = g.vertex_to_index_idx(idx_vertex);
+            assert(edge_idx < tn_edges.size());
+            return tn_edges[edge_idx];
+#else
+            return *(tn_edges.begin() + idx_vertex);
+#endif
+          };
 
           if (Logger::instance().wick_topology) {
             std::basic_ostringstream<wchar_t> oss;
-#if USE_TENSOR_NETWORK_V2
             graph->write_dot(oss, vlabels);
-#else
-            graph->write_dot(oss, vlabels);
-#endif
             std::wcout
                 << "WickTheorem<S>::compute: colored graph produced from TN = "
                 << std::endl
@@ -674,7 +680,7 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
                 assert(insertion_result.second);
               }
               if (vtypes[v] == VertexType::Index && !input_->empty()) {
-                auto &idx = (tn_edges.begin() + v)->idx();
+                auto &idx = idx_vertex_to_edge(v).idx();
                 auto idx_it_in_opseq = ranges::find_if(
                     opseq_view,
                     [&idx](const auto &v) { return v.index() == idx; });
@@ -721,7 +727,9 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
           // partitions with a single partition will be reported
           // @param vertex_pair_exclude a callable that accepts 2 vertex
           // indices and returns true if the automorphism of this pair
-          // of indices is to be ignored
+          // of indices is to be ignored; this is used to disregard
+          // automorphisms of Index objects unless connected to same bra/ket
+          // of an (anti)symmetric NormalOperator.
           // @return the \c {vertex_to_partition_idx,npartitions} pair in
           // which \c vertex_to_partition_idx maps vertex indices that are
           // part of nontrivial partitions to their (1-based) partition indices
@@ -735,17 +743,14 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
 
             // using each automorphism generator
             for (auto &&aut : aut_generators) {
-              // skip automorphism generators that involve vertices that are
-              // not part of list `vertices`
-              // this prevents topology exploitation for spin-free Wick
-              // TODO learn how to compute partitions correctly for
-              //      spin-free cases
+              // skip automorphism generators that do not involve vertices
+              // in `vertices` list
               const auto nv = aut.size();
-              bool aut_contains_other_vertices = false;
-              for (std::size_t v = 0; v != nv; ++v) {
+              bool aut_contains_other_vertices = true;
+              for (auto &&[v, ord] : vertices) {
                 const auto v_is_in_aut = v != aut[v];
-                if (v_is_in_aut && !vertices.contains(v)) {
-                  aut_contains_other_vertices = true;
+                if (v_is_in_aut) {
+                  aut_contains_other_vertices = false;
                   break;
                 }
               }
@@ -905,25 +910,21 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
           // Index partitions are constructed to *only* include Index
           // objects attached to the bra/ket of any NormalOperator! hence
           // need to use filter in computing partitions
-          auto exclude_index_vertex_pair = [&tn_tensors, &tn_edges](size_t v1,
-                                                                    size_t v2) {
-            // v1 and v2 are vertex indices and also index the edges in the
-            // WickGraph
-            assert(v1 < tn_edges.size());
-            assert(v2 < tn_edges.size());
-            const auto &edge1 = *(tn_edges.begin() + v1);
-            const auto &edge2 = *(tn_edges.begin() + v2);
-            auto connected_to_same_nop =
+          auto exclude_index_vertex_pair = [&tn_tensors, &idx_vertex_to_edge](
+                                               size_t v1, size_t v2) {
+            const auto &edge1 = idx_vertex_to_edge(v1);
+            const auto &edge2 = idx_vertex_to_edge(v2);
+            auto connected_to_bra_or_ket_of_same_symmetric_nop =
                 [&tn_tensors](const auto &edge1, const auto &edge2) -> bool {
               const auto nt1 =
-#if USE_TENSOR_NETWORK_V2
+#if USE_TENSOR_NETWORK_V3
                   edge1.vertex_count();
 #else
                   edge1.size();
 #endif
               assert(nt1 <= 2);
               const auto nt2 =
-#if USE_TENSOR_NETWORK_V2
+#if USE_TENSOR_NETWORK_V3
                   edge2.vertex_count();
 #else
                   edge2.size();
@@ -931,33 +932,56 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
               assert(nt2 <= 2);
               for (auto i1 = 0; i1 != nt1; ++i1) {
                 const auto tensor1_ord =
-#if USE_TENSOR_NETWORK_V2
-                    i1 == 0 ? edge1.first_vertex().getTerminalIndex()
-                            : edge1.second_vertex().getTerminalIndex();
+#if USE_TENSOR_NETWORK_V3
+                    edge1.vertex(i1).getTerminalIndex();
 #else
                     edge1[i1].tensor_ord;
 #endif
                 for (auto i2 = 0; i2 != nt2; ++i2) {
                   const auto tensor2_ord =
-#if USE_TENSOR_NETWORK_V2
-                      i2 == 0 ? edge2.first_vertex().getTerminalIndex()
-                              : edge2.second_vertex().getTerminalIndex();
+#if USE_TENSOR_NETWORK_V3
+                      edge2.vertex(i2).getTerminalIndex();
 #else
                       edge2[i2].tensor_ord;
 #endif
+
+                  // do not skip if connected to same ...
                   if (tensor1_ord == tensor2_ord) {
                     auto tensor_ord = tensor1_ord;
                     const std::shared_ptr<AbstractTensor> &tensor_ptr =
                         tn_tensors.at(tensor_ord);
-                    if (std::dynamic_pointer_cast<NormalOperator<S>>(
-                            tensor_ptr))
-                      return true;
+
+                    // ... (anti)symmetric ...
+                    if (tensor_ptr->_symmetry() != Symmetry::nonsymm) {
+                      const auto tensor1_slot_type =
+#if USE_TENSOR_NETWORK_V3
+                          edge1.vertex(i1).getOrigin();
+#else
+                          edge1[i1].slot_type;
+#endif
+                      const auto tensor2_slot_type =
+#if USE_TENSOR_NETWORK_V3
+                          edge2.vertex(i2).getOrigin();
+#else
+                          edge2[i2].slot_type;
+#endif
+
+                      // ... bra/ket of ...
+                      if (tensor1_slot_type == tensor2_slot_type) {
+                        // ... NormalOperator!
+                        if (std::dynamic_pointer_cast<NormalOperator<S>>(
+                                tensor_ptr)) {
+                          return true;
+                        }
+                      }
+                    }
                   }
                 }
               }
               return false;
             };
-            const bool exclude = !connected_to_same_nop(edge1, edge2);
+            const bool exclude =
+                !connected_to_bra_or_ket_of_same_symmetric_nop(edge1, edge2);
             return exclude;
           };
 
@@ -968,7 +992,8 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
           std::tie(index_vidx2pidx, index_npartitions) = compute_partitions(
               index_vidx_ord, /* nontrivial_partitions_only = */ false,
               /* this is to ensure that each index partition only involves
-                 indices attached to bra or to ket of same nop */
+                 indices attached to bra or to ket of same
+                 symmetric/antisymmetric nop.*/
               exclude_index_vertex_pair);
 
           if (!index_vidx2pidx.empty()) {
@@ -980,17 +1005,22 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
             if (Logger::instance().wick_topology) {
               std::wcout << "WickTheorem<S>::compute: topological index "
                             "partitions:{\n";
-              ranges::for_each(index_vidx2pidx, [&tn_edges](auto &&vidx_pidx) {
-                auto &&[vidx, pidx] = vidx_pidx;
-                assert(vidx < tn_edges.size());
-                auto &idx = (tn_edges.begin() + vidx)->idx();
-                std::wcout << "Index " << idx.full_label() << " -> partition "
-                           << pidx << "\n";
-              });
+              ranges::for_each(index_vidx2pidx,
+                               [&idx_vertex_to_edge](auto &&vidx_pidx) {
+                                 auto &&[vidx, pidx] = vidx_pidx;
+                                 auto &idx = idx_vertex_to_edge(vidx).idx();
+                                 std::wcout << "Index " << idx.full_label()
+                                            << " -> partition " << pidx << "\n";
+                               });
               std::wcout << "}" << std::endl;
             }
 
             this->set_op_partitions(index_partitions);
+
+            // TODO determine partitions of braket index pairs to be able to
+            // exploit topology for spin-free WT note that right now indices
+            // attached to bra/ket of spin-free normal operators are excluded
+            // from index partitions above
           }
         }
 

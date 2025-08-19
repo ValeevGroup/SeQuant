@@ -9,11 +9,11 @@
 #include <mutex>
 #include <utility>
 
+#include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/math.hpp>
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/ranges.hpp>
 #include <SeQuant/core/runtime.hpp>
-#include <SeQuant/core/tensor.hpp>
 
 namespace sequant {
 
@@ -102,7 +102,7 @@ class WickTheorem {
       "basis")]] WickTheorem &
   spinfree(bool sf) {
     if (!((sf && get_default_context(S).spbasis() == SPBasis::spinfree) ||
-          (!sf && get_default_context(S).spbasis() == SPBasis::spinorbital))) {
+          (!sf && get_default_context(S).spbasis() == SPBasis::spinor))) {
       throw std::invalid_argument(
           "WickTheorem<S>::spinfree(sf): sf must match the contents of "
           "get_default_context(S).spbasis() (N.B. WickTheorem::spinfree() is "

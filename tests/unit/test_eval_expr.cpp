@@ -2,7 +2,6 @@
 
 #include "catch2_sequant.hpp"
 
-#include <SeQuant/core/abstract_tensor.hpp>
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/context.hpp>
@@ -10,12 +9,12 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/parse.hpp>
-#include <SeQuant/core/tensor.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 
 #include <initializer_list>
 #include <memory>
+#include <set>
 #include <string>
 #include <string_view>
 
@@ -57,6 +56,8 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
     const auto& c3 = EvalExpr{p1->at(1)->as<Tensor>()};
 
     REQUIRE_NOTHROW(EvalExpr{Variable{L"λ"}});
+
+    REQUIRE_NOTHROW(EvalExpr{Constant{1}});
   }
 
   SECTION("EvalExpr::EvalOp types") {
@@ -129,16 +130,52 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
 
   SECTION("result expr") {
     ExprPtr expr = parse_expr(L"2 var");
-    auto node = binarize(expr);
-    REQUIRE(node->expr().is<Variable>());
-    REQUIRE_FALSE(node->label() == node.left()->label());
-    REQUIRE_FALSE(node->label() == node.right()->label());
+    ExprPtr root_expr = binarize(expr)->expr();
+    REQUIRE(root_expr->is<Variable>());
+    REQUIRE(*root_expr != *expr);
 
     expr = parse_expr(L"2 t{a1;i1}");
-    node = binarize(expr);
-    REQUIRE(node->expr().is<Tensor>());
-    REQUIRE_FALSE(node->label() == node.left()->label());
-    REQUIRE_FALSE(node->label() == node.right()->label());
+    root_expr = binarize(expr)->expr();
+    REQUIRE(root_expr->is<Tensor>());
+    REQUIRE(*root_expr != *expr);
+
+    // The binarized tree shall respect the label of the ResultExpr
+    ResultExpr res = parse_result_expr(L"E = g{i1,i2;a1,a2} t{a1,a2;i1,i2}");
+    root_expr = binarize(res)->expr();
+    REQUIRE(root_expr.is<Variable>());
+    REQUIRE(root_expr.as<Variable>().label() == L"E");
+
+    // The binarized tree shall respect the indexing of the ResultExpr
+    res = parse_result_expr(L"Result{a2;i2} = g{i1,i2;a1,a2} t{a1;i1}");
+    root_expr = binarize(res)->expr();
+    REQUIRE(root_expr.is<Tensor>());
+    REQUIRE(root_expr.as<Tensor>() ==
+            Tensor(L"Result", bra(IndexList{L"a_2"}), ket(IndexList{L"i_2"}),
+                   Symmetry::nonsymm, BraKetSymmetry::nonsymm,
+                   ParticleSymmetry::nonsymm));
+
+    // continued ->  check that changing indexing in result changes indexing in
+    // tree
+    res = parse_result_expr(L"Result{i2;a2} = g{i1,i2;a1,a2} t{a1;i1}");
+    root_expr = binarize(res)->expr();
+    REQUIRE(root_expr.is<Tensor>());
+    REQUIRE(root_expr.as<Tensor>() ==
+            Tensor(L"Result", bra(IndexList{L"i_2"}), ket(IndexList{L"a_2"}),
+                   Symmetry::nonsymm, BraKetSymmetry::nonsymm,
+                   ParticleSymmetry::nonsymm));
+
+    // The name-respecting property shall also hold for terminals
+    res = parse_result_expr(L"Other = Var");
+    root_expr = binarize(res)->expr();
+    REQUIRE(root_expr.is<Variable>());
+    REQUIRE(root_expr.as<Variable>().label() == L"Other");
+
+    res = parse_result_expr(L"Amplitude{i1;a1} = t{a1;i1}");
+    root_expr = binarize(res)->expr();
+    REQUIRE(root_expr.is<Tensor>());
+    REQUIRE(root_expr.as<Tensor>() == Tensor(L"Amplitude",
+                                             bra(IndexList{L"i_1"}),
+                                             ket(IndexList{L"a_1"})));
   }
 
   SECTION("Sequant expression") {
@@ -215,6 +252,7 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
 
     // todo:
     // REQUIRE(x12.expr()->as<Tensor>().symmetry() == Symmetry::antisymm);
+    REQUIRE(x12.expr()->as<Tensor>().symmetry() == Symmetry::nonsymm);
 
     // whole bra <-> ket contraction between two symmetric tensors
     const auto t3 =
@@ -226,6 +264,7 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
 
     // todo:
     // REQUIRE(x34.expr()->as<Tensor>().symmetry() == Symmetry::symm);
+    REQUIRE(x34.expr()->as<Tensor>().symmetry() == Symmetry::nonsymm);
 
     // outer product of the same tensor
     const auto t5 = parse_expr(L"f_{i1}^{a1}", Symmetry::nonsymm)->as<Tensor>();
@@ -235,15 +274,14 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
 
     // todo:
     // REQUIRE(x56.expr()->as<Tensor>().symmetry() == Symmetry::antisymm);
+    REQUIRE(x56.expr()->as<Tensor>().symmetry() == Symmetry::nonsymm);
 
     // contraction of some indices from a bra to a ket
     const auto t7 = parse_tensor(L"g_{a1,a2}^{i1,a3}", Symmetry::antisymm);
     const auto t8 = parse_tensor(L"t_{a3}^{i2}", Symmetry::antisymm);
 
     const auto x78 = result_expr(EvalExpr{t7}, EvalExpr{t8}, EvalOp::Product);
-
-    // todo:
-    // REQUIRE(x78.expr()->as<Tensor>().symmetry() == Symmetry::nonsymm);
+    REQUIRE(x78.expr()->as<Tensor>().symmetry() == Symmetry::nonsymm);
 
     // whole bra <-> ket contraction between symmetric and antisymmetric tensors
     auto const t9 =
@@ -253,6 +291,7 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
     auto const x910 = result_expr(EvalExpr{t9}, EvalExpr{t10}, EvalOp::Product);
     // todo:
     // REQUIRE(x910.expr()->as<Tensor>().symmetry() == Symmetry::symm);
+    REQUIRE(x910.expr()->as<Tensor>().symmetry() == Symmetry::nonsymm);
   }
 
   SECTION("Symmetry of sum") {

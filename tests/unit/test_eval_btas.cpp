@@ -19,16 +19,7 @@ namespace {
 
 auto eval_node(sequant::ExprPtr const& expr) {
   using namespace sequant;
-  auto node = binarize(expr);
-  return transform_node(node, [](auto&& val) {
-    if (val.is_tensor()) {
-      return EvalExprBTAS(
-          *val.op_type(), val.result_type(), val.expr(),
-          val.as_tensor().indices() | ranges::to<EvalExpr::index_vector>(),
-          val.canon_phase(), val.hash_value());
-    } else
-      return EvalExprBTAS(val);
-  });
+  return binarize<EvalExprBTAS>(expr);
 }
 
 static auto const idx_rgx = boost::wregex{L"([ia])([↑↓])?_?(\\d+)"};
@@ -63,7 +54,7 @@ class rand_tensor_yield {
     using sequant::IndexSpace;
     auto isr = sequant::get_default_context().index_space_registry();
 
-    assert(ranges::all_of(tnsr.const_braket(),
+    assert(ranges::all_of(tnsr.const_braket_indices(),
                           [&isr](auto const& idx) {
                             return idx.space() == isr->retrieve(L"i") ||
                                    idx.space() == isr->retrieve(L"a");
@@ -71,7 +62,7 @@ class rand_tensor_yield {
            "Unsupported IndexSpace type found while generating tensor.");
 
     auto rng = btas::Range{
-        tnsr.const_braket() | transform([this, &isr](auto const& idx) {
+        tnsr.const_braket_indices() | transform([this, &isr](auto const& idx) {
           return idx.space() == isr->retrieve(L"i") ? nocc_ : nvirt_;
         }) |
         ranges::to_vector};
@@ -149,7 +140,7 @@ container::svector<long> tidxs(Iterable const& indices) noexcept {
 }
 
 container::svector<long> tidxs(Tensor const& tnsr) noexcept {
-  return sequant::EvalExprBTAS::index_hash(tnsr.const_braket()) |
+  return sequant::EvalExprBTAS::index_hash(tnsr.const_braket_indices()) |
          ranges::to<container::svector<long>>;
 }
 

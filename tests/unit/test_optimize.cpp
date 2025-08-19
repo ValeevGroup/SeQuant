@@ -4,9 +4,12 @@
 
 #include <SeQuant/core/algorithm.hpp>
 #include <SeQuant/core/attr.hpp>
+#include <SeQuant/core/eval_expr.hpp>
+#include <SeQuant/core/eval_node.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/optimize.hpp>
+#include <SeQuant/core/optimize/common_subexpression_elimination.hpp>
 #include <SeQuant/core/parse.hpp>
 #include <SeQuant/core/space.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
@@ -51,9 +54,9 @@ TEST_CASE("optimize", "[optimize]") {
 
     auto single_term_opt = [](Product const& prod) {
       return opt::single_term_opt(prod, [](Index const& ix) {
-        auto lbl = to_string(ix.label());
-        auto sz = ix.space().approximate_size();
-        return ix.space().approximate_size();
+        // null space contributes x1 to the size
+        auto sz = ix.nonnull() ? ix.space().approximate_size() : 1;
+        return sz;
       });
     };
 
@@ -197,6 +200,77 @@ TEST_CASE("optimize", "[optimize]") {
       REQUIRE(optimized->is<Sum>());
       REQUIRE(optimized->as<Sum>().summands().size() == 1);
       REQUIRE(sum->as<Sum>().summand(0).as<Product>().factors().size() == 1);
+    }
+  }
+
+  SECTION("CSE") {
+    for (bool force_hash_collisions : {false, true}) {
+      CAPTURE(force_hash_collisions);
+
+      for (const auto& [inputs, outputs] : std::vector<
+               std::pair<std::vector<std::wstring>, std::vector<std::wstring>>>{
+               // Basic example with only scalars
+               {{L"R1 = (A B) C", L"R2 = D (A B)"},
+                {L"CSE1 = A B", L"R1 = CSE1 C", L"R2 = D CSE1"}},
+               // Test case in which the same intermediate is reused but
+               // requires different indexing
+               {{L"R{a1,a3;i2,i3} = 2 GAM0{a1,a3;a4,a5} T2g{a4,a5;i2,i3} - "
+                 L"GAM0{a1,a3;a4,a5} T2g{a4,a5;i3,i2}"},
+                {L"CSE1{;;a3,a1,i2,i3} = GAM0{a1,a3;a4,a5} T2g{a4,a5;i2,i3}",
+                 L"R{a1,a3;i2,i3} = 2 CSE1{;;a3,a1,i2,i3} - "
+                 L"CSE1{;;a3,a1,i3,i2}"}},
+               // In this case it is important that the computation of the
+               // subexpression isn't simply thrown at the beginning of the
+               // expression list as it depends on B, which has to be computed
+               // first.
+               {{L"B = K J", L"R = (A B) C + (A B) D"},
+                {L"B = K J", L"CSE1 = A B", L"R = CSE1 C + CSE1 D"}},
+           }) {
+        CAPTURE(inputs);
+
+        std::vector<EvalNode<EvalExpr>> expressions;
+        std::vector<ResultExpr> expected;
+
+        for (const std::wstring& current : inputs) {
+          expressions.push_back(binarize(parse_result_expr(
+              current, Symmetry::nonsymm, BraKetSymmetry::nonsymm,
+              ParticleSymmetry::nonsymm)));
+        }
+        for (const std::wstring& current : outputs) {
+          expected.push_back(parse_result_expr(current, Symmetry::nonsymm,
+                                               BraKetSymmetry::nonsymm,
+                                               ParticleSymmetry::nonsymm));
+        }
+
+        auto binarizer = [](auto&& expr) { return binarize(expr); };
+
+        if (force_hash_collisions) {
+          // This code path makes all hashes be computed to be zero and hence
+          // every pair of objects will yield a hash collision which need to be
+          // dealt with by using proper comparison operators.
+          static constexpr bool force_collisions = true;
+          eliminate_common_subexpressions<
+              decltype(expressions), decltype(binarizer),
+              cse::AcceptAllPredicate, force_collisions>(expressions,
+                                                         binarizer);
+        } else {
+          eliminate_common_subexpressions(expressions, binarizer);
+        }
+
+        std::vector<ResultExpr> actual;
+        for (const auto& current : expressions) {
+          if (current->is_tensor()) {
+            actual.emplace_back(current->expr()->as<Tensor>(),
+                                to_expr(current));
+          } else {
+            REQUIRE(current->is_scalar());
+            actual.emplace_back(current->expr()->as<Variable>(),
+                                to_expr(current));
+          }
+        }
+
+        REQUIRE(actual == expected);
+      }
     }
   }
 

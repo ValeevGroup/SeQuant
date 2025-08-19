@@ -60,6 +60,29 @@ TEST_CASE("eval_node", "[EvalNode]") {
     return parse_expr(xpr, Symmetry::antisymm);
   };
 
+  SECTION("terminals") {
+    auto node = eval_node(parse_expr_antisymm(L"f{a1;i1}"));
+    REQUIRE(node.leaf());
+    REQUIRE(node->as_tensor().label() == L"f");
+
+    // In order to represent unary computations, i.e. assignments, we have to
+    // represent them as a multiplication with 1 in order for the tree to remain
+    // a full binary tree.
+    node = binarize(parse_result_expr(L"R{a1;i1} = f{a1;i1}"));
+    REQUIRE(!node.leaf());
+    REQUIRE(node->op_type() == EvalOp::Product);
+    REQUIRE(node->as_tensor().label() == L"R");
+    REQUIRE(((node.left()->is_tensor() && node.right()->is_scalar()) ||
+             (node.right()->is_tensor() && node.left()->is_scalar())));
+
+    node = binarize(parse_result_expr(L"R = Var"));
+    REQUIRE(!node.leaf());
+    REQUIRE(node->op_type() == EvalOp::Product);
+    REQUIRE(node->as_variable().label() == L"R");
+    REQUIRE(((node.left()->is_variable() && node.right()->is_scalar()) ||
+             (node.right()->is_variable() && node.left()->is_scalar())));
+  }
+
   SECTION("product") {
     // 1/16 * (A * B) * C
     const auto p1 = parse_expr_antisymm(
@@ -110,7 +133,7 @@ TEST_CASE("eval_node", "[EvalNode]") {
                  EquivalentTo("g{i3,i4; a3,a4}:A"));
 
     REQUIRE_THAT(node(node2, {L, R}).as_tensor(),
-                 EquivalentTo("I{a1,a2,a3,a4;i3,i4,i1,i2}:N-N-N"));
+                 EquivalentTo("I{a1,a2,a3,a4;i1,i2,i3,i4}:N-N-N"));
 
     REQUIRE_THAT(node(node2, {L, R, L}).as_tensor(),
                  EquivalentTo("t{a1,a2;i3,i4}:A"));
