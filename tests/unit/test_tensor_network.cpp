@@ -1381,7 +1381,8 @@ class TensorNetworkV3Accessor {
   auto get_canonical_bliss_graph(
       sequant::TensorNetworkV3 tn,
       const sequant::TensorNetwork::named_indices_t* named_indices = nullptr) {
-    tn.canonicalize_graph(named_indices ? *named_indices : tn.ext_indices_);
+    [[maybe_unused]] auto byprod =
+        tn.canonicalize_graph(named_indices ? *named_indices : tn.ext_indices_);
     tn.init_edges();
     auto graph = tn.create_graph(
         {.named_indices = named_indices,
