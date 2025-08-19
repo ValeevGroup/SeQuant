@@ -150,6 +150,11 @@ class ItfGenerator : public Generator<Context> {
       for (const Index &idx : tensor.const_indices()) {
         name += ctx.get_tag(idx.space());
       }
+
+      if (name.back() == ':') {
+        // all tags have been empty -> remove colon and leave tensor untagged
+        name.erase(name.size() - 1);
+      }
     }
 
     return name;
