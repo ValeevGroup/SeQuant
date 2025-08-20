@@ -165,7 +165,7 @@ class flattened_rangenest
       // TODO resolve the compilation issue
       //      ranges::erase(*range_iter_, elem_iter_);
       // verify that capacity does not change
-      const auto capacity = range_iter_->capacity();
+      [[maybe_unused]] const auto capacity = range_iter_->capacity();
       range_iter_->erase(elem_iter_);
       assert(capacity == range_iter_->capacity());
     }
@@ -176,7 +176,7 @@ class flattened_rangenest
       // TODO resolve the compilation issue
       //      ranges::insert(*range_iter_, elem_iter_, std::forward<T>(elem));
       // verify that capacity does not change
-      const auto capacity = range_iter_->capacity();
+      [[maybe_unused]] const auto capacity = range_iter_->capacity();
       range_iter_->insert(elem_iter_, std::forward<T>(elem));
       assert(capacity == range_iter_->capacity());
     }

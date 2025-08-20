@@ -40,7 +40,7 @@ class HugenholtzVertex {
             std::make_pair(edge, typename Group::second_type{edge_idx}));
         edge_to_group_.push_back(groups_.size() - 1);
       } else {
-        auto result = grp_it->second.insert(edge_idx);
+        [[maybe_unused]] auto result = grp_it->second.insert(edge_idx);
         assert(result.second);
         edge_to_group_.push_back(grp_it - begin(groups_));
       }
@@ -97,7 +97,7 @@ class HugenholtzVertex {
   /// @param edge_idx the ordinal index of the edge to be removed
   /// @param edge the edge descriptor, only used to assert logic when NDEBUG is
   /// not defined
-  void erase(size_t edge_idx, const Edge& edge) {
+  void erase(size_t edge_idx, [[maybe_unused]] const Edge& edge) {
     // preconditions
     const auto grp_idx = edge_to_group_.at(edge_idx);
     Group& grp = groups_.at(grp_idx);
@@ -153,7 +153,7 @@ class HugenholtzVertex {
       edge_to_group_.insert(edge_to_group_.begin() + edge_idx,
                             groups_.size() - 1);
     } else {  // just insert but keep the group indices sorted
-      auto result = grp_it->second.insert(edge_idx);
+      [[maybe_unused]] auto result = grp_it->second.insert(edge_idx);
       assert(result.second);
       edge_to_group_.insert(edge_to_group_.begin() + edge_idx,
                             grp_it - groups_.begin());

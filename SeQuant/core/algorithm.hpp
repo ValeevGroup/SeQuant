@@ -186,7 +186,7 @@ template <typename Rng>
 auto inits(Rng const& rng) {
   using ranges::views::slice;
   using ranges::views::transform;
-  return rng | transform([n = 0, &rng](auto&& val) mutable {
+  return rng | transform([n = 0, &rng](auto&&) mutable {
            return slice(rng, 0, ++n);
          });
 }

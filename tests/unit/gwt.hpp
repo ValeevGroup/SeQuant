@@ -111,7 +111,7 @@ class GWT {
           if (!done) result_ = next_wf_terms;
         } else {
           for (const auto& new_term : next_wf_terms) {
-            auto [it, inserted] = result_.emplace(new_term);
+            result_.emplace(new_term);
           }
         }
         current_wf_terms = std::move(next_wf_terms);

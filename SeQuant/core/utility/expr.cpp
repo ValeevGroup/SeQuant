@@ -203,7 +203,7 @@ std::string toplevel_diff(const Tensor &lhs, const Tensor &rhs) {
   throw std::runtime_error("Indeterminate tensor difference");
 }
 
-std::string toplevel_diff(const Sum &lhs, const Sum &rhs) {
+std::string toplevel_diff(const Sum & /*lhs*/, const Sum & /*rhs*/) {
   // There is no way two Sum objects can be different on the top-level
   return {};
 }

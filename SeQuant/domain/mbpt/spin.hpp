@@ -74,7 +74,7 @@ std::wstring spinannotation_remove(WS&& label) {
 template <typename WS, typename = std::enable_if_t<
                            meta::is_wstring_or_view_v<std::decay_t<WS>>>>
 std::wstring spinannotation_add(WS&& label, Spin s) {
-  auto view = to_basic_string_view(label);
+  [[maybe_unused]] auto view = to_basic_string_view(label);
   assert(!ranges::contains(view, L'_'));
   assert(view.back() != L'↑' && view.back() != L'↓');
   switch (s) {

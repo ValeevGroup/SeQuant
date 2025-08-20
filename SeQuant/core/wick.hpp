@@ -829,7 +829,8 @@ class WickTheorem {
           if (nconnections == 0 && partition_idx > 0) {
             --partition_idx;  // to 0-based
             assert(nop_partitions.at(partition_idx).size() > 0);
-            auto removed = nop_partitions[partition_idx].erase(nop_idx);
+            [[maybe_unused]] auto removed =
+                nop_partitions[partition_idx].erase(nop_idx);
             assert(removed);
           }
         }
@@ -946,7 +947,8 @@ class WickTheorem {
           auto partition_idx = wick.nop_partition_idx_[nop_idx];
           if (nconnections == 0 && partition_idx > 0) {
             --partition_idx;  // to 0-based
-            auto inserted = nop_partitions.at(partition_idx).insert(nop_idx);
+            [[maybe_unused]] auto inserted =
+                nop_partitions.at(partition_idx).insert(nop_idx);
             assert(inserted.second);
           }
         }
@@ -1150,7 +1152,7 @@ class WickTheorem {
               constexpr bool use_op_partition_groups = true;
               constexpr bool test_vs_old_code = false;
 
-              size_t ref_op_psymm_weight = 1;
+              [[maybe_unused]] size_t ref_op_psymm_weight = 1;
               if constexpr (test_vs_old_code) {
                 auto op_right_idx_in_opseq =
                     op_right_it - ranges::begin(nop_right);

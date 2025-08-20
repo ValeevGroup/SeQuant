@@ -46,7 +46,7 @@ class TextGenerator : public Generator<Context> {
     return DeclarationScope::Section;
   }
 
-  std::string represent(const Index &idx, const Context &ctx) const override {
+  std::string represent(const Index &idx, const Context &) const override {
     return toUtf8(idx.label());
   }
 
@@ -67,12 +67,12 @@ class TextGenerator : public Generator<Context> {
   }
 
   std::string represent(const Variable &variable,
-                        const Context &ctx) const override {
+                        const Context &) const override {
     return toUtf8(variable.label());
   }
 
   std::string represent(const Constant &constant,
-                        const Context &ctx) const override {
+                        const Context &) const override {
     std::stringstream sstream;
     if (constant.value().imag() != 0) {
       sstream << "(" << constant.value().real();
@@ -175,7 +175,7 @@ class TextGenerator : public Generator<Context> {
     m_generated += m_indent + "Declare index " + represent(idx, ctx) + "\n";
   }
 
-  void declare(const Variable &variable, UsageSet usage,
+  void declare(const Variable &variable, UsageSet /*usage*/,
                const Context &ctx) override {
     if (ctx.inside_named_section()) {
       if (m_generated.back() != '(') {
@@ -189,7 +189,7 @@ class TextGenerator : public Generator<Context> {
     }
   }
 
-  void declare(const Tensor &tensor, UsageSet usage,
+  void declare(const Tensor &tensor, UsageSet /*usage*/,
                const Context &ctx) override {
     if (ctx.inside_named_section()) {
       if (m_generated.back() != '(') {
@@ -203,7 +203,7 @@ class TextGenerator : public Generator<Context> {
     }
   }
 
-  void all_indices_declared(std::size_t amount, const Context &ctx) override {
+  void all_indices_declared(std::size_t amount, const Context &) override {
     if (amount > 0) {
       m_generated += "\n";
     }
@@ -221,8 +221,7 @@ class TextGenerator : public Generator<Context> {
     }
   }
 
-  void begin_declarations(DeclarationScope scope, const Context &ctx) override {
-  }
+  void begin_declarations(DeclarationScope, const Context &) override {}
 
   void end_declarations(DeclarationScope scope, const Context &ctx) override {
     if (scope == DeclarationScope::Section && ctx.inside_named_section()) {
@@ -230,33 +229,33 @@ class TextGenerator : public Generator<Context> {
     }
   }
 
-  void insert_comment(const std::string &comment, const Context &ctx) override {
+  void insert_comment(const std::string &comment, const Context &) override {
     m_generated += m_indent + "// " + comment + "\n";
   }
 
-  void begin_named_section(std::string_view name, const Context &ctx) override {
+  void begin_named_section(std::string_view name, const Context &) override {
     m_generated += m_indent + "section " + std::string(name) + "(";
     m_indent += "  ";
   }
 
-  void end_named_section(std::string_view name, const Context &ctx) override {
+  void end_named_section(std::string_view /*name*/, const Context &) override {
     assert(m_indent.size() >= 2);
     m_indent = m_indent.substr(2, std::string::npos);
     m_generated += m_indent + "end section\n";
   }
 
-  void begin_expression(const Context &ctx) override {
+  void begin_expression(const Context &) override {
     if (!m_generated.empty() && !m_generated.ends_with("\n\n") &&
         !m_generated.ends_with(")\n")) {
       m_generated += "\n";
     }
   }
 
-  void begin_export(const Context &ctx) override { m_generated.clear(); }
+  void begin_export(const Context &) override { m_generated.clear(); }
 
-  void end_export(const Context &ctx) override {}
+  void end_export(const Context &) override {}
 
-  void end_expression(const Context &ctx) override {}
+  void end_expression(const Context &) override {}
 
   std::string get_generated_code() const override { return m_generated; }
 

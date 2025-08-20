@@ -336,7 +336,7 @@ EvalExprNode binarize(Sum const& sum) {
   bool const all_tensors =
       ranges::all_of(summands, [](auto&& n) { return n->is_tensor(); });
 
-  bool const all_scalars =
+  [[maybe_unused]] bool const all_scalars =
       ranges::all_of(summands, [](auto&& n) { return n->is_scalar(); });
 
   assert(all_tensors | all_scalars);
@@ -346,7 +346,7 @@ EvalExprNode binarize(Sum const& sum) {
   auto make_sum = [i = 0,                    //
                    hs = imed_hashes(hvals),  //
                    all_tensors](EvalExpr const& left,
-                                EvalExpr const& right) mutable -> EvalExpr {
+                                EvalExpr const&) mutable -> EvalExpr {
     auto h = ranges::at(hs, ++i);
     if (all_tensors) {
       auto const& t = left.as_tensor();

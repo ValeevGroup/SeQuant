@@ -939,7 +939,7 @@ class Index : public Taggable {
   }
 
   template <typename Char, typename = std::enable_if_t<meta::is_char_v<Char>>>
-  static inline std::optional<ordinal_type> to_ordinal(Char label) noexcept {
+  static inline std::optional<ordinal_type> to_ordinal(Char) noexcept {
     return std::nullopt;
   }
 

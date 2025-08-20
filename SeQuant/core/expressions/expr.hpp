@@ -445,7 +445,7 @@ class Expr : public std::enable_shared_from_this<Expr>,
   /// @note @c that is guaranteed to be of same type as @c *this, hence can be
   /// statically cast
   /// @return true if @c that is equivalent to *this
-  virtual bool static_equal(const Expr &that) const
+  virtual bool static_equal(const Expr &) const
 #if __GNUG__
   {
     abort();
@@ -469,7 +469,7 @@ class Expr : public std::enable_shared_from_this<Expr>,
   /// c-number , hence honest checking is needed
   /// @return true if @c *this multiplicatively commutes with @c that
   /// @note this returns true unless overridden in derived class
-  virtual bool commutes_with_atom(const Expr &that) const { return true; }
+  virtual bool commutes_with_atom(const Expr &) const { return true; }
 
  private:
   /// @return returns next type id in the grand class list

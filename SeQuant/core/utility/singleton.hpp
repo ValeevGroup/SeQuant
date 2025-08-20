@@ -102,7 +102,7 @@ class Singleton {
 
  protected:
   template <typename... Args>
-  Singleton(Args&&... args) {}  // all constructors are private
+  Singleton(Args&&...) {}  // all constructors are private
 
   static auto& instance_accessor() {
     static std::unique_ptr<Derived> instance;

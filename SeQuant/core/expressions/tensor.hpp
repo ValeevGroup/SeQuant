@@ -198,8 +198,6 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
         canonical_bra_.reserve(bra_.size());
         decltype(ket_)::value_type canonical_ket_;
         canonical_ket_.reserve(ket_.size());
-        std::size_t num_unpaired_bra_slots = 0;
-        std::size_t num_unpaired_ket_slots = 0;
         // push all braket bundles first
         for (std::size_t p = 0; p != std::min(bra_rank(), ket_rank()); ++p) {
           const auto nonempty_bra = bra_[p].nonnull();
@@ -211,10 +209,7 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
             // out
             canonical_bra_.emplace_back(std::move(bra_[p]));
             canonical_ket_.push_back(std::move(ket_[p]));
-          } else if (nonempty_bra)
-            ++num_unpaired_bra_slots;
-          else
-            ++num_unpaired_ket_slots;
+          }
         }
 
         std::size_t num_bra_indices = canonical_bra_.size();

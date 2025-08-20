@@ -115,7 +115,7 @@ class JuliaITensorGenerator : public JuliaTensorOperationsGenerator<Context> {
     Base::m_generated += ", \"" + currentindex + "\")\n";
   }
 
-  void all_indices_declared(std::size_t amount, const Context &ctx) override {
+  void all_indices_declared(std::size_t amount, const Context &) override {
     if (amount > 0) {
       Base::m_generated += "\n";
     }

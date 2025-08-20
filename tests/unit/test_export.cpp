@@ -98,7 +98,7 @@ std::string get_format_name() {
 }
 
 template <typename... Generator>
-std::set<std::string> known_format_names(std::tuple<Generator...> generators) {
+std::set<std::string> known_format_names(std::tuple<Generator...>) {
   std::set<std::string> names;
 
   (names.insert(get_format_name<Generator>()), ...);
@@ -106,7 +106,7 @@ std::set<std::string> known_format_names(std::tuple<Generator...> generators) {
   return names;
 }
 
-void configure_context_defaults(TextGeneratorContext &ctx) {}
+void configure_context_defaults(TextGeneratorContext &) {}
 
 void configure_context_defaults(ItfContext &ctx) {
   auto registry = get_default_context().index_space_registry();
@@ -132,13 +132,12 @@ void configure_context_defaults(JuliaTensorOperationsGeneratorContext &ctx) {
   ctx.set_tag(virt, "v");
 }
 
-void add_to_context(TextGeneratorContext &ctx, std::string_view key,
-                    std::string_view value) {
+void add_to_context(TextGeneratorContext &, std::string_view,
+                    std::string_view) {
   throw std::runtime_error(
       "TextGeneratorContext doesn't support specifications");
 }
-void add_to_context(ItfContext &ctx, std::string_view key,
-                    std::string_view value) {}
+void add_to_context(ItfContext &, std::string_view, std::string_view) {}
 void add_to_context(JuliaTensorOperationsGeneratorContext &ctx,
                     std::string_view key, std::string_view value) {
   auto parse_space_map = [](std::string_view spec) {

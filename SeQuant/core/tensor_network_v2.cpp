@@ -587,7 +587,6 @@ TensorNetworkV2::canonicalize_slots(
         idx2cord(named_index_compare);
 
     // collect named indices and sort them on the fly
-    auto grand_index_list_end = grand_index_list.end();
     for (auto [idx_ord, idx] : ranges::views::enumerate(grand_index_list)) {
       if (!is_named_index(idx)) {
         continue;

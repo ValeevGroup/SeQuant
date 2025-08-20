@@ -113,21 +113,13 @@ ExprPtr Expr::clone() const { throw not_implemented("clone"); }
 
 void Expr::adjoint() { throw not_implemented("adjoint"); }
 
-Expr &Expr::operator*=(const Expr &that) {
-  throw not_implemented("operator*=");
-}
+Expr &Expr::operator*=(const Expr &) { throw not_implemented("operator*="); }
 
-Expr &Expr::operator^=(const Expr &that) {
-  throw not_implemented("operator^=");
-}
+Expr &Expr::operator^=(const Expr &) { throw not_implemented("operator^="); }
 
-Expr &Expr::operator+=(const Expr &that) {
-  throw not_implemented("operator+=");
-}
+Expr &Expr::operator+=(const Expr &) { throw not_implemented("operator+="); }
 
-Expr &Expr::operator-=(const Expr &that) {
-  throw not_implemented("operator-=");
-}
+Expr &Expr::operator-=(const Expr &) { throw not_implemented("operator-="); }
 
 ExprPtr adjoint(const ExprPtr &expr) {
   auto result = expr->clone();

@@ -13,7 +13,8 @@ namespace sequant {
 
 Tensor::~Tensor() = default;
 
-void Tensor::assert_nonreserved_label(std::wstring_view label) const {
+void Tensor::assert_nonreserved_label(
+    [[maybe_unused]] std::wstring_view label) const {
   assert(!ranges::contains(FNOperator::labels(), label) &&
          !ranges::contains(BNOperator::labels(), label));
 }

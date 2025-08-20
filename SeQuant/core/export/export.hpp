@@ -849,12 +849,6 @@ void export_groups(Range groups, Generator<Context> &generator, Context ctx) {
 
   generator.begin_export(ctx);
 
-  const DeclarationScope index_decl_scope = generator.index_declaration_scope();
-  const DeclarationScope variable_decl_scope =
-      generator.variable_declaration_scope();
-  const DeclarationScope tensor_decl_scope =
-      generator.tensor_declaration_scope();
-
   // First step: preprocessing of all expressions
   container::svector<detail::PreprocessResult> pp_results;
   for (ExpressionGroup<T> &current_group : groups) {
