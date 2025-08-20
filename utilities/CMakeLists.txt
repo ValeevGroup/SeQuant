@@ -7,9 +7,7 @@ foreach(current IN LISTS EXECUTABLE_SOURCES)
     add_executable(${name} ${current})
     target_link_libraries(${name} SeQuant)
     
-    if (SEQUANT_WARNINGS_AS_ERRORS)
-        target_warnings_as_errors(${name})
-    endif()
+    target_set_warning_flags("${name}")
 endforeach()
 
 add_subdirectory(external-interface)

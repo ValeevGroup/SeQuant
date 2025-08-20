@@ -439,9 +439,7 @@ else()
             )
 endif ()
 
-if (SEQUANT_WARNINGS_AS_ERRORS)
-    target_warnings_as_errors(SeQuant)
-endif()
+target_set_warning_flags(SeQuant)
 
 install(TARGETS SeQuant-bliss EXPORT sequant COMPONENT sequant LIBRARY DESTINATION ${SEQUANT_INSTALL_LIBDIR})
 install(TARGETS SeQuant EXPORT sequant COMPONENT sequant LIBRARY DESTINATION ${SEQUANT_INSTALL_LIBDIR})

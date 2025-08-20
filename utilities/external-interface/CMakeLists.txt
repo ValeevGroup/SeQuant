@@ -38,6 +38,4 @@ target_link_libraries(external_interface
         spdlog::spdlog
 )
 
-if (SEQUANT_WARNINGS_AS_ERRORS)
-    target_warnings_as_errors(external_interface)
-endif()
+target_set_warning_flags(external_interface)
