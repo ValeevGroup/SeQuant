@@ -5,6 +5,13 @@
 #ifndef SEQUANT_HUGENHOLTZ_HPP
 #define SEQUANT_HUGENHOLTZ_HPP
 
+#include <SeQuant/core/container.hpp>
+
+#include <range/v3/all.hpp>
+
+#include <algorithm>
+#include <utility>
+
 namespace sequant {
 
 /// @brief HugenholtzVertex represents a sequence of edges arranged into groups
