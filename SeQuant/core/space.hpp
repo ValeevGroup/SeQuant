@@ -71,7 +71,12 @@ class TypeAttr {
   /// @return true if this object is non-null (i.e. has any bits set)
   constexpr explicit operator bool() const { return bitset != 0; }
 
-  constexpr TypeAttr(const TypeAttr &other) { bitset = other.to_int32(); }
+  constexpr TypeAttr(const TypeAttr &other) { *this = other; }
+
+  constexpr TypeAttr &operator=(const TypeAttr &other) {
+    bitset = other.to_int32();
+    return *this;
+  }
 
   /// @return union of `*this` and @p other, i.e. `*this` AND @p other
   /// @note equivalent to `this->to_int32() | other.to_int32()`
