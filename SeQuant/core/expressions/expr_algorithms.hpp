@@ -434,8 +434,8 @@ class expr_range : public ranges::view_facade<expr_range> {
       }
     }
 
-    const auto address() const { return address_; }
-    const auto ordinal() const {
+    auto address() const { return address_; }
+    auto ordinal() const {
       assert(ordinal_ >= 0);
       return ordinal_;
     }

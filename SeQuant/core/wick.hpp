@@ -1146,7 +1146,7 @@ class WickTheorem {
             bool is_unique = true;
             if (use_topology_) {
               auto &nop_right = *(op_right_cursor.range_iter());
-              auto &op_right_it = op_right_cursor.elem_iter();
+              auto op_right_it = op_right_cursor.elem_iter();
 
               // check against the degeneracy deduced by index partition
               constexpr bool use_op_partition_groups = true;

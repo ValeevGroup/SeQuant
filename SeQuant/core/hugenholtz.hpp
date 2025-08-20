@@ -95,7 +95,7 @@ class HugenholtzVertex {
   /// @param edge_idx the edge index
   /// @return the size of the group to which this edge belongs
   /// @note this is equivalent to @c group(edge_idx).size()
-  const size_t group_size(size_t edge_idx) const {
+  size_t group_size(size_t edge_idx) const {
     const auto result = group(edge_idx).second.size();
     assert(result > 0);
     return result;

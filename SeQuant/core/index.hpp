@@ -776,7 +776,7 @@ class Index : public Taggable {
   }
 
   /// @return the smallest index of a generated index
-  static const std::size_t min_tmp_index() noexcept;
+  static std::size_t min_tmp_index() noexcept;
 
   /// @return a unique temporary index, its value is equal to or greater than
   /// that returned by min_tmp_index()
