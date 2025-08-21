@@ -20,8 +20,8 @@
 #include <SeQuant/core/tensor_network.hpp>
 #include <SeQuant/core/tensor_network_v2.hpp>
 #include <SeQuant/core/tensor_network_v3.hpp>
-#include <SeQuant/core/timer.hpp>
 #include <SeQuant/core/utility/string.hpp>
+#include <SeQuant/core/utility/timer.hpp>
 
 #include <algorithm>
 #include <cmath>
@@ -46,7 +46,7 @@
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/op.hpp>
 
-#include <SeQuant/core/timer.hpp>
+#include <SeQuant/core/utility/timer.hpp>
 #include <range/v3/all.hpp>
 
 using namespace sequant;

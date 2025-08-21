@@ -278,7 +278,6 @@ set(SeQuant_src
         SeQuant/core/tensor_network/vertex.hpp
         SeQuant/core/tensor_network/vertex_painter.cpp
         SeQuant/core/tensor_network/vertex_painter.hpp
-        SeQuant/core/timer.hpp
         SeQuant/core/utility/atomic.hpp
         SeQuant/core/utility/context.hpp
         SeQuant/core/utility/debug.hpp
@@ -293,6 +292,7 @@ set(SeQuant_src
         SeQuant/core/utility/string.hpp
         SeQuant/core/utility/swap.hpp
         SeQuant/core/utility/tensor.hpp
+        SeQuant/core/utility/timer.hpp
         SeQuant/core/utility/tuple.hpp
         SeQuant/core/wick.hpp
         SeQuant/core/wick.impl.hpp
