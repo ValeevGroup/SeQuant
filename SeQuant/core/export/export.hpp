@@ -265,8 +265,8 @@ class GenerationVisitor {
 
  private:
   Generator<Context> &m_generator;
-  const std::unordered_map<NodeID, ExprPtr> &m_scalarFactors;
   Context &m_ctx;
+  const std::unordered_map<NodeID, ExprPtr> &m_scalarFactors;
   std::map<Tensor, std::size_t, TensorBlockLessThanComparator> m_tensorUses;
   std::map<Variable, std::size_t> m_variableUses;
 

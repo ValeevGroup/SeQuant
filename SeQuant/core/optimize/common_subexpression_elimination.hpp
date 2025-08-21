@@ -311,9 +311,9 @@ class SubexpressionReplacer {
   VectorLike &expr_trees;
   std::size_t expr_offset = 0;
   std::size_t current_expr_idx = 0;
-  const Transformer &expr_to_tree;
   const SubexpressionUsageCounts<TreeNode, force_hash_collisions>
       &subexpressions;
+  const Transformer &expr_to_tree;
   SubexpressionNames<TreeNode, force_hash_collisions> cse_names;
   std::size_t name_counter = 1;
   const LabelGenerator &label_gen;

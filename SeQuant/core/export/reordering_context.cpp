@@ -52,8 +52,8 @@ IndexSpace relevant_space(Range &&rng, MemoryLayout layout) {
 
 template <typename Comp>
 struct PairComparator {
-  bool prioritize_first;
   const Comp &cmp;
+  bool prioritize_first;
 
   PairComparator(const Comp &cmp, bool prioritize_first)
       : cmp(cmp), prioritize_first(prioritize_first) {}
