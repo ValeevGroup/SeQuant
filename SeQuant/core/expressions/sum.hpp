@@ -30,8 +30,8 @@ class Sum : public Expr {
   /// @param summands an initializer list of summands
   Sum(ExprPtrList summands) {
     // use append to flatten out Sum summands
-    for (auto &summand : summands) {
-      append(std::move(summand));
+    for (auto &&summand : summands) {
+      append(std::forward<decltype(summand)>(summand));
     }
   }
 
