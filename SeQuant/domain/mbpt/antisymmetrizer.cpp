@@ -246,7 +246,7 @@ int num_closed_loops(std::vector<Index> init_upper,
   };
   auto where_same_ele = [&](Index i1, std::vector<Index> ref_list) {
     [[maybe_unused]] int hit_counter = 0;
-    int where;
+    int where = -1;
     bool in_list = false;
     for (int i = 0; i < ref_list.size(); i++) {
       if (equal_indices(i1, ref_list[i])) {
