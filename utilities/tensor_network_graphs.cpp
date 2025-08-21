@@ -114,7 +114,7 @@ int main(int argc, char **argv) {
       std::wcout << "Graph for '" << to_latex(expr) << "'\n";
       graph->write_dot(std::wcout, vlabels);
     } else {
-      auto make_graph = [&](auto *tn_ptr) {
+      auto make_graph = [&](auto *tn_ptr) -> int {
         using TN = std::decay_t<decltype(*tn_ptr)>;
         std::optional<TN> network = make_tn<TN>(expr);
         if (!network.has_value()) {
@@ -128,13 +128,16 @@ int main(int argc, char **argv) {
                  use_named_indices ? nullptr : &empty_named_indices});
         std::wcout << "Graph for '" << to_latex(expr) << "'\n";
         graph.bliss_graph->write_dot(std::wcout, graph.vertex_labels);
+        return 0;
       };
-      if (version == 2)
-        make_graph(static_cast<TensorNetworkV2 *>(nullptr));
-      else if (version == 3)
-        make_graph(static_cast<TensorNetworkV3 *>(nullptr));
-      else
-        abort();
+      switch (version) {
+        case 2:
+          return make_graph(static_cast<TensorNetworkV2 *>(nullptr));
+        case 3:
+          return make_graph(static_cast<TensorNetworkV3 *>(nullptr));
+        default:
+          abort();  // unreachable
+      }
     }
   }
 }
