@@ -111,6 +111,7 @@ set(SEQUANT_INSTALL_CMAKEDIR "lib/cmake/sequant"
 # Additional build variables
 ############################
 option(SEQUANT_BENCHMARKS "Enable SeQuant benchmarks" ${PROJECT_IS_TOP_LEVEL})
+option(SEQUANT_UTILITIES "Enable SeQuant utility programs" ${PROJECT_IS_TOP_LEVEL})
 
 option(SEQUANT_IWYU "Whether to use the include-what-you-use tool (if found)" OFF)
 option(SEQUANT_WARNINGS_AS_ERRORS "Whether to treat compiler warnings as errors" ${PROJECT_IS_TOP_LEVEL})
@@ -477,9 +478,12 @@ if (SEQUANT_IWYU)
 endif()
 
 
-add_subdirectory(utilities)
 add_subdirectory(tests)
 add_subdirectory(doc)
+
+if (SEQUANT_UTILITIES)
+    add_subdirectory(utilities)
+endif()
 
 if (SEQUANT_BENCHMARKS)
     add_subdirectory(benchmarks)
