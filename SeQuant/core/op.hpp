@@ -203,6 +203,8 @@ bool is_pure_qpcreator(const Op<S> &op,
     case Vacuum::MultiProduct:
       throw std::logic_error(
           "is_pure_qpcreator: cannot handle MultiProduct vacuum");
+    case Vacuum::Invalid:
+      throw std::logic_error("Invalid Product not allowed");
   }
 
   assert(false);
@@ -224,9 +226,15 @@ bool is_qpcreator(const Op<S> &op,
               op.action() == Action::annihilate) ||
              (isr->contains_unoccupied(op.index().space()) &&
               op.action() == Action::create);
+      case Vacuum::MultiProduct:
+        throw std::logic_error(
+            "is_qpcreator: cannot handle MultiProduct vacuum");
+      case Vacuum::Invalid:
+        throw std::logic_error("is_qpcreator: cannot handle Invalid vacuum");
     }
   }
-  throw std::logic_error("is_qpcreator: cannot handle MultiProduct vacuum");
+  assert(false);
+  throw "Unreachable";
 };
 
 template <Statistics S>
@@ -246,8 +254,15 @@ IndexSpace qpcreator_space(
                  : isr->intersection(
                        op.index().space(),
                        isr->vacuum_unoccupied_space(op.index().space().qns()));
+    case Vacuum::MultiProduct:
+      throw std::logic_error(
+          "qpcreator_space: cannot handle MultiProduct vacuum");
+    case Vacuum::Invalid:
+      throw std::logic_error("qpcreator_space: cannot handle Invalid vacuum");
   }
-  throw std::logic_error("qpcreator_space: cannot handle MultiProduct vacuum");
+
+  assert(false);
+  throw "Unreachable";
 }
 
 /// @return true if this is a pure quasiparticle annihilator with respect to
@@ -269,6 +284,9 @@ bool is_pure_qpannihilator(
     case Vacuum::MultiProduct:
       throw std::logic_error(
           "is_pure_qpannihilator: cannot handle MultiProduct vacuum");
+    case Vacuum::Invalid:
+      throw std::logic_error(
+          "is_pure_qpannihilator: cannot handle Invalid vacuum");
   }
 
   assert(false);
@@ -294,6 +312,8 @@ bool is_qpannihilator(const Op<S> &op,
     case Vacuum::MultiProduct:
       throw std::logic_error(
           "is_qpannihilator: cannot handle MultiProduct vacuum");
+    case Vacuum::Invalid:
+      throw std::logic_error("Invalid Product not allowed");
   }
 
   assert(false);
@@ -320,6 +340,8 @@ IndexSpace qpannihilator_space(
     case Vacuum::MultiProduct:
       throw std::logic_error(
           "qpcreator_space: cannot handle MultiProduct vacuum");
+    case Vacuum::Invalid:
+      throw std::logic_error("Invalid Product not allowed");
   }
 
   assert(false);
