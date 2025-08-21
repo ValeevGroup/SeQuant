@@ -33,6 +33,18 @@ function(target_set_warning_flags TARGET)
     endif()
 
     if (IS_GNU_LIKE_COMPILER)
-		target_compile_options("${TARGET}" PRIVATE "-Wall" "-Wpedantic" "-Wextra" "-Wno-sign-conversion" "-Wno-sign-compare" "-Wno-parentheses")
+        target_compile_options("${TARGET}" PRIVATE "-Wall" "-Wpedantic" "-Wextra" "-Wno-sign-conversion" "-Wno-sign-compare" "-Wno-parentheses")
+    endif()
+    if (CMAKE_COMPILER_IS_GNUCXX)
+        # Certain kinds of warnings are no longer suppressed inside system headers (under all circumstances) when using GCC 12+
+        # Hence, we have to ensure we're not causing a compile error for those warnings as the warning might
+        # be in a dependency which we can't fix.
+        # Which warnings belong into this category is unclear as of writing this, so consider the below an incomplete list
+        #
+        # See also:
+        # - https://gcc.gnu.org/bugzilla/show_bug.cgi?id=119388
+        # - https://gcc.gnu.org/cgit/gcc/commit/?id=6feb628a706e86eb3f303aff388c74bdb29e7381
+        # - https://stackoverflow.com/q/79742311
+        target_compile_options("${TARGET}" PRIVATE "-Wno-error=maybe-uninitialized")
     endif()
 endfunction()
