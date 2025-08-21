@@ -495,7 +495,7 @@ class NormalOperator : public Operator<S>,
   using base_type::operator[];
 
   /// constructs an identity operator
-  NormalOperator(Vacuum v = get_default_context(S).vacuum()) {}
+  NormalOperator(Vacuum v = get_default_context(S).vacuum()) : vacuum_(v) {}
 
   /// @tparam IndexOrOpSequence1 type representing a sequence of objects that
   /// can be statically cast into Index or Op<S>
