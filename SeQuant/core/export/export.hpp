@@ -302,7 +302,7 @@ bool prune_scalar_factor(ExportNode<T> &node, PreprocessResult &result) {
   ExprPtr parentFactor =
       iter == result.scalarFactors.end() ? nullptr : iter->second;
 
-  ExprPtr factor = std::move(node->expr());
+  ExprPtr factor = node->expr();
 
   assert(factor);
   assert(factor->is<Constant>() || factor->is<Variable>());
@@ -326,7 +326,7 @@ bool prune_scalar_factor(ExportNode<T> &node, PreprocessResult &result) {
   }();
 
   if (!fill_in.leaf()) {
-    fill_in->set_expr(std::move(node.parent()->expr()));
+    fill_in->set_expr(node.parent()->expr());
   } else if (!node.parent().root()) {
     if (node.parent()->id() == node.parent().parent().left()->id()) {
       node.parent().parent()->select_left();

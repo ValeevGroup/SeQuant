@@ -254,7 +254,7 @@ class SubexpressionReplacer {
       return ex<Variable>(label);
     }();
 
-    ExprPtr original = std::move(tree->expr());
+    ExprPtr original = tree->expr();
 
     std::optional<TreeNode> intermediate_definition;
     if (label_it == end(cse_names)) {
