@@ -106,11 +106,12 @@ set(SEQUANT_INSTALL_DOCDIR "${SEQUANT_INSTALL_SHAREDIR}/doc"
         CACHE PATH "SeQuant DOC install directory")
 set(SEQUANT_INSTALL_CMAKEDIR "lib/cmake/sequant"
         CACHE PATH "SeQuant CMAKE install directory")
-option(SEQUANT_BENCHMARKS "Enable SeQuant benchmarks" OFF)
 
 ############################
 # Additional build variables
 ############################
+option(SEQUANT_BENCHMARKS "Enable SeQuant benchmarks" ${PROJECT_IS_TOP_LEVEL})
+
 option(SEQUANT_IWYU "Whether to use the include-what-you-use tool (if found)" OFF)
 option(SEQUANT_WARNINGS_AS_ERRORS "Whether to treat compiler warnings as errors" ${PROJECT_IS_TOP_LEVEL})
 
