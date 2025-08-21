@@ -174,8 +174,13 @@ class JuliaTensorOperationsGenerator : public Generator<Context> {
   }
   void load(const Variable &variable, bool set_to_zero,
             const Context &ctx) override {
-    m_generated += represent(variable, ctx) + " = deserialize(\"" +
-                   represent(variable, ctx) + ".jlbin\")";
+    m_generated += represent(variable, ctx) + " = ";
+
+    if (set_to_zero)
+      m_generated = "0";
+    else {
+      m_generated += "deserialize(\"" + represent(variable, ctx) + ".jlbin\")";
+    }
     m_generated += "\n";
   }
 
