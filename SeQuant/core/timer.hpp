@@ -67,15 +67,4 @@ class TimerPool {
 
 }  // namespace sequant
 
-#define SEQUANT_PROFILE_SINGLE(id, call)                       \
-  {                                                            \
-    sequant::TimerPool<> timer;                                \
-    timer.start();                                             \
-    { call; }                                                  \
-    timer.stop();                                              \
-    auto elapsed_seconds = timer.read();                       \
-    std::wcout << id << ": elapsed_time = " << std::scientific \
-               << elapsed_seconds << " seconds" << std::endl;  \
-  }
-
 #endif  // SEQUANT_TIMER_HPP

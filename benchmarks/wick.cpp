@@ -4,8 +4,14 @@
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/parse.hpp>
 #include <SeQuant/core/wick.hpp>
+#include <SeQuant/domain/mbpt/context.hpp>
+#include <SeQuant/domain/mbpt/op.hpp>
+
+#include <optional>
+#include <vector>
 
 using namespace sequant;
+using namespace sequant::mbpt;
 
 static constexpr std::size_t nInputs = 5;
 
@@ -112,3 +118,57 @@ BENCHMARK_CAPTURE(wick<Statistics::FermiDirac>, all_without_topology, false,
 BENCHMARK_CAPTURE(wick<Statistics::BoseEinstein>, all_without_topology, false,
                   false)
     ->DenseRange(1, nInputs);
+
+struct VacAvPair {
+  using Connections = std::vector<std::pair<int, int>>;
+  ExprPtr expr;
+  std::optional<Connections> connections;
+};
+
+static constexpr std::size_t nMbptInputs = 4;
+
+VacAvPair get_mbpt_expr(std::size_t i) {
+  namespace t = sequant::mbpt::tensor;
+
+  switch (i) {
+    case 1:
+      return {t::A(nₚ(-2)) * t::H(2) * t ::T(2) * t::T(2),
+              VacAvPair::Connections{{1, 2}, {1, 3}}};
+    case 2:
+      return {t::A(nₚ(-4)) * t::H_(2) * t ::T_(3) * t::T_(3),
+              VacAvPair::Connections{{1, 2}, {1, 3}}};
+    case 3:
+      return {t::A(-5) * t::H_(2) * t::T_(2) * t::T_(2) * t::T_(3),
+              VacAvPair::Connections{{1, 2}, {1, 3}, {1, 4}}};
+    case 4:
+      return {t::L_(nₚ(2), nₕ(1)) * t::H_(2) * t::R_(nₚ(1), nₕ(0)),
+              std::nullopt};
+  }
+
+  throw "Invalid index";
+}
+
+static void mbpt_vac_av(benchmark::State &state, bool csv) {
+  auto ctx = sequant::mbpt::set_scoped_default_mbpt_context(
+      mbpt::Context(csv ? mbpt::CSV::Yes : mbpt::CSV::No));
+
+  VacAvPair input = get_mbpt_expr(state.range(0));
+
+  // Note: only what is contained in this loop will be part
+  // of the benchmark timings
+  for (auto _ : state) {
+    ExprPtr result = [&]() {
+      if (input.connections) {
+        return mbpt::tensor::vac_av(input.expr, input.connections.value());
+      } else {
+        return mbpt::tensor::vac_av(input.expr);
+      }
+    }();
+
+    benchmark::DoNotOptimize(result);
+  }
+}
+
+BENCHMARK_CAPTURE(mbpt_vac_av, mbpt_vac_av, false)->DenseRange(1, nMbptInputs);
+BENCHMARK_CAPTURE(mbpt_vac_av, mbpt_vac_av_csv, true)
+    ->DenseRange(1, nMbptInputs);
