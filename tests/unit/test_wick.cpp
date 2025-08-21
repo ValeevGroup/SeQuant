@@ -36,7 +36,7 @@ struct WickAccessor {};
 
 template <>
 template <>
-struct WickTheorem<Statistics::FermiDirac>::template access_by<WickAccessor> {
+struct WickTheorem<Statistics::FermiDirac>::access_by<WickAccessor> {
   auto compute_nontensor_wick(WickTheorem<Statistics::FermiDirac>& wick) {
     return wick.compute_nontensor_wick(false);
   }
