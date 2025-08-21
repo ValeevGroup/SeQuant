@@ -264,7 +264,7 @@ class Expr : public std::enable_shared_from_this<Expr>,
   template <typename T>
   static type_id_type get_type_id() {
     return type_id_accessor<T>();
-  };
+  }
 
   /// sets (unique) type id of class T
   /// @param id the value of type id of class T
@@ -273,7 +273,7 @@ class Expr : public std::enable_shared_from_this<Expr>,
   template <typename T>
   static void set_type_id(type_id_type id) {
     type_id_accessor<T>() = id;
-  };
+  }
 
   /// @tparam T an Expr type
   /// @return true if this object is of type @c T
@@ -476,7 +476,7 @@ class Expr : public std::enable_shared_from_this<Expr>,
   static type_id_type get_next_type_id() {
     static std::atomic<type_id_type> grand_type_id = 0;
     return ++grand_type_id;
-  };
+  }
 
   /// sets (unique) type id of class T
   /// @param id the value of type id of class T
@@ -484,7 +484,7 @@ class Expr : public std::enable_shared_from_this<Expr>,
   static type_id_type &type_id_accessor() {
     static type_id_type type_id = get_next_type_id();
     return type_id;
-  };
+  }
 
  private:
   /// @input[in] fn the name of function that is missing in this class
