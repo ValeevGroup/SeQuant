@@ -32,7 +32,7 @@ static ExprPtr get_expression(std::size_t i) {
   throw "Invalid index";
 }
 
-static void canonicalize(benchmark::State &state) {
+static void bench_canonicalize(benchmark::State &state) {
   ExprPtr input = get_expression(state.range(0));
 
   for (auto _ : state) {
@@ -43,4 +43,4 @@ static void canonicalize(benchmark::State &state) {
   }
 }
 
-BENCHMARK(canonicalize)->DenseRange(1, nInputs);
+BENCHMARK(bench_canonicalize)->Name("canonicalize")->DenseRange(1, nInputs);
