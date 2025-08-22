@@ -58,7 +58,7 @@ enum struct EvalMode {
   SumInplace,
   Symmetrize,
   Antisymmetrize,
-  MBPTCleanup,
+  BiorthogonalCleanup,
   Unknown
 };
 
@@ -76,18 +76,18 @@ enum struct EvalMode {
 }
 
 [[nodiscard]] constexpr auto to_string(EvalMode mode) noexcept {
-  return (mode == EvalMode::Constant)         ? "Constant"
-         : (mode == EvalMode::Variable)       ? "Variable"
-         : (mode == EvalMode::Tensor)         ? "Tensor"
-         : (mode == EvalMode::Permute)        ? "Permute"
-         : (mode == EvalMode::Product)        ? "Product"
-         : (mode == EvalMode::MultByPhase)    ? "MultByPhase"
-         : (mode == EvalMode::Sum)            ? "Sum"
-         : (mode == EvalMode::SumInplace)     ? "SumInplace"
-         : (mode == EvalMode::Symmetrize)     ? "Symmetrize"
-         : (mode == EvalMode::Antisymmetrize) ? "Antisymmetrize"
-         : (mode == EvalMode::MBPTCleanup)    ? "MBPTCleanup"
-                                              : "??";
+  return (mode == EvalMode::Constant)              ? "Constant"
+         : (mode == EvalMode::Variable)            ? "Variable"
+         : (mode == EvalMode::Tensor)              ? "Tensor"
+         : (mode == EvalMode::Permute)             ? "Permute"
+         : (mode == EvalMode::Product)             ? "Product"
+         : (mode == EvalMode::MultByPhase)         ? "MultByPhase"
+         : (mode == EvalMode::Sum)                 ? "Sum"
+         : (mode == EvalMode::SumInplace)          ? "SumInplace"
+         : (mode == EvalMode::Symmetrize)          ? "Symmetrize"
+         : (mode == EvalMode::Antisymmetrize)      ? "Antisymmetrize"
+         : (mode == EvalMode::BiorthogonalCleanup) ? "BiorthogonalCleanup"
+                                                   : "??";
 }
 
 enum struct CacheMode { Store, Access, Release };
@@ -539,27 +539,28 @@ ResultPtr evaluate_antisymm(Args&&... args) {
 }
 
 ///
-/// \brief Calls @code evaluate followed by the MBPT cleanup function.
-///        The MBPT cleanup function restores the effects of terms that were
-///        deleted in order to obtain the most compact set of equations. It
+/// \brief Calls @code evaluate followed by the biorthogonal-cleanup function.
+///        The biorthogonal-cleanup function restores the effects of terms that
+///        were deleted in order to obtain the most compact set of equations. It
 ///        applies this transformation: result = identity - (1/ket_rank!) *
 ///        sum_of_ket_permutations
 /// \return Evaluated result as ResultPtr.
 ///
 template <Trace EvalTrace = Trace::Default, typename... Args>
-ResultPtr evaluate_mbpt_cleanup(Args&&... args) {
+ResultPtr evaluate_biorthogonal_cleanup(Args&&... args) {
   ResultPtr pre = evaluate<EvalTrace>(std::forward<Args>(args)...);
   assert(pre);
 
   auto const& n0 = node0(arg0(std::forward<Args>(args)...));
 
   ResultPtr result;
-  auto time = timed_eval_inplace(
-      [&]() { result = pre->mbpt_cleanup(n0->as_tensor().bra_rank()); });
+  auto time = timed_eval_inplace([&]() {
+    result = pre->biorthogonal_cleanup(n0->as_tensor().bra_rank());
+  });
 
   // logging
   if constexpr (trace(EvalTrace)) {
-    auto stat = log::EvalStat{.mode = log::EvalMode::MBPTCleanup,
+    auto stat = log::EvalStat{.mode = log::EvalMode::BiorthogonalCleanup,
                               .time = time,
                               .memory = log::bytes(pre, result)};
     log::eval(stat, n0->label());

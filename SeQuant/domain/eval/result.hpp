@@ -340,9 +340,9 @@ auto particle_antisymmetrize_btas(btas::Tensor<Args...> const& arr,
 }
 
 ///
-/// \brief This function implements the MBPT cleanup of TA::DistArray to restore
-/// the effects of deleted terms in order to obtain the most compact set of
-/// equations.
+/// \brief This function implements the biorthogonal-cleanup of TA::DistArray to
+/// restore the effects of deleted terms in order to obtain the most compact set
+/// of equations.
 ///
 /// \param arr The array to be cleaned up
 ///
@@ -351,7 +351,8 @@ auto particle_antisymmetrize_btas(btas::Tensor<Args...> const& arr,
 /// \return The cleaned TA::DistArray.
 ///
 template <typename... Args>
-auto mbpt_cleanup_ta(TA::DistArray<Args...> const& arr, size_t bra_rank) {
+auto biorthogonal_cleanup_ta(TA::DistArray<Args...> const& arr,
+                             size_t bra_rank) {
   using ranges::views::iota;
   size_t const rank = arr.trange().rank();
   assert(bra_rank <= rank);
@@ -421,9 +422,9 @@ auto mbpt_cleanup_ta(TA::DistArray<Args...> const& arr, size_t bra_rank) {
 }
 
 ///
-/// \brief This function implements the MBPT cleanup of btas::Tensor to restore
-/// the effects of deleted terms in order to obtain the most compact set of
-/// equations.
+/// \brief This function implements the biorthogonal-cleanup of btas::Tensor to
+/// restore the effects of deleted terms in order to obtain the most compact set
+/// of equations.
 ///
 /// \param arr The tensor to be cleaned up
 ///
@@ -432,7 +433,8 @@ auto mbpt_cleanup_ta(TA::DistArray<Args...> const& arr, size_t bra_rank) {
 /// \return The cleaned btas::Tensor.
 ///
 template <typename... Args>
-auto mbpt_cleanup_btas(btas::Tensor<Args...> const& arr, size_t bra_rank) {
+auto biorthogonal_cleanup_btas(btas::Tensor<Args...> const& arr,
+                               size_t bra_rank) {
   using ranges::views::concat;
   using ranges::views::iota;
   size_t const rank = arr.rank();
@@ -637,9 +639,10 @@ class Result {
   [[nodiscard]] virtual ResultPtr antisymmetrize(size_t bra_rank) const = 0;
 
   ///
-  /// \brief MBPT-cleanup for closed-shell compact-set equations
+  /// \brief biorthogonal-cleanup for closed-shell compact-set equations
   ///
-  [[nodiscard]] virtual ResultPtr mbpt_cleanup(size_t bra_rank) const = 0;
+  [[nodiscard]] virtual ResultPtr biorthogonal_cleanup(
+      size_t bra_rank) const = 0;
 
   [[nodiscard]] bool has_value() const noexcept;
 
@@ -751,8 +754,8 @@ class ResultScalar final : public Result {
     throw unimplemented_method("antisymmetrize");
   }
 
-  [[nodiscard]] ResultPtr mbpt_cleanup(size_t bra_rank) const override {
-    throw unimplemented_method("mbpt_cleanup");
+  [[nodiscard]] ResultPtr biorthogonal_cleanup(size_t bra_rank) const override {
+    throw unimplemented_method("biorthogonal_cleanup");
   }
 
   [[nodiscard]] ResultPtr mult_by_phase(std::int8_t factor) const override {
@@ -896,8 +899,9 @@ class ResultTensorTA final : public Result {
         particle_antisymmetrize_ta(get<ArrayT>(), bra_rank));
   }
 
-  [[nodiscard]] ResultPtr mbpt_cleanup(size_t bra_rank) const override {
-    return eval_result<this_type>(mbpt_cleanup_ta(get<ArrayT>(), bra_rank));
+  [[nodiscard]] ResultPtr biorthogonal_cleanup(size_t bra_rank) const override {
+    return eval_result<this_type>(
+        biorthogonal_cleanup_ta(get<ArrayT>(), bra_rank));
   }
 
  private:
@@ -1048,8 +1052,8 @@ class ResultTensorOfTensorTA final : public Result {
     return nullptr;
   }
 
-  [[nodiscard]] ResultPtr mbpt_cleanup(size_t bra_rank) const override {
-    // or? throw unimplemented_method("mbpt_cleanup");
+  [[nodiscard]] ResultPtr biorthogonal_cleanup(size_t bra_rank) const override {
+    // or? throw unimplemented_method("biorthogonal_cleanup");
     // not implemented yet, I think I need it for CSV
     return nullptr;
   }
@@ -1156,9 +1160,9 @@ class ResultTensorBTAS final : public Result {
         particle_antisymmetrize_btas(get<T>(), bra_rank));
   }
 
-  [[nodiscard]] ResultPtr mbpt_cleanup(size_t bra_rank) const override {
+  [[nodiscard]] ResultPtr biorthogonal_cleanup(size_t bra_rank) const override {
     return eval_result<ResultTensorBTAS<T>>(
-        mbpt_cleanup_btas(get<T>(), bra_rank));
+        biorthogonal_cleanup_btas(get<T>(), bra_rank));
   }
 
  private:

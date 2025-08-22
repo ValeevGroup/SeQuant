@@ -987,29 +987,28 @@ ExprPtr hash_filter_compact_set(
 ExprPtr closed_shell_spintrace(
     const ExprPtr& expression,
     const container::svector<container::svector<Index>>& ext_index_groups,
-    bool is_direct_full_expansion) {
+    bool full_expansion) {
   // Symmetrize and expression
   // Partially expand the antisymmetrizer and write it in terms of S operator.
   // See symmetrize_expr(expr) function for implementation details. We want an
   // expression with non-symmetric tensors, hence we are partially expanding the
   // antisymmetrizer (A) and fully expanding the anti-symmetric tensors to
   // non-symmetric.
-  // adding another option to fully expand the antisymmetrizer (can be used for
-  // compact set of epns, however it is not an optimized way)
-  auto partially_or_fully_expand =
-      [&is_direct_full_expansion](const ExprPtr& expr) {
-        auto temp = expr;
-        if (has_tensor(temp, L"A")) {
-          if (is_direct_full_expansion) {
-            temp = expand_A_op(temp);
-          } else {
-            temp = symmetrize_expr(temp);
-          }
-        }
-        temp = expand_antisymm(temp);
-        rapid_simplify(temp);
-        return temp;
-      };
+  // full_expansion: it fully expands the antisymmetrizer directly (can be used
+  // for compact-set epns, however it is not an optimized way).
+  auto partially_or_fully_expand = [&full_expansion](const ExprPtr& expr) {
+    auto temp = expr;
+    if (has_tensor(temp, L"A")) {
+      if (full_expansion) {
+        temp = expand_A_op(temp);
+      } else {
+        temp = symmetrize_expr(temp);
+      }
+    }
+    temp = expand_antisymm(temp);
+    rapid_simplify(temp);
+    return temp;
+  };
   auto expr = partially_or_fully_expand(expression);
 
   // Index tags are cleaned prior to calling the fast canonicalizer

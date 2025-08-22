@@ -251,18 +251,18 @@ ExprPtr hash_filter_compact_set(
 /// lacks proper index attributes.
 /// @param expr ExprPtr with spin orbital indices
 /// @param ext_index_groups groups of external indices
-/// @param is_direct_full_expansion if true, will produce fully expanded
-/// expressions, which makes spintracing expensive because of the large number
-/// of terms
+/// @param full_expansion if true, we first fully expand the
+/// anti-symmetrizer, which makes spintracing expensive because of the large
+/// number of terms. If false, we exapnd it in terms of the symmetrizer,
+/// which results in a partial expansion.
 /// @return an expression with spin integrated/adapted
-/// @brief 2-parameter wrapper version
 ExprPtr closed_shell_spintrace(
     const ExprPtr& expr,
     const container::svector<container::svector<Index>>& ext_index_groups = {},
-    bool is_direct_full_expansion = false);
+    bool full_expansion = false);
 
 container::svector<ResultExpr> closed_shell_spintrace(
-    const ResultExpr& expr, bool is_compact_set = false);
+    const ResultExpr& expr, bool full_expansion = false);
 
 /// @brief Transforms Coupled cluster from spin orbital to spatial orbitals
 /// @details The external indices are deduced from Antisymmetrization operator
