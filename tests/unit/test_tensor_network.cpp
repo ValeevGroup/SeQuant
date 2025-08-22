@@ -236,9 +236,8 @@ TEMPLATE_TEST_CASE("tensor_network_shared", "[elements]", TensorNetwork,
 
       using idxvec_t = std::vector<std::wstring>;
       constexpr bool v3 =
-          std::is_same_v<TN,
-                         TensorNetworkV3>;  // v3 colors vertices differently,
-                                            // so canonical order differs
+          TN::version() == 3;  // v3 colors vertices differently,
+                               // so canonical order differs
       for (const auto& [input, str_indices] :
            std::vector<std::pair<std::wstring, std::vector<std::wstring>>>{
                {L"G{;;a1,a2,a3,a4} T{;;i3,i2,a3,a4}",
@@ -304,7 +303,7 @@ TEMPLATE_TEST_CASE("tensor_network_shared", "[elements]", TensorNetwork,
           // "\n";
 
           // TNv1 fails to canonicalize this correctly
-          if constexpr (!std::is_same_v<TN, TensorNetwork>) {
+          if constexpr (TN::version() != 1) {
             // input2 obtained from input1 by i6 -> i11, which "frees" i6 for
             // dummy renamings so canonical(input2) is obtained from
             // canonical(input1) by i6 -> i11 and i7 -> i6

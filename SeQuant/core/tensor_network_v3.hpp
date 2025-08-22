@@ -41,6 +41,9 @@ namespace sequant {
 /// graph), with Tensor objects represented by one or more vertices.
 class TensorNetworkV3 {
  public:
+  /// @return the implementation version of TN
+  constexpr static int version() { return 3; }
+
   // for unit testing only
   friend class TensorNetworkV3Accessor;
 

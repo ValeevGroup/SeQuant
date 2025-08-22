@@ -39,6 +39,9 @@ namespace sequant {
 /// @warning the terminology is a mix at best, e.g. terminal vs. slot, etc.
 class TensorNetwork {
  public:
+  /// @return the implementation version of TN
+  constexpr static int version() { return 1; }
+
   constexpr static size_t max_rank = 256;
 
   // clang-format off
