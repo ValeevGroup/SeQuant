@@ -1063,8 +1063,7 @@ TEST_CASE("tensor_network_v2", "[elements]") {
           second_graph->write_dot(
               stream, {.labels = second_labels, .display_colors = true});
           stream << "TN graph:\n";
-          auto [wick_graph, labels, texlabels, d1, d2] =
-              TensorNetwork(first).make_bliss_graph();
+          auto graph = TensorNetworkV2(first).create_graph();
           graph.bliss_graph->write_dot(stream,
                                        {.labels = graph.vertex_labels,
                                         .texlabels = graph.vertex_texlabels,
@@ -1706,8 +1705,7 @@ TEST_CASE("tensor_network_v3", "[elements]") {
           second_graph->write_dot(
               stream, {.labels = second_labels, .display_colors = true});
           stream << "TN graph:\n";
-          auto [wick_graph, labels, texlabels, d1, d2] =
-              TensorNetwork(first).make_bliss_graph();
+          auto graph = TensorNetworkV3(first).create_graph();
           graph.bliss_graph->write_dot(stream,
                                        {.labels = graph.vertex_labels,
                                         .xlabels = graph.vertex_xlabels,
