@@ -156,6 +156,9 @@ include(FindOrFetchRangeV3)
 # Boost will be added after defining SeQuant
 include(external/boost.cmake)
 
+# polymorphic_variant
+include(FindOrFetchPolymorphicVariant)
+
 # LibPerm
 include(FindOrFetchLibPerm)
 

@@ -45,6 +45,16 @@ if (NOT TARGET range-v3::range-v3)
   find_dependency(range-v3 QUIET REQUIRED HINTS "${range-v3_DIR}")
 endif(NOT TARGET range-v3::range-v3)
 
+if (NOT TARGET libperm::libperm)
+  get_filename_component(libperm_DIR "@libperm_CONFIG@" DIRECTORY)
+  find_dependency(libperm QUIET REQUIRED HINTS "${libperm_DIR}")
+endif(NOT TARGET libperm::libperm)
+
+if (NOT TARGET polymorphic_variant::polymorphic_variant)
+  get_filename_component(polymorphic_variant_DIR "@polymorphic_variant_CONFIG@" DIRECTORY)
+  find_dependency(polymorphic_variant QUIET REQUIRED HINTS "${polymorphic_variant_DIR}")
+endif(NOT TARGET polymorphic_variant::polymorphic_variant)
+
 if (NOT TARGET Threads::Threads)
     find_dependency(Threads REQUIRED)
 endif (NOT TARGET Threads::Threads)
