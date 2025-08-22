@@ -159,11 +159,11 @@ void TensorNetworkV2::canonicalize_graph(const NamedIndexSet &named_indices) {
                       Logger::instance().canonicalize_dot,
        .make_texlabels = Logger::instance().canonicalize_input_graph ||
                          Logger::instance().canonicalize_dot});
-  // graph.bliss_graph->write_dot(std::wcout, graph.vertex_labels);
+  // graph.bliss_graph->write_dot(std::wcout, {.labels = graph.vertex_labels});
 
   if (Logger::instance().canonicalize_input_graph) {
     std::wcout << "Input graph for canonicalization:\n";
-    graph.bliss_graph->write_dot(std::wcout, graph.vertex_labels);
+    graph.bliss_graph->write_dot(std::wcout, {.labels = graph.vertex_labels});
   }
 
   // canonize the graph
@@ -179,10 +179,10 @@ void TensorNetworkV2::canonicalize_graph(const NamedIndexSet &named_indices) {
     }
     std::wcout << "Canonicalized graph:\n";
     bliss::Graph *cgraph = graph.bliss_graph->permute(canonize_perm);
-    cgraph->write_dot(std::wcout, {}, {}, {.display_colors = true});
+    cgraph->write_dot(std::wcout, {.display_colors = true});
     auto cvlabels = permute(graph.vertex_labels, canonize_perm);
     std::wcout << "with our labels:\n";
-    cgraph->write_dot(std::wcout, cvlabels);
+    cgraph->write_dot(std::wcout, {.labels = cvlabels});
     delete cgraph;
   }
 
@@ -544,8 +544,9 @@ TensorNetworkV2::canonicalize_slots(
 
   if (Logger::instance().canonicalize_input_graph) {
     std::wcout << "Input graph for canonicalization:\n";
-    graph.bliss_graph->write_dot(std::wcout, graph.vertex_labels,
-                                 graph.vertex_texlabels);
+    graph.bliss_graph->write_dot(
+        std::wcout,
+        {.labels = graph.vertex_labels, .texlabels = graph.vertex_texlabels});
   }
 
   // canonize the graph
@@ -563,11 +564,12 @@ TensorNetworkV2::canonicalize_slots(
       std::wcout << i << " -> " << canonize_perm[i] << "\n";
     }
     std::wcout << "Canonicalized graph:\n";
-    metadata.graph->write_dot(std::wcout, {}, {}, {.display_colors = true});
+    metadata.graph->write_dot(std::wcout, {.display_colors = true});
     auto cvlabels = permute(graph.vertex_labels, canonize_perm);
     auto cvtexlabels = permute(graph.vertex_texlabels, canonize_perm);
     std::wcout << "with our labels:\n";
-    metadata.graph->write_dot(std::wcout, cvlabels, cvtexlabels);
+    metadata.graph->write_dot(std::wcout,
+                              {.labels = cvlabels, .texlabels = cvtexlabels});
   }
 
   // produce canonical list of named indices

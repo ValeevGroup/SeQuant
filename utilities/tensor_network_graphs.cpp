@@ -112,7 +112,7 @@ int main(int argc, char **argv) {
               {.named_indices =
                    (use_named_indices ? nullptr : &empty_named_indices)});
       std::wcout << "Graph for '" << to_latex(expr) << "'\n";
-      graph->write_dot(std::wcout, vlabels);
+      graph->write_dot(std::wcout, {.labels = vlabels});
     } else {
       auto make_graph = [&](auto *tn_ptr) -> int {
         using TN = std::decay_t<decltype(*tn_ptr)>;
@@ -127,7 +127,8 @@ int main(int argc, char **argv) {
             {.named_indices =
                  use_named_indices ? nullptr : &empty_named_indices});
         std::wcout << "Graph for '" << to_latex(expr) << "'\n";
-        graph.bliss_graph->write_dot(std::wcout, graph.vertex_labels);
+        graph.bliss_graph->write_dot(std::wcout,
+                                     {.labels = graph.vertex_labels});
         return 0;
       };
       switch (version) {

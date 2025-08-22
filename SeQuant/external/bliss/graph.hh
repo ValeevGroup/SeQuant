@@ -685,6 +685,12 @@ class Graph : public AbstractGraph {
   /// options for generating dot file
   template <typename Char, typename Traits>
   struct DotOptions {
+    /// vertex labels
+    std::vector<std::basic_string<Char, Traits>> labels = {};
+    /// vertex xlabels
+    std::vector<std::optional<std::basic_string<Char, Traits>>> xlabels = {};
+    /// vertex texlabels
+    std::vector<std::optional<std::basic_string<Char, Traits>>> texlabels = {};
     /// if true, display colored vertices using color values
     /// to RGB colors;
     ///        if false, color value is appended to the vertex label; by default
@@ -705,21 +711,17 @@ class Graph : public AbstractGraph {
   /// @tparam Char a character type
   /// @tparam Traits a stream traits type
   /// @param os the output stream
-  /// @param vertex_labels the optional vertex labels, used for `label` attributes of nodes
-  /// @param vertex_texlabels the optional vertex labels, used for `texlbl` attributes of nodes
   /// @param options options for generating dot file
-  template <typename Char, typename Traits,
-            typename StringSequence = std::vector<std::basic_string<Char>>,
-            typename OptStringSequence = std::vector<std::optional<std::basic_string<Char>>>>
+  template <typename Char, typename Traits>
   void write_dot(std::basic_ostream<Char, Traits>& os,
-                 const StringSequence& vertex_labels = StringSequence{},
-                 const OptStringSequence& vertex_texlabels = OptStringSequence{},
-                 DotOptions<Char,Traits> options = {.display_colors=std::nullopt, .fillcolor_saturation_nbits=3, .vertex_to_subgraph = {}, .nodeextras = {}}) {
+                 DotOptions<Char,Traits> options = {.labels = {}, .xlabels = {}, .texlabels = {}, .display_colors=std::nullopt, .fillcolor_saturation_nbits=3, .vertex_to_subgraph = {}, .nodeextras = {}}) {
     using std::size;
-    const auto nvertices = size(vertex_labels);
+    const auto nvertices = size(options.labels);
     const bool have_labels = nvertices > 0;
-    const bool have_texlabels = size(vertex_texlabels) > 0;
-    assert(!have_texlabels || size(vertex_texlabels) == nvertices);
+    const bool have_xlabels = size(options.xlabels) > 0;
+    assert(!have_xlabels || size(options.xlabels) == nvertices);
+    const bool have_texlabels = size(options.texlabels) > 0;
+    assert(!have_texlabels || size(options.texlabels) == nvertices);
     const bool rgb_colors = options.display_colors.value_or(have_labels);
 
     remove_duplicate_edges();
@@ -794,13 +796,19 @@ class Graph : public AbstractGraph {
       os << "v" << vord << " [ label=\"";
       if (have_labels) {
         assert(vord < nvertices);
-        os << vertex_labels[vord];
+        os << options.labels[vord];
       } else
         os << vord;
+      if (have_xlabels) {
+        assert(vord < nvertices);
+        if (options.xlabels[vord].has_value()) {
+          os << "\", xlabel=\"" << options.xlabels[vord].value();
+        }
+      }
       if (have_texlabels) {
         assert(vord < nvertices);
-        if (vertex_texlabels[vord].has_value()) {
-          os << "\", texlbl=\"" << vertex_texlabels[vord].value();
+        if (options.texlabels[vord].has_value()) {
+          os << "\", texlbl=\"" << options.texlabels[vord].value();
         }
       }
       if (rgb_colors) {
@@ -913,9 +921,9 @@ protected:
 * Accessor for the const Graph::cmp implementation
 */
 struct ConstGraphCmp {
-	static auto cmp(const Graph &lhs, const Graph &rhs) {
-		return lhs.cmp(rhs);
-	}
+  static auto cmp(const Graph &lhs, const Graph &rhs) {
+    return lhs.cmp(rhs);
+  }
 };
 
 /**

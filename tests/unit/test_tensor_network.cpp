@@ -495,10 +495,11 @@ TEST_CASE("tensor_network", "[elements]") {
     // N.B. cluster tensor vertices only
     std::basic_ostringstream<wchar_t> oss;
     REQUIRE_NOTHROW(graph->write_dot(
-        oss, vlabels, vtexlabels,
-        {.vertex_to_subgraph = [&](std::size_t vertex_ordinal) {
-          return gdata.vertex_to_tensor_cluster(vertex_ordinal);
-        }}));
+        oss, {.labels = vlabels,
+              .texlabels = vtexlabels,
+              .vertex_to_subgraph = [&](std::size_t vertex_ordinal) {
+                return gdata.vertex_to_tensor_cluster(vertex_ordinal);
+              }}));
     // std::wcout << "oss.str() = " << std::endl << oss.str() << std::endl;
     const std::wstring actual = oss.str();
     // clang-format off
@@ -742,7 +743,7 @@ L"}\n";
       // create dot
       {
         std::basic_ostringstream<wchar_t> oss;
-        REQUIRE_NOTHROW(graph->write_dot(oss, vlabels));
+        REQUIRE_NOTHROW(graph->write_dot(oss, {.labels = vlabels}));
         // std::wcout << "oss.str() = " << std::endl << oss.str() << std::endl;
       }
 
@@ -1050,16 +1051,18 @@ TEST_CASE("tensor_network_v2", "[elements]") {
         if (first_graph->cmp(*second_graph) != 0) {
           std::wstringstream stream;
           stream << "First graph:\n";
-          first_graph->write_dot(stream, first_labels, {},
-                                 {.display_colors = true});
+          first_graph->write_dot(
+              stream, {.labels = first_labels, .display_colors = true});
           stream << "Second graph:\n";
-          second_graph->write_dot(stream, second_labels, {},
-                                  {.display_colors = true});
+          second_graph->write_dot(
+              stream, {.labels = second_labels, .display_colors = true});
           stream << "TN graph:\n";
           auto [wick_graph, labels, texlabels, d1, d2] =
               TensorNetwork(first).make_bliss_graph();
-          wick_graph->write_dot(stream, labels, texlabels,
-                                {.display_colors = true});
+          graph.bliss_graph->write_dot(stream,
+                                       {.labels = graph.vertex_labels,
+                                        .texlabels = graph.vertex_texlabels,
+                                        .display_colors = true});
 
           FAIL(to_string(stream.str()));
         }
@@ -1149,8 +1152,8 @@ TEST_CASE("tensor_network_v2", "[elements]") {
           accessor.get_canonical_bliss_graph(TensorNetworkV2(expected));
 
       //      std::wcout << "Canonical graph:\n";
-      //      canonical_graph->write_dot(std::wcout, canonical_graph_labels);
-      //      std::wcout << std::endl;
+      //      canonical_graph->write_dot(std::wcout, {.labels =
+      //      canonical_graph_labels}); std::wcout << std::endl;
 
       std::vector<Index> indices;
       for (std::size_t i = 0; i < expected.size(); ++i) {
@@ -1218,7 +1221,8 @@ TEST_CASE("tensor_network_v2", "[elements]") {
             if (current_graph->cmp(*canonical_graph) != 0) {
               std::wcout << "Canonical graph for " << deparse(ex<Product>(copy))
                          << ":\n";
-              current_graph->write_dot(std::wcout, current_graph_labels);
+              current_graph->write_dot(std::wcout,
+                                       {.labels = current_graph_labels});
               std::wcout << std::endl;
             }
             REQUIRE(current_graph->cmp(*canonical_graph) == 0);
@@ -1344,7 +1348,8 @@ TEST_CASE("tensor_network_v2", "[elements]") {
       // create dot
       {
         std::basic_ostringstream<wchar_t> oss;
-        REQUIRE_NOTHROW(graph.bliss_graph->write_dot(oss, graph.vertex_labels));
+        REQUIRE_NOTHROW(
+            graph.bliss_graph->write_dot(oss, {.labels = graph.vertex_labels}));
         // std::wcout << "oss.str() = " << std::endl << oss.str() <<
         // std::endl;
       }
@@ -1686,16 +1691,19 @@ TEST_CASE("tensor_network_v3", "[elements]") {
         if (first_graph->cmp(*second_graph) != 0) {
           std::wstringstream stream;
           stream << "First graph:\n";
-          first_graph->write_dot(stream, first_labels, {},
-                                 {.display_colors = true});
+          first_graph->write_dot(
+              stream, {.labels = first_labels, .display_colors = true});
           stream << "Second graph:\n";
-          second_graph->write_dot(stream, second_labels, {},
-                                  {.display_colors = true});
+          second_graph->write_dot(
+              stream, {.labels = second_labels, .display_colors = true});
           stream << "TN graph:\n";
           auto [wick_graph, labels, texlabels, d1, d2] =
               TensorNetwork(first).make_bliss_graph();
-          wick_graph->write_dot(stream, labels, texlabels,
-                                {.display_colors = true});
+          graph.bliss_graph->write_dot(stream,
+                                       {.labels = graph.vertex_labels,
+                                        .xlabels = graph.vertex_xlabels,
+                                        .texlabels = graph.vertex_texlabels,
+                                        .display_colors = true});
 
           FAIL(to_string(stream.str()));
         }
@@ -1835,8 +1843,8 @@ TEST_CASE("tensor_network_v3", "[elements]") {
           accessor.get_canonical_bliss_graph(TN(expected));
 
       //      std::wcout << "Canonical graph:\n";
-      //      canonical_graph->write_dot(std::wcout, canonical_graph_labels);
-      //      std::wcout << std::endl;
+      //      canonical_graph->write_dot(std::wcout, {.labels =
+      //      canonical_graph_labels}); std::wcout << std::endl;
 
       std::vector<Index> indices;
       for (std::size_t i = 0; i < expected.size(); ++i) {
@@ -1904,7 +1912,8 @@ TEST_CASE("tensor_network_v3", "[elements]") {
             if (current_graph->cmp(*canonical_graph) != 0) {
               std::wcout << "Canonical graph for " << deparse(ex<Product>(copy))
                          << ":\n";
-              current_graph->write_dot(std::wcout, current_graph_labels);
+              current_graph->write_dot(std::wcout,
+                                       {.labels = current_graph_labels});
               std::wcout << std::endl;
             }
             REQUIRE(current_graph->cmp(*canonical_graph) == 0);
@@ -2029,7 +2038,8 @@ TEST_CASE("tensor_network_v3", "[elements]") {
       // create dot
       {
         std::basic_ostringstream<wchar_t> oss;
-        REQUIRE_NOTHROW(graph.bliss_graph->write_dot(oss, graph.vertex_labels));
+        REQUIRE_NOTHROW(
+            graph.bliss_graph->write_dot(oss, {.labels = graph.vertex_labels}));
         // std::wcout << "oss.str() = " << std::endl << oss.str() <<
         // std::endl;
       }

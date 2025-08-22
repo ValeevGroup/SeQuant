@@ -218,12 +218,14 @@ ExprPtr TensorNetwork::canonicalize(
         return pvector;
       };
 
-      graph->write_dot(std::wcout, vlabels, vtexlabels);
+      graph->write_dot(std::wcout,
+                       {.labels = vlabels, .texlabels = vtexlabels});
 
       bliss::Graph *cgraph = graph->permute(cl);
       auto cvlabels = permute(vlabels, cl);
       auto cvtexlabels = permute(vtexlabels, cl);
-      cgraph->write_dot(std::wcout, cvlabels, cvtexlabels);
+      cgraph->write_dot(std::wcout,
+                        {.labels = cvlabels, .texlabels = cvtexlabels});
       delete cgraph;
     }
 
@@ -1013,7 +1015,7 @@ TensorNetwork::SlotCanonicalizationMetadata TensorNetwork::canonicalize_slots(
                         .make_texlabels = Logger::instance().canonicalize_dot});
   if (Logger::instance().canonicalize_dot) {
     std::wcout << "Input graph for canonicalization:\n";
-    graph->write_dot(std::wcout, vlabels, vtexlabels);
+    graph->write_dot(std::wcout, {.labels = vlabels, .texlabels = vtexlabels});
   }
 
   // canonize the graph
@@ -1035,7 +1037,8 @@ TensorNetwork::SlotCanonicalizationMetadata TensorNetwork::canonicalize_slots(
     auto cvlabels = permute(vlabels, cl);
     auto cvtexlabels = permute(vtexlabels, cl);
     std::wcout << "Canonicalized graph:\n";
-    metadata.graph->write_dot(std::wcout, cvlabels, cvtexlabels);
+    metadata.graph->write_dot(std::wcout,
+                              {.labels = cvlabels, .texlabels = cvtexlabels});
   }
 
   // produce named indices sorted by named_index_compare first, then by
