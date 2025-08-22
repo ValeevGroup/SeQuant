@@ -208,10 +208,6 @@ TEMPLATE_TEST_CASE("tensor_network_shared", "[elements]", TensorNetwork,
           REQUIRE(cbp1.phase * cbp2.phase == (phase == Minus ? -1 : 1));
         } else
           REQUIRE(cbp1.graph->cmp(*cbp2.graph) != 0);
-
-        //                std::wcout << canonicalize(ex1).to_latex() << " should
-        //                be equal " << canonicalize(ex2).to_latex() <<
-        //                std::endl;
       }
     }
 
