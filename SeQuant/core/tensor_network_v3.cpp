@@ -839,6 +839,26 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
   // results
   Graph graph;
   std::size_t nvertex = 0;
+  auto make_label = [&nvertex, &options, &graph](std::wstring lbl) {
+    graph.vertex_labels.emplace_back(
+        options.label_prepend_ordinal
+            ? (std::to_wstring(nvertex) + L": " + std::move(lbl))
+            : std::move(lbl));
+  };
+  auto make_xlabel = [&nvertex, &options, &graph]() {
+    if (options.xlabel_maker)
+      graph.vertex_xlabels.emplace_back(options.xlabel_maker(nvertex));
+  };
+  auto make_texlabel = [&nvertex, &options, &graph](std::wstring lbl) {
+    if (lbl.empty())
+      graph.vertex_texlabels.emplace_back(std::nullopt);
+    else
+      graph.vertex_texlabels.emplace_back(
+          options.texlabel_prepend_ordinal
+              ? (std::to_wstring(nvertex) + L": " + std::move(lbl))
+              : std::move(lbl));
+  };
+
   // predicting exact vertex count is too much work, make a rough estimate only
   // We know that at the very least all indices and all tensors will yield
   // vertex representations; for tensors estimate the average number of verices
@@ -847,6 +867,7 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
   std::size_t vertex_count_estimate =
       edges_.size() + pure_proto_indices_.size() + 5 * tensors_.size();
   if (options.make_labels) graph.vertex_labels.reserve(vertex_count_estimate);
+  if (options.make_xlabels) graph.vertex_xlabels.reserve(vertex_count_estimate);
   if (options.make_texlabels)
     graph.vertex_texlabels.reserve(vertex_count_estimate);
   graph.vertex_colors.reserve(vertex_count_estimate);
@@ -906,9 +927,10 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
 
     // Tensor core
     const auto tlabel = label(tensor);
-    if (options.make_labels) graph.vertex_labels.emplace_back(tlabel);
+    if (options.make_labels) make_label(std::wstring{tlabel});
+    if (options.make_xlabels) make_xlabel();
     if (options.make_texlabels)
-      graph.vertex_texlabels.emplace_back(L"$" + utf_to_latex(tlabel) + L"$");
+      make_texlabel(L"$" + utf_to_latex(tlabel) + L"$");
     graph.vertex_types.emplace_back(VertexType::TensorCore);
     const auto tensor_color =
         colorizer.apply_shade(tensor);  // subsequent vertices will be shaded by
@@ -956,14 +978,13 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
               assert(tensor_sym != Symmetry::invalid);
           }
         } else {
-          psuffix = L"_" + to_wstring(i);
+          psuffix = L"_" + std::to_wstring(i);
         }
-        if (options.make_labels)
-          graph.vertex_labels.emplace_back(base_label + psuffix);
+        if (options.make_labels) make_label(base_label + psuffix);
         if (options.make_texlabels)
-          graph.vertex_texlabels.emplace_back(
-              base_label + ((i != 0) ? (L"\\" + psuffix) : L""));
+          make_texlabel(base_label + ((i != 0) ? (L"\\" + psuffix) : L""));
       }
+      if (options.make_xlabels) make_xlabel();
       graph.vertex_types.emplace_back(VertexType::TensorBraKet);
 
       // If tensor is particle-symmetric use same color for all braket vertices,
@@ -989,16 +1010,16 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
       for (auto s : {Origin::Bra, Origin::Ket}) {
         const bool bra = s == Origin::Bra;
         const auto size = bra ? bra_rank(tensor) : ket_rank(tensor);
-        if (options.make_labels) {
+        if (options.make_labels || options.make_texlabels) {
           std::wstring label =
               std::wstring(bra ? L"bra" : L"ket") + std::to_wstring(size) +
               ((tensor_sym == Symmetry::antisymm)
                    ? L"a"
                    : (tensor_sym == Symmetry::symm ? L"s" : L""));
-          graph.vertex_labels.emplace_back(label);
+          if (options.make_labels) make_label(label);
+          if (options.make_texlabels) make_texlabel(label);
         }
-        if (options.make_texlabels)
-          graph.vertex_texlabels.emplace_back(std::nullopt);
+        if (options.make_xlabels) make_xlabel();
         graph.vertex_types.emplace_back(bra ? VertexType::TensorBraBundle
                                             : VertexType::TensorKetBundle);
         tensor_network::VertexColor color;
@@ -1050,12 +1071,11 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
         }
 
         if (options.make_labels)
-          graph.vertex_labels.emplace_back((is_bra ? L"bra_" : L"ket_") +
-                                           std::to_wstring(i + 1));
+          make_label((is_bra ? L"bra_" : L"ket_") + std::to_wstring(i + 1));
+        if (options.make_xlabels) make_xlabel();
         if (options.make_texlabels)
-          graph.vertex_texlabels.emplace_back(
-              std::wstring(is_bra ? L"bra" : L"ket") + L"\\_" +
-              std::to_wstring(i + 1));
+          make_texlabel(std::wstring(is_bra ? L"bra" : L"ket") + L"\\_" +
+                        std::to_wstring(i + 1));
         graph.vertex_types.emplace_back(vertex_type);
         // see color_id definition for handling of bra, ket, and and braket
         // bundle symmetries. if symmetric wrt bra<->ket swap use same color
@@ -1095,11 +1115,10 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
     // TODO: handle aux indices permutation symmetries once they are supported
     // for now, auxiliary indices are considered to always be asymmetric
     for (std::size_t i = 0; i < aux_rank(tensor); ++i) {
-      if (options.make_labels)
-        graph.vertex_labels.emplace_back(L"aux_" + std::to_wstring(i + 1));
+      if (options.make_labels) make_label(L"aux_" + std::to_wstring(i + 1));
+      if (options.make_xlabels) make_xlabel();
       if (options.make_texlabels)
-        graph.vertex_texlabels.emplace_back(std::wstring(L"aux") + L"\\_" +
-                                            std::to_wstring(i + 1));
+        make_texlabel(std::wstring(L"aux") + L"\\_" + std::to_wstring(i + 1));
       graph.vertex_types.emplace_back(VertexType::TensorAux);
       graph.vertex_colors.emplace_back(colorizer(AuxGroup{i}));
       edges.emplace_back(std::make_pair(tensor_vertex, nvertex));
@@ -1118,11 +1137,10 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
     const Edge &current_edge = edges_[i];
 
     const Index &index = current_edge.idx();
-    if (options.make_labels)
-      graph.vertex_labels.emplace_back(std::wstring(index.full_label()));
+    if (options.make_labels) make_label(std::wstring(index.full_label()));
+    if (options.make_xlabels) make_xlabel();
     using namespace std::string_literals;
-    if (options.make_texlabels)
-      graph.vertex_texlabels.emplace_back(L"$"s + index.to_latex() + L"$");
+    if (options.make_texlabels) make_texlabel(L"$"s + index.to_latex() + L"$");
     graph.vertex_types.emplace_back(VertexType::Index);
     graph.vertex_colors.emplace_back(colorizer(index));
 
@@ -1154,8 +1172,9 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
                    [](const Index &idx) { return idx.full_label(); }) |
                ranges::views::join(L","sv) | ranges::to<std::wstring>()) +
               L">";
-          graph.vertex_labels.emplace_back(std::move(index_bundle_label));
+          make_label(std::move(index_bundle_label));
         }
+        if (options.make_xlabels) make_xlabel();
         if (options.make_texlabels) {
           using namespace std::literals;
           std::wstring index_bundle_texlabel =
@@ -1165,7 +1184,7 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
                    [](const Index &idx) { return idx.to_latex(); }) |
                ranges::views::join(L","sv) | ranges::to<std::wstring>()) +
               L"\\rangle$";
-          graph.vertex_texlabels.emplace_back(std::move(index_bundle_texlabel));
+          make_texlabel(std::move(index_bundle_texlabel));
         }
         graph.vertex_types.emplace_back(VertexType::IndexBundle);
         graph.vertex_colors.emplace_back(colorizer(index.proto_indices()));
@@ -1206,19 +1225,18 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
 
   // also create vertices for pure proto indices
   for (const auto &[i, index] : ranges::views::enumerate(pure_proto_indices_)) {
-    ++nvertex;
-    if (options.make_labels)
-      graph.vertex_labels.emplace_back(index.full_label());
+    if (options.make_labels) make_label(std::wstring(index.full_label()));
+    if (options.make_xlabels) make_xlabel();
     using namespace std::string_literals;
-    if (options.make_texlabels)
-      graph.vertex_texlabels.emplace_back(L"$"s + index.to_latex() + L"$");
+    if (options.make_texlabels) make_texlabel(L"$"s + index.to_latex() + L"$");
     graph.vertex_types.emplace_back(VertexType::Index);
     graph.vertex_colors.emplace_back(colorizer(index));
 
-    const std::size_t index_vertex = nvertex - 1;
+    const std::size_t index_vertex = nvertex;
 
     assert(index_vertices.at(i + edges_.size()) == uninitialized_vertex);
     index_vertices[i + edges_.size()] = index_vertex;
+    ++nvertex;
   }
 
   // Add edges between proto index bundle vertices and all vertices of the
