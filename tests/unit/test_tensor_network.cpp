@@ -281,12 +281,18 @@ TEMPLATE_TEST_CASE("tensor_network_shared", "[elements]", TensorNetwork,
         CAPTURE(input2);
 
         {
+          auto tn_canonicalize = [](TN& tn) {
+            if constexpr (TN::version() == 3) {
+              tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels());
+            } else {
+              tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(),
+                              /* fast = */ false);
+            }
+          };
           TN tn1(*input1);
-          tn1.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(),
-                           false);
+          tn_canonicalize(tn1);
           TN tn2(*input2);
-          tn2.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(),
-                           false);
+          tn_canonicalize(tn2);
 
           // std::wcout << "tn1[0] = " <<
           // to_latex(std::dynamic_pointer_cast<Expr>(tn1.tensors()[0])) <<
@@ -1381,7 +1387,8 @@ class TensorNetworkV3Accessor {
   auto get_canonical_bliss_graph(
       sequant::TensorNetworkV3 tn,
       const sequant::TensorNetwork::named_indices_t* named_indices = nullptr) {
-    tn.canonicalize_graph(named_indices ? *named_indices : tn.ext_indices_);
+    auto _ =
+        tn.canonicalize_graph(named_indices ? *named_indices : tn.ext_indices_);
     tn.init_edges();
     auto graph = tn.create_graph(
         {.named_indices = named_indices,
@@ -1569,7 +1576,7 @@ TEST_CASE("tensor_network_v3", "[elements]") {
       auto t2 = ex<FNOperator>(cre({L"i_1"}), ann({L"i_2"}), V);
       auto t1_x_t2 = t1 * t2;
       TN tn(*t1_x_t2);
-      tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(), false);
+      tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels());
 
       REQUIRE(size(tn.tensors()) == 2);
       REQUIRE(std::dynamic_pointer_cast<Expr>(tn.tensors()[0]));
@@ -1595,7 +1602,7 @@ TEST_CASE("tensor_network_v3", "[elements]") {
       // with all external named indices
       SECTION("implicit") {
         TN tn(*t1_x_t2);
-        tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(), false);
+        tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels());
 
         REQUIRE(size(tn.tensors()) == 2);
         REQUIRE(std::dynamic_pointer_cast<Expr>(tn.tensors()[0]));
@@ -1618,8 +1625,8 @@ TEST_CASE("tensor_network_v3", "[elements]") {
 
         using named_indices_t = TN::NamedIndexSet;
         named_indices_t indices{Index{L"i_17"}};
-        tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(), false,
-                        &indices);
+        tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(),
+                        TN::CanonicalizationMethod::Complete, &indices);
 
         REQUIRE(size(tn.tensors()) == 2);
         REQUIRE(std::dynamic_pointer_cast<Expr>(tn.tensors()[0]));
@@ -1645,7 +1652,8 @@ TEST_CASE("tensor_network_v3", "[elements]") {
       for (int variant : {1, 2}) {
         for (bool fast : {true, false}) {
           TN tn(std::vector<ExprPtr>{variant == 1 ? input1 : input2});
-          tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(), fast);
+          tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(),
+                          TN::CanonicalizationMethod::Rapid);
           REQUIRE(tn.tensors().size() == 1);
           auto result = ex<Product>(to_tensors(tn.tensors()));
           REQUIRE(to_latex(result) == (variant == 1 ? expected1 : expected2));
@@ -1661,9 +1669,10 @@ TEST_CASE("tensor_network_v3", "[elements]") {
       const std::wstring expected =
           L"A{i_1,i_2;i_3,i_4}:A * I1{i_3,i_4;;x_1}:N * I2{;i_1,i_2;x_1}:N";
 
-      for (bool fast : {true, false}) {
+      for (auto method : {TN::CanonicalizationMethod::Rapid,
+                          TN::CanonicalizationMethod::Complete}) {
         TN tn(input);
-        tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(), fast);
+        tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(), method);
         const auto result = ex<Product>(to_tensors(tn.tensors()));
         REQUIRE_THAT(result, SimplifiesTo(expected));
       }
@@ -1711,8 +1720,8 @@ TEST_CASE("tensor_network_v3", "[elements]") {
         TN tn1(first);
         TN tn2(second);
 
-        tn1.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(), false);
-        tn2.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(), false);
+        tn1.canonicalize(TensorCanonicalizer::cardinal_tensor_labels());
+        tn2.canonicalize(TensorCanonicalizer::cardinal_tensor_labels());
 
         REQUIRE(tn1.tensors().size() == tn2.tensors().size());
         for (std::size_t i = 0; i < tn1.tensors().size(); ++i) {
@@ -1742,8 +1751,9 @@ TEST_CASE("tensor_network_v3", "[elements]") {
         const auto input_tensors = parse_expr(input).as<Product>().factors();
 
         TN tn(input_tensors);
-        ExprPtr factor = tn.canonicalize(
-            TensorCanonicalizer::cardinal_tensor_labels(), true);
+        ExprPtr factor =
+            tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(),
+                            TN::CanonicalizationMethod::Rapid);
 
         ExprPtr prod = to_product(tn.tensors());
         if (factor) {
@@ -1766,7 +1776,7 @@ TEST_CASE("tensor_network_v3", "[elements]") {
       TN tn(factors);
 
       ExprPtr factor =
-          tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(), false);
+          tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels());
       ExprPtr result = to_product(tn.tensors());
       if (factor) {
         result *= factor;
@@ -1790,8 +1800,8 @@ TEST_CASE("tensor_network_v3", "[elements]") {
                              aux{L"p_1", L"p"}, Symmetry::antisymm);
         TN tn(u1 * u2 * u3);
 
-        ExprPtr factor = tn.canonicalize(
-            TensorCanonicalizer::cardinal_tensor_labels(), false);
+        ExprPtr factor =
+            tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels());
         result_1 = to_product(tn.tensors());
         if (factor) {
           result_1 *= factor;
@@ -1812,8 +1822,8 @@ TEST_CASE("tensor_network_v3", "[elements]") {
                              aux{L"p_1", L"p_2"}, Symmetry::antisymm);
         TN tn(u2 * u1 * u3);
 
-        ExprPtr factor = tn.canonicalize(
-            TensorCanonicalizer::cardinal_tensor_labels(), false);
+        ExprPtr factor =
+            tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels());
         result_2 = to_product(tn.tensors());
         if (factor) {
           result_2 *= factor;
@@ -1918,8 +1928,7 @@ TEST_CASE("tensor_network_v3", "[elements]") {
             }
             REQUIRE(current_graph->cmp(*canonical_graph) == 0);
 
-            tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(),
-                            false);
+            tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels());
 
             std::vector<ExprPtr> actual;
             std::transform(tn.tensors().begin(), tn.tensors().end(),
@@ -1974,19 +1983,20 @@ TEST_CASE("tensor_network_v3", "[elements]") {
         auto factors2 = parse_expr(current).as<Product>().factors();
 
         TN reference_tn(factors1);
-        reference_tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(),
-                                  false);
+        reference_tn.canonicalize(
+            TensorCanonicalizer::cardinal_tensor_labels());
 
         TN check_tn(factors2);
-        check_tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(),
-                              false);
+        check_tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels());
 
         REQUIRE(to_latex(to_product(reference_tn.tensors())) ==
                 to_latex(to_product(check_tn.tensors())));
 
         for (bool fast : {true, false, true, true, false, false, true}) {
           reference_tn.canonicalize(
-              TensorCanonicalizer::cardinal_tensor_labels(), fast);
+              TensorCanonicalizer::cardinal_tensor_labels(),
+              fast ? TN::CanonicalizationMethod::Rapid
+                   : TN::CanonicalizationMethod::Complete);
 
           REQUIRE(to_latex(to_product(reference_tn.tensors())) ==
                   to_latex(to_product(check_tn.tensors())));

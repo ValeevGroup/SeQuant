@@ -474,10 +474,10 @@ TensorNetworkV3 &TensorNetworkV3::operator=(
 }
 
 ExprPtr TensorNetworkV3::canonicalize(
-    const container::vector<std::wstring> &cardinal_tensor_labels, bool fast,
-    const NamedIndexSet *named_indices_ptr) {
+    const container::vector<std::wstring> &cardinal_tensor_labels,
+    CanonicalizationMethod method, const NamedIndexSet *named_indices_ptr) {
   if (Logger::instance().canonicalize) {
-    std::wcout << "TensorNetworkV3::canonicalize(" << (fast ? "fast" : "slow")
+    std::wcout << "TensorNetworkV3::canonicalize(" << to_wstring(method)
                << "): input tensors\n";
     size_t cnt = 0;
     ranges::for_each(tensors_, [&](const auto &t) {
@@ -503,105 +503,111 @@ ExprPtr TensorNetworkV3::canonicalize(
   }
 
   ExprPtr byproduct;
-  if (!fast) {
+  if (logical_and(method, CanonicalizationMethod::Topological)) {
     // The graph-based canonization is required in all cases in which there are
     // indistinguishable tensors present in the expression. Their order and
     // indexing can only be determined via this rigorous canonization.
     byproduct = canonicalize_graph(named_indices);
   }
 
-  // Ensure each individual tensor is written in the way that its tensor
-  // block (== order of index spaces) is canonical
-  byproduct *= canonicalize_individual_tensor_blocks(named_indices);
+  if (logical_and(method, CanonicalizationMethod::Lexicographic)) {
+    // Ensure each individual tensor is written in the way that its tensor
+    // block (== order of index spaces) is canonical
+    byproduct *= canonicalize_individual_tensor_blocks(named_indices);
 
-  CanonicalTensorCompare<decltype(cardinal_tensor_labels)> tensor_sorter(
-      cardinal_tensor_labels, true);
+    CanonicalTensorCompare<decltype(cardinal_tensor_labels)> tensor_sorter(
+        cardinal_tensor_labels, true);
 
-  using ranges::begin;
-  using ranges::end;
-  using ranges::views::zip;
-  auto tensors_with_ordinals = zip(tensors_, tensor_input_ordinals_);
-  bubble_sort(begin(tensors_with_ordinals), end(tensors_with_ordinals),
-              tensor_sorter);
+    using ranges::begin;
+    using ranges::end;
+    using ranges::views::zip;
+    auto tensors_with_ordinals = zip(tensors_, tensor_input_ordinals_);
+    bubble_sort(begin(tensors_with_ordinals), end(tensors_with_ordinals),
+                tensor_sorter);
 
-  init_edges();
+    init_edges();
 
-  if (Logger::instance().canonicalize) {
-    std::wcout << "TensorNetworkV3::canonicalize(" << (fast ? "fast" : "slow")
-               << "): tensors after initial sort\n";
-    size_t cnt = 0;
-    ranges::for_each(tensors_, [&](const auto &t) {
-      std::wcout << "tensor " << cnt++ << ": " << to_latex(*t) << std::endl;
-    });
-  }
-
-  // helpers to filter named ("external" in traditional use case) / anonymous
-  // ("internal" in traditional use case)
-  auto is_named_index = [&](const Index &idx) {
-    return named_indices.find(idx) != named_indices.end();
-  };
-  auto is_anonymous_index = [&](const Index &idx) {
-    return named_indices.find(idx) == named_indices.end();
-  };
-
-  // Sort edges based on the order of the tensors they connect
-  std::stable_sort(edges_.begin(), edges_.end(),
-                   [&is_named_index](const Edge &lhs, const Edge &rhs) {
-                     // Sort first by index's character (named < anonymous),
-                     // then by Edge (not by Index's full label) ... this
-                     // automatically puts named indices first
-                     const bool lhs_is_named = is_named_index(lhs.idx());
-                     const bool rhs_is_named = is_named_index(rhs.idx());
-
-                     if (lhs_is_named == rhs_is_named) {
-                       return lhs < rhs;
-                     } else {
-                       return lhs_is_named;
-                     }
-                   });
-
-  // index factory to generate anonymous indices
-  // -> start reindexing anonymous indices from 1
-  IndexFactory idxfac(is_anonymous_index, 1);
-
-  container::map<Index, Index> idxrepl;
-
-  // Use the new order of edges as the canonical order of indices and relabel
-  // accordingly (but only anonymous indices, of course)
-  for (std::size_t i = named_indices.size(); i < edges_.size(); ++i) {
-    const Index &index = edges_[i].idx();
-    assert(is_anonymous_index(index));
-    Index replacement = idxfac.make(index);
-    if (index != replacement) idxrepl.emplace(index, std::move(replacement));
-  }
-
-  // Done computing canonical index replacement list
-  // reset edges since renamings will make them obsolete
-  edges_.clear();
-  have_edges_ = false;
-
-  if (Logger::instance().canonicalize) {
-    for (const auto &idxpair : idxrepl) {
-      std::wcout << "TensorNetworkV3::canonicalize(" << (fast ? "fast" : "slow")
-                 << "): replacing " << to_latex(idxpair.first) << " with "
-                 << to_latex(idxpair.second) << std::endl;
+    if (Logger::instance().canonicalize) {
+      std::wcout << "TensorNetworkV3::canonicalize(" << to_wstring(method)
+                 << "): tensors after lexicographic sort\n";
+      size_t cnt = 0;
+      ranges::for_each(tensors_, [&](const auto &t) {
+        std::wcout << "tensor " << cnt++ << ": " << to_latex(*t) << std::endl;
+      });
     }
-  }
 
-  apply_index_replacements(tensors_, idxrepl, true);
+    // helpers to filter named ("external" in traditional use case) / anonymous
+    // ("internal" in traditional use case)
+    auto is_named_index = [&](const Index &idx) {
+      return named_indices.find(idx) != named_indices.end();
+    };
+    auto is_anonymous_index = [&](const Index &idx) {
+      return named_indices.find(idx) == named_indices.end();
+    };
 
-  byproduct *= canonicalize_individual_tensors(named_indices);
+    // Sort edges based on the order of the tensors they connect
+    std::stable_sort(edges_.begin(), edges_.end(),
+                     [&is_named_index](const Edge &lhs, const Edge &rhs) {
+                       // Sort first by index's character (named < anonymous),
+                       // then by Edge (not by Index's full label) ... this
+                       // automatically puts named indices first
+                       const bool lhs_is_named = is_named_index(lhs.idx());
+                       const bool rhs_is_named = is_named_index(rhs.idx());
 
-  // We assume that re-indexing did not change the canonical order of tensors
-  assert(std::is_sorted(tensors_.begin(), tensors_.end(), tensor_sorter));
-  // However, in order to produce the most aesthetically pleasing result, we now
-  // reorder tensors based on the regular AbstractTensor::operator<, which takes
-  // the explicit index labelling of tensors into account.
-  tensor_sorter.set_blocks_only(false);
-  std::stable_sort(tensors_.begin(), tensors_.end(), tensor_sorter);
+                       if (lhs_is_named == rhs_is_named) {
+                         return lhs < rhs;
+                       } else {
+                         return lhs_is_named;
+                       }
+                     });
 
-  assert(byproduct->is<Constant>());
-  return (byproduct->as<Constant>().value() == 1) ? nullptr : byproduct;
+    // index factory to generate anonymous indices
+    // -> start reindexing anonymous indices from 1
+    IndexFactory idxfac(is_anonymous_index, 1);
+
+    container::map<Index, Index> idxrepl;
+
+    // Use the new order of edges as the canonical order of indices and relabel
+    // accordingly (but only anonymous indices, of course)
+    for (std::size_t i = named_indices.size(); i < edges_.size(); ++i) {
+      const Index &index = edges_[i].idx();
+      assert(is_anonymous_index(index));
+      Index replacement = idxfac.make(index);
+      if (index != replacement) idxrepl.emplace(index, std::move(replacement));
+    }
+
+    // Done computing canonical index replacement list
+    // reset edges since renamings will make them obsolete
+    edges_.clear();
+    have_edges_ = false;
+
+    if (Logger::instance().canonicalize) {
+      for (const auto &idxpair : idxrepl) {
+        std::wcout << "TensorNetworkV3::canonicalize(" << to_wstring(method)
+                   << "): lexicographic rewrite, replacing "
+                   << to_latex(idxpair.first) << " with "
+                   << to_latex(idxpair.second) << std::endl;
+      }
+    }
+
+    apply_index_replacements(tensors_, idxrepl, true);
+
+    byproduct *= canonicalize_individual_tensors(named_indices);
+
+    // We assume that re-indexing did not change the canonical order of tensors
+    assert(std::is_sorted(tensors_.begin(), tensors_.end(), tensor_sorter));
+    // However, in order to produce the most aesthetically pleasing result, we
+    // now reorder tensors based on the regular AbstractTensor::operator<, which
+    // takes the explicit index labelling of tensors into account.
+    tensor_sorter.set_blocks_only(false);
+    std::stable_sort(tensors_.begin(), tensors_.end(), tensor_sorter);
+  }  // lexicographic canonicalization
+
+  if (byproduct) {
+    assert(byproduct->is<Constant>());
+    return (byproduct->as<Constant>().value() == 1) ? nullptr : byproduct;
+  } else
+    return nullptr;
 }
 
 TensorNetworkV3::SlotCanonicalizationMetadata
@@ -1296,8 +1302,8 @@ void TensorNetworkV3::init_edges() {
       std::wcout << "TensorNetworkV3::init_edges: idx=" << to_latex(idx)
                  << " attached to tensor " << vertex.getTerminalIndex() << " ("
                  << vertex.getOrigin() << ") at position "
-                 << vertex.getIndexSlot()
-                 << " (sym: " << to_wstring(vertex.getTerminalSymmetry()) << ")"
+                 << vertex.getIndexSlot() << " (sym: "
+                 << sequant::to_wstring(vertex.getTerminalSymmetry()) << ")"
                  << std::endl;
     }
 
@@ -1460,6 +1466,24 @@ ExprPtr TensorNetworkV3::do_individual_canonicalization(
   }
 
   return byproduct;
+}
+
+bool TensorNetworkV3::logical_and(CanonicalizationMethod m1,
+                                  CanonicalizationMethod m2) {
+  return (static_cast<int>(m1) & static_cast<int>(m2)) != 0;
+}
+
+std::wstring TensorNetworkV3::to_wstring(CanonicalizationMethod m) {
+  switch (m) {
+    case CanonicalizationMethod::Topological:
+      return L"topological";
+    case CanonicalizationMethod::Lexicographic:
+      return L"lexicographic";
+    case CanonicalizationMethod::Complete:
+      return L"complete";
+    default:
+      abort();
+  }
 }
 
 }  // namespace sequant

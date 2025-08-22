@@ -487,6 +487,9 @@ class TensorNetworkV3 {
     tensors_.emplace_back(std::move(tensor_ptr));
     tensor_input_ordinals_.push_back(tensor_input_ordinals_.size());
   }
+
+  static bool logical_and(CanonicalizationMethod m1, CanonicalizationMethod m2);
+  static std::wstring to_wstring(CanonicalizationMethod m);
 };
 
 template <typename CharT, typename Traits>
