@@ -44,11 +44,18 @@ endforeach()
 # Testing runnable examples
 if (SEQUANT_TESTS AND RUNNABLE_DOC_EXAMPLES)
     foreach (example IN LISTS RUNNABLE_DOC_EXAMPLES)
+        add_test(NAME "sequant/doc-examples/${example}/build"
+                 COMMAND "${CMAKE_COMMAND}" --build ${CMAKE_BINARY_DIR} --target "${example}")
+        set_tests_properties("sequant/doc-examples/${example}/build" PROPERTIES FIXTURES_SETUP SEQUANT_FIXTURE_${example})
+
         # these tests should fail if any runtime issue is encountered
         add_test(
-                NAME "sequant/doc-examples/${example}"
+                NAME "sequant/doc-examples/${example}/run"
                 COMMAND ${example}
-                WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
         )
+        set_tests_properties("sequant/doc-examples/${example}/run" PROPERTIES
+                WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+                FIXTURES_REQUIRED SEQUANT_FIXTURE_${example})
+
     endforeach ()
 endif ()
