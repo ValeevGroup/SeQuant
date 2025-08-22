@@ -205,12 +205,13 @@ TEST_CASE("eval_with_btas", "[eval_btas]") {
         ->get<BTensorD>();
   };
 
-  auto eval_mbpt_cleanup = [&yield_](
-                               sequant::ExprPtr const& expr,
-                               container::svector<long> const& target_labels) {
-    return evaluate_mbpt_cleanup(eval_node(expr), target_labels, yield_)
-        ->get<BTensorD>();
-  };
+  auto eval_biorthogonal_cleanup =
+      [&yield_](sequant::ExprPtr const& expr,
+                container::svector<long> const& target_labels) {
+        return evaluate_biorthogonal_cleanup(eval_node(expr), target_labels,
+                                             yield_)
+            ->get<BTensorD>();
+      };
 
   auto parse_antisymm = [](auto const& xpr) {
     return parse_expr(xpr, sequant::Symmetry::antisymm);
@@ -365,12 +366,12 @@ TEST_CASE("eval_with_btas", "[eval_btas]") {
     REQUIRE(norm(eval1) == Catch::Approx(norm(man1)));
   }
 
-  SECTION("MBPT Cleanup") {
+  SECTION("Biorthogonal Cleanup") {
     using btas::permute;
     // low-rank residuals: skip cleanup
     auto expr1 = parse_antisymm(L"R_{a1, a2}^{i1, i2}");
     auto tidx1 = tidxs(L"a_1,a_2,i_1,i_2");
-    auto eval1 = eval_mbpt_cleanup(expr1, tidx1);
+    auto eval1 = eval_biorthogonal_cleanup(expr1, tidx1);
     auto const& r1 =
         yield(L"R{v,v;o,o}");  // Assuming v = virtual, o = occupied
 
@@ -389,7 +390,7 @@ TEST_CASE("eval_with_btas", "[eval_btas]") {
     // result = identity - (1/ket_rank!) * sum_of_ket_permutations
     auto expr2 = parse_antisymm(L"R_{a1, a2, a3}^{i1, i2, i3}");
     auto tidx2 = tidxs(L"a_1,a_2,a_3,i_1,i_2,i_3");
-    auto eval2 = eval_mbpt_cleanup(expr2, tidx2);
+    auto eval2 = eval_biorthogonal_cleanup(expr2, tidx2);
     auto const& r2 = yield(L"R{v,v,v;o,o,o}");
 
     BTensorD man2{r2.range()};
