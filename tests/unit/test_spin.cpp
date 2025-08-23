@@ -981,45 +981,7 @@ SECTION("Closed-shell spintrace CCSDT terms") {
                      "S{i1,i2,i3;a1,a2,a3} f{i4;i3} t{a1,a2,a3;i2,i1,i4}"));
   }
 
-  {  // A3 * f * t3, spintracing with direct-full-expansion
-    auto input = ex<Constant>(rational{1, 12}) *
-                 ex<Tensor>(L"A", bra{L"i_1", L"i_2", L"i_3"},
-                            ket{L"a_1", L"a_2", L"a_3"}, Symmetry::antisymm) *
-                 ex<Tensor>(L"f", bra{L"i_4"}, ket{L"i_1"}) *
-                 ex<Tensor>(L"t", bra{L"a_1", L"a_2", L"a_3"},
-                            ket{L"i_2", L"i_3", L"i_4"}, Symmetry::antisymm);
-
-    auto result = expand_A_op(input);
-    REQUIRE(result->size() == 36);
-    result = expand_antisymm(result);
-    result = closed_shell_spintrace(
-        input, {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}, {L"i_3", L"a_3"}}, true);
-    simplify(result);
-    REQUIRE(result->size() == 18);  // 4 for partially expanded
-    REQUIRE_THAT(
-        result,
-        EquivalentTo(
-            "-4 f{i_4;i_3}:N-C-S * t{a_1,a_2,a_3;i_2,i_1,i_4}:N-C-S - 4 "
-            "f{i_4;i_1}:N-C-S * t{a_1,a_2,a_3;i_3,i_2,i_4}:N-C-S + 2 "
-            "f{i_4;i_3}:N-C-S * t{a_2,a_3,a_1;i_1,i_2,i_4}:N-C-S - 4 "
-            "f{i_4;i_3}:N-C-S * t{a_2,a_3,a_1;i_2,i_1,i_4}:N-C-S + 2 "
-            "f{i_4;i_2}:N-C-S * t{a_2,a_3,a_1;i_3,i_1,i_4}:N-C-S - 4 "
-            "f{i_4;i_2}:N-C-S * t{a_1,a_2,a_3;i_1,i_3,i_4}:N-C-S + 2 "
-            "f{i_4;i_2}:N-C-S * t{a_1,a_2,a_3;i_3,i_1,i_4}:N-C-S - 4 "
-            "f{i_4;i_1}:N-C-S * t{a_1,a_3,a_2;i_2,i_3,i_4}:N-C-S - 4 "
-            "f{i_4;i_2}:N-C-S * t{a_1,a_3,a_2;i_3,i_1,i_4}:N-C-S - 4 "
-            "f{i_4;i_1}:N-C-S * t{a_2,a_3,a_1;i_3,i_2,i_4}:N-C-S + 2 "
-            "f{i_4;i_1}:N-C-S * t{a_1,a_3,a_2;i_3,i_2,i_4}:N-C-S + 8 "
-            "f{i_4;i_1}:N-C-S * t{a_2,a_3,a_1;i_2,i_3,i_4}:N-C-S + 2 "
-            "f{i_4;i_1}:N-C-S * t{a_1,a_2,a_3;i_2,i_3,i_4}:N-C-S + 8 "
-            "f{i_4;i_3}:N-C-S * t{a_1,a_2,a_3;i_1,i_2,i_4}:N-C-S + 8 "
-            "f{i_4;i_2}:N-C-S * t{a_1,a_3,a_2;i_1,i_3,i_4}:N-C-S - 4 "
-            "f{i_4;i_3}:N-C-S * t{a_1,a_3,a_2;i_1,i_2,i_4}:N-C-S - 4 "
-            "f{i_4;i_2}:N-C-S * t{a_2,a_3,a_1;i_1,i_3,i_4}:N-C-S + 2 "
-            "f{i_4;i_3}:N-C-S * t{a_1,a_3,a_2;i_2,i_1,i_4}:N-C-S"));
-  }
-
-  {  // ppl term: A3 * g * t3, spintracing with direct full expansion
+  {  // ppl term: A3 * g * t3, spintracing with direct full-expansion
     auto input = ex<Constant>(rational{1, 24}) *
                  ex<Tensor>(L"A", bra{L"i_1", L"i_2", L"i_3"},
                             ket{L"a_1", L"a_2", L"a_3"}, Symmetry::antisymm) *
@@ -1058,8 +1020,9 @@ SECTION("Closed-shell spintrace CCSDT terms") {
             "g{a_1,a_2;a_4,a_5}:N-C-S * t{a_3,a_4,a_5;i_1,i_2,i_3}:N-C-S + 2 "
             "g{a_1,a_3;a_4,a_5}:N-C-S * t{a_2,a_4,a_5;i_1,i_3,i_2}:N-C-S"));
 
-    // the new method, spintracing with partial expansion, then expanding by
-    // S_map
+    // the new efficient method, spintracing with partial expansion, then
+    // expanding by S_map ( this method is used in
+    // closed-shell-cc-spintrace-compact-set)
     auto result_2 = closed_shell_spintrace(
         input, {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}, {L"i_3", L"a_3"}});
     simplify(result_2);
@@ -1165,24 +1128,6 @@ SECTION("Closed-shell spintrace CCSDT terms") {
         input, {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}, {L"i_3", L"a_3"}});
     REQUIRE(result->size() == 20);
   }
-
-  {  // A * g * t3, with direct-full-expansion
-    // spintracing)
-    auto input = ex<Constant>(rational{-1, 4}) *
-                 ex<Tensor>(L"A", bra{L"i_1", L"i_2", L"i_3"},
-                            ket{L"a_1", L"a_2", L"a_3"}, Symmetry::antisymm) *
-                 ex<Tensor>(L"g", bra{L"i_4", L"a_1"}, ket{L"i_1", L"a_4"},
-                            Symmetry::antisymm) *
-                 ex<Tensor>(L"t", bra{L"a_2", L"a_3", L"a_4"},
-                            ket{L"i_2", L"i_3", L"i_4"}, Symmetry::antisymm);
-    auto result = expand_A_op(input);
-    REQUIRE(result->size() == 36);
-    result = expand_antisymm(result);
-    result = closed_shell_spintrace(
-        input, {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}, {L"i_3", L"a_3"}}, true);
-    REQUIRE(result->size() == 108);
-  }
-
   {  // g * t3
     auto input = ex<Tensor>(L"g", bra{L"i_4", L"a_1"}, ket{L"i_1", L"a_4"},
                             Symmetry::antisymm) *
