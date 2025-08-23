@@ -682,6 +682,42 @@ class Graph : public AbstractGraph {
    */
   void write_dot(const char* const file_name);
 
+  /// converts a color expressed as utin32_t to RGB color represented as 3 integers with 8 bits worth of information
+  /// increase xsat (xsat <= 8) to try to increase saturation by this many bits
+  /// @pre xsat <= 8
+  static std::array<std::uint32_t,3> uint32_to_rgb(std::uint32_t i, unsigned int xsat = 0) {
+    assert(xsat <= 8);
+    // RGB has channel strides of {256^2, 256, 1} for a total range of [0, 256^3)
+    // map 32-bit int to RGB by using channel strides of {s^2, s, 1}, where s=(2^32)^(1/3) = 1626
+    constexpr std::uint32_t s = 1626;
+    constexpr std::uint32_t ss = s*s;
+    std::array<std::uint32_t,3> rgb_int; // 0 -> R, 1 -> G, 2 -> B
+    rgb_int[0] = i/ss;
+    rgb_int[1] = (i-rgb_int[0]*ss)/s;
+    rgb_int[2] = (i-rgb_int[0]*ss - rgb_int[1]*s);
+    for(int k=0; k!=3; ++k) rgb_int[k]=(rgb_int[k]*256)/s;  // rescale to 8 bits per channel
+
+    // increase saturation, if needed
+    if (xsat > 0) {
+      // for each channel saturate independently
+      for (int k = 0; k != 3; ++k) {
+        int nsatbits = xsat;
+        while (nsatbits > 0) {
+          // do we have this many unset significant bits in this channel?
+          bool can_sat = true;
+          if ((rgb_int[k] >> (8 - nsatbits)) > 0) can_sat = false;
+          if (can_sat) {
+            rgb_int[k] = rgb_int[k] == 0 ? (1<<(nsatbits-1)) : (rgb_int[k] << nsatbits);
+            break;
+          } else
+            nsatbits--;
+        }
+      }
+    }
+
+    return rgb_int;
+  }
+
   /// options for generating dot file
   template <typename Char, typename Traits>
   struct DotOptions {
@@ -728,37 +764,9 @@ class Graph : public AbstractGraph {
 
     // converts int color to RGB string; increase xsat (xsat <= 8) to try to increase saturation by this many bits
     auto int_to_rgb = [](std::uint32_t i, unsigned int xsat = 0) {
-      assert(xsat <= 8);
-      // RGB has channel strides of {256^2, 256, 1} for a total range of [0, 256^3)
-      // map 32-bit int to RGB by using channel strides of {s^2, s, 1}, where s=(2^32)^(1/3) = 1626
-      constexpr std::uint32_t s = 1626;
-      constexpr std::uint32_t ss = s*s;
-      std::array<std::uint32_t,3> rgb_int; // 0 -> R, 1 -> G, 2 -> B
-      rgb_int[0] = i/ss;
-      rgb_int[1] = (i-rgb_int[0]*ss)/s;
-      rgb_int[2] = (i-rgb_int[0]*ss - rgb_int[1]*s);
-      for(int k=0; k!=3; ++k) rgb_int[k]=(rgb_int[k]*256)/s;  // rescale to 8 bits per channel
-
-      // increase saturation, if needed
-      if (xsat > 0) {
-        // for each channel saturate independently
-        for (int k = 0; k != 3; ++k) {
-          int nsatbits = xsat;
-          while (nsatbits > 0) {
-            // do we have this many unset significant bits in this channel?
-            bool can_sat = true;
-            if ((rgb_int[k] >> (8 - nsatbits)) > 0) can_sat = false;
-            if (can_sat) {
-              rgb_int[k] = rgb_int[k] == 0 ? (1<<(nsatbits-1)) : (rgb_int[k] << nsatbits);
-              break;
-            } else
-              nsatbits--;
-          }
-        }
-      }
-
-      // rebuild integer
-      i = rgb_int[0] * (1<<16) + rgb_int[1] * (1<<8) + rgb_int[2];
+      auto rgb_int8 = uint32_to_rgb(i, xsat);
+      // map back to an int
+      i = rgb_int8[0] * (1<<16) + rgb_int8[1] * (1<<8) + rgb_int8[2];
 
       std::basic_stringstream<Char> stream;
       // Set locale of this stream to C to avoid any kind of thousands separator
