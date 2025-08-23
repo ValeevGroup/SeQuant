@@ -825,7 +825,7 @@ TensorNetworkV3::canonicalize_slots(
 
 TensorNetworkV3::Graph TensorNetworkV3::create_graph(
     const CreateGraphOptions &options) const {
-  assert(have_edges_);
+  if (!have_edges_) const_cast<TensorNetworkV3 *>(this)->init_edges();
 
   // initialize named_indices by default to all external indices
   const NamedIndexSet &named_indices = options.named_indices == nullptr
