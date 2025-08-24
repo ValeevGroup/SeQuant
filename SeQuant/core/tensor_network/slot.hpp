@@ -9,6 +9,7 @@ namespace sequant {
 /// named indices of tensor networks
 /// @sa TensorNetwork
 /// @sa TensorNetworkV2
+/// @sa TensorNetworkV3
 enum class TensorIndexSlotType {
   /// bra tensor vector index slot
   Bra = 0,
@@ -26,6 +27,7 @@ enum class TensorIndexSlotType {
 /// named indices of tensor networks
 /// @sa TensorNetwork
 /// @sa TensorNetworkV2
+/// @sa TensorNetworkV3
 enum class IndexSlotType {
   /// only part of proto index bundles
   IndexBundle,

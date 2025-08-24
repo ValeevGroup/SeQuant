@@ -1004,14 +1004,10 @@ class Index : public Taggable {
                                           const Index &i2) noexcept {
     using SO = std::strong_ordering;
 
-    auto compare_space = [&i1, &i2]() {
-      if (i1.space() != i2.space()) {
-        return i1.space() < i2.space() ? SO::less : SO::greater;
-      } else if (i1.space().attr() == default_space_attr &&
-                 i1.space().base_key() != i2.space().base_key()) {
-        return i1.space().base_key() < i2.space().base_key() ? SO::less
-                                                             : SO::greater;
-      } else if (i1.ordinal_ != i2.ordinal_) {
+    auto compare_sans_tag = [&i1, &i2]() {
+      const auto cmp_space = i1.space() <=> i2.space();
+      if (cmp_space != SO::equal) return cmp_space;
+      if (i1.ordinal_ != i2.ordinal_) {
         return i1.ordinal_ < i2.ordinal_ ? SO::less : SO::greater;
       } else if (i1.proto_indices() == i2.proto_indices())
         return SO::equal;
@@ -1026,8 +1022,7 @@ class Index : public Taggable {
       const bool have_tags = i1.tag().has_value() && i2.tag().has_value();
 
       if (!have_tags || i1.tag() == i2.tag()) {
-        // Note that comparison of index spaces contains comparison of QNs
-        return compare_space();
+        return compare_sans_tag();
       }
 
       return i1.tag() < i2.tag() ? SO::less : SO::greater;

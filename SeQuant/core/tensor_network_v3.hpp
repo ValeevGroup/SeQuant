@@ -41,6 +41,9 @@ namespace sequant {
 /// graph), with Tensor objects represented by one or more vertices.
 class TensorNetworkV3 {
  public:
+  /// @return the implementation version of TN
+  constexpr static int version() { return 3; }
+
   // for unit testing only
   friend class TensorNetworkV3Accessor;
 
@@ -192,6 +195,7 @@ class TensorNetworkV3 {
 
     std::unique_ptr<bliss::Graph> bliss_graph;
     std::vector<std::wstring> vertex_labels;
+    std::vector<std::optional<std::wstring>> vertex_xlabels;
     std::vector<std::optional<std::wstring>> vertex_texlabels;
     std::vector<VertexColor> vertex_colors;
     std::vector<VertexType> vertex_types;
@@ -255,11 +259,27 @@ class TensorNetworkV3 {
 
   using NamedIndexSet = container::set<Index, Index::FullLabelCompare>;
 
+  /// canonicalization methods
+  enum class CanonicalizationMethod {
+    /// Canonical graph sort of all TN elements produces complete
+    /// canonicalization
+    /// The result may be aesthetically poor.
+    Topological = 0b01,
+    /// Lexicographic sort of tensors, slots and slot bundles, and indices.
+    /// Aesthetically pleasing result, but incomplete if some tensors are
+    /// identical
+    Lexicographic = 0b10,
+    /// Topological, then Lexicographic. Guaranteed to work even if some
+    /// tensors are identical, and the result is aesthetically pleasing.
+    Complete = Topological | Lexicographic,
+    /// Lexicographic = quick-and-dirty
+    Rapid = Lexicographic
+  };
+
   /// @param cardinal_tensor_labels move all tensors with these labels to the
   /// front before canonicalizing indices
-  /// @param fast if true (default), does fast canonicalization that is only
-  /// optimal if all tensors are distinct; set to false to perform complete
-  /// canonicalization
+  /// @param method see CanonicalizationMethod for the meaning of this
+  /// parameter; by default perform complete canonicalization
   /// @param named_indices specifies the indices that cannot be renamed, i.e.
   /// their labels are meaningful; default is nullptr, which results in external
   /// indices treated as named indices
@@ -267,7 +287,8 @@ class TensorNetworkV3 {
   /// nullptr
   ExprPtr canonicalize(
       const container::vector<std::wstring> &cardinal_tensor_labels = {},
-      bool fast = true, const NamedIndexSet *named_indices = nullptr);
+      CanonicalizationMethod method = CanonicalizationMethod::Complete,
+      const NamedIndexSet *named_indices = nullptr);
 
   /// metadata produced by canonicalize_slots()
   struct SlotCanonicalizationMetadata {
@@ -374,8 +395,23 @@ class TensorNetworkV3 {
     /// if false, will not generate the labels
     bool make_labels = true;
 
+    /// if true, will prepend label by vertex ordinal
+    bool label_prepend_ordinal = false;
+
+    /// if false, will not generate the xlabels
+    bool make_xlabels = false;
+
+    /// callable that maps vertex index to xlabel
+    std::function<std::wstring(std::size_t)> xlabel_maker =
+        [](std::size_t vertex_ordinal) {
+          return std::to_wstring(vertex_ordinal);
+        };
+
     /// if false, will not generate the TeX labels
     bool make_texlabels = true;
+
+    /// if true, will prepend texlabel by vertex ordinal
+    bool texlabel_prepend_ordinal = false;
 
     /// if false, will not generate the Index->vertex map
     bool make_idx_to_vertex = false;
@@ -424,7 +460,14 @@ class TensorNetworkV3 {
                          .named_indices = nullptr,
                          .distinct_named_indices = false,
                          .make_labels = true,
+                         .label_prepend_ordinal = false,
+                         .make_xlabels = true,
+                         .xlabel_maker =
+                             [](std::size_t vertex_ordinal) {
+                               return std::to_wstring(vertex_ordinal);
+                             },
                          .make_texlabels = true,
+                         .texlabel_prepend_ordinal = false,
                          .make_idx_to_vertex = false}) const;
 
  private:
@@ -484,6 +527,9 @@ class TensorNetworkV3 {
     tensors_.emplace_back(std::move(tensor_ptr));
     tensor_input_ordinals_.push_back(tensor_input_ordinals_.size());
   }
+
+  static bool logical_and(CanonicalizationMethod m1, CanonicalizationMethod m2);
+  static std::wstring to_wstring(CanonicalizationMethod m);
 };
 
 template <typename CharT, typename Traits>
