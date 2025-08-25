@@ -5,6 +5,7 @@
 #include <SeQuant/core/biorthogonalization.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/math.hpp>
+#include <SeQuant/core/optimize.hpp>
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/space.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
@@ -1170,14 +1171,9 @@ ExprPtr closed_shell_CC_spintrace_compact_set(ExprPtr const& expr) {
     for (auto& term : *st_expr) {
       if (term->is<Product>()) term = remove_tensor(term->as<Product>(), L"S");
     }
-    const auto tstart0 = std::chrono::high_resolution_clock::now();
     st_expr = biorthogonal_transform(st_expr, ext_idxs);
-    // put the function call
-    const auto tstop0 = std::chrono::high_resolution_clock::now();
-    const auto time_elapsed =
-        std::chrono::duration_cast<std::chrono::seconds>(tstop0 - tstart0);
-    std::cout << "spintrace time: " << time_elapsed.count() << " s.\n";
 
+    // adding S in order to expand it and have all the raw equations
     auto bixs = ext_idxs | transform([](auto&& vec) { return vec[1]; });
     auto kixs = ext_idxs | transform([](auto&& vec) { return vec[0]; });
     if (bixs.size() > 1) {
@@ -1186,10 +1182,10 @@ ExprPtr closed_shell_CC_spintrace_compact_set(ExprPtr const& expr) {
           st_expr;
     }
     simplify(st_expr);
-    // now fully expand them. this avoids the expensive spintracing and also
-    // biorthogonalization of all the raw terms
+    // expanding S after spintracing and biorthogonalization, to avoid dealing
+    // with large number of terms
     st_expr = S_maps(st_expr);
-    // canonicalizer must be called before hash-filter
+    // canonicalizer must be called before hash-filter to combine terms
     canonicalize(st_expr);
 
     // apply hash filter method to get unique set of terms
@@ -1211,9 +1207,12 @@ ExprPtr closed_shell_CC_spintrace_compact_set(ExprPtr const& expr) {
   }
 
   simplify(st_expr);
-  // std::wcout << "final eqns after symm: " <<
-  // sequant::to_latex_align(sequant::ex<sequant::Sum>(sequant::opt::reorder(st_expr->as<sequant::Sum>())),
-  // 0, 4) << std::endl;
+  std::wcout << "final eqns after symm: "
+             << sequant::to_latex_align(
+                    sequant::ex<sequant::Sum>(
+                        sequant::opt::reorder(st_expr->as<sequant::Sum>())),
+                    0, 4)
+             << std::endl;
 
   return st_expr;
 }
