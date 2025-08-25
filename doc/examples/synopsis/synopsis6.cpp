@@ -15,7 +15,8 @@ inline auto commutator(sequant::ExprPtr op1, sequant::ExprPtr op2) {
 int main() {
   using namespace sequant;
   using namespace sequant::mbpt;
-  set_default_context(Context(make_min_sr_spaces(), Vacuum::SingleProduct));
+  set_default_context({.index_space_registry_shared_ptr = make_min_sr_spaces(),
+                       .vacuum = Vacuum::SingleProduct});
 
   auto hbar =
       H(2) + commutator(H(2), T_(2)) +

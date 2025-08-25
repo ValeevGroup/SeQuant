@@ -400,8 +400,7 @@ void generalSetup() {
 
 int main(int argc, char **argv) {
   set_locale();
-  set_default_context(Context(Vacuum::SingleProduct, IndexSpaceMetric::Unit,
-                              BraKetSymmetry::conjugate, SPBasis::spinor));
+  set_default_context({.vacuum = Vacuum::SingleProduct});
   generalSetup();
 
   CLI::App app(

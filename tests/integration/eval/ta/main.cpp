@@ -68,9 +68,9 @@ int main(int argc, char* argv[]) {
   auto& world = TA::initialize(argc, argv);
   using namespace sequant;
   detail::OpIdRegistrar op_id_registrar;
-  sequant::set_default_context(Context(
-      mbpt::make_min_sr_spaces(), Vacuum::SingleProduct, IndexSpaceMetric::Unit,
-      BraKetSymmetry::conjugate, SPBasis::spinor));
+  sequant::set_default_context(
+      {.index_space_registry_shared_ptr = mbpt::make_min_sr_spaces(),
+       .vacuum = Vacuum::SingleProduct});
   TensorCanonicalizer::register_instance(
       std::make_shared<DefaultTensorCanonicalizer>());
 

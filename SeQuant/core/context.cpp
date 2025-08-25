@@ -42,7 +42,7 @@ const Context& get_default_context(Statistics s) {
   auto it = contexts.find(s);
   /// default for arbitrary statistics is initialized lazily here
   if (it == contexts.end() && s == Statistics::Arbitrary) {
-    set_default_context({}, Statistics::Arbitrary);
+    set_default_context(Context{}, Statistics::Arbitrary);
   }
   it = contexts.find(s);
   // have context for this statistics? else return for arbitrary statistics
@@ -52,7 +52,7 @@ const Context& get_default_context(Statistics s) {
     return get_default_context(Statistics::Arbitrary);
 }
 
-void set_default_context(const Context& ctx, Statistics s) {
+void set_default_context(Context ctx, Statistics s) {
 #ifdef SEQUANT_CONTEXT_MANIPULATION_THREADSAFE
   std::scoped_lock lock(ctx_mtx);
 #endif
@@ -60,10 +60,14 @@ void set_default_context(const Context& ctx, Statistics s) {
       detail::implicit_context_instance<container::map<Statistics, Context>>();
   auto it = contexts.find(s);
   if (it != contexts.end()) {
-    it->second = ctx;
+    it->second = std::move(ctx);
   } else {
-    contexts.emplace(s, ctx);
+    contexts.emplace(s, std::move(ctx));
   }
+}
+
+void set_default_context(Context::Options ctx_opts, Statistics s) {
+  return set_default_context(Context(ctx_opts), s);
 }
 
 void set_default_context(const container::map<Statistics, Context>& ctxs) {
@@ -90,21 +94,28 @@ set_scoped_default_context(const container::map<Statistics, Context>& ctx) {
 
 [[nodiscard]] detail::ImplicitContextResetter<
     container::map<Statistics, Context>>
-set_scoped_default_context(const Context& ctx) {
-  return detail::set_scoped_implicit_context(
-      container::map<Statistics, Context>{{Statistics::Arbitrary, ctx}});
-}
-
-[[nodiscard]] detail::ImplicitContextResetter<
-    container::map<Statistics, Context>>
-set_scoped_default_context(Context&& ctx) {
+set_scoped_default_context(Context ctx) {
   return detail::set_scoped_implicit_context(
       container::map<Statistics, Context>{
           {Statistics::Arbitrary, std::move(ctx)}});
 }
 
-Context::Context(ContextOptions options)
-    : idx_space_reg_(std::move(options.index_space_registry_shared_ptr)),
+[[nodiscard]] detail::ImplicitContextResetter<
+    container::map<Statistics, Context>>
+set_scoped_default_context(Context::Options ctx_options) {
+  return detail::set_scoped_implicit_context(
+      container::map<Statistics, Context>{
+          {Statistics::Arbitrary, Context(std::move(ctx_options))}});
+}
+
+Context::Context(Options options)
+    : idx_space_reg_(
+          options.index_space_registry_shared_ptr
+              ? std::move(options.index_space_registry_shared_ptr)
+              : (options.index_space_registry.has_value()
+                     ? std::make_shared<IndexSpaceRegistry>(
+                           std::move(options.index_space_registry.value()))
+                     : nullptr)),
       vacuum_(options.vacuum),
       metric_(options.metric),
       braket_symmetry_(options.braket_symmetry),
@@ -113,31 +124,6 @@ Context::Context(ContextOptions options)
       canonicalization_options_(options.canonicalization_options),
       braket_typesetting_(options.braket_typesetting),
       braket_slot_typesetting_(options.braket_slot_typesetting) {}
-
-Context::Context(std::shared_ptr<IndexSpaceRegistry> isr, Vacuum vac,
-                 IndexSpaceMetric m, BraKetSymmetry bks, SPBasis spb,
-                 std::size_t fdio, BraKetTypesetting bkt,
-                 BraKetSlotTypesetting bkst)
-    : idx_space_reg_(std::move(isr)),
-      vacuum_(vac),
-      metric_(m),
-      braket_symmetry_(bks),
-      spbasis_(spb),
-      first_dummy_index_ordinal_(fdio),
-      braket_typesetting_(bkt),
-      braket_slot_typesetting_(bkst) {}
-
-Context::Context(IndexSpaceRegistry isr, Vacuum vac, IndexSpaceMetric m,
-                 BraKetSymmetry bks, SPBasis spb, std::size_t fdio,
-                 BraKetTypesetting bkt, BraKetSlotTypesetting bkst)
-    : Context(std::make_shared<IndexSpaceRegistry>(std::move(isr)), vac, m, bks,
-              spb, fdio, bkt, bkst) {}
-
-Context::Context(Vacuum vac, IndexSpaceMetric m, BraKetSymmetry bks,
-                 SPBasis spb, std::size_t fdio, BraKetTypesetting bkt,
-                 BraKetSlotTypesetting bkst)
-    : Context(std::make_shared<IndexSpaceRegistry>(), vac, m, bks, spb, fdio,
-              bkt, bkst) {}
 
 Context Context::clone() const {
   Context ctx(*this);

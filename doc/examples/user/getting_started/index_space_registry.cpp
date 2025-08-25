@@ -20,7 +20,7 @@ void v1() {
 
   // to use the vocabulary defined by isr use it to make a Context object and
   // make it the default
-  set_default_context(Context(std::move(isr)));
+  set_default_context({.index_space_registry = std::move(isr)});
 
   // now can use space labels to construct Index objects representing said
   // spaces
@@ -39,8 +39,8 @@ void v2() {
   using namespace sequant::mbpt;
 
   // makes 2 base spaces, i and a, and their union
-  auto isr = make_min_sr_spaces();
-  set_default_context(Context(isr));
+  set_default_context(
+      {.index_space_registry_shared_ptr = make_min_sr_spaces()});
 
   // set theoretic operations on spaces
   auto i1 = Index(L"i_1");

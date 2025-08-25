@@ -187,9 +187,9 @@ int main(int argc, char* argv[]) {
   const bool print = print_str == "print";
 
   sequant::detail::OpIdRegistrar op_id_registrar;
-  sequant::set_default_context(sequant::Context(
-      make_min_sr_spaces(), Vacuum::SingleProduct, IndexSpaceMetric::Unit,
-      BraKetSymmetry::conjugate, SPBasis::spinor));
+  sequant::set_default_context(
+      sequant::Context({.index_space_registry_shared_ptr = make_min_sr_spaces(),
+                        .vacuum = Vacuum::SingleProduct}));
   TensorCanonicalizer::register_instance(
       std::make_shared<DefaultTensorCanonicalizer>());
 

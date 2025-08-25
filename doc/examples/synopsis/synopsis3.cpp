@@ -4,11 +4,12 @@
 int main() {
   using namespace sequant;
 
-  set_default_context(Context{IndexSpaceRegistry{}
-                                  .add(L"y", 0b01, is_vacuum_occupied)
-                                  .add(L"z", 0b10)
-                                  .add(L"p", 0b11, is_complete),
-                              Vacuum::SingleProduct});
+  set_default_context(
+      {.index_space_registry = IndexSpaceRegistry{}
+                                   .add(L"y", 0b01, is_vacuum_occupied)
+                                   .add(L"z", 0b10)
+                                   .add(L"p", 0b11, is_complete),
+       .vacuum = Vacuum::SingleProduct});
 
   auto cp1 = fcrex(L"p_1"), cp2 = fcrex(L"p_2");
   auto ap3 = fannx(L"p_3"), ap4 = fannx(L"p_4");

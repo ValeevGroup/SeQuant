@@ -3,6 +3,7 @@
 
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/index_space_registry.hpp>
+#include <SeQuant/core/options.hpp>
 #include <SeQuant/core/utility/context.hpp>
 
 namespace sequant {
@@ -33,6 +34,8 @@ namespace sequant {
 /// - `first_dummy_index_ordinal`: during its operation SeQuant will generate
 ///    temporary indices with orbitals greater or equal to this; to avoid
 ///    duplicates user Index objects should have ordinals smaller than this
+/// - `canonicalization_options`: if set, this specifies the default options to
+///    use for canonicalization of expressions.
 /// - `braket_typesetting`: whether `to_latex()` typesets tensor indices of ket
 ///    (covariant, primal) modes as superscript (`BraKetTypesetting::KetSuper`,
 ///    default)
@@ -50,7 +53,7 @@ class Context {
     constexpr static auto vacuum = Vacuum::Physical;
     constexpr static auto metric = IndexSpaceMetric::Unit;
     constexpr static auto braket_symmetry = BraKetSymmetry::conjugate;
-    constexpr static auto spbasis = sequant::SPBasis::spinor;
+    constexpr static auto spbasis = SPBasis::spinor;
     constexpr static auto first_dummy_index_ordinal = 100;
     constexpr static std::optional<CanonicalizeOptions> canonicalization_options = std::nullopt;
     constexpr static auto braket_typesetting = BraKetTypesetting::ContraSub;
@@ -61,9 +64,11 @@ class Context {
   /// helper for the named-parameter constructor of Context
 
   /// see the Context documentation for detailed description
-  struct ContextOptions {
+  struct Options {
       /// a shared_ptr to an IndexSpaceRegistry object
       std::shared_ptr<IndexSpaceRegistry> index_space_registry_shared_ptr = nullptr;
+      /// an IndexSpaceRegistry object; used if index_space_registry_shared_ptr is null and it is nonnull
+      std::optional<IndexSpaceRegistry> index_space_registry = std::nullopt;
       /// the Vacuum object
       Vacuum vacuum = Defaults::vacuum;
       /// the IndexSpaceMetric object
@@ -91,64 +96,8 @@ class Context {
   /// ```cpp
   ///   Context ctx({.vacuum = Vacuum::SingleReference, .spbasis = SPBasis::spinfree});
   /// ```
-  Context(ContextOptions options = {.index_space_registry_shared_ptr = nullptr, .vacuum = Defaults::vacuum, .metric = Defaults::metric, .braket_symmetry =  Defaults::braket_symmetry, .spbasis = Defaults::spbasis, .first_dummy_index_ordinal = Defaults::first_dummy_index_ordinal, .braket_typesetting = Defaults::braket_typesetting, .braket_slot_typesetting =
+  Context(Options options = {.index_space_registry_shared_ptr = nullptr, .index_space_registry = std::nullopt, .vacuum = Defaults::vacuum, .metric = Defaults::metric, .braket_symmetry =  Defaults::braket_symmetry, .spbasis = Defaults::spbasis, .first_dummy_index_ordinal = Defaults::first_dummy_index_ordinal, .canonicalization_options = Defaults::canonicalization_options, .braket_typesetting = Defaults::braket_typesetting, .braket_slot_typesetting =
         Defaults::braket_slot_typesetting});
-
-  /// standard full-form constructor
-
-  /// @param isr_sptr a shared_ptr to an IndexSpaceRegistry object
-  /// @param vac a Vacuum object
-  /// @param m an IndexSpaceMetric object
-  /// @param bks a BraKetSymmetry object
-  /// @param spb single-particle basis (spin-free or spin-dependent)
-  /// @param fdio first dummy index ordinal
-  /// @param bkt a BraKetTypesetting object
-  /// @param bkst a BraKetSlotTypesetting object
-  explicit Context(
-      std::shared_ptr<IndexSpaceRegistry> isr_sptr,
-      Vacuum vac = Defaults::vacuum, IndexSpaceMetric m = Defaults::metric,
-      BraKetSymmetry bks = Defaults::braket_symmetry,
-      SPBasis spb = Defaults::spbasis,
-      std::size_t fdio = Defaults::first_dummy_index_ordinal,
-      BraKetTypesetting bkt = Defaults::braket_typesetting,
-      BraKetSlotTypesetting bkst = Defaults::braket_slot_typesetting);
-
-  /// @brief same as the standard ctor, using IndexSpaceRegistry passed by value
-
-  /// @param isr an IndexSpaceRegistry object
-  /// @param vac a Vacuum object
-  /// @param m an IndexSpaceMetric object
-  /// @param bks a BraKetSymmetry object
-  /// @param spb single-particle basis (spin-free or spin-dependent)
-  /// @param fdio first dummy index ordinal
-  /// @param bkt a BraKetTypesetting object
-  /// @param bkst a BraKetSlotTypesetting object
-  explicit Context(
-      IndexSpaceRegistry isr, Vacuum vac = Defaults::vacuum,
-      IndexSpaceMetric m = Defaults::metric,
-      BraKetSymmetry bks = Defaults::braket_symmetry,
-      SPBasis spb = Defaults::spbasis,
-      std::size_t fdio = Defaults::first_dummy_index_ordinal,
-      BraKetTypesetting bkt = Defaults::braket_typesetting,
-      BraKetSlotTypesetting bkst = Defaults::braket_slot_typesetting);
-
-  /// @brief same as the standard ctor, using default-constructed
-  /// IndexSpaceRegistry
-
-  /// @param vac a Vacuum object
-  /// @param m an IndexSpaceMetric object
-  /// @param bks a BraKetSymmetry object
-  /// @param spb single-particle basis (spin-free or spin-dependent)
-  /// @param fdio first dummy index ordinal
-  /// @param bkt a BraKetTypesetting object
-  /// @param bkst a BraKetSlotTypesetting object
-  explicit Context(
-      Vacuum vac, IndexSpaceMetric m = Defaults::metric,
-      BraKetSymmetry bks = Defaults::braket_symmetry,
-      SPBasis spb = Defaults::spbasis,
-      std::size_t fdio = Defaults::first_dummy_index_ordinal,
-      BraKetTypesetting bkt = Defaults::braket_typesetting,
-      BraKetSlotTypesetting bkst = Defaults::braket_slot_typesetting);
 
   ~Context() = default;
 
@@ -247,6 +196,7 @@ class Context {
   BraKetSymmetry braket_symmetry_ = Defaults::braket_symmetry;
   SPBasis spbasis_ = Defaults::spbasis;
   std::size_t first_dummy_index_ordinal_ = Defaults::first_dummy_index_ordinal;
+  std::optional<CanonicalizeOptions> canonicalization_options_ = std::nullopt;
   BraKetTypesetting braket_typesetting_ = Defaults::braket_typesetting;
   BraKetSlotTypesetting braket_slot_typesetting_ =
       Defaults::braket_slot_typesetting;
@@ -289,7 +239,13 @@ const Context& get_default_context(Statistics s = Statistics::Arbitrary);
 /// @brief sets default Context for the given Statistics
 /// @param ctx Context object
 /// @param s Statistics
-void set_default_context(const Context& ctx,
+void set_default_context(Context ctx,
+                         Statistics s = Statistics::Arbitrary);
+
+/// @brief sets default Context for the given Statistics
+/// @param ctx_options Context named-parameter constructor arguments
+/// @param s Statistics
+void set_default_context(Context::Options ctx_options,
                          Statistics s = Statistics::Arbitrary);
 
 /// @brief sets default Context for several given Statistics
@@ -320,14 +276,14 @@ set_scoped_default_context(const container::map<Statistics, Context>& ctx);
 /// ctx}})`
 [[nodiscard]] detail::ImplicitContextResetter<
     container::map<Statistics, Context>>
-set_scoped_default_context(const Context& ctx);
+set_scoped_default_context(Context ctx);
 
 /// @brief changes default context for arbitrary statistics
 /// @note equivalent to `set_scoped_default_context({{Statistics::Arbitrary,
-/// std::move(ctx)}})`
+/// Context{ctx_options}}})`
 [[nodiscard]] detail::ImplicitContextResetter<
     container::map<Statistics, Context>>
-set_scoped_default_context(Context&& ctx);
+set_scoped_default_context(Context::Options ctx_options);
 
 ///@}
 
