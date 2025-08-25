@@ -371,8 +371,12 @@ class TensorNetworkV3 {
     const NamedIndexSet *named_indices = nullptr;
 
     /// if false, will use same color for all
-    /// named indices that have same Index::color(), else will use distinct
-    /// color for each
+    /// named indices that have same Index::color(). This is needed to
+    /// ignore labels of the external indices, which is the desired behavior
+    /// for routine canonicalization that produces results independent of
+    /// external slot renamings. In some circumstances where external slots are
+    /// to be treated as topologically distinct (e.g. in WickTheorem) need to
+    /// set this to true
     bool distinct_named_indices = false;
 
     /// if false, will not generate the labels

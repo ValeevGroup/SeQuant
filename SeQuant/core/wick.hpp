@@ -311,9 +311,10 @@ class WickTheorem {
            }) == false);
 
     // every op needs to be in a partition AND partitions need to be sorted
-    // if op_partitions only specifues nontrivial partitions, may need to add
+    // if op_partitions only specifies nontrivial partitions, may need to add
     // more partitions create initial set of partitions, then update if needed
     op_npartitions_ = size(op_partitions);
+    op_partitions_.clear();
     op_partitions_.resize(op_npartitions_);
     auto partition_idx = 0;
     ranges::for_each(op_partitions, [&](auto &&op_partition) {

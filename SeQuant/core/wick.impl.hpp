@@ -608,7 +608,7 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
             // construct graph representation of the tensor product
 #if USE_TENSOR_NETWORK_V3
           TensorNetworkV3 tn(expr_input_->as<Product>().factors());
-          auto g = tn.create_graph();
+          auto g = tn.create_graph({.distinct_named_indices = true});
           const auto &graph = g.bliss_graph;
           const auto &vlabels = g.vertex_labels;
           const auto &vcolors = g.vertex_colors;
@@ -815,7 +815,7 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
                 }
               });
             }
-            const auto npartitions = next_partition_idx;
+            const auto npartitions = next_partition_idx + 1;
             return std::make_tuple(vertex_to_partition_idx, npartitions);
           };
 
