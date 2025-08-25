@@ -10,11 +10,11 @@ endif()
 option(SEQUANT_SKIP_LONG_TESTS "Whether to skip execution of long-running tests" OFF)
 
 if (SEQUANT_TESTS)
-    # Add a "test" that compiles that "all" target, which includes the tests binaries
-    add_test("sequant/compile" "${CMAKE_COMMAND}" --build "${PROJECT_BINARY_DIR}")
-    set_tests_properties("sequant/compile" PROPERTIES
+    # Add a "test" that builds that "all" target, which includes the tests binaries
+    add_test("sequant/build" "${CMAKE_COMMAND}" --build "${PROJECT_BINARY_DIR}")
+    set_tests_properties("sequant/build" PROPERTIES
         FIXTURES_SETUP SEQUANT_BUILD_ALL
-        TIMEOUT 0 # disable timeout for the compile step
+        TIMEOUT 0 # disable timeout for the build step
     )
 endif()
 
