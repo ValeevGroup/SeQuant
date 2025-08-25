@@ -28,16 +28,13 @@ if (TARGET tiledarray)
     target_compile_definitions(eval_ta PRIVATE SEQUANT_HAS_TILEDARRAY)
 
     set(test_name "sequant/integration/eval_ta")
-    add_test(NAME "${test_name}/build"
-            COMMAND "${CMAKE_COMMAND}" --build ${CMAKE_BINARY_DIR} --target "eval_ta")
-    set_tests_properties("${test_name}/build" PROPERTIES FIXTURES_SETUP SEQUANT_FIXTURE_eval_ta)
     add_test(
-            NAME "${test_name}/run"
+            NAME "${test_name}"
             COMMAND eval_ta
-    )
-    set_tests_properties("${test_name}/run" PROPERTIES
             WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
-            FIXTURES_REQUIRED SEQUANT_FIXTURE_eval_ta)
+    )
+
+    build_test_as_needed(eval_ta "${test_name}" test_name)
 
     add_executable(eval_btas ${BUILD_BY_DEFAULT}
             "btas/data_world_btas.hpp"
@@ -48,15 +45,11 @@ if (TARGET tiledarray)
     target_link_libraries(eval_btas PRIVATE eval_shared)
 
     set(test_name "sequant/integration/eval_btas")
-    add_test(NAME "${test_name}/build"
-            COMMAND "${CMAKE_COMMAND}" --build ${CMAKE_BINARY_DIR} --target "eval_btas")
-    set_tests_properties("${test_name}/build" PROPERTIES FIXTURES_SETUP SEQUANT_FIXTURE_eval_btas)
     add_test(
-            NAME "${test_name}/run"
+            NAME "${test_name}"
             COMMAND eval_btas
             WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
     )
-    set_tests_properties("${test_name}/run" PROPERTIES
-            WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
-            FIXTURES_REQUIRED SEQUANT_FIXTURE_eval_btas)
+
+    build_test_as_needed(eval_btas "${test_name}" test_name)
 endif (TARGET tiledarray)

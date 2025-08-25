@@ -43,19 +43,15 @@ foreach(current IN LISTS TEST_CASES)
         target_compile_definitions(${test_name} PRIVATE SEQUANT_SKIP_LONG_TESTS=1)
     endif()
 
-    # test for building ${test_name} as needed
-    add_test(NAME "sequant/integration/${test_name}/build"
-            COMMAND "${CMAKE_COMMAND}" --build ${CMAKE_BINARY_DIR} --target "${test_name}")
-    set_tests_properties("sequant/integration/${test_name}/build" PROPERTIES FIXTURES_SETUP SEQUANT_FIXTURE_${test_name})
+    set(variant_names "")
 
     if (NOT test_variants)
         add_test(
-            NAME "sequant/integration/${test_name}/run"
+            NAME "sequant/integration/${test_name}"
             COMMAND ${test_name}
+            WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
         )
-        set_tests_properties("sequant/integration/${test_name}/run" PROPERTIES
-                WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
-                FIXTURES_REQUIRED SEQUANT_FIXTURE_${test_name})
+        list(APPEND variant_names "sequant/integration/${test_name}")
     else()
         # By inserting semicolons, we turn test_variants into a list
         string(REPLACE "|" ";" test_variants "${test_variants}")
@@ -63,16 +59,17 @@ foreach(current IN LISTS TEST_CASES)
         set(counter 1)
         foreach(arguments IN LISTS test_variants)
             add_test(
-                NAME "sequant/integration/${test_name}/run/${counter}"
+                NAME "sequant/integration/${test_name}/${counter}"
                 COMMAND ${test_name} ${arguments}
+                WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
             )
-            set_tests_properties("sequant/integration/${test_name}/run/${counter}" PROPERTIES
-                    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
-                    FIXTURES_REQUIRED SEQUANT_FIXTURE_${test_name})
+            list(APPEND variant_names "sequant/integration/${test_name}/${counter}")
 
             math(EXPR counter "${counter} + 1")
         endforeach()
     endif()
+
+    build_test_as_needed(${test_name} "sequant/integration/${test_name}" variant_names)
 endforeach()
 
 add_subdirectory(eval)
