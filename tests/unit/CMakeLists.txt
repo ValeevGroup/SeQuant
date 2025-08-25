@@ -66,6 +66,7 @@ if (SEQUANT_TESTS)
         unit_tests-sequant
         TEST_PREFIX "sequant/unit/"
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+        PROPERTIES FIXTURES_REQUIRED "SEQUANT_BUILD_ALL"
     )
 else()
     add_test(
@@ -73,6 +74,7 @@ else()
         COMMAND unit_tests-sequant
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
     )
+
     set(TEST_NAMES "sequant/unit")
     build_test_as_needed(unit_tests-sequant "sequant/unit" TEST_NAMES)
 endif()

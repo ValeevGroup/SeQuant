@@ -9,9 +9,24 @@ endif()
 
 option(SEQUANT_SKIP_LONG_TESTS "Whether to skip execution of long-running tests" OFF)
 
+if (SEQUANT_TESTS)
+    # Add a "test" that compiles that "all" target, which includes the tests binaries
+    add_test("sequant/compile" "${CMAKE_COMMAND}" --build "${PROJECT_BINARY_DIR}")
+    set_tests_properties("sequant/compile" PROPERTIES
+        FIXTURES_SETUP SEQUANT_BUILD_ALL
+        TIMEOUT 0 # disable timeout for the compile step
+    )
+endif()
+
 function(build_test_as_needed TARGET_NAME TEST_PREFIX DEPENDENT_TESTS)
     if (SEQUANT_TESTS)
         # Tests are built by default -> no need to add extra build steps
+        # However, we do depend on the SEQUANT_BUILD_ALL fixture to allow for
+        # running ctest without running make first
+        foreach(current IN LISTS ${DEPENDENT_TESTS})
+            set_tests_properties("${current}" PROPERTIES FIXTURES_REQUIRED "SEQUANT_BUILD_ALL")
+        endforeach()
+
         return()
     endif()
 
