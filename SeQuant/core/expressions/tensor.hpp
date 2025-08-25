@@ -601,7 +601,8 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
     abort();  // unreachable
   }
 
-  ExprPtr canonicalize() override;
+  /// @note this performs rapid canonicalization only
+  ExprPtr canonicalize(CanonicalizeOptions = {}) override;
 
   /// @brief adjoint of a Tensor swaps its bra and ket
   virtual void adjoint() override;

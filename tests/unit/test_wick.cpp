@@ -658,6 +658,8 @@ TEST_CASE("wick", "[algorithms][wick]") {
       ExprPtr result;
       REQUIRE_NOTHROW(result = wick.compute());
       // std::wcout << "result = " << to_latex(result) << std::endl;
+      REQUIRE(to_latex(result) == L"{{-}{\\bar{g}^{{a_2}{i_1}}_{{a_4}{a_3}}}}");
+      canonicalize(result, {.method = CanonicalizationMethod::Rapid});
       REQUIRE(to_latex(result) == L"{{-}{\\bar{g}^{{i_1}{a_2}}_{{a_3}{a_4}}}}");
     }
 
@@ -993,7 +995,8 @@ TEST_CASE("wick", "[algorithms][wick]") {
           TensorCanonicalizer::register_instance(
               std::make_shared<DefaultTensorCanonicalizer>(
                   std::vector<Index>{}));
-          canonicalize(wick_result_2);
+          canonicalize(wick_result_2,
+                       {.method = CanonicalizationMethod::Complete});
           rapid_simplify(wick_result_2);
 
           // print(oss.str(), wick_result_2);

@@ -19,6 +19,7 @@ bool operator==(const Context& ctx1, const Context& ctx2) {
                ctx2.first_dummy_index_ordinal() &&
            ctx1.index_space_registry()->spaces() ==
                ctx2.index_space_registry()->spaces() &&
+           ctx1.canonicalization_options() == ctx2.canonicalization_options() &&
            ctx1.braket_typesetting() == ctx2.braket_typesetting() &&
            ctx1.braket_slot_typesetting() == ctx2.braket_slot_typesetting() &&
            *ctx1.index_space_registry() == *ctx2.index_space_registry();

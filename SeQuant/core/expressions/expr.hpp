@@ -2,6 +2,7 @@
 #define SEQUANT_EXPRESSIONS_EXPR_HPP
 
 #include <SeQuant/core/expressions/expr_ptr.hpp>
+#include <SeQuant/core/options.hpp>
 
 #include <boost/core/demangle.hpp>
 
@@ -99,7 +100,8 @@ class Expr : public std::enable_shared_from_this<Expr>,
   /// phase)
   /// @return the byproduct of canonicalization, or @c nullptr if no byproduct
   /// generated
-  virtual ExprPtr canonicalize() {
+  virtual ExprPtr canonicalize(
+      CanonicalizeOptions opt = CanonicalizeOptions::default_options()) {
     return {};  // by default do nothing and return nullptr
   }
 
@@ -108,7 +110,9 @@ class Expr : public std::enable_shared_from_this<Expr>,
   /// canonicalize(), unless overridden in the derived class.
   /// @return the byproduct of canonicalization, or @c nullptr if no byproduct
   /// generated
-  virtual ExprPtr rapid_canonicalize() { return this->canonicalize(); }
+  virtual ExprPtr rapid_canonicalize() {
+    return this->canonicalize({.method = CanonicalizationMethod::Rapid});
+  }
 
   // clang-format off
   /// recursively visit this expression, i.e. call visitor on each subexpression

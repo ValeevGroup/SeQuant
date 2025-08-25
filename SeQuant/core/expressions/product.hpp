@@ -397,8 +397,10 @@ class Product : public Expr {
     return *hash_value_;
   }
 
-  ExprPtr canonicalize_impl(bool rapid = false);
-  virtual ExprPtr canonicalize() override;
+  ExprPtr canonicalize_impl(CanonicalizationMethod);
+  virtual ExprPtr canonicalize(
+      CanonicalizeOptions opt =
+          CanonicalizeOptions::default_options()) override;
   virtual ExprPtr rapid_canonicalize() override;
 
   bool static_equal(const Expr &that) const override {

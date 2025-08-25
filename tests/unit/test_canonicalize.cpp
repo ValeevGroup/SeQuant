@@ -98,6 +98,11 @@ TEST_CASE("canonicalization", "[algorithms]") {
   }
 
   SECTION("Products") {
+    // P.S. ref outputs produced with complete canonicalization
+    auto ctx = get_default_context();
+    ctx.set(CanonicalizeOptions{.method = CanonicalizationMethod::Complete});
+    auto _ = set_scoped_default_context(ctx);
+
     {
       auto input =
           ex<Tensor>(L"S", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"},
@@ -219,6 +224,11 @@ TEST_CASE("canonicalization", "[algorithms]") {
   }
 
   SECTION("Sum of Products") {
+    // P.S. ref outputs produced with complete canonicalization
+    auto ctx = get_default_context();
+    ctx.set(CanonicalizeOptions{.method = CanonicalizationMethod::Complete});
+    auto _ = set_scoped_default_context(ctx);
+
     {
       // CASE 1: Non-symmetric tensors
       auto input =

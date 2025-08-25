@@ -385,6 +385,7 @@ class WickTheorem {
   /// canonicalization of the input expression; the default is false.
   /// @return the result of applying Wick's theorem; either a Constant, a
   /// Product, or a Sum
+  /// @note the canonicalization method is controlled by the default Context
   /// @warning this is not reentrant, but is optionally threaded internally
   /// @throw std::logic_error if input's vacuum does not match the current
   /// context vacuum

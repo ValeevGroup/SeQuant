@@ -487,7 +487,11 @@ TEST_CASE("tensor_network", "[elements]") {
         {t::A(nₚ(-2)), t::H_(2), t::T_(2), t::T_(2), t::T_(2)});
     // canonicalize to avoid dependence on the implementation details of
     // mbpt::sr::make_op
-    canonicalize(tmp);
+    // N.B. graph structure before canonicalization will depend on the input
+    // state
+    //      make sure input matches what was used to generate the reference
+    //      graphviz validator
+    canonicalize(tmp, {.method = CanonicalizationMethod::Complete});
     // std::wcout << "A2*H2*T2*T2*T2 = " << to_latex(tmp) << std::endl;
     TN tn(tmp->as<Product>().factors());
 
