@@ -20,8 +20,8 @@
 #include <SeQuant/core/tensor_network.hpp>
 #include <SeQuant/core/tensor_network_v2.hpp>
 #include <SeQuant/core/tensor_network_v3.hpp>
-#include <SeQuant/core/timer.hpp>
 #include <SeQuant/core/utility/string.hpp>
+#include <SeQuant/core/utility/timer.hpp>
 
 #include <algorithm>
 #include <cmath>
@@ -46,7 +46,7 @@
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/op.hpp>
 
-#include <SeQuant/core/timer.hpp>
+#include <SeQuant/core/utility/timer.hpp>
 #include <range/v3/all.hpp>
 
 using namespace sequant;
@@ -208,10 +208,6 @@ TEMPLATE_TEST_CASE("tensor_network_shared", "[elements]", TensorNetwork,
           REQUIRE(cbp1.phase * cbp2.phase == (phase == Minus ? -1 : 1));
         } else
           REQUIRE(cbp1.graph->cmp(*cbp2.graph) != 0);
-
-        //                std::wcout << canonicalize(ex1).to_latex() << " should
-        //                be equal " << canonicalize(ex2).to_latex() <<
-        //                std::endl;
       }
     }
 
@@ -240,9 +236,8 @@ TEMPLATE_TEST_CASE("tensor_network_shared", "[elements]", TensorNetwork,
 
       using idxvec_t = std::vector<std::wstring>;
       constexpr bool v3 =
-          std::is_same_v<TN,
-                         TensorNetworkV3>;  // v3 colors vertices differently,
-                                            // so canonical order differs
+          TN::version() == 3;  // v3 colors vertices differently,
+                               // so canonical order differs
       for (const auto& [input, str_indices] :
            std::vector<std::pair<std::wstring, std::vector<std::wstring>>>{
                {L"G{;;a1,a2,a3,a4} T{;;i3,i2,a3,a4}",
@@ -286,12 +281,18 @@ TEMPLATE_TEST_CASE("tensor_network_shared", "[elements]", TensorNetwork,
         CAPTURE(input2);
 
         {
+          auto tn_canonicalize = [](TN& tn) {
+            if constexpr (TN::version() == 3) {
+              tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels());
+            } else {
+              tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(),
+                              /* fast = */ false);
+            }
+          };
           TN tn1(*input1);
-          tn1.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(),
-                           false);
+          tn_canonicalize(tn1);
           TN tn2(*input2);
-          tn2.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(),
-                           false);
+          tn_canonicalize(tn2);
 
           // std::wcout << "tn1[0] = " <<
           // to_latex(std::dynamic_pointer_cast<Expr>(tn1.tensors()[0])) <<
@@ -308,7 +309,7 @@ TEMPLATE_TEST_CASE("tensor_network_shared", "[elements]", TensorNetwork,
           // "\n";
 
           // TNv1 fails to canonicalize this correctly
-          if constexpr (!std::is_same_v<TN, TensorNetwork>) {
+          if constexpr (TN::version() != 1) {
             // input2 obtained from input1 by i6 -> i11, which "frees" i6 for
             // dummy renamings so canonical(input2) is obtained from
             // canonical(input1) by i6 -> i11 and i7 -> i6
@@ -500,10 +501,11 @@ TEST_CASE("tensor_network", "[elements]") {
     // N.B. cluster tensor vertices only
     std::basic_ostringstream<wchar_t> oss;
     REQUIRE_NOTHROW(graph->write_dot(
-        oss, vlabels, vtexlabels,
-        {.vertex_to_subgraph = [&](std::size_t vertex_ordinal) {
-          return gdata.vertex_to_tensor_cluster(vertex_ordinal);
-        }}));
+        oss, {.labels = vlabels,
+              .texlabels = vtexlabels,
+              .vertex_to_subgraph = [&](std::size_t vertex_ordinal) {
+                return gdata.vertex_to_tensor_cluster(vertex_ordinal);
+              }}));
     // std::wcout << "oss.str() = " << std::endl << oss.str() << std::endl;
     const std::wstring actual = oss.str();
     // clang-format off
@@ -747,7 +749,7 @@ L"}\n";
       // create dot
       {
         std::basic_ostringstream<wchar_t> oss;
-        REQUIRE_NOTHROW(graph->write_dot(oss, vlabels));
+        REQUIRE_NOTHROW(graph->write_dot(oss, {.labels = vlabels}));
         // std::wcout << "oss.str() = " << std::endl << oss.str() << std::endl;
       }
 
@@ -1055,16 +1057,17 @@ TEST_CASE("tensor_network_v2", "[elements]") {
         if (first_graph->cmp(*second_graph) != 0) {
           std::wstringstream stream;
           stream << "First graph:\n";
-          first_graph->write_dot(stream, first_labels, {},
-                                 {.display_colors = true});
+          first_graph->write_dot(
+              stream, {.labels = first_labels, .display_colors = true});
           stream << "Second graph:\n";
-          second_graph->write_dot(stream, second_labels, {},
-                                  {.display_colors = true});
+          second_graph->write_dot(
+              stream, {.labels = second_labels, .display_colors = true});
           stream << "TN graph:\n";
-          auto [wick_graph, labels, texlabels, d1, d2] =
-              TensorNetwork(first).make_bliss_graph();
-          wick_graph->write_dot(stream, labels, texlabels,
-                                {.display_colors = true});
+          auto graph = TensorNetworkV2(first).create_graph();
+          graph.bliss_graph->write_dot(stream,
+                                       {.labels = graph.vertex_labels,
+                                        .texlabels = graph.vertex_texlabels,
+                                        .display_colors = true});
 
           FAIL(to_string(stream.str()));
         }
@@ -1154,8 +1157,8 @@ TEST_CASE("tensor_network_v2", "[elements]") {
           accessor.get_canonical_bliss_graph(TensorNetworkV2(expected));
 
       //      std::wcout << "Canonical graph:\n";
-      //      canonical_graph->write_dot(std::wcout, canonical_graph_labels);
-      //      std::wcout << std::endl;
+      //      canonical_graph->write_dot(std::wcout, {.labels =
+      //      canonical_graph_labels}); std::wcout << std::endl;
 
       std::vector<Index> indices;
       for (std::size_t i = 0; i < expected.size(); ++i) {
@@ -1223,7 +1226,8 @@ TEST_CASE("tensor_network_v2", "[elements]") {
             if (current_graph->cmp(*canonical_graph) != 0) {
               std::wcout << "Canonical graph for " << deparse(ex<Product>(copy))
                          << ":\n";
-              current_graph->write_dot(std::wcout, current_graph_labels);
+              current_graph->write_dot(std::wcout,
+                                       {.labels = current_graph_labels});
               std::wcout << std::endl;
             }
             REQUIRE(current_graph->cmp(*canonical_graph) == 0);
@@ -1349,7 +1353,8 @@ TEST_CASE("tensor_network_v2", "[elements]") {
       // create dot
       {
         std::basic_ostringstream<wchar_t> oss;
-        REQUIRE_NOTHROW(graph.bliss_graph->write_dot(oss, graph.vertex_labels));
+        REQUIRE_NOTHROW(
+            graph.bliss_graph->write_dot(oss, {.labels = graph.vertex_labels}));
         // std::wcout << "oss.str() = " << std::endl << oss.str() <<
         // std::endl;
       }
@@ -1381,7 +1386,7 @@ class TensorNetworkV3Accessor {
   auto get_canonical_bliss_graph(
       sequant::TensorNetworkV3 tn,
       const sequant::TensorNetwork::named_indices_t* named_indices = nullptr) {
-    [[maybe_unused]] auto byprod =
+    auto _ =
         tn.canonicalize_graph(named_indices ? *named_indices : tn.ext_indices_);
     tn.init_edges();
     auto graph = tn.create_graph(
@@ -1570,7 +1575,7 @@ TEST_CASE("tensor_network_v3", "[elements]") {
       auto t2 = ex<FNOperator>(cre({L"i_1"}), ann({L"i_2"}), V);
       auto t1_x_t2 = t1 * t2;
       TN tn(*t1_x_t2);
-      tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(), false);
+      tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels());
 
       REQUIRE(size(tn.tensors()) == 2);
       REQUIRE(std::dynamic_pointer_cast<Expr>(tn.tensors()[0]));
@@ -1596,7 +1601,7 @@ TEST_CASE("tensor_network_v3", "[elements]") {
       // with all external named indices
       SECTION("implicit") {
         TN tn(*t1_x_t2);
-        tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(), false);
+        tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels());
 
         REQUIRE(size(tn.tensors()) == 2);
         REQUIRE(std::dynamic_pointer_cast<Expr>(tn.tensors()[0]));
@@ -1619,8 +1624,8 @@ TEST_CASE("tensor_network_v3", "[elements]") {
 
         using named_indices_t = TN::NamedIndexSet;
         named_indices_t indices{Index{L"i_17"}};
-        tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(), false,
-                        &indices);
+        tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(),
+                        TN::CanonicalizationMethod::Complete, &indices);
 
         REQUIRE(size(tn.tensors()) == 2);
         REQUIRE(std::dynamic_pointer_cast<Expr>(tn.tensors()[0]));
@@ -1646,7 +1651,9 @@ TEST_CASE("tensor_network_v3", "[elements]") {
       for (int variant : {1, 2}) {
         for (bool fast : {true, false}) {
           TN tn(std::vector<ExprPtr>{variant == 1 ? input1 : input2});
-          tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(), fast);
+          tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(),
+                          fast ? TN::CanonicalizationMethod::Rapid
+                               : TN::CanonicalizationMethod::Complete);
           REQUIRE(tn.tensors().size() == 1);
           auto result = ex<Product>(to_tensors(tn.tensors()));
           REQUIRE(to_latex(result) == (variant == 1 ? expected1 : expected2));
@@ -1662,9 +1669,10 @@ TEST_CASE("tensor_network_v3", "[elements]") {
       const std::wstring expected =
           L"A{i_1,i_2;i_3,i_4}:A * I1{i_3,i_4;;x_1}:N * I2{;i_1,i_2;x_1}:N";
 
-      for (bool fast : {true, false}) {
+      for (auto method : {TN::CanonicalizationMethod::Rapid,
+                          TN::CanonicalizationMethod::Complete}) {
         TN tn(input);
-        tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(), fast);
+        tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(), method);
         const auto result = ex<Product>(to_tensors(tn.tensors()));
         REQUIRE_THAT(result, SimplifiesTo(expected));
       }
@@ -1692,16 +1700,18 @@ TEST_CASE("tensor_network_v3", "[elements]") {
         if (first_graph->cmp(*second_graph) != 0) {
           std::wstringstream stream;
           stream << "First graph:\n";
-          first_graph->write_dot(stream, first_labels, {},
-                                 {.display_colors = true});
+          first_graph->write_dot(
+              stream, {.labels = first_labels, .display_colors = true});
           stream << "Second graph:\n";
-          second_graph->write_dot(stream, second_labels, {},
-                                  {.display_colors = true});
+          second_graph->write_dot(
+              stream, {.labels = second_labels, .display_colors = true});
           stream << "TN graph:\n";
-          auto [wick_graph, labels, texlabels, d1, d2] =
-              TensorNetwork(first).make_bliss_graph();
-          wick_graph->write_dot(stream, labels, texlabels,
-                                {.display_colors = true});
+          auto graph = TensorNetworkV3(first).create_graph();
+          graph.bliss_graph->write_dot(stream,
+                                       {.labels = graph.vertex_labels,
+                                        .xlabels = graph.vertex_xlabels,
+                                        .texlabels = graph.vertex_texlabels,
+                                        .display_colors = true});
 
           FAIL(to_string(stream.str()));
         }
@@ -1709,8 +1719,8 @@ TEST_CASE("tensor_network_v3", "[elements]") {
         TN tn1(first);
         TN tn2(second);
 
-        tn1.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(), false);
-        tn2.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(), false);
+        tn1.canonicalize(TensorCanonicalizer::cardinal_tensor_labels());
+        tn2.canonicalize(TensorCanonicalizer::cardinal_tensor_labels());
 
         REQUIRE(tn1.tensors().size() == tn2.tensors().size());
         for (std::size_t i = 0; i < tn1.tensors().size(); ++i) {
@@ -1740,8 +1750,9 @@ TEST_CASE("tensor_network_v3", "[elements]") {
         const auto input_tensors = parse_expr(input).as<Product>().factors();
 
         TN tn(input_tensors);
-        ExprPtr factor = tn.canonicalize(
-            TensorCanonicalizer::cardinal_tensor_labels(), true);
+        ExprPtr factor =
+            tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(),
+                            TN::CanonicalizationMethod::Rapid);
 
         ExprPtr prod = to_product(tn.tensors());
         if (factor) {
@@ -1764,7 +1775,7 @@ TEST_CASE("tensor_network_v3", "[elements]") {
       TN tn(factors);
 
       ExprPtr factor =
-          tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(), false);
+          tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels());
       ExprPtr result = to_product(tn.tensors());
       if (factor) {
         result *= factor;
@@ -1788,8 +1799,8 @@ TEST_CASE("tensor_network_v3", "[elements]") {
                              aux{L"p_1", L"p"}, Symmetry::antisymm);
         TN tn(u1 * u2 * u3);
 
-        ExprPtr factor = tn.canonicalize(
-            TensorCanonicalizer::cardinal_tensor_labels(), false);
+        ExprPtr factor =
+            tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels());
         result_1 = to_product(tn.tensors());
         if (factor) {
           result_1 *= factor;
@@ -1810,8 +1821,8 @@ TEST_CASE("tensor_network_v3", "[elements]") {
                              aux{L"p_1", L"p_2"}, Symmetry::antisymm);
         TN tn(u2 * u1 * u3);
 
-        ExprPtr factor = tn.canonicalize(
-            TensorCanonicalizer::cardinal_tensor_labels(), false);
+        ExprPtr factor =
+            tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels());
         result_2 = to_product(tn.tensors());
         if (factor) {
           result_2 *= factor;
@@ -1841,8 +1852,8 @@ TEST_CASE("tensor_network_v3", "[elements]") {
           accessor.get_canonical_bliss_graph(TN(expected));
 
       //      std::wcout << "Canonical graph:\n";
-      //      canonical_graph->write_dot(std::wcout, canonical_graph_labels);
-      //      std::wcout << std::endl;
+      //      canonical_graph->write_dot(std::wcout, {.labels =
+      //      canonical_graph_labels}); std::wcout << std::endl;
 
       std::vector<Index> indices;
       for (std::size_t i = 0; i < expected.size(); ++i) {
@@ -1910,13 +1921,13 @@ TEST_CASE("tensor_network_v3", "[elements]") {
             if (current_graph->cmp(*canonical_graph) != 0) {
               std::wcout << "Canonical graph for " << deparse(ex<Product>(copy))
                          << ":\n";
-              current_graph->write_dot(std::wcout, current_graph_labels);
+              current_graph->write_dot(std::wcout,
+                                       {.labels = current_graph_labels});
               std::wcout << std::endl;
             }
             REQUIRE(current_graph->cmp(*canonical_graph) == 0);
 
-            tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(),
-                            false);
+            tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels());
 
             std::vector<ExprPtr> actual;
             std::transform(tn.tensors().begin(), tn.tensors().end(),
@@ -1971,19 +1982,20 @@ TEST_CASE("tensor_network_v3", "[elements]") {
         auto factors2 = parse_expr(current).as<Product>().factors();
 
         TN reference_tn(factors1);
-        reference_tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(),
-                                  false);
+        reference_tn.canonicalize(
+            TensorCanonicalizer::cardinal_tensor_labels());
 
         TN check_tn(factors2);
-        check_tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(),
-                              false);
+        check_tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels());
 
         REQUIRE(to_latex(to_product(reference_tn.tensors())) ==
                 to_latex(to_product(check_tn.tensors())));
 
         for (bool fast : {true, false, true, true, false, false, true}) {
           reference_tn.canonicalize(
-              TensorCanonicalizer::cardinal_tensor_labels(), fast);
+              TensorCanonicalizer::cardinal_tensor_labels(),
+              fast ? TN::CanonicalizationMethod::Rapid
+                   : TN::CanonicalizationMethod::Complete);
 
           REQUIRE(to_latex(to_product(reference_tn.tensors())) ==
                   to_latex(to_product(check_tn.tensors())));
@@ -2035,7 +2047,8 @@ TEST_CASE("tensor_network_v3", "[elements]") {
       // create dot
       {
         std::basic_ostringstream<wchar_t> oss;
-        REQUIRE_NOTHROW(graph.bliss_graph->write_dot(oss, graph.vertex_labels));
+        REQUIRE_NOTHROW(
+            graph.bliss_graph->write_dot(oss, {.labels = graph.vertex_labels}));
         // std::wcout << "oss.str() = " << std::endl << oss.str() <<
         // std::endl;
       }

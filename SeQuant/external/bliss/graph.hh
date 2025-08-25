@@ -682,9 +682,51 @@ class Graph : public AbstractGraph {
    */
   void write_dot(const char* const file_name);
 
+  /// converts a color expressed as utin32_t to RGB color represented as 3 integers with 8 bits worth of information
+  /// increase xsat (xsat <= 8) to try to increase saturation by this many bits
+  /// @pre xsat <= 8
+  static std::array<std::uint32_t,3> uint32_to_rgb(std::uint32_t i, unsigned int xsat = 0) {
+    assert(xsat <= 8);
+    // RGB has channel strides of {256^2, 256, 1} for a total range of [0, 256^3)
+    // map 32-bit int to RGB by using channel strides of {s^2, s, 1}, where s=(2^32)^(1/3) = 1626
+    constexpr std::uint32_t s = 1626;
+    constexpr std::uint32_t ss = s*s;
+    std::array<std::uint32_t,3> rgb_int; // 0 -> R, 1 -> G, 2 -> B
+    rgb_int[0] = i/ss;
+    rgb_int[1] = (i-rgb_int[0]*ss)/s;
+    rgb_int[2] = (i-rgb_int[0]*ss - rgb_int[1]*s);
+    for(int k=0; k!=3; ++k) rgb_int[k]=(rgb_int[k]*256)/s;  // rescale to 8 bits per channel
+
+    // increase saturation, if needed
+    if (xsat > 0) {
+      // for each channel saturate independently
+      for (int k = 0; k != 3; ++k) {
+        int nsatbits = xsat;
+        while (nsatbits > 0) {
+          // do we have this many unset significant bits in this channel?
+          bool can_sat = true;
+          if ((rgb_int[k] >> (8 - nsatbits)) > 0) can_sat = false;
+          if (can_sat) {
+            rgb_int[k] = rgb_int[k] == 0 ? (1<<(nsatbits-1)) : (rgb_int[k] << nsatbits);
+            break;
+          } else
+            nsatbits--;
+        }
+      }
+    }
+
+    return rgb_int;
+  }
+
   /// options for generating dot file
   template <typename Char, typename Traits>
   struct DotOptions {
+    /// vertex labels
+    std::vector<std::basic_string<Char, Traits>> labels = {};
+    /// vertex xlabels
+    std::vector<std::optional<std::basic_string<Char, Traits>>> xlabels = {};
+    /// vertex texlabels
+    std::vector<std::optional<std::basic_string<Char, Traits>>> texlabels = {};
     /// if true, display colored vertices using color values
     /// to RGB colors;
     ///        if false, color value is appended to the vertex label; by default
@@ -705,58 +747,26 @@ class Graph : public AbstractGraph {
   /// @tparam Char a character type
   /// @tparam Traits a stream traits type
   /// @param os the output stream
-  /// @param vertex_labels the optional vertex labels, used for `label` attributes of nodes
-  /// @param vertex_texlabels the optional vertex labels, used for `texlbl` attributes of nodes
   /// @param options options for generating dot file
-  template <typename Char, typename Traits,
-            typename StringSequence = std::vector<std::basic_string<Char>>,
-            typename OptStringSequence = std::vector<std::optional<std::basic_string<Char>>>>
+  template <typename Char, typename Traits>
   void write_dot(std::basic_ostream<Char, Traits>& os,
-                 const StringSequence& vertex_labels = StringSequence{},
-                 const OptStringSequence& vertex_texlabels = OptStringSequence{},
-                 DotOptions<Char,Traits> options = {.display_colors=std::nullopt, .fillcolor_saturation_nbits=3, .vertex_to_subgraph = {}, .nodeextras = {}}) {
+                 DotOptions<Char,Traits> options = {.labels = {}, .xlabels = {}, .texlabels = {}, .display_colors=std::nullopt, .fillcolor_saturation_nbits=3, .vertex_to_subgraph = {}, .nodeextras = {}}) {
     using std::size;
-    const auto nvertices = size(vertex_labels);
+    const auto nvertices = size(options.labels);
     const bool have_labels = nvertices > 0;
-    const bool have_texlabels = size(vertex_texlabels) > 0;
-    assert(!have_texlabels || size(vertex_texlabels) == nvertices);
+    const bool have_xlabels = size(options.xlabels) > 0;
+    assert(!have_xlabels || size(options.xlabels) == nvertices);
+    const bool have_texlabels = size(options.texlabels) > 0;
+    assert(!have_texlabels || size(options.texlabels) == nvertices);
     const bool rgb_colors = options.display_colors.value_or(have_labels);
 
     remove_duplicate_edges();
 
     // converts int color to RGB string; increase xsat (xsat <= 8) to try to increase saturation by this many bits
     auto int_to_rgb = [](std::uint32_t i, unsigned int xsat = 0) {
-      assert(xsat <= 8);
-      // RGB has channel strides of {256^2, 256, 1} for a total range of [0, 256^3)
-      // map 32-bit int to RGB by using channel strides of {s^2, s, 1}, where s=(2^32)^(1/3) = 1626
-      constexpr std::uint32_t s = 1626;
-      constexpr std::uint32_t ss = s*s;
-      std::array<std::uint32_t,3> rgb_int; // 0 -> R, 1 -> G, 2 -> B
-      rgb_int[0] = i/ss;
-      rgb_int[1] = (i-rgb_int[0]*ss)/s;
-      rgb_int[2] = (i-rgb_int[0]*ss - rgb_int[1]*s);
-      for(int k=0; k!=3; ++k) rgb_int[k]=(rgb_int[k]*256)/s;  // rescale to 8 bits per channel
-
-      // increase saturation, if needed
-      if (xsat > 0) {
-        // for each channel saturate independently
-        for (int k = 0; k != 3; ++k) {
-          int nsatbits = xsat;
-          while (nsatbits > 0) {
-            // do we have this many unset significant bits in this channel?
-            bool can_sat = true;
-            if ((rgb_int[k] >> (8 - nsatbits)) > 0) can_sat = false;
-            if (can_sat) {
-              rgb_int[k] = rgb_int[k] == 0 ? (1<<(nsatbits-1)) : (rgb_int[k] << nsatbits);
-              break;
-            } else
-              nsatbits--;
-          }
-        }
-      }
-
-      // rebuild integer
-      i = rgb_int[0] * (1<<16) + rgb_int[1] * (1<<8) + rgb_int[2];
+      auto rgb_int8 = uint32_to_rgb(i, xsat);
+      // map back to an int
+      i = rgb_int8[0] * (1<<16) + rgb_int8[1] * (1<<8) + rgb_int8[2];
 
       std::basic_stringstream<Char> stream;
       // Set locale of this stream to C to avoid any kind of thousands separator
@@ -794,13 +804,19 @@ class Graph : public AbstractGraph {
       os << "v" << vord << " [ label=\"";
       if (have_labels) {
         assert(vord < nvertices);
-        os << vertex_labels[vord];
+        os << options.labels[vord];
       } else
         os << vord;
+      if (have_xlabels) {
+        assert(vord < nvertices);
+        if (options.xlabels[vord].has_value()) {
+          os << "\", xlabel=\"" << options.xlabels[vord].value();
+        }
+      }
       if (have_texlabels) {
         assert(vord < nvertices);
-        if (vertex_texlabels[vord].has_value()) {
-          os << "\", texlbl=\"" << vertex_texlabels[vord].value();
+        if (options.texlabels[vord].has_value()) {
+          os << "\", texlbl=\"" << options.texlabels[vord].value();
         }
       }
       if (rgb_colors) {
@@ -913,9 +929,9 @@ protected:
 * Accessor for the const Graph::cmp implementation
 */
 struct ConstGraphCmp {
-	static auto cmp(const Graph &lhs, const Graph &rhs) {
-		return lhs.cmp(rhs);
-	}
+  static auto cmp(const Graph &lhs, const Graph &rhs) {
+    return lhs.cmp(rhs);
+  }
 };
 
 /**

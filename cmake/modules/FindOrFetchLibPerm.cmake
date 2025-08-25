@@ -6,7 +6,6 @@ if (NOT TARGET libperm)
         GIT_REPOSITORY "https://github.com/Krzmbrzl/libPerm.git"
         GIT_TAG "${SEQUANT_TRACKED_LIBPERM_TAG}"
         GIT_SHALLOW
-        EXCLUDE_FROM_ALL
         SYSTEM
     )
 

@@ -3,7 +3,7 @@
 //
 
 #include <SeQuant/core/expr.hpp>
-#include <SeQuant/core/timer.hpp>
+#include <SeQuant/core/utility/timer.hpp>
 #include <SeQuant/domain/mbpt/models/cc.hpp>
 
 #include <catch2/catch_test_macros.hpp>

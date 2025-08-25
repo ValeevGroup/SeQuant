@@ -65,6 +65,18 @@ class TimerPool {
   // adjust reported timings is you need fine-grained timing
 };
 
+/// calls @p callable, prints the elapsed time to @p stream annotated
+/// by @p id
+auto profile(auto id, auto callable, auto& stream = std::cout) {
+  sequant::TimerPool<> timer;
+  timer.start();
+  callable();
+  timer.stop();
+  auto elapsed_seconds = timer.read();
+  stream << id << ": elapsed_time = " << std::scientific
+         << elapsed_seconds * 1000 << " ms" << std::endl;
+}
+
 }  // namespace sequant
 
 #endif  // SEQUANT_TIMER_HPP

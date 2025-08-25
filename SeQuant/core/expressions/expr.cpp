@@ -208,8 +208,10 @@ ExprPtr Product::canonicalize_impl(bool rapid) {
                                // that's done in
                                // TensorNetwork
     TensorNetworkV3 tn(factors_);
-    auto canon_factor =
-        tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(), rapid);
+    ExprPtr canon_factor = tn.canonicalize(
+        TensorCanonicalizer::cardinal_tensor_labels(),
+        rapid ? TensorNetworkV3::CanonicalizationMethod::Rapid
+              : TensorNetworkV3::CanonicalizationMethod::Complete);
     const auto &tensors = tn.tensors();
     using std::size;
     assert(size(tensors) == size(factors_));
@@ -221,7 +223,7 @@ ExprPtr Product::canonicalize_impl(bool rapid) {
                      assert(exprptr);
                      return exprptr;
                    });
-    if (canon_factor) scalar_ *= canon_factor->as<Constant>().value();
+    if (canon_factor) scalar_ *= canon_factor->template as<Constant>().value();
     this->reset_hash_value();
   } else {  // if contains non-tensors, do commutation-checking resort
 

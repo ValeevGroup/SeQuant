@@ -644,7 +644,7 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
 
           if (Logger::instance().wick_topology) {
             std::basic_ostringstream<wchar_t> oss;
-            graph->write_dot(oss, vlabels);
+            graph->write_dot(oss, {.labels = vlabels});
             std::wcout
                 << "WickTheorem<S>::compute: colored graph produced from TN = "
                 << std::endl

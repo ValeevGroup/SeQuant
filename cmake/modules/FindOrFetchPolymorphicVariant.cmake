@@ -2,13 +2,14 @@ if (NOT TARGET polymorphic_variant::polymorphic_variant)
     include(FetchContent)
 
     FetchContent_Declare(
-        Catch2
+        polymorphic_variant
         GIT_REPOSITORY "https://github.com/Krzmbrzl/polymorphic_variant.git"
         GIT_TAG "${SEQUANT_TRACKED_POLYMORPHICVARIANT_TAG}"
         GIT_SHALLOW
-        EXCLUDE_FROM_ALL
         SYSTEM
     )
+
+	FetchContent_MakeAvailable(polymorphic_variant)
 endif()
 
 # postcond check

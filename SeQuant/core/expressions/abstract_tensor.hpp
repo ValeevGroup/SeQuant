@@ -342,20 +342,20 @@ class AbstractTensor {
       return to_type(i) < to_type(j);
     });
 
-    container::svector<std::pair<Index, Index>> sorted_indices(n);
+    container::svector<Index> sorted_indices(n);
     for (std::size_t i = 0; i != bra_indices.size(); ++i) {
       assert(perm_from[i] < bra_indices.size());
-      sorted_indices[i].first = std::move(bra_indices[perm_from[i]]);
+      sorted_indices[i] = std::move(bra_indices[perm_from[i]]);
+    }
+    for (std::size_t i = 0; i != bra_indices.size(); ++i) {
+      bra_indices[i] = std::move(sorted_indices[i]);
     }
     for (std::size_t i = 0; i != ket_indices.size(); ++i) {
       assert(perm_from[i] < ket_indices.size());
-      sorted_indices[i].second = std::move(ket_indices[perm_from[i]]);
-    }
-    for (std::size_t i = 0; i != bra_indices.size(); ++i) {
-      bra_indices[i] = std::move(sorted_indices[i].first);
+      sorted_indices[i] = std::move(ket_indices[perm_from[i]]);
     }
     for (std::size_t i = 0; i != ket_indices.size(); ++i) {
-      ket_indices[i] = std::move(sorted_indices[i].second);
+      ket_indices[i] = std::move(sorted_indices[i]);
     }
   }
 };

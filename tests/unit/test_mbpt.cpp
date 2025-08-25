@@ -10,7 +10,7 @@
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/parse.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
-#include <SeQuant/core/timer.hpp>
+#include <SeQuant/core/utility/timer.hpp>
 #include <SeQuant/domain/mbpt/context.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/op.hpp>
