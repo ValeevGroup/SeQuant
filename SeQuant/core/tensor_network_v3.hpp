@@ -259,23 +259,6 @@ class TensorNetworkV3 {
 
   using NamedIndexSet = container::set<Index, Index::FullLabelCompare>;
 
-  /// canonicalization methods
-  enum class CanonicalizationMethod {
-    /// Canonical graph sort of all TN elements produces complete
-    /// canonicalization
-    /// The result may be aesthetically poor.
-    Topological = 0b01,
-    /// Lexicographic sort of tensors, slots and slot bundles, and indices.
-    /// Aesthetically pleasing result, but incomplete if some tensors are
-    /// identical
-    Lexicographic = 0b10,
-    /// Topological, then Lexicographic. Guaranteed to work even if some
-    /// tensors are identical, and the result is aesthetically pleasing.
-    Complete = Topological | Lexicographic,
-    /// Lexicographic = quick-and-dirty
-    Rapid = Lexicographic
-  };
-
   /// @param cardinal_tensor_labels move all tensors with these labels to the
   /// front before canonicalizing indices
   /// @param method see CanonicalizationMethod for the meaning of this
@@ -527,9 +510,6 @@ class TensorNetworkV3 {
     tensors_.emplace_back(std::move(tensor_ptr));
     tensor_input_ordinals_.push_back(tensor_input_ordinals_.size());
   }
-
-  static bool logical_and(CanonicalizationMethod m1, CanonicalizationMethod m2);
-  static std::wstring to_wstring(CanonicalizationMethod m);
 };
 
 template <typename CharT, typename Traits>

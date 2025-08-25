@@ -109,6 +109,7 @@ Context::Context(ContextOptions options)
       braket_symmetry_(options.braket_symmetry),
       spbasis_(options.spbasis),
       first_dummy_index_ordinal_(options.first_dummy_index_ordinal),
+      canonicalization_options_(options.canonicalization_options),
       braket_typesetting_(options.braket_typesetting),
       braket_slot_typesetting_(options.braket_slot_typesetting) {}
 
@@ -165,6 +166,9 @@ SPBasis Context::spbasis() const { return spbasis_; }
 std::size_t Context::first_dummy_index_ordinal() const {
   return first_dummy_index_ordinal_;
 }
+std::optional<CanonicalizeOptions> Context::canonicalization_options() const {
+  return canonicalization_options_;
+}
 
 BraKetTypesetting Context::braket_typesetting() const {
   return braket_typesetting_;
@@ -207,6 +211,11 @@ Context& Context::set(SPBasis spbasis) {
 Context& Context::set_first_dummy_index_ordinal(
     std::size_t first_dummy_index_ordinal) {
   first_dummy_index_ordinal_ = first_dummy_index_ordinal;
+  return *this;
+}
+
+Context& Context::set(CanonicalizeOptions copt) {
+  canonicalization_options_ = copt;
   return *this;
 }
 
