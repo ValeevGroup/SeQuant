@@ -47,4 +47,13 @@ function(target_set_warning_flags TARGET)
         # - https://stackoverflow.com/q/79742311
         target_compile_options("${TARGET}" PRIVATE "-Wno-error=maybe-uninitialized")
     endif()
+    if (CMAKE_CXX_COMPILER_ID MATCHES "^(Clang|AppleClang)$")
+        # This warning can be a bit odd in that it seems like some Clang versions emit it incorrectly,
+        # others don't emit it and some emit it correctly but in places where fixing the code causes
+        # it to no longer be compilable with other compilers (in particular GCC) because support for
+        # the exact semantics of when a lambda capture is required seems to be quite lacking across
+        # different compilers.
+        # See also https://github.com/llvm/llvm-project/issues/35017
+        target_compile_options("${TARGET}" PRIVATE "-Wno-unused-lambda-capture")
+    endif()
 endfunction()

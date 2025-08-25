@@ -5,22 +5,16 @@
 #include <SeQuant/core/tensor_network.hpp>
 #include <SeQuant/core/tensor_network_v2.hpp>
 #include <SeQuant/core/tensor_network_v3.hpp>
+#include <SeQuant/core/utility/string.hpp>
 #include <SeQuant/domain/mbpt/context.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 
 #include <cassert>
-#include <codecvt>
 #include <iostream>
-#include <locale>
 #include <optional>
 #include <string>
 
 using namespace sequant;
-
-std::wstring from_utf8(std::string_view str) {
-  std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
-  return converter.from_bytes(std::string(str));
-}
 
 template <typename TN>
 std::optional<TN> make_tn(const ExprPtr &expr) {
@@ -71,7 +65,7 @@ int main(int argc, char **argv) {
   }
 
   for (std::size_t i = 1; i < static_cast<std::size_t>(argc); ++i) {
-    std::wstring current = from_utf8(argv[i]);
+    std::wstring current = toUtf16(argv[i]);
     if (current == L"--help") {
       print_help();
       return 0;
