@@ -17,8 +17,10 @@ function(build_test_as_needed TARGET_NAME TEST_PREFIX DEPENDENT_TESTS)
 
     add_test("${TEST_PREFIX}/build" "${CMAKE_COMMAND}" --build "${CMAKE_BINARY_DIR}" --target "${TARGET_NAME}")
 
+    set_tests_properties("${TEST_PREFIX}/build" PROPERTIES FIXTURES_SETUP "SEQUANT_TEST_BUILD_${TARGET_NAME}")
+
     foreach(current IN LISTS ${DEPENDENT_TESTS})
-        set_tests_properties("${current}" PROPERTIES DEPENDS "${TEST_PREFIX}/build")
+        set_tests_properties("${current}" PROPERTIES FIXTURES_REQUIRED "SEQUANT_TEST_BUILD_${TARGET_NAME}")
     endforeach()
 endfunction()
 
