@@ -51,5 +51,5 @@ if (TARGET tiledarray)
             WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
     )
 
-    build_test_as_needed(eval_ta "${test_name}" test_name)
+    build_test_as_needed(eval_btas "${test_name}" test_name)
 endif (TARGET tiledarray)
