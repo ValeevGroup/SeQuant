@@ -416,8 +416,9 @@ if (NOT PROJECT_IS_TOP_LEVEL)
 endif()
 target_include_directories(SeQuant ${SEQUANT_SYSTEM} PUBLIC
         $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}>
-        $<BUILD_INTERFACE:${PROJECT_BINARY_DIR}>
         $<INSTALL_INTERFACE:${CMAKE_INSTALL_PREFIX}/include>)
+target_include_directories(SeQuant SYSTEM PUBLIC
+        $<BUILD_INTERFACE:${PROJECT_BINARY_DIR}>)
 target_compile_features(SeQuant INTERFACE "cxx_std_20")
 if (SEQUANT_EVAL_TRACE)
     target_compile_definitions(SeQuant PUBLIC SEQUANT_EVAL_TRACE=1)
