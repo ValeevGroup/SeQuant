@@ -462,7 +462,7 @@ TensorNetworkV3 &TensorNetworkV3::operator=(TensorNetworkV3 &&) noexcept =
 TensorNetworkV3::TensorNetworkV3(const TensorNetworkV3 &other) {
   tensors_.reserve(other.tensors_.size());
   for (const auto &t : other.tensors_) {
-    tensors_.emplace_back(std::shared_ptr<AbstractTensor>(t->_clone()));
+    tensors_.emplace_back(t->_clone_shared());
   }
   tensor_input_ordinals_ = other.tensor_input_ordinals_;
 }
