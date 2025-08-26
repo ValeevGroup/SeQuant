@@ -16,7 +16,7 @@ TEST_CASE("mbpt_cc", "[mbpt/cc]") {
   SECTION("sr_tcc") {
     SECTION("t") {
       // TCC R1
-      SEQUANT_PROFILE_SINGLE("CCSD t", {
+      SECTION("CCSD t") {
         [[maybe_unused]] auto& l = sequant::Logger::instance();
         // l.canonicalize = true;
         const auto N = 2;
@@ -27,14 +27,14 @@ TEST_CASE("mbpt_cc", "[mbpt/cc]") {
           REQUIRE(size(t_eqs[0]) == 3);
           REQUIRE(size(t_eqs[1]) == 14);
         }
-      });
+      }
 
     }  // SECTION("t")
   }
 
   SECTION("eom_cc"){SECTION("EOM-CCSD"){const auto N = 2;
   auto cc = CC{N};
-  SEQUANT_PROFILE_SINGLE("EE-EOM-CCSD R", {
+  SECTION("EE-EOM-CCSD R") {
     const auto np = 2;
     const auto nh = 2;
     const auto eqs = cc.eom_r(nₚ(np), nₕ(nh));
@@ -42,9 +42,9 @@ TEST_CASE("mbpt_cc", "[mbpt/cc]") {
 
     REQUIRE(size(eqs[1]) == 21);
     REQUIRE(size(eqs[2]) == 53);
-  });
+  }
 
-  SEQUANT_PROFILE_SINGLE("IP-EOM-CCSD R", {
+  SECTION("IP-EOM-CCSD R") {
     const auto np = 1;
     const auto nh = 2;
     const auto eqs = cc.eom_r(nₚ(np), nₕ(nh));
@@ -52,9 +52,9 @@ TEST_CASE("mbpt_cc", "[mbpt/cc]") {
 
     REQUIRE(size(eqs[0]) == 9);
     REQUIRE(size(eqs[1]) == 32);
-  });
+  }
 
-  SEQUANT_PROFILE_SINGLE("EA-EOM-CCSD R", {
+  SECTION("EA-EOM-CCSD R") {
     const auto np = 2;
     const auto nh = 1;
     const auto eqs = cc.eom_r(nₚ(np), nₕ(nh));
@@ -62,9 +62,9 @@ TEST_CASE("mbpt_cc", "[mbpt/cc]") {
 
     REQUIRE(size(eqs[0]) == 9);
     REQUIRE(size(eqs[1]) == 32);
-  });
+  }
 
-  SEQUANT_PROFILE_SINGLE("EE-EOM-CCSD L", {
+  SECTION("EE-EOM-CCSD L") {
     const auto np = 2;
     const auto nh = 2;
     const auto eqs = cc.eom_l(nₚ(np), nₕ(nh));
@@ -72,14 +72,14 @@ TEST_CASE("mbpt_cc", "[mbpt/cc]") {
 
     REQUIRE(size(eqs[1]) == 43);
     REQUIRE(size(eqs[2]) == 31);
-  });
+  }
 }  // SECTION("EOM-CCSD")
 
 #ifndef SEQUANT_SKIP_LONG_TESTS
 SECTION("EOM-CCSDT") {
   const auto N = 3;
   auto cc = CC{N};
-  SEQUANT_PROFILE_SINGLE("EE-EOM-CCSDT R", {
+  SECTION("EE-EOM-CCSDT R") {
     const auto np = 3;
     const auto nh = 3;
     const auto eqs = cc.eom_r(nₚ(np), nₕ(nh));
@@ -88,7 +88,7 @@ SECTION("EOM-CCSDT") {
     REQUIRE(size(eqs[1]) == 22);
     REQUIRE(size(eqs[2]) == 62);
     REQUIRE(size(eqs[3]) == 99);
-  });
+  }
 }  // SECTION("EOM-CCSDT")
 #endif
 }

@@ -46,14 +46,13 @@ IndexSpace relevant_space(Range &&rng, MemoryLayout layout) {
       return {};
   }
 
-  assert(false);
-  return {};
+  abort();  // unreachable
 }
 
 template <typename Comp>
 struct PairComparator {
-  bool prioritize_first;
   const Comp &cmp;
+  bool prioritize_first;
 
   PairComparator(const Comp &cmp, bool prioritize_first)
       : cmp(cmp), prioritize_first(prioritize_first) {}
@@ -230,8 +229,7 @@ bool ReorderingContext::is_less(const IndexSpace &lhs,
       return false;
   }
 
-  assert(false);
-  return false;
+  abort();  // unreachable
 }
 
 bool ReorderingContext::is_ordered(const IndexSpace &lhs,

@@ -77,6 +77,7 @@ if (NOT CMAKE_CXX_COMPILER MATCHES ".*/ccache$")
     endif ()
 endif ()
 
+list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake/")
 list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake/modules/")
 
 set(FETCHCONTENT_UPDATES_DISCONNECTED OFF CACHE BOOL "Enables UPDATE_DISCONNECTED behavior for all content population")
@@ -85,6 +86,8 @@ include(FetchContent)
 include(AddCustomTargetSubproject)
 include(FeatureSummary)
 include(CMakePackageConfigHelpers)
+
+include(compiler)
 
 ##########################
 # Standard build variables
@@ -103,12 +106,15 @@ set(SEQUANT_INSTALL_DOCDIR "${SEQUANT_INSTALL_SHAREDIR}/doc"
         CACHE PATH "SeQuant DOC install directory")
 set(SEQUANT_INSTALL_CMAKEDIR "lib/cmake/sequant"
         CACHE PATH "SeQuant CMAKE install directory")
-option(SEQUANT_BENCHMARKS "Enable SeQuant benchmarks" OFF)
 
 ############################
 # Additional build variables
 ############################
+option(SEQUANT_BENCHMARKS "Enable SeQuant benchmarks" ${PROJECT_IS_TOP_LEVEL})
+option(SEQUANT_UTILITIES "Enable SeQuant utility programs" ${PROJECT_IS_TOP_LEVEL})
+
 option(SEQUANT_IWYU "Whether to use the include-what-you-use tool (if found)" OFF)
+option(SEQUANT_WARNINGS_AS_ERRORS "Whether to treat compiler warnings as errors" ${PROJECT_IS_TOP_LEVEL})
 
 ##########################
 # SeQuant package options
@@ -161,6 +167,9 @@ include(FindOrFetchPolymorphicVariant)
 
 # LibPerm
 include(FindOrFetchLibPerm)
+
+# Utfcpp
+include(FindOrFetchUtfcpp)
 
 # embedded bliss-0.73
 add_library(SeQuant-bliss
@@ -378,7 +387,7 @@ if (SEQUANT_CONTEXT_MANIPULATION_THREADSAFE)
 endif()
 
 target_link_libraries(SeQuant PUBLIC range-v3::range-v3 Boost::regex Boost::locale Boost::headers SeQuant-bliss Threads::Threads)
-target_link_libraries(SeQuant PRIVATE libperm::libperm)
+target_link_libraries(SeQuant PRIVATE libperm::libperm $<BUILD_LOCAL_INTERFACE:utfcpp>)
 target_link_libraries(SeQuant PUBLIC polymorphic_variant::polymorphic_variant)
 # modularized Boost has finer grained targets than just Boost::headers
 if (Boost_IS_MODULARIZED)
@@ -404,13 +413,17 @@ if (SEQUANT_HAS_EXECUTION_HEADER_STANDALONE OR SEQUANT_HAS_EXECUTION_HEADER_WITH
     target_compile_definitions(SeQuant PUBLIC SEQUANT_HAS_EXECUTION_HEADER)
     if (SEQUANT_HAS_EXECUTION_HEADER_WITH_TBB)
         target_link_libraries(SeQuant PUBLIC ${TBB_LIBRARIES})
-        target_include_directories(SeQuant PUBLIC ${TBB_INCLUDE_DIRS})
+        target_include_directories(SeQuant SYSTEM PUBLIC ${TBB_INCLUDE_DIRS})
     endif ()
 endif ()
-target_include_directories(SeQuant PUBLIC
+if (NOT PROJECT_IS_TOP_LEVEL)
+    set(SEQUANT_SYSTEM "SYSTEM")
+endif()
+target_include_directories(SeQuant ${SEQUANT_SYSTEM} PUBLIC
         $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}>
-        $<BUILD_INTERFACE:${PROJECT_BINARY_DIR}>
         $<INSTALL_INTERFACE:${CMAKE_INSTALL_PREFIX}/include>)
+target_include_directories(SeQuant SYSTEM PUBLIC
+        $<BUILD_INTERFACE:${PROJECT_BINARY_DIR}>)
 target_compile_features(SeQuant INTERFACE "cxx_std_20")
 if (SEQUANT_EVAL_TRACE)
     target_compile_definitions(SeQuant PUBLIC SEQUANT_EVAL_TRACE=1)
@@ -436,6 +449,9 @@ else()
             FILES_MATCHING PATTERN "*.hpp"
             )
 endif ()
+
+target_set_warning_flags(SeQuant)
+
 install(TARGETS SeQuant-bliss EXPORT sequant COMPONENT sequant LIBRARY DESTINATION ${SEQUANT_INSTALL_LIBDIR})
 install(TARGETS SeQuant EXPORT sequant COMPONENT sequant LIBRARY DESTINATION ${SEQUANT_INSTALL_LIBDIR})
 install(DIRECTORY SeQuant
@@ -471,9 +487,12 @@ if (SEQUANT_IWYU)
 endif()
 
 
-add_subdirectory(utilities)
 add_subdirectory(tests)
 add_subdirectory(doc)
+
+if (SEQUANT_UTILITIES)
+    add_subdirectory(utilities)
+endif()
 
 if (SEQUANT_BENCHMARKS)
     add_subdirectory(benchmarks)

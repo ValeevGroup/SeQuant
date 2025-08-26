@@ -89,8 +89,13 @@ class JuliaITensorGenerator : public JuliaTensorOperationsGenerator<Context> {
 
   void load(const Variable &variable, bool set_to_zero,
             const Context &ctx) override {
-    Base::m_generated += "tmpvar = deserialize(\"" +
-                         Base::represent(variable, ctx) + ".jlbin\")\n";
+    if (set_to_zero) {
+      Base::m_generated += "tmpvar = 0\n";
+    } else {
+      Base::m_generated += "tmpvar = deserialize(\"" +
+                           Base::represent(variable, ctx) + ".jlbin\")\n";
+    }
+
     Base::m_generated +=
         Base::represent(variable, ctx) + " = ITensor(tmpvar)\n";
   }
@@ -115,7 +120,7 @@ class JuliaITensorGenerator : public JuliaTensorOperationsGenerator<Context> {
     Base::m_generated += ", \"" + currentindex + "\")\n";
   }
 
-  void all_indices_declared(std::size_t amount, const Context &ctx) override {
+  void all_indices_declared(std::size_t amount, const Context &) override {
     if (amount > 0) {
       Base::m_generated += "\n";
     }

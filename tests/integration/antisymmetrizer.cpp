@@ -75,7 +75,7 @@ void try_main() {
   std::wcout << to_latex_align(new_a3, 20, 7) << std::endl;
 }
 
-int main(int argc, char* argv[]) {
+int main() {
   std::wcout.precision(std::numeric_limits<double>::max_digits10);
   std::wcerr.precision(std::numeric_limits<double>::max_digits10);
   sequant::set_locale();

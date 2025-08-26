@@ -176,12 +176,12 @@ class ItfGenerator : public Generator<Context> {
   }
 
   std::string represent(const Variable &variable,
-                        const Context &ctx) const override {
+                        const Context &) const override {
     return toUtf8(variable.label()) + "[]";
   }
 
   std::string represent(const Constant &constant,
-                        const Context &ctx) const override {
+                        const Context &) const override {
     std::stringstream sstream;
     if (constant.value().imag() != 0) {
       sstream << "(" << constant.value().real();
@@ -246,6 +246,10 @@ class ItfGenerator : public Generator<Context> {
   void load(const Variable &variable, bool set_to_zero,
             const Context &ctx) override {
     m_generated += "load " + represent(variable, ctx) + "\n";
+
+    if (set_to_zero) {
+      this->set_to_zero(variable, ctx);
+    }
   }
 
   void set_to_zero(const Variable &variable, const Context &ctx) override {
@@ -327,60 +331,60 @@ class ItfGenerator : public Generator<Context> {
     m_generated += "\n";
   }
 
-  void all_indices_declared(std::size_t amount, const Context &ctx) override {
+  void all_indices_declared(std::size_t amount, const Context &) override {
     if (amount > 0) {
       m_generated += "\n";
     }
   }
 
-  void all_variables_declared(std::size_t amount, const Context &ctx) override {
+  void all_variables_declared(std::size_t amount, const Context &) override {
     if (amount > 0) {
       m_generated += "\n";
     }
   }
 
-  void all_tensors_declared(std::size_t amount, const Context &ctx) override {
+  void all_tensors_declared(std::size_t amount, const Context &) override {
     if (amount > 0) {
       m_generated += "\n";
     }
   }
 
-  void begin_declarations(DeclarationScope scope, const Context &ctx) override {
+  void begin_declarations(DeclarationScope scope, const Context &) override {
     if (scope == DeclarationScope::Global) {
       m_generated += "---- decl\n";
     }
   }
 
-  void end_declarations(DeclarationScope scope, const Context &ctx) override {
+  void end_declarations(DeclarationScope scope, const Context &) override {
     if (scope == DeclarationScope::Global) {
       m_generated += "\n";
     }
   }
 
-  void insert_comment(const std::string &comment, const Context &ctx) override {
+  void insert_comment(const std::string &comment, const Context &) override {
     m_generated += "// " + comment + "\n";
   }
 
-  void begin_named_section(std::string_view name, const Context &ctx) override {
+  void begin_named_section(std::string_view name, const Context &) override {
     m_generated += "---- code(\"" + std::string(name) + "\")\n";
   }
 
-  void end_named_section(std::string_view name, const Context &ctx) override {
+  void end_named_section(std::string_view /*name*/, const Context &) override {
     m_generated += "\n\n";
   }
 
-  void begin_expression(const Context &ctx) override {
+  void begin_expression(const Context &) override {
     if (!m_generated.empty() && !m_generated.ends_with("\n\n") &&
         !m_generated.ends_with(")\n")) {
       m_generated += "\n";
     }
   }
 
-  void end_expression(const Context &ctx) override {}
+  void end_expression(const Context &) override {}
 
-  void begin_export(const Context &ctx) override { m_generated.clear(); }
+  void begin_export(const Context &) override { m_generated.clear(); }
 
-  void end_export(const Context &ctx) override { m_generated += "---- end\n"; }
+  void end_export(const Context &) override { m_generated += "---- end\n"; }
 
   std::string get_generated_code() const override { return m_generated; }
 

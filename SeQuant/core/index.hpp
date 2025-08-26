@@ -776,7 +776,7 @@ class Index : public Taggable {
   }
 
   /// @return the smallest index of a generated index
-  static const std::size_t min_tmp_index() noexcept;
+  static std::size_t min_tmp_index() noexcept;
 
   /// @return a unique temporary index, its value is equal to or greater than
   /// that returned by min_tmp_index()
@@ -939,7 +939,7 @@ class Index : public Taggable {
   }
 
   template <typename Char, typename = std::enable_if_t<meta::is_char_v<Char>>>
-  static inline std::optional<ordinal_type> to_ordinal(Char label) noexcept {
+  static inline std::optional<ordinal_type> to_ordinal(Char) noexcept {
     return std::nullopt;
   }
 

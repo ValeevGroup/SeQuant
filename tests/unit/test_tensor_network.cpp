@@ -1656,7 +1656,8 @@ TEST_CASE("tensor_network_v3", "[elements]") {
         for (bool fast : {true, false}) {
           TN tn(std::vector<ExprPtr>{variant == 1 ? input1 : input2});
           tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(),
-                          CanonicalizationMethod::Rapid);
+                          fast ? CanonicalizationMethod::Rapid
+                               : CanonicalizationMethod::Complete);
           REQUIRE(tn.tensors().size() == 1);
           auto result = ex<Product>(to_tensors(tn.tensors()));
           REQUIRE(to_latex(result) == (variant == 1 ? expected1 : expected2));

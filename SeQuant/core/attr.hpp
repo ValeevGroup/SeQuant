@@ -62,9 +62,7 @@ inline std::wstring to_wstring(Symmetry sym) {
     case Symmetry::invalid:
       return L"invalid";
   }
-
-  assert(false);
-  std::abort();
+  abort();  // unreachable
 }
 
 enum class BraKetPos { bra, ket, none };

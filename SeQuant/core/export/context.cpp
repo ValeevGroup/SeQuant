@@ -230,9 +230,9 @@ void ExportContext::setZeroStrategy(
   }
 }
 
-bool ExportContext::rewrite(Tensor &tensor) const { return false; }
+bool ExportContext::rewrite(Tensor &) const { return false; }
 
-bool ExportContext::rewrite(Variable &variable) const { return false; }
+bool ExportContext::rewrite(Variable &) const { return false; }
 
 bool ExportContext::inside_named_section() const {
   return m_currentSection.has_value();

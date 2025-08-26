@@ -148,7 +148,7 @@ class compute_all {
       std::vector<std::string> manifold_vec;
       auto [Nh, Np] = parse_excitation_manifold(manifold);
       // generate all possible manifolds
-      while (Nh >= 0 && Np >= 0) {
+      while (Nh > 0 || Np > 0) {
         if (Nh == 0 && Np == 0) break;
         manifold_vec.push_back(std::to_string(Nh) + "h" + std::to_string(Np) +
                                "p");

@@ -232,15 +232,15 @@ class EvalExpr {
 
   ResultType result_type_;
 
-  size_t hash_value_;
-
-  std::shared_ptr<bliss::Graph> connectivity_;
+  ExprPtr expr_;
 
   index_vector canon_indices_;
 
   std::int8_t canon_phase_{1};
 
-  ExprPtr expr_;
+  size_t hash_value_;
+
+  std::shared_ptr<bliss::Graph> connectivity_;
 };
 
 struct EvalOpSetter {

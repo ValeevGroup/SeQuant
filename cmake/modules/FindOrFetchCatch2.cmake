@@ -1,24 +1,20 @@
 if (NOT TARGET Catch2::Catch2)
+    include(FetchContent)
 
-    include(${vg_cmake_kit_SOURCE_DIR}/modules/VRGFindOrFetchPackage.cmake)
-    VRGFindOrFetchPackage(Catch2 "https://github.com/catchorg/Catch2.git" "${SEQUANT_TRACKED_CATCH2_TAG}"
-            ADD_SUBDIR
-			ADD_SUBDIR_EXCLUDE_FROM_ALL
-            CONFIG_SUBDIR
-            FIND_PACKAGE_ARGS 3
+    FetchContent_Declare(
+        Catch2
+        GIT_REPOSITORY "https://github.com/catchorg/Catch2.git"
+        GIT_TAG "${SEQUANT_TRACKED_CATCH2_TAG}"
+        GIT_SHALLOW
+        EXCLUDE_FROM_ALL
+        SYSTEM
+        FIND_PACKAGE_ARGS 3 NAMES Catch2
     )
-    if (TARGET Catch2 AND NOT TARGET Catch2::Catch2)
-        add_library(Catch2::Catch2 ALIAS Catch2)
-    endif()
 
-	if (Catch2_SOURCE_DIR)
-		list(APPEND CMAKE_MODULE_PATH "${Catch2_SOURCE_DIR}/extras")
-  	elseif(Catch2_DIR)
-		list(APPEND CMAKE_MODULE_PATH "${Catch2_DIR}")
-	endif()
+    FetchContent_MakeAvailable(Catch2)
 endif()
 
 # postcond check
 if (NOT TARGET Catch2::Catch2)
     message(FATAL_ERROR "FindOrFetchCatch2 could not make TARGET Catch2 available")
-endif(NOT TARGET Catch2::Catch2)
+endif()

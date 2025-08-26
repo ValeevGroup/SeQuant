@@ -589,7 +589,6 @@ TensorNetworkV2::canonicalize_slots(
         idx2cord(named_index_compare);
 
     // collect named indices and sort them on the fly
-    auto grand_index_list_end = grand_index_list.end();
     for (auto [idx_ord, idx] : ranges::views::enumerate(grand_index_list)) {
       if (!is_named_index(idx)) {
         continue;
@@ -706,7 +705,8 @@ TensorNetworkV2::Graph TensorNetworkV2::create_graph(
                                            ? this->ext_indices()
                                            : *(options.named_indices);
 
-  VertexPainter colorizer(named_indices, options.distinct_named_indices);
+  VertexPainter<TensorNetworkV2> colorizer(named_indices,
+                                           options.distinct_named_indices);
 
   // core, bra, ket, auxiliary and optionally (for non-symmetric tensors) a
   // particle vertex

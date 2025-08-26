@@ -79,7 +79,8 @@ container::map<Index, Index> compute_index_replacement_rules(
                       const Index &src, const Index &dst) {
     auto src_it = result.find(src);
     if (src_it == result.end()) {  // if brand new, add the rule
-      auto insertion_result = result.emplace(src, proto(dst, src));
+      [[maybe_unused]] auto insertion_result =
+          result.emplace(src, proto(dst, src));
       assert(insertion_result.second);
     } else {  // else modify the destination of the existing rule to the
       // intersection
@@ -114,9 +115,11 @@ container::map<Index, Index> compute_index_replacement_rules(
         !src2.has_proto_indices() && src1.has_proto_indices() ? src1 : src2;
 
     if (!has_src1_rule && !has_src2_rule) {  // if brand new, add the rules
-      auto insertion_result1 = result.emplace(src1, proto(dst, dst1_proto));
+      [[maybe_unused]] auto insertion_result1 =
+          result.emplace(src1, proto(dst, dst1_proto));
       assert(insertion_result1.second);
-      auto insertion_result2 = result.emplace(src2, proto(dst, dst2_proto));
+      [[maybe_unused]] auto insertion_result2 =
+          result.emplace(src2, proto(dst, dst2_proto));
       assert(insertion_result2.second);
     } else if (has_src1_rule &&
                !has_src2_rule) {  // update the existing rule for src1
@@ -226,7 +229,8 @@ inline bool apply_index_replacement_rules(
     std::set<Index, Index::LabelCompare> &all_indices,
     const std::shared_ptr<const IndexSpaceRegistry> &isr) {
   // to be able to use map[]
-  auto &replrules = const_cast<container::map<Index, Index> &>(const_replrules);
+  [[maybe_unused]] auto &replrules =
+      const_cast<container::map<Index, Index> &>(const_replrules);
 
   expr_range exrng(product);
 
@@ -603,7 +607,7 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
           auto g = tn.create_graph({.distinct_named_indices = true});
           const auto &graph = g.bliss_graph;
           const auto &vlabels = g.vertex_labels;
-          const auto &vcolors = g.vertex_colors;
+          [[maybe_unused]] const auto &vcolors = g.vertex_colors;
           const auto &vtypes = g.vertex_types;
           const auto n = vtypes.size();
           assert(vcolors.size() == n);
@@ -656,7 +660,8 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
               if (vtypes[v] == VertexType::TensorCore &&
                   (std::find(nop_labels_begin, nop_labels_end, vlabels[v]) !=
                    nop_labels_end)) {
-                auto insertion_result = nop_vidx_ord.emplace(v, nop_ord++);
+                [[maybe_unused]] auto insertion_result =
+                    nop_vidx_ord.emplace(v, nop_ord++);
                 assert(insertion_result.second);
               }
               if (vtypes[v] == VertexType::Index && !input_->empty()) {
@@ -667,7 +672,8 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
                 if (idx_it_in_opseq != opseq_view_end) {
                   const auto ord =
                       ranges::distance(opseq_view_begin, idx_it_in_opseq);
-                  auto insertion_result = index_vidx_ord.emplace(v, ord);
+                  [[maybe_unused]] auto insertion_result =
+                      index_vidx_ord.emplace(v, ord);
                   assert(insertion_result.second);
                 }
               }
@@ -725,9 +731,9 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
             for (auto &&aut : aut_generators) {
               // skip automorphism generators that do not involve vertices
               // in `vertices` list
-              const auto nv = aut.size();
               bool aut_contains_other_vertices = true;
               for (auto &&[v, ord] : vertices) {
+                (void)ord;
                 const auto v_is_in_aut = v != aut[v];
                 if (v_is_in_aut) {
                   aut_contains_other_vertices = false;
@@ -802,9 +808,7 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
           // compute NormalOperator->partition map, convert to partition lists
           // (if any), and register via set_nop_partitions to be used in full
           // contractions
-          auto do_not_skip_elements = [](size_t v1, size_t v2) {
-            return false;
-          };
+          auto do_not_skip_elements = [](size_t, size_t) { return false; };
           auto [nop_vidx2pidx, nop_npartitions] = compute_partitions(
               nop_vidx_ord, /* nontrivial_partitions_only = */ true,
               do_not_skip_elements);

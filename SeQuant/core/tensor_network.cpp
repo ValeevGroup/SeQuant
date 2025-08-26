@@ -276,12 +276,10 @@ ExprPtr TensorNetwork::canonicalize(
                     });
           // make a replacement list by generating new indices in canonical
           // order
-          std::size_t ord = 0;
           for (auto &&[idx_ord, idx_ord_can] : idx_can) {
             const auto &idx = (edges_.begin() + idx_ord)->idx();
             const auto new_idx = idxfac.make(idx);
             if (idx != new_idx) idxrepl.emplace(idx, std::move(new_idx));
-            ++ord;
           }
         } else if (sz == 1) {  // no need for resorting of colors with 1 index
                                // only, but still need to replace the index
@@ -402,6 +400,7 @@ ExprPtr TensorNetwork::canonicalize(
           end(idx_terminals_sorted),
           [&idxrepl, &idxfac, &is_anonymous_index](const auto &terminals) {
             const auto &idx = terminals.idx();
+            (void)is_anonymous_index;
             assert(is_anonymous_index(
                 idx));  // should only encounter anonymous indices here
             idxrepl.emplace(std::make_pair(idx, idxfac.make(idx)));
@@ -488,7 +487,8 @@ TensorNetwork::GraphData TensorNetwork::make_bliss_graph(
                                   ? this->ext_indices()
                                   : *options.named_indices;
 
-  VertexPainter colorizer(named_indices, options.distinct_named_indices);
+  VertexPainter<TensorNetwork> colorizer(named_indices,
+                                         options.distinct_named_indices);
 
   // results
   std::shared_ptr<bliss::Graph> graph;
@@ -538,8 +538,9 @@ TensorNetwork::GraphData TensorNetwork::make_bliss_graph(
       if (symmetric_protoindex_bundles.find(idx.proto_indices()) ==
           symmetric_protoindex_bundles
               .end()) {  // new bundle? make a vertex for it
-        auto graph = symmetric_protoindex_bundles.insert(idx.proto_indices());
-        assert(graph.second);
+        [[maybe_unused]] auto [it, inserted] =
+            symmetric_protoindex_bundles.insert(idx.proto_indices());
+        assert(inserted);
       }
     }
     index_cnt++;

@@ -322,17 +322,18 @@ TEST_CASE("tensor", "[elements]") {
 
   SECTION("hash") {
     auto t1 = Tensor(L"F", bra{L"i_1"}, ket{L"i_2"});
-    size_t t1_hash;
-    REQUIRE_NOTHROW(t1_hash = hash_value(t1));
+    REQUIRE_NOTHROW(hash_value(t1));
+    size_t t1_hash = hash_value(t1);
 
     auto t2 = Tensor(L"F", bra{L"i_2"}, ket{L"i_1"});
-    size_t t2_hash;
-    REQUIRE_NOTHROW(t2_hash = hash_value(t2));
+    REQUIRE_NOTHROW(hash_value(t2));
+    size_t t2_hash = hash_value(t2);
+
     REQUIRE(t1_hash != t2_hash);
 
     auto t3 = Tensor(L"F", bra{L"i_2"}, ket{L"i_1"}, aux{L"i_3"});
-    size_t t3_hash;
-    REQUIRE_NOTHROW(t3_hash = hash_value(t3));
+    REQUIRE_NOTHROW(hash_value(t3));
+    size_t t3_hash = hash_value(t3);
     REQUIRE(t2_hash != t3_hash);
     REQUIRE(t1_hash != t3_hash);
 

@@ -70,7 +70,7 @@ class JuliaTensorOperationsGenerator : public Generator<Context> {
     return DeclarationScope::Global;
   }
 
-  std::string represent(const Index &idx, const Context &ctx) const override {
+  std::string represent(const Index &idx, const Context &) const override {
     if (idx.has_proto_indices()) {
       throw std::runtime_error("Proto Indices are not (yet) supported!");
     }
@@ -97,12 +97,12 @@ class JuliaTensorOperationsGenerator : public Generator<Context> {
   }
 
   std::string represent(const Variable &variable,
-                        const Context &ctx) const override {
+                        const Context &) const override {
     return toUtf8(variable.label());
   }
 
   std::string represent(const Constant &constant,
-                        const Context &ctx) const override {
+                        const Context &) const override {
     std::stringstream sstream;
 
     if (constant.value().imag() != 0) {
@@ -174,8 +174,13 @@ class JuliaTensorOperationsGenerator : public Generator<Context> {
   }
   void load(const Variable &variable, bool set_to_zero,
             const Context &ctx) override {
-    m_generated += represent(variable, ctx) + " = deserialize(\"" +
-                   represent(variable, ctx) + ".jlbin\")";
+    m_generated += represent(variable, ctx) + " = ";
+
+    if (set_to_zero)
+      m_generated = "0";
+    else {
+      m_generated += "deserialize(\"" + represent(variable, ctx) + ".jlbin\")";
+    }
     m_generated += "\n";
   }
 
@@ -217,12 +222,14 @@ class JuliaTensorOperationsGenerator : public Generator<Context> {
   void declare(const Variable &variable, UsageSet usage,
                const Context &ctx) override {
     (void)variable;
+    (void)usage;
     (void)ctx;
   }
 
   void declare(const Tensor &tensor, UsageSet usage,
                const Context &ctx) override {
     (void)tensor;
+    (void)usage;
     (void)ctx;
   }
 
@@ -251,29 +258,29 @@ class JuliaTensorOperationsGenerator : public Generator<Context> {
     (void)ctx;
   }
 
-  void insert_comment(const std::string &comment, const Context &ctx) override {
+  void insert_comment(const std::string &comment, const Context &) override {
     m_generated += "# " + comment + "\n";
   }
 
-  void begin_named_section(std::string_view name, const Context &ctx) override {
+  void begin_named_section(std::string_view, const Context &) override {
     std::abort();
   }
 
-  void end_named_section(std::string_view name, const Context &ctx) override {
+  void end_named_section(std::string_view, const Context &) override {
     std::abort();
   }
 
-  void begin_expression(const Context &ctx) override {
+  void begin_expression(const Context &) override {
     if (!m_generated.empty() && !m_generated.ends_with("\n\n")) {
       m_generated += "\n";
     }
   }
 
-  void end_expression(const Context &ctx) override {}
+  void end_expression(const Context &) override {}
 
-  void begin_export(const Context &ctx) override { m_generated.clear(); }
+  void begin_export(const Context &) override { m_generated.clear(); }
 
-  void end_export(const Context &ctx) override {}
+  void end_export(const Context &) override {}
 
   std::string get_generated_code() const override { return m_generated; }
 

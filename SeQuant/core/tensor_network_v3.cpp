@@ -378,17 +378,15 @@ ExprPtr TensorNetworkV3::canonicalize_graph(
           const auto bra = bk == Origin::Bra;
           auto &sorted_ordinals = bra ? braslots : ketslots;
           if (!ranges::is_sorted(sorted_ordinals)) {
-            for (const auto &idxpair : idxrepl) {
-              std::wcout << "TensorNetworkV3::canonicalize_graph: permuting "
-                         << (bra ? "bra" : "ket") << " slots in "
-                         << to_latex(tensor) << ":\n";
-              auto indices = bra ? tensor._bra() : tensor._ket();
-              for (auto i = 0; i != indices.size(); ++i) {
-                std::wcout << "  " << to_latex(indices[sorted_ordinals[i]])
-                           << " -> " << to_latex(indices[i]) << "\n";
-              }
-              std::wcout << std::endl;
+            std::wcout << "TensorNetworkV3::canonicalize_graph: permuting "
+                       << (bra ? "bra" : "ket") << " slots in "
+                       << to_latex(tensor) << ":\n";
+            auto indices = bra ? tensor._bra() : tensor._ket();
+            for (auto i = 0; i != indices.size(); ++i) {
+              std::wcout << "  " << to_latex(indices[sorted_ordinals[i]])
+                         << " -> " << to_latex(indices[i]) << "\n";
             }
+            std::wcout << std::endl;
           }
         }
       }
@@ -715,7 +713,6 @@ TensorNetworkV3::canonicalize_slots(
         idx2cord(named_index_compare);
 
     // collect named indices and sort them on the fly
-    auto grand_index_list_end = grand_index_list.end();
     for (auto [idx_ord, idx] : ranges::views::enumerate(grand_index_list)) {
       if (!is_named_index(idx)) {
         continue;
@@ -832,13 +829,13 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
                                            ? this->ext_indices()
                                            : *(options.named_indices);
 
-  VertexPainter colorizer(named_indices, options.distinct_named_indices);
-
-  constexpr std::size_t num_tensor_components = 5;
+  VertexPainter<TensorNetworkV3> colorizer(named_indices,
+                                           options.distinct_named_indices);
 
   // results
   Graph graph;
   std::size_t nvertex = 0;
+
   auto make_label = [&nvertex, &options, &graph](std::wstring lbl) {
     graph.vertex_labels.emplace_back(
         options.label_prepend_ordinal
@@ -863,9 +860,9 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
   // We know that at the very least all indices and all tensors will yield
   // vertex representations; for tensors estimate the average number of verices
   // at 5
-
   std::size_t vertex_count_estimate =
       edges_.size() + pure_proto_indices_.size() + 5 * tensors_.size();
+
   if (options.make_labels) graph.vertex_labels.reserve(vertex_count_estimate);
   if (options.make_xlabels) graph.vertex_xlabels.reserve(vertex_count_estimate);
   if (options.make_texlabels)
@@ -1211,8 +1208,6 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
 
       // Store an edge connecting the index vertex to the corresponding tensor
       // vertex
-      const bool tensor_is_nonsymm =
-          vertex.getTerminalSymmetry() == Symmetry::nonsymm;
       const AbstractTensor &tensor = *tensors_[vertex.getTerminalIndex()];
       const std::size_t offset =
           index_slot_offset(tensor, vertex.getOrigin(), vertex.getIndexSlot());

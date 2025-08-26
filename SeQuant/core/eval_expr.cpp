@@ -147,24 +147,24 @@ EvalExpr::EvalExpr(Tensor const& tnsr)
 EvalExpr::EvalExpr(Constant const& c)
     : op_type_{std::nullopt},
       result_type_{ResultType::Scalar},
-      hash_value_{hash::value(c)},
-      expr_{c.clone()} {}
+      expr_{c.clone()},
+      hash_value_{hash::value(c)} {}
 
 EvalExpr::EvalExpr(Variable const& v)
     : op_type_{std::nullopt},
       result_type_{ResultType::Scalar},
-      hash_value_{hash::value(v)},
-      expr_{v.clone()} {}
+      expr_{v.clone()},
+      hash_value_{hash::value(v)} {}
 
 EvalExpr::EvalExpr(EvalOp op, ResultType res, ExprPtr const& ex,
                    index_vector ixs, std::int8_t p, size_t h,
                    std::shared_ptr<bliss::Graph> connectivity)
     : op_type_{op},
       result_type_{res},
-      hash_value_{h},
+      expr_{ex.clone()},
       canon_indices_{std::move(ixs)},
       canon_phase_{p},
-      expr_{ex.clone()},
+      hash_value_{h},
       connectivity_{std::move(connectivity)} {
   if (connectivity_ != nullptr) {
     // Note: The non-const cmp function performs some internal cleanup that the
@@ -336,7 +336,7 @@ EvalExprNode binarize(Sum const& sum) {
   bool const all_tensors =
       ranges::all_of(summands, [](auto&& n) { return n->is_tensor(); });
 
-  bool const all_scalars =
+  [[maybe_unused]] bool const all_scalars =
       ranges::all_of(summands, [](auto&& n) { return n->is_scalar(); });
 
   assert(all_tensors | all_scalars);
@@ -346,7 +346,7 @@ EvalExprNode binarize(Sum const& sum) {
   auto make_sum = [i = 0,                    //
                    hs = imed_hashes(hvals),  //
                    all_tensors](EvalExpr const& left,
-                                EvalExpr const& right) mutable -> EvalExpr {
+                                EvalExpr const&) mutable -> EvalExpr {
     auto h = ranges::at(hs, ++i);
     if (all_tensors) {
       auto const& t = left.as_tensor();

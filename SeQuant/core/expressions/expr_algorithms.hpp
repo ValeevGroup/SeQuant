@@ -438,8 +438,8 @@ class expr_range : public ranges::view_facade<expr_range> {
       }
     }
 
-    const auto address() const { return address_; }
-    const auto ordinal() const {
+    auto address() const { return address_; }
+    auto ordinal() const {
       assert(ordinal_ >= 0);
       return ordinal_;
     }
@@ -494,8 +494,8 @@ struct rapid_simplify_visitor {
   /// - flattening subproducts
   /// - factoring in constants
   /// @param[in,out] expr (shared_ptr to ) a Product
-  bool simplify_product(ExprPtr& expr, SimplifyOptions opts =
-                                           SimplifyOptions::default_options()) {
+  bool simplify_product(ExprPtr& expr,
+                        SimplifyOptions = SimplifyOptions::default_options()) {
     auto& expr_ref = *expr;
 
     // need to rebuild if any factor is a constant or product
@@ -538,7 +538,7 @@ struct rapid_simplify_visitor {
   /// but the user code may transform sums in a way that the same
   /// simplifications need to be applied here
   bool simplify_sum(ExprPtr& expr,
-                    SimplifyOptions opts = SimplifyOptions::default_options()) {
+                    SimplifyOptions = SimplifyOptions::default_options()) {
     bool mutated = false;
     const Sum& expr_sum = expr->as<Sum>();
 

@@ -200,10 +200,13 @@ bool is_pure_qpcreator(const Op<S> &op,
              (isr->is_pure_unoccupied(op.index().space()) &&
               op.action() == Action::create);
     }
-    default:
+    case Vacuum::MultiProduct:
       throw std::logic_error(
           "is_pure_qpcreator: cannot handle MultiProduct vacuum");
+    case Vacuum::Invalid:
+      throw std::logic_error("Invalid Product not allowed");
   }
+  abort();  // unreachable
 };
 
 /// @return true if this is a quasiparticle creator with respect to the given
@@ -221,10 +224,14 @@ bool is_qpcreator(const Op<S> &op,
               op.action() == Action::annihilate) ||
              (isr->contains_unoccupied(op.index().space()) &&
               op.action() == Action::create);
+      case Vacuum::MultiProduct:
+        throw std::logic_error(
+            "is_qpcreator: cannot handle MultiProduct vacuum");
+      case Vacuum::Invalid:
+        throw std::logic_error("is_qpcreator: cannot handle Invalid vacuum");
     }
-    default:
-      throw std::logic_error("is_qpcreator: cannot handle MultiProduct vacuum");
   }
+  abort();  // unreachable
 };
 
 template <Statistics S>
@@ -244,10 +251,14 @@ IndexSpace qpcreator_space(
                  : isr->intersection(
                        op.index().space(),
                        isr->vacuum_unoccupied_space(op.index().space().qns()));
-    default:
+    case Vacuum::MultiProduct:
       throw std::logic_error(
           "qpcreator_space: cannot handle MultiProduct vacuum");
+    case Vacuum::Invalid:
+      throw std::logic_error("qpcreator_space: cannot handle Invalid vacuum");
   }
+
+  abort();  // unreachable
 }
 
 /// @return true if this is a pure quasiparticle annihilator with respect to
@@ -266,10 +277,15 @@ bool is_pure_qpannihilator(
              (isr->is_pure_occupied(op.index().space()) &&
               op.action() == Action::create);
     }
-    default:
+    case Vacuum::MultiProduct:
       throw std::logic_error(
           "is_pure_qpannihilator: cannot handle MultiProduct vacuum");
+    case Vacuum::Invalid:
+      throw std::logic_error(
+          "is_pure_qpannihilator: cannot handle Invalid vacuum");
   }
+
+  abort();  // unreachable
 };
 
 /// @return true if this is a quasiparticle annihilator with respect to the
@@ -288,10 +304,14 @@ bool is_qpannihilator(const Op<S> &op,
              (isr->contains_unoccupied(op.index().space()) &&
               op.action() == Action::annihilate);
     }
-    default:
+    case Vacuum::MultiProduct:
       throw std::logic_error(
           "is_qpannihilator: cannot handle MultiProduct vacuum");
+    case Vacuum::Invalid:
+      throw std::logic_error("Invalid Product not allowed");
   }
+
+  abort();  // unreachable
 };
 
 template <Statistics S>
@@ -311,10 +331,14 @@ IndexSpace qpannihilator_space(
                  : isr->intersection(
                        op.index().space(),
                        isr->vacuum_unoccupied_space(op.index().space().qns()));
-    default:
+    case Vacuum::MultiProduct:
       throw std::logic_error(
           "qpcreator_space: cannot handle MultiProduct vacuum");
+    case Vacuum::Invalid:
+      throw std::logic_error("Invalid Product not allowed");
   }
+
+  abort();  // unreachable
 }
 
 template <Statistics S = Statistics::FermiDirac>
@@ -486,7 +510,7 @@ class NormalOperator : public Operator<S>,
   using base_type::operator[];
 
   /// constructs an identity operator
-  NormalOperator(Vacuum v = get_default_context(S).vacuum()) {}
+  NormalOperator(Vacuum v = get_default_context(S).vacuum()) : vacuum_(v) {}
 
   /// @tparam IndexOrOpSequence1 type representing a sequence of objects that
   /// can be statically cast into Index or Op<S>
@@ -666,6 +690,7 @@ class NormalOperator : public Operator<S>,
                                this->_aux(), bkt, /* left_align = */ false);
       }
     }
+
     abort();  // unreachable
   }
 

@@ -63,9 +63,7 @@ class GenerationVisitor {
       case TreeTraversal::PreAndPostOrder:
       case TreeTraversal::PostAndInOrder:
       case TreeTraversal::None:
-        // Should be unreachable
-        assert(false);
-        break;
+        abort();  // unreachable
     }
 
     if (!m_rootID.has_value()) {
@@ -265,8 +263,8 @@ class GenerationVisitor {
 
  private:
   Generator<Context> &m_generator;
-  const std::unordered_map<NodeID, ExprPtr> &m_scalarFactors;
   Context &m_ctx;
+  const std::unordered_map<NodeID, ExprPtr> &m_scalarFactors;
   std::map<Tensor, std::size_t, TensorBlockLessThanComparator> m_tensorUses;
   std::map<Variable, std::size_t> m_variableUses;
 
@@ -302,7 +300,7 @@ bool prune_scalar_factor(ExportNode<T> &node, PreprocessResult &result) {
   ExprPtr parentFactor =
       iter == result.scalarFactors.end() ? nullptr : iter->second;
 
-  ExprPtr factor = std::move(node->expr());
+  ExprPtr factor = node->expr();
 
   assert(factor);
   assert(factor->is<Constant>() || factor->is<Variable>());
@@ -326,7 +324,7 @@ bool prune_scalar_factor(ExportNode<T> &node, PreprocessResult &result) {
   }();
 
   if (!fill_in.leaf()) {
-    fill_in->set_expr(std::move(node.parent()->expr()));
+    fill_in->set_expr(node.parent()->expr());
   } else if (!node.parent().root()) {
     if (node.parent()->id() == node.parent().parent().left()->id()) {
       node.parent().parent()->select_left();
@@ -534,9 +532,7 @@ class PreprocessVisitor {
       case TreeTraversal::PreAndPostOrder:
       case TreeTraversal::PostAndInOrder:
       case TreeTraversal::None:
-        // Should be unreachable
-        assert(false);
-        break;
+        abort();  // unreachable
     }
   }
 
@@ -848,12 +844,6 @@ void export_groups(Range groups, Generator<Context> &generator, Context ctx) {
   }
 
   generator.begin_export(ctx);
-
-  const DeclarationScope index_decl_scope = generator.index_declaration_scope();
-  const DeclarationScope variable_decl_scope =
-      generator.variable_declaration_scope();
-  const DeclarationScope tensor_decl_scope =
-      generator.tensor_declaration_scope();
 
   // First step: preprocessing of all expressions
   container::svector<detail::PreprocessResult> pp_results;

@@ -98,9 +98,7 @@ class GenerationOptimizer final : public Generator<MainContext> {
           return false;
       }
 
-      // should not be reached
-      assert(false);
-      return false;
+      abort();  // unreachable
     }
 
     MemoryAction memory_action() const {
@@ -118,9 +116,7 @@ class GenerationOptimizer final : public Generator<MainContext> {
           return MemoryAction::None;
       }
 
-      // should not be reached
-      assert(false);
-      return MemoryAction::None;
+      abort();  // unreachable
     }
 
     std::string to_string() const {
@@ -355,12 +351,12 @@ class GenerationOptimizer final : public Generator<MainContext> {
   }
 
   void create(const Tensor &tensor, bool zero_init,
-              const MainContext &ctx) override {
+              const MainContext &) override {
     m_queue.emplace_back(CreateOperation(tensor, zero_init));
   }
 
   void load(const Tensor &tensor, bool set_to_zero,
-            const MainContext &ctx) override {
+            const MainContext &) override {
     if (set_to_zero) {
       m_queue.emplace_back(LoadAndZeroOperation(tensor));
     } else {
@@ -368,29 +364,29 @@ class GenerationOptimizer final : public Generator<MainContext> {
     }
   }
 
-  void set_to_zero(const Tensor &tensor, const MainContext &ctx) override {
+  void set_to_zero(const Tensor &tensor, const MainContext &) override {
     m_queue.emplace_back(ZeroOperation(tensor));
   }
 
-  void unload(const Tensor &tensor, const MainContext &ctx) override {
+  void unload(const Tensor &tensor, const MainContext &) override {
     m_queue.emplace_back(UnloadOperation(tensor));
   }
 
-  void destroy(const Tensor &tensor, const MainContext &ctx) override {
+  void destroy(const Tensor &tensor, const MainContext &) override {
     m_queue.emplace_back(DestroyOperation(tensor));
   }
 
-  void persist(const Tensor &tensor, const MainContext &ctx) override {
+  void persist(const Tensor &tensor, const MainContext &) override {
     m_queue.emplace_back(PersistOperation(tensor));
   }
 
   void create(const Variable &variable, bool zero_init,
-              const MainContext &ctx) override {
+              const MainContext &) override {
     m_queue.emplace_back(CreateOperation(variable, zero_init));
   }
 
   void load(const Variable &variable, bool set_to_zero,
-            const MainContext &ctx) override {
+            const MainContext &) override {
     if (set_to_zero) {
       m_queue.emplace_back(LoadAndZeroOperation(variable));
     } else {
@@ -398,30 +394,30 @@ class GenerationOptimizer final : public Generator<MainContext> {
     }
   }
 
-  void set_to_zero(const Variable &variable, const MainContext &ctx) override {
+  void set_to_zero(const Variable &variable, const MainContext &) override {
     m_queue.emplace_back(ZeroOperation(variable));
   }
 
-  void unload(const Variable &variable, const MainContext &ctx) override {
+  void unload(const Variable &variable, const MainContext &) override {
     m_queue.emplace_back(UnloadOperation(variable));
   }
 
-  void destroy(const Variable &variable, const MainContext &ctx) override {
+  void destroy(const Variable &variable, const MainContext &) override {
     m_queue.emplace_back(DestroyOperation(variable));
   }
 
-  void persist(const Variable &variable, const MainContext &ctx) override {
+  void persist(const Variable &variable, const MainContext &) override {
     m_queue.emplace_back(PersistOperation(variable));
   }
 
   void compute(const Expr &expression, const Tensor &result,
-               const MainContext &ctx) override {
+               const MainContext &) override {
     m_queue.emplace_back(ComputeOperation(result, expression.clone()));
     process_operation_queue();
   }
 
   void compute(const Expr &expression, const Variable &result,
-               const MainContext &ctx) override {
+               const MainContext &) override {
     m_queue.emplace_back(ComputeOperation(result, expression.clone()));
     process_operation_queue();
   }
@@ -590,8 +586,8 @@ class GenerationOptimizer final : public Generator<MainContext> {
       assert(second_idx < m_cache.size());
       assert(first_idx < second_idx);
 
-      const Operation &first = m_cache.at(first_idx);
-      const Operation &second = m_cache.at(second_idx);
+      [[maybe_unused]] const Operation &first = m_cache.at(first_idx);
+      [[maybe_unused]] const Operation &second = m_cache.at(second_idx);
       assert(first->pairs_with(second));
 
       if (second_idx - first_idx > 2) {
