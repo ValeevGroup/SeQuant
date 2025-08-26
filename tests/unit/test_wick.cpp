@@ -370,6 +370,48 @@ TEST_CASE("wick", "[algorithms][wick]") {
           L"+ {{s^{{i_6}}_{{i_3}}}{a^{{i_1}{i_2}{i_5}}_{{i_8}{i_4}{i_7}}}} + "
           L"{{a^{{i_1}{i_2}{i_5}{i_6}}_{{i_3}{i_4}{i_7}{i_8}}}}\\bigr) }");
 
+      // we use this example in the paper, both as bare ops and contracted with
+      // scalars to make all indices dummy and the topological optimizations
+      // kicking in ... see if the paper's exlanation of how
+      // topology works is correct
+      {
+        auto expr =
+            ex<Tensor>(L"g", bra{L"i_1", L"i_2"}, ket{L"i_3", L"i_4"},
+                       Symmetry::antisymm) *
+            ex<FNOperator>(cre({L"i_1", L"i_2"}), ann({L"i_3", L"i_4"})) *
+            ex<Tensor>(L"g", bra{L"i_5", L"i_6"}, ket{L"i_7", L"i_8"},
+                       Symmetry::antisymm) *
+            ex<FNOperator>(cre({L"i_5", L"i_6"}), ann({L"i_7", L"i_8"}));
+        auto wick = FWickTheorem{expr};
+
+        // first with topology utilization
+        REQUIRE_NOTHROW(
+            wick.full_contractions(false).use_topology(true).compute());
+        wick.stats().reset();
+        auto result =
+            wick.full_contractions(false).use_topology(true).compute();
+        result->rapid_canonicalize();
+        REQUIRE(result->is<Sum>());
+        REQUIRE(result->size() == 3);
+        REQUIRE(wick.stats().num_attempted_contractions == 2);
+        REQUIRE(wick.stats().num_useful_contractions == 3);
+        auto result_latex_w_topology = to_latex(result);
+
+        // now without topology
+        wick = FWickTheorem{expr};
+        REQUIRE_NOTHROW(
+            wick.full_contractions(false).use_topology(false).compute());
+        wick.stats().reset();
+        result = wick.full_contractions(false).use_topology(false).compute();
+        result->rapid_canonicalize();
+        REQUIRE(result->is<Sum>());
+        REQUIRE(result->size() == 3);
+        REQUIRE(wick.stats().num_attempted_contractions == 6);
+        REQUIRE(wick.stats().num_useful_contractions == 8);
+        auto result_latex_wo_topology = to_latex(result);
+        REQUIRE(result_latex_wo_topology == result_latex_w_topology);
+      }
+
       // if Wick's theorem's result is in "canonical" (columns-matching-inputs
       // ... this is what Kutzelnigg calls generalized Wick's theorem) it works
       // same for spinor and spinfree basis for physical vacuum
@@ -658,6 +700,8 @@ TEST_CASE("wick", "[algorithms][wick]") {
       ExprPtr result;
       REQUIRE_NOTHROW(result = wick.compute());
       // std::wcout << "result = " << to_latex(result) << std::endl;
+      REQUIRE(to_latex(result) == L"{{-}{\\bar{g}^{{a_2}{i_1}}_{{a_4}{a_3}}}}");
+      canonicalize(result, {.method = CanonicalizationMethod::Rapid});
       REQUIRE(to_latex(result) == L"{{-}{\\bar{g}^{{i_1}{a_2}}_{{a_3}{a_4}}}}");
     }
 
@@ -993,7 +1037,8 @@ TEST_CASE("wick", "[algorithms][wick]") {
           TensorCanonicalizer::register_instance(
               std::make_shared<DefaultTensorCanonicalizer>(
                   std::vector<Index>{}));
-          canonicalize(wick_result_2);
+          canonicalize(wick_result_2,
+                       {.method = CanonicalizationMethod::Complete});
           rapid_simplify(wick_result_2);
 
           // print(oss.str(), wick_result_2);

@@ -487,7 +487,11 @@ TEST_CASE("tensor_network", "[elements]") {
         {t::A(nₚ(-2)), t::H_(2), t::T_(2), t::T_(2), t::T_(2)});
     // canonicalize to avoid dependence on the implementation details of
     // mbpt::sr::make_op
-    canonicalize(tmp);
+    // N.B. graph structure before canonicalization will depend on the input
+    // state
+    //      make sure input matches what was used to generate the reference
+    //      graphviz validator
+    canonicalize(tmp, {.method = CanonicalizationMethod::Complete});
     // std::wcout << "A2*H2*T2*T2*T2 = " << to_latex(tmp) << std::endl;
     TN tn(tmp->as<Product>().factors());
 
@@ -1625,7 +1629,7 @@ TEST_CASE("tensor_network_v3", "[elements]") {
         using named_indices_t = TN::NamedIndexSet;
         named_indices_t indices{Index{L"i_17"}};
         tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(),
-                        TN::CanonicalizationMethod::Complete, &indices);
+                        CanonicalizationMethod::Complete, &indices);
 
         REQUIRE(size(tn.tensors()) == 2);
         REQUIRE(std::dynamic_pointer_cast<Expr>(tn.tensors()[0]));
@@ -1652,7 +1656,7 @@ TEST_CASE("tensor_network_v3", "[elements]") {
         for (bool fast : {true, false}) {
           TN tn(std::vector<ExprPtr>{variant == 1 ? input1 : input2});
           tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(),
-                          TN::CanonicalizationMethod::Rapid);
+                          CanonicalizationMethod::Rapid);
           REQUIRE(tn.tensors().size() == 1);
           auto result = ex<Product>(to_tensors(tn.tensors()));
           REQUIRE(to_latex(result) == (variant == 1 ? expected1 : expected2));
@@ -1668,8 +1672,8 @@ TEST_CASE("tensor_network_v3", "[elements]") {
       const std::wstring expected =
           L"A{i_1,i_2;i_3,i_4}:A * I1{i_3,i_4;;x_1}:N * I2{;i_1,i_2;x_1}:N";
 
-      for (auto method : {TN::CanonicalizationMethod::Rapid,
-                          TN::CanonicalizationMethod::Complete}) {
+      for (auto method :
+           {CanonicalizationMethod::Rapid, CanonicalizationMethod::Complete}) {
         TN tn(input);
         tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(), method);
         const auto result = ex<Product>(to_tensors(tn.tensors()));
@@ -1751,7 +1755,7 @@ TEST_CASE("tensor_network_v3", "[elements]") {
         TN tn(input_tensors);
         ExprPtr factor =
             tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(),
-                            TN::CanonicalizationMethod::Rapid);
+                            CanonicalizationMethod::Rapid);
 
         ExprPtr prod = to_product(tn.tensors());
         if (factor) {
@@ -1993,8 +1997,8 @@ TEST_CASE("tensor_network_v3", "[elements]") {
         for (bool fast : {true, false, true, true, false, false, true}) {
           reference_tn.canonicalize(
               TensorCanonicalizer::cardinal_tensor_labels(),
-              fast ? TN::CanonicalizationMethod::Rapid
-                   : TN::CanonicalizationMethod::Complete);
+              fast ? CanonicalizationMethod::Rapid
+                   : CanonicalizationMethod::Complete);
 
           REQUIRE(to_latex(to_product(reference_tn.tensors())) ==
                   to_latex(to_product(check_tn.tensors())));

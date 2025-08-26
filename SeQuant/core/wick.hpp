@@ -311,9 +311,10 @@ class WickTheorem {
            }) == false);
 
     // every op needs to be in a partition AND partitions need to be sorted
-    // if op_partitions only specifues nontrivial partitions, may need to add
+    // if op_partitions only specifies nontrivial partitions, may need to add
     // more partitions create initial set of partitions, then update if needed
     op_npartitions_ = size(op_partitions);
+    op_partitions_.clear();
     op_partitions_.resize(op_npartitions_);
     auto partition_idx = 0;
     ranges::for_each(op_partitions, [&](auto &&op_partition) {
@@ -385,6 +386,7 @@ class WickTheorem {
   /// canonicalization of the input expression; the default is false.
   /// @return the result of applying Wick's theorem; either a Constant, a
   /// Product, or a Sum
+  /// @note the canonicalization method is controlled by the default Context
   /// @warning this is not reentrant, but is optionally threaded internally
   /// @throw std::logic_error if input's vacuum does not match the current
   /// context vacuum
@@ -443,7 +445,7 @@ class WickTheorem {
 
   mutable std::shared_ptr<NormalOperatorSequence<S>> input_;
   bool full_contractions_ = true;
-  bool use_topology_ = false;
+  bool use_topology_ = true;
   mutable Stats stats_;
 
   mutable std::optional<container::set<Index>>
@@ -1447,7 +1449,8 @@ class WickTheorem {
                   recursive_nontensor_wick(result, state);
                   --state.level;
                   // this contraction is useful if it leads to useful
-                  // contractions as a result
+                  // contractions as a result ... thus same contraction
+                  // can be useful multiple times
                   if (current_num_useful_contractions !=
                       stats_.num_useful_contractions.load())
                     ++stats_.num_useful_contractions;

@@ -818,6 +818,9 @@ class NormalOperator : public Operator<S>,
   NormalOperator *_clone() const override final {
     return new NormalOperator(*this);
   }
+  std::shared_ptr<AbstractTensor> _clone_shared() const override final {
+    return std::make_shared<NormalOperator>(*this);
+  }
 
   AbstractTensor::const_any_view_randsz _bra() const override final {
     return annihilators() |

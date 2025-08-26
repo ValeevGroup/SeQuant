@@ -462,7 +462,7 @@ TensorNetworkV3 &TensorNetworkV3::operator=(TensorNetworkV3 &&) noexcept =
 TensorNetworkV3::TensorNetworkV3(const TensorNetworkV3 &other) {
   tensors_.reserve(other.tensors_.size());
   for (const auto &t : other.tensors_) {
-    tensors_.emplace_back(std::shared_ptr<AbstractTensor>(t->_clone()));
+    tensors_.emplace_back(t->_clone_shared());
   }
   tensor_input_ordinals_ = other.tensor_input_ordinals_;
 }
@@ -503,14 +503,14 @@ ExprPtr TensorNetworkV3::canonicalize(
   }
 
   ExprPtr byproduct;
-  if (logical_and(method, CanonicalizationMethod::Topological)) {
+  if (method & CanonicalizationMethod::Topological) {
     // The graph-based canonization is required in all cases in which there are
     // indistinguishable tensors present in the expression. Their order and
     // indexing can only be determined via this rigorous canonization.
     byproduct = canonicalize_graph(named_indices);
   }
 
-  if (logical_and(method, CanonicalizationMethod::Lexicographic)) {
+  if (method & CanonicalizationMethod::Lexicographic) {
     // Ensure each individual tensor is written in the way that its tensor
     // block (== order of index spaces) is canonical
     byproduct *= canonicalize_individual_tensor_blocks(named_indices);
@@ -1484,24 +1484,6 @@ ExprPtr TensorNetworkV3::do_individual_canonicalization(
   }
 
   return byproduct;
-}
-
-bool TensorNetworkV3::logical_and(CanonicalizationMethod m1,
-                                  CanonicalizationMethod m2) {
-  return (static_cast<int>(m1) & static_cast<int>(m2)) != 0;
-}
-
-std::wstring TensorNetworkV3::to_wstring(CanonicalizationMethod m) {
-  switch (m) {
-    case CanonicalizationMethod::Topological:
-      return L"topological";
-    case CanonicalizationMethod::Lexicographic:
-      return L"lexicographic";
-    case CanonicalizationMethod::Complete:
-      return L"complete";
-    default:
-      abort();
-  }
 }
 
 }  // namespace sequant

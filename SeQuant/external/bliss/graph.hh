@@ -741,6 +741,8 @@ class Graph : public AbstractGraph {
     /// extra content for node section
     std::basic_string<Char, Traits> nodeextras = {};
   };
+  template <typename Char, typename Traits>
+  static DotOptions<Char, Traits> make_default_dot_options() { return {};}
 
   /// @brief  writes a dot file, optionally using user-supplied labels and
   /// converting color values to colors
@@ -750,7 +752,7 @@ class Graph : public AbstractGraph {
   /// @param options options for generating dot file
   template <typename Char, typename Traits>
   void write_dot(std::basic_ostream<Char, Traits>& os,
-                 DotOptions<Char,Traits> options = {.labels = {}, .xlabels = {}, .texlabels = {}, .display_colors=std::nullopt, .fillcolor_saturation_nbits=3, .vertex_to_subgraph = {}, .nodeextras = {}}) {
+                 DotOptions<Char,Traits> options = make_default_dot_options<Char, Traits>()) {
     using std::size;
     const auto nvertices = size(options.labels);
     const bool have_labels = nvertices > 0;

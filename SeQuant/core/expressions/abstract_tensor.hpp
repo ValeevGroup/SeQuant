@@ -110,6 +110,14 @@ class AbstractTensor {
     throw missing_instantiation_for("_clone");
   }
 
+  /// clones this object producing a shared_ptr<AbstractTensor> so that if the
+  /// derived class is an Expr, hence derived from
+  /// `std::enable_shared_from_this`, the weak pointer is set correctly
+  //// @throw missing_instantiation_for if not overloaded
+  virtual std::shared_ptr<AbstractTensor> _clone_shared() const {
+    throw missing_instantiation_for("_clone_shared");
+  }
+
   using const_any_view_rand =
       ranges::any_view<const Index&, ranges::category::random_access>;
   using const_any_view_randsz =

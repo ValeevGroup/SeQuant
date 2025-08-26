@@ -27,9 +27,12 @@ TEST_CASE("context", "[runtime]") {
     auto initial_ctx = get_default_context();
 
     // basic set_default_context test
-    CHECK_NOTHROW(set_default_context(Context(
-        mbpt::make_sr_spaces(), Vacuum::SingleProduct, IndexSpaceMetric::Unit,
-        BraKetSymmetry::symm, SPBasis::spinfree)));
+    CHECK_NOTHROW(set_default_context(
+        {.index_space_registry_shared_ptr = mbpt::make_sr_spaces(),
+         .vacuum = Vacuum::SingleProduct,
+         .metric = IndexSpaceMetric::Unit,
+         .braket_symmetry = BraKetSymmetry::symm,
+         .spbasis = SPBasis::spinfree}));
     CHECK(get_default_context().vacuum() == Vacuum::SingleProduct);
     CHECK(get_default_context().metric() == IndexSpaceMetric::Unit);
     CHECK(get_default_context().braket_symmetry() == BraKetSymmetry::symm);
@@ -40,8 +43,12 @@ TEST_CASE("context", "[runtime]") {
     CHECK(fermi_isr->spaces() ==
           bose_isr->spaces());  // fermi_isr and bose_isr share the space set
     CHECK_NOTHROW(set_default_context(
-        {{Statistics::FermiDirac, Context(fermi_isr, Vacuum::SingleProduct)},
-         {Statistics::BoseEinstein, Context(bose_isr, Vacuum::Physical)}}));
+        {{Statistics::FermiDirac,
+          Context({.index_space_registry_shared_ptr = fermi_isr,
+                   .vacuum = Vacuum::SingleProduct})},
+         {Statistics::BoseEinstein,
+          Context({.index_space_registry_shared_ptr = bose_isr,
+                   .vacuum = Vacuum::Physical})}}));
     CHECK(get_default_context(Statistics::Arbitrary).vacuum() ==
           Vacuum::SingleProduct);
     CHECK(get_default_context(Statistics::FermiDirac).vacuum() ==
@@ -64,9 +71,12 @@ TEST_CASE("context", "[runtime]") {
     // scoped changes to default context
     {
       // if we do not save the resetter context is reset back immediately
-      CHECK_NOTHROW(set_scoped_default_context(Context(
-          mbpt::make_sr_spaces(), Vacuum::SingleProduct, IndexSpaceMetric::Unit,
-          BraKetSymmetry::symm, SPBasis::spinfree)));
+      CHECK_NOTHROW(set_scoped_default_context(
+          {.index_space_registry_shared_ptr = mbpt::make_sr_spaces(),
+           .vacuum = Vacuum::SingleProduct,
+           .metric = IndexSpaceMetric::Unit,
+           .braket_symmetry = BraKetSymmetry::symm,
+           .spbasis = SPBasis::spinfree}));
       CHECK(get_default_context() == initial_ctx);
 
       auto ctx = get_default_context();
