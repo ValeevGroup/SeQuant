@@ -714,7 +714,8 @@ ExprPtr S(std::int64_t K) {
       OpType::S, cre(creators), ann(annihilators))(dep, {Symmetry::nonsymm});
 }
 
-ExprPtr H_pt([[maybe_unused]] std::size_t order, std::size_t R, std::size_t nbatch) {
+ExprPtr H_pt([[maybe_unused]] std::size_t order, std::size_t R,
+             std::size_t nbatch) {
   assert(order == 1 &&
          "sequant::mbpt::H_pt(): only supports first order perturbation");
   assert(R > 0);
@@ -724,7 +725,8 @@ ExprPtr H_pt([[maybe_unused]] std::size_t order, std::size_t R, std::size_t nbat
                                          naux(nbatch))();
 }
 
-ExprPtr T_pt_([[maybe_unused]] std::size_t order, std::size_t K, std::size_t nbatch) {
+ExprPtr T_pt_([[maybe_unused]] std::size_t order, std::size_t K,
+              std::size_t nbatch) {
   assert(order == 1 &&
          "sequant::sr::T_pt_(): only supports first order perturbation");
   if (nbatch != 0)
@@ -743,7 +745,8 @@ ExprPtr T_pt(std::size_t order, std::size_t K, std::size_t nbatch, bool skip1) {
   return result;
 }
 
-ExprPtr Λ_pt_([[maybe_unused]] std::size_t order, std::size_t K, std::size_t nbatch) {
+ExprPtr Λ_pt_([[maybe_unused]] std::size_t order, std::size_t K,
+              std::size_t nbatch) {
   assert(order == 1 &&
          "sequant::sr::Λ_pt_(): only supports first order perturbation");
   if (nbatch != 0)

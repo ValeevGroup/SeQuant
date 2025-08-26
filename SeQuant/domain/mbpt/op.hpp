@@ -681,9 +681,8 @@ class OpMaker {
   static OpInfo build_op_info(const IndexSpaceContainer& cre_spaces,
                               const IndexSpaceContainer& ann_spaces,
                               UseDepIdx dep = UseDepIdx::None) {
-    const bool symm =
-        get_default_context().spbasis() ==
-        SPBasis::spinor;  // antisymmetrize if spin-orbital basis
+    const bool symm = get_default_context().spbasis() ==
+                      SPBasis::spinor;  // antisymmetrize if spinor basis
     const auto dep_bra = dep == UseDepIdx::Bra;
     const auto dep_ket = dep == UseDepIdx::Ket;
 
