@@ -46,10 +46,6 @@ foreach(current IN LISTS TEST_CASES)
     target_set_warning_flags("${test_name}")
 
     set(variant_names "")
-    # test for building ${test_name} as needed
-    add_test(NAME "sequant/integration/${test_name}/build"
-            COMMAND "${CMAKE_COMMAND}" --build ${CMAKE_BINARY_DIR} --target "${test_name}")
-    set_tests_properties("sequant/integration/${test_name}/build" PROPERTIES FIXTURES_SETUP SEQUANT_FIXTURE_${test_name})
 
     if (NOT test_variants)
         add_test(
