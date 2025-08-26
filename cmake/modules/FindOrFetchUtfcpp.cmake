@@ -4,7 +4,7 @@ if (NOT TARGET utfcpp)
     FetchContent_Declare(
         utfcpp
         GIT_REPOSITORY "https://github.com/nemtrif/utfcpp.git"
-        GIT_TAG "v4.0.6"
+		GIT_TAG "${SEQUANT_TRACKED_UTFCPP_TAG}"
         GIT_SHALLOW
         # Setting SOURCE_SUBDIR to a non-existing directory is the suggested workaround
         # to prevent FetchContent_MakeAvailable to add_subdirectory until
