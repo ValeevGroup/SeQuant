@@ -5,18 +5,11 @@
 #ifndef SEQUANT_WICK_IMPL_HPP
 #define SEQUANT_WICK_IMPL_HPP
 
-// change to 0 to try TNV1
-#define USE_TENSOR_NETWORK_V3 1
-
 #include <SeQuant/core/bliss.hpp>
 #include <SeQuant/core/logger.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
-#if USE_TENSOR_NETWORK_V3
-#include <SeQuant/core/tensor_network_v3.hpp>
-#else
-#include <SeQuant/core/tensor_network.hpp>
-#endif
 #include <SeQuant/core/tensor_network/vertex.hpp>
+#include <SeQuant/core/tensor_network_v3.hpp>
 
 #ifdef SEQUANT_HAS_EXECUTION_HEADER
 #include <execution>
@@ -605,22 +598,13 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
                 << "WickTheorem<S>::compute: input to topology computation = "
                 << to_latex(expr_input_) << std::endl;
 
-            // construct graph representation of the tensor product
-#if USE_TENSOR_NETWORK_V3
+          // construct graph representation of the tensor product
           TensorNetworkV3 tn(expr_input_->as<Product>().factors());
           auto g = tn.create_graph({.distinct_named_indices = true});
           const auto &graph = g.bliss_graph;
           const auto &vlabels = g.vertex_labels;
           const auto &vcolors = g.vertex_colors;
           const auto &vtypes = g.vertex_types;
-#else
-          TensorNetwork tn(expr_input_->as<Product>().factors());
-          auto [graph, vlabels, vtexlabels, vcolors, vtypes] =
-              tn.make_bliss_graph(
-                  {/* need labels to find normal operators */ .make_labels =
-                       true,
-                   .make_texlabels = false});
-#endif
           const auto n = vtypes.size();
           assert(vcolors.size() == n);
           assert(vlabels.size() == n);
@@ -628,13 +612,9 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
           const auto &tn_tensors = tn.tensors();
           auto idx_vertex_to_edge = [&](const auto idx_vertex) -> const auto & {
             assert(idx_vertex < n);
-#if USE_TENSOR_NETWORK_V3
             const auto edge_idx = g.vertex_to_index_idx(idx_vertex);
             assert(edge_idx < tn_edges.size());
             return tn_edges[edge_idx];
-#else
-            return *(tn_edges.begin() + idx_vertex);
-#endif
           };
 
           if (Logger::instance().wick_topology) {
@@ -916,34 +896,14 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
             const auto &edge2 = idx_vertex_to_edge(v2);
             auto connected_to_bra_or_ket_of_same_symmetric_nop =
                 [&tn_tensors](const auto &edge1, const auto &edge2) -> bool {
-              const auto nt1 =
-#if USE_TENSOR_NETWORK_V3
-                  edge1.vertex_count();
-#else
-                  edge1.size();
-#endif
+              const auto nt1 = edge1.vertex_count();
               assert(nt1 <= 2);
-              const auto nt2 =
-#if USE_TENSOR_NETWORK_V3
-                  edge2.vertex_count();
-#else
-                  edge2.size();
-#endif
+              const auto nt2 = edge2.vertex_count();
               assert(nt2 <= 2);
               for (auto i1 = 0; i1 != nt1; ++i1) {
-                const auto tensor1_ord =
-#if USE_TENSOR_NETWORK_V3
-                    edge1.vertex(i1).getTerminalIndex();
-#else
-                    edge1[i1].tensor_ord;
-#endif
+                const auto tensor1_ord = edge1.vertex(i1).getTerminalIndex();
                 for (auto i2 = 0; i2 != nt2; ++i2) {
-                  const auto tensor2_ord =
-#if USE_TENSOR_NETWORK_V3
-                      edge2.vertex(i2).getTerminalIndex();
-#else
-                      edge2[i2].tensor_ord;
-#endif
+                  const auto tensor2_ord = edge2.vertex(i2).getTerminalIndex();
 
                   // do not skip if connected to same ...
                   if (tensor1_ord == tensor2_ord) {
@@ -954,17 +914,9 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
                     // ... (anti)symmetric ...
                     if (tensor_ptr->_symmetry() != Symmetry::nonsymm) {
                       const auto tensor1_slot_type =
-#if USE_TENSOR_NETWORK_V3
                           edge1.vertex(i1).getOrigin();
-#else
-                          edge1[i1].slot_type;
-#endif
                       const auto tensor2_slot_type =
-#if USE_TENSOR_NETWORK_V3
                           edge2.vertex(i2).getOrigin();
-#else
-                          edge2[i2].slot_type;
-#endif
 
                       // ... bra/ket of ...
                       if (tensor1_slot_type == tensor2_slot_type) {
