@@ -445,7 +445,7 @@ class WickTheorem {
 
   mutable std::shared_ptr<NormalOperatorSequence<S>> input_;
   bool full_contractions_ = true;
-  bool use_topology_ = false;
+  bool use_topology_ = true;
   mutable Stats stats_;
 
   mutable std::optional<container::set<Index>>
@@ -1449,7 +1449,8 @@ class WickTheorem {
                   recursive_nontensor_wick(result, state);
                   --state.level;
                   // this contraction is useful if it leads to useful
-                  // contractions as a result
+                  // contractions as a result ... thus same contraction
+                  // can be useful multiple times
                   if (current_num_useful_contractions !=
                       stats_.num_useful_contractions.load())
                     ++stats_.num_useful_contractions;
