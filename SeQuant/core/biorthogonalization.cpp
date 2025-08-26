@@ -3,8 +3,6 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/math.hpp>
-#include <SeQuant/core/result_expr.hpp>
-#include <SeQuant/core/tensor.hpp>
 #include <SeQuant/core/utility/expr.hpp>
 #include <SeQuant/core/utility/permutation.hpp>
 
@@ -15,6 +13,7 @@
 #include <libperm/Utils.hpp>
 
 #include <algorithm>
+#include <cassert>
 
 namespace sequant {
 
@@ -64,7 +63,7 @@ Eigen::MatrixXd permutational_overlap_matrix(std::size_t n_particles) {
   Eigen::MatrixXd M(n, n);
   M.setZero();
 
-  // TODO: Can we fill the entire matrix only by knowing the entires of one
+  // TODO: Can we fill the entire matrix only by knowing the entries of one
   // row/column? For n_particles < 4, every consecutive col/row is only rotated
   // by one compared to the one before
   for (std::size_t row = 0; row < n; ++row) {
@@ -161,15 +160,18 @@ ExprPtr create_expr_for(const ParticlePairings& ref_pairing,
                        return std::is_sorted(pairing.begin(), pairing.end(),
                                              compare_first_less<IndexPair>{});
                      }));
+  assert(std::is_sorted(ref_pairing.begin(), ref_pairing.end(),
+                        compare_first_less<IndexPair>{}));
 
   container::set<std::pair<IndexSpace, IndexSpace>> ref_space_pairing;
   ref_space_pairing.reserve(ref_pairing.size());
   for (std::size_t i = 0; i < ref_pairing.size(); ++i) {
-    ref_space_pairing.insert(
-        std::make_pair(ref_pairing[i].first.space(),
-                       ref_pairing[perm->image(i)].second.space()));
+    ref_space_pairing.emplace(ref_pairing[i].first.space(),
+                              ref_pairing[perm->image(i)].second.space());
   }
 
+  // Look for a ParticlePairings object that pairs indices belonging to index
+  // spaces compatible with ref_space_pairing
   auto it = std::find_if(
       pairings.begin(), pairings.end(), [&](const ParticlePairings& p) {
         assert(p.size() == ref_pairing.size());
@@ -200,36 +202,44 @@ ExprPtr create_expr_for(const ParticlePairings& ref_pairing,
   for (std::size_t i = 0; i < base.size(); ++i) {
     std::size_t ref_idx = perm->image(i);
 
-    const bool differs_in_first = base[i].first != ref_pairing[i].first;
+    // Remember that all index pairings are sorted w.r.t. first and hence we are
+    // only looking for permutations in second
+    assert(base[i].first == ref_pairing[i].first);
     const bool differs_in_second =
         base[i].second != ref_pairing[ref_idx].second;
 
-    if (!differs_in_first && !differs_in_second) {
+    if (!differs_in_second) {
       // This particle pairing is identical
       continue;
     }
 
-    assert(differs_in_first || differs_in_second);
+    assert(differs_in_second);
 
-    if (differs_in_first) {
-      if (base[i].first.space() == ref_pairing[i].first.space()) {
-        replacements.insert(
-            std::make_pair(base[i].first, ref_pairing[ref_idx].first));
-        continue;
-      }
-    }
-    if (differs_in_second) {
-      if (base[i].second.space() == ref_pairing[i].second.space()) {
-        replacements.insert(
-            std::make_pair(base[i].second, ref_pairing[ref_idx].second));
-        continue;
-      }
+    // Note: we may only permute indices belonging to the same space
+    // (otherwise, we would produce non-sensical expressions)
+    if (base[i].second.space() == ref_pairing[ref_idx].second.space()) {
+      // base and ref_pairing differ in the second index of the current
+      // pairing and their index space matches -> can just permute them
+      replacements.emplace(base[i].second, ref_pairing[ref_idx].second);
+    } else {
+      // Index spaces of the differing index (second) in the pairings are
+      // different as well. Since the tensors are assumed to be
+      // particle-symmetric, we can instead permute the first indices in the
+      // pairings, which are of the same space (that's guaranteed by the way we
+      // chose base).
+      assert(base[i].first.space() == ref_pairing[ref_idx].first.space());
+      replacements.emplace(base[i].first, ref_pairing[ref_idx].first);
     }
   }
 
   ExprPtr expr = base_exprs.at(idx)->clone();
 
   if (!replacements.empty()) {
+#ifndef NDEBUG
+    for (const auto& [first, second] : replacements) {
+      assert(first.space() == second.space());
+    }
+#endif
     expr = transform_expr(expr, replacements);
   }
 
@@ -287,6 +297,29 @@ void biorthogonal_transform(container::svector<ResultExpr>& result_exprs,
                      [](const ResultExpr& res) {
                        return res.particle_symmetry() == ParticleSymmetry::symm;
                      }));
+
+  // Furthermore, we expect that there is no symmetrization operator present in
+  // the expressions as that would imply transforming also the symmetrization
+  // operator, which is incorrect. This is because the idea during
+  // biorthogonalization is that we project onto e.g.
+  // \tilde{E}^{IJ}_{AB} = c_1 E^{IJ}_{AB} + c_2 E^{JI}_{AB}
+  // instead of E^{IJ}_{AB} directly. In either case though, the result looks
+  // like R^{IJ}_{AB} and the index pairing of the result is what determines
+  // the required symmetrization. Hence, the symmetrization operator must not
+  // be changed when transforming from one representation into the other.
+  assert(std::all_of(
+      result_exprs.begin(), result_exprs.end(), [](const ResultExpr& res) {
+        bool found = false;
+        res.expression()->visit(
+            [&](const ExprPtr& expr) {
+              if (expr->is<Tensor>() && (expr->as<Tensor>().label() == L"S" ||
+                                         expr->as<Tensor>().label() == L"A")) {
+                found = true;
+              };
+            },
+            true);
+        return !found;
+      }));
 
   auto externals = result_exprs |
                    ranges::views::transform([](const ResultExpr& expr) {

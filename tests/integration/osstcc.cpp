@@ -1,6 +1,7 @@
 #include <SeQuant/core/op.hpp>
+#include <SeQuant/core/runtime.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
-#include <SeQuant/core/timer.hpp>
+#include <SeQuant/core/utility/timer.hpp>
 #include <SeQuant/domain/mbpt/context.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/models/cc.hpp>
@@ -19,19 +20,13 @@ using namespace sequant;
   }
 
 int main(int argc, char* argv[]) {
-  std::setlocale(LC_ALL, "en_US.UTF-8");
   std::wcout.precision(std::numeric_limits<double>::max_digits10);
   std::wcerr.precision(std::numeric_limits<double>::max_digits10);
-  std::wcout.sync_with_stdio(false);
-  std::wcerr.sync_with_stdio(false);
-  std::wcout.imbue(std::locale("en_US.UTF-8"));
-  std::wcerr.imbue(std::locale("en_US.UTF-8"));
-  std::wcout.sync_with_stdio(true);
-  std::wcerr.sync_with_stdio(true);
+  sequant::set_locale();
 
-  sequant::set_default_context(Context(
-      mbpt::make_min_sr_spaces(), Vacuum::SingleProduct, IndexSpaceMetric::Unit,
-      BraKetSymmetry::conjugate, SPBasis::spinorbital));
+  sequant::set_default_context(
+      {.index_space_registry_shared_ptr = mbpt::make_min_sr_spaces(),
+       .vacuum = Vacuum::SingleProduct});
   TensorCanonicalizer::register_instance(
       std::make_shared<DefaultTensorCanonicalizer>());
 

@@ -2,7 +2,6 @@
 // Created by Eduard Valeyev on 2019-02-26.
 //
 
-#include <SeQuant/core/abstract_tensor.hpp>
 #include <SeQuant/core/algorithm.hpp>
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/bliss.hpp>
@@ -14,7 +13,6 @@
 #include <SeQuant/core/latex.hpp>
 #include <SeQuant/core/logger.hpp>
 #include <SeQuant/core/tag.hpp>
-#include <SeQuant/core/tensor.hpp>
 #include <SeQuant/core/tensor_network.hpp>
 #include <SeQuant/core/tensor_network/vertex_painter.hpp>
 #include <SeQuant/core/tensor_network_v2.hpp>
@@ -139,6 +137,11 @@ ExprPtr TensorNetwork::canonicalize(
   // been computed in init_edges)
   const auto &named_indices =
       named_indices_ptr == nullptr ? this->ext_indices() : *named_indices_ptr;
+  if (Logger::instance().canonicalize) {
+    std::wcout << "named_indices = ";
+    ranges::for_each(named_indices,
+                     [](auto &&i) { std::wcout << i.full_label() << L" "; });
+  }
 
   // helpers to filter named ("external" in traditional use case) / anonymous
   // ("internal" in traditional use case)
@@ -215,12 +218,14 @@ ExprPtr TensorNetwork::canonicalize(
         return pvector;
       };
 
-      graph->write_dot(std::wcout, vlabels, vtexlabels);
+      graph->write_dot(std::wcout,
+                       {.labels = vlabels, .texlabels = vtexlabels});
 
       bliss::Graph *cgraph = graph->permute(cl);
       auto cvlabels = permute(vlabels, cl);
       auto cvtexlabels = permute(vtexlabels, cl);
-      cgraph->write_dot(std::wcout, cvlabels, cvtexlabels);
+      cgraph->write_dot(std::wcout,
+                        {.labels = cvlabels, .texlabels = cvtexlabels});
       delete cgraph;
     }
 
@@ -271,12 +276,10 @@ ExprPtr TensorNetwork::canonicalize(
                     });
           // make a replacement list by generating new indices in canonical
           // order
-          std::size_t ord = 0;
           for (auto &&[idx_ord, idx_ord_can] : idx_can) {
             const auto &idx = (edges_.begin() + idx_ord)->idx();
             const auto new_idx = idxfac.make(idx);
             if (idx != new_idx) idxrepl.emplace(idx, std::move(new_idx));
-            ++ord;
           }
         } else if (sz == 1) {  // no need for resorting of colors with 1 index
                                // only, but still need to replace the index
@@ -397,6 +400,7 @@ ExprPtr TensorNetwork::canonicalize(
           end(idx_terminals_sorted),
           [&idxrepl, &idxfac, &is_anonymous_index](const auto &terminals) {
             const auto &idx = terminals.idx();
+            (void)is_anonymous_index;
             assert(is_anonymous_index(
                 idx));  // should only encounter anonymous indices here
             idxrepl.emplace(std::make_pair(idx, idxfac.make(idx)));
@@ -483,7 +487,8 @@ TensorNetwork::GraphData TensorNetwork::make_bliss_graph(
                                   ? this->ext_indices()
                                   : *options.named_indices;
 
-  VertexPainter colorizer(named_indices, options.distinct_named_indices);
+  VertexPainter<TensorNetwork> colorizer(named_indices,
+                                         options.distinct_named_indices);
 
   // results
   std::shared_ptr<bliss::Graph> graph;
@@ -533,8 +538,9 @@ TensorNetwork::GraphData TensorNetwork::make_bliss_graph(
       if (symmetric_protoindex_bundles.find(idx.proto_indices()) ==
           symmetric_protoindex_bundles
               .end()) {  // new bundle? make a vertex for it
-        auto graph = symmetric_protoindex_bundles.insert(idx.proto_indices());
-        assert(graph.second);
+        [[maybe_unused]] auto [it, inserted] =
+            symmetric_protoindex_bundles.insert(idx.proto_indices());
+        assert(inserted);
       }
     }
     index_cnt++;
@@ -646,7 +652,7 @@ TensorNetwork::GraphData TensorNetwork::make_bliss_graph(
       if (options.make_texlabels) {
         vertex_texlabels.emplace_back(std::nullopt);
       }
-      vertex_type.push_back(VertexType::Particle);
+      vertex_type.push_back(VertexType::TensorBraKet);
       // Color bk node in same color as tensor core
       vertex_color.push_back(colorizer(tref));
     }
@@ -692,7 +698,7 @@ TensorNetwork::GraphData TensorNetwork::make_bliss_graph(
         if (options.make_texlabels) {
           vertex_texlabels.emplace_back(std::nullopt);
         }
-        vertex_type.push_back(VertexType::Particle);
+        vertex_type.push_back(VertexType::TensorBraKet);
         vertex_color.push_back(colorizer(tref));
       }
     }
@@ -775,7 +781,7 @@ TensorNetwork::GraphData TensorNetwork::make_bliss_graph(
     for (auto &&proto_index : bundle) {
       // proto index either connects tensors (i.e. it's in edges_) OR
       // it's among pure_proto_indices_
-      auto edges_it = edges_.find(proto_index.full_label());
+      auto edges_it = edges_.find(proto_index);
       if (edges_it != edges_.end()) {
         const auto proto_index_vertex = edges_it - edges_.begin();
         graph->add_edge(spbundle_cnt, proto_index_vertex);
@@ -837,7 +843,7 @@ void TensorNetwork::init_edges() const {
                  << slot_group_ord << std::endl;
     }
     edges_t &edges = this->edges_;
-    auto it = edges.find(idx.full_label());
+    auto it = edges.find(idx);
     if (it == edges.end()) {
       edges.emplace(Edge::Terminal(tensor_idx, slot_type, slot_group_ord),
                     &idx);
@@ -988,6 +994,11 @@ TensorNetwork::SlotCanonicalizationMetadata TensorNetwork::canonicalize_slots(
   const auto &named_indices =
       named_indices_ptr == nullptr ? this->ext_indices() : *named_indices_ptr;
   metadata.named_indices = named_indices;
+  if (Logger::instance().canonicalize) {
+    std::wcout << "named_indices = ";
+    ranges::for_each(named_indices,
+                     [](auto &&i) { std::wcout << i.full_label() << L" "; });
+  }
 
   // helper to filter named ("external" in traditional use case) / anonymous
   // ("internal" in traditional use case)
@@ -1005,7 +1016,7 @@ TensorNetwork::SlotCanonicalizationMetadata TensorNetwork::canonicalize_slots(
                         .make_texlabels = Logger::instance().canonicalize_dot});
   if (Logger::instance().canonicalize_dot) {
     std::wcout << "Input graph for canonicalization:\n";
-    graph->write_dot(std::wcout, vlabels, vtexlabels);
+    graph->write_dot(std::wcout, {.labels = vlabels, .texlabels = vtexlabels});
   }
 
   // canonize the graph
@@ -1027,7 +1038,8 @@ TensorNetwork::SlotCanonicalizationMetadata TensorNetwork::canonicalize_slots(
     auto cvlabels = permute(vlabels, cl);
     auto cvtexlabels = permute(vtexlabels, cl);
     std::wcout << "Canonicalized graph:\n";
-    metadata.graph->write_dot(std::wcout, cvlabels, cvtexlabels);
+    metadata.graph->write_dot(std::wcout,
+                              {.labels = cvlabels, .texlabels = cvtexlabels});
   }
 
   // produce named indices sorted by named_index_compare first, then by
@@ -1038,8 +1050,7 @@ TensorNetwork::SlotCanonicalizationMetadata TensorNetwork::canonicalize_slots(
     using cord_set_t = container::set<ord_cord_it_t, detail::tuple_less<1>>;
 
     auto grand_index_list = ranges::views::concat(
-        edges_ | ranges::views::transform(edge2index<Edge>),
-        pure_proto_indices_);
+        edges_ | ranges::views::transform(&Edge::idx), pure_proto_indices_);
 
     // for each named index type (as defined by named_index_compare) maps its
     // ptr in grand_index_list to its ordinal in grand_index_list + canonical
@@ -1130,7 +1141,7 @@ TensorNetwork::SlotCanonicalizationMetadata TensorNetwork::canonicalize_slots(
 
       // returns an iterator to {Index,inord} pair
       auto index_inord_it = [&](const Index &idx) {
-        auto it = idx_inord.find(idx.full_label());
+        auto it = idx_inord.find(idx);
         if (it == idx_inord.end()) {
           const auto inord = idx_inord.size();
           bool inserted;
@@ -1167,7 +1178,7 @@ TensorNetwork::SlotCanonicalizationMetadata TensorNetwork::canonicalize_slots(
           // use canonical ordinal of the index vertex as the canonical index
           // ordinal, to find it need the ordinal of the corresponding vertex in
           // the input graph
-          auto input_vertex_it = this->edges_.find(idx.full_label());
+          auto input_vertex_it = this->edges_.find(idx);
           assert(input_vertex_it != this->edges_.end());
           const auto inord_vertex = input_vertex_it - this->edges_.begin();
           const auto canord_vertex = cl[inord_vertex];

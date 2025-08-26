@@ -8,8 +8,8 @@
 #include <SeQuant/core/asy_cost.hpp>
 #include <SeQuant/core/binary_node.hpp>
 #include <SeQuant/core/eval_expr.hpp>
+#include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/math.hpp>
-#include <SeQuant/core/tensor.hpp>
 
 namespace sequant {
 
@@ -34,8 +34,8 @@ namespace {
 enum NodePos { Left = 0, Right, This };
 
 [[maybe_unused]] std::pair<size_t, size_t> occ_virt(Tensor const& t) {
-  auto bk_rank = t.bra_rank() + t.ket_rank();
-  auto nocc = ranges::count_if(t.const_braket(), [](Index const& idx) {
+  auto bk_rank = t.bra_net_rank() + t.ket_net_rank();
+  auto nocc = ranges::count_if(t.const_braket_indices(), [](Index const& idx) {
     return idx.space() ==
            get_default_context().index_space_registry()->hole_space(
                idx.space().qns());

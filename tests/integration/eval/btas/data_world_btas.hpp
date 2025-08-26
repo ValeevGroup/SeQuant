@@ -10,7 +10,7 @@
 
 #include <btas/btas.h>
 #include <SeQuant/core/container.hpp>
-#include <SeQuant/core/tensor.hpp>
+#include <SeQuant/core/expr.hpp>
 #include <SeQuant/domain/eval/eval.hpp>
 #include <range/v3/view.hpp>
 
@@ -112,7 +112,7 @@ class DataWorldBTAS {
 
     assert(tensor.label() != L"t");
 
-    auto const r1_limits = range1_limits(tensor, nocc, nvirt);
+    auto r1_limits = range1_limits(tensor, nocc, nvirt);
     assert(r1_limits.size() == DataInfo::fock_rank ||
            r1_limits.size() == DataInfo::eri_rank);
 

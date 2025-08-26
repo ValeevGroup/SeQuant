@@ -2,14 +2,12 @@
 
 #include "catch2_sequant.hpp"
 
-#include <SeQuant/core/abstract_tensor.hpp>
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/latex.hpp>
 #include <SeQuant/core/rational.hpp>
-#include <SeQuant/core/tensor.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/tensor_network.hpp>
 #include <SeQuant/core/tensor_network_v2.hpp>
@@ -30,8 +28,9 @@ TEST_CASE("canonicalization", "[algorithms]") {
       std::make_shared<DefaultTensorCanonicalizer>());
   auto isr = sequant::mbpt::make_legacy_spaces();
   mbpt::add_pao_spaces(isr);
-  auto ctx_resetter =
-      set_scoped_default_context(Context(isr, Vacuum::SingleProduct));
+  auto ctx = get_default_context();
+  ctx.set(isr);
+  auto ctx_resetter = set_scoped_default_context(ctx);
 
   SECTION("Tensors") {
     {
@@ -99,6 +98,11 @@ TEST_CASE("canonicalization", "[algorithms]") {
   }
 
   SECTION("Products") {
+    // P.S. ref outputs produced with complete canonicalization
+    auto ctx = get_default_context();
+    ctx.set(CanonicalizeOptions{.method = CanonicalizationMethod::Complete});
+    auto _ = set_scoped_default_context(ctx);
+
     {
       auto input =
           ex<Tensor>(L"S", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"},
@@ -153,10 +157,9 @@ TEST_CASE("canonicalization", "[algorithms]") {
           ex<Tensor>(L"f", bra{L"a_5"}, ket{L"i_5"}, Symmetry::nonsymm) *
           ex<Tensor>(L"t", bra{L"i_1"}, ket{L"a_5"}, Symmetry::nonsymm) * f2;
       canonicalize(input1);
-      REQUIRE_THAT(
-          input1,
-          SimplifiesTo(
-              "S{a_1,a_2;i_1,i_2} f{a_3;i_3} f⁺{i_1,i_3;a_1,a_2} t{i_2;a_3}"));
+      REQUIRE_THAT(input1,
+                   SimplifiesTo("S{a_1,a_2;i_1,i_2} f{a_3;i_3} "
+                                "f⁺{i_1,i_3;a_1,a_2}:N-N-S t{i_2;a_3}"));
       auto input2 =
           ex<Tensor>(L"S", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"},
                      Symmetry::nonsymm) *
@@ -164,21 +167,42 @@ TEST_CASE("canonicalization", "[algorithms]") {
           ex<Tensor>(L"t", bra{L"i_1"}, ket{L"a_5"}, Symmetry::nonsymm) * f2 *
           ex<Variable>(L"w") * ex<Constant>(rational{1, 2});
       canonicalize(input2);
-      REQUIRE_THAT(input2, SimplifiesTo("1/2 w S{a_1,a_2;i_1,i_2} f{a_3;i_3} "
-                                        "f⁺{i_1,i_3;a_1,a_2} t{i_2;a_3}"));
+      REQUIRE_THAT(input2,
+                   SimplifiesTo("1/2 w S{a_1,a_2;i_1,i_2} f{a_3;i_3} "
+                                "f⁺{i_1,i_3;a_1,a_2}:N-N-S t{i_2;a_3}"));
     }
-  }
-  {
-    auto input = ex<Constant>(rational{1, 2}) *
-                 ex<Tensor>(L"B", bra{L"p_2"}, ket{L"p_4"}, aux{L"p_5"},
-                            Symmetry::nonsymm) *
-                 ex<Tensor>(L"B", bra{L"p_1"}, ket{L"p_3"}, aux{L"p_5"},
-                            Symmetry::nonsymm) *
-                 ex<Tensor>(L"t", bra{L"p_4"}, ket{L"p_2"}, Symmetry::nonsymm) *
-                 ex<Tensor>(L"t", bra{L"p_3"}, ket{L"p_1"}, Symmetry::nonsymm);
-    canonicalize(input);
-    REQUIRE_THAT(input,
-                 EquivalentTo("1/2 t{p1;p3} t{p2;p4} B{p3;p1;p5} B{p4;p2;p5}"));
+    // with aux indices
+    {
+      auto input =
+          ex<Constant>(rational{1, 2}) *
+          ex<Tensor>(L"B", bra{L"p_2"}, ket{L"p_4"}, aux{L"p_5"},
+                     Symmetry::nonsymm) *
+          ex<Tensor>(L"B", bra{L"p_1"}, ket{L"p_3"}, aux{L"p_5"},
+                     Symmetry::nonsymm) *
+          ex<Tensor>(L"t", bra{L"p_4"}, ket{L"p_2"}, Symmetry::nonsymm) *
+          ex<Tensor>(L"t", bra{L"p_3"}, ket{L"p_1"}, Symmetry::nonsymm);
+      canonicalize(input);
+      // because bra and ket are in same space dummy renaming flips the bra and
+      // ket even though the tensors are not bra-ket symmetric
+      REQUIRE_THAT(
+          input, EquivalentTo("1/2 t{p1;p3} t{p2;p4} B{p3;p1;p5} B{p4;p2;p5}"));
+    }
+    // with bra-ket symmetry
+    {
+      Context ctx = get_default_context();
+      ctx.set(BraKetSymmetry::symm);
+      auto resetter = set_scoped_default_context(ctx);
+      // TN is invariant wrt flipping one if the tensors
+      // N.B. it's not possible purely to canonicalize each tensor since bra and
+      // ket slots are equivalent, only the overall TN topology determines
+      // whether bra/ket swap should occur for each tensor
+      auto input = ex<Constant>(rational{1, 2}) *
+                   ex<Tensor>(L"B", bra{L"p_2"}, ket{L"p_1"}, aux{L"p_5"},
+                              Symmetry::nonsymm, BraKetSymmetry::symm) *
+                   ex<Tensor>(L"B", bra{L"p_1"}, ket{L"p_2"}, aux{L"p_5"},
+                              Symmetry::nonsymm, BraKetSymmetry::symm);
+      REQUIRE_THAT(input, EquivalentTo("1/2 B{p1;p2;p5}:N-S B{p1;p2;p5}:N-S"));
+    }
   }
 
   SECTION("Sum of Variables") {
@@ -200,6 +224,11 @@ TEST_CASE("canonicalization", "[algorithms]") {
   }
 
   SECTION("Sum of Products") {
+    // P.S. ref outputs produced with complete canonicalization
+    auto ctx = get_default_context();
+    ctx.set(CanonicalizeOptions{.method = CanonicalizationMethod::Complete});
+    auto _ = set_scoped_default_context(ctx);
+
     {
       // CASE 1: Non-symmetric tensors
       auto input =
@@ -315,7 +344,7 @@ TEST_CASE("canonicalization", "[algorithms]") {
         canonicalize(input);
         REQUIRE_THAT(
             input,
-            SimplifiesTo(
+            EquivalentTo(
                 "-8 S{i1,i2,i3;a1,a2,a3} f{i4;i3} t{a1,a2,a3;i1,i4,i2}"));
       }
 
@@ -337,16 +366,16 @@ TEST_CASE("canonicalization", "[algorithms]") {
         canonicalize(term1);
         canonicalize(term2);
         REQUIRE_THAT(term1,
-                     SimplifiesTo("-4 S{i_1,i_2,i_3;a_1,a_2,a_3} f{i_4;i_3} "
+                     EquivalentTo("-4 S{i_1,i_2,i_3;a_1,a_2,a_3} f{i_4;i_3} "
                                   "t{a_1,a_2,a_3;i_1,i_4,i_2}"));
         REQUIRE_THAT(term2,
-                     SimplifiesTo("-4 S{i_1,i_2,i_3;a_1,a_2,a_3} f{i_4;i_3} "
+                     EquivalentTo("-4 S{i_1,i_2,i_3;a_1,a_2,a_3} f{i_4;i_3} "
                                   "t{a_1,a_2,a_3;i_1,i_4,i_2}"));
         auto sum_of_terms = term1 + term2;
         simplify(sum_of_terms);
         REQUIRE_THAT(
             sum_of_terms,
-            SimplifiesTo(
+            EquivalentTo(
                 "-8 S{i1,i2,i3;a1,a2,a3} f{i4;i3} t{a1,a2,a3;i1,i4,i2}"));
       }
 
@@ -366,7 +395,7 @@ TEST_CASE("canonicalization", "[algorithms]") {
                            ket{L"i_2", L"i_3", L"i_4"}, Symmetry::nonsymm);
         canonicalize(input);
         REQUIRE_THAT(
-            input, SimplifiesTo(
+            input, EquivalentTo(
                        "4 S{i1,i2,i3;a1,a2,a3} f{i4;i3} t{a1,a2,a3;i4,i1,i2}"));
       }
     }
@@ -397,191 +426,5 @@ TEST_CASE("canonicalization", "[algorithms]") {
           input,
           EquivalentTo("t{a2;i4} t{a1,a3;i3,i2} B{i3;i1;p5} B{i4;a3;p5}"));
     }
-  }
-
-  SECTION("TN isomorphism") {
-    enum { Eq, NEq };
-    enum { Plus, Minus };
-
-    // Case 7: with protoindices
-    auto do_test = [&](auto* tn) {
-      using TN = std::remove_pointer_t<decltype(tn)>;
-
-      auto& l = Logger::instance();
-      //      l.tensor_network = l.canonicalize = l.canonicalize_dot =
-      //          l.canonicalize_input_graph = true;
-
-      for (const auto& [input1, input2, eq, phase] : {
-               // original 4 tensor networks from Bimal
-               std::make_tuple(
-                   L"g{i3,i4;a3<i1,i4>,a4<i2>} * s{a1<i1,i2>;a5<i3>}",
-                   L"s{a1<i1,i2>;a5<i3>} * g{i3,i4;a3<i1,i4>,a4<i2>}", Eq,
-                   Plus),  // product reorder is OK
-               std::make_tuple(
-                   L"g{i3,i4;a3<i1,i4>,a4<i2>} * s{a1<i1,i2>;a5<i3>}",
-                   L"g{i3,i4;a3<i1,i3>,a4<i2>} * s{a2<i1,i2>;a6<i4>}", NEq,
-                   Plus),
-               std::make_tuple(
-                   L"g{i3,i4;a3<i1,i4>,a4<i2>} * s{a1<i1,i2>;a5<i3>}",
-                   L"g{i3,i4;a3<i1,i4>,a4<i2>} * s{a2<i1,i2>;a6<i3>}", Eq,
-                   Plus),
-               std::make_tuple(
-                   L"g{i3,i4;a3<i1,i4>,a4<i2>} * s{a1<i1,i2>;a5<i3>}",
-                   L"g{i3,i4;a3<i1,i3>,a4<i2>} * s{a2<i1,i2>;a6<i4>}", NEq,
-                   Plus),
-               // one more pair of ternary products
-               std::make_tuple(
-                   L"s{a2<i1,i2>;a6<i2,i4>} * g{i3,i4;a3<i2,i4>,a4<i1,i3>} * "
-                   L"t{a3<i2,i4>,a6<i2,i4>;i4,i2}",
-                   L"g{i3,i4;a3<i1,i4>,a4<i2,i3>} * "
-                   L"t{a3<i1,i4>,a5<i1,i4>;i4,i1} "
-                   L"* s{a1<i1,i2>;a5<i1,i4>}",
-                   Eq, Plus),
-               // last pair of ternary nets involved in MO->PNO integral
-               // transform
-               std::make_tuple(
-                   L"g{i3,i4;a3,a4} * C{a3;a3<i1,i4>} * C{a4;a4<i2>}",
-                   L"g{i3,i4;a3,a4} * C{a3;a3<i1,i3>} * C{a4;a4<i2>}", NEq,
-                   Plus),
-               // representation of the above as single tensor
-               std::make_tuple(L"g{i3,i4;a3<i1,i4>,a4<i2>}",
-                               L"g{i3,i4;a3<i1,i3>,a4<i2>}", NEq, Plus),
-               // 3-index MO->PNO integral transform, but extra aux index just
-               // for fun
-               std::make_tuple(
-                   L"g{a3;a4;x1,x2} * C{a3<i1,i4>;a3} * C{a4;a4<i1>}",
-                   L"g{a3;a4;x2,x1} * C{a3<i1,i2>;a3} * C{a4;a4<i2>}", Eq,
-                   Plus),
-               // TNs discovered during CSV evaluation that did not deduce
-               // external indices correctly
-               std::make_tuple(
-                   L"f{i2;a2<i1,i2>} * t{a2<i1,i2>,a3<i1,i2>;i2,i1}",
-                   L"f{i1;a2<i1,i2>} * t{a2<i1,i2>,a3<i1,i2>;i2,i1}",  // f_i2
-                                                                       // ->
-                                                                       // f_i1
-                   NEq, Plus),
-               std::make_tuple(
-                   L"f{i2;a2<i1,i2>} * t{a2<i1,i2>,a3<i1,i2>;i2,i1}",
-                   L"f{i1;a2<i1,i2>} * t{a3<i1,i2>,a2<i1,i2>;i2,i1}",  // f_i2
-                                                                       // ->
-                                                                       // f_i1,
-                                                                       // a2 <->
-                                                                       // a3
-                   Eq, Plus),
-               //////////////// TNs w antisymmetric tensors
-               // unlike the nonsymmetric/symmetric cases we need to check for
-               // the phase due to canonical reordering of the slots
-               // N.B. these tests are not robust due to relying on specific
-               // canonical order (which will change by changing bliss
-               // heuristics, colors, etc.)
-               //
-               // spin-orbital CC cases suggested by Bimal testing
-               // these differ by a sign ...
-               std::make_tuple(L"g{i1,i4;a1,a4}:A * t{a4;i4}:A",
-                               L"g{i3,i2;a2,a4}:A * t{a4;i3}:A", Eq, Minus),
-               // more spin-orbital CC cases suggested by Bimal
-               // 1
-               std::make_tuple(L"g{i_2,i_3;a_2,a_3}:A * t{a_2;i_1}:A",
-                               L"g{i_3,i_4;a_3,a_4}:A * t{a_3;i_1}:A", Eq,
-                               Plus),
-               std::make_tuple(L"g{i_2,i_3;a_2,a_3}:A * t{a_2;i_1}:A",
-                               L"g{i_3,i_4;a_3,a_4}:A * t{a_4;i_1}:A", Eq,
-                               Minus),
-               // 2a
-               std::make_tuple(
-                   L"g{i_3,i_4;a_3,a_4}:A * t{a_3;i_1}:A * t{a_4;i_2}:A",
-                   L"g{i_3,i_4;a_3,a_4}:A * t{a_4;i_1}:A * t{a_3;i_2}:A", Eq,
-                   Minus),
-               // 2b: unlike its equivalent counterpart 2a the order of named
-               // indices is different for the 2 TNs, which cancels out the
-               // phase change
-               std::make_tuple(
-                   L"g{i_3,i_4;a_3,a_4}:A * t{a_3;i_1}:A * t{a_4;i_2}:A",
-                   L"g{i_3,i_4;a_3,a_4}:A * t{a_3;i_2}:A * t{a_4;i_1}:A", Eq,
-                   Plus),
-               // 3: matching "constant" TNs (TNs without named indices)
-               //    also needs canonicalization
-               std::make_tuple(L"g{i_2,i_3;a_2,a_3}:A * t{a_2,a_3;i_2,i_3}:A",
-                               L"g{i_4,i_1;a_2,a_3}:A * t{a_2,a_3;i_4,i_1}:A",
-                               Eq, Plus),
-               std::make_tuple(L"g{i_2,i_3;a_2,a_3}:A * t{a_2,a_3;i_2,i_3}:A",
-                               L"g{i_1,i_4;a_2,a_3}:A * t{a_2,a_3;i_4,i_1}:A",
-                               Eq, Minus),
-               // 4: more complexity, with triples, CSV, and antisymmetry
-               std::make_tuple(
-                   L"g{i_2,i_3;a_2,a_3}:A * t{a_1,a_2,a_3;i_1,i_2,i_3}:A",
-                   L"g{i_1,i_3;a_2,a_3}:A * t{a_1,a_2,a_3;i_1,i_2,i_3}:A", Eq,
-                   Minus),
-               std::make_tuple(
-                   L"g{i_2,i_3;a_2,a_3}:A * t{a_1<i_1>,a_2,a_3;i_1,i_2,i_3}:A",
-                   L"g{i_2,i_3;a_1,a_3}:A * t{a_3,a_2<i_1>,a_1;i_1,i_2,i_3}:A",
-                   Eq, Plus),
-               std::make_tuple(L"g{i_2,i_3;a_2,a_3}:A * "
-                               L"t{a_1<i_1,i_4>,a_2,a_3;i_1,i_2,i_3}:A",
-                               L"g{i_4,i_1;a_1,a_3}:A * "
-                               L"t{a_3,a_2<i_5,i_2>,a_1;i_1,i_4,i_2}:A",
-                               Eq, Minus),
-               ///////////////////////////// tensors with PAOs
-               // These produce same layout, but are different
-               std::make_tuple(L"C{μ̃_1;a_3<i_3>}:N", L"C{a_1<i_2>;μ̃_1}:N", NEq,
-                               Plus),
-           }) {
-        auto ex1 = parse_expr(input1);
-        auto ex2 = parse_expr(input2);
-
-        // TNV2::canonicalize_slots does not support antisymm tensors yet
-        {
-          auto get_symm = [](const auto& t) {
-            if (t.template is<Tensor>())
-              return t.template as<Tensor>().symmetry();
-            return Symmetry::invalid;
-          };
-          if (ranges::contains(ex1, Symmetry::antisymm, get_symm) ||
-              ranges::contains(ex2, Symmetry::antisymm, get_symm))
-            continue;
-        }
-
-        std::wcout << "============== " << input1
-                   << " ===============" << std::endl;
-        TN tn1(ex1);
-        auto cbp1 = tn1.canonicalize_slots(
-            TensorCanonicalizer::cardinal_tensor_labels());
-        std::wcout << "canonical order of named indices:\n";
-        for (const auto& idx_it : cbp1.named_indices_canonical) {
-          std::wcout << idx_it->to_latex() << "\n";
-        }
-
-        std::wcout << "============== " << input2
-                   << " ===============" << std::endl;
-        TN tn2(ex2);
-        auto cbp2 = tn2.canonicalize_slots(
-            TensorCanonicalizer::cardinal_tensor_labels());
-        std::wcout << "canonical order of named indices:\n";
-        for (const auto& idx_it : cbp2.named_indices_canonical) {
-          std::wcout << idx_it->to_latex() << "\n";
-        }
-
-        std::wcout << "graph(" << input1 << ") <=> graph(" << input2
-                   << "): " << cbp1.graph->cmp(*cbp2.graph)
-                   << (cbp1.phase * cbp2.phase == -1 ? " [modulo sign]" : "")
-                   << std::endl;
-
-        if (eq == Eq) {
-          REQUIRE(cbp1.graph->cmp(*cbp2.graph) == 0);
-          REQUIRE(cbp1.phase * cbp2.phase == (phase == Minus ? -1 : 1));
-        } else
-          REQUIRE(cbp1.graph->cmp(*cbp2.graph) != 0);
-
-        //                std::wcout << canonicalize(ex1).to_latex() << " should
-        //                be equal " << canonicalize(ex2).to_latex() <<
-        //                std::endl;
-      }
-
-      //      l.tensor_network = l.canonicalize = l.canonicalize_dot =
-      //          l.canonicalize_input_graph = false;
-    };
-
-    do_test(static_cast<TensorNetwork*>(nullptr));
-    do_test(static_cast<TensorNetworkV2*>(nullptr));
   }
 }

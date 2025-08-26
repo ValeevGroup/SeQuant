@@ -5,7 +5,6 @@
 #ifndef SEQUANT_TENSOR_NETWORK_H
 #define SEQUANT_TENSOR_NETWORK_H
 
-#include <SeQuant/core/abstract_tensor.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
@@ -40,6 +39,9 @@ namespace sequant {
 /// @warning the terminology is a mix at best, e.g. terminal vs. slot, etc.
 class TensorNetwork {
  public:
+  /// @return the implementation version of TN
+  constexpr static int version() { return 1; }
+
   constexpr static size_t max_rank = 256;
 
   // clang-format off
@@ -344,22 +346,16 @@ class TensorNetwork {
   struct FullLabelCompare {
     using is_transparent = void;
     bool operator()(const Edge &first, const Edge &second) const {
-      return first.idx().full_label() < second.idx().full_label();
-    }
-    bool operator()(const Edge &first, const std::wstring_view &second) const {
-      return first.idx().full_label() < second;
-    }
-    bool operator()(const std::wstring_view &first, const Edge &second) const {
-      return first < second.idx().full_label();
+      return Index::FullLabelCompare{}(first.idx(), second.idx());
     }
     bool operator()(const Index &first, const Index &second) const {
-      return first.full_label() < second.full_label();
+      return Index::FullLabelCompare{}(first, second);
     }
-    bool operator()(const Index &first, const std::wstring_view &second) const {
-      return first.full_label() < second;
+    bool operator()(const Edge &first, const Index &second) const {
+      return Index::FullLabelCompare{}(first.idx(), second);
     }
-    bool operator()(const std::wstring_view &first, const Index &second) const {
-      return first < second.full_label();
+    bool operator()(const Index &first, const Edge &second) const {
+      return Index::FullLabelCompare{}(first, second.idx());
     }
   };
   // Index -> Edge, sorted by full label
@@ -367,12 +363,10 @@ class TensorNetwork {
   mutable edges_t edges_;
   // set to true by init_edges();
   mutable bool have_edges_ = false;
-  // ext indices do not connect tensors
-  // sorted by *label* (not full label) of the corresponding value (Index)
-  // this ensures that proto indices are not considered and all internal indices
-  // have unique labels (not full labels)
-  // N.B. this may contain some indices in pure_proto_indices_ if there are
-  // externals indices that depend on them
+  /// ext indices do not connect tensors
+  /// sorted by full label of the corresponding value (Index)
+  /// N.B. this may contain some indices in pure_proto_indices_ if there are
+  /// external indices that depend on them
   mutable named_indices_t ext_indices_;
   /// some proto indices may not be in edges_ if they appear exclusively among
   /// proto indices
@@ -432,7 +426,7 @@ class TensorNetwork {
     std::vector<VertexType> vertex_types;
 
     /// maps vertex ordinal to tensor cluster ordinal
-    /// @note usable as blis::Graph::DotOptions::vertex_to_subgraph
+    /// @note usable as bliss::Graph::DotOptions::vertex_to_subgraph
     std::optional<std::size_t> vertex_to_tensor_cluster(
         std::size_t vertex) const;
 
@@ -488,6 +482,7 @@ class TensorNetwork {
     /// if false, will not generate the TeX labels
     bool make_texlabels = true;
   };
+  static BlissGraphOptions make_default_bliss_graph_options() { return {}; }
 
   /// @brief converts the network into a Bliss graph whose vertices are indices
   /// and tensor vertex representations
@@ -511,11 +506,8 @@ class TensorNetwork {
   ///   tensor; terminal vertices are colored by the color of its tensor,
   ///     with the color of symm/antisymm terminals augmented by the
   ///     terminal's type (bra/ket).
-  GraphData make_bliss_graph(const BlissGraphOptions &options = {
-                                 .named_indices = nullptr,
-                                 .distinct_named_indices = true,
-                                 .make_labels = true,
-                                 .make_texlabels = true}) const;
+  GraphData make_bliss_graph(const BlissGraphOptions &options =
+                                 make_default_bliss_graph_options()) const;
 };
 
 }  // namespace sequant

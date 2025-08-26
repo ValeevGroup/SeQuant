@@ -1,29 +1,25 @@
 #include <SeQuant/core/bliss.hpp>
+#include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/parse.hpp>
 #include <SeQuant/core/runtime.hpp>
-#include <SeQuant/core/tensor.hpp>
 #include <SeQuant/core/tensor_network.hpp>
 #include <SeQuant/core/tensor_network_v2.hpp>
+#include <SeQuant/core/tensor_network_v3.hpp>
+#include <SeQuant/core/utility/string.hpp>
 #include <SeQuant/domain/mbpt/context.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 
 #include <cassert>
-#include <codecvt>
 #include <iostream>
-#include <locale>
 #include <optional>
 #include <string>
 
 using namespace sequant;
 
-std::wstring from_utf8(std::string_view str) {
-  std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
-  return converter.from_bytes(std::string(str));
-}
-
-std::optional<TensorNetwork> to_network(const ExprPtr &expr) {
+template <typename TN>
+std::optional<TN> make_tn(const ExprPtr &expr) {
   if (expr.is<Tensor>()) {
-    return TensorNetwork({expr});
+    return TN({expr});
   } else if (expr.is<Product>()) {
     for (const ExprPtr &factor : expr.as<Product>().factors()) {
       if (!factor.is<Tensor>()) {
@@ -31,23 +27,7 @@ std::optional<TensorNetwork> to_network(const ExprPtr &expr) {
       }
     }
 
-    return TensorNetwork(expr.as<Product>().factors());
-  } else {
-    return {};
-  }
-}
-
-std::optional<TensorNetworkV2> to_network_v2(const ExprPtr &expr) {
-  if (expr.is<Tensor>()) {
-    return TensorNetworkV2({expr});
-  } else if (expr.is<Product>()) {
-    for (const ExprPtr &factor : expr.as<Product>().factors()) {
-      if (!factor.is<Tensor>()) {
-        return {};
-      }
-    }
-
-    return TensorNetworkV2(expr.as<Product>().factors());
+    return TN(expr.as<Product>().factors());
   } else {
     return {};
   }
@@ -61,19 +41,22 @@ void print_help() {
       << "  <exe> [options] <network 1> [<network 2> [... [<network N>] ] ]\n";
   std::wcout << "Options:\n";
   std::wcout << "  --help     Shows this help message\n";
+  std::wcout
+      << "  --v1       Use original TensorNetwork (aka TensorNetworkV1)\n";
   std::wcout << "  --v2       Use TensorNetworkV2\n";
+  std::wcout << "  --v3       Use TensorNetworkV3 [default]\n";
   std::wcout << "  --no-named Treat all indices as unnamed (even if they are "
                 "external)\n";
 }
 
 int main(int argc, char **argv) {
   set_locale();
-  sequant::set_default_context(Context(
-      mbpt::make_sr_spaces(), Vacuum::SingleProduct, IndexSpaceMetric::Unit,
-      BraKetSymmetry::conjugate, SPBasis::spinorbital));
+  sequant::set_default_context(
+      {.index_space_registry_shared_ptr = mbpt::make_sr_spaces(),
+       .vacuum = Vacuum::SingleProduct});
 
   bool use_named_indices = true;
-  bool use_tnv2 = false;
+  int version = 3;
   const TensorNetwork::named_indices_t empty_named_indices;
 
   if (argc <= 1) {
@@ -82,15 +65,21 @@ int main(int argc, char **argv) {
   }
 
   for (std::size_t i = 1; i < static_cast<std::size_t>(argc); ++i) {
-    std::wstring current = from_utf8(argv[i]);
+    std::wstring current = toUtf16(argv[i]);
     if (current == L"--help") {
       print_help();
       return 0;
     } else if (current == L"--no-named") {
       use_named_indices = false;
       continue;
+    } else if (current == L"--v1") {
+      version = 1;
+      continue;
     } else if (current == L"--v2") {
-      use_tnv2 = true;
+      version = 2;
+      continue;
+    } else if (current == L"--v3") {
+      version = 3;
       continue;
     }
 
@@ -104,8 +93,8 @@ int main(int argc, char **argv) {
     }
     assert(expr);
 
-    if (!use_tnv2) {
-      std::optional<TensorNetwork> network = to_network(expr);
+    if (version == 1) {
+      std::optional<TensorNetwork> network = make_tn<TensorNetwork>(expr);
       if (!network.has_value()) {
         std::wcout << "Failed to construct tensor network for input '"
                    << to_latex(expr) << "'" << std::endl;
@@ -117,20 +106,33 @@ int main(int argc, char **argv) {
               {.named_indices =
                    (use_named_indices ? nullptr : &empty_named_indices)});
       std::wcout << "Graph for '" << to_latex(expr) << "'\n";
-      graph->write_dot(std::wcout, vlabels);
+      graph->write_dot(std::wcout, {.labels = vlabels});
     } else {
-      std::optional<TensorNetworkV2> network = to_network_v2(expr);
-      if (!network.has_value()) {
-        std::wcout << "Failed to construct tensor network for input '"
-                   << to_latex(expr) << "'" << std::endl;
-        return 2;
-      }
+      auto make_graph = [&](auto *tn_ptr) -> int {
+        using TN = std::decay_t<decltype(*tn_ptr)>;
+        std::optional<TN> network = make_tn<TN>(expr);
+        if (!network.has_value()) {
+          std::wcout << "Failed to construct tensor network for input '"
+                     << to_latex(expr) << "'" << std::endl;
+          return 3;
+        }
 
-      TensorNetworkV2::Graph graph = network->create_graph(
-          {.named_indices =
-               use_named_indices ? nullptr : &empty_named_indices});
-      std::wcout << "Graph for '" << to_latex(expr) << "'\n";
-      graph.bliss_graph->write_dot(std::wcout, graph.vertex_labels);
+        auto graph = network->create_graph(
+            {.named_indices =
+                 use_named_indices ? nullptr : &empty_named_indices});
+        std::wcout << "Graph for '" << to_latex(expr) << "'\n";
+        graph.bliss_graph->write_dot(std::wcout,
+                                     {.labels = graph.vertex_labels});
+        return 0;
+      };
+      switch (version) {
+        case 2:
+          return make_graph(static_cast<TensorNetworkV2 *>(nullptr));
+        case 3:
+          return make_graph(static_cast<TensorNetworkV3 *>(nullptr));
+        default:
+          abort();  // unreachable
+      }
     }
   }
 }

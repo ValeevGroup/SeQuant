@@ -1,9 +1,9 @@
 #include <SeQuant/domain/mbpt/context.hpp>
 #include <SeQuant/domain/mbpt/op.hpp>
 
+#include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/math.hpp>
 #include <SeQuant/core/op.hpp>
-#include <SeQuant/core/tensor.hpp>
 #include <SeQuant/core/wick.hpp>
 
 #include <stdexcept>
@@ -467,14 +467,18 @@ ExprPtr OpMaker<S>::operator()(std::optional<UseDepIdx> dep,
   // dependent indices for pure (de)excitation ops
   if (!dep && get_default_mbpt_context().csv() == mbpt::CSV::Yes) {
     if (to_class(op_) == OpClass::ex) {
+#ifndef NDEBUG
       for (auto&& s : cre_spaces_) {
         assert(isr->contains_unoccupied(s));
       }
+#endif
       dep = UseDepIdx::Bra;
     } else if (to_class(op_) == OpClass::deex) {
+#ifndef NDEBUG
       for (auto&& s : ann_spaces_) {
         assert(isr->contains_unoccupied(s));
       }
+#endif
       dep = UseDepIdx::Ket;
     } else {
       dep = UseDepIdx::None;
@@ -710,7 +714,7 @@ ExprPtr S(std::int64_t K) {
       OpType::S, cre(creators), ann(annihilators))(dep, {Symmetry::nonsymm});
 }
 
-ExprPtr H_pt(std::size_t order, std::size_t R, std::size_t nbatch) {
+ExprPtr H_pt([[maybe_unused]] std::size_t order, std::size_t R, std::size_t nbatch) {
   assert(order == 1 &&
          "sequant::mbpt::H_pt(): only supports first order perturbation");
   assert(R > 0);
@@ -720,7 +724,7 @@ ExprPtr H_pt(std::size_t order, std::size_t R, std::size_t nbatch) {
                                          naux(nbatch))();
 }
 
-ExprPtr T_pt_(std::size_t order, std::size_t K, std::size_t nbatch) {
+ExprPtr T_pt_([[maybe_unused]] std::size_t order, std::size_t K, std::size_t nbatch) {
   assert(order == 1 &&
          "sequant::sr::T_pt_(): only supports first order perturbation");
   if (nbatch != 0)
@@ -739,7 +743,7 @@ ExprPtr T_pt(std::size_t order, std::size_t K, std::size_t nbatch, bool skip1) {
   return result;
 }
 
-ExprPtr Λ_pt_(std::size_t order, std::size_t K, std::size_t nbatch) {
+ExprPtr Λ_pt_([[maybe_unused]] std::size_t order, std::size_t K, std::size_t nbatch) {
   assert(order == 1 &&
          "sequant::sr::Λ_pt_(): only supports first order perturbation");
   if (nbatch != 0)
@@ -916,7 +920,7 @@ ExprPtr P(nₚ np, nₕ nh) {
     const auto K = np;  // K = np = nh
     return S(-K);
   } else {
-    assert(get_default_context().spbasis() == SPBasis::spinorbital);
+    assert(get_default_context().spbasis() == SPBasis::spinor);
     return A(-np, -nh);
   }
 }
@@ -1090,10 +1094,9 @@ ExprPtr vac_av(ExprPtr expr, std::vector<std::pair<int, int>> nop_connections,
                bool use_top) {
   simplify(expr);
   auto isr = get_default_context().index_space_registry();
-  const auto spinorbital =
-      get_default_context().spbasis() == SPBasis::spinorbital;
+  const auto spinor = get_default_context().spbasis() == SPBasis::spinor;
   // convention is to use different label for spin-orbital and spin-free RDM
-  const auto rdm_label = spinorbital ? optype2label.at(OpType::RDM) : L"Γ";
+  const auto rdm_label = spinor ? optype2label.at(OpType::RDM) : L"Γ";
 
   // only need full contractions if don't have any density outside of
   // the orbitals occupied in the vacuum
@@ -1111,7 +1114,10 @@ ExprPtr vac_av(ExprPtr expr, std::vector<std::pair<int, int>> nop_connections,
   FWickTheorem wick{expr};
   wick.use_topology(use_top).set_nop_connections(nop_connections);
   wick.full_contractions(full_contractions);
-  auto result = wick.compute();
+  auto result = wick.compute(/* count_only = */ false,
+                             /* skip_input_canonicalization? true since already
+                                did simplification above */
+                             true);
   simplify(result);
 
   if (Logger::instance().wick_stats) {
@@ -1137,8 +1143,8 @@ ExprPtr vac_av(ExprPtr expr, std::vector<std::pair<int, int>> nop_connections,
             : isr->reference_occupied_space(Spin::any);
 
     // STEP1. replace NOPs by RDM
-    auto replace_nop_with_rdm = [&rdm_label, spinorbital](ExprPtr& exptr) {
-      auto replace = [&rdm_label, spinorbital](const auto& nop) -> ExprPtr {
+    auto replace_nop_with_rdm = [&rdm_label, spinor](ExprPtr& exptr) {
+      auto replace = [&rdm_label, spinor](const auto& nop) -> ExprPtr {
         using index_container = container::svector<Index>;
         auto braidxs = nop.annihilators() |
                        ranges::views::transform(
@@ -1153,7 +1159,7 @@ ExprPtr vac_av(ExprPtr expr, std::vector<std::pair<int, int>> nop_connections,
         const auto rank = braidxs.size();
         return ex<Tensor>(
             rdm_label, bra(std::move(braidxs)), ket(std::move(ketidxs)),
-            rank > 1 && spinorbital ? Symmetry::antisymm : Symmetry::nonsymm);
+            rank > 1 && spinor ? Symmetry::antisymm : Symmetry::nonsymm);
       };
 
       if (exptr.template is<FNOperator>()) {

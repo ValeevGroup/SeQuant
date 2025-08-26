@@ -11,7 +11,8 @@ int main() {
   // start-snippet-0
   using namespace sequant;
   using namespace sequant::mbpt;
-  set_default_context(Context(make_min_sr_spaces(), Vacuum::SingleProduct));
+  set_default_context({.index_space_registry_shared_ptr = make_min_sr_spaces(),
+                       .vacuum = Vacuum::SingleProduct});
   // end-snippet-0
 
   // start-snippet-1
@@ -38,6 +39,7 @@ int main() {
   // access the tensor form
   auto fock_tensor = fock_op.tensor_form();
   // end-snippet-2
+  (void)label;
 
   // start-snippet-3
   using namespace sequant::mbpt::op;
@@ -62,6 +64,9 @@ int main() {
   auto expr2 = lambda2 * H_(1);
   bool lowers_to_vacuum = lowers_rank_to_vacuum(expr2, 2);  // true
   // end-snippet-3
+  (void)raises_to_double;
+  (void)raises_up_to_double;
+  (void)lowers_to_vacuum;
 
   // start-snippet-4
   using namespace sequant::mbpt;

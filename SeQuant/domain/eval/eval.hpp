@@ -3,10 +3,10 @@
 
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/eval_node.hpp>
+#include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/logger.hpp>
 #include <SeQuant/core/meta.hpp>
 #include <SeQuant/core/parse.hpp>
-#include <SeQuant/core/tensor.hpp>
 #include <SeQuant/domain/eval/cache_manager.hpp>
 #include <SeQuant/domain/eval/eval_fwd.hpp>
 #include <SeQuant/domain/eval/result.hpp>
@@ -158,7 +158,7 @@ auto cache(size_t key, CacheManager const& cm, Args const&... args) {
                   .curr_life = cur_l,
                   .max_life = max_l,
                   .num_alive = cm.alive_count(),
-                  .memory = bytes(cm)},
+                  .memory = {bytes(cm)}},
         args...);
 }
 
@@ -481,7 +481,8 @@ ResultPtr evaluate(Args&&... args) {
 /// \tparam EvalTrace If Trace::On, trace is written to the logger's stream.
 ///                   Default is to follow Trace::Default, which is itself
 ///                   equal to Trace::On or Trace::Off.
-/// \brief Calls @code evaluate followd by the particle-symmetrization function.
+/// \brief Calls @code evaluate followed by the particle-symmetrization
+///        function.
 ///        The number of particles is inferred by the tensor present in the
 ///        evaluation node(s). Presence of odd-ranked tensors in the evaluation
 ///        node(s) is an error.
@@ -509,7 +510,7 @@ ResultPtr evaluate_symm(Args&&... args) {
 /// \tparam EvalTrace If Trace::On, trace is written to the logger's stream.
 ///                   Default is to follow Trace::Default, which is itself
 ///                   equal to Trace::On or Trace::Off.
-/// \brief Calls @code evaluate followd by the anti-symmetrization function on
+/// \brief Calls @code evaluate followed by the anti-symmetrization function on
 ///        the bra indices and the ket indices. The bra and ket indices are
 ///        inferred from the evaluation node(s).
 /// \return Evaluated result as ResultPtr.

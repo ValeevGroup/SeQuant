@@ -1,9 +1,9 @@
 #include <SeQuant/core/biorthogonalization.hpp>
+#include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/runtime.hpp>
-#include <SeQuant/core/tensor.hpp>
-#include <SeQuant/core/timer.hpp>
 #include <SeQuant/core/utility/indices.hpp>
+#include <SeQuant/core/utility/timer.hpp>
 #include <SeQuant/core/wick.hpp>
 #include <SeQuant/domain/mbpt/context.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
@@ -45,7 +45,7 @@ inline const std::map<std::string, mbpt::CSV> str2uocc = {
 
 /// maps SPBasis type string to enum
 inline const std::map<std::string, SPBasis> str2spbasis = {
-    {"so", SPBasis::spinorbital}, {"sf", SPBasis::spinfree}};
+    {"so", SPBasis::spinor}, {"sf", SPBasis::spinfree}};
 
 // profiles evaluation of all CC equations for a given ex rank N with projection
 // ex rank PMIN .. P
@@ -82,9 +82,8 @@ class compute_cceqvec {
     std::vector<ExprPtr> eqvec_sf_ref;
     if (get_default_context().spbasis() == SPBasis::spinfree) {
       auto context_resetter = sequant::set_scoped_default_context(
-          sequant::Context(make_min_sr_spaces(), Vacuum::SingleProduct,
-                           IndexSpaceMetric::Unit, BraKetSymmetry::conjugate,
-                           SPBasis::spinorbital));
+          {.index_space_registry_shared_ptr = make_min_sr_spaces(),
+           .vacuum = Vacuum::SingleProduct});
       std::vector<ExprPtr> eqvec_so;
       switch (type) {
         case EqnType::t:
@@ -119,7 +118,7 @@ class compute_cceqvec {
       // validate known sizes of some CC residuals
       // N.B. # of equations depends on whether we use symmetric or
       // antisymmetric amplitudes
-      if (get_default_context().spbasis() == SPBasis::spinorbital) {
+      if (get_default_context().spbasis() == SPBasis::spinor) {
         if (type == EqnType::t) {
           if (R == 1 && N == 1) runtime_assert(eqvec[R]->size() == 8);
           if (R == 1 && N == 2) runtime_assert(eqvec[R]->size() == 14);
@@ -222,15 +221,9 @@ class compute_all {
 }  // namespace
 
 int main(int argc, char* argv[]) {
-  std::setlocale(LC_ALL, "en_US.UTF-8");
   std::wcout.precision(std::numeric_limits<double>::max_digits10);
   std::wcerr.precision(std::numeric_limits<double>::max_digits10);
-  std::wcout.sync_with_stdio(false);
-  std::wcerr.sync_with_stdio(false);
-  std::wcout.imbue(std::locale("en_US.UTF-8"));
-  std::wcerr.imbue(std::locale("en_US.UTF-8"));
-  std::wcout.sync_with_stdio(true);
-  std::wcerr.sync_with_stdio(true);
+  sequant::set_locale();
 
   // set_num_threads(1);
 
@@ -256,9 +249,11 @@ int main(int argc, char* argv[]) {
   const bool print = print_str == "print";
 
   sequant::detail::OpIdRegistrar op_id_registrar;
-  sequant::set_default_context(sequant::Context(
-      make_min_sr_spaces(SpinConvention::None), Vacuum::SingleProduct,
-      IndexSpaceMetric::Unit, BraKetSymmetry::conjugate, spbasis));
+  sequant::set_default_context(
+      sequant::Context({.index_space_registry_shared_ptr =
+                            make_min_sr_spaces(SpinConvention::None),
+                        .vacuum = Vacuum::SingleProduct,
+                        .spbasis = spbasis}));
   TensorCanonicalizer::register_instance(
       std::make_shared<DefaultTensorCanonicalizer>());
 

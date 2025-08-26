@@ -47,9 +47,9 @@ if (TARGET tiledarray)
     set(test_name "sequant/integration/eval_btas")
     add_test(
             NAME "${test_name}"
-            COMMAND eval_ta
+            COMMAND eval_btas
             WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
     )
 
-    build_test_as_needed(eval_ta "${test_name}" test_name)
+    build_test_as_needed(eval_btas "${test_name}" test_name)
 endif (TARGET tiledarray)

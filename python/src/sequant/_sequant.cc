@@ -1,9 +1,9 @@
 #include <SeQuant/core/complex.hpp>
 #include <SeQuant/core/context.hpp>
+#include <SeQuant/core/expressions/tensor.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/space.hpp>
-#include <SeQuant/core/tensor.hpp>
 
 #include <iostream>
 #include <string>
@@ -139,9 +139,15 @@ PYBIND11_MODULE(_sequant, m) {
                                return std::vector<Index>(braket.begin(),
                                                          braket.end());
                              })
-      .def_property_readonly("indices", [](const Tensor &t) {
-        auto indices = t.indices();
-        return std::vector<Index>(indices.begin(), indices.end());
+      .def_property_readonly("braketaux",
+                             [](const Tensor &t) {
+                               auto slots = t.braketaux();
+                               return std::vector<Index>(slots.begin(),
+                                                         slots.end());
+                             })
+      .def_property_readonly("slots", [](const Tensor &t) {
+        auto slots = t.slots();
+        return std::vector<Index>(slots.begin(), slots.end());
       });
 
   py::class_<Complex<rational>>(m, "zRational")

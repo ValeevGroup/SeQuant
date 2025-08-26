@@ -9,9 +9,9 @@ namespace sequant {
 void set_locale() {
   // set global C++ locale (and C locale)
   std::locale target_locale{};
-  try {  // use en_US.UTF-8, if supported
-    target_locale = std::locale{"en_US.UTF-8"};
-  } catch (std::exception &) {  // use default if en_US.UTF-8 not available
+  try {  // use C.UTF-8, if supported
+    target_locale = std::locale{"C.UTF-8"};
+  } catch (std::exception &) {  // use default if C.UTF-8 not available
   }
   std::locale::global(target_locale);
   // set C++ streams locale to target

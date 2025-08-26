@@ -1,0 +1,31 @@
+-1 g{a_2,i_3;a_3,i_1} * t{a_1,a_3;i_3,i_2} + 2 g{a_1,i_3;i_1,a_3} * t{a_2,a_3;i_2,i_3}
+
+=================================================
+Plain Text
+=================================================
+Declare index i_1
+Declare index i_2
+Declare index i_3
+Declare index a_1
+Declare index a_2
+Declare index a_3
+
+Declare tensor I[a_1, a_2, i_1, i_2]
+Declare tensor g[a_1, i_3, i_1, a_3]
+Declare tensor g[a_2, i_3, a_3, i_1]
+Declare tensor t[a_1, a_3, i_3, i_2]
+
+Create I[a_1, a_2, i_1, i_2] and initialize to zero
+Load g[a_2, i_3, a_3, i_1]
+Load t[a_1, a_3, i_3, i_2]
+Compute I[a_1, a_2, i_1, i_2] += -1 g[a_2, i_3, a_3, i_1] t[a_1, a_3, i_3, i_2]
+Unload t[a_1, a_3, i_3, i_2]
+Unload g[a_2, i_3, a_3, i_1]
+Load g[a_1, i_3, i_1, a_3]
+Load t[a_2, a_3, i_2, i_3]
+Compute I[a_1, a_2, i_1, i_2] += 2 g[a_1, i_3, i_1, a_3] t[a_2, a_3, i_2, i_3]
+Unload t[a_2, a_3, i_2, i_3]
+Unload g[a_1, i_3, i_1, a_3]
+Persist I[a_1, a_2, i_1, i_2]
+
+=================================================

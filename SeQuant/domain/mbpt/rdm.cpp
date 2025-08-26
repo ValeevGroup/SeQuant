@@ -96,8 +96,8 @@ ExprPtr one_body_sub(ExprPtr ex_) {  // J. Chem. Phys. 132, 234107 (2010);
   return (result);
 }
 
-ExprPtr two_body_decomp(ExprPtr ex_,
-                        bool approx) {  // J. Chem. Phys. 132, 234107 (2010);
+ExprPtr two_body_decomp(
+    ExprPtr ex_, bool /*approx*/) {  // J. Chem. Phys. 132, 234107 (2010);
   // https://doi.org/10.1063/1.3439395
   // eqn 16 for \tilde{a}^{pr}_{qs}
   assert(ex_->is<FNOperator>());

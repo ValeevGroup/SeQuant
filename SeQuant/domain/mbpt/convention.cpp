@@ -41,7 +41,8 @@ void load(Convention conv, SpinConvention spconv) {
       isr = make_legacy_spaces(spconv);
       break;
   }
-  set_default_context(sequant::Context(isr, Vacuum::SingleProduct));
+  set_default_context({.index_space_registry_shared_ptr = isr,
+                       .vacuum = Vacuum::SingleProduct});
 }
 
 void add_fermi_spin(IndexSpaceRegistry& isr) {

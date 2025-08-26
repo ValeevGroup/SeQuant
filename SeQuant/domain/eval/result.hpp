@@ -585,7 +585,7 @@ class ResultScalar final : public Result {
     throw unimplemented_method("symmetrize");
   }
 
-  [[nodiscard]] ResultPtr antisymmetrize(size_t bra_rank) const override {
+  [[nodiscard]] ResultPtr antisymmetrize(size_t /*bra_rank*/) const override {
     throw unimplemented_method("antisymmetrize");
   }
 
@@ -873,7 +873,7 @@ class ResultTensorOfTensorTA final : public Result {
     return nullptr;
   }
 
-  [[nodiscard]] ResultPtr antisymmetrize(size_t bra_rank) const override {
+  [[nodiscard]] ResultPtr antisymmetrize(size_t /*bra_rank*/) const override {
     // not implemented yet
     return nullptr;
   }
@@ -922,7 +922,7 @@ class ResultTensorBTAS final : public Result {
 
   [[nodiscard]] ResultPtr prod(Result const& other,
                                std::array<std::any, 3> const& annot,
-                               TA::DeNest DeNestFlag) const override {
+                               TA::DeNest /*DeNestFlag*/) const override {
     auto const a = annot_wrap{annot};
 
     if (other.is<ResultScalar<numeric_type>>()) {

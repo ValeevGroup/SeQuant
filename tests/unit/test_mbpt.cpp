@@ -2,7 +2,6 @@
 // Created by Eduard Valeyev on 2019-02-19.
 //
 
-#include <SeQuant/core/abstract_tensor.hpp>
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/expr.hpp>
@@ -10,9 +9,8 @@
 #include <SeQuant/core/latex.hpp>
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/parse.hpp>
-#include <SeQuant/core/tensor.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
-#include <SeQuant/core/timer.hpp>
+#include <SeQuant/core/utility/timer.hpp>
 #include <SeQuant/domain/mbpt/context.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/op.hpp>
@@ -21,7 +19,6 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers.hpp>
 #include "catch2_sequant.hpp"
-#include "test_config.hpp"
 
 #include <iostream>
 #include <memory>
@@ -295,13 +292,6 @@ TEST_CASE("mbpt", "[mbpt]") {
 
     SECTION("screen") {
       using namespace sequant::mbpt;
-      auto sr_registry = sequant::mbpt::make_sr_spaces();
-      auto old_context = get_default_context();
-      sequant::Context new_context(
-          sr_registry, old_context.vacuum(), old_context.metric(),
-          old_context.braket_symmetry(), old_context.spbasis(),
-          old_context.first_dummy_index_ordinal());
-      auto cxt_resetter = set_scoped_default_context(new_context);
       auto g_t2_t2 = H_(2) * T_(2) * T_(2);
       REQUIRE(raises_vacuum_to_rank(g_t2_t2, 2));
       REQUIRE(raises_vacuum_up_to_rank(g_t2_t2, 2));
@@ -326,6 +316,10 @@ TEST_CASE("mbpt", "[mbpt]") {
     }  // SECTION("screen")
 
     SECTION("predefined") {
+      // P.S. ref outputs produced with complete canonicalization
+      auto ctx = get_default_context();
+      ctx.set(CanonicalizeOptions{.method = CanonicalizationMethod::Complete});
+      auto _ = set_scoped_default_context(ctx);
       using namespace sequant::mbpt;
 
       auto theta1 = θ(1)->as<op_t>();
@@ -405,9 +399,9 @@ TEST_CASE("mbpt", "[mbpt]") {
               L"{ "
               L"\\bigl({{{\\frac{1}{36}}}{\\bar{R}^{{i_1}{i_2}{i_3}}_{{a_1}{a_"
               L"2}{a_3}}}{\\tilde{a}^{{a_1}{a_2}{a_3}}_{{i_1}{i_2}{i_3}}}} + "
-              L"{{R^{{i_1}}_{{a_1}}}{\\tilde{a}^{{a_1}}_{{i_1}}}} + "
               L"{{{\\frac{1}{4}}}{\\bar{R}^{{i_1}{i_2}}_{{a_1}{a_2}}}{\\tilde{"
-              L"a}^{{a_1}{a_2}}_{{i_1}{i_2}}}}\\bigr) }");
+              L"a}^{{a_1}{a_2}}_{{i_1}{i_2}}}} + "
+              L"{{R^{{i_1}}_{{a_1}}}{\\tilde{a}^{{a_1}}_{{i_1}}}}\\bigr) }");
 
       auto R12 = R(nₚ(2), nₕ(1));
       lower_to_tensor_form(R12);
@@ -424,11 +418,9 @@ TEST_CASE("mbpt", "[mbpt]") {
       simplify(R21);
       //    std::wcout << "R21: " << to_latex(R21) << std::endl;
       REQUIRE(to_latex(R21) ==
-              L"{ "
-              L"\\bigl({{{\\frac{1}{2}}}{\\bar{R}^{{i_1}{i_2}}_{{a_1}}}{"
-              L"\\tilde{a}^{"
-              L"\\textvisiblespace\\,{a_1}}_{{i_1}{i_2}}}} + "
-              L"{{R^{{i_1}}_{}}{\\tilde{a}_{{i_1}}}}\\bigr) }");
+              L"{ \\bigl({{R^{{i_1}}_{}}{\\tilde{a}_{{i_1}}}} + "
+              L"{{{\\frac{1}{2}}}{\\bar{R}^{{i_1}{i_2}}_{{a_1}}}{\\tilde{a}^{"
+              L"\\textvisiblespace\\,{a_1}}_{{i_1}{i_2}}}}\\bigr) }");
 
       auto L23 = L(nₚ(2), nₕ(3));
       lower_to_tensor_form(L23);
@@ -436,11 +428,11 @@ TEST_CASE("mbpt", "[mbpt]") {
       // std::wcout << "L23: " << to_latex(L23) << std::endl;
       REQUIRE(to_latex(L23) ==
               L"{ "
-              L"\\bigl({{{\\frac{1}{2}}}{\\bar{L}^{{a_1}}_{{i_1}{i_2}}}{"
-              L"\\tilde{a}^{{i_1}{i_2}}_{\\textvisiblespace\\,{a_1}}}} + "
-              L"{{{\\frac{1}{12}}}{\\bar{L}^{{a_1}{a_2}}_{{i_1}{i_2}{i_3}}}{"
-              L"\\tilde{a}^{{i_1}{i_2}{i_3}}_{\\textvisiblespace\\,{a_1}{a_2}}}"
-              L"} + {{L^{}_{{i_1}}}{\\tilde{a}^{{i_1}}}}\\bigr) }");
+              L"\\bigl({{{\\frac{1}{12}}}{\\bar{L}^{{a_1}{a_2}}_{{i_1}{i_2}{i_"
+              L"3}}}{\\tilde{a}^{{i_1}{i_2}{i_3}}_{\\textvisiblespace\\,{a_1}{"
+              L"a_2}}}} + {{L^{}_{{i_1}}}{\\tilde{a}^{{i_1}}}} + "
+              L"{{{\\frac{1}{2}}}{\\bar{L}^{{a_1}}_{{i_1}{i_2}}}{\\tilde{a}^{{"
+              L"i_1}{i_2}}_{\\textvisiblespace\\,{a_1}}}}\\bigr) }");
     }
 
     SECTION("batching") {
@@ -504,165 +496,153 @@ TEST_CASE("mbpt", "[mbpt]") {
     TensorCanonicalizer::register_instance(
         std::make_shared<DefaultTensorCanonicalizer>());
 
-    SECTION("SRSO") {
-      // H**T12**T12 -> R2
-      SEQUANT_PROFILE_SINGLE("wick(H**T12**T12 -> R2)", {
-        auto result = t::vac_av(t::A(nₚ(-2)) * t::H(2) * t ::T(2) * t::T(2),
-                                {{1, 2}, {1, 3}});
+    SECTION("SRSO"){
+        // H**T12**T12 -> R2
+        SECTION("wick(H**T12**T12 -> R2)"){
+            auto result = t::vac_av(t::A(nₚ(-2)) * t::H(2) * t ::T(2) * t::T(2),
+                                    {{1, 2}, {1, 3}});
 
-        //      std::wcout << "H*T12*T12 -> R2 = " << to_latex_align(result, 20)
-        //                 << std::endl;
-        REQUIRE(result->size() == 15);
+    //      std::wcout << "H*T12*T12 -> R2 = " << to_latex_align(result, 20)
+    //                 << std::endl;
+    REQUIRE(result->size() == 15);
 
-        {
-          // check against op
-          auto result_op = o::vac_av(o::P(nₚ(2)) * o::H() * o ::T(2) * o::T(2));
-          REQUIRE(result_op->size() ==
-                  result->size());  // as compact as result ..
-          REQUIRE(simplify(result_op - result) ==
-                  ex<Constant>(0));  // .. and equivalent to it
-        }
-      });
+    {
+      // check against op
+      auto result_op = o::vac_av(o::P(nₚ(2)) * o::H() * o ::T(2) * o::T(2));
+      REQUIRE(result_op->size() == result->size());  // as compact as result ..
+      REQUIRE(simplify(result_op - result) ==
+              ex<Constant>(0));  // .. and equivalent to it
+    }
+  }
 
-      // H2**T3**T3 -> R4
-      SEQUANT_PROFILE_SINGLE("wick(H2**T3**T3 -> R4)", {
-        auto result = t::vac_av(t::A(nₚ(-4)) * t::H_(2) * t ::T_(3) * t::T_(3),
-                                {{1, 2}, {1, 3}});
+  // H2**T3**T3 -> R4
+  SECTION("wick(H2**T3**T3 -> R4)") {
+    auto result = t::vac_av(t::A(nₚ(-4)) * t::H_(2) * t ::T_(3) * t::T_(3),
+                            {{1, 2}, {1, 3}});
 
-        std::wcout << "H2**T3**T3 -> R4 = " << to_latex_align(result, 20)
-                   << std::endl;
-        REQUIRE(result->size() == 4);
-      });
-
-      const std::vector<std::pair<std::wstring, std::wstring>> new_op_connect =
-          {{L"h", L"t"}, {L"f", L"t"}, {L"g", L"t"}};
+    // std::wcout << "H2**T3**T3 -> R4 = " << to_latex_align(result, 20)
+    //            << std::endl;
+    REQUIRE(result->size() == 4);
+  }
 
 #ifndef SEQUANT_SKIP_LONG_TESTS
-      // the longest term in CCSDTQP
-      // H2**T2**T2**T3 -> R5
-      {
-        ExprPtr ref_result;
-        SEQUANT_PROFILE_SINGLE("wick(H2**T2**T2**T3 -> R5)", {
-          ref_result =
-              t::vac_av(t::A(-5) * t::H_(2) * t::T_(2) * t::T_(2) * t::T_(3),
-                        new_op_connect);
-          REQUIRE(ref_result->size() == 7);
-        });
-        // now computed using specific component of H2
-        SEQUANT_PROFILE_SINGLE("wick(H2(oo;vv)**T2**T2**T3 -> R5)", {
-          auto result = t::vac_av(
-              t::A(-5) * t::H2_oo_vv() * t::T_(2) * t::T_(2) * t::T_(3),
-              new_op_connect);
-          REQUIRE(result->size() == ref_result->size());
-        });
-      }
+  // the longest term in CCSDTQP
+  // H2**T2**T2**T3 -> R5
+  {
+    ExprPtr ref_result;
+    SECTION("wick(H2**T2**T2**T3 -> R5)") {
+      ref_result =
+          t::vac_av(t::A(-5) * t::H_(2) * t::T_(2) * t::T_(2) * t::T_(3),
+                    {{1, 2}, {1, 3}, {1, 4}});
+      REQUIRE(ref_result->size() == 7);
+    }
+  }
 #endif  // !defined(SEQUANT_SKIP_LONG_TESTS)
-    }   // SECTION ("SRSO")
+}  // SECTION ("SRSO")
 
-    SECTION("SRSO Fock") {
-      // <2p1h|H2|1p> ->
-      SEQUANT_PROFILE_SINGLE(
-          "wick(<2p1h|H2|1p>)", ({
-            auto input = t::L_(nₚ(2), nₕ(1)) * t::H_(2) * t::R_(nₚ(1), nₕ(0));
-            auto result = t::vac_av(input);
+SECTION("SRSO Fock") {
+  // <2p1h|H2|1p> ->
+  SECTION("wick(<2p1h|H2|1p>)") {
+    auto input = t::L_(nₚ(2), nₕ(1)) * t::H_(2) * t::R_(nₚ(1), nₕ(0));
+    auto result = t::vac_av(input);
 
-            std::wcout << "<2p1h|H2|1p> = " << to_latex(result) << std::endl;
-            REQUIRE(result->is<Product>());  // product ...
-            REQUIRE(result->size() == 3);    // ... of 3 factors
-          }));
+    std::wcout << "<2p1h|H2|1p> = " << to_latex(result) << std::endl;
+    REQUIRE(result->is<Product>());  // product ...
+    REQUIRE(result->size() == 3);    // ... of 3 factors
+  }
 
-      // <2p1h|H2|2p1h(c)> ->
-      SEQUANT_PROFILE_SINGLE(
-          "wick(<2p1h|H2|2p1h(c)>)", ({
-            auto input = t::L_(nₚ(2), nₕ(1)) * t::H() * t::R_(nₚ(2), nₕ(1));
-            auto result = t::vac_av(input);
+  // <2p1h|H2|2p1h(c)> ->
+  SECTION("wick(<2p1h|H2|2p1h(c)>)") {
+    auto input = t::L_(nₚ(2), nₕ(1)) * t::H() * t::R_(nₚ(2), nₕ(1));
+    auto result = t::vac_av(input);
 
-            std::wcout << "<2p1h|H|2p1h(c)> = " << to_latex(result)
-                       << std::endl;
-            REQUIRE(result->is<Sum>());    // sub ...
-            REQUIRE(result->size() == 4);  // ... of 4 factors
-          }));
-    }  // SECTION("SRSO Fock")
+    // std::wcout << "<2p1h|H|2p1h(c)> = " << to_latex(result)
+    //            << std::endl;
+    REQUIRE(result->is<Sum>());    // sub ...
+    REQUIRE(result->size() == 4);  // ... of 4 factors
+  }
+}  // SECTION("SRSO Fock")
 
-    SECTION("SRSO-PNO") {
-      using sequant::mbpt::Context;
-      auto mbpt_ctx = sequant::mbpt::set_scoped_default_mbpt_context(
-          Context(mbpt::CSV::Yes));
+SECTION("SRSO-PNO") {
+  using sequant::mbpt::Context;
+  auto mbpt_ctx =
+      sequant::mbpt::set_scoped_default_mbpt_context(Context(mbpt::CSV::Yes));
 
-      // H2**T2**T2 -> R2
-      SEQUANT_PROFILE_SINGLE("wick(H2**T2**T2 -> R2)", {
-        auto result = t::vac_av(t::A(nₚ(-2)) * t::H_(2) * t ::T_(2) * t::T_(2),
-                                {{1, 2}, {1, 3}});
+  // H2**T2**T2 -> R2
+  SECTION("wick(H2**T2**T2 -> R2)") {
+    auto result = t::vac_av(t::A(nₚ(-2)) * t::H_(2) * t ::T_(2) * t::T_(2),
+                            {{1, 2}, {1, 3}});
 
-        std::wcout << "H2**T2**T2 -> R2 = " << to_latex_align(result, 20)
-                   << std::endl;
-        REQUIRE(result->size() == 4);
-      });
-    }  // SECTION("SRSO-PNO")
+    std::wcout << "H2**T2**T2 -> R2 = " << to_latex_align(result, 20)
+               << std::endl;
+    REQUIRE(result->size() == 4);
+  }
+}  // SECTION("SRSO-PNO")
 
-    SECTION("SRSF") {
-      auto ctx_resetter = set_scoped_default_context(sequant::Context(
-          mbpt::make_sr_spaces(), Vacuum::SingleProduct, IndexSpaceMetric::Unit,
-          BraKetSymmetry::conjugate, SPBasis::spinfree));
+SECTION("SRSF") {
+  auto ctx = get_default_context();
+  ctx.set(SPBasis::spinfree);
+  auto ctx_resetter = set_scoped_default_context(ctx);
 
-      // H2 -> R2
-      SEQUANT_PROFILE_SINGLE("wick(H2 -> R2)", {
-        auto result = t::vac_av(t::S(-2) * t::H_(2));
+  // H2 -> R2
+  SECTION("wick(H2 -> R2)") {
+    auto result = t::vac_av(t::S(-2) * t::H_(2));
 
-        {
-          std::wcout << "H2 -> R2 = " << to_latex_align(result, 0, 1)
-                     << std::endl;
-        }
-      });
+    {
+      // std::wcout << "H2 -> R2 = " << to_latex_align(result, 0, 1)
+      //            << std::endl;
+      REQUIRE(result->is<Sum>());
+      REQUIRE(result->size() == 2);
+    }
+  }
 
-      // H2**T2 -> R2
-      SEQUANT_PROFILE_SINGLE("wick(H2**T2 -> R2)", {
-        auto result = t::vac_av(t::S(-2) * t::H_(2) * t::T_(2), {{1, 2}});
+  // H2**T2 -> R2
+  SECTION("wick(H2**T2 -> R2)") {
+    auto result = t::vac_av(t::S(-2) * t::H_(2) * t::T_(2), {{1, 2}});
 
-        {
-          std::wcout << "H2**T2 -> R2 = " << to_latex_align(result, 0, 1)
-                     << std::endl;
-        }
-      });
-    }  // SECTION("SRSF")
+    {
+      // std::wcout << "H2**T2 -> R2 = " << to_latex_align(result, 0, 1)
+      //            << std::endl;
+      REQUIRE(result->is<Sum>());
+      REQUIRE(result->size() == 12);
+    }
+  }
+}  // SECTION("SRSF")
 
-    SECTION("MRSO") {
-      auto ctx_resetter = set_scoped_default_context(sequant::Context(
-          mbpt::make_mr_spaces(), Vacuum::SingleProduct, IndexSpaceMetric::Unit,
-          BraKetSymmetry::conjugate, SPBasis::spinorbital));
+SECTION("MRSO") {
+  auto ctx = get_default_context();
+  ctx.set(mbpt::make_mr_spaces());
+  auto ctx_resetter = set_scoped_default_context(ctx);
 
-      // H2**T2 -> 0
-      // std::wcout << "H_(2) * T_(2) = " << to_latex(H_(2) * T_(2)) <<
-      // std::endl;
-      SEQUANT_PROFILE_SINGLE("wick(H2**T2 -> 0)", {
-                             {
+  // H2**T2 -> 0
+  // std::wcout << "H_(2) * T_(2) = " << to_latex(H_(2) * T_(2)) <<
+  // std::endl;
+  SECTION("wick(H2**T2 -> 0)") {
+    {
+      std::wcout << "multireference start" << std::endl;
+      auto result = t::vac_av(t::H_(2) * t::T_(2), {{0, 1}});
 
-                             std::wcout << "multireference start" << std::endl;
-                             auto result = t::vac_av(t::H_(2) * t::T_(2), {{0, 1
-                               }});
-
-                             {
+      {
         std::wcout << " multireference H2*T2 -> 0 = "
                    << to_latex_align(result, 0, 1) << std::endl;
-                             }
+      }
 
-                             auto result_wo_top =
-                             t::vac_av(t::H_(2) * t::T_(2), {{0, 1}},
-                               /* use_topology = */ false);
+      auto result_wo_top = t::vac_av(t::H_(2) * t::T_(2), {{0, 1}},
+                                     /* use_topology = */ false);
 
-                             auto dif = simplify(result - result_wo_top);
-                             std::wcout <<" multireference topology difference"
-                             << to_latex(dif) << std::endl;
+      auto dif = simplify(result - result_wo_top);
+      std::wcout << " multireference topology difference" << to_latex(dif)
+                 << std::endl;
 
-                             REQUIRE(simplify(result - result_wo_top) == ex<
-                               Constant>(0));
+      REQUIRE(simplify(result - result_wo_top) == ex<Constant>(0));
     }
 
     // now compute using physical vacuum
     {
-      auto ctx_resetter = set_scoped_default_context(sequant::Context(
-          mbpt::make_mr_spaces(), Vacuum::Physical, IndexSpaceMetric::Unit,
-          BraKetSymmetry::conjugate, SPBasis::spinorbital));
+      auto ctx = get_default_context();
+      ctx.set(mbpt::make_mr_spaces());
+      ctx.set(Vacuum::Physical);
+      auto ctx_resetter = set_scoped_default_context(ctx);
       auto result_phys = t::vac_av(t::H_(2) * t::T_(2), {{0, 1}});
 
       {
@@ -670,10 +650,10 @@ TEST_CASE("mbpt", "[mbpt]") {
                    << to_latex_align(result_phys, 0, 1) << std::endl;
       }
     }
-  });
+  }
 
   // H2 ** T2 ** T2 -> 0
-  SEQUANT_PROFILE_SINGLE("wick(H2**T2**T2 -> 0)", {
+  SECTION("wick(H2**T2**T2 -> 0)") {
     // first without use of topology
     auto result = t::vac_av(t::H_(2) * t::T_(2) * t::T_(2), {{0, 1}},
                             /* use_topology = */ false);
@@ -682,31 +662,32 @@ TEST_CASE("mbpt", "[mbpt]") {
                                 /* use_topology = */ true);
 
     REQUIRE(simplify(result - result_top) == ex<Constant>(0));
-  });
+  }
 
 #if 0
     // H**T12 -> R2
-    SEQUANT_PROFILE_SINGLE("wick(H**T2 -> R2)", {
+    SECTION("wick(H**T2 -> R2)") {
       auto result = t::vac_av(t::A(-2) * t::H() * t::T_(2), {{1, 2}});
 
       {
         std::wcout << "H*T2 -> R2 = " << to_latex_align(result, 0, 1)
                    << std::endl;
       }
-    });
+    }
 #endif
 }  // SECTION("MRSO")
 
 SECTION("MRSF") {
   // now compute using (closed) Fermi vacuum + spinfree basis
-  auto ctx_resetter = set_scoped_default_context(sequant::Context(
-      mbpt::make_mr_spaces(), Vacuum::SingleProduct, IndexSpaceMetric::Unit,
-      BraKetSymmetry::conjugate, SPBasis::spinfree));
+  auto ctx = get_default_context();
+  ctx.set(mbpt::make_mr_spaces());
+  ctx.set(SPBasis::spinfree);
+  auto ctx_resetter = set_scoped_default_context(ctx);
 
   // H2**T2 -> 0
   std::wcout << "H_(2) * T_(2) = " << to_latex(t::H_(2) * t::T_(2))
              << std::endl;
-  SEQUANT_PROFILE_SINGLE("wick(H2**T2 -> 0)", {
+  SECTION("wick(H2**T2 -> 0)") {
     auto result = t::vac_av(t::H_(2) * t::T_(2), {{0, 1}});
 
     //          {
@@ -729,7 +710,7 @@ SECTION("MRSF") {
       REQUIRE(result_op->size() == result->size());
       REQUIRE(simplify(result - result_op) == ex<Constant>(0));
     }
-  });
+  }
 }  // SECTION("MRSF")
 }
 

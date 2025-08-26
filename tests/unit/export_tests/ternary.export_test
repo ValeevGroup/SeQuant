@@ -1,0 +1,116 @@
+A{a2;i2} B{i2;a1} C{i1;a2}
+
+=================================================
+Plain Text
+=================================================
+Declare index i_1
+Declare index i_2
+Declare index a_1
+Declare index a_2
+
+Declare tensor A[a_2, i_2]
+Declare tensor B[i_2, a_1]
+Declare tensor C[i_1, a_2]
+Declare tensor I[i_1, a_1]
+Declare tensor I[a_2, a_1]
+
+Create I[i_1, a_1] and initialize to zero
+Create I[a_2, a_1] and initialize to zero
+Load A[a_2, i_2]
+Load B[i_2, a_1]
+Compute I[a_2, a_1] += A[a_2, i_2] B[i_2, a_1]
+Unload B[i_2, a_1]
+Unload A[a_2, i_2]
+Load C[i_1, a_2]
+Compute I[i_1, a_1] += I[a_2, a_1] C[i_1, a_2]
+Unload C[i_1, a_2]
+Unload I[a_2, a_1]
+Persist I[i_1, a_1]
+
+=================================================
+Julia (TensorOperations)
+=================================================
+I_ov = zeros(Float64, nocc, nv)
+I_vv = zeros(Float64, nv, nv)
+A_vo = deserialize("A_vo.jlbin")
+B_ov = deserialize("B_ov.jlbin")
+@tensor I_vv[ a_2, a_1 ] += A_vo[ a_2, i_2 ] * B_ov[ i_2, a_1 ]
+B_ov = nothing
+A_vo = nothing
+C_ov = deserialize("C_ov.jlbin")
+@tensor I_ov[ i_1, a_1 ] += I_vv[ a_2, a_1 ] * C_ov[ i_1, a_2 ]
+C_ov = nothing
+I_vv = nothing
+return I_ov
+
+=================================================
+Julia (TensorKit)
+=================================================
+I_ov = TensorMap(zeros(Float64, nocc, nv), ℝ^nocc, ℝ^nv)
+I_vv = TensorMap(zeros(Float64, nv, nv), ℝ^nv, ℝ^nv)
+A_vo = TensorMap(deserialize("A_vo.jlbin"), ℝ^nv, ℝ^nocc)
+B_ov = TensorMap(deserialize("B_ov.jlbin"), ℝ^nocc, ℝ^nv)
+@tensor I_vv[ a_2, a_1 ] += A_vo[ a_2, i_2 ] * B_ov[ i_2, a_1 ]
+B_ov = nothing
+A_vo = nothing
+C_ov = TensorMap(deserialize("C_ov.jlbin"), ℝ^nocc, ℝ^nv)
+@tensor I_ov[ i_1, a_1 ] += I_vv[ a_2, a_1 ] * C_ov[ i_1, a_2 ]
+C_ov = nothing
+I_vv = nothing
+return I_ov
+
+=================================================
+Julia (ITensor)
+=================================================
+i_1 = Index(nocc, "i_1")
+i_2 = Index(nocc, "i_2")
+a_1 = Index(nv, "a_1")
+a_2 = Index(nv, "a_2")
+
+I_ov = ITensor(zeros(Float64, nocc, nv), i_1, a_1)
+I_vv = ITensor(zeros(Float64, nv, nv), a_2, a_1)
+A_vo = ITensor(deserialize("A_vo.jlbin"), a_2, i_2)
+B_ov = ITensor(deserialize("B_ov.jlbin"), i_2, a_1)
+I_vv += A_vo * B_ov
+B_ov = nothing
+A_vo = nothing
+C_ov = ITensor(deserialize("C_ov.jlbin"), i_1, a_2)
+I_ov += I_vv * C_ov
+C_ov = nothing
+I_vv = nothing
+return I_ov
+
+=================================================
+ITF
+=================================================
+---- decl
+index-space: j, Closed, c
+index-space: k, Closed, c
+index-space: b, External, e
+index-space: c, External, e
+
+tensor: A:ec[ck], A:ec
+tensor: B:ce[kb], B:ce
+tensor: C:ce[jc], C:ce
+tensor: I:ce[jb], I:ce
+tensor: I:ee[cb], !Create{type:plain}
+
+
+---- code("unnamed")
+alloc I:ce[jb]
+alloc I:ee[cb]
+load A:ec[ck]
+load B:ce[kb]
+.I:ee[cb] += A:ec[ck] B:ce[kb]
+drop B:ce[kb]
+drop A:ec[ck]
+load C:ce[jc]
+.I:ce[jb] += I:ee[cb] C:ce[jc]
+drop C:ce[jc]
+drop I:ee[cb]
+store I:ce[jb]
+
+
+---- end
+
+=================================================

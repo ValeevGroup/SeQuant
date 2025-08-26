@@ -2,16 +2,14 @@
 
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
-#include <SeQuant/core/result_expr.hpp>
 #include <SeQuant/core/space.hpp>
+#include <SeQuant/core/utility/expr.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/string.hpp>
 
 #include <algorithm>
-#include <bitset>
 #include <cassert>
-#include <functional>
-#include <sstream>
+#include <optional>
 
 #include <range/v3/view/zip.hpp>
 
@@ -25,11 +23,7 @@ std::size_t IndexSpaceMeta::getSize(const Index &index) const {
   return getSize(index.space());
 }
 
-std::wstring IndexSpaceMeta::getLabel(const IndexSpace &space) const {
-  return space.base_key();
-}
-
-std::wstring IndexSpaceMeta::getName(const IndexSpace &space) const {
+std::string IndexSpaceMeta::getName(const IndexSpace &space) const {
   auto iter = m_entries.find(space);
   if (iter == m_entries.end()) {
     throw std::runtime_error("No known name for index space " +
@@ -39,7 +33,7 @@ std::wstring IndexSpaceMeta::getName(const IndexSpace &space) const {
   return iter->second.name;
 }
 
-std::wstring IndexSpaceMeta::getTag(const IndexSpace &space) const {
+std::string IndexSpaceMeta::getTag(const IndexSpace &space) const {
   auto iter = m_entries.find(space);
   if (iter == m_entries.end()) {
     throw std::runtime_error("No known tag for index space " +
@@ -158,7 +152,7 @@ sequant::ExprPtr generateResultSymmetrization(const ResultExpr &result,
                                               std::wstring_view precursorName) {
   IndexGroups<std::vector<Index> > externals;
 
-  for (const auto [bra, ket] :
+  for (const auto &[bra, ket] :
        result.index_particle_grouping<std::pair<Index, Index> >()) {
     externals.bra.push_back(bra);
     externals.ket.push_back(ket);
@@ -202,4 +196,14 @@ sequant::ExprPtr generateResultSymmetrization(
   }
 
   return symmetrization;
+}
+
+std::optional<ExprPtr> pop_symmetrizer(ResultExpr &expr) {
+  std::optional<ExprPtr> symmetrizer = pop_tensor(expr.expression(), L"S");
+
+  if (!symmetrizer.has_value()) {
+    symmetrizer = pop_tensor(expr.expression(), L"A");
+  }
+
+  return symmetrizer;
 }

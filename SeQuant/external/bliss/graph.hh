@@ -52,6 +52,8 @@ class AbstractGraph;
 #include <range/v3/algorithm/for_each.hpp>
 #include <range/v3/view/iota.hpp>
 
+#include <boost/container/small_vector.hpp>
+
 namespace bliss {
 
 /**
@@ -525,6 +527,8 @@ class AbstractGraph {
  */
 class Graph : public AbstractGraph {
  public:
+  friend struct ConstGraphCmp;
+
   /**
    * The possible splitting heuristics.
    * The selected splitting heuristics affects the computed canonical
@@ -568,7 +572,7 @@ class Graph : public AbstractGraph {
     void sort_edges();
 
     unsigned int color;
-    std::vector<unsigned int> edges;
+    boost::container::small_vector<unsigned int, 8> edges;
     unsigned int nof_edges() const { return edges.size(); }
   };
   std::vector<Vertex> vertices;
@@ -678,9 +682,51 @@ class Graph : public AbstractGraph {
    */
   void write_dot(const char* const file_name);
 
+  /// converts a color expressed as utin32_t to RGB color represented as 3 integers with 8 bits worth of information
+  /// increase xsat (xsat <= 8) to try to increase saturation by this many bits
+  /// @pre xsat <= 8
+  static std::array<std::uint32_t,3> uint32_to_rgb(std::uint32_t i, unsigned int xsat = 0) {
+    assert(xsat <= 8);
+    // RGB has channel strides of {256^2, 256, 1} for a total range of [0, 256^3)
+    // map 32-bit int to RGB by using channel strides of {s^2, s, 1}, where s=(2^32)^(1/3) = 1626
+    constexpr std::uint32_t s = 1626;
+    constexpr std::uint32_t ss = s*s;
+    std::array<std::uint32_t,3> rgb_int; // 0 -> R, 1 -> G, 2 -> B
+    rgb_int[0] = i/ss;
+    rgb_int[1] = (i-rgb_int[0]*ss)/s;
+    rgb_int[2] = (i-rgb_int[0]*ss - rgb_int[1]*s);
+    for(int k=0; k!=3; ++k) rgb_int[k]=(rgb_int[k]*256)/s;  // rescale to 8 bits per channel
+
+    // increase saturation, if needed
+    if (xsat > 0) {
+      // for each channel saturate independently
+      for (int k = 0; k != 3; ++k) {
+        int nsatbits = xsat;
+        while (nsatbits > 0) {
+          // do we have this many unset significant bits in this channel?
+          bool can_sat = true;
+          if ((rgb_int[k] >> (8 - nsatbits)) > 0) can_sat = false;
+          if (can_sat) {
+            rgb_int[k] = rgb_int[k] == 0 ? (1<<(nsatbits-1)) : (rgb_int[k] << nsatbits);
+            break;
+          } else
+            nsatbits--;
+        }
+      }
+    }
+
+    return rgb_int;
+  }
+
   /// options for generating dot file
   template <typename Char, typename Traits>
   struct DotOptions {
+    /// vertex labels
+    std::vector<std::basic_string<Char, Traits>> labels = {};
+    /// vertex xlabels
+    std::vector<std::optional<std::basic_string<Char, Traits>>> xlabels = {};
+    /// vertex texlabels
+    std::vector<std::optional<std::basic_string<Char, Traits>>> texlabels = {};
     /// if true, display colored vertices using color values
     /// to RGB colors;
     ///        if false, color value is appended to the vertex label; by default
@@ -695,64 +741,34 @@ class Graph : public AbstractGraph {
     /// extra content for node section
     std::basic_string<Char, Traits> nodeextras = {};
   };
+  template <typename Char, typename Traits>
+  static DotOptions<Char, Traits> make_default_dot_options() { return {};}
 
   /// @brief  writes a dot file, optionally using user-supplied labels and
   /// converting color values to colors
   /// @tparam Char a character type
   /// @tparam Traits a stream traits type
   /// @param os the output stream
-  /// @param vertex_labels the optional vertex labels, used for `label` attributes of nodes
-  /// @param vertex_texlabels the optional vertex labels, used for `texlbl` attributes of nodes
   /// @param options options for generating dot file
-  template <typename Char, typename Traits,
-            typename StringSequence = std::vector<std::basic_string<Char>>,
-            typename OptStringSequence = std::vector<std::optional<std::basic_string<Char>>>>
+  template <typename Char, typename Traits>
   void write_dot(std::basic_ostream<Char, Traits>& os,
-                 const StringSequence& vertex_labels = StringSequence{},
-                 const OptStringSequence& vertex_texlabels = OptStringSequence{},
-                 DotOptions<Char,Traits> options = {.display_colors=std::nullopt, .fillcolor_saturation_nbits=3, .vertex_to_subgraph = {}, .nodeextras = {}}) {
+                 DotOptions<Char,Traits> options = make_default_dot_options<Char, Traits>()) {
     using std::size;
-    const auto nvertices = size(vertex_labels);
+    const auto nvertices = size(options.labels);
     const bool have_labels = nvertices > 0;
-    const bool have_texlabels = size(vertex_texlabels) > 0;
-    assert(!have_texlabels || size(vertex_texlabels) == nvertices);
+    const bool have_xlabels = size(options.xlabels) > 0;
+    assert(!have_xlabels || size(options.xlabels) == nvertices);
+    const bool have_texlabels = size(options.texlabels) > 0;
+    assert(!have_texlabels || size(options.texlabels) == nvertices);
     const bool rgb_colors = options.display_colors.value_or(have_labels);
 
     remove_duplicate_edges();
 
     // converts int color to RGB string; increase xsat (xsat <= 8) to try to increase saturation by this many bits
     auto int_to_rgb = [](std::uint32_t i, unsigned int xsat = 0) {
-      assert(xsat <= 8);
-      // RGB has channel strides of {256^2, 256, 1} for a total range of [0, 256^3)
-      // map 32-bit int to RGB by using channel strides of {s^2, s, 1}, where s=(2^32)^(1/3) = 1626
-      constexpr std::uint32_t s = 1626;
-      constexpr std::uint32_t ss = s*s;
-      std::array<std::uint32_t,3> rgb_int; // 0 -> R, 1 -> G, 2 -> B
-      rgb_int[0] = i/ss;
-      rgb_int[1] = (i-rgb_int[0]*ss)/s;
-      rgb_int[2] = (i-rgb_int[0]*ss - rgb_int[1]*s);
-      for(int k=0; k!=3; ++k) rgb_int[k]=(rgb_int[k]*256)/s;  // rescale to 8 bits per channel
-
-      // increase saturation, if needed
-      if (xsat > 0) {
-        // for each channel saturate independently
-        for (int k = 0; k != 3; ++k) {
-          int nsatbits = xsat;
-          while (nsatbits > 0) {
-            // do we have this many unset significant bits in this channel?
-            bool can_sat = true;
-            if ((rgb_int[k] >> (8 - nsatbits)) > 0) can_sat = false;
-            if (can_sat) {
-              rgb_int[k] = rgb_int[k] == 0 ? (1<<(nsatbits-1)) : (rgb_int[k] << nsatbits);
-              break;
-            } else
-              nsatbits--;
-          }
-        }
-      }
-
-      // rebuild integer
-      i = rgb_int[0] * (1<<16) + rgb_int[1] * (1<<8) + rgb_int[2];
+      auto rgb_int8 = uint32_to_rgb(i, xsat);
+      // map back to an int
+      i = rgb_int8[0] * (1<<16) + rgb_int8[1] * (1<<8) + rgb_int8[2];
 
       std::basic_stringstream<Char> stream;
       // Set locale of this stream to C to avoid any kind of thousands separator
@@ -775,7 +791,7 @@ class Graph : public AbstractGraph {
 
     std::optional<std::int64_t> current_cluster_ordinal;
     for (auto& [cluster_ordinal, vertex_ordinal] : clusters) {
-      auto vnum = vertex_ordinal;
+      auto vord = vertex_ordinal;
       Vertex& v = vertices.at(vertex_ordinal);
 
       // start of a new cluster? start new subgraph
@@ -787,16 +803,22 @@ class Graph : public AbstractGraph {
         }
       }
 
-      os << "v" << vnum << " [ label=\"";
+      os << "v" << vord << " [ label=\"";
       if (have_labels) {
-        assert(vnum < nvertices);
-        os << vertex_labels[vnum];
+        assert(vord < nvertices);
+        os << options.labels[vord];
       } else
-        os << vnum;
+        os << vord;
+      if (have_xlabels) {
+        assert(vord < nvertices);
+        if (options.xlabels[vord].has_value()) {
+          os << "\", xlabel=\"" << options.xlabels[vord].value();
+        }
+      }
       if (have_texlabels) {
-        assert(vnum < nvertices);
-        if (vertex_texlabels[vnum].has_value()) {
-          os << "\", texlbl=\"" << vertex_texlabels[vnum].value();
+        assert(vord < nvertices);
+        if (options.texlabels[vord].has_value()) {
+          os << "\", texlbl=\"" << options.texlabels[vord].value();
         }
       }
       if (rgb_colors) {
@@ -806,10 +828,23 @@ class Graph : public AbstractGraph {
       } else {
         os << ":" << v.color << "\"];\n";
       }
-      for (std::vector<unsigned int>::const_iterator ei = v.edges.begin();
+      for (auto ei = v.edges.begin();
            ei != v.edges.end(); ei++) {
-        const unsigned int vnum2 = *ei;
-        if (vnum2 > vnum) os << "v" << vnum << " -- v" << vnum2 << "\n";
+        const unsigned int vord2 = *ei;
+
+        bool declare_edge = false;
+        // strangely vertices get assigned to clusters where their first edge is appears
+        // so introduce all edges involving this vertex to vertices in this or later cluster
+        if (options.vertex_to_subgraph) {
+          const std::int64_t v2_cluster_ordinal = options.vertex_to_subgraph(vord2).value_or(-1);
+          declare_edge = cluster_ordinal < v2_cluster_ordinal || (cluster_ordinal == v2_cluster_ordinal && vord < vord2);
+        }
+        else {
+          // if not using clusters print edges from lesser to greater ordinal
+          declare_edge = vord < vord2;
+        }
+        if (declare_edge)
+          os << "v" << vord << " -- v" << vord2 << "\n";
       }
     }
 
@@ -878,6 +913,27 @@ class Graph : public AbstractGraph {
    * for both graphs.
    */
   void set_splitting_heuristic(const SplittingHeuristic shs) { sh = shs; }
+
+protected:
+  /**
+   * Compare this graph with the graph \a other.
+   * Returns 0 if the graphs are equal, and a negative (positive) integer
+   * if this graph is "smaller than" ("greater than", resp.) than \a other.
+   * Note that the const version will not perform removal of duplicate edges.
+   */
+  int cmp(const Graph& other) const;
+};
+
+/**
+* WARNING: Use only if you are aware of the caveats regarding
+* the use of the const-qualified Graph::cmp function.
+*
+* Accessor for the const Graph::cmp implementation
+*/
+struct ConstGraphCmp {
+  static auto cmp(const Graph &lhs, const Graph &rhs) {
+    return lhs.cmp(rhs);
+  }
 };
 
 /**
@@ -930,8 +986,8 @@ class Digraph : public AbstractGraph {
     void remove_duplicate_edges(std::vector<bool>& tmp);
     void sort_edges();
     unsigned int color;
-    std::vector<unsigned int> edges_out;
-    std::vector<unsigned int> edges_in;
+    boost::container::small_vector<unsigned int, 8> edges_out;
+    boost::container::small_vector<unsigned int, 8> edges_in;
     unsigned int nof_edges_in() const { return edges_in.size(); }
     unsigned int nof_edges_out() const { return edges_out.size(); }
   };

@@ -12,8 +12,6 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
-#include <SeQuant/core/result_expr.hpp>
-#include <SeQuant/core/tensor.hpp>
 
 #include <cassert>
 #include <cstddef>
@@ -76,7 +74,7 @@ std::wstring spinannotation_remove(WS&& label) {
 template <typename WS, typename = std::enable_if_t<
                            meta::is_wstring_or_view_v<std::decay_t<WS>>>>
 std::wstring spinannotation_add(WS&& label, Spin s) {
-  auto view = to_basic_string_view(label);
+  [[maybe_unused]] auto view = to_basic_string_view(label);
   assert(!ranges::contains(view, L'_'));
   assert(view.back() != L'↑' && view.back() != L'↓');
   switch (s) {
@@ -86,10 +84,11 @@ std::wstring spinannotation_add(WS&& label, Spin s) {
       return to_wstring(std::forward<WS>(label)) + L'↑';
     case Spin::beta:
       return to_wstring(std::forward<WS>(label)) + L'↓';
-    default:
-      assert(false && "invalid quantum number");
-      abort();
+    case Spin::null:
+      break;
   }
+  assert(false && "invalid quantum number");
+  abort();
 }
 
 /// replaces spin annotation to

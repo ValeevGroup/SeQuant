@@ -303,6 +303,7 @@ class strong_type_base {
 #define DEFINE_STRONG_TYPE_FOR_RANGE(ID)                                       \
   template <typename T>                                                        \
   struct ID : detail::strong_type_base<T, ID<T>> {                             \
+    using value_type = T;                                                      \
     using base_type = detail::strong_type_base<T, ID<T>>;                      \
     using base_type::base_type;                                                \
     using base_type::operator=;                                                \
@@ -336,6 +337,7 @@ class strong_type_base {
 #ifndef DEFINE_STRONG_TYPE_FOR_INTEGER
 #define DEFINE_STRONG_TYPE_FOR_INTEGER(ID, IntType)          \
   struct ID : detail::strong_type_base<IntType, ID> {        \
+    using value_type = IntType;                              \
     using base_type = detail::strong_type_base<IntType, ID>; \
     using base_type::base_type;                              \
     using base_type::operator=;                              \

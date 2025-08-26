@@ -224,7 +224,7 @@ class QuantumNumberChange
       container::svector<boost::numeric::interval<std::make_signed_t<QNV>>, 8>;
   using this_type = QuantumNumberChange<QNV, Tag>;
 
-  const std::size_t size() const {
+  std::size_t size() const {
     if (get_default_context().vacuum() == Vacuum::Physical) {
       return 2;
     } else if (get_default_context().vacuum() == Vacuum::SingleProduct) {
@@ -590,7 +590,7 @@ inline container::svector<Index> make_depidx_vector(
 /// and indices \f$ \{ b_i \} \f$ / \f$ \{ k_i \} \f$.
 /// @note The choice of computational basis can be controlled by the default Context.
 ///       See `SeQuant/core/context.hpp` and `SeQuant/mbpt/context.hpp`
-/// @warning Tensor \f$ T \f$ will be antisymmetrized if `get_default_context().spbasis() == SPBasis::spinorbital`, else it will be particle-symmetric; the latter is only valid if # of bra and ket indices coincide.
+/// @warning Tensor \f$ T \f$ will be antisymmetrized if `get_default_context().spbasis() == SPBasis::spinor`, else it will be particle-symmetric; the latter is only valid if # of bra and ket indices coincide.
 /// @internal bless the maker and his water
 // clang-format on
 template <Statistics S>
@@ -683,7 +683,7 @@ class OpMaker {
                               UseDepIdx dep = UseDepIdx::None) {
     const bool symm =
         get_default_context().spbasis() ==
-        SPBasis::spinorbital;  // antisymmetrize if spin-orbital basis
+        SPBasis::spinor;  // antisymmetrize if spin-orbital basis
     const auto dep_bra = dep == UseDepIdx::Bra;
     const auto dep_ket = dep == UseDepIdx::Ket;
 
@@ -812,8 +812,8 @@ class OpMaker {
 
   OpMaker(OpType op);
 
-  [[nodiscard]] const auto ncreators() const { return cre_spaces_.size(); };
-  [[nodiscard]] const auto nannihilators() const { return ann_spaces_.size(); };
+  [[nodiscard]] auto ncreators() const { return cre_spaces_.size(); };
+  [[nodiscard]] auto nannihilators() const { return ann_spaces_.size(); };
 };
 
 extern template class OpMaker<Statistics::FermiDirac>;

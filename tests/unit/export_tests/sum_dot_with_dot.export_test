@@ -1,0 +1,83 @@
+2 g{i_1,i_2;a_1,a_2} * t{a_1,a_2;i_1,i_2} - g{i_1,i_2;a_1,a_2} * t{a_1,a_2;i_2,i_1}
+
+=================================================
+Plain Text
+=================================================
+Declare index i_1
+Declare index i_2
+Declare index a_1
+Declare index a_2
+
+Declare variable Z
+
+Declare tensor g[i_1, i_2, a_1, a_2]
+Declare tensor t[a_1, a_2, i_1, i_2]
+
+Create Z and initialize to zero
+Load g[i_1, i_2, a_1, a_2]
+Load t[a_1, a_2, i_1, i_2]
+Compute Z += 2 g[i_1, i_2, a_1, a_2] t[a_1, a_2, i_1, i_2]
+Unload t[a_1, a_2, i_1, i_2]
+Unload g[i_1, i_2, a_1, a_2]
+Load g[i_1, i_2, a_1, a_2]
+Load t[a_1, a_2, i_2, i_1]
+Compute Z += -1 g[i_1, i_2, a_1, a_2] t[a_1, a_2, i_2, i_1]
+Unload t[a_1, a_2, i_2, i_1]
+Unload g[i_1, i_2, a_1, a_2]
+Persist Z
+
+=================================================
+Julia (TensorOperations)
+=================================================
+Z = 0.0
+g_oovv = deserialize("g_oovv.jlbin")
+t_vvoo = deserialize("t_vvoo.jlbin")
+@tensor Z += 2 * g_oovv[ i_1, i_2, a_1, a_2 ] * t_vvoo[ a_1, a_2, i_1, i_2 ]
+t_vvoo = nothing
+g_oovv = nothing
+g_oovv = deserialize("g_oovv.jlbin")
+t_vvoo = deserialize("t_vvoo.jlbin")
+@tensor Z += -1 * g_oovv[ i_1, i_2, a_1, a_2 ] * t_vvoo[ a_1, a_2, i_2, i_1 ]
+t_vvoo = nothing
+g_oovv = nothing
+return Z
+
+=================================================
+Julia (TensorKit)
+=================================================
+Z = 0.0
+g_oovv = TensorMap(deserialize("g_oovv.jlbin"), ℝ^nocc ⊗ ℝ^nocc, ℝ^nv ⊗ ℝ^nv)
+t_vvoo = TensorMap(deserialize("t_vvoo.jlbin"), ℝ^nv ⊗ ℝ^nv, ℝ^nocc ⊗ ℝ^nocc)
+@tensor Z += 2 * g_oovv[ i_1, i_2, a_1, a_2 ] * t_vvoo[ a_1, a_2, i_1, i_2 ]
+t_vvoo = nothing
+g_oovv = nothing
+g_oovv = TensorMap(deserialize("g_oovv.jlbin"), ℝ^nocc ⊗ ℝ^nocc, ℝ^nv ⊗ ℝ^nv)
+t_vvoo = TensorMap(deserialize("t_vvoo.jlbin"), ℝ^nv ⊗ ℝ^nv, ℝ^nocc ⊗ ℝ^nocc)
+@tensor Z += -1 * g_oovv[ i_1, i_2, a_1, a_2 ] * t_vvoo[ a_1, a_2, i_2, i_1 ]
+t_vvoo = nothing
+g_oovv = nothing
+return Z
+
+=================================================
+Julia (ITensor)
+=================================================
+i_1 = Index(nocc, "i_1")
+i_2 = Index(nocc, "i_2")
+a_1 = Index(nv, "a_1")
+a_2 = Index(nv, "a_2")
+
+tmpvar = 0.0
+Z = ITensor(tmpvar)
+g_oovv = ITensor(deserialize("g_oovv.jlbin"), i_1, i_2, a_1, a_2)
+t_vvoo = ITensor(deserialize("t_vvoo.jlbin"), a_1, a_2, i_1, i_2)
+Z += 2 * g_oovv * t_vvoo
+t_vvoo = nothing
+g_oovv = nothing
+g_oovv = ITensor(deserialize("g_oovv.jlbin"), i_1, i_2, a_1, a_2)
+t_vvoo = ITensor(deserialize("t_vvoo.jlbin"), a_1, a_2, i_2, i_1)
+Z += -1 * g_oovv * t_vvoo
+t_vvoo = nothing
+g_oovv = nothing
+return Z
+
+=================================================

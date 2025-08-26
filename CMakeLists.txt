@@ -55,7 +55,7 @@ project(SeQuant LANGUAGES CXX VERSION "${SEQUANT_VERSION}" DESCRIPTION "SEcond Q
 # need C++20, insist on strict standard
 set(CMAKE_CXX_STANDARD 20 CACHE STRING "C++ ISO Standard version")
 if (CMAKE_CXX_STANDARD LESS 20)
-    message(FATAL_ERROR "C++ 2020 ISO Standard or higher is required to compile SeQuant")
+    message(FATAL_ERROR "C++ 2020 ISO Standard or higher is required to build SeQuant")
 endif ()
 # C++20 is only configurable via compile features with cmake 3.12 and older
 if (CMAKE_CXX_STANDARD EQUAL 20 AND CMAKE_VERSION VERSION_LESS 3.12.0)
@@ -77,6 +77,7 @@ if (NOT CMAKE_CXX_COMPILER MATCHES ".*/ccache$")
     endif ()
 endif ()
 
+list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake/")
 list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake/modules/")
 
 set(FETCHCONTENT_UPDATES_DISCONNECTED OFF CACHE BOOL "Enables UPDATE_DISCONNECTED behavior for all content population")
@@ -85,6 +86,8 @@ include(FetchContent)
 include(AddCustomTargetSubproject)
 include(FeatureSummary)
 include(CMakePackageConfigHelpers)
+
+include(compiler)
 
 ##########################
 # Standard build variables
@@ -103,12 +106,15 @@ set(SEQUANT_INSTALL_DOCDIR "${SEQUANT_INSTALL_SHAREDIR}/doc"
         CACHE PATH "SeQuant DOC install directory")
 set(SEQUANT_INSTALL_CMAKEDIR "lib/cmake/sequant"
         CACHE PATH "SeQuant CMAKE install directory")
-option(SEQUANT_BENCHMARKS "Enable SeQuant benchmarks" OFF)
 
 ############################
 # Additional build variables
 ############################
+option(SEQUANT_BENCHMARKS "Enable SeQuant benchmarks" ${PROJECT_IS_TOP_LEVEL})
+option(SEQUANT_UTILITIES "Enable SeQuant utility programs" ${PROJECT_IS_TOP_LEVEL})
+
 option(SEQUANT_IWYU "Whether to use the include-what-you-use tool (if found)" OFF)
+option(SEQUANT_WARNINGS_AS_ERRORS "Whether to treat compiler warnings as errors" ${PROJECT_IS_TOP_LEVEL})
 
 ##########################
 # SeQuant package options
@@ -122,6 +128,9 @@ add_feature_info(PYTHON SEQUANT_PYTHON "PySeQuant: Python bindings to SeQuant")
 
 option(SEQUANT_USE_SYSTEM_BOOST_HASH "Use system Boost for hashing? Set to OFF to make hashing independent of Boost, thus value-portable" ON)
 add_feature_info(SEQUANT_USE_SYSTEM_BOOST_HASH SEQUANT_USE_SYSTEM_BOOST_HASH "SeQuant uses system Boost for hashing (thus results depend on the Boost version)")
+
+option(SEQUANT_CONTEXT_MANIPULATION_THREADSAFE "Controls if the default context can be changed from multiple threads; recommended to set to OFF and setting context from main thread" ON)
+add_feature_info(SEQUANT_CONTEXT_MANIPULATION_THREADSAFE SEQUANT_CONTEXT_MANIPULATION_THREADSAFE "The default context can be changed from multiple threads")
 
 ##########################
 # Prerequisites
@@ -153,8 +162,14 @@ include(FindOrFetchRangeV3)
 # Boost will be added after defining SeQuant
 include(external/boost.cmake)
 
+# polymorphic_variant
+include(FindOrFetchPolymorphicVariant)
+
 # LibPerm
 include(FindOrFetchLibPerm)
+
+# Utfcpp
+include(FindOrFetchUtfcpp)
 
 # embedded bliss-0.73
 add_library(SeQuant-bliss
@@ -177,12 +192,16 @@ add_library(SeQuant-bliss
         SeQuant/external/bliss/bliss_C.cc
         SeQuant/external/bliss/bliss_C.h
         )
-target_link_libraries(SeQuant-bliss PUBLIC range-v3::range-v3)
+target_link_libraries(SeQuant-bliss PUBLIC range-v3::range-v3 Boost::headers)
+# modularized Boost has finer grained targets than just Boost::headers
+if (Boost_IS_MODULARIZED)
+    target_link_libraries(SeQuant-bliss PUBLIC
+            Boost::container
+    )
+endif()
 
 set(SeQuant_src
         ${PROJECT_BINARY_DIR}/SeQuant/version.hpp
-        SeQuant/version.cpp
-        SeQuant/core/abstract_tensor.hpp
         SeQuant/core/algorithm.hpp
         SeQuant/core/any.hpp
         SeQuant/core/asy_cost.cpp
@@ -199,12 +218,33 @@ set(SeQuant_src
         SeQuant/core/eval_expr.cpp
         SeQuant/core/eval_expr.hpp
         SeQuant/core/eval_node.hpp
+        SeQuant/core/export/compute_selection.cpp
+        SeQuant/core/export/compute_selection.hpp
+        SeQuant/core/export/context.cpp
+        SeQuant/core/export/context.hpp
+        SeQuant/core/export/export.cpp
+        SeQuant/core/export/export.hpp
+        SeQuant/core/export/export_expr.cpp
+        SeQuant/core/export/export_expr.hpp
+        SeQuant/core/export/generator.hpp
         SeQuant/core/export/itf.cpp
         SeQuant/core/export/itf.hpp
-        SeQuant/core/expr.cpp
-        SeQuant/core/expr.hpp
-        SeQuant/core/expr_algorithm.hpp
-        SeQuant/core/expr_operator.hpp
+        SeQuant/core/export/julia_itensor.hpp
+        SeQuant/core/export/julia_tensor_kit.hpp
+        SeQuant/core/export/julia_tensor_operations.cpp
+        SeQuant/core/export/julia_tensor_operations.hpp
+        SeQuant/core/export/reordering_context.cpp
+        SeQuant/core/export/reordering_context.hpp
+        SeQuant/core/export/text_generator.hpp
+        SeQuant/core/expressions/abstract_tensor.hpp
+        SeQuant/core/expressions/expr.cpp
+        SeQuant/core/expressions/expr.hpp
+        SeQuant/core/expressions/expr_algorithms.hpp
+        SeQuant/core/expressions/expr_operators.hpp
+        SeQuant/core/expressions/result_expr.cpp
+        SeQuant/core/expressions/result_expr.hpp
+        SeQuant/core/expressions/tensor.cpp
+        SeQuant/core/expressions/tensor.hpp
         SeQuant/core/hash.cpp
         SeQuant/core/hash.hpp
         SeQuant/core/hugenholtz.hpp
@@ -214,44 +254,47 @@ set(SeQuant_src
         SeQuant/core/index_space_registry.hpp
         SeQuant/core/interval.hpp
         SeQuant/core/latex.cpp
-        SeQuant/core/latex.ipp
         SeQuant/core/latex.hpp
+        SeQuant/core/latex.ipp
         SeQuant/core/logger.hpp
         SeQuant/core/math.hpp
         SeQuant/core/meta.hpp
         SeQuant/core/op.cpp
         SeQuant/core/op.hpp
+        SeQuant/core/options.cpp
+        SeQuant/core/options.hpp
         SeQuant/core/optimize.hpp
+        SeQuant/core/optimize/common_subexpression_elimination.hpp
         SeQuant/core/optimize/fusion.cpp
         SeQuant/core/optimize/fusion.hpp
         SeQuant/core/optimize/optimize.cpp
+        SeQuant/core/parse.hpp
         SeQuant/core/parse/deparse.cpp
         SeQuant/core/parse/parse.cpp
-        SeQuant/core/parse.hpp
         SeQuant/core/ranges.hpp
         SeQuant/core/rational.hpp
-        SeQuant/core/result_expr.cpp
-        SeQuant/core/result_expr.hpp
         SeQuant/core/runtime.cpp
         SeQuant/core/runtime.hpp
         SeQuant/core/space.cpp
         SeQuant/core/space.hpp
         SeQuant/core/tag.hpp
-        SeQuant/core/tensor.cpp
-        SeQuant/core/tensor.hpp
         SeQuant/core/tensor_canonicalizer.cpp
         SeQuant/core/tensor_canonicalizer.hpp
         SeQuant/core/tensor_network.cpp
         SeQuant/core/tensor_network.hpp
         SeQuant/core/tensor_network_v2.cpp
         SeQuant/core/tensor_network_v2.hpp
+        SeQuant/core/tensor_network_v3.cpp
+        SeQuant/core/tensor_network_v3.hpp
+        SeQuant/core/tensor_network/utils.hpp
         SeQuant/core/tensor_network/canonicals.hpp
         SeQuant/core/tensor_network/slot.hpp
         SeQuant/core/tensor_network/vertex.hpp
         SeQuant/core/tensor_network/vertex_painter.cpp
         SeQuant/core/tensor_network/vertex_painter.hpp
-        SeQuant/core/timer.hpp
+        SeQuant/core/utility/atomic.hpp
         SeQuant/core/utility/context.hpp
+        SeQuant/core/utility/debug.hpp
         SeQuant/core/utility/expr.cpp
         SeQuant/core/utility/expr.hpp
         SeQuant/core/utility/indices.hpp
@@ -259,35 +302,45 @@ set(SeQuant_src
         SeQuant/core/utility/nodiscard.hpp
         SeQuant/core/utility/permutation.hpp
         SeQuant/core/utility/singleton.hpp
-        SeQuant/core/utility/string.hpp
         SeQuant/core/utility/string.cpp
-        SeQuant/core/utility/tuple.hpp
+        SeQuant/core/utility/string.hpp
         SeQuant/core/utility/swap.hpp
+        SeQuant/core/utility/tensor.hpp
+        SeQuant/core/utility/timer.hpp
+        SeQuant/core/utility/tuple.hpp
         SeQuant/core/wick.hpp
         SeQuant/core/wick.impl.hpp
         SeQuant/core/wolfram.hpp
         SeQuant/core/wstring.hpp
         SeQuant/domain/mbpt/antisymmetrizer.cpp
         SeQuant/domain/mbpt/antisymmetrizer.hpp
-        SeQuant/domain/mbpt/context.hpp
         SeQuant/domain/mbpt/context.cpp
+        SeQuant/domain/mbpt/context.hpp
         SeQuant/domain/mbpt/convention.cpp
         SeQuant/domain/mbpt/convention.hpp
+        SeQuant/domain/mbpt/models/cc.cpp
+        SeQuant/domain/mbpt/models/cc.hpp
         SeQuant/domain/mbpt/op.cpp
         SeQuant/domain/mbpt/op.hpp
         SeQuant/domain/mbpt/op.ipp
         SeQuant/domain/mbpt/rdm.cpp
         SeQuant/domain/mbpt/rdm.hpp
+        SeQuant/domain/mbpt/rules/csv.cpp
+        SeQuant/domain/mbpt/rules/csv.hpp
+        SeQuant/domain/mbpt/rules/df.cpp
+        SeQuant/domain/mbpt/rules/df.hpp
         SeQuant/domain/mbpt/space_qns.hpp
         SeQuant/domain/mbpt/spin.cpp
         SeQuant/domain/mbpt/spin.hpp
         SeQuant/domain/mbpt/vac_av.ipp
-        SeQuant/domain/mbpt/models/cc.cpp
-        SeQuant/domain/mbpt/models/cc.hpp
-        SeQuant/domain/mbpt/rules/df.cpp
-        SeQuant/domain/mbpt/rules/df.hpp
-        SeQuant/domain/mbpt/rules/csv.cpp
-        SeQuant/domain/mbpt/rules/csv.hpp
+        SeQuant/version.cpp
+)
+
+#### disable unity_build for v2:
+set_source_files_properties(
+        SeQuant/core/tensor_network_v2.cpp
+        SeQuant/core/tensor_network_v2.hpp
+        PROPERTIES SKIP_UNITY_BUILD_INCLUSION TRUE
 )
 
 ### optional prereqs
@@ -329,9 +382,13 @@ set_source_files_properties(
         PROPERTIES COMPILE_DEFINITIONS
         "SEQUANT_GIT_REVISION=\"${SEQUANT_GIT_REVISION}\";SEQUANT_GIT_DESCRIPTION=\"${SEQUANT_GIT_DESCRIPTION}\""
 )
+if (SEQUANT_CONTEXT_MANIPULATION_THREADSAFE)
+  target_compile_definitions(SeQuant PUBLIC SEQUANT_CONTEXT_MANIPULATION_THREADSAFE)
+endif()
 
 target_link_libraries(SeQuant PUBLIC range-v3::range-v3 Boost::regex Boost::locale Boost::headers SeQuant-bliss Threads::Threads)
-target_link_libraries(SeQuant PRIVATE $<BUILD_INTERFACE:libperm::libperm>)
+target_link_libraries(SeQuant PRIVATE libperm::libperm $<BUILD_LOCAL_INTERFACE:utfcpp>)
+target_link_libraries(SeQuant PUBLIC polymorphic_variant::polymorphic_variant)
 # modularized Boost has finer grained targets than just Boost::headers
 if (Boost_IS_MODULARIZED)
     target_link_libraries(SeQuant PUBLIC
@@ -356,13 +413,17 @@ if (SEQUANT_HAS_EXECUTION_HEADER_STANDALONE OR SEQUANT_HAS_EXECUTION_HEADER_WITH
     target_compile_definitions(SeQuant PUBLIC SEQUANT_HAS_EXECUTION_HEADER)
     if (SEQUANT_HAS_EXECUTION_HEADER_WITH_TBB)
         target_link_libraries(SeQuant PUBLIC ${TBB_LIBRARIES})
-        target_include_directories(SeQuant PUBLIC ${TBB_INCLUDE_DIRS})
+        target_include_directories(SeQuant SYSTEM PUBLIC ${TBB_INCLUDE_DIRS})
     endif ()
 endif ()
-target_include_directories(SeQuant PUBLIC
+if (NOT PROJECT_IS_TOP_LEVEL)
+    set(SEQUANT_SYSTEM "SYSTEM")
+endif()
+target_include_directories(SeQuant ${SEQUANT_SYSTEM} PUBLIC
         $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}>
-        $<BUILD_INTERFACE:${PROJECT_BINARY_DIR}>
         $<INSTALL_INTERFACE:${CMAKE_INSTALL_PREFIX}/include>)
+target_include_directories(SeQuant SYSTEM PUBLIC
+        $<BUILD_INTERFACE:${PROJECT_BINARY_DIR}>)
 target_compile_features(SeQuant INTERFACE "cxx_std_20")
 if (SEQUANT_EVAL_TRACE)
     target_compile_definitions(SeQuant PUBLIC SEQUANT_EVAL_TRACE=1)
@@ -388,6 +449,9 @@ else()
             FILES_MATCHING PATTERN "*.hpp"
             )
 endif ()
+
+target_set_warning_flags(SeQuant)
+
 install(TARGETS SeQuant-bliss EXPORT sequant COMPONENT sequant LIBRARY DESTINATION ${SEQUANT_INSTALL_LIBDIR})
 install(TARGETS SeQuant EXPORT sequant COMPONENT sequant LIBRARY DESTINATION ${SEQUANT_INSTALL_LIBDIR})
 install(DIRECTORY SeQuant
@@ -423,9 +487,12 @@ if (SEQUANT_IWYU)
 endif()
 
 
-add_subdirectory(utilities)
 add_subdirectory(tests)
 add_subdirectory(doc)
+
+if (SEQUANT_UTILITIES)
+    add_subdirectory(utilities)
+endif()
 
 if (SEQUANT_BENCHMARKS)
     add_subdirectory(benchmarks)

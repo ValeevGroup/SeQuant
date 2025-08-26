@@ -71,7 +71,12 @@ class TypeAttr {
   /// @return true if this object is non-null (i.e. has any bits set)
   constexpr explicit operator bool() const { return bitset != 0; }
 
-  constexpr TypeAttr(const TypeAttr &other) { bitset = other.to_int32(); }
+  constexpr TypeAttr(const TypeAttr &other) { *this = other; }
+
+  constexpr TypeAttr &operator=(const TypeAttr &other) {
+    bitset = other.to_int32();
+    return *this;
+  }
 
   /// @return union of `*this` and @p other, i.e. `*this` AND @p other
   /// @note equivalent to `this->to_int32() | other.to_int32()`
@@ -419,10 +424,8 @@ class IndexSpace {
 
   friend constexpr bool operator==(IndexSpace const &,
                                    IndexSpace const &) noexcept;
-  friend constexpr bool operator!=(IndexSpace const &,
-                                   IndexSpace const &) noexcept;
-  friend constexpr bool operator<(IndexSpace const &,
-                                  IndexSpace const &) noexcept;
+  friend constexpr std::strong_ordering operator<=>(
+      const IndexSpace &s1, const IndexSpace &s2) noexcept;
 
   constexpr Attr attr() const noexcept { return attr_; }
   constexpr Type type() const noexcept { return attr().type(); }
@@ -430,7 +433,7 @@ class IndexSpace {
 
   /// Default ctor creates null space (with null label, type and quantum
   /// numbers)
-  IndexSpace() noexcept {}
+  IndexSpace() noexcept = default;
 
   const static IndexSpace null;
 
@@ -448,9 +451,26 @@ class IndexSpace {
   explicit IndexSpace(std::wstring_view label);
 
   IndexSpace(const IndexSpace &other) = default;
-  IndexSpace(IndexSpace &&other) = default;
+  /// move constructor
+  /// @param other[in,out] on output is null
+  /// @post state of this object is identical to the input state of @p other
+  IndexSpace(IndexSpace &&other) noexcept
+      : attr_(std::move(other.attr_)),
+        base_key_(std::move(other.base_key_)),
+        approximate_size_(std::move(other.approximate_size_)) {
+    other = null;
+  }
   IndexSpace &operator=(const IndexSpace &other) = default;
-  IndexSpace &operator=(IndexSpace &&other) = default;
+  /// move constructor
+  /// @param other[in,out] on output is null
+  /// @post state of this object is identical to the input state of @p other
+  IndexSpace &operator=(IndexSpace &&other) {
+    attr_ = std::move(other.attr_);
+    base_key_ = std::move(other.base_key_);
+    approximate_size_ = std::move(other.approximate_size_);
+    other = null;
+    return *this;
+  }
 
   const std::wstring &base_key() const { return base_key_; }
   static std::wstring_view reduce_key(std::wstring_view key) {
@@ -477,9 +497,9 @@ class IndexSpace {
   void approximate_size(size_t n) { approximate_size_ = n; }
 
  private:
-  Attr attr_;
-  std::wstring base_key_;
-  std::size_t approximate_size_;
+  Attr attr_ = {};
+  std::wstring base_key_ = {};
+  std::size_t approximate_size_ = {};
 
   static std::wstring to_wstring(std::wstring_view key) {
     return std::wstring(key.begin(), key.end());
@@ -516,13 +536,20 @@ inline bool includes(const IndexSpace &space1, const IndexSpace &space2) {
   return space1.attr().includes(space2.attr());
 }
 
-/// IndexSpace are ordered by their attributes and by labels
-[[nodiscard]] inline constexpr bool operator<(
-    const IndexSpace &space1, const IndexSpace &space2) noexcept {
-  if (space1.attr() != space2.attr())
-    return space1.attr() < space2.attr();
-  else
-    return space1.base_key() < space2.base_key();
+/// IndexSpace is ordered by its attributes and (if attributes are default,
+/// i.e., reserved) by labels
+[[nodiscard]] inline constexpr std::strong_ordering operator<=>(
+    const IndexSpace &s1, const IndexSpace &s2) noexcept {
+  using SO = std::strong_ordering;
+
+  if (s1.attr() != s2.attr()) {
+    return s1.attr() < s2.attr() ? SO::less : SO::greater;
+  }
+  if (s1.attr() == IndexSpace::Attr::reserved &&
+      s1.base_key() != s2.base_key()) {
+    return s1.base_key() < s2.base_key() ? SO::less : SO::greater;
+  }
+  return SO::equal;
 }
 
 ///
@@ -533,15 +560,6 @@ inline bool includes(const IndexSpace &space1, const IndexSpace &space2) {
     IndexSpace const &space1, IndexSpace const &space2) noexcept {
   return space1.attr() == space2.attr() &&
          space1.base_key() == space2.base_key();
-}
-
-///
-/// IndexSpace are equal if they have equal @c IndexSpace::type(),
-/// @c IndexSpace::qns(), and @c IndexSpace::base_key().
-///
-[[nodiscard]] inline constexpr bool operator!=(
-    IndexSpace const &space1, IndexSpace const &space2) noexcept {
-  return !(space1 == space2);
 }
 
 }  // namespace sequant

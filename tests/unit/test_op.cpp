@@ -398,36 +398,89 @@ TEST_CASE("op", "[elements]") {
 
     auto nop1 = FNOperator(cre({L"i_1", L"i_2"}), ann({L"a_1", L"a_2"}),
                            Vacuum::SingleProduct);
-    REQUIRE(to_latex(nop1) == L"{\\tilde{a}^{{i_1}{i_2}}_{{a_1}{a_2}}}");
-
     auto nop2 = FNOperator(
         cre({Index{L"i_1"}, Index{L"i_2"}}),
         ann({Index{L"a_1", {L"i_1", L"i_2"}}, Index{L"a_2", {L"i_1", L"i_2"}}}),
         Vacuum::SingleProduct);
-    REQUIRE(
-        to_latex(nop2) ==
-        L"{\\tilde{a}^{{i_1}{i_2}}_{{a_1^{{i_1}{i_2}}}{a_2^{{i_1}{i_2}}}}}");
-
     auto nop3 =
         FNOperator(cre({L"i_1", L"i_2"}), ann({L"a_2"}), Vacuum::SingleProduct);
-    REQUIRE(to_latex(nop3) ==
-            L"{\\tilde{a}^{{i_1}{i_2}}_{\\textvisiblespace\\,{a_2}}}");
-
     auto nop4 =
         FNOperator(cre({L"i_2"}), ann({L"a_1", L"a_2"}), Vacuum::SingleProduct);
-    REQUIRE(to_latex(nop4) ==
-            L"{\\tilde{a}^{\\textvisiblespace\\,{i_2}}_{{a_1}{a_2}}}");
-
     auto nop5 = FNOperator(cre({L"i_1"}), ann({}), Vacuum::SingleProduct);
-    REQUIRE(to_latex(nop5) == L"{\\tilde{a}^{{i_1}}}");
-
     auto nop6 = FNOperator(cre({}), ann({L"a_1"}), Vacuum::SingleProduct);
-    REQUIRE(to_latex(nop6) == L"{\\tilde{a}_{{a_1}}}");
-
     auto nopseq1 = FNOperatorSeq({nop1, nop2});
-    REQUIRE(to_latex(nopseq1) ==
-            L"{{\\tilde{a}^{{i_1}{i_2}}_{{a_1}{a_2}}}{\\tilde{a}^{{i_1}{i_2}}_{"
-            L"{a_1^{{i_1}{i_2}}}{a_2^{{i_1}{i_2}}}}}}");
+
+    SECTION("default (brasub, naive) typesetting") {
+      REQUIRE(to_latex(nop1) == L"{\\tilde{a}^{{i_1}{i_2}}_{{a_1}{a_2}}}");
+      REQUIRE(
+          to_latex(nop2) ==
+          L"{\\tilde{a}^{{i_1}{i_2}}_{{a_1^{{i_1}{i_2}}}{a_2^{{i_1}{i_2}}}}}");
+      REQUIRE(to_latex(nop3) ==
+              L"{\\tilde{a}^{{i_1}{i_2}}_{\\textvisiblespace\\,{a_2}}}");
+      REQUIRE(to_latex(nop4) ==
+              L"{\\tilde{a}^{\\textvisiblespace\\,{i_2}}_{{a_1}{a_2}}}");
+      REQUIRE(to_latex(nop5) == L"{\\tilde{a}^{{i_1}}}");
+      REQUIRE(to_latex(nop6) == L"{\\tilde{a}_{{a_1}}}");
+      REQUIRE(
+          to_latex(nopseq1) ==
+          L"{{\\tilde{a}^{{i_1}{i_2}}_{{a_1}{a_2}}}{\\tilde{a}^{{i_1}{i_2}}_{"
+          L"{a_1^{{i_1}{i_2}}}{a_2^{{i_1}{i_2}}}}}}");
+    }
+
+    SECTION("ketsub naive typesetting") {
+      Context ctx = get_default_context();
+      REQUIRE(get_default_context().braket_typesetting() ==
+              BraKetTypesetting::KetSuper);
+      ctx.set(BraKetTypesetting::KetSub);
+      auto resetter = set_scoped_default_context(ctx);
+      REQUIRE(get_default_context().braket_typesetting() ==
+              BraKetTypesetting::KetSub);
+
+      REQUIRE(to_latex(nop1) == L"{\\tilde{a}_{{i_1}{i_2}}^{{a_1}{a_2}}}");
+      REQUIRE(
+          to_latex(nop2) ==
+          L"{\\tilde{a}_{{i_1}{i_2}}^{{a_1^{{i_1}{i_2}}}{a_2^{{i_1}{i_2}}}}}");
+      REQUIRE(to_latex(nop3) ==
+              L"{\\tilde{a}_{{i_1}{i_2}}^{\\textvisiblespace\\,{a_2}}}");
+      REQUIRE(to_latex(nop4) ==
+              L"{\\tilde{a}_{\\textvisiblespace\\,{i_2}}^{{a_1}{a_2}}}");
+      REQUIRE(to_latex(nop5) == L"{\\tilde{a}_{{i_1}}}");
+      REQUIRE(to_latex(nop6) == L"{\\tilde{a}^{{a_1}}}");
+      REQUIRE(
+          to_latex(nopseq1) ==
+          L"{{\\tilde{a}_{{i_1}{i_2}}^{{a_1}{a_2}}}{\\tilde{a}_{{i_1}{i_2}}^{"
+          L"{a_1^{{i_1}{i_2}}}{a_2^{{i_1}{i_2}}}}}}");
+    }
+
+    SECTION("brasub tensor typesetting") {
+      Context ctx = get_default_context();
+      REQUIRE(get_default_context().braket_typesetting() ==
+              BraKetTypesetting::BraSub);
+      REQUIRE(get_default_context().braket_slot_typesetting() ==
+              BraKetSlotTypesetting::Naive);
+      ctx.set(BraKetSlotTypesetting::TensorPackage);
+      auto resetter = set_scoped_default_context(ctx);
+      REQUIRE(get_default_context().braket_typesetting() ==
+              BraKetTypesetting::BraSub);
+      REQUIRE(get_default_context().braket_slot_typesetting() ==
+              BraKetSlotTypesetting::TensorPackage);
+
+      REQUIRE(to_latex(nop1) ==
+              L"{\\tensor*{\\tilde{a}}{*^{i_1}_{a_1}*^{i_2}_{a_2}}}");
+      REQUIRE(to_latex(nop2) ==
+              L"{\\tensor*{\\tilde{a}}{*^{i_1}_{a_1^{{i_1}{i_2}}}*^{i_2}_{a_2^{"
+              L"{i_1}{i_2}}}}}");
+      REQUIRE(to_latex(nop3) ==
+              L"{\\tensor*{\\tilde{a}}{*^{i_1}_{}*^{i_2}_{a_2}}}");
+      REQUIRE(to_latex(nop4) ==
+              L"{\\tensor*{\\tilde{a}}{*^{}_{a_1}*^{i_2}_{a_2}}}");
+      REQUIRE(to_latex(nop5) == L"{\\tensor*{\\tilde{a}}{*^{i_1}_{}}}");
+      REQUIRE(to_latex(nop6) == L"{\\tensor*{\\tilde{a}}{*^{}_{a_1}}}");
+      REQUIRE(to_latex(nopseq1) ==
+              L"{{\\tensor*{\\tilde{a}}{*^{i_1}_{a_1}*^{i_2}_{a_2}}}{\\tensor*{"
+              L"\\tilde{a}}{*^{i_1}_{a_1^{{i_1}{i_2}}}*^{i_2}_{a_2^{{i_1}{i_2}}"
+              L"}}}}");
+    }
   }
 
   SECTION("commutativity") {

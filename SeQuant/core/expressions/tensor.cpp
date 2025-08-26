@@ -2,18 +2,19 @@
 // Created by Eduard Valeyev on 2019-01-30.
 //
 
-#include <SeQuant/core/abstract_tensor.hpp>
-#include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/expressions/abstract_tensor.hpp>
+#include <SeQuant/core/expressions/expr.hpp>
+#include <SeQuant/core/expressions/tensor.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/op.hpp>
-#include <SeQuant/core/tensor.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 
 namespace sequant {
 
 Tensor::~Tensor() = default;
 
-void Tensor::assert_nonreserved_label(std::wstring_view label) const {
+void Tensor::assert_nonreserved_label(
+    [[maybe_unused]] std::wstring_view label) const {
   assert(!ranges::contains(FNOperator::labels(), label) &&
          !ranges::contains(BNOperator::labels(), label));
 }
@@ -36,7 +37,7 @@ void Tensor::adjoint() {
   reset_hash_value();
 }
 
-ExprPtr Tensor::canonicalize() {
+ExprPtr Tensor::canonicalize(CanonicalizeOptions) {
   auto canonicalizer_ptr = TensorCanonicalizer::instance_ptr(label_);
   return canonicalizer_ptr ? canonicalizer_ptr->apply(*this) : ExprPtr{};
 }

@@ -9,11 +9,11 @@
 #include <mutex>
 #include <utility>
 
+#include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/math.hpp>
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/ranges.hpp>
 #include <SeQuant/core/runtime.hpp>
-#include <SeQuant/core/tensor.hpp>
 
 namespace sequant {
 
@@ -102,10 +102,10 @@ class WickTheorem {
       "basis")]] WickTheorem &
   spinfree(bool sf) {
     if (!((sf && get_default_context(S).spbasis() == SPBasis::spinfree) ||
-          (!sf && get_default_context(S).spbasis() == SPBasis::spinorbital))) {
+          (!sf && get_default_context(S).spbasis() == SPBasis::spinor))) {
       throw std::invalid_argument(
-          "WickTheorem::spinfree(sf): sf must match the contents of "
-          "get_default_context().spbasis() (N.B. WickTheorem::spinfree() is "
+          "WickTheorem<S>::spinfree(sf): sf must match the contents of "
+          "get_default_context(S).spbasis() (N.B. WickTheorem::spinfree() is "
           "deprecated, no longer should be used)");
     }
     return *this;
@@ -311,9 +311,10 @@ class WickTheorem {
            }) == false);
 
     // every op needs to be in a partition AND partitions need to be sorted
-    // if op_partitions only specifues nontrivial partitions, may need to add
+    // if op_partitions only specifies nontrivial partitions, may need to add
     // more partitions create initial set of partitions, then update if needed
     op_npartitions_ = size(op_partitions);
+    op_partitions_.clear();
     op_partitions_.resize(op_npartitions_);
     auto partition_idx = 0;
     ranges::for_each(op_partitions, [&](auto &&op_partition) {
@@ -385,6 +386,7 @@ class WickTheorem {
   /// canonicalization of the input expression; the default is false.
   /// @return the result of applying Wick's theorem; either a Constant, a
   /// Product, or a Sum
+  /// @note the canonicalization method is controlled by the default Context
   /// @warning this is not reentrant, but is optionally threaded internally
   /// @throw std::logic_error if input's vacuum does not match the current
   /// context vacuum
@@ -443,7 +445,7 @@ class WickTheorem {
 
   mutable std::shared_ptr<NormalOperatorSequence<S>> input_;
   bool full_contractions_ = true;
-  bool use_topology_ = false;
+  bool use_topology_ = true;
   mutable Stats stats_;
 
   mutable std::optional<container::set<Index>>
@@ -638,6 +640,7 @@ class WickTheorem {
         : wick(wt),
           nopseq(nopseq),
           nopseq_size(nopseq.opsize()),
+          ctx(get_default_context(S)),
           level(0),
           left_op_offset(0),
           count_only(false),
@@ -656,6 +659,7 @@ class WickTheorem {
     const WickTheorem<S> &wick;        //!< the WickTheorem object using this
     NormalOperatorSequence<S> nopseq;  //!< current state of operator sequence
     std::size_t nopseq_size;           //!< current size of nopseq
+    Context ctx;                       //!< current context
     Product sp;                        //!< current prefactor
     container::svector<std::pair<Op<S>, Op<S>>>
         contractions;  //!< current list of indices of contracted {qpann,qpcre}
@@ -827,7 +831,8 @@ class WickTheorem {
           if (nconnections == 0 && partition_idx > 0) {
             --partition_idx;  // to 0-based
             assert(nop_partitions.at(partition_idx).size() > 0);
-            auto removed = nop_partitions[partition_idx].erase(nop_idx);
+            [[maybe_unused]] auto removed =
+                nop_partitions[partition_idx].erase(nop_idx);
             assert(removed);
           }
         }
@@ -944,7 +949,8 @@ class WickTheorem {
           auto partition_idx = wick.nop_partition_idx_[nop_idx];
           if (nconnections == 0 && partition_idx > 0) {
             --partition_idx;  // to 0-based
-            auto inserted = nop_partitions.at(partition_idx).insert(nop_idx);
+            [[maybe_unused]] auto inserted =
+                nop_partitions.at(partition_idx).insert(nop_idx);
             assert(inserted.second);
           }
         }
@@ -1090,6 +1096,9 @@ class WickTheorem {
     using std::begin;
     using std::end;
 
+    const auto &ctx = state.ctx;
+    const auto &isr = ctx.index_space_registry();
+
     // if full contractions needed, make contractions involving first index with
     // another index, else contract any index i with index j (i<j)
     auto left_op_offset = state.left_op_offset;
@@ -1098,7 +1107,7 @@ class WickTheorem {
 
     // optimization: can't contract fully if first op is not a qp annihilator
     if (full_contractions_ &&
-        !is_qpannihilator(*op_left_iter, input_->vacuum()))
+        !is_qpannihilator(*op_left_iter, input_->vacuum(), isr))
       return;
 
     const auto op_left_iter_fence =
@@ -1139,13 +1148,13 @@ class WickTheorem {
             bool is_unique = true;
             if (use_topology_) {
               auto &nop_right = *(op_right_cursor.range_iter());
-              auto &op_right_it = op_right_cursor.elem_iter();
+              auto op_right_it = op_right_cursor.elem_iter();
 
               // check against the degeneracy deduced by index partition
               constexpr bool use_op_partition_groups = true;
               constexpr bool test_vs_old_code = false;
 
-              size_t ref_op_psymm_weight = 1;
+              [[maybe_unused]] size_t ref_op_psymm_weight = 1;
               if constexpr (test_vs_old_code) {
                 auto op_right_idx_in_opseq =
                     op_right_it - ranges::begin(nop_right);
@@ -1308,7 +1317,8 @@ class WickTheorem {
 
           // check if can contract these indices and
           // check connectivity constraints (if needed)
-          if (can_contract(*op_left_iter, *op_right_iter, input_->vacuum())) {
+          if (can_contract(*op_left_iter, *op_right_iter, ctx.vacuum(),
+                           ctx.index_space_registry())) {
             auto &&[is_unique, nop_top_degen] = is_topologically_unique();
             if (is_unique) {
               if (state.connect(nop_connections_,
@@ -1339,7 +1349,8 @@ class WickTheorem {
                 Product sp_copy = state.sp;
                 state.sp.append(
                     static_cast<int64_t>(nop_top_degen) * phase,
-                    contract(*op_left_iter, *op_right_iter, input_->vacuum()));
+                    contract(*op_left_iter, *op_right_iter, ctx.vacuum(),
+                             ctx.index_space_registry()));
 
                 // update the stats
                 ++stats_.num_attempted_contractions;
@@ -1373,10 +1384,8 @@ class WickTheorem {
                         // for spinfree Wick over Fermi vacuum, we need to
                         // include extra x2 factor for each cycle
                         if (S == Statistics::FermiDirac &&
-                            get_default_context(S).vacuum() ==
-                                Vacuum::SingleProduct &&
-                            get_default_context(S).spbasis() ==
-                                SPBasis::spinfree) {
+                            ctx.vacuum() == Vacuum::SingleProduct &&
+                            ctx.spbasis() == SPBasis::spinfree) {
                           auto [target_partner_indices, ncycles] =
                               state.make_target_partner_indices();
                           assert(target_partner_indices
@@ -1404,10 +1413,8 @@ class WickTheorem {
                         // for spinfree Wick over Fermi vacuum, we need to
                         // include extra x2 factor for each cycle
                         if (ncycles > 0 &&
-                            get_default_context(S).vacuum() ==
-                                Vacuum::SingleProduct &&
-                            get_default_context(S).spbasis() ==
-                                SPBasis::spinfree) {
+                            ctx.vacuum() == Vacuum::SingleProduct &&
+                            ctx.spbasis() == SPBasis::spinfree) {
                           scalar_prefactor *= 1 << ncycles;
                         }
 
@@ -1444,7 +1451,8 @@ class WickTheorem {
                   recursive_nontensor_wick(result, state);
                   --state.level;
                   // this contraction is useful if it leads to useful
-                  // contractions as a result
+                  // contractions as a result ... thus same contraction
+                  // can be useful multiple times
                   if (current_num_useful_contractions !=
                       stats_.num_useful_contractions.load())
                     ++stats_.num_useful_contractions;
@@ -1474,15 +1482,18 @@ class WickTheorem {
   }
 
  public:
-  static bool can_contract(const Op<S> &left, const Op<S> &right,
-                           Vacuum vacuum = get_default_context(S).vacuum()) {
-    const auto &isr = get_default_context(S).index_space_registry();
+  static bool can_contract(
+      const Op<S> &left, const Op<S> &right,
+      Vacuum vacuum = get_default_context(S).vacuum(),
+      const std::shared_ptr<const IndexSpaceRegistry> &isr =
+          get_default_context(S).index_space_registry()) {
     // for bosons can only do Wick's theorem for physical vacuum (or similar)
     if constexpr (statistics == Statistics::BoseEinstein)
       assert(vacuum == Vacuum::Physical);
-    if (is_qpannihilator<S>(left, vacuum) && is_qpcreator<S>(right, vacuum)) {
-      const auto qpspace_left = qpannihilator_space<S>(left, vacuum);
-      const auto qpspace_right = qpcreator_space<S>(right, vacuum);
+    if (is_qpannihilator<S>(left, vacuum, isr) &&
+        is_qpcreator<S>(right, vacuum, isr)) {
+      const auto qpspace_left = qpannihilator_space<S>(left, vacuum, isr);
+      const auto qpspace_right = qpcreator_space<S>(right, vacuum, isr);
       const auto qpspace_common =
           isr->intersection(qpspace_left, qpspace_right);
       if (qpspace_common) return true;
@@ -1491,20 +1502,21 @@ class WickTheorem {
   }
 
   static ExprPtr contract(const Op<S> &left, const Op<S> &right,
-                          Vacuum vacuum = get_default_context(S).vacuum()) {
-    const auto &isr = get_default_context(S).index_space_registry();
-    assert(can_contract(left, right, vacuum));
+                          Vacuum vacuum = get_default_context(S).vacuum(),
+                          const std::shared_ptr<const IndexSpaceRegistry> &isr =
+                              get_default_context(S).index_space_registry()) {
+    assert(can_contract(left, right, vacuum, isr));
     //    assert(
     //        !left.index().has_proto_indices() &&
     //            !right.index().has_proto_indices());  // I don't think the
     //            logic is
     // correct for dependent indices
-    if (is_pure_qpannihilator<S>(left, vacuum) &&
-        is_pure_qpcreator<S>(right, vacuum))
+    if (is_pure_qpannihilator<S>(left, vacuum, isr) &&
+        is_pure_qpcreator<S>(right, vacuum, isr))
       return make_overlap(left.index(), right.index());
     else {
-      const auto qpspace_left = qpannihilator_space<S>(left, vacuum);
-      const auto qpspace_right = qpcreator_space<S>(right, vacuum);
+      const auto qpspace_left = qpannihilator_space<S>(left, vacuum, isr);
+      const auto qpspace_right = qpcreator_space<S>(right, vacuum, isr);
       const auto qpspace_common =
           isr->intersection(qpspace_left, qpspace_right);
       const auto index_common = Index::make_tmp_index(qpspace_common);

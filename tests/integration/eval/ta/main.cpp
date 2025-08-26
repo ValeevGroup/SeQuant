@@ -6,6 +6,7 @@
 
 #include <tiledarray.h>
 #include <SeQuant/core/op.hpp>
+#include <SeQuant/core/runtime.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/domain/mbpt/context.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
@@ -63,16 +64,13 @@ int main(int argc, char* argv[]) {
     // return 1;
   }
 
-  std::locale::global(std::locale("en_US.UTF-8"));
-  std::wcout.imbue(std::locale("en_US.UTF-8"));
-  std::wcerr.imbue(std::locale("en_US.UTF-8"));
-
+  sequant::set_locale();
   auto& world = TA::initialize(argc, argv);
   using namespace sequant;
   detail::OpIdRegistrar op_id_registrar;
-  sequant::set_default_context(Context(
-      mbpt::make_min_sr_spaces(), Vacuum::SingleProduct, IndexSpaceMetric::Unit,
-      BraKetSymmetry::conjugate, SPBasis::spinorbital));
+  sequant::set_default_context(
+      {.index_space_registry_shared_ptr = mbpt::make_min_sr_spaces(),
+       .vacuum = Vacuum::SingleProduct});
   TensorCanonicalizer::register_instance(
       std::make_shared<DefaultTensorCanonicalizer>());
 
