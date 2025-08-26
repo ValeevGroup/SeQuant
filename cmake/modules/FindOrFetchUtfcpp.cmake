@@ -16,11 +16,10 @@ if (NOT TARGET utfcpp)
     FetchContent_MakeAvailable(utfcpp)
 
     add_library(utfcpp INTERFACE)
-    target_include_directories(utfcpp SYSTEM INTERFACE "${utfcpp_SOURCE_DIR}/source")
+    target_include_directories(utfcpp SYSTEM INTERFACE "${utfcpp_SOURCE_DIR}/..")
 endif()
 
 # postcond check
 if (NOT TARGET utfcpp)
     message(FATAL_ERROR "FindOrFetchUtfcpp could not make TARGET utfcpp available")
 endif()
-
