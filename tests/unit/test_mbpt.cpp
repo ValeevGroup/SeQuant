@@ -440,7 +440,8 @@ TEST_CASE("mbpt", "[mbpt]") {
       auto isr = sequant::mbpt::make_legacy_spaces();
       mbpt::add_batching_spaces(isr);
       auto ctx_resetter =
-          set_scoped_default_context(Context(isr, Vacuum::SingleProduct));
+          set_scoped_default_context({.index_space_registry_shared_ptr = isr,
+                                      .vacuum = Vacuum::SingleProduct});
       REQUIRE_NOTHROW(
           get_default_context().index_space_registry()->retrieve(L"z"));
 
