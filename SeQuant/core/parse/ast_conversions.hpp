@@ -331,10 +331,7 @@ ExprPtr ast_to_expr(const parse::ast::Product &product,
                     const PositionCache &position_cache, const Iterator &begin,
                     const DefaultSymmetries &default_symms) {
   if (product.factors.empty()) {
-    // This shouldn't happen
-    assert(false);
-    throw std::runtime_error(
-        "ast_to_expr: Reached supposed-to-be unreachable code");
+    abort();  // unreachable
   }
 
   if (product.factors.size() == 1) {

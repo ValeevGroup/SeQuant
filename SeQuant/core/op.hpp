@@ -206,9 +206,7 @@ bool is_pure_qpcreator(const Op<S> &op,
     case Vacuum::Invalid:
       throw std::logic_error("Invalid Product not allowed");
   }
-
-  assert(false);
-  throw "Unreachable";
+  abort();  // unreachable
 };
 
 /// @return true if this is a quasiparticle creator with respect to the given
@@ -233,8 +231,7 @@ bool is_qpcreator(const Op<S> &op,
         throw std::logic_error("is_qpcreator: cannot handle Invalid vacuum");
     }
   }
-  assert(false);
-  throw "Unreachable";
+  abort();  // unreachable
 };
 
 template <Statistics S>
@@ -261,8 +258,7 @@ IndexSpace qpcreator_space(
       throw std::logic_error("qpcreator_space: cannot handle Invalid vacuum");
   }
 
-  assert(false);
-  throw "Unreachable";
+  abort();  // unreachable
 }
 
 /// @return true if this is a pure quasiparticle annihilator with respect to
@@ -289,8 +285,7 @@ bool is_pure_qpannihilator(
           "is_pure_qpannihilator: cannot handle Invalid vacuum");
   }
 
-  assert(false);
-  throw "Unreachable";
+  abort();  // unreachable
 };
 
 /// @return true if this is a quasiparticle annihilator with respect to the
@@ -316,8 +311,7 @@ bool is_qpannihilator(const Op<S> &op,
       throw std::logic_error("Invalid Product not allowed");
   }
 
-  assert(false);
-  throw "Unreachable";
+  abort();  // unreachable
 };
 
 template <Statistics S>
@@ -344,8 +338,7 @@ IndexSpace qpannihilator_space(
       throw std::logic_error("Invalid Product not allowed");
   }
 
-  assert(false);
-  throw "Unreachable";
+  abort();  // unreachable
 }
 
 template <Statistics S = Statistics::FermiDirac>
@@ -698,8 +691,7 @@ class NormalOperator : public Operator<S>,
       }
     }
 
-    assert(false);
-    throw "Unreachable";
+    abort();  // unreachable
   }
 
   /// overload base_type::erase

@@ -61,9 +61,7 @@ std::wstring deparse_symm(Symmetry symm) {
     case Symmetry::invalid:
       return L"INVALID";
   }
-
-  assert(false);
-  return L"INVALIDANDUNREACHABLE";
+  abort();  // unreachable
 }
 
 std::wstring deparse_symm(BraKetSymmetry symm) {
@@ -77,9 +75,7 @@ std::wstring deparse_symm(BraKetSymmetry symm) {
     case BraKetSymmetry::invalid:
       return L"INVALID";
   }
-
-  assert(false);
-  return L"INVALIDANDUNREACHABLE";
+  abort();  // unreachable
 }
 
 std::wstring deparse_symm(ParticleSymmetry symm) {
@@ -91,9 +87,7 @@ std::wstring deparse_symm(ParticleSymmetry symm) {
     case ParticleSymmetry::invalid:
       return L"INVALID";
   }
-
-  assert(false);
-  return L"INVALIDANDUNREACHABLE";
+  abort();  // unreachable
 }
 
 std::wstring deparse_scalar(const Constant::scalar_type& scalar) {

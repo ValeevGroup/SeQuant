@@ -63,9 +63,7 @@ class GenerationVisitor {
       case TreeTraversal::PreAndPostOrder:
       case TreeTraversal::PostAndInOrder:
       case TreeTraversal::None:
-        // Should be unreachable
-        assert(false);
-        break;
+        abort();  // unreachable
     }
 
     if (!m_rootID.has_value()) {
@@ -534,9 +532,7 @@ class PreprocessVisitor {
       case TreeTraversal::PreAndPostOrder:
       case TreeTraversal::PostAndInOrder:
       case TreeTraversal::None:
-        // Should be unreachable
-        assert(false);
-        break;
+        abort();  // unreachable
     }
   }
 

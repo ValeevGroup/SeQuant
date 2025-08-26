@@ -98,9 +98,7 @@ class GenerationOptimizer final : public Generator<MainContext> {
           return false;
       }
 
-      // should not be reached
-      assert(false);
-      return false;
+      abort();  // unreachable
     }
 
     MemoryAction memory_action() const {
@@ -118,9 +116,7 @@ class GenerationOptimizer final : public Generator<MainContext> {
           return MemoryAction::None;
       }
 
-      // should not be reached
-      assert(false);
-      return MemoryAction::None;
+      abort();  // unreachable
     }
 
     std::string to_string() const {

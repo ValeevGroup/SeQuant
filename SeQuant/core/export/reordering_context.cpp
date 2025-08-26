@@ -46,8 +46,7 @@ IndexSpace relevant_space(Range &&rng, MemoryLayout layout) {
       return {};
   }
 
-  assert(false);
-  return {};
+  abort();  // unreachable
 }
 
 template <typename Comp>
@@ -230,8 +229,7 @@ bool ReorderingContext::is_less(const IndexSpace &lhs,
       return false;
   }
 
-  assert(false);
-  return false;
+  abort();  // unreachable
 }
 
 bool ReorderingContext::is_ordered(const IndexSpace &lhs,

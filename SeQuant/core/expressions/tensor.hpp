@@ -593,9 +593,7 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
                                this->_aux(), bkt, /* left_align = */ true);
       }
     }
-
-    assert(false);
-    throw "Unreachable code";
+    abort();  // unreachable
   }
 
   /// @note this performs rapid canonicalization only
