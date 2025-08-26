@@ -364,6 +364,7 @@ class TensorNetworkV2 {
     /// if false, will not generate the Index->vertex map
     bool make_idx_to_vertex = false;
   };
+  static CreateGraphOptions make_default_graph_options() { return {}; }
 
   /// @brief converts the network into a Bliss graph whose vertices are indices
   /// and tensor vertex representations
@@ -385,12 +386,8 @@ class TensorNetworkV2 {
   ///   tensor; terminal vertices are colored by the color of its tensor,
   ///     with the color of symm/antisymm terminals augmented by the
   ///     terminal's type (bra/ket).
-  Graph create_graph(const CreateGraphOptions &options = {
-                         .named_indices = nullptr,
-                         .distinct_named_indices = false,
-                         .make_labels = true,
-                         .make_texlabels = true,
-                         .make_idx_to_vertex = false}) const;
+  Graph create_graph(
+      const CreateGraphOptions &options = make_default_graph_options()) const;
 
  private:
   /// list of tensors

@@ -403,6 +403,7 @@ class TensorNetworkV3 {
     /// if false, will not generate the Index->vertex map
     bool make_idx_to_vertex = false;
   };
+  static CreateGraphOptions make_default_graph_options() { return {}; }
 
   // clang-format off
   /// @brief converts the network into a Bliss graph whose vertices are indices
@@ -443,19 +444,8 @@ class TensorNetworkV3 {
   ///     - for tensors with bra<->ket symmetry matching bra and ket slot
   ///     vertices have identical colors.
   // clang-format on
-  Graph create_graph(const CreateGraphOptions &options = {
-                         .named_indices = nullptr,
-                         .distinct_named_indices = false,
-                         .make_labels = true,
-                         .label_prepend_ordinal = false,
-                         .make_xlabels = true,
-                         .xlabel_maker =
-                             [](std::size_t vertex_ordinal) {
-                               return std::to_wstring(vertex_ordinal);
-                             },
-                         .make_texlabels = true,
-                         .texlabel_prepend_ordinal = false,
-                         .make_idx_to_vertex = false}) const;
+  Graph create_graph(
+      const CreateGraphOptions &options = make_default_graph_options()) const;
 
  private:
   /// list of tensors

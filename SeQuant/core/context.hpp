@@ -87,6 +87,7 @@ class Context {
       BraKetSlotTypesetting braket_slot_typesetting =
         Defaults::braket_slot_typesetting;
   };
+  static Options make_default_options() { return {}; }
 
   /// @brief standard named-parameter constructor
   ///
@@ -96,8 +97,7 @@ class Context {
   /// ```cpp
   ///   Context ctx({.vacuum = Vacuum::SingleReference, .spbasis = SPBasis::spinfree});
   /// ```
-  Context(Options options = {.index_space_registry_shared_ptr = nullptr, .index_space_registry = std::nullopt, .vacuum = Defaults::vacuum, .metric = Defaults::metric, .braket_symmetry =  Defaults::braket_symmetry, .spbasis = Defaults::spbasis, .first_dummy_index_ordinal = Defaults::first_dummy_index_ordinal, .canonicalization_options = Defaults::canonicalization_options, .braket_typesetting = Defaults::braket_typesetting, .braket_slot_typesetting =
-        Defaults::braket_slot_typesetting});
+  Context(Options options = make_default_options());
 
   ~Context() = default;
 
