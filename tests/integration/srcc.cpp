@@ -82,9 +82,8 @@ class compute_cceqvec {
     std::vector<ExprPtr> eqvec_sf_ref;
     if (get_default_context().spbasis() == SPBasis::spinfree) {
       auto context_resetter = sequant::set_scoped_default_context(
-          sequant::Context(make_min_sr_spaces(), Vacuum::SingleProduct,
-                           IndexSpaceMetric::Unit, BraKetSymmetry::conjugate,
-                           SPBasis::spinor));
+          {.index_space_registry_shared_ptr = make_min_sr_spaces(),
+           .vacuum = Vacuum::SingleProduct});
       std::vector<ExprPtr> eqvec_so;
       switch (type) {
         case EqnType::t:
@@ -250,9 +249,11 @@ int main(int argc, char* argv[]) {
   const bool print = print_str == "print";
 
   sequant::detail::OpIdRegistrar op_id_registrar;
-  sequant::set_default_context(sequant::Context(
-      make_min_sr_spaces(SpinConvention::None), Vacuum::SingleProduct,
-      IndexSpaceMetric::Unit, BraKetSymmetry::conjugate, spbasis));
+  sequant::set_default_context(
+      sequant::Context({.index_space_registry_shared_ptr =
+                            make_min_sr_spaces(SpinConvention::None),
+                        .vacuum = Vacuum::SingleProduct,
+                        .spbasis = spbasis}));
   TensorCanonicalizer::register_instance(
       std::make_shared<DefaultTensorCanonicalizer>());
 

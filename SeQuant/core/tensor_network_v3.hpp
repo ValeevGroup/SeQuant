@@ -259,23 +259,6 @@ class TensorNetworkV3 {
 
   using NamedIndexSet = container::set<Index, Index::FullLabelCompare>;
 
-  /// canonicalization methods
-  enum class CanonicalizationMethod {
-    /// Canonical graph sort of all TN elements produces complete
-    /// canonicalization
-    /// The result may be aesthetically poor.
-    Topological = 0b01,
-    /// Lexicographic sort of tensors, slots and slot bundles, and indices.
-    /// Aesthetically pleasing result, but incomplete if some tensors are
-    /// identical
-    Lexicographic = 0b10,
-    /// Topological, then Lexicographic. Guaranteed to work even if some
-    /// tensors are identical, and the result is aesthetically pleasing.
-    Complete = Topological | Lexicographic,
-    /// Lexicographic = quick-and-dirty
-    Rapid = Lexicographic
-  };
-
   /// @param cardinal_tensor_labels move all tensors with these labels to the
   /// front before canonicalizing indices
   /// @param method see CanonicalizationMethod for the meaning of this
@@ -388,8 +371,12 @@ class TensorNetworkV3 {
     const NamedIndexSet *named_indices = nullptr;
 
     /// if false, will use same color for all
-    /// named indices that have same Index::color(), else will use distinct
-    /// color for each
+    /// named indices that have same Index::color(). This is needed to
+    /// ignore labels of the external indices, which is the desired behavior
+    /// for routine canonicalization that produces results independent of
+    /// external slot renamings. In some circumstances where external slots are
+    /// to be treated as topologically distinct (e.g. in WickTheorem) need to
+    /// set this to true
     bool distinct_named_indices = false;
 
     /// if false, will not generate the labels
@@ -416,6 +403,7 @@ class TensorNetworkV3 {
     /// if false, will not generate the Index->vertex map
     bool make_idx_to_vertex = false;
   };
+  static CreateGraphOptions make_default_graph_options() { return {}; }
 
   // clang-format off
   /// @brief converts the network into a Bliss graph whose vertices are indices
@@ -456,19 +444,8 @@ class TensorNetworkV3 {
   ///     - for tensors with bra<->ket symmetry matching bra and ket slot
   ///     vertices have identical colors.
   // clang-format on
-  Graph create_graph(const CreateGraphOptions &options = {
-                         .named_indices = nullptr,
-                         .distinct_named_indices = false,
-                         .make_labels = true,
-                         .label_prepend_ordinal = false,
-                         .make_xlabels = true,
-                         .xlabel_maker =
-                             [](std::size_t vertex_ordinal) {
-                               return std::to_wstring(vertex_ordinal);
-                             },
-                         .make_texlabels = true,
-                         .texlabel_prepend_ordinal = false,
-                         .make_idx_to_vertex = false}) const;
+  Graph create_graph(
+      const CreateGraphOptions &options = make_default_graph_options()) const;
 
  private:
   /// list of tensors
@@ -527,9 +504,6 @@ class TensorNetworkV3 {
     tensors_.emplace_back(std::move(tensor_ptr));
     tensor_input_ordinals_.push_back(tensor_input_ordinals_.size());
   }
-
-  static bool logical_and(CanonicalizationMethod m1, CanonicalizationMethod m2);
-  static std::wstring to_wstring(CanonicalizationMethod m);
 };
 
 template <typename CharT, typename Traits>

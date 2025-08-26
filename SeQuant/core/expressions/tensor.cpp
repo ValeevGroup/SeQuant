@@ -37,7 +37,7 @@ void Tensor::adjoint() {
   reset_hash_value();
 }
 
-ExprPtr Tensor::canonicalize() {
+ExprPtr Tensor::canonicalize(CanonicalizeOptions) {
   auto canonicalizer_ptr = TensorCanonicalizer::instance_ptr(label_);
   return canonicalizer_ptr ? canonicalizer_ptr->apply(*this) : ExprPtr{};
 }

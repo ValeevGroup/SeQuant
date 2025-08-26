@@ -51,9 +51,9 @@ void print_help() {
 
 int main(int argc, char **argv) {
   set_locale();
-  sequant::set_default_context(Context(
-      mbpt::make_sr_spaces(), Vacuum::SingleProduct, IndexSpaceMetric::Unit,
-      BraKetSymmetry::conjugate, SPBasis::spinor));
+  sequant::set_default_context(
+      {.index_space_registry_shared_ptr = mbpt::make_sr_spaces(),
+       .vacuum = Vacuum::SingleProduct});
 
   bool use_named_indices = true;
   int version = 3;

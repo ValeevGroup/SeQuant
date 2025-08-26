@@ -179,8 +179,10 @@ T& ExprPtr::as() {
 /// @param[in,out] expr expression to be canonicalized; may be
 /// _replaced_ (i.e. `&expr` may be mutated by call)
 /// @return \p expr to facilitate chaining
-inline ExprPtr& canonicalize(ExprPtr& expr) {
-  const auto byproduct = expr->canonicalize();
+inline ExprPtr& canonicalize(
+    ExprPtr& expr,
+    CanonicalizeOptions opts = CanonicalizeOptions::default_options()) {
+  const auto byproduct = expr->canonicalize(opts);
   if (byproduct && byproduct->is<Constant>()) {
     expr = byproduct * expr;
   }
@@ -191,8 +193,10 @@ inline ExprPtr& canonicalize(ExprPtr& expr) {
 /// for temporary expressions
 /// @param[in] expr_rv rvalue-ref-to-expression to be canonicalized
 /// @return canonicalized form of \p expr_rv
-inline ExprPtr canonicalize(ExprPtr&& expr_rv) {
-  const auto byproduct = expr_rv->canonicalize();
+inline ExprPtr canonicalize(
+    ExprPtr&& expr_rv,
+    CanonicalizeOptions opts = CanonicalizeOptions::default_options()) {
+  const auto byproduct = expr_rv->canonicalize(opts);
   if (byproduct && byproduct->is<Constant>()) {
     expr_rv = byproduct * expr_rv;
   }
@@ -476,7 +480,8 @@ struct rapid_simplify_visitor {
       std::wcout << "rapid_simplify_visitor received " << to_latex(expr)
                  << std::endl;
     // apply simplify() iteratively until done
-    while (simplify(expr)) {
+    while (simplify(
+        expr, SimplifyOptions{{.method = CanonicalizationMethod::Rapid}})) {
       if (Logger::instance().simplify)
         std::wcout << "after 1 round of simplification have " << to_latex(expr)
                    << std::endl;
@@ -489,7 +494,8 @@ struct rapid_simplify_visitor {
   /// - flattening subproducts
   /// - factoring in constants
   /// @param[in,out] expr (shared_ptr to ) a Product
-  bool simplify_product(ExprPtr& expr) {
+  bool simplify_product(ExprPtr& expr,
+                        SimplifyOptions = SimplifyOptions::default_options()) {
     auto& expr_ref = *expr;
 
     // need to rebuild if any factor is a constant or product
@@ -531,7 +537,8 @@ struct rapid_simplify_visitor {
   /// simplifies a Sum ... generally Sum::{ap,pre}pend simplify automatically,
   /// but the user code may transform sums in a way that the same
   /// simplifications need to be applied here
-  bool simplify_sum(ExprPtr& expr) {
+  bool simplify_sum(ExprPtr& expr,
+                    SimplifyOptions = SimplifyOptions::default_options()) {
     bool mutated = false;
     const Sum& expr_sum = expr->as<Sum>();
 
@@ -572,11 +579,12 @@ struct rapid_simplify_visitor {
   }
 
   // @return true if any simplifications were performed
-  bool simplify(ExprPtr& expr) {
+  bool simplify(ExprPtr& expr,
+                SimplifyOptions opts = SimplifyOptions::default_options()) {
     if (expr->is<Product>()) {
-      return simplify_product(expr);
+      return simplify_product(expr, opts);
     } else if (expr->is<Sum>()) {
-      return simplify_sum(expr);
+      return simplify_sum(expr, opts);
     } else
       return false;
   }
@@ -602,10 +610,11 @@ inline ExprPtr& rapid_simplify(ExprPtr& expr) {
 /// _replaced_ (i.e. `&expr` may be mutated by call)
 /// @sa rapid_simplify()
 /// @return \p expr to facilitate chaining
-inline ExprPtr& simplify(ExprPtr& expr) {
+inline ExprPtr& simplify(
+    ExprPtr& expr, SimplifyOptions opts = SimplifyOptions::default_options()) {
   expand(expr);
   rapid_simplify(expr);
-  canonicalize(expr);
+  canonicalize(expr, opts);
   rapid_simplify(expr);
   return expr;
 }
@@ -614,9 +623,11 @@ inline ExprPtr& simplify(ExprPtr& expr) {
 /// rapid_simplify; like mutating simplify() but works for temporary expressions
 /// @param[in] expr_rv rvalue-ref-to-expression to be simplified
 /// @return simplified form of \p expr_rv
-inline ExprPtr simplify(ExprPtr&& expr_rv) {
+inline ExprPtr simplify(
+    ExprPtr&& expr_rv,
+    SimplifyOptions opts = SimplifyOptions::default_options()) {
   auto expr = std::move(expr_rv);
-  simplify(expr);
+  simplify(expr, opts);
   return expr;
 }
 

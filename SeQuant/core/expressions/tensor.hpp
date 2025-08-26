@@ -598,7 +598,8 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
     throw "Unreachable code";
   }
 
-  ExprPtr canonicalize() override;
+  /// @note this performs rapid canonicalization only
+  ExprPtr canonicalize(CanonicalizeOptions = {}) override;
 
   /// @brief adjoint of a Tensor swaps its bra and ket
   virtual void adjoint() override;
@@ -749,6 +750,9 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   }
 
   Tensor *_clone() const override final { return new Tensor(*this); }
+  std::shared_ptr<AbstractTensor> _clone_shared() const override final {
+    return std::make_shared<Tensor>(*this);
+  }
 
   // these implement the AbstractTensor interface
   AbstractTensor::const_any_view_randsz _bra() const override final {

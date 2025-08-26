@@ -55,7 +55,7 @@ project(SeQuant LANGUAGES CXX VERSION "${SEQUANT_VERSION}" DESCRIPTION "SEcond Q
 # need C++20, insist on strict standard
 set(CMAKE_CXX_STANDARD 20 CACHE STRING "C++ ISO Standard version")
 if (CMAKE_CXX_STANDARD LESS 20)
-    message(FATAL_ERROR "C++ 2020 ISO Standard or higher is required to compile SeQuant")
+    message(FATAL_ERROR "C++ 2020 ISO Standard or higher is required to build SeQuant")
 endif ()
 # C++20 is only configurable via compile features with cmake 3.12 and older
 if (CMAKE_CXX_STANDARD EQUAL 20 AND CMAKE_VERSION VERSION_LESS 3.12.0)
@@ -261,6 +261,8 @@ set(SeQuant_src
         SeQuant/core/meta.hpp
         SeQuant/core/op.cpp
         SeQuant/core/op.hpp
+        SeQuant/core/options.cpp
+        SeQuant/core/options.hpp
         SeQuant/core/optimize.hpp
         SeQuant/core/optimize/common_subexpression_elimination.hpp
         SeQuant/core/optimize/fusion.cpp

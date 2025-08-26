@@ -90,7 +90,7 @@ void fatal_error(const char* fmt, ...);
  *
  * When linking the bliss library \c libbliss.a in other programs,
  * remember to include the standard c++ library
- * (and the GMP library if you compiled bliss to include it).
+ * (and the GMP library if you configured bliss to use it).
  * For instance,
  * \code gcc -o test test.c -lstdc++ -lgmp -lbliss\endcode
  *

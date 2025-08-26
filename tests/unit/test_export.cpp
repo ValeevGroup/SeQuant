@@ -86,7 +86,7 @@ using KnownGenerators = std::tuple<
     JuliaITensorGenerator<JuliaITensorGeneratorContext>,
     JuliaTensorKitGenerator<JuliaTensorKitGeneratorContext>,
     JuliaTensorOperationsGenerator<JuliaTensorOperationsGeneratorContext>,
-	ItfGenerator<ItfContext>
+    ItfGenerator<ItfContext>
 >;
 // clang-format on
 
@@ -240,7 +240,8 @@ std::vector<ExpressionGroup<>> parse_expression_spec(const std::string &spec) {
   reg->add(L"u", 0b100, is_vacuum_occupied, is_reference_occupied, is_hole,
            is_particle, 5);
 
-  return set_scoped_default_context(Context(std::move(reg)));
+  return set_scoped_default_context(
+      {.index_space_registry_shared_ptr = std::move(reg)});
 }
 
 TEMPLATE_LIST_TEST_CASE("export_tests", "[export]", KnownGenerators) {

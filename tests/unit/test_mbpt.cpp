@@ -316,6 +316,10 @@ TEST_CASE("mbpt", "[mbpt]") {
     }  // SECTION("screen")
 
     SECTION("predefined") {
+      // P.S. ref outputs produced with complete canonicalization
+      auto ctx = get_default_context();
+      ctx.set(CanonicalizeOptions{.method = CanonicalizationMethod::Complete});
+      auto _ = set_scoped_default_context(ctx);
       using namespace sequant::mbpt;
 
       auto theta1 = θ(1)->as<op_t>();
