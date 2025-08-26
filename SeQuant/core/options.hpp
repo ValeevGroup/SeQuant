@@ -29,7 +29,7 @@ enum class CanonicalizationMethod {
   Rapid = Lexicographic
 };
 
-bool logical_and(CanonicalizationMethod m1, CanonicalizationMethod m2);
+bool operator&(CanonicalizationMethod m1, CanonicalizationMethod m2);
 std::wstring to_wstring(CanonicalizationMethod m);
 
 struct CanonicalizeOptions {

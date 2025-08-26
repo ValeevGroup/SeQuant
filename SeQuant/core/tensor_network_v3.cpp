@@ -503,14 +503,14 @@ ExprPtr TensorNetworkV3::canonicalize(
   }
 
   ExprPtr byproduct;
-  if (logical_and(method, CanonicalizationMethod::Topological)) {
+  if (method & CanonicalizationMethod::Topological) {
     // The graph-based canonization is required in all cases in which there are
     // indistinguishable tensors present in the expression. Their order and
     // indexing can only be determined via this rigorous canonization.
     byproduct = canonicalize_graph(named_indices);
   }
 
-  if (logical_and(method, CanonicalizationMethod::Lexicographic)) {
+  if (method & CanonicalizationMethod::Lexicographic) {
     // Ensure each individual tensor is written in the way that its tensor
     // block (== order of index spaces) is canonical
     byproduct *= canonicalize_individual_tensor_blocks(named_indices);

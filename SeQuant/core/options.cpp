@@ -7,7 +7,7 @@
 
 namespace sequant {
 
-bool logical_and(CanonicalizationMethod m1, CanonicalizationMethod m2) {
+bool operator&(CanonicalizationMethod m1, CanonicalizationMethod m2) {
   return (static_cast<int>(m1) & static_cast<int>(m2)) != 0;
 }
 
