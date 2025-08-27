@@ -10,6 +10,7 @@
 #include <SeQuant/core/expressions/expr_ptr.hpp>
 #include <SeQuant/core/expressions/product.hpp>
 #include <SeQuant/core/expressions/sum.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 
 #include <memory>
 
@@ -40,7 +41,8 @@ inline ExprPtr operator*(const ExprPtr &left, const ExprPtr &right) {
     result->prepend(1, left);
     return result;
   }
-  abort();  // unreachable
+
+  SEQUANT_UNREACHABLE;
 }
 
 /// Unlike @code operator*(const ExprPtr&, const ExprPtr&) @endcode this
@@ -59,7 +61,8 @@ inline ExprPtr operator^(const ExprPtr &left, const ExprPtr &right) {
     result->prepend(1, left);
     return result;
   }
-  abort();  // unreachable
+
+  SEQUANT_UNREACHABLE;
 }
 
 inline ExprPtr operator+(const ExprPtr &left, const ExprPtr &right) {
@@ -76,7 +79,8 @@ inline ExprPtr operator+(const ExprPtr &left, const ExprPtr &right) {
     result->prepend(left);
     return result;
   }
-  abort();  // unreachable
+
+  SEQUANT_UNREACHABLE;
 }
 
 inline ExprPtr operator-(const ExprPtr &left, const ExprPtr &right) {
@@ -94,7 +98,8 @@ inline ExprPtr operator-(const ExprPtr &left, const ExprPtr &right) {
       result->append(ex<Product>(-1, ExprPtrList{right}));
     return result;
   }
-  abort();  // unreachable
+
+  SEQUANT_UNREACHABLE;
 }
 
 }  // namespace sequant

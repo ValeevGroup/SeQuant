@@ -2,6 +2,7 @@
 #define SEQUANT_PERMUTATION_HPP
 
 #include <SeQuant/core/index.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 
 #include <range/v3/algorithm.hpp>
 
@@ -39,8 +40,9 @@ std::size_t count_cycles(Seq0&& v0, const Seq1& v1) {
       return -1;
     } else if constexpr (std::is_same_v<T, Index>) {
       return L"p_50";
-    } else  // unreachable
-      abort();
+    }
+
+    SEQUANT_UNREACHABLE;
   };
 
   const auto null = make_null();

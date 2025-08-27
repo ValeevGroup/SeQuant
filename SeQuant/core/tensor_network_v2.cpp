@@ -17,6 +17,7 @@
 #include <SeQuant/core/tensor_network/utils.hpp>
 #include <SeQuant/core/tensor_network/vertex_painter.hpp>
 #include <SeQuant/core/tensor_network_v2.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/swap.hpp>
 #include <SeQuant/core/utility/tuple.hpp>
 #include <SeQuant/core/wstring.hpp>
@@ -1026,7 +1027,7 @@ TensorNetworkV2::Graph TensorNetworkV2::create_graph(
 
       assert(idx_vertex != uninitialized_vertex);
       if (idx_vertex == uninitialized_vertex) {
-        std::abort();
+        SEQUANT_ABORT("Expected all vertices to be initialized at this point");
       }
 
       edges.push_back(std::make_pair(idx_vertex, vertex));
@@ -1208,7 +1209,7 @@ void TensorNetworkV2::init_edges() {
 }
 
 container::svector<std::pair<long, long>> TensorNetworkV2::factorize() {
-  abort();  // not yet implemented
+  SEQUANT_ABORT("TensorNetworkV2::factorize is not yet implemented");
 }
 
 size_t TensorNetworkV2::SlotCanonicalizationMetadata::hash_value() const {

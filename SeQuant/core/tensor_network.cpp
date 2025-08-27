@@ -16,6 +16,7 @@
 #include <SeQuant/core/tensor_network.hpp>
 #include <SeQuant/core/tensor_network/vertex_painter.hpp>
 #include <SeQuant/core/tensor_network_v2.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/tuple.hpp>
 #include <SeQuant/core/wstring.hpp>
 
@@ -768,7 +769,7 @@ TensorNetwork::GraphData TensorNetwork::make_bliss_graph(
             symmetric_protoindex_bundles.begin();
         graph->add_edge(index_cnt, spbundle_vertex_offset + spbundle_idx);
       } else {
-        abort();  // nonsymmetric proto indices not supported yet
+        SEQUANT_ABORT("nonsymmetric proto indices not supported yet");
       }
     }
     ++index_cnt;
@@ -953,7 +954,7 @@ void TensorNetwork::init_edges() const {
 }
 
 container::svector<std::pair<long, long>> TensorNetwork::factorize() {
-  abort();  // not yet implemented
+  SEQUANT_ABORT("TensorNetwork::factorize is not yet implemented");
 }
 
 size_t TensorNetwork::SlotCanonicalizationMetadata::hash_value() const {

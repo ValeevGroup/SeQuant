@@ -1,6 +1,6 @@
 #include <SeQuant/core/export/reordering_context.hpp>
 
-#include <SeQuant/core/parse.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 
 #include <algorithm>
 #include <cassert>
@@ -46,7 +46,7 @@ IndexSpace relevant_space(Range &&rng, MemoryLayout layout) {
       return {};
   }
 
-  abort();  // unreachable
+  SEQUANT_UNREACHABLE;
 }
 
 template <typename Comp>
@@ -229,7 +229,7 @@ bool ReorderingContext::is_less(const IndexSpace &lhs,
       return false;
   }
 
-  abort();  // unreachable
+  SEQUANT_UNREACHABLE;
 }
 
 bool ReorderingContext::is_ordered(const IndexSpace &lhs,

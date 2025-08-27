@@ -5,6 +5,7 @@
 #include <SeQuant/core/export/generator.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/parse.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/tensor.hpp>
 
 #include <pv/polymorphic_variant.hpp>
@@ -98,7 +99,7 @@ class GenerationOptimizer final : public Generator<MainContext> {
           return false;
       }
 
-      abort();  // unreachable
+      SEQUANT_UNREACHABLE;
     }
 
     MemoryAction memory_action() const {
@@ -116,7 +117,7 @@ class GenerationOptimizer final : public Generator<MainContext> {
           return MemoryAction::None;
       }
 
-      abort();  // unreachable
+      SEQUANT_UNREACHABLE;
     }
 
     std::string to_string() const {

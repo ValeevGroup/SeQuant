@@ -6,6 +6,7 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/space.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/string.hpp>
 
 #include <range/v3/view/join.hpp>
@@ -263,11 +264,11 @@ class JuliaTensorOperationsGenerator : public Generator<Context> {
   }
 
   void begin_named_section(std::string_view, const Context &) override {
-    std::abort();
+    SEQUANT_ABORT("This function should not have been called");
   }
 
   void end_named_section(std::string_view, const Context &) override {
-    std::abort();
+    SEQUANT_ABORT("This function should not have been called");
   }
 
   void begin_expression(const Context &) override {

@@ -12,6 +12,7 @@
 #include <SeQuant/core/parse.hpp>
 #include <SeQuant/core/parse/ast.hpp>
 #include <SeQuant/core/space.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/string.hpp>
 
 #include <boost/variant.hpp>
@@ -331,7 +332,7 @@ ExprPtr ast_to_expr(const parse::ast::Product &product,
                     const PositionCache &position_cache, const Iterator &begin,
                     const DefaultSymmetries &default_symms) {
   if (product.factors.empty()) {
-    abort();  // unreachable
+    SEQUANT_ABORT("Product factors must not be empty");
   }
 
   if (product.factors.size() == 1) {

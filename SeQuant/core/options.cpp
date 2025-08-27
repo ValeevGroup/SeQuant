@@ -19,9 +19,9 @@ std::wstring to_wstring(CanonicalizationMethod m) {
       return L"lexicographic";
     case CanonicalizationMethod::Complete:
       return L"complete";
-    default:
-      abort();
   }
+
+  SEQUANT_UNREACHABLE;
 }
 
 CanonicalizeOptions CanonicalizeOptions::default_options() {
