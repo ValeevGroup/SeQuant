@@ -1,27 +1,24 @@
 project(python-sequant)
-cmake_minimum_required(VERSION 3.11)
 
 if (NOT TARGET Python::Module)
-  find_package(Python COMPONENTS Interpreter Development REQUIRED)
+  find_package(Python 3 COMPONENTS Interpreter Development REQUIRED)
 endif()
 
 FetchContent_Declare(
     pybind11
-    GIT_REPOSITORY https://github.com/ValeevGroup/pybind11.git
-    GIT_TAG ValeevGroup/v2.11
+    GIT_REPOSITORY https://github.com/pybind/pybind11.git
+    GIT_TAG v3.0.1
 )
 FetchContent_MakeAvailable(pybind11)
 
-if (NOT(CMAKE_CXX_STANDARD GREATER_EQUAL 17))
+if (CMAKE_CXX_STANDARD VERSION_LESS 17)
   message(FATAL_ERROR "C++ 2017 ISO Standard or higher is required to compile PySeQuant")
 endif()
-
-# Python2.7 has register in Python.h
-add_compile_options(-Wno-register)
 
 pybind11_add_module(python-sequant MODULE src/sequant/_sequant.cc)
 
 target_link_libraries(python-sequant PRIVATE SeQuant)
+target_include_directories(python-sequant PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include")
 
 set_target_properties(
   python-sequant
