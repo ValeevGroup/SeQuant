@@ -1207,12 +1207,12 @@ ExprPtr closed_shell_CC_spintrace_compact_set(ExprPtr const& expr) {
   }
 
   simplify(st_expr);
-  std::wcout << "final eqns after symm: "
-             << sequant::to_latex_align(
-                    sequant::ex<sequant::Sum>(
-                        sequant::opt::reorder(st_expr->as<sequant::Sum>())),
-                    0, 4)
-             << std::endl;
+  // std::wcout << "final eqns after symm: "
+  //            << sequant::to_latex_align(
+  //                   sequant::ex<sequant::Sum>(
+  //                       sequant::opt::reorder(st_expr->as<sequant::Sum>())),
+  //                   0, 4)
+  //            << std::endl;
 
   return st_expr;
 }
