@@ -219,9 +219,6 @@ class DefaultTensorCanonicalizer : public TensorCanonicalizer {
           bubble_sort(begin(rest_of), end(rest_of), idxcmp);
         }
       } break;
-
-      case Symmetry::invalid:
-        SEQUANT_ABORT("Invalid symmetry should not appear here");
     }
 
     // TODO: Handle auxiliary index symmetries once they are introduced

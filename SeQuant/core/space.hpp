@@ -178,7 +178,9 @@ class QuantumNumbersAttr {
                 !std::is_same_v<std::decay_t<QN>, TypeAttr> &&
                 !std::is_same_v<std::decay_t<QN>, QuantumNumbersAttr>>>
   constexpr QuantumNumbersAttr(QN &&value) noexcept
-      : bitset(static_cast<bitset_t>(std::forward<QN>(value))) {}
+      : bitset(static_cast<bitset_t>(std::forward<QN>(value))) {
+    assert((this->bitset & bitset::reserved) == bitset::null);
+  }
 
   constexpr explicit operator int64_t() const {
     return static_cast<int64_t>(bitset);

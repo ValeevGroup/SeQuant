@@ -415,11 +415,7 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   /// @}
 
   /// @return true if the Tensor is initialized
-  explicit operator bool() const {
-    return !label_.empty() && symmetry_ != Symmetry::invalid &&
-           braket_symmetry_ != BraKetSymmetry::invalid &&
-           particle_symmetry_ != ParticleSymmetry::invalid;
-  }
+  explicit operator bool() const { return !label_.empty(); }
 
   /// @return "core" label of the tensor
   std::wstring_view label() const override { return label_; }
@@ -644,9 +640,9 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   sequant::bra<index_container_type> bra_{};
   sequant::ket<index_container_type> ket_{};
   sequant::aux<index_container_type> aux_{};
-  Symmetry symmetry_ = Symmetry::invalid;
-  BraKetSymmetry braket_symmetry_ = BraKetSymmetry::invalid;
-  ParticleSymmetry particle_symmetry_ = ParticleSymmetry::invalid;
+  Symmetry symmetry_ = Symmetry::nonsymm;
+  BraKetSymmetry braket_symmetry_ = BraKetSymmetry::nonsymm;
+  ParticleSymmetry particle_symmetry_ = ParticleSymmetry::nonsymm;
   mutable std::optional<hash_type>
       bra_hash_value_;  // memoized byproduct of memoizing_hash()
   bool is_adjoint_ = false;

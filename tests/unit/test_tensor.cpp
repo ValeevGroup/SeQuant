@@ -38,9 +38,9 @@ TEST_CASE("tensor", "[elements]") {
     REQUIRE(t1.bra_net_rank() == 0);
     REQUIRE(t1.ket_net_rank() == 0);
     REQUIRE(t1.rank() == 0);
-    REQUIRE(t1.symmetry() == Symmetry::invalid);
-    REQUIRE(t1.braket_symmetry() == BraKetSymmetry::invalid);
-    REQUIRE(t1.particle_symmetry() == ParticleSymmetry::invalid);
+    REQUIRE(t1.symmetry() == Symmetry::nonsymm);
+    REQUIRE(t1.braket_symmetry() == BraKetSymmetry::nonsymm);
+    REQUIRE(t1.particle_symmetry() == ParticleSymmetry::nonsymm);
     REQUIRE(t1.label() == L"");
 
     REQUIRE_NOTHROW(Tensor(L"F", bra{L"i_1"}, ket{L"i_1"}));

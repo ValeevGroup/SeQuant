@@ -61,7 +61,7 @@ class TensorNetwork {
    public:
     struct Terminal {
       int tensor_ord = -1;
-      TensorIndexSlotType slot_type = TensorIndexSlotType::Invalid;
+      TensorIndexSlotType slot_type;
       // index slots are grouped according to degrees of freedom and/or
       // symmetry. E.g. bra/ket slots for same particle of a nonsymmetric tensor
       // are grouped together. Bra and ket slots of a symmetric/antisymmetric
@@ -75,8 +75,7 @@ class TensorNetwork {
           : tensor_ord(tensor_ord),
             slot_type(slot_type),
             slot_group_ord(slot_group_ord) {
-        assert(tensor_ord >= 0 && slot_type != TensorIndexSlotType::Invalid &&
-               slot_group_ord >= 0);
+        assert(tensor_ord >= 0 && slot_group_ord >= 0);
       }
 
       friend bool operator==(const Terminal &a, const Terminal &b) {
@@ -132,9 +131,6 @@ class TensorNetwork {
                   "connected to a bra slot");
             }
             break;
-          default:
-            throw std::logic_error(
-                "TensorNetwork::Edge::connect_to: invalid slot");
         }
 
         first_ = t;
