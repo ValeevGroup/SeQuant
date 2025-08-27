@@ -35,12 +35,16 @@ int main(int argc, char* argv[]) {
   sequant::set_locale();
   sequant::detail::OpIdRegistrar op_id_registrar;
   sequant::set_default_context(
-      Context(sequant::mbpt::make_sr_spaces(), Vacuum::SingleProduct,
-              IndexSpaceMetric::Unit, BraKetSymmetry::conjugate,
-              SPBasis::spinor, 100, BraKetTypesetting::ContraSub,
-              // to_latex() reference outputs predominantly assume the original
-              // (naive) convention
-              BraKetSlotTypesetting::Naive));
+      {.index_space_registry_shared_ptr = sequant::mbpt::make_sr_spaces(),
+       .vacuum = Vacuum::SingleProduct,
+       .metric = IndexSpaceMetric::Unit,
+       .braket_symmetry = BraKetSymmetry::conjugate,
+       .spbasis = SPBasis::spinor,
+       .first_dummy_index_ordinal = 100,
+       .braket_typesetting = BraKetTypesetting::ContraSub,
+       // to_latex() reference outputs predominantly assume the original
+       // (naive) convention
+       .braket_slot_typesetting = BraKetSlotTypesetting::Naive});
   TensorCanonicalizer::set_cardinal_tensor_labels(
       sequant::mbpt::cardinal_tensor_labels());
   // uncomment to enable verbose output ...

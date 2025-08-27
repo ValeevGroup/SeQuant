@@ -7,11 +7,10 @@ int main() {
 
   // the default is to use genuine vacuum
   assert(get_default_context().vacuum() == Vacuum::Physical);
-  // make default IndexSpaceRegistry
-  IndexSpaceRegistry ISR;
-  // now set the context to a single product of SP states
-  set_default_context(Context{ISR, Vacuum::SingleProduct,
-                              IndexSpaceMetric::Unit, BraKetSymmetry::symm});
+  // create a context with default IndexSpaceRegistry, using a vacuum of a
+  // single product of SP states
+  set_default_context({.index_space_registry = IndexSpaceRegistry{},
+                       .vacuum = Vacuum::SingleProduct});
   assert(get_default_context().vacuum() == Vacuum::SingleProduct);
   // reset the context back to the default
   reset_default_context();

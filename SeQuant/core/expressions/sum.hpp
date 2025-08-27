@@ -30,8 +30,8 @@ class Sum : public Expr {
   /// @param summands an initializer list of summands
   Sum(ExprPtrList summands) {
     // use append to flatten out Sum summands
-    for (auto &summand : summands) {
-      append(std::move(summand));
+    for (auto &&summand : summands) {
+      append(std::forward<decltype(summand)>(summand));
     }
   }
 
@@ -271,11 +271,15 @@ class Sum : public Expr {
 
   /// @param multipass if true, will do a multipass canonicalization, with extra
   /// cleanup pass after the deep canonization pass
-  ExprPtr canonicalize_impl(bool multipass);
+  ExprPtr canonicalize_impl(bool multipass, CanonicalizeOptions opt);
 
-  virtual ExprPtr canonicalize() override { return canonicalize_impl(true); }
+  virtual ExprPtr canonicalize(
+      CanonicalizeOptions opt =
+          CanonicalizeOptions::default_options()) override {
+    return canonicalize_impl(true, opt);
+  }
   virtual ExprPtr rapid_canonicalize() override {
-    return canonicalize_impl(false);
+    return canonicalize_impl(false, {.method = CanonicalizationMethod::Rapid});
   }
 
   bool static_equal(const Expr &that) const override {

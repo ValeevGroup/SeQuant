@@ -27,12 +27,12 @@ struct assume_strict_column_permutability {};
 class ReorderingContext : public ExportContext {
  public:
   explicit ReorderingContext(MemoryLayout layout) : m_layout(layout) {}
-  ReorderingContext(MemoryLayout layout, assume_real_orbitals tag)
+  ReorderingContext(MemoryLayout layout, assume_real_orbitals)
       : m_layout(layout), m_real_orbitals(true) {}
-  ReorderingContext(MemoryLayout layout, assume_strict_column_permutability tag)
+  ReorderingContext(MemoryLayout layout, assume_strict_column_permutability)
       : m_layout(layout), m_column_permutability(true) {}
-  ReorderingContext(MemoryLayout layout, assume_real_orbitals tag1,
-                    assume_strict_column_permutability tag2)
+  ReorderingContext(MemoryLayout layout, assume_real_orbitals,
+                    assume_strict_column_permutability)
       : m_layout(layout), m_real_orbitals(true), m_column_permutability(true) {}
 
   MemoryLayout memory_layout() const { return m_layout; }

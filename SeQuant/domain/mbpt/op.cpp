@@ -1,3 +1,4 @@
+#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/domain/mbpt/context.hpp>
 #include <SeQuant/domain/mbpt/op.hpp>
 
@@ -441,14 +442,18 @@ ExprPtr OpMaker<S>::operator()(std::optional<UseDepIdx> dep,
   // dependent indices for pure (de)excitation ops
   if (!dep && get_default_mbpt_context().csv() == mbpt::CSV::Yes) {
     if (to_class(op_) == OpClass::ex) {
+#ifndef NDEBUG
       for (auto&& s : cre_spaces_) {
         assert(isr->contains_unoccupied(s));
       }
+#endif
       dep = UseDepIdx::Bra;
     } else if (to_class(op_) == OpClass::deex) {
+#ifndef NDEBUG
       for (auto&& s : ann_spaces_) {
         assert(isr->contains_unoccupied(s));
       }
+#endif
       dep = UseDepIdx::Ket;
     } else {
       dep = UseDepIdx::None;
@@ -485,16 +490,16 @@ ExprPtr H_(std::size_t k) {
           return OpMaker<Statistics::FermiDirac>(OpType::f, 1)();
         case Vacuum::MultiProduct:
           return OpMaker<Statistics::FermiDirac>(OpType::f, 1)();
-        default:
-          abort();
+        case Vacuum::Invalid:
+          SEQUANT_ABORT("Invalid vacuum not allowed here");
       }
+      SEQUANT_UNREACHABLE;
 
     case 2:
       return OpMaker<Statistics::FermiDirac>(OpType::g, 2)();
-
-    default:
-      abort();
   }
+
+  SEQUANT_ABORT("Unhandled k value");
 }
 
 ExprPtr H(std::size_t k) {
@@ -672,14 +677,14 @@ ExprPtr S(std::int64_t K) {
       OpType::S, cre(creators), ann(annihilators))(dep, {Symmetry::nonsymm});
 }
 
-ExprPtr H_pt(std::size_t order, std::size_t R) {
+ExprPtr H_pt([[maybe_unused]] std::size_t order, std::size_t R) {
   assert(order == 1 &&
          "sequant::sr::H_pt(): only supports first order perturbation");
   assert(R > 0);
   return OpMaker<Statistics::FermiDirac>(OpType::h_1, R)();
 }
 
-ExprPtr T_pt_(std::size_t order, std::size_t K) {
+ExprPtr T_pt_([[maybe_unused]] std::size_t order, std::size_t K) {
   assert(order == 1 &&
          "sequant::sr::T_pt_(): only supports first order perturbation");
   return OpMaker<Statistics::FermiDirac>(OpType::t_1, K)();
@@ -694,7 +699,7 @@ ExprPtr T_pt(std::size_t order, std::size_t K, bool skip1) {
   return result;
 }
 
-ExprPtr Λ_pt_(std::size_t order, std::size_t K) {
+ExprPtr Λ_pt_([[maybe_unused]] std::size_t order, std::size_t K) {
   assert(order == 1 &&
          "sequant::sr::Λ_pt_(): only supports first order perturbation");
   return OpMaker<Statistics::FermiDirac>(OpType::λ_1, K)();
@@ -724,9 +729,11 @@ ExprPtr H_(std::size_t k) {
                 return L"f";
               case Vacuum::MultiProduct:
                 return L"f";
-              default:
-                abort();
+              case Vacuum::Invalid:
+                SEQUANT_ABORT("Invalid vacuum not allowed here");
             }
+
+            SEQUANT_UNREACHABLE;
           },
           [=]() -> ExprPtr { return tensor::H_(1); },
           [=](qnc_t& qns) {
@@ -741,10 +748,9 @@ ExprPtr H_(std::size_t k) {
                         qnc_t op_qnc_t = general_type_qns(2);
                         qns = combine(op_qnc_t, qns);
                       });
-
-    default:
-      abort();
   }
+
+  SEQUANT_ABORT("Unhandled k value");
 }
 
 ExprPtr H(std::size_t k) {

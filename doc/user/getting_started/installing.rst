@@ -25,7 +25,11 @@ Mandatory
 * `Eigen3 <http://eigen.tuxfamily.org/>`_ 
 * `libperm <https://github.com/Krzmbrzl/libPerm>`_
 * `polymorphic_variant <https://github.com/Krzmbrzl/polymorphic_variant>`_
+* `Utfcpp <https://github.com/nemtrif/utfcpp>`_ 4.0 or later
 * `DTL <https://github.com/cubicdaiya/dtl>`_ 1.12 or later - only used for unit tests
+* `CLI11 <https://github.com/CLIUtils/CLI11>`_ 2.0 or later - only used for external interface
+* `spdlog <https://github.com/gabime/spdlog>`_ - only used for external interface
+* `nlohmann::json <https://github.com/nlohmann/json>`_ 3.0 or later - only used for external interface
 
 .. note:: SeQuant can download and build Boost if configured with :code:`Boost_FETCH_IF_MISSING=ON`, but the use of Boost provided by the system package manager is recommended. The following non-header-only Boost libraries are required, hence Boost must be configured/built:
 

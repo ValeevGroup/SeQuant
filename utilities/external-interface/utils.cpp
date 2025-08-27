@@ -152,7 +152,7 @@ sequant::ExprPtr generateResultSymmetrization(const ResultExpr &result,
                                               std::wstring_view precursorName) {
   IndexGroups<std::vector<Index> > externals;
 
-  for (const auto [bra, ket] :
+  for (const auto &[bra, ket] :
        result.index_particle_grouping<std::pair<Index, Index> >()) {
     externals.bra.push_back(bra);
     externals.ket.push_back(ket);

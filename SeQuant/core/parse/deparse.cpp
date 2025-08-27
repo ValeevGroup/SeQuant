@@ -5,6 +5,7 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/op.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/string.hpp>
 
 #include <range/v3/all.hpp>
@@ -62,8 +63,7 @@ std::wstring deparse_symm(Symmetry symm) {
       return L"INVALID";
   }
 
-  assert(false);
-  return L"INVALIDANDUNREACHABLE";
+  SEQUANT_UNREACHABLE;
 }
 
 std::wstring deparse_symm(BraKetSymmetry symm) {
@@ -78,8 +78,7 @@ std::wstring deparse_symm(BraKetSymmetry symm) {
       return L"INVALID";
   }
 
-  assert(false);
-  return L"INVALIDANDUNREACHABLE";
+  SEQUANT_UNREACHABLE;
 }
 
 std::wstring deparse_symm(ParticleSymmetry symm) {
@@ -92,8 +91,7 @@ std::wstring deparse_symm(ParticleSymmetry symm) {
       return L"INVALID";
   }
 
-  assert(false);
-  return L"INVALIDANDUNREACHABLE";
+  SEQUANT_UNREACHABLE;
 }
 
 std::wstring deparse_scalar(const Constant::scalar_type& scalar) {

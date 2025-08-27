@@ -5,22 +5,16 @@
 #include <SeQuant/core/tensor_network.hpp>
 #include <SeQuant/core/tensor_network_v2.hpp>
 #include <SeQuant/core/tensor_network_v3.hpp>
+#include <SeQuant/core/utility/string.hpp>
 #include <SeQuant/domain/mbpt/context.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 
 #include <cassert>
-#include <codecvt>
 #include <iostream>
-#include <locale>
 #include <optional>
 #include <string>
 
 using namespace sequant;
-
-std::wstring from_utf8(std::string_view str) {
-  std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
-  return converter.from_bytes(std::string(str));
-}
 
 template <typename TN>
 std::optional<TN> make_tn(const ExprPtr &expr) {
@@ -57,9 +51,9 @@ void print_help() {
 
 int main(int argc, char **argv) {
   set_locale();
-  sequant::set_default_context(Context(
-      mbpt::make_sr_spaces(), Vacuum::SingleProduct, IndexSpaceMetric::Unit,
-      BraKetSymmetry::conjugate, SPBasis::spinor));
+  sequant::set_default_context(
+      {.index_space_registry_shared_ptr = mbpt::make_sr_spaces(),
+       .vacuum = Vacuum::SingleProduct});
 
   bool use_named_indices = true;
   int version = 3;
@@ -71,7 +65,7 @@ int main(int argc, char **argv) {
   }
 
   for (std::size_t i = 1; i < static_cast<std::size_t>(argc); ++i) {
-    std::wstring current = from_utf8(argv[i]);
+    std::wstring current = toUtf16(argv[i]);
     if (current == L"--help") {
       print_help();
       return 0;
@@ -112,29 +106,33 @@ int main(int argc, char **argv) {
               {.named_indices =
                    (use_named_indices ? nullptr : &empty_named_indices)});
       std::wcout << "Graph for '" << to_latex(expr) << "'\n";
-      graph->write_dot(std::wcout, vlabels);
+      graph->write_dot(std::wcout, {.labels = vlabels});
     } else {
-      auto make_graph = [&](auto *tn_ptr) {
+      auto make_graph = [&](auto *tn_ptr) -> int {
         using TN = std::decay_t<decltype(*tn_ptr)>;
         std::optional<TN> network = make_tn<TN>(expr);
         if (!network.has_value()) {
           std::wcout << "Failed to construct tensor network for input '"
                      << to_latex(expr) << "'" << std::endl;
-          return 2;
+          return 3;
         }
 
         auto graph = network->create_graph(
             {.named_indices =
                  use_named_indices ? nullptr : &empty_named_indices});
         std::wcout << "Graph for '" << to_latex(expr) << "'\n";
-        graph.bliss_graph->write_dot(std::wcout, graph.vertex_labels);
+        graph.bliss_graph->write_dot(std::wcout,
+                                     {.labels = graph.vertex_labels});
+        return 0;
       };
-      if (version == 2)
-        make_graph(static_cast<TensorNetworkV2 *>(nullptr));
-      else if (version == 3)
-        make_graph(static_cast<TensorNetworkV3 *>(nullptr));
-      else
-        abort();
+      switch (version) {
+        case 2:
+          return make_graph(static_cast<TensorNetworkV2 *>(nullptr));
+        case 3:
+          return make_graph(static_cast<TensorNetworkV3 *>(nullptr));
+        default:
+          abort();  // unreachable
+      }
     }
   }
 }

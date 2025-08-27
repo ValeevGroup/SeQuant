@@ -160,7 +160,7 @@ auto cache(size_t key, CacheManager const& cm, Args const&... args) {
                   .curr_life = cur_l,
                   .max_life = max_l,
                   .num_alive = cm.alive_count(),
-                  .memory = bytes(cm)},
+                  .memory = {bytes(cm)}},
         args...);
 }
 

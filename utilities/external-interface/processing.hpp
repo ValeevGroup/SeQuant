@@ -30,7 +30,6 @@ struct ProcessingOptions {
 };
 
 sequant::container::svector<sequant::ResultExpr> postProcess(
-    sequant::ResultExpr expression, const IndexSpaceMeta &space_meta,
-    const ProcessingOptions &options = {});
+    sequant::ResultExpr expression, const ProcessingOptions &options = {});
 
 #endif

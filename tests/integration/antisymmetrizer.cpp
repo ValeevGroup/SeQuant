@@ -75,14 +75,14 @@ void try_main() {
   std::wcout << to_latex_align(new_a3, 20, 7) << std::endl;
 }
 
-int main(int argc, char* argv[]) {
+int main() {
   std::wcout.precision(std::numeric_limits<double>::max_digits10);
   std::wcerr.precision(std::numeric_limits<double>::max_digits10);
   sequant::set_locale();
   sequant::detail::OpIdRegistrar op_id_registrar;
-  sequant::set_default_context(Context(
-      sequant::mbpt::make_min_sr_spaces(), Vacuum::Physical,
-      IndexSpaceMetric::Unit, BraKetSymmetry::conjugate, SPBasis::spinfree));
+  sequant::set_default_context(
+      {.index_space_registry_shared_ptr = sequant::mbpt::make_min_sr_spaces(),
+       .spbasis = SPBasis::spinfree});
 
   TensorCanonicalizer::register_instance(
       std::make_shared<DefaultTensorCanonicalizer>());

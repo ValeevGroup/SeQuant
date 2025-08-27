@@ -2,6 +2,7 @@
 #define SEQUANT_EXPRESSIONS_EXPR_HPP
 
 #include <SeQuant/core/expressions/expr_ptr.hpp>
+#include <SeQuant/core/options.hpp>
 
 #include <boost/core/demangle.hpp>
 
@@ -99,7 +100,8 @@ class Expr : public std::enable_shared_from_this<Expr>,
   /// phase)
   /// @return the byproduct of canonicalization, or @c nullptr if no byproduct
   /// generated
-  virtual ExprPtr canonicalize() {
+  virtual ExprPtr canonicalize(
+      CanonicalizeOptions = CanonicalizeOptions::default_options()) {
     return {};  // by default do nothing and return nullptr
   }
 
@@ -108,7 +110,9 @@ class Expr : public std::enable_shared_from_this<Expr>,
   /// canonicalize(), unless overridden in the derived class.
   /// @return the byproduct of canonicalization, or @c nullptr if no byproduct
   /// generated
-  virtual ExprPtr rapid_canonicalize() { return this->canonicalize(); }
+  virtual ExprPtr rapid_canonicalize() {
+    return this->canonicalize({.method = CanonicalizationMethod::Rapid});
+  }
 
   // clang-format off
   /// recursively visit this expression, i.e. call visitor on each subexpression
@@ -264,7 +268,7 @@ class Expr : public std::enable_shared_from_this<Expr>,
   template <typename T>
   static type_id_type get_type_id() {
     return type_id_accessor<T>();
-  };
+  }
 
   /// sets (unique) type id of class T
   /// @param id the value of type id of class T
@@ -273,7 +277,7 @@ class Expr : public std::enable_shared_from_this<Expr>,
   template <typename T>
   static void set_type_id(type_id_type id) {
     type_id_accessor<T>() = id;
-  };
+  }
 
   /// @tparam T an Expr type
   /// @return true if this object is of type @c T
@@ -445,7 +449,7 @@ class Expr : public std::enable_shared_from_this<Expr>,
   /// @note @c that is guaranteed to be of same type as @c *this, hence can be
   /// statically cast
   /// @return true if @c that is equivalent to *this
-  virtual bool static_equal(const Expr &that) const
+  virtual bool static_equal(const Expr &) const
 #if __GNUG__
   {
     abort();
@@ -469,14 +473,14 @@ class Expr : public std::enable_shared_from_this<Expr>,
   /// c-number , hence honest checking is needed
   /// @return true if @c *this multiplicatively commutes with @c that
   /// @note this returns true unless overridden in derived class
-  virtual bool commutes_with_atom(const Expr &that) const { return true; }
+  virtual bool commutes_with_atom(const Expr &) const { return true; }
 
  private:
   /// @return returns next type id in the grand class list
   static type_id_type get_next_type_id() {
     static std::atomic<type_id_type> grand_type_id = 0;
     return ++grand_type_id;
-  };
+  }
 
   /// sets (unique) type id of class T
   /// @param id the value of type id of class T
@@ -484,7 +488,7 @@ class Expr : public std::enable_shared_from_this<Expr>,
   static type_id_type &type_id_accessor() {
     static type_id_type type_id = get_next_type_id();
     return type_id;
-  };
+  }
 
  private:
   /// @input[in] fn the name of function that is missing in this class

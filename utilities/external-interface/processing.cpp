@@ -18,7 +18,6 @@
 using namespace sequant;
 
 container::svector<ResultExpr> postProcess(ResultExpr result,
-                                           const IndexSpaceMeta &spaceMeta,
                                            const ProcessingOptions &options) {
   if (result.expression().is<Constant>() ||
       result.expression().is<Variable>()) {

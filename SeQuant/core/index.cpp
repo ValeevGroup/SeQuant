@@ -12,7 +12,7 @@
 
 namespace sequant {
 
-const std::size_t Index::min_tmp_index() noexcept {
+std::size_t Index::min_tmp_index() noexcept {
   return get_default_context().first_dummy_index_ordinal();
 }
 

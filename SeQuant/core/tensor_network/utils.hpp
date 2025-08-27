@@ -172,7 +172,9 @@ void apply_index_replacements(ArrayLike &tensors,
 
 /// sorts a sequence of integers in the lexicographic order (w.r.t. operator<)
 /// and overwrites them with their input ordinals
-/// e.g. `{23,7,14}` is overwritten with `{1,2,0}`
+/// e.g. `{23,7,14}` is overwritten with `{1,2,0}`. Effectively, this inverts
+/// the permutation (input is a to-permutation, the results is a
+/// from-permutation, just reindexed)
 /// @param[in,out] seq on input: a sequence of integers, on output: sequence of
 /// input ordinals of the elements of sorted @p seq
 /// @return -1 if permutation is off parity, else

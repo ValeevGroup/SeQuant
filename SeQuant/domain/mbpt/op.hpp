@@ -224,7 +224,7 @@ class QuantumNumberChange
       container::svector<boost::numeric::interval<std::make_signed_t<QNV>>, 8>;
   using this_type = QuantumNumberChange<QNV, Tag>;
 
-  const std::size_t size() const {
+  std::size_t size() const {
     if (get_default_context().vacuum() == Vacuum::Physical) {
       return 2;
     } else if (get_default_context().vacuum() == Vacuum::SingleProduct) {
@@ -708,8 +708,8 @@ class OpMaker {
 
   OpMaker(OpType op);
 
-  [[nodiscard]] const auto ncreators() const { return cre_spaces_.size(); };
-  [[nodiscard]] const auto nannihilators() const { return ann_spaces_.size(); };
+  [[nodiscard]] auto ncreators() const { return cre_spaces_.size(); };
+  [[nodiscard]] auto nannihilators() const { return ann_spaces_.size(); };
 };
 
 extern template class OpMaker<Statistics::FermiDirac>;

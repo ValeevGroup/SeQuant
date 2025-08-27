@@ -39,6 +39,9 @@ namespace sequant {
 /// @warning the terminology is a mix at best, e.g. terminal vs. slot, etc.
 class TensorNetwork {
  public:
+  /// @return the implementation version of TN
+  constexpr static int version() { return 1; }
+
   constexpr static size_t max_rank = 256;
 
   // clang-format off
@@ -479,6 +482,7 @@ class TensorNetwork {
     /// if false, will not generate the TeX labels
     bool make_texlabels = true;
   };
+  static BlissGraphOptions make_default_bliss_graph_options() { return {}; }
 
   /// @brief converts the network into a Bliss graph whose vertices are indices
   /// and tensor vertex representations
@@ -502,11 +506,8 @@ class TensorNetwork {
   ///   tensor; terminal vertices are colored by the color of its tensor,
   ///     with the color of symm/antisymm terminals augmented by the
   ///     terminal's type (bra/ket).
-  GraphData make_bliss_graph(const BlissGraphOptions &options = {
-                                 .named_indices = nullptr,
-                                 .distinct_named_indices = true,
-                                 .make_labels = true,
-                                 .make_texlabels = true}) const;
+  GraphData make_bliss_graph(const BlissGraphOptions &options =
+                                 make_default_bliss_graph_options()) const;
 };
 
 }  // namespace sequant

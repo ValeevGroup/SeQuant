@@ -1,10 +1,15 @@
 if (NOT TARGET polymorphic_variant::polymorphic_variant)
-    include(${vg_cmake_kit_SOURCE_DIR}/modules/VRGFindOrFetchPackage.cmake)
-	VRGFindOrFetchPackage(polymorphic_variant "https://github.com/Krzmbrzl/polymorphic_variant.git" "${SEQUANT_TRACKED_POLYMORPHICVARIANT_TAG}"
-            ADD_SUBDIR
-			ADD_SUBDIR_EXCLUDE_FROM_ALL
-            CONFIG_SUBDIR
+    include(FetchContent)
+
+    FetchContent_Declare(
+        polymorphic_variant
+        GIT_REPOSITORY "https://github.com/Krzmbrzl/polymorphic_variant.git"
+        GIT_TAG "${SEQUANT_TRACKED_POLYMORPHICVARIANT_TAG}"
+        GIT_SHALLOW
+        SYSTEM
     )
+
+	FetchContent_MakeAvailable(polymorphic_variant)
 endif()
 
 # postcond check

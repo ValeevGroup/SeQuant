@@ -5,18 +5,12 @@
 #ifndef SEQUANT_WICK_IMPL_HPP
 #define SEQUANT_WICK_IMPL_HPP
 
-// change to 0 to try TNV1
-#define USE_TENSOR_NETWORK_V3 1
-
 #include <SeQuant/core/bliss.hpp>
 #include <SeQuant/core/logger.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
-#if USE_TENSOR_NETWORK_V3
-#include <SeQuant/core/tensor_network_v3.hpp>
-#else
-#include <SeQuant/core/tensor_network.hpp>
-#endif
 #include <SeQuant/core/tensor_network/vertex.hpp>
+#include <SeQuant/core/tensor_network_v3.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 
 #ifdef SEQUANT_HAS_EXECUTION_HEADER
 #include <execution>
@@ -86,7 +80,8 @@ container::map<Index, Index> compute_index_replacement_rules(
                       const Index &src, const Index &dst) {
     auto src_it = result.find(src);
     if (src_it == result.end()) {  // if brand new, add the rule
-      auto insertion_result = result.emplace(src, proto(dst, src));
+      [[maybe_unused]] auto insertion_result =
+          result.emplace(src, proto(dst, src));
       assert(insertion_result.second);
     } else {  // else modify the destination of the existing rule to the
       // intersection
@@ -121,9 +116,11 @@ container::map<Index, Index> compute_index_replacement_rules(
         !src2.has_proto_indices() && src1.has_proto_indices() ? src1 : src2;
 
     if (!has_src1_rule && !has_src2_rule) {  // if brand new, add the rules
-      auto insertion_result1 = result.emplace(src1, proto(dst, dst1_proto));
+      [[maybe_unused]] auto insertion_result1 =
+          result.emplace(src1, proto(dst, dst1_proto));
       assert(insertion_result1.second);
-      auto insertion_result2 = result.emplace(src2, proto(dst, dst2_proto));
+      [[maybe_unused]] auto insertion_result2 =
+          result.emplace(src2, proto(dst, dst2_proto));
       assert(insertion_result2.second);
     } else if (has_src1_rule &&
                !has_src2_rule) {  // update the existing rule for src1
@@ -233,7 +230,8 @@ inline bool apply_index_replacement_rules(
     std::set<Index, Index::LabelCompare> &all_indices,
     const std::shared_ptr<const IndexSpaceRegistry> &isr) {
   // to be able to use map[]
-  auto &replrules = const_cast<container::map<Index, Index> &>(const_replrules);
+  [[maybe_unused]] auto &replrules =
+      const_cast<container::map<Index, Index> &>(const_replrules);
 
   expr_range exrng(product);
 
@@ -363,53 +361,54 @@ template <Statistics S>
 void reduce_wick_impl(std::shared_ptr<Product> &expr,
                       const container::set<Index> &external_indices,
                       const Context &ctx) {
-  if (ctx.metric() == IndexSpaceMetric::Unit) {
-    bool pass_mutated = false;
-    do {
-      pass_mutated = false;
+  if (ctx.metric() != IndexSpaceMetric::Unit) {
+    SEQUANT_ABORT(
+        "reduce_wick_impl expects to only work with IndexSpaceMetric::Unit");
+  }
 
-      // extract current indices
-      std::set<Index, Index::LabelCompare> all_indices;
-      ranges::for_each(*expr, [&all_indices](const auto &factor) {
-        if (factor->template is<Tensor>()) {
-          ranges::for_each(factor->template as<const Tensor>().indices(),
-                           [&all_indices](const Index &idx) {
-                             [[maybe_unused]] auto result =
-                                 all_indices.insert(idx);
-                           });
-        }
+  bool pass_mutated = false;
+  do {
+    pass_mutated = false;
+
+    // extract current indices
+    std::set<Index, Index::LabelCompare> all_indices;
+    ranges::for_each(*expr, [&all_indices](const auto &factor) {
+      if (factor->template is<Tensor>()) {
+        ranges::for_each(factor->template as<const Tensor>().indices(),
+                         [&all_indices](const Index &idx) {
+                           [[maybe_unused]] auto result =
+                               all_indices.insert(idx);
+                         });
+      }
+    });
+
+    const auto replacement_rules = compute_index_replacement_rules<S>(
+        expr, external_indices, all_indices, ctx.index_space_registry());
+
+    if (Logger::instance().wick_reduce) {
+      std::wcout << "reduce_wick_impl(expr, external_indices):\n  expr = "
+                 << expr->to_latex() << "\n  external_indices = ";
+      ranges::for_each(external_indices,
+                       [](auto &index) { std::wcout << index.label() << " "; });
+      std::wcout << "\n  replrules = ";
+      ranges::for_each(replacement_rules, [](auto &index) {
+        std::wcout << to_latex(index.first) << "\\to" << to_latex(index.second)
+                   << "\\,";
       });
+      std::wcout.flush();
+    }
 
-      const auto replacement_rules = compute_index_replacement_rules<S>(
-          expr, external_indices, all_indices, ctx.index_space_registry());
+    if (!replacement_rules.empty()) {
+      auto isr = ctx.index_space_registry();
+      pass_mutated = apply_index_replacement_rules(
+          expr, replacement_rules, external_indices, all_indices, isr);
+    }
 
-      if (Logger::instance().wick_reduce) {
-        std::wcout << "reduce_wick_impl(expr, external_indices):\n  expr = "
-                   << expr->to_latex() << "\n  external_indices = ";
-        ranges::for_each(external_indices, [](auto &index) {
-          std::wcout << index.label() << " ";
-        });
-        std::wcout << "\n  replrules = ";
-        ranges::for_each(replacement_rules, [](auto &index) {
-          std::wcout << to_latex(index.first) << "\\to"
-                     << to_latex(index.second) << "\\,";
-        });
-        std::wcout.flush();
-      }
+    if (Logger::instance().wick_reduce) {
+      std::wcout << "\n  result = " << expr->to_latex() << std::endl;
+    }
 
-      if (!replacement_rules.empty()) {
-        auto isr = ctx.index_space_registry();
-        pass_mutated = apply_index_replacement_rules(
-            expr, replacement_rules, external_indices, all_indices, isr);
-      }
-
-      if (Logger::instance().wick_reduce) {
-        std::wcout << "\n  result = " << expr->to_latex() << std::endl;
-      }
-
-    } while (pass_mutated);  // keep reducing until stop changing
-  } else
-    abort();  // programming error?
+  } while (pass_mutated);  // keep reducing until stop changing
 }
 
 template <Statistics S>
@@ -605,22 +604,13 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
                 << "WickTheorem<S>::compute: input to topology computation = "
                 << to_latex(expr_input_) << std::endl;
 
-            // construct graph representation of the tensor product
-#if USE_TENSOR_NETWORK_V3
+          // construct graph representation of the tensor product
           TensorNetworkV3 tn(expr_input_->as<Product>().factors());
-          auto g = tn.create_graph();
+          auto g = tn.create_graph({.distinct_named_indices = true});
           const auto &graph = g.bliss_graph;
           const auto &vlabels = g.vertex_labels;
-          const auto &vcolors = g.vertex_colors;
+          [[maybe_unused]] const auto &vcolors = g.vertex_colors;
           const auto &vtypes = g.vertex_types;
-#else
-          TensorNetwork tn(expr_input_->as<Product>().factors());
-          auto [graph, vlabels, vtexlabels, vcolors, vtypes] =
-              tn.make_bliss_graph(
-                  {/* need labels to find normal operators */ .make_labels =
-                       true,
-                   .make_texlabels = false});
-#endif
           const auto n = vtypes.size();
           assert(vcolors.size() == n);
           assert(vlabels.size() == n);
@@ -628,18 +618,14 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
           const auto &tn_tensors = tn.tensors();
           auto idx_vertex_to_edge = [&](const auto idx_vertex) -> const auto & {
             assert(idx_vertex < n);
-#if USE_TENSOR_NETWORK_V3
             const auto edge_idx = g.vertex_to_index_idx(idx_vertex);
             assert(edge_idx < tn_edges.size());
             return tn_edges[edge_idx];
-#else
-            return *(tn_edges.begin() + idx_vertex);
-#endif
           };
 
           if (Logger::instance().wick_topology) {
             std::basic_ostringstream<wchar_t> oss;
-            graph->write_dot(oss, vlabels);
+            graph->write_dot(oss, {.labels = vlabels});
             std::wcout
                 << "WickTheorem<S>::compute: colored graph produced from TN = "
                 << std::endl
@@ -676,7 +662,8 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
               if (vtypes[v] == VertexType::TensorCore &&
                   (std::find(nop_labels_begin, nop_labels_end, vlabels[v]) !=
                    nop_labels_end)) {
-                auto insertion_result = nop_vidx_ord.emplace(v, nop_ord++);
+                [[maybe_unused]] auto insertion_result =
+                    nop_vidx_ord.emplace(v, nop_ord++);
                 assert(insertion_result.second);
               }
               if (vtypes[v] == VertexType::Index && !input_->empty()) {
@@ -687,7 +674,8 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
                 if (idx_it_in_opseq != opseq_view_end) {
                   const auto ord =
                       ranges::distance(opseq_view_begin, idx_it_in_opseq);
-                  auto insertion_result = index_vidx_ord.emplace(v, ord);
+                  [[maybe_unused]] auto insertion_result =
+                      index_vidx_ord.emplace(v, ord);
                   assert(insertion_result.second);
                 }
               }
@@ -745,9 +733,9 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
             for (auto &&aut : aut_generators) {
               // skip automorphism generators that do not involve vertices
               // in `vertices` list
-              const auto nv = aut.size();
               bool aut_contains_other_vertices = true;
               for (auto &&[v, ord] : vertices) {
+                (void)ord;
                 const auto v_is_in_aut = v != aut[v];
                 if (v_is_in_aut) {
                   aut_contains_other_vertices = false;
@@ -815,16 +803,14 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
                 }
               });
             }
-            const auto npartitions = next_partition_idx;
+            const auto npartitions = next_partition_idx + 1;
             return std::make_tuple(vertex_to_partition_idx, npartitions);
           };
 
           // compute NormalOperator->partition map, convert to partition lists
           // (if any), and register via set_nop_partitions to be used in full
           // contractions
-          auto do_not_skip_elements = [](size_t v1, size_t v2) {
-            return false;
-          };
+          auto do_not_skip_elements = [](size_t, size_t) { return false; };
           auto [nop_vidx2pidx, nop_npartitions] = compute_partitions(
               nop_vidx_ord, /* nontrivial_partitions_only = */ true,
               do_not_skip_elements);
@@ -916,34 +902,14 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
             const auto &edge2 = idx_vertex_to_edge(v2);
             auto connected_to_bra_or_ket_of_same_symmetric_nop =
                 [&tn_tensors](const auto &edge1, const auto &edge2) -> bool {
-              const auto nt1 =
-#if USE_TENSOR_NETWORK_V3
-                  edge1.vertex_count();
-#else
-                  edge1.size();
-#endif
+              const auto nt1 = edge1.vertex_count();
               assert(nt1 <= 2);
-              const auto nt2 =
-#if USE_TENSOR_NETWORK_V3
-                  edge2.vertex_count();
-#else
-                  edge2.size();
-#endif
+              const auto nt2 = edge2.vertex_count();
               assert(nt2 <= 2);
               for (auto i1 = 0; i1 != nt1; ++i1) {
-                const auto tensor1_ord =
-#if USE_TENSOR_NETWORK_V3
-                    edge1.vertex(i1).getTerminalIndex();
-#else
-                    edge1[i1].tensor_ord;
-#endif
+                const auto tensor1_ord = edge1.vertex(i1).getTerminalIndex();
                 for (auto i2 = 0; i2 != nt2; ++i2) {
-                  const auto tensor2_ord =
-#if USE_TENSOR_NETWORK_V3
-                      edge2.vertex(i2).getTerminalIndex();
-#else
-                      edge2[i2].tensor_ord;
-#endif
+                  const auto tensor2_ord = edge2.vertex(i2).getTerminalIndex();
 
                   // do not skip if connected to same ...
                   if (tensor1_ord == tensor2_ord) {
@@ -954,17 +920,9 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
                     // ... (anti)symmetric ...
                     if (tensor_ptr->_symmetry() != Symmetry::nonsymm) {
                       const auto tensor1_slot_type =
-#if USE_TENSOR_NETWORK_V3
                           edge1.vertex(i1).getOrigin();
-#else
-                          edge1[i1].slot_type;
-#endif
                       const auto tensor2_slot_type =
-#if USE_TENSOR_NETWORK_V3
                           edge2.vertex(i2).getOrigin();
-#else
-                          edge2[i2].slot_type;
-#endif
 
                       // ... bra/ket of ...
                       if (tensor1_slot_type == tensor2_slot_type) {
@@ -1051,18 +1009,15 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
     }  // expr_input_->is<Product>()
     // ... else if NormalOperatorSequence already, compute ...
     else if (expr_input_->is<NormalOperatorSequence<S>>()) {
-      abort();  // expr_input_ should no longer be nonnull if constructed with
-                // an expression that's a NormalOperatorSequence<S>
-      init_input(
-          expr_input_.template as_shared_ptr<NormalOperatorSequence<S>>());
-      // NB no simplification possible for a bare product w/ full contractions
-      // ... partial contractions will need simplification
-      return compute_nopseq(count_only);
+      SEQUANT_ABORT(
+          "expr_input_ should no longer be nonnull if constructed with an "
+          "expression that's a NormalOperatorSequence<S>");
     } else  // ... else do nothing
       return expr_input_;
   } else  // given a NormalOperatorSequence instead of an expression
     return compute_nopseq(count_only);
-  abort();
+
+  SEQUANT_UNREACHABLE;
 }
 
 template <Statistics S>

@@ -113,21 +113,13 @@ ExprPtr Expr::clone() const { throw not_implemented("clone"); }
 
 void Expr::adjoint() { throw not_implemented("adjoint"); }
 
-Expr &Expr::operator*=(const Expr &that) {
-  throw not_implemented("operator*=");
-}
+Expr &Expr::operator*=(const Expr &) { throw not_implemented("operator*="); }
 
-Expr &Expr::operator^=(const Expr &that) {
-  throw not_implemented("operator^=");
-}
+Expr &Expr::operator^=(const Expr &) { throw not_implemented("operator^="); }
 
-Expr &Expr::operator+=(const Expr &that) {
-  throw not_implemented("operator+=");
-}
+Expr &Expr::operator+=(const Expr &) { throw not_implemented("operator+="); }
 
-Expr &Expr::operator-=(const Expr &that) {
-  throw not_implemented("operator-=");
-}
+Expr &Expr::operator-=(const Expr &) { throw not_implemented("operator-="); }
 
 ExprPtr adjoint(const ExprPtr &expr) {
   auto result = expr->clone();
@@ -172,7 +164,7 @@ bool Product::is_commutative() const {
   return result;
 }
 
-ExprPtr Product::canonicalize_impl(bool rapid) {
+ExprPtr Product::canonicalize_impl(CanonicalizationMethod method) {
   // recursively canonicalize subfactors ...
   ranges::for_each(factors_, [this](auto &factor) {
     auto bp = factor->canonicalize();
@@ -183,7 +175,7 @@ ExprPtr Product::canonicalize_impl(bool rapid) {
   });
 
   if (Logger::instance().canonicalize) {
-    std::wcout << "Product canonicalization(" << (rapid ? "fast" : "slow")
+    std::wcout << "Product canonicalization(" << to_wstring(method)
                << ") input: " << to_latex() << std::endl;
   }
 
@@ -215,9 +207,23 @@ ExprPtr Product::canonicalize_impl(bool rapid) {
   if (!contains_nontensors) {  // tensor network canonization is a special case
                                // that's done in
                                // TensorNetwork
-    TensorNetworkV3 tn(factors_);
-    auto canon_factor =
-        tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(), rapid);
+    auto make_canonical_tn = [this, &method](auto *tn_null_ptr) {
+      using TN = std::decay_t<std::remove_pointer_t<decltype(tn_null_ptr)>>;
+      ExprPtr canon_factor;
+      TN tn(this->factors_);
+      if constexpr (TN::version() == 3) {
+        canon_factor = tn.canonicalize(
+            TensorCanonicalizer::cardinal_tensor_labels(), method);
+      } else {
+        canon_factor =
+            tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(),
+                            method == CanonicalizationMethod::Rapid);
+      }
+      return std::pair{std::move(tn), canon_factor};
+    };
+    using TN = TensorNetworkV3;
+    auto [tn, canon_factor] = make_canonical_tn(static_cast<TN *>(nullptr));
+
     const auto &tensors = tn.tensors();
     using std::size;
     assert(size(tensors) == size(factors_));
@@ -229,7 +235,7 @@ ExprPtr Product::canonicalize_impl(bool rapid) {
                      assert(exprptr);
                      return exprptr;
                    });
-    if (canon_factor) scalar_ *= canon_factor->as<Constant>().value();
+    if (canon_factor) scalar_ *= canon_factor->template as<Constant>().value();
     this->reset_hash_value();
   } else {  // if contains non-tensors, do commutation-checking resort
 
@@ -293,7 +299,7 @@ ExprPtr Product::canonicalize_impl(bool rapid) {
   // TODO evaluate product of Tensors (turn this into Products of Products)
 
   if (Logger::instance().canonicalize)
-    std::wcout << "Product canonicalization(" << (rapid ? "fast" : "slow")
+    std::wcout << "Product canonicalization(" << to_wstring(method)
                << ") result: " << to_latex() << std::endl;
 
   return {};  // side effects are absorbed into the scalar_
@@ -311,12 +317,12 @@ void Product::adjoint() {
       Product(adj_scalar, ranges::begin(adj_factors), ranges::end(adj_factors));
 }
 
-ExprPtr Product::canonicalize() {
-  return this->canonicalize_impl(/* rapid = */ false);
+ExprPtr Product::canonicalize(CanonicalizeOptions opt) {
+  return this->canonicalize_impl(opt.method);
 }
 
 ExprPtr Product::rapid_canonicalize() {
-  return this->canonicalize_impl(/* rapid = */ true);
+  return this->canonicalize_impl(CanonicalizationMethod::Rapid);
 }
 
 void CProduct::adjoint() {
@@ -349,7 +355,7 @@ void Sum::adjoint() {
   *this = Sum(ranges::begin(adj_summands), ranges::end(adj_summands));
 }
 
-ExprPtr Sum::canonicalize_impl(bool multipass) {
+ExprPtr Sum::canonicalize_impl(bool multipass, CanonicalizeOptions opts) {
   if (Logger::instance().canonicalize)
     std::wcout << "Sum::canonicalize_impl: input = "
                << to_latex_align(shared_from_this()) << std::endl;
@@ -358,9 +364,9 @@ ExprPtr Sum::canonicalize_impl(bool multipass) {
   for (auto pass = 0; pass != npasses; ++pass) {
     // recursively canonicalize summands ...
     // using for_each and directly access to summands
-    sequant::for_each(summands_, [pass](ExprPtr &summand) {
+    sequant::for_each(summands_, [pass, &opts](ExprPtr &summand) {
       auto bp = (pass % 2 == 0) ? summand->rapid_canonicalize()
-                                : summand->canonicalize();
+                                : summand->canonicalize(opts);
       if (bp) {
         assert(bp->template is<Constant>());
         summand = ex<Product>(std::static_pointer_cast<Constant>(bp)->value(),

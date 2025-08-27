@@ -46,7 +46,7 @@ struct ParticleGroup {
 /// objects that actually should have different colors (i.e. this is more than a
 /// hash function). It is intended to be used to determine the vertex colors in
 /// a colored graph representing a tensor network.
-class VertexPainter {
+class VertexPainterImpl {
  public:
   using Color = tensor_network::VertexColor;
   using NamedIndexSet = tensor_network::NamedIndexSet;
@@ -59,17 +59,14 @@ class VertexPainter {
   /// their Index::color() \param distinct_named_indices if false, will use same
   /// color for all named indices that have same Index::color(), else will use
   /// distinct color for each named_index
-  VertexPainter(const NamedIndexSet &named_indices,
-                bool distinct_named_indices = true);
+  VertexPainterImpl(const NamedIndexSet &named_indices,
+                    bool distinct_named_indices = true);
 
   const ColorMap &used_colors() const;
 
   Color operator()(const Index &idx);
   Color operator()(const ProtoBundle &bundle);
 
-  /// computes color using tensor label only; the preferred way is apply_shade()
-  [[deprecated("use apply_shade()")]] Color operator()(
-      const AbstractTensor &tensor);
   Color operator()(const BraGroup &group);
   Color operator()(const KetGroup &group);
   Color operator()(const AuxGroup &group);
@@ -87,7 +84,7 @@ class VertexPainter {
 
   void reset_shade();
 
- private:
+ protected:
   ColorMap used_colors_;
   const NamedIndexSet &named_indices_;
   bool distinct_named_indices_ = true;
@@ -167,6 +164,38 @@ class VertexPainter {
   bool may_have_same_color(const VertexData &data, const ParticleGroup &group);
   bool may_have_same_color(const VertexData &data, const Index &idx);
   bool may_have_same_color(const VertexData &data, const ProtoBundle &bundle);
+};
+
+template <typename TN>
+class VertexPainter : public VertexPainterImpl {
+ public:
+  using VertexPainterImpl::VertexPainterImpl;
+};
+
+// Template specializations vor TNv1 and TNv2, which still require
+// operator()(const AbstractTensor &) (refactoring would require changing tests
+// as well)
+class TensorNetwork;
+class TensorNetworkV2;
+
+template <>
+class VertexPainter<TensorNetwork> : public VertexPainterImpl {
+ public:
+  using VertexPainterImpl::VertexPainterImpl;
+
+  using VertexPainterImpl::operator();
+
+  VertexPainterImpl::Color operator()(const AbstractTensor &tensor) {
+    Color color = to_color(hash::value(label(tensor)));
+
+    return ensure_uniqueness(color, tensor);
+  }
+};
+
+template <>
+class VertexPainter<TensorNetworkV2> : public VertexPainter<TensorNetwork> {
+ public:
+  using VertexPainter<TensorNetwork>::VertexPainter;
 };
 
 }  // namespace sequant

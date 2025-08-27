@@ -12,6 +12,7 @@
 #include <SeQuant/core/parse.hpp>
 #include <SeQuant/core/parse/ast.hpp>
 #include <SeQuant/core/space.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/string.hpp>
 
 #include <boost/variant.hpp>
@@ -115,7 +116,7 @@ make_indices(const parse::ast::IndexGroups &groups,
 }
 
 template <typename Iterator>
-Symmetry to_perm_symmetry(char c, std::size_t offset, const Iterator &begin,
+Symmetry to_perm_symmetry(char c, std::size_t offset, const Iterator &,
                           Symmetry default_symmetry) {
   if (c == parse::ast::SymmetrySpec::unspecified) {
     return default_symmetry;
@@ -138,8 +139,7 @@ Symmetry to_perm_symmetry(char c, std::size_t offset, const Iterator &begin,
 }
 
 template <typename Iterator>
-BraKetSymmetry to_braket_symmetry(char c, std::size_t offset,
-                                  const Iterator &begin,
+BraKetSymmetry to_braket_symmetry(char c, std::size_t offset, const Iterator &,
                                   BraKetSymmetry default_symmetry) {
   if (c == parse::ast::SymmetrySpec::unspecified) {
     return default_symmetry;
@@ -163,7 +163,7 @@ BraKetSymmetry to_braket_symmetry(char c, std::size_t offset,
 
 template <typename Iterator>
 ParticleSymmetry to_particle_symmetry(char c, std::size_t offset,
-                                      const Iterator &begin,
+                                      const Iterator &,
                                       ParticleSymmetry default_symmetry) {
   if (c == parse::ast::SymmetrySpec::unspecified) {
     return default_symmetry;
@@ -184,9 +184,8 @@ ParticleSymmetry to_particle_symmetry(char c, std::size_t offset,
 }
 
 template <typename PositionCache, typename Iterator>
-Constant to_constant(const parse::ast::Number &number,
-                     const PositionCache &position_cache,
-                     const Iterator &begin) {
+Constant to_constant(const parse::ast::Number &number, const PositionCache &,
+                     const Iterator &) {
   if (static_cast<std::int64_t>(number.numerator) == number.numerator &&
       static_cast<std::int64_t>(number.denominator) == number.denominator) {
     // Integer fraction
@@ -333,10 +332,7 @@ ExprPtr ast_to_expr(const parse::ast::Product &product,
                     const PositionCache &position_cache, const Iterator &begin,
                     const DefaultSymmetries &default_symms) {
   if (product.factors.empty()) {
-    // This shouldn't happen
-    assert(false);
-    throw std::runtime_error(
-        "ast_to_expr: Reached supposed-to-be unreachable code");
+    SEQUANT_ABORT("Product factors must not be empty");
   }
 
   if (product.factors.size() == 1) {

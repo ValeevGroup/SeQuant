@@ -1,6 +1,6 @@
 #include <SeQuant/core/export/reordering_context.hpp>
 
-#include <SeQuant/core/parse.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 
 #include <algorithm>
 #include <cassert>
@@ -46,14 +46,13 @@ IndexSpace relevant_space(Range &&rng, MemoryLayout layout) {
       return {};
   }
 
-  assert(false);
-  return {};
+  SEQUANT_UNREACHABLE;
 }
 
 template <typename Comp>
 struct PairComparator {
-  bool prioritize_first;
   const Comp &cmp;
+  bool prioritize_first;
 
   PairComparator(const Comp &cmp, bool prioritize_first)
       : cmp(cmp), prioritize_first(prioritize_first) {}
@@ -230,8 +229,7 @@ bool ReorderingContext::is_less(const IndexSpace &lhs,
       return false;
   }
 
-  assert(false);
-  return false;
+  SEQUANT_UNREACHABLE;
 }
 
 bool ReorderingContext::is_ordered(const IndexSpace &lhs,

@@ -110,6 +110,14 @@ class AbstractTensor {
     throw missing_instantiation_for("_clone");
   }
 
+  /// clones this object producing a shared_ptr<AbstractTensor> so that if the
+  /// derived class is an Expr, hence derived from
+  /// `std::enable_shared_from_this`, the weak pointer is set correctly
+  //// @throw missing_instantiation_for if not overloaded
+  virtual std::shared_ptr<AbstractTensor> _clone_shared() const {
+    throw missing_instantiation_for("_clone_shared");
+  }
+
   using const_any_view_rand =
       ranges::any_view<const Index&, ranges::category::random_access>;
   using const_any_view_randsz =
@@ -214,7 +222,7 @@ class AbstractTensor {
     throw missing_instantiation_for("_to_latex");
   }
 
-  virtual bool operator<(const AbstractTensor& other) const {
+  virtual bool operator<(const AbstractTensor&) const {
     throw missing_instantiation_for("operator<");
   }
 
@@ -228,8 +236,7 @@ class AbstractTensor {
     throw missing_instantiation_for("_hash_value");
   }
 
-  virtual bool _transform_indices(
-      const container::map<Index, Index>& index_map) {
+  virtual bool _transform_indices(const container::map<Index, Index>&) {
     throw missing_instantiation_for("_transform_indices");
   }
   virtual void _reset_tags() { throw missing_instantiation_for("_reset_tags"); }
@@ -343,20 +350,20 @@ class AbstractTensor {
       return to_type(i) < to_type(j);
     });
 
-    container::svector<std::pair<Index, Index>> sorted_indices(n);
+    container::svector<Index> sorted_indices(n);
     for (std::size_t i = 0; i != bra_indices.size(); ++i) {
       assert(perm_from[i] < bra_indices.size());
-      sorted_indices[i].first = std::move(bra_indices[perm_from[i]]);
+      sorted_indices[i] = std::move(bra_indices[perm_from[i]]);
+    }
+    for (std::size_t i = 0; i != bra_indices.size(); ++i) {
+      bra_indices[i] = std::move(sorted_indices[i]);
     }
     for (std::size_t i = 0; i != ket_indices.size(); ++i) {
       assert(perm_from[i] < ket_indices.size());
-      sorted_indices[i].second = std::move(ket_indices[perm_from[i]]);
-    }
-    for (std::size_t i = 0; i != bra_indices.size(); ++i) {
-      bra_indices[i] = std::move(sorted_indices[i].first);
+      sorted_indices[i] = std::move(ket_indices[perm_from[i]]);
     }
     for (std::size_t i = 0; i != ket_indices.size(); ++i) {
-      ket_indices[i] = std::move(sorted_indices[i].second);
+      ket_indices[i] = std::move(sorted_indices[i]);
     }
   }
 };

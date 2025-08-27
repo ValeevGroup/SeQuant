@@ -294,6 +294,7 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
     REQUIRE(x910.expr()->as<Tensor>().symmetry() == Symmetry::nonsymm);
   }
 
+#if 0
   SECTION("Symmetry of sum") {
     auto tensor = [](Symmetry s) {
       return parse_expr(L"I_{i1,i2}^{a1,a2}", s)->as<Tensor>();
@@ -316,7 +317,6 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
     const auto t5 = tensor(Symmetry::nonsymm);
     const auto t6 = tensor(Symmetry::nonsymm);
 
-#if 0
     // sum of two antisymm tensors.
     REQUIRE(symmetry(imed(t1, t2)) == Symmetry::antisymm);
 
@@ -334,8 +334,8 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
 
     // sum of two nonsymmetric tensors
     REQUIRE(symmetry(imed(t5, t6)) == Symmetry::nonsymm);
-#endif
   }
+#endif
 
   SECTION("Debug") {
     auto t1 =

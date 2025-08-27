@@ -240,8 +240,7 @@ void generateITF(const json &blocks, std::string_view out_file,
           spdlog::debug("Current contribution:\n{}", contribution);
         }
 
-        for (ResultExpr &current :
-             postProcess(contribution, spaceMeta, options)) {
+        for (ResultExpr &current : postProcess(contribution, options)) {
           spdlog::debug("Fully processed equation is:\n{}", current);
 
           if (*current.expression() == Constant(0)) {
@@ -400,8 +399,8 @@ void generalSetup() {
 
 int main(int argc, char **argv) {
   set_locale();
-  set_default_context(Context(Vacuum::SingleProduct, IndexSpaceMetric::Unit,
-                              BraKetSymmetry::conjugate, SPBasis::spinor));
+  set_default_context({.index_space_registry = IndexSpaceRegistry(),
+                       .vacuum = Vacuum::SingleProduct});
   generalSetup();
 
   CLI::App app(

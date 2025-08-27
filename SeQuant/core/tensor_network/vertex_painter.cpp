@@ -4,13 +4,15 @@
 
 namespace sequant {
 
-VertexPainter::VertexPainter(const VertexPainter::NamedIndexSet &named_indices,
-                             bool distinct_named_indices)
+VertexPainterImpl::VertexPainterImpl(
+    const VertexPainterImpl::NamedIndexSet &named_indices,
+    bool distinct_named_indices)
     : used_colors_(),
       named_indices_(named_indices),
       distinct_named_indices_(distinct_named_indices) {}
 
-std::size_t VertexPainter::to_hash_value(const AbstractTensor &tensor) const {
+std::size_t VertexPainterImpl::to_hash_value(
+    const AbstractTensor &tensor) const {
   auto hashes = {hash::value(tensor._label()),
                  hash::value(tensor._bra_rank()),
                  hash::value(tensor._ket_rank()),
@@ -22,31 +24,26 @@ std::size_t VertexPainter::to_hash_value(const AbstractTensor &tensor) const {
   return to_hash_value(hashes);
 }
 
-VertexPainter::Color VertexPainter::operator()(const AbstractTensor &tensor) {
-  Color color = to_color(hash::value(label(tensor)));
-
-  return ensure_uniqueness(color, tensor);
-}
-
-VertexPainter::Color VertexPainter::operator()(const BraGroup &group) {
+VertexPainterImpl::Color VertexPainterImpl::operator()(const BraGroup &group) {
   Color color = to_color(group.id + 0xff);
 
   return ensure_uniqueness(color, group);
 }
 
-VertexPainter::Color VertexPainter::operator()(const KetGroup &group) {
+VertexPainterImpl::Color VertexPainterImpl::operator()(const KetGroup &group) {
   Color color = to_color(group.id + 0xff00);
 
   return ensure_uniqueness(color, group);
 }
 
-VertexPainter::Color VertexPainter::operator()(const AuxGroup &group) {
+VertexPainterImpl::Color VertexPainterImpl::operator()(const AuxGroup &group) {
   Color color = to_color(group.id + 3 * 0xff0000);
 
   return ensure_uniqueness(color, group);
 }
 
-VertexPainter::Color VertexPainter::operator()(const ParticleGroup &group) {
+VertexPainterImpl::Color VertexPainterImpl::operator()(
+    const ParticleGroup &group) {
   Color color;
   if (group.size == 1) {  // legacy coloring works for groups of size 1
     color = to_color(group.id);
@@ -58,18 +55,19 @@ VertexPainter::Color VertexPainter::operator()(const ParticleGroup &group) {
   return ensure_uniqueness(color, group);
 }
 
-void VertexPainter::apply_shade(std::size_t shade) { salt_ = shade; }
+void VertexPainterImpl::apply_shade(std::size_t shade) { salt_ = shade; }
 
-VertexPainter::Color VertexPainter::apply_shade(const AbstractTensor &t) {
+VertexPainterImpl::Color VertexPainterImpl::apply_shade(
+    const AbstractTensor &t) {
   const auto hash = to_hash_value(t);
   Color color = to_color(hash);
   salt_ = to_hash_value(t);
   return ensure_uniqueness(color, t);
 }
 
-void VertexPainter::reset_shade() { salt_.reset(); }
+void VertexPainterImpl::reset_shade() { salt_.reset(); }
 
-VertexPainter::Color VertexPainter::operator()(const Index &idx) {
+VertexPainterImpl::Color VertexPainterImpl::operator()(const Index &idx) {
   auto it = named_indices_.find(idx);
 
   std::size_t pre_color;
@@ -91,17 +89,18 @@ VertexPainter::Color VertexPainter::operator()(const Index &idx) {
   return ensure_uniqueness(to_color(pre_color), idx);
 }
 
-VertexPainter::Color VertexPainter::operator()(const ProtoBundle &bundle) {
+VertexPainterImpl::Color VertexPainterImpl::operator()(
+    const ProtoBundle &bundle) {
   Color color = to_color(Index::proto_indices_color(bundle));
 
   return ensure_uniqueness(color, bundle);
 }
 
-VertexPainter::Color VertexPainter::to_color(std::size_t color) const {
+VertexPainterImpl::Color VertexPainterImpl::to_color(std::size_t color) const {
   return to_color({color});
 }
 
-std::size_t VertexPainter::to_hash_value(
+std::size_t VertexPainterImpl::to_hash_value(
     std::initializer_list<std::size_t> hash_values) const {
   assert(hash_values.size() > 0);
   std::size_t hash = *(hash_values.begin());
@@ -112,7 +111,7 @@ std::size_t VertexPainter::to_hash_value(
   return hash;
 }
 
-VertexPainter::Color VertexPainter::to_color(
+VertexPainterImpl::Color VertexPainterImpl::to_color(
     std::initializer_list<std::size_t> colors) const {
   std::size_t color = to_hash_value(colors);
 
@@ -134,7 +133,7 @@ VertexPainter::Color VertexPainter::to_color(
     // exactly what happens when we perform a conversion into a narrower type.
     // We only have to make sure that the underlying types are unsigned as
     // otherwise the behavior is undefined.
-    static_assert(std::is_unsigned_v<VertexPainter::Color>,
+    static_assert(std::is_unsigned_v<VertexPainterImpl::Color>,
                   "Narrowing conversion are undefined for signed integers");
     static_assert(std::is_unsigned_v<std::size_t>,
                   "Narrowing conversion are undefined for signed integers");
@@ -142,38 +141,38 @@ VertexPainter::Color VertexPainter::to_color(
   }
 }
 
-bool VertexPainter::may_have_same_color(const VertexData &data,
-                                        const AbstractTensor &tensor) {
+bool VertexPainterImpl::may_have_same_color(const VertexData &data,
+                                            const AbstractTensor &tensor) {
   return std::holds_alternative<const AbstractTensor *>(data) &&
          label(*std::get<const AbstractTensor *>(data)) == label(tensor);
 }
 
-bool VertexPainter::may_have_same_color(const VertexData &data,
-                                        const BraGroup &group) {
+bool VertexPainterImpl::may_have_same_color(const VertexData &data,
+                                            const BraGroup &group) {
   return std::holds_alternative<BraGroup>(data) &&
          std::get<BraGroup>(data).id == group.id;
 }
 
-bool VertexPainter::may_have_same_color(const VertexData &data,
-                                        const KetGroup &group) {
+bool VertexPainterImpl::may_have_same_color(const VertexData &data,
+                                            const KetGroup &group) {
   return std::holds_alternative<KetGroup>(data) &&
          std::get<KetGroup>(data).id == group.id;
 }
 
-bool VertexPainter::may_have_same_color(const VertexData &data,
-                                        const AuxGroup &group) {
+bool VertexPainterImpl::may_have_same_color(const VertexData &data,
+                                            const AuxGroup &group) {
   return std::holds_alternative<AuxGroup>(data) &&
          std::get<AuxGroup>(data).id == group.id;
 }
 
-bool VertexPainter::may_have_same_color(const VertexData &data,
-                                        const ParticleGroup &group) {
+bool VertexPainterImpl::may_have_same_color(const VertexData &data,
+                                            const ParticleGroup &group) {
   return std::holds_alternative<ParticleGroup>(data) &&
          std::get<ParticleGroup>(data).id == group.id;
 }
 
-bool VertexPainter::may_have_same_color(const VertexData &data,
-                                        const Index &idx) {
+bool VertexPainterImpl::may_have_same_color(const VertexData &data,
+                                            const Index &idx) {
   if (!std::holds_alternative<Index>(data)) {
     return false;
   }
@@ -192,8 +191,8 @@ bool VertexPainter::may_have_same_color(const VertexData &data,
   return lhs.color() == idx.color();
 }
 
-bool VertexPainter::may_have_same_color(const VertexData &data,
-                                        const ProtoBundle &bundle) {
+bool VertexPainterImpl::may_have_same_color(const VertexData &data,
+                                            const ProtoBundle &bundle) {
   return std::holds_alternative<const ProtoBundle *>(data) &&
          Index::proto_indices_color(*std::get<const ProtoBundle *>(data)) ==
              Index::proto_indices_color(bundle);

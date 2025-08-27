@@ -12,9 +12,9 @@
 #include <SeQuant/core/latex.hpp>
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/rational.hpp>
-#include <SeQuant/core/timer.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/nodiscard.hpp>
+#include <SeQuant/core/utility/timer.hpp>
 #include <SeQuant/core/wick.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 
@@ -36,7 +36,7 @@ struct WickAccessor {};
 
 template <>
 template <>
-struct WickTheorem<Statistics::FermiDirac>::template access_by<WickAccessor> {
+struct WickTheorem<Statistics::FermiDirac>::access_by<WickAccessor> {
   auto compute_nontensor_wick(WickTheorem<Statistics::FermiDirac>& wick) {
     return wick.compute_nontensor_wick(false);
   }
@@ -370,6 +370,48 @@ TEST_CASE("wick", "[algorithms][wick]") {
           L"+ {{s^{{i_6}}_{{i_3}}}{a^{{i_1}{i_2}{i_5}}_{{i_8}{i_4}{i_7}}}} + "
           L"{{a^{{i_1}{i_2}{i_5}{i_6}}_{{i_3}{i_4}{i_7}{i_8}}}}\\bigr) }");
 
+      // we use this example in the paper, both as bare ops and contracted with
+      // scalars to make all indices dummy and the topological optimizations
+      // kicking in ... see if the paper's exlanation of how
+      // topology works is correct
+      {
+        auto expr =
+            ex<Tensor>(L"g", bra{L"i_1", L"i_2"}, ket{L"i_3", L"i_4"},
+                       Symmetry::antisymm) *
+            ex<FNOperator>(cre({L"i_1", L"i_2"}), ann({L"i_3", L"i_4"})) *
+            ex<Tensor>(L"g", bra{L"i_5", L"i_6"}, ket{L"i_7", L"i_8"},
+                       Symmetry::antisymm) *
+            ex<FNOperator>(cre({L"i_5", L"i_6"}), ann({L"i_7", L"i_8"}));
+        auto wick = FWickTheorem{expr};
+
+        // first with topology utilization
+        REQUIRE_NOTHROW(
+            wick.full_contractions(false).use_topology(true).compute());
+        wick.stats().reset();
+        auto result =
+            wick.full_contractions(false).use_topology(true).compute();
+        result->rapid_canonicalize();
+        REQUIRE(result->is<Sum>());
+        REQUIRE(result->size() == 3);
+        REQUIRE(wick.stats().num_attempted_contractions == 2);
+        REQUIRE(wick.stats().num_useful_contractions == 3);
+        auto result_latex_w_topology = to_latex(result);
+
+        // now without topology
+        wick = FWickTheorem{expr};
+        REQUIRE_NOTHROW(
+            wick.full_contractions(false).use_topology(false).compute());
+        wick.stats().reset();
+        result = wick.full_contractions(false).use_topology(false).compute();
+        result->rapid_canonicalize();
+        REQUIRE(result->is<Sum>());
+        REQUIRE(result->size() == 3);
+        REQUIRE(wick.stats().num_attempted_contractions == 6);
+        REQUIRE(wick.stats().num_useful_contractions == 8);
+        auto result_latex_wo_topology = to_latex(result);
+        REQUIRE(result_latex_wo_topology == result_latex_w_topology);
+      }
+
       // if Wick's theorem's result is in "canonical" (columns-matching-inputs
       // ... this is what Kutzelnigg calls generalized Wick's theorem) it works
       // same for spinor and spinfree basis for physical vacuum
@@ -658,6 +700,8 @@ TEST_CASE("wick", "[algorithms][wick]") {
       ExprPtr result;
       REQUIRE_NOTHROW(result = wick.compute());
       // std::wcout << "result = " << to_latex(result) << std::endl;
+      REQUIRE(to_latex(result) == L"{{-}{\\bar{g}^{{a_2}{i_1}}_{{a_4}{a_3}}}}");
+      canonicalize(result, {.method = CanonicalizationMethod::Rapid});
       REQUIRE(to_latex(result) == L"{{-}{\\bar{g}^{{i_1}{a_2}}_{{a_3}{a_4}}}}");
     }
 
@@ -674,20 +718,18 @@ TEST_CASE("wick", "[algorithms][wick]") {
     }
 
     // 4-body ^ 4-body
-    SEQUANT_PROFILE_SINGLE(
-        "wick(4^4)",
-        {
-          auto opseq = ex<FNOperatorSeq>(
-              FNOperator(cre({L"p_1", L"p_2", L"p_3", L"p_4"}),
-                         ann({L"p_5", L"p_6", L"p_7", L"p_8"})),
-              FNOperator(cre({L"p_21", L"p_22", L"p_23", L"p_24"}),
-                         ann({L"p_25", L"p_26", L"p_27", L"p_28"})));
-          auto wick = FWickTheorem{opseq};
-          auto result = wick.compute(true);
-          REQUIRE(result->is<Constant>());
-          REQUIRE(result->as<Constant>().value<int>() == 576);
-          REQUIRE(576 == GWT({4, 4}).result().size());
-        })
+    SECTION("wick(4^4)") {
+      auto opseq = ex<FNOperatorSeq>(
+          FNOperator(cre({L"p_1", L"p_2", L"p_3", L"p_4"}),
+                     ann({L"p_5", L"p_6", L"p_7", L"p_8"})),
+          FNOperator(cre({L"p_21", L"p_22", L"p_23", L"p_24"}),
+                     ann({L"p_25", L"p_26", L"p_27", L"p_28"})));
+      auto wick = FWickTheorem{opseq};
+      auto result = wick.compute(true);
+      REQUIRE(result->is<Constant>());
+      REQUIRE(result->as<Constant>().value<int>() == 576);
+      REQUIRE(576 == GWT({4, 4}).result().size());
+    }
 
     // three general 1-body operators
     {
@@ -751,7 +793,7 @@ TEST_CASE("wick", "[algorithms][wick]") {
     }
 
     // 2-body ^ 2-body ^ 2-body ^ 2-body
-    SEQUANT_PROFILE_SINGLE("wick(2^2^2^2)", {
+    SECTION("wick(2^2^2^2)") {
       auto opseq = ex<FNOperatorSeq>(
           FNOperator(cre({L"p_1", L"p_2"}), ann({L"p_5", L"p_6"})),
           FNOperator(cre({L"p_9", L"p_10"}), ann({L"p_11", L"p_12"})),
@@ -761,7 +803,7 @@ TEST_CASE("wick", "[algorithms][wick]") {
       auto result = wick.compute(true);
       REQUIRE(result->is<Constant>());
       REQUIRE(result->as<Constant>().value<int>() == 4752);
-    })
+    }
 #ifndef SEQUANT_SKIP_LONG_TESTS
     REQUIRE(4752 == GWT({2, 2, 2, 2}).result().size());
 #endif
@@ -772,7 +814,7 @@ TEST_CASE("wick", "[algorithms][wick]") {
 #define SEQUANT_EXPENSIVELY_VALIDATE_LONG_TESTS 0
 
     // 4-body ^ 2-body ^ 4-body
-    SEQUANT_PROFILE_SINGLE("wick(4^2^4)", {
+    SECTION("wick(4^2^4)") {
       auto opseq = ex<FNOperatorSeq>(
           FNOperator(cre({L"p_1", L"p_2", L"p_3", L"p_4"}),
                      ann({L"p_5", L"p_6", L"p_7", L"p_8"})),
@@ -785,14 +827,14 @@ TEST_CASE("wick", "[algorithms][wick]") {
       REQUIRE(result->as<Constant>().value<int>() == 50688);
       if (SEQUANT_EXPENSIVELY_VALIDATE_LONG_TESTS)
         REQUIRE(50688 == GWT({4, 2, 4}).result().size());
-    })
+    }
 
 // comment out to run superlong tests
 #define SEQUANT_SKIP_SUPERLONG_TESTS
 
 #ifndef SEQUANT_SKIP_SUPERLONG_TESTS
     // 4-body ^ 2-body ^ 2-body ^ 2-body
-    SEQUANT_PROFILE_SINGLE("wick(4^2^2^2)", {
+    SECTION("wick(4^2^2^2)") {
       auto opseq = ex<FNOperatorSeq>(
           FNOperator(cre({L"p_1", L"p_2", L"p_3", L"p_4"}),
                      ann({L"p_5", L"p_6", L"p_7", L"p_8"})),
@@ -805,10 +847,10 @@ TEST_CASE("wick", "[algorithms][wick]") {
       REQUIRE(result->as<Constant>().value<int>() == 117504);
       if (SEQUANT_EXPENSIVELY_VALIDATE_LONG_TESTS)
         REQUIRE(117504 == GWT({4, 2, 2, 2}).result().size());
-    })
+    }
 
     // 3-body ^ 2-body ^ 2-body ^ 3-body
-    SEQUANT_PROFILE_SINGLE("wick(3^2^2^3)", {
+    SECTION("wick(3^2^2^3)") {
       auto opseq = ex<FNOperatorSeq>(
           FNOperator(cre({L"p_1", L"p_2", L"p_3"}),
                      ann({L"p_5", L"p_6", L"p_7"})),
@@ -822,10 +864,10 @@ TEST_CASE("wick", "[algorithms][wick]") {
       REQUIRE(result->as<Constant>().value<int>() == 202320);
       if (SEQUANT_EXPENSIVELY_VALIDATE_LONG_TESTS)
         REQUIRE(202320 == GWT({3, 2, 2, 3}).result().size());
-    })
+    }
 
     // 4-body ^ 4-body ^ 4-body
-    SEQUANT_PROFILE_SINGLE("wick(4^4^4)", {
+    SECTION("wick(4^4^4)") {
       auto opseq = ex<FNOperatorSeq>(
           FNOperator(cre({L"p_1", L"p_2", L"p_3", L"p_4"}),
                      ann({L"p_5", L"p_6", L"p_7", L"p_8"})),
@@ -839,7 +881,7 @@ TEST_CASE("wick", "[algorithms][wick]") {
       REQUIRE(result->as<Constant>().value<int>() == 4783104);
       if (SEQUANT_EXPENSIVELY_VALIDATE_LONG_TESTS)
         REQUIRE(4783104 == GWT({4, 4, 4}).result().size());
-    })
+    }
 #endif
 
 #endif
@@ -872,7 +914,7 @@ TEST_CASE("wick", "[algorithms][wick]") {
     });
 
     // 2-body ^ 2-body
-    SEQUANT_PROFILE_SINGLE("wick(H2*T2)", {
+    SECTION("wick(H2*T2)") {
       auto opseq = ex<FNOperatorSeq>(
           FNOperator(cre({L"p_1", L"p_2"}), ann({L"p_3", L"p_4"})),
           FNOperator(cre({L"a_4", L"a_5"}), ann({L"i_4", L"i_5"})));
@@ -953,10 +995,10 @@ TEST_CASE("wick", "[algorithms][wick]") {
                      EquivalentTo("-4 * g{i1,i2;a1,a2} t{a1,a2;i2,i1} + 8 "
                                   "g{i1,i2;a1,a2} t{a1,a2;i1,i2}"));
       }
-    });
+    }
 
     // 2-body ^ 1-body ^ 1-body, with/without using topology
-    SEQUANT_PROFILE_SINGLE("wick(H2*T1*T1)", {
+    SECTION("wick(H2*T1*T1)") {
       for (auto&& use_nop_partitions : {false}) {
         for (auto&& use_op_partitions : {true, false}) {
           std::wostringstream oss;
@@ -993,7 +1035,8 @@ TEST_CASE("wick", "[algorithms][wick]") {
           TensorCanonicalizer::register_instance(
               std::make_shared<DefaultTensorCanonicalizer>(
                   std::vector<Index>{}));
-          canonicalize(wick_result_2);
+          canonicalize(wick_result_2,
+                       {.method = CanonicalizationMethod::Complete});
           rapid_simplify(wick_result_2);
 
           // print(oss.str(), wick_result_2);
@@ -1006,10 +1049,10 @@ TEST_CASE("wick", "[algorithms][wick]") {
                   L"2}}}}");
         }  // use_op_partitions
       }    // use_nop_partitions
-    });
+    }
 
     // 2-body ^ 1-body ^ 2-body with dependent (PNO) indices
-    SEQUANT_PROFILE_SINGLE("wick(P2*H1*T2)", {
+    SECTION("wick(P2*H1*T2)") {
       auto opseq =
           ex<FNOperatorSeq>(FNOperator(cre({L"i_1", L"i_2"}),
                                        ann({Index(L"a_1", {L"i_1", L"i_2"}),
@@ -1043,10 +1086,10 @@ TEST_CASE("wick", "[algorithms][wick]") {
           std::make_shared<DefaultTensorCanonicalizer>());
       canonicalize(wick_result_2);
       rapid_simplify(wick_result_2);
-    });
+    }
 
     // 2=body ^ 2-body ^ 2-body ^ 2-body with dependent (PNO) indices
-    SEQUANT_PROFILE_SINGLE("wick(P2*H2*T2*T2)", {
+    SECTION("wick(P2*H2*T2*T2)") {
       for (auto&& use_nop_partitions : {false}) {
         for (auto&& use_op_partitions : {true, false}) {
           std::wostringstream oss;
@@ -1120,11 +1163,11 @@ TEST_CASE("wick", "[algorithms][wick]") {
           REQUIRE(wick_result_2->size() == 4);
         }  // use_op_partitions
       }    // use_nop_partitions
-    });
+    }
 
 #if 1
     // 3-body ^ 2-body ^ 2-body ^ 3-body
-    SEQUANT_PROFILE_SINGLE("wick(P3*H2*T2*T3)", {
+    SECTION("wick(P3*H2*T2*T3)") {
       constexpr bool connected_only = true;
       constexpr bool topology = true;
       auto P3 = ex<Constant>(rational{1, 36}) *
@@ -1156,7 +1199,7 @@ TEST_CASE("wick", "[algorithms][wick]") {
       REQUIRE(
           wick_result->size() ==
           (connected_only ? 7 : 9));  // 9 = 2 disconnected + 7 connected terms
-    });
+    }
 #endif
   }
 }

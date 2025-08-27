@@ -41,6 +41,9 @@ namespace sequant {
 /// graph), with Tensor objects represented by one or more vertices.
 class TensorNetworkV3 {
  public:
+  /// @return the implementation version of TN
+  constexpr static int version() { return 3; }
+
   // for unit testing only
   friend class TensorNetworkV3Accessor;
 
@@ -192,6 +195,7 @@ class TensorNetworkV3 {
 
     std::unique_ptr<bliss::Graph> bliss_graph;
     std::vector<std::wstring> vertex_labels;
+    std::vector<std::optional<std::wstring>> vertex_xlabels;
     std::vector<std::optional<std::wstring>> vertex_texlabels;
     std::vector<VertexColor> vertex_colors;
     std::vector<VertexType> vertex_types;
@@ -257,9 +261,8 @@ class TensorNetworkV3 {
 
   /// @param cardinal_tensor_labels move all tensors with these labels to the
   /// front before canonicalizing indices
-  /// @param fast if true (default), does fast canonicalization that is only
-  /// optimal if all tensors are distinct; set to false to perform complete
-  /// canonicalization
+  /// @param method see CanonicalizationMethod for the meaning of this
+  /// parameter; by default perform complete canonicalization
   /// @param named_indices specifies the indices that cannot be renamed, i.e.
   /// their labels are meaningful; default is nullptr, which results in external
   /// indices treated as named indices
@@ -267,7 +270,8 @@ class TensorNetworkV3 {
   /// nullptr
   ExprPtr canonicalize(
       const container::vector<std::wstring> &cardinal_tensor_labels = {},
-      bool fast = true, const NamedIndexSet *named_indices = nullptr);
+      CanonicalizationMethod method = CanonicalizationMethod::Complete,
+      const NamedIndexSet *named_indices = nullptr);
 
   /// metadata produced by canonicalize_slots()
   struct SlotCanonicalizationMetadata {
@@ -367,19 +371,39 @@ class TensorNetworkV3 {
     const NamedIndexSet *named_indices = nullptr;
 
     /// if false, will use same color for all
-    /// named indices that have same Index::color(), else will use distinct
-    /// color for each
+    /// named indices that have same Index::color(). This is needed to
+    /// ignore labels of the external indices, which is the desired behavior
+    /// for routine canonicalization that produces results independent of
+    /// external slot renamings. In some circumstances where external slots are
+    /// to be treated as topologically distinct (e.g. in WickTheorem) need to
+    /// set this to true
     bool distinct_named_indices = false;
 
     /// if false, will not generate the labels
     bool make_labels = true;
 
+    /// if true, will prepend label by vertex ordinal
+    bool label_prepend_ordinal = false;
+
+    /// if false, will not generate the xlabels
+    bool make_xlabels = false;
+
+    /// callable that maps vertex index to xlabel
+    std::function<std::wstring(std::size_t)> xlabel_maker =
+        [](std::size_t vertex_ordinal) {
+          return std::to_wstring(vertex_ordinal);
+        };
+
     /// if false, will not generate the TeX labels
     bool make_texlabels = true;
+
+    /// if true, will prepend texlabel by vertex ordinal
+    bool texlabel_prepend_ordinal = false;
 
     /// if false, will not generate the Index->vertex map
     bool make_idx_to_vertex = false;
   };
+  static CreateGraphOptions make_default_graph_options() { return {}; }
 
   // clang-format off
   /// @brief converts the network into a Bliss graph whose vertices are indices
@@ -420,12 +444,8 @@ class TensorNetworkV3 {
   ///     - for tensors with bra<->ket symmetry matching bra and ket slot
   ///     vertices have identical colors.
   // clang-format on
-  Graph create_graph(const CreateGraphOptions &options = {
-                         .named_indices = nullptr,
-                         .distinct_named_indices = false,
-                         .make_labels = true,
-                         .make_texlabels = true,
-                         .make_idx_to_vertex = false}) const;
+  Graph create_graph(
+      const CreateGraphOptions &options = make_default_graph_options()) const;
 
  private:
   /// list of tensors

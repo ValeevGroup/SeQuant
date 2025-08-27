@@ -17,6 +17,7 @@
 #include <SeQuant/core/tensor_network/utils.hpp>
 #include <SeQuant/core/tensor_network/vertex_painter.hpp>
 #include <SeQuant/core/tensor_network_v2.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/swap.hpp>
 #include <SeQuant/core/utility/tuple.hpp>
 #include <SeQuant/core/wstring.hpp>
@@ -159,11 +160,11 @@ void TensorNetworkV2::canonicalize_graph(const NamedIndexSet &named_indices) {
                       Logger::instance().canonicalize_dot,
        .make_texlabels = Logger::instance().canonicalize_input_graph ||
                          Logger::instance().canonicalize_dot});
-  // graph.bliss_graph->write_dot(std::wcout, graph.vertex_labels);
+  // graph.bliss_graph->write_dot(std::wcout, {.labels = graph.vertex_labels});
 
   if (Logger::instance().canonicalize_input_graph) {
     std::wcout << "Input graph for canonicalization:\n";
-    graph.bliss_graph->write_dot(std::wcout, graph.vertex_labels);
+    graph.bliss_graph->write_dot(std::wcout, {.labels = graph.vertex_labels});
   }
 
   // canonize the graph
@@ -179,10 +180,10 @@ void TensorNetworkV2::canonicalize_graph(const NamedIndexSet &named_indices) {
     }
     std::wcout << "Canonicalized graph:\n";
     bliss::Graph *cgraph = graph.bliss_graph->permute(canonize_perm);
-    cgraph->write_dot(std::wcout, {}, {}, {.display_colors = true});
+    cgraph->write_dot(std::wcout, {.display_colors = true});
     auto cvlabels = permute(graph.vertex_labels, canonize_perm);
     std::wcout << "with our labels:\n";
-    cgraph->write_dot(std::wcout, cvlabels);
+    cgraph->write_dot(std::wcout, {.labels = cvlabels});
     delete cgraph;
   }
 
@@ -544,8 +545,9 @@ TensorNetworkV2::canonicalize_slots(
 
   if (Logger::instance().canonicalize_input_graph) {
     std::wcout << "Input graph for canonicalization:\n";
-    graph.bliss_graph->write_dot(std::wcout, graph.vertex_labels,
-                                 graph.vertex_texlabels);
+    graph.bliss_graph->write_dot(
+        std::wcout,
+        {.labels = graph.vertex_labels, .texlabels = graph.vertex_texlabels});
   }
 
   // canonize the graph
@@ -563,11 +565,12 @@ TensorNetworkV2::canonicalize_slots(
       std::wcout << i << " -> " << canonize_perm[i] << "\n";
     }
     std::wcout << "Canonicalized graph:\n";
-    metadata.graph->write_dot(std::wcout, {}, {}, {.display_colors = true});
+    metadata.graph->write_dot(std::wcout, {.display_colors = true});
     auto cvlabels = permute(graph.vertex_labels, canonize_perm);
     auto cvtexlabels = permute(graph.vertex_texlabels, canonize_perm);
     std::wcout << "with our labels:\n";
-    metadata.graph->write_dot(std::wcout, cvlabels, cvtexlabels);
+    metadata.graph->write_dot(std::wcout,
+                              {.labels = cvlabels, .texlabels = cvtexlabels});
   }
 
   // produce canonical list of named indices
@@ -587,7 +590,6 @@ TensorNetworkV2::canonicalize_slots(
         idx2cord(named_index_compare);
 
     // collect named indices and sort them on the fly
-    auto grand_index_list_end = grand_index_list.end();
     for (auto [idx_ord, idx] : ranges::views::enumerate(grand_index_list)) {
       if (!is_named_index(idx)) {
         continue;
@@ -704,7 +706,8 @@ TensorNetworkV2::Graph TensorNetworkV2::create_graph(
                                            ? this->ext_indices()
                                            : *(options.named_indices);
 
-  VertexPainter colorizer(named_indices, options.distinct_named_indices);
+  VertexPainter<TensorNetworkV2> colorizer(named_indices,
+                                           options.distinct_named_indices);
 
   // core, bra, ket, auxiliary and optionally (for non-symmetric tensors) a
   // particle vertex
@@ -1024,7 +1027,7 @@ TensorNetworkV2::Graph TensorNetworkV2::create_graph(
 
       assert(idx_vertex != uninitialized_vertex);
       if (idx_vertex == uninitialized_vertex) {
-        std::abort();
+        SEQUANT_ABORT("Expected all vertices to be initialized at this point");
       }
 
       edges.push_back(std::make_pair(idx_vertex, vertex));
@@ -1206,7 +1209,7 @@ void TensorNetworkV2::init_edges() {
 }
 
 container::svector<std::pair<long, long>> TensorNetworkV2::factorize() {
-  abort();  // not yet implemented
+  SEQUANT_ABORT("TensorNetworkV2::factorize is not yet implemented");
 }
 
 size_t TensorNetworkV2::SlotCanonicalizationMetadata::hash_value() const {

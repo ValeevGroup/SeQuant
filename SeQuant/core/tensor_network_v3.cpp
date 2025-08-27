@@ -17,6 +17,7 @@
 #include <SeQuant/core/tensor_network/utils.hpp>
 #include <SeQuant/core/tensor_network/vertex_painter.hpp>
 #include <SeQuant/core/tensor_network_v3.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/swap.hpp>
 #include <SeQuant/core/utility/tuple.hpp>
 
@@ -111,7 +112,7 @@ std::size_t TensorNetworkV3::Graph::vertex_to_index_idx(
 
 std::optional<std::size_t> TensorNetworkV3::Graph::vertex_to_tensor_idx(
     std::size_t vertex) const {
-  const auto vertex_type = vertex_types.at(vertex);
+  const auto vertex_type = vertex_types[vertex];
   if (vertex_type == VertexType::Index || vertex_type == VertexType::SPBundle)
     return std::nullopt;
 
@@ -160,7 +161,7 @@ ExprPtr TensorNetworkV3::canonicalize_graph(
 
   if (Logger::instance().canonicalize_input_graph) {
     std::wcout << "Input graph for canonicalization:\n";
-    graph.bliss_graph->write_dot(std::wcout, graph.vertex_labels);
+    graph.bliss_graph->write_dot(std::wcout, {.labels = graph.vertex_labels});
   }
 
   // canonize the graph
@@ -176,10 +177,10 @@ ExprPtr TensorNetworkV3::canonicalize_graph(
     }
     std::wcout << "Canonicalized graph:\n";
     bliss::Graph *cgraph = graph.bliss_graph->permute(canonize_perm);
-    cgraph->write_dot(std::wcout, {}, {}, {.display_colors = true});
+    cgraph->write_dot(std::wcout, {.display_colors = true});
     auto cvlabels = permute(graph.vertex_labels, canonize_perm);
     std::wcout << "with our labels:\n";
-    cgraph->write_dot(std::wcout, cvlabels);
+    cgraph->write_dot(std::wcout, {.labels = cvlabels});
     delete cgraph;
   }
 
@@ -223,7 +224,7 @@ ExprPtr TensorNetworkV3::canonicalize_graph(
         assert(tensor_count > 0);
         const auto bra = vertex_type == VertexType::TensorBra;
         const std::size_t tensor_ord = tensor_count - 1;
-        const AbstractTensor &tensor = *tensors_.at(tensor_ord);
+        const AbstractTensor &tensor = *tensors_[tensor_ord];
         const auto symm = symmetry(tensor);
         if (symm == Symmetry::symm || symm == Symmetry::antisymm) {
           canonical_slot_order[tensor_ord][bra ? 0 : 1].second.emplace_back(
@@ -240,7 +241,7 @@ ExprPtr TensorNetworkV3::canonicalize_graph(
       case VertexType::TensorBraKet: {
         assert(tensor_count > 0);
         const std::size_t tensor_ord = tensor_count - 1;
-        const AbstractTensor &tensor = *tensors_.at(tensor_ord);
+        const AbstractTensor &tensor = *tensors_[tensor_ord];
         const auto symm = symmetry(tensor);
         const auto psymm = particle_symmetry(tensor);
         if (symm == Symmetry::nonsymm && psymm == ParticleSymmetry::symm &&
@@ -378,17 +379,15 @@ ExprPtr TensorNetworkV3::canonicalize_graph(
           const auto bra = bk == Origin::Bra;
           auto &sorted_ordinals = bra ? braslots : ketslots;
           if (!ranges::is_sorted(sorted_ordinals)) {
-            for (const auto &idxpair : idxrepl) {
-              std::wcout << "TensorNetworkV3::canonicalize_graph: permuting "
-                         << (bra ? "bra" : "ket") << " slots in "
-                         << to_latex(tensor) << ":\n";
-              auto indices = bra ? tensor._bra() : tensor._ket();
-              for (auto i = 0; i != indices.size(); ++i) {
-                std::wcout << "  " << to_latex(indices[sorted_ordinals[i]])
-                           << " -> " << to_latex(indices[i]) << "\n";
-              }
-              std::wcout << std::endl;
+            std::wcout << "TensorNetworkV3::canonicalize_graph: permuting "
+                       << (bra ? "bra" : "ket") << " slots in "
+                       << to_latex(tensor) << ":\n";
+            auto indices = bra ? tensor._bra() : tensor._ket();
+            for (auto i = 0; i != indices.size(); ++i) {
+              std::wcout << "  " << to_latex(indices[sorted_ordinals[i]])
+                         << " -> " << to_latex(indices[i]) << "\n";
             }
+            std::wcout << std::endl;
           }
         }
       }
@@ -428,8 +427,8 @@ ExprPtr TensorNetworkV3::canonicalize_graph(
       return false;
     }
 
-    const std::size_t lhs_vertex = tensor_idx_to_vertex.at(lhs_idx);
-    const std::size_t rhs_vertex = tensor_idx_to_vertex.at(rhs_idx);
+    const std::size_t lhs_vertex = tensor_idx_to_vertex[lhs_idx];
+    const std::size_t rhs_vertex = tensor_idx_to_vertex[rhs_idx];
 
     // Commuting tensors are sorted based on their canonical order which is
     // given by the order of the corresponding vertices in the canonical graph
@@ -462,7 +461,7 @@ TensorNetworkV3 &TensorNetworkV3::operator=(TensorNetworkV3 &&) noexcept =
 TensorNetworkV3::TensorNetworkV3(const TensorNetworkV3 &other) {
   tensors_.reserve(other.tensors_.size());
   for (const auto &t : other.tensors_) {
-    tensors_.emplace_back(std::shared_ptr<AbstractTensor>(t->_clone()));
+    tensors_.emplace_back(t->_clone_shared());
   }
   tensor_input_ordinals_ = other.tensor_input_ordinals_;
 }
@@ -474,10 +473,10 @@ TensorNetworkV3 &TensorNetworkV3::operator=(
 }
 
 ExprPtr TensorNetworkV3::canonicalize(
-    const container::vector<std::wstring> &cardinal_tensor_labels, bool fast,
-    const NamedIndexSet *named_indices_ptr) {
+    const container::vector<std::wstring> &cardinal_tensor_labels,
+    CanonicalizationMethod method, const NamedIndexSet *named_indices_ptr) {
   if (Logger::instance().canonicalize) {
-    std::wcout << "TensorNetworkV3::canonicalize(" << (fast ? "fast" : "slow")
+    std::wcout << "TensorNetworkV3::canonicalize(" << to_wstring(method)
                << "): input tensors\n";
     size_t cnt = 0;
     ranges::for_each(tensors_, [&](const auto &t) {
@@ -503,105 +502,111 @@ ExprPtr TensorNetworkV3::canonicalize(
   }
 
   ExprPtr byproduct;
-  if (!fast) {
+  if (method & CanonicalizationMethod::Topological) {
     // The graph-based canonization is required in all cases in which there are
     // indistinguishable tensors present in the expression. Their order and
     // indexing can only be determined via this rigorous canonization.
     byproduct = canonicalize_graph(named_indices);
   }
 
-  // Ensure each individual tensor is written in the way that its tensor
-  // block (== order of index spaces) is canonical
-  byproduct *= canonicalize_individual_tensor_blocks(named_indices);
+  if (method & CanonicalizationMethod::Lexicographic) {
+    // Ensure each individual tensor is written in the way that its tensor
+    // block (== order of index spaces) is canonical
+    byproduct *= canonicalize_individual_tensor_blocks(named_indices);
 
-  CanonicalTensorCompare<decltype(cardinal_tensor_labels)> tensor_sorter(
-      cardinal_tensor_labels, true);
+    CanonicalTensorCompare<decltype(cardinal_tensor_labels)> tensor_sorter(
+        cardinal_tensor_labels, true);
 
-  using ranges::begin;
-  using ranges::end;
-  using ranges::views::zip;
-  auto tensors_with_ordinals = zip(tensors_, tensor_input_ordinals_);
-  bubble_sort(begin(tensors_with_ordinals), end(tensors_with_ordinals),
-              tensor_sorter);
+    using ranges::begin;
+    using ranges::end;
+    using ranges::views::zip;
+    auto tensors_with_ordinals = zip(tensors_, tensor_input_ordinals_);
+    bubble_sort(begin(tensors_with_ordinals), end(tensors_with_ordinals),
+                tensor_sorter);
 
-  init_edges();
+    init_edges();
 
-  if (Logger::instance().canonicalize) {
-    std::wcout << "TensorNetworkV3::canonicalize(" << (fast ? "fast" : "slow")
-               << "): tensors after initial sort\n";
-    size_t cnt = 0;
-    ranges::for_each(tensors_, [&](const auto &t) {
-      std::wcout << "tensor " << cnt++ << ": " << to_latex(*t) << std::endl;
-    });
-  }
-
-  // helpers to filter named ("external" in traditional use case) / anonymous
-  // ("internal" in traditional use case)
-  auto is_named_index = [&](const Index &idx) {
-    return named_indices.find(idx) != named_indices.end();
-  };
-  auto is_anonymous_index = [&](const Index &idx) {
-    return named_indices.find(idx) == named_indices.end();
-  };
-
-  // Sort edges based on the order of the tensors they connect
-  std::stable_sort(edges_.begin(), edges_.end(),
-                   [&is_named_index](const Edge &lhs, const Edge &rhs) {
-                     // Sort first by index's character (named < anonymous),
-                     // then by Edge (not by Index's full label) ... this
-                     // automatically puts named indices first
-                     const bool lhs_is_named = is_named_index(lhs.idx());
-                     const bool rhs_is_named = is_named_index(rhs.idx());
-
-                     if (lhs_is_named == rhs_is_named) {
-                       return lhs < rhs;
-                     } else {
-                       return lhs_is_named;
-                     }
-                   });
-
-  // index factory to generate anonymous indices
-  // -> start reindexing anonymous indices from 1
-  IndexFactory idxfac(is_anonymous_index, 1);
-
-  container::map<Index, Index> idxrepl;
-
-  // Use the new order of edges as the canonical order of indices and relabel
-  // accordingly (but only anonymous indices, of course)
-  for (std::size_t i = named_indices.size(); i < edges_.size(); ++i) {
-    const Index &index = edges_[i].idx();
-    assert(is_anonymous_index(index));
-    Index replacement = idxfac.make(index);
-    if (index != replacement) idxrepl.emplace(index, std::move(replacement));
-  }
-
-  // Done computing canonical index replacement list
-  // reset edges since renamings will make them obsolete
-  edges_.clear();
-  have_edges_ = false;
-
-  if (Logger::instance().canonicalize) {
-    for (const auto &idxpair : idxrepl) {
-      std::wcout << "TensorNetworkV3::canonicalize(" << (fast ? "fast" : "slow")
-                 << "): replacing " << to_latex(idxpair.first) << " with "
-                 << to_latex(idxpair.second) << std::endl;
+    if (Logger::instance().canonicalize) {
+      std::wcout << "TensorNetworkV3::canonicalize(" << to_wstring(method)
+                 << "): tensors after lexicographic sort\n";
+      size_t cnt = 0;
+      ranges::for_each(tensors_, [&](const auto &t) {
+        std::wcout << "tensor " << cnt++ << ": " << to_latex(*t) << std::endl;
+      });
     }
-  }
 
-  apply_index_replacements(tensors_, idxrepl, true);
+    // helpers to filter named ("external" in traditional use case) / anonymous
+    // ("internal" in traditional use case)
+    auto is_named_index = [&](const Index &idx) {
+      return named_indices.find(idx) != named_indices.end();
+    };
+    auto is_anonymous_index = [&](const Index &idx) {
+      return named_indices.find(idx) == named_indices.end();
+    };
 
-  byproduct *= canonicalize_individual_tensors(named_indices);
+    // Sort edges based on the order of the tensors they connect
+    std::stable_sort(edges_.begin(), edges_.end(),
+                     [&is_named_index](const Edge &lhs, const Edge &rhs) {
+                       // Sort first by index's character (named < anonymous),
+                       // then by Edge (not by Index's full label) ... this
+                       // automatically puts named indices first
+                       const bool lhs_is_named = is_named_index(lhs.idx());
+                       const bool rhs_is_named = is_named_index(rhs.idx());
 
-  // We assume that re-indexing did not change the canonical order of tensors
-  assert(std::is_sorted(tensors_.begin(), tensors_.end(), tensor_sorter));
-  // However, in order to produce the most aesthetically pleasing result, we now
-  // reorder tensors based on the regular AbstractTensor::operator<, which takes
-  // the explicit index labelling of tensors into account.
-  tensor_sorter.set_blocks_only(false);
-  std::stable_sort(tensors_.begin(), tensors_.end(), tensor_sorter);
+                       if (lhs_is_named == rhs_is_named) {
+                         return lhs < rhs;
+                       } else {
+                         return lhs_is_named;
+                       }
+                     });
 
-  assert(byproduct->is<Constant>());
-  return (byproduct->as<Constant>().value() == 1) ? nullptr : byproduct;
+    // index factory to generate anonymous indices
+    // -> start reindexing anonymous indices from 1
+    IndexFactory idxfac(is_anonymous_index, 1);
+
+    container::map<Index, Index> idxrepl;
+
+    // Use the new order of edges as the canonical order of indices and relabel
+    // accordingly (but only anonymous indices, of course)
+    for (std::size_t i = named_indices.size(); i < edges_.size(); ++i) {
+      const Index &index = edges_[i].idx();
+      assert(is_anonymous_index(index));
+      Index replacement = idxfac.make(index);
+      if (index != replacement) idxrepl.emplace(index, std::move(replacement));
+    }
+
+    // Done computing canonical index replacement list
+    // reset edges since renamings will make them obsolete
+    edges_.clear();
+    have_edges_ = false;
+
+    if (Logger::instance().canonicalize) {
+      for (const auto &idxpair : idxrepl) {
+        std::wcout << "TensorNetworkV3::canonicalize(" << to_wstring(method)
+                   << "): lexicographic rewrite, replacing "
+                   << to_latex(idxpair.first) << " with "
+                   << to_latex(idxpair.second) << std::endl;
+      }
+    }
+
+    apply_index_replacements(tensors_, idxrepl, true);
+
+    byproduct *= canonicalize_individual_tensors(named_indices);
+
+    // We assume that re-indexing did not change the canonical order of tensors
+    assert(std::is_sorted(tensors_.begin(), tensors_.end(), tensor_sorter));
+    // However, in order to produce the most aesthetically pleasing result, we
+    // now reorder tensors based on the regular AbstractTensor::operator<, which
+    // takes the explicit index labelling of tensors into account.
+    tensor_sorter.set_blocks_only(false);
+    std::stable_sort(tensors_.begin(), tensors_.end(), tensor_sorter);
+  }  // lexicographic canonicalization
+
+  if (byproduct) {
+    assert(byproduct->is<Constant>());
+    return (byproduct->as<Constant>().value() == 1) ? nullptr : byproduct;
+  } else
+    return nullptr;
 }
 
 TensorNetworkV3::SlotCanonicalizationMetadata
@@ -659,12 +664,14 @@ TensorNetworkV3::canonicalize_slots(
                          Logger::instance().canonicalize_dot,
        .make_idx_to_vertex = true});
   const auto &idx_to_vertex = graph.idx_to_vertex;
-  // graph.bliss_graph->write_dot(std::wcout, graph.vertex_labels);
+  // graph.bliss_graph->write_dot(std::wcout, {.labels = graph.vertex_labels});
 
   if (Logger::instance().canonicalize_input_graph) {
     std::wcout << "Input graph for canonicalization:\n";
-    graph.bliss_graph->write_dot(std::wcout, graph.vertex_labels,
-                                 graph.vertex_texlabels);
+    graph.bliss_graph->write_dot(std::wcout,
+                                 {.labels = graph.vertex_labels,
+                                  .xlabels = graph.vertex_xlabels,
+                                  .texlabels = graph.vertex_texlabels});
   }
 
   // canonize the graph
@@ -682,11 +689,12 @@ TensorNetworkV3::canonicalize_slots(
       std::wcout << i << " -> " << canonize_perm[i] << "\n";
     }
     std::wcout << "Canonicalized graph:\n";
-    metadata.graph->write_dot(std::wcout, {}, {}, {.display_colors = true});
+    metadata.graph->write_dot(std::wcout, {.display_colors = true});
     auto cvlabels = permute(graph.vertex_labels, canonize_perm);
     auto cvtexlabels = permute(graph.vertex_texlabels, canonize_perm);
     std::wcout << "with our labels:\n";
-    metadata.graph->write_dot(std::wcout, cvlabels, cvtexlabels);
+    metadata.graph->write_dot(std::wcout,
+                              {.labels = cvlabels, .texlabels = cvtexlabels});
   }
 
   // produce canonical list of named indices
@@ -706,7 +714,6 @@ TensorNetworkV3::canonicalize_slots(
         idx2cord(named_index_compare);
 
     // collect named indices and sort them on the fly
-    auto grand_index_list_end = grand_index_list.end();
     for (auto [idx_ord, idx] : ranges::views::enumerate(grand_index_list)) {
       if (!is_named_index(idx)) {
         continue;
@@ -816,28 +823,49 @@ TensorNetworkV3::canonicalize_slots(
 
 TensorNetworkV3::Graph TensorNetworkV3::create_graph(
     const CreateGraphOptions &options) const {
-  assert(have_edges_);
+  if (!have_edges_) const_cast<TensorNetworkV3 *>(this)->init_edges();
 
   // initialize named_indices by default to all external indices
   const NamedIndexSet &named_indices = options.named_indices == nullptr
                                            ? this->ext_indices()
                                            : *(options.named_indices);
 
-  VertexPainter colorizer(named_indices, options.distinct_named_indices);
-
-  constexpr std::size_t num_tensor_components = 5;
+  VertexPainter<TensorNetworkV3> colorizer(named_indices,
+                                           options.distinct_named_indices);
 
   // results
   Graph graph;
   std::size_t nvertex = 0;
+
+  auto make_label = [&nvertex, &options, &graph](std::wstring lbl) {
+    graph.vertex_labels.emplace_back(
+        options.label_prepend_ordinal
+            ? (std::to_wstring(nvertex) + L": " + std::move(lbl))
+            : std::move(lbl));
+  };
+  auto make_xlabel = [&nvertex, &options, &graph]() {
+    if (options.xlabel_maker)
+      graph.vertex_xlabels.emplace_back(options.xlabel_maker(nvertex));
+  };
+  auto make_texlabel = [&nvertex, &options, &graph](std::wstring lbl) {
+    if (lbl.empty())
+      graph.vertex_texlabels.emplace_back(std::nullopt);
+    else
+      graph.vertex_texlabels.emplace_back(
+          options.texlabel_prepend_ordinal
+              ? (std::to_wstring(nvertex) + L": " + std::move(lbl))
+              : std::move(lbl));
+  };
+
   // predicting exact vertex count is too much work, make a rough estimate only
   // We know that at the very least all indices and all tensors will yield
   // vertex representations; for tensors estimate the average number of verices
   // at 5
-
   std::size_t vertex_count_estimate =
       edges_.size() + pure_proto_indices_.size() + 5 * tensors_.size();
+
   if (options.make_labels) graph.vertex_labels.reserve(vertex_count_estimate);
+  if (options.make_xlabels) graph.vertex_xlabels.reserve(vertex_count_estimate);
   if (options.make_texlabels)
     graph.vertex_texlabels.reserve(vertex_count_estimate);
   graph.vertex_colors.reserve(vertex_count_estimate);
@@ -893,18 +921,19 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
     assert(tensor_idx < tensor_vertices.size());
     assert(tensor_vertices[tensor_idx] == uninitialized_vertex);
     assert(tensors_.at(tensor_idx));
-    const AbstractTensor &tensor = *tensors_.at(tensor_idx);
+    const AbstractTensor &tensor = *tensors_[tensor_idx];
 
     // Tensor core
     const auto tlabel = label(tensor);
-    if (options.make_labels) graph.vertex_labels.emplace_back(tlabel);
+    if (options.make_labels) make_label(std::wstring{tlabel});
+    if (options.make_xlabels) make_xlabel();
     if (options.make_texlabels)
-      graph.vertex_texlabels.emplace_back(L"$" + utf_to_latex(tlabel) + L"$");
+      make_texlabel(L"$" + utf_to_latex(tlabel) + L"$");
     graph.vertex_types.emplace_back(VertexType::TensorCore);
     const auto tensor_color =
         colorizer.apply_shade(tensor);  // subsequent vertices will be shaded by
                                         // the color of this tensor
-    graph.vertex_colors.push_back(tensor_color);
+    graph.vertex_colors.emplace_back(tensor_color);
 
     const std::size_t tensor_vertex = nvertex;
     tensor_vertices[tensor_idx] = tensor_vertex;
@@ -947,15 +976,14 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
               assert(tensor_sym != Symmetry::invalid);
           }
         } else {
-          psuffix = L"_" + to_wstring(i);
+          psuffix = L"_" + std::to_wstring(i);
         }
-        if (options.make_labels)
-          graph.vertex_labels.emplace_back(base_label + psuffix);
+        if (options.make_labels) make_label(base_label + psuffix);
         if (options.make_texlabels)
-          graph.vertex_texlabels.emplace_back(
-              base_label + ((i != 0) ? (L"\\" + psuffix) : L""));
+          make_texlabel(base_label + ((i != 0) ? (L"\\" + psuffix) : L""));
       }
-      graph.vertex_types.push_back(VertexType::TensorBraKet);
+      if (options.make_xlabels) make_xlabel();
+      graph.vertex_types.emplace_back(VertexType::TensorBraKet);
 
       // If tensor is particle-symmetric use same color for all braket vertices,
       // else use different colors
@@ -966,9 +994,9 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
         // {bra_i,ket_i} bundle -> particle_symmetric ? 1 : i+1
         color_id = is_part_symm ? 1 : i;
       }
-      graph.vertex_colors.push_back(colorizer(ParticleGroup{color_id}));
+      graph.vertex_colors.emplace_back(colorizer(ParticleGroup{color_id}));
 
-      edges.push_back(std::make_pair(tensor_vertex, nvertex));
+      edges.emplace_back(std::make_pair(tensor_vertex, nvertex));
       ++nvertex;
     }
 
@@ -980,18 +1008,18 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
       for (auto s : {Origin::Bra, Origin::Ket}) {
         const bool bra = s == Origin::Bra;
         const auto size = bra ? bra_rank(tensor) : ket_rank(tensor);
-        if (options.make_labels) {
+        if (options.make_labels || options.make_texlabels) {
           std::wstring label =
               std::wstring(bra ? L"bra" : L"ket") + std::to_wstring(size) +
               ((tensor_sym == Symmetry::antisymm)
                    ? L"a"
                    : (tensor_sym == Symmetry::symm ? L"s" : L""));
-          graph.vertex_labels.emplace_back(label);
+          if (options.make_labels) make_label(label);
+          if (options.make_texlabels) make_texlabel(label);
         }
-        if (options.make_texlabels)
-          graph.vertex_texlabels.emplace_back(std::nullopt);
-        graph.vertex_types.push_back(bra ? VertexType::TensorBraBundle
-                                         : VertexType::TensorKetBundle);
+        if (options.make_xlabels) make_xlabel();
+        graph.vertex_types.emplace_back(bra ? VertexType::TensorBraBundle
+                                            : VertexType::TensorKetBundle);
         tensor_network::VertexColor color;
         if (is_braket_symm) {  // if have bra<->ket symmetry (not conj!),
                                // use same color for bra and ket
@@ -999,10 +1027,10 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
         } else {
           color = bra ? colorizer(BraGroup{size}) : colorizer(KetGroup{size});
         }
-        graph.vertex_colors.push_back(color);
+        graph.vertex_colors.emplace_back(color);
 
         const auto braket_vertex = tensor_vertex + 1;
-        edges.push_back(std::make_pair(braket_vertex, nvertex));
+        edges.emplace_back(std::make_pair(braket_vertex, nvertex));
         ++nvertex;
       }
     }
@@ -1041,19 +1069,18 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
         }
 
         if (options.make_labels)
-          graph.vertex_labels.emplace_back((is_bra ? L"bra_" : L"ket_") +
-                                           std::to_wstring(i + 1));
+          make_label((is_bra ? L"bra_" : L"ket_") + std::to_wstring(i + 1));
+        if (options.make_xlabels) make_xlabel();
         if (options.make_texlabels)
-          graph.vertex_texlabels.emplace_back(
-              std::wstring(is_bra ? L"bra" : L"ket") + L"\\_" +
-              std::to_wstring(i + 1));
-        graph.vertex_types.push_back(vertex_type);
+          make_texlabel(std::wstring(is_bra ? L"bra" : L"ket") + L"\\_" +
+                        std::to_wstring(i + 1));
+        graph.vertex_types.emplace_back(vertex_type);
         // see color_id definition for handling of bra, ket, and and braket
         // bundle symmetries. if symmetric wrt bra<->ket swap use same color
         // for bra and ket bundles, else use distinct colors
-        graph.vertex_colors.push_back((is_bra || is_braket_symm)
-                                          ? colorizer(BraGroup{color_id})
-                                          : colorizer(KetGroup{color_id}));
+        graph.vertex_colors.emplace_back((is_bra || is_braket_symm)
+                                             ? colorizer(BraGroup{color_id})
+                                             : colorizer(KetGroup{color_id}));
 
         // connect to bra bundle vertex, regardless of symmetry
         {
@@ -1064,7 +1091,7 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
           const std::size_t slot_vertex =
               tensor_vertex + slot_bundle_vertex_offset +
               /* bra or ket bundle vertex */ (is_bra ? 0 : 1);
-          edges.push_back(std::make_pair(slot_vertex, nvertex));
+          edges.emplace_back(std::make_pair(slot_vertex, nvertex));
         }
         // for asymmetric tensors also connect to the {bra_i,ket_i} bundle
         // vertex
@@ -1074,7 +1101,7 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
               /* tensor core vertex */ 1 +
               /* {bra,ket} bundle vertex */ 1 +
               /* {bra_i,ket_i} bundle vertex */ i;
-          edges.push_back(std::make_pair(braket_bundle_vertex, nvertex));
+          edges.emplace_back(std::make_pair(braket_bundle_vertex, nvertex));
         }
         // make sure logic in index_slot_offset is correct
         assert(nvertex ==
@@ -1086,14 +1113,13 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
     // TODO: handle aux indices permutation symmetries once they are supported
     // for now, auxiliary indices are considered to always be asymmetric
     for (std::size_t i = 0; i < aux_rank(tensor); ++i) {
-      if (options.make_labels)
-        graph.vertex_labels.emplace_back(L"aux_" + std::to_wstring(i + 1));
+      if (options.make_labels) make_label(L"aux_" + std::to_wstring(i + 1));
+      if (options.make_xlabels) make_xlabel();
       if (options.make_texlabels)
-        graph.vertex_texlabels.emplace_back(std::wstring(L"aux") + L"\\_" +
-                                            std::to_wstring(i + 1));
-      graph.vertex_types.push_back(VertexType::TensorAux);
-      graph.vertex_colors.push_back(colorizer(AuxGroup{i}));
-      edges.push_back(std::make_pair(tensor_vertex, nvertex));
+        make_texlabel(std::wstring(L"aux") + L"\\_" + std::to_wstring(i + 1));
+      graph.vertex_types.emplace_back(VertexType::TensorAux);
+      graph.vertex_colors.emplace_back(colorizer(AuxGroup{i}));
+      edges.emplace_back(std::make_pair(tensor_vertex, nvertex));
       ++nvertex;
     }
 
@@ -1109,13 +1135,12 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
     const Edge &current_edge = edges_[i];
 
     const Index &index = current_edge.idx();
-    if (options.make_labels)
-      graph.vertex_labels.push_back(std::wstring(index.full_label()));
+    if (options.make_labels) make_label(std::wstring(index.full_label()));
+    if (options.make_xlabels) make_xlabel();
     using namespace std::string_literals;
-    if (options.make_texlabels)
-      graph.vertex_texlabels.emplace_back(L"$"s + index.to_latex() + L"$");
-    graph.vertex_types.push_back(VertexType::Index);
-    graph.vertex_colors.push_back(colorizer(index));
+    if (options.make_texlabels) make_texlabel(L"$"s + index.to_latex() + L"$");
+    graph.vertex_types.emplace_back(VertexType::Index);
+    graph.vertex_colors.emplace_back(colorizer(index));
 
     const std::size_t index_vertex = nvertex;
     ++nvertex;
@@ -1145,8 +1170,9 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
                    [](const Index &idx) { return idx.full_label(); }) |
                ranges::views::join(L","sv) | ranges::to<std::wstring>()) +
               L">";
-          graph.vertex_labels.push_back(std::move(index_bundle_label));
+          make_label(std::move(index_bundle_label));
         }
+        if (options.make_xlabels) make_xlabel();
         if (options.make_texlabels) {
           using namespace std::literals;
           std::wstring index_bundle_texlabel =
@@ -1156,17 +1182,17 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
                    [](const Index &idx) { return idx.to_latex(); }) |
                ranges::views::join(L","sv) | ranges::to<std::wstring>()) +
               L"\\rangle$";
-          graph.vertex_texlabels.push_back(std::move(index_bundle_texlabel));
+          make_texlabel(std::move(index_bundle_texlabel));
         }
-        graph.vertex_types.push_back(VertexType::IndexBundle);
-        graph.vertex_colors.push_back(colorizer(index.proto_indices()));
+        graph.vertex_types.emplace_back(VertexType::IndexBundle);
+        graph.vertex_colors.emplace_back(colorizer(index.proto_indices()));
 
         proto_vertex = nvertex;
         proto_bundles.emplace_back(index.proto_indices(), proto_vertex);
         ++nvertex;
       }
 
-      edges.push_back(std::make_pair(index_vertex, proto_vertex));
+      edges.emplace_back(std::make_pair(index_vertex, proto_vertex));
     }
 
     // Connect index to the tensor(s) it is connected to
@@ -1183,33 +1209,30 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
 
       // Store an edge connecting the index vertex to the corresponding tensor
       // vertex
-      const bool tensor_is_nonsymm =
-          vertex.getTerminalSymmetry() == Symmetry::nonsymm;
       const AbstractTensor &tensor = *tensors_[vertex.getTerminalIndex()];
       const std::size_t offset =
           index_slot_offset(tensor, vertex.getOrigin(), vertex.getIndexSlot());
       const std::size_t tensor_component_vertex = tensor_vertex + offset;
 
       assert(tensor_component_vertex < nvertex);
-      edges.push_back(std::make_pair(index_vertex, tensor_component_vertex));
+      edges.emplace_back(std::make_pair(index_vertex, tensor_component_vertex));
     }
   }
 
   // also create vertices for pure proto indices
   for (const auto &[i, index] : ranges::views::enumerate(pure_proto_indices_)) {
-    ++nvertex;
-    if (options.make_labels)
-      graph.vertex_labels.push_back(std::wstring(index.full_label()));
+    if (options.make_labels) make_label(std::wstring(index.full_label()));
+    if (options.make_xlabels) make_xlabel();
     using namespace std::string_literals;
-    if (options.make_texlabels)
-      graph.vertex_texlabels.push_back(L"$"s + index.to_latex() + L"$");
-    graph.vertex_types.push_back(VertexType::Index);
-    graph.vertex_colors.push_back(colorizer(index));
+    if (options.make_texlabels) make_texlabel(L"$"s + index.to_latex() + L"$");
+    graph.vertex_types.emplace_back(VertexType::Index);
+    graph.vertex_colors.emplace_back(colorizer(index));
 
-    const std::size_t index_vertex = nvertex - 1;
+    const std::size_t index_vertex = nvertex;
 
     assert(index_vertices.at(i + edges_.size()) == uninitialized_vertex);
     index_vertices[i + edges_.size()] = index_vertex;
+    ++nvertex;
   }
 
   // Add edges between proto index bundle vertices and all vertices of the
@@ -1222,7 +1245,7 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
       auto it = std::ranges::find(edges_, idx, &Edge::idx);
       if (it != edges_.end()) {
         assert(std::distance(edges_.begin(), it) >= 0);
-        idx_vertex = index_vertices.at(std::distance(edges_.begin(), it));
+        idx_vertex = index_vertices[std::distance(edges_.begin(), it)];
       } else {
         auto pure_it = pure_proto_indices_.find(idx);
         assert(pure_it != pure_proto_indices_.end());
@@ -1230,18 +1253,18 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
         if (pure_it != pure_proto_indices_.end()) {
           assert(std::distance(pure_proto_indices_.begin(),
                                pure_proto_indices_.end()) >= 0);
-          idx_vertex = index_vertices.at(
-              std::distance(pure_proto_indices_.begin(), pure_it) +
-              edges_.size());
+          idx_vertex = index_vertices[std::distance(pure_proto_indices_.begin(),
+                                                    pure_it) +
+                                      edges_.size()];
         }
       }
 
       assert(idx_vertex != uninitialized_vertex);
       if (idx_vertex == uninitialized_vertex) {
-        std::abort();
+        SEQUANT_ABORT("Expected all vertices to be initialized at this point");
       }
 
-      edges.push_back(std::make_pair(idx_vertex, vertex));
+      edges.emplace_back(std::make_pair(idx_vertex, vertex));
     }
   }
 
@@ -1268,12 +1291,12 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
 
     for (std::size_t i = 0; i < edges_.size(); ++i) {
       graph.idx_to_vertex.emplace(
-          std::make_pair(edges_.at(i).idx(), index_vertices.at(i)));
+          std::make_pair(edges_[i].idx(), index_vertices[i]));
     }
     for (const auto &[i, index] :
          ranges::views::enumerate(pure_proto_indices_)) {
       graph.idx_to_vertex.emplace(
-          std::make_pair(index, index_vertices.at(i + edges_.size())));
+          std::make_pair(index, index_vertices[i + edges_.size()]));
     }
   }
 
@@ -1293,8 +1316,8 @@ void TensorNetworkV3::init_edges() {
       std::wcout << "TensorNetworkV3::init_edges: idx=" << to_latex(idx)
                  << " attached to tensor " << vertex.getTerminalIndex() << " ("
                  << vertex.getOrigin() << ") at position "
-                 << vertex.getIndexSlot()
-                 << " (sym: " << to_wstring(vertex.getTerminalSymmetry()) << ")"
+                 << vertex.getIndexSlot() << " (sym: "
+                 << sequant::to_wstring(vertex.getTerminalSymmetry()) << ")"
                  << std::endl;
     }
 
@@ -1309,8 +1332,8 @@ void TensorNetworkV3::init_edges() {
 
   std::size_t distinct_index_estimate = 0;
   for (const AbstractTensorPtr &current : tensors_) {
-    distinct_index_estimate += bra_net_rank(*current);
-    distinct_index_estimate += ket_net_rank(*current);
+    distinct_index_estimate += bra_rank(*current);  // assumes no empty slots
+    distinct_index_estimate += ket_rank(*current);  // assumes no empty slots
     distinct_index_estimate += aux_rank(*current);
   }
   // For a fully contracted tensor network 1/2 of all indices are unique
@@ -1420,7 +1443,7 @@ void TensorNetworkV3::init_edges() {
 }
 
 container::svector<std::pair<long, long>> TensorNetworkV3::factorize() {
-  abort();  // not yet implemented
+  SEQUANT_ABORT("TensorNetworkV3::factorize is not yet implemented");
 }
 
 size_t TensorNetworkV3::SlotCanonicalizationMetadata::hash_value() const {

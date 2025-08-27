@@ -1779,7 +1779,7 @@ AbstractGraph::find_automorphisms(Stats& stats,
     }
 }
 
-
+/// @return to-permutation of the vertex ordinals, i.e. `result[i]` is the ordinal of the `i`th input vertex in the canonical order
 const unsigned int *
 AbstractGraph::canonical_form(Stats& stats,
 			      void (*hook)(void *user_param,

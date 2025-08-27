@@ -160,7 +160,8 @@ struct annotate_position {
 
 struct error_handler {
   template <typename Iterator, typename Exception, typename Context>
-  x3::error_handler_result on_error(const Iterator &first, const Iterator &last,
+  x3::error_handler_result on_error(const Iterator & /*first*/,
+                                    const Iterator & /*last*/,
                                     const Exception &e, const Context &ctx) {
     auto &error_handler = x3::get<error_handler_tag>(ctx).get();
     error_handler(e.where(), boost::core::demangle(e.which().data()));
