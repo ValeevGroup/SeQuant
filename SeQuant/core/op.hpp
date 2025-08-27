@@ -15,6 +15,7 @@
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/ranges.hpp>
 #include <SeQuant/core/space.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/strong.hpp>
 
 #include <cassert>
@@ -206,7 +207,8 @@ bool is_pure_qpcreator(const Op<S> &op,
     case Vacuum::Invalid:
       throw std::logic_error("Invalid Product not allowed");
   }
-  abort();  // unreachable
+
+  SEQUANT_UNREACHABLE;
 };
 
 /// @return true if this is a quasiparticle creator with respect to the given
@@ -231,7 +233,8 @@ bool is_qpcreator(const Op<S> &op,
         throw std::logic_error("is_qpcreator: cannot handle Invalid vacuum");
     }
   }
-  abort();  // unreachable
+
+  SEQUANT_UNREACHABLE;
 };
 
 template <Statistics S>
@@ -258,7 +261,7 @@ IndexSpace qpcreator_space(
       throw std::logic_error("qpcreator_space: cannot handle Invalid vacuum");
   }
 
-  abort();  // unreachable
+  SEQUANT_UNREACHABLE;
 }
 
 /// @return true if this is a pure quasiparticle annihilator with respect to
@@ -285,7 +288,7 @@ bool is_pure_qpannihilator(
           "is_pure_qpannihilator: cannot handle Invalid vacuum");
   }
 
-  abort();  // unreachable
+  SEQUANT_UNREACHABLE;
 };
 
 /// @return true if this is a quasiparticle annihilator with respect to the
@@ -311,7 +314,7 @@ bool is_qpannihilator(const Op<S> &op,
       throw std::logic_error("Invalid Product not allowed");
   }
 
-  abort();  // unreachable
+  SEQUANT_UNREACHABLE;
 };
 
 template <Statistics S>
@@ -338,7 +341,7 @@ IndexSpace qpannihilator_space(
       throw std::logic_error("Invalid Product not allowed");
   }
 
-  abort();  // unreachable
+  SEQUANT_UNREACHABLE;
 }
 
 template <Statistics S = Statistics::FermiDirac>
@@ -691,7 +694,7 @@ class NormalOperator : public Operator<S>,
       }
     }
 
-    abort();  // unreachable
+    SEQUANT_UNREACHABLE;
   }
 
   /// overload base_type::erase

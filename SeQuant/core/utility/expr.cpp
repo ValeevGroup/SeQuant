@@ -1,5 +1,6 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/utility/expr.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/string.hpp>
 
 #include <bitset>
@@ -115,7 +116,7 @@ std::string diff_spaces(const IndexSpace &lhs, const IndexSpace &rhs) {
     stream << "Size differs: " << std::to_string(lhs.approximate_size())
            << " vs. " << std::to_string(rhs.approximate_size());
   } else {
-    abort();  // unreachable
+    SEQUANT_UNREACHABLE;
   }
 
   assert(!stream.str().empty());
@@ -152,7 +153,7 @@ std::string toplevel_diff(const Index &lhs, const Index &rhs) {
   }
 
   // We have run out of ideas of what to check
-  abort();
+  SEQUANT_ABORT("Unexpected difference between indices");
 }
 
 std::string toplevel_diff(const Tensor &lhs, const Tensor &rhs) {
@@ -197,7 +198,7 @@ std::string toplevel_diff(const Tensor &lhs, const Tensor &rhs) {
 
   // Really, this shouldn't produce an empty diff as the objects compare as
   // non-equal but we have run out of ideas of what to check
-  abort();
+  SEQUANT_ABORT("Unhandled difference between tensors");
 }
 
 std::string toplevel_diff(const Sum & /*lhs*/, const Sum & /*rhs*/) {
@@ -274,7 +275,7 @@ std::string diff(const Expr &lhs, const Expr &rhs) {
   } else if (lhs.is<Variable>()) {
     diff_str = toplevel_diff(lhs.as<Variable>(), rhs.as<Variable>());
   } else {
-    abort();
+    SEQUANT_ABORT("Unhandled expression type");
   }
 
   return diff_str;

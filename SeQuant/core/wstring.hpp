@@ -85,8 +85,8 @@ constexpr decltype(auto) select_string_literal(
     return u16str;
   else if constexpr (std::is_same_v<Char, char32_t>)
     return u32str;
-  else
-    abort();
+
+  SEQUANT_ABORT("Unhandled character type");
 }
 }  // namespace detail
 
@@ -112,8 +112,8 @@ constexpr decltype(auto) select_string_literal(const char (&str)[NChar],
     return str;
   else if constexpr (std::is_same_v<Char, wchar_t>)
     return wstr;
-  else
-    abort();
+
+  SEQUANT_ABORT("Unhandled character type");
 }
 
 }  // namespace detail

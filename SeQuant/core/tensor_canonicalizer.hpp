@@ -6,6 +6,7 @@
 #define SEQUANT_CORE_TENSOR_CANONICALIZER_HPP
 
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 
 #include <functional>
 #include <memory>
@@ -219,8 +220,8 @@ class DefaultTensorCanonicalizer : public TensorCanonicalizer {
         }
       } break;
 
-      default:
-        abort();
+      case Symmetry::invalid:
+        SEQUANT_ABORT("Invalid symmetry should not appear here");
     }
 
     // TODO: Handle auxiliary index symmetries once they are introduced

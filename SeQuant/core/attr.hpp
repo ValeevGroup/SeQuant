@@ -5,6 +5,8 @@
 #ifndef SEQUANT_ATTR_HPP
 #define SEQUANT_ATTR_HPP
 
+#include <SeQuant/core/utility/macros.hpp>
+
 #include <cassert>
 #include <cstdlib>
 #include <string>
@@ -45,8 +47,8 @@ inline std::wstring to_wolfram(const Symmetry& symmetry) {
     case Symmetry::nonsymm:
       result = L"indexSymm[0]";
       break;
-    default:
-      abort();
+    case Symmetry::invalid:
+      SEQUANT_ABORT("Invalid symmetry is not allowed here");
   }
   return result;
 }
@@ -62,7 +64,8 @@ inline std::wstring to_wstring(Symmetry sym) {
     case Symmetry::invalid:
       return L"invalid";
   }
-  abort();  // unreachable
+
+  SEQUANT_UNREACHABLE;
 }
 
 enum class BraKetPos { bra, ket, none };
@@ -110,9 +113,9 @@ inline std::wstring to_string(Vacuum V) {
       return L"MultiProductVacuum";
     case Vacuum::Invalid:
       return L"InvalidVacuum";
-    default:
-      abort();
   }
+
+  SEQUANT_UNREACHABLE;
 }
 
 /// describes LaTeX typesetting convention for contravariant (bra, annihilation)

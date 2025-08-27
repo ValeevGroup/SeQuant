@@ -1,3 +1,4 @@
+#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/domain/mbpt/context.hpp>
 #include <SeQuant/domain/mbpt/op.hpp>
 
@@ -489,16 +490,16 @@ ExprPtr H_(std::size_t k) {
           return OpMaker<Statistics::FermiDirac>(OpType::f, 1)();
         case Vacuum::MultiProduct:
           return OpMaker<Statistics::FermiDirac>(OpType::f, 1)();
-        default:
-          abort();
+        case Vacuum::Invalid:
+          SEQUANT_ABORT("Invalid vacuum not allowed here");
       }
+      SEQUANT_UNREACHABLE;
 
     case 2:
       return OpMaker<Statistics::FermiDirac>(OpType::g, 2)();
-
-    default:
-      abort();
   }
+
+  SEQUANT_ABORT("Unhandled k value");
 }
 
 ExprPtr H(std::size_t k) {
@@ -728,9 +729,11 @@ ExprPtr H_(std::size_t k) {
                 return L"f";
               case Vacuum::MultiProduct:
                 return L"f";
-              default:
-                abort();
+              case Vacuum::Invalid:
+                SEQUANT_ABORT("Invalid vacuum not allowed here");
             }
+
+            SEQUANT_UNREACHABLE;
           },
           [=]() -> ExprPtr { return tensor::H_(1); },
           [=](qnc_t& qns) {
@@ -745,10 +748,9 @@ ExprPtr H_(std::size_t k) {
                         qnc_t op_qnc_t = general_type_qns(2);
                         qns = combine(op_qnc_t, qns);
                       });
-
-    default:
-      abort();
   }
+
+  SEQUANT_ABORT("Unhandled k value");
 }
 
 ExprPtr H(std::size_t k) {

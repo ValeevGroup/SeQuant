@@ -12,6 +12,7 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 
 #include <cassert>
 #include <cstddef>
@@ -85,10 +86,10 @@ std::wstring spinannotation_add(WS&& label, Spin s) {
     case Spin::beta:
       return to_wstring(std::forward<WS>(label)) + L'↓';
     case Spin::null:
-      break;
+      SEQUANT_ABORT("Invalid spin quantum number");
   }
-  assert(false && "invalid quantum number");
-  abort();
+
+  SEQUANT_UNREACHABLE;
 }
 
 /// replaces spin annotation to
