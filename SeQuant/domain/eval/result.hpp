@@ -385,7 +385,7 @@ auto biorthogonal_cleanup_ta(TA::DistArray<Args...> const& arr,
     if (range_rank <= 1) return input_arr;
     TA::DistArray<Args...> result;
 
-    auto callback = [&](int parity) {
+    auto callback = [&]([[maybe_unused]] int parity) {
       const auto range_annot = ords_to_annot(range_perm);
       const auto annot = other_annot.empty()
                              ? range_annot
@@ -464,7 +464,7 @@ auto biorthogonal_cleanup_btas(btas::Tensor<Args...> const& arr,
     btas::Tensor<Args...> result{input_arr.range()};
     result.fill(0);
 
-    auto callback = [&](int parity) {
+    auto callback = [&]([[maybe_unused]] int parity) {
       const auto annot =
           is_bra ? concat(range_perm, other_perm) | ranges::to<perm_t>()
                  : concat(other_perm, range_perm) | ranges::to<perm_t>();
@@ -754,7 +754,8 @@ class ResultScalar final : public Result {
     throw unimplemented_method("antisymmetrize");
   }
 
-  [[nodiscard]] ResultPtr biorthogonal_cleanup(size_t bra_rank) const override {
+  [[nodiscard]] ResultPtr biorthogonal_cleanup(
+      [[maybe_unused]] size_t bra_rank) const override {
     throw unimplemented_method("biorthogonal_cleanup");
   }
 
@@ -1052,7 +1053,8 @@ class ResultTensorOfTensorTA final : public Result {
     return nullptr;
   }
 
-  [[nodiscard]] ResultPtr biorthogonal_cleanup(size_t bra_rank) const override {
+  [[nodiscard]] ResultPtr biorthogonal_cleanup(
+      [[maybe_unused]] size_t bra_rank) const override {
     // or? throw unimplemented_method("biorthogonal_cleanup");
     // not implemented yet, I think I need it for CSV
     return nullptr;
@@ -1160,7 +1162,8 @@ class ResultTensorBTAS final : public Result {
         particle_antisymmetrize_btas(get<T>(), bra_rank));
   }
 
-  [[nodiscard]] ResultPtr biorthogonal_cleanup(size_t bra_rank) const override {
+  [[nodiscard]] ResultPtr biorthogonal_cleanup(
+      [[maybe_unused]] size_t bra_rank) const override {
     return eval_result<ResultTensorBTAS<T>>(
         biorthogonal_cleanup_btas(get<T>(), bra_rank));
   }
