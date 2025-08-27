@@ -57,7 +57,10 @@ inline Spin to_spin(const QuantumNumbersAttr& t) {
 /// removes spin annotation in QuantumNumbersAttr by unsetting the bits used by
 /// Spin
 inline QuantumNumbersAttr spinannotation_remove(const QuantumNumbersAttr& t) {
-  return t.intersection(QuantumNumbersAttr(~mask_v<Spin>));
+  static_assert((~(~mask_v<Spin> & ~bitset::reserved) & ~bitset::reserved) ==
+                    mask_v<Spin>,
+                "Spin bitmask uses reserved bits");
+  return t.intersection(QuantumNumbersAttr(~mask_v<Spin> & ~bitset::reserved));
 }
 
 /// removes spin annotation, if any
