@@ -102,7 +102,7 @@ class Op {
 
  private:
   Index index_;
-  Action action_ = Action::invalid;
+  Action action_ = Action::create;
 };
 
 /// @brief The ordering operator
@@ -204,8 +204,6 @@ bool is_pure_qpcreator(const Op<S> &op,
     case Vacuum::MultiProduct:
       throw std::logic_error(
           "is_pure_qpcreator: cannot handle MultiProduct vacuum");
-    case Vacuum::Invalid:
-      throw std::logic_error("Invalid Product not allowed");
   }
 
   SEQUANT_UNREACHABLE;
@@ -229,8 +227,6 @@ bool is_qpcreator(const Op<S> &op,
       case Vacuum::MultiProduct:
         throw std::logic_error(
             "is_qpcreator: cannot handle MultiProduct vacuum");
-      case Vacuum::Invalid:
-        throw std::logic_error("is_qpcreator: cannot handle Invalid vacuum");
     }
   }
 
@@ -257,8 +253,6 @@ IndexSpace qpcreator_space(
     case Vacuum::MultiProduct:
       throw std::logic_error(
           "qpcreator_space: cannot handle MultiProduct vacuum");
-    case Vacuum::Invalid:
-      throw std::logic_error("qpcreator_space: cannot handle Invalid vacuum");
   }
 
   SEQUANT_UNREACHABLE;
@@ -283,9 +277,6 @@ bool is_pure_qpannihilator(
     case Vacuum::MultiProduct:
       throw std::logic_error(
           "is_pure_qpannihilator: cannot handle MultiProduct vacuum");
-    case Vacuum::Invalid:
-      throw std::logic_error(
-          "is_pure_qpannihilator: cannot handle Invalid vacuum");
   }
 
   SEQUANT_UNREACHABLE;
@@ -310,8 +301,6 @@ bool is_qpannihilator(const Op<S> &op,
     case Vacuum::MultiProduct:
       throw std::logic_error(
           "is_qpannihilator: cannot handle MultiProduct vacuum");
-    case Vacuum::Invalid:
-      throw std::logic_error("Invalid Product not allowed");
   }
 
   SEQUANT_UNREACHABLE;
@@ -337,8 +326,6 @@ IndexSpace qpannihilator_space(
     case Vacuum::MultiProduct:
       throw std::logic_error(
           "qpcreator_space: cannot handle MultiProduct vacuum");
-    case Vacuum::Invalid:
-      throw std::logic_error("Invalid Product not allowed");
   }
 
   SEQUANT_UNREACHABLE;
@@ -1041,23 +1028,24 @@ class NormalOperatorSequence : public container::svector<NormalOperator<S>>,
   };
 
  private:
-  Vacuum vacuum_ = Vacuum::Invalid;
+  Vacuum vacuum_ = Vacuum::Physical;
   /// ensures that all operators use same vacuum, and sets vacuum_
   void check_vacuum() {
-    vacuum_ = std::accumulate(
-        this->cbegin(), this->cend(), Vacuum::Invalid,
-        [](Vacuum v1, const NormalOperator<S> &v2) {
-          if (v1 == Vacuum::Invalid) {
-            return v2.vacuum();
-          } else {
-            if (v1 != v2.vacuum())
-              throw std::invalid_argument(
-                  "NormalOperatorSequence expects all constituent "
-                  "NormalOperator objects to use same vacuum");
-            else
-              return v1;
-          }
-        });
+    const bool all_same_vaccum =
+        std::ranges::adjacent_find(*this, std::ranges::not_equal_to{},
+                                   [](const NormalOperator<S> &op) {
+                                     return op.vacuum();
+                                   }) == this->end();
+
+    if (!all_same_vaccum) {
+      throw std::invalid_argument(
+          "NormalOperatorSequence expects all constituent "
+          "NormalOperator objects to use same vacuum");
+    }
+
+    if (size() > 0) {
+      vacuum_ = this->cbegin()->vacuum();
+    }
   }
 
   bool static_equal(const Expr &that) const override {

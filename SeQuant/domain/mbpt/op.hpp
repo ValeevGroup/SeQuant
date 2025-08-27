@@ -90,10 +90,9 @@ enum class OpType {
   RDMCumulant,  //!< RDM cumulant
   δ,  //!< Kronecker delta (=identity) operator; same as overlap, but the latter
       //!< is too special for all uses
-  h_1,     //!< Hamiltonian perturbation
-  t_1,     //!< first order perturbed excitation cluster operator
-  λ_1,     //!< first order perturbed deexcitation cluster operator
-  invalid  //!< invalid operator
+  h_1,  //!< Hamiltonian perturbation
+  t_1,  //!< first order perturbed excitation cluster operator
+  λ_1,  //!< first order perturbed deexcitation cluster operator
 };
 
 /// maps operator types to their labels

@@ -326,9 +326,8 @@ std::wstring to_latex(const mbpt::Operator<mbpt::qns_t, S>& op) {
   }
 
   auto it = label2optype.find(base_lbl);
-  OpType optype = OpType::invalid;
   if (it != label2optype.end()) {  // handle special cases
-    optype = it->second;
+    OpType optype = it->second;
     if (to_class(optype) == OpClass::gen) {
       if (optype == OpType::θ) {  // special case for θ
         result += L"_{" + std::to_wstring(op()[0].upper()) + L"}";
@@ -490,8 +489,6 @@ ExprPtr H_(std::size_t k) {
           return OpMaker<Statistics::FermiDirac>(OpType::f, 1)();
         case Vacuum::MultiProduct:
           return OpMaker<Statistics::FermiDirac>(OpType::f, 1)();
-        case Vacuum::Invalid:
-          SEQUANT_ABORT("Invalid vacuum not allowed here");
       }
       SEQUANT_UNREACHABLE;
 
@@ -729,8 +726,6 @@ ExprPtr H_(std::size_t k) {
                 return L"f";
               case Vacuum::MultiProduct:
                 return L"f";
-              case Vacuum::Invalid:
-                SEQUANT_ABORT("Invalid vacuum not allowed here");
             }
 
             SEQUANT_UNREACHABLE;

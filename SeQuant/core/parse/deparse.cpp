@@ -59,8 +59,6 @@ std::wstring deparse_symm(Symmetry symm) {
       return L"A";
     case Symmetry::nonsymm:
       return L"N";
-    case Symmetry::invalid:
-      return L"INVALID";
   }
 
   SEQUANT_UNREACHABLE;
@@ -74,8 +72,6 @@ std::wstring deparse_symm(BraKetSymmetry symm) {
       return L"S";
     case BraKetSymmetry::nonsymm:
       return L"N";
-    case BraKetSymmetry::invalid:
-      return L"INVALID";
   }
 
   SEQUANT_UNREACHABLE;
@@ -87,8 +83,6 @@ std::wstring deparse_symm(ParticleSymmetry symm) {
       return L"S";
     case ParticleSymmetry::nonsymm:
       return L"N";
-    case ParticleSymmetry::invalid:
-      return L"INVALID";
   }
 
   SEQUANT_UNREACHABLE;
