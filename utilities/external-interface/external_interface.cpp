@@ -399,7 +399,8 @@ void generalSetup() {
 
 int main(int argc, char **argv) {
   set_locale();
-  set_default_context({.vacuum = Vacuum::SingleProduct});
+  set_default_context({.index_space_registry = IndexSpaceRegistry(),
+                       .vacuum = Vacuum::SingleProduct});
   generalSetup();
 
   CLI::App app(
