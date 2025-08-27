@@ -4,12 +4,7 @@ if (NOT TARGET Python::Module)
   find_package(Python 3 COMPONENTS Interpreter Development REQUIRED)
 endif()
 
-FetchContent_Declare(
-    pybind11
-    GIT_REPOSITORY https://github.com/pybind/pybind11.git
-    GIT_TAG v3.0.1
-)
-FetchContent_MakeAvailable(pybind11)
+include(FindOrFetchPybind11)
 
 if (CMAKE_CXX_STANDARD VERSION_LESS 17)
   message(FATAL_ERROR "C++ 2017 ISO Standard or higher is required to compile PySeQuant")
