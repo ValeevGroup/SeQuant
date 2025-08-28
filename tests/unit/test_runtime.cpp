@@ -15,12 +15,7 @@
 TEST_CASE("context", "[runtime]") {
   using namespace sequant;
 
-  SECTION("constructors") {
-    REQUIRE_NOTHROW(Context{});
-
-    REQUIRE_NOTHROW(Context({.vacuum = Vacuum::Invalid}));
-    REQUIRE(Context({.vacuum = Vacuum::Invalid}).vacuum() == Vacuum::Invalid);
-  }
+  SECTION("constructors") { REQUIRE_NOTHROW(Context{}); }
 
   SECTION("default context") {
     CHECK_NOTHROW(get_default_context());

@@ -972,8 +972,8 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
             case Symmetry::antisymm:
               base_label += L"a";
               break;
-            default:
-              assert(tensor_sym != Symmetry::invalid);
+            case Symmetry::nonsymm:
+              break;
           }
         } else {
           psuffix = L"_" + std::to_wstring(i);

@@ -397,11 +397,11 @@ TEST_CASE("mbpt", "[mbpt]") {
       //    std::wcout << "R33: " << to_latex(R33) << std::endl;
       REQUIRE(to_latex(R33) ==
               L"{ "
-              L"\\bigl({{{\\frac{1}{36}}}{\\bar{R}^{{i_1}{i_2}{i_3}}_{{a_1}{a_"
-              L"2}{a_3}}}{\\tilde{a}^{{a_1}{a_2}{a_3}}_{{i_1}{i_2}{i_3}}}} + "
+              L"\\bigl({{R^{{i_1}}_{{a_1}}}{\\tilde{a}^{{a_1}}_{{i_1}}}} + "
+              L"{{{\\frac{1}{36}}}{\\bar{R}^{{i_1}{i_2}{i_3}}_{{a_1}{a_2}{a_3}}"
+              L"}{\\tilde{a}^{{a_1}{a_2}{a_3}}_{{i_1}{i_2}{i_3}}}} + "
               L"{{{\\frac{1}{4}}}{\\bar{R}^{{i_1}{i_2}}_{{a_1}{a_2}}}{\\tilde{"
-              L"a}^{{a_1}{a_2}}_{{i_1}{i_2}}}} + "
-              L"{{R^{{i_1}}_{{a_1}}}{\\tilde{a}^{{a_1}}_{{i_1}}}}\\bigr) }");
+              L"a}^{{a_1}{a_2}}_{{i_1}{i_2}}}}\\bigr) }");
 
       auto R12 = R(nₚ(2), nₕ(1));
       lower_to_tensor_form(R12);
@@ -418,9 +418,11 @@ TEST_CASE("mbpt", "[mbpt]") {
       simplify(R21);
       //    std::wcout << "R21: " << to_latex(R21) << std::endl;
       REQUIRE(to_latex(R21) ==
-              L"{ \\bigl({{R^{{i_1}}_{}}{\\tilde{a}_{{i_1}}}} + "
-              L"{{{\\frac{1}{2}}}{\\bar{R}^{{i_1}{i_2}}_{{a_1}}}{\\tilde{a}^{"
-              L"\\textvisiblespace\\,{a_1}}_{{i_1}{i_2}}}}\\bigr) }");
+              L"{ "
+              L"\\bigl({{{\\frac{1}{2}}}{\\bar{R}^{{i_1}{i_2}}_{{a_1}}}{"
+              L"\\tilde{a}^{"
+              L"\\textvisiblespace\\,{a_1}}_{{i_1}{i_2}}}} + "
+              L"{{R^{{i_1}}_{}}{\\tilde{a}_{{i_1}}}}\\bigr) }");
 
       auto L23 = L(nₚ(2), nₕ(3));
       lower_to_tensor_form(L23);
@@ -428,11 +430,12 @@ TEST_CASE("mbpt", "[mbpt]") {
       // std::wcout << "L23: " << to_latex(L23) << std::endl;
       REQUIRE(to_latex(L23) ==
               L"{ "
-              L"\\bigl({{{\\frac{1}{12}}}{\\bar{L}^{{a_1}{a_2}}_{{i_1}{i_2}{i_"
-              L"3}}}{\\tilde{a}^{{i_1}{i_2}{i_3}}_{\\textvisiblespace\\,{a_1}{"
-              L"a_2}}}} + {{L^{}_{{i_1}}}{\\tilde{a}^{{i_1}}}} + "
+              L"\\bigl({{L^{}_{{i_1}}}{\\tilde{a}^{{i_1}}}} + "
               L"{{{\\frac{1}{2}}}{\\bar{L}^{{a_1}}_{{i_1}{i_2}}}{\\tilde{a}^{{"
-              L"i_1}{i_2}}_{\\textvisiblespace\\,{a_1}}}}\\bigr) }");
+              L"i_1}{i_2}}_{\\textvisiblespace\\,{a_1}}}} + "
+              L"{{{\\frac{1}{12}}}{\\bar{L}^{{a_1}{a_2}}_{{i_1}{i_2}{i_"
+              L"3}}}{\\tilde{a}^{{i_1}{i_2}{i_3}}_{\\textvisiblespace\\,{a_1}{"
+              L"a_2}}}}\\bigr) }");
     }
   }
 

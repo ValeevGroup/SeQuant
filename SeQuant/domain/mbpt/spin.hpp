@@ -50,14 +50,17 @@ inline Spin operator&(Spin s1, Spin s2) {
 /// converts QuantumNumbersAttr to Spin
 /// @note this filters out all bits not used in Spin
 inline Spin to_spin(const QuantumNumbersAttr& t) {
-  assert((t.to_int32() & static_cast<int>(Spin::mask)) != 0);
-  return static_cast<Spin>(static_cast<Spin>(t.to_int32()) & Spin::mask);
+  assert((t.to_int32() & mask_v<Spin>) != 0);
+  return static_cast<Spin>(t.to_int32() & mask_v<Spin>);
 }
 
 /// removes spin annotation in QuantumNumbersAttr by unsetting the bits used by
 /// Spin
 inline QuantumNumbersAttr spinannotation_remove(const QuantumNumbersAttr& t) {
-  return t.intersection(QuantumNumbersAttr(~Spin::mask));
+  static_assert((~(~mask_v<Spin> & ~bitset::reserved) & ~bitset::reserved) ==
+                    mask_v<Spin>,
+                "Spin bitmask uses reserved bits");
+  return t.intersection(QuantumNumbersAttr(~mask_v<Spin> & ~bitset::reserved));
 }
 
 /// removes spin annotation, if any

@@ -55,7 +55,6 @@ class WickTheorem {
       const std::shared_ptr<NormalOperatorSequence<S>> &input) {
     init_input(input);
     assert(input_->size() <= max_input_size);
-    assert(input_->empty() || input_->vacuum() != Vacuum::Invalid);
     if constexpr (statistics == Statistics::BoseEinstein) {
       assert(input_->empty() || input_->vacuum() == Vacuum::Physical);
     }
