@@ -9,12 +9,12 @@
 
 ExprPtr vac_av(
     ExprPtr expr,
-    const OpConnections<std::wstring>& op_connections,
+    const OpConnections<std::wstring>& op_connections, bool use_topology,
     bool skip_clone) {
   // use cloned expr to avoid side effects
   if (!skip_clone) expr = expr->clone();
 
-  auto vac_av_product = [&op_connections](ExprPtr expr) {
+  auto vac_av_product = [&op_connections, &use_topology](ExprPtr expr) {
     assert(expr.is<Product>());
     // extract scalar and factors
     const auto scalar = expr.as<Product>().scalar();
@@ -38,8 +38,8 @@ ExprPtr vac_av(
     std::vector<std::pair<int, int>> connections;
     {
       container::map<std::wstring, std::vector<int>>
-          oplbl2pos;  // maps operator labels to the operator positions in the
-                      // product
+          oplbl2pos; // maps operator labels to the operator positions in the
+      // product
       int pos = 0;
       bool ops_only = true;
       for (const auto& factor : product.as<Product>()) {
@@ -47,14 +47,15 @@ ExprPtr vac_av(
           const auto& op = factor.as<op_t>();
           const std::wstring op_lbl = std::wstring(op.label());
           const auto it = oplbl2pos.find(op_lbl);
-          if (it == oplbl2pos.end()) {  // new label
+          if (it == oplbl2pos.end()) {
+            // new label
             oplbl2pos.emplace(op_lbl, std::vector<int>{pos});
           } else {
             it->second.emplace_back(pos);
           }
           ++pos;
         } else if (factor.is<FNOperator>() || factor.is<BNOperator>()) {
-          ++pos;  // skip FNOperator and BNOperator
+          ++pos; // skip FNOperator and BNOperator
           ops_only = false;
         }
       }
@@ -69,13 +70,14 @@ ExprPtr vac_av(
       for (const auto& [op1_lbl, op2_lbl] : op_connections) {
         auto it1 = oplbl2pos.find(op1_lbl);
         auto it2 = oplbl2pos.find(op2_lbl);
-        if (it1 == oplbl2pos.end() || it2 == oplbl2pos.end())
-          continue;  // one of the op labels is not present in the product
+        if (it1 == oplbl2pos.end() || it2 == oplbl2pos.end()) continue;
+        // one of the op labels is not present in the product
         const auto& [dummy1, op1_indices] = *it1;
         const auto& [dummy2, op2_indices] = *it2;
         for (const auto& op1_idx : op1_indices) {
           for (const auto& op2_idx : op2_indices) {
-            if (op1_idx < op2_idx) {  // N.B. connections are directional
+            if (op1_idx < op2_idx) {
+              // N.B. connections are directional
               connections.emplace_back(op1_idx, op2_idx);
             }
           }
@@ -88,10 +90,12 @@ ExprPtr vac_av(
     simplify(product);
 
     // compute VEV
-    auto vev = tensor::vac_av(product, connections, /* use_topology = */ true);
+    auto vev = tensor::vac_av(product, connections, use_topology);
     // restore Variable types to the Product
-    if (!variables.empty())
-      ranges::for_each(variables, [&vev](const auto& var) { vev *= var; });
+    if (!variables.empty()) ranges::for_each(variables,
+                                             [&vev](const auto& var) {
+                                               vev *= var;
+                                             });
 
     return simplify(vev);
   };
@@ -100,13 +104,12 @@ ExprPtr vac_av(
   if (expr.is<Product>()) {
     // expand sums in a product
     if (ranges::any_of(expr.as<Product>().factors(), [](const auto& factor) {
-          return factor.template is<Sum>();
-        })) {
+      return factor.template is<Sum>();
+    })) {
       expr = expand(expr);
-      simplify(expr);  // condense equivalent terms after expansion
+      simplify(expr); // condense equivalent terms after expansion
       return vac_av(expr, op_connections, /* skip_clone = */ true);
-    } else
-      return vac_av_product(expr);
+    } else return vac_av_product(expr);
   } else if (expr.is<Sum>()) {
     result = sequant::transform_reduce(
         *expr, ex<Sum>(),
@@ -116,22 +119,23 @@ ExprPtr vac_av(
         [&op_connections](const auto& op_product) {
           return vac_av(op_product, op_connections, /* skip_clone = */ true);
         });
-    simplify(result);  // combine possible equivalent summands
+    simplify(result); // combine possible equivalent summands
     return result;
   } else if (expr.is<op_t>()) {
     return ex<Constant>(
-        0);  // expectation value of a normal-ordered operator is 0
+        0); // expectation value of a normal-ordered operator is 0
   } else if (expr.is<Constant>() || expr.is<Variable>()) {
-    return expr;  // vacuum is normalized
+    return expr; // vacuum is normalized
   }
   throw std::invalid_argument("mpbt::*::vac_av(expr): unknown expression type");
 }
 
 ExprPtr vac_av(
     ExprPtr expr,
-    const OpConnections<OpType>& op_connections,
+    const OpConnections<OpType>& op_connections, bool use_topology,
     bool skip_clone) {
-  return vac_av(expr, to_label_connections(op_connections), skip_clone);
+  return vac_av(expr, to_label_connections(op_connections), use_topology,
+                skip_clone);
 }
 
 #endif  // SEQUANT_DOMAIN_MBPT_VAC_AV_IPP
