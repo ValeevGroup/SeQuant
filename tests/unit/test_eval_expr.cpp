@@ -346,5 +346,25 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
                      ->as<Tensor>()};
 
     REQUIRE_NOTHROW(result_expr(t1, t2, EvalOp::Product));
+    std::cout << "min_tmp_index: " << Index::min_tmp_index() << std::endl;
+
+    // auto prod1 = parse_expr(
+    //     L"(g{i_2,i_3;a_19603,a_19604}:N-C-S * C{a_19603;a_2<i_1>}:N-C-S) * "
+    //     L"C{a_19604;a_3<i_2,i_3>}:N-C-S");
+    // auto prod2 = parse_expr(
+    //     L"(g{i_2,i_3;a_19650,a_19651}:N-C-S * C{a_19650;a_2<i_2>}:N-C-S) * "
+    //     L"C{a_19651;a_3<i_1,i_3>}:N-C-S");
+    auto prod3 = parse_expr(
+        L"(g{i_2,i_3;a_13,a_14}:N-C-S * C{a_13;a_2<i_1>}:N-C-S) * "
+        L"C{a_14;a_3<i_2,i_3>}:N-C-S");
+    auto prod4 = parse_expr(
+        L"(g{i_2,i_3;a_10,a_11}:N-C-S * C{a_10;a_2<i_2>}:N-C-S) * "
+        L"C{a_11;a_3<i_1,i_3>}:N-C-S");
+    // auto n1 = binarize(prod1);
+    // auto n2 = binarize(prod2);
+    // REQUIRE(n1->hash_value() != n2->hash_value());
+    auto n3 = binarize<EvalExprTA>(prod3);
+    auto n4 = binarize<EvalExprTA>(prod4);
+    REQUIRE(n3->hash_value() != n4->hash_value());
   }
 }
