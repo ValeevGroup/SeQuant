@@ -9,12 +9,12 @@
 
 ExprPtr vac_av(
     ExprPtr expr,
-    const OpConnections<std::wstring>& op_connections, bool use_topology,
+    const OpConnections<std::wstring>& op_connections, bool use_topology, bool screen,
     bool skip_clone) {
   // use cloned expr to avoid side effects
   if (!skip_clone) expr = expr->clone();
 
-  auto vac_av_product = [&op_connections, &use_topology](ExprPtr expr) {
+  auto vac_av_product = [&op_connections, &use_topology, &screen](ExprPtr expr) {
     assert(expr.is<Product>());
     // extract scalar and factors
     const auto scalar = expr.as<Product>().scalar();
@@ -61,7 +61,7 @@ ExprPtr vac_av(
       }
 
       // if composed of ops only, screen out products with zero VEV
-      if (ops_only) {
+      if (ops_only & screen) {
         if (!can_change_qns(product, qns_t{})) {
           return ex<Constant>(0);
         }
@@ -132,9 +132,9 @@ ExprPtr vac_av(
 
 ExprPtr vac_av(
     ExprPtr expr,
-    const OpConnections<OpType>& op_connections, bool use_topology,
+    const OpConnections<OpType>& op_connections, bool use_topology, bool screen,
     bool skip_clone) {
-  return vac_av(expr, to_label_connections(op_connections), use_topology,
+  return vac_av(expr, to_label_connections(op_connections), use_topology, screen,
                 skip_clone);
 }
 
