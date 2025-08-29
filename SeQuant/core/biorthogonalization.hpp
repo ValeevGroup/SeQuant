@@ -24,6 +24,9 @@ void biorthogonal_transform(ResultExpr& expr,
 void biorthogonal_transform(container::svector<ResultExpr>& exprs,
                             double threshold = default_biorth_threshold);
 
+/// performs symbolic biorthogonal transform of CC-like equation using
+///(for rank-3 and higher
+/// Wang-Knizia biorthogonalization (https://arxiv.org/abs/1805.00565) is used
 [[nodiscard]] ExprPtr biorthogonal_transform(
     const ExprPtr& expr,
     const container::svector<container::svector<sequant::Index>>&

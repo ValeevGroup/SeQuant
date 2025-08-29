@@ -1,9 +1,8 @@
 #include <SeQuant/core/biorthogonalization.hpp>
-#include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/runtime.hpp>
+#include <SeQuant/core/timer.hpp>
 #include <SeQuant/core/utility/indices.hpp>
-#include <SeQuant/core/utility/timer.hpp>
 #include <SeQuant/core/wick.hpp>
 #include <SeQuant/domain/mbpt/context.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
@@ -82,8 +81,9 @@ class compute_cceqvec {
     std::vector<ExprPtr> eqvec_sf_ref;
     if (get_default_context().spbasis() == SPBasis::spinfree) {
       auto context_resetter = sequant::set_scoped_default_context(
-          {.index_space_registry_shared_ptr = make_min_sr_spaces(),
-           .vacuum = Vacuum::SingleProduct});
+          sequant::Context(make_min_sr_spaces(), Vacuum::SingleProduct,
+                           IndexSpaceMetric::Unit, BraKetSymmetry::conjugate,
+                           SPBasis::spinor));
       std::vector<ExprPtr> eqvec_so;
       switch (type) {
         case EqnType::t:
@@ -98,15 +98,18 @@ class compute_cceqvec {
       for (size_t R = PMIN; R <= P; ++R) {
         auto const ext_idxs =
             external_indices(eqvec_so[R]->at(0)->at(0)->as<Tensor>());
-        eqvec_sf_ref[R] = closed_shell_spintrace(eqvec_so[R], ext_idxs);
-        if (R == 1) {  // closed_shell_spintrace omits 1-body S
-          using ranges::views::transform;
-          auto bixs = ext_idxs | transform([](auto&& vec) { return vec[0]; });
-          auto kixs = ext_idxs | transform([](auto&& vec) { return vec[1]; });
-          auto s_tensor = ex<Tensor>(Tensor{L"S", bra(kixs), ket(bixs)});
-          eqvec_sf_ref[R] = s_tensor * eqvec_sf_ref[R];
-          expand(eqvec_sf_ref[R]);
-        }
+        eqvec_sf_ref[R] = closed_shell_spintrace(
+            eqvec_so[R], ext_idxs);  // with partial expansion
+        eqvec_sf_ref[R] = S_maps(eqvec_sf_ref[R]);
+
+        using ranges::views::transform;
+        auto bixs = ext_idxs | transform([](auto&& vec) { return vec[0]; });
+        auto kixs = ext_idxs | transform([](auto&& vec) { return vec[1]; });
+        auto s_tensor = ex<Tensor>(Tensor{L"S", bra(kixs), ket(bixs)});
+        eqvec_sf_ref[R] = s_tensor * eqvec_sf_ref[R];
+        rational normalization_factor = rational(1, factorial(R));
+        eqvec_sf_ref[R] = ex<Constant>(normalization_factor) * eqvec_sf_ref[R];
+        expand(eqvec_sf_ref[R]);
       }
     }
 
@@ -166,38 +169,19 @@ class compute_cceqvec {
           auto const ext_idxs =
               external_indices(eqvec[R]->at(0)->at(0)->as<Tensor>());
 
-          // Remove S operator
-          for (auto& term : eqvec[R]->expr()) {
-            if (term->is<Product>())
-              term = remove_tensor(term->as<Product>(), L"S");
-          }
-
+          // instead of removing S, expnad S to get fully expanded terms
+          eqvec[R] = S_maps(eqvec[R]);
           // Biorthogonal transformation
           eqvec[R] = biorthogonal_transform(eqvec[R], ext_idxs);
+          // apply hash fiter to get compact_set eqns
+          eqvec[R] = WK_biorthogonalization_filter(eqvec[R], ext_idxs);
 
-          // restore the particle symmetrizer to then expand it in order to get
-          // all the raw equations
+          // restore the particle symmetrizer
           auto bixs = ext_idxs | ranges::views::transform(
                                      [](auto&& vec) { return vec[0]; });
           auto kixs = ext_idxs | ranges::views::transform(
                                      [](auto&& vec) { return vec[1]; });
           // N.B. external_indices(expr) confuses bra and ket
-          if (bixs.size() > 1) {
-            eqvec[R] =
-                ex<Tensor>(Tensor{L"S", bra(kixs), ket(bixs)}) * eqvec[R];
-          }
-
-          simplify(eqvec[R]);
-
-          // expand the particle symmetrizer to get all the raw equations
-          eqvec[R] = S_maps(eqvec[R]);
-          canonicalize(eqvec[R]);
-
-          // apply hash fiter to get only terms with large coefficients
-          eqvec[R] = WK_biorthogonalization_filter(eqvec[R], ext_idxs);
-
-          // resotre the particle symmetrizer again to get the most compact set
-          // of equations
           eqvec[R] = ex<Tensor>(Tensor{L"S", bra(kixs), ket(bixs)}) * eqvec[R];
 
           eqvec[R] = expand(eqvec[R]);
@@ -215,23 +199,19 @@ class compute_cceqvec {
 
           simplify(eqvec[R]);
 
-          // hash filter method removes the redundancy caused by biorthogonal
-          // transformation and gives the most compact set of eqns. However, we
-          // need to restore the effects of those deleted terms. So, in cck
-          // class, after evaluste_symm in sequant evaluation scope, we need to
-          // call evaluate_biorthogonal_cleanup.
-
           std::wcout << "biorthogonal spin-free R" << R << "(expS" << N
                      << ") has " << eqvec[R]->size() << " terms:" << std::endl;
           if (print) std::wcout << to_latex_align(eqvec[R], 20, 1) << std::endl;
 
+          // hash filter method gives the compact-set eqns, but later after
+          // evaluation it needs a numerical cleanup to restore the effect of
+          // deleted terms
           if (R == 1 && N == 2) runtime_assert(eqvec[R]->size() == 26);
           if (R == 2 && N == 2) runtime_assert(eqvec[R]->size() == 55);
           if (R == 1 && N == 3) runtime_assert(eqvec[R]->size() == 30);
           if (R == 2 && N == 3) runtime_assert(eqvec[R]->size() == 73);
           if (R == 3 && N == 3) runtime_assert(eqvec[R]->size() == 93);
-          if (R == 3 && N == 4) runtime_assert(eqvec[R]->size() == 111);
-          if (R == 4 && N == 4) runtime_assert(eqvec[R]->size() == 149);
+          if (R == 3 && N == 4) runtime_assert(eqvec[R]->size() == 149);
         }
       }
     }
@@ -259,16 +239,22 @@ class compute_all {
 }  // namespace
 
 int main(int argc, char* argv[]) {
+  std::setlocale(LC_ALL, "en_US.UTF-8");
   std::wcout.precision(std::numeric_limits<double>::max_digits10);
   std::wcerr.precision(std::numeric_limits<double>::max_digits10);
-  sequant::set_locale();
+  std::wcout.sync_with_stdio(false);
+  std::wcerr.sync_with_stdio(false);
+  std::wcout.imbue(std::locale("en_US.UTF-8"));
+  std::wcerr.imbue(std::locale("en_US.UTF-8"));
+  std::wcout.sync_with_stdio(true);
+  std::wcerr.sync_with_stdio(true);
 
   // set_num_threads(1);
 
 #ifndef NDEBUG
   const size_t DEFAULT_NMAX = 3;
 #else
-  const size_t DEFAULT_NMAX = 4;
+  const size_t DEFAULT_NMAX = 3;
 #endif
 
   const size_t NMAX = argc > 1 ? std::atoi(argv[1]) : DEFAULT_NMAX;
@@ -287,11 +273,9 @@ int main(int argc, char* argv[]) {
   const bool print = print_str == "print";
 
   sequant::detail::OpIdRegistrar op_id_registrar;
-  sequant::set_default_context(
-      sequant::Context({.index_space_registry_shared_ptr =
-                            make_min_sr_spaces(SpinConvention::None),
-                        .vacuum = Vacuum::SingleProduct,
-                        .spbasis = spbasis}));
+  sequant::set_default_context(sequant::Context(
+      make_min_sr_spaces(), Vacuum::SingleProduct, IndexSpaceMetric::Unit,
+      BraKetSymmetry::conjugate, spbasis));
   TensorCanonicalizer::register_instance(
       std::make_shared<DefaultTensorCanonicalizer>());
 
