@@ -1,12 +1,12 @@
 #ifndef SEQUANT_DOMAIN_MBPT_MODELS_CC_HPP
 #define SEQUANT_DOMAIN_MBPT_MODELS_CC_HPP
 
+#include <SeQuant/core/op.hpp>
+#include <SeQuant/domain/mbpt/op.hpp>
+
 #include <cstddef>
 #include <limits>
 #include <vector>
-
-#include <SeQuant/core/op.hpp>
-#include <SeQuant/domain/mbpt/op.hpp>
 
 namespace sequant {
 class ExprPtr;
