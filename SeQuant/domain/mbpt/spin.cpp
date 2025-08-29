@@ -9,7 +9,7 @@
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/space.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
-#include <SeQuant/core/tensor_network_v2.hpp>
+#include <SeQuant/core/tensor_network_v3.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/permutation.hpp>
 #include <SeQuant/core/utility/swap.hpp>
@@ -950,7 +950,7 @@ ExprPtr hash_filter_compact_set(
     auto product = term->as<Product>();
     auto scalar = product.scalar();
 
-    sequant::TensorNetworkV2 tn(product);
+    sequant::TensorNetworkV3 tn(product);
     auto hash =
         tn.canonicalize_slots(TensorCanonicalizer::cardinal_tensor_labels())
             .hash_value();
