@@ -53,11 +53,11 @@ std::wstring deparse_ops(const Range& ops) {
 
 std::wstring deparse_symm(Symmetry symm) {
   switch (symm) {
-    case Symmetry::symm:
+    case Symmetry::Symm:
       return L"S";
-    case Symmetry::antisymm:
+    case Symmetry::Antisymm:
       return L"A";
-    case Symmetry::nonsymm:
+    case Symmetry::Nonsymm:
       return L"N";
   }
 
@@ -66,11 +66,11 @@ std::wstring deparse_symm(Symmetry symm) {
 
 std::wstring deparse_symm(BraKetSymmetry symm) {
   switch (symm) {
-    case BraKetSymmetry::conjugate:
+    case BraKetSymmetry::Conjugate:
       return L"C";
-    case BraKetSymmetry::symm:
+    case BraKetSymmetry::Symm:
       return L"S";
-    case BraKetSymmetry::nonsymm:
+    case BraKetSymmetry::Nonsymm:
       return L"N";
   }
 
@@ -79,9 +79,9 @@ std::wstring deparse_symm(BraKetSymmetry symm) {
 
 std::wstring deparse_symm(ColumnSymmetry symm) {
   switch (symm) {
-    case ColumnSymmetry::symm:
+    case ColumnSymmetry::Symm:
       return L"S";
-    case ColumnSymmetry::nonsymm:
+    case ColumnSymmetry::Nonsymm:
       return L"N";
   }
 

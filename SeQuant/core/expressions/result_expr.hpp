@@ -142,9 +142,9 @@ class ResultExpr {
              ColumnSymmetry column_symm, std::optional<std::wstring> label,
              ExprPtr expression);
 
-  Symmetry m_symm = Symmetry::nonsymm;
-  BraKetSymmetry m_bksymm = BraKetSymmetry::nonsymm;
-  ColumnSymmetry m_csymm = ColumnSymmetry::nonsymm;
+  Symmetry m_symm = Symmetry::Nonsymm;
+  BraKetSymmetry m_bksymm = BraKetSymmetry::Nonsymm;
+  ColumnSymmetry m_csymm = ColumnSymmetry::Nonsymm;
   IndexContainer m_braIndices;
   IndexContainer m_ketIndices;
   IndexContainer m_auxIndices;

@@ -24,13 +24,13 @@ namespace sequant {
 ///    this affects the value of Wick contractions.
 /// - `braket_symmetry`: whether the primal (ket) and dual (bra) vector space
 /// _bases_
-///    are "equivalent" (homogenous to each other; `BraKetSymmetry::symm`),
+///    are "equivalent" (homogenous to each other; `BraKetSymmetry::Symm`),
 ///    "conjugate to each other" (<a
 ///    href="https://en.wikipedia.org/wiki/Antilinear_map">conjugate-homogenous</a>
-///    to each other; `BraKetSymmetry::conjugate`) or are "nonequivalent" (not
-///    homogeneous; `BraKetSymmetry::nonsymm`)
-/// - `spbasis`: whether the bra/ket bases are spinor (`SPBasis::spinor`) or
-/// spin-free (`SPBasis::spinfree`).
+///    to each other; `BraKetSymmetry::Conjugate`) or are "nonequivalent" (not
+///    homogeneous; `BraKetSymmetry::Nonsymm`)
+/// - `spbasis`: whether the bra/ket bases are spinor (`SPBasis::Spinor`) or
+/// spin-free (`SPBasis::Spinfree`).
 /// - `first_dummy_index_ordinal`: during its operation SeQuant will generate
 ///    temporary indices with orbitals greater or equal to this; to avoid
 ///    duplicates user Index objects should have ordinals smaller than this
@@ -52,8 +52,8 @@ class Context {
   struct Defaults {
     constexpr static auto vacuum = Vacuum::Physical;
     constexpr static auto metric = IndexSpaceMetric::Unit;
-    constexpr static auto braket_symmetry = BraKetSymmetry::conjugate;
-    constexpr static auto spbasis = SPBasis::spinor;
+    constexpr static auto braket_symmetry = BraKetSymmetry::Conjugate;
+    constexpr static auto spbasis = SPBasis::Spinor;
     constexpr static auto first_dummy_index_ordinal = 100;
     constexpr static std::optional<CanonicalizeOptions> canonicalization_options = std::nullopt;
     constexpr static auto braket_typesetting = BraKetTypesetting::ContraSub;
@@ -95,7 +95,7 @@ class Context {
   /// `this->index_space_registry()` will return nullptr
   /// Example:
   /// ```cpp
-  ///   Context ctx({.vacuum = Vacuum::SingleReference, .spbasis = SPBasis::spinfree});
+  ///   Context ctx({.vacuum = Vacuum::SingleReference, .spbasis = SPBasis::Spinfree});
   /// ```
   Context(Options options = make_default_options());
 

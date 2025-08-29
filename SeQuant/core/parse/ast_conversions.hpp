@@ -124,13 +124,13 @@ Symmetry to_perm_symmetry(char c, std::size_t offset, const Iterator &,
   switch (c) {
     case 'A':
     case 'a':
-      return Symmetry::antisymm;
+      return Symmetry::Antisymm;
     case 'S':
     case 's':
-      return Symmetry::symm;
+      return Symmetry::Symm;
     case 'N':
     case 'n':
-      return Symmetry::nonsymm;
+      return Symmetry::Nonsymm;
   }
 
   throw ParseError(offset, 1,
@@ -147,13 +147,13 @@ BraKetSymmetry to_braket_symmetry(char c, std::size_t offset, const Iterator &,
   switch (c) {
     case 'C':
     case 'c':
-      return BraKetSymmetry::conjugate;
+      return BraKetSymmetry::Conjugate;
     case 'S':
     case 's':
-      return BraKetSymmetry::symm;
+      return BraKetSymmetry::Symm;
     case 'N':
     case 'n':
-      return BraKetSymmetry::nonsymm;
+      return BraKetSymmetry::Nonsymm;
   }
 
   throw ParseError(
@@ -170,10 +170,10 @@ ColumnSymmetry to_column_symmetry(char c, std::size_t offset, const Iterator &,
   switch (c) {
     case 'S':
     case 's':
-      return ColumnSymmetry::symm;
+      return ColumnSymmetry::Symm;
     case 'N':
     case 'n':
-      return ColumnSymmetry::nonsymm;
+      return ColumnSymmetry::Nonsymm;
   }
 
   throw ParseError(

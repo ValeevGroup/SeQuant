@@ -247,7 +247,7 @@ parse::transform::DefaultSymmetries to_default_symms(
   const Context &ctx = get_default_context();
 
   parse::transform::DefaultSymmetries symms{
-      Symmetry::nonsymm, ctx.braket_symmetry(), ColumnSymmetry::symm};
+      Symmetry::Nonsymm, ctx.braket_symmetry(), ColumnSymmetry::Symm};
 
   if (perm_symm.has_value()) {
     std::get<0>(symms) = perm_symm.value();
@@ -259,9 +259,9 @@ parse::transform::DefaultSymmetries to_default_symms(
     std::get<2>(symms) = column_symm.value();
   }
   if (std::get<0>(symms) !=
-      Symmetry::nonsymm) {  // antisymmetry/symmetric bra and ket imply particle
+      Symmetry::Nonsymm) {  // antisymmetry/symmetric bra and ket imply particle
                             // symmetry
-    std::get<2>(symms) = ColumnSymmetry::symm;
+    std::get<2>(symms) = ColumnSymmetry::Symm;
   }
 
   return symms;

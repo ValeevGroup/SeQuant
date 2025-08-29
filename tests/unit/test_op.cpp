@@ -21,37 +21,37 @@ TEST_CASE("op", "[elements]") {
   SECTION("constructors") {
     REQUIRE_NOTHROW(FOp{});
 
-    REQUIRE_NOTHROW(FOp(Index(L"i_1"), Action::create));
-    FOp o1(Index(L"i_1"), Action::create);
+    REQUIRE_NOTHROW(FOp(Index(L"i_1"), Action::Create));
+    FOp o1(Index(L"i_1"), Action::Create);
     REQUIRE(o1.statistics == Statistics::FermiDirac);
     REQUIRE(o1.index() == Index(L"i_1"));
-    REQUIRE(o1.action() == Action::create);
+    REQUIRE(o1.action() == Action::Create);
 
     {
-      REQUIRE_NOTHROW(FOp(L"i_1", Action::create));
-      FOp o1(L"i_1", Action::create);
+      REQUIRE_NOTHROW(FOp(L"i_1", Action::Create));
+      FOp o1(L"i_1", Action::Create);
       REQUIRE(o1.statistics == Statistics::FermiDirac);
       REQUIRE(o1.index() == Index(L"i_1"));
-      REQUIRE(o1.action() == Action::create);
+      REQUIRE(o1.action() == Action::Create);
     }
 
     REQUIRE_NOTHROW(bann(Index(L"i_2")));
     auto o2 = bann(Index(L"i_2"));
     REQUIRE(o2.statistics == Statistics::BoseEinstein);
     REQUIRE(o2.index() == Index(L"i_2"));
-    REQUIRE(o2.action() == Action::annihilate);
+    REQUIRE(o2.action() == Action::Annihilate);
 
     REQUIRE_NOTHROW(bcre(L"i_3"));
     auto o3 = bcre(L"i_3");
     REQUIRE(o3.statistics == Statistics::BoseEinstein);
     REQUIRE(o3.index() == Index(L"i_3"));
-    REQUIRE(o3.action() == Action::create);
+    REQUIRE(o3.action() == Action::Create);
 
     REQUIRE_NOTHROW(fann(L"i_4", {L"a_1", L"a_2"}));
     auto o4 = fann(L"i_4", {L"a_1", L"a_2"});
     REQUIRE(o4.statistics == Statistics::FermiDirac);
     REQUIRE(o4.index() == Index(L"i_4", {L"a_1", L"a_2"}));
-    REQUIRE(o4.action() == Action::annihilate);
+    REQUIRE(o4.action() == Action::Annihilate);
 
     REQUIRE_NOTHROW(FOperator{fcre(L"i_1"), fann(L"i_1")});
     auto oper1 = FOperator{fcre(L"i_1"), fann(L"i_1")};
@@ -124,15 +124,15 @@ TEST_CASE("op", "[elements]") {
   }
 
   SECTION("adjoint") {
-    auto o1 = adjoint(FOp(Index(L"i_1"), Action::create));
+    auto o1 = adjoint(FOp(Index(L"i_1"), Action::Create));
     REQUIRE(o1.statistics == Statistics::FermiDirac);
     REQUIRE(o1.index() == Index(L"i_1"));
-    REQUIRE(o1.action() == Action::annihilate);
+    REQUIRE(o1.action() == Action::Annihilate);
     o1.adjoint();
-    REQUIRE(o1.action() == Action::create);
+    REQUIRE(o1.action() == Action::Create);
     o1.adjoint();
     o1.adjoint();
-    REQUIRE(o1.action() == Action::create);
+    REQUIRE(o1.action() == Action::Create);
 
     auto oper1 = adjoint(FOperator{fcre(L"i_1"), fann(L"i_2")});
     REQUIRE(oper1.statistics == Statistics::FermiDirac);
@@ -384,10 +384,10 @@ TEST_CASE("op", "[elements]") {
   }
 
   SECTION("latex") {
-    FOp o1(Index(L"i_1"), Action::create);
+    FOp o1(Index(L"i_1"), Action::Create);
     REQUIRE(to_latex(o1) == L"{a^{\\dagger}_{i_1}}");
 
-    BOp o2(Index(L"a_1"), Action::create);
+    BOp o2(Index(L"a_1"), Action::Create);
     REQUIRE(to_latex(o2) == L"{b^{\\dagger}_{a_1}}");
 
     auto oper0 = FOperator{};

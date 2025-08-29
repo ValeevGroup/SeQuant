@@ -33,7 +33,7 @@ struct AuxGroup {
 struct ParticleGroup {
   /// creates a group of particles of size @p size and symmetry @p symmetry
   explicit ParticleGroup(std::size_t id, std::size_t size = 1,
-                         Symmetry symmetry = Symmetry::nonsymm)
+                         Symmetry symmetry = Symmetry::Nonsymm)
       : id(id), size(size), symmetry(symmetry) {}
 
   std::size_t id;

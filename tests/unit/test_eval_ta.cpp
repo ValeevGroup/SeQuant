@@ -107,7 +107,7 @@ auto tensor_to_key(sequant::Tensor const& tnsr) {
 }
 
 auto tensor_to_key(std::wstring_view spec) {
-  return tensor_to_key(sequant::parse_expr(spec, sequant::Symmetry::nonsymm)
+  return tensor_to_key(sequant::parse_expr(spec, sequant::Symmetry::Nonsymm)
                            ->as<sequant::Tensor>());
 }
 
@@ -282,7 +282,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
     using TA::TArrayD;
 
     auto parse_antisymm = [](auto const& xpr) {
-      return parse_expr(xpr, sequant::Symmetry::antisymm);
+      return parse_expr(xpr, sequant::Symmetry::Antisymm);
     };
 
     // tnsr is assumed to be single-tiled

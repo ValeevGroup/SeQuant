@@ -190,21 +190,21 @@ ExprVar to_expression(T &&expression) {
     if (std::find(begin(string), end(string), L'=') != end(string)) {
       return sequant::parse_result_expr(
           sequant::to_wstring(std::string(std::forward<T>(expression))),
-          sequant::Symmetry::nonsymm);
+          sequant::Symmetry::Nonsymm);
     } else {
       return sequant::parse_expr(
           sequant::to_wstring(std::string(std::forward<T>(expression))),
-          sequant::Symmetry::nonsymm);
+          sequant::Symmetry::Nonsymm);
     }
   } else if constexpr (std::is_convertible_v<T, std::wstring>) {
     if (std::find(begin(expression), end(expression), L'=') !=
         end(expression)) {
       return sequant::parse_result_expr(
           std::wstring(std::forward<T>(expression)),
-          sequant::Symmetry::nonsymm);
+          sequant::Symmetry::Nonsymm);
     } else {
       return sequant::parse_expr(std::wstring(std::forward<T>(expression)),
-                                 sequant::Symmetry::nonsymm);
+                                 sequant::Symmetry::Nonsymm);
     }
   } else if constexpr (std::is_convertible_v<T, sequant::ResultExpr>) {
     return expression;

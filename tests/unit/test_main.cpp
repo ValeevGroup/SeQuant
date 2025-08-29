@@ -38,8 +38,8 @@ int main(int argc, char* argv[]) {
       {.index_space_registry_shared_ptr = sequant::mbpt::make_sr_spaces(),
        .vacuum = Vacuum::SingleProduct,
        .metric = IndexSpaceMetric::Unit,
-       .braket_symmetry = BraKetSymmetry::conjugate,
-       .spbasis = SPBasis::spinor,
+       .braket_symmetry = BraKetSymmetry::Conjugate,
+       .spbasis = SPBasis::Spinor,
        .first_dummy_index_ordinal = 100,
        .braket_typesetting = BraKetTypesetting::ContraSub,
        // to_latex() reference outputs predominantly assume the original

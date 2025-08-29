@@ -21,7 +21,7 @@
 #include <range/v3/all.hpp>
 
 namespace sequant {
-Tensor parse_tensor(std::wstring_view tnsr, Symmetry s = Symmetry::nonsymm) {
+Tensor parse_tensor(std::wstring_view tnsr, Symmetry s = Symmetry::Nonsymm) {
   return parse_expr(tnsr, s)->as<Tensor>();
 }
 
@@ -151,8 +151,8 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
     REQUIRE(root_expr.is<Tensor>());
     REQUIRE(root_expr.as<Tensor>() ==
             Tensor(L"Result", bra(IndexList{L"a_2"}), ket(IndexList{L"i_2"}),
-                   Symmetry::antisymm, BraKetSymmetry::symm,
-                   ColumnSymmetry::symm));
+                   Symmetry::Antisymm, BraKetSymmetry::Symm,
+                   ColumnSymmetry::Symm));
 
     // continued ->  check that changing indexing in result changes indexing in
     // tree
@@ -161,8 +161,8 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
     REQUIRE(root_expr.is<Tensor>());
     REQUIRE(root_expr.as<Tensor>() ==
             Tensor(L"Result", bra(IndexList{L"i_2"}), ket(IndexList{L"a_2"}),
-                   Symmetry::antisymm, BraKetSymmetry::symm,
-                   ColumnSymmetry::symm));
+                   Symmetry::Antisymm, BraKetSymmetry::Symm,
+                   ColumnSymmetry::Symm));
 
     // The name-respecting property shall also hold for terminals
     res = parse_result_expr(L"Other = Var");
@@ -220,9 +220,9 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
   }
 
   SECTION("Hash value") {
-    const auto t1 = parse_tensor(L"t_{i1}^{a1}", Symmetry::antisymm);
-    const auto t2 = parse_tensor(L"t_{i2}^{a2}", Symmetry::antisymm);
-    const auto t3 = parse_tensor(L"t_{i1,i2}^{a1,a2}", Symmetry::antisymm);
+    const auto t1 = parse_tensor(L"t_{i1}^{a1}", Symmetry::Antisymm);
+    const auto t2 = parse_tensor(L"t_{i2}^{a2}", Symmetry::Antisymm);
+    const auto t3 = parse_tensor(L"t_{i1,i2}^{a1,a2}", Symmetry::Antisymm);
 
     const auto& x1 = EvalExpr{t1};
     const auto& x2 = EvalExpr{t2};
@@ -245,53 +245,53 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
 
   SECTION("Symmetry of product") {
     // whole bra <-> ket contraction between two antisymmetric tensors
-    const auto t1 = parse_tensor(L"g_{i3,i4}^{i1,i2}", Symmetry::antisymm);
-    const auto t2 = parse_tensor(L"t_{a1,a2}^{i3,i4}", Symmetry::antisymm);
+    const auto t1 = parse_tensor(L"g_{i3,i4}^{i1,i2}", Symmetry::Antisymm);
+    const auto t2 = parse_tensor(L"t_{a1,a2}^{i3,i4}", Symmetry::Antisymm);
 
     const auto x12 = result_expr(EvalExpr{t1}, EvalExpr{t2}, EvalOp::Product);
 
     // todo:
-    // REQUIRE(x12.expr()->as<Tensor>().symmetry() == Symmetry::antisymm);
-    REQUIRE(x12.expr()->as<Tensor>().symmetry() == Symmetry::nonsymm);
+    // REQUIRE(x12.expr()->as<Tensor>().symmetry() == Symmetry::Antisymm);
+    REQUIRE(x12.expr()->as<Tensor>().symmetry() == Symmetry::Nonsymm);
 
     // whole bra <-> ket contraction between two symmetric tensors
     const auto t3 =
-        parse_expr(L"g_{i3,i4}^{i1,i2}", Symmetry::symm)->as<Tensor>();
+        parse_expr(L"g_{i3,i4}^{i1,i2}", Symmetry::Symm)->as<Tensor>();
     const auto t4 =
-        parse_expr(L"t_{a1,a2}^{i3,i4}", Symmetry::symm)->as<Tensor>();
+        parse_expr(L"t_{a1,a2}^{i3,i4}", Symmetry::Symm)->as<Tensor>();
 
     const auto x34 = result_expr(EvalExpr{t3}, EvalExpr{t4}, EvalOp::Product);
 
     // todo:
-    // REQUIRE(x34.expr()->as<Tensor>().symmetry() == Symmetry::symm);
-    REQUIRE(x34.expr()->as<Tensor>().symmetry() == Symmetry::nonsymm);
+    // REQUIRE(x34.expr()->as<Tensor>().symmetry() == Symmetry::Symm);
+    REQUIRE(x34.expr()->as<Tensor>().symmetry() == Symmetry::Nonsymm);
 
     // outer product of the same tensor
-    const auto t5 = parse_expr(L"f_{i1}^{a1}", Symmetry::nonsymm)->as<Tensor>();
-    const auto t6 = parse_expr(L"f_{i2}^{a2}", Symmetry::nonsymm)->as<Tensor>();
+    const auto t5 = parse_expr(L"f_{i1}^{a1}", Symmetry::Nonsymm)->as<Tensor>();
+    const auto t6 = parse_expr(L"f_{i2}^{a2}", Symmetry::Nonsymm)->as<Tensor>();
 
     const auto& x56 = result_expr(EvalExpr{t5}, EvalExpr{t6}, EvalOp::Product);
 
     // todo:
-    // REQUIRE(x56.expr()->as<Tensor>().symmetry() == Symmetry::antisymm);
-    REQUIRE(x56.expr()->as<Tensor>().symmetry() == Symmetry::nonsymm);
+    // REQUIRE(x56.expr()->as<Tensor>().symmetry() == Symmetry::Antisymm);
+    REQUIRE(x56.expr()->as<Tensor>().symmetry() == Symmetry::Nonsymm);
 
     // contraction of some indices from a bra to a ket
-    const auto t7 = parse_tensor(L"g_{a1,a2}^{i1,a3}", Symmetry::antisymm);
-    const auto t8 = parse_tensor(L"t_{a3}^{i2}", Symmetry::antisymm);
+    const auto t7 = parse_tensor(L"g_{a1,a2}^{i1,a3}", Symmetry::Antisymm);
+    const auto t8 = parse_tensor(L"t_{a3}^{i2}", Symmetry::Antisymm);
 
     const auto x78 = result_expr(EvalExpr{t7}, EvalExpr{t8}, EvalOp::Product);
-    REQUIRE(x78.expr()->as<Tensor>().symmetry() == Symmetry::nonsymm);
+    REQUIRE(x78.expr()->as<Tensor>().symmetry() == Symmetry::Nonsymm);
 
     // whole bra <-> ket contraction between symmetric and antisymmetric tensors
     auto const t9 =
-        parse_expr(L"g_{a1,a2}^{a3,a4}", Symmetry::antisymm)->as<Tensor>();
+        parse_expr(L"g_{a1,a2}^{a3,a4}", Symmetry::Antisymm)->as<Tensor>();
     auto const t10 =
-        parse_expr(L"t_{a3,a4}^{i1,i2}", Symmetry::symm)->as<Tensor>();
+        parse_expr(L"t_{a3,a4}^{i1,i2}", Symmetry::Symm)->as<Tensor>();
     auto const x910 = result_expr(EvalExpr{t9}, EvalExpr{t10}, EvalOp::Product);
     // todo:
-    // REQUIRE(x910.expr()->as<Tensor>().symmetry() == Symmetry::symm);
-    REQUIRE(x910.expr()->as<Tensor>().symmetry() == Symmetry::nonsymm);
+    // REQUIRE(x910.expr()->as<Tensor>().symmetry() == Symmetry::Symm);
+    REQUIRE(x910.expr()->as<Tensor>().symmetry() == Symmetry::Nonsymm);
   }
 
 #if 0
@@ -308,41 +308,41 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
       return result_expr(EvalExpr{t1}, EvalExpr{t2}, EvalOp::Sum);
     };
 
-    const auto t1 = tensor(Symmetry::antisymm);
-    const auto t2 = tensor(Symmetry::antisymm);
+    const auto t1 = tensor(Symmetry::Antisymm);
+    const auto t2 = tensor(Symmetry::Antisymm);
 
-    const auto t3 = tensor(Symmetry::symm);
-    const auto t4 = tensor(Symmetry::symm);
+    const auto t3 = tensor(Symmetry::Symm);
+    const auto t4 = tensor(Symmetry::Symm);
 
-    const auto t5 = tensor(Symmetry::nonsymm);
-    const auto t6 = tensor(Symmetry::nonsymm);
+    const auto t5 = tensor(Symmetry::Nonsymm);
+    const auto t6 = tensor(Symmetry::Nonsymm);
 
     // sum of two antisymm tensors.
-    REQUIRE(symmetry(imed(t1, t2)) == Symmetry::antisymm);
+    REQUIRE(symmetry(imed(t1, t2)) == Symmetry::Antisymm);
 
     // sum of one antisymm and one symmetric tensors
-    REQUIRE(symmetry(imed(t1, t3)) == Symmetry::symm);
+    REQUIRE(symmetry(imed(t1, t3)) == Symmetry::Symm);
 
     // sum of two symmetric tensors
-    REQUIRE(symmetry(imed(t3, t4)) == Symmetry::symm);
+    REQUIRE(symmetry(imed(t3, t4)) == Symmetry::Symm);
 
     // sum of an antisymmetric and a nonsymmetric tensors
-    REQUIRE(symmetry(imed(t1, t5)) == Symmetry::nonsymm);
+    REQUIRE(symmetry(imed(t1, t5)) == Symmetry::Nonsymm);
 
     // sum of one symmetric and one nonsymmetric tensors
-    REQUIRE(symmetry(imed(t3, t5)) == Symmetry::nonsymm);
+    REQUIRE(symmetry(imed(t3, t5)) == Symmetry::Nonsymm);
 
     // sum of two nonsymmetric tensors
-    REQUIRE(symmetry(imed(t5, t6)) == Symmetry::nonsymm);
+    REQUIRE(symmetry(imed(t5, t6)) == Symmetry::Nonsymm);
   }
 #endif
 
   SECTION("Debug") {
     auto t1 =
-        EvalExpr{parse_expr(L"O{a_1<i_1,i_2>;a_1<i_3,i_2>}", Symmetry::nonsymm)
+        EvalExpr{parse_expr(L"O{a_1<i_1,i_2>;a_1<i_3,i_2>}", Symmetry::Nonsymm)
                      ->as<Tensor>()};
     auto t2 =
-        EvalExpr{parse_expr(L"O{a_2<i_1,i_2>;a_2<i_3,i_2>}", Symmetry::nonsymm)
+        EvalExpr{parse_expr(L"O{a_2<i_1,i_2>;a_2<i_3,i_2>}", Symmetry::Nonsymm)
                      ->as<Tensor>()};
 
     REQUIRE_NOTHROW(result_expr(t1, t2, EvalOp::Product));

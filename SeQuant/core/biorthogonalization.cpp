@@ -294,7 +294,7 @@ void biorthogonal_transform(container::svector<ResultExpr>& result_exprs,
       }));
   assert(std::all_of(result_exprs.begin(), result_exprs.end(),
                      [](const ResultExpr& res) {
-                       return res.column_symmetry() == ColumnSymmetry::symm;
+                       return res.column_symmetry() == ColumnSymmetry::Symm;
                      }));
 
   // Furthermore, we expect that there is no symmetrization operator present in
@@ -379,8 +379,8 @@ ExprPtr biorthogonal_transform(
             return pair.at(1);
           }) |
           ranges::to<container::svector<Index>>()),
-      aux(IndexList{}), Symmetry::nonsymm, BraKetSymmetry::nonsymm,
-      ColumnSymmetry::symm, {}, expr);
+      aux(IndexList{}), Symmetry::Nonsymm, BraKetSymmetry::Nonsymm,
+      ColumnSymmetry::Symm, {}, expr);
 
   biorthogonal_transform(res, threshold);
 

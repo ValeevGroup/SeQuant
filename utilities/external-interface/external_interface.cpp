@@ -217,7 +217,7 @@ void generateITF(const json &blocks, std::string_view out_file,
       const std::string input(std::istreambuf_iterator<char>(in), {});
 
       sequant::ResultExpr result =
-          sequant::parse_result_expr(toUtf16(input), Symmetry::antisymm);
+          sequant::parse_result_expr(toUtf16(input), Symmetry::Antisymm);
 
       if (current_result.contains("name")) {
         result.set_label(toUtf16(current_result.at("name").get<std::string>()));

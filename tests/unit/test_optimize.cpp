@@ -61,7 +61,7 @@ TEST_CASE("optimize", "[optimize]") {
     };
 
     auto parse_expr_antisymm = [](auto const& xpr) {
-      return parse_expr(xpr, Symmetry::antisymm);
+      return parse_expr(xpr, Symmetry::Antisymm);
     };
 
     SECTION("Single term optimization") {
@@ -233,13 +233,13 @@ TEST_CASE("optimize", "[optimize]") {
 
         for (const std::wstring& current : inputs) {
           expressions.push_back(binarize(parse_result_expr(
-              current, Symmetry::nonsymm, BraKetSymmetry::nonsymm,
-              ColumnSymmetry::nonsymm)));
+              current, Symmetry::Nonsymm, BraKetSymmetry::Nonsymm,
+              ColumnSymmetry::Nonsymm)));
         }
         for (const std::wstring& current : outputs) {
-          expected.push_back(parse_result_expr(current, Symmetry::nonsymm,
-                                               BraKetSymmetry::nonsymm,
-                                               ColumnSymmetry::nonsymm));
+          expected.push_back(parse_result_expr(current, Symmetry::Nonsymm,
+                                               BraKetSymmetry::Nonsymm,
+                                               ColumnSymmetry::Nonsymm));
         }
 
         auto binarizer = [](auto&& expr) { return binarize(expr); };

@@ -71,8 +71,8 @@ ExprPtr make_tensor(Args&&... arg_list) {
 
 template <typename... Args>
 ExprPtr make_tensor_wo_symmetries(Args&&... args) {
-  return make_tensor(std::forward<Args>(args)..., Symmetry::nonsymm,
-                     BraKetSymmetry::nonsymm, ColumnSymmetry::nonsymm);
+  return make_tensor(std::forward<Args>(args)..., Symmetry::Nonsymm,
+                     BraKetSymmetry::Nonsymm, ColumnSymmetry::Nonsymm);
 }
 
 ExprPtr make_tensor(Tensor const& t, bool with_symm) {
