@@ -259,11 +259,11 @@ class AbstractTensor {
   virtual void _permute_aux(std::span<const std::size_t> perm) {
     permute_impl(_aux_mutable(), perm);
   }
-  /// permutes braket slot groups according to @p perm
-  /// @param perm from-permutation, i.e. Index pair in slot `permutation[i]`
-  /// will end up in slot `i`
-  virtual void _permute_braket(std::span<std::size_t> perm) {
-    permute_braket_impl(_bra_mutable(), _ket_mutable(), perm);
+  /// permutes column slot bundles according to @p perm
+  /// @param perm from-permutation, i.e. Index pair in column `permutation[i]`
+  /// will end up in column `i`
+  virtual void _permute_columns(std::span<std::size_t> perm) {
+    permute_columns_impl(_bra_mutable(), _ket_mutable(), perm);
   }
   /// swaps bra and ket slots
   virtual void _swap_bra_ket() {
@@ -305,13 +305,13 @@ class AbstractTensor {
     }
   }
 
-  static void permute_braket_impl(AbstractTensor::any_view_randsz bra_indices,
-                                  any_view_randsz ket_indices,
-                                  std::span<std::size_t> perm_from) {
+  static void permute_columns_impl(AbstractTensor::any_view_randsz bra_indices,
+                                   any_view_randsz ket_indices,
+                                   std::span<std::size_t> perm_from) {
     const auto n = std::max(bra_indices.size(), ket_indices.size());
     assert(n == perm_from.size());
 
-    // N.B. braket slot bundles are kept in canonical order, see AbstractTensor
+    // N.B. column slot bundles are kept in canonical order, see AbstractTensor
     // class dox: paired bundles first, then bra (paired with null ket) and
     // ket (unpaired).
 
@@ -600,7 +600,7 @@ inline void permute_ket(AbstractTensor& t, std::span<const std::size_t> perm) {
 /// @param perm from-permutation, i.e. Index pair in input slot `permutation[i]`
 /// will be in slot `i`
 inline void permute_braket(AbstractTensor& t, std::span<std::size_t> perm) {
-  return t._permute_braket(perm);
+  return t._permute_columns(perm);
 }
 
 // defined in AbstractTensor

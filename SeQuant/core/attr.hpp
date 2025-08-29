@@ -16,7 +16,7 @@ namespace sequant {
 enum class IndexSpaceMetric { Unit, General };
 
 // clang-format off
-/// describes supported symmetries of tensorial objects with respect to permutations of columns (in tensor notation)
+/// describes supported symmetries of tensorial objects with respect to permutations of columns (in tensor notation), i.e., pairs of {bra[i],ket[i]} slots
 // clang-format on
 enum class ColumnSymmetry { Symm, Nonsymm };
 
@@ -26,7 +26,8 @@ enum class ColumnSymmetry { Symm, Nonsymm };
 // clang-format on
 enum class Symmetry { Symm, Antisymm, Nonsymm };
 
-/// describes supported symmetries of tensorial objects w.r.t. bra-ket exchange
+/// describes supported symmetries of tensorial objects w.r.t. bra-ket exchange,
+/// i.e., the swap of bra slot bundle with ket slot bundle
 ///
 /// @note Currently there is no support for swapping bra index with the ket
 ///       index for a single particle, only whole bra-ket swaps are considered.

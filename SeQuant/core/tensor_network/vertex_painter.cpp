@@ -43,7 +43,7 @@ VertexPainterImpl::Color VertexPainterImpl::operator()(const AuxGroup &group) {
 }
 
 VertexPainterImpl::Color VertexPainterImpl::operator()(
-    const ParticleGroup &group) {
+    const ColumnGroup &group) {
   Color color;
   if (group.size == 1) {  // legacy coloring works for groups of size 1
     color = to_color(group.id);
@@ -166,9 +166,9 @@ bool VertexPainterImpl::may_have_same_color(const VertexData &data,
 }
 
 bool VertexPainterImpl::may_have_same_color(const VertexData &data,
-                                            const ParticleGroup &group) {
-  return std::holds_alternative<ParticleGroup>(data) &&
-         std::get<ParticleGroup>(data).id == group.id;
+                                            const ColumnGroup &group) {
+  return std::holds_alternative<ColumnGroup>(data) &&
+         std::get<ColumnGroup>(data).id == group.id;
 }
 
 bool VertexPainterImpl::may_have_same_color(const VertexData &data,

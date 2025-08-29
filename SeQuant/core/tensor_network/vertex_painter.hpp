@@ -29,11 +29,11 @@ struct AuxGroup {
 
   std::size_t id;
 };
-/// group of particles produces single braket slot
-struct ParticleGroup {
+/// column in a group of columns produces single braket slot
+struct ColumnGroup {
   /// creates a group of particles of size @p size and symmetry @p symmetry
-  explicit ParticleGroup(std::size_t id, std::size_t size = 1,
-                         Symmetry symmetry = Symmetry::Nonsymm)
+  explicit ColumnGroup(std::size_t id, std::size_t size = 1,
+                       Symmetry symmetry = Symmetry::Nonsymm)
       : id(id), size(size), symmetry(symmetry) {}
 
   std::size_t id;
@@ -52,7 +52,7 @@ class VertexPainterImpl {
   using NamedIndexSet = tensor_network::NamedIndexSet;
   using VertexData =
       std::variant<const AbstractTensor *, Index, const ProtoBundle *, BraGroup,
-                   KetGroup, AuxGroup, ParticleGroup>;
+                   KetGroup, AuxGroup, ColumnGroup>;
   using ColorMap = container::map<Color, VertexData>;
 
   /// \param named_indices indices not in this list will use colors based on
@@ -70,7 +70,7 @@ class VertexPainterImpl {
   Color operator()(const BraGroup &group);
   Color operator()(const KetGroup &group);
   Color operator()(const AuxGroup &group);
-  Color operator()(const ParticleGroup &group);
+  Color operator()(const ColumnGroup &group);
 
   /// will apply @p shade to all subsequent colors.
   /// use this to shade colors of all tensor components by the color of its type
@@ -161,7 +161,7 @@ class VertexPainterImpl {
   bool may_have_same_color(const VertexData &data, const BraGroup &group);
   bool may_have_same_color(const VertexData &data, const KetGroup &group);
   bool may_have_same_color(const VertexData &data, const AuxGroup &group);
-  bool may_have_same_color(const VertexData &data, const ParticleGroup &group);
+  bool may_have_same_color(const VertexData &data, const ColumnGroup &group);
   bool may_have_same_color(const VertexData &data, const Index &idx);
   bool may_have_same_color(const VertexData &data, const ProtoBundle &bundle);
 };

@@ -780,7 +780,7 @@ TensorNetworkV2::Graph TensorNetworkV2::create_graph(
           graph.vertex_texlabels.emplace_back(std::nullopt);
         graph.vertex_types.push_back(VertexType::TensorBraKet);
         // Particles are indistinguishable -> always use same ID
-        graph.vertex_colors.push_back(colorizer(ParticleGroup{0}));
+        graph.vertex_colors.push_back(colorizer(ColumnGroup{0}));
         edges.push_back(std::make_pair(tensor_vertex, nvertex - 1));
       }
 

@@ -556,9 +556,9 @@ SECTION("Expand Symmetrizer") {
 SECTION("partial expansion + S_maps = full expansion") {
   auto input = ex<Constant>(rational{1, 4}) *
                ex<Tensor>(L"A", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"},
-                          Symmetry::antisymm) *
+                          Symmetry::Antisymm) *
                ex<Tensor>(L"t", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"},
-                          Symmetry::antisymm);
+                          Symmetry::Antisymm);
   auto result = symmetrize_expr(input);
   REQUIRE_THAT(
       result, SimplifiesTo(
@@ -586,9 +586,9 @@ SECTION("partial expansion + S_maps = full expansion") {
 SECTION("partial spintracing + S_maps = full spintracing") {
   auto input = ex<Constant>(rational{1, 4}) *
                ex<Tensor>(L"A", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"},
-                          Symmetry::antisymm) *
+                          Symmetry::Antisymm) *
                ex<Tensor>(L"t", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"},
-                          Symmetry::antisymm);
+                          Symmetry::Antisymm);
   auto result =
       closed_shell_spintrace(input, {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}});
   REQUIRE_THAT(
@@ -719,7 +719,7 @@ SECTION("Closed-shell spintrace CCD") {
     }
     {  // compact set
       const auto input = ex<Sum>(ExprPtrList{parse_expr(
-          L"1/4 g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_1,i_2}", Symmetry::antisymm)});
+          L"1/4 g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_1,i_2}", Symmetry::Antisymm)});
 
       auto result = closed_shell_CC_spintrace_compact_set(input);
       REQUIRE_THAT(result,
@@ -984,11 +984,11 @@ SECTION("Closed-shell spintrace CCSDT terms") {
   {  // ppl term: A3 * g * t3, spintracing with direct full-expansion
     auto input = ex<Constant>(rational{1, 24}) *
                  ex<Tensor>(L"A", bra{L"i_1", L"i_2", L"i_3"},
-                            ket{L"a_1", L"a_2", L"a_3"}, Symmetry::antisymm) *
+                            ket{L"a_1", L"a_2", L"a_3"}, Symmetry::Antisymm) *
                  ex<Tensor>(L"g", bra{L"a_1", L"a_2"}, ket{L"a_4", L"a_5"},
-                            Symmetry::antisymm) *
+                            Symmetry::Antisymm) *
                  ex<Tensor>(L"t", bra{L"a_3", L"a_4", L"a_5"},
-                            ket{L"i_1", L"i_2", L"i_3"}, Symmetry::antisymm);
+                            ket{L"i_1", L"i_2", L"i_3"}, Symmetry::Antisymm);
 
     auto result_1 = expand_A_op(input);
     REQUIRE(result_1->size() == 36);
@@ -1057,7 +1057,7 @@ SECTION("Closed-shell spintrace CCSDT terms") {
     const auto input = ex<Sum>(ExprPtrList{
         parse_expr(L"1/24 A{i_1,i_2,i_3;a_1,a_2,a_3} * "
                    L"g{a_1,a_2;a_4,a_5} * t{a_3,a_4,a_5;i_1,i_2,i_3}",
-                   Symmetry::antisymm)});
+                   Symmetry::Antisymm)});
 
     auto result = closed_shell_CC_spintrace_compact_set(input);
     // multiply the resut by 6/5 to revert the rescaling factor
@@ -1079,7 +1079,7 @@ SECTION("Closed-shell spintrace CCSDT terms") {
     const auto input = ex<Sum>(ExprPtrList{
         parse_expr(L"1/24 A{i_1,i_2,i_3;a_1,a_2,a_3} * g{a_1,a_2;a_4,a_5} * "
                    "t{a_3,a_4,a_5;i_1,i_2,i_3}",
-                   Symmetry::antisymm)});
+                   Symmetry::Antisymm)});
 
     auto result = closed_shell_CC_spintrace(input);
     REQUIRE(result->size() == 4);

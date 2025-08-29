@@ -96,7 +96,7 @@ TEST_CASE("abstract_tensor", "[elements]") {
             t._braket() |
             ranges::views::transform([](const auto& idx) { return &idx; }) |
             ranges::to_vector;
-        t._permute_braket(p);
+        t._permute_columns(p);
         for (auto i = 0; i != 3; ++i) {
           REQUIRE(t._bra()[i].label() == braidxs[pdata[i]]);
           REQUIRE(t._ket()[i].label() == ketidxs[pdata[i]]);

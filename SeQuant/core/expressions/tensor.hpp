@@ -497,7 +497,8 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   /// under exchange of bra and ket.
   BraKetSymmetry braket_symmetry() const { return braket_symmetry_; }
   /// @return the ColumnSymmetry object describing the symmetry of the Tensor
-  /// under exchange of particles (columns).
+  /// under exchange of _columns_ (i.e., pairs of matching {bra[i],ket[i]}
+  /// slot bundles).
   ColumnSymmetry column_symmetry() const { return column_symmetry_; }
 
   /// @return number of bra slots (some may be occupied by null indices, hence

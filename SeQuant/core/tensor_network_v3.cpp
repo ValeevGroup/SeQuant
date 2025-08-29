@@ -198,9 +198,9 @@ ExprPtr TensorNetworkV3::canonicalize_graph(
                  /* bra + ket = */ 2>>
       canonical_slot_order;
   // for nonsymmetric column-symmetric tensors only: maps tensor ordinal ->
-  // canonical order of its braket slots
+  // canonical order of its column slots
   container::map<std::size_t, container::svector<std::size_t, 4>>
-      canonical_braket_slot_order;
+      canonical_column_slot_order;
   // for bra-ket symmetric tensors only: maps tensor ordinal -> canonical order
   // of its bra and ket slot bundle vertices
   container::map<std::size_t, std::array<std::size_t, /* bra + ket = */ 2>>
@@ -209,8 +209,8 @@ ExprPtr TensorNetworkV3::canonicalize_graph(
   std::vector<std::size_t> index_idx_to_vertex;
   index_idx_to_vertex.reserve(edges_.size() + pure_proto_indices_.size());
   std::size_t tensor_braket_vertex_ord =
-      0;  // counts encountered braket bundle vertices, resets to zero when
-          // switching to new tensor
+      0;  // counts encountered braket and column bundle vertices,
+          // resets to zero when switching to new tensor
 
   for (std::size_t vertex = 0; vertex < graph.vertex_types.size(); ++vertex) {
     const auto vertex_type = graph.vertex_types[vertex];
@@ -247,7 +247,7 @@ ExprPtr TensorNetworkV3::canonicalize_graph(
         if (symm == Symmetry::Nonsymm && csymm == ColumnSymmetry::Symm &&
             /* skip the first one which connects bra and ket bundles */
             tensor_braket_vertex_ord != 0) {
-          canonical_braket_slot_order[tensor_ord].emplace_back(
+          canonical_column_slot_order[tensor_ord].emplace_back(
               canonize_perm[vertex]);
         }
         ++tensor_braket_vertex_ord;
@@ -282,7 +282,7 @@ ExprPtr TensorNetworkV3::canonicalize_graph(
     braparslots.first = sort_then_replace_by_ordinals(braparslots.second);
     ketparslots.first = sort_then_replace_by_ordinals(ketparslots.second);
   }
-  for (auto &[ord, slots] : canonical_braket_slot_order) {
+  for (auto &[ord, slots] : canonical_column_slot_order) {
     sort_then_replace_by_ordinals(slots);
   }
 
@@ -329,7 +329,7 @@ ExprPtr TensorNetworkV3::canonicalize_graph(
 
   apply_index_replacements(tensors_, idxrepl, true);
 
-  // Permute {bra, ket} or braket slots of column-symmetric tensors as
+  // Permute {bra, ket} or column slots of column-symmetric tensors as
   // indicated by graph canonization
   for (std::size_t i = 0; i < tensors_.size(); ++i) {
     AbstractTensor &tensor = *tensors_[i];
@@ -337,19 +337,19 @@ ExprPtr TensorNetworkV3::canonicalize_graph(
     if (column_symmetry(tensor) != ColumnSymmetry::Symm) continue;
     const auto asymm = symmetry(tensor) == Symmetry::Nonsymm;
 
-    if (asymm) {  // asymmetric tensor? order braket slots only
+    if (asymm) {  // asymmetric tensor? order column slots only
 
-      auto it = canonical_braket_slot_order.find(i);
-      if (it == canonical_braket_slot_order.end()) continue;
+      auto it = canonical_column_slot_order.find(i);
+      if (it == canonical_column_slot_order.end()) continue;
 
       auto &sorted_ordinals = it->second;
 
-      // the logic of _permute_braket is too complicated to capture here
+      // the logic of _permute_columns is too complicated to capture here
       // if (Logger::instance().canonicalize) {
       //   if (!ranges::is_sorted(sorted_ordinals)) {
       //     for (const auto &idxpair : idxrepl) {
       //       std::wcout << "TensorNetworkV3::canonicalize_graph: permuting "
-      //                     "braket slots in "
+      //                     "column bundles in "
       //                  << to_latex(tensor) << ":\n";
       //       for (auto i = 0; i != sorted_ordinals.size(); ++i) {
       //         std::wcout << "  {" <<
@@ -364,7 +364,7 @@ ExprPtr TensorNetworkV3::canonicalize_graph(
       //   }
       // }
 
-      tensor._permute_braket(
+      tensor._permute_columns(
           std::span(sorted_ordinals.data(), sorted_ordinals.size()));
     } else {  // symmetric/antisymmetric bra
       auto it = canonical_slot_order.find(i);
@@ -952,8 +952,9 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
 
     // vertices for braket bundles:
     // - antisymmetric/symmetric tensors only need 1 bundle for {bra,ket}
-    // - asymmetric tensors also need 1 bundle for each pair of slots
-    // {bra_i,ket_i} (including pairs where one of the slots is empty/missing)
+    // - asymmetric tensors also need 1 bundle for each column, i.e. pair of
+    // matching slots {bra_i,ket_i} (including pairs where one of the slots is
+    // empty/missing)
     const std::size_t num_braket_vertices = !is_symm ? num_cols + 1 : 1;
     const bool is_col_symm = column_symmetry(tensor) == ColumnSymmetry::Symm;
 
@@ -992,7 +993,7 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
         // {bra_i,ket_i} bundle -> column_symmetric ? 1 : i+1
         color_id = is_col_symm ? 1 : i;
       }
-      graph.vertex_colors.emplace_back(colorizer(ParticleGroup{color_id}));
+      graph.vertex_colors.emplace_back(colorizer(ColumnGroup{color_id}));
 
       edges.emplace_back(std::make_pair(tensor_vertex, nvertex));
       ++nvertex;
@@ -1045,13 +1046,13 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
         // N.B. currently AbstractTensor only supports "left"-aligned bra/ket
         // slot sets (i.e. bra[0] is paired with ket[0], etc.), gaps between
         // occupied slots are occupied by null indices) we need to assign
-        // different colors to braket slots of different types so must track
-        // types of braket slots:
-        // - if tensor is not column symmetric braket slots will already be
+        // different colors to column slots of different types so must track
+        // types of column slots:
+        // - if tensor is not column symmetric column slots will already be
         // colored uniquely (by column index)
-        // - if tensor is symmetric/antisymmetric braket slots have same color
+        // - if tensor is symmetric/antisymmetric column slots have same color
         // - if tensor is column symmetric then assign different colors to
-        // braket slots of different types (paired vs unpaired)
+        // column slots of different types (paired vs unpaired)
 
         // N.B. emtpy slots are not skipped!
 
@@ -1073,7 +1074,7 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
           make_texlabel(std::wstring(is_bra ? L"bra" : L"ket") + L"\\_" +
                         std::to_wstring(i + 1));
         graph.vertex_types.emplace_back(vertex_type);
-        // see color_id definition for handling of bra, ket, and and braket
+        // see color_id definition for handling of bra, ket, and column
         // bundle symmetries. if symmetric wrt bra<->ket swap use same color
         // for bra and ket bundles, else use distinct colors
         graph.vertex_colors.emplace_back((is_bra || is_braket_symm)
@@ -1091,15 +1092,15 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
               /* bra or ket bundle vertex */ (is_bra ? 0 : 1);
           edges.emplace_back(std::make_pair(slot_vertex, nvertex));
         }
-        // for asymmetric tensors also connect to the {bra_i,ket_i} bundle
-        // vertex
+        // for asymmetric tensors also connect to the {bra_i,ket_i} column
+        // bundle vertex
         if (!is_symm) {
-          const std::size_t braket_bundle_vertex =
+          const std::size_t column_bundle_vertex =
               tensor_vertex +
               /* tensor core vertex */ 1 +
               /* {bra,ket} bundle vertex */ 1 +
-              /* {bra_i,ket_i} bundle vertex */ i;
-          edges.emplace_back(std::make_pair(braket_bundle_vertex, nvertex));
+              /* {bra_i,ket_i} column bundle vertex */ i;
+          edges.emplace_back(std::make_pair(column_bundle_vertex, nvertex));
         }
         // make sure logic in index_slot_offset is correct
         assert(nvertex ==
