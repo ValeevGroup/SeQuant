@@ -767,8 +767,7 @@ TensorNetworkV2::Graph TensorNetworkV2::create_graph(
       // notation)
       const std::size_t num_particle_vertices =
           std::min(bra_rank(tensor), ket_rank(tensor));
-      const bool is_part_symm =
-          particle_symmetry(tensor) == ParticleSymmetry::symm;
+      const bool is_col_symm = column_symmetry(tensor) == ColumnSymmetry::symm;
       // TODO: How to handle BraKetSymmetry::conjugate?
       const bool is_braket_symm =
           braket_symmetry(tensor) == BraKetSymmetry::symm;
@@ -787,7 +786,7 @@ TensorNetworkV2::Graph TensorNetworkV2::create_graph(
 
       for (std::size_t i = 0; i < bra_rank(tensor); ++i) {
         const bool is_unpaired_idx = i >= num_particle_vertices;
-        const bool color_idx = is_unpaired_idx || !is_part_symm;
+        const bool color_idx = is_unpaired_idx || !is_col_symm;
 
         ++nvertex;
         if (options.make_labels)
@@ -804,7 +803,7 @@ TensorNetworkV2::Graph TensorNetworkV2::create_graph(
 
       for (std::size_t i = 0; i < ket_rank(tensor); ++i) {
         const bool is_unpaired_idx = i >= num_particle_vertices;
-        const bool color_idx = is_unpaired_idx || !is_part_symm;
+        const bool color_idx = is_unpaired_idx || !is_col_symm;
 
         ++nvertex;
         if (options.make_labels)

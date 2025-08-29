@@ -23,8 +23,7 @@
 
 namespace sequant::parse::transform {
 
-using DefaultSymmetries =
-    std::tuple<Symmetry, BraKetSymmetry, ParticleSymmetry>;
+using DefaultSymmetries = std::tuple<Symmetry, BraKetSymmetry, ColumnSymmetry>;
 
 template <typename AST, typename PositionCache, typename Iterator>
 std::tuple<std::size_t, std::size_t> get_pos(const AST &ast,
@@ -162,9 +161,8 @@ BraKetSymmetry to_braket_symmetry(char c, std::size_t offset, const Iterator &,
 }
 
 template <typename Iterator>
-ParticleSymmetry to_particle_symmetry(char c, std::size_t offset,
-                                      const Iterator &,
-                                      ParticleSymmetry default_symmetry) {
+ColumnSymmetry to_column_symmetry(char c, std::size_t offset, const Iterator &,
+                                  ColumnSymmetry default_symmetry) {
   if (c == parse::ast::SymmetrySpec::unspecified) {
     return default_symmetry;
   }
@@ -172,10 +170,10 @@ ParticleSymmetry to_particle_symmetry(char c, std::size_t offset,
   switch (c) {
     case 'S':
     case 's':
-      return ParticleSymmetry::symm;
+      return ColumnSymmetry::symm;
     case 'N':
     case 'n':
-      return ParticleSymmetry::nonsymm;
+      return ColumnSymmetry::nonsymm;
   }
 
   throw ParseError(
@@ -199,7 +197,7 @@ Constant to_constant(const parse::ast::Number &number, const PositionCache &,
 }
 
 template <typename PositionCache, typename Iterator>
-std::tuple<Symmetry, BraKetSymmetry, ParticleSymmetry> to_symmetries(
+std::tuple<Symmetry, BraKetSymmetry, ColumnSymmetry> to_symmetries(
     const boost::optional<parse::ast::SymmetrySpec> &symm_spec,
     const DefaultSymmetries &default_symms, const PositionCache &cache,
     const Iterator &begin) {
@@ -218,10 +216,10 @@ std::tuple<Symmetry, BraKetSymmetry, ParticleSymmetry> to_symmetries(
                                         std::get<0>(default_symms));
   BraKetSymmetry braket_symm = to_braket_symmetry(
       spec.braket_symm, offset + 3, begin, std::get<1>(default_symms));
-  ParticleSymmetry particle_symm = to_particle_symmetry(
-      spec.particle_symm, offset + 5, begin, std::get<2>(default_symms));
+  ColumnSymmetry column_symm = to_column_symmetry(
+      spec.column_symm, offset + 5, begin, std::get<2>(default_symms));
 
-  return {perm_symm, braket_symm, particle_symm};
+  return {perm_symm, braket_symm, column_symm};
 }
 
 template <typename PositionCache, typename Iterator>
@@ -253,7 +251,7 @@ struct Transformer {
     auto [braIndices, ketIndices, auxiliaries] =
         make_indices(tensor.indices, position_cache.get(), begin.get());
 
-    auto [perm_symm, braket_symm, particle_symm] =
+    auto [perm_symm, braket_symm, column_symm] =
         to_symmetries(tensor.symmetry, default_symms.get(),
                       position_cache.get(), begin.get());
 
@@ -266,9 +264,9 @@ struct Transformer {
              ((tensor.symmetry.value().perm_symm ==
                    ast::SymmetrySpec::unspecified ||
                tensor.symmetry.value().perm_symm == 'A') &&
-              (tensor.symmetry.value().particle_symm ==
+              (tensor.symmetry.value().column_symm ==
                    ast::SymmetrySpec::unspecified ||
-               tensor.symmetry.value().particle_symm == 'S')));
+               tensor.symmetry.value().column_symm == 'S')));
       Vacuum vac = fit == ranges::begin(FNOperator::labels())
                        ? Vacuum::Physical
                        : Vacuum::SingleProduct;
@@ -283,9 +281,9 @@ struct Transformer {
              ((tensor.symmetry.value().perm_symm ==
                    ast::SymmetrySpec::unspecified ||
                tensor.symmetry.value().perm_symm == 'S') &&
-              (tensor.symmetry.value().particle_symm ==
+              (tensor.symmetry.value().column_symm ==
                    ast::SymmetrySpec::unspecified ||
-               tensor.symmetry.value().particle_symm == 'S')));
+               tensor.symmetry.value().column_symm == 'S')));
       Vacuum vac = bit == ranges::begin(BNOperator::labels())
                        ? Vacuum::Physical
                        : Vacuum::SingleProduct;
@@ -294,7 +292,7 @@ struct Transformer {
     }
     return ex<Tensor>(tensor.name, bra(std::move(braIndices)),
                       ket(std::move(ketIndices)), aux(std::move(auxiliaries)),
-                      perm_symm, braket_symm, particle_symm);
+                      perm_symm, braket_symm, column_symm);
   }
 
   ExprPtr operator()(const parse::ast::Variable &variable) const {

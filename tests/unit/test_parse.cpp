@@ -185,7 +185,7 @@ TEST_CASE("parsing", "[parse]") {
 
       REQUIRE(t3.symmetry() == Symmetry::nonsymm);
       REQUIRE(t3.braket_symmetry() == BraKetSymmetry::symm);
-      REQUIRE(t3.particle_symmetry() == ParticleSymmetry::nonsymm);
+      REQUIRE(t3.column_symmetry() == ColumnSymmetry::nonsymm);
     }
 
     SECTION("NormalOperator") {
@@ -428,7 +428,7 @@ TEST_CASE("parsing", "[parse]") {
       REQUIRE(result.ket().empty());
       REQUIRE(result.symmetry() == Symmetry::nonsymm);
       REQUIRE(result.braket_symmetry() == BraKetSymmetry::nonsymm);
-      REQUIRE(result.particle_symmetry() == ParticleSymmetry::nonsymm);
+      REQUIRE(result.column_symmetry() == ColumnSymmetry::nonsymm);
 
       REQUIRE(result.expression().is<Constant>());
       REQUIRE(result.expression().as<Constant>().value<int>() == 3);
@@ -448,7 +448,7 @@ TEST_CASE("parsing", "[parse]") {
       REQUIRE(result.symmetry() == Symmetry::antisymm);
       REQUIRE(result.braket_symmetry() ==
               get_default_context().braket_symmetry());
-      REQUIRE(result.particle_symmetry() == ParticleSymmetry::symm);
+      REQUIRE(result.column_symmetry() == ColumnSymmetry::symm);
 
       REQUIRE(result.expression().is<Product>());
       const Product& prod = result.expression().as<Product>();

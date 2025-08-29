@@ -58,12 +58,12 @@ struct ParseError : std::runtime_error {
 ///             - 'S' for symmetric (sequant::BraKetSymmetry::symm)
 ///             - 'N' for non-symmetric (sequant::BraKetSymmetry::nonsymm)
 ///             Possible values for <particle symm> are
-///             - 'S' for symmetric (sequant::ParticleSymmetry::symm)
-///             - 'N' for non-symmetric (sequant::ParticleSymmetry::nonsymm)
+///             - 'S' for symmetric (sequant::ColumnSymmetry::symm)
+///             - 'N' for non-symmetric (sequant::ColumnSymmetry::nonsymm)
 /// \param perm_symm Default index permutation symmetry to be used if tensors don't specify a permutation
 ///                  symmetry explicitly.
 /// \param braket_symm Default BraKet symmetry to be used if tensors don't specify a BraKet symmetry explicitly.
-/// \param particle_symm Default particle symmetry to be used if tensors don't specify a particle symmetry explicitly.
+/// \param column_symm Default particle symmetry to be used if tensors don't specify a particle symmetry explicitly.
 ///                   @c raw expression. Explicit tensor symmetry can
 ///                   be annotated in the expression itself. In that case, the
 ///                   annotated symmetry will be used.
@@ -75,12 +75,12 @@ struct ParseError : std::runtime_error {
 ExprPtr parse_expr(std::wstring_view raw,
                    std::optional<Symmetry> perm_symm = {},
                    std::optional<BraKetSymmetry> braket_symm = {},
-                   std::optional<ParticleSymmetry> particle_symm = {});
+                   std::optional<ColumnSymmetry> column_symm = {});
 
-ResultExpr parse_result_expr(
-    std::wstring_view raw, std::optional<Symmetry> perm_symm = {},
-    std::optional<BraKetSymmetry> braket_symm = {},
-    std::optional<ParticleSymmetry> particle_symm = {});
+ResultExpr parse_result_expr(std::wstring_view raw,
+                             std::optional<Symmetry> perm_symm = {},
+                             std::optional<BraKetSymmetry> braket_symm = {},
+                             std::optional<ColumnSymmetry> column_symm = {});
 
 ///
 /// Get a parsable string from an expression.

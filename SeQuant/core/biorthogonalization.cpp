@@ -270,11 +270,10 @@ void biorthogonal_transform(container::svector<ResultExpr>& result_exprs,
       result_exprs.begin(), result_exprs.end(), [&](const ResultExpr& expr) {
         return expr.braket_symmetry() == result_exprs.front().braket_symmetry();
       }));
-  assert(std::all_of(result_exprs.begin(), result_exprs.end(),
-                     [&](const ResultExpr& expr) {
-                       return expr.particle_symmetry() ==
-                              result_exprs.front().particle_symmetry();
-                     }));
+  assert(std::all_of(
+      result_exprs.begin(), result_exprs.end(), [&](const ResultExpr& expr) {
+        return expr.column_symmetry() == result_exprs.front().column_symmetry();
+      }));
   assert(std::all_of(
       result_exprs.begin(), result_exprs.end(), [&](const ResultExpr& expr) {
         return expr.bra().size() == result_exprs.front().bra().size() &&
@@ -295,7 +294,7 @@ void biorthogonal_transform(container::svector<ResultExpr>& result_exprs,
       }));
   assert(std::all_of(result_exprs.begin(), result_exprs.end(),
                      [](const ResultExpr& res) {
-                       return res.particle_symmetry() == ParticleSymmetry::symm;
+                       return res.column_symmetry() == ColumnSymmetry::symm;
                      }));
 
   // Furthermore, we expect that there is no symmetrization operator present in
@@ -381,7 +380,7 @@ ExprPtr biorthogonal_transform(
           }) |
           ranges::to<container::svector<Index>>()),
       aux(IndexList{}), Symmetry::nonsymm, BraKetSymmetry::nonsymm,
-      ParticleSymmetry::symm, {}, expr);
+      ColumnSymmetry::symm, {}, expr);
 
   biorthogonal_transform(res, threshold);
 

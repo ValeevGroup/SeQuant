@@ -152,7 +152,7 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
     REQUIRE(root_expr.as<Tensor>() ==
             Tensor(L"Result", bra(IndexList{L"a_2"}), ket(IndexList{L"i_2"}),
                    Symmetry::antisymm, BraKetSymmetry::symm,
-                   ParticleSymmetry::symm));
+                   ColumnSymmetry::symm));
 
     // continued ->  check that changing indexing in result changes indexing in
     // tree
@@ -162,7 +162,7 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
     REQUIRE(root_expr.as<Tensor>() ==
             Tensor(L"Result", bra(IndexList{L"i_2"}), ket(IndexList{L"a_2"}),
                    Symmetry::antisymm, BraKetSymmetry::symm,
-                   ParticleSymmetry::symm));
+                   ColumnSymmetry::symm));
 
     // The name-respecting property shall also hold for terminals
     res = parse_result_expr(L"Other = Var");

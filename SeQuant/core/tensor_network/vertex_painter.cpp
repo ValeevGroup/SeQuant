@@ -18,7 +18,7 @@ std::size_t VertexPainterImpl::to_hash_value(
                  hash::value(tensor._ket_rank()),
                  hash::value(tensor._aux_rank()),
                  hash::value(tensor._symmetry()),
-                 hash::value(tensor._particle_symmetry()),
+                 hash::value(tensor._column_symmetry()),
                  hash::value(tensor._braket_symmetry())};
 
   return to_hash_value(hashes);

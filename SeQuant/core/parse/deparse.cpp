@@ -77,11 +77,11 @@ std::wstring deparse_symm(BraKetSymmetry symm) {
   SEQUANT_UNREACHABLE;
 }
 
-std::wstring deparse_symm(ParticleSymmetry symm) {
+std::wstring deparse_symm(ColumnSymmetry symm) {
   switch (symm) {
-    case ParticleSymmetry::symm:
+    case ColumnSymmetry::symm:
       return L"S";
-    case ParticleSymmetry::nonsymm:
+    case ColumnSymmetry::nonsymm:
       return L"N";
   }
 
@@ -200,7 +200,7 @@ std::wstring deparse(Tensor const& tensor, bool annot_sym) {
   if (annot_sym) {
     deparsed += L":" + details::deparse_symm(tensor.symmetry());
     deparsed += L"-" + details::deparse_symm(tensor.braket_symmetry());
-    deparsed += L"-" + details::deparse_symm(tensor.particle_symmetry());
+    deparsed += L"-" + details::deparse_symm(tensor.column_symmetry());
   }
 
   return deparsed;
@@ -223,7 +223,7 @@ std::wstring deparse(AbstractTensor const& tensor, bool annot_sym) {
   if (annot_sym) {
     deparsed += L":" + details::deparse_symm(tensor._symmetry());
     deparsed += L"-" + details::deparse_symm(tensor._braket_symmetry());
-    deparsed += L"-" + details::deparse_symm(tensor._particle_symmetry());
+    deparsed += L"-" + details::deparse_symm(tensor._column_symmetry());
   }
 
   return deparsed;

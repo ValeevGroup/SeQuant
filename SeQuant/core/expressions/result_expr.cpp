@@ -18,7 +18,7 @@ bool ResultExpr::ResultCmp::operator()(const ResultExpr &lhs,
 
   return lhs.symmetry() == rhs.symmetry() &&
          lhs.braket_symmetry() == rhs.braket_symmetry() &&
-         lhs.particle_symmetry() == rhs.particle_symmetry() &&
+         lhs.column_symmetry() == rhs.column_symmetry() &&
          lhs.bra() == rhs.bra() && lhs.ket() == rhs.ket() &&
          lhs.aux() == rhs.aux();
 }
@@ -27,7 +27,7 @@ ResultExpr::ResultExpr(const Tensor &tensor, ExprPtr expression)
     : m_expr(std::move(expression)),
       m_symm(tensor.symmetry()),
       m_bksymm(tensor.braket_symmetry()),
-      m_psymm(tensor.particle_symmetry()),
+      m_csymm(tensor.column_symmetry()),
       m_braIndices(tensor.bra().begin(), tensor.bra().end()),
       m_ketIndices(tensor.ket().begin(), tensor.ket().end()),
       m_auxIndices(tensor.aux().begin(), tensor.aux().end()),
@@ -38,13 +38,12 @@ ResultExpr::ResultExpr(const Variable &variable, ExprPtr expression)
 
 ResultExpr::ResultExpr(IndexContainer bra, IndexContainer ket,
                        IndexContainer aux, Symmetry symm,
-                       BraKetSymmetry braket_symm,
-                       ParticleSymmetry particle_symm,
+                       BraKetSymmetry braket_symm, ColumnSymmetry column_symm,
                        std::optional<std::wstring> label, ExprPtr expression)
     : m_expr(std::move(expression)),
       m_symm(symm),
       m_bksymm(braket_symm),
-      m_psymm(particle_symm),
+      m_csymm(column_symm),
       m_braIndices(std::move(bra)),
       m_ketIndices(std::move(ket)),
       m_auxIndices(std::move(aux)),
@@ -70,11 +69,9 @@ BraKetSymmetry ResultExpr::braket_symmetry() const { return m_bksymm; }
 
 void ResultExpr::set_braket_symmetry(BraKetSymmetry symm) { m_bksymm = symm; }
 
-ParticleSymmetry ResultExpr::particle_symmetry() const { return m_psymm; }
+ColumnSymmetry ResultExpr::column_symmetry() const { return m_csymm; }
 
-void ResultExpr::set_particle_symmetry(ParticleSymmetry symm) {
-  m_psymm = symm;
-}
+void ResultExpr::set_column_symmetry(ColumnSymmetry symm) { m_csymm = symm; }
 
 const ResultExpr::IndexContainer &ResultExpr::bra() const {
   return m_braIndices;
@@ -94,7 +91,7 @@ ExprPtr &ResultExpr::expression() { return m_expr; }
 
 ResultExpr ResultExpr::clone() const {
   return ResultExpr(m_braIndices, m_ketIndices, m_auxIndices, m_symm, m_bksymm,
-                    m_psymm, m_label, m_expr->clone());
+                    m_csymm, m_label, m_expr->clone());
 }
 
 ResultExpr &canonicalize(ResultExpr &expr) {

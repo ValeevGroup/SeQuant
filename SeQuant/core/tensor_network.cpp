@@ -674,7 +674,7 @@ TensorNetwork::GraphData TensorNetwork::make_bliss_graph(
         }
         vertex_type.push_back(VertexType::TensorBra);
         const bool distinguishable_particles =
-            particle_symmetry(tref) == ParticleSymmetry::nonsymm;
+            column_symmetry(tref) == ColumnSymmetry::nonsymm;
         vertex_color.push_back(
             colorizer(BraGroup{distinguishable_particles ? p : 0}));
         if (options.make_labels) {

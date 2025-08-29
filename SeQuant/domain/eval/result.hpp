@@ -145,7 +145,7 @@ std::string ords_to_annot(RngOfOrdinals const& ords) {
 /// \return The symmetrized TA::DistArray.
 ///
 template <typename... Args>
-auto particle_symmetrize_ta(TA::DistArray<Args...> const& arr) {
+auto column_symmetrize_ta(TA::DistArray<Args...> const& arr) {
   using ranges::views::iota;
 
   size_t const rank = arr.trange().rank();
@@ -254,7 +254,7 @@ auto particle_antisymmetrize_ta(TA::DistArray<Args...> const& arr,
 /// \return The symmetrized btas::Tensor.
 ///
 template <typename... Args>
-auto particle_symmetrize_btas(btas::Tensor<Args...> const& arr) {
+auto column_symmetrize_btas(btas::Tensor<Args...> const& arr) {
   using ranges::views::iota;
 
   size_t const rank = arr.rank();
@@ -722,7 +722,7 @@ class ResultTensorTA final : public Result {
   }
 
   [[nodiscard]] ResultPtr symmetrize() const override {
-    return eval_result<this_type>(particle_symmetrize_ta(get<ArrayT>()));
+    return eval_result<this_type>(column_symmetrize_ta(get<ArrayT>()));
   }
 
   [[nodiscard]] ResultPtr antisymmetrize(size_t bra_rank) const override {
@@ -972,7 +972,7 @@ class ResultTensorBTAS final : public Result {
   }
 
   [[nodiscard]] ResultPtr symmetrize() const override {
-    return eval_result<ResultTensorBTAS<T>>(particle_symmetrize_btas(get<T>()));
+    return eval_result<ResultTensorBTAS<T>>(column_symmetrize_btas(get<T>()));
   }
 
   [[nodiscard]] ResultPtr antisymmetrize(size_t bra_rank) const override {

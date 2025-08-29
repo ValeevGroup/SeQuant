@@ -184,12 +184,12 @@ template <typename Container, typename TraceFunction, typename... Args>
       if (permuteBra) {
         return ResultExpr(bra(permIndices), ket(expr.ket()), aux(expr.aux()),
                           expr.symmetry(), expr.braket_symmetry(),
-                          expr.particle_symmetry(), expr.label(),
+                          expr.column_symmetry(), expr.label(),
                           std::move(expression));
       } else {
         return ResultExpr(bra(expr.bra()), ket(permIndices), aux(expr.aux()),
                           expr.symmetry(), expr.braket_symmetry(),
-                          expr.particle_symmetry(), expr.label(),
+                          expr.column_symmetry(), expr.label(),
                           std::move(expression));
       }
     }();
@@ -228,7 +228,7 @@ ExprPtr swap_bra_ket(const ExprPtr& expr) {
   auto tensor_swap = [](const Tensor& tensor) {
     auto result = Tensor(tensor.label(), bra(tensor.ket().value()),
                          ket(tensor.bra().value()), tensor.symmetry(),
-                         tensor.braket_symmetry(), tensor.particle_symmetry());
+                         tensor.braket_symmetry(), tensor.column_symmetry());
     return ex<Tensor>(result);
   };
 
@@ -413,7 +413,7 @@ ExprPtr expand_antisymm(const Tensor& tensor, bool skip_spinsymm) {
   if (tensor.bra_rank() == 1) {
     Tensor new_tensor(tensor.label(), tensor.bra(), tensor.ket(), tensor.aux(),
                       Symmetry::nonsymm, tensor.braket_symmetry(),
-                      tensor.particle_symmetry());
+                      tensor.column_symmetry());
     return std::make_shared<Tensor>(new_tensor);
   }
 
@@ -1166,8 +1166,8 @@ Tensor swap_spin(const Tensor& t) {
     k.at(i) = spin_flipped_idx(t.ket().at(i));
   }
 
-  return {t.label(),    bra(std::move(b)),   ket(std::move(k)),    t.aux(),
-          t.symmetry(), t.braket_symmetry(), t.particle_symmetry()};
+  return {t.label(),    bra(std::move(b)),   ket(std::move(k)),  t.aux(),
+          t.symmetry(), t.braket_symmetry(), t.column_symmetry()};
 }
 
 ExprPtr swap_spin(const ExprPtr& expr) {

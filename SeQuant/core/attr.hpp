@@ -16,9 +16,9 @@ namespace sequant {
 enum class IndexSpaceMetric { Unit, General };
 
 // clang-format off
-/// describes supported symmetries of tensorial objects with respect to permutations of particles (or columns, in tensor notation)
+/// describes supported symmetries of tensorial objects with respect to permutations of columns (in tensor notation)
 // clang-format on
-enum class ParticleSymmetry { symm, nonsymm };
+enum class ColumnSymmetry { symm, nonsymm };
 
 // clang-format off
 /// describes supported symmetries of bra or ket of _particle-symmetric_ tensorial objects

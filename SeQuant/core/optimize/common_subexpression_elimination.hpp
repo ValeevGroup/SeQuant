@@ -248,7 +248,7 @@ class SubexpressionReplacer {
       if (tree->is_tensor()) {
         return ex<Tensor>(label, bra(), ket(), aux(tree->canon_indices()),
                           Symmetry::nonsymm, BraKetSymmetry::nonsymm,
-                          ParticleSymmetry::nonsymm);
+                          ColumnSymmetry::nonsymm);
       }
 
       return ex<Variable>(label);

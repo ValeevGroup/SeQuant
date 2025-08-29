@@ -879,8 +879,8 @@ class NormalOperator : public Operator<S>,
   BraKetSymmetry _braket_symmetry() const override final {
     return BraKetSymmetry::nonsymm;
   }
-  ParticleSymmetry _particle_symmetry() const override final {
-    return ParticleSymmetry::symm;
+  ColumnSymmetry _column_symmetry() const override final {
+    return ColumnSymmetry::symm;
   }
   std::size_t _color() const override final {
     return S == Statistics::FermiDirac ? 1 : 2;

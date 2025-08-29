@@ -219,12 +219,12 @@ std::vector<ExpressionGroup<>> parse_expression_spec(const std::string &spec) {
     try {
       ResultExpr res =
           parse_result_expr(to_wstring(line), Symmetry::nonsymm,
-                            BraKetSymmetry::nonsymm, ParticleSymmetry::nonsymm);
+                            BraKetSymmetry::nonsymm, ColumnSymmetry::nonsymm);
       groups.back().add(to_export_tree(res));
     } catch (...) {
       ExprPtr expr =
           parse_expr(to_wstring(line), Symmetry::nonsymm,
-                     BraKetSymmetry::nonsymm, ParticleSymmetry::nonsymm);
+                     BraKetSymmetry::nonsymm, ColumnSymmetry::nonsymm);
       groups.back().add(to_export_tree(expr));
     }
   }
@@ -408,7 +408,7 @@ TEST_CASE("export", "[export]") {
 
         Tensor tensor =
             parse_expr(input, Symmetry::nonsymm, BraKetSymmetry::nonsymm,
-                       ParticleSymmetry::nonsymm)
+                       ColumnSymmetry::nonsymm)
                 ->as<Tensor>();
         bool rewritten = ctx.rewrite(tensor);
         REQUIRE_THAT(tensor, EquivalentTo(expected));

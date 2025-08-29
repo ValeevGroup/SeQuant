@@ -244,7 +244,7 @@ class ExpressionMatcher : public Catch::Matchers::MatcherGenericBase {
     return self.has_label() == res.has_label() && self.label() == res.label() &&
            self.symmetry() == res.symmetry() &&
            self.braket_symmetry() == res.braket_symmetry() &&
-           self.particle_symmetry() == res.particle_symmetry() &&
+           self.column_symmetry() == res.column_symmetry() &&
            do_match(*res.expression());
   }
 

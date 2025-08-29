@@ -243,8 +243,8 @@ ExprPtr TensorNetworkV3::canonicalize_graph(
         const std::size_t tensor_ord = tensor_count - 1;
         const AbstractTensor &tensor = *tensors_[tensor_ord];
         const auto symm = symmetry(tensor);
-        const auto psymm = particle_symmetry(tensor);
-        if (symm == Symmetry::nonsymm && psymm == ParticleSymmetry::symm &&
+        const auto csymm = column_symmetry(tensor);
+        if (symm == Symmetry::nonsymm && csymm == ColumnSymmetry::symm &&
             /* skip the first one which connects bra and ket bundles */
             tensor_braket_vertex_ord != 0) {
           canonical_braket_slot_order[tensor_ord].emplace_back(
@@ -334,7 +334,7 @@ ExprPtr TensorNetworkV3::canonicalize_graph(
   for (std::size_t i = 0; i < tensors_.size(); ++i) {
     AbstractTensor &tensor = *tensors_[i];
 
-    if (particle_symmetry(tensor) != ParticleSymmetry::symm) continue;
+    if (column_symmetry(tensor) != ColumnSymmetry::symm) continue;
     const auto asymm = symmetry(tensor) == Symmetry::nonsymm;
 
     if (asymm) {  // asymmetric tensor? order braket slots only
@@ -956,8 +956,7 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
     // - asymmetric tensors also need 1 bundle for each pair of slots
     // {bra_i,ket_i} (including pairs where one of the slots is empty/missing)
     const std::size_t num_braket_vertices = !is_symm ? num_particles + 1 : 1;
-    const bool is_part_symm =
-        particle_symmetry(tensor) == ParticleSymmetry::symm;
+    const bool is_col_symm = column_symmetry(tensor) == ColumnSymmetry::symm;
 
     // make braket slot bundles first
     for (std::size_t i = 0; i < num_braket_vertices; ++i) {
@@ -991,8 +990,8 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
       if (i == 0) {  // {bra,ket} bundle -> 0
         color_id = 0;
       } else {
-        // {bra_i,ket_i} bundle -> particle_symmetric ? 1 : i+1
-        color_id = is_part_symm ? 1 : i;
+        // {bra_i,ket_i} bundle -> column_symmetric ? 1 : i+1
+        color_id = is_col_symm ? 1 : i;
       }
       graph.vertex_colors.emplace_back(colorizer(ParticleGroup{color_id}));
 
@@ -1061,7 +1060,7 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
         std::size_t color_id = i;
         if (is_symm)
           color_id = 0;
-        else if (is_part_symm) {
+        else if (is_col_symm) {
           if (is_paired_particle)
             color_id = 0;
           else

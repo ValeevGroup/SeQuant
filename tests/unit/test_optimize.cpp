@@ -234,12 +234,12 @@ TEST_CASE("optimize", "[optimize]") {
         for (const std::wstring& current : inputs) {
           expressions.push_back(binarize(parse_result_expr(
               current, Symmetry::nonsymm, BraKetSymmetry::nonsymm,
-              ParticleSymmetry::nonsymm)));
+              ColumnSymmetry::nonsymm)));
         }
         for (const std::wstring& current : outputs) {
           expected.push_back(parse_result_expr(current, Symmetry::nonsymm,
                                                BraKetSymmetry::nonsymm,
-                                               ParticleSymmetry::nonsymm));
+                                               ColumnSymmetry::nonsymm));
         }
 
         auto binarizer = [](auto&& expr) { return binarize(expr); };

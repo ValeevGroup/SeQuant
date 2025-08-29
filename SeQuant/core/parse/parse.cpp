@@ -243,11 +243,11 @@ AST do_parse(const StartRule &start, std::wstring_view input,
 parse::transform::DefaultSymmetries to_default_symms(
     const std::optional<Symmetry> &perm_symm,
     const std::optional<BraKetSymmetry> &braket_symm,
-    const std::optional<ParticleSymmetry> &particle_symm) {
+    const std::optional<ColumnSymmetry> &column_symm) {
   const Context &ctx = get_default_context();
 
   parse::transform::DefaultSymmetries symms{
-      Symmetry::nonsymm, ctx.braket_symmetry(), ParticleSymmetry::symm};
+      Symmetry::nonsymm, ctx.braket_symmetry(), ColumnSymmetry::symm};
 
   if (perm_symm.has_value()) {
     std::get<0>(symms) = perm_symm.value();
@@ -255,13 +255,13 @@ parse::transform::DefaultSymmetries to_default_symms(
   if (braket_symm.has_value()) {
     std::get<1>(symms) = braket_symm.value();
   }
-  if (particle_symm.has_value()) {
-    std::get<2>(symms) = particle_symm.value();
+  if (column_symm.has_value()) {
+    std::get<2>(symms) = column_symm.value();
   }
   if (std::get<0>(symms) !=
       Symmetry::nonsymm) {  // antisymmetry/symmetric bra and ket imply particle
                             // symmetry
-    std::get<2>(symms) = ParticleSymmetry::symm;
+    std::get<2>(symms) = ColumnSymmetry::symm;
   }
 
   return symms;
@@ -270,7 +270,7 @@ parse::transform::DefaultSymmetries to_default_symms(
 ResultExpr parse_result_expr(std::wstring_view input,
                              std::optional<Symmetry> perm_symm,
                              std::optional<BraKetSymmetry> braket_symm,
-                             std::optional<ParticleSymmetry> particle_symm) {
+                             std::optional<ColumnSymmetry> column_symm) {
   using iterator_type = decltype(input)::iterator;
   x3::position_cache<std::vector<iterator_type>> positions(input.begin(),
                                                            input.end());
@@ -279,12 +279,12 @@ ResultExpr parse_result_expr(std::wstring_view input,
 
   return parse::transform::ast_to_result(
       ast, positions, input.begin(),
-      to_default_symms(perm_symm, braket_symm, particle_symm));
+      to_default_symms(perm_symm, braket_symm, column_symm));
 }
 
 ExprPtr parse_expr(std::wstring_view input, std::optional<Symmetry> perm_symm,
                    std::optional<BraKetSymmetry> braket_symm,
-                   std::optional<ParticleSymmetry> particle_symm) {
+                   std::optional<ColumnSymmetry> column_symm) {
   using iterator_type = decltype(input)::iterator;
   x3::position_cache<std::vector<iterator_type>> positions(input.begin(),
                                                            input.end());
@@ -292,7 +292,7 @@ ExprPtr parse_expr(std::wstring_view input, std::optional<Symmetry> perm_symm,
 
   return parse::transform::ast_to_expr(
       ast, positions, input.begin(),
-      to_default_symms(perm_symm, braket_symm, particle_symm));
+      to_default_symms(perm_symm, braket_symm, column_symm));
 }
 
 }  // namespace sequant

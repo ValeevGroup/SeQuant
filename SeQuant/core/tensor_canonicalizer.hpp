@@ -166,7 +166,7 @@ class DefaultTensorCanonicalizer : public TensorCanonicalizer {
     // std::wcout << "abstract tensor: " << to_latex(t) << "\n";
 
     // nothing to do for non-particle-symmetric tensors
-    if (t._particle_symmetry() == ParticleSymmetry::nonsymm) return nullptr;
+    if (t._column_symmetry() == ColumnSymmetry::nonsymm) return nullptr;
 
     auto s = symmetry(t);
     auto is_antisymm = (s == Symmetry::antisymm);
