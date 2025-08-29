@@ -454,7 +454,7 @@ class IndexSpace {
 
   IndexSpace(const IndexSpace &other) = default;
   /// move constructor
-  /// @param other[in,out] on output is null
+  /// @param[in,out] other on output is null
   /// @post state of this object is identical to the input state of @p other
   IndexSpace(IndexSpace &&other) noexcept
       : attr_(std::move(other.attr_)),
@@ -464,7 +464,7 @@ class IndexSpace {
   }
   IndexSpace &operator=(const IndexSpace &other) = default;
   /// move constructor
-  /// @param other[in,out] on output is null
+  /// @param[in,out] other on output is null
   /// @post state of this object is identical to the input state of @p other
   IndexSpace &operator=(IndexSpace &&other) {
     attr_ = std::move(other.attr_);

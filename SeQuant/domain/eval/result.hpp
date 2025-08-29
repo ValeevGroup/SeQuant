@@ -339,17 +339,13 @@ auto particle_antisymmetrize_btas(btas::Tensor<Args...> const& arr,
   return result;
 }
 
+/// \brief This function is used to implement ResultPtr::biorthogonal_cleanup
+/// for TA::DistArray
 ///
-/// \brief This function implements the biorthogonal-cleanup of TA::DistArray to
-/// restore the effects of deleted terms in order to obtain the most compact set
-/// of equations.
-///
-/// \param arr The array to be cleaned up
-///
+/// \param arr The array to be "cleaned up"
 /// \param bra_rank The rank of the bra indices
 ///
 /// \return The cleaned TA::DistArray.
-///
 template <typename... Args>
 auto biorthogonal_cleanup_ta(TA::DistArray<Args...> const& arr,
                              size_t bra_rank) {
@@ -421,17 +417,13 @@ auto biorthogonal_cleanup_ta(TA::DistArray<Args...> const& arr,
   return result;
 }
 
+/// \brief This function is used to implement ResultPtr::biorthogonal_cleanup
+/// for btas::Tensor
 ///
-/// \brief This function implements the biorthogonal-cleanup of btas::Tensor to
-/// restore the effects of deleted terms in order to obtain the most compact set
-/// of equations.
-///
-/// \param arr The tensor to be cleaned up
-///
+/// \param arr The array to be "cleaned up"
 /// \param bra_rank The rank of the bra indices
 ///
 /// \return The cleaned btas::Tensor.
-///
 template <typename... Args>
 auto biorthogonal_cleanup_btas(btas::Tensor<Args...> const& arr,
                                size_t bra_rank) {
@@ -638,9 +630,16 @@ class Result {
   ///
   [[nodiscard]] virtual ResultPtr antisymmetrize(size_t bra_rank) const = 0;
 
+  /// \brief Implements "biorthogonal cleanup" of closed-shell
+  /// compact-set equations produced via method of
+  /// <a href="https://arxiv.org/abs/1805.00565">Wang and Knizia</a>.
   ///
-  /// \brief biorthogonal-cleanup for closed-shell compact-set equations
-  ///
+  /// For 3-body residual (`bra_rank=3`) this implements Eq. (41) of the
+  /// Wang/Knizia paper, same as the first line of Figure 1.
+  /// For 4-body residual this implements the first line of Figure 2.
+  /// The implementation is for arbitrary ranks.
+  /// @param bra_rank the particle rank of the residual tensor (i.e.
+  ///                 its order halved)
   [[nodiscard]] virtual ResultPtr biorthogonal_cleanup(
       size_t bra_rank) const = 0;
 

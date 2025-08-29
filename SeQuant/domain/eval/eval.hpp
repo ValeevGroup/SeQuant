@@ -47,6 +47,7 @@ template <typename... T>
   return std::format("{}B", bs.value);
 }
 
+/// type of data or operation
 enum struct EvalMode {
   Constant,
   Variable,
@@ -58,6 +59,8 @@ enum struct EvalMode {
   SumInplace,
   Symmetrize,
   Antisymmetrize,
+  /// Cleanup operation of Wang-Knizia biorthogonalization
+  /// @sa ResultPtr::biorthogonal_cleanup
   BiorthogonalCleanup,
   Unknown
 };
@@ -235,13 +238,13 @@ namespace {
 /// \tparam EvalTrace If Trace::On, trace is written to the logger's stream.
 ///                   Default is to follow Trace::Default, which is itself
 ///                   equal to Trace::On or Trace::Off.
-/// \tparam Cache If CacheCache::Checked (default) the @param cache will be
+/// \tparam Cache If CacheCache::Checked (default) the \p cache will be
 ///               checked before evaluating. It is used to detect the base case
 ///               for recursion to prevent infinite recursion.
-/// \param node A node that can be evaluated using @param le as the leaf
+/// \param node A node that can be evaluated using \p le as the leaf
 ///             evaluator.
 /// \param le The leaf evaluator that satisfies
-///           @code meta::leaf_node_evaluator<Node, F>.
+///           `meta::leaf_node_evaluator<Node, F>`.
 /// \param cache The cache for common sub-expression elimination.
 /// \return Evaluated result as ResultPtr.
 ///
@@ -336,12 +339,12 @@ ResultPtr evaluate(Node const& node,  //
 /// \tparam EvalTrace If Trace::On, trace is written to the logger's stream.
 ///                   Default is to follow Trace::Default, which is itself
 ///                   equal to Trace::On or Trace::Off.
-/// \param node A node that can be evaluated using @param le as the leaf
+/// \param node A node that can be evaluated using \p le as the leaf
 ///             evaluator.
 /// \param layout The layout of the final result. Only meaningful if the result
 ///               has a layout (or supports permutation) eg. a tensor.
 /// \param le The leaf evaluator that satisfies
-///           @code meta::leaf_node_evaluator<Node, F>.
+///           `meta::leaf_node_evaluator<Node, F>`.
 /// \param cache The cache for common sub-expression elimination.
 /// \return Evaluated result as ResultPtr.
 ///
@@ -391,17 +394,17 @@ ResultPtr evaluate(Node const& node,           //
 /// \tparam EvalTrace If Trace::On, trace is written to the logger's stream.
 ///                   Default is to follow Trace::Default, which is itself
 ///                   equal to Trace::On or Trace::Off.
-/// \param nodes A range of node that can be evaluated using @param le as the
+/// \param nodes A range of node that can be evaluated using \p le as the
 ///              leaf evaluator. The evaluation result of the elements of
-///              @param nodes will be summed up.
+///              \p nodes will be summed up.
 ///
 /// \param layout The layout of the final result. Only meaningful if the result
 ///               has a layout (or supports permutation) eg. a tensor.
-///               The results of each element from @param nodes will be permuted
+///               The results of each element from \p nodes will be permuted
 ///               to this layout before being summed.
 ///
 /// \param le The leaf evaluator that satisfies
-///           @code meta::leaf_node_evaluator<Node, F>.
+///           `meta::leaf_node_evaluator<Node, F>`.
 /// \param cache The cache for common sub-expression elimination.
 /// \return Evaluated result as ResultPtr.
 ///
@@ -438,16 +441,16 @@ ResultPtr evaluate(Nodes const& nodes,  //
 /// \tparam EvalTrace If Trace::On, trace is written to the logger's stream.
 ///                   Default is to follow Trace::Default, which is itself
 ///                   equal to Trace::On or Trace::Off.
-/// \param nodes A range of node that can be evaluated using @param le as the
+/// \param nodes A range of node that can be evaluated using \p le as the
 ///              leaf evaluator. The evaluation result of the elements of
-///              @param nodes will be summed up.
+///              \p nodes will be summed up.
 ///
 /// \param le The leaf evaluator that satisfies
-///           @code meta::leaf_node_evaluator<Node, F>.
+///           `meta::leaf_node_evaluator<Node, F>`.
 /// \param cache The cache for common sub-expression elimination.
 /// \return Evaluated result as ResultPtr.
 /// \note Because this function takes no layout argument, it is only useful
-///       to evaluate summations of the elements in the @param nodes when they
+///       to evaluate summations of the elements in the \p nodes when they
 ///       are scalar results.
 ///
 template <Trace EvalTrace = Trace::Default, meta::can_evaluate_range Nodes,
@@ -468,7 +471,7 @@ ResultPtr evaluate(Nodes const& nodes,  //
 ///                   Default is to follow Trace::Default, which is itself
 ///                   equal to Trace::On or Trace::Off.
 /// \brief Evaluate given node (or a range of nodes) using an empty cache
-///        manager. Calls the other @code evalaute function overloads.
+///        manager. Calls the other sequant::evaluate function overloads.
 /// \see evaluate.
 /// \return Evaluated result as ResultPtr.
 ///
@@ -483,7 +486,7 @@ ResultPtr evaluate(Args&&... args) {
 /// \tparam EvalTrace If Trace::On, trace is written to the logger's stream.
 ///                   Default is to follow Trace::Default, which is itself
 ///                   equal to Trace::On or Trace::Off.
-/// \brief Calls @code evaluate followed by the particle-symmetrization
+/// \brief Calls sequant::evaluate followed by the particle-symmetrization
 ///        function.
 ///        The number of particles is inferred by the tensor present in the
 ///        evaluation node(s). Presence of odd-ranked tensors in the evaluation
@@ -512,7 +515,8 @@ ResultPtr evaluate_symm(Args&&... args) {
 /// \tparam EvalTrace If Trace::On, trace is written to the logger's stream.
 ///                   Default is to follow Trace::Default, which is itself
 ///                   equal to Trace::On or Trace::Off.
-/// \brief Calls @code evaluate followed by the anti-symmetrization function on
+/// \brief Calls sequant::evaluate followed by the anti-symmetrization function
+/// on
 ///        the bra indices and the ket indices. The bra and ket indices are
 ///        inferred from the evaluation node(s).
 /// \return Evaluated result as ResultPtr.
@@ -538,14 +542,9 @@ ResultPtr evaluate_antisymm(Args&&... args) {
   return result;
 }
 
-///
-/// \brief Calls @code evaluate followed by the biorthogonal-cleanup function.
-///        The biorthogonal-cleanup function restores the effects of terms that
-///        were deleted in order to obtain the most compact set of equations. It
-///        applies this transformation: result = identity - (1/ket_rank!) *
-///        sum_of_ket_permutations
+/// \brief Calls sequant::evaluate followed by ResultPtr::biorthogonal_cleanup
 /// \return Evaluated result as ResultPtr.
-///
+/// \sa ResultPtr::biorthogonal_cleanup
 template <Trace EvalTrace = Trace::Default, typename... Args>
 ResultPtr evaluate_biorthogonal_cleanup(Args&&... args) {
   ResultPtr pre = evaluate<EvalTrace>(std::forward<Args>(args)...);

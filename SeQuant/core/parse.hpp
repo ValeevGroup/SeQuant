@@ -46,18 +46,18 @@ struct ParseError : std::runtime_error {
 ///                't{i1,i2; a1<i1,i2>, a2<i1,i2>}' a tensor having indices with proto indices.
 ///                                                a1<i1,i2> is an index with i1 and i2 as proto-indices.
 ///             Every tensor may optionally be annoted with index symmetry specifications. The general syntax is
-///             <tensorSpec> [:<perm symm> [-<braket symm> [-<particle symm>]]]
+///             `<tensorSpec> [:<perm symm> [-<braket symm> [-<particle symm>]]]`
 ///             (no whitespace is allowed at this place). Examples are
 ///             't{i1;i2}:A', 't{i1;i2}:A-S', 't{i1;i2}:N-C-S'
-///             Possible values for <perm symm> are
+///             Possible values for `<perm symm>` are
 ///             - 'A' for antisymmetry (sequant::Symmetry::antisymm)
 ///             - 'S' for symmetric (sequant::Symmetry::symm)
 ///             - 'N' for non-symmetric (sequant::Symmetry::nonsymm)
-///             Possible values for <braket symm> are
+///             Possible values for `<braket symm>` are
 ///             - 'C' for antisymmetry (sequant::BraKetSymmetry::conjugate)
 ///             - 'S' for symmetric (sequant::BraKetSymmetry::symm)
 ///             - 'N' for non-symmetric (sequant::BraKetSymmetry::nonsymm)
-///             Possible values for <particle symm> are
+///             Possible values for `<particle symm>` are
 ///             - 'S' for symmetric (sequant::ParticleSymmetry::symm)
 ///             - 'N' for non-symmetric (sequant::ParticleSymmetry::nonsymm)
 /// \param perm_symm Default index permutation symmetry to be used if tensors don't specify a permutation

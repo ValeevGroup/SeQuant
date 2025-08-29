@@ -178,6 +178,8 @@ T& ExprPtr::as() {
 /// Recursively canonicalizes an Expr and replaces it as needed
 /// @param[in,out] expr expression to be canonicalized; may be
 /// _replaced_ (i.e. `&expr` may be mutated by call)
+/// @param[in] opts canonicalization options (if not given, uses
+///            CanonicalizeOptions::default_options() to obtain the default)
 /// @return \p expr to facilitate chaining
 inline ExprPtr& canonicalize(
     ExprPtr& expr,
@@ -192,6 +194,8 @@ inline ExprPtr& canonicalize(
 /// Recursively canonicalizes an Expr; like mutating canonicalize() but works
 /// for temporary expressions
 /// @param[in] expr_rv rvalue-ref-to-expression to be canonicalized
+/// @param[in] opts canonicalization options (if not given, uses
+///            CanonicalizeOptions::default_options() to obtain the default)
 /// @return canonicalized form of \p expr_rv
 inline ExprPtr canonicalize(
     ExprPtr&& expr_rv,
@@ -608,6 +612,8 @@ inline ExprPtr& rapid_simplify(ExprPtr& expr) {
 /// rapid_simplify
 /// @param[in,out] expr expression to be simplified; may be
 /// _replaced_ (i.e. `&expr` may be mutated by call)
+/// @param[in] opts canonicalization options (if not given, uses
+///            CanonicalizeOptions::default_options() to obtain the default)
 /// @sa rapid_simplify()
 /// @return \p expr to facilitate chaining
 inline ExprPtr& simplify(
@@ -622,6 +628,8 @@ inline ExprPtr& simplify(
 /// Simplifies an Expr by a combination of expansion, canonicalization, and
 /// rapid_simplify; like mutating simplify() but works for temporary expressions
 /// @param[in] expr_rv rvalue-ref-to-expression to be simplified
+/// @param[in] opts canonicalization options (if not given, uses
+///            CanonicalizeOptions::default_options() to obtain the default)
 /// @return simplified form of \p expr_rv
 inline ExprPtr simplify(
     ExprPtr&& expr_rv,

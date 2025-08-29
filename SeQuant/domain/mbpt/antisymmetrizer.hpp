@@ -86,7 +86,7 @@ namespace antisymm {
 /// @param new_upper set of contracted upper
 /// indices,
 /// @param new_lower set of lower contracted indices.
-/// @out the number of loops.
+/// @return the number of loops.
 // TODO Test this function extensively and add more asserts
 int num_closed_loops(std::vector<Index> init_upper,
                      std::vector<Index> init_lower,

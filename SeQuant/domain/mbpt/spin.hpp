@@ -233,14 +233,18 @@ container::svector<container::map<Index, Index>> S_replacement_maps(
 /// @brief Expand S operator
 ExprPtr S_maps(const ExprPtr& expr);
 
-/// @brief Filters and compacts expression based on a hash-based heuristic.
+/// @brief filters out the nonunique terms in Wang-Knizia biorthogonalization
+
+/// WK biorthogonalization rewrites biorthogonal expressions as a "cleanup"
+/// projector applied to the biorothogonal expressions where out of each
+/// group of terms related by permutation of external indices
+/// those with the largest coefficients are selected.
+/// This function performs the selection by forming groups of terms that
+/// are equivalent modulo external index permutation (all terms in a group
+/// have identical graph hashes).
 /// @details This function processes a sum expression, grouping product terms by
 /// hash of their canonicalized tensor network forms. For each group, it
-/// retains only the terms with the largest absolute scalar coefficient. This is
-/// intended to compact large expressions by keeping only the dominant terms
-/// after a hash-based grouping.
-/// This is particularly useful to eliminate the redudancy caused by
-/// biorthogonal trnasformation in coupled-cluster equations.
+/// retains only the terms with the largest absolute scalar coefficient.
 /// @param expr The input expression, expected to be a `Sum` of `Product` terms.
 /// @param ext_idxs A vector of external index groups. The function will not
 /// apply the filtering logic if `ext_idxs.size()` is 2 or less.
@@ -269,33 +273,55 @@ ExprPtr closed_shell_spintrace(
 container::svector<ResultExpr> closed_shell_spintrace(
     const ResultExpr& expr, bool full_expansion = false);
 
-/// @brief Transforms Coupled cluster from spin orbital to spatial orbitals
+/// @brief spin-traces spin-orbital CC-style equations for closed-shell
+/// spin-restricted states
+///
+/// Spin-traces CC-style equations (obtained by projection onto
+/// replacement manifolds) assuming spin-restricted closed-shell reference,
+/// followed by biorthogonal transform (see ). It correctly factors out the
+/// particle symmetrizer to reduce the number of terms in the intermediate
+/// manipulations.
 /// @details The external indices are deduced from Antisymmetrization operator
 /// @param expr ExprPtr to Sum type with spin orbital indices
 /// @return an expression with spin integrated/adapted
 ExprPtr closed_shell_CC_spintrace(ExprPtr const& expr);
 
-/// \brief Same as \c closed_shell_CC_spintrace except it treats expression
-/// differently. It generates a compact set expression with spin integration.
-/// It applies a specific filtering and compaction procedure. It internally
-/// expands the symmetrizer to access all individual terms. The function
-/// then uses a heuristic hash filter method to identify and retain only the
-/// most significant terms, thereby reducing the total number of terms that
-/// need to be evaluated.
-/// After the evaluation of the final expression, a `mbpt-cleanup` function
-/// is applied to restore the effects of deleted terms.
-/// To work correctly with the cleanup function, the intermediate expression
-/// is internally multiplied by a rescaling factor of $n!/(n!-1)$.
-/// If you need to print the compact-set equations, you must manually compensate
+/// \brief Same as \c closed_shell_CC_spintrace except internally uses
+///        \c sequant::spintrace instead of sequant::closed_shell_spintrace.
+/// \warning this is extremely slow and should only be used for reference
+/// purposes
+ExprPtr closed_shell_CC_spintrace_rigorous(ExprPtr const& expr);
+
+/// @brief same as closed_shell_CC_spintrace but way more efficient and
+/// produces more compact equations
+///
+/// The algorithm:
+/// - factor out symmetrizer from the antisymmetrizer,
+///   "set it aside" (remove from the expression), and
+///   expand the rest of the antisymmetricer.
+/// - spin-trace the resulting expression assuming spin-restricted basis and
+///   closed-shell reference
+/// - biorthogonalize
+/// - apply the particle symmetrizer and simplify
+/// - group terms that differ only by external index permutation (i.e. have same
+/// colored graph hash), for each group select the terms with the largest
+/// coefficients)
+/// - multiply by the particle symmetrizer and simplify (this combines terms
+/// that differ only by particle permutations)
+///
+/// The produced expression is not equivalent to that produced by
+/// closed_shell_CC_spintrace but becomes equivalent if the biorthogonal
+/// cleanup (particular linear combination of permutation operators) is applied.
+/// The biorthogonal cleanup is performed in numeric form, after the numerically
+/// evaluating the compact equations produced by this.
+/// @warning To work correctly with the cleanup function, the intermediate
+/// expression is internally multiplied by a rescaling factor of $n!/(n!-1)$. If
+/// you need to print the compact-set equations, you must manually compensate
 /// for this factor and multiply the expression by $(n!-1)/n!$.
 /// @param expr ExprPtr to Sum type with spin orbital indices
 /// @return An expression pointer representing the most compact set of
 /// spin-integrated terms.
 ExprPtr closed_shell_CC_spintrace_compact_set(ExprPtr const& expr);
-
-/// \brief Same as \c closed_shell_CC_spintrace except internally uses
-///        \c sequant::spintrace instead of sequant::closed_shell_spintrace.
-ExprPtr closed_shell_CC_spintrace_rigorous(ExprPtr const& expr);
 
 /// Collect all indices from an expression
 container::set<Index, Index::LabelCompare> index_list(const ExprPtr& expr);
