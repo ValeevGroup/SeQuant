@@ -174,7 +174,7 @@ class compute_cceqvec {
           // Biorthogonal transformation
           eqvec[R] = biorthogonal_transform(eqvec[R], ext_idxs);
           // apply hash fiter to get compact_set eqns
-          eqvec[R] = hash_filter_compact_set(eqvec[R], ext_idxs);
+          eqvec[R] = WK_biorthogonalization_filter(eqvec[R], ext_idxs);
 
           // restore the particle symmetrizer
           auto bixs = ext_idxs | ranges::views::transform(

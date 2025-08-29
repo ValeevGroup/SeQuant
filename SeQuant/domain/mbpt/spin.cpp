@@ -935,7 +935,7 @@ ExprPtr S_maps(const ExprPtr& expr) {
   return result;
 }
 
-ExprPtr hash_filter_compact_set(
+ExprPtr WK_biorthogonalization_filter(
     ExprPtr expr,
     const container::svector<container::svector<Index>>& ext_idxs) {
   if (!expr->is<Sum>()) return expr;
@@ -1189,7 +1189,7 @@ ExprPtr closed_shell_CC_spintrace_compact_set(ExprPtr const& expr) {
     canonicalize(st_expr);
 
     // apply hash filter method to get unique set of terms
-    st_expr = hash_filter_compact_set(st_expr, ext_idxs);
+    st_expr = WK_biorthogonalization_filter(st_expr, ext_idxs);
     // add S tensor again
     st_expr =
         ex<Tensor>(Tensor{L"S", bra(std::move(bixs)), ket(std::move(kixs))}) *

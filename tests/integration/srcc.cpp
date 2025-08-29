@@ -194,7 +194,7 @@ class compute_cceqvec {
           canonicalize(eqvec[R]);
 
           // apply hash fiter to get only terms with large coefficients
-          eqvec[R] = hash_filter_compact_set(eqvec[R], ext_idxs);
+          eqvec[R] = WK_biorthogonalization_filter(eqvec[R], ext_idxs);
 
           // resotre the particle symmetrizer again to get the most compact set
           // of equations

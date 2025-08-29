@@ -249,7 +249,7 @@ ExprPtr S_maps(const ExprPtr& expr);
 /// @param ext_idxs A vector of external index groups. The function will not
 /// apply the filtering logic if `ext_idxs.size()` is 2 or less.
 /// @return A new `ExprPtr` representing the filtered and compacted expression.
-ExprPtr hash_filter_compact_set(
+ExprPtr WK_biorthogonalization_filter(
     ExprPtr expr,
     const container::svector<container::svector<Index>>& ext_idxs);
 
