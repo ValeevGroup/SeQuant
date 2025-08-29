@@ -16,13 +16,22 @@
 
 namespace sequant::mbpt {
 
-CC::CC(size_t n, Ansatz a) : N(n), ansatz_(a) {}
+CC::CC(size_t n, Ansatz a, bool screen, bool use_topology)
+    : N(n), ansatz_(a), screen_(screen), use_topology_(use_topology) {}
 
 CC::Ansatz CC::ansatz() const { return ansatz_; }
 
 bool CC::unitary() const {
   return ansatz_ == Ansatz::U || ansatz_ == Ansatz::oU;
 }
+
+void CC::screen(bool val) { screen_ = val; }
+
+bool CC::screen() const { return screen_; }
+
+void CC::use_topology(bool val) { use_topology_ = val; }
+
+bool CC::use_topology() const { return use_topology_; }
 
 ExprPtr CC::sim_tr(ExprPtr expr, size_t commutator_rank) {
   const bool skip_singles = ansatz_ == Ansatz::oT || ansatz_ == Ansatz::oU;
@@ -90,26 +99,33 @@ std::vector<ExprPtr> CC::t(size_t commutator_rank, size_t pmax, size_t pmin) {
     // <p|
     std::shared_ptr<Sum>
         hbar_p;  // products that can produce excitations of rank p
-    std::shared_ptr<Sum>
-        hbar_le_p;  // keeps products that can produce excitations rank <=p
-    for (auto& term : *hbar) {
-      assert(term->is<Product>() || term->is<op_t>());
-      if (raises_vacuum_up_to_rank(term, p)) {
-        if (!hbar_le_p)
-          hbar_le_p = std::make_shared<Sum>(ExprPtrList{term});
-        else
-          hbar_le_p->append(term);
-        if (raises_vacuum_to_rank(term, p)) {
-          if (!hbar_p)
-            hbar_p = std::make_shared<Sum>(ExprPtrList{term});
+    std::shared_ptr<Sum> hbar_le_p;
+    // keeps products that can produce excitations rank <=p
+
+    if (screen_) {  // if operator level screening is on
+      for (auto& term : *hbar) {
+        assert(term->is<Product>() || term->is<op_t>());
+        if (raises_vacuum_up_to_rank(term, p)) {
+          if (!hbar_le_p)
+            hbar_le_p = std::make_shared<Sum>(ExprPtrList{term});
           else
-            hbar_p->append(term);
+            hbar_le_p->append(term);
+          if (raises_vacuum_to_rank(term, p)) {
+            if (!hbar_p)
+              hbar_p = std::make_shared<Sum>(ExprPtrList{term});
+            else
+              hbar_p->append(term);
+          }
         }
       }
+      hbar = hbar_le_p;
+    } else {
+      // no screening, use hbar
+      hbar_p = std::make_shared<Sum>(hbar);
     }
-    hbar = hbar_le_p;
+
     // 2.b project onto <p| (i.e., multiply by P(p) if p>0) and compute VEV
-    result.at(p) = vac_av(p != 0 ? P(nₚ(p)) * hbar_p : hbar_p);
+    result.at(p) = this->vac_av(p != 0 ? P(nₚ(p)) * hbar_p : hbar_p);
   }
 
   return result;
@@ -142,27 +158,32 @@ std::vector<ExprPtr> CC::λ(size_t commutator_rank) {
         hbar_p;  // products that can produce excitations of rank p
     std::shared_ptr<Sum>
         hbar_le_p;  // keeps products that can produce excitations rank <=p
-    for (auto& term : *lhbar) {  // pick terms from lhbar
-      assert(term->is<Product>() || term->is<op_t>());
 
-      if (lowers_rank_or_lower_to_vacuum(term, p)) {
-        if (!hbar_le_p)
-          hbar_le_p = std::make_shared<Sum>(ExprPtrList{term});
-        else
-          hbar_le_p->append(term);
-        if (lowers_rank_to_vacuum(term, p)) {
-          if (!hbar_p)
-            hbar_p = std::make_shared<Sum>(ExprPtrList{term});
+    if (screen_) {                 // if operator level screening is enabled
+      for (auto& term : *lhbar) {  // pick terms from lhbar
+        assert(term->is<Product>() || term->is<op_t>());
+
+        if (lowers_rank_or_lower_to_vacuum(term, p)) {
+          if (!hbar_le_p)
+            hbar_le_p = std::make_shared<Sum>(ExprPtrList{term});
           else
-            hbar_p->append(term);
+            hbar_le_p->append(term);
+          if (lowers_rank_to_vacuum(term, p)) {
+            if (!hbar_p)
+              hbar_p = std::make_shared<Sum>(ExprPtrList{term});
+            else
+              hbar_p->append(term);
+          }
         }
       }
+      lhbar = hbar_le_p;
+    } else {  // no screening
+      hbar_le_p = std::make_shared<Sum>(hbar);
     }
-    lhbar = hbar_le_p;
 
     // 2.b multiply by adjoint of P(p) (i.e., P(-p)) on the right side and
     // compute VEV
-    result.at(p) = vac_av(hbar_p * P(nₚ(-p)), op_connect);
+    result.at(p) = this->vac_av(hbar_p * P(nₚ(-p)), op_connect);
   }
   return result;
 }
@@ -201,7 +222,8 @@ std::vector<ExprPtr> CC::t_pt(size_t order, size_t rank) {
   std::vector<ExprPtr> result(N + 1);
   for (auto p = N; p >= 1; --p) {
     const auto freq_term = ex<Variable>(L"ω") * P(nₚ(p)) * T_pt_(order, p);
-    result.at(p) = vac_av(P(nₚ(p)) * expr, op_connect) - vac_av(freq_term);
+    result.at(p) =
+        this->vac_av(P(nₚ(p)) * expr, op_connect) - this->vac_av(freq_term);
   }
   return result;
 }
@@ -255,7 +277,8 @@ std::vector<ExprPtr> CC::λ_pt(size_t order, size_t rank) {
   std::vector<ExprPtr> result(N + 1);
   for (auto p = N; p >= 1; --p) {
     const auto freq_term = ex<Variable>(L"ω") * Λ_pt_(order, p) * P(nₚ(-p));
-    result.at(p) = vac_av(expr * P(nₚ(-p)), op_connect) + vac_av(freq_term);
+    result.at(p) =
+        this->vac_av(expr * P(nₚ(-p)), op_connect) + this->vac_av(freq_term);
   }
   return result;
 }
@@ -291,7 +314,8 @@ std::vector<ExprPtr> CC::eom_r(nₚ np, nₕ nh) {
   while (rp >= 0 && rh >= 0) {
     if (rp == 0 && rh == 0) break;
     // project with <rp, rh| (i.e., multiply P(rp, rh)) and compute VEV
-    result.at(min(rp, rh)) = vac_av(P(nₚ(rp), nₕ(rh)) * hbar_R, op_connect);
+    result.at(min(rp, rh)) =
+        this->vac_av(P(nₚ(rp), nₕ(rh)) * hbar_R, op_connect);
     if (rp == 0 || rh == 0) break;
     rp--;
     rh--;
@@ -333,7 +357,8 @@ std::vector<ExprPtr> CC::eom_l(nₚ np, nₕ nh) {
   while (rp >= 0 && rh >= 0) {
     if (rp == 0 && rh == 0) break;
     // right project with |rp,rh> (i.e., multiply P(-rp, -rh)) and compute VEV
-    result.at(min(rp, rh)) = vac_av(L_hbar * P(nₚ(-rp), nₕ(-rh)), op_connect);
+    result.at(min(rp, rh)) =
+        this->vac_av(L_hbar * P(nₚ(-rp), nₕ(-rh)), op_connect);
     if (rp == 0 || rh == 0) break;
     rp--;
     rh--;

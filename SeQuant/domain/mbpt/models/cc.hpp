@@ -31,13 +31,29 @@ class CC {
   /// @brief constructs CC engine
   /// @param N coupled cluster excitation rank
   /// @param ansatz the type of CC ansatz
-  explicit CC(size_t N, Ansatz ansatz = Ansatz::T);
+  /// @param screen if true, uses Operator level screening before applying
+  /// WickTheorem
+  /// @param use_topology if true, uses topological optimizations in WickTheorem
+  explicit CC(size_t N, Ansatz ansatz = Ansatz::T, bool screen = true,
+              bool use_topology = true);
 
   /// @return the type of ansatz
   Ansatz ansatz() const;
 
   /// @return true if the ansatz is unitary
-  bool unitary() const;
+  [[nodiscard]] bool unitary() const;
+
+  /// @brief turn screening on or off
+  void screen(bool val);
+
+  /// @return whether screening is on or not
+  [[nodiscard]] bool screen() const;
+
+  /// @brief turn on or off topological optimization in WickTheorem
+  void use_topology(bool val);
+
+  /// @return whether topological optimization in WickTheorem
+  [[nodiscard]] bool use_topology() const;
 
   /// @brief derives similarity-transformed expressions of mpbt::Operators
   /// @param expr expression to be transformed
@@ -110,6 +126,17 @@ class CC {
  private:
   size_t N;
   Ansatz ansatz_ = Ansatz::T;
+  bool screen_ = true;
+  bool use_topology_ = true;
+
+  /// @param[in] expr input expression
+  /// @param[in] op_connect list of pairs of operators to be connected
+  /// @note see mbpt::op::vac_av for further details
+  auto vac_av(const ExprPtr& expr,
+              const OpConnections<mbpt::OpType>& op_connect =
+                  default_op_connections()) const {
+    return op::vac_av(expr, op_connect, this->use_topology(), this->screen());
+  }
 };  // class CC
 
 }  // namespace sequant::mbpt
