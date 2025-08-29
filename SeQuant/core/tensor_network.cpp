@@ -673,10 +673,10 @@ TensorNetwork::GraphData TensorNetwork::make_bliss_graph(
           vertex_texlabels.emplace_back(std::nullopt);
         }
         vertex_type.push_back(VertexType::TensorBra);
-        const bool distinguishable_particles =
+        const bool distinguishable_cols =
             column_symmetry(tref) == ColumnSymmetry::nonsymm;
         vertex_color.push_back(
-            colorizer(BraGroup{distinguishable_particles ? p : 0}));
+            colorizer(BraGroup{distinguishable_cols ? p : 0}));
         if (options.make_labels) {
           vertex_labels.emplace_back(std::wstring(L"ket") + pstr);
         }
@@ -688,10 +688,10 @@ TensorNetwork::GraphData TensorNetwork::make_bliss_graph(
           // Use BraGroup for kets as well as they are supposed to be
           // indistinguishable
           vertex_color.push_back(
-              colorizer(BraGroup{distinguishable_particles ? p : 0}));
+              colorizer(BraGroup{distinguishable_cols ? p : 0}));
         } else {
           vertex_color.push_back(
-              colorizer(KetGroup{distinguishable_particles ? p : 0}));
+              colorizer(KetGroup{distinguishable_cols ? p : 0}));
         }
         if (options.make_labels) {
           vertex_labels.emplace_back(std::wstring(L"bk") + pstr);

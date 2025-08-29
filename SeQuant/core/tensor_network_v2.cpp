@@ -765,17 +765,17 @@ TensorNetworkV2::Graph TensorNetworkV2::create_graph(
       // Additionally, we need particle vertices to group indices that belong to
       // the same particle (are in the same "column" in the usual tensor
       // notation)
-      const std::size_t num_particle_vertices =
+      const std::size_t num_col_vertices =
           std::min(bra_rank(tensor), ket_rank(tensor));
       const bool is_col_symm = column_symmetry(tensor) == ColumnSymmetry::symm;
       // TODO: How to handle BraKetSymmetry::conjugate?
       const bool is_braket_symm =
           braket_symmetry(tensor) == BraKetSymmetry::symm;
 
-      for (std::size_t i = 0; i < num_particle_vertices; ++i) {
+      for (std::size_t i = 0; i < num_col_vertices; ++i) {
         ++nvertex;
         if (options.make_labels)
-          graph.vertex_labels.emplace_back(L"p_" + std::to_wstring(i + 1));
+          graph.vertex_labels.emplace_back(L"c_" + std::to_wstring(i + 1));
         if (options.make_texlabels)
           graph.vertex_texlabels.emplace_back(std::nullopt);
         graph.vertex_types.push_back(VertexType::TensorBraKet);
@@ -785,7 +785,7 @@ TensorNetworkV2::Graph TensorNetworkV2::create_graph(
       }
 
       for (std::size_t i = 0; i < bra_rank(tensor); ++i) {
-        const bool is_unpaired_idx = i >= num_particle_vertices;
+        const bool is_unpaired_idx = i >= num_col_vertices;
         const bool color_idx = is_unpaired_idx || !is_col_symm;
 
         ++nvertex;
@@ -802,7 +802,7 @@ TensorNetworkV2::Graph TensorNetworkV2::create_graph(
       }
 
       for (std::size_t i = 0; i < ket_rank(tensor); ++i) {
-        const bool is_unpaired_idx = i >= num_particle_vertices;
+        const bool is_unpaired_idx = i >= num_col_vertices;
         const bool color_idx = is_unpaired_idx || !is_col_symm;
 
         ++nvertex;

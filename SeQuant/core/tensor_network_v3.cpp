@@ -197,7 +197,7 @@ ExprPtr TensorNetworkV3::canonicalize_graph(
                            container::svector<std::size_t, 4>>,
                  /* bra + ket = */ 2>>
       canonical_slot_order;
-  // for nonsymmetric particle-symmetric tensors only: maps tensor ordinal ->
+  // for nonsymmetric column-symmetric tensors only: maps tensor ordinal ->
   // canonical order of its braket slots
   container::map<std::size_t, container::svector<std::size_t, 4>>
       canonical_braket_slot_order;
@@ -329,7 +329,7 @@ ExprPtr TensorNetworkV3::canonicalize_graph(
 
   apply_index_replacements(tensors_, idxrepl, true);
 
-  // Permute {bra, ket} or braket slots of particle-symmetric tensors as
+  // Permute {bra, ket} or braket slots of column-symmetric tensors as
   // indicated by graph canonization
   for (std::size_t i = 0; i < tensors_.size(); ++i) {
     AbstractTensor &tensor = *tensors_[i];
@@ -943,11 +943,10 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
     const bool is_symm = tensor_sym != Symmetry::nonsymm;
     // max (number of bra slots, number of ket slots) slots, i.e. the number of
     // 1-index and 2-index columns
-    const std::size_t num_particles =
-        std::max(bra_rank(tensor), ket_rank(tensor));
+    const std::size_t num_cols = std::max(bra_rank(tensor), ket_rank(tensor));
     // min (number of bra slots, number of ket slots) slots, i.e. the number of
     // 2-index columns
-    const std::size_t num_paired_particles =
+    const std::size_t num_paired_cols =
         std::max(bra_rank(tensor), ket_rank(tensor));
     const bool is_braket_symm = braket_symmetry(tensor) == BraKetSymmetry::symm;
 
@@ -955,13 +954,13 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
     // - antisymmetric/symmetric tensors only need 1 bundle for {bra,ket}
     // - asymmetric tensors also need 1 bundle for each pair of slots
     // {bra_i,ket_i} (including pairs where one of the slots is empty/missing)
-    const std::size_t num_braket_vertices = !is_symm ? num_particles + 1 : 1;
+    const std::size_t num_braket_vertices = !is_symm ? num_cols + 1 : 1;
     const bool is_col_symm = column_symmetry(tensor) == ColumnSymmetry::symm;
 
     // make braket slot bundles first
     for (std::size_t i = 0; i < num_braket_vertices; ++i) {
       if (options.make_labels || options.make_texlabels) {
-        std::wstring base_label = L"bk";
+        std::wstring base_label = L"c";
         std::wstring psuffix;
         if (i == 0) {  // {bra,ket} bundle -> "bk{a,s,}"
           switch (tensor_sym) {
@@ -984,7 +983,7 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
       if (options.make_xlabels) make_xlabel();
       graph.vertex_types.emplace_back(VertexType::TensorBraKet);
 
-      // If tensor is particle-symmetric use same color for all braket vertices,
+      // If tensor is column-symmetric use same color for all braket vertices,
       // else use different colors
       std::size_t color_id;
       if (i == 0) {  // {bra,ket} bundle -> 0
@@ -1048,20 +1047,20 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
         // occupied slots are occupied by null indices) we need to assign
         // different colors to braket slots of different types so must track
         // types of braket slots:
-        // - if tensor is not particle symmetric braket slots will already be
-        // colored uniquely (by particle index)
+        // - if tensor is not column symmetric braket slots will already be
+        // colored uniquely (by column index)
         // - if tensor is symmetric/antisymmetric braket slots have same color
-        // - if tensor is particle symmetric then assign different colors to
+        // - if tensor is column symmetric then assign different colors to
         // braket slots of different types (paired vs unpaired)
 
         // N.B. emtpy slots are not skipped!
 
-        const auto is_paired_particle = i < num_paired_particles;
+        const auto is_paired_col = i < num_paired_cols;
         std::size_t color_id = i;
         if (is_symm)
           color_id = 0;
         else if (is_col_symm) {
-          if (is_paired_particle)
+          if (is_paired_col)
             color_id = 0;
           else
             color_id = 1;
@@ -1086,7 +1085,7 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
           const std::size_t slot_bundle_vertex_offset =
               /* tensor core vertex */ 1 + /* {bra,ket} bundle vertex */ 1 +
               /* {bra_i,ket_i} bundle vertices */
-              (!is_symm ? num_particles : 0);
+              (!is_symm ? num_cols : 0);
           const std::size_t slot_vertex =
               tensor_vertex + slot_bundle_vertex_offset +
               /* bra or ket bundle vertex */ (is_bra ? 0 : 1);
