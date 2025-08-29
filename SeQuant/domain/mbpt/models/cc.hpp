@@ -31,7 +31,7 @@ class CC {
   /// @brief constructs CC engine
   /// @param N coupled cluster excitation rank
   /// @param ansatz the type of CC ansatz
-  CC(size_t N, Ansatz ansatz = Ansatz::T);
+  explicit CC(size_t N, Ansatz ansatz = Ansatz::T);
 
   /// @return the type of ansatz
   Ansatz ansatz() const;
