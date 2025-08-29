@@ -100,11 +100,11 @@ class WickTheorem {
       "get_default_context().spbasis() should be used to specify spin-free "
       "basis")]] WickTheorem &
   spinfree(bool sf) {
-    if (!((sf && get_default_context(S).spbasis() == SPBasis::spinfree) ||
-          (!sf && get_default_context(S).spbasis() == SPBasis::spinor))) {
+    if (!((sf && get_default_context(S).spbasis() == SPBasis::Spinfree) ||
+          (!sf && get_default_context(S).spbasis() == SPBasis::Spinor))) {
       throw std::invalid_argument(
-          "WickTheorem<S>::spinfree(sf): sf must match the contents of "
-          "get_default_context(S).spbasis() (N.B. WickTheorem::spinfree() is "
+          "WickTheorem<S>::Spinfree(sf): sf must match the contents of "
+          "get_default_context(S).spbasis() (N.B. WickTheorem::Spinfree() is "
           "deprecated, no longer should be used)");
     }
     return *this;
@@ -568,7 +568,7 @@ class WickTheorem {
   ExprPtr compute_nopseq(const bool count_only) const {
     // precondition 1: spin-free version only supported for physical and Fermi
     // vacua
-    if (get_default_context(S).spbasis() == SPBasis::spinfree &&
+    if (get_default_context(S).spbasis() == SPBasis::Spinfree &&
         !(get_default_context(S).vacuum() == Vacuum::Physical ||
           (S == Statistics::FermiDirac &&
            get_default_context(S).vacuum() == Vacuum::SingleProduct)))
@@ -730,9 +730,9 @@ class WickTheorem {
         //                   << " qpcre_op=" << qpcre_op_ptr->to_latex() <<
         //                   "\n";
         auto ann_it = ranges::find_if(result, [&](const auto &p) {
-          return (qpann_op_ptr->action() == Action::annihilate &&
+          return (qpann_op_ptr->action() == Action::Annihilate &&
                   p.second == qpann_op_ptr->index()) ||
-                 (qpcre_op_ptr->action() == Action::annihilate &&
+                 (qpcre_op_ptr->action() == Action::Annihilate &&
                   p.second == qpcre_op_ptr->index());
         });
         if (ann_it != result.end()) {
@@ -741,9 +741,9 @@ class WickTheorem {
           //                     << ann_it->first.to_latex() << ", "
           //                     << ann_it->second.to_latex() << "}\n";
           auto cre_it = ranges::find_if(result, [&](const auto &p) {
-            return (qpcre_op_ptr->action() == Action::create &&
+            return (qpcre_op_ptr->action() == Action::Create &&
                     p.first == qpcre_op_ptr->index()) ||
-                   (qpann_op_ptr->action() == Action::create &&
+                   (qpann_op_ptr->action() == Action::Create &&
                     p.first == qpann_op_ptr->index());
           });
           if (cre_it != result.end()) {
@@ -1384,7 +1384,7 @@ class WickTheorem {
                         // include extra x2 factor for each cycle
                         if (S == Statistics::FermiDirac &&
                             ctx.vacuum() == Vacuum::SingleProduct &&
-                            ctx.spbasis() == SPBasis::spinfree) {
+                            ctx.spbasis() == SPBasis::Spinfree) {
                           auto [target_partner_indices, ncycles] =
                               state.make_target_partner_indices();
                           assert(target_partner_indices
@@ -1413,7 +1413,7 @@ class WickTheorem {
                         // include extra x2 factor for each cycle
                         if (ncycles > 0 &&
                             ctx.vacuum() == Vacuum::SingleProduct &&
-                            ctx.spbasis() == SPBasis::spinfree) {
+                            ctx.spbasis() == SPBasis::Spinfree) {
                           scalar_prefactor *= 1 << ncycles;
                         }
 
@@ -1521,8 +1521,8 @@ class WickTheorem {
       const auto index_common = Index::make_tmp_index(qpspace_common);
 
       // preserve bra/ket positions of left & right
-      const auto left_is_ann = left.action() == Action::annihilate;
-      assert(left_is_ann || right.action() == Action::annihilate);
+      const auto left_is_ann = left.action() == Action::Annihilate;
+      assert(left_is_ann || right.action() == Action::Annihilate);
 
       if (qpspace_common != left.index().space() &&
           qpspace_common !=

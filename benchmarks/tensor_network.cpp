@@ -57,8 +57,8 @@ ProductPtr create_random_network(const std::size_t testcase,
       ranges::views::transform([&](const auto& idxs) {
         return ex<Tensor>(
             L"u", bra(idxs), ket{},
-            (testcase == 3 ? Symmetry::nonsymm
-                           : ((n == 1) ? Symmetry::symm : Symmetry::nonsymm)));
+            (testcase == 3 ? Symmetry::Nonsymm
+                           : ((n == 1) ? Symmetry::Symm : Symmetry::Nonsymm)));
       }) |
       ranges::to_vector;
 
@@ -67,7 +67,7 @@ ProductPtr create_random_network(const std::size_t testcase,
   auto dtensors =
       ket_indices | ranges::views::chunk(num_indices) |
       ranges::views::transform([&](const auto& idxs) {
-        return ex<Tensor>(L"d", bra{}, ket(idxs), Symmetry::nonsymm);
+        return ex<Tensor>(L"d", bra{}, ket(idxs), Symmetry::Nonsymm);
       }) |
       ranges::to_vector;
   assert(dtensors.size() == 1);

@@ -16,35 +16,36 @@ namespace sequant {
 enum class IndexSpaceMetric { Unit, General };
 
 // clang-format off
-/// describes supported symmetries of tensorial objects with respect to permutations of particles (or columns, in tensor notation)
+/// describes supported symmetries of tensorial objects with respect to permutations of columns (in tensor notation), i.e., pairs of {bra[i],ket[i]} slots
 // clang-format on
-enum class ParticleSymmetry { symm, nonsymm };
+enum class ColumnSymmetry { Symm, Nonsymm };
 
 // clang-format off
 /// describes supported symmetries of bra or ket of _particle-symmetric_ tensorial objects
 /// @note bra or ket can be symmetric or antisymmetric only if the tensor is particle-symmetric, otherwise it does not make sense to permute indices corresponding to distinguishable particles
 // clang-format on
-enum class Symmetry { symm, antisymm, nonsymm };
+enum class Symmetry { Symm, Antisymm, Nonsymm };
 
-/// describes supported symmetries of tensorial objects w.r.t. bra-ket exchange
+/// describes supported symmetries of tensorial objects w.r.t. bra-ket exchange,
+/// i.e., the swap of bra slot bundle with ket slot bundle
 ///
 /// @note Currently there is no support for swapping bra index with the ket
 ///       index for a single particle, only whole bra-ket swaps are considered.
-enum class BraKetSymmetry { symm, conjugate, nonsymm };
+enum class BraKetSymmetry { Symm, Conjugate, Nonsymm };
 
 /// describes type of single-particle basis
-enum class SPBasis { spinor, spinfree };
+enum class SPBasis { Spinor, Spinfree };
 
 inline std::wstring to_wolfram(const Symmetry& symmetry) {
   std::wstring result;
   switch (symmetry) {
-    case Symmetry::symm:
+    case Symmetry::Symm:
       result = L"indexSymm[1]";
       break;
-    case Symmetry::antisymm:
+    case Symmetry::Antisymm:
       result = L"indexSymm[-1]";
       break;
-    case Symmetry::nonsymm:
+    case Symmetry::Nonsymm:
       result = L"indexSymm[0]";
       break;
   }
@@ -53,11 +54,11 @@ inline std::wstring to_wolfram(const Symmetry& symmetry) {
 
 inline std::wstring to_wstring(Symmetry sym) {
   switch (sym) {
-    case Symmetry::symm:
+    case Symmetry::Symm:
       return L"symmetric";
-    case Symmetry::antisymm:
+    case Symmetry::Antisymm:
       return L"antisymmetric";
-    case Symmetry::nonsymm:
+    case Symmetry::Nonsymm:
       return L"nonsymmetric";
   }
 
@@ -65,15 +66,15 @@ inline std::wstring to_wstring(Symmetry sym) {
 }
 
 enum class BraKetPos {
-  bra,
-  ket,
+  Bra,
+  Ket,
 };
 
 inline std::wstring to_wolfram(BraKetPos a) {
   switch (a) {
-    case BraKetPos::bra:
+    case BraKetPos::Bra:
       return L"indexType[bra]";
-    case BraKetPos::ket:
+    case BraKetPos::Ket:
       return L"indexType[ket]";
   }
 }
@@ -84,16 +85,16 @@ enum class Statistics {
   Arbitrary,
 };
 
-enum class Action { create, annihilate };
+enum class Action { Create, Annihilate };
 
 /// applies (Hermitian) adjoint to @c action
 inline Action adjoint(Action action) {
-  return action == Action::create ? Action::annihilate : Action::create;
+  return action == Action::Create ? Action::Annihilate : Action::Create;
 }
 
 inline std::wstring to_wolfram(Action a) {
   using namespace std::literals;
-  return L"indexType["s + (a == Action::create ? L"cre" : L"ann") + L"]";
+  return L"indexType["s + (a == Action::Create ? L"cre" : L"ann") + L"]";
 }
 
 enum class Vacuum { Physical, SingleProduct, MultiProduct };

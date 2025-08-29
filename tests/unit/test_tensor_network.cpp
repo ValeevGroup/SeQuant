@@ -732,11 +732,11 @@ L"}\n";
       Index::reset_tmp_index();
       // TN1 from manuscript
       auto g = ex<Tensor>(L"g", bra{L"i_3", L"i_4"}, ket{L"a_3", L"a_4"},
-                          Symmetry::antisymm);
+                          Symmetry::Antisymm);
       auto ta = ex<Tensor>(L"t", bra{L"a_1", L"a_3"}, ket{L"i_1", L"i_2"},
-                           Symmetry::antisymm);
+                           Symmetry::Antisymm);
       auto tb = ex<Tensor>(L"t", bra{L"a_2", L"a_4"}, ket{L"i_3", L"i_4"},
-                           Symmetry::antisymm);
+                           Symmetry::Antisymm);
 
       auto tmp = g * ta * tb;
       // std::wcout << "TN1 = " << to_latex(tmp) << std::endl;
@@ -826,14 +826,14 @@ TEST_CASE("tensor_network_v2", "[elements]") {
     using Edge = TensorNetworkV2::Edge;
     using Origin = TensorNetworkV2::Origin;
 
-    Vertex v1(Origin::Bra, 0, 1, Symmetry::antisymm);
-    Vertex v2(Origin::Bra, 0, 0, Symmetry::antisymm);
-    Vertex v3(Origin::Ket, 1, 0, Symmetry::symm);
-    Vertex v4(Origin::Ket, 1, 3, Symmetry::symm);
-    Vertex v5(Origin::Bra, 3, 0, Symmetry::nonsymm);
-    Vertex v6(Origin::Bra, 3, 2, Symmetry::nonsymm);
-    Vertex v7(Origin::Ket, 3, 1, Symmetry::nonsymm);
-    Vertex v8(Origin::Ket, 5, 0, Symmetry::symm);
+    Vertex v1(Origin::Bra, 0, 1, Symmetry::Antisymm);
+    Vertex v2(Origin::Bra, 0, 0, Symmetry::Antisymm);
+    Vertex v3(Origin::Ket, 1, 0, Symmetry::Symm);
+    Vertex v4(Origin::Ket, 1, 3, Symmetry::Symm);
+    Vertex v5(Origin::Bra, 3, 0, Symmetry::Nonsymm);
+    Vertex v6(Origin::Bra, 3, 2, Symmetry::Nonsymm);
+    Vertex v7(Origin::Ket, 3, 1, Symmetry::Nonsymm);
+    Vertex v8(Origin::Ket, 5, 0, Symmetry::Symm);
 
     const Index dummy(L"a_1");
 
@@ -1151,7 +1151,7 @@ TEST_CASE("tensor_network_v2", "[elements]") {
       const Product expectedExpr =
           parse_expr(
               L"A{i1,i2;a1,a2} g{i3,i4;a3,a4} t{a1,a3;i3,i4} t{a2,a4;i1,i2}",
-              Symmetry::antisymm)
+              Symmetry::Antisymm)
               .as<Product>();
 
       const auto expected = expectedExpr.factors();
@@ -1319,11 +1319,11 @@ TEST_CASE("tensor_network_v2", "[elements]") {
       Index::reset_tmp_index();
       // TN1 from manuscript
       auto g = ex<Tensor>(L"g", bra{L"i_3", L"i_4"}, ket{L"a_3", L"a_4"},
-                          Symmetry::antisymm);
+                          Symmetry::Antisymm);
       auto ta = ex<Tensor>(L"t", bra{L"a_1", L"a_3"}, ket{L"i_1", L"i_2"},
-                           Symmetry::antisymm);
+                           Symmetry::Antisymm);
       auto tb = ex<Tensor>(L"t", bra{L"a_2", L"a_4"}, ket{L"i_3", L"i_4"},
-                           Symmetry::antisymm);
+                           Symmetry::Antisymm);
 
       auto tmp = g * ta * tb;
       // std::wcout << "TN1 = " << to_latex(tmp) << std::endl;
@@ -1415,14 +1415,14 @@ TEST_CASE("tensor_network_v3", "[elements]") {
     using Edge = TN::Edge;
     using Origin = TN::Origin;
 
-    Vertex v1(Origin::Bra, 0, 1, Symmetry::antisymm);
-    Vertex v2(Origin::Bra, 0, 0, Symmetry::antisymm);
-    Vertex v3(Origin::Ket, 1, 0, Symmetry::symm);
-    Vertex v4(Origin::Ket, 1, 3, Symmetry::symm);
-    Vertex v5(Origin::Bra, 3, 0, Symmetry::nonsymm);
-    Vertex v6(Origin::Bra, 3, 2, Symmetry::nonsymm);
-    Vertex v7(Origin::Ket, 3, 1, Symmetry::nonsymm);
-    Vertex v8(Origin::Ket, 5, 0, Symmetry::symm);
+    Vertex v1(Origin::Bra, 0, 1, Symmetry::Antisymm);
+    Vertex v2(Origin::Bra, 0, 0, Symmetry::Antisymm);
+    Vertex v3(Origin::Ket, 1, 0, Symmetry::Symm);
+    Vertex v4(Origin::Ket, 1, 3, Symmetry::Symm);
+    Vertex v5(Origin::Bra, 3, 0, Symmetry::Nonsymm);
+    Vertex v6(Origin::Bra, 3, 2, Symmetry::Nonsymm);
+    Vertex v7(Origin::Ket, 3, 1, Symmetry::Nonsymm);
+    Vertex v8(Origin::Ket, 5, 0, Symmetry::Symm);
 
     const Index dummy(L"a_1");
 
@@ -1467,9 +1467,9 @@ TEST_CASE("tensor_network_v3", "[elements]") {
 
     // aux edges, including hyperedges
     {
-      Vertex v9(Origin::Aux, 3, 1, Symmetry::nonsymm);
-      Vertex v10(Origin::Aux, 5, 0, Symmetry::nonsymm);
-      Vertex v11(Origin::Aux, 6, 0, Symmetry::nonsymm);
+      Vertex v9(Origin::Aux, 3, 1, Symmetry::Nonsymm);
+      Vertex v10(Origin::Aux, 5, 0, Symmetry::Nonsymm);
+      Vertex v11(Origin::Aux, 6, 0, Symmetry::Nonsymm);
 
       REQUIRE_NOTHROW(Edge({v9, v10}, &dummy));
       Edge e1({v9, v10}, &dummy);
@@ -1517,11 +1517,11 @@ TEST_CASE("tensor_network_v3", "[elements]") {
       // can have empty slots, but only in nonsymm bra/ket
       {
         auto u1 = ex<Tensor>(L"u1", bra{L"i_1", L""}, ket{L"", L"i_4"},
-                             aux{L"p"}, Symmetry::nonsymm);
+                             aux{L"p"}, Symmetry::Nonsymm);
         auto u2 = ex<Tensor>(L"u2", bra{L"i_2", L"", L"i_4"}, ket{L"", L"i_1"},
-                             aux{L"p"}, Symmetry::nonsymm);
+                             aux{L"p"}, Symmetry::Nonsymm);
         auto u3 = ex<Tensor>(L"u3", bra{L"i_3", L"i_5"}, ket{}, aux{L"p"},
-                             Symmetry::symm);
+                             Symmetry::Symm);
         REQUIRE_NOTHROW(TN(u1 * u2 * u3));
         TN tn(u1 * u2 * u3);
         REQUIRE_NOTHROW(
@@ -1793,14 +1793,14 @@ TEST_CASE("tensor_network_v3", "[elements]") {
       ExprPtr result_1;
       {
         auto u1 = ex<Tensor>(L"u1", bra{L"i_1", L""}, ket{L"", L"i_4"},
-                             aux{L"p_1"}, Symmetry::nonsymm);
+                             aux{L"p_1"}, Symmetry::Nonsymm);
         auto u2 =
             ex<Tensor>(L"u2", bra{L"i_2", L"", L"i_4"}, ket{L"", L"i_1", L""},
-                       aux{L"p"}, Symmetry::nonsymm);
+                       aux{L"p"}, Symmetry::Nonsymm);
         auto u3 = ex<Tensor>(L"u3", bra{L"i_3", L"i_5"}, ket{}, aux{L"p"},
-                             Symmetry::symm);
+                             Symmetry::Symm);
         auto u4 = ex<Tensor>(L"u4", bra{}, ket{L"i_3", L"i_5", L"i_6"},
-                             aux{L"p_1", L"p"}, Symmetry::antisymm);
+                             aux{L"p_1", L"p"}, Symmetry::Antisymm);
         TN tn(u1 * u2 * u3);
 
         ExprPtr factor =
@@ -1815,14 +1815,14 @@ TEST_CASE("tensor_network_v3", "[elements]") {
       ExprPtr result_2;
       {
         auto u1 = ex<Tensor>(L"u1", bra{L"i_4", L""}, ket{L"", L"i_1"},
-                             aux{L"p_1"}, Symmetry::nonsymm);
+                             aux{L"p_1"}, Symmetry::Nonsymm);
         auto u2 =
             ex<Tensor>(L"u2", bra{L"i_2", L"", L"i_1"}, ket{L"", L"i_4", L""},
-                       aux{L"p_2"}, Symmetry::nonsymm);
+                       aux{L"p_2"}, Symmetry::Nonsymm);
         auto u3 = ex<Tensor>(L"u3", bra{L"i_3", L"i_5"}, ket{}, aux{L"p_2"},
-                             Symmetry::symm);
+                             Symmetry::Symm);
         auto u4 = ex<Tensor>(L"u4", bra{}, ket{L"i_6", L"i_3", L"i_5"},
-                             aux{L"p_1", L"p_2"}, Symmetry::antisymm);
+                             aux{L"p_1", L"p_2"}, Symmetry::Antisymm);
         TN tn(u2 * u1 * u3);
 
         ExprPtr factor =
@@ -1846,7 +1846,7 @@ TEST_CASE("tensor_network_v3", "[elements]") {
       const Product expectedExpr =
           parse_expr(
               L"A{i1,i2;a1,a2} g{i3,i4;a3,a4} t{a1,a3;i1,i2} t{a2,a4;i3,i4}",
-              Symmetry::antisymm)
+              Symmetry::Antisymm)
               .as<Product>();
 
       const auto expected = expectedExpr.factors();
@@ -2014,11 +2014,11 @@ TEST_CASE("tensor_network_v3", "[elements]") {
       Index::reset_tmp_index();
       // TN1 from manuscript
       auto g = ex<Tensor>(L"g", bra{L"i_3", L"i_4"}, ket{L"a_3", L"a_4"},
-                          Symmetry::antisymm);
+                          Symmetry::Antisymm);
       auto ta = ex<Tensor>(L"t", bra{L"a_1", L"a_3"}, ket{L"i_1", L"i_2"},
-                           Symmetry::antisymm);
+                           Symmetry::Antisymm);
       auto tb = ex<Tensor>(L"t", bra{L"a_2", L"a_4"}, ket{L"i_3", L"i_4"},
-                           Symmetry::antisymm);
+                           Symmetry::Antisymm);
 
       auto tmp = g * ta * tb;
       // std::wcout << "TN1 = " << to_latex(tmp) << std::endl;

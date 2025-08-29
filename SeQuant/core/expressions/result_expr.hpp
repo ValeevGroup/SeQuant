@@ -40,10 +40,10 @@ class ResultExpr {
   template <typename Range1, typename Range2, typename Range3>
   ResultExpr(bra<Range1> &&bra, ket<Range2> &&ket, aux<Range3> &&aux,
              Symmetry symm, BraKetSymmetry braket_symm,
-             ParticleSymmetry particle_symm, std::optional<std::wstring> label,
+             ColumnSymmetry column_symm, std::optional<std::wstring> label,
              ExprPtr expr)
       : ResultExpr(std::forward<Range1>(bra), std::forward<Range2>(ket),
-                   std::forward<Range3>(aux), symm, braket_symm, particle_symm,
+                   std::forward<Range3>(aux), symm, braket_symm, column_symm,
                    std::move(label), std::move(expr)) {}
 
   ResultExpr(const ResultExpr &other) = default;
@@ -66,8 +66,8 @@ class ResultExpr {
   BraKetSymmetry braket_symmetry() const;
   void set_braket_symmetry(BraKetSymmetry symm);
 
-  ParticleSymmetry particle_symmetry() const;
-  void set_particle_symmetry(ParticleSymmetry symm);
+  ColumnSymmetry column_symmetry() const;
+  void set_column_symmetry(ColumnSymmetry symm);
 
   const IndexContainer &bra() const;
   const IndexContainer &ket() const;
@@ -119,7 +119,7 @@ class ResultExpr {
   Tensor result_as_tensor(std::wstring default_label = L"Unnamed") const {
     return Tensor(m_label.has_value() ? m_label.value() : default_label,
                   sequant::bra(m_braIndices), sequant::ket(m_ketIndices),
-                  sequant::aux(m_auxIndices), m_symm, m_bksymm, m_psymm);
+                  sequant::aux(m_auxIndices), m_symm, m_bksymm, m_csymm);
   }
 
   Variable result_as_variable(std::wstring default_label = L"Unnamed") const {
@@ -139,12 +139,12 @@ class ResultExpr {
 
   ResultExpr(IndexContainer bra, IndexContainer ket, IndexContainer aux,
              Symmetry symm, BraKetSymmetry braket_symm,
-             ParticleSymmetry particle_symm, std::optional<std::wstring> label,
+             ColumnSymmetry column_symm, std::optional<std::wstring> label,
              ExprPtr expression);
 
-  Symmetry m_symm = Symmetry::nonsymm;
-  BraKetSymmetry m_bksymm = BraKetSymmetry::nonsymm;
-  ParticleSymmetry m_psymm = ParticleSymmetry::nonsymm;
+  Symmetry m_symm = Symmetry::Nonsymm;
+  BraKetSymmetry m_bksymm = BraKetSymmetry::Nonsymm;
+  ColumnSymmetry m_csymm = ColumnSymmetry::Nonsymm;
   IndexContainer m_braIndices;
   IndexContainer m_ketIndices;
   IndexContainer m_auxIndices;

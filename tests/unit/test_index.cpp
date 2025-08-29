@@ -462,13 +462,13 @@ TEST_CASE("index", "[elements][index]") {
     REQUIRE(i1_str ==
             L"particleIndex[\"\\!\\(\\*SubscriptBox[\\(i\\), "
             L"\\(1\\)]\\)\",particleSpace[occupied]]");
-    REQUIRE(i1.to_wolfram(Action::create) ==
+    REQUIRE(i1.to_wolfram(Action::Create) ==
             L"particleIndex[\"\\!\\(\\*SubscriptBox[\\(i\\), "
             L"\\(1\\)]\\)\",particleSpace[occupied],indexType[cre]]");
     REQUIRE(i1.to_wolfram(BraKetPos::ket) ==
             L"particleIndex[\"\\!\\(\\*SubscriptBox[\\(i\\), "
             L"\\(1\\)]\\)\",particleSpace[occupied],indexType[ket]]");
-    REQUIRE(i1.to_wolfram(Action::annihilate) ==
+    REQUIRE(i1.to_wolfram(Action::Annihilate) ==
             L"particleIndex[\"\\!\\(\\*SubscriptBox[\\(i\\), "
             L"\\(1\\)]\\)\",particleSpace[occupied],indexType[ann]]");
     REQUIRE(i1.to_wolfram(BraKetPos::bra) ==

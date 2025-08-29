@@ -50,37 +50,37 @@ struct ParseError : std::runtime_error {
 ///             (no whitespace is allowed at this place). Examples are
 ///             't{i1;i2}:A', 't{i1;i2}:A-S', 't{i1;i2}:N-C-S'
 ///             Possible values for `<perm symm>` are
-///             - 'A' for antisymmetry (sequant::Symmetry::antisymm)
-///             - 'S' for symmetric (sequant::Symmetry::symm)
-///             - 'N' for non-symmetric (sequant::Symmetry::nonsymm)
+///             - 'A' for antisymmetry (sequant::Symmetry::Antisymm)
+///             - 'S' for symmetric (sequant::Symmetry::Symm)
+///             - 'N' for non-symmetric (sequant::Symmetry::Nonsymm)
 ///             Possible values for `<braket symm>` are
-///             - 'C' for antisymmetry (sequant::BraKetSymmetry::conjugate)
-///             - 'S' for symmetric (sequant::BraKetSymmetry::symm)
-///             - 'N' for non-symmetric (sequant::BraKetSymmetry::nonsymm)
+///             - 'C' for antisymmetry (sequant::BraKetSymmetry::Conjugate)
+///             - 'S' for symmetric (sequant::BraKetSymmetry::Symm)
+///             - 'N' for non-symmetric (sequant::BraKetSymmetry::Nonsymm)
 ///             Possible values for `<particle symm>` are
-///             - 'S' for symmetric (sequant::ParticleSymmetry::symm)
-///             - 'N' for non-symmetric (sequant::ParticleSymmetry::nonsymm)
+///             - 'S' for symmetric (sequant::ColumnSymmetry::Symm)
+///             - 'N' for non-symmetric (sequant::ColumnSymmetry::Nonsymm)
 /// \param perm_symm Default index permutation symmetry to be used if tensors don't specify a permutation
 ///                  symmetry explicitly.
 /// \param braket_symm Default BraKet symmetry to be used if tensors don't specify a BraKet symmetry explicitly.
-/// \param particle_symm Default particle symmetry to be used if tensors don't specify a particle symmetry explicitly.
+/// \param column_symm Default particle symmetry to be used if tensors don't specify a particle symmetry explicitly.
 ///                   @c raw expression. Explicit tensor symmetry can
 ///                   be annotated in the expression itself. In that case, the
 ///                   annotated symmetry will be used.
-///                   eg. 'g{i1, a1; i2, a2}:A' tensor with 'sequant::Symmetry::antisymm' annotation
-///                       'g{i1, a1; i2, a2}:S' tensor with 'sequant::Symmetry::symm' annotation
-///                       'g{i1, a1; i2, a2}:N' tensor with 'sequant::Symmetry::nonsymm' annotation
+///                   eg. 'g{i1, a1; i2, a2}:A' tensor with 'sequant::Symmetry::Antisymm' annotation
+///                       'g{i1, a1; i2, a2}:S' tensor with 'sequant::Symmetry::Symm' annotation
+///                       'g{i1, a1; i2, a2}:N' tensor with 'sequant::Symmetry::Nonsymm' annotation
 /// \return SeQuant expression.
 // clang-format on
 ExprPtr parse_expr(std::wstring_view raw,
                    std::optional<Symmetry> perm_symm = {},
                    std::optional<BraKetSymmetry> braket_symm = {},
-                   std::optional<ParticleSymmetry> particle_symm = {});
+                   std::optional<ColumnSymmetry> column_symm = {});
 
-ResultExpr parse_result_expr(
-    std::wstring_view raw, std::optional<Symmetry> perm_symm = {},
-    std::optional<BraKetSymmetry> braket_symm = {},
-    std::optional<ParticleSymmetry> particle_symm = {});
+ResultExpr parse_result_expr(std::wstring_view raw,
+                             std::optional<Symmetry> perm_symm = {},
+                             std::optional<BraKetSymmetry> braket_symm = {},
+                             std::optional<ColumnSymmetry> column_symm = {});
 
 ///
 /// Get a parsable string from an expression.

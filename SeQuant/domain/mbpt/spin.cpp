@@ -93,7 +93,7 @@ void reset_idx_tags(const ExprPtr& expr) {
 template <typename Container, typename TraceFunction, typename... Args>
 [[nodiscard]] Container wrap_trace(const ResultExpr& expr,
                                    TraceFunction&& tracer, Args&&... args) {
-  bool searchForNonEquivalentResults = expr.symmetry() != Symmetry::nonsymm;
+  bool searchForNonEquivalentResults = expr.symmetry() != Symmetry::Nonsymm;
   searchForNonEquivalentResults &=
       expr.bra().size() > 1 || expr.ket().size() > 1;
   const bool brasSameSpace = std::all_of(
@@ -111,13 +111,13 @@ template <typename Container, typename TraceFunction, typename... Args>
                traced.index_particle_grouping<container::svector<Index>>(),
                std::forward<Args>(args)...);
 
-    traced.set_symmetry(Symmetry::nonsymm);
+    traced.set_symmetry(Symmetry::Nonsymm);
 
     return {std::move(traced)};
   }
 
-  assert(expr.symmetry() == Symmetry::antisymm ||
-         expr.symmetry() == Symmetry::symm);
+  assert(expr.symmetry() == Symmetry::Antisymm ||
+         expr.symmetry() == Symmetry::Symm);
 
   // TODO: Do we have to track the sign?
   const bool permuteBra = expr.bra().size() >= expr.ket().size();
@@ -187,12 +187,12 @@ template <typename Container, typename TraceFunction, typename... Args>
       if (permuteBra) {
         return ResultExpr(bra(permIndices), ket(expr.ket()), aux(expr.aux()),
                           expr.symmetry(), expr.braket_symmetry(),
-                          expr.particle_symmetry(), expr.label(),
+                          expr.column_symmetry(), expr.label(),
                           std::move(expression));
       } else {
         return ResultExpr(bra(expr.bra()), ket(permIndices), aux(expr.aux()),
                           expr.symmetry(), expr.braket_symmetry(),
-                          expr.particle_symmetry(), expr.label(),
+                          expr.column_symmetry(), expr.label(),
                           std::move(expression));
       }
     }();
@@ -202,7 +202,7 @@ template <typename Container, typename TraceFunction, typename... Args>
                result.index_particle_grouping<container::svector<Index>>(),
                std::forward<Args>(args)...);
 
-    result.set_symmetry(Symmetry::nonsymm);
+    result.set_symmetry(Symmetry::Nonsymm);
 
     resultSet.push_back(std::move(result));
   } while (std::next_permutation(permIndices.begin(), permIndices.end()));
@@ -231,7 +231,7 @@ ExprPtr swap_bra_ket(const ExprPtr& expr) {
   auto tensor_swap = [](const Tensor& tensor) {
     auto result = Tensor(tensor.label(), bra(tensor.ket().value()),
                          ket(tensor.bra().value()), tensor.symmetry(),
-                         tensor.braket_symmetry(), tensor.particle_symmetry());
+                         tensor.braket_symmetry(), tensor.column_symmetry());
     return ex<Tensor>(result);
   };
 
@@ -415,8 +415,8 @@ ExprPtr expand_antisymm(const Tensor& tensor, bool skip_spinsymm) {
   // Return non-symmetric tensor if rank is 1
   if (tensor.bra_rank() == 1) {
     Tensor new_tensor(tensor.label(), tensor.bra(), tensor.ket(), tensor.aux(),
-                      Symmetry::nonsymm, tensor.braket_symmetry(),
-                      tensor.particle_symmetry());
+                      Symmetry::Nonsymm, tensor.braket_symmetry(),
+                      tensor.column_symmetry());
     return std::make_shared<Tensor>(new_tensor);
   }
 
@@ -439,7 +439,7 @@ ExprPtr expand_antisymm(const Tensor& tensor, bool skip_spinsymm) {
 
   // Generate a sum of asymmetric tensors if the input tensor is antisymmetric
   // and greater than one body otherwise, return the tensor
-  if (tensor.symmetry() == Symmetry::antisymm) {
+  if (tensor.symmetry() == Symmetry::Antisymm) {
     const auto prefactor = get_phase(tensor);
     container::set<Index> bra_list(tensor.bra().begin(), tensor.bra().end());
     container::set<Index> ket_list(tensor.ket().begin(), tensor.ket().end());
@@ -447,7 +447,7 @@ ExprPtr expand_antisymm(const Tensor& tensor, bool skip_spinsymm) {
     do {
       // N.B. must copy
       auto new_tensor = Tensor(tensor.label(), bra(bra_list), ket(ket_list),
-                               tensor.aux(), Symmetry::nonsymm);
+                               tensor.aux(), Symmetry::Nonsymm);
 
       if (spin_symm_tensor(new_tensor)) {
         auto new_tensor_product = std::make_shared<Product>();
@@ -659,7 +659,7 @@ ExprPtr symmetrize_expr(const Product& product) {
   auto S = Tensor{};
   if (A_is_nconserving) {
     S = Tensor(L"S", A_tensor.bra(), A_tensor.ket(), A_tensor.aux(),
-               Symmetry::nonsymm);
+               Symmetry::Nonsymm);
   } else {  // A is N-nonconserving
     auto n = std::min(A_tensor.bra_rank(), A_tensor.ket_rank());
     container::svector<Index> bra_list(A_tensor.bra().begin(),
@@ -667,7 +667,7 @@ ExprPtr symmetrize_expr(const Product& product) {
     container::svector<Index> ket_list(A_tensor.ket().begin(),
                                        A_tensor.ket().begin() + n);
     S = Tensor(L"S", bra(std::move(bra_list)), ket(std::move(ket_list)),
-               A_tensor.aux(), Symmetry::nonsymm);
+               A_tensor.aux(), Symmetry::Nonsymm);
   }
 
   // Generate replacement maps from a list of Index type (could be a bra or a
@@ -1290,8 +1290,8 @@ Tensor swap_spin(const Tensor& t) {
     k.at(i) = spin_flipped_idx(t.ket().at(i));
   }
 
-  return {t.label(),    bra(std::move(b)),   ket(std::move(k)),    t.aux(),
-          t.symmetry(), t.braket_symmetry(), t.particle_symmetry()};
+  return {t.label(),    bra(std::move(b)),   ket(std::move(k)),  t.aux(),
+          t.symmetry(), t.braket_symmetry(), t.column_symmetry()};
 }
 
 ExprPtr swap_spin(const ExprPtr& expr) {
@@ -1362,7 +1362,7 @@ std::vector<ExprPtr> open_shell_A_op(const Tensor& A) {
     ranges::for_each(spin_bra, [](const Index& i) { i.reset_tag(); });
     ranges::for_each(spin_ket, [](const Index& i) { i.reset_tag(); });
     result.at(i) = ex<Tensor>(
-        Tensor(L"A", spin_bra, spin_ket, A.aux(), Symmetry::antisymm));
+        Tensor(L"A", spin_bra, spin_ket, A.aux(), Symmetry::Antisymm));
     // std::wcout << to_latex(result.at(i)) << " ";
   }
   // std::wcout << "\n" << std::endl;
@@ -1395,9 +1395,9 @@ std::vector<ExprPtr> open_shell_P_op_vector(const Tensor& A) {
       for (auto& k : beta_spin) {
         if (!alpha_spin.empty() && !beta_spin.empty()) {
           P_bra_list.emplace_back(Tensor(
-              L"P", bra{A.bra().at(j), A.bra().at(k)}, ket{}, Symmetry::symm));
+              L"P", bra{A.bra().at(j), A.bra().at(k)}, ket{}, Symmetry::Symm));
           P_ket_list.emplace_back(Tensor(
-              L"P", bra{}, ket{A.ket().at(j), A.ket().at(k)}, Symmetry::symm));
+              L"P", bra{}, ket{A.ket().at(j), A.ket().at(k)}, Symmetry::Symm));
         }
       }
     }
@@ -1416,12 +1416,12 @@ std::vector<ExprPtr> open_shell_P_op_vector(const Tensor& A) {
                   Tensor(L"P",
                          bra{A.bra().at(i1), A.bra().at(i3), A.bra().at(i2),
                              A.bra().at(i4)},
-                         ket{}, Symmetry::symm));
+                         ket{}, Symmetry::Symm));
               P_ket_list.emplace_back(
                   Tensor(L"P", bra{},
                          ket{A.ket().at(i1), A.ket().at(i3), A.ket().at(i2),
                              A.ket().at(i4)},
-                         Symmetry::symm));
+                         Symmetry::Symm));
             }
           }
         }
@@ -1927,7 +1927,7 @@ ExprPtr factorize_S(const ExprPtr& expression,
     });
     assert(bra_list.size() == ket_list.size());
     S = Tensor(L"S", bra(std::move(bra_list)), ket(std::move(ket_list)),
-               Symmetry::nonsymm);
+               Symmetry::Nonsymm);
   }
 
   // For any order CC residual equation:
