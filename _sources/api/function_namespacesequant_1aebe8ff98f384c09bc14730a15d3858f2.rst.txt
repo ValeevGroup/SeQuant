@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1aebe8ff98f384c09bc14730a15d3858f2:
+
+Function sequant::to_wolfram(Action)
+====================================
+
+- Defined in :ref:`file_SeQuant_core_attr.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::to_wolfram(Action)
+   :project: SeQuant

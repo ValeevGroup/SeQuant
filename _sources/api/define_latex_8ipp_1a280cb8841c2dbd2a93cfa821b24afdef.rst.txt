@@ -1,0 +1,14 @@
+.. _exhale_define_latex_8ipp_1a280cb8841c2dbd2a93cfa821b24afdef:
+
+Define SEQUANT_CORE_LATEX_IPP
+=============================
+
+- Defined in :ref:`file_SeQuant_core_latex.ipp`
+
+
+Define Documentation
+--------------------
+
+
+.. doxygendefine:: SEQUANT_CORE_LATEX_IPP
+   :project: SeQuant

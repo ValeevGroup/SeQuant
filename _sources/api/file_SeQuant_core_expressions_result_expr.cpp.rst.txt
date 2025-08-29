@@ -1,0 +1,78 @@
+
+.. _file_SeQuant_core_expressions_result_expr.cpp:
+
+File result_expr.cpp
+====================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core_expressions>` (``SeQuant/core/expressions``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/expressions/result_expr.cpp``)
+---------------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_expressions_result_expr.cpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/expressions/result_expr.hpp`` (:ref:`file_SeQuant_core_expressions_result_expr.hpp`)
+
+- ``SeQuant/core/expressions/tensor.hpp`` (:ref:`file_SeQuant_core_expressions_tensor.hpp`)
+
+- ``SeQuant/core/expressions/variable.hpp`` (:ref:`file_SeQuant_core_expressions_variable.hpp`)
+
+- ``SeQuant/core/optimize.hpp`` (:ref:`file_SeQuant_core_optimize.hpp`)
+
+- ``SeQuant/core/utility/indices.hpp`` (:ref:`file_SeQuant_core_utility_indices.hpp`)
+
+
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1aab6886c27528068a1f9b4e8bb41ea13f`
+
+- :ref:`exhale_function_namespacesequant_1a113060966db09679d51f30fb53462fb1`
+
+- :ref:`exhale_function_namespacesequant_1a4707bc59cef2a682942534231a7357e8`
+
+- :ref:`exhale_function_namespacesequant_1af62672d9a36d78a6f42ea045dff8a442`
+
+- :ref:`exhale_function_namespacesequant_1aeb444d42370bce37efac58068bfe2ab0`
+
+- :ref:`exhale_function_namespacesequant_1aa43257686655fc15cab8a669ca2a0e4b`
+
+- :ref:`exhale_function_namespacesequant_1af7af411a33316d3a0de009df2da4069b`
+
+- :ref:`exhale_function_namespacesequant_1ad3502a95f147cf67cbb10e16456aaf1a`
+
+- :ref:`exhale_function_namespacesequant_1aa9e484904fdefdd206b5e0e3d5a0ae73`
+
+- :ref:`exhale_function_namespacesequant_1a6ca30fa8ef0b08354509b7c23cf8064e`
+

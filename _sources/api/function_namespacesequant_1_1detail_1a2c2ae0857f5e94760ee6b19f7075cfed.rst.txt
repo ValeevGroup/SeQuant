@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1detail_1a2c2ae0857f5e94760ee6b19f7075cfed:
+
+Template Function sequant::detail::prune_scalar_factor
+======================================================
+
+- Defined in :ref:`file_SeQuant_core_export_export.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::detail::prune_scalar_factor(ExportNode<T>&, PreprocessResult&)
+   :project: SeQuant

@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1ad3502a95f147cf67cbb10e16456aaf1a:
+
+Function sequant::rapid_simplify(ResultExpr&)
+=============================================
+
+- Defined in :ref:`file_SeQuant_core_expressions_result_expr.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::rapid_simplify(ResultExpr&)
+   :project: SeQuant

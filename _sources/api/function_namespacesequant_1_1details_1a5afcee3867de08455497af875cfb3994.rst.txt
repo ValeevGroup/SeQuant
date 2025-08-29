@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1details_1a5afcee3867de08455497af875cfb3994:
+
+Function sequant::details::deparse_symm(Symmetry)
+=================================================
+
+- Defined in :ref:`file_SeQuant_core_parse_deparse.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::details::deparse_symm(Symmetry)
+   :project: SeQuant

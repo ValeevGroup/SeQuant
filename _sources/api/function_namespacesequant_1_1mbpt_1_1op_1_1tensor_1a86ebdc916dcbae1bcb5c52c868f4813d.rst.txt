@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1mbpt_1_1op_1_1tensor_1a86ebdc916dcbae1bcb5c52c868f4813d:
+
+Function sequant::mbpt::op::sequant::mbpt::tensor::T_pt
+=======================================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_op.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::mbpt::op::sequant::mbpt::tensor::T_pt()
+   :project: SeQuant

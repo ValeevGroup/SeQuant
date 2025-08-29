@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a3f82b6772553fedc95da4ea299972f5c:
+
+Function sequant::expand_antisymm(const Tensor&, bool)
+======================================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_spin.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::expand_antisymm(const Tensor&, bool)
+   :project: SeQuant

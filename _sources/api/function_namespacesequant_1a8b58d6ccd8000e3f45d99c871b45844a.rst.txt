@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a8b58d6ccd8000e3f45d99c871b45844a:
+
+Function sequant::symmetrize_expr(const Product&)
+=================================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_spin.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::symmetrize_expr(const Product&)
+   :project: SeQuant

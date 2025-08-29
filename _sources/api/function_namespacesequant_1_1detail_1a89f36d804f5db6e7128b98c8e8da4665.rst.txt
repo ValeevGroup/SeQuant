@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1detail_1a89f36d804f5db6e7128b98c8e8da4665:
+
+Function sequant::detail::reset_idx_tags
+========================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_spin.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::detail::reset_idx_tags(const ExprPtr&)
+   :project: SeQuant

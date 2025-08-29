@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1ad515c9c22fe8046eb7daa7f0119501a7:
+
+Function sequant::biorthogonal_transform_copy(const container::svector<ResultExpr>&, double)
+============================================================================================
+
+- Defined in :ref:`file_SeQuant_core_biorthogonalization.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::biorthogonal_transform_copy(const container::svector<ResultExpr>&, double)
+   :project: SeQuant
