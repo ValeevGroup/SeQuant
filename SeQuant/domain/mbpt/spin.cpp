@@ -5,8 +5,11 @@
 #include <SeQuant/core/biorthogonalization.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/math.hpp>
+#include <SeQuant/core/optimize.hpp>
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/space.hpp>
+#include <SeQuant/core/tensor_canonicalizer.hpp>
+#include <SeQuant/core/tensor_network_v3.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/permutation.hpp>
 #include <SeQuant/core/utility/swap.hpp>
@@ -932,23 +935,82 @@ ExprPtr S_maps(const ExprPtr& expr) {
   return result;
 }
 
+ExprPtr WK_biorthogonalization_filter(
+    ExprPtr expr,
+    const container::svector<container::svector<Index>>& ext_idxs) {
+  if (!expr->is<Sum>()) return expr;
+  if (ext_idxs.size() <= 2) return expr;  // always skip R1 and R2
+
+  // hash filtering logic for R > 2
+  container::map<std::size_t, container::vector<ExprPtr>> largest_coeff_terms;
+
+  for (const auto& term : *expr) {
+    if (!term->is<Product>()) continue;
+
+    auto product = term->as<Product>();
+    auto scalar = product.scalar();
+
+    sequant::TensorNetworkV3 tn(product);
+    auto hash =
+        tn.canonicalize_slots(TensorCanonicalizer::cardinal_tensor_labels())
+            .hash_value();
+
+    auto it = largest_coeff_terms.find(hash);
+    if (it == largest_coeff_terms.end()) {
+      largest_coeff_terms[hash] = {term};
+    } else {
+      if (!it->second.empty()) {
+        auto existing_scalar = it->second[0]->as<Product>().scalar();
+        auto existing_abs = abs(existing_scalar);
+        auto current_abs = abs(scalar);
+
+        if (current_abs > existing_abs) {
+          it->second.clear();
+          it->second.push_back(term);
+        } else if (current_abs == existing_abs) {
+          it->second.push_back(term);
+        }
+      }
+    }
+  }
+
+  Sum filtered;
+  for (const auto& [_, terms] : largest_coeff_terms) {
+    for (const auto& t : terms) {
+      filtered.append(t);
+    }
+  }
+  auto result = ex<Sum>(filtered);
+
+  return result;
+}
+
 ExprPtr closed_shell_spintrace(
     const ExprPtr& expression,
-    const container::svector<container::svector<Index>>& ext_index_groups) {
+    const container::svector<container::svector<Index>>& ext_index_groups,
+    bool full_expansion) {
   // Symmetrize and expression
   // Partially expand the antisymmetrizer and write it in terms of S operator.
   // See symmetrize_expr(expr) function for implementation details. We want an
   // expression with non-symmetric tensors, hence we are partially expanding the
   // antisymmetrizer (A) and fully expanding the anti-symmetric tensors to
   // non-symmetric.
-  auto symm_and_expand = [](const ExprPtr& expr) {
+  // full_expansion: it fully expands the antisymmetrizer directly (can be used
+  // for compact-set epns, however it is not an optimized way).
+  auto partially_or_fully_expand = [&full_expansion](const ExprPtr& expr) {
     auto temp = expr;
-    if (has_tensor(temp, L"A")) temp = symmetrize_expr(temp);
+    if (has_tensor(temp, L"A")) {
+      if (full_expansion) {
+        temp = expand_A_op(temp);
+      } else {
+        temp = symmetrize_expr(temp);
+      }
+    }
     temp = expand_antisymm(temp);
     rapid_simplify(temp);
     return temp;
   };
-  auto expr = symm_and_expand(expression);
+  auto expr = partially_or_fully_expand(expression);
 
   // Index tags are cleaned prior to calling the fast canonicalizer
   detail::reset_idx_tags(expr);  // This call is REQUIRED
@@ -1085,12 +1147,74 @@ ExprPtr closed_shell_CC_spintrace(ExprPtr const& expr) {
   return st_expr;
 }
 
-container::svector<ResultExpr> closed_shell_spintrace(const ResultExpr& expr) {
-  using TraceFunction = ExprPtr (*)(
-      const ExprPtr&, const container::svector<container::svector<Index>>&);
+container::svector<ResultExpr> closed_shell_spintrace(
+    const ResultExpr& expr, bool is_direct_full_expansion) {
+  using TraceFunction =
+      ExprPtr (*)(const ExprPtr&,
+                  const container::svector<container::svector<Index>>&, bool);
 
   return detail::wrap_trace<container::svector<ResultExpr>>(
-      expr, static_cast<TraceFunction>(&closed_shell_spintrace));
+      expr, static_cast<TraceFunction>(&closed_shell_spintrace),
+      is_direct_full_expansion);
+}
+
+ExprPtr closed_shell_CC_spintrace_compact_set(ExprPtr const& expr) {
+  assert(expr->is<Sum>());
+  using ranges::views::transform;
+
+  auto const ext_idxs = external_indices(expr);
+  auto st_expr = closed_shell_spintrace(expr, ext_idxs);
+  canonicalize(st_expr);
+
+  if (!ext_idxs.empty()) {
+    // Remove S operator to apply biorthogonal transformation
+    for (auto& term : *st_expr) {
+      if (term->is<Product>()) term = remove_tensor(term->as<Product>(), L"S");
+    }
+    st_expr = biorthogonal_transform(st_expr, ext_idxs);
+
+    // adding S in order to expand it and have all the raw equations
+    auto bixs = ext_idxs | transform([](auto&& vec) { return vec[1]; });
+    auto kixs = ext_idxs | transform([](auto&& vec) { return vec[0]; });
+    if (bixs.size() > 1) {
+      st_expr =
+          ex<Tensor>(Tensor{L"S", bra(std::move(bixs)), ket(std::move(kixs))}) *
+          st_expr;
+    }
+    simplify(st_expr);
+    // expanding S after spintracing and biorthogonalization, to avoid dealing
+    // with large number of terms
+    st_expr = S_maps(st_expr);
+    // canonicalizer must be called before hash-filter to combine terms
+    canonicalize(st_expr);
+
+    // apply hash filter method to get unique set of terms
+    st_expr = WK_biorthogonalization_filter(st_expr, ext_idxs);
+    // add S tensor again
+    st_expr =
+        ex<Tensor>(Tensor{L"S", bra(std::move(bixs)), ket(std::move(kixs))}) *
+        st_expr;
+
+    rational combined_factor;
+    if (ext_idxs.size() <= 2) {
+      combined_factor = rational(1, factorial(ext_idxs.size()));
+    } else {
+      auto fact_n = factorial(ext_idxs.size());
+      combined_factor =
+          rational(1, fact_n - 1);  // this is (1/fact_n) * (fact_n/(fact_n-1))
+    }
+    st_expr = ex<Constant>(combined_factor) * st_expr;
+  }
+
+  simplify(st_expr);
+  // std::wcout << "final eqns after symm: "
+  //            << sequant::to_latex_align(
+  //                   sequant::ex<sequant::Sum>(
+  //                       sequant::opt::reorder(st_expr->as<sequant::Sum>())),
+  //                   0, 4)
+  //            << std::endl;
+
+  return st_expr;
 }
 
 ExprPtr closed_shell_CC_spintrace_rigorous(ExprPtr const& expr) {

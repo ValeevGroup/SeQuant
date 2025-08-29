@@ -205,6 +205,14 @@ TEST_CASE("eval_with_btas", "[eval_btas]") {
         ->get<BTensorD>();
   };
 
+  auto eval_biorthogonal_cleanup =
+      [&yield_](sequant::ExprPtr const& expr,
+                container::svector<long> const& target_labels) {
+        return evaluate_biorthogonal_cleanup(eval_node(expr), target_labels,
+                                             yield_)
+            ->get<BTensorD>();
+      };
+
   auto parse_antisymm = [](auto const& xpr) {
     return parse_expr(xpr, sequant::Symmetry::Antisymm);
   };
@@ -356,6 +364,57 @@ TEST_CASE("eval_with_btas", "[eval_btas]") {
     btas::scal(0.5, man1);
 
     REQUIRE(norm(eval1) == Catch::Approx(norm(man1)));
+  }
+
+  SECTION("Biorthogonal Cleanup") {
+    using btas::permute;
+    // low-rank residuals: skip cleanup
+    auto expr1 = parse_antisymm(L"R_{a1, a2}^{i1, i2}");
+    auto tidx1 = tidxs(L"a_1,a_2,i_1,i_2");
+    auto eval1 = eval_biorthogonal_cleanup(expr1, tidx1);
+    auto const& r1 =
+        yield(L"R{v,v;o,o}");  // Assuming v = virtual, o = occupied
+
+    BTensorD man1{r1.range()};
+    man1.fill(0);
+    man1 = r1;
+
+    REQUIRE(norm(eval1) == Catch::Approx(norm(man1)));
+
+    BTensorD zero1{r1.range()};
+    zero1 = man1 - eval1;
+    REQUIRE(norm(zero1) == Catch::Approx(0).margin(
+                               100 * std::numeric_limits<double>::epsilon()));
+
+    // high-rank residuals: cleanup applies:
+    // result = identity - (1/ket_rank!) * sum_of_ket_permutations
+    auto expr2 = parse_antisymm(L"R_{a1, a2, a3}^{i1, i2, i3}");
+    auto tidx2 = tidxs(L"a_1,a_2,a_3,i_1,i_2,i_3");
+    auto eval2 = eval_biorthogonal_cleanup(expr2, tidx2);
+    auto const& r2 = yield(L"R{v,v,v;o,o,o}");
+
+    BTensorD man2{r2.range()};
+    man2.fill(0);
+    man2 = r2;
+
+    BTensorD perm_sum{r2.range()};
+    perm_sum.fill(0);
+
+    perm_sum += r2;
+    perm_sum += BTensorD{permute(r2, {0, 1, 2, 3, 5, 4})};
+    perm_sum += BTensorD{permute(r2, {0, 1, 2, 4, 3, 5})};
+    perm_sum += BTensorD{permute(r2, {0, 1, 2, 4, 5, 3})};
+    perm_sum += BTensorD{permute(r2, {0, 1, 2, 5, 3, 4})};
+    perm_sum += BTensorD{permute(r2, {0, 1, 2, 5, 4, 3})};
+
+    btas::scal(1.0 / 6.0, perm_sum);
+    man2 -= perm_sum;
+    REQUIRE(norm(eval2) == Catch::Approx(norm(man2)));
+
+    BTensorD zero2{r2.range()};
+    zero2 = man2 - eval2;
+    REQUIRE(norm(zero2) == Catch::Approx(0).margin(
+                               100 * std::numeric_limits<double>::epsilon()));
   }
 
   SECTION("Others") {

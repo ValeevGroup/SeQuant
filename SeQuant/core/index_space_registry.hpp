@@ -1195,8 +1195,6 @@ class IndexSpaceRegistry {
 
   /// @}
 
-  /// @}
-
  private:
   // N.B. need transparent comparator, see https://stackoverflow.com/a/35525806
   std::shared_ptr<container::set<IndexSpace, IndexSpace::KeyCompare>> spaces_;

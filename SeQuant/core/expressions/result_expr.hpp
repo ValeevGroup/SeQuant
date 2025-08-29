@@ -16,7 +16,7 @@
 namespace sequant {
 
 /// Represents an expression containing a left-hand-side of the form
-/// <lhs> = <expression>
+/// `<lhs> = <expression>`
 /// Thus, objects of this class are used to keep track of the result
 /// of a given expression as well as the expression itself.
 ///

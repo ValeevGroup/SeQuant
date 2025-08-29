@@ -20,7 +20,7 @@ using ResultPtr = std::shared_ptr<Result>;
 namespace meta {
 
 ///
-/// \brief Satisfied by a type with a method named \code annot that returns
+/// \brief Satisfied by a type with a method named `annot` that returns
 ///        a non-void type.
 ///
 template <typename T>
@@ -33,8 +33,8 @@ concept has_annot = requires(T t) {
 /// \brief Satisfied by an eval_node whose dereferenced type satisfies the
 ///        has_annot method.
 /// \example
-///          * \code static_assert(!meta::can_evaluate<EvalNode<EvalExpr>>);
-///          * \code static_assert(meta::can_evaluate<EvalNode<EvalExprTA>>);
+///          * `static_assert(!meta::can_evaluate<EvalNode<EvalExpr>>)`
+///          * `static_assert(meta::can_evaluate<EvalNode<EvalExprTA>>)`
 ///
 template <typename T>
 concept can_evaluate = eval_node<T> && requires(T n) {
