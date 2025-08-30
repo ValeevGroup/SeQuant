@@ -392,7 +392,7 @@ ExprPtr three_body_substitution(ExprPtr& input, int rank, bool fast) {
                 rank);  // decompose that term and replace the existing term.
             factor = fac_pair.first;
             initial_pairing = fac_pair.second;
-            if (get_default_context().spbasis() == SPBasis::spinfree) {
+            if (get_default_context().spbasis() == SPBasis::Spinfree) {
               factor = antisymm::spin_sum(initial_pairing.second,
                                           initial_pairing.first, factor);
               non_canon_simplify(factor);
@@ -414,7 +414,7 @@ ExprPtr three_body_substitution(ExprPtr& input, int rank, bool fast) {
         initial_pairing =
             fac_pair
                 .second;  // decompose that term and replace the existing term.
-        if (get_default_context().spbasis() == SPBasis::spinfree) {
+        if (get_default_context().spbasis() == SPBasis::Spinfree) {
           factor = antisymm::spin_sum(initial_pairing.second,
                                       initial_pairing.first, factor);
           non_canon_simplify(factor);
@@ -426,7 +426,7 @@ ExprPtr three_body_substitution(ExprPtr& input, int rank, bool fast) {
         input, rank);  // decompose that term and replace the existing term.
     input = fac_pair.first;
     initial_pairing = fac_pair.second;
-    if (get_default_context().spbasis() == SPBasis::spinfree) {
+    if (get_default_context().spbasis() == SPBasis::Spinfree) {
       // std::wcout << to_latex_align(input,20) << std::endl;
       input = antisymm::spin_sum(initial_pairing.second, initial_pairing.first,
                                  input);

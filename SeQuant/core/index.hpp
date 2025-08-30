@@ -790,15 +790,23 @@ class Index : public Taggable {
   /// testing)
   static void reset_tmp_index() noexcept;
 
+  // clang-format off
   /// @brief index replacement
   /// replaces this object with its image in the Index map.
   /// If this object was not found in the map, tries replacing its subindices.
   /// @param index_map maps Index to Index
   /// @return false if no replacements were made
-  /// @pre  \code this->tag().has_value() == false || (this->tag().has_value()
-  /// == true && this->tag().value<int>() == 0) \endcode
-  /// @post if return value is true: \code this->tag().has_value() == true &&
-  /// this->tag().value<int>() == 0 \endcode
+  /// @pre
+  /// \code
+  /// this->tag().has_value() == false ||
+  /// (this->tag().has_value() == true && this->tag().value<int>() == 0)
+  /// \endcode
+  /// @post if return value is true:
+  /// \code
+  /// this->tag().has_value() == true &&
+  /// this->tag().value<int>() == 0
+  /// \endcode
+  // clang-format off
   template <template <typename, typename, typename... Args> class Map,
             typename... Args>
   bool transform(const Map<Index, Index, Args...> &index_map) noexcept {

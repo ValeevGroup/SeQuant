@@ -18,7 +18,7 @@ std::size_t VertexPainterImpl::to_hash_value(
                  hash::value(tensor._ket_rank()),
                  hash::value(tensor._aux_rank()),
                  hash::value(tensor._symmetry()),
-                 hash::value(tensor._particle_symmetry()),
+                 hash::value(tensor._column_symmetry()),
                  hash::value(tensor._braket_symmetry())};
 
   return to_hash_value(hashes);
@@ -43,7 +43,7 @@ VertexPainterImpl::Color VertexPainterImpl::operator()(const AuxGroup &group) {
 }
 
 VertexPainterImpl::Color VertexPainterImpl::operator()(
-    const ParticleGroup &group) {
+    const ColumnGroup &group) {
   Color color;
   if (group.size == 1) {  // legacy coloring works for groups of size 1
     color = to_color(group.id);
@@ -166,9 +166,9 @@ bool VertexPainterImpl::may_have_same_color(const VertexData &data,
 }
 
 bool VertexPainterImpl::may_have_same_color(const VertexData &data,
-                                            const ParticleGroup &group) {
-  return std::holds_alternative<ParticleGroup>(data) &&
-         std::get<ParticleGroup>(data).id == group.id;
+                                            const ColumnGroup &group) {
+  return std::holds_alternative<ColumnGroup>(data) &&
+         std::get<ColumnGroup>(data).id == group.id;
 }
 
 bool VertexPainterImpl::may_have_same_color(const VertexData &data,

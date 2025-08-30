@@ -918,7 +918,7 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
                         tn_tensors.at(tensor_ord);
 
                     // ... (anti)symmetric ...
-                    if (tensor_ptr->_symmetry() != Symmetry::nonsymm) {
+                    if (tensor_ptr->_symmetry() != Symmetry::Nonsymm) {
                       const auto tensor1_slot_type =
                           edge1.vertex(i1).getOrigin();
                       const auto tensor2_slot_type =

@@ -82,7 +82,7 @@ int main() {
   sequant::detail::OpIdRegistrar op_id_registrar;
   sequant::set_default_context(
       {.index_space_registry_shared_ptr = sequant::mbpt::make_min_sr_spaces(),
-       .spbasis = SPBasis::spinfree});
+       .spbasis = SPBasis::Spinfree});
 
   TensorCanonicalizer::register_instance(
       std::make_shared<DefaultTensorCanonicalizer>());

@@ -560,7 +560,7 @@ namespace mbpt {
 /// and indices \f$ \{ b_i \} \f$ / \f$ \{ k_i \} \f$.
 /// @note The choice of computational basis can be controlled by the default Context.
 ///       See `SeQuant/core/context.hpp` and `SeQuant/mbpt/context.hpp`
-/// @warning Tensor \f$ T \f$ will be antisymmetrized if `get_default_context().spbasis() == SPBasis::spinor`, else it will be particle-symmetric; the latter is only valid if # of bra and ket indices coincide.
+/// @warning Tensor \f$ T \f$ will be antisymmetrized if `get_default_context().spbasis() == SPBasis::Spinor`, else it will be particle-symmetric; the latter is only valid if # of bra and ket indices coincide.
 /// @internal bless the maker and his water
 // clang-format on
 template <Statistics S>
@@ -634,7 +634,7 @@ class OpMaker {
                       TensorGenerator&& tensor_generator,
                       UseDepIdx dep = UseDepIdx::None) {
     const bool symm = get_default_context().spbasis() ==
-                      SPBasis::spinor;  // antisymmetrize if spin-orbital basis
+                      SPBasis::Spinor;  // antisymmetrize if spin-orbital basis
     const auto dep_bra = dep == UseDepIdx::Bra;
     const auto dep_ket = dep == UseDepIdx::Ket;
 
@@ -679,9 +679,9 @@ class OpMaker {
     const auto mult =
         symm ? factorial(size(creators)) * factorial(size(annihilators))
              : factorial(size(creators));
-    const auto opsymm = symm ? (S == Statistics::FermiDirac ? Symmetry::antisymm
-                                                            : Symmetry::symm)
-                             : Symmetry::nonsymm;
+    const auto opsymm = symm ? (S == Statistics::FermiDirac ? Symmetry::Antisymm
+                                                            : Symmetry::Symm)
+                             : Symmetry::Nonsymm;
     return ex<Constant>(rational{1, mult}) *
            tensor_generator(creidxs, annidxs, opsymm) *
            ex<NormalOperator<S>>(cre(creidxs), ann(annidxs),

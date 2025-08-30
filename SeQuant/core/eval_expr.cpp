@@ -71,18 +71,18 @@ ExprPtr make_tensor(Args&&... arg_list) {
 
 template <typename... Args>
 ExprPtr make_tensor_wo_symmetries(Args&&... args) {
-  return make_tensor(std::forward<Args>(args)..., Symmetry::nonsymm,
-                     BraKetSymmetry::nonsymm, ParticleSymmetry::nonsymm);
+  return make_tensor(std::forward<Args>(args)..., Symmetry::Nonsymm,
+                     BraKetSymmetry::Nonsymm, ColumnSymmetry::Nonsymm);
 }
 
 ExprPtr make_tensor(Tensor const& t, bool with_symm) {
   if (with_symm) {
-    return make_tensor(bra(t.bra()),            //
-                       ket(t.ket()),            //
-                       aux(t.aux()),            //
-                       t.symmetry(),            //
-                       t.braket_symmetry(),     //
-                       t.particle_symmetry());  //
+    return make_tensor(bra(t.bra()),          //
+                       ket(t.ket()),          //
+                       aux(t.aux()),          //
+                       t.symmetry(),          //
+                       t.braket_symmetry(),   //
+                       t.column_symmetry());  //
   } else {
     return make_tensor_wo_symmetries(bra(t.bra()),  //
                                      ket(t.ket()),  //

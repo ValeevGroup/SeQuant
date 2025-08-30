@@ -532,7 +532,7 @@ SECTION("SRSO-PNO") {
 
 SECTION("SRSF") {
   auto ctx = get_default_context();
-  ctx.set(SPBasis::spinfree);
+  ctx.set(SPBasis::Spinfree);
   auto ctx_resetter = set_scoped_default_context(ctx);
 
   // H2 -> R2
@@ -632,7 +632,7 @@ SECTION("MRSF") {
   // now compute using (closed) Fermi vacuum + spinfree basis
   auto ctx = get_default_context();
   ctx.set(mbpt::make_mr_spaces());
-  ctx.set(SPBasis::spinfree);
+  ctx.set(SPBasis::Spinfree);
   auto ctx_resetter = set_scoped_default_context(ctx);
 
   // H2**T2 -> 0

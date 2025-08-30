@@ -175,10 +175,10 @@ std::string toplevel_diff(const Tensor &lhs, const Tensor &rhs) {
     return "Symmetry differs: " + to_string(to_wstring(lhs.symmetry())) +
            " vs. " + to_string(to_wstring(rhs.symmetry()));
   }
-  if (lhs.particle_symmetry() != rhs.particle_symmetry()) {
+  if (lhs.column_symmetry() != rhs.column_symmetry()) {
     return "Particle-Symmetry differs: " +
-           to_string(to_wstring(lhs.particle_symmetry())) + " vs. " +
-           to_string(to_wstring(rhs.particle_symmetry()));
+           to_string(to_wstring(lhs.column_symmetry())) + " vs. " +
+           to_string(to_wstring(rhs.column_symmetry()));
   }
   if (lhs.braket_symmetry() != rhs.braket_symmetry()) {
     return "BraKet-Symmetry differs: " +

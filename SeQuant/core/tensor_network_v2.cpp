@@ -77,7 +77,7 @@ bool TensorNetworkV2::Vertex::operator<(const Vertex &rhs) const {
   }
 
   // We only take the index slot into account for non-symmetric tensors
-  if (terminal_symm == Symmetry::nonsymm) {
+  if (terminal_symm == Symmetry::Nonsymm) {
     return index_slot < rhs.index_slot;
   } else {
     return false;
@@ -87,9 +87,9 @@ bool TensorNetworkV2::Vertex::operator<(const Vertex &rhs) const {
 bool TensorNetworkV2::Vertex::operator==(const Vertex &rhs) const {
   // Slot position is only taken into account for non_symmetric tensors
   const std::size_t lhs_slot =
-      (terminal_symm == Symmetry::nonsymm) * index_slot;
+      (terminal_symm == Symmetry::Nonsymm) * index_slot;
   const std::size_t rhs_slot =
-      (rhs.terminal_symm == Symmetry::nonsymm) * rhs.index_slot;
+      (rhs.terminal_symm == Symmetry::Nonsymm) * rhs.index_slot;
 
   // sanity check that bra and ket have same symmetry
   assert(origin == Origin::Aux || rhs.origin == Origin::Aux ||
@@ -206,7 +206,7 @@ void TensorNetworkV2::canonicalize_graph(const NamedIndexSet &named_indices) {
       case VertexType::TensorBraKet: {
         assert(tensor_idx > 0);
         const std::size_t base_tensor_idx = tensor_idx - 1;
-        assert(symmetry(*tensors_.at(base_tensor_idx)) == Symmetry::nonsymm);
+        assert(symmetry(*tensors_.at(base_tensor_idx)) == Symmetry::Nonsymm);
         tensor_idx_to_particle_order[base_tensor_idx].push_back(
             canonize_perm[vertex]);
         break;
@@ -289,7 +289,7 @@ void TensorNetworkV2::canonicalize_graph(const NamedIndexSet &named_indices) {
 
     auto it = tensor_idx_to_particle_order.find(i);
     if (it == tensor_idx_to_particle_order.end()) {
-      assert(num_particles == 0 || symmetry(*tensors_[i]) != Symmetry::nonsymm);
+      assert(num_particles == 0 || symmetry(*tensors_[i]) != Symmetry::Nonsymm);
       continue;
     }
 
@@ -654,7 +654,7 @@ TensorNetworkV2::canonicalize_slots(
   metadata.phase = 1;
   container::svector<SwapCountable<std::size_t>> vertices;
   for (const AbstractTensor &tensor : tensors_ | ranges::views::indirect) {
-    if (symmetry(tensor) != Symmetry::antisymm) {
+    if (symmetry(tensor) != Symmetry::Antisymm) {
       // Only antisymmetric tensors (or rather: their indices) can incur a phase
       // change due to index permutation
       continue;
@@ -760,34 +760,33 @@ TensorNetworkV2::Graph TensorNetworkV2::create_graph(
 
     // Create vertices to group indices
     const Symmetry tensor_sym = symmetry(tensor);
-    if (tensor_sym == Symmetry::nonsymm) {
+    if (tensor_sym == Symmetry::Nonsymm) {
       // Create separate vertices for every index
       // Additionally, we need particle vertices to group indices that belong to
       // the same particle (are in the same "column" in the usual tensor
       // notation)
-      const std::size_t num_particle_vertices =
+      const std::size_t num_col_vertices =
           std::min(bra_rank(tensor), ket_rank(tensor));
-      const bool is_part_symm =
-          particle_symmetry(tensor) == ParticleSymmetry::symm;
-      // TODO: How to handle BraKetSymmetry::conjugate?
+      const bool is_col_symm = column_symmetry(tensor) == ColumnSymmetry::Symm;
+      // TODO: How to handle BraKetSymmetry::Conjugate?
       const bool is_braket_symm =
-          braket_symmetry(tensor) == BraKetSymmetry::symm;
+          braket_symmetry(tensor) == BraKetSymmetry::Symm;
 
-      for (std::size_t i = 0; i < num_particle_vertices; ++i) {
+      for (std::size_t i = 0; i < num_col_vertices; ++i) {
         ++nvertex;
         if (options.make_labels)
-          graph.vertex_labels.emplace_back(L"p_" + std::to_wstring(i + 1));
+          graph.vertex_labels.emplace_back(L"c_" + std::to_wstring(i + 1));
         if (options.make_texlabels)
           graph.vertex_texlabels.emplace_back(std::nullopt);
         graph.vertex_types.push_back(VertexType::TensorBraKet);
         // Particles are indistinguishable -> always use same ID
-        graph.vertex_colors.push_back(colorizer(ParticleGroup{0}));
+        graph.vertex_colors.push_back(colorizer(ColumnGroup{0}));
         edges.push_back(std::make_pair(tensor_vertex, nvertex - 1));
       }
 
       for (std::size_t i = 0; i < bra_rank(tensor); ++i) {
-        const bool is_unpaired_idx = i >= num_particle_vertices;
-        const bool color_idx = is_unpaired_idx || !is_part_symm;
+        const bool is_unpaired_idx = i >= num_col_vertices;
+        const bool color_idx = is_unpaired_idx || !is_col_symm;
 
         ++nvertex;
         if (options.make_labels)
@@ -803,8 +802,8 @@ TensorNetworkV2::Graph TensorNetworkV2::create_graph(
       }
 
       for (std::size_t i = 0; i < ket_rank(tensor); ++i) {
-        const bool is_unpaired_idx = i >= num_particle_vertices;
-        const bool color_idx = is_unpaired_idx || !is_part_symm;
+        const bool is_unpaired_idx = i >= num_col_vertices;
+        const bool color_idx = is_unpaired_idx || !is_col_symm;
 
         ++nvertex;
         if (options.make_labels)
@@ -826,7 +825,7 @@ TensorNetworkV2::Graph TensorNetworkV2::create_graph(
       }
     } else {
       // Shared set of bra/ket vertices for all indices
-      std::wstring suffix = tensor_sym == Symmetry::symm ? L"_s" : L"_a";
+      std::wstring suffix = tensor_sym == Symmetry::Symm ? L"_s" : L"_a";
 
       ++nvertex;
       if (options.make_labels) graph.vertex_labels.push_back(L"bra" + suffix);
@@ -841,8 +840,8 @@ TensorNetworkV2::Graph TensorNetworkV2::create_graph(
       if (options.make_texlabels)
         graph.vertex_texlabels.emplace_back(std::nullopt);
       graph.vertex_types.push_back(VertexType::TensorKet);
-      // TODO: figure out how to handle BraKetSymmetry::conjugate
-      if (braket_symmetry(tensor) == BraKetSymmetry::symm) {
+      // TODO: figure out how to handle BraKetSymmetry::Conjugate
+      if (braket_symmetry(tensor) == BraKetSymmetry::Symm) {
         // Use BraGroup for kets as well as they should be indistinguishable
         graph.vertex_colors.push_back(colorizer(BraGroup{0}));
       } else {
@@ -949,7 +948,7 @@ TensorNetworkV2::Graph TensorNetworkV2::create_graph(
       // Store an edge connecting the index vertex to the corresponding tensor
       // vertex
       const bool tensor_is_nonsymm =
-          vertex.getTerminalSymmetry() == Symmetry::nonsymm;
+          vertex.getTerminalSymmetry() == Symmetry::Nonsymm;
       const AbstractTensor &tensor = *tensors_[vertex.getTerminalIndex()];
       std::size_t offset;
       if (tensor_is_nonsymm) {
@@ -1133,7 +1132,7 @@ void TensorNetworkV2::init_edges() {
       // permutational symmetry of auxiliary indices so we just assume there is
       // no such symmetry
       idx_insert(aux_indices[index_idx],
-                 Vertex(Origin::Aux, tensor_idx, index_idx, Symmetry::nonsymm));
+                 Vertex(Origin::Aux, tensor_idx, index_idx, Symmetry::Nonsymm));
     }
   }
 

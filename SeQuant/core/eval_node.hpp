@@ -174,18 +174,18 @@ struct FlopsWithSymm {
     // the rules of cost reduction are taken from
     //   doi:10.1016/j.procs.2012.04.044
     // ------
-    if (tsymm == Symmetry::symm || tsymm == Symmetry::antisymm) {
+    if (tsymm == Symmetry::Symm || tsymm == Symmetry::Antisymm) {
       auto const op = n->op_type();
       auto const tbrank = t.bra_rank();
       auto const tkrank = t.ket_rank();
       if (op == EvalOp::Sum)
-        cost = tsymm == Symmetry::symm
+        cost = tsymm == Symmetry::Symm
                    ? cost / (factorial(tbrank) * factorial(tkrank))
                    : cost / factorial(tbrank);
       else if (op == EvalOp::Product) {
         auto const lsymm = n.left()->as_tensor().symmetry();
         auto const rsymm = n.right()->as_tensor().symmetry();
-        cost = (lsymm == rsymm && lsymm == Symmetry::nonsymm)
+        cost = (lsymm == rsymm && lsymm == Symmetry::Nonsymm)
                    ? cost / factorial(tbrank)
                    : cost / (factorial(tbrank) * factorial(tkrank));
       } else

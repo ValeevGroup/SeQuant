@@ -62,7 +62,7 @@ class Op {
   void adjoint() { action_ = sequant::adjoint(action_); }
 
   static std::wstring core_label() {
-    return get_default_context(S).spbasis() == SPBasis::spinor
+    return get_default_context(S).spbasis() == SPBasis::Spinor
                ? (S == Statistics::FermiDirac ? L"a" : L"b")
                : L"E";
   }
@@ -72,7 +72,7 @@ class Op {
     std::wstring result;
     result = L"{";
     result += core_label();
-    result += (action() == Action::create ? L"^{\\dagger}_" : L"_");
+    result += (action() == Action::Create ? L"^{\\dagger}_" : L"_");
     result += index().to_latex();
     result += L"}";
     return result;
@@ -102,7 +102,7 @@ class Op {
 
  private:
   Index index_;
-  Action action_ = Action::create;
+  Action action_ = Action::Create;
 };
 
 /// @brief The ordering operator
@@ -152,37 +152,37 @@ bool operator!=(const Op<S> &op1, const Op<S> &op2) {
 using BOp = Op<Statistics::BoseEinstein>;
 using FOp = Op<Statistics::FermiDirac>;
 
-inline BOp bcre(Index i) { return BOp(i, Action::create); }
+inline BOp bcre(Index i) { return BOp(i, Action::Create); }
 template <typename I>
 inline BOp bcre(Index i, std::initializer_list<I> pi) {
-  return BOp(Index(i, pi), Action::create);
+  return BOp(Index(i, pi), Action::Create);
 }
-inline BOp bann(Index i) { return BOp(i, Action::annihilate); }
+inline BOp bann(Index i) { return BOp(i, Action::Annihilate); }
 template <typename I>
 inline BOp bann(Index i, std::initializer_list<I> pi) {
-  return BOp(Index(i, pi), Action::annihilate);
+  return BOp(Index(i, pi), Action::Annihilate);
 }
-inline FOp fcre(Index i) { return FOp(i, Action::create); }
+inline FOp fcre(Index i) { return FOp(i, Action::Create); }
 template <typename I>
 inline FOp fcre(Index i, std::initializer_list<I> pi) {
-  return FOp(Index(i, pi), Action::create);
+  return FOp(Index(i, pi), Action::Create);
 }
-inline FOp fann(Index i) { return FOp(i, Action::annihilate); }
+inline FOp fann(Index i) { return FOp(i, Action::Annihilate); }
 template <typename I>
 inline FOp fann(Index i, std::initializer_list<I> pi) {
-  return FOp(Index(i, pi), Action::annihilate);
+  return FOp(Index(i, pi), Action::Annihilate);
 }
 
 /// @return true if this is a particle creator, false otherwise
 template <Statistics S>
 bool is_creator(const Op<S> &op) {
-  return op.action() == Action::create;
+  return op.action() == Action::Create;
 };
 
 /// @return true if this is a particle annihilator, false otherwise
 template <Statistics S>
 bool is_annihilator(const Op<S> &op) {
-  return op.action() == Action::annihilate;
+  return op.action() == Action::Annihilate;
 };
 
 /// @return true if this is a pure quasiparticle creator with respect to the
@@ -194,12 +194,12 @@ bool is_pure_qpcreator(const Op<S> &op,
                            get_default_context(S).index_space_registry()) {
   switch (vacuum) {
     case Vacuum::Physical:
-      return op.action() == Action::create;
+      return op.action() == Action::Create;
     case Vacuum::SingleProduct: {
       return (isr->is_pure_occupied(op.index().space()) &&
-              op.action() == Action::annihilate) ||
+              op.action() == Action::Annihilate) ||
              (isr->is_pure_unoccupied(op.index().space()) &&
-              op.action() == Action::create);
+              op.action() == Action::Create);
     }
     case Vacuum::MultiProduct:
       throw std::logic_error(
@@ -218,12 +218,12 @@ bool is_qpcreator(const Op<S> &op,
                       get_default_context(S).index_space_registry()) {
   switch (vacuum) {
     case Vacuum::Physical:
-      return op.action() == Action::create;
+      return op.action() == Action::Create;
     case Vacuum::SingleProduct: {
       return (isr->contains_occupied(op.index().space()) &&
-              op.action() == Action::annihilate) ||
+              op.action() == Action::Annihilate) ||
              (isr->contains_unoccupied(op.index().space()) &&
-              op.action() == Action::create);
+              op.action() == Action::Create);
       case Vacuum::MultiProduct:
         throw std::logic_error(
             "is_qpcreator: cannot handle MultiProduct vacuum");
@@ -240,10 +240,10 @@ IndexSpace qpcreator_space(
         get_default_context(S).index_space_registry()) {
   switch (vacuum) {
     case Vacuum::Physical:
-      return op.action() == Action::create ? op.index().space()
+      return op.action() == Action::Create ? op.index().space()
                                            : IndexSpace::null;
     case Vacuum::SingleProduct:
-      return op.action() == Action::annihilate
+      return op.action() == Action::Annihilate
                  ? isr->intersection(
                        op.index().space(),
                        isr->vacuum_occupied_space(op.index().space().qns()))
@@ -267,12 +267,12 @@ bool is_pure_qpannihilator(
         get_default_context(S).index_space_registry()) {
   switch (vacuum) {
     case Vacuum::Physical:
-      return op.action() == Action::annihilate;
+      return op.action() == Action::Annihilate;
     case Vacuum::SingleProduct: {
       return (isr->is_pure_unoccupied(op.index().space()) &&
-              op.action() == Action::annihilate) ||
+              op.action() == Action::Annihilate) ||
              (isr->is_pure_occupied(op.index().space()) &&
-              op.action() == Action::create);
+              op.action() == Action::Create);
     }
     case Vacuum::MultiProduct:
       throw std::logic_error(
@@ -291,12 +291,12 @@ bool is_qpannihilator(const Op<S> &op,
                           get_default_context(S).index_space_registry()) {
   switch (vacuum) {
     case Vacuum::Physical:
-      return op.action() == Action::annihilate;
+      return op.action() == Action::Annihilate;
     case Vacuum::SingleProduct: {
       return (isr->contains_occupied(op.index().space()) &&
-              op.action() == Action::create) ||
+              op.action() == Action::Create) ||
              (isr->contains_unoccupied(op.index().space()) &&
-              op.action() == Action::annihilate);
+              op.action() == Action::Annihilate);
     }
     case Vacuum::MultiProduct:
       throw std::logic_error(
@@ -313,10 +313,10 @@ IndexSpace qpannihilator_space(
         get_default_context(S).index_space_registry()) {
   switch (vacuum) {
     case Vacuum::Physical:
-      return op.action() == Action::annihilate ? op.index().space()
+      return op.action() == Action::Annihilate ? op.index().space()
                                                : IndexSpace::null;
     case Vacuum::SingleProduct:
-      return op.action() == Action::create
+      return op.action() == Action::Create
                  ? isr->intersection(
                        op.index().space(),
                        isr->vacuum_occupied_space(op.index().space().qns()))
@@ -534,9 +534,9 @@ class NormalOperator : public Operator<S>,
                               std::array<meta::castable_to_any, 0>>));
       if constexpr (meta::is_statically_castable_v<
                         meta::range_value_t<IndexOrOpSequence1>, Index>)
-        this->emplace_back(c, Action::create);
+        this->emplace_back(c, Action::Create);
       else {
-        assert(c.action() == Action::create);
+        assert(c.action() == Action::Create);
         this->emplace_back(c);
       }
     }
@@ -545,9 +545,9 @@ class NormalOperator : public Operator<S>,
                               std::array<meta::castable_to_any, 0>>));
       if constexpr (meta::is_statically_castable_v<
                         meta::range_value_t<IndexOrOpSequence2>, Index>)
-        this->emplace_back(a, Action::annihilate);
+        this->emplace_back(a, Action::Annihilate);
       else {
-        assert(a.action() == Action::annihilate);
+        assert(a.action() == Action::Annihilate);
         this->emplace_back(a);
       }
     }
@@ -686,7 +686,7 @@ class NormalOperator : public Operator<S>,
 
   /// overload base_type::erase
   iterator erase(const_iterator it) {
-    if (it->action() == Action::create) --ncreators_;
+    if (it->action() == Action::Create) --ncreators_;
     if (hug_) hug_->erase(it - begin(), *it);
     return Operator<S>::erase(it);
   }
@@ -694,7 +694,7 @@ class NormalOperator : public Operator<S>,
   /// overload base_type::insert
   template <typename T>
   iterator insert(const_iterator it, T &&value) {
-    if (value.action() == Action::create) ++ncreators_;
+    if (value.action() == Action::Create) ++ncreators_;
     auto result = Operator<S>::insert(it, std::forward<T>(value));
     if (hug_) hug_->insert(result - begin(), *result);
     return result;
@@ -871,16 +871,16 @@ class NormalOperator : public Operator<S>,
   std::size_t _aux_rank() const override final { return 0; }
   Symmetry _symmetry() const override final {
     return (S == Statistics::FermiDirac
-                ? (get_default_context(S).spbasis() == SPBasis::spinor
-                       ? Symmetry::antisymm
-                       : Symmetry::nonsymm)
-                : (Symmetry::symm));
+                ? (get_default_context(S).spbasis() == SPBasis::Spinor
+                       ? Symmetry::Antisymm
+                       : Symmetry::Nonsymm)
+                : (Symmetry::Symm));
   }
   BraKetSymmetry _braket_symmetry() const override final {
-    return BraKetSymmetry::nonsymm;
+    return BraKetSymmetry::Nonsymm;
   }
-  ParticleSymmetry _particle_symmetry() const override final {
-    return ParticleSymmetry::symm;
+  ColumnSymmetry _column_symmetry() const override final {
+    return ColumnSymmetry::Symm;
   }
   std::size_t _color() const override final {
     return S == Statistics::FermiDirac ? 1 : 2;

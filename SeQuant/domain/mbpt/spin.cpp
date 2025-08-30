@@ -5,8 +5,11 @@
 #include <SeQuant/core/biorthogonalization.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/math.hpp>
+#include <SeQuant/core/optimize.hpp>
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/space.hpp>
+#include <SeQuant/core/tensor_canonicalizer.hpp>
+#include <SeQuant/core/tensor_network_v3.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/permutation.hpp>
 #include <SeQuant/core/utility/swap.hpp>
@@ -90,7 +93,7 @@ void reset_idx_tags(const ExprPtr& expr) {
 template <typename Container, typename TraceFunction, typename... Args>
 [[nodiscard]] Container wrap_trace(const ResultExpr& expr,
                                    TraceFunction&& tracer, Args&&... args) {
-  bool searchForNonEquivalentResults = expr.symmetry() != Symmetry::nonsymm;
+  bool searchForNonEquivalentResults = expr.symmetry() != Symmetry::Nonsymm;
   searchForNonEquivalentResults &=
       expr.bra().size() > 1 || expr.ket().size() > 1;
   const bool brasSameSpace = std::all_of(
@@ -108,13 +111,13 @@ template <typename Container, typename TraceFunction, typename... Args>
                traced.index_particle_grouping<container::svector<Index>>(),
                std::forward<Args>(args)...);
 
-    traced.set_symmetry(Symmetry::nonsymm);
+    traced.set_symmetry(Symmetry::Nonsymm);
 
     return {std::move(traced)};
   }
 
-  assert(expr.symmetry() == Symmetry::antisymm ||
-         expr.symmetry() == Symmetry::symm);
+  assert(expr.symmetry() == Symmetry::Antisymm ||
+         expr.symmetry() == Symmetry::Symm);
 
   // TODO: Do we have to track the sign?
   const bool permuteBra = expr.bra().size() >= expr.ket().size();
@@ -184,12 +187,12 @@ template <typename Container, typename TraceFunction, typename... Args>
       if (permuteBra) {
         return ResultExpr(bra(permIndices), ket(expr.ket()), aux(expr.aux()),
                           expr.symmetry(), expr.braket_symmetry(),
-                          expr.particle_symmetry(), expr.label(),
+                          expr.column_symmetry(), expr.label(),
                           std::move(expression));
       } else {
         return ResultExpr(bra(expr.bra()), ket(permIndices), aux(expr.aux()),
                           expr.symmetry(), expr.braket_symmetry(),
-                          expr.particle_symmetry(), expr.label(),
+                          expr.column_symmetry(), expr.label(),
                           std::move(expression));
       }
     }();
@@ -199,7 +202,7 @@ template <typename Container, typename TraceFunction, typename... Args>
                result.index_particle_grouping<container::svector<Index>>(),
                std::forward<Args>(args)...);
 
-    result.set_symmetry(Symmetry::nonsymm);
+    result.set_symmetry(Symmetry::Nonsymm);
 
     resultSet.push_back(std::move(result));
   } while (std::next_permutation(permIndices.begin(), permIndices.end()));
@@ -228,7 +231,7 @@ ExprPtr swap_bra_ket(const ExprPtr& expr) {
   auto tensor_swap = [](const Tensor& tensor) {
     auto result = Tensor(tensor.label(), bra(tensor.ket().value()),
                          ket(tensor.bra().value()), tensor.symmetry(),
-                         tensor.braket_symmetry(), tensor.particle_symmetry());
+                         tensor.braket_symmetry(), tensor.column_symmetry());
     return ex<Tensor>(result);
   };
 
@@ -412,8 +415,8 @@ ExprPtr expand_antisymm(const Tensor& tensor, bool skip_spinsymm) {
   // Return non-symmetric tensor if rank is 1
   if (tensor.bra_rank() == 1) {
     Tensor new_tensor(tensor.label(), tensor.bra(), tensor.ket(), tensor.aux(),
-                      Symmetry::nonsymm, tensor.braket_symmetry(),
-                      tensor.particle_symmetry());
+                      Symmetry::Nonsymm, tensor.braket_symmetry(),
+                      tensor.column_symmetry());
     return std::make_shared<Tensor>(new_tensor);
   }
 
@@ -436,7 +439,7 @@ ExprPtr expand_antisymm(const Tensor& tensor, bool skip_spinsymm) {
 
   // Generate a sum of asymmetric tensors if the input tensor is antisymmetric
   // and greater than one body otherwise, return the tensor
-  if (tensor.symmetry() == Symmetry::antisymm) {
+  if (tensor.symmetry() == Symmetry::Antisymm) {
     const auto prefactor = get_phase(tensor);
     container::set<Index> bra_list(tensor.bra().begin(), tensor.bra().end());
     container::set<Index> ket_list(tensor.ket().begin(), tensor.ket().end());
@@ -444,7 +447,7 @@ ExprPtr expand_antisymm(const Tensor& tensor, bool skip_spinsymm) {
     do {
       // N.B. must copy
       auto new_tensor = Tensor(tensor.label(), bra(bra_list), ket(ket_list),
-                               tensor.aux(), Symmetry::nonsymm);
+                               tensor.aux(), Symmetry::Nonsymm);
 
       if (spin_symm_tensor(new_tensor)) {
         auto new_tensor_product = std::make_shared<Product>();
@@ -656,7 +659,7 @@ ExprPtr symmetrize_expr(const Product& product) {
   auto S = Tensor{};
   if (A_is_nconserving) {
     S = Tensor(L"S", A_tensor.bra(), A_tensor.ket(), A_tensor.aux(),
-               Symmetry::nonsymm);
+               Symmetry::Nonsymm);
   } else {  // A is N-nonconserving
     auto n = std::min(A_tensor.bra_rank(), A_tensor.ket_rank());
     container::svector<Index> bra_list(A_tensor.bra().begin(),
@@ -664,7 +667,7 @@ ExprPtr symmetrize_expr(const Product& product) {
     container::svector<Index> ket_list(A_tensor.ket().begin(),
                                        A_tensor.ket().begin() + n);
     S = Tensor(L"S", bra(std::move(bra_list)), ket(std::move(ket_list)),
-               A_tensor.aux(), Symmetry::nonsymm);
+               A_tensor.aux(), Symmetry::Nonsymm);
   }
 
   // Generate replacement maps from a list of Index type (could be a bra or a
@@ -932,23 +935,82 @@ ExprPtr S_maps(const ExprPtr& expr) {
   return result;
 }
 
+ExprPtr WK_biorthogonalization_filter(
+    ExprPtr expr,
+    const container::svector<container::svector<Index>>& ext_idxs) {
+  if (!expr->is<Sum>()) return expr;
+  if (ext_idxs.size() <= 2) return expr;  // always skip R1 and R2
+
+  // hash filtering logic for R > 2
+  container::map<std::size_t, container::vector<ExprPtr>> largest_coeff_terms;
+
+  for (const auto& term : *expr) {
+    if (!term->is<Product>()) continue;
+
+    auto product = term->as<Product>();
+    auto scalar = product.scalar();
+
+    sequant::TensorNetworkV3 tn(product);
+    auto hash =
+        tn.canonicalize_slots(TensorCanonicalizer::cardinal_tensor_labels())
+            .hash_value();
+
+    auto it = largest_coeff_terms.find(hash);
+    if (it == largest_coeff_terms.end()) {
+      largest_coeff_terms[hash] = {term};
+    } else {
+      if (!it->second.empty()) {
+        auto existing_scalar = it->second[0]->as<Product>().scalar();
+        auto existing_abs = abs(existing_scalar);
+        auto current_abs = abs(scalar);
+
+        if (current_abs > existing_abs) {
+          it->second.clear();
+          it->second.push_back(term);
+        } else if (current_abs == existing_abs) {
+          it->second.push_back(term);
+        }
+      }
+    }
+  }
+
+  Sum filtered;
+  for (const auto& [_, terms] : largest_coeff_terms) {
+    for (const auto& t : terms) {
+      filtered.append(t);
+    }
+  }
+  auto result = ex<Sum>(filtered);
+
+  return result;
+}
+
 ExprPtr closed_shell_spintrace(
     const ExprPtr& expression,
-    const container::svector<container::svector<Index>>& ext_index_groups) {
+    const container::svector<container::svector<Index>>& ext_index_groups,
+    bool full_expansion) {
   // Symmetrize and expression
   // Partially expand the antisymmetrizer and write it in terms of S operator.
   // See symmetrize_expr(expr) function for implementation details. We want an
   // expression with non-symmetric tensors, hence we are partially expanding the
   // antisymmetrizer (A) and fully expanding the anti-symmetric tensors to
   // non-symmetric.
-  auto symm_and_expand = [](const ExprPtr& expr) {
+  // full_expansion: it fully expands the antisymmetrizer directly (can be used
+  // for compact-set epns, however it is not an optimized way).
+  auto partially_or_fully_expand = [&full_expansion](const ExprPtr& expr) {
     auto temp = expr;
-    if (has_tensor(temp, L"A")) temp = symmetrize_expr(temp);
+    if (has_tensor(temp, L"A")) {
+      if (full_expansion) {
+        temp = expand_A_op(temp);
+      } else {
+        temp = symmetrize_expr(temp);
+      }
+    }
     temp = expand_antisymm(temp);
     rapid_simplify(temp);
     return temp;
   };
-  auto expr = symm_and_expand(expression);
+  auto expr = partially_or_fully_expand(expression);
 
   // Index tags are cleaned prior to calling the fast canonicalizer
   detail::reset_idx_tags(expr);  // This call is REQUIRED
@@ -1085,12 +1147,74 @@ ExprPtr closed_shell_CC_spintrace(ExprPtr const& expr) {
   return st_expr;
 }
 
-container::svector<ResultExpr> closed_shell_spintrace(const ResultExpr& expr) {
-  using TraceFunction = ExprPtr (*)(
-      const ExprPtr&, const container::svector<container::svector<Index>>&);
+container::svector<ResultExpr> closed_shell_spintrace(
+    const ResultExpr& expr, bool is_direct_full_expansion) {
+  using TraceFunction =
+      ExprPtr (*)(const ExprPtr&,
+                  const container::svector<container::svector<Index>>&, bool);
 
   return detail::wrap_trace<container::svector<ResultExpr>>(
-      expr, static_cast<TraceFunction>(&closed_shell_spintrace));
+      expr, static_cast<TraceFunction>(&closed_shell_spintrace),
+      is_direct_full_expansion);
+}
+
+ExprPtr closed_shell_CC_spintrace_compact_set(ExprPtr const& expr) {
+  assert(expr->is<Sum>());
+  using ranges::views::transform;
+
+  auto const ext_idxs = external_indices(expr);
+  auto st_expr = closed_shell_spintrace(expr, ext_idxs);
+  canonicalize(st_expr);
+
+  if (!ext_idxs.empty()) {
+    // Remove S operator to apply biorthogonal transformation
+    for (auto& term : *st_expr) {
+      if (term->is<Product>()) term = remove_tensor(term->as<Product>(), L"S");
+    }
+    st_expr = biorthogonal_transform(st_expr, ext_idxs);
+
+    // adding S in order to expand it and have all the raw equations
+    auto bixs = ext_idxs | transform([](auto&& vec) { return vec[1]; });
+    auto kixs = ext_idxs | transform([](auto&& vec) { return vec[0]; });
+    if (bixs.size() > 1) {
+      st_expr =
+          ex<Tensor>(Tensor{L"S", bra(std::move(bixs)), ket(std::move(kixs))}) *
+          st_expr;
+    }
+    simplify(st_expr);
+    // expanding S after spintracing and biorthogonalization, to avoid dealing
+    // with large number of terms
+    st_expr = S_maps(st_expr);
+    // canonicalizer must be called before hash-filter to combine terms
+    canonicalize(st_expr);
+
+    // apply hash filter method to get unique set of terms
+    st_expr = WK_biorthogonalization_filter(st_expr, ext_idxs);
+    // add S tensor again
+    st_expr =
+        ex<Tensor>(Tensor{L"S", bra(std::move(bixs)), ket(std::move(kixs))}) *
+        st_expr;
+
+    rational combined_factor;
+    if (ext_idxs.size() <= 2) {
+      combined_factor = rational(1, factorial(ext_idxs.size()));
+    } else {
+      auto fact_n = factorial(ext_idxs.size());
+      combined_factor =
+          rational(1, fact_n - 1);  // this is (1/fact_n) * (fact_n/(fact_n-1))
+    }
+    st_expr = ex<Constant>(combined_factor) * st_expr;
+  }
+
+  simplify(st_expr);
+  // std::wcout << "final eqns after symm: "
+  //            << sequant::to_latex_align(
+  //                   sequant::ex<sequant::Sum>(
+  //                       sequant::opt::reorder(st_expr->as<sequant::Sum>())),
+  //                   0, 4)
+  //            << std::endl;
+
+  return st_expr;
 }
 
 ExprPtr closed_shell_CC_spintrace_rigorous(ExprPtr const& expr) {
@@ -1166,8 +1290,8 @@ Tensor swap_spin(const Tensor& t) {
     k.at(i) = spin_flipped_idx(t.ket().at(i));
   }
 
-  return {t.label(),    bra(std::move(b)),   ket(std::move(k)),    t.aux(),
-          t.symmetry(), t.braket_symmetry(), t.particle_symmetry()};
+  return {t.label(),    bra(std::move(b)),   ket(std::move(k)),  t.aux(),
+          t.symmetry(), t.braket_symmetry(), t.column_symmetry()};
 }
 
 ExprPtr swap_spin(const ExprPtr& expr) {
@@ -1238,7 +1362,7 @@ std::vector<ExprPtr> open_shell_A_op(const Tensor& A) {
     ranges::for_each(spin_bra, [](const Index& i) { i.reset_tag(); });
     ranges::for_each(spin_ket, [](const Index& i) { i.reset_tag(); });
     result.at(i) = ex<Tensor>(
-        Tensor(L"A", spin_bra, spin_ket, A.aux(), Symmetry::antisymm));
+        Tensor(L"A", spin_bra, spin_ket, A.aux(), Symmetry::Antisymm));
     // std::wcout << to_latex(result.at(i)) << " ";
   }
   // std::wcout << "\n" << std::endl;
@@ -1271,9 +1395,9 @@ std::vector<ExprPtr> open_shell_P_op_vector(const Tensor& A) {
       for (auto& k : beta_spin) {
         if (!alpha_spin.empty() && !beta_spin.empty()) {
           P_bra_list.emplace_back(Tensor(
-              L"P", bra{A.bra().at(j), A.bra().at(k)}, ket{}, Symmetry::symm));
+              L"P", bra{A.bra().at(j), A.bra().at(k)}, ket{}, Symmetry::Symm));
           P_ket_list.emplace_back(Tensor(
-              L"P", bra{}, ket{A.ket().at(j), A.ket().at(k)}, Symmetry::symm));
+              L"P", bra{}, ket{A.ket().at(j), A.ket().at(k)}, Symmetry::Symm));
         }
       }
     }
@@ -1292,12 +1416,12 @@ std::vector<ExprPtr> open_shell_P_op_vector(const Tensor& A) {
                   Tensor(L"P",
                          bra{A.bra().at(i1), A.bra().at(i3), A.bra().at(i2),
                              A.bra().at(i4)},
-                         ket{}, Symmetry::symm));
+                         ket{}, Symmetry::Symm));
               P_ket_list.emplace_back(
                   Tensor(L"P", bra{},
                          ket{A.ket().at(i1), A.ket().at(i3), A.ket().at(i2),
                              A.ket().at(i4)},
-                         Symmetry::symm));
+                         Symmetry::Symm));
             }
           }
         }
@@ -1803,7 +1927,7 @@ ExprPtr factorize_S(const ExprPtr& expression,
     });
     assert(bra_list.size() == ket_list.size());
     S = Tensor(L"S", bra(std::move(bra_list)), ket(std::move(ket_list)),
-               Symmetry::nonsymm);
+               Symmetry::Nonsymm);
   }
 
   // For any order CC residual equation:

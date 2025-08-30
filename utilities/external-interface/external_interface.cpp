@@ -168,7 +168,7 @@ std::vector<ResultExpr> splitContributions(const ResultExpr &result) {
 
   Tensor resultTensor(result.label(), bra(result.bra()), ket(result.ket()),
                       aux(result.aux()), result.symmetry(),
-                      result.braket_symmetry(), result.particle_symmetry());
+                      result.braket_symmetry(), result.column_symmetry());
 
   std::vector<ResultExpr> contributions;
   contributions.reserve(result.expression()->size());
@@ -217,7 +217,7 @@ void generateITF(const json &blocks, std::string_view out_file,
       const std::string input(std::istreambuf_iterator<char>(in), {});
 
       sequant::ResultExpr result =
-          sequant::parse_result_expr(toUtf16(input), Symmetry::antisymm);
+          sequant::parse_result_expr(toUtf16(input), Symmetry::Antisymm);
 
       if (current_result.contains("name")) {
         result.set_label(toUtf16(current_result.at("name").get<std::string>()));
@@ -273,7 +273,7 @@ void generateITF(const json &blocks, std::string_view out_file,
             Tensor resultTensor(current.label(), bra(current.bra()),
                                 ket(current.ket()), aux(current.aux()),
                                 current.symmetry(), current.braket_symmetry(),
-                                current.particle_symmetry());
+                                current.column_symmetry());
             tensorsToSymmetrize.insert(resultTensor);
 
             current.set_label(current.label() + L"u");
