@@ -63,10 +63,10 @@ class compute_cceqvec {
     std::vector<ExprPtr> eqvec;
     switch (type) {
       case EqnType::t:
-        eqvec = CC{N}.t(4, P, PMIN);
+        eqvec = CC{N, CC::Ansatz::T, screen, use_topology}.t(4, P, PMIN);
         break;
       case EqnType::λ:
-        eqvec = CC{N}.λ(4);
+        eqvec = CC{N, CC::Ansatz::T, screen, use_topology}.λ(4);
         break;
     }
     tpool.stop(N);
@@ -300,5 +300,5 @@ int main(int argc, char* argv[]) {
 
   tpool.clear();
   // comment out to run all possible combinations
-  compute_all{NMAX, eqn_type}(print);
+  compute_all{NMAX, eqn_type}(print, /*screen*/ true, /*use_topology*/ true);
 }
