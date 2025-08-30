@@ -9,12 +9,14 @@
 
 ExprPtr vac_av(
     ExprPtr expr,
-    const OpConnections<std::wstring>& op_connections, bool use_topology, bool screen,
+    const OpConnections<std::wstring>& op_connections, bool use_topology,
+    bool screen,
     bool skip_clone) {
   // use cloned expr to avoid side effects
   if (!skip_clone) expr = expr->clone();
 
-  auto vac_av_product = [&op_connections, &use_topology, &screen](ExprPtr expr) {
+  auto vac_av_product = [&op_connections, use_topology, screen
+      ](ExprPtr expr) {
     assert(expr.is<Product>());
     // extract scalar and factors
     const auto scalar = expr.as<Product>().scalar();
@@ -108,7 +110,7 @@ ExprPtr vac_av(
     })) {
       expr = expand(expr);
       simplify(expr); // condense equivalent terms after expansion
-      return vac_av(expr, op_connections, /* skip_clone = */ true);
+      return vac_av(expr, op_connections, use_topology, screen, /* skip_clone = */ true);
     } else return vac_av_product(expr);
   } else if (expr.is<Sum>()) {
     result = sequant::transform_reduce(
@@ -116,8 +118,8 @@ ExprPtr vac_av(
         [](const ExprPtr& running_total, const ExprPtr& summand) {
           return running_total + summand;
         },
-        [&op_connections](const auto& op_product) {
-          return vac_av(op_product, op_connections, /* skip_clone = */ true);
+        [&op_connections, use_topology, screen](const auto& op_product) {
+          return vac_av(op_product, op_connections, use_topology, screen, /* skip_clone = */ true);
         });
     simplify(result); // combine possible equivalent summands
     return result;
