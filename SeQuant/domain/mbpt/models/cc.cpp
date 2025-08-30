@@ -25,11 +25,7 @@ bool CC::unitary() const {
   return ansatz_ == Ansatz::U || ansatz_ == Ansatz::oU;
 }
 
-void CC::screen(bool val) { screen_ = val; }
-
 bool CC::screen() const { return screen_; }
-
-void CC::use_topology(bool val) { use_topology_ = val; }
 
 bool CC::use_topology() const { return use_topology_; }
 

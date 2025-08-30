@@ -43,14 +43,8 @@ class CC {
   /// @return true if the ansatz is unitary
   [[nodiscard]] bool unitary() const;
 
-  /// @brief turn screening on or off
-  void screen(bool val);
-
   /// @return whether screening is on or not
   [[nodiscard]] bool screen() const;
-
-  /// @brief turn on or off topological optimization in WickTheorem
-  void use_topology(bool val);
 
   /// @return whether topological optimization in WickTheorem
   [[nodiscard]] bool use_topology() const;
