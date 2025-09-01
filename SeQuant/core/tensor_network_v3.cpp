@@ -1446,7 +1446,7 @@ container::svector<std::pair<long, long>> TensorNetworkV3::factorize() {
 }
 
 size_t TensorNetworkV3::SlotCanonicalizationMetadata::hash_value() const {
-  return graph->get_hash();
+  return graph->get_hash64();
 }
 
 ExprPtr TensorNetworkV3::canonicalize_individual_tensor_blocks(
