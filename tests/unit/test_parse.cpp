@@ -178,14 +178,14 @@ TEST_CASE("parsing", "[parse]") {
       const Tensor& t2 = expr2->as<Tensor>();
       const Tensor& t3 = expr3->as<Tensor>();
 
-      REQUIRE(t1.symmetry() == Symmetry::antisymm);
+      REQUIRE(t1.symmetry() == Symmetry::Antisymm);
 
-      REQUIRE(t2.symmetry() == Symmetry::symm);
-      REQUIRE(t2.braket_symmetry() == BraKetSymmetry::conjugate);
+      REQUIRE(t2.symmetry() == Symmetry::Symm);
+      REQUIRE(t2.braket_symmetry() == BraKetSymmetry::Conjugate);
 
-      REQUIRE(t3.symmetry() == Symmetry::nonsymm);
-      REQUIRE(t3.braket_symmetry() == BraKetSymmetry::symm);
-      REQUIRE(t3.particle_symmetry() == ParticleSymmetry::nonsymm);
+      REQUIRE(t3.symmetry() == Symmetry::Nonsymm);
+      REQUIRE(t3.braket_symmetry() == BraKetSymmetry::Symm);
+      REQUIRE(t3.column_symmetry() == ColumnSymmetry::Nonsymm);
     }
 
     SECTION("NormalOperator") {
@@ -426,9 +426,9 @@ TEST_CASE("parsing", "[parse]") {
       REQUIRE(result.label() == L"A");
       REQUIRE(result.bra().empty());
       REQUIRE(result.ket().empty());
-      REQUIRE(result.symmetry() == Symmetry::nonsymm);
-      REQUIRE(result.braket_symmetry() == BraKetSymmetry::nonsymm);
-      REQUIRE(result.particle_symmetry() == ParticleSymmetry::nonsymm);
+      REQUIRE(result.symmetry() == Symmetry::Nonsymm);
+      REQUIRE(result.braket_symmetry() == BraKetSymmetry::Nonsymm);
+      REQUIRE(result.column_symmetry() == ColumnSymmetry::Nonsymm);
 
       REQUIRE(result.expression().is<Constant>());
       REQUIRE(result.expression().as<Constant>().value<int>() == 3);
@@ -445,10 +445,10 @@ TEST_CASE("parsing", "[parse]") {
       REQUIRE(result.ket().size() == 2);
       REQUIRE(result.ket()[0].full_label() == L"e_1");
       REQUIRE(result.ket()[1].full_label() == L"e_2");
-      REQUIRE(result.symmetry() == Symmetry::antisymm);
+      REQUIRE(result.symmetry() == Symmetry::Antisymm);
       REQUIRE(result.braket_symmetry() ==
               get_default_context().braket_symmetry());
-      REQUIRE(result.particle_symmetry() == ParticleSymmetry::symm);
+      REQUIRE(result.column_symmetry() == ColumnSymmetry::Symm);
 
       REQUIRE(result.expression().is<Product>());
       const Product& prod = result.expression().as<Product>();

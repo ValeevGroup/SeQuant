@@ -16,6 +16,7 @@
 #include <SeQuant/core/tensor_network.hpp>
 #include <SeQuant/core/tensor_network/vertex_painter.hpp>
 #include <SeQuant/core/tensor_network_v2.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/tuple.hpp>
 #include <SeQuant/core/wstring.hpp>
 
@@ -616,12 +617,12 @@ TensorNetwork::GraphData TensorNetwork::make_bliss_graph(
     // - ket
     // - braket (connecting bra and ket to the core)
     auto &tref = *t;
-    if (symmetry(tref) != Symmetry::nonsymm) {
+    if (symmetry(tref) != Symmetry::Nonsymm) {
       nv += 3;
       if (options.make_labels) {
         vertex_labels.emplace_back(
             std::wstring(L"bra") + to_wstring(bra_rank(tref)) +
-            ((symmetry(tref) == Symmetry::antisymm) ? L"a" : L"s"));
+            ((symmetry(tref) == Symmetry::Antisymm) ? L"a" : L"s"));
       }
       if (options.make_texlabels) {
         vertex_texlabels.emplace_back(std::nullopt);
@@ -631,13 +632,13 @@ TensorNetwork::GraphData TensorNetwork::make_bliss_graph(
       if (options.make_labels) {
         vertex_labels.emplace_back(
             std::wstring(L"ket") + to_wstring(ket_rank(tref)) +
-            ((symmetry(tref) == Symmetry::antisymm) ? L"a" : L"s"));
+            ((symmetry(tref) == Symmetry::Antisymm) ? L"a" : L"s"));
       }
       if (options.make_texlabels) {
         vertex_texlabels.emplace_back(std::nullopt);
       }
       vertex_type.push_back(VertexType::TensorKet);
-      if (braket_symmetry(tref) == BraKetSymmetry::symm) {
+      if (braket_symmetry(tref) == BraKetSymmetry::Symm) {
         // Use BraGroup for kets as well as they are supposed to be
         // indistinguishable
         vertex_color.push_back(colorizer(BraGroup{0}));
@@ -647,7 +648,7 @@ TensorNetwork::GraphData TensorNetwork::make_bliss_graph(
       if (options.make_labels) {
         vertex_labels.emplace_back(
             std::wstring(L"bk") +
-            ((symmetry(tref) == Symmetry::antisymm) ? L"a" : L"s"));
+            ((symmetry(tref) == Symmetry::Antisymm) ? L"a" : L"s"));
       }
       if (options.make_texlabels) {
         vertex_texlabels.emplace_back(std::nullopt);
@@ -672,10 +673,10 @@ TensorNetwork::GraphData TensorNetwork::make_bliss_graph(
           vertex_texlabels.emplace_back(std::nullopt);
         }
         vertex_type.push_back(VertexType::TensorBra);
-        const bool distinguishable_particles =
-            particle_symmetry(tref) == ParticleSymmetry::nonsymm;
+        const bool distinguishable_cols =
+            column_symmetry(tref) == ColumnSymmetry::Nonsymm;
         vertex_color.push_back(
-            colorizer(BraGroup{distinguishable_particles ? p : 0}));
+            colorizer(BraGroup{distinguishable_cols ? p : 0}));
         if (options.make_labels) {
           vertex_labels.emplace_back(std::wstring(L"ket") + pstr);
         }
@@ -683,14 +684,14 @@ TensorNetwork::GraphData TensorNetwork::make_bliss_graph(
           vertex_texlabels.emplace_back(std::nullopt);
         }
         vertex_type.push_back(VertexType::TensorKet);
-        if (braket_symmetry(tref) == BraKetSymmetry::symm) {
+        if (braket_symmetry(tref) == BraKetSymmetry::Symm) {
           // Use BraGroup for kets as well as they are supposed to be
           // indistinguishable
           vertex_color.push_back(
-              colorizer(BraGroup{distinguishable_particles ? p : 0}));
+              colorizer(BraGroup{distinguishable_cols ? p : 0}));
         } else {
           vertex_color.push_back(
-              colorizer(KetGroup{distinguishable_particles ? p : 0}));
+              colorizer(KetGroup{distinguishable_cols ? p : 0}));
         }
         if (options.make_labels) {
           vertex_labels.emplace_back(std::wstring(L"bk") + pstr);
@@ -743,7 +744,7 @@ TensorNetwork::GraphData TensorNetwork::make_bliss_graph(
       } else {
         const auto &tensor = *tensors_[tensor_ord];
         const auto num_vector_slot_groups =
-            tensor._symmetry() == Symmetry::nonsymm
+            tensor._symmetry() == Symmetry::Nonsymm
                 ? std::max(tensor._bra().size(), tensor._ket().size())
                 : 1;
         // aux slot groups appear after the vector slot groups
@@ -768,7 +769,7 @@ TensorNetwork::GraphData TensorNetwork::make_bliss_graph(
             symmetric_protoindex_bundles.begin();
         graph->add_edge(index_cnt, spbundle_vertex_offset + spbundle_idx);
       } else {
-        abort();  // nonsymmetric proto indices not supported yet
+        SEQUANT_ABORT("nonsymmetric proto indices not supported yet");
       }
     }
     ++index_cnt;
@@ -802,7 +803,7 @@ TensorNetwork::GraphData TensorNetwork::make_bliss_graph(
         const auto vertex_offset = tensor_vertex_offset.at(tensor_cnt);
         // for each braket terminal linker
         auto &tref = *t;
-        const size_t nbk = symmetry(tref) == Symmetry::nonsymm
+        const size_t nbk = symmetry(tref) == Symmetry::Nonsymm
                                ? std::max(bra_rank(tref), ket_rank(tref))
                                : 1;
         for (size_t bk = 1; bk <= nbk; ++bk) {
@@ -854,7 +855,7 @@ void TensorNetwork::init_edges() const {
 
   int t_idx = 0;
   for (auto &&t : tensors_) {
-    const auto t_is_nonsymm = symmetry(*t) == Symmetry::nonsymm;
+    const auto t_is_nonsymm = symmetry(*t) == Symmetry::Nonsymm;
     size_t slot_group_ord = 0;
     for (const Index &idx : t->_bra()) {
       idx_insert(idx, t_idx, TensorIndexSlotType::Bra,
@@ -953,7 +954,7 @@ void TensorNetwork::init_edges() const {
 }
 
 container::svector<std::pair<long, long>> TensorNetwork::factorize() {
-  abort();  // not yet implemented
+  SEQUANT_ABORT("TensorNetwork::factorize is not yet implemented");
 }
 
 size_t TensorNetwork::SlotCanonicalizationMetadata::hash_value() const {
@@ -1198,7 +1199,7 @@ TensorNetwork::SlotCanonicalizationMetadata TensorNetwork::canonicalize_slots(
       // canonical order of slots: bra, then ket, then aux. We only care about
       // indices in tensor slots here, so no need to worry about protoindex
       // slots
-      if (t->symmetry() == Symmetry::antisymm) {
+      if (t->symmetry() == Symmetry::Antisymm) {
         // bra first, then ket
         metadata.phase *= input_to_canonical_parity(t->bra());
         metadata.phase *= input_to_canonical_parity(t->ket());

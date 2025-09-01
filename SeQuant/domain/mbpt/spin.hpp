@@ -12,6 +12,7 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 
 #include <cassert>
 #include <cstddef>
@@ -49,14 +50,17 @@ inline Spin operator&(Spin s1, Spin s2) {
 /// converts QuantumNumbersAttr to Spin
 /// @note this filters out all bits not used in Spin
 inline Spin to_spin(const QuantumNumbersAttr& t) {
-  assert((t.to_int32() & static_cast<int>(Spin::mask)) != 0);
-  return static_cast<Spin>(static_cast<Spin>(t.to_int32()) & Spin::mask);
+  assert((t.to_int32() & mask_v<Spin>) != 0);
+  return static_cast<Spin>(t.to_int32() & mask_v<Spin>);
 }
 
 /// removes spin annotation in QuantumNumbersAttr by unsetting the bits used by
 /// Spin
 inline QuantumNumbersAttr spinannotation_remove(const QuantumNumbersAttr& t) {
-  return t.intersection(QuantumNumbersAttr(~Spin::mask));
+  static_assert((~(~mask_v<Spin> & ~bitset::reserved) & ~bitset::reserved) ==
+                    mask_v<Spin>,
+                "Spin bitmask uses reserved bits");
+  return t.intersection(QuantumNumbersAttr(~mask_v<Spin> & ~bitset::reserved));
 }
 
 /// removes spin annotation, if any
@@ -85,10 +89,10 @@ std::wstring spinannotation_add(WS&& label, Spin s) {
     case Spin::beta:
       return to_wstring(std::forward<WS>(label)) + L'↓';
     case Spin::null:
-      break;
+      SEQUANT_ABORT("Invalid spin quantum number");
   }
-  assert(false && "invalid quantum number");
-  abort();
+
+  SEQUANT_UNREACHABLE;
 }
 
 /// replaces spin annotation to
@@ -229,6 +233,26 @@ container::svector<container::map<Index, Index>> S_replacement_maps(
 /// @brief Expand S operator
 ExprPtr S_maps(const ExprPtr& expr);
 
+/// @brief filters out the nonunique terms in Wang-Knizia biorthogonalization
+
+/// WK biorthogonalization rewrites biorthogonal expressions as a "cleanup"
+/// projector applied to the biorothogonal expressions where out of each
+/// group of terms related by permutation of external indices
+/// those with the largest coefficients are selected.
+/// This function performs the selection by forming groups of terms that
+/// are equivalent modulo external index permutation (all terms in a group
+/// have identical graph hashes).
+/// @details This function processes a sum expression, grouping product terms by
+/// hash of their canonicalized tensor network forms. For each group, it
+/// retains only the terms with the largest absolute scalar coefficient.
+/// @param expr The input expression, expected to be a `Sum` of `Product` terms.
+/// @param ext_idxs A vector of external index groups. The function will not
+/// apply the filtering logic if `ext_idxs.size()` is 2 or less.
+/// @return A new `ExprPtr` representing the filtered and compacted expression.
+ExprPtr WK_biorthogonalization_filter(
+    ExprPtr expr,
+    const container::svector<container::svector<Index>>& ext_idxs);
+
 /// @brief Transforms an expression from spin orbital to spatial orbitals
 /// @details This functions is designed for integrating spin out of expression
 /// with Coupled Cluster equations in mind.
@@ -236,14 +260,27 @@ ExprPtr S_maps(const ExprPtr& expr);
 /// lacks proper index attributes.
 /// @param expr ExprPtr with spin orbital indices
 /// @param ext_index_groups groups of external indices
+/// @param full_expansion if true, we first fully expand the
+/// anti-symmetrizer, which makes spintracing expensive because of the large
+/// number of terms. If false, we exapnd it in terms of the symmetrizer,
+/// which results in a partial expansion.
 /// @return an expression with spin integrated/adapted
 ExprPtr closed_shell_spintrace(
     const ExprPtr& expr,
-    const container::svector<container::svector<Index>>& ext_index_groups = {});
+    const container::svector<container::svector<Index>>& ext_index_groups = {},
+    bool full_expansion = false);
 
-container::svector<ResultExpr> closed_shell_spintrace(const ResultExpr& expr);
+container::svector<ResultExpr> closed_shell_spintrace(
+    const ResultExpr& expr, bool full_expansion = false);
 
-/// @brief Transforms Coupled cluster from spin orbital to spatial orbitals
+/// @brief spin-traces spin-orbital CC-style equations for closed-shell
+/// spin-restricted states
+///
+/// Spin-traces CC-style equations (obtained by projection onto
+/// replacement manifolds) assuming spin-restricted closed-shell reference,
+/// followed by biorthogonal transform (see ). It correctly factors out the
+/// particle symmetrizer to reduce the number of terms in the intermediate
+/// manipulations.
 /// @details The external indices are deduced from Antisymmetrization operator
 /// @param expr ExprPtr to Sum type with spin orbital indices
 /// @return an expression with spin integrated/adapted
@@ -251,7 +288,40 @@ ExprPtr closed_shell_CC_spintrace(ExprPtr const& expr);
 
 /// \brief Same as \c closed_shell_CC_spintrace except internally uses
 ///        \c sequant::spintrace instead of sequant::closed_shell_spintrace.
+/// \warning this is extremely slow and should only be used for reference
+/// purposes
 ExprPtr closed_shell_CC_spintrace_rigorous(ExprPtr const& expr);
+
+/// @brief same as closed_shell_CC_spintrace but way more efficient and
+/// produces more compact equations
+///
+/// The algorithm:
+/// - factor out symmetrizer from the antisymmetrizer,
+///   "set it aside" (remove from the expression), and
+///   expand the rest of the antisymmetricer.
+/// - spin-trace the resulting expression assuming spin-restricted basis and
+///   closed-shell reference
+/// - biorthogonalize
+/// - apply the particle symmetrizer and simplify
+/// - group terms that differ only by external index permutation (i.e. have same
+/// colored graph hash), for each group select the terms with the largest
+/// coefficients)
+/// - multiply by the particle symmetrizer and simplify (this combines terms
+/// that differ only by particle permutations)
+///
+/// The produced expression is not equivalent to that produced by
+/// closed_shell_CC_spintrace but becomes equivalent if the biorthogonal
+/// cleanup (particular linear combination of permutation operators) is applied.
+/// The biorthogonal cleanup is performed in numeric form, after the numerically
+/// evaluating the compact equations produced by this.
+/// @warning To work correctly with the cleanup function, the intermediate
+/// expression is internally multiplied by a rescaling factor of $n!/(n!-1)$. If
+/// you need to print the compact-set equations, you must manually compensate
+/// for this factor and multiply the expression by $(n!-1)/n!$.
+/// @param expr ExprPtr to Sum type with spin orbital indices
+/// @return An expression pointer representing the most compact set of
+/// spin-integrated terms.
+ExprPtr closed_shell_CC_spintrace_compact_set(ExprPtr const& expr);
 
 /// Collect all indices from an expression
 container::set<Index, Index::LabelCompare> index_list(const ExprPtr& expr);

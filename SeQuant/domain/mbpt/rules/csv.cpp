@@ -80,7 +80,7 @@ ExprPtr csv_transform_impl(Tensor const& tnsr, const IndexSpace& csv_basis,
 
   auto xtnsr = ex<Tensor>(tnsr.label(), bra(rbra), ket(rket), tnsr.aux(),
                           tnsr.symmetry(), tnsr.braket_symmetry(),
-                          tnsr.particle_symmetry());
+                          tnsr.column_symmetry());
   result.prepend(1, std::move(xtnsr));
 
   return ex<Product>(std::move(result));

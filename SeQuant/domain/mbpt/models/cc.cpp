@@ -274,7 +274,7 @@ std::vector<ExprPtr> CC::eom_r(nₚ np, nₕ nh) {
 
   if (np != nh)
     assert(
-        get_default_context().spbasis() != SPBasis::spinfree &&
+        get_default_context().spbasis() != SPBasis::Spinfree &&
         "spin-free basis does not yet support non particle-conserving cases");
 
   // construct hbar
@@ -313,7 +313,7 @@ std::vector<ExprPtr> CC::eom_l(nₚ np, nₕ nh) {
   assert((np > 0 || nh > 0) && "Unsupported excitation order");
 
   if (np != nh)
-    assert(get_default_context().spbasis() != SPBasis::spinfree &&
+    assert(get_default_context().spbasis() != SPBasis::Spinfree &&
            "spin-free basis does not support non particle-conserving cases");
 
   // construct hbar

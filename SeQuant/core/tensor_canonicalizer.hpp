@@ -6,6 +6,7 @@
 #define SEQUANT_CORE_TENSOR_CANONICALIZER_HPP
 
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 
 #include <functional>
 #include <memory>
@@ -151,8 +152,8 @@ class DefaultTensorCanonicalizer : public TensorCanonicalizer {
 
   /// Implements TensorCanonicalizer::apply
   /// @note Canonicalizes @c t by sorting its bra (if @c
-  /// t.symmetry()==Symmetry::nonsymm ) or its bra and ket (if @c
-  /// t.symmetry()!=Symmetry::nonsymm ),
+  /// t.symmetry()==Symmetry::Nonsymm ) or its bra and ket (if @c
+  /// t.symmetry()!=Symmetry::Nonsymm ),
   ///       with the external indices appearing "before" (smaller particle
   ///       indices) than the internal indices
   ExprPtr apply(AbstractTensor& t) const override;
@@ -165,10 +166,10 @@ class DefaultTensorCanonicalizer : public TensorCanonicalizer {
     // std::wcout << "abstract tensor: " << to_latex(t) << "\n";
 
     // nothing to do for non-particle-symmetric tensors
-    if (t._particle_symmetry() == ParticleSymmetry::nonsymm) return nullptr;
+    if (t._column_symmetry() == ColumnSymmetry::Nonsymm) return nullptr;
 
     auto s = symmetry(t);
-    auto is_antisymm = (s == Symmetry::antisymm);
+    auto is_antisymm = (s == Symmetry::Antisymm);
     const auto _bra_rank = bra_rank(t);
     const auto _ket_rank = ket_rank(t);
     const auto _aux_rank = aux_rank(t);
@@ -185,8 +186,8 @@ class DefaultTensorCanonicalizer : public TensorCanonicalizer {
 
     bool even = true;
     switch (s) {
-      case Symmetry::antisymm:
-      case Symmetry::symm: {
+      case Symmetry::Antisymm:
+      case Symmetry::Symm: {
         auto _bra = mutable_bra_range(t);
         auto _ket = mutable_ket_range(t);
         //      std::wcout << "canonicalizing " << to_latex(t);
@@ -201,7 +202,7 @@ class DefaultTensorCanonicalizer : public TensorCanonicalizer {
         //      produces " << to_latex(t) << std::endl;
       } break;
 
-      case Symmetry::nonsymm: {
+      case Symmetry::Nonsymm: {
         // sort particles with bra and ket functions first,
         // then the particles with either bra or ket index
         auto _bra = mutable_bra_range(t);
@@ -218,9 +219,6 @@ class DefaultTensorCanonicalizer : public TensorCanonicalizer {
           bubble_sort(begin(rest_of), end(rest_of), idxcmp);
         }
       } break;
-
-      default:
-        abort();
     }
 
     // TODO: Handle auxiliary index symmetries once they are introduced

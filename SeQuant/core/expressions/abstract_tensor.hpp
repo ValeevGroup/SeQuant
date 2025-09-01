@@ -78,7 +78,7 @@ class TensorCanonicalizer;
 /// or ket mode), or empty (i.e., occupied by a null Index).
 /// Tensors with non-symmetric bras and kets can have empty slots in arbitrary
 /// positions in bra and ket slot bundles. Such tensors symmetric with
-/// respect to reordering of braket bundles (`_particle_symmetry()`)
+/// respect to reordering of braket bundles (`_column_symmetry()`)
 /// assume the canonical order of slots, defined as follows:
 /// - paired braket slot bundles (both bra and ket slots are nonempty) appear
 ///    first
@@ -204,8 +204,8 @@ class AbstractTensor {
   /// @return the symmetry of tensor under exchange of matching {bra,ket} slot
   /// pairs
   /// @note slots are left-aligned
-  virtual ParticleSymmetry _particle_symmetry() const {
-    throw missing_instantiation_for("_particle_symmetry");
+  virtual ColumnSymmetry _column_symmetry() const {
+    throw missing_instantiation_for("_column_symmetry");
   }
   virtual std::size_t _color() const {
     throw missing_instantiation_for("_color");
@@ -259,11 +259,11 @@ class AbstractTensor {
   virtual void _permute_aux(std::span<const std::size_t> perm) {
     permute_impl(_aux_mutable(), perm);
   }
-  /// permutes braket slot groups according to @p perm
-  /// @param perm from-permutation, i.e. Index pair in slot `permutation[i]`
-  /// will end up in slot `i`
-  virtual void _permute_braket(std::span<std::size_t> perm) {
-    permute_braket_impl(_bra_mutable(), _ket_mutable(), perm);
+  /// permutes column slot bundles according to @p perm
+  /// @param perm from-permutation, i.e. Index pair in column `permutation[i]`
+  /// will end up in column `i`
+  virtual void _permute_columns(std::span<std::size_t> perm) {
+    permute_columns_impl(_bra_mutable(), _ket_mutable(), perm);
   }
   /// swaps bra and ket slots
   virtual void _swap_bra_ket() {
@@ -305,13 +305,13 @@ class AbstractTensor {
     }
   }
 
-  static void permute_braket_impl(AbstractTensor::any_view_randsz bra_indices,
-                                  any_view_randsz ket_indices,
-                                  std::span<std::size_t> perm_from) {
+  static void permute_columns_impl(AbstractTensor::any_view_randsz bra_indices,
+                                   any_view_randsz ket_indices,
+                                   std::span<std::size_t> perm_from) {
     const auto n = std::max(bra_indices.size(), ket_indices.size());
     assert(n == perm_from.size());
 
-    // N.B. braket slot bundles are kept in canonical order, see AbstractTensor
+    // N.B. column slot bundles are kept in canonical order, see AbstractTensor
     // class dox: paired bundles first, then bra (paired with null ket) and
     // ket (unpaired).
 
@@ -386,8 +386,8 @@ inline auto symmetry(const AbstractTensor& t) { return t._symmetry(); }
 inline auto braket_symmetry(const AbstractTensor& t) {
   return t._braket_symmetry();
 }
-inline auto particle_symmetry(const AbstractTensor& t) {
-  return t._particle_symmetry();
+inline auto column_symmetry(const AbstractTensor& t) {
+  return t._column_symmetry();
 }
 inline auto color(const AbstractTensor& t) { return t._color(); }
 inline auto is_cnumber(const AbstractTensor& t) { return t._is_cnumber(); }
@@ -518,8 +518,8 @@ inline std::wstring to_latex_tensor(
 ///         _particle-symmetric_ @c t ;
 ///         - @c braket_symmetry(t) is a valid expression and evaluates to a
 ///         BraKetSymmetry object that describes the bra-ket symmetry of @c t ;
-///         - @c particle_symmetry(t) is a valid expression and evaluates to a
-///         ParticleSymmetry object that describes the symmetry of @c t with
+///         - @c column_symmetry(t) is a valid expression and evaluates to a
+///         ColumnSymmetry object that describes the symmetry of @c t with
 ///         respect to permutations of particles;
 ///         - @c color(t) is a valid expression and returns whether a
 ///         nonnegative integer that identifies the type of a tensor; tensors
@@ -541,7 +541,7 @@ struct is_tensor
           std::is_invocable_v<decltype(aux_rank), T> &&
           std::is_invocable_v<decltype(symmetry), T> &&
           std::is_invocable_v<decltype(braket_symmetry), T> &&
-          std::is_invocable_v<decltype(particle_symmetry), T> &&
+          std::is_invocable_v<decltype(column_symmetry), T> &&
           std::is_invocable_v<decltype(color), T> &&
           std::is_invocable_v<decltype(is_cnumber), T> &&
           std::is_invocable_v<decltype(label), T> &&
@@ -600,7 +600,7 @@ inline void permute_ket(AbstractTensor& t, std::span<const std::size_t> perm) {
 /// @param perm from-permutation, i.e. Index pair in input slot `permutation[i]`
 /// will be in slot `i`
 inline void permute_braket(AbstractTensor& t, std::span<std::size_t> perm) {
-  return t._permute_braket(perm);
+  return t._permute_columns(perm);
 }
 
 // defined in AbstractTensor

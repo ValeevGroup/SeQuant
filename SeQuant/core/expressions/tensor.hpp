@@ -100,7 +100,7 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
 
   // clang-format off
   /// @throw std::invalid_argument if `NDEBUG` not `#define`d and:
-  ///        - `symmetry()==Symmetry::antisymm` and `bra()` or `ket()` contains null indices, or
+  ///        - `symmetry()==Symmetry::Antisymm` and `bra()` or `ket()` contains null indices, or
   ///        - `aux()` contains null indices, or
   ///        - there are duplicate indices within bra, within ket, or within aux
   // clang-format on
@@ -111,7 +111,7 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
     // 2 empty slots is supposed to do what?)
     // by analogy symmetric bra or ket should not have null indices, but limited
     // circumstances do allow null indices in such context ... but no use cases
-    if (symmetry() != Symmetry::nonsymm) {
+    if (symmetry() != Symmetry::Nonsymm) {
       if (!bra_.empty() && ranges::contains(bra_, Index::null))
         throw std::invalid_argument(
             "Tensor ctor: found null indices in symmetric/antisymmetric bra");
@@ -189,8 +189,8 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   void canonicalize_slots() {
     // if tensor is particle symmetric make sure
     // braket bundles are first, then bra-only, then ket-only
-    if (symmetry() == Symmetry::nonsymm &&
-        particle_symmetry() == ParticleSymmetry::symm) {
+    if (symmetry() == Symmetry::Nonsymm &&
+        column_symmetry() == ColumnSymmetry::Symm) {
       const bool have_empty_slots =
           bra_rank() != bra_net_rank() || ket_rank() != ket_net_rank();
       if (have_empty_slots) {
@@ -257,16 +257,16 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   Tensor(std::wstring_view label, const bra<IndexRange1> &bra_indices,
          const ket<IndexRange2> &ket_indices,
          const aux<IndexRange3> &aux_indices, reserved_tag,
-         Symmetry s = Symmetry::nonsymm,
+         Symmetry s = Symmetry::Nonsymm,
          BraKetSymmetry bks = get_default_context().braket_symmetry(),
-         ParticleSymmetry ps = ParticleSymmetry::symm)
+         ColumnSymmetry ps = ColumnSymmetry::Symm)
       : label_(label),
         bra_(make_indices(bra_indices)),
         ket_(make_indices(ket_indices)),
         aux_(make_indices(aux_indices)),
         symmetry_(s),
         braket_symmetry_(bks),
-        particle_symmetry_(ps),
+        column_symmetry_(ps),
         bra_net_rank_(ranges::count_if(
             bra_, [](const Index &idx) { return static_cast<bool>(idx); })),
         ket_net_rank_(ranges::count_if(
@@ -279,16 +279,16 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   Tensor(std::wstring_view label, bra<index_container_type> &&bra_indices,
          ket<index_container_type> &&ket_indices,
          aux<index_container_type> &&aux_indices, reserved_tag,
-         Symmetry s = Symmetry::nonsymm,
+         Symmetry s = Symmetry::Nonsymm,
          BraKetSymmetry bks = get_default_context().braket_symmetry(),
-         ParticleSymmetry ps = ParticleSymmetry::symm)
+         ColumnSymmetry ps = ColumnSymmetry::Symm)
       : label_(label),
         bra_(std::move(bra_indices)),
         ket_(std::move(ket_indices)),
         aux_(std::move(aux_indices)),
         symmetry_(s),
         braket_symmetry_(bks),
-        particle_symmetry_(ps),
+        column_symmetry_(ps),
         bra_net_rank_(ranges::count_if(
             bra_, [](const Index &idx) { return static_cast<bool>(idx); })),
         ket_net_rank_(ranges::count_if(
@@ -333,9 +333,9 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
                             is_statically_castable_v<
                                 meta::range_value_t<IndexRange2>, Index>)>>
   Tensor(std::wstring_view label, const bra<IndexRange1> &bra_indices,
-         const ket<IndexRange2> &ket_indices, Symmetry s = Symmetry::nonsymm,
+         const ket<IndexRange2> &ket_indices, Symmetry s = Symmetry::Nonsymm,
          BraKetSymmetry bks = get_default_context().braket_symmetry(),
-         ParticleSymmetry ps = ParticleSymmetry::symm)
+         ColumnSymmetry ps = ColumnSymmetry::Symm)
       : Tensor(label, bra_indices, ket_indices, sequant::aux{}, reserved_tag{},
                s, bks, ps) {
     assert_nonreserved_label(label_);
@@ -365,9 +365,9 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
                                                         Index>)>>
   Tensor(std::wstring_view label, const bra<IndexRange1> &bra_indices,
          const ket<IndexRange2> &ket_indices,
-         const aux<IndexRange3> &aux_indices, Symmetry s = Symmetry::nonsymm,
+         const aux<IndexRange3> &aux_indices, Symmetry s = Symmetry::Nonsymm,
          BraKetSymmetry bks = get_default_context().braket_symmetry(),
-         ParticleSymmetry ps = ParticleSymmetry::symm)
+         ColumnSymmetry ps = ColumnSymmetry::Symm)
       : Tensor(label, bra_indices, ket_indices, aux_indices, reserved_tag{}, s,
                bks, ps) {
     assert_nonreserved_label(label_);
@@ -383,9 +383,9 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   /// @param ps the symmetry under exchange of particles
   Tensor(std::wstring_view label, bra<index_container_type> &&bra_indices,
          ket<index_container_type> &&ket_indices,
-         Symmetry s = Symmetry::nonsymm,
+         Symmetry s = Symmetry::Nonsymm,
          BraKetSymmetry bks = get_default_context().braket_symmetry(),
-         ParticleSymmetry ps = ParticleSymmetry::symm)
+         ColumnSymmetry ps = ColumnSymmetry::Symm)
       : Tensor(label, std::move(bra_indices), std::move(ket_indices),
                sequant::aux{}, reserved_tag{}, s, bks, ps) {
     assert_nonreserved_label(label_);
@@ -404,9 +404,9 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   Tensor(std::wstring_view label, bra<index_container_type> &&bra_indices,
          ket<index_container_type> &&ket_indices,
          aux<index_container_type> &&aux_indices,
-         Symmetry s = Symmetry::nonsymm,
+         Symmetry s = Symmetry::Nonsymm,
          BraKetSymmetry bks = get_default_context().braket_symmetry(),
-         ParticleSymmetry ps = ParticleSymmetry::symm)
+         ColumnSymmetry ps = ColumnSymmetry::Symm)
       : Tensor(label, std::move(bra_indices), std::move(ket_indices),
                std::move(aux_indices), reserved_tag{}, s, bks, ps) {
     assert_nonreserved_label(label_);
@@ -415,11 +415,7 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   /// @}
 
   /// @return true if the Tensor is initialized
-  explicit operator bool() const {
-    return !label_.empty() && symmetry_ != Symmetry::invalid &&
-           braket_symmetry_ != BraKetSymmetry::invalid &&
-           particle_symmetry_ != ParticleSymmetry::invalid;
-  }
+  explicit operator bool() const { return !label_.empty(); }
 
   /// @return "core" label of the tensor
   std::wstring_view label() const override { return label_; }
@@ -492,17 +488,18 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   /// in <em>either bra or ket</em> has on the elements of the Tensor;
   /// Tensor's are <em>always assumed</em> to be particle-symmetric, i.e.
   /// swapping indices in positions @c i and @c j in <b>both bra and ket</b>;
-  /// The allowed values are Symmetry::symm, Symmetry::antisymm, and
-  /// Symmetry::nonsymm
+  /// The allowed values are Symmetry::Symm, Symmetry::Antisymm, and
+  /// Symmetry::Nonsymm
   /// @return the Symmetry object describing the symmetry of the bra and ket of
   /// the Tensor.
   Symmetry symmetry() const { return symmetry_; }
   /// @return the BraKetSymmetry object describing the symmetry of the Tensor
   /// under exchange of bra and ket.
   BraKetSymmetry braket_symmetry() const { return braket_symmetry_; }
-  /// @return the ParticleSymmetry object describing the symmetry of the Tensor
-  /// under exchange of particles (columns).
-  ParticleSymmetry particle_symmetry() const { return particle_symmetry_; }
+  /// @return the ColumnSymmetry object describing the symmetry of the Tensor
+  /// under exchange of _columns_ (i.e., pairs of matching {bra[i],ket[i]}
+  /// slot bundles).
+  ColumnSymmetry column_symmetry() const { return column_symmetry_; }
 
   /// @return number of bra slots (some may be occupied by null indices, hence
   /// this is the gross rank)
@@ -544,10 +541,10 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
         bra_rank() == ket_rank() ? rank() > 1 : bra_rank() + ket_rank() > 1;
 
     std::wstring core_label;
-    if ((this->symmetry() == Symmetry::antisymm) && add_bar)
+    if ((this->symmetry() == Symmetry::Antisymm) && add_bar)
       core_label += L"\\bar{";
     core_label += utf_to_latex(this->label());
-    if ((this->symmetry() == Symmetry::antisymm) && add_bar) core_label += L"}";
+    if ((this->symmetry() == Symmetry::Antisymm) && add_bar) core_label += L"}";
 
     switch (bkst) {
       case BraKetSlotTypesetting::Naive: {
@@ -644,9 +641,9 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   sequant::bra<index_container_type> bra_{};
   sequant::ket<index_container_type> ket_{};
   sequant::aux<index_container_type> aux_{};
-  Symmetry symmetry_ = Symmetry::invalid;
-  BraKetSymmetry braket_symmetry_ = BraKetSymmetry::invalid;
-  ParticleSymmetry particle_symmetry_ = ParticleSymmetry::invalid;
+  Symmetry symmetry_ = Symmetry::Nonsymm;
+  BraKetSymmetry braket_symmetry_ = BraKetSymmetry::Nonsymm;
+  ColumnSymmetry column_symmetry_ = ColumnSymmetry::Nonsymm;
   mutable std::optional<hash_type>
       bra_hash_value_;  // memoized byproduct of memoizing_hash()
   bool is_adjoint_ = false;
@@ -656,8 +653,8 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   void validate_symmetries() {
     // (anti)symmetric bra or ket makes sense only for particle-symmetric
     // tensors
-    if (symmetry_ == Symmetry::symm || symmetry_ == Symmetry::antisymm)
-      assert(particle_symmetry_ == ParticleSymmetry::symm);
+    if (symmetry_ == Symmetry::Symm || symmetry_ == Symmetry::Antisymm)
+      assert(column_symmetry_ == ColumnSymmetry::Symm);
   }
 
   hash_type memoizing_hash() const override {
@@ -671,7 +668,7 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
       hash::combine(val, label_);
       hash::combine(val, symmetry_);
       hash::combine(val, braket_symmetry_);
-      hash::combine(val, particle_symmetry_);
+      hash::combine(val, column_symmetry_);
       // N.B. adjointness is baked into the label
       return val;
     };
@@ -692,7 +689,7 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
     if (this->label() == that_cast.label() &&
         this->symmetry() == that_cast.symmetry() &&
         this->braket_symmetry() == that_cast.braket_symmetry() &&
-        this->particle_symmetry() == that_cast.particle_symmetry() &&
+        this->column_symmetry() == that_cast.column_symmetry() &&
         this->bra_rank() == that_cast.bra_rank() &&
         this->ket_rank() == that_cast.ket_rank() &&
         this->aux_rank() == that_cast.aux_rank()) {
@@ -785,8 +782,8 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   BraKetSymmetry _braket_symmetry() const override final {
     return braket_symmetry_;
   }
-  ParticleSymmetry _particle_symmetry() const override final {
-    return particle_symmetry_;
+  ColumnSymmetry _column_symmetry() const override final {
+    return column_symmetry_;
   }
   std::size_t _color() const override final { return 0; }
   bool _is_cnumber() const override final { return true; }

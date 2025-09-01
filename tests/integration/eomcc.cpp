@@ -82,7 +82,7 @@ class compute_eomcc {
   }
 
   void operator()(bool print) {
-    assert(get_default_context().spbasis() == SPBasis::spinor);
+    assert(get_default_context().spbasis() == SPBasis::Spinor);
     timer_pool.start(N);
     std::vector<ExprPtr> eqvec;
     switch (type) {

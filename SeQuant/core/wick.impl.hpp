@@ -10,6 +10,7 @@
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/tensor_network/vertex.hpp>
 #include <SeQuant/core/tensor_network_v3.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 
 #ifdef SEQUANT_HAS_EXECUTION_HEADER
 #include <execution>
@@ -360,53 +361,54 @@ template <Statistics S>
 void reduce_wick_impl(std::shared_ptr<Product> &expr,
                       const container::set<Index> &external_indices,
                       const Context &ctx) {
-  if (ctx.metric() == IndexSpaceMetric::Unit) {
-    bool pass_mutated = false;
-    do {
-      pass_mutated = false;
+  if (ctx.metric() != IndexSpaceMetric::Unit) {
+    SEQUANT_ABORT(
+        "reduce_wick_impl expects to only work with IndexSpaceMetric::Unit");
+  }
 
-      // extract current indices
-      std::set<Index, Index::LabelCompare> all_indices;
-      ranges::for_each(*expr, [&all_indices](const auto &factor) {
-        if (factor->template is<Tensor>()) {
-          ranges::for_each(factor->template as<const Tensor>().indices(),
-                           [&all_indices](const Index &idx) {
-                             [[maybe_unused]] auto result =
-                                 all_indices.insert(idx);
-                           });
-        }
+  bool pass_mutated = false;
+  do {
+    pass_mutated = false;
+
+    // extract current indices
+    std::set<Index, Index::LabelCompare> all_indices;
+    ranges::for_each(*expr, [&all_indices](const auto &factor) {
+      if (factor->template is<Tensor>()) {
+        ranges::for_each(factor->template as<const Tensor>().indices(),
+                         [&all_indices](const Index &idx) {
+                           [[maybe_unused]] auto result =
+                               all_indices.insert(idx);
+                         });
+      }
+    });
+
+    const auto replacement_rules = compute_index_replacement_rules<S>(
+        expr, external_indices, all_indices, ctx.index_space_registry());
+
+    if (Logger::instance().wick_reduce) {
+      std::wcout << "reduce_wick_impl(expr, external_indices):\n  expr = "
+                 << expr->to_latex() << "\n  external_indices = ";
+      ranges::for_each(external_indices,
+                       [](auto &index) { std::wcout << index.label() << " "; });
+      std::wcout << "\n  replrules = ";
+      ranges::for_each(replacement_rules, [](auto &index) {
+        std::wcout << to_latex(index.first) << "\\to" << to_latex(index.second)
+                   << "\\,";
       });
+      std::wcout.flush();
+    }
 
-      const auto replacement_rules = compute_index_replacement_rules<S>(
-          expr, external_indices, all_indices, ctx.index_space_registry());
+    if (!replacement_rules.empty()) {
+      auto isr = ctx.index_space_registry();
+      pass_mutated = apply_index_replacement_rules(
+          expr, replacement_rules, external_indices, all_indices, isr);
+    }
 
-      if (Logger::instance().wick_reduce) {
-        std::wcout << "reduce_wick_impl(expr, external_indices):\n  expr = "
-                   << expr->to_latex() << "\n  external_indices = ";
-        ranges::for_each(external_indices, [](auto &index) {
-          std::wcout << index.label() << " ";
-        });
-        std::wcout << "\n  replrules = ";
-        ranges::for_each(replacement_rules, [](auto &index) {
-          std::wcout << to_latex(index.first) << "\\to"
-                     << to_latex(index.second) << "\\,";
-        });
-        std::wcout.flush();
-      }
+    if (Logger::instance().wick_reduce) {
+      std::wcout << "\n  result = " << expr->to_latex() << std::endl;
+    }
 
-      if (!replacement_rules.empty()) {
-        auto isr = ctx.index_space_registry();
-        pass_mutated = apply_index_replacement_rules(
-            expr, replacement_rules, external_indices, all_indices, isr);
-      }
-
-      if (Logger::instance().wick_reduce) {
-        std::wcout << "\n  result = " << expr->to_latex() << std::endl;
-      }
-
-    } while (pass_mutated);  // keep reducing until stop changing
-  } else
-    abort();  // programming error?
+  } while (pass_mutated);  // keep reducing until stop changing
 }
 
 template <Statistics S>
@@ -916,7 +918,7 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
                         tn_tensors.at(tensor_ord);
 
                     // ... (anti)symmetric ...
-                    if (tensor_ptr->_symmetry() != Symmetry::nonsymm) {
+                    if (tensor_ptr->_symmetry() != Symmetry::Nonsymm) {
                       const auto tensor1_slot_type =
                           edge1.vertex(i1).getOrigin();
                       const auto tensor2_slot_type =
@@ -1007,18 +1009,15 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
     }  // expr_input_->is<Product>()
     // ... else if NormalOperatorSequence already, compute ...
     else if (expr_input_->is<NormalOperatorSequence<S>>()) {
-      abort();  // expr_input_ should no longer be nonnull if constructed with
-                // an expression that's a NormalOperatorSequence<S>
-      init_input(
-          expr_input_.template as_shared_ptr<NormalOperatorSequence<S>>());
-      // NB no simplification possible for a bare product w/ full contractions
-      // ... partial contractions will need simplification
-      return compute_nopseq(count_only);
+      SEQUANT_ABORT(
+          "expr_input_ should no longer be nonnull if constructed with an "
+          "expression that's a NormalOperatorSequence<S>");
     } else  // ... else do nothing
       return expr_input_;
   } else  // given a NormalOperatorSequence instead of an expression
     return compute_nopseq(count_only);
-  abort();
+
+  SEQUANT_UNREACHABLE;
 }
 
 template <Statistics S>

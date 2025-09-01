@@ -22,8 +22,8 @@ void Tensor::assert_nonreserved_label(
 void Tensor::adjoint() {
   std::swap(bra_.value(), ket_.value());
 
-  // only track adjointness for BraKetSymmetry::nonsymm cases
-  if (braket_symmetry() == BraKetSymmetry::nonsymm) {
+  // only track adjointness for BraKetSymmetry::Nonsymm cases
+  if (braket_symmetry() == BraKetSymmetry::Nonsymm) {
     if (label_.back() == sequant::adjoint_label) {
       assert(is_adjoint_);
       label_.pop_back();

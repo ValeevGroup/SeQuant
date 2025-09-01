@@ -90,10 +90,9 @@ enum class OpType {
   RDMCumulant,  //!< RDM cumulant
   δ,  //!< Kronecker delta (=identity) operator; same as overlap, but the latter
       //!< is too special for all uses
-  h_1,     //!< Hamiltonian perturbation
-  t_1,     //!< first order perturbed excitation cluster operator
-  λ_1,     //!< first order perturbed deexcitation cluster operator
-  invalid  //!< invalid operator
+  h_1,  //!< Hamiltonian perturbation
+  t_1,  //!< first order perturbed excitation cluster operator
+  λ_1,  //!< first order perturbed deexcitation cluster operator
 };
 
 /// maps operator types to their labels
@@ -590,7 +589,7 @@ inline container::svector<Index> make_depidx_vector(
 /// and indices \f$ \{ b_i \} \f$ / \f$ \{ k_i \} \f$.
 /// @note The choice of computational basis can be controlled by the default Context.
 ///       See `SeQuant/core/context.hpp` and `SeQuant/mbpt/context.hpp`
-/// @warning Tensor \f$ T \f$ will be antisymmetrized if `get_default_context().spbasis() == SPBasis::spinor`, else it will be particle-symmetric; the latter is only valid if # of bra and ket indices coincide.
+/// @warning Tensor \f$ T \f$ will be antisymmetrized if `get_default_context().spbasis() == SPBasis::Spinor`, else it will be particle-symmetric; the latter is only valid if # of bra and ket indices coincide.
 /// @internal bless the maker and his water
 // clang-format on
 template <Statistics S>
@@ -682,7 +681,7 @@ class OpMaker {
                               const IndexSpaceContainer& ann_spaces,
                               UseDepIdx dep = UseDepIdx::None) {
     const bool symm = get_default_context().spbasis() ==
-                      SPBasis::spinor;  // antisymmetrize if spinor basis
+                      SPBasis::Spinor;  // antisymmetrize if spin-orbital basis
     const auto dep_bra = dep == UseDepIdx::Bra;
     const auto dep_ket = dep == UseDepIdx::Ket;
 
@@ -705,9 +704,9 @@ class OpMaker {
     const auto mult =
         symm ? factorial(size(cre_spaces)) * factorial(size(ann_spaces))
              : factorial(size(cre_spaces));
-    const auto opsymm = symm ? (S == Statistics::FermiDirac ? Symmetry::antisymm
-                                                            : Symmetry::symm)
-                             : Symmetry::nonsymm;
+    const auto opsymm = symm ? (S == Statistics::FermiDirac ? Symmetry::Antisymm
+                                                            : Symmetry::Symm)
+                             : Symmetry::Nonsymm;
 
     return OpInfo{creidxs, annidxs, mult, opsymm, dep};
   }

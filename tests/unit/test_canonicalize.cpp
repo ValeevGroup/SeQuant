@@ -35,37 +35,37 @@ TEST_CASE("canonicalization", "[algorithms]") {
   SECTION("Tensors") {
     {
       auto op = ex<Tensor>(L"g", bra{L"p_1", L"p_2"}, ket{L"p_3", L"p_4"},
-                           Symmetry::nonsymm);
+                           Symmetry::Nonsymm);
       canonicalize(op);
       REQUIRE_THAT(op, SimplifiesTo("g{p1,p2;p3,p4}"));
     }
     {
       auto op = ex<Tensor>(L"g", bra{L"p_2", L"p_1"}, ket{L"p_3", L"p_4"},
-                           Symmetry::nonsymm);
+                           Symmetry::Nonsymm);
       canonicalize(op);
       REQUIRE_THAT(op, SimplifiesTo("g{p1,p2;p4,p3}"));
     }
     {
       auto op = ex<Tensor>(L"g", bra{L"p_1", L"p_2"}, ket{L"p_4", L"p_3"},
-                           Symmetry::nonsymm);
+                           Symmetry::Nonsymm);
       canonicalize(op);
       REQUIRE_THAT(op, SimplifiesTo("g{p1,p2;p4,p3}"));
     }
     {
       auto op = ex<Tensor>(L"g", bra{L"p_2", L"p_1"}, ket{L"p_4", L"p_3"},
-                           Symmetry::nonsymm);
+                           Symmetry::Nonsymm);
       canonicalize(op);
       REQUIRE_THAT(op, SimplifiesTo("g{p1,p2;p3,p4}"));
     }
     {
       auto op = ex<Tensor>(L"g", bra{L"p_1", L"p_2"}, ket{L"p_4", L"p_3"},
-                           Symmetry::symm);
+                           Symmetry::Symm);
       canonicalize(op);
       REQUIRE_THAT(op, SimplifiesTo("g{p1,p2;p3,p4}:S"));
     }
     {
       auto op = ex<Tensor>(L"g", bra{L"p_1", L"p_2"}, ket{L"p_4", L"p_3"},
-                           Symmetry::antisymm);
+                           Symmetry::Antisymm);
       canonicalize(op);
       REQUIRE_THAT(op, SimplifiesTo("-g{p1,p2;p3,p4}:A"));
     }
@@ -73,25 +73,25 @@ TEST_CASE("canonicalization", "[algorithms]") {
     // aux indices
     {
       auto op = ex<Tensor>(L"B", bra{L"p_1"}, ket{L"p_2"}, aux{L"p_3"},
-                           Symmetry::nonsymm);
+                           Symmetry::Nonsymm);
       canonicalize(op);
       REQUIRE_THAT(op, SimplifiesTo("B{p1;p2;p3}"));
     }
     {
       auto op = ex<Tensor>(L"B", bra{L"p_1", L"p_2"}, ket{L"p_4", L"p_3"},
-                           aux{L"p_5"}, Symmetry::nonsymm);
+                           aux{L"p_5"}, Symmetry::Nonsymm);
       canonicalize(op);
       REQUIRE_THAT(op, SimplifiesTo("B{p1,p2;p4,p3;p5}"));
     }
     {
       auto op = ex<Tensor>(L"B", bra{L"p_1", L"p_2"}, ket{L"p_4", L"p_3"},
-                           aux{L"p_5"}, Symmetry::symm);
+                           aux{L"p_5"}, Symmetry::Symm);
       canonicalize(op);
       REQUIRE_THAT(op, SimplifiesTo("B{p1,p2;p3,p4;p5}:S"));
     }
     {
       auto op = ex<Tensor>(L"B", bra{L"p_1", L"p_2"}, ket{L"p_4", L"p_3"},
-                           aux{L"p_5"}, Symmetry::antisymm);
+                           aux{L"p_5"}, Symmetry::Antisymm);
       canonicalize(op);
       REQUIRE_THAT(op, SimplifiesTo("-B{p1,p2;p3,p4;p5}:A"));
     }
@@ -106,11 +106,11 @@ TEST_CASE("canonicalization", "[algorithms]") {
     {
       auto input =
           ex<Tensor>(L"S", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"},
-                     Symmetry::nonsymm) *
-          ex<Tensor>(L"f", bra{L"a_5"}, ket{L"i_5"}, Symmetry::nonsymm) *
-          ex<Tensor>(L"t", bra{L"i_5"}, ket{L"a_1"}, Symmetry::nonsymm) *
+                     Symmetry::Nonsymm) *
+          ex<Tensor>(L"f", bra{L"a_5"}, ket{L"i_5"}, Symmetry::Nonsymm) *
+          ex<Tensor>(L"t", bra{L"i_5"}, ket{L"a_1"}, Symmetry::Nonsymm) *
           ex<Tensor>(L"t", bra{L"i_1", L"i_2"}, ket{L"a_5", L"a_2"},
-                     Symmetry::nonsymm);
+                     Symmetry::Nonsymm);
       canonicalize(input);
       REQUIRE_THAT(
           input,
@@ -119,11 +119,11 @@ TEST_CASE("canonicalization", "[algorithms]") {
     {
       auto input =
           ex<Tensor>(L"S", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"},
-                     Symmetry::nonsymm) *
-          ex<Tensor>(L"f", bra{L"a_5"}, ket{L"i_5"}, Symmetry::nonsymm) *
-          ex<Tensor>(L"t", bra{L"i_1"}, ket{L"a_5"}, Symmetry::nonsymm) *
+                     Symmetry::Nonsymm) *
+          ex<Tensor>(L"f", bra{L"a_5"}, ket{L"i_5"}, Symmetry::Nonsymm) *
+          ex<Tensor>(L"t", bra{L"i_1"}, ket{L"a_5"}, Symmetry::Nonsymm) *
           ex<Tensor>(L"t", bra{L"i_5", L"i_2"}, ket{L"a_1", L"a_2"},
-                     Symmetry::nonsymm);
+                     Symmetry::Nonsymm);
       canonicalize(input);
       REQUIRE_THAT(
           input,
@@ -135,13 +135,13 @@ TEST_CASE("canonicalization", "[algorithms]") {
       q2->adjoint();
       auto input =
           ex<Tensor>(L"S", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"},
-                     Symmetry::nonsymm) *
-          q2 * ex<Tensor>(L"f", bra{L"a_5"}, ket{L"i_5"}, Symmetry::nonsymm) *
+                     Symmetry::Nonsymm) *
+          q2 * ex<Tensor>(L"f", bra{L"a_5"}, ket{L"i_5"}, Symmetry::Nonsymm) *
           ex<Variable>(L"p") *
-          ex<Tensor>(L"t", bra{L"i_1"}, ket{L"a_5"}, Symmetry::nonsymm) *
+          ex<Tensor>(L"t", bra{L"i_1"}, ket{L"a_5"}, Symmetry::Nonsymm) *
           ex<Variable>(L"q1") *
           ex<Tensor>(L"t", bra{L"i_5", L"i_2"}, ket{L"a_1", L"a_2"},
-                     Symmetry::nonsymm);
+                     Symmetry::Nonsymm);
       canonicalize(input);
       REQUIRE_THAT(input,
                    SimplifiesTo("p q1 q2^* S{a_1,a_2;i_1,i_2} f{a_3;i_3} "
@@ -149,22 +149,22 @@ TEST_CASE("canonicalization", "[algorithms]") {
     }
     {  // Product containing adjoint of a Tensor
       auto f2 = ex<Tensor>(L"f", bra{L"a_1", L"a_2"}, ket{L"i_5", L"i_2"},
-                           Symmetry::nonsymm, BraKetSymmetry::nonsymm);
+                           Symmetry::Nonsymm, BraKetSymmetry::Nonsymm);
       f2->adjoint();
       auto input1 =
           ex<Tensor>(L"S", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"},
-                     Symmetry::nonsymm) *
-          ex<Tensor>(L"f", bra{L"a_5"}, ket{L"i_5"}, Symmetry::nonsymm) *
-          ex<Tensor>(L"t", bra{L"i_1"}, ket{L"a_5"}, Symmetry::nonsymm) * f2;
+                     Symmetry::Nonsymm) *
+          ex<Tensor>(L"f", bra{L"a_5"}, ket{L"i_5"}, Symmetry::Nonsymm) *
+          ex<Tensor>(L"t", bra{L"i_1"}, ket{L"a_5"}, Symmetry::Nonsymm) * f2;
       canonicalize(input1);
       REQUIRE_THAT(input1,
                    SimplifiesTo("S{a_1,a_2;i_1,i_2} f{a_3;i_3} "
                                 "f⁺{i_1,i_3;a_1,a_2}:N-N-S t{i_2;a_3}"));
       auto input2 =
           ex<Tensor>(L"S", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"},
-                     Symmetry::nonsymm) *
-          ex<Tensor>(L"f", bra{L"a_5"}, ket{L"i_5"}, Symmetry::nonsymm) *
-          ex<Tensor>(L"t", bra{L"i_1"}, ket{L"a_5"}, Symmetry::nonsymm) * f2 *
+                     Symmetry::Nonsymm) *
+          ex<Tensor>(L"f", bra{L"a_5"}, ket{L"i_5"}, Symmetry::Nonsymm) *
+          ex<Tensor>(L"t", bra{L"i_1"}, ket{L"a_5"}, Symmetry::Nonsymm) * f2 *
           ex<Variable>(L"w") * ex<Constant>(rational{1, 2});
       canonicalize(input2);
       REQUIRE_THAT(input2,
@@ -176,11 +176,11 @@ TEST_CASE("canonicalization", "[algorithms]") {
       auto input =
           ex<Constant>(rational{1, 2}) *
           ex<Tensor>(L"B", bra{L"p_2"}, ket{L"p_4"}, aux{L"p_5"},
-                     Symmetry::nonsymm) *
+                     Symmetry::Nonsymm) *
           ex<Tensor>(L"B", bra{L"p_1"}, ket{L"p_3"}, aux{L"p_5"},
-                     Symmetry::nonsymm) *
-          ex<Tensor>(L"t", bra{L"p_4"}, ket{L"p_2"}, Symmetry::nonsymm) *
-          ex<Tensor>(L"t", bra{L"p_3"}, ket{L"p_1"}, Symmetry::nonsymm);
+                     Symmetry::Nonsymm) *
+          ex<Tensor>(L"t", bra{L"p_4"}, ket{L"p_2"}, Symmetry::Nonsymm) *
+          ex<Tensor>(L"t", bra{L"p_3"}, ket{L"p_1"}, Symmetry::Nonsymm);
       canonicalize(input);
       // because bra and ket are in same space dummy renaming flips the bra and
       // ket even though the tensors are not bra-ket symmetric
@@ -190,7 +190,7 @@ TEST_CASE("canonicalization", "[algorithms]") {
     // with bra-ket symmetry
     {
       Context ctx = get_default_context();
-      ctx.set(BraKetSymmetry::symm);
+      ctx.set(BraKetSymmetry::Symm);
       auto resetter = set_scoped_default_context(ctx);
       // TN is invariant wrt flipping one if the tensors
       // N.B. it's not possible purely to canonicalize each tensor since bra and
@@ -198,9 +198,9 @@ TEST_CASE("canonicalization", "[algorithms]") {
       // whether bra/ket swap should occur for each tensor
       auto input = ex<Constant>(rational{1, 2}) *
                    ex<Tensor>(L"B", bra{L"p_2"}, ket{L"p_1"}, aux{L"p_5"},
-                              Symmetry::nonsymm, BraKetSymmetry::symm) *
+                              Symmetry::Nonsymm, BraKetSymmetry::Symm) *
                    ex<Tensor>(L"B", bra{L"p_1"}, ket{L"p_2"}, aux{L"p_5"},
-                              Symmetry::nonsymm, BraKetSymmetry::symm);
+                              Symmetry::Nonsymm, BraKetSymmetry::Symm);
       REQUIRE_THAT(input, EquivalentTo("1/2 B{p1;p2;p5}:N-S B{p1;p2;p5}:N-S"));
     }
   }
@@ -234,14 +234,14 @@ TEST_CASE("canonicalization", "[algorithms]") {
       auto input =
           ex<Constant>(rational{1, 2}) *
               ex<Tensor>(L"g", bra{L"p_1", L"p_2"}, ket{L"p_3", L"p_4"},
-                         Symmetry::nonsymm) *
-              ex<Tensor>(L"t", bra{L"p_3"}, ket{L"p_1"}, Symmetry::nonsymm) *
-              ex<Tensor>(L"t", bra{L"p_4"}, ket{L"p_2"}, Symmetry::nonsymm) +
+                         Symmetry::Nonsymm) *
+              ex<Tensor>(L"t", bra{L"p_3"}, ket{L"p_1"}, Symmetry::Nonsymm) *
+              ex<Tensor>(L"t", bra{L"p_4"}, ket{L"p_2"}, Symmetry::Nonsymm) +
           ex<Constant>(rational{1, 2}) *
               ex<Tensor>(L"g", bra{L"p_2", L"p_1"}, ket{L"p_4", L"p_3"},
-                         Symmetry::nonsymm) *
-              ex<Tensor>(L"t", bra{L"p_3"}, ket{L"p_1"}, Symmetry::nonsymm) *
-              ex<Tensor>(L"t", bra{L"p_4"}, ket{L"p_2"}, Symmetry::nonsymm);
+                         Symmetry::Nonsymm) *
+              ex<Tensor>(L"t", bra{L"p_3"}, ket{L"p_1"}, Symmetry::Nonsymm) *
+              ex<Tensor>(L"t", bra{L"p_4"}, ket{L"p_2"}, Symmetry::Nonsymm);
       simplify(input);
       canonicalize(input);
       REQUIRE_THAT(input,
@@ -253,14 +253,14 @@ TEST_CASE("canonicalization", "[algorithms]") {
       auto input =
           ex<Constant>(rational{1, 2}) *
               ex<Tensor>(L"g", bra{L"p_1", L"p_2"}, ket{L"p_3", L"p_4"},
-                         Symmetry::symm) *
-              ex<Tensor>(L"t", bra{L"p_3"}, ket{L"p_1"}, Symmetry::nonsymm) *
-              ex<Tensor>(L"t", bra{L"p_4"}, ket{L"p_2"}, Symmetry::nonsymm) +
+                         Symmetry::Symm) *
+              ex<Tensor>(L"t", bra{L"p_3"}, ket{L"p_1"}, Symmetry::Nonsymm) *
+              ex<Tensor>(L"t", bra{L"p_4"}, ket{L"p_2"}, Symmetry::Nonsymm) +
           ex<Constant>(rational{1, 2}) *
               ex<Tensor>(L"g", bra{L"p_2", L"p_1"}, ket{L"p_4", L"p_3"},
-                         Symmetry::symm) *
-              ex<Tensor>(L"t", bra{L"p_3"}, ket{L"p_1"}, Symmetry::nonsymm) *
-              ex<Tensor>(L"t", bra{L"p_4"}, ket{L"p_2"}, Symmetry::nonsymm);
+                         Symmetry::Symm) *
+              ex<Tensor>(L"t", bra{L"p_3"}, ket{L"p_1"}, Symmetry::Nonsymm) *
+              ex<Tensor>(L"t", bra{L"p_4"}, ket{L"p_2"}, Symmetry::Nonsymm);
       canonicalize(input);
       REQUIRE_THAT(input, EquivalentTo("g{p2,p3;p1,p4}:S t{p1;p2} t{p4;p3}"));
     }
@@ -270,14 +270,14 @@ TEST_CASE("canonicalization", "[algorithms]") {
       auto input =
           ex<Constant>(rational{1, 2}) *
               ex<Tensor>(L"g", bra{L"p_1", L"p_2"}, ket{L"p_3", L"p_4"},
-                         Symmetry::antisymm) *
-              ex<Tensor>(L"t", bra{L"p_3"}, ket{L"p_1"}, Symmetry::nonsymm) *
-              ex<Tensor>(L"t", bra{L"p_4"}, ket{L"p_2"}, Symmetry::nonsymm) +
+                         Symmetry::Antisymm) *
+              ex<Tensor>(L"t", bra{L"p_3"}, ket{L"p_1"}, Symmetry::Nonsymm) *
+              ex<Tensor>(L"t", bra{L"p_4"}, ket{L"p_2"}, Symmetry::Nonsymm) +
           ex<Constant>(rational{1, 2}) *
               ex<Tensor>(L"g", bra{L"p_2", L"p_1"}, ket{L"p_4", L"p_3"},
-                         Symmetry::antisymm) *
-              ex<Tensor>(L"t", bra{L"p_3"}, ket{L"p_1"}, Symmetry::nonsymm) *
-              ex<Tensor>(L"t", bra{L"p_4"}, ket{L"p_2"}, Symmetry::nonsymm);
+                         Symmetry::Antisymm) *
+              ex<Tensor>(L"t", bra{L"p_3"}, ket{L"p_1"}, Symmetry::Nonsymm) *
+              ex<Tensor>(L"t", bra{L"p_4"}, ket{L"p_2"}, Symmetry::Nonsymm);
       canonicalize(input);
       REQUIRE_THAT(input, EquivalentTo("g{p2,p3;p1,p4}:A t{p1;p2} t{p4;p3}"));
     }
@@ -287,16 +287,16 @@ TEST_CASE("canonicalization", "[algorithms]") {
       auto input =
           ex<Constant>(rational{4, 3}) *
               ex<Tensor>(L"g", bra{L"i_3", L"i_4"}, ket{L"a_3", L"i_1"},
-                         Symmetry::antisymm) *
-              ex<Tensor>(L"t", bra{L"a_2"}, ket{L"i_3"}, Symmetry::nonsymm) *
+                         Symmetry::Antisymm) *
+              ex<Tensor>(L"t", bra{L"a_2"}, ket{L"i_3"}, Symmetry::Nonsymm) *
               ex<Tensor>(L"t", bra{L"a_1", L"a_3"}, ket{L"i_4", L"i_2"},
-                         Symmetry::antisymm) -
+                         Symmetry::Antisymm) -
           ex<Constant>(rational{1, 3}) *
               ex<Tensor>(L"g", bra{L"i_3", L"i_4"}, ket{L"i_1", L"a_3"},
-                         Symmetry::antisymm) *
-              ex<Tensor>(L"t", bra{L"a_2"}, ket{L"i_4"}, Symmetry::nonsymm) *
+                         Symmetry::Antisymm) *
+              ex<Tensor>(L"t", bra{L"a_2"}, ket{L"i_4"}, Symmetry::Nonsymm) *
               ex<Tensor>(L"t", bra{L"a_1", L"a_3"}, ket{L"i_3", L"i_2"},
-                         Symmetry::antisymm);
+                         Symmetry::Antisymm);
       canonicalize(input);
       REQUIRE(input->size() == 1);
       REQUIRE_THAT(input,
@@ -308,16 +308,16 @@ TEST_CASE("canonicalization", "[algorithms]") {
       auto input =
           ex<Constant>(rational{4, 3}) *
               ex<Tensor>(L"g", bra{L"i_3", L"i_4"}, ket{L"a_3", L"i_1"},
-                         Symmetry::nonsymm) *
-              ex<Tensor>(L"t", bra{L"a_2"}, ket{L"i_3"}, Symmetry::nonsymm) *
+                         Symmetry::Nonsymm) *
+              ex<Tensor>(L"t", bra{L"a_2"}, ket{L"i_3"}, Symmetry::Nonsymm) *
               ex<Tensor>(L"t", bra{L"a_1", L"a_3"}, ket{L"i_4", L"i_2"},
-                         Symmetry::nonsymm) -
+                         Symmetry::Nonsymm) -
           ex<Constant>(rational{1, 3}) *
               ex<Tensor>(L"g", bra{L"i_3", L"i_4"}, ket{L"i_1", L"a_3"},
-                         Symmetry::nonsymm) *
-              ex<Tensor>(L"t", bra{L"a_2"}, ket{L"i_4"}, Symmetry::nonsymm) *
+                         Symmetry::Nonsymm) *
+              ex<Tensor>(L"t", bra{L"a_2"}, ket{L"i_4"}, Symmetry::Nonsymm) *
               ex<Tensor>(L"t", bra{L"a_1", L"a_3"}, ket{L"i_3", L"i_2"},
-                         Symmetry::nonsymm);
+                         Symmetry::Nonsymm);
 
       canonicalize(input);
       REQUIRE(input->size() == 1);
@@ -331,16 +331,16 @@ TEST_CASE("canonicalization", "[algorithms]") {
         auto input =
             ex<Constant>(-4) *
                 ex<Tensor>(L"S", bra{L"i_1", L"i_2", L"i_3"},
-                           ket{L"a_1", L"a_2", L"a_3"}, Symmetry::nonsymm) *
+                           ket{L"a_1", L"a_2", L"a_3"}, Symmetry::Nonsymm) *
                 ex<Tensor>(L"f", bra{L"i_4"}, ket{L"i_1"}) *
                 ex<Tensor>(L"t", bra{L"a_1", L"a_2", L"a_3"},
-                           ket{L"i_3", L"i_2", L"i_4"}, Symmetry::nonsymm) +
+                           ket{L"i_3", L"i_2", L"i_4"}, Symmetry::Nonsymm) +
             ex<Constant>(-4) *
                 ex<Tensor>(L"S", bra{L"i_1", L"i_2", L"i_3"},
-                           ket{L"a_1", L"a_2", L"a_3"}, Symmetry::nonsymm) *
+                           ket{L"a_1", L"a_2", L"a_3"}, Symmetry::Nonsymm) *
                 ex<Tensor>(L"f", bra{L"i_4"}, ket{L"i_1"}) *
                 ex<Tensor>(L"t", bra{L"a_1", L"a_2", L"a_3"},
-                           ket{L"i_2", L"i_4", L"i_3"}, Symmetry::nonsymm);
+                           ket{L"i_2", L"i_4", L"i_3"}, Symmetry::Nonsymm);
         canonicalize(input);
         REQUIRE_THAT(
             input,
@@ -352,17 +352,17 @@ TEST_CASE("canonicalization", "[algorithms]") {
         auto term1 =
             ex<Constant>(-4) *
             ex<Tensor>(L"S", bra{L"i_1", L"i_2", L"i_3"},
-                       ket{L"a_1", L"a_2", L"a_3"}, Symmetry::nonsymm) *
+                       ket{L"a_1", L"a_2", L"a_3"}, Symmetry::Nonsymm) *
             ex<Tensor>(L"f", bra{L"i_4"}, ket{L"i_1"}) *
             ex<Tensor>(L"t", bra{L"a_1", L"a_2", L"a_3"},
-                       ket{L"i_3", L"i_2", L"i_4"}, Symmetry::nonsymm);
+                       ket{L"i_3", L"i_2", L"i_4"}, Symmetry::Nonsymm);
         auto term2 =
             ex<Constant>(-4) *
             ex<Tensor>(L"S", bra{L"i_1", L"i_2", L"i_3"},
-                       ket{L"a_1", L"a_2", L"a_3"}, Symmetry::nonsymm) *
+                       ket{L"a_1", L"a_2", L"a_3"}, Symmetry::Nonsymm) *
             ex<Tensor>(L"f", bra{L"i_4"}, ket{L"i_1"}) *
             ex<Tensor>(L"t", bra{L"a_1", L"a_2", L"a_3"},
-                       ket{L"i_2", L"i_4", L"i_3"}, Symmetry::nonsymm);
+                       ket{L"i_2", L"i_4", L"i_3"}, Symmetry::Nonsymm);
         canonicalize(term1);
         canonicalize(term2);
         REQUIRE_THAT(term1,
@@ -383,16 +383,16 @@ TEST_CASE("canonicalization", "[algorithms]") {
         auto input =
             ex<Constant>(2) *
                 ex<Tensor>(L"S", bra{L"i_1", L"i_2", L"i_3"},
-                           ket{L"a_1", L"a_2", L"a_3"}, Symmetry::nonsymm) *
+                           ket{L"a_1", L"a_2", L"a_3"}, Symmetry::Nonsymm) *
                 ex<Tensor>(L"f", bra{L"i_4"}, ket{L"i_1"}) *
                 ex<Tensor>(L"t", bra{L"a_1", L"a_2", L"a_3"},
-                           ket{L"i_3", L"i_4", L"i_2"}, Symmetry::nonsymm) +
+                           ket{L"i_3", L"i_4", L"i_2"}, Symmetry::Nonsymm) +
             ex<Constant>(2) *
                 ex<Tensor>(L"S", bra{L"i_1", L"i_2", L"i_3"},
-                           ket{L"a_1", L"a_2", L"a_3"}, Symmetry::nonsymm) *
+                           ket{L"a_1", L"a_2", L"a_3"}, Symmetry::Nonsymm) *
                 ex<Tensor>(L"f", bra{L"i_4"}, ket{L"i_1"}) *
                 ex<Tensor>(L"t", bra{L"a_1", L"a_2", L"a_3"},
-                           ket{L"i_2", L"i_3", L"i_4"}, Symmetry::nonsymm);
+                           ket{L"i_2", L"i_3", L"i_4"}, Symmetry::Nonsymm);
         canonicalize(input);
         REQUIRE_THAT(
             input, EquivalentTo(
@@ -405,20 +405,20 @@ TEST_CASE("canonicalization", "[algorithms]") {
       auto input =
           ex<Constant>(rational{4, 3}) *
               ex<Tensor>(L"B", bra{L"i_3"}, ket{L"a_3"}, aux{L"p_5"},
-                         Symmetry::nonsymm) *
+                         Symmetry::Nonsymm) *
               ex<Tensor>(L"B", bra{L"i_4"}, ket{L"i_1"}, aux{L"p_5"},
-                         Symmetry::nonsymm) *
-              ex<Tensor>(L"t", bra{L"a_2"}, ket{L"i_3"}, Symmetry::nonsymm) *
+                         Symmetry::Nonsymm) *
+              ex<Tensor>(L"t", bra{L"a_2"}, ket{L"i_3"}, Symmetry::Nonsymm) *
               ex<Tensor>(L"t", bra{L"a_1", L"a_3"}, ket{L"i_4", L"i_2"},
-                         Symmetry::nonsymm) -
+                         Symmetry::Nonsymm) -
           ex<Constant>(rational{1, 3}) *
               ex<Tensor>(L"B", bra{L"i_3"}, ket{L"i_1"}, aux{L"p_5"},
-                         Symmetry::nonsymm) *
+                         Symmetry::Nonsymm) *
               ex<Tensor>(L"B", bra{L"i_4"}, ket{L"a_3"}, aux{L"p_5"},
-                         Symmetry::nonsymm) *
-              ex<Tensor>(L"t", bra{L"a_2"}, ket{L"i_4"}, Symmetry::nonsymm) *
+                         Symmetry::Nonsymm) *
+              ex<Tensor>(L"t", bra{L"a_2"}, ket{L"i_4"}, Symmetry::Nonsymm) *
               ex<Tensor>(L"t", bra{L"a_1", L"a_3"}, ket{L"i_3", L"i_2"},
-                         Symmetry::nonsymm);
+                         Symmetry::Nonsymm);
 
       canonicalize(input);
       simplify(input);

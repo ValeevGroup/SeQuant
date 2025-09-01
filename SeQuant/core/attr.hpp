@@ -5,100 +5,99 @@
 #ifndef SEQUANT_ATTR_HPP
 #define SEQUANT_ATTR_HPP
 
+#include <SeQuant/core/utility/macros.hpp>
+
 #include <cassert>
 #include <cstdlib>
 #include <string>
 
 namespace sequant {
 
-enum class IndexSpaceMetric { Unit, General, Invalid };
+enum class IndexSpaceMetric { Unit, General };
 
 // clang-format off
-/// describes supported symmetries of tensorial objects with respect to permutations of particles (or columns, in tensor notation)
+/// describes supported symmetries of tensorial objects with respect to permutations of columns (in tensor notation), i.e., pairs of {bra[i],ket[i]} slots
 // clang-format on
-enum class ParticleSymmetry { symm, nonsymm, invalid };
+enum class ColumnSymmetry { Symm, Nonsymm };
 
 // clang-format off
 /// describes supported symmetries of bra or ket of _particle-symmetric_ tensorial objects
 /// @note bra or ket can be symmetric or antisymmetric only if the tensor is particle-symmetric, otherwise it does not make sense to permute indices corresponding to distinguishable particles
 // clang-format on
-enum class Symmetry { symm, antisymm, nonsymm, invalid };
+enum class Symmetry { Symm, Antisymm, Nonsymm };
 
-/// describes supported symmetries of tensorial objects w.r.t. bra-ket exchange
+/// describes supported symmetries of tensorial objects w.r.t. bra-ket exchange,
+/// i.e., the swap of bra slot bundle with ket slot bundle
 ///
 /// @note Currently there is no support for swapping bra index with the ket
 ///       index for a single particle, only whole bra-ket swaps are considered.
-enum class BraKetSymmetry { symm, conjugate, nonsymm, invalid };
+enum class BraKetSymmetry { Symm, Conjugate, Nonsymm };
 
 /// describes type of single-particle basis
-enum class SPBasis { spinor, spinfree };
+enum class SPBasis { Spinor, Spinfree };
 
 inline std::wstring to_wolfram(const Symmetry& symmetry) {
   std::wstring result;
   switch (symmetry) {
-    case Symmetry::symm:
+    case Symmetry::Symm:
       result = L"indexSymm[1]";
       break;
-    case Symmetry::antisymm:
+    case Symmetry::Antisymm:
       result = L"indexSymm[-1]";
       break;
-    case Symmetry::nonsymm:
+    case Symmetry::Nonsymm:
       result = L"indexSymm[0]";
       break;
-    default:
-      abort();
   }
   return result;
 }
 
 inline std::wstring to_wstring(Symmetry sym) {
   switch (sym) {
-    case Symmetry::symm:
+    case Symmetry::Symm:
       return L"symmetric";
-    case Symmetry::antisymm:
+    case Symmetry::Antisymm:
       return L"antisymmetric";
-    case Symmetry::nonsymm:
+    case Symmetry::Nonsymm:
       return L"nonsymmetric";
-    case Symmetry::invalid:
-      return L"invalid";
   }
-  abort();  // unreachable
+
+  SEQUANT_UNREACHABLE;
 }
 
-enum class BraKetPos { bra, ket, none };
+enum class BraKetPos {
+  Bra,
+  Ket,
+};
 
 inline std::wstring to_wolfram(BraKetPos a) {
   switch (a) {
-    case BraKetPos::bra:
+    case BraKetPos::Bra:
       return L"indexType[bra]";
-    case BraKetPos::ket:
+    case BraKetPos::Ket:
       return L"indexType[ket]";
-    case BraKetPos::none:
-      return L"indexType[none]";
   }
 }
 
 enum class Statistics {
-  Null,
   FermiDirac,
   BoseEinstein,
   Arbitrary,
-  Invalid = Null
 };
 
-enum class Action { create, annihilate, invalid };
+enum class Action { Create, Annihilate };
 
 /// applies (Hermitian) adjoint to @c action
 inline Action adjoint(Action action) {
-  return action == Action::create ? Action::annihilate : Action::create;
+  return action == Action::Create ? Action::Annihilate : Action::Create;
 }
 
 inline std::wstring to_wolfram(Action a) {
   using namespace std::literals;
-  return L"indexType["s + (a == Action::create ? L"cre" : L"ann") + L"]";
+  return L"indexType["s + (a == Action::Create ? L"cre" : L"ann") + L"]";
 }
 
-enum class Vacuum { Physical, SingleProduct, MultiProduct, Invalid };
+enum class Vacuum { Physical, SingleProduct, MultiProduct };
 
 inline std::wstring to_string(Vacuum V) {
   switch (V) {
@@ -108,11 +107,9 @@ inline std::wstring to_string(Vacuum V) {
       return L"SingleProductVacuum";
     case Vacuum::MultiProduct:
       return L"MultiProductVacuum";
-    case Vacuum::Invalid:
-      return L"InvalidVacuum";
-    default:
-      abort();
   }
+
+  SEQUANT_UNREACHABLE;
 }
 
 /// describes LaTeX typesetting convention for contravariant (bra, annihilation)

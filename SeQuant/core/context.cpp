@@ -176,7 +176,7 @@ Context& Context::set(IndexSpaceRegistry ISR) {
 }
 
 Context& Context::set(std::shared_ptr<IndexSpaceRegistry> ISR) {
-  idx_space_reg_ = ISR;
+  idx_space_reg_ = std::move(ISR);
   return *this;
 }
 

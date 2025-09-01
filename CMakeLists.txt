@@ -136,6 +136,10 @@ add_feature_info(SEQUANT_CONTEXT_MANIPULATION_THREADSAFE SEQUANT_CONTEXT_MANIPUL
 # Prerequisites
 ##########################
 
+if (PROJECT_IS_TOP_LEVEL AND NOT DEFINED CMAKE_POSITION_INDEPENDENT_CODE)
+    set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+endif()
+
 # std::thread requires (on some platforms?) thread support which is not
 # provided automatically
 find_package(Threads REQUIRED)

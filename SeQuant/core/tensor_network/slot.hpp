@@ -17,8 +17,6 @@ enum class TensorIndexSlotType {
   Ket = 1,
   /// tensor aux index slot
   Aux = 2,
-
-  Invalid
 };
 
 /// types of slots that can host an index
@@ -43,8 +41,6 @@ enum class IndexSlotType {
   TensorAux,
   /// connecting two tensor aux index slots
   TensorAuxAux,
-
-  Invalid
 };
 
 }  // namespace sequant

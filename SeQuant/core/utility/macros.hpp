@@ -5,6 +5,10 @@
 #ifndef SEQUANT_CORE_UTILITY_MACROS_H
 #define SEQUANT_CORE_UTILITY_MACROS_H
 
+#include <cassert>
+#include <cstdlib>
+#include <iostream>
+
 /* detect C++ compiler id:
 - ids taken from CMake
 - macros are discussed at https://sourceforge.net/p/predef/wiki/Compilers/
@@ -57,5 +61,26 @@
 #else
 #define SEQUANT_PRAGMA_GCC(x)
 #endif
+
+#define SEQUANT_ABORT(msg)       \
+  assert(false && msg);          \
+  std::cerr << msg << std::endl; \
+  std::abort();
+
+#if defined(__cpp_lib_unreachable)
+#include <utility>
+
+#define SEQUANT_UNREACHABLE_TOKEN std::unreachable()
+#elif defined(SEQUANT_CXX_COMPILER_IS_GCC) || \
+    defined(SEQUANT_CXX_COMPILER_IS_CLANG)
+#define SEQUANT_UNREACHABLE_TOKEN __builtin_unreachable()
+#else
+// Compiler-independent fallback
+#define SEQUANT_UNREACHABLE_TOKEN std::abort()
+#endif
+
+#define SEQUANT_UNREACHABLE                        \
+  assert(false && "Should have been unreachable"); \
+  SEQUANT_UNREACHABLE_TOKEN;
 
 #endif  // SEQUANT_CORE_UTILITY_MACROS_H

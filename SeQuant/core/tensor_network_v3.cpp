@@ -17,6 +17,7 @@
 #include <SeQuant/core/tensor_network/utils.hpp>
 #include <SeQuant/core/tensor_network/vertex_painter.hpp>
 #include <SeQuant/core/tensor_network_v3.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/swap.hpp>
 #include <SeQuant/core/utility/tuple.hpp>
 
@@ -70,7 +71,7 @@ bool TensorNetworkV3::Vertex::operator<(const Vertex &rhs) const {
   }
 
   // We only take the index slot into account for non-symmetric tensors
-  if (terminal_symm == Symmetry::nonsymm) {
+  if (terminal_symm == Symmetry::Nonsymm) {
     return index_slot < rhs.index_slot;
   } else {
     return false;
@@ -80,9 +81,9 @@ bool TensorNetworkV3::Vertex::operator<(const Vertex &rhs) const {
 bool TensorNetworkV3::Vertex::operator==(const Vertex &rhs) const {
   // Slot position is only taken into account for non_symmetric tensors
   const std::size_t lhs_slot =
-      (terminal_symm == Symmetry::nonsymm) * index_slot;
+      (terminal_symm == Symmetry::Nonsymm) * index_slot;
   const std::size_t rhs_slot =
-      (rhs.terminal_symm == Symmetry::nonsymm) * rhs.index_slot;
+      (rhs.terminal_symm == Symmetry::Nonsymm) * rhs.index_slot;
 
   // sanity check that bra and ket have same symmetry
   assert(origin == Origin::Aux || rhs.origin == Origin::Aux ||
@@ -196,10 +197,10 @@ ExprPtr TensorNetworkV3::canonicalize_graph(
                            container::svector<std::size_t, 4>>,
                  /* bra + ket = */ 2>>
       canonical_slot_order;
-  // for nonsymmetric particle-symmetric tensors only: maps tensor ordinal ->
-  // canonical order of its braket slots
+  // for nonsymmetric column-symmetric tensors only: maps tensor ordinal ->
+  // canonical order of its column slots
   container::map<std::size_t, container::svector<std::size_t, 4>>
-      canonical_braket_slot_order;
+      canonical_column_slot_order;
   // for bra-ket symmetric tensors only: maps tensor ordinal -> canonical order
   // of its bra and ket slot bundle vertices
   container::map<std::size_t, std::array<std::size_t, /* bra + ket = */ 2>>
@@ -208,8 +209,8 @@ ExprPtr TensorNetworkV3::canonicalize_graph(
   std::vector<std::size_t> index_idx_to_vertex;
   index_idx_to_vertex.reserve(edges_.size() + pure_proto_indices_.size());
   std::size_t tensor_braket_vertex_ord =
-      0;  // counts encountered braket bundle vertices, resets to zero when
-          // switching to new tensor
+      0;  // counts encountered braket and column bundle vertices,
+          // resets to zero when switching to new tensor
 
   for (std::size_t vertex = 0; vertex < graph.vertex_types.size(); ++vertex) {
     const auto vertex_type = graph.vertex_types[vertex];
@@ -225,12 +226,12 @@ ExprPtr TensorNetworkV3::canonicalize_graph(
         const std::size_t tensor_ord = tensor_count - 1;
         const AbstractTensor &tensor = *tensors_[tensor_ord];
         const auto symm = symmetry(tensor);
-        if (symm == Symmetry::symm || symm == Symmetry::antisymm) {
+        if (symm == Symmetry::Symm || symm == Symmetry::Antisymm) {
           canonical_slot_order[tensor_ord][bra ? 0 : 1].second.emplace_back(
               canonize_perm[vertex]);
         }
         const auto bksymm = braket_symmetry(tensor);
-        if (bksymm != BraKetSymmetry::nonsymm) {
+        if (bksymm != BraKetSymmetry::Nonsymm) {
           canonical_bra_ket_bundle_order[tensor_ord][bra ? 0 : 1] =
               canonize_perm[vertex];
         }
@@ -242,11 +243,11 @@ ExprPtr TensorNetworkV3::canonicalize_graph(
         const std::size_t tensor_ord = tensor_count - 1;
         const AbstractTensor &tensor = *tensors_[tensor_ord];
         const auto symm = symmetry(tensor);
-        const auto psymm = particle_symmetry(tensor);
-        if (symm == Symmetry::nonsymm && psymm == ParticleSymmetry::symm &&
+        const auto csymm = column_symmetry(tensor);
+        if (symm == Symmetry::Nonsymm && csymm == ColumnSymmetry::Symm &&
             /* skip the first one which connects bra and ket bundles */
             tensor_braket_vertex_ord != 0) {
-          canonical_braket_slot_order[tensor_ord].emplace_back(
+          canonical_column_slot_order[tensor_ord].emplace_back(
               canonize_perm[vertex]);
         }
         ++tensor_braket_vertex_ord;
@@ -281,7 +282,7 @@ ExprPtr TensorNetworkV3::canonicalize_graph(
     braparslots.first = sort_then_replace_by_ordinals(braparslots.second);
     ketparslots.first = sort_then_replace_by_ordinals(ketparslots.second);
   }
-  for (auto &[ord, slots] : canonical_braket_slot_order) {
+  for (auto &[ord, slots] : canonical_column_slot_order) {
     sort_then_replace_by_ordinals(slots);
   }
 
@@ -328,27 +329,27 @@ ExprPtr TensorNetworkV3::canonicalize_graph(
 
   apply_index_replacements(tensors_, idxrepl, true);
 
-  // Permute {bra, ket} or braket slots of particle-symmetric tensors as
+  // Permute {bra, ket} or column slots of column-symmetric tensors as
   // indicated by graph canonization
   for (std::size_t i = 0; i < tensors_.size(); ++i) {
     AbstractTensor &tensor = *tensors_[i];
 
-    if (particle_symmetry(tensor) != ParticleSymmetry::symm) continue;
-    const auto asymm = symmetry(tensor) == Symmetry::nonsymm;
+    if (column_symmetry(tensor) != ColumnSymmetry::Symm) continue;
+    const auto asymm = symmetry(tensor) == Symmetry::Nonsymm;
 
-    if (asymm) {  // asymmetric tensor? order braket slots only
+    if (asymm) {  // asymmetric tensor? order column slots only
 
-      auto it = canonical_braket_slot_order.find(i);
-      if (it == canonical_braket_slot_order.end()) continue;
+      auto it = canonical_column_slot_order.find(i);
+      if (it == canonical_column_slot_order.end()) continue;
 
       auto &sorted_ordinals = it->second;
 
-      // the logic of _permute_braket is too complicated to capture here
+      // the logic of _permute_columns is too complicated to capture here
       // if (Logger::instance().canonicalize) {
       //   if (!ranges::is_sorted(sorted_ordinals)) {
       //     for (const auto &idxpair : idxrepl) {
       //       std::wcout << "TensorNetworkV3::canonicalize_graph: permuting "
-      //                     "braket slots in "
+      //                     "column bundles in "
       //                  << to_latex(tensor) << ":\n";
       //       for (auto i = 0; i != sorted_ordinals.size(); ++i) {
       //         std::wcout << "  {" <<
@@ -363,7 +364,7 @@ ExprPtr TensorNetworkV3::canonicalize_graph(
       //   }
       // }
 
-      tensor._permute_braket(
+      tensor._permute_columns(
           std::span(sorted_ordinals.data(), sorted_ordinals.size()));
     } else {  // symmetric/antisymmetric bra
       auto it = canonical_slot_order.find(i);
@@ -395,14 +396,14 @@ ExprPtr TensorNetworkV3::canonicalize_graph(
       tensor._permute_ket(std::span(ketslots.data(), ketslots.size()));
 
       // parity of slot permutations only matters for antisymmetric tensors
-      if (symmetry(tensor) == Symmetry::antisymm) {
+      if (symmetry(tensor) == Symmetry::Antisymm) {
         parity *= braparity.value_or(1) * ketparity.value_or(1);
       }
     }
 
     // lastly permute bra with ket bundles, if needed
     // TODO extend to support comjugate case
-    if (braket_symmetry(tensor) != BraKetSymmetry::symm) continue;
+    if (braket_symmetry(tensor) != BraKetSymmetry::Symm) continue;
 
     // swap bra and ket bundles
     if (canonical_bra_ket_bundle_order[i][0] >
@@ -777,7 +778,7 @@ TensorNetworkV3::canonicalize_slots(
   metadata.phase = 1;
   container::svector<SwapCountable<std::size_t>> vertices;
   for (const AbstractTensor &tensor : tensors_ | ranges::views::indirect) {
-    if (symmetry(tensor) != Symmetry::antisymm) {
+    if (symmetry(tensor) != Symmetry::Antisymm) {
       // Only antisymmetric tensors (or rather: their indices) can incur a phase
       // change due to index permutation
       continue;
@@ -889,7 +890,7 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
   auto index_slot_offset = [](const AbstractTensor &tensor, SlotType slot_type,
                               std::size_t slot_ordinal) {
     const Symmetry tensor_sym = symmetry(tensor);
-    const bool is_symm = tensor_sym != Symmetry::nonsymm;
+    const bool is_symm = tensor_sym != Symmetry::Nonsymm;
     std::size_t offset = 0;
     // number of vertices before first index slot vertex varies with symmetry
     if (is_symm) {
@@ -939,40 +940,39 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
     ++nvertex;
 
     const Symmetry tensor_sym = symmetry(tensor);
-    const bool is_symm = tensor_sym != Symmetry::nonsymm;
+    const bool is_symm = tensor_sym != Symmetry::Nonsymm;
     // max (number of bra slots, number of ket slots) slots, i.e. the number of
     // 1-index and 2-index columns
-    const std::size_t num_particles =
-        std::max(bra_rank(tensor), ket_rank(tensor));
+    const std::size_t num_cols = std::max(bra_rank(tensor), ket_rank(tensor));
     // min (number of bra slots, number of ket slots) slots, i.e. the number of
     // 2-index columns
-    const std::size_t num_paired_particles =
+    const std::size_t num_paired_cols =
         std::max(bra_rank(tensor), ket_rank(tensor));
-    const bool is_braket_symm = braket_symmetry(tensor) == BraKetSymmetry::symm;
+    const bool is_braket_symm = braket_symmetry(tensor) == BraKetSymmetry::Symm;
 
     // vertices for braket bundles:
     // - antisymmetric/symmetric tensors only need 1 bundle for {bra,ket}
-    // - asymmetric tensors also need 1 bundle for each pair of slots
-    // {bra_i,ket_i} (including pairs where one of the slots is empty/missing)
-    const std::size_t num_braket_vertices = !is_symm ? num_particles + 1 : 1;
-    const bool is_part_symm =
-        particle_symmetry(tensor) == ParticleSymmetry::symm;
+    // - asymmetric tensors also need 1 bundle for each column, i.e. pair of
+    // matching slots {bra_i,ket_i} (including pairs where one of the slots is
+    // empty/missing)
+    const std::size_t num_braket_vertices = !is_symm ? num_cols + 1 : 1;
+    const bool is_col_symm = column_symmetry(tensor) == ColumnSymmetry::Symm;
 
     // make braket slot bundles first
     for (std::size_t i = 0; i < num_braket_vertices; ++i) {
       if (options.make_labels || options.make_texlabels) {
-        std::wstring base_label = L"bk";
+        std::wstring base_label = L"c";
         std::wstring psuffix;
         if (i == 0) {  // {bra,ket} bundle -> "bk{a,s,}"
           switch (tensor_sym) {
-            case Symmetry::symm:
+            case Symmetry::Symm:
               base_label += L"s";
               break;
-            case Symmetry::antisymm:
+            case Symmetry::Antisymm:
               base_label += L"a";
               break;
-            default:
-              assert(tensor_sym != Symmetry::invalid);
+            case Symmetry::Nonsymm:
+              break;
           }
         } else {
           psuffix = L"_" + std::to_wstring(i);
@@ -984,16 +984,16 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
       if (options.make_xlabels) make_xlabel();
       graph.vertex_types.emplace_back(VertexType::TensorBraKet);
 
-      // If tensor is particle-symmetric use same color for all braket vertices,
+      // If tensor is column-symmetric use same color for all braket vertices,
       // else use different colors
       std::size_t color_id;
       if (i == 0) {  // {bra,ket} bundle -> 0
         color_id = 0;
       } else {
-        // {bra_i,ket_i} bundle -> particle_symmetric ? 1 : i+1
-        color_id = is_part_symm ? 1 : i;
+        // {bra_i,ket_i} bundle -> column_symmetric ? 1 : i+1
+        color_id = is_col_symm ? 1 : i;
       }
-      graph.vertex_colors.emplace_back(colorizer(ParticleGroup{color_id}));
+      graph.vertex_colors.emplace_back(colorizer(ColumnGroup{color_id}));
 
       edges.emplace_back(std::make_pair(tensor_vertex, nvertex));
       ++nvertex;
@@ -1010,9 +1010,9 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
         if (options.make_labels || options.make_texlabels) {
           std::wstring label =
               std::wstring(bra ? L"bra" : L"ket") + std::to_wstring(size) +
-              ((tensor_sym == Symmetry::antisymm)
+              ((tensor_sym == Symmetry::Antisymm)
                    ? L"a"
-                   : (tensor_sym == Symmetry::symm ? L"s" : L""));
+                   : (tensor_sym == Symmetry::Symm ? L"s" : L""));
           if (options.make_labels) make_label(label);
           if (options.make_texlabels) make_texlabel(label);
         }
@@ -1046,22 +1046,22 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
         // N.B. currently AbstractTensor only supports "left"-aligned bra/ket
         // slot sets (i.e. bra[0] is paired with ket[0], etc.), gaps between
         // occupied slots are occupied by null indices) we need to assign
-        // different colors to braket slots of different types so must track
-        // types of braket slots:
-        // - if tensor is not particle symmetric braket slots will already be
-        // colored uniquely (by particle index)
-        // - if tensor is symmetric/antisymmetric braket slots have same color
-        // - if tensor is particle symmetric then assign different colors to
-        // braket slots of different types (paired vs unpaired)
+        // different colors to column slots of different types so must track
+        // types of column slots:
+        // - if tensor is not column symmetric column slots will already be
+        // colored uniquely (by column index)
+        // - if tensor is symmetric/antisymmetric column slots have same color
+        // - if tensor is column symmetric then assign different colors to
+        // column slots of different types (paired vs unpaired)
 
         // N.B. emtpy slots are not skipped!
 
-        const auto is_paired_particle = i < num_paired_particles;
+        const auto is_paired_col = i < num_paired_cols;
         std::size_t color_id = i;
         if (is_symm)
           color_id = 0;
-        else if (is_part_symm) {
-          if (is_paired_particle)
+        else if (is_col_symm) {
+          if (is_paired_col)
             color_id = 0;
           else
             color_id = 1;
@@ -1074,7 +1074,7 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
           make_texlabel(std::wstring(is_bra ? L"bra" : L"ket") + L"\\_" +
                         std::to_wstring(i + 1));
         graph.vertex_types.emplace_back(vertex_type);
-        // see color_id definition for handling of bra, ket, and and braket
+        // see color_id definition for handling of bra, ket, and column
         // bundle symmetries. if symmetric wrt bra<->ket swap use same color
         // for bra and ket bundles, else use distinct colors
         graph.vertex_colors.emplace_back((is_bra || is_braket_symm)
@@ -1086,21 +1086,21 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
           const std::size_t slot_bundle_vertex_offset =
               /* tensor core vertex */ 1 + /* {bra,ket} bundle vertex */ 1 +
               /* {bra_i,ket_i} bundle vertices */
-              (!is_symm ? num_particles : 0);
+              (!is_symm ? num_cols : 0);
           const std::size_t slot_vertex =
               tensor_vertex + slot_bundle_vertex_offset +
               /* bra or ket bundle vertex */ (is_bra ? 0 : 1);
           edges.emplace_back(std::make_pair(slot_vertex, nvertex));
         }
-        // for asymmetric tensors also connect to the {bra_i,ket_i} bundle
-        // vertex
+        // for asymmetric tensors also connect to the {bra_i,ket_i} column
+        // bundle vertex
         if (!is_symm) {
-          const std::size_t braket_bundle_vertex =
+          const std::size_t column_bundle_vertex =
               tensor_vertex +
               /* tensor core vertex */ 1 +
               /* {bra,ket} bundle vertex */ 1 +
-              /* {bra_i,ket_i} bundle vertex */ i;
-          edges.emplace_back(std::make_pair(braket_bundle_vertex, nvertex));
+              /* {bra_i,ket_i} column bundle vertex */ i;
+          edges.emplace_back(std::make_pair(column_bundle_vertex, nvertex));
         }
         // make sure logic in index_slot_offset is correct
         assert(nvertex ==
@@ -1260,7 +1260,7 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
 
       assert(idx_vertex != uninitialized_vertex);
       if (idx_vertex == uninitialized_vertex) {
-        std::abort();
+        SEQUANT_ABORT("Expected all vertices to be initialized at this point");
       }
 
       edges.emplace_back(std::make_pair(idx_vertex, vertex));
@@ -1366,7 +1366,7 @@ void TensorNetworkV3::init_edges() {
       // permutational symmetry of auxiliary indices so we just assume there is
       // no such symmetry
       idx_insert(aux_indices[index_idx],
-                 Vertex(Origin::Aux, tensor_idx, index_idx, Symmetry::nonsymm));
+                 Vertex(Origin::Aux, tensor_idx, index_idx, Symmetry::Nonsymm));
     }
   }
 
@@ -1442,7 +1442,7 @@ void TensorNetworkV3::init_edges() {
 }
 
 container::svector<std::pair<long, long>> TensorNetworkV3::factorize() {
-  abort();  // not yet implemented
+  SEQUANT_ABORT("TensorNetworkV3::factorize is not yet implemented");
 }
 
 size_t TensorNetworkV3::SlotCanonicalizationMetadata::hash_value() const {

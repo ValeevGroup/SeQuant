@@ -59,6 +59,7 @@ jobs:
         -DSEQUANT_BENCHMARKS=${{ !matrix.valgrind && !matrix.sanitize }}
         -DSEQUANT_SKIP_LONG_TESTS=${{ matrix.valgrind || matrix.sanitize }}
         -DSEQUANT_COMPILE_DOC_EXAMPLES=${{ !matrix.valgrind }}
+        -DSEQUANT_PYTHON=${{ !matrix.valgrind && !matrix.sanitize }}
     steps:
     - uses: actions/checkout@v4
 

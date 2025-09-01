@@ -145,7 +145,7 @@ std::string ords_to_annot(RngOfOrdinals const& ords) {
 /// \return The symmetrized TA::DistArray.
 ///
 template <typename... Args>
-auto particle_symmetrize_ta(TA::DistArray<Args...> const& arr) {
+auto column_symmetrize_ta(TA::DistArray<Args...> const& arr) {
   using ranges::views::iota;
 
   size_t const rank = arr.trange().rank();
@@ -254,7 +254,7 @@ auto particle_antisymmetrize_ta(TA::DistArray<Args...> const& arr,
 /// \return The symmetrized btas::Tensor.
 ///
 template <typename... Args>
-auto particle_symmetrize_btas(btas::Tensor<Args...> const& arr) {
+auto column_symmetrize_btas(btas::Tensor<Args...> const& arr) {
   using ranges::views::iota;
 
   size_t const rank = arr.rank();
@@ -335,6 +335,157 @@ auto particle_antisymmetrize_btas(btas::Tensor<Args...> const& arr,
   // Process ket permutations if needed
   const auto bra_annot = bra_rank == 0 ? perm_t{} : bra_perm;
   result = process_permutations(result, ket_rank, ket_perm, bra_annot, false);
+
+  return result;
+}
+
+/// \brief This function is used to implement ResultPtr::biorthogonal_cleanup
+/// for TA::DistArray
+///
+/// \param arr The array to be "cleaned up"
+/// \param bra_rank The rank of the bra indices
+///
+/// \return The cleaned TA::DistArray.
+template <typename... Args>
+auto biorthogonal_cleanup_ta(TA::DistArray<Args...> const& arr,
+                             size_t bra_rank) {
+  using ranges::views::iota;
+  size_t const rank = arr.trange().rank();
+  assert(bra_rank <= rank);
+  size_t const ket_rank = rank - bra_rank;
+
+  if (rank <= 4) {
+    return arr;
+  }
+
+  using numeric_type = typename TA::DistArray<Args...>::numeric_type;
+
+  size_t factorial_ket = 1;
+  for (size_t i = 2; i <= ket_rank; ++i) {
+    factorial_ket *= i;
+  }
+  numeric_type norm_factor = numeric_type(1) / numeric_type(factorial_ket);
+
+  TA::DistArray<Args...> result;
+
+  perm_t perm = iota(size_t{0}, rank) | ranges::to<perm_t>;
+  perm_t bra_perm = iota(size_t{0}, bra_rank) | ranges::to<perm_t>;
+  perm_t ket_perm = iota(bra_rank, rank) | ranges::to<perm_t>;
+
+  const auto lannot = ords_to_annot(perm);
+
+  auto process_permutations = [&lannot](const TA::DistArray<Args...>& input_arr,
+                                        size_t range_rank, perm_t range_perm,
+                                        const std::string& other_annot,
+                                        bool is_bra) -> TA::DistArray<Args...> {
+    if (range_rank <= 1) return input_arr;
+    TA::DistArray<Args...> result;
+
+    auto callback = [&]([[maybe_unused]] int parity) {
+      const auto range_annot = ords_to_annot(range_perm);
+      const auto annot = other_annot.empty()
+                             ? range_annot
+                             : (is_bra ? range_annot + "," + other_annot
+                                       : other_annot + "," + range_annot);
+
+      // ignore parity, all permutations get same coefficient
+      numeric_type p_ = 1;
+      if (result.is_initialized()) {
+        result(lannot) += p_ * input_arr(annot);
+      } else {
+        result(lannot) = p_ * input_arr(annot);
+      }
+    };
+    antisymmetric_permutation(ParticleRange{range_perm.begin(), range_rank},
+                              callback);
+    return result;
+  };
+
+  // identity term with coefficient +1
+  result(lannot) = arr(lannot);
+
+  // process only ket permutations with coefficient norm_factor
+  if (ket_rank > 1) {
+    const auto bra_annot = bra_rank == 0 ? "" : ords_to_annot(bra_perm);
+    auto ket_result =
+        process_permutations(arr, ket_rank, ket_perm, bra_annot, false);
+
+    result(lannot) -= norm_factor * ket_result(lannot);
+  }
+
+  TA::DistArray<Args...>::wait_for_lazy_cleanup(result.world());
+  return result;
+}
+
+/// \brief This function is used to implement ResultPtr::biorthogonal_cleanup
+/// for btas::Tensor
+///
+/// \param arr The array to be "cleaned up"
+/// \param bra_rank The rank of the bra indices
+///
+/// \return The cleaned btas::Tensor.
+template <typename... Args>
+auto biorthogonal_cleanup_btas(btas::Tensor<Args...> const& arr,
+                               size_t bra_rank) {
+  using ranges::views::concat;
+  using ranges::views::iota;
+  size_t const rank = arr.rank();
+  assert(bra_rank <= rank);
+  size_t const ket_rank = rank - bra_rank;
+
+  if (rank <= 4) {
+    return arr;
+  }
+
+  using numeric_type = typename btas::Tensor<Args...>::numeric_type;
+
+  size_t factorial_ket = 1;
+  for (size_t i = 2; i <= ket_rank; ++i) {
+    factorial_ket *= i;
+  }
+  numeric_type norm_factor = numeric_type(1) / numeric_type(factorial_ket);
+
+  perm_t bra_perm = iota(size_t{0}, bra_rank) | ranges::to<perm_t>;
+  perm_t ket_perm = iota(bra_rank, rank) | ranges::to<perm_t>;
+  const auto lannot = iota(size_t{0}, rank) | ranges::to<perm_t>;
+
+  auto process_permutations = [&lannot](const btas::Tensor<Args...>& input_arr,
+                                        size_t range_rank, perm_t range_perm,
+                                        const perm_t& other_perm, bool is_bra) {
+    if (range_rank <= 1) return input_arr;
+    btas::Tensor<Args...> result{input_arr.range()};
+    result.fill(0);
+
+    auto callback = [&]([[maybe_unused]] int parity) {
+      const auto annot =
+          is_bra ? concat(range_perm, other_perm) | ranges::to<perm_t>()
+                 : concat(other_perm, range_perm) | ranges::to<perm_t>();
+
+      // ignore parity, all permutations get same coefficient
+      numeric_type p_ = 1;
+      btas::Tensor<Args...> temp;
+      btas::permute(input_arr, lannot, temp, annot);
+      btas::scal(p_, temp);
+      result += temp;
+    };
+
+    antisymmetric_permutation(ParticleRange{range_perm.begin(), range_rank},
+                              callback);
+    return result;
+  };
+
+  // identity term with coefficient +1
+  auto result = arr;
+
+  // process only ket permutations with coefficient norm_factor
+  if (ket_rank > 1) {
+    const auto bra_annot = bra_rank == 0 ? perm_t{} : bra_perm;
+    auto ket_result =
+        process_permutations(arr, ket_rank, ket_perm, bra_annot, false);
+
+    btas::scal(norm_factor, ket_result);
+    result -= ket_result;
+  }
 
   return result;
 }
@@ -479,6 +630,19 @@ class Result {
   ///
   [[nodiscard]] virtual ResultPtr antisymmetrize(size_t bra_rank) const = 0;
 
+  /// \brief Implements "biorthogonal cleanup" of closed-shell
+  /// compact-set equations produced via method of
+  /// <a href="https://arxiv.org/abs/1805.00565">Wang and Knizia</a>.
+  ///
+  /// For 3-body residual (`bra_rank=3`) this implements Eq. (41) of the
+  /// Wang/Knizia paper, same as the first line of Figure 1.
+  /// For 4-body residual this implements the first line of Figure 2.
+  /// The implementation is for arbitrary ranks.
+  /// @param bra_rank the particle rank of the residual tensor (i.e.
+  ///                 its order halved)
+  [[nodiscard]] virtual ResultPtr biorthogonal_cleanup(
+      size_t bra_rank) const = 0;
+
   [[nodiscard]] bool has_value() const noexcept;
 
   [[nodiscard]] virtual ResultPtr mult_by_phase(std::int8_t) const = 0;
@@ -587,6 +751,11 @@ class ResultScalar final : public Result {
 
   [[nodiscard]] ResultPtr antisymmetrize(size_t /*bra_rank*/) const override {
     throw unimplemented_method("antisymmetrize");
+  }
+
+  [[nodiscard]] ResultPtr biorthogonal_cleanup(
+      [[maybe_unused]] size_t bra_rank) const override {
+    throw unimplemented_method("biorthogonal_cleanup");
   }
 
   [[nodiscard]] ResultPtr mult_by_phase(std::int8_t factor) const override {
@@ -722,12 +891,17 @@ class ResultTensorTA final : public Result {
   }
 
   [[nodiscard]] ResultPtr symmetrize() const override {
-    return eval_result<this_type>(particle_symmetrize_ta(get<ArrayT>()));
+    return eval_result<this_type>(column_symmetrize_ta(get<ArrayT>()));
   }
 
   [[nodiscard]] ResultPtr antisymmetrize(size_t bra_rank) const override {
     return eval_result<this_type>(
         particle_antisymmetrize_ta(get<ArrayT>(), bra_rank));
+  }
+
+  [[nodiscard]] ResultPtr biorthogonal_cleanup(size_t bra_rank) const override {
+    return eval_result<this_type>(
+        biorthogonal_cleanup_ta(get<ArrayT>(), bra_rank));
   }
 
  private:
@@ -878,6 +1052,13 @@ class ResultTensorOfTensorTA final : public Result {
     return nullptr;
   }
 
+  [[nodiscard]] ResultPtr biorthogonal_cleanup(
+      [[maybe_unused]] size_t bra_rank) const override {
+    // or? throw unimplemented_method("biorthogonal_cleanup");
+    // not implemented yet, I think I need it for CSV
+    return nullptr;
+  }
+
  private:
   [[nodiscard]] std::size_t size_in_bytes() const final {
     auto& v = get<ArrayT>();
@@ -972,12 +1153,18 @@ class ResultTensorBTAS final : public Result {
   }
 
   [[nodiscard]] ResultPtr symmetrize() const override {
-    return eval_result<ResultTensorBTAS<T>>(particle_symmetrize_btas(get<T>()));
+    return eval_result<ResultTensorBTAS<T>>(column_symmetrize_btas(get<T>()));
   }
 
   [[nodiscard]] ResultPtr antisymmetrize(size_t bra_rank) const override {
     return eval_result<ResultTensorBTAS<T>>(
         particle_antisymmetrize_btas(get<T>(), bra_rank));
+  }
+
+  [[nodiscard]] ResultPtr biorthogonal_cleanup(
+      [[maybe_unused]] size_t bra_rank) const override {
+    return eval_result<ResultTensorBTAS<T>>(
+        biorthogonal_cleanup_btas(get<T>(), bra_rank));
   }
 
  private:

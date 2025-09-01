@@ -27,7 +27,7 @@ enum class Convention {
 enum class SpinConvention {
   None,  //!< particles are assumed spin-free, spin bits are set to Spin::none
   Default,  //!< fermions are assumed spin-1/2 (Spin::any, Spin::up,
-            //!< Spin::down), boson are spin-free (Spin::none)
+            //!< Spin::down), bosons are spin-free (Spin::none)
   Legacy,  //!< all particles are assumed spin-free, spin bits set to Spin::null
 };
 

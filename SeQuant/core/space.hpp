@@ -178,7 +178,9 @@ class QuantumNumbersAttr {
                 !std::is_same_v<std::decay_t<QN>, TypeAttr> &&
                 !std::is_same_v<std::decay_t<QN>, QuantumNumbersAttr>>>
   constexpr QuantumNumbersAttr(QN &&value) noexcept
-      : bitset(static_cast<bitset_t>(std::forward<QN>(value))) {}
+      : bitset(static_cast<bitset_t>(std::forward<QN>(value))) {
+    assert((this->bitset & bitset::reserved) == bitset::null);
+  }
 
   constexpr explicit operator int64_t() const {
     return static_cast<int64_t>(bitset);
@@ -452,7 +454,7 @@ class IndexSpace {
 
   IndexSpace(const IndexSpace &other) = default;
   /// move constructor
-  /// @param other[in,out] on output is null
+  /// @param[in,out] other on output is null
   /// @post state of this object is identical to the input state of @p other
   IndexSpace(IndexSpace &&other) noexcept
       : attr_(std::move(other.attr_)),
@@ -462,7 +464,7 @@ class IndexSpace {
   }
   IndexSpace &operator=(const IndexSpace &other) = default;
   /// move constructor
-  /// @param other[in,out] on output is null
+  /// @param[in,out] other on output is null
   /// @post state of this object is identical to the input state of @p other
   IndexSpace &operator=(IndexSpace &&other) {
     attr_ = std::move(other.attr_);

@@ -11,6 +11,7 @@
 #include <SeQuant/core/export/generator.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/logger.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/tensor.hpp>
 
 #include <algorithm>
@@ -63,7 +64,7 @@ class GenerationVisitor {
       case TreeTraversal::PreAndPostOrder:
       case TreeTraversal::PostAndInOrder:
       case TreeTraversal::None:
-        abort();  // unreachable
+        SEQUANT_UNREACHABLE;
     }
 
     if (!m_rootID.has_value()) {
@@ -532,7 +533,7 @@ class PreprocessVisitor {
       case TreeTraversal::PreAndPostOrder:
       case TreeTraversal::PostAndInOrder:
       case TreeTraversal::None:
-        abort();  // unreachable
+        SEQUANT_UNREACHABLE;
     }
   }
 

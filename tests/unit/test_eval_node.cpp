@@ -57,7 +57,7 @@ TEST_CASE("eval_node", "[EvalNode]") {
   auto R = Npos::R;
 
   auto parse_expr_antisymm = [](auto const& xpr) {
-    return parse_expr(xpr, Symmetry::antisymm);
+    return parse_expr(xpr, Symmetry::Antisymm);
   };
 
   SECTION("terminals") {
@@ -277,41 +277,41 @@ TEST_CASE("eval_node", "[EvalNode]") {
 
 #if 0
     auto const s1 =
-        parse_expr(L"I{i1,i2;a1,a2} + I{i1,i2;a1,a2}", Symmetry::symm);
+        parse_expr(L"I{i1,i2;a1,a2} + I{i1,i2;a1,a2}", Symmetry::Symm);
     auto const ns1 = eval_node(s1);
     REQUIRE(asy_cost(ns1) == AsyCost{{1, 4}, 2, 2});  // 1/4 * O^2V^2
 
     auto const s2 =
-        parse_expr(L"I{i1,i2;a1,a2} + I{i1,i2;a1,a2}", Symmetry::antisymm);
+        parse_expr(L"I{i1,i2;a1,a2} + I{i1,i2;a1,a2}", Symmetry::Antisymm);
     auto const ns2 = eval_node(s2);
     REQUIRE(asy_cost(ns2) == AsyCost{{1, 2}, 2, 2});  // 1/2 * O^2V^2
 
     auto const s3 =
-        parse_expr(L"I{i1,i2;a1,a2} + I{i1,i2;a1,a2}", Symmetry::nonsymm);
+        parse_expr(L"I{i1,i2;a1,a2} + I{i1,i2;a1,a2}", Symmetry::Nonsymm);
     auto const ns3 = eval_node(s3);
     REQUIRE(asy_cost(ns3) == AsyCost{2, 2});  // O^2V^2
 
     auto const p4 =
-        parse_expr(L"I{i1,i2;a3,a4} * I{a3,a4;a1,a2}", Symmetry::symm);
+        parse_expr(L"I{i1,i2;a3,a4} * I{a3,a4;a1,a2}", Symmetry::Symm);
     auto const np4 = eval_node(p4);
     REQUIRE(asy_cost(np4) == AsyCost{{1, 2}, 2, 4});  // 1/4 * 2 * O^2V^4
 
     auto const p5 =
-        parse_expr(L"I{i1,i2;a3,a4} * I{a3,a4;a1,a2}", Symmetry::antisymm);
+        parse_expr(L"I{i1,i2;a3,a4} * I{a3,a4;a1,a2}", Symmetry::Antisymm);
     auto const np5 = eval_node(p5);
     REQUIRE(asy_cost(np5) == AsyCost{{1, 2}, 2, 4});  // 1/4 * 2 * O^2V^4
 
     auto const p6 =
-        parse_expr(L"I{i1,i2;a3,a4} * I{a3,a4;a1,a2}", Symmetry::antisymm);
+        parse_expr(L"I{i1,i2;a3,a4} * I{a3,a4;a1,a2}", Symmetry::Antisymm);
     auto const np6 = eval_node(p6);
     REQUIRE(asy_cost(np6) == AsyCost{{1, 2}, 2, 4});  // 1/4 * 2 * O^2V^4
 
-    auto const p7 = parse_expr(L"I{i1;a1} * I{i2;a2}", Symmetry::nonsymm);
+    auto const p7 = parse_expr(L"I{i1;a1} * I{i2;a2}", Symmetry::Nonsymm);
     auto const np7 = eval_node(p7);
     REQUIRE(asy_cost(np7) == AsyCost{{1, 2}, 2, 2});  // 1/2 * O^2V^2
 
     auto const p8 =
-        parse_expr(L"I{i1,i2;a3,a4} * I{a3,a4;a1,a2}", Symmetry::nonsymm);
+        parse_expr(L"I{i1,i2;a3,a4} * I{a3,a4;a1,a2}", Symmetry::Nonsymm);
     auto const np8 = eval_node(p8);
     REQUIRE(asy_cost(np8) == AsyCost{2, 2, 4});  // 2 * O^2V^4
 #endif

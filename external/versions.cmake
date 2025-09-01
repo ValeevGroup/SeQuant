@@ -18,6 +18,15 @@ set(SEQUANT_TRACKED_POLYMORPHICVARIANT_PREVIOUS_TAG 010c69786104c07c5faccffe0e99
 set(SEQUANT_TRACKED_UTFCPP_TAG v4.0.6)
 set(SEQUANT_TRACKED_UTFCPP_PREVIOUS_TAG v4.0.6)
 
+set(SEQUANT_TRACKED_CLI11_TAG v2.5.0)
+set(SEQUANT_TRACKED_CLI11_PREVIOUS_TAG v2.5.0)
+
+set(SEQUANT_TRACKED_SPDLOG_TAG v1.15.3)
+set(SEQUANT_TRACKED_SPDLOG_PREVIOUS_TAG v1.15.3)
+
+set(SEQUANT_TRACKED_JSON_TAG v3.12.0)
+set(SEQUANT_TRACKED_JSON_PREVIOUS_TAG v3.12.0)
+
 # oldest Boost we can tolerate ... with some compilers should be able to use an earlier version, but:
 # - Boost.ContainerHash <1.81 uses unary_function that has been deprecated in C++11 and removed in C++17:
 #   https://github.com/boostorg/container_hash/blob/boost-1.80.0/include/boost/container_hash/hash.hpp#L132
@@ -27,3 +36,5 @@ set(SEQUANT_OLDEST_BOOST_VERSION 1.81)
 set(SEQUANT_TRACKED_CATCH2_TAG v3.9.1)
 
 set(SEQUANT_TRACKED_GOOGLEBENCHMARK_TAG v1.9.4)
+
+set(SEQUANT_TRACKED_PYBIND11_TAG v3.0.1)
