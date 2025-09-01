@@ -231,6 +231,36 @@ TEMPLATE_TEST_CASE("tensor_network_shared", "[elements]", TensorNetwork,
       REQUIRE(canon1.phase != canon2.phase);
     }
 
+    SECTION("amazing hash collision") {
+      auto _ = set_scoped_default_context(
+          {.index_space_registry_shared_ptr = mbpt::make_min_sr_spaces(),
+           .vacuum = Vacuum::SingleProduct,
+           .first_dummy_index_ordinal = 20000});
+
+      const Product prod1 =
+          parse_expr(
+              L"g{i_2,i_3;a_19592,a_19593}:N-C-S * C{a_19592;a_2<i_1>}:N-C-S * "
+              L"C{a_19593;a_3<i_2,i_3>}:N-C-S")
+              ->as<Product>();
+      const Product prod2 =
+          parse_expr(
+              L"g{i_2,i_3;a_19594,a_19595}:N-C-S * C{a_19594;a_2<i_2>}:N-C-S * "
+              L"C{a_19595;a_3<i_1,i_3>}:N-C-S")
+              ->as<Product>();
+
+      TN tn1(prod1.factors());
+      TN tn2(prod2.factors());
+
+      const auto& canon1 =
+          tn1.canonicalize_slots(TensorCanonicalizer::cardinal_tensor_labels());
+      [[maybe_unused]] const auto canon1_hash = canon1.hash_value();
+      const auto& canon2 =
+          tn2.canonicalize_slots(TensorCanonicalizer::cardinal_tensor_labels());
+      [[maybe_unused]] const auto canon2_hash = canon2.hash_value();
+
+      REQUIRE(canon1.hash_value() != canon2.hash_value());
+    }
+
     SECTION("Named index ordering") {
       REQUIRE(IndexSpace("i") < IndexSpace("a"));
 

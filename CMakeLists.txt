@@ -165,8 +165,27 @@ include(FindOrFetchRangeV3)
 
 # Boost will be added after defining SeQuant
 include(external/boost.cmake)
+if(NOT SEQUANT_USE_SYSTEM_BOOST_HASH) # if not to use Boost Hash, unpack bundled Boost ContainerHash 1.81
+        file(MAKE_DIRECTORY ${PROJECT_BINARY_DIR}/SeQuant/external)
+        execute_process(
+                COMMAND ${CMAKE_COMMAND} -E tar xzf ${PROJECT_SOURCE_DIR}/SeQuant/external/boost.tar.gz
+                WORKING_DIRECTORY ${PROJECT_BINARY_DIR}/SeQuant/external
+                RESULT_VARIABLE UNPACK_BOOST_RESULT
+                OUTPUT_VARIABLE UNPACK_BOOST_OUTPUT
+                ERROR_VARIABLE UNPACK_BOOST_OUTPUT
+        )
+        if (NOT UNPACK_BOOST_RESULT EQUAL 0)
+            message(FATAL_ERROR "Failed to unpack the bundled Boost! The tar command output:\n${UNPACK_BOOST_OUTPUT}")
+        endif()
+        install(DIRECTORY ${PROJECT_BINARY_DIR}/SeQuant
+                COMPONENT sequant
+                DESTINATION "${SEQUANT_INSTALL_INCLUDEDIR}"
+                FILES_MATCHING PATTERN "*.hpp"
+        )
+endif()
 
-# polymorphic_variant
+
+    # polymorphic_variant
 include(FindOrFetchPolymorphicVariant)
 
 # LibPerm
@@ -197,10 +216,17 @@ add_library(SeQuant-bliss
         SeQuant/external/bliss/bliss_C.h
         )
 target_link_libraries(SeQuant-bliss PUBLIC range-v3::range-v3 Boost::headers)
+if (SEQUANT_USE_SYSTEM_BOOST_HASH)
+    target_compile_definitions(SeQuant-bliss PUBLIC SEQUANT_USE_SYSTEM_BOOST_HASH=1)
+else()
+    target_include_directories(SeQuant-bliss ${SEQUANT_SYSTEM} PRIVATE
+            $<BUILD_INTERFACE:${PROJECT_BINARY_DIR}>)
+endif()
 # modularized Boost has finer grained targets than just Boost::headers
 if (Boost_IS_MODULARIZED)
     target_link_libraries(SeQuant-bliss PUBLIC
             Boost::container
+            Boost::container_hash
     )
 endif()
 
@@ -434,25 +460,7 @@ if (SEQUANT_EVAL_TRACE)
 endif ()
 if (SEQUANT_USE_SYSTEM_BOOST_HASH)
     target_compile_definitions(SeQuant PUBLIC SEQUANT_USE_SYSTEM_BOOST_HASH=1)
-else()
-    # if not to use Boost Hash, unpack bundled Boost ContainerHash 1.81
-    file(MAKE_DIRECTORY ${PROJECT_BINARY_DIR}/SeQuant/external)
-    execute_process(
-            COMMAND ${CMAKE_COMMAND} -E tar xzf ${PROJECT_SOURCE_DIR}/SeQuant/external/boost.tar.gz
-            WORKING_DIRECTORY ${PROJECT_BINARY_DIR}/SeQuant/external
-            RESULT_VARIABLE UNPACK_BOOST_RESULT
-            OUTPUT_VARIABLE UNPACK_BOOST_OUTPUT
-            ERROR_VARIABLE UNPACK_BOOST_OUTPUT
-    )
-    if (NOT UNPACK_BOOST_RESULT EQUAL 0)
-        message(FATAL_ERROR "Failed to unpack the bundled Boost! The tar command output:\n${UNPACK_BOOST_OUTPUT}")
-    endif()
-    install(DIRECTORY ${PROJECT_BINARY_DIR}/SeQuant
-            COMPONENT sequant
-            DESTINATION "${SEQUANT_INSTALL_INCLUDEDIR}"
-            FILES_MATCHING PATTERN "*.hpp"
-            )
-endif ()
+endif()
 
 target_set_warning_flags(SeQuant)
 

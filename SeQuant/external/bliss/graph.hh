@@ -277,10 +277,18 @@ class AbstractGraph {
   virtual void write_dot(const char* const file_name) = 0;
 
   /**
-   * Get a hash value for the graph.
+   * Get a 32-bit hash value for the graph.
    * \return  the hash value
+   * \note this is used by all graph algorithms
    */
   virtual unsigned int get_hash() = 0;
+
+  /**
+ * Get a 64-bit hash value for the graph.
+ * \return  the hash value
+ * \note this can be used to a wider range of values than get_hash()
+ */
+  virtual std::uint64_t get_hash64() = 0;
 
   /**
    * Disable/enable the "long prune" method.
@@ -868,6 +876,11 @@ class Graph : public AbstractGraph {
   virtual unsigned int get_hash();
 
   /**
+   * \copydoc AbstractGraph::get_hash64()
+   */
+  virtual std::uint64_t get_hash64();
+
+  /**
    * Return the number of vertices in the graph.
    */
   unsigned int get_nof_vertices() const { return vertices.size(); }
@@ -1118,6 +1131,11 @@ class Digraph : public AbstractGraph {
    * \copydoc AbstractGraph::get_hash()
    */
   virtual unsigned int get_hash();
+
+  /**
+   * \copydoc AbstractGraph::get_hash64()
+   */
+  virtual std::uint64_t get_hash64();
 
   /**
    * Return the number of vertices in the graph.
