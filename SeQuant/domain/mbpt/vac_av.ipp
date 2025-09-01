@@ -63,7 +63,7 @@ ExprPtr vac_av(
       }
 
       // if composed of ops only, screen out products with zero VEV
-      if (ops_only & screen) {
+      if (ops_only && screen) {
         if (!can_change_qns(product, qns_t{})) {
           return ex<Constant>(0);
         }
