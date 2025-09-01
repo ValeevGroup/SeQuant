@@ -94,9 +94,9 @@ std::vector<ExprPtr> CC::t(size_t commutator_rank, size_t pmax, size_t pmin) {
     // 2.a. screen out terms that cannot give nonzero after projection onto
     // <p|
     std::shared_ptr<Sum>
-        hbar_p;  // products that can produce excitations of rank p
-    std::shared_ptr<Sum> hbar_le_p;
-    // keeps products that can produce excitations rank <=p
+        hbar_for_vev;  // keeps products that can produce non-zero VEV
+    std::shared_ptr<Sum>
+        hbar_le_p;  // keeps products that can produce excitations rank <=p
 
     if (screen_) {  // if operator level screening is on
       for (auto& term : *hbar) {
@@ -107,21 +107,21 @@ std::vector<ExprPtr> CC::t(size_t commutator_rank, size_t pmax, size_t pmin) {
           else
             hbar_le_p->append(term);
           if (raises_vacuum_to_rank(term, p)) {
-            if (!hbar_p)
-              hbar_p = std::make_shared<Sum>(ExprPtrList{term});
+            if (!hbar_for_vev)
+              hbar_for_vev = std::make_shared<Sum>(ExprPtrList{term});
             else
-              hbar_p->append(term);
+              hbar_for_vev->append(term);
           }
         }
       }
       hbar = hbar_le_p;
-    } else {
-      // no screening, use hbar
-      hbar_p = std::make_shared<Sum>(hbar);
+    } else {  // no screening, use full hbar
+      hbar_for_vev = std::make_shared<Sum>(hbar);
     }
 
     // 2.b project onto <p| (i.e., multiply by P(p) if p>0) and compute VEV
-    result.at(p) = this->vac_av(p != 0 ? P(nₚ(p)) * hbar_p : hbar_p);
+    result.at(p) =
+        this->vac_av(p != 0 ? P(nₚ(p)) * hbar_for_vev : hbar_for_vev);
   }
 
   return result;
@@ -151,35 +151,35 @@ std::vector<ExprPtr> CC::λ(size_t commutator_rank) {
     // 2.a. screen out terms that cannot give nonzero after projection onto
     // <P|
     std::shared_ptr<Sum>
-        hbar_p;  // products that can produce excitations of rank p
+        lhbar_for_vev;  // keeps products that can produce non-zero VEV
     std::shared_ptr<Sum>
-        hbar_le_p;  // keeps products that can produce excitations rank <=p
+        lhbar_le_p;  // keeps products that can produce excitations rank <=p
 
     if (screen_) {                 // if operator level screening is enabled
       for (auto& term : *lhbar) {  // pick terms from lhbar
         assert(term->is<Product>() || term->is<op_t>());
 
         if (lowers_rank_or_lower_to_vacuum(term, p)) {
-          if (!hbar_le_p)
-            hbar_le_p = std::make_shared<Sum>(ExprPtrList{term});
+          if (!lhbar_le_p)
+            lhbar_le_p = std::make_shared<Sum>(ExprPtrList{term});
           else
-            hbar_le_p->append(term);
+            lhbar_le_p->append(term);
           if (lowers_rank_to_vacuum(term, p)) {
-            if (!hbar_p)
-              hbar_p = std::make_shared<Sum>(ExprPtrList{term});
+            if (!lhbar_for_vev)
+              lhbar_for_vev = std::make_shared<Sum>(ExprPtrList{term});
             else
-              hbar_p->append(term);
+              lhbar_for_vev->append(term);
           }
         }
       }
-      lhbar = hbar_le_p;
+      lhbar = lhbar_le_p;
     } else {  // no screening
-      hbar_le_p = std::make_shared<Sum>(hbar);
+      lhbar_for_vev = std::make_shared<Sum>(lhbar);
     }
 
     // 2.b multiply by adjoint of P(p) (i.e., P(-p)) on the right side and
     // compute VEV
-    result.at(p) = this->vac_av(hbar_p * P(nₚ(-p)), op_connect);
+    result.at(p) = this->vac_av(lhbar_for_vev * P(nₚ(-p)), op_connect);
   }
   return result;
 }
