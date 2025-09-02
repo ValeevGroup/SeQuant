@@ -5,6 +5,7 @@
 #ifndef SEQUANT_INDEX_SPACE_REGISTRY_HPP
 #define SEQUANT_INDEX_SPACE_REGISTRY_HPP
 
+#include <SeQuant/core/bitset.hpp>
 #include <SeQuant/core/space.hpp>
 
 #include <range/v3/algorithm/sort.hpp>
@@ -574,6 +575,25 @@ class IndexSpaceRegistry {
     return retrieve_ptr(result_attr);
   }
 
+  /// @brief queries if the intersection space is registered
+  /// @param space1_key base key of a registered IndexSpace
+  /// @param space2_key base key of a registered IndexSpace
+  /// @return true if
+  /// `valid_intersection(retrieve(space1_key),retrieve(space2_key))` is
+  /// registered
+  template <typename S1, typename S2,
+            typename = meta::EnableIfAllBasicStringConvertible<S1, S2>>
+  bool valid_intersection(S1&& space1_key, S2&& space2_key) const {
+    if (!contains(space1_key) || !contains(space2_key))
+      throw std::invalid_argument(
+          "IndexSpaceRegistry::valid_intersection(s1,s2): s1 and s2 must both "
+          "be "
+          "registered");
+    return this->valid_intersection(
+        this->retrieve(std::forward<S1>(space1_key)),
+        this->retrieve(std::forward<S2>(space2_key)));
+  }
+
   /// @brief return the resulting space corresponding to a bitwise intersection
   /// between two spaces.
   /// @param space1 a registered IndexSpace
@@ -624,7 +644,7 @@ class IndexSpaceRegistry {
                               this->retrieve(std::forward<S2>(space2_key)));
   }
 
-  /// @brief is a union between spaces eligible and registered
+  /// @brief is a union between spaces exists and registered
   /// @param space1
   /// @param space2
   /// @return true if space is constructable and registered
@@ -653,6 +673,22 @@ class IndexSpaceRegistry {
     } else {  // union not mathematically allowed.
       return false;
     }
+  }
+
+  /// @brief is a union between spaces exists and registered
+  /// @param space1_key base key of a registered IndexSpace
+  /// @param space2_key base key of a registered IndexSpace
+  /// @return true if `valid_unIon(retrieve(space1_key),retrieve(space2_key))`
+  /// is registered
+  template <typename S1, typename S2,
+            typename = meta::EnableIfAllBasicStringConvertible<S1, S2>>
+  bool valid_unIon(S1&& space1_key, S2&& space2_key) const {
+    if (!contains(space1_key) || !contains(space2_key))
+      throw std::invalid_argument(
+          "IndexSpaceRegistry::valid_unIon(s1,s2): s1 and s2 must both be "
+          "registered");
+    return this->valid_unIon(this->retrieve(std::forward<S1>(space1_key)),
+                             this->retrieve(std::forward<S2>(space2_key)));
   }
 
   /// @param space1
@@ -707,25 +743,47 @@ class IndexSpaceRegistry {
   /// @name physical particle space structure introspection
   /// @{
 
-  /// @brief sets the mask of attributes of `IndexSpace`s  that can be occupied
-  /// by physical particles.
-
-  /// Some states do not correspond to physical particles, but may be present
-  /// in the registry. Such spaces are not considered when e.g. determining
-  /// the base spaces.
-  /// @param m the mask of attributes of `IndexSpace`s  that can be occupied by
-  /// physical particles.
-  void physical_particle_attribute_mask(bitset_t m);
-
-  /// @brief accesses the mask of attributes of `IndexSpace`s  that can be
+  /// @brief sets the mask of QN attributes of `IndexSpace`s  that can be
   /// occupied by physical particles.
 
   /// Some states do not correspond to physical particles, but may be present
   /// in the registry. Such spaces are not considered when e.g. determining
   /// the base spaces.
-  /// @return the mask of attributes of `IndexSpace`s  that can be occupied by
-  /// physical particles.
+  /// @param m the mask of QN attributes of `IndexSpace`s  that can be occupied
+  ///        by physical particles.
+  void physical_particle_attribute_mask(bitset_t m);
+
+  /// @brief sets the mask of QN attributes of `IndexSpace`s
+  /// that can be occupied by physical particles.
+
+  /// Some states do not correspond to physical particles, but may be present
+  /// in the registry. Such spaces are not considered when e.g. determining
+  /// the base spaces.
+  /// @param m the mask of QN attributes of `IndexSpace`s  that can be occupied
+  ///        by physical particles.
+  template <convertible_to_bitset T>
+  void physical_particle_attribute_mask(T m) {
+    this->physical_particle_attribute_mask(to_bitset(m));
+  }
+
+  /// @brief accesses the mask of QN attributes of `IndexSpace`s  that can be
+  /// occupied by physical particles.
+
+  /// Some states do not correspond to physical particles, but may be present
+  /// in the registry. Such spaces are not considered when e.g. determining
+  /// the base spaces.
+  /// @return the mask of QN attributes of `IndexSpace`s  that can be occupied
+  ///         by physical particles.
   bitset_t physical_particle_attribute_mask() const;
+
+  /// @return the bits of \p qn used to specify states of physical particles.
+  IndexSpace::QuantumNumbers physical_particle_attributes(
+      IndexSpace::QuantumNumbers qn) const;
+
+  /// @return the bits of \p qn not used to specify states of physical
+  /// particles.
+  IndexSpace::QuantumNumbers other_attributes(
+      IndexSpace::QuantumNumbers qn) const;
 
   /// @brief returns the list of _basis_ IndexSpace::Type objects
 
@@ -779,9 +837,19 @@ class IndexSpaceRegistry {
   bool is_base(const IndexSpace& IS) const {
     // is base if has base type and has no bits outsize of the physical particle
     // attribute mask
-    return is_base(IS.type()) &&
-           ((bitset_t(IS.qns()) & (~(physical_particle_attribute_mask()))) ==
-            0);
+    return is_base(IS.type()) && !other_attributes(IS.qns());
+  }
+
+  /// @brief equivalent to `is_base(retrieve(space_key))`
+  /// @param space_key space key
+  /// @return true if the space registered with \p space_key is in the basis
+  /// @sa base_spaces
+  template <typename S, typename = meta::EnableIfAllBasicStringConvertible<S>>
+  bool is_base(S&& space_key) const {
+    if (!contains(space_key))
+      throw std::invalid_argument(
+          "IndexSpaceRegistry::is_base(s): s must be registered");
+    return this->is_base(this->retrieve(std::forward<S>(space_key)));
   }
 
   /// @brief checks if an IndexSpace::Type is in the basis
@@ -809,6 +877,18 @@ class IndexSpaceRegistry {
     }
   }
 
+  /// @brief equivalent to `is_pure_occupied(retrieve(space_key))`
+  /// @param space_key space key
+  /// @return `is_pure_occupied(retrieve(space_key))`
+  /// @sa base_spaces
+  template <typename S, typename = meta::EnableIfAllBasicStringConvertible<S>>
+  bool is_pure_occupied(S&& space_key) const {
+    if (!contains(space_key))
+      throw std::invalid_argument(
+          "IndexSpaceRegistry::is_pure_occupied(s): s must be registered");
+    return this->is_pure_occupied(this->retrieve(std::forward<S>(space_key)));
+  }
+
   /// @brief all states are unoccupied in the fermi vacuum
   /// @note again, this only makes sense to ask if in a SingleProduct vacuum
   /// context.
@@ -816,8 +896,21 @@ class IndexSpaceRegistry {
     if (!IS) {
       return false;
     } else {
-      return !IS.type().intersection(vacuum_occupied_space(IS.qns()).type());
+      return !IS.type().intersection(
+          vacuum_occupied_space(physical_particle_attributes(IS.qns())).type());
     }
+  }
+
+  /// @brief equivalent to `is_pure_unoccupied(retrieve(space_key))`
+  /// @param space_key space key
+  /// @return `is_pure_unoccupied(retrieve(space_key))`
+  /// @sa base_spaces
+  template <typename S, typename = meta::EnableIfAllBasicStringConvertible<S>>
+  bool is_pure_unoccupied(S&& space_key) const {
+    if (!contains(space_key))
+      throw std::invalid_argument(
+          "IndexSpaceRegistry::is_pure_unoccupied(s): s must be registered");
+    return this->is_pure_unoccupied(this->retrieve(std::forward<S>(space_key)));
   }
 
   /// @brief some states are fermi vacuum occupied
@@ -826,10 +919,35 @@ class IndexSpaceRegistry {
            IndexSpace::Type::null;
   }
 
+  /// @brief equivalent to `contains_occupied(retrieve(space_key))`
+  /// @param space_key space key
+  /// @return `contains_occupied(retrieve(space_key))`
+  /// @sa base_spaces
+  template <typename S, typename = meta::EnableIfAllBasicStringConvertible<S>>
+  bool contains_occupied(S&& space_key) const {
+    if (!contains(space_key))
+      throw std::invalid_argument(
+          "IndexSpaceRegistry::contains_occupied(s): s must be registered");
+    return this->contains_occupied(this->retrieve(std::forward<S>(space_key)));
+  }
+
   /// @brief some states are fermi vacuum unoccupied
   bool contains_unoccupied(const IndexSpace& IS) const {
     return IS.type().intersection(vacuum_unoccupied_space(IS.qns()).type()) !=
            IndexSpace::Type::null;
+  }
+
+  /// @brief equivalent to `contains_occupied(retrieve(space_key))`
+  /// @param space_key space key
+  /// @return `contains_occupied(retrieve(space_key))`
+  /// @sa base_spaces
+  template <typename S, typename = meta::EnableIfAllBasicStringConvertible<S>>
+  bool contains_unoccupied(S&& space_key) const {
+    if (!contains(space_key))
+      throw std::invalid_argument(
+          "IndexSpaceRegistry::contains_unoccupied(s): s must be registered");
+    return this->contains_unoccupied(
+        this->retrieve(std::forward<S>(space_key)));
   }
 
   /// @name  specifies which spaces have nonzero occupancy in the vacuum wave
@@ -843,7 +961,7 @@ class IndexSpaceRegistry {
   ///          choice); to specify occupied space per specific QN set use the
   ///          other overload
   /// @return reference to `this`
-  IndexSpaceRegistry& vacuum_occupied_space(const IndexSpace::Type& t) {
+  IndexSpaceRegistry& vacuum_occupied_space(IndexSpace::Type t) {
     throw_if_missing(t, "vacuum_occupied_space");
     std::get<0>(vacocc_) = t;
     return *this;
@@ -894,8 +1012,7 @@ class IndexSpaceRegistry {
   /// @param qn the quantum numbers of the space
   /// @return the space occupied in vacuum state for the given set of quantum
   /// numbers
-  const IndexSpace& vacuum_occupied_space(
-      const IndexSpace::QuantumNumbers& qn) const {
+  const IndexSpace& vacuum_occupied_space(IndexSpace::QuantumNumbers qn) const {
     auto it = std::get<1>(vacocc_).find(qn);
     if (it != std::get<1>(vacocc_).end()) {
       return retrieve(it->second, qn);
@@ -919,7 +1036,7 @@ class IndexSpaceRegistry {
   ///          quantum numbers); to specify occupied space per specific QN set
   ///          use the other overload
   /// @return reference to `this`
-  IndexSpaceRegistry& reference_occupied_space(const IndexSpace::Type& t) {
+  IndexSpaceRegistry& reference_occupied_space(IndexSpace::Type t) {
     throw_if_missing(t, "reference_occupied_space");
     std::get<0>(refocc_) = t;
     return *this;
@@ -973,7 +1090,7 @@ class IndexSpaceRegistry {
   /// @return the space occupied in vacuum state for the given set of quantum
   /// numbers
   const IndexSpace& reference_occupied_space(
-      const IndexSpace::QuantumNumbers& qn) const {
+      IndexSpace::QuantumNumbers qn) const {
     auto it = std::get<1>(refocc_).find(qn);
     if (it != std::get<1>(refocc_).end()) {
       return retrieve(it->second, qn);
@@ -991,7 +1108,7 @@ class IndexSpaceRegistry {
   /// @param s an IndexSpace::Type specifying the complete Hilbert space;
   ///          to specify occupied space per specific QN set use the other
   ///          overload
-  IndexSpaceRegistry& complete_space(const IndexSpace::Type& s) {
+  IndexSpaceRegistry& complete_space(IndexSpace::Type s) {
     throw_if_missing(s, "complete_space");
     std::get<0>(complete_) = s;
     return *this;
@@ -1038,7 +1155,7 @@ class IndexSpaceRegistry {
 
   /// @param qn the quantum numbers of the space
   /// @return the complete Hilbert space for the given set of quantum numbers
-  const IndexSpace& complete_space(const IndexSpace::QuantumNumbers& qn) const {
+  const IndexSpace& complete_space(IndexSpace::QuantumNumbers qn) const {
     auto it = std::get<1>(complete_).find(qn);
     if (it != std::get<1>(complete_).end()) {
       return retrieve(it->second, qn);
@@ -1051,7 +1168,7 @@ class IndexSpaceRegistry {
 
   /// @return the space that is unoccupied in the vacuum state
   const IndexSpace& vacuum_unoccupied_space(
-      const IndexSpace::QuantumNumbers& qn) const {
+      IndexSpace::QuantumNumbers qn) const {
     auto complete_type = this->complete_space(qn).type();
     auto vacocc_type = this->vacuum_occupied_space(qn).type();
     auto vacuocc_type =
@@ -1067,7 +1184,7 @@ class IndexSpaceRegistry {
   /// @param t an IndexSpace::Type specifying where holes can be created;
   ///          to specify hole space per specific QN set use the other
   ///          overload
-  IndexSpaceRegistry& hole_space(const IndexSpace::Type& t) {
+  IndexSpaceRegistry& hole_space(IndexSpace::Type t) {
     throw_if_missing(t, "hole_space");
     std::get<0>(hole_space_) = t;
     return *this;
@@ -1116,7 +1233,7 @@ class IndexSpaceRegistry {
   /// @param qn the quantum numbers of the space
   /// @return the space in which holes can be created for the given set of
   /// quantum numbers
-  const IndexSpace& hole_space(const IndexSpace::QuantumNumbers& qn) const {
+  const IndexSpace& hole_space(IndexSpace::QuantumNumbers qn) const {
     auto it = std::get<1>(hole_space_).find(qn);
     if (it != std::get<1>(hole_space_).end()) {
       return this->retrieve(it->second, qn);
@@ -1135,7 +1252,7 @@ class IndexSpaceRegistry {
   /// @param t an IndexSpace::Type specifying where particles can be created;
   ///          to specify particle space per specific QN set use the other
   ///          overload
-  IndexSpaceRegistry& particle_space(const IndexSpace::Type& t) {
+  IndexSpaceRegistry& particle_space(IndexSpace::Type t) {
     throw_if_missing(t, "particle_space");
     std::get<0>(particle_space_) = t;
     return *this;
@@ -1184,7 +1301,7 @@ class IndexSpaceRegistry {
   /// @param qn the quantum numbers of the space
   /// @return the space in which particles can be created for the given set of
   /// quantum numbers
-  const IndexSpace& particle_space(const IndexSpace::QuantumNumbers& qn) const {
+  const IndexSpace& particle_space(IndexSpace::QuantumNumbers qn) const {
     auto it = std::get<1>(particle_space_).find(qn);
     if (it != std::get<1>(particle_space_).end()) {
       return this->retrieve(it->second, qn);
