@@ -183,23 +183,22 @@ class compute_cceqvec {
             eqvec[R] =
                 ex<Tensor>(Tensor{L"S", bra(kixs), ket(bixs)}) * eqvec[R];
           }
-
           simplify(eqvec[R]);
 
           // expand the particle symmetrizer to get all the raw equations
           eqvec[R] = S_maps(eqvec[R]);
           canonicalize(eqvec[R]);
 
-          // apply hash fiter to get only terms with large coefficients
+          // apply WK_biorthogonalization_filter to get only terms with large
+          // coefficients
           eqvec[R] = WK_biorthogonalization_filter(eqvec[R], ext_idxs);
 
-          // resotre the particle symmetrizer again to get the most compact set
+          // restore the particle symmetrizer again to get the most compact set
           // of equations
           eqvec[R] = ex<Tensor>(Tensor{L"S", bra(kixs), ket(bixs)}) * eqvec[R];
-
           eqvec[R] = expand(eqvec[R]);
 
-          // apply normalizaiton and rescaling facotrs
+          // apply normalization and rescaling factors
           rational combined_factor;
           if (ext_idxs.size() <= 2) {
             combined_factor = rational(1, factorial(ext_idxs.size()));
@@ -209,14 +208,13 @@ class compute_cceqvec {
                 1, fact_n - 1);  // this is (1/fact_n) * (fact_n/(fact_n-1))
           }
           eqvec[R] = ex<Constant>(combined_factor) * eqvec[R];
-
           simplify(eqvec[R]);
 
-          // hash filter method removes the redundancy caused by biorthogonal
-          // transformation and gives the most compact set of eqns. However, we
-          // need to restore the effects of those deleted terms. So, in cck
-          // class, after evaluste_symm in sequant evaluation scope, we need to
-          // call evaluate_biorthogonal_cleanup.
+          // WK_biorthogonalization_filter method removes the redundancy caused
+          // by biorthogonal transformation and gives the most compact set of
+          // equations. However, we need to restore the effects of those deleted
+          // terms. So, after evaluate_symm call in sequant evaluation scope, we
+          // need to call evaluate_biorthogonal_cleanup.
 
           std::wcout << "biorthogonal spin-free R" << R << "(expS" << N
                      << ") has " << eqvec[R]->size() << " terms:" << std::endl;

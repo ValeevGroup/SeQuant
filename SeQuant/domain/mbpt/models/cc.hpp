@@ -49,7 +49,7 @@ class CC {
   /// @return whether topological optimization in WickTheorem
   [[nodiscard]] bool use_topology() const;
 
-  /// @brief derives similarity-transformed expressions of mpbt::Operators
+  /// @brief derives similarity-transformed expressions of mbpt::Operators
   /// @param expr expression to be transformed
   /// @param r order of truncation
   /// @pre expr should be composed of mbpt::Operators
