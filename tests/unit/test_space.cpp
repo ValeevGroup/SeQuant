@@ -232,4 +232,50 @@ TEST_CASE("index_space", "[elements]") {
     // ordering
     REQUIRE(isr->retrieve(L"i") < isr->retrieve(L"μ̃"));
   }
+
+  SECTION("paper example") {
+    IndexSpaceRegistry isr;
+    using namespace sequant::mbpt;
+    const QuantumNumbersAttr spin_any = 0b0011;
+    isr.add("i", 0b001, spin_any,
+            // fully occupied in vacuum state
+            is_vacuum_occupied)
+        .add("u", 0b010, spin_any)
+        .add("a", 0b100, spin_any)
+        // reference RDMs are nonzero in this space, annihilator = qp creator
+        .add_union("I", {"i", "u"}, is_reference_occupied, is_hole)
+        // creator = qp creator
+        .add_union("A", {"u", "a"}, is_particle)
+        // general particle operators (e.g. Hamiltonian) act on this space
+        .add_union("p", {"I", "A"}, is_complete);
+
+    // spaces whose QNs contain spin_any contain physical particles
+    isr.physical_particle_attribute_mask(spin_any);
+
+    // projected atomic orbitals = localized form of virtuals
+    const QuantumNumbersAttr lcao = 0b0100;
+    isr.add("μ̃", 0b100, lcao | spin_any);
+    // nonparticle mode: density fitting, or Cholesky, or Hubbard-Stratonivich
+    isr.add("x", 0b001, QuantumNumbersAttr{0b1000});
+
+    REQUIRE(isr.retrieve("u") == isr.intersection("A", "I"));
+    REQUIRE(isr.retrieve("p") == isr.unIon("A", "i"));
+    REQUIRE(isr.valid_intersection("i", "x") == false);
+    REQUIRE(isr.valid_intersection("a", "μ̃") == true);
+    REQUIRE(isr.is_base("u") == true);
+    REQUIRE(isr.is_base("A") == false);
+    REQUIRE(isr.is_pure_occupied("i") == true);
+    REQUIRE(isr.is_pure_unoccupied("μ̃") == true);
+    REQUIRE(isr.contains_occupied("p") == true);
+    REQUIRE(isr.contains_unoccupied("p") == true);
+
+    auto _ = set_scoped_default_context(
+        {.index_space_registry = isr, .vacuum = Vacuum::SingleProduct});
+    REQUIRE_NOTHROW(Index("A_1"));
+    REQUIRE_NOTHROW(Index("μ̃_1"));
+    REQUIRE_NOTHROW(Index("x_1"));
+    Index A1("A_1");
+    Index μ̃1("μ̃_1");
+    Index x1("x_1");
+  }
 }
