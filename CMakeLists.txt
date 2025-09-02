@@ -238,6 +238,7 @@ set(SeQuant_src
         SeQuant/core/asy_cost.hpp
         SeQuant/core/attr.hpp
         SeQuant/core/binary_node.hpp
+        SeQuant/core/bitset.hpp
         SeQuant/core/biorthogonalization.cpp
         SeQuant/core/biorthogonalization.hpp
         SeQuant/core/bliss.hpp
