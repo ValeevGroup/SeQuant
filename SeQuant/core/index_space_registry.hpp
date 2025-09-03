@@ -7,6 +7,7 @@
 
 #include <SeQuant/core/bitset.hpp>
 #include <SeQuant/core/space.hpp>
+#include <SeQuant/core/wstring.hpp>
 
 #include <range/v3/algorithm/sort.hpp>
 #include <range/v3/numeric/accumulate.hpp>
@@ -219,8 +220,8 @@ class IndexSpaceRegistry {
     } else
       throw std::invalid_argument(
           "IndexSpaceRegistry::retrieve(type,qn): missing { IndexSpace::Type=" +
-          std::to_string(type.to_int32()) + " , IndexSpace::QuantumNumbers=" +
-          std::to_string(qns.to_int32()) + " } combination");
+          to_string(type) + " , IndexSpace::QuantumNumbers=" + to_string(qns) +
+          " } combination");
   }
 
   /// @brief retrieve pointer to the IndexSpace from the registry by the
@@ -244,10 +245,8 @@ class IndexSpaceRegistry {
       return *ptr;
     } else
       throw std::invalid_argument(
-          "IndexSpaceRegistry::retrieve(attr): missing { IndexSpace::Type=" +
-          std::to_string(space_attr.type().to_int32()) +
-          " , IndexSpace::QuantumNumbers=" +
-          std::to_string(space_attr.qns().to_int32()) + " } combination");
+          std::string("IndexSpaceRegistry::retrieve(attr): attr=") +
+          to_string(space_attr) + " is missing");
   }
 
   /// queries presence of a registered IndexSpace
@@ -294,27 +293,24 @@ class IndexSpaceRegistry {
     auto it = spaces_->find(IS.base_key());
     if (it != spaces_->end()) {
       throw std::invalid_argument(
-          (std::string("IndexSpaceRegistry::add(is): already have an "
-                       "IndexSpace associated "
-                       "with is.base_key()=") +
+          (std::string("IndexSpaceRegistry::add(index_space): space with "
+                       "index_space.base_key()=") +
            to_string(IS.base_key()) +
-           "; if you are trying to replace the IndexSpace use "
-           "IndexSpaceRegistry::replace(is)")
-              .c_str());
+           " already in the registry; if you are trying to replace the "
+           "IndexSpace use "
+           "IndexSpaceRegistry::replace(is)"));
     } else {
       // make sure there are no duplicate IndexSpaces whose attribute is
       // IS.attr()
       if (ranges::any_of(*spaces_,
                          [&IS](auto&& is) { return IS.attr() == is.attr(); })) {
         throw std::invalid_argument(
-            std::string(
-                "IndexSpaceRegistry::add(is): already have an IndexSpace "
-                "associated with is.attr()={type=" +
-                std::to_string(IS.attr().type().to_int32()) +
-                ",qns=" + std::to_string(IS.attr().qns().to_int32()) +
-                "}; if you are trying to replace the "
-                "IndexSpace use IndexSpaceRegistry::replace(is)")
-                .c_str());
+            (std::string("IndexSpaceRegistry::add(index_space): space with "
+                         "index_space.attr()=") +
+             to_string(IS.attr()) +
+             " already in the registry; if you are trying to replace the "
+             "IndexSpace use "
+             "IndexSpaceRegistry::replace(is)"));
       }
       spaces_->emplace(IS);
     }
@@ -570,14 +566,19 @@ class IndexSpaceRegistry {
   /// registered
   template <basic_string_convertible S1, basic_string_convertible S2>
   bool valid_intersection(S1&& space1_key, S2&& space2_key) const {
-    if (!contains(space1_key) || !contains(space2_key))
+    if (!contains(space1_key))
       throw std::invalid_argument(
-          "IndexSpaceRegistry::valid_intersection(s1,s2): s1 and s2 must both "
-          "be "
-          "registered");
+          std::string("IndexSpaceRegistry::valid_intersection(s1,s2): space "
+                      "with key s1=") +
+          to_string(space1_key) + " must be added to the registry first");
+    if (!contains(space2_key))
+      throw std::invalid_argument(
+          std::string(
+              "IndexSpaceRegistry::valid_intersection(s1,s2): space key s2=") +
+          to_string(space2_key) + " must be added to the registry first");
     return this->valid_intersection(
-        this->retrieve(std::forward<S1>(space1_key)),
-        this->retrieve(std::forward<S2>(space2_key)));
+        *(this->retrieve_ptr(std::forward<S1>(space1_key))),
+        *(this->retrieve_ptr(std::forward<S2>(space2_key))));
   }
 
   /// @brief return the resulting space corresponding to a bitwise intersection
@@ -600,14 +601,17 @@ class IndexSpaceRegistry {
       }
 
       // check the registry
-      auto intersection_attr = space1.type().intersection(space2.type());
+      auto intersection_type = space1.type().intersection(space2.type());
       const IndexSpace& intersection_space =
-          find_by_attr({intersection_attr, space1.qns()});
+          find_by_attr({intersection_type, space1.qns()});
       // the nullspace is a reasonable return value for intersection
-      if (intersection_space == IndexSpace::null && intersection_attr) {
+      if (intersection_space == IndexSpace::null && intersection_type) {
         throw std::invalid_argument(
-            "The resulting space is not registered in this context. Add this "
-            "space to the registry with a label to use it.");
+            std::string("intersection(s1=") + to_string(space1) +
+            ",s2=" + to_string(space2) +
+            ": no space with resulting type=" + to_string(intersection_type) +
+            " is found in the registry. Add a "
+            "space with this type to the registry.");
       } else {
         return intersection_space;
       }
@@ -621,12 +625,19 @@ class IndexSpaceRegistry {
   /// @note throw invalid_argument if the nonnull intersection is not registered
   template <basic_string_convertible S1, basic_string_convertible S2>
   const IndexSpace& intersection(S1&& space1_key, S2&& space2_key) const {
-    if (!contains(space1_key) || !contains(space2_key))
+    if (!contains(space1_key))
       throw std::invalid_argument(
-          "IndexSpaceRegistry::intersection(s1,s2): s1 and s2 must both be "
-          "registered");
-    return this->intersection(this->retrieve(std::forward<S1>(space1_key)),
-                              this->retrieve(std::forward<S2>(space2_key)));
+          std::string(
+              "IndexSpaceRegistry::intersection(s1,s2): space with key s1=") +
+          to_string(space1_key) + " must be added to the registry first");
+    if (!contains(space2_key))
+      throw std::invalid_argument(
+          std::string(
+              "IndexSpaceRegistry::intersection(s1,s2): space key s2=") +
+          to_string(space2_key) + " must be added to the registry first");
+    return this->intersection(
+        *(this->retrieve_ptr(std::forward<S1>(space1_key))),
+        *(this->retrieve_ptr(std::forward<S2>(space2_key))));
   }
 
   /// @brief is a union between spaces exists and registered
@@ -667,12 +678,18 @@ class IndexSpaceRegistry {
   /// is registered
   template <basic_string_convertible S1, basic_string_convertible S2>
   bool valid_unIon(S1&& space1_key, S2&& space2_key) const {
-    if (!contains(space1_key) || !contains(space2_key))
+    if (!contains(space1_key))
       throw std::invalid_argument(
-          "IndexSpaceRegistry::valid_unIon(s1,s2): s1 and s2 must both be "
-          "registered");
-    return this->valid_unIon(this->retrieve(std::forward<S1>(space1_key)),
-                             this->retrieve(std::forward<S2>(space2_key)));
+          std::string(
+              "IndexSpaceRegistry::valid_unIon(s1,s2): space with key s1=") +
+          to_string(space1_key) + " must be added to the registry first");
+    if (!contains(space2_key))
+      throw std::invalid_argument(
+          std::string("IndexSpaceRegistry::valid_unIon(s1,s2): space key s2=") +
+          to_string(space2_key) + " must be added to the registry first");
+    return this->valid_unIon(
+        *(this->retrieve_ptr(std::forward<S1>(space1_key))),
+        *(this->retrieve_ptr(std::forward<S2>(space2_key))));
   }
 
   /// alias for valid_unIon
@@ -688,10 +705,14 @@ class IndexSpaceRegistry {
   /// @note never returns nullspace
   const IndexSpace& unIon(const IndexSpace& space1,
                           const IndexSpace& space2) const {
-    if (!contains(space1) || !contains(space2))
+    if (!contains(space1))
       throw std::invalid_argument(
-          "IndexSpaceRegistry::unIon(s1,s2): s1 and s2 must both be "
-          "registered");
+          std::string("IndexSpaceRegistry::valid_unIon(s1,s2): space s1=") +
+          to_string(space1) + " must be added to the registry first");
+    if (!contains(space2))
+      throw std::invalid_argument(
+          std::string("IndexSpaceRegistry::valid_unIon(s1,s2): space s2=") +
+          to_string(space2) + " must be added to the registry first");
 
     if (space1 == space2) {
       return space1;
@@ -699,15 +720,18 @@ class IndexSpaceRegistry {
       bool same_qns = space1.qns() == space2.qns();
       if (!same_qns) {
         throw std::invalid_argument(
-            "IndexSpaceRegistry::unIon(s1,s2): s1 and s2 must have identical "
+            std::string("IndexSpaceRegistry::valid_unIon(s1,s2): spaces s1=") +
+            to_string(space1) + " and s2=" + to_string(space2) +
+            " must have identical "
             "quantum number attributes.");
       }
       auto unIontype = space1.type().unIon(space2.type());
       const IndexSpace& unIonSpace = find_by_attr({unIontype, space1.qns()});
       if (unIonSpace == IndexSpace::null) {
         throw std::invalid_argument(
-            "IndexSpaceRegistry::unIon(s1,s2): the result is not registered, "
-            "must register first.");
+            std::string("IndexSpaceRegistry::valid_unIon(s1,s2), s1=") +
+            to_string(space1) + " and s2=" + to_string(space2) +
+            ": the result is not registered, must register first.");
       } else {
         return unIonSpace;
       }
@@ -721,12 +745,16 @@ class IndexSpaceRegistry {
   /// @note never returns nullspace
   template <basic_string_convertible S1, basic_string_convertible S2>
   const IndexSpace& unIon(S1&& space1_key, S2&& space2_key) const {
-    if (!contains(space1_key) || !contains(space2_key))
+    if (!contains(space1_key))
       throw std::invalid_argument(
-          "IndexSpaceRegistry::unIon(s1,s2): s1 and s2 must both be "
-          "registered");
-    return this->unIon(this->retrieve(std::forward<S1>(space1_key)),
-                       this->retrieve(std::forward<S2>(space2_key)));
+          std::string("IndexSpaceRegistry::unIon(s1,s2): space with key s1=") +
+          to_string(space1_key) + " must be added to the registry first");
+    if (!contains(space2_key))
+      throw std::invalid_argument(
+          std::string("IndexSpaceRegistry::unIon(s1,s2): space key s2=") +
+          to_string(space2_key) + " must be added to the registry first");
+    return this->unIon(*(this->retrieve_ptr(std::forward<S1>(space1_key))),
+                       *(this->retrieve_ptr(std::forward<S2>(space2_key))));
   }
 
   /// @name physical particle space structure introspection
@@ -837,8 +865,9 @@ class IndexSpaceRegistry {
   bool is_base(S&& space_key) const {
     if (!contains(space_key))
       throw std::invalid_argument(
-          "IndexSpaceRegistry::is_base(s): s must be registered");
-    return this->is_base(this->retrieve(std::forward<S>(space_key)));
+          std::string("IndexSpaceRegistry::is_base(s): space with key s=") +
+          to_string(space_key) + " must be added to the registry first");
+    return this->is_base(*(this->retrieve_ptr(std::forward<S>(space_key))));
   }
 
   /// @brief checks if an IndexSpace::Type is in the basis
@@ -874,8 +903,11 @@ class IndexSpaceRegistry {
   bool is_pure_occupied(S&& space_key) const {
     if (!contains(space_key))
       throw std::invalid_argument(
-          "IndexSpaceRegistry::is_pure_occupied(s): s must be registered");
-    return this->is_pure_occupied(this->retrieve(std::forward<S>(space_key)));
+          std::string(
+              "IndexSpaceRegistry::is_pure_occupied(s): space with key s=") +
+          to_string(space_key) + " must be added to the registry first");
+    return this->is_pure_occupied(
+        *(this->retrieve_ptr(std::forward<S>(space_key))));
   }
 
   /// @brief all states are unoccupied in the fermi vacuum
@@ -898,8 +930,11 @@ class IndexSpaceRegistry {
   bool is_pure_unoccupied(S&& space_key) const {
     if (!contains(space_key))
       throw std::invalid_argument(
-          "IndexSpaceRegistry::is_pure_unoccupied(s): s must be registered");
-    return this->is_pure_unoccupied(this->retrieve(std::forward<S>(space_key)));
+          std::string(
+              "IndexSpaceRegistry::is_pure_unoccupied(s): space with key s=") +
+          to_string(space_key) + " must be added to the registry first");
+    return this->is_pure_unoccupied(
+        *(this->retrieve_ptr(std::forward<S>(space_key))));
   }
 
   /// @brief some states are fermi vacuum occupied
@@ -916,8 +951,11 @@ class IndexSpaceRegistry {
   bool contains_occupied(S&& space_key) const {
     if (!contains(space_key))
       throw std::invalid_argument(
-          "IndexSpaceRegistry::contains_occupied(s): s must be registered");
-    return this->contains_occupied(this->retrieve(std::forward<S>(space_key)));
+          std::string(
+              "IndexSpaceRegistry::contains_occupied(s): space with key s=") +
+          to_string(space_key) + " must be added to the registry first");
+    return this->contains_occupied(
+        *(this->retrieve_ptr(std::forward<S>(space_key))));
   }
 
   /// @brief some states are fermi vacuum unoccupied
@@ -934,9 +972,11 @@ class IndexSpaceRegistry {
   bool contains_unoccupied(S&& space_key) const {
     if (!contains(space_key))
       throw std::invalid_argument(
-          "IndexSpaceRegistry::contains_unoccupied(s): s must be registered");
+          std::string(
+              "IndexSpaceRegistry::contains_unoccupied(s): space with key s=") +
+          to_string(space_key) + " must be added to the registry first");
     return this->contains_unoccupied(
-        this->retrieve(std::forward<S>(space_key)));
+        *(this->retrieve_ptr(std::forward<S>(space_key))));
   }
 
   /// @name  specifies which spaces have nonzero occupancy in the vacuum wave
@@ -1344,10 +1384,8 @@ class IndexSpaceRegistry {
       }
     }
     throw std::invalid_argument(
-        call_context +
-        ": missing { IndexSpace::Type=" + std::to_string(t.to_int32()) +
-        " , IndexSpace::QuantumNumbers=" + std::to_string(qn.to_int32()) +
-        " } combination");
+        call_context + ": missing { IndexSpace::Type=" + to_string(t) +
+        " , IndexSpace::QuantumNumbers=" + to_string(qn) + " } combination");
   }
 
   // same as above, but ignoring qn
@@ -1358,8 +1396,8 @@ class IndexSpaceRegistry {
         return;
       }
     }
-    throw std::invalid_argument(call_context + ": missing { IndexSpace::Type=" +
-                                std::to_string(t.to_int32()) +
+    throw std::invalid_argument(call_context +
+                                ": missing { IndexSpace::Type=" + to_string(t) +
                                 " , any IndexSpace::QuantumNumbers } space");
   }
 
