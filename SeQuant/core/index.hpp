@@ -313,8 +313,7 @@ class Index : public Taggable {
   /// is an rvalue reference will scavenge it for the label of the new index
   /// @warning nonexplicit to make Index creation as ergonomic as possible, at
   /// the cost of slightly increased danger
-  template <typename String,
-            typename = meta::EnableIfAllBasicStringConvertible<String>>
+  template <basic_string_convertible String>
   Index(String &&label)
       : Index(
             get_default_context().index_space_registry()

@@ -160,7 +160,7 @@ class IndexSpaceRegistry {
   /// Index::label() )
   /// @return pointer to IndexSpace associated with that key, or nullptr if not
   /// found
-  template <typename S, typename = meta::EnableIfAllBasicStringConvertible<S>>
+  template <basic_string_convertible S>
   const IndexSpace* retrieve_ptr(S&& label) const {
     auto it =
         spaces_->find(IndexSpace::reduce_key(to_basic_string_view(label)));
@@ -172,7 +172,7 @@ class IndexSpaceRegistry {
   /// Index::label() )
   /// @return pointer to IndexSpace associated with that key, or nullptr if not
   /// found
-  template <typename S, typename = meta::EnableIfAllBasicStringConvertible<S>>
+  template <basic_string_convertible S>
   IndexSpace* retrieve_ptr(S&& label) {
     auto it =
         spaces_->find(IndexSpace::reduce_key(to_basic_string_view(label)));
@@ -184,7 +184,7 @@ class IndexSpaceRegistry {
   /// Index::label() )
   /// @return IndexSpace associated with that key
   /// @throw IndexSpace::bad_key if matching space is not found
-  template <typename S, typename = meta::EnableIfAllBasicStringConvertible<S>>
+  template <basic_string_convertible S>
   const IndexSpace& retrieve(S&& label) const {
     if (const auto* ptr = retrieve_ptr(std::forward<S>(label))) {
       return *ptr;
@@ -254,7 +254,7 @@ class IndexSpaceRegistry {
   /// @param label a @c base_key of an IndexSpace, or a label of an Index (see
   /// Index::label() )
   /// @return true, if an IndexSpace with key @p label is registered
-  template <typename S, typename = meta::EnableIfAllBasicStringConvertible<S>>
+  template <basic_string_convertible S>
   bool contains(S&& label) const {
     return this->retrieve_ptr(std::forward<S>(label));
   }
@@ -335,8 +335,7 @@ class IndexSpaceRegistry {
   /// @return reference to `this`
   /// @throw std::invalid_argument if `type_label` or `type` matches
   /// an already registered IndexSpace
-  template <typename S, typename... OptionalArgs,
-            typename = meta::EnableIfAllBasicStringConvertible<S>>
+  template <basic_string_convertible S, typename... OptionalArgs>
   IndexSpaceRegistry& add(S&& type_label, IndexSpace::Type type,
                           OptionalArgs&&... args) {
     auto h_args = boost::hana::make_tuple(args...);
@@ -396,12 +395,8 @@ class IndexSpaceRegistry {
   /// { is_vacuum_occupied , is_reference_occupied , is_complete , is_hole ,
   /// is_particle }
   /// @return reference to `this`
-  template <typename S, typename IndexSpaceOrLabel, typename... OptionalArgs,
-            typename = meta::EnableIfAllBasicStringConvertible<S>,
-            typename = std::enable_if_t<
-                (std::is_same_v<std::decay_t<IndexSpaceOrLabel>, IndexSpace> ||
-                 meta::is_basic_string_convertible_v<
-                     std::decay_t<IndexSpaceOrLabel>>)>>
+  template <basic_string_convertible S, index_space_or_label IndexSpaceOrLabel,
+            typename... OptionalArgs>
   IndexSpaceRegistry& add_unIon(
       S&& type_label, std::initializer_list<IndexSpaceOrLabel> components,
       OptionalArgs&&... args) {
@@ -414,7 +409,7 @@ class IndexSpaceRegistry {
     long count = 0;
     if (components.size() <= 1) {
       throw std::invalid_argument(
-          "IndexSpaceRegistry::add_union: must have at least two components");
+          "IndexSpaceRegistry::add_unIon: must have at least two components");
     }
     for (auto&& component : components) {
       const IndexSpace* component_ptr;
@@ -450,12 +445,8 @@ class IndexSpaceRegistry {
   }
 
   /// alias to add_unIon
-  template <typename S, typename IndexSpaceOrLabel, typename... OptionalArgs,
-            typename = meta::EnableIfAllBasicStringConvertible<S>,
-            typename = std::enable_if_t<
-                (std::is_same_v<std::decay_t<IndexSpaceOrLabel>, IndexSpace> ||
-                 meta::is_basic_string_convertible_v<
-                     std::decay_t<IndexSpaceOrLabel>>)>>
+  template <basic_string_convertible S, index_space_or_label IndexSpaceOrLabel,
+            typename... OptionalArgs>
   IndexSpaceRegistry& add_union(
       S&& type_label, std::initializer_list<IndexSpaceOrLabel> components,
       OptionalArgs&&... args) {
@@ -472,12 +463,8 @@ class IndexSpaceRegistry {
   /// { is_vacuum_occupied , is_reference_occupied , is_complete , is_hole ,
   /// is_particle }
   /// @return reference to `this`
-  template <typename S, typename IndexSpaceOrLabel, typename... OptionalArgs,
-            typename = meta::EnableIfAllBasicStringConvertible<S>,
-            typename = std::enable_if_t<
-                (std::is_same_v<std::decay_t<IndexSpaceOrLabel>, IndexSpace> ||
-                 meta::is_basic_string_convertible_v<
-                     std::decay_t<IndexSpaceOrLabel>>)>>
+  template <basic_string_convertible S, index_space_or_label IndexSpaceOrLabel,
+            typename... OptionalArgs>
   IndexSpaceRegistry& add_intersection(
       S&& type_label, std::initializer_list<IndexSpaceOrLabel> components,
       OptionalArgs&&... args) {
@@ -542,7 +529,7 @@ class IndexSpaceRegistry {
   /// @brief equivalent to `remove(this->retrieve(label))`
   /// @param label space label
   /// @return reference to `this`
-  template <typename S, typename = meta::EnableIfAllBasicStringConvertible<S>>
+  template <basic_string_convertible S>
   IndexSpaceRegistry& remove(S&& label) {
     auto&& IS = this->retrieve(std::forward<S>(label));
     return this->remove(IS);
@@ -581,8 +568,7 @@ class IndexSpaceRegistry {
   /// @return true if
   /// `valid_intersection(retrieve(space1_key),retrieve(space2_key))` is
   /// registered
-  template <typename S1, typename S2,
-            typename = meta::EnableIfAllBasicStringConvertible<S1, S2>>
+  template <basic_string_convertible S1, basic_string_convertible S2>
   bool valid_intersection(S1&& space1_key, S2&& space2_key) const {
     if (!contains(space1_key) || !contains(space2_key))
       throw std::invalid_argument(
@@ -633,8 +619,7 @@ class IndexSpaceRegistry {
   /// @return the intersection of @p space1 and @p space2
   /// @note can return nullspace
   /// @note throw invalid_argument if the nonnull intersection is not registered
-  template <typename S1, typename S2,
-            typename = meta::EnableIfAllBasicStringConvertible<S1, S2>>
+  template <basic_string_convertible S1, basic_string_convertible S2>
   const IndexSpace& intersection(S1&& space1_key, S2&& space2_key) const {
     if (!contains(space1_key) || !contains(space2_key))
       throw std::invalid_argument(
@@ -680,8 +665,7 @@ class IndexSpaceRegistry {
   /// @param space2_key base key of a registered IndexSpace
   /// @return true if `valid_unIon(retrieve(space1_key),retrieve(space2_key))`
   /// is registered
-  template <typename S1, typename S2,
-            typename = meta::EnableIfAllBasicStringConvertible<S1, S2>>
+  template <basic_string_convertible S1, basic_string_convertible S2>
   bool valid_unIon(S1&& space1_key, S2&& space2_key) const {
     if (!contains(space1_key) || !contains(space2_key))
       throw std::invalid_argument(
@@ -729,8 +713,7 @@ class IndexSpaceRegistry {
   /// @return the union of two spaces.
   /// @note can only return registered spaces
   /// @note never returns nullspace
-  template <typename S1, typename S2,
-            typename = meta::EnableIfAllBasicStringConvertible<S1, S2>>
+  template <basic_string_convertible S1, basic_string_convertible S2>
   const IndexSpace& unIon(S1&& space1_key, S2&& space2_key) const {
     if (!contains(space1_key) || !contains(space2_key))
       throw std::invalid_argument(
@@ -844,7 +827,7 @@ class IndexSpaceRegistry {
   /// @param space_key space key
   /// @return true if the space registered with \p space_key is in the basis
   /// @sa base_spaces
-  template <typename S, typename = meta::EnableIfAllBasicStringConvertible<S>>
+  template <basic_string_convertible S>
   bool is_base(S&& space_key) const {
     if (!contains(space_key))
       throw std::invalid_argument(
@@ -881,7 +864,7 @@ class IndexSpaceRegistry {
   /// @param space_key space key
   /// @return `is_pure_occupied(retrieve(space_key))`
   /// @sa base_spaces
-  template <typename S, typename = meta::EnableIfAllBasicStringConvertible<S>>
+  template <basic_string_convertible S>
   bool is_pure_occupied(S&& space_key) const {
     if (!contains(space_key))
       throw std::invalid_argument(
@@ -905,7 +888,7 @@ class IndexSpaceRegistry {
   /// @param space_key space key
   /// @return `is_pure_unoccupied(retrieve(space_key))`
   /// @sa base_spaces
-  template <typename S, typename = meta::EnableIfAllBasicStringConvertible<S>>
+  template <basic_string_convertible S>
   bool is_pure_unoccupied(S&& space_key) const {
     if (!contains(space_key))
       throw std::invalid_argument(
@@ -923,7 +906,7 @@ class IndexSpaceRegistry {
   /// @param space_key space key
   /// @return `contains_occupied(retrieve(space_key))`
   /// @sa base_spaces
-  template <typename S, typename = meta::EnableIfAllBasicStringConvertible<S>>
+  template <basic_string_convertible S>
   bool contains_occupied(S&& space_key) const {
     if (!contains(space_key))
       throw std::invalid_argument(
@@ -941,7 +924,7 @@ class IndexSpaceRegistry {
   /// @param space_key space key
   /// @return `contains_occupied(retrieve(space_key))`
   /// @sa base_spaces
-  template <typename S, typename = meta::EnableIfAllBasicStringConvertible<S>>
+  template <basic_string_convertible S>
   bool contains_unoccupied(S&& space_key) const {
     if (!contains(space_key))
       throw std::invalid_argument(
@@ -988,7 +971,7 @@ class IndexSpaceRegistry {
   /// equivalent to `vacuum_occupied_space(retrieve(l).type())`
   /// @param l label of a known IndexSpace
   /// @return reference to `this`
-  template <typename S, typename = meta::EnableIfAllBasicStringConvertible<S>>
+  template <basic_string_convertible S>
   IndexSpaceRegistry& vacuum_occupied_space(S&& l) {
     return vacuum_occupied_space(this->retrieve(std::forward<S>(l)).type());
   }
@@ -1064,7 +1047,7 @@ class IndexSpaceRegistry {
   /// equivalent to `reference_occupied_space(retrieve(l).type())`
   /// @param l label of a known IndexSpace
   /// @return reference to `this`
-  template <typename S, typename = meta::EnableIfAllBasicStringConvertible<S>>
+  template <basic_string_convertible S>
   IndexSpaceRegistry& reference_occupied_space(S&& l) {
     return reference_occupied_space(this->retrieve(std::forward<S>(l)).type());
   }
@@ -1135,7 +1118,7 @@ class IndexSpaceRegistry {
   /// equivalent to `complete_space(retrieve(l).type())`
   /// @param l label of a known IndexSpace
   /// @return reference to `this`
-  template <typename S, typename = meta::EnableIfAllBasicStringConvertible<S>>
+  template <basic_string_convertible S>
   IndexSpaceRegistry& complete_space(S&& l) {
     return complete_space(this->retrieve(std::forward<S>(l)).type());
   }
@@ -1210,7 +1193,7 @@ class IndexSpaceRegistry {
   /// equivalent to `hole_space(retrieve(l).type())`
   /// @param l label of a known IndexSpace
   /// @return reference to `this`
-  template <typename S, typename = meta::EnableIfAllBasicStringConvertible<S>>
+  template <basic_string_convertible S>
   IndexSpaceRegistry& hole_space(S&& l) {
     return hole_space(this->retrieve(std::forward<S>(l)).type());
   }
@@ -1278,7 +1261,7 @@ class IndexSpaceRegistry {
   /// equivalent to `particle_space(retrieve(l).type())`
   /// @param l label of a known IndexSpace
   /// @return reference to `this`
-  template <typename S, typename = meta::EnableIfAllBasicStringConvertible<S>>
+  template <basic_string_convertible S>
   IndexSpaceRegistry& particle_space(S&& l) {
     return particle_space(this->retrieve(std::forward<S>(l)).type());
   }
