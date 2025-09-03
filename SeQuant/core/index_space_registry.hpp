@@ -675,6 +675,12 @@ class IndexSpaceRegistry {
                              this->retrieve(std::forward<S2>(space2_key)));
   }
 
+  /// alias for valid_unIon
+  template <index_space_or_label T1, index_space_or_label T2>
+  bool valid_union(T1&& t1, T2&& t2) const {
+    return valid_unIon(std::forward<T1>(t1), std::forward<T2>(t2));
+  }
+
   /// @param space1
   /// @param space2
   /// @return the union of two spaces.
