@@ -16,12 +16,12 @@ bitset_t IndexSpaceRegistry::physical_particle_attribute_mask() const {
 
 IndexSpace::QuantumNumbers IndexSpaceRegistry::physical_particle_attributes(
     IndexSpace::QuantumNumbers qn) const {
-  return static_cast<bitset_t>(qn) & physical_particle_attribute_mask_;
+  return to_bitset(qn) & physical_particle_attribute_mask_;
 }
 
 IndexSpace::QuantumNumbers IndexSpaceRegistry::other_attributes(
     IndexSpace::QuantumNumbers qn) const {
-  return static_cast<bitset_t>(qn) & ~physical_particle_attribute_mask_;
+  return to_bitset(qn) & ~physical_particle_attribute_mask_;
 }
 
 IndexSpaceRegistry IndexSpaceRegistry::clone() const {
