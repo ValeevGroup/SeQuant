@@ -29,6 +29,13 @@ TEST_CASE("index_space", "[elements]") {
     REQUIRE(active_occupied == IndexSpace::null);
   }
 
+  SECTION("to_string") {
+    IndexSpace active_occupied(L"i", 0b0010, 20);
+    REQUIRE_NOTHROW(to_string(active_occupied));
+    const auto str = to_string(active_occupied);
+    REQUIRE(str == "{attr={type=0x2,qns=0x14},base_key=i,approximate_size=10}");
+  }
+
   SECTION("registry synopsis") {
     auto sr_isr = sequant::mbpt::make_sr_spaces();
     REQUIRE_NOTHROW(sr_isr->retrieve(L"i"));

@@ -564,6 +564,11 @@ inline bool includes(const IndexSpace &space1, const IndexSpace &space2) {
          space1.base_key() == space2.base_key();
 }
 
+std::string to_string(IndexSpace::Type type);
+std::string to_string(IndexSpace::QuantumNumbers qns);
+std::string to_string(IndexSpace::Attr attr);
+std::string to_string(const IndexSpace &space);
+
 /// true if `std::remove_cvref_t<T>` is an IndexSpace or is convertible to
 /// std::basic_string
 template <typename T>
