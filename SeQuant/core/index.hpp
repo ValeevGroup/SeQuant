@@ -44,6 +44,11 @@ class Index;
 using WstrList = std::initializer_list<std::wstring_view>;
 using IndexList = std::initializer_list<Index>;
 
+template <typename T>
+concept index_or_index_label =
+    (std::is_same_v<std::remove_cvref_t<T>, Index> ||
+     meta::is_basic_string_convertible_v<std::remove_cvref_t<T>>);
+
 // clang-format off
 /// @brief Index = IndexSpace + nonnegative integer ordinal
 
@@ -341,11 +346,7 @@ class Index : public Taggable {
   /// unique, i.e. duplicates are not allowed)
   /// @param symmetric_proto_indices if true, proto_indices can be permuted at
   /// will and will always be sorted
-  template <typename IndexOrIndexLabel, typename I,
-            typename = std::enable_if_t<
-                (std::is_same_v<std::decay_t<IndexOrIndexLabel>, Index> ||
-                 meta::is_basic_string_convertible_v<
-                     std::decay_t<IndexOrIndexLabel>>)>>
+  template <index_or_index_label IndexOrIndexLabel, typename I>
   Index(IndexOrIndexLabel &&index_or_index_label,
         std::initializer_list<I> proto_indices,
         bool symmetric_proto_indices = true)
@@ -386,13 +387,9 @@ class Index : public Taggable {
   /// i.e. duplicates are not allowed)
   /// @param symmetric_proto_indices if true, proto_indices can be permuted at
   ///  will and will always be sorted
-  template <
-      typename IndexOrIndexLabel, typename IndexContainer,
-      typename = std::enable_if_t<
-          std::is_convertible_v<std::remove_reference_t<IndexContainer>,
-                                container::vector<Index>> &&
-          (std::is_same_v<std::decay_t<IndexOrIndexLabel>, Index> ||
-           meta::is_wstring_convertible_v<std::decay_t<IndexOrIndexLabel>>)>>
+  template <index_or_index_label IndexOrIndexLabel, typename IndexContainer,
+            typename = std::enable_if_t<std::is_convertible_v<
+                std::remove_cvref_t<IndexContainer>, container::vector<Index>>>>
   Index(IndexOrIndexLabel &&index_or_index_label,
         IndexContainer &&proto_indices, bool symmetric_proto_indices = true)
       : proto_indices_(std::forward<IndexContainer>(proto_indices)),
