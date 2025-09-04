@@ -285,8 +285,10 @@ class Expr : public std::enable_shared_from_this<Expr>,
   bool is() const {
     if constexpr (is_expr_v<T>)
       return true;
-    else
+    else if constexpr (std::is_base_of_v<Expr, T>)
       return this->type_id() == get_type_id<meta::remove_cvref_t<T>>();
+    else
+      return dynamic_cast<const T *>(this) != nullptr;
   }
 
   /// @tparam T an Expr type
@@ -294,7 +296,10 @@ class Expr : public std::enable_shared_from_this<Expr>,
   template <typename T>
   const T &as() const {
     assert(this->is<T>());
-    return static_cast<const T &>(*this);
+    if constexpr (std::is_base_of_v<Expr, T>) {
+      return static_cast<const T &>(*this);
+    } else
+      return dynamic_cast<const T &>(*this);
   }
 
   /// @tparam T an Expr type
@@ -302,7 +307,10 @@ class Expr : public std::enable_shared_from_this<Expr>,
   template <typename T>
   T &as() {
     assert(this->is<T>());
-    return static_cast<T &>(*this);
+    if constexpr (std::is_base_of_v<Expr, T>) {
+      return static_cast<T &>(*this);
+    } else
+      return dynamic_cast<T &>(*this);
   }
 
   /// @return the (demangled) name of this type
