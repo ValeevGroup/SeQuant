@@ -422,7 +422,7 @@ inline std::wstring to_latex_tensor(
   std::size_t col = 0;
 
   // loop over left-aligned unpaired slots, if left_align==false
-  if (left_align == false) {
+  if (left_align == false && num_unpaired) {
     auto* unpaired_indices = unpaired_type == SlotType::Bra
                                  ? &bra[0]
                                  : &ket[0];  // bra/ket are contiguous
@@ -462,7 +462,7 @@ inline std::wstring to_latex_tensor(
   }
 
   // loop over right-aligned unpaired slots, if left_align==true
-  if (left_align == true) {
+  if (left_align == true && num_unpaired) {
     auto* unpaired_indices = unpaired_type == SlotType::Bra
                                  ? &bra[0]
                                  : &ket[0];  // bra/ket are contiguous
