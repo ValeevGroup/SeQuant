@@ -1509,10 +1509,10 @@ TEST_CASE("tensor_network_v3", "[elements]") {
       Edge e2_copy({v11, v10, v9}, &dummy);
       REQUIRE(e2 == e2_copy);
 
-      // can't connect aux to bra
-      REQUIRE_THROWS_AS(Edge({v9, v1}, &dummy), std::invalid_argument);
-      // can't connect aux to ket
-      REQUIRE_THROWS_AS(Edge({v9, v3}, &dummy), std::invalid_argument);
+      // can connect aux to bra!
+      REQUIRE_NOTHROW(Edge({v9, v1}, &dummy));
+      // can connect aux to ket!
+      REQUIRE_NOTHROW(Edge({v9, v3}, &dummy));
 
       // edge < hyperedge
       REQUIRE(!(e1 == e2));
