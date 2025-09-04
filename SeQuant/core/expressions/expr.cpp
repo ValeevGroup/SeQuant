@@ -245,8 +245,8 @@ ExprPtr Product::canonicalize_impl(CanonicalizationMethod method) {
     auto local_compare = [&cardinal_tensor_labels](const ExprPtr &first,
                                                    const ExprPtr &second) {
       if (first->is<Labeled>() && second->is<Labeled>()) {
-        const auto first_label = first->as<Tensor>().label();
-        const auto second_label = second->as<Tensor>().label();
+        const auto first_label = first->as<Labeled>().label();
+        const auto second_label = second->as<Labeled>().label();
         if (first_label == second_label) return *first < *second;
         const auto first_is_cardinal_it = ranges::find_if(
             cardinal_tensor_labels,
