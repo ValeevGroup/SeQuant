@@ -57,16 +57,15 @@ class compute_cceqvec {
   compute_cceqvec(size_t p, size_t pmin, size_t n, EqnType t = EqnType::t)
       : P(nₚ(p)), PMIN(pmin), N(n), type(t) {}
 
-  void operator()(bool print, bool screen, bool use_topology,
-                  bool use_connectivity, bool canonical_only) {
+  void operator()(bool print, bool screen, bool use_topology) {
     tpool.start(N);
     std::vector<ExprPtr> eqvec;
     switch (type) {
       case EqnType::t:
-        eqvec = CC{N}.t(4, P, PMIN);
+        eqvec = CC{N, CC::Ansatz::T, screen, use_topology}.t(4, P, PMIN);
         break;
       case EqnType::λ:
-        eqvec = CC{N}.λ(4);
+        eqvec = CC{N, CC::Ansatz::T, screen, use_topology}.λ(4);
         break;
     }
     tpool.stop(N);
@@ -74,9 +73,7 @@ class compute_cceqvec {
     std::wcout << std::boolalpha << "CC equations [type=" << type2str.at(type)
                << ",rank=" << N << ",spinfree=" << spinfree
                << ",screen=" << screen << ",use_topology=" << use_topology
-               << ",use_connectivity=" << use_connectivity
-               << ",canonical_only=" << canonical_only << "] computed in "
-               << tpool.read(N) << " seconds" << std::endl;
+               << "] computed in " << tpool.read(N) << " seconds" << std::endl;
 
     // validate spin-free equations against spin-traced spin-orbital equations
     std::vector<ExprPtr> eqvec_sf_ref;
@@ -248,11 +245,9 @@ class compute_all {
   compute_all(size_t nmax, EqnType t = EqnType::t) : NMAX(nmax), type(t) {}
 
   void operator()(bool print = true, bool screen = true,
-                  bool use_topology = true, bool use_connectivity = true,
-                  bool canonical_only = true) {
+                  bool use_topology = true) {
     for (size_t N = 1; N <= NMAX; ++N)
-      compute_cceqvec{N, 1, N, type}(print, screen, use_topology,
-                                     use_connectivity, canonical_only);
+      compute_cceqvec{N, 1, N, type}(print, screen, use_topology);
   }
 };  // class compute_all
 
@@ -300,5 +295,5 @@ int main(int argc, char* argv[]) {
 
   tpool.clear();
   // comment out to run all possible combinations
-  compute_all{NMAX, eqn_type}(print);
+  compute_all{NMAX, eqn_type}(print, /*screen*/ true, /*use_topology*/ true);
 }
