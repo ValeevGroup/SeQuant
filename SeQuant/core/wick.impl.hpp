@@ -250,9 +250,9 @@ inline bool apply_index_replacement_rules(
   {
     for (auto it = ranges::begin(exrng); it != ranges::end(exrng); ++it) {
       const auto &factor = *it;
-      if (factor->is<Tensor>()) {
-        auto &tensor = factor->as<Tensor>();
-        assert(ranges::none_of(tensor.const_slots(), [](const Index &idx) {
+      if (factor->is<AbstractTensor>()) {
+        auto &tensor = factor->as<AbstractTensor>();
+        assert(ranges::none_of(tensor._slots(), [](const Index &idx) {
           return idx.tag().has_value();
         }));
       }
@@ -266,16 +266,16 @@ inline bool apply_index_replacement_rules(
 
     for (auto it = ranges::begin(exrng); it != ranges::end(exrng);) {
       const auto &factor = *it;
-      if (factor->is<Tensor>()) {
+      if (factor->is<AbstractTensor>()) {
         bool erase_it = false;
-        auto &tensor = factor->as<Tensor>();
+        auto &tensor = factor->as<AbstractTensor>();
 
         /// replace indices
-        pass_mutated &= tensor.transform_indices(const_replrules);
+        pass_mutated &= tensor._transform_indices(const_replrules);
 
-        if (tensor.label() == overlap_label()) {
-          const auto &bra = tensor.bra().at(0);
-          const auto &ket = tensor.ket().at(0);
+        if (tensor._label() == overlap_label()) {
+          const auto bra = tensor._bra().at(0);
+          const auto ket = tensor._ket().at(0);
 
           if (bra.proto_indices() == ket.proto_indices()) {
             const auto bra_is_ext = ranges::find(external_indices, bra) !=
@@ -343,8 +343,8 @@ inline bool apply_index_replacement_rules(
   {
     for (auto it = ranges::begin(exrng); it != ranges::end(exrng); ++it) {
       const auto &factor = *it;
-      if (factor->is<Tensor>()) {
-        factor->as<Tensor>().reset_tags();
+      if (factor->is<AbstractTensor>()) {
+        factor->as<AbstractTensor>()._reset_tags();
       }
     }
   }
@@ -381,11 +381,11 @@ void reduce_wick_impl(std::shared_ptr<Product> &expr,
     // extract current indices
     std::set<Index, Index::LabelCompare> all_indices;
     ranges::for_each(*expr, [&all_indices](const auto &factor) {
-      if (factor->template is<Tensor>()) {
-        ranges::for_each(factor->template as<const Tensor>().indices(),
+      if (factor->template is<AbstractTensor>()) {
+        ranges::for_each(factor->template as<const AbstractTensor>()._slots(),
                          [&all_indices](const Index &idx) {
-                           [[maybe_unused]] auto result =
-                               all_indices.insert(idx);
+                           if (idx) [[maybe_unused]]
+                             auto result = all_indices.insert(idx);
                          });
       }
     });
