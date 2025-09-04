@@ -34,16 +34,21 @@ struct zero_result : public std::exception {};
 ///   - if space of J includes space of I, replace J with I, !!remove delta!!
 ///   - if space of J is a subset of space of I, replace J with a new internal
 ///     index representing intersection of spaces of I and J, !!keep the delta!!
+/// @return index replacement map + whether found any overlap tensors; the
+/// former may be empty even if the latter is true, if, e.g., contain trivial
+/// overlaps with identical indices
 /// @throw zero_result if @c product is zero for any reason, e.g. because
 ///        it includes an overlap of 2 indices from nonoverlapping spaces
 template <Statistics S>
-container::map<Index, Index> compute_index_replacement_rules(
+std::pair<container::map<Index, Index>, bool> compute_index_replacement_rules(
     std::shared_ptr<Product> &product,
     const container::set<Index> &external_indices,
     const std::set<Index, Index::LabelCompare> &all_indices,
     const std::shared_ptr<const IndexSpaceRegistry> &isr =
         get_default_context(S).index_space_registry()) {
   expr_range exrng(product);
+
+  bool have_overlaps = false;
 
   /// this ensures that all temporary indices have unique *labels* (not just
   /// unique *full labels*)
@@ -180,46 +185,49 @@ container::map<Index, Index> compute_index_replacement_rules(
     if (factor->type_id() == Expr::get_type_id<Tensor>()) {
       const auto &tensor = static_cast<const Tensor &>(*factor);
       if (tensor.label() == overlap_label()) {
+        have_overlaps = true;
         assert(tensor.bra().size() == 1);
         assert(tensor.ket().size() == 1);
         const auto &bra = tensor.bra().at(0);
         const auto &ket = tensor.ket().at(0);
-        assert(bra != ket);
 
-        const auto bra_is_ext = ranges::find(external_indices, bra) !=
-                                ranges::end(external_indices);
-        const auto ket_is_ext = ranges::find(external_indices, ket) !=
-                                ranges::end(external_indices);
+        // skip trivial kroneckers
+        if (bra != ket) {
+          const auto bra_is_ext = ranges::find(external_indices, bra) !=
+                                  ranges::end(external_indices);
+          const auto ket_is_ext = ranges::find(external_indices, ket) !=
+                                  ranges::end(external_indices);
 
-        const auto intersection_space =
-            isr->intersection(bra.space(), ket.space());
+          const auto intersection_space =
+              isr->intersection(bra.space(), ket.space());
 
-        // if overlap's indices are from non-overlapping spaces, return zero
-        if (!intersection_space) {
-          throw zero_result{};
-        }
-
-        if (!bra_is_ext && !ket_is_ext) {  // int + int
-          const auto new_dummy = idxfac.make(intersection_space);
-          add_rules(bra, ket, new_dummy);
-        } else if (bra_is_ext && !ket_is_ext) {  // ext + int
-          if (includes(ket.space(), bra.space())) {
-            add_rule(ket, bra);
-          } else {
-            add_rule(ket, idxfac.make(intersection_space));
+          // if overlap's indices are from non-overlapping spaces, return zero
+          if (!intersection_space) {
+            throw zero_result{};
           }
-        } else if (!bra_is_ext && ket_is_ext) {  // int + ext
-          if (includes(bra.space(), ket.space())) {
-            add_rule(bra, ket);
-          } else {
-            add_rule(bra, idxfac.make(intersection_space));
+
+          if (!bra_is_ext && !ket_is_ext) {  // int + int
+            const auto new_dummy = idxfac.make(intersection_space);
+            add_rules(bra, ket, new_dummy);
+          } else if (bra_is_ext && !ket_is_ext) {  // ext + int
+            if (includes(ket.space(), bra.space())) {
+              add_rule(ket, bra);
+            } else {
+              add_rule(ket, idxfac.make(intersection_space));
+            }
+          } else if (!bra_is_ext && ket_is_ext) {  // int + ext
+            if (includes(bra.space(), ket.space())) {
+              add_rule(bra, ket);
+            } else {
+              add_rule(bra, idxfac.make(intersection_space));
+            }
           }
         }
       }
     }
   }
 
-  return result;
+  return std::make_pair(result, have_overlaps);
 }
 
 /// @return true if made any changes
@@ -382,8 +390,9 @@ void reduce_wick_impl(std::shared_ptr<Product> &expr,
       }
     });
 
-    const auto replacement_rules = compute_index_replacement_rules<S>(
-        expr, external_indices, all_indices, ctx.index_space_registry());
+    const auto [replacement_rules, have_overlaps] =
+        compute_index_replacement_rules<S>(expr, external_indices, all_indices,
+                                           ctx.index_space_registry());
 
     if (Logger::instance().wick_reduce) {
       std::wcout << "reduce_wick_impl(expr, external_indices):\n  expr = "
@@ -398,7 +407,7 @@ void reduce_wick_impl(std::shared_ptr<Product> &expr,
       std::wcout.flush();
     }
 
-    if (!replacement_rules.empty()) {
+    if (have_overlaps) {
       auto isr = ctx.index_space_registry();
       pass_mutated = apply_index_replacement_rules(
           expr, replacement_rules, external_indices, all_indices, isr);
