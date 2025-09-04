@@ -34,7 +34,7 @@ std::wstring to_wstring(std::floating_point auto t) {
 ///
 /// Converts a UTF-8 encoded string (C or C++) to a UTF-8 encoded
 /// std::string
-template <typename S, typename = meta::EnableIfAllBasicStringConvertible<S>>
+template <basic_string_convertible S>
 std::string to_string(S&& str_utf8) {
   auto str_utf8_view = to_basic_string_view(std::forward<S>(str_utf8));
   using boost::locale::conv::utf_to_utf;
@@ -51,7 +51,7 @@ inline std::string to_string(std::string&& str_utf8) {
 ///
 /// Converts a UTF-8 encoded std::basic_string_view<Char> to a UTF-8 encoded
 /// std::wstring
-template <typename S, typename = meta::EnableIfAllBasicStringConvertible<S>>
+template <basic_string_convertible S>
 std::wstring to_wstring(S&& str_utf8) {
   auto str_utf8_view = to_basic_string_view(std::forward<S>(str_utf8));
   using boost::locale::conv::utf_to_utf;
