@@ -59,8 +59,9 @@ class WickTheorem {
       assert(input_->empty() || input_->vacuum() == Vacuum::Physical);
     }
   }
-  explicit WickTheorem(const NormalOperatorSequence<S> &input)
-      : WickTheorem(std::make_shared<NormalOperatorSequence<S>>(input)) {}
+  explicit WickTheorem(NormalOperatorSequence<S> input)
+      : WickTheorem(
+            std::make_shared<NormalOperatorSequence<S>>(std::move(input))) {}
 
   explicit WickTheorem(ExprPtr expr_input) {
     if (expr_input->is<NormalOperatorSequence<S>>()) {
@@ -69,6 +70,9 @@ class WickTheorem {
     } else
       expr_input_ = std::move(expr_input);
   }
+
+  explicit WickTheorem(const std::initializer_list<Op<S>> &ops)
+      : WickTheorem(NormalOperatorSequence<S>{ops}) {}
 
   /// constructs WickTheorem from @c other with expression input set to @c
   /// expr_input
