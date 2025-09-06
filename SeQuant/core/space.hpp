@@ -532,10 +532,10 @@ inline bool includes(IndexSpace::QuantumNumbers qns1,
                      IndexSpace::QuantumNumbers qns2) {
   return qns1.includes(qns2);
 }
-/// @return true if space2 is included in space1, i.e. `intersection(space1,
-/// space2) == space2`
-inline bool includes(const IndexSpace &space1, const IndexSpace &space2) {
-  return space1.attr().includes(space2.attr());
+/// @return true if \p subspace is included in \p space, i.e.
+/// `intersection(space, subspace) == subspace`
+inline bool includes(const IndexSpace &space, const IndexSpace &subspace) {
+  return space.attr().includes(subspace.attr());
 }
 
 /// IndexSpace is ordered by its attributes and (if attributes are default,

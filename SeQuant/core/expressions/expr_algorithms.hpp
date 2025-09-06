@@ -479,13 +479,18 @@ class expr_range : public ranges::view_facade<expr_range> {
 
 namespace detail {
 struct rapid_simplify_visitor {
+  SimplifyOptions opts;
+
+  rapid_simplify_visitor(SimplifyOptions opts) : opts(std::move(opts)) {
+    opts.method = CanonicalizationMethod::Rapid;
+  }
+
   void operator()(ExprPtr& expr) {
     if (Logger::instance().simplify)
       std::wcout << "rapid_simplify_visitor received " << to_latex(expr)
                  << std::endl;
     // apply simplify() iteratively until done
-    while (simplify(
-        expr, SimplifyOptions{{.method = CanonicalizationMethod::Rapid}})) {
+    while (simplify(expr, opts)) {
       if (Logger::instance().simplify)
         std::wcout << "after 1 round of simplification have " << to_latex(expr)
                    << std::endl;
@@ -599,10 +604,13 @@ struct rapid_simplify_visitor {
 /// trivial math, flattening sums and products, etc.)
 /// @param[in,out] expr expression to be simplified; may be
 /// _replaced_ (i.e. `&expr` may be mutated by call)
+/// @param[in] opts canonicalization options (if not given, uses
+///            CanonicalizeOptions::default_options() to obtain the default)
 /// @sa simplify()
 /// @return \p expr to facilitate chaining
-inline ExprPtr& rapid_simplify(ExprPtr& expr) {
-  detail::rapid_simplify_visitor simplifier{};
+inline ExprPtr& rapid_simplify(
+    ExprPtr& expr, SimplifyOptions opts = SimplifyOptions::default_options()) {
+  detail::rapid_simplify_visitor simplifier{opts};
   expr->visit(simplifier);
   simplifier(expr);
   return expr;
@@ -619,9 +627,9 @@ inline ExprPtr& rapid_simplify(ExprPtr& expr) {
 inline ExprPtr& simplify(
     ExprPtr& expr, SimplifyOptions opts = SimplifyOptions::default_options()) {
   expand(expr);
-  rapid_simplify(expr);
+  rapid_simplify(expr, opts);
   canonicalize(expr, opts);
-  rapid_simplify(expr);
+  rapid_simplify(expr, opts);
   return expr;
 }
 

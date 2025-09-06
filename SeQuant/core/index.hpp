@@ -49,6 +49,10 @@ concept index_or_index_label =
     (std::is_same_v<std::remove_cvref_t<T>, Index> ||
      meta::is_basic_string_convertible_v<std::remove_cvref_t<T>>);
 
+template <typename T>
+concept range_of_castables_to_index =
+    (meta::is_statically_castable_v<meta::range_value_t<T>, Index>);
+
 // clang-format off
 /// @brief Index = IndexSpace + nonnegative integer ordinal
 

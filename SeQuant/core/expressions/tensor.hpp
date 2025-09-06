@@ -242,25 +242,16 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
     }
   }
 
-  template <typename IndexRange1, typename IndexRange2, typename IndexRange3,
-            typename = std::enable_if_t<
-                (meta::is_statically_castable_v<
-                    meta::range_value_t<IndexRange1>,
-                    Index>)&&(meta::
-                                  is_statically_castable_v<
-                                      meta::range_value_t<IndexRange2>,
-                                      Index>)&&(meta::
-                                                    is_statically_castable_v<
-                                                        meta::range_value_t<
-                                                            IndexRange3>,
-                                                        Index>)>>
-  Tensor(std::wstring_view label, const bra<IndexRange1> &bra_indices,
+  template <basic_string_convertible S, range_of_castables_to_index IndexRange1,
+            range_of_castables_to_index IndexRange2,
+            range_of_castables_to_index IndexRange3>
+  Tensor(S &&label, const bra<IndexRange1> &bra_indices,
          const ket<IndexRange2> &ket_indices,
          const aux<IndexRange3> &aux_indices, reserved_tag,
          Symmetry s = Symmetry::Nonsymm,
          BraKetSymmetry bks = get_default_context().braket_symmetry(),
          ColumnSymmetry ps = ColumnSymmetry::Symm)
-      : label_(label),
+      : label_(to_wstring(std::forward<S>(label))),
         bra_(make_indices(bra_indices)),
         ket_(make_indices(ket_indices)),
         aux_(make_indices(aux_indices)),
@@ -276,13 +267,14 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
     canonicalize_slots();
   }
 
-  Tensor(std::wstring_view label, bra<index_container_type> &&bra_indices,
+  template <basic_string_convertible S>
+  Tensor(S &&label, bra<index_container_type> &&bra_indices,
          ket<index_container_type> &&ket_indices,
          aux<index_container_type> &&aux_indices, reserved_tag,
          Symmetry s = Symmetry::Nonsymm,
          BraKetSymmetry bks = get_default_context().braket_symmetry(),
          ColumnSymmetry ps = ColumnSymmetry::Symm)
-      : label_(label),
+      : label_(to_wstring(std::forward<S>(label))),
         bra_(std::move(bra_indices)),
         ket_(std::move(ket_indices)),
         aux_(std::move(aux_indices)),
@@ -324,20 +316,14 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   /// @param s the symmetry of bra or ket
   /// @param bks the symmetry with respect to bra-ket exchange
   /// @param ps the symmetry under exchange of particles
-  template <
-      typename IndexRange1, typename IndexRange2,
-      typename = std::enable_if_t<
-          (meta::is_statically_castable_v<
-              meta::range_value_t<IndexRange1>,
-              Index>)&&(meta::
-                            is_statically_castable_v<
-                                meta::range_value_t<IndexRange2>, Index>)>>
-  Tensor(std::wstring_view label, const bra<IndexRange1> &bra_indices,
+  template <basic_string_convertible S, range_of_castables_to_index IndexRange1,
+            range_of_castables_to_index IndexRange2>
+  Tensor(S &&label, const bra<IndexRange1> &bra_indices,
          const ket<IndexRange2> &ket_indices, Symmetry s = Symmetry::Nonsymm,
          BraKetSymmetry bks = get_default_context().braket_symmetry(),
          ColumnSymmetry ps = ColumnSymmetry::Symm)
-      : Tensor(label, bra_indices, ket_indices, sequant::aux{}, reserved_tag{},
-               s, bks, ps) {
+      : Tensor(std::forward<S>(label), bra_indices, ket_indices, sequant::aux{},
+               reserved_tag{}, s, bks, ps) {
     assert_nonreserved_label(label_);
   }
 
@@ -351,25 +337,16 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   /// @param s the symmetry of bra or ket
   /// @param bks the symmetry with respect to bra-ket exchange
   /// @param ps the symmetry under exchange of particles
-  template <typename IndexRange1, typename IndexRange2, typename IndexRange3,
-            typename = std::enable_if_t<
-                (meta::is_statically_castable_v<
-                    meta::range_value_t<IndexRange1>,
-                    Index>)&&(meta::
-                                  is_statically_castable_v<
-                                      meta::range_value_t<IndexRange2>,
-                                      Index>)&&(meta::
-                                                    is_statically_castable_v<
-                                                        meta::range_value_t<
-                                                            IndexRange3>,
-                                                        Index>)>>
-  Tensor(std::wstring_view label, const bra<IndexRange1> &bra_indices,
+  template <basic_string_convertible S, range_of_castables_to_index IndexRange1,
+            range_of_castables_to_index IndexRange2,
+            range_of_castables_to_index IndexRange3>
+  Tensor(S &&label, const bra<IndexRange1> &bra_indices,
          const ket<IndexRange2> &ket_indices,
          const aux<IndexRange3> &aux_indices, Symmetry s = Symmetry::Nonsymm,
          BraKetSymmetry bks = get_default_context().braket_symmetry(),
          ColumnSymmetry ps = ColumnSymmetry::Symm)
-      : Tensor(label, bra_indices, ket_indices, aux_indices, reserved_tag{}, s,
-               bks, ps) {
+      : Tensor(std::forward<S>(label), bra_indices, ket_indices, aux_indices,
+               reserved_tag{}, s, bks, ps) {
     assert_nonreserved_label(label_);
   }
 
@@ -381,13 +358,15 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   /// @param s the symmetry of bra or ket
   /// @param bks the symmetry with respect to bra-ket exchange
   /// @param ps the symmetry under exchange of particles
-  Tensor(std::wstring_view label, bra<index_container_type> &&bra_indices,
+  template <basic_string_convertible S>
+  Tensor(S &&label, bra<index_container_type> &&bra_indices,
          ket<index_container_type> &&ket_indices,
          Symmetry s = Symmetry::Nonsymm,
          BraKetSymmetry bks = get_default_context().braket_symmetry(),
          ColumnSymmetry ps = ColumnSymmetry::Symm)
-      : Tensor(label, std::move(bra_indices), std::move(ket_indices),
-               sequant::aux{}, reserved_tag{}, s, bks, ps) {
+      : Tensor(std::forward<S>(label), std::move(bra_indices),
+               std::move(ket_indices), sequant::aux{}, reserved_tag{}, s, bks,
+               ps) {
     assert_nonreserved_label(label_);
   }
 
@@ -401,14 +380,16 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   /// @param s the symmetry of bra or ket
   /// @param bks the symmetry with respect to bra-ket exchange
   /// @param ps the symmetry under exchange of particles
-  Tensor(std::wstring_view label, bra<index_container_type> &&bra_indices,
+  template <basic_string_convertible S>
+  Tensor(S &&label, bra<index_container_type> &&bra_indices,
          ket<index_container_type> &&ket_indices,
          aux<index_container_type> &&aux_indices,
          Symmetry s = Symmetry::Nonsymm,
          BraKetSymmetry bks = get_default_context().braket_symmetry(),
          ColumnSymmetry ps = ColumnSymmetry::Symm)
-      : Tensor(label, std::move(bra_indices), std::move(ket_indices),
-               std::move(aux_indices), reserved_tag{}, s, bks, ps) {
+      : Tensor(std::forward<S>(label), std::move(bra_indices),
+               std::move(ket_indices), std::move(aux_indices), reserved_tag{},
+               s, bks, ps) {
     assert_nonreserved_label(label_);
   }
 

@@ -278,8 +278,12 @@ class Sum : public Expr {
           CanonicalizeOptions::default_options()) override {
     return canonicalize_impl(true, opt);
   }
-  virtual ExprPtr rapid_canonicalize() override {
-    return canonicalize_impl(false, {.method = CanonicalizationMethod::Rapid});
+  virtual ExprPtr rapid_canonicalize(
+      CanonicalizeOptions opts =
+          CanonicalizeOptions::default_options().copy_and_set_method(
+              CanonicalizationMethod::Rapid)) override {
+    assert(opts.method == CanonicalizationMethod::Rapid);
+    return canonicalize_impl(false, opts);
   }
 
   bool static_equal(const Expr &that) const override {

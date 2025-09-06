@@ -100,16 +100,7 @@ class TensorNetworkV3 {
       if (vertices.empty()) {
         vertices.emplace(vertex);
       } else {
-        // - cannot connect braket slots to aux slots
         auto &first = *(vertices.begin());
-        if ((first.getOrigin() == Origin::Aux &&
-             vertex.getOrigin() != Origin::Aux) ||
-            (first.getOrigin() != Origin::Aux &&
-             vertex.getOrigin() == Origin::Aux)) {
-          throw std::invalid_argument(
-              "TensorNetworkV3::Edge::connect_to: aux slot cannot be connected "
-              "to a non-aux slot");
-        }
         // - can connect bra slot to ket slot, and vice versa, unless there is
         // no distinction between primal and dual spaces
         if (get_default_context().braket_symmetry() != BraKetSymmetry::Symm) {

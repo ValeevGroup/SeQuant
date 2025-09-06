@@ -22,6 +22,36 @@ namespace detail {
 
 struct zero_result : public std::exception {};
 
+/// index replacements are many-to-one, i.e. multiple source indices may be
+/// mapped to the same destnation index. This serves the role of a single
+/// destination to avoid representing each destination index by multiple copies
+/// of itself. This is needed to be able to "merge" multiple replacements
+/// efficiently. e.g. consider adding replacement p1->i1 to the current list
+/// {p1->I1, p2->I1} this means that we need to replace I1 by i1 (since i1
+/// represents a subset of I1). With 1-to-1 representation changing I1 to i1
+/// will require searching through all replacements. This struct makes sure that
+/// I1 will need to be replaced in 1 spot. Note that destination index may or
+/// may not have protonindices.
+class index_repl_dst_t {
+ public:
+  explicit index_repl_dst_t(Index dst, Index src)
+      : dst_(std::move(dst)), src_{std::move(src)} {}
+
+  const Index &dst() const { return dst_; }
+  void update_dst(Index idx) { dst_ = std::move(idx); }
+
+  const container::svector<Index> &src() const { return src_; }
+  index_repl_dst_t &append_src(Index src) {
+    assert(ranges::contains(src_, src) == false);
+    src_.emplace_back(std::move(src));
+    return *this;
+  }
+
+ private:
+  Index dst_;  // does not have proto indices
+  container::svector<Index> src_;
+};
+
 /// @brief computes index replacement rules
 
 /// If using orthonormal representation, overlaps are Kronecker deltas, hence
@@ -34,10 +64,13 @@ struct zero_result : public std::exception {};
 ///   - if space of J includes space of I, replace J with I, !!remove delta!!
 ///   - if space of J is a subset of space of I, replace J with a new internal
 ///     index representing intersection of spaces of I and J, !!keep the delta!!
+/// @return index replacement map + whether found any overlap tensors; the
+/// former may be empty even if the latter is true, if, e.g., contain trivial
+/// overlaps with identical indices
 /// @throw zero_result if @c product is zero for any reason, e.g. because
 ///        it includes an overlap of 2 indices from nonoverlapping spaces
 template <Statistics S>
-container::map<Index, Index> compute_index_replacement_rules(
+std::pair<container::map<Index, Index>, bool> compute_index_replacement_rules(
     std::shared_ptr<Product> &product,
     const container::set<Index> &external_indices,
     const std::set<Index, Index::LabelCompare> &all_indices,
@@ -45,13 +78,18 @@ container::map<Index, Index> compute_index_replacement_rules(
         get_default_context(S).index_space_registry()) {
   expr_range exrng(product);
 
+  bool have_overlaps = false;
+
   /// this ensures that all temporary indices have unique *labels* (not just
   /// unique *full labels*)
   auto index_validator = [&all_indices](const Index &idx) {
     return all_indices.find(idx) == all_indices.end();
   };
   IndexFactory idxfac(index_validator);
-  container::map<Index /* src */, Index /* dst */> result;  // src->dst
+  container::map<Index /* src */, std::shared_ptr<index_repl_dst_t> /* dst */>
+      src2dst;  // src->dst, will be converted to
+  container::svector<std::shared_ptr<index_repl_dst_t>>
+      dst_list;  // unsorted list of dst indices
 
   // computes an index in intersection of space1 and space2
   auto make_intersection_index = [&idxfac, &isr](const IndexSpace &space1,
@@ -61,88 +99,165 @@ container::map<Index, Index> compute_index_replacement_rules(
     return idxfac.make(intersection_space);
   };
 
-  // transfers proto indices from idx (if any) to img
-  auto proto = [](const Index &img, const Index &idx) {
-    if (idx.has_proto_indices()) {
-      if (img.has_proto_indices()) {
-        assert(img.proto_indices() == idx.proto_indices());
-        return img;
+  // transfers proto indices from src (if any) to dst
+  // which proto-indices should dst inherit from src? a dst index without
+  // proto indices will inherit its src counterpart's indices, unless it
+  // already has its own protoindices: <a_ij|p> = <a_ij|a_ij> (hence replace p
+  // with a_ij), but <a_ij|p_kl> = <a_ij|a_kl> != <a_ij|a_ij> (hence replace
+  // p_kl with a_kl)
+  auto proto = [](const Index &dst, const Index &src) {
+    if (src.has_proto_indices()) {
+      if (dst.has_proto_indices()) {
+        assert(dst.proto_indices() == src.proto_indices());
+        return dst;
       } else
-        return Index(img, idx.proto_indices());
+        return Index(dst, src.proto_indices());
     } else {
-      assert(!img.has_proto_indices());
-      return img;
+      assert(!dst.has_proto_indices());
+      return dst;
     }
   };
 
-  // adds src->dst or src->intersection(dst,current_dst)
-  auto add_rule = [&result, &proto, &make_intersection_index](
-                      const Index &src, const Index &dst) {
-    auto src_it = result.find(src);
-    if (src_it == result.end()) {  // if brand new, add the rule
-      [[maybe_unused]] auto insertion_result =
-          result.emplace(src, proto(dst, src));
+  // adds src->dst, optionally assigning proto indices from protosrc
+  auto add_src_to_existing_dst = [&src2dst, &dst_list, &proto,
+                                  &make_intersection_index](const Index &src,
+                                                            auto srd2dst_it) {
+    assert(srd2dst_it != ranges::end(src2dst));
+    srd2dst_it->second->append_src(src);
+    src2dst.emplace(src, srd2dst_it->second);
+  };
+
+  // change dst index
+  auto replace_dst_index = [&src2dst](const Index &new_dst, auto srd2dst_it) {
+    assert(srd2dst_it != ranges::end(src2dst));
+    srd2dst_it->second->update_dst(new_dst);
+  };
+
+  // merges dst2 into dst1
+  auto merge_dst2_into_dst1 = [&src2dst, &dst_list, &proto,
+                               &make_intersection_index](auto srd2dst_it1,
+                                                         auto srd2dst_it2) {
+    assert(srd2dst_it1->second !=
+           srd2dst_it2->second);  // caller should ensure no self-merges,
+                                  // indicates faulty logic upstream
+    assert(srd2dst_it1 != ranges::end(src2dst));
+    assert(srd2dst_it2 != ranges::end(src2dst));
+    const auto dst1 = srd2dst_it1->second;
+    const auto dst2 = srd2dst_it2->second;
+
+    // repoint all source indices of dst2 to dst1
+    for (const auto &src2 : srd2dst_it2->second->src()) {
+      auto it = src2dst.find(src2);
+      assert(it != src2dst.end());
+      it->second = dst1;
+      dst1->append_src(src2);
+    }
+
+    // there should be no refs to dst2 in src2dst
+    assert(ranges::contains(src2dst, dst2,
+                            [](const auto &it) { return it.second; }) == false);
+
+    // erase dst2 from dst_list
+    auto it2 = ranges::find(dst_list, dst2);
+    assert(it2 != ranges::end(dst_list));
+    dst_list.erase(it2);
+    // there should be no "viewers" of dst2
+    assert(dst2.use_count() == 1);
+  };
+
+  // adds src->dst, optionally assigning proto indices from protosrc
+  auto add_rule = [&src2dst, &dst_list, &proto, &make_intersection_index](
+                      const Index &src, const Index &dst,
+                      std::optional<const Index> protosrc = std::nullopt) {
+    auto real_dst = protosrc ? proto(dst, protosrc.value()) : proto(dst, src);
+    auto it = ranges::find_if(
+        dst_list, [&real_dst](const auto &d) { return d->dst() == real_dst; });
+    if (it != ranges::end(dst_list)) {
+      (*it)->append_src(src);
+      src2dst.emplace(src, *it);
+    } else {
+      [[maybe_unused]] auto insertion_result = src2dst.emplace(
+          src, std::make_shared<index_repl_dst_t>(real_dst, src));
       assert(insertion_result.second);
-    } else {  // else modify the destination of the existing rule to the
-      // intersection
-      const auto &old_dst = src_it->second;
-      assert(old_dst.proto_indices() == src.proto_indices());
-      if (dst.space() != old_dst.space()) {
-        src_it->second =
-            proto(make_intersection_index(old_dst.space(), dst.space()), src);
-      }
+      dst_list.emplace_back(insertion_result.first->second);
+    }
+  };
+
+  // changes src->current_dst to src->intersection(dst,current_dst)
+  auto update_rule = [&src2dst, &dst_list, &proto, &make_intersection_index](
+                         auto src_it, const Index &src, const Index &dst,
+                         std::optional<const Index> protosrc = std::nullopt) {
+    assert(src_it != src2dst.end());
+    // intersection
+    auto &old_dst = src_it->second->dst();
+    assert(old_dst.proto_indices() == src.proto_indices());
+    if (dst.space() != old_dst.space()) {
+      auto space_intersection =
+          make_intersection_index(old_dst.space(), dst.space());
+      auto real_dst = protosrc ? proto(space_intersection, protosrc.value())
+                               : proto(space_intersection, src);
+      src_it->second->update_dst(real_dst);
+    }
+  };
+
+  // adds src->dst or changes src->current_dst to
+  // src->intersection(dst,current_dst)
+  auto add_or_update_rule = [&add_rule, &update_rule, &src2dst, &dst_list,
+                             &proto, &make_intersection_index](
+                                const Index &src, const Index &dst) {
+    auto src_it = src2dst.find(src);
+    if (src_it == src2dst.end()) {
+      add_rule(src, dst);
+    } else {
+      update_rule(src_it, src, dst);
     }
   };
 
   // adds src1->dst and src2->dst; if src1->dst1 and/or src2->dst2 already
   // exist the existing rules are updated to map to the intersection of dst1,
   // dst2 and dst
-  auto add_rules = [&result, &idxfac, &proto, &make_intersection_index, &isr](
-                       const Index &src1, const Index &src2, const Index &dst) {
+  auto add_or_update_rules = [&add_rule, &update_rule, &add_src_to_existing_dst,
+                              &replace_dst_index, &merge_dst2_into_dst1,
+                              &src2dst, &dst_list, &idxfac, &proto,
+                              &make_intersection_index,
+                              &isr](const Index &src1, const Index &src2,
+                                    const Index &dst) {
     // are there replacement rules already for src{1,2}?
-    auto src1_it = result.find(src1);
-    auto src2_it = result.find(src2);
-    const auto has_src1_rule = src1_it != result.end();
-    const auto has_src2_rule = src2_it != result.end();
+    auto src1_it = src2dst.find(src1);
+    auto src2_it = src2dst.find(src2);
+    const auto has_src1_rule = src1_it != src2dst.end();
+    const auto has_src2_rule = src2_it != src2dst.end();
 
-    // which proto-indices should dst1 and dst2 inherit? a source index without
-    // proto indices will inherit its source counterpart's indices, unless it
-    // already has its own protoindices: <a_ij|p> = <a_ij|a_ij> (hence replace p
-    // with a_ij), but <a_ij|p_kl> = <a_ij|a_kl> != <a_ij|a_ij> (hence replace
-    // p_kl with a_kl)
+    // which proto-indices should dst1 and dst2 inherit? a destination index
+    // without proto indices will inherit its source counterpart's indices,
+    // unless it already has its own protoindices: <a_ij|p> = <a_ij|a_ij> (hence
+    // replace p with a_ij), but <a_ij|p_kl> = <a_ij|a_kl> != <a_ij|a_ij> (hence
+    // replace p_kl with a_kl)
     const auto &dst1_proto =
         !src1.has_proto_indices() && src2.has_proto_indices() ? src2 : src1;
     const auto &dst2_proto =
         !src2.has_proto_indices() && src1.has_proto_indices() ? src1 : src2;
 
     if (!has_src1_rule && !has_src2_rule) {  // if brand new, add the rules
-      [[maybe_unused]] auto insertion_result1 =
-          result.emplace(src1, proto(dst, dst1_proto));
-      assert(insertion_result1.second);
-      [[maybe_unused]] auto insertion_result2 =
-          result.emplace(src2, proto(dst, dst2_proto));
-      assert(insertion_result2.second);
-    } else if (has_src1_rule &&
-               !has_src2_rule) {  // update the existing rule for src1
-      const auto &old_dst1 = src1_it->second;
-      assert(old_dst1.proto_indices() == dst1_proto.proto_indices());
-      if (dst.space() != old_dst1.space()) {
-        src1_it->second = proto(
-            make_intersection_index(old_dst1.space(), dst.space()), dst1_proto);
-      }
-      result.emplace(src2, src1_it->second);
-    } else if (!has_src1_rule &&
-               has_src2_rule) {  // update the existing rule for src2
-      const auto &old_dst2 = src2_it->second;
-      assert(old_dst2.proto_indices() == dst2_proto.proto_indices());
-      if (dst.space() != old_dst2.space()) {
-        src2_it->second = proto(
-            make_intersection_index(old_dst2.space(), dst.space()), dst2_proto);
-      }
-      result.emplace(src1, src2_it->second);
-    } else {  // update both of the existing rules
-      const auto &old_dst1 = src1_it->second;
-      const auto &old_dst2 = src2_it->second;
+      add_rule(src1, dst, dst1_proto);
+      add_rule(src2, dst, dst2_proto);
+    } else if (has_src1_rule && !has_src2_rule) {
+      // update the existing rule for src1
+      update_rule(src1_it, src1, dst, dst1_proto);
+      // create new rule: src2->dst1
+      add_src_to_existing_dst(src2, src2dst.find(src1));
+    } else if (!has_src1_rule && has_src2_rule) {
+      // update the existing rule for src2
+      update_rule(src2_it, src2, dst, dst2_proto);
+      // create new rule: src1->dst2
+      add_src_to_existing_dst(src1, src2dst.find(src2));
+    } else {
+      // merge the existing rules
+      // - compute new target index space
+      // - compute new target index
+      // - repoint old rules to the new target
+      const auto &old_dst1 = src1_it->second->dst();
+      const auto &old_dst2 = src2_it->second->dst();
       const auto new_dst_space =
           (dst.space() != old_dst1.space() || dst.space() != old_dst2.space())
               ? isr->intersection(
@@ -168,8 +283,20 @@ container::map<Index, Index> compute_index_replacement_rules(
         new_dst = dst;
       } else
         new_dst = idxfac.make(new_dst_space);
-      result.emplace(src1, proto(new_dst, dst1_proto));
-      result.emplace(src2, proto(new_dst, dst2_proto));
+
+      // update dst1 and dst2 with new_dst, then merge them
+      auto new_real_dst = proto(new_dst, dst1_proto);
+      assert(new_real_dst ==
+             proto(new_dst, dst2_proto));  // don't know how to handle this yet
+      auto src2dst_it1 = src2dst.find(src1);
+      replace_dst_index(new_real_dst, src2dst_it1);
+      // if src1 and src2 were pointing to same destination, we are done, else
+      // merge their destinations
+      auto src2dst_it2 = src2dst.find(src2);
+      if (src2dst_it1->second != src2dst_it2->second) {
+        replace_dst_index(new_real_dst, src2dst_it2);
+        merge_dst2_into_dst1(src2dst_it1, src2dst_it2);
+      }
     }
   };
 
@@ -180,46 +307,61 @@ container::map<Index, Index> compute_index_replacement_rules(
     if (factor->type_id() == Expr::get_type_id<Tensor>()) {
       const auto &tensor = static_cast<const Tensor &>(*factor);
       if (tensor.label() == overlap_label()) {
+        have_overlaps = true;
         assert(tensor.bra().size() == 1);
         assert(tensor.ket().size() == 1);
         const auto &bra = tensor.bra().at(0);
         const auto &ket = tensor.ket().at(0);
-        assert(bra != ket);
 
-        const auto bra_is_ext = ranges::find(external_indices, bra) !=
-                                ranges::end(external_indices);
-        const auto ket_is_ext = ranges::find(external_indices, ket) !=
-                                ranges::end(external_indices);
+        // skip if
+        // - self-overlap (will be replaced by 1 already)
+        bool do_skip = bra == ket;
+        // - nontrivial overlap between spaces that depend on distinct
+        // protoindices
+        do_skip = do_skip && bra.has_proto_indices() != ket.has_proto_indices();
+        if (!do_skip) {
+          const auto bra_is_ext = ranges::find(external_indices, bra) !=
+                                  ranges::end(external_indices);
+          const auto ket_is_ext = ranges::find(external_indices, ket) !=
+                                  ranges::end(external_indices);
 
-        const auto intersection_space =
-            isr->intersection(bra.space(), ket.space());
+          const auto intersection_space =
+              isr->intersection(bra.space(), ket.space());
 
-        // if overlap's indices are from non-overlapping spaces, return zero
-        if (!intersection_space) {
-          throw zero_result{};
-        }
-
-        if (!bra_is_ext && !ket_is_ext) {  // int + int
-          const auto new_dummy = idxfac.make(intersection_space);
-          add_rules(bra, ket, new_dummy);
-        } else if (bra_is_ext && !ket_is_ext) {  // ext + int
-          if (includes(ket.space(), bra.space())) {
-            add_rule(ket, bra);
-          } else {
-            add_rule(ket, idxfac.make(intersection_space));
+          // if overlap's indices are from non-overlapping spaces, return zero
+          if (!intersection_space) {
+            throw zero_result{};
           }
-        } else if (!bra_is_ext && ket_is_ext) {  // int + ext
-          if (includes(bra.space(), ket.space())) {
-            add_rule(bra, ket);
-          } else {
-            add_rule(bra, idxfac.make(intersection_space));
+
+          if (!bra_is_ext && !ket_is_ext) {
+            // int + int
+            const auto new_dummy = idxfac.make(intersection_space);
+            add_or_update_rules(bra, ket, new_dummy);
+          } else if (bra_is_ext && !ket_is_ext) {  // ext + int
+            if (includes(ket.space(), bra.space())) {
+              add_or_update_rule(ket, bra);
+            } else {
+              add_or_update_rule(ket, idxfac.make(intersection_space));
+            }
+          } else if (!bra_is_ext && ket_is_ext) {  // int + ext
+            if (includes(bra.space(), ket.space())) {
+              add_or_update_rule(bra, ket);
+            } else {
+              add_or_update_rule(bra, idxfac.make(intersection_space));
+            }
           }
+          // ext + ext => leave overlap as is
         }
       }
     }
   }
 
-  return result;
+  // make 1-to-1 version of src->dst
+  container::map<Index /* src */, Index /* dst */> result;
+  for (auto &&[src, d] : src2dst) {
+    result.emplace(src, d->dst());
+  }
+  return std::make_pair(result, have_overlaps);
 }
 
 /// @return true if made any changes
@@ -242,9 +384,9 @@ inline bool apply_index_replacement_rules(
   {
     for (auto it = ranges::begin(exrng); it != ranges::end(exrng); ++it) {
       const auto &factor = *it;
-      if (factor->is<Tensor>()) {
-        auto &tensor = factor->as<Tensor>();
-        assert(ranges::none_of(tensor.const_slots(), [](const Index &idx) {
+      if (factor->is<AbstractTensor>()) {
+        auto &tensor = factor->as<AbstractTensor>();
+        assert(ranges::none_of(tensor._slots(), [](const Index &idx) {
           return idx.tag().has_value();
         }));
       }
@@ -258,16 +400,16 @@ inline bool apply_index_replacement_rules(
 
     for (auto it = ranges::begin(exrng); it != ranges::end(exrng);) {
       const auto &factor = *it;
-      if (factor->is<Tensor>()) {
+      if (factor->is<AbstractTensor>()) {
         bool erase_it = false;
-        auto &tensor = factor->as<Tensor>();
+        auto &tensor = factor->as<AbstractTensor>();
 
         /// replace indices
-        pass_mutated &= tensor.transform_indices(const_replrules);
+        pass_mutated &= tensor._transform_indices(const_replrules);
 
-        if (tensor.label() == overlap_label()) {
-          const auto &bra = tensor.bra().at(0);
-          const auto &ket = tensor.ket().at(0);
+        if (tensor._label() == overlap_label()) {
+          const auto bra = tensor._bra().at(0);
+          const auto ket = tensor._ket().at(0);
 
           if (bra.proto_indices() == ket.proto_indices()) {
             const auto bra_is_ext = ranges::find(external_indices, bra) !=
@@ -335,8 +477,8 @@ inline bool apply_index_replacement_rules(
   {
     for (auto it = ranges::begin(exrng); it != ranges::end(exrng); ++it) {
       const auto &factor = *it;
-      if (factor->is<Tensor>()) {
-        factor->as<Tensor>().reset_tags();
+      if (factor->is<AbstractTensor>()) {
+        factor->as<AbstractTensor>()._reset_tags();
       }
     }
   }
@@ -373,17 +515,18 @@ void reduce_wick_impl(std::shared_ptr<Product> &expr,
     // extract current indices
     std::set<Index, Index::LabelCompare> all_indices;
     ranges::for_each(*expr, [&all_indices](const auto &factor) {
-      if (factor->template is<Tensor>()) {
-        ranges::for_each(factor->template as<const Tensor>().indices(),
+      if (factor->template is<AbstractTensor>()) {
+        ranges::for_each(factor->template as<const AbstractTensor>()._slots(),
                          [&all_indices](const Index &idx) {
-                           [[maybe_unused]] auto result =
-                               all_indices.insert(idx);
+                           if (idx) [[maybe_unused]]
+                             auto result = all_indices.insert(idx);
                          });
       }
     });
 
-    const auto replacement_rules = compute_index_replacement_rules<S>(
-        expr, external_indices, all_indices, ctx.index_space_registry());
+    const auto [replacement_rules, have_overlaps] =
+        compute_index_replacement_rules<S>(expr, external_indices, all_indices,
+                                           ctx.index_space_registry());
 
     if (Logger::instance().wick_reduce) {
       std::wcout << "reduce_wick_impl(expr, external_indices):\n  expr = "
@@ -398,7 +541,7 @@ void reduce_wick_impl(std::shared_ptr<Product> &expr,
       std::wcout.flush();
     }
 
-    if (!replacement_rules.empty()) {
+    if (have_overlaps) {
       auto isr = ctx.index_space_registry();
       pass_mutated = apply_index_replacement_rules(
           expr, replacement_rules, external_indices, all_indices, isr);

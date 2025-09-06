@@ -12,6 +12,7 @@
 #include <SeQuant/core/latex.hpp>
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/rational.hpp>
+#include <SeQuant/core/utility/debug.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/nodiscard.hpp>
 #include <SeQuant/core/utility/timer.hpp>
@@ -248,6 +249,29 @@ TEST_CASE("wick", "[algorithms][wick]") {
             to_latex(partial_contractions) ==
             L"{ \\bigl({{s^{{i_2}}_{{i_1}}}} + {{b^{{i_2}}_{{i_1}}}}\\bigr) }");
       }
+    }
+
+    // general string of creators/annihilators, from Nick Mayhall
+    {
+      // sequence of individual ops
+      const auto ops = {fann("i_1"), fcre("i_2"), fcre("i_3"),
+                        fann("i_4"), fann("i_5"), fcre("i_1")};
+      REQUIRE_NOTHROW(FWickTheorem(ops));
+      FWickTheorem w(ops);
+      REQUIRE_NOTHROW(w.full_contractions(false).compute());
+      auto partial_contractions =
+          FWickTheorem{ops}.full_contractions(false).compute();
+      REQUIRE(to_latex(partial_contractions) ==
+              L"{ \\bigl( - {{s^{{i_2}}_{{i_1}}}{a^{{i_3}{i_1}}_{{i_4}{i_5}}}} "
+              L"- {{s^{{i_2}}_{{i_1}}}{s^{{i_1}}_{{i_4}}}{a^{{i_3}}_{{i_5}}}} "
+              L"+ {{s^{{i_2}}_{{i_1}}}{s^{{i_1}}_{{i_5}}}{a^{{i_3}}_{{i_4}}}} "
+              L"+ {{s^{{i_3}}_{{i_1}}}{a^{{i_2}{i_1}}_{{i_4}{i_5}}}} + "
+              L"{{s^{{i_3}}_{{i_1}}}{s^{{i_1}}_{{i_4}}}{a^{{i_2}}_{{i_5}}}} - "
+              L"{{s^{{i_3}}_{{i_1}}}{s^{{i_1}}_{{i_5}}}{a^{{i_2}}_{{i_4}}}} - "
+              L"{{s^{{i_1}}_{{i_1}}}{a^{{i_2}{i_3}}_{{i_4}{i_5}}}} + "
+              L"{{s^{{i_1}}_{{i_4}}}{a^{{i_2}{i_3}}_{{i_1}{i_5}}}} - "
+              L"{{s^{{i_1}}_{{i_5}}}{a^{{i_2}{i_3}}_{{i_1}{i_4}}}} + "
+              L"{{a^{{i_2}{i_3}{i_1}}_{{i_1}{i_4}{i_5}}}}\\bigr) }");
     }
 
     // three 1-body operators
@@ -703,6 +727,89 @@ TEST_CASE("wick", "[algorithms][wick]") {
       REQUIRE(to_latex(result) == L"{{-}{\\bar{g}^{{a_2}{i_1}}_{{a_4}{a_3}}}}");
       canonicalize(result, {.method = CanonicalizationMethod::Rapid});
       REQUIRE(to_latex(result) == L"{{-}{\\bar{g}^{{i_1}{a_2}}_{{a_3}{a_4}}}}");
+    }
+
+    // general string of creators/annihilators, from Nick Mayhall
+    {
+      // sequence of individual ops
+      const auto ops = {fann("p_1"), fcre("p_2"), fcre("p_3"),
+                        fann("p_4"), fann("p_5"), fcre("p_1")};
+      REQUIRE_NOTHROW(FWickTheorem(ops));
+      FWickTheorem w(ops);
+      REQUIRE_NOTHROW(w.full_contractions(false).compute());
+      auto partial_contractions =
+          FWickTheorem{ops}.full_contractions(false).compute();
+      REQUIRE(partial_contractions.is<Sum>());
+      REQUIRE(partial_contractions.as<Sum>().size() == 34);
+      // REQUIRE(
+      //       to_latex(partial_contractions) ==
+      //       L"{ \\bigl( -
+      //       {{s^{{e_{133}}}_{{p_1}}}{s^{{p_2}}_{{e_{133}}}}{\\tilde{a}^{{p_3}{p_1}}_{{p_4}{p_5}}}}
+      //       -
+      //       {{s^{{e_{133}}}_{{p_1}}}{s^{{p_2}}_{{e_{133}}}}{s^{{p_3}}_{{m_{134}}}}{s^{{m_{134}}}_{{p_4}}}{\\tilde{a}^{{p_1}}_{{p_5}}}}
+      //       +
+      //       {{s^{{e_{133}}}_{{p_1}}}{s^{{p_2}}_{{e_{133}}}}{s^{{p_3}}_{{m_{134}}}}{s^{{m_{134}}}_{{p_4}}}{s^{{e_{135}}}_{{p_5}}}{s^{{p_1}}_{{e_{135}}}}}
+      //       +
+      //       {{s^{{e_{133}}}_{{p_1}}}{s^{{p_2}}_{{e_{133}}}}{s^{{p_3}}_{{m_{136}}}}{s^{{m_{136}}}_{{p_5}}}{\\tilde{a}^{{p_1}}_{{p_4}}}}
+      //       -
+      //       {{s^{{e_{133}}}_{{p_1}}}{s^{{p_2}}_{{e_{133}}}}{s^{{p_3}}_{{m_{136}}}}{s^{{m_{136}}}_{{p_5}}}{s^{{e_{137}}}_{{p_4}}}{s^{{p_1}}_{{e_{137}}}}}
+      //       -
+      //       {{s^{{e_{133}}}_{{p_1}}}{s^{{p_2}}_{{e_{133}}}}{s^{{e_{138}}}_{{p_4}}}{s^{{p_1}}_{{e_{138}}}}{\\tilde{a}^{{p_3}}_{{p_5}}}}
+      //       +
+      //       {{s^{{e_{133}}}_{{p_1}}}{s^{{p_2}}_{{e_{133}}}}{s^{{e_{139}}}_{{p_5}}}{s^{{p_1}}_{{e_{139}}}}{\\tilde{a}^{{p_3}}_{{p_4}}}}
+      //       +
+      //       {{s^{{e_{140}}}_{{p_1}}}{s^{{p_3}}_{{e_{140}}}}{\\tilde{a}^{{p_2}{p_1}}_{{p_4}{p_5}}}}
+      //       +
+      //       {{s^{{e_{140}}}_{{p_1}}}{s^{{p_3}}_{{e_{140}}}}{s^{{p_2}}_{{m_{141}}}}{s^{{m_{141}}}_{{p_4}}}{\\tilde{a}^{{p_1}}_{{p_5}}}}
+      //       -
+      //       {{s^{{e_{140}}}_{{p_1}}}{s^{{p_3}}_{{e_{140}}}}{s^{{p_2}}_{{m_{141}}}}{s^{{m_{141}}}_{{p_4}}}{s^{{e_{142}}}_{{p_5}}}{s^{{p_1}}_{{e_{142}}}}}
+      //       -
+      //       {{s^{{e_{140}}}_{{p_1}}}{s^{{p_3}}_{{e_{140}}}}{s^{{p_2}}_{{m_{143}}}}{s^{{m_{143}}}_{{p_5}}}{\\tilde{a}^{{p_1}}_{{p_4}}}}
+      //       +
+      //       {{s^{{e_{140}}}_{{p_1}}}{s^{{p_3}}_{{e_{140}}}}{s^{{p_2}}_{{m_{143}}}}{s^{{m_{143}}}_{{p_5}}}{s^{{e_{144}}}_{{p_4}}}{s^{{p_1}}_{{e_{144}}}}}
+      //       +
+      //       {{s^{{e_{140}}}_{{p_1}}}{s^{{p_3}}_{{e_{140}}}}{s^{{e_{145}}}_{{p_4}}}{s^{{p_1}}_{{e_{145}}}}{\\tilde{a}^{{p_2}}_{{p_5}}}}
+      //       -
+      //       {{s^{{e_{140}}}_{{p_1}}}{s^{{p_3}}_{{e_{140}}}}{s^{{e_{146}}}_{{p_5}}}{s^{{p_1}}_{{e_{146}}}}{\\tilde{a}^{{p_2}}_{{p_4}}}}
+      //       -
+      //       {{s^{{e_{147}}}_{{p_1}}}{s^{{p_1}}_{{e_{147}}}}{\\tilde{a}^{{p_2}{p_3}}_{{p_4}{p_5}}}}
+      //       -
+      //       {{s^{{e_{147}}}_{{p_1}}}{s^{{p_1}}_{{e_{147}}}}{s^{{p_2}}_{{m_{148}}}}{s^{{m_{148}}}_{{p_4}}}{\\tilde{a}^{{p_3}}_{{p_5}}}}
+      //       -
+      //       {{s^{{e_{147}}}_{{p_1}}}{s^{{p_1}}_{{e_{147}}}}{s^{{p_2}}_{{m_{148}}}}{s^{{m_{148}}}_{{p_4}}}{s^{{p_3}}_{{m_{149}}}}{s^{{m_{149}}}_{{p_5}}}}
+      //       +
+      //       {{s^{{e_{147}}}_{{p_1}}}{s^{{p_1}}_{{e_{147}}}}{s^{{p_2}}_{{m_{150}}}}{s^{{m_{150}}}_{{p_5}}}{\\tilde{a}^{{p_3}}_{{p_4}}}}
+      //       +
+      //       {{s^{{e_{147}}}_{{p_1}}}{s^{{p_1}}_{{e_{147}}}}{s^{{p_2}}_{{m_{150}}}}{s^{{m_{150}}}_{{p_5}}}{s^{{p_3}}_{{m_{151}}}}{s^{{m_{151}}}_{{p_4}}}}
+      //       +
+      //       {{s^{{e_{147}}}_{{p_1}}}{s^{{p_1}}_{{e_{147}}}}{s^{{p_3}}_{{m_{152}}}}{s^{{m_{152}}}_{{p_4}}}{\\tilde{a}^{{p_2}}_{{p_5}}}}
+      //       -
+      //       {{s^{{e_{147}}}_{{p_1}}}{s^{{p_1}}_{{e_{147}}}}{s^{{p_3}}_{{m_{153}}}}{s^{{m_{153}}}_{{p_5}}}{\\tilde{a}^{{p_2}}_{{p_4}}}}
+      //       -
+      //       {{s^{{p_2}}_{{m_{154}}}}{s^{{m_{154}}}_{{p_4}}}{\\tilde{a}^{{p_3}{p_1}}_{{p_1}{p_5}}}}
+      //       +
+      //       {{s^{{p_2}}_{{m_{154}}}}{s^{{m_{154}}}_{{p_4}}}{s^{{p_3}}_{{m_{155}}}}{s^{{m_{155}}}_{{p_5}}}{\\tilde{a}^{{p_1}}_{{p_1}}}}
+      //       +
+      //       {{s^{{p_2}}_{{m_{154}}}}{s^{{m_{154}}}_{{p_4}}}{s^{{e_{156}}}_{{p_5}}}{s^{{p_1}}_{{e_{156}}}}{\\tilde{a}^{{p_3}}_{{p_1}}}}
+      //       +
+      //       {{s^{{p_2}}_{{m_{157}}}}{s^{{m_{157}}}_{{p_5}}}{\\tilde{a}^{{p_3}{p_1}}_{{p_1}{p_4}}}}
+      //       -
+      //       {{s^{{p_2}}_{{m_{157}}}}{s^{{m_{157}}}_{{p_5}}}{s^{{p_3}}_{{m_{158}}}}{s^{{m_{158}}}_{{p_4}}}{\\tilde{a}^{{p_1}}_{{p_1}}}}
+      //       -
+      //       {{s^{{p_2}}_{{m_{157}}}}{s^{{m_{157}}}_{{p_5}}}{s^{{e_{159}}}_{{p_4}}}{s^{{p_1}}_{{e_{159}}}}{\\tilde{a}^{{p_3}}_{{p_1}}}}
+      //       +
+      //       {{s^{{p_3}}_{{m_{160}}}}{s^{{m_{160}}}_{{p_4}}}{\\tilde{a}^{{p_2}{p_1}}_{{p_1}{p_5}}}}
+      //       -
+      //       {{s^{{p_3}}_{{m_{160}}}}{s^{{m_{160}}}_{{p_4}}}{s^{{e_{161}}}_{{p_5}}}{s^{{p_1}}_{{e_{161}}}}{\\tilde{a}^{{p_2}}_{{p_1}}}}
+      //       -
+      //       {{s^{{p_3}}_{{m_{162}}}}{s^{{m_{162}}}_{{p_5}}}{\\tilde{a}^{{p_2}{p_1}}_{{p_1}{p_4}}}}
+      //       +
+      //       {{s^{{p_3}}_{{m_{162}}}}{s^{{m_{162}}}_{{p_5}}}{s^{{e_{163}}}_{{p_4}}}{s^{{p_1}}_{{e_{163}}}}{\\tilde{a}^{{p_2}}_{{p_1}}}}
+      //       +
+      //       {{s^{{e_{164}}}_{{p_4}}}{s^{{p_1}}_{{e_{164}}}}{\\tilde{a}^{{p_2}{p_3}}_{{p_1}{p_5}}}}
+      //       -
+      //       {{s^{{e_{165}}}_{{p_5}}}{s^{{p_1}}_{{e_{165}}}}{\\tilde{a}^{{p_2}{p_3}}_{{p_1}{p_4}}}}
+      //       + {{\\tilde{a}^{{p_2}{p_3}{p_1}}_{{p_1}{p_4}{p_5}}}}\\bigr) }");
     }
 
     // odd number of ops -> full contraction is 0
@@ -1201,6 +1308,64 @@ TEST_CASE("wick", "[algorithms][wick]") {
           (connected_only ? 7 : 9));  // 9 = 2 disconnected + 7 connected terms
     }
 #endif
+
+    // example with "diagonal" operator from Nick Mayhall
+    {
+      auto _ = set_scoped_default_context(
+          {.index_space_registry_shared_ptr = mbpt::make_min_sr_spaces(),
+           .vacuum = Vacuum::SingleProduct,
+           .braket_symmetry = BraKetSymmetry::Symm,
+           .spbasis = SPBasis::Spinor});
+
+      // sequence of individual ops
+      const auto ops = {fann("p_1"), fcre("p_2"), fcre("p_3"),
+                        fann("p_5"), fann("p_4"), fcre("p_1")};
+      REQUIRE_NOTHROW(FWickTheorem(ops));
+      FWickTheorem w(ops);
+      REQUIRE_NOTHROW(w.full_contractions(false).compute());
+      auto wresult = FWickTheorem{ops}.full_contractions(false).compute();
+
+      auto result0 =
+          wresult * ex<Constant>(ratio(1, 4)) *
+          ex<Tensor>(L"v", bra{L"p_2", L"p_3"}, ket{L"p_4", L"p_5"},
+                     Symmetry::Antisymm) *
+          ex<Tensor>(L"w", bra{}, ket{}, aux{L"p_1"}, Symmetry::Nonsymm);
+      // std::wcout << "before expand: op = " << to_latex(op) << std::endl;
+      expand(result0);
+      // std::wcout << "after expand: op = " << to_latex(op) << std::endl;
+      w.reduce(result0);
+      // std::wcout << "after reduce: op = " << to_latex(op) << std::endl;
+      simplify(result0, {{.named_indices = IndexList{}}});
+      // sequant::wprintf(L"after simplify: op = ", to_latex_align(op, 3),
+      // L"\n");
+
+      auto Ld_H2_L =
+          ex<Constant>(ratio(1, 4)) *
+          ex<Tensor>(L"v", bra{L"p_2", L"p_3"}, ket{L"p_4", L"p_5"},
+                     Symmetry::Antisymm) *
+          ex<Tensor>(L"w", bra{}, ket{}, aux{L"p_1"}, Symmetry::Nonsymm) *
+          fannx("p_1") * fcrex("p_2") * fcrex("p_3") * fannx("p_5") *
+          fannx("p_4") * fcrex("p_1");
+      auto result1 = FWickTheorem{Ld_H2_L}.full_contractions(false).compute();
+      simplify(result1, {{.named_indices = IndexList{}}});
+      // sequant::wprintf(to_latex_align(Ld_H2_L), L" = \n",
+      // to_latex_align(result, 0, 2), L"\n");
+      REQUIRE(result0 == result1);
+
+      auto Ld_H2N_L =
+          ex<Constant>(ratio(1, 4)) *
+          ex<Tensor>(L"v", bra{L"p_2", L"p_3"}, ket{L"p_4", L"p_5"},
+                     Symmetry::Antisymm) *
+          ex<Tensor>(L"w", bra{}, ket{}, aux{L"p_1"}, Symmetry::Nonsymm) *
+          fannx("p_1") *
+          ex<FNOperator>(cre({L"p_2", L"p_3"}), ann({L"p_4", L"p_5"})) *
+          fcrex("p_1");
+      auto result2 = FWickTheorem{Ld_H2N_L}.full_contractions(false).compute();
+      simplify(result2, {{.named_indices = IndexList{}}});
+      // sequant::wprintf(to_latex_align(Ld_H2N_L), L" = \n",
+      // to_latex_align(result, 0, 2), L"\n");
+      REQUIRE(result2.as<Sum>().size() == 5);
+    }
   }
 }
 #endif

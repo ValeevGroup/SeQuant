@@ -29,6 +29,13 @@ CanonicalizeOptions CanonicalizeOptions::default_options() {
       CanonicalizeOptions{});
 }
 
+CanonicalizeOptions CanonicalizeOptions::copy_and_set_method(
+    CanonicalizationMethod m) const {
+  auto result = *this;
+  result.method = m;
+  return result;
+}
+
 SimplifyOptions SimplifyOptions::default_options() {
   auto result =
       sequant::get_default_context().canonicalization_options().value_or(

@@ -323,6 +323,7 @@ set(SeQuant_src
         SeQuant/core/tensor_network/vertex.hpp
         SeQuant/core/tensor_network/vertex_painter.cpp
         SeQuant/core/tensor_network/vertex_painter.hpp
+        SeQuant/core/tensor_network/typedefs.hpp
         SeQuant/core/utility/atomic.hpp
         SeQuant/core/utility/context.hpp
         SeQuant/core/utility/debug.hpp
