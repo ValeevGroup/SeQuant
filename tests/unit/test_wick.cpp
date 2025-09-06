@@ -1333,7 +1333,7 @@ TEST_CASE("wick", "[algorithms][wick]") {
       w.reduce(result0);
       // std::wcout << "after reduce: op = " << to_latex(op) << std::endl;
       simplify(result0, {{.named_indices = IndexList{}}});
-      // sequant::wprintf(L"after simplify: op = ", to_latex_align(op, 3),
+      // sequant::wprintf(L"after simplify: op = ", to_latex_align(result0, 3),
       // L"\n");
 
       auto Ld_H2_L =
@@ -1346,7 +1346,7 @@ TEST_CASE("wick", "[algorithms][wick]") {
       auto result1 = FWickTheorem{Ld_H2_L}.full_contractions(false).compute();
       simplify(result1, {{.named_indices = IndexList{}}});
       // sequant::wprintf(to_latex_align(Ld_H2_L), L" = \n",
-      // to_latex_align(result, 0, 2), L"\n");
+      // to_latex_align(result1, 0, 2), L"\n");
       REQUIRE(result0 == result1);
 
       auto Ld_H2N_L =
@@ -1359,9 +1359,25 @@ TEST_CASE("wick", "[algorithms][wick]") {
           fcrex("p_1");
       auto result2 = FWickTheorem{Ld_H2N_L}.full_contractions(false).compute();
       simplify(result2, {{.named_indices = IndexList{}}});
-      // sequant::wprintf(to_latex_align(Ld_H2N_L), L" = \n",
-      // to_latex_align(result, 0, 2), L"\n");
+      sequant::wprintf(to_latex_align(Ld_H2N_L), L" = \n",
+                       to_latex_align(result2, 0, 2), L"\n");
       REQUIRE(result2.as<Sum>().size() == 5);
+      REQUIRE(result2.to_latex() ==
+              L"{ \\bigl( - "
+              L"{{{\\frac{1}{4}}}{\\tensor*{\\tilde{a}}{*^{p_3}_{p_1}*^{p_4}_{"
+              L"p_2}*^{p_5}_{p_5}}}{\\tensor*{\\bar{v}}{*^{p_3}_{p_1}*^{p_4}_{"
+              L"p_2}}}{\\tensor*{w}{}[{p_5}]}} + "
+              L"{{\\tensor*{\\tilde{a}}{*^{p_2}_{p_1}}}{\\tensor*{\\bar{v}}{*^{"
+              L"a_1}_{a_1}*^{p_2}_{p_1}}}{\\tensor*{w}{}[{a_1}]}} - "
+              L"{{{\\frac{1}{2}}}{\\tensor*{\\tilde{a}}{*^{p_2}_{a_1}*^{p_3}_{"
+              L"p_1}}}{\\tensor*{\\bar{v}}{*^{a_1}_{p_2}*^{p_1}_{p_3}}}{"
+              L"\\tensor*{w}{}[{a_1}]}} + "
+              L"{{{\\frac{1}{4}}}{\\tensor*{\\tilde{a}}{*^{p_3}_{p_1}*^{p_4}_{"
+              L"p_2}}}{\\tensor*{\\bar{v}}{*^{p_1}_{p_3}*^{p_2}_{p_4}}}{"
+              L"\\tensor*{w}{}[{a_1}]}} - "
+              L"{{{\\frac{1}{2}}}{\\tensor*{\\tilde{a}}{*^{a_1}_{p_1}*^{p_3}_{"
+              L"p_2}}}{\\tensor*{\\bar{v}}{*^{a_1}_{p_1}*^{p_3}_{p_2}}}{"
+              L"\\tensor*{w}{}[{a_1}]}}\\bigr) }");
     }
   }
 }
