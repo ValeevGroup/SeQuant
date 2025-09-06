@@ -500,12 +500,10 @@ TEST_CASE("wick", "[algorithms][wick]") {
       REQUIRE_NOTHROW(wick.compute());
       auto result = wick.compute();
       REQUIRE(result->is<Product>());
-      REQUIRE(result->size() ==
-              2 * 2);  // product of 4 terms (since each contraction of 2
-                       // *general* indices produces 2 overlaps)
       REQUIRE(to_latex(result) ==
-              L"{{s^{{p_1}}_{{m_{102}}}}{s^{{m_{102}}}_{{p_4}}}{s^{{e_{103}}}_{"
-              L"{p_2}}}{s^{{p_3}}_{{e_{103}}}}}");
+              L"{{s^{{m_{104}}}_{{m_{105}}}}{\\delta^{{m_{105}}}_{{p_4}}}{"
+              L"\\delta^{{p_1}}_{{m_{104}}}}{s^{{e_{107}}}_{{e_{106}}}}{"
+              L"\\delta^{{e_{106}}}_{{p_2}}}{\\delta^{{p_3}}_{{e_{107}}}}}");
     }
     // two general 1-body operators, partial contractions: Eq. 21a of
     // DOI 10.1063/1.474405
@@ -520,15 +518,16 @@ TEST_CASE("wick", "[algorithms][wick]") {
       REQUIRE(
           4 ==
           GWT({1, 1}, /* full_contractions_only = */ false).result().size());
-      REQUIRE(
-          to_latex(result) ==
-          L"{ \\bigl( - "
-          L"{{s^{{p_1}}_{{m_{107}}}}{s^{{m_{107}}}_{{p_4}}}{\\tilde{a}^{{p_3}}_"
-          L"{{p_2}}}} + "
-          L"{{s^{{p_1}}_{{m_{107}}}}{s^{{m_{107}}}_{{p_4}}}{s^{{e_{108}}}_{{p_"
-          L"2}}}{s^{{p_3}}_{{e_{108}}}}} + "
-          L"{{s^{{e_{109}}}_{{p_2}}}{s^{{p_3}}_{{e_{109}}}}{\\tilde{a}^{{p_1}}_"
-          L"{{p_4}}}} + {{\\tilde{a}^{{p_1}{p_3}}_{{p_2}{p_4}}}}\\bigr) }");
+      REQUIRE(to_latex(result) ==
+              L"{ \\bigl( - "
+              L"{{s^{{m_{114}}}_{{m_{115}}}}{\\delta^{{m_{115}}}_{{p_4}}}{"
+              L"\\delta^{{p_1}}_{{m_{114}}}}{\\tilde{a}^{{p_3}}_{{p_2}}}} + "
+              L"{{s^{{m_{114}}}_{{m_{115}}}}{\\delta^{{m_{115}}}_{{p_4}}}{"
+              L"\\delta^{{p_1}}_{{m_{114}}}}{s^{{e_{117}}}_{{e_{116}}}}{"
+              L"\\delta^{{e_{116}}}_{{p_2}}}{\\delta^{{p_3}}_{{e_{117}}}}} + "
+              L"{{s^{{e_{119}}}_{{e_{118}}}}{\\delta^{{e_{118}}}_{{p_2}}}{"
+              L"\\delta^{{p_3}}_{{e_{119}}}}{\\tilde{a}^{{p_1}}_{{p_4}}}} + "
+              L"{{\\tilde{a}^{{p_1}{p_3}}_{{p_2}{p_4}}}}\\bigr) }");
     }
 
     // two (pure qp) 2-body operators
@@ -544,17 +543,16 @@ TEST_CASE("wick", "[algorithms][wick]") {
       // std::endl;
       REQUIRE(result->is<Sum>());
       REQUIRE(result->size() == 4);
-      REQUIRE(
-          result_latex ==
-          L"{ "
-          L"\\bigl({{s^{{i_4}}_{{i_1}}}{s^{{i_3}}_{{i_2}}}{s^{{a_3}}_{{a_2}}}"
-          L"{s^{{a_4}}_{{a_1}}}} - "
-          L"{{s^{{i_4}}_{{i_1}}}{s^{{i_3}}_{{i_2}}}{s^{{a_4}}_{{a_2}}}{s^{{a_"
-          L"3}}_{{a_1}}}} - "
-          L"{{s^{{i_3}}_{{i_1}}}{s^{{i_4}}_{{i_2}}}{s^{{a_3}}_{{a_2}}}{s^{{a_"
-          L"4}}_{{a_1}}}} + "
-          L"{{s^{{i_3}}_{{i_1}}}{s^{{i_4}}_{{i_2}}}{s^{{a_4}}_{{a_2}}}{s^{{a_"
-          L"3}}_{{a_1}}}}\\bigr) }");
+      REQUIRE(result_latex ==
+              L"{ "
+              L"\\bigl({{s^{{i_1}}_{{i_4}}}{s^{{i_2}}_{{i_3}}}{s^{{a_3}}_{{a_2}"
+              L"}}{s^{{a_4}}_{{a_1}}}} - "
+              L"{{s^{{i_1}}_{{i_4}}}{s^{{i_2}}_{{i_3}}}{s^{{a_4}}_{{a_2}}}{s^{{"
+              L"a_3}}_{{a_1}}}} - "
+              L"{{s^{{i_1}}_{{i_3}}}{s^{{i_2}}_{{i_4}}}{s^{{a_3}}_{{a_2}}}{s^{{"
+              L"a_4}}_{{a_1}}}} + "
+              L"{{s^{{i_1}}_{{i_3}}}{s^{{i_2}}_{{i_4}}}{s^{{a_4}}_{{a_2}}}{s^{{"
+              L"a_3}}_{{a_1}}}}\\bigr) }");
 
       // in spin-free result first and fourth terms are multiplied by 4, second
       // and third terms multiplied by 2
@@ -566,17 +564,16 @@ TEST_CASE("wick", "[algorithms][wick]") {
       //     << std::endl;
       REQUIRE(result_sf->is<Sum>());
       REQUIRE(result_sf->size() == 4);
-      REQUIRE(
-          result_sf_latex ==
-          L"{ "
-          L"\\bigl({{{4}}{s^{{i_4}}_{{i_1}}}{s^{{i_3}}_{{i_2}}}{s^{{a_3}}_{{"
-          L"a_2}}}{s^{{a_4}}_{{a_1}}}} - "
-          L"{{{2}}{s^{{i_4}}_{{i_1}}}{s^{{i_3}}_{{i_2}}}{s^{{a_4}}_{{a_2}}}{"
-          L"s^{{a_3}}_{{a_1}}}} - "
-          L"{{{2}}{s^{{i_3}}_{{i_1}}}{s^{{i_4}}_{{i_2}}}{s^{{a_3}}_{{a_2}}}{"
-          L"s^{{a_4}}_{{a_1}}}} + "
-          L"{{{4}}{s^{{i_3}}_{{i_1}}}{s^{{i_4}}_{{i_2}}}{s^{{a_4}}_{{a_2}}}{"
-          L"s^{{a_3}}_{{a_1}}}}\\bigr) }");
+      REQUIRE(result_sf_latex ==
+              L"{ "
+              L"\\bigl({{{4}}{s^{{i_1}}_{{i_4}}}{s^{{i_2}}_{{i_3}}}{s^{{a_3}}_{"
+              L"{a_2}}}{s^{{a_4}}_{{a_1}}}} - "
+              L"{{{2}}{s^{{i_1}}_{{i_4}}}{s^{{i_2}}_{{i_3}}}{s^{{a_4}}_{{a_2}}}"
+              L"{s^{{a_3}}_{{a_1}}}} - "
+              L"{{{2}}{s^{{i_1}}_{{i_3}}}{s^{{i_2}}_{{i_4}}}{s^{{a_3}}_{{a_2}}}"
+              L"{s^{{a_4}}_{{a_1}}}} + "
+              L"{{{4}}{s^{{i_1}}_{{i_3}}}{s^{{i_2}}_{{i_4}}}{s^{{a_4}}_{{a_2}}}"
+              L"{s^{{a_3}}_{{a_1}}}}\\bigr) }");
     }
     // two (pure qp) 3-body operators
     {

@@ -54,8 +54,14 @@ class index_repl_dst_t {
 
 /// @brief computes index replacement rules
 
-/// If using orthonormal representation, overlaps are Kronecker deltas, hence
-/// summations can be reduced by index replacements. Reducing sums over dummy
+/// Kronecker deltas are translated into index replacement rules.
+/// If using orthonormal representation, overlaps between orthonormal spaces
+/// are Kronecker deltas, hence such overlaps are also used to produce
+/// replacement rules.
+/// (N.B. even if working in orthonormal representation, dependent spaces are
+/// not orthonormal if their protoindices differ).
+/// Summations are then reduced by index replacements.
+/// Reducing sums over dummy
 /// (internal) indices uses 2 rules:
 /// - if a Kronecker delta binds 2 internal indices I and J, replace them with a
 ///   new internal index representing intersection of spaces of I and J,
@@ -64,9 +70,10 @@ class index_repl_dst_t {
 ///   - if space of J includes space of I, replace J with I, !!remove delta!!
 ///   - if space of J is a subset of space of I, replace J with a new internal
 ///     index representing intersection of spaces of I and J, !!keep the delta!!
-/// @return index replacement map + whether found any overlap tensors; the
+/// @return index replacement map + whether found any kronecker tensors or
+/// overlaps equivalent to them; the
 /// former may be empty even if the latter is true, if, e.g., contain trivial
-/// overlaps with identical indices
+/// self-overlaps with identical indices
 /// @throw zero_result if @c product is zero for any reason, e.g. because
 ///        it includes an overlap of 2 indices from nonoverlapping spaces
 template <Statistics S>
@@ -78,7 +85,7 @@ std::pair<container::map<Index, Index>, bool> compute_index_replacement_rules(
         get_default_context(S).index_space_registry()) {
   expr_range exrng(product);
 
-  bool have_overlaps = false;
+  bool have_kroneckers = false;
 
   /// this ensures that all temporary indices have unique *labels* (not just
   /// unique *full labels*)
@@ -184,18 +191,38 @@ std::pair<container::map<Index, Index>, bool> compute_index_replacement_rules(
   };
 
   // changes src->current_dst to src->intersection(dst,current_dst)
-  auto update_rule = [&src2dst, &dst_list, &proto, &make_intersection_index](
+  auto update_rule = [&src2dst, &dst_list, &proto, &isr, &idxfac](
                          auto src_it, const Index &src, const Index &dst,
                          std::optional<const Index> protosrc = std::nullopt) {
     assert(src_it != src2dst.end());
-    // intersection
     auto &old_dst = src_it->second->dst();
-    assert(old_dst.proto_indices() == src.proto_indices());
-    if (dst.space() != old_dst.space()) {
-      auto space_intersection =
-          make_intersection_index(old_dst.space(), dst.space());
-      auto real_dst = protosrc ? proto(space_intersection, protosrc.value())
-                               : proto(space_intersection, src);
+
+    // do we need to change space of dst?
+    const bool change_dst_space = (dst.space() != old_dst.space());
+    const IndexSpace &new_dst_space =
+        change_dst_space ? isr->intersection(old_dst.space(), dst.space())
+                         : dst.space();
+    if (!new_dst_space) throw zero_result{};
+
+    // do we need to change protoindices?
+    bool change_dst_protoindices = false;
+    // already have protoindices?
+    if (old_dst.has_proto_indices()) {
+      // not sure what do to now; same index need to be mappped to indices with
+      // different protoindices?
+      if (protosrc.value_or(src).has_proto_indices()) {
+        assert(protosrc.value_or(src).proto_indices() ==
+               old_dst.proto_indices());
+      }
+    } else {
+      change_dst_protoindices = protosrc.value_or(src).has_proto_indices();
+    }
+
+    if (change_dst_space || change_dst_protoindices) {
+      auto plain_dst = idxfac.make(new_dst_space);
+      const auto real_dst = change_dst_protoindices
+                                ? proto(plain_dst, protosrc.value_or(src))
+                                : proto(plain_dst, old_dst);
       src_it->second->update_dst(real_dst);
     }
   };
@@ -306,19 +333,27 @@ std::pair<container::map<Index, Index>, bool> compute_index_replacement_rules(
     const auto &factor = *it;
     if (factor->type_id() == Expr::get_type_id<Tensor>()) {
       const auto &tensor = static_cast<const Tensor &>(*factor);
-      if (tensor.label() == overlap_label()) {
-        have_overlaps = true;
+      const auto is_overlap = tensor.label() == overlap_label();
+      const auto is_kronecker = tensor.label() == kronecker_label();
+      if (is_overlap || is_kronecker) {
+        have_kroneckers = true;
         assert(tensor.bra().size() == 1);
         assert(tensor.ket().size() == 1);
         const auto &bra = tensor.bra().at(0);
         const auto &ket = tensor.ket().at(0);
 
         // skip if
-        // - self-overlap (will be replaced by 1 already)
+        // - self-kronecker (will be replaced by 1 already)
         bool do_skip = bra == ket;
         // - nontrivial overlap between spaces that depend on distinct
         // protoindices
-        do_skip = do_skip && bra.has_proto_indices() != ket.has_proto_indices();
+        if (is_overlap) {
+          do_skip =
+              do_skip && bra.has_proto_indices() != ket.has_proto_indices();
+        } else {
+          // kroneckers should never involve different protoindices
+          assert(bra.has_proto_indices() == ket.has_proto_indices());
+        }
         if (!do_skip) {
           const auto bra_is_ext = ranges::find(external_indices, bra) !=
                                   ranges::end(external_indices);
@@ -361,7 +396,7 @@ std::pair<container::map<Index, Index>, bool> compute_index_replacement_rules(
   for (auto &&[src, d] : src2dst) {
     result.emplace(src, d->dst());
   }
-  return std::make_pair(result, have_overlaps);
+  return std::make_pair(result, have_kroneckers);
 }
 
 /// @return true if made any changes
@@ -407,7 +442,8 @@ inline bool apply_index_replacement_rules(
         /// replace indices
         pass_mutated &= tensor._transform_indices(const_replrules);
 
-        if (tensor._label() == overlap_label()) {
+        if (tensor._label() == overlap_label() ||
+            tensor._label() == kronecker_label()) {
           const auto bra = tensor._bra().at(0);
           const auto ket = tensor._ket().at(0);
 
@@ -496,18 +532,13 @@ inline bool apply_index_replacement_rules(
   return mutated;
 }
 
-/// If using orthonormal representation, resolves Kronecker deltas (=overlaps
+/// resolves Kronecker deltas (and, using orthonormal representation, overlaps
 /// between indices in orthonormal spaces) in summations
 /// @throw zero_result if @c expr is zero
 template <Statistics S>
 void reduce_wick_impl(std::shared_ptr<Product> &expr,
                       const container::set<Index> &external_indices,
                       const Context &ctx) {
-  if (ctx.metric() != IndexSpaceMetric::Unit) {
-    SEQUANT_ABORT(
-        "reduce_wick_impl expects to only work with IndexSpaceMetric::Unit");
-  }
-
   bool pass_mutated = false;
   do {
     pass_mutated = false;
@@ -524,7 +555,7 @@ void reduce_wick_impl(std::shared_ptr<Product> &expr,
       }
     });
 
-    const auto [replacement_rules, have_overlaps] =
+    const auto [replacement_rules, found_kroneckers] =
         compute_index_replacement_rules<S>(expr, external_indices, all_indices,
                                            ctx.index_space_registry());
 
@@ -541,7 +572,9 @@ void reduce_wick_impl(std::shared_ptr<Product> &expr,
       std::wcout.flush();
     }
 
-    if (have_overlaps) {
+    // N.B. even if replacement list is empty, but have trivial kroneckers
+    // invoke apply_index_replacement_rules
+    if (found_kroneckers) {
       auto isr = ctx.index_space_registry();
       pass_mutated = apply_index_replacement_rules(
           expr, replacement_rules, external_indices, all_indices, isr);
