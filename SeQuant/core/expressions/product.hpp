@@ -397,11 +397,14 @@ class Product : public Expr {
     return *hash_value_;
   }
 
-  ExprPtr canonicalize_impl(CanonicalizationMethod);
+  ExprPtr canonicalize_impl(CanonicalizeOptions);
   virtual ExprPtr canonicalize(
       CanonicalizeOptions opt =
           CanonicalizeOptions::default_options()) override;
-  virtual ExprPtr rapid_canonicalize() override;
+  virtual ExprPtr rapid_canonicalize(
+      CanonicalizeOptions opts =
+          CanonicalizeOptions::default_options().copy_and_set_method(
+              CanonicalizationMethod::Rapid)) override;
 
   bool static_equal(const Expr &that) const override {
     const auto &that_cast = static_cast<const Product &>(that);

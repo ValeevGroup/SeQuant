@@ -10,6 +10,7 @@
 #include <SeQuant/core/logger.hpp>
 #include <SeQuant/core/runtime.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
+#include <SeQuant/core/tensor_network/typedefs.hpp>
 #include <SeQuant/core/tensor_network_v3.hpp>
 
 #include <range/v3/all.hpp>
@@ -164,10 +165,10 @@ bool Product::is_commutative() const {
   return result;
 }
 
-ExprPtr Product::canonicalize_impl(CanonicalizationMethod method) {
+ExprPtr Product::canonicalize_impl(CanonicalizeOptions opts) {
   // recursively canonicalize subfactors ...
-  ranges::for_each(factors_, [this](auto &factor) {
-    auto bp = factor->canonicalize();
+  ranges::for_each(factors_, [this, opts](auto &factor) {
+    auto bp = factor->canonicalize(opts);
     if (bp) {
       assert(bp->template is<Constant>());
       this->scalar_ *= std::static_pointer_cast<Constant>(bp)->value();
@@ -175,7 +176,7 @@ ExprPtr Product::canonicalize_impl(CanonicalizationMethod method) {
   });
 
   if (Logger::instance().canonicalize) {
-    std::wcout << "Product canonicalization(" << to_wstring(method)
+    std::wcout << "Product canonicalization(" << to_wstring(opts.method)
                << ") input: " << to_latex() << std::endl;
   }
 
@@ -207,17 +208,24 @@ ExprPtr Product::canonicalize_impl(CanonicalizationMethod method) {
   if (!contains_nontensors) {  // tensor network canonization is a special case
                                // that's done in
                                // TensorNetwork
-    auto make_canonical_tn = [this, &method](auto *tn_null_ptr) {
+    auto make_canonical_tn = [this, &opts](auto *tn_null_ptr) {
       using TN = std::decay_t<std::remove_pointer_t<decltype(tn_null_ptr)>>;
       ExprPtr canon_factor;
       TN tn(this->factors_);
+      using NamedIndexSet = tensor_network::NamedIndexSet;
+      std::shared_ptr<NamedIndexSet> named_indices =
+          !opts.named_indices
+              ? nullptr
+              : std::make_shared<NamedIndexSet>(opts.named_indices->begin(),
+                                                opts.named_indices->end());
       if constexpr (TN::version() == 3) {
-        canon_factor = tn.canonicalize(
-            TensorCanonicalizer::cardinal_tensor_labels(), method);
-      } else {
         canon_factor =
             tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(),
-                            method == CanonicalizationMethod::Rapid);
+                            opts.method, named_indices.get());
+      } else {
+        canon_factor = tn.canonicalize(
+            TensorCanonicalizer::cardinal_tensor_labels(),
+            opts.method == CanonicalizationMethod::Rapid, named_indices.get());
       }
       return std::pair{std::move(tn), canon_factor};
     };
@@ -299,7 +307,7 @@ ExprPtr Product::canonicalize_impl(CanonicalizationMethod method) {
   // TODO evaluate product of Tensors (turn this into Products of Products)
 
   if (Logger::instance().canonicalize)
-    std::wcout << "Product canonicalization(" << to_wstring(method)
+    std::wcout << "Product canonicalization(" << to_wstring(opts.method)
                << ") result: " << to_latex() << std::endl;
 
   return {};  // side effects are absorbed into the scalar_
@@ -318,11 +326,12 @@ void Product::adjoint() {
 }
 
 ExprPtr Product::canonicalize(CanonicalizeOptions opt) {
-  return this->canonicalize_impl(opt.method);
+  return this->canonicalize_impl(opt);
 }
 
-ExprPtr Product::rapid_canonicalize() {
-  return this->canonicalize_impl(CanonicalizationMethod::Rapid);
+ExprPtr Product::rapid_canonicalize(CanonicalizeOptions opt) {
+  assert(opt.method == CanonicalizationMethod::Rapid);
+  return this->canonicalize_impl(opt);
 }
 
 void CProduct::adjoint() {
@@ -365,8 +374,14 @@ ExprPtr Sum::canonicalize_impl(bool multipass, CanonicalizeOptions opts) {
     // recursively canonicalize summands ...
     // using for_each and directly access to summands
     sequant::for_each(summands_, [pass, &opts](ExprPtr &summand) {
-      auto bp = (pass % 2 == 0) ? summand->rapid_canonicalize()
-                                : summand->canonicalize(opts);
+      ExprPtr bp;
+      const auto rapid = (pass % 2 == 0);
+      if (rapid) {
+        auto opts_copy = opts;
+        opts_copy.method = CanonicalizationMethod::Lexicographic;
+        bp = summand->rapid_canonicalize(opts_copy);
+      } else
+        bp = summand->canonicalize(opts);
       if (bp) {
         assert(bp->template is<Constant>());
         summand = ex<Product>(std::static_pointer_cast<Constant>(bp)->value(),

@@ -8,6 +8,9 @@
 #include <string>
 
 namespace sequant {
+
+class Index;
+
 /// canonicalization methods
 enum class CanonicalizationMethod {
   /// Enables use of expression topology in the canonicalization, may be
@@ -34,7 +37,10 @@ std::wstring to_wstring(CanonicalizationMethod m);
 
 struct CanonicalizeOptions {
   CanonicalizationMethod method = CanonicalizationMethod::Topological;
+  std::optional<std::initializer_list<Index>> named_indices = std::nullopt;
+
   static CanonicalizeOptions default_options();
+  CanonicalizeOptions copy_and_set_method(CanonicalizationMethod method) const;
 
   friend constexpr bool operator==(const CanonicalizeOptions& a,
                                    const CanonicalizeOptions& b) {
