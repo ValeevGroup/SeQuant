@@ -12,6 +12,7 @@
 #include <SeQuant/core/latex.hpp>
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/rational.hpp>
+#include <SeQuant/core/utility/debug.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/nodiscard.hpp>
 #include <SeQuant/core/utility/timer.hpp>
@@ -1307,6 +1308,64 @@ TEST_CASE("wick", "[algorithms][wick]") {
           (connected_only ? 7 : 9));  // 9 = 2 disconnected + 7 connected terms
     }
 #endif
+
+    // example with "diagonal" operator from Nick Mayhall
+    {
+      auto _ = set_scoped_default_context(
+          {.index_space_registry_shared_ptr = mbpt::make_min_sr_spaces(),
+           .vacuum = Vacuum::SingleProduct,
+           .braket_symmetry = BraKetSymmetry::Symm,
+           .spbasis = SPBasis::Spinor});
+
+      // sequence of individual ops
+      const auto ops = {fann("p_1"), fcre("p_2"), fcre("p_3"),
+                        fann("p_5"), fann("p_4"), fcre("p_1")};
+      REQUIRE_NOTHROW(FWickTheorem(ops));
+      FWickTheorem w(ops);
+      REQUIRE_NOTHROW(w.full_contractions(false).compute());
+      auto wresult = FWickTheorem{ops}.full_contractions(false).compute();
+
+      auto result0 =
+          wresult * ex<Constant>(ratio(1, 4)) *
+          ex<Tensor>(L"v", bra{L"p_2", L"p_3"}, ket{L"p_4", L"p_5"},
+                     Symmetry::Antisymm) *
+          ex<Tensor>(L"w", bra{}, ket{}, aux{L"p_1"}, Symmetry::Nonsymm);
+      // std::wcout << "before expand: op = " << to_latex(op) << std::endl;
+      expand(result0);
+      // std::wcout << "after expand: op = " << to_latex(op) << std::endl;
+      w.reduce(result0);
+      // std::wcout << "after reduce: op = " << to_latex(op) << std::endl;
+      simplify(result0, {{.named_indices = IndexList{}}});
+      // sequant::wprintf(L"after simplify: op = ", to_latex_align(op, 3),
+      // L"\n");
+
+      auto Ld_H2_L =
+          ex<Constant>(ratio(1, 4)) *
+          ex<Tensor>(L"v", bra{L"p_2", L"p_3"}, ket{L"p_4", L"p_5"},
+                     Symmetry::Antisymm) *
+          ex<Tensor>(L"w", bra{}, ket{}, aux{L"p_1"}, Symmetry::Nonsymm) *
+          fannx("p_1") * fcrex("p_2") * fcrex("p_3") * fannx("p_5") *
+          fannx("p_4") * fcrex("p_1");
+      auto result1 = FWickTheorem{Ld_H2_L}.full_contractions(false).compute();
+      simplify(result1, {{.named_indices = IndexList{}}});
+      // sequant::wprintf(to_latex_align(Ld_H2_L), L" = \n",
+      // to_latex_align(result, 0, 2), L"\n");
+      REQUIRE(result0 == result1);
+
+      auto Ld_H2N_L =
+          ex<Constant>(ratio(1, 4)) *
+          ex<Tensor>(L"v", bra{L"p_2", L"p_3"}, ket{L"p_4", L"p_5"},
+                     Symmetry::Antisymm) *
+          ex<Tensor>(L"w", bra{}, ket{}, aux{L"p_1"}, Symmetry::Nonsymm) *
+          fannx("p_1") *
+          ex<FNOperator>(cre({L"p_2", L"p_3"}), ann({L"p_4", L"p_5"})) *
+          fcrex("p_1");
+      auto result2 = FWickTheorem{Ld_H2N_L}.full_contractions(false).compute();
+      simplify(result2, {{.named_indices = IndexList{}}});
+      // sequant::wprintf(to_latex_align(Ld_H2N_L), L" = \n",
+      // to_latex_align(result, 0, 2), L"\n");
+      REQUIRE(result2.as<Sum>().size() == 5);
+    }
   }
 }
 #endif
