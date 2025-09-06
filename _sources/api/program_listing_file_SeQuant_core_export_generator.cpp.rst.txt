@@ -1,0 +1,19 @@
+
+.. _program_listing_file_SeQuant_core_export_generator.cpp:
+
+Program Listing for File generator.cpp
+======================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_core_export_generator.cpp>` (``SeQuant/core/export/generator.cpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   #include <SeQuant/core/export/context.hpp>
+   
+   namespace sequant {
+   
+   ExportContext::~ExportContext() = default;
+   
+   }

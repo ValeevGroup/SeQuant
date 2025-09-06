@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a41716bdbda99a76165e127f722b4578c:
+
+Template Function sequant::diactrics_to_latex(const std::basic_string_view<Char, Traits>&)
+==========================================================================================
+
+- Defined in :ref:`file_SeQuant_core_latex.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::diactrics_to_latex(const std::basic_string_view<Char, Traits>&)
+   :project: SeQuant

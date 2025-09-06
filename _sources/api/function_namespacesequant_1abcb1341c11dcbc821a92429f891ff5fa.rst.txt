@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1abcb1341c11dcbc821a92429f891ff5fa:
+
+Function sequant::deparse(const Index&)
+=======================================
+
+- Defined in :ref:`file_SeQuant_core_parse_deparse.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::deparse(const Index&)
+   :project: SeQuant

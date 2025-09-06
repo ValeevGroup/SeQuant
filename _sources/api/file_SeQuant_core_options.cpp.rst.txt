@@ -1,0 +1,56 @@
+
+.. _file_SeQuant_core_options.cpp:
+
+File options.cpp
+================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core>` (``SeQuant/core``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/options.cpp``)
+-----------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_options.cpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/context.hpp`` (:ref:`file_SeQuant_core_context.hpp`)
+
+- ``SeQuant/core/options.hpp`` (:ref:`file_SeQuant_core_options.hpp`)
+
+
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1ab1d430961f2cf8a6e19d74fb636ab598`
+
+- :ref:`exhale_function_namespacesequant_1a270d37d988dd2be71e72c0ea8d4c6750`
+

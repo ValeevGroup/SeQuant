@@ -1,0 +1,71 @@
+
+.. _program_listing_file_SeQuant_domain_mbpt_models_cc.hpp:
+
+Program Listing for File cc.hpp
+===============================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_domain_mbpt_models_cc.hpp>` (``SeQuant/domain/mbpt/models/cc.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   #ifndef SEQUANT_DOMAIN_MBPT_MODELS_CC_HPP
+   #define SEQUANT_DOMAIN_MBPT_MODELS_CC_HPP
+   
+   #include <cstddef>
+   #include <limits>
+   #include <vector>
+   
+   #include <SeQuant/core/op.hpp>
+   #include <SeQuant/domain/mbpt/op.hpp>
+   
+   namespace sequant {
+   class ExprPtr;
+   }
+   
+   namespace sequant::mbpt {
+   
+   class CC {
+    public:
+     enum class Ansatz {
+       T,
+       oT,
+       U,
+       oU
+     };
+   
+     CC(size_t N, Ansatz ansatz = Ansatz::T);
+   
+     Ansatz ansatz() const;
+   
+     bool unitary() const;
+   
+     ExprPtr sim_tr(ExprPtr expr, size_t r);
+   
+     [[nodiscard]] std::vector<ExprPtr> t(
+         size_t commutator_rank = 4,
+         size_t pmax = std::numeric_limits<size_t>::max(), size_t pmin = 0);
+   
+     [[nodiscard]] std::vector<ExprPtr> λ(size_t commutator_rank = 4);
+   
+     // clang-format off
+     // clang-format on
+     [[nodiscard]] std::vector<ExprPtr> t_pt(size_t order = 1, size_t rank = 1);
+   
+     // clang-format off
+     // clang-format on
+     [[nodiscard]] std::vector<ExprPtr> λ_pt(size_t order = 1, size_t rank = 1);
+   
+     [[nodiscard]] std::vector<ExprPtr> eom_r(nₚ np, nₕ nh);
+   
+     [[nodiscard]] std::vector<ExprPtr> eom_l(nₚ np, nₕ nh);
+   
+    private:
+     size_t N;
+     Ansatz ansatz_ = Ansatz::T;
+   };  // class CC
+   
+   }  // namespace sequant::mbpt
+   
+   #endif  // SEQUANT_DOMAIN_MBPT_MODELS_CC_HPP
