@@ -887,6 +887,7 @@ class IndexSpaceRegistry {
     if (!IS) {
       return false;
     }
+    // this introduces icky dependence on bit footprint of vacuum_occupied_space
     if (IS.type().to_int32() <=
         vacuum_occupied_space(IS.qns()).type().to_int32()) {
       return true;
@@ -917,6 +918,9 @@ class IndexSpaceRegistry {
     if (!IS) {
       return false;
     } else {
+      // Q: would be better to express as IS is a subspace of
+      // vacuum_unoccupied_space? Then subspaces that are part of neither (this
+      // is not supposed to happen) will not cause an issue here
       return !IS.type().intersection(
           vacuum_occupied_space(physical_particle_attributes(IS.qns())).type());
     }
