@@ -166,12 +166,15 @@ bool Product::is_commutative() const {
 }
 
 ExprPtr Product::canonicalize_impl(CanonicalizeOptions opts) {
-  // recursively canonicalize subfactors ...
+  // recursively canonicalize non-tensor subfactors (tensors will be
+  // canonicalized as part of the TN built of all tensor factors of this) ...
   ranges::for_each(factors_, [this, opts](auto &factor) {
-    auto bp = factor->canonicalize(opts);
-    if (bp) {
-      assert(bp->template is<Constant>());
-      this->scalar_ *= std::static_pointer_cast<Constant>(bp)->value();
+    if (factor.template is<AbstractTensor>() == false) {
+      auto bp = factor->canonicalize(opts);
+      if (bp) {
+        assert(bp->template is<Constant>());
+        this->scalar_ *= std::static_pointer_cast<Constant>(bp)->value();
+      }
     }
   });
 

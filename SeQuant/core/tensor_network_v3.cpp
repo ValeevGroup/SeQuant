@@ -161,10 +161,8 @@ ExprPtr TensorNetworkV3::canonicalize_graph(const NamedIndexSet &named_indices,
                          Logger::instance().canonicalize_dot});
 
   if (Logger::instance().canonicalize_input_graph) {
-    std::wostringstream oss;
-    oss << "Input graph for canonicalization:\n";
-    graph.bliss_graph->write_dot(oss, {.labels = graph.vertex_labels});
-    sequant::wprintf(oss.str());
+    std::wcout << "Input graph for canonicalization:\n";
+    graph.bliss_graph->write_dot(std::wcout, {.labels = graph.vertex_labels});
   }
 
   // canonize the graph
@@ -174,19 +172,17 @@ ExprPtr TensorNetworkV3::canonicalize_graph(const NamedIndexSet &named_indices,
       graph.bliss_graph->canonical_form(stats, nullptr, nullptr);
 
   if (Logger::instance().canonicalize_dot) {
-    std::wostringstream oss;
-    oss << "Canonicalization permutation:\n";
+    std::wcout << "Canonicalization permutation:\n";
     for (std::size_t i = 0; i < graph.vertex_labels.size(); ++i) {
-      oss << i << " -> " << canonize_perm[i] << "\n";
+      std::wcout << i << " -> " << canonize_perm[i] << "\n";
     }
-    oss << "Canonicalized graph:\n";
+    std::wcout << "Canonicalized graph:\n";
     bliss::Graph *cgraph = graph.bliss_graph->permute(canonize_perm);
-    cgraph->write_dot(oss, {.display_colors = true});
+    cgraph->write_dot(std::wcout, {.display_colors = true});
     auto cvlabels = permute(graph.vertex_labels, canonize_perm);
-    oss << "with our labels:\n";
-    cgraph->write_dot(oss, {.labels = cvlabels});
+    std::wcout << "with our labels:\n";
+    cgraph->write_dot(std::wcout, {.labels = cvlabels});
     delete cgraph;
-    sequant::wprintf(oss.str());
   }
 
   // maps tensor ordinal -> input vertex ordinal
@@ -342,8 +338,7 @@ ExprPtr TensorNetworkV3::canonicalize_graph(const NamedIndexSet &named_indices,
     if (column_symmetry(tensor) != ColumnSymmetry::Symm) continue;
     const auto asymm = symmetry(tensor) == Symmetry::Nonsymm;
 
-    if (asymm) {
-      // asymmetric tensor? order column slots only
+    if (asymm) {  // asymmetric tensor? order column slots only
 
       auto it = canonical_column_slot_order.find(i);
       if (it == canonical_column_slot_order.end()) continue;
