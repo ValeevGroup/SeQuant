@@ -77,7 +77,7 @@ Index make_index_with_spincase(const Index& idx, mbpt::Spin s) {
   return Index{space, idx.ordinal(), protoindices};
 }
 
-// The argument really should be non-const but const sematics are broken
+// The argument really should be non-const but const semantics are broken
 // for the ExprPtr type so we are required to make this const in order
 // to be able to use this function everywhere we want to.
 void reset_idx_tags(const ExprPtr& expr) {
