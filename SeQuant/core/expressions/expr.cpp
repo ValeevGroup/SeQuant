@@ -366,7 +366,7 @@ void Sum::adjoint() {
   *this = Sum(ranges::begin(adj_summands), ranges::end(adj_summands));
 }
 
-ExprPtr Sum::canonicalize_impl(bool multipass, CanonicalizeOptions opts) {
+ExprPtr Sum::canonicalize_impl(CanonicalizeOptions opts) {
   if (Logger::instance().canonicalize)
     std::wcout << "Sum::canonicalize_impl: input = "
                << to_latex_align(shared_from_this()) << std::endl;
@@ -376,20 +376,12 @@ ExprPtr Sum::canonicalize_impl(bool multipass, CanonicalizeOptions opts) {
   auto opts_copy = opts;
   opts_copy.ignore_named_index_labels = false;
 
-  const auto npasses = multipass ? 3 : 1;
-  for (auto pass = 0; pass != npasses; ++pass) {
+  {
     // recursively canonicalize summands ...
     // using for_each and directly access to summands
-    sequant::for_each(summands_, [pass, &opts_copy](ExprPtr &summand) {
+    sequant::for_each(summands_, [&opts_copy](ExprPtr &summand) {
       ExprPtr bp;
-      const auto rapid = (pass % 2 == 0);
-      if (rapid) {
-        opts_copy.method = CanonicalizationMethod::Lexicographic;
-        bp = summand->rapid_canonicalize(opts_copy);
-      } else {
-        opts_copy.method = CanonicalizationMethod::Topological;
-        bp = summand->canonicalize(opts_copy);
-      }
+      bp = summand->canonicalize(opts_copy);
       if (bp) {
         assert(bp->template is<Constant>());
         summand = ex<Product>(std::static_pointer_cast<Constant>(bp)->value(),
@@ -397,8 +389,7 @@ ExprPtr Sum::canonicalize_impl(bool multipass, CanonicalizeOptions opts) {
       }
     });
     if (Logger::instance().canonicalize)
-      std::wcout << "Sum::canonicalize_impl (pass=" << pass
-                 << "): after canonicalizing summands = "
+      std::wcout << "Sum::canonicalize_impl: after canonicalizing summands = "
                  << to_latex_align(shared_from_this()) << std::endl;
     // flat map for grouping by (size, hash) pairs
     container::map<std::pair<size_t, size_t>, ExprPtr> hash_groups;
@@ -452,8 +443,7 @@ ExprPtr Sum::canonicalize_impl(bool multipass, CanonicalizeOptions opts) {
     summands_.swap(new_summands);
 
     if (Logger::instance().canonicalize)
-      std::wcout << "Sum::canonicalize_impl (pass=" << pass
-                 << "): after reducing summands = "
+      std::wcout << "Sum::canonicalize_impl: after reducing summands = "
                  << to_latex_align(shared_from_this()) << std::endl;
   }
 
