@@ -35,9 +35,20 @@ enum class CanonicalizationMethod {
 bool operator&(CanonicalizationMethod m1, CanonicalizationMethod m2);
 std::wstring to_wstring(CanonicalizationMethod m);
 
+/// @brief options that control behavior of `canonicalize()`
 struct CanonicalizeOptions {
+  /// TN canonicalization method
   CanonicalizationMethod method = CanonicalizationMethod::Topological;
+  /// specifies named indices; by default all indices that appear only once are
+  /// deduced to be named, but this may be misleading if e.g. single
+  /// summed-over dummy index appears in an expression
   std::optional<std::initializer_list<Index>> named_indices = std::nullopt;
+  /// whether to ignore the labels of named indices. Setting
+  /// to false will cause named indices to be treated as equivalent slots, which
+  /// the result to be independent of their labels. This does not make sense in
+  /// contexts where labels are meaningful, e.g. when canonicalizing sum of
+  /// tensor networks.
+  bool ignore_named_index_labels = true;
 
   static CanonicalizeOptions default_options();
   CanonicalizeOptions copy_and_set_method(CanonicalizationMethod method) const;
@@ -48,6 +59,8 @@ struct CanonicalizeOptions {
   }
 };
 
+/// @brief options that control behavior of `simplify()`
+/// @note this is a superset of CanonicalizeOptions
 struct SimplifyOptions : public CanonicalizeOptions {
   static SimplifyOptions default_options();
 

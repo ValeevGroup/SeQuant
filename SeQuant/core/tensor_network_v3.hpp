@@ -252,17 +252,13 @@ class TensorNetworkV3 {
 
   /// @param cardinal_tensor_labels move all tensors with these labels to the
   /// front before canonicalizing indices
-  /// @param method see CanonicalizationMethod for the meaning of this
-  /// parameter; by default perform complete canonicalization
-  /// @param named_indices specifies the indices that cannot be renamed, i.e.
-  /// their labels are meaningful; default is nullptr, which results in external
-  /// indices treated as named indices
+  /// @param options see CanonicalizeOptions for the meaning of this
+  /// parameter; the default is given by CanonicalizeOptions::default_options()
   /// @return byproduct of canonicalization (e.g. phase); if none, returns
   /// nullptr
   ExprPtr canonicalize(
       const container::vector<std::wstring> &cardinal_tensor_labels = {},
-      CanonicalizationMethod method = CanonicalizationMethod::Complete,
-      const NamedIndexSet *named_indices = nullptr);
+      CanonicalizeOptions options = CanonicalizeOptions::default_options());
 
   /// metadata produced by canonicalize_slots()
   struct SlotCanonicalizationMetadata {
@@ -464,10 +460,15 @@ class TensorNetworkV3 {
 
   /// Canonicalizes the network graph representation using colored graph
   /// canonicalization
+  /// @param named_indices named indices
+  /// @param ignore_named_index_labels whether to ignore labels of named
+  /// indices, see CanonicalizeOptions for more info
   /// @return The byproduct of canonicalization
   /// @note this produces canonical representation that is invariant with
   /// respect to the renaming of named indices
-  [[nodiscard]] ExprPtr canonicalize_graph(const NamedIndexSet &named_indices);
+  [[nodiscard]] ExprPtr canonicalize_graph(
+      const NamedIndexSet &named_indices,
+      bool ignore_named_index_labels = true);
 
   /// Canonicalizes every individual tensor for itself, taking into account only
   /// tensor blocks

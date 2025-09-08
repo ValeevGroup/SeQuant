@@ -212,17 +212,16 @@ ExprPtr Product::canonicalize_impl(CanonicalizeOptions opts) {
       using TN = std::decay_t<std::remove_pointer_t<decltype(tn_null_ptr)>>;
       ExprPtr canon_factor;
       TN tn(this->factors_);
-      using NamedIndexSet = tensor_network::NamedIndexSet;
-      std::shared_ptr<NamedIndexSet> named_indices =
-          !opts.named_indices
-              ? nullptr
-              : std::make_shared<NamedIndexSet>(opts.named_indices->begin(),
-                                                opts.named_indices->end());
       if constexpr (TN::version() == 3) {
-        canon_factor =
-            tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(),
-                            opts.method, named_indices.get());
+        canon_factor = tn.canonicalize(
+            TensorCanonicalizer::cardinal_tensor_labels(), opts);
       } else {
+        using NamedIndexSet = tensor_network::NamedIndexSet;
+        std::shared_ptr<NamedIndexSet> named_indices =
+            !opts.named_indices
+                ? nullptr
+                : std::make_shared<NamedIndexSet>(opts.named_indices->begin(),
+                                                  opts.named_indices->end());
         canon_factor = tn.canonicalize(
             TensorCanonicalizer::cardinal_tensor_labels(),
             opts.method == CanonicalizationMethod::Rapid, named_indices.get());
@@ -369,19 +368,25 @@ ExprPtr Sum::canonicalize_impl(bool multipass, CanonicalizeOptions opts) {
     std::wcout << "Sum::canonicalize_impl: input = "
                << to_latex_align(shared_from_this()) << std::endl;
 
+  // canonicalizing TNs in a sum requires treating named indices as
+  // meaningful/distinct
+  auto opts_copy = opts;
+  opts_copy.ignore_named_index_labels = false;
+
   const auto npasses = multipass ? 3 : 1;
   for (auto pass = 0; pass != npasses; ++pass) {
     // recursively canonicalize summands ...
     // using for_each and directly access to summands
-    sequant::for_each(summands_, [pass, &opts](ExprPtr &summand) {
+    sequant::for_each(summands_, [pass, &opts_copy](ExprPtr &summand) {
       ExprPtr bp;
       const auto rapid = (pass % 2 == 0);
       if (rapid) {
-        auto opts_copy = opts;
         opts_copy.method = CanonicalizationMethod::Lexicographic;
         bp = summand->rapid_canonicalize(opts_copy);
-      } else
-        bp = summand->canonicalize(opts);
+      } else {
+        opts_copy.method = CanonicalizationMethod::Topological;
+        bp = summand->canonicalize(opts_copy);
+      }
       if (bp) {
         assert(bp->template is<Constant>());
         summand = ex<Product>(std::static_pointer_cast<Constant>(bp)->value(),

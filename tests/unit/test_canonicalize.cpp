@@ -130,6 +130,34 @@ TEST_CASE("canonicalization", "[algorithms]") {
           SimplifiesTo(
               "S{a_1,a_2;i_1,i_2} f{a_3;i_3} t{i_2;a_3} t{i_1,i_3;a_1,a_2}"));
     }
+    {  // Azam's example:
+      // two intermediates that are equivalent modulo permutation of columns of
+      // named indices. as of https://github.com/ValeevGroup/SeQuant/pull/349
+      // canonicalization does not recognize them as identical because by
+      // default named index labels are ignored (this is done to make canonical
+      // TNs to be independent of external index renamings). However in
+      // the context of a sum external index labels are meaningful and should be
+      // accounted.
+      for (auto ignore_named_index_labels : {true, false}) {
+        auto input1 =
+            parse_expr(L"1/2 t{a3,a1,a2;i4,i5,i2}:N-C-S g{i4,i5;i3,i1}:N-C-S");
+        //      auto input1 = parse_expr(L"1/2 t{a1,a2,a3;i5,i2,i4}:N-C-S
+        //      g{i4,i5;i3,i1}:N-C-S");
+        auto input2 =
+            parse_expr(L"1/2 t{a1,a3,a2;i5,i4,i2}:N-C-S g{i5,i4;i1,i3}:N-C-S");
+        canonicalize(input1,
+                     {.method = CanonicalizationMethod::Topological,
+                      .ignore_named_index_labels = ignore_named_index_labels});
+        canonicalize(input2,
+                     {.method = CanonicalizationMethod::Topological,
+                      .ignore_named_index_labels = ignore_named_index_labels});
+        if (ignore_named_index_labels)
+          REQUIRE(input1 != input2);
+        else
+          REQUIRE(input1 == input2);
+      }
+    }
+
     {  // Product containing Variables
       auto q2 = ex<Variable>(L"q2");
       q2->adjoint();
