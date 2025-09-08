@@ -269,19 +269,21 @@ class Sum : public Expr {
     return *hash_value_;
   }
 
-  ExprPtr canonicalize_impl(CanonicalizeOptions opt);
+  /// @param multipass if true, will do a multipass canonicalization, with extra
+  /// cleanup pass after the deep canonization pass
+  ExprPtr canonicalize_impl(bool multipass, CanonicalizeOptions opt);
 
   virtual ExprPtr canonicalize(
       CanonicalizeOptions opt =
           CanonicalizeOptions::default_options()) override {
-    return canonicalize_impl(opt);
+    return canonicalize_impl(true, opt);
   }
   virtual ExprPtr rapid_canonicalize(
       CanonicalizeOptions opts =
           CanonicalizeOptions::default_options().copy_and_set_method(
               CanonicalizationMethod::Rapid)) override {
     assert(opts.method == CanonicalizationMethod::Rapid);
-    return canonicalize_impl(opts);
+    return canonicalize_impl(false, opts);
   }
 
   bool static_equal(const Expr &that) const override {
