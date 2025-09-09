@@ -403,7 +403,7 @@ class Product : public Expr {
           CanonicalizeOptions::default_options()) override;
   virtual ExprPtr rapid_canonicalize(
       CanonicalizeOptions opts =
-          CanonicalizeOptions::default_options().copy_and_set_method(
+          CanonicalizeOptions::default_options().copy_and_set(
               CanonicalizationMethod::Rapid)) override;
 
   bool static_equal(const Expr &that) const override {
