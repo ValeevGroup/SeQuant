@@ -66,6 +66,7 @@ class TypeAttr {
     return static_cast<int64_t>(bitset);
   }
   constexpr explicit operator bitset_t() const { return bitset; }
+  constexpr bitset_t to_bitset() const { return bitset; }
   constexpr int32_t to_int32() const { return bitset; }
 
   /// @return true if this object is non-null (i.e. has any bits set)
@@ -186,6 +187,7 @@ class QuantumNumbersAttr {
     return static_cast<int64_t>(bitset);
   }
   constexpr explicit operator bitset_t() const { return bitset; }
+  constexpr bitset_t to_bitset() const { return bitset; }
   constexpr int32_t to_int32() const { return bitset; }
 
   /// @return true if this object is non-null (i.e. has any bits set)
