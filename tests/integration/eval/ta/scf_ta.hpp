@@ -95,14 +95,16 @@ class SequantEvalScfTA final : public SequantEvalScf {
     auto log = Logger::instance().eval.level > 0;
 
     for (auto&& [r, n] : zip(rs, nodes_)) {
+      assert(!n.empty());
       auto const& target_indices = ranges::front(n)->annot();
       r = funcs[st][log](n, target_indices, data_world_, cman_)
               ->template get<Tensor_t>();
     }
 
+    auto E = info_.eqn_opts.spintrace ? energy_spin_free_orbital()
+                                      : energy_spin_orbital();
     data_world_.update_amplitudes(rs);
-    return info_.eqn_opts.spintrace ? energy_spin_free_orbital()
-                                    : energy_spin_orbital();
+    return E;
   }
 
  public:
