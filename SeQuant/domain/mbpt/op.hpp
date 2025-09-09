@@ -785,6 +785,8 @@ class Operator : public Operator<void, S> {
 
   Expr::hash_type memoizing_hash() const override;
 
+  bool static_equal(const Expr& other) const override;
+
 };  // class Operator
 
 extern template class Operator<qns_t, Statistics::FermiDirac>;
