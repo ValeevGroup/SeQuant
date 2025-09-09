@@ -33,12 +33,18 @@
 TEST_CASE("spin", "[spin]") {
   using namespace sequant;
 
+  // P.S. ref outputs produced with complete canonicalization
+  auto ctx = get_default_context();
+  ctx.set(CanonicalizeOptions{.method = CanonicalizationMethod::Complete});
+  auto _ = set_scoped_default_context(ctx);
+  using namespace sequant::mbpt;
+
   TensorCanonicalizer::register_instance(
       std::make_shared<DefaultTensorCanonicalizer>());
 
   auto reset_idx_tags = [](ExprPtr& expr) {
-    if (expr->is<Tensor>())
-      ranges::for_each(expr->as<Tensor>().const_slots(),
+    if (expr->is<AbstractTensor>())
+      ranges::for_each(expr->as<AbstractTensor>()._slots(),
                        [](const Index& idx) { idx.reset_tag(); });
   };
 
@@ -175,7 +181,7 @@ TEST_CASE("spin", "[spin]") {
     }
   }
 
-  SECTION("Tensor: can_expand, spin_symm_tensor, remove_spin") {
+  SECTION("Tensor: can_expand, ms_conserving_columns, remove_spin") {
     auto p1 = Index(L"p↑_1");
     auto p2 = Index(L"p↓_2");
     auto p3 = Index(L"p↑_3");
@@ -183,7 +189,7 @@ TEST_CASE("spin", "[spin]") {
 
     auto input = ex<Tensor>(L"t", bra{p1, p2}, ket{p3, p4});
     REQUIRE(can_expand(input->as<Tensor>()) == true);
-    REQUIRE(spin_symm_tensor(input->as<Tensor>()) == true);
+    REQUIRE(ms_conserving_columns(input->as<Tensor>()) == true);
 
     auto spin_swap_tensor = swap_spin(input->as<Tensor>());
     REQUIRE_THAT(spin_swap_tensor, EquivalentTo("t{p↓1,p↑2;p↓3,p↑4}"));
@@ -195,7 +201,7 @@ TEST_CASE("spin", "[spin]") {
     input = ex<Tensor>(L"t", bra{p1, p3}, ket{p2, p4});
     REQUIRE_THAT(swap_spin(input), EquivalentTo("t{p↓1,p↓3;p↑2,p↑4}"));
     REQUIRE(can_expand(input->as<Tensor>()) == false);
-    REQUIRE(spin_symm_tensor(input->as<Tensor>()) == false);
+    REQUIRE(ms_conserving_columns(input->as<Tensor>()) == false);
   }
 
   SECTION("Tensor: expand_antisymm") {
@@ -737,7 +743,7 @@ SECTION("Closed-shell spintrace CCD") {
       auto pno_ccd_energy_sf =
           closed_shell_CC_spintrace(pno_ccd_energy_so_as_sum);
       REQUIRE_THAT(pno_ccd_energy_sf,
-                   SimplifiesTo("2 g{a1<i1,i2>,a2<i1,i2>;i1,i2}:N-C "
+                   EquivalentTo("2 g{a1<i1,i2>,a2<i1,i2>;i1,i2}:N-C "
                                 "t{i1,i2;a1<i1,i2>,a2<i1,i2>}:N-C - "
                                 "g{a1<i1,i2>,a2<i1,i2>;i1,i2}:N-C "
                                 "t{i1,i2;a2<i1,i2>,a1<i1,i2>}:N-C"));
@@ -753,7 +759,7 @@ SECTION("Closed-shell spintrace CCD") {
       auto pno_ccd_energy_sf =
           closed_shell_CC_spintrace_compact_set(pno_ccd_energy_so_as_sum);
       REQUIRE_THAT(pno_ccd_energy_sf,
-                   SimplifiesTo("2 g{a1<i1,i2>,a2<i1,i2>;i1,i2}:N-C "
+                   EquivalentTo("2 g{a1<i1,i2>,a2<i1,i2>;i1,i2}:N-C "
                                 "t{i1,i2;a1<i1,i2>,a2<i1,i2>}:N-C - "
                                 "g{a1<i1,i2>,a2<i1,i2>;i1,i2}:N-C "
                                 "t{i1,i2;a2<i1,i2>,a1<i1,i2>}:N-C"));

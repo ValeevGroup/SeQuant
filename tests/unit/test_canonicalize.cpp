@@ -145,12 +145,18 @@ TEST_CASE("canonicalization", "[algorithms]") {
         //      g{i4,i5;i3,i1}:N-C-S");
         auto input2 =
             parse_expr(L"1/2 t{a1,a3,a2;i5,i4,i2}:N-C-S g{i5,i4;i1,i3}:N-C-S");
-        canonicalize(input1,
-                     {.method = CanonicalizationMethod::Topological,
-                      .ignore_named_index_labels = ignore_named_index_labels});
-        canonicalize(input2,
-                     {.method = CanonicalizationMethod::Topological,
-                      .ignore_named_index_labels = ignore_named_index_labels});
+        canonicalize(
+            input1,
+            {.method = CanonicalizationMethod::Topological,
+             .ignore_named_index_labels =
+                 static_cast<CanonicalizeOptions::IgnoreNamedIndexLabel>(
+                     ignore_named_index_labels)});
+        canonicalize(
+            input2,
+            {.method = CanonicalizationMethod::Topological,
+             .ignore_named_index_labels =
+                 static_cast<CanonicalizeOptions::IgnoreNamedIndexLabel>(
+                     ignore_named_index_labels)});
         if (ignore_named_index_labels)
           REQUIRE(input1 != input2);
         else
@@ -247,7 +253,7 @@ TEST_CASE("canonicalization", "[algorithms]") {
           ex<Variable>(L"q1") * ex<Variable>(L"q1") + ex<Variable>(L"q2");
       simplify(input);
       canonicalize(input);
-      REQUIRE_THAT(input, SimplifiesTo("q2 + q1 * q1"));
+      REQUIRE_THAT(input, EquivalentTo("q2 + q1 * q1"));
     }
   }
 
@@ -273,7 +279,7 @@ TEST_CASE("canonicalization", "[algorithms]") {
       simplify(input);
       canonicalize(input);
       REQUIRE_THAT(input,
-                   SimplifiesTo("g{p_1,p_2;p_3,p_4} t{p_3;p_1} t{p_4;p_2}"));
+                   EquivalentTo("g{p_1,p_2;p_3,p_4} t{p_3;p_1} t{p_4;p_2}"));
     }
 
     // CASE 2: Symmetric tensors
@@ -328,7 +334,7 @@ TEST_CASE("canonicalization", "[algorithms]") {
       canonicalize(input);
       REQUIRE(input->size() == 1);
       REQUIRE_THAT(input,
-                   SimplifiesTo("g{i3,i4;i1,a3}:A t{a2;i3} t{a1,a3;i2,i4}:A"));
+                   EquivalentTo("g{i3,i4;i1,a3}:A t{a2;i3} t{a1,a3;i2,i4}:A"));
     }
 
     // Case 4: permuted indices from CCSD R2 biorthogonal configuration
@@ -350,7 +356,7 @@ TEST_CASE("canonicalization", "[algorithms]") {
       canonicalize(input);
       REQUIRE(input->size() == 1);
       REQUIRE_THAT(input,
-                   SimplifiesTo("g{i3,i4;i1,a3} t{a2;i4} t{a1,a3;i3,i2}"));
+                   EquivalentTo("g{i3,i4;i1,a3} t{a2;i4} t{a1,a3;i3,i2}"));
     }
 
     {  // Case 5: CCSDT R3: S3 * F * T3

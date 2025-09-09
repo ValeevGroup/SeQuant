@@ -1056,7 +1056,7 @@ TEST_CASE("wick", "[algorithms][wick]") {
       rapid_simplify(wick_result_2);
       TensorCanonicalizer::register_instance(
           std::make_shared<DefaultTensorCanonicalizer>());
-      canonicalize(wick_result_2);
+      canonicalize(wick_result_2, {.method = CanonicalizationMethod::Complete});
       rapid_simplify(wick_result_2);
 
       std::wcout << L"H2*T2 = " << to_latex(wick_result_2) << std::endl;
@@ -1358,7 +1358,8 @@ TEST_CASE("wick", "[algorithms][wick]") {
           ex<FNOperator>(cre({L"p_2", L"p_3"}), ann({L"p_4", L"p_5"})) *
           fcrex("p_1");
       auto result2 = FWickTheorem{Ld_H2N_L}.full_contractions(false).compute();
-      simplify(result2, {{.named_indices = IndexList{}}});
+      simplify(result2, {{.method = CanonicalizationMethod::Complete,
+                          .named_indices = IndexList{}}});
       sequant::wprintf(to_latex_align(Ld_H2N_L), L" = \n",
                        to_latex_align(result2, 0, 2), L"\n");
       REQUIRE(result2.as<Sum>().size() == 5);

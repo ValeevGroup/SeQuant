@@ -371,23 +371,27 @@ ExprPtr Sum::canonicalize_impl(bool multipass, CanonicalizeOptions opts) {
     std::wcout << "Sum::canonicalize_impl: input = "
                << to_latex_align(shared_from_this()) << std::endl;
 
-  // canonicalizing TNs in a sum requires treating named indices as
-  // meaningful/distinct
-  auto opts_copy = opts;
-  opts_copy.ignore_named_index_labels = false;
-
-  const auto npasses = multipass ? 3 : 1;
+  const auto npasses = multipass ? 2 : 1;
   for (auto pass = 0; pass != npasses; ++pass) {
+    const auto rapid = (pass % 2 == 0);
+
+    // canonicalizing TNs in a sum requires treating named indices as
+    // meaningful/distinct
+    auto opts_copy = opts;
+    opts_copy.ignore_named_index_labels =
+        CanonicalizeOptions::IgnoreNamedIndexLabel::No;
+    if (rapid) {
+      opts_copy.method = CanonicalizationMethod::Lexicographic;
+    } else
+      opts_copy.method = opts.method | CanonicalizationMethod::Topological;
+
     // recursively canonicalize summands ...
     // using for_each and directly access to summands
-    sequant::for_each(summands_, [pass, &opts_copy](ExprPtr &summand) {
+    sequant::for_each(summands_, [pass, &opts_copy, &rapid](ExprPtr &summand) {
       ExprPtr bp;
-      const auto rapid = (pass % 2 == 0);
       if (rapid) {
-        opts_copy.method = CanonicalizationMethod::Lexicographic;
         bp = summand->rapid_canonicalize(opts_copy);
       } else {
-        opts_copy.method = CanonicalizationMethod::Topological;
         bp = summand->canonicalize(opts_copy);
       }
       if (bp) {
@@ -400,19 +404,17 @@ ExprPtr Sum::canonicalize_impl(bool multipass, CanonicalizeOptions opts) {
       std::wcout << "Sum::canonicalize_impl (pass=" << pass
                  << "): after canonicalizing summands = "
                  << to_latex_align(shared_from_this()) << std::endl;
-    // flat map for grouping by (size, hash) pairs
-    container::map<std::pair<size_t, size_t>, ExprPtr> hash_groups;
+    // flat map for grouping by hash pairs
+    container::map<std::size_t, ExprPtr> hash_groups;
     // process each summand
     for (const auto &summand : summands_) {
       auto hash = summand->hash_value();
-      size_t term_size = sequant::size(summand);
-      auto key = std::make_pair(term_size, hash);
-      auto it = hash_groups.find(key);
+      auto it = hash_groups.find(hash);
       if (it == hash_groups.end()) {
-        // first occurrence of this (size, hash) pair
-        hash_groups[key] = summand;
+        // first occurrence of this item
+        hash_groups.emplace(hash, summand);
       } else {
-        // another term with the same (size, hash)
+        // another term with the same hash
         if (summand->template is<Product>()) {
           if (it->second->template is<Product>()) {
             // both are products - add them
@@ -420,8 +422,7 @@ ExprPtr Sum::canonicalize_impl(bool multipass, CanonicalizeOptions opts) {
             product.add_identical(summand->template as<Product>());
           } else {
             // convert existing term to product and add
-            auto product_copy =
-                std::static_pointer_cast<Product>(summand->clone());
+            auto product_copy = std::make_shared<Product>(summand->clone());
             product_copy->add_identical(it->second);
             it->second = product_copy;
           }
@@ -443,7 +444,7 @@ ExprPtr Sum::canonicalize_impl(bool multipass, CanonicalizeOptions opts) {
     new_summands.reserve(summands_.size());
     // collect all grouped terms (already sorted by size, then hash due to pair
     // ordering)
-    for (const auto &[key, term] : hash_groups) {
+    for (const auto &[hash, term] : hash_groups) {
       if (!term->template is<Product>() ||
           !term->template as<Product>().is_zero()) {
         new_summands.push_back(term);
