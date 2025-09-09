@@ -108,7 +108,7 @@ int main(int argc, char* argv[]) {
   scf_ta.scf(std::wcout);
   double const expected{-0.07068045196165902};
   double const threshold = calc_info.scf_opts.conv;
-  double const ediff = std::abs(expected - scf_ta.energy());
+  double const ediff = std::fabs(expected - scf_ta.energy());
 
   runtime_assert((ediff <= threshold));
 
