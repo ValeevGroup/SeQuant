@@ -17,6 +17,7 @@
 #include <SeQuant/core/tensor_network/utils.hpp>
 #include <SeQuant/core/tensor_network/vertex_painter.hpp>
 #include <SeQuant/core/tensor_network_v3.hpp>
+#include <SeQuant/core/utility/debug.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/swap.hpp>
 #include <SeQuant/core/utility/tuple.hpp>
@@ -132,12 +133,14 @@ ExprPtr TensorNetworkV3::canonicalize_graph(const NamedIndexSet &named_indices,
   int parity = 1;
 
   if (Logger::instance().canonicalize) {
-    std::wcout << "TensorNetworkV3::canonicalize_graph: input tensors\n";
+    std::wostringstream oss;
+    oss << "TensorNetworkV3::canonicalize_graph: input tensors\n";
     size_t cnt = 0;
     ranges::for_each(tensors_, [&](const auto &t) {
-      std::wcout << "tensor " << cnt++ << ": " << to_latex(*t) << std::endl;
+      oss << "tensor " << cnt++ << ": " << to_latex(*t) << std::endl;
     });
-    std::wcout << std::endl;
+    oss << std::endl;
+    sequant::wprintf(oss.str());
   }
 
   if (!have_edges_) {
@@ -161,8 +164,10 @@ ExprPtr TensorNetworkV3::canonicalize_graph(const NamedIndexSet &named_indices,
                          Logger::instance().canonicalize_dot});
 
   if (Logger::instance().canonicalize_input_graph) {
-    std::wcout << "Input graph for canonicalization:\n";
-    graph.bliss_graph->write_dot(std::wcout, {.labels = graph.vertex_labels});
+    std::wostringstream oss;
+    oss << "Input graph for canonicalization:\n";
+    graph.bliss_graph->write_dot(oss, {.labels = graph.vertex_labels});
+    sequant::wprintf(oss.str());
   }
 
   // canonize the graph
@@ -172,17 +177,19 @@ ExprPtr TensorNetworkV3::canonicalize_graph(const NamedIndexSet &named_indices,
       graph.bliss_graph->canonical_form(stats, nullptr, nullptr);
 
   if (Logger::instance().canonicalize_dot) {
-    std::wcout << "Canonicalization permutation:\n";
+    std::wostringstream oss;
+    oss << "Canonicalization permutation:\n";
     for (std::size_t i = 0; i < graph.vertex_labels.size(); ++i) {
-      std::wcout << i << " -> " << canonize_perm[i] << "\n";
+      oss << i << " -> " << canonize_perm[i] << "\n";
     }
-    std::wcout << "Canonicalized graph:\n";
+    oss << "Canonicalized graph:\n";
     bliss::Graph *cgraph = graph.bliss_graph->permute(canonize_perm);
-    cgraph->write_dot(std::wcout, {.display_colors = true});
+    cgraph->write_dot(oss, {.display_colors = true});
     auto cvlabels = permute(graph.vertex_labels, canonize_perm);
-    std::wcout << "with our labels:\n";
-    cgraph->write_dot(std::wcout, {.labels = cvlabels});
+    oss << "with our labels:\n";
+    cgraph->write_dot(oss, {.labels = cvlabels});
     delete cgraph;
+    sequant::wprintf(oss.str());
   }
 
   // maps tensor ordinal -> input vertex ordinal
@@ -318,9 +325,9 @@ ExprPtr TensorNetworkV3::canonicalize_graph(const NamedIndexSet &named_indices,
 
   if (Logger::instance().canonicalize) {
     for (const auto &idxpair : idxrepl) {
-      std::wcout << "TensorNetworkV3::canonicalize_graph: replacing "
-                 << to_latex(idxpair.first) << " with "
-                 << to_latex(idxpair.second) << std::endl;
+      sequant::wprintf("TensorNetworkV3::canonicalize_graph: replacing ",
+                       to_latex(idxpair.first), " with ",
+                       to_latex(idxpair.second), "\n");
     }
   }
 
@@ -360,15 +367,15 @@ ExprPtr TensorNetworkV3::canonicalize_graph(const NamedIndexSet &named_indices,
           const auto bra = bk == Origin::Bra;
           auto &sorted_ordinals = bra ? braslots : ketslots;
           if (!ranges::is_sorted(sorted_ordinals)) {
-            std::wcout << "TensorNetworkV3::canonicalize_graph: permuting "
-                       << (bra ? "bra" : "ket") << " slots in "
-                       << to_latex(tensor) << ":\n";
+            sequant::wprintf("TensorNetworkV3::canonicalize_graph: permuting ",
+                             (bra ? "bra" : "ket"), " slots in ",
+                             to_latex(tensor), ":\n");
             auto indices = bra ? tensor._bra() : tensor._ket();
             for (auto i = 0; i != indices.size(); ++i) {
-              std::wcout << "  " << to_latex(indices[sorted_ordinals[i]])
-                         << " -> " << to_latex(indices[i]) << "\n";
+              sequant::wprintf("  ", to_latex(indices[sorted_ordinals[i]]),
+                               " -> ", to_latex(indices[i]), "\n");
             }
-            std::wcout << std::endl;
+            sequant::wprintf("\n");
           }
         }
       }
@@ -421,12 +428,14 @@ ExprPtr TensorNetworkV3::canonicalize_graph(const NamedIndexSet &named_indices,
       sort_via_ordinals<OrderType::Weak>(tensors_, tensor_less_than);
 
   if (Logger::instance().canonicalize) {
-    std::wcout << "TensorNetworkV3::canonicalize_graph: tensors after "
-                  "canonicalization\n";
+    std::wostringstream oss;
+    oss << "TensorNetworkV3::canonicalize_graph: tensors after "
+           "canonicalization\n";
     size_t cnt = 0;
     ranges::for_each(tensors_, [&](const auto &t) {
-      std::wcout << "tensor " << cnt++ << ": " << to_latex(*t) << std::endl;
+      oss << "tensor " << cnt++ << ": " << to_latex(*t) << std::endl;
     });
+    sequant::wprintf(oss.str());
   }
 
   if (parity < 0)
@@ -457,16 +466,18 @@ ExprPtr TensorNetworkV3::canonicalize(
     const container::vector<std::wstring> &cardinal_tensor_labels,
     CanonicalizeOptions options) {
   if (Logger::instance().canonicalize) {
-    std::wcout << "TensorNetworkV3::canonicalize(" << to_wstring(options.method)
-               << "): input tensors\n";
+    std::wostringstream oss;
+    oss << "TensorNetworkV3::canonicalize(" << to_wstring(options.method)
+        << "): input tensors\n";
     size_t cnt = 0;
     ranges::for_each(tensors_, [&](const auto &t) {
-      std::wcout << "tensor " << cnt++ << ": " << to_latex(*t) << std::endl;
+      oss << "tensor " << cnt++ << ": " << to_latex(*t) << std::endl;
     });
-    std::wcout << "cardinal_tensor_labels = ";
+    oss << "cardinal_tensor_labels = ";
     ranges::for_each(cardinal_tensor_labels,
-                     [](auto &&i) { std::wcout << i << L" "; });
-    std::wcout << std::endl;
+                     [&oss](auto &&i) { oss << i << L" "; });
+    oss << std::endl;
+    sequant::wprintf(oss.str());
   }
 
   if (!have_edges_) {
@@ -484,21 +495,25 @@ ExprPtr TensorNetworkV3::canonicalize(
       !options.named_indices ? this->ext_indices() : *named_indices_sptr;
 
   if (Logger::instance().canonicalize) {
-    std::wcout << "named_indices = ";
+    std::wostringstream oss;
+    oss << "named_indices = ";
     ranges::for_each(named_indices,
-                     [](auto &&i) { std::wcout << i.full_label() << L" "; });
+                     [&oss](auto &&i) { oss << i.full_label() << L" "; });
+    sequant::wprintf(oss.str());
   }
 
   ExprPtr byproduct;
-  if (options.method & CanonicalizationMethod::Topological) {
+  if ((options.method & CanonicalizationMethod::Topological) ==
+      CanonicalizationMethod::Topological) {
     // The graph-based canonization is required in all cases in which there are
     // indistinguishable tensors present in the expression. Their order and
     // indexing can only be determined via this rigorous canonization.
-    byproduct =
-        canonicalize_graph(named_indices, options.ignore_named_index_labels);
+    byproduct = canonicalize_graph(
+        named_indices, static_cast<bool>(options.ignore_named_index_labels));
   }
 
-  if (options.method & CanonicalizationMethod::Lexicographic) {
+  if ((options.method & CanonicalizationMethod::Lexicographic) ==
+      CanonicalizationMethod::Lexicographic) {
     // Ensure each individual tensor is written in the way that its tensor
     // block (== order of index spaces) is canonical
     byproduct *= canonicalize_individual_tensor_blocks(named_indices);
@@ -516,13 +531,14 @@ ExprPtr TensorNetworkV3::canonicalize(
     init_edges();
 
     if (Logger::instance().canonicalize) {
-      std::wcout << "TensorNetworkV3::canonicalize("
-                 << to_wstring(options.method)
-                 << "): tensors after lexicographic sort\n";
+      std::wostringstream oss;
+      oss << "TensorNetworkV3::canonicalize(" << to_wstring(options.method)
+          << "): tensors after lexicographic sort\n";
       size_t cnt = 0;
       ranges::for_each(tensors_, [&](const auto &t) {
-        std::wcout << "tensor " << cnt++ << ": " << to_latex(*t) << std::endl;
+        oss << "tensor " << cnt++ << ": " << to_latex(*t) << std::endl;
       });
+      sequant::wprintf(oss.str());
     }
 
     // helpers to filter named ("external" in traditional use case) / anonymous
@@ -572,11 +588,10 @@ ExprPtr TensorNetworkV3::canonicalize(
 
     if (Logger::instance().canonicalize) {
       for (const auto &idxpair : idxrepl) {
-        std::wcout << "TensorNetworkV3::canonicalize("
-                   << to_wstring(options.method)
-                   << "): lexicographic rewrite, replacing "
-                   << to_latex(idxpair.first) << " with "
-                   << to_latex(idxpair.second) << std::endl;
+        sequant::wprintf(
+            "TensorNetworkV3::canonicalize(", to_wstring(options.method),
+            "): lexicographic rewrite, replacing ", to_latex(idxpair.first),
+            " with ", to_latex(idxpair.second), "\n");
       }
     }
 
@@ -617,15 +632,17 @@ TensorNetworkV3::canonicalize_slots(
   TensorNetworkV3::SlotCanonicalizationMetadata metadata;
 
   if (Logger::instance().canonicalize) {
-    std::wcout << "TensorNetworkV3::canonicalize_slots(): input tensors\n";
+    std::wostringstream oss;
+    oss << "TensorNetworkV3::canonicalize_slots(): input tensors\n";
     size_t cnt = 0;
     ranges::for_each(tensors_, [&](const auto &t) {
-      std::wcout << "tensor " << cnt++ << ": " << to_latex(*t) << std::endl;
+      oss << "tensor " << cnt++ << ": " << to_latex(*t) << std::endl;
     });
-    std::wcout << "cardinal_tensor_labels = ";
+    oss << "cardinal_tensor_labels = ";
     ranges::for_each(cardinal_tensor_labels,
-                     [](auto &&i) { std::wcout << i << L" "; });
-    std::wcout << std::endl;
+                     [&oss](auto &&i) { oss << i << L" "; });
+    oss << std::endl;
+    sequant::wprintf(oss.str());
   }
 
   if (!have_edges_) {
@@ -655,14 +672,14 @@ TensorNetworkV3::canonicalize_slots(
                          Logger::instance().canonicalize_dot,
        .make_idx_to_vertex = true});
   const auto &idx_to_vertex = graph.idx_to_vertex;
-  // graph.bliss_graph->write_dot(std::wcout, {.labels = graph.vertex_labels});
 
   if (Logger::instance().canonicalize_input_graph) {
-    std::wcout << "Input graph for canonicalization:\n";
-    graph.bliss_graph->write_dot(std::wcout,
-                                 {.labels = graph.vertex_labels,
-                                  .xlabels = graph.vertex_xlabels,
-                                  .texlabels = graph.vertex_texlabels});
+    std::wostringstream oss;
+    oss << "Input graph for canonicalization:\n";
+    graph.bliss_graph->write_dot(oss, {.labels = graph.vertex_labels,
+                                       .xlabels = graph.vertex_xlabels,
+                                       .texlabels = graph.vertex_texlabels});
+    sequant::wprintf(oss.str());
   }
 
   // canonize the graph
@@ -675,17 +692,19 @@ TensorNetworkV3::canonicalize_slots(
       std::shared_ptr<bliss::Graph>(graph.bliss_graph->permute(canonize_perm));
 
   if (Logger::instance().canonicalize_dot) {
-    std::wcout << "Canonicalization permutation:\n";
+    std::wostringstream oss;
+    oss << "Canonicalization permutation:\n";
     for (std::size_t i = 0; i < graph.vertex_labels.size(); ++i) {
-      std::wcout << i << " -> " << canonize_perm[i] << "\n";
+      oss << i << " -> " << canonize_perm[i] << "\n";
     }
-    std::wcout << "Canonicalized graph:\n";
-    metadata.graph->write_dot(std::wcout, {.display_colors = true});
+    oss << "Canonicalized graph:\n";
+    metadata.graph->write_dot(oss, {.display_colors = true});
     auto cvlabels = permute(graph.vertex_labels, canonize_perm);
     auto cvtexlabels = permute(graph.vertex_texlabels, canonize_perm);
-    std::wcout << "with our labels:\n";
-    metadata.graph->write_dot(std::wcout,
+    oss << "with our labels:\n";
+    metadata.graph->write_dot(oss,
                               {.labels = cvlabels, .texlabels = cvtexlabels});
+    sequant::wprintf(oss.str());
   }
 
   // produce canonical list of named indices
@@ -1303,12 +1322,13 @@ void TensorNetworkV3::init_edges() {
     // skip null indices
     if (!idx) return;
     if (Logger::instance().tensor_network) {
-      std::wcout << "TensorNetworkV3::init_edges: idx=" << to_latex(idx)
-                 << " attached to tensor " << vertex.getTerminalIndex() << " ("
-                 << vertex.getOrigin() << ") at position "
-                 << vertex.getIndexSlot() << " (sym: "
-                 << sequant::to_wstring(vertex.getTerminalSymmetry()) << ")"
-                 << std::endl;
+      std::wostringstream oss;
+      oss << "TensorNetworkV3::init_edges: idx=" << to_latex(idx)
+          << " attached to tensor " << vertex.getTerminalIndex() << " ("
+          << vertex.getOrigin() << ") at position " << vertex.getIndexSlot()
+          << " (sym: " << sequant::to_wstring(vertex.getTerminalSymmetry())
+          << ")" << std::endl;
+      sequant::wprintf(oss.str());
     }
 
     auto it = std::ranges::lower_bound(edges_, idx, Index::FullLabelCompare{},
@@ -1370,8 +1390,7 @@ void TensorNetworkV3::init_edges() {
     // network)
     if (current.vertex_count() == 1) {
       if (Logger::instance().tensor_network) {
-        std::wcout << "idx " << to_latex(current.idx()) << " is external"
-                   << std::endl;
+        sequant::wprintf("idx ", to_latex(current.idx()), " is external\n");
       }
 
       const auto &[it, inserted] = ext_indices_.emplace(current.idx());
@@ -1401,8 +1420,7 @@ void TensorNetworkV3::init_edges() {
   pure_proto_indices_ = std::move(proto_indices);
   if (Logger::instance().tensor_network) {
     for (auto &&idx : pure_proto_indices_) {
-      std::wcout << "idx " << to_latex(idx) << " is pure protoindex"
-                 << std::endl;
+      sequant::wprintf("idx ", to_latex(idx), " is pure protoindex\n");
     }
   }
 
