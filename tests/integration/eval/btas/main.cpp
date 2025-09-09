@@ -14,6 +14,13 @@
 #include <btas/scf_btas.hpp>
 #include <calc_info.hpp>
 
+#define runtime_assert(tf)                                                  \
+  if (!(tf)) {                                                              \
+    std::ostringstream oss;                                                 \
+    oss << "failed assert at line " << __LINE__ << " in eval_btas example"; \
+    throw std::runtime_error(oss.str().c_str());                            \
+  }
+
 ///
 /// excitation (2 = ccsd (default) through 6 supported)
 /// fock(/eri) tensor data file name (default "fock.dat"/"eri.dat")
@@ -77,9 +84,14 @@ int main(int argc, char* argv[]) {
 
   auto const calc_info =
       eval::make_calc_info(calc_config, fock_file, eri_file, out_file);
+  auto scf_btas =
+      eval::btas::SequantEvalScfBTAS<btas::Tensor<double>>{calc_info};
+  scf_btas.scf(std::wcout);
 
-  eval::btas::SequantEvalScfBTAS<btas::Tensor<double>>{calc_info}.scf(
-      std::wcout);
+  double const expected{-0.07068045196165902};
+  double const threshold = calc_info.scf_opts.conv;
+  double const ediff = std::fabs(expected - scf_btas.energy());
 
+  runtime_assert((ediff <= threshold));
   return 0;
 }
