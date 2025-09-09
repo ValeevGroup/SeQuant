@@ -14,6 +14,13 @@
 #include <calc_info.hpp>
 #include <ta/scf_ta.hpp>
 
+#define runtime_assert(tf)                                                \
+  if (!(tf)) {                                                            \
+    std::ostringstream oss;                                               \
+    oss << "failed assert at line " << __LINE__ << " in eval_ta example"; \
+    throw std::runtime_error(oss.str().c_str());                          \
+  }
+
 template <typename Os>
 Os& operator<<(Os& os, sequant::eval::CalcInfo const& info) {
   os << std::boolalpha << "[equation]\n"
@@ -96,7 +103,14 @@ int main(int argc, char* argv[]) {
   auto const calc_info =
       eval::make_calc_info(calc_config, fock_file, eri_file, out_file);
 
-  eval::SequantEvalScfTA<TA::TArrayD>{world, calc_info}.scf(std::wcout);
+  auto scf_ta = eval::SequantEvalScfTA<TA::TArrayD>{world, calc_info};
+
+  scf_ta.scf(std::wcout);
+  double const expected{-0.07068045196165902};
+  double const threshold = calc_info.scf_opts.conv;
+  double const ediff = std::abs(expected - scf_ta.energy());
+
+  runtime_assert((ediff <= threshold));
 
   TA::finalize();
   return 0;
