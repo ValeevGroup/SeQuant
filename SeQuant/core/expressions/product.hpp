@@ -4,6 +4,7 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expressions/constant.hpp>
 #include <SeQuant/core/expressions/expr.hpp>
+#include <SeQuant/core/expressions/expr_algorithms.hpp>
 #include <SeQuant/core/expressions/expr_ptr.hpp>
 #include <SeQuant/core/meta.hpp>
 
@@ -330,12 +331,12 @@ class Product : public Expr {
   }
 
   void add_identical(const Product &other) {
-    assert(this->hash_value() == other.hash_value());
+    assert(ranges::equal(this->factors(), other.factors()));
     scalar_ += other.scalar_;
   }
 
   void add_identical(const std::shared_ptr<Product> &other) {
-    assert(this->hash_value() == other->hash_value());
+    assert(ranges::equal(this->factors(), other->factors()));
     scalar_ += other->scalar_;
   }
 
@@ -343,8 +344,7 @@ class Product : public Expr {
     if (other.is<Product>()) return this->add_identical(other.as<Product>());
 
     // only makes sense if this has a single factor
-    assert(this->factors_.size() == 1 &&
-           this->factors_[0]->hash_value() == other->hash_value());
+    assert(this->factors_.size() == 1 && this->factors_[0] == other);
     scalar_ += 1;
   }
 
