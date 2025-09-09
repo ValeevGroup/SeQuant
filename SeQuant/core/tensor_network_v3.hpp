@@ -258,7 +258,8 @@ class TensorNetworkV3 {
   /// nullptr
   ExprPtr canonicalize(
       const container::vector<std::wstring> &cardinal_tensor_labels = {},
-      CanonicalizeOptions options = CanonicalizeOptions::default_options());
+      const CanonicalizeOptions &options =
+          CanonicalizeOptions::default_options());
 
   /// metadata produced by canonicalize_slots()
   struct SlotCanonicalizationMetadata {

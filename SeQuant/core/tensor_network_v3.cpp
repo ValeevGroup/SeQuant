@@ -464,7 +464,7 @@ TensorNetworkV3 &TensorNetworkV3::operator=(
 
 ExprPtr TensorNetworkV3::canonicalize(
     const container::vector<std::wstring> &cardinal_tensor_labels,
-    CanonicalizeOptions options) {
+    const CanonicalizeOptions &options) {
   if (Logger::instance().canonicalize) {
     std::wostringstream oss;
     oss << "TensorNetworkV3::canonicalize(" << to_wstring(options.method)
