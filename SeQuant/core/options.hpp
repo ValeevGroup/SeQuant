@@ -52,7 +52,7 @@ struct CanonicalizeOptions {
   /// to false will cause named indices to be treated as equivalent slots, which
   /// the result to be independent of their labels. This does not make sense in
   /// contexts where labels are meaningful, e.g. when canonicalizing sum of
-  /// tensor networks.
+  /// tensor networks and will be therefore ignored.
   IgnoreNamedIndexLabel ignore_named_index_labels = IgnoreNamedIndexLabel::Yes;
 
   static CanonicalizeOptions default_options();
