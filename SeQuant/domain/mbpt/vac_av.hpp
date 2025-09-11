@@ -86,9 +86,9 @@ inline ExprPtr lower_to_tensor_form(const ExprPtr& expr_inp) {
 /// (preceding it). The default list of connections is given
 /// by default_op_connections() .
 /// @param[in] use_topology if true, WickTheorem uses topological equivalence of
-/// terms
-/// @param[in] screen if true, expressions are screened before calling
-/// WickTheorem
+/// terms, defaults to true
+/// @param[in] screen if true, expressions are screened before lowering to
+/// Tensor level and calling WickTheorem, defaults to true
 /// @param[in] skip_clone if true, will not clone the input expression
 /// @return the VEV
 ExprPtr vac_av(ExprPtr expr,
@@ -105,9 +105,9 @@ ExprPtr vac_av(ExprPtr expr,
 /// `{opL,opR}` declares that `opL` and `opR` are to be connected
 /// when `opR` precedes `opL`, i.e. `opL` is to the left of `opR`
 /// @param[in] use_topology if true, WickTheorem uses topological equivalence of
-/// terms
-/// @param[in] screen if true, expressions are screened before calling
-/// WickTheorem
+/// terms, defaults to true
+/// @param[in] screen if true, expressions are screened before lowering to
+/// Tensor level and calling WickTheorem, defaults to true
 /// @param[in] skip_clone if true, will not clone the input expression
 /// @return the VEV
 ExprPtr vac_av(ExprPtr expr, const OpConnections<std::wstring>& op_connections,

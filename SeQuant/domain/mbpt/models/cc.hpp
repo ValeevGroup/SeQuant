@@ -46,7 +46,7 @@ class CC {
   /// @return whether screening is on or not
   [[nodiscard]] bool screen() const;
 
-  /// @return whether topological optimization in WickTheorem
+  /// @return whether topological optimization is used in WickTheorem
   [[nodiscard]] bool use_topology() const;
 
   /// @brief derives similarity-transformed expressions of mbpt::Operators
@@ -124,7 +124,8 @@ class CC {
   bool use_topology_ = true;
 
   /// @param[in] expr input expression
-  /// @param[in] op_connect list of pairs of operators to be connected
+  /// @param[in] op_connect list of pairs of operators to be connected. Default
+  /// is given by mbpt::default_op_connections().
   /// @note see mbpt::op::vac_av for further details
   auto vac_av(const ExprPtr& expr,
               const OpConnections<mbpt::OpType>& op_connect =
