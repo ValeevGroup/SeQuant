@@ -1005,7 +1005,7 @@ ExprPtr closed_shell_spintrace(
   // antisymmetrizer (A) and fully expanding the anti-symmetric tensors to
   // non-symmetric.
   // full_expansion: it fully expands the antisymmetrizer directly (can be used
-  // for compact-set epns, however it is not an optimized way).
+  // for optimal epns, however it is not an optimized way).
   auto partially_or_fully_expand = [&full_expansion](const ExprPtr& expr) {
     auto temp = expr;
     if (has_tensor(temp, L"A")) {
@@ -1127,12 +1127,27 @@ ExprPtr closed_shell_spintrace(
   }
 }
 
-ExprPtr closed_shell_CC_spintrace(ExprPtr const& expr) {
+container::svector<ResultExpr> closed_shell_spintrace(const ResultExpr& expr,
+                                                      bool full_expansion) {
+  using TraceFunction =
+      ExprPtr (*)(const ExprPtr&,
+                  const container::svector<container::svector<Index>>&, bool);
+
+  return detail::wrap_trace<container::svector<ResultExpr>>(
+      expr, static_cast<TraceFunction>(&closed_shell_spintrace),
+      full_expansion);
+}
+
+ExprPtr closed_shell_CC_spintrace_v1(ExprPtr const& expr,
+                                     ClosedShellCCSpintraceOptions options) {
+  assert(options.method == BiorthogonalizationMethod::V1);
   assert(expr->is<Sum>());
   using ranges::views::transform;
 
   auto const ext_idxs = external_indices(expr);
-  auto st_expr = closed_shell_spintrace(expr, ext_idxs);
+  auto st_expr = options.naive_spintrace
+                     ? spintrace(expr, ext_idxs)
+                     : closed_shell_spintrace(expr, ext_idxs);
   canonicalize(st_expr);
 
   if (!ext_idxs.empty()) {
@@ -1156,23 +1171,16 @@ ExprPtr closed_shell_CC_spintrace(ExprPtr const& expr) {
   return st_expr;
 }
 
-container::svector<ResultExpr> closed_shell_spintrace(
-    const ResultExpr& expr, bool is_direct_full_expansion) {
-  using TraceFunction =
-      ExprPtr (*)(const ExprPtr&,
-                  const container::svector<container::svector<Index>>&, bool);
-
-  return detail::wrap_trace<container::svector<ResultExpr>>(
-      expr, static_cast<TraceFunction>(&closed_shell_spintrace),
-      is_direct_full_expansion);
-}
-
-ExprPtr closed_shell_CC_spintrace_compact_set(ExprPtr const& expr) {
+ExprPtr closed_shell_CC_spintrace_v2(ExprPtr const& expr,
+                                     ClosedShellCCSpintraceOptions options) {
+  assert(options.method == BiorthogonalizationMethod::V2);
   assert(expr->is<Sum>());
   using ranges::views::transform;
 
   auto const ext_idxs = external_indices(expr);
-  auto st_expr = closed_shell_spintrace(expr, ext_idxs);
+  auto st_expr = options.naive_spintrace
+                     ? spintrace(expr, ext_idxs)
+                     : closed_shell_spintrace(expr, ext_idxs);
   canonicalize(st_expr);
 
   if (!ext_idxs.empty()) {
@@ -1226,33 +1234,17 @@ ExprPtr closed_shell_CC_spintrace_compact_set(ExprPtr const& expr) {
   return st_expr;
 }
 
-ExprPtr closed_shell_CC_spintrace_rigorous(ExprPtr const& expr) {
-  assert(expr->is<Sum>());
-  using ranges::views::transform;
-
-  auto const ext_idxs = external_indices(expr);
-  auto st_expr = sequant::spintrace(expr, ext_idxs);
-  canonicalize(st_expr);
-
-  if (!ext_idxs.empty()) {
-    // Remove S operator
-    for (auto& term : *st_expr) {
-      if (term->is<Product>()) term = remove_tensor(term->as<Product>(), L"S");
-    }
-
-    // Biorthogonal transformation
-    st_expr = biorthogonal_transform(st_expr, ext_idxs);
-
-    auto bixs = ext_idxs | transform([](auto&& vec) { return vec[1]; });
-    auto kixs = ext_idxs | transform([](auto&& vec) { return vec[0]; });
-    st_expr =
-        ex<Tensor>(Tensor{L"S", bra(std::move(bixs)), ket(std::move(kixs))}) *
-        st_expr;
+ExprPtr closed_shell_CC_spintrace(ExprPtr const& expr,
+                                  ClosedShellCCSpintraceOptions options) {
+  switch (options.method) {
+    case BiorthogonalizationMethod::V1:
+      return closed_shell_CC_spintrace_v1(expr, options);
+    case BiorthogonalizationMethod::V2:
+      return closed_shell_CC_spintrace_v2(expr, options);
+    default:
+      assert(false && "unreachable code reached");
+      abort();
   }
-
-  simplify(st_expr);
-
-  return st_expr;
 }
 
 /// Collect all indices from an expression
