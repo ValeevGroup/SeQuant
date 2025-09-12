@@ -109,7 +109,8 @@ class SequantEvalScfBTAS final : public SequantEvalScf {
 
     for (auto&& [r, n] : zip(rs, nodes_)) {
       assert(!n.empty());
-      auto const& target_indices = ranges::front(n)->annot();
+      // update_amplitudes assumes that the residuals are in specific layout
+      auto const target_indices = sorted_annot(ranges::front(n)->as_tensor());
       r = funcs[st][log](n, target_indices, data_world_, cman_)
               ->template get<Tensor_t>();
     }
