@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1ab4080d1930c5ba22da9ffb6c36b34b41:
+
+Function sequant::has_tensor
+============================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_spin.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::has_tensor(const ExprPtr&, std::wstring)
+   :project: SeQuant

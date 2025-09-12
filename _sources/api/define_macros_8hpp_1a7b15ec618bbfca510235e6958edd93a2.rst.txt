@@ -1,0 +1,14 @@
+.. _exhale_define_macros_8hpp_1a7b15ec618bbfca510235e6958edd93a2:
+
+Define SEQUANT_PRAGMA_CLANG
+===========================
+
+- Defined in :ref:`file_SeQuant_core_utility_macros.hpp`
+
+
+Define Documentation
+--------------------
+
+
+.. doxygendefine:: SEQUANT_PRAGMA_CLANG
+   :project: SeQuant

@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a0d9a669cc707d5850b07f8e0d2fa177e:
+
+Function sequant::canonicalize(ExprPtr&&, CanonicalizeOptions)
+==============================================================
+
+- Defined in :ref:`file_SeQuant_core_expressions_expr_algorithms.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::canonicalize(ExprPtr&&, CanonicalizeOptions)
+   :project: SeQuant

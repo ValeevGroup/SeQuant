@@ -1,0 +1,26 @@
+.. _exhale_class_classsequant_1_1_vertex_painter:
+
+Template Class VertexPainter
+============================
+
+- Defined in :ref:`file_SeQuant_core_tensor_network_vertex_painter.hpp`
+
+
+Inheritance Relationships
+-------------------------
+
+Base Type
+*********
+
+- ``public sequant::VertexPainterImpl`` (:ref:`exhale_class_classsequant_1_1_vertex_painter_impl`)
+
+
+Class Documentation
+-------------------
+
+
+.. doxygenclass:: sequant::VertexPainter
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

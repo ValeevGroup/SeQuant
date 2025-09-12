@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1detail_1ad5426992244e5c13e9a8129dad659a90:
+
+Template Function sequant::detail::wrap_trace
+=============================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_spin.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::detail::wrap_trace(const ResultExpr&, TraceFunction&&, Args&&...)
+   :project: SeQuant
