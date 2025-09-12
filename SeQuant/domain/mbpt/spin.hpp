@@ -316,12 +316,12 @@ ExprPtr closed_shell_CC_spintrace_rigorous(ExprPtr const& expr);
 /// evaluating the compact equations produced by this.
 /// @warning To work correctly with the cleanup function, the intermediate
 /// expression is internally multiplied by a rescaling factor of $n!/(n!-1)$. If
-/// you need to print the compact-set equations, you must manually compensate
+/// you need to print the optimal equations, you must manually compensate
 /// for this factor and multiply the expression by $(n!-1)/n!$.
 /// @param expr ExprPtr to Sum type with spin orbital indices
 /// @return An expression pointer representing the most compact set of
 /// spin-integrated terms.
-ExprPtr closed_shell_CC_spintrace_compact_set(ExprPtr const& expr);
+ExprPtr closed_shell_CC_spintrace_optimal(ExprPtr const& expr);
 
 /// Collect all indices from an expression
 container::set<Index, Index::LabelCompare> index_list(const ExprPtr& expr);

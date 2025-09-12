@@ -1005,7 +1005,7 @@ ExprPtr closed_shell_spintrace(
   // antisymmetrizer (A) and fully expanding the anti-symmetric tensors to
   // non-symmetric.
   // full_expansion: it fully expands the antisymmetrizer directly (can be used
-  // for compact-set epns, however it is not an optimized way).
+  // for optimal epns, however it is not an optimized way).
   auto partially_or_fully_expand = [&full_expansion](const ExprPtr& expr) {
     auto temp = expr;
     if (has_tensor(temp, L"A")) {
@@ -1167,7 +1167,7 @@ container::svector<ResultExpr> closed_shell_spintrace(
       is_direct_full_expansion);
 }
 
-ExprPtr closed_shell_CC_spintrace_compact_set(ExprPtr const& expr) {
+ExprPtr closed_shell_CC_spintrace_optimal(ExprPtr const& expr) {
   assert(expr->is<Sum>());
   using ranges::views::transform;
 
