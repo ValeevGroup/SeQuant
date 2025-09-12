@@ -28,7 +28,10 @@ int main(int argc, char* argv[]) {
 
   sequant::set_default_context(
       {.index_space_registry_shared_ptr = mbpt::make_min_sr_spaces(),
-       .vacuum = Vacuum::SingleProduct});
+       .vacuum = Vacuum::SingleProduct,
+       .canonicalization_options =
+           CanonicalizeOptions::default_options().copy_and_set(
+               CanonicalizationMethod::Complete)});
   TensorCanonicalizer::register_instance(
       std::make_shared<DefaultTensorCanonicalizer>());
 

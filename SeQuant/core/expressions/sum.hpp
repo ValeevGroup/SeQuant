@@ -280,7 +280,7 @@ class Sum : public Expr {
   }
   virtual ExprPtr rapid_canonicalize(
       CanonicalizeOptions opts =
-          CanonicalizeOptions::default_options().copy_and_set_method(
+          CanonicalizeOptions::default_options().copy_and_set(
               CanonicalizationMethod::Rapid)) override {
     assert(opts.method == CanonicalizationMethod::Rapid);
     return canonicalize_impl(false, opts);

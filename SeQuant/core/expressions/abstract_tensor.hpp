@@ -151,8 +151,9 @@ class AbstractTensor {
   virtual const_any_view_rand _braket() const {
     throw missing_instantiation_for("_braket");
   }
-  /// accesses bra, ket, and aux indices
-  /// @return view of a not necessarily contiguous range of Index objects
+  /// accesses bra, ket, and aux slots
+  /// @return view of a not necessarily contiguous view of bra, ket, and aux
+  /// slots
   virtual const_any_view_rand _braketaux() const {
     throw missing_instantiation_for("_braketaux");
   }

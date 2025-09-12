@@ -133,22 +133,22 @@ ExprPtr append_spin(const ExprPtr& expr,
 /// @return expr an ExprPtr with spin labels removed
 ExprPtr remove_spin(const ExprPtr& expr);
 
-/// @brief Checks the spin symmetry of a pair of indices corresponding to a
-/// particle in tensor notation
-/// @param tensor a tensor with indices containing spin labels
-/// @return true if spin symmetry matches for all pairs of indices
-bool spin_symm_tensor(const Tensor& tensor);
+/// @brief Checks that columns conserve Ms (azimuthal spin qn); only
+/// filled columns (with 2 non-null indices) are considered
+/// @param tensor a tensor
+/// @return true if  columns conserve Ms
+bool ms_conserving_columns(const AbstractTensor& tensor);
 
-/// @brief Checks if spin labels on a tensor are same
-/// @param tensor a tensor with indices containing spin labels
-/// @return true if all spin labels on a tensor are the same
-bool same_spin_tensor(const Tensor& tensor);
+/// @brief Checks if all indices have same ms
+/// @param tensor a tensor
+/// @return true if all indices have same ms
+bool ms_uniform_tensor(const AbstractTensor& tensor);
 
 /// @brief Check if the number of alpha spins in bra and ket are equal;
 /// beta spins will match if total number of indices is the same
 /// @param tensor with spin indices
 /// @return true if number of alpha spins match in bra and ket
-bool can_expand(const Tensor& tensor);
+bool can_expand(const AbstractTensor& tensor);
 
 /// @brief expand an antisymmetric tensor
 ///
