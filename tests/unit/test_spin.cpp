@@ -727,7 +727,7 @@ SECTION("Closed-shell spintrace CCD") {
       const auto input = ex<Sum>(ExprPtrList{parse_expr(
           L"1/4 g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_1,i_2}", Symmetry::Antisymm)});
 
-      auto result = closed_shell_CC_spintrace_compact_set(input);
+      auto result = closed_shell_CC_spintrace_optimal(input);
       REQUIRE_THAT(result,
                    EquivalentTo(L"- g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_2,i_1} + "
                                 L"2 g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_1,i_2}"));
@@ -748,7 +748,7 @@ SECTION("Closed-shell spintrace CCD") {
                                 "g{a1<i1,i2>,a2<i1,i2>;i1,i2}:N-C "
                                 "t{i1,i2;a2<i1,i2>,a1<i1,i2>}:N-C"));
     }
-    {  // CSV (aka PNO) for compact-set
+    {  // CSV (aka PNO) for optimal equations
       const auto pno_ccd_energy_so = parse_expr(
           L"1/4 g{a1<i1,i2>, a2<i1,i2>;i1, i2}:A-C t{i1,i2;a1<i1,i2>, "
           L"a2<i1,i2>}:A");
@@ -757,7 +757,7 @@ SECTION("Closed-shell spintrace CCD") {
       const auto pno_ccd_energy_so_as_sum =
           ex<Sum>(ExprPtrList{pno_ccd_energy_so});
       auto pno_ccd_energy_sf =
-          closed_shell_CC_spintrace_compact_set(pno_ccd_energy_so_as_sum);
+          closed_shell_CC_spintrace_optimal(pno_ccd_energy_so_as_sum);
       REQUIRE_THAT(pno_ccd_energy_sf,
                    EquivalentTo("2 g{a1<i1,i2>,a2<i1,i2>;i1,i2}:N-C "
                                 "t{i1,i2;a1<i1,i2>,a2<i1,i2>}:N-C - "
@@ -1028,7 +1028,7 @@ SECTION("Closed-shell spintrace CCSDT terms") {
 
     // the new efficient method, spintracing with partial expansion, then
     // expanding by S_map ( this method is used in
-    // closed-shell-cc-spintrace-compact-set)
+    // closed_shell_CC_spintrace_optimal)
     auto result_2 = closed_shell_spintrace(
         input, {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}, {L"i_3", L"a_3"}});
     simplify(result_2);
@@ -1059,13 +1059,13 @@ SECTION("Closed-shell spintrace CCSDT terms") {
             "g{a_1,a_3;a_4,a_5}:N-C-S * t{a_2,a_4,a_5;i_1,i_3,i_2}:N-C-S"));
   }
 
-  {  // ppl term in compact-set: results in 1 term
+  {  // ppl term in optimal: results in 1 term
     const auto input = ex<Sum>(ExprPtrList{
         parse_expr(L"1/24 A{i_1,i_2,i_3;a_1,a_2,a_3} * "
                    L"g{a_1,a_2;a_4,a_5} * t{a_3,a_4,a_5;i_1,i_2,i_3}",
                    Symmetry::Antisymm)});
 
-    auto result = closed_shell_CC_spintrace_compact_set(input);
+    auto result = closed_shell_CC_spintrace_optimal(input);
     // multiply the resut by 6/5 to revert the rescaling factor
     result *= ex<Constant>(rational{5, 6});
 

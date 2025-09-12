@@ -16,8 +16,8 @@ if (NOT SEQUANT_SKIP_LONG_TESTS)
         list(APPEND TEST_CASES
             # Single-Reference closed-shell Coupled-Cluster equation generation (fast spin-traced)
             "stcc.cpp"
-            # Single-Reference Coupled-Cluster closed-shell compact-set equation generation (full expansion spin-traced)
-            "stcc_compact_set.cpp"
+            # Single-Reference closed-shell Coupled-Cluster optimal equation generation (fast spin-traced)
+            "stcc_optimal.cpp"
             # Single-Reference closed-shell Coupled-Cluster equation generation (rigorous spin-traced)
             "stcc_rigorous.cpp"
         )
