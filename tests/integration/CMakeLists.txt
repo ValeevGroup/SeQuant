@@ -15,9 +15,9 @@ if (NOT SEQUANT_SKIP_LONG_TESTS)
         # these examples require Eigen for full functionality
         list(APPEND TEST_CASES
             # Single-Reference closed-shell Coupled-Cluster equation generation (fast spin-traced)
-            "stcc.cpp"
-            # Single-Reference closed-shell Coupled-Cluster optimal equation generation (fast spin-traced)
-            "stcc_optimal.cpp"
+            "stcc_v0.cpp"
+            # Single-Reference closed-shell Coupled-Cluster more compact equation generation (fast spin-traced)
+            "stcc_v1.cpp"
             # Single-Reference closed-shell Coupled-Cluster equation generation (rigorous spin-traced)
             "stcc_rigorous.cpp"
         )

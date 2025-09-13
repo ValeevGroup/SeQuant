@@ -284,7 +284,7 @@ container::svector<ResultExpr> closed_shell_spintrace(
 /// @details The external indices are deduced from Antisymmetrization operator
 /// @param expr ExprPtr to Sum type with spin orbital indices
 /// @return an expression with spin integrated/adapted
-ExprPtr closed_shell_CC_spintrace(ExprPtr const& expr);
+ExprPtr closed_shell_CC_v0_spintrace(ExprPtr const& expr);
 
 /// \brief Same as \c closed_shell_CC_spintrace except internally uses
 ///        \c sequant::spintrace instead of sequant::closed_shell_spintrace.
@@ -313,15 +313,18 @@ ExprPtr closed_shell_CC_spintrace_rigorous(ExprPtr const& expr);
 /// closed_shell_CC_spintrace but becomes equivalent if the biorthogonal
 /// cleanup (particular linear combination of permutation operators) is applied.
 /// The biorthogonal cleanup is performed in numeric form, after the numerically
-/// evaluating the compact equations produced by this.
+/// evaluating more compact equations produced by this.
 /// @warning To work correctly with the cleanup function, the intermediate
 /// expression is internally multiplied by a rescaling factor of $n!/(n!-1)$. If
-/// you need to print the optimal equations, you must manually compensate
+/// you need to print the v1 equations, you must manually compensate
 /// for this factor and multiply the expression by $(n!-1)/n!$.
 /// @param expr ExprPtr to Sum type with spin orbital indices
-/// @return An expression pointer representing the most compact set of
+/// @return An expression pointer representing more compact
 /// spin-integrated terms.
-ExprPtr closed_shell_CC_spintrace_optimal(ExprPtr const& expr);
+ExprPtr closed_shell_CC_v1_spintrace(ExprPtr const& expr);
+
+/// Dispatches to the default closed-shell CC spin-trace (v1)
+ExprPtr closed_shell_CC_spintrace(ExprPtr const& expr);
 
 /// Collect all indices from an expression
 container::set<Index, Index::LabelCompare> index_list(const ExprPtr& expr);

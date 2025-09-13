@@ -631,7 +631,7 @@ class Result {
   [[nodiscard]] virtual ResultPtr antisymmetrize(size_t bra_rank) const = 0;
 
   /// \brief Implements "biorthogonal cleanup" of closed-shell
-  /// optimal equations produced via method of
+  /// more compact spintraced equations produced via method of
   /// <a href="https://arxiv.org/abs/1805.00565">Wang and Knizia</a>.
   ///
   /// For 3-body residual (`bra_rank=3`) this implements Eq. (41) of the
