@@ -1467,7 +1467,7 @@ std::vector<ExprPtr> open_shell_P_op_vector(const Tensor& A) {
 std::vector<ExprPtr> open_shell_spintrace(
     const ExprPtr& expr,
     const container::svector<container::svector<Index>>& ext_index_groups,
-    const int single_spin_case) {
+    std::optional<int> target_spin_case) {
   if (expr->is<Constant>() || expr->is<Variable>()) {
     return std::vector<ExprPtr>{expr};
   }
@@ -1553,8 +1553,8 @@ std::vector<ExprPtr> open_shell_spintrace(
 
   // For a single spin case, keep only the relevant spin case
   // PS: all alpha indexing start at 0
-  if (single_spin_case) {
-    auto external_replacement_map = e_rep.at(single_spin_case);
+  if (target_spin_case) {
+    auto external_replacement_map = e_rep.at(*target_spin_case);
     e_rep.clear();
     e_rep.push_back(external_replacement_map);
   }
@@ -1634,7 +1634,7 @@ std::vector<ExprPtr> open_shell_spintrace(
     result.push_back(std::make_shared<Sum>(e_result));
   }  // loop over external indices
 
-  if (single_spin_case) {
+  if (target_spin_case) {
     assert(result.size() == 1 &&
            "Spin-specific case must return one expression.");
   }
