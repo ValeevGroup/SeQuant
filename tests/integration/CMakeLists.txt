@@ -14,12 +14,8 @@ if (NOT SEQUANT_SKIP_LONG_TESTS)
     if (TARGET Eigen3::Eigen)
         # these examples require Eigen for full functionality
         list(APPEND TEST_CASES
-            # Single-Reference closed-shell Coupled-Cluster equation generation (fast spin-traced)
-            "stcc_v0.cpp"
-            # Single-Reference closed-shell Coupled-Cluster more compact equation generation (fast spin-traced)
-            "stcc_v1.cpp"
-            # Single-Reference closed-shell Coupled-Cluster equation generation (rigorous spin-traced)
-            "stcc_rigorous.cpp"
+            # Single-Reference closed-shell Coupled-Cluster equation generation
+            "stcc.cpp -> |2 v1 naive|2 v1|2 v2|3 v1|3 v2|4 v1|4 v2"
         )
     endif()
 else()
@@ -27,6 +23,13 @@ else()
         # Single-Reference Coupled-Cluster equation generation (reduced test set)
         "srcc.cpp ->  |2 t csv sf"
     )
+    if (TARGET Eigen3::Eigen)
+        # these examples require Eigen for full functionality
+        list(APPEND TEST_CASES
+                # Single-Reference closed-shell Coupled-Cluster equation generation
+                "stcc.cpp -> |2 v1 naive|3 v1|3 v2"
+        )
+    endif()
 endif()
 
 foreach(current IN LISTS TEST_CASES)
