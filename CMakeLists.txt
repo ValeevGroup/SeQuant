@@ -233,7 +233,6 @@ endif()
 set(SeQuant_src
         ${PROJECT_BINARY_DIR}/SeQuant/version.hpp
         SeQuant/core/algorithm.hpp
-        SeQuant/core/any.hpp
         SeQuant/core/asy_cost.cpp
         SeQuant/core/asy_cost.hpp
         SeQuant/core/attr.hpp
