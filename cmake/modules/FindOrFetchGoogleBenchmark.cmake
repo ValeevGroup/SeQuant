@@ -10,7 +10,7 @@ if (NOT TARGET benchmark::benchmark)
         GIT_SHALLOW
         EXCLUDE_FROM_ALL
         SYSTEM
-        FIND_PACKAGE_ARGS NAMES benchmark
+        FIND_PACKAGE_ARGS 1.9.3 NAMES benchmark
     )
 
     FetchContent_MakeAvailable(googlebenchmark)
