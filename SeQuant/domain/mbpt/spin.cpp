@@ -1005,7 +1005,7 @@ ExprPtr closed_shell_spintrace(
   // antisymmetrizer (A) and fully expanding the anti-symmetric tensors to
   // non-symmetric.
   // full_expansion: it fully expands the antisymmetrizer directly (can be used
-  // for optimal epns, however it is not an optimized way).
+  // for v2 eqs, however it is not an optimized way).
   auto partially_or_fully_expand = [&full_expansion](const ExprPtr& expr) {
     auto temp = expr;
     if (has_tensor(temp, L"A")) {
@@ -1224,7 +1224,7 @@ ExprPtr closed_shell_CC_spintrace_v2(ExprPtr const& expr,
   }
 
   simplify(st_expr);
-  // std::wcout << "final eqns after symm: "
+  // std::wcout << "final eqs after symm: "
   //            << sequant::to_latex_align(
   //                   sequant::ex<sequant::Sum>(
   //                       sequant::opt::reorder(st_expr->as<sequant::Sum>())),
