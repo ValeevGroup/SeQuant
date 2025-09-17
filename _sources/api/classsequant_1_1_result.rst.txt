@@ -1,0 +1,29 @@
+.. _exhale_class_classsequant_1_1_result:
+
+Class Result
+============
+
+- Defined in :ref:`file_SeQuant_domain_eval_result.hpp`
+
+
+Inheritance Relationships
+-------------------------
+
+Derived Types
+*************
+
+- ``public sequant::ResultScalar< T >`` (:ref:`exhale_class_classsequant_1_1_result_scalar`)
+- ``public sequant::ResultTensorBTAS< T >`` (:ref:`exhale_class_classsequant_1_1_result_tensor_b_t_a_s`)
+- ``public sequant::ResultTensorOfTensorTA< ArrayT, typename >`` (:ref:`exhale_class_classsequant_1_1_result_tensor_of_tensor_t_a`)
+- ``public sequant::ResultTensorTA< ArrayT, typename >`` (:ref:`exhale_class_classsequant_1_1_result_tensor_t_a`)
+
+
+Class Documentation
+-------------------
+
+
+.. doxygenclass:: sequant::Result
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

@@ -1,0 +1,14 @@
+.. _exhale_enum_namespacesequant_1adcf6710961a218919db03929ad31bc96:
+
+Enum BiorthogonalizationMethod
+==============================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_spin.hpp`
+
+
+Enum Documentation
+------------------
+
+
+.. doxygenenum:: sequant::BiorthogonalizationMethod
+   :project: SeQuant

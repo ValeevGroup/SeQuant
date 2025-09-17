@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a13cdc83f724cad0904471255851dc3a8:
+
+Function sequant::remove_spin
+=============================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_spin.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::remove_spin(const ExprPtr&)
+   :project: SeQuant

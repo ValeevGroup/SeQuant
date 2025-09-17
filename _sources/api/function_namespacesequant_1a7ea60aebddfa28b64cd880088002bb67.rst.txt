@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a7ea60aebddfa28b64cd880088002bb67:
+
+Function sequant::expand_A_op(const ExprPtr&)
+=============================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_spin.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::expand_A_op(const ExprPtr&)
+   :project: SeQuant

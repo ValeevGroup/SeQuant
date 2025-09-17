@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1detail_1a8ad6b2947dd0303d0b0315113e3b82bf:
+
+Function sequant::detail::next_export_expr_id
+=============================================
+
+- Defined in :ref:`file_SeQuant_core_export_export_expr.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::detail::next_export_expr_id()
+   :project: SeQuant

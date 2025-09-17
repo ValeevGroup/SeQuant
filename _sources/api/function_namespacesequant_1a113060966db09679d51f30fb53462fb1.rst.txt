@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a113060966db09679d51f30fb53462fb1:
+
+Function sequant::canonicalize(ResultExpr&&)
+============================================
+
+- Defined in :ref:`file_SeQuant_core_expressions_result_expr.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::canonicalize(ResultExpr&&)
+   :project: SeQuant

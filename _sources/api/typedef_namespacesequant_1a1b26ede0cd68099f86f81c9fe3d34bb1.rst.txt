@@ -1,0 +1,14 @@
+.. _exhale_typedef_namespacesequant_1a1b26ede0cd68099f86f81c9fe3d34bb1:
+
+Typedef sequant::WstrList
+=========================
+
+- Defined in :ref:`file_SeQuant_core_index.hpp`
+
+
+Typedef Documentation
+---------------------
+
+
+.. doxygentypedef:: sequant::WstrList
+   :project: SeQuant

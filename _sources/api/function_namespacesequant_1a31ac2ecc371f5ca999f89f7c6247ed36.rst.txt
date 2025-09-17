@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a31ac2ecc371f5ca999f89f7c6247ed36:
+
+Function sequant::S_replacement_maps
+====================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_spin.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::S_replacement_maps(const Tensor&)
+   :project: SeQuant

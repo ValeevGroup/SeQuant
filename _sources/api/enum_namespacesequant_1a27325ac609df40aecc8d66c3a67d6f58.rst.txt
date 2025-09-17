@@ -1,0 +1,14 @@
+.. _exhale_enum_namespacesequant_1a27325ac609df40aecc8d66c3a67d6f58:
+
+Enum MemoryLayout
+=================
+
+- Defined in :ref:`file_SeQuant_core_export_reordering_context.hpp`
+
+
+Enum Documentation
+------------------
+
+
+.. doxygenenum:: sequant::MemoryLayout
+   :project: SeQuant

@@ -1,0 +1,113 @@
+
+.. _file_SeQuant_core_wstring.hpp:
+
+File wstring.hpp
+================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core>` (``SeQuant/core``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/wstring.hpp``)
+-----------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_wstring.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/utility/macros.hpp`` (:ref:`file_SeQuant_core_utility_macros.hpp`)
+
+- ``SeQuant/core/utility/string.hpp`` (:ref:`file_SeQuant_core_utility_string.hpp`)
+
+- ``boost/locale/encoding_utf.hpp``
+
+- ``cmath``
+
+- ``concepts``
+
+- ``string`` (:ref:`file_SeQuant_core_utility_string.cpp`)
+
+- ``string_view``
+
+- ``type_traits``
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_core_asy_cost.cpp`
+
+- :ref:`file_SeQuant_core_eval_expr.cpp`
+
+- :ref:`file_SeQuant_core_index.cpp`
+
+- :ref:`file_SeQuant_core_index_space_registry.hpp`
+
+- :ref:`file_SeQuant_core_latex.hpp`
+
+- :ref:`file_SeQuant_core_latex.ipp`
+
+- :ref:`file_SeQuant_core_rational.hpp`
+
+- :ref:`file_SeQuant_core_space.hpp`
+
+- :ref:`file_SeQuant_core_tensor_network.cpp`
+
+- :ref:`file_SeQuant_core_tensor_network_v2.cpp`
+
+- :ref:`file_SeQuant_core_wolfram.hpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+- :ref:`namespace_sequant__detail`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1_1detail_1a785547f6ef47fbf695d01ec9146c5d55`
+
+- :ref:`exhale_function_namespacesequant_1ab6c5861e50921ae6172ceac3ef29bd7a`
+
+- :ref:`exhale_function_namespacesequant_1a8b3f62b488e9eb5152db5b5f77f182e7`
+
+- :ref:`exhale_function_namespacesequant_1a001984d7c3a0dc473be644d4c2a95c68`
+
+- :ref:`exhale_function_namespacesequant_1aaf54287d033a279369da95bf4509207d`
+
+- :ref:`exhale_function_namespacesequant_1accc4967667f64928f9fb5a45b6ac1844`
+
+- :ref:`exhale_function_namespacesequant_1af6495449b17b85bec48b4e1a89f7570f`
+
+
+Defines
+-------
+
+
+- :ref:`exhale_define_wstring_8hpp_1a81ef57fa6b2d82eee3006de055773a34`
+
