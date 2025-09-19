@@ -469,27 +469,56 @@ TEST_CASE("mbpt", "[mbpt]") {
               L"{ \\bigl({\\hat{h¹}}{[{z}_{1}]} + {\\hat{t¹}_{2}}{[{z}_{1}]} + "
               L"{\\hat{t¹}_{1}}{[{z}_{1}]}\\bigr) }");
 
-      // TODO: Confirm if the products have the intended behavior
       auto pdt1 = h1 * h1_2;
       simplify(pdt1);
-      std::wcout << "pdt1: " << to_latex(pdt1) << std::endl;
+      // std::wcout << "pdt1: " << to_latex(pdt1) << std::endl;
       REQUIRE(to_latex(pdt1) ==
               L"{{\\hat{h¹}}{[{z}_{1}]}{\\hat{h¹}}{[{z}_{1}, {z}_{2}]}}");
 
       auto pdt2 = h1 * pt1;
       simplify(pdt2);
-      std::wcout << "pdt1: " << to_latex(pdt2) << std::endl;
+      // std::wcout << "pdt1: " << to_latex(pdt2) << std::endl;
       REQUIRE(to_latex(pdt2) ==
               L"{ \\bigl({{\\hat{h¹}}{[{z}_{1}]}{\\hat{t¹}_{1}}{[{z}_{1}]}} + "
               L"{{\\hat{h¹}}{[{z}_{1}]}{\\hat{t¹}_{2}}{[{z}_{1}]}}\\bigr) }");
 
-      // TODO: Enable tensor level tests later after fixing the ordinals of
-      // batching indices
-
-      // auto sum1_t = lower_to_tensor_form(sum1);
+      // lowering to tensor form
+      // TODO: Rewrite using SimplifiesTo, but will wait until the upcoming
+      // refactor
+      auto sum1_t = simplify(lower_to_tensor_form(sum1));
       // std::wcout << "sum1_t: " << to_latex(sum1_t) << std::endl;
-      // auto sum2_t = lower_to_tensor_form(sum2);
+      REQUIRE(to_latex(sum1_t) ==
+              L"{{{2}}{\\tensor*{h¹}{*^{\\kappa_1}_{\\kappa_2}}[{z_1}]}{"
+              L"\\tensor*{\\tilde{a}}{*^{\\kappa_2}_{\\kappa_1}}}}");
+
+      auto sum2_t = simplify(lower_to_tensor_form(sum2));
       // std::wcout << "sum2_t: " << to_latex(sum2_t) << std::endl;
+      REQUIRE(to_latex(sum2_t) ==
+              L"{ "
+              L"\\bigl({{\\tensor*{\\tilde{a}}{*^{a_1}_{i_1}}}{\\tensor*{t¹}{*^"
+              L"{i_1}_{a_1}}[{z_1}]}} + "
+              L"{{\\tensor*{h¹}{*^{\\kappa_1}_{\\kappa_2}}[{z_1}]}{\\tensor*{"
+              L"\\tilde{a}}{*^{\\kappa_2}_{\\kappa_1}}}} + "
+              L"{{{\\frac{1}{4}}}{\\tensor*{\\tilde{a}}{*^{a_1}_{i_1}*^{a_2}_{"
+              L"i_2}}}{\\tensor*{\\bar{t¹}}{*^{i_1}_{a_1}*^{i_2}_{a_2}}[{z_1}]}"
+              L"}\\bigr) }");
+
+      auto expr3_t = simplify(lower_to_tensor_form(sum2 * h1_2));
+      // std::wcout << "expr3_t: " << to_latex(expr3_t) << std::endl;
+      REQUIRE(
+          to_latex(expr3_t) ==
+          L"{ "
+          L"\\bigl({{\\tensor*{h¹}{*^{\\kappa_1}_{\\kappa_2}}[{z_1},{z_2}]}{"
+          L"\\tensor*{\\tilde{a}}{*^{a_1}_{i_1}}}{\\tensor*{\\tilde{a}}{*^{"
+          L"\\kappa_2}_{\\kappa_1}}}{\\tensor*{t¹}{*^{i_1}_{a_1}}[{z_1}]}} + "
+          L"{{\\tensor*{h¹}{*^{\\kappa_3}_{\\kappa_4}}[{z_1}]}{\\tensor*{h¹}{*^"
+          L"{\\kappa_1}_{\\kappa_2}}[{z_1},{z_2}]}{\\tensor*{\\tilde{a}}{*^{"
+          L"\\kappa_4}_{\\kappa_3}}}{\\tensor*{\\tilde{a}}{*^{\\kappa_2}_{"
+          L"\\kappa_1}}}} + "
+          L"{{{\\frac{1}{4}}}{\\tensor*{\\tilde{a}}{*^{a_1}_{i_1}*^{a_2}_{i_2}}"
+          L"}{\\tensor*{\\bar{t¹}}{*^{i_1}_{a_1}*^{i_2}_{a_2}}[{z_1}]}{"
+          L"\\tensor*{h¹}{*^{\\kappa_1}_{\\kappa_2}}[{z_1},{z_2}]}{\\tensor*{"
+          L"\\tilde{a}}{*^{\\kappa_2}_{\\kappa_1}}}}\\bigr) }");
     }
   }
 
