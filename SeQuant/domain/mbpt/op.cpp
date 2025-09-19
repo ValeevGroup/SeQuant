@@ -285,7 +285,6 @@ qns_t combine(qns_t a, qns_t b) {
   qns_t result;
 
   if (get_default_context().vacuum() == Vacuum::Physical) {
-    qns_t result;
     const auto ncontr = qninterval_t{0, std::min(b[0].upper(), a[1].upper())};
     const auto nc = nonnegative(a[0] + b[0] - ncontr);
     const auto na = nonnegative(a[1] + b[1] - ncontr);
