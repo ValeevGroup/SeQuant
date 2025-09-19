@@ -5,17 +5,21 @@
 #ifndef SEQUANT_TAG_HPP
 #define SEQUANT_TAG_HPP
 
-#include <SeQuant/core/any.hpp>
 #include <SeQuant/core/meta.hpp>
+
+#include <any>
+#include <cassert>
 
 namespace sequant {
 
-// prefer std::any, if available
-#ifdef SEQUANT_HAS_CXX17_ANY
-using std::any;
-using std::any_cast;
-using std::bad_any_cast;
-#else
+class bad_any_comparable_cast : public std::bad_any_cast {
+ public:
+  bad_any_comparable_cast() = default;
+  virtual ~bad_any_comparable_cast() {}
+  virtual const char *what() const noexcept {
+    return "Bad any_comparable_cast";
+  }
+};
 
 namespace detail {
 
@@ -297,8 +301,6 @@ class Taggable {
     return !(a == b);
   }
 };
-
-#endif  // SEQUANT_HAS_CXX17_ANY
 
 }  // namespace sequant
 

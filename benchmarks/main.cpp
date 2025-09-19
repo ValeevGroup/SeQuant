@@ -7,6 +7,8 @@
 using namespace sequant;
 
 int main(int argc, char *argv[]) {
+  benchmark::MaybeReenterWithoutASLR(argc, argv);
+
   // Disable multithreading
   set_num_threads(1);
   set_locale();

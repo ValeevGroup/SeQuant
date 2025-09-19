@@ -8,7 +8,7 @@ if (NOT TARGET pybind11::module)
         GIT_SHALLOW
         EXCLUDE_FROM_ALL
         SYSTEM
-        FIND_PACKAGE_ARGS 3 NAMES pybind11
+        FIND_PACKAGE_ARGS ${SEQUANT_OLDEST_PYBIND11_VERSION} NAMES pybind11
     )
 
     FetchContent_MakeAvailable(Pybind11)

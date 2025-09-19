@@ -76,6 +76,15 @@ class ExprPtr : public std::shared_ptr<Expr> {
   /// @pre `this->operator bool()`
   Expr &&operator*() &&;
 
+  // n.b. equality comparison is deep
+
+  /// ExprPtr is equal to a null pointer if it's uninitialized
+  friend inline bool operator==(const ExprPtr &x, std::nullptr_t) {
+    return x.get() == nullptr;
+  }
+
+  friend bool operator==(const ExprPtr &x, const ExprPtr &y);
+
   /// in-place addition operator
 
   /// if this is non-null, adds @c other to the contained expressions, otherwise
@@ -121,16 +130,6 @@ class ExprPtr : public std::shared_ptr<Expr> {
 
   std::wstring to_latex() const;
 };  // class ExprPtr
-
-/// ExprPtr is equal to a null pointer if it's uninitialized
-inline bool operator==(const ExprPtr &x, std::nullptr_t) {
-  return x.get() == nullptr;
-}
-
-/// ExprPtr is equal to a null pointer if it's uninitialized
-inline bool operator==(std::nullptr_t, const ExprPtr &x) {
-  return x.get() == nullptr;
-}
 
 /// make an ExprPtr to a new object of type T
 /// @tparam T a class derived from Expr

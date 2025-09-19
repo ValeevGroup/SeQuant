@@ -49,11 +49,11 @@ struct mask<Spin> {
 };
 
 /// quantum numbers tags related to LCAO basis traits
-/// \note sLCAO basis traits use 3rd and 4th rightmost bits
+/// \note LCAO basis traits use 3rd and 4th rightmost bits
 enum class LCAOQNS : bitset_t {
   ao = 0b000100,
-  pao = 0b001000,  // projected AO space denotes unoccupied spaces made from AO
-                   // basis and orthogonal to occupied orbitals
+  pao = 0b001000  // projected AO space denotes unoccupied spaces made
+                  // from AO basis and orthogonal to occupied orbitals
 };
 
 template <>

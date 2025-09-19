@@ -133,22 +133,22 @@ ExprPtr append_spin(const ExprPtr& expr,
 /// @return expr an ExprPtr with spin labels removed
 ExprPtr remove_spin(const ExprPtr& expr);
 
-/// @brief Checks the spin symmetry of a pair of indices corresponding to a
-/// particle in tensor notation
-/// @param tensor a tensor with indices containing spin labels
-/// @return true if spin symmetry matches for all pairs of indices
-bool spin_symm_tensor(const Tensor& tensor);
+/// @brief Checks that columns conserve Ms (azimuthal spin qn); only
+/// filled columns (with 2 non-null indices) are considered
+/// @param tensor a tensor
+/// @return true if  columns conserve Ms
+bool ms_conserving_columns(const AbstractTensor& tensor);
 
-/// @brief Checks if spin labels on a tensor are same
-/// @param tensor a tensor with indices containing spin labels
-/// @return true if all spin labels on a tensor are the same
-bool same_spin_tensor(const Tensor& tensor);
+/// @brief Checks if all indices have same ms
+/// @param tensor a tensor
+/// @return true if all indices have same ms
+bool ms_uniform_tensor(const AbstractTensor& tensor);
 
 /// @brief Check if the number of alpha spins in bra and ket are equal;
 /// beta spins will match if total number of indices is the same
 /// @param tensor with spin indices
 /// @return true if number of alpha spins match in bra and ket
-bool can_expand(const Tensor& tensor);
+bool can_expand(const AbstractTensor& tensor);
 
 /// @brief expand an antisymmetric tensor
 ///
@@ -253,18 +253,23 @@ ExprPtr WK_biorthogonalization_filter(
     ExprPtr expr,
     const container::svector<container::svector<Index>>& ext_idxs);
 
-/// @brief Transforms an expression from spin orbital to spatial orbitals
-/// @details This functions is designed for integrating spin out of expression
-/// with Coupled Cluster equations in mind.
-/// @attention This function may fail on arbitrarily created expressions that
-/// lacks proper index attributes.
-/// @param expr ExprPtr with spin orbital indices
+// clang-format off
+/// @brief Traces out spin degrees of freedom from fermionic operator moments
+/// @details This function is designed for integrating spin out of
+/// expressions obtained as (k,k)-moment of a fermionic operator:
+/// A_{p_1 .. p_k}^{q_1 .. q_k} <a^{p_1 .. p_k}_{q_1 .. q_k} op>
+/// with A antisymmetric tensor, op an arbitrary fermionic operator, and
+/// the expectation value is with respect to a closed-shell Fermi vacuum.
+/// @param expr an input expression
 /// @param ext_index_groups groups of external indices
 /// @param full_expansion if true, we first fully expand the
-/// anti-symmetrizer, which makes spintracing expensive because of the large
-/// number of terms. If false, we exapnd it in terms of the symmetrizer,
+/// antisymmetrizer, which makes spintracing expensive because of the large
+/// number of terms. If false, we expand it in terms of the symmetrizer,
 /// which results in a partial expansion.
-/// @return an expression with spin integrated/adapted
+/// @return the spin-free form of expr
+/// @warning the "antisymmetrizer" tensor A is assumed to be at the front of each tensor
+/// network, hence must use "complete" canonicalization to produce the input expression.
+// clang-format on
 ExprPtr closed_shell_spintrace(
     const ExprPtr& expr,
     const container::svector<container::svector<Index>>& ext_index_groups = {},
@@ -273,55 +278,64 @@ ExprPtr closed_shell_spintrace(
 container::svector<ResultExpr> closed_shell_spintrace(
     const ResultExpr& expr, bool full_expansion = false);
 
-/// @brief spin-traces spin-orbital CC-style equations for closed-shell
-/// spin-restricted states
-///
-/// Spin-traces CC-style equations (obtained by projection onto
-/// replacement manifolds) assuming spin-restricted closed-shell reference,
-/// followed by biorthogonal transform (see ). It correctly factors out the
-/// particle symmetrizer to reduce the number of terms in the intermediate
-/// manipulations.
-/// @details The external indices are deduced from Antisymmetrization operator
-/// @param expr ExprPtr to Sum type with spin orbital indices
-/// @return an expression with spin integrated/adapted
-ExprPtr closed_shell_CC_spintrace(ExprPtr const& expr);
+// clang-format off
+/// biorthogonalization variants
+enum class BiorthogonalizationMethod {
+  /// standard biorthogonalization method
+  V1,
+  /// improved Wang-Knizia biorthogonalization (DOI 10.48550/arXiv.1805.00565), with factored out "cleanup" operator (expressed as a linear combination of permutations)
+  V2
+};
+// clang-format on
 
-/// \brief Same as \c closed_shell_CC_spintrace except internally uses
-///        \c sequant::spintrace instead of sequant::closed_shell_spintrace.
-/// \warning this is extremely slow and should only be used for reference
-/// purposes
-ExprPtr closed_shell_CC_spintrace_rigorous(ExprPtr const& expr);
+/// controls behavior of biorthogonal closed-shell spin-tracing
+struct ClosedShellCCSpintraceOptions {
+  BiorthogonalizationMethod method = BiorthogonalizationMethod::V2;
+  /// set to true to use sequant::spintrace which does not assume closed-shell
+  /// (spin-free) basis and thus has an exponential cost;
+  /// the default is to use closed_shell_spintrace, which is more efficient
+  bool naive_spintrace = false;
+};
 
-/// @brief same as closed_shell_CC_spintrace but way more efficient and
-/// produces more compact equations
-///
-/// The algorithm:
+// clang-format off
+/// @brief like closed_shell_spintrace but transforms spin-free moments to biorthogonal form
+/// The algorithm (most steps are the same in V1 and V2):
 /// - factor out symmetrizer from the antisymmetrizer,
 ///   "set it aside" (remove from the expression), and
-///   expand the rest of the antisymmetricer.
+///   expand the rest of the antisymmetrizer.
 /// - spin-trace the resulting expression assuming spin-restricted basis and
 ///   closed-shell reference
 /// - biorthogonalize
+/// - V2 only: collect terms that differ only by external index permutation
+/// (i.e. have same colored graph hash), for each group select the terms with
+/// the largest coefficients)
 /// - apply the particle symmetrizer and simplify
-/// - group terms that differ only by external index permutation (i.e. have same
-/// colored graph hash), for each group select the terms with the largest
-/// coefficients)
-/// - multiply by the particle symmetrizer and simplify (this combines terms
-/// that differ only by particle permutations)
 ///
-/// The produced expression is not equivalent to that produced by
-/// closed_shell_CC_spintrace but becomes equivalent if the biorthogonal
-/// cleanup (particular linear combination of permutation operators) is applied.
-/// The biorthogonal cleanup is performed in numeric form, after the numerically
-/// evaluating the compact equations produced by this.
-/// @warning To work correctly with the cleanup function, the intermediate
-/// expression is internally multiplied by a rescaling factor of $n!/(n!-1)$. If
-/// you need to print the compact-set equations, you must manually compensate
-/// for this factor and multiply the expression by $(n!-1)/n!$.
-/// @param expr ExprPtr to Sum type with spin orbital indices
-/// @return An expression pointer representing the most compact set of
-/// spin-integrated terms.
-ExprPtr closed_shell_CC_spintrace_compact_set(ExprPtr const& expr);
+/// The V2 method produces an expression that becomes equivalent that of V1 by
+/// application of if the biorthogonal cleanup (particular linear combination of
+/// permutation operators) is applied. The biorthogonal cleanup should be
+/// performed numerically.
+/// @warning the antisymmetrizer is assumed to be at the front of each tensor
+/// network, hence must use "complete" canonicalization to produce the input expression.
+/// @param expr input expression
+/// @param options optional parameter controlling the algorithm selection and
+///                other traits; the default is to use
+///                the V2 method
+// clang-format on
+ExprPtr closed_shell_CC_spintrace(ExprPtr const& expr,
+                                  ClosedShellCCSpintraceOptions options = {});
+
+/// @sa closed_shell_CC_spintrace
+ExprPtr closed_shell_CC_spintrace_v1(
+    ExprPtr const& expr,
+    ClosedShellCCSpintraceOptions options = {
+        .method = BiorthogonalizationMethod::V1, .naive_spintrace = false});
+
+/// @sa closed_shell_CC_spintrace
+ExprPtr closed_shell_CC_spintrace_v2(
+    ExprPtr const& expr,
+    ClosedShellCCSpintraceOptions options = {
+        .method = BiorthogonalizationMethod::V2, .naive_spintrace = false});
 
 /// Collect all indices from an expression
 container::set<Index, Index::LabelCompare> index_list(const ExprPtr& expr);
@@ -350,22 +364,41 @@ std::vector<ExprPtr> open_shell_A_op(const Tensor& A);
 /// @warning This function assumes the antisymmetrizer (A) has a canonical form
 std::vector<ExprPtr> open_shell_P_op_vector(const Tensor& A);
 
-/// @brief Generates spin expressions to be used for open-shell coupled cluster
-/// @details Every spin combination of external indices will have all spin
-/// combinations of internal indices.
-/// @param expr ExprPtr with spin orbital indices
+// clang-format off
+/// @brief Traces out spin degrees of freedom from fermionic operator moments
+/// @details This function is designed for integrating spin out of
+/// expressions obtained as (k,k)-moment of a fermionic operator:
+/// A_{p_1 .. p_k}^{q_1 .. q_k} <a^{p_1 .. p_k}_{q_1 .. q_k} op>
+/// with A antisymmetric tensor, op an arbitrary fermionic operator, and
+/// the expectation value is with respect to an open-shell Fermi vacuum.
+/// @param expr an input expression
 /// @param ext_index_groups groups of external indices
-/// @param single_spin_case Calculate open-shell expression for a specific spin
-/// case
-/// @return a vector of expr ptrs with spin expressions
+/// @param target_spin_case if non-null specifies the target spin case of the external indices, else produces equations for all spin cases
+/// @return vector of spin-traced expressions for each spincase
+/// @warning the "antisymmetrizer" tensor A is assumed to be at the front of each tensor
+/// network, hence must use "complete" canonicalization to produce the input expression.
+/// @note this performs full expansion of the antisymmetrizer
+/// @sa open_shell_CC_spintrace
+// clang-format on
 std::vector<ExprPtr> open_shell_spintrace(
     const ExprPtr& expr,
     const container::svector<container::svector<Index>>& ext_index_groups,
-    const int single_spin_case = 0);
+    std::optional<int> target_spin_case = std::nullopt);
 
-/// @brief Transforms Coupled cluster from spin orbital to spatial orbitals
-/// @param expr ExprPtr to Sum type with spin orbital indices
-/// @return a vector of spin expressions for open-shell reference
+// clang-format off
+/// @brief Like open_shell_spintrace but uses minimal expansion of the antisymmetrizer
+/// @details This function is designed for integrating spin out of
+/// expressions obtained as (k,k)-moment of a fermionic operator:
+/// A_{p_1 .. p_k}^{q_1 .. q_k} <a^{p_1 .. p_k}_{q_1 .. q_k} op>
+/// with A antisymmetric tensor, op an arbitrary fermionic operator, and
+/// the expectation value is with respect to an open-shell Fermi vacuum.
+/// Antisymmetrizer is expanded partially to produce antisymmetrizer for
+/// spin-up and spin-down columns.
+/// @param expr the input expression
+/// @return vector of spin-traced expressions for each spincase
+/// @warning the "antisymmetrizer" tensor A is assumed to be at the front of each tensor
+/// network, hence must use "complete" canonicalization to produce the input expression.
+// clang-format on
 std::vector<ExprPtr> open_shell_CC_spintrace(const ExprPtr& expr);
 
 /// @brief Transforms an expression from spin orbital to spin-free (spatial)

@@ -297,8 +297,9 @@ struct EquivalentToMatcher : ExpressionMatcher<EquivalentToMatcher> {
   using ExpressionMatcher::ExpressionMatcher;
 
   static void pre_comparison(sequant::ExprPtr &expr) {
-    sequant::canonicalize(expr);
-    sequant::simplify(expr);
+    sequant::simplify(
+        expr, sequant::SimplifyOptions::default_options().copy_and_set(
+                  sequant::CanonicalizeOptions::IgnoreNamedIndexLabel::No));
   }
 
   static std::string comparison_requirement() { return "Equivalent to"; }

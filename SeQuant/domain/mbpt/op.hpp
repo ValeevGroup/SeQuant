@@ -88,11 +88,10 @@ enum class OpType {
   C,    //!< cabs singles op
   RDM,  //!< RDM
   RDMCumulant,  //!< RDM cumulant
-  δ,  //!< Kronecker delta (=identity) operator; same as overlap, but the latter
-      //!< is too special for all uses
-  h_1,  //!< Hamiltonian perturbation
-  t_1,  //!< first order perturbed excitation cluster operator
-  λ_1,  //!< first order perturbed deexcitation cluster operator
+  δ,            //!< Kronecker delta (=identity) operator
+  h_1,          //!< Hamiltonian perturbation
+  t_1,          //!< first order perturbed excitation cluster operator
+  λ_1,          //!< first order perturbed deexcitation cluster operator
 };
 
 /// maps operator types to their labels
@@ -101,6 +100,7 @@ inline const container::map<OpType, std::wstring> optype2label{
     {OpType::f, L"f"},
     {OpType::f̃, L"f̃"},
     {OpType::s, overlap_label()},
+    {OpType::δ, kronecker_label()},
     {OpType::g, L"g"},
     {OpType::θ, L"θ"},
     {OpType::t, L"t"},
@@ -784,6 +784,8 @@ class Operator : public Operator<void, S> {
   std::wstring to_latex() const override;
 
   Expr::hash_type memoizing_hash() const override;
+
+  bool static_equal(const Expr& other) const override;
 
 };  // class Operator
 

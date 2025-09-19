@@ -66,6 +66,7 @@ class TypeAttr {
     return static_cast<int64_t>(bitset);
   }
   constexpr explicit operator bitset_t() const { return bitset; }
+  constexpr bitset_t to_bitset() const { return bitset; }
   constexpr int32_t to_int32() const { return bitset; }
 
   /// @return true if this object is non-null (i.e. has any bits set)
@@ -186,6 +187,7 @@ class QuantumNumbersAttr {
     return static_cast<int64_t>(bitset);
   }
   constexpr explicit operator bitset_t() const { return bitset; }
+  constexpr bitset_t to_bitset() const { return bitset; }
   constexpr int32_t to_int32() const { return bitset; }
 
   /// @return true if this object is non-null (i.e. has any bits set)
@@ -377,7 +379,7 @@ class IndexSpace {
   /// IndexSpace::base_key() or Index::label()
   struct bad_key : std::invalid_argument {
     bad_key() : std::invalid_argument("bad key") {}
-    template <typename S, typename = meta::EnableIfAllBasicStringConvertible<S>>
+    template <basic_string_convertible S>
     bad_key(S &&key)
         : std::invalid_argument(std::string("bad key: ") +
                                 sequant::to_string(key)) {}
@@ -441,7 +443,7 @@ class IndexSpace {
 
   explicit operator bool() const { return *this != null; }
 
-  template <typename S, typename = meta::EnableIfAllBasicStringConvertible<S>>
+  template <basic_string_convertible S>
   IndexSpace(S &&type_label, TypeAttr typeattr,
              QuantumNumbersAttr qnattr = QuantumNumbersAttr{0},
              unsigned long approximate_size = 10)
@@ -532,10 +534,10 @@ inline bool includes(IndexSpace::QuantumNumbers qns1,
                      IndexSpace::QuantumNumbers qns2) {
   return qns1.includes(qns2);
 }
-/// @return true if space2 is included in space1, i.e. `intersection(space1,
-/// space2) == space2`
-inline bool includes(const IndexSpace &space1, const IndexSpace &space2) {
-  return space1.attr().includes(space2.attr());
+/// @return true if \p subspace is included in \p space, i.e.
+/// `intersection(space, subspace) == subspace`
+inline bool includes(const IndexSpace &space, const IndexSpace &subspace) {
+  return space.attr().includes(subspace.attr());
 }
 
 /// IndexSpace is ordered by its attributes and (if attributes are default,
@@ -563,6 +565,18 @@ inline bool includes(const IndexSpace &space1, const IndexSpace &space2) {
   return space1.attr() == space2.attr() &&
          space1.base_key() == space2.base_key();
 }
+
+std::string to_string(IndexSpace::Type type);
+std::string to_string(IndexSpace::QuantumNumbers qns);
+std::string to_string(IndexSpace::Attr attr);
+std::string to_string(const IndexSpace &space);
+
+/// true if `std::remove_cvref_t<T>` is an IndexSpace or is convertible to
+/// std::basic_string
+template <typename T>
+concept index_space_or_label =
+    (std::is_same_v<std::remove_cvref_t<T>, IndexSpace> ||
+     meta::is_basic_string_convertible_v<std::remove_cvref_t<T>>);
 
 }  // namespace sequant
 

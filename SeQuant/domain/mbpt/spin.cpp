@@ -77,14 +77,14 @@ Index make_index_with_spincase(const Index& idx, mbpt::Spin s) {
   return Index{space, idx.ordinal(), protoindices};
 }
 
-// The argument really should be non-const but const sematics are broken
+// The argument really should be non-const but const semantics are broken
 // for the ExprPtr type so we are required to make this const in order
 // to be able to use this function everywhere we want to.
 void reset_idx_tags(const ExprPtr& expr) {
   expr->visit(
-      [](const ExprPtr& current) {
-        if (current.is<Tensor>()) {
-          current.as<Tensor>().reset_tags();
+      [](ExprPtr& current) {
+        if (current.is<AbstractTensor>()) {
+          current.as<AbstractTensor>()._reset_tags();
         }
       },
       true);
@@ -356,43 +356,53 @@ ExprPtr remove_spin(const ExprPtr& expr) {
   }
 }
 
-bool spin_symm_tensor(const Tensor& tensor) {
-  assert(tensor.bra_rank() == tensor.ket_rank());
-  for (std::size_t i = 0; i != tensor.rank(); ++i) {
-    if (tensor.bra()[i].space().qns() != tensor.ket()[i].space().qns())
-      return false;
+bool ms_conserving_columns(const AbstractTensor& tensor) {
+  for (const auto& [bra, ket] :
+       ranges::zip_view(tensor._bra(), tensor._ket())) {
+    if (bra.nonnull() && ket.nonnull()) {
+      const auto bra_ms = mbpt::to_spin(bra.space().qns());
+      ;
+      const auto ket_ms = mbpt::to_spin(ket.space().qns());
+      ;
+      if (bra_ms != ket_ms) return false;
+    }
   }
   return true;
 }
 
-bool same_spin_tensor(const Tensor& tensor) {
-  auto braket = tensor.braket_indices();
+bool ms_uniform_tensor(const AbstractTensor& tensor) {
+  auto braket = tensor._braket();
   assert(ranges::empty(braket) == false);
-  auto spin_element = braket.begin()->space().qns();
-  return std::all_of(braket.begin(), braket.end(),
-                     [&spin_element](const auto& idx) {
-                       return idx.space().qns() == spin_element;
-                     });
+  std::optional<mbpt::Spin> ms;
+  return ranges::all_of(braket, [&ms](const auto& idx) {
+    if (idx.nonnull()) {
+      const auto idx_ms = mbpt::to_spin(idx.space().qns());
+      if (ms.has_value())
+        return idx_ms == *ms;
+      else {
+        ms = idx_ms;
+        return true;
+      }
+    } else
+      return true;
+  });
 }
 
-bool can_expand(const Tensor& tensor) {
-  assert(tensor.bra_rank() == tensor.ket_rank() &&
+bool can_expand(const AbstractTensor& tensor) {
+  assert(tensor._bra_rank() == tensor._ket_rank() &&
          "can_expand(Tensor) failed.");
-  if (tensor.bra_rank() != tensor.ket_rank()) return false;
+  if (tensor._bra_rank() != tensor._ket_rank()) return false;
 
   // indices must have specific spin
-  [[maybe_unused]] auto all_have_spin = std::all_of(
-      tensor.const_braket_indices().begin(),
-      tensor.const_braket_indices().end(), [](const auto& idx) {
+  [[maybe_unused]] auto all_have_spin =
+      ranges::all_of(tensor._braket(), [](const auto& idx) {
         auto idx_spin = mbpt::to_spin(idx.space().qns());
         return idx_spin == mbpt::Spin::alpha || idx_spin == mbpt::Spin::beta;
       });
-  assert(std::all_of(tensor.const_braket_indices().begin(),
-                     tensor.const_braket_indices().end(), [](const auto& idx) {
-                       auto idx_spin = mbpt::to_spin(idx.space().qns());
-                       return idx_spin == mbpt::Spin::alpha ||
-                              idx_spin == mbpt::Spin::beta;
-                     }));
+  assert(ranges::all_of(tensor._braket(), [](const auto& idx) {
+    auto idx_spin = mbpt::to_spin(idx.space().qns());
+    return idx_spin == mbpt::Spin::alpha || idx_spin == mbpt::Spin::beta;
+  }));
 
   // count alpha indices in bra
   auto is_alpha = [](const Index& idx) {
@@ -400,12 +410,10 @@ bool can_expand(const Tensor& tensor) {
   };
 
   // count alpha indices in bra
-  auto a_bra =
-      std::count_if(tensor.bra().begin(), tensor.bra().end(), is_alpha);
+  auto a_bra = ranges::count_if(tensor._bra(), is_alpha);
 
   // count alpha indices in ket
-  auto a_ket =
-      std::count_if(tensor.ket().begin(), tensor.ket().end(), is_alpha);
+  auto a_ket = ranges::count_if(tensor._ket(), is_alpha);
 
   return a_bra == a_ket;
 }
@@ -422,7 +430,7 @@ ExprPtr expand_antisymm(const Tensor& tensor, bool skip_spinsymm) {
 
   // If all indices have the same spin label,
   // return the antisymm tensor
-  if (skip_spinsymm && same_spin_tensor(tensor)) {
+  if (skip_spinsymm && ms_uniform_tensor(tensor)) {
     return std::make_shared<Tensor>(tensor);
   }
 
@@ -449,7 +457,7 @@ ExprPtr expand_antisymm(const Tensor& tensor, bool skip_spinsymm) {
       auto new_tensor = Tensor(tensor.label(), bra(bra_list), ket(ket_list),
                                tensor.aux(), Symmetry::Nonsymm);
 
-      if (spin_symm_tensor(new_tensor)) {
+      if (ms_conserving_columns(new_tensor)) {
         auto new_tensor_product = std::make_shared<Product>();
         new_tensor_product->append(get_phase(new_tensor),
                                    ex<Tensor>(new_tensor));
@@ -508,13 +516,13 @@ bool has_tensor(const ExprPtr& expr, std::wstring label) {
 
   auto check_product = [&label](const Product& p) {
     return ranges::any_of(p.factors(), [&label](const auto& t) {
-      return t->template is<Tensor>() &&
-             (t->template as<Tensor>()).label() == label;
+      return t->template is<AbstractTensor>() &&
+             (t->template as<AbstractTensor>())._label() == label;
     });
   };
 
-  if (expr->is<Tensor>()) {
-    return expr->as<Tensor>().label() == label;
+  if (expr->is<AbstractTensor>()) {
+    return expr->as<AbstractTensor>()._label() == label;
   } else if (expr->is<Product>()) {
     return check_product(expr->as<Product>());
   } else if (expr->is<Sum>()) {
@@ -557,9 +565,9 @@ ExprPtr remove_tensor(const Product& product, std::wstring label) {
   auto new_product = std::make_shared<Product>();
   new_product->scale(product.scalar());
   for (auto&& term : product) {
-    if (term->is<Tensor>()) {
-      auto tensor = term->as<Tensor>();
-      if (tensor.label() != label) new_product->append(1, ex<Tensor>(tensor));
+    if (term->is<AbstractTensor>()) {
+      if (term->as<AbstractTensor>()._label() != label)
+        new_product->append(1, term.clone());
     } else
       new_product->append(1, term);
   }
@@ -575,8 +583,9 @@ ExprPtr remove_tensor(const ExprPtr& expr, std::wstring label) {
     return ex<Sum>(result);
   } else if (expr->is<Product>())
     return remove_tensor(expr->as<Product>(), label);
-  else if (expr->is<Tensor>())
-    return expr->as<Tensor>().label() == label ? ex<Constant>(1) : expr;
+  else if (expr->is<AbstractTensor>())
+    return expr->as<AbstractTensor>()._label() == label ? ex<Constant>(1)
+                                                        : expr;
   else if (expr->is<Constant>() || expr->is<Variable>())
     return expr;
   else
@@ -996,7 +1005,7 @@ ExprPtr closed_shell_spintrace(
   // antisymmetrizer (A) and fully expanding the anti-symmetric tensors to
   // non-symmetric.
   // full_expansion: it fully expands the antisymmetrizer directly (can be used
-  // for compact-set epns, however it is not an optimized way).
+  // for v2 eqs, however it is not an optimized way).
   auto partially_or_fully_expand = [&full_expansion](const ExprPtr& expr) {
     auto temp = expr;
     if (has_tensor(temp, L"A")) {
@@ -1118,12 +1127,27 @@ ExprPtr closed_shell_spintrace(
   }
 }
 
-ExprPtr closed_shell_CC_spintrace(ExprPtr const& expr) {
+container::svector<ResultExpr> closed_shell_spintrace(const ResultExpr& expr,
+                                                      bool full_expansion) {
+  using TraceFunction =
+      ExprPtr (*)(const ExprPtr&,
+                  const container::svector<container::svector<Index>>&, bool);
+
+  return detail::wrap_trace<container::svector<ResultExpr>>(
+      expr, static_cast<TraceFunction>(&closed_shell_spintrace),
+      full_expansion);
+}
+
+ExprPtr closed_shell_CC_spintrace_v1(ExprPtr const& expr,
+                                     ClosedShellCCSpintraceOptions options) {
+  assert(options.method == BiorthogonalizationMethod::V1);
   assert(expr->is<Sum>());
   using ranges::views::transform;
 
   auto const ext_idxs = external_indices(expr);
-  auto st_expr = closed_shell_spintrace(expr, ext_idxs);
+  auto st_expr = options.naive_spintrace
+                     ? spintrace(expr, ext_idxs)
+                     : closed_shell_spintrace(expr, ext_idxs);
   canonicalize(st_expr);
 
   if (!ext_idxs.empty()) {
@@ -1147,23 +1171,16 @@ ExprPtr closed_shell_CC_spintrace(ExprPtr const& expr) {
   return st_expr;
 }
 
-container::svector<ResultExpr> closed_shell_spintrace(
-    const ResultExpr& expr, bool is_direct_full_expansion) {
-  using TraceFunction =
-      ExprPtr (*)(const ExprPtr&,
-                  const container::svector<container::svector<Index>>&, bool);
-
-  return detail::wrap_trace<container::svector<ResultExpr>>(
-      expr, static_cast<TraceFunction>(&closed_shell_spintrace),
-      is_direct_full_expansion);
-}
-
-ExprPtr closed_shell_CC_spintrace_compact_set(ExprPtr const& expr) {
+ExprPtr closed_shell_CC_spintrace_v2(ExprPtr const& expr,
+                                     ClosedShellCCSpintraceOptions options) {
+  assert(options.method == BiorthogonalizationMethod::V2);
   assert(expr->is<Sum>());
   using ranges::views::transform;
 
   auto const ext_idxs = external_indices(expr);
-  auto st_expr = closed_shell_spintrace(expr, ext_idxs);
+  auto st_expr = options.naive_spintrace
+                     ? spintrace(expr, ext_idxs)
+                     : closed_shell_spintrace(expr, ext_idxs);
   canonicalize(st_expr);
 
   if (!ext_idxs.empty()) {
@@ -1207,7 +1224,7 @@ ExprPtr closed_shell_CC_spintrace_compact_set(ExprPtr const& expr) {
   }
 
   simplify(st_expr);
-  // std::wcout << "final eqns after symm: "
+  // std::wcout << "final eqs after symm: "
   //            << sequant::to_latex_align(
   //                   sequant::ex<sequant::Sum>(
   //                       sequant::opt::reorder(st_expr->as<sequant::Sum>())),
@@ -1217,33 +1234,17 @@ ExprPtr closed_shell_CC_spintrace_compact_set(ExprPtr const& expr) {
   return st_expr;
 }
 
-ExprPtr closed_shell_CC_spintrace_rigorous(ExprPtr const& expr) {
-  assert(expr->is<Sum>());
-  using ranges::views::transform;
-
-  auto const ext_idxs = external_indices(expr);
-  auto st_expr = sequant::spintrace(expr, ext_idxs);
-  canonicalize(st_expr);
-
-  if (!ext_idxs.empty()) {
-    // Remove S operator
-    for (auto& term : *st_expr) {
-      if (term->is<Product>()) term = remove_tensor(term->as<Product>(), L"S");
-    }
-
-    // Biorthogonal transformation
-    st_expr = biorthogonal_transform(st_expr, ext_idxs);
-
-    auto bixs = ext_idxs | transform([](auto&& vec) { return vec[1]; });
-    auto kixs = ext_idxs | transform([](auto&& vec) { return vec[0]; });
-    st_expr =
-        ex<Tensor>(Tensor{L"S", bra(std::move(bixs)), ket(std::move(kixs))}) *
-        st_expr;
+ExprPtr closed_shell_CC_spintrace(ExprPtr const& expr,
+                                  ClosedShellCCSpintraceOptions options) {
+  switch (options.method) {
+    case BiorthogonalizationMethod::V1:
+      return closed_shell_CC_spintrace_v1(expr, options);
+    case BiorthogonalizationMethod::V2:
+      return closed_shell_CC_spintrace_v2(expr, options);
+    default:
+      assert(false && "unreachable code reached");
+      abort();
   }
-
-  simplify(st_expr);
-
-  return st_expr;
 }
 
 /// Collect all indices from an expression
@@ -1466,7 +1467,7 @@ std::vector<ExprPtr> open_shell_P_op_vector(const Tensor& A) {
 std::vector<ExprPtr> open_shell_spintrace(
     const ExprPtr& expr,
     const container::svector<container::svector<Index>>& ext_index_groups,
-    const int single_spin_case) {
+    std::optional<int> target_spin_case) {
   if (expr->is<Constant>() || expr->is<Variable>()) {
     return std::vector<ExprPtr>{expr};
   }
@@ -1552,8 +1553,8 @@ std::vector<ExprPtr> open_shell_spintrace(
 
   // For a single spin case, keep only the relevant spin case
   // PS: all alpha indexing start at 0
-  if (single_spin_case) {
-    auto external_replacement_map = e_rep.at(single_spin_case);
+  if (target_spin_case) {
+    auto external_replacement_map = e_rep.at(*target_spin_case);
     e_rep.clear();
     e_rep.push_back(external_replacement_map);
   }
@@ -1620,7 +1621,7 @@ std::vector<ExprPtr> open_shell_spintrace(
           if (pr->is<Product>()) {
             if (spin_symm_product(pr->as<Product>())) i_result.append(pr);
           } else if (pr->is<Tensor>()) {
-            if (spin_symm_tensor(pr->as<Tensor>())) i_result.append(pr);
+            if (ms_conserving_columns(pr->as<Tensor>())) i_result.append(pr);
           } else if (pr->is<Constant>() || pr->is<Variable>()) {
             i_result.append(pr);
           } else
@@ -1633,7 +1634,7 @@ std::vector<ExprPtr> open_shell_spintrace(
     result.push_back(std::make_shared<Sum>(e_result));
   }  // loop over external indices
 
-  if (single_spin_case) {
+  if (target_spin_case) {
     assert(result.size() == 1 &&
            "Spin-specific case must return one expression.");
   }
@@ -1720,14 +1721,14 @@ ExprPtr spintrace(
   // This function must be used for tensors with spin-specific indices only. If
   // the spin-symmetry is conserved: the tensor is expanded; else: zero is
   // returned.
-  auto spin_trace_tensor = [](const Tensor& tensor) {
+  auto spintrace_tensor = [](const Tensor& tensor) {
     return can_expand(tensor) ? expand_antisymm(tensor) : ex<Constant>(0);
   };
 
   // This function is used to spin-trace a product terms with spin-specific
   // indices. It checks if all tensors can be expanded and spintraces individual
   // tensors by call to the spin_trace_tensor lambda.
-  auto spin_trace_product = [&spin_trace_tensor](const Product& product) {
+  auto spintrace_product = [&spintrace_tensor](const Product& product) {
     Product spin_product{};
 
     // Check if all tensors in this product can be expanded
@@ -1746,7 +1747,7 @@ ExprPtr spintrace(
     spin_product.scale(product.scalar());
     for (const ExprPtr& expr : product.factors()) {
       if (expr.is<Tensor>()) {
-        spin_product.append(1, spin_trace_tensor(expr.as<Tensor>()));
+        spin_product.append(1, spintrace_tensor(expr.as<Tensor>()));
       } else if (expr.is<Variable>() || expr.is<Constant>()) {
         spin_product.append(1, expr.clone());
       } else {
@@ -1765,8 +1766,8 @@ ExprPtr spintrace(
   };
 
   // Most important lambda of this function
-  auto trace_product = [&ext_index_groups, &spin_trace_tensor,
-                        &spin_trace_product,
+  auto trace_product = [&ext_index_groups, &spintrace_tensor,
+                        &spintrace_product,
                         spinfree_index_spaces](const Product& expression) {
     ExprPtr expr = std::make_shared<Product>(expression);
 
@@ -1806,6 +1807,7 @@ ExprPtr spintrace(
 
     // EFV: for each spincase (loop over integer from 0 to 2^n-1, n=#of index
     // groups)
+    assert(index_groups.size() <= 64);
     const uint64_t nspincases = pow2(index_groups.size());
 
     auto result = std::make_shared<Sum>();
@@ -1834,10 +1836,10 @@ ExprPtr spintrace(
       // NB: There are temporaries in the following code to enable
       // printing intermediate expressions.
       if (spin_expr->is<Tensor>()) {
-        auto st_expr = spin_trace_tensor(spin_expr->as<Tensor>());
+        auto st_expr = spintrace_tensor(spin_expr->as<Tensor>());
         result->append(spinfree_index_spaces ? remove_spin(st_expr) : st_expr);
       } else if (spin_expr->is<Product>()) {
-        auto st_expr = spin_trace_product(spin_expr->as<Product>());
+        auto st_expr = spintrace_product(spin_expr->as<Product>());
         if (!st_expr->is<Constant>() || st_expr->as<Constant>().value() != 0) {
           result->append(spinfree_index_spaces ? remove_spin(st_expr)
                                                : st_expr);
@@ -1846,9 +1848,9 @@ ExprPtr spintrace(
         for (auto&& summand : *spin_expr) {
           Sum st_expr{};
           if (summand->is<Tensor>())
-            st_expr.append(spin_trace_tensor(summand->as<Tensor>()));
+            st_expr.append(spintrace_tensor(summand->as<Tensor>()));
           else if (summand->is<Product>())
-            st_expr.append(spin_trace_product(summand->as<Product>()));
+            st_expr.append(spintrace_product(summand->as<Product>()));
           else {
             st_expr.append(summand);
           }

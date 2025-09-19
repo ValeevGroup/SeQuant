@@ -7,7 +7,7 @@ if (NOT TARGET nlohmann_json::nlohmann_json)
         GIT_SHALLOW
         EXCLUDE_FROM_ALL
         SYSTEM
-        FIND_PACKAGE_ARGS 3 NAMES nlohmann_json
+        FIND_PACKAGE_ARGS ${SEQUANT_OLDEST_JSON_VERSION} NAMES nlohmann_json
     )
 
     FetchContent_MakeAvailable(nlohmann_json)

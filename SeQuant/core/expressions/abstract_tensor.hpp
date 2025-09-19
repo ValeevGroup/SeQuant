@@ -151,8 +151,9 @@ class AbstractTensor {
   virtual const_any_view_rand _braket() const {
     throw missing_instantiation_for("_braket");
   }
-  /// accesses bra, ket, and aux indices
-  /// @return view of a not necessarily contiguous range of Index objects
+  /// accesses bra, ket, and aux slots
+  /// @return view of a not necessarily contiguous view of bra, ket, and aux
+  /// slots
   virtual const_any_view_rand _braketaux() const {
     throw missing_instantiation_for("_braketaux");
   }
@@ -422,7 +423,7 @@ inline std::wstring to_latex_tensor(
   std::size_t col = 0;
 
   // loop over left-aligned unpaired slots, if left_align==false
-  if (left_align == false) {
+  if (!left_align && num_unpaired) {
     auto* unpaired_indices = unpaired_type == SlotType::Bra
                                  ? &bra[0]
                                  : &ket[0];  // bra/ket are contiguous
@@ -462,7 +463,7 @@ inline std::wstring to_latex_tensor(
   }
 
   // loop over right-aligned unpaired slots, if left_align==true
-  if (left_align == true) {
+  if (left_align && num_unpaired) {
     auto* unpaired_indices = unpaired_type == SlotType::Bra
                                  ? &bra[0]
                                  : &ket[0];  // bra/ket are contiguous

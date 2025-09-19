@@ -28,6 +28,17 @@ TEST_CASE("abstract_tensor", "[elements]") {
   std::shared_ptr<AbstractTensor> nop = std::make_shared<FNOperator>(
       cre<decltype(ketidxs)>{ketidxs}, ann<decltype(braidxs)>{braidxs});
 
+  SECTION("to_latex") {
+    REQUIRE_NOTHROW(tensor->_to_latex());
+
+    // can handle empty bra ket and aux bundles
+    Tensor t("x", bra{}, ket{}, aux{});
+    REQUIRE_NOTHROW(t.to_latex());
+    auto _ = set_scoped_default_context(
+        {.braket_slot_typesetting = BraKetSlotTypesetting::TensorPackage});
+    REQUIRE_NOTHROW(t.to_latex());
+  }
+
   SECTION("permute") {
     SECTION("1-index") {
       for (auto& tptr : {tensor, nop}) {
