@@ -353,10 +353,11 @@ std::wstring to_latex(const mbpt::Operator<mbpt::qns_t, S>& op) {
     base_lbl.pop_back();
   }
 
-  const bool has_batch = op.batch_idx_rank().has_value();
   auto add_batch_suffix = [&op](std::wstring& str) {
+    assert(op.batch_idx_rank() && "Batch index rank is not set");
+
     std::wstring batch_suffix = L"[";
-    const auto idx_rank = *op.batch_idx_rank();
+    const auto idx_rank = op.batch_idx_rank().value();
     for (std::size_t i = 1; i <= idx_rank; ++i) {
       batch_suffix += L"{z}_{" + std::to_wstring(i) + L"}";
       if (i != idx_rank) {
@@ -376,7 +377,7 @@ std::wstring to_latex(const mbpt::Operator<mbpt::qns_t, S>& op) {
         result += L"_{" + std::to_wstring(op()[0].upper()) + L"}";
       }
       result += L"}";
-      return has_batch ? add_batch_suffix(result) : result;
+      return op.batch_idx_rank() ? add_batch_suffix(result) : result;
     }
   }
   std::wstring baseline_char = is_adjoint ? L"^" : L"_";
@@ -430,7 +431,7 @@ std::wstring to_latex(const mbpt::Operator<mbpt::qns_t, S>& op) {
     }
   }
   result += L"}";
-  return has_batch ? add_batch_suffix(result) : result;
+  return op.batch_idx_rank() ? add_batch_suffix(result) : result;
 }
 
 }  // namespace sequant
@@ -468,7 +469,8 @@ OpMaker<S>::OpMaker(OpType op, ncre nc, nann na, naux nbatch)
   if (nbatch == 0) return;
   assert(nbatch > 0);
   auto isr = get_default_context().index_space_registry();
-  assert(isr->contains(L"z"));  // z is the batch space
+  assert(isr->contains(L"z") &&
+         "ISR does not contain any batching space");  // z is the batch space
   const auto batch_space = isr->retrieve(L"z");
   batch_spaces_ = IndexSpaceContainer(nbatch, batch_space);
 }
@@ -514,9 +516,9 @@ ExprPtr OpMaker<S>::operator()(std::optional<UseDepIdx> dep,
   }
 
   // if batching indices are given, use them
-  if (batch_spaces_.has_value()) {
+  if (batch_spaces_) {
     return make(
-        cre_spaces_, ann_spaces_, *batch_spaces_,
+        cre_spaces_, ann_spaces_, batch_spaces_.value(),
         [this, opsymm_opt](const auto& creidxs, const auto& annidxs,
                            const auto& batchidxs, Symmetry opsymm) {
           return ex<Tensor>(to_wstring(op_), bra(creidxs), ket(annidxs),
