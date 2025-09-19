@@ -39,9 +39,7 @@ ExprPtr vac_av(
     // compute connections
     std::vector<std::pair<int, int>> connections;
     {
-      container::map<std::wstring, std::vector<int>>
-          oplbl2pos; // maps operator labels to the operator positions in the
-      // product
+      container::map<std::wstring, std::vector<int>> oplbl2pos; // maps operator labels to the operator positions in the product
       int pos = 0;
       bool ops_only = true;
       for (const auto& factor : product.as<Product>()) {
@@ -49,8 +47,7 @@ ExprPtr vac_av(
           const auto& op = factor.as<op_t>();
           const std::wstring op_lbl = std::wstring(op.label());
           const auto it = oplbl2pos.find(op_lbl);
-          if (it == oplbl2pos.end()) {
-            // new label
+          if (it == oplbl2pos.end()) { // new label
             oplbl2pos.emplace(op_lbl, std::vector<int>{pos});
           } else {
             it->second.emplace_back(pos);
@@ -72,14 +69,13 @@ ExprPtr vac_av(
       for (const auto& [op1_lbl, op2_lbl] : op_connections) {
         auto it1 = oplbl2pos.find(op1_lbl);
         auto it2 = oplbl2pos.find(op2_lbl);
-        if (it1 == oplbl2pos.end() || it2 == oplbl2pos.end()) continue;
-        // one of the op labels is not present in the product
+        if (it1 == oplbl2pos.end() || it2 == oplbl2pos.end())
+          continue; // one of the op labels is not present in the product
         const auto& [dummy1, op1_indices] = *it1;
         const auto& [dummy2, op2_indices] = *it2;
         for (const auto& op1_idx : op1_indices) {
           for (const auto& op2_idx : op2_indices) {
-            if (op1_idx < op2_idx) {
-              // N.B. connections are directional
+            if (op1_idx < op2_idx) { // N.B. connections are directional
               connections.emplace_back(op1_idx, op2_idx);
             }
           }
@@ -94,10 +90,8 @@ ExprPtr vac_av(
     // compute VEV
     auto vev = tensor::vac_av(product, connections, use_topology);
     // restore Variable types to the Product
-    if (!variables.empty()) ranges::for_each(variables,
-                                             [&vev](const auto& var) {
-                                               vev *= var;
-                                             });
+    if (!variables.empty())
+      ranges::for_each(variables, [&vev](const auto& var) { vev *= var; });
 
     return simplify(vev);
   };
