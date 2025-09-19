@@ -570,6 +570,27 @@ inline container::svector<Index> make_depidx_vector(
          }) |
          ranges::to<container::svector<Index>>();
 }
+
+/// @brief Creates a vector of auxiliary indices based on the given \p space and
+/// rank. Indexing goes from 1 to \p rank. Eg: for rank=3, indices will be
+/// aux_{1}, aux_{2}, aux_{3}
+/// @param spaces The vector of Auxiliary IndexSpaces
+/// @return A vector of Index objects
+inline container::svector<Index> make_aux_indices(
+    const container::svector<IndexSpace>& spaces) {
+  auto validator = [](const Index& idx) {
+    return idx.space().base_key() ==
+           L"z";  // for now only z is allowed, i.e. batching index space
+  };
+
+  IndexFactory aux_factory{validator, 1};
+  return spaces |
+         ranges::views::transform([&aux_factory](const IndexSpace& space) {
+           return aux_factory.make(space);
+         }) |
+         ranges::to<container::svector<Index>>();
+}
+
 }  // namespace detail
 
 // clang-format off
