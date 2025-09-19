@@ -791,7 +791,15 @@ class OpMaker {
     const auto op_info = build_op_info(cre_spaces, ann_spaces, dep);
     assert(!batch_spaces.empty());
     assert(get_default_context().index_space_registry()->contains(L"z"));
-    const auto batchidx = detail::make_idx_vector(batch_spaces);
+#ifndef NDEBUG
+    // assumes that there are no more than one type of batch space
+    auto batch_space =
+        get_default_context().index_space_registry()->retrieve(L"z");
+    for (const auto& space : batch_spaces) {
+      assert(space == batch_space);
+    }
+#endif
+    const auto batchidx = detail::make_aux_indices(batch_spaces);
 
     const auto t = tensor_generator(op_info.creidxs, op_info.annidxs, batchidx,
                                     op_info.opsymm);
