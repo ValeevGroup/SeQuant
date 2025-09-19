@@ -4,6 +4,7 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expressions/constant.hpp>
 #include <SeQuant/core/expressions/expr.hpp>
+#include <SeQuant/core/expressions/expr_algorithms.hpp>
 #include <SeQuant/core/expressions/expr_ptr.hpp>
 #include <SeQuant/core/meta.hpp>
 
@@ -330,12 +331,12 @@ class Product : public Expr {
   }
 
   void add_identical(const Product &other) {
-    assert(this->hash_value() == other.hash_value());
+    assert(ranges::equal(this->factors(), other.factors()));
     scalar_ += other.scalar_;
   }
 
   void add_identical(const std::shared_ptr<Product> &other) {
-    assert(this->hash_value() == other->hash_value());
+    assert(ranges::equal(this->factors(), other->factors()));
     scalar_ += other->scalar_;
   }
 
@@ -343,8 +344,7 @@ class Product : public Expr {
     if (other.is<Product>()) return this->add_identical(other.as<Product>());
 
     // only makes sense if this has a single factor
-    assert(this->factors_.size() == 1 &&
-           this->factors_[0]->hash_value() == other->hash_value());
+    assert(this->factors_.size() == 1 && this->factors_[0] == other);
     scalar_ += 1;
   }
 
@@ -397,11 +397,14 @@ class Product : public Expr {
     return *hash_value_;
   }
 
-  ExprPtr canonicalize_impl(CanonicalizationMethod);
+  ExprPtr canonicalize_impl(CanonicalizeOptions);
   virtual ExprPtr canonicalize(
       CanonicalizeOptions opt =
           CanonicalizeOptions::default_options()) override;
-  virtual ExprPtr rapid_canonicalize() override;
+  virtual ExprPtr rapid_canonicalize(
+      CanonicalizeOptions opts =
+          CanonicalizeOptions::default_options().copy_and_set(
+              CanonicalizationMethod::Rapid)) override;
 
   bool static_equal(const Expr &that) const override {
     const auto &that_cast = static_cast<const Product &>(that);

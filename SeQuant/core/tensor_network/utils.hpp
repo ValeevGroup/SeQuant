@@ -6,6 +6,7 @@
 #define SEQUANT_TENSOR_NETWORK_UTILITIES_HPP
 
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/tensor_network/typedefs.hpp>
 
 #include <algorithm>
 #include <iostream>
@@ -253,11 +254,6 @@ container::svector<std::size_t> sort_via_ordinals(Sequence &seq,
 
   return input_ordinals;
 }
-
-namespace tensor_network {
-using NamedIndexSet = container::set<Index, Index::FullLabelCompare>;
-using VertexColor = std::uint32_t;
-}  // namespace tensor_network
 
 }  // namespace sequant
 

@@ -10,6 +10,7 @@
 #include <SeQuant/core/logger.hpp>
 #include <SeQuant/core/runtime.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
+#include <SeQuant/core/tensor_network/typedefs.hpp>
 #include <SeQuant/core/tensor_network_v3.hpp>
 
 #include <range/v3/all.hpp>
@@ -164,10 +165,14 @@ bool Product::is_commutative() const {
   return result;
 }
 
-ExprPtr Product::canonicalize_impl(CanonicalizationMethod method) {
-  // recursively canonicalize subfactors ...
-  ranges::for_each(factors_, [this](auto &factor) {
-    auto bp = factor->canonicalize();
+ExprPtr Product::canonicalize_impl(CanonicalizeOptions opts) {
+  // recursively canonicalize non-tensor subfactors (tensors will be
+  // canonicalized as part of the TN built of all tensor factors of this) ...
+  ranges::for_each(factors_, [this, opts](auto &factor) {
+    if (factor.template is<AbstractTensor>()) {
+      return;
+    }
+    auto bp = factor->canonicalize(opts);
     if (bp) {
       assert(bp->template is<Constant>());
       this->scalar_ *= std::static_pointer_cast<Constant>(bp)->value();
@@ -175,7 +180,7 @@ ExprPtr Product::canonicalize_impl(CanonicalizationMethod method) {
   });
 
   if (Logger::instance().canonicalize) {
-    std::wcout << "Product canonicalization(" << to_wstring(method)
+    std::wcout << "Product canonicalization(" << to_wstring(opts.method)
                << ") input: " << to_latex() << std::endl;
   }
 
@@ -207,17 +212,23 @@ ExprPtr Product::canonicalize_impl(CanonicalizationMethod method) {
   if (!contains_nontensors) {  // tensor network canonization is a special case
                                // that's done in
                                // TensorNetwork
-    auto make_canonical_tn = [this, &method](auto *tn_null_ptr) {
+    auto make_canonical_tn = [this, &opts](auto *tn_null_ptr) {
       using TN = std::decay_t<std::remove_pointer_t<decltype(tn_null_ptr)>>;
       ExprPtr canon_factor;
       TN tn(this->factors_);
       if constexpr (TN::version() == 3) {
         canon_factor = tn.canonicalize(
-            TensorCanonicalizer::cardinal_tensor_labels(), method);
+            TensorCanonicalizer::cardinal_tensor_labels(), opts);
       } else {
-        canon_factor =
-            tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(),
-                            method == CanonicalizationMethod::Rapid);
+        using NamedIndexSet = tensor_network::NamedIndexSet;
+        std::shared_ptr<NamedIndexSet> named_indices =
+            !opts.named_indices
+                ? nullptr
+                : std::make_shared<NamedIndexSet>(opts.named_indices->begin(),
+                                                  opts.named_indices->end());
+        canon_factor = tn.canonicalize(
+            TensorCanonicalizer::cardinal_tensor_labels(),
+            opts.method == CanonicalizationMethod::Rapid, named_indices.get());
       }
       return std::pair{std::move(tn), canon_factor};
     };
@@ -245,8 +256,8 @@ ExprPtr Product::canonicalize_impl(CanonicalizationMethod method) {
     auto local_compare = [&cardinal_tensor_labels](const ExprPtr &first,
                                                    const ExprPtr &second) {
       if (first->is<Labeled>() && second->is<Labeled>()) {
-        const auto first_label = first->as<Tensor>().label();
-        const auto second_label = second->as<Tensor>().label();
+        const auto first_label = first->as<Labeled>().label();
+        const auto second_label = second->as<Labeled>().label();
         if (first_label == second_label) return *first < *second;
         const auto first_is_cardinal_it = ranges::find_if(
             cardinal_tensor_labels,
@@ -299,7 +310,7 @@ ExprPtr Product::canonicalize_impl(CanonicalizationMethod method) {
   // TODO evaluate product of Tensors (turn this into Products of Products)
 
   if (Logger::instance().canonicalize)
-    std::wcout << "Product canonicalization(" << to_wstring(method)
+    std::wcout << "Product canonicalization(" << to_wstring(opts.method)
                << ") result: " << to_latex() << std::endl;
 
   return {};  // side effects are absorbed into the scalar_
@@ -318,11 +329,12 @@ void Product::adjoint() {
 }
 
 ExprPtr Product::canonicalize(CanonicalizeOptions opt) {
-  return this->canonicalize_impl(opt.method);
+  return this->canonicalize_impl(opt);
 }
 
-ExprPtr Product::rapid_canonicalize() {
-  return this->canonicalize_impl(CanonicalizationMethod::Rapid);
+ExprPtr Product::rapid_canonicalize(CanonicalizeOptions opt) {
+  assert(opt.method == CanonicalizationMethod::Rapid);
+  return this->canonicalize_impl(opt);
 }
 
 void CProduct::adjoint() {
@@ -360,13 +372,29 @@ ExprPtr Sum::canonicalize_impl(bool multipass, CanonicalizeOptions opts) {
     std::wcout << "Sum::canonicalize_impl: input = "
                << to_latex_align(shared_from_this()) << std::endl;
 
-  const auto npasses = multipass ? 3 : 1;
+  const auto npasses = multipass ? 2 : 1;
   for (auto pass = 0; pass != npasses; ++pass) {
+    const auto rapid = (pass % 2 == 0);
+
+    // canonicalizing TNs in a sum requires treating named indices as
+    // meaningful/distinct
+    auto opts_copy = opts;
+    opts_copy.ignore_named_index_labels =
+        CanonicalizeOptions::IgnoreNamedIndexLabel::No;
+    if (rapid) {
+      opts_copy.method = CanonicalizationMethod::Lexicographic;
+    } else
+      opts_copy.method = opts.method | CanonicalizationMethod::Topological;
+
     // recursively canonicalize summands ...
     // using for_each and directly access to summands
-    sequant::for_each(summands_, [pass, &opts](ExprPtr &summand) {
-      auto bp = (pass % 2 == 0) ? summand->rapid_canonicalize()
-                                : summand->canonicalize(opts);
+    sequant::for_each(summands_, [pass, &opts_copy, &rapid](ExprPtr &summand) {
+      ExprPtr bp;
+      if (rapid) {
+        bp = summand->rapid_canonicalize(opts_copy);
+      } else {
+        bp = summand->canonicalize(opts_copy);
+      }
       if (bp) {
         assert(bp->template is<Constant>());
         summand = ex<Product>(std::static_pointer_cast<Constant>(bp)->value(),
@@ -377,19 +405,17 @@ ExprPtr Sum::canonicalize_impl(bool multipass, CanonicalizeOptions opts) {
       std::wcout << "Sum::canonicalize_impl (pass=" << pass
                  << "): after canonicalizing summands = "
                  << to_latex_align(shared_from_this()) << std::endl;
-    // flat map for grouping by (size, hash) pairs
-    container::map<std::pair<size_t, size_t>, ExprPtr> hash_groups;
+    // flat map for grouping by hash pairs
+    container::map<std::size_t, ExprPtr> hash_groups;
     // process each summand
     for (const auto &summand : summands_) {
       auto hash = summand->hash_value();
-      size_t term_size = sequant::size(summand);
-      auto key = std::make_pair(term_size, hash);
-      auto it = hash_groups.find(key);
+      auto it = hash_groups.find(hash);
       if (it == hash_groups.end()) {
-        // first occurrence of this (size, hash) pair
-        hash_groups[key] = summand;
+        // first occurrence of this item
+        hash_groups.emplace(hash, summand);
       } else {
-        // another term with the same (size, hash)
+        // another term with the same hash
         if (summand->template is<Product>()) {
           if (it->second->template is<Product>()) {
             // both are products - add them
@@ -397,8 +423,7 @@ ExprPtr Sum::canonicalize_impl(bool multipass, CanonicalizeOptions opts) {
             product.add_identical(summand->template as<Product>());
           } else {
             // convert existing term to product and add
-            auto product_copy =
-                std::static_pointer_cast<Product>(summand->clone());
+            auto product_copy = std::make_shared<Product>(summand->clone());
             product_copy->add_identical(it->second);
             it->second = product_copy;
           }
@@ -420,7 +445,7 @@ ExprPtr Sum::canonicalize_impl(bool multipass, CanonicalizeOptions opts) {
     new_summands.reserve(summands_.size());
     // collect all grouped terms (already sorted by size, then hash due to pair
     // ordering)
-    for (const auto &[key, term] : hash_groups) {
+    for (const auto &[hash, term] : hash_groups) {
       if (!term->template is<Product>() ||
           !term->template as<Product>().is_zero()) {
         new_summands.push_back(term);

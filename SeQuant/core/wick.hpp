@@ -59,8 +59,9 @@ class WickTheorem {
       assert(input_->empty() || input_->vacuum() == Vacuum::Physical);
     }
   }
-  explicit WickTheorem(const NormalOperatorSequence<S> &input)
-      : WickTheorem(std::make_shared<NormalOperatorSequence<S>>(input)) {}
+  explicit WickTheorem(NormalOperatorSequence<S> input)
+      : WickTheorem(
+            std::make_shared<NormalOperatorSequence<S>>(std::move(input))) {}
 
   explicit WickTheorem(ExprPtr expr_input) {
     if (expr_input->is<NormalOperatorSequence<S>>()) {
@@ -69,6 +70,9 @@ class WickTheorem {
     } else
       expr_input_ = std::move(expr_input);
   }
+
+  explicit WickTheorem(const std::initializer_list<Op<S>> &ops)
+      : WickTheorem(NormalOperatorSequence<S>{ops}) {}
 
   /// constructs WickTheorem from @c other with expression input set to @c
   /// expr_input
@@ -1505,46 +1509,66 @@ class WickTheorem {
                           const std::shared_ptr<const IndexSpaceRegistry> &isr =
                               get_default_context(S).index_space_registry()) {
     assert(can_contract(left, right, vacuum, isr));
-    //    assert(
-    //        !left.index().has_proto_indices() &&
-    //            !right.index().has_proto_indices());  // I don't think the
-    //            logic is
-    // correct for dependent indices
-    if (is_pure_qpannihilator<S>(left, vacuum, isr) &&
-        is_pure_qpcreator<S>(right, vacuum, isr))
-      return make_overlap(left.index(), right.index());
-    else {
+    // contraction result depends on whether the left/right (L, R) spaces
+    // are pure qp annihilator (hole, H) or qp creator (particle, P) subspaces
+    // or not, i.e. on whether L ⊆ H and R ⊆ P. The either of the conditions
+    // does not hold need to "project" either L or R to the corresponding
+    // intersection with the hole/particle spaces (l = L ∩ H, r = R ∩ P)
+    // before adding the contraction result, i.e. overlap:
+    // - both pure (L ⊆ H and R ⊆ P): result = s(L,R)
+    // - neither pure: result = δ(L,l) s(s,r) δ(R,r)
+    // - only L ⊆ H: result = s(L,r) δ(R,r)
+    // - only R ⊆ P: result = δ(L,l) s(s,R)
+    // N.B. This is a simplified version of the reality, since qp character
+    // depends on the Op's action, so the H/P depend on whether left/right is
+    // a creator/annihilator
+    const auto left_is_pure = is_pure_qpannihilator<S>(left, vacuum, isr);
+    const auto right_is_pure = is_pure_qpcreator<S>(right, vacuum, isr);
+
+    IndexSpace qpspace_common;
+    if (!left_is_pure || !right_is_pure) {
       const auto qpspace_left = qpannihilator_space<S>(left, vacuum, isr);
       const auto qpspace_right = qpcreator_space<S>(right, vacuum, isr);
-      const auto qpspace_common =
-          isr->intersection(qpspace_left, qpspace_right);
-      const auto index_common = Index::make_tmp_index(qpspace_common);
+      qpspace_common = isr->intersection(qpspace_left, qpspace_right);
+    }
 
-      // preserve bra/ket positions of left & right
-      const auto left_is_ann = left.action() == Action::Annihilate;
-      assert(left_is_ann || right.action() == Action::Annihilate);
+    std::optional<Index> left_qp_idx;
+    if (!left_is_pure) {
+      left_qp_idx =
+          Index::make_tmp_index(qpspace_common, left.index().proto_indices());
+    }
 
-      if (qpspace_common != left.index().space() &&
-          qpspace_common !=
-              right.index().space()) {  // may need 2 overlaps if neither space
-        // is pure qp creator/annihilator
-        auto result = std::make_shared<Product>();
-        result->append(1, left_is_ann
-                              ? make_overlap(left.index(), index_common)
-                              : make_overlap(index_common, left.index()));
-        result->append(1, left_is_ann
-                              ? make_overlap(index_common, right.index())
-                              : make_overlap(right.index(), index_common));
-        return result;
-      } else {
-        return left_is_ann ? make_overlap(left.index(), right.index())
-                           : make_overlap(right.index(), left.index());
-      }
+    std::optional<Index> right_qp_idx;
+    if (!right_is_pure) {
+      right_qp_idx =
+          Index::make_tmp_index(qpspace_common, right.index().proto_indices());
+    }
+
+    // preserve bra/ket positions of left & right
+    const auto left_is_ann = left.action() == Action::Annihilate;
+    assert(left_is_ann || right.action() == Action::Annihilate);
+    const auto bra_is_pure = left_is_ann ? left_is_pure : right_is_pure;
+    const auto ket_is_pure = left_is_ann ? right_is_pure : left_is_pure;
+    const auto &bra_idx = left_is_ann ? left.index() : right.index();
+    const auto &ket_idx = left_is_ann ? right.index() : left.index();
+    const auto &bra_qp_idx_opt = left_is_ann ? left_qp_idx : right_qp_idx;
+    const auto &ket_qp_idx_opt = left_is_ann ? right_qp_idx : left_qp_idx;
+
+    if (bra_is_pure || ket_is_pure) {
+      return make_overlap(bra_idx, ket_idx);
+    } else {
+      auto result = std::make_shared<Product>();
+      assert(bra_qp_idx_opt);
+      assert(ket_qp_idx_opt);
+      result->append(1, make_overlap(*bra_qp_idx_opt, *ket_qp_idx_opt));
+      result->append(1, make_kronecker(bra_idx, *bra_qp_idx_opt));
+      result->append(1, make_kronecker(*ket_qp_idx_opt, ket_idx));
+      return result;
     }
   }
 
   /// @param[in,out] expr on input, Wick's theorem result, on output the result
-  /// of reducing the overlaps
+  /// of reducing the kroneckers/overlaps
   void reduce(ExprPtr &expr) const;
 };
 

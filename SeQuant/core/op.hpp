@@ -458,7 +458,13 @@ bool Operator<S>::static_equal(const Expr &that) const {
   return *this == that_cast;
 }
 
-/// @brief NormalOperator is an Operator normal-ordered with respect to vacuum.
+template <Statistics S, typename T>
+concept index_or_op_sequence =
+    (meta::is_statically_castable_v<meta::range_value_t<T>, Index> ||
+     meta::is_statically_castable_v<meta::range_value_t<T>, Op<S>>);
+
+/// @brief NormalOperator is an Operator normal-ordered with respect to a
+/// vacuum.
 
 /// @note Normal ordering means all creators are to the left of all
 /// annihilators. It is natural to express at least number-conserving normal
@@ -502,6 +508,14 @@ class NormalOperator : public Operator<S>,
   /// constructs an identity operator
   NormalOperator(Vacuum v = get_default_context(S).vacuum()) : vacuum_(v) {}
 
+  /// constructs a single-Op operator
+  /// \param op an operator
+  /// \param v the vacuum state
+  NormalOperator(Op<S> op, Vacuum v = get_default_context(S).vacuum())
+      : Operator<S>{std::move(op)},
+        vacuum_(v),
+        ncreators_((*this)[0].action() == Action::Create ? 1 : 0) {}
+
   /// @tparam IndexOrOpSequence1 type representing a sequence of objects that
   /// can be statically cast into Index or Op<S>
   /// @tparam IndexOrOpSequence2 type representing a sequence of objects that
@@ -511,19 +525,9 @@ class NormalOperator : public Operator<S>,
   /// @param annihilators sequence of annihilator indices or operators (in order
   /// of particle indices).
   /// @param v vacuum state with respect to which the operator is normal-ordered
-  template <
-      typename IndexOrOpSequence1, typename IndexOrOpSequence2,
-      typename = std::enable_if_t<
-          (meta::is_statically_castable_v<
-               meta::range_value_t<IndexOrOpSequence1>, Index> ||
-           meta::is_statically_castable_v<
-               meta::range_value_t<IndexOrOpSequence1>,
-               Op<S>>)&&(meta::
-                             is_statically_castable_v<
-                                 meta::range_value_t<IndexOrOpSequence2>,
-                                 Index> ||
-                         meta::is_statically_castable_v<
-                             meta::range_value_t<IndexOrOpSequence2>, Op<S>>)>>
+  template <typename IndexOrOpSequence1, typename IndexOrOpSequence2>
+    requires index_or_op_sequence<S, IndexOrOpSequence1> &&
+                 index_or_op_sequence<S, IndexOrOpSequence2>
   NormalOperator(const cre<IndexOrOpSequence1> &creators,
                  const ann<IndexOrOpSequence2> &annihilators,
                  Vacuum v = get_default_context(S).vacuum())
@@ -984,9 +988,15 @@ class NormalOperatorSequence : public container::svector<NormalOperator<S>>,
     check_vacuum();
   }
 
-  /// constructs from an initializer list
+  /// constructs from an initializer list of normal operators
   NormalOperatorSequence(std::initializer_list<NormalOperator<S>> operators)
       : base_type(operators) {
+    check_vacuum();
+  }
+
+  /// constructs from an initializer list of Ops
+  NormalOperatorSequence(std::initializer_list<Op<S>> operators)
+      : base_type(operators.begin(), operators.end()) {
     check_vacuum();
   }
 
@@ -1026,6 +1036,11 @@ class NormalOperatorSequence : public container::svector<NormalOperator<S>>,
   Expr::type_id_type type_id() const override {
     return Expr::get_type_id<NormalOperatorSequence>();
   };
+
+  friend bool operator==(const NormalOperatorSequence &nopseq1,
+                         const NormalOperatorSequence &nopseq2) {
+    return static_cast<base_type>(nopseq1) == static_cast<base_type>(nopseq2);
+  }
 
  private:
   Vacuum vacuum_ = Vacuum::Physical;

@@ -8,7 +8,7 @@ if (NOT TARGET Catch2::Catch2)
         GIT_SHALLOW
         EXCLUDE_FROM_ALL
         SYSTEM
-        FIND_PACKAGE_ARGS 3 NAMES Catch2
+        FIND_PACKAGE_ARGS ${SEQUANT_OLDEST_CATCH2_VERSION} NAMES Catch2
     )
 
     FetchContent_MakeAvailable(Catch2)

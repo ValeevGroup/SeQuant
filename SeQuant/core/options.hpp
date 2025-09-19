@@ -8,6 +8,9 @@
 #include <string>
 
 namespace sequant {
+
+class Index;
+
 /// canonicalization methods
 enum class CanonicalizationMethod {
   /// Enables use of expression topology in the canonicalization, may be
@@ -29,12 +32,34 @@ enum class CanonicalizationMethod {
   Rapid = Lexicographic
 };
 
-bool operator&(CanonicalizationMethod m1, CanonicalizationMethod m2);
+CanonicalizationMethod operator&(CanonicalizationMethod m1,
+                                 CanonicalizationMethod m2);
+CanonicalizationMethod operator|(CanonicalizationMethod m1,
+                                 CanonicalizationMethod m2);
 std::wstring to_wstring(CanonicalizationMethod m);
 
+/// @brief options that control behavior of `canonicalize()`
 struct CanonicalizeOptions {
+  enum class IgnoreNamedIndexLabel : bool { Yes = true, No = false };
+
+  /// TN canonicalization method
   CanonicalizationMethod method = CanonicalizationMethod::Topological;
+  /// specifies named indices; by default all indices that appear only once are
+  /// deduced to be named, but this may be misleading if e.g. single
+  /// summed-over dummy index appears in an expression
+  std::optional<std::initializer_list<Index>> named_indices = std::nullopt;
+  /// whether to ignore the labels of named indices. Setting
+  /// to false will cause named indices to be treated as equivalent slots, which
+  /// the result to be independent of their labels. This does not make sense in
+  /// contexts where labels are meaningful, e.g. when canonicalizing sum of
+  /// tensor networks and will be therefore ignored.
+  IgnoreNamedIndexLabel ignore_named_index_labels = IgnoreNamedIndexLabel::Yes;
+
   static CanonicalizeOptions default_options();
+  CanonicalizeOptions copy_and_set(CanonicalizationMethod) const;
+  CanonicalizeOptions copy_and_set(
+      std::optional<std::initializer_list<Index>>) const;
+  CanonicalizeOptions copy_and_set(IgnoreNamedIndexLabel) const;
 
   friend constexpr bool operator==(const CanonicalizeOptions& a,
                                    const CanonicalizeOptions& b) {
@@ -42,8 +67,11 @@ struct CanonicalizeOptions {
   }
 };
 
+/// @brief options that control behavior of `simplify()`
+/// @note this is a superset of CanonicalizeOptions
 struct SimplifyOptions : public CanonicalizeOptions {
   static SimplifyOptions default_options();
+  SimplifyOptions(CanonicalizeOptions opts);
 
   friend constexpr bool operator==(const SimplifyOptions& a,
                                    const SimplifyOptions& b) {

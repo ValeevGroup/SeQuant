@@ -43,10 +43,6 @@ template <typename T>
 constexpr inline bool is_basic_string_convertible_v =
     is_string_convertible_v<T> || is_wstring_convertible_v<T>;
 
-template <typename... T>
-using EnableIfAllBasicStringConvertible = std::enable_if_t<(
-    is_basic_string_convertible_v<std::remove_reference_t<T>> && ...)>;
-
 template <typename T, typename Enabler = void>
 struct char_type;
 
@@ -60,6 +56,10 @@ using char_t = typename char_type<T>::type;
 
 }  // namespace meta
 
+template <typename T>
+concept basic_string_convertible =
+    meta::is_basic_string_convertible_v<std::remove_cvref_t<T>>;
+
 /// Converts the given wide-string to a UTF-8 encoded narrow string
 std::string toUtf8(std::wstring_view str);
 
@@ -67,7 +67,7 @@ std::string toUtf8(std::wstring_view str);
 /// wide-string
 std::wstring toUtf16(std::string_view str);
 
-template <typename S, typename = meta::EnableIfAllBasicStringConvertible<S>>
+template <basic_string_convertible S>
 std::basic_string_view<meta::char_t<S>> to_basic_string_view(S &&str) {
   if constexpr (meta::is_char_v<std::remove_reference_t<S>>)
     return {&str, 1};
