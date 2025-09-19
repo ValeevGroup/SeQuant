@@ -123,10 +123,11 @@ class CC {
   bool screen_ = true;
   bool use_topology_ = true;
 
+  /// @brief computes reference expectation value of an expression. Dispatches
+  /// to `mbpt::op::vac_av()`
   /// @param[in] expr input expression
   /// @param[in] op_connect list of pairs of operators to be connected. Default
-  /// is given by mbpt::default_op_connections().
-  /// @note see mbpt::op::vac_av for further details
+  /// is given by `mbpt::default_op_connections()`.
   auto vac_av(const ExprPtr& expr,
               const OpConnections<mbpt::OpType>& op_connect =
                   default_op_connections()) const {

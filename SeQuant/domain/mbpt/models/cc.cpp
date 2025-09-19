@@ -154,8 +154,7 @@ std::vector<ExprPtr> CC::λ(size_t commutator_rank) {
         lhbar_for_vev;  // keeps products that can produce non-zero VEV
     std::shared_ptr<Sum>
         lhbar_le_p;  // keeps products that can produce excitations rank <=p
-
-    if (screen_) {                 // if operator level screening is enabled
+    if (screen_) {   // if operator level screening is enabled
       for (auto& term : *lhbar) {  // pick terms from lhbar
         assert(term->is<Product>() || term->is<op_t>());
 
