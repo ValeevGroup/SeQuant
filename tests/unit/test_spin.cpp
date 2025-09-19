@@ -15,6 +15,7 @@
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/space.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
+#include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/spin.hpp>
 
@@ -29,6 +30,7 @@
 #include <vector>
 
 #include <range/v3/all.hpp>
+#include <range/v3/view/transform.hpp>
 
 TEST_CASE("spin", "[spin]") {
   using namespace sequant;
@@ -1059,15 +1061,13 @@ SECTION("Closed-shell spintrace CCSDT terms") {
             "g{a_1,a_3;a_4,a_5}:N-C-S * t{a_2,a_4,a_5;i_1,i_3,i_2}:N-C-S"));
   }
 
-  {  // ppl term in optimal: results in 1 term
+  {  // ppl term in v2: results in 1 term
     const auto input = ex<Sum>(ExprPtrList{
         parse_expr(L"1/24 A{i_1,i_2,i_3;a_1,a_2,a_3} * "
                    L"g{a_1,a_2;a_4,a_5} * t{a_3,a_4,a_5;i_1,i_2,i_3}",
                    Symmetry::Antisymm)});
 
     auto result = closed_shell_CC_spintrace_v2(input);
-    // multiply the resut by 6/5 to revert the rescaling factor
-    result *= ex<Constant>(rational{5, 6});
 
     std::wcout << "Result: " << to_latex_align(result) << std::endl;
     std::wcout << "Result: " << to_latex_align(ex<Sum>(result), 0, 4)
@@ -1078,10 +1078,10 @@ SECTION("Closed-shell spintrace CCSDT terms") {
     REQUIRE_THAT(
         result,
         EquivalentTo(
-            L"1/2 S{i_1,i_2,i_3;a_1,a_2,a_3}:N-C-S * "
+            L"6/10 S{i_1,i_2,i_3;a_1,a_2,a_3}:N-C-S * "
             "g{a_1,a_2;a_4,a_5}:N-C-S * t{a_3,a_4,a_5;i_3,i_1,i_2}:N-C-S"));
   }
-  {  // ppl term in regular_cs: results in 4 terms
+  {  // ppl term in v1: results in 4 terms
     const auto input = ex<Sum>(ExprPtrList{
         parse_expr(L"1/24 A{i_1,i_2,i_3;a_1,a_2,a_3} * g{a_1,a_2;a_4,a_5} * "
                    "t{a_3,a_4,a_5;i_1,i_2,i_3}",
@@ -1102,6 +1102,56 @@ SECTION("Closed-shell spintrace CCSDT terms") {
             "t{a_3,a_4,a_5;i_3,i_2,i_1}:N-C-S - 1/5 "
             "S{i_1,i_2,i_3;a_1,a_2,a_3}:N-C-S * "
             "g{a_1,a_2;a_4,a_5}:N-C-S * t{a_3,a_4,a_5;i_2,i_1,i_3}:N-C-S"));
+  }
+
+  {  // convert v1 eqs to v2
+    const auto input = ex<Sum>(ExprPtrList{
+        parse_expr(L"1/24 A{i_1,i_2,i_3;a_1,a_2,a_3} * g{a_1,a_2;a_4,a_5} * "
+                   "t{a_3,a_4,a_5;i_1,i_2,i_3}",
+                   Symmetry::Antisymm)});
+
+    auto result = closed_shell_CC_spintrace_v1(input);
+
+    REQUIRE_THAT(
+        result,
+        EquivalentTo(
+            L"-1/5 S{i_1,i_2,i_3;a_1,a_2,a_3}:N-C-S * g{a_1,a_2;a_4,a_5}:N-C-S "
+            L"* "
+            "t{a_3,a_4,a_5;i_1,i_2,i_3}:N-C-S + 1/2 "
+            "S{i_1,i_2,i_3;a_1,a_2,a_3}:N-C-S * "
+            "g{a_1,a_2;a_4,a_5}:N-C-S * t{a_3,a_4,a_5;i_3,i_1,i_2}:N-C-S - "
+            "1/10 "
+            "S{i_1,i_2,i_3;a_1,a_2,a_3}:N-C-S * g{a_1,a_2;a_4,a_5}:N-C-S * "
+            "t{a_3,a_4,a_5;i_3,i_2,i_1}:N-C-S - 1/5 "
+            "S{i_1,i_2,i_3;a_1,a_2,a_3}:N-C-S * "
+            "g{a_1,a_2;a_4,a_5}:N-C-S * t{a_3,a_4,a_5;i_2,i_1,i_3}:N-C-S"));
+
+    // further steps convert v1 to v2
+    auto const ext_idxs = external_indices(result);
+    result = S_maps(result);
+    result = canonicalize(result);
+    result = WK_biorthogonalization_filter(result, ext_idxs);
+
+    using ranges::views::transform;
+    auto bixs = ext_idxs | transform([](auto&& vec) { return vec[1]; });
+    auto kixs = ext_idxs | transform([](auto&& vec) { return vec[0]; });
+    result =
+        ex<Tensor>(Tensor{L"S", bra(std::move(bixs)), ket(std::move(kixs))}) *
+        result;
+
+    rational combined_factor;
+    auto fact_n = factorial(ext_idxs.size());
+    combined_factor =
+        rational(1, fact_n - 1);  // this is (1/fact_n) * (fact_n/(fact_n-1))
+    result = ex<Constant>(combined_factor) * result;
+
+    simplify(result);
+
+    REQUIRE_THAT(
+        result,
+        EquivalentTo(
+            L"6/10 S{i_1,i_2,i_3;a_1,a_2,a_3}:N-C-S * "
+            "g{a_1,a_2;a_4,a_5}:N-C-S * t{a_3,a_4,a_5;i_3,i_1,i_2}:N-C-S"));
   }
 
   {  // f * t3
