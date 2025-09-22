@@ -57,16 +57,15 @@ class compute_cceqvec {
   compute_cceqvec(size_t p, size_t pmin, size_t n, EqnType t = EqnType::t)
       : P(nₚ(p)), PMIN(pmin), N(n), type(t) {}
 
-  void operator()(bool print, bool screen, bool use_topology,
-                  bool use_connectivity, bool canonical_only) {
+  void operator()(bool print, bool screen, bool use_topology) {
     tpool.start(N);
     std::vector<ExprPtr> eqvec;
     switch (type) {
       case EqnType::t:
-        eqvec = CC{N}.t(4, P, PMIN);
+        eqvec = CC{N, CC::Ansatz::T, screen, use_topology}.t(4, P, PMIN);
         break;
       case EqnType::λ:
-        eqvec = CC{N}.λ(4);
+        eqvec = CC{N, CC::Ansatz::T, screen, use_topology}.λ(4);
         break;
     }
     tpool.stop(N);
@@ -74,9 +73,7 @@ class compute_cceqvec {
     std::wcout << std::boolalpha << "CC equations [type=" << type2str.at(type)
                << ",rank=" << N << ",spinfree=" << spinfree
                << ",screen=" << screen << ",use_topology=" << use_topology
-               << ",use_connectivity=" << use_connectivity
-               << ",canonical_only=" << canonical_only << "] computed in "
-               << tpool.read(N) << " seconds" << std::endl;
+               << "] computed in " << tpool.read(N) << " seconds" << std::endl;
 
     // validate spin-free equations against spin-traced spin-orbital equations
     std::vector<ExprPtr> eqvec_sf_ref;
@@ -186,23 +183,22 @@ class compute_cceqvec {
             eqvec[R] =
                 ex<Tensor>(Tensor{L"S", bra(kixs), ket(bixs)}) * eqvec[R];
           }
-
           simplify(eqvec[R]);
 
           // expand the particle symmetrizer to get all the raw equations
           eqvec[R] = S_maps(eqvec[R]);
           canonicalize(eqvec[R]);
 
-          // apply hash fiter to get only terms with large coefficients
+          // apply WK_biorthogonalization_filter to get only terms with large
+          // coefficients
           eqvec[R] = WK_biorthogonalization_filter(eqvec[R], ext_idxs);
 
-          // resotre the particle symmetrizer again to get the most compact set
+          // restore the particle symmetrizer again to get the most compact set
           // of equations
           eqvec[R] = ex<Tensor>(Tensor{L"S", bra(kixs), ket(bixs)}) * eqvec[R];
-
           eqvec[R] = expand(eqvec[R]);
 
-          // apply normalizaiton and rescaling facotrs
+          // apply normalization and rescaling factors
           rational combined_factor;
           if (ext_idxs.size() <= 2) {
             combined_factor = rational(1, factorial(ext_idxs.size()));
@@ -212,14 +208,13 @@ class compute_cceqvec {
                 1, fact_n - 1);  // this is (1/fact_n) * (fact_n/(fact_n-1))
           }
           eqvec[R] = ex<Constant>(combined_factor) * eqvec[R];
-
           simplify(eqvec[R]);
 
-          // hash filter method removes the redundancy caused by biorthogonal
-          // transformation and gives the most compact set of eqns. However, we
-          // need to restore the effects of those deleted terms. So, in cck
-          // class, after evaluste_symm in sequant evaluation scope, we need to
-          // call evaluate_biorthogonal_cleanup.
+          // WK_biorthogonalization_filter method removes the redundancy caused
+          // by biorthogonal transformation and gives the most compact set of
+          // equations. However, we need to restore the effects of those deleted
+          // terms. So, after evaluate_symm call in sequant evaluation scope, we
+          // need to call evaluate_biorthogonal_cleanup.
 
           std::wcout << "biorthogonal spin-free R" << R << "(expS" << N
                      << ") has " << eqvec[R]->size() << " terms:" << std::endl;
@@ -248,11 +243,9 @@ class compute_all {
   compute_all(size_t nmax, EqnType t = EqnType::t) : NMAX(nmax), type(t) {}
 
   void operator()(bool print = true, bool screen = true,
-                  bool use_topology = true, bool use_connectivity = true,
-                  bool canonical_only = true) {
+                  bool use_topology = true) {
     for (size_t N = 1; N <= NMAX; ++N)
-      compute_cceqvec{N, 1, N, type}(print, screen, use_topology,
-                                     use_connectivity, canonical_only);
+      compute_cceqvec{N, 1, N, type}(print, screen, use_topology);
   }
 };  // class compute_all
 
@@ -300,5 +293,5 @@ int main(int argc, char* argv[]) {
 
   tpool.clear();
   // comment out to run all possible combinations
-  compute_all{NMAX, eqn_type}(print);
+  compute_all{NMAX, eqn_type}(print, /*screen*/ true, /*use_topology*/ true);
 }
