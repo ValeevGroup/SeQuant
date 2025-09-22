@@ -245,7 +245,7 @@ TEST_CASE("canonicalization", "[algorithms]") {
           ex<Variable>(L"q1") + ex<Variable>(L"q1") + ex<Variable>(L"q2");
       simplify(input);
       canonicalize(input);
-      REQUIRE_THAT(input, SimplifiesTo("q2 + 2 q1"));
+      REQUIRE_THAT(input, EquivalentTo("q2 + 2 q1"));
     }
 
     {

@@ -226,18 +226,18 @@ TEST_CASE("mbpt", "[mbpt]") {
       {
         //      std::wcout << "to_latex(simplify(f * t * t)): "
         //                 << to_latex(simplify(f * t * t)) << std::endl;
-        CHECK(to_latex(simplify(f * t * t)) ==
-              to_latex(f * t2 * t2 + ex<Constant>(2) * f * t1 * t2 +
-                       f * t1 * t1));
+        REQUIRE_THAT(simplify(f * t * t),
+                     EquivalentTo(f * t2 * t2 + ex<Constant>(2) * f * t1 * t2 +
+                                  f * t1 * t1));
       }
 
       {
         //      std::wcout << "to_latex(simplify(f * t * t * t): "
         //                 << to_latex(simplify(f * t * t * t)) << std::endl;
-        CHECK(to_latex(simplify(f * t * t * t)) ==
-              to_latex(f * t1 * t1 * t1 + f * t2 * t2 * t2 +
-                       ex<Constant>(3) * f * t1 * t2 * t2 +
-                       ex<Constant>(3) * f * t1 * t1 * t2));
+        REQUIRE_THAT(simplify(f * t * t * t),
+                     EquivalentTo(f * t1 * t1 * t1 + f * t2 * t2 * t2 +
+                                  ex<Constant>(3) * f * t1 * t2 * t2 +
+                                  ex<Constant>(3) * f * t1 * t1 * t2));
       }
     }  // SECTION("canonicalize")
 

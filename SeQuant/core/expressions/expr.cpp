@@ -405,51 +405,64 @@ ExprPtr Sum::canonicalize_impl(bool multipass, CanonicalizeOptions opts) {
       std::wcout << "Sum::canonicalize_impl (pass=" << pass
                  << "): after canonicalizing summands = "
                  << to_latex_align(shared_from_this()) << std::endl;
-    // flat map for grouping by hash pairs
-    container::map<std::size_t, ExprPtr> hash_groups;
+
+    // used to combine terms proportional to each other
+    container::unordered_set<ExprPtr, sequant::hash::_<ExprPtr>,
+                             proportional_to>
+        summands;
+
     // process each summand
-    for (const auto &summand : summands_) {
-      auto hash = summand->hash_value();
-      auto it = hash_groups.find(hash);
-      if (it == hash_groups.end()) {
-        // first occurrence of this item
-        hash_groups.emplace(hash, summand);
-      } else {
-        // another term with the same hash
-        if (summand->template is<Product>()) {
-          if (it->second->template is<Product>()) {
+    for (auto &summand : summands_) {
+      auto it = summands.find(summand);
+      if (it == summands.end()) {
+        summands.emplace(summand);
+      } else {  // found existing term with the same hash
+        auto existing_summand = *it;
+        if (summand.template is<Product>()) {
+          if (existing_summand.is<Product>()) {
             // both are products - add them
-            auto &product = it->second->template as<Product>();
-            product.add_identical(summand->template as<Product>());
+            existing_summand.as<Product>().add_identical(
+                summand.template as<Product>());
           } else {
             // convert existing term to product and add
             auto product_copy = std::make_shared<Product>(summand->clone());
-            product_copy->add_identical(it->second);
-            it->second = product_copy;
+            product_copy->add_identical(existing_summand);
+            summands.erase(it);
+            summands.emplace(std::move(product_copy));
           }
         } else {
-          if (it->second->template is<Product>()) {
-            // convert summand to product and add
-            auto &product = it->second->template as<Product>();
-            product.add_identical(summand);
+          if (existing_summand.is<Product>()) {
+            existing_summand.as<Product>().add_identical(summand);
           } else {
             // neither is a product - create new product
             auto product_form = std::make_shared<Product>();
-            product_form->append(2, summand->template as<Expr>());
-            it->second = product_form;
+            product_form->append(2, summand.template as<Expr>());
+            summands.erase(it);
+            summands.emplace(std::move(product_form));
           }
         }
       }
     }
     decltype(summands_) new_summands;
-    new_summands.reserve(summands_.size());
-    // collect all grouped terms (already sorted by size, then hash due to pair
-    // ordering)
-    for (const auto &[hash, term] : hash_groups) {
+    new_summands.reserve(summands.size());
+    for (auto term : summands) {
       if (!term->template is<Product>() ||
           !term->template as<Product>().is_zero()) {
         new_summands.push_back(term);
       }
+    }
+
+    // last pass? sort by hash then by Expr::operator<
+    // N.B. no point in differentiating between canonicalization methods here
+    // since need to sort in both cases
+    if (pass == npasses - 1) {
+      ranges::sort(new_summands, [](const auto &e1, const auto &e2) {
+        if (e1->hash_value() == e2->hash_value()) {
+          return e1 < e2;
+        } else {
+          return e1->hash_value() < e2->hash_value();
+        }
+      });
     }
     summands_.swap(new_summands);
 
@@ -460,6 +473,33 @@ ExprPtr Sum::canonicalize_impl(bool multipass, CanonicalizeOptions opts) {
   }
 
   return {};  // side effects are absorbed into summands
+}
+
+bool proportional_to::operator()(const ExprPtr &expr1,
+                                 const ExprPtr &expr2) const {
+  if (expr1->type_id() !=
+      expr2->type_id()) {  // if expr1 is a Product with single factor == expr2,
+                           // or vice versa
+    if (expr1.is<Product>()) {
+      return expr1.as<Product>().factors().size() == 1 &&
+             expr1.as<Product>().factors().front() == expr2;
+    } else if (expr2.is<Product>()) {
+      return expr2.as<Product>().factors().size() == 1 &&
+             expr2.as<Product>().factors().front() == expr1;
+    } else
+      return false;
+  }
+
+  // expr1 and expr2 are same type
+
+  if (expr1.is<Variable>()) {
+    return true;
+  }
+  if (expr1.is<Product>()) {
+    return expr1->hash_value() == expr2->hash_value() &&
+           expr1.as<Product>().factors() == expr2.as<Product>().factors();
+  }
+  return expr1 == expr2;
 }
 
 }  // namespace sequant
