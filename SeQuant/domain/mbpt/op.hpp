@@ -200,12 +200,12 @@ struct default_qns_tag {};
 // clang-format off
 /// Tracks changes in \c N quantum numbers
 
-/// Implements the concept of a quantum number change; this is useful for
-/// tracking the quantum numbers of a many-body operator, such as the number of particles,
+/// Represents changes in a set of quantum numbers; this is useful for
+/// tracking the change of quantum numbers induced by a many-body operator, such as the number of particles,
 /// the number of quasiparticles, the number of ops (creators/annihilators) in each subspace, etc.
 /// For example, to operator products expressed in normal order with respect to physical vacuum it is sufficient to track
 /// the number of creators and annihilators; For the fermi vacuum case, the number of creators and annihilators in each
-/// subspace becomes important. the number of ops is tracked for each base space (determined by the IndexSpaceRegistry object in Context).
+/// subspace becomes important, hence the number of ops is tracked for each base space (determined by the IndexSpaceRegistry object in Context).
 /// The interval representation is necessary to dictate how many creators or annihilators could be in each subspace.
 /// This is pertinent when user defined hole_space or particle_space are NOT base spaces.
 /// Since the choice of space partitioning is up to the user, the base class must be a dynamic container.

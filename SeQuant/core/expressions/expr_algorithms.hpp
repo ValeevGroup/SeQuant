@@ -340,6 +340,11 @@ inline ExprPtr& expand(ExprPtr& expr) {
   return expr;
 }
 
+/// Recursively expands products of sums
+/// @param[in,out] expr expression to be expanded
+/// @return \p expr to facilitate chaining
+inline ExprPtr expand(ExprPtr&& expr) { return expand(expr); }
+
 /// @brief a view of the leaves/atoms of an Expr tree
 /// @note this is just like view::join, except fully recursive and its iterator
 /// provides not only elements but also their indices as well as the host

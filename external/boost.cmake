@@ -31,6 +31,7 @@ set(required_components
         range
         regex
         spirit
+        unordered
         variant
 )
 if (DEFINED Boost_REQUIRED_COMPONENTS)

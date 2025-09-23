@@ -528,6 +528,14 @@ inline bool operator==(const Expr &a, const Expr &b) {
 inline bool operator!=(const Expr &a, const Expr &b) { return !(a == b); }
 #endif  // __cplusplus < 202002L
 
+/// binary predicate that returns true is 2 expressions differ by a factor
+struct proportional_to {
+  /// @param[in] expr1
+  /// @param[in] expr2
+  /// @return true if @p expr1 is proportional to @p expr2
+  bool operator()(const ExprPtr &expr1, const ExprPtr &expr2) const;
+};
+
 }  // namespace sequant
 
 #endif  // SEQUANT_EXPRESSIONS_EXPR_HPP
