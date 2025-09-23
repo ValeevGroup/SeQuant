@@ -1111,7 +1111,6 @@ SECTION("Closed-shell spintrace CCSDT terms") {
                    Symmetry::Antisymm)});
 
     auto result = closed_shell_CC_spintrace_v1(input);
-
     REQUIRE_THAT(
         result,
         EquivalentTo(
@@ -1140,18 +1139,25 @@ SECTION("Closed-shell spintrace CCSDT terms") {
         result;
 
     rational combined_factor;
-    auto fact_n = factorial(ext_idxs.size());
-    combined_factor =
-        rational(1, fact_n - 1);  // this is (1/fact_n) * (fact_n/(fact_n-1))
+    if (ext_idxs.size() <= 2) {
+      combined_factor = rational(1, factorial(ext_idxs.size()));
+    } else {
+      auto fact_n = factorial(ext_idxs.size());
+      combined_factor =
+          rational(1, fact_n - 1);  // this is (1/fact_n) * (fact_n/(fact_n-1))
+    }
     result = ex<Constant>(combined_factor) * result;
 
     simplify(result);
-
     REQUIRE_THAT(
         result,
         EquivalentTo(
-            L"6/10 S{i_1,i_2,i_3;a_1,a_2,a_3}:N-C-S * "
+            L"3/5 S{i_1,i_2,i_3;a_1,a_2,a_3}:N-C-S * "
             "g{a_1,a_2;a_4,a_5}:N-C-S * t{a_3,a_4,a_5;i_3,i_1,i_2}:N-C-S"));
+    auto result2 = closed_shell_CC_spintrace_v2(input);
+
+    // it is possbile to build v2 out of v1
+    REQUIRE(result == result2);
   }
 
   {  // f * t3
