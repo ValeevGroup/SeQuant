@@ -2,7 +2,6 @@
 // Created by Eduard Valeyev on 2019-02-26.
 //
 
-#include <SeQuant/core/abstract_tensor.hpp>
 #include <SeQuant/core/algorithm.hpp>
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/bliss.hpp>
@@ -14,10 +13,10 @@
 #include <SeQuant/core/latex.hpp>
 #include <SeQuant/core/logger.hpp>
 #include <SeQuant/core/tag.hpp>
-#include <SeQuant/core/tensor.hpp>
 #include <SeQuant/core/tensor_network.hpp>
 #include <SeQuant/core/tensor_network/vertex_painter.hpp>
 #include <SeQuant/core/tensor_network_v2.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/tuple.hpp>
 #include <SeQuant/core/wstring.hpp>
 
@@ -220,12 +219,14 @@ ExprPtr TensorNetwork::canonicalize(
         return pvector;
       };
 
-      graph->write_dot(std::wcout, vlabels, vtexlabels);
+      graph->write_dot(std::wcout,
+                       {.labels = vlabels, .texlabels = vtexlabels});
 
       bliss::Graph *cgraph = graph->permute(cl);
       auto cvlabels = permute(vlabels, cl);
       auto cvtexlabels = permute(vtexlabels, cl);
-      cgraph->write_dot(std::wcout, cvlabels, cvtexlabels);
+      cgraph->write_dot(std::wcout,
+                        {.labels = cvlabels, .texlabels = cvtexlabels});
       delete cgraph;
     }
 
@@ -276,12 +277,10 @@ ExprPtr TensorNetwork::canonicalize(
                     });
           // make a replacement list by generating new indices in canonical
           // order
-          std::size_t ord = 0;
           for (auto &&[idx_ord, idx_ord_can] : idx_can) {
             const auto &idx = (edges_.begin() + idx_ord)->idx();
             const auto new_idx = idxfac.make(idx);
             if (idx != new_idx) idxrepl.emplace(idx, std::move(new_idx));
-            ++ord;
           }
         } else if (sz == 1) {  // no need for resorting of colors with 1 index
                                // only, but still need to replace the index
@@ -402,6 +401,7 @@ ExprPtr TensorNetwork::canonicalize(
           end(idx_terminals_sorted),
           [&idxrepl, &idxfac, &is_anonymous_index](const auto &terminals) {
             const auto &idx = terminals.idx();
+            (void)is_anonymous_index;
             assert(is_anonymous_index(
                 idx));  // should only encounter anonymous indices here
             idxrepl.emplace(std::make_pair(idx, idxfac.make(idx)));
@@ -488,7 +488,8 @@ TensorNetwork::GraphData TensorNetwork::make_bliss_graph(
                                   ? this->ext_indices()
                                   : *options.named_indices;
 
-  VertexPainter colorizer(named_indices, options.distinct_named_indices);
+  VertexPainter<TensorNetwork> colorizer(named_indices,
+                                         options.distinct_named_indices);
 
   // results
   std::shared_ptr<bliss::Graph> graph;
@@ -538,8 +539,9 @@ TensorNetwork::GraphData TensorNetwork::make_bliss_graph(
       if (symmetric_protoindex_bundles.find(idx.proto_indices()) ==
           symmetric_protoindex_bundles
               .end()) {  // new bundle? make a vertex for it
-        auto graph = symmetric_protoindex_bundles.insert(idx.proto_indices());
-        assert(graph.second);
+        [[maybe_unused]] auto [it, inserted] =
+            symmetric_protoindex_bundles.insert(idx.proto_indices());
+        assert(inserted);
       }
     }
     index_cnt++;
@@ -615,12 +617,12 @@ TensorNetwork::GraphData TensorNetwork::make_bliss_graph(
     // - ket
     // - braket (connecting bra and ket to the core)
     auto &tref = *t;
-    if (symmetry(tref) != Symmetry::nonsymm) {
+    if (symmetry(tref) != Symmetry::Nonsymm) {
       nv += 3;
       if (options.make_labels) {
         vertex_labels.emplace_back(
             std::wstring(L"bra") + to_wstring(bra_rank(tref)) +
-            ((symmetry(tref) == Symmetry::antisymm) ? L"a" : L"s"));
+            ((symmetry(tref) == Symmetry::Antisymm) ? L"a" : L"s"));
       }
       if (options.make_texlabels) {
         vertex_texlabels.emplace_back(std::nullopt);
@@ -630,13 +632,13 @@ TensorNetwork::GraphData TensorNetwork::make_bliss_graph(
       if (options.make_labels) {
         vertex_labels.emplace_back(
             std::wstring(L"ket") + to_wstring(ket_rank(tref)) +
-            ((symmetry(tref) == Symmetry::antisymm) ? L"a" : L"s"));
+            ((symmetry(tref) == Symmetry::Antisymm) ? L"a" : L"s"));
       }
       if (options.make_texlabels) {
         vertex_texlabels.emplace_back(std::nullopt);
       }
       vertex_type.push_back(VertexType::TensorKet);
-      if (braket_symmetry(tref) == BraKetSymmetry::symm) {
+      if (braket_symmetry(tref) == BraKetSymmetry::Symm) {
         // Use BraGroup for kets as well as they are supposed to be
         // indistinguishable
         vertex_color.push_back(colorizer(BraGroup{0}));
@@ -646,12 +648,12 @@ TensorNetwork::GraphData TensorNetwork::make_bliss_graph(
       if (options.make_labels) {
         vertex_labels.emplace_back(
             std::wstring(L"bk") +
-            ((symmetry(tref) == Symmetry::antisymm) ? L"a" : L"s"));
+            ((symmetry(tref) == Symmetry::Antisymm) ? L"a" : L"s"));
       }
       if (options.make_texlabels) {
         vertex_texlabels.emplace_back(std::nullopt);
       }
-      vertex_type.push_back(VertexType::Particle);
+      vertex_type.push_back(VertexType::TensorBraKet);
       // Color bk node in same color as tensor core
       vertex_color.push_back(colorizer(tref));
     }
@@ -671,10 +673,10 @@ TensorNetwork::GraphData TensorNetwork::make_bliss_graph(
           vertex_texlabels.emplace_back(std::nullopt);
         }
         vertex_type.push_back(VertexType::TensorBra);
-        const bool distinguishable_particles =
-            particle_symmetry(tref) == ParticleSymmetry::nonsymm;
+        const bool distinguishable_cols =
+            column_symmetry(tref) == ColumnSymmetry::Nonsymm;
         vertex_color.push_back(
-            colorizer(BraGroup{distinguishable_particles ? p : 0}));
+            colorizer(BraGroup{distinguishable_cols ? p : 0}));
         if (options.make_labels) {
           vertex_labels.emplace_back(std::wstring(L"ket") + pstr);
         }
@@ -682,14 +684,14 @@ TensorNetwork::GraphData TensorNetwork::make_bliss_graph(
           vertex_texlabels.emplace_back(std::nullopt);
         }
         vertex_type.push_back(VertexType::TensorKet);
-        if (braket_symmetry(tref) == BraKetSymmetry::symm) {
+        if (braket_symmetry(tref) == BraKetSymmetry::Symm) {
           // Use BraGroup for kets as well as they are supposed to be
           // indistinguishable
           vertex_color.push_back(
-              colorizer(BraGroup{distinguishable_particles ? p : 0}));
+              colorizer(BraGroup{distinguishable_cols ? p : 0}));
         } else {
           vertex_color.push_back(
-              colorizer(KetGroup{distinguishable_particles ? p : 0}));
+              colorizer(KetGroup{distinguishable_cols ? p : 0}));
         }
         if (options.make_labels) {
           vertex_labels.emplace_back(std::wstring(L"bk") + pstr);
@@ -697,7 +699,7 @@ TensorNetwork::GraphData TensorNetwork::make_bliss_graph(
         if (options.make_texlabels) {
           vertex_texlabels.emplace_back(std::nullopt);
         }
-        vertex_type.push_back(VertexType::Particle);
+        vertex_type.push_back(VertexType::TensorBraKet);
         vertex_color.push_back(colorizer(tref));
       }
     }
@@ -742,7 +744,7 @@ TensorNetwork::GraphData TensorNetwork::make_bliss_graph(
       } else {
         const auto &tensor = *tensors_[tensor_ord];
         const auto num_vector_slot_groups =
-            tensor._symmetry() == Symmetry::nonsymm
+            tensor._symmetry() == Symmetry::Nonsymm
                 ? std::max(tensor._bra().size(), tensor._ket().size())
                 : 1;
         // aux slot groups appear after the vector slot groups
@@ -767,7 +769,7 @@ TensorNetwork::GraphData TensorNetwork::make_bliss_graph(
             symmetric_protoindex_bundles.begin();
         graph->add_edge(index_cnt, spbundle_vertex_offset + spbundle_idx);
       } else {
-        abort();  // nonsymmetric proto indices not supported yet
+        SEQUANT_ABORT("nonsymmetric proto indices not supported yet");
       }
     }
     ++index_cnt;
@@ -801,7 +803,7 @@ TensorNetwork::GraphData TensorNetwork::make_bliss_graph(
         const auto vertex_offset = tensor_vertex_offset.at(tensor_cnt);
         // for each braket terminal linker
         auto &tref = *t;
-        const size_t nbk = symmetry(tref) == Symmetry::nonsymm
+        const size_t nbk = symmetry(tref) == Symmetry::Nonsymm
                                ? std::max(bra_rank(tref), ket_rank(tref))
                                : 1;
         for (size_t bk = 1; bk <= nbk; ++bk) {
@@ -853,7 +855,7 @@ void TensorNetwork::init_edges() const {
 
   int t_idx = 0;
   for (auto &&t : tensors_) {
-    const auto t_is_nonsymm = symmetry(*t) == Symmetry::nonsymm;
+    const auto t_is_nonsymm = symmetry(*t) == Symmetry::Nonsymm;
     size_t slot_group_ord = 0;
     for (const Index &idx : t->_bra()) {
       idx_insert(idx, t_idx, TensorIndexSlotType::Bra,
@@ -952,7 +954,7 @@ void TensorNetwork::init_edges() const {
 }
 
 container::svector<std::pair<long, long>> TensorNetwork::factorize() {
-  abort();  // not yet implemented
+  SEQUANT_ABORT("TensorNetwork::factorize is not yet implemented");
 }
 
 size_t TensorNetwork::SlotCanonicalizationMetadata::hash_value() const {
@@ -1015,7 +1017,7 @@ TensorNetwork::SlotCanonicalizationMetadata TensorNetwork::canonicalize_slots(
                         .make_texlabels = Logger::instance().canonicalize_dot});
   if (Logger::instance().canonicalize_dot) {
     std::wcout << "Input graph for canonicalization:\n";
-    graph->write_dot(std::wcout, vlabels, vtexlabels);
+    graph->write_dot(std::wcout, {.labels = vlabels, .texlabels = vtexlabels});
   }
 
   // canonize the graph
@@ -1037,7 +1039,8 @@ TensorNetwork::SlotCanonicalizationMetadata TensorNetwork::canonicalize_slots(
     auto cvlabels = permute(vlabels, cl);
     auto cvtexlabels = permute(vtexlabels, cl);
     std::wcout << "Canonicalized graph:\n";
-    metadata.graph->write_dot(std::wcout, cvlabels, cvtexlabels);
+    metadata.graph->write_dot(std::wcout,
+                              {.labels = cvlabels, .texlabels = cvtexlabels});
   }
 
   // produce named indices sorted by named_index_compare first, then by
@@ -1196,7 +1199,7 @@ TensorNetwork::SlotCanonicalizationMetadata TensorNetwork::canonicalize_slots(
       // canonical order of slots: bra, then ket, then aux. We only care about
       // indices in tensor slots here, so no need to worry about protoindex
       // slots
-      if (t->symmetry() == Symmetry::antisymm) {
+      if (t->symmetry() == Symmetry::Antisymm) {
         // bra first, then ket
         metadata.phase *= input_to_canonical_parity(t->bra());
         metadata.phase *= input_to_canonical_parity(t->ket());

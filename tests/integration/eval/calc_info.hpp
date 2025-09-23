@@ -71,9 +71,16 @@ struct CalcInfo {
                                                          size_t rank) const {
     using ranges::views::transform;
     auto trimmed = opt::tail_factor(expr);
-    return *trimmed | transform([st = optm_opts.single_term](auto expr) {
-      return binarize<ExprT>(st ? optimize(expr) : expr);
-    }) | ranges::to_vector;
+    auto tform_and_save =
+        transform([st = optm_opts.single_term](const auto& expr) {
+          return binarize<ExprT>(st ? optimize(expr) : expr);
+        }) |
+        ranges::to_vector;
+    if (trimmed.size() > 0) {
+      return *trimmed | tform_and_save;
+    } else {  // corner case: trimmed is an atom (i.e. single tensor)
+      return ranges::views::single(trimmed) | tform_and_save;
+    }
   }
 };
 

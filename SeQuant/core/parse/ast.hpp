@@ -72,7 +72,7 @@ struct SymmetrySpec : boost::spirit::x3::position_tagged {
   static constexpr char unspecified = '\0';
   char perm_symm = unspecified;
   char braket_symm = unspecified;
-  char particle_symm = unspecified;
+  char column_symm = unspecified;
 };
 
 // represents AbstractTensor, i.e. Tensor or NormalOperator
@@ -146,7 +146,7 @@ BOOST_FUSION_ADAPT_STRUCT(sequant::parse::ast::Variable, name, conjugated);
 BOOST_FUSION_ADAPT_STRUCT(sequant::parse::ast::IndexGroups, bra, ket,
                           auxiliaries, reverse_bra_ket);
 BOOST_FUSION_ADAPT_STRUCT(sequant::parse::ast::SymmetrySpec, perm_symm,
-                          braket_symm, particle_symm);
+                          braket_symm, column_symm);
 BOOST_FUSION_ADAPT_STRUCT(sequant::parse::ast::Tensor, name, indices, symmetry);
 
 BOOST_FUSION_ADAPT_STRUCT(sequant::parse::ast::Product, factors);

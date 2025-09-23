@@ -20,13 +20,23 @@ TEST_CASE("index", "[elements][index]") {
 
     // default
     REQUIRE_NOTHROW(Index{});
-    Index i{};
+    REQUIRE(Index{}.space() == IndexSpace{});
+    REQUIRE(Index{}.ordinal() == std::nullopt);
+    REQUIRE(Index{}.proto_indices().empty());
+    REQUIRE(Index{}.symmetric_proto_indices());
+    REQUIRE(Index{}.label().empty());
+    REQUIRE(static_cast<bool>(Index{}) == false);
+    REQUIRE(Index{} == Index::null);
+    // empty label also produces default
+    REQUIRE_NOTHROW(Index(L""));
+    REQUIRE(Index{L""} == Index{});
 
     // ordinal-free Index
     {
       REQUIRE_NOTHROW(Index(L"i"));
       Index i(L"i");
       REQUIRE(!i.ordinal());
+      REQUIRE(static_cast<bool>(i) == true);
     }
 
     // labels must match the space key
@@ -41,6 +51,7 @@ TEST_CASE("index", "[elements][index]") {
     REQUIRE(i1.label() == L"i_1");
     REQUIRE(i1.space() == isr->retrieve(L"i"));
     REQUIRE(i1.ordinal() == 1);
+    REQUIRE(static_cast<bool>(i1) == true);
 
     Index i2(isr->retrieve(L'i'), 2);  // N.B. using retrieve(char)
     REQUIRE(i2.label() == L"i_2");
@@ -104,9 +115,23 @@ TEST_CASE("index", "[elements][index]") {
       REQUIRE(i7.proto_indices()[1] == i2);  // !!
       REQUIRE(i7.full_label() == L"i_7<i_1, i_2>");
 
+      // move-ctor should leave null in its wake
+      REQUIRE(i7.nonnull());
+      auto i7_copy = i7;
+      i7_copy.tag();  // make tag nonnull also
+      REQUIRE(i7_copy.nonnull() == true);
+      REQUIRE_NOTHROW(Index(std::move(i7_copy)));
+      REQUIRE(i7_copy.nonnull() == false);
+      i7_copy = i7;
+      i7_copy.tag();  // make tag nonnull also
+      REQUIRE(i7_copy.nonnull() == true);
+      REQUIRE_NOTHROW(Index{} = std::move(i7_copy));
+      REQUIRE(i7_copy.nonnull() == false);
+
 #ifndef NDEBUG
       REQUIRE_THROWS(Index(isr->retrieve(L"i"), 4, {i1, i1}));
       REQUIRE_THROWS(Index(L"i_5", {L"i_1", L"i_1"}));
+      REQUIRE_THROWS(Index(L"i_5", {L"i_1", L""}));
 #endif
     }
 
@@ -122,11 +147,10 @@ TEST_CASE("index", "[elements][index]") {
       REQUIRE(!i2.ordinal());
 
       // to make things interesting use F12 registry with greek letters
-      Context cxt(sequant::mbpt::make_F12_sr_spaces(), Vacuum::Physical,
-                  get_default_context().metric(),
-                  get_default_context().braket_symmetry(),
-                  get_default_context().spbasis());
-      auto cxt_resetter = set_scoped_default_context(cxt);
+      auto ctx = get_default_context();
+      ctx.set(sequant::mbpt::make_F12_sr_spaces());
+      ctx.set(Vacuum::Physical);
+      auto ctx_resetter = set_scoped_default_context(ctx);
       Index α("α_2",
               get_default_context().index_space_registry()->retrieve("α"));
       REQUIRE(α.label() == L"α_2");
@@ -159,14 +183,17 @@ TEST_CASE("index", "[elements][index]") {
   }
 
   SECTION("equality") {
+    Index i{};
     Index i1(L"i_1");
     Index i2(L"i_2");
     Index i3(L"i_1");
+    REQUIRE(i == i);
     REQUIRE(i1 == i1);
     REQUIRE(!(i1 == i2));
     REQUIRE(i1 != i2);
     REQUIRE(i1 == i3);
     REQUIRE(!(i1 != i3));
+    REQUIRE(i1 != i);
 
     // check copy ctor
     Index i4(i2);
@@ -185,14 +212,35 @@ TEST_CASE("index", "[elements][index]") {
   }
 
   SECTION("ordering") {
+    using SO = std::strong_ordering;
+
     // compare by qns, then tag, then space, then label, then proto indices
+    Index i{};
     Index i1(L"i_1");
     Index i2(L"i_2");
     Index i3(L"i_11");
+
+    REQUIRE(!(i < i));
+    REQUIRE(!(i > i));
+    REQUIRE(i < i1);
+    REQUIRE(!(i > i1));
+
     REQUIRE(i1 < i2);
     REQUIRE(!(i2 < i1));
+    REQUIRE(i1 <=> i2 == SO::less);
+    REQUIRE(i1 <= i2);
+    REQUIRE(!(i1 >= i2));
+
     REQUIRE(!(i1 < i1));
+    REQUIRE(i1 <=> i1 == SO::equal);
+    REQUIRE(i1 <= i1);
+    REQUIRE(i1 >= i1);
+
     REQUIRE(i1 < i3);
+    REQUIRE(i1 <=> i3 == SO::less);
+    REQUIRE(i1 <= i3);
+    REQUIRE(!(i1 >= i3));
+
     REQUIRE(!(i3 < i1));
     REQUIRE(i2 < i3);
     REQUIRE(!(i3 < i2));
@@ -204,15 +252,19 @@ TEST_CASE("index", "[elements][index]") {
     // tags override rest, but ignored if defined for one and not the other
     i2.tag().assign(1);
     REQUIRE(i1 < i2);
+    REQUIRE(i1 <=> i2 == SO::less);
     i1.tag().assign(2);
     REQUIRE(!(i1 < i2));
     REQUIRE(i2 < i1);
+    REQUIRE(i2 <=> i1 == SO::less);
     a1.tag().assign(1);
     REQUIRE(!(i1 < a1));
     REQUIRE(a1 < i1);
     REQUIRE(i2 < a1);
+    REQUIRE(i2 <=> a1 == SO::less);
     a1.tag().reset().assign(0);
     REQUIRE(a1 < i2);
+    REQUIRE(a1 <=> i2 == SO::less);
 
     // qns override rest
     IndexSpace p_upspace(L"p", 0b11, 0b01);
@@ -239,6 +291,12 @@ TEST_CASE("index", "[elements][index]") {
     REQUIRE(p1A < p2A);
     p1A.tag().assign(2);
     REQUIRE(p2A < p1A);
+    REQUIRE(p2A <=> p1A == SO::less);
+    Index i1_p1Ap2A(L"i_1", {p1A, p2A});
+    Index i1_p1Bp2A(L"i_1", {p1B, p2A});
+    REQUIRE(i1_p1Ap2A < i1_p1Bp2A);
+    REQUIRE(i1_p1Ap2A <=> i1_p1Bp2A == SO::less);
+    REQUIRE(i1_p1Ap2A <=> i1_p1Ap2A == SO::equal);
 
     // with default Context label is used for comparisons
     {
@@ -250,7 +308,16 @@ TEST_CASE("index", "[elements][index]") {
       REQUIRE(i < j1);
       REQUIRE(j < j1);
       REQUIRE(!(j1 < j1));
+      REQUIRE(i <=> j == SO::less);
+      REQUIRE(i <=> j1 == SO::less);
+      REQUIRE(j <=> j1 == SO::less);
     }
+  }
+
+  SECTION("ordinal") {
+    REQUIRE(Index(L"i_0").ordinal() == 0);
+    REQUIRE(Index(L"i_1").ordinal() == 1);
+    REQUIRE(Index(L"i_5").ordinal() == 5);
   }
 
   SECTION("hashing") {
@@ -268,11 +335,15 @@ TEST_CASE("index", "[elements][index]") {
   }
 
   SECTION("transform") {
+    Index i{};
     Index i0(L"i_0");
     Index i1(L"i_1");
     Index i0_13(L"i_0", {L"i_1", L"i_3"});
     Index i1_13(L"i_1", {L"i_1", L"i_3"});
-    std::map<Index, Index> map{std::make_pair(Index{L"i_1"}, Index{L"i_2"})};
+    std::map<Index, Index> map{std::make_pair(Index{L"i_1"}, Index{L"i_2"}),
+                               std::make_pair(Index{}, Index{L"i_4"})};
+    REQUIRE(i.transform(map));
+    REQUIRE(i == Index{L"i_4"});
     REQUIRE(!i0.transform(map));
     REQUIRE(i0 == Index{L"i_0"});
     REQUIRE(i1.transform(map));
@@ -284,12 +355,14 @@ TEST_CASE("index", "[elements][index]") {
   }
 
   SECTION("to_string") {
-    auto old_cxt = get_default_context();
-    Context cxt(sequant::mbpt::make_F12_sr_spaces(), Vacuum::Physical,
-                old_cxt.metric(), old_cxt.braket_symmetry(), old_cxt.spbasis());
-    auto cxt_resetter = set_scoped_default_context(cxt);
+    auto ctx = get_default_context();
+    ctx.set(sequant::mbpt::make_F12_sr_spaces());
+    ctx.set(Vacuum::Physical);
+    auto ctx_resetter = set_scoped_default_context(ctx);
     Index alpha(L"α");
     REQUIRE(alpha.to_string() == "α");
+    Index null{};
+    REQUIRE(null.to_string() == "");
 
     SEQUANT_PRAGMA_CLANG(diagnostic push)
     SEQUANT_PRAGMA_CLANG(diagnostic ignored "-Wdeprecated-declarations")
@@ -303,8 +376,9 @@ TEST_CASE("index", "[elements][index]") {
   }
 
   SECTION("label manipulation") {
-    auto context_resetter = set_scoped_default_context(
-        Context(sequant::mbpt::make_F12_sr_spaces(), Vacuum::SingleProduct));
+    auto ctx = get_default_context();
+    ctx.set(sequant::mbpt::make_F12_sr_spaces());
+    auto context_resetter = set_scoped_default_context(ctx);
     auto isr = get_default_context().index_space_registry();
     Index alpha(L"α", isr->retrieve(L"α"));
     Index alpha1(L"α_1", isr->retrieve(L"α"));
@@ -323,6 +397,10 @@ TEST_CASE("index", "[elements][index]") {
   }
 
   SECTION("latex") {
+    Index i{};
+    REQUIRE_NOTHROW(to_latex(i));
+    REQUIRE(to_latex(i) == L"{}");
+
     Index i1(L"i_1");
     std::wstring i1_str;
     REQUIRE_NOTHROW(i1_str = to_latex(i1));
@@ -384,13 +462,13 @@ TEST_CASE("index", "[elements][index]") {
     REQUIRE(i1_str ==
             L"particleIndex[\"\\!\\(\\*SubscriptBox[\\(i\\), "
             L"\\(1\\)]\\)\",particleSpace[occupied]]");
-    REQUIRE(i1.to_wolfram(Action::create) ==
+    REQUIRE(i1.to_wolfram(Action::Create) ==
             L"particleIndex[\"\\!\\(\\*SubscriptBox[\\(i\\), "
             L"\\(1\\)]\\)\",particleSpace[occupied],indexType[cre]]");
     REQUIRE(i1.to_wolfram(BraKetPos::ket) ==
             L"particleIndex[\"\\!\\(\\*SubscriptBox[\\(i\\), "
             L"\\(1\\)]\\)\",particleSpace[occupied],indexType[ket]]");
-    REQUIRE(i1.to_wolfram(Action::annihilate) ==
+    REQUIRE(i1.to_wolfram(Action::Annihilate) ==
             L"particleIndex[\"\\!\\(\\*SubscriptBox[\\(i\\), "
             L"\\(1\\)]\\)\",particleSpace[occupied],indexType[ann]]");
     REQUIRE(i1.to_wolfram(BraKetPos::bra) ==

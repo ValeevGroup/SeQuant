@@ -25,6 +25,8 @@ class Sum;
 using SumPtr = std::shared_ptr<Sum>;
 class Variable;
 using VariablePtr = std::shared_ptr<Variable>;
+class Tensor;
+using TensorPtr = std::shared_ptr<Tensor>;
 
 }  // namespace sequant
 

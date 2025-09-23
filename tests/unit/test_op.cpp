@@ -21,37 +21,37 @@ TEST_CASE("op", "[elements]") {
   SECTION("constructors") {
     REQUIRE_NOTHROW(FOp{});
 
-    REQUIRE_NOTHROW(FOp(Index(L"i_1"), Action::create));
-    FOp o1(Index(L"i_1"), Action::create);
+    REQUIRE_NOTHROW(FOp(Index(L"i_1"), Action::Create));
+    FOp o1(Index(L"i_1"), Action::Create);
     REQUIRE(o1.statistics == Statistics::FermiDirac);
     REQUIRE(o1.index() == Index(L"i_1"));
-    REQUIRE(o1.action() == Action::create);
+    REQUIRE(o1.action() == Action::Create);
 
     {
-      REQUIRE_NOTHROW(FOp(L"i_1", Action::create));
-      FOp o1(L"i_1", Action::create);
+      REQUIRE_NOTHROW(FOp(L"i_1", Action::Create));
+      FOp o1(L"i_1", Action::Create);
       REQUIRE(o1.statistics == Statistics::FermiDirac);
       REQUIRE(o1.index() == Index(L"i_1"));
-      REQUIRE(o1.action() == Action::create);
+      REQUIRE(o1.action() == Action::Create);
     }
 
     REQUIRE_NOTHROW(bann(Index(L"i_2")));
     auto o2 = bann(Index(L"i_2"));
     REQUIRE(o2.statistics == Statistics::BoseEinstein);
     REQUIRE(o2.index() == Index(L"i_2"));
-    REQUIRE(o2.action() == Action::annihilate);
+    REQUIRE(o2.action() == Action::Annihilate);
 
     REQUIRE_NOTHROW(bcre(L"i_3"));
     auto o3 = bcre(L"i_3");
     REQUIRE(o3.statistics == Statistics::BoseEinstein);
     REQUIRE(o3.index() == Index(L"i_3"));
-    REQUIRE(o3.action() == Action::create);
+    REQUIRE(o3.action() == Action::Create);
 
     REQUIRE_NOTHROW(fann(L"i_4", {L"a_1", L"a_2"}));
     auto o4 = fann(L"i_4", {L"a_1", L"a_2"});
     REQUIRE(o4.statistics == Statistics::FermiDirac);
     REQUIRE(o4.index() == Index(L"i_4", {L"a_1", L"a_2"}));
-    REQUIRE(o4.action() == Action::annihilate);
+    REQUIRE(o4.action() == Action::Annihilate);
 
     REQUIRE_NOTHROW(FOperator{fcre(L"i_1"), fann(L"i_1")});
     auto oper1 = FOperator{fcre(L"i_1"), fann(L"i_1")};
@@ -89,11 +89,15 @@ TEST_CASE("op", "[elements]") {
     REQUIRE(nop3.creators().size() == 1);
     REQUIRE(nop3.annihilators().size() == 0);
     REQUIRE(nop3.creators()[0] == fcre(L"i_1"));
+    REQUIRE_NOTHROW(FNOperator({fcre(L"i_1")}));  // = nop3
+    REQUIRE(FNOperator({fcre(L"i_1")}) == nop3);
     REQUIRE_NOTHROW(FNOperator(cre({}), ann({Index{L"a_1", {L"i_1"}}})));
     auto nop4 = FNOperator(cre({}), ann({Index{L"a_1", {L"i_1"}}}));
     REQUIRE(nop4.creators().size() == 0);
     REQUIRE(nop4.annihilators().size() == 1);
     REQUIRE(nop4.annihilators()[0] == fann(Index{L"a_1", {L"i_1"}}));
+    REQUIRE_NOTHROW(FNOperator({fann(Index{L"a_1", {L"i_1"}})}));  // = nop3
+    REQUIRE(FNOperator({fann(Index{L"a_1", {L"i_1"}})}) == nop4);
 
     /////////////////// normal op sequence
     // can include N-conserving ...
@@ -112,9 +116,16 @@ TEST_CASE("op", "[elements]") {
     REQUIRE(nopseq1.at(2) == FNOperator(cre({L"i_5"}), ann({L"i_6"})));
 
     // ... N-nonconserving normal ops ...
+    REQUIRE_NOTHROW(FNOperatorSeq({FNOperator(cre({}), ann({L"i_1"}))}));
     auto nopseq2 = FNOperatorSeq({FNOperator(cre({}), ann({L"i_1"}))});
     REQUIRE(nopseq2.size() == 1);
     REQUIRE(nopseq2[0] == FNOperator(cre({}), ann({L"i_1"})));
+    // equivalent
+    REQUIRE_NOTHROW(FNOperatorSeq({fann(L"i_1")}));
+    REQUIRE(nopseq2 == FNOperatorSeq({fann(L"i_1")}));
+    // sequence of individual ops
+    REQUIRE_NOTHROW(FNOperatorSeq({fann("i_1"), fcre("i_2"), fcre("i_3"),
+                                   fann("i_4"), fann("i_5"), fcre("i_1")}));
 
     // but all vacua must match
     REQUIRE_THROWS(FNOperatorSeq(
@@ -124,15 +135,15 @@ TEST_CASE("op", "[elements]") {
   }
 
   SECTION("adjoint") {
-    auto o1 = adjoint(FOp(Index(L"i_1"), Action::create));
+    auto o1 = adjoint(FOp(Index(L"i_1"), Action::Create));
     REQUIRE(o1.statistics == Statistics::FermiDirac);
     REQUIRE(o1.index() == Index(L"i_1"));
-    REQUIRE(o1.action() == Action::annihilate);
+    REQUIRE(o1.action() == Action::Annihilate);
     o1.adjoint();
-    REQUIRE(o1.action() == Action::create);
+    REQUIRE(o1.action() == Action::Create);
     o1.adjoint();
     o1.adjoint();
-    REQUIRE(o1.action() == Action::create);
+    REQUIRE(o1.action() == Action::Create);
 
     auto oper1 = adjoint(FOperator{fcre(L"i_1"), fann(L"i_2")});
     REQUIRE(oper1.statistics == Statistics::FermiDirac);
@@ -384,10 +395,10 @@ TEST_CASE("op", "[elements]") {
   }
 
   SECTION("latex") {
-    FOp o1(Index(L"i_1"), Action::create);
+    FOp o1(Index(L"i_1"), Action::Create);
     REQUIRE(to_latex(o1) == L"{a^{\\dagger}_{i_1}}");
 
-    BOp o2(Index(L"a_1"), Action::create);
+    BOp o2(Index(L"a_1"), Action::Create);
     REQUIRE(to_latex(o2) == L"{b^{\\dagger}_{a_1}}");
 
     auto oper0 = FOperator{};
@@ -398,36 +409,89 @@ TEST_CASE("op", "[elements]") {
 
     auto nop1 = FNOperator(cre({L"i_1", L"i_2"}), ann({L"a_1", L"a_2"}),
                            Vacuum::SingleProduct);
-    REQUIRE(to_latex(nop1) == L"{\\tilde{a}^{{i_1}{i_2}}_{{a_1}{a_2}}}");
-
     auto nop2 = FNOperator(
         cre({Index{L"i_1"}, Index{L"i_2"}}),
         ann({Index{L"a_1", {L"i_1", L"i_2"}}, Index{L"a_2", {L"i_1", L"i_2"}}}),
         Vacuum::SingleProduct);
-    REQUIRE(
-        to_latex(nop2) ==
-        L"{\\tilde{a}^{{i_1}{i_2}}_{{a_1^{{i_1}{i_2}}}{a_2^{{i_1}{i_2}}}}}");
-
     auto nop3 =
         FNOperator(cre({L"i_1", L"i_2"}), ann({L"a_2"}), Vacuum::SingleProduct);
-    REQUIRE(to_latex(nop3) ==
-            L"{\\tilde{a}^{{i_1}{i_2}}_{\\textvisiblespace\\,{a_2}}}");
-
     auto nop4 =
         FNOperator(cre({L"i_2"}), ann({L"a_1", L"a_2"}), Vacuum::SingleProduct);
-    REQUIRE(to_latex(nop4) ==
-            L"{\\tilde{a}^{\\textvisiblespace\\,{i_2}}_{{a_1}{a_2}}}");
-
     auto nop5 = FNOperator(cre({L"i_1"}), ann({}), Vacuum::SingleProduct);
-    REQUIRE(to_latex(nop5) == L"{\\tilde{a}^{{i_1}}}");
-
     auto nop6 = FNOperator(cre({}), ann({L"a_1"}), Vacuum::SingleProduct);
-    REQUIRE(to_latex(nop6) == L"{\\tilde{a}_{{a_1}}}");
-
     auto nopseq1 = FNOperatorSeq({nop1, nop2});
-    REQUIRE(to_latex(nopseq1) ==
-            L"{{\\tilde{a}^{{i_1}{i_2}}_{{a_1}{a_2}}}{\\tilde{a}^{{i_1}{i_2}}_{"
-            L"{a_1^{{i_1}{i_2}}}{a_2^{{i_1}{i_2}}}}}}");
+
+    SECTION("default (brasub, naive) typesetting") {
+      REQUIRE(to_latex(nop1) == L"{\\tilde{a}^{{i_1}{i_2}}_{{a_1}{a_2}}}");
+      REQUIRE(
+          to_latex(nop2) ==
+          L"{\\tilde{a}^{{i_1}{i_2}}_{{a_1^{{i_1}{i_2}}}{a_2^{{i_1}{i_2}}}}}");
+      REQUIRE(to_latex(nop3) ==
+              L"{\\tilde{a}^{{i_1}{i_2}}_{\\textvisiblespace\\,{a_2}}}");
+      REQUIRE(to_latex(nop4) ==
+              L"{\\tilde{a}^{\\textvisiblespace\\,{i_2}}_{{a_1}{a_2}}}");
+      REQUIRE(to_latex(nop5) == L"{\\tilde{a}^{{i_1}}}");
+      REQUIRE(to_latex(nop6) == L"{\\tilde{a}_{{a_1}}}");
+      REQUIRE(
+          to_latex(nopseq1) ==
+          L"{{\\tilde{a}^{{i_1}{i_2}}_{{a_1}{a_2}}}{\\tilde{a}^{{i_1}{i_2}}_{"
+          L"{a_1^{{i_1}{i_2}}}{a_2^{{i_1}{i_2}}}}}}");
+    }
+
+    SECTION("ketsub naive typesetting") {
+      Context ctx = get_default_context();
+      REQUIRE(get_default_context().braket_typesetting() ==
+              BraKetTypesetting::KetSuper);
+      ctx.set(BraKetTypesetting::KetSub);
+      auto resetter = set_scoped_default_context(ctx);
+      REQUIRE(get_default_context().braket_typesetting() ==
+              BraKetTypesetting::KetSub);
+
+      REQUIRE(to_latex(nop1) == L"{\\tilde{a}_{{i_1}{i_2}}^{{a_1}{a_2}}}");
+      REQUIRE(
+          to_latex(nop2) ==
+          L"{\\tilde{a}_{{i_1}{i_2}}^{{a_1^{{i_1}{i_2}}}{a_2^{{i_1}{i_2}}}}}");
+      REQUIRE(to_latex(nop3) ==
+              L"{\\tilde{a}_{{i_1}{i_2}}^{\\textvisiblespace\\,{a_2}}}");
+      REQUIRE(to_latex(nop4) ==
+              L"{\\tilde{a}_{\\textvisiblespace\\,{i_2}}^{{a_1}{a_2}}}");
+      REQUIRE(to_latex(nop5) == L"{\\tilde{a}_{{i_1}}}");
+      REQUIRE(to_latex(nop6) == L"{\\tilde{a}^{{a_1}}}");
+      REQUIRE(
+          to_latex(nopseq1) ==
+          L"{{\\tilde{a}_{{i_1}{i_2}}^{{a_1}{a_2}}}{\\tilde{a}_{{i_1}{i_2}}^{"
+          L"{a_1^{{i_1}{i_2}}}{a_2^{{i_1}{i_2}}}}}}");
+    }
+
+    SECTION("brasub tensor typesetting") {
+      Context ctx = get_default_context();
+      REQUIRE(get_default_context().braket_typesetting() ==
+              BraKetTypesetting::BraSub);
+      REQUIRE(get_default_context().braket_slot_typesetting() ==
+              BraKetSlotTypesetting::Naive);
+      ctx.set(BraKetSlotTypesetting::TensorPackage);
+      auto resetter = set_scoped_default_context(ctx);
+      REQUIRE(get_default_context().braket_typesetting() ==
+              BraKetTypesetting::BraSub);
+      REQUIRE(get_default_context().braket_slot_typesetting() ==
+              BraKetSlotTypesetting::TensorPackage);
+
+      REQUIRE(to_latex(nop1) ==
+              L"{\\tensor*{\\tilde{a}}{*^{i_1}_{a_1}*^{i_2}_{a_2}}}");
+      REQUIRE(to_latex(nop2) ==
+              L"{\\tensor*{\\tilde{a}}{*^{i_1}_{a_1^{{i_1}{i_2}}}*^{i_2}_{a_2^{"
+              L"{i_1}{i_2}}}}}");
+      REQUIRE(to_latex(nop3) ==
+              L"{\\tensor*{\\tilde{a}}{*^{i_1}_{}*^{i_2}_{a_2}}}");
+      REQUIRE(to_latex(nop4) ==
+              L"{\\tensor*{\\tilde{a}}{*^{}_{a_1}*^{i_2}_{a_2}}}");
+      REQUIRE(to_latex(nop5) == L"{\\tensor*{\\tilde{a}}{*^{i_1}_{}}}");
+      REQUIRE(to_latex(nop6) == L"{\\tensor*{\\tilde{a}}{*^{}_{a_1}}}");
+      REQUIRE(to_latex(nopseq1) ==
+              L"{{\\tensor*{\\tilde{a}}{*^{i_1}_{a_1}*^{i_2}_{a_2}}}{\\tensor*{"
+              L"\\tilde{a}}{*^{i_1}_{a_1^{{i_1}{i_2}}}*^{i_2}_{a_2^{{i_1}{i_2}}"
+              L"}}}}");
+    }
   }
 
   SECTION("commutativity") {

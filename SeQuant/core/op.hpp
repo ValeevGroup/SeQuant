@@ -5,16 +5,17 @@
 #ifndef SEQUANT_CORE_OP_H
 #define SEQUANT_CORE_OP_H
 
-#include <SeQuant/core/abstract_tensor.hpp>
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/expressions/abstract_tensor.hpp>
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/hugenholtz.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/ranges.hpp>
 #include <SeQuant/core/space.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/strong.hpp>
 
 #include <cassert>
@@ -61,7 +62,7 @@ class Op {
   void adjoint() { action_ = sequant::adjoint(action_); }
 
   static std::wstring core_label() {
-    return get_default_context(S).spbasis() == SPBasis::spinorbital
+    return get_default_context(S).spbasis() == SPBasis::Spinor
                ? (S == Statistics::FermiDirac ? L"a" : L"b")
                : L"E";
   }
@@ -71,7 +72,7 @@ class Op {
     std::wstring result;
     result = L"{";
     result += core_label();
-    result += (action() == Action::create ? L"^{\\dagger}_" : L"_");
+    result += (action() == Action::Create ? L"^{\\dagger}_" : L"_");
     result += index().to_latex();
     result += L"}";
     return result;
@@ -101,7 +102,7 @@ class Op {
 
  private:
   Index index_;
-  Action action_ = Action::invalid;
+  Action action_ = Action::Create;
 };
 
 /// @brief The ordering operator
@@ -151,37 +152,37 @@ bool operator!=(const Op<S> &op1, const Op<S> &op2) {
 using BOp = Op<Statistics::BoseEinstein>;
 using FOp = Op<Statistics::FermiDirac>;
 
-inline BOp bcre(Index i) { return BOp(i, Action::create); }
+inline BOp bcre(Index i) { return BOp(i, Action::Create); }
 template <typename I>
 inline BOp bcre(Index i, std::initializer_list<I> pi) {
-  return BOp(Index(i, pi), Action::create);
+  return BOp(Index(i, pi), Action::Create);
 }
-inline BOp bann(Index i) { return BOp(i, Action::annihilate); }
+inline BOp bann(Index i) { return BOp(i, Action::Annihilate); }
 template <typename I>
 inline BOp bann(Index i, std::initializer_list<I> pi) {
-  return BOp(Index(i, pi), Action::annihilate);
+  return BOp(Index(i, pi), Action::Annihilate);
 }
-inline FOp fcre(Index i) { return FOp(i, Action::create); }
+inline FOp fcre(Index i) { return FOp(i, Action::Create); }
 template <typename I>
 inline FOp fcre(Index i, std::initializer_list<I> pi) {
-  return FOp(Index(i, pi), Action::create);
+  return FOp(Index(i, pi), Action::Create);
 }
-inline FOp fann(Index i) { return FOp(i, Action::annihilate); }
+inline FOp fann(Index i) { return FOp(i, Action::Annihilate); }
 template <typename I>
 inline FOp fann(Index i, std::initializer_list<I> pi) {
-  return FOp(Index(i, pi), Action::annihilate);
+  return FOp(Index(i, pi), Action::Annihilate);
 }
 
 /// @return true if this is a particle creator, false otherwise
 template <Statistics S>
 bool is_creator(const Op<S> &op) {
-  return op.action() == Action::create;
+  return op.action() == Action::Create;
 };
 
 /// @return true if this is a particle annihilator, false otherwise
 template <Statistics S>
 bool is_annihilator(const Op<S> &op) {
-  return op.action() == Action::annihilate;
+  return op.action() == Action::Annihilate;
 };
 
 /// @return true if this is a pure quasiparticle creator with respect to the
@@ -193,17 +194,19 @@ bool is_pure_qpcreator(const Op<S> &op,
                            get_default_context(S).index_space_registry()) {
   switch (vacuum) {
     case Vacuum::Physical:
-      return op.action() == Action::create;
+      return op.action() == Action::Create;
     case Vacuum::SingleProduct: {
       return (isr->is_pure_occupied(op.index().space()) &&
-              op.action() == Action::annihilate) ||
+              op.action() == Action::Annihilate) ||
              (isr->is_pure_unoccupied(op.index().space()) &&
-              op.action() == Action::create);
+              op.action() == Action::Create);
     }
-    default:
+    case Vacuum::MultiProduct:
       throw std::logic_error(
           "is_pure_qpcreator: cannot handle MultiProduct vacuum");
   }
+
+  SEQUANT_UNREACHABLE;
 };
 
 /// @return true if this is a quasiparticle creator with respect to the given
@@ -215,16 +218,19 @@ bool is_qpcreator(const Op<S> &op,
                       get_default_context(S).index_space_registry()) {
   switch (vacuum) {
     case Vacuum::Physical:
-      return op.action() == Action::create;
+      return op.action() == Action::Create;
     case Vacuum::SingleProduct: {
       return (isr->contains_occupied(op.index().space()) &&
-              op.action() == Action::annihilate) ||
+              op.action() == Action::Annihilate) ||
              (isr->contains_unoccupied(op.index().space()) &&
-              op.action() == Action::create);
+              op.action() == Action::Create);
+      case Vacuum::MultiProduct:
+        throw std::logic_error(
+            "is_qpcreator: cannot handle MultiProduct vacuum");
     }
-    default:
-      throw std::logic_error("is_qpcreator: cannot handle MultiProduct vacuum");
   }
+
+  SEQUANT_UNREACHABLE;
 };
 
 template <Statistics S>
@@ -234,20 +240,22 @@ IndexSpace qpcreator_space(
         get_default_context(S).index_space_registry()) {
   switch (vacuum) {
     case Vacuum::Physical:
-      return op.action() == Action::create ? op.index().space()
+      return op.action() == Action::Create ? op.index().space()
                                            : IndexSpace::null;
     case Vacuum::SingleProduct:
-      return op.action() == Action::annihilate
+      return op.action() == Action::Annihilate
                  ? isr->intersection(
                        op.index().space(),
                        isr->vacuum_occupied_space(op.index().space().qns()))
                  : isr->intersection(
                        op.index().space(),
                        isr->vacuum_unoccupied_space(op.index().space().qns()));
-    default:
+    case Vacuum::MultiProduct:
       throw std::logic_error(
           "qpcreator_space: cannot handle MultiProduct vacuum");
   }
+
+  SEQUANT_UNREACHABLE;
 }
 
 /// @return true if this is a pure quasiparticle annihilator with respect to
@@ -259,17 +267,19 @@ bool is_pure_qpannihilator(
         get_default_context(S).index_space_registry()) {
   switch (vacuum) {
     case Vacuum::Physical:
-      return op.action() == Action::annihilate;
+      return op.action() == Action::Annihilate;
     case Vacuum::SingleProduct: {
       return (isr->is_pure_unoccupied(op.index().space()) &&
-              op.action() == Action::annihilate) ||
+              op.action() == Action::Annihilate) ||
              (isr->is_pure_occupied(op.index().space()) &&
-              op.action() == Action::create);
+              op.action() == Action::Create);
     }
-    default:
+    case Vacuum::MultiProduct:
       throw std::logic_error(
           "is_pure_qpannihilator: cannot handle MultiProduct vacuum");
   }
+
+  SEQUANT_UNREACHABLE;
 };
 
 /// @return true if this is a quasiparticle annihilator with respect to the
@@ -281,17 +291,19 @@ bool is_qpannihilator(const Op<S> &op,
                           get_default_context(S).index_space_registry()) {
   switch (vacuum) {
     case Vacuum::Physical:
-      return op.action() == Action::annihilate;
+      return op.action() == Action::Annihilate;
     case Vacuum::SingleProduct: {
       return (isr->contains_occupied(op.index().space()) &&
-              op.action() == Action::create) ||
+              op.action() == Action::Create) ||
              (isr->contains_unoccupied(op.index().space()) &&
-              op.action() == Action::annihilate);
+              op.action() == Action::Annihilate);
     }
-    default:
+    case Vacuum::MultiProduct:
       throw std::logic_error(
           "is_qpannihilator: cannot handle MultiProduct vacuum");
   }
+
+  SEQUANT_UNREACHABLE;
 };
 
 template <Statistics S>
@@ -301,20 +313,22 @@ IndexSpace qpannihilator_space(
         get_default_context(S).index_space_registry()) {
   switch (vacuum) {
     case Vacuum::Physical:
-      return op.action() == Action::annihilate ? op.index().space()
+      return op.action() == Action::Annihilate ? op.index().space()
                                                : IndexSpace::null;
     case Vacuum::SingleProduct:
-      return op.action() == Action::create
+      return op.action() == Action::Create
                  ? isr->intersection(
                        op.index().space(),
                        isr->vacuum_occupied_space(op.index().space().qns()))
                  : isr->intersection(
                        op.index().space(),
                        isr->vacuum_unoccupied_space(op.index().space().qns()));
-    default:
+    case Vacuum::MultiProduct:
       throw std::logic_error(
           "qpcreator_space: cannot handle MultiProduct vacuum");
   }
+
+  SEQUANT_UNREACHABLE;
 }
 
 template <Statistics S = Statistics::FermiDirac>
@@ -406,10 +420,19 @@ class Operator : public container::svector<Op<S>>, public Expr {
   }
 
   hash_type memoizing_hash() const override {
-    using std::begin;
-    using std::end;
-    const auto &ops = static_cast<const base_type &>(*this);
-    return hash::range(begin(ops), end(ops));
+    auto compute_hash = [this]() {
+      using std::begin;
+      using std::end;
+      const auto &ops = static_cast<const base_type &>(*this);
+      auto value = hash::range(begin(ops), end(ops));
+      return value;
+    };
+    if (!hash_value_) {
+      hash_value_ = compute_hash();
+    } else {
+      assert(*hash_value_ == compute_hash());
+    }
+    return *hash_value_;
   }
 };
 
@@ -435,7 +458,13 @@ bool Operator<S>::static_equal(const Expr &that) const {
   return *this == that_cast;
 }
 
-/// @brief NormalOperator is an Operator normal-ordered with respect to vacuum.
+template <Statistics S, typename T>
+concept index_or_op_sequence =
+    (meta::is_statically_castable_v<meta::range_value_t<T>, Index> ||
+     meta::is_statically_castable_v<meta::range_value_t<T>, Op<S>>);
+
+/// @brief NormalOperator is an Operator normal-ordered with respect to a
+/// vacuum.
 
 /// @note Normal ordering means all creators are to the left of all
 /// annihilators. It is natural to express at least number-conserving normal
@@ -477,7 +506,15 @@ class NormalOperator : public Operator<S>,
   using base_type::operator[];
 
   /// constructs an identity operator
-  NormalOperator(Vacuum v = get_default_context(S).vacuum()) {}
+  NormalOperator(Vacuum v = get_default_context(S).vacuum()) : vacuum_(v) {}
+
+  /// constructs a single-Op operator
+  /// \param op an operator
+  /// \param v the vacuum state
+  NormalOperator(Op<S> op, Vacuum v = get_default_context(S).vacuum())
+      : Operator<S>{std::move(op)},
+        vacuum_(v),
+        ncreators_((*this)[0].action() == Action::Create ? 1 : 0) {}
 
   /// @tparam IndexOrOpSequence1 type representing a sequence of objects that
   /// can be statically cast into Index or Op<S>
@@ -488,19 +525,9 @@ class NormalOperator : public Operator<S>,
   /// @param annihilators sequence of annihilator indices or operators (in order
   /// of particle indices).
   /// @param v vacuum state with respect to which the operator is normal-ordered
-  template <
-      typename IndexOrOpSequence1, typename IndexOrOpSequence2,
-      typename = std::enable_if_t<
-          (meta::is_statically_castable_v<
-               meta::range_value_t<IndexOrOpSequence1>, Index> ||
-           meta::is_statically_castable_v<
-               meta::range_value_t<IndexOrOpSequence1>,
-               Op<S>>)&&(meta::
-                             is_statically_castable_v<
-                                 meta::range_value_t<IndexOrOpSequence2>,
-                                 Index> ||
-                         meta::is_statically_castable_v<
-                             meta::range_value_t<IndexOrOpSequence2>, Op<S>>)>>
+  template <typename IndexOrOpSequence1, typename IndexOrOpSequence2>
+    requires index_or_op_sequence<S, IndexOrOpSequence1> &&
+                 index_or_op_sequence<S, IndexOrOpSequence2>
   NormalOperator(const cre<IndexOrOpSequence1> &creators,
                  const ann<IndexOrOpSequence2> &annihilators,
                  Vacuum v = get_default_context(S).vacuum())
@@ -511,9 +538,9 @@ class NormalOperator : public Operator<S>,
                               std::array<meta::castable_to_any, 0>>));
       if constexpr (meta::is_statically_castable_v<
                         meta::range_value_t<IndexOrOpSequence1>, Index>)
-        this->emplace_back(c, Action::create);
+        this->emplace_back(c, Action::Create);
       else {
-        assert(c.action() == Action::create);
+        assert(c.action() == Action::Create);
         this->emplace_back(c);
       }
     }
@@ -522,9 +549,9 @@ class NormalOperator : public Operator<S>,
                               std::array<meta::castable_to_any, 0>>));
       if constexpr (meta::is_statically_castable_v<
                         meta::range_value_t<IndexOrOpSequence2>, Index>)
-        this->emplace_back(a, Action::annihilate);
+        this->emplace_back(a, Action::Annihilate);
       else {
-        assert(a.action() == Action::annihilate);
+        assert(a.action() == Action::Annihilate);
         this->emplace_back(a);
       }
     }
@@ -597,54 +624,73 @@ class NormalOperator : public Operator<S>,
   }
 
   std::wstring to_latex() const override {
-    std::wstring result;
-    result = L"{";
+    const auto &ctx = get_default_context();
+    const auto bkt = ctx.braket_typesetting();
+    const auto bkst = ctx.braket_slot_typesetting();
+
+    std::wstring core_label;
     if (vacuum() == Vacuum::Physical) {
-      result += Op<S>::core_label();
+      core_label += Op<S>::core_label();
     } else {
-      result += L"\\tilde{";
-      result += Op<S>::core_label();
-      result += L"}";
+      core_label += L"\\tilde{";
+      core_label += Op<S>::core_label();
+      core_label += L"}";
     }
-    const auto ncreators = this->ncreators();
-    const auto nannihilators = this->nannihilators();
-    if (ncreators > 0) {
-      result += L"^{";
-      if (ncreators <
-          nannihilators) {  // if have more annihilators than creators pad on
-                            // the left with square underbrackets, i.e. ⎵
-        const auto iend = nannihilators - ncreators;
-        if (iend > 0) result += L"\\textvisiblespace";
-        for (size_t i = 1; i != iend; ++i) {
-          result += L"\\,\\textvisiblespace";
+
+    switch (bkst) {
+      case BraKetSlotTypesetting::Naive: {
+        std::wstring result = L"{";
+        result += core_label;
+        const auto ncreators = this->ncreators();
+        const auto nannihilators = this->nannihilators();
+        if (ncreators > 0) {
+          result += (bkt == BraKetTypesetting::KetSub ? L"_" : L"^");
+          result += L"{";
+          if (ncreators < nannihilators) {  // if have more annihilators than
+                                            // creators pad on
+            // the left with square underbrackets, i.e. ⎵
+            const auto iend = nannihilators - ncreators;
+            if (iend > 0) result += L"\\textvisiblespace";
+            for (size_t i = 1; i != iend; ++i) {
+              result += L"\\,\\textvisiblespace";
+            }
+            result += L"\\,";
+          }
+          for (const auto &o : creators()) result += o.index().to_latex();
+          result += L"}";
         }
-        result += L"\\,";
-      }
-      for (const auto &o : creators()) result += o.index().to_latex();
-      result += L"}";
-    }
-    if (nannihilators > 0) {
-      result += L"_{";
-      if (ncreators >
-          nannihilators) {  // if have more creators than annihilators pad on
-                            // the left with square underbrackets, i.e. ⎵
-        const auto iend = ncreators - nannihilators;
-        if (iend > 0) result += L"\\textvisiblespace";
-        for (size_t i = 1; i != iend; ++i) {
-          result += L"\\,\\textvisiblespace";
+        if (nannihilators > 0) {
+          result += (bkt == BraKetTypesetting::BraSub ? L"_" : L"^");
+          result += L"{";
+          if (ncreators > nannihilators) {  // if have more creators than
+                                            // annihilators pad on
+            // the left with square underbrackets, i.e. ⎵
+            const auto iend = ncreators - nannihilators;
+            if (iend > 0) result += L"\\textvisiblespace";
+            for (size_t i = 1; i != iend; ++i) {
+              result += L"\\,\\textvisiblespace";
+            }
+            result += L"\\,";
+          }
+          for (const auto &o : annihilators()) result += o.index().to_latex();
+          result += L"}";
         }
-        result += L"\\,";
+        result += L"}";
+        return result;
       }
-      for (const auto &o : annihilators()) result += o.index().to_latex();
-      result += L"}";
+
+      case BraKetSlotTypesetting::TensorPackage: {
+        return to_latex_tensor(core_label, this->_bra(), this->_ket(),
+                               this->_aux(), bkt, /* left_align = */ false);
+      }
     }
-    result += L"}";
-    return result;
+
+    SEQUANT_UNREACHABLE;
   }
 
   /// overload base_type::erase
   iterator erase(const_iterator it) {
-    if (it->action() == Action::create) --ncreators_;
+    if (it->action() == Action::Create) --ncreators_;
     if (hug_) hug_->erase(it - begin(), *it);
     return Operator<S>::erase(it);
   }
@@ -652,7 +698,7 @@ class NormalOperator : public Operator<S>,
   /// overload base_type::insert
   template <typename T>
   iterator insert(const_iterator it, T &&value) {
-    if (value.action() == Action::create) ++ncreators_;
+    if (value.action() == Action::Create) ++ncreators_;
     auto result = Operator<S>::insert(it, std::forward<T>(value));
     if (hug_) hug_->insert(result - begin(), *result);
     return result;
@@ -788,6 +834,13 @@ class NormalOperator : public Operator<S>,
   }
 
   // these implement the AbstractTensor interface
+  NormalOperator *_clone() const override final {
+    return new NormalOperator(*this);
+  }
+  std::shared_ptr<AbstractTensor> _clone_shared() const override final {
+    return std::make_shared<NormalOperator>(*this);
+  }
+
   AbstractTensor::const_any_view_randsz _bra() const override final {
     return annihilators() |
            ranges::views::transform(
@@ -806,24 +859,32 @@ class NormalOperator : public Operator<S>,
            ranges::views::transform(
                [](auto &&op) -> const Index & { return op.index(); });
   }
-  AbstractTensor::const_any_view_rand _indices() const override final {
+  AbstractTensor::const_any_view_rand _slots() const override final {
     return _braket();
   }
   std::size_t _bra_rank() const override final { return nannihilators(); }
+  std::size_t _bra_net_rank() const override final {
+    // there are no null slots in NormalOperator
+    return _bra_rank();
+  }
   std::size_t _ket_rank() const override final { return ncreators(); }
+  std::size_t _ket_net_rank() const override final {
+    // there are no null slots in NormalOperator
+    return _ket_rank();
+  }
   std::size_t _aux_rank() const override final { return 0; }
   Symmetry _symmetry() const override final {
     return (S == Statistics::FermiDirac
-                ? (get_default_context(S).spbasis() == SPBasis::spinorbital
-                       ? Symmetry::antisymm
-                       : Symmetry::nonsymm)
-                : (Symmetry::symm));
+                ? (get_default_context(S).spbasis() == SPBasis::Spinor
+                       ? Symmetry::Antisymm
+                       : Symmetry::Nonsymm)
+                : (Symmetry::Symm));
   }
   BraKetSymmetry _braket_symmetry() const override final {
-    return BraKetSymmetry::nonsymm;
+    return BraKetSymmetry::Nonsymm;
   }
-  ParticleSymmetry _particle_symmetry() const override final {
-    return ParticleSymmetry::symm;
+  ColumnSymmetry _column_symmetry() const override final {
+    return ColumnSymmetry::Symm;
   }
   std::size_t _color() const override final {
     return S == Statistics::FermiDirac ? 1 : 2;
@@ -831,6 +892,7 @@ class NormalOperator : public Operator<S>,
   bool _is_cnumber() const override final { return false; }
   std::wstring_view _label() const override final { return label(); }
   std::wstring _to_latex() const override final { return to_latex(); }
+  std::size_t _hash_value() const override final { return this->hash_value(); }
   bool _transform_indices(
       const container::map<Index, Index> &index_map) override final {
     return transform_indices(index_map);
@@ -860,6 +922,13 @@ class NormalOperator : public Operator<S>,
                [](auto &&op) -> Index & { return op.index(); });
   }
   AbstractTensor::any_view_randsz _aux_mutable() override final { return {}; }
+
+  void _permute_aux(std::span<const std::size_t> perm) override final {
+    if (perm.size() != 0)
+      throw std::invalid_argument(
+          "NormalOperator::_permute_aux(p): there are no aux indices, p must "
+          "be null");
+  }
 };
 
 static_assert(
@@ -919,9 +988,15 @@ class NormalOperatorSequence : public container::svector<NormalOperator<S>>,
     check_vacuum();
   }
 
-  /// constructs from an initializer list
+  /// constructs from an initializer list of normal operators
   NormalOperatorSequence(std::initializer_list<NormalOperator<S>> operators)
       : base_type(operators) {
+    check_vacuum();
+  }
+
+  /// constructs from an initializer list of Ops
+  NormalOperatorSequence(std::initializer_list<Op<S>> operators)
+      : base_type(operators.begin(), operators.end()) {
     check_vacuum();
   }
 
@@ -962,24 +1037,30 @@ class NormalOperatorSequence : public container::svector<NormalOperator<S>>,
     return Expr::get_type_id<NormalOperatorSequence>();
   };
 
+  friend bool operator==(const NormalOperatorSequence &nopseq1,
+                         const NormalOperatorSequence &nopseq2) {
+    return static_cast<base_type>(nopseq1) == static_cast<base_type>(nopseq2);
+  }
+
  private:
-  Vacuum vacuum_ = Vacuum::Invalid;
+  Vacuum vacuum_ = Vacuum::Physical;
   /// ensures that all operators use same vacuum, and sets vacuum_
   void check_vacuum() {
-    vacuum_ = std::accumulate(
-        this->cbegin(), this->cend(), Vacuum::Invalid,
-        [](Vacuum v1, const NormalOperator<S> &v2) {
-          if (v1 == Vacuum::Invalid) {
-            return v2.vacuum();
-          } else {
-            if (v1 != v2.vacuum())
-              throw std::invalid_argument(
-                  "NormalOperatorSequence expects all constituent "
-                  "NormalOperator objects to use same vacuum");
-            else
-              return v1;
-          }
-        });
+    const bool all_same_vaccum =
+        std::ranges::adjacent_find(*this, std::ranges::not_equal_to{},
+                                   [](const NormalOperator<S> &op) {
+                                     return op.vacuum();
+                                   }) == this->end();
+
+    if (!all_same_vaccum) {
+      throw std::invalid_argument(
+          "NormalOperatorSequence expects all constituent "
+          "NormalOperator objects to use same vacuum");
+    }
+
+    if (size() > 0) {
+      vacuum_ = this->cbegin()->vacuum();
+    }
   }
 
   bool static_equal(const Expr &that) const override {

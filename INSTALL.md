@@ -10,16 +10,18 @@ While in the SeQuant source directory:
   * mandatory:
     * CMake 3.27 or later
     * a C++20 compiler
-    * [Boost](https://www.boost.org/), version 1.81 or higher. *SeQuant can download and build Boost if configured with `Boost_FETCH_IF_MISSING=ON`, but the use of Boost provided by the system package manager is recommended.* The following non-header-only Boost libraries are required, hence Boost must be configured/built:
+    * [Boost](https://www.boost.org/). *SeQuant can download and build Boost if configured with `Boost_FETCH_IF_MISSING=ON`, but the use of Boost provided by the system package manager is recommended.* The following non-header-only Boost libraries are required, hence Boost must be configured/built:
       - [Boost.Regex](https://www.boost.org/doc/libs/master/libs/regex/doc/html/index.html)
       - [Boost.Locale](https://www.boost.org/doc/libs/master/libs/locale/doc/html/index.html)
-    * [Range-V3](https://github.com/ericniebler/range-v3.git), tag 0.12.0, *if not found, SeQuant will download and build Range-V3*
-    * [libPerm](https://github.com/Krzmbrzl/libPerm), tag cada3e185549896203cf4d0c7f26ea22c7de428f, *if not found, SeQuant will download and build libPerm*
+    * [Range-V3](https://github.com/ericniebler/range-v3.git). *If not found, SeQuant will download and build Range-V3*
+    * [libPerm](https://github.com/Krzmbrzl/libPerm). *If not found, SeQuant will download and build libPerm*
   * optional:
     * for building coupled-cluster evaluation tests:
-      * [TiledArray](https://github.com/ValeevGroup/tiledarray.git), tag 5477174cd8e857f76d29cf6c0dcc80277393a9eb
+      * [TiledArray](https://github.com/ValeevGroup/tiledarray.git)
     * for building `stcc*` test programs
-        * [Eigen](http://eigen.tuxfamily.org/), version 3
+        * [Eigen](http://eigen.tuxfamily.org/)
+
+Minimum required versions of prerequisites, including the versions of prerequisites installed from source, can be found in `external/versions.cmake`.
 
 ### Configure
 

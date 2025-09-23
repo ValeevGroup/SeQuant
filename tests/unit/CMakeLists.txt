@@ -2,9 +2,10 @@ include(FindOrFetchCatch2)
 include(Catch)
 
 add_executable(unit_tests-sequant ${BUILD_BY_DEFAULT}
+    "test_abstract_tensor.cpp"
     "test_asy_cost.cpp"
     "test_binary_node.cpp"
-	"test_biorthogonalization.cpp"
+    "test_biorthogonalization.cpp"
     "test_bliss.cpp"
     "test_canonicalize.cpp"
     "test_eval_expr.cpp"
@@ -34,6 +35,13 @@ add_executable(unit_tests-sequant ${BUILD_BY_DEFAULT}
     "test_wick.cpp"
 )
 
+target_compile_definitions(unit_tests-sequant PRIVATE SEQUANT_UNIT_TESTS_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+target_link_libraries(unit_tests-sequant PRIVATE Boost::boost)
+
+if (SEQUANT_SKIP_LONG_TESTS)
+    target_compile_definitions(unit_tests-sequant PRIVATE SEQUANT_SKIP_LONG_TESTS=1)
+endif()
+
 if (TARGET tiledarray)
     target_sources(unit_tests-sequant
         PRIVATE
@@ -51,13 +59,16 @@ if (TARGET tiledarray)
     target_compile_definitions(unit_tests-sequant PRIVATE SEQUANT_HAS_TILEDARRAY)
 endif (TARGET tiledarray)
 
-target_link_libraries(unit_tests-sequant PRIVATE SeQuant Catch2)
+target_link_libraries(unit_tests-sequant PRIVATE SeQuant::SeQuant Catch2::Catch2 dtl::dtl)
+
+target_set_warning_flags(unit_tests-sequant)
 
 if (SEQUANT_TESTS)
     catch_discover_tests(
         unit_tests-sequant
         TEST_PREFIX "sequant/unit/"
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+        PROPERTIES FIXTURES_REQUIRED "SEQUANT_BUILD_ALL"
     )
 else()
     add_test(
@@ -65,6 +76,7 @@ else()
         COMMAND unit_tests-sequant
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
     )
+
     set(TEST_NAMES "sequant/unit")
     build_test_as_needed(unit_tests-sequant "sequant/unit" TEST_NAMES)
 endif()

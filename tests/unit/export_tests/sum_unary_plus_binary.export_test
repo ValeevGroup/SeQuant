@@ -1,0 +1,27 @@
+f{a1;i1} - f{i2;i1} t{a1;i2} 
+
+
+=================================================
+Plain Text
+=================================================
+Declare index i_1
+Declare index i_2
+Declare index a_1
+
+Declare tensor I[a_1, i_1]
+Declare tensor f[i_2, i_1]
+Declare tensor f[a_1, i_1]
+Declare tensor t[a_1, i_2]
+
+Create I[a_1, i_1] and initialize to zero
+Load f[i_2, i_1]
+Load t[a_1, i_2]
+Compute I[a_1, i_1] += -1 f[i_2, i_1] t[a_1, i_2]
+Unload t[a_1, i_2]
+Unload f[i_2, i_1]
+Load f[a_1, i_1]
+Compute I[a_1, i_1] += f[a_1, i_1]
+Unload f[a_1, i_1]
+Persist I[a_1, i_1]
+
+=================================================

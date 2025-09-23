@@ -14,8 +14,13 @@ set(RUNNABLE_DOC_EXAMPLES "")
 set(counter 1)
 foreach(current IN LISTS EXAMPLE_CODES)
     file(READ "${current}" contents)
+    cmake_path(GET current FILENAME filename)
+    string(REPLACE ".cpp" "" basename "${filename}")
 
-    set(current_name "sequant_doc_example_${counter}")
+    set(current_name "sequant_doc_example_${basename}")
+    if (TARGET "${current_name}")
+        set(current_name "${current_name}${counter}")
+    endif()
 
     if ("${contents}" MATCHES " main\\(")
         add_executable(${current_name} ${current})
@@ -37,6 +42,8 @@ foreach(current IN LISTS EXAMPLE_CODES)
             ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
             LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
     )
+
+    target_set_warning_flags("${current_name}")
 
     math(EXPR counter "${counter} + 1")
 endforeach()

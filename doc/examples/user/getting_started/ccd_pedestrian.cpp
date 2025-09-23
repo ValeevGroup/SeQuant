@@ -7,21 +7,22 @@
 int main() {
   using namespace sequant;
   using namespace sequant::mbpt;
-  set_default_context(Context(make_min_sr_spaces(), Vacuum::SingleProduct));
+  set_default_context({.index_space_registry_shared_ptr = make_min_sr_spaces(),
+                       .vacuum = Vacuum::SingleProduct});
 
   // start-snippet-1
   auto t2 = ex<Constant>(rational(1, 4)) *
             ex<Tensor>(L"t", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"},
-                       Symmetry::antisymm) *
+                       Symmetry::Antisymm) *
             ex<FNOperator>(cre{L"a_1", L"a_2"}, ann{L"i_1", L"i_2"});
   // end-snippet-1
 
   // start-snippet-2
-  auto H = ex<Tensor>(L"f", bra{L"p_1"}, ket{L"p_2"}, Symmetry::nonsymm) *
+  auto H = ex<Tensor>(L"f", bra{L"p_1"}, ket{L"p_2"}, Symmetry::Nonsymm) *
                ex<FNOperator>(cre{L"p_1"}, ann{L"p_2"}) +
            ex<Constant>(rational(1, 4)) *
                ex<Tensor>(L"g", bra{L"p_1", L"p_2"}, ket{L"p_3", L"p_4"},
-                          Symmetry::antisymm) *
+                          Symmetry::Antisymm) *
                ex<FNOperator>(cre{L"p_1", L"p_2"}, ann{L"p_3", L"p_4"});
   // end-snippet-2
 
@@ -41,12 +42,12 @@ int main() {
   // start-snippet-5
   auto t2_0 = ex<Constant>(rational(1, 4)) *
               ex<Tensor>(L"t", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"},
-                         Symmetry::antisymm) *
+                         Symmetry::Antisymm) *
               ex<FNOperator>(cre{L"a_1", L"a_2"}, ann{L"i_1", L"i_2"});
 
   auto t2_1 = ex<Constant>(rational(1, 4)) *
               ex<Tensor>(L"t", bra{L"a_3", L"a_4"}, ket{L"i_3", L"i_4"},
-                         Symmetry::antisymm) *
+                         Symmetry::Antisymm) *
               ex<FNOperator>(cre{L"a_3", L"a_4"}, ann{L"i_3", L"i_4"});
 
   auto c_htt =

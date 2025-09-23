@@ -6,7 +6,6 @@
 
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/space.hpp>
-#include <SeQuant/core/tensor.hpp>
 
 #include <range/v3/view.hpp>
 
@@ -26,7 +25,7 @@ ExprPtr density_fit_impl(Tensor const& tnsr, Index const& aux_idx,
   auto t2 = ex<Tensor>(factor_label, bra({ranges::back(tnsr.bra())}),
                        ket({ranges::back(tnsr.ket())}), aux({aux_idx}));
 
-  if (tnsr.symmetry() == Symmetry::antisymm) {
+  if (tnsr.symmetry() == Symmetry::Antisymm) {
     auto t3 = ex<Tensor>(factor_label, bra({ranges::back(tnsr.bra())}),
                          ket({ranges::front(tnsr.ket())}), aux({aux_idx}));
 

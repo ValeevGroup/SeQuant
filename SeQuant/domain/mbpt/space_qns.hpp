@@ -9,6 +9,18 @@
 
 namespace sequant::mbpt {
 
+/// Meta-class to provide information about the bit-mask for the provided bitset
+template <typename BitSet>
+struct mask;
+
+/// The numeric value of the bit-mask for the provided bitset
+template <typename BitSet>
+constexpr auto mask_v = mask<BitSet>::value;
+
+/// The type of the bit-mask for the provided bitset
+template <typename BitSet>
+using mask_t = mask<BitSet>::type;
+
 // SeQuant/mbpt definitions of IndexSpace QNs
 
 /// quantum numbers tags related to spin
@@ -26,23 +38,42 @@ enum class Spin : bitset_t {
   none = any,   //!< same as spin-free
   up = alpha,   //!< spin-up (physics)
   down = beta,  //!< spin-down (physics)
-  mask = any,   //!< spin bit mask
   // only used by legacy code
   null = 0b000000
 };
 
+template <>
+struct mask<Spin> {
+  using type = std::underlying_type_t<Spin>;
+  static constexpr type value = static_cast<type>(Spin::any);
+};
+
 /// quantum numbers tags related to LCAO basis traits
-/// \note sLCAO basis traits use 3rd and 4th rightmost bits
+/// \note LCAO basis traits use 3rd and 4th rightmost bits
 enum class LCAOQNS : bitset_t {
   ao = 0b000100,
-  pao = 0b001000,  // projected AO space denotes unoccupied spaces made from AO
-                   // basis and orthogonal to occupied orbitals
-  mask = ao | pao
+  pao = 0b001000  // projected AO space denotes unoccupied spaces made
+                  // from AO basis and orthogonal to occupied orbitals
+};
+
+template <>
+struct mask<LCAOQNS> {
+  using type = std::underlying_type_t<LCAOQNS>;
+  static constexpr type value =
+      static_cast<type>(LCAOQNS::ao) | static_cast<type>(LCAOQNS::pao);
 };
 
 /// quantum numbers tags related to tensor factorization basis traits
 /// \note TensorFactorization basis traits use 5th rightmost bits
-enum class TensorFactorizationQNS : bitset_t { df = 0b010000, mask = df };
+enum class TensorFactorizationQNS : bitset_t {
+  df = 0b010000,
+};
+
+template <>
+struct mask<TensorFactorizationQNS> {
+  using type = std::underlying_type_t<TensorFactorizationQNS>;
+  static constexpr type value = static_cast<type>(TensorFactorizationQNS::df);
+};
 
 }  // namespace sequant::mbpt
 

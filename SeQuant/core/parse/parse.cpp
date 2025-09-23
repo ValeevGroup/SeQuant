@@ -10,9 +10,7 @@
 #include <SeQuant/core/parse/ast.hpp>
 #include <SeQuant/core/parse/ast_conversions.hpp>
 #include <SeQuant/core/parse/semantic_actions.hpp>
-#include <SeQuant/core/result_expr.hpp>
 #include <SeQuant/core/space.hpp>
-#include <SeQuant/core/tensor.hpp>
 
 #define BOOST_SPIRIT_X3_UNICODE
 #include <boost/core/demangle.hpp>
@@ -162,7 +160,8 @@ struct annotate_position {
 
 struct error_handler {
   template <typename Iterator, typename Exception, typename Context>
-  x3::error_handler_result on_error(const Iterator &first, const Iterator &last,
+  x3::error_handler_result on_error(const Iterator & /*first*/,
+                                    const Iterator & /*last*/,
                                     const Exception &e, const Context &ctx) {
     auto &error_handler = x3::get<error_handler_tag>(ctx).get();
     error_handler(e.where(), boost::core::demangle(e.which().data()));
@@ -230,10 +229,11 @@ AST do_parse(const StartRule &start, std::wstring_view input,
                        std::distance(begin, input.end()),
                        "Couldn't parse the entire input");
     }
-  } catch (const boost::spirit::x3::expectation_failure<iterator_type> &e) {
-    std::wcout << "Caught expectation_failure\nwhere: " << e.where()
-               << "\nwhat: " << e.what() << "\nwhich: " << e.which().data()
-               << std::endl;
+  } catch ([[maybe_unused]] const boost::spirit::x3::expectation_failure<
+           iterator_type> &e) {
+    // std::wcout << "Caught expectation_failure\nwhere: " << e.where()
+    //           << "\nwhat: " << e.what() << "\nwhich: " << e.which().data()
+    //           << std::endl;
     throw;
   }
 
@@ -243,11 +243,11 @@ AST do_parse(const StartRule &start, std::wstring_view input,
 parse::transform::DefaultSymmetries to_default_symms(
     const std::optional<Symmetry> &perm_symm,
     const std::optional<BraKetSymmetry> &braket_symm,
-    const std::optional<ParticleSymmetry> &particle_symm) {
+    const std::optional<ColumnSymmetry> &column_symm) {
   const Context &ctx = get_default_context();
 
   parse::transform::DefaultSymmetries symms{
-      Symmetry::nonsymm, ctx.braket_symmetry(), ParticleSymmetry::symm};
+      Symmetry::Nonsymm, ctx.braket_symmetry(), ColumnSymmetry::Symm};
 
   if (perm_symm.has_value()) {
     std::get<0>(symms) = perm_symm.value();
@@ -255,8 +255,13 @@ parse::transform::DefaultSymmetries to_default_symms(
   if (braket_symm.has_value()) {
     std::get<1>(symms) = braket_symm.value();
   }
-  if (particle_symm.has_value()) {
-    std::get<2>(symms) = particle_symm.value();
+  if (column_symm.has_value()) {
+    std::get<2>(symms) = column_symm.value();
+  }
+  if (std::get<0>(symms) !=
+      Symmetry::Nonsymm) {  // antisymmetry/symmetric bra and ket imply particle
+                            // symmetry
+    std::get<2>(symms) = ColumnSymmetry::Symm;
   }
 
   return symms;
@@ -265,7 +270,7 @@ parse::transform::DefaultSymmetries to_default_symms(
 ResultExpr parse_result_expr(std::wstring_view input,
                              std::optional<Symmetry> perm_symm,
                              std::optional<BraKetSymmetry> braket_symm,
-                             std::optional<ParticleSymmetry> particle_symm) {
+                             std::optional<ColumnSymmetry> column_symm) {
   using iterator_type = decltype(input)::iterator;
   x3::position_cache<std::vector<iterator_type>> positions(input.begin(),
                                                            input.end());
@@ -274,12 +279,12 @@ ResultExpr parse_result_expr(std::wstring_view input,
 
   return parse::transform::ast_to_result(
       ast, positions, input.begin(),
-      to_default_symms(perm_symm, braket_symm, particle_symm));
+      to_default_symms(perm_symm, braket_symm, column_symm));
 }
 
 ExprPtr parse_expr(std::wstring_view input, std::optional<Symmetry> perm_symm,
                    std::optional<BraKetSymmetry> braket_symm,
-                   std::optional<ParticleSymmetry> particle_symm) {
+                   std::optional<ColumnSymmetry> column_symm) {
   using iterator_type = decltype(input)::iterator;
   x3::position_cache<std::vector<iterator_type>> positions(input.begin(),
                                                            input.end());
@@ -287,7 +292,7 @@ ExprPtr parse_expr(std::wstring_view input, std::optional<Symmetry> perm_symm,
 
   return parse::transform::ast_to_expr(
       ast, positions, input.begin(),
-      to_default_symms(perm_symm, braket_symm, particle_symm));
+      to_default_symms(perm_symm, braket_symm, column_symm));
 }
 
 }  // namespace sequant

@@ -35,13 +35,13 @@ class SequantEvalScfBTAS final : public SequantEvalScf {
 
   Tensor_t const& f_vo() const {
     static Tensor_t tnsr =
-        data_world_(parse_expr(L"f{a1;i1}", Symmetry::nonsymm)->as<Tensor>());
+        data_world_(parse_expr(L"f{a1;i1}", Symmetry::Nonsymm)->as<Tensor>());
     return tnsr;
   }
 
   Tensor_t const& g_vvoo() const {
     static Tensor_t tnsr = data_world_(
-        parse_expr(L"g{a1,a2;i1,i2}", Symmetry::nonsymm)->as<Tensor>());
+        parse_expr(L"g{a1,a2;i1,i2}", Symmetry::Nonsymm)->as<Tensor>());
     return tnsr;
   }
 
@@ -50,7 +50,7 @@ class SequantEvalScfBTAS final : public SequantEvalScf {
         L"f{i1;a1} * t{a1;i1} + g{i1,i2;a1,a2} * "
         L"(1/4 * t{a1,a2;i1,i2} + 1/2 t{a1;i1} * t{a2;i2})";
     static auto const node =
-        binarize<EvalExprBTAS>(parse_expr(energy_expr, Symmetry::antisymm));
+        binarize<EvalExprBTAS>(parse_expr(energy_expr, Symmetry::Antisymm));
 
     return evaluate(node, data_world_)->template get<double>();
   }
@@ -108,14 +108,17 @@ class SequantEvalScfBTAS final : public SequantEvalScf {
     auto log = Logger::instance().eval.level > 0;
 
     for (auto&& [r, n] : zip(rs, nodes_)) {
-      auto const& target_indices = ranges::front(n)->annot();
+      assert(!n.empty());
+      // update_amplitudes assumes that the residuals are in specific layout
+      auto const target_indices = sorted_annot(ranges::front(n)->as_tensor());
       r = funcs[st][log](n, target_indices, data_world_, cman_)
               ->template get<Tensor_t>();
     }
 
+    const auto E = info_.eqn_opts.spintrace ? energy_spin_free_orbital()
+                                            : energy_spin_orbital();
     data_world_.update_amplitudes(rs);
-    return info_.eqn_opts.spintrace ? energy_spin_free_orbital()
-                                    : energy_spin_orbital();
+    return E;
   }
 
  public:

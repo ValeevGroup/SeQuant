@@ -6,12 +6,20 @@
 
 #include <tiledarray.h>
 #include <SeQuant/core/op.hpp>
+#include <SeQuant/core/runtime.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/domain/mbpt/context.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 
 #include <calc_info.hpp>
 #include <ta/scf_ta.hpp>
+
+#define runtime_assert(tf)                                                \
+  if (!(tf)) {                                                            \
+    std::ostringstream oss;                                               \
+    oss << "failed assert at line " << __LINE__ << " in eval_ta example"; \
+    throw std::runtime_error(oss.str().c_str());                          \
+  }
 
 template <typename Os>
 Os& operator<<(Os& os, sequant::eval::CalcInfo const& info) {
@@ -63,16 +71,16 @@ int main(int argc, char* argv[]) {
     // return 1;
   }
 
-  std::locale::global(std::locale("en_US.UTF-8"));
-  std::wcout.imbue(std::locale("en_US.UTF-8"));
-  std::wcerr.imbue(std::locale("en_US.UTF-8"));
-
+  sequant::set_locale();
   auto& world = TA::initialize(argc, argv);
   using namespace sequant;
   detail::OpIdRegistrar op_id_registrar;
-  sequant::set_default_context(Context(
-      mbpt::make_min_sr_spaces(), Vacuum::SingleProduct, IndexSpaceMetric::Unit,
-      BraKetSymmetry::conjugate, SPBasis::spinorbital));
+  sequant::set_default_context(
+      {.index_space_registry_shared_ptr = mbpt::make_min_sr_spaces(),
+       .vacuum = Vacuum::SingleProduct,
+       .canonicalization_options =
+           CanonicalizeOptions::default_options().copy_and_set(
+               CanonicalizationMethod::Complete)});
   TensorCanonicalizer::register_instance(
       std::make_shared<DefaultTensorCanonicalizer>());
 
@@ -98,7 +106,14 @@ int main(int argc, char* argv[]) {
   auto const calc_info =
       eval::make_calc_info(calc_config, fock_file, eri_file, out_file);
 
-  eval::SequantEvalScfTA<TA::TArrayD>{world, calc_info}.scf(std::wcout);
+  auto scf_ta = eval::SequantEvalScfTA<TA::TArrayD>{world, calc_info};
+
+  scf_ta.scf(std::wcout);
+  double const expected{-0.07068045196165902};
+  double const threshold = calc_info.scf_opts.conv;
+  double const ediff = std::fabs(expected - scf_ta.energy());
+
+  runtime_assert((ediff <= threshold));
 
   TA::finalize();
   return 0;

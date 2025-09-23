@@ -2,12 +2,12 @@
 // Created by Eduard Valeyev on 3/8/25.
 //
 
-#include "SeQuant/domain/mbpt/rules/csv.hpp"
+#include <SeQuant/domain/mbpt/rules/csv.hpp>
 
-#include "SeQuant/domain/mbpt/space_qns.hpp"
+#include <SeQuant/domain/mbpt/space_qns.hpp>
 
-#include "SeQuant/core/tensor.hpp"
-#include "SeQuant/core/utility/indices.hpp"
+#include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/utility/indices.hpp>
 
 namespace sequant::mbpt {
 
@@ -19,7 +19,7 @@ ExprPtr csv_transform_impl(Tensor const& tnsr, const IndexSpace& csv_basis,
                            std::wstring_view coeff_tensor_label) {
   using ranges::views::transform;
 
-  if (ranges::none_of(tnsr.const_braket(), &Index::has_proto_indices))
+  if (ranges::none_of(tnsr.const_braket_indices(), &Index::has_proto_indices))
     return nullptr;
 
   assert(ranges::none_of(tnsr.aux(), &Index::has_proto_indices));
@@ -80,7 +80,7 @@ ExprPtr csv_transform_impl(Tensor const& tnsr, const IndexSpace& csv_basis,
 
   auto xtnsr = ex<Tensor>(tnsr.label(), bra(rbra), ket(rket), tnsr.aux(),
                           tnsr.symmetry(), tnsr.braket_symmetry(),
-                          tnsr.particle_symmetry());
+                          tnsr.column_symmetry());
   result.prepend(1, std::move(xtnsr));
 
   return ex<Product>(std::move(result));

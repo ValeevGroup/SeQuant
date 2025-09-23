@@ -15,7 +15,6 @@
 #include <SeQuant/core/meta.hpp>
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/tag.hpp>
-#include <SeQuant/core/tensor.hpp>
 #include <SeQuant/domain/mbpt/context.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 
@@ -36,10 +35,12 @@ TEST_CASE("tensor", "[elements]") {
     REQUIRE(t1.bra_rank() == 0);
     REQUIRE(t1.ket_rank() == 0);
     REQUIRE(t1.aux_rank() == 0);
+    REQUIRE(t1.bra_net_rank() == 0);
+    REQUIRE(t1.ket_net_rank() == 0);
     REQUIRE(t1.rank() == 0);
-    REQUIRE(t1.symmetry() == Symmetry::invalid);
-    REQUIRE(t1.braket_symmetry() == BraKetSymmetry::invalid);
-    REQUIRE(t1.particle_symmetry() == ParticleSymmetry::invalid);
+    REQUIRE(t1.symmetry() == Symmetry::Nonsymm);
+    REQUIRE(t1.braket_symmetry() == BraKetSymmetry::Nonsymm);
+    REQUIRE(t1.column_symmetry() == ColumnSymmetry::Nonsymm);
     REQUIRE(t1.label() == L"");
 
     REQUIRE_NOTHROW(Tensor(L"F", bra{L"i_1"}, ket{L"i_1"}));
@@ -49,49 +50,205 @@ TEST_CASE("tensor", "[elements]") {
     REQUIRE(t2.ket_rank() == 1);
     REQUIRE(t2.aux_rank() == 0);
     REQUIRE(t2.rank() == 1);
-    REQUIRE(t2.const_indices().size() == 2);
-    REQUIRE(t2.symmetry() == Symmetry::nonsymm);
-    REQUIRE(t2.braket_symmetry() == BraKetSymmetry::conjugate);
-    REQUIRE(t2.particle_symmetry() == ParticleSymmetry::symm);
+    REQUIRE(t2.const_braketaux().size() == 2);
+    REQUIRE(t2.const_slots().size() == 2);
+    REQUIRE(t2.num_slots() == 2);
+    REQUIRE(t2.num_indices() == 2);
+    REQUIRE(ranges::distance(t2.const_braketaux_indices().begin(),
+                             t2.const_braketaux_indices().end()) == 2);
+    REQUIRE(ranges::distance(t2.const_indices().begin(),
+                             t2.const_indices().end()) == 2);
+    REQUIRE(t2.symmetry() == Symmetry::Nonsymm);
+    REQUIRE(t2.braket_symmetry() == BraKetSymmetry::Conjugate);
+    REQUIRE(t2.column_symmetry() == ColumnSymmetry::Symm);
     REQUIRE(t2.label() == L"F");
 
+    // bra/kets of different rank
     REQUIRE_NOTHROW(Tensor(L"N", bra{L"i_1"}, ket{}, aux{L"a_1"}));
     auto t3 = Tensor(L"N", bra{L"i_1"}, ket{}, aux{L"a_1"});
     REQUIRE(t3);
     REQUIRE(t3.bra_rank() == 1);
     REQUIRE(t3.ket_rank() == 0);
     REQUIRE(t3.aux_rank() == 1);
+    REQUIRE(t3.bra_net_rank() == 1);
+    REQUIRE(t3.ket_net_rank() == 0);
     REQUIRE_THROWS(t3.rank());
-    REQUIRE(t3.const_indices().size() == 2);
-    REQUIRE(t3.symmetry() == Symmetry::nonsymm);
-    REQUIRE(t3.braket_symmetry() == BraKetSymmetry::conjugate);
-    REQUIRE(t3.particle_symmetry() == ParticleSymmetry::symm);
+    REQUIRE(t3.const_braketaux().size() == 2);
+    REQUIRE(t3.const_slots().size() == 2);
+    REQUIRE(t3.num_slots() == 2);
+    REQUIRE(t3.num_indices() == 2);
+    REQUIRE(ranges::distance(t3.const_braketaux_indices().begin(),
+                             t3.const_braketaux_indices().end()) == 2);
+    REQUIRE(ranges::distance(t3.const_indices().begin(),
+                             t3.const_indices().end()) == 2);
+    REQUIRE(t3.symmetry() == Symmetry::Nonsymm);
+    REQUIRE(t3.braket_symmetry() == BraKetSymmetry::Conjugate);
+    REQUIRE(t3.column_symmetry() == ColumnSymmetry::Symm);
     REQUIRE(t3.label() == L"N");
 
     REQUIRE_NOTHROW(Tensor(L"g", bra{Index{L"i_1"}, Index{L"i_2"}},
                            ket{Index{L"i_3"}, Index{L"i_4"}},
-                           aux{Index{L"i_5"}}, Symmetry::nonsymm,
-                           BraKetSymmetry::symm, ParticleSymmetry::nonsymm));
+                           aux{Index{L"i_5"}}, Symmetry::Nonsymm,
+                           BraKetSymmetry::Symm, ColumnSymmetry::Nonsymm));
     auto t4 = Tensor(L"g", bra{Index{L"i_1"}, Index{L"i_2"}},
                      ket{Index{L"i_3"}, Index{L"i_4"}}, aux{Index{L"i_5"}},
-                     Symmetry::nonsymm, BraKetSymmetry::symm,
-                     ParticleSymmetry::nonsymm);
+                     Symmetry::Nonsymm, BraKetSymmetry::Symm,
+                     ColumnSymmetry::Nonsymm);
     REQUIRE(t4);
     REQUIRE(t4.bra_rank() == 2);
     REQUIRE(t4.ket_rank() == 2);
     REQUIRE(t4.aux_rank() == 1);
     REQUIRE(t4.rank() == 2);
-    REQUIRE(t4.const_indices().size() == 5);
-    REQUIRE(t4.symmetry() == Symmetry::nonsymm);
-    REQUIRE(t4.braket_symmetry() == BraKetSymmetry::symm);
-    REQUIRE(t4.particle_symmetry() == ParticleSymmetry::nonsymm);
+    REQUIRE(ranges::size(t4.const_braketaux()) == 5);
+    REQUIRE(ranges::size(t4.const_slots()) == 5);
+    REQUIRE(t4.num_slots() == 5);
+    REQUIRE(t4.symmetry() == Symmetry::Nonsymm);
+    REQUIRE(t4.braket_symmetry() == BraKetSymmetry::Symm);
+    REQUIRE(t4.column_symmetry() == ColumnSymmetry::Nonsymm);
     REQUIRE(t4.label() == L"g");
+
+    SECTION("null indices") {
+      // null indices ok in asymmetric bra or ket
+      REQUIRE_NOTHROW(Tensor(L"N", bra{L"i_2", L"", L"i_3"},
+                             ket{L"", L"i_1", L""}, aux{}, Symmetry::Nonsymm));
+      REQUIRE_NOTHROW(Tensor(L"N", bra{L"", L"i_1", L""},
+                             ket{L"i_2", L"", L"i_3"}, aux{},
+                             Symmetry::Nonsymm));
+
+      REQUIRE_NOTHROW(
+          Tensor(L"N", bra{L""}, ket{L"i_1"}, aux{}, Symmetry::Nonsymm));
+      Tensor t(L"N", bra{L""}, ket{L"i_1"}, aux{}, Symmetry::Nonsymm);
+      REQUIRE(t.bra_rank() == 0);
+      REQUIRE(t.ket_rank() == 1);
+      REQUIRE(t.bra_net_rank() == 0);
+      REQUIRE(t.ket_net_rank() == 1);
+      REQUIRE(t.num_slots() == 1);
+      REQUIRE(t.num_indices() == 1);
+
+      // in fact slots of asymmetric particle-symmetric tensors are kept in
+      // canonical order
+      REQUIRE(Tensor(L"N", bra{L""}, ket{L"i_1"}, aux{}, Symmetry::Nonsymm) ==
+              Tensor(L"N", bra{}, ket{L"i_1"}, aux{}, Symmetry::Nonsymm));
+      REQUIRE(Tensor(L"N", bra{L"i_2", L"", L"i_3"}, ket{L"", L"i_1", L""},
+                     aux{}, Symmetry::Nonsymm) ==
+              Tensor(L"N", bra{L"i_2", L"i_3"}, ket{L"", L"", L"i_1"}, aux{},
+                     Symmetry::Nonsymm));
+      REQUIRE(Tensor(L"N", bra{L"", L"i_1", L""}, ket{L"i_2", L"", L"i_3"},
+                     aux{}, Symmetry::Nonsymm) ==
+              Tensor(L"N", bra{L"i_1", L"", L""}, ket{L"", L"i_2", L"i_3"},
+                     aux{}, Symmetry::Nonsymm));
+      REQUIRE(
+          Tensor(L"N", bra{L"", L"i_1", L"", L"i_4"},
+                 ket{L"i_2", L"", L"i_3", L"i_5"}, aux{}, Symmetry::Nonsymm) ==
+          Tensor(L"N", bra{L"i_4", L"i_1", L"", L""},
+                 ket{L"i_5", L"", L"i_2", L"i_3"}, aux{}, Symmetry::Nonsymm));
+      // in fact unnecessary null indices are dropped in canonicalization
+      REQUIRE(
+          Tensor(L"N", bra{L"", L"i_1", L"", L"i_4"},
+                 ket{L"i_2", L"", L"i_3", L"i_5"}, aux{}, Symmetry::Nonsymm) ==
+          Tensor(L"N", bra{L"i_4", L"i_1"}, ket{L"i_5", L"", L"i_2", L"i_3"},
+                 aux{}, Symmetry::Nonsymm));
+      Tensor t5(L"N", bra{L"", L"i_1", L"", L"i_4"},
+                ket{L"i_2", L"", L"i_3", L"i_5"}, aux{}, Symmetry::Nonsymm);
+      REQUIRE(t5.bra_rank() == 2);
+      REQUIRE(t5.bra_net_rank() == 2);
+      REQUIRE(t5.bra()[0] == L"i_4");
+      REQUIRE(t5.bra()[1] == L"i_1");
+      REQUIRE(t5.ket_rank() == 4);
+      REQUIRE(t5.ket_net_rank() == 3);
+      REQUIRE(t5.ket()[0] == L"i_5");
+      REQUIRE(t5.ket()[1].nonnull() == false);
+      REQUIRE(t5.ket()[2] == L"i_2");
+      REQUIRE(t5.ket()[3] == L"i_3");
+
+      // but asymmetric particle-NONsymmetric tensors are kept in given order
+      REQUIRE(Tensor(L"N", bra{L""}, ket{L"i_1"}, aux{}, Symmetry::Nonsymm,
+                     BraKetSymmetry::Conjugate, ColumnSymmetry::Nonsymm) !=
+              Tensor(L"N", bra{}, ket{L"i_1"}, aux{}, Symmetry::Nonsymm,
+                     BraKetSymmetry::Conjugate, ColumnSymmetry::Nonsymm));
+      REQUIRE(Tensor(L"N", bra{L"", L"i_1", L"", L"i_4"},
+                     ket{L"i_2", L"", L"i_3", L"i_5"}, aux{}, Symmetry::Nonsymm,
+                     BraKetSymmetry::Conjugate, ColumnSymmetry::Nonsymm) !=
+              Tensor(L"N", bra{L"i_4", L"i_1", L"", L""},
+                     ket{L"i_5", L"", L"i_2", L"i_3"}, aux{}, Symmetry::Nonsymm,
+                     BraKetSymmetry::Conjugate, ColumnSymmetry::Nonsymm));
+      Tensor t6(L"N", bra{L"", L"i_1", L"", L"i_4"},
+                ket{L"i_2", L"", L"i_3", L"i_5"}, aux{}, Symmetry::Nonsymm,
+                BraKetSymmetry::Conjugate, ColumnSymmetry::Nonsymm);
+      REQUIRE(t6.bra_rank() == 4);
+      REQUIRE(t6.bra_net_rank() == 2);
+      REQUIRE(t6.bra()[0].nonnull() == false);
+      REQUIRE(t6.bra()[1] == L"i_1");
+      REQUIRE(t6.bra()[2].nonnull() == false);
+      REQUIRE(t6.bra()[3] == L"i_4");
+      REQUIRE(t6.ket_rank() == 4);
+      REQUIRE(t6.ket_net_rank() == 3);
+      REQUIRE(t6.ket()[0] == L"i_2");
+      REQUIRE(t6.ket()[1].nonnull() == false);
+      REQUIRE(t6.ket()[2] == L"i_3");
+      REQUIRE(t6.ket()[3] == L"i_5");
+      REQUIRE(t6.num_slots() == 8);
+      REQUIRE(t6.num_indices() == 5);
+
+      // check errors
+#ifndef NDEBUG
+      // no null indices in antisymmetric bra or ket
+      REQUIRE_THROWS_AS(
+          Tensor(L"N", bra{L""}, ket{L"i_1"}, aux{}, Symmetry::Antisymm),
+          std::invalid_argument);
+      REQUIRE_THROWS_AS(
+          Tensor(L"N", bra{L"i_1"}, ket{L""}, aux{}, Symmetry::Antisymm),
+          std::invalid_argument);
+
+      // no null indices in symmetric bra or ket
+      REQUIRE_THROWS_AS(
+          Tensor(L"N", bra{L""}, ket{L"i_1"}, aux{}, Symmetry::Symm),
+          std::invalid_argument);
+      REQUIRE_THROWS_AS(
+          Tensor(L"N", bra{L"i_1"}, ket{L""}, aux{}, Symmetry::Symm),
+          std::invalid_argument);
+
+      // no paired null indices in asymmetric bra/ket
+      REQUIRE_THROWS_AS(Tensor(L"N", bra{L"i_2", L""}, ket{L"i_1", L""}, aux{},
+                               Symmetry::Nonsymm),
+                        std::invalid_argument);
+
+      // no unpaired null indices in asymmetric bra/ket
+      REQUIRE_THROWS_AS(
+          Tensor(L"N", bra{L"i_2"}, ket{L"i_1", L""}, aux{}, Symmetry::Nonsymm),
+          std::invalid_argument);
+      REQUIRE_THROWS_AS(
+          Tensor(L"N", bra{L"i_2", L""}, ket{L"i_1"}, aux{}, Symmetry::Nonsymm),
+          std::invalid_argument);
+
+      // no null aux indices
+      REQUIRE_THROWS_AS(Tensor(L"N", bra{L"i_1"}, ket{}, aux{L""}),
+                        std::invalid_argument);
+#endif
+    }
+
+    SECTION("duplicate indices") {
+      // no duplicate indices allowed in bra, in ket, or in aux
+      // but duplicates OK across the bundles
+      REQUIRE_NOTHROW(Tensor(L"N", bra{L"i_1"}, ket{L"i_1"}, aux{L"i_2"}));
+      // null indices are ignored in duplicate checks
+      REQUIRE_NOTHROW(Tensor(L"N", bra{L"", L"", L"i_1"},
+                             ket{L"i_1", L"i_2", L""}, aux{L"i_3"}));
+#ifndef NDEBUG
+      REQUIRE_THROWS_AS(Tensor(L"N", bra{L"i_1", L"i_1"}, ket{}, aux{}),
+                        std::invalid_argument);
+      REQUIRE_THROWS_AS(Tensor(L"N", bra{}, ket{L"i_1", L"i_1"}, aux{}),
+                        std::invalid_argument);
+      REQUIRE_THROWS_AS(Tensor(L"N", bra{}, ket{}, aux{L"i_1", L"i_1"}),
+                        std::invalid_argument);
+#endif
+    }
   }  // SECTION("constructors")
 
   SECTION("index transformation") {
     auto t = Tensor(L"g", bra{Index{L"i_1"}, Index{L"i_2"}},
                     ket{Index{L"i_3"}, Index{L"i_4"}}, aux{Index{L"i_5"}},
-                    Symmetry::antisymm);
+                    Symmetry::Antisymm);
     // index renaming preserves slot pointers
     const auto* slot_b0 = &(t.bra()[0]);
     const auto* slot_b1 = &(t.bra()[1]);
@@ -119,14 +276,14 @@ TEST_CASE("tensor", "[elements]") {
     REQUIRE(!t.ket()[1].tag().has_value());
     REQUIRE(t == Tensor(L"g", bra{Index{L"i_2"}, Index{L"i_1"}},
                         ket{Index{L"i_3"}, Index{L"i_4"}}, aux{Index{L"i_5"}},
-                        Symmetry::antisymm));
+                        Symmetry::Antisymm));
     // tagged indices are protected, so no replacements the second goaround
     REQUIRE(!t.transform_indices(idxmap));
     t.reset_tags();
     REQUIRE(t.transform_indices(idxmap));
     REQUIRE(t == Tensor(L"g", bra{Index{L"i_1"}, Index{L"i_2"}},
                         ket{Index{L"i_3"}, Index{L"i_4"}}, aux{Index{L"i_5"}},
-                        Symmetry::antisymm));
+                        Symmetry::Antisymm));
     t.reset_tags();
     REQUIRE(!t.bra()[0].tag().has_value());
     REQUIRE(!t.bra()[1].tag().has_value());
@@ -165,17 +322,18 @@ TEST_CASE("tensor", "[elements]") {
 
   SECTION("hash") {
     auto t1 = Tensor(L"F", bra{L"i_1"}, ket{L"i_2"});
-    size_t t1_hash;
-    REQUIRE_NOTHROW(t1_hash = hash_value(t1));
+    REQUIRE_NOTHROW(hash_value(t1));
+    size_t t1_hash = hash_value(t1);
 
     auto t2 = Tensor(L"F", bra{L"i_2"}, ket{L"i_1"});
-    size_t t2_hash;
-    REQUIRE_NOTHROW(t2_hash = hash_value(t2));
+    REQUIRE_NOTHROW(hash_value(t2));
+    size_t t2_hash = hash_value(t2);
+
     REQUIRE(t1_hash != t2_hash);
 
     auto t3 = Tensor(L"F", bra{L"i_2"}, ket{L"i_1"}, aux{L"i_3"});
-    size_t t3_hash;
-    REQUIRE_NOTHROW(t3_hash = hash_value(t3));
+    REQUIRE_NOTHROW(hash_value(t3));
+    size_t t3_hash = hash_value(t3);
     REQUIRE(t2_hash != t3_hash);
     REQUIRE(t1_hash != t3_hash);
 
@@ -183,18 +341,91 @@ TEST_CASE("tensor", "[elements]") {
 
   SECTION("latex") {
     auto t1 = Tensor(L"F", bra{L"i_1"}, ket{L"i_2"});
-    REQUIRE(to_latex(t1) == L"{F^{{i_2}}_{{i_1}}}");
-
     auto t2 = Tensor(L"F", bra{L"i_1"}, ket{L"i_2"}, aux{L"i_3"});
-    REQUIRE(to_latex(t2) == L"{F^{{i_2}}_{{i_1}}[{i_3}]}");
-
     auto t3 = Tensor(L"F", bra{L"i_1"}, ket{L"i_2"}, aux{L"i_3", L"i_4"});
-    REQUIRE(to_latex(t3) == L"{F^{{i_2}}_{{i_1}}[{i_3},{i_4}]}");
-
+    auto t4 = Tensor(L"F", bra{Index(L"i_1", {L"i_5", L"i_6"}), Index{}},
+                     ket{L"", L"i_2"}, aux{L"i_3", L"i_4"}, Symmetry::Nonsymm);
     auto h1 = ex<Tensor>(L"F", bra{L"i_1"}, ket{L"i_2"}) *
               ex<FNOperator>(cre({L"i_1"}), ann({L"i_2"}));
-    REQUIRE(to_latex(h1) ==
-            L"{{F^{{i_2}}_{{i_1}}}{\\tilde{a}^{{i_1}}_{{i_2}}}}");
+
+    SECTION("default (brasub, naive) typesetting") {
+      REQUIRE(to_latex(t1) == L"{F^{{i_2}}_{{i_1}}}");
+      REQUIRE(to_latex(t2) == L"{F^{{i_2}}_{{i_1}}[{i_3}]}");
+      REQUIRE(to_latex(t3) == L"{F^{{i_2}}_{{i_1}}[{i_3},{i_4}]}");
+      REQUIRE(to_latex(t4) ==
+              L"{F^{\\textvisiblespace{i_2}}_{{i_1^{{i_5}{i_6}}}"
+              L"}[{i_3},{i_4}]}");
+      REQUIRE(to_latex(h1) ==
+              L"{{F^{{i_2}}_{{i_1}}}{\\tilde{a}^{{i_1}}_{{i_2}}}}");
+    }
+
+    SECTION("ketsub naive typesetting") {
+      Context ctx = get_default_context();
+      REQUIRE(get_default_context().braket_typesetting() ==
+              BraKetTypesetting::KetSuper);
+      ctx.set(BraKetTypesetting::KetSub);
+      auto resetter = set_scoped_default_context(ctx);
+      REQUIRE(get_default_context().braket_typesetting() ==
+              BraKetTypesetting::KetSub);
+
+      REQUIRE(to_latex(t1) == L"{F_{{i_2}}^{{i_1}}}");
+      REQUIRE(to_latex(t2) == L"{F_{{i_2}}^{{i_1}}[{i_3}]}");
+      REQUIRE(to_latex(t3) == L"{F_{{i_2}}^{{i_1}}[{i_3},{i_4}]}");
+      REQUIRE(to_latex(t4) ==
+              L"{F_{\\textvisiblespace{i_2}}^{{i_1^{{i_5}{i_6}}}"
+              L"}[{i_3},{i_4}]}");
+      REQUIRE(to_latex(h1) ==
+              L"{{F_{{i_2}}^{{i_1}}}{\\tilde{a}_{{i_1}}^{{i_2}}}}");
+    }
+
+    SECTION("brasub tensor typesetting") {
+      Context ctx = get_default_context();
+      REQUIRE(get_default_context().braket_typesetting() ==
+              BraKetTypesetting::BraSub);
+      REQUIRE(get_default_context().braket_slot_typesetting() ==
+              BraKetSlotTypesetting::Naive);
+      ctx.set(BraKetSlotTypesetting::TensorPackage);
+      auto resetter = set_scoped_default_context(ctx);
+      REQUIRE(get_default_context().braket_typesetting() ==
+              BraKetTypesetting::BraSub);
+      REQUIRE(get_default_context().braket_slot_typesetting() ==
+              BraKetSlotTypesetting::TensorPackage);
+
+      REQUIRE(to_latex(t1) == L"{\\tensor*{F}{*^{i_2}_{i_1}}}");
+      REQUIRE(to_latex(t2) == L"{\\tensor*{F}{*^{i_2}_{i_1}}[{i_3}]}");
+      REQUIRE(to_latex(t3) == L"{\\tensor*{F}{*^{i_2}_{i_1}}[{i_3},{i_4}]}");
+      REQUIRE(
+          to_latex(t4) ==
+          L"{\\tensor*{F}{*^{}_{i_1^{{i_5}{i_6}}}*^{i_2}_{}}[{i_3},{i_4}]}");
+      REQUIRE(to_latex(h1) ==
+              L"{{\\tensor*{F}{*^{i_2}_{i_1}}}{\\tensor*{\\tilde{a}}{*^{i_1}_{"
+              L"i_2}}}}");
+    }
+
+    SECTION("ketsub tensor typesetting") {
+      Context ctx = get_default_context();
+      REQUIRE(get_default_context().braket_typesetting() ==
+              BraKetTypesetting::BraSub);
+      REQUIRE(get_default_context().braket_slot_typesetting() ==
+              BraKetSlotTypesetting::Naive);
+      ctx.set(BraKetTypesetting::KetSub);
+      ctx.set(BraKetSlotTypesetting::TensorPackage);
+      auto resetter = set_scoped_default_context(ctx);
+      REQUIRE(get_default_context().braket_typesetting() ==
+              BraKetTypesetting::KetSub);
+      REQUIRE(get_default_context().braket_slot_typesetting() ==
+              BraKetSlotTypesetting::TensorPackage);
+
+      REQUIRE(to_latex(t1) == L"{\\tensor*{F}{*^{i_1}_{i_2}}}");
+      REQUIRE(to_latex(t2) == L"{\\tensor*{F}{*^{i_1}_{i_2}}[{i_3}]}");
+      REQUIRE(to_latex(t3) == L"{\\tensor*{F}{*^{i_1}_{i_2}}[{i_3},{i_4}]}");
+      REQUIRE(
+          to_latex(t4) ==
+          L"{\\tensor*{F}{*^{i_1^{{i_5}{i_6}}}_{}*^{}_{i_2}}[{i_3},{i_4}]}");
+      REQUIRE(to_latex(h1) ==
+              L"{{\\tensor*{F}{*^{i_1}_{i_2}}}{\\tensor*{\\tilde{a}}{*^{i_2}_{"
+              L"i_1}}}}");
+    }
 
   }  // SECTION("latex")
 
@@ -203,8 +434,8 @@ TEST_CASE("tensor", "[elements]") {
     REQUIRE_NOTHROW(f1.adjoint());
     REQUIRE(to_latex(f1) == L"{F^{{i_1}{i_2}}_{{i_3}{i_4}}}");
 
-    auto t1 = Tensor(L"t", bra{L"a_1"}, ket{L"i_1"}, Symmetry::nonsymm,
-                     BraKetSymmetry::nonsymm);
+    auto t1 = Tensor(L"t", bra{L"a_1"}, ket{L"i_1"}, Symmetry::Nonsymm,
+                     BraKetSymmetry::Nonsymm);
     REQUIRE_NOTHROW(t1.adjoint());
     REQUIRE(to_latex(t1) == L"{t⁺^{{a_1}}_{{i_1}}}");
     t1.adjoint();

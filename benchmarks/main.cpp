@@ -7,18 +7,22 @@
 using namespace sequant;
 
 int main(int argc, char *argv[]) {
+  benchmark::MaybeReenterWithoutASLR(argc, argv);
+
   // Disable multithreading
   set_num_threads(1);
   set_locale();
   disable_thousands_separator();
-  Context fermi_ctx = Context(mbpt::make_sr_spaces(), Vacuum::SingleProduct,
-                              IndexSpaceMetric::Unit, BraKetSymmetry::nonsymm,
-                              SPBasis::spinorbital);
+  auto idxreg = mbpt::make_sr_spaces();
+  Context fermi_ctx = Context({.index_space_registry_shared_ptr = idxreg,
+                               .vacuum = Vacuum::SingleProduct,
+                               .braket_symmetry = BraKetSymmetry::Nonsymm});
   set_default_context(fermi_ctx);
 
   Context bose_einstein_ctx =
-      Context(mbpt::make_sr_spaces(), Vacuum::Physical, IndexSpaceMetric::Unit,
-              BraKetSymmetry::nonsymm, SPBasis::spinorbital);
+      Context({.index_space_registry_shared_ptr = idxreg,
+               .vacuum = Vacuum::Physical,
+               .braket_symmetry = BraKetSymmetry::Nonsymm});
 
   set_default_context(bose_einstein_ctx, Statistics::BoseEinstein);
 

@@ -4,8 +4,8 @@
 #include "catch2_sequant.hpp"
 
 #include <SeQuant/core/context.hpp>
+#include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/parse.hpp>
-#include <SeQuant/core/tensor.hpp>
 #include <SeQuant/domain/eval/eval.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 
@@ -45,11 +45,12 @@ struct NestedTensorIndices {
       if (!ranges::contains(cont, el)) cont.emplace_back(el);
     };
 
-    for (Index const& ix : tnsr.const_braket())
+    for (Index const& ix : tnsr.const_braket_indices()) {
       append_unique(ix.has_proto_indices() ? inner : outer, ix);
+    }
 
     for (Index const& ix :
-         tnsr.const_braket() | transform(&Index::proto_indices) | join)
+         tnsr.const_braket_indices() | transform(&Index::proto_indices) | join)
       append_unique(outer, ix);
   }
 
@@ -66,7 +67,8 @@ auto eval_node(sequant::ExprPtr const& expr) {
       return EvalExprTA(*val.op_type(), val.result_type(), val.expr(),
                         NestedTensorIndices(val.as_tensor()).outer_inner() |
                             ranges::to<EvalExpr::index_vector>(),
-                        val.canon_phase(), val.hash_value());
+                        val.canon_phase(), val.hash_value(),
+                        val.copy_connectivity_graph());
     } else
       return EvalExprTA(val);
   });
@@ -105,7 +107,7 @@ auto tensor_to_key(sequant::Tensor const& tnsr) {
 }
 
 auto tensor_to_key(std::wstring_view spec) {
-  return tensor_to_key(sequant::parse_expr(spec, sequant::Symmetry::nonsymm)
+  return tensor_to_key(sequant::parse_expr(spec, sequant::Symmetry::Nonsymm)
                            ->as<sequant::Tensor>());
 }
 
@@ -280,7 +282,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
     using TA::TArrayD;
 
     auto parse_antisymm = [](auto const& xpr) {
-      return parse_expr(xpr, sequant::Symmetry::antisymm);
+      return parse_expr(xpr, sequant::Symmetry::Antisymm);
     };
 
     // tnsr is assumed to be single-tiled
@@ -315,6 +317,14 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
     auto eval_antisymm = [&yield_](sequant::ExprPtr const& expr,
                                    std::string const& target_labels) {
       return evaluate_antisymm(eval_node(expr), target_labels, yield_)
+          ->get<TA::TArrayD>();
+    };
+
+    auto eval_biorthogonal_cleanup = [&yield_](
+                                         sequant::ExprPtr const& expr,
+                                         std::string const& target_labels) {
+      return evaluate_biorthogonal_cleanup(eval_node(expr), target_labels,
+                                           yield_)
           ->get<TA::TArrayD>();
     };
 
@@ -496,6 +506,41 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
                             arr2("1,2,0,4,5,3") + arr2("1,0,2,4,3,5");
 
       REQUIRE(norm(man2) == Catch::Approx(norm(eval2)));
+    }
+
+    SECTION("Biorthogonal Cleanup") {
+      // low-rank residuals: skip cleanup
+      auto expr1 = parse_antisymm(L"R_{a1, a2}^{i1, i2}");
+      auto eval1 = eval_biorthogonal_cleanup(expr1, "a_1,a_2,i_1,i_2");
+      auto const& arr1 = yield(L"R{a1,a2;i1,i2}");
+
+      auto man1 = TArrayD{};
+      man1("0,1,2,3") = arr1("0,1,2,3");
+
+      REQUIRE(norm(man1) == Catch::Approx(norm(eval1)));
+      TArrayD zero1;
+      zero1("0,1,2,3") = man1("0,1,2,3") - eval1("0,1,2,3");
+      REQUIRE(norm(zero1) == Catch::Approx(0).margin(
+                                 100 * std::numeric_limits<double>::epsilon()));
+
+      // high-rank residuals: cleanup applies:
+      // result = identity - (1/ket_rank!) * sum_of_ket_permutations
+      auto expr2 = parse_antisymm(L"R_{a1, a2, a3}^{i1, i2, i3}");
+      auto eval2 = eval_biorthogonal_cleanup(expr2, "a_1,a_2,a_3,i_1,i_2,i_3");
+      auto const& arr2 = yield(L"R{a1,a2,a3;i1,i2,i3}");
+
+      auto man2 = TArrayD{};
+      man2("0,1,2,3,4,5") =
+          arr2("0,1,2,3,4,5") -
+          (1.0 / 6.0) *
+              (arr2("0,1,2,3,4,5") + arr2("0,1,2,3,5,4") + arr2("0,1,2,4,3,5") +
+               arr2("0,1,2,4,5,3") + arr2("0,1,2,5,3,4") + arr2("0,1,2,5,4,3"));
+
+      REQUIRE(norm(man2) == Catch::Approx(norm(eval2)));
+      TArrayD zero2;
+      zero2("0,1,2,3,4,5") = man2("0,1,2,3,4,5") - eval2("0,1,2,3,4,5");
+      REQUIRE(norm(zero1) == Catch::Approx(0).margin(
+                                 100 * std::numeric_limits<double>::epsilon()));
     }
 
     SECTION("Others") {

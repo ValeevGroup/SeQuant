@@ -2,6 +2,7 @@
 #define SEQUANT_PERMUTATION_HPP
 
 #include <SeQuant/core/index.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 
 #include <range/v3/algorithm.hpp>
 
@@ -39,8 +40,9 @@ std::size_t count_cycles(Seq0&& v0, const Seq1& v1) {
       return -1;
     } else if constexpr (std::is_same_v<T, Index>) {
       return L"p_50";
-    } else  // unreachable
-      abort();
+    }
+
+    SEQUANT_UNREACHABLE;
   };
 
   const auto null = make_null();
@@ -79,6 +81,36 @@ std::size_t count_cycles(Seq0&& v0, const Seq1& v1) {
   }
   return n_cycles;
 };
+
+/// computes parity of a permutation of 0 ... N-1
+///
+/// @param p permutation
+/// @param overwrite if true, will overwrite @p p
+template <std::integral T>
+int permutation_parity(std::span<T> p, bool overwrite = false) {
+  // https://stackoverflow.com/a/20703469
+  // compute cycles, mutating elements of p to mark used elements
+  const std::size_t N = p.size();
+  int parity = 1;
+  // search for next element to start cycle with
+  for (std::size_t k = 0; k != N; ++k) {
+    if (p[k] >= N) continue;
+    std::size_t i = k;
+    std::size_t cycle_length = 1;
+    do {
+      i = p[i];
+      p[i] += N;
+      ++cycle_length;
+    } while (p[i] < N);
+    if (cycle_length % 2 == 0) parity *= -1;
+  }
+
+  if (overwrite) {
+    ranges::for_each(p, [N](auto& e) { e -= N; });
+  }
+
+  return parity;
+}
 
 }  // namespace sequant
 

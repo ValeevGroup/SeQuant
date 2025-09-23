@@ -36,7 +36,7 @@ struct Dummy : public sequant::Expr {
   std::wstring to_wolfram() const override { return L"Dummy[]"; }
   type_id_type type_id() const override { return get_type_id<Dummy>(); };
   sequant::ExprPtr clone() const override { return sequant::ex<Dummy>(); }
-  bool static_equal(const sequant::Expr &that) const override { return true; }
+  bool static_equal(const sequant::Expr &) const override { return true; }
 };
 
 template <typename T>

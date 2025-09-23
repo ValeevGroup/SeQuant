@@ -41,7 +41,8 @@ void load(Convention conv, SpinConvention spconv) {
       isr = make_legacy_spaces(spconv);
       break;
   }
-  set_default_context(sequant::Context(isr, Vacuum::SingleProduct));
+  set_default_context({.index_space_registry_shared_ptr = isr,
+                       .vacuum = Vacuum::SingleProduct});
 }
 
 void add_fermi_spin(IndexSpaceRegistry& isr) {
@@ -104,8 +105,7 @@ std::shared_ptr<IndexSpaceRegistry> make_min_sr_spaces(SpinConvention spconv) {
   auto isr = std::make_shared<IndexSpaceRegistry>();
 
   const auto spin_any = IndexSpace::QuantumNumbers{
-      spconv == SpinConvention::Legacy ? 0x00
-                                       : static_cast<bitset_t>(Spin::any)};
+      spconv == SpinConvention::Legacy ? Spin::null : Spin::any};
   isr->add(L"i", 0b01, spin_any, is_vacuum_occupied, is_reference_occupied,
            is_hole)
       .add(L"a", 0b10, spin_any, is_particle)
@@ -124,8 +124,7 @@ std::shared_ptr<IndexSpaceRegistry> make_mr_spaces(SpinConvention spconv) {
   auto isr = std::make_shared<IndexSpaceRegistry>();
 
   const auto spin_any = IndexSpace::QuantumNumbers{
-      spconv == SpinConvention::Legacy ? 0x00
-                                       : static_cast<bitset_t>(Spin::any)};
+      spconv == SpinConvention::Legacy ? Spin::null : Spin::any};
   isr->add(L"o", 0b00001, spin_any)
       .add(L"i", 0b00010, spin_any)
       .add(L"u", 0b00100, spin_any)

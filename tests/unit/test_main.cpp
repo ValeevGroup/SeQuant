@@ -34,9 +34,17 @@ int main(int argc, char* argv[]) {
   std::wcerr.precision(std::numeric_limits<double>::max_digits10);
   sequant::set_locale();
   sequant::detail::OpIdRegistrar op_id_registrar;
-  sequant::set_default_context(Context(
-      sequant::mbpt::make_sr_spaces(), Vacuum::SingleProduct,
-      IndexSpaceMetric::Unit, BraKetSymmetry::conjugate, SPBasis::spinorbital));
+  sequant::set_default_context(
+      {.index_space_registry_shared_ptr = sequant::mbpt::make_sr_spaces(),
+       .vacuum = Vacuum::SingleProduct,
+       .metric = IndexSpaceMetric::Unit,
+       .braket_symmetry = BraKetSymmetry::Conjugate,
+       .spbasis = SPBasis::Spinor,
+       .first_dummy_index_ordinal = 100,
+       .braket_typesetting = BraKetTypesetting::ContraSub,
+       // to_latex() reference outputs predominantly assume the original
+       // (naive) convention
+       .braket_slot_typesetting = BraKetSlotTypesetting::Naive});
   TensorCanonicalizer::set_cardinal_tensor_labels(
       sequant::mbpt::cardinal_tensor_labels());
   // uncomment to enable verbose output ...

@@ -9,11 +9,11 @@
 #include <mutex>
 #include <utility>
 
+#include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/math.hpp>
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/ranges.hpp>
 #include <SeQuant/core/runtime.hpp>
-#include <SeQuant/core/tensor.hpp>
 
 namespace sequant {
 
@@ -55,13 +55,13 @@ class WickTheorem {
       const std::shared_ptr<NormalOperatorSequence<S>> &input) {
     init_input(input);
     assert(input_->size() <= max_input_size);
-    assert(input_->empty() || input_->vacuum() != Vacuum::Invalid);
     if constexpr (statistics == Statistics::BoseEinstein) {
       assert(input_->empty() || input_->vacuum() == Vacuum::Physical);
     }
   }
-  explicit WickTheorem(const NormalOperatorSequence<S> &input)
-      : WickTheorem(std::make_shared<NormalOperatorSequence<S>>(input)) {}
+  explicit WickTheorem(NormalOperatorSequence<S> input)
+      : WickTheorem(
+            std::make_shared<NormalOperatorSequence<S>>(std::move(input))) {}
 
   explicit WickTheorem(ExprPtr expr_input) {
     if (expr_input->is<NormalOperatorSequence<S>>()) {
@@ -70,6 +70,9 @@ class WickTheorem {
     } else
       expr_input_ = std::move(expr_input);
   }
+
+  explicit WickTheorem(const std::initializer_list<Op<S>> &ops)
+      : WickTheorem(NormalOperatorSequence<S>{ops}) {}
 
   /// constructs WickTheorem from @c other with expression input set to @c
   /// expr_input
@@ -101,11 +104,11 @@ class WickTheorem {
       "get_default_context().spbasis() should be used to specify spin-free "
       "basis")]] WickTheorem &
   spinfree(bool sf) {
-    if (!((sf && get_default_context(S).spbasis() == SPBasis::spinfree) ||
-          (!sf && get_default_context(S).spbasis() == SPBasis::spinorbital))) {
+    if (!((sf && get_default_context(S).spbasis() == SPBasis::Spinfree) ||
+          (!sf && get_default_context(S).spbasis() == SPBasis::Spinor))) {
       throw std::invalid_argument(
-          "WickTheorem<S>::spinfree(sf): sf must match the contents of "
-          "get_default_context(S).spbasis() (N.B. WickTheorem::spinfree() is "
+          "WickTheorem<S>::Spinfree(sf): sf must match the contents of "
+          "get_default_context(S).spbasis() (N.B. WickTheorem::Spinfree() is "
           "deprecated, no longer should be used)");
     }
     return *this;
@@ -311,9 +314,10 @@ class WickTheorem {
            }) == false);
 
     // every op needs to be in a partition AND partitions need to be sorted
-    // if op_partitions only specifues nontrivial partitions, may need to add
+    // if op_partitions only specifies nontrivial partitions, may need to add
     // more partitions create initial set of partitions, then update if needed
     op_npartitions_ = size(op_partitions);
+    op_partitions_.clear();
     op_partitions_.resize(op_npartitions_);
     auto partition_idx = 0;
     ranges::for_each(op_partitions, [&](auto &&op_partition) {
@@ -385,6 +389,7 @@ class WickTheorem {
   /// canonicalization of the input expression; the default is false.
   /// @return the result of applying Wick's theorem; either a Constant, a
   /// Product, or a Sum
+  /// @note the canonicalization method is controlled by the default Context
   /// @warning this is not reentrant, but is optionally threaded internally
   /// @throw std::logic_error if input's vacuum does not match the current
   /// context vacuum
@@ -443,7 +448,7 @@ class WickTheorem {
 
   mutable std::shared_ptr<NormalOperatorSequence<S>> input_;
   bool full_contractions_ = true;
-  bool use_topology_ = false;
+  bool use_topology_ = true;
   mutable Stats stats_;
 
   mutable std::optional<container::set<Index>>
@@ -567,7 +572,7 @@ class WickTheorem {
   ExprPtr compute_nopseq(const bool count_only) const {
     // precondition 1: spin-free version only supported for physical and Fermi
     // vacua
-    if (get_default_context(S).spbasis() == SPBasis::spinfree &&
+    if (get_default_context(S).spbasis() == SPBasis::Spinfree &&
         !(get_default_context(S).vacuum() == Vacuum::Physical ||
           (S == Statistics::FermiDirac &&
            get_default_context(S).vacuum() == Vacuum::SingleProduct)))
@@ -729,9 +734,9 @@ class WickTheorem {
         //                   << " qpcre_op=" << qpcre_op_ptr->to_latex() <<
         //                   "\n";
         auto ann_it = ranges::find_if(result, [&](const auto &p) {
-          return (qpann_op_ptr->action() == Action::annihilate &&
+          return (qpann_op_ptr->action() == Action::Annihilate &&
                   p.second == qpann_op_ptr->index()) ||
-                 (qpcre_op_ptr->action() == Action::annihilate &&
+                 (qpcre_op_ptr->action() == Action::Annihilate &&
                   p.second == qpcre_op_ptr->index());
         });
         if (ann_it != result.end()) {
@@ -740,9 +745,9 @@ class WickTheorem {
           //                     << ann_it->first.to_latex() << ", "
           //                     << ann_it->second.to_latex() << "}\n";
           auto cre_it = ranges::find_if(result, [&](const auto &p) {
-            return (qpcre_op_ptr->action() == Action::create &&
+            return (qpcre_op_ptr->action() == Action::Create &&
                     p.first == qpcre_op_ptr->index()) ||
-                   (qpann_op_ptr->action() == Action::create &&
+                   (qpann_op_ptr->action() == Action::Create &&
                     p.first == qpann_op_ptr->index());
           });
           if (cre_it != result.end()) {
@@ -829,7 +834,8 @@ class WickTheorem {
           if (nconnections == 0 && partition_idx > 0) {
             --partition_idx;  // to 0-based
             assert(nop_partitions.at(partition_idx).size() > 0);
-            auto removed = nop_partitions[partition_idx].erase(nop_idx);
+            [[maybe_unused]] auto removed =
+                nop_partitions[partition_idx].erase(nop_idx);
             assert(removed);
           }
         }
@@ -946,7 +952,8 @@ class WickTheorem {
           auto partition_idx = wick.nop_partition_idx_[nop_idx];
           if (nconnections == 0 && partition_idx > 0) {
             --partition_idx;  // to 0-based
-            auto inserted = nop_partitions.at(partition_idx).insert(nop_idx);
+            [[maybe_unused]] auto inserted =
+                nop_partitions.at(partition_idx).insert(nop_idx);
             assert(inserted.second);
           }
         }
@@ -1144,13 +1151,13 @@ class WickTheorem {
             bool is_unique = true;
             if (use_topology_) {
               auto &nop_right = *(op_right_cursor.range_iter());
-              auto &op_right_it = op_right_cursor.elem_iter();
+              auto op_right_it = op_right_cursor.elem_iter();
 
               // check against the degeneracy deduced by index partition
               constexpr bool use_op_partition_groups = true;
               constexpr bool test_vs_old_code = false;
 
-              size_t ref_op_psymm_weight = 1;
+              [[maybe_unused]] size_t ref_op_psymm_weight = 1;
               if constexpr (test_vs_old_code) {
                 auto op_right_idx_in_opseq =
                     op_right_it - ranges::begin(nop_right);
@@ -1381,7 +1388,7 @@ class WickTheorem {
                         // include extra x2 factor for each cycle
                         if (S == Statistics::FermiDirac &&
                             ctx.vacuum() == Vacuum::SingleProduct &&
-                            ctx.spbasis() == SPBasis::spinfree) {
+                            ctx.spbasis() == SPBasis::Spinfree) {
                           auto [target_partner_indices, ncycles] =
                               state.make_target_partner_indices();
                           assert(target_partner_indices
@@ -1410,7 +1417,7 @@ class WickTheorem {
                         // include extra x2 factor for each cycle
                         if (ncycles > 0 &&
                             ctx.vacuum() == Vacuum::SingleProduct &&
-                            ctx.spbasis() == SPBasis::spinfree) {
+                            ctx.spbasis() == SPBasis::Spinfree) {
                           scalar_prefactor *= 1 << ncycles;
                         }
 
@@ -1447,7 +1454,8 @@ class WickTheorem {
                   recursive_nontensor_wick(result, state);
                   --state.level;
                   // this contraction is useful if it leads to useful
-                  // contractions as a result
+                  // contractions as a result ... thus same contraction
+                  // can be useful multiple times
                   if (current_num_useful_contractions !=
                       stats_.num_useful_contractions.load())
                     ++stats_.num_useful_contractions;
@@ -1501,46 +1509,66 @@ class WickTheorem {
                           const std::shared_ptr<const IndexSpaceRegistry> &isr =
                               get_default_context(S).index_space_registry()) {
     assert(can_contract(left, right, vacuum, isr));
-    //    assert(
-    //        !left.index().has_proto_indices() &&
-    //            !right.index().has_proto_indices());  // I don't think the
-    //            logic is
-    // correct for dependent indices
-    if (is_pure_qpannihilator<S>(left, vacuum, isr) &&
-        is_pure_qpcreator<S>(right, vacuum, isr))
-      return make_overlap(left.index(), right.index());
-    else {
+    // contraction result depends on whether the left/right (L, R) spaces
+    // are pure qp annihilator (hole, H) or qp creator (particle, P) subspaces
+    // or not, i.e. on whether L ⊆ H and R ⊆ P. The either of the conditions
+    // does not hold need to "project" either L or R to the corresponding
+    // intersection with the hole/particle spaces (l = L ∩ H, r = R ∩ P)
+    // before adding the contraction result, i.e. overlap:
+    // - both pure (L ⊆ H and R ⊆ P): result = s(L,R)
+    // - neither pure: result = δ(L,l) s(s,r) δ(R,r)
+    // - only L ⊆ H: result = s(L,r) δ(R,r)
+    // - only R ⊆ P: result = δ(L,l) s(s,R)
+    // N.B. This is a simplified version of the reality, since qp character
+    // depends on the Op's action, so the H/P depend on whether left/right is
+    // a creator/annihilator
+    const auto left_is_pure = is_pure_qpannihilator<S>(left, vacuum, isr);
+    const auto right_is_pure = is_pure_qpcreator<S>(right, vacuum, isr);
+
+    IndexSpace qpspace_common;
+    if (!left_is_pure || !right_is_pure) {
       const auto qpspace_left = qpannihilator_space<S>(left, vacuum, isr);
       const auto qpspace_right = qpcreator_space<S>(right, vacuum, isr);
-      const auto qpspace_common =
-          isr->intersection(qpspace_left, qpspace_right);
-      const auto index_common = Index::make_tmp_index(qpspace_common);
+      qpspace_common = isr->intersection(qpspace_left, qpspace_right);
+    }
 
-      // preserve bra/ket positions of left & right
-      const auto left_is_ann = left.action() == Action::annihilate;
-      assert(left_is_ann || right.action() == Action::annihilate);
+    std::optional<Index> left_qp_idx;
+    if (!left_is_pure) {
+      left_qp_idx =
+          Index::make_tmp_index(qpspace_common, left.index().proto_indices());
+    }
 
-      if (qpspace_common != left.index().space() &&
-          qpspace_common !=
-              right.index().space()) {  // may need 2 overlaps if neither space
-        // is pure qp creator/annihilator
-        auto result = std::make_shared<Product>();
-        result->append(1, left_is_ann
-                              ? make_overlap(left.index(), index_common)
-                              : make_overlap(index_common, left.index()));
-        result->append(1, left_is_ann
-                              ? make_overlap(index_common, right.index())
-                              : make_overlap(right.index(), index_common));
-        return result;
-      } else {
-        return left_is_ann ? make_overlap(left.index(), right.index())
-                           : make_overlap(right.index(), left.index());
-      }
+    std::optional<Index> right_qp_idx;
+    if (!right_is_pure) {
+      right_qp_idx =
+          Index::make_tmp_index(qpspace_common, right.index().proto_indices());
+    }
+
+    // preserve bra/ket positions of left & right
+    const auto left_is_ann = left.action() == Action::Annihilate;
+    assert(left_is_ann || right.action() == Action::Annihilate);
+    const auto bra_is_pure = left_is_ann ? left_is_pure : right_is_pure;
+    const auto ket_is_pure = left_is_ann ? right_is_pure : left_is_pure;
+    const auto &bra_idx = left_is_ann ? left.index() : right.index();
+    const auto &ket_idx = left_is_ann ? right.index() : left.index();
+    const auto &bra_qp_idx_opt = left_is_ann ? left_qp_idx : right_qp_idx;
+    const auto &ket_qp_idx_opt = left_is_ann ? right_qp_idx : left_qp_idx;
+
+    if (bra_is_pure || ket_is_pure) {
+      return make_overlap(bra_idx, ket_idx);
+    } else {
+      auto result = std::make_shared<Product>();
+      assert(bra_qp_idx_opt);
+      assert(ket_qp_idx_opt);
+      result->append(1, make_overlap(*bra_qp_idx_opt, *ket_qp_idx_opt));
+      result->append(1, make_kronecker(bra_idx, *bra_qp_idx_opt));
+      result->append(1, make_kronecker(*ket_qp_idx_opt, ket_idx));
+      return result;
     }
   }
 
   /// @param[in,out] expr on input, Wick's theorem result, on output the result
-  /// of reducing the overlaps
+  /// of reducing the kroneckers/overlaps
   void reduce(ExprPtr &expr) const;
 };
 

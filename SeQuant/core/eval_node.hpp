@@ -8,8 +8,8 @@
 #include <SeQuant/core/asy_cost.hpp>
 #include <SeQuant/core/binary_node.hpp>
 #include <SeQuant/core/eval_expr.hpp>
+#include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/math.hpp>
-#include <SeQuant/core/tensor.hpp>
 
 namespace sequant {
 
@@ -34,8 +34,8 @@ namespace {
 enum NodePos { Left = 0, Right, This };
 
 [[maybe_unused]] std::pair<size_t, size_t> occ_virt(Tensor const& t) {
-  auto bk_rank = t.bra_rank() + t.ket_rank();
-  auto nocc = ranges::count_if(t.const_braket(), [](Index const& idx) {
+  auto bk_rank = t.bra_net_rank() + t.ket_net_rank();
+  auto nocc = ranges::count_if(t.const_braket_indices(), [](Index const& idx) {
     return idx.space() ==
            get_default_context().index_space_registry()->hole_space(
                idx.space().qns());
@@ -174,18 +174,18 @@ struct FlopsWithSymm {
     // the rules of cost reduction are taken from
     //   doi:10.1016/j.procs.2012.04.044
     // ------
-    if (tsymm == Symmetry::symm || tsymm == Symmetry::antisymm) {
+    if (tsymm == Symmetry::Symm || tsymm == Symmetry::Antisymm) {
       auto const op = n->op_type();
       auto const tbrank = t.bra_rank();
       auto const tkrank = t.ket_rank();
       if (op == EvalOp::Sum)
-        cost = tsymm == Symmetry::symm
+        cost = tsymm == Symmetry::Symm
                    ? cost / (factorial(tbrank) * factorial(tkrank))
                    : cost / factorial(tbrank);
       else if (op == EvalOp::Product) {
         auto const lsymm = n.left()->as_tensor().symmetry();
         auto const rsymm = n.right()->as_tensor().symmetry();
-        cost = (lsymm == rsymm && lsymm == Symmetry::nonsymm)
+        cost = (lsymm == rsymm && lsymm == Symmetry::Nonsymm)
                    ? cost / factorial(tbrank)
                    : cost / (factorial(tbrank) * factorial(tkrank));
       } else

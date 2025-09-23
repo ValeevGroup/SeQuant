@@ -11,9 +11,8 @@
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/parse.hpp>
 #include <SeQuant/core/parse/ast.hpp>
-#include <SeQuant/core/result_expr.hpp>
 #include <SeQuant/core/space.hpp>
-#include <SeQuant/core/tensor.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/string.hpp>
 
 #include <boost/variant.hpp>
@@ -24,8 +23,7 @@
 
 namespace sequant::parse::transform {
 
-using DefaultSymmetries =
-    std::tuple<Symmetry, BraKetSymmetry, ParticleSymmetry>;
+using DefaultSymmetries = std::tuple<Symmetry, BraKetSymmetry, ColumnSymmetry>;
 
 template <typename AST, typename PositionCache, typename Iterator>
 std::tuple<std::size_t, std::size_t> get_pos(const AST &ast,
@@ -117,7 +115,7 @@ make_indices(const parse::ast::IndexGroups &groups,
 }
 
 template <typename Iterator>
-Symmetry to_perm_symmetry(char c, std::size_t offset, const Iterator &begin,
+Symmetry to_perm_symmetry(char c, std::size_t offset, const Iterator &,
                           Symmetry default_symmetry) {
   if (c == parse::ast::SymmetrySpec::unspecified) {
     return default_symmetry;
@@ -126,13 +124,13 @@ Symmetry to_perm_symmetry(char c, std::size_t offset, const Iterator &begin,
   switch (c) {
     case 'A':
     case 'a':
-      return Symmetry::antisymm;
+      return Symmetry::Antisymm;
     case 'S':
     case 's':
-      return Symmetry::symm;
+      return Symmetry::Symm;
     case 'N':
     case 'n':
-      return Symmetry::nonsymm;
+      return Symmetry::Nonsymm;
   }
 
   throw ParseError(offset, 1,
@@ -140,8 +138,7 @@ Symmetry to_perm_symmetry(char c, std::size_t offset, const Iterator &begin,
 }
 
 template <typename Iterator>
-BraKetSymmetry to_braket_symmetry(char c, std::size_t offset,
-                                  const Iterator &begin,
+BraKetSymmetry to_braket_symmetry(char c, std::size_t offset, const Iterator &,
                                   BraKetSymmetry default_symmetry) {
   if (c == parse::ast::SymmetrySpec::unspecified) {
     return default_symmetry;
@@ -150,13 +147,13 @@ BraKetSymmetry to_braket_symmetry(char c, std::size_t offset,
   switch (c) {
     case 'C':
     case 'c':
-      return BraKetSymmetry::conjugate;
+      return BraKetSymmetry::Conjugate;
     case 'S':
     case 's':
-      return BraKetSymmetry::symm;
+      return BraKetSymmetry::Symm;
     case 'N':
     case 'n':
-      return BraKetSymmetry::nonsymm;
+      return BraKetSymmetry::Nonsymm;
   }
 
   throw ParseError(
@@ -164,9 +161,8 @@ BraKetSymmetry to_braket_symmetry(char c, std::size_t offset,
 }
 
 template <typename Iterator>
-ParticleSymmetry to_particle_symmetry(char c, std::size_t offset,
-                                      const Iterator &begin,
-                                      ParticleSymmetry default_symmetry) {
+ColumnSymmetry to_column_symmetry(char c, std::size_t offset, const Iterator &,
+                                  ColumnSymmetry default_symmetry) {
   if (c == parse::ast::SymmetrySpec::unspecified) {
     return default_symmetry;
   }
@@ -174,10 +170,10 @@ ParticleSymmetry to_particle_symmetry(char c, std::size_t offset,
   switch (c) {
     case 'S':
     case 's':
-      return ParticleSymmetry::symm;
+      return ColumnSymmetry::Symm;
     case 'N':
     case 'n':
-      return ParticleSymmetry::nonsymm;
+      return ColumnSymmetry::Nonsymm;
   }
 
   throw ParseError(
@@ -186,9 +182,8 @@ ParticleSymmetry to_particle_symmetry(char c, std::size_t offset,
 }
 
 template <typename PositionCache, typename Iterator>
-Constant to_constant(const parse::ast::Number &number,
-                     const PositionCache &position_cache,
-                     const Iterator &begin) {
+Constant to_constant(const parse::ast::Number &number, const PositionCache &,
+                     const Iterator &) {
   if (static_cast<std::int64_t>(number.numerator) == number.numerator &&
       static_cast<std::int64_t>(number.denominator) == number.denominator) {
     // Integer fraction
@@ -202,7 +197,7 @@ Constant to_constant(const parse::ast::Number &number,
 }
 
 template <typename PositionCache, typename Iterator>
-std::tuple<Symmetry, BraKetSymmetry, ParticleSymmetry> to_symmetries(
+std::tuple<Symmetry, BraKetSymmetry, ColumnSymmetry> to_symmetries(
     const boost::optional<parse::ast::SymmetrySpec> &symm_spec,
     const DefaultSymmetries &default_symms, const PositionCache &cache,
     const Iterator &begin) {
@@ -221,10 +216,10 @@ std::tuple<Symmetry, BraKetSymmetry, ParticleSymmetry> to_symmetries(
                                         std::get<0>(default_symms));
   BraKetSymmetry braket_symm = to_braket_symmetry(
       spec.braket_symm, offset + 3, begin, std::get<1>(default_symms));
-  ParticleSymmetry particle_symm = to_particle_symmetry(
-      spec.particle_symm, offset + 5, begin, std::get<2>(default_symms));
+  ColumnSymmetry column_symm = to_column_symmetry(
+      spec.column_symm, offset + 5, begin, std::get<2>(default_symms));
 
-  return {perm_symm, braket_symm, particle_symm};
+  return {perm_symm, braket_symm, column_symm};
 }
 
 template <typename PositionCache, typename Iterator>
@@ -256,7 +251,7 @@ struct Transformer {
     auto [braIndices, ketIndices, auxiliaries] =
         make_indices(tensor.indices, position_cache.get(), begin.get());
 
-    auto [perm_symm, braket_symm, particle_symm] =
+    auto [perm_symm, braket_symm, column_symm] =
         to_symmetries(tensor.symmetry, default_symms.get(),
                       position_cache.get(), begin.get());
 
@@ -269,9 +264,9 @@ struct Transformer {
              ((tensor.symmetry.value().perm_symm ==
                    ast::SymmetrySpec::unspecified ||
                tensor.symmetry.value().perm_symm == 'A') &&
-              (tensor.symmetry.value().particle_symm ==
+              (tensor.symmetry.value().column_symm ==
                    ast::SymmetrySpec::unspecified ||
-               tensor.symmetry.value().particle_symm == 'S')));
+               tensor.symmetry.value().column_symm == 'S')));
       Vacuum vac = fit == ranges::begin(FNOperator::labels())
                        ? Vacuum::Physical
                        : Vacuum::SingleProduct;
@@ -286,9 +281,9 @@ struct Transformer {
              ((tensor.symmetry.value().perm_symm ==
                    ast::SymmetrySpec::unspecified ||
                tensor.symmetry.value().perm_symm == 'S') &&
-              (tensor.symmetry.value().particle_symm ==
+              (tensor.symmetry.value().column_symm ==
                    ast::SymmetrySpec::unspecified ||
-               tensor.symmetry.value().particle_symm == 'S')));
+               tensor.symmetry.value().column_symm == 'S')));
       Vacuum vac = bit == ranges::begin(BNOperator::labels())
                        ? Vacuum::Physical
                        : Vacuum::SingleProduct;
@@ -297,7 +292,7 @@ struct Transformer {
     }
     return ex<Tensor>(tensor.name, bra(std::move(braIndices)),
                       ket(std::move(ketIndices)), aux(std::move(auxiliaries)),
-                      perm_symm, braket_symm, particle_symm);
+                      perm_symm, braket_symm, column_symm);
   }
 
   ExprPtr operator()(const parse::ast::Variable &variable) const {
@@ -335,10 +330,7 @@ ExprPtr ast_to_expr(const parse::ast::Product &product,
                     const PositionCache &position_cache, const Iterator &begin,
                     const DefaultSymmetries &default_symms) {
   if (product.factors.empty()) {
-    // This shouldn't happen
-    assert(false);
-    throw std::runtime_error(
-        "ast_to_expr: Reached supposed-to-be unreachable code");
+    SEQUANT_ABORT("Product factors must not be empty");
   }
 
   if (product.factors.size() == 1) {

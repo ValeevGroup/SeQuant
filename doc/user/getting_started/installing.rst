@@ -22,7 +22,14 @@ Mandatory
 * `C++20 compatible compiler <https://en.cppreference.com/w/cpp/compiler_support#cpp20>`_
 * `Boost <https://www.boost.org/>`_ 1.81 or later
 * `Range-V3 <https://github.com/ericniebler/range-v3.git>`_ 0.12.0 or later
+* `Eigen3 <http://eigen.tuxfamily.org/>`_ 
 * `libperm <https://github.com/Krzmbrzl/libPerm>`_
+* `polymorphic_variant <https://github.com/Krzmbrzl/polymorphic_variant>`_
+* `Utfcpp <https://github.com/nemtrif/utfcpp>`_ 4.0 or later
+* `DTL <https://github.com/cubicdaiya/dtl>`_ 1.12 or later - only used for unit tests
+* `CLI11 <https://github.com/CLIUtils/CLI11>`_ 2.0 or later - only used for external interface
+* `spdlog <https://github.com/gabime/spdlog>`_ - only used for external interface
+* `nlohmann::json <https://github.com/nlohmann/json>`_ 3.0 or later - only used for external interface
 
 .. note:: SeQuant can download and build Boost if configured with :code:`Boost_FETCH_IF_MISSING=ON`, but the use of Boost provided by the system package manager is recommended. The following non-header-only Boost libraries are required, hence Boost must be configured/built:
 
@@ -33,9 +40,8 @@ Mandatory
 Optional
 ~~~~~~~~
 * `TiledArray <https://github.com/ValeevGroup/tiledarray.git>`_ - for building coupled-cluster evaluation tests
-* `Eigen3 <http://eigen.tuxfamily.org/>`_ - for building coupled-cluster integration tests
 
-.. note:: If not found, SeQuant can download and build Range-V3, libperm and TiledArray.
+.. note:: If not found, SeQuant can download and build Range-V3, libperm, polymorphic_variant, DTL and TiledArray.
 
 
 Useful CMake Variables

@@ -9,6 +9,7 @@ namespace sequant {
 /// named indices of tensor networks
 /// @sa TensorNetwork
 /// @sa TensorNetworkV2
+/// @sa TensorNetworkV3
 enum class TensorIndexSlotType {
   /// bra tensor vector index slot
   Bra = 0,
@@ -16,8 +17,6 @@ enum class TensorIndexSlotType {
   Ket = 1,
   /// tensor aux index slot
   Aux = 2,
-
-  Invalid
 };
 
 /// types of slots that can host an index
@@ -26,9 +25,12 @@ enum class TensorIndexSlotType {
 /// named indices of tensor networks
 /// @sa TensorNetwork
 /// @sa TensorNetworkV2
+/// @sa TensorNetworkV3
 enum class IndexSlotType {
   /// only part of proto index bundles
-  SPBundle,
+  IndexBundle,
+  /// legacy alias for IndexBundle
+  SPBundle = IndexBundle,
   /// in bra tensor vector index slot
   TensorBra,
   /// in ket tensor vector index slot
@@ -39,8 +41,6 @@ enum class IndexSlotType {
   TensorAux,
   /// connecting two tensor aux index slots
   TensorAuxAux,
-
-  Invalid
 };
 
 }  // namespace sequant

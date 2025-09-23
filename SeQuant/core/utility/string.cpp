@@ -1,29 +1,32 @@
-#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/string.hpp>
 
-#include <codecvt>
-#include <locale>
+#include <algorithm>
+#include <cassert>
+#include <limits>
+#include <string>
+
+#include <utfcpp-src/source/utf8.h>
 
 namespace sequant {
 
-SEQUANT_PRAGMA_CLANG(diagnostic push)
-SEQUANT_PRAGMA_CLANG(diagnostic ignored "-Wdeprecated-declarations")
-SEQUANT_PRAGMA_GCC(diagnostic push)
-SEQUANT_PRAGMA_GCC(diagnostic ignored "-Wdeprecated-declarations")
-
 std::string toUtf8(const std::wstring_view str) {
-  std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
+  assert(std::none_of(str.begin(), str.end(), [](wchar_t c) {
+    return c > std::numeric_limits<char16_t>::max();
+  }));
 
-  return converter.to_bytes(str.begin(), str.end());
+  std::u16string u16str(str.begin(), str.end());
+
+  auto stream = utf8::utf16to8(u16str);
+
+  return std::string(stream.begin(), stream.end());
 }
 
 std::wstring toUtf16(const std::string_view str) {
-  std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
+  auto stream = utf8::utf8to16(str);
 
-  return converter.from_bytes(str.begin(), str.end());
+  static_assert(sizeof(wchar_t) >= sizeof(char16_t));
+
+  return std::wstring(stream.begin(), stream.end());
 }
-
-SEQUANT_PRAGMA_CLANG(diagnostic pop)
-SEQUANT_PRAGMA_GCC(diagnostic pop)
 
 }  // namespace sequant

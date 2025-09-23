@@ -1,6 +1,6 @@
 #include <SeQuant/core/expr.hpp>
-#include <SeQuant/core/tensor.hpp>
 #include <SeQuant/core/utility/expr.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/string.hpp>
 
 #include <bitset>
@@ -116,8 +116,7 @@ std::string diff_spaces(const IndexSpace &lhs, const IndexSpace &rhs) {
     stream << "Size differs: " << std::to_string(lhs.approximate_size())
            << " vs. " << std::to_string(rhs.approximate_size());
   } else {
-    assert(false);
-    throw std::runtime_error("Indeterminate space difference");
+    SEQUANT_UNREACHABLE;
   }
 
   assert(!stream.str().empty());
@@ -154,8 +153,7 @@ std::string toplevel_diff(const Index &lhs, const Index &rhs) {
   }
 
   // We have run out of ideas of what to check
-  assert(false);
-  throw std::runtime_error("Indeterminate index difference");
+  SEQUANT_ABORT("Unexpected difference between indices");
 }
 
 std::string toplevel_diff(const Tensor &lhs, const Tensor &rhs) {
@@ -168,19 +166,19 @@ std::string toplevel_diff(const Tensor &lhs, const Tensor &rhs) {
            to_string(rhs.label());
   }
 
-  if (lhs.indices().size() != rhs.indices().size()) {
-    return std::to_string(lhs.indices().size()) + " indices vs. " +
-           std::to_string(rhs.indices().size()) + " indices";
+  if (lhs.slots().size() != rhs.slots().size()) {
+    return std::to_string(lhs.slots().size()) + " indices vs. " +
+           std::to_string(rhs.slots().size()) + " indices";
   }
 
   if (lhs.symmetry() != rhs.symmetry()) {
     return "Symmetry differs: " + to_string(to_wstring(lhs.symmetry())) +
            " vs. " + to_string(to_wstring(rhs.symmetry()));
   }
-  if (lhs.particle_symmetry() != rhs.particle_symmetry()) {
+  if (lhs.column_symmetry() != rhs.column_symmetry()) {
     return "Particle-Symmetry differs: " +
-           to_string(to_wstring(lhs.particle_symmetry())) + " vs. " +
-           to_string(to_wstring(rhs.particle_symmetry()));
+           to_string(to_wstring(lhs.column_symmetry())) + " vs. " +
+           to_string(to_wstring(rhs.column_symmetry()));
   }
   if (lhs.braket_symmetry() != rhs.braket_symmetry()) {
     return "BraKet-Symmetry differs: " +
@@ -200,11 +198,10 @@ std::string toplevel_diff(const Tensor &lhs, const Tensor &rhs) {
 
   // Really, this shouldn't produce an empty diff as the objects compare as
   // non-equal but we have run out of ideas of what to check
-  assert(false);
-  throw std::runtime_error("Indeterminate tensor difference");
+  SEQUANT_ABORT("Unhandled difference between tensors");
 }
 
-std::string toplevel_diff(const Sum &lhs, const Sum &rhs) {
+std::string toplevel_diff(const Sum & /*lhs*/, const Sum & /*rhs*/) {
   // There is no way two Sum objects can be different on the top-level
   return {};
 }
@@ -278,8 +275,7 @@ std::string diff(const Expr &lhs, const Expr &rhs) {
   } else if (lhs.is<Variable>()) {
     diff_str = toplevel_diff(lhs.as<Variable>(), rhs.as<Variable>());
   } else {
-    assert(false);
-    throw std::runtime_error("Unsupported expr type");
+    SEQUANT_ABORT("Unhandled expression type");
   }
 
   return diff_str;

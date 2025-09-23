@@ -5,7 +5,6 @@
 #ifndef SEQUANT_TENSOR_NETWORK_H
 #define SEQUANT_TENSOR_NETWORK_H
 
-#include <SeQuant/core/abstract_tensor.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
@@ -40,6 +39,9 @@ namespace sequant {
 /// @warning the terminology is a mix at best, e.g. terminal vs. slot, etc.
 class TensorNetwork {
  public:
+  /// @return the implementation version of TN
+  constexpr static int version() { return 1; }
+
   constexpr static size_t max_rank = 256;
 
   // clang-format off
@@ -59,7 +61,7 @@ class TensorNetwork {
    public:
     struct Terminal {
       int tensor_ord = -1;
-      TensorIndexSlotType slot_type = TensorIndexSlotType::Invalid;
+      TensorIndexSlotType slot_type;
       // index slots are grouped according to degrees of freedom and/or
       // symmetry. E.g. bra/ket slots for same particle of a nonsymmetric tensor
       // are grouped together. Bra and ket slots of a symmetric/antisymmetric
@@ -73,8 +75,7 @@ class TensorNetwork {
           : tensor_ord(tensor_ord),
             slot_type(slot_type),
             slot_group_ord(slot_group_ord) {
-        assert(tensor_ord >= 0 && slot_type != TensorIndexSlotType::Invalid &&
-               slot_group_ord >= 0);
+        assert(tensor_ord >= 0 && slot_group_ord >= 0);
       }
 
       friend bool operator==(const Terminal &a, const Terminal &b) {
@@ -130,9 +131,6 @@ class TensorNetwork {
                   "connected to a bra slot");
             }
             break;
-          default:
-            throw std::logic_error(
-                "TensorNetwork::Edge::connect_to: invalid slot");
         }
 
         first_ = t;
@@ -424,7 +422,7 @@ class TensorNetwork {
     std::vector<VertexType> vertex_types;
 
     /// maps vertex ordinal to tensor cluster ordinal
-    /// @note usable as blis::Graph::DotOptions::vertex_to_subgraph
+    /// @note usable as bliss::Graph::DotOptions::vertex_to_subgraph
     std::optional<std::size_t> vertex_to_tensor_cluster(
         std::size_t vertex) const;
 
@@ -480,6 +478,7 @@ class TensorNetwork {
     /// if false, will not generate the TeX labels
     bool make_texlabels = true;
   };
+  static BlissGraphOptions make_default_bliss_graph_options() { return {}; }
 
   /// @brief converts the network into a Bliss graph whose vertices are indices
   /// and tensor vertex representations
@@ -503,11 +502,8 @@ class TensorNetwork {
   ///   tensor; terminal vertices are colored by the color of its tensor,
   ///     with the color of symm/antisymm terminals augmented by the
   ///     terminal's type (bra/ket).
-  GraphData make_bliss_graph(const BlissGraphOptions &options = {
-                                 .named_indices = nullptr,
-                                 .distinct_named_indices = true,
-                                 .make_labels = true,
-                                 .make_texlabels = true}) const;
+  GraphData make_bliss_graph(const BlissGraphOptions &options =
+                                 make_default_bliss_graph_options()) const;
 };
 
 }  // namespace sequant

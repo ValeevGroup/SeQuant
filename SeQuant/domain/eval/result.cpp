@@ -9,8 +9,8 @@ Result::id_t Result::next_id() noexcept {
 
 bool Result::has_value() const noexcept { return value_.has_value(); }
 
-void log_ta_tensor_host_memory_use(madness::World& world,
-                                   std::string_view label) {
+void log_ta_tensor_host_memory_use([[maybe_unused]] madness::World& world,
+                                   [[maybe_unused]] std::string_view label) {
 #if defined(TA_TENSOR_MEM_PROFILE)
   auto logger = Logger::instance();
   if (logger.eval.level < 3) return;

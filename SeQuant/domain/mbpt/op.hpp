@@ -88,12 +88,10 @@ enum class OpType {
   C,    //!< cabs singles op
   RDM,  //!< RDM
   RDMCumulant,  //!< RDM cumulant
-  δ,  //!< Kronecker delta (=identity) operator; same as overlap, but the latter
-      //!< is too special for all uses
-  h_1,     //!< Hamiltonian perturbation
-  t_1,     //!< first order perturbed excitation cluster operator
-  λ_1,     //!< first order perturbed deexcitation cluster operator
-  invalid  //!< invalid operator
+  δ,            //!< Kronecker delta (=identity) operator
+  h_1,          //!< Hamiltonian perturbation
+  t_1,          //!< first order perturbed excitation cluster operator
+  λ_1,          //!< first order perturbed deexcitation cluster operator
 };
 
 /// maps operator types to their labels
@@ -102,6 +100,7 @@ inline const container::map<OpType, std::wstring> optype2label{
     {OpType::f, L"f"},
     {OpType::f̃, L"f̃"},
     {OpType::s, overlap_label()},
+    {OpType::δ, kronecker_label()},
     {OpType::g, L"g"},
     {OpType::θ, L"θ"},
     {OpType::t, L"t"},
@@ -201,12 +200,12 @@ struct default_qns_tag {};
 // clang-format off
 /// Tracks changes in \c N quantum numbers
 
-/// Implements the concept of a quantum number change; this is useful for
-/// tracking the quantum numbers of a many-body operator, such as the number of particles,
+/// Represents changes in a set of quantum numbers; this is useful for
+/// tracking the change of quantum numbers induced by a many-body operator, such as the number of particles,
 /// the number of quasiparticles, the number of ops (creators/annihilators) in each subspace, etc.
 /// For example, to operator products expressed in normal order with respect to physical vacuum it is sufficient to track
 /// the number of creators and annihilators; For the fermi vacuum case, the number of creators and annihilators in each
-/// subspace becomes important. the number of ops is tracked for each base space (determined by the IndexSpaceRegistry object in Context).
+/// subspace becomes important, hence the number of ops is tracked for each base space (determined by the IndexSpaceRegistry object in Context).
 /// The interval representation is necessary to dictate how many creators or annihilators could be in each subspace.
 /// This is pertinent when user defined hole_space or particle_space are NOT base spaces.
 /// Since the choice of space partitioning is up to the user, the base class must be a dynamic container.
@@ -224,7 +223,7 @@ class QuantumNumberChange
       container::svector<boost::numeric::interval<std::make_signed_t<QNV>>, 8>;
   using this_type = QuantumNumberChange<QNV, Tag>;
 
-  const std::size_t size() const {
+  std::size_t size() const {
     if (get_default_context().vacuum() == Vacuum::Physical) {
       return 2;
     } else if (get_default_context().vacuum() == Vacuum::SingleProduct) {
@@ -561,7 +560,7 @@ namespace mbpt {
 /// and indices \f$ \{ b_i \} \f$ / \f$ \{ k_i \} \f$.
 /// @note The choice of computational basis can be controlled by the default Context.
 ///       See `SeQuant/core/context.hpp` and `SeQuant/mbpt/context.hpp`
-/// @warning Tensor \f$ T \f$ will be antisymmetrized if `get_default_context().spbasis() == SPBasis::spinorbital`, else it will be particle-symmetric; the latter is only valid if # of bra and ket indices coincide.
+/// @warning Tensor \f$ T \f$ will be antisymmetrized if `get_default_context().spbasis() == SPBasis::Spinor`, else it will be particle-symmetric; the latter is only valid if # of bra and ket indices coincide.
 /// @internal bless the maker and his water
 // clang-format on
 template <Statistics S>
@@ -634,9 +633,8 @@ class OpMaker {
                       const container::svector<IndexSpace>& annihilators,
                       TensorGenerator&& tensor_generator,
                       UseDepIdx dep = UseDepIdx::None) {
-    const bool symm =
-        get_default_context().spbasis() ==
-        SPBasis::spinorbital;  // antisymmetrize if spin-orbital basis
+    const bool symm = get_default_context().spbasis() ==
+                      SPBasis::Spinor;  // antisymmetrize if spin-orbital basis
     const auto dep_bra = dep == UseDepIdx::Bra;
     const auto dep_ket = dep == UseDepIdx::Ket;
 
@@ -681,9 +679,9 @@ class OpMaker {
     const auto mult =
         symm ? factorial(size(creators)) * factorial(size(annihilators))
              : factorial(size(creators));
-    const auto opsymm = symm ? (S == Statistics::FermiDirac ? Symmetry::antisymm
-                                                            : Symmetry::symm)
-                             : Symmetry::nonsymm;
+    const auto opsymm = symm ? (S == Statistics::FermiDirac ? Symmetry::Antisymm
+                                                            : Symmetry::Symm)
+                             : Symmetry::Nonsymm;
     return ex<Constant>(rational{1, mult}) *
            tensor_generator(creidxs, annidxs, opsymm) *
            ex<NormalOperator<S>>(cre(creidxs), ann(annidxs),
@@ -709,8 +707,8 @@ class OpMaker {
 
   OpMaker(OpType op);
 
-  [[nodiscard]] const auto ncreators() const { return cre_spaces_.size(); };
-  [[nodiscard]] const auto nannihilators() const { return ann_spaces_.size(); };
+  [[nodiscard]] auto ncreators() const { return cre_spaces_.size(); };
+  [[nodiscard]] auto nannihilators() const { return ann_spaces_.size(); };
 };
 
 extern template class OpMaker<Statistics::FermiDirac>;
@@ -786,6 +784,8 @@ class Operator : public Operator<void, S> {
   std::wstring to_latex() const override;
 
   Expr::hash_type memoizing_hash() const override;
+
+  bool static_equal(const Expr& other) const override;
 
 };  // class Operator
 

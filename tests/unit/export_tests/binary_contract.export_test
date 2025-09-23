@@ -1,0 +1,84 @@
+A{a1;i2} B{i1;a1}
+
+=================================================
+Plain Text
+=================================================
+Declare index i_1
+Declare index i_2
+Declare index a_1
+
+Declare tensor A[a_1, i_2]
+Declare tensor B[i_1, a_1]
+Declare tensor I[i_1, i_2]
+
+Create I[i_1, i_2] and initialize to zero
+Load A[a_1, i_2]
+Load B[i_1, a_1]
+Compute I[i_1, i_2] += A[a_1, i_2] B[i_1, a_1]
+Unload B[i_1, a_1]
+Unload A[a_1, i_2]
+Persist I[i_1, i_2]
+
+=================================================
+Julia (TensorOperations)
+=================================================
+I_oo = zeros(Float64, nocc, nocc)
+A_vo = deserialize("A_vo.jlbin")
+B_ov = deserialize("B_ov.jlbin")
+@tensor I_oo[ i_1, i_2 ] += A_vo[ a_1, i_2 ] * B_ov[ i_1, a_1 ]
+B_ov = nothing
+A_vo = nothing
+return I_oo
+
+=================================================
+Julia (TensorKit)
+=================================================
+I_oo = TensorMap(zeros(Float64, nocc, nocc), ℝ^nocc, ℝ^nocc)
+A_vo = TensorMap(deserialize("A_vo.jlbin"), ℝ^nv, ℝ^nocc)
+B_ov = TensorMap(deserialize("B_ov.jlbin"), ℝ^nocc, ℝ^nv)
+@tensor I_oo[ i_1, i_2 ] += A_vo[ a_1, i_2 ] * B_ov[ i_1, a_1 ]
+B_ov = nothing
+A_vo = nothing
+return I_oo
+
+=================================================
+Julia (ITensor)
+=================================================
+i_1 = Index(nocc, "i_1")
+i_2 = Index(nocc, "i_2")
+a_1 = Index(nv, "a_1")
+
+I_oo = ITensor(zeros(Float64, nocc, nocc), i_1, i_2)
+A_vo = ITensor(deserialize("A_vo.jlbin"), a_1, i_2)
+B_ov = ITensor(deserialize("B_ov.jlbin"), i_1, a_1)
+I_oo += A_vo * B_ov
+B_ov = nothing
+A_vo = nothing
+return I_oo
+
+=================================================
+ITF
+=================================================
+---- decl
+index-space: j, Closed, c
+index-space: k, Closed, c
+index-space: b, External, e
+
+tensor: A:ec[bk], A:ec
+tensor: B:ce[jb], B:ce
+tensor: I:cc[jk], I:cc
+
+
+---- code("unnamed")
+alloc I:cc[jk]
+load A:ec[bk]
+load B:ce[jb]
+.I:cc[jk] += A:ec[bk] B:ce[jb]
+drop B:ce[jb]
+drop A:ec[bk]
+store I:cc[jk]
+
+
+---- end
+
+=================================================

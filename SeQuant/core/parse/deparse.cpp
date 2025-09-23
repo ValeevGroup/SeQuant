@@ -5,8 +5,7 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/op.hpp>
-#include <SeQuant/core/result_expr.hpp>
-#include <SeQuant/core/tensor.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/string.hpp>
 
 #include <range/v3/all.hpp>
@@ -23,7 +22,7 @@ namespace sequant {
 namespace details {
 
 template <typename Range>
-std::wstring deparse_indices(const Range& indices) {
+std::wstring deparse_indices(Range&& indices) {
   std::wstring deparsed;
 
   for (std::size_t i = 0; i < indices.size(); ++i) {
@@ -54,48 +53,39 @@ std::wstring deparse_ops(const Range& ops) {
 
 std::wstring deparse_symm(Symmetry symm) {
   switch (symm) {
-    case Symmetry::symm:
+    case Symmetry::Symm:
       return L"S";
-    case Symmetry::antisymm:
+    case Symmetry::Antisymm:
       return L"A";
-    case Symmetry::nonsymm:
+    case Symmetry::Nonsymm:
       return L"N";
-    case Symmetry::invalid:
-      return L"INVALID";
   }
 
-  assert(false);
-  return L"INVALIDANDUNREACHABLE";
+  SEQUANT_UNREACHABLE;
 }
 
 std::wstring deparse_symm(BraKetSymmetry symm) {
   switch (symm) {
-    case BraKetSymmetry::conjugate:
+    case BraKetSymmetry::Conjugate:
       return L"C";
-    case BraKetSymmetry::symm:
+    case BraKetSymmetry::Symm:
       return L"S";
-    case BraKetSymmetry::nonsymm:
+    case BraKetSymmetry::Nonsymm:
       return L"N";
-    case BraKetSymmetry::invalid:
-      return L"INVALID";
   }
 
-  assert(false);
-  return L"INVALIDANDUNREACHABLE";
+  SEQUANT_UNREACHABLE;
 }
 
-std::wstring deparse_symm(ParticleSymmetry symm) {
+std::wstring deparse_symm(ColumnSymmetry symm) {
   switch (symm) {
-    case ParticleSymmetry::symm:
+    case ColumnSymmetry::Symm:
       return L"S";
-    case ParticleSymmetry::nonsymm:
+    case ColumnSymmetry::Nonsymm:
       return L"N";
-    case ParticleSymmetry::invalid:
-      return L"INVALID";
   }
 
-  assert(false);
-  return L"INVALIDANDUNREACHABLE";
+  SEQUANT_UNREACHABLE;
 }
 
 std::wstring deparse_scalar(const Constant::scalar_type& scalar) {
@@ -165,24 +155,10 @@ std::wstring deparse(const Expr& expr, bool annot_sym) {
 
 std::wstring deparse(const ResultExpr& result, bool annot_sym) {
   std::wstring deparsed;
-  if (result.has_label()) {
-    deparsed += result.label();
+  if (result.produces_tensor()) {
+    deparsed = deparse(result.result_as_tensor(L"?"), annot_sym);
   } else {
-    deparsed += L"?";
-  }
-
-  if (!result.bra().empty() || !result.ket().empty()) {
-    deparsed += L"{";
-    deparsed += details::deparse_indices(result.bra());
-    deparsed += L";";
-    deparsed += details::deparse_indices(result.ket());
-    deparsed += L"}";
-
-    if (annot_sym) {
-      deparsed += L":" + details::deparse_symm(result.symmetry()) + L"-" +
-                  details::deparse_symm(result.braket_symmetry()) + L"-" +
-                  details::deparse_symm(result.particle_symmetry());
-    }
+    deparsed = deparse(result.result_as_variable(L"?"), annot_sym);
   }
 
   return deparsed + L" = " + deparse(result.expression(), annot_sym);
@@ -224,7 +200,30 @@ std::wstring deparse(Tensor const& tensor, bool annot_sym) {
   if (annot_sym) {
     deparsed += L":" + details::deparse_symm(tensor.symmetry());
     deparsed += L"-" + details::deparse_symm(tensor.braket_symmetry());
-    deparsed += L"-" + details::deparse_symm(tensor.particle_symmetry());
+    deparsed += L"-" + details::deparse_symm(tensor.column_symmetry());
+  }
+
+  return deparsed;
+}
+
+std::wstring deparse(AbstractTensor const& tensor, bool annot_sym) {
+  std::wstring deparsed(tensor._label());
+  deparsed += L"{" + details::deparse_indices(tensor._bra());
+  if (tensor._ket_rank() > 0) {
+    deparsed += L";" + details::deparse_indices(tensor._ket());
+  }
+  if (tensor._aux_rank() > 0) {
+    if (tensor._ket_rank() == 0) {
+      deparsed += L";";
+    }
+    deparsed += L";" + details::deparse_indices(tensor._aux());
+  }
+  deparsed += L"}";
+
+  if (annot_sym) {
+    deparsed += L":" + details::deparse_symm(tensor._symmetry());
+    deparsed += L"-" + details::deparse_symm(tensor._braket_symmetry());
+    deparsed += L"-" + details::deparse_symm(tensor._column_symmetry());
   }
 
   return deparsed;
