@@ -1308,12 +1308,6 @@ TEST_CASE("wick", "[algorithms][wick]") {
 
     // example with "diagonal" operator from Nick Mayhall
     {
-      auto _ = set_scoped_default_context(
-          {.index_space_registry_shared_ptr = mbpt::make_min_sr_spaces(),
-           .vacuum = Vacuum::SingleProduct,
-           .braket_symmetry = BraKetSymmetry::Symm,
-           .spbasis = SPBasis::Spinor});
-
       // sequence of individual ops
       const auto ops = {fann("p_1"), fcre("p_2"), fcre("p_3"),
                         fann("p_5"), fann("p_4"), fcre("p_1")};
@@ -1365,20 +1359,16 @@ TEST_CASE("wick", "[algorithms][wick]") {
       REQUIRE(result2.as<Sum>().size() == 5);
       REQUIRE(result2.to_latex() ==
               L"{ \\bigl( - "
-              L"{{{\\frac{1}{4}}}{\\tensor*{\\tilde{a}}{*^{p_3}_{p_1}*^{p_4}_{"
-              L"p_2}*^{p_5}_{p_5}}}{\\tensor*{\\bar{v}}{*^{p_3}_{p_1}*^{p_4}_{"
-              L"p_2}}}{\\tensor*{w}{}[{p_5}]}} + "
-              L"{{\\tensor*{\\tilde{a}}{*^{p_2}_{p_1}}}{\\tensor*{\\bar{v}}{*^{"
-              L"a_1}_{a_1}*^{p_2}_{p_1}}}{\\tensor*{w}{}[{a_1}]}} - "
-              L"{{{\\frac{1}{2}}}{\\tensor*{\\tilde{a}}{*^{p_2}_{a_1}*^{p_3}_{"
-              L"p_1}}}{\\tensor*{\\bar{v}}{*^{a_1}_{p_2}*^{p_1}_{p_3}}}{"
-              L"\\tensor*{w}{}[{a_1}]}} + "
-              L"{{{\\frac{1}{4}}}{\\tensor*{\\tilde{a}}{*^{p_3}_{p_1}*^{p_4}_{"
-              L"p_2}}}{\\tensor*{\\bar{v}}{*^{p_1}_{p_3}*^{p_2}_{p_4}}}{"
-              L"\\tensor*{w}{}[{a_1}]}} - "
-              L"{{{\\frac{1}{2}}}{\\tensor*{\\tilde{a}}{*^{a_1}_{p_1}*^{p_3}_{"
-              L"p_2}}}{\\tensor*{\\bar{v}}{*^{a_1}_{p_1}*^{p_3}_{p_2}}}{"
-              L"\\tensor*{w}{}[{a_1}]}}\\bigr) }");
+              L"{{{\\frac{1}{4}}}{\\tilde{a}^{{p_3}{p_4}{p_5}}_{{p_1}{p_2}{p_5}"
+              L"}}{\\bar{v}^{{p_1}{p_2}}_{{p_3}{p_4}}}{w^{}_{}[{p_5}]}} - "
+              L"{{{\\frac{1}{2}}}{\\tilde{a}^{{p_2}{p_3}}_{{e_1}{p_1}}}{\\bar{"
+              L"v}^{{e_1}{p_1}}_{{p_2}{p_3}}}{w^{}_{}[{e_1}]}} + "
+              L"{{\\tilde{a}^{{p_2}}_{{p_1}}}{\\bar{v}^{{e_1}{p_1}}_{{e_1}{p_2}"
+              L"}}{w^{}_{}[{e_1}]}} - "
+              L"{{{\\frac{1}{2}}}{\\tilde{a}^{{e_1}{p_3}}_{{p_1}{p_2}}}{\\bar{"
+              L"v}^{{p_1}{p_2}}_{{e_1}{p_3}}}{w^{}_{}[{e_1}]}} + "
+              L"{{{\\frac{1}{4}}}{\\tilde{a}^{{p_3}{p_4}}_{{p_1}{p_2}}}{\\bar{"
+              L"v}^{{p_1}{p_2}}_{{p_3}{p_4}}}{w^{}_{}[{e_1}]}}\\bigr) }");
     }
   }
 }

@@ -363,8 +363,8 @@ std::pair<container::map<Index, Index>, bool> compute_index_replacement_rules(
         // - nontrivial overlap between spaces that depend on distinct
         // protoindices
         if (is_overlap) {
-          do_skip =
-              do_skip && bra.has_proto_indices() != ket.has_proto_indices();
+          do_skip = do_skip ||
+                    bra.proto_indices().size() != ket.proto_indices().size();
         } else {
           // kroneckers should never involve different protoindices
           assert(bra.has_proto_indices() == ket.has_proto_indices());

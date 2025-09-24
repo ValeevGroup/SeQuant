@@ -100,25 +100,28 @@ class TensorNetworkV3 {
       if (vertices.empty()) {
         vertices.emplace(vertex);
       } else {
-        auto &first = *(vertices.begin());
-        // - can connect bra slot to ket slot, and vice versa, unless there is
-        // no distinction between primal and dual spaces
+        // - can't connect bra slot to bra slot or ket slot to ket slot, unless
+        // there is no distinction between primal and dual spaces
         if (get_default_context().braket_symmetry() != BraKetSymmetry::Symm) {
-          if (first.getOrigin() == Origin::Bra &&
-              vertex.getOrigin() != Origin::Ket) {
-            throw std::invalid_argument(
-                "TensorNetworkV3::Edge::connect_to: bra slot can only be "
-                "connected "
-                "to a ket slot if default context's braket_symmetry() != "
-                "BraKetSymmetry::Symm");
+          if (vertex.getOrigin() == Origin::Bra) {
+            if (ranges::contains(vertices, Origin::Bra,
+                                 [](const auto &v) { return v.getOrigin(); })) {
+              throw std::invalid_argument(
+                  "TensorNetworkV3::Edge::connect_to: bra slot can only be "
+                  "connected "
+                  "to a bra slot if default context's braket_symmetry() != "
+                  "BraKetSymmetry::Symm");
+            }
           }
-          if (first.getOrigin() == Origin::Ket &&
-              vertex.getOrigin() != Origin::Bra) {
-            throw std::invalid_argument(
-                "TensorNetworkV3::Edge::connect_to: ket slot can only be "
-                "connected "
-                "to a bra slot if default context's braket_symmetry() != "
-                "BraKetSymmetry::Symm");
+          if (vertex.getOrigin() == Origin::Ket) {
+            if (ranges::contains(vertices, Origin::Ket,
+                                 [](const auto &v) { return v.getOrigin(); })) {
+              throw std::invalid_argument(
+                  "TensorNetworkV3::Edge::connect_to: ket slot can only be "
+                  "connected "
+                  "to a ket slot if default context's braket_symmetry() != "
+                  "BraKetSymmetry::Symm");
+            }
           }
         }
         add_vertex(vertex);
