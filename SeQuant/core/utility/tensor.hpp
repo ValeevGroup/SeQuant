@@ -57,6 +57,20 @@ struct TensorBlockComparator {
 
     return fallback;
   }
+
+  bool operator()(const Expr &lhs, const Expr &rhs) const {
+    if (lhs.is<Tensor>() && rhs.is<Tensor>()) {
+      return (*this)(lhs.as<Tensor>(), rhs.as<Tensor>());
+    }
+
+    Comparator cmp;
+
+    return cmp(lhs, rhs);
+  }
+
+  bool operator()(const ExprPtr &lhs, const ExprPtr &rhs) const {
+    return (*this)(*lhs, *rhs);
+  }
 };
 
 /// Compares tensor blocks (slots) for equality
