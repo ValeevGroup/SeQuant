@@ -562,8 +562,9 @@ void reduce_wick_impl(std::shared_ptr<Product> &expr,
     if (Logger::instance().wick_reduce) {
       std::wcout << "reduce_wick_impl(expr, external_indices):\n  expr = "
                  << expr->to_latex() << "\n  external_indices = ";
-      ranges::for_each(external_indices,
-                       [](auto &index) { std::wcout << index.label() << " "; });
+      ranges::for_each(external_indices, [](auto &index) {
+        std::wcout << index.full_label() << " ";
+      });
       std::wcout << "\n  replrules = ";
       ranges::for_each(replacement_rules, [](auto &index) {
         std::wcout << to_latex(index.first) << "\\to" << to_latex(index.second)

@@ -1212,7 +1212,7 @@ ExprPtr vac_av(ExprPtr expr, std::vector<std::pair<int, int>> nop_connections,
           std::wcout << "expr = " << product_ptr->to_latex()
                      << "\n  external_indices = ";
           ranges::for_each(external_indices, [](auto& index) {
-            std::wcout << index.label() << " ";
+            std::wcout << index.full_label() << " ";
           });
           std::wcout << "\n  replrules = ";
           ranges::for_each(replacement_rules, [](auto& index) {
