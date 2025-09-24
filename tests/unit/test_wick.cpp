@@ -1370,6 +1370,41 @@ TEST_CASE("wick", "[algorithms][wick]") {
               L"{{{\\frac{1}{4}}}{\\tilde{a}^{{p_3}{p_4}}_{{p_1}{p_2}}}{\\bar{"
               L"v}^{{p_1}{p_2}}_{{p_3}{p_4}}}{w^{}_{}[{e_1}]}}\\bigr) }");
     }
+
+    // simplified example with "diagonal" operator from the paper, inspired by
+    // the last example
+    {
+      auto _ = set_scoped_default_context(
+          get_default_context().clone().set(mbpt::make_min_mr_spaces()));
+
+      auto result =
+          FWickTheorem{
+              fannx(Index{"p_1", {L"i_1"}}) *
+              (ex<Tensor>(L"h", bra{}, ket{}, aux{L"p_3"}, Symmetry::Nonsymm) *
+               ex<FNOperator>(cre({L"p_3"}), ann({L"p_3"}))) *
+              fcrex(Index{"p_2", {L"i_2"}})}
+              .full_contractions(false)
+              .compute();
+      simplify(result,
+               {{.named_indices = IndexList{
+                     L"i_1", L"i_2", {"p_1", {L"i_1"}}, {"p_2", {L"i_2"}}}}});
+      REQUIRE(result.as<Sum>().size() == 5);
+      REQUIRE(
+          result.to_latex() ==
+          L"{ \\bigl( - "
+          L"{{h^{}_{}[{A_1}]}{\\delta^{{A_2^{{i_1}}}}_{{p_1^{{i_1}}}}}{\\tilde{"
+          L"a}^{{p_2^{{i_2}}}}_{{A_1}}}{s^{{A_1}}_{{A_2^{{i_1}}}}}} + "
+          L"{{h^{}_{}[{A_1}]}{\\delta^{{A_2^{{i_1}}}}_{{p_1^{{i_1}}}}}{\\delta^"
+          L"{{p_2^{{i_2}}}}_{{A_3^{{i_2}}}}}{s^{{A_1}}_{{A_2^{{i_1}}}}}{s^{{A_"
+          L"3^{{i_2}}}}_{{A_1}}}} + "
+          L"{{h^{}_{}[{p_1}]}{\\delta^{{A_1^{{i_1}}}}_{{p_1^{{i_1}}}}}{\\delta^"
+          L"{{p_2^{{i_2}}}}_{{A_2^{{i_2}}}}}{\\tilde{a}^{{p_1}}_{{p_1}}}{s^{{A_"
+          L"2^{{i_2}}}}_{{A_1^{{i_1}}}}}} - "
+          L"{{h^{}_{}[{A_1}]}{\\delta^{{p_2^{{i_2}}}}_{{A_2^{{i_2}}}}}{\\tilde{"
+          L"a}^{{A_1}}_{{p_1^{{i_1}}}}}{s^{{A_2^{{i_2}}}}_{{A_1}}}} + "
+          L"{{h^{}_{}[{p_1}]}{\\tilde{a}^{{p_1}{p_2^{{i_2}}}}_{{p_1^{{i_1}}}{p_"
+          L"1}}}}\\bigr) }");
+    }
   }
 }
 #endif
