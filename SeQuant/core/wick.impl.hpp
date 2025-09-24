@@ -782,7 +782,8 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
                 << to_latex(expr_input_) << std::endl;
 
           // construct graph representation of the tensor product
-          TensorNetworkV3 tn(expr_input_->as<Product>().factors());
+          using TN = TensorNetworkV3;
+          TN tn(expr_input_->as<Product>().factors());
           auto g = tn.create_graph({.distinct_named_indices = true});
           const auto &graph = g.bliss_graph;
           const auto &vlabels = g.vertex_labels;
@@ -793,11 +794,14 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
           assert(vlabels.size() == n);
           const auto &tn_edges = tn.edges();
           const auto &tn_tensors = tn.tensors();
-          auto idx_vertex_to_edge = [&](const auto idx_vertex) -> const auto & {
+          auto idx_vertex_to_edge_ptr =
+              [&](const auto idx_vertex) -> const TN::Edge * {
             assert(idx_vertex < n);
             const auto edge_idx = g.vertex_to_index_idx(idx_vertex);
-            assert(edge_idx < tn_edges.size());
-            return tn_edges[edge_idx];
+            if (edge_idx < tn_edges.size())
+              return &tn_edges[edge_idx];
+            else  // indices without matching edges are pure protoindices
+              return nullptr;
           };
 
           if (Logger::instance().wick_topology) {
@@ -844,16 +848,19 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
                 assert(insertion_result.second);
               }
               if (vtypes[v] == VertexType::Index && !input_->empty()) {
-                auto &idx = idx_vertex_to_edge(v).idx();
-                auto idx_it_in_opseq = ranges::find_if(
-                    opseq_view,
-                    [&idx](const auto &v) { return v.index() == idx; });
-                if (idx_it_in_opseq != opseq_view_end) {
-                  const auto ord =
-                      ranges::distance(opseq_view_begin, idx_it_in_opseq);
-                  [[maybe_unused]] auto insertion_result =
-                      index_vidx_ord.emplace(v, ord);
-                  assert(insertion_result.second);
+                auto *edge_ptr = idx_vertex_to_edge_ptr(v);
+                if (edge_ptr) {  // do not consider pure protoindices
+                  auto &idx = edge_ptr->idx();
+                  auto idx_it_in_opseq = ranges::find_if(
+                      opseq_view,
+                      [&idx](const auto &v) { return v.index() == idx; });
+                  if (idx_it_in_opseq != opseq_view_end) {
+                    const auto ord =
+                        ranges::distance(opseq_view_begin, idx_it_in_opseq);
+                    [[maybe_unused]] auto insertion_result =
+                        index_vidx_ord.emplace(v, ord);
+                    assert(insertion_result.second);
+                  }
                 }
               }
             }
@@ -1073,10 +1080,14 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
           // Index partitions are constructed to *only* include Index
           // objects attached to the bra/ket of any NormalOperator! hence
           // need to use filter in computing partitions
-          auto exclude_index_vertex_pair = [&tn_tensors, &idx_vertex_to_edge](
+          auto exclude_index_vertex_pair = [&tn_tensors,
+                                            &idx_vertex_to_edge_ptr](
                                                size_t v1, size_t v2) {
-            const auto &edge1 = idx_vertex_to_edge(v1);
-            const auto &edge2 = idx_vertex_to_edge(v2);
+            const auto *edge1_ptr = idx_vertex_to_edge_ptr(v1);
+            const auto *edge2_ptr = idx_vertex_to_edge_ptr(v2);
+            if (!edge1_ptr || !edge2_ptr) return true;
+            const auto &edge1 = *edge1_ptr;
+            const auto &edge2 = *edge2_ptr;
             auto connected_to_bra_or_ket_of_same_symmetric_nop =
                 [&tn_tensors](const auto &edge1, const auto &edge2) -> bool {
               const auto nt1 = edge1.vertex_count();
@@ -1140,13 +1151,17 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
             if (Logger::instance().wick_topology) {
               std::wcout << "WickTheorem<S>::compute: topological index "
                             "partitions:{\n";
-              ranges::for_each(index_vidx2pidx,
-                               [&idx_vertex_to_edge](auto &&vidx_pidx) {
-                                 auto &&[vidx, pidx] = vidx_pidx;
-                                 auto &idx = idx_vertex_to_edge(vidx).idx();
-                                 std::wcout << "Index " << idx.full_label()
-                                            << " -> partition " << pidx << "\n";
-                               });
+              ranges::for_each(
+                  index_vidx2pidx, [&idx_vertex_to_edge_ptr](auto &&vidx_pidx) {
+                    auto &&[vidx, pidx] = vidx_pidx;
+                    auto *edge_ptr = idx_vertex_to_edge_ptr(vidx);
+                    // skip pure proto indices
+                    if (edge_ptr) {
+                      auto &idx = edge_ptr->idx();
+                      std::wcout << "Index " << idx.full_label()
+                                 << " -> partition " << pidx << "\n";
+                    }
+                  });
               std::wcout << "}" << std::endl;
             }
 
