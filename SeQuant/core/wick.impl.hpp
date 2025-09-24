@@ -418,9 +418,7 @@ std::pair<container::map<Index, Index>, bool> compute_index_replacement_rules(
 inline bool apply_index_replacement_rules(
     std::shared_ptr<Product> &product,
     const container::map<Index, Index> &const_replrules,
-    const container::set<Index> &external_indices,
-    std::set<Index, Index::LabelCompare> &all_indices,
-    const std::shared_ptr<const IndexSpaceRegistry> &isr) {
+    std::set<Index, Index::LabelCompare> &all_indices) {
   // to be able to use map[]
   [[maybe_unused]] auto &replrules =
       const_cast<container::map<Index, Index> &>(const_replrules);
@@ -451,7 +449,6 @@ inline bool apply_index_replacement_rules(
     for (auto it = ranges::begin(exrng); it != ranges::end(exrng);) {
       const auto &factor = *it;
       if (factor->is<AbstractTensor>()) {
-        bool erase_it = false;
         auto &tensor = factor->as<AbstractTensor>();
 
         /// replace indices
@@ -461,63 +458,11 @@ inline bool apply_index_replacement_rules(
             tensor._label() == kronecker_label()) {
           const auto bra = tensor._bra().at(0);
           const auto ket = tensor._ket().at(0);
-
-          if (bra.proto_indices() == ket.proto_indices()) {
-            const auto bra_is_ext = ranges::find(external_indices, bra) !=
-                                    ranges::end(external_indices);
-            const auto ket_is_ext = ranges::find(external_indices, ket) !=
-                                    ranges::end(external_indices);
-
-#ifndef NDEBUG
-            const auto intersection_space =
-                isr->intersection(bra.space(), ket.space());
-#endif
-
-            if (!bra_is_ext && !ket_is_ext) {  // int + int
-#ifndef NDEBUG
-              if (replrules.find(bra) != replrules.end() &&
-                  replrules.find(ket) != replrules.end())
-                assert(replrules[bra].space() == replrules[ket].space());
-#endif
-              erase_it = true;
-            } else if (bra_is_ext && !ket_is_ext) {  // ext + int
-              if (isr->intersection(ket.space(), bra.space()) !=
-                  IndexSpace::null) {
-#ifndef NDEBUG
-                if (replrules.find(ket) != replrules.end())
-                  assert(replrules[ket].space() == bra.space());
-#endif
-                erase_it = true;
-              } else {
-#ifndef NDEBUG
-                if (replrules.find(ket) != replrules.end())
-                  assert(replrules[ket].space() == intersection_space);
-#endif
-              }
-            } else if (!bra_is_ext && ket_is_ext) {  // int + ext
-              if (isr->intersection(bra.space(), ket.space()) !=
-                  IndexSpace::null) {
-#ifndef NDEBUG
-                if (replrules.find(bra) != replrules.end())
-                  assert(replrules[bra].space() == ket.space());
-#endif
-                erase_it = true;
-              } else {
-#ifndef NDEBUG
-                if (replrules.find(bra) != replrules.end())
-                  assert(replrules[bra].space() == intersection_space);
-#endif
-              }
-            } else {  // ext + ext
-              if (bra == ket) erase_it = true;
-            }
-
-            if (erase_it) {
-              pass_mutated = true;
-              *it = ex<Constant>(1);
-            }
-          }  // matching proto indices
-        }    // Kronecker delta
+          if (bra == ket) {
+            pass_mutated = true;
+            *it = ex<Constant>(1);
+          }
+        }  // Kronecker delta
       }
       ++it;
     }
@@ -600,9 +545,8 @@ void reduce_wick_impl(std::shared_ptr<Product> &expr,
     // N.B. even if replacement list is empty, but have trivial kroneckers
     // invoke apply_index_replacement_rules
     if (found_kroneckers) {
-      auto isr = ctx.index_space_registry();
-      pass_mutated = apply_index_replacement_rules(
-          expr, replacement_rules, external_indices, all_indices, isr);
+      pass_mutated =
+          apply_index_replacement_rules(expr, replacement_rules, all_indices);
     }
 
     if (Logger::instance().wick_reduce) {
