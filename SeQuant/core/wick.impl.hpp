@@ -35,14 +35,29 @@ struct zero_result : public std::exception {};
 class index_repl_dst_t {
  public:
   explicit index_repl_dst_t(Index dst, Index src)
-      : dst_(std::move(dst)), src_{std::move(src)} {}
+      : dst_(std::move(dst)), src_{std::move(src)} {
+    if (Logger::instance().wick_reduce) {
+      std::wcout << "index_repl_dst_t: ctor, src=" << src.to_latex()
+                 << " dst=" << dst_.to_latex() << "\n";
+    }
+  }
 
   const Index &dst() const { return dst_; }
-  void update_dst(Index idx) { dst_ = std::move(idx); }
+  void update_dst(Index idx) {
+    if (Logger::instance().wick_reduce) {
+      std::wcout << "index_repl_dst_t: changing dst=" << dst_.to_latex()
+                 << " to dst=" << idx.to_latex() << "\n";
+    }
+    dst_ = std::move(idx);
+  }
 
   const container::svector<Index> &src() const { return src_; }
   index_repl_dst_t &append_src(Index src) {
     assert(ranges::contains(src_, src) == false);
+    if (Logger::instance().wick_reduce) {
+      std::wcout << "index_repl_dst_t: appended src=" << src.to_latex()
+                 << " to dst=" << dst_.to_latex() << "\n";
+    }
     src_.emplace_back(std::move(src));
     return *this;
   }
@@ -539,6 +554,15 @@ template <Statistics S>
 void reduce_wick_impl(std::shared_ptr<Product> &expr,
                       const container::set<Index> &external_indices,
                       const Context &ctx) {
+  if (Logger::instance().wick_reduce) {
+    std::wcout << "reduce_wick_impl(expr, external_indices):\n input expr = "
+               << expr->to_latex() << "\n  external_indices = ";
+    ranges::for_each(external_indices, [](auto &index) {
+      std::wcout << index.full_label() << " ";
+    });
+    std::wcout << std::endl;
+  }
+
   bool pass_mutated = false;
   do {
     pass_mutated = false;
