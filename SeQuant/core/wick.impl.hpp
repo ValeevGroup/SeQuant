@@ -23,7 +23,7 @@ namespace detail {
 struct zero_result : public std::exception {};
 
 /// index replacements are many-to-one, i.e. multiple source indices may be
-/// mapped to the same destnation index. This serves the role of a single
+/// mapped to the same destination index. This serves the role of a single
 /// destination to avoid representing each destination index by multiple copies
 /// of itself. This is needed to be able to "merge" multiple replacements
 /// efficiently. e.g. consider adding replacement p1->i1 to the current list
