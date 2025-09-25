@@ -1476,6 +1476,14 @@ void TensorNetworkV3::init_edges() {
   ext_indices_.reserve(ext_indices_.size() + pure_proto_indices_.size());
   ext_indices_.insert(pure_proto_indices_.begin(), pure_proto_indices_.end());
 
+  if (Logger::instance().tensor_network) {
+    sequant::wprintf("TNV3: computed external indices = ");
+    ranges::for_each(ext_indices_, [](auto &index) {
+      sequant::wprintf(index.full_label(), " ");
+    });
+    sequant::wprintf("\n");
+  }
+
   have_edges_ = true;
 }
 
