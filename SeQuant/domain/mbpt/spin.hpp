@@ -213,8 +213,9 @@ ExprPtr S_maps(const ExprPtr& expr);
 
 /// @brief filters out the nonunique terms in Wang-Knizia biorthogonalization
 
-/// WK biorthogonalization rewrites biorthogonal expressions as a "cleanup"
-/// projector applied to the biorothogonal expressions where out of each
+/// WK biorthogonalization rewrites biorthogonal expressions as a projector
+/// onto non-null-space (NNS)
+/// applied to the biorothogonal expressions where out of each
 /// group of terms related by permutation of external indices
 /// those with the largest coefficients are selected.
 /// This function performs the selection by forming groups of terms that
@@ -261,7 +262,7 @@ container::svector<ResultExpr> closed_shell_spintrace(
 enum class BiorthogonalizationMethod {
   /// standard biorthogonalization method
   V1,
-  /// improved Wang-Knizia biorthogonalization (DOI 10.48550/arXiv.1805.00565), with factored out "cleanup" operator (expressed as a linear combination of permutations)
+  /// improved Wang-Knizia biorthogonalization (DOI 10.48550/arXiv.1805.00565), with factored out the Non-Null-Space (NNS) projector (expressed as a linear combination of permutations)
   V2
 };
 // clang-format on
@@ -290,8 +291,8 @@ struct ClosedShellCCSpintraceOptions {
 /// - apply the particle symmetrizer and simplify
 ///
 /// The V2 method produces an expression that becomes equivalent that of V1 by
-/// application of if the biorthogonal cleanup (particular linear combination of
-/// permutation operators) is applied. The biorthogonal cleanup should be
+/// application of if the biorthogonal NNS projector (particular linear combination of
+/// permutation operators) is applied. The biorthogonal NNS projection should be
 /// performed numerically.
 /// @warning the antisymmetrizer is assumed to be at the front of each tensor
 /// network, hence must use "complete" canonicalization to produce the input expression.

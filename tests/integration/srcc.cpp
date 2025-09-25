@@ -214,7 +214,7 @@ class compute_cceqvec {
           // by biorthogonal transformation and gives the most compact set of
           // equations. However, we need to restore the effects of those deleted
           // terms. So, after evaluate_symm call in sequant evaluation scope, we
-          // need to call evaluate_biorthogonal_cleanup.
+          // need to call evaluate_biorthogonal_nns_project.
 
           std::wcout << "biorthogonal spin-free R" << R << "(expS" << N
                      << ") has " << eqvec[R]->size() << " terms:" << std::endl;

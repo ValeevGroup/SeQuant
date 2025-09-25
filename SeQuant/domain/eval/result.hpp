@@ -339,16 +339,16 @@ auto particle_antisymmetrize_btas(btas::Tensor<Args...> const& arr,
   return result;
 }
 
-/// \brief This function is used to implement ResultPtr::biorthogonal_cleanup
-/// for TA::DistArray
+/// \brief This function is used to implement
+/// ResultPtr::biorthogonal_nns_project for TA::DistArray
 ///
 /// \param arr The array to be "cleaned up"
 /// \param bra_rank The rank of the bra indices
 ///
 /// \return The cleaned TA::DistArray.
 template <typename... Args>
-auto biorthogonal_cleanup_ta(TA::DistArray<Args...> const& arr,
-                             size_t bra_rank) {
+auto biorthogonal_nns_project_ta(TA::DistArray<Args...> const& arr,
+                                 size_t bra_rank) {
   using ranges::views::iota;
   size_t const rank = arr.trange().rank();
   assert(bra_rank <= rank);
@@ -417,16 +417,16 @@ auto biorthogonal_cleanup_ta(TA::DistArray<Args...> const& arr,
   return result;
 }
 
-/// \brief This function is used to implement ResultPtr::biorthogonal_cleanup
-/// for btas::Tensor
+/// \brief This function is used to implement
+/// ResultPtr::biorthogonal_nns_project for btas::Tensor
 ///
 /// \param arr The array to be "cleaned up"
 /// \param bra_rank The rank of the bra indices
 ///
 /// \return The cleaned btas::Tensor.
 template <typename... Args>
-auto biorthogonal_cleanup_btas(btas::Tensor<Args...> const& arr,
-                               size_t bra_rank) {
+auto biorthogonal_nns_project_btas(btas::Tensor<Args...> const& arr,
+                                   size_t bra_rank) {
   using ranges::views::concat;
   using ranges::views::iota;
   size_t const rank = arr.rank();
@@ -640,7 +640,7 @@ class Result {
   /// The implementation is for arbitrary ranks.
   /// @param bra_rank the particle rank of the residual tensor (i.e.
   ///                 its order halved)
-  [[nodiscard]] virtual ResultPtr biorthogonal_cleanup(
+  [[nodiscard]] virtual ResultPtr biorthogonal_nns_project(
       size_t bra_rank) const = 0;
 
   [[nodiscard]] bool has_value() const noexcept;
@@ -753,9 +753,9 @@ class ResultScalar final : public Result {
     throw unimplemented_method("antisymmetrize");
   }
 
-  [[nodiscard]] ResultPtr biorthogonal_cleanup(
+  [[nodiscard]] ResultPtr biorthogonal_nns_project(
       [[maybe_unused]] size_t bra_rank) const override {
-    throw unimplemented_method("biorthogonal_cleanup");
+    throw unimplemented_method("biorthogonal_nns_project");
   }
 
   [[nodiscard]] ResultPtr mult_by_phase(std::int8_t factor) const override {
@@ -899,9 +899,10 @@ class ResultTensorTA final : public Result {
         particle_antisymmetrize_ta(get<ArrayT>(), bra_rank));
   }
 
-  [[nodiscard]] ResultPtr biorthogonal_cleanup(size_t bra_rank) const override {
+  [[nodiscard]] ResultPtr biorthogonal_nns_project(
+      size_t bra_rank) const override {
     return eval_result<this_type>(
-        biorthogonal_cleanup_ta(get<ArrayT>(), bra_rank));
+        biorthogonal_nns_project_ta(get<ArrayT>(), bra_rank));
   }
 
  private:
@@ -1052,9 +1053,9 @@ class ResultTensorOfTensorTA final : public Result {
     return nullptr;
   }
 
-  [[nodiscard]] ResultPtr biorthogonal_cleanup(
+  [[nodiscard]] ResultPtr biorthogonal_nns_project(
       [[maybe_unused]] size_t bra_rank) const override {
-    // or? throw unimplemented_method("biorthogonal_cleanup");
+    // or? throw unimplemented_method("biorthogonal_nns_project");
     // not implemented yet, I think I need it for CSV
     return nullptr;
   }
@@ -1161,10 +1162,10 @@ class ResultTensorBTAS final : public Result {
         particle_antisymmetrize_btas(get<T>(), bra_rank));
   }
 
-  [[nodiscard]] ResultPtr biorthogonal_cleanup(
+  [[nodiscard]] ResultPtr biorthogonal_nns_project(
       [[maybe_unused]] size_t bra_rank) const override {
     return eval_result<ResultTensorBTAS<T>>(
-        biorthogonal_cleanup_btas(get<T>(), bra_rank));
+        biorthogonal_nns_project_btas(get<T>(), bra_rank));
   }
 
  private:
