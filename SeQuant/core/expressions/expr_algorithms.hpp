@@ -5,6 +5,7 @@
 #ifndef SEQUANT_EXPRESSIONS_ALGORITHMS_HPP
 #define SEQUANT_EXPRESSIONS_ALGORITHMS_HPP
 
+#include <SeQuant/core/expr_fwd.hpp>
 #include <SeQuant/core/expressions/expr.hpp>
 #include <SeQuant/core/expressions/expr_ptr.hpp>
 
@@ -125,6 +126,26 @@ ExprPtr canonicalize(
     ExprPtr&& expr_rv,
     CanonicalizeOptions opts = CanonicalizeOptions::default_options());
 
+/// Recursively canonicalizes an Expr and replaces it as needed
+/// @param[in,out] expr expression to be canonicalized; may be
+/// _replaced_ (i.e. `&expr` may be mutated by call)
+/// @param[in] opts canonicalization options (if not given, uses
+///            CanonicalizeOptions::default_options() to obtain the default)
+/// @return \p expr to facilitate chaining
+ResultExpr& canonicalize(
+    ResultExpr& expr,
+    CanonicalizeOptions opts = CanonicalizeOptions::default_options());
+
+/// Recursively canonicalizes an Expr; like mutating canonicalize() but works
+/// for temporary expressions
+/// @param[in] expr_rv rvalue-ref-to-expression to be canonicalized
+/// @param[in] opts canonicalization options (if not given, uses
+///            CanonicalizeOptions::default_options() to obtain the default)
+/// @return canonicalized form of \p expr_rv
+[[nodiscard]] ResultExpr& canonicalize(
+    ResultExpr&& expr,
+    CanonicalizeOptions opts = CanonicalizeOptions::default_options());
+
 /// Recursively expands products of sums
 /// @param[in,out] expr expression to be expanded
 /// @return \p expr to facilitate chaining
@@ -134,6 +155,16 @@ ExprPtr& expand(ExprPtr& expr);
 /// @param[in,out] expr expression to be expanded
 /// @return \p expr to facilitate chaining
 ExprPtr expand(ExprPtr&& expr);
+
+/// Recursively expands products of sums
+/// @param[in,out] expr expression to be expanded
+/// @return \p expr to facilitate chaining
+ResultExpr& expand(ResultExpr& expr);
+
+/// Recursively expands products of sums
+/// @param[in,out] expr expression to be expanded
+/// @return The expanded expression
+[[nodiscard]] ResultExpr& expand(ResultExpr&& expr);
 
 /// Simplifies an Expr by applying cheap transformations (e.g. eliminating
 /// trivial math, flattening sums and products, etc.)
@@ -145,6 +176,30 @@ ExprPtr expand(ExprPtr&& expr);
 /// @return \p expr to facilitate chaining
 ExprPtr& rapid_simplify(
     ExprPtr& expr, SimplifyOptions opts = SimplifyOptions::default_options());
+
+/// Simplifies an Expr by applying cheap transformations (e.g. eliminating
+/// trivial math, flattening sums and products, etc.)
+/// @param[in,out] expr expression to be simplified; may be
+/// _replaced_ (i.e. `&expr` may be mutated by call)
+/// @param[in] opts canonicalization options (if not given, uses
+///            CanonicalizeOptions::default_options() to obtain the default)
+/// @sa simplify()
+/// @return \p expr to facilitate chaining
+ResultExpr& rapid_simplify(
+    ResultExpr& expr,
+    SimplifyOptions opts = SimplifyOptions::default_options());
+
+/// Simplifies an Expr by applying cheap transformations (e.g. eliminating
+/// trivial math, flattening sums and products, etc.)
+/// @param[in,out] expr expression to be simplified; may be
+/// _replaced_ (i.e. `&expr` may be mutated by call)
+/// @param[in] opts canonicalization options (if not given, uses
+///            CanonicalizeOptions::default_options() to obtain the default)
+/// @sa simplify()
+/// @return \p expr to facilitate chaining
+[[nodiscard]] ResultExpr& rapid_simplify(
+    ResultExpr&& expr,
+    SimplifyOptions opts = SimplifyOptions::default_options());
 
 /// Simplifies an Expr by a combination of expansion, canonicalization, and
 /// rapid_simplify
@@ -166,6 +221,27 @@ ExprPtr& simplify(ExprPtr& expr,
 ExprPtr simplify(ExprPtr&& expr_rv,
                  SimplifyOptions opts = SimplifyOptions::default_options());
 
+/// Simplifies an Expr by a combination of expansion, canonicalization, and
+/// rapid_simplify
+/// @param[in,out] expr expression to be simplified; may be
+/// _replaced_ (i.e. `&expr` may be mutated by call)
+/// @param[in] opts canonicalization options (if not given, uses
+///            CanonicalizeOptions::default_options() to obtain the default)
+/// @sa rapid_simplify()
+/// @return \p expr to facilitate chaining
+ResultExpr& simplify(ResultExpr& expr,
+                     SimplifyOptions opts = SimplifyOptions::default_options());
+
+/// Simplifies an Expr by a combination of expansion, canonicalization, and
+/// rapid_simplify; like mutating simplify() but works for temporary expressions
+/// @param[in] expr_rv rvalue-ref-to-expression to be simplified
+/// @param[in] opts canonicalization options (if not given, uses
+///            CanonicalizeOptions::default_options() to obtain the default)
+/// @return simplified form of \p expr_rv
+[[nodiscard]] ResultExpr& simplify(
+    ResultExpr&& expr,
+    SimplifyOptions opts = SimplifyOptions::default_options());
+
 /// Simplifies an Expr by a combination of expansion and
 /// rapid_simplify
 /// @param[in,out] expr expression to be simplified; may be
@@ -173,6 +249,22 @@ ExprPtr simplify(ExprPtr&& expr_rv,
 /// @sa simplify()
 /// @return \p expr to facilitate chaining
 ExprPtr& non_canon_simplify(ExprPtr& expr);
+
+/// Simplifies an Expr by a combination of expansion and
+/// rapid_simplify
+/// @param[in,out] expr expression to be simplified; may be
+/// _replaced_ (i.e. `&expr` may be mutated by call)
+/// @sa simplify()
+/// @return \p expr to facilitate chaining
+ResultExpr& non_canon_simplify(ResultExpr& expr);
+
+/// Simplifies an Expr by a combination of expansion and
+/// rapid_simplify
+/// @param[in,out] expr expression to be simplified; may be
+/// _replaced_ (i.e. `&expr` may be mutated by call)
+/// @sa simplify()
+/// @return Simplified expression
+[[nodiscard]] ResultExpr non_canon_simplify(ResultExpr&& expr);
 
 }  // namespace sequant
 

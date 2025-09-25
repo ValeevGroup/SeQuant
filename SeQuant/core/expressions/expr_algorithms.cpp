@@ -2,6 +2,7 @@
 #include <SeQuant/core/expressions/expr_algorithms.hpp>
 #include <SeQuant/core/expressions/expr_operators.hpp>
 #include <SeQuant/core/expressions/product.hpp>
+#include <SeQuant/core/expressions/result_expr.hpp>
 #include <SeQuant/core/expressions/sum.hpp>
 #include <SeQuant/core/expressions/tensor.hpp>
 #include <SeQuant/core/logger.hpp>
@@ -104,6 +105,16 @@ ExprPtr canonicalize(ExprPtr&& expr_rv, CanonicalizeOptions opts) {
     expr_rv = byproduct * expr_rv;
   }
   return std::move(expr_rv);
+}
+
+ResultExpr& canonicalize(ResultExpr& expr, CanonicalizeOptions opts) {
+  expr.expression() = canonicalize(expr.expression(), std::move(opts));
+
+  return expr;
+}
+
+ResultExpr& canonicalize(ResultExpr&& expr, CanonicalizeOptions opts) {
+  return canonicalize(expr, std::move(opts));
 }
 
 struct ExpandVisitor {
@@ -236,6 +247,14 @@ ExprPtr& expand(ExprPtr& expr) {
 
 ExprPtr expand(ExprPtr&& expr) { return expand(expr); }
 
+ResultExpr& expand(ResultExpr& expr) {
+  expr.expression() = expand(expr.expression());
+
+  return expr;
+}
+
+ResultExpr& expand(ResultExpr&& expr) { return expand(expr); }
+
 struct RapidSimplifyVisitor {
   SimplifyOptions opts;
 
@@ -364,6 +383,16 @@ ExprPtr& rapid_simplify(ExprPtr& expr, SimplifyOptions opts) {
   return expr;
 }
 
+ResultExpr& rapid_simplify(ResultExpr& expr, SimplifyOptions opts) {
+  expr.expression() = rapid_simplify(expr.expression(), std::move(opts));
+
+  return expr;
+}
+
+ResultExpr& rapid_simplify(ResultExpr&& expr, SimplifyOptions opts) {
+  return rapid_simplify(expr, std::move(opts));
+}
+
 ExprPtr& simplify(ExprPtr& expr, SimplifyOptions opts) {
   expand(expr);
   rapid_simplify(expr, opts);
@@ -378,7 +407,23 @@ ExprPtr simplify(ExprPtr&& expr_rv, SimplifyOptions opts) {
   return expr;
 }
 
+ResultExpr& simplify(ResultExpr& expr, SimplifyOptions opts) {
+  expr.expression() = simplify(expr.expression(), std::move(opts));
+
+  return expr;
+}
+
+ResultExpr& simplify(ResultExpr&& expr, SimplifyOptions opts) {
+  return simplify(expr, std::move(opts));
+}
+
 ExprPtr& non_canon_simplify(ExprPtr& expr) {
+  expand(expr);
+  rapid_simplify(expr);
+  return expr;
+}
+
+ResultExpr& non_canon_simplify(ResultExpr& expr) {
   expand(expr);
   rapid_simplify(expr);
   return expr;
