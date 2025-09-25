@@ -614,6 +614,18 @@ inline void permute_braket(AbstractTensor& t, std::span<std::size_t> perm) {
 
 using AbstractTensorPtr = std::shared_ptr<AbstractTensor>;
 
+/// @brief Check if a tensor with a certain label is present in an expression
+/// @param expr input expression
+/// @param label tensor label to find in the expression
+/// @return true if tensor with given label is found
+bool has_tensor(const ExprPtr& expr, std::wstring label);
+
+/// @brief Removes tensor with a certain label from an expression
+/// @param expr An expression pointer
+/// @param label Label of the tensor to remove
+/// @return ExprPtr with the tensor removed
+ExprPtr remove_tensor(const ExprPtr& expr, std::wstring label);
+
 }  // namespace sequant
 
 #endif  // SEQUANT_ABSTRACT_TENSOR_HPP

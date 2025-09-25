@@ -163,29 +163,11 @@ ExprPtr expand_antisymm(const Tensor& tensor, bool skip_spinsymm = false);
 /// @return an expression pointer with expanded tensors as a sum
 ExprPtr expand_antisymm(const ExprPtr& expr, bool skip_spinsymm = false);
 
-/// @brief Check if a tensor with a certain label is present in an expression
-/// @param expr input expression
-/// @param label tensor label to find in the expression
-/// @return true if tensor with given label is found
-bool has_tensor(const ExprPtr& expr, std::wstring label);
-
 /// @brief Generates a vector of replacement maps for antisymmetrization (A)
 /// tensor
 /// @param A An antisymmetrizer tensor (A) (with > 2 particle indices)
 /// @return Vector of replacement maps
 container::svector<container::map<Index, Index>> A_maps(const Tensor& A);
-
-/// @brief Removes tensor with a certain label from product
-/// @param product A product expression
-/// @param label Label of the tensor to remove
-/// @return ExprPtr with the tensor removed
-ExprPtr remove_tensor(const Product& product, std::wstring label);
-
-/// @brief Removes tensor with a certain label from an expression
-/// @param expr An expression pointer
-/// @param label Label of the tensor to remove
-/// @return ExprPtr with the tensor removed
-ExprPtr remove_tensor(const ExprPtr& expr, std::wstring label);
 
 /// @brief Expand a product containing the antisymmetrization (A) tensor
 /// @param product a Product that may or may not include the antisymmetrizer

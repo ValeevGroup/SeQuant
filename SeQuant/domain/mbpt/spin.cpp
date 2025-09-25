@@ -511,27 +511,6 @@ ExprPtr expand_antisymm(const ExprPtr& expr, bool skip_spinsymm) {
   }
 }
 
-bool has_tensor(const ExprPtr& expr, std::wstring label) {
-  if (expr->is<Constant>() || expr->is<Variable>()) return false;
-
-  auto check_product = [&label](const Product& p) {
-    return ranges::any_of(p.factors(), [&label](const auto& t) {
-      return t->template is<AbstractTensor>() &&
-             (t->template as<AbstractTensor>())._label() == label;
-    });
-  };
-
-  if (expr->is<AbstractTensor>()) {
-    return expr->as<AbstractTensor>()._label() == label;
-  } else if (expr->is<Product>()) {
-    return check_product(expr->as<Product>());
-  } else if (expr->is<Sum>()) {
-    return ranges::any_of(
-        *expr, [&label](const auto& term) { return has_tensor(term, label); });
-  } else
-    return false;
-}
-
 container::svector<container::map<Index, Index>> A_maps(const Tensor& A) {
   assert(A.label() == L"A");
 
@@ -558,38 +537,6 @@ container::svector<container::map<Index, Index>> A_maps(const Tensor& A) {
   } while (std::next_permutation(ket_indices.begin(), ket_indices.end()));
 
   return result;
-}
-
-ExprPtr remove_tensor(const Product& product, std::wstring label) {
-  // filter out tensors with specified label
-  auto new_product = std::make_shared<Product>();
-  new_product->scale(product.scalar());
-  for (auto&& term : product) {
-    if (term->is<AbstractTensor>()) {
-      if (term->as<AbstractTensor>()._label() != label)
-        new_product->append(1, term.clone());
-    } else
-      new_product->append(1, term);
-  }
-  return new_product;
-}
-
-ExprPtr remove_tensor(const ExprPtr& expr, std::wstring label) {
-  if (expr->is<Sum>()) {
-    Sum result{};
-    for (auto& term : *expr) {
-      result.append(remove_tensor(term, label));
-    }
-    return ex<Sum>(result);
-  } else if (expr->is<Product>())
-    return remove_tensor(expr->as<Product>(), label);
-  else if (expr->is<AbstractTensor>())
-    return expr->as<AbstractTensor>()._label() == label ? ex<Constant>(1)
-                                                        : expr;
-  else if (expr->is<Constant>() || expr->is<Variable>())
-    return expr;
-  else
-    throw std::runtime_error("Invalid Expr type in remove_tensor");
 }
 
 ExprPtr expand_A_op(const Product& product) {
@@ -911,7 +858,7 @@ ExprPtr S_maps(const ExprPtr& expr) {
     for (auto&& map : maps) {
       Product new_product{};
       new_product.scale(product.scalar());
-      auto temp_product = remove_tensor(product, L"S")->as<Product>();
+      auto temp_product = remove_tensor(product, L"S").as_shared_ptr<Product>();
       for (auto&& term : temp_product) {
         if (term->is<Tensor>()) {
           auto new_tensor = term->as<Tensor>();
@@ -1153,7 +1100,8 @@ ExprPtr closed_shell_CC_spintrace_v1(ExprPtr const& expr,
   if (!ext_idxs.empty()) {
     // Remove S operator
     for (auto& term : *st_expr) {
-      if (term->is<Product>()) term = remove_tensor(term->as<Product>(), L"S");
+      if (term->is<Product>())
+        term = remove_tensor(term.as_shared_ptr<Product>(), L"S");
     }
 
     // Biorthogonal transformation
@@ -1186,7 +1134,8 @@ ExprPtr closed_shell_CC_spintrace_v2(ExprPtr const& expr,
   if (!ext_idxs.empty()) {
     // Remove S operator to apply biorthogonal transformation
     for (auto& term : *st_expr) {
-      if (term->is<Product>()) term = remove_tensor(term->as<Product>(), L"S");
+      if (term->is<Product>())
+        term = remove_tensor(term.as_shared_ptr<Product>(), L"S");
     }
     st_expr = biorthogonal_transform(st_expr, ext_idxs);
 
@@ -1658,7 +1607,7 @@ std::vector<ExprPtr> open_shell_CC_spintrace(const ExprPtr& expr) {
   std::vector<Sum> concat_terms(i + 1);
   [[maybe_unused]] size_t n_spin_orbital_term = 0;
   for (auto& product_term : *expr) {
-    auto term = remove_tensor(product_term->as<Product>(), L"A");
+    auto term = remove_tensor(product_term.as_shared_ptr<Product>(), L"A");
     std::vector<ExprPtr> os_st(i + 1);
 
     // Apply the P operators on the product term without the A,
