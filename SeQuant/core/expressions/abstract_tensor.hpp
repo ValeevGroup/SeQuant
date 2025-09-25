@@ -10,6 +10,7 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expressions/expr_algorithms.hpp>
 #include <SeQuant/core/index.hpp>
+#include <SeQuant/core/latex.hpp>
 
 #include <cstdlib>
 #include <memory>

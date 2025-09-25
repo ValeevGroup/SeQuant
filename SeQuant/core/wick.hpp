@@ -10,6 +10,7 @@
 #include <utility>
 
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/logger.hpp>
 #include <SeQuant/core/math.hpp>
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/ranges.hpp>
