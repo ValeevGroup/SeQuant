@@ -17,10 +17,11 @@ enum class Convention {
   Minimal,  //!< occupied/hole + unoccupied/particle + their union
   SR,       //!< single determinant reference: occupied (frozen + active) +
             //!< unoccupied (active + frozen)
-  MR,    //!< multi determinant reference: occupied (frozen + active) + active +
-         //!< unoccupied (active + frozen)
-  F12,   //!< SR + complement from complete basis, used for F12 methods
-  QCiFS  //!< ``Quantum Chemistry in Fock Space'' = superset of above
+  MR,  //!< multi determinant reference: occupied (frozen + active) + active +
+       //!< unoccupied (active + frozen)
+  MinimalMR,  //!< MR, without frozen spaces
+  F12,        //!< SR + complement from complete basis, used for F12 methods
+  QCiFS       //!< ``Quantum Chemistry in Fock Space'' = superset of above
 };
 
 /// @brief Conventions for representing spin quantum numbers
@@ -75,6 +76,10 @@ std::shared_ptr<IndexSpaceRegistry> make_F12_sr_spaces(
 /// a SingleProduct Vacuum. This leads to a variety of additional composite
 /// spaces with may or may not be occupied.
 std::shared_ptr<IndexSpaceRegistry> make_mr_spaces(
+    SpinConvention spconv = SpinConvention::Default);
+
+/// like make_mr_spaces, but without frozen orbitals
+std::shared_ptr<IndexSpaceRegistry> make_min_mr_spaces(
     SpinConvention spconv = SpinConvention::Default);
 
 /// 'Standard' choice of partitioning orbitals in a single reference.

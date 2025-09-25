@@ -1212,7 +1212,7 @@ ExprPtr vac_av(ExprPtr expr, std::vector<std::pair<int, int>> nop_connections,
           std::wcout << "expr = " << product_ptr->to_latex()
                      << "\n  external_indices = ";
           ranges::for_each(external_indices, [](auto& index) {
-            std::wcout << index.label() << " ";
+            std::wcout << index.full_label() << " ";
           });
           std::wcout << "\n  replrules = ";
           ranges::for_each(replacement_rules, [](auto& index) {
@@ -1224,8 +1224,7 @@ ExprPtr vac_av(ExprPtr expr, std::vector<std::pair<int, int>> nop_connections,
 
         if (!replacement_rules.empty()) {
           sequant::detail::apply_index_replacement_rules(
-              product_ptr, replacement_rules, external_indices, all_indices,
-              isr);
+              product_ptr, replacement_rules, all_indices);
         }
       };
 

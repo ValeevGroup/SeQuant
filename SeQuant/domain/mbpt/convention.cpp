@@ -31,6 +31,9 @@ void load(Convention conv, SpinConvention spconv) {
     case Convention::SR:
       isr = make_sr_spaces(spconv);
       break;
+    case Convention::MinimalMR:
+      isr = make_min_mr_spaces(spconv);
+      break;
     case Convention::MR:
       isr = make_mr_spaces(spconv);
       break;
@@ -136,6 +139,24 @@ std::shared_ptr<IndexSpaceRegistry> make_mr_spaces(SpinConvention spconv) {
       .add_union(L"E", {L"u", L"a", L"g"})
       .add_union(L"A", {L"u", L"a"}, is_particle)
       .add_union(L"p", {L"M", L"E"}, is_complete);
+
+  if (spconv == SpinConvention::Default) add_fermi_spin(*isr);
+  isr->physical_particle_attribute_mask(bitset_t(spin_any));
+
+  return isr;
+}
+
+std::shared_ptr<IndexSpaceRegistry> make_min_mr_spaces(SpinConvention spconv) {
+  auto isr = std::make_shared<IndexSpaceRegistry>();
+
+  const auto spin_any = IndexSpace::QuantumNumbers{
+      spconv == SpinConvention::Legacy ? Spin::null : Spin::any};
+  isr->add(L"i", 0b0001, spin_any, is_vacuum_occupied)
+      .add(L"u", 0b0010, spin_any)
+      .add(L"a", 0b0100, spin_any)
+      .add_union(L"I", {L"i", L"u"}, is_reference_occupied, is_hole)
+      .add_union(L"A", {L"u", L"a"}, is_particle)
+      .add_union(L"p", {L"I", L"a"}, is_complete);
 
   if (spconv == SpinConvention::Default) add_fermi_spin(*isr);
   isr->physical_particle_attribute_mask(bitset_t(spin_any));

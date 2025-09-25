@@ -28,6 +28,7 @@ struct ParseError : std::runtime_error {
 };
 
 // clang-format off
+/// \brief Construct expressions from string representations
 ///
 /// \param raw A tensor algebra expression. A valid expression is
 ///            a product, a sum or a mix of those including parentheses.
@@ -77,7 +78,19 @@ ExprPtr parse_expr(std::wstring_view raw,
                    std::optional<BraKetSymmetry> braket_symm = {},
                    std::optional<ColumnSymmetry> column_symm = {});
 
+/// \sa parse_expr
+ExprPtr parse_expr(std::string_view raw, std::optional<Symmetry> perm_symm = {},
+                   std::optional<BraKetSymmetry> braket_symm = {},
+                   std::optional<ColumnSymmetry> column_symm = {});
+
+/// \sa parse_expr
 ResultExpr parse_result_expr(std::wstring_view raw,
+                             std::optional<Symmetry> perm_symm = {},
+                             std::optional<BraKetSymmetry> braket_symm = {},
+                             std::optional<ColumnSymmetry> column_symm = {});
+
+/// \sa parse_expr
+ResultExpr parse_result_expr(std::string_view raw,
                              std::optional<Symmetry> perm_symm = {},
                              std::optional<BraKetSymmetry> braket_symm = {},
                              std::optional<ColumnSymmetry> column_symm = {});
