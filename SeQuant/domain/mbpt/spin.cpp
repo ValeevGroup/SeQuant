@@ -43,7 +43,7 @@
 #include <unordered_map>
 #include <utility>
 
-namespace sequant {
+namespace sequant::mbpt {
 
 namespace detail {
 
@@ -2176,4 +2176,4 @@ ExprPtr factorize_S(const ExprPtr& expression,
   return result;
 }
 
-}  // namespace sequant
+}  // namespace sequant::mbpt

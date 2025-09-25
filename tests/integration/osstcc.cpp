@@ -58,7 +58,7 @@ int main(int argc, char* argv[]) {
             << std::endl;
   std::vector<std::vector<ExprPtr>> os_cc_st_r(cc_r.size());
   for (auto i = 1; i < cc_r.size(); ++i) {
-    os_cc_st_r[i] = open_shell_CC_spintrace(cc_r[i]);
+    os_cc_st_r[i] = mbpt::open_shell_CC_spintrace(cc_r[i]);
     std::cout << "CCK-" << NMAX << " R[" << i << "]  ";
     for (auto const& x : os_cc_st_r[i]) std::cout << x->size() << "  ";
     std::cout << std::endl;

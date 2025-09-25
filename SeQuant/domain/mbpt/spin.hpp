@@ -20,9 +20,7 @@
 #include <string>
 #include <vector>
 
-namespace sequant {
-
-namespace mbpt {
+namespace sequant::mbpt {
 
 // Spin is a scoped enum, hence not implicitly convertible to
 // QuantumNumbersAttr::bitset_t
@@ -102,8 +100,6 @@ std::wstring spinannotation_replacе(WS&& label, Spin s) {
   auto label_sf = spinannotation_remove(std::forward<WS>(label));
   return spinannotation_add(label_sf, s);
 }
-
-}  // namespace mbpt
 
 // make alpha-spin idx
 [[nodiscard]] Index make_spinalpha(const Index& idx);
@@ -434,6 +430,6 @@ ExprPtr factorize_S(const ExprPtr& expression,
                     std::initializer_list<IndexList> ext_index_groups,
                     bool fast_method = true);
 
-}  // namespace sequant
+}  // namespace sequant::mbpt
 
 #endif  // SEQUANT_DOMAIN_MBPT_SPIN_HPP

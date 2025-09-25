@@ -32,12 +32,12 @@
 
 TEST_CASE("spin", "[spin]") {
   using namespace sequant;
+  using namespace sequant::mbpt;
 
   // P.S. ref outputs produced with complete canonicalization
   auto ctx = get_default_context();
   ctx.set(CanonicalizeOptions{.method = CanonicalizationMethod::Complete});
   auto _ = set_scoped_default_context(ctx);
-  using namespace sequant::mbpt;
 
   TensorCanonicalizer::register_instance(
       std::make_shared<DefaultTensorCanonicalizer>());

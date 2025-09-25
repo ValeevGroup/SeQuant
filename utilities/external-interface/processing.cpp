@@ -55,6 +55,8 @@ container::svector<ResultExpr> postProcess(ResultExpr result,
 
   assert(result.expression());
 
+  using namespace sequant::mbpt;
+
   if (options.expand_symmetrizer) {
     spdlog::debug("Fully expanding all antisymmetrizers before spintracing...");
     result.expression() = simplify(expand_A_op(result.expression()));

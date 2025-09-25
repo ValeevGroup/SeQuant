@@ -28,9 +28,9 @@ static void spintrace(benchmark::State &state, bool assume_spinfree) {
   for (auto _ : state) {
     ExprPtr result = [&]() {
       if constexpr (closed_shell) {
-        return closed_shell_spintrace(input->clone());
+        return mbpt::closed_shell_spintrace(input->clone());
       } else {
-        return spintrace(input->clone(), {}, assume_spinfree);
+        return mbpt::spintrace(input->clone(), {}, assume_spinfree);
       }
     }();
 
