@@ -1,5 +1,5 @@
-#ifndef SEQUANT_BIORTHOGONALIZE_HPP
-#define SEQUANT_BIORTHOGONALIZE_HPP
+#ifndef SEQUANT_DOMAIN_MBPT_BIORTHOGONALIZE_HPP
+#define SEQUANT_DOMAIN_MBPT_BIORTHOGONALIZE_HPP
 
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>

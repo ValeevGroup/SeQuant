@@ -1,8 +1,8 @@
+#include <SeQuant/domain/mbpt/biorthogonalization.hpp>
 #include <SeQuant/domain/mbpt/spin.hpp>
 
 #include <SeQuant/core/algorithm.hpp>
 #include <SeQuant/core/attr.hpp>
-#include <SeQuant/core/biorthogonalization.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/math.hpp>
 #include <SeQuant/core/optimize.hpp>
