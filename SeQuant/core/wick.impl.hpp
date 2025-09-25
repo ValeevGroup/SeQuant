@@ -567,6 +567,26 @@ struct NullNormalOperatorCanonicalizerDeregister {
 
 }  // namespace detail
 
+inline void count_index_impl(container::map<Index, int64_t> &counter,
+                             const Index &idx) {
+  auto it = counter.find(idx);
+  if (it == counter.end()) {
+    counter.emplace(idx, 1);
+  } else {
+    it->second++;
+  }
+}
+
+inline void count_index(container::map<Index, int64_t> &counter,
+                        const Index &idx) {
+  count_index_impl(counter, idx);
+  /// N.B. protoindices of external indices are external
+  for (const auto &proto_idx : idx.proto_indices()) {
+    count_index_impl(counter, proto_idx);
+  }
+}
+
+/// @note protoindices of external indices are external
 inline container::set<Index> extract_external_indices(const Expr &expr) {
   if (ranges::any_of(expr, [](auto &e) { return e.template is<Sum>(); }))
     throw std::invalid_argument(
@@ -580,12 +600,8 @@ inline container::set<Index> extract_external_indices(const Expr &expr) {
     if (expr_as_abstract_tensor) {
       ranges::for_each(expr_as_abstract_tensor->_braket(),
                        [&idx_counter](const auto &v) {
-                         auto it = idx_counter.find(v);
-                         if (it == idx_counter.end()) {
-                           idx_counter.emplace(v, 1);
-                         } else {
-                           it->second++;
-                         }
+                         // N.B. protoindices of external indices are external
+                         count_index(idx_counter, v);
                        });
     }
   };
