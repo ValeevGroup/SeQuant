@@ -229,10 +229,9 @@ ExprPtr swap_bra_ket(const ExprPtr& expr) {
 
   // Lambda for tensor
   auto tensor_swap = [](const Tensor& tensor) {
-    auto result = Tensor(tensor.label(), bra(tensor.ket().value()),
-                         ket(tensor.bra().value()), tensor.symmetry(),
-                         tensor.braket_symmetry(), tensor.column_symmetry());
-    return ex<Tensor>(result);
+    return ex<Tensor>(tensor.label(), bra(tensor.ket().value()),
+                      ket(tensor.bra().value()), tensor.symmetry(),
+                      tensor.braket_symmetry(), tensor.column_symmetry());
   };
 
   // Lambda for product
@@ -244,7 +243,7 @@ ExprPtr swap_bra_ket(const ExprPtr& expr) {
         result->append(1, tensor_swap(term->as<Tensor>()),
                        Product::Flatten::No);
       } else if (term->is<Variable>() || term->is<Constant>()) {
-        result->append(1, term->clone());
+        result->append(1, term);
       } else {
         throw std::runtime_error("Invalid Expr type in product_swap");
       }
@@ -282,7 +281,7 @@ ExprPtr append_spin(const ExprPtr& expr,
       if (term->is<Tensor>()) {
         spin_product->append(1, add_spin_to_tensor(term->as<Tensor>()));
       } else if (term->is<Constant>() || term->is<Variable>()) {
-        spin_product->append(1, term->clone());
+        spin_product->append(1, term);
       } else {
         throw std::runtime_error(
             "Invalid Expr type in append_spin::add_spin_to_product");
@@ -302,7 +301,7 @@ ExprPtr append_spin(const ExprPtr& expr,
     }
     return spin_expr;
   } else if (expr->is<Constant>() || expr->is<Variable>()) {
-    return expr->clone();
+    return expr;
   }
 
   throw std::runtime_error("Unsupported Expr type in append_spin");
@@ -317,9 +316,9 @@ ExprPtr remove_spin(const ExprPtr& expr) {
         idx = make_spinfree(idx);
       }
     }
-    Tensor result(tensor.label(), bra(std::move(b)), ket(std::move(k)),
-                  tensor.aux(), tensor.symmetry(), tensor.braket_symmetry());
-    return std::make_shared<Tensor>(std::move(result));
+    return ex<Tensor>(tensor.label(), bra(std::move(b)), ket(std::move(k)),
+                      tensor.aux(), tensor.symmetry(),
+                      tensor.braket_symmetry());
   };
 
   auto remove_spin_from_product =
@@ -330,7 +329,7 @@ ExprPtr remove_spin(const ExprPtr& expr) {
           if (term->is<Tensor>()) {
             result->append(1, remove_spin_from_tensor(term->as<Tensor>()));
           } else if (term->is<Constant>() || term->is<Variable>()) {
-            result->append(1, term->clone());
+            result->append(1, term);
           } else {
             throw std::runtime_error(
                 "Invalid Expr type in remove_spin::remove_spin_from_product");
@@ -350,7 +349,7 @@ ExprPtr remove_spin(const ExprPtr& expr) {
     }
     return result;
   } else if (expr->is<Constant>() || expr->is<Variable>()) {
-    return expr->clone();
+    return expr;
   } else {
     throw std::runtime_error("Invalid Expr type in remove_spin");
   }
@@ -487,7 +486,7 @@ ExprPtr expand_antisymm(const ExprPtr& expr, bool skip_spinsymm) {
         temp.append(1, expand_antisymm(term->as<Tensor>(), skip_spinsymm),
                     Product::Flatten::No);
       } else if (term->is<Variable>() || term->is<Constant>()) {
-        temp.append(1, term->clone(), Product::Flatten::No);
+        temp.append(1, term, Product::Flatten::No);
       } else {
         throw std::runtime_error(
             "Invalid Expr type in expand_antisymm::expand_product");
@@ -539,7 +538,7 @@ container::svector<container::map<Index, Index>> A_maps(const Tensor& A) {
   return result;
 }
 
-ExprPtr expand_A_op(const Product& product) {
+ExprPtr expand_A_op(const ProductPtr& product) {
   bool has_A_operator = false;
 
   // Check A and build replacement map
@@ -557,7 +556,7 @@ ExprPtr expand_A_op(const Product& product) {
     }
   }
 
-  if (!has_A_operator) return std::make_shared<Product>(product);
+  if (!has_A_operator) return product;
 
   auto new_result = std::make_shared<Sum>();
   for (auto&& map : map_list) {
@@ -572,20 +571,20 @@ ExprPtr expand_A_op(const Product& product) {
       phase = ts_swap_counter_is_even<Index>() ? 1 : -1;
     }
 
-    Product new_product{};
-    new_product.scale(product.scalar());
+    ProductPtr new_product = std::make_shared<Product>();
+    new_product->scale(product->scalar());
     auto temp_product = remove_tensor(product, L"A");
     for (auto&& term : *temp_product) {
       if (term->is<Tensor>()) {
         auto new_tensor = term->as<Tensor>();
         new_tensor.transform_indices(map);
-        new_product.append(1, ex<Tensor>(new_tensor));
+        new_product->append(1, ex<Tensor>(new_tensor));
       } else {
-        new_product.append(1, term->clone());
+        new_product->append(1, term);
       }
     }
-    new_product.scale(phase);
-    new_result->append(ex<Product>(new_product));
+    new_product->scale(phase);
+    new_result->append(new_product);
   }  // map_list
 
   detail::reset_idx_tags(new_result);
@@ -593,16 +592,15 @@ ExprPtr expand_A_op(const Product& product) {
   return new_result;
 }
 
-ExprPtr symmetrize_expr(const Product& product) {
+ExprPtr symmetrize_expr(const ProductPtr& product) {
   auto result = std::make_shared<Sum>();
 
   // Assumes canonical sequence of tensors in the product
-  if (product.factor(0)->as<Tensor>().label() != L"A")
-    return std::make_shared<Product>(product);
+  if (product->factor(0)->as<Tensor>().label() != L"A") return product;
 
   // CHECK: A is present and >1 particle
   // GENERATE S tensor
-  auto A_tensor = product.factor(0)->as<Tensor>();
+  auto A_tensor = product->factor(0)->as<Tensor>();
   assert(A_tensor.label() == L"A");
 
   auto A_is_nconserving = A_tensor.bra_rank() == A_tensor.ket_rank();
@@ -671,7 +669,7 @@ ExprPtr symmetrize_expr(const Product& product) {
   assert(!maps.empty());
   for (auto&& map : maps) {
     Product new_product{};
-    new_product.scale(product.scalar());
+    new_product.scale(product->scalar());
     new_product.append(get_phase(map), ex<Tensor>(S));
     auto temp_product = remove_tensor(product, L"A");
     for (auto&& term : *temp_product) {
@@ -680,7 +678,7 @@ ExprPtr symmetrize_expr(const Product& product) {
         new_tensor.transform_indices(map);
         new_product.append(1, ex<Tensor>(new_tensor));
       } else if (term->is<Constant>() || term->is<Variable>()) {
-        new_product.append(1, term->clone());
+        new_product.append(1, term);
       } else {
         throw std::runtime_error("Invalid Expr type in symmetrize_expr");
       }
@@ -695,7 +693,7 @@ ExprPtr symmetrize_expr(const ExprPtr& expr) {
     return expr;
 
   if (expr->is<Product>())
-    return symmetrize_expr(expr->as<Product>());
+    return symmetrize_expr(expr.as_shared_ptr<Product>());
   else if (expr->is<Sum>()) {
     auto result = std::make_shared<Sum>();
     for (auto&& summand : *expr) {
@@ -712,7 +710,7 @@ ExprPtr expand_A_op(const ExprPtr& expr) {
     return expr;
 
   if (expr->is<Product>())
-    return expand_A_op(expr->as<Product>());
+    return expand_A_op(expr.as_shared_ptr<Product>());
   else if (expr->is<Sum>()) {
     auto result = std::make_shared<Sum>();
     for (auto&& summand : *expr) {
@@ -748,7 +746,7 @@ container::svector<container::map<Index, Index>> P_maps(const Tensor& P) {
   return container::svector<container::map<Index, Index>>{idx_rep};
 }
 
-ExprPtr expand_P_op(const Product& product) {
+ExprPtr expand_P_op(const ProductPtr& product) {
   bool has_P_operator = false;
 
   // Check P and build a replacement map
@@ -756,7 +754,7 @@ ExprPtr expand_P_op(const Product& product) {
   container::svector<container::map<Index, Index>> map_list;
   for (auto& term : product) {
     if (term->is<Tensor>()) {
-      auto P = term->as<Tensor>();
+      const auto& P = term->as<Tensor>();
       if ((P.label() == L"P") && (P.bra_rank() > 1 || (P.ket_rank() > 1))) {
         has_P_operator = true;
         auto map = P_maps(P);
@@ -768,26 +766,26 @@ ExprPtr expand_P_op(const Product& product) {
     }
   }
 
-  if (!has_P_operator) return std::make_shared<Product>(product);
+  if (!has_P_operator) return product;
 
   auto result = std::make_shared<Sum>();
   for (auto&& map : map_list) {
-    Product new_product{};
-    new_product.scale(product.scalar());
+    ProductPtr new_product = std::make_shared<Product>();
+    new_product->scale(product->scalar());
     auto temp_product = remove_tensor(product, L"P");
     for (auto&& term : *temp_product) {
       if (term->is<Tensor>()) {
         auto new_tensor = term->as<Tensor>();
         new_tensor.transform_indices(map);
         new_tensor.reset_tags();
-        new_product.append(1, ex<Tensor>(new_tensor));
+        new_product->append(1, ex<Tensor>(new_tensor));
       } else if (term->is<Constant>() || term->is<Variable>()) {
-        new_product.append(1, term->clone());
+        new_product->append(1, term);
       } else {
         throw std::runtime_error("Invalid Expr type in expand_P_op");
       }
     }
-    result->append(ex<Product>(new_product));
+    result->append(new_product);
   }  // map_list
 
   return result;
@@ -797,7 +795,7 @@ ExprPtr expand_P_op(const ExprPtr& expr) {
   if (expr->is<Constant>() || expr->is<Variable>() || expr->is<Tensor>())
     return expr;
   else if (expr->is<Product>())
-    return expand_P_op(expr->as<Product>());
+    return expand_P_op(expr.as_shared_ptr<Product>());
   else if (expr->is<Sum>()) {
     auto result = std::make_shared<Sum>();
     for (auto& summand : *expr) {
@@ -846,40 +844,40 @@ ExprPtr S_maps(const ExprPtr& expr) {
   detail::reset_idx_tags(expr);
 
   // Lambda for applying S on products
-  auto expand_S_product = [](const Product& product) {
+  auto expand_S_product = [](const ProductPtr& product) -> ExprPtr {
     // check if S is present
-    if (!has_tensor(ex<Product>(product), L"S")) return ex<Product>(product);
+    if (!has_tensor(product, L"S")) return product;
 
     container::svector<container::map<Index, Index>> maps;
-    if (product.factor(0)->as<Tensor>().label() == L"S")
-      maps = S_replacement_maps(product.factor(0)->as<Tensor>());
+    if (product->factor(0)->as<Tensor>().label() == L"S")
+      maps = S_replacement_maps(product->factor(0)->as<Tensor>());
     assert(!maps.empty());
     Sum sum{};
     for (auto&& map : maps) {
-      Product new_product{};
-      new_product.scale(product.scalar());
+      ProductPtr new_product = std::make_shared<Product>();
+      new_product->scale(product->scalar());
       auto temp_product = remove_tensor(product, L"S").as_shared_ptr<Product>();
       for (auto&& term : temp_product) {
         if (term->is<Tensor>()) {
           auto new_tensor = term->as<Tensor>();
           new_tensor.transform_indices(map);
-          new_product.append(1, ex<Tensor>(new_tensor));
+          new_product->append(1, ex<Tensor>(new_tensor));
         } else {
-          new_product.append(1, term->clone());
+          new_product->append(1, term);
         }
       }
-      sum.append(ex<Product>(new_product));
+      sum.append(new_product);
     }
     ExprPtr result = std::make_shared<Sum>(sum);
     return result;
   };
 
   if (expr->is<Product>()) {
-    result->append(expand_S_product(expr->as<Product>()));
+    result->append(expand_S_product(expr.as_shared_ptr<Product>()));
   } else if (expr->is<Sum>()) {
     for (auto&& term : *expr) {
       if (term->is<Product>()) {
-        result->append(expand_S_product(term->as<Product>()));
+        result->append(expand_S_product(term.as_shared_ptr<Product>()));
       } else if (term->is<Tensor>() || term->is<Constant>() ||
                  expr->is<Variable>()) {
         result->append(term);
@@ -903,10 +901,10 @@ ExprPtr WK_biorthogonalization_filter(
   for (const auto& term : *expr) {
     if (!term->is<Product>()) continue;
 
-    auto product = term->as<Product>();
-    auto scalar = product.scalar();
+    auto product = term.as_shared_ptr<Product>();
+    auto scalar = product->scalar();
 
-    sequant::TensorNetworkV3 tn(product);
+    sequant::TensorNetworkV3 tn(*product);
     auto hash =
         tn.canonicalize_slots(TensorCanonicalizer::cardinal_tensor_labels())
             .hash_value();
@@ -1256,7 +1254,7 @@ ExprPtr swap_spin(const ExprPtr& expr) {
       if (t->is<Tensor>()) {
         result.append(1, swap_tensor(t->as<Tensor>()), Product::Flatten::No);
       } else if (t->is<Constant>() || t->is<Variable>()) {
-        result.append(1, t->clone(), Product::Flatten::No);
+        result.append(1, t, Product::Flatten::No);
       } else {
         throw std::runtime_error(
             "Invalid Expr type in swap_spin::swap_product");
@@ -1677,12 +1675,13 @@ ExprPtr spintrace(
   // This function is used to spin-trace a product terms with spin-specific
   // indices. It checks if all tensors can be expanded and spintraces individual
   // tensors by call to the spin_trace_tensor lambda.
-  auto spintrace_product = [&spintrace_tensor](const Product& product) {
-    Product spin_product{};
+  auto spintrace_product =
+      [&spintrace_tensor](const ProductPtr& product) -> ExprPtr {
+    ProductPtr spin_product = std::make_shared<Product>();
 
     // Check if all tensors in this product can be expanded
     // If NOT all tensors can be expanded, return zero
-    for (const ExprPtr& expr : product.factors()) {
+    for (const ExprPtr& expr : product->factors()) {
       if (expr.is<Tensor>()) {
         if (!can_expand(expr.as<Tensor>())) {
           return ex<Constant>(0);
@@ -1693,12 +1692,12 @@ ExprPtr spintrace(
       }
     }
 
-    spin_product.scale(product.scalar());
-    for (const ExprPtr& expr : product.factors()) {
+    spin_product->scale(product->scalar());
+    for (const ExprPtr& expr : product->factors()) {
       if (expr.is<Tensor>()) {
-        spin_product.append(1, spintrace_tensor(expr.as<Tensor>()));
+        spin_product->append(1, spintrace_tensor(expr.as<Tensor>()));
       } else if (expr.is<Variable>() || expr.is<Constant>()) {
-        spin_product.append(1, expr.clone());
+        spin_product->append(1, expr.clone());
       } else {
         // Would need some sort of recursion but it is not clear how that would
         // interact with other code in here yet so prefer to error instead.
@@ -1708,7 +1707,7 @@ ExprPtr spintrace(
       }
     }
 
-    ExprPtr result = std::make_shared<Product>(spin_product);
+    ExprPtr result = spin_product;
     expand(result);
     rapid_simplify(result);
     return result;
@@ -1717,9 +1716,8 @@ ExprPtr spintrace(
   // Most important lambda of this function
   auto trace_product = [&ext_index_groups, &spintrace_tensor,
                         &spintrace_product,
-                        spinfree_index_spaces](const Product& expression) {
-    ExprPtr expr = std::make_shared<Product>(expression);
-
+                        spinfree_index_spaces](const ProductPtr& product) {
+    ExprPtr expr = product->clone();
     // List of all indices in the expression
     container::set<Index, Index::LabelCompare> grand_idxlist = index_list(expr);
 
@@ -1788,7 +1786,7 @@ ExprPtr spintrace(
         auto st_expr = spintrace_tensor(spin_expr->as<Tensor>());
         result->append(spinfree_index_spaces ? remove_spin(st_expr) : st_expr);
       } else if (spin_expr->is<Product>()) {
-        auto st_expr = spintrace_product(spin_expr->as<Product>());
+        auto st_expr = spintrace_product(spin_expr.as_shared_ptr<Product>());
         if (!st_expr->is<Constant>() || st_expr->as<Constant>().value() != 0) {
           result->append(spinfree_index_spaces ? remove_spin(st_expr)
                                                : st_expr);
@@ -1799,7 +1797,7 @@ ExprPtr spintrace(
           if (summand->is<Tensor>())
             st_expr.append(spintrace_tensor(summand->as<Tensor>()));
           else if (summand->is<Product>())
-            st_expr.append(spintrace_product(summand->as<Product>()));
+            st_expr.append(spintrace_product(summand.as_shared_ptr<Product>()));
           else {
             st_expr.append(summand);
           }
@@ -1822,15 +1820,16 @@ ExprPtr spintrace(
 
   ExprPtr result;
   if (expr->is<Product>()) {
-    result = trace_product(expr->as<Product>());
+    result = trace_product(expr.as_shared_ptr<Product>());
   } else if ((expr->is<Sum>())) {
     auto result_sum = std::make_shared<Sum>();
     for (auto&& term : *expr) {
       if (term->is<Product>())
-        result_sum->append(trace_product(term->as<Product>()));
+        result_sum->append(trace_product(term.as_shared_ptr<Product>()));
       else if (term->is<Tensor>()) {
         auto term_as_product = ex<Constant>(1) * term;
-        result_sum->append(trace_product(term_as_product->as<Product>()));
+        result_sum->append(
+            trace_product(term_as_product.as_shared_ptr<Product>()));
       } else
         result_sum->append(term);
       result = result_sum;
@@ -1959,7 +1958,7 @@ ExprPtr factorize_S(const ExprPtr& expression,
                   1, transform_tensor(t->as<Tensor>(), replacement_map),
                   Product::Flatten::No);
             } else if (t->is<Constant>() || t->is<Variable>()) {
-              S_product.append(1, t->clone(), Product::Flatten::No);
+              S_product.append(1, t, Product::Flatten::No);
             } else {
               throw std::runtime_error("Invalid Expr in factorize_S");
             }
@@ -2063,7 +2062,7 @@ ExprPtr factorize_S(const ExprPtr& expression,
                   1, transform_tensor(t->as<Tensor>(), replacement_map),
                   Product::Flatten::No);
             } else if (t->is<Constant>() || t->is<Variable>()) {
-              S_product.append(1, t->clone(), Product::Flatten::No);
+              S_product.append(1, t, Product::Flatten::No);
             } else {
               throw std::runtime_error("Invalid Expr type in factorize_S");
             }

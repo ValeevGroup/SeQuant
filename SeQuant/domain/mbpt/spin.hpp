@@ -172,12 +172,12 @@ container::svector<container::map<Index, Index>> A_maps(const Tensor& A);
 /// @brief Expand a product containing the antisymmetrization (A) tensor
 /// @param product a Product that may or may not include the antisymmetrizer
 /// @return an ExprPtr containing sum of expanded terms if A is present
-ExprPtr expand_A_op(const Product& product);
+ExprPtr expand_A_op(const ProductPtr& product);
 
 /// @brief Write expression in terms of Symmetrizer (S operator)
 /// @param product
 /// @return expression pointer with Symmstrizer operator
-ExprPtr symmetrize_expr(const Product& product);
+ExprPtr symmetrize_expr(const ProductPtr& product);
 
 /// @brief Expand an expression containing the antisymmetrization (A) tensor
 /// @param expr any ExprPtr
@@ -198,7 +198,7 @@ container::svector<container::map<Index, Index>> P_maps(const Tensor& P);
 /// @brief Expand a product containing the particle permutation (P) tensor
 /// @param product a Product that may or may not contain P tensor
 /// @return an ExprPtr containing sum of expanded terms if P is present
-ExprPtr expand_P_op(const Product& product);
+ExprPtr expand_P_op(const ProductPtr& product);
 
 /// @brief Expand an expression containing the particle permutation (P) tensor
 /// @param expr any ExprPtr
