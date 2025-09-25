@@ -266,6 +266,7 @@ set(SeQuant_src
         SeQuant/core/export/reordering_context.cpp
         SeQuant/core/export/reordering_context.hpp
         SeQuant/core/export/text_generator.hpp
+        SeQuant/core/expressions/abstract_tensor.cpp
         SeQuant/core/expressions/abstract_tensor.hpp
         SeQuant/core/expressions/expr.cpp
         SeQuant/core/expressions/expr.hpp

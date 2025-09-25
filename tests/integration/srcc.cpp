@@ -166,7 +166,7 @@ class compute_cceqvec {
           // Remove S operator
           for (auto& term : eqvec[R]->expr()) {
             if (term->is<Product>())
-              term = remove_tensor(term->as<Product>(), L"S");
+              term = remove_tensor(term.as_shared_ptr<Product>(), L"S");
           }
 
           // Biorthogonal transformation
