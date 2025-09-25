@@ -372,4 +372,60 @@ TEST_CASE("utilities", "[utilities]") {
       }
     }
   }
+
+  SECTION("replace") {
+    SECTION("Expr") {
+      for (const auto& [input_str, target_str, replacement_str, expected_str] :
+           std::vector<std::tuple<std::wstring, std::wstring, std::wstring,
+                                  std::wstring>>{
+               {L"Var", L"t{a1;i1}", L"Test", L"Var"},
+               {L"Var", L"Var", L"Test", L"Test"},
+               {L"t{a1;i1} Var", L"Var", L"Test", L"t{a1;i1} Test"},
+               {L"t{a1;i1} Var", L"Var", L"K{;;p1,p2}", L"t{a1;i1} K{;;p1,p2}"},
+               {L"t{a1;i1} Var", L"t{a1;i1}", L"K{p1} - 1", L"(K{p1} - 1) Var"},
+           }) {
+        CAPTURE(toUtf8(input_str));
+        CAPTURE(toUtf8(target_str));
+        CAPTURE(toUtf8(replacement_str));
+        CAPTURE(toUtf8(expected_str));
+
+        ExprPtr input = parse_expr(input_str);
+        const ExprPtr target = parse_expr(target_str);
+        const ExprPtr replacement = parse_expr(replacement_str);
+
+        replace(input, target, replacement);
+
+        REQUIRE_THAT(input, EquivalentTo(expected_str));
+      }
+    }
+    SECTION("ResultExpr") {
+      // The big difference to replacing on plain expressions is that the result
+      // (indices) are updated as well (if needed)
+      for (const auto& [input_str, target_str, replacement_str, expected_str] :
+           std::vector<std::tuple<std::wstring, std::wstring, std::wstring,
+                                  std::wstring>>{
+               {L"R = Var", L"t{a1;i1}", L"Test", L"R = Var"},
+               {L"R = Var", L"Var", L"Test", L"R = Test"},
+               {L"R{a1;i1} = t{a1;i1} Var", L"Var", L"Test",
+                L"R{a1;i1} = t{a1;i1} Test"},
+               {L"R{a1;i1} = t{a1;i1} Var", L"Var", L"K{;;p1,p2}",
+                L"R{a1;i1;p1,p2} = t{a1;i1} K{;;p1,p2}"},
+               {L"R{a1;i1} = t{a1;i1} Var", L"t{a1;i1}", L"K{p1} - 1",
+                L"R{p1} = (K{p1} - 1) Var"},
+           }) {
+        CAPTURE(toUtf8(input_str));
+        CAPTURE(toUtf8(target_str));
+        CAPTURE(toUtf8(replacement_str));
+        CAPTURE(toUtf8(expected_str));
+
+        ResultExpr input = parse_result_expr(input_str);
+        const ExprPtr target = parse_expr(target_str);
+        const ExprPtr replacement = parse_expr(replacement_str);
+
+        replace(input, target, replacement);
+
+        REQUIRE_THAT(input, EquivalentTo(expected_str));
+      }
+    }
+  }
 }
