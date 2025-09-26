@@ -223,6 +223,28 @@ void generateITF(const json &blocks, std::string_view out_file,
         result.set_label(toUtf16(current_result.at("name").get<std::string>()));
       }
 
+      if (current_result.contains("replace")) {
+        for (const nlohmann::json &sub : current_result.at("substitute")) {
+          ExprPtr target =
+              parse_expr(toUtf16(sub.at("target").get<std::string>()));
+          ExprPtr replacement =
+              parse_expr(toUtf16(sub.at("replacement").get<std::string>()));
+
+          spdlog::debug("Replacing {} -> {}", target, replacement);
+
+          std::string equality_method =
+              sub.value("tensor_equality", "identity");
+          if (equality_method == "identity") {
+            replace(result, target, replacement);
+          } else if (equality_method == "block") {
+            replace<TensorBlockEqualComparator>(result, target, replacement);
+          } else {
+            throw std::runtime_error("Unknown tensor_equality choice '" +
+                                     equality_method + "'");
+          }
+        }
+      }
+
       spdlog::debug("Initial equation is:\n{}", result);
 
       ProcessingOptions options =
