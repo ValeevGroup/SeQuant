@@ -28,7 +28,7 @@ inline ExprPtr sim_tr(const ExprPtr& A, const ExprPtr& B,
                       size_t commutator_rank, bool unitary = false) {
   assert(commutator_rank >= 1 && "Truncation order must be at least 1");
 
-  auto expr = A.clone();  // work on a copy
+  auto expr = A.clone();  // work on a copy of A
 
   // takes a product or an operator and applies the similarity transformation
   auto transform = [&B, commutator_rank, unitary](const ExprPtr& e) {
@@ -77,7 +77,8 @@ inline ExprPtr sim_tr(const ExprPtr& A, const ExprPtr& B,
     return expr;
   else
     throw std::invalid_argument(
-        "mbpt::sim_tr(expr): Unsupported expression type");
+        "mbpt::sim_tr(A, B, commutator_rank, unitary): Unsupported expression "
+        "type");
 }
 
 }  // namespace sequant::mbpt
