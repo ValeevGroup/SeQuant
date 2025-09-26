@@ -1204,11 +1204,40 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
       edges.emplace_back(std::make_pair(index_vertex, proto_vertex));
     }
 
+    // hyperedges must involve aux indices
+#ifndef NDEBUG
+    if (current_edge.vertex_count() > 2) {
+      std::size_t nbra = 0;
+      std::size_t nket = 0;
+      std::size_t naux = 0;
+      for (std::size_t i = 0; i < current_edge.vertex_count(); ++i) {
+        const Vertex &vertex = current_edge.vertex(i);
+        switch (vertex.getOrigin()) {
+          case Origin::Bra:
+            ++nbra;
+            break;
+          case Origin::Ket:
+            ++nket;
+            break;
+          case Origin::Aux:
+            ++naux;
+            break;
+        }
+      }
+      // if braket symmetry == BraKetSymmetry::Symm there is no distinction
+      // between bra and ket, but still can have at most 2 of them total if
+      // braket symmetry != BraKetSymmetry::Symm at most 1 bra and 1 ket can
+      // connect to aux
+      assert(get_default_context().braket_symmetry() == BraKetSymmetry::Symm
+                 ? (nbra + nket <= 2)
+                 : (nbra <= 1 && nket <= 1));
+      assert(naux >= 1);  // at least 1 aux
+    }
+#endif
+
     // Connect index to the tensor(s) it is connected to
     for (std::size_t i = 0; i < current_edge.vertex_count(); ++i) {
       const Vertex &vertex = current_edge.vertex(i);
-      if (i >= 2)  // hyperedges can only occur between aux indices
-        assert(vertex.getOrigin() == Origin::Aux);
 
       assert(vertex.getTerminalIndex() < tensor_vertices.size());
       assert(tensor_vertices[vertex.getTerminalIndex()] !=
@@ -1446,6 +1475,14 @@ void TensorNetworkV3::init_edges() {
   // ... and add pure protoindices to the external indices
   ext_indices_.reserve(ext_indices_.size() + pure_proto_indices_.size());
   ext_indices_.insert(pure_proto_indices_.begin(), pure_proto_indices_.end());
+
+  if (Logger::instance().tensor_network) {
+    sequant::wprintf("TNV3: computed external indices = ");
+    ranges::for_each(ext_indices_, [](auto &index) {
+      sequant::wprintf(index.full_label(), " ");
+    });
+    sequant::wprintf("\n");
+  }
 
   have_edges_ = true;
 }

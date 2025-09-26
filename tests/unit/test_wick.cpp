@@ -1297,8 +1297,8 @@ TEST_CASE("wick", "[algorithms][wick]") {
       if (connected_only) wick.set_nop_connections({{1, 2}, {1, 3}});
       auto wick_result = wick.compute();
 
-      std::wcout << "P3*H2*T2*T3 = " << to_latex_align(wick_result, 20)
-                 << std::endl;
+      // std::wcout << "P3*H2*T2*T3 = " << to_latex_align(wick_result, 20)
+      //            << std::endl;
       REQUIRE(wick_result->is<Sum>());
       REQUIRE(
           wick_result->size() ==
@@ -1306,79 +1306,104 @@ TEST_CASE("wick", "[algorithms][wick]") {
     }
 #endif
 
-    // example with "diagonal" operator from Nick Mayhall
-    {
-      auto _ = set_scoped_default_context(
-          {.index_space_registry_shared_ptr = mbpt::make_min_sr_spaces(),
-           .vacuum = Vacuum::SingleProduct,
-           .braket_symmetry = BraKetSymmetry::Symm,
-           .spbasis = SPBasis::Spinor});
+    // misc examples with diagonal operators
+    SECTION("diagonals") {
+      // example with "diagonal" operator from Nick Mayhall
+      {
+        // sequence of individual ops
+        const auto ops = {fann("p_1"), fcre("p_2"), fcre("p_3"),
+                          fann("p_5"), fann("p_4"), fcre("p_1")};
+        REQUIRE_NOTHROW(FWickTheorem(ops));
+        FWickTheorem w(ops);
+        REQUIRE_NOTHROW(w.full_contractions(false).compute());
+        auto wresult = FWickTheorem{ops}.full_contractions(false).compute();
 
-      // sequence of individual ops
-      const auto ops = {fann("p_1"), fcre("p_2"), fcre("p_3"),
-                        fann("p_5"), fann("p_4"), fcre("p_1")};
-      REQUIRE_NOTHROW(FWickTheorem(ops));
-      FWickTheorem w(ops);
-      REQUIRE_NOTHROW(w.full_contractions(false).compute());
-      auto wresult = FWickTheorem{ops}.full_contractions(false).compute();
+        auto result0 =
+            wresult * ex<Constant>(ratio(1, 4)) *
+            ex<Tensor>(L"v", bra{L"p_2", L"p_3"}, ket{L"p_4", L"p_5"},
+                       Symmetry::Antisymm) *
+            ex<Tensor>(L"w", bra{}, ket{}, aux{L"p_1"}, Symmetry::Nonsymm);
+        // std::wcout << "before expand: op = " << to_latex(op) << std::endl;
+        expand(result0);
+        // std::wcout << "after expand: op = " << to_latex(op) << std::endl;
+        w.reduce(result0);
+        // std::wcout << "after reduce: op = " << to_latex(op) << std::endl;
+        simplify(result0, {{.named_indices = IndexList{}}});
+        // sequant::wprintf(L"after simplify: op = ", to_latex_align(result0,
+        // 3), L"\n");
 
-      auto result0 =
-          wresult * ex<Constant>(ratio(1, 4)) *
-          ex<Tensor>(L"v", bra{L"p_2", L"p_3"}, ket{L"p_4", L"p_5"},
-                     Symmetry::Antisymm) *
-          ex<Tensor>(L"w", bra{}, ket{}, aux{L"p_1"}, Symmetry::Nonsymm);
-      // std::wcout << "before expand: op = " << to_latex(op) << std::endl;
-      expand(result0);
-      // std::wcout << "after expand: op = " << to_latex(op) << std::endl;
-      w.reduce(result0);
-      // std::wcout << "after reduce: op = " << to_latex(op) << std::endl;
-      simplify(result0, {{.named_indices = IndexList{}}});
-      // sequant::wprintf(L"after simplify: op = ", to_latex_align(result0, 3),
-      // L"\n");
+        auto Ld_H2_L =
+            ex<Constant>(ratio(1, 4)) *
+            ex<Tensor>(L"v", bra{L"p_2", L"p_3"}, ket{L"p_4", L"p_5"},
+                       Symmetry::Antisymm) *
+            ex<Tensor>(L"w", bra{}, ket{}, aux{L"p_1"}, Symmetry::Nonsymm) *
+            fannx("p_1") * fcrex("p_2") * fcrex("p_3") * fannx("p_5") *
+            fannx("p_4") * fcrex("p_1");
+        auto result1 = FWickTheorem{Ld_H2_L}.full_contractions(false).compute();
+        simplify(result1, {{.named_indices = IndexList{}}});
+        // sequant::wprintf(to_latex_align(Ld_H2_L), L" = \n",
+        // to_latex_align(result1, 0, 2), L"\n");
+        REQUIRE(result0 == result1);
 
-      auto Ld_H2_L =
-          ex<Constant>(ratio(1, 4)) *
-          ex<Tensor>(L"v", bra{L"p_2", L"p_3"}, ket{L"p_4", L"p_5"},
-                     Symmetry::Antisymm) *
-          ex<Tensor>(L"w", bra{}, ket{}, aux{L"p_1"}, Symmetry::Nonsymm) *
-          fannx("p_1") * fcrex("p_2") * fcrex("p_3") * fannx("p_5") *
-          fannx("p_4") * fcrex("p_1");
-      auto result1 = FWickTheorem{Ld_H2_L}.full_contractions(false).compute();
-      simplify(result1, {{.named_indices = IndexList{}}});
-      // sequant::wprintf(to_latex_align(Ld_H2_L), L" = \n",
-      // to_latex_align(result1, 0, 2), L"\n");
-      REQUIRE(result0 == result1);
+        auto Ld_H2N_L =
+            ex<Constant>(ratio(1, 4)) *
+            ex<Tensor>(L"v", bra{L"p_2", L"p_3"}, ket{L"p_4", L"p_5"},
+                       Symmetry::Antisymm) *
+            ex<Tensor>(L"w", bra{}, ket{}, aux{L"p_1"}, Symmetry::Nonsymm) *
+            fannx("p_1") *
+            ex<FNOperator>(cre({L"p_2", L"p_3"}), ann({L"p_4", L"p_5"})) *
+            fcrex("p_1");
+        auto result2 =
+            FWickTheorem{Ld_H2N_L}.full_contractions(false).compute();
+        simplify(result2, {{.method = CanonicalizationMethod::Complete,
+                            .named_indices = IndexList{}}});
+        // sequant::wprintf(to_latex_align(Ld_H2N_L), L" = \n",
+        //                  to_latex_align(result2, 0, 2), L"\n");
+        REQUIRE(result2.as<Sum>().size() == 5);
+        REQUIRE(
+            result2.to_latex() ==
+            L"{ \\bigl( - "
+            L"{{{\\frac{1}{4}}}{\\tilde{a}^{{p_3}{p_4}{p_5}}_{{p_1}{p_2}{p_5}"
+            L"}}{\\bar{v}^{{p_1}{p_2}}_{{p_3}{p_4}}}{w^{}_{}[{p_5}]}} - "
+            L"{{{\\frac{1}{2}}}{\\tilde{a}^{{p_2}{p_3}}_{{e_1}{p_1}}}{\\bar{"
+            L"v}^{{e_1}{p_1}}_{{p_2}{p_3}}}{w^{}_{}[{e_1}]}} + "
+            L"{{\\tilde{a}^{{p_2}}_{{p_1}}}{\\bar{v}^{{e_1}{p_1}}_{{e_1}{p_2}"
+            L"}}{w^{}_{}[{e_1}]}} - "
+            L"{{{\\frac{1}{2}}}{\\tilde{a}^{{e_1}{p_3}}_{{p_1}{p_2}}}{\\bar{"
+            L"v}^{{p_1}{p_2}}_{{e_1}{p_3}}}{w^{}_{}[{e_1}]}} + "
+            L"{{{\\frac{1}{4}}}{\\tilde{a}^{{p_3}{p_4}}_{{p_1}{p_2}}}{\\bar{"
+            L"v}^{{p_1}{p_2}}_{{p_3}{p_4}}}{w^{}_{}[{e_1}]}}\\bigr) }");
+      }
 
-      auto Ld_H2N_L =
-          ex<Constant>(ratio(1, 4)) *
-          ex<Tensor>(L"v", bra{L"p_2", L"p_3"}, ket{L"p_4", L"p_5"},
-                     Symmetry::Antisymm) *
-          ex<Tensor>(L"w", bra{}, ket{}, aux{L"p_1"}, Symmetry::Nonsymm) *
-          fannx("p_1") *
-          ex<FNOperator>(cre({L"p_2", L"p_3"}), ann({L"p_4", L"p_5"})) *
-          fcrex("p_1");
-      auto result2 = FWickTheorem{Ld_H2N_L}.full_contractions(false).compute();
-      simplify(result2, {{.method = CanonicalizationMethod::Complete,
-                          .named_indices = IndexList{}}});
-      sequant::wprintf(to_latex_align(Ld_H2N_L), L" = \n",
-                       to_latex_align(result2, 0, 2), L"\n");
-      REQUIRE(result2.as<Sum>().size() == 5);
-      REQUIRE(result2.to_latex() ==
-              L"{ \\bigl( - "
-              L"{{{\\frac{1}{4}}}{\\tensor*{\\tilde{a}}{*^{p_3}_{p_1}*^{p_4}_{"
-              L"p_2}*^{p_5}_{p_5}}}{\\tensor*{\\bar{v}}{*^{p_3}_{p_1}*^{p_4}_{"
-              L"p_2}}}{\\tensor*{w}{}[{p_5}]}} + "
-              L"{{\\tensor*{\\tilde{a}}{*^{p_2}_{p_1}}}{\\tensor*{\\bar{v}}{*^{"
-              L"a_1}_{a_1}*^{p_2}_{p_1}}}{\\tensor*{w}{}[{a_1}]}} - "
-              L"{{{\\frac{1}{2}}}{\\tensor*{\\tilde{a}}{*^{p_2}_{a_1}*^{p_3}_{"
-              L"p_1}}}{\\tensor*{\\bar{v}}{*^{a_1}_{p_2}*^{p_1}_{p_3}}}{"
-              L"\\tensor*{w}{}[{a_1}]}} + "
-              L"{{{\\frac{1}{4}}}{\\tensor*{\\tilde{a}}{*^{p_3}_{p_1}*^{p_4}_{"
-              L"p_2}}}{\\tensor*{\\bar{v}}{*^{p_1}_{p_3}*^{p_2}_{p_4}}}{"
-              L"\\tensor*{w}{}[{a_1}]}} - "
-              L"{{{\\frac{1}{2}}}{\\tensor*{\\tilde{a}}{*^{a_1}_{p_1}*^{p_3}_{"
-              L"p_2}}}{\\tensor*{\\bar{v}}{*^{a_1}_{p_1}*^{p_3}_{p_2}}}{"
-              L"\\tensor*{w}{}[{a_1}]}}\\bigr) }");
+      // simplified example with "diagonal" operator from the paper, inspired by
+      // the last example
+      {
+        auto _ = set_scoped_default_context(
+            get_default_context().clone().set(mbpt::make_min_mr_spaces()));
+
+        auto input =
+            fannx(Index{"p_1", {L"i_1"}}) *
+            (ex<Tensor>(L"h", bra{}, ket{}, aux{L"p_3"}, Symmetry::Nonsymm) *
+             ex<FNOperator>(cre({L"p_3"}), ann({L"p_3"}))) *
+            fcrex(Index{"p_2", {L"i_2"}});
+        auto result = FWickTheorem{input}.full_contractions(false).compute();
+        simplify(result);
+        REQUIRE(result.as<Sum>().size() == 5);
+
+        auto expected = parse_expr(
+            "- h{;;p_1} * ã{p_1<i_1>,p_1;p_2<i_2>,p_1} "
+            "+ h{;;p_1} * δ{p_1<i_1>;A_1<i_1>} * δ{A_2<i_2>;p_2<i_2>} * "
+            "ã{p_1;p_1} * s{A_1<i_1>;A_2<i_2>} "
+            "- h{;;A_1} * δ{p_1<i_1>;A_2<i_1>} * s{A_2<i_1>;A_1} * "
+            "ã{A_1;p_2<i_2>} "
+            "- h{;;A_1} * δ{A_2<i_2>;p_2<i_2>} * ã{p_1<i_1>;A_1} * "
+            "s{A_1;A_2<i_2>} "
+            "+ h{;;A_1} * δ{p_1<i_1>;A_2<i_1>} * δ{A_3<i_2>;p_2<i_2>} * "
+            "s{A_2<i_1>;A_1} * s{A_1;A_3<i_2>} ");
+        simplify(expected);
+
+        REQUIRE(result == expected);
+      }
     }
   }
 }

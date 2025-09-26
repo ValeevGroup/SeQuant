@@ -20,9 +20,7 @@
 #include <string>
 #include <vector>
 
-namespace sequant {
-
-namespace mbpt {
+namespace sequant::mbpt {
 
 // Spin is a scoped enum, hence not implicitly convertible to
 // QuantumNumbersAttr::bitset_t
@@ -103,8 +101,6 @@ std::wstring spinannotation_replacе(WS&& label, Spin s) {
   return spinannotation_add(label_sf, s);
 }
 
-}  // namespace mbpt
-
 // make alpha-spin idx
 [[nodiscard]] Index make_spinalpha(const Index& idx);
 
@@ -167,39 +163,21 @@ ExprPtr expand_antisymm(const Tensor& tensor, bool skip_spinsymm = false);
 /// @return an expression pointer with expanded tensors as a sum
 ExprPtr expand_antisymm(const ExprPtr& expr, bool skip_spinsymm = false);
 
-/// @brief Check if a tensor with a certain label is present in an expression
-/// @param expr input expression
-/// @param label tensor label to find in the expression
-/// @return true if tensor with given label is found
-bool has_tensor(const ExprPtr& expr, std::wstring label);
-
 /// @brief Generates a vector of replacement maps for antisymmetrization (A)
 /// tensor
 /// @param A An antisymmetrizer tensor (A) (with > 2 particle indices)
 /// @return Vector of replacement maps
 container::svector<container::map<Index, Index>> A_maps(const Tensor& A);
 
-/// @brief Removes tensor with a certain label from product
-/// @param product A product expression
-/// @param label Label of the tensor to remove
-/// @return ExprPtr with the tensor removed
-ExprPtr remove_tensor(const Product& product, std::wstring label);
-
-/// @brief Removes tensor with a certain label from an expression
-/// @param expr An expression pointer
-/// @param label Label of the tensor to remove
-/// @return ExprPtr with the tensor removed
-ExprPtr remove_tensor(const ExprPtr& expr, std::wstring label);
-
 /// @brief Expand a product containing the antisymmetrization (A) tensor
 /// @param product a Product that may or may not include the antisymmetrizer
 /// @return an ExprPtr containing sum of expanded terms if A is present
-ExprPtr expand_A_op(const Product& product);
+ExprPtr expand_A_op(const ProductPtr& product);
 
 /// @brief Write expression in terms of Symmetrizer (S operator)
 /// @param product
 /// @return expression pointer with Symmstrizer operator
-ExprPtr symmetrize_expr(const Product& product);
+ExprPtr symmetrize_expr(const ProductPtr& product);
 
 /// @brief Expand an expression containing the antisymmetrization (A) tensor
 /// @param expr any ExprPtr
@@ -220,7 +198,7 @@ container::svector<container::map<Index, Index>> P_maps(const Tensor& P);
 /// @brief Expand a product containing the particle permutation (P) tensor
 /// @param product a Product that may or may not contain P tensor
 /// @return an ExprPtr containing sum of expanded terms if P is present
-ExprPtr expand_P_op(const Product& product);
+ExprPtr expand_P_op(const ProductPtr& product);
 
 /// @brief Expand an expression containing the particle permutation (P) tensor
 /// @param expr any ExprPtr
@@ -235,8 +213,9 @@ ExprPtr S_maps(const ExprPtr& expr);
 
 /// @brief filters out the nonunique terms in Wang-Knizia biorthogonalization
 
-/// WK biorthogonalization rewrites biorthogonal expressions as a "cleanup"
-/// projector applied to the biorothogonal expressions where out of each
+/// WK biorthogonalization rewrites biorthogonal expressions as a projector
+/// onto non-null-space (NNS)
+/// applied to the biorothogonal expressions where out of each
 /// group of terms related by permutation of external indices
 /// those with the largest coefficients are selected.
 /// This function performs the selection by forming groups of terms that
@@ -283,7 +262,7 @@ container::svector<ResultExpr> closed_shell_spintrace(
 enum class BiorthogonalizationMethod {
   /// standard biorthogonalization method
   V1,
-  /// improved Wang-Knizia biorthogonalization (DOI 10.48550/arXiv.1805.00565), with factored out "cleanup" operator (expressed as a linear combination of permutations)
+  /// improved Wang-Knizia biorthogonalization (DOI 10.48550/arXiv.1805.00565), with factored out the Non-Null-Space (NNS) projector (expressed as a linear combination of permutations)
   V2
 };
 // clang-format on
@@ -312,8 +291,8 @@ struct ClosedShellCCSpintraceOptions {
 /// - apply the particle symmetrizer and simplify
 ///
 /// The V2 method produces an expression that becomes equivalent that of V1 by
-/// application of if the biorthogonal cleanup (particular linear combination of
-/// permutation operators) is applied. The biorthogonal cleanup should be
+/// application of if the biorthogonal NNS projector (particular linear combination of
+/// permutation operators) is applied. The biorthogonal NNS projection should be
 /// performed numerically.
 /// @warning the antisymmetrizer is assumed to be at the front of each tensor
 /// network, hence must use "complete" canonicalization to produce the input expression.
@@ -434,6 +413,6 @@ ExprPtr factorize_S(const ExprPtr& expression,
                     std::initializer_list<IndexList> ext_index_groups,
                     bool fast_method = true);
 
-}  // namespace sequant
+}  // namespace sequant::mbpt
 
 #endif  // SEQUANT_DOMAIN_MBPT_SPIN_HPP

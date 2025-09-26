@@ -238,8 +238,6 @@ set(SeQuant_src
         SeQuant/core/attr.hpp
         SeQuant/core/binary_node.hpp
         SeQuant/core/bitset.hpp
-        SeQuant/core/biorthogonalization.cpp
-        SeQuant/core/biorthogonalization.hpp
         SeQuant/core/bliss.hpp
         SeQuant/core/complex.hpp
         SeQuant/core/container.hpp
@@ -266,6 +264,7 @@ set(SeQuant_src
         SeQuant/core/export/reordering_context.cpp
         SeQuant/core/export/reordering_context.hpp
         SeQuant/core/export/text_generator.hpp
+        SeQuant/core/expressions/abstract_tensor.cpp
         SeQuant/core/expressions/abstract_tensor.hpp
         SeQuant/core/expressions/expr.cpp
         SeQuant/core/expressions/expr.hpp
@@ -345,6 +344,8 @@ set(SeQuant_src
         SeQuant/core/wstring.hpp
         SeQuant/domain/mbpt/antisymmetrizer.cpp
         SeQuant/domain/mbpt/antisymmetrizer.hpp
+        SeQuant/domain/mbpt/biorthogonalization.cpp
+        SeQuant/domain/mbpt/biorthogonalization.hpp
         SeQuant/domain/mbpt/context.cpp
         SeQuant/domain/mbpt/context.hpp
         SeQuant/domain/mbpt/convention.cpp
@@ -390,7 +391,7 @@ if (NOT TARGET Eigen3::Eigen)
 endif()
 if (TARGET Eigen3::Eigen)
     set(SEQUANT_HAS_EIGEN ON)
-    endif()
+endif()
 
 if (TARGET tiledarray)
     set(SEQUANT_HAS_TILEDARRAY ON)

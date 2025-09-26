@@ -320,11 +320,11 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
           ->get<TA::TArrayD>();
     };
 
-    auto eval_biorthogonal_cleanup = [&yield_](
-                                         sequant::ExprPtr const& expr,
-                                         std::string const& target_labels) {
-      return evaluate_biorthogonal_cleanup(eval_node(expr), target_labels,
-                                           yield_)
+    auto eval_biorthogonal_nns_project = [&yield_](
+                                             sequant::ExprPtr const& expr,
+                                             std::string const& target_labels) {
+      return evaluate_biorthogonal_nns_project(eval_node(expr), target_labels,
+                                               yield_)
           ->get<TA::TArrayD>();
     };
 
@@ -511,7 +511,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
     SECTION("Biorthogonal Cleanup") {
       // low-rank residuals: skip cleanup
       auto expr1 = parse_antisymm(L"R_{a1, a2}^{i1, i2}");
-      auto eval1 = eval_biorthogonal_cleanup(expr1, "a_1,a_2,i_1,i_2");
+      auto eval1 = eval_biorthogonal_nns_project(expr1, "a_1,a_2,i_1,i_2");
       auto const& arr1 = yield(L"R{a1,a2;i1,i2}");
 
       auto man1 = TArrayD{};
@@ -526,7 +526,8 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
       // high-rank residuals: cleanup applies:
       // result = identity - (1/ket_rank!) * sum_of_ket_permutations
       auto expr2 = parse_antisymm(L"R_{a1, a2, a3}^{i1, i2, i3}");
-      auto eval2 = eval_biorthogonal_cleanup(expr2, "a_1,a_2,a_3,i_1,i_2,i_3");
+      auto eval2 =
+          eval_biorthogonal_nns_project(expr2, "a_1,a_2,a_3,i_1,i_2,i_3");
       auto const& arr2 = yield(L"R{a1,a2,a3;i1,i2,i3}");
 
       auto man2 = TArrayD{};

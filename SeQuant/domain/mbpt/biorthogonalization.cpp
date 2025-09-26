@@ -1,4 +1,5 @@
-#include <SeQuant/core/biorthogonalization.hpp>
+#include <SeQuant/domain/mbpt/biorthogonalization.hpp>
+
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
