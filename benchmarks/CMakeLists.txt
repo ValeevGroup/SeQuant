@@ -17,7 +17,13 @@ add_executable(sequant_benchmarks
 set_target_properties(sequant_benchmarks PROPERTIES UNITY_BUILD OFF)
 
 target_link_libraries(sequant_benchmarks
-	PRIVATE
-		benchmark::benchmark
-		SeQuant::SeQuant
+        PRIVATE
+        benchmark::benchmark
+        SeQuant::SeQuant
+)
+
+# benchmark target to just run cc
+add_custom_target(sequant_benchmark_cc
+        COMMAND sequant_benchmarks --benchmark_filter="cc_full"
+        DEPENDS sequant_benchmarks
 )
