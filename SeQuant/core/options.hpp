@@ -5,11 +5,13 @@
 #ifndef SEQUANT_CORE_OPTIONS_HPP
 #define SEQUANT_CORE_OPTIONS_HPP
 
+#include <SeQuant/core/index.hpp>
+
+#include <optional>
 #include <string>
+#include <vector>
 
 namespace sequant {
-
-class Index;
 
 /// canonicalization methods
 enum class CanonicalizationMethod {
@@ -47,7 +49,7 @@ struct CanonicalizeOptions {
   /// specifies named indices; by default all indices that appear only once are
   /// deduced to be named, but this may be misleading if e.g. single
   /// summed-over dummy index appears in an expression
-  std::optional<std::initializer_list<Index>> named_indices = std::nullopt;
+  std::optional<std::vector<Index>> named_indices = std::nullopt;
   /// whether to ignore the labels of named indices. Setting
   /// to false will cause named indices to be treated as equivalent slots, which
   /// the result to be independent of their labels. This does not make sense in
@@ -57,8 +59,7 @@ struct CanonicalizeOptions {
 
   static CanonicalizeOptions default_options();
   CanonicalizeOptions copy_and_set(CanonicalizationMethod) const;
-  CanonicalizeOptions copy_and_set(
-      std::optional<std::initializer_list<Index>>) const;
+  CanonicalizeOptions copy_and_set(std::optional<std::vector<Index>>) const;
   CanonicalizeOptions copy_and_set(IgnoreNamedIndexLabel) const;
 
   friend constexpr bool operator==(const CanonicalizeOptions& a,
