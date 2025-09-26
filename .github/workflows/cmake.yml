@@ -48,7 +48,7 @@ jobs:
         -G Ninja
         -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
         -DBUILD_SHARED_LIBS=OFF
-        -DCMAKE_UNITY_BUILD=${{ matrix.build_type == 'Debug' || matrix.valgrind }}
+        -DCMAKE_UNITY_BUILD=${{ !matrix.sanitize && (matrix.build_type == 'Debug' || matrix.valgrind) }}
         -DMPIEXEC_PREFLAGS='--bind-to;none;--allow-run-as-root'
         -DCMAKE_PREFIX_PATH='/usr/local/opt/boost'
         -DSEQUANT_TESTS=ON
