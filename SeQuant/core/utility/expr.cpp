@@ -292,10 +292,12 @@ ExprPtr transform_expr(const ExprPtr &expr,
     return expr;
   }
 
-  auto transform_tensor = [&index_replacements](const Tensor &tensor) {
-    auto result = std::make_shared<Tensor>(tensor);
-    result->transform_indices(index_replacements);
-    result->reset_tags();
+  auto transform_tensor =
+      [&index_replacements](const ExprPtr &tensor) -> ExprPtr {
+    ExprPtr result = tensor.clone();
+    auto &result_tensor = result->as<AbstractTensor>();
+    transform_indices(result_tensor, index_replacements);
+    reset_tags(result_tensor);
     return result;
   };
 
@@ -304,9 +306,8 @@ ExprPtr transform_expr(const ExprPtr &expr,
     auto result = std::make_shared<Product>();
     result->scale(product.scalar());
     for (auto &&term : product) {
-      if (term->is<Tensor>()) {
-        auto tensor = term->as<Tensor>();
-        result->append(1, transform_tensor(tensor));
+      if (term->is<AbstractTensor>()) {
+        result->append(1, transform_tensor(term));
       } else if (term->is<Variable>() || term->is<Constant>()) {
         result->append(1, term->clone());
       } else {
@@ -317,8 +318,8 @@ ExprPtr transform_expr(const ExprPtr &expr,
     return result;
   };
 
-  if (expr->is<Tensor>()) {
-    auto result = transform_tensor(expr->as<Tensor>());
+  if (expr->is<AbstractTensor>()) {
+    auto result = transform_tensor(expr);
     if (scaling_factor != 1) {
       result = result * ex<Constant>(scaling_factor);
     }
