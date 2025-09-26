@@ -632,6 +632,20 @@ SECTION("partial spintracing + S_maps = full spintracing") {
   //(canonicalized: -2 t{a_1,a_2;i_2,i_1}:N-C-S + 4 t{a_1,a_2;i_1,i_2}:N-C-S)
 }
 
+SECTION("external indices have to remain consistent") {
+  // Internally, closed_shell_spintrace performs canonicalization which can end
+  // up renaming external indices (due to the presence of the symmetrizer). This
+  // will cause an inconsistency with the explicitly provided external index
+  // names.
+  ExprPtr input = parse_expr(
+      L"A{p_8,p_9;a_8,a_9}:A-C-S * y{p_3,p_4;p_8,p_9}:A-C-S * "
+      L"g{i_3,a_8;p_3,p_4}:A-C-S * t{a_9;i_3}:A-C-S");
+  ExprPtr result =
+      closed_shell_spintrace(input, {{L"a_8", L"p_8"}, {L"a_9", L"p_9"}});
+
+  // REQUIRE_THAT(result, EquivalentTo(L"TODO"));
+}
+
 SECTION("Symmetrize expression") {
   {
     // g * t1 + g * t1
