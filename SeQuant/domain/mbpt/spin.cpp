@@ -9,7 +9,7 @@
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/space.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
-#include <SeQuant/core/tensor_network/v3.hpp>
+#include <SeQuant/core/tensor_network.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/permutation.hpp>
 #include <SeQuant/core/utility/swap.hpp>
@@ -904,7 +904,7 @@ ExprPtr WK_biorthogonalization_filter(
     auto product = term.as_shared_ptr<Product>();
     auto scalar = product->scalar();
 
-    sequant::TensorNetworkV3 tn(*product);
+    sequant::TensorNetwork tn(*product);
     auto hash =
         tn.canonicalize_slots(TensorCanonicalizer::cardinal_tensor_labels())
             .hash_value();

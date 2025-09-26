@@ -10,8 +10,8 @@
 #include <SeQuant/core/logger.hpp>
 #include <SeQuant/core/runtime.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
+#include <SeQuant/core/tensor_network.hpp>
 #include <SeQuant/core/tensor_network/typedefs.hpp>
-#include <SeQuant/core/tensor_network/v3.hpp>
 
 #include <range/v3/all.hpp>
 
@@ -232,7 +232,7 @@ ExprPtr Product::canonicalize_impl(CanonicalizeOptions opts) {
       }
       return std::pair{std::move(tn), canon_factor};
     };
-    using TN = TensorNetworkV3;
+    using TN = TensorNetwork;
     auto [tn, canon_factor] = make_canonical_tn(static_cast<TN *>(nullptr));
 
     const auto &tensors = tn.tensors();

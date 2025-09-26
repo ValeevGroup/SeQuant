@@ -8,7 +8,7 @@
 #include <SeQuant/core/bliss.hpp>
 #include <SeQuant/core/logger.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
-#include <SeQuant/core/tensor_network/v3.hpp>
+#include <SeQuant/core/tensor_network.hpp>
 #include <SeQuant/core/tensor_network/vertex.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
@@ -766,7 +766,7 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
                 << to_latex(expr_input_) << std::endl;
 
           // construct graph representation of the tensor product
-          using TN = TensorNetworkV3;
+          using TN = TensorNetwork;
           TN tn(expr_input_->as<Product>().factors());
           auto g = tn.create_graph({.distinct_named_indices = true});
           const auto &graph = g.bliss_graph;

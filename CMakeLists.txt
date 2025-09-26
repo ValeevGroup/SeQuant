@@ -309,6 +309,7 @@ set(SeQuant_src
         SeQuant/core/tag.hpp
         SeQuant/core/tensor_canonicalizer.cpp
         SeQuant/core/tensor_canonicalizer.hpp
+        SeQuant/core/tensor_network.hpp
         SeQuant/core/tensor_network/canonicals.hpp
         SeQuant/core/tensor_network/slot.hpp
         SeQuant/core/tensor_network/typedefs.hpp
