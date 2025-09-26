@@ -5,6 +5,8 @@
 #ifndef SEQUANT_CORE_OPTIONS_HPP
 #define SEQUANT_CORE_OPTIONS_HPP
 
+#include <initializer_list>
+#include <optional>
 #include <string>
 
 namespace sequant {
