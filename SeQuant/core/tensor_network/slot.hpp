@@ -7,7 +7,7 @@ namespace sequant {
 
 /// @note the order orchestrated to produce intuitively "canonical" layout of
 /// named indices of tensor networks
-/// @sa TensorNetwork
+/// @sa TensorNetworkV1
 /// @sa TensorNetworkV2
 /// @sa TensorNetworkV3
 enum class TensorIndexSlotType {
@@ -23,7 +23,7 @@ enum class TensorIndexSlotType {
 
 /// @note the order orchestrated to produce intuitively "canonical" layout of
 /// named indices of tensor networks
-/// @sa TensorNetwork
+/// @sa TensorNetworkV1
 /// @sa TensorNetworkV2
 /// @sa TensorNetworkV3
 enum class IndexSlotType {

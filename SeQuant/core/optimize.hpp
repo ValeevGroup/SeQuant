@@ -16,7 +16,7 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
-#include <SeQuant/core/tensor_network_v3.hpp>
+#include <SeQuant/core/tensor_network.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 
 #if __cplusplus >= 202002L
@@ -175,7 +175,7 @@ container::svector<Index> diff_indices(I1 const& idxs1, I2 const& idxs2) {
 template <typename IdxToSz,
           std::enable_if_t<std::is_invocable_r_v<size_t, IdxToSz, const Index&>,
                            bool> = true>
-EvalSequence single_term_opt(TensorNetworkV3 const& network,
+EvalSequence single_term_opt(TensorNetwork const& network,
                              IdxToSz const& idxsz) {
   using ranges::views::concat;
   using IndexContainer = container::svector<Index>;
@@ -288,7 +288,7 @@ ExprPtr single_term_opt(Product const& prod, IdxToSz const& idxsz) {
                                prod.factors().end(), Product::Flatten::No});
   auto const tensors =
       prod | filter(&ExprPtr::template is<Tensor>) | ranges::to_vector;
-  auto seq = single_term_opt(TensorNetworkV3{tensors}, idxsz);
+  auto seq = single_term_opt(TensorNetwork{tensors}, idxsz);
   auto result = container::svector<ExprPtr>{};
   for (auto i : seq)
     if (i == -1) {
