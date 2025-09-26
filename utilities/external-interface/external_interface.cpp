@@ -19,7 +19,7 @@
 #include <SeQuant/core/utility/string.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/op.hpp>
-#include <SeQuant/domain/mbpt/spin.hpp>  // for remove_tensor
+#include <SeQuant/domain/mbpt/spin.hpp>
 
 #include <CLI/CLI.hpp>
 
@@ -362,7 +362,8 @@ void registerIndexSpaces(const json &spaces, IndexSpaceMeta &meta) {
     entry.tag = current.at("tag").get<std::string>();
 
     std::wstring label = toUtf16(current.at("label").get<std::string>());
-    registry.add(label, type, size);
+    registry.add(label, type, size,
+                 IndexSpace::QuantumNumbers{mbpt::Spin::any});
 
     spdlog::debug(
         "Registered index space '{}' with label '{}', tag '{}' and size {}",
