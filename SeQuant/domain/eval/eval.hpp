@@ -59,9 +59,9 @@ enum struct EvalMode {
   SumInplace,
   Symmetrize,
   Antisymmetrize,
-  /// Cleanup operation of Wang-Knizia biorthogonalization
-  /// @sa ResultPtr::biorthogonal_cleanup
-  BiorthogonalCleanup,
+  /// NNS projection of Wang-Knizia biorthogonalization
+  /// @sa ResultPtr::biorthogonal_nns_project
+  BiorthogonalNNSProject,
   Unknown
 };
 
@@ -79,18 +79,18 @@ enum struct EvalMode {
 }
 
 [[nodiscard]] constexpr auto to_string(EvalMode mode) noexcept {
-  return (mode == EvalMode::Constant)              ? "Constant"
-         : (mode == EvalMode::Variable)            ? "Variable"
-         : (mode == EvalMode::Tensor)              ? "Tensor"
-         : (mode == EvalMode::Permute)             ? "Permute"
-         : (mode == EvalMode::Product)             ? "Product"
-         : (mode == EvalMode::MultByPhase)         ? "MultByPhase"
-         : (mode == EvalMode::Sum)                 ? "Sum"
-         : (mode == EvalMode::SumInplace)          ? "SumInplace"
-         : (mode == EvalMode::Symmetrize)          ? "Symmetrize"
-         : (mode == EvalMode::Antisymmetrize)      ? "Antisymmetrize"
-         : (mode == EvalMode::BiorthogonalCleanup) ? "BiorthogonalCleanup"
-                                                   : "??";
+  return (mode == EvalMode::Constant)                 ? "Constant"
+         : (mode == EvalMode::Variable)               ? "Variable"
+         : (mode == EvalMode::Tensor)                 ? "Tensor"
+         : (mode == EvalMode::Permute)                ? "Permute"
+         : (mode == EvalMode::Product)                ? "Product"
+         : (mode == EvalMode::MultByPhase)            ? "MultByPhase"
+         : (mode == EvalMode::Sum)                    ? "Sum"
+         : (mode == EvalMode::SumInplace)             ? "SumInplace"
+         : (mode == EvalMode::Symmetrize)             ? "Symmetrize"
+         : (mode == EvalMode::Antisymmetrize)         ? "Antisymmetrize"
+         : (mode == EvalMode::BiorthogonalNNSProject) ? "BiorthogonalNNSProject"
+                                                      : "??";
 }
 
 enum struct CacheMode { Store, Access, Release };
@@ -542,11 +542,11 @@ ResultPtr evaluate_antisymm(Args&&... args) {
   return result;
 }
 
-/// \brief Calls sequant::evaluate followed by ResultPtr::biorthogonal_cleanup
-/// \return Evaluated result as ResultPtr.
-/// \sa ResultPtr::biorthogonal_cleanup
+/// \brief Calls sequant::evaluate followed by
+/// ResultPtr::biorthogonal_nns_project \return Evaluated result as ResultPtr.
+/// \sa ResultPtr::biorthogonal_nns_project
 template <Trace EvalTrace = Trace::Default, typename... Args>
-ResultPtr evaluate_biorthogonal_cleanup(Args&&... args) {
+ResultPtr evaluate_biorthogonal_nns_project(Args&&... args) {
   ResultPtr pre = evaluate<EvalTrace>(std::forward<Args>(args)...);
   assert(pre);
 
@@ -554,12 +554,12 @@ ResultPtr evaluate_biorthogonal_cleanup(Args&&... args) {
 
   ResultPtr result;
   auto time = timed_eval_inplace([&]() {
-    result = pre->biorthogonal_cleanup(n0->as_tensor().bra_rank());
+    result = pre->biorthogonal_nns_project(n0->as_tensor().bra_rank());
   });
 
   // logging
   if constexpr (trace(EvalTrace)) {
-    auto stat = log::EvalStat{.mode = log::EvalMode::BiorthogonalCleanup,
+    auto stat = log::EvalStat{.mode = log::EvalMode::BiorthogonalNNSProject,
                               .time = time,
                               .memory = log::bytes(pre, result)};
     log::eval(stat, n0->label());
