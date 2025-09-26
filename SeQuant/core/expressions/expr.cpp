@@ -11,7 +11,7 @@
 #include <SeQuant/core/runtime.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/tensor_network/typedefs.hpp>
-#include <SeQuant/core/tensor_network_v3.hpp>
+#include <SeQuant/core/tensor_network/v3.hpp>
 
 #include <range/v3/all.hpp>
 

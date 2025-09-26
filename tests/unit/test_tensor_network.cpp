@@ -18,8 +18,8 @@
 #include <SeQuant/core/parse.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/tensor_network/v1.hpp>
-#include <SeQuant/core/tensor_network_v2.hpp>
-#include <SeQuant/core/tensor_network_v3.hpp>
+#include <SeQuant/core/tensor_network/v2.hpp>
+#include <SeQuant/core/tensor_network/v3.hpp>
 #include <SeQuant/core/utility/string.hpp>
 #include <SeQuant/core/utility/timer.hpp>
 

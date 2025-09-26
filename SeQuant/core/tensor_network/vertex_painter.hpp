@@ -4,7 +4,7 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expressions/abstract_tensor.hpp>
 #include <SeQuant/core/index.hpp>
-#include <SeQuant/core/tensor_network_v2.hpp>
+#include <SeQuant/core/tensor_network/v2.hpp>
 
 #include <utility>
 #include <variant>

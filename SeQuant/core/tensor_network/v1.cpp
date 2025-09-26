@@ -15,7 +15,6 @@
 #include <SeQuant/core/tag.hpp>
 #include <SeQuant/core/tensor_network/v1.hpp>
 #include <SeQuant/core/tensor_network/vertex_painter.hpp>
-#include <SeQuant/core/tensor_network_v2.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/tuple.hpp>
 #include <SeQuant/core/wstring.hpp>

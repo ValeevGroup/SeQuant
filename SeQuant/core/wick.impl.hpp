@@ -8,8 +8,8 @@
 #include <SeQuant/core/bliss.hpp>
 #include <SeQuant/core/logger.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
+#include <SeQuant/core/tensor_network/v3.hpp>
 #include <SeQuant/core/tensor_network/vertex.hpp>
-#include <SeQuant/core/tensor_network_v3.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
 #ifdef SEQUANT_HAS_EXECUTION_HEADER

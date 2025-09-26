@@ -15,8 +15,8 @@
 #include <SeQuant/core/tag.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/tensor_network/utils.hpp>
+#include <SeQuant/core/tensor_network/v3.hpp>
 #include <SeQuant/core/tensor_network/vertex_painter.hpp>
-#include <SeQuant/core/tensor_network_v3.hpp>
 #include <SeQuant/core/utility/debug.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/swap.hpp>
