@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <optional>
+#include <ranges>
 #include <set>
 #include <type_traits>
 #include <vector>
@@ -237,6 +238,42 @@ IndexGroups<Container> get_unique_indices(const Expr& expr) {
 template <typename Container>
 IndexGroups<Container> get_unique_indices(const ExprPtr& expr) {
   return get_unique_indices<Container>(*expr);
+}
+
+/// @returns A set of all indices used in the provided expression
+template <typename Set = container::set<Index>>
+Set get_used_indices(const Expr& expr) {
+  Set all_indices;
+
+  auto collect_indices = [&all_indices](const Expr& expr) {
+    if (!expr.is<AbstractTensor>()) {
+      return;
+    }
+    const AbstractTensor& tensor = expr.as<AbstractTensor>();
+
+    auto current_indices =
+        slots(tensor) | std::ranges::views::filter(
+                            [](const Index& idx) { return idx.nonnull(); });
+
+    for (const Index& idx : current_indices) {
+      all_indices.emplace(idx);
+    }
+  };
+
+  if (expr.is_atom()) {
+    collect_indices(expr);
+  } else {
+    expr.visit([&](const ExprPtr& expr) { collect_indices(*expr); },
+               /*atoms_only=*/true);
+  }
+
+  return all_indices;
+}
+
+/// @returns A set of all indices used in the provided expression
+template <typename Set = container::set<Index>>
+Set get_used_indices(const ExprPtr& expr) {
+  return get_used_indices<Set>(*expr);
 }
 
 template <typename Container = std::vector<Index>, typename Rng>

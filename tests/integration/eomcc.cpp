@@ -1,6 +1,7 @@
 //
 // Created by Ajay Melekamburath on 2/3/25.
 //
+#include <SeQuant/core/logger.hpp>
 #include <SeQuant/core/runtime.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/utility/timer.hpp>

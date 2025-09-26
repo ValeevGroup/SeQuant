@@ -172,6 +172,10 @@ class Index : public Taggable {
     ordinal_ = idx.ordinal_;
     proto_indices_ = idx.proto_indices_;
     symmetric_proto_indices_ = idx.symmetric_proto_indices_;
+    // We might not copy memoized data, but we do have to reset it or else it
+    // might end up being wrong
+    label_.reset();
+    full_label_.reset();
     return *this;
   }
 

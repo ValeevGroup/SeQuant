@@ -3,6 +3,7 @@
 //
 
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/logger.hpp>
 #include <SeQuant/core/utility/timer.hpp>
 #include <SeQuant/domain/mbpt/models/cc.hpp>
 

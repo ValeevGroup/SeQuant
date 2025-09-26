@@ -19,7 +19,7 @@
 #include <SeQuant/core/utility/string.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/op.hpp>
-#include <SeQuant/domain/mbpt/spin.hpp>  // for remove_tensor
+#include <SeQuant/domain/mbpt/spin.hpp>
 
 #include <CLI/CLI.hpp>
 
@@ -223,6 +223,28 @@ void generateITF(const json &blocks, std::string_view out_file,
         result.set_label(toUtf16(current_result.at("name").get<std::string>()));
       }
 
+      if (current_result.contains("replace")) {
+        for (const nlohmann::json &sub : current_result.at("substitute")) {
+          ExprPtr target =
+              parse_expr(toUtf16(sub.at("target").get<std::string>()));
+          ExprPtr replacement =
+              parse_expr(toUtf16(sub.at("replacement").get<std::string>()));
+
+          spdlog::debug("Replacing {} -> {}", target, replacement);
+
+          std::string equality_method =
+              sub.value("tensor_equality", "identity");
+          if (equality_method == "identity") {
+            replace(result, target, replacement);
+          } else if (equality_method == "block") {
+            replace<TensorBlockEqualComparator>(result, target, replacement);
+          } else {
+            throw std::runtime_error("Unknown tensor_equality choice '" +
+                                     equality_method + "'");
+          }
+        }
+      }
+
       spdlog::debug("Initial equation is:\n{}", result);
 
       ProcessingOptions options =
@@ -362,7 +384,8 @@ void registerIndexSpaces(const json &spaces, IndexSpaceMeta &meta) {
     entry.tag = current.at("tag").get<std::string>();
 
     std::wstring label = toUtf16(current.at("label").get<std::string>());
-    registry.add(label, type, size);
+    registry.add(label, type, size,
+                 IndexSpace::QuantumNumbers{mbpt::Spin::any});
 
     spdlog::debug(
         "Registered index space '{}' with label '{}', tag '{}' and size {}",

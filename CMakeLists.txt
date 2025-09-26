@@ -268,8 +268,10 @@ set(SeQuant_src
         SeQuant/core/expressions/abstract_tensor.hpp
         SeQuant/core/expressions/expr.cpp
         SeQuant/core/expressions/expr.hpp
+        SeQuant/core/expressions/expr_algorithms.cpp
         SeQuant/core/expressions/expr_algorithms.hpp
         SeQuant/core/expressions/expr_operators.hpp
+        SeQuant/core/expressions/expr_range.hpp
         SeQuant/core/expressions/result_expr.cpp
         SeQuant/core/expressions/result_expr.hpp
         SeQuant/core/expressions/tensor.cpp

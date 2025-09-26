@@ -137,6 +137,18 @@ class ResultExpr {
  private:
   ExprPtr m_expr;
 
+  template <typename Range1, typename Range2, typename Range3>
+    requires(!std::is_constructible_v<IndexContainer, Range1> ||
+             !std::is_constructible_v<IndexContainer, Range2> ||
+             !std::is_constructible_v<IndexContainer, Range3>)
+  ResultExpr(Range1 &&bra, Range2 &&ket, Range3 &&aux, Symmetry symm,
+             BraKetSymmetry braket_symm, ColumnSymmetry column_symm,
+             std::optional<std::wstring> label, ExprPtr expression)
+      : ResultExpr(IndexContainer(bra.begin(), bra.end()),
+                   IndexContainer(ket.begin(), ket.end()),
+                   IndexContainer(aux.begin(), aux.end()), symm, braket_symm,
+                   column_symm, std::move(label), std::move(expression)) {}
+
   ResultExpr(IndexContainer bra, IndexContainer ket, IndexContainer aux,
              Symmetry symm, BraKetSymmetry braket_symm,
              ColumnSymmetry column_symm, std::optional<std::wstring> label,
@@ -150,18 +162,6 @@ class ResultExpr {
   IndexContainer m_auxIndices;
   std::optional<std::wstring> m_label;
 };
-
-ResultExpr &canonicalize(ResultExpr &expr);
-ResultExpr &simplify(ResultExpr &expr);
-ResultExpr &rapid_simplify(ResultExpr &expr);
-ResultExpr &expand(ResultExpr &expr);
-ResultExpr &optimize(ResultExpr &expr);
-
-[[nodiscard]] ResultExpr &canonicalize(ResultExpr &&expr);
-[[nodiscard]] ResultExpr &simplify(ResultExpr &&expr);
-[[nodiscard]] ResultExpr &rapid_simplify(ResultExpr &&expr);
-[[nodiscard]] ResultExpr &expand(ResultExpr &&expr);
-[[nodiscard]] ResultExpr &optimize(ResultExpr &&expr);
 
 }  // namespace sequant
 
