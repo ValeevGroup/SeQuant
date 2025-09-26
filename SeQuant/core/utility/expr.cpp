@@ -285,7 +285,11 @@ ExprPtr transform_expr(const ExprPtr &expr,
                        const container::map<Index, Index> &index_replacements,
                        Constant::scalar_type scaling_factor) {
   if (expr->is<Constant>() || expr->is<Variable>()) {
-    return ex<Constant>(scaling_factor) * expr;
+    if (scaling_factor != 1) {
+      return ex<Constant>(scaling_factor) * expr;
+    }
+
+    return expr;
   }
 
   auto transform_tensor = [&index_replacements](const Tensor &tensor) {
@@ -314,8 +318,10 @@ ExprPtr transform_expr(const ExprPtr &expr,
   };
 
   if (expr->is<Tensor>()) {
-    auto result =
-        ex<Constant>(scaling_factor) * transform_tensor(expr->as<Tensor>());
+    auto result = transform_tensor(expr->as<Tensor>());
+    if (scaling_factor != 1) {
+      result = result * ex<Constant>(scaling_factor);
+    }
     return result;
   } else if (expr->is<Product>()) {
     auto result = transform_product(expr->as<Product>());
