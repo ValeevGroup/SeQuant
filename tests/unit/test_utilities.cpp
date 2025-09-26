@@ -402,6 +402,10 @@ TEST_CASE("utilities", "[utilities]") {
                {L"t{a1;i1} Var", L"Var", L"Test", L"t{a1;i1} Test"},
                {L"t{a1;i1} Var", L"Var", L"K{;;p1,p2}", L"t{a1;i1} K{;;p1,p2}"},
                {L"t{a1;i1} Var", L"t{a1;i1}", L"K{p1} - 1", L"(K{p1} - 1) Var"},
+               {L"g{p1,p2;p3,p4} t{p3,p4;p1,p2}", L"t{p5,p6;p7,p8}",
+                L"T{p5,p6;p7,p8}", L"g{p1,p2;p3,p4} T{p3,p4;p1,p2}"},
+               {L"g{p1,p2;p3,p4} t{p3,p4;p1,p2}", L"t{p5,p6;p1,p2}",
+                L"T{p5,p6;p7,p8}", L"g{p1,p2;p3,p4} T{p3,p4;p7,p8}"},
            }) {
         CAPTURE(toUtf8(input_str));
         CAPTURE(toUtf8(target_str));
@@ -412,7 +416,7 @@ TEST_CASE("utilities", "[utilities]") {
         const ExprPtr target = parse_expr(target_str);
         const ExprPtr replacement = parse_expr(replacement_str);
 
-        replace(input, target, replacement);
+        replace<TensorBlockEqualComparator>(input, target, replacement);
 
         REQUIRE_THAT(input, EquivalentTo(expected_str));
       }
@@ -431,6 +435,11 @@ TEST_CASE("utilities", "[utilities]") {
                 L"R{a1;i1;p1,p2} = t{a1;i1} K{;;p1,p2}"},
                {L"R{a1;i1} = t{a1;i1} Var", L"t{a1;i1}", L"K{p1} - 1",
                 L"R{p1} = (K{p1} - 1) Var"},
+               {L"R = g{p1,p2;p3,p4} t{p3,p4;p1,p2}", L"t{p5,p6;p7,p8}",
+                L"T{p5,p6;p7,p8}", L"R = g{p1,p2;p3,p4} T{p3,p4;p1,p2}"},
+               {L"R = g{p1,p2;p3,p4} t{p3,p4;p1,p2}", L"t{p5,p6;p1,p2}",
+                L"T{p5,p6;p7,p8}",
+                L"R{p1,p2;p7,p8}:N-N-N = g{p1,p2;p3,p4} T{p3,p4;p7,p8}"},
            }) {
         CAPTURE(toUtf8(input_str));
         CAPTURE(toUtf8(target_str));
@@ -441,7 +450,7 @@ TEST_CASE("utilities", "[utilities]") {
         const ExprPtr target = parse_expr(target_str);
         const ExprPtr replacement = parse_expr(replacement_str);
 
-        replace(input, target, replacement);
+        replace<TensorBlockEqualComparator>(input, target, replacement);
 
         REQUIRE_THAT(input, EquivalentTo(expected_str));
       }

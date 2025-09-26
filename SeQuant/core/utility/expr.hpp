@@ -7,6 +7,7 @@
 #include <SeQuant/core/utility/indices.hpp>
 
 #include <range/v3/view/concat.hpp>
+#include <range/v3/view/enumerate.hpp>
 
 #include <algorithm>
 #include <cassert>
@@ -48,13 +49,62 @@ ExprPtr &replace(ExprPtr &expr, const ExprPtr &target,
         "Replacement of composite expressions is not yet implemented");
   }
 
+  container::svector<std::size_t> index_mapping;
+  if (target.is<AbstractTensor>()) {
+    // Figure out which indices are being reused between target and replacement
+    // (those are the ones we might need to perform replacements on)
+    auto target_slots = slots(target.as<AbstractTensor>());
+    auto replacement_indices = get_used_indices(replacement);
+
+    for (const auto &[i, idx] : ranges::views::enumerate(target_slots)) {
+      if (!idx.nonnull()) {
+        continue;
+      }
+
+      if (std::ranges::find(replacement_indices, idx) !=
+          replacement_indices.end()) {
+        index_mapping.emplace_back(i);
+      }
+    }
+  }
+
   if (cmp(*expr, *target)) {
     expr = replacement->clone();
   } else {
     expr->visit(
         [&](ExprPtr &current) {
           if (cmp(*current, *target)) {
-            current = replacement->clone();
+            ExprPtr repl;
+
+            if (index_mapping.empty()) {
+              repl = replacement->clone();
+            } else {
+              // Ensure that all indices shared between target and replacement
+              // will also be shared with current and the actual replacement we
+              // want to use for it (this becomes relevant if cmp compares only
+              // equivalence instead of equality)
+              assert(current->is<AbstractTensor>());
+              assert(target->is<AbstractTensor>());
+
+              const auto &current_tensor = current->as<AbstractTensor>();
+              const auto &target_tensor = target->as<AbstractTensor>();
+
+              assert(num_slots(current_tensor) == num_slots(target_tensor));
+
+              auto current_slots = slots(current_tensor);
+              auto target_slots = slots(target_tensor);
+
+              container::map<Index, Index> replacements;
+              for (std::size_t i : index_mapping) {
+                if (target_slots[i] != current_slots[i]) {
+                  replacements[target_slots[i]] = current_slots[i];
+                }
+              }
+
+              repl = transform_expr(replacement, replacements);
+            }
+
+            current = std::move(repl);
           }
         },
         /*only_atoms*/ true);
