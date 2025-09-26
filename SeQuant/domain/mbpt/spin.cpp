@@ -6,6 +6,7 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/math.hpp>
 #include <SeQuant/core/optimize.hpp>
+#include <SeQuant/core/parse.hpp>
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/space.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
@@ -943,6 +944,7 @@ ExprPtr closed_shell_spintrace(
     const ExprPtr& expression,
     const container::svector<container::svector<Index>>& ext_index_groups,
     bool full_expansion) {
+  std::wcout << "Original: " << deparse(expression) << "\n";
   // Symmetrize and expression
   // Partially expand the antisymmetrizer and write it in terms of S operator.
   // See symmetrize_expr(expr) function for implementation details. We want an
@@ -966,6 +968,8 @@ ExprPtr closed_shell_spintrace(
   };
   auto expr = partially_or_fully_expand(expression);
 
+  std::wcout << "Partially expanded: " << deparse(expr) << "\n";
+
   // Index tags are cleaned prior to calling the fast canonicalizer
   detail::reset_idx_tags(expr);  // This call is REQUIRED
   expand(expr);                  // This call is REQUIRED
@@ -977,6 +981,8 @@ ExprPtr closed_shell_spintrace(
   }
   simplify(expr, opts);  // full simplify to combine terms before count_cycles
 
+  std::wcout << "Simplified: " << deparse(expr) << "\n";
+
   // Lambda for spin-tracing a product term
   // For closed-shell case, a spin-traced result is a product term scaled by
   // 2^{n_cycles}, where n_cycles are counted by the lambda function described
@@ -985,6 +991,7 @@ ExprPtr closed_shell_spintrace(
   // substituted with either one of the index (because the two vectors should be
   // permutations of each other to count cycles). All tensors must be nonsymm.
   auto trace_product = [&ext_index_groups](const Product& product) {
+    std::wcout << "Tracing " << deparse(product) << "\n";
     // Remove S if present in a product
     Product temp_product{};
     temp_product.scale(product.scalar());
@@ -1025,6 +1032,7 @@ ExprPtr closed_shell_spintrace(
                                 (t->as<Tensor>().label() != L"A" &&
                                  t->as<Tensor>().label() != L"S"))) {
           const Tensor& tensor = t->as<Tensor>();
+          std::wcout << "Collecting bra indices of " << tensor.label() << "\n";
           bra_idx.insert(bra_idx.end(), tensor.bra().begin(),
                          tensor.bra().end());
         }
@@ -1038,12 +1046,33 @@ ExprPtr closed_shell_spintrace(
       assert(idx_pair.size() == 2);
       const auto& what = idx_pair[0];
       const auto& with = idx_pair[1];
+      std::wcout << "Replacing " << what.full_label() << "("
+                 << what.space().qns().to_int32() << ")"
+                 << " with " << with.full_label() << "\n";
       std::replace(product_bras.begin(), product_bras.end(), what, with);
       std::replace(product_kets.begin(), product_kets.end(), what, with);
     };
 
+    for (const auto& idx : product_bras) {
+      std::wcout << idx.full_label() << ", ";
+    }
+    std::wcout << std::endl;
+    for (const auto& idx : product_kets) {
+      std::wcout << idx.full_label() << ", ";
+    }
+    std::wcout << std::endl;
+
     // Substitute indices from external index list
     ranges::for_each(ext_index_groups, substitute_ext_idx);
+
+    for (const auto& idx : product_bras) {
+      std::wcout << idx.full_label() << ", ";
+    }
+    std::wcout << std::endl;
+    for (const auto& idx : product_kets) {
+      std::wcout << idx.full_label() << ", ";
+    }
+    std::wcout << std::endl;
 
     auto n_cycles = count_cycles(product_kets, product_bras);
 
