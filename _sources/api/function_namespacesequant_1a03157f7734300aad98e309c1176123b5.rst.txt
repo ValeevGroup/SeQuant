@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a03157f7734300aad98e309c1176123b5:
+
+Function sequant::count_index
+=============================
+
+- Defined in :ref:`file_SeQuant_core_wick.impl.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::count_index(container::map<Index, int64_t>&, const Index&)
+   :project: SeQuant

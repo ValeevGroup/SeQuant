@@ -1,0 +1,33 @@
+.. _exhale_class_classsequant_1_1_julia_tensor_operations_generator:
+
+Template Class JuliaTensorOperationsGenerator
+=============================================
+
+- Defined in :ref:`file_SeQuant_core_export_julia_tensor_operations.hpp`
+
+
+Inheritance Relationships
+-------------------------
+
+Base Type
+*********
+
+- ``public sequant::Generator< JuliaTensorOperationsGeneratorContext >`` (:ref:`exhale_class_classsequant_1_1_generator`)
+
+
+Derived Types
+*************
+
+- ``public sequant::JuliaITensorGenerator< Context >`` (:ref:`exhale_class_classsequant_1_1_julia_i_tensor_generator`)
+- ``public sequant::JuliaTensorKitGenerator< Context >`` (:ref:`exhale_class_classsequant_1_1_julia_tensor_kit_generator`)
+
+
+Class Documentation
+-------------------
+
+
+.. doxygenclass:: sequant::JuliaTensorOperationsGenerator
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

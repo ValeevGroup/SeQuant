@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1mbpt_1acac3fd55692949b3412c0bdffe781b53:
+
+Function sequant::mbpt::set_default_mbpt_context
+================================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_context.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::mbpt::set_default_mbpt_context(const Context&)
+   :project: SeQuant

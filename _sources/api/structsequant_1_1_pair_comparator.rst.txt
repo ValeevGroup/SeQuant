@@ -1,0 +1,17 @@
+.. _exhale_struct_structsequant_1_1_pair_comparator:
+
+Template Struct PairComparator
+==============================
+
+- Defined in :ref:`file_SeQuant_core_export_reordering_context.cpp`
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::PairComparator
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

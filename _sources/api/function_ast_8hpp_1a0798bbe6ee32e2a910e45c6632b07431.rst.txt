@@ -1,0 +1,14 @@
+.. _exhale_function_ast_8hpp_1a0798bbe6ee32e2a910e45c6632b07431:
+
+Function BOOST_FUSION_ADAPT_STRUCT(sequant::parse::ast::SymmetrySpec, perm_symm, braket_symm, column_symm)
+==========================================================================================================
+
+- Defined in :ref:`file_SeQuant_core_parse_ast.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: BOOST_FUSION_ADAPT_STRUCT(sequant::parse::ast::SymmetrySpec, perm_symm, braket_symm, column_symm)
+   :project: SeQuant
