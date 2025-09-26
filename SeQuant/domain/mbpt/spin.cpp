@@ -969,7 +969,13 @@ ExprPtr closed_shell_spintrace(
   // Index tags are cleaned prior to calling the fast canonicalizer
   detail::reset_idx_tags(expr);  // This call is REQUIRED
   expand(expr);                  // This call is REQUIRED
-  simplify(expr);  // full simplify to combine terms before count_cycles
+  SimplifyOptions opts = SimplifyOptions::default_options();
+  opts.named_indices = std::vector<Index>{};
+  for (const auto& group : ext_index_groups) {
+    opts.named_indices->insert(opts.named_indices->end(), group.begin(),
+                               group.end());
+  }
+  simplify(expr, opts);  // full simplify to combine terms before count_cycles
 
   // Lambda for spin-tracing a product term
   // For closed-shell case, a spin-traced result is a product term scaled by
