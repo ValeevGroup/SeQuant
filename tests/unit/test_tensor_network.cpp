@@ -17,7 +17,7 @@
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/parse.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
-#include <SeQuant/core/tensor_network.hpp>
+#include <SeQuant/core/tensor_network/v1.hpp>
 #include <SeQuant/core/tensor_network_v2.hpp>
 #include <SeQuant/core/tensor_network_v3.hpp>
 #include <SeQuant/core/utility/string.hpp>
@@ -42,7 +42,7 @@
 
 #include <SeQuant/core/bliss.hpp>
 #include <SeQuant/core/op.hpp>
-#include <SeQuant/core/tensor_network.hpp>
+#include <SeQuant/core/tensor_network/v1.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/op.hpp>
 
@@ -52,7 +52,7 @@
 using namespace sequant;
 using namespace std::literals;
 
-TEMPLATE_TEST_CASE("tensor_network_shared", "[elements]", TensorNetwork,
+TEMPLATE_TEST_CASE("tensor_network_shared", "[elements]", TensorNetworkV1,
                    TensorNetworkV2, TensorNetworkV3) {
   TensorCanonicalizer::register_instance(
       std::make_shared<DefaultTensorCanonicalizer>());
@@ -365,7 +365,7 @@ TEST_CASE("tensor_network", "[elements]") {
   using sequant::Context;
   namespace t = sequant::mbpt::tensor;
   namespace o = sequant::mbpt::op;
-  using TN = TensorNetwork;
+  using TN = TensorNetworkV1;
 
   SECTION("constructors") {
     {  // with Tensors
@@ -832,7 +832,8 @@ class TensorNetworkV2Accessor {
  public:
   auto get_canonical_bliss_graph(
       sequant::TensorNetworkV2 tn,
-      const sequant::TensorNetwork::named_indices_t* named_indices = nullptr) {
+      const sequant::TensorNetworkV1::named_indices_t* named_indices =
+          nullptr) {
     tn.canonicalize_graph(named_indices ? *named_indices : tn.ext_indices_);
     tn.init_edges();
     auto graph = tn.create_graph(
@@ -1419,7 +1420,8 @@ class TensorNetworkV3Accessor {
  public:
   auto get_canonical_bliss_graph(
       sequant::TensorNetworkV3 tn,
-      const sequant::TensorNetwork::named_indices_t* named_indices = nullptr) {
+      const sequant::TensorNetworkV1::named_indices_t* named_indices =
+          nullptr) {
     auto _ =
         tn.canonicalize_graph(named_indices ? *named_indices : tn.ext_indices_);
     tn.init_edges();

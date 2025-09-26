@@ -6,7 +6,7 @@ namespace sequant {
 /// types of vertices created on a colored graph representation of a tensor
 /// network
 
-/// @sa TensorNetwork
+/// @sa TensorNetworkV1
 /// @sa TensorNetworkV2
 /// @sa TensorNetworkV3
 enum class VertexType {

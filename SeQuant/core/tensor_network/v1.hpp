@@ -2,8 +2,8 @@
 // Created by Eduard Valeyev on 2019-02-02.
 //
 
-#ifndef SEQUANT_TENSOR_NETWORK_H
-#define SEQUANT_TENSOR_NETWORK_H
+#ifndef SEQUANT_CORE_TENSOR_NETWORK_V1_H
+#define SEQUANT_CORE_TENSOR_NETWORK_V1_H
 
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
@@ -37,7 +37,7 @@ namespace sequant {
 /// canonized is actually the graph of indices (roughly the dual of the tensor
 /// graph), with Tensor objects represented by one or more vertices.
 /// @warning the terminology is a mix at best, e.g. terminal vs. slot, etc.
-class TensorNetwork {
+class TensorNetworkV1 {
  public:
   /// @return the implementation version of TN
   constexpr static int version() { return 1; }
@@ -45,7 +45,7 @@ class TensorNetwork {
   constexpr static size_t max_rank = 256;
 
   // clang-format off
-  /// @brief Edge in a TensorNetwork = the Index annotating it + a pair of indices to identify which Tensor terminals it's connected to
+  /// @brief Edge in a TensorNetworkV1 = the Index annotating it + a pair of indices to identify which Tensor terminals it's connected to
 
   /// @note tensor terminals in a sequence of tensors are indexed as follows:
   /// - >0 for bra terminals (i.e. "+7" indicated connection to a bra terminal
@@ -112,7 +112,7 @@ class TensorNetwork {
           case TensorIndexSlotType::Aux:
             if (second_.slot_type != TensorIndexSlotType::Aux) {
               throw std::logic_error(
-                  "TensorNetwork::Edge::connect_to: aux slot cannot be "
+                  "TensorNetworkV1::Edge::connect_to: aux slot cannot be "
                   "connected to a non-aux slot");
             }
             break;
@@ -120,14 +120,14 @@ class TensorNetwork {
           case TensorIndexSlotType::Bra:
             if (second_.slot_type != TensorIndexSlotType::Ket) {
               throw std::logic_error(
-                  "TensorNetwork::Edge::connect_to: bra slot can only be "
+                  "TensorNetworkV1::Edge::connect_to: bra slot can only be "
                   "connected to a ket slot");
             }
             break;
           case TensorIndexSlotType::Ket:
             if (second_.slot_type != TensorIndexSlotType::Bra) {
               throw std::logic_error(
-                  "TensorNetwork::Edge::connect_to: ket slot can only be "
+                  "TensorNetworkV1::Edge::connect_to: ket slot can only be "
                   "connected to a bra slot");
             }
             break;
@@ -203,7 +203,7 @@ class TensorNetwork {
   /// @throw std::logic_error if exprptr_range contains a non-tensor
   /// @note uses RTTI
   template <typename ExprPtrRange>
-  TensorNetwork(ExprPtrRange &exprptr_range) {
+  TensorNetworkV1(ExprPtrRange &exprptr_range) {
     if (exprptr_range.size() > 0) {
       for (auto &&ex : exprptr_range) {
         auto t = std::dynamic_pointer_cast<AbstractTensor>(ex);
@@ -213,7 +213,7 @@ class TensorNetwork {
           tensor_input_ordinals_.emplace_back(count++);
         } else {
           throw std::logic_error(
-              "TensorNetwork::TensorNetwork: non-tensors in the given "
+              "TensorNetworkV1::TensorNetworkV1: non-tensors in the given "
               "expression range");
         }
       }
@@ -229,12 +229,12 @@ class TensorNetwork {
       }
     }
     throw std::logic_error(
-        "TensorNetwork::TensorNetwork: non-tensors in the given expression "
+        "TensorNetworkV1::TensorNetworkV1: non-tensors in the given expression "
         "range");
   }
 
   /// @return const reference to the sequence of tensors
-  /// @note after invoking TensorNetwork::canonicalize() the order of
+  /// @note after invoking TensorNetworkV1::canonicalize() the order of
   /// tensors may be different from that provided as input; use
   /// tensor_input_ordinals() to obtain the input ordinals of
   /// the tensors in the result
@@ -450,7 +450,7 @@ class TensorNetwork {
     template <std::size_t Index, typename T>
     static auto &&get_helper(T &&t) {
       static_assert(Index < 5,
-                    "Index out of bounds for TensorNetwork::GraphData");
+                    "Index out of bounds for TensorNetworkV1::GraphData");
       if constexpr (Index == 0) return std::forward<T>(t).graph;
       if constexpr (Index == 1) return std::forward<T>(t).vertex_labels;
       if constexpr (Index == 2) return std::forward<T>(t).vertex_texlabels;
@@ -510,39 +510,39 @@ class TensorNetwork {
 
 namespace std {
 template <>
-struct tuple_size<sequant::TensorNetwork::GraphData>
+struct tuple_size<sequant::TensorNetworkV1::GraphData>
     : integral_constant<size_t, 5> {};
 
 template <>
-struct tuple_element<0, sequant::TensorNetwork::GraphData> {
+struct tuple_element<0, sequant::TensorNetworkV1::GraphData> {
   using type =
-      decltype(std::declval<sequant::TensorNetwork::GraphData>().graph);
+      decltype(std::declval<sequant::TensorNetworkV1::GraphData>().graph);
 };
 
 template <>
-struct tuple_element<1, sequant::TensorNetwork::GraphData> {
-  using type =
-      decltype(std::declval<sequant::TensorNetwork::GraphData>().vertex_labels);
+struct tuple_element<1, sequant::TensorNetworkV1::GraphData> {
+  using type = decltype(std::declval<sequant::TensorNetworkV1::GraphData>()
+                            .vertex_labels);
 };
 
 template <>
-struct tuple_element<2, sequant::TensorNetwork::GraphData> {
-  using type = decltype(std::declval<sequant::TensorNetwork::GraphData>()
+struct tuple_element<2, sequant::TensorNetworkV1::GraphData> {
+  using type = decltype(std::declval<sequant::TensorNetworkV1::GraphData>()
                             .vertex_texlabels);
 };
 
 template <>
-struct tuple_element<3, sequant::TensorNetwork::GraphData> {
-  using type =
-      decltype(std::declval<sequant::TensorNetwork::GraphData>().vertex_colors);
+struct tuple_element<3, sequant::TensorNetworkV1::GraphData> {
+  using type = decltype(std::declval<sequant::TensorNetworkV1::GraphData>()
+                            .vertex_colors);
 };
 
 template <>
-struct tuple_element<4, sequant::TensorNetwork::GraphData> {
-  using type =
-      decltype(std::declval<sequant::TensorNetwork::GraphData>().vertex_types);
+struct tuple_element<4, sequant::TensorNetworkV1::GraphData> {
+  using type = decltype(std::declval<sequant::TensorNetworkV1::GraphData>()
+                            .vertex_types);
 };
 
 }  // namespace std
 
-#endif  // SEQUANT_TENSOR_NETWORK_H
+#endif  // SEQUANT_CORE_TENSOR_NETWORK_V1_H

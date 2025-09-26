@@ -9,7 +9,7 @@
 #include <SeQuant/core/latex.hpp>
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
-#include <SeQuant/core/tensor_network.hpp>
+#include <SeQuant/core/tensor_network/v1.hpp>
 #include <SeQuant/core/tensor_network_v2.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 

@@ -243,7 +243,7 @@ class TensorNetworkV3 {
   TensorNetworkV3 &operator=(const TensorNetworkV3 &other) noexcept;
 
   /// @return const reference to the sequence of tensors
-  /// @note after invoking TensorNetwork::canonicalize() the order of
+  /// @note after invoking TensorNetworkV3::canonicalize() the order of
   /// tensors may be different from that provided as input; use
   /// tensor_input_ordinals() to obtain the input ordinals of
   /// the tensors in the result
