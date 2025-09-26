@@ -368,6 +368,7 @@ set(SeQuant_src
         SeQuant/domain/mbpt/spin.cpp
         SeQuant/domain/mbpt/spin.hpp
         SeQuant/domain/mbpt/vac_av.ipp
+        SeQuant/domain/mbpt/utils.hpp
         SeQuant/version.cpp
 )
 

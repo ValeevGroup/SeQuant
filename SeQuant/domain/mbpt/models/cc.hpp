@@ -49,13 +49,6 @@ class CC {
   /// @return whether topological optimization is used in WickTheorem
   [[nodiscard]] bool use_topology() const;
 
-  /// @brief derives similarity-transformed expressions of mbpt::Operators
-  /// @param expr expression to be transformed
-  /// @param r order of truncation
-  /// @pre expr should be composed of mbpt::Operators
-  /// @return transformed expression
-  ExprPtr sim_tr(ExprPtr expr, size_t r);
-
   /// @brief derives t amplitude equations, \f$ \langle P|\bar{H}|0 \rangle = 0
   /// \f$
   /// @param commutator_rank rank of commutators included in \f$ \bar{H} \f$ ;
