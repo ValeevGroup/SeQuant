@@ -41,6 +41,24 @@ std::string diff(const Expr &lhs, const Expr &rhs);
 /// @returns The removed tensor, if any occurrance has been found
 std::optional<ExprPtr> pop_tensor(ExprPtr &expression, std::wstring_view label);
 
+/// Replaces a given target expression by a given replacement
+///
+/// If target and replacement have common indices, the indices in the
+/// replacement will be updated for each individual match of target. This is
+/// relevant in cases the provided comparator doesn't account for index
+/// equality. For instance, in t{a1;a2} -> r{a1;a5} applied to var * t{a3;a4}
+/// the replacement shares the index a1 with the target. If the target gets
+/// matched to t{a3;a4}, the replacement will be adapted via a1 -> a3, whereas
+/// the index a5 will be left as is. Overall, this would lead to var * r{a3;a5}.
+///
+/// @param expr The expression to perform the replacements in
+/// @param target The target expression to be replaced
+/// @param replacement The expression to replace the target with
+/// @param cmp The comparator used to determine equality between expressions
+/// @returns A reference to expr, which has been modified in-place (useful for
+/// chaining)
+///
+/// @note At this time, target must not be a composite expression
 template <typename EqualityComparator = std::equal_to<>>
 ExprPtr &replace(ExprPtr &expr, const ExprPtr &target,
                  const ExprPtr &replacement, EqualityComparator cmp = {}) {
@@ -113,6 +131,25 @@ ExprPtr &replace(ExprPtr &expr, const ExprPtr &target,
   return expr;
 }
 
+/// Replaces a given target expression by a given replacement. Result indices
+/// are adapted as needed.
+///
+/// If target and replacement have common indices, the indices in the
+/// replacement will be updated for each individual match of target. This is
+/// relevant in cases the provided comparator doesn't account for index
+/// equality. For instance, in t{a1;a2} -> r{a1;a5} applied to var * t{a3;a4}
+/// the replacement shares the index a1 with the target. If the target gets
+/// matched to t{a3;a4}, the replacement will be adapted via a1 -> a3, whereas
+/// the index a5 will be left as is. Overall, this would lead to var * r{a3;a5}.
+///
+/// @param expr The expression to perform the replacements in
+/// @param target The target expression to be replaced
+/// @param replacement The expression to replace the target with
+/// @param cmp The comparator used to determine equality between expressions
+/// @returns A reference to expr, which has been modified in-place (useful for
+/// chaining)
+///
+/// @note At this time, target must not be a composite expression
 template <typename EqualityComparator = std::equal_to<>>
 ResultExpr &replace(ResultExpr &expr, const ExprPtr &target,
                     const ExprPtr &replacement, EqualityComparator cmp = {}) {
