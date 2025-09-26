@@ -13,9 +13,9 @@
 #include <SeQuant/core/utility/strong.hpp>
 #include <SeQuant/core/utility/tensor.hpp>
 
-#include <codecvt>
 #include <iostream>
 #include <locale>
+#include <ranges>
 #include <string>
 #include <string_view>
 #include <thread>
@@ -370,6 +370,25 @@ TEST_CASE("utilities", "[utilities]") {
           REQUIRE(cmp(rhs_tensor, lhs_tensor) == !less);
         }
       }
+    }
+  }
+
+  SECTION("get_used_indices") {
+    for (const auto& [input, expected] :
+         std::vector<std::tuple<std::wstring, std::vector<std::wstring>>>{
+             {L"Var", {}},
+             {L"t{a1;a2}", {L"a_1", L"a_2"}},
+             {L"t{a1;a2} f{a2;a1}", {L"a_1", L"a_2"}},
+             {L"t{a1;a2} - (Var * (B{p1} T{a1,a2;p1}) + t{a1;a2})",
+              {L"a_1", L"a_2", L"p_1"}},
+         }) {
+      ExprPtr expr = parse_expr(input);
+      auto indices =
+          expected | std::ranges::views::transform(
+                         [](const std::wstring& idx) { return Index(idx); });
+
+      REQUIRE_THAT(get_used_indices(expr),
+                   Catch::Matchers::UnorderedRangeEquals(indices));
     }
   }
 
