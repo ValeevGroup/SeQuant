@@ -166,6 +166,26 @@ ResultExpr& expand(ResultExpr& expr);
 /// @return The expanded expression
 [[nodiscard]] ResultExpr& expand(ResultExpr&& expr);
 
+/// Recursively flattens Sum of Sum's and Product of Product's
+/// @param[in,out] expr expression to be flattened
+/// @return \p expr to facilitate chaining
+ExprPtr& flatten(ExprPtr& expr);
+
+/// Recursively flattens Sum of Sum's and Product of Product's
+/// @param[in,out] expr expression to be flattened
+/// @return \p expr to facilitate chaining
+ExprPtr flatten(ExprPtr&& expr);
+
+/// Recursively flattens Sum of Sum's and Product of Product's
+/// @param[in,out] expr expression to be flattened
+/// @return \p expr to facilitate chaining
+ResultExpr& flatten(ResultExpr& expr);
+
+/// Recursively flattens Sum of Sum's and Product of Product's
+/// @param[in,out] expr expression to be flattened
+/// @return The expanded expression
+[[nodiscard]] ResultExpr& flatten(ResultExpr&& expr);
+
 /// Simplifies an Expr by applying cheap transformations (e.g. eliminating
 /// trivial math, flattening sums and products, etc.)
 /// @param[in,out] expr expression to be simplified; may be
