@@ -172,6 +172,26 @@ class Product : public Expr {
                         flatten_tag);
   }
 
+  /// (post-)multiplies the product by@c factor
+  /// @param factor a factor by which to multiply the product
+  /// @param flatten_tag specifies whether (and how) to flatten the argument(s)
+  /// @return @c *this
+  Product &append(ExprPtr factor, Flatten flatten_tag = Flatten::Yes) {
+    return this->append(1, factor, flatten_tag);
+  }
+
+  /// (post-)multiplies the product by @c factor
+  /// @param factor a factor by which to multiply the product
+  /// @param flatten_tag specifies whether (and how) to flatten the argument(s)
+  /// @return @c *this
+  /// @warning if @p factor is a Product, it is flattened recursively
+  template <typename Factor, typename = std::enable_if_t<is_an_expr_v<Factor>>>
+  Product &append(Factor &&factor, Flatten flatten_tag = Flatten::Yes) {
+    return this->append(std::static_pointer_cast<Expr>(
+                            std::forward<Factor>(factor).shared_from_this()),
+                        flatten_tag);
+  }
+
   /// (pre-)multiplies the product by @c scalar times @c factor
   /// @param scalar a scalar by which to multiply the product
   /// @param factor a factor by which to multiply the product
