@@ -79,8 +79,10 @@
 #define SEQUANT_UNREACHABLE_TOKEN std::abort()
 #endif
 
-#define SEQUANT_UNREACHABLE                        \
-  assert(false && "Should have been unreachable"); \
-  SEQUANT_UNREACHABLE_TOKEN;
+#define SEQUANT_UNREACHABLE                      \
+  do {                                           \
+    assert(false && "reached unreachable code"); \
+    SEQUANT_UNREACHABLE_TOKEN;                   \
+  } while (0)
 
 #endif  // SEQUANT_CORE_UTILITY_MACROS_H
