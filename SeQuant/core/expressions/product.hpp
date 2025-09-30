@@ -373,11 +373,20 @@ class Product : public Expr {
   container::svector<ExprPtr, 2> factors_{};
 
   cursor begin_cursor() override {
-    return factors_.empty() ? Expr::begin_cursor() : cursor{&factors_[0]};
+    if (factors_.empty()) {
+      return Expr::begin_cursor();
+    } else {
+      reset_hash_value();
+      return cursor{&factors_[0]};
+    }
   };
   cursor end_cursor() override {
-    return factors_.empty() ? Expr::end_cursor()
-                            : cursor{&factors_[0] + factors_.size()};
+    if (factors_.empty()) {
+      return Expr::begin_cursor();
+    } else {
+      reset_hash_value();
+      return cursor{&factors_[0] + factors_.size()};
+    }
   };
 
   cursor begin_cursor() const override {
