@@ -45,13 +45,15 @@ inline qns_t compute_qnc(const Product& pdt) {
 /// @param commutator_rank The order at which to truncate the expansion (number
 /// of nested commutators)
 /// @param unitary If true, uses unitary ansatz with B-B^+
+/// @param skip_clone if true, will not clone the input expression
 /// @pre This function expects \p A and \p B to be composed of mbpt::Operators
-ExprPtr sim_tr(const ExprPtr& A, const ExprPtr& B, size_t commutator_rank,
-               bool unitary = false);
+ExprPtr sim_tr(ExprPtr A, const ExprPtr& B, size_t commutator_rank,
+               bool unitary = false, bool skip_clone = false);
 
 /// @brief Screens out terms in the expression \p expr that cannot contribute to
 /// expectation value
-/// @param input input expression
+/// @param expr input expression
+/// @param skip_clone if true, will not clone the input expression
 /// @return return screened expression
 /// @code
 /// // example usage:
@@ -59,7 +61,7 @@ ExprPtr sim_tr(const ExprPtr& A, const ExprPtr& B, size_t commutator_rank,
 /// auto expr2 = screen_terms(P(2) * expr); // screens for <P(2)| expr |0>
 /// @endcode
 /// @pre This function expects \p input to be composed of mbpt::Operators
-ExprPtr screen_terms(const ExprPtr& input);
+ExprPtr screen_terms(ExprPtr expr, bool skip_clone = false);
 
 }  // namespace sequant::mbpt
 
