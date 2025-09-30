@@ -6,11 +6,12 @@
 
 namespace sequant::mbpt {
 
-ExprPtr sim_tr(const ExprPtr& A, const ExprPtr& B, size_t commutator_rank,
-               bool unitary) {
+ExprPtr sim_tr(ExprPtr A, const ExprPtr& B, size_t commutator_rank,
+               bool unitary, bool skip_clone) {
   assert(commutator_rank >= 1 && "Truncation order must be at least 1");
 
-  auto expr = A.clone();  // work on a copy of A
+  // use cloned expr to avoid side effects
+  if (!skip_clone) A = A->clone();
 
   // takes a product or an operator and applies the similarity transformation
   auto transform = [&B, commutator_rank, unitary](const ExprPtr& e) {
@@ -33,38 +34,41 @@ ExprPtr sim_tr(const ExprPtr& A, const ExprPtr& B, size_t commutator_rank,
   };
 
   // expression type dispatch
-  if (expr.is<op_t>()) {
-    return transform(expr);
-  } else if (expr.is<Product>()) {
-    auto& product = expr.as<Product>();
+  if (A.is<op_t>()) {
+    return transform(A);
+  } else if (A.is<Product>()) {
+    auto& product = A.as<Product>();
     // Expand product as sum
     if (ranges::any_of(product.factors(), [](const auto& factor) {
           return factor.template is<Sum>();
         })) {
-      expr = sequant::expand(expr);
-      simplify(expr);
-      return sim_tr(expr, B, commutator_rank, unitary);
+      A = sequant::expand(A);
+      simplify(A);
+      return sim_tr(A, B, commutator_rank, unitary, /*skip_clone*/ true);
     } else {
-      return transform(expr);
+      return transform(A);
     }
-  } else if (expr.is<Sum>()) {
+  } else if (A.is<Sum>()) {
     auto result = sequant::transform_reduce(
-        *expr, ex<Sum>(),
+        *A, ex<Sum>(),
         [](const ExprPtr& running_total, const ExprPtr& summand) {
           return running_total + summand;
         },
-        [=](const auto& op_product) { return transform(op_product); });
+        [=](const auto& term) {
+          return sim_tr(term, B, commutator_rank, unitary, /*skip_clone*/ true);
+        });
     return result;
-  } else if (expr.is<Constant>() || expr.is<Variable>())
-    return expr;
+  } else if (A.is<Constant>() || A.is<Variable>())
+    return A;
   else
     throw std::invalid_argument(
         "mbpt::sim_tr(A, B, commutator_rank, unitary): Unsupported expression "
         "type");
 }
 
-ExprPtr screen_terms(const ExprPtr& input) {
-  auto expr = input.clone();  // work on a copy of input
+ExprPtr screen_terms(ExprPtr expr, bool skip_clone) {
+  // use cloned expr to avoid side effects
+  if (!skip_clone) expr = expr->clone();
 
   auto screen = [](const ExprPtr& term) {
     if (!(term->is<op_t>() || term->is<Product>())) {
@@ -90,7 +94,7 @@ ExprPtr screen_terms(const ExprPtr& input) {
         })) {
       expr = sequant::expand(expr);
       simplify(expr);
-      return screen_terms(expr);
+      return screen_terms(expr, /*skip_clone*/ true);
     } else {
       return screen(expr);
     }
@@ -102,7 +106,9 @@ ExprPtr screen_terms(const ExprPtr& input) {
         [](const ExprPtr& running_total, const ExprPtr& summand) {
           return running_total + summand;
         },
-        [=](const auto& term) { return screen(term); });
+        [=](const auto& term) {
+          return screen_terms(term, /*skip_clone*/ true);
+        });
     return result;
   } else
     throw std::invalid_argument(
