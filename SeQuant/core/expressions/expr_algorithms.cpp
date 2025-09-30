@@ -255,6 +255,56 @@ ResultExpr& expand(ResultExpr& expr) {
 
 ResultExpr& expand(ResultExpr&& expr) { return expand(expr); }
 
+ExprPtr& flatten(ExprPtr& expr) {
+  auto impl = []<typename E>(std::shared_ptr<E> expr) {
+    static_assert(std::is_base_of_v<Expr, E> &&
+                  (std::is_same_v<E, Product> || std::is_same_v<E, Sum>));
+
+    bool mutated = false;
+    std::shared_ptr<E> flattened_expr;
+    for (auto it = expr->begin(); it != expr->end(); ++it) {
+      auto& subexpr = *it;
+      if (mutated) {
+        flattened_expr->append(flatten(subexpr));
+        continue;
+      }
+      auto flattened_subexpr = flatten(subexpr);
+      bool rebuild = flattened_subexpr.template is<E>() ||
+                     (flattened_subexpr.get() != subexpr.get());
+      if (rebuild) {
+        mutated = true;
+        if constexpr (std::is_same_v<E, Product>) {
+          flattened_expr =
+              std::make_shared<E>(expr->scalar(), expr->begin(), it);
+        } else {
+          flattened_expr = std::make_shared<E>(expr->begin(), it);
+        }
+        flattened_expr->append(flattened_subexpr);
+      }
+    }
+    return mutated ? flattened_expr : expr;
+  };
+
+  if (expr.is<Product>()) {
+    expr = impl(expr.as_shared_ptr<Product>());
+    return expr;
+  } else if (expr.is<Sum>()) {
+    expr = impl(expr.as_shared_ptr<Sum>());
+    return expr;
+  } else
+    return expr;
+}
+
+ExprPtr flatten(ExprPtr&& expr) { return flatten(expr); }
+
+ResultExpr& flatten(ResultExpr& expr) {
+  expr.expression() = flatten(expr.expression());
+
+  return expr;
+}
+
+ResultExpr& flatten(ResultExpr&& expr) { return flatten(expr); }
+
 struct RapidSimplifyVisitor {
   SimplifyOptions opts;
 

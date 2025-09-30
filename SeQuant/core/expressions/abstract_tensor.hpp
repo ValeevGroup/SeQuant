@@ -272,7 +272,6 @@ class AbstractTensor {
     throw missing_instantiation_for("_swap_bra_ket");
   }
 
- private:
   /// @return mutable view of bra
   /// @warning this is used for mutable access, flush memoized state before
   /// returning!
@@ -292,6 +291,7 @@ class AbstractTensor {
     throw missing_instantiation_for("_aux_mutable");
   }
 
+ private:
   friend class TensorCanonicalizer;
 
   static void permute_impl(AbstractTensor::any_view_randsz indices,
