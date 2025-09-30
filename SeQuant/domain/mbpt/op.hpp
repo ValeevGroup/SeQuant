@@ -115,7 +115,6 @@ inline const container::map<OpType, std::wstring> optype2label{
     {OpType::RDM, L"γ"},
     // see https://en.wikipedia.org/wiki/Cumulant
     {OpType::RDMCumulant, L"κ"},
-    {OpType::δ, L"δ"},
     {OpType::h_1, L"h¹"},
     {OpType::t_1, L"t¹"},
     {OpType::λ_1, L"λ¹"}};
