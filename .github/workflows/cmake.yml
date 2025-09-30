@@ -87,10 +87,8 @@ jobs:
         sudo apt-get install ninja-build g++-14 liblapack-dev libboost-dev libboost-locale-dev libboost-random-dev libboost-regex-dev libeigen3-dev openmpi-bin libopenmpi-dev ccache valgrind catch2
     - name: Prepare ccache timestamp
       id: ccache_cache_timestamp
-      shell: cmake -P {0}
-      run: |
-        string(TIMESTAMP current_date "%Y-%m-%d-%H;%M;%S" UTC)
-        message("::set-output name=timestamp::${current_date}")
+      shell: bash
+      run: echo "timestamp=$(date -u +'%Y-%m-%d-%H-%M-%S')" >> $GITHUB_OUTPUT
     - name: Setup ccache cache files
       uses: actions/cache@v4
       with:
