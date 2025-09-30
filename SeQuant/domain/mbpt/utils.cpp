@@ -74,7 +74,7 @@ ExprPtr screen_terms(const ExprPtr& input) {
     if (term->is<op_t>()) {
       term_qns = term->as<op_t>()();
     } else if (term->is<Product>()) {
-      term_qns = detail::compute_qnc(term->as<Product>());
+      term_qns = mbpt::detail::compute_qnc(term->as<Product>());
     }
     return is_vacuum(term_qns) ? term : ex<Constant>(0);
   };
