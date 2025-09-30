@@ -11,7 +11,29 @@
 
 #include <SeQuant/domain/mbpt/op.hpp>
 
+#include <range/v3/view.hpp>
+
 namespace sequant::mbpt {
+
+namespace detail {
+
+/// @brief Computes the net quantum number change produced by a product of
+/// mbpt::Operators
+/// @param pdt a product of mbpt::op_t
+/// @return net quantum number change produced by \p pdt
+/// @pre This function expects \p pdt to be a Product of mbpt::op_t
+inline qns_t compute_qnc(const Product& pdt) {
+  qns_t qns;
+  for (auto& factor : ranges::views::reverse(pdt.factors())) {
+    if (factor->template is<Variable>()) continue;  // skip Variables
+    assert(factor->template is<op_t>());  // everything else must be op_t
+    const auto& op = factor->template as<op_t>();
+    qns = op(qns);
+  }
+  return qns;
+}
+
+}  // namespace detail
 
 /// @brief Computes the similarity transformation e^(-B) A e^B using the
 /// commutator expansion up to the specified order.
