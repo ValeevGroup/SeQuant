@@ -35,18 +35,21 @@ inline qns_t compute_qnc(const Product& pdt) {
 
 }  // namespace detail
 
-/// @brief Computes the similarity transformation e^(-B) A e^B using the
-/// commutator expansion up to the specified order.
-/// The expansion is given by: e^(-B) A e^B = A + [A,B] + (1/2!)[[A,B],B] +
-/// (1/3!)[[[A,B],B],B] + ...
+// clang-format off
+/// @brief Computes the similarity transformation e^(-B) A e^B using a commutator series truncated up to the specified order. Uses the Baker-Campbell-Hausdorff expansion.
+/// The transformation is given by: e^(-B) A e^B = A + [A,B] + (1/2!)[[A,B],B] + (1/3!)[[[A,B],B],B] + ...
 ///
-/// @param A Operator A
-/// @param B Operator B
-/// @param commutator_rank The order at which to truncate the expansion (number
-/// of nested commutators)
+/// Notes:
+/// - This implementation is specific to the exponential ansatz B = e^X, not the general similarity transform B^{-1} A B.
+/// - If \p unitary is true, the ansatz uses B - B^+ instead of B, corresponding to a unitary coupled-cluster type transformation.
+///
+/// @param A Expression A (e.g., the Hamiltonian)
+/// @param B Expression B (e.g., the cluster operator T)
+/// @param commutator_rank The maximum order of nested commutators to retain (e.g. 4 for traditional coupled-cluster)
 /// @param unitary If true, uses unitary ansatz with B-B^+
 /// @param skip_clone if true, will not clone the input expression
 /// @pre This function expects \p A and \p B to be composed of mbpt::Operators
+// clang-format on
 ExprPtr sim_tr(ExprPtr A, const ExprPtr& B, size_t commutator_rank,
                bool unitary = false, bool skip_clone = false);
 
