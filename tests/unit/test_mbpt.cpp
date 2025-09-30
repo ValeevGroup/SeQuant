@@ -15,6 +15,7 @@
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/op.hpp>
 #include <SeQuant/domain/mbpt/rules/df.hpp>
+#include <SeQuant/domain/mbpt/utils.hpp>
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers.hpp>
@@ -323,6 +324,26 @@ TEST_CASE("mbpt", "[mbpt]") {
       auto vev2_op = op::vac_av(expr2);
       auto vev2_t = tensor::vac_av(expr2_tnsr);  // no operator level screening
       REQUIRE(to_latex(vev2_op) == to_latex(vev2_t));
+
+      // Test op::screen_zero_terms
+      auto hbar = mbpt::sim_tr(H(), T_(2), 4);  // CCD Hbar
+      auto screened_hbar = op::screen_zero_terms(hbar);
+      auto expected = H_(2) * T_(2);
+      REQUIRE(simplify(screened_hbar - expected) == ex<Constant>(0));
+
+      auto expr3 = P(2) * hbar * R_(nₚ(2), nₕ(2));
+      auto screened_expr3 = op::screen_zero_terms(expr3);
+      auto expected3 =
+          op::P(2) * (H_(2) * T_(2) + H_(2) + H_(1)) * R_(nₚ(2), nₕ(2));
+      REQUIRE(simplify(screened_expr3 - expected3) == ex<Constant>(0));
+
+      auto expr4 = P(nₚ(2), nₕ(1)) * hbar * R(nₚ(1), nₕ(0));
+      auto screened_expr4 = op::screen_zero_terms(expr4);
+      auto expected4 = P(nₚ(2), nₕ(1)) *
+                       (H_(1) + H_(1) * T_(2) + H_(2) * T_(2) + H_(2)) *
+                       R(nₚ(1), nₕ(0));
+      REQUIRE(simplify(screened_expr4 - expected4) == ex<Constant>(0));
+
     }  // SECTION("screen")
 
     SECTION("predefined") {
