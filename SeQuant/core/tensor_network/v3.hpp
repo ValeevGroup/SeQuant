@@ -502,23 +502,6 @@ class TensorNetworkV3 {
   }
 };
 
-template <typename CharT, typename Traits>
-std::basic_ostream<CharT, Traits> &operator<<(
-    std::basic_ostream<CharT, Traits> &stream, SlotType origin) {
-  switch (origin) {
-    case SlotType::Bra:
-      stream << "Bra";
-      break;
-    case SlotType::Ket:
-      stream << "Ket";
-      break;
-    case SlotType::Aux:
-      stream << "Aux";
-      break;
-  }
-  return stream;
-}
-
 }  // namespace sequant
 
 #endif  // SEQUANT_TENSOR_NETWORK_H
