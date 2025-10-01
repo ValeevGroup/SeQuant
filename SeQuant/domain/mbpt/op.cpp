@@ -730,39 +730,39 @@ ExprPtr S(std::int64_t K) {
       OpType::S, cre(creators), ann(annihilators))(dep, {Symmetry::Nonsymm});
 }
 
-ExprPtr H_pt([[maybe_unused]] std::size_t order, std::size_t R) {
+ExprPtr H_pt(std::size_t R, [[maybe_unused]] std::size_t order) {
   assert(order == 1 &&
          "sequant::sr::H_pt(): only supports first order perturbation");
   assert(R > 0);
   return OpMaker<Statistics::FermiDirac>(OpType::h_1, R)();
 }
 
-ExprPtr T_pt_([[maybe_unused]] std::size_t order, std::size_t K) {
+ExprPtr T_pt_(std::size_t K, [[maybe_unused]] std::size_t order) {
   assert(order == 1 &&
          "sequant::sr::T_pt_(): only supports first order perturbation");
   return OpMaker<Statistics::FermiDirac>(OpType::t_1, K)();
 }
 
-ExprPtr T_pt(std::size_t order, std::size_t K, bool skip1) {
+ExprPtr T_pt(std::size_t K, std::size_t order, bool skip1) {
   assert(K > (skip1 ? 1 : 0));
   ExprPtr result;
   for (auto k = (skip1 ? 2ul : 1ul); k <= K; ++k) {
-    result = k > 1 ? result + tensor::T_pt_(order, k) : tensor::T_pt_(order, k);
+    result = k > 1 ? result + tensor::T_pt_(k, order) : tensor::T_pt_(k, order);
   }
   return result;
 }
 
-ExprPtr Λ_pt_([[maybe_unused]] std::size_t order, std::size_t K) {
+ExprPtr Λ_pt_(std::size_t K, [[maybe_unused]] std::size_t order) {
   assert(order == 1 &&
          "sequant::sr::Λ_pt_(): only supports first order perturbation");
   return OpMaker<Statistics::FermiDirac>(OpType::λ_1, K)();
 }
 
-ExprPtr Λ_pt(std::size_t order, std::size_t K, bool skip1) {
+ExprPtr Λ_pt(std::size_t K, std::size_t order, bool skip1) {
   assert(K > (skip1 ? 1 : 0));
   ExprPtr result;
   for (auto k = (skip1 ? 2ul : 1ul); k <= K; ++k) {
-    result = k > 1 ? result + tensor::Λ_pt_(order, k) : tensor::Λ_pt_(order, k);
+    result = k > 1 ? result + tensor::Λ_pt_(k, order) : tensor::Λ_pt_(k, order);
   }
   return result;
 }
@@ -928,47 +928,47 @@ ExprPtr P(nₚ np, nₕ nh) {
   }
 }
 
-ExprPtr H_pt(std::size_t order, std::size_t R) {
+ExprPtr H_pt(std::size_t R, std::size_t order) {
   assert(R > 0);
   assert(order == 1 && "only first order perturbation is supported now");
   return ex<op_t>(
       []() -> std::wstring_view { return optype2label.at(OpType::h_1); },
-      [=]() -> ExprPtr { return tensor::H_pt(order, R); },
+      [=]() -> ExprPtr { return tensor::H_pt(R, order); },
       [=](qnc_t& qns) { qns = combine(general_type_qns(R), qns); });
 }
 
-ExprPtr T_pt_(std::size_t order, std::size_t K) {
+ExprPtr T_pt_(std::size_t K, std::size_t order) {
   assert(K > 0);
   assert(order == 1 && "only first order perturbation is supported now");
   return ex<op_t>(
       []() -> std::wstring_view { return optype2label.at(OpType::t_1); },
-      [=]() -> ExprPtr { return tensor::T_pt_(order, K); },
+      [=]() -> ExprPtr { return tensor::T_pt_(K, order); },
       [=](qnc_t& qns) { qns = combine(excitation_type_qns(K), qns); });
 }
 
-ExprPtr T_pt(std::size_t order, std::size_t K, bool skip1) {
+ExprPtr T_pt(std::size_t K, std::size_t order, bool skip1) {
   assert(K > (skip1 ? 1 : 0));
   ExprPtr result;
   for (auto k = (skip1 ? 2ul : 1ul); k <= K; ++k) {
-    result = k > 1 ? result + T_pt_(order, k) : T_pt_(order, k);
+    result = k > 1 ? result + T_pt_(k, order) : T_pt_(k, order);
   }
   return result;
 }
 
-ExprPtr Λ_pt_(std::size_t order, std::size_t K) {
+ExprPtr Λ_pt_(std::size_t K, std::size_t order) {
   assert(K > 0);
   assert(order == 1 && "only first order perturbation is supported now");
   return ex<op_t>(
       []() -> std::wstring_view { return optype2label.at(OpType::λ_1); },
-      [=]() -> ExprPtr { return tensor::Λ_pt_(order, K); },
+      [=]() -> ExprPtr { return tensor::Λ_pt_(K, order); },
       [=](qnc_t& qns) { qns = combine(deexcitation_type_qns(K), qns); });
 }
 
-ExprPtr Λ_pt(std::size_t order, std::size_t K, bool skip1) {
+ExprPtr Λ_pt(std::size_t K, std::size_t order, bool skip1) {
   assert(K > (skip1 ? 1 : 0));
   ExprPtr result;
   for (auto k = (skip1 ? 2ul : 1ul); k <= K; ++k) {
-    result = k > 1 ? result + Λ_pt_(order, k) : Λ_pt_(order, k);
+    result = k > 1 ? result + Λ_pt_(k, order) : Λ_pt_(k, order);
   }
   return result;
 }
