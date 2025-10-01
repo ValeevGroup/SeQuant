@@ -890,39 +890,39 @@ DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(A);
 ExprPtr S(std::int64_t K);
 
 /// @brief Makes perturbation operator of rank \p R
-/// @param order order of perturbation
 /// @param R rank of the operator,`R = 1` implies one-body perturbation
+/// @param order order of perturbation
 /// @pre `order==1`, only first order perturbation is supported now
-ExprPtr H_pt(std::size_t order, std::size_t R);
+ExprPtr H_pt(std::size_t R, std::size_t order = 1);
 
 /// @brief Makes perturbed particle-conserving excitation operator of rank \p K
-/// @param order order of perturbation
 /// @param K rank of the excitation operator
+/// @param order order of perturbation
 /// @pre `order==1`, only first order perturbation is supported now
-ExprPtr T_pt_(std::size_t order, std::size_t K);
+ExprPtr T_pt_(std::size_t K, std::size_t order = 1);
 
 /// @brief Makes sum of perturbed particle-conserving excitation operators up to
 /// rank \p K
-/// @param order order of perturbation
 /// @param K rank up to which the sum is to be formed
+/// @param order order of perturbation
 /// @param skip1 if true, skips single excitations
 /// @pre `order==1`, only first order perturbation is supported now
-ExprPtr T_pt(std::size_t order, std::size_t K, bool skip1 = false);
+ExprPtr T_pt(std::size_t K, std::size_t order = 1, bool skip1 = false);
 
 /// @brief Makes perturbed particle-conserving deexcitation operator of
 /// rank \p K
-/// @param order order of perturbation
 /// @param K rank of the deexcitation operator
+/// @param order order of perturbation
 /// @pre `order==1`, only first order perturbation is supported now
-ExprPtr Λ_pt_(std::size_t order, std::size_t K);
+ExprPtr Λ_pt_(std::size_t K, std::size_t order = 1);
 
 /// @brief Makes sum of perturbed particle-conserving deexcitation operators up
 /// to rank \p K
-/// @param order order of perturbation
 /// @param K rank up to which the sum is to be formed
+/// @param order order of perturbation
 /// @param skip1 if true, skips single deexcitations
 /// @pre `order==1`, only first order perturbation is supported now
-ExprPtr Λ_pt(std::size_t order, std::size_t K, bool skip1 = false);
+ExprPtr Λ_pt(std::size_t K, std::size_t order = 1, bool skip1 = false);
 }  // namespace tensor
 }  // namespace op
 
@@ -1052,39 +1052,39 @@ DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(A);
 ExprPtr S(std::int64_t K);
 
 /// @brief Makes perturbation operator of rank \p R
-/// @param order order of perturbation
 /// @param R rank of the operator,`R = 1` implies one-body perturbation
+/// @param order order of perturbation
 /// @pre `order==1`, only first order perturbation is supported now
-ExprPtr H_pt(std::size_t order, std::size_t R);
+ExprPtr H_pt(std::size_t R, std::size_t order = 1);
 
 /// @brief Makes perturbed particle-conserving excitation operator of rank \p K
-/// @param order order of perturbation
 /// @param K rank of the excitation operator
+/// @param order order of perturbation
 /// @pre `order==1`, only first order perturbation is supported now
-ExprPtr T_pt_(std::size_t order, std::size_t K);
+ExprPtr T_pt_(std::size_t K, std::size_t order = 1);
 
 /// @brief Makes sum of perturbed particle-conserving excitation operators up to
 /// rank \p K
-/// @param order order of perturbation
 /// @param K rank up to which the sum is to be formed
+/// @param order order of perturbation
 /// @param skip1 if true, skips single excitations
 /// @pre `order==1`, only first order perturbation is supported now
-ExprPtr T_pt(std::size_t order, std::size_t K, bool skip1 = false);
+ExprPtr T_pt(std::size_t K, std::size_t order = 1, bool skip1 = false);
 
 /// @brief Makes perturbed particle-conserving deexcitation operator of
 /// rank \p K
-/// @param order order of perturbation
 /// @param K rank of the deexcitation operator
+/// @param order order of perturbation
 /// @pre `order==1`, only first order perturbation is supported now
-ExprPtr Λ_pt_(std::size_t order, std::size_t K);
+ExprPtr Λ_pt_(std::size_t K, std::size_t order = 1);
 
 /// @brief Makes sum of perturbed particle-conserving deexcitation operators up
 /// to rank \p K
-/// @param order order of perturbation
 /// @param K rank up to which the sum is to be formed
+/// @param order order of perturbation
 /// @param skip1 if true, skips single deexcitations
 /// @pre `order==1`, only first order perturbation is supported now
-ExprPtr Λ_pt(std::size_t order, std::size_t K, bool skip1 = false);
+ExprPtr Λ_pt(std::size_t K, std::size_t order = 1, bool skip1 = false);
 
 /// @brief computes the quantum number change effected by a given Operator or
 /// Operator Product

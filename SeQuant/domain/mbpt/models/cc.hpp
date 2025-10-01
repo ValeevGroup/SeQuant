@@ -82,21 +82,21 @@ class CC {
 
   // clang-format off
   /// @brief derives perturbed t amplitude equations
-  /// @param order order of perturbation
   /// @param rank rank of perturbation operator. r = 1 means one-body perturbation operator
+  /// @param order order of perturbation
   /// @pre `rank==1 && order==1`, only first order perturbation and one-body perturbation operator is supported now
   /// @return std::vector of perturbed t amplitude equations
   // clang-format on
-  [[nodiscard]] std::vector<ExprPtr> t_pt(size_t order = 1, size_t rank = 1);
+  [[nodiscard]] std::vector<ExprPtr> t_pt(size_t rank = 1, size_t order = 1);
 
   // clang-format off
   /// @brief derives perturbed λ amplitude equations
-  /// @param order order of perturbation
   /// @param rank rank of perturbation operator. r = 1 means one-body perturbation operator
+  /// @param order order of perturbation
   /// @pre `rank==1 && order==1`, only first order perturbation and one-body perturbation operator is supported now
   /// @return std::vector of perturbed λ amplitude equations
   // clang-format on
-  [[nodiscard]] std::vector<ExprPtr> λ_pt(size_t order = 1, size_t rank = 1);
+  [[nodiscard]] std::vector<ExprPtr> λ_pt(size_t rank = 1, size_t order = 1);
 
   /// @brief derives right-side sigma equations for EOM-CC
   /// @param np number of particle creators in R operator

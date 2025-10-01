@@ -136,7 +136,7 @@ std::vector<ExprPtr> CC::λ(size_t commutator_rank) {
   return result;
 }
 
-std::vector<ExprPtr> CC::t_pt(size_t order, size_t rank) {
+std::vector<ExprPtr> CC::t_pt(size_t rank, size_t order) {
   assert(order == 1 &&
          "sequant::mbpt::CC::t_pt(): only first-order perturbation is "
          "supported now");
@@ -149,10 +149,10 @@ std::vector<ExprPtr> CC::t_pt(size_t order, size_t rank) {
   // truncate h1_bar at rank 2 for one-body perturbation
   // operator and at rank 4 for two-body perturbation operator
   const auto h1_truncate_at = rank == 1 ? 2 : 4;
-  const auto h1_bar = mbpt::sim_tr(H_pt(1, rank), T(N), h1_truncate_at);
+  const auto h1_bar = mbpt::sim_tr(H_pt(rank), T(N), h1_truncate_at);
 
   // construct [hbar, T(1)]
-  const auto hbar_pert = mbpt::sim_tr(H(), T(N), 3) * T_pt(order, N);
+  const auto hbar_pert = mbpt::sim_tr(H(), T(N), 3) * T_pt(N);
 
   // [Eq. 34, WIREs Comput Mol Sci. 2019; 9:e1406]
   const auto expr = simplify(h1_bar + hbar_pert);
@@ -169,14 +169,14 @@ std::vector<ExprPtr> CC::t_pt(size_t order, size_t rank) {
 
   std::vector<ExprPtr> result(N + 1);
   for (auto p = N; p >= 1; --p) {
-    const auto freq_term = ex<Variable>(L"ω") * P(nₚ(p)) * T_pt_(order, p);
+    const auto freq_term = ex<Variable>(L"ω") * P(nₚ(p)) * T_pt_(p);
     result.at(p) =
         this->vac_av(P(nₚ(p)) * expr, op_connect) - this->vac_av(freq_term);
   }
   return result;
 }
 
-std::vector<ExprPtr> CC::λ_pt(size_t order, size_t rank) {
+std::vector<ExprPtr> CC::λ_pt(size_t rank, size_t order) {
   assert(order == 1 &&
          "sequant::mbpt::CC::λ_pt(): only first-order perturbation is "
          "supported now");
@@ -192,15 +192,15 @@ std::vector<ExprPtr> CC::λ_pt(size_t order, size_t rank) {
   // truncate h1_bar at rank 2 for one-body perturbation
   // operator and at rank 4 for two-body perturbation operator
   const auto h1_truncate_at = rank == 1 ? 2 : 4;
-  const auto h1_bar = mbpt::sim_tr(H_pt(1, rank), T(N), h1_truncate_at);
+  const auto h1_bar = mbpt::sim_tr(H_pt(rank), T(N), h1_truncate_at);
 
   // construct [hbar, T(1)]
-  const auto hbar_pert = mbpt::sim_tr(H(), T(N), 3) * T_pt(order, N);
+  const auto hbar_pert = mbpt::sim_tr(H(), T(N), 3) * T_pt(N);
 
   // [Eq. 35, WIREs Comput Mol Sci. 2019; 9:e1406]
   const auto One = ex<Constant>(1);
   const auto expr =
-      simplify((One + Λ(N)) * (h1_bar + hbar_pert) + Λ_pt(order, N) * hbar);
+      simplify((One + Λ(N)) * (h1_bar + hbar_pert) + Λ_pt(N) * hbar);
 
   // connectivity:
   // t and t1 with {h,f,g}
@@ -224,7 +224,7 @@ std::vector<ExprPtr> CC::λ_pt(size_t order, size_t rank) {
 
   std::vector<ExprPtr> result(N + 1);
   for (auto p = N; p >= 1; --p) {
-    const auto freq_term = ex<Variable>(L"ω") * Λ_pt_(order, p) * P(nₚ(-p));
+    const auto freq_term = ex<Variable>(L"ω") * Λ_pt_(p) * P(nₚ(-p));
     result.at(p) =
         this->vac_av(expr * P(nₚ(-p)), op_connect) + this->vac_av(freq_term);
   }
