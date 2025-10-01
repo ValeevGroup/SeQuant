@@ -1086,6 +1086,14 @@ ExprPtr Λ_pt_(std::size_t order, std::size_t K);
 /// @pre `order==1`, only first order perturbation is supported now
 ExprPtr Λ_pt(std::size_t order, std::size_t K, bool skip1 = false);
 
+/// @brief computes the quantum number change effected by a given Operator or
+/// Operator Product
+/// @param expr the operator or operator product whose quantum number change is
+/// to be computed
+/// @return the quantum number change effected by \p expr
+/// @pre \p expr must be an Operator or an Operator Product
+qns_t compute_qnc(const ExprPtr& expr);
+
 /// @brief Checks if a given Operator or Operator Product can change the quantum
 /// numbers from \p source_qns to \p target_qns
 /// @param op_or_op_product the operator or operator product to check
