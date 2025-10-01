@@ -61,7 +61,7 @@ jobs:
         -DSEQUANT_COMPILE_DOC_EXAMPLES=${{ !matrix.valgrind }}
         -DSEQUANT_PYTHON=${{ !matrix.valgrind && !matrix.sanitize }}
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
 
     - name: Create Build Environment
       # Some projects don't allow in-source building, so create a separate build directory
@@ -78,7 +78,7 @@ jobs:
 
     - name: Install prerequisite MacOS packages
       if: ${{ startswith(matrix.os, 'macos') }}
-      run: brew install ninja boost eigen open-mpi ccache
+      run: brew install boost eigen open-mpi ccache
 
     - name: Install prerequisites Ubuntu packages
       if: ${{ matrix.os == 'ubuntu-24.04' }}
@@ -87,10 +87,8 @@ jobs:
         sudo apt-get install ninja-build g++-14 liblapack-dev libboost-dev libboost-locale-dev libboost-random-dev libboost-regex-dev libeigen3-dev openmpi-bin libopenmpi-dev ccache valgrind catch2
     - name: Prepare ccache timestamp
       id: ccache_cache_timestamp
-      shell: cmake -P {0}
-      run: |
-        string(TIMESTAMP current_date "%Y-%m-%d-%H;%M;%S" UTC)
-        message("::set-output name=timestamp::${current_date}")
+      shell: bash
+      run: echo "timestamp=$(date -u +'%Y-%m-%d-%H-%M-%S')" >> $GITHUB_OUTPUT
     - name: Setup ccache cache files
       uses: actions/cache@v4
       with:
