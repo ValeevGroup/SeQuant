@@ -18,16 +18,6 @@
 
 namespace sequant {
 
-/// @brief extracts external indices of an expanded expression
-
-/// External indices appear only once in an expression
-/// @param expr an expression
-/// @return external indices
-/// @pre @p expr has been expanded (i.e. cannot contain a Sum as a
-/// subexpression)
-/// @throw std::invalid_argument if any of @p expr subexpressions is a Sum
-inline container::set<Index> extract_external_indices(const Expr &expr);
-
 /// Applies Wick's theorem to a sequence of normal-ordered operators.
 ///
 /// @tparam S particle statistics
@@ -1555,15 +1545,18 @@ class WickTheorem {
     const auto &bra_qp_idx_opt = left_is_ann ? left_qp_idx : right_qp_idx;
     const auto &ket_qp_idx_opt = left_is_ann ? right_qp_idx : left_qp_idx;
 
-    if (bra_is_pure || ket_is_pure) {
+    if (bra_is_pure && ket_is_pure) {
       return make_overlap(bra_idx, ket_idx);
     } else {
       auto result = std::make_shared<Product>();
-      assert(bra_qp_idx_opt);
-      assert(ket_qp_idx_opt);
-      result->append(1, make_overlap(*bra_qp_idx_opt, *ket_qp_idx_opt));
-      result->append(1, make_kronecker(bra_idx, *bra_qp_idx_opt));
-      result->append(1, make_kronecker(*ket_qp_idx_opt, ket_idx));
+      assert(bra_is_pure || bra_qp_idx_opt);
+      assert(ket_is_pure || ket_qp_idx_opt);
+      result->append(1, make_overlap(bra_qp_idx_opt.value_or(bra_idx),
+                                     ket_qp_idx_opt.value_or(ket_idx)));
+      if (!bra_is_pure)
+        result->append(1, make_kronecker(bra_idx, *bra_qp_idx_opt));
+      if (!ket_is_pure)
+        result->append(1, make_kronecker(*ket_qp_idx_opt, ket_idx));
       return result;
     }
   }
