@@ -39,16 +39,16 @@ class index_repl_dst_t {
   explicit index_repl_dst_t(Index dst, Index src)
       : dst_(std::move(dst)), src_{std::move(src)} {
     if (Logger::instance().wick_reduce) {
-      std::wcout << "index_repl_dst_t: ctor, src=" << src.to_latex()
-                 << " dst=" << dst_.to_latex() << "\n";
+      sequant::wprintf("index_repl_dst_t: ctor, src=", src.to_latex(),
+                       " dst=", dst_.to_latex(), "\n");
     }
   }
 
   const Index &dst() const { return dst_; }
   void update_dst(Index idx) {
     if (Logger::instance().wick_reduce) {
-      std::wcout << "index_repl_dst_t: changing dst=" << dst_.to_latex()
-                 << " to dst=" << idx.to_latex() << "\n";
+      sequant::wprintf("index_repl_dst_t: changing dst=", dst_.to_latex(),
+                       " to dst=", idx.to_latex(), "\n");
     }
     dst_ = std::move(idx);
   }
@@ -57,8 +57,8 @@ class index_repl_dst_t {
   index_repl_dst_t &append_src(Index src) {
     assert(ranges::contains(src_, src) == false);
     if (Logger::instance().wick_reduce) {
-      std::wcout << "index_repl_dst_t: appended src=" << src.to_latex()
-                 << " to dst=" << dst_.to_latex() << "\n";
+      sequant::wprintf("index_repl_dst_t: appended src=", src.to_latex(),
+                       " -> dst=", dst_.to_latex(), "\n");
     }
     src_.emplace_back(std::move(src));
     return *this;
@@ -349,8 +349,8 @@ std::pair<container::map<Index, Index>, bool> compute_index_replacement_rules(
   /// to keep the information about which indices are related
   for (auto it = ranges::begin(exrng); it != ranges::end(exrng); ++it) {
     const auto &factor = *it;
-    if (factor->type_id() == Expr::get_type_id<Tensor>()) {
-      const auto &tensor = static_cast<const Tensor &>(*factor);
+    if (factor.is<Tensor>()) {
+      const auto &tensor = factor.as<Tensor>();
       const auto is_overlap = tensor.label() == overlap_label();
       const auto is_kronecker = tensor.label() == kronecker_label();
       if (is_overlap || is_kronecker) {
@@ -506,17 +506,20 @@ void reduce_wick_impl(std::shared_ptr<Product> &expr,
   const auto have_noncovariant_indices = !noncovariant_indices.empty();
 
   if (Logger::instance().wick_reduce) {
-    std::wcout << "reduce_wick_impl(expr, external_indices):\n input expr = "
-               << expr->to_latex() << "\n  external_indices = ";
+    sequant::wprintf(
+        "reduce_wick_impl(expr, external_indices):\n input expr = ",
+        expr->to_latex(), "\n  external_indices = ");
     ranges::for_each(external_indices, [](auto &index) {
-      std::wcout << index.full_label() << " ";
+      sequant::wprintf(index.full_label(), " ");
     });
-    std::wcout << std::endl;
+    sequant::wprintf("\n");
   }
 
+  std::int64_t pass = -1;
   bool pass_mutated = false;
   do {
     pass_mutated = false;
+    ++pass;
 
     // extract current indices
     auto idx_counter = get_used_indices_with_counts(expr);
@@ -589,17 +592,17 @@ void reduce_wick_impl(std::shared_ptr<Product> &expr,
             ctx.index_space_registry());
 
     if (Logger::instance().wick_reduce) {
-      std::wcout << "reduce_wick_impl(expr, external_indices):\n  expr = "
-                 << expr->to_latex() << "\n  external_indices = ";
+      sequant::wprintf("reduce_wick_impl(expr, external_indices) pass=", pass,
+                       ":\n  expr = ", expr->to_latex(),
+                       "\n  external_indices = ");
       ranges::for_each(external_indices, [](auto &index) {
-        std::wcout << index.full_label() << " ";
+        sequant::wprintf(index.full_label(), " ");
       });
-      std::wcout << "\n  replrules = ";
+      sequant::wprintf("\n  replrules = ");
       ranges::for_each(replacement_rules, [](auto &index) {
-        std::wcout << to_latex(index.first) << "\\to" << to_latex(index.second)
-                   << "\\,";
+        sequant::wprintf(to_latex(index.first), "\\to", to_latex(index.second),
+                         "\\,");
       });
-      std::wcout.flush();
     }
 
     // N.B. even if replacement list is empty, but have trivial kroneckers
@@ -610,9 +613,8 @@ void reduce_wick_impl(std::shared_ptr<Product> &expr,
     }
 
     if (Logger::instance().wick_reduce) {
-      std::wcout << "\n  result = " << expr->to_latex() << std::endl;
+      sequant::wprintf("\n  result = ", expr->to_latex(), "\n");
     }
-
   } while (pass_mutated);  // keep reducing until stop changing
 }
 
@@ -1261,7 +1263,7 @@ void WickTheorem<S>::reduce(ExprPtr &expr) const {
 
   // there are 2 possibilities: expr is a single Product, or it's a Sum of
   // Products
-  if (expr->type_id() == Expr::get_type_id<Product>()) {
+  if (expr.is<Product>()) {
     auto expr_cast = std::static_pointer_cast<Product>(expr);
     try {
       assert(external_indices_);
@@ -1271,8 +1273,7 @@ void WickTheorem<S>::reduce(ExprPtr &expr) const {
     } catch (detail::zero_result &) {
       expr = std::make_shared<Constant>(0);
     }
-  } else {
-    assert(expr->type_id() == Expr::get_type_id<Sum>());
+  } else if (expr.is<Sum>()) {
     for (auto &&subexpr : *expr) {
       assert(subexpr->is<Product>());
       auto subexpr_cast = std::static_pointer_cast<Product>(subexpr);
@@ -1289,8 +1290,8 @@ void WickTheorem<S>::reduce(ExprPtr &expr) const {
   }
 
   if (Logger::instance().wick_reduce) {
-    std::wcout << "WickTheorem<S>::reduce: result = "
-               << to_latex_align(expr, 20, 1) << std::endl;
+    sequant::wprintf(
+        "WickTheorem<S>::reduce: result = ", to_latex_align(expr, 20, 1), "\n");
   }
   if (extracted_indices) reset_indices();
 }
