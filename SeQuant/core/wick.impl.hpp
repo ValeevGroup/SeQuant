@@ -560,18 +560,18 @@ void reduce_wick_impl(std::shared_ptr<Product> &expr,
                t._bra()[0].proto_indices() == t._ket()[0].proto_indices());
           if (is_kronecker) {
             assert(t._bra_rank() == 1);
-            auto &b = t._bra()[0];
+            Index b = t._bra()[0];
             assert(t._ket_rank() == 1);
-            auto &k = t._ket()[0];
+            Index k = t._ket()[0];
             if (all_noncovariant_indices.contains(b)) {
               auto it = all_noncovariant_indices.find(k);
               if (it == all_noncovariant_indices.end()) {
-                all_noncovariant_indices.emplace_hint(it, k);
+                all_noncovariant_indices.emplace_hint(it, std::move(k));
               }
             } else if (all_noncovariant_indices.contains(k)) {
               auto it = all_noncovariant_indices.find(b);
               if (it == all_noncovariant_indices.end()) {
-                all_noncovariant_indices.emplace_hint(it, b);
+                all_noncovariant_indices.emplace_hint(it, std::move(b));
               }
             }
           }
