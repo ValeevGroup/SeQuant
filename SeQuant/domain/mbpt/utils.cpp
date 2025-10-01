@@ -66,7 +66,7 @@ ExprPtr sim_tr(ExprPtr A, const ExprPtr& B, size_t commutator_rank,
         "type");
 }
 
-ExprPtr screen_terms(ExprPtr expr, bool skip_clone) {
+ExprPtr screen_zero_terms(ExprPtr expr, bool skip_clone) {
   // use cloned expr to avoid side effects
   if (!skip_clone) expr = expr->clone();
 
@@ -74,18 +74,12 @@ ExprPtr screen_terms(ExprPtr expr, bool skip_clone) {
     if (!(term->is<op_t>() || term->is<Product>())) {
       throw std::invalid_argument("op::screen_terms: Unsupported term type");
     }
-    qns_t term_qns;
-    if (term->is<op_t>()) {
-      term_qns = term->as<op_t>()();
-    } else if (term->is<Product>()) {
-      term_qns = mbpt::detail::compute_qnc(term->as<Product>());
-    }
-    return is_vacuum(term_qns) ? term : ex<Constant>(0);
+    return op::can_change_qns(term, qns_t{}) ? term : ex<Constant>(0);
   };
 
   // expression type dispatch
   if (expr.is<op_t>()) {
-    return screen(expr);
+    return ex<Constant>(0);  // VEV of NO operator is zero
   } else if (expr.is<Product>()) {
     auto& product = expr.as<Product>();
     // Expand product as sum
@@ -94,7 +88,7 @@ ExprPtr screen_terms(ExprPtr expr, bool skip_clone) {
         })) {
       expr = sequant::expand(expr);
       simplify(expr);
-      return screen_terms(expr, /*skip_clone*/ true);
+      return screen_zero_terms(expr, /*skip_clone*/ true);
     } else {
       return screen(expr);
     }
@@ -107,7 +101,7 @@ ExprPtr screen_terms(ExprPtr expr, bool skip_clone) {
           return running_total + summand;
         },
         [=](const auto& term) {
-          return screen_terms(term, /*skip_clone*/ true);
+          return screen_zero_terms(term, /*skip_clone*/ true);
         });
     return result;
   } else
