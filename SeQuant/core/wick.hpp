@@ -130,10 +130,7 @@ class WickTheorem {
   /// WickTheorem::compute had already been invoked
   template <typename IndexContainer>
   WickTheorem &set_external_indices(IndexContainer &&external_indices) {
-    if (external_indices_.has_value())
-      throw std::logic_error(
-          "WickTheorem::set_external_indices invoked but external indices have "
-          "already been set/computed");
+    external_indices_.reset();
 
     if constexpr (std::is_convertible_v<
                       IndexContainer,
@@ -153,6 +150,18 @@ class WickTheorem {
             }
           });
     }
+
+    user_defined_external_indices_ = true;
+    return *this;
+  }
+
+  /// Resets the memoized (external, covariant) indices; will auto-deduce next
+  /// time reduce is called
+  const WickTheorem &reset_indices() const {
+    all_indices_.reset();
+    external_indices_.reset();
+    noncovariant_indices_.reset();
+    user_defined_external_indices_ = false;
     return *this;
   }
 
@@ -442,10 +451,15 @@ class WickTheorem {
   bool use_topology_ = true;
   mutable Stats stats_;
 
-  mutable std::optional<container::set<Index>>
-      external_indices_;  // lack of external indices != all indices are
-                          // internal
-
+  mutable std::optional<container::set<Index>> all_indices_;
+  mutable bool user_defined_external_indices_ = false;
+  mutable std::optional<container::set<Index>> external_indices_;
+  // covariant indices (= dummy indices that appear twice in braket slots) can
+  // be "rotated" arbitrarily in reduce ... these are the ones that can't
+  // n.b. this list is computed using input expression and
+  // used to compute list in reduce because kronecker deltas propagate
+  // noncovariance
+  mutable std::optional<container::set<Index>> noncovariant_indices_;
   container::svector<std::pair<Index, Index>>
       input_partner_indices_;  //!< list of {cre,ann} pairs of Index objects in
                                //!< input_ whose corresponding Op<S> objects
@@ -483,6 +497,19 @@ class WickTheorem {
   mutable container::map<Op<S>, std::size_t> op_to_input_ordinal_;
   friend class NontensorWickState;  // NontensorWickState needs to access
                                     // members of this
+
+  /// @brief extracts and memoizes all, external (if not already set) and
+  /// covariant indices
+
+  /// External indices appear only once in an expression
+  /// @param expr an expression
+  /// @param force_external if true, will treat all indices (even repeating) as
+  /// external
+  /// @pre @p expr has been expanded (i.e. cannot contain a Sum as a
+  /// subexpression)
+  /// @note protoindices of external indices are external
+  /// @throw std::invalid_argument if any of @p expr subexpressions is a Sum
+  void extract_indices(const Expr &expr, bool force_external = false) const;
 
   /// upsizes `{nop,index}_topological_partition_`, filling new entries with
   /// zeroes noop if current size > new_size
@@ -571,9 +598,8 @@ class WickTheorem {
           "WickTheorem::compute: spinfree=true supported only for physical "
           "vacuum and for Fermi facuum");
 
-    // deduce external indices, if needed
-    if (!external_indices_) {
-      external_indices_ = extract_external_indices(*input_);
+    if (!all_indices_) {
+      extract_indices(*input_);
     }
 
     // process cached nop_connections_input_, if needed

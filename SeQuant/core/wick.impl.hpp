@@ -10,6 +10,8 @@
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/tensor_network.hpp>
 #include <SeQuant/core/tensor_network/vertex.hpp>
+#include <SeQuant/core/utility/debug.hpp>
+#include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
 #ifdef SEQUANT_HAS_EXECUTION_HEADER
@@ -567,50 +569,39 @@ struct NullNormalOperatorCanonicalizerDeregister {
 
 }  // namespace detail
 
-inline void count_index_impl(container::map<Index, int64_t> &counter,
-                             const Index &idx) {
-  auto it = counter.find(idx);
-  if (it == counter.end()) {
-    counter.emplace(idx, 1);
-  } else {
-    it->second++;
+template <Statistics S>
+void WickTheorem<S>::extract_indices(const Expr &expr,
+                                     bool force_external) const {
+  auto idx_counter = get_used_indices_with_counts(expr);
+
+  all_indices_ =
+      idx_counter |
+      ranges::views::transform([](const auto &v) { return v.first; }) |
+      ranges::to<container::set<Index>>;
+
+  if (!user_defined_external_indices_) {
+    // external indices either appears once in nonproto slot or is pure
+    // protoindex
+    external_indices_ =
+        idx_counter | ranges::views::filter([force_external](const auto &v) {
+          return v.second.nonproto() <= 1 || force_external;
+        }) |
+        ranges::views::transform([](const auto &v) { return v.first; }) |
+        ranges::to<container::set<Index>>;
   }
-}
 
-inline void count_index(container::map<Index, int64_t> &counter,
-                        const Index &idx) {
-  count_index_impl(counter, idx);
-  /// N.B. protoindices of external indices are external
-  for (const auto &proto_idx : idx.proto_indices()) {
-    count_index_impl(counter, proto_idx);
-  }
-}
-
-/// @note protoindices of external indices are external
-inline container::set<Index> extract_external_indices(const Expr &expr) {
-  if (ranges::any_of(expr, [](auto &e) { return e.template is<Sum>(); }))
-    throw std::invalid_argument(
-        "extract_external_indices(expr): expr must be expanded (i.e. no "
-        "subexpression can be a Sum)");
-
-  container::map<Index, int64_t> idx_counter;
-  auto visitor = [&idx_counter](const auto &expr) {
-    auto expr_as_abstract_tensor =
-        std::dynamic_pointer_cast<AbstractTensor>(expr);
-    if (expr_as_abstract_tensor) {
-      ranges::for_each(expr_as_abstract_tensor->_braket(),
-                       [&idx_counter](const auto &v) {
-                         // N.B. protoindices of external indices are external
-                         count_index(idx_counter, v);
-                       });
-    }
-  };
-  expr.visit(visitor);
-
-  return idx_counter |
-         ranges::views::filter([](const auto &v) { return v.second == 1; }) |
-         ranges::views::transform([](const auto &v) { return v.first; }) |
-         ranges::to<container::set<Index>>;
+  // covariant indices are indices that do not depend on other indices,
+  // are not protoindices for other indices, and are dummy, i.e. summed over by
+  // appearing twice in nonproto slots and not among external indices
+  // noncovariant indices are the rest
+  noncovariant_indices_ =
+      idx_counter | ranges::views::filter([this](const auto &v) {
+        return (v.first.has_proto_indices() == true || v.second.proto != 0 ||
+                v.second.nonproto() != 2) &&
+               !external_indices_->contains(v.first);
+      }) |
+      ranges::views::transform([](const auto &v) { return v.first; }) |
+      ranges::to<container::set<Index>>;
 }
 
 template <Statistics S>
@@ -677,8 +668,7 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
                 "summands also a Sum, WickTheorem can only accept a fully "
                 "expanded Sum");
           else if (summand.template is<Product>()) {
-            external_indices_ = extract_external_indices(
-                *(summand.template as_shared_ptr<Product>()));
+            extract_indices(*(summand.template as_shared_ptr<Product>()));
             return true;
           } else
             return false;
@@ -727,14 +717,8 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
       // subsequent nop canonicalization
       disable_nop_canonicalization();
 
-      // find external_indices if don't have them
-      if (!external_indices_) {
-        external_indices_ =
-            extract_external_indices(*(expr_input_.as_shared_ptr<Product>()));
-      } else {
-        assert(
-            extract_external_indices(*(expr_input_.as_shared_ptr<Product>())) ==
-            *external_indices_);
+      if (!all_indices_) {
+        extract_indices(*(expr_input_.as_shared_ptr<Product>()));
       }
 
       // split off NormalOperators into input_
@@ -1202,6 +1186,12 @@ void WickTheorem<S>::reduce(ExprPtr &expr) const {
     std::wcout << "WickTheorem<S>::reduce: input = "
                << to_latex_align(expr, 20, 1) << std::endl;
   }
+
+  const bool extracted_indices = !all_indices_;
+  if (extracted_indices) {
+    extract_indices(*expr);
+  }
+
   // there are 2 possibilities: expr is a single Product, or it's a Sum of
   // Products
   if (expr->type_id() == Expr::get_type_id<Product>()) {
@@ -1234,6 +1224,7 @@ void WickTheorem<S>::reduce(ExprPtr &expr) const {
     std::wcout << "WickTheorem<S>::reduce: result = "
                << to_latex_align(expr, 20, 1) << std::endl;
   }
+  if (extracted_indices) reset_indices();
 }
 template <Statistics S>
 WickTheorem<S>::~WickTheorem() {}
