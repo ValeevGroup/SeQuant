@@ -1174,9 +1174,18 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
           "expression that's a NormalOperatorSequence<S>");
     } else  // ... else do nothing
       return expr_input_;
-  } else  // given a NormalOperatorSequence instead of an expression
-    return compute_nopseq(count_only);
-
+  } else {
+    // given a NormalOperatorSequence instead of an expression
+    auto result = compute_nopseq(count_only);
+    if (result) {  // simplify if obtained nonzero ...
+      this->reduce(result);
+      // N.B. DO NOT CANONICALIZE to preserve index pairings if doing partial
+      // contraction
+      rapid_simplify(result);
+    } else
+      result = ex<Constant>(0);
+    return result;
+  }
   SEQUANT_UNREACHABLE;
 }
 

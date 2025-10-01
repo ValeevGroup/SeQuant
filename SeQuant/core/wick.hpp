@@ -42,6 +42,8 @@ class WickTheorem {
   WickTheorem &operator=(const WickTheorem &) = default;
 
  public:
+  /// @param input normal operator sequence
+  /// @note assuming that all indices are external (not summed)
   explicit WickTheorem(
       const std::shared_ptr<NormalOperatorSequence<S>> &input) {
     init_input(input);
@@ -49,11 +51,22 @@ class WickTheorem {
     if constexpr (statistics == Statistics::BoseEinstein) {
       assert(input_->empty() || input_->vacuum() == Vacuum::Physical);
     }
+
+    // default computation may treat repeating indices as dummy
+    // override
+    extract_indices(*input, /* force_external = */ true);
   }
+
+  /// @param input normal operator sequence
+  /// @note assuming that all indices are external (not summed)
   explicit WickTheorem(NormalOperatorSequence<S> input)
       : WickTheorem(
             std::make_shared<NormalOperatorSequence<S>>(std::move(input))) {}
 
+  /// @param expr_input input expression
+  /// @note if \p expr_input is a normal operator sequence, assume that all
+  /// indices are external (not summed), else duplicate indices are assumed
+  /// dummy
   explicit WickTheorem(ExprPtr expr_input) {
     if (expr_input->is<NormalOperatorSequence<S>>()) {
       *this = WickTheorem(
@@ -62,11 +75,13 @@ class WickTheorem {
       expr_input_ = std::move(expr_input);
   }
 
+  /// @param ops operator sequence
+  /// @note assuming that all indices are external (not summed)
   explicit WickTheorem(const std::initializer_list<Op<S>> &ops)
       : WickTheorem(NormalOperatorSequence<S>{ops}) {}
 
-  /// constructs WickTheorem from @c other with expression input set to @c
-  /// expr_input
+  /// constructs WickTheorem from @p other with expression input set to
+  /// @p expr_input
   WickTheorem(ExprPtr expr_input, const WickTheorem &other)
       : WickTheorem(other) {
     input_ = {};  // reset input_ so that it is deduced from expr_input_
