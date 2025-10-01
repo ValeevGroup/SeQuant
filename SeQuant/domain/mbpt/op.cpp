@@ -1041,8 +1041,8 @@ ExprPtr L(nann na, ncre nc, const cre<IndexSpace>& cre_space,
 
 ExprPtr L(nₚ np, nₕ nh) { return L(nann(np), ncre(nh)); }
 
-bool can_change_qns(const ExprPtr& op_or_op_product, const qns_t target_qns,
-                    const qns_t source_qns = {}) {
+bool can_change_qns(const ExprPtr& op_or_op_product, const qns_t& target_qns,
+                    const qns_t& source_qns) {
   qns_t qns = source_qns;
   if (op_or_op_product.is<Product>()) {
     const auto& op_product = op_or_op_product.as<Product>();

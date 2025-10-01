@@ -1086,6 +1086,14 @@ ExprPtr Λ_pt_(std::size_t order, std::size_t K);
 /// @pre `order==1`, only first order perturbation is supported now
 ExprPtr Λ_pt(std::size_t order, std::size_t K, bool skip1 = false);
 
+/// Checks if a given Operator or Operator Product can change the quantum
+/// numbers from \p source_qns to \p target_qns
+/// @param op_or_op_product the operator or operator product to check
+/// @param target_qns the target quantum numbers
+/// @param source_qns the source quantum numbers
+bool can_change_qns(const ExprPtr& op_or_op_product, const qns_t& target_qns,
+                    const qns_t& source_qns = {});
+
 bool raises_vacuum_up_to_rank(const ExprPtr& op_or_op_product,
                               const unsigned long k);
 
