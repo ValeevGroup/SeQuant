@@ -32,11 +32,12 @@ bool CC::use_topology() const { return use_topology_; }
 
 std::vector<ExprPtr> CC::t(size_t commutator_rank, size_t pmax, size_t pmin) {
   pmax = (pmax == std::numeric_limits<size_t>::max() ? N : pmax);
+  const bool skip_singles = ansatz_ == Ansatz::oT || ansatz_ == Ansatz::oU;
 
   assert(pmax >= pmin && "pmax should be >= pmin");
 
   // 1. construct hbar(op) in canonical form
-  auto hbar = mbpt::sim_tr(H(), T(N), commutator_rank, unitary());
+  auto hbar = mbpt::sim_tr(H(), T(N, skip_singles), commutator_rank, unitary());
 
   // 2. project onto each manifold, screen, lower to tensor form and wick it
   std::vector<ExprPtr> result(pmax + 1);
@@ -80,9 +81,11 @@ std::vector<ExprPtr> CC::t(size_t commutator_rank, size_t pmax, size_t pmin) {
 std::vector<ExprPtr> CC::λ(size_t commutator_rank) {
   assert(commutator_rank >= 1 && "commutator rank should be >= 1");
   assert(!unitary() && "there is no need for CC::λ for unitary ansatz");
+  const bool skip_singles = ansatz_ == Ansatz::oT || ansatz_ == Ansatz::oU;
 
   // construct hbar
-  auto hbar = mbpt::sim_tr(H(), T(N), commutator_rank - 1, unitary());
+  auto hbar =
+      mbpt::sim_tr(H(), T(N, skip_singles), commutator_rank - 1, unitary());
 
   const auto One = ex<Constant>(1);
   auto lhbar = simplify((One + Λ(N)) * hbar);
@@ -236,9 +239,10 @@ std::vector<ExprPtr> CC::eom_r(nₚ np, nₕ nh) {
     assert(
         get_default_context().spbasis() != SPBasis::Spinfree &&
         "spin-free basis does not yet support non particle-conserving cases");
+  const bool skip_singles = ansatz_ == Ansatz::oT;
 
   // construct hbar
-  const auto hbar = mbpt::sim_tr(H(), T(N), 4);
+  const auto hbar = mbpt::sim_tr(H(), T(N, skip_singles), 4);
 
   // hbar * R
   const auto hbar_R = hbar * R(np, nh);
@@ -276,9 +280,10 @@ std::vector<ExprPtr> CC::eom_l(nₚ np, nₕ nh) {
   if (np != nh)
     assert(get_default_context().spbasis() != SPBasis::Spinfree &&
            "spin-free basis does not support non particle-conserving cases");
+  const bool skip_singles = ansatz_ == Ansatz::oT;
 
   // construct hbar
-  const auto hbar = mbpt::sim_tr(H(), T(N), 4);
+  const auto hbar = mbpt::sim_tr(H(), T(N, skip_singles), 4);
 
   // L * hbar
   const auto L_hbar = L(np, nh) * hbar;
