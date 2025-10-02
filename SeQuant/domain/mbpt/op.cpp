@@ -354,18 +354,30 @@ std::wstring to_latex(const mbpt::Operator<mbpt::qns_t, S>& op) {
     base_lbl.pop_back();
   }
 
-  auto it = label2optype.find(base_lbl);
-  if (it != label2optype.end()) {  // handle special cases
-    OpType optype = it->second;
-    if (to_class(optype) == OpClass::gen) {
-      if (optype == OpType::θ) {  // special case for θ
-        result += L"_{" + std::to_wstring(op()[0].upper()) + L"}";
-      }
-      result += L"}";
-      return result;
-    }
+  auto it = label2optype.find(base_lbl);  // look for OpType
+
+  // special handling for general operators
+  // - Ops like f and g does not need ranks, it is implied
+  // - Ops like A, S, θ are general, but need rank information
+  // - θ needs to be treated differently because it can have variable number of
+  // quantum numbers
+
+  auto skip_rank_info = [](const OpType& optype) {
+    return to_class(optype) == OpClass::gen &&
+           !(optype == OpType::θ || optype == OpType::A || optype == OpType::S);
+  };
+  if (it != label2optype.end() && skip_rank_info(it->second)) {
+    result += L"}";  // close the brace
+    return result;
   }
-  std::wstring baseline_char = is_adjoint ? L"^" : L"_";
+  // specially handle θ operator
+  if (it != label2optype.end() && it->second == OpType::θ) {
+    result += L"_{" + std::to_wstring(op()[0].upper()) + L"}";
+    result += L"}";  // close the brace
+    return result;
+  }
+
+  const std::wstring baseline_char = is_adjoint ? L"^" : L"_";
   if (get_default_context().vacuum() == Vacuum::Physical) {
     if (op()[0] == op()[1]) {  // particle conserving
       result += L"_{" + std::to_wstring(op()[0].lower()) + L"}";
