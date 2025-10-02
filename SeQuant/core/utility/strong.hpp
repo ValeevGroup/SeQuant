@@ -302,9 +302,9 @@ class strong_type_base {
 // interpret as T)
 #define DEFINE_STRONG_TYPE_FOR_RANGE(ID)                                       \
   template <typename T>                                                        \
-  struct ID : detail::strong_type_base<T, ID<T>> {                             \
+  struct ID : sequant::detail::strong_type_base<T, ID<T>> {                    \
     using value_type = T;                                                      \
-    using base_type = detail::strong_type_base<T, ID<T>>;                      \
+    using base_type = sequant::detail::strong_type_base<T, ID<T>>;             \
     using base_type::base_type;                                                \
     using base_type::operator=;                                                \
   };                                                                           \
@@ -335,15 +335,15 @@ class strong_type_base {
 #endif  // DEFINE_STRONG_TYPE_FOR_RANGE
 
 #ifndef DEFINE_STRONG_TYPE_FOR_INTEGER
-#define DEFINE_STRONG_TYPE_FOR_INTEGER(ID, IntType)          \
-  struct ID : detail::strong_type_base<IntType, ID> {        \
-    using value_type = IntType;                              \
-    using base_type = detail::strong_type_base<IntType, ID>; \
-    using base_type::base_type;                              \
-    using base_type::operator=;                              \
-    using base_type::operator-;                              \
-    ID(const base_type& b) noexcept : base_type(b) {}        \
-    ID(base_type&& b) noexcept : base_type(std::move(b)) {}  \
+#define DEFINE_STRONG_TYPE_FOR_INTEGER(ID, IntType)                   \
+  struct ID : sequant::detail::strong_type_base<IntType, ID> {        \
+    using value_type = IntType;                                       \
+    using base_type = sequant::detail::strong_type_base<IntType, ID>; \
+    using base_type::base_type;                                       \
+    using base_type::operator=;                                       \
+    using base_type::operator-;                                       \
+    ID(const base_type& b) noexcept : base_type(b) {}                 \
+    ID(base_type&& b) noexcept : base_type(std::move(b)) {}           \
   };
 #endif  // DEFINE_STRONG_TYPE_FOR_INTEGER
 #ifndef DEFINE_STRONG_TYPE_FOR_RANGE_AND_RANGESIZE
