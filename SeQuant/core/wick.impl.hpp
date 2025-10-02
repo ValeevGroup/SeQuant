@@ -10,6 +10,8 @@
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/tensor_network.hpp>
 #include <SeQuant/core/tensor_network/vertex.hpp>
+#include <SeQuant/core/utility/debug.hpp>
+#include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
 #ifdef SEQUANT_HAS_EXECUTION_HEADER
@@ -37,16 +39,16 @@ class index_repl_dst_t {
   explicit index_repl_dst_t(Index dst, Index src)
       : dst_(std::move(dst)), src_{std::move(src)} {
     if (Logger::instance().wick_reduce) {
-      std::wcout << "index_repl_dst_t: ctor, src=" << src.to_latex()
-                 << " dst=" << dst_.to_latex() << "\n";
+      sequant::wprintf("index_repl_dst_t: ctor, src=", src.to_latex(),
+                       " dst=", dst_.to_latex(), "\n");
     }
   }
 
   const Index &dst() const { return dst_; }
   void update_dst(Index idx) {
     if (Logger::instance().wick_reduce) {
-      std::wcout << "index_repl_dst_t: changing dst=" << dst_.to_latex()
-                 << " to dst=" << idx.to_latex() << "\n";
+      sequant::wprintf("index_repl_dst_t: changing dst=", dst_.to_latex(),
+                       " to dst=", idx.to_latex(), "\n");
     }
     dst_ = std::move(idx);
   }
@@ -55,8 +57,8 @@ class index_repl_dst_t {
   index_repl_dst_t &append_src(Index src) {
     assert(ranges::contains(src_, src) == false);
     if (Logger::instance().wick_reduce) {
-      std::wcout << "index_repl_dst_t: appended src=" << src.to_latex()
-                 << " to dst=" << dst_.to_latex() << "\n";
+      sequant::wprintf("index_repl_dst_t: appended src=", src.to_latex(),
+                       " -> dst=", dst_.to_latex(), "\n");
     }
     src_.emplace_back(std::move(src));
     return *this;
@@ -95,6 +97,7 @@ template <Statistics S>
 std::pair<container::map<Index, Index>, bool> compute_index_replacement_rules(
     std::shared_ptr<Product> &product,
     const container::set<Index> &external_indices,
+    const container::set<Index> &noncovariant_indices,
     const std::set<Index, Index::LabelCompare> &all_indices,
     const std::shared_ptr<const IndexSpaceRegistry> &isr =
         get_default_context(S).index_space_registry()) {
@@ -135,7 +138,6 @@ std::pair<container::map<Index, Index>, bool> compute_index_replacement_rules(
       } else
         return Index(dst, src.proto_indices());
     } else {
-      assert(!dst.has_proto_indices());
       return dst;
     }
   };
@@ -223,8 +225,9 @@ std::pair<container::map<Index, Index>, bool> compute_index_replacement_rules(
     bool change_dst_protoindices = false;
     // already have protoindices?
     if (old_dst.has_proto_indices()) {
-      // not sure what do to now; same index need to be mappped to indices with
-      // different protoindices?
+      // same index should never be mapped to indices with
+      // different protoindices, this is what the logic dealing with
+      // noncovariant indices is meant to avoid
       if (protosrc.value_or(src).has_proto_indices()) {
         assert(protosrc.value_or(src).proto_indices() ==
                old_dst.proto_indices());
@@ -346,8 +349,8 @@ std::pair<container::map<Index, Index>, bool> compute_index_replacement_rules(
   /// to keep the information about which indices are related
   for (auto it = ranges::begin(exrng); it != ranges::end(exrng); ++it) {
     const auto &factor = *it;
-    if (factor->type_id() == Expr::get_type_id<Tensor>()) {
-      const auto &tensor = static_cast<const Tensor &>(*factor);
+    if (factor.is<Tensor>()) {
+      const auto &tensor = factor.as<Tensor>();
       const auto is_overlap = tensor.label() == overlap_label();
       const auto is_kronecker = tensor.label() == kronecker_label();
       if (is_overlap || is_kronecker) {
@@ -360,14 +363,12 @@ std::pair<container::map<Index, Index>, bool> compute_index_replacement_rules(
         // skip if
         // - self-kronecker (will be replaced by 1 already)
         bool do_skip = bra == ket;
-        // - nontrivial overlap between spaces that depend on distinct
-        // protoindices
+        // - nontrivial overlap between 2 noncovariant modes
         if (is_overlap) {
-          do_skip = do_skip ||
-                    bra.proto_indices().size() != ket.proto_indices().size();
-        } else {
-          // kroneckers should never involve different protoindices
-          assert(bra.has_proto_indices() == ket.has_proto_indices());
+          // N.B. noncovariant bra or ket is OK because we can always rotate it
+          // to match the basis of the other
+          do_skip = do_skip || (noncovariant_indices.contains(bra) &&
+                                noncovariant_indices.contains(ket));
         }
         if (!do_skip) {
           const auto bra_is_ext = ranges::find(external_indices, bra) !=
@@ -498,48 +499,110 @@ inline bool apply_index_replacement_rules(
 template <Statistics S>
 void reduce_wick_impl(std::shared_ptr<Product> &expr,
                       const container::set<Index> &external_indices,
+                      const container::set<Index> &noncovariant_indices,
                       const Context &ctx) {
+  // if have noncovariant indices, will need to update them at the beginning of
+  // every pass
+  const auto have_noncovariant_indices = !noncovariant_indices.empty();
+
   if (Logger::instance().wick_reduce) {
-    std::wcout << "reduce_wick_impl(expr, external_indices):\n input expr = "
-               << expr->to_latex() << "\n  external_indices = ";
+    sequant::wprintf(
+        "reduce_wick_impl(expr, external_indices):\n input expr = ",
+        expr->to_latex(), "\n  external_indices = ");
     ranges::for_each(external_indices, [](auto &index) {
-      std::wcout << index.full_label() << " ";
+      sequant::wprintf(index.full_label(), " ");
     });
-    std::wcout << std::endl;
+    sequant::wprintf("\n");
   }
 
+  std::int64_t pass = -1;
   bool pass_mutated = false;
   do {
     pass_mutated = false;
+    ++pass;
 
     // extract current indices
-    std::set<Index, Index::LabelCompare> all_indices;
-    ranges::for_each(*expr, [&all_indices](const auto &factor) {
-      if (factor->template is<AbstractTensor>()) {
-        ranges::for_each(factor->template as<const AbstractTensor>()._slots(),
-                         [&all_indices](const Index &idx) {
-                           if (idx) [[maybe_unused]]
-                             auto result = all_indices.insert(idx);
-                         });
+    auto idx_counter = get_used_indices_with_counts(expr);
+
+    auto all_indices =
+        idx_counter |
+        ranges::views::transform([](const auto &v) { return v.first; }) |
+        ranges::to<std::set<Index, Index::LabelCompare>>;
+
+    // update list of noncovariant indices every iteration
+    container::set<Index> all_noncovariant_indices;
+    if (have_noncovariant_indices) {
+      // see extract_indices
+      all_noncovariant_indices =
+          idx_counter |
+          ranges::views::filter([&external_indices](const auto &v) {
+            return (v.first.has_proto_indices() == true ||
+                    v.second.proto != 0 || v.second.nonproto() != 2) &&
+                   !external_indices.contains(v.first);
+          }) |
+          ranges::views::transform([](const auto &v) { return v.first; }) |
+          ranges::to<container::set<Index>>;
+      // augment list of noncovariant indices:
+      // - any index with protoindices is noncovariant
+      // - if kronecker delta has a noncovariant index, the other index is also
+      // noncovariant
+      expr->visit([&all_noncovariant_indices](const ExprPtr &ex) {
+        if (ex.is<AbstractTensor>()) {
+          auto &t = ex.template as<AbstractTensor>();
+          for (auto &idx : slots(t)) {
+            if (idx.has_proto_indices()) all_noncovariant_indices.emplace(idx);
+          }
+          const auto tlabel = t._label();
+          const auto is_kronecker =
+              tlabel == kronecker_label() ||
+              (tlabel == overlap_label() &&
+               get_default_context().metric() == IndexSpaceMetric::Unit &&
+               t._bra()[0].proto_indices() == t._ket()[0].proto_indices());
+          if (is_kronecker) {
+            assert(t._bra_rank() == 1);
+            Index b = t._bra()[0];
+            assert(t._ket_rank() == 1);
+            Index k = t._ket()[0];
+            if (all_noncovariant_indices.contains(b)) {
+              auto it = all_noncovariant_indices.find(k);
+              if (it == all_noncovariant_indices.end()) {
+                all_noncovariant_indices.emplace_hint(it, std::move(k));
+              }
+            } else if (all_noncovariant_indices.contains(k)) {
+              auto it = all_noncovariant_indices.find(b);
+              if (it == all_noncovariant_indices.end()) {
+                all_noncovariant_indices.emplace_hint(it, std::move(b));
+              }
+            }
+          }
+        }
+      });
+      if (Logger::instance().wick_reduce) {
+        sequant::wprintf("all_noncovariant_indices = ");
+        for (auto &idx : all_noncovariant_indices) {
+          sequant::wprintf(" ", idx.to_latex());
+        }
+        sequant::wprintf("\n");
       }
-    });
+    }
 
     const auto [replacement_rules, found_kroneckers] =
-        compute_index_replacement_rules<S>(expr, external_indices, all_indices,
-                                           ctx.index_space_registry());
+        compute_index_replacement_rules<S>(
+            expr, external_indices, all_noncovariant_indices, all_indices,
+            ctx.index_space_registry());
 
     if (Logger::instance().wick_reduce) {
-      std::wcout << "reduce_wick_impl(expr, external_indices):\n  expr = "
-                 << expr->to_latex() << "\n  external_indices = ";
+      sequant::wprintf("reduce_wick_impl(expr, external_indices) pass=", pass,
+                       ":\n  expr = ", expr->to_latex(),
+                       "\n  external_indices = ");
       ranges::for_each(external_indices, [](auto &index) {
-        std::wcout << index.full_label() << " ";
+        sequant::wprintf(index.full_label(), " ");
       });
-      std::wcout << "\n  replrules = ";
+      sequant::wprintf("\n  replrules = ");
       ranges::for_each(replacement_rules, [](auto &index) {
-        std::wcout << to_latex(index.first) << "\\to" << to_latex(index.second)
-                   << "\\,";
+        sequant::wprintf(to_latex(index.first), "\\to", to_latex(index.second),
+                         "\\,");
       });
-      std::wcout.flush();
     }
 
     // N.B. even if replacement list is empty, but have trivial kroneckers
@@ -550,9 +613,8 @@ void reduce_wick_impl(std::shared_ptr<Product> &expr,
     }
 
     if (Logger::instance().wick_reduce) {
-      std::wcout << "\n  result = " << expr->to_latex() << std::endl;
+      sequant::wprintf("\n  result = ", expr->to_latex(), "\n");
     }
-
   } while (pass_mutated);  // keep reducing until stop changing
 }
 
@@ -567,50 +629,39 @@ struct NullNormalOperatorCanonicalizerDeregister {
 
 }  // namespace detail
 
-inline void count_index_impl(container::map<Index, int64_t> &counter,
-                             const Index &idx) {
-  auto it = counter.find(idx);
-  if (it == counter.end()) {
-    counter.emplace(idx, 1);
-  } else {
-    it->second++;
+template <Statistics S>
+void WickTheorem<S>::extract_indices(const Expr &expr,
+                                     bool force_external) const {
+  auto idx_counter = get_used_indices_with_counts(expr);
+
+  all_indices_ =
+      idx_counter |
+      ranges::views::transform([](const auto &v) { return v.first; }) |
+      ranges::to<container::set<Index>>;
+
+  if (!user_defined_external_indices_) {
+    // external indices either appears once in nonproto slot or is pure
+    // protoindex
+    external_indices_ =
+        idx_counter | ranges::views::filter([force_external](const auto &v) {
+          return v.second.nonproto() <= 1 || force_external;
+        }) |
+        ranges::views::transform([](const auto &v) { return v.first; }) |
+        ranges::to<container::set<Index>>;
   }
-}
 
-inline void count_index(container::map<Index, int64_t> &counter,
-                        const Index &idx) {
-  count_index_impl(counter, idx);
-  /// N.B. protoindices of external indices are external
-  for (const auto &proto_idx : idx.proto_indices()) {
-    count_index_impl(counter, proto_idx);
-  }
-}
-
-/// @note protoindices of external indices are external
-inline container::set<Index> extract_external_indices(const Expr &expr) {
-  if (ranges::any_of(expr, [](auto &e) { return e.template is<Sum>(); }))
-    throw std::invalid_argument(
-        "extract_external_indices(expr): expr must be expanded (i.e. no "
-        "subexpression can be a Sum)");
-
-  container::map<Index, int64_t> idx_counter;
-  auto visitor = [&idx_counter](const auto &expr) {
-    auto expr_as_abstract_tensor =
-        std::dynamic_pointer_cast<AbstractTensor>(expr);
-    if (expr_as_abstract_tensor) {
-      ranges::for_each(expr_as_abstract_tensor->_braket(),
-                       [&idx_counter](const auto &v) {
-                         // N.B. protoindices of external indices are external
-                         count_index(idx_counter, v);
-                       });
-    }
-  };
-  expr.visit(visitor);
-
-  return idx_counter |
-         ranges::views::filter([](const auto &v) { return v.second == 1; }) |
-         ranges::views::transform([](const auto &v) { return v.first; }) |
-         ranges::to<container::set<Index>>;
+  // covariant indices are indices that do not depend on other indices,
+  // are not protoindices for other indices, and are dummy, i.e. summed over by
+  // appearing twice in nonproto slots and not among external indices
+  // noncovariant indices are the rest
+  noncovariant_indices_ =
+      idx_counter | ranges::views::filter([this](const auto &v) {
+        return (v.first.has_proto_indices() == true || v.second.proto != 0 ||
+                v.second.nonproto() != 2) &&
+               !external_indices_->contains(v.first);
+      }) |
+      ranges::views::transform([](const auto &v) { return v.first; }) |
+      ranges::to<container::set<Index>>;
 }
 
 template <Statistics S>
@@ -677,8 +728,7 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
                 "summands also a Sum, WickTheorem can only accept a fully "
                 "expanded Sum");
           else if (summand.template is<Product>()) {
-            external_indices_ = extract_external_indices(
-                *(summand.template as_shared_ptr<Product>()));
+            extract_indices(*(summand.template as_shared_ptr<Product>()));
             return true;
           } else
             return false;
@@ -727,14 +777,8 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
       // subsequent nop canonicalization
       disable_nop_canonicalization();
 
-      // find external_indices if don't have them
-      if (!external_indices_) {
-        external_indices_ =
-            extract_external_indices(*(expr_input_.as_shared_ptr<Product>()));
-      } else {
-        assert(
-            extract_external_indices(*(expr_input_.as_shared_ptr<Product>())) ==
-            *external_indices_);
+      if (!all_indices_) {
+        extract_indices(*(expr_input_.as_shared_ptr<Product>()));
       }
 
       // split off NormalOperators into input_
@@ -1190,9 +1234,18 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
           "expression that's a NormalOperatorSequence<S>");
     } else  // ... else do nothing
       return expr_input_;
-  } else  // given a NormalOperatorSequence instead of an expression
-    return compute_nopseq(count_only);
-
+  } else {
+    // given a NormalOperatorSequence instead of an expression
+    auto result = compute_nopseq(count_only);
+    if (result) {  // simplify if obtained nonzero ...
+      this->reduce(result);
+      // N.B. DO NOT CANONICALIZE to preserve index pairings if doing partial
+      // contraction
+      rapid_simplify(result);
+    } else
+      result = ex<Constant>(0);
+    return result;
+  }
   SEQUANT_UNREACHABLE;
 }
 
@@ -1202,26 +1255,32 @@ void WickTheorem<S>::reduce(ExprPtr &expr) const {
     std::wcout << "WickTheorem<S>::reduce: input = "
                << to_latex_align(expr, 20, 1) << std::endl;
   }
+
+  const bool extracted_indices = !all_indices_;
+  if (extracted_indices) {
+    extract_indices(*expr);
+  }
+
   // there are 2 possibilities: expr is a single Product, or it's a Sum of
   // Products
-  if (expr->type_id() == Expr::get_type_id<Product>()) {
+  if (expr.is<Product>()) {
     auto expr_cast = std::static_pointer_cast<Product>(expr);
     try {
       assert(external_indices_);
       detail::reduce_wick_impl<S>(expr_cast, *external_indices_,
-                                  get_default_context(S));
+                                  *external_indices_, get_default_context(S));
       expr = expr_cast;
     } catch (detail::zero_result &) {
       expr = std::make_shared<Constant>(0);
     }
-  } else {
-    assert(expr->type_id() == Expr::get_type_id<Sum>());
+  } else if (expr.is<Sum>()) {
     for (auto &&subexpr : *expr) {
       assert(subexpr->is<Product>());
       auto subexpr_cast = std::static_pointer_cast<Product>(subexpr);
       try {
         assert(external_indices_);
         detail::reduce_wick_impl<S>(subexpr_cast, *external_indices_,
+                                    *noncovariant_indices_,
                                     get_default_context(S));
         subexpr = subexpr_cast;
       } catch (detail::zero_result &) {
@@ -1231,9 +1290,10 @@ void WickTheorem<S>::reduce(ExprPtr &expr) const {
   }
 
   if (Logger::instance().wick_reduce) {
-    std::wcout << "WickTheorem<S>::reduce: result = "
-               << to_latex_align(expr, 20, 1) << std::endl;
+    sequant::wprintf(
+        "WickTheorem<S>::reduce: result = ", to_latex_align(expr, 20, 1), "\n");
   }
+  if (extracted_indices) reset_indices();
 }
 template <Statistics S>
 WickTheorem<S>::~WickTheorem() {}

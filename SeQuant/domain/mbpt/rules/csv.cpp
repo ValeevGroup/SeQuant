@@ -40,17 +40,29 @@ ExprPtr csv_transform_impl(Tensor const& tnsr, const IndexSpace& csv_basis,
 
     auto&& bra_idx = tnsr.bra().at(0);
     auto&& ket_idx = tnsr.ket().at(0);
+    [[maybe_unused]] const auto bra_has_proto_indices =
+        bra_idx.has_proto_indices();
+    [[maybe_unused]] const auto ket_has_proto_indices =
+        ket_idx.has_proto_indices();
+    assert(bra_has_proto_indices || ket_has_proto_indices);
 
-    auto dummy_idx = ordinal_compare(bra_idx, ket_idx)   //
-                         ? bra_idx.drop_proto_indices()  //
-                         : ket_idx.drop_proto_indices();
+    if (bra_has_proto_indices && ket_has_proto_indices) {
+      auto dummy_idx = ordinal_compare(bra_idx, ket_idx)   //
+                           ? bra_idx.drop_proto_indices()  //
+                           : ket_idx.drop_proto_indices();
 
-    return ex<Product>(
-        1,
-        ExprPtrList{ex<Tensor>(coeff_tensor_label,                 //
-                               bra({bra_idx}), ket({dummy_idx})),  //
-                    ex<Tensor>(coeff_tensor_label,                 //
-                               bra({dummy_idx}), ket({ket_idx}))});
+      return ex<Product>(
+          1,
+          ExprPtrList{ex<Tensor>(coeff_tensor_label,                 //
+                                 bra({bra_idx}), ket({dummy_idx})),  //
+                      ex<Tensor>(coeff_tensor_label,                 //
+                                 bra({dummy_idx}), ket({ket_idx}))});
+    } else {
+      return ex<Product>(
+          1,
+          ExprPtrList{ex<Tensor>(coeff_tensor_label,  //
+                                 bra({bra_idx}), ket({ket_idx}))});
+    }
   }
 
   Product result;
