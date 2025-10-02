@@ -497,7 +497,6 @@ SECTION("SRSO Fock") {
     auto input = t::L_(nₚ(2), nₕ(1)) * t::H_(2) * t::R_(nₚ(1), nₕ(0));
     auto result = t::vac_av(input);
 
-    std::wcout << "<2p1h|H2|1p> = " << to_latex(result) << std::endl;
     REQUIRE(result->is<Product>());  // product ...
     REQUIRE(result->size() == 3);    // ... of 3 factors
   }
@@ -524,8 +523,6 @@ SECTION("SRSO-PNO") {
     auto result = t::vac_av(t::A(nₚ(-2)) * t::H_(2) * t ::T_(2) * t::T_(2),
                             {{1, 2}, {1, 3}});
 
-    std::wcout << "H2**T2**T2 -> R2 = " << to_latex_align(result, 20)
-               << std::endl;
     REQUIRE(result->size() == 4);
   }
 }  // SECTION("SRSO-PNO")
@@ -565,26 +562,12 @@ SECTION("MRSO") {
   ctx.set(mbpt::make_mr_spaces());
   auto ctx_resetter = set_scoped_default_context(ctx);
 
-  // H2**T2 -> 0
-  // std::wcout << "H_(2) * T_(2) = " << to_latex(H_(2) * T_(2)) <<
-  // std::endl;
   SECTION("wick(H2**T2 -> 0)") {
     {
-      std::wcout << "multireference start" << std::endl;
       auto result = t::vac_av(t::H_(2) * t::T_(2), {{0, 1}});
-
-      {
-        std::wcout << " multireference H2*T2 -> 0 = "
-                   << to_latex_align(result, 0, 1) << std::endl;
-      }
 
       auto result_wo_top = t::vac_av(t::H_(2) * t::T_(2), {{0, 1}},
                                      /* use_topology = */ false);
-
-      auto dif = simplify(result - result_wo_top);
-      std::wcout << " multireference topology difference" << to_latex(dif)
-                 << std::endl;
-
       REQUIRE(simplify(result - result_wo_top) == ex<Constant>(0));
     }
 
@@ -595,11 +578,6 @@ SECTION("MRSO") {
       ctx.set(Vacuum::Physical);
       auto ctx_resetter = set_scoped_default_context(ctx);
       auto result_phys = t::vac_av(t::H_(2) * t::T_(2), {{0, 1}});
-
-      {
-        std::wcout << "H2*T2 -> 0 using phys vacuum = "
-                   << to_latex_align(result_phys, 0, 1) << std::endl;
-      }
     }
   }
 
@@ -635,16 +613,8 @@ SECTION("MRSF") {
   ctx.set(SPBasis::Spinfree);
   auto ctx_resetter = set_scoped_default_context(ctx);
 
-  // H2**T2 -> 0
-  std::wcout << "H_(2) * T_(2) = " << to_latex(t::H_(2) * t::T_(2))
-             << std::endl;
   SECTION("wick(H2**T2 -> 0)") {
     auto result = t::vac_av(t::H_(2) * t::T_(2), {{0, 1}});
-
-    //          {
-    //            std::wcout << "H2*T2 -> 0 = " << to_latex_align(result, 0, 1)
-    //                       << std::endl;
-    //          }
 
     {
       // make sure get same result without use of topology

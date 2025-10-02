@@ -1031,8 +1031,6 @@ TEST_CASE("wick", "[algorithms][wick]") {
         rapid_simplify(wick_result_2);
         REQUIRE(wick_result_2->size() == 2);  // now 2 terms
 
-        std::wcout << L"spinfree H2*T2 = " << to_latex(wick_result_2)
-                   << std::endl;
         REQUIRE_THAT(wick_result_2,
                      EquivalentTo("-4 * g{i1,i2;a1,a2} t{a1,a2;i2,i1} + 8 "
                                   "g{i1,i2;a1,a2} t{a1,a2;i1,i2}"));
