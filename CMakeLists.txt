@@ -185,7 +185,7 @@ if(NOT SEQUANT_USE_SYSTEM_BOOST_HASH) # if not to use Boost Hash, unpack bundled
 endif()
 
 
-    # polymorphic_variant
+# polymorphic_variant
 include(FindOrFetchPolymorphicVariant)
 
 # LibPerm
