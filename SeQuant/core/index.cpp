@@ -71,4 +71,9 @@ std::string Index::to_string() const {
   return sequant::to_string(this->label());
 }
 
+std::shared_ptr<const IndexSpaceRegistry>
+Index::obtain_default_index_registry() {
+  return get_default_context().index_space_registry();
+}
+
 }  // namespace sequant
