@@ -4,6 +4,7 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
+#include <SeQuant/core/op.hpp>
 
 #include <range/v3/view.hpp>
 
@@ -240,23 +241,81 @@ IndexGroups<Container> get_unique_indices(const ExprPtr& expr) {
   return get_unique_indices<Container>(*expr);
 }
 
-/// @returns A set of all indices used in the provided expression
-template <typename Set = container::set<Index>>
-Set get_used_indices(const Expr& expr) {
-  Set all_indices;
+/// tracks number of times each index appears in a given slot type
+struct IndexSlotCounters {
+  std::int64_t bra = 0;
+  std::int64_t ket = 0;
+  std::int64_t aux = 0;
+  std::int64_t proto = 0;
 
-  auto collect_indices = [&all_indices](const Expr& expr) {
-    if (!expr.is<AbstractTensor>()) {
-      return;
+  std::int64_t total() const { return bra + ket + aux + proto; }
+  std::int64_t nonproto() const { return bra + ket + aux; }
+
+  IndexSlotCounters& increment(SlotType slot) {
+    switch (slot) {
+      case SlotType::Bra:
+        ++bra;
+        break;
+      case SlotType::Ket:
+        ++ket;
+        break;
+      case SlotType::Aux:
+        ++aux;
+        break;
+      case SlotType::Proto:
+        ++proto;
+        break;
     }
-    const AbstractTensor& tensor = expr.as<AbstractTensor>();
+    return *this;
+  }
+};
 
-    auto current_indices =
-        slots(tensor) | std::ranges::views::filter(
-                            [](const Index& idx) { return idx.nonnull(); });
+/// like get_used_indices, but returns counts and indices
+/// @returns A set of all indices used in the provided expression
+template <typename Map = container::map<Index, IndexSlotCounters>>
+Map get_used_indices_with_counts(const Expr& expr) {
+  Map all_indices;
+  auto emplace = [&all_indices](const Index& idx, SlotType slot) {
+    if (!idx.nonnull()) return;
+    auto add = [&all_indices](const Index& i, SlotType slot) {
+      auto it = all_indices.find(i);
+      if (it == all_indices.end()) {
+        std::tie(it, std::ignore) = all_indices.emplace(i, IndexSlotCounters{});
+      }
+      it->second.increment(slot);
+    };
+    add(idx, slot);
+    for (const auto& i : idx.proto_indices()) {
+      add(i, SlotType::Proto);
+    }
+  };
+  auto process_abstract_tensor = [&emplace](const AbstractTensor& t) {
+    ranges::for_each(
+        t._bra(), [&emplace](const auto& idx) { emplace(idx, SlotType::Bra); });
+    ranges::for_each(
+        t._ket(), [&emplace](const auto& idx) { emplace(idx, SlotType::Ket); });
+    ranges::for_each(
+        t._aux(), [&emplace](const auto& idx) { emplace(idx, SlotType::Aux); });
+  };
 
-    for (const Index& idx : current_indices) {
-      all_indices.emplace(idx);
+  auto collect_indices = [&process_abstract_tensor](const Expr& expr) {
+    if (expr.is<AbstractTensor>()) {
+      process_abstract_tensor(expr.as<AbstractTensor>());
+    } else if (expr.is<NormalOperatorSequence<Statistics::FermiDirac>>()) {
+      for (auto& op :
+           expr.as<NormalOperatorSequence<Statistics::FermiDirac>>()) {
+        process_abstract_tensor(op.as<AbstractTensor>());
+      }
+    } else if (expr.is<NormalOperatorSequence<Statistics::BoseEinstein>>()) {
+      for (auto& op :
+           expr.as<NormalOperatorSequence<Statistics::BoseEinstein>>()) {
+        process_abstract_tensor(op.as<AbstractTensor>());
+      }
+    } else if (expr.is<NormalOperatorSequence<Statistics::Arbitrary>>()) {
+      for (auto& op :
+           expr.as<NormalOperatorSequence<Statistics::Arbitrary>>()) {
+        process_abstract_tensor(op.as<AbstractTensor>());
+      }
     }
   };
 
@@ -270,7 +329,25 @@ Set get_used_indices(const Expr& expr) {
   return all_indices;
 }
 
-/// @returns A set of all indices used in the provided expression
+/// @returns A set of all unique indices used in the provided expression
+/// @note includes pure protoindices
+template <typename Map = container::map<Index, IndexSlotCounters>>
+Map get_used_indices_with_counts(const ExprPtr& expr) {
+  return get_used_indices_with_counts<Map>(*expr);
+}
+
+/// @returns A set of all unique indices used in the provided expression
+/// @note includes pure protoindices
+template <typename Set = container::set<Index>>
+Set get_used_indices(const Expr& expr) {
+  return get_used_indices_with_counts(expr) |
+         std::views::transform(
+             [](const auto& idx_count) { return idx_count.first; }) |
+         ranges::to<Set>;
+}
+
+/// @returns A set of all unique indices used in the provided expression
+/// @note includes pure protoindices
 template <typename Set = container::set<Index>>
 Set get_used_indices(const ExprPtr& expr) {
   return get_used_indices<Set>(*expr);

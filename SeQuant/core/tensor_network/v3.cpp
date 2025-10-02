@@ -1222,6 +1222,8 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
           case Origin::Aux:
             ++naux;
             break;
+          case Origin::Proto:
+            SEQUANT_UNREACHABLE;
         }
       }
       // if braket symmetry == BraKetSymmetry::Symm there is no distinction
