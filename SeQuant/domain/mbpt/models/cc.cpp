@@ -136,7 +136,7 @@ std::vector<ExprPtr> CC::λ(size_t commutator_rank) {
   return result;
 }
 
-std::vector<ExprPtr> CC::t_pt(size_t rank, size_t order) {
+std::vector<ExprPtr> CC::t_pt(size_t rank, [[maybe_unused]] size_t order) {
   assert(order == 1 &&
          "sequant::mbpt::CC::t_pt(): only first-order perturbation is "
          "supported now");
@@ -176,7 +176,7 @@ std::vector<ExprPtr> CC::t_pt(size_t rank, size_t order) {
   return result;
 }
 
-std::vector<ExprPtr> CC::λ_pt(size_t rank, size_t order) {
+std::vector<ExprPtr> CC::λ_pt(size_t rank, [[maybe_unused]] size_t order) {
   assert(order == 1 &&
          "sequant::mbpt::CC::λ_pt(): only first-order perturbation is "
          "supported now");
