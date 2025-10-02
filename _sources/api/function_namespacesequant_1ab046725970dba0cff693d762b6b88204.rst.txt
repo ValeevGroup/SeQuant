@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1ab046725970dba0cff693d762b6b88204:
+
+Function sequant::parse_result_expr(std::wstring_view, std::optional<Symmetry>, std::optional<BraKetSymmetry>, std::optional<ColumnSymmetry>)
+=============================================================================================================================================
+
+- Defined in :ref:`file_SeQuant_core_parse_parse.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::parse_result_expr(std::wstring_view, std::optional<Symmetry>, std::optional<BraKetSymmetry>, std::optional<ColumnSymmetry>)
+   :project: SeQuant

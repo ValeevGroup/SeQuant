@@ -1,0 +1,22 @@
+.. _dir_SeQuant_domain:
+
+
+Directory domain
+================
+
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant>` (``SeQuant``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+*Directory path:* ``SeQuant/domain``
+
+Subdirectories
+--------------
+
+- :ref:`dir_SeQuant_domain_eval`
+- :ref:`dir_SeQuant_domain_mbpt`
+
+
+

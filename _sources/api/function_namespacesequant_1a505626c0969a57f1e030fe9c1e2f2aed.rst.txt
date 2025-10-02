@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a505626c0969a57f1e030fe9c1e2f2aed:
+
+Template Function sequant::to_basic_string_view
+===============================================
+
+- Defined in :ref:`file_SeQuant_core_utility_string.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::to_basic_string_view(S&&)
+   :project: SeQuant

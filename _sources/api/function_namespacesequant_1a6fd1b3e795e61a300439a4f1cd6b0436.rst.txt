@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a6fd1b3e795e61a300439a4f1cd6b0436:
+
+Function sequant::deparse(const Variable&)
+==========================================
+
+- Defined in :ref:`file_SeQuant_core_parse_deparse.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::deparse(const Variable&)
+   :project: SeQuant

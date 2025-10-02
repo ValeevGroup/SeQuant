@@ -1,0 +1,23 @@
+.. _exhale_struct_structsequant_1_1_index_1_1_index_factory_tag:
+
+Struct Index::IndexFactoryTag
+=============================
+
+- Defined in :ref:`file_SeQuant_core_index.hpp`
+
+
+Nested Relationships
+--------------------
+
+This struct is a nested type of :ref:`exhale_class_classsequant_1_1_index`.
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::Index::IndexFactoryTag
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

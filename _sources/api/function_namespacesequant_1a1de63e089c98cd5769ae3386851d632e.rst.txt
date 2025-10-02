@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a1de63e089c98cd5769ae3386851d632e:
+
+Template Function sequant::to_latex(const boost::multiprecision::number<Backend>&)
+==================================================================================
+
+- Defined in :ref:`file_SeQuant_core_rational.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::to_latex(const boost::multiprecision::number<Backend>&)
+   :project: SeQuant

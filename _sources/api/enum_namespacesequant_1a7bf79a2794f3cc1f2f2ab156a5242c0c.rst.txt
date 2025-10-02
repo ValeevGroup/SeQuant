@@ -1,0 +1,14 @@
+.. _exhale_enum_namespacesequant_1a7bf79a2794f3cc1f2f2ab156a5242c0c:
+
+Enum EvalOp
+===========
+
+- Defined in :ref:`file_SeQuant_core_eval_expr.hpp`
+
+
+Enum Documentation
+------------------
+
+
+.. doxygenenum:: sequant::EvalOp
+   :project: SeQuant

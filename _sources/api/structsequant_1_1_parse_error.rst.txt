@@ -1,0 +1,26 @@
+.. _exhale_struct_structsequant_1_1_parse_error:
+
+Struct ParseError
+=================
+
+- Defined in :ref:`file_SeQuant_core_parse.hpp`
+
+
+Inheritance Relationships
+-------------------------
+
+Base Type
+*********
+
+- ``public std::runtime_error``
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::ParseError
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

@@ -1,0 +1,17 @@
+.. _exhale_struct_structsequant_1_1proportional__to:
+
+Struct proportional_to
+======================
+
+- Defined in :ref:`file_SeQuant_core_expressions_expr.hpp`
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::proportional_to
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

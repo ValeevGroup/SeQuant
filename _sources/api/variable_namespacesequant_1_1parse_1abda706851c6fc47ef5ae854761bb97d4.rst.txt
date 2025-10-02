@@ -1,0 +1,14 @@
+.. _exhale_variable_namespacesequant_1_1parse_1abda706851c6fc47ef5ae854761bb97d4:
+
+Variable sequant::parse::to_char_type
+=====================================
+
+- Defined in :ref:`file_SeQuant_core_parse_parse.cpp`
+
+
+Variable Documentation
+----------------------
+
+
+.. doxygenvariable:: sequant::parse::to_char_type
+   :project: SeQuant

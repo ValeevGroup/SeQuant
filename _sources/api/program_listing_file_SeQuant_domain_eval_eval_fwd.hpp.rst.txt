@@ -1,0 +1,62 @@
+
+.. _program_listing_file_SeQuant_domain_eval_eval_fwd.hpp:
+
+Program Listing for File eval_fwd.hpp
+=====================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_domain_eval_eval_fwd.hpp>` (``SeQuant/domain/eval/eval_fwd.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   //
+   // Created by Bimal Gaudel on 3/27/25.
+   //
+   
+   #ifndef SEQUANT_EVAL_FWD_HPP
+   #define SEQUANT_EVAL_FWD_HPP
+   
+   #include <SeQuant/core/eval_expr.hpp>
+   
+   namespace sequant {
+   
+   class CacheManager;
+   class Result;
+   
+   using ResultPtr = std::shared_ptr<Result>;
+   
+   namespace meta {
+   
+   template <typename T>
+   concept has_annot = requires(T t) {
+     t.annot();
+     requires !std::is_void_v<decltype(t.annot())>;
+   };
+   
+   template <typename T>
+   concept can_evaluate = eval_node<T> && requires(T n) {
+     { *n } -> has_annot;
+   };
+   
+   template <typename Rng>
+   concept can_evaluate_range =
+       std::ranges::range<Rng> && can_evaluate<std::ranges::range_value_t<Rng>>;
+   
+   template <typename Node, typename F>
+   concept leaf_node_evaluator =
+       can_evaluate<Node> && requires(F f, Node const& n) {
+         { f(n) } -> std::same_as<ResultPtr>;
+       };
+   }  // namespace meta
+   
+   static_assert(meta::eval_node<EvalNode<EvalExpr>>);
+   static_assert(meta::eval_node<EvalNode<EvalExprTA>>);
+   static_assert(meta::eval_node<EvalNode<EvalExprBTAS>>);
+   
+   static_assert(!meta::can_evaluate<EvalNode<EvalExpr>>);
+   static_assert(meta::can_evaluate<EvalNode<EvalExprTA>>);
+   static_assert(meta::can_evaluate<EvalNode<EvalExprBTAS>>);
+   
+   }  // namespace sequant
+   #endif  // SEQUANT_EVAL_FWD_HPP

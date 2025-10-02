@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a92314549fe0e76646271eb4e077ed789:
+
+Template Function sequant::to_wolfram(T&&)
+==========================================
+
+- Defined in :ref:`file_SeQuant_core_wolfram.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::to_wolfram(T&&)
+   :project: SeQuant
