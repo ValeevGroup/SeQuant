@@ -22,8 +22,6 @@ namespace sequant {
 
 namespace detail {
 
-struct zero_result : public std::exception {};
-
 /// index replacements are many-to-one, i.e. multiple source indices may be
 /// mapped to the same destination index. This serves the role of a single
 /// destination to avoid representing each destination index by multiple copies
@@ -90,17 +88,29 @@ class index_repl_dst_t {
 /// @return index replacement map + whether found any kronecker tensors or
 /// overlaps equivalent to them; the
 /// former may be empty even if the latter is true, if, e.g., contain trivial
-/// self-overlaps with identical indices
-/// @throw zero_result if @c product is zero for any reason, e.g. because
-///        it includes an overlap of 2 indices from nonoverlapping spaces
+/// self-overlaps with identical indices; return null
+/// if @c product is zero for any reason, e.g. because
+/// it includes an overlap of 2 indices from nonoverlapping spaces
 template <Statistics S>
-std::pair<container::map<Index, Index>, bool> compute_index_replacement_rules(
+std::optional<std::pair<container::map<Index, Index>, bool>>
+compute_index_replacement_rules(
     std::shared_ptr<Product> &product,
     const container::set<Index> &external_indices,
     const container::set<Index> &noncovariant_indices,
     const std::set<Index, Index::LabelCompare> &all_indices,
     const std::shared_ptr<const IndexSpaceRegistry> &isr =
         get_default_context(S).index_space_registry()) {
+  bool zero_result_status = false;
+  auto zero_result = [&zero_result_status]() -> void {
+    zero_result_status = true;
+  };
+#define SEQUANT_WICK_IMPL_HPP_CIRR_EARLY_RETURN_IF_ZERO_RESULT(x) \
+  { x; }                                                          \
+  if (zero_result_status) return {};
+#define SEQUANT_WICK_IMPL_HPP_CIRR_EARLY_RETURN_VOID_IF_ZERO_RESULT(x) \
+  { x; }                                                               \
+  if (zero_result_status) return;
+
   expr_range exrng(product);
 
   bool have_kroneckers = false;
@@ -115,14 +125,6 @@ std::pair<container::map<Index, Index>, bool> compute_index_replacement_rules(
       src2dst;  // src->dst, will be converted to
   container::svector<std::shared_ptr<index_repl_dst_t>>
       dst_list;  // unsorted list of dst indices
-
-  // computes an index in intersection of space1 and space2
-  auto make_intersection_index = [&idxfac, &isr](const IndexSpace &space1,
-                                                 const IndexSpace &space2) {
-    const auto intersection_space = isr->intersection(space1, space2);
-    if (!intersection_space) throw zero_result{};
-    return idxfac.make(intersection_space);
-  };
 
   // transfers proto indices from src (if any) to dst
   // which proto-indices should dst inherit from src? a dst index without
@@ -143,9 +145,7 @@ std::pair<container::map<Index, Index>, bool> compute_index_replacement_rules(
   };
 
   // adds src->dst, optionally assigning proto indices from protosrc
-  auto add_src_to_existing_dst = [&src2dst, &dst_list, &proto,
-                                  &make_intersection_index](const Index &src,
-                                                            auto srd2dst_it) {
+  auto add_src_to_existing_dst = [&src2dst](const Index &src, auto srd2dst_it) {
     assert(srd2dst_it != ranges::end(src2dst));
     srd2dst_it->second->append_src(src);
     src2dst.emplace(src, srd2dst_it->second);
@@ -158,9 +158,8 @@ std::pair<container::map<Index, Index>, bool> compute_index_replacement_rules(
   };
 
   // merges dst2 into dst1
-  auto merge_dst2_into_dst1 = [&src2dst, &dst_list, &proto,
-                               &make_intersection_index](auto srd2dst_it1,
-                                                         auto srd2dst_it2) {
+  auto merge_dst2_into_dst1 = [&src2dst, &dst_list](auto srd2dst_it1,
+                                                    auto srd2dst_it2) {
     assert(srd2dst_it1->second !=
            srd2dst_it2->second);  // caller should ensure no self-merges,
                                   // indicates faulty logic upstream
@@ -190,7 +189,7 @@ std::pair<container::map<Index, Index>, bool> compute_index_replacement_rules(
   };
 
   // adds src->dst, optionally assigning proto indices from protosrc
-  auto add_rule = [&src2dst, &dst_list, &proto, &make_intersection_index](
+  auto add_rule = [&src2dst, &dst_list, &proto](
                       const Index &src, const Index &dst,
                       std::optional<const Index> protosrc = std::nullopt) {
     auto real_dst = protosrc ? proto(dst, protosrc.value()) : proto(dst, src);
@@ -208,7 +207,7 @@ std::pair<container::map<Index, Index>, bool> compute_index_replacement_rules(
   };
 
   // changes src->current_dst to src->intersection(dst,current_dst)
-  auto update_rule = [&src2dst, &dst_list, &proto, &isr, &idxfac](
+  auto update_rule = [&src2dst, &proto, &isr, &idxfac, &zero_result](
                          auto src_it, const Index &src, const Index &dst,
                          std::optional<const Index> protosrc = std::nullopt) {
     assert(src_it != src2dst.end());
@@ -219,7 +218,7 @@ std::pair<container::map<Index, Index>, bool> compute_index_replacement_rules(
     const IndexSpace &new_dst_space =
         change_dst_space ? isr->intersection(old_dst.space(), dst.space())
                          : dst.space();
-    if (!new_dst_space) throw zero_result{};
+    if (!new_dst_space) return zero_result();
 
     // do we need to change protoindices?
     bool change_dst_protoindices = false;
@@ -247,14 +246,15 @@ std::pair<container::map<Index, Index>, bool> compute_index_replacement_rules(
 
   // adds src->dst or changes src->current_dst to
   // src->intersection(dst,current_dst)
-  auto add_or_update_rule = [&add_rule, &update_rule, &src2dst, &dst_list,
-                             &proto, &make_intersection_index](
-                                const Index &src, const Index &dst) {
+  auto add_or_update_rule = [&add_rule, &update_rule, &src2dst,
+                             &zero_result_status](const Index &src,
+                                                  const Index &dst) {
     auto src_it = src2dst.find(src);
     if (src_it == src2dst.end()) {
       add_rule(src, dst);
     } else {
-      update_rule(src_it, src, dst);
+      SEQUANT_WICK_IMPL_HPP_CIRR_EARLY_RETURN_VOID_IF_ZERO_RESULT(
+          update_rule(src_it, src, dst));
     }
   };
 
@@ -263,8 +263,8 @@ std::pair<container::map<Index, Index>, bool> compute_index_replacement_rules(
   // dst2 and dst
   auto add_or_update_rules = [&add_rule, &update_rule, &add_src_to_existing_dst,
                               &replace_dst_index, &merge_dst2_into_dst1,
-                              &src2dst, &dst_list, &idxfac, &proto,
-                              &make_intersection_index,
+                              &src2dst, &idxfac, &proto, &zero_result,
+                              &zero_result_status,
                               &isr](const Index &src1, const Index &src2,
                                     const Index &dst) {
     // are there replacement rules already for src{1,2}?
@@ -288,12 +288,14 @@ std::pair<container::map<Index, Index>, bool> compute_index_replacement_rules(
       add_rule(src2, dst, dst2_proto);
     } else if (has_src1_rule && !has_src2_rule) {
       // update the existing rule for src1
-      update_rule(src1_it, src1, dst, dst1_proto);
+      SEQUANT_WICK_IMPL_HPP_CIRR_EARLY_RETURN_VOID_IF_ZERO_RESULT(
+          update_rule(src1_it, src1, dst, dst1_proto));
       // create new rule: src2->dst1
       add_src_to_existing_dst(src2, src2dst.find(src1));
     } else if (!has_src1_rule && has_src2_rule) {
       // update the existing rule for src2
-      update_rule(src2_it, src2, dst, dst2_proto);
+      SEQUANT_WICK_IMPL_HPP_CIRR_EARLY_RETURN_VOID_IF_ZERO_RESULT(
+          update_rule(src2_it, src2, dst, dst2_proto));
       // create new rule: src1->dst2
       add_src_to_existing_dst(src1, src2dst.find(src2));
     } else {
@@ -309,7 +311,7 @@ std::pair<container::map<Index, Index>, bool> compute_index_replacement_rules(
                     isr->intersection(old_dst1.space(), old_dst2.space()),
                     dst.space())
               : dst.space();
-      if (!new_dst_space) throw zero_result{};
+      if (!new_dst_space) return zero_result();
       Index new_dst;
       if (new_dst_space == old_dst1.space()) {
         new_dst = old_dst1;
@@ -381,24 +383,29 @@ std::pair<container::map<Index, Index>, bool> compute_index_replacement_rules(
 
           // if overlap's indices are from non-overlapping spaces, return zero
           if (!intersection_space) {
-            throw zero_result{};
+            return std::nullopt;
           }
 
           if (!bra_is_ext && !ket_is_ext) {
             // int + int
             const auto new_dummy = idxfac.make(intersection_space);
-            add_or_update_rules(bra, ket, new_dummy);
+            SEQUANT_WICK_IMPL_HPP_CIRR_EARLY_RETURN_IF_ZERO_RESULT(
+                add_or_update_rules(bra, ket, new_dummy));
           } else if (bra_is_ext && !ket_is_ext) {  // ext + int
             if (includes(ket.space(), bra.space())) {
-              add_or_update_rule(ket, bra);
+              SEQUANT_WICK_IMPL_HPP_CIRR_EARLY_RETURN_IF_ZERO_RESULT(
+                  add_or_update_rule(ket, bra));
             } else {
-              add_or_update_rule(ket, idxfac.make(intersection_space));
+              SEQUANT_WICK_IMPL_HPP_CIRR_EARLY_RETURN_IF_ZERO_RESULT(
+                  add_or_update_rule(ket, idxfac.make(intersection_space)));
             }
           } else if (!bra_is_ext && ket_is_ext) {  // int + ext
             if (includes(bra.space(), ket.space())) {
-              add_or_update_rule(bra, ket);
+              SEQUANT_WICK_IMPL_HPP_CIRR_EARLY_RETURN_IF_ZERO_RESULT(
+                  add_or_update_rule(bra, ket));
             } else {
-              add_or_update_rule(bra, idxfac.make(intersection_space));
+              SEQUANT_WICK_IMPL_HPP_CIRR_EARLY_RETURN_IF_ZERO_RESULT(
+                  add_or_update_rule(bra, idxfac.make(intersection_space)));
             }
           }
           // ext + ext => leave overlap as is
@@ -413,6 +420,9 @@ std::pair<container::map<Index, Index>, bool> compute_index_replacement_rules(
     result.emplace(src, d->dst());
   }
   return std::make_pair(result, have_kroneckers);
+
+#undef SEQUANT_WICK_IMPL_HPP_CIRR_EARLY_RETURN_IF_ZERO_RESULT
+#undef SEQUANT_WICK_IMPL_HPP_CIRR_EARLY_RETURN_VOID_IF_ZERO_RESULT
 }
 
 /// @return true if made any changes
@@ -495,9 +505,9 @@ inline bool apply_index_replacement_rules(
 
 /// resolves Kronecker deltas (and, using orthonormal representation, overlaps
 /// between indices in orthonormal spaces) in summations
-/// @throw zero_result if @c expr is zero
+/// @return false if @c expr is zero
 template <Statistics S>
-void reduce_wick_impl(std::shared_ptr<Product> &expr,
+bool reduce_wick_impl(std::shared_ptr<Product> &expr,
                       const container::set<Index> &external_indices,
                       const container::set<Index> &noncovariant_indices,
                       const Context &ctx) {
@@ -586,10 +596,11 @@ void reduce_wick_impl(std::shared_ptr<Product> &expr,
       }
     }
 
-    const auto [replacement_rules, found_kroneckers] =
-        compute_index_replacement_rules<S>(
-            expr, external_indices, all_noncovariant_indices, all_indices,
-            ctx.index_space_registry());
+    auto nonnull_result_opt = compute_index_replacement_rules<S>(
+        expr, external_indices, all_noncovariant_indices, all_indices,
+        ctx.index_space_registry());
+    if (!nonnull_result_opt) return false;
+    const auto &[replacement_rules, found_kroneckers] = *nonnull_result_opt;
 
     if (Logger::instance().wick_reduce) {
       sequant::wprintf("reduce_wick_impl(expr, external_indices) pass=", pass,
@@ -616,6 +627,8 @@ void reduce_wick_impl(std::shared_ptr<Product> &expr,
       sequant::wprintf("\n  result = ", expr->to_latex(), "\n");
     }
   } while (pass_mutated);  // keep reducing until stop changing
+
+  return true;
 }
 
 template <Statistics S>
@@ -1265,27 +1278,25 @@ void WickTheorem<S>::reduce(ExprPtr &expr) const {
   // Products
   if (expr.is<Product>()) {
     auto expr_cast = std::static_pointer_cast<Product>(expr);
-    try {
-      assert(external_indices_);
-      detail::reduce_wick_impl<S>(expr_cast, *external_indices_,
-                                  *external_indices_, get_default_context(S));
+    assert(external_indices_);
+    if (detail::reduce_wick_impl<S>(expr_cast, *external_indices_,
+                                    *external_indices_,
+                                    get_default_context(S))) {
       expr = expr_cast;
-    } catch (detail::zero_result &) {
+    } else {
       expr = std::make_shared<Constant>(0);
     }
   } else if (expr.is<Sum>()) {
     for (auto &&subexpr : *expr) {
       assert(subexpr->is<Product>());
       auto subexpr_cast = std::static_pointer_cast<Product>(subexpr);
-      try {
-        assert(external_indices_);
-        detail::reduce_wick_impl<S>(subexpr_cast, *external_indices_,
-                                    *noncovariant_indices_,
-                                    get_default_context(S));
+      assert(external_indices_);
+      if (detail::reduce_wick_impl<S>(subexpr_cast, *external_indices_,
+                                      *noncovariant_indices_,
+                                      get_default_context(S)))
         subexpr = subexpr_cast;
-      } catch (detail::zero_result &) {
+      else
         subexpr = std::make_shared<Constant>(0);
-      }
     }
   }
 
