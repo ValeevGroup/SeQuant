@@ -172,6 +172,16 @@ TEST_CASE("mbpt", "[mbpt]") {
       auto r_2_1 = R_(nₚ(1), nₕ(2));
       auto r_1_2 = R_(nₚ(2), nₕ(1));
       auto theta2 = θ(2);
+      auto P2 = P(2);
+      auto P2_adj = adjoint(P2);
+      auto P_neg2 = P(-2);
+      auto P_2_1 = P(nₚ(1), nₕ(2));
+      auto P_neg_2_1 = P(nₚ(-1), nₕ(-2));
+      std::wcout << "to_latex(P2): " << to_latex(P2) << std::endl;
+      std::wcout << "to_latex(P2_adj): " << to_latex(P2_adj) << std::endl;
+      std::wcout << "to_latex(P_neg2): " << to_latex(P_neg2) << std::endl;
+      std::wcout << "to_latex(P_2_1): " << to_latex(P_2_1) << std::endl;
+      std::wcout << "to_latex(P_neg_2_1): " << to_latex(P_neg_2_1) << std::endl;
 
       REQUIRE(to_latex(theta2) == L"{\\hat{\\theta}_{2}}");
       REQUIRE(to_latex(f) == L"{\\hat{f}}");
