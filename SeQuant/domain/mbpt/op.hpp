@@ -1104,20 +1104,23 @@ bool can_change_qns(const ExprPtr& op_or_op_product, const qns_t& target_qns,
 
 /// @brief Checks if a given Operator or Operator Product can raise the vacuum
 /// quantum numbers up to rank \p k
-bool raises_vacuum_up_to_rank(const ExprPtr& op_or_op_product, unsigned long k);
+bool raises_vacuum_up_to_rank(const ExprPtr& op_or_op_product,
+                              const unsigned long k);
 
 /// @brief Checks if a given Operator or Operator Product can lower quantum
 /// numbers of rank \p down up to vacuum
 bool lowers_rank_or_lower_to_vacuum(const ExprPtr& op_or_op_product,
-                                    unsigned long k);
+                                    const unsigned long k);
 
 /// @brief Checks if a given Operator or Operator Product can raise the vacuum
 /// quantum numbers to rank \p k
-bool raises_vacuum_to_rank(const ExprPtr& op_or_op_product, unsigned long k);
+bool raises_vacuum_to_rank(const ExprPtr& op_or_op_product,
+                           const unsigned long k);
 
 /// @brief Checks if a given Operator or Operator Product can lower quantum
 /// numbers of rank \p k down to vacuum
-bool lowers_rank_to_vacuum(const ExprPtr& op_or_op_product, unsigned long k);
+bool lowers_rank_to_vacuum(const ExprPtr& op_or_op_product,
+                           const unsigned long k);
 
 #include <SeQuant/domain/mbpt/vac_av.hpp>
 }  // namespace op

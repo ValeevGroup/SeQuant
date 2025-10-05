@@ -1071,25 +1071,27 @@ bool can_change_qns(const ExprPtr& op_or_op_product, const qns_t& target_qns,
 }
 
 bool raises_vacuum_up_to_rank(const ExprPtr& op_or_op_product,
-                              unsigned long k) {
+                              const unsigned long k) {
   assert(op_or_op_product.is<op_t>() || op_or_op_product.is<Product>());
 
   return can_change_qns(op_or_op_product, interval_excitation_type_qns(k));
 }
 
 bool lowers_rank_or_lower_to_vacuum(const ExprPtr& op_or_op_product,
-                                    unsigned long k) {
+                                    const unsigned long k) {
   assert(op_or_op_product.is<op_t>() || op_or_op_product.is<Product>());
   return can_change_qns(op_or_op_product, qns_t{},
                         interval_excitation_type_qns(k));
 }
 
-bool raises_vacuum_to_rank(const ExprPtr& op_or_op_product, unsigned long k) {
+bool raises_vacuum_to_rank(const ExprPtr& op_or_op_product,
+                           const unsigned long k) {
   assert(op_or_op_product.is<op_t>() || op_or_op_product.is<Product>());
   return can_change_qns(op_or_op_product, excitation_type_qns(k));
 }
 
-bool lowers_rank_to_vacuum(const ExprPtr& op_or_op_product, unsigned long k) {
+bool lowers_rank_to_vacuum(const ExprPtr& op_or_op_product,
+                           const unsigned long k) {
   assert(op_or_op_product.is<op_t>() || op_or_op_product.is<Product>());
   return can_change_qns(op_or_op_product, qns_t{}, excitation_type_qns(k));
 }
