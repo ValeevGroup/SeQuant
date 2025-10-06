@@ -1319,7 +1319,7 @@ bool can_change_qns(const ExprPtr& op_or_op_product, const qns_t target_qns,
     return qns.overlaps_with(target_qns);
   } else if (op_or_op_product.is<op_t>()) {
     const auto& op = op_or_op_product.as<op_t>();
-    qns = op();
+    qns = op(qns);
     return qns.overlaps_with(target_qns);
   } else
     throw std::invalid_argument(
