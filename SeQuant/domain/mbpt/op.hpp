@@ -1087,12 +1087,12 @@ ExprPtr Λ_pt_(std::size_t K, std::size_t order = 1);
 ExprPtr Λ_pt(std::size_t K, std::size_t order = 1, bool skip1 = false);
 
 /// @brief computes the quantum number change effected by a given Operator or
-/// Operator Product
+/// Operator Product when applied to the vacuum state
 /// @param expr the operator or operator product whose quantum number change is
 /// to be computed
 /// @return the quantum number change effected by \p expr
 /// @pre \p expr must be an Operator or an Operator Product
-qns_t compute_qnc(const ExprPtr& expr);
+qns_t apply_to_vac(const ExprPtr& expr);
 
 /// @brief Checks if a given Operator or Operator Product can change the quantum
 /// numbers from \p source_qns to \p target_qns
