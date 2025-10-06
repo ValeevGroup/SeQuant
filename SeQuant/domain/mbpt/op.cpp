@@ -354,6 +354,8 @@ std::wstring to_latex(const mbpt::Operator<mbpt::qns_t, S>& op) {
     base_lbl.pop_back();
   }
 
+  auto op_qns = op();  // operator action i.e. quantum number change
+
   auto it = label2optype.find(base_lbl);  // look for OpType
 
   // special handling for general operators
@@ -372,24 +374,25 @@ std::wstring to_latex(const mbpt::Operator<mbpt::qns_t, S>& op) {
   }
   // specially handle θ operator
   if (it != label2optype.end() && it->second == OpType::θ) {
-    result += L"_{" + std::to_wstring(op()[0].upper()) + L"}";
+    result += L"_{" + std::to_wstring(op_qns[0].upper()) + L"}";
     result += L"}";  // close the brace
     return result;
   }
 
-  const std::wstring baseline_char = is_adjoint ? L"^" : L"_";
   if (get_default_context().vacuum() == Vacuum::Physical) {
-    if (op()[0] == op()[1]) {  // particle conserving
-      result += L"_{" + std::to_wstring(op()[0].lower()) + L"}";
+    if (op_qns[0] == op_qns[1]) {  // particle conserving
+      result += L"_{" + std::to_wstring(op_qns[0].lower()) + L"}";
     } else {  // non-particle conserving
-      result += L"_{" + std::to_wstring(op()[1].lower()) + L"}^{" +
-                std::to_wstring(op()[0].lower()) + L"}";
+      result += L"_{" + std::to_wstring(op_qns[1].lower()) + L"}^{" +
+                std::to_wstring(op_qns[0].lower()) + L"}";
     }
   } else {  // single product vacuum
-    auto nann_p = is_adjoint ? op().ncre_particles() : op().nann_particles();
-    auto ncre_h = is_adjoint ? op().nann_holes() : op().ncre_holes();
-    auto ncre_p = is_adjoint ? op().nann_particles() : op().ncre_particles();
-    auto nann_h = is_adjoint ? op().ncre_holes() : op().nann_holes();
+    auto nann_p =
+        is_adjoint ? op_qns.ncre_particles() : op_qns.nann_particles();
+    auto ncre_h = is_adjoint ? op_qns.nann_holes() : op_qns.ncre_holes();
+    auto ncre_p =
+        is_adjoint ? op_qns.nann_particles() : op_qns.ncre_particles();
+    auto nann_h = is_adjoint ? op_qns.ncre_holes() : op_qns.nann_holes();
 
     if (!is_definite(nann_p) || !is_definite(ncre_h) || !is_definite(ncre_p) ||
         !is_definite(nann_h)) {
@@ -403,6 +406,7 @@ std::wstring to_latex(const mbpt::Operator<mbpt::qns_t, S>& op) {
     const auto qprank_ann = nann_p.lower() + ncre_h.lower();
     const auto qppure = qprank_cre == 0 || qprank_ann == 0;
     if (qppure) {
+      const std::wstring baseline_char = is_adjoint ? L"^" : L"_";
       if (qprank_cre) {
         if (ncre_p.lower() == nann_h.lower()) {  // q-particle conserving
           result +=
