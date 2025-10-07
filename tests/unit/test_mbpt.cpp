@@ -325,20 +325,20 @@ TEST_CASE("mbpt", "[mbpt]") {
       auto vev2_t = tensor::vac_av(expr2_tnsr);  // no operator level screening
       REQUIRE(to_latex(vev2_op) == to_latex(vev2_t));
 
-      // Test op::screen_zero_terms
+      // Test op::screen_vac_av
       auto hbar = mbpt::sim_tr(H(), T_(2), 4);  // CCD Hbar
-      auto screened_hbar = op::screen_zero_terms(hbar);
+      auto screened_hbar = op::screen_vac_av(hbar);
       auto expected = H_(2) * T_(2);
       REQUIRE(simplify(screened_hbar - expected) == ex<Constant>(0));
 
       auto expr3 = P(2) * hbar * R_(nₚ(2), nₕ(2));
-      auto screened_expr3 = op::screen_zero_terms(expr3);
+      auto screened_expr3 = op::screen_vac_av(expr3);
       auto expected3 =
           op::P(2) * (H_(2) * T_(2) + H_(2) + H_(1)) * R_(nₚ(2), nₕ(2));
       REQUIRE(simplify(screened_expr3 - expected3) == ex<Constant>(0));
 
       auto expr4 = P(nₚ(2), nₕ(1)) * hbar * R(nₚ(1), nₕ(0));
-      auto screened_expr4 = op::screen_zero_terms(expr4);
+      auto screened_expr4 = op::screen_vac_av(expr4);
       auto expected4 = P(nₚ(2), nₕ(1)) *
                        (H_(1) + H_(1) * T_(2) + H_(2) * T_(2) + H_(2)) *
                        R(nₚ(1), nₕ(0));

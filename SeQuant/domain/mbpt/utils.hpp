@@ -39,11 +39,11 @@ ExprPtr sim_tr(ExprPtr A, const ExprPtr& B, size_t commutator_rank,
 /// @return return screened expression
 /// @code
 /// // example usage:
-/// auto expr1 = screen_zero_terms(expr); // screens for <0| expr |0>
-/// auto expr2 = screen_zero_terms(P(2) * expr); // screens for <P(2)| expr |0>
+/// auto expr1 = screen_vac_av(expr); // screens for <0| expr |0>
+/// auto expr2 = screen_vac_av(P(2) * expr); // screens for <P(2)| expr |0>
 /// @endcode
 /// @pre This function expects \p input to be composed of mbpt::Operators
-ExprPtr screen_zero_terms(ExprPtr expr, bool skip_clone = false);
+ExprPtr screen_vac_av(ExprPtr expr, bool skip_clone = false);
 
 }  // namespace sequant::mbpt
 

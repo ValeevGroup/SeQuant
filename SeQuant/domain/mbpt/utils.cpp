@@ -66,7 +66,7 @@ ExprPtr sim_tr(ExprPtr A, const ExprPtr& B, size_t commutator_rank,
         "type");
 }
 
-ExprPtr screen_zero_terms(ExprPtr expr, bool skip_clone) {
+ExprPtr screen_vac_av(ExprPtr expr, bool skip_clone) {
   // use cloned expr to avoid side effects
   if (!skip_clone) expr = expr->clone();
 
@@ -88,7 +88,7 @@ ExprPtr screen_zero_terms(ExprPtr expr, bool skip_clone) {
         })) {
       expr = sequant::expand(expr);
       simplify(expr);
-      return screen_zero_terms(expr, /*skip_clone*/ true);
+      return screen_vac_av(expr, /*skip_clone*/ true);
     } else {
       return screen(expr);
     }
@@ -101,7 +101,7 @@ ExprPtr screen_zero_terms(ExprPtr expr, bool skip_clone) {
           return running_total + summand;
         },
         [=](const auto& term) {
-          return screen_zero_terms(term, /*skip_clone*/ true);
+          return screen_vac_av(term, /*skip_clone*/ true);
         });
     return result;
   } else
