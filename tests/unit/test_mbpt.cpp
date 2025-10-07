@@ -164,6 +164,7 @@ TEST_CASE("mbpt", "[mbpt]") {
     SECTION("to_latex") {
       using qns_t [[maybe_unused]] = mbpt::qns_t;
       using namespace sequant::mbpt;
+
       auto f = F();
       auto t1 = T(1);
       auto t2 = T_(2);
@@ -172,17 +173,6 @@ TEST_CASE("mbpt", "[mbpt]") {
       auto r_2_1 = R_(nₚ(1), nₕ(2));
       auto r_1_2 = R_(nₚ(2), nₕ(1));
       auto theta2 = θ(2);
-      auto P2 = P(2);
-      auto P2_adj = adjoint(P2);
-      auto P_neg2 = P(-2);
-      auto P_2_1 = P(nₚ(1), nₕ(2));
-      auto P_neg_2_1 = P(nₚ(-1), nₕ(-2));
-      std::wcout << "to_latex(P2): " << to_latex(P2) << std::endl;
-      std::wcout << "to_latex(P2_adj): " << to_latex(P2_adj) << std::endl;
-      std::wcout << "to_latex(P_neg2): " << to_latex(P_neg2) << std::endl;
-      std::wcout << "to_latex(P_2_1): " << to_latex(P_2_1) << std::endl;
-      std::wcout << "to_latex(P_neg_2_1): " << to_latex(P_neg_2_1) << std::endl;
-
       REQUIRE(to_latex(theta2) == L"{\\hat{\\theta}_{2}}");
       REQUIRE(to_latex(f) == L"{\\hat{f}}");
       REQUIRE(to_latex(t1) == L"{\\hat{t}_{1}}");
@@ -191,6 +181,16 @@ TEST_CASE("mbpt", "[mbpt]") {
       REQUIRE(to_latex(lambda2) == L"{\\hat{\\lambda}_{2}}");
       REQUIRE(to_latex(r_2_1) == L"{\\hat{R}_{2,1}}");
       REQUIRE(to_latex(r_1_2) == L"{\\hat{R}_{1,2}}");
+
+      // projectors
+      auto P2 = P(2);
+      auto P_neg2 = P(-2);
+      auto P_2_1 = P(nₚ(1), nₕ(2));
+      auto P_neg_2_1 = P(nₚ(-1), nₕ(-2));
+      REQUIRE(to_latex(P2) == L"{\\hat{A}_{-2}}");
+      REQUIRE(to_latex(P_neg2) == L"{\\hat{A}_{2}}");
+      REQUIRE(to_latex(P_2_1) == L"{\\hat{A}_{-2,-1}}");
+      REQUIRE(to_latex(P_neg_2_1) == L"{\\hat{A}_{2,1}}");
     }  // SECTION("to_latex")
 
     SECTION("canonicalize") {
