@@ -1322,7 +1322,7 @@ TEST_CASE("wick", "[algorithms][wick]") {
       // the last example
       {
         auto _ = set_scoped_default_context(
-            get_default_context().clone().set(mbpt::make_min_mr_spaces()));
+            get_default_context().clone().set(mbpt::make_min_sr_spaces()));
 
         auto input =
             fannx(Index{"p_1", {L"i_1"}}) *
@@ -1333,16 +1333,14 @@ TEST_CASE("wick", "[algorithms][wick]") {
         simplify(result);
         REQUIRE(result.as<Sum>().size() == 5);
 
+        // clang-format off
         auto expected = parse_expr(
-            "- h{;;p_1} * ã{p_1<i_1>,p_1;p_2<i_2>,p_1} "
-            "+ h{;;p_1} * δ{p_1<i_1>;A_1<i_1>} * δ{A_2<i_2>;p_2<i_2>} * "
-            "ã{p_1;p_1} * s{A_1<i_1>;A_2<i_2>} "
-            "- h{;;A_1} * δ{p_1<i_1>;A_2<i_1>} * s{A_2<i_1>;A_1} * "
-            "ã{A_1;p_2<i_2>} "
-            "- h{;;A_1} * δ{A_2<i_2>;p_2<i_2>} * ã{p_1<i_1>;A_1} * "
-            "s{A_1;A_2<i_2>} "
-            "+ h{;;A_1} * δ{p_1<i_1>;A_2<i_1>} * δ{A_3<i_2>;p_2<i_2>} * "
-            "s{A_2<i_1>;A_1} * s{A_1;A_3<i_2>} ");
+            "- h{;;p_3} ã{p_1<i_1>,p_3;p_2<i_2>,p_3}"
+            "+ h{;;p_3} δ{p_1<i_1>;a_1<i_1>} δ{a_2<i_2>;p_2<i_2>} ã{p_3;p_3} s{a_1<i_1>;a_2<i_2>} "
+            "- h{;;a_1} δ{a_2<i_2>;p_2<i_2>} ã{p_1<i_1>;a_1} s{a_1;a_2<i_2>} "
+            "- h{;;a_2} δ{p_1<i_1>;a_1<i_1>} s{a_1<i_1>;a_2} ã{a_2;p_2<i_2>} "
+            "+ h{;;a_3} δ{p_1<i_1>;a_1<i_1>} δ{a_2<i_2>;p_2<i_2>} s{a_1<i_1>;a_3} s{a_3;a_2<i_2>} ");
+        // clang-format on
         simplify(expected);
 
         REQUIRE(result == expected);
