@@ -548,22 +548,22 @@ class IndexSpaceRegistry {
     return *this;
   }
 
-  /// @brief queries if the intersection space is registered
+  /// @brief queries if the intersection space is nonnull and registered
   /// @param space1
   /// @param space2
-  /// @return true if `space1.intersection(space2)` is registered
+  /// @return true if `space1.intersection(space2)` is nonnull and registered
   bool valid_intersection(const IndexSpace& space1,
                           const IndexSpace& space2) const {
     auto result_attr = space1.attr().intersection(space2.attr());
-    return retrieve_ptr(result_attr);
+    return result_attr != IndexSpace::Type::null && retrieve_ptr(result_attr);
   }
 
-  /// @brief queries if the intersection space is registered
+  /// @brief queries if the intersection space is nonnull and registered
   /// @param space1_key base key of a registered IndexSpace
   /// @param space2_key base key of a registered IndexSpace
   /// @return true if
   /// `valid_intersection(retrieve(space1_key),retrieve(space2_key))` is
-  /// registered
+  /// nonnull and registered
   template <basic_string_convertible S1, basic_string_convertible S2>
   bool valid_intersection(S1&& space1_key, S2&& space2_key) const {
     if (!contains(space1_key))
@@ -640,10 +640,10 @@ class IndexSpaceRegistry {
         *(this->retrieve_ptr(std::forward<S2>(space2_key))));
   }
 
-  /// @brief is a union between spaces exists and registered
+  /// @brief is a union between spaces is registered
   /// @param space1
   /// @param space2
-  /// @return true if space is constructable and registered
+  /// @return true if space is registered
   bool valid_unIon(const IndexSpace& space1, const IndexSpace& space2) const {
     // check typeattr
     if (!space1.type().includes(space2.type()) &&
@@ -671,7 +671,7 @@ class IndexSpaceRegistry {
     }
   }
 
-  /// @brief is a union between spaces exists and registered
+  /// @brief is a union between spaces is registered
   /// @param space1_key base key of a registered IndexSpace
   /// @param space2_key base key of a registered IndexSpace
   /// @return true if `valid_unIon(retrieve(space1_key),retrieve(space2_key))`
