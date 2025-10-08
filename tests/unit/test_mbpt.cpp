@@ -326,7 +326,7 @@ TEST_CASE("mbpt", "[mbpt]") {
       REQUIRE(to_latex(vev2_op) == to_latex(vev2_t));
 
       // Test op::screen_vac_av
-      auto hbar = mbpt::sim_tr(H(), T_(2), 4);  // CCD Hbar
+      auto hbar = mbpt::lst(H(), T_(2), 4);  // CCD Hbar
       auto screened_hbar = op::screen_vac_av(hbar);
       auto expected = H_(2) * T_(2);
       REQUIRE(simplify(screened_hbar - expected) == ex<Constant>(0));

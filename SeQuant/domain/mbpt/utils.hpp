@@ -15,22 +15,21 @@
 
 namespace sequant::mbpt {
 // clang-format off
-/// @brief Computes the similarity transformation e^(-B) A e^B using a commutator series truncated up to the specified order. Uses the Baker-Campbell-Hausdorff expansion.
-/// The transformation is given by: e^(-B) A e^B = A + [A,B] + (1/2!)[[A,B],B] + (1/3!)[[[A,B],B],B] + ...
+/// @brief Computes the Lie similarity transformation, e^(-B) A e^B, using its Campbell expansion (DOI 10.1112/plms/s1-28.1.381) as a series of nested commutators:
+/// `e^(-B) A e^B = A + [A,B] + (1/2!)[[A,B],B] + (1/3!)[[[A,B],B],B] + ...`
 ///
 /// Notes:
-/// - This implementation is specific to the exponential ansatz B = e^X, not the general similarity transform B^{-1} A B.
-/// - If \p unitary is true, the ansatz uses B - B^+ instead of B, corresponding to a unitary coupled-cluster type transformation.
+/// - If \p unitary is true, the ansatz uses B - B^+ instead of B.
 ///
 /// @param A Expression A (e.g., the Hamiltonian)
 /// @param B Expression B (e.g., the cluster operator T)
 /// @param commutator_rank The maximum order of nested commutators to retain (e.g. 4 for traditional coupled-cluster)
-/// @param unitary If true, uses unitary ansatz with B-B^+
+/// @param unitary If true, uses unitary generator with B-B^+
 /// @param skip_clone if true, will not clone the input expression
 /// @pre This function expects \p A and \p B to be composed of mbpt::Operators
 // clang-format on
-ExprPtr sim_tr(ExprPtr A, const ExprPtr& B, size_t commutator_rank,
-               bool unitary = false, bool skip_clone = false);
+ExprPtr lst(ExprPtr A, ExprPtr B, size_t commutator_rank, bool unitary = false,
+            bool skip_clone = false);
 
 /// @brief Screens out terms in the expression \p expr that cannot contribute to
 /// expectation value

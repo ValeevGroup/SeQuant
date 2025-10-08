@@ -6,8 +6,8 @@
 
 namespace sequant::mbpt {
 
-ExprPtr sim_tr(ExprPtr A, const ExprPtr& B, size_t commutator_rank,
-               bool unitary, bool skip_clone) {
+ExprPtr lst(ExprPtr A, ExprPtr B, size_t commutator_rank, bool unitary,
+            bool skip_clone) {
   assert(commutator_rank >= 1 && "Truncation order must be at least 1");
 
   // use cloned expr to avoid side effects
@@ -44,7 +44,7 @@ ExprPtr sim_tr(ExprPtr A, const ExprPtr& B, size_t commutator_rank,
         })) {
       A = sequant::expand(A);
       simplify(A);
-      return sim_tr(A, B, commutator_rank, unitary, /*skip_clone*/ true);
+      return lst(A, B, commutator_rank, unitary, /*skip_clone*/ true);
     } else {
       return transform(A);
     }
@@ -55,14 +55,14 @@ ExprPtr sim_tr(ExprPtr A, const ExprPtr& B, size_t commutator_rank,
           return running_total + summand;
         },
         [=](const auto& term) {
-          return sim_tr(term, B, commutator_rank, unitary, /*skip_clone*/ true);
+          return lst(term, B, commutator_rank, unitary, /*skip_clone*/ true);
         });
     return result;
   } else if (A.is<Constant>() || A.is<Variable>())
     return A;
   else
     throw std::invalid_argument(
-        "mbpt::sim_tr(A, B, commutator_rank, unitary): Unsupported expression "
+        "mbpt::lst(A, B, commutator_rank, unitary): Unsupported expression "
         "type");
 }
 

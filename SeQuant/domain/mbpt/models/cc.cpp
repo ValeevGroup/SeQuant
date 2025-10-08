@@ -37,7 +37,7 @@ std::vector<ExprPtr> CC::t(size_t commutator_rank, size_t pmax, size_t pmin) {
   assert(pmax >= pmin && "pmax should be >= pmin");
 
   // 1. construct hbar(op) in canonical form
-  auto hbar = mbpt::sim_tr(H(), T(N, skip_singles), commutator_rank, unitary());
+  auto hbar = mbpt::lst(H(), T(N, skip_singles), commutator_rank, unitary());
 
   // 2. project onto each manifold, screen, lower to tensor form and wick it
   std::vector<ExprPtr> result(pmax + 1);
@@ -85,7 +85,7 @@ std::vector<ExprPtr> CC::λ(size_t commutator_rank) {
 
   // construct hbar
   auto hbar =
-      mbpt::sim_tr(H(), T(N, skip_singles), commutator_rank - 1, unitary());
+      mbpt::lst(H(), T(N, skip_singles), commutator_rank - 1, unitary());
 
   const auto One = ex<Constant>(1);
   auto lhbar = simplify((One + Λ(N)) * hbar);
@@ -149,10 +149,10 @@ std::vector<ExprPtr> CC::t_pt(size_t rank, [[maybe_unused]] size_t order) {
   // truncate h1_bar at rank 2 for one-body perturbation
   // operator and at rank 4 for two-body perturbation operator
   const auto h1_truncate_at = rank == 1 ? 2 : 4;
-  const auto h1_bar = mbpt::sim_tr(H_pt(rank), T(N), h1_truncate_at);
+  const auto h1_bar = mbpt::lst(H_pt(rank), T(N), h1_truncate_at);
 
   // construct [hbar, T(1)]
-  const auto hbar_pert = mbpt::sim_tr(H(), T(N), 3) * T_pt(N);
+  const auto hbar_pert = mbpt::lst(H(), T(N), 3) * T_pt(N);
 
   // [Eq. 34, WIREs Comput Mol Sci. 2019; 9:e1406]
   const auto expr = simplify(h1_bar + hbar_pert);
@@ -186,16 +186,16 @@ std::vector<ExprPtr> CC::λ_pt(size_t rank, [[maybe_unused]] size_t order) {
   assert(ansatz_ == Ansatz::T && "unitary ansatz is not yet supported");
 
   // construct hbar
-  const auto hbar = mbpt::sim_tr(H(), T(N), 4);
+  const auto hbar = mbpt::lst(H(), T(N), 4);
 
   // construct h1_bar
   // truncate h1_bar at rank 2 for one-body perturbation
   // operator and at rank 4 for two-body perturbation operator
   const auto h1_truncate_at = rank == 1 ? 2 : 4;
-  const auto h1_bar = mbpt::sim_tr(H_pt(rank), T(N), h1_truncate_at);
+  const auto h1_bar = mbpt::lst(H_pt(rank), T(N), h1_truncate_at);
 
   // construct [hbar, T(1)]
-  const auto hbar_pert = mbpt::sim_tr(H(), T(N), 3) * T_pt(N);
+  const auto hbar_pert = mbpt::lst(H(), T(N), 3) * T_pt(N);
 
   // [Eq. 35, WIREs Comput Mol Sci. 2019; 9:e1406]
   const auto One = ex<Constant>(1);
@@ -242,7 +242,7 @@ std::vector<ExprPtr> CC::eom_r(nₚ np, nₕ nh) {
   const bool skip_singles = ansatz_ == Ansatz::oT;
 
   // construct hbar
-  const auto hbar = mbpt::sim_tr(H(), T(N, skip_singles), 4);
+  const auto hbar = mbpt::lst(H(), T(N, skip_singles), 4);
 
   // hbar * R
   const auto hbar_R = hbar * R(np, nh);
@@ -283,7 +283,7 @@ std::vector<ExprPtr> CC::eom_l(nₚ np, nₕ nh) {
   const bool skip_singles = ansatz_ == Ansatz::oT;
 
   // construct hbar
-  const auto hbar = mbpt::sim_tr(H(), T(N, skip_singles), 4);
+  const auto hbar = mbpt::lst(H(), T(N, skip_singles), 4);
 
   // L * hbar
   const auto L_hbar = L(np, nh) * hbar;
