@@ -528,6 +528,16 @@ qns_t generic_deexcitation_qns(std::size_t particle_rank, std::size_t hole_rank,
 
 inline namespace op {
 namespace tensor {
+namespace detail {
+ExprPtr expectation_value_impl(ExprPtr expr,
+                               std::vector<std::pair<int, int>> nop_connections,
+                               bool use_top, bool full_contractions);
+}  // namespace detail
+
+ExprPtr ref_av(ExprPtr expr,
+               std::vector<std::pair<int, int>> nop_connections = {},
+               bool use_top = true);
+
 ExprPtr vac_av(ExprPtr expr,
                std::vector<std::pair<int, int>> nop_connections = {},
                bool use_top = true);

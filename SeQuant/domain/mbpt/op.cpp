@@ -1100,24 +1100,21 @@ bool lowers_rank_to_vacuum(const ExprPtr& op_or_op_product,
 
 namespace tensor {
 
-ExprPtr vac_av(ExprPtr expr, std::vector<std::pair<int, int>> nop_connections,
-               bool use_top) {
+ExprPtr detail::expectation_value_impl(
+    ExprPtr expr, std::vector<std::pair<int, int>> nop_connections,
+    bool use_top, bool full_contractions) {
   simplify(expr);
   auto isr = get_default_context().index_space_registry();
   const auto spinor = get_default_context().spbasis() == SPBasis::Spinor;
   // convention is to use different label for spin-orbital and spin-free RDM
   const auto rdm_label = spinor ? optype2label.at(OpType::RDM) : L"Γ";
 
-  // only need full contractions if don't have any density outside of
-  // the orbitals occupied in the vacuum
-  bool full_contractions =
-      (isr->reference_occupied_space() == isr->vacuum_occupied_space()) ? true
-                                                                        : false;
   // N.B. reference < vacuum is not yet supported
   if (isr->reference_occupied_space().intersection(
           isr->vacuum_occupied_space()) != isr->vacuum_occupied_space()) {
     throw std::invalid_argument(
-        "mbpt::tensor::vac_av: vacuum occupied orbitals must be same as or "
+        "mbpt::tensor::expectation_value_impl: vacuum occupied orbitals must "
+        "be same as or "
         "subset of the reference orbital set.");
   }
 
@@ -1320,6 +1317,22 @@ ExprPtr vac_av(ExprPtr expr, std::vector<std::pair<int, int>> nop_connections,
     }
     return result;
   }
+}
+
+ExprPtr ref_av(ExprPtr expr, std::vector<std::pair<int, int>> nop_connections,
+               bool use_top) {
+  auto isr = get_default_context().index_space_registry();
+  const bool full_contractions =
+      (isr->reference_occupied_space() == isr->vacuum_occupied_space()) ? true
+                                                                        : false;
+  return detail::expectation_value_impl(expr, nop_connections, use_top,
+                                        full_contractions);
+}
+
+ExprPtr vac_av(ExprPtr expr, std::vector<std::pair<int, int>> nop_connections,
+               bool use_top) {
+  return detail::expectation_value_impl(expr, nop_connections, use_top,
+                                        /* full_contractions*/ true);
 }
 
 }  // namespace tensor
