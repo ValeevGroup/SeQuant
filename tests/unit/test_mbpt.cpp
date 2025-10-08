@@ -595,9 +595,9 @@ SECTION("MRSO") {
 
   SECTION("wick(H2**T2 -> 0)") {
     {
-      auto result = t::vac_av(t::H_(2) * t::T_(2), {{0, 1}});
+      auto result = t::ref_av(t::H_(2) * t::T_(2), {{0, 1}});
 
-      auto result_wo_top = t::vac_av(t::H_(2) * t::T_(2), {{0, 1}},
+      auto result_wo_top = t::ref_av(t::H_(2) * t::T_(2), {{0, 1}},
                                      /* use_topology = */ false);
       REQUIRE(simplify(result - result_wo_top) == ex<Constant>(0));
     }
@@ -608,17 +608,17 @@ SECTION("MRSO") {
       ctx.set(mbpt::make_mr_spaces());
       ctx.set(Vacuum::Physical);
       auto ctx_resetter = set_scoped_default_context(ctx);
-      auto result_phys = t::vac_av(t::H_(2) * t::T_(2), {{0, 1}});
+      auto result_phys = t::ref_av(t::H_(2) * t::T_(2), {{0, 1}});
     }
   }
 
   // H2 ** T2 ** T2 -> 0
   SECTION("wick(H2**T2**T2 -> 0)") {
     // first without use of topology
-    auto result = t::vac_av(t::H_(2) * t::T_(2) * t::T_(2), {{0, 1}},
+    auto result = t::ref_av(t::H_(2) * t::T_(2) * t::T_(2), {{0, 1}},
                             /* use_topology = */ false);
     // now with topology use
-    auto result_top = t::vac_av(t::H_(2) * t::T_(2) * t ::T_(2), {{0, 1}},
+    auto result_top = t::ref_av(t::H_(2) * t::T_(2) * t ::T_(2), {{0, 1}},
                                 /* use_topology = */ true);
 
     REQUIRE(simplify(result - result_top) == ex<Constant>(0));
@@ -627,7 +627,7 @@ SECTION("MRSO") {
 #if 0
     // H**T12 -> R2
     SECTION("wick(H**T2 -> R2)") {
-      auto result = t::vac_av(t::A(-2) * t::H() * t::T_(2), {{1, 2}});
+      auto result = t::ref_av(t::A(-2) * t::H() * t::T_(2), {{1, 2}});
 
       {
         std::wcout << "H*T2 -> R2 = " << to_latex_align(result, 0, 1)
@@ -645,11 +645,11 @@ SECTION("MRSF") {
   auto ctx_resetter = set_scoped_default_context(ctx);
 
   SECTION("wick(H2**T2 -> 0)") {
-    auto result = t::vac_av(t::H_(2) * t::T_(2), {{0, 1}});
+    auto result = t::ref_av(t::H_(2) * t::T_(2), {{0, 1}});
 
     {
       // make sure get same result without use of topology
-      auto result_wo_top = t::vac_av(t::H_(2) * t::T_(2), {{0, 1}},
+      auto result_wo_top = t::ref_av(t::H_(2) * t::T_(2), {{0, 1}},
                                      /* use_topology = */ false);
 
       REQUIRE(simplify(result - result_wo_top) == ex<Constant>(0));
@@ -657,7 +657,7 @@ SECTION("MRSF") {
 
     {
       // make sure get same result using operators
-      auto result_op = o::vac_av(o::H_(2) * o::T_(2));
+      auto result_op = o::ref_av(o::H_(2) * o::T_(2));
 
       REQUIRE(result_op->size() == result->size());
       REQUIRE(simplify(result - result_op) == ex<Constant>(0));
