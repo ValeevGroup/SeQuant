@@ -534,10 +534,19 @@ ExprPtr expectation_value_impl(ExprPtr expr,
                                bool use_top, bool full_contractions);
 }  // namespace detail
 
+/// @brief computes the reference expectation value of a tensor-level expression
+/// @param expr input expression
+/// @param nop_connections connectivity information
+/// @param use_top if true, WickTheorem uses topological equivalence of terms
 ExprPtr ref_av(ExprPtr expr,
                std::vector<std::pair<int, int>> nop_connections = {},
                bool use_top = true);
 
+/// @brief computes the vacuum expectation value of a tensor-level expression,
+/// forces full contractions in WickTheorem
+/// @param expr input expression
+/// @param nop_connections connectivity information
+/// @param use_top if true, WickTheorem uses topological equivalence of terms
 ExprPtr vac_av(ExprPtr expr,
                std::vector<std::pair<int, int>> nop_connections = {},
                bool use_top = true);
