@@ -354,30 +354,47 @@ std::wstring to_latex(const mbpt::Operator<mbpt::qns_t, S>& op) {
     base_lbl.pop_back();
   }
 
-  auto it = label2optype.find(base_lbl);
-  if (it != label2optype.end()) {  // handle special cases
-    OpType optype = it->second;
-    if (to_class(optype) == OpClass::gen) {
-      if (optype == OpType::θ) {  // special case for θ
-        result += L"_{" + std::to_wstring(op()[0].upper()) + L"}";
-      }
-      result += L"}";
-      return result;
-    }
+  auto op_qns = op();  // operator action i.e. quantum number change
+
+  auto it = label2optype.find(base_lbl);  // look for OpType
+  const bool known_optype = it != label2optype.end();
+
+  // special handling for general operators
+  // - Ops like f and g does not need ranks, it is implied
+  // - Ops like A, S, θ are general, but need rank information
+  // - θ needs to be treated differently because it can have variable number of
+  // quantum numbers
+
+  auto skip_rank_info = [](const OpType& optype) {
+    return to_class(optype) == OpClass::gen &&
+           !(optype == OpType::θ || optype == OpType::A || optype == OpType::S);
+  };
+
+  if (known_optype && skip_rank_info(it->second)) {
+    result += L"}";  // close the brace
+    return result;
   }
-  std::wstring baseline_char = is_adjoint ? L"^" : L"_";
+  // specially handle θ operator
+  if (known_optype && it->second == OpType::θ) {
+    result += L"_{" + std::to_wstring(op_qns[0].upper()) + L"}";
+    result += L"}";  // close the brace
+    return result;
+  }
+
   if (get_default_context().vacuum() == Vacuum::Physical) {
-    if (op()[0] == op()[1]) {  // particle conserving
-      result += L"_{" + std::to_wstring(op()[0].lower()) + L"}";
+    if (op_qns[0] == op_qns[1]) {  // particle conserving
+      result += L"_{" + std::to_wstring(op_qns[0].lower()) + L"}";
     } else {  // non-particle conserving
-      result += L"_{" + std::to_wstring(op()[1].lower()) + L"}^{" +
-                std::to_wstring(op()[0].lower()) + L"}";
+      result += L"_{" + std::to_wstring(op_qns[1].lower()) + L"}^{" +
+                std::to_wstring(op_qns[0].lower()) + L"}";
     }
   } else {  // single product vacuum
-    auto nann_p = is_adjoint ? op().ncre_particles() : op().nann_particles();
-    auto ncre_h = is_adjoint ? op().nann_holes() : op().ncre_holes();
-    auto ncre_p = is_adjoint ? op().nann_particles() : op().ncre_particles();
-    auto nann_h = is_adjoint ? op().ncre_holes() : op().nann_holes();
+    auto nann_p =
+        is_adjoint ? op_qns.ncre_particles() : op_qns.nann_particles();
+    auto ncre_h = is_adjoint ? op_qns.nann_holes() : op_qns.ncre_holes();
+    auto ncre_p =
+        is_adjoint ? op_qns.nann_particles() : op_qns.ncre_particles();
+    auto nann_h = is_adjoint ? op_qns.ncre_holes() : op_qns.nann_holes();
 
     if (!is_definite(nann_p) || !is_definite(ncre_h) || !is_definite(ncre_p) ||
         !is_definite(nann_h)) {
@@ -386,12 +403,19 @@ std::wstring to_latex(const mbpt::Operator<mbpt::qns_t, S>& op) {
           "can only handle generic operators with definite cre/ann numbers");
     }
 
+    // check if the Op is a projector (A or S)
+    // projectors can have negative ranks, need special handling
+    [[maybe_unused]] const bool is_projector =
+        known_optype && (it->second == OpType::A || it->second == OpType::S);
+
     // pure quasiparticle creator/annihilator?
     const auto qprank_cre = ncre_p.lower() + nann_h.lower();
     const auto qprank_ann = nann_p.lower() + ncre_h.lower();
     const auto qppure = qprank_cre == 0 || qprank_ann == 0;
     if (qppure) {
+      const std::wstring baseline_char = is_adjoint ? L"^" : L"_";
       if (qprank_cre) {
+        // here there is no need for sign, positive ranks of projectors
         if (ncre_p.lower() == nann_h.lower()) {  // q-particle conserving
           result +=
               baseline_char + L"{" + std::to_wstring(nann_h.lower()) + L"}";
@@ -400,12 +424,15 @@ std::wstring to_latex(const mbpt::Operator<mbpt::qns_t, S>& op) {
                     L"," + std::to_wstring(ncre_p.lower()) + L"}";
         }
       } else {
+        // if projector, add negative sign to ranks
+        const std::wstring sign = is_projector ? L"-" : L"";
         if (ncre_h.lower() == nann_p.lower()) {  // q-particle conserving
-          result +=
-              baseline_char + L"{" + std::to_wstring(ncre_h.lower()) + L"}";
+          result += baseline_char + L"{" + sign +
+                    std::to_wstring(ncre_h.lower()) + L"}";
         } else {  // q-particle non-conserving
-          result += baseline_char + L"{" + std::to_wstring(ncre_h.lower()) +
-                    L"," + std::to_wstring(nann_p.lower()) + L"}";
+          result += baseline_char + L"{" + sign +
+                    std::to_wstring(ncre_h.lower()) + L"," + sign +
+                    std::to_wstring(nann_p.lower()) + L"}";
         }
       }
     } else {  // not pure qp creator/annihilator
@@ -1303,7 +1330,7 @@ bool can_change_qns(const ExprPtr& op_or_op_product, const qns_t target_qns,
     return qns.overlaps_with(target_qns);
   } else if (op_or_op_product.is<op_t>()) {
     const auto& op = op_or_op_product.as<op_t>();
-    qns = op();
+    qns = op(qns);
     return qns.overlaps_with(target_qns);
   } else
     throw std::invalid_argument(
