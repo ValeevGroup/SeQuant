@@ -81,7 +81,10 @@ ExprPtr expectation_value_impl(
 
 }  // namespace detail
 
+// clang-format off
 /// @brief computes the reference expectation value
+/// @note equivalent to vac_av if the reference state is the Wick vacuum,
+///       i.e. if `get_default_context().index_space_registry()->reference_occupied_space() == get_default_context().index_space_registry()->vacuum_occupied_space()`
 /// @param[in] expr input expression
 /// @param[in] op_connections list of pairs of operator labels to be
 /// connected; connections are defined left-to-right, i.e., pair
@@ -93,11 +96,15 @@ ExprPtr expectation_value_impl(
 /// Tensor level and calling WickTheorem, default is true
 /// @param[in] skip_clone if true, will not clone the input expression
 /// @return the reference expectation value
+// clang_format on
 ExprPtr ref_av(ExprPtr expr, const OpConnections<std::wstring>& op_connections,
                bool use_topology = true, bool screen = true,
                bool skip_clone = false);
 
+// clang-format off
 /// @brief computes the reference expectation value
+/// @note equivalent to vac_av if the reference state is the Wick vacuum,
+///       i.e. if `get_default_context().index_space_registry()->reference_occupied_space() == get_default_context().index_space_registry()->vacuum_occupied_space()`
 /// @param[in] expr input expression
 /// @param[in] op_connections list of pairs of operators to be
 /// connected; connections are left-to-right, i.e., pair `{opL,opR}` declares
@@ -113,14 +120,15 @@ ExprPtr ref_av(ExprPtr expr, const OpConnections<std::wstring>& op_connections,
 /// Tensor level and calling WickTheorem, default is true
 /// @param[in] skip_clone if true, will not clone the input expression
 /// @return the reference expectation value
+// clang-format on
 ExprPtr ref_av(ExprPtr expr,
                const OpConnections<mbpt::OpType>& op_connections =
                    default_op_connections(),
                bool use_topology = true, bool screen = true,
                bool skip_clone = false);
 
-/// @brief computes the vacuum expectation value, forces full contractions in
-/// WickTheorem
+/// @brief computes the vacuum expectation value
+/// @internal evaluates only full contractions in  WickTheorem
 /// @param[in] expr input expression
 /// @param[in] op_connections list of pairs of operator labels to be
 /// connected; connections are defined left-to-right, i.e., pair
@@ -136,8 +144,8 @@ ExprPtr vac_av(ExprPtr expr, const OpConnections<std::wstring>& op_connections,
                bool use_topology = true, bool screen = true,
                bool skip_clone = false);
 
-/// @brief computes the vacuum expectation value, forces full contractions in
-/// WickTheorem
+/// @brief computes the vacuum expectation value
+/// @internal evaluates only full contractions in WickTheorem
 /// @param[in] expr input expression
 /// @param[in] op_connections list of pairs of operators to be
 /// connected; connections are left-to-right, i.e., pair `{opL,opR}` declares
