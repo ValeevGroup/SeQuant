@@ -46,14 +46,14 @@ The :class:`CC <sequant::mbpt::CC>` class supports several CC ansätze through t
 Key Methods
 ----------
 
-Similarity Transformation
-^^^^^^^^^^^^^^^^^^^^^^^^^
+Lie Similarity Transformation
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 .. code-block:: cpp
 
-   ExprPtr sim_tr(ExprPtr expr, size_t r);
+   ExprPtr lst(ExprPtr A, ExprPtr B, size_t r);
 
-Performs the similarity transformation of an operator. For traditional CC, this computes :math:`\bar{O} = e^{-\hat{T}} \hat{O} e^{\hat{T}}` expanded as a series of nested commutators truncated at order ``r``, where :math:`\hat{O}` is the operator to be transformed.
+Returns Lie similarity transformation, :math:`\bar{A} = e^{-\hat{B}} \hat{A} e^{\hat{B}}`, as a series of nested commutators, :math:`[\hat{A},\hat{B}]`, :math:`[[\hat{A},\hat{B}],\hat{B}]`, etc., up to order ``r``.
 
 Ground State Amplitudes
 ^^^^^^^^^^^^^^^^^^^^^^^

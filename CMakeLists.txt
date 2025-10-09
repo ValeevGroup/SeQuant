@@ -185,7 +185,7 @@ if(NOT SEQUANT_USE_SYSTEM_BOOST_HASH) # if not to use Boost Hash, unpack bundled
 endif()
 
 
-    # polymorphic_variant
+# polymorphic_variant
 include(FindOrFetchPolymorphicVariant)
 
 # LibPerm
@@ -368,6 +368,8 @@ set(SeQuant_src
         SeQuant/domain/mbpt/spin.cpp
         SeQuant/domain/mbpt/spin.hpp
         SeQuant/domain/mbpt/vac_av.ipp
+        SeQuant/domain/mbpt/utils.hpp
+        SeQuant/domain/mbpt/utils.cpp
         SeQuant/version.cpp
 )
 

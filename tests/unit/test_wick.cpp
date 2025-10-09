@@ -850,7 +850,7 @@ TEST_CASE("wick", "[algorithms][wick]") {
     }
 
     // 2-body ^ 2-body ^ 2-body ^ 2-body
-    SECTION("wick(2^2^2^2)") {
+    {
       auto opseq = ex<FNOperatorSeq>(
           FNOperator(cre({L"p_1", L"p_2"}), ann({L"p_5", L"p_6"})),
           FNOperator(cre({L"p_9", L"p_10"}), ann({L"p_11", L"p_12"})),
@@ -871,7 +871,7 @@ TEST_CASE("wick", "[algorithms][wick]") {
 #define SEQUANT_EXPENSIVELY_VALIDATE_LONG_TESTS 0
 
     // 4-body ^ 2-body ^ 4-body
-    SECTION("wick(4^2^4)") {
+    {
       auto opseq = ex<FNOperatorSeq>(
           FNOperator(cre({L"p_1", L"p_2", L"p_3", L"p_4"}),
                      ann({L"p_5", L"p_6", L"p_7", L"p_8"})),
@@ -891,7 +891,7 @@ TEST_CASE("wick", "[algorithms][wick]") {
 
 #ifndef SEQUANT_SKIP_SUPERLONG_TESTS
     // 4-body ^ 2-body ^ 2-body ^ 2-body
-    SECTION("wick(4^2^2^2)") {
+    {
       auto opseq = ex<FNOperatorSeq>(
           FNOperator(cre({L"p_1", L"p_2", L"p_3", L"p_4"}),
                      ann({L"p_5", L"p_6", L"p_7", L"p_8"})),
@@ -907,7 +907,7 @@ TEST_CASE("wick", "[algorithms][wick]") {
     }
 
     // 3-body ^ 2-body ^ 2-body ^ 3-body
-    SECTION("wick(3^2^2^3)") {
+    {
       auto opseq = ex<FNOperatorSeq>(
           FNOperator(cre({L"p_1", L"p_2", L"p_3"}),
                      ann({L"p_5", L"p_6", L"p_7"})),
@@ -924,7 +924,7 @@ TEST_CASE("wick", "[algorithms][wick]") {
     }
 
     // 4-body ^ 4-body ^ 4-body
-    SECTION("wick(4^4^4)") {
+    {
       auto opseq = ex<FNOperatorSeq>(
           FNOperator(cre({L"p_1", L"p_2", L"p_3", L"p_4"}),
                      ann({L"p_5", L"p_6", L"p_7", L"p_8"})),

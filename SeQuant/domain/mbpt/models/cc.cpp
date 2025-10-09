@@ -6,6 +6,7 @@
 #include <SeQuant/domain/mbpt/models/cc.hpp>
 #include <SeQuant/domain/mbpt/op.hpp>
 #include <SeQuant/domain/mbpt/spin.hpp>
+#include <SeQuant/domain/mbpt/utils.hpp>
 
 #include <cassert>
 #include <cstdint>
@@ -29,64 +30,14 @@ bool CC::screen() const { return screen_; }
 
 bool CC::use_topology() const { return use_topology_; }
 
-ExprPtr CC::sim_tr(ExprPtr expr, size_t commutator_rank) {
-  const bool skip_singles = ansatz_ == Ansatz::oT || ansatz_ == Ansatz::oU;
-  auto transform_op_op_pdt = [this, &commutator_rank,
-                              skip_singles](const ExprPtr& expr) {
-    assert(expr.is<op_t>() || expr.is<Product>());
-    auto result = expr;
-    auto op_Sk = result;
-    for (size_t k = 1; k <= commutator_rank; ++k) {
-      ExprPtr op_Sk_comm_w_S;
-      op_Sk_comm_w_S =
-          op_Sk * T(N, skip_singles);  // traditional SR ansatz: [O,T] = (O T)_c
-      if (unitary())  // unitary SR ansatz: [O,T-T^+] = (O T)_c + (T^+ O)_c
-        op_Sk_comm_w_S += adjoint(T(N, skip_singles)) * op_Sk;
-      op_Sk = ex<Constant>(rational{1, k}) * op_Sk_comm_w_S;
-      simplify(op_Sk);
-      result += op_Sk;
-    }
-    return result;
-  };
-
-  if (expr.is<op_t>()) {
-    return transform_op_op_pdt(expr);
-  } else if (expr.is<Product>()) {
-    auto& product = expr.as<Product>();
-    // Expand product as sum
-    if (ranges::any_of(product.factors(), [](const auto& factor) {
-          return factor.template is<Sum>();
-        })) {
-      expr = sequant::expand(expr);
-      simplify(expr);
-      return sim_tr(expr, commutator_rank);
-    } else {
-      return transform_op_op_pdt(expr);
-    }
-  } else if (expr.is<Sum>()) {
-    auto result = sequant::transform_reduce(
-        *expr, ex<Sum>(),
-        [](const ExprPtr& running_total, const ExprPtr& summand) {
-          return running_total + summand;
-        },
-        [=](const auto& op_product) {
-          return transform_op_op_pdt(op_product);
-        });
-    return result;
-  } else if (expr.is<Constant>() || expr.is<Variable>())
-    return expr;
-  else
-    throw std::invalid_argument(
-        "CC::sim_tr(expr): Unsupported expression type");
-}
-
 std::vector<ExprPtr> CC::t(size_t commutator_rank, size_t pmax, size_t pmin) {
   pmax = (pmax == std::numeric_limits<size_t>::max() ? N : pmax);
+  const bool skip_singles = ansatz_ == Ansatz::oT || ansatz_ == Ansatz::oU;
 
   assert(pmax >= pmin && "pmax should be >= pmin");
 
   // 1. construct hbar(op) in canonical form
-  auto hbar = sim_tr(H(), commutator_rank);
+  auto hbar = mbpt::lst(H(), T(N, skip_singles), commutator_rank, unitary());
 
   // 2. project onto each manifold, screen, lower to tensor form and wick it
   std::vector<ExprPtr> result(pmax + 1);
@@ -130,9 +81,11 @@ std::vector<ExprPtr> CC::t(size_t commutator_rank, size_t pmax, size_t pmin) {
 std::vector<ExprPtr> CC::λ(size_t commutator_rank) {
   assert(commutator_rank >= 1 && "commutator rank should be >= 1");
   assert(!unitary() && "there is no need for CC::λ for unitary ansatz");
+  const bool skip_singles = ansatz_ == Ansatz::oT || ansatz_ == Ansatz::oU;
 
   // construct hbar
-  auto hbar = sim_tr(H(), commutator_rank - 1);
+  auto hbar =
+      mbpt::lst(H(), T(N, skip_singles), commutator_rank - 1, unitary());
 
   const auto One = ex<Constant>(1);
   auto lhbar = simplify((One + Λ(N)) * hbar);
@@ -183,7 +136,7 @@ std::vector<ExprPtr> CC::λ(size_t commutator_rank) {
   return result;
 }
 
-std::vector<ExprPtr> CC::t_pt(size_t order, size_t rank) {
+std::vector<ExprPtr> CC::t_pt(size_t rank, [[maybe_unused]] size_t order) {
   assert(order == 1 &&
          "sequant::mbpt::CC::t_pt(): only first-order perturbation is "
          "supported now");
@@ -196,10 +149,10 @@ std::vector<ExprPtr> CC::t_pt(size_t order, size_t rank) {
   // truncate h1_bar at rank 2 for one-body perturbation
   // operator and at rank 4 for two-body perturbation operator
   const auto h1_truncate_at = rank == 1 ? 2 : 4;
-  const auto h1_bar = sim_tr(H_pt(1, rank), h1_truncate_at);
+  const auto h1_bar = mbpt::lst(H_pt(rank), T(N), h1_truncate_at);
 
   // construct [hbar, T(1)]
-  const auto hbar_pert = sim_tr(H(), 3) * T_pt(order, N);
+  const auto hbar_pert = mbpt::lst(H(), T(N), 3) * T_pt(N);
 
   // [Eq. 34, WIREs Comput Mol Sci. 2019; 9:e1406]
   const auto expr = simplify(h1_bar + hbar_pert);
@@ -216,14 +169,14 @@ std::vector<ExprPtr> CC::t_pt(size_t order, size_t rank) {
 
   std::vector<ExprPtr> result(N + 1);
   for (auto p = N; p >= 1; --p) {
-    const auto freq_term = ex<Variable>(L"ω") * P(nₚ(p)) * T_pt_(order, p);
+    const auto freq_term = ex<Variable>(L"ω") * P(nₚ(p)) * T_pt_(p);
     result.at(p) =
         this->vac_av(P(nₚ(p)) * expr, op_connect) - this->vac_av(freq_term);
   }
   return result;
 }
 
-std::vector<ExprPtr> CC::λ_pt(size_t order, size_t rank) {
+std::vector<ExprPtr> CC::λ_pt(size_t rank, [[maybe_unused]] size_t order) {
   assert(order == 1 &&
          "sequant::mbpt::CC::λ_pt(): only first-order perturbation is "
          "supported now");
@@ -233,21 +186,21 @@ std::vector<ExprPtr> CC::λ_pt(size_t order, size_t rank) {
   assert(ansatz_ == Ansatz::T && "unitary ansatz is not yet supported");
 
   // construct hbar
-  const auto hbar = sim_tr(H(), 4);
+  const auto hbar = mbpt::lst(H(), T(N), 4);
 
   // construct h1_bar
   // truncate h1_bar at rank 2 for one-body perturbation
   // operator and at rank 4 for two-body perturbation operator
   const auto h1_truncate_at = rank == 1 ? 2 : 4;
-  const auto h1_bar = sim_tr(H_pt(1, rank), h1_truncate_at);
+  const auto h1_bar = mbpt::lst(H_pt(rank), T(N), h1_truncate_at);
 
   // construct [hbar, T(1)]
-  const auto hbar_pert = sim_tr(H(), 3) * T_pt(order, N);
+  const auto hbar_pert = mbpt::lst(H(), T(N), 3) * T_pt(N);
 
   // [Eq. 35, WIREs Comput Mol Sci. 2019; 9:e1406]
   const auto One = ex<Constant>(1);
   const auto expr =
-      simplify((One + Λ(N)) * (h1_bar + hbar_pert) + Λ_pt(order, N) * hbar);
+      simplify((One + Λ(N)) * (h1_bar + hbar_pert) + Λ_pt(N) * hbar);
 
   // connectivity:
   // t and t1 with {h,f,g}
@@ -271,7 +224,7 @@ std::vector<ExprPtr> CC::λ_pt(size_t order, size_t rank) {
 
   std::vector<ExprPtr> result(N + 1);
   for (auto p = N; p >= 1; --p) {
-    const auto freq_term = ex<Variable>(L"ω") * Λ_pt_(order, p) * P(nₚ(-p));
+    const auto freq_term = ex<Variable>(L"ω") * Λ_pt_(p) * P(nₚ(-p));
     result.at(p) =
         this->vac_av(expr * P(nₚ(-p)), op_connect) + this->vac_av(freq_term);
   }
@@ -286,9 +239,10 @@ std::vector<ExprPtr> CC::eom_r(nₚ np, nₕ nh) {
     assert(
         get_default_context().spbasis() != SPBasis::Spinfree &&
         "spin-free basis does not yet support non particle-conserving cases");
+  const bool skip_singles = ansatz_ == Ansatz::oT;
 
   // construct hbar
-  const auto hbar = sim_tr(H(), 4);
+  const auto hbar = mbpt::lst(H(), T(N, skip_singles), 4);
 
   // hbar * R
   const auto hbar_R = hbar * R(np, nh);
@@ -326,9 +280,10 @@ std::vector<ExprPtr> CC::eom_l(nₚ np, nₕ nh) {
   if (np != nh)
     assert(get_default_context().spbasis() != SPBasis::Spinfree &&
            "spin-free basis does not support non particle-conserving cases");
+  const bool skip_singles = ansatz_ == Ansatz::oT;
 
   // construct hbar
-  const auto hbar = sim_tr(H(), 4);
+  const auto hbar = mbpt::lst(H(), T(N, skip_singles), 4);
 
   // L * hbar
   const auto L_hbar = L(np, nh) * hbar;

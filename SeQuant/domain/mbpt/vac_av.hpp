@@ -74,8 +74,37 @@ inline ExprPtr lower_to_tensor_form(const ExprPtr& expr_inp) {
   return expr;
 }
 
-/// computes the vacuum expectation value (VEV)
+namespace detail {
+ExprPtr expectation_value_impl(
+    ExprPtr expr, const OpConnections<std::wstring>& op_connections,
+    bool use_topology, bool screen, bool skip_clone, bool full_contractions);
 
+}  // namespace detail
+
+// clang-format off
+/// @brief computes the reference expectation value
+/// @note equivalent to vac_av if the reference state is the Wick vacuum,
+///       i.e. if `get_default_context().index_space_registry()->reference_occupied_space() == get_default_context().index_space_registry()->vacuum_occupied_space()`
+/// @param[in] expr input expression
+/// @param[in] op_connections list of pairs of operator labels to be
+/// connected; connections are defined left-to-right, i.e., pair
+/// `{opL,opR}` declares that `opL` and `opR` are to be connected
+/// when `opR` precedes `opL`, i.e. `opL` is to the left of `opR`
+/// @param[in] use_topology if true, WickTheorem uses topological equivalence of
+/// terms, default is true
+/// @param[in] screen if true, expressions are screened before lowering to
+/// Tensor level and calling WickTheorem, default is true
+/// @param[in] skip_clone if true, will not clone the input expression
+/// @return the reference expectation value
+// clang_format on
+ExprPtr ref_av(ExprPtr expr, const OpConnections<std::wstring>& op_connections,
+               bool use_topology = true, bool screen = true,
+               bool skip_clone = false);
+
+// clang-format off
+/// @brief computes the reference expectation value
+/// @note equivalent to vac_av if the reference state is the Wick vacuum,
+///       i.e. if `get_default_context().index_space_registry()->reference_occupied_space() == get_default_context().index_space_registry()->vacuum_occupied_space()`
 /// @param[in] expr input expression
 /// @param[in] op_connections list of pairs of operators to be
 /// connected; connections are left-to-right, i.e., pair `{opL,opR}` declares
@@ -84,21 +113,22 @@ inline ExprPtr lower_to_tensor_form(const ExprPtr& expr_inp) {
 /// e.g., `{{OpType::h, OpType::t}}` will ensure that each
 /// `OpType::h` will be connected to at least one `OpType::t` on its right
 /// (preceding it). The default list of connections is given
-/// by default_op_connections() .
+/// by default_op_connections()
 /// @param[in] use_topology if true, WickTheorem uses topological equivalence of
 /// terms, default is true
 /// @param[in] screen if true, expressions are screened before lowering to
 /// Tensor level and calling WickTheorem, default is true
 /// @param[in] skip_clone if true, will not clone the input expression
-/// @return the VEV
-ExprPtr vac_av(ExprPtr expr,
+/// @return the reference expectation value
+// clang-format on
+ExprPtr ref_av(ExprPtr expr,
                const OpConnections<mbpt::OpType>& op_connections =
                    default_op_connections(),
                bool use_topology = true, bool screen = true,
                bool skip_clone = false);
 
-/// computes the vacuum expectation value (VEV)
-
+/// @brief computes the vacuum expectation value
+/// @internal evaluates only full contractions in  WickTheorem
 /// @param[in] expr input expression
 /// @param[in] op_connections list of pairs of operator labels to be
 /// connected; connections are defined left-to-right, i.e., pair
@@ -111,5 +141,28 @@ ExprPtr vac_av(ExprPtr expr,
 /// @param[in] skip_clone if true, will not clone the input expression
 /// @return the VEV
 ExprPtr vac_av(ExprPtr expr, const OpConnections<std::wstring>& op_connections,
+               bool use_topology = true, bool screen = true,
+               bool skip_clone = false);
+
+/// @brief computes the vacuum expectation value
+/// @internal evaluates only full contractions in WickTheorem
+/// @param[in] expr input expression
+/// @param[in] op_connections list of pairs of operators to be
+/// connected; connections are left-to-right, i.e., pair `{opL,opR}` declares
+/// that `opL` and `opR` are to be connected when `opR` precedes `opL`, i.e.
+/// `opL` is to the left of `opR`;
+/// e.g., `{{OpType::h, OpType::t}}` will ensure that each
+/// `OpType::h` will be connected to at least one `OpType::t` on its right
+/// (preceding it). The default list of connections is given
+/// by default_op_connections()
+/// @param[in] use_topology if true, WickTheorem uses topological equivalence of
+/// terms, default is true
+/// @param[in] screen if true, expressions are screened before lowering to
+/// Tensor level and calling WickTheorem, default is true
+/// @param[in] skip_clone if true, will not clone the input expression
+/// @return the VEV
+ExprPtr vac_av(ExprPtr expr,
+               const OpConnections<mbpt::OpType>& op_connections =
+                   default_op_connections(),
                bool use_topology = true, bool screen = true,
                bool skip_clone = false);
