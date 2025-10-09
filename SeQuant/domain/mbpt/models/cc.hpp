@@ -119,14 +119,14 @@ class CC {
   bool use_topology_ = true;
 
   /// @brief computes reference expectation value of an expression. Dispatches
-  /// to `mbpt::op::vac_av()`
+  /// to `mbpt::op::ref_av()`
   /// @param[in] expr input expression
   /// @param[in] op_connect list of pairs of operators to be connected. Default
   /// is given by `mbpt::default_op_connections()`.
-  auto vac_av(const ExprPtr& expr,
+  auto ref_av(const ExprPtr& expr,
               const OpConnections<mbpt::OpType>& op_connect =
                   default_op_connections()) const {
-    return op::vac_av(expr, op_connect, this->use_topology(), this->screen());
+    return op::ref_av(expr, op_connect, this->use_topology(), this->screen());
   }
 };  // class CC
 
