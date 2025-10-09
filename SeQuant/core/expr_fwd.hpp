@@ -10,6 +10,7 @@
 namespace sequant {
 
 class Expr;
+class ResultExpr;
 class ExprPtr;
 
 class Labeled;

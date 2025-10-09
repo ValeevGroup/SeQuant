@@ -240,7 +240,34 @@ TEST_CASE("index_space", "[elements]") {
     REQUIRE(isr->retrieve(L"i") < isr->retrieve(L"μ̃"));
   }
 
-  SECTION("paper example") {
+  SECTION("paper 1 example") {
+    IndexSpaceRegistry isr;
+    using namespace sequant::mbpt;
+    isr.add("i", 0b01,
+            // fully occupied in vacuum state
+            is_vacuum_occupied)
+        .add("a", 0b10)
+        .add_union("p", {"i", "a"});
+
+    REQUIRE(isr.retrieve("i") == isr.intersection("p", "i"));
+    REQUIRE(isr.retrieve("p") == isr.unIon("a", "i"));
+    REQUIRE(isr.valid_intersection("i", "a") == false);
+    REQUIRE(isr.is_base("a") == true);
+    REQUIRE(isr.is_base("p") == false);
+    REQUIRE(isr.is_pure_occupied("i") == true);
+    REQUIRE(isr.is_pure_unoccupied("a") == true);
+    REQUIRE(isr.contains_occupied("p") == true);
+
+    // to use ISR load into default context
+    auto _ = set_scoped_default_context(
+        {.index_space_registry = isr, .vacuum = Vacuum::SingleProduct});
+    REQUIRE_NOTHROW(Index("a_1"));
+    REQUIRE_NOTHROW(Index("p_1"));
+    Index a1("a_1");
+    Index p1("p_1");
+  }
+
+  SECTION("paper 2 example") {
     IndexSpaceRegistry isr;
     using namespace sequant::mbpt;
     const QuantumNumbersAttr spin_any = 0b0011;

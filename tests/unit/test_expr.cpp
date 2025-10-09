@@ -606,26 +606,22 @@ TEST_CASE("expr", "[elements]") {
               L"{{ \\bigl({{{1}}} + {\\text{Dummy}}\\bigr) }{ \\bigl({{{3}}} "
               L"+ {\\text{Dummy}}\\bigr) }}");
       expand(x);
-      //      std::wcout << "x = " << to_latex(x) << std::endl;
       REQUIRE(to_latex(x) ==
               L"{ \\bigl({{{3}}} + {{\\text{Dummy}}} + {{{3}}"
               L"{\\text{Dummy}}} + {{\\text{Dummy}}{\\text{Dummy}}}\\bigr) }");
       rapid_simplify(x);
-      //      std::wcout << "x = " << to_latex(x) << std::endl;
     }
     {
       auto x =
           (ex<Constant>(1) +
            ex<Constant>(2) * (ex<Constant>(3) - ex<Dummy>())) *
           (ex<Constant>(5) * (ex<Constant>(6) + ex<Dummy>()) + ex<Dummy>());
-      // std::wcout << "x = " << to_latex(x) << std::endl;
       REQUIRE(to_latex(x) ==
               L"{{ \\bigl({{{1}}} + {{{2}}{ \\bigl({{{3}}} - {"
               L"{\\text{Dummy}}}\\bigr) }}\\bigr) }{ \\bigl({{{5}}"
               L"{ \\bigl({{{6}}} + {\\text{Dummy}}\\bigr) }} + "
               L"{\\text{Dummy}}\\bigr) }}");
       expand(x);
-      // std::wcout << "ex = " << to_latex(x) << std::endl;
       REQUIRE(to_latex(x) ==
               L"{ \\bigl({{{30}}} + {{{5}}{\\text{Dummy}}} + "
               L"{{\\text{Dummy}}} + {{{180}}} + {{{30}}"
@@ -633,6 +629,64 @@ TEST_CASE("expr", "[elements]") {
               L"{\\text{Dummy}}} - {{{10}}"
               L"{\\text{Dummy}}{\\text{Dummy}}} - {{{2}}"
               L"{\\text{Dummy}}{\\text{Dummy}}}\\bigr) }");
+    }
+  }
+
+  SECTION("flatten") {
+    {  // sums of sums
+      auto x = ex<Constant>(1) + (ex<Dummy>() + ex<Constant>(3)) + ex<Dummy>();
+      REQUIRE(to_latex(x) ==
+              L"{ \\bigl({\\text{Dummy}} + {{{4}}} + {\\text{Dummy}}\\bigr) }");
+      // make nested sums by visitation
+      x->visit([](ExprPtr &e) {
+        if (e.is<Dummy>()) {
+          e = ex<Dummy>() + ex<Dummy>();
+        }
+      });
+      REQUIRE(to_latex(x) ==
+              L"{ \\bigl({ \\bigl({\\text{Dummy}} + {\\text{Dummy}}\\bigr) } + "
+              L"{{{4}}} + { \\bigl({\\text{Dummy}} + {\\text{Dummy}}\\bigr) "
+              L"}\\bigr) }");
+      flatten(x);
+      REQUIRE(to_latex(x) ==
+              L"{ \\bigl({\\text{Dummy}} + {\\text{Dummy}} + {{{4}}} + "
+              L"{\\text{Dummy}} + {\\text{Dummy}}\\bigr) }");
+    }
+    {  // products of products
+      auto x = ex<Constant>(1) * (ex<Dummy>() * ex<Constant>(3)) * ex<Dummy>();
+      REQUIRE(to_latex(x) == L"{{{3}}{\\text{Dummy}}{\\text{Dummy}}}");
+      // make nested sums by visitation
+      x->visit([](ExprPtr &e) {
+        if (e.is<Dummy>()) {
+          e = ex<Dummy>() * ex<Dummy>();
+        }
+      });
+      REQUIRE(to_latex(x) ==
+              L"{{{3}}\\bigl({{\\text{Dummy}}{\\text{Dummy}}}\\bigr)\\bigl({{"
+              L"\\text{Dummy}}{\\text{Dummy}}}\\bigr)}");
+      flatten(x);
+      REQUIRE(to_latex(x) ==
+              L"{{{3}}{\\text{Dummy}}{\\text{Dummy}}{\\text{Dummy}}{\\text{"
+              L"Dummy}}}");
+    }
+    {  // products of products and sums
+      auto x = ex<Constant>(1) * (ex<Dummy>() * ex<Constant>(3)) * ex<Dummy>();
+      REQUIRE(to_latex(x) == L"{{{3}}{\\text{Dummy}}{\\text{Dummy}}}");
+      // make nested sums by visitation
+      x->visit([](ExprPtr &e) {
+        if (e.is<Dummy>()) {
+          e = ex<Dummy>() * (ex<Dummy>() + ex<Dummy>());
+        }
+      });
+      REQUIRE(to_latex(x) ==
+              L"{{{3}}\\bigl({{\\text{Dummy}}{ \\bigl({\\text{Dummy}} + "
+              L"{\\text{Dummy}}\\bigr) }}\\bigr)\\bigl({{\\text{Dummy}}{ "
+              L"\\bigl({\\text{Dummy}} + {\\text{Dummy}}\\bigr) }}\\bigr)}");
+      flatten(x);
+      REQUIRE(to_latex(x) ==
+              L"{{{3}}{\\text{Dummy}}{ \\bigl({\\text{Dummy}} + "
+              L"{\\text{Dummy}}\\bigr) }{\\text{Dummy}}{ "
+              L"\\bigl({\\text{Dummy}} + {\\text{Dummy}}\\bigr) }}");
     }
   }
 

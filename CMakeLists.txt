@@ -185,7 +185,7 @@ if(NOT SEQUANT_USE_SYSTEM_BOOST_HASH) # if not to use Boost Hash, unpack bundled
 endif()
 
 
-    # polymorphic_variant
+# polymorphic_variant
 include(FindOrFetchPolymorphicVariant)
 
 # LibPerm
@@ -268,8 +268,10 @@ set(SeQuant_src
         SeQuant/core/expressions/abstract_tensor.hpp
         SeQuant/core/expressions/expr.cpp
         SeQuant/core/expressions/expr.hpp
+        SeQuant/core/expressions/expr_algorithms.cpp
         SeQuant/core/expressions/expr_algorithms.hpp
         SeQuant/core/expressions/expr_operators.hpp
+        SeQuant/core/expressions/expr_range.hpp
         SeQuant/core/expressions/result_expr.cpp
         SeQuant/core/expressions/result_expr.hpp
         SeQuant/core/expressions/tensor.cpp
@@ -309,19 +311,20 @@ set(SeQuant_src
         SeQuant/core/tag.hpp
         SeQuant/core/tensor_canonicalizer.cpp
         SeQuant/core/tensor_canonicalizer.hpp
-        SeQuant/core/tensor_network.cpp
         SeQuant/core/tensor_network.hpp
-        SeQuant/core/tensor_network_v2.cpp
-        SeQuant/core/tensor_network_v2.hpp
-        SeQuant/core/tensor_network_v3.cpp
-        SeQuant/core/tensor_network_v3.hpp
-        SeQuant/core/tensor_network/utils.hpp
         SeQuant/core/tensor_network/canonicals.hpp
         SeQuant/core/tensor_network/slot.hpp
+        SeQuant/core/tensor_network/typedefs.hpp
+        SeQuant/core/tensor_network/utils.hpp
         SeQuant/core/tensor_network/vertex.hpp
         SeQuant/core/tensor_network/vertex_painter.cpp
         SeQuant/core/tensor_network/vertex_painter.hpp
-        SeQuant/core/tensor_network/typedefs.hpp
+        SeQuant/core/tensor_network/v1.cpp
+        SeQuant/core/tensor_network/v1.hpp
+        SeQuant/core/tensor_network/v2.cpp
+        SeQuant/core/tensor_network/v2.hpp
+        SeQuant/core/tensor_network/v3.cpp
+        SeQuant/core/tensor_network/v3.hpp
         SeQuant/core/utility/atomic.hpp
         SeQuant/core/utility/context.hpp
         SeQuant/core/utility/debug.hpp
@@ -365,13 +368,15 @@ set(SeQuant_src
         SeQuant/domain/mbpt/spin.cpp
         SeQuant/domain/mbpt/spin.hpp
         SeQuant/domain/mbpt/vac_av.ipp
+        SeQuant/domain/mbpt/utils.hpp
+        SeQuant/domain/mbpt/utils.cpp
         SeQuant/version.cpp
 )
 
 #### disable unity_build for v2:
 set_source_files_properties(
-        SeQuant/core/tensor_network_v2.cpp
-        SeQuant/core/tensor_network_v2.hpp
+        SeQuant/core/tensor_network/v2.cpp
+        SeQuant/core/tensor_network/v2.hpp
         PROPERTIES SKIP_UNITY_BUILD_INCLUSION TRUE
 )
 

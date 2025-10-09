@@ -115,7 +115,6 @@ inline const container::map<OpType, std::wstring> optype2label{
     {OpType::RDM, L"γ"},
     // see https://en.wikipedia.org/wiki/Cumulant
     {OpType::RDMCumulant, L"κ"},
-    {OpType::δ, L"δ"},
     {OpType::h_1, L"h¹"},
     {OpType::t_1, L"t¹"},
     {OpType::λ_1, L"λ¹"}};
@@ -529,6 +528,25 @@ qns_t generic_deexcitation_qns(std::size_t particle_rank, std::size_t hole_rank,
 
 inline namespace op {
 namespace tensor {
+namespace detail {
+ExprPtr expectation_value_impl(ExprPtr expr,
+                               std::vector<std::pair<int, int>> nop_connections,
+                               bool use_top, bool full_contractions);
+}  // namespace detail
+
+/// @brief computes the reference expectation value of a tensor-level expression
+/// @param expr input expression
+/// @param nop_connections connectivity information
+/// @param use_top if true, WickTheorem uses topological equivalence of terms
+ExprPtr ref_av(ExprPtr expr,
+               std::vector<std::pair<int, int>> nop_connections = {},
+               bool use_top = true);
+
+/// @brief computes the vacuum expectation value of a tensor-level expression,
+/// forces full contractions in WickTheorem
+/// @param expr input expression
+/// @param nop_connections connectivity information
+/// @param use_top if true, WickTheorem uses topological equivalence of terms
 ExprPtr vac_av(ExprPtr expr,
                std::vector<std::pair<int, int>> nop_connections = {},
                bool use_top = true);
@@ -1043,45 +1061,45 @@ DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(A);
 ExprPtr S(std::int64_t K);
 
 /// @brief Makes perturbation operator of rank \p R
-/// @param order order of perturbation
 /// @param R rank of the operator,`R = 1` implies one-body perturbation
+/// @param order order of perturbation
 /// @param nbatch rank of optional auxiliary/batching index [default is 0]
 /// @pre `order==1`, only first order perturbation is supported now
-ExprPtr H_pt(std::size_t order, std::size_t R, std::size_t nbatch = 0);
+ExprPtr H_pt(std::size_t R, std::size_t order = 1, std::size_t nbatch = 0);
 
 /// @brief Makes perturbed particle-conserving excitation operator of rank \p K
-/// @param order order of perturbation
 /// @param K rank of the excitation operator
+/// @param order order of perturbation
 /// @param nbatch rank of optional auxiliary/batching index [default is 0]
 /// @pre `order==1`, only first order perturbation is supported now
-ExprPtr T_pt_(std::size_t order, std::size_t K, size_t nbatch = 0);
+ExprPtr T_pt_(std::size_t K, std::size_t order = 1, std::size_t nbatch = 0);
 
 /// @brief Makes sum of perturbed particle-conserving excitation operators up to
 /// rank \p K
-/// @param order order of perturbation
 /// @param K rank up to which the sum is to be formed
+/// @param order order of perturbation
 /// @param nbatch rank of optional auxiliary/batching index [default is 0]
 /// @param skip1 if true, skips single excitations
 /// @pre `order==1`, only first order perturbation is supported now
-ExprPtr T_pt(std::size_t order, std::size_t K, size_t nbatch = 0,
+ExprPtr T_pt(std::size_t K, std::size_t order = 1, std::size_t nbatch = 0,
              bool skip1 = false);
 
 /// @brief Makes perturbed particle-conserving deexcitation operator of
 /// rank \p K
-/// @param order order of perturbation
 /// @param K rank of the deexcitation operator
+/// @param order order of perturbation
 /// @param nbatch rank of optional auxiliary/batching index [default is 0]
 /// @pre `order==1`, only first order perturbation is supported now
-ExprPtr Λ_pt_(std::size_t order, std::size_t K, size_t nbatch = 0);
+ExprPtr Λ_pt_(std::size_t K, std::size_t order = 1, size_t nbatch = 0);
 
 /// @brief Makes sum of perturbed particle-conserving deexcitation operators up
 /// to rank \p K
-/// @param order order of perturbation
 /// @param K rank up to which the sum is to be formed
+/// @param order order of perturbation
 /// @param nbatch rank of optional auxiliary/batching index [default is 0]
 /// @param skip1 if true, skips single deexcitations
 /// @pre `order==1`, only first order perturbation is supported now
-ExprPtr Λ_pt(std::size_t order, std::size_t K, size_t nbatch = 0,
+ExprPtr Λ_pt(std::size_t K, std::size_t order = 1, size_t nbatch = 0,
              bool skip1 = false);
 }  // namespace tensor
 }  // namespace op
@@ -1212,58 +1230,83 @@ DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(A);
 ExprPtr S(std::int64_t K);
 
 /// @brief Makes perturbation operator of rank \p R
-/// @param order order of perturbation
 /// @param R rank of the operator,`R = 1` implies one-body perturbation
+/// @param order order of perturbation
 /// @param nbatch rank of optional auxiliary/batching index [default is 0]
 /// @pre `order==1`, only first order perturbation is supported now
-ExprPtr H_pt(std::size_t order, std::size_t R, std::size_t nbatch = 0);
+ExprPtr H_pt(std::size_t R, std::size_t order = 1, size_t nbatch = 0, );
 
 /// @brief Makes perturbed particle-conserving excitation operator of rank \p K
-/// @param order order of perturbation
 /// @param K rank of the excitation operator
+/// @param order order of perturbation
 /// @param nbatch rank of optional auxiliary/batching index [default is 0]
 /// @pre `order==1`, only first order perturbation is supported now
-ExprPtr T_pt_(std::size_t order, std::size_t K, size_t nbatch = 0);
+ExprPtr T_pt_(std::size_t K, std::size_t order = 1, size_t nbatch = 0, );
 
 /// @brief Makes sum of perturbed particle-conserving excitation operators up to
 /// rank \p K
-/// @param order order of perturbation
 /// @param K rank up to which the sum is to be formed
+/// @param order order of perturbation
 /// @param nbatch rank of optional auxiliary/batching index [default is 0]
 /// @param skip1 if true, skips single excitations
 /// @pre `order==1`, only first order perturbation is supported now
-ExprPtr T_pt(std::size_t order, std::size_t K, size_t nbatch = 0,
+ExprPtr T_pt(std::size_t K, std::size_t order = 1, size_t nbatch = 0,
              bool skip1 = false);
 
 /// @brief Makes perturbed particle-conserving deexcitation operator of
 /// rank \p K
-/// @param order order of perturbation
 /// @param K rank of the deexcitation operator
+/// @param order order of perturbation
 /// @param nbatch rank of optional auxiliary/batching index [default is 0]
 /// @pre `order==1`, only first order perturbation is supported now
-ExprPtr Λ_pt_(std::size_t order, std::size_t K, size_t nbatch = 0);
+ExprPtr Λ_pt_(std::size_t K, std::size_t order = 1, size_t nbatch = 0, );
 
 /// @brief Makes sum of perturbed particle-conserving deexcitation operators up
 /// to rank \p K
-/// @param order order of perturbation
 /// @param K rank up to which the sum is to be formed
+/// @param order order of perturbation
 /// @param nbatch rank of optional auxiliary/batching index [default is 0]
 /// @param skip1 if true, skips single deexcitations
 /// @pre `order==1`, only first order perturbation is supported now
-ExprPtr Λ_pt(std::size_t order, std::size_t K, size_t nbatch = 0,
+ExprPtr Λ_pt(std::size_t K, std::size_t order = 1, size_t nbatch = 0,
              bool skip1 = false);
 
+/// @brief computes the quantum number change effected by a given Operator or
+/// Operator Product when applied to the vacuum state
+/// @param expr the operator or operator product whose quantum number change is
+/// to be computed
+/// @return the quantum number change effected by \p expr
+/// @pre \p expr must be an Operator or an Operator Product
+qns_t apply_to_vac(const ExprPtr& expr);
+
+/// @brief Checks if a given Operator or Operator Product can change the quantum
+/// numbers from \p source_qns to \p target_qns
+/// @param op_or_op_product the operator or operator product to check
+/// @param target_qns the target quantum numbers
+/// @param source_qns the source quantum numbers
+bool can_change_qns(const ExprPtr& op_or_op_product, const qns_t& target_qns,
+                    const qns_t& source_qns = {});
+
+/// @brief Checks if a given Operator or Operator Product can raise the vacuum
+/// quantum numbers up to rank \p k
 bool raises_vacuum_up_to_rank(const ExprPtr& op_or_op_product,
                               const unsigned long k);
 
+/// @brief Checks if a given Operator or Operator Product can lower quantum
+/// numbers of rank \p down up to vacuum
 bool lowers_rank_or_lower_to_vacuum(const ExprPtr& op_or_op_product,
                                     const unsigned long k);
 
+/// @brief Checks if a given Operator or Operator Product can raise the vacuum
+/// quantum numbers to rank \p k
 bool raises_vacuum_to_rank(const ExprPtr& op_or_op_product,
                            const unsigned long k);
 
+/// @brief Checks if a given Operator or Operator Product can lower quantum
+/// numbers of rank \p k down to vacuum
 bool lowers_rank_to_vacuum(const ExprPtr& op_or_op_product,
                            const unsigned long k);
+
 #include <SeQuant/domain/mbpt/vac_av.hpp>
 }  // namespace op
 }  // namespace mbpt

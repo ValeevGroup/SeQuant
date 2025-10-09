@@ -165,4 +165,14 @@ ExprPtr optimize(ExprPtr const& expr, bool reorder_sum) {
       reorder_sum);
 }
 
+ResultExpr& optimize(ResultExpr& expr, bool reorder_sum) {
+  expr.expression() = optimize(expr.expression(), reorder_sum);
+
+  return expr;
+}
+
+ResultExpr& optimize(ResultExpr&& expr, bool reorder_sum) {
+  return optimize(expr, reorder_sum);
+}
+
 }  // namespace sequant

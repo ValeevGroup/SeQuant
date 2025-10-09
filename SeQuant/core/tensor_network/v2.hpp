@@ -107,20 +107,22 @@ class TensorNetworkV2 {
             (first->getOrigin() != Origin::Aux &&
              vertex.getOrigin() == Origin::Aux)) {
           throw std::logic_error(
-              "TensorNetwork::Edge::connect_to: aux slot cannot be connected "
+              "TensorNetworkV2::Edge::connect_to: aux slot cannot be connected "
               "to a non-aux slot");
         }
         // - can connect bra slot to ket slot, and vice versa
         if (first->getOrigin() == Origin::Bra &&
             vertex.getOrigin() != Origin::Ket) {
           throw std::logic_error(
-              "TensorNetwork::Edge::connect_to: bra slot can only be connected "
+              "TensorNetworkV2::Edge::connect_to: bra slot can only be "
+              "connected "
               "to a ket slot");
         }
         if (first->getOrigin() == Origin::Ket &&
             vertex.getOrigin() != Origin::Bra) {
           throw std::logic_error(
-              "TensorNetwork::Edge::connect_to: ket slot can only be connected "
+              "TensorNetworkV2::Edge::connect_to: ket slot can only be "
+              "connected "
               "to a bra slot");
         }
         second = std::move(vertex);
@@ -229,7 +231,7 @@ class TensorNetworkV2 {
   }
 
   /// @return const reference to the sequence of tensors
-  /// @note after invoking TensorNetwork::canonicalize() the order of
+  /// @note after invoking TensorNetworkV2::canonicalize() the order of
   /// tensors may be different from that provided as input; use
   /// tensor_input_ordinals() to obtain the input ordinals of
   /// the tensors in the result

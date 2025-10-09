@@ -15,7 +15,7 @@ namespace sequant {
 template <typename... Args>
 void wprintf(Args&&... args) {
   std::wostringstream oss;
-  (oss << ... << std::forward<Args>(args)) << std::endl;
+  (oss << ... << std::forward<Args>(args));
   std::wprintf(oss.str().c_str());
 }
 

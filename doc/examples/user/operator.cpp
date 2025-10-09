@@ -73,6 +73,8 @@ int main() {
 
   auto expr = op::H(2) * op::T(2) * op::T(2);
   auto result = op::vac_av(op::P(2) * expr);
+  // vac_av is equivalent to ref_av for single-determinant reference:
+  // auto result = op::ref_av(op::P(2) * expr);
 
   std::wcout << "Result: " << to_latex(result) << "\n";
   // end-snippet-4

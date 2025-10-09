@@ -49,13 +49,6 @@ class CC {
   /// @return whether topological optimization is used in WickTheorem
   [[nodiscard]] bool use_topology() const;
 
-  /// @brief derives similarity-transformed expressions of mbpt::Operators
-  /// @param expr expression to be transformed
-  /// @param r order of truncation
-  /// @pre expr should be composed of mbpt::Operators
-  /// @return transformed expression
-  ExprPtr sim_tr(ExprPtr expr, size_t r);
-
   /// @brief derives t amplitude equations, \f$ \langle P|\bar{H}|0 \rangle = 0
   /// \f$
   /// @param commutator_rank rank of commutators included in \f$ \bar{H} \f$ ;
@@ -89,26 +82,26 @@ class CC {
 
   // clang-format off
   /// @brief derives perturbed t amplitude equations
-  /// @param order order of perturbation
   /// @param rank rank of perturbation operator. r = 1 means one-body perturbation operator
+  /// @param order order of perturbation
   /// @param nbatch optional batching index rank for perturbation operators
   /// @pre `rank==1 && order==1`, only first order perturbation and one-body perturbation operator is supported now
   /// @return std::vector of perturbed t amplitude equations
   // clang-format on
   [[nodiscard]] std::vector<ExprPtr> t_pt(
-      size_t order = 1, size_t rank = 1,
+      size_t rank = 1, [[maybe_unused]] size_t order = 1,
       std::optional<size_t> nbatch = std::nullopt);
 
   // clang-format off
   /// @brief derives perturbed λ amplitude equations
-  /// @param order order of perturbation
   /// @param rank rank of perturbation operator. r = 1 means one-body perturbation operator
+  /// @param order order of perturbation
   /// @param nbatch optional batching index rank for perturbation operators
   /// @pre `rank==1 && order==1`, only first order perturbation and one-body perturbation operator is supported now
   /// @return std::vector of perturbed λ amplitude equations
   // clang-format on
   [[nodiscard]] std::vector<ExprPtr> λ_pt(
-      size_t order = 1, size_t rank = 1,
+      size_t rank = 1, [[maybe_unused]] size_t order = 1,
       std::optional<size_t> nbatch = std::nullopt);
 
   /// @brief derives right-side sigma equations for EOM-CC

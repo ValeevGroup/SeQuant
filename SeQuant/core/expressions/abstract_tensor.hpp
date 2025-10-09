@@ -10,6 +10,7 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expressions/expr_algorithms.hpp>
 #include <SeQuant/core/index.hpp>
+#include <SeQuant/core/latex.hpp>
 
 #include <cstdlib>
 #include <memory>
@@ -28,7 +29,27 @@ namespace sequant {
 /// index slot types
 ///
 /// @note This does not include slot bundles, like braket, etc.
-enum class SlotType { Bra, Ket, Aux };
+enum class SlotType { Bra = 0, Ket = 1, Aux = 2, Proto = 3 };
+
+template <typename CharT, typename Traits>
+std::basic_ostream<CharT, Traits>& operator<<(
+    std::basic_ostream<CharT, Traits>& stream, SlotType origin) {
+  switch (origin) {
+    case SlotType::Bra:
+      stream << "Bra";
+      break;
+    case SlotType::Ket:
+      stream << "Ket";
+      break;
+    case SlotType::Aux:
+      stream << "Aux";
+      break;
+    case SlotType::Proto:
+      stream << "Proto";
+      break;
+  }
+  return stream;
+}
 
 class TensorCanonicalizer;
 
@@ -271,7 +292,6 @@ class AbstractTensor {
     throw missing_instantiation_for("_swap_bra_ket");
   }
 
- private:
   /// @return mutable view of bra
   /// @warning this is used for mutable access, flush memoized state before
   /// returning!
@@ -291,6 +311,7 @@ class AbstractTensor {
     throw missing_instantiation_for("_aux_mutable");
   }
 
+ private:
   friend class TensorCanonicalizer;
 
   static void permute_impl(AbstractTensor::any_view_randsz indices,

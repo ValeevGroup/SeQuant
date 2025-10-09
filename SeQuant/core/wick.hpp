@@ -10,22 +10,13 @@
 #include <utility>
 
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/logger.hpp>
 #include <SeQuant/core/math.hpp>
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/ranges.hpp>
 #include <SeQuant/core/runtime.hpp>
 
 namespace sequant {
-
-/// @brief extracts external indices of an expanded expression
-
-/// External indices appear only once in an expression
-/// @param expr an expression
-/// @return external indices
-/// @pre @p expr has been expanded (i.e. cannot contain a Sum as a
-/// subexpression)
-/// @throw std::invalid_argument if any of @p expr subexpressions is a Sum
-inline container::set<Index> extract_external_indices(const Expr &expr);
 
 /// Applies Wick's theorem to a sequence of normal-ordered operators.
 ///
@@ -51,6 +42,8 @@ class WickTheorem {
   WickTheorem &operator=(const WickTheorem &) = default;
 
  public:
+  /// @param input normal operator sequence
+  /// @note assuming that all indices are external (not summed)
   explicit WickTheorem(
       const std::shared_ptr<NormalOperatorSequence<S>> &input) {
     init_input(input);
@@ -58,11 +51,22 @@ class WickTheorem {
     if constexpr (statistics == Statistics::BoseEinstein) {
       assert(input_->empty() || input_->vacuum() == Vacuum::Physical);
     }
+
+    // default computation may treat repeating indices as dummy
+    // override
+    extract_indices(*input, /* force_external = */ true);
   }
+
+  /// @param input normal operator sequence
+  /// @note assuming that all indices are external (not summed)
   explicit WickTheorem(NormalOperatorSequence<S> input)
       : WickTheorem(
             std::make_shared<NormalOperatorSequence<S>>(std::move(input))) {}
 
+  /// @param expr_input input expression
+  /// @note if \p expr_input is a normal operator sequence, assume that all
+  /// indices are external (not summed), else duplicate indices are assumed
+  /// dummy
   explicit WickTheorem(ExprPtr expr_input) {
     if (expr_input->is<NormalOperatorSequence<S>>()) {
       *this = WickTheorem(
@@ -71,11 +75,13 @@ class WickTheorem {
       expr_input_ = std::move(expr_input);
   }
 
+  /// @param ops operator sequence
+  /// @note assuming that all indices are external (not summed)
   explicit WickTheorem(const std::initializer_list<Op<S>> &ops)
       : WickTheorem(NormalOperatorSequence<S>{ops}) {}
 
-  /// constructs WickTheorem from @c other with expression input set to @c
-  /// expr_input
+  /// constructs WickTheorem from @p other with expression input set to
+  /// @p expr_input
   WickTheorem(ExprPtr expr_input, const WickTheorem &other)
       : WickTheorem(other) {
     input_ = {};  // reset input_ so that it is deduced from expr_input_
@@ -139,10 +145,7 @@ class WickTheorem {
   /// WickTheorem::compute had already been invoked
   template <typename IndexContainer>
   WickTheorem &set_external_indices(IndexContainer &&external_indices) {
-    if (external_indices_.has_value())
-      throw std::logic_error(
-          "WickTheorem::set_external_indices invoked but external indices have "
-          "already been set/computed");
+    external_indices_.reset();
 
     if constexpr (std::is_convertible_v<
                       IndexContainer,
@@ -162,6 +165,18 @@ class WickTheorem {
             }
           });
     }
+
+    user_defined_external_indices_ = true;
+    return *this;
+  }
+
+  /// Resets the memoized (external, covariant) indices; will auto-deduce next
+  /// time reduce is called
+  const WickTheorem &reset_indices() const {
+    all_indices_.reset();
+    external_indices_.reset();
+    noncovariant_indices_.reset();
+    user_defined_external_indices_ = false;
     return *this;
   }
 
@@ -451,10 +466,15 @@ class WickTheorem {
   bool use_topology_ = true;
   mutable Stats stats_;
 
-  mutable std::optional<container::set<Index>>
-      external_indices_;  // lack of external indices != all indices are
-                          // internal
-
+  mutable std::optional<container::set<Index>> all_indices_;
+  mutable bool user_defined_external_indices_ = false;
+  mutable std::optional<container::set<Index>> external_indices_;
+  // covariant indices (= dummy indices that appear twice in braket slots) can
+  // be "rotated" arbitrarily in reduce ... these are the ones that can't
+  // n.b. this list is computed using input expression and
+  // used to compute list in reduce because kronecker deltas propagate
+  // noncovariance
+  mutable std::optional<container::set<Index>> noncovariant_indices_;
   container::svector<std::pair<Index, Index>>
       input_partner_indices_;  //!< list of {cre,ann} pairs of Index objects in
                                //!< input_ whose corresponding Op<S> objects
@@ -492,6 +512,19 @@ class WickTheorem {
   mutable container::map<Op<S>, std::size_t> op_to_input_ordinal_;
   friend class NontensorWickState;  // NontensorWickState needs to access
                                     // members of this
+
+  /// @brief extracts and memoizes all, external (if not already set) and
+  /// covariant indices
+
+  /// External indices appear only once in an expression
+  /// @param expr an expression
+  /// @param force_external if true, will treat all indices (even repeating) as
+  /// external
+  /// @pre @p expr has been expanded (i.e. cannot contain a Sum as a
+  /// subexpression)
+  /// @note protoindices of external indices are external
+  /// @throw std::invalid_argument if any of @p expr subexpressions is a Sum
+  void extract_indices(const Expr &expr, bool force_external = false) const;
 
   /// upsizes `{nop,index}_topological_partition_`, filling new entries with
   /// zeroes noop if current size > new_size
@@ -580,9 +613,8 @@ class WickTheorem {
           "WickTheorem::compute: spinfree=true supported only for physical "
           "vacuum and for Fermi facuum");
 
-    // deduce external indices, if needed
-    if (!external_indices_) {
-      external_indices_ = extract_external_indices(*input_);
+    if (!all_indices_) {
+      extract_indices(*input_);
     }
 
     // process cached nop_connections_input_, if needed
@@ -1554,15 +1586,18 @@ class WickTheorem {
     const auto &bra_qp_idx_opt = left_is_ann ? left_qp_idx : right_qp_idx;
     const auto &ket_qp_idx_opt = left_is_ann ? right_qp_idx : left_qp_idx;
 
-    if (bra_is_pure || ket_is_pure) {
+    if (bra_is_pure && ket_is_pure) {
       return make_overlap(bra_idx, ket_idx);
     } else {
       auto result = std::make_shared<Product>();
-      assert(bra_qp_idx_opt);
-      assert(ket_qp_idx_opt);
-      result->append(1, make_overlap(*bra_qp_idx_opt, *ket_qp_idx_opt));
-      result->append(1, make_kronecker(bra_idx, *bra_qp_idx_opt));
-      result->append(1, make_kronecker(*ket_qp_idx_opt, ket_idx));
+      assert(bra_is_pure || bra_qp_idx_opt);
+      assert(ket_is_pure || ket_qp_idx_opt);
+      result->append(1, make_overlap(bra_qp_idx_opt.value_or(bra_idx),
+                                     ket_qp_idx_opt.value_or(ket_idx)));
+      if (!bra_is_pure)
+        result->append(1, make_kronecker(bra_idx, *bra_qp_idx_opt));
+      if (!ket_is_pure)
+        result->append(1, make_kronecker(*ket_qp_idx_opt, ket_idx));
       return result;
     }
   }

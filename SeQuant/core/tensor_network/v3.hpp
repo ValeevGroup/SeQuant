@@ -243,7 +243,7 @@ class TensorNetworkV3 {
   TensorNetworkV3 &operator=(const TensorNetworkV3 &other) noexcept;
 
   /// @return const reference to the sequence of tensors
-  /// @note after invoking TensorNetwork::canonicalize() the order of
+  /// @note after invoking TensorNetworkV3::canonicalize() the order of
   /// tensors may be different from that provided as input; use
   /// tensor_input_ordinals() to obtain the input ordinals of
   /// the tensors in the result
@@ -501,23 +501,6 @@ class TensorNetworkV3 {
     tensor_input_ordinals_.push_back(tensor_input_ordinals_.size());
   }
 };
-
-template <typename CharT, typename Traits>
-std::basic_ostream<CharT, Traits> &operator<<(
-    std::basic_ostream<CharT, Traits> &stream, SlotType origin) {
-  switch (origin) {
-    case SlotType::Bra:
-      stream << "Bra";
-      break;
-    case SlotType::Ket:
-      stream << "Ket";
-      break;
-    case SlotType::Aux:
-      stream << "Aux";
-      break;
-  }
-  return stream;
-}
 
 }  // namespace sequant
 
