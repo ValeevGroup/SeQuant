@@ -480,15 +480,15 @@ TEST_CASE("mbpt", "[mbpt]") {
           get_default_context().index_space_registry()->retrieve(L"z"));
 
       using namespace mbpt::op;
-      // ctors (pert_order == 1, rank, batch)
+      // ctors (rank, pert_order == 1, batch)
       REQUIRE_NOTHROW(op::H_pt(1, 1, 1));
-      REQUIRE_NOTHROW(op::H_pt(1, 2, 2));
-      REQUIRE_NOTHROW(op::T_pt(1, 3, 2));
+      REQUIRE_NOTHROW(op::H_pt(2, 1, 2));
+      REQUIRE_NOTHROW(op::T_pt(3, 1, 2));
 
       // operations
       auto h1 = op::H_pt(1, 1, 1);
       auto h1_2 = op::H_pt(1, 1, 2);
-      auto pt1 = op::T_pt(1, 2, 1);
+      auto pt1 = op::T_pt(2, 1, 1);
 
       auto sum1 = h1 + h1;
       simplify(sum1);

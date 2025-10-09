@@ -1234,14 +1234,14 @@ ExprPtr S(std::int64_t K);
 /// @param order order of perturbation
 /// @param nbatch rank of optional auxiliary/batching index [default is 0]
 /// @pre `order==1`, only first order perturbation is supported now
-ExprPtr H_pt(std::size_t R, std::size_t order = 1, size_t nbatch = 0, );
+ExprPtr H_pt(std::size_t R, std::size_t order = 1, size_t nbatch = 0);
 
 /// @brief Makes perturbed particle-conserving excitation operator of rank \p K
 /// @param K rank of the excitation operator
 /// @param order order of perturbation
 /// @param nbatch rank of optional auxiliary/batching index [default is 0]
 /// @pre `order==1`, only first order perturbation is supported now
-ExprPtr T_pt_(std::size_t K, std::size_t order = 1, size_t nbatch = 0, );
+ExprPtr T_pt_(std::size_t K, std::size_t order = 1, size_t nbatch = 0);
 
 /// @brief Makes sum of perturbed particle-conserving excitation operators up to
 /// rank \p K
@@ -1259,7 +1259,7 @@ ExprPtr T_pt(std::size_t K, std::size_t order = 1, size_t nbatch = 0,
 /// @param order order of perturbation
 /// @param nbatch rank of optional auxiliary/batching index [default is 0]
 /// @pre `order==1`, only first order perturbation is supported now
-ExprPtr Λ_pt_(std::size_t K, std::size_t order = 1, size_t nbatch = 0, );
+ExprPtr Λ_pt_(std::size_t K, std::size_t order = 1, size_t nbatch = 0);
 
 /// @brief Makes sum of perturbed particle-conserving deexcitation operators up
 /// to rank \p K

@@ -992,7 +992,7 @@ ExprPtr H_pt(std::size_t R, std::size_t order, std::size_t nbatch) {
       [=](qnc_t& qns) { qns = combine(general_type_qns(R), qns); }, nbatch);
 }
 
-ExprPtr T_pt_(std::size_t K, std::size_t order, std::size_t nbatch, ) {
+ExprPtr T_pt_(std::size_t K, std::size_t order, std::size_t nbatch) {
   assert(K > 0);
   assert(order == 1 && "only first order perturbation is supported now");
   return ex<op_t>(
@@ -1010,7 +1010,7 @@ ExprPtr T_pt(std::size_t K, std::size_t order, std::size_t nbatch, bool skip1) {
   return result;
 }
 
-ExprPtr Λ_pt_(std::size_t K, std::size_t order, std::size_t nbatch, ) {
+ExprPtr Λ_pt_(std::size_t K, std::size_t order, std::size_t nbatch) {
   assert(K > 0);
   assert(order == 1 && "only first order perturbation is supported now");
   return ex<op_t>(
