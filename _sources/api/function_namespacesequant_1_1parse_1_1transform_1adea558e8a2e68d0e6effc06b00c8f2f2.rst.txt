@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1parse_1_1transform_1adea558e8a2e68d0e6effc06b00c8f2f2:
+
+Template Function sequant::parse::transform::holds_alternative
+==============================================================
+
+- Defined in :ref:`file_SeQuant_core_parse_ast_conversions.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::parse::transform::holds_alternative(const boost::variant<Ts...>&)
+   :project: SeQuant

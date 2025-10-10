@@ -1,0 +1,84 @@
+
+.. _program_listing_file_SeQuant_domain_mbpt_models_cc.hpp:
+
+Program Listing for File cc.hpp
+===============================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_domain_mbpt_models_cc.hpp>` (``SeQuant/domain/mbpt/models/cc.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   #ifndef SEQUANT_DOMAIN_MBPT_MODELS_CC_HPP
+   #define SEQUANT_DOMAIN_MBPT_MODELS_CC_HPP
+   
+   #include <SeQuant/core/op.hpp>
+   #include <SeQuant/domain/mbpt/op.hpp>
+   
+   #include <cstddef>
+   #include <limits>
+   #include <vector>
+   
+   namespace sequant {
+   class ExprPtr;
+   }
+   
+   namespace sequant::mbpt {
+   
+   class CC {
+    public:
+     enum class Ansatz {
+       T,
+       oT,
+       U,
+       oU
+     };
+   
+     explicit CC(size_t N, Ansatz ansatz = Ansatz::T, bool screen = true,
+                 bool use_topology = true);
+   
+     Ansatz ansatz() const;
+   
+     [[nodiscard]] bool unitary() const;
+   
+     [[nodiscard]] bool screen() const;
+   
+     [[nodiscard]] bool use_topology() const;
+   
+     [[nodiscard]] std::vector<ExprPtr> t(
+         size_t commutator_rank = 4,
+         size_t pmax = std::numeric_limits<size_t>::max(), size_t pmin = 0);
+   
+     [[nodiscard]] std::vector<ExprPtr> λ(size_t commutator_rank = 4);
+   
+     // clang-format off
+     // clang-format on
+     [[nodiscard]] std::vector<ExprPtr> t_pt(size_t rank = 1,
+                                             [[maybe_unused]] size_t order = 1);
+   
+     // clang-format off
+     // clang-format on
+     [[nodiscard]] std::vector<ExprPtr> λ_pt(size_t rank = 1,
+                                             [[maybe_unused]] size_t order = 1);
+   
+     [[nodiscard]] std::vector<ExprPtr> eom_r(nₚ np, nₕ nh);
+   
+     [[nodiscard]] std::vector<ExprPtr> eom_l(nₚ np, nₕ nh);
+   
+    private:
+     size_t N;
+     Ansatz ansatz_ = Ansatz::T;
+     bool screen_ = true;
+     bool use_topology_ = true;
+   
+     auto ref_av(const ExprPtr& expr,
+                 const OpConnections<mbpt::OpType>& op_connect =
+                     default_op_connections()) const {
+       return op::ref_av(expr, op_connect, this->use_topology(), this->screen());
+     }
+   };  // class CC
+   
+   }  // namespace sequant::mbpt
+   
+   #endif  // SEQUANT_DOMAIN_MBPT_MODELS_CC_HPP

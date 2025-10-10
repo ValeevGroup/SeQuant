@@ -1,0 +1,109 @@
+
+.. _file_SeQuant_core_optimize.hpp:
+
+File optimize.hpp
+=================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core>` (``SeQuant/core``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/optimize.hpp``)
+------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_optimize.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/algorithm.hpp`` (:ref:`file_SeQuant_core_algorithm.hpp`)
+
+- ``SeQuant/core/container.hpp`` (:ref:`file_SeQuant_core_container.hpp`)
+
+- ``SeQuant/core/expr.hpp`` (:ref:`file_SeQuant_core_expr.hpp`)
+
+- ``SeQuant/core/index.hpp`` (:ref:`file_SeQuant_core_index.hpp`)
+
+- ``SeQuant/core/tensor_network.hpp`` (:ref:`file_SeQuant_core_tensor_network.hpp`)
+
+- ``SeQuant/core/utility/indices.hpp`` (:ref:`file_SeQuant_core_utility_indices.hpp`)
+
+- ``cassert``
+
+- ``cmath``
+
+- ``cstddef``
+
+- ``functional``
+
+- ``iterator``
+
+- ``limits``
+
+- ``memory``
+
+- ``stdexcept``
+
+- ``type_traits``
+
+- ``utility`` (:ref:`file_SeQuant_core_utility_atomic.hpp`)
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_core_expressions_result_expr.cpp`
+
+- :ref:`file_SeQuant_core_optimize_optimize.cpp`
+
+- :ref:`file_SeQuant_domain_mbpt_spin.cpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+- :ref:`namespace_sequant__opt`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1a6e03db58ed0430c2fd1b61ddefdf42ab`
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1a0d0a1695c09f0cfbd340392eb5934b3b`
+
+- :ref:`exhale_function_namespacesequant_1_1opt_1a088126559bd2e83e8fc9fa1a3240d784`
+
+
+Variables
+---------
+
+
+- :ref:`exhale_variable_optimize_8hpp_1a786703939f61f085bd7d5b96b7a1f5cb`
+
+- :ref:`exhale_variable_optimize_8hpp_1af529b4a3079403e31c1517777e3134fe`
+
+- :ref:`exhale_variable_optimize_8hpp_1ae5fc76b8ef7dadc78e5f9078889e820e`
+

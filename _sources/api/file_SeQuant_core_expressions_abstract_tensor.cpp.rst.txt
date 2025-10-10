@@ -1,0 +1,60 @@
+
+.. _file_SeQuant_core_expressions_abstract_tensor.cpp:
+
+File abstract_tensor.cpp
+========================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core_expressions>` (``SeQuant/core/expressions``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/expressions/abstract_tensor.cpp``)
+-------------------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_expressions_abstract_tensor.cpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/expressions/abstract_tensor.hpp`` (:ref:`file_SeQuant_core_expressions_abstract_tensor.hpp`)
+
+- ``SeQuant/core/expressions/product.hpp`` (:ref:`file_SeQuant_core_expressions_product.hpp`)
+
+- ``SeQuant/core/expressions/sum.hpp`` (:ref:`file_SeQuant_core_expressions_sum.hpp`)
+
+- ``SeQuant/core/expressions/variable.hpp`` (:ref:`file_SeQuant_core_expressions_variable.hpp`)
+
+
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1ab4080d1930c5ba22da9ffb6c36b34b41`
+
+- :ref:`exhale_function_namespacesequant_1a88685d8d7e0729724cdd52c262435058`
+

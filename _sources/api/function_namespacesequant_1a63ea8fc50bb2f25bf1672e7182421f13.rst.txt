@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a63ea8fc50bb2f25bf1672e7182421f13:
+
+Template Function sequant::get_unique_indices(const Sum&)
+=========================================================
+
+- Defined in :ref:`file_SeQuant_core_utility_indices.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::get_unique_indices(const Sum&)
+   :project: SeQuant

@@ -1,0 +1,22 @@
+.. _dir_SeQuant:
+
+
+Directory SeQuant
+=================
+
+
+*Directory path:* ``SeQuant``
+
+Subdirectories
+--------------
+
+- :ref:`dir_SeQuant_core`
+- :ref:`dir_SeQuant_domain`
+
+
+Files
+-----
+
+- :ref:`file_SeQuant_version.cpp`
+
+

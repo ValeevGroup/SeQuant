@@ -1,0 +1,14 @@
+.. _exhale_function_vac__av_8hpp_1a5a0a127b69d3a475f3618d177fa28954:
+
+Function lower_to_tensor_form(const ExprPtr&)
+=============================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_vac_av.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: lower_to_tensor_form(const ExprPtr&)
+   :project: SeQuant
