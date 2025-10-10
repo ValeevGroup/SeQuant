@@ -812,8 +812,8 @@ static_assert(is_tensor_v<Tensor>,
 
 using TensorPtr = std::shared_ptr<Tensor>;
 
-/// make_overlap tensor label is reserved since it is used by low-level SeQuant
-/// machinery. Users can create overlap Tensor using make_overlap()
+/// overlap/metric tensor label is reserved since it is used by low-level
+/// SeQuant machinery. Users can create overlap Tensor using make_overlap()
 inline std::wstring overlap_label() { return L"s"; }
 
 inline ExprPtr make_overlap(const Index &bra_index, const Index &ket_index) {
@@ -821,7 +821,7 @@ inline ExprPtr make_overlap(const Index &bra_index, const Index &ket_index) {
                            aux{}, Tensor::reserved_tag{}));
 }
 
-/// make_kronecker tensor label is reserved since it is used by low-level
+/// kronecker tensor label is reserved since it is used by low-level
 /// SeQuant machinery. Users can create Kronecker Tensor using make_kronecker()
 inline std::wstring kronecker_label() { return L"δ"; }
 

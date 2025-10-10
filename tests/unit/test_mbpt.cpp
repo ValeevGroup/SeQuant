@@ -481,7 +481,7 @@ TEST_CASE("mbpt", "[mbpt]") {
     SECTION("SRSO"){
         // H**T12**T12 -> R2
         SECTION("wick(H**T12**T12 -> R2)"){
-            auto result = t::vac_av(t::A(nₚ(-2)) * t::H(2) * t ::T(2) * t::T(2),
+            auto result = t::vac_av(t::A(nₚ(-2)) * t::H(2) * t::T(2) * t::T(2),
                                     {{1, 2}, {1, 3}});
 
     //      std::wcout << "H*T12*T12 -> R2 = " << to_latex_align(result, 20)
@@ -499,7 +499,7 @@ TEST_CASE("mbpt", "[mbpt]") {
 
   // H2**T3**T3 -> R4
   SECTION("wick(H2**T3**T3 -> R4)") {
-    auto result = t::vac_av(t::A(nₚ(-4)) * t::H_(2) * t ::T_(3) * t::T_(3),
+    auto result = t::vac_av(t::A(nₚ(-4)) * t::H_(2) * t::T_(3) * t::T_(3),
                             {{1, 2}, {1, 3}});
 
     // std::wcout << "H2**T3**T3 -> R4 = " << to_latex_align(result, 20)
@@ -551,7 +551,7 @@ SECTION("SRSO-PNO") {
 
   // H2**T2**T2 -> R2
   SECTION("wick(H2**T2**T2 -> R2)") {
-    auto result = t::vac_av(t::A(nₚ(-2)) * t::H_(2) * t ::T_(2) * t::T_(2),
+    auto result = t::vac_av(t::A(nₚ(-2)) * t::H_(2) * t::T_(2) * t::T_(2),
                             {{1, 2}, {1, 3}});
 
     REQUIRE(result->size() == 4);
