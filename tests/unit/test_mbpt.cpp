@@ -325,20 +325,20 @@ TEST_CASE("mbpt", "[mbpt]") {
       auto vev2_t = tensor::vac_av(expr2_tnsr);  // no operator level screening
       REQUIRE(to_latex(vev2_op) == to_latex(vev2_t));
 
-      // Test op::screen_vac_av
+      // Test screen_vac_av
       auto hbar = mbpt::lst(H(), T_(2), 4);  // CCD Hbar
-      auto screened_hbar = op::screen_vac_av(hbar);
+      auto screened_hbar = screen_vac_av(hbar);
       auto expected = H_(2) * T_(2);
       REQUIRE(simplify(screened_hbar - expected) == ex<Constant>(0));
 
       auto expr3 = P(2) * hbar * R_(nₚ(2), nₕ(2));
-      auto screened_expr3 = op::screen_vac_av(expr3);
+      auto screened_expr3 = screen_vac_av(expr3);
       auto expected3 =
           op::P(2) * (H_(2) * T_(2) + H_(2) + H_(1)) * R_(nₚ(2), nₕ(2));
       REQUIRE(simplify(screened_expr3 - expected3) == ex<Constant>(0));
 
       auto expr4 = P(nₚ(2), nₕ(1)) * hbar * R(nₚ(1), nₕ(0));
-      auto screened_expr4 = op::screen_vac_av(expr4);
+      auto screened_expr4 = screen_vac_av(expr4);
       auto expected4 = P(nₚ(2), nₕ(1)) *
                        (H_(1) + H_(1) * T_(2) + H_(2) * T_(2) + H_(2)) *
                        R(nₚ(1), nₕ(0));
@@ -481,7 +481,7 @@ TEST_CASE("mbpt", "[mbpt]") {
     SECTION("SRSO"){
         // H**T12**T12 -> R2
         SECTION("wick(H**T12**T12 -> R2)"){
-            auto result = t::vac_av(t::A(nₚ(-2)) * t::H(2) * t ::T(2) * t::T(2),
+            auto result = t::vac_av(t::A(nₚ(-2)) * t::H(2) * t::T(2) * t::T(2),
                                     {{1, 2}, {1, 3}});
 
     //      std::wcout << "H*T12*T12 -> R2 = " << to_latex_align(result, 20)
@@ -499,7 +499,7 @@ TEST_CASE("mbpt", "[mbpt]") {
 
   // H2**T3**T3 -> R4
   SECTION("wick(H2**T3**T3 -> R4)") {
-    auto result = t::vac_av(t::A(nₚ(-4)) * t::H_(2) * t ::T_(3) * t::T_(3),
+    auto result = t::vac_av(t::A(nₚ(-4)) * t::H_(2) * t::T_(3) * t::T_(3),
                             {{1, 2}, {1, 3}});
 
     // std::wcout << "H2**T3**T3 -> R4 = " << to_latex_align(result, 20)
@@ -551,7 +551,7 @@ SECTION("SRSO-PNO") {
 
   // H2**T2**T2 -> R2
   SECTION("wick(H2**T2**T2 -> R2)") {
-    auto result = t::vac_av(t::A(nₚ(-2)) * t::H_(2) * t ::T_(2) * t::T_(2),
+    auto result = t::vac_av(t::A(nₚ(-2)) * t::H_(2) * t::T_(2) * t::T_(2),
                             {{1, 2}, {1, 3}});
 
     REQUIRE(result->size() == 4);

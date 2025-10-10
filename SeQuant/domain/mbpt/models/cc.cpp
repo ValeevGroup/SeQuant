@@ -72,7 +72,7 @@ std::vector<ExprPtr> CC::t(size_t commutator_rank, size_t pmax, size_t pmin) {
 
     // 2.b project onto <p| (i.e., multiply by P(p) if p>0) and compute VEV
     result.at(p) =
-        this->vac_av(p != 0 ? P(nₚ(p)) * hbar_for_vev : hbar_for_vev);
+        this->ref_av(p != 0 ? P(nₚ(p)) * hbar_for_vev : hbar_for_vev);
   }
 
   return result;
@@ -131,7 +131,7 @@ std::vector<ExprPtr> CC::λ(size_t commutator_rank) {
 
     // 2.b multiply by adjoint of P(p) (i.e., P(-p)) on the right side and
     // compute VEV
-    result.at(p) = this->vac_av(lhbar_for_vev * P(nₚ(-p)), op_connect);
+    result.at(p) = this->ref_av(lhbar_for_vev * P(nₚ(-p)), op_connect);
   }
   return result;
 }
@@ -171,7 +171,7 @@ std::vector<ExprPtr> CC::t_pt(size_t rank, [[maybe_unused]] size_t order) {
   for (auto p = N; p >= 1; --p) {
     const auto freq_term = ex<Variable>(L"ω") * P(nₚ(p)) * T_pt_(p);
     result.at(p) =
-        this->vac_av(P(nₚ(p)) * expr, op_connect) - this->vac_av(freq_term);
+        this->ref_av(P(nₚ(p)) * expr, op_connect) - this->ref_av(freq_term);
   }
   return result;
 }
@@ -226,7 +226,7 @@ std::vector<ExprPtr> CC::λ_pt(size_t rank, [[maybe_unused]] size_t order) {
   for (auto p = N; p >= 1; --p) {
     const auto freq_term = ex<Variable>(L"ω") * Λ_pt_(p) * P(nₚ(-p));
     result.at(p) =
-        this->vac_av(expr * P(nₚ(-p)), op_connect) + this->vac_av(freq_term);
+        this->ref_av(expr * P(nₚ(-p)), op_connect) + this->ref_av(freq_term);
   }
   return result;
 }
@@ -264,7 +264,7 @@ std::vector<ExprPtr> CC::eom_r(nₚ np, nₕ nh) {
     if (rp == 0 && rh == 0) break;
     // project with <rp, rh| (i.e., multiply P(rp, rh)) and compute VEV
     result.at(min(rp, rh)) =
-        this->vac_av(P(nₚ(rp), nₕ(rh)) * hbar_R, op_connect);
+        this->ref_av(P(nₚ(rp), nₕ(rh)) * hbar_R, op_connect);
     if (rp == 0 || rh == 0) break;
     rp--;
     rh--;
@@ -308,7 +308,7 @@ std::vector<ExprPtr> CC::eom_l(nₚ np, nₕ nh) {
     if (rp == 0 && rh == 0) break;
     // right project with |rp,rh> (i.e., multiply P(-rp, -rh)) and compute VEV
     result.at(min(rp, rh)) =
-        this->vac_av(L_hbar * P(nₚ(-rp), nₕ(-rh)), op_connect);
+        this->ref_av(L_hbar * P(nₚ(-rp), nₕ(-rh)), op_connect);
     if (rp == 0 || rh == 0) break;
     rp--;
     rh--;

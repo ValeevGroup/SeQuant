@@ -1,7 +1,6 @@
 //
 // Created by Eduard Valeyev on 2023-10-30.
 //
-using namespace sequant::mbpt;
 
 template <typename T>
 using OpConnections = std::vector<std::pair<T, T>>;
