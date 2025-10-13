@@ -1159,13 +1159,13 @@ ExprPtr closed_shell_CC_spintrace_v2(ExprPtr const& expr,
         ex<Tensor>(Tensor{L"S", bra(std::move(bixs)), ket(std::move(kixs))}) *
         st_expr;
 
+    auto N = ext_idxs.size();
     rational combined_factor;
-    if (ext_idxs.size() <= 2) {
-      combined_factor = rational(1, factorial(ext_idxs.size()));
+    if (N <= 2) {
+      combined_factor = rational(1, factorial(N));
     } else {
-      auto fact_n = factorial(ext_idxs.size());
-      combined_factor =
-          rational(1, fact_n - 1);  // this is (1/fact_n) * (fact_n/(fact_n-1))
+      auto catalan = factorial(2 * N) / (factorial(N + 1) * factorial(N));
+      combined_factor = rational(1, catalan);
     }
     st_expr = ex<Constant>(combined_factor) * st_expr;
   }

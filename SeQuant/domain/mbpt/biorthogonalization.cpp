@@ -361,8 +361,8 @@ void biorthogonal_transform(container::svector<ResultExpr>& result_exprs,
   Eigen::MatrixXd computed_coefficients;
   if (!hardcoded_coefficients.has_value()) {
     computed_coefficients = compute_biorth_coeffs(n_particles, threshold);
-    assert(num_perms == coefficients_double.rows());
-    assert(num_perms == coefficients_double.cols());
+    assert(num_perms == computed_coefficients.rows());
+    assert(num_perms == computed_coefficients.cols());
   }
 
   for (std::size_t i = 0; i < result_exprs.size(); ++i) {
