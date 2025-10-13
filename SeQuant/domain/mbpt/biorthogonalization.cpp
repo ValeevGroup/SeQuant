@@ -338,7 +338,8 @@ void biorthogonal_transform(container::svector<ResultExpr>& result_exprs,
 
   const std::size_t n_particles = externals.front().size();
 
-  Eigen::MatrixXd coefficients = compute_biorth_coeffs(n_particles, threshold);
+  // Eigen::MatrixXd coefficients = compute_biorth_coeffs(n_particles,
+  // threshold);
 
   auto num_perms = factorial(n_particles);
 
@@ -362,9 +363,6 @@ void biorthogonal_transform(container::svector<ResultExpr>& result_exprs,
     coefficients_double = compute_biorth_coeffs(n_particles, threshold);
     assert(num_perms == coefficients_double.rows());
     assert(num_perms == coefficients_double.cols());
-  } else {
-    assert(num_perms == rational_coeffs.rows());
-    assert(num_perms == rational_coeffs.cols());
   }
 
   for (std::size_t i = 0; i < result_exprs.size(); ++i) {
