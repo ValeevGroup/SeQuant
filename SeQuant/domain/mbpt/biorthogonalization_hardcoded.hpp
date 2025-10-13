@@ -324,7 +324,7 @@ get_first_row_biorth_coeffs_rational(std::size_t n_particles) {
           ratio(-47, 166320), ratio(-1, 33264),   ratio(79, 166320),
           ratio(-1, 33264),   ratio(-47, 166320), ratio(17, 332640)};
 
-    case 6:
+    case 7:
       return std::vector<sequant::rational>{
           ratio(1523, 1572480), ratio(5, 596458),     ratio(5, 596458),
           ratio(5, 596458),     ratio(5, 596458),     ratio(5, 596458),
