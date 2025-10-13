@@ -1,4 +1,5 @@
 #include <SeQuant/domain/mbpt/biorthogonalization.hpp>
+#include <SeQuant/domain/mbpt/biorthogonalization_hardcoded.hpp>
 
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
@@ -29,30 +30,32 @@ using IndexPair = std::pair<Index, Index>;
 using ParticlePairings = container::svector<IndexPair>;
 
 ResultExpr biorthogonal_transform_copy(const ResultExpr& expr,
-                                       double threshold) {
+                                       bool use_hardcoded, double threshold) {
   container::svector<ResultExpr> wrapper = {expr.clone()};
 
-  biorthogonal_transform(wrapper, threshold);
+  biorthogonal_transform(wrapper, use_hardcoded, threshold);
 
   return wrapper.front();
 }
 
 container::svector<ResultExpr> biorthogonal_transform_copy(
-    const container::svector<ResultExpr>& exprs, double threshold) {
+    const container::svector<ResultExpr>& exprs, bool use_hardcoded,
+    double threshold) {
   container::svector<ResultExpr> copy;
   copy.reserve(exprs.size());
 
   std::transform(exprs.begin(), exprs.end(), std::back_inserter(copy),
                  [](const ResultExpr& expr) { return expr.clone(); });
 
-  biorthogonal_transform(copy, threshold);
+  biorthogonal_transform(copy, use_hardcoded, threshold);
 
   return copy;
 }
 
-void biorthogonal_transform(ResultExpr& expr, double threshold) {
+void biorthogonal_transform(ResultExpr& expr, bool use_hardcoded,
+                            double threshold) {
   // TODO: avoid copy
-  expr = biorthogonal_transform_copy(expr, threshold);
+  expr = biorthogonal_transform_copy(expr, use_hardcoded, threshold);
 }
 
 Eigen::MatrixXd permutational_overlap_matrix(std::size_t n_particles) {
@@ -248,7 +251,7 @@ ExprPtr create_expr_for(const ParticlePairings& ref_pairing,
 }
 
 void biorthogonal_transform(container::svector<ResultExpr>& result_exprs,
-                            double threshold) {
+                            bool use_hardcoded, double threshold) {
   if (result_exprs.empty()) {
     return;
   }
@@ -338,14 +341,31 @@ void biorthogonal_transform(container::svector<ResultExpr>& result_exprs,
   Eigen::MatrixXd coefficients = compute_biorth_coeffs(n_particles, threshold);
 
   auto num_perms = factorial(n_particles);
-  assert(num_perms == coefficients.rows());
-  assert(num_perms == coefficients.cols());
 
   auto original_exprs = result_exprs |
                         ranges::views::transform([](const ResultExpr& res) {
                           return res.expression();
                         }) |
                         ranges::to<container::svector<ExprPtr>>();
+
+  // check if we have hardcoded coefficients for that rank
+  auto hardcoded_coefficients =
+      use_hardcoded ? get_hardcoded_biorth_coeffs_rational(n_particles)
+                    : std::nullopt;
+  std::cout << "hardcoded coeffs: = "
+            << (hardcoded_coefficients.has_value() ? "true" : "false")
+            << std::endl;
+
+  // get coefficients: hardcoded or computed_svd
+  Eigen::MatrixXd coefficients_double;
+  if (!hardcoded_coefficients.has_value()) {
+    coefficients_double = compute_biorth_coeffs(n_particles, threshold);
+    assert(num_perms == coefficients_double.rows());
+    assert(num_perms == coefficients_double.cols());
+  } else {
+    assert(num_perms == rational_coeffs.rows());
+    assert(num_perms == rational_coeffs.cols());
+  }
 
   for (std::size_t i = 0; i < result_exprs.size(); ++i) {
     result_exprs.at(i).expression() = ex<Constant>(0);
@@ -356,9 +376,13 @@ void biorthogonal_transform(container::svector<ResultExpr>& result_exprs,
       perm::Permutation perm = perm::unrank(rank, n_particles);
       perm->postMultiply(reference);
 
+      sequant::rational coeff =
+          hardcoded_coefficients.has_value()
+              ? hardcoded_coefficients.value()(ranks.at(i), rank)
+              : to_rational(coefficients_double(ranks.at(i), rank), threshold);
+
       result_exprs.at(i).expression() +=
-          ex<Constant>(
-              to_rational(coefficients(ranks.at(i), rank), threshold)) *
+          ex<Constant>(coeff) *
           create_expr_for(externals.at(i), perm, externals, original_exprs);
     }
 
@@ -370,7 +394,7 @@ ExprPtr biorthogonal_transform(
     const sequant::ExprPtr& expr,
     const container::svector<container::svector<sequant::Index>>&
         ext_index_groups,
-    const double threshold) {
+    bool use_hardcoded, const double threshold) {
   ResultExpr res(
       bra(ext_index_groups | ranges::views::transform([](const auto& pair) {
             return pair.at(0);
@@ -383,7 +407,7 @@ ExprPtr biorthogonal_transform(
       aux(IndexList{}), Symmetry::Nonsymm, BraKetSymmetry::Nonsymm,
       ColumnSymmetry::Symm, {}, expr);
 
-  biorthogonal_transform(res, threshold);
+  biorthogonal_transform(res, use_hardcoded, threshold);
 
   return res.expression();
 }
