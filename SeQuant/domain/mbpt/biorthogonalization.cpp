@@ -358,9 +358,9 @@ void biorthogonal_transform(container::svector<ResultExpr>& result_exprs,
             << std::endl;
 
   // get coefficients: hardcoded or computed_svd
-  Eigen::MatrixXd coefficients_double;
+  Eigen::MatrixXd computed_coefficients;
   if (!hardcoded_coefficients.has_value()) {
-    coefficients_double = compute_biorth_coeffs(n_particles, threshold);
+    computed_coefficients = compute_biorth_coeffs(n_particles, threshold);
     assert(num_perms == coefficients_double.rows());
     assert(num_perms == coefficients_double.cols());
   }
@@ -377,7 +377,8 @@ void biorthogonal_transform(container::svector<ResultExpr>& result_exprs,
       sequant::rational coeff =
           hardcoded_coefficients.has_value()
               ? hardcoded_coefficients.value()(ranks.at(i), rank)
-              : to_rational(coefficients_double(ranks.at(i), rank), threshold);
+              : to_rational(computed_coefficients(ranks.at(i), rank),
+                            threshold);
 
       result_exprs.at(i).expression() +=
           ex<Constant>(coeff) *
