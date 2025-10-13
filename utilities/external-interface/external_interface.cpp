@@ -422,8 +422,15 @@ void generalSetup() {
 
 int main(int argc, char **argv) {
   set_locale();
-  set_default_context({.index_space_registry = IndexSpaceRegistry(),
-                       .vacuum = Vacuum::SingleProduct});
+  Context ctx({.index_space_registry = IndexSpaceRegistry(),
+               .vacuum = Vacuum::SingleProduct});
+  // TODO: This only hides a bug/issue in the processing code where SeQuant
+  // assumes that it is okay to freely rename external indices while
+  // canonicalizing an expression. However, this breaks down as soon as those
+  // indices are tracked externally (e.g. ResultExpr) as those won't get updated
+  // to use the new names.
+  ctx.set(CanonicalizeOptions{.method = CanonicalizationMethod::Complete});
+  set_default_context(ctx);
   generalSetup();
 
   CLI::App app(
