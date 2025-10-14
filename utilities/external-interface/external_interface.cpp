@@ -225,12 +225,11 @@ void generateITF(const json &blocks, std::string_view out_file,
 
       if (current_result.contains("replace")) {
         for (const nlohmann::json &sub : current_result.at("replace")) {
-          ExprPtr target =
-              parse_expr(toUtf16(sub.at("target").get<std::string>()));
+          ExprPtr target = parse_expr(
+              toUtf16(sub.at("target").get<std::string>()), Symmetry::Antisymm);
           ExprPtr replacement =
-              parse_expr(toUtf16(sub.at("replacement").get<std::string>()));
-
-          spdlog::debug("Replacing {} -> {}", target, replacement);
+              parse_expr(toUtf16(sub.at("replacement").get<std::string>()),
+                         Symmetry::Antisymm);
 
           std::string equality_method =
               sub.value("tensor_equality", "identity");
