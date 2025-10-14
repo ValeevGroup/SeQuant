@@ -4,8 +4,8 @@
 #include <SeQuant/core/expressions/tensor.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/space.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 
-#include <cassert>
 #include <functional>
 
 namespace sequant {
@@ -45,7 +45,7 @@ struct TensorBlockComparator {
 
     for (auto lhs_it = lhs_indices.begin(), rhs_it = rhs_indices.begin();
          lhs_it != lhs_indices.end(); ++lhs_it, ++rhs_it) {
-      assert(rhs_it != rhs_indices.end());
+      SEQUANT_ASSERT(rhs_it != rhs_indices.end());
 
       const IndexSpace &left = lhs_it->space();
       const IndexSpace &right = rhs_it->space();

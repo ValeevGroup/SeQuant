@@ -5,6 +5,7 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/op.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 
 #include <range/v3/view.hpp>
 
@@ -449,8 +450,8 @@ Container external_indices(const Expr& expr) {
       [&](const ExprPtr& expr) {
         if (expr.is<Tensor>() && (expr.as<Tensor>().label() == L"S" ||
                                   expr.as<Tensor>().label() == L"A")) {
-          assert(!symmetrizer.has_value() ||
-                 symmetrizer.value() == expr.as<Tensor>());
+          SEQUANT_ASSERT(!symmetrizer.has_value() ||
+                         symmetrizer.value() == expr.as<Tensor>());
           symmetrizer = expr.as<Tensor>();
         }
       },

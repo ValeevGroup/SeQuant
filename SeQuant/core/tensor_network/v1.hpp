@@ -12,8 +12,8 @@
 #include <SeQuant/core/tensor_network/canonicals.hpp>
 #include <SeQuant/core/tensor_network/slot.hpp>
 #include <SeQuant/core/tensor_network/vertex.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 
-#include <cassert>
 #include <cstdlib>
 #include <memory>
 #include <stdexcept>
@@ -75,7 +75,7 @@ class TensorNetworkV1 {
           : tensor_ord(tensor_ord),
             slot_type(slot_type),
             slot_group_ord(slot_group_ord) {
-        assert(tensor_ord >= 0 && slot_group_ord >= 0);
+        SEQUANT_ASSERT(tensor_ord >= 0 && slot_group_ord >= 0);
       }
 
       friend bool operator==(const Terminal &a, const Terminal &b) {
@@ -102,9 +102,10 @@ class TensorNetworkV1 {
     //    Edge& operator=(Edge&&) = default;
 
     Edge &connect_to(const Terminal &t) {
-      assert(first_.null() || second_.null());  // not fully connected yet
+      SEQUANT_ASSERT(first_.null() ||
+                     second_.null());  // not fully connected yet
       if (second_.null()) {
-        assert(first_.null());  // unconnected Edge
+        SEQUANT_ASSERT(first_.null());  // unconnected Edge
         second_ = t;
       } else {
         // - cannot connect braket slot to aux slot
@@ -151,11 +152,11 @@ class TensorNetworkV1 {
     }
 
     const auto &first() const {
-      assert(first_.nonnull());
+      SEQUANT_ASSERT(first_.nonnull());
       return first_;
     }
     const auto &second() const {
-      assert(second_.nonnull());
+      SEQUANT_ASSERT(second_.nonnull());
       return second_;
     }
     /// access terminals by index, nonnull terminals first
@@ -163,7 +164,7 @@ class TensorNetworkV1 {
     /// @return if `i==0` return first(), if nonnull, else second(), if nonnull,
     /// else null;  if `i==1` return second(), if nonnull, else else null;
     const auto &operator[](std::size_t i) const {
-      assert(i == 0 || i == 1);
+      SEQUANT_ASSERT(i == 0 || i == 1);
       if (i == 0) {
         if (first_.nonnull())
           return first_;
@@ -185,7 +186,7 @@ class TensorNetworkV1 {
     }
 
     const Index &idx() const {
-      assert(idxptr_ != nullptr);
+      SEQUANT_ASSERT(idxptr_ != nullptr);
       return *idxptr_;
     }
 

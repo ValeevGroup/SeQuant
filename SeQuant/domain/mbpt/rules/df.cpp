@@ -6,6 +6,7 @@
 
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/space.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 
 #include <range/v3/view.hpp>
 
@@ -15,9 +16,9 @@ namespace sequant::mbpt {
 
 ExprPtr density_fit_impl(Tensor const& tnsr, Index const& aux_idx,
                          std::wstring_view factor_label) {
-  assert(tnsr.bra_rank() == 2     //
-         && tnsr.ket_rank() == 2  //
-         && tnsr.aux_rank() == 0);
+  SEQUANT_ASSERT(tnsr.bra_rank() == 2     //
+                 && tnsr.ket_rank() == 2  //
+                 && tnsr.aux_rank() == 0);
 
   auto t1 = ex<Tensor>(factor_label, bra({ranges::front(tnsr.bra())}),
                        ket({ranges::front(tnsr.ket())}), aux({aux_idx}));

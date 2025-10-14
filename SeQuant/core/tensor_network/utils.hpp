@@ -7,6 +7,7 @@
 
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/tensor_network/typedefs.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 
 #include <algorithm>
 #include <iostream>
@@ -92,8 +93,8 @@ struct CanonicalTensorCompare {
 
   bool operator()(const AbstractTensorPtr &lhs_ptr,
                   const AbstractTensorPtr &rhs_ptr) const {
-    assert(lhs_ptr);
-    assert(rhs_ptr);
+    SEQUANT_ASSERT(lhs_ptr);
+    SEQUANT_ASSERT(rhs_ptr);
     const AbstractTensor &lhs = *lhs_ptr;
     const AbstractTensor &rhs = *rhs_ptr;
 

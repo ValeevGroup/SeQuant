@@ -53,7 +53,7 @@ class index_repl_dst_t {
 
   const container::svector<Index> &src() const { return src_; }
   index_repl_dst_t &append_src(Index src) {
-    assert(ranges::contains(src_, src) == false);
+    SEQUANT_ASSERT(ranges::contains(src_, src) == false);
     if (Logger::instance().wick_reduce) {
       sequant::wprintf("index_repl_dst_t: appended src=", src.to_latex(),
                        " -> dst=", dst_.to_latex(), "\n");
@@ -135,7 +135,7 @@ compute_index_replacement_rules(
   auto proto = [](const Index &dst, const Index &src) {
     if (src.has_proto_indices()) {
       if (dst.has_proto_indices()) {
-        assert(dst.proto_indices() == src.proto_indices());
+        SEQUANT_ASSERT(dst.proto_indices() == src.proto_indices());
         return dst;
       } else
         return Index(dst, src.proto_indices());
@@ -146,46 +146,48 @@ compute_index_replacement_rules(
 
   // adds src->dst, optionally assigning proto indices from protosrc
   auto add_src_to_existing_dst = [&src2dst](const Index &src, auto srd2dst_it) {
-    assert(srd2dst_it != ranges::end(src2dst));
+    SEQUANT_ASSERT(srd2dst_it != ranges::end(src2dst));
     srd2dst_it->second->append_src(src);
     src2dst.emplace(src, srd2dst_it->second);
   };
 
   // change dst index
   auto replace_dst_index = [&src2dst](const Index &new_dst, auto srd2dst_it) {
-    assert(srd2dst_it != ranges::end(src2dst));
+    SEQUANT_ASSERT(srd2dst_it != ranges::end(src2dst));
     srd2dst_it->second->update_dst(new_dst);
   };
 
   // merges dst2 into dst1
   auto merge_dst2_into_dst1 = [&src2dst, &dst_list](auto srd2dst_it1,
                                                     auto srd2dst_it2) {
-    assert(srd2dst_it1->second !=
-           srd2dst_it2->second);  // caller should ensure no self-merges,
-                                  // indicates faulty logic upstream
-    assert(srd2dst_it1 != ranges::end(src2dst));
-    assert(srd2dst_it2 != ranges::end(src2dst));
+    SEQUANT_ASSERT(
+        srd2dst_it1->second !=
+        srd2dst_it2->second);  // caller should ensure no self-merges,
+                               // indicates faulty logic upstream
+    SEQUANT_ASSERT(srd2dst_it1 != ranges::end(src2dst));
+    SEQUANT_ASSERT(srd2dst_it2 != ranges::end(src2dst));
     const auto dst1 = srd2dst_it1->second;
     const auto dst2 = srd2dst_it2->second;
 
     // repoint all source indices of dst2 to dst1
     for (const auto &src2 : srd2dst_it2->second->src()) {
       auto it = src2dst.find(src2);
-      assert(it != src2dst.end());
+      SEQUANT_ASSERT(it != src2dst.end());
       it->second = dst1;
       dst1->append_src(src2);
     }
 
     // there should be no refs to dst2 in src2dst
-    assert(ranges::contains(src2dst, dst2,
-                            [](const auto &it) { return it.second; }) == false);
+    SEQUANT_ASSERT(ranges::contains(src2dst, dst2, [](const auto &it) {
+                     return it.second;
+                   }) == false);
 
     // erase dst2 from dst_list
     auto it2 = ranges::find(dst_list, dst2);
-    assert(it2 != ranges::end(dst_list));
+    SEQUANT_ASSERT(it2 != ranges::end(dst_list));
     dst_list.erase(it2);
     // there should be no "viewers" of dst2
-    assert(dst2.use_count() == 1);
+    SEQUANT_ASSERT(dst2.use_count() == 1);
   };
 
   // adds src->dst, optionally assigning proto indices from protosrc
@@ -201,7 +203,7 @@ compute_index_replacement_rules(
     } else {
       [[maybe_unused]] auto insertion_result = src2dst.emplace(
           src, std::make_shared<index_repl_dst_t>(real_dst, src));
-      assert(insertion_result.second);
+      SEQUANT_ASSERT(insertion_result.second);
       dst_list.emplace_back(insertion_result.first->second);
     }
   };
@@ -210,7 +212,7 @@ compute_index_replacement_rules(
   auto update_rule = [&src2dst, &proto, &isr, &idxfac, &zero_result](
                          auto src_it, const Index &src, const Index &dst,
                          std::optional<const Index> protosrc = std::nullopt) {
-    assert(src_it != src2dst.end());
+    SEQUANT_ASSERT(src_it != src2dst.end());
     auto &old_dst = src_it->second->dst();
 
     // do we need to change space of dst?
@@ -228,8 +230,8 @@ compute_index_replacement_rules(
       // different protoindices, this is what the logic dealing with
       // noncovariant indices is meant to avoid
       if (protosrc.value_or(src).has_proto_indices()) {
-        assert(protosrc.value_or(src).proto_indices() ==
-               old_dst.proto_indices());
+        SEQUANT_ASSERT(protosrc.value_or(src).proto_indices() ==
+                       old_dst.proto_indices());
       }
     } else {
       change_dst_protoindices = protosrc.value_or(src).has_proto_indices();
@@ -333,8 +335,9 @@ compute_index_replacement_rules(
 
       // update dst1 and dst2 with new_dst, then merge them
       auto new_real_dst = proto(new_dst, dst1_proto);
-      assert(new_real_dst ==
-             proto(new_dst, dst2_proto));  // don't know how to handle this yet
+      SEQUANT_ASSERT(
+          new_real_dst ==
+          proto(new_dst, dst2_proto));  // don't know how to handle this yet
       auto src2dst_it1 = src2dst.find(src1);
       replace_dst_index(new_real_dst, src2dst_it1);
       // if src1 and src2 were pointing to same destination, we are done, else
@@ -357,8 +360,8 @@ compute_index_replacement_rules(
       const auto is_kronecker = tensor.label() == kronecker_label();
       if (is_overlap || is_kronecker) {
         have_kroneckers = true;
-        assert(tensor.bra().size() == 1);
-        assert(tensor.ket().size() == 1);
+        SEQUANT_ASSERT(tensor.bra().size() == 1);
+        SEQUANT_ASSERT(tensor.ket().size() == 1);
         const auto &bra = tensor.bra().at(0);
         const auto &ket = tensor.ket().at(0);
 
@@ -445,7 +448,7 @@ inline bool apply_index_replacement_rules(
       const auto &factor = *it;
       if (factor->is<AbstractTensor>()) {
         auto &tensor = factor->as<AbstractTensor>();
-        assert(ranges::none_of(tensor._slots(), [](const Index &idx) {
+        SEQUANT_ASSERT(ranges::none_of(tensor._slots(), [](const Index &idx) {
           return idx.tag().has_value();
         }));
       }
@@ -569,9 +572,9 @@ bool reduce_wick_impl(std::shared_ptr<Product> &expr,
                get_default_context().metric() == IndexSpaceMetric::Unit &&
                t._bra()[0].proto_indices() == t._ket()[0].proto_indices());
           if (is_kronecker) {
-            assert(t._bra_rank() == 1);
+            SEQUANT_ASSERT(t._bra_rank() == 1);
             Index b = t._bra()[0];
-            assert(t._ket_rank() == 1);
+            SEQUANT_ASSERT(t._ket_rank() == 1);
             Index k = t._ket()[0];
             if (all_noncovariant_indices.contains(b)) {
               auto it = all_noncovariant_indices.find(k);
@@ -694,7 +697,7 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
   auto disable_nop_canonicalization = [&raii_null_nop_canonicalizer]() {
     if (!raii_null_nop_canonicalizer) {
       const auto nop_labels = NormalOperator<S>::labels();
-      assert(nop_labels.size() == 2);
+      SEQUANT_ASSERT(nop_labels.size() == 2);
       TensorCanonicalizer::try_register_instance(
           std::make_shared<NullTensorCanonicalizer>(), nop_labels[0]);
       TensorCanonicalizer::try_register_instance(
@@ -719,7 +722,7 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
       if (!skip_input_canonicalization) {
         // initial full canonicalization
         canonicalize(expr_input_);
-        assert(!expr_input_->as<Sum>().empty());
+        SEQUANT_ASSERT(!expr_input_->as<Sum>().empty());
       }
 
       // NOW disable canonicalization of normal operators
@@ -782,8 +785,9 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
     else if (expr_input_->is<Product>()) {
       if (!skip_input_canonicalization) {  // canonicalize, unless told to skip
         auto canon_byproduct = expr_input_->rapid_canonicalize();
-        assert(canon_byproduct ==
-               nullptr);  // canonicalization of Product always returns nullptr
+        SEQUANT_ASSERT(
+            canon_byproduct ==
+            nullptr);  // canonicalization of Product always returns nullptr
       }
       // NOW disable canonicalization of normal operators
       // N.B. even if skipped initial input canonicalization need to disable
@@ -808,7 +812,7 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
           if (factor->template is<NormalOperator<S>>()) {
             nopseq->push_back(factor->template as<NormalOperator<S>>());
           } else {
-            assert(factor->is_cnumber());
+            SEQUANT_ASSERT(factor->is_cnumber());
             *prefactor *= *factor;
           }
         }
@@ -831,13 +835,13 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
           [[maybe_unused]] const auto &vcolors = g.vertex_colors;
           const auto &vtypes = g.vertex_types;
           const auto n = vtypes.size();
-          assert(vcolors.size() == n);
-          assert(vlabels.size() == n);
+          SEQUANT_ASSERT(vcolors.size() == n);
+          SEQUANT_ASSERT(vlabels.size() == n);
           const auto &tn_edges = tn.edges();
           const auto &tn_tensors = tn.tensors();
           auto idx_vertex_to_edge_ptr =
               [&](const auto idx_vertex) -> const TN::Edge * {
-            assert(idx_vertex < n);
+            SEQUANT_ASSERT(idx_vertex < n);
             const auto edge_idx = g.vertex_to_index_idx(idx_vertex);
             if (edge_idx < tn_edges.size())
               return &tn_edges[edge_idx];
@@ -886,7 +890,7 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
                    nop_labels_end)) {
                 [[maybe_unused]] auto insertion_result =
                     nop_vidx_ord.emplace(v, nop_ord++);
-                assert(insertion_result.second);
+                SEQUANT_ASSERT(insertion_result.second);
               }
               if (vtypes[v] == VertexType::Index && !input_->empty()) {
                 auto *edge_ptr = idx_vertex_to_edge_ptr(v);
@@ -900,7 +904,7 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
                         ranges::distance(opseq_view_begin, idx_it_in_opseq);
                     [[maybe_unused]] auto insertion_result =
                         index_vidx_ord.emplace(v, ord);
-                    assert(insertion_result.second);
+                    SEQUANT_ASSERT(insertion_result.second);
                   }
                 }
               }
@@ -977,7 +981,7 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
                         v1, v2)) {  // if the automorphism maps this vertex to
                                     // another ... they both must be in the same
                                     // partition
-                  assert(vertices.find(v2) != vertices.end());
+                  SEQUANT_ASSERT(vertices.find(v2) != vertices.end());
                   auto v1_partition_it = vertex_to_partition_idx.find(v1);
                   auto v2_partition_it = vertex_to_partition_idx.find(v2);
                   const bool v1_has_partition =
@@ -1055,7 +1059,7 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
                                        const auto &vidx_ord) {
             container::svector<container::svector<size_t>> partitions;
 
-            assert(npartitions > -1);
+            SEQUANT_ASSERT(npartitions > -1);
             const size_t max_pidx = npartitions;
             partitions.reserve(max_pidx);
 
@@ -1068,7 +1072,7 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
                 if (pidx == p) {
                   // !!remember to map the vertex index into the operator
                   // index!!
-                  assert(vidx_ord.find(vidx) != vidx_ord.end());
+                  SEQUANT_ASSERT(vidx_ord.find(vidx) != vidx_ord.end());
                   const auto ordinal = vidx_ord.find(vidx)->second;
                   if (p_found == false) {  // first time this is found
                     partitions.emplace_back(container::svector<size_t>{
@@ -1132,9 +1136,9 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
             auto connected_to_bra_or_ket_of_same_symmetric_nop =
                 [&tn_tensors](const auto &edge1, const auto &edge2) -> bool {
               const auto nt1 = edge1.vertex_count();
-              assert(nt1 <= 2);
+              SEQUANT_ASSERT(nt1 <= 2);
               const auto nt2 = edge2.vertex_count();
-              assert(nt2 <= 2);
+              SEQUANT_ASSERT(nt2 <= 2);
               for (auto i1 = 0; i1 != nt1; ++i1) {
                 const auto tensor1_ord = edge1.vertex(i1).getTerminalIndex();
                 for (auto i2 = 0; i2 != nt2; ++i2) {
@@ -1278,7 +1282,7 @@ void WickTheorem<S>::reduce(ExprPtr &expr) const {
   // Products
   if (expr.is<Product>()) {
     auto expr_cast = std::static_pointer_cast<Product>(expr);
-    assert(external_indices_);
+    SEQUANT_ASSERT(external_indices_);
     if (detail::reduce_wick_impl<S>(expr_cast, *external_indices_,
                                     *external_indices_,
                                     get_default_context(S))) {
@@ -1288,9 +1292,9 @@ void WickTheorem<S>::reduce(ExprPtr &expr) const {
     }
   } else if (expr.is<Sum>()) {
     for (auto &&subexpr : *expr) {
-      assert(subexpr->is<Product>());
+      SEQUANT_ASSERT(subexpr->is<Product>());
       auto subexpr_cast = std::static_pointer_cast<Product>(subexpr);
-      assert(external_indices_);
+      SEQUANT_ASSERT(external_indices_);
       if (detail::reduce_wick_impl<S>(subexpr_cast, *external_indices_,
                                       *noncovariant_indices_,
                                       get_default_context(S)))

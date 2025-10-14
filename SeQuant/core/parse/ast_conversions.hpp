@@ -259,14 +259,14 @@ struct Transformer {
     decltype(ranges::begin(FNOperator::labels())) fit;
     if ((fit = ranges::find(FNOperator::labels(), tensor.name)) !=
         ranges::end(FNOperator::labels())) {
-      assert(ranges::size(auxiliaries) == 0);
-      assert(!tensor.symmetry.has_value() ||
-             ((tensor.symmetry.value().perm_symm ==
-                   ast::SymmetrySpec::unspecified ||
-               tensor.symmetry.value().perm_symm == 'A') &&
-              (tensor.symmetry.value().column_symm ==
-                   ast::SymmetrySpec::unspecified ||
-               tensor.symmetry.value().column_symm == 'S')));
+      SEQUANT_ASSERT(ranges::size(auxiliaries) == 0);
+      SEQUANT_ASSERT(!tensor.symmetry.has_value() ||
+                     ((tensor.symmetry.value().perm_symm ==
+                           ast::SymmetrySpec::unspecified ||
+                       tensor.symmetry.value().perm_symm == 'A') &&
+                      (tensor.symmetry.value().column_symm ==
+                           ast::SymmetrySpec::unspecified ||
+                       tensor.symmetry.value().column_symm == 'S')));
       Vacuum vac = fit == ranges::begin(FNOperator::labels())
                        ? Vacuum::Physical
                        : Vacuum::SingleProduct;
@@ -276,14 +276,14 @@ struct Transformer {
     decltype(ranges::begin(BNOperator::labels())) bit;
     if ((bit = ranges::find(BNOperator::labels(), tensor.name)) !=
         ranges::end(BNOperator::labels())) {
-      assert(ranges::size(auxiliaries) == 0);
-      assert(!tensor.symmetry.has_value() ||
-             ((tensor.symmetry.value().perm_symm ==
-                   ast::SymmetrySpec::unspecified ||
-               tensor.symmetry.value().perm_symm == 'S') &&
-              (tensor.symmetry.value().column_symm ==
-                   ast::SymmetrySpec::unspecified ||
-               tensor.symmetry.value().column_symm == 'S')));
+      SEQUANT_ASSERT(ranges::size(auxiliaries) == 0);
+      SEQUANT_ASSERT(!tensor.symmetry.has_value() ||
+                     ((tensor.symmetry.value().perm_symm ==
+                           ast::SymmetrySpec::unspecified ||
+                       tensor.symmetry.value().perm_symm == 'S') &&
+                      (tensor.symmetry.value().column_symm ==
+                           ast::SymmetrySpec::unspecified ||
+                       tensor.symmetry.value().column_symm == 'S')));
       Vacuum vac = bit == ranges::begin(BNOperator::labels())
                        ? Vacuum::Physical
                        : Vacuum::SingleProduct;

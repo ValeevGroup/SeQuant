@@ -6,8 +6,8 @@
 #include <SeQuant/core/expressions/tensor.hpp>
 #include <SeQuant/core/expressions/variable.hpp>
 #include <SeQuant/core/index.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 
-#include <cassert>
 #include <initializer_list>
 #include <optional>
 #include <string>
@@ -89,10 +89,10 @@ class ResultExpr {
   container::svector<Group> index_particle_grouping() const {
     container::svector<Group> groups;
 
-    assert(m_braIndices.size() == m_ketIndices.size() &&
-           "Not yet generalized to particle non-conserving results");
-    assert(m_auxIndices.empty() &&
-           "Not yet clear how auxiliary indices should be handled");
+    SEQUANT_ASSERT(m_braIndices.size() == m_ketIndices.size() &&
+                   "Not yet generalized to particle non-conserving results");
+    SEQUANT_ASSERT(m_auxIndices.empty() &&
+                   "Not yet clear how auxiliary indices should be handled");
 
     groups.reserve(m_braIndices.size());
 
@@ -123,7 +123,7 @@ class ResultExpr {
   }
 
   Variable result_as_variable(std::wstring default_label = L"Unnamed") const {
-    assert(!produces_tensor());
+    SEQUANT_ASSERT(!produces_tensor());
     return Variable(m_label.has_value() ? m_label.value() : default_label);
   }
 

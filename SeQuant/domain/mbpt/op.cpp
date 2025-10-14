@@ -281,7 +281,7 @@ qns_t generic_deexcitation_qns(std::size_t particle_rank, std::size_t hole_rank,
 // By counting the number of contractions between indices of proper type, we can
 // know the quantum numbers of a combined result.
 qns_t combine(qns_t a, qns_t b) {
-  assert(a.size() == b.size());
+  SEQUANT_ASSERT(a.size() == b.size());
   qns_t result;
 
   if (get_default_context().vacuum() == Vacuum::Physical) {
@@ -458,7 +458,7 @@ OpMaker<S>::OpMaker(OpType op) : op_(op) {}
 template <Statistics S>
 OpMaker<S>::OpMaker(OpType op, ncre nc, nann na) {
   op_ = op;
-  assert(nc > 0 || na > 0);
+  SEQUANT_ASSERT(nc > 0 || na > 0);
   switch (to_class(op)) {
     case OpClass::ex:
       cre_spaces_ = decltype(cre_spaces_)(nc, get_particle_space(Spin::any));
@@ -484,7 +484,7 @@ OpMaker<S>::OpMaker(OpType op, ncre nc, nann na,
                     const cre<IndexSpace>& cre_space,
                     const ann<IndexSpace>& ann_space) {
   op_ = op;
-  assert(nc > 0 || na > 0);
+  SEQUANT_ASSERT(nc > 0 || na > 0);
   cre_spaces_ = decltype(cre_spaces_)(nc, cre_space);
   ann_spaces_ = decltype(ann_spaces_)(na, ann_space);
 }
@@ -499,14 +499,14 @@ ExprPtr OpMaker<S>::operator()(std::optional<UseDepIdx> dep,
     if (to_class(op_) == OpClass::ex) {
 #ifndef NDEBUG
       for (auto&& s : cre_spaces_) {
-        assert(isr->contains_unoccupied(s));
+        SEQUANT_ASSERT(isr->contains_unoccupied(s));
       }
 #endif
       dep = UseDepIdx::Bra;
     } else if (to_class(op_) == OpClass::deex) {
 #ifndef NDEBUG
       for (auto&& s : ann_spaces_) {
-        assert(isr->contains_unoccupied(s));
+        SEQUANT_ASSERT(isr->contains_unoccupied(s));
       }
 #endif
       dep = UseDepIdx::Ket;
@@ -535,7 +535,7 @@ inline namespace op {
 
 namespace tensor {
 ExprPtr H_(std::size_t k) {
-  assert(k > 0 && k <= 2);
+  SEQUANT_ASSERT(k > 0 && k <= 2);
   switch (k) {
     case 1:
       switch (get_default_context().vacuum()) {
@@ -556,16 +556,17 @@ ExprPtr H_(std::size_t k) {
 }
 
 ExprPtr H(std::size_t k) {
-  assert(k > 0 && k <= 2);
+  SEQUANT_ASSERT(k > 0 && k <= 2);
   return k == 1 ? tensor::H_(1) : tensor::H_(1) + tensor::H_(2);
 }
 
 ExprPtr F(bool use_tensor, IndexSpace reference_occupied) {
   if (use_tensor) {
     return OpMaker<Statistics::FermiDirac>(OpType::f, 1)();
-  } else {                       // explicit density matrix construction
-    assert(reference_occupied);  // cannot explicitly instantiate fock operator
-                                 // without providing an occupied indexspace
+  } else {  // explicit density matrix construction
+    SEQUANT_ASSERT(
+        reference_occupied);  // cannot explicitly instantiate fock operator
+                              // without providing an occupied indexspace
     // add \bar{g}^{\kappa x}_{\lambda y} \gamma^y_x with x,y in occ_space_type
     auto make_g_contribution = [](const auto occ_space) {
       auto isr = get_default_context().index_space_registry();
@@ -574,7 +575,8 @@ ExprPtr F(bool use_tensor, IndexSpace reference_occupied) {
           [=](auto braidxs, auto ketidxs, Symmetry opsymm) {
             auto m1 = Index::make_tmp_index(occ_space);
             auto m2 = Index::make_tmp_index(occ_space);
-            assert(opsymm == Symmetry::Antisymm || opsymm == Symmetry::Nonsymm);
+            SEQUANT_ASSERT(opsymm == Symmetry::Antisymm ||
+                           opsymm == Symmetry::Nonsymm);
             if (opsymm == Symmetry::Antisymm) {
               braidxs.push_back(m1);
               ketidxs.push_back(m2);
@@ -619,7 +621,7 @@ ExprPtr T_(std::size_t K) {
 }
 
 ExprPtr T(std::size_t K, bool skip1) {
-  assert(K > (skip1 ? 1 : 0));
+  SEQUANT_ASSERT(K > (skip1 ? 1 : 0));
   ExprPtr result;
   for (auto k = skip1 ? 2ul : 1ul; k <= K; ++k) {
     result += tensor::T_(k);
@@ -632,7 +634,7 @@ ExprPtr Λ_(std::size_t K) {
 }
 
 ExprPtr Λ(std::size_t K) {
-  assert(K > 0);
+  SEQUANT_ASSERT(K > 0);
 
   ExprPtr result;
   for (auto k = 1ul; k <= K; ++k) {
@@ -647,7 +649,7 @@ ExprPtr R_(nann na, ncre nc, const cre<IndexSpace>& cre_space,
                                          ann_space)();
 }
 ExprPtr R_(nₚ np, nₕ nh) {
-  assert(np >= 0 && nh >= 0);
+  SEQUANT_ASSERT(np >= 0 && nh >= 0);
   return OpMaker<Statistics::FermiDirac>(OpType::R, ncre(np.value()),
                                          nann(nh.value()))();
 }
@@ -659,7 +661,7 @@ ExprPtr L_(nann na, ncre nc, const cre<IndexSpace>& cre_space,
 }
 
 ExprPtr L_(nₚ np, nₕ nh) {
-  assert(np >= 0 && nh >= 0);
+  SEQUANT_ASSERT(np >= 0 && nh >= 0);
   return OpMaker<Statistics::FermiDirac>(OpType::L, ncre(nh.value()),
                                          nann(np.value()))();
 }
@@ -675,10 +677,10 @@ ExprPtr P(nₚ np, nₕ nh) {
 }
 
 ExprPtr A(nₚ np, nₕ nh) {
-  assert(!(np == 0 && nh == 0));
+  SEQUANT_ASSERT(!(np == 0 && nh == 0));
   // if one of them is not zero, nh and np should have the same sign
   if (np != 0 && nh != 0) {
-    assert((np > 0 && nh > 0) || (np < 0 && nh < 0));
+    SEQUANT_ASSERT((np > 0 && nh > 0) || (np < 0 && nh < 0));
   }
 
   container::svector<IndexSpace> creators;
@@ -706,7 +708,7 @@ ExprPtr A(nₚ np, nₕ nh) {
 }
 
 ExprPtr S(std::int64_t K) {
-  assert(K != 0);
+  SEQUANT_ASSERT(K != 0);
   container::svector<IndexSpace> creators;
   container::svector<IndexSpace> annihilators;
   if (K > 0)  // ex
@@ -733,7 +735,7 @@ ExprPtr S(std::int64_t K) {
 ExprPtr H_pt(std::size_t R, [[maybe_unused]] std::size_t order) {
   assert(order == 1 &&
          "sequant::sr::H_pt(): only supports first order perturbation");
-  assert(R > 0);
+  SEQUANT_ASSERT(R > 0);
   return OpMaker<Statistics::FermiDirac>(OpType::h_1, R)();
 }
 
@@ -744,7 +746,7 @@ ExprPtr T_pt_(std::size_t K, [[maybe_unused]] std::size_t order) {
 }
 
 ExprPtr T_pt(std::size_t K, std::size_t order, bool skip1) {
-  assert(K > (skip1 ? 1 : 0));
+  SEQUANT_ASSERT(K > (skip1 ? 1 : 0));
   ExprPtr result;
   for (auto k = (skip1 ? 2ul : 1ul); k <= K; ++k) {
     result = k > 1 ? result + tensor::T_pt_(k, order) : tensor::T_pt_(k, order);
@@ -759,7 +761,7 @@ ExprPtr Λ_pt_(std::size_t K, [[maybe_unused]] std::size_t order) {
 }
 
 ExprPtr Λ_pt(std::size_t K, std::size_t order, bool skip1) {
-  assert(K > (skip1 ? 1 : 0));
+  SEQUANT_ASSERT(K > (skip1 ? 1 : 0));
   ExprPtr result;
   for (auto k = (skip1 ? 2ul : 1ul); k <= K; ++k) {
     result = k > 1 ? result + tensor::Λ_pt_(k, order) : tensor::Λ_pt_(k, order);
@@ -770,7 +772,7 @@ ExprPtr Λ_pt(std::size_t K, std::size_t order, bool skip1) {
 }  // namespace tensor
 
 ExprPtr H_(std::size_t k) {
-  assert(k > 0 && k <= 2);
+  SEQUANT_ASSERT(k > 0 && k <= 2);
   switch (k) {
     case 1:
       return ex<op_t>(
@@ -805,12 +807,12 @@ ExprPtr H_(std::size_t k) {
 }
 
 ExprPtr H(std::size_t k) {
-  assert(k > 0 && k <= 2);
+  SEQUANT_ASSERT(k > 0 && k <= 2);
   return k == 1 ? H_(1) : H_(1) + H_(2);
 }
 
 ExprPtr θ(std::size_t K) {
-  assert(K > 0);
+  SEQUANT_ASSERT(K > 0);
   return ex<op_t>([]() -> std::wstring_view { return L"θ"; },
                   [=]() -> ExprPtr { return tensor::θ(K); },
                   [=](qnc_t& qns) {
@@ -820,7 +822,7 @@ ExprPtr θ(std::size_t K) {
 }
 
 ExprPtr T_(std::size_t K) {
-  assert(K > 0);
+  SEQUANT_ASSERT(K > 0);
   return ex<op_t>([]() -> std::wstring_view { return L"t"; },
                   [=]() -> ExprPtr { return tensor::T_(K); },
                   [=](qnc_t& qns) {
@@ -830,7 +832,7 @@ ExprPtr T_(std::size_t K) {
 }
 
 ExprPtr T(std::size_t K, bool skip1) {
-  assert(K > (skip1 ? 1 : 0));
+  SEQUANT_ASSERT(K > (skip1 ? 1 : 0));
   ExprPtr result;
   for (auto k = skip1 ? 2ul : 1ul; k <= K; ++k) {
     result += T_(k);
@@ -839,7 +841,7 @@ ExprPtr T(std::size_t K, bool skip1) {
 }
 
 ExprPtr Λ_(std::size_t K) {
-  assert(K > 0);
+  SEQUANT_ASSERT(K > 0);
   return ex<op_t>([]() -> std::wstring_view { return L"λ"; },
                   [=]() -> ExprPtr { return tensor::Λ_(K); },
                   [=](qnc_t& qns) {
@@ -849,7 +851,7 @@ ExprPtr Λ_(std::size_t K) {
 }
 
 ExprPtr Λ(std::size_t K) {
-  assert(K > 0);
+  SEQUANT_ASSERT(K > 0);
   ExprPtr result;
   for (auto k = 1ul; k <= K; ++k) {
     result = k > 1 ? result + Λ_(k) : Λ_(k);
@@ -872,10 +874,10 @@ ExprPtr F(bool use_f_tensor, IndexSpace occupied_density) {
 }
 
 ExprPtr A(nₚ np, nₕ nh) {
-  assert(!(nh == 0 && np == 0));
+  SEQUANT_ASSERT(!(nh == 0 && np == 0));
   // if one of them is not zero, nh and np should have the same sign
   if (nh != 0 && np != 0) {
-    assert((nh > 0 && np > 0) || (nh < 0 && np < 0));
+    SEQUANT_ASSERT((nh > 0 && np > 0) || (nh < 0 && np < 0));
   }
   // if np or nh is negative, it's a deexcitation operator
   const auto deexcitation = (np < 0 || nh < 0);
@@ -900,7 +902,7 @@ ExprPtr A(nₚ np, nₕ nh) {
 }
 
 ExprPtr S(std::int64_t K) {
-  assert(K != 0);
+  SEQUANT_ASSERT(K != 0);
   return ex<op_t>([]() -> std::wstring_view { return L"S"; },
                   [=]() -> ExprPtr { return tensor::S(K); },
                   [=](qnc_t& qns) {
@@ -923,14 +925,15 @@ ExprPtr P(nₚ np, nₕ nh) {
     const auto K = np;  // K = np = nh
     return S(-K);
   } else {
-    assert(get_default_context().spbasis() == SPBasis::Spinor);
+    SEQUANT_ASSERT(get_default_context().spbasis() == SPBasis::Spinor);
     return A(-np, -nh);
   }
 }
 
 ExprPtr H_pt(std::size_t R, std::size_t order) {
-  assert(R > 0);
-  assert(order == 1 && "only first order perturbation is supported now");
+  SEQUANT_ASSERT(R > 0);
+  SEQUANT_ASSERT(order == 1 &&
+                 "only first order perturbation is supported now");
   return ex<op_t>(
       []() -> std::wstring_view { return optype2label.at(OpType::h_1); },
       [=]() -> ExprPtr { return tensor::H_pt(R, order); },
@@ -938,8 +941,9 @@ ExprPtr H_pt(std::size_t R, std::size_t order) {
 }
 
 ExprPtr T_pt_(std::size_t K, std::size_t order) {
-  assert(K > 0);
-  assert(order == 1 && "only first order perturbation is supported now");
+  SEQUANT_ASSERT(K > 0);
+  SEQUANT_ASSERT(order == 1 &&
+                 "only first order perturbation is supported now");
   return ex<op_t>(
       []() -> std::wstring_view { return optype2label.at(OpType::t_1); },
       [=]() -> ExprPtr { return tensor::T_pt_(K, order); },
@@ -947,7 +951,7 @@ ExprPtr T_pt_(std::size_t K, std::size_t order) {
 }
 
 ExprPtr T_pt(std::size_t K, std::size_t order, bool skip1) {
-  assert(K > (skip1 ? 1 : 0));
+  SEQUANT_ASSERT(K > (skip1 ? 1 : 0));
   ExprPtr result;
   for (auto k = (skip1 ? 2ul : 1ul); k <= K; ++k) {
     result = k > 1 ? result + T_pt_(k, order) : T_pt_(k, order);
@@ -956,8 +960,9 @@ ExprPtr T_pt(std::size_t K, std::size_t order, bool skip1) {
 }
 
 ExprPtr Λ_pt_(std::size_t K, std::size_t order) {
-  assert(K > 0);
-  assert(order == 1 && "only first order perturbation is supported now");
+  SEQUANT_ASSERT(K > 0);
+  SEQUANT_ASSERT(order == 1 &&
+                 "only first order perturbation is supported now");
   return ex<op_t>(
       []() -> std::wstring_view { return optype2label.at(OpType::λ_1); },
       [=]() -> ExprPtr { return tensor::Λ_pt_(K, order); },
@@ -965,7 +970,7 @@ ExprPtr Λ_pt_(std::size_t K, std::size_t order) {
 }
 
 ExprPtr Λ_pt(std::size_t K, std::size_t order, bool skip1) {
-  assert(K > (skip1 ? 1 : 0));
+  SEQUANT_ASSERT(K > (skip1 ? 1 : 0));
   ExprPtr result;
   for (auto k = (skip1 ? 2ul : 1ul); k <= K; ++k) {
     result = k > 1 ? result + Λ_pt_(k, order) : Λ_pt_(k, order);
@@ -1007,7 +1012,7 @@ ExprPtr L_(nₚ np, nₕ nh) { return L_(nann(np), ncre(nh)); }
 
 ExprPtr R(nann na, ncre nc, const cre<IndexSpace>& cre_space,
           const ann<IndexSpace>& ann_space) {
-  assert(na > 0 || nc > 0);
+  SEQUANT_ASSERT(na > 0 || nc > 0);
   ExprPtr result;
 
   std::int64_t ra = na, rc = nc;
@@ -1025,7 +1030,7 @@ ExprPtr R(nₚ np, nₕ nh) { return R(nann(nh), ncre(np)); }
 
 ExprPtr L(nann na, ncre nc, const cre<IndexSpace>& cre_space,
           const ann<IndexSpace>& ann_space) {
-  assert(na > 0 || nc > 0);
+  SEQUANT_ASSERT(na > 0 || nc > 0);
   ExprPtr result;
 
   std::int64_t ra = na, rc = nc;
@@ -1042,14 +1047,14 @@ ExprPtr L(nann na, ncre nc, const cre<IndexSpace>& cre_space,
 ExprPtr L(nₚ np, nₕ nh) { return L(nann(np), ncre(nh)); }
 
 qns_t apply_to_vac(const ExprPtr& expr) {
-  assert(expr.is<op_t>() || expr.is<Product>());
+  SEQUANT_ASSERT(expr.is<op_t>() || expr.is<Product>());
   qns_t qns;
   if (expr.is<op_t>()) {
     qns = expr.as<op_t>()();
   } else if (expr.is<Product>()) {
     const auto& op_product = expr.as<Product>();
     for (auto& op_ptr : ranges::views::reverse(op_product.factors())) {
-      assert(op_ptr->template is<op_t>());
+      SEQUANT_ASSERT(op_ptr->template is<op_t>());
       const auto& op = op_ptr->template as<op_t>();
       qns = op(qns);
     }
@@ -1072,27 +1077,27 @@ bool can_change_qns(const ExprPtr& op_or_op_product, const qns_t& target_qns,
 
 bool raises_vacuum_up_to_rank(const ExprPtr& op_or_op_product,
                               const unsigned long k) {
-  assert(op_or_op_product.is<op_t>() || op_or_op_product.is<Product>());
+  SEQUANT_ASSERT(op_or_op_product.is<op_t>() || op_or_op_product.is<Product>());
 
   return can_change_qns(op_or_op_product, interval_excitation_type_qns(k));
 }
 
 bool lowers_rank_or_lower_to_vacuum(const ExprPtr& op_or_op_product,
                                     const unsigned long k) {
-  assert(op_or_op_product.is<op_t>() || op_or_op_product.is<Product>());
+  SEQUANT_ASSERT(op_or_op_product.is<op_t>() || op_or_op_product.is<Product>());
   return can_change_qns(op_or_op_product, qns_t{},
                         interval_excitation_type_qns(k));
 }
 
 bool raises_vacuum_to_rank(const ExprPtr& op_or_op_product,
                            const unsigned long k) {
-  assert(op_or_op_product.is<op_t>() || op_or_op_product.is<Product>());
+  SEQUANT_ASSERT(op_or_op_product.is<op_t>() || op_or_op_product.is<Product>());
   return can_change_qns(op_or_op_product, excitation_type_qns(k));
 }
 
 bool lowers_rank_to_vacuum(const ExprPtr& op_or_op_product,
                            const unsigned long k) {
-  assert(op_or_op_product.is<op_t>() || op_or_op_product.is<Product>());
+  SEQUANT_ASSERT(op_or_op_product.is<op_t>() || op_or_op_product.is<Product>());
   return can_change_qns(op_or_op_product, qns_t{}, excitation_type_qns(k));
 }
 
@@ -1161,8 +1166,9 @@ ExprPtr detail::expectation_value_impl(
                        ranges::views::transform(
                            [](const auto& op) { return op.index(); }) |
                        ranges::to<index_container>();
-        assert(braidxs.size() ==
-               ketidxs.size());  // need to handle particle # violating case?
+        SEQUANT_ASSERT(
+            braidxs.size() ==
+            ketidxs.size());  // need to handle particle # violating case?
         const auto rank = braidxs.size();
         return ex<Tensor>(
             rdm_label, bra(std::move(braidxs)), ket(std::move(ketidxs)),
@@ -1265,10 +1271,10 @@ ExprPtr detail::expectation_value_impl(
         impl_for_single_tn(product_ptr);
         exptr = product_ptr;
       } else {
-        assert(exptr.template is<Sum>());
+        SEQUANT_ASSERT(exptr.template is<Sum>());
         auto result = std::make_shared<Sum>();
         for (auto& summand : exptr.template as<Sum>().summands()) {
-          assert(summand.template is<Product>());
+          SEQUANT_ASSERT(summand.template is<Product>());
           auto result_summand = summand.template as<Product>().clone();
           auto product_ptr = result_summand.template as_shared_ptr<Product>();
           impl_for_single_tn(product_ptr);
@@ -1344,7 +1350,7 @@ bool can_change_qns(const ExprPtr& op_or_op_product, const qns_t target_qns,
   if (op_or_op_product.is<Product>()) {
     const auto& op_product = op_or_op_product.as<Product>();
     for (auto& op_ptr : ranges::views::reverse(op_product.factors())) {
-      assert(op_ptr->template is<op_t>());
+      SEQUANT_ASSERT(op_ptr->template is<op_t>());
       const auto& op = op_ptr->template as<op_t>();
       qns = op(qns);
     }

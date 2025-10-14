@@ -7,6 +7,7 @@
 
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/eval_node.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 #include <chrono>
 #include <fstream>
 #include <iomanip>
@@ -58,7 +59,7 @@ auto range1_limits(sequant::Tensor const& tensor, size_t nocc, size_t nvirt) {
   return ranges::views::transform(tensor.const_braket(),
                                   [nocc, nvirt](auto const& idx) {
                                     const auto& sp = idx.space();
-                                    assert(sp == ao || sp == au);
+                                    SEQUANT_ASSERT(sp == ao || sp == au);
 
                                     return sp == ao ? nocc : nvirt;
                                   });

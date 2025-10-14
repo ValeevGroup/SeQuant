@@ -6,10 +6,10 @@
 
 #include "catch2_sequant.hpp"
 
+#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/external/bliss/graph.hh>
 #include <SeQuant/external/bliss/utils.hh>
 
-#include <cassert>
 #include <cstdio>
 #include <initializer_list>
 #include <memory>
@@ -22,7 +22,7 @@ constexpr const bool use_colors = true;
  */
 [[maybe_unused]] static void report_aut(void* param, const unsigned int n,
                                         const unsigned int* aut) {
-  assert(param);
+  SEQUANT_ASSERT(param);
   fprintf((FILE*)param, "Generator: ");
   bliss::print_permutation((FILE*)param, n, aut, 1);
   fprintf((FILE*)param, "\n");
@@ -35,7 +35,8 @@ TEST_CASE("bliss", "[elements]") {
     bliss::Graph sg1(n), sg2(n);
 
     auto add_edges = [](auto& sg, int v1, std::initializer_list<int> v2s) {
-      assert(v1 >= 0 && static_cast<unsigned int>(v1) < sg.get_nof_vertices());
+      SEQUANT_ASSERT(v1 >= 0 &&
+                     static_cast<unsigned int>(v1) < sg.get_nof_vertices());
       for (auto&& v2 : v2s) {
         assert(v2 >= 0 &&
                static_cast<unsigned int>(v2) < sg.get_nof_vertices());

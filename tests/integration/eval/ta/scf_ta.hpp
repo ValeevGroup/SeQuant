@@ -7,6 +7,7 @@
 
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/parse.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/domain/eval/cache_manager.hpp>
 #include <SeQuant/domain/eval/eval.hpp>
 
@@ -95,9 +96,9 @@ class SequantEvalScfTA final : public SequantEvalScf {
     auto log = Logger::instance().eval.level > 0;
 
     for (auto&& [r, n] : zip(rs, nodes_)) {
-      assert(!n.empty());
+      SEQUANT_ASSERT(!n.empty());
       auto trank = ranges::front(n)->as_tensor().bra_rank();
-      assert(trank == 1 || trank == 2);
+      SEQUANT_ASSERT(trank == 1 || trank == 2);
       // update_amplitudes assumes that the residuals are in specific layout
       std::string target_indices = trank == 1 ? "a_1,i_1" : "a_1,a_2,i_1,i_2";
       r = funcs[st][log](n, target_indices, data_world_, cman_)

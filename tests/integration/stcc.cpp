@@ -2,6 +2,7 @@
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/runtime.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/timer.hpp>
 #include <SeQuant/domain/mbpt/context.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
@@ -122,7 +123,7 @@ int main(int argc, char* argv[]) {
       }
       break;
     default:
-      assert(false && "unreachable code reached");
+      SEQUANT_ASSERT(false && "unreachable code reached");
       abort();
   }
 

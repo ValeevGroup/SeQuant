@@ -8,10 +8,10 @@
 #include <SeQuant/core/expr_fwd.hpp>
 #include <SeQuant/core/expressions/expr.hpp>
 #include <SeQuant/core/expressions/expr_ptr.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 
 #include <range/v3/range/access.hpp>
 
-#include <cassert>
 #include <string>
 
 namespace sequant {
@@ -52,42 +52,42 @@ std::size_t size(const ExprPtr& exprptr);
 /// @param[in] exprptr (a pointer to) an expression
 /// @return begin iterator to the expression range
 inline decltype(auto) begin(const ExprPtr& exprptr) {
-  assert(exprptr);
+  SEQUANT_ASSERT(exprptr);
   return ranges::begin(*exprptr);
 }
 
 /// @param[in] exprptr (a pointer to) an expression
 /// @return begin iterator to the expression range
 inline decltype(auto) begin(ExprPtr& exprptr) {
-  assert(exprptr);
+  SEQUANT_ASSERT(exprptr);
   return ranges::begin(*exprptr);
 }
 
 /// @param[in] exprptr (a pointer to) an expression
 /// @return begin iterator to the expression range
 inline decltype(auto) cbegin(const ExprPtr& exprptr) {
-  assert(exprptr);
+  SEQUANT_ASSERT(exprptr);
   return ranges::cbegin(*exprptr);
 }
 
 /// @param[in] exprptr (a pointer to) an expression
 /// @return end iterator to the expression range
 inline decltype(auto) end(const ExprPtr& exprptr) {
-  assert(exprptr);
+  SEQUANT_ASSERT(exprptr);
   return ranges::end(*exprptr);
 }
 
 /// @param[in] exprptr (a pointer to) an expression
 /// @return end iterator to the expression range
 inline decltype(auto) end(ExprPtr& exprptr) {
-  assert(exprptr);
+  SEQUANT_ASSERT(exprptr);
   return ranges::end(*exprptr);
 }
 
 /// @param[in] exprptr (a pointer to) an expression
 /// @return end iterator to the expression range
 inline decltype(auto) cend(const ExprPtr& exprptr) {
-  assert(exprptr);
+  SEQUANT_ASSERT(exprptr);
   return ranges::cend(*exprptr);
 }
 

@@ -1,6 +1,7 @@
 #include <SeQuant/core/export/itf.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/space.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/string.hpp>
 
 #include <algorithm>
@@ -13,7 +14,7 @@ namespace sequant {
 
 std::string ItfContext::index_name(const IndexSpace &space,
                                    std::size_t ordinal) const {
-  assert(ordinal >= m_idx_offset);
+  SEQUANT_ASSERT(ordinal >= m_idx_offset);
   ordinal -= m_idx_offset;
 
   std::string base_key = toUtf8(space.base_key());
@@ -202,8 +203,8 @@ bool ItfContext::rewrite(Tensor &tensor) const {
 
 bool ItfContext::is_exceptional_J(std::span<Index> bra,
                                   std::span<Index> ket) const {
-  assert(bra.size() == 2);
-  assert(ket.size() == 2);
+  SEQUANT_ASSERT(bra.size() == 2);
+  SEQUANT_ASSERT(ket.size() == 2);
 
   // integrals with 3 external (virtual) indices ought to be converted to
   // J-integrals

@@ -97,7 +97,7 @@ bool TensorNetworkV3::Vertex::operator==(const Vertex &rhs) const {
 
 std::size_t TensorNetworkV3::Graph::vertex_to_index_idx(
     std::size_t vertex) const {
-  assert(vertex_types.at(vertex) == VertexType::Index);
+  SEQUANT_ASSERT(vertex_types.at(vertex) == VertexType::Index);
 
   std::size_t index_idx = 0;
   for (std::size_t i = 0; i <= vertex; ++i) {
@@ -106,7 +106,7 @@ std::size_t TensorNetworkV3::Graph::vertex_to_index_idx(
     }
   }
 
-  assert(index_idx > 0);
+  SEQUANT_ASSERT(index_idx > 0);
 
   return index_idx - 1;
 }
@@ -124,7 +124,7 @@ std::optional<std::size_t> TensorNetworkV3::Graph::vertex_to_tensor_idx(
     }
   }
 
-  assert(tensor_idx > 0);
+  SEQUANT_ASSERT(tensor_idx > 0);
   return tensor_idx - 1;
 }
 
@@ -229,7 +229,7 @@ ExprPtr TensorNetworkV3::canonicalize_graph(const NamedIndexSet &named_indices,
 
       case VertexType::TensorBra:
       case VertexType::TensorKet: {
-        assert(tensor_count > 0);
+        SEQUANT_ASSERT(tensor_count > 0);
         const auto bra = vertex_type == VertexType::TensorBra;
         const std::size_t tensor_ord = tensor_count - 1;
         const AbstractTensor &tensor = *tensors_[tensor_ord];
@@ -247,7 +247,7 @@ ExprPtr TensorNetworkV3::canonicalize_graph(const NamedIndexSet &named_indices,
       }
 
       case VertexType::TensorBraKet: {
-        assert(tensor_count > 0);
+        SEQUANT_ASSERT(tensor_count > 0);
         const std::size_t tensor_ord = tensor_count - 1;
         const AbstractTensor &tensor = *tensors_[tensor_ord];
         const auto symm = symmetry(tensor);
@@ -263,7 +263,7 @@ ExprPtr TensorNetworkV3::canonicalize_graph(const NamedIndexSet &named_indices,
       }
 
       case VertexType::TensorCore:
-        assert(tensor_idx_to_vertex.size() == tensor_count);
+        SEQUANT_ASSERT(tensor_idx_to_vertex.size() == tensor_count);
         tensor_idx_to_vertex.emplace_back(tensor_idx_to_vertex.size()) = vertex;
         ++tensor_count;
         tensor_braket_vertex_ord = 0;
@@ -278,10 +278,10 @@ ExprPtr TensorNetworkV3::canonicalize_graph(const NamedIndexSet &named_indices,
     }
   }
 
-  assert(index_idx_to_vertex.size() ==
-         edges_.size() + pure_proto_indices_.size());
-  assert(tensor_idx_to_vertex.size() == tensors_.size());
-  assert(canonical_slot_order.size() <= tensors_.size());
+  SEQUANT_ASSERT(index_idx_to_vertex.size() ==
+                 edges_.size() + pure_proto_indices_.size());
+  SEQUANT_ASSERT(tensor_idx_to_vertex.size() == tensors_.size());
+  SEQUANT_ASSERT(canonical_slot_order.size() <= tensors_.size());
 
   // canonical slot arrays right now contain vertex ordinals, convert to
   // permutations
@@ -304,9 +304,9 @@ ExprPtr TensorNetworkV3::canonicalize_graph(const NamedIndexSet &named_indices,
   // Use this ordering to relabel anonymous indices
   const auto index_less_than = [&index_idx_to_vertex, &canonize_perm](
                                    std::size_t lhs_idx, std::size_t rhs_idx) {
-    assert(lhs_idx < index_idx_to_vertex.size());
+    SEQUANT_ASSERT(lhs_idx < index_idx_to_vertex.size());
     const std::size_t lhs_vertex = index_idx_to_vertex[lhs_idx];
-    assert(rhs_idx < index_idx_to_vertex.size());
+    SEQUANT_ASSERT(rhs_idx < index_idx_to_vertex.size());
     const std::size_t rhs_vertex = index_idx_to_vertex[rhs_idx];
 
     return canonize_perm[lhs_vertex] < canonize_perm[rhs_vertex];
@@ -576,7 +576,7 @@ ExprPtr TensorNetworkV3::canonicalize(
     // accordingly (but only anonymous indices, of course)
     for (std::size_t i = named_indices.size(); i < edges_.size(); ++i) {
       const Index &index = edges_[i].idx();
-      assert(is_anonymous_index(index));
+      SEQUANT_ASSERT(is_anonymous_index(index));
       Index replacement = idxfac.make(index);
       if (index != replacement) idxrepl.emplace(index, std::move(replacement));
     }
@@ -600,7 +600,8 @@ ExprPtr TensorNetworkV3::canonicalize(
     byproduct *= canonicalize_individual_tensors(named_indices);
 
     // We assume that re-indexing did not change the canonical order of tensors
-    assert(std::is_sorted(tensors_.begin(), tensors_.end(), tensor_sorter));
+    SEQUANT_ASSERT(
+        std::is_sorted(tensors_.begin(), tensors_.end(), tensor_sorter));
     // However, in order to produce the most aesthetically pleasing result, we
     // now reorder tensors based on the regular AbstractTensor::operator<, which
     // takes the explicit index labelling of tensors into account.
@@ -609,7 +610,7 @@ ExprPtr TensorNetworkV3::canonicalize(
   }  // lexicographic canonicalization
 
   if (byproduct) {
-    assert(byproduct->is<Constant>());
+    SEQUANT_ASSERT(byproduct->is<Constant>());
     return (byproduct->as<Constant>().value() == 1) ? nullptr : byproduct;
   } else
     return nullptr;
@@ -730,7 +731,7 @@ TensorNetworkV3::canonicalize_slots(
       }
 
       const auto named_indices_it = metadata.named_indices.find(idx);
-      assert(named_indices_it != metadata.named_indices.end());
+      SEQUANT_ASSERT(named_indices_it != metadata.named_indices.end());
       const auto vertex_ord = idx_to_vertex.at(*named_indices_it);
 
       // find the entry for this index type
@@ -747,11 +748,11 @@ TensorNetworkV3::canonicalize_slots(
           else if (edge_it->vertex(0).getOrigin() == Origin::Bra)
             slot_type = IndexSlotType::TensorBra;
           else {
-            assert(edge_it->vertex(0).getOrigin() == Origin::Ket);
+            SEQUANT_ASSERT(edge_it->vertex(0).getOrigin() == Origin::Ket);
             slot_type = IndexSlotType::TensorKet;
           }
         } else {  // if
-          assert(edge_it->vertex_count() == 2);
+          SEQUANT_ASSERT(edge_it->vertex_count() == 2);
           slot_type = IndexSlotType::IndexBundle;
         }
       } else
@@ -763,7 +764,7 @@ TensorNetworkV3::canonicalize_slots(
         bool inserted;
         std::tie(it, inserted) = idx2cord.emplace(
             idxptr_slottype, cord_set_t(cord_set_t::key_compare{}));
-        assert(inserted);
+        SEQUANT_ASSERT(inserted);
       }
 
       it->second.emplace(idx_ord, canonize_perm[vertex_ord], named_indices_it);
@@ -928,9 +929,9 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
 
   // Add vertices for tensors
   for (std::size_t tensor_idx = 0; tensor_idx < tensors_.size(); ++tensor_idx) {
-    assert(tensor_idx < tensor_vertices.size());
-    assert(tensor_vertices[tensor_idx] == uninitialized_vertex);
-    assert(tensors_.at(tensor_idx));
+    SEQUANT_ASSERT(tensor_idx < tensor_vertices.size());
+    SEQUANT_ASSERT(tensor_vertices[tensor_idx] == uninitialized_vertex);
+    SEQUANT_ASSERT(tensors_.at(tensor_idx));
     const AbstractTensor &tensor = *tensors_[tensor_idx];
 
     // Tensor core
@@ -1154,13 +1155,13 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
     const std::size_t index_vertex = nvertex;
     ++nvertex;
 
-    assert(index_vertices.at(i) == uninitialized_vertex);
+    SEQUANT_ASSERT(index_vertices.at(i) == uninitialized_vertex);
     index_vertices[i] = index_vertex;
 
     // Handle proto indices
     if (index.has_proto_indices()) {
       // For now we assume that all proto indices are symmetric
-      assert(index.symmetric_proto_indices());
+      SEQUANT_ASSERT(index.symmetric_proto_indices());
 
       std::size_t proto_vertex;
       if (auto it =
@@ -1230,10 +1231,11 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
       // between bra and ket, but still can have at most 2 of them total if
       // braket symmetry != BraKetSymmetry::Symm at most 1 bra and 1 ket can
       // connect to aux
-      assert(get_default_context().braket_symmetry() == BraKetSymmetry::Symm
-                 ? (nbra + nket <= 2)
-                 : (nbra <= 1 && nket <= 1));
-      assert(naux >= 1);  // at least 1 aux
+      SEQUANT_ASSERT(get_default_context().braket_symmetry() ==
+                             BraKetSymmetry::Symm
+                         ? (nbra + nket <= 2)
+                         : (nbra <= 1 && nket <= 1));
+      SEQUANT_ASSERT(naux >= 1);  // at least 1 aux
     }
 #endif
 
@@ -1241,9 +1243,9 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
     for (std::size_t i = 0; i < current_edge.vertex_count(); ++i) {
       const Vertex &vertex = current_edge.vertex(i);
 
-      assert(vertex.getTerminalIndex() < tensor_vertices.size());
-      assert(tensor_vertices[vertex.getTerminalIndex()] !=
-             uninitialized_vertex);
+      SEQUANT_ASSERT(vertex.getTerminalIndex() < tensor_vertices.size());
+      SEQUANT_ASSERT(tensor_vertices[vertex.getTerminalIndex()] !=
+                     uninitialized_vertex);
       const std::size_t tensor_vertex =
           tensor_vertices[vertex.getTerminalIndex()];
 
@@ -1254,7 +1256,7 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
           index_slot_offset(tensor, vertex.getOrigin(), vertex.getIndexSlot());
       const std::size_t tensor_component_vertex = tensor_vertex + offset;
 
-      assert(tensor_component_vertex < nvertex);
+      SEQUANT_ASSERT(tensor_component_vertex < nvertex);
       edges.emplace_back(std::make_pair(index_vertex, tensor_component_vertex));
     }
   }
@@ -1270,7 +1272,8 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
 
     const std::size_t index_vertex = nvertex;
 
-    assert(index_vertices.at(i + edges_.size()) == uninitialized_vertex);
+    SEQUANT_ASSERT(index_vertices.at(i + edges_.size()) ==
+                   uninitialized_vertex);
     index_vertices[i + edges_.size()] = index_vertex;
     ++nvertex;
   }
@@ -1284,22 +1287,22 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
 
       auto it = std::ranges::find(edges_, idx, &Edge::idx);
       if (it != edges_.end()) {
-        assert(std::distance(edges_.begin(), it) >= 0);
+        SEQUANT_ASSERT(std::distance(edges_.begin(), it) >= 0);
         idx_vertex = index_vertices[std::distance(edges_.begin(), it)];
       } else {
         auto pure_it = pure_proto_indices_.find(idx);
-        assert(pure_it != pure_proto_indices_.end());
+        SEQUANT_ASSERT(pure_it != pure_proto_indices_.end());
 
         if (pure_it != pure_proto_indices_.end()) {
-          assert(std::distance(pure_proto_indices_.begin(),
-                               pure_proto_indices_.end()) >= 0);
+          SEQUANT_ASSERT(std::distance(pure_proto_indices_.begin(),
+                                       pure_proto_indices_.end()) >= 0);
           idx_vertex = index_vertices[std::distance(pure_proto_indices_.begin(),
                                                     pure_it) +
                                       edges_.size()];
         }
       }
 
-      assert(idx_vertex != uninitialized_vertex);
+      SEQUANT_ASSERT(idx_vertex != uninitialized_vertex);
       if (idx_vertex == uninitialized_vertex) {
         SEQUANT_ABORT("Expected all vertices to be initialized at this point");
       }
@@ -1308,10 +1311,11 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
     }
   }
 
-  assert(!options.make_labels || nvertex == graph.vertex_labels.size());
-  assert(!options.make_texlabels || nvertex == graph.vertex_texlabels.size());
-  assert(nvertex == graph.vertex_colors.size());
-  assert(nvertex == graph.vertex_types.size());
+  SEQUANT_ASSERT(!options.make_labels || nvertex == graph.vertex_labels.size());
+  SEQUANT_ASSERT(!options.make_texlabels ||
+                 nvertex == graph.vertex_texlabels.size());
+  SEQUANT_ASSERT(nvertex == graph.vertex_colors.size());
+  SEQUANT_ASSERT(nvertex == graph.vertex_types.size());
 
   // Create the actual BLISS graph object
   graph.bliss_graph = std::make_unique<bliss::Graph>(nvertex);
@@ -1326,7 +1330,8 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
   }
 
   if (options.make_idx_to_vertex) {
-    assert(index_vertices.size() == edges_.size() + pure_proto_indices_.size());
+    SEQUANT_ASSERT(index_vertices.size() ==
+                   edges_.size() + pure_proto_indices_.size());
     graph.idx_to_vertex.reserve(index_vertices.size());
 
     for (std::size_t i = 0; i < edges_.size(); ++i) {
@@ -1383,7 +1388,7 @@ void TensorNetworkV3::init_edges() {
   edges_.reserve(distinct_index_estimate);
 
   for (std::size_t tensor_idx = 0; tensor_idx < tensors_.size(); ++tensor_idx) {
-    assert(tensors_[tensor_idx]);
+    SEQUANT_ASSERT(tensors_[tensor_idx]);
     const AbstractTensor &tensor = *tensors_[tensor_idx];
     const Symmetry tensor_symm = symmetry(tensor);
 
@@ -1416,7 +1421,7 @@ void TensorNetworkV3::init_edges() {
   // may be pure protoindices)
   NamedIndexSet proto_indices;
   for (const Edge &current : edges_) {
-    assert(current.vertex_count() > 0);
+    SEQUANT_ASSERT(current.vertex_count() > 0);
     // External index (== Edge only connected to a single vertex in the
     // network)
     if (current.vertex_count() == 1) {
@@ -1429,7 +1434,7 @@ void TensorNetworkV3::init_edges() {
       // protoindex of a previously inserted ext index ... check to ensure no
       // accidental duplicates
       if (!inserted) {
-        assert(proto_indices.contains(current.idx()));
+        SEQUANT_ASSERT(proto_indices.contains(current.idx()));
       }
     }
 

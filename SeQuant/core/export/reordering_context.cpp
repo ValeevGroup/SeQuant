@@ -3,7 +3,6 @@
 #include <SeQuant/core/utility/macros.hpp>
 
 #include <algorithm>
-#include <cassert>
 #include <ranges>
 
 #include <range/v3/algorithm/sort.hpp>
@@ -199,8 +198,8 @@ bool ReorderingContext::rewrite(Tensor &tensor) const {
   }
 
   if (sort_particles) {
-    assert(!bra_range.empty());
-    assert(bra_range.size() == ket_range.size());
+    SEQUANT_ASSERT(!bra_range.empty());
+    SEQUANT_ASSERT(bra_range.size() == ket_range.size());
 
     ranges::sort(ranges::views::zip(bra_range, ket_range), pair_comp);
   }

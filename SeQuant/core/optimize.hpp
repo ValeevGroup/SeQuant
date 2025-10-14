@@ -1,7 +1,6 @@
 #ifndef SEQUANT_OPTIMIZE_OPTIMIZE_HPP
 #define SEQUANT_OPTIMIZE_OPTIMIZE_HPP
 
-#include <cassert>
 #include <cmath>
 #include <cstddef>
 #include <functional>
@@ -18,6 +17,7 @@
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/tensor_network.hpp>
 #include <SeQuant/core/utility/indices.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 
 #if __cplusplus >= 202002L
 #include <bit>
@@ -131,8 +131,8 @@ container::svector<Index> common_indices(I1 const& idxs1, I2 const& idxs2) {
   using std::end;
   using std::set_intersection;
 
-  assert(std::is_sorted(begin(idxs1), end(idxs1), Comp{}));
-  assert(std::is_sorted(begin(idxs2), end(idxs2), Comp{}));
+  SEQUANT_ASSERT(std::is_sorted(begin(idxs1), end(idxs1), Comp{}));
+  SEQUANT_ASSERT(std::is_sorted(begin(idxs2), end(idxs2), Comp{}));
 
   container::svector<Index> result;
 
@@ -155,8 +155,8 @@ container::svector<Index> diff_indices(I1 const& idxs1, I2 const& idxs2) {
   using std::end;
   using std::set_symmetric_difference;
 
-  assert(std::is_sorted(begin(idxs1), end(idxs1), Comp{}));
-  assert(std::is_sorted(begin(idxs2), end(idxs2), Comp{}));
+  SEQUANT_ASSERT(std::is_sorted(begin(idxs1), end(idxs1), Comp{}));
+  SEQUANT_ASSERT(std::is_sorted(begin(idxs2), end(idxs2), Comp{}));
 
   container::svector<Index> result;
 
@@ -234,7 +234,7 @@ EvalSequence single_term_opt(TensorNetwork const& network,
 
     auto& curr_result = results[n];
     if (has_single_bit(n)) {
-      assert(curr_indices.empty());
+      SEQUANT_ASSERT(curr_indices.empty());
       // evaluation of a single atomic tensor
       curr_result.flops = 0;
       curr_result.indices = std::move(nth_tensor_indices[power_pos]);

@@ -14,11 +14,11 @@
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/latex.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/strong.hpp>
 
 #include <algorithm>
 #include <array>
-#include <cassert>
 #include <cstddef>
 #include <initializer_list>
 #include <iterator>
@@ -636,7 +636,7 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
     // (anti)symmetric bra or ket makes sense only for particle-symmetric
     // tensors
     if (symmetry_ == Symmetry::Symm || symmetry_ == Symmetry::Antisymm)
-      assert(column_symmetry_ == ColumnSymmetry::Symm);
+      SEQUANT_ASSERT(column_symmetry_ == ColumnSymmetry::Symm);
   }
 
   hash_type memoizing_hash() const override {
@@ -657,7 +657,7 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
     if (!hash_value_) {
       hash_value_ = compute_hash();
     } else {
-      assert(*hash_value_ == compute_hash());
+      SEQUANT_ASSERT(*hash_value_ == compute_hash());
     }
     return *hash_value_;
   }

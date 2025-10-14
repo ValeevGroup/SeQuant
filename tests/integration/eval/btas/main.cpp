@@ -8,6 +8,7 @@
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/runtime.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/domain/mbpt/context.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 
@@ -71,11 +72,11 @@ int main(int argc, char* argv[]) {
     auto reg = get_default_context().mutable_index_space_registry();
     auto occ = reg->retrieve_ptr(L"i");
     auto uocc = reg->retrieve_ptr(L"a");
-    assert(occ);
-    assert(uocc);
+    SEQUANT_ASSERT(occ);
+    SEQUANT_ASSERT(uocc);
     occ->approximate_size(10);
     uocc->approximate_size(100);
-    assert(uocc->approximate_size() == 100);
+    SEQUANT_ASSERT(uocc->approximate_size() == 100);
   }
 
   std::string calc_config = argc > 1 ? argv[1] : "calc.inp";

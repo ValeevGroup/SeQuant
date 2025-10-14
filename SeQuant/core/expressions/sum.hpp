@@ -7,8 +7,8 @@
 #include <SeQuant/core/expressions/expr_ptr.hpp>
 #include <SeQuant/core/expressions/product.hpp>
 #include <SeQuant/core/meta.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 
-#include <cassert>
 #include <optional>
 #include <type_traits>
 
@@ -61,13 +61,13 @@ class Sum : public Expr {
   /// append a summand to the sum
   /// @param summand the summand
   Sum &append(ExprPtr summand) {
-    assert(summand);
+    SEQUANT_ASSERT(summand);
     if (!summand->is<Sum>()) {
       if (summand->is<Constant>()) {  // exclude zeros, add up constants
                                       // immediately, if possible
         auto summand_constant = std::static_pointer_cast<Constant>(summand);
         if (constant_summand_idx_) {
-          assert(summands_.at(*constant_summand_idx_)->is<Constant>());
+          SEQUANT_ASSERT(summands_.at(*constant_summand_idx_)->is<Constant>());
           *(summands_[*constant_summand_idx_]) += *summand;
         } else {
           if (!summand_constant->is_zero()) {
@@ -88,12 +88,12 @@ class Sum : public Expr {
   /// prepend a summand to the sum
   /// @param summand the summand
   Sum &prepend(ExprPtr summand) {
-    assert(summand);
+    SEQUANT_ASSERT(summand);
     if (!summand->is<Sum>()) {
       if (summand->is<Constant>()) {  // exclude zeros
         auto summand_constant = std::static_pointer_cast<Constant>(summand);
         if (constant_summand_idx_) {  // add up to the existing constant ...
-          assert(summands_.at(*constant_summand_idx_)->is<Constant>());
+          SEQUANT_ASSERT(summands_.at(*constant_summand_idx_)->is<Constant>());
           *summands_[*constant_summand_idx_] += *summand_constant;
         } else {  // or include the nonzero constant and update
                   // constant_summand_idx_
@@ -263,7 +263,7 @@ class Sum : public Expr {
     if (!hash_value_) {
       hash_value_ = compute_hash();
     } else {
-      assert(*hash_value_ == compute_hash());
+      SEQUANT_ASSERT(*hash_value_ == compute_hash());
     }
 
     return *hash_value_;
@@ -282,7 +282,7 @@ class Sum : public Expr {
       CanonicalizeOptions opts =
           CanonicalizeOptions::default_options().copy_and_set(
               CanonicalizationMethod::Rapid)) override {
-    assert(opts.method == CanonicalizationMethod::Rapid);
+    SEQUANT_ASSERT(opts.method == CanonicalizationMethod::Rapid);
     return canonicalize_impl(false, opts);
   }
 

@@ -1,6 +1,7 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/runtime.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/domain/mbpt/context.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/models/cc.hpp>
@@ -8,7 +9,6 @@
 #include <SeQuant/domain/mbpt/spin.hpp>
 #include <SeQuant/domain/mbpt/utils.hpp>
 
-#include <cassert>
 #include <cstdint>
 #include <memory>
 #include <new>
@@ -34,7 +34,7 @@ std::vector<ExprPtr> CC::t(size_t commutator_rank, size_t pmax, size_t pmin) {
   pmax = (pmax == std::numeric_limits<size_t>::max() ? N : pmax);
   const bool skip_singles = ansatz_ == Ansatz::oT || ansatz_ == Ansatz::oU;
 
-  assert(pmax >= pmin && "pmax should be >= pmin");
+  SEQUANT_ASSERT(pmax >= pmin && "pmax should be >= pmin");
 
   // 1. construct hbar(op) in canonical form
   auto hbar = mbpt::lst(H(), T(N, skip_singles), commutator_rank, unitary());
@@ -51,7 +51,7 @@ std::vector<ExprPtr> CC::t(size_t commutator_rank, size_t pmax, size_t pmin) {
 
     if (screen_) {  // if operator level screening is on
       for (auto& term : *hbar) {
-        assert(term->is<Product>() || term->is<op_t>());
+        SEQUANT_ASSERT(term->is<Product>() || term->is<op_t>());
         if (raises_vacuum_up_to_rank(term, p)) {
           if (!hbar_le_p)
             hbar_le_p = std::make_shared<Sum>(ExprPtrList{term});
@@ -79,8 +79,8 @@ std::vector<ExprPtr> CC::t(size_t commutator_rank, size_t pmax, size_t pmin) {
 }
 
 std::vector<ExprPtr> CC::λ(size_t commutator_rank) {
-  assert(commutator_rank >= 1 && "commutator rank should be >= 1");
-  assert(!unitary() && "there is no need for CC::λ for unitary ansatz");
+  SEQUANT_ASSERT(commutator_rank >= 1 && "commutator rank should be >= 1");
+  SEQUANT_ASSERT(!unitary() && "there is no need for CC::λ for unitary ansatz");
   const bool skip_singles = ansatz_ == Ansatz::oT || ansatz_ == Ansatz::oU;
 
   // construct hbar
@@ -109,7 +109,7 @@ std::vector<ExprPtr> CC::λ(size_t commutator_rank) {
         lhbar_le_p;  // keeps products that can produce excitations rank <=p
     if (screen_) {   // if operator level screening is enabled
       for (auto& term : *lhbar) {  // pick terms from lhbar
-        assert(term->is<Product>() || term->is<op_t>());
+        SEQUANT_ASSERT(term->is<Product>() || term->is<op_t>());
 
         if (lowers_rank_or_lower_to_vacuum(term, p)) {
           if (!lhbar_le_p)
@@ -143,7 +143,7 @@ std::vector<ExprPtr> CC::t_pt(size_t rank, [[maybe_unused]] size_t order) {
   assert(rank == 1 &&
          "sequant::mbpt::CC::t_pt(): only one-body perturbation "
          "operator is supported now");
-  assert(ansatz_ == Ansatz::T && "unitary ansatz is not yet supported");
+  SEQUANT_ASSERT(ansatz_ == Ansatz::T && "unitary ansatz is not yet supported");
 
   // construct h1_bar
   // truncate h1_bar at rank 2 for one-body perturbation
@@ -183,7 +183,7 @@ std::vector<ExprPtr> CC::λ_pt(size_t rank, [[maybe_unused]] size_t order) {
   assert(rank == 1 &&
          "sequant::mbpt::CC::λ_pt(): only one-body perturbation "
          "operator is supported now");
-  assert(ansatz_ == Ansatz::T && "unitary ansatz is not yet supported");
+  SEQUANT_ASSERT(ansatz_ == Ansatz::T && "unitary ansatz is not yet supported");
 
   // construct hbar
   const auto hbar = mbpt::lst(H(), T(N), 4);
@@ -232,8 +232,8 @@ std::vector<ExprPtr> CC::λ_pt(size_t rank, [[maybe_unused]] size_t order) {
 }
 
 std::vector<ExprPtr> CC::eom_r(nₚ np, nₕ nh) {
-  assert(!unitary() && "Unitary ansatz is not yet supported");
-  assert((np > 0 || nh > 0) && "Unsupported excitation order");
+  SEQUANT_ASSERT(!unitary() && "Unitary ansatz is not yet supported");
+  SEQUANT_ASSERT((np > 0 || nh > 0) && "Unsupported excitation order");
 
   if (np != nh)
     assert(
@@ -274,12 +274,13 @@ std::vector<ExprPtr> CC::eom_r(nₚ np, nₕ nh) {
 }
 
 std::vector<ExprPtr> CC::eom_l(nₚ np, nₕ nh) {
-  assert(!unitary() && "Unitary ansatz is not yet supported");
-  assert((np > 0 || nh > 0) && "Unsupported excitation order");
+  SEQUANT_ASSERT(!unitary() && "Unitary ansatz is not yet supported");
+  SEQUANT_ASSERT((np > 0 || nh > 0) && "Unsupported excitation order");
 
   if (np != nh)
-    assert(get_default_context().spbasis() != SPBasis::Spinfree &&
-           "spin-free basis does not support non particle-conserving cases");
+    SEQUANT_ASSERT(
+        get_default_context().spbasis() != SPBasis::Spinfree &&
+        "spin-free basis does not support non particle-conserving cases");
   const bool skip_singles = ansatz_ == Ansatz::oT;
 
   // construct hbar

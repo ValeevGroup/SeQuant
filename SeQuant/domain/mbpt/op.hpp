@@ -20,6 +20,7 @@
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/space.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/strong.hpp>
 
 #include <range/v3/iterator/basic_iterator.hpp>
@@ -32,7 +33,6 @@
 
 #include <algorithm>
 #include <array>
-#include <cassert>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
@@ -172,13 +172,13 @@ class Operator<void, S> : public Expr, public Labeled {
 
   /// @return label of the operator
   std::wstring_view label() const override {
-    assert(label_generator_);
+    SEQUANT_ASSERT(label_generator_);
     return label_generator_();
   }
 
   /// @return tensor form of the operator
   virtual ExprPtr tensor_form() const {
-    assert(tensor_form_generator_);
+    SEQUANT_ASSERT(tensor_form_generator_);
     return tensor_form_generator_();
   }
 
@@ -228,7 +228,7 @@ class QuantumNumberChange
     } else if (get_default_context().vacuum() == Vacuum::SingleProduct) {
       auto isr = get_default_context().index_space_registry();
       const auto& isr_base_spaces = isr->base_spaces();
-      assert(isr_base_spaces.size() > 0);
+      SEQUANT_ASSERT(isr_base_spaces.size() > 0);
       return isr_base_spaces.size() * 2;
     } else {
       throw std::logic_error("unknown Vacuum type");
@@ -238,7 +238,7 @@ class QuantumNumberChange
   /// initializes all values with zeroes
   QuantumNumberChange() {
     this->resize(this->size());
-    assert(this->base().size() != 0);
+    SEQUANT_ASSERT(this->base().size() != 0);
     std::fill(this->begin(), this->end(), interval_t{});
   }
 
@@ -251,7 +251,7 @@ class QuantumNumberChange
                 meta::is_range_v<std::remove_reference_t<Range>> &&
                 std::is_convertible_v<I, interval_t>>>
   explicit QuantumNumberChange(Range&& i) : QuantumNumberChange() {
-    assert(i.size() == size());
+    SEQUANT_ASSERT(i.size() == size());
     std::copy(i.begin(), i.end(), this->begin());
   }
 
@@ -264,7 +264,7 @@ class QuantumNumberChange
   explicit QuantumNumberChange(
       std::initializer_list<std::initializer_list<I>> i)
       : QuantumNumberChange() {
-    assert(i.size() == size());
+    SEQUANT_ASSERT(i.size() == size());
 #ifndef NDEBUG
     if (std::find_if(i.begin(), i.end(),
                      [](const auto& ii) { return ii.size() != 2; }) != i.end())
@@ -397,7 +397,7 @@ class QuantumNumberChange
   /// @return true if \p i is in `*this[0]`
   template <typename I, typename = std::enable_if_t<std::is_integral_v<I>>>
   bool in(std::initializer_list<I> i) {
-    assert(i.size() == size());
+    SEQUANT_ASSERT(i.size() == size());
     std::array<I, 4> i_arr;
     std::copy(i.begin(), i.end(), i_arr.begin());
     return this->in(i_arr);
@@ -415,7 +415,7 @@ class QuantumNumberChange
   }
 
   auto hash_value() const {
-    assert(size() > 0);
+    SEQUANT_ASSERT(size() > 0);
     auto val = sequant::hash::value(this->operator[](0));
     for (std::size_t c = 1; c != size(); ++c) {
       sequant::hash::combine(val, sequant::hash::value(this->operator[](c)));
@@ -593,7 +593,7 @@ class OpMaker {
       : op_(op),
         cre_spaces_(cre_list.begin(), cre_list.end()),
         ann_spaces_(ann_list.begin(), ann_list.end()) {
-    assert(ncreators() > 0 || nannihilators() > 0);
+    SEQUANT_ASSERT(ncreators() > 0 || nannihilators() > 0);
   }
 
   /// @param[in] op the operator type
@@ -657,7 +657,8 @@ class OpMaker {
     const auto dep_ket = dep == UseDepIdx::Ket;
 
     // not sure what it means to use nonsymmetric operator if nbra != nket
-    if (!symm) assert(ranges::size(creators) == ranges::size(annihilators));
+    if (!symm)
+      SEQUANT_ASSERT(ranges::size(creators) == ranges::size(annihilators));
 
     auto make_idx_vector = [](const auto& spacetypes) {
       container::svector<Index> result;

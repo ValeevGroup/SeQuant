@@ -11,9 +11,9 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/parse.hpp>
 #include <SeQuant/core/rational.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 
-#include <cassert>
 #include <initializer_list>
 #include <memory>
 #include <string>
@@ -37,7 +37,7 @@ sequant::EvalExpr node(sequant::EvalNode<sequant::EvalExpr> const& n,
   if (pos.size() == 0) return *n;
   auto n_ = n;
   for (auto p : pos) {
-    assert(!n_.leaf() && "Accessing child of leaf!");
+    SEQUANT_ASSERT(!n_.leaf() && "Accessing child of leaf!");
     n_ = p == Npos::L ? n_.left() : n_.right();
   }
 

@@ -10,6 +10,7 @@
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/latex.hpp>
 #include <SeQuant/core/rational.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/wolfram.hpp>
 
 namespace sequant {
@@ -214,7 +215,7 @@ constexpr auto abs(const Complex<T>& val) {
     using std::sqrt;
     return sqrt(val.real() * val.real() + val.imag() * val.imag());
   } else {
-    assert(val.real() == 0 || val.imag() == 0);
+    SEQUANT_ASSERT(val.real() == 0 || val.imag() == 0);
     return val.imag() == 0 ? abs(val.real()) : abs(val.imag());
   }
 }

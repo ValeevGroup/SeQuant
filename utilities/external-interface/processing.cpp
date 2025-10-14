@@ -8,6 +8,7 @@
 #include <SeQuant/core/optimize.hpp>
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/utility/expr.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 
 #include <SeQuant/domain/mbpt/biorthogonalization.hpp>
 #include <SeQuant/domain/mbpt/rules/df.hpp>
@@ -53,7 +54,7 @@ container::svector<ResultExpr> postProcess(ResultExpr result,
       break;
   }
 
-  assert(result.expression());
+  SEQUANT_ASSERT(result.expression());
 
   using namespace sequant::mbpt;
 

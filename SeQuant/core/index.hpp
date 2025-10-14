@@ -9,12 +9,12 @@
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/tag.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/string.hpp>
 #include <SeQuant/core/utility/swap.hpp>
 
 #include <algorithm>
 #include <atomic>
-#include <cassert>
 #include <charconv>
 #include <cstdint>
 #include <cwchar>
@@ -100,11 +100,11 @@ class Index : public Taggable {
 
   std::optional<ordinal_type> to_ordinal(meta::integral auto i) noexcept {
     if constexpr (std::is_signed_v<decltype(i)>) {
-      assert(i >= 0);
+      SEQUANT_ASSERT(i >= 0);
     }
     if constexpr (std::numeric_limits<decltype(i)>::max() >
                   std::numeric_limits<ordinal_type>::max()) {
-      assert(i <= std::numeric_limits<ordinal_type>::max());
+      SEQUANT_ASSERT(i <= std::numeric_limits<ordinal_type>::max());
     }
     return static_cast<ordinal_type>(i);
   }
@@ -722,7 +722,7 @@ class Index : public Taggable {
       if (subsc_pos == std::wstring_view::npos)
         return std::wstring(str);
       else {
-        assert(subsc_pos + 1 < str.size());
+        SEQUANT_ASSERT(subsc_pos + 1 < str.size());
         std::wstring result = L"\\!\\(\\*SubscriptBox[\\(";
         result += std::wstring(str.substr(0, subsc_pos));
         result += L"\\), \\(";
@@ -736,7 +736,7 @@ class Index : public Taggable {
     std::wstring result =
         L"particleIndex[\""s + protect_subscript(this->label()) + L"\"";
     if (this->has_proto_indices()) {
-      assert(false && "not yet supported");
+      SEQUANT_ASSERT(false && "not yet supported");
     }
     using namespace std::literals;
     result += L","s + ::sequant::to_wolfram(space());
@@ -829,7 +829,7 @@ class Index : public Taggable {
     const auto this_is_tagged = this->tag().has_value();
     // sanity check that tag = 0
     if (this_is_tagged) {
-      assert(this->tag().value<int>() == 0);
+      SEQUANT_ASSERT(this->tag().value<int>() == 0);
     } else {  // only try replacing this if not already tagged
       auto it = index_map.find(*this);
       if (it != index_map.end()) {
@@ -842,7 +842,7 @@ class Index : public Taggable {
     if (!mutated) {
       bool proto_indices_transformed = false;
       for (auto &&subidx : proto_indices_) {
-        assert(!subidx.has_proto_indices());
+        SEQUANT_ASSERT(!subidx.has_proto_indices());
         if (subidx.transform(index_map)) proto_indices_transformed = true;
       }
       if (proto_indices_transformed) {
@@ -960,7 +960,7 @@ class Index : public Taggable {
     const auto underscore_position = label.rfind('_');
     if (underscore_position != std::wstring::npos) {
       // check that there is at least one char past the underscore
-      assert(underscore_position + 1 < label.size());
+      SEQUANT_ASSERT(underscore_position + 1 < label.size());
       return std::atol(
           label.substr(underscore_position + 1, std::string::npos).data());
     } else
@@ -1106,7 +1106,7 @@ class IndexFactory {
   explicit IndexFactory(IndexValidator validator,
                         size_t min_index = Index::min_tmp_index())
       : min_index_(min_index), validator_(std::move(validator)) {
-    assert(min_index_ > 0);
+    SEQUANT_ASSERT(min_index_ > 0);
   }
 
   /// creates a temporary index in space @c space . The label of the resulting
@@ -1128,7 +1128,7 @@ class IndexFactory {
           bool inserted = false;
           std::tie(counter_it, inserted) =
               counters_.emplace(space, min_index_ - 1);
-          assert(inserted);
+          SEQUANT_ASSERT(inserted);
         }
       }
       result = Index(space, ++(counter_it->second), Index::IndexFactoryTag{});

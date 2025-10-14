@@ -1,6 +1,7 @@
 #include <SeQuant/core/expressions/abstract_tensor.hpp>
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/tensor_network/vertex_painter.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 
 namespace sequant {
 
@@ -102,7 +103,7 @@ VertexPainterImpl::Color VertexPainterImpl::to_color(std::size_t color) const {
 
 std::size_t VertexPainterImpl::to_hash_value(
     std::initializer_list<std::size_t> hash_values) const {
-  assert(hash_values.size() > 0);
+  SEQUANT_ASSERT(hash_values.size() > 0);
   std::size_t hash = *(hash_values.begin());
   hash::combine(hash, salt());
   for (auto it = hash_values.begin() + 1; it != hash_values.end(); ++it) {

@@ -4,6 +4,7 @@
 #include <SeQuant/core/logger.hpp>
 #include <SeQuant/core/runtime.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/timer.hpp>
 #include <SeQuant/domain/mbpt/context.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
@@ -83,7 +84,7 @@ class compute_eomcc {
   }
 
   void operator()(bool print) {
-    assert(get_default_context().spbasis() == SPBasis::Spinor);
+    SEQUANT_ASSERT(get_default_context().spbasis() == SPBasis::Spinor);
     timer_pool.start(N);
     std::vector<ExprPtr> eqvec;
     switch (type) {
@@ -178,11 +179,11 @@ int main(int argc, char* argv[]) {
 
   // read command line arguments
   const size_t NMAX = argc > 1 ? std::stoi(argv[1]) : DEFAULT_NMAX;
-  assert(NMAX > 0 && "Invalid NMAX");
+  SEQUANT_ASSERT(NMAX > 0 && "Invalid NMAX");
   const std::string exc_manifold =
       argc > 2 ? argv[2]
                : (std::to_string(NMAX) + "h" + std::to_string(NMAX) + "p");
-  assert(!exc_manifold.empty() && "Invalid excitation manifold");
+  SEQUANT_ASSERT(!exc_manifold.empty() && "Invalid excitation manifold");
   const std::string eqn_type = argc > 3 ? argv[3] : "R";
   const std::string print_str = argc > 4 ? argv[4] : "noprint";
   const bool print = print_str == "print";

@@ -5,7 +5,6 @@
 #ifndef SEQUANT_CORE_UTILITY_MACROS_H
 #define SEQUANT_CORE_UTILITY_MACROS_H
 
-#include <cassert>
 #include <cstdlib>
 #include <iostream>
 #include <utility>
@@ -79,7 +78,7 @@
   SEQUANT_ASSERT_IMPL(condition, __FILE__, __LINE__)
 
 #define SEQUANT_ABORT(msg)       \
-  assert(false && msg);          \
+  SEQUANT_ASSERT(false && msg);  \
   std::cerr << msg << std::endl; \
   std::abort();
 
@@ -94,10 +93,10 @@
 #define SEQUANT_UNREACHABLE_TOKEN std::abort()
 #endif
 
-#define SEQUANT_UNREACHABLE                      \
-  do {                                           \
-    assert(false && "reached unreachable code"); \
-    SEQUANT_UNREACHABLE_TOKEN;                   \
+#define SEQUANT_UNREACHABLE                              \
+  do {                                                   \
+    SEQUANT_ASSERT(false && "reached unreachable code"); \
+    SEQUANT_UNREACHABLE_TOKEN;                           \
   } while (0)
 
 #endif  // SEQUANT_CORE_UTILITY_MACROS_H

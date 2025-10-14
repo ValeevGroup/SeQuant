@@ -6,6 +6,7 @@
 #define SEQUANT_HUGENHOLTZ_HPP
 
 #include <SeQuant/core/container.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 
 #include <range/v3/all.hpp>
 
@@ -48,7 +49,7 @@ class HugenholtzVertex {
         edge_to_group_.push_back(groups_.size() - 1);
       } else {
         [[maybe_unused]] auto result = grp_it->second.insert(edge_idx);
-        assert(result.second);
+        SEQUANT_ASSERT(result.second);
         edge_to_group_.push_back(grp_it - begin(groups_));
       }
       ++edge_idx;
@@ -97,7 +98,7 @@ class HugenholtzVertex {
   /// @note this is equivalent to @c group(edge_idx).size()
   size_t group_size(size_t edge_idx) const {
     const auto result = group(edge_idx).second.size();
-    assert(result > 0);
+    SEQUANT_ASSERT(result > 0);
     return result;
   }
 
@@ -108,12 +109,12 @@ class HugenholtzVertex {
     // preconditions
     const auto grp_idx = edge_to_group_.at(edge_idx);
     Group& grp = groups_.at(grp_idx);
-    assert(std::find_if(begin(groups_), end(groups_),
-                        [this, &edge](const Group& grp) {
-                          return equals_(grp.first, edge);
-                        }) != end(groups_));
-    assert(grp.second.find(edge_idx) != end(grp.second));
-    assert(equals_(grp.first, edge));
+    SEQUANT_ASSERT(std::find_if(begin(groups_), end(groups_),
+                                [this, &edge](const Group& grp) {
+                                  return equals_(grp.first, edge);
+                                }) != end(groups_));
+    SEQUANT_ASSERT(grp.second.find(edge_idx) != end(grp.second));
+    SEQUANT_ASSERT(equals_(grp.first, edge));
 
     // remove the edge from the map and update the groups
     edge_to_group_.erase(edge_to_group_.begin() + edge_idx);
@@ -121,7 +122,7 @@ class HugenholtzVertex {
     for (auto&& g : groups_) {
       ranges::for_each(g.second, [&edge_idx](size_t& e) {
         if (e >= edge_idx) {
-          assert(e > 0);
+          SEQUANT_ASSERT(e > 0);
           --e;
         }
       });
@@ -161,7 +162,7 @@ class HugenholtzVertex {
                             groups_.size() - 1);
     } else {  // just insert but keep the group indices sorted
       [[maybe_unused]] auto result = grp_it->second.insert(edge_idx);
-      assert(result.second);
+      SEQUANT_ASSERT(result.second);
       edge_to_group_.insert(edge_to_group_.begin() + edge_idx,
                             grp_it - groups_.begin());
     }

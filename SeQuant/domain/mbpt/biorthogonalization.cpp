@@ -5,6 +5,7 @@
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/math.hpp>
 #include <SeQuant/core/utility/expr.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/permutation.hpp>
 
 #include <Eigen/Eigenvalues>
@@ -14,7 +15,6 @@
 #include <libperm/Utils.hpp>
 
 #include <algorithm>
-#include <cassert>
 
 namespace sequant {
 
@@ -95,7 +95,7 @@ Eigen::MatrixXd permutational_overlap_matrix(std::size_t n_particles) {
     M *= -1;
   }
 
-  assert(M.isApprox(M.transpose()));
+  SEQUANT_ASSERT(M.isApprox(M.transpose()));
 
   return M;
 }
@@ -103,8 +103,8 @@ Eigen::MatrixXd permutational_overlap_matrix(std::size_t n_particles) {
 Eigen::MatrixXd compute_biorth_coeffs(std::size_t n_particles,
                                       double threshold) {
   auto perm_ovlp_mat = permutational_overlap_matrix(n_particles);
-  assert(perm_ovlp_mat.rows() == perm_ovlp_mat.cols());
-  assert(perm_ovlp_mat.isApprox(perm_ovlp_mat.transpose()));
+  SEQUANT_ASSERT(perm_ovlp_mat.rows() == perm_ovlp_mat.cols());
+  SEQUANT_ASSERT(perm_ovlp_mat.isApprox(perm_ovlp_mat.transpose()));
 
   // Find Pseudo Inverse
   auto decomp =
@@ -114,7 +114,7 @@ Eigen::MatrixXd compute_biorth_coeffs(std::size_t n_particles,
 
   Eigen::MatrixXd pinv = decomp.pseudoInverse();
   // The pseudo inverse of a symmetric matrix should also be symmetric
-  assert(pinv.isApprox(pinv.transpose()));
+  SEQUANT_ASSERT(pinv.isApprox(pinv.transpose()));
 
   // We need to normalize to the amount of non-zero eigenvalues via
   // normalization = #eigenvalues / #non-zero eigenvalues
@@ -135,11 +135,11 @@ void sort_pairings(ParticlePairings& pairing) {
 
 std::size_t rank_transformation_perms(const ParticlePairings& reference,
                                       const ParticlePairings& current) {
-  assert(reference.size() == current.size());
-  assert(std::is_sorted(reference.begin(), reference.end(),
-                        compare_first_less<IndexPair>{}));
-  assert(std::is_sorted(current.begin(), current.end(),
-                        compare_first_less<IndexPair>{}));
+  SEQUANT_ASSERT(reference.size() == current.size());
+  SEQUANT_ASSERT(std::is_sorted(reference.begin(), reference.end(),
+                                compare_first_less<IndexPair>{}));
+  SEQUANT_ASSERT(std::is_sorted(current.begin(), current.end(),
+                                compare_first_less<IndexPair>{}));
 
   perm::Permutation perm = perm::computeTransformationPermutation(
       reference, current, [](const IndexPair& lhs, const IndexPair& rhs) {
@@ -156,13 +156,13 @@ ExprPtr create_expr_for(const ParticlePairings& ref_pairing,
   // Note: perm only applies to the p->second for every pair p in ref_pairing
 
   // assert that all pairings are sorted w.r.t. first
-  assert(std::all_of(pairings.begin(), pairings.end(),
-                     [](const ParticlePairings& pairing) {
-                       return std::is_sorted(pairing.begin(), pairing.end(),
-                                             compare_first_less<IndexPair>{});
-                     }));
-  assert(std::is_sorted(ref_pairing.begin(), ref_pairing.end(),
-                        compare_first_less<IndexPair>{}));
+  SEQUANT_ASSERT(std::all_of(
+      pairings.begin(), pairings.end(), [](const ParticlePairings& pairing) {
+        return std::is_sorted(pairing.begin(), pairing.end(),
+                              compare_first_less<IndexPair>{});
+      }));
+  SEQUANT_ASSERT(std::is_sorted(ref_pairing.begin(), ref_pairing.end(),
+                                compare_first_less<IndexPair>{}));
 
   container::set<std::pair<IndexSpace, IndexSpace>> ref_space_pairing;
   ref_space_pairing.reserve(ref_pairing.size());
@@ -175,7 +175,7 @@ ExprPtr create_expr_for(const ParticlePairings& ref_pairing,
   // spaces compatible with ref_space_pairing
   auto it = std::find_if(
       pairings.begin(), pairings.end(), [&](const ParticlePairings& p) {
-        assert(p.size() == ref_pairing.size());
+        SEQUANT_ASSERT(p.size() == ref_pairing.size());
 
         for (const IndexPair& pair : p) {
           if (ref_space_pairing.find(
@@ -197,7 +197,7 @@ ExprPtr create_expr_for(const ParticlePairings& ref_pairing,
   auto idx = std::distance(pairings.begin(), it);
   const ParticlePairings& base = *it;
 
-  assert(base.size() == ref_pairing.size());
+  SEQUANT_ASSERT(base.size() == ref_pairing.size());
 
   container::map<Index, Index> replacements;
   for (std::size_t i = 0; i < base.size(); ++i) {
@@ -205,7 +205,7 @@ ExprPtr create_expr_for(const ParticlePairings& ref_pairing,
 
     // Remember that all index pairings are sorted w.r.t. first and hence we are
     // only looking for permutations in second
-    assert(base[i].first == ref_pairing[i].first);
+    SEQUANT_ASSERT(base[i].first == ref_pairing[i].first);
     const bool differs_in_second =
         base[i].second != ref_pairing[ref_idx].second;
 
@@ -214,7 +214,7 @@ ExprPtr create_expr_for(const ParticlePairings& ref_pairing,
       continue;
     }
 
-    assert(differs_in_second);
+    SEQUANT_ASSERT(differs_in_second);
 
     // Note: we may only permute indices belonging to the same space
     // (otherwise, we would produce non-sensical expressions)
@@ -228,7 +228,8 @@ ExprPtr create_expr_for(const ParticlePairings& ref_pairing,
       // particle-symmetric, we can instead permute the first indices in the
       // pairings, which are of the same space (that's guaranteed by the way we
       // chose base).
-      assert(base[i].first.space() == ref_pairing[ref_idx].first.space());
+      SEQUANT_ASSERT(base[i].first.space() ==
+                     ref_pairing[ref_idx].first.space());
       replacements.emplace(base[i].first, ref_pairing[ref_idx].first);
     }
   }
@@ -238,7 +239,7 @@ ExprPtr create_expr_for(const ParticlePairings& ref_pairing,
   if (!replacements.empty()) {
 #ifndef NDEBUG
     for (const auto& [first, second] : replacements) {
-      assert(first.space() == second.space());
+      SEQUANT_ASSERT(first.space() == second.space());
     }
 #endif
     expr = transform_expr(expr, replacements);
@@ -293,10 +294,10 @@ void biorthogonal_transform(container::svector<ResultExpr>& result_exprs,
                std::is_permutation(expr.aux().begin(), expr.aux().end(),
                                    result_exprs.front().aux().begin());
       }));
-  assert(std::all_of(result_exprs.begin(), result_exprs.end(),
-                     [](const ResultExpr& res) {
-                       return res.column_symmetry() == ColumnSymmetry::Symm;
-                     }));
+  SEQUANT_ASSERT(std::all_of(
+      result_exprs.begin(), result_exprs.end(), [](const ResultExpr& res) {
+        return res.column_symmetry() == ColumnSymmetry::Symm;
+      }));
 
   // Furthermore, we expect that there is no symmetrization operator present in
   // the expressions as that would imply transforming also the symmetrization
@@ -338,8 +339,8 @@ void biorthogonal_transform(container::svector<ResultExpr>& result_exprs,
   Eigen::MatrixXd coefficients = compute_biorth_coeffs(n_particles, threshold);
 
   auto num_perms = factorial(n_particles);
-  assert(num_perms == coefficients.rows());
-  assert(num_perms == coefficients.cols());
+  SEQUANT_ASSERT(num_perms == coefficients.rows());
+  SEQUANT_ASSERT(num_perms == coefficients.cols());
 
   auto original_exprs = result_exprs |
                         ranges::views::transform([](const ResultExpr& res) {
