@@ -285,7 +285,6 @@ qns_t combine(qns_t a, qns_t b) {
   qns_t result;
 
   if (get_default_context().vacuum() == Vacuum::Physical) {
-    qns_t result;
     const auto ncontr = qninterval_t{0, std::min(b[0].upper(), a[1].upper())};
     const auto nc = nonnegative(a[0] + b[0] - ncontr);
     const auto na = nonnegative(a[1] + b[1] - ncontr);
@@ -370,15 +369,32 @@ std::wstring to_latex(const mbpt::Operator<mbpt::qns_t, S>& op) {
            !(optype == OpType::θ || optype == OpType::A || optype == OpType::S);
   };
 
+  // batch index handling
+  auto add_batch_suffix = [&op](std::wstring& str) {
+    assert(op.batch_idx_rank() && "Batch index rank is not set");
+
+    std::wstring batch_suffix = L"[";
+    const auto idx_rank = op.batch_idx_rank().value();
+    for (std::size_t i = 1; i <= idx_rank; ++i) {
+      batch_suffix += L"{z}_{" + std::to_wstring(i) + L"}";
+      if (i != idx_rank) {
+        batch_suffix += L", ";
+      }
+    }
+    batch_suffix += L"]";
+    str += L"{" + batch_suffix + L"}";
+    return str;
+  };
+
   if (known_optype && skip_rank_info(it->second)) {
     result += L"}";  // close the brace
-    return result;
+    return op.batch_idx_rank() ? add_batch_suffix(result) : result;
   }
   // specially handle θ operator
   if (known_optype && it->second == OpType::θ) {
     result += L"_{" + std::to_wstring(op_qns[0].upper()) + L"}";
     result += L"}";  // close the brace
-    return result;
+    return op.batch_idx_rank() ? add_batch_suffix(result) : result;
   }
 
   if (get_default_context().vacuum() == Vacuum::Physical) {
@@ -443,7 +459,7 @@ std::wstring to_latex(const mbpt::Operator<mbpt::qns_t, S>& op) {
     }
   }
   result += L"}";
-  return result;
+  return op.batch_idx_rank() ? add_batch_suffix(result) : result;
 }
 
 }  // namespace sequant
@@ -461,18 +477,30 @@ OpMaker<S>::OpMaker(OpType op, ncre nc, nann na) {
   assert(nc > 0 || na > 0);
   switch (to_class(op)) {
     case OpClass::ex:
-      cre_spaces_ = decltype(cre_spaces_)(nc, get_particle_space(Spin::any));
-      ann_spaces_ = decltype(ann_spaces_)(na, get_hole_space(Spin::any));
+      cre_spaces_ = IndexSpaceContainer(nc, get_particle_space(Spin::any));
+      ann_spaces_ = IndexSpaceContainer(na, get_hole_space(Spin::any));
       break;
     case OpClass::deex:
-      cre_spaces_ = decltype(cre_spaces_)(nc, get_hole_space(Spin::any));
-      ann_spaces_ = decltype(ann_spaces_)(na, get_particle_space(Spin::any));
+      cre_spaces_ = IndexSpaceContainer(nc, get_hole_space(Spin::any));
+      ann_spaces_ = IndexSpaceContainer(na, get_particle_space(Spin::any));
       break;
     case OpClass::gen:
-      cre_spaces_ = decltype(cre_spaces_)(nc, get_complete_space(Spin::any));
-      ann_spaces_ = decltype(ann_spaces_)(na, get_complete_space(Spin::any));
+      cre_spaces_ = IndexSpaceContainer(nc, get_complete_space(Spin::any));
+      ann_spaces_ = IndexSpaceContainer(na, get_complete_space(Spin::any));
       break;
   }
+}
+
+template <Statistics S>
+OpMaker<S>::OpMaker(OpType op, ncre nc, nann na, naux nbatch)
+    : OpMaker(op, nc, na) {
+  if (nbatch == 0) return;
+  assert(nbatch > 0);
+  auto isr = get_default_context().index_space_registry();
+  assert(isr->contains(L"z") &&
+         "ISR does not contain any batching space");  // z is the batch space
+  const auto batch_space = isr->retrieve(L"z");
+  batch_spaces_ = IndexSpaceContainer(nbatch, batch_space);
 }
 
 template <Statistics S>
@@ -485,8 +513,8 @@ OpMaker<S>::OpMaker(OpType op, ncre nc, nann na,
                     const ann<IndexSpace>& ann_space) {
   op_ = op;
   assert(nc > 0 || na > 0);
-  cre_spaces_ = decltype(cre_spaces_)(nc, cre_space);
-  ann_spaces_ = decltype(ann_spaces_)(na, ann_space);
+  cre_spaces_ = IndexSpaceContainer(nc, cre_space);
+  ann_spaces_ = IndexSpaceContainer(na, ann_space);
 }
 
 template <Statistics S>
@@ -515,6 +543,18 @@ ExprPtr OpMaker<S>::operator()(std::optional<UseDepIdx> dep,
     }
   }
 
+  // if batching indices are given, use them
+  if (batch_spaces_) {
+    return make(
+        cre_spaces_, ann_spaces_, batch_spaces_.value(),
+        [this, opsymm_opt](const auto& creidxs, const auto& annidxs,
+                           const auto& batchidxs, Symmetry opsymm) {
+          return ex<Tensor>(to_wstring(op_), bra(creidxs), ket(annidxs),
+                            aux(batchidxs), opsymm_opt ? *opsymm_opt : opsymm);
+        },
+        dep ? *dep : UseDepIdx::None);
+  }
+  // else no batching
   return make(
       cre_spaces_, ann_spaces_,
       [this, opsymm_opt](const auto& creidxs, const auto& annidxs,
@@ -730,39 +770,54 @@ ExprPtr S(std::int64_t K) {
       OpType::S, cre(creators), ann(annihilators))(dep, {Symmetry::Nonsymm});
 }
 
-ExprPtr H_pt(std::size_t R, [[maybe_unused]] std::size_t order) {
+ExprPtr H_pt(std::size_t R, [[maybe_unused]] std::size_t order,
+             std::size_t nbatch) {
   assert(order == 1 &&
-         "sequant::sr::H_pt(): only supports first order perturbation");
+         "sequant::mbpt::H_pt(): only supports first order perturbation");
   assert(R > 0);
-  return OpMaker<Statistics::FermiDirac>(OpType::h_1, R)();
+  if (nbatch != 0)
+    assert(get_default_context().index_space_registry()->contains(L"z"));
+  return OpMaker<Statistics::FermiDirac>(OpType::h_1, ncre(R), nann(R),
+                                         naux(nbatch))();
 }
 
-ExprPtr T_pt_(std::size_t K, [[maybe_unused]] std::size_t order) {
+ExprPtr T_pt_(std::size_t K, [[maybe_unused]] std::size_t order,
+              std::size_t nbatch) {
   assert(order == 1 &&
          "sequant::sr::T_pt_(): only supports first order perturbation");
-  return OpMaker<Statistics::FermiDirac>(OpType::t_1, K)();
+  if (nbatch != 0)
+    assert(get_default_context().index_space_registry()->contains(L"z"));
+  return OpMaker<Statistics::FermiDirac>(OpType::t_1, ncre(K), nann(K),
+                                         naux(nbatch))();
 }
 
-ExprPtr T_pt(std::size_t K, std::size_t order, bool skip1) {
+ExprPtr T_pt(std::size_t K, std::size_t order, std::size_t nbatch, bool skip1) {
   assert(K > (skip1 ? 1 : 0));
   ExprPtr result;
   for (auto k = (skip1 ? 2ul : 1ul); k <= K; ++k) {
-    result = k > 1 ? result + tensor::T_pt_(k, order) : tensor::T_pt_(k, order);
+    result = k > 1 ? result + tensor::T_pt_(k, order, nbatch)
+                   : tensor::T_pt_(k, order, nbatch);
   }
   return result;
 }
 
-ExprPtr Λ_pt_(std::size_t K, [[maybe_unused]] std::size_t order) {
+ExprPtr Λ_pt_(std::size_t K, [[maybe_unused]] std::size_t order,
+              std::size_t nbatch) {
   assert(order == 1 &&
          "sequant::sr::Λ_pt_(): only supports first order perturbation");
-  return OpMaker<Statistics::FermiDirac>(OpType::λ_1, K)();
+  if (nbatch != 0)
+    assert(get_default_context().index_space_registry()->contains(L"z"));
+
+  return OpMaker<Statistics::FermiDirac>(OpType::λ_1, ncre(K), nann(K),
+                                         naux(nbatch))();
 }
 
-ExprPtr Λ_pt(std::size_t K, std::size_t order, bool skip1) {
+ExprPtr Λ_pt(std::size_t K, std::size_t order, std::size_t nbatch, bool skip1) {
   assert(K > (skip1 ? 1 : 0));
   ExprPtr result;
   for (auto k = (skip1 ? 2ul : 1ul); k <= K; ++k) {
-    result = k > 1 ? result + tensor::Λ_pt_(k, order) : tensor::Λ_pt_(k, order);
+    result = k > 1 ? result + tensor::Λ_pt_(k, order, nbatch)
+                   : tensor::Λ_pt_(k, order, nbatch);
   }
   return result;
 }
@@ -928,47 +983,48 @@ ExprPtr P(nₚ np, nₕ nh) {
   }
 }
 
-ExprPtr H_pt(std::size_t R, std::size_t order) {
+ExprPtr H_pt(std::size_t R, std::size_t order, std::size_t nbatch) {
   assert(R > 0);
   assert(order == 1 && "only first order perturbation is supported now");
   return ex<op_t>(
       []() -> std::wstring_view { return optype2label.at(OpType::h_1); },
-      [=]() -> ExprPtr { return tensor::H_pt(R, order); },
-      [=](qnc_t& qns) { qns = combine(general_type_qns(R), qns); });
+      [=]() -> ExprPtr { return tensor::H_pt(R, order, nbatch); },
+      [=](qnc_t& qns) { qns = combine(general_type_qns(R), qns); }, nbatch);
 }
 
-ExprPtr T_pt_(std::size_t K, std::size_t order) {
+ExprPtr T_pt_(std::size_t K, std::size_t order, std::size_t nbatch) {
   assert(K > 0);
   assert(order == 1 && "only first order perturbation is supported now");
   return ex<op_t>(
       []() -> std::wstring_view { return optype2label.at(OpType::t_1); },
-      [=]() -> ExprPtr { return tensor::T_pt_(K, order); },
-      [=](qnc_t& qns) { qns = combine(excitation_type_qns(K), qns); });
+      [=]() -> ExprPtr { return tensor::T_pt_(K, order, nbatch); },
+      [=](qnc_t& qns) { qns = combine(excitation_type_qns(K), qns); }, nbatch);
 }
 
-ExprPtr T_pt(std::size_t K, std::size_t order, bool skip1) {
+ExprPtr T_pt(std::size_t K, std::size_t order, std::size_t nbatch, bool skip1) {
   assert(K > (skip1 ? 1 : 0));
   ExprPtr result;
   for (auto k = (skip1 ? 2ul : 1ul); k <= K; ++k) {
-    result = k > 1 ? result + T_pt_(k, order) : T_pt_(k, order);
+    result = k > 1 ? result + T_pt_(k, order, nbatch) : T_pt_(k, order, nbatch);
   }
   return result;
 }
 
-ExprPtr Λ_pt_(std::size_t K, std::size_t order) {
+ExprPtr Λ_pt_(std::size_t K, std::size_t order, std::size_t nbatch) {
   assert(K > 0);
   assert(order == 1 && "only first order perturbation is supported now");
   return ex<op_t>(
       []() -> std::wstring_view { return optype2label.at(OpType::λ_1); },
-      [=]() -> ExprPtr { return tensor::Λ_pt_(K, order); },
-      [=](qnc_t& qns) { qns = combine(deexcitation_type_qns(K), qns); });
+      [=]() -> ExprPtr { return tensor::Λ_pt_(K, order, nbatch); },
+      [=](qnc_t& qns) { qns = combine(deexcitation_type_qns(K), qns); },
+      nbatch);
 }
 
-ExprPtr Λ_pt(std::size_t K, std::size_t order, bool skip1) {
+ExprPtr Λ_pt(std::size_t K, std::size_t order, std::size_t nbatch, bool skip1) {
   assert(K > (skip1 ? 1 : 0));
   ExprPtr result;
   for (auto k = (skip1 ? 2ul : 1ul); k <= K; ++k) {
-    result = k > 1 ? result + Λ_pt_(k, order) : Λ_pt_(k, order);
+    result = k > 1 ? result + Λ_pt_(k, order) : Λ_pt_(k, order, nbatch);
   }
   return result;
 }

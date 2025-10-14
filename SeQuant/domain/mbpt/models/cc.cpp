@@ -136,7 +136,8 @@ std::vector<ExprPtr> CC::λ(size_t commutator_rank) {
   return result;
 }
 
-std::vector<ExprPtr> CC::t_pt(size_t rank, [[maybe_unused]] size_t order) {
+std::vector<ExprPtr> CC::t_pt(size_t rank, [[maybe_unused]] size_t order,
+                              std::optional<size_t> nbatch) {
   assert(order == 1 &&
          "sequant::mbpt::CC::t_pt(): only first-order perturbation is "
          "supported now");
@@ -145,14 +146,17 @@ std::vector<ExprPtr> CC::t_pt(size_t rank, [[maybe_unused]] size_t order) {
          "operator is supported now");
   assert(ansatz_ == Ansatz::T && "unitary ansatz is not yet supported");
 
+  const size_t batch_rank = nbatch.value_or(0);
+
   // construct h1_bar
   // truncate h1_bar at rank 2 for one-body perturbation
   // operator and at rank 4 for two-body perturbation operator
   const auto h1_truncate_at = rank == 1 ? 2 : 4;
-  const auto h1_bar = mbpt::lst(H_pt(rank), T(N), h1_truncate_at);
+  const auto h1_bar =
+      mbpt::lst(H_pt(rank, 1, batch_rank), T(N), h1_truncate_at);
 
   // construct [hbar, T(1)]
-  const auto hbar_pert = mbpt::lst(H(), T(N), 3) * T_pt(N);
+  const auto hbar_pert = mbpt::lst(H(), T(N), 3) * T_pt(N, order, batch_rank);
 
   // [Eq. 34, WIREs Comput Mol Sci. 2019; 9:e1406]
   const auto expr = simplify(h1_bar + hbar_pert);
@@ -169,14 +173,16 @@ std::vector<ExprPtr> CC::t_pt(size_t rank, [[maybe_unused]] size_t order) {
 
   std::vector<ExprPtr> result(N + 1);
   for (auto p = N; p >= 1; --p) {
-    const auto freq_term = ex<Variable>(L"ω") * P(nₚ(p)) * T_pt_(p);
+    const auto freq_term =
+        ex<Variable>(L"ω") * P(nₚ(p)) * T_pt_(p, order, batch_rank);
     result.at(p) =
         this->ref_av(P(nₚ(p)) * expr, op_connect) - this->ref_av(freq_term);
   }
   return result;
 }
 
-std::vector<ExprPtr> CC::λ_pt(size_t rank, [[maybe_unused]] size_t order) {
+std::vector<ExprPtr> CC::λ_pt(size_t rank, [[maybe_unused]] size_t order,
+                              std::optional<size_t> nbatch) {
   assert(order == 1 &&
          "sequant::mbpt::CC::λ_pt(): only first-order perturbation is "
          "supported now");
@@ -185,6 +191,8 @@ std::vector<ExprPtr> CC::λ_pt(size_t rank, [[maybe_unused]] size_t order) {
          "operator is supported now");
   assert(ansatz_ == Ansatz::T && "unitary ansatz is not yet supported");
 
+  const size_t batch_rank = nbatch.value_or(0);
+
   // construct hbar
   const auto hbar = mbpt::lst(H(), T(N), 4);
 
@@ -192,15 +200,16 @@ std::vector<ExprPtr> CC::λ_pt(size_t rank, [[maybe_unused]] size_t order) {
   // truncate h1_bar at rank 2 for one-body perturbation
   // operator and at rank 4 for two-body perturbation operator
   const auto h1_truncate_at = rank == 1 ? 2 : 4;
-  const auto h1_bar = mbpt::lst(H_pt(rank), T(N), h1_truncate_at);
+  const auto h1_bar =
+      mbpt::lst(H_pt(rank, order, batch_rank), T(N), h1_truncate_at);
 
   // construct [hbar, T(1)]
-  const auto hbar_pert = mbpt::lst(H(), T(N), 3) * T_pt(N);
+  const auto hbar_pert = mbpt::lst(H(), T(N), 3) * T_pt(N, order, batch_rank);
 
   // [Eq. 35, WIREs Comput Mol Sci. 2019; 9:e1406]
   const auto One = ex<Constant>(1);
-  const auto expr =
-      simplify((One + Λ(N)) * (h1_bar + hbar_pert) + Λ_pt(N) * hbar);
+  const auto expr = simplify((One + Λ(N)) * (h1_bar + hbar_pert) +
+                             Λ_pt(N, order, batch_rank) * hbar);
 
   // connectivity:
   // t and t1 with {h,f,g}
@@ -224,7 +233,8 @@ std::vector<ExprPtr> CC::λ_pt(size_t rank, [[maybe_unused]] size_t order) {
 
   std::vector<ExprPtr> result(N + 1);
   for (auto p = N; p >= 1; --p) {
-    const auto freq_term = ex<Variable>(L"ω") * Λ_pt_(p) * P(nₚ(-p));
+    const auto freq_term =
+        ex<Variable>(L"ω") * Λ_pt_(p, order, batch_rank) * P(nₚ(-p));
     result.at(p) =
         this->ref_av(expr * P(nₚ(-p)), op_connect) + this->ref_av(freq_term);
   }
