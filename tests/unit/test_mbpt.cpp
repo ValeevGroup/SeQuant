@@ -467,7 +467,19 @@ TEST_CASE("mbpt", "[mbpt]") {
               L"{{{\\frac{1}{12}}}{\\bar{L}^{{a_1}{a_2}}_{{i_1}{i_2}{i_"
               L"3}}}{\\tilde{a}^{{i_1}{i_2}{i_3}}_{\\textvisiblespace\\,{a_1}{"
               L"a_2}}}}\\bigr) }");
-    }
+    }  // SECTION("predefined")
+
+    SECTION("batching") {
+      // update context to use batching index
+      auto isr = sequant::mbpt::make_legacy_spaces();
+      mbpt::add_batching_spaces(isr);
+      auto ctx_resetter =
+          set_scoped_default_context({.index_space_registry_shared_ptr = isr,
+                                      .vacuum = Vacuum::SingleProduct});
+      REQUIRE_NOTHROW(
+          get_default_context().index_space_registry()->retrieve(L"z"));
+
+    }  // SECTION("batching")
   }
 
   SECTION("wick") {
