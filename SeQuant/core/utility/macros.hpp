@@ -8,6 +8,7 @@
 #include <cassert>
 #include <cstdlib>
 #include <iostream>
+#include <utility>
 
 /* detect C++ compiler id:
 - ids taken from CMake
@@ -62,13 +63,27 @@
 #define SEQUANT_PRAGMA_GCC(x)
 #endif
 
+#if defined(SEQUANT_ENABLE_ASSERTIONS) || !defined(NDEBUG)
+#define SEQUANT_ASSERT_IMPL(condition, file, line)                     \
+  do {                                                                 \
+    if (!static_cast<bool>(condition)) {                               \
+      std::cerr << file << ":" << line << " assertion '" << #condition \
+                << "' failed" << std::endl;                            \
+      std::abort();                                                    \
+    }                                                                  \
+  } while (0)
+#else
+#define SEQUANT_ASSERT_IMPL(condition, file, line) (void)0
+#endif
+#define SEQUANT_ASSERT(condition) \
+  SEQUANT_ASSERT_IMPL(condition, __FILE__, __LINE__)
+
 #define SEQUANT_ABORT(msg)       \
   assert(false && msg);          \
   std::cerr << msg << std::endl; \
   std::abort();
 
 #if defined(__cpp_lib_unreachable)
-#include <utility>
 
 #define SEQUANT_UNREACHABLE_TOKEN std::unreachable()
 #elif defined(SEQUANT_CXX_COMPILER_IS_GCC) || \

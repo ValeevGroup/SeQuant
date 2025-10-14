@@ -115,6 +115,7 @@ option(SEQUANT_UTILITIES "Enable SeQuant utility programs" ${PROJECT_IS_TOP_LEVE
 
 option(SEQUANT_IWYU "Whether to use the include-what-you-use tool (if found)" OFF)
 option(SEQUANT_WARNINGS_AS_ERRORS "Whether to treat compiler warnings as errors" ${PROJECT_IS_TOP_LEVEL})
+option(SEQUANT_ASSERTIONS "Whether to enable assertions in non-Debug builds as well" OFF)
 
 ##########################
 # SeQuant package options
@@ -422,6 +423,9 @@ set_source_files_properties(
 )
 if (SEQUANT_CONTEXT_MANIPULATION_THREADSAFE)
   target_compile_definitions(SeQuant PUBLIC SEQUANT_CONTEXT_MANIPULATION_THREADSAFE)
+endif()
+if (SEQUANT_ASSERTIONS)
+    target_compile_definitions(SeQuant PUBLIC SEQUANT_ENABLE_ASSERTIONS)
 endif()
 
 target_link_libraries(SeQuant PUBLIC range-v3::range-v3 Boost::regex Boost::locale Boost::headers SeQuant-bliss Threads::Threads)
