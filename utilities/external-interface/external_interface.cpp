@@ -224,7 +224,7 @@ void generateITF(const json &blocks, std::string_view out_file,
       }
 
       if (current_result.contains("replace")) {
-        for (const nlohmann::json &sub : current_result.at("substitute")) {
+        for (const nlohmann::json &sub : current_result.at("replace")) {
           ExprPtr target =
               parse_expr(toUtf16(sub.at("target").get<std::string>()));
           ExprPtr replacement =
