@@ -234,6 +234,10 @@ void generateITF(const json &blocks, std::string_view out_file,
 
           std::string equality_method =
               sub.value("tensor_equality", "identity");
+
+          spdlog::debug("Replacing {} -> {} (tensor equality: '{}')", target,
+                        replacement, equality_method);
+
           if (equality_method == "identity") {
             replace(result, target, replacement);
           } else if (equality_method == "block") {
