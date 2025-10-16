@@ -5,9 +5,12 @@
 #ifndef SEQUANT_CORE_UTILITY_MACROS_H
 #define SEQUANT_CORE_UTILITY_MACROS_H
 
+#include <SeQuant/core/utility/exception.hpp>
+
 #include <cstdlib>
 #include <iostream>
 #include <source_location>
+#include <sstream>
 #include <utility>
 
 /* detect C++ compiler id:
@@ -69,12 +72,13 @@
 #define SEQUANT_ASSERT_IGNORE 4
 #define SEQUANT_STRINGIFY(x) #x
 #define SEQUANT_ASSERT_BEHAVIOR \
-  SEQUANT_CONCAT(SEQUANT_ASSERT_, SEQUANT_ASSERT_POLICY)
+  SEQUANT_CONCAT(SEQUANT_ASSERT_, SEQUANT_ASSERT_BEHAVIOR_)
 #if SEQUANT_ASSERT_BEHAVIOR != SEQUANT_ASSERT_IGNORE
 #define SEQUANT_ASSERT_ENABLED
 #endif
 
 namespace sequant {
+
 inline void assert_failed(
     [[maybe_unused]] const std::string &m,
     const std::source_location location = std::source_location::current()) {
@@ -84,9 +88,8 @@ inline void assert_failed(
 #elif SEQUANT_ASSERT_BEHAVIOR == SEQUANT_ASSERT_ABORT
   std::cerr
 #endif
-      << m << " at " << location.file_name() << ":" << location.line() << ":"
-      << location.column() << " in function '" << location.function_name()
-      << "'";
+      << m << " at " << location.file_name() << ":" << location.line()
+      << " in function '" << location.function_name() << "'";
 #if SEQUANT_ASSERT_BEHAVIOR == SEQUANT_ASSERT_THROW
   throw sequant::Exception(oss.str());
 #elif SEQUANT_ASSERT_BEHAVIOR == SEQUANT_ASSERT_ABORT
