@@ -149,9 +149,9 @@ template <typename ReplacementMap>
 void apply_index_replacements(AbstractTensor &tensor,
                               const ReplacementMap &replacements,
                               const bool self_consistent) {
-#ifndef NDEBUG
+#ifdef SEQUANT_ASSERT_ENABLED
   // assert that tensors' indices are not tagged since going to tag indices
-  assert(ranges::none_of(
+  SEQUANT_ASSERT(ranges::none_of(
       slots(tensor), [](const Index &idx) { return idx.tag().has_value(); }));
 #endif
 

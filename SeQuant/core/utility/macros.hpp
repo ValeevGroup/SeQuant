@@ -7,6 +7,7 @@
 
 #include <cstdlib>
 #include <iostream>
+#include <source_location>
 #include <utility>
 
 /* detect C++ compiler id:
@@ -62,25 +63,59 @@
 #define SEQUANT_PRAGMA_GCC(x)
 #endif
 
-#if defined(SEQUANT_ENABLE_ASSERTIONS) || !defined(NDEBUG)
-#define SEQUANT_ASSERT_IMPL(condition, file, line)                     \
-  do {                                                                 \
-    if (!static_cast<bool>(condition)) {                               \
-      std::cerr << file << ":" << line << " assertion '" << #condition \
-                << "' failed" << std::endl;                            \
-      std::abort();                                                    \
-    }                                                                  \
+/* Defines the default error checking behavior */
+#define SEQUANT_ASSERT_THROW 2
+#define SEQUANT_ASSERT_ABORT 3
+#define SEQUANT_ASSERT_IGNORE 4
+#define SEQUANT_STRINGIFY(x) #x
+#define SEQUANT_ASSERT_BEHAVIOR \
+  SEQUANT_CONCAT(SEQUANT_ASSERT_, SEQUANT_ASSERT_POLICY)
+#if SEQUANT_ASSERT_BEHAVIOR != SEQUANT_ASSERT_IGNORE
+#define SEQUANT_ASSERT_ENABLED
+#endif
+
+namespace sequant {
+inline void assert_failed(
+    [[maybe_unused]] const std::string &m,
+    const std::source_location location = std::source_location::current()) {
+#if SEQUANT_ASSERT_BEHAVIOR == SEQUANT_ASSERT_THROW
+  std::ostringstream oss;
+  oss
+#elif SEQUANT_ASSERT_BEHAVIOR == SEQUANT_ASSERT_ABORT
+  std::cerr
+#endif
+      << m << " at " << location.file_name() << ":" << location.line() << ":"
+      << location.column() << " in function '" << location.function_name()
+      << "'";
+#if SEQUANT_ASSERT_BEHAVIOR == SEQUANT_ASSERT_THROW
+  throw sequant::Exception(oss.str());
+#elif SEQUANT_ASSERT_BEHAVIOR == SEQUANT_ASSERT_ABORT
+  std::abort();
+#endif
+}
+}  // namespace sequant
+
+#ifdef SEQUANT_ASSERT_ENABLED
+#define SEQUANT_ASSERT_MESSAGE(EXPR, ...) \
+  "SEQUANT_ASSERT(" SEQUANT_STRINGIFY(EXPR) ") failed [ " __VA_ARGS__ " ]"
+
+#define SEQUANT_ASSERT(EXPR, ...)                                        \
+  do {                                                                   \
+    if (!(EXPR)) {                                                       \
+      sequant::assert_failed(SEQUANT_ASSERT_MESSAGE(EXPR, __VA_ARGS__)); \
+    }                                                                    \
   } while (0)
 #else
-#define SEQUANT_ASSERT_IMPL(condition, file, line) (void)0
+#define SEQUANT_ASSERT(...) \
+  do {                      \
+  } while (0)
 #endif
-#define SEQUANT_ASSERT(condition) \
-  SEQUANT_ASSERT_IMPL(condition, __FILE__, __LINE__)
 
-#define SEQUANT_ABORT(msg)       \
-  SEQUANT_ASSERT(false && msg);  \
-  std::cerr << msg << std::endl; \
-  std::abort();
+#define SEQUANT_ABORT(msg)         \
+  do {                             \
+    std::cerr << msg << std::endl; \
+    std::abort();                  \
+  } while (0)
 
 #if defined(__cpp_lib_unreachable)
 

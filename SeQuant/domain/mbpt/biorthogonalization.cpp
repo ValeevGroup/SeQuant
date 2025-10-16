@@ -237,7 +237,7 @@ ExprPtr create_expr_for(const ParticlePairings& ref_pairing,
   ExprPtr expr = base_exprs.at(idx)->clone();
 
   if (!replacements.empty()) {
-#ifndef NDEBUG
+#ifdef SEQUANT_ASSERT_ENABLED
     for (const auto& [first, second] : replacements) {
       SEQUANT_ASSERT(first.space() == second.space());
     }

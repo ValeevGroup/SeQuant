@@ -128,7 +128,7 @@ TEST_CASE("index", "[elements][index]") {
       REQUIRE_NOTHROW(Index{} = std::move(i7_copy));
       REQUIRE(i7_copy.nonnull() == false);
 
-#ifndef NDEBUG
+#if SEQUANT_ASSERT_VARIANT == SEQUANT_ASSERT_THROW
       REQUIRE_THROWS(Index(isr->retrieve(L"i"), 4, {i1, i1}));
       REQUIRE_THROWS(Index(L"i_5", {L"i_1", L"i_1"}));
       REQUIRE_THROWS(Index(L"i_5", {L"i_1", L""}));

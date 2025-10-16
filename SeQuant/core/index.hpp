@@ -1050,10 +1050,9 @@ inline const IndexSpace::Attr Index::default_space_attr{
 inline const Index Index::null;
 
 void Index::validate_proto_indices() const {
-#ifndef NDEBUG
+#ifdef SEQUANT_ASSERT_ENABLED
   if (!proto_indices_.empty()) {
-    if (ranges::contains(proto_indices_, null))
-      throw std::invalid_argument("Index ctor: null proto index detected");
+    SEQUANT_ASSERT(!ranges::contains(proto_indices_, null) && "Index ctor: null proto index detected");
     if (!symmetric_proto_indices_) {  // if proto indices not symmetric, sort
                                       // via
       // ptrs
@@ -1063,19 +1062,15 @@ void Index::validate_proto_indices() const {
         vp.push_back(&proto_indices_[i]);
       std::sort(vp.begin(), vp.end(),
                 [](Index const *l, Index const *r) { return *l < *r; });
-      if (std::adjacent_find(vp.begin(), vp.end(),
+      SEQUANT_ASSERT(std::adjacent_find(vp.begin(), vp.end(),
                              [](Index const *l, Index const *r) {
                                return *l == *r;
-                             }) != vp.end()) {
-        throw std::invalid_argument(
+                             }) == vp.end() &&
             "Index ctor: duplicate proto indices detected");
-      }
     } else {  // else search directly
-      if (std::adjacent_find(begin(proto_indices_), end(proto_indices_)) !=
-          proto_indices_.end()) {
-        throw std::invalid_argument(
+      SEQUANT_ASSERT(std::adjacent_find(begin(proto_indices_), end(proto_indices_)) ==
+          proto_indices_.end() &&
             "Index ctor: duplicate proto indices detected");
-      }
     }
   }
 #endif

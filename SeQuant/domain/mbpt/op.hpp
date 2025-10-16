@@ -265,12 +265,13 @@ class QuantumNumberChange
       std::initializer_list<std::initializer_list<I>> i)
       : QuantumNumberChange() {
     SEQUANT_ASSERT(i.size() == size());
-#ifndef NDEBUG
-    if (std::find_if(i.begin(), i.end(),
-                     [](const auto& ii) { return ii.size() != 2; }) != i.end())
-      throw std::invalid_argument(
-          "QuantumNumberChange<N>(initializer_list<initializer_list> i): each "
-          "element of i must contain 2 elements");
+#ifdef SEQUANT_ASSERT_ENABLED
+    SEQUANT_ASSERT(
+        std::find_if(i.begin(), i.end(),
+                     [](const auto& ii) { return ii.size() != 2; }) ==
+            i.end() &&
+        "QuantumNumberChange<N>(initializer_list<initializer_list> i): each "
+        "element of i must contain 2 elements");
 #endif
     for (std::size_t c = 0; c != size(); ++c) {
       this->operator[](c) = interval_t{*((i.begin() + c)->begin()),

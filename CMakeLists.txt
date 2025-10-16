@@ -115,7 +115,18 @@ option(SEQUANT_UTILITIES "Enable SeQuant utility programs" ${PROJECT_IS_TOP_LEVE
 
 option(SEQUANT_IWYU "Whether to use the include-what-you-use tool (if found)" OFF)
 option(SEQUANT_WARNINGS_AS_ERRORS "Whether to treat compiler warnings as errors" ${PROJECT_IS_TOP_LEVEL})
-option(SEQUANT_ASSERTIONS "Whether to enable assertions in non-Debug builds as well" OFF)
+
+# SEQUANT_ASSERT
+if (CMAKE_BUILD_TYPE STREQUAL Release OR
+    CMAKE_BUILD_TYPE STREQUAL MinSizeRel)
+    set (SEQUANT_ASSERT_POLICY_DEFAULT IGNORE)
+else ()
+    set (SEQUANT_ASSERT_POLICY_DEFAULT ABORT)
+endif()
+set (SEQUANT_ASSERT_POLICY ${SEQUANT_ASSERT_POLICY_DEFAULT} CACHE STRING "Controls the behavior of SEQUANT_ASSERT; THROW causes SEQUANT_ASSERT to throw, ABORT causes SEQUANT_ASSERT to abort, IGNORE makes SEQUANT_ASSERT a no-op")
+set_property(
+        CACHE SEQUANT_ASSERT_POLICY PROPERTY
+        STRINGS THROW ABORT IGNORE)
 
 ##########################
 # SeQuant package options
@@ -424,9 +435,7 @@ set_source_files_properties(
 if (SEQUANT_CONTEXT_MANIPULATION_THREADSAFE)
   target_compile_definitions(SeQuant PUBLIC SEQUANT_CONTEXT_MANIPULATION_THREADSAFE)
 endif()
-if (SEQUANT_ASSERTIONS)
-    target_compile_definitions(SeQuant PUBLIC SEQUANT_ENABLE_ASSERTIONS)
-endif()
+target_compile_definitions(SeQuant PUBLIC SEQUANT_ASSERT_POLICY=${SEQUANT_ASSERT_POLICY})
 
 target_link_libraries(SeQuant PUBLIC range-v3::range-v3 Boost::regex Boost::locale Boost::headers SeQuant-bliss Threads::Threads)
 target_link_libraries(SeQuant PRIVATE libperm::libperm $<BUILD_LOCAL_INTERFACE:utfcpp>)

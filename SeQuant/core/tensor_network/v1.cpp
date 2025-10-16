@@ -417,7 +417,7 @@ ExprPtr TensorNetworkV1::canonicalize(
     }
   }
 
-#ifndef NDEBUG
+#ifdef SEQUANT_ASSERT_ENABLED
   // assert that tensors' indices are not tagged since going to tag indices
   {
     for (const auto &tensor : tensors_) {

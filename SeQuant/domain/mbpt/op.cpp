@@ -497,14 +497,14 @@ ExprPtr OpMaker<S>::operator()(std::optional<UseDepIdx> dep,
   // dependent indices for pure (de)excitation ops
   if (!dep && get_default_mbpt_context().csv() == mbpt::CSV::Yes) {
     if (to_class(op_) == OpClass::ex) {
-#ifndef NDEBUG
+#ifdef SEQUANT_ASSERT_ENABLED
       for (auto&& s : cre_spaces_) {
         SEQUANT_ASSERT(isr->contains_unoccupied(s));
       }
 #endif
       dep = UseDepIdx::Bra;
     } else if (to_class(op_) == OpClass::deex) {
-#ifndef NDEBUG
+#ifdef SEQUANT_ASSERT_ENABLED
       for (auto&& s : ann_spaces_) {
         SEQUANT_ASSERT(isr->contains_unoccupied(s));
       }

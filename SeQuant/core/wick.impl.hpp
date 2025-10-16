@@ -441,7 +441,7 @@ inline bool apply_index_replacement_rules(
 
   /// this recursively applies replacement rules until result does not
   /// change removes the deltas that are no longer needed
-#ifndef NDEBUG
+#ifdef SEQUANT_ASSERT_ENABLED
   // assert that tensors_ indices are not tagged since going to tag indices
   {
     for (auto it = ranges::begin(exrng); it != ranges::end(exrng); ++it) {

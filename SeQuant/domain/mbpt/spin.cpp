@@ -1650,7 +1650,7 @@ ExprPtr spintrace(
     return expression;
   }
 
-#ifndef NDEBUG
+#ifdef SEQUANT_ASSERT_ENABLED
   // Verify that the amount of external indices matches the amount of indices in
   // ext_index_groups
   auto count_indices = [](const auto& range) {

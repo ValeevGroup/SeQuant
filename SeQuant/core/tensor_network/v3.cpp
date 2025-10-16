@@ -1206,7 +1206,7 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
     }
 
     // hyperedges must involve aux indices
-#ifndef NDEBUG
+#ifdef SEQUANT_ASSERT_ENABLED
     if (current_edge.vertex_count() > 2) {
       std::size_t nbra = 0;
       std::size_t nket = 0;
