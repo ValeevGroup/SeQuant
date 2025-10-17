@@ -79,22 +79,24 @@
 
 namespace sequant {
 
-inline void assert_failed(
-    [[maybe_unused]] const std::string &errmsg,
-    const std::source_location location = std::source_location::current()) {
+inline void assert_failed([[maybe_unused]] const std::string &errmsg,
+                          [[maybe_unused]] const std::source_location location =
+                              std::source_location::current()) {
+#ifdef SEQUANT_ASSERT_ENABLED
 #if SEQUANT_ASSERT_BEHAVIOR == SEQUANT_ASSERT_THROW
   std::ostringstream oss;
   oss
 #elif SEQUANT_ASSERT_BEHAVIOR == SEQUANT_ASSERT_ABORT
   std::cerr
-#endif
+#endif  // SEQUANT_ASSERT_BEHAVIOR
       << errmsg << " at " << location.file_name() << ":" << location.line()
       << " in function '" << location.function_name() << "'";
 #if SEQUANT_ASSERT_BEHAVIOR == SEQUANT_ASSERT_THROW
   throw sequant::Exception(oss.str());
 #elif SEQUANT_ASSERT_BEHAVIOR == SEQUANT_ASSERT_ABORT
   std::abort();
-#endif
+#endif  // SEQUANT_ASSERT_BEHAVIOR
+#endif  // SEQUANT_ASSERT_ENABLED
 }
 }  // namespace sequant
 
