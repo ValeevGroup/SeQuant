@@ -7,6 +7,7 @@
 
 #include <SeQuant/core/bitset.hpp>
 #include <SeQuant/core/space.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/wstring.hpp>
 
 #include <range/v3/algorithm/sort.hpp>
@@ -396,7 +397,7 @@ class IndexSpaceRegistry {
   IndexSpaceRegistry& add_unIon(
       S&& type_label, std::initializer_list<IndexSpaceOrLabel> components,
       OptionalArgs&&... args) {
-    assert(components.size() > 1);
+    SEQUANT_ASSERT(components.size() > 1);
 
     auto h_args = boost::hana::make_tuple(args...);
 
@@ -464,7 +465,7 @@ class IndexSpaceRegistry {
   IndexSpaceRegistry& add_intersection(
       S&& type_label, std::initializer_list<IndexSpaceOrLabel> components,
       OptionalArgs&&... args) {
-    assert(components.size() > 1);
+    SEQUANT_ASSERT(components.size() > 1);
 
     auto h_args = boost::hana::make_tuple(args...);
 
@@ -1413,7 +1414,7 @@ class IndexSpaceRegistry {
       for (auto&& [qn, t] : qn2type) {
         if (space.type() == t && space.qns() == qn) {
           [[maybe_unused]] auto [it, found] = qn2type_found.try_emplace(qn, t);
-          assert(!found);
+          SEQUANT_ASSERT(!found);
           // found all? return
           if (qn2type_found.size() == qn2type.size()) {
             return;

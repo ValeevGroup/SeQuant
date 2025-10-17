@@ -6,6 +6,7 @@
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/logger.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/domain/eval/eval_fwd.hpp>
 
 #include <TiledArray/einsum/tiledarray.h>
@@ -192,7 +193,7 @@ auto particle_antisymmetrize_ta(TA::DistArray<Args...> const& arr,
                                 size_t bra_rank) {
   using ranges::views::iota;
   size_t const rank = arr.trange().rank();
-  assert(bra_rank <= rank);
+  SEQUANT_ASSERT(bra_rank <= rank);
   size_t const ket_rank = rank - bra_rank;
 
   if (bra_rank <= 1 && ket_rank <= 1) {
@@ -299,7 +300,7 @@ auto particle_antisymmetrize_btas(btas::Tensor<Args...> const& arr,
   using ranges::views::concat;
   using ranges::views::iota;
   size_t const rank = arr.rank();
-  assert(bra_rank <= rank);
+  SEQUANT_ASSERT(bra_rank <= rank);
   size_t const ket_rank = rank - bra_rank;
 
   perm_t bra_perm = iota(size_t{0}, bra_rank) | ranges::to<perm_t>;
@@ -351,7 +352,7 @@ auto biorthogonal_nns_project_ta(TA::DistArray<Args...> const& arr,
                                  size_t bra_rank) {
   using ranges::views::iota;
   size_t const rank = arr.trange().rank();
-  assert(bra_rank <= rank);
+  SEQUANT_ASSERT(bra_rank <= rank);
   size_t const ket_rank = rank - bra_rank;
 
   if (rank <= 4) {
@@ -430,7 +431,7 @@ auto biorthogonal_nns_project_btas(btas::Tensor<Args...> const& arr,
   using ranges::views::concat;
   using ranges::views::iota;
   size_t const rank = arr.rank();
-  assert(bra_rank <= rank);
+  SEQUANT_ASSERT(bra_rank <= rank);
   size_t const ket_rank = rank - bra_rank;
 
   if (rank <= 4) {
@@ -580,7 +581,7 @@ class Result {
   ///
   template <typename T>
   [[nodiscard]] T const& as() const {
-    assert(this->is<std::decay_t<T>>());
+    SEQUANT_ASSERT(this->is<std::decay_t<T>>());
     return static_cast<T const&>(*this);
   }
 
@@ -652,7 +653,7 @@ class Result {
   ///
   template <typename T>
   [[nodiscard]] T& get() {
-    assert(has_value());
+    SEQUANT_ASSERT(has_value());
     return *std::any_cast<T>(&value_);
   }
 
@@ -739,7 +740,7 @@ class ResultScalar final : public Result {
   }
 
   void add_inplace(Result const& other) override {
-    assert(other.is<ResultScalar<T>>());
+    SEQUANT_ASSERT(other.is<ResultScalar<T>>());
     log_constant(value(), " += ", other.get<T>(), "\n");
     auto& val = get<T>();
     val += other.get<T>();
@@ -795,7 +796,7 @@ class ResultTensorTA final : public Result {
   [[nodiscard]] ResultPtr sum(
       Result const& other,
       std::array<std::any, 3> const& annot) const override {
-    assert(other.is<this_type>());
+    SEQUANT_ASSERT(other.is<this_type>());
     auto const a = annot_wrap{annot};
 
     log_ta(a.lannot, " + ", a.rannot, " = ", a.this_annot, "\n");
@@ -826,7 +827,7 @@ class ResultTensorTA final : public Result {
 
     if (a.this_annot.empty()) {
       // DOT product
-      assert(other.is<this_type>());
+      SEQUANT_ASSERT(other.is<this_type>());
       numeric_type d =
           TA::dot(get<ArrayT>()(a.lannot), other.get<ArrayT>()(a.rannot));
       ArrayT::wait_for_lazy_cleanup(get<ArrayT>().world());
@@ -876,12 +877,12 @@ class ResultTensorTA final : public Result {
   }
 
   void add_inplace(Result const& other) override {
-    assert(other.is<this_type>());
+    SEQUANT_ASSERT(other.is<this_type>());
 
     auto& t = get<ArrayT>();
     auto const& o = other.get<ArrayT>();
 
-    assert(t.trange() == o.trange());
+    SEQUANT_ASSERT(t.trange() == o.trange());
     auto ann = TA::detail::dummy_annotation(t.trange().rank());
 
     log_ta(ann, " += ", ann, "\n");
@@ -943,7 +944,7 @@ class ResultTensorOfTensorTA final : public Result {
   [[nodiscard]] ResultPtr sum(
       Result const& other,
       std::array<std::any, 3> const& annot) const override {
-    assert(other.is<this_type>());
+    SEQUANT_ASSERT(other.is<this_type>());
     auto const a = annot_wrap{annot};
 
     log_ta(a.lannot, " + ", a.rannot, " = ", a.this_annot, "\n");
@@ -972,7 +973,7 @@ class ResultTensorOfTensorTA final : public Result {
       return eval_result<this_type>(std::move(result));
     } else if (a.this_annot.empty()) {
       // DOT product
-      assert(other.is<this_type>());
+      SEQUANT_ASSERT(other.is<this_type>());
       numeric_type d =
           TA::dot(get<ArrayT>()(a.lannot), other.get<ArrayT>()(a.rannot));
       ArrayT::wait_for_lazy_cleanup(get<ArrayT>().world());
@@ -1029,12 +1030,12 @@ class ResultTensorOfTensorTA final : public Result {
   }
 
   void add_inplace(Result const& other) override {
-    assert(other.is<this_type>());
+    SEQUANT_ASSERT(other.is<this_type>());
 
     auto& t = get<ArrayT>();
     auto const& o = other.get<ArrayT>();
 
-    assert(t.trange() == o.trange());
+    SEQUANT_ASSERT(t.trange() == o.trange());
     auto ann = TA::detail::dummy_annotation(t.trange().rank());
 
     log_ta(ann, " += ", ann, "\n");
@@ -1093,7 +1094,7 @@ class ResultTensorBTAS final : public Result {
   [[nodiscard]] ResultPtr sum(
       Result const& other,
       std::array<std::any, 3> const& annot) const override {
-    assert(other.is<ResultTensorBTAS<T>>());
+    SEQUANT_ASSERT(other.is<ResultTensorBTAS<T>>());
     auto const a = annot_wrap{annot};
 
     T lres, rres;
@@ -1114,7 +1115,7 @@ class ResultTensorBTAS final : public Result {
       return eval_result<ResultTensorBTAS<T>>(std::move(result));
     }
 
-    assert(other.is<ResultTensorBTAS<T>>());
+    SEQUANT_ASSERT(other.is<ResultTensorBTAS<T>>());
 
     if (a.this_annot.empty()) {
       T rres;
@@ -1149,7 +1150,7 @@ class ResultTensorBTAS final : public Result {
   void add_inplace(Result const& other) override {
     auto& t = get<T>();
     auto const& o = other.get<T>();
-    assert(t.range() == o.range());
+    SEQUANT_ASSERT(t.range() == o.range());
     t += o;
   }
 

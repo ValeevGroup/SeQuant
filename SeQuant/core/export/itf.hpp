@@ -8,10 +8,10 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/space.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/string.hpp>
 #include <SeQuant/core/utility/tensor.hpp>
 
-#include <cassert>
 #include <optional>
 #include <span>
 #include <sstream>
@@ -133,7 +133,7 @@ class ItfGenerator : public Generator<Context> {
     const std::size_t ordinal = idx.ordinal().value();
 
     std::string name = ctx.index_name(idx.space(), ordinal);
-    assert(!name.empty());
+    SEQUANT_ASSERT(!name.empty());
 
     if (name.size() > 1) {
       name = "{" + name + "}";

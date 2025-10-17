@@ -3,6 +3,7 @@
 
 #include <SeQuant/core/expressions/expr_ptr.hpp>
 #include <SeQuant/core/options.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 
 #include <boost/core/demangle.hpp>
 
@@ -297,7 +298,7 @@ class Expr : public std::enable_shared_from_this<Expr>,
   /// @return this object cast to type @c T
   template <typename T>
   const T &as() const {
-    assert(this->is<T>());
+    SEQUANT_ASSERT(this->is<T>());
     if constexpr (std::is_base_of_v<Expr, T>) {
       return static_cast<const T &>(*this);
     } else
@@ -308,7 +309,7 @@ class Expr : public std::enable_shared_from_this<Expr>,
   /// @return this object cast to type @c T
   template <typename T>
   T &as() {
-    assert(this->is<T>());
+    SEQUANT_ASSERT(this->is<T>());
     if constexpr (std::is_base_of_v<Expr, T>) {
       return static_cast<T &>(*this);
     } else

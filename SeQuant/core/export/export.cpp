@@ -1,6 +1,7 @@
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/export/export.hpp>
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 
 #include <cwctype>
 #include <string>
@@ -14,7 +15,7 @@ auto get_with_default(const auto &map, const auto &key, auto def_value) {
 }
 
 bool rename(Tensor &tensor, PreprocessResult &result) {
-  assert(result.tensorReferences.at(tensor) > 0);
+  SEQUANT_ASSERT(result.tensorReferences.at(tensor) > 0);
 
   std::wstring basename = [&tensor]() {
     std::size_t size = tensor.label().size();
@@ -22,7 +23,7 @@ bool rename(Tensor &tensor, PreprocessResult &result) {
     while (size > 0 && std::iswdigit(tensor.label().at(size - 1))) {
       size--;
     }
-    assert(size > 0);
+    SEQUANT_ASSERT(size > 0);
 
     return std::wstring(tensor.label().substr(0, size));
   }();
@@ -39,7 +40,7 @@ bool rename(Tensor &tensor, PreprocessResult &result) {
 }
 
 bool rename(Variable &variable, PreprocessResult &result) {
-  assert(result.variableReferences.at(variable) > 0);
+  SEQUANT_ASSERT(result.variableReferences.at(variable) > 0);
 
   std::wstring basename = [&variable]() {
     std::size_t size = variable.label().size();
@@ -47,7 +48,7 @@ bool rename(Variable &variable, PreprocessResult &result) {
     while (size > 0 && std::iswdigit(variable.label().at(size - 1))) {
       size--;
     }
-    assert(size > 0);
+    SEQUANT_ASSERT(size > 0);
 
     return std::wstring(variable.label().substr(0, size));
   }();

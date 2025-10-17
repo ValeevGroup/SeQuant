@@ -16,6 +16,7 @@
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/utility/expr.hpp>
 #include <SeQuant/core/utility/indices.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/string.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/op.hpp>
@@ -29,7 +30,6 @@
 
 #include <boost/algorithm/string.hpp>
 
-#include <cassert>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
@@ -54,12 +54,12 @@ class ItfExportContext : public ItfContext {
   ItfExportContext(const IndexSpaceMeta &meta) : m_meta(&meta) {}
 
   std::string get_tag(const IndexSpace &space) const override {
-    assert(m_meta);
+    SEQUANT_ASSERT(m_meta);
     return m_meta->getTag(space);
   }
 
   std::string get_name(const IndexSpace &space) const override {
-    assert(m_meta);
+    SEQUANT_ASSERT(m_meta);
     return m_meta->getName(space);
   }
 
@@ -130,7 +130,7 @@ ExportNode<> prepareForExport(const ResultExpr &result,
   ExportNode<> tree = to_export_tree(result);
 
   if (result.produces_tensor()) {
-    assert(result.has_label());
+    SEQUANT_ASSERT(result.has_label());
     Tensor result_tensor = result.result_as_tensor();
     ctx.rewrite(result_tensor);
     if (importResult) {
@@ -144,7 +144,7 @@ ExportNode<> prepareForExport(const ResultExpr &result,
     }
   } else {
     if (importResult) {
-      assert(result.has_label());
+      SEQUANT_ASSERT(result.has_label());
       ctx.set_import_name(result.result_as_variable(), toUtf8(result.label()));
     }
     if (createResult) {
@@ -164,7 +164,7 @@ std::vector<ResultExpr> splitContributions(const ResultExpr &result) {
     return {result};
   }
 
-  assert(result.expression()->is<Sum>());
+  SEQUANT_ASSERT(result.expression()->is<Sum>());
 
   Tensor resultTensor(result.label(), bra(result.bra()), ket(result.ket()),
                       aux(result.aux()), result.symmetry(),
@@ -293,7 +293,7 @@ void generateITF(const json &blocks, std::string_view out_file,
           if (needsSymmetrization(current.expression())) {
             std::optional<ExprPtr> symmetrizer =
                 pop_tensor(current.expression(), L"S");
-            assert(symmetrizer.has_value());
+            SEQUANT_ASSERT(symmetrizer.has_value());
 
             Tensor resultTensor(current.label(), bra(current.bra()),
                                 ket(current.ket()), aux(current.aux()),

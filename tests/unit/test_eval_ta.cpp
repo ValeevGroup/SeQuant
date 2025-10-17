@@ -6,6 +6,7 @@
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/parse.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/domain/eval/eval.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 
@@ -36,8 +37,8 @@ struct NestedTensorIndices {
     using namespace sequant;
 
     for (auto&& ix : tnsr.aux()) {
-      assert(!ix.has_proto_indices() &&
-             "Aux indices with proto indices not supported");
+      SEQUANT_ASSERT(!ix.has_proto_indices() &&
+                     "Aux indices with proto indices not supported");
       outer.emplace_back(ix);
     }
 
@@ -168,7 +169,7 @@ class rand_tensor_yield {
 
     if (node->is_variable()) return (*this)(node->as_variable());
 
-    assert(node->is_constant());
+    SEQUANT_ASSERT(node->is_constant());
 
     using result_t = ResultScalar<NumericT>;
 
@@ -192,8 +193,8 @@ class rand_tensor_yield {
 
     auto make_extents = [this, &isr](auto&& ixs) -> container::svector<size_t> {
       return ixs | transform([this, &isr](auto const& ix) -> size_t {
-               assert(ix.space() == isr->retrieve(L"i") ||
-                      ix.space() == isr->retrieve(L"a"));
+               SEQUANT_ASSERT(ix.space() == isr->retrieve(L"i") ||
+                              ix.space() == isr->retrieve(L"a"));
                return ix.space() == isr->retrieve(L"i") ? nocc_ : nvirt_;
              }) |
              ranges::to<container::svector<size_t>>;
@@ -241,10 +242,10 @@ class rand_tensor_yield {
     }
 
     auto success = label_to_er_.emplace(label, result);
-    assert(success.second && "couldn't store ResultPtr!");
+    SEQUANT_ASSERT(success.second && "couldn't store ResultPtr!");
     //    std::cout << "label = [" << sequant::to_string(label)
     //              << "] NotFound in cache. Creating.." << std::endl;
-    assert(success.first->second);
+    SEQUANT_ASSERT(success.first->second);
     return success.first->second;
   }
 

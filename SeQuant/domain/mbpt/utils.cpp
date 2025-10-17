@@ -2,20 +2,21 @@
 // Created by Ajay Melekamburath on 9/30/25.
 //
 
+#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/domain/mbpt/utils.hpp>
 
 namespace sequant::mbpt {
 
 ExprPtr lst(ExprPtr A, ExprPtr B, size_t commutator_rank, bool unitary,
             bool skip_clone) {
-  assert(commutator_rank >= 1 && "Truncation order must be at least 1");
+  SEQUANT_ASSERT(commutator_rank >= 1 && "Truncation order must be at least 1");
 
   // use cloned expr to avoid side effects
   if (!skip_clone) A = A->clone();
 
   // takes a product or an operator and applies the similarity transformation
   auto transform = [&B, commutator_rank, unitary](const ExprPtr& e) {
-    assert(e.is<op_t>() || e.is<Product>());
+    SEQUANT_ASSERT(e.is<op_t>() || e.is<Product>());
     auto result = e;  // start with expr
     auto op_Sk = result;
 

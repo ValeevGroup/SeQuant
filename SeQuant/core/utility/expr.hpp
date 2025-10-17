@@ -5,6 +5,7 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/utility/indices.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 
 #include <range/v3/view/concat.hpp>
 #include <range/v3/view/enumerate.hpp>
@@ -101,13 +102,14 @@ ExprPtr &replace(ExprPtr &expr, const ExprPtr &target,
               // will also be shared with current and the actual replacement we
               // want to use for it (this becomes relevant if cmp compares only
               // equivalence instead of equality)
-              assert(current->is<AbstractTensor>());
-              assert(target->is<AbstractTensor>());
+              SEQUANT_ASSERT(current->is<AbstractTensor>());
+              SEQUANT_ASSERT(target->is<AbstractTensor>());
 
               const auto &current_tensor = current->as<AbstractTensor>();
               const auto &target_tensor = target->as<AbstractTensor>();
 
-              assert(num_slots(current_tensor) == num_slots(target_tensor));
+              SEQUANT_ASSERT(num_slots(current_tensor) ==
+                             num_slots(target_tensor));
 
               auto current_slots = slots(current_tensor);
               auto target_slots = slots(target_tensor);

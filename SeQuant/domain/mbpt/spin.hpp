@@ -14,7 +14,6 @@
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
-#include <cassert>
 #include <cstddef>
 #include <initializer_list>
 #include <string>
@@ -48,7 +47,7 @@ inline Spin operator&(Spin s1, Spin s2) {
 /// converts QuantumNumbersAttr to Spin
 /// @note this filters out all bits not used in Spin
 inline Spin to_spin(const QuantumNumbersAttr& t) {
-  assert((t.to_int32() & mask_v<Spin>) != 0);
+  SEQUANT_ASSERT((t.to_int32() & mask_v<Spin>) != 0);
   return static_cast<Spin>(t.to_int32() & mask_v<Spin>);
 }
 
@@ -66,7 +65,7 @@ template <typename WS, typename = std::enable_if_t<
                            meta::is_wstring_or_view_v<std::decay_t<WS>>>>
 std::wstring spinannotation_remove(WS&& label) {
   auto view = to_basic_string_view(label);
-  assert(!ranges::contains(view, L'_'));
+  SEQUANT_ASSERT(!ranges::contains(view, L'_'));
   const auto has_annotation = view.back() == L'↑' || view.back() == L'↓';
   return std::wstring{view.data(),
                       view.data() + view.size() - (has_annotation ? 1 : 0)};
@@ -77,8 +76,8 @@ template <typename WS, typename = std::enable_if_t<
                            meta::is_wstring_or_view_v<std::decay_t<WS>>>>
 std::wstring spinannotation_add(WS&& label, Spin s) {
   [[maybe_unused]] auto view = to_basic_string_view(label);
-  assert(!ranges::contains(view, L'_'));
-  assert(view.back() != L'↑' && view.back() != L'↓');
+  SEQUANT_ASSERT(!ranges::contains(view, L'_'));
+  SEQUANT_ASSERT(view.back() != L'↑' && view.back() != L'↓');
   switch (s) {
     case Spin::any:
       return to_wstring(std::forward<WS>(label));

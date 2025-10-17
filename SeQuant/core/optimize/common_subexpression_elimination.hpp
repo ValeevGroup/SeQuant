@@ -7,9 +7,9 @@
 #include <SeQuant/core/eval_node.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/hash.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/tensor.hpp>
 
-#include <cassert>
 #include <concepts>
 #include <format>
 #include <optional>
@@ -99,8 +99,8 @@ struct TreeNodeEqualityComparator {
 
     // Check connectivity in products / contractions
     if (lhs->has_connectivity_graph()) {
-      assert(lhs->has_connectivity_graph());
-      assert(rhs->has_connectivity_graph());
+      SEQUANT_ASSERT(lhs->has_connectivity_graph());
+      SEQUANT_ASSERT(rhs->has_connectivity_graph());
 
       if (bliss::ConstGraphCmp::cmp(lhs->connectivity_graph(),
                                     rhs->connectivity_graph()) != 0) {
@@ -280,7 +280,7 @@ class SubexpressionReplacer {
     }
 
     if (tree.root()) {
-      assert(original->is<Tensor>() || original->is<Variable>());
+      SEQUANT_ASSERT(original->is<Tensor>() || original->is<Variable>());
 
       ResultExpr result = [&]() {
         if (original->is<Tensor>()) {
@@ -296,7 +296,7 @@ class SubexpressionReplacer {
     }
 
     if (intermediate_definition.has_value()) {
-      assert(expr_trees.size() > current_expr_idx + expr_offset);
+      SEQUANT_ASSERT(expr_trees.size() > current_expr_idx + expr_offset);
       auto expr_it = expr_trees.begin();
       std::advance(expr_it, current_expr_idx + expr_offset);
 

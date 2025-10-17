@@ -116,6 +116,21 @@ option(SEQUANT_UTILITIES "Enable SeQuant utility programs" ${PROJECT_IS_TOP_LEVE
 option(SEQUANT_IWYU "Whether to use the include-what-you-use tool (if found)" OFF)
 option(SEQUANT_WARNINGS_AS_ERRORS "Whether to treat compiler warnings as errors" ${PROJECT_IS_TOP_LEVEL})
 
+# SEQUANT_ASSERT
+if (CMAKE_BUILD_TYPE STREQUAL Release OR
+    CMAKE_BUILD_TYPE STREQUAL MinSizeRel)
+    set (SEQUANT_ASSERT_BEHAVIOR_DEFAULT IGNORE)
+else ()
+    set (SEQUANT_ASSERT_BEHAVIOR_DEFAULT ABORT)
+endif()
+set (SEQUANT_ASSERT_BEHAVIOR ${SEQUANT_ASSERT_BEHAVIOR_DEFAULT} CACHE STRING "Controls the behavior of SEQUANT_ASSERT; THROW causes SEQUANT_ASSERT to throw, ABORT causes SEQUANT_ASSERT to abort, IGNORE makes SEQUANT_ASSERT a no-op")
+set_property(
+        CACHE SEQUANT_ASSERT_BEHAVIOR PROPERTY
+        STRINGS THROW ABORT IGNORE)
+if (NOT ($CACHE{SEQUANT_ASSERT_BEHAVIOR} STREQUAL THROW OR $CACHE{SEQUANT_ASSERT_BEHAVIOR} STREQUAL ABORT OR $CACHE{SEQUANT_ASSERT_BEHAVIOR} STREQUAL IGNORE))
+    message(FATAL_ERROR "SEQUANT_ASSERT_BEHAVIOR is set to $CACHE{SEQUANT_ASSERT_BEHAVIOR} but must be one of THROW, ABORT, or IGNORE")
+endif()
+
 ##########################
 # SeQuant package options
 ##########################
@@ -328,6 +343,7 @@ set(SeQuant_src
         SeQuant/core/utility/atomic.hpp
         SeQuant/core/utility/context.hpp
         SeQuant/core/utility/debug.hpp
+        SeQuant/core/utility/exception.hpp
         SeQuant/core/utility/expr.cpp
         SeQuant/core/utility/expr.hpp
         SeQuant/core/utility/indices.hpp
@@ -423,6 +439,7 @@ set_source_files_properties(
 if (SEQUANT_CONTEXT_MANIPULATION_THREADSAFE)
   target_compile_definitions(SeQuant PUBLIC SEQUANT_CONTEXT_MANIPULATION_THREADSAFE)
 endif()
+target_compile_definitions(SeQuant PUBLIC SEQUANT_ASSERT_BEHAVIOR_=${SEQUANT_ASSERT_BEHAVIOR})
 
 target_link_libraries(SeQuant PUBLIC range-v3::range-v3 Boost::regex Boost::locale Boost::headers SeQuant-bliss Threads::Threads)
 target_link_libraries(SeQuant PRIVATE libperm::libperm $<BUILD_LOCAL_INTERFACE:utfcpp>)

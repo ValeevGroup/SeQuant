@@ -6,15 +6,15 @@
 #define SEQUANT_CORE_MATH_HPP
 
 #include <SeQuant/core/rational.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 
 #include <atomic>
-#include <cassert>
 #include <cstddef>
 
 namespace sequant {
 
 constexpr std::size_t pow2(std::size_t n) {
-  assert(n <= 63);
+  SEQUANT_ASSERT(n <= 63);
   return 1ul << n;
 }
 

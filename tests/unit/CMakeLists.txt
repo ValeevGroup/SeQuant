@@ -18,6 +18,7 @@ add_executable(unit_tests-sequant ${BUILD_BY_DEFAULT}
     "test_iterator.cpp"
     "test_latex.cpp"
     "test_main.cpp"
+    "test_macros.cpp"
     "test_math.cpp"
     "test_mbpt.cpp"
     "test_mbpt_cc.cpp"

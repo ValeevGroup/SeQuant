@@ -2,13 +2,14 @@
 // Created by Eduard Valeyev on 9/22/24.
 //
 
+#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/domain/mbpt/antisymmetrizer.hpp>
 
 namespace sequant {
 
 antisymm_element::antisymm_element(ExprPtr ex_) {
   current_product = ex_;
-  assert(ex_->is<Product>());
+  SEQUANT_ASSERT(ex_->is<Product>());
   Constant::scalar_type starting_constant = 1;
   unsigned long begining_index = 0;
   for (auto it = begin(*ex_); it != end(*ex_); it++) {
@@ -17,7 +18,7 @@ antisymm_element::antisymm_element(ExprPtr ex_) {
       index_group.push_back(
           {begining_index, begining_index + factor.bra_rank()});
       begining_index += factor.bra_rank();
-      assert(factor.bra_rank() == factor.ket_rank());
+      SEQUANT_ASSERT(factor.bra_rank() == factor.ket_rank());
       for (int i = 0; i < factor.rank(); i++) {
         sorted_bra_indices.push_back(factor.bra()[i]);
         sorted_ket_indices.push_back(factor.ket()[i]);
@@ -31,7 +32,7 @@ antisymm_element::antisymm_element(ExprPtr ex_) {
       index_group.push_back(
           {begining_index, begining_index + factor.nannihilators()});
       begining_index += factor.nannihilators();
-      assert(factor.ncreators() == factor.nannihilators());
+      SEQUANT_ASSERT(factor.ncreators() == factor.nannihilators());
       for (int i = 0; i < factor.rank(); i++) {
         sorted_bra_indices.push_back(factor.annihilators()[i].index());
         sorted_ket_indices.push_back(factor.creators()[i].index());
@@ -255,14 +256,14 @@ int num_closed_loops(std::vector<Index> init_upper,
         in_list = true;
       }
     }
-    assert(hit_counter < 2);
+    SEQUANT_ASSERT(hit_counter < 2);
     std::pair<int, bool> result(where, in_list);
     return result;
   };
 
   std::vector<Index> in_loop;  // lower indices already in a loop.
   for (int i = 0; i < new_upper.size(); i++) {
-    assert(new_upper.size() == new_lower.size());
+    SEQUANT_ASSERT(new_upper.size() == new_lower.size());
     if (!where_same_ele(new_lower[i], in_loop).second) {
       auto starting_point = where_same_ele(new_upper[i], init_upper).first;
       auto chain_end = init_lower[starting_point];
@@ -298,8 +299,8 @@ int num_closed_loops(std::vector<Index> init_upper,
           new_lower[i]);  // put the starting lower index in the list
     }
   }
-  assert(in_loop.size() <= init_lower.size());
-  assert(result <= init_lower.size());
+  SEQUANT_ASSERT(in_loop.size() <= init_lower.size());
+  SEQUANT_ASSERT(result <= init_lower.size());
   return result;
 }
 
@@ -334,8 +335,8 @@ ExprPtr max_similarity(const std::vector<Index>& original_upper,
           }
           std::iter_swap(current_lower.begin(), current_lower.begin() + 1);
           for (int i = 0; i < 2; i++) {
-            assert(original_map.find(current_upper[i].to_latex()) !=
-                   original_map.end());
+            SEQUANT_ASSERT(original_map.find(current_upper[i].to_latex()) !=
+                           original_map.end());
             if (original_map.find(current_upper[i].to_latex())->second ==
                 current_lower[i].to_latex()) {
               new_pairs += 1;
@@ -352,10 +353,11 @@ ExprPtr max_similarity(const std::vector<Index>& original_upper,
         std::vector<Index> current_lower;
         if (factor->as<FNOperator>().rank() == 2) {
           for (int i = 0; i < 2; i++) {
-            assert(original_map.find(factor->as<FNOperator>()
-                                         .creators()[i]
-                                         .index()
-                                         .to_latex()) != original_map.end());
+            SEQUANT_ASSERT(original_map.find(factor->as<FNOperator>()
+                                                 .creators()[i]
+                                                 .index()
+                                                 .to_latex()) !=
+                           original_map.end());
             if (original_map
                     .find(factor->as<FNOperator>()
                               .creators()[i]
@@ -372,8 +374,8 @@ ExprPtr max_similarity(const std::vector<Index>& original_upper,
           }
           std::iter_swap(current_lower.begin(), current_lower.begin() + 1);
           for (int i = 0; i < 2; i++) {
-            assert(original_map.find(current_upper[i].to_latex()) !=
-                   original_map.end());
+            SEQUANT_ASSERT(original_map.find(current_upper[i].to_latex()) !=
+                           original_map.end());
             if (original_map.find(current_upper[i].to_latex())->second ==
                 current_lower[i].to_latex()) {
               new_pairs += 1;

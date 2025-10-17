@@ -14,11 +14,11 @@
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/latex.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/strong.hpp>
 
 #include <algorithm>
 #include <array>
-#include <cassert>
 #include <cstddef>
 #include <initializer_list>
 #include <iterator>
@@ -100,34 +100,34 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
   /// validates bra, ket, and aux indices
 
   // clang-format off
-  /// @throw std::invalid_argument if `NDEBUG` not `#define`d and:
-  ///        - `symmetry()==Symmetry::Antisymm` and `bra()` or `ket()` contains null indices, or
-  ///        - `aux()` contains null indices, or
-  ///        - there are duplicate indices within bra, within ket, or within aux
+  /// @pre if SEQUANT_ASSERT_ENABLED is defined uses SEQUANT_ASSERT to assert that
+  ///        - if `symmetry()==Symmetry::Antisymm` `bra()` and `ket()` do not contain null indices, and
+  ///        - `aux()` does not contains null indices, or
+  ///        - there are no duplicate indices within bra, within ket, or within aux
   // clang-format on
   void validate_indices() const {
-#ifndef NDEBUG
+#ifdef SEQUANT_ASSERT_ENABLED
     // antisymmetric bra or ket cannot support null indices (because it is not
     // clear what antisymmetry means if some slots can be empty; permutation of
     // 2 empty slots is supposed to do what?)
     // by analogy symmetric bra or ket should not have null indices, but limited
     // circumstances do allow null indices in such context ... but no use cases
     if (symmetry() != Symmetry::Nonsymm) {
-      if (!bra_.empty() && ranges::contains(bra_, Index::null))
-        throw std::invalid_argument(
-            "Tensor ctor: found null indices in symmetric/antisymmetric bra");
-      if (!ket_.empty() && ranges::contains(ket_, Index::null))
-        throw std::invalid_argument(
-            "Tensor ctor: found null indices in symmetric/antisymmetric ket");
+      SEQUANT_ASSERT(
+          !ranges::contains(bra_, Index::null) &&
+          "Tensor ctor: found null indices in symmetric/antisymmetric bra");
+      SEQUANT_ASSERT(
+          !ranges::contains(ket_, Index::null) &&
+          "Tensor ctor: found null indices in symmetric/antisymmetric ket");
     } else {  // asymmetric tensor
 
       // matching bra and ket slots cannot be both empty
       const auto braket_rank = std::min(bra_rank(), ket_rank());
       for (std::size_t r = 0; r != braket_rank; ++r) {
-        if (bra_[r] == Index::null && ket_[r] == Index::null)
-          throw std::invalid_argument(
-              "Tensor ctor: found null indices in both matching slots of "
-              "asymmetric bra and ket");
+        SEQUANT_ASSERT(
+            !(bra_[r] == Index::null && ket_[r] == Index::null) &&
+            "Tensor ctor: found null indices in both matching slots of "
+            "asymmetric bra and ket");
       }
 
       // if bra and ket differ in size, make sure unpaired slots are not empty
@@ -140,25 +140,23 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
         const auto rank = std::max(bra_rank(), ket_rank());
 
         for (std::size_t r = braket_rank; r != rank; ++r) {
-          if (longer_bundle[r] == Index::null)
-            throw std::invalid_argument(
-                (std::string("Tensor ctor: found null index in a slot of "
-                             "asymmetric ") +
-                 (longer_bundle_type == SlotType::Bra ? "bra" : "ket") +
-                 " that does have a matching " +
-                 (longer_bundle_type == SlotType::Bra ? "ket" : "bra") +
-                 " slot")
-                    .c_str());
+          SEQUANT_ASSERT(
+              !(longer_bundle[r] == Index::null) &&
+              ((std::string("Tensor ctor: found null index in a slot of "
+                            "asymmetric ") +
+                (longer_bundle_type == SlotType::Bra ? "bra" : "ket") +
+                " that does have a matching " +
+                (longer_bundle_type == SlotType::Bra ? "ket" : "bra") + " slot")
+                   .c_str()));
         }
       }
     }
-    if (!aux_.empty() && ranges::contains(aux_, Index::null)) {
-      throw std::invalid_argument("Tensor ctor: found null aux indices");
-    }
+    SEQUANT_ASSERT(!ranges::contains(aux_, Index::null) &&
+                   "Tensor ctor: found null aux indices");
     // check for duplicates
     {
-      auto throw_if_contains_duplicates = [](const auto &indices,
-                                             const char *id) -> void {
+      auto assert_that_contains_no_duplicates = [](const auto &indices,
+                                                   const char *id) -> void {
         // sort via ptrs
         auto index_ptrs = indices |
                           ranges::views::transform(
@@ -166,18 +164,17 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
                           ranges::to<container::svector<Index const *>>;
         ranges::sort(index_ptrs,
                      [](Index const *l, Index const *r) { return *l < *r; });
-        if (ranges::adjacent_find(index_ptrs,
+        SEQUANT_ASSERT(
+            ranges::adjacent_find(index_ptrs,
                                   [](Index const *l, Index const *r) {
                                     // N.B. multiple null indices OK
                                     return *l == *r && *l != Index::null;
-                                  }) != index_ptrs.end())
-          throw std::invalid_argument(
-              (std::string("Tensor ctor: duplicate ") + id + " indices")
-                  .c_str());
+                                  }) == index_ptrs.end() &&
+            (std::string("Tensor ctor: duplicate ") + id + " indices").c_str());
       };
-      throw_if_contains_duplicates(bra_, "bra");
-      throw_if_contains_duplicates(ket_, "ket");
-      throw_if_contains_duplicates(aux_, "aux");
+      assert_that_contains_no_duplicates(bra_, "bra");
+      assert_that_contains_no_duplicates(ket_, "ket");
+      assert_that_contains_no_duplicates(aux_, "aux");
     }
 #endif
   }
@@ -299,7 +296,7 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
 
   // clang-format off
   /// @name nontrivial constructors
-  /// @note if `NDEBUG` is not `#define`d and invalid combinations of indices are found, these throw `std::invalid_argument`. Specifically, these throw if
+  /// @note if `SEQUANT_ASSERT_ENABLED` is `#define`d and invalid combinations of indices are found, these will assert via SEQUANT_ASSERT that these conditions do not occur:
   /// - null indices are found in any slot of antisymmetric bra or ket (it's not clear what permutation of 2 empty slots is supposed to do in general)
   /// - null indices are found in any slot of symmetric bra or ket: can assign consistent semantics if have empty slots in the shorter of the bra/ket, but not clear if there is a use case that demands this
   /// - null indices are found in both slots of bra-ket slot pairs (meaning is unclear)
@@ -636,7 +633,7 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
     // (anti)symmetric bra or ket makes sense only for particle-symmetric
     // tensors
     if (symmetry_ == Symmetry::Symm || symmetry_ == Symmetry::Antisymm)
-      assert(column_symmetry_ == ColumnSymmetry::Symm);
+      SEQUANT_ASSERT(column_symmetry_ == ColumnSymmetry::Symm);
   }
 
   hash_type memoizing_hash() const override {
@@ -657,7 +654,7 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
     if (!hash_value_) {
       hash_value_ = compute_hash();
     } else {
-      assert(*hash_value_ == compute_hash());
+      SEQUANT_ASSERT(*hash_value_ == compute_hash());
     }
     return *hash_value_;
   }

@@ -21,6 +21,7 @@
 #include <SeQuant/core/tensor_network/v1.hpp>
 #include <SeQuant/core/tensor_network/v2.hpp>
 #include <SeQuant/core/tensor_network/v3.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/string.hpp>
 #include <SeQuant/core/utility/timer.hpp>
 
@@ -1274,7 +1275,7 @@ TEST_CASE("tensor_network_v2", "[elements]") {
             std::vector<ExprPtr> actual;
             std::transform(tn.tensors().begin(), tn.tensors().end(),
                            std::back_inserter(actual), [](const auto& t) {
-                             assert(std::dynamic_pointer_cast<Expr>(t));
+                             SEQUANT_ASSERT(std::dynamic_pointer_cast<Expr>(t));
                              return std::dynamic_pointer_cast<Expr>(t);
                            });
 
@@ -1973,7 +1974,7 @@ TEST_CASE("tensor_network_v3", "[elements]") {
             std::vector<ExprPtr> actual;
             std::transform(tn.tensors().begin(), tn.tensors().end(),
                            std::back_inserter(actual), [](const auto& t) {
-                             assert(std::dynamic_pointer_cast<Expr>(t));
+                             SEQUANT_ASSERT(std::dynamic_pointer_cast<Expr>(t));
                              return std::dynamic_pointer_cast<Expr>(t);
                            });
 

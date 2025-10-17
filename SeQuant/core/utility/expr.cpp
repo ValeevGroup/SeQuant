@@ -4,7 +4,6 @@
 #include <SeQuant/core/utility/string.hpp>
 
 #include <bitset>
-#include <cassert>
 #include <climits>
 #include <optional>
 #include <sstream>
@@ -119,7 +118,7 @@ std::string diff_spaces(const IndexSpace &lhs, const IndexSpace &rhs) {
     SEQUANT_UNREACHABLE;
   }
 
-  assert(!stream.str().empty());
+  SEQUANT_ASSERT(!stream.str().empty());
   return stream.str();
 }
 
@@ -350,7 +349,7 @@ std::optional<ExprPtr> pop_tensor(ExprPtr &expression,
       if (!tensor.has_value()) {
         tensor = popped;
       }
-      assert(tensor == popped);
+      SEQUANT_ASSERT(tensor == popped);
 
       result.append(std::move(term));
     }
@@ -369,7 +368,7 @@ std::optional<ExprPtr> pop_tensor(ExprPtr &expression,
       if (!tensor.has_value()) {
         tensor = popped;
       }
-      assert(!popped.has_value() || tensor == popped);
+      SEQUANT_ASSERT(!popped.has_value() || tensor == popped);
 
       if (!factor.is<Constant>() || !factor.as<Constant>().is_zero()) {
         result.append(1, std::move(factor), Product::Flatten::No);

@@ -1,11 +1,13 @@
+#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/domain/mbpt/rdm.hpp>
 
 namespace sequant::mbpt::decompositions {
 
 ExprPtr cumu_to_density(ExprPtr ex_) {
-  assert(ex_->is<Tensor>());
-  assert(ex_->as<Tensor>().rank() == 1);
-  assert(ex_->as<Tensor>().label() == optype2label.at(OpType::RDMCumulant));
+  SEQUANT_ASSERT(ex_->is<Tensor>());
+  SEQUANT_ASSERT(ex_->as<Tensor>().rank() == 1);
+  SEQUANT_ASSERT(ex_->as<Tensor>().label() ==
+                 optype2label.at(OpType::RDMCumulant));
   auto down_0 = ex_->as<Tensor>().ket()[0];
   auto up_0 = ex_->as<Tensor>().bra()[0];
 
@@ -15,9 +17,10 @@ ExprPtr cumu_to_density(ExprPtr ex_) {
 }
 
 sequant::ExprPtr cumu2_to_density(sequant::ExprPtr ex_) {
-  assert(ex_->is<Tensor>());
-  assert(ex_->as<Tensor>().rank() == 2);
-  assert(ex_->as<Tensor>().label() == optype2label.at(OpType::RDMCumulant));
+  SEQUANT_ASSERT(ex_->is<Tensor>());
+  SEQUANT_ASSERT(ex_->as<Tensor>().rank() == 2);
+  SEQUANT_ASSERT(ex_->as<Tensor>().label() ==
+                 optype2label.at(OpType::RDMCumulant));
 
   auto down_0 = ex_->as<Tensor>().ket()[0];
   auto up_0 = ex_->as<Tensor>().bra()[0];
@@ -34,9 +37,10 @@ sequant::ExprPtr cumu2_to_density(sequant::ExprPtr ex_) {
 }
 
 ExprPtr cumu3_to_density(ExprPtr ex_) {
-  assert(ex_->is<Tensor>());
-  assert(ex_->as<Tensor>().rank() == 3);
-  assert(ex_->as<Tensor>().label() == optype2label.at(OpType::RDMCumulant));
+  SEQUANT_ASSERT(ex_->is<Tensor>());
+  SEQUANT_ASSERT(ex_->as<Tensor>().rank() == 3);
+  SEQUANT_ASSERT(ex_->as<Tensor>().label() ==
+                 optype2label.at(OpType::RDMCumulant));
 
   auto down_0 = ex_->as<Tensor>().ket()[0];
   auto up_0 = ex_->as<Tensor>().bra()[0];
@@ -83,8 +87,8 @@ ExprPtr cumu3_to_density(ExprPtr ex_) {
 
 ExprPtr one_body_sub(ExprPtr ex_) {  // J. Chem. Phys. 132, 234107 (2010);
   // https://doi.org/10.1063/1.3439395 eqn 15 for
-  assert(ex_->is<FNOperator>());
-  assert(ex_->as<FNOperator>().rank() == 1);
+  SEQUANT_ASSERT(ex_->is<FNOperator>());
+  SEQUANT_ASSERT(ex_->as<FNOperator>().rank() == 1);
   auto down_0 = ex_->as<FNOperator>().annihilators()[0].index();
   auto up_0 = ex_->as<FNOperator>().creators()[0].index();
 
@@ -100,8 +104,8 @@ ExprPtr two_body_decomp(
     ExprPtr ex_, bool /*approx*/) {  // J. Chem. Phys. 132, 234107 (2010);
   // https://doi.org/10.1063/1.3439395
   // eqn 16 for \tilde{a}^{pr}_{qs}
-  assert(ex_->is<FNOperator>());
-  assert(ex_->as<FNOperator>().rank() == 2);
+  SEQUANT_ASSERT(ex_->is<FNOperator>());
+  SEQUANT_ASSERT(ex_->as<FNOperator>().rank() == 2);
 
   auto down_0 = ex_->as<FNOperator>().annihilators()[0].index();
   auto down_1 = ex_->as<FNOperator>().annihilators()[1].index();
@@ -130,8 +134,8 @@ ExprPtr two_body_decomp(
 
 std::pair<ExprPtr, std::pair<std::vector<Index>, std::vector<Index>>>
 three_body_decomp(ExprPtr ex_, bool approx) {
-  assert(ex_->is<FNOperator>());
-  assert(ex_->as<FNOperator>().rank() == 3);
+  SEQUANT_ASSERT(ex_->is<FNOperator>());
+  SEQUANT_ASSERT(ex_->as<FNOperator>().rank() == 3);
 
   auto down_0 = ex_->as<FNOperator>().annihilators()[0].index();
   auto down_1 = ex_->as<FNOperator>().annihilators()[1].index();
@@ -238,8 +242,8 @@ three_body_decomposition(ExprPtr ex_, int rank, bool fast) {
                        factor->as<Tensor>().rank() == 1) {
               factor = cumu_to_density(factor);
             } else {
-              assert(factor->as<Tensor>().label() !=
-                     optype2label.at(OpType::RDMCumulant));
+              SEQUANT_ASSERT(factor->as<Tensor>().label() !=
+                             optype2label.at(OpType::RDMCumulant));
             }
           }
         }
@@ -249,7 +253,7 @@ three_body_decomposition(ExprPtr ex_, int rank, bool fast) {
 
   } else if (rank == 2) {
     if (fast) {
-      assert(ex_->is<FNOperator>());
+      SEQUANT_ASSERT(ex_->is<FNOperator>());
       // FNOp does not store a list of indices so I have to do this
       auto down_0 = ex_->as<FNOperator>().annihilators()[0].index();
       auto down_1 = ex_->as<FNOperator>().annihilators()[1].index();
@@ -295,8 +299,8 @@ three_body_decomposition(ExprPtr ex_, int rank, bool fast) {
                        optype2label.at(OpType::RDMCumulant)) {
               factor = cumu_to_density(factor);
             } else {
-              assert(factor->as<Tensor>().label() !=
-                     optype2label.at(OpType::RDMCumulant));
+              SEQUANT_ASSERT(factor->as<Tensor>().label() !=
+                             optype2label.at(OpType::RDMCumulant));
             }
           }
         }
@@ -322,8 +326,8 @@ three_body_decomposition(ExprPtr ex_, int rank, bool fast) {
                        optype2label.at(OpType::RDMCumulant)) {
               factor = cumu_to_density(factor);
             } else {
-              assert(factor->as<Tensor>().label() !=
-                     optype2label.at(OpType::RDMCumulant));
+              SEQUANT_ASSERT(factor->as<Tensor>().label() !=
+                             optype2label.at(OpType::RDMCumulant));
             }
           }
         }
@@ -342,7 +346,7 @@ ExprPtr three_body_substitution(ExprPtr& input, int rank, bool fast) {
     return input;
   }
   if (fast) {
-    assert(rank == 2);
+    SEQUANT_ASSERT(rank == 2);
     if (input->is<Sum>()) {
       for (auto&& product : input->as<Sum>().summands()) {
         if (product->is<Product>()) {

@@ -12,6 +12,7 @@
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/tensor_network.hpp>
 #include <SeQuant/core/tensor_network/typedefs.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 
 #include <range/v3/all.hpp>
 
@@ -38,17 +39,17 @@ ExprPtr::base_type &&ExprPtr::as_shared_ptr() && {
 }
 
 Expr &ExprPtr::operator*() & {
-  assert(this->operator bool());
+  SEQUANT_ASSERT(this->operator bool());
   return *(this->get());
 }
 
 const Expr &ExprPtr::operator*() const & {
-  assert(this->operator bool());
+  SEQUANT_ASSERT(this->operator bool());
   return *(this->get());
 }
 
 Expr &&ExprPtr::operator*() && {
-  assert(this->operator bool());
+  SEQUANT_ASSERT(this->operator bool());
   return std::move(*(this->get()));
 }
 
@@ -174,7 +175,7 @@ ExprPtr Product::canonicalize_impl(CanonicalizeOptions opts) {
     }
     auto bp = factor->canonicalize(opts);
     if (bp) {
-      assert(bp->template is<Constant>());
+      SEQUANT_ASSERT(bp->template is<Constant>());
       this->scalar_ *= std::static_pointer_cast<Constant>(bp)->value();
     }
   });
@@ -237,13 +238,13 @@ ExprPtr Product::canonicalize_impl(CanonicalizeOptions opts) {
 
     const auto &tensors = tn.tensors();
     using std::size;
-    assert(size(tensors) == size(factors_));
+    SEQUANT_ASSERT(size(tensors) == size(factors_));
     using std::begin;
     using std::end;
     std::transform(begin(tensors), end(tensors), begin(factors_),
                    [](const auto &tptr) {
                      auto exprptr = std::dynamic_pointer_cast<Expr>(tptr);
-                     assert(exprptr);
+                     SEQUANT_ASSERT(exprptr);
                      return exprptr;
                    });
     if (canon_factor) scalar_ *= canon_factor->template as<Constant>().value();
@@ -277,7 +278,7 @@ ExprPtr Product::canonicalize_impl(CanonicalizeOptions opts) {
         else if (!first_is_cardinal && second_is_cardinal)
           return false;
         else {
-          assert(!first_is_cardinal && !second_is_cardinal);
+          SEQUANT_ASSERT(!first_is_cardinal && !second_is_cardinal);
           return *first < *second;
         }
       } else
@@ -317,7 +318,7 @@ ExprPtr Product::canonicalize_impl(CanonicalizeOptions opts) {
 }
 
 void Product::adjoint() {
-  assert(static_commutativity() == false);  // assert no slicing
+  SEQUANT_ASSERT(static_commutativity() == false);  // assert no slicing
   auto adj_scalar = conj(scalar());
   using namespace ranges;
   auto adj_factors =
@@ -333,7 +334,7 @@ ExprPtr Product::canonicalize(CanonicalizeOptions opt) {
 }
 
 ExprPtr Product::rapid_canonicalize(CanonicalizeOptions opt) {
-  assert(opt.method == CanonicalizationMethod::Rapid);
+  SEQUANT_ASSERT(opt.method == CanonicalizationMethod::Rapid);
   return this->canonicalize_impl(opt);
 }
 
@@ -396,7 +397,7 @@ ExprPtr Sum::canonicalize_impl(bool multipass, CanonicalizeOptions opts) {
         bp = summand->canonicalize(opts_copy);
       }
       if (bp) {
-        assert(bp->template is<Constant>());
+        SEQUANT_ASSERT(bp->template is<Constant>());
         summand = ex<Product>(std::static_pointer_cast<Constant>(bp)->value(),
                               ExprPtrList{summand});
       }

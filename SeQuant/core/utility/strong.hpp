@@ -6,6 +6,7 @@
 #define SEQUANT_CORE_UTILITY_STRONG_HPP
 
 #include <SeQuant/core/meta.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 
 #include <utility>
 
@@ -127,7 +128,7 @@ class strong_type_base {
     if constexpr (meta::has_memfn_push_back_v<T, U>)
       std::copy(elements.begin(), elements.end(), std::back_inserter(value_));
     else {
-      assert(elements.size() == value_.size());
+      SEQUANT_ASSERT(elements.size() == value_.size());
       std::copy(elements.begin(), elements.end(), value_.begin());
     }
   }

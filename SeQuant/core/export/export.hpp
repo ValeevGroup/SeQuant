@@ -128,7 +128,7 @@ class GenerationVisitor {
     } else if (load) {
       m_generator.load(expr, zeroLoad, m_ctx);
     } else if (zeroReuse) {
-      assert(alreadyLoaded);
+      SEQUANT_ASSERT(alreadyLoaded);
       m_generator.set_to_zero(expr, m_ctx);
     }
   }
@@ -155,7 +155,7 @@ class GenerationVisitor {
     if (expr.is<Tensor>()) {
       const Tensor &tensor = expr.as<Tensor>();
 
-      assert(m_tensorUses[tensor] > 0);
+      SEQUANT_ASSERT(m_tensorUses[tensor] > 0);
       m_tensorUses[tensor]--;
 
       if (m_tensorUses[tensor] == 0) {
@@ -164,7 +164,7 @@ class GenerationVisitor {
     } else if (expr.is<Variable>()) {
       const Variable &variable = expr.as<Variable>();
 
-      assert(m_variableUses[variable] > 0);
+      SEQUANT_ASSERT(m_variableUses[variable] > 0);
       m_variableUses[variable]--;
 
       if (m_variableUses[variable] == 0) {
@@ -174,8 +174,8 @@ class GenerationVisitor {
   }
 
   void process_computation(const ExportNode<NodeData> &node) {
-    assert(!node.leaf());
-    assert(node->op_type().has_value());
+    SEQUANT_ASSERT(!node.leaf());
+    SEQUANT_ASSERT(node->op_type().has_value());
 
     // Assemble the expression that should be evaluated
     container::svector<ExprPtr> expressions;
@@ -206,7 +206,7 @@ class GenerationVisitor {
       }
     }
 
-    assert(!expressions.empty());
+    SEQUANT_ASSERT(!expressions.empty());
 
     // Account for any scalar prefactor(s) and if there are
     // variables among them, make sure to load them first
@@ -215,7 +215,7 @@ class GenerationVisitor {
         iter != m_scalarFactors.end()) {
       if (iter->second->template is<Product>()) {
         for (const ExprPtr &current : iter->second->template as<Product>()) {
-          assert(current->is<Constant>() || current->is<Variable>());
+          SEQUANT_ASSERT(current->is<Constant>() || current->is<Variable>());
 
           if (current->is<Variable>()) {
             variables.push_back(current->as<Variable>());
@@ -294,8 +294,8 @@ bool prune_scalar_factor(ExportNode<T> &node, PreprocessResult &result) {
     return false;
   }
 
-  assert(!node.root());
-  assert(node.parent()->op_type() == EvalOp::Product);
+  SEQUANT_ASSERT(!node.root());
+  SEQUANT_ASSERT(node.parent()->op_type() == EvalOp::Product);
 
   const auto iter = result.scalarFactors.find(node.parent()->id());
   ExprPtr parentFactor =
@@ -303,8 +303,8 @@ bool prune_scalar_factor(ExportNode<T> &node, PreprocessResult &result) {
 
   ExprPtr factor = node->expr();
 
-  assert(factor);
-  assert(factor->is<Constant>() || factor->is<Variable>());
+  SEQUANT_ASSERT(factor);
+  SEQUANT_ASSERT(factor->is<Constant>() || factor->is<Variable>());
 
   if (factor->is<Variable>()) {
     result.variables[factor->as<Variable>()] |=
@@ -319,7 +319,7 @@ bool prune_scalar_factor(ExportNode<T> &node, PreprocessResult &result) {
     if (node->id() == node.parent().left()->id()) {
       return std::move(node.parent().right());
     } else {
-      assert(node->id() == node.parent().right()->id());
+      SEQUANT_ASSERT(node->id() == node.parent().right()->id());
       return std::move(node.parent().left());
     }
   }();
@@ -330,7 +330,8 @@ bool prune_scalar_factor(ExportNode<T> &node, PreprocessResult &result) {
     if (node.parent()->id() == node.parent().parent().left()->id()) {
       node.parent().parent()->select_left();
     } else {
-      assert(node.parent()->id() == node.parent().parent().right()->id());
+      SEQUANT_ASSERT(node.parent()->id() ==
+                     node.parent().parent().right()->id());
       node.parent().parent()->select_right();
     }
   }
@@ -401,7 +402,7 @@ void preprocess(ExprType expr, ExportContext &ctx, Node &node,
     // However, for any object that is the result of a sum,
     // we don't want this special behavior.
     if (handleReuse && usedBefore) {
-      assert(!node.leaf());
+      SEQUANT_ASSERT(!node.leaf());
 
       if (currentlyLoaded) {
         // This expr is currently in use -> can't use it as a result as that
@@ -544,7 +545,7 @@ class PreprocessVisitor {
       // accounted for (as leafs only get loaded and never computed)
       if (auto iter = m_result.scalarFactors.find(tree->id());
           iter != m_result.scalarFactors.end() && tree.leaf()) {
-        assert(!tree.root());
+        SEQUANT_ASSERT(!tree.root());
         ExprPtr factor = std::move(iter->second);
         m_result.scalarFactors.erase(iter);
 
@@ -560,7 +561,7 @@ class PreprocessVisitor {
     while (may_prune(tree) && prune_scalar_factor(tree.right(), m_result)) {
       if (auto iter = m_result.scalarFactors.find(tree->id());
           iter != m_result.scalarFactors.end() && tree.leaf()) {
-        assert(!tree.root());
+        SEQUANT_ASSERT(!tree.root());
         ExprPtr factor = std::move(iter->second);
         m_result.scalarFactors.erase(iter);
 
@@ -616,21 +617,21 @@ class PreprocessVisitor {
     // Mark tensors/variables as no longer in use
     if (node.left()->is_tensor()) {
       const Tensor &tensor = node.left()->as_tensor();
-      assert(m_result.tensorReferences[tensor] > 0);
+      SEQUANT_ASSERT(m_result.tensorReferences[tensor] > 0);
       m_result.tensorReferences[tensor]--;
     } else if (node.left()->is_variable()) {
       const Variable &variable = node.left()->as_variable();
-      assert(m_result.variableReferences[variable] > 0);
+      SEQUANT_ASSERT(m_result.variableReferences[variable] > 0);
       m_result.variableReferences[variable]--;
     }
 
     if (node.right()->is_tensor()) {
       const Tensor &tensor = node.right()->as_tensor();
-      assert(m_result.tensorReferences[tensor] > 0);
+      SEQUANT_ASSERT(m_result.tensorReferences[tensor] > 0);
       m_result.tensorReferences[tensor]--;
     } else if (node.right()->is_variable()) {
       const Variable &variable = node.right()->as_variable();
-      assert(m_result.variableReferences[variable] > 0);
+      SEQUANT_ASSERT(m_result.variableReferences[variable] > 0);
       m_result.variableReferences[variable]--;
     }
   }
@@ -883,7 +884,7 @@ void export_groups(Range groups, Generator<Context> &generator, Context ctx) {
     }
 
     // Handle section-level declarations
-    assert(pp_results.size() >= pp_idx + size(current_group));
+    SEQUANT_ASSERT(pp_results.size() >= pp_idx + size(current_group));
     detail::handle_declarations<DeclarationScope::Section>(
         std::span(&pp_results.at(pp_idx), size(current_group)), generator, ctx);
 
@@ -905,7 +906,7 @@ void export_groups(Range groups, Generator<Context> &generator, Context ctx) {
     ctx.clear_current_section_name();
   }
 
-  assert(pp_idx == pp_results.size());
+  SEQUANT_ASSERT(pp_idx == pp_results.size());
 
   generator.end_export(ctx);
 }

@@ -7,8 +7,8 @@
 #include <SeQuant/core/expressions/expr_algorithms.hpp>
 #include <SeQuant/core/expressions/expr_ptr.hpp>
 #include <SeQuant/core/meta.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 
-#include <cassert>
 #include <string>
 #include <type_traits>
 
@@ -129,7 +129,7 @@ class Product : public Expr {
   template <typename T>
   Product &append(T scalar, ExprPtr factor,
                   Flatten flatten_tag = Flatten::Yes) {
-    assert(factor);
+    SEQUANT_ASSERT(factor);
     scalar_ *= scalar;
     if (!factor->is<Product>()) {
       if (factor->is<Constant>()) {  // factor in Constant
@@ -202,7 +202,7 @@ class Product : public Expr {
   template <typename T>
   Product &prepend(T scalar, ExprPtr factor,
                    Flatten flatten_tag = Flatten::Yes) {
-    assert(factor);
+    SEQUANT_ASSERT(factor);
     scalar_ *= scalar;
     if (!factor->is<Product>()) {
       if (factor->is<Constant>()) {  // factor in Constant
@@ -351,12 +351,12 @@ class Product : public Expr {
   }
 
   void add_identical(const Product &other) {
-    assert(ranges::equal(this->factors(), other.factors()));
+    SEQUANT_ASSERT(ranges::equal(this->factors(), other.factors()));
     scalar_ += other.scalar_;
   }
 
   void add_identical(const std::shared_ptr<Product> &other) {
-    assert(ranges::equal(this->factors(), other->factors()));
+    SEQUANT_ASSERT(ranges::equal(this->factors(), other->factors()));
     scalar_ += other->scalar_;
   }
 
@@ -364,7 +364,7 @@ class Product : public Expr {
     if (other.is<Product>()) return this->add_identical(other.as<Product>());
 
     // only makes sense if this has a single factor
-    assert(this->factors_.size() == 1 && this->factors_[0] == other);
+    SEQUANT_ASSERT(this->factors_.size() == 1 && this->factors_[0] == other);
     scalar_ += 1;
   }
 
@@ -420,7 +420,7 @@ class Product : public Expr {
     if (!hash_value_) {
       hash_value_ = compute_hash();
     } else {
-      assert(*hash_value_ == compute_hash());
+      SEQUANT_ASSERT(*hash_value_ == compute_hash());
     }
 
     return *hash_value_;
