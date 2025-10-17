@@ -21,7 +21,7 @@ sequant::assert_failed("test");
       // N.B. clang <16 has std::source_location produce wrong line numbers when
       // initialized as default argument see
       // https://github.com/llvm/llvm-project/issues/56379
-#if defined(SEQUANT_CXX_COMPILER_IS_CLANG) && __clang_major__ >= 16
+#if !defined(SEQUANT_CXX_COMPILER_IS_CLANG) || __clang_major__ >= 16
       REQUIRE(ex.what().find("tests/unit/test_macros.cpp:1000 in function ") !=
               std::string::npos);
 #endif
