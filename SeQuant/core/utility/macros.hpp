@@ -126,9 +126,7 @@ namespace sequant {
 }  // namespace sequant
 
 #define SEQUANT_ABORT(msg)   \
-  do {                       \
-    sequant::abort_msg(msg); \
-  } while (0)
+  sequant::abort_msg(msg)
 
 #if defined(__cpp_lib_unreachable)
 
