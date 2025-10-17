@@ -80,7 +80,7 @@
 namespace sequant {
 
 inline void assert_failed(
-    [[maybe_unused]] const std::string &m,
+    [[maybe_unused]] const std::string &errmsg,
     const std::source_location location = std::source_location::current()) {
 #if SEQUANT_ASSERT_BEHAVIOR == SEQUANT_ASSERT_THROW
   std::ostringstream oss;
@@ -88,7 +88,7 @@ inline void assert_failed(
 #elif SEQUANT_ASSERT_BEHAVIOR == SEQUANT_ASSERT_ABORT
   std::cerr
 #endif
-      << m << " at " << location.file_name() << ":" << location.line()
+      << errmsg << " at " << location.file_name() << ":" << location.line()
       << " in function '" << location.function_name() << "'";
 #if SEQUANT_ASSERT_BEHAVIOR == SEQUANT_ASSERT_THROW
   throw sequant::Exception(oss.str());
@@ -114,10 +114,20 @@ inline void assert_failed(
   } while (0)
 #endif
 
-#define SEQUANT_ABORT(msg)         \
-  do {                             \
-    std::cerr << msg << std::endl; \
-    std::abort();                  \
+namespace sequant {
+[[noreturn]] inline void abort_msg(
+    [[maybe_unused]] const std::string &errmsg,
+    const std::source_location location = std::source_location::current()) {
+  std::cerr << errmsg << " at " << location.file_name() << ":"
+            << location.line() << " in function '" << location.function_name()
+            << "'";
+  std::abort();
+}
+}  // namespace sequant
+
+#define SEQUANT_ABORT(msg)   \
+  do {                       \
+    sequant::abort_msg(msg); \
   } while (0)
 
 #if defined(__cpp_lib_unreachable)
