@@ -935,8 +935,8 @@ class Index : public Taggable {
   inline void canonicalize_proto_indices() noexcept;
 
   /// validate protoindices
-  /// @warning disabled if NDEBUG is defined
-  /// @throw std::invalid_argument if have duplicate or null indices among
+  /// @warning no-op unless SEQUANT_ASSERT_ENABLED is defined
+  /// @pre use SEQUANT_ASSERT to assert that there are no duplicate or null indices among
   /// protoindices
   inline void validate_proto_indices() const;
 

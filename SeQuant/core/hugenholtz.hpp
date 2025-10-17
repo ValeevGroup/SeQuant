@@ -103,8 +103,8 @@ class HugenholtzVertex {
   }
 
   /// @param edge_idx the ordinal index of the edge to be removed
-  /// @param edge the edge descriptor, only used to assert logic when NDEBUG is
-  /// not defined
+  /// @param edge the edge descriptor, only used to assert logic when
+  /// SEQUANT_ASSERT_ENABLED is defined
   void erase(size_t edge_idx, [[maybe_unused]] const Edge& edge) {
     // preconditions
     const auto grp_idx = edge_to_group_.at(edge_idx);
