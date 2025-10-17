@@ -38,8 +38,8 @@ TEST_CASE("bliss", "[elements]") {
       SEQUANT_ASSERT(v1 >= 0 &&
                      static_cast<unsigned int>(v1) < sg.get_nof_vertices());
       for (auto&& v2 : v2s) {
-        assert(v2 >= 0 &&
-               static_cast<unsigned int>(v2) < sg.get_nof_vertices());
+        SEQUANT_ASSERT(v2 >= 0 &&
+                       static_cast<unsigned int>(v2) < sg.get_nof_vertices());
         sg.add_edge(v1, v2);
       }
     };

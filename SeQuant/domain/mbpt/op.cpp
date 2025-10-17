@@ -668,7 +668,7 @@ ExprPtr L_(nₚ np, nₕ nh) {
 
 ExprPtr P(nₚ np, nₕ nh) {
   if (np != nh)
-    assert(
+    SEQUANT_ASSERT(
         get_default_context().spbasis() != SPBasis::Spinfree &&
         "Spinfree basis does not support non-particle conserving projectors");
   return get_default_context().spbasis() == SPBasis::Spinfree
@@ -733,15 +733,16 @@ ExprPtr S(std::int64_t K) {
 }
 
 ExprPtr H_pt(std::size_t R, [[maybe_unused]] std::size_t order) {
-  assert(order == 1 &&
-         "sequant::sr::H_pt(): only supports first order perturbation");
+  SEQUANT_ASSERT(order == 1 &&
+                 "sequant::sr::H_pt(): only supports first order perturbation");
   SEQUANT_ASSERT(R > 0);
   return OpMaker<Statistics::FermiDirac>(OpType::h_1, R)();
 }
 
 ExprPtr T_pt_(std::size_t K, [[maybe_unused]] std::size_t order) {
-  assert(order == 1 &&
-         "sequant::sr::T_pt_(): only supports first order perturbation");
+  SEQUANT_ASSERT(
+      order == 1 &&
+      "sequant::sr::T_pt_(): only supports first order perturbation");
   return OpMaker<Statistics::FermiDirac>(OpType::t_1, K)();
 }
 
@@ -755,8 +756,9 @@ ExprPtr T_pt(std::size_t K, std::size_t order, bool skip1) {
 }
 
 ExprPtr Λ_pt_(std::size_t K, [[maybe_unused]] std::size_t order) {
-  assert(order == 1 &&
-         "sequant::sr::Λ_pt_(): only supports first order perturbation");
+  SEQUANT_ASSERT(
+      order == 1 &&
+      "sequant::sr::Λ_pt_(): only supports first order perturbation");
   return OpMaker<Statistics::FermiDirac>(OpType::λ_1, K)();
 }
 
@@ -919,9 +921,10 @@ ExprPtr S(std::int64_t K) {
 
 ExprPtr P(nₚ np, nₕ nh) {
   if (get_default_context().spbasis() == SPBasis::Spinfree) {
-    assert(nh == np &&
-           "Only particle number conserving cases are supported with spinfree "
-           "basis for now");
+    SEQUANT_ASSERT(
+        nh == np &&
+        "Only particle number conserving cases are supported with spinfree "
+        "basis for now");
     const auto K = np;  // K = np = nh
     return S(-K);
   } else {
