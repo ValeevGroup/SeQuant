@@ -116,7 +116,7 @@ inline void assert_failed(
 
 namespace sequant {
 [[noreturn]] inline void abort_msg(
-    [[maybe_unused]] const std::string &errmsg,
+    const std::string &errmsg,
     const std::source_location location = std::source_location::current()) {
   std::cerr << errmsg << " at " << location.file_name() << ":"
             << location.line() << " in function '" << location.function_name()
@@ -125,8 +125,7 @@ namespace sequant {
 }
 }  // namespace sequant
 
-#define SEQUANT_ABORT(msg)   \
-  sequant::abort_msg(msg)
+#define SEQUANT_ABORT(msg) sequant::abort_msg(msg)
 
 #if defined(__cpp_lib_unreachable)
 
