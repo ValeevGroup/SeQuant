@@ -14,7 +14,7 @@ jobs:
       fail-fast: false
       matrix:
         build_type : [ Release, Debug ]
-        os : [ macos-latest, ubuntu-24.04 ]
+        os : [ macos-15, ubuntu-24.04 ]
         valgrind: [ true, false ]
         sanitize: [ true, false ]
         exclude:
@@ -24,15 +24,15 @@ jobs:
             valgrind : true
           - build_type : Release
             sanitize : true
-          - os: macos-latest
+          - os: macos-15
             sanitize: true
-          - os: macos-latest
+          - os: macos-15
             valgrind: true
         include:
           - os: ubuntu-24.04
             cxx: /usr/bin/g++-14
             sanitize_flags: -fsanitize=address -fsanitize=leak -fsanitize=undefined -fno-omit-frame-pointer -fno-var-tracking
-          - os: macos-latest
+          - os: macos-15
             cxx: clang++
             sanitize_flags: -fsanitize=address -fsanitize=undefined -fno-omit-frame-pointer -fno-var-tracking
 
