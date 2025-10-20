@@ -117,11 +117,10 @@ option(SEQUANT_IWYU "Whether to use the include-what-you-use tool (if found)" OF
 option(SEQUANT_WARNINGS_AS_ERRORS "Whether to treat compiler warnings as errors" ${PROJECT_IS_TOP_LEVEL})
 
 # SEQUANT_ASSERT
-if (CMAKE_BUILD_TYPE STREQUAL Release OR
-    CMAKE_BUILD_TYPE STREQUAL MinSizeRel)
-    set (SEQUANT_ASSERT_BEHAVIOR_DEFAULT IGNORE)
-else ()
+if (CMAKE_BUILD_TYPE STREQUAL Debug)
     set (SEQUANT_ASSERT_BEHAVIOR_DEFAULT ABORT)
+else ()
+    set (SEQUANT_ASSERT_BEHAVIOR_DEFAULT IGNORE)
 endif()
 set (SEQUANT_ASSERT_BEHAVIOR ${SEQUANT_ASSERT_BEHAVIOR_DEFAULT} CACHE STRING "Controls the behavior of SEQUANT_ASSERT; THROW causes SEQUANT_ASSERT to throw, ABORT causes SEQUANT_ASSERT to abort, IGNORE makes SEQUANT_ASSERT a no-op")
 set_property(
