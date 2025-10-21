@@ -81,6 +81,10 @@ class ResultExpr {
   /// Obtains the exact grouping (pairing) of indices in the result. Typically,
   /// this represents particle-assignments (i.e. indices in the same group are
   /// associated with the same particle in the underlying theory).
+  /// This corresponds to columns of indices in the typical tensor notation.
+  ///
+  /// Note: auxiliary indices are ignored by this function (the assumption
+  /// being that they don't belong to this kind of pairings).
   ///
   /// @tparam Group The type of the object to represent an index group. Must be
   /// constructible from an initializer_list<Index> or from a set of two
@@ -91,8 +95,6 @@ class ResultExpr {
 
     SEQUANT_ASSERT(m_braIndices.size() == m_ketIndices.size() &&
                    "Not yet generalized to particle non-conserving results");
-    SEQUANT_ASSERT(m_auxIndices.empty() &&
-                   "Not yet clear how auxiliary indices should be handled");
 
     groups.reserve(m_braIndices.size());
 
