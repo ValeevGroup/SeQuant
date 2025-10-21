@@ -425,7 +425,7 @@ bool can_expand(const AbstractTensor& tensor) {
 ExprPtr expand_antisymm(const Tensor& tensor, bool skip_spinsymm) {
   SEQUANT_ASSERT(tensor.bra_rank() == tensor.ket_rank());
   // Return non-symmetric tensor if rank is 1
-  if (tensor.bra_rank() == 1) {
+  if (tensor.bra_rank() <= 1) {
     Tensor new_tensor(tensor.label(), tensor.bra(), tensor.ket(), tensor.aux(),
                       Symmetry::Nonsymm, tensor.braket_symmetry(),
                       tensor.column_symmetry());
