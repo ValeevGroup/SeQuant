@@ -25,9 +25,6 @@ container::svector<ResultExpr> postProcess(ResultExpr result,
     return {result};
   }
 
-  container::svector<container::svector<Index>> externals =
-      result.index_particle_grouping<container::svector<Index>>();
-
   if (options.density_fitting) {
     IndexSpace aux_space =
         get_default_context().index_space_registry()->retrieve(L"F");
