@@ -123,9 +123,9 @@ class Index : public Taggable {
   static std::optional<std::size_t> get_ordinal(std::wstring_view label) {
     const auto underscore_position = label.rfind(L'_');
     if (underscore_position != std::wstring::npos) {
-      assert(underscore_position + 1 <
-             label.size());  // check that there is at least one char past the
-                             // underscore
+      SEQUANT_ASSERT(underscore_position + 1 <
+                     label.size());  // check that there is at least one char
+                                     // past the underscore
       return std::wcstol(
           label.substr(underscore_position + 1, std::wstring::npos).data(),
           NULL, 10);
@@ -971,7 +971,7 @@ class Index : public Taggable {
       std::wstring_view label) noexcept {
     const auto underscore_position = label.rfind(L'_');
     if (underscore_position != std::wstring::npos) {
-      assert(underscore_position + 1 <
+      SEQUANT_ASSERT(underscore_position + 1 <
              label.size());  // check that there is at least one char past the
       // underscore
       return std::wcstol(

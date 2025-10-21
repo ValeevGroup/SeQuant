@@ -323,7 +323,7 @@ ExprPtr max_similarity(const std::vector<Index>& original_upper,
         std::vector<Index> current_lower;
         if (factor->as<Tensor>().rank() == 2) {
           for (int i = 0; i < 2; i++) {
-            assert(
+            SEQUANT_ASSERT(
                 original_map.find(factor->as<Tensor>().ket()[i].to_latex()) !=
                 original_map.end());
             if (original_map.find(factor->as<Tensor>().ket()[i].to_latex())

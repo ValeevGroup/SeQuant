@@ -17,7 +17,7 @@ ExprPtr expectation_value_impl(ExprPtr expr,
   if (!skip_clone) expr = expr->clone();
 
   auto vac_av_product = [&op_connections, use_topology, screen, full_contractions](ExprPtr expr) {
-    assert(expr.is<Product>());
+    SEQUANT_ASSERT(expr.is<Product>());
     // extract scalar and factors
     const auto scalar = expr.as<Product>().scalar();
     auto factors = expr.as<Product>().factors();
