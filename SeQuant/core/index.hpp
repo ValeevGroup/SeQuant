@@ -6,8 +6,9 @@
 #define SEQUANT_INDEX_H
 
 #include <SeQuant/core/container.hpp>
-#include <SeQuant/core/context.hpp>
 #include <SeQuant/core/hash.hpp>
+#include <SeQuant/core/index_space_registry.hpp>
+#include <SeQuant/core/space.hpp>
 #include <SeQuant/core/tag.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/string.hpp>
@@ -15,7 +16,6 @@
 
 #include <algorithm>
 #include <atomic>
-#include <charconv>
 #include <cstdint>
 #include <cwchar>
 #include <functional>
@@ -23,6 +23,7 @@
 #include <iostream>
 #include <iterator>
 #include <map>
+#include <memory>
 #include <mutex>
 #include <optional>
 #include <stdexcept>
@@ -328,12 +329,11 @@ class Index : public Taggable {
   /// the cost of slightly increased danger
   template <basic_string_convertible String>
   Index(String &&label)
-      : Index(
-            get_default_context().index_space_registry()
-                ? get_default_context().index_space_registry()->retrieve(label)
-                : IndexSpace{base_label(label), IndexSpace::Type::reserved,
-                             IndexSpace::QuantumNumbers::reserved},
-            to_ordinal(label), {}) {
+      : Index(obtain_default_index_registry()
+                  ? obtain_default_index_registry()->retrieve(label)
+                  : IndexSpace{base_label(label), IndexSpace::Type::reserved,
+                               IndexSpace::QuantumNumbers::reserved},
+              to_ordinal(label), {}) {
     check_nonreserved();
     if constexpr (std::is_same_v<String, std::wstring>) {
       label_ = std::move(label);
@@ -1042,6 +1042,8 @@ class Index : public Taggable {
 
     return i1_Q < i2_Q ? SO::less : SO::greater;
   }
+
+  static std::shared_ptr<const IndexSpaceRegistry> obtain_default_index_registry();
 
 };  // class Index
 
