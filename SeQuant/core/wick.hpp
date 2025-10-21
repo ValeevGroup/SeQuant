@@ -851,10 +851,10 @@ class WickTheorem {
 
       // add contraction to the grand list
       auto register_contraction = [&]() {
-        assert(ranges::contains(this->contractions,
-                                std::make_pair(*(op1_cursor.elem_iter()),
-                                               *(op2_cursor.elem_iter()))) ==
-               false);
+        SEQUANT_ASSERT(ranges::contains(
+                           this->contractions,
+                           std::make_pair(*(op1_cursor.elem_iter()),
+                                          *(op2_cursor.elem_iter()))) == false);
         this->contractions.emplace_back(*op1_cursor.elem_iter(),
                                         *op2_cursor.elem_iter());
       };
@@ -1013,8 +1013,8 @@ class WickTheorem {
 
           SEQUANT_ASSERT(op_partition_cdeg_matrix.size() >
                          uptri_op(op1_partition_idx, op2_partition_idx));
-          assert(op_partition_cdeg_matrix[uptri_op(op1_partition_idx,
-                                                   op2_partition_idx)] > 0);
+          SEQUANT_ASSERT(op_partition_cdeg_matrix[uptri_op(
+                             op1_partition_idx, op2_partition_idx)] > 0);
           op_partition_cdeg_matrix[uptri_op(op1_partition_idx,
                                             op2_partition_idx)] -= 1;
           SEQUANT_ASSERT(op_partition_ncontractions[op1_partition_idx] > 0);
@@ -1273,9 +1273,9 @@ class WickTheorem {
                     if (op_right_partition.size() ==
                         nop_right_input.hug()->group_size(
                             op_right_ord_in_nop_input)) {
-                      assert(ref_op_psymm_weight ==
-                             op_right_partition.size() -
-                                 op_right_ord_in_partition);
+                      SEQUANT_ASSERT(ref_op_psymm_weight ==
+                                     op_right_partition.size() -
+                                         op_right_ord_in_partition);
                     }
                   }
                 }
@@ -1426,8 +1426,9 @@ class WickTheorem {
                             ctx.spbasis() == SPBasis::Spinfree) {
                           auto [target_partner_indices, ncycles] =
                               state.make_target_partner_indices();
-                          assert(target_partner_indices
-                                     .empty());  // all ops are contracted out
+                          SEQUANT_ASSERT(
+                              target_partner_indices
+                                  .empty());  // all ops are contracted out
                           scalar_prefactor *= 1 << ncycles;
                         }
                         auto prefactor = state.sp.deep_copy().scale(

@@ -137,12 +137,12 @@ std::vector<ExprPtr> CC::λ(size_t commutator_rank) {
 }
 
 std::vector<ExprPtr> CC::t_pt(size_t rank, [[maybe_unused]] size_t order) {
-  assert(order == 1 &&
-         "sequant::mbpt::CC::t_pt(): only first-order perturbation is "
-         "supported now");
-  assert(rank == 1 &&
-         "sequant::mbpt::CC::t_pt(): only one-body perturbation "
-         "operator is supported now");
+  SEQUANT_ASSERT(order == 1 &&
+                 "sequant::mbpt::CC::t_pt(): only first-order perturbation is "
+                 "supported now");
+  SEQUANT_ASSERT(rank == 1 &&
+                 "sequant::mbpt::CC::t_pt(): only one-body perturbation "
+                 "operator is supported now");
   SEQUANT_ASSERT(ansatz_ == Ansatz::T && "unitary ansatz is not yet supported");
 
   // construct h1_bar
@@ -177,12 +177,12 @@ std::vector<ExprPtr> CC::t_pt(size_t rank, [[maybe_unused]] size_t order) {
 }
 
 std::vector<ExprPtr> CC::λ_pt(size_t rank, [[maybe_unused]] size_t order) {
-  assert(order == 1 &&
-         "sequant::mbpt::CC::λ_pt(): only first-order perturbation is "
-         "supported now");
-  assert(rank == 1 &&
-         "sequant::mbpt::CC::λ_pt(): only one-body perturbation "
-         "operator is supported now");
+  SEQUANT_ASSERT(order == 1 &&
+                 "sequant::mbpt::CC::λ_pt(): only first-order perturbation is "
+                 "supported now");
+  SEQUANT_ASSERT(rank == 1 &&
+                 "sequant::mbpt::CC::λ_pt(): only one-body perturbation "
+                 "operator is supported now");
   SEQUANT_ASSERT(ansatz_ == Ansatz::T && "unitary ansatz is not yet supported");
 
   // construct hbar
@@ -236,7 +236,7 @@ std::vector<ExprPtr> CC::eom_r(nₚ np, nₕ nh) {
   SEQUANT_ASSERT((np > 0 || nh > 0) && "Unsupported excitation order");
 
   if (np != nh)
-    assert(
+    SEQUANT_ASSERT(
         get_default_context().spbasis() != SPBasis::Spinfree &&
         "spin-free basis does not yet support non particle-conserving cases");
   const bool skip_singles = ansatz_ == Ansatz::oT;

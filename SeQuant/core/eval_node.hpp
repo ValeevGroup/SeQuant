@@ -191,9 +191,9 @@ struct FlopsWithSymm {
                    ? cost / factorial(tbrank)
                    : cost / (factorial(tbrank) * factorial(tkrank));
       } else
-        assert(false &&
-               "Unsupported evaluation operation for asymptotic cost "
-               "computation.");
+        SEQUANT_ASSERT(false &&
+                       "Unsupported evaluation operation for asymptotic cost "
+                       "computation.");
     }
     return cost;
   }
