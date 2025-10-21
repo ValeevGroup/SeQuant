@@ -71,6 +71,10 @@ class JuliaTensorOperationsGenerator : public Generator<Context> {
     return DeclarationScope::Global;
   }
 
+  PrunableScalars prunable_scalars() const override {
+    return PrunableScalars::All;
+  }
+
   std::string represent(const Index &idx, const Context &) const override {
     if (idx.has_proto_indices()) {
       throw std::runtime_error("Proto Indices are not (yet) supported!");
