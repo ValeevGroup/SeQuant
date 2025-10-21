@@ -83,18 +83,26 @@ class Expr : public std::enable_shared_from_this<Expr>,
   virtual ExprPtr clone() const;
 
   /// like Expr::shared_from_this, but returns ExprPtr
-  /// @return a shared_ptr to this object wrapped into ExprPtr
-  /// @throw std::bad_weak_ptr if this object is not managed by a shared_ptr
+  /// @return a shared_ptr to this object wrapped into ExprPtr, if this object
+  /// is already managed by a shared_ptr, else returns a shared_ptr to a clone
+  /// of this object wrapped into ExprPtr
   ExprPtr exprptr_from_this() {
-    return static_cast<ExprPtr>(this->shared_from_this());
+    if (weak_from_this().use_count() == 0)
+      return this->clone();
+    else
+      return static_cast<ExprPtr>(this->shared_from_this());
   }
 
   /// like Expr::shared_from_this, but returns ExprPtr
-  /// @return a shared_ptr to this object wrapped into ExprPtr
-  /// @throw std::bad_weak_ptr if this object is not managed by a shared_ptr
+  /// @return a shared_ptr to this object wrapped into ExprPtr, if this object
+  /// is already managed by a shared_ptr, else returns a shared_ptr to a clone
+  /// of this object wrapped into ExprPtr
   ExprPtr exprptr_from_this() const {
-    return static_cast<const ExprPtr>(
-        std::const_pointer_cast<Expr>(this->shared_from_this()));
+    if (weak_from_this().use_count() == 0)
+      return this->clone();
+    else
+      return static_cast<const ExprPtr>(
+          std::const_pointer_cast<Expr>(this->shared_from_this()));
   }
 
   /// Canonicalizes @c this and returns the byproduct of canonicalization (e.g.
