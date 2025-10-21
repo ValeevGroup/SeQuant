@@ -1836,7 +1836,7 @@ ExprPtr spintrace(
   ExprPtr result;
   if (expr->is<Product>()) {
     result = trace_product(expr.as_shared_ptr<Product>());
-  } else if ((expr->is<Sum>())) {
+  } else if (expr->is<Sum>()) {
     auto result_sum = std::make_shared<Sum>();
     for (auto&& term : *expr) {
       if (term->is<Product>())
