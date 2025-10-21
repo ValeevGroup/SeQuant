@@ -48,13 +48,27 @@ class Sum : public Expr {
 
   /// construct a Sum out of a range of summands
   /// @param rng a range
-  template <typename Range,
-            typename = std::enable_if_t<meta::is_range_v<std::decay_t<Range>> &&
-                                        !meta::is_same_v<Range, ExprPtrList>>>
+  template <typename Range>
+    requires(meta::is_range_v<std::remove_cvref_t<Range>> &&
+             !meta::is_same_v<std::remove_cvref_t<Range>, ExprPtrList>)
   explicit Sum(Range &&rng) {
-    // use append to flatten out Sum summands
-    for (auto &&v : rng) {
-      append(std::forward<decltype(v)>(v));
+    // N.B. use append to flatten out Sum summands
+    constexpr auto rng_is_expr =
+        meta::is_base_of_v<Expr, std::remove_cvref_t<Range>>;
+    constexpr auto rng_is_exprptr =
+        meta::is_same_v<ExprPtr, std::remove_cvref_t<Range>>;
+    if constexpr (rng_is_expr || rng_is_exprptr) {
+      ExprPtr rng_as_exprptr;
+      if constexpr (rng_is_expr) {
+        rng_as_exprptr = rng.exprptr_from_this();
+      } else {
+        rng_as_exprptr = rng;
+      }
+      this->append(rng_as_exprptr);
+    } else {
+      for (auto &&v : rng) {
+        append(std::forward<decltype(v)>(v));
+      }
     }
   }
 

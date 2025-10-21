@@ -67,7 +67,8 @@ std::vector<ExprPtr> CC::t(size_t commutator_rank, size_t pmax, size_t pmin) {
       }
       hbar = hbar_le_p;
     } else {  // no screening, use full hbar
-      hbar_for_vev = std::make_shared<Sum>(hbar);
+      hbar_for_vev = hbar.is<Sum>() ? hbar.as_shared_ptr<Sum>()
+                                    : std::make_shared<Sum>(hbar);
     }
 
     // 2.b project onto <p| (i.e., multiply by P(p) if p>0) and compute VEV
@@ -126,7 +127,8 @@ std::vector<ExprPtr> CC::λ(size_t commutator_rank) {
       }
       lhbar = lhbar_le_p;
     } else {  // no screening
-      lhbar_for_vev = std::make_shared<Sum>(lhbar);
+      lhbar_for_vev = lhbar.is<Sum>() ? lhbar.as_shared_ptr<Sum>()
+                                      : std::make_shared<Sum>(lhbar);
     }
 
     // 2.b multiply by adjoint of P(p) (i.e., P(-p)) on the right side and
