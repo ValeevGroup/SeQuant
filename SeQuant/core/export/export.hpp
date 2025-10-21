@@ -289,8 +289,9 @@ struct PreprocessResult {
 /// multiplied with the end result rather than creating intermediates
 /// themselves.
 template <typename T>
-bool prune_scalar_factor(ExportNode<T> &node, PreprocessResult &result) {
-  if (!node.leaf() || !node->is_scalar()) {
+bool prune_scalar_factor(ExportNode<T> &node, PreprocessResult &result,
+                         PrunableScalars prunable) {
+  if (prunable == PrunableScalars::None || !node.leaf() || !node->is_scalar()) {
     return false;
   }
 
@@ -307,8 +308,13 @@ bool prune_scalar_factor(ExportNode<T> &node, PreprocessResult &result) {
   SEQUANT_ASSERT(factor->is<Constant>() || factor->is<Variable>());
 
   if (factor->is<Variable>()) {
+    if ((prunable & PrunableScalars::Variables) == PrunableScalars::None) {
+      return false;
+    }
     result.variables[factor->as<Variable>()] |=
         node.leaf() ? Usage::Terminal : Usage::Intermediate;
+  } else if ((prunable & PrunableScalars::Constants) == PrunableScalars::None) {
+    return false;
   }
 
   if (parentFactor) {
@@ -508,8 +514,9 @@ bool may_prune(const EvalNode<T> &tree) {
 template <typename T>
 class PreprocessVisitor {
  public:
-  PreprocessVisitor(PreprocessResult &result, ExportContext &ctx)
-      : m_result(result), m_ctx(ctx) {}
+  PreprocessVisitor(PreprocessResult &result, ExportContext &ctx,
+                    PrunableScalars prunable)
+      : m_result(result), m_ctx(ctx), m_prunable(prunable) {}
 
   void operator()(ExportNode<T> &tree, TreeTraversal context) {
     // Note the context for leaf nodes is always TreeTraversal::Any
@@ -539,7 +546,8 @@ class PreprocessVisitor {
   }
 
   void prune_scalar_factors(ExportNode<T> &tree) {
-    while (may_prune(tree) && prune_scalar_factor(tree.left(), m_result)) {
+    while (may_prune(tree) &&
+           prune_scalar_factor(tree.left(), m_result, m_prunable)) {
       // In case the pruning led to tree becoming a leaf, we have to move the
       // pruned scalar factor out to its parent in order to be properly
       // accounted for (as leafs only get loaded and never computed)
@@ -558,7 +566,8 @@ class PreprocessVisitor {
       }
     }
 
-    while (may_prune(tree) && prune_scalar_factor(tree.right(), m_result)) {
+    while (may_prune(tree) &&
+           prune_scalar_factor(tree.right(), m_result, m_prunable)) {
       if (auto iter = m_result.scalarFactors.find(tree->id());
           iter != m_result.scalarFactors.end() && tree.leaf()) {
         SEQUANT_ASSERT(!tree.root());
@@ -639,13 +648,14 @@ class PreprocessVisitor {
  private:
   PreprocessResult &m_result;
   ExportContext &m_ctx;
+  PrunableScalars m_prunable;
 };
 
 /// Uses the PreprocessVisitor to perform preprocessing and, if desired, also
 /// logs the tree before and after preprocessing
 template <typename T>
 void preprocess_and_maybe_log(ExportNode<T> &tree, PreprocessResult &result,
-                              ExportContext &ctx) {
+                              ExportContext &ctx, PrunableScalars prunable) {
   if (Logger::instance().export_equations) {
     std::cout << "Tree before preprocessing:\n"
               << tree.tikz(
@@ -656,7 +666,7 @@ void preprocess_and_maybe_log(ExportNode<T> &tree, PreprocessResult &result,
               << "\n";
   }
 
-  detail::PreprocessVisitor<T> preprocessor(result, ctx);
+  detail::PreprocessVisitor<T> preprocessor(result, ctx, prunable);
   tree.visit(preprocessor, TreeTraversal::PreAndPostOrder);
 
   if (Logger::instance().export_equations) {
@@ -857,7 +867,8 @@ void export_groups(Range groups, Generator<Context> &generator, Context ctx) {
 
       ctx.set_current_expression_id(current_tree->id());
 
-      detail::preprocess_and_maybe_log(current_tree, pp_results.back(), ctx);
+      detail::preprocess_and_maybe_log(current_tree, pp_results.back(), ctx,
+                                       generator.prunable_scalars());
 
       ctx.clear_current_expression_id();
     }

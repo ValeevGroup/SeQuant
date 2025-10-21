@@ -248,7 +248,11 @@ void generateITF(const json &blocks, std::string_view out_file,
         }
       }
 
-      spdlog::debug("Initial equation is:\n{}", result);
+      // SeQuant processing often assumes fully expanded/simplified expressions
+      // so at least for now, we start out with exactly that
+      rapid_simplify(result);
+
+      spdlog::debug("Initial (mildly simplified) equation is:\n{}", result);
 
       ProcessingOptions options =
           extractProcessingOptions(current_result, defaults);

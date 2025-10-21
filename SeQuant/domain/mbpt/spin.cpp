@@ -245,7 +245,8 @@ ExprPtr swap_bra_ket(const ExprPtr& expr) {
       } else if (term->is<Variable>() || term->is<Constant>()) {
         result->append(1, term);
       } else {
-        throw std::runtime_error("Invalid Expr type in product_swap");
+        throw std::runtime_error("Invalid Expr type in product_swap: " +
+                                 term->type_name());
       }
     }
     return result;
@@ -262,7 +263,8 @@ ExprPtr swap_bra_ket(const ExprPtr& expr) {
     }
     return result;
   } else {
-    throw std::runtime_error("Invalid Expr type in swap_bra_ket");
+    throw std::runtime_error("Invalid Expr type in swap_bra_ket: " +
+                             expr->type_name());
   }
 }
 
@@ -284,7 +286,8 @@ ExprPtr append_spin(const ExprPtr& expr,
         spin_product->append(1, term);
       } else {
         throw std::runtime_error(
-            "Invalid Expr type in append_spin::add_spin_to_product");
+            "Invalid Expr type in append_spin::add_spin_to_product: " +
+            term->type_name());
       }
     }
     return spin_product;
@@ -332,7 +335,8 @@ ExprPtr remove_spin(const ExprPtr& expr) {
             result->append(1, term);
           } else {
             throw std::runtime_error(
-                "Invalid Expr type in remove_spin::remove_spin_from_product");
+                "Invalid Expr type in remove_spin::remove_spin_from_product: " +
+                term->type_name());
           }
         }
         return result;
@@ -351,7 +355,8 @@ ExprPtr remove_spin(const ExprPtr& expr) {
   } else if (expr->is<Constant>() || expr->is<Variable>()) {
     return expr;
   } else {
-    throw std::runtime_error("Invalid Expr type in remove_spin");
+    throw std::runtime_error("Invalid Expr type in remove_spin: " +
+                             expr->type_name());
   }
 }
 
@@ -420,7 +425,7 @@ bool can_expand(const AbstractTensor& tensor) {
 ExprPtr expand_antisymm(const Tensor& tensor, bool skip_spinsymm) {
   SEQUANT_ASSERT(tensor.bra_rank() == tensor.ket_rank());
   // Return non-symmetric tensor if rank is 1
-  if (tensor.bra_rank() == 1) {
+  if (tensor.bra_rank() <= 1) {
     Tensor new_tensor(tensor.label(), tensor.bra(), tensor.ket(), tensor.aux(),
                       Symmetry::Nonsymm, tensor.braket_symmetry(),
                       tensor.column_symmetry());
@@ -489,7 +494,8 @@ ExprPtr expand_antisymm(const ExprPtr& expr, bool skip_spinsymm) {
         temp.append(1, term, Product::Flatten::No);
       } else {
         throw std::runtime_error(
-            "Invalid Expr type in expand_antisymm::expand_product");
+            "Invalid Expr type in expand_antisymm::expand_product: " +
+            term->type_name());
       }
     }
     ExprPtr result = std::make_shared<Product>(temp);
@@ -506,7 +512,8 @@ ExprPtr expand_antisymm(const ExprPtr& expr, bool skip_spinsymm) {
     }
     return result;
   } else {
-    throw std::runtime_error("Invalid Expr type in expand_antisymm");
+    throw std::runtime_error("Invalid Expr type in expand_antisymm: " +
+                             expr->type_name());
   }
 }
 
@@ -680,7 +687,8 @@ ExprPtr symmetrize_expr(const ProductPtr& product) {
       } else if (term->is<Constant>() || term->is<Variable>()) {
         new_product.append(1, term);
       } else {
-        throw std::runtime_error("Invalid Expr type in symmetrize_expr");
+        throw std::runtime_error("Invalid Expr type in symmetrize_expr: " +
+                                 term->type_name());
       }
     }
     result->append(ex<Product>(new_product));
@@ -701,7 +709,8 @@ ExprPtr symmetrize_expr(const ExprPtr& expr) {
     }
     return result;
   } else {
-    throw std::runtime_error("Invalid Expr type in symmetrize_expr");
+    throw std::runtime_error("Invalid Expr type in symmetrize_expr: " +
+                             expr->type_name());
   }
 }
 
@@ -719,7 +728,8 @@ ExprPtr expand_A_op(const ExprPtr& expr) {
     return result;
   }
 
-  throw std::runtime_error("Invalid Expr type in expand_A_op");
+  throw std::runtime_error("Invalid Expr type in expand_A_op: " +
+                           expr->type_name());
 }
 
 container::svector<container::map<Index, Index>> P_maps(const Tensor& P) {
@@ -782,7 +792,8 @@ ExprPtr expand_P_op(const ProductPtr& product) {
       } else if (term->is<Constant>() || term->is<Variable>()) {
         new_product->append(1, term);
       } else {
-        throw std::runtime_error("Invalid Expr type in expand_P_op");
+        throw std::runtime_error("Invalid Expr type in expand_P_op: " +
+                                 term->type_name());
       }
     }
     result->append(new_product);
@@ -803,7 +814,8 @@ ExprPtr expand_P_op(const ExprPtr& expr) {
     }
     return result;
   } else {
-    throw std::runtime_error("Invalid Expr type in expand_P_op");
+    throw std::runtime_error("Invalid Expr type in expand_P_op: " +
+                             expr->type_name());
   }
 }
 
@@ -1068,7 +1080,8 @@ ExprPtr closed_shell_spintrace(
     }
     return result;
   } else {
-    throw std::runtime_error("Invalid Expr type in closed_shell_spintrace");
+    throw std::runtime_error("Invalid Expr type in closed_shell_spintrace: " +
+                             expr->type_name());
   }
 }
 
@@ -1257,7 +1270,7 @@ ExprPtr swap_spin(const ExprPtr& expr) {
         result.append(1, t, Product::Flatten::No);
       } else {
         throw std::runtime_error(
-            "Invalid Expr type in swap_spin::swap_product");
+            "Invalid Expr type in swap_spin::swap_product: " + t->type_name());
       }
     }
     return ex<Product>(result);
@@ -1274,7 +1287,8 @@ ExprPtr swap_spin(const ExprPtr& expr) {
     }
     return ex<Sum>(result);
   } else {
-    throw std::runtime_error("Invalid Expr type in swap_spin");
+    throw std::runtime_error("Invalid Expr type in swap_spin: " +
+                             expr->type_name());
   }
 }
 
@@ -1822,7 +1836,7 @@ ExprPtr spintrace(
   ExprPtr result;
   if (expr->is<Product>()) {
     result = trace_product(expr.as_shared_ptr<Product>());
-  } else if ((expr->is<Sum>())) {
+  } else if (expr->is<Sum>()) {
     auto result_sum = std::make_shared<Sum>();
     for (auto&& term : *expr) {
       if (term->is<Product>())
@@ -1837,7 +1851,8 @@ ExprPtr spintrace(
     }
     return result;
   } else {
-    throw std::runtime_error("Invalid Expr type in spintrace");
+    throw std::runtime_error("Invalid Expr type in spintrace: " +
+                             expr->type_name());
   }
 
   detail::reset_idx_tags(result);
@@ -1961,7 +1976,8 @@ ExprPtr factorize_S(const ExprPtr& expression,
             } else if (t->is<Constant>() || t->is<Variable>()) {
               S_product.append(1, t, Product::Flatten::No);
             } else {
-              throw std::runtime_error("Invalid Expr in factorize_S");
+              throw std::runtime_error("Invalid Expr in factorize_S: " +
+                                       t->type_name());
             }
           }
           auto new_product_expr = ex<Product>(S_product);
@@ -1981,7 +1997,8 @@ ExprPtr factorize_S(const ExprPtr& expression,
         } else if ((*it)->is<Constant>() || (*it)->is<Variable>()) {
           hash1 = (*it)->hash_value();
         } else {
-          throw std::runtime_error("Invalid Expr in factorize_S");
+          throw std::runtime_error("Invalid Expr in factorize_S: " +
+                                   (*it)->type_name());
         }
         hash1_list.push_back(hash1);
       }
@@ -2065,7 +2082,8 @@ ExprPtr factorize_S(const ExprPtr& expression,
             } else if (t->is<Constant>() || t->is<Variable>()) {
               S_product.append(1, t, Product::Flatten::No);
             } else {
-              throw std::runtime_error("Invalid Expr type in factorize_S");
+              throw std::runtime_error("Invalid Expr type in factorize_S: " +
+                                       t->type_name());
             }
           }
           auto new_product_expr = ex<Product>(S_product);
@@ -2084,7 +2102,8 @@ ExprPtr factorize_S(const ExprPtr& expression,
         } else if ((*it)->is<Constant>() || (*it)->is<Variable>()) {
           hash0 = (*it)->hash_value();
         } else {
-          throw std::runtime_error("Invalid Expr type in factorize_S");
+          throw std::runtime_error("Invalid Expr type in factorize_S: " +
+                                   (*it)->type_name());
         }
         hash0_list.push_back(hash0);
       }

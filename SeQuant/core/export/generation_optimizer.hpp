@@ -452,6 +452,7 @@ class GenerationOptimizer final : public Generator<MainContext> {
   DeclarationScope index_declaration_scope() const override { return m_generator.index_declaration_scope(); }
   DeclarationScope variable_declaration_scope() const override { return m_generator.variable_declaration_scope(); }
   DeclarationScope tensor_declaration_scope() const override { return m_generator.tensor_declaration_scope(); }
+  PrunableScalars prunable_scalars() const override { return m_generator.prunable_scalars(); }
   std::string represent(const Index &idx, const MainContext &ctx) const override { return m_generator.represent(idx, ctx); }
   std::string represent(const Tensor &tensor, const MainContext &ctx) const override { return m_generator.represent(tensor, ctx); }
   std::string represent(const Variable &variable, const MainContext &ctx) const override { return m_generator.represent(variable, ctx); }

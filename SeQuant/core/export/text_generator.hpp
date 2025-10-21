@@ -47,6 +47,10 @@ class TextGenerator : public Generator<Context> {
     return DeclarationScope::Section;
   }
 
+  PrunableScalars prunable_scalars() const override {
+    return PrunableScalars::All;
+  }
+
   std::string represent(const Index &idx, const Context &) const override {
     return toUtf8(idx.label());
   }

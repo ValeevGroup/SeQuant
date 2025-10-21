@@ -18,6 +18,16 @@ enum class DeclarationScope {
   Expression,
 };
 
+enum class PrunableScalars {
+  None = 0,
+  Constants = 0b01,
+  Variables = 0b10,
+  All = Constants | Variables
+};
+
+PrunableScalars operator&(PrunableScalars lhs, PrunableScalars rhs);
+PrunableScalars operator|(PrunableScalars lhs, PrunableScalars rhs);
+
 /// Abstract base class for all (code) generators. These work by implementing
 /// callbacks for semantic actions and their job is to perform (piecewise)
 /// translation of those semantic actions into the corresponding code.
@@ -47,6 +57,13 @@ class Generator {
   virtual DeclarationScope variable_declaration_scope() const = 0;
   /// @returns The scope at which this generator would like declare tensors
   virtual DeclarationScope tensor_declaration_scope() const = 0;
+
+  /// @returns What kinds of scalars may be pruned from the expression tree in
+  /// order to avoid binary computation steps for them. Instead, all pruned
+  /// scalars will be multiplied with whatever binary expression remains after
+  /// pruning. This means that scalar pruning may lead to non-binary expressions
+  /// that need to be exported by this generator.
+  virtual PrunableScalars prunable_scalars() const = 0;
 
   /// @returns A backend-specific string representation of the given Index
   virtual std::string represent(const Index &idx, const Context &ctx) const = 0;

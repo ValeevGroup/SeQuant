@@ -258,37 +258,37 @@ void biorthogonal_transform(container::svector<ResultExpr>& result_exprs,
   // indices
   // Also, we are assuming that all given ResultExpr objects are
   // particle-symmetric
-  assert(std::all_of(
+  SEQUANT_ASSERT(std::all_of(
       result_exprs.begin(), result_exprs.end(), [&](const ResultExpr& expr) {
         return expr.has_label() == result_exprs.front().has_label() &&
                (!expr.has_label() ||
                 expr.label() == result_exprs.front().label());
       }));
-  assert(std::all_of(
+  SEQUANT_ASSERT(std::all_of(
       result_exprs.begin(), result_exprs.end(), [&](const ResultExpr& expr) {
         return expr.symmetry() == result_exprs.front().symmetry();
       }));
-  assert(std::all_of(
+  SEQUANT_ASSERT(std::all_of(
       result_exprs.begin(), result_exprs.end(), [&](const ResultExpr& expr) {
         return expr.braket_symmetry() == result_exprs.front().braket_symmetry();
       }));
-  assert(std::all_of(
+  SEQUANT_ASSERT(std::all_of(
       result_exprs.begin(), result_exprs.end(), [&](const ResultExpr& expr) {
         return expr.column_symmetry() == result_exprs.front().column_symmetry();
       }));
-  assert(std::all_of(
+  SEQUANT_ASSERT(std::all_of(
       result_exprs.begin(), result_exprs.end(), [&](const ResultExpr& expr) {
         return expr.bra().size() == result_exprs.front().bra().size() &&
                std::is_permutation(expr.bra().begin(), expr.bra().end(),
                                    result_exprs.front().bra().begin());
       }));
-  assert(std::all_of(
+  SEQUANT_ASSERT(std::all_of(
       result_exprs.begin(), result_exprs.end(), [&](const ResultExpr& expr) {
         return expr.ket().size() == result_exprs.front().ket().size() &&
                std::is_permutation(expr.ket().begin(), expr.ket().end(),
                                    result_exprs.front().ket().begin());
       }));
-  assert(std::all_of(
+  SEQUANT_ASSERT(std::all_of(
       result_exprs.begin(), result_exprs.end(), [&](const ResultExpr& expr) {
         return expr.aux().size() == result_exprs.front().aux().size() &&
                std::is_permutation(expr.aux().begin(), expr.aux().end(),
