@@ -220,7 +220,7 @@ IndexGroups<Container> get_unique_indices(const Product& product) {
 
 /// Obtains the set of unique (non-repeated) indices used in the given
 /// expression
-template <typename Container>
+template <typename Container = std::vector<Index>>
 IndexGroups<Container> get_unique_indices(const Expr& expr) {
   if (expr.is<Constant>()) {
     return get_unique_indices<Container>(expr.as<Constant>());

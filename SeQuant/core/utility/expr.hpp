@@ -24,6 +24,36 @@ namespace sequant {
 /// meant to be (resonably) human-readable.
 std::string diff(const Expr &lhs, const Expr &rhs);
 
+/// Checks whether the given expression is valid (i.e. uses
+/// consistent indexing etc.)
+/// @param expr The expression to validate
+/// @param msg If given, the function will set the string to a message
+///            describing why the provided expression is considered to
+///            be invalid. If the expression is valid, the string will
+///            be left unchanged.
+/// @returns The validity of the expression
+bool is_valid(const ExprPtr &expr, std::string *msg = nullptr);
+
+/// Checks whether the given expression is valid (i.e. uses
+/// consistent indexing etc.)
+/// @param expr The expression to validate
+/// @param msg If given, the function will set the string to a message
+///            describing why the provided expression is considered to
+///            be invalid. If the expression is valid, the string will
+///            be left unchanged.
+/// @returns The validity of the expression
+bool is_valid(const Expr &expr, std::string *msg = nullptr);
+
+/// Checks whether the given expression is valid (i.e. uses
+/// consistent indexing etc.)
+/// @param expr The expression to validate
+/// @param msg If given, the function will set the string to a message
+///            describing why the provided expression is considered to
+///            be invalid. If the expression is valid, the string will
+///            be left unchanged.
+/// @returns The validity of the expression
+bool is_valid(const ResultExpr &expr, std::string *msg = nullptr);
+
 /// @brief Applies index replacement rules to an ExprPtr
 /// @param expr ExprPtr to transform
 /// @param index_replacements index replacement map

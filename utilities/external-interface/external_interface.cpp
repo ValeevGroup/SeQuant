@@ -254,6 +254,10 @@ void generateITF(const json &blocks, std::string_view out_file,
 
       spdlog::debug("Initial (mildly simplified) equation is:\n{}", result);
 
+      if (std::string msg; !is_valid(result, &msg)) {
+        throw std::runtime_error("Input equation is invalid: " + msg);
+      }
+
       ProcessingOptions options =
           extractProcessingOptions(current_result, defaults);
 

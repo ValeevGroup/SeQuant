@@ -456,4 +456,80 @@ TEST_CASE("utilities", "[utilities]") {
       }
     }
   }
+
+  SECTION("is_valid") {
+    SECTION("Expr") {
+      for (auto [expr_str, msg] :
+           std::vector<std::pair<std::wstring, std::string>>{
+               {L"Var", ""},
+               {L"3/8", ""},
+               {L"t{a1,a2;;i3}", ""},
+               {L"2 Var", ""},
+               {L"Var + Other", ""},
+               {L"Var + 3", ""},
+               {L"1 + t{}", ""},
+               {L"t{a1} t{a1} t{a1}", "Index a_1 appears more than 2 times"},
+               {L"1 + t{a1} t{a1} t{a1}",
+                "Index a_1 appears more than 2 times"},
+               {L"1 + t{a1}", "Inconsistent external indices in sum"},
+           }) {
+        CAPTURE(toUtf8(expr_str));
+
+        ExprPtr expr = parse_expr(expr_str);
+
+        const bool expected = msg.empty();
+
+        std::string actual_msg;
+        bool actual = is_valid(expr, &actual_msg);
+
+        REQUIRE(actual_msg == msg);
+        REQUIRE(actual == expected);
+
+        IndexGroups<> externals = get_unique_indices(expr);
+        // TODO: use proper symmetries
+        ResultExpr res(bra(externals.bra), ket(externals.ket),
+                       aux(externals.aux), Symmetry::Nonsymm,
+                       BraKetSymmetry::Nonsymm, ColumnSymmetry::Nonsymm, L"R",
+                       expr);
+
+        actual_msg.clear();
+        actual = is_valid(res, &actual_msg);
+
+        REQUIRE(actual_msg == msg);
+        REQUIRE(actual == expected);
+      }
+    }
+    SECTION("ResultExpr") {
+      for (const auto& [expr_str, msg] :
+           std::vector<std::pair<std::wstring, std::string>>{
+               {L"R{a1;a2} = t{a1;i1} t{i1;a2}", ""},
+               {L"R{a1,a2;i1,i2} = A{i1,i2;a1,a2} t{a1,a2;i1,i2}", ""},
+               {L"R{a2,a1;i1,i2} = S{i1,i2;a1,a2} t{a1,a2;i1,i2}", ""},
+               {L"R{a1} = Var",
+                "Bra indices of result are inconsistent with the rhs "
+                "expression"},
+               {L"R{;a1} = Var",
+                "Ket indices of result are inconsistent with the rhs "
+                "expression"},
+               {L"R{;;a1} = Var",
+                "Aux indices of result are inconsistent with the rhs "
+                "expression"},
+               {L"R{a2;a1} = t{a1;i1} t{i1;a2}",
+                "Bra indices of result are inconsistent with the rhs "
+                "expression"},
+           }) {
+        CAPTURE(toUtf8(expr_str));
+
+        ResultExpr expr = parse_result_expr(expr_str);
+
+        const bool expected = msg.empty();
+
+        std::string actual_msg;
+        bool actual = is_valid(expr, &actual_msg);
+
+        REQUIRE(actual_msg == msg);
+        REQUIRE(actual == expected);
+      }
+    }
+  }
 }
