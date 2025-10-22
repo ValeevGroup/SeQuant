@@ -98,6 +98,7 @@ assert_failed([[maybe_unused]] const std::string &errmsg,
 #if SEQUANT_ASSERT_BEHAVIOR == SEQUANT_ASSERT_THROW
   throw sequant::Exception(oss.str());
 #elif SEQUANT_ASSERT_BEHAVIOR == SEQUANT_ASSERT_ABORT
+  std::cerr << std::endl;
   std::abort();
 #endif  // SEQUANT_ASSERT_BEHAVIOR
 #endif  // SEQUANT_ASSERT_ENABLED
