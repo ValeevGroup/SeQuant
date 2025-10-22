@@ -79,9 +79,13 @@
 
 namespace sequant {
 
-inline void assert_failed([[maybe_unused]] const std::string &errmsg,
-                          [[maybe_unused]] const std::source_location location =
-                              std::source_location::current()) {
+#ifdef SEQUANT_ASSERT_ENABLED
+[[noreturn]]
+#endif
+inline void
+assert_failed([[maybe_unused]] const std::string &errmsg,
+              [[maybe_unused]] const std::source_location location =
+                  std::source_location::current()) {
 #ifdef SEQUANT_ASSERT_ENABLED
 #if SEQUANT_ASSERT_BEHAVIOR == SEQUANT_ASSERT_THROW
   std::ostringstream oss;
@@ -94,6 +98,7 @@ inline void assert_failed([[maybe_unused]] const std::string &errmsg,
 #if SEQUANT_ASSERT_BEHAVIOR == SEQUANT_ASSERT_THROW
   throw sequant::Exception(oss.str());
 #elif SEQUANT_ASSERT_BEHAVIOR == SEQUANT_ASSERT_ABORT
+  std::cerr << std::endl;
   std::abort();
 #endif  // SEQUANT_ASSERT_BEHAVIOR
 #endif  // SEQUANT_ASSERT_ENABLED
@@ -101,8 +106,9 @@ inline void assert_failed([[maybe_unused]] const std::string &errmsg,
 }  // namespace sequant
 
 #ifdef SEQUANT_ASSERT_ENABLED
-#define SEQUANT_ASSERT_MESSAGE(EXPR, ...) \
-  "SEQUANT_ASSERT(" SEQUANT_STRINGIFY(EXPR) ") failed [ " __VA_ARGS__ " ]"
+#define SEQUANT_ASSERT_MESSAGE(EXPR, ...)                          \
+  "SEQUANT_ASSERT(" SEQUANT_STRINGIFY(EXPR) ") failed" __VA_OPT__( \
+      " with message '" __VA_ARGS__ "'")
 
 #define SEQUANT_ASSERT(EXPR, ...)                                        \
   do {                                                                   \
