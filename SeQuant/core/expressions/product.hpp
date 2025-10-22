@@ -47,33 +47,48 @@ class Product : public Expr {
   }
 
   /// construct a Product out of zero or more factors (multiplied by 1)
-  /// @param rng a range of factors
+  /// @param rng a range of factors; if rng is a Product, it will be flattened
+  /// into this Product and its scalar prefactor will be preserved
   /// @param flatten_tag if Flatten::Yes, flatten the factors
-  template <typename Range,
-            typename = std::enable_if_t<meta::is_range_v<std::decay_t<Range>> &&
-                                        !meta::is_same_v<Range, ExprPtrList> &&
-                                        !meta::is_same_v<Range, Product>>>
+  template <typename Range>
+    requires(meta::is_range_v<std::remove_cvref_t<Range>> &&
+             !meta::is_same_v<std::remove_cvref_t<Range>, ExprPtrList>)
   explicit Product(Range &&rng, Flatten flatten_tag = Flatten::Yes) {
-    using ranges::begin;
-    using ranges::end;
-    for (auto &&v : rng) append(1, std::forward<decltype(v)>(v), flatten_tag);
+    // N.B. use append to flatten out Sum summands
+    constexpr auto rng_is_expr =
+        meta::is_base_of_v<Expr, std::remove_cvref_t<Range>>;
+    constexpr auto rng_is_exprptr =
+        meta::is_same_v<ExprPtr, std::remove_cvref_t<Range>>;
+    if constexpr (rng_is_expr || rng_is_exprptr) {
+      ExprPtr rng_as_exprptr;
+      if constexpr (rng_is_expr) {
+        rng_as_exprptr = rng.exprptr_from_this();
+      } else {
+        rng_as_exprptr = rng;
+      }
+      if (rng_as_exprptr.is<Product>()) {
+        const auto &rng_as_product = rng_as_exprptr.as<Product>();
+        for (const auto &v : rng_as_product.factors_)
+          this->append(1, v, flatten_tag);
+        this->scalar_ *= rng_as_product.scalar_;
+      } else
+        this->append(rng_as_exprptr);
+    } else {
+      for (auto &&v : rng) append(1, std::forward<decltype(v)>(v), flatten_tag);
+    }
   }
 
-  /// construct a Product out of zero or more factors (multiplied by 1)
+  /// construct a Product of the range of factors and multiply by @p scalar
   /// @tparam T a numeric type; it must be able to multiply Product::scalar_type
   /// @param scalar a scalar of type T
   /// @param rng a range of factors
   /// @param flatten_tag if Flatten::Yes, flatten the factors
-  template <typename T, typename Range,
-            typename = std::enable_if_t<
-                meta::is_range_v<std::decay_t<Range>> &&
-                !std::is_same_v<std::remove_reference_t<Range>, ExprPtrList> &&
-                !std::is_same_v<std::remove_reference_t<Range>, Product>>>
+  template <typename T, typename Range>
+    requires(meta::is_range_v<std::remove_cvref_t<Range>> &&
+             !meta::is_same_v<std::remove_cvref_t<Range>, ExprPtrList>)
   explicit Product(T scalar, Range &&rng, Flatten flatten_tag = Flatten::Yes)
-      : scalar_(std::move(scalar)) {
-    using ranges::begin;
-    using ranges::end;
-    for (auto &&v : rng) append(1, std::forward<decltype(v)>(v), flatten_tag);
+      : Product(std::forward<Range>(rng), flatten_tag) {
+    scalar_ *= std::move(scalar);
   }
 
   /// construct a Product out of zero or more factors multiplied by a scalar
