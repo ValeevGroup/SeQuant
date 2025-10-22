@@ -79,9 +79,13 @@
 
 namespace sequant {
 
-inline void assert_failed([[maybe_unused]] const std::string &errmsg,
-                          [[maybe_unused]] const std::source_location location =
-                              std::source_location::current()) {
+#ifdef SEQUANT_ASSERT_ENABLED
+[[noreturn]]
+#endif
+inline void
+assert_failed([[maybe_unused]] const std::string &errmsg,
+              [[maybe_unused]] const std::source_location location =
+                  std::source_location::current()) {
 #ifdef SEQUANT_ASSERT_ENABLED
 #if SEQUANT_ASSERT_BEHAVIOR == SEQUANT_ASSERT_THROW
   std::ostringstream oss;
