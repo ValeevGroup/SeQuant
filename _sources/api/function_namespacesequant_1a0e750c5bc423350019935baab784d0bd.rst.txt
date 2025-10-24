@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a0e750c5bc423350019935baab784d0bd:
+
+Function sequant::kronecker_label
+=================================
+
+- Defined in :ref:`file_SeQuant_core_expressions_tensor.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::kronecker_label()
+   :project: SeQuant

@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1acd3c708e58c98005b82af6f0203af462:
+
+Template Function sequant::deparse(const NormalOperator<S>&)
+============================================================
+
+- Defined in :ref:`file_SeQuant_core_parse_deparse.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::deparse(const NormalOperator<S>&)
+   :project: SeQuant

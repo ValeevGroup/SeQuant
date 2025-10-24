@@ -1,0 +1,17 @@
+.. _exhale_struct_structsequant_1_1space__tags_1_1_is_reference_occupied:
+
+Struct IsReferenceOccupied
+==========================
+
+- Defined in :ref:`file_SeQuant_core_index_space_registry.hpp`
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::space_tags::IsReferenceOccupied
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

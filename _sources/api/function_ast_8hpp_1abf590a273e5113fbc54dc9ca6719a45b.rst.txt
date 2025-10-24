@@ -1,0 +1,14 @@
+.. _exhale_function_ast_8hpp_1abf590a273e5113fbc54dc9ca6719a45b:
+
+Function BOOST_FUSION_ADAPT_STRUCT(sequant::parse::ast::Number, numerator, denominator)
+=======================================================================================
+
+- Defined in :ref:`file_SeQuant_core_parse_ast.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: BOOST_FUSION_ADAPT_STRUCT(sequant::parse::ast::Number, numerator, denominator)
+   :project: SeQuant

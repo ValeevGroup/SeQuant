@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1opt_1a0eda7f76073a13b7aca43425edcdcaf5:
+
+Function sequant::opt::reorder
+==============================
+
+- Defined in :ref:`file_SeQuant_core_optimize_optimize.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::opt::reorder(Sum const&)
+   :project: SeQuant

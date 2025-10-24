@@ -1,0 +1,105 @@
+
+.. _file_SeQuant_core_expressions_expr_ptr.hpp:
+
+File expr_ptr.hpp
+=================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core_expressions>` (``SeQuant/core/expressions``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/expressions/expr_ptr.hpp``)
+------------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_expressions_expr_ptr.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/container.hpp`` (:ref:`file_SeQuant_core_container.hpp`)
+
+- ``SeQuant/core/expr_fwd.hpp`` (:ref:`file_SeQuant_core_expr_fwd.hpp`)
+
+- ``SeQuant/core/expressions/traits.hpp`` (:ref:`file_SeQuant_core_expressions_traits.hpp`)
+
+- ``SeQuant/core/utility/macros.hpp`` (:ref:`file_SeQuant_core_utility_macros.hpp`)
+
+- ``memory``
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_core_expr.hpp`
+
+- :ref:`file_SeQuant_core_expressions_constant.hpp`
+
+- :ref:`file_SeQuant_core_expressions_expr.hpp`
+
+- :ref:`file_SeQuant_core_expressions_expr_algorithms.hpp`
+
+- :ref:`file_SeQuant_core_expressions_expr_operators.hpp`
+
+- :ref:`file_SeQuant_core_expressions_expr_range.hpp`
+
+- :ref:`file_SeQuant_core_expressions_product.hpp`
+
+- :ref:`file_SeQuant_core_expressions_sum.hpp`
+
+- :ref:`file_SeQuant_core_expressions_variable.hpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+
+Classes
+-------
+
+
+- :ref:`exhale_class_classsequant_1_1_expr_ptr`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1af4f19f545e6cd169b63cae9380ec8a40`
+
+
+Typedefs
+--------
+
+
+- :ref:`exhale_typedef_namespacesequant_1ac7e383437dab811d4219dd728be59a70`
+
+- :ref:`exhale_typedef_namespacesequant_1a388e4a59478e5e1ead910ed0f0edcf5b`
+
+
+Variables
+---------
+
+
+- :ref:`exhale_variable_namespacesequant_1a6c89624f108880b0b5a6b0695eb01dcb`
+

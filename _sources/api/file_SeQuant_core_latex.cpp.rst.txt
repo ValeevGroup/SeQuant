@@ -1,0 +1,69 @@
+
+.. _file_SeQuant_core_latex.cpp:
+
+File latex.cpp
+==============
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core>` (``SeQuant/core``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/latex.cpp``)
+---------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_latex.cpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/latex.ipp`` (:ref:`file_SeQuant_core_latex.ipp`)
+
+
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+- :ref:`namespace_sequant__detail`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1_1detail_1a4d530f2fe54abd2bdeff325388c05131`
+
+- :ref:`exhale_function_namespacesequant_1_1detail_1a4b1d9c37b6bbdf502bc4ca85a4297121`
+
+- :ref:`exhale_function_namespacesequant_1_1detail_1a59133a39ee162bde9883c9a3267d9f17`
+
+- :ref:`exhale_function_namespacesequant_1_1detail_1a520c4877aa5705eb2b11d47e52b06a9e`
+
+
+Defines
+-------
+
+
+- :ref:`exhale_define_latex_8cpp_1ab760ab1eddd4483966e84165082e67a7`
+
+- :ref:`exhale_define_latex_8cpp_1ad1cf33c51a3319055cdaacc324fa7e69`
+

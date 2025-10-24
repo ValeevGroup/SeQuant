@@ -1,0 +1,20 @@
+
+.. _namespace_detail:
+
+Namespace detail
+================
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+
+
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacedetail_1afeadcbff331a5c52159ddb6f4f2bea65`

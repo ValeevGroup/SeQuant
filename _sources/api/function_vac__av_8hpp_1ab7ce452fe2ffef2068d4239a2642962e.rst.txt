@@ -1,0 +1,14 @@
+.. _exhale_function_vac__av_8hpp_1ab7ce452fe2ffef2068d4239a2642962e:
+
+Function vac_av(ExprPtr, const OpConnections<std::wstring>&, bool, bool, bool)
+==============================================================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_vac_av.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: vac_av(ExprPtr, const OpConnections<std::wstring>&, bool, bool, bool)
+   :project: SeQuant

@@ -1,0 +1,28 @@
+.. _exhale_class_classsequant_1_1_cache_manager:
+
+Class CacheManager
+==================
+
+- Defined in :ref:`file_SeQuant_domain_eval_cache_manager.hpp`
+
+
+Nested Relationships
+--------------------
+
+
+Nested Types
+************
+
+- :ref:`exhale_struct_structsequant_1_1_cache_manager_1_1access__by`
+- :ref:`exhale_class_classsequant_1_1_cache_manager_1_1entry`
+
+
+Class Documentation
+-------------------
+
+
+.. doxygenclass:: sequant::CacheManager
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:
