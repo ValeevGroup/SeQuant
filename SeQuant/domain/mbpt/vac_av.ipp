@@ -137,8 +137,8 @@ ExprPtr ref_av(ExprPtr expr, const OpConnections<std::wstring>& op_connections,
                bool use_topology, bool screen, bool use_connectivity, bool skip_clone) {
   auto isr = get_default_context().index_space_registry();
   const bool full_contractions =
-      (isr->reference_occupied_space() == isr->vacuum_occupied_space()) ? true
-                                                                        : false;
+      (isr->reference_occupied_space() == isr->vacuum_occupied_space());
+
   return detail::expectation_value_impl(expr, op_connections, use_topology,
                                         screen, skip_clone,
                                         full_contractions, use_connectivity);
