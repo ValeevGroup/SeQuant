@@ -1109,7 +1109,7 @@ bool lowers_rank_to_vacuum(const ExprPtr& op_or_op_product,
 namespace tensor {
 
 ExprPtr detail::expectation_value_impl(
-    ExprPtr expr, std::vector<std::pair<int, int>> nop_connections,
+    ExprPtr expr, const std::vector<std::pair<int, int>>& nop_connections,
     bool use_top, bool full_contractions, bool use_connectivity) {
   simplify(expr);
   auto isr = get_default_context().index_space_registry();
@@ -1330,7 +1330,8 @@ ExprPtr detail::expectation_value_impl(
   }
 }
 
-ExprPtr ref_av(ExprPtr expr, std::vector<std::pair<int, int>> nop_connections,
+ExprPtr ref_av(ExprPtr expr,
+               const std::vector<std::pair<int, int>>& nop_connections,
                bool use_top, bool use_connectivity) {
   auto isr = get_default_context().index_space_registry();
   const bool full_contractions =
@@ -1340,7 +1341,8 @@ ExprPtr ref_av(ExprPtr expr, std::vector<std::pair<int, int>> nop_connections,
                                         full_contractions, use_connectivity);
 }
 
-ExprPtr vac_av(ExprPtr expr, std::vector<std::pair<int, int>> nop_connections,
+ExprPtr vac_av(ExprPtr expr,
+               const std::vector<std::pair<int, int>>& nop_connections,
                bool use_top, bool use_connectivity) {
   return detail::expectation_value_impl(expr, nop_connections, use_top,
                                         /* full_contractions*/ true,

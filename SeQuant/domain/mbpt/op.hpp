@@ -530,10 +530,9 @@ qns_t generic_deexcitation_qns(std::size_t particle_rank, std::size_t hole_rank,
 inline namespace op {
 namespace tensor {
 namespace detail {
-ExprPtr expectation_value_impl(ExprPtr expr,
-                               std::vector<std::pair<int, int>> nop_connections,
-                               bool use_top, bool full_contractions,
-                               bool use_connectivity);
+ExprPtr expectation_value_impl(
+    ExprPtr expr, const std::vector<std::pair<int, int>>& nop_connections,
+    bool use_top, bool full_contractions, bool use_connectivity);
 }  // namespace detail
 
 /// @brief computes the reference expectation value of a tensor-level expression
@@ -542,7 +541,7 @@ ExprPtr expectation_value_impl(ExprPtr expr,
 /// @param use_top if true, WickTheorem uses topological equivalence of terms
 /// @param use_connectivity if true, WickTheorem uses connectivity information
 ExprPtr ref_av(ExprPtr expr,
-               std::vector<std::pair<int, int>> nop_connections = {},
+               const std::vector<std::pair<int, int>>& nop_connections = {},
                bool use_top = true, bool use_connectivity = true);
 
 /// @brief computes the vacuum expectation value of a tensor-level expression,
@@ -552,7 +551,7 @@ ExprPtr ref_av(ExprPtr expr,
 /// @param use_top if true, WickTheorem uses topological equivalence of terms
 /// @param use_connectivity if true, WickTheorem uses connectivity information
 ExprPtr vac_av(ExprPtr expr,
-               std::vector<std::pair<int, int>> nop_connections = {},
+               const std::vector<std::pair<int, int>>& nop_connections = {},
                bool use_top = true, bool use_connectivity = true);
 }  // namespace tensor
 }  // namespace op
