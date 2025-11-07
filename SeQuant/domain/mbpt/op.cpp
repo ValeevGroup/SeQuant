@@ -1049,28 +1049,20 @@ ExprPtr L(nann na, ncre nc, const cre<IndexSpace>& cre_space,
 
 ExprPtr L(nₚ np, nₕ nh) { return L(nann(np), ncre(nh)); }
 
-qns_t apply_to_vac(const ExprPtr& expr) {
-  SEQUANT_ASSERT(expr.is<op_t>() || expr.is<Product>());
-  qns_t qns;
-  if (expr.is<op_t>()) {
-    qns = expr.as<op_t>()();
-  } else if (expr.is<Product>()) {
-    const auto& op_product = expr.as<Product>();
-    for (auto& op_ptr : ranges::views::reverse(op_product.factors())) {
-      SEQUANT_ASSERT(op_ptr->template is<op_t>());
-      const auto& op = op_ptr->template as<op_t>();
-      qns = op(qns);
-    }
-  }
-  return qns;
-}
-
 bool can_change_qns(const ExprPtr& op_or_op_product, const qns_t& target_qns,
                     const qns_t& source_qns) {
   qns_t qns = source_qns;
-  if (op_or_op_product.is<Product>() || op_or_op_product.is<op_t>()) {
-    auto qnc = apply_to_vac(op_or_op_product);
-    qns = combine(qnc, qns);  // apply the operator qnc on the source qns
+  if (op_or_op_product.is<Product>()) {
+    const auto& op_product = op_or_op_product.as<Product>();
+    for (auto& op_ptr : ranges::views::reverse(op_product.factors())) {
+      assert(op_ptr->template is<op_t>());
+      const auto& op = op_ptr->template as<op_t>();
+      qns = op(qns);
+    }
+    return qns.overlaps_with(target_qns);
+  } else if (op_or_op_product.is<op_t>()) {
+    const auto& op = op_or_op_product.as<op_t>();
+    qns = op();
     return qns.overlaps_with(target_qns);
   } else
     throw std::invalid_argument(
