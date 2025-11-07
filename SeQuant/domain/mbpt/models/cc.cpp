@@ -17,8 +17,13 @@
 
 namespace sequant::mbpt {
 
-CC::CC(size_t n, Ansatz a, bool screen, bool use_topology)
-    : N(n), ansatz_(a), screen_(screen), use_topology_(use_topology) {}
+CC::CC(size_t n, Ansatz a, bool screen, bool use_topology,
+       bool use_connectivity)
+    : N(n),
+      ansatz_(a),
+      screen_(screen),
+      use_topology_(use_topology),
+      use_connectivity_(use_connectivity) {}
 
 CC::Ansatz CC::ansatz() const { return ansatz_; }
 
@@ -29,6 +34,8 @@ bool CC::unitary() const {
 bool CC::screen() const { return screen_; }
 
 bool CC::use_topology() const { return use_topology_; }
+
+bool CC::use_connectivity() const { return use_connectivity_; }
 
 std::vector<ExprPtr> CC::t(size_t commutator_rank, size_t pmax, size_t pmin) {
   pmax = (pmax == std::numeric_limits<size_t>::max() ? N : pmax);

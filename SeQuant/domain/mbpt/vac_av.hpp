@@ -76,7 +76,8 @@ inline ExprPtr lower_to_tensor_form(const ExprPtr& expr_inp) {
 namespace detail {
 ExprPtr expectation_value_impl(
     ExprPtr expr, const OpConnections<std::wstring>& op_connections,
-    bool use_topology, bool screen, bool skip_clone, bool full_contractions);
+    bool use_topology, bool screen, bool skip_clone, bool full_contractions,
+    bool use_connectivity);
 
 }  // namespace detail
 
@@ -93,11 +94,12 @@ ExprPtr expectation_value_impl(
 /// terms, default is true
 /// @param[in] screen if true, expressions are screened before lowering to
 /// Tensor level and calling WickTheorem, default is true
+/// @param [in] use_connectivity if true, WickTheorem uses connectivity information, default is true
 /// @param[in] skip_clone if true, will not clone the input expression
 /// @return the reference expectation value
 // clang_format on
 ExprPtr ref_av(ExprPtr expr, const OpConnections<std::wstring>& op_connections,
-               bool use_topology = true, bool screen = true,
+               bool use_topology = true, bool screen = true, bool use_connectivity = true,
                bool skip_clone = false);
 
 // clang-format off
@@ -117,6 +119,7 @@ ExprPtr ref_av(ExprPtr expr, const OpConnections<std::wstring>& op_connections,
 /// terms, default is true
 /// @param[in] screen if true, expressions are screened before lowering to
 /// Tensor level and calling WickTheorem, default is true
+/// @param [in] use_connectivity if true, WickTheorem uses connectivity information, default is true
 /// @param[in] skip_clone if true, will not clone the input expression
 /// @return the reference expectation value
 // clang-format on
@@ -124,7 +127,7 @@ ExprPtr ref_av(ExprPtr expr,
                const OpConnections<mbpt::OpType>& op_connections =
                    default_op_connections(),
                bool use_topology = true, bool screen = true,
-               bool skip_clone = false);
+               bool use_connectivity = true, bool skip_clone = false);
 
 /// @brief computes the vacuum expectation value
 /// @internal evaluates only full contractions in  WickTheorem
@@ -137,11 +140,13 @@ ExprPtr ref_av(ExprPtr expr,
 /// terms, default is true
 /// @param[in] screen if true, expressions are screened before lowering to
 /// Tensor level and calling WickTheorem, default is true
+/// @param [in] use_connectivity if true, WickTheorem uses connectivity
+/// information, default is true
 /// @param[in] skip_clone if true, will not clone the input expression
 /// @return the VEV
 ExprPtr vac_av(ExprPtr expr, const OpConnections<std::wstring>& op_connections,
                bool use_topology = true, bool screen = true,
-               bool skip_clone = false);
+               bool use_connectivity = true, bool skip_clone = false);
 
 /// @brief computes the vacuum expectation value
 /// @internal evaluates only full contractions in WickTheorem
@@ -158,10 +163,12 @@ ExprPtr vac_av(ExprPtr expr, const OpConnections<std::wstring>& op_connections,
 /// terms, default is true
 /// @param[in] screen if true, expressions are screened before lowering to
 /// Tensor level and calling WickTheorem, default is true
+/// @param [in] use_connectivity if true, WickTheorem uses connectivity
+/// information, default is true
 /// @param[in] skip_clone if true, will not clone the input expression
 /// @return the VEV
 ExprPtr vac_av(ExprPtr expr,
                const OpConnections<mbpt::OpType>& op_connections =
                    default_op_connections(),
                bool use_topology = true, bool screen = true,
-               bool skip_clone = false);
+               bool use_connectivity = true, bool skip_clone = false);

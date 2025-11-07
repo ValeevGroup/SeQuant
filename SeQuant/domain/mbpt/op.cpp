@@ -1110,7 +1110,7 @@ namespace tensor {
 
 ExprPtr detail::expectation_value_impl(
     ExprPtr expr, std::vector<std::pair<int, int>> nop_connections,
-    bool use_top, bool full_contractions) {
+    bool use_top, bool full_contractions, bool use_connectivity) {
   simplify(expr);
   auto isr = get_default_context().index_space_registry();
   const auto spinor = get_default_context().spbasis() == SPBasis::Spinor;
@@ -1127,8 +1127,10 @@ ExprPtr detail::expectation_value_impl(
   }
 
   FWickTheorem wick{expr};
-  wick.use_topology(use_top).set_nop_connections(nop_connections);
-  wick.full_contractions(full_contractions);
+  wick.use_topology(use_top).full_contractions(full_contractions);
+  if (use_connectivity) {
+    wick.set_nop_connections(nop_connections);
+  }
   auto result = wick.compute(/* count_only = */ false,
                              /* skip_input_canonicalization? true since already
                                 did simplification above */
@@ -1329,19 +1331,20 @@ ExprPtr detail::expectation_value_impl(
 }
 
 ExprPtr ref_av(ExprPtr expr, std::vector<std::pair<int, int>> nop_connections,
-               bool use_top) {
+               bool use_top, bool use_connectivity) {
   auto isr = get_default_context().index_space_registry();
   const bool full_contractions =
       (isr->reference_occupied_space() == isr->vacuum_occupied_space()) ? true
                                                                         : false;
   return detail::expectation_value_impl(expr, nop_connections, use_top,
-                                        full_contractions);
+                                        full_contractions, use_connectivity);
 }
 
 ExprPtr vac_av(ExprPtr expr, std::vector<std::pair<int, int>> nop_connections,
-               bool use_top) {
+               bool use_top, bool use_connectivity) {
   return detail::expectation_value_impl(expr, nop_connections, use_top,
-                                        /* full_contractions*/ true);
+                                        /* full_contractions*/ true,
+                                        use_connectivity);
 }
 
 }  // namespace tensor

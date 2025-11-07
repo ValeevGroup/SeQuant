@@ -532,25 +532,28 @@ namespace tensor {
 namespace detail {
 ExprPtr expectation_value_impl(ExprPtr expr,
                                std::vector<std::pair<int, int>> nop_connections,
-                               bool use_top, bool full_contractions);
+                               bool use_top, bool full_contractions,
+                               bool use_connectivity);
 }  // namespace detail
 
 /// @brief computes the reference expectation value of a tensor-level expression
 /// @param expr input expression
 /// @param nop_connections connectivity information
 /// @param use_top if true, WickTheorem uses topological equivalence of terms
+/// @param use_connectivity if true, WickTheorem uses connectivity information
 ExprPtr ref_av(ExprPtr expr,
                std::vector<std::pair<int, int>> nop_connections = {},
-               bool use_top = true);
+               bool use_top = true, bool use_connectivity = true);
 
 /// @brief computes the vacuum expectation value of a tensor-level expression,
 /// forces full contractions in WickTheorem
 /// @param expr input expression
 /// @param nop_connections connectivity information
 /// @param use_top if true, WickTheorem uses topological equivalence of terms
+/// @param use_connectivity if true, WickTheorem uses connectivity information
 ExprPtr vac_av(ExprPtr expr,
                std::vector<std::pair<int, int>> nop_connections = {},
-               bool use_top = true);
+               bool use_top = true, bool use_connectivity = true);
 }  // namespace tensor
 }  // namespace op
 

@@ -34,8 +34,10 @@ class CC {
   /// @param screen if true, uses Operator level screening before applying
   /// WickTheorem
   /// @param use_topology if true, uses topological optimizations in WickTheorem
+  /// @param use_connectivity if true, uses connectivity information in
+  /// WickTheorem
   explicit CC(size_t N, Ansatz ansatz = Ansatz::T, bool screen = true,
-              bool use_topology = true);
+              bool use_topology = true, bool use_connectivity = true);
 
   /// @return the type of ansatz
   Ansatz ansatz() const;
@@ -48,6 +50,9 @@ class CC {
 
   /// @return whether topological optimization is used in WickTheorem
   [[nodiscard]] bool use_topology() const;
+
+  /// @return whether connectivity information is used in WickTheorem
+  [[nodiscard]] bool use_connectivity() const;
 
   /// @brief derives t amplitude equations, \f$ \langle P|\bar{H}|0 \rangle = 0
   /// \f$
@@ -117,6 +122,7 @@ class CC {
   Ansatz ansatz_ = Ansatz::T;
   bool screen_ = true;
   bool use_topology_ = true;
+  bool use_connectivity_ = true;
 
   /// @brief computes reference expectation value of an expression. Dispatches
   /// to `mbpt::op::ref_av()`
@@ -126,7 +132,8 @@ class CC {
   auto ref_av(const ExprPtr& expr,
               const OpConnections<mbpt::OpType>& op_connect =
                   default_op_connections()) const {
-    return op::ref_av(expr, op_connect, this->use_topology(), this->screen());
+    return op::ref_av(expr, op_connect, this->use_topology(), this->screen(),
+                      this->use_connectivity());
   }
 };  // class CC
 
