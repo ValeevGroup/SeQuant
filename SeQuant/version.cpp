@@ -6,7 +6,7 @@
 
 namespace sequant {
 
-const char* revision() noexcept {
+const char* git_revision() noexcept {
   static const char revision[] = SEQUANT_GIT_REVISION;
   return revision;
 }
