@@ -76,9 +76,9 @@ class compute_cceqvec {
     tpool.stop(N);
     const bool spinfree = get_default_context().spbasis() == SPBasis::Spinfree;
     std::wcout << std::format(
-        L"CC equations [type={}, rank={}, spinfree={}, screen={}, "
+        L"\nCC equations [type={}, rank={}, spinfree={}, screen={}, "
         L"use_topology={}, use_connectivity={}] "
-        L"computed in {} seconds\n",
+        L"computed in {} seconds",
         type2str.at(type), N, spinfree, screen, use_topology, use_connectivity,
         tpool.read(N));
 
@@ -115,8 +115,8 @@ class compute_cceqvec {
     }
 
     for (size_t R = PMIN; R <= P; ++R) {
-      std::wcout << "R" << R << "(expS" << N << ") has " << eqvec[R]->size()
-                 << " terms:" << std::endl;
+      std::wcout << std::format(L"\nR{}(expS{}) has {} terms", R, N,
+                                eqvec[R]->size());
       if (print) std::wcout << to_latex_align(eqvec[R], 20, 1) << std::endl;
 
       // validate known sizes of some CC residuals
@@ -154,11 +154,11 @@ class compute_cceqvec {
         // validate spin-free equations by spin-tracing spin-orbital equations
         const auto should_be_zero = simplify(eqvec_sf_ref[R] - eqvec[R]);
         if (should_be_zero != ex<Constant>(0))
-          std::wcout << "Spin-free equations do not match spin-traced "
-                        "spin-orbital equations: N="
-                     << N << " R=" << R << ":\n"
-                     << "spintraced-spinfree = "
-                     << to_latex_align(should_be_zero, 0, 1) << std::endl;
+          std::wcout << std::format(
+              L"Spin-free equations do not match spin-traced "
+              L"spin-orbital equations: N={} R={}:\n"
+              L"spintraced-spinfree = {}\n",
+              N, R, to_latex_align(should_be_zero, 0, 1));
         else
           std::wcout << "Spin-free equations match spin-traced "
                         "spin-orbital equations"
@@ -223,8 +223,9 @@ class compute_cceqvec {
           // terms. So, after evaluate_symm call in sequant evaluation scope, we
           // need to call evaluate_biorthogonal_nns_project.
 
-          std::wcout << "biorthogonal spin-free R" << R << "(expS" << N
-                     << ") has " << eqvec[R]->size() << " terms:" << std::endl;
+          std::wcout << std::format(
+              L"biorthogonal spin-free R{}(expS{}) has {} terms:\n", R, N,
+              eqvec[R]->size());
           if (print) std::wcout << to_latex_align(eqvec[R], 20, 1) << std::endl;
 
           if (R == 1 && N == 2) runtime_assert(eqvec[R]->size() == 26);
@@ -265,7 +266,7 @@ int main(int argc, char* argv[]) {
   sequant::set_locale();
 
   std::cout << "SeQuant revision: " << sequant::git_revision() << "\n";
-  std::cout << "Number of threads: " << sequant::num_threads() << "\n\n";
+  std::cout << "Number of threads: " << sequant::num_threads() << "\n";
 
 #ifndef NDEBUG
   const size_t DEFAULT_NMAX = 3;
