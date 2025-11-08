@@ -45,10 +45,6 @@ else (SEQUANT_PRERELEASE_ID)
     set(SEQUANT_EXT_VERSION "${SEQUANT_VERSION}")
 endif (SEQUANT_PRERELEASE_ID)
 
-# extract git metadata
-include(GetGitMetadata)
-vgkit_cmake_git_metadata()
-
 # make SeQuant project
 project(SeQuant LANGUAGES CXX VERSION "${SEQUANT_VERSION}" DESCRIPTION "SEcond QUANTization toolkit")
 
@@ -88,6 +84,10 @@ include(FeatureSummary)
 include(CMakePackageConfigHelpers)
 
 include(compiler)
+
+# extract git metadata
+include(GetGitMetadata)
+vgkit_cmake_git_metadata()
 
 ##########################
 # Standard build variables
