@@ -14,6 +14,38 @@
 #include <range/v3/view.hpp>
 
 namespace sequant::mbpt {
+
+namespace detail {
+
+/// @brief computes the commutator [a,b] = a b - b a
+/// @param a first expression
+/// @param b second expression
+/// @return the non-canonicalized commutator expression
+inline auto commutator(const ExprPtr& a, const ExprPtr& b) {
+  auto result = a * b - b * a;
+  return non_canon_simplify(result);
+}
+
+/// @brief computes the nested commutator up to given rank:
+/// e.g., for rank=3, computes A + [A,B] + (1/2)[[A,B],B] + (1/3!)[[[A,B],B],B]
+/// @param a first expression
+/// @param b second expression
+/// @param rank the rank of nested commutator
+/// @return the non-canonicalized nested commutator expression
+inline auto nested_commutator(const ExprPtr& a, const ExprPtr& b,
+                              const int rank) {
+  ExprPtr result = a;
+  ExprPtr tmp = a;
+  for (int i = 1; i <= rank; ++i) {
+    auto comm = commutator(tmp, b);
+    comm *= ex<Constant>(rational{1, i});
+    result += comm;
+    tmp = comm;
+  }
+  return non_canon_simplify(result);
+}
+}  // namespace detail
+
 // clang-format off
 /// @brief Computes the Lie similarity transformation, e^(-B) A e^B, using its Campbell expansion (DOI 10.1112/plms/s1-28.1.381) as a series of nested commutators:
 /// `e^(-B) A e^B = A + [A,B] + (1/2!)[[A,B],B] + (1/3!)[[[A,B],B],B] + ...`

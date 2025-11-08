@@ -16,39 +16,6 @@
 #include <utility>
 
 namespace sequant::mbpt {
-
-namespace detail {
-// These functions should be moved out for general use
-
-/// @brief computes the commutator [a,b] = a b - b a
-/// @param a first expression
-/// @param b second expression
-/// @return the non-canonicalized commutator expression
-inline auto commutator(const ExprPtr& a, const ExprPtr& b) {
-  auto result = a * b - b * a;
-  return non_canon_simplify(result);
-}
-
-/// @brief computes the nested commutator up to given rank:
-/// e.g., for rank=3, computes A + [A,B] + (1/2)[[A,B],B] + (1/3!)[[[A,B],B],B]
-/// @param a first expression
-/// @param b second expression
-/// @param rank the rank of nested commutator
-/// @return the non-canonicalized nested commutator expression
-inline auto nested_commutator(const ExprPtr& a, const ExprPtr& b,
-                              const int rank) {
-  ExprPtr result = a;
-  ExprPtr tmp = a;
-  for (int i = 1; i <= rank; ++i) {
-    auto comm = commutator(tmp, b);
-    comm *= ex<Constant>(rational{1, i});
-    result += comm;
-    tmp = comm;
-  }
-  return non_canon_simplify(result);
-}
-}  // namespace detail
-
 CC::CC(size_t n, Ansatz a, bool screen, bool use_topology,
        bool use_connectivity)
     : N(n),
