@@ -38,7 +38,7 @@ ExprPtr expectation_value_impl(
 
     // compute connections if connectivity is used
     std::vector<std::pair<int, int>> connections;
-    {
+    if (use_connectivity) {
       container::map<std::wstring, std::vector<int>>
           oplbl2pos;  // maps operator labels to the operator positions in the
                       // product
