@@ -1055,7 +1055,7 @@ bool can_change_qns(const ExprPtr& op_or_op_product, const qns_t& target_qns,
   if (op_or_op_product.is<Product>()) {
     const auto& op_product = op_or_op_product.as<Product>();
     for (auto& op_ptr : ranges::views::reverse(op_product.factors())) {
-      assert(op_ptr->template is<op_t>());
+      SEQUANT_ASSERT(op_ptr->template is<op_t>());
       const auto& op = op_ptr->template as<op_t>();
       qns = op(qns);
     }
