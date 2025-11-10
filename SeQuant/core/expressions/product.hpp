@@ -442,6 +442,8 @@ class Product : public Expr {
   }
 
   ExprPtr canonicalize_impl(CanonicalizeOptions);
+
+ public:
   virtual ExprPtr canonicalize(
       CanonicalizeOptions opt =
           CanonicalizeOptions::default_options()) override;
@@ -450,6 +452,7 @@ class Product : public Expr {
           CanonicalizeOptions::default_options().copy_and_set(
               CanonicalizationMethod::Rapid)) override;
 
+ private:
   bool static_equal(const Expr &that) const override {
     const auto &that_cast = static_cast<const Product &>(that);
     if (scalar() == that_cast.scalar() &&

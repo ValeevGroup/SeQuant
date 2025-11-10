@@ -727,7 +727,7 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
       disable_nop_canonicalization();
 
       // parallelize over summands
-      auto result = std::make_shared<Sum>();
+      HashingAccumulator result_acc;
       std::mutex result_mtx;  // serializes updates of result
       auto summands = expr_input_->as<Sum>().summands();
 
@@ -749,10 +749,10 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
 
       if (Logger::instance().wick_harness)
         std::wcout << "WickTheorem<S>::compute: input (after canonicalize) has "
-                   << summands.size() << " terms = " << to_latex_align(result)
-                   << std::endl;
+                   << summands.size()
+                   << " terms = " << to_latex_align(expr_input_) << std::endl;
 
-      auto wick_task = [&result, &result_mtx, this,
+      auto wick_task = [&result_acc, &result_mtx, this,
                         &count_only](const ExprPtr &input) {
         WickTheorem wt(input->clone(), *this);
         auto task_result = wt.compute(
@@ -760,21 +760,14 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
         stats() += wt.stats();
         if (task_result) {
           std::scoped_lock<std::mutex> lock(result_mtx);
-          result->append(task_result);
+          result_acc.append(task_result);
         }
       };
       sequant::for_each(summands, wick_task);
 
       // if the sum is empty return zero
       // if the sum has 1 summand, return it directly
-      ExprPtr result_expr = result;
-      if (result->summands().size() == 0) {
-        result_expr = ex<Constant>(0);
-      }
-      if (result->summands().size() == 1)
-        result_expr = std::move(result->summands()[0]);
-
-      return result_expr;
+      return result_acc.make_expr();
     }
     // ... else if a product, find NormalOperatorSequence, if any, and compute
     // ...
@@ -1222,13 +1215,14 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
             for (auto &&nop : input_) std::wcout << to_latex(nop) << "\n";
             std::wcout << "}" << std::endl;
           }
+
+          prefactor_ = prefactor;
           auto result = compute_nopseq(count_only);
+          prefactor_.reset();
+
           if (result) {  // simplify if obtained nonzero ...
-            result = prefactor * result;
-            expand(result);
-            this->reduce(result);
-            rapid_simplify(result);
-            canonicalize(result);
+            // rapid_simplify(result);
+            // canonicalize(result);
             rapid_simplify(
                 result);  // rapid_simplify again since canonization may produce
                           // new opportunities (e.g. terms cancel, etc.)

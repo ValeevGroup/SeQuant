@@ -112,11 +112,8 @@ ExprPtr expectation_value_impl(ExprPtr expr,
     } else
       return vac_av_product(expr);
   } else if (expr.is<Sum>()) {
-    result = sequant::transform_reduce(
-        *expr, ex<Sum>(),
-        [](const ExprPtr& running_total, const ExprPtr& summand) {
-          return running_total + summand;
-        },
+    result = sequant::transform_sum_expr(
+        *expr,
         [&op_connections, use_topology, screen, full_contractions](const auto& op_product) {
           return expectation_value_impl(op_product, op_connections, use_topology, screen,
                         /* skip_clone = */ true, full_contractions);
