@@ -28,7 +28,6 @@ TEST_CASE("latex", "[util]") {
     REQUIRE(greek_characters_to_latex(std::wstring(L"Α")) == L"A");
     REQUIRE(greek_characters_to_latex(std::wstring(L"Γ")) == L"\\Gamma");
 
-#if __cplusplus >= 202002L
     REQUIRE(greek_characters_to_latex(std::u8string(u8"alpha")) == u8"alpha");
     REQUIRE_THROWS_AS(
         greek_characters_to_latex(std::u8string(u8"α")) == u8"\\alpha",
@@ -44,8 +43,6 @@ TEST_CASE("latex", "[util]") {
     REQUIRE(greek_characters_to_latex(std::u32string(U"alpha")) == U"alpha");
     REQUIRE(greek_characters_to_latex(std::u32string(U"α")) == U"\\alpha");
     REQUIRE(greek_characters_to_latex(std::u32string(U"Γ")) == U"\\Gamma");
-
-#endif
   }
 
   SECTION("diactrids->latex") {
