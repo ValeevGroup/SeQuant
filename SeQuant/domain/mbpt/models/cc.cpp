@@ -100,6 +100,7 @@ std::vector<ExprPtr> CC::t(size_t commutator_rank, size_t pmax, size_t pmin) {
 std::vector<ExprPtr> CC::λ(size_t commutator_rank) {
   SEQUANT_ASSERT(commutator_rank >= 1 && "commutator rank should be >= 1");
   SEQUANT_ASSERT(!unitary() && "there is no need for CC::λ for unitary ansatz");
+  SEQUANT_ASSERT(use_connectivity() && "CC::λ requires connectivity usage");
   const bool skip_singles = ansatz_ == Ansatz::oT || ansatz_ == Ansatz::oU;
 
   // construct hbar
@@ -164,6 +165,8 @@ std::vector<ExprPtr> CC::t_pt(size_t rank, [[maybe_unused]] size_t order) {
                  "sequant::mbpt::CC::t_pt(): only one-body perturbation "
                  "operator is supported now");
   SEQUANT_ASSERT(ansatz_ == Ansatz::T && "unitary ansatz is not yet supported");
+  SEQUANT_ASSERT(use_connectivity() &&
+                 "CC::t_pt() requires connectivity usage");
 
   // construct h1_bar
   // truncate h1_bar at rank 2 for one-body perturbation
@@ -204,6 +207,8 @@ std::vector<ExprPtr> CC::λ_pt(size_t rank, [[maybe_unused]] size_t order) {
                  "sequant::mbpt::CC::λ_pt(): only one-body perturbation "
                  "operator is supported now");
   SEQUANT_ASSERT(ansatz_ == Ansatz::T && "unitary ansatz is not yet supported");
+  SEQUANT_ASSERT(use_connectivity() &&
+                 "CC::λ_pt() requires connectivity usage");
 
   // construct hbar
   const auto hbar = mbpt::lst(H(), T(N), 4);
@@ -253,6 +258,8 @@ std::vector<ExprPtr> CC::λ_pt(size_t rank, [[maybe_unused]] size_t order) {
 
 std::vector<ExprPtr> CC::eom_r(nₚ np, nₕ nh) {
   SEQUANT_ASSERT(!unitary() && "Unitary ansatz is not yet supported");
+  SEQUANT_ASSERT(use_connectivity() &&
+                 "CC::eom_r() requires connectivity usage");
   SEQUANT_ASSERT((np > 0 || nh > 0) && "Unsupported excitation order");
 
   if (np != nh)
@@ -295,6 +302,8 @@ std::vector<ExprPtr> CC::eom_r(nₚ np, nₕ nh) {
 
 std::vector<ExprPtr> CC::eom_l(nₚ np, nₕ nh) {
   SEQUANT_ASSERT(!unitary() && "Unitary ansatz is not yet supported");
+  SEQUANT_ASSERT(use_connectivity() &&
+                 "CC::eom_l() requires connectivity usage");
   SEQUANT_ASSERT((np > 0 || nh > 0) && "Unsupported excitation order");
 
   if (np != nh)
