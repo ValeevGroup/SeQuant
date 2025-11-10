@@ -433,10 +433,6 @@ inline bool apply_index_replacement_rules(
     std::shared_ptr<Product> &product,
     const container::map<Index, Index> &const_replrules,
     std::set<Index, Index::LabelCompare> &all_indices) {
-  // to be able to use map[]
-  [[maybe_unused]] auto &replrules =
-      const_cast<container::map<Index, Index> &>(const_replrules);
-
   expr_range exrng(product);
 
   /// this recursively applies replacement rules until result does not
