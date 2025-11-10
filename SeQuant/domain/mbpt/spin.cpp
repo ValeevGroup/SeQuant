@@ -1558,6 +1558,12 @@ std::vector<ExprPtr> open_shell_spintrace(
 
   // Loop over external index replacement maps
   for (auto& e : e_rep) {
+    std::wcout << "external replacement map:\n";
+    for (auto& p : e) {
+      std::cout << p.first.to_string() << " -> " << p.second.to_string()
+                << "\n";
+    }
+
     // Add spin labels to external indices
     auto spin_expr = append_spin(expanded_expr, e);
     detail::reset_idx_tags(spin_expr);
@@ -1567,7 +1573,12 @@ std::vector<ExprPtr> open_shell_spintrace(
     for (auto& i : i_rep) {
       // Add spin labels to internal indices, expand antisymmetric tensors
       auto spin_expr_i = append_spin(spin_expr, i);
+      std::wcout << "after append_spin (internal replaced): "
+                 << to_latex(spin_expr_i) << "\n";
+
       spin_expr_i = expand_antisymm(spin_expr_i, true);
+      std::wcout << "after expand_antisymm: " << to_latex(spin_expr_i) << "\n";
+
       expand(spin_expr_i);
       detail::reset_idx_tags(spin_expr_i);
       Sum i_result{};
@@ -1604,7 +1615,10 @@ std::vector<ExprPtr> open_shell_spintrace(
   // Canonicalize and simplify all expressions
   for (auto& expression : result) {
     detail::reset_idx_tags(expression);
+    std::wcout << "before canon: " << to_latex(expression) << "\n";
     canonicalize(expression);
+    std::wcout << "after canon: " << to_latex(expression) << "\n";
+
     rapid_simplify(expression);
   }
   return result;

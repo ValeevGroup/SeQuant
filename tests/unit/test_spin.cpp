@@ -1384,13 +1384,29 @@ SECTION("Open-shell spin-tracing") {
     REQUIRE_THAT(result[2], EquivalentTo("1/4 g{a↓1,a↓2;i↓1,i↓2}:A"));
   }
 
+  // t1
+  {
+    auto input = ex<Constant>(rational{1, 2}) *
+                 ex<Tensor>(L"t", bra{L"a_1"}, ket{L"i_1"}, Symmetry::Nonsymm);
+    auto result = open_shell_spintrace(input, {{L"i_1", L"a_1"}});
+
+    std::wcout << "result[0]: " << to_latex(result[0]) << std::endl;
+    std::wcout << "result[1]: " << to_latex(result[1]) << std::endl;
+
+    REQUIRE(result.size() == 2);
+
+    auto result_alpha = result[0];
+    auto result_beta = result[1];
+    auto result_beta_by_spin_swap = swap_spin(result_alpha);
+    assert(result_beta == result_beta_spin_swap);
+  }
+
   // f_oo * t2
   {
     auto input = ex<Constant>(rational{1, 2}) *
                  ex<Tensor>(L"f", bra{L"i_3"}, ket{L"i_1"}) *
                  ex<Tensor>(L"t", bra{L"a_1", L"a_2"}, ket{L"i_2", L"i_3"},
                             Symmetry::Antisymm);
-
     auto result =
         open_shell_spintrace(input, {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}});
     REQUIRE(result.size() == 3);
@@ -1399,6 +1415,7 @@ SECTION("Open-shell spin-tracing") {
     REQUIRE_THAT(result[1], EquivalentTo("-1/2 f{i↑2;i↑1} t{a↑1,a↓2;i↑2,i↓2}"));
     REQUIRE_THAT(result[2],
                  EquivalentTo("1/2 f{i↓3;i↓1} t{a↓1,a↓2;i↓2,i↓3}:A"));
+    std::cout << "the end my target test: " << std::endl;
   }
 
   // g * t1
@@ -1560,6 +1577,7 @@ SECTION("Open-shell spin-tracing") {
         input2, {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}, {L"i_3", L"a_3"}});
     REQUIRE(result2[1]->size() == 24);
   }
+  * /
 }
 
 SECTION("ResultExpr") {
