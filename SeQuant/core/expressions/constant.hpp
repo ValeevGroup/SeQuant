@@ -104,8 +104,7 @@ class Constant : public Expr {
   }
 
   /// @param[in] v a scalar
-  /// @return true if this is a soft zero, i.e. its magnitude is less than
-  /// `std::sqrt(std::numeric_limits<float>::epsilon())`
+  /// @return true if this is zero
   static bool is_zero(scalar_type v) { return v.is_zero(); }
 
   /// @return `Constant::is_zero(this->value())`

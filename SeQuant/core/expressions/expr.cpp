@@ -388,7 +388,7 @@ ExprPtr Sum::canonicalize_impl(bool multipass, CanonicalizeOptions opts) {
       opts_copy.method = opts.method | CanonicalizationMethod::Topological;
 
     // recursively canonicalize summands ...
-    // using for_each and directly access to summands
+    // using for_each and direct access to summands
     sequant::for_each(summands_, [pass, &opts_copy, &rapid](ExprPtr &summand) {
       ExprPtr bp;
       if (rapid) {
