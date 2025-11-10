@@ -70,6 +70,9 @@ class Expr : public std::enable_shared_from_this<Expr>,
   /// @return true if this is a leaf
   bool is_atom() const { return ranges::empty(*this); }
 
+  /// @return true if this is zero
+  virtual bool is_zero() const { return false; }
+
   /// @return the string representation of @c this in the LaTeX format
   virtual std::wstring to_latex() const;
 

@@ -108,7 +108,7 @@ class Constant : public Expr {
   static bool is_zero(scalar_type v) { return v.is_zero(); }
 
   /// @return `Constant::is_zero(this->value())`
-  bool is_zero() const { return is_zero(this->value()); }
+  bool is_zero() const final { return is_zero(this->value()); }
 
  private:
   scalar_type value_;

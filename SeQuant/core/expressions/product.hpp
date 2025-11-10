@@ -264,7 +264,7 @@ class Product : public Expr {
   const auto &scalar() const { return scalar_; }
 
   /// @return `Constant::is_zero(this->scalar())`
-  bool is_zero() const { return Constant::is_zero(this->scalar()); }
+  bool is_zero() const override { return Constant::is_zero(this->scalar()); }
 
   const auto &factors() const { return factors_; }
   auto &factors() { return factors_; }
