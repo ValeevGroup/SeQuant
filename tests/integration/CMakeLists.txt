@@ -9,6 +9,7 @@ if (NOT SEQUANT_SKIP_LONG_TESTS)
         "osstcc.cpp"
         # Equation-of-motion Coupled-Cluster
         "eomcc.cpp"
+            "os_eom.cpp"
     )
 
     if (TARGET Eigen3::Eigen)
