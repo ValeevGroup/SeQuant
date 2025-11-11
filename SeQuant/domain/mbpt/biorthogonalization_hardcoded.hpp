@@ -1,5 +1,5 @@
-#ifndef SEQUANT_DOMAIN_MBPT_BIORTHOGONALIZATION_DATA_HPP
-#define SEQUANT_DOMAIN_MBPT_BIORTHOGONALIZATION_DATA_HPP
+#ifndef SEQUANT_DOMAIN_MBPT_BIORTHOGONALIZATION_HARDCODED_HPP
+#define SEQUANT_DOMAIN_MBPT_BIORTHOGONALIZATION_HARDCODED_HPP
 
 #include <SeQuant/core/math.hpp>
 
@@ -13,6 +13,7 @@
 
 namespace sequant {
 
+// hardcoded coefficients for biorthogonalization
 inline std::optional<std::vector<sequant::rational>>
 get_first_row_biorth_coeffs_rational(std::size_t n_particles) {
   switch (n_particles) {
@@ -2025,7 +2026,7 @@ biorth_coeffs_from_first_row_rational(
       perm::Permutation row_perm = perm::unrank(n - 1 - row, n_particles);
       perm::Permutation col_perm = perm::unrank(col, n_particles);
 
-      // compute: row_perm * col_perm (no inversion)
+      // row_perm * col_perm
       col_perm->preMultiply(row_perm);
 
       std::size_t source_idx = perm::rank(col_perm, n_particles);
@@ -2048,4 +2049,4 @@ get_hardcoded_biorth_coeffs_rational(std::size_t n_particles) {
 
 }  // namespace sequant
 
-#endif  // SEQUANT_DOMAIN_MBPT_BIORTHOGONALIZATION_DATA_HPP
+#endif  // SEQUANT_DOMAIN_MBPT_BIORTHOGONALIZATION_HARDCODED_HPP
