@@ -464,6 +464,7 @@ class WickTheorem {
   mutable ExprPtr expr_input_;
 
   mutable std::shared_ptr<NormalOperatorSequence<S>> input_;
+  mutable ExprPtr prefactor_;
   bool full_contractions_ = true;
   bool use_topology_ = true;
   mutable Stats stats_;
@@ -698,6 +699,7 @@ class WickTheorem {
     std::size_t nopseq_size;           //!< current size of nopseq
     Context ctx;                       //!< current context
     Product sp;                        //!< current prefactor
+    std::size_t sp_initial_size = 0;   //!< size of prefactor at the start
     container::svector<std::pair<Op<S>, Op<S>>>
         contractions;  //!< current list of indices of contracted {qpann,qpcre}
                        //!< ops
@@ -1050,12 +1052,16 @@ class WickTheorem {
   /// counting Ops
   /// @return the result
   ExprPtr compute_nontensor_wick(const bool count_only) const {
-    std::vector<std::pair<Product, std::shared_ptr<NormalOperator<S>>>>
-        result;      //!< current value of the result
-    std::mutex mtx;  // used in critical sections updating the result
+    HashingAccumulator result;  //!< current value of the result
+    std::mutex mtx;             // used in critical sections updating the result
     auto result_plus_mutex = std::make_pair(&result, &mtx);
     NontensorWickState state(*this, *input_);
     state.count_only = count_only;
+    if (prefactor_) {
+      state.sp = this->prefactor_.template as<Product>().deep_copy();
+      state.sp_initial_size = state.sp.size();
+    }
+
     // TODO extract index->particle maps
 
     if (Logger::instance().wick_contract) {
@@ -1079,8 +1085,18 @@ class WickTheorem {
         ++state.count;
       } else {
         auto [phase, normop] = normalize(*input_, input_partner_indices_);
-        result_plus_mutex.first->push_back(
-            std::make_pair(Product(phase, {}), std::move(normop)));
+        ExprPtr summand = normop;
+        if (phase != 1) summand *= ex<Constant>(phase);
+        if (prefactor_) {
+          summand *= prefactor_;
+          auto bp = summand->canonicalize();
+          summand *= bp;
+        }
+        if (!summand.template is<Product>()) {
+          summand = ex<Product>(summand);
+        }
+
+        result_plus_mutex.first->append(std::move(summand));
       }
     }
 
@@ -1090,32 +1106,8 @@ class WickTheorem {
     if (count_only) {  // count only? return the total number as a Constant
       SEQUANT_ASSERT(result.empty());
       result_expr = ex<Constant>(state.count.load());
-    } else if (result.size() == 1) {  // if result.size() == 1, return Product
-      auto product = std::make_shared<Product>(std::move(result.at(0).first));
-      if (full_contractions_)
-        SEQUANT_ASSERT(result.at(0).second == nullptr);
-      else {
-        if (result.at(0).second)
-          product->append(1, std::move(result.at(0).second));
-      }
-      result_expr = product;
-    } else if (result.size() > 1) {
-      auto sum = std::make_shared<Sum>();
-      for (auto &&term : result) {
-        if (full_contractions_) {
-          SEQUANT_ASSERT(term.second == nullptr);
-          sum->append(ex<Product>(std::move(term.first)));
-        } else {
-          auto term_product = std::make_shared<Product>(std::move(term.first));
-          if (term.second) {
-            term_product->append(1, term.second);
-          }
-          sum->append(term_product);
-        }
-      }
-      result_expr = sum;
-    } else if (result_expr == nullptr)
-      result_expr = ex<Constant>(0);
+    } else
+      result_expr = result.make_expr(true);
     return result_expr;
   }
 
@@ -1124,9 +1116,7 @@ class WickTheorem {
 
  private:
   void recursive_nontensor_wick(
-      std::pair<
-          std::vector<std::pair<Product, std::shared_ptr<NormalOperator<S>>>> *,
-          std::mutex *> &result,
+      std::pair<HashingAccumulator *, std::mutex *> &result,
       NontensorWickState &state) const {
     using nopseq_view_type = flattened_rangenest<NormalOperatorSequence<S>>;
     auto nopseq_view = nopseq_view_type(&state.nopseq);
@@ -1405,7 +1395,7 @@ class WickTheorem {
                 //            to_latex(state.opseq) << std::endl;
 
                 // if have a nonzero result ...
-                if (!state.sp.empty()) {
+                if (state.sp.size() != state.sp_initial_size) {
                   // update the result if nothing left to contract and
                   if (!full_contractions_ ||
                       (full_contractions_ && state.nopseq_size == 0)) {
@@ -1431,16 +1421,18 @@ class WickTheorem {
                                   .empty());  // all ops are contracted out
                           scalar_prefactor *= 1 << ncycles;
                         }
-                        auto prefactor = state.sp.deep_copy().scale(
+                        auto prefactor = state.sp.clone();
+                        prefactor.template as<Product>().scale(
                             std::move(scalar_prefactor));
+                        this->reduce(prefactor);
+                        auto bp = prefactor->canonicalize();
+                        prefactor *= bp;
 
                         result.second->lock();
                         //              std::wcout << "got " <<
                         //              to_latex(state.sp)
                         //              << std::endl;
-                        result.first->push_back(std::make_pair(
-                            std::move(prefactor),
-                            std::shared_ptr<NormalOperator<S>>{}));
+                        result.first->append(std::move(prefactor));
                         //              std::wcout << "now up to " <<
                         //              result.first->size()
                         //              << " terms" << std::endl;
@@ -1465,13 +1457,21 @@ class WickTheorem {
                             normalize(state.nopseq, target_partner_indices);
                         scalar_prefactor *= phase;
 
-                        auto prefactor = state.sp.deep_copy().scale(
+                        auto summand = state.sp.clone();
+                        summand.template as<Product>().scale(
                             std::move(scalar_prefactor));
+                        if (!op->empty()) summand *= std::move(op);
+                        if (state.sp_initial_size > 0) {
+                          this->reduce(summand);
+                          auto bp = summand->canonicalize();
+                          summand *= bp;
+                        }
+                        if (!summand.template is<Product>()) {
+                          summand = ex<Product>(summand);
+                        }
 
                         result.second->lock();
-                        result.first->push_back(std::make_pair(
-                            std::move(prefactor),
-                            op->empty() ? nullptr : std::move(op)));
+                        result.first->append(std::move(summand));
                         result.second->unlock();
                       }
                     } else

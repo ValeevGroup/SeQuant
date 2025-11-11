@@ -266,7 +266,7 @@ int main(int argc, char* argv[]) {
   sequant::set_locale();
 
   std::cout << "SeQuant revision: " << sequant::git_revision() << "\n";
-  std::cout << "Number of threads: " << sequant::num_threads() << "\n";
+  std::cout << "Number of threads: " << sequant::num_threads() << "\n\n";
 
 #ifndef NDEBUG
   const size_t DEFAULT_NMAX = 3;
