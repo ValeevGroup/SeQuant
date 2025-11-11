@@ -509,7 +509,7 @@ ExprPtr HashingAccumulator::make_expr(bool canonicalize) {
   if (summands_.size() == 0) {
     return ex<Constant>(0);
   } else if (summands_.size() == 1)
-    return std::move(*(summands_.begin()));
+    return *(summands_.begin());
   else
     return make_sum_impl(canonicalize);
 }

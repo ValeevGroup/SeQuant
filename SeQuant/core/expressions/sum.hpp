@@ -108,7 +108,7 @@ class Sum : public Expr {
 
       // erase if needed
       if (do_erase) {
-        summands.erase(it);
+        summands_.erase(it);
         it = summands_.begin();
         std::advance(it, pos);
       } else
