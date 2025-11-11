@@ -84,7 +84,7 @@ class compute_eomcc {
   }
 
   void operator()(bool print) {
-    // SEQUANT_ASSERT(get_default_context().spbasis() == SPBasis::Spinor); //
+    SEQUANT_ASSERT(get_default_context().spbasis() == SPBasis::Spinor);  //
     // for spin-free I cancelled this assertion
     timer_pool.start(N);
     std::vector<ExprPtr> eqvec;
@@ -191,18 +191,17 @@ int main(int argc, char* argv[]) {
 
   sequant::detail::OpIdRegistrar op_id_registrar;
 
-  // contex for spin-orbital
-  // sequant::set_default_context(
-  //     sequant::Context({.index_space_registry_shared_ptr =
-  //     make_min_sr_spaces(),
-  //                       .vacuum = Vacuum::SingleProduct}));
+  // contex for spin-orbital, for open-shell or closed-shell I need so basis
+  sequant::set_default_context(
+      sequant::Context({.index_space_registry_shared_ptr = make_min_sr_spaces(),
+                        .vacuum = Vacuum::SingleProduct}));
 
   // now I set the context for spin-free
-  sequant::set_default_context(
-      sequant::Context({.index_space_registry_shared_ptr =
-                            make_min_sr_spaces(SpinConvention::None),
-                        .vacuum = Vacuum::SingleProduct,
-                        .spbasis = SPBasis::Spinfree}));
+  // sequant::set_default_context(
+  // sequant::Context({.index_space_registry_shared_ptr =
+  //                       make_min_sr_spaces(SpinConvention::None),
+  //                   .vacuum = Vacuum::SingleProduct,
+  //                   .spbasis = SPBasis::Spinfree}));
 
   TensorCanonicalizer::register_instance(
       std::make_shared<DefaultTensorCanonicalizer>());
