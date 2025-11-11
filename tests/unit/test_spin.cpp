@@ -1189,11 +1189,20 @@ SECTION("Permutation operators") {
                        ket{L"a_1", L"a_2", L"a_3", L"a_4", L"a_5"},
                        Symmetry::Antisymm);
 
+  auto P2 = open_shell_P_op_vector(A2->as<Tensor>());
   auto Avec2 = open_shell_A_op(A2->as<Tensor>());
+  // there are n=N+1 P cases like A
+  REQUIRE(P2[0]->size() == 0);  // all alpha
+  REQUIRE(P2[1]->size() == 4);  // mix
+  std::wcout << "what P2[1] contains: " << to_latex_align(P2[1]) << std::endl;
+  REQUIRE(P2[2]->size() == 0);  // all beta
+
+  // auto Avec2 = open_shell_A_op(A2->as<Tensor>());
   auto P3 = open_shell_P_op_vector(A3->as<Tensor>());
   auto Avec3 = open_shell_A_op(A3->as<Tensor>());
   REQUIRE(P3[0]->size() == 0);
   REQUIRE(P3[1]->size() == 9);
+  std::wcout << "what P1 contains: " << to_latex_align(P3[1]) << std::endl;
   REQUIRE(P3[2]->size() == 9);
   REQUIRE(P3[3]->size() == 0);
 
@@ -1577,7 +1586,6 @@ SECTION("Open-shell spin-tracing") {
         input2, {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}, {L"i_3", L"a_3"}});
     REQUIRE(result2[1]->size() == 24);
   }
-  * /
 }
 
 SECTION("ResultExpr") {
