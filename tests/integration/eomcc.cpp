@@ -1,6 +1,8 @@
 //
 // Created by Ajay Melekamburath on 2/3/25.
 //
+#include <SeQuant/version.hpp>
+
 #include <SeQuant/core/logger.hpp>
 #include <SeQuant/core/runtime.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
@@ -170,6 +172,9 @@ int main(int argc, char* argv[]) {
   std::wcout.precision(std::numeric_limits<double>::max_digits10);
   std::wcerr.precision(std::numeric_limits<double>::max_digits10);
   sequant::set_locale();
+
+  std::cout << "SeQuant revision: " << sequant::git_revision() << "\n";
+  std::cout << "Number of threads: " << sequant::num_threads() << "\n\n";
 
 #ifndef NDEBUG
   constexpr size_t DEFAULT_NMAX = 3;
