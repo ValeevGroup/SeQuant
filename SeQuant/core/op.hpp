@@ -533,7 +533,7 @@ class NormalOperator : public Operator<S>,
       : Operator<S>{}, vacuum_(v), ncreators_(ranges::size(creators)) {
     this->reserve(ranges::size(creators) + ranges::size(annihilators));
     for (const auto &c : creators) {
-      SEQUANT_ASSERT((!std::is_same_v<meta::remove_cvref_t<IndexOrOpSequence1>,
+      SEQUANT_ASSERT((!std::is_same_v<std::remove_cvref_t<IndexOrOpSequence1>,
                                       std::array<meta::castable_to_any, 0>>));
       if constexpr (meta::is_statically_castable_v<
                         meta::range_value_t<IndexOrOpSequence1>, Index>)
@@ -544,7 +544,7 @@ class NormalOperator : public Operator<S>,
       }
     }
     for (const auto &a : annihilators | ranges::views::reverse) {
-      SEQUANT_ASSERT((!std::is_same_v<meta::remove_cvref_t<IndexOrOpSequence2>,
+      SEQUANT_ASSERT((!std::is_same_v<std::remove_cvref_t<IndexOrOpSequence2>,
                                       std::array<meta::castable_to_any, 0>>));
       if constexpr (meta::is_statically_castable_v<
                         meta::range_value_t<IndexOrOpSequence2>, Index>)

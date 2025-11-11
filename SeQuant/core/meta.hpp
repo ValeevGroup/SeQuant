@@ -35,24 +35,6 @@ struct castable_to_any {
   }
 };
 
-///////// remove_cvref ///////////
-
-#if __cplusplus < 202002L
-template <class T>
-struct remove_cvref {
-  using type = std::remove_cv_t<::std::remove_reference_t<T>>;
-};
-
-template <class T>
-using remove_cvref_t = typename remove_cvref<T>::type;
-#else
-template <typename T>
-using remove_cvref = std::remove_cvref<T>;
-
-template <typename T>
-using remove_cvref_t = std::remove_cvref_t<T>;
-#endif
-
 ///////// is_detected ///////////
 
 struct nonesuch {
@@ -135,10 +117,8 @@ template <>
 struct is_char<char> : std::true_type {};
 template <>
 struct is_char<wchar_t> : std::true_type {};
-#if __cplusplus >= 202002L
 template <>
 struct is_char<char8_t> : std::true_type {};
-#endif
 template <>
 struct is_char<char16_t> : std::true_type {};
 template <>
@@ -169,17 +149,17 @@ struct literal_to_string {
 
 template <typename Char, std::size_t N>
 struct literal_to_string<Char[N], std::enable_if_t<is_char_v<Char>>> {
-  using type = std::basic_string<meta::remove_cvref_t<Char>>;
+  using type = std::basic_string<std::remove_cvref_t<Char>>;
 };
 
 template <typename Char>
 struct literal_to_string<Char[], std::enable_if_t<is_char_v<Char>>> {
-  using type = std::basic_string<meta::remove_cvref_t<Char>>;
+  using type = std::basic_string<std::remove_cvref_t<Char>>;
 };
 
 template <typename Char>
 struct literal_to_string<Char *, std::enable_if_t<is_char_v<Char>>> {
-  using type = std::basic_string<meta::remove_cvref_t<Char>>;
+  using type = std::basic_string<std::remove_cvref_t<Char>>;
 };
 
 template <typename T>
@@ -461,7 +441,8 @@ static constexpr bool has_operator_subscript_v =
 /// Checks whether \c T is a \c Base (is either the same class or a sub-class
 /// ignoring CV and reference qualifiers
 template <typename Base, typename T>
-using is_base_of = std::is_base_of<remove_cvref_t<Base>, remove_cvref_t<T>>;
+using is_base_of =
+    std::is_base_of<std::remove_cvref_t<Base>, std::remove_cvref_t<T>>;
 template <typename Base, typename T>
 constexpr bool is_base_of_v = is_base_of<Base, T>::value;
 
@@ -470,8 +451,8 @@ constexpr bool is_base_of_v = is_base_of<Base, T>::value;
 /// reference qualifiers
 template <typename T, typename U>
 struct is_same
-    : std::bool_constant<std::is_same_v<remove_cvref_t<T>, remove_cvref_t<U>>> {
-};
+    : std::bool_constant<
+          std::is_same_v<std::remove_cvref_t<T>, std::remove_cvref_t<U>>> {};
 
 template <typename T, typename U>
 constexpr bool is_same_v = is_same<T, U>::value;

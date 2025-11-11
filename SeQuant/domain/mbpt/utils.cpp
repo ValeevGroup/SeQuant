@@ -50,14 +50,9 @@ ExprPtr lst(ExprPtr A, ExprPtr B, size_t commutator_rank, bool unitary,
       return transform(A);
     }
   } else if (A.is<Sum>()) {
-    auto result = sequant::transform_reduce(
-        *A, ex<Sum>(),
-        [](const ExprPtr& running_total, const ExprPtr& summand) {
-          return running_total + summand;
-        },
-        [=](const auto& term) {
-          return lst(term, B, commutator_rank, unitary, /*skip_clone*/ true);
-        });
+    auto result = sequant::transform_sum_expr(*A, [=](const auto& term) {
+      return lst(term, B, commutator_rank, unitary, /*skip_clone*/ true);
+    });
     return result;
   } else if (A.is<Constant>() || A.is<Variable>())
     return A;
@@ -96,14 +91,9 @@ ExprPtr screen_vac_av(ExprPtr expr, bool skip_clone) {
   } else if (expr.is<Variable>() || expr.is<Constant>()) {
     return expr;
   } else if (expr.is<Sum>()) {
-    auto result = sequant::transform_reduce(
-        *expr, ex<Sum>(),
-        [](const ExprPtr& running_total, const ExprPtr& summand) {
-          return running_total + summand;
-        },
-        [=](const auto& term) {
-          return screen_vac_av(term, /*skip_clone*/ true);
-        });
+    auto result = sequant::transform_sum_expr(*expr, [=](const auto& term) {
+      return screen_vac_av(term, /*skip_clone*/ true);
+    });
     return result;
   } else
     throw std::invalid_argument(

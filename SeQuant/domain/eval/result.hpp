@@ -663,7 +663,8 @@ class Result {
   ///
   template <typename T>
   [[nodiscard]] T const& get() const {
-    return const_cast<Result&>(*this).get<T>();
+    SEQUANT_ASSERT(has_value());
+    return *std::any_cast<const T>(&value_);
   }
 
   /// @return the size of the object in bytes
