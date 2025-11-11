@@ -180,8 +180,7 @@ Expr::hash_type Operator<QuantumNumbers, S>::memoizing_hash() const {
   };
   if (!this->hash_value_) {
     this->hash_value_ = compute_hash();
-  }
-  else {
+  } else {
     SEQUANT_ASSERT(*(this->hash_value_) == compute_hash());
   }
   return *(this->hash_value_);
@@ -189,8 +188,10 @@ Expr::hash_type Operator<QuantumNumbers, S>::memoizing_hash() const {
 
 template <typename QuantumNumbers, Statistics S>
 bool Operator<QuantumNumbers, S>::static_equal(const Expr& other_expr) const {
-  const auto& other = static_cast<const Operator<QuantumNumbers, S>&>(other_expr);
-  return this->label() == other.label() && (*this)(QuantumNumbers{}) == other(QuantumNumbers{});
+  const auto& other =
+      static_cast<const Operator<QuantumNumbers, S>&>(other_expr);
+  return this->label() == other.label() &&
+         (*this)(QuantumNumbers{}) == other(QuantumNumbers{});
 }
 
 }  // namespace mbpt
