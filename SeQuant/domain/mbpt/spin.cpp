@@ -1558,11 +1558,11 @@ std::vector<ExprPtr> open_shell_spintrace(
 
   // Loop over external index replacement maps
   for (auto& e : e_rep) {
-    std::wcout << "external replacement map:\n";
-    for (auto& p : e) {
-      std::cout << p.first.to_string() << " -> " << p.second.to_string()
-                << "\n";
-    }
+    // std::wcout << "external replacement map:\n";
+    // for (auto& p : e) {
+    //   std::cout << p.first.to_string() << " -> " << p.second.to_string()
+    //             << "\n";
+    // }
 
     // Add spin labels to external indices
     auto spin_expr = append_spin(expanded_expr, e);
@@ -1573,11 +1573,12 @@ std::vector<ExprPtr> open_shell_spintrace(
     for (auto& i : i_rep) {
       // Add spin labels to internal indices, expand antisymmetric tensors
       auto spin_expr_i = append_spin(spin_expr, i);
-      std::wcout << "after append_spin (internal replaced): "
-                 << to_latex(spin_expr_i) << "\n";
+      // std::wcout << "after append_spin (internal replaced): "
+      //            << to_latex(spin_expr_i) << "\n";
 
       spin_expr_i = expand_antisymm(spin_expr_i, true);
-      std::wcout << "after expand_antisymm: " << to_latex(spin_expr_i) << "\n";
+      // std::wcout << "after expand_antisymm: " << to_latex(spin_expr_i) <<
+      // "\n";
 
       expand(spin_expr_i);
       detail::reset_idx_tags(spin_expr_i);
@@ -1615,9 +1616,9 @@ std::vector<ExprPtr> open_shell_spintrace(
   // Canonicalize and simplify all expressions
   for (auto& expression : result) {
     detail::reset_idx_tags(expression);
-    std::wcout << "before canon: " << to_latex(expression) << "\n";
+    // std::wcout << "before canon: " << to_latex(expression) << "\n";
     canonicalize(expression);
-    std::wcout << "after canon: " << to_latex(expression) << "\n";
+    // std::wcout << "after canon: " << to_latex(expression) << "\n";
 
     rapid_simplify(expression);
   }
@@ -1664,6 +1665,15 @@ std::vector<ExprPtr> open_shell_CC_spintrace(const ExprPtr& expr) {
   for (auto& spin_case : concat_terms) {
     auto ptr = sequant::ex<Sum>(spin_case);
     expr_vec.push_back(ptr);
+  }
+  std::wcout << "original (spin-orbital): " << expr->size() << " terms\n";
+  std::wcout << "spin-traced cases: " << expr_vec.size() << "\n";
+  for (size_t sc = 0; sc < expr_vec.size(); ++sc) {
+    if (expr_vec[sc] == nullptr) {
+      std::wcout << "case " << sc << ": null\n";
+      continue;
+    }
+    std::wcout << "case " << sc << " : " << expr_vec[sc]->size() << " terms\n";
   }
 
   return expr_vec;
