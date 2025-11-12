@@ -1,7 +1,6 @@
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/logger.hpp>
-#include <SeQuant/core/math.hpp>
 #include <SeQuant/core/optimize.hpp>
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/runtime.hpp>
@@ -19,13 +18,9 @@
 #include <algorithm>
 #include <functional>
 #include <iterator>
-#include <memory>
-#include <new>
-#include <numeric>
 #include <stdexcept>
 #include <string_view>
 #include <unordered_map>
-#include <utility>
 
 using namespace sequant;
 using namespace sequant::mbpt;
@@ -119,8 +114,7 @@ class compute_eomcc_openshell {
                << "EOM-CC Equations [type=" << type2wstr.at(type)
                << ", CC rank=" << N
                << ", manifold=" << sequant::to_wstring(manifold) << "]"
-               << " computed in " << timer_pool.read(N) << " s\n"
-               << "Number of excitation levels: " << eqvec.size() << "\n";
+               << " computed in " << timer_pool.read(N) << " s\n";
 
     if (print) std::wcout << "\n";
     // to_latex_align(eqvec[i], 20, 1) << "\n";
@@ -129,10 +123,9 @@ class compute_eomcc_openshell {
     std::vector<std::vector<ExprPtr>> spintraced_results;
 
     for (size_t i = 0; i < eqvec.size(); ++i) {
-      if (eqvec[i] == nullptr) {
-        spintraced_results.push_back({});
-        continue;
-      }
+      if (eqvec[i] == nullptr) continue;
+      //     // spintraced_results.push_back({});
+      std::wcout << "R[" << i << "] has " << eqvec[i].size() << " terms\n";
 
       auto expr = eqvec[i];
       Tensor A = expr->at(0)->at(0)->as<Tensor>();
@@ -160,7 +153,13 @@ class compute_eomcc_openshell {
           expand(os_st[s]);
           os_st[s] = expand_P_op(os_st[s]);
 
-          os_st[s] = open_shell_spintrace(os_st[s], ext_idxs, s)[0];
+          // os_st[s] = open_shell_spintrace(os_st[s], ext_idxs, s)[0];
+          auto spintraced = open_shell_spintrace(os_st[s], ext_idxs, s);
+          if (spintraced.empty()) {
+            throw std::runtime_error(
+                "open_shell_spintrace returned empty vector");
+          }
+          os_st[s] = spintraced[0];
 
           if (rank > 2) {
             os_st[s] = A_vec[s] * os_st[s];
@@ -192,7 +191,6 @@ class compute_eomcc_openshell {
         continue;
       }
 
-      std::wcout << type2wstr.at(type) << i << ":\n";
       if (eqvec[i] != nullptr) {
         std::wcout << "original (spin-orbital): " << eqvec[i]->size()
                    << " terms\n";

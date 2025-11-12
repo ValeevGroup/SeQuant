@@ -1194,7 +1194,7 @@ SECTION("Permutation operators") {
   // there are n=N+1 P cases like A
   REQUIRE(P2[0]->size() == 0);  // all alpha
   REQUIRE(P2[1]->size() == 4);  // mix
-  std::wcout << "what P2[1] contains: " << to_latex_align(P2[1]) << std::endl;
+  std::wcout << "what P2[2] contains: " << to_latex_align(P2[2]) << std::endl;
   REQUIRE(P2[2]->size() == 0);  // all beta
 
   // auto Avec2 = open_shell_A_op(A2->as<Tensor>());
@@ -1202,7 +1202,7 @@ SECTION("Permutation operators") {
   auto Avec3 = open_shell_A_op(A3->as<Tensor>());
   REQUIRE(P3[0]->size() == 0);
   REQUIRE(P3[1]->size() == 9);
-  std::wcout << "what P1 contains: " << to_latex_align(P3[1]) << std::endl;
+  std::wcout << "what P3[2] contains: " << to_latex_align(P3[2]) << std::endl;
   REQUIRE(P3[2]->size() == 9);
   REQUIRE(P3[3]->size() == 0);
 
