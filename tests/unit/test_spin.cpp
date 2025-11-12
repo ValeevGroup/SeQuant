@@ -1406,7 +1406,7 @@ SECTION("Open-shell spin-tracing") {
 
     auto result_alpha = result[0];
     auto result_beta = result[1];
-    auto result_beta_by_spin_swap = swap_spin(result_alpha);
+    auto result_beta_spin_swap = swap_spin(result_alpha);
     assert(result_beta == result_beta_spin_swap);
   }
 
