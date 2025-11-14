@@ -128,6 +128,21 @@ inline const container::map<std::wstring, OpType> label2optype =
 /// Operator character relative to Fermi vacuum
 enum class OpClass { ex, deex, gen };
 
+/// @brief Named parameter struct for Operator construction
+struct OpParams {
+  std::optional<std::size_t> rank = std::nullopt;
+  ///< operator rank (for particle-conserving ops)
+  std::optional<nₕ> nh = std::nullopt;
+  ///< number of hole indices (for non-particle conserving)
+  std::optional<nₚ> np = std::nullopt;
+  ///< number of particle indices (for non-particle conserving)
+  std::size_t order = 1;  ///< perturbation order (for _pt operators)
+  std::optional<naux> nbatch = std::nullopt;  ///< number of batching indices
+  std::optional<std::vector<std::size_t>> batch_ordinals = std::nullopt;
+  ///< custom batching index ordinals
+  bool skip1 = false;  ///< skip single excitations (for sum operators)
+};
+
 /// @return the tensor labels in the cardinal order
 std::vector<std::wstring> cardinal_tensor_labels();
 
