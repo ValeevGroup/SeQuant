@@ -1,3 +1,5 @@
+#include <SeQuant/version.hpp>
+
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/runtime.hpp>
@@ -10,8 +12,6 @@
 #include <SeQuant/domain/mbpt/models/cc.hpp>
 #include <SeQuant/domain/mbpt/op.hpp>
 #include <SeQuant/domain/mbpt/spin.hpp>
-
-#include <clocale>
 
 using namespace sequant;
 using namespace sequant::mbpt;
@@ -256,7 +256,8 @@ int main(int argc, char* argv[]) {
   std::wcerr.precision(std::numeric_limits<double>::max_digits10);
   sequant::set_locale();
 
-  // set_num_threads(1);
+  std::cout << "SeQuant revision: " << sequant::git_revision() << "\n";
+  std::cout << "Number of threads: " << sequant::num_threads() << "\n\n";
 
 #ifndef NDEBUG
   const size_t DEFAULT_NMAX = 3;

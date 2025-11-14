@@ -7,10 +7,10 @@
 #include <SeQuant/core/expressions/tensor.hpp>
 #include <SeQuant/core/logger.hpp>
 #include <SeQuant/core/options.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 
 #include <range/v3/range/primitives.hpp>
 
-#include <cassert>
 #include <iostream>
 #include <string>
 #include <utility>
@@ -37,14 +37,16 @@ std::wstring to_latex_align(const ExprPtr& exprptr, size_t max_lines_per_align,
     bool have_next_term = true;
     auto insert_into_result_at = [&](std::wstring::size_type at,
                                      const auto& str) {
-      assert(pos != std::wstring::npos);
+      SEQUANT_ASSERT(pos != std::wstring::npos);
       result.insert(at, str);
       const auto str_nchar = std::size(str) - 1;  // neglect end-of-string
       pos += str_nchar;
       if (plus_pos != std::wstring::npos) plus_pos += str_nchar;
       if (minus_pos != std::wstring::npos) minus_pos += str_nchar;
-      if (pos != plus_pos) assert(plus_pos == result.find(L" + ", plus_pos));
-      if (pos != minus_pos) assert(minus_pos == result.find(L" - ", minus_pos));
+      if (pos != plus_pos)
+        SEQUANT_ASSERT(plus_pos == result.find(L" + ", plus_pos));
+      if (pos != minus_pos)
+        SEQUANT_ASSERT(minus_pos == result.find(L" - ", minus_pos));
     };
     while (have_next_term) {
       if (max_lines_per_align > 0 &&

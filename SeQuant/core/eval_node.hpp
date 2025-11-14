@@ -10,6 +10,7 @@
 #include <SeQuant/core/eval_expr.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/math.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 
 namespace sequant {
 
@@ -20,11 +21,11 @@ ExprPtr linearize_eval_node(Node const& node) {
   ExprPtr lres = linearize_eval_node(node.left());
   ExprPtr rres = linearize_eval_node(node.right());
 
-  assert(lres);
-  assert(rres);
+  SEQUANT_ASSERT(lres);
+  SEQUANT_ASSERT(rres);
 
   if (node->op_type() == EvalOp::Sum) return ex<Sum>(ExprPtrList{lres, rres});
-  assert(node->op_type() == EvalOp::Product);
+  SEQUANT_ASSERT(node->op_type() == EvalOp::Product);
   return ex<Product>(
       Product{1, ExprPtrList{lres, rres}, Product::Flatten::Yes});
 }
@@ -51,7 +52,8 @@ class ContractedIndexCount {
     auto const R = NodePos::Right;
     auto const T = NodePos::This;
 
-    assert(n->is_tensor() && n.left()->is_tensor() && n.right()->is_tensor());
+    SEQUANT_ASSERT(n->is_tensor() && n.left()->is_tensor() &&
+                   n.right()->is_tensor());
 
     for (auto p : {L, R, T}) {
       auto const& t = (p == L ? n.left() : p == R ? n.right() : n)->as_tensor();
@@ -189,9 +191,9 @@ struct FlopsWithSymm {
                    ? cost / factorial(tbrank)
                    : cost / (factorial(tbrank) * factorial(tkrank));
       } else
-        assert(false &&
-               "Unsupported evaluation operation for asymptotic cost "
-               "computation.");
+        SEQUANT_ASSERT(false &&
+                       "Unsupported evaluation operation for asymptotic cost "
+                       "computation.");
     }
     return cost;
   }

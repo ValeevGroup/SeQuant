@@ -3,6 +3,7 @@
 
 #include <SeQuant/core/expressions/expr_ptr.hpp>
 #include <SeQuant/core/options.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 
 #include <boost/core/demangle.hpp>
 
@@ -69,6 +70,9 @@ class Expr : public std::enable_shared_from_this<Expr>,
   /// @return true if this is a leaf
   bool is_atom() const { return ranges::empty(*this); }
 
+  /// @return true if this is zero
+  virtual bool is_zero() const { return false; }
+
   /// @return the string representation of @c this in the LaTeX format
   virtual std::wstring to_latex() const;
 
@@ -82,18 +86,26 @@ class Expr : public std::enable_shared_from_this<Expr>,
   virtual ExprPtr clone() const;
 
   /// like Expr::shared_from_this, but returns ExprPtr
-  /// @return a shared_ptr to this object wrapped into ExprPtr
-  /// @throw std::bad_weak_ptr if this object is not managed by a shared_ptr
+  /// @return a shared_ptr to this object wrapped into ExprPtr, if this object
+  /// is already managed by a shared_ptr, else returns a shared_ptr to a clone
+  /// of this object wrapped into ExprPtr
   ExprPtr exprptr_from_this() {
-    return static_cast<ExprPtr>(this->shared_from_this());
+    if (weak_from_this().use_count() == 0)
+      return this->clone();
+    else
+      return static_cast<ExprPtr>(this->shared_from_this());
   }
 
   /// like Expr::shared_from_this, but returns ExprPtr
-  /// @return a shared_ptr to this object wrapped into ExprPtr
-  /// @throw std::bad_weak_ptr if this object is not managed by a shared_ptr
+  /// @return a shared_ptr to this object wrapped into ExprPtr, if this object
+  /// is already managed by a shared_ptr, else returns a shared_ptr to a clone
+  /// of this object wrapped into ExprPtr
   ExprPtr exprptr_from_this() const {
-    return static_cast<const ExprPtr>(
-        std::const_pointer_cast<Expr>(this->shared_from_this()));
+    if (weak_from_this().use_count() == 0)
+      return this->clone();
+    else
+      return static_cast<const ExprPtr>(
+          std::const_pointer_cast<Expr>(this->shared_from_this()));
   }
 
   /// Canonicalizes @c this and returns the byproduct of canonicalization (e.g.
@@ -288,7 +300,7 @@ class Expr : public std::enable_shared_from_this<Expr>,
     if constexpr (is_expr_v<T>)
       return true;
     else if constexpr (std::is_base_of_v<Expr, T>)
-      return this->type_id() == get_type_id<meta::remove_cvref_t<T>>();
+      return this->type_id() == get_type_id<std::remove_cvref_t<T>>();
     else
       return dynamic_cast<const T *>(this) != nullptr;
   }
@@ -297,7 +309,7 @@ class Expr : public std::enable_shared_from_this<Expr>,
   /// @return this object cast to type @c T
   template <typename T>
   const T &as() const {
-    assert(this->is<T>());
+    SEQUANT_ASSERT(this->is<T>());
     if constexpr (std::is_base_of_v<Expr, T>) {
       return static_cast<const T &>(*this);
     } else
@@ -308,7 +320,7 @@ class Expr : public std::enable_shared_from_this<Expr>,
   /// @return this object cast to type @c T
   template <typename T>
   T &as() {
-    assert(this->is<T>());
+    SEQUANT_ASSERT(this->is<T>());
     if constexpr (std::is_base_of_v<Expr, T>) {
       return static_cast<T &>(*this);
     } else
@@ -356,9 +368,9 @@ class Expr : public std::enable_shared_from_this<Expr>,
  private:
   friend ranges::range_access;
 
-  template <typename E, typename Visitor,
-            typename =
-                std::enable_if_t<std::is_same_v<meta::remove_cvref_t<E>, Expr>>>
+  template <
+      typename E, typename Visitor,
+      typename = std::enable_if_t<std::is_same_v<std::remove_cvref_t<E>, Expr>>>
   static bool visit_impl(E &&expr, Visitor &&visitor, const bool atoms_only) {
     if (expr.weak_from_this().use_count() == 0)
       throw std::invalid_argument(
@@ -522,11 +534,6 @@ inline bool operator==(const Expr &a, const Expr &b) {
   else
     return a.static_equal(b);
 }
-
-#if __cplusplus < 202002L
-/// @return true if @c a is not equal to @c b
-inline bool operator!=(const Expr &a, const Expr &b) { return !(a == b); }
-#endif  // __cplusplus < 202002L
 
 /// binary predicate that returns true is 2 expressions differ by a factor
 struct proportional_to {

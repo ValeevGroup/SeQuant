@@ -12,6 +12,7 @@
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/tensor_network.hpp>
 #include <SeQuant/core/tensor_network/typedefs.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 
 #include <range/v3/all.hpp>
 
@@ -38,21 +39,23 @@ ExprPtr::base_type &&ExprPtr::as_shared_ptr() && {
 }
 
 Expr &ExprPtr::operator*() & {
-  assert(this->operator bool());
+  SEQUANT_ASSERT(this->operator bool());
   return *(this->get());
 }
 
 const Expr &ExprPtr::operator*() const & {
-  assert(this->operator bool());
+  SEQUANT_ASSERT(this->operator bool());
   return *(this->get());
 }
 
 Expr &&ExprPtr::operator*() && {
-  assert(this->operator bool());
+  SEQUANT_ASSERT(this->operator bool());
   return std::move(*(this->get()));
 }
 
 ExprPtr &ExprPtr::operator+=(const ExprPtr &other) {
+  if (!other) return *this;
+
   if (!*this) {
     *this = other.clone();
   } else if (as_shared_ptr()->is<Sum>()) {
@@ -67,6 +70,8 @@ ExprPtr &ExprPtr::operator+=(const ExprPtr &other) {
 }
 
 ExprPtr &ExprPtr::operator-=(const ExprPtr &other) {
+  if (!other) return *this;
+
   if (!*this) {
     *this = ex<Constant>(-1) * other.clone();
   } else if (as_shared_ptr()->is<Sum>()) {
@@ -81,6 +86,8 @@ ExprPtr &ExprPtr::operator-=(const ExprPtr &other) {
 }
 
 ExprPtr &ExprPtr::operator*=(const ExprPtr &other) {
+  if (!other) return *this;
+
   if (!*this) {
     *this = other.clone();
   } else if (as_shared_ptr()->is<Product>()) {
@@ -174,7 +181,7 @@ ExprPtr Product::canonicalize_impl(CanonicalizeOptions opts) {
     }
     auto bp = factor->canonicalize(opts);
     if (bp) {
-      assert(bp->template is<Constant>());
+      SEQUANT_ASSERT(bp->template is<Constant>());
       this->scalar_ *= std::static_pointer_cast<Constant>(bp)->value();
     }
   });
@@ -237,13 +244,13 @@ ExprPtr Product::canonicalize_impl(CanonicalizeOptions opts) {
 
     const auto &tensors = tn.tensors();
     using std::size;
-    assert(size(tensors) == size(factors_));
+    SEQUANT_ASSERT(size(tensors) == size(factors_));
     using std::begin;
     using std::end;
     std::transform(begin(tensors), end(tensors), begin(factors_),
                    [](const auto &tptr) {
                      auto exprptr = std::dynamic_pointer_cast<Expr>(tptr);
-                     assert(exprptr);
+                     SEQUANT_ASSERT(exprptr);
                      return exprptr;
                    });
     if (canon_factor) scalar_ *= canon_factor->template as<Constant>().value();
@@ -277,7 +284,7 @@ ExprPtr Product::canonicalize_impl(CanonicalizeOptions opts) {
         else if (!first_is_cardinal && second_is_cardinal)
           return false;
         else {
-          assert(!first_is_cardinal && !second_is_cardinal);
+          SEQUANT_ASSERT(!first_is_cardinal && !second_is_cardinal);
           return *first < *second;
         }
       } else
@@ -317,7 +324,7 @@ ExprPtr Product::canonicalize_impl(CanonicalizeOptions opts) {
 }
 
 void Product::adjoint() {
-  assert(static_commutativity() == false);  // assert no slicing
+  SEQUANT_ASSERT(static_commutativity() == false);  // assert no slicing
   auto adj_scalar = conj(scalar());
   using namespace ranges;
   auto adj_factors =
@@ -333,7 +340,7 @@ ExprPtr Product::canonicalize(CanonicalizeOptions opt) {
 }
 
 ExprPtr Product::rapid_canonicalize(CanonicalizeOptions opt) {
-  assert(opt.method == CanonicalizationMethod::Rapid);
+  SEQUANT_ASSERT(opt.method == CanonicalizationMethod::Rapid);
   return this->canonicalize_impl(opt);
 }
 
@@ -387,7 +394,7 @@ ExprPtr Sum::canonicalize_impl(bool multipass, CanonicalizeOptions opts) {
       opts_copy.method = opts.method | CanonicalizationMethod::Topological;
 
     // recursively canonicalize summands ...
-    // using for_each and directly access to summands
+    // using for_each and direct access to summands
     sequant::for_each(summands_, [pass, &opts_copy, &rapid](ExprPtr &summand) {
       ExprPtr bp;
       if (rapid) {
@@ -396,7 +403,7 @@ ExprPtr Sum::canonicalize_impl(bool multipass, CanonicalizeOptions opts) {
         bp = summand->canonicalize(opts_copy);
       }
       if (bp) {
-        assert(bp->template is<Constant>());
+        SEQUANT_ASSERT(bp->template is<Constant>());
         summand = ex<Product>(std::static_pointer_cast<Constant>(bp)->value(),
                               ExprPtrList{summand});
       }
@@ -406,65 +413,17 @@ ExprPtr Sum::canonicalize_impl(bool multipass, CanonicalizeOptions opts) {
                  << "): after canonicalizing summands = "
                  << to_latex_align(shared_from_this()) << std::endl;
 
-    // used to combine terms proportional to each other
-    container::unordered_set<ExprPtr, sequant::hash::_<ExprPtr>,
-                             proportional_to>
-        summands;
-
-    // process each summand
+    HashingAccumulator acc;
     for (auto &summand : summands_) {
-      auto it = summands.find(summand);
-      if (it == summands.end()) {
-        summands.emplace(summand);
-      } else {  // found existing term with the same hash
-        auto existing_summand = *it;
-        if (summand.template is<Product>()) {
-          if (existing_summand.is<Product>()) {
-            // both are products - add them
-            existing_summand.as<Product>().add_identical(
-                summand.template as<Product>());
-          } else {
-            // convert existing term to product and add
-            auto product_copy = std::make_shared<Product>(summand->clone());
-            product_copy->add_identical(existing_summand);
-            summands.erase(it);
-            summands.emplace(std::move(product_copy));
-          }
-        } else {
-          if (existing_summand.is<Product>()) {
-            existing_summand.as<Product>().add_identical(summand);
-          } else {
-            // neither is a product - create new product
-            auto product_form = std::make_shared<Product>();
-            product_form->append(2, summand.template as<Expr>());
-            summands.erase(it);
-            summands.emplace(std::move(product_form));
-          }
-        }
-      }
-    }
-    decltype(summands_) new_summands;
-    new_summands.reserve(summands.size());
-    for (auto term : summands) {
-      if (!term->template is<Product>() ||
-          !term->template as<Product>().is_zero()) {
-        new_summands.push_back(term);
-      }
+      acc.append(summand);
     }
 
     // last pass? sort by hash then by Expr::operator<
     // N.B. no point in differentiating between canonicalization methods here
     // since need to sort in both cases
-    if (pass == npasses - 1) {
-      ranges::sort(new_summands, [](const auto &e1, const auto &e2) {
-        if (e1->hash_value() == e2->hash_value()) {
-          return e1 < e2;
-        } else {
-          return e1->hash_value() < e2->hash_value();
-        }
-      });
-    }
-    summands_.swap(new_summands);
+    auto new_sum =
+        (pass == npasses - 1) ? acc.make_canonicalized_sum() : acc.make_sum();
+    this->swap(*new_sum);
 
     if (Logger::instance().canonicalize)
       std::wcout << "Sum::canonicalize_impl (pass=" << pass
@@ -473,6 +432,86 @@ ExprPtr Sum::canonicalize_impl(bool multipass, CanonicalizeOptions opts) {
   }
 
   return {};  // side effects are absorbed into summands
+}
+
+HashingAccumulator &HashingAccumulator::append(ExprPtr summand, bool flatten) {
+  // flatten, if needed
+  if (flatten && summand.is<Sum>()) {
+    for (auto &subsummand : summand.as<Sum>().summands()) {
+      this->append(subsummand, flatten);
+    }
+    return *this;
+  }
+
+  // process summand as a whole
+  auto it = summands_.find(summand);
+  if (it == summands_.end()) {
+    summands_.emplace(summand);
+  } else {  // found existing term with the same hash
+    auto existing_summand = *it;
+    if (summand.template is<Product>()) {
+      if (existing_summand.is<Product>()) {
+        // both are products - add them
+        existing_summand.as<Product>().add_identical(
+            summand.template as<Product>());
+      } else {
+        // convert existing term to product and add
+        auto product_copy = std::make_shared<Product>(summand->clone());
+        product_copy->add_identical(existing_summand);
+        summands_.erase(it);
+        summands_.emplace(std::move(product_copy));
+      }
+    } else {
+      if (existing_summand.is<Product>()) {
+        existing_summand.as<Product>().add_identical(summand);
+      } else {
+        // neither is a product - create new product
+        auto product_form = std::make_shared<Product>();
+        product_form->append(2, summand.template as<Expr>());
+        summands_.erase(it);
+        summands_.emplace(std::move(product_form));
+      }
+    }
+  }
+
+  return *this;
+}
+
+SumPtr HashingAccumulator::make_sum_impl(bool canonicalize) {
+  Sum::summands_type summands;
+  summands.reserve(summands_.size());
+  for (auto summand : summands_) {
+    if (!summand->is_zero()) {
+      summands.push_back(summand);
+    }
+  }
+
+  if (canonicalize) {
+    ranges::sort(summands, [](const auto &e1, const auto &e2) {
+      if (e1->hash_value() == e2->hash_value()) {
+        return e1 < e2;
+      } else {
+        return e1->hash_value() < e2->hash_value();
+      }
+    });
+  }
+
+  return std::make_shared<Sum>(std::move(summands), Sum::move_only_tag{});
+}
+
+SumPtr HashingAccumulator::make_sum() { return make_sum_impl(false); }
+
+SumPtr HashingAccumulator::make_canonicalized_sum() {
+  return make_sum_impl(true);
+}
+
+ExprPtr HashingAccumulator::make_expr(bool canonicalize) {
+  if (summands_.size() == 0) {
+    return ex<Constant>(0);
+  } else if (summands_.size() == 1)
+    return *(summands_.begin());
+  else
+    return make_sum_impl(canonicalize);
 }
 
 bool proportional_to::operator()(const ExprPtr &expr1,
@@ -492,7 +531,7 @@ bool proportional_to::operator()(const ExprPtr &expr1,
 
   // expr1 and expr2 are same type
 
-  if (expr1.is<Variable>()) {
+  if (expr1.is<Constant>()) {
     return true;
   }
   if (expr1.is<Product>()) {

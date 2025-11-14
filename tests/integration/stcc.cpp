@@ -1,15 +1,18 @@
+#include <SeQuant/version.hpp>
+
 #include <SeQuant/core/math.hpp>
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/runtime.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/timer.hpp>
 #include <SeQuant/domain/mbpt/context.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/models/cc.hpp>
 #include <SeQuant/domain/mbpt/spin.hpp>
-#include <fstream>
 
 #include <clocale>
+#include <fstream>
 
 using namespace sequant;
 
@@ -25,6 +28,9 @@ int main(int argc, char* argv[]) {
   std::wcout.precision(std::numeric_limits<double>::max_digits10);
   std::wcerr.precision(std::numeric_limits<double>::max_digits10);
   sequant::set_locale();
+
+  std::cout << "SeQuant revision: " << sequant::git_revision() << "\n";
+  std::cout << "Number of threads: " << sequant::num_threads() << "\n\n";
 
   sequant::set_default_context(
       {.index_space_registry_shared_ptr = mbpt::make_min_sr_spaces(),
@@ -122,7 +128,7 @@ int main(int argc, char* argv[]) {
       }
       break;
     default:
-      assert(false && "unreachable code reached");
+      SEQUANT_ASSERT(false && "unreachable code reached");
       abort();
   }
 

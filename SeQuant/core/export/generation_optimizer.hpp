@@ -11,7 +11,6 @@
 #include <pv/polymorphic_variant.hpp>
 
 #include <algorithm>
-#include <cassert>
 #include <stack>
 #include <utility>
 #include <variant>
@@ -149,7 +148,7 @@ class GenerationOptimizer final : public Generator<MainContext> {
           break;
       }
 
-      assert(!str.empty());
+      SEQUANT_ASSERT(!str.empty());
 
       str += " ";
 
@@ -321,13 +320,13 @@ class GenerationOptimizer final : public Generator<MainContext> {
 
     void execute(const Tensor &result, MainGenerator &generator,
                  const MainContext &ctx) override {
-      assert(m_expr);
+      SEQUANT_ASSERT(m_expr);
       generator.compute(*m_expr, result, ctx);
     }
 
     void execute(const Variable &result, MainGenerator &generator,
                  const MainContext &ctx) override {
-      assert(m_expr);
+      SEQUANT_ASSERT(m_expr);
       generator.compute(*m_expr, result, ctx);
     }
 
@@ -428,17 +427,17 @@ class GenerationOptimizer final : public Generator<MainContext> {
     process_operation_queue();
     process_operation_cache(ctx);
 
-    assert(m_queue.empty());
-    assert(m_cache.empty());
-    assert(m_paired.empty());
+    SEQUANT_ASSERT(m_queue.empty());
+    SEQUANT_ASSERT(m_cache.empty());
+    SEQUANT_ASSERT(m_paired.empty());
 
     m_generator.end_expression(ctx);
   }
 
   void end_export(const MainContext &ctx) override {
-    assert(m_queue.empty());
-    assert(m_cache.empty());
-    assert(m_paired.empty());
+    SEQUANT_ASSERT(m_queue.empty());
+    SEQUANT_ASSERT(m_cache.empty());
+    SEQUANT_ASSERT(m_paired.empty());
 
     m_generator.end_export(ctx);
   }
@@ -453,6 +452,7 @@ class GenerationOptimizer final : public Generator<MainContext> {
   DeclarationScope index_declaration_scope() const override { return m_generator.index_declaration_scope(); }
   DeclarationScope variable_declaration_scope() const override { return m_generator.variable_declaration_scope(); }
   DeclarationScope tensor_declaration_scope() const override { return m_generator.tensor_declaration_scope(); }
+  PrunableScalars prunable_scalars() const override { return m_generator.prunable_scalars(); }
   std::string represent(const Index &idx, const MainContext &ctx) const override { return m_generator.represent(idx, ctx); }
   std::string represent(const Tensor &tensor, const MainContext &ctx) const override { return m_generator.represent(tensor, ctx); }
   std::string represent(const Variable &variable, const MainContext &ctx) const override { return m_generator.represent(variable, ctx); }
@@ -578,18 +578,18 @@ class GenerationOptimizer final : public Generator<MainContext> {
       // Account for previously erased pairs (this simple method only works in
       // combination with the assumptions under which we are currently doing
       // erasures - see below)
-      assert(first_idx >= erased);
-      assert(second_idx >= erased);
+      SEQUANT_ASSERT(first_idx >= erased);
+      SEQUANT_ASSERT(second_idx >= erased);
       first_idx -= erased;
       second_idx -= erased;
 
-      assert(first_idx < m_cache.size());
-      assert(second_idx < m_cache.size());
-      assert(first_idx < second_idx);
+      SEQUANT_ASSERT(first_idx < m_cache.size());
+      SEQUANT_ASSERT(second_idx < m_cache.size());
+      SEQUANT_ASSERT(first_idx < second_idx);
 
       [[maybe_unused]] const Operation &first = m_cache.at(first_idx);
       [[maybe_unused]] const Operation &second = m_cache.at(second_idx);
-      assert(first->pairs_with(second));
+      SEQUANT_ASSERT(first->pairs_with(second));
 
       if (second_idx - first_idx > 2) {
         // There is more than one intermittent operation between the pair. We
@@ -610,26 +610,27 @@ class GenerationOptimizer final : public Generator<MainContext> {
         continue;
       }
 
-      assert(intermittent_action == MemoryAction::Deallocate);
+      SEQUANT_ASSERT(intermittent_action == MemoryAction::Deallocate);
       // If this was an allocation, the stack model would already be violated
-      assert(first->memory_action() == MemoryAction::Deallocate);
+      SEQUANT_ASSERT(first->memory_action() == MemoryAction::Deallocate);
 
       auto alloc_it = find_unpaired_allocation(
           m_cache.rbegin() + m_cache.size() - 1 - first_idx + 1,
           m_cache.rend());
-      assert(alloc_it != m_cache.rend());
-      assert(std::distance(alloc_it, m_cache.rend()) > 0);
+      SEQUANT_ASSERT(alloc_it != m_cache.rend());
+      SEQUANT_ASSERT(std::distance(alloc_it, m_cache.rend()) > 0);
       std::size_t first_alloc_idx = std::distance(alloc_it, m_cache.rend()) - 1;
-      assert(m_cache.at(first_alloc_idx)->pairs_with(first));
+      SEQUANT_ASSERT(m_cache.at(first_alloc_idx)->pairs_with(first));
 
       alloc_it = find_unpaired_allocation(alloc_it + 1, m_cache.rend());
-      assert(alloc_it != m_cache.rend());
-      assert(std::distance(alloc_it, m_cache.rend()) > 0);
+      SEQUANT_ASSERT(alloc_it != m_cache.rend());
+      SEQUANT_ASSERT(std::distance(alloc_it, m_cache.rend()) > 0);
       std::size_t intermittent_alloc_idx =
           std::distance(alloc_it, m_cache.rend()) - 1;
-      assert(m_cache.at(intermittent_alloc_idx)->pairs_with(intermittent));
+      SEQUANT_ASSERT(
+          m_cache.at(intermittent_alloc_idx)->pairs_with(intermittent));
 
-      assert(intermittent_alloc_idx < first_alloc_idx);
+      SEQUANT_ASSERT(intermittent_alloc_idx < first_alloc_idx);
       if (first_alloc_idx - intermittent_alloc_idx == 1) {
         // The allocations happen in subsequently -> we can simply swap them
         std::swap(m_cache.at(intermittent_alloc_idx),
@@ -651,8 +652,9 @@ class GenerationOptimizer final : public Generator<MainContext> {
   }
 
   void process_operation_cache(const MainContext &ctx) {
-    assert(m_queue.empty());
-    assert(m_cache.empty() || m_cache.front()->pairs_with(m_cache.back()));
+    SEQUANT_ASSERT(m_queue.empty());
+    SEQUANT_ASSERT(m_cache.empty() ||
+                   m_cache.front()->pairs_with(m_cache.back()));
 
     optimize_operation_cache();
 

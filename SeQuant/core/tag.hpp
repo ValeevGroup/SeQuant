@@ -6,9 +6,9 @@
 #define SEQUANT_TAG_HPP
 
 #include <SeQuant/core/meta.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 
 #include <any>
-#include <cassert>
 
 namespace sequant {
 
@@ -167,11 +167,11 @@ class any_comparable {
     const std::type_info &type() const override { return typeid(T); }
 
     bool operator<(const impl_base &other) const override {
-      assert(type() == other.type());
+      SEQUANT_ASSERT(type() == other.type());
       return value < other.cast_static<T>()->value;
     }
     bool operator==(const impl_base &other) const override {
-      assert(type() == other.type());
+      SEQUANT_ASSERT(type() == other.type());
       return value == other.cast_static<T>()->value;
     }
 
@@ -242,7 +242,7 @@ class Taggable {
  public:
   using any_comparable = ::sequant::detail::any_comparable;
 
-  Taggable() noexcept : tag_{} { assert(!has_value()); }
+  Taggable() noexcept : tag_{} { SEQUANT_ASSERT(!has_value()); }
 
   /// tags this object with tag @c t
   /// @param t tag to assign
@@ -251,9 +251,9 @@ class Taggable {
   /// @post `this->value() == t`
   template <typename T>
   const Taggable &assign(const T &t) const {
-    assert(!tag_.has_value());
+    SEQUANT_ASSERT(!tag_.has_value());
     tag_ = t;
-    assert(tag_.has_value());
+    SEQUANT_ASSERT(tag_.has_value());
     return *this;
   }
 
@@ -262,7 +262,7 @@ class Taggable {
   /// to T
   template <typename T>
   const T &value() const {
-    assert(tag_.has_value());
+    SEQUANT_ASSERT(tag_.has_value());
     using detail::any_comparable_cast;
     return *any_comparable_cast<T>(&tag_);
   }

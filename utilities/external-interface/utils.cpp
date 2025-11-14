@@ -5,6 +5,7 @@
 #include <SeQuant/core/space.hpp>
 #include <SeQuant/core/utility/expr.hpp>
 #include <SeQuant/core/utility/indices.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/string.hpp>
 
 #include <algorithm>
@@ -96,7 +97,7 @@ container::svector<container::svector<Index> > getExternalIndexPairs(
   container::svector<container::svector<Index> > externalPairs;
 
   auto visitor = [&groups, &externalPairs](const ExprPtr &expr) {
-    assert(expr.is<Tensor>());
+    SEQUANT_ASSERT(expr.is<Tensor>());
 
     const Tensor &tensor = expr.as<Tensor>();
 
@@ -163,7 +164,7 @@ sequant::ExprPtr generateResultSymmetrization(const ResultExpr &result,
 
 sequant::ExprPtr generateResultSymmetrization(const Tensor &result,
                                               std::wstring_view precursorName) {
-  assert(result.bra_rank() == result.ket_rank());
+  SEQUANT_ASSERT(result.bra_rank() == result.ket_rank());
 
   IndexGroups<std::vector<Index> > externals;
 
@@ -178,7 +179,7 @@ sequant::ExprPtr generateResultSymmetrization(const Tensor &result,
 sequant::ExprPtr generateResultSymmetrization(
     std::wstring_view precursorName,
     const sequant::IndexGroups<std::vector<sequant::Index> > &externals) {
-  assert(externals.bra.size() == externals.ket.size());
+  SEQUANT_ASSERT(externals.bra.size() == externals.ket.size());
 
   // Note: we're only symmetrizing over bra-ket, not over auxiliary indices
   ExprPtr symmetrization = ex<Sum>(ExprPtrList{});

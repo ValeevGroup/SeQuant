@@ -5,6 +5,7 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/op.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 
 #include <range/v3/view.hpp>
 
@@ -219,7 +220,7 @@ IndexGroups<Container> get_unique_indices(const Product& product) {
 
 /// Obtains the set of unique (non-repeated) indices used in the given
 /// expression
-template <typename Container>
+template <typename Container = std::vector<Index>>
 IndexGroups<Container> get_unique_indices(const Expr& expr) {
   if (expr.is<Constant>()) {
     return get_unique_indices<Container>(expr.as<Constant>());
@@ -449,8 +450,8 @@ Container external_indices(const Expr& expr) {
       [&](const ExprPtr& expr) {
         if (expr.is<Tensor>() && (expr.as<Tensor>().label() == L"S" ||
                                   expr.as<Tensor>().label() == L"A")) {
-          assert(!symmetrizer.has_value() ||
-                 symmetrizer.value() == expr.as<Tensor>());
+          SEQUANT_ASSERT(!symmetrizer.has_value() ||
+                         symmetrizer.value() == expr.as<Tensor>());
           symmetrizer = expr.as<Tensor>();
         }
       },

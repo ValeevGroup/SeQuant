@@ -116,7 +116,7 @@ inline void combine(std::size_t& seed, T const& v) {
 
   sequant_boost::hash_combine(seed, hasher(v));
 
-  //  assert(seed == seed_ref);
+  //  SEQUANT_ASSERT(seed == seed_ref);
 }
 
 template <class It>
@@ -128,7 +128,7 @@ inline std::size_t range(It first, It last) {
     hash::combine(seed, *first);
   }
 
-  //  assert(seed == seed_ref);
+  //  SEQUANT_ASSERT(seed == seed_ref);
   return seed;
 }
 
@@ -139,7 +139,7 @@ inline void range(std::size_t& seed, It first, It last) {
   for (; first != last; ++first) {
     hash::combine(seed, *first);
   }
-  //  assert(seed == seed_ref);
+  //  SEQUANT_ASSERT(seed == seed_ref);
 }
 
 ///

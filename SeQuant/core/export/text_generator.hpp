@@ -4,6 +4,7 @@
 #include <SeQuant/core/export/context.hpp>
 #include <SeQuant/core/export/generator.hpp>
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/string.hpp>
 
 #include <range/v3/view/join.hpp>
@@ -44,6 +45,10 @@ class TextGenerator : public Generator<Context> {
 
   DeclarationScope tensor_declaration_scope() const override {
     return DeclarationScope::Section;
+  }
+
+  PrunableScalars prunable_scalars() const override {
+    return PrunableScalars::All;
   }
 
   std::string represent(const Index &idx, const Context &) const override {
@@ -239,7 +244,7 @@ class TextGenerator : public Generator<Context> {
   }
 
   void end_named_section(std::string_view /*name*/, const Context &) override {
-    assert(m_indent.size() >= 2);
+    SEQUANT_ASSERT(m_indent.size() >= 2);
     m_indent = m_indent.substr(2, std::string::npos);
     m_generated += m_indent + "end section\n";
   }

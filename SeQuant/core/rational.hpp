@@ -5,6 +5,7 @@
 #include <SeQuant/core/wstring.hpp>
 
 #include <boost/multiprecision/cpp_int.hpp>
+#include <boost/multiprecision/rational_adaptor.hpp>
 #include <boost/numeric/conversion/cast.hpp>
 
 #include <memory>
@@ -13,6 +14,14 @@
 namespace sequant {
 
 using rational = boost::multiprecision::cpp_rational;
+
+inline auto numerator(const rational& number) {
+  return boost::multiprecision::numerator(number);
+}
+
+inline auto denominator(const rational& number) {
+  return boost::multiprecision::denominator(number);
+}
 
 /// shorter=sweeter? sometimes
 using ratio = rational;

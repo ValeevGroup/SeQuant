@@ -11,6 +11,7 @@
 #include <SeQuant/core/expressions/expr_algorithms.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/latex.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 
 #include <cstdlib>
 #include <memory>
@@ -317,7 +318,7 @@ class AbstractTensor {
   static void permute_impl(AbstractTensor::any_view_randsz indices,
                            std::span<const std::size_t> perm) {
     const auto n = indices.size();
-    assert(indices.size() == perm.size());
+    SEQUANT_ASSERT(indices.size() == perm.size());
     container::svector<Index> sorted_indices(n);
     for (std::size_t i = 0; i != n; ++i) {
       sorted_indices[i] = std::move(indices[perm[i]]);
@@ -331,7 +332,7 @@ class AbstractTensor {
                                    any_view_randsz ket_indices,
                                    std::span<std::size_t> perm_from) {
     const auto n = std::max(bra_indices.size(), ket_indices.size());
-    assert(n == perm_from.size());
+    SEQUANT_ASSERT(n == perm_from.size());
 
     // N.B. column slot bundles are kept in canonical order, see AbstractTensor
     // class dox: paired bundles first, then bra (paired with null ket) and
@@ -351,7 +352,7 @@ class AbstractTensor {
     }
     // corner case: there are only unpaired bra slots, no unpaired ket slots
     if (bra_indices.size() > ket_indices.size()) {
-      assert(ket_indices.size() == npaired);
+      SEQUANT_ASSERT(ket_indices.size() == npaired);
       nunpaired_bra += bra_indices.size() - ket_indices.size();
     }
 
@@ -374,14 +375,14 @@ class AbstractTensor {
 
     container::svector<Index> sorted_indices(n);
     for (std::size_t i = 0; i != bra_indices.size(); ++i) {
-      assert(perm_from[i] < bra_indices.size());
+      SEQUANT_ASSERT(perm_from[i] < bra_indices.size());
       sorted_indices[i] = std::move(bra_indices[perm_from[i]]);
     }
     for (std::size_t i = 0; i != bra_indices.size(); ++i) {
       bra_indices[i] = std::move(sorted_indices[i]);
     }
     for (std::size_t i = 0; i != ket_indices.size(); ++i) {
-      assert(perm_from[i] < ket_indices.size());
+      SEQUANT_ASSERT(perm_from[i] < ket_indices.size());
       sorted_indices[i] = std::move(ket_indices[perm_from[i]]);
     }
     for (std::size_t i = 0; i != ket_indices.size(); ++i) {

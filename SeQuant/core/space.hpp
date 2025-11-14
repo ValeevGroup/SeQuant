@@ -10,12 +10,12 @@
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/hash.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/string.hpp>
 #include <SeQuant/core/wstring.hpp>
 
 #include <range/v3/algorithm/any_of.hpp>
 
-#include <cassert>
 #include <cmath>
 #include <string_view>
 
@@ -48,7 +48,7 @@ class TypeAttr {
   /// @param bitset bitset representation of this Type
   /// @pre `(bitset & make_reserved().bitset) == null.bitset`
   explicit constexpr TypeAttr(bitset_t bitset) noexcept : bitset(bitset) {
-    assert((this->bitset & bitset::reserved) == bitset::null);
+    SEQUANT_ASSERT((this->bitset & bitset::reserved) == bitset::null);
   }
 
   /// construct TypeAddr from things that can be cast to bitset_t, but exclude
@@ -169,7 +169,7 @@ class QuantumNumbersAttr {
   /// @pre `(bitset & make_reserved().bitset()) == null.bitset()`
   explicit constexpr QuantumNumbersAttr(bitset_t bitset) noexcept
       : bitset(bitset) {
-    assert((this->bitset & bitset::reserved) == bitset::null);
+    SEQUANT_ASSERT((this->bitset & bitset::reserved) == bitset::null);
   }
 
   template <typename QN,
@@ -180,7 +180,7 @@ class QuantumNumbersAttr {
                 !std::is_same_v<std::decay_t<QN>, QuantumNumbersAttr>>>
   constexpr QuantumNumbersAttr(QN &&value) noexcept
       : bitset(static_cast<bitset_t>(std::forward<QN>(value))) {
-    assert((this->bitset & bitset::reserved) == bitset::null);
+    SEQUANT_ASSERT((this->bitset & bitset::reserved) == bitset::null);
   }
 
   constexpr explicit operator int64_t() const {

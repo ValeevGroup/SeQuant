@@ -27,8 +27,8 @@ Operator<QuantumNumbers, S>::Operator(
     std::function<std::wstring_view()> label_generator,
     std::function<ExprPtr()> tensor_form_generator,
     std::function<void(QuantumNumbers&)> qn_action, size_t batch_idx_rank)
-  : Operator(std::move(label_generator), std::move(tensor_form_generator),
-             std::move(qn_action)) {
+    : Operator(std::move(label_generator), std::move(tensor_form_generator),
+               std::move(qn_action)) {
   batch_idx_rank_ = batch_idx_rank;
 }
 
@@ -46,7 +46,7 @@ QuantumNumbers Operator<QuantumNumbers, S>::operator()(
 template <typename QuantumNumbers, Statistics S>
 QuantumNumbers& Operator<QuantumNumbers, S>::apply_to(
     QuantumNumbers& qns) const {
-  assert(qn_action_);
+  SEQUANT_ASSERT(qn_action_);
   if (is_vacuum(qns)) {  // action on vacuum is trivial ...
     qn_action_(qns);
   } else {  // action on a {operator. product of operators} = use Wick's theorem
@@ -59,7 +59,7 @@ QuantumNumbers& Operator<QuantumNumbers, S>::apply_to(
 
 template <typename QuantumNumbers, Statistics S>
 bool Operator<QuantumNumbers, S>::static_less_than(const Expr& that) const {
-  assert(that.is<this_type>());
+  SEQUANT_ASSERT(that.is<this_type>());
   auto& that_op = that.as<this_type>();
 
   // compare cardinal tensor labels first, then QN ranks
@@ -96,7 +96,7 @@ bool Operator<QuantumNumbers, S>::static_less_than(const Expr& that) const {
 
 template <typename QuantumNumbers, Statistics S>
 bool Operator<QuantumNumbers, S>::commutes_with_atom(const Expr& that) const {
-  assert(that.is_cnumber() || that.is<this_type>());
+  SEQUANT_ASSERT(that.is_cnumber() || that.is<this_type>());
   if (that.is_cnumber())
     return true;
   else {
@@ -108,7 +108,7 @@ bool Operator<QuantumNumbers, S>::commutes_with_atom(const Expr& that) const {
     auto delta_this = (*this)();
     auto delta_that = (that_op)();
 
-    assert(this->size() % 2 == 0 && that.size() == this->size());
+    SEQUANT_ASSERT(this->size() % 2 == 0 && that.size() == this->size());
 
     return combine(delta_this, delta_that) == combine(delta_that, delta_this);
   }
@@ -124,10 +124,10 @@ void Operator<QuantumNumbers, S>::adjoint() {
   // grab label and update according to adjoint flag
   auto lbl = std::wstring(this->label());
   if (lbl.back() == sequant::adjoint_label) {
-    assert(is_adjoint_);
+    SEQUANT_ASSERT(is_adjoint_);
     lbl.pop_back();
   } else {
-    assert(!is_adjoint_);
+    SEQUANT_ASSERT(!is_adjoint_);
     lbl.push_back(sequant::adjoint_label);
   }
 
@@ -190,17 +190,18 @@ Expr::hash_type Operator<QuantumNumbers, S>::memoizing_hash() const {
   };
   if (!this->hash_value_) {
     this->hash_value_ = compute_hash();
-  }
-  else {
-    assert(*(this->hash_value_) == compute_hash());
+  } else {
+    SEQUANT_ASSERT(*(this->hash_value_) == compute_hash());
   }
   return *(this->hash_value_);
 }
 
 template <typename QuantumNumbers, Statistics S>
 bool Operator<QuantumNumbers, S>::static_equal(const Expr& other_expr) const {
-  const auto& other = static_cast<const Operator<QuantumNumbers, S>&>(other_expr);
-  return this->label() == other.label() && (*this)(QuantumNumbers{}) == other(QuantumNumbers{});
+  const auto& other =
+      static_cast<const Operator<QuantumNumbers, S>&>(other_expr);
+  return this->label() == other.label() &&
+         (*this)(QuantumNumbers{}) == other(QuantumNumbers{});
 }
 
 }  // namespace mbpt

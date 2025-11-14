@@ -3,6 +3,7 @@
 //
 
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers_range_equals.hpp>
 
 #include "catch2_sequant.hpp"
 
@@ -816,6 +817,40 @@ TEST_CASE("expr", "[elements]") {
       ex3.reset();
       REQUIRE_NOTHROW(ex3 *= ex2);
       CHECK(ex3 == ex2);
+    }
+  }
+
+  SECTION("ResultExpr") {
+    SECTION("accessors") {
+      SECTION("as_variable") {
+        REQUIRE_THAT(parse_result_expr(L"R = Var").result_as_variable(),
+                     EquivalentTo(L"R"));
+
+        REQUIRE_THAT(parse_result_expr(L"R = Var").result_as_tensor(),
+                     EquivalentTo(L"R{}:N-N-N"));
+      }
+      SECTION("as_tensor") {
+        REQUIRE_THAT(
+            parse_result_expr(L"R{a1;i2;p3} = T{a1;i2;p3}").result_as_tensor(),
+            EquivalentTo(L"R{a1;i2;p3}"));
+      }
+    }
+    SECTION("particle pairings") {
+      std::vector<std::pair<Index, Index>> expected = {{L"a_1", L"i_1"}};
+      auto pairings = parse_result_expr(L"R{a1;i1} = t{a1;i1}")
+                          .index_particle_grouping<std::pair<Index, Index>>();
+      REQUIRE_THAT(pairings, ::Catch::Matchers::UnorderedRangeEquals(expected));
+
+      expected = {{L"a_1", L"i_1"}, {L"a_2", L"i_2"}};
+      pairings = parse_result_expr(L"R{a1,a2;i1,i2} = t{a1,a2;i1,i2}")
+                     .index_particle_grouping<std::pair<Index, Index>>();
+      REQUIRE_THAT(pairings, ::Catch::Matchers::UnorderedRangeEquals(expected));
+
+      // aux indices are ignored
+      expected = {{L"a_1", L"i_1"}, {L"a_2", L"i_2"}};
+      pairings = parse_result_expr(L"R{a1,a2;i1,i2;p1} = t{a1,a2;i1,i2;p1}")
+                     .index_particle_grouping<std::pair<Index, Index>>();
+      REQUIRE_THAT(pairings, ::Catch::Matchers::UnorderedRangeEquals(expected));
     }
   }
 }

@@ -3,6 +3,7 @@
 #include <SeQuant/core/complex.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 
 #include <range/v3/algorithm.hpp>
 #include <range/v3/iterator.hpp>
@@ -48,8 +49,9 @@ ExprPtr Fusion::fuse_left(Product const& lhs, Product const& rhs) {
   auto lsmand_prod = Product{lsmand.begin(), lsmand.end()};
   auto rsmand_prod = Product{rsmand.begin(), rsmand.end()};
 
-  assert(lhs.scalar().imag().is_zero() && rhs.scalar().imag().is_zero() &&
-         "Complex valued gcd not supported");
+  SEQUANT_ASSERT(lhs.scalar().imag().is_zero() &&
+                 rhs.scalar().imag().is_zero() &&
+                 "Complex valued gcd not supported");
   auto scalars_fused = fuse_scalar(lhs.scalar().real(), rhs.scalar().real());
 
   fac_prod.scale(scalars_fused.at(0));
@@ -86,8 +88,9 @@ ExprPtr Fusion::fuse_right(Product const& lhs, Product const& rhs) {
   auto lsmand_prod = Product{lsmand.begin(), lsmand.end()};
   auto rsmand_prod = Product{rsmand.begin(), rsmand.end()};
 
-  assert(lhs.scalar().imag().is_zero() && rhs.scalar().imag().is_zero() &&
-         "Complex valued gcd not supported");
+  SEQUANT_ASSERT(lhs.scalar().imag().is_zero() &&
+                 rhs.scalar().imag().is_zero() &&
+                 "Complex valued gcd not supported");
   auto scalars_fused = fuse_scalar(lhs.scalar().real(), rhs.scalar().real());
 
   fac_prod.scale(scalars_fused.at(0));

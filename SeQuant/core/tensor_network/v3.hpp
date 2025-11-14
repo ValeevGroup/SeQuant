@@ -11,10 +11,10 @@
 #include <SeQuant/core/tensor_network/canonicals.hpp>
 #include <SeQuant/core/tensor_network/slot.hpp>
 #include <SeQuant/core/tensor_network/vertex.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 
 #include <range/v3/range/traits.hpp>
 
-#include <cassert>
 #include <cstdlib>
 #include <iosfwd>
 #include <memory>
@@ -141,7 +141,7 @@ class TensorNetworkV3 {
         return vertices < other.vertices;
       }
 
-      assert(index && other.index);
+      SEQUANT_ASSERT(index && other.index);
       return index->space() < other.index->space();
     }
 
@@ -153,7 +153,7 @@ class TensorNetworkV3 {
     /// @return const reference to the `i`th Vertex object
     /// @pre `this->size() > i`
     const Vertex &vertex(std::size_t i) const {
-      assert(vertices.size() > i);
+      SEQUANT_ASSERT(vertices.size() > i);
       return *(vertices.begin() + i);
     }
 
@@ -161,7 +161,7 @@ class TensorNetworkV3 {
     std::size_t vertex_count() const { return vertices.size(); }
 
     const Index &idx() const {
-      assert(index);
+      SEQUANT_ASSERT(index);
       return *index;
     }
 
@@ -342,14 +342,14 @@ class TensorNetworkV3 {
   /// by their Index's full label
   /// @sa Edge
   const auto &edges() const {
-    assert(have_edges_);
+    SEQUANT_ASSERT(have_edges_);
     return edges_;
   }
 
   /// @brief Returns a range of external indices, i.e. those indices that do not
   /// connect tensors
   const auto &ext_indices() const {
-    assert(have_edges_);
+    SEQUANT_ASSERT(have_edges_);
     return ext_indices_;
   }
 

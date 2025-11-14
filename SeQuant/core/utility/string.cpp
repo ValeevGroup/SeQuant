@@ -1,7 +1,7 @@
+#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/string.hpp>
 
 #include <algorithm>
-#include <cassert>
 #include <limits>
 #include <string>
 
@@ -10,7 +10,7 @@
 namespace sequant {
 
 std::string toUtf8(const std::wstring_view str) {
-  assert(std::none_of(str.begin(), str.end(), [](wchar_t c) {
+  SEQUANT_ASSERT(std::none_of(str.begin(), str.end(), [](wchar_t c) {
     return c > std::numeric_limits<char16_t>::max();
   }));
 

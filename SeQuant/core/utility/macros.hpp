@@ -5,9 +5,13 @@
 #ifndef SEQUANT_CORE_UTILITY_MACROS_H
 #define SEQUANT_CORE_UTILITY_MACROS_H
 
-#include <cassert>
+#include <SeQuant/core/utility/exception.hpp>
+
 #include <cstdlib>
 #include <iostream>
+#include <source_location>
+#include <sstream>
+#include <utility>
 
 /* detect C++ compiler id:
 - ids taken from CMake
@@ -62,13 +66,76 @@
 #define SEQUANT_PRAGMA_GCC(x)
 #endif
 
-#define SEQUANT_ABORT(msg)       \
-  assert(false && msg);          \
-  std::cerr << msg << std::endl; \
+/* Defines the default error checking behavior */
+#define SEQUANT_ASSERT_THROW 2
+#define SEQUANT_ASSERT_ABORT 3
+#define SEQUANT_ASSERT_IGNORE 4
+#define SEQUANT_STRINGIFY(x) #x
+#define SEQUANT_ASSERT_BEHAVIOR \
+  SEQUANT_CONCAT(SEQUANT_ASSERT_, SEQUANT_ASSERT_BEHAVIOR_)
+#if SEQUANT_ASSERT_BEHAVIOR != SEQUANT_ASSERT_IGNORE
+#define SEQUANT_ASSERT_ENABLED
+#endif
+
+namespace sequant {
+
+#ifdef SEQUANT_ASSERT_ENABLED
+[[noreturn]]
+#endif
+inline void
+assert_failed([[maybe_unused]] const std::string &errmsg,
+              [[maybe_unused]] const std::source_location location =
+                  std::source_location::current()) {
+#ifdef SEQUANT_ASSERT_ENABLED
+#if SEQUANT_ASSERT_BEHAVIOR == SEQUANT_ASSERT_THROW
+  std::ostringstream oss;
+  oss
+#elif SEQUANT_ASSERT_BEHAVIOR == SEQUANT_ASSERT_ABORT
+  std::cerr
+#endif  // SEQUANT_ASSERT_BEHAVIOR
+      << errmsg << " at " << location.file_name() << ":" << location.line()
+      << " in function '" << location.function_name() << "'";
+#if SEQUANT_ASSERT_BEHAVIOR == SEQUANT_ASSERT_THROW
+  throw sequant::Exception(oss.str());
+#elif SEQUANT_ASSERT_BEHAVIOR == SEQUANT_ASSERT_ABORT
+  std::cerr << std::endl;
   std::abort();
+#endif  // SEQUANT_ASSERT_BEHAVIOR
+#endif  // SEQUANT_ASSERT_ENABLED
+}
+}  // namespace sequant
+
+#ifdef SEQUANT_ASSERT_ENABLED
+#define SEQUANT_ASSERT_MESSAGE(EXPR, ...)                          \
+  "SEQUANT_ASSERT(" SEQUANT_STRINGIFY(EXPR) ") failed" __VA_OPT__( \
+      " with message '" __VA_ARGS__ "'")
+
+#define SEQUANT_ASSERT(EXPR, ...)                                        \
+  do {                                                                   \
+    if (!(EXPR)) {                                                       \
+      sequant::assert_failed(SEQUANT_ASSERT_MESSAGE(EXPR, __VA_ARGS__)); \
+    }                                                                    \
+  } while (0)
+#else
+#define SEQUANT_ASSERT(...) \
+  do {                      \
+  } while (0)
+#endif
+
+namespace sequant {
+[[noreturn]] inline void abort_msg(
+    const std::string &errmsg,
+    const std::source_location location = std::source_location::current()) {
+  std::cerr << errmsg << " at " << location.file_name() << ":"
+            << location.line() << " in function '" << location.function_name()
+            << "'";
+  std::abort();
+}
+}  // namespace sequant
+
+#define SEQUANT_ABORT(msg) sequant::abort_msg(msg)
 
 #if defined(__cpp_lib_unreachable)
-#include <utility>
 
 #define SEQUANT_UNREACHABLE_TOKEN std::unreachable()
 #elif defined(SEQUANT_CXX_COMPILER_IS_GCC) || \
@@ -79,10 +146,10 @@
 #define SEQUANT_UNREACHABLE_TOKEN std::abort()
 #endif
 
-#define SEQUANT_UNREACHABLE                      \
-  do {                                           \
-    assert(false && "reached unreachable code"); \
-    SEQUANT_UNREACHABLE_TOKEN;                   \
+#define SEQUANT_UNREACHABLE                              \
+  do {                                                   \
+    SEQUANT_ASSERT(false && "reached unreachable code"); \
+    SEQUANT_UNREACHABLE_TOKEN;                           \
   } while (0)
 
 #endif  // SEQUANT_CORE_UTILITY_MACROS_H
