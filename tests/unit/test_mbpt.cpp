@@ -504,7 +504,7 @@ TEST_CASE("mbpt", "[mbpt]") {
       simplify(pdt1);
       // std::wcout << "pdt1: " << to_latex(pdt1) << std::endl;
       REQUIRE(to_latex(pdt1) ==
-              L"{{\\hat{h¹}}{[{z}_{1}]}{\\hat{h¹}}{[{z}_{1}, {z}_{2}]}}");
+              L"{{\\hat{h¹}}{[{z}_{1}]}{\\hat{h¹}}{[{z}_{1},{z}_{2}]}}");
 
       auto pdt2 = h1 * pt1;
       simplify(pdt2);
