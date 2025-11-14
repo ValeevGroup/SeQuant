@@ -916,6 +916,11 @@ class Operator : public Operator<void, S> {
            std::function<void(QuantumNumbers&)> qn_action,
            size_t batch_idx_rank);
 
+  Operator(std::function<std::wstring_view()> label_generator,
+           std::function<ExprPtr()> tensor_form_generator,
+           std::function<void(QuantumNumbers&)> qn_action,
+           container::svector<std::size_t> batch_ordinals);
+
   virtual ~Operator();
 
   /// evaluates the result of applying this operator to \p qns
@@ -950,9 +955,9 @@ class Operator : public Operator<void, S> {
 
   void adjoint() override;
 
-  /// @return the batch index rank of the operator
-  [[nodiscard]] std::optional<size_t> batch_idx_rank() const {
-    return batch_idx_rank_;
+  /// @brief returns the batching ordinals if any
+  std::optional<container::svector<std::size_t>> batching_ordinals() const {
+    return batching_ordinals_;
   }
 
  private:
@@ -960,7 +965,8 @@ class Operator : public Operator<void, S> {
 
   bool is_adjoint_ = false;
 
-  std::optional<size_t> batch_idx_rank_ = std::nullopt;
+  std::optional<container::svector<std::size_t>> batching_ordinals_ =
+      std::nullopt;
 
   bool less_than_rank_of(const this_type& that) const;
 

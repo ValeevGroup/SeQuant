@@ -370,41 +370,44 @@ std::wstring to_latex(const mbpt::Operator<mbpt::qns_t, S>& op) {
   };
 
   // batch index handling
-  auto add_batch_suffix = [&op](std::wstring& str) {
-    SEQUANT_ASSERT(op.batch_idx_rank() && "Batch index rank is not set");
+  const auto has_batching = op.batching_ordinals();
+  auto add_batch_suffix = [&op](const std::wstring& inp) {
+    SEQUANT_ASSERT(op.batching_ordinals() && "Batching ordinals is not set");
+    std::wstring str = inp;
+    using namespace ranges::views;
 
-    std::wstring batch_suffix = L"[";
-    const auto idx_rank = op.batch_idx_rank().value();
-    for (std::size_t i = 1; i <= idx_rank; ++i) {
-      batch_suffix += L"{z}_{" + std::to_wstring(i) + L"}";
-      if (i != idx_rank) {
-        batch_suffix += L", ";
-      }
-    }
-    batch_suffix += L"]";
-    str += L"{" + batch_suffix + L"}";
+    const auto& ordinals = op.batching_ordinals().value();
+    str += L"{[";
+    str += ordinals | transform([](const auto& ord) {
+             return L"{z}_{" + std::to_wstring(ord) + L"}";
+           }) |
+           join(L',') | ranges::to<std::wstring>();
+    str += L"]}";
     return str;
   };
 
   if (known_optype && skip_rank_info(it->second)) {
     result += L"}";  // close the brace
-    return op.batch_idx_rank() ? add_batch_suffix(result) : result;
+    return has_batching ? add_batch_suffix(result) : result;
   }
   // specially handle θ operator
   if (known_optype && it->second == OpType::θ) {
     result += L"_{" + std::to_wstring(op_qns[0].upper()) + L"}";
     result += L"}";  // close the brace
-    return op.batch_idx_rank() ? add_batch_suffix(result) : result;
+    return has_batching ? add_batch_suffix(result) : result;
   }
 
   if (get_default_context().vacuum() == Vacuum::Physical) {
-    if (op_qns[0] == op_qns[1]) {  // particle conserving
+    if (op_qns[0] == op_qns[1]) {
+      // particle conserving
       result += L"_{" + std::to_wstring(op_qns[0].lower()) + L"}";
-    } else {  // non-particle conserving
+    } else {
+      // non-particle conserving
       result += L"_{" + std::to_wstring(op_qns[1].lower()) + L"}^{" +
                 std::to_wstring(op_qns[0].lower()) + L"}";
     }
-  } else {  // single product vacuum
+  } else {
+    // single product vacuum
     auto nann_p =
         is_adjoint ? op_qns.ncre_particles() : op_qns.nann_particles();
     auto ncre_h = is_adjoint ? op_qns.nann_holes() : op_qns.ncre_holes();
@@ -459,7 +462,7 @@ std::wstring to_latex(const mbpt::Operator<mbpt::qns_t, S>& op) {
     }
   }
   result += L"}";
-  return op.batch_idx_rank() ? add_batch_suffix(result) : result;
+  return has_batching ? add_batch_suffix(result) : result;
 }
 
 }  // namespace sequant

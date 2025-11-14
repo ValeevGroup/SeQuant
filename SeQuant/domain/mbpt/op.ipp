@@ -29,7 +29,20 @@ Operator<QuantumNumbers, S>::Operator(
     std::function<void(QuantumNumbers&)> qn_action, size_t batch_idx_rank)
     : Operator(std::move(label_generator), std::move(tensor_form_generator),
                std::move(qn_action)) {
-  batch_idx_rank_ = batch_idx_rank;
+  // make aux ordinals [1 to batch_idx_rank]
+  batching_ordinals_ = ranges::views::iota(1ul, 1ul + batch_idx_rank) |
+                       ranges::to<container::svector<std::size_t>>();
+}
+
+template <typename QuantumNumbers, Statistics S>
+Operator<QuantumNumbers, S>::Operator(
+    std::function<std::wstring_view()> label_generator,
+    std::function<ExprPtr()> tensor_form_generator,
+    std::function<void(QuantumNumbers&)> qn_action,
+    container::svector<std::size_t> batch_ordinals)
+    : Operator(std::move(label_generator), std::move(tensor_form_generator),
+               std::move(qn_action)) {
+  batching_ordinals_ = batch_ordinals;
 }
 
 template <typename QuantumNumbers, Statistics S>
