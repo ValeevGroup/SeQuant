@@ -1,11 +1,10 @@
-#include <SeQuant/core/utility/macros.hpp>
-#include <SeQuant/domain/mbpt/context.hpp>
-#include <SeQuant/domain/mbpt/op.hpp>
-
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/math.hpp>
 #include <SeQuant/core/op.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/wick.hpp>
+#include <SeQuant/domain/mbpt/context.hpp>
+#include <SeQuant/domain/mbpt/op.hpp>
 
 #include <stdexcept>
 
