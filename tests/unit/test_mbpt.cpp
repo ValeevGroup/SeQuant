@@ -479,7 +479,7 @@ TEST_CASE("mbpt", "[mbpt]") {
       REQUIRE_NOTHROW(
           get_default_context().index_space_registry()->retrieve(L"z"));
 
-      using namespace mbpt::op;
+      using namespace mbpt;
       // ctors (rank, pert_order == 1, batch)
       REQUIRE_NOTHROW(op::H_pt(1, 1, 1));
       REQUIRE_NOTHROW(op::H_pt(2, 1, 2));
