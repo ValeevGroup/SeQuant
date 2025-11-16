@@ -661,6 +661,7 @@ inline container::svector<Index> make_aux_indices(
 // clang-format on
 template <Statistics S>
 class OpMaker {
+  using IndexContainer = container::svector<Index>;
   using IndexSpaceContainer = container::svector<IndexSpace>;
 
  public:
@@ -685,7 +686,14 @@ class OpMaker {
   /// @param[in] nc number of bra indices/creators
   /// @param[in] na number of ket indices/annihilators
   /// @param[in] nbatch number of auxiliary/batching indices
-  OpMaker(OpType op, ncre nc, nann na, naux nbatch);
+  OpMaker(OpType op, ncre nc, nann na, std::size_t nbatch);
+
+  /// @param[in] op the operator type
+  /// @param[in] nc number of bra indices/creators
+  /// @param[in] na number of ket indices/annihilators
+  /// @param[in] batch_ordinals custom batching index ordinals
+  OpMaker(OpType op, ncre nc, nann na,
+          const container::svector<std::size_t>& batch_ordinals);
 
   /// @brief creates a particle-conserving replacement operator
   /// @param[in] op the operator type
@@ -700,6 +708,11 @@ class OpMaker {
   /// @param[in] ann_space IndexSpace referred to be the annihilators
   OpMaker(OpType op, ncre nc, nann na, const cre<IndexSpace>& cre_space,
           const ann<IndexSpace>& ann_space);
+
+  /// @brief Creates operator from OpParams
+  /// @param[in] op the operator type
+  /// @param[in] params named parameters for operator construction
+  OpMaker(OpType op, const OpParams& params);
 
   enum class UseDepIdx {
     /// bra/cre indices depend on ket
@@ -826,30 +839,27 @@ class OpMaker {
   /// and of the given symmetry
   /// @param[in] cre_spaces creator IndexSpaces
   /// @param[in] ann_spaces annihilator IndexSpaces
-  /// @param[in] batch_spaces batch IndexSpaces
+  /// @param[in] batch_indices batch indices
   /// @param[in] tensor_generator the callable that generates the tensor
   /// @param[in] dep whether to use dependent indices
   template <typename TensorGenerator>
   static ExprPtr make(const IndexSpaceContainer& cre_spaces,
                       const IndexSpaceContainer& ann_spaces,
-                      const IndexSpaceContainer& batch_spaces,
+                      const IndexContainer& batch_indices,
                       TensorGenerator&& tensor_generator,
                       UseDepIdx dep = UseDepIdx::None) {
     const auto op_info = build_op_info(cre_spaces, ann_spaces, dep);
-    assert(!batch_spaces.empty());
-    assert(get_default_context().index_space_registry()->contains(L"z"));
-#ifndef NDEBUG
+    SEQUANT_ASSERT(!batch_indices.empty());
+    SEQUANT_ASSERT(
+        get_default_context().index_space_registry()->contains(L"z"));
     // assumes that there are no more than one type of batch space
-    auto batch_space =
+    [[maybe_unused]] auto batch_space =
         get_default_context().index_space_registry()->retrieve(L"z");
-    for (const auto& space : batch_spaces) {
-      assert(space == batch_space);
+    for ([[maybe_unused]] const auto& idx : batch_indices) {
+      SEQUANT_ASSERT(idx.space() == batch_space);
     }
-#endif
-    const auto batchidx = detail::make_aux_indices(batch_spaces);
-
-    const auto t = tensor_generator(op_info.creidxs, op_info.annidxs, batchidx,
-                                    op_info.opsymm);
+    const auto t = tensor_generator(op_info.creidxs, op_info.annidxs,
+                                    batch_indices, op_info.opsymm);
 
     return ex<Constant>(rational{1, op_info.mult}) * t *
            ex<NormalOperator<S>>(cre(op_info.creidxs), ann(op_info.annidxs),
@@ -862,19 +872,20 @@ class OpMaker {
   /// and of the given symmetry
   /// @param[in] creators creator IndexSpaces as an initializer list
   /// @param[in] annihilators annihilator IndexSpaces as an initializer list
-  /// @param[in] batch_spaces batch IndexSpaces as an initializer list
+  /// @param[in] batch_indices batch IndexSpaces as an initializer list
   /// @param[in] tensor_generator the callable that generates the tensor
   /// @param[in] csv whether to use dependent indices
   template <typename TensorGenerator>
   static ExprPtr make(std::initializer_list<IndexSpace::Type> creators,
                       std::initializer_list<IndexSpace::Type> annihilators,
-                      std::initializer_list<IndexSpace::Type> batch_spaces,
+                      std::initializer_list<Index> batch_indices,
                       TensorGenerator&& tensor_generator,
                       UseDepIdx csv = UseDepIdx::None) {
     IndexSpaceContainer cre_vec(creators.begin(), creators.end());
     IndexSpaceContainer ann_vec(annihilators.begin(), annihilators.end());
-    IndexSpaceContainer batch_vec(batch_spaces.begin(), batch_spaces.end());
-    return OpMaker::make(cre_vec, ann_vec, batch_spaces,
+    IndexSpaceContainer batchidx_vec(batch_indices.begin(),
+                                     batch_indices.end());
+    return OpMaker::make(cre_vec, ann_vec, batchidx_vec,
                          std::forward<TensorGenerator>(tensor_generator), csv);
   }
 
@@ -882,7 +893,7 @@ class OpMaker {
   OpType op_;
   IndexSpaceContainer cre_spaces_;
   IndexSpaceContainer ann_spaces_;
-  std::optional<IndexSpaceContainer> batch_spaces_ = std::nullopt;
+  std::optional<IndexContainer> batch_indices_ = std::nullopt;
 
   OpMaker(OpType op);
 

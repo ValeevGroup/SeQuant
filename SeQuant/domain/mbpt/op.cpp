@@ -375,7 +375,7 @@ std::wstring to_latex(const mbpt::Operator<mbpt::qns_t, S>& op) {
     std::wstring str = inp;
     using namespace ranges::views;
 
-    const auto& ordinals = op.batching_ordinals().value();
+    const auto ordinals = op.batching_ordinals().value();
     str += L"{[";
     str += ordinals | transform([](const auto& ord) {
              return L"{z}_{" + std::to_wstring(ord) + L"}";
@@ -494,16 +494,33 @@ OpMaker<S>::OpMaker(OpType op, ncre nc, nann na) {
 }
 
 template <Statistics S>
-OpMaker<S>::OpMaker(OpType op, ncre nc, nann na, naux nbatch)
+OpMaker<S>::OpMaker(OpType op, ncre nc, nann na, std::size_t nbatch)
     : OpMaker(op, nc, na) {
-  if (nbatch == 0) return;
-  SEQUANT_ASSERT(nbatch > 0);
+  SEQUANT_ASSERT(nbatch > 0 && "Number of batching indices must be > 0");
   auto isr = get_default_context().index_space_registry();
   SEQUANT_ASSERT(
       isr->contains(L"z") &&
       "ISR does not contain any batching space");  // z is the batch space
   const auto batch_space = isr->retrieve(L"z");
-  batch_spaces_ = IndexSpaceContainer(nbatch, batch_space);
+  batch_indices_ = make_aux_indices(IndexSpaceContainer(nbatch, batch_space));
+}
+
+template <Statistics S>
+OpMaker<S>::OpMaker(OpType op, ncre nc, nann na,
+                    const container::svector<std::size_t>& batch_ordinals)
+    : OpMaker(op, nc, na) {
+  SEQUANT_ASSERT(!batch_ordinals.empty() && "Batch ordinals cannot be empty");
+  auto isr = get_default_context().index_space_registry();
+  SEQUANT_ASSERT(
+      isr->contains(L"z") &&
+      "ISR does not contain any batching space");  // z is the batch space
+  const auto batch_space = isr->retrieve(L"z");
+  container::svector<Index> batch_indices;
+  for (auto ord : batch_ordinals) {
+    auto idx = Index(batch_space, ord);
+    batch_indices.push_back(idx);
+  }
+  batch_indices_ = std::move(batch_indices);
 }
 
 template <Statistics S>
@@ -518,6 +535,33 @@ OpMaker<S>::OpMaker(OpType op, ncre nc, nann na,
   SEQUANT_ASSERT(nc > 0 || na > 0);
   cre_spaces_ = IndexSpaceContainer(nc, cre_space);
   ann_spaces_ = IndexSpaceContainer(na, ann_space);
+}
+
+template <Statistics S>
+OpMaker<S>::OpMaker(OpType op, const OpParams& params) {
+  params.validate();  // validate params
+
+  ncre nc{};
+  nann na{};
+  if (params.np || params.nh) {  // use np/nh if provided
+    nc = ncre(params.np ? params.np->value() : 0);
+    na = nann(params.nh ? params.nh->value() : 0);
+  } else {  // else use rank
+    SEQUANT_ASSERT(params.rank > 0);
+    nc = ncre(params.rank);
+    na = nann(params.rank);
+  }
+  // delegate to existing constructors
+  if (!params.batch_ordinals.empty()) {
+    // convert to svector for internal use
+    container::svector<std::size_t> batch_ords(params.batch_ordinals.begin(),
+                                               params.batch_ordinals.end());
+    *this = OpMaker(op, nc, na, batch_ords);
+  } else if (params.nbatch > 0) {
+    *this = OpMaker(op, nc, na, params.nbatch);
+  } else {
+    *this = OpMaker(op, nc, na);
+  }
 }
 
 template <Statistics S>
@@ -547,9 +591,9 @@ ExprPtr OpMaker<S>::operator()(std::optional<UseDepIdx> dep,
   }
 
   // if batching indices are given, use them
-  if (batch_spaces_) {
+  if (batch_indices_) {
     return make(
-        cre_spaces_, ann_spaces_, batch_spaces_.value(),
+        cre_spaces_, ann_spaces_, batch_indices_.value(),
         [this, opsymm_opt](const auto& creidxs, const auto& annidxs,
                            const auto& batchidxs, Symmetry opsymm) {
           return ex<Tensor>(to_wstring(op_), bra(creidxs), ket(annidxs),
