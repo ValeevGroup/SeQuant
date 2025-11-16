@@ -194,10 +194,8 @@ if __name__ == "__main__":
                        "-DCMAKE_CXX_COMPILER_LAUNCHER=ccache",
                        "-DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON",
                        "-DSEQUANT_TESTS=OFF",
-                       "-DSEQUANT_EVAL_TESTS=OFF",
                        "-DSEQUANT_BENCHMARKS=ON",
-                       "-DSEQUANT_MIMALLOC=ON",
-                       "-DSEQUANT_CONTEXT_MANIPULATION_THREADSAFE=ON"]
+                       "-DSEQUANT_MIMALLOC=ON"]
 
     try:
         # base commit
