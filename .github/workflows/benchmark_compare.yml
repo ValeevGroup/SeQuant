@@ -17,9 +17,9 @@ concurrency:
 jobs:
   benchmark:
     if: >
-      (github.event_name == 'issue_comment' 
-        && github.event.issue.pull_request 
-        && contains(github.event.comment.body, '/benchmark') 
+      (github.event_name == 'issue_comment'
+        && github.event.issue.pull_request
+        && contains(github.event.comment.body, '/benchmark')
         && (github.event.comment.author_association == 'COLLABORATOR' || github.event.comment.author_association == 'MEMBER' || github.event.comment.author_association == 'OWNER')
       ) || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
@@ -29,6 +29,10 @@ jobs:
       pull-requests: write
       actions: read
       statuses: write
+    env:
+      CCACHE_DIR: ${{github.workspace}}/build/.ccache
+      CCACHE_COMPRESS: true
+      CCACHE_COMPRESSLEVEL: 6
 
     steps:
       - name: Get PR details
@@ -36,31 +40,21 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            let pullRequestNumber;
-            
-            if (context.eventName === 'workflow_dispatch') {
-              // Manual dispatch - use provided PR number
-              pullRequestNumber = parseInt('${{ github.event.inputs.pr_number }}');
-            } else {
-              // PR comment trigger - use PR number
-              pullRequestNumber = context.issue.number;
-            }
-            
-            // Fetch PR details
+            const pullRequestNumber = context.eventName === 'workflow_dispatch'
+              ? parseInt('${{ github.event.inputs.pr_number }}')
+              : context.issue.number;
+
             const { data: pullRequest } = await github.rest.pulls.get({
               owner: context.repo.owner,
               repo: context.repo.repo,
               pull_number: pullRequestNumber,
             });
-            
-            const is_fork = pullRequest.head.repo.full_name !== pullRequest.base.repo.full_name;    
+
+            const is_fork = pullRequest.head.repo.full_name !== pullRequest.base.repo.full_name;
             return {
               base_sha: pullRequest.base.sha,
               head_sha: pullRequest.head.sha,
-              base_ref: pullRequest.base.ref,
-              head_ref: pullRequest.head.ref,
               head_repo_full_name: pullRequest.head.repo.full_name,
-              base_repo_full_name: pullRequest.base.repo.full_name,
               is_fork: is_fork,
               pr_number: pullRequestNumber
             };
@@ -85,35 +79,44 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Add fork as remote and fetch (if needed)
+      - name: Add fork as remote and fetch
         if: fromJson(steps.pr.outputs.result).is_fork
         run: |
-          echo "PR is from fork: ${{ fromJson(steps.pr.outputs.result).head_repo_full_name }}"
           git remote add fork https://github.com/${{ fromJson(steps.pr.outputs.result).head_repo_full_name }}.git
           git fetch fork
-
-      - name: Verify commits
-        run: |
-          echo "=== Git Remotes ==="
-          git remote -v
-          echo "=== Base commit ==="
-          echo "${{ fromJson(steps.pr.outputs.result).base_sha }}"
-          echo "=== Head commit ==="
-          echo "${{ fromJson(steps.pr.outputs.result).head_sha }}"
 
       - name: Install Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake ninja-build libboost-dev libboost-locale-dev libboost-random-dev libboost-regex-dev libeigen3-dev libmimalloc-dev
+          sudo apt-get install -y cmake ninja-build libboost-dev libboost-locale-dev libboost-random-dev libboost-regex-dev libeigen3-dev libmimalloc-dev ccache
+
+      - name: Prepare ccache timestamp
+        id: ccache_cache_timestamp
+        run: |
+          echo "timestamp=$(date -u +'%Y-%m-%d-%H;%M;%S')" >> $GITHUB_OUTPUT
+
+      - name: Setup ccache cache files
+        uses: actions/cache@v4
+        with:
+          path: ${{github.workspace}}/build/.ccache
+          key: benchmark-ccache-${{ steps.ccache_cache_timestamp.outputs.timestamp }}
+          restore-keys: |
+            benchmark-ccache-
+
+      - name: Install Python Dependencies
+        run: |
+          python3 -m pip install --upgrade pip
+          pip install numpy scipy
 
       - name: Run Benchmark Script
         working-directory: ${{ github.workspace }}
-        run: python3 bin/admin/benchmark_compare.py ${{ fromJson(steps.pr.outputs.result).base_sha }} ${{ fromJson(steps.pr.outputs.result).head_sha }}
+        run: python3 bin/admin/benchmark_compare.py ${{ fromJson(steps.pr.outputs.result).base_sha }} ${{ fromJson(steps.pr.outputs.result).head_sha }} -c ${{ github.workspace }}/build/_deps/googlebenchmark-src/tools/compare.py -o benchmark-comparison.txt
 
       - name: Upload Results
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: benchmark-data
+          name: benchmark-data-${{ github.run_id }}
           path: |
             ${{ github.workspace }}/${{ fromJson(steps.pr.outputs.result).base_sha }}-results.json
             ${{ github.workspace }}/${{ fromJson(steps.pr.outputs.result).head_sha }}-results.json
@@ -121,19 +124,16 @@ jobs:
           retention-days: 30
 
       - name: Post Results
+        if: success()
         uses: actions/github-script@v7
         with:
           script: |
             const fs = require('fs');
-            const path = require('path');
-
             const prData = ${{ steps.pr.outputs.result }};
-            const comparisonFile = `benchmark-comparison.txt`;
-            const comparisonPath = path.join('${{ github.workspace }}', comparisonFile);
 
             let comparisonResults = '';
             try {
-              comparisonResults = fs.readFileSync(comparisonPath, 'utf8');
+              comparisonResults = fs.readFileSync('benchmark-comparison.txt', 'utf8');
             } catch (error) {
               comparisonResults = 'Error reading comparison results: ' + error.message;
             }
@@ -144,7 +144,7 @@ jobs:
             ${comparisonResults}
             \`\`\`
 
-            #### [Full benchmark data](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+            [Full benchmark data](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
             `;
 
             github.rest.issues.createComment({

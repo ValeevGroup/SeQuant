@@ -6,122 +6,145 @@ import sys
 import subprocess
 import json
 import argparse
+import shutil
+import re
 
 SILENT_OUTPUT = False # Set to True to suppress command line output
 
-def run_command(command):
-    subprocess.run(command, shell=True, check=True, capture_output=SILENT_OUTPUT, text=True)
+def validate_commit_sha(sha):
+    if not re.match(r'^[a-fA-F0-9]{6,40}$', sha):
+        raise ValueError(f"Invalid commit SHA format: {sha}")
+    return sha
 
-# replace slashes in branch names with dashes for file naming, otherwise it will create directories
+def verify_commit_exists(commit):
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--verify", commit],
+            capture_output=True, text=True, check=True
+        )
+        return result.stdout.strip()
+    except subprocess.CalledProcessError:
+        raise ValueError(f"Commit does not exist: {commit}")
+
+def run_command(command_list):
+    subprocess.run(command_list, check=True, capture_output=SILENT_OUTPUT, text=True)
+
 def process_branch_name(branch_name):
     return branch_name.replace('/', '-')
 
 def get_current_git_state():
     try:
         # try branch name
-        result = subprocess.run("git symbolic-ref --short HEAD", shell=True,
-                                capture_output=True, text=True, check=True)
+        result = subprocess.run(
+            ["git", "symbolic-ref", "--short", "HEAD"],
+            capture_output=True, text=True, check=True
+        )
         return result.stdout.strip()
     except subprocess.CalledProcessError:
         # else try commit hash (for detached state)
-        result = subprocess.run("git rev-parse HEAD", shell=True, check=True, capture_output=True, text=True)
+        result = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            check=True, capture_output=True, text=True
+        )
         return result.stdout.strip()
 
 def restore_git_state(original_git_state):
-    print(f"\nRestoring original git state: {original_git_state}")
-    run_command(f"git checkout {original_git_state}")
+    print(f"\n==> Restoring git state")
+    run_command(["git", "checkout", original_git_state])
+
+# Locate Google Benchmark's compare.py script
+def find_google_benchmark_compare(custom_path=None):
+    if custom_path:
+        if os.path.exists(custom_path):
+            return custom_path
+        else:
+            raise FileNotFoundError(f"Custom compare.py path does not exist: {custom_path}")
+    compare = shutil.which("compare.py")
+    if compare:
+        return compare
+    try:
+        import google_benchmark
+        gb_path = os.path.dirname(google_benchmark.__file__)
+        script = os.path.join(gb_path, "tools", "compare.py")
+        if os.path.exists(script):
+            return script
+    except ImportError:
+        pass
+    raise FileNotFoundError("Google Benchmark's compare.py not found.")
+
 
 def configure_and_build(commit, cmake_variables, benchmark_target, build_dir):
-    print(f"\nConfiguring and building commit: {commit}\n")
-
-    run_command(f"git checkout {commit}")
-
-    cmake_vars_str = " ".join(cmake_variables)
-    command = f"cmake -S . -B {build_dir} -DCMAKE_BUILD_TYPE=Release {cmake_vars_str}"
-    run_command(command)
-
-    command = f"cmake --build {build_dir} --target {benchmark_target} --clean-first"
-    run_command(command)
+    print(f"\n==> Building {commit[:8]}")
+    run_command(["git", "checkout", commit])
+    cmake_cmd = ["cmake", "-S", ".", "-B", build_dir] + cmake_variables
+    run_command(cmake_cmd)
+    build_cmd = ["cmake", "--build", build_dir, "--target", benchmark_target]
+    run_command(build_cmd)
 
 def run_benchmarks(commit, benchmark_target, build_dir):
-    print(f"Running benchmarks for commit: {commit}\n")
+    print(f"==> Running benchmarks for {commit[:8]}")
     output = process_branch_name(commit) + "-results.json"
-    command = f"./{build_dir}/benchmarks/{benchmark_target} --benchmark_out_format=json --benchmark_time_unit=us --benchmark_out={output}"
-    run_command(command)
-    print(f"Benchmarks for commit {commit} completed and results saved to {output}\n")
+    exe_path = os.path.join(build_dir, "benchmarks", benchmark_target)
+    if not os.path.isfile(exe_path):
+        print(f"Error: Benchmark executable not found at {exe_path}", file=sys.stderr)
+        sys.exit(1)
 
-def compare_benchmarks(base_benchmark, new_benchmark, metric="cpu_time"):
-    if metric not in ["cpu_time", "real_time"]:
-        raise ValueError("Invalid metric specified. Use 'cpu_time' or 'real_time'.")
+    benchmark_cmd = [
+        exe_path,
+        "--benchmark_out_format=json",
+        "--benchmark_time_unit=us",
+        f"--benchmark_out={output}"
+    ]
+    run_command(benchmark_cmd)
 
-    # Validate files exist and load JSON data
+def compare_benchmarks(base_commit, head_commit, benchmark_target, build_dir, compare_path=None, output_file=None):
+    base_file = process_branch_name(base_commit) + "-results.json"
+    new_file = process_branch_name(head_commit) + "-results.json"
+
+    # Verify that benchmark result files exist
+    if not os.path.isfile(base_file):
+        print(f"Error: Baseline benchmark results not found: {base_file}", file=sys.stderr)
+        sys.exit(1)
+    if not os.path.isfile(new_file):
+        print(f"Error: New benchmark results not found: {new_file}", file=sys.stderr)
+        sys.exit(1)
+
+    compare_script = find_google_benchmark_compare(compare_path)
+
+    cmd = [
+        sys.executable,
+        compare_script,
+        "benchmarks",
+        base_file,
+        new_file,
+    ]
     try:
-        if not os.path.exists(base_benchmark):
-            raise FileNotFoundError(f"Base file not found: {base_benchmark}")
-        if not os.path.exists(new_benchmark):
-            raise FileNotFoundError(f"New file not found: {new_benchmark}")
+        result = subprocess.run(
+            cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            text=True, check=True
+        )
+    except subprocess.CalledProcessError as e:
+        print("Error running compare.py:", file=sys.stderr)
+        print(e.stderr, file=sys.stderr)
+        print("Command:", ' '.join(cmd), file=sys.stderr)
+        sys.exit(1)
 
-        with open(base_benchmark, 'r') as f:
-            base_data = json.load(f)
-        with open(new_benchmark, 'r') as f:
-            new_data = json.load(f)
+    # Use the text output from compare.py directly
+    comparison_output = result.stdout
 
-    except json.JSONDecodeError as e:
-        raise ValueError(f"Invalid JSON format: {e}")
-    except Exception as e:
-        raise RuntimeError(f"Error reading files: {e}")
+    if not comparison_output.strip():
+        print("Error: No benchmark comparison output generated", file=sys.stderr)
+        sys.exit(1)
 
-    output_file = "benchmark-comparison.txt"
-    print(f"\nComparing benchmarks between {base_benchmark} and {new_benchmark} using metric: {metric}\n")
+    # Strip ANSI color codes for output file
+    ansi_escape_pattern = re.compile(r'\x1b\[[0-9;]*m')
+    clean_output = ansi_escape_pattern.sub('', comparison_output)
 
-    # index benchmarks by name
-    base_benchmarks = {b['name']: b for b in base_data['benchmarks']}
-    new_benchmarks = {b['name']: b for b in new_data['benchmarks']}
+    print("\n" + clean_output)
 
-    # get time unit
-    time_unit = base_data['benchmarks'][0].get('time_unit', 'ns')
-
-    # only compare benchmarks that are present in both files
-    common_names = []
-    new_benchmark_names = set(new_benchmarks.keys())
-    for benchmark in base_data['benchmarks']:
-        if benchmark['name'] in new_benchmark_names:
-            common_names.append(benchmark['name'])
-
-    # output details
-    output_lines = [f"Benchmark Comparison: {base_benchmark} vs {new_benchmark}", f"Metric: {metric}",
-                    f"Time Unit: {time_unit}", f"Date: {os.popen('date').read().strip()}", ""]
-
-    if 'context' in base_data:
-        output_lines.append("Base Benchmark Context:")
-        output_lines.append(json.dumps(base_data['context'], indent=2))
-        output_lines.append("")
-
-    if 'context' in new_data:
-        output_lines.append("New Benchmark Context:")
-        output_lines.append(json.dumps(new_data['context'], indent=2))
-        output_lines.append("")
-
-    output_lines.append(f"{'Name':<60} {f'Base ({time_unit})':<15} {f'New ({time_unit})':<15} {f'Diff ({time_unit})':<15} {'% Diff':<10}")
-    output_lines.append("-" * 125)
-
-    # compare each benchmark
-    for name in common_names:
-        base_value = base_benchmarks[name][metric]
-        new_value = new_benchmarks[name][metric]
-
-        diff = new_value - base_value
-        percentage_diff = ((new_value - base_value) / base_value) * 100.0 if base_value != 0 else 0.0
-        sign = "+" if percentage_diff > 0 else ""
-
-        line = f"{name:<60} {base_value:<15.2f} {new_value:<15.2f} {diff:<15.2f} {sign}{percentage_diff:<9.2f}"
-        output_lines.append(line)
-
-    # Write to file
-    with open(output_file, 'w') as f:
-        f.write('\n'.join(output_lines))
-
-    print(f"\nComparison results written to: {output_file}")
+    if output_file:
+        with open(output_file, "w") as f:
+            f.write(clean_output)
 
 
 if __name__ == "__main__":
@@ -138,24 +161,37 @@ if __name__ == "__main__":
     parser.add_argument("--build-dir", "-b",
                         default="build",
                         help="Build directory for CMake (default: build)")
+    parser.add_argument("--compare-path", "-c",
+                        default=None,
+                        help="Path to Google Benchmark's compare.py script (optional)")
+    parser.add_argument("--output-file", "-o",
+                        default=None,
+                        help="File to write comparison results (optional)")
 
     args = parser.parse_args()
 
-    # print info
-    print("**" * 50)
-    print("SeQuant Benchmark Comparison Script\n")
-    print(f"Base commit: {args.base_commit}")
-    print(f"Head commit: {args.head_commit}")
-    print(f"Benchmark target: {args.benchmark_target}")
-    print(f"Build directory: {args.build_dir}")
-    print("**" * 50)
+    # Validate commit SHAs
+    try:
+        validate_commit_sha(args.base_commit)
+        validate_commit_sha(args.head_commit)
+    except ValueError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
 
     original_ref = get_current_git_state()
-    print(f"Original git reference: {original_ref}")
+
+    # Verify commits exist
+    try:
+        verify_commit_exists(args.base_commit)
+        verify_commit_exists(args.head_commit)
+    except ValueError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
 
     # Define CMake variables
-    cmake_variables = ["-G Ninja",
+    cmake_variables = ["-G", "Ninja",
                        "-DCMAKE_BUILD_TYPE=Release",
+                       "-DCMAKE_CXX_COMPILER_LAUNCHER=ccache",
                        "-DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON",
                        "-DSEQUANT_TESTS=OFF",
                        "-DSEQUANT_EVAL_TESTS=OFF",
@@ -163,25 +199,21 @@ if __name__ == "__main__":
                        "-DSEQUANT_MIMALLOC=ON",
                        "-DSEQUANT_CONTEXT_MANIPULATION_THREADSAFE=ON"]
 
-    print("\nCMake variables:")
-    for var in cmake_variables:
-        print(f"{var}")
-
     try:
         # base commit
         configure_and_build(args.base_commit, cmake_variables, args.benchmark_target, args.build_dir)
         run_benchmarks(args.base_commit, args.benchmark_target, args.build_dir)
-
         # head commit
         configure_and_build(args.head_commit, cmake_variables, args.benchmark_target, args.build_dir)
         run_benchmarks(args.head_commit, args.benchmark_target, args.build_dir)
-
-        # Compare benchmarks
-        base_benchmark_file = process_branch_name(args.base_commit) + "-results.json"
-        new_benchmark_file = process_branch_name(args.head_commit) + "-results.json"
-        compare_benchmarks(base_benchmark_file, new_benchmark_file, metric="cpu_time")
-        print("Benchmark comparison completed successfully.")
-
+        compare_benchmarks(
+            args.base_commit,
+            args.head_commit,
+            args.benchmark_target,
+            args.build_dir,
+            args.compare_path,
+            args.output_file
+        )
     except Exception as e:
         print(f"Error during benchmark execution: {e}")
         sys.exit(1)
