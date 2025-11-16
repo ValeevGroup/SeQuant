@@ -720,11 +720,11 @@ ExprPtr Λ_(std::size_t K) {
   return OpMaker<Statistics::FermiDirac>(OpType::λ, K)();
 }
 
-ExprPtr Λ(std::size_t K) {
-  SEQUANT_ASSERT(K > 0);
+ExprPtr Λ(std::size_t K, bool skip1) {
+  SEQUANT_ASSERT(K > (skip1 ? 1 : 0));
 
   ExprPtr result;
-  for (auto k = 1ul; k <= K; ++k) {
+  for (auto k = (skip1 ? 2ul : 1ul); k <= K; ++k) {
     result = k > 1 ? result + tensor::Λ_(k) : tensor::Λ_(k);
   }
   return result;
@@ -856,7 +856,7 @@ ExprPtr T_pt(std::size_t K, std::size_t order, bool skip1) {
   SEQUANT_ASSERT(K > (skip1 ? 1 : 0));
   ExprPtr result;
   for (auto k = (skip1 ? 2ul : 1ul); k <= K; ++k) {
-    result = k > 1 ? result + tensor::T_pt_(k, order) : tensor::T_pt_(k, order);
+    result += tensor::T_pt_(k, order);
   }
   return result;
 }
@@ -869,7 +869,7 @@ ExprPtr T_pt(const OpParams& params) {
     OpParams k_params = params;
     k_params.rank = k;
     k_params.skip1 = false;
-    result = k > 1 ? result + tensor::T_pt_(k_params) : tensor::T_pt_(k_params);
+    result += tensor::T_pt_(k_params);
   }
   return result;
 }
@@ -893,7 +893,7 @@ ExprPtr Λ_pt(std::size_t K, std::size_t order, bool skip1) {
   SEQUANT_ASSERT(K > (skip1 ? 1 : 0));
   ExprPtr result;
   for (auto k = (skip1 ? 2ul : 1ul); k <= K; ++k) {
-    result = k > 1 ? result + tensor::Λ_pt_(k, order) : tensor::Λ_pt_(k, order);
+    result += tensor::Λ_pt_(k, order);
   }
   return result;
 }
@@ -906,7 +906,7 @@ ExprPtr Λ_pt(const OpParams& params) {
     OpParams k_params = params;
     k_params.rank = k;
     k_params.skip1 = false;
-    result = k > 1 ? result + tensor::Λ_pt_(k_params) : tensor::Λ_pt_(k_params);
+    result += tensor::Λ_pt_(k_params);
   }
   return result;
 }
@@ -992,10 +992,10 @@ ExprPtr Λ_(std::size_t K) {
                   });
 }
 
-ExprPtr Λ(std::size_t K) {
-  SEQUANT_ASSERT(K > 0);
+ExprPtr Λ(std::size_t K, bool skip1) {
+  SEQUANT_ASSERT(K > (skip1 ? 1 : 0));
   ExprPtr result;
-  for (auto k = 1ul; k <= K; ++k) {
+  for (auto k = (skip1 ? 2ul : 1ul); k <= K; ++k) {
     result = k > 1 ? result + Λ_(k) : Λ_(k);
   }
   return result;
@@ -1150,7 +1150,7 @@ ExprPtr T_pt(std::size_t K, std::size_t order, bool skip1) {
   SEQUANT_ASSERT(K > (skip1 ? 1 : 0));
   ExprPtr result;
   for (auto k = (skip1 ? 2ul : 1ul); k <= K; ++k) {
-    result = k > 1 ? result + T_pt_(k, order) : T_pt_(k, order);
+    result += T_pt_(k, order);
   }
   return result;
 }
@@ -1163,7 +1163,7 @@ ExprPtr T_pt(const OpParams& params) {
     OpParams k_params = params;
     k_params.rank = k;
     k_params.skip1 = false;
-    result = k > 1 ? result + T_pt_(k_params) : T_pt_(k_params);
+    result += T_pt_(k_params);
   }
   return result;
 }
@@ -1196,7 +1196,7 @@ ExprPtr Λ_pt(std::size_t K, std::size_t order, bool skip1) {
   SEQUANT_ASSERT(K > (skip1 ? 1 : 0));
   ExprPtr result;
   for (auto k = (skip1 ? 2ul : 1ul); k <= K; ++k) {
-    result = k > 1 ? result + Λ_pt_(k, order) : Λ_pt_(k, order);
+    result += Λ_pt_(k, order);
   }
   return result;
 }
@@ -1209,7 +1209,7 @@ ExprPtr Λ_pt(const OpParams& params) {
     OpParams k_params = params;
     k_params.rank = k;
     k_params.skip1 = false;
-    result = k > 1 ? result + Λ_pt_(k_params) : Λ_pt_(k_params);
+    result += Λ_pt_(k_params);
   }
   return result;
 }

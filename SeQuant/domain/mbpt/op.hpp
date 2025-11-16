@@ -1048,7 +1048,7 @@ ExprPtr Λ_(std::size_t K);
 
 /// Makes sum of particle-conserving deexcitation operators of all ranks up to
 /// \p K based on the defined context
-ExprPtr Λ(std::size_t K);
+ExprPtr Λ(std::size_t K, bool skip1 = false);
 
 /// @brief Makes generic right-hand replacement operator
 /// @param na number of annihilators
@@ -1204,7 +1204,7 @@ ExprPtr Λ_(std::size_t K);
 
 /// Makes sum of particle-conserving deexcitation operators of all ranks up to
 /// \p K
-ExprPtr Λ(std::size_t K);
+ExprPtr Λ(std::size_t K, bool skip1 = false);
 
 /// @brief Makes generic excitation operator
 /// @param na number of annihilators
