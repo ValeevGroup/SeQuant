@@ -175,7 +175,6 @@ T transform_reduce(SizedRange&& rng, T init, const BinaryReductionOp& reduce,
 #endif
 }
 
-/// Set up the global locale settings
 void set_locale();
 
 }  // namespace sequant

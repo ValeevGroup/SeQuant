@@ -24,4 +24,5 @@ void set_locale() {
   std::wclog.imbue(target_locale);
   std::ios_base::sync_with_stdio(true);
 }
+
 }  // namespace sequant
