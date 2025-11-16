@@ -29,9 +29,6 @@ def verify_commit_exists(commit):
 def run_command(command_list):
     subprocess.run(command_list, check=True, capture_output=SILENT_OUTPUT, text=True)
 
-def process_branch_name(branch_name):
-    return branch_name.replace('/', '-')
-
 def get_current_git_state():
     try:
         # try branch name
@@ -83,7 +80,7 @@ def configure_and_build(commit, cmake_variables, benchmark_target, build_dir):
 
 def run_benchmarks(commit, benchmark_target, build_dir):
     print(f"==> Running benchmarks for {commit[:8]}")
-    output = process_branch_name(commit) + "-results.json"
+    output = f"{commit}-results.json"
     exe_path = os.path.join(build_dir, "benchmarks", benchmark_target)
     if not os.path.isfile(exe_path):
         print(f"Error: Benchmark executable not found at {exe_path}", file=sys.stderr)
@@ -98,8 +95,8 @@ def run_benchmarks(commit, benchmark_target, build_dir):
     run_command(benchmark_cmd)
 
 def compare_benchmarks(base_commit, head_commit, benchmark_target, build_dir, compare_path=None, output_file=None):
-    base_file = process_branch_name(base_commit) + "-results.json"
-    new_file = process_branch_name(head_commit) + "-results.json"
+    base_file = f"{base_commit}-results.json"
+    new_file = f"{head_commit}-results.json"
 
     # Verify that benchmark result files exist
     if not os.path.isfile(base_file):
