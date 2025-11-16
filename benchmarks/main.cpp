@@ -12,7 +12,6 @@ int main(int argc, char *argv[]) {
   // Disable multithreading
   set_num_threads(1);
   set_locale();
-  disable_thousands_separator();
   auto idxreg = mbpt::make_sr_spaces();
   Context fermi_ctx = Context({.index_space_registry_shared_ptr = idxreg,
                                .vacuum = Vacuum::SingleProduct,
