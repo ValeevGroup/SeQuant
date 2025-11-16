@@ -130,17 +130,29 @@ enum class OpClass { ex, deex, gen };
 
 /// @brief Named parameter struct for Operator construction
 struct OpParams {
-  std::optional<std::size_t> rank = std::nullopt;
+  std::size_t rank = 0;
   ///< operator rank (for particle-conserving ops)
   std::optional<nₕ> nh = std::nullopt;
   ///< number of hole indices (for non-particle conserving)
   std::optional<nₚ> np = std::nullopt;
   ///< number of particle indices (for non-particle conserving)
-  std::size_t order = 1;  ///< perturbation order (for _pt operators)
-  std::optional<naux> nbatch = std::nullopt;  ///< number of batching indices
-  std::optional<std::vector<std::size_t>> batch_ordinals = std::nullopt;
-  ///< custom batching index ordinals
+  std::size_t order = 1;   ///< perturbation order (for _pt operators)
+  std::size_t nbatch = 0;  ///< number of batching indices
+  std::vector<std::size_t> batch_ordinals{};
+  ///< custom batching index ordinals (empty = no batching)
   bool skip1 = false;  ///< skip single excitations (for sum operators)
+
+  /// @brief Validates the parameters for consistency
+  void validate() const {
+    SEQUANT_ASSERT(!(nbatch > 0 && !batch_ordinals.empty()) &&
+                   "OpParams: Cannot specify both nbatch and batch_ordinals");
+    SEQUANT_ASSERT(!(rank > 0 && (np || nh)) &&
+                   "OpParams: Cannot specify both rank and np/nh.");
+    if (np || nh) {
+      SEQUANT_ASSERT((np && nh) &&
+                     "OpParams: Must specify both np and nh, or use rank");
+    }
+  }
 };
 
 /// @return the tensor labels in the cardinal order
