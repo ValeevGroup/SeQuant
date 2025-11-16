@@ -8,6 +8,7 @@
 
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/utility/indices.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 
 namespace sequant::mbpt {
 
@@ -22,9 +23,10 @@ ExprPtr csv_transform_impl(Tensor const& tnsr, const IndexSpace& csv_basis,
   if (ranges::none_of(tnsr.const_braket_indices(), &Index::has_proto_indices))
     return nullptr;
 
-  assert(ranges::none_of(tnsr.aux(), &Index::has_proto_indices));
-  assert(get_default_context().index_space_registry());
-  assert(get_default_context().index_space_registry()->contains(csv_basis));
+  SEQUANT_ASSERT(ranges::none_of(tnsr.aux(), &Index::has_proto_indices));
+  SEQUANT_ASSERT(get_default_context().index_space_registry());
+  SEQUANT_ASSERT(
+      get_default_context().index_space_registry()->contains(csv_basis));
 
   // shortcut for the CSV overlap if csv_basis is orthonormal (assume LCAO bases
   // are orthonormal!)
@@ -34,23 +36,35 @@ ExprPtr csv_transform_impl(Tensor const& tnsr, const IndexSpace& csv_basis,
       bitset_t(csv_basis.qns()) & bitset_t(LCAOQNS::pao);
   const bool csv_basis_is_orthonormal = !(csv_basis_is_ao || csv_basis_is_pao);
   if (csv_basis_is_orthonormal && tnsr.label() == overlap_label()) {
-    assert(tnsr.bra_rank() == 1     //
-           && tnsr.ket_rank() == 1  //
-           && tnsr.aux_rank() == 0);
+    SEQUANT_ASSERT(tnsr.bra_rank() == 1     //
+                   && tnsr.ket_rank() == 1  //
+                   && tnsr.aux_rank() == 0);
 
     auto&& bra_idx = tnsr.bra().at(0);
     auto&& ket_idx = tnsr.ket().at(0);
+    [[maybe_unused]] const auto bra_has_proto_indices =
+        bra_idx.has_proto_indices();
+    [[maybe_unused]] const auto ket_has_proto_indices =
+        ket_idx.has_proto_indices();
+    SEQUANT_ASSERT(bra_has_proto_indices || ket_has_proto_indices);
 
-    auto dummy_idx = ordinal_compare(bra_idx, ket_idx)   //
-                         ? bra_idx.drop_proto_indices()  //
-                         : ket_idx.drop_proto_indices();
+    if (bra_has_proto_indices && ket_has_proto_indices) {
+      auto dummy_idx = ordinal_compare(bra_idx, ket_idx)   //
+                           ? bra_idx.drop_proto_indices()  //
+                           : ket_idx.drop_proto_indices();
 
-    return ex<Product>(
-        1,
-        ExprPtrList{ex<Tensor>(coeff_tensor_label,                 //
-                               bra({bra_idx}), ket({dummy_idx})),  //
-                    ex<Tensor>(coeff_tensor_label,                 //
-                               bra({dummy_idx}), ket({ket_idx}))});
+      return ex<Product>(
+          1,
+          ExprPtrList{ex<Tensor>(coeff_tensor_label,                 //
+                                 bra({bra_idx}), ket({dummy_idx})),  //
+                      ex<Tensor>(coeff_tensor_label,                 //
+                                 bra({dummy_idx}), ket({ket_idx}))});
+    } else {
+      return ex<Product>(
+          1,
+          ExprPtrList{ex<Tensor>(coeff_tensor_label,  //
+                                 bra({bra_idx}), ket({ket_idx}))});
+    }
   }
 
   Product result;

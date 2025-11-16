@@ -119,6 +119,8 @@ Vacuum averaging and final expression
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 The ``sequant::mbpt::op::vac_av`` function can be used to compute the vacuum average of an operator level expression.
+If reference state differs from the Wick vacuum ``sequant::mbpt::op::ref_av`` function should be used instead to
+compute the reference average.
 
 .. literalinclude:: /examples/user/operator.cpp
    :language: cpp

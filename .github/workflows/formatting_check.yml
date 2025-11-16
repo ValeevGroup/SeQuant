@@ -7,9 +7,10 @@ jobs:
     name: "Check formatting"
     runs-on: "ubuntu-latest"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: jidicula/clang-format-action@v4.11.0
         with:
           clang-format-version: "17"
+          include-regex: '.*\.(h|hpp|hh|hxx|ipp|cpp|cc|cxx)$'
           exclude-regex: "/SeQuant\\/external/"
     

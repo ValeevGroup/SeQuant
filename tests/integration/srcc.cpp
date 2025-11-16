@@ -1,17 +1,17 @@
-#include <SeQuant/core/biorthogonalization.hpp>
+#include <SeQuant/version.hpp>
+
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/runtime.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/timer.hpp>
 #include <SeQuant/core/wick.hpp>
+#include <SeQuant/domain/mbpt/biorthogonalization.hpp>
 #include <SeQuant/domain/mbpt/context.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/models/cc.hpp>
 #include <SeQuant/domain/mbpt/op.hpp>
 #include <SeQuant/domain/mbpt/spin.hpp>
-
-#include <clocale>
 
 using namespace sequant;
 using namespace sequant::mbpt;
@@ -166,7 +166,7 @@ class compute_cceqvec {
           // Remove S operator
           for (auto& term : eqvec[R]->expr()) {
             if (term->is<Product>())
-              term = remove_tensor(term->as<Product>(), L"S");
+              term = remove_tensor(term.as_shared_ptr<Product>(), L"S");
           }
 
           // Biorthogonal transformation
@@ -214,7 +214,7 @@ class compute_cceqvec {
           // by biorthogonal transformation and gives the most compact set of
           // equations. However, we need to restore the effects of those deleted
           // terms. So, after evaluate_symm call in sequant evaluation scope, we
-          // need to call evaluate_biorthogonal_cleanup.
+          // need to call evaluate_biorthogonal_nns_project.
 
           std::wcout << "biorthogonal spin-free R" << R << "(expS" << N
                      << ") has " << eqvec[R]->size() << " terms:" << std::endl;
@@ -256,7 +256,8 @@ int main(int argc, char* argv[]) {
   std::wcerr.precision(std::numeric_limits<double>::max_digits10);
   sequant::set_locale();
 
-  // set_num_threads(1);
+  std::cout << "SeQuant revision: " << sequant::git_revision() << "\n";
+  std::cout << "Number of threads: " << sequant::num_threads() << "\n\n";
 
 #ifndef NDEBUG
   const size_t DEFAULT_NMAX = 3;

@@ -7,8 +7,8 @@
 #include <SeQuant/core/expressions/expr_algorithms.hpp>
 #include <SeQuant/core/expressions/expr_ptr.hpp>
 #include <SeQuant/core/meta.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 
-#include <cassert>
 #include <string>
 #include <type_traits>
 
@@ -47,33 +47,48 @@ class Product : public Expr {
   }
 
   /// construct a Product out of zero or more factors (multiplied by 1)
-  /// @param rng a range of factors
+  /// @param rng a range of factors; if rng is a Product, it will be flattened
+  /// into this Product and its scalar prefactor will be preserved
   /// @param flatten_tag if Flatten::Yes, flatten the factors
-  template <typename Range,
-            typename = std::enable_if_t<meta::is_range_v<std::decay_t<Range>> &&
-                                        !meta::is_same_v<Range, ExprPtrList> &&
-                                        !meta::is_same_v<Range, Product>>>
+  template <typename Range>
+    requires(meta::is_range_v<std::remove_cvref_t<Range>> &&
+             !meta::is_same_v<std::remove_cvref_t<Range>, ExprPtrList>)
   explicit Product(Range &&rng, Flatten flatten_tag = Flatten::Yes) {
-    using ranges::begin;
-    using ranges::end;
-    for (auto &&v : rng) append(1, std::forward<decltype(v)>(v), flatten_tag);
+    // N.B. use append to flatten out Sum summands
+    constexpr auto rng_is_expr =
+        meta::is_base_of_v<Expr, std::remove_cvref_t<Range>>;
+    constexpr auto rng_is_exprptr =
+        meta::is_same_v<ExprPtr, std::remove_cvref_t<Range>>;
+    if constexpr (rng_is_expr || rng_is_exprptr) {
+      ExprPtr rng_as_exprptr;
+      if constexpr (rng_is_expr) {
+        rng_as_exprptr = rng.exprptr_from_this();
+      } else {
+        rng_as_exprptr = rng;
+      }
+      if (rng_as_exprptr.is<Product>()) {
+        const auto &rng_as_product = rng_as_exprptr.as<Product>();
+        for (const auto &v : rng_as_product.factors_)
+          this->append(1, v, flatten_tag);
+        this->scalar_ *= rng_as_product.scalar_;
+      } else
+        this->append(rng_as_exprptr);
+    } else {
+      for (auto &&v : rng) append(1, std::forward<decltype(v)>(v), flatten_tag);
+    }
   }
 
-  /// construct a Product out of zero or more factors (multiplied by 1)
+  /// construct a Product of the range of factors and multiply by @p scalar
   /// @tparam T a numeric type; it must be able to multiply Product::scalar_type
   /// @param scalar a scalar of type T
   /// @param rng a range of factors
   /// @param flatten_tag if Flatten::Yes, flatten the factors
-  template <typename T, typename Range,
-            typename = std::enable_if_t<
-                meta::is_range_v<std::decay_t<Range>> &&
-                !std::is_same_v<std::remove_reference_t<Range>, ExprPtrList> &&
-                !std::is_same_v<std::remove_reference_t<Range>, Product>>>
+  template <typename T, typename Range>
+    requires(meta::is_range_v<std::remove_cvref_t<Range>> &&
+             !meta::is_same_v<std::remove_cvref_t<Range>, ExprPtrList>)
   explicit Product(T scalar, Range &&rng, Flatten flatten_tag = Flatten::Yes)
-      : scalar_(std::move(scalar)) {
-    using ranges::begin;
-    using ranges::end;
-    for (auto &&v : rng) append(1, std::forward<decltype(v)>(v), flatten_tag);
+      : Product(std::forward<Range>(rng), flatten_tag) {
+    scalar_ *= std::move(scalar);
   }
 
   /// construct a Product out of zero or more factors multiplied by a scalar
@@ -129,7 +144,7 @@ class Product : public Expr {
   template <typename T>
   Product &append(T scalar, ExprPtr factor,
                   Flatten flatten_tag = Flatten::Yes) {
-    assert(factor);
+    SEQUANT_ASSERT(factor);
     scalar_ *= scalar;
     if (!factor->is<Product>()) {
       if (factor->is<Constant>()) {  // factor in Constant
@@ -172,6 +187,26 @@ class Product : public Expr {
                         flatten_tag);
   }
 
+  /// (post-)multiplies the product by@c factor
+  /// @param factor a factor by which to multiply the product
+  /// @param flatten_tag specifies whether (and how) to flatten the argument(s)
+  /// @return @c *this
+  Product &append(ExprPtr factor, Flatten flatten_tag = Flatten::Yes) {
+    return this->append(1, factor, flatten_tag);
+  }
+
+  /// (post-)multiplies the product by @c factor
+  /// @param factor a factor by which to multiply the product
+  /// @param flatten_tag specifies whether (and how) to flatten the argument(s)
+  /// @return @c *this
+  /// @warning if @p factor is a Product, it is flattened recursively
+  template <typename Factor, typename = std::enable_if_t<is_an_expr_v<Factor>>>
+  Product &append(Factor &&factor, Flatten flatten_tag = Flatten::Yes) {
+    return this->append(std::static_pointer_cast<Expr>(
+                            std::forward<Factor>(factor).shared_from_this()),
+                        flatten_tag);
+  }
+
   /// (pre-)multiplies the product by @c scalar times @c factor
   /// @param scalar a scalar by which to multiply the product
   /// @param factor a factor by which to multiply the product
@@ -182,7 +217,7 @@ class Product : public Expr {
   template <typename T>
   Product &prepend(T scalar, ExprPtr factor,
                    Flatten flatten_tag = Flatten::Yes) {
-    assert(factor);
+    SEQUANT_ASSERT(factor);
     scalar_ *= scalar;
     if (!factor->is<Product>()) {
       if (factor->is<Constant>()) {  // factor in Constant
@@ -229,7 +264,7 @@ class Product : public Expr {
   const auto &scalar() const { return scalar_; }
 
   /// @return `Constant::is_zero(this->scalar())`
-  bool is_zero() const { return Constant::is_zero(this->scalar()); }
+  bool is_zero() const override { return Constant::is_zero(this->scalar()); }
 
   const auto &factors() const { return factors_; }
   auto &factors() { return factors_; }
@@ -331,12 +366,12 @@ class Product : public Expr {
   }
 
   void add_identical(const Product &other) {
-    assert(ranges::equal(this->factors(), other.factors()));
+    SEQUANT_ASSERT(ranges::equal(this->factors(), other.factors()));
     scalar_ += other.scalar_;
   }
 
   void add_identical(const std::shared_ptr<Product> &other) {
-    assert(ranges::equal(this->factors(), other->factors()));
+    SEQUANT_ASSERT(ranges::equal(this->factors(), other->factors()));
     scalar_ += other->scalar_;
   }
 
@@ -344,7 +379,7 @@ class Product : public Expr {
     if (other.is<Product>()) return this->add_identical(other.as<Product>());
 
     // only makes sense if this has a single factor
-    assert(this->factors_.size() == 1 && this->factors_[0] == other);
+    SEQUANT_ASSERT(this->factors_.size() == 1 && this->factors_[0] == other);
     scalar_ += 1;
   }
 
@@ -353,11 +388,20 @@ class Product : public Expr {
   container::svector<ExprPtr, 2> factors_{};
 
   cursor begin_cursor() override {
-    return factors_.empty() ? Expr::begin_cursor() : cursor{&factors_[0]};
+    if (factors_.empty()) {
+      return Expr::begin_cursor();
+    } else {
+      reset_hash_value();
+      return cursor{&factors_[0]};
+    }
   };
   cursor end_cursor() override {
-    return factors_.empty() ? Expr::end_cursor()
-                            : cursor{&factors_[0] + factors_.size()};
+    if (factors_.empty()) {
+      return Expr::begin_cursor();
+    } else {
+      reset_hash_value();
+      return cursor{&factors_[0] + factors_.size()};
+    }
   };
 
   cursor begin_cursor() const override {
@@ -391,13 +435,15 @@ class Product : public Expr {
     if (!hash_value_) {
       hash_value_ = compute_hash();
     } else {
-      assert(*hash_value_ == compute_hash());
+      SEQUANT_ASSERT(*hash_value_ == compute_hash());
     }
 
     return *hash_value_;
   }
 
   ExprPtr canonicalize_impl(CanonicalizeOptions);
+
+ public:
   virtual ExprPtr canonicalize(
       CanonicalizeOptions opt =
           CanonicalizeOptions::default_options()) override;
@@ -406,6 +452,7 @@ class Product : public Expr {
           CanonicalizeOptions::default_options().copy_and_set(
               CanonicalizationMethod::Rapid)) override;
 
+ private:
   bool static_equal(const Expr &that) const override {
     const auto &that_cast = static_cast<const Product &>(that);
     if (scalar() == that_cast.scalar() &&

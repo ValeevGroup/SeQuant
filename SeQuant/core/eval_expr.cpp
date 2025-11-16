@@ -9,8 +9,9 @@
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/parse.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
-#include <SeQuant/core/tensor_network_v3.hpp>
+#include <SeQuant/core/tensor_network.hpp>
 #include <SeQuant/core/utility/indices.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/wstring.hpp>
 #include <SeQuant/external/bliss/graph.hh>
 
@@ -21,7 +22,6 @@
 #include <range/v3/view.hpp>
 
 #include <algorithm>
-#include <cassert>
 #include <cmath>
 #include <ranges>
 #include <string_view>
@@ -127,10 +127,10 @@ EvalExpr::EvalExpr(Tensor const& tnsr)
     : op_type_{std::nullopt},
       result_type_{ResultType::Tensor},
       expr_{tnsr.clone()} {
-  assert(!tnsr.indices().empty());
+  SEQUANT_ASSERT(!tnsr.indices().empty());
   if (is_tot(tnsr)) {
     ExprPtrList tlist{expr_};
-    auto tn = TensorNetworkV3(tlist);
+    auto tn = TensorNetwork(tlist);
     auto md =
         tn.canonicalize_slots(TensorCanonicalizer::cardinal_tensor_labels());
     hash_value_ = md.hash_value();
@@ -176,7 +176,7 @@ EvalExpr::EvalExpr(EvalOp op, ResultType res, ExprPtr const& ex,
   }
 
   // Using Tensor objects to represent scalar results is just confusing
-  assert(ex->is<Tensor>() == (res == ResultType::Tensor));
+  SEQUANT_ASSERT(ex->is<Tensor>() == (res == ResultType::Tensor));
 }
 
 const std::optional<EvalOp>& EvalExpr::op_type() const noexcept {
@@ -229,7 +229,7 @@ std::string EvalExpr::label() const noexcept {
   else if (is_constant()) {
     return sequant::to_string(sequant::deparse(as_constant()));
   } else {
-    assert(is_variable());
+    SEQUANT_ASSERT(is_variable());
     return to_string(as_variable().label());
   }
 }
@@ -241,7 +241,7 @@ bool EvalExpr::has_connectivity_graph() const noexcept {
 }
 
 const bliss::Graph& EvalExpr::connectivity_graph() const noexcept {
-  assert(connectivity_ != nullptr);
+  SEQUANT_ASSERT(connectivity_ != nullptr);
   return *connectivity_;
 }
 
@@ -339,7 +339,7 @@ EvalExprNode binarize(Sum const& sum) {
   [[maybe_unused]] bool const all_scalars =
       ranges::all_of(summands, [](auto&& n) { return n->is_scalar(); });
 
-  assert(all_tensors | all_scalars);
+  SEQUANT_ASSERT(all_tensors | all_scalars);
 
   auto hvals = summands | transform([](auto&& n) { return n->hash_value(); });
 
@@ -416,7 +416,7 @@ EvalExprNode binarize(Product const& prod) {
       collect_tensor_factors(left, subfacs);
       collect_tensor_factors(right, subfacs);
       auto ts = subfacs | transform([](auto&& t) { return t.expr; });
-      auto tn = TensorNetworkV3(ts);
+      auto tn = TensorNetwork(ts);
       auto canon =
           tn.canonicalize_slots(TensorCanonicalizer::cardinal_tensor_labels());
       hash::combine(h, canon.hash_value());

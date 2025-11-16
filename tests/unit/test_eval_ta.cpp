@@ -6,6 +6,7 @@
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/parse.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/domain/eval/eval.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 
@@ -36,8 +37,8 @@ struct NestedTensorIndices {
     using namespace sequant;
 
     for (auto&& ix : tnsr.aux()) {
-      assert(!ix.has_proto_indices() &&
-             "Aux indices with proto indices not supported");
+      SEQUANT_ASSERT(!ix.has_proto_indices() &&
+                     "Aux indices with proto indices not supported");
       outer.emplace_back(ix);
     }
 
@@ -168,7 +169,7 @@ class rand_tensor_yield {
 
     if (node->is_variable()) return (*this)(node->as_variable());
 
-    assert(node->is_constant());
+    SEQUANT_ASSERT(node->is_constant());
 
     using result_t = ResultScalar<NumericT>;
 
@@ -192,8 +193,8 @@ class rand_tensor_yield {
 
     auto make_extents = [this, &isr](auto&& ixs) -> container::svector<size_t> {
       return ixs | transform([this, &isr](auto const& ix) -> size_t {
-               assert(ix.space() == isr->retrieve(L"i") ||
-                      ix.space() == isr->retrieve(L"a"));
+               SEQUANT_ASSERT(ix.space() == isr->retrieve(L"i") ||
+                              ix.space() == isr->retrieve(L"a"));
                return ix.space() == isr->retrieve(L"i") ? nocc_ : nvirt_;
              }) |
              ranges::to<container::svector<size_t>>;
@@ -241,10 +242,10 @@ class rand_tensor_yield {
     }
 
     auto success = label_to_er_.emplace(label, result);
-    assert(success.second && "couldn't store ResultPtr!");
+    SEQUANT_ASSERT(success.second && "couldn't store ResultPtr!");
     //    std::cout << "label = [" << sequant::to_string(label)
     //              << "] NotFound in cache. Creating.." << std::endl;
-    assert(success.first->second);
+    SEQUANT_ASSERT(success.first->second);
     return success.first->second;
   }
 
@@ -320,11 +321,11 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
           ->get<TA::TArrayD>();
     };
 
-    auto eval_biorthogonal_cleanup = [&yield_](
-                                         sequant::ExprPtr const& expr,
-                                         std::string const& target_labels) {
-      return evaluate_biorthogonal_cleanup(eval_node(expr), target_labels,
-                                           yield_)
+    auto eval_biorthogonal_nns_project = [&yield_](
+                                             sequant::ExprPtr const& expr,
+                                             std::string const& target_labels) {
+      return evaluate_biorthogonal_nns_project(eval_node(expr), target_labels,
+                                               yield_)
           ->get<TA::TArrayD>();
     };
 
@@ -511,7 +512,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
     SECTION("Biorthogonal Cleanup") {
       // low-rank residuals: skip cleanup
       auto expr1 = parse_antisymm(L"R_{a1, a2}^{i1, i2}");
-      auto eval1 = eval_biorthogonal_cleanup(expr1, "a_1,a_2,i_1,i_2");
+      auto eval1 = eval_biorthogonal_nns_project(expr1, "a_1,a_2,i_1,i_2");
       auto const& arr1 = yield(L"R{a1,a2;i1,i2}");
 
       auto man1 = TArrayD{};
@@ -526,7 +527,8 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
       // high-rank residuals: cleanup applies:
       // result = identity - (1/ket_rank!) * sum_of_ket_permutations
       auto expr2 = parse_antisymm(L"R_{a1, a2, a3}^{i1, i2, i3}");
-      auto eval2 = eval_biorthogonal_cleanup(expr2, "a_1,a_2,a_3,i_1,i_2,i_3");
+      auto eval2 =
+          eval_biorthogonal_nns_project(expr2, "a_1,a_2,a_3,i_1,i_2,i_3");
       auto const& arr2 = yield(L"R{a1,a2,a3;i1,i2,i3}");
 
       auto man2 = TArrayD{};

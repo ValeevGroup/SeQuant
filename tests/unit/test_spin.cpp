@@ -32,12 +32,12 @@
 
 TEST_CASE("spin", "[spin]") {
   using namespace sequant;
+  using namespace sequant::mbpt;
 
   // P.S. ref outputs produced with complete canonicalization
   auto ctx = get_default_context();
   ctx.set(CanonicalizeOptions{.method = CanonicalizationMethod::Complete});
   auto _ = set_scoped_default_context(ctx);
-  using namespace sequant::mbpt;
 
   TensorCanonicalizer::register_instance(
       std::make_shared<DefaultTensorCanonicalizer>());
@@ -272,6 +272,21 @@ TEST_CASE("spin", "[spin]") {
 
       REQUIRE_THAT(result,
                    EquivalentTo(L"4 g{p1,p2;p4,p3} - 2 g{p1,p2;p3,p4}"));
+    }
+    {  // non-closed-shell -> keep spin labels
+      const auto expr = ex<Constant>(rational{1, 4}) *
+                        ex<Tensor>(L"g", bra{L"p_1", L"p_2"},
+                                   ket{L"p_3", L"p_4"}, Symmetry::Antisymm);
+      auto result = spintrace(expr, {{L"p_1", L"p_3"}, {L"p_2", L"p_4"}},
+                              /* spinfree = */ false);
+      REQUIRE_THAT(
+          result,
+          EquivalentTo(
+              "1/4 g{p↑_1,p↑_2;p↑_3,p↑_4}:N-C-S - 1/4 "
+              "g{p↑_2,p↑_1;p↑_3,p↑_4}:N-C-S + 1/4 g{p↑_1,p↓_2;p↑_3,p↓_4}:N-C-S "
+              "+ 1/4 g{p↑_2,p↓_1;p↑_4,p↓_3}:N-C-S + 1/4 "
+              "g{p↓_1,p↓_2;p↓_3,p↓_4}:N-C-S - 1/4 "
+              "g{p↓_2,p↓_1;p↓_3,p↓_4}:N-C-S"));
     }
   }
 
@@ -1066,12 +1081,9 @@ SECTION("Closed-shell spintrace CCSDT terms") {
                    Symmetry::Antisymm)});
 
     auto result = closed_shell_CC_spintrace_v2(input);
-    // multiply the resut by 6/5 to revert the rescaling factor
+    // multiply the result by 6/5 to revert the rescaling factor
     result *= ex<Constant>(rational{5, 6});
 
-    std::wcout << "Result: " << to_latex_align(result) << std::endl;
-    std::wcout << "Result: " << to_latex_align(ex<Sum>(result), 0, 4)
-               << std::endl;
     // There is a problem with casting a single term to Sum
     // REQUIRE(result->size()== 1); // it needs to be checked
 

@@ -1,10 +1,14 @@
+#include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/utility/expr.hpp>
+#include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/string.hpp>
 
+#include <range/v3/view/concat.hpp>
+
+#include <algorithm>
 #include <bitset>
-#include <cassert>
 #include <climits>
 #include <optional>
 #include <sstream>
@@ -119,7 +123,7 @@ std::string diff_spaces(const IndexSpace &lhs, const IndexSpace &rhs) {
     SEQUANT_UNREACHABLE;
   }
 
-  assert(!stream.str().empty());
+  SEQUANT_ASSERT(!stream.str().empty());
   return stream.str();
 }
 
@@ -281,17 +285,150 @@ std::string diff(const Expr &lhs, const Expr &rhs) {
   return diff_str;
 }
 
+#define SEQUANT_EXPR_INVALID(message) \
+  if (msg) {                          \
+    *msg = message;                   \
+  }                                   \
+  return false;
+
+bool is_valid(const ExprPtr &expr, std::string *msg) {
+  if (!expr) {
+    SEQUANT_EXPR_INVALID("Expression is null");
+  }
+
+  return is_valid(*expr, msg);
+}
+
+bool is_valid(const Expr &expr, std::string *msg) {
+  if (!expr.is_atom()) {
+    // Validate children first
+    for (const ExprPtr &current : expr) {
+      if (!is_valid(current, msg)) {
+        return false;
+      }
+    }
+  }
+
+  if (expr.is<Variable>()) {
+    // Nothing to validate
+  } else if (expr.is<Constant>()) {
+    const Constant &c = expr.as<Constant>();
+    if (denominator(c.value().real()) == 0) {
+      SEQUANT_EXPR_INVALID("Denominator of real part of constant is zero");
+    }
+    if (denominator(c.value().imag()) == 0) {
+      SEQUANT_EXPR_INVALID("Denominator of imaginary part of constant is zero");
+    }
+  } else if (expr.is<Tensor>()) {
+    // Nothing to validate
+  } else if (expr.is<Product>()) {
+    const Product &prod = expr.as<Product>();
+    auto factor = prod.scalar();
+
+    if (denominator(factor.real()) == 0) {
+      SEQUANT_EXPR_INVALID(
+          "Denominator of real part of product factor is zero");
+    }
+    if (denominator(factor.imag()) == 0) {
+      SEQUANT_EXPR_INVALID(
+          "Denominator of imaginary part of product factor is zero");
+    }
+
+    // Check that indices don't appear more than 2 times
+    container::map<Index, std::size_t> index_counter;
+    for (const ExprPtr &factor : prod.factors()) {
+      IndexGroups<> indices = get_unique_indices(*factor);
+      for (const Index &idx :
+           ranges::views::concat(indices.bra, indices.ket, indices.aux)) {
+        index_counter[idx] += 1;
+      }
+    }
+
+    for (const auto &[idx, count] : index_counter) {
+      if (count > 2) {
+        SEQUANT_EXPR_INVALID("Index " + toUtf8(idx.full_label()) +
+                             " appears more than 2 times");
+      }
+    }
+  } else if (expr.is<Sum>()) {
+    // Verify that all summands have the same external indices
+    const Sum &sum = expr.as<Sum>();
+
+    auto extractor = [](const ExprPtr &expr) {
+      return get_unique_indices(expr);
+    };
+
+    const IndexGroups<> ref = extractor(sum.summand(0));
+
+    auto compare = [&ref](const IndexGroups<> &grps) {
+      return std::ranges::is_permutation(ref.bra, grps.bra) &&
+             std::ranges::is_permutation(ref.ket, grps.ket) &&
+             std::ranges::is_permutation(ref.aux, grps.aux);
+    };
+
+    bool consistent = std::ranges::all_of(sum.summands(), compare, extractor);
+
+    if (!consistent) {
+      SEQUANT_EXPR_INVALID("Inconsistent external indices in sum");
+    }
+  } else {
+    SEQUANT_ASSERT(false, "Unsupported expression type in is_valid");
+  }
+
+  return true;
+}
+
+bool is_valid(const ResultExpr &expr, std::string *msg) {
+  if (!is_valid(expr.expression(), msg)) {
+    return false;
+  }
+
+  // We need to make sure to remove any symmetrizers from the expression in
+  // order to not mess up the determination of external indices
+  ExprPtr rhs = expr.expression().clone();
+  pop_tensor(rhs, L"A");
+  pop_tensor(rhs, L"S");
+
+  IndexGroups<> externals = get_unique_indices(rhs);
+
+  if (!std::ranges::is_permutation(expr.bra(), externals.bra)) {
+    SEQUANT_EXPR_INVALID(
+        "Bra indices of result are inconsistent with the rhs expression");
+  }
+  if (!std::ranges::is_permutation(expr.ket(), externals.ket)) {
+    SEQUANT_EXPR_INVALID(
+        "Ket indices of result are inconsistent with the rhs expression");
+  }
+  if (!std::ranges::is_permutation(expr.aux(), externals.aux)) {
+    SEQUANT_EXPR_INVALID(
+        "Aux indices of result are inconsistent with the rhs expression");
+  }
+
+  // TODO: check whether specified symmetries of result are fulfilled in the rhs
+  // expression
+
+  return true;
+}
+
+#undef SEQUANT_EXPR_INVALID
+
 ExprPtr transform_expr(const ExprPtr &expr,
                        const container::map<Index, Index> &index_replacements,
                        Constant::scalar_type scaling_factor) {
   if (expr->is<Constant>() || expr->is<Variable>()) {
-    return ex<Constant>(scaling_factor) * expr;
+    if (scaling_factor != 1) {
+      return ex<Constant>(scaling_factor) * expr;
+    }
+
+    return expr;
   }
 
-  auto transform_tensor = [&index_replacements](const Tensor &tensor) {
-    auto result = std::make_shared<Tensor>(tensor);
-    result->transform_indices(index_replacements);
-    result->reset_tags();
+  auto transform_tensor =
+      [&index_replacements](const ExprPtr &tensor) -> ExprPtr {
+    ExprPtr result = tensor.clone();
+    auto &result_tensor = result->as<AbstractTensor>();
+    transform_indices(result_tensor, index_replacements);
+    reset_tags(result_tensor);
     return result;
   };
 
@@ -300,9 +437,8 @@ ExprPtr transform_expr(const ExprPtr &expr,
     auto result = std::make_shared<Product>();
     result->scale(product.scalar());
     for (auto &&term : product) {
-      if (term->is<Tensor>()) {
-        auto tensor = term->as<Tensor>();
-        result->append(1, transform_tensor(tensor));
+      if (term->is<AbstractTensor>()) {
+        result->append(1, transform_tensor(term));
       } else if (term->is<Variable>() || term->is<Constant>()) {
         result->append(1, term->clone());
       } else {
@@ -313,9 +449,11 @@ ExprPtr transform_expr(const ExprPtr &expr,
     return result;
   };
 
-  if (expr->is<Tensor>()) {
-    auto result =
-        ex<Constant>(scaling_factor) * transform_tensor(expr->as<Tensor>());
+  if (expr->is<AbstractTensor>()) {
+    auto result = transform_tensor(expr);
+    if (scaling_factor != 1) {
+      result = result * ex<Constant>(scaling_factor);
+    }
     return result;
   } else if (expr->is<Product>()) {
     auto result = transform_product(expr->as<Product>());
@@ -343,7 +481,7 @@ std::optional<ExprPtr> pop_tensor(ExprPtr &expression,
       if (!tensor.has_value()) {
         tensor = popped;
       }
-      assert(tensor == popped);
+      SEQUANT_ASSERT(tensor == popped);
 
       result.append(std::move(term));
     }
@@ -362,7 +500,7 @@ std::optional<ExprPtr> pop_tensor(ExprPtr &expression,
       if (!tensor.has_value()) {
         tensor = popped;
       }
-      assert(!popped.has_value() || tensor == popped);
+      SEQUANT_ASSERT(!popped.has_value() || tensor == popped);
 
       if (!factor.is<Constant>() || !factor.as<Constant>().is_zero()) {
         result.append(1, std::move(factor), Product::Flatten::No);

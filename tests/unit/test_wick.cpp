@@ -181,11 +181,7 @@ TEST_CASE("wick", "[algorithms][wick]") {
         // partial contractions = N
         auto partial_contractions =
             FWickTheorem{opseq1}.full_contractions(false).compute();
-        // std::wcout << "partial_contractions=" <<
-        // to_latex(partial_contractions)
-        // << std::endl;
-        REQUIRE(partial_contractions->is<Product>());
-        REQUIRE(partial_contractions->as<Product>().size() == 1);
+        REQUIRE_THAT(partial_contractions, EquivalentTo(L"a{i_2;i_1}"));
       }
       {
         auto opseq1 = ex<BNOperatorSeq>(BNOperator(cre({L"i_1"}), ann()),
@@ -199,11 +195,7 @@ TEST_CASE("wick", "[algorithms][wick]") {
         // partial contractions = N
         auto partial_contractions =
             BWickTheorem{opseq1}.full_contractions(false).compute();
-        // std::wcout << "partial_contractions=" <<
-        // to_latex(partial_contractions)
-        // << std::endl;
-        REQUIRE(partial_contractions->is<Product>());
-        REQUIRE(partial_contractions->as<Product>().size() == 1);
+        REQUIRE_THAT(partial_contractions, EquivalentTo(L"b{i_2;i_1}"));
       }
     }
 
@@ -216,18 +208,14 @@ TEST_CASE("wick", "[algorithms][wick]") {
         REQUIRE_NOTHROW(wick1.compute());
         // full contractions = delta
         auto full_contractions = FWickTheorem{opseq1}.compute();
-        REQUIRE(full_contractions->is<Product>());
-        REQUIRE(full_contractions->as<Product>().size() == 1);
+        REQUIRE_THAT(full_contractions, EquivalentTo(L"s{i_1;i_2}"));
         // partial contractions = delta - N
         auto partial_contractions =
             FWickTheorem{opseq1}.full_contractions(false).compute();
         // std::wcout << "partial_contractions=" <<
         // to_latex(partial_contractions) << std::endl;
-        REQUIRE(partial_contractions->is<Sum>());
-        REQUIRE(partial_contractions->as<Sum>().size() == 2);
-        REQUIRE(
-            to_latex(partial_contractions) ==
-            L"{ \\bigl({{s^{{i_2}}_{{i_1}}}} - {{a^{{i_2}}_{{i_1}}}}\\bigr) }");
+        REQUIRE_THAT(partial_contractions,
+                     EquivalentTo(L"s{i_1;i_2} - a{i_1;i_2}"));
       }
       {
         auto opseq1 = ex<BNOperatorSeq>(BNOperator(cre({}), ann({L"i_1"})),
@@ -236,18 +224,14 @@ TEST_CASE("wick", "[algorithms][wick]") {
         REQUIRE_NOTHROW(wick1.compute());
         // full contractions = delta
         auto full_contractions = BWickTheorem{opseq1}.compute();
-        REQUIRE(full_contractions->is<Product>());
-        REQUIRE(full_contractions->as<Product>().size() == 1);
+        REQUIRE_THAT(full_contractions, EquivalentTo(L"s{i_1;i_2}"));
         // partial contractions = delta + N
         auto partial_contractions =
             BWickTheorem{opseq1}.full_contractions(false).compute();
         // std::wcout << "partial_contractions=" <<
         // to_latex(partial_contractions) << std::endl;
-        REQUIRE(partial_contractions->is<Sum>());
-        REQUIRE(partial_contractions->as<Sum>().size() == 2);
-        REQUIRE(
-            to_latex(partial_contractions) ==
-            L"{ \\bigl({{s^{{i_2}}_{{i_1}}}} + {{b^{{i_2}}_{{i_1}}}}\\bigr) }");
+        REQUIRE_THAT(partial_contractions,
+                     EquivalentTo(L"s{i_1;i_2} + b{i_1;i_2}"));
       }
     }
 
@@ -261,17 +245,15 @@ TEST_CASE("wick", "[algorithms][wick]") {
       REQUIRE_NOTHROW(w.full_contractions(false).compute());
       auto partial_contractions =
           FWickTheorem{ops}.full_contractions(false).compute();
-      REQUIRE(to_latex(partial_contractions) ==
-              L"{ \\bigl( - {{s^{{i_2}}_{{i_1}}}{a^{{i_3}{i_1}}_{{i_4}{i_5}}}} "
-              L"- {{s^{{i_2}}_{{i_1}}}{s^{{i_1}}_{{i_4}}}{a^{{i_3}}_{{i_5}}}} "
-              L"+ {{s^{{i_2}}_{{i_1}}}{s^{{i_1}}_{{i_5}}}{a^{{i_3}}_{{i_4}}}} "
-              L"+ {{s^{{i_3}}_{{i_1}}}{a^{{i_2}{i_1}}_{{i_4}{i_5}}}} + "
-              L"{{s^{{i_3}}_{{i_1}}}{s^{{i_1}}_{{i_4}}}{a^{{i_2}}_{{i_5}}}} - "
-              L"{{s^{{i_3}}_{{i_1}}}{s^{{i_1}}_{{i_5}}}{a^{{i_2}}_{{i_4}}}} - "
-              L"{{s^{{i_1}}_{{i_1}}}{a^{{i_2}{i_3}}_{{i_4}{i_5}}}} + "
-              L"{{s^{{i_1}}_{{i_4}}}{a^{{i_2}{i_3}}_{{i_1}{i_5}}}} - "
-              L"{{s^{{i_1}}_{{i_5}}}{a^{{i_2}{i_3}}_{{i_1}{i_4}}}} + "
-              L"{{a^{{i_2}{i_3}{i_1}}_{{i_1}{i_4}{i_5}}}}\\bigr) }");
+      REQUIRE_THAT(
+          partial_contractions,
+          EquivalentTo(
+              L"- s{i_1;i_2} * a{i_4,i_5;i_3,i_1} - s{i_1;i_2} * s{i_4;i_1} * "
+              L"a{i_5;i_3} + s{i_1;i_2} * s{i_5;i_1} * a{i_4;i_3} + s{i_1;i_3} "
+              L"* a{i_4,i_5;i_2,i_1} + s{i_1;i_3} * s{i_4;i_1} * a{i_5;i_2} - "
+              L"s{i_1;i_3} * s{i_5;i_1} * a{i_4;i_2} - a{i_4,i_5;i_2,i_3} + "
+              L"s{i_4;i_1} * a{i_1,i_5;i_2,i_3} - s{i_5;i_1} * "
+              L"a{i_1,i_4;i_2,i_3} + a{i_1,i_4,i_5;i_2,i_3,i_1}"));
     }
 
     // three 1-body operators
@@ -343,13 +325,12 @@ TEST_CASE("wick", "[algorithms][wick]") {
       REQUIRE_NOTHROW(wick.full_contractions(false).compute());
       auto result = wick.full_contractions(false).compute();
       REQUIRE(result->is<Sum>());
-      REQUIRE(result->size() == 5);  // sum of 4 terms
-      REQUIRE(to_latex(result) ==
-              L"{ \\bigl( - {{s^{{i_2}}_{{i_1}}}{a^{{i_4}}_{{i_3}}}} + "
-              L"{{s^{{i_2}}_{{i_1}}}{s^{{i_4}}_{{i_3}}}} + "
-              L"{{s^{{i_4}}_{{i_1}}}{a^{{i_2}}_{{i_3}}}} - "
-              L"{{s^{{i_4}}_{{i_3}}}{a^{{i_2}}_{{i_1}}}} - "
-              L"{{a^{{i_2}{i_4}}_{{i_3}{i_1}}}}\\bigr) }");
+      REQUIRE(result->size() == 5);
+      REQUIRE_THAT(
+          result,
+          EquivalentTo(L"- a{i_1;i_2} * s{i_3;i_4} - a{i_3;i_4} * s{i_1;i_2} + "
+                       L"a{i_3;i_2} * s{i_1;i_4} + a{i_1,i_3;i_2,i_4} + "
+                       L"s{i_1;i_2} * s{i_3;i_4}"));
     }
 
     // three 1-body operators, partial contraction
@@ -362,12 +343,12 @@ TEST_CASE("wick", "[algorithms][wick]") {
       auto result = FWickTheorem{opseq1}.full_contractions(false).compute();
       REQUIRE(result->is<Sum>());
       REQUIRE(result->size() == 5);
-      REQUIRE(to_latex(result) ==
-              L"{ \\bigl({{s^{{i_3}}_{{i_2}}}{a^{{i_1}{i_5}}_{{i_4}{i_6}}}} + "
-              L"{{s^{{i_3}}_{{i_2}}}{s^{{i_5}}_{{i_4}}}{a^{{i_1}}_{{i_6}}}} + "
-              L"{{s^{{i_5}}_{{i_2}}}{a^{{i_1}{i_3}}_{{i_6}{i_4}}}} + "
-              L"{{s^{{i_5}}_{{i_4}}}{a^{{i_1}{i_3}}_{{i_2}{i_6}}}} + "
-              L"{{a^{{i_1}{i_3}{i_5}}_{{i_2}{i_4}{i_6}}}}\\bigr) }");
+      REQUIRE_THAT(
+          result,
+          EquivalentTo(
+              L"a{i_6;i_1} * s{i_2;i_3} * s{i_4;i_5} - a{i_6,i_2;i_1,i_3} * "
+              L"s{i_4;i_5} + a{i_2,i_4,i_6;i_1,i_3,i_5} + a{i_6,i_4;i_1,i_3} * "
+              L"s{i_2;i_5} - a{i_6,i_4;i_1,i_5} * s{i_2;i_3}"));
     }
 
     // two 2-body operators, partial contraction: Eq. 9b of DOI 10.1063/1.474405
@@ -381,22 +362,19 @@ TEST_CASE("wick", "[algorithms][wick]") {
       auto result_latex = to_latex(result);
       REQUIRE(result->is<Sum>());
       REQUIRE(result->size() == 7);
-      REQUIRE(
-          result_latex ==
-          L"{ "
-          L"\\bigl({{s^{{i_5}}_{{i_4}}}{a^{{i_1}{i_2}{i_6}}_{{i_3}{i_7}{i_8}}}}"
-          L" + "
-          L"{{s^{{i_5}}_{{i_4}}}{s^{{i_6}}_{{i_3}}}{a^{{i_1}{i_2}}_{{i_8}{i_7}}"
-          L"}} + {{s^{{i_6}}_{{i_4}}}{a^{{i_1}{i_2}{i_5}}_{{i_3}{i_8}{i_7}}}} "
-          L"+ "
-          L"{{s^{{i_6}}_{{i_4}}}{s^{{i_5}}_{{i_3}}}{a^{{i_1}{i_2}}_{{i_7}{i_8}}"
-          L"}} + {{s^{{i_5}}_{{i_3}}}{a^{{i_1}{i_2}{i_6}}_{{i_7}{i_4}{i_8}}}} "
-          L"+ {{s^{{i_6}}_{{i_3}}}{a^{{i_1}{i_2}{i_5}}_{{i_8}{i_4}{i_7}}}} + "
-          L"{{a^{{i_1}{i_2}{i_5}{i_6}}_{{i_3}{i_4}{i_7}{i_8}}}}\\bigr) }");
+      REQUIRE_THAT(
+          result,
+          EquivalentTo(
+              L"a{i_8,i_7,i_4;i_1,i_5,i_2} * s{i_3;i_6} + "
+              L"a{i_3,i_4,i_7,i_8;i_1,i_2,i_5,i_6} + a{i_8,i_7;i_1,i_2} * "
+              L"s{i_3;i_6} * s{i_4;i_5} + a{i_8,i_7,i_4;i_6,i_1,i_2} * "
+              L"s{i_3;i_5} + a{i_8,i_3,i_7;i_1,i_5,i_2} * s{i_4;i_6} + "
+              L"a{i_8,i_3,i_7;i_6,i_1,i_2} * s{i_4;i_5} - a{i_8,i_7;i_1,i_2} * "
+              L"s{i_3;i_5} * s{i_4;i_6}"));
 
       // we use this example in the paper, both as bare ops and contracted with
       // scalars to make all indices dummy and the topological optimizations
-      // kicking in ... see if the paper's exlanation of how
+      // kicking in ... see if the paper's explanation of how
       // topology works is correct
       {
         auto expr =
@@ -443,7 +421,6 @@ TEST_CASE("wick", "[algorithms][wick]") {
       REQUIRE_NOTHROW(wick.full_contractions(false).compute());
       auto result_sf = wick.full_contractions(false).compute();
       auto result_sf_latex = to_latex(result_sf);
-      // std::wcout << "result_sf: " << to_latex(result_sf) << std::endl;
       REQUIRE(result->is<Sum>());
       REQUIRE(result->size() == 7);
       auto result_sf_latex_with_E_replaced_by_a =
@@ -500,10 +477,9 @@ TEST_CASE("wick", "[algorithms][wick]") {
       REQUIRE_NOTHROW(wick.compute());
       auto result = wick.compute();
       REQUIRE(result->is<Product>());
-      REQUIRE(to_latex(result) ==
-              L"{{s^{{m_{104}}}_{{m_{105}}}}{\\delta^{{m_{105}}}_{{p_4}}}{"
-              L"\\delta^{{p_1}}_{{m_{104}}}}{s^{{e_{107}}}_{{e_{106}}}}{"
-              L"\\delta^{{e_{106}}}_{{p_2}}}{\\delta^{{p_3}}_{{e_{107}}}}}");
+      REQUIRE_THAT(
+          result,
+          EquivalentTo(L"δ{p_4;m_1} * δ{m_1;p_1} * δ{p_2;e_1} * δ{e_1;p_3}"));
     }
     // two general 1-body operators, partial contractions: Eq. 21a of
     // DOI 10.1063/1.474405
@@ -518,16 +494,11 @@ TEST_CASE("wick", "[algorithms][wick]") {
       REQUIRE(
           4 ==
           GWT({1, 1}, /* full_contractions_only = */ false).result().size());
-      REQUIRE(to_latex(result) ==
-              L"{ \\bigl( - "
-              L"{{s^{{m_{114}}}_{{m_{115}}}}{\\delta^{{m_{115}}}_{{p_4}}}{"
-              L"\\delta^{{p_1}}_{{m_{114}}}}{\\tilde{a}^{{p_3}}_{{p_2}}}} + "
-              L"{{s^{{m_{114}}}_{{m_{115}}}}{\\delta^{{m_{115}}}_{{p_4}}}{"
-              L"\\delta^{{p_1}}_{{m_{114}}}}{s^{{e_{117}}}_{{e_{116}}}}{"
-              L"\\delta^{{e_{116}}}_{{p_2}}}{\\delta^{{p_3}}_{{e_{117}}}}} + "
-              L"{{s^{{e_{119}}}_{{e_{118}}}}{\\delta^{{e_{118}}}_{{p_2}}}{"
-              L"\\delta^{{p_3}}_{{e_{119}}}}{\\tilde{a}^{{p_1}}_{{p_4}}}} + "
-              L"{{\\tilde{a}^{{p_1}{p_3}}_{{p_2}{p_4}}}}\\bigr) }");
+      REQUIRE_THAT(
+          result,
+          EquivalentTo(L"- δ{p_4;m_1} * δ{m_1;p_1} * ã{p_2;p_3} + δ{p_4;m_1} * "
+                       L"δ{m_1;p_1} * δ{p_2;e_1} * δ{e_1;p_3} + δ{p_2;e_1} * "
+                       L"δ{e_1;p_3} * ã{p_4;p_1} + ã{p_2,p_4;p_1,p_3}"));
     }
 
     // two (pure qp) 2-body operators
@@ -543,16 +514,12 @@ TEST_CASE("wick", "[algorithms][wick]") {
       // std::endl;
       REQUIRE(result->is<Sum>());
       REQUIRE(result->size() == 4);
-      REQUIRE(result_latex ==
-              L"{ "
-              L"\\bigl({{s^{{i_1}}_{{i_4}}}{s^{{i_2}}_{{i_3}}}{s^{{a_3}}_{{a_2}"
-              L"}}{s^{{a_4}}_{{a_1}}}} - "
-              L"{{s^{{i_1}}_{{i_4}}}{s^{{i_2}}_{{i_3}}}{s^{{a_4}}_{{a_2}}}{s^{{"
-              L"a_3}}_{{a_1}}}} - "
-              L"{{s^{{i_1}}_{{i_3}}}{s^{{i_2}}_{{i_4}}}{s^{{a_3}}_{{a_2}}}{s^{{"
-              L"a_4}}_{{a_1}}}} + "
-              L"{{s^{{i_1}}_{{i_3}}}{s^{{i_2}}_{{i_4}}}{s^{{a_4}}_{{a_2}}}{s^{{"
-              L"a_3}}_{{a_1}}}}\\bigr) }");
+      REQUIRE_THAT(
+          result,
+          EquivalentTo(L"s{i_4;i_1} * s{i_3;i_2} * s{a_2;a_3} * s{a_1;a_4} - "
+                       L"s{i_4;i_1} * s{i_3;i_2} * s{a_2;a_4} * s{a_1;a_3} - "
+                       L"s{i_3;i_1} * s{i_4;i_2} * s{a_2;a_3} * s{a_1;a_4} + "
+                       L"s{i_3;i_1} * s{i_4;i_2} * s{a_2;a_4} * s{a_1;a_3}"));
 
       // in spin-free result first and fourth terms are multiplied by 4, second
       // and third terms multiplied by 2
@@ -564,16 +531,12 @@ TEST_CASE("wick", "[algorithms][wick]") {
       //     << std::endl;
       REQUIRE(result_sf->is<Sum>());
       REQUIRE(result_sf->size() == 4);
-      REQUIRE(result_sf_latex ==
-              L"{ "
-              L"\\bigl({{{4}}{s^{{i_1}}_{{i_4}}}{s^{{i_2}}_{{i_3}}}{s^{{a_3}}_{"
-              L"{a_2}}}{s^{{a_4}}_{{a_1}}}} - "
-              L"{{{2}}{s^{{i_1}}_{{i_4}}}{s^{{i_2}}_{{i_3}}}{s^{{a_4}}_{{a_2}}}"
-              L"{s^{{a_3}}_{{a_1}}}} - "
-              L"{{{2}}{s^{{i_1}}_{{i_3}}}{s^{{i_2}}_{{i_4}}}{s^{{a_3}}_{{a_2}}}"
-              L"{s^{{a_4}}_{{a_1}}}} + "
-              L"{{{4}}{s^{{i_1}}_{{i_3}}}{s^{{i_2}}_{{i_4}}}{s^{{a_4}}_{{a_2}}}"
-              L"{s^{{a_3}}_{{a_1}}}}\\bigr) }");
+      REQUIRE_THAT(
+          result_sf,
+          EquivalentTo(L"4 s{i_4;i_1} * s{i_3;i_2} * s{a_2;a_3} * s{a_1;a_4} - "
+                       L"2 s{i_4;i_1} * s{i_3;i_2} * s{a_2;a_4} * s{a_1;a_3} - "
+                       L"2 s{i_3;i_1} * s{i_4;i_2} * s{a_2;a_3} * s{a_1;a_4} + "
+                       L"4 s{i_3;i_1} * s{i_4;i_2} * s{a_2;a_4} * s{a_1;a_3}"));
     }
     // two (pure qp) 3-body operators
     {
@@ -640,21 +603,16 @@ TEST_CASE("wick", "[algorithms][wick]") {
       auto wick = FWickTheorem{opseq};
       REQUIRE_NOTHROW(wick.compute());
       auto result = wick.compute();
-      std::wcout << "<" << to_latex(opseq) << "> = " << to_latex(result)
-                 << std::endl;
+      // std::wcout << "<" << to_latex(opseq) << "> = " << to_latex(result)
+      //            << std::endl;
       REQUIRE(result->is<Sum>());
       REQUIRE(result->size() == 4);
-      REQUIRE(
-          to_latex(result) ==
-          L"{ "
-          L"\\bigl({{s^{{p_1}}_{{i_4}}}{s^{{p_2}}_{{i_3}}}{s^{{a_3}}_{{p_4}}}"
-          L"{s^{{a_4}}_{{p_3}}}} - "
-          L"{{s^{{p_1}}_{{i_4}}}{s^{{p_2}}_{{i_3}}}{s^{{a_4}}_{{p_4}}}{s^{{a_"
-          L"3}}_{{p_3}}}} - "
-          L"{{s^{{p_1}}_{{i_3}}}{s^{{p_2}}_{{i_4}}}{s^{{a_3}}_{{p_4}}}{s^{{a_"
-          L"4}}_{{p_3}}}} + "
-          L"{{s^{{p_1}}_{{i_3}}}{s^{{p_2}}_{{i_4}}}{s^{{a_4}}_{{p_4}}}{s^{{a_"
-          L"3}}_{{p_3}}}}\\bigr) }");
+      REQUIRE_THAT(
+          result,
+          EquivalentTo(L"δ{i_4;p_1} * δ{i_3;p_2} * δ{p_4;a_3} * δ{p_3;a_4} - "
+                       L"δ{i_4;p_1} * δ{i_3;p_2} * δ{p_4;a_4} * δ{p_3;a_3} - "
+                       L"δ{i_3;p_1} * δ{i_4;p_2} * δ{p_4;a_3} * δ{p_3;a_4} + "
+                       L"δ{i_3;p_1} * δ{i_4;p_2} * δ{p_4;a_4} * δ{p_3;a_3}"));
 
       // in spin-free result first and fourth terms are multiplied by 4, second
       // and third terms multiplied by 2
@@ -666,17 +624,12 @@ TEST_CASE("wick", "[algorithms][wick]") {
       //     << std::endl;
       REQUIRE(result_sf->is<Sum>());
       REQUIRE(result_sf->size() == 4);
-      REQUIRE(
-          to_latex(result_sf) ==
-          L"{ "
-          L"\\bigl({{{4}}{s^{{p_1}}_{{i_4}}}{s^{{p_2}}_{{i_3}}}{s^{{a_3}}_{{"
-          L"p_4}}}{s^{{a_4}}_{{p_3}}}} - "
-          L"{{{2}}{s^{{p_1}}_{{i_4}}}{s^{{p_2}}_{{i_3}}}{s^{{a_4}}_{{p_4}}}{"
-          L"s^{{a_3}}_{{p_3}}}} - "
-          L"{{{2}}{s^{{p_1}}_{{i_3}}}{s^{{p_2}}_{{i_4}}}{s^{{a_3}}_{{p_4}}}{"
-          L"s^{{a_4}}_{{p_3}}}} + "
-          L"{{{4}}{s^{{p_1}}_{{i_3}}}{s^{{p_2}}_{{i_4}}}{s^{{a_4}}_{{p_4}}}{"
-          L"s^{{a_3}}_{{p_3}}}}\\bigr) }");
+      REQUIRE_THAT(
+          result_sf,
+          EquivalentTo(L"4 δ{i_4;p_1} * δ{i_3;p_2} * δ{p_4;a_3} * δ{p_3;a_4} - "
+                       L"2 δ{i_4;p_1} * δ{i_3;p_2} * δ{p_4;a_4} * δ{p_3;a_3} - "
+                       L"2 δ{i_3;p_1} * δ{i_4;p_2} * δ{p_4;a_3} * δ{p_3;a_4} + "
+                       L"4 δ{i_3;p_1} * δ{i_4;p_2} * δ{p_4;a_4} * δ{p_3;a_3}"));
     }
 
     // two general 3-body operators
@@ -897,7 +850,7 @@ TEST_CASE("wick", "[algorithms][wick]") {
     }
 
     // 2-body ^ 2-body ^ 2-body ^ 2-body
-    SECTION("wick(2^2^2^2)") {
+    {
       auto opseq = ex<FNOperatorSeq>(
           FNOperator(cre({L"p_1", L"p_2"}), ann({L"p_5", L"p_6"})),
           FNOperator(cre({L"p_9", L"p_10"}), ann({L"p_11", L"p_12"})),
@@ -918,7 +871,7 @@ TEST_CASE("wick", "[algorithms][wick]") {
 #define SEQUANT_EXPENSIVELY_VALIDATE_LONG_TESTS 0
 
     // 4-body ^ 2-body ^ 4-body
-    SECTION("wick(4^2^4)") {
+    {
       auto opseq = ex<FNOperatorSeq>(
           FNOperator(cre({L"p_1", L"p_2", L"p_3", L"p_4"}),
                      ann({L"p_5", L"p_6", L"p_7", L"p_8"})),
@@ -938,7 +891,7 @@ TEST_CASE("wick", "[algorithms][wick]") {
 
 #ifndef SEQUANT_SKIP_SUPERLONG_TESTS
     // 4-body ^ 2-body ^ 2-body ^ 2-body
-    SECTION("wick(4^2^2^2)") {
+    {
       auto opseq = ex<FNOperatorSeq>(
           FNOperator(cre({L"p_1", L"p_2", L"p_3", L"p_4"}),
                      ann({L"p_5", L"p_6", L"p_7", L"p_8"})),
@@ -954,7 +907,7 @@ TEST_CASE("wick", "[algorithms][wick]") {
     }
 
     // 3-body ^ 2-body ^ 2-body ^ 3-body
-    SECTION("wick(3^2^2^3)") {
+    {
       auto opseq = ex<FNOperatorSeq>(
           FNOperator(cre({L"p_1", L"p_2", L"p_3"}),
                      ann({L"p_5", L"p_6", L"p_7"})),
@@ -971,7 +924,7 @@ TEST_CASE("wick", "[algorithms][wick]") {
     }
 
     // 4-body ^ 4-body ^ 4-body
-    SECTION("wick(4^4^4)") {
+    {
       auto opseq = ex<FNOperatorSeq>(
           FNOperator(cre({L"p_1", L"p_2", L"p_3", L"p_4"}),
                      ann({L"p_5", L"p_6", L"p_7", L"p_8"})),
@@ -1034,24 +987,8 @@ TEST_CASE("wick", "[algorithms][wick]") {
                                       ket{L"i_4", L"i_5"}, Symmetry::Antisymm) *
                            wick_result;
       expand(wick_result_2);
-      REQUIRE(to_latex(wick_result_2) ==
-              L"{ "
-              L"\\bigl({{\\bar{g}^{{p_3}{p_4}}_{{p_1}{p_2}}}{\\bar{t}^{{i_4}{i_"
-              L"5}}_{{a_4}{a_"
-              L"5}}}{s^{{p_1}}_{{i_5}}}{s^{{p_2}}_{{i_4}}}{s^{{a_4}}_{{p_4}}}{"
-              L"s^{{a_5}}_{{p_3}}}} - {"
-              L"{\\bar{g}^{{p_3}{p_4}}_{{p_1}{p_2}}}{\\bar{t}^{{i_4}{i_5}}_{{a_"
-              L"4}{a_5}}}{s^{{"
-              L"p_1}}_{{i_5}}}{s^{{p_2}}_{{i_4}}}{s^{{a_5}}_{{p_4}}}{s^{{a_4}}_"
-              L"{{p_3}}}} - {"
-              L"{\\bar{g}^{{p_3}{p_4}}_{{p_1}{p_2}}}{\\bar{t}^{{i_4}{i_5}}_{{a_"
-              L"4}{a_5}}}{s^{{"
-              L"p_1}}_{{i_4}}}{s^{{p_2}}_{{i_5}}}{s^{{a_4}}_{{p_4}}}{s^{{a_5}}_"
-              L"{{p_3}}}} + "
-              L"{{\\bar{g}^{{p_3}{p_4}}_{{p_1}{p_2}}}{\\bar{t}^{{i_4}{i_5}}_{{"
-              L"a_4}{a_5}}}{s^{"
-              L"{p_1}}_{{i_4}}}{s^{{p_2}}_{{i_5}}}{s^{{a_5}}_{{p_4}}}{s^{{a_4}}"
-              L"_{{p_3}}}}\\bigr) }");
+      // n.b. what used to be external indices now are dummy
+      wick.reset_indices();
       wick.reduce(wick_result_2);
       rapid_simplify(wick_result_2);
       TensorCanonicalizer::register_instance(
@@ -1059,8 +996,7 @@ TEST_CASE("wick", "[algorithms][wick]") {
       canonicalize(wick_result_2, {.method = CanonicalizationMethod::Complete});
       rapid_simplify(wick_result_2);
 
-      std::wcout << L"H2*T2 = " << to_latex(wick_result_2) << std::endl;
-      // std::wcout << L"H2*T2 = " << to_wolfram(wick_result_2) << std::endl;
+      // std::wcout << L"H2*T2 = " << to_latex(wick_result_2) << std::endl;
       REQUIRE(to_latex(wick_result_2) ==
               L"{{{4}}"
               L"{\\bar{g}^{{a_1}{a_2}}_{{i_1}{i_2}}}{\\bar{t}^{{i_1}{i_2}}_{{a_"
@@ -1085,6 +1021,8 @@ TEST_CASE("wick", "[algorithms][wick]") {
         expand(wick_result_2);
         REQUIRE(wick_result_2->size() == 4);  // still 4 terms
 
+        // n.b. what used to be external indices now are dummy
+        wick.reset_indices();
         wick.reduce(wick_result_2);
         rapid_simplify(wick_result_2);
         TensorCanonicalizer::register_instance(
@@ -1093,8 +1031,6 @@ TEST_CASE("wick", "[algorithms][wick]") {
         rapid_simplify(wick_result_2);
         REQUIRE(wick_result_2->size() == 2);  // now 2 terms
 
-        std::wcout << L"spinfree H2*T2 = " << to_latex(wick_result_2)
-                   << std::endl;
         REQUIRE_THAT(wick_result_2,
                      EquivalentTo("-4 * g{i1,i2;a1,a2} t{a1,a2;i2,i1} + 8 "
                                   "g{i1,i2;a1,a2} t{a1,a2;i1,i2}"));
@@ -1134,6 +1070,8 @@ TEST_CASE("wick", "[algorithms][wick]") {
               ex<Tensor>(L"t", bra{L"a_5"}, ket{L"i_5"}, Symmetry::Antisymm) *
               wick_result;
           expand(wick_result_2);
+          // n.b. what used to be external indices now are dummy
+          wick.reset_indices();
           wick.reduce(wick_result_2);
           rapid_simplify(wick_result_2);
           TensorCanonicalizer::register_instance(
@@ -1143,7 +1081,7 @@ TEST_CASE("wick", "[algorithms][wick]") {
                        {.method = CanonicalizationMethod::Complete});
           rapid_simplify(wick_result_2);
 
-          // print(oss.str(), wick_result_2);
+          // std::wcout << wick_result_2.to_latex() << std::endl;
           REQUIRE(wick_result_2->size() == 3 /* factors */);
           REQUIRE(to_latex(wick_result_2) ==
                   L"{{{4}}"
@@ -1184,6 +1122,8 @@ TEST_CASE("wick", "[algorithms][wick]") {
                      ket{L"i_3", L"i_4"}, Symmetry::Antisymm) *
           wick_result;
       expand(wick_result_2);
+      // n.b. what used to be external indices now are dummy
+      wick.reset_indices();
       wick.reduce(wick_result_2);
       rapid_simplify(wick_result_2);
       TensorCanonicalizer::register_instance(
@@ -1297,8 +1237,8 @@ TEST_CASE("wick", "[algorithms][wick]") {
       if (connected_only) wick.set_nop_connections({{1, 2}, {1, 3}});
       auto wick_result = wick.compute();
 
-      std::wcout << "P3*H2*T2*T3 = " << to_latex_align(wick_result, 20)
-                 << std::endl;
+      // std::wcout << "P3*H2*T2*T3 = " << to_latex_align(wick_result, 20)
+      //            << std::endl;
       REQUIRE(wick_result->is<Sum>());
       REQUIRE(
           wick_result->size() ==
@@ -1306,79 +1246,105 @@ TEST_CASE("wick", "[algorithms][wick]") {
     }
 #endif
 
-    // example with "diagonal" operator from Nick Mayhall
-    {
-      auto _ = set_scoped_default_context(
-          {.index_space_registry_shared_ptr = mbpt::make_min_sr_spaces(),
-           .vacuum = Vacuum::SingleProduct,
-           .braket_symmetry = BraKetSymmetry::Symm,
-           .spbasis = SPBasis::Spinor});
+    // misc examples with diagonal operators
+    SECTION("diagonals") {
+      // example with "diagonal" operator from Nick Mayhall
+      {
+        // sequence of individual ops
+        const auto ops = {fann("p_1"), fcre("p_2"), fcre("p_3"),
+                          fann("p_5"), fann("p_4"), fcre("p_1")};
+        FWickTheorem w(ops);
+        REQUIRE_NOTHROW(w.full_contractions(false).compute());
+        auto wresult = FWickTheorem{ops}.full_contractions(false).compute();
 
-      // sequence of individual ops
-      const auto ops = {fann("p_1"), fcre("p_2"), fcre("p_3"),
-                        fann("p_5"), fann("p_4"), fcre("p_1")};
-      REQUIRE_NOTHROW(FWickTheorem(ops));
-      FWickTheorem w(ops);
-      REQUIRE_NOTHROW(w.full_contractions(false).compute());
-      auto wresult = FWickTheorem{ops}.full_contractions(false).compute();
+        auto result0 =
+            wresult * ex<Constant>(ratio(1, 4)) *
+            ex<Tensor>(L"v", bra{L"p_2", L"p_3"}, ket{L"p_4", L"p_5"},
+                       Symmetry::Antisymm) *
+            ex<Tensor>(L"w", bra{}, ket{}, aux{L"p_1"}, Symmetry::Nonsymm);
+        // std::wcout << "before expand: op = " << to_latex(op) << std::endl;
+        expand(result0);
+        // std::wcout << "after expand: op = " << to_latex(op) << std::endl;
 
-      auto result0 =
-          wresult * ex<Constant>(ratio(1, 4)) *
-          ex<Tensor>(L"v", bra{L"p_2", L"p_3"}, ket{L"p_4", L"p_5"},
-                     Symmetry::Antisymm) *
-          ex<Tensor>(L"w", bra{}, ket{}, aux{L"p_1"}, Symmetry::Nonsymm);
-      // std::wcout << "before expand: op = " << to_latex(op) << std::endl;
-      expand(result0);
-      // std::wcout << "after expand: op = " << to_latex(op) << std::endl;
-      w.reduce(result0);
-      // std::wcout << "after reduce: op = " << to_latex(op) << std::endl;
-      simplify(result0, {{.named_indices = IndexList{}}});
-      // sequant::wprintf(L"after simplify: op = ", to_latex_align(result0, 3),
-      // L"\n");
+        // n.b. what used to be external indices are now dummy indices
+        w.reset_indices();
+        w.reduce(result0);
+        // std::wcout << "after reduce: op = " << to_latex_align(result0,
+        // 3) << std::endl;
+        simplify(result0, {{.named_indices = IndexList{}}});
+        // sequant::wprintf(L"after simplify: op = ", to_latex_align(result0,
+        // 3), L"\n");
 
-      auto Ld_H2_L =
-          ex<Constant>(ratio(1, 4)) *
-          ex<Tensor>(L"v", bra{L"p_2", L"p_3"}, ket{L"p_4", L"p_5"},
-                     Symmetry::Antisymm) *
-          ex<Tensor>(L"w", bra{}, ket{}, aux{L"p_1"}, Symmetry::Nonsymm) *
-          fannx("p_1") * fcrex("p_2") * fcrex("p_3") * fannx("p_5") *
-          fannx("p_4") * fcrex("p_1");
-      auto result1 = FWickTheorem{Ld_H2_L}.full_contractions(false).compute();
-      simplify(result1, {{.named_indices = IndexList{}}});
-      // sequant::wprintf(to_latex_align(Ld_H2_L), L" = \n",
-      // to_latex_align(result1, 0, 2), L"\n");
-      REQUIRE(result0 == result1);
+        auto Ld_H2_L =
+            ex<Constant>(ratio(1, 4)) *
+            ex<Tensor>(L"v", bra{L"p_2", L"p_3"}, ket{L"p_4", L"p_5"},
+                       Symmetry::Antisymm) *
+            ex<Tensor>(L"w", bra{}, ket{}, aux{L"p_1"}, Symmetry::Nonsymm) *
+            fannx("p_1") * fcrex("p_2") * fcrex("p_3") * fannx("p_5") *
+            fannx("p_4") * fcrex("p_1");
+        auto result1 = FWickTheorem{Ld_H2_L}.full_contractions(false).compute();
+        simplify(result1, {{.named_indices = IndexList{}}});
+        // sequant::wprintf(to_latex_align(Ld_H2_L), L" = \n",
+        // to_latex_align(result1, 0, 2), L"\n");
+        REQUIRE(result0 == result1);
 
-      auto Ld_H2N_L =
-          ex<Constant>(ratio(1, 4)) *
-          ex<Tensor>(L"v", bra{L"p_2", L"p_3"}, ket{L"p_4", L"p_5"},
-                     Symmetry::Antisymm) *
-          ex<Tensor>(L"w", bra{}, ket{}, aux{L"p_1"}, Symmetry::Nonsymm) *
-          fannx("p_1") *
-          ex<FNOperator>(cre({L"p_2", L"p_3"}), ann({L"p_4", L"p_5"})) *
-          fcrex("p_1");
-      auto result2 = FWickTheorem{Ld_H2N_L}.full_contractions(false).compute();
-      simplify(result2, {{.method = CanonicalizationMethod::Complete,
-                          .named_indices = IndexList{}}});
-      sequant::wprintf(to_latex_align(Ld_H2N_L), L" = \n",
-                       to_latex_align(result2, 0, 2), L"\n");
-      REQUIRE(result2.as<Sum>().size() == 5);
-      REQUIRE(result2.to_latex() ==
-              L"{ \\bigl( - "
-              L"{{{\\frac{1}{4}}}{\\tensor*{\\tilde{a}}{*^{p_3}_{p_1}*^{p_4}_{"
-              L"p_2}*^{p_5}_{p_5}}}{\\tensor*{\\bar{v}}{*^{p_3}_{p_1}*^{p_4}_{"
-              L"p_2}}}{\\tensor*{w}{}[{p_5}]}} + "
-              L"{{\\tensor*{\\tilde{a}}{*^{p_2}_{p_1}}}{\\tensor*{\\bar{v}}{*^{"
-              L"a_1}_{a_1}*^{p_2}_{p_1}}}{\\tensor*{w}{}[{a_1}]}} - "
-              L"{{{\\frac{1}{2}}}{\\tensor*{\\tilde{a}}{*^{p_2}_{a_1}*^{p_3}_{"
-              L"p_1}}}{\\tensor*{\\bar{v}}{*^{a_1}_{p_2}*^{p_1}_{p_3}}}{"
-              L"\\tensor*{w}{}[{a_1}]}} + "
-              L"{{{\\frac{1}{4}}}{\\tensor*{\\tilde{a}}{*^{p_3}_{p_1}*^{p_4}_{"
-              L"p_2}}}{\\tensor*{\\bar{v}}{*^{p_1}_{p_3}*^{p_2}_{p_4}}}{"
-              L"\\tensor*{w}{}[{a_1}]}} - "
-              L"{{{\\frac{1}{2}}}{\\tensor*{\\tilde{a}}{*^{a_1}_{p_1}*^{p_3}_{"
-              L"p_2}}}{\\tensor*{\\bar{v}}{*^{a_1}_{p_1}*^{p_3}_{p_2}}}{"
-              L"\\tensor*{w}{}[{a_1}]}}\\bigr) }");
+        auto Ld_H2N_L =
+            ex<Constant>(ratio(1, 4)) *
+            ex<Tensor>(L"v", bra{L"p_2", L"p_3"}, ket{L"p_4", L"p_5"},
+                       Symmetry::Antisymm) *
+            ex<Tensor>(L"w", bra{}, ket{}, aux{L"p_1"}, Symmetry::Nonsymm) *
+            fannx("p_1") *
+            ex<FNOperator>(cre({L"p_2", L"p_3"}), ann({L"p_4", L"p_5"})) *
+            fcrex("p_1");
+        auto result2 =
+            FWickTheorem{Ld_H2N_L}.full_contractions(false).compute();
+        simplify(result2, {{.method = CanonicalizationMethod::Complete,
+                            .named_indices = IndexList{}}});
+        // sequant::wprintf(to_latex_align(Ld_H2N_L), L" = \n",
+        //                  to_latex_align(result2, 0, 2), L"\n");
+        REQUIRE(result2.as<Sum>().size() == 5);
+        REQUIRE(
+            result2.to_latex() ==
+            L"{ \\bigl( - "
+            L"{{{\\frac{1}{4}}}{\\tilde{a}^{{p_3}{p_4}{p_5}}_{{p_1}{p_2}{p_5}"
+            L"}}{\\bar{v}^{{p_1}{p_2}}_{{p_3}{p_4}}}{w^{}_{}[{p_5}]}} - "
+            L"{{{\\frac{1}{2}}}{\\tilde{a}^{{p_2}{p_3}}_{{e_1}{p_1}}}{\\bar{"
+            L"v}^{{e_1}{p_1}}_{{p_2}{p_3}}}{w^{}_{}[{e_1}]}} + "
+            L"{{\\tilde{a}^{{p_2}}_{{p_1}}}{\\bar{v}^{{e_1}{p_1}}_{{e_1}{p_2}"
+            L"}}{w^{}_{}[{e_1}]}} - "
+            L"{{{\\frac{1}{2}}}{\\tilde{a}^{{e_1}{p_3}}_{{p_1}{p_2}}}{\\bar{"
+            L"v}^{{p_1}{p_2}}_{{e_1}{p_3}}}{w^{}_{}[{e_1}]}} + "
+            L"{{{\\frac{1}{4}}}{\\tilde{a}^{{p_3}{p_4}}_{{p_1}{p_2}}}{\\bar{"
+            L"v}^{{p_1}{p_2}}_{{p_3}{p_4}}}{w^{}_{}[{e_1}]}}\\bigr) }");
+      }
+
+      // simplified example with "diagonal" operator from the paper, inspired by
+      // the last example
+      {
+        auto _ = set_scoped_default_context(
+            get_default_context().clone().set(mbpt::make_min_sr_spaces()));
+
+        auto input =
+            fannx(Index{"p_1", {L"i_1"}}) *
+            (ex<Tensor>(L"h", bra{}, ket{}, aux{L"p_3"}, Symmetry::Nonsymm) *
+             ex<FNOperator>(cre({L"p_3"}), ann({L"p_3"}))) *
+            fcrex(Index{"p_2", {L"i_2"}});
+        auto result = FWickTheorem{input}.full_contractions(false).compute();
+        simplify(result);
+        REQUIRE(result.as<Sum>().size() == 5);
+
+        // clang-format off
+        auto expected = parse_expr(
+            "- h{;;p_3} ã{p_1<i_1>,p_3;p_2<i_2>,p_3}"
+            "+ h{;;p_3} δ{p_1<i_1>;a_1<i_1>} δ{a_2<i_2>;p_2<i_2>} ã{p_3;p_3} s{a_1<i_1>;a_2<i_2>} "
+            "- h{;;a_1} δ{a_2<i_2>;p_2<i_2>} ã{p_1<i_1>;a_1} s{a_1;a_2<i_2>} "
+            "- h{;;a_2} δ{p_1<i_1>;a_1<i_1>} s{a_1<i_1>;a_2} ã{a_2;p_2<i_2>} "
+            "+ h{;;a_3} δ{p_1<i_1>;a_1<i_1>} δ{a_2<i_2>;p_2<i_2>} s{a_1<i_1>;a_3} s{a_3;a_2<i_2>} ");
+        // clang-format on
+        simplify(expected);
+
+        REQUIRE(result == expected);
+      }
     }
   }
 }

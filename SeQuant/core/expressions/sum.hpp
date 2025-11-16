@@ -7,8 +7,9 @@
 #include <SeQuant/core/expressions/expr_ptr.hpp>
 #include <SeQuant/core/expressions/product.hpp>
 #include <SeQuant/core/meta.hpp>
+#include <SeQuant/core/runtime.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 
-#include <cassert>
 #include <optional>
 #include <type_traits>
 
@@ -19,12 +20,20 @@ namespace sequant {
 /// Sum is associative and is flattened automatically.
 class Sum : public Expr {
  public:
+  using summands_type = container::svector<ExprPtr, 2>;
+
   Sum() = default;
   virtual ~Sum() = default;
   Sum(const Sum &) = default;
   Sum(Sum &&) = default;
   Sum &operator=(const Sum &) = default;
   Sum &operator=(Sum &&) = default;
+
+  void swap(Sum &other) {
+    Sum tmp = std::move(other);
+    other = std::move(*this);
+    *this = std::move(tmp);
+  }
 
   /// construct a Sum out of zero or more summands
   /// @param summands an initializer list of summands
@@ -48,37 +57,87 @@ class Sum : public Expr {
 
   /// construct a Sum out of a range of summands
   /// @param rng a range
-  template <typename Range,
-            typename = std::enable_if_t<meta::is_range_v<std::decay_t<Range>> &&
-                                        !meta::is_same_v<Range, ExprPtrList>>>
+  template <typename Range>
+    requires(meta::is_range_v<std::remove_cvref_t<Range>> &&
+             !meta::is_same_v<std::remove_cvref_t<Range>, ExprPtrList>)
   explicit Sum(Range &&rng) {
-    // use append to flatten out Sum summands
-    for (auto &&v : rng) {
-      append(std::forward<decltype(v)>(v));
+    // N.B. use append to flatten out Sum summands
+    constexpr auto rng_is_expr =
+        meta::is_base_of_v<Expr, std::remove_cvref_t<Range>>;
+    constexpr auto rng_is_exprptr =
+        meta::is_same_v<ExprPtr, std::remove_cvref_t<Range>>;
+    if constexpr (rng_is_expr || rng_is_exprptr) {
+      ExprPtr rng_as_exprptr;
+      if constexpr (rng_is_expr) {
+        rng_as_exprptr = rng.exprptr_from_this();
+      } else {
+        rng_as_exprptr = rng;
+      }
+      this->append(rng_as_exprptr);
+    } else {
+      for (auto &&v : rng) {
+        append(std::forward<decltype(v)>(v));
+      }
+    }
+  }
+
+  /// tags ctor to move the summands directly
+  struct move_only_tag {};
+
+  /// construct a Sum by moving in the summands, no flattening is performed,
+  /// but zeros will be omitted and constants added up
+  /// @param summands the summands to move in
+  explicit Sum(summands_type &&summands, move_only_tag)
+      : summands_(std::move(summands)) {
+    std::size_t pos = 0;
+    for (auto it = summands_.begin(); it != summands_.end(); ++it) {
+      auto &summand = *it;
+      bool do_erase = false;
+      if (summand->is_zero()) {
+        do_erase = true;
+      } else if (summand->is<Constant>()) {
+        auto summand_constant = summand.as_shared_ptr<Constant>();
+        if (constant_summand_idx_) {  // add up to the existing constant ...
+          SEQUANT_ASSERT(summands_.at(*constant_summand_idx_)->is<Constant>());
+          *summands_[*constant_summand_idx_] += *summand_constant;
+          do_erase = true;
+        } else {  // or memorize the position of the constant
+          constant_summand_idx_ = pos;
+        }
+      }
+
+      // erase if needed
+      if (do_erase) {
+        summands_.erase(it);
+        it = summands_.begin();
+        std::advance(it, pos);
+      } else
+        ++pos;
     }
   }
 
   /// append a summand to the sum
   /// @param summand the summand
   Sum &append(ExprPtr summand) {
-    assert(summand);
+    SEQUANT_ASSERT(summand);
     if (!summand->is<Sum>()) {
-      if (summand->is<Constant>()) {  // exclude zeros, add up constants
-                                      // immediately, if possible
-        auto summand_constant = std::static_pointer_cast<Constant>(summand);
-        if (constant_summand_idx_) {
-          assert(summands_.at(*constant_summand_idx_)->is<Constant>());
-          *(summands_[*constant_summand_idx_]) += *summand;
-        } else {
-          if (!summand_constant->is_zero()) {
+      if (!summand->is_zero()) {        // exclude zeros
+        if (summand->is<Constant>()) {  // add up constants
+          // immediately, if possible
+          auto summand_constant = summand.as_shared_ptr<Constant>();
+          if (constant_summand_idx_) {
+            SEQUANT_ASSERT(
+                summands_.at(*constant_summand_idx_)->is<Constant>());
+            *(summands_[*constant_summand_idx_]) += *summand;
+          } else {
             summands_.push_back(summand->clone());
             constant_summand_idx_ = summands_.size() - 1;
           }
+        } else {
+          summands_.push_back(summand->clone());
         }
-      } else {
-        summands_.push_back(summand->clone());
+        reset_hash_value();
       }
-      reset_hash_value();
     } else {  // this recursively flattens Sum summands
       for (auto &subsummand : *summand) this->append(subsummand);
     }
@@ -88,26 +147,28 @@ class Sum : public Expr {
   /// prepend a summand to the sum
   /// @param summand the summand
   Sum &prepend(ExprPtr summand) {
-    assert(summand);
+    SEQUANT_ASSERT(summand);
     if (!summand->is<Sum>()) {
-      if (summand->is<Constant>()) {  // exclude zeros
-        auto summand_constant = std::static_pointer_cast<Constant>(summand);
-        if (constant_summand_idx_) {  // add up to the existing constant ...
-          assert(summands_.at(*constant_summand_idx_)->is<Constant>());
-          *summands_[*constant_summand_idx_] += *summand_constant;
-        } else {  // or include the nonzero constant and update
-                  // constant_summand_idx_
-          if (!summand_constant->is_zero()) {
+      if (!summand->is_zero()) {
+        // exclude zeros
+        if (summand->is<Constant>()) {
+          auto summand_constant = summand.as_shared_ptr<Constant>();
+          if (constant_summand_idx_) {  // add up to the existing constant ...
+            SEQUANT_ASSERT(
+                summands_.at(*constant_summand_idx_)->is<Constant>());
+            *summands_[*constant_summand_idx_] += *summand_constant;
+          } else {  // or include the nonzero constant and update
+            // constant_summand_idx_
             summands_.insert(summands_.begin(), summand->clone());
             constant_summand_idx_ = 0;
           }
+        } else {
+          summands_.insert(summands_.begin(), summand->clone());
+          if (constant_summand_idx_)  // if have a constant, update its position
+            ++*constant_summand_idx_;
         }
-      } else {
-        summands_.insert(summands_.begin(), summand->clone());
-        if (constant_summand_idx_)  // if have a constant, update its position
-          ++*constant_summand_idx_;
+        reset_hash_value();
       }
-      reset_hash_value();
     } else {  // this recursively flattens Sum summands
       for (auto &subsummand : *summand) this->prepend(subsummand);
     }
@@ -222,7 +283,7 @@ class Sum : public Expr {
   }
 
  private:
-  container::svector<ExprPtr, 2> summands_{};
+  summands_type summands_{};
   std::optional<size_t>
       constant_summand_idx_{};  // points to the constant summand, if any; used
                                 // to sum up constants in append/prepend
@@ -263,7 +324,7 @@ class Sum : public Expr {
     if (!hash_value_) {
       hash_value_ = compute_hash();
     } else {
-      assert(*hash_value_ == compute_hash());
+      SEQUANT_ASSERT(*hash_value_ == compute_hash());
     }
 
     return *hash_value_;
@@ -282,7 +343,7 @@ class Sum : public Expr {
       CanonicalizeOptions opts =
           CanonicalizeOptions::default_options().copy_and_set(
               CanonicalizationMethod::Rapid)) override {
-    assert(opts.method == CanonicalizationMethod::Rapid);
+    SEQUANT_ASSERT(opts.method == CanonicalizationMethod::Rapid);
     return canonicalize_impl(false, opts);
   }
 
@@ -301,6 +362,70 @@ class Sum : public Expr {
       return false;
   }
 };  // class Sum
+
+/// @brief utility for eagerly accumulating summands in a hash table
+/// Intended to accumulate summands that are already in canonical form and
+/// produces canonical Sum
+class HashingAccumulator {
+ public:
+  /// @p summand expr to append to the sum
+  /// @p flatten if true, and @p summand is a Sum, will flatten the sum
+  HashingAccumulator &append(ExprPtr summand, bool flatten = true);
+
+  SumPtr make_sum();
+
+  SumPtr make_canonicalized_sum();
+
+  /// @param canonicalize if true, will sort the summands to canonical order
+  /// defined by ExprPtr::operator<
+  /// @return summands as a Sum (if have more than 1 summand), Constant (if have
+  /// zero summands), or the lone summand itself
+  ExprPtr make_expr(bool canonicalize = true);
+
+  bool empty() const { return summands_.empty(); }
+
+ private:
+  /// @brief Common implementation for make_sum and make_canonicalized_sum
+  /// @param canonicalize if true, sort the summands by hash value
+  SumPtr make_sum_impl(bool canonicalize);
+
+  container::unordered_set<ExprPtr, sequant::hash::_<ExprPtr>, proportional_to>
+      summands_;
+};
+
+struct TransformSumExprOptions {
+  bool canonicalize = true;
+  bool flatten = true;
+};
+
+/// variant of sequant::transform_reduce for eager sum reduction of Expr's
+/// @sa HashingAccumulator
+template <typename SizedRange, typename UnaryMapOp>
+  requires(meta::is_range_v<std::remove_cvref_t<SizedRange>>)
+ExprPtr transform_sum_expr(SizedRange &&rng, const UnaryMapOp &map,
+                           const TransformSumExprOptions &options = {}) {
+  HashingAccumulator result_acc;
+  std::mutex result_mtx;  // serializes updates of result
+
+  auto task = [&result_acc, &result_mtx, &map,
+               canonicalize = options.canonicalize,
+               flatten = options.flatten](const ExprPtr &input) {
+    auto task_result = map(input);
+    if (task_result) {
+      if (canonicalize) {
+        auto bp = task_result->canonicalize();
+        if (bp) {
+          task_result = bp * task_result;
+        }
+      }
+
+      std::scoped_lock<std::mutex> lock(result_mtx);
+      result_acc.append(task_result, flatten);
+    }
+  };
+  sequant::for_each(std::forward<SizedRange>(rng), task);
+  return result_acc.make_expr(options.canonicalize);
+}
 
 }  // namespace sequant
 

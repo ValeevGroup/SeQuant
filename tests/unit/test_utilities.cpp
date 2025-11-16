@@ -13,9 +13,9 @@
 #include <SeQuant/core/utility/strong.hpp>
 #include <SeQuant/core/utility/tensor.hpp>
 
-#include <codecvt>
 #include <iostream>
 #include <locale>
+#include <ranges>
 #include <string>
 #include <string_view>
 #include <thread>
@@ -369,6 +369,166 @@ TEST_CASE("utilities", "[utilities]") {
         } else {
           REQUIRE(cmp(rhs_tensor, lhs_tensor) == !less);
         }
+      }
+    }
+  }
+
+  SECTION("get_used_indices") {
+    for (const auto& [input, expected] :
+         std::vector<std::tuple<std::wstring, std::vector<std::wstring>>>{
+             {L"Var", {}},
+             {L"t{a1;a2}", {L"a_1", L"a_2"}},
+             {L"t{a1;a2} f{a2;a1}", {L"a_1", L"a_2"}},
+             {L"t{a1;a2} - (Var * (B{p1} T{a1,a2;p1}) + t{a1;a2})",
+              {L"a_1", L"a_2", L"p_1"}},
+         }) {
+      ExprPtr expr = parse_expr(input);
+      auto indices =
+          expected | std::ranges::views::transform(
+                         [](const std::wstring& idx) { return Index(idx); });
+
+      REQUIRE_THAT(get_used_indices(expr),
+                   Catch::Matchers::UnorderedRangeEquals(indices));
+    }
+  }
+
+  SECTION("replace") {
+    SECTION("Expr") {
+      for (const auto& [input_str, target_str, replacement_str, expected_str] :
+           std::vector<std::tuple<std::wstring, std::wstring, std::wstring,
+                                  std::wstring>>{
+               {L"Var", L"t{a1;i1}", L"Test", L"Var"},
+               {L"Var", L"Var", L"Test", L"Test"},
+               {L"t{a1;i1} Var", L"Var", L"Test", L"t{a1;i1} Test"},
+               {L"t{a1;i1} Var", L"Var", L"K{;;p1,p2}", L"t{a1;i1} K{;;p1,p2}"},
+               {L"t{a1;i1} Var", L"t{a1;i1}", L"K{p1} - 1", L"(K{p1} - 1) Var"},
+               {L"g{p1,p2;p3,p4} t{p3,p4;p1,p2}", L"t{p5,p6;p7,p8}",
+                L"T{p5,p6;p7,p8}", L"g{p1,p2;p3,p4} T{p3,p4;p1,p2}"},
+               {L"g{p1,p2;p3,p4} t{p3,p4;p1,p2}", L"t{p5,p6;p1,p2}",
+                L"T{p5,p6;p7,p8}", L"g{p1,p2;p3,p4} T{p3,p4;p7,p8}"},
+           }) {
+        CAPTURE(toUtf8(input_str));
+        CAPTURE(toUtf8(target_str));
+        CAPTURE(toUtf8(replacement_str));
+        CAPTURE(toUtf8(expected_str));
+
+        ExprPtr input = parse_expr(input_str);
+        const ExprPtr target = parse_expr(target_str);
+        const ExprPtr replacement = parse_expr(replacement_str);
+
+        replace<TensorBlockEqualComparator>(input, target, replacement);
+
+        REQUIRE_THAT(input, EquivalentTo(expected_str));
+      }
+    }
+    SECTION("ResultExpr") {
+      // The big difference to replacing on plain expressions is that the result
+      // (indices) are updated as well (if needed)
+      for (const auto& [input_str, target_str, replacement_str, expected_str] :
+           std::vector<std::tuple<std::wstring, std::wstring, std::wstring,
+                                  std::wstring>>{
+               {L"R = Var", L"t{a1;i1}", L"Test", L"R = Var"},
+               {L"R = Var", L"Var", L"Test", L"R = Test"},
+               {L"R{a1;i1} = t{a1;i1} Var", L"Var", L"Test",
+                L"R{a1;i1} = t{a1;i1} Test"},
+               {L"R{a1;i1} = t{a1;i1} Var", L"Var", L"K{;;p1,p2}",
+                L"R{a1;i1;p1,p2} = t{a1;i1} K{;;p1,p2}"},
+               {L"R{a1;i1} = t{a1;i1} Var", L"t{a1;i1}", L"K{p1} - 1",
+                L"R{p1} = (K{p1} - 1) Var"},
+               {L"R = g{p1,p2;p3,p4} t{p3,p4;p1,p2}", L"t{p5,p6;p7,p8}",
+                L"T{p5,p6;p7,p8}", L"R = g{p1,p2;p3,p4} T{p3,p4;p1,p2}"},
+               {L"R = g{p1,p2;p3,p4} t{p3,p4;p1,p2}", L"t{p5,p6;p1,p2}",
+                L"T{p5,p6;p7,p8}",
+                L"R{p1,p2;p7,p8}:N-N-N = g{p1,p2;p3,p4} T{p3,p4;p7,p8}"},
+           }) {
+        CAPTURE(toUtf8(input_str));
+        CAPTURE(toUtf8(target_str));
+        CAPTURE(toUtf8(replacement_str));
+        CAPTURE(toUtf8(expected_str));
+
+        ResultExpr input = parse_result_expr(input_str);
+        const ExprPtr target = parse_expr(target_str);
+        const ExprPtr replacement = parse_expr(replacement_str);
+
+        replace<TensorBlockEqualComparator>(input, target, replacement);
+
+        REQUIRE_THAT(input, EquivalentTo(expected_str));
+      }
+    }
+  }
+
+  SECTION("is_valid") {
+    SECTION("Expr") {
+      for (auto [expr_str, msg] :
+           std::vector<std::pair<std::wstring, std::string>>{
+               {L"Var", ""},
+               {L"3/8", ""},
+               {L"t{a1,a2;;i3}", ""},
+               {L"2 Var", ""},
+               {L"Var + Other", ""},
+               {L"Var + 3", ""},
+               {L"1 + t{}", ""},
+               {L"t{a1} t{a1} t{a1}", "Index a_1 appears more than 2 times"},
+               {L"1 + t{a1} t{a1} t{a1}",
+                "Index a_1 appears more than 2 times"},
+               {L"1 + t{a1}", "Inconsistent external indices in sum"},
+           }) {
+        CAPTURE(toUtf8(expr_str));
+
+        ExprPtr expr = parse_expr(expr_str);
+
+        const bool expected = msg.empty();
+
+        std::string actual_msg;
+        bool actual = is_valid(expr, &actual_msg);
+
+        REQUIRE(actual_msg == msg);
+        REQUIRE(actual == expected);
+
+        IndexGroups<> externals = get_unique_indices(expr);
+        // TODO: use proper symmetries
+        ResultExpr res(bra(externals.bra), ket(externals.ket),
+                       aux(externals.aux), Symmetry::Nonsymm,
+                       BraKetSymmetry::Nonsymm, ColumnSymmetry::Nonsymm, L"R",
+                       expr);
+
+        actual_msg.clear();
+        actual = is_valid(res, &actual_msg);
+
+        REQUIRE(actual_msg == msg);
+        REQUIRE(actual == expected);
+      }
+    }
+    SECTION("ResultExpr") {
+      for (const auto& [expr_str, msg] :
+           std::vector<std::pair<std::wstring, std::string>>{
+               {L"R{a1;a2} = t{a1;i1} t{i1;a2}", ""},
+               {L"R{a1,a2;i1,i2} = A{i1,i2;a1,a2} t{a1,a2;i1,i2}", ""},
+               {L"R{a2,a1;i1,i2} = S{i1,i2;a1,a2} t{a1,a2;i1,i2}", ""},
+               {L"R{a1} = Var",
+                "Bra indices of result are inconsistent with the rhs "
+                "expression"},
+               {L"R{;a1} = Var",
+                "Ket indices of result are inconsistent with the rhs "
+                "expression"},
+               {L"R{;;a1} = Var",
+                "Aux indices of result are inconsistent with the rhs "
+                "expression"},
+               {L"R{a2;a1} = t{a1;i1} t{i1;a2}",
+                "Bra indices of result are inconsistent with the rhs "
+                "expression"},
+           }) {
+        CAPTURE(toUtf8(expr_str));
+
+        ResultExpr expr = parse_result_expr(expr_str);
+
+        const bool expected = msg.empty();
+
+        std::string actual_msg;
+        bool actual = is_valid(expr, &actual_msg);
+
+        REQUIRE(actual_msg == msg);
+        REQUIRE(actual == expected);
       }
     }
   }

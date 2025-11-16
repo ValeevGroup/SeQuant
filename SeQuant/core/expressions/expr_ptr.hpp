@@ -4,6 +4,7 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr_fwd.hpp>
 #include <SeQuant/core/expressions/traits.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 
 #include <memory>
 
@@ -57,7 +58,7 @@ class ExprPtr : public std::shared_ptr<Expr> {
 
   template <typename E, typename = std::enable_if_t<!is_expr_v<E>>>
   std::shared_ptr<E> as_shared_ptr() const {
-    assert(this->is<E>());
+    SEQUANT_ASSERT(this->is<E>());
     return std::static_pointer_cast<E>(this->as_shared_ptr());
   }
 

@@ -7,6 +7,7 @@
 
 #include <SeQuant/core/bitset.hpp>
 #include <SeQuant/core/space.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/wstring.hpp>
 
 #include <range/v3/algorithm/sort.hpp>
@@ -396,7 +397,7 @@ class IndexSpaceRegistry {
   IndexSpaceRegistry& add_unIon(
       S&& type_label, std::initializer_list<IndexSpaceOrLabel> components,
       OptionalArgs&&... args) {
-    assert(components.size() > 1);
+    SEQUANT_ASSERT(components.size() > 1);
 
     auto h_args = boost::hana::make_tuple(args...);
 
@@ -464,7 +465,7 @@ class IndexSpaceRegistry {
   IndexSpaceRegistry& add_intersection(
       S&& type_label, std::initializer_list<IndexSpaceOrLabel> components,
       OptionalArgs&&... args) {
-    assert(components.size() > 1);
+    SEQUANT_ASSERT(components.size() > 1);
 
     auto h_args = boost::hana::make_tuple(args...);
 
@@ -548,22 +549,22 @@ class IndexSpaceRegistry {
     return *this;
   }
 
-  /// @brief queries if the intersection space is registered
+  /// @brief queries if the intersection space is nonnull and registered
   /// @param space1
   /// @param space2
-  /// @return true if `space1.intersection(space2)` is registered
+  /// @return true if `space1.intersection(space2)` is nonnull and registered
   bool valid_intersection(const IndexSpace& space1,
                           const IndexSpace& space2) const {
     auto result_attr = space1.attr().intersection(space2.attr());
-    return retrieve_ptr(result_attr);
+    return result_attr != IndexSpace::Type::null && retrieve_ptr(result_attr);
   }
 
-  /// @brief queries if the intersection space is registered
+  /// @brief queries if the intersection space is nonnull and registered
   /// @param space1_key base key of a registered IndexSpace
   /// @param space2_key base key of a registered IndexSpace
   /// @return true if
   /// `valid_intersection(retrieve(space1_key),retrieve(space2_key))` is
-  /// registered
+  /// nonnull and registered
   template <basic_string_convertible S1, basic_string_convertible S2>
   bool valid_intersection(S1&& space1_key, S2&& space2_key) const {
     if (!contains(space1_key))
@@ -640,10 +641,10 @@ class IndexSpaceRegistry {
         *(this->retrieve_ptr(std::forward<S2>(space2_key))));
   }
 
-  /// @brief is a union between spaces exists and registered
+  /// @brief is a union between spaces is registered
   /// @param space1
   /// @param space2
-  /// @return true if space is constructable and registered
+  /// @return true if space is registered
   bool valid_unIon(const IndexSpace& space1, const IndexSpace& space2) const {
     // check typeattr
     if (!space1.type().includes(space2.type()) &&
@@ -671,7 +672,7 @@ class IndexSpaceRegistry {
     }
   }
 
-  /// @brief is a union between spaces exists and registered
+  /// @brief is a union between spaces is registered
   /// @param space1_key base key of a registered IndexSpace
   /// @param space2_key base key of a registered IndexSpace
   /// @return true if `valid_unIon(retrieve(space1_key),retrieve(space2_key))`
@@ -1413,7 +1414,7 @@ class IndexSpaceRegistry {
       for (auto&& [qn, t] : qn2type) {
         if (space.type() == t && space.qns() == qn) {
           [[maybe_unused]] auto [it, found] = qn2type_found.try_emplace(qn, t);
-          assert(!found);
+          SEQUANT_ASSERT(!found);
           // found all? return
           if (qn2type_found.size() == qn2type.size()) {
             return;
@@ -1424,11 +1425,7 @@ class IndexSpaceRegistry {
 
     std::string errmsg;
     for (auto&& [qn, t] : qn2type) {
-#if __cplusplus < 202002L
-      if (qn2type_found.find(qn) == qn2type_found.end()) {
-#else
       if (!qn2type_found.contains(qn)) {
-#endif
         errmsg +=
             call_context +
             ": missing { IndexSpace::Type=" + std::to_string(t.to_int32()) +

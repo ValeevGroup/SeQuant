@@ -12,10 +12,10 @@
 #include <SeQuant/core/tensor_network/slot.hpp>
 #include <SeQuant/core/tensor_network/utils.hpp>
 #include <SeQuant/core/tensor_network/vertex.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 
 #include <range/v3/range/traits.hpp>
 
-#include <cassert>
 #include <cstdlib>
 #include <iosfwd>
 #include <memory>
@@ -95,7 +95,7 @@ class TensorNetworkV2 {
         : first(std::move(vertex)), second(), index(index) {}
 
     Edge &connect_to(Vertex vertex) {
-      assert(!second.has_value());
+      SEQUANT_ASSERT(!second.has_value());
 
       if (!first.has_value()) {
         // unconnected Edge
@@ -107,20 +107,22 @@ class TensorNetworkV2 {
             (first->getOrigin() != Origin::Aux &&
              vertex.getOrigin() == Origin::Aux)) {
           throw std::logic_error(
-              "TensorNetwork::Edge::connect_to: aux slot cannot be connected "
+              "TensorNetworkV2::Edge::connect_to: aux slot cannot be connected "
               "to a non-aux slot");
         }
         // - can connect bra slot to ket slot, and vice versa
         if (first->getOrigin() == Origin::Bra &&
             vertex.getOrigin() != Origin::Ket) {
           throw std::logic_error(
-              "TensorNetwork::Edge::connect_to: bra slot can only be connected "
+              "TensorNetworkV2::Edge::connect_to: bra slot can only be "
+              "connected "
               "to a ket slot");
         }
         if (first->getOrigin() == Origin::Ket &&
             vertex.getOrigin() != Origin::Bra) {
           throw std::logic_error(
-              "TensorNetwork::Edge::connect_to: ket slot can only be connected "
+              "TensorNetworkV2::Edge::connect_to: ket slot can only be "
+              "connected "
               "to a bra slot");
         }
         second = std::move(vertex);
@@ -148,7 +150,7 @@ class TensorNetworkV2 {
         return second < other.second;
       }
 
-      assert(index && other.index);
+      SEQUANT_ASSERT(index && other.index);
       return index->space() < other.index->space();
     }
 
@@ -157,11 +159,11 @@ class TensorNetworkV2 {
     }
 
     const Vertex &first_vertex() const {
-      assert(first.has_value());
+      SEQUANT_ASSERT(first.has_value());
       return first.value();
     }
     const Vertex &second_vertex() const {
-      assert(second.has_value());
+      SEQUANT_ASSERT(second.has_value());
       return second.value();
     }
 
@@ -171,7 +173,7 @@ class TensorNetworkV2 {
     }
 
     const Index &idx() const {
-      assert(index);
+      SEQUANT_ASSERT(index);
       return *index;
     }
 
@@ -229,7 +231,7 @@ class TensorNetworkV2 {
   }
 
   /// @return const reference to the sequence of tensors
-  /// @note after invoking TensorNetwork::canonicalize() the order of
+  /// @note after invoking TensorNetworkV2::canonicalize() the order of
   /// tensors may be different from that provided as input; use
   /// tensor_input_ordinals() to obtain the input ordinals of
   /// the tensors in the result
@@ -331,14 +333,14 @@ class TensorNetworkV2 {
   /// by their Index's full label
   /// @sa Edge
   const auto &edges() const {
-    assert(have_edges_);
+    SEQUANT_ASSERT(have_edges_);
     return edges_;
   }
 
   /// @brief Returns a range of external indices, i.e. those indices that do not
   /// connect tensors
   const auto &ext_indices() const {
-    assert(have_edges_);
+    SEQUANT_ASSERT(have_edges_);
     return ext_indices_;
   }
 

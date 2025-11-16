@@ -16,6 +16,7 @@
 #include <SeQuant/core/optimize.hpp>
 #include <SeQuant/core/parse.hpp>
 #include <SeQuant/core/rational.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/string.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/spin.hpp>
@@ -207,7 +208,7 @@ std::vector<ExpressionGroup<>> parse_expression_spec(const std::string &spec) {
     if (line.starts_with("section") && line.ends_with(":")) {
       std::string name = line.substr(7, line.size() - 7 - 1);
       boost::trim(name);
-      assert(!name.empty());
+      SEQUANT_ASSERT(!name.empty());
       groups.emplace_back(std::move(name));
       continue;
     }

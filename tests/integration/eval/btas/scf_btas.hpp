@@ -16,6 +16,7 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/eval_node.hpp>
 #include <SeQuant/core/parse.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 
 #include <btas/btas.h>
 #include <memory>
@@ -108,7 +109,7 @@ class SequantEvalScfBTAS final : public SequantEvalScf {
     auto log = Logger::instance().eval.level > 0;
 
     for (auto&& [r, n] : zip(rs, nodes_)) {
-      assert(!n.empty());
+      SEQUANT_ASSERT(!n.empty());
       // update_amplitudes assumes that the residuals are in specific layout
       auto const target_indices = sorted_annot(ranges::front(n)->as_tensor());
       r = funcs[st][log](n, target_indices, data_world_, cman_)

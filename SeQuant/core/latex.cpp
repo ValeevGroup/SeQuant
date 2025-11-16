@@ -13,11 +13,9 @@ namespace sequant::detail {
 
 SQ_IMPL1(char);
 SQ_IMPL1(wchar_t);
-#if __cplusplus >= 202002L
 SQ_IMPL1(char8_t);
 SQ_IMPL1(char16_t);
 SQ_IMPL1(char32_t);
-#endif
 
 #define SQ_IMPL2(CHAR)                                      \
   template std::basic_string<CHAR> diactrics_to_latex_impl< \
@@ -26,10 +24,8 @@ SQ_IMPL1(char32_t);
 
 SQ_IMPL2(char);
 SQ_IMPL2(wchar_t);
-#if __cplusplus >= 202002L
 SQ_IMPL2(char8_t);
 SQ_IMPL2(char16_t);
 SQ_IMPL2(char32_t);
-#endif
 
 }  // namespace sequant::detail

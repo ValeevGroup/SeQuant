@@ -4,6 +4,8 @@
 
 #include "scf.hpp"
 
+#include <SeQuant/core/logger.hpp>
+
 #include <chrono>
 #include <cmath>
 #include <iomanip>

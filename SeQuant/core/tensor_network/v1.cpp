@@ -13,9 +13,8 @@
 #include <SeQuant/core/latex.hpp>
 #include <SeQuant/core/logger.hpp>
 #include <SeQuant/core/tag.hpp>
-#include <SeQuant/core/tensor_network.hpp>
+#include <SeQuant/core/tensor_network/v1.hpp>
 #include <SeQuant/core/tensor_network/vertex_painter.hpp>
-#include <SeQuant/core/tensor_network_v2.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/tuple.hpp>
 #include <SeQuant/core/wstring.hpp>
@@ -35,7 +34,7 @@
 
 namespace sequant {
 
-std::optional<std::size_t> TensorNetwork::GraphData::vertex_to_tensor_cluster(
+std::optional<std::size_t> TensorNetworkV1::GraphData::vertex_to_tensor_cluster(
     std::size_t vertex) const {
   const auto vertex_type = vertex_types.at(vertex);
   if (vertex_type == VertexType::Index || vertex_type == VertexType::SPBundle)
@@ -48,18 +47,18 @@ std::optional<std::size_t> TensorNetwork::GraphData::vertex_to_tensor_cluster(
     }
   }
 
-  assert(tensor_idx > 0);
+  SEQUANT_ASSERT(tensor_idx > 0);
   return tensor_idx - 1;
 }
 
-ExprPtr TensorNetwork::canonicalize(
+ExprPtr TensorNetworkV1::canonicalize(
     const container::vector<std::wstring> &cardinal_tensor_labels, bool fast,
     const named_indices_t *named_indices_ptr) {
   ExprPtr canon_byproduct = ex<Constant>(1);
   container::svector<Edge> idx_terminals_sorted;  // to avoid memory allocs
 
   if (Logger::instance().canonicalize) {
-    std::wcout << "TensorNetwork::canonicalize(" << (fast ? "fast" : "slow")
+    std::wcout << "TensorNetworkV1::canonicalize(" << (fast ? "fast" : "slow")
                << "): input tensors\n";
     size_t cnt = 0;
     ranges::for_each(tensors_, [&](const auto &t) {
@@ -124,7 +123,7 @@ ExprPtr TensorNetwork::canonicalize(
               });
 
   if (Logger::instance().canonicalize) {
-    std::wcout << "TensorNetwork::canonicalize(" << (fast ? "fast" : "slow")
+    std::wcout << "TensorNetworkV1::canonicalize(" << (fast ? "fast" : "slow")
                << "): tensors after initial sort\n";
     size_t cnt = 0;
     ranges::for_each(tensors_, [&](const auto &t) {
@@ -154,10 +153,10 @@ ExprPtr TensorNetwork::canonicalize(
   };
   // more efficient version of is_anonymous_index
   auto is_anonymous_index_ord = [&](const std::size_t &idx_ord) {
-    assert(idx_ord < edges_.size() + pure_proto_indices_.size());
+    SEQUANT_ASSERT(idx_ord < edges_.size() + pure_proto_indices_.size());
     if (idx_ord < edges_.size()) {
       const auto edge_it = edges_.begin() + idx_ord;
-      assert(edge_it->size() > 0);
+      SEQUANT_ASSERT(edge_it->size() > 0);
       return edge_it->size() == 2;
     } else  // pure proto indices are named
       return false;
@@ -259,7 +258,7 @@ ExprPtr TensorNetwork::canonicalize(
         const auto sz = end - beg;
         // sz == 0 should not be possible since colors contains only anonymous
         // Index colors
-        assert(sz != 0);
+        SEQUANT_ASSERT(sz != 0);
 
         // anonymous indices are regenerated using factory
         if (sz > 1) {
@@ -327,7 +326,7 @@ ExprPtr TensorNetwork::canonicalize(
         auto beg = color2idx.lower_bound(color);
         auto end = color2idx.upper_bound(color);
         const auto sz = end - beg;
-        assert(sz > 0);
+        SEQUANT_ASSERT(sz > 0);
         if (sz > 1) {
           // all tensors of same color are c-numbers or all q-numbers ...
           // inspect the first to determine the type
@@ -342,7 +341,8 @@ ExprPtr TensorNetwork::canonicalize(
             ord_orig[cnt] = it->second.first;
             // assert that all tensors of same color are all c-numbers or all
             // q-numbers
-            assert(cnumber == is_cnumber(*(tensors_.at(ord_orig[cnt]))));
+            SEQUANT_ASSERT(cnumber ==
+                           is_cnumber(*(tensors_.at(ord_orig[cnt]))));
           }
           using std::begin;
           using std::end;
@@ -411,17 +411,17 @@ ExprPtr TensorNetwork::canonicalize(
 
   if (Logger::instance().canonicalize) {
     for (const auto &idxpair : idxrepl) {
-      std::wcout << "TensorNetwork::canonicalize(" << (fast ? "fast" : "slow")
+      std::wcout << "TensorNetworkV1::canonicalize(" << (fast ? "fast" : "slow")
                  << "): replacing " << to_latex(idxpair.first) << " with "
                  << to_latex(idxpair.second) << std::endl;
     }
   }
 
-#ifndef NDEBUG
+#ifdef SEQUANT_ASSERT_ENABLED
   // assert that tensors' indices are not tagged since going to tag indices
   {
     for (const auto &tensor : tensors_) {
-      assert(ranges::none_of(braket(*tensor), [](const Index &idx) {
+      SEQUANT_ASSERT(ranges::none_of(braket(*tensor), [](const Index &idx) {
         return idx.tag().has_value();
       }));
     }
@@ -461,13 +461,13 @@ ExprPtr TensorNetwork::canonicalize(
   edges_.clear();
   ext_indices_.clear();
 
-  assert(canon_byproduct->is<Constant>());
+  SEQUANT_ASSERT(canon_byproduct->is<Constant>());
   return (canon_byproduct->as<Constant>().value() == 1) ? nullptr
                                                         : canon_byproduct;
 }
 
-TensorNetwork::GraphData TensorNetwork::make_bliss_graph(
-    const TensorNetwork::BlissGraphOptions &options) const {
+TensorNetworkV1::GraphData TensorNetworkV1::make_bliss_graph(
+    const TensorNetworkV1::BlissGraphOptions &options) const {
   auto make_texlabel = [&](const auto &t) {
     using T = std::remove_cvref_t<decltype(t)>;
     std::wstring result;
@@ -488,8 +488,8 @@ TensorNetwork::GraphData TensorNetwork::make_bliss_graph(
                                   ? this->ext_indices()
                                   : *options.named_indices;
 
-  VertexPainter<TensorNetwork> colorizer(named_indices,
-                                         options.distinct_named_indices);
+  VertexPainter<TensorNetworkV1> colorizer(named_indices,
+                                           options.distinct_named_indices);
 
   // results
   std::shared_ptr<bliss::Graph> graph;
@@ -534,14 +534,15 @@ TensorNetwork::GraphData TensorNetwork::make_bliss_graph(
     // symmetric_protoindex_bundles, then commit their data to
     // vertex_{labels,type,color} later
     if (idx.has_proto_indices()) {
-      assert(idx.symmetric_proto_indices());  // only symmetric protoindices are
-                                              // supported right now
+      SEQUANT_ASSERT(
+          idx.symmetric_proto_indices());  // only symmetric protoindices are
+                                           // supported right now
       if (symmetric_protoindex_bundles.find(idx.proto_indices()) ==
           symmetric_protoindex_bundles
               .end()) {  // new bundle? make a vertex for it
         [[maybe_unused]] auto [it, inserted] =
             symmetric_protoindex_bundles.insert(idx.proto_indices());
-        assert(inserted);
+        SEQUANT_ASSERT(inserted);
       }
     }
     index_cnt++;
@@ -561,7 +562,7 @@ TensorNetwork::GraphData TensorNetwork::make_bliss_graph(
 
   // now commit protoindex bundle metadata
   ranges::for_each(symmetric_protoindex_bundles, [&](const auto &bundle) {
-    assert(!bundle.empty());
+    SEQUANT_ASSERT(!bundle.empty());
     ++nv;  // each symmetric protoindex bundle is a vertex
     if (options.make_labels) {
       std::wstring spbundle_label = L"<";
@@ -661,7 +662,7 @@ TensorNetwork::GraphData TensorNetwork::make_bliss_graph(
     // max(bra_rank(),ket_rank())
     else {
       const auto rank = std::max(bra_rank(tref), ket_rank(tref));
-      assert(rank <= max_rank);
+      SEQUANT_ASSERT(rank <= max_rank);
       for (size_t p = 0; p != rank; ++p) {
         nv += 3;
         std::wstring pstr;
@@ -704,7 +705,7 @@ TensorNetwork::GraphData TensorNetwork::make_bliss_graph(
       }
     }
     // aux indices currently do not support any symmetry
-    assert(aux_rank(tref) <= max_rank);
+    SEQUANT_ASSERT(aux_rank(tref) <= max_rank);
     for (size_t p = 0; p != aux_rank(tref); ++p) {
       nv += 1;
       if (options.make_labels) {
@@ -728,7 +729,7 @@ TensorNetwork::GraphData TensorNetwork::make_bliss_graph(
   // - each index's degree <= 2 + # of protoindex terminals
   index_cnt = 0;
   ranges::for_each(edges_, [&](const Edge &edge) {
-    assert(edge.size() > 0);
+    SEQUANT_ASSERT(edge.size() > 0);
     [[maybe_unused]] const auto edge_connected = edge.size() == 2;
     for (int t = 0; t != edge.size(); ++t) {
       const auto &terminal = edge[t];
@@ -762,8 +763,8 @@ TensorNetwork::GraphData TensorNetwork::make_bliss_graph(
     const auto &idx = edge.idx();
     if (idx.has_proto_indices()) {
       if (idx.symmetric_proto_indices()) {
-        assert(symmetric_protoindex_bundles.find(idx.proto_indices()) !=
-               symmetric_protoindex_bundles.end());
+        SEQUANT_ASSERT(symmetric_protoindex_bundles.find(idx.proto_indices()) !=
+                       symmetric_protoindex_bundles.end());
         const auto spbundle_idx =
             symmetric_protoindex_bundles.find(idx.proto_indices()) -
             symmetric_protoindex_bundles.begin();
@@ -788,7 +789,7 @@ TensorNetwork::GraphData TensorNetwork::make_bliss_graph(
         graph->add_edge(spbundle_cnt, proto_index_vertex);
       } else {
         auto ppidx_it = pure_proto_indices_.find(proto_index);
-        assert(ppidx_it != pure_proto_indices_.end());
+        SEQUANT_ASSERT(ppidx_it != pure_proto_indices_.end());
         const auto proto_index_vertex =
             ppidx_it - pure_proto_indices_.begin() + edges_.size();
         graph->add_edge(spbundle_cnt, proto_index_vertex);
@@ -832,13 +833,13 @@ TensorNetwork::GraphData TensorNetwork::make_bliss_graph(
           .vertex_types = std::move(vertex_type)};
 }
 
-void TensorNetwork::init_edges() const {
+void TensorNetworkV1::init_edges() const {
   if (have_edges_) return;
 
   auto idx_insert = [this](const Index &idx, int tensor_idx,
                            TensorIndexSlotType slot_type, int slot_group_ord) {
     if (Logger::instance().tensor_network) {
-      std::wcout << "TensorNetwork::init_edges: idx=" << to_latex(idx)
+      std::wcout << "TensorNetworkV1::init_edges: idx=" << to_latex(idx)
                  << " attached to tensor " << std::abs(tensor_idx) << "'s "
                  << ((tensor_idx > 0) ? "bra" : "ket") << " via slot group "
                  << slot_group_ord << std::endl;
@@ -884,7 +885,7 @@ void TensorNetwork::init_edges() const {
   // may be pure protoindices)
   named_indices_t proto_indices;
   for (const auto &terminals : edges_) {
-    assert(terminals.size() != 0);
+    SEQUANT_ASSERT(terminals.size() != 0);
     // External index (== Edge only connected to a single vertex in the
     // network)
     if (terminals.size() == 1) {
@@ -897,7 +898,7 @@ void TensorNetwork::init_edges() const {
       // protoindex of a previously inserted ext index ... check to ensure no
       // accidental duplicates
       if (!inserted) {
-        assert(proto_indices.contains(terminals.idx()));
+        SEQUANT_ASSERT(proto_indices.contains(terminals.idx()));
       }
     }
 
@@ -905,11 +906,12 @@ void TensorNetwork::init_edges() const {
     for (auto &&proto_idx : terminals.idx().proto_indices()) {
       if (proto_idx.has_proto_indices())
         throw std::runtime_error(
-            "TensorNetwork does not support recursive protoindices");  // for
-                                                                       // now no
-                                                                       // recursive
-                                                                       // proto
-                                                                       // indices
+            "TensorNetworkV1 does not support recursive protoindices");  // for
+                                                                         // now
+                                                                         // no
+                                                                         // recursive
+                                                                         // proto
+                                                                         // indices
       proto_indices.insert(proto_idx);
     }
   }
@@ -953,18 +955,19 @@ void TensorNetwork::init_edges() const {
   have_edges_ = true;
 }
 
-container::svector<std::pair<long, long>> TensorNetwork::factorize() {
-  SEQUANT_ABORT("TensorNetwork::factorize is not yet implemented");
+container::svector<std::pair<long, long>> TensorNetworkV1::factorize() {
+  SEQUANT_ABORT("TensorNetworkV1::factorize is not yet implemented");
 }
 
-size_t TensorNetwork::SlotCanonicalizationMetadata::hash_value() const {
+size_t TensorNetworkV1::SlotCanonicalizationMetadata::hash_value() const {
   return graph->get_hash();
 }
 
-TensorNetwork::SlotCanonicalizationMetadata TensorNetwork::canonicalize_slots(
+TensorNetworkV1::SlotCanonicalizationMetadata
+TensorNetworkV1::canonicalize_slots(
     const std::vector<std::wstring> &cardinal_tensor_labels,
-    const TensorNetwork::named_indices_t *named_indices_ptr,
-    TensorNetwork::SlotCanonicalizationMetadata::named_index_compare_t
+    const TensorNetworkV1::named_indices_t *named_indices_ptr,
+    TensorNetworkV1::SlotCanonicalizationMetadata::named_index_compare_t
         named_index_compare) {
   if (!named_index_compare)
     named_index_compare = [](const auto &idxptr_slottype_1,
@@ -974,10 +977,10 @@ TensorNetwork::SlotCanonicalizationMetadata TensorNetwork::canonicalize_slots(
       return idxptr1->space() < idxptr2->space();
     };
 
-  TensorNetwork::SlotCanonicalizationMetadata metadata;
+  TensorNetworkV1::SlotCanonicalizationMetadata metadata;
 
   if (Logger::instance().canonicalize) {
-    std::wcout << "TensorNetwork::canonicalize_slots(): input tensors\n";
+    std::wcout << "TensorNetworkV1::canonicalize_slots(): input tensors\n";
     size_t cnt = 0;
     ranges::for_each(tensors_, [&](const auto &t) {
       std::wcout << "tensor " << cnt++ << ": " << to_latex(*t) << std::endl;
@@ -1067,7 +1070,7 @@ TensorNetwork::SlotCanonicalizationMetadata TensorNetwork::canonicalize_slots(
       const auto &idx = *git;
       if (is_named_index(idx)) {
         const auto named_indices_it = metadata.named_indices.find(idx);
-        assert(named_indices_it != metadata.named_indices.end());
+        SEQUANT_ASSERT(named_indices_it != metadata.named_indices.end());
 
         // deduce the slot type occupied by this index
         IndexSlotType slot_type;
@@ -1085,7 +1088,7 @@ TensorNetwork::SlotCanonicalizationMetadata TensorNetwork::canonicalize_slots(
             else  // edge_it->second().slot_type == TensorIndexSlotType::Ket
               slot_type = IndexSlotType::TensorKet;
           } else {  // if
-            assert(edge_it->size() == 2);
+            SEQUANT_ASSERT(edge_it->size() == 2);
             slot_type = IndexSlotType::SPBundle;
           }
         } else
@@ -1098,7 +1101,7 @@ TensorNetwork::SlotCanonicalizationMetadata TensorNetwork::canonicalize_slots(
           bool inserted;
           std::tie(it, inserted) = idx2cord.insert(std::make_pair(
               idxptr_slottype, cord_set_t(cord_set_t::key_compare{})));
-          assert(inserted);
+          SEQUANT_ASSERT(inserted);
         }
         it->second.emplace(idx_ord, cl[idx_ord], named_indices_it);
       }
@@ -1137,7 +1140,7 @@ TensorNetwork::SlotCanonicalizationMetadata TensorNetwork::canonicalize_slots(
         idx_inord;  // Index -> input ordinal; helps with computing the ordinals
                     // during the traversal
     for (auto &_t : tensors_) {
-      assert(std::dynamic_pointer_cast<Tensor>(_t));
+      SEQUANT_ASSERT(std::dynamic_pointer_cast<Tensor>(_t));
       auto t = std::static_pointer_cast<Tensor>(_t);
 
       // returns an iterator to {Index,inord} pair
@@ -1147,7 +1150,7 @@ TensorNetwork::SlotCanonicalizationMetadata TensorNetwork::canonicalize_slots(
           const auto inord = idx_inord.size();
           bool inserted;
           std::tie(it, inserted) = idx_inord.emplace(idx, inord);
-          assert(inserted);
+          SEQUANT_ASSERT(inserted);
         }
         return it;
       };
@@ -1180,7 +1183,7 @@ TensorNetwork::SlotCanonicalizationMetadata TensorNetwork::canonicalize_slots(
           // ordinal, to find it need the ordinal of the corresponding vertex in
           // the input graph
           auto input_vertex_it = this->edges_.find(idx);
-          assert(input_vertex_it != this->edges_.end());
+          SEQUANT_ASSERT(input_vertex_it != this->edges_.end());
           const auto inord_vertex = input_vertex_it - this->edges_.begin();
           const auto canord_vertex = cl[inord_vertex];
 

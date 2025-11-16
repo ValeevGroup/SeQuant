@@ -6,6 +6,7 @@
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/logger.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/domain/eval/eval_fwd.hpp>
 
 #include <TiledArray/einsum/tiledarray.h>
@@ -192,7 +193,7 @@ auto particle_antisymmetrize_ta(TA::DistArray<Args...> const& arr,
                                 size_t bra_rank) {
   using ranges::views::iota;
   size_t const rank = arr.trange().rank();
-  assert(bra_rank <= rank);
+  SEQUANT_ASSERT(bra_rank <= rank);
   size_t const ket_rank = rank - bra_rank;
 
   if (bra_rank <= 1 && ket_rank <= 1) {
@@ -299,7 +300,7 @@ auto particle_antisymmetrize_btas(btas::Tensor<Args...> const& arr,
   using ranges::views::concat;
   using ranges::views::iota;
   size_t const rank = arr.rank();
-  assert(bra_rank <= rank);
+  SEQUANT_ASSERT(bra_rank <= rank);
   size_t const ket_rank = rank - bra_rank;
 
   perm_t bra_perm = iota(size_t{0}, bra_rank) | ranges::to<perm_t>;
@@ -339,19 +340,19 @@ auto particle_antisymmetrize_btas(btas::Tensor<Args...> const& arr,
   return result;
 }
 
-/// \brief This function is used to implement ResultPtr::biorthogonal_cleanup
-/// for TA::DistArray
+/// \brief This function is used to implement
+/// ResultPtr::biorthogonal_nns_project for TA::DistArray
 ///
 /// \param arr The array to be "cleaned up"
 /// \param bra_rank The rank of the bra indices
 ///
 /// \return The cleaned TA::DistArray.
 template <typename... Args>
-auto biorthogonal_cleanup_ta(TA::DistArray<Args...> const& arr,
-                             size_t bra_rank) {
+auto biorthogonal_nns_project_ta(TA::DistArray<Args...> const& arr,
+                                 size_t bra_rank) {
   using ranges::views::iota;
   size_t const rank = arr.trange().rank();
-  assert(bra_rank <= rank);
+  SEQUANT_ASSERT(bra_rank <= rank);
   size_t const ket_rank = rank - bra_rank;
 
   if (rank <= 4) {
@@ -417,20 +418,20 @@ auto biorthogonal_cleanup_ta(TA::DistArray<Args...> const& arr,
   return result;
 }
 
-/// \brief This function is used to implement ResultPtr::biorthogonal_cleanup
-/// for btas::Tensor
+/// \brief This function is used to implement
+/// ResultPtr::biorthogonal_nns_project for btas::Tensor
 ///
 /// \param arr The array to be "cleaned up"
 /// \param bra_rank The rank of the bra indices
 ///
 /// \return The cleaned btas::Tensor.
 template <typename... Args>
-auto biorthogonal_cleanup_btas(btas::Tensor<Args...> const& arr,
-                               size_t bra_rank) {
+auto biorthogonal_nns_project_btas(btas::Tensor<Args...> const& arr,
+                                   size_t bra_rank) {
   using ranges::views::concat;
   using ranges::views::iota;
   size_t const rank = arr.rank();
-  assert(bra_rank <= rank);
+  SEQUANT_ASSERT(bra_rank <= rank);
   size_t const ket_rank = rank - bra_rank;
 
   if (rank <= 4) {
@@ -580,7 +581,7 @@ class Result {
   ///
   template <typename T>
   [[nodiscard]] T const& as() const {
-    assert(this->is<std::decay_t<T>>());
+    SEQUANT_ASSERT(this->is<std::decay_t<T>>());
     return static_cast<T const&>(*this);
   }
 
@@ -640,7 +641,7 @@ class Result {
   /// The implementation is for arbitrary ranks.
   /// @param bra_rank the particle rank of the residual tensor (i.e.
   ///                 its order halved)
-  [[nodiscard]] virtual ResultPtr biorthogonal_cleanup(
+  [[nodiscard]] virtual ResultPtr biorthogonal_nns_project(
       size_t bra_rank) const = 0;
 
   [[nodiscard]] bool has_value() const noexcept;
@@ -652,7 +653,7 @@ class Result {
   ///
   template <typename T>
   [[nodiscard]] T& get() {
-    assert(has_value());
+    SEQUANT_ASSERT(has_value());
     return *std::any_cast<T>(&value_);
   }
 
@@ -662,7 +663,8 @@ class Result {
   ///
   template <typename T>
   [[nodiscard]] T const& get() const {
-    return const_cast<Result&>(*this).get<T>();
+    SEQUANT_ASSERT(has_value());
+    return *std::any_cast<const T>(&value_);
   }
 
   /// @return the size of the object in bytes
@@ -739,7 +741,7 @@ class ResultScalar final : public Result {
   }
 
   void add_inplace(Result const& other) override {
-    assert(other.is<ResultScalar<T>>());
+    SEQUANT_ASSERT(other.is<ResultScalar<T>>());
     log_constant(value(), " += ", other.get<T>(), "\n");
     auto& val = get<T>();
     val += other.get<T>();
@@ -753,9 +755,9 @@ class ResultScalar final : public Result {
     throw unimplemented_method("antisymmetrize");
   }
 
-  [[nodiscard]] ResultPtr biorthogonal_cleanup(
+  [[nodiscard]] ResultPtr biorthogonal_nns_project(
       [[maybe_unused]] size_t bra_rank) const override {
-    throw unimplemented_method("biorthogonal_cleanup");
+    throw unimplemented_method("biorthogonal_nns_project");
   }
 
   [[nodiscard]] ResultPtr mult_by_phase(std::int8_t factor) const override {
@@ -795,7 +797,7 @@ class ResultTensorTA final : public Result {
   [[nodiscard]] ResultPtr sum(
       Result const& other,
       std::array<std::any, 3> const& annot) const override {
-    assert(other.is<this_type>());
+    SEQUANT_ASSERT(other.is<this_type>());
     auto const a = annot_wrap{annot};
 
     log_ta(a.lannot, " + ", a.rannot, " = ", a.this_annot, "\n");
@@ -826,7 +828,7 @@ class ResultTensorTA final : public Result {
 
     if (a.this_annot.empty()) {
       // DOT product
-      assert(other.is<this_type>());
+      SEQUANT_ASSERT(other.is<this_type>());
       numeric_type d =
           TA::dot(get<ArrayT>()(a.lannot), other.get<ArrayT>()(a.rannot));
       ArrayT::wait_for_lazy_cleanup(get<ArrayT>().world());
@@ -876,12 +878,12 @@ class ResultTensorTA final : public Result {
   }
 
   void add_inplace(Result const& other) override {
-    assert(other.is<this_type>());
+    SEQUANT_ASSERT(other.is<this_type>());
 
     auto& t = get<ArrayT>();
     auto const& o = other.get<ArrayT>();
 
-    assert(t.trange() == o.trange());
+    SEQUANT_ASSERT(t.trange() == o.trange());
     auto ann = TA::detail::dummy_annotation(t.trange().rank());
 
     log_ta(ann, " += ", ann, "\n");
@@ -899,9 +901,10 @@ class ResultTensorTA final : public Result {
         particle_antisymmetrize_ta(get<ArrayT>(), bra_rank));
   }
 
-  [[nodiscard]] ResultPtr biorthogonal_cleanup(size_t bra_rank) const override {
+  [[nodiscard]] ResultPtr biorthogonal_nns_project(
+      size_t bra_rank) const override {
     return eval_result<this_type>(
-        biorthogonal_cleanup_ta(get<ArrayT>(), bra_rank));
+        biorthogonal_nns_project_ta(get<ArrayT>(), bra_rank));
   }
 
  private:
@@ -942,7 +945,7 @@ class ResultTensorOfTensorTA final : public Result {
   [[nodiscard]] ResultPtr sum(
       Result const& other,
       std::array<std::any, 3> const& annot) const override {
-    assert(other.is<this_type>());
+    SEQUANT_ASSERT(other.is<this_type>());
     auto const a = annot_wrap{annot};
 
     log_ta(a.lannot, " + ", a.rannot, " = ", a.this_annot, "\n");
@@ -971,7 +974,7 @@ class ResultTensorOfTensorTA final : public Result {
       return eval_result<this_type>(std::move(result));
     } else if (a.this_annot.empty()) {
       // DOT product
-      assert(other.is<this_type>());
+      SEQUANT_ASSERT(other.is<this_type>());
       numeric_type d =
           TA::dot(get<ArrayT>()(a.lannot), other.get<ArrayT>()(a.rannot));
       ArrayT::wait_for_lazy_cleanup(get<ArrayT>().world());
@@ -1028,12 +1031,12 @@ class ResultTensorOfTensorTA final : public Result {
   }
 
   void add_inplace(Result const& other) override {
-    assert(other.is<this_type>());
+    SEQUANT_ASSERT(other.is<this_type>());
 
     auto& t = get<ArrayT>();
     auto const& o = other.get<ArrayT>();
 
-    assert(t.trange() == o.trange());
+    SEQUANT_ASSERT(t.trange() == o.trange());
     auto ann = TA::detail::dummy_annotation(t.trange().rank());
 
     log_ta(ann, " += ", ann, "\n");
@@ -1052,9 +1055,9 @@ class ResultTensorOfTensorTA final : public Result {
     return nullptr;
   }
 
-  [[nodiscard]] ResultPtr biorthogonal_cleanup(
+  [[nodiscard]] ResultPtr biorthogonal_nns_project(
       [[maybe_unused]] size_t bra_rank) const override {
-    // or? throw unimplemented_method("biorthogonal_cleanup");
+    // or? throw unimplemented_method("biorthogonal_nns_project");
     // not implemented yet, I think I need it for CSV
     return nullptr;
   }
@@ -1092,7 +1095,7 @@ class ResultTensorBTAS final : public Result {
   [[nodiscard]] ResultPtr sum(
       Result const& other,
       std::array<std::any, 3> const& annot) const override {
-    assert(other.is<ResultTensorBTAS<T>>());
+    SEQUANT_ASSERT(other.is<ResultTensorBTAS<T>>());
     auto const a = annot_wrap{annot};
 
     T lres, rres;
@@ -1113,7 +1116,7 @@ class ResultTensorBTAS final : public Result {
       return eval_result<ResultTensorBTAS<T>>(std::move(result));
     }
 
-    assert(other.is<ResultTensorBTAS<T>>());
+    SEQUANT_ASSERT(other.is<ResultTensorBTAS<T>>());
 
     if (a.this_annot.empty()) {
       T rres;
@@ -1148,7 +1151,7 @@ class ResultTensorBTAS final : public Result {
   void add_inplace(Result const& other) override {
     auto& t = get<T>();
     auto const& o = other.get<T>();
-    assert(t.range() == o.range());
+    SEQUANT_ASSERT(t.range() == o.range());
     t += o;
   }
 
@@ -1161,10 +1164,10 @@ class ResultTensorBTAS final : public Result {
         particle_antisymmetrize_btas(get<T>(), bra_rank));
   }
 
-  [[nodiscard]] ResultPtr biorthogonal_cleanup(
+  [[nodiscard]] ResultPtr biorthogonal_nns_project(
       [[maybe_unused]] size_t bra_rank) const override {
     return eval_result<ResultTensorBTAS<T>>(
-        biorthogonal_cleanup_btas(get<T>(), bra_rank));
+        biorthogonal_nns_project_btas(get<T>(), bra_rank));
   }
 
  private:

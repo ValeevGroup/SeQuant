@@ -4,6 +4,7 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/export/export_expr.hpp>
 #include <SeQuant/core/export/export_node.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 
 #include <optional>
 #include <string>
@@ -33,7 +34,7 @@ class ExpressionGroup {
       : ExpressionGroup(std::move(expressions), {}) {}
   ExpressionGroup(container_type expressions, std::optional<std::string> name)
       : m_expressions(std::move(expressions)), m_name(std::move(name)) {
-    assert(!m_name.has_value() || !m_name.value().empty());
+    SEQUANT_ASSERT(!m_name.has_value() || !m_name.value().empty());
   }
 
   template <typename Range>

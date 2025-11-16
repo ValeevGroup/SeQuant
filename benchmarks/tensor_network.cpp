@@ -5,11 +5,11 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
-#include <SeQuant/core/tensor_network_v3.hpp>
+#include <SeQuant/core/tensor_network.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 
 #include <range/v3/all.hpp>
 
-#include <cassert>
 #include <format>
 #include <random>
 
@@ -62,7 +62,7 @@ ProductPtr create_random_network(const std::size_t testcase,
       }) |
       ranges::to_vector;
 
-  assert(utensors.size() == static_cast<std::size_t>(n));
+  SEQUANT_ASSERT(utensors.size() == static_cast<std::size_t>(n));
 
   auto dtensors =
       ket_indices | ranges::views::chunk(num_indices) |
@@ -70,7 +70,7 @@ ProductPtr create_random_network(const std::size_t testcase,
         return ex<Tensor>(L"d", bra{}, ket(idxs), Symmetry::Nonsymm);
       }) |
       ranges::to_vector;
-  assert(dtensors.size() == 1);
+  SEQUANT_ASSERT(dtensors.size() == 1);
 
   ExprPtr expr;
   for (int g = 0; g < n; ++g) {
@@ -99,7 +99,7 @@ static void random_tensor_network(benchmark::State& state) {
 
   for (auto _ : state) {
     // Need to clone in order to avoid mutating original expression
-    TensorNetworkV3 tn(prod->clone()->as<Product>().factors());
+    TensorNetwork tn(prod->clone()->as<Product>().factors());
 
     ExprPtr expr =
         tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels());

@@ -10,22 +10,14 @@
 #include <utility>
 
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/logger.hpp>
 #include <SeQuant/core/math.hpp>
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/ranges.hpp>
 #include <SeQuant/core/runtime.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 
 namespace sequant {
-
-/// @brief extracts external indices of an expanded expression
-
-/// External indices appear only once in an expression
-/// @param expr an expression
-/// @return external indices
-/// @pre @p expr has been expanded (i.e. cannot contain a Sum as a
-/// subexpression)
-/// @throw std::invalid_argument if any of @p expr subexpressions is a Sum
-inline container::set<Index> extract_external_indices(const Expr &expr);
 
 /// Applies Wick's theorem to a sequence of normal-ordered operators.
 ///
@@ -51,18 +43,31 @@ class WickTheorem {
   WickTheorem &operator=(const WickTheorem &) = default;
 
  public:
+  /// @param input normal operator sequence
+  /// @note assuming that all indices are external (not summed)
   explicit WickTheorem(
       const std::shared_ptr<NormalOperatorSequence<S>> &input) {
     init_input(input);
-    assert(input_->size() <= max_input_size);
+    SEQUANT_ASSERT(input_->size() <= max_input_size);
     if constexpr (statistics == Statistics::BoseEinstein) {
-      assert(input_->empty() || input_->vacuum() == Vacuum::Physical);
+      SEQUANT_ASSERT(input_->empty() || input_->vacuum() == Vacuum::Physical);
     }
+
+    // default computation may treat repeating indices as dummy
+    // override
+    extract_indices(*input, /* force_external = */ true);
   }
+
+  /// @param input normal operator sequence
+  /// @note assuming that all indices are external (not summed)
   explicit WickTheorem(NormalOperatorSequence<S> input)
       : WickTheorem(
             std::make_shared<NormalOperatorSequence<S>>(std::move(input))) {}
 
+  /// @param expr_input input expression
+  /// @note if \p expr_input is a normal operator sequence, assume that all
+  /// indices are external (not summed), else duplicate indices are assumed
+  /// dummy
   explicit WickTheorem(ExprPtr expr_input) {
     if (expr_input->is<NormalOperatorSequence<S>>()) {
       *this = WickTheorem(
@@ -71,11 +76,13 @@ class WickTheorem {
       expr_input_ = std::move(expr_input);
   }
 
+  /// @param ops operator sequence
+  /// @note assuming that all indices are external (not summed)
   explicit WickTheorem(const std::initializer_list<Op<S>> &ops)
       : WickTheorem(NormalOperatorSequence<S>{ops}) {}
 
-  /// constructs WickTheorem from @c other with expression input set to @c
-  /// expr_input
+  /// constructs WickTheorem from @p other with expression input set to
+  /// @p expr_input
   WickTheorem(ExprPtr expr_input, const WickTheorem &other)
       : WickTheorem(other) {
     input_ = {};  // reset input_ so that it is deduced from expr_input_
@@ -139,10 +146,7 @@ class WickTheorem {
   /// WickTheorem::compute had already been invoked
   template <typename IndexContainer>
   WickTheorem &set_external_indices(IndexContainer &&external_indices) {
-    if (external_indices_.has_value())
-      throw std::logic_error(
-          "WickTheorem::set_external_indices invoked but external indices have "
-          "already been set/computed");
+    external_indices_.reset();
 
     if constexpr (std::is_convertible_v<
                       IndexContainer,
@@ -162,6 +166,18 @@ class WickTheorem {
             }
           });
     }
+
+    user_defined_external_indices_ = true;
+    return *this;
+  }
+
+  /// Resets the memoized (external, covariant) indices; will auto-deduce next
+  /// time reduce is called
+  const WickTheorem &reset_indices() const {
+    all_indices_.reset();
+    external_indices_.reset();
+    noncovariant_indices_.reset();
+    user_defined_external_indices_ = false;
     return *this;
   }
 
@@ -269,7 +285,7 @@ class WickTheorem {
     auto current_nops = size(nop_partition_idx_);
     for (auto &&partition : nop_partitions) {
       for (auto &&nop_ord : partition) {
-        assert(nop_ord >= 0);
+        SEQUANT_ASSERT(nop_ord >= 0);
         if (static_cast<std::size_t>(nop_ord) >= current_nops) {
           current_nops = upsize_topological_partitions(
               nop_ord + 1, TopologicalPartitionType::NormalOperator);
@@ -279,7 +295,7 @@ class WickTheorem {
       ++partition_cnt;
     }
     nop_npartitions_ = size(nop_partitions);
-    assert(partition_cnt == nop_npartitions_);
+    SEQUANT_ASSERT(partition_cnt == nop_npartitions_);
     return *this;
   }
 
@@ -309,9 +325,9 @@ class WickTheorem {
   auto &set_op_partitions(IndexListContainer &&op_partitions) const {
     using std::size;
     // assert that we don't have empty partitions due to broken logic upstream
-    assert(ranges::any_of(op_partitions, [](auto &&partition) {
-             return size(partition) == 0;
-           }) == false);
+    SEQUANT_ASSERT(ranges::any_of(op_partitions, [](auto &&partition) {
+                     return size(partition) == 0;
+                   }) == false);
 
     // every op needs to be in a partition AND partitions need to be sorted
     // if op_partitions only specifies nontrivial partitions, may need to add
@@ -326,9 +342,10 @@ class WickTheorem {
       });
       partition_idx++;
     });
-    assert(ranges::is_sorted(op_partitions_, [](const auto &x, const auto &y) {
-      return *(x.begin()) < *(y.begin());
-    }));
+    SEQUANT_ASSERT(
+        ranges::is_sorted(op_partitions_, [](const auto &x, const auto &y) {
+          return *(x.begin()) < *(y.begin());
+        }));
 
     bool done = false;
     while (!done) {
@@ -337,9 +354,9 @@ class WickTheorem {
       for (auto &&[partition_idx, partition] :
            ranges::views::enumerate(op_partitions_)) {
         for (auto &&op_ord : partition) {
-          assert(op_ord >= 0);
-          assert(op_ord < input_->opsize());
-          assert(op_partition_idx_[op_ord] == 0);
+          SEQUANT_ASSERT(op_ord >= 0);
+          SEQUANT_ASSERT(op_ord < input_->opsize());
+          SEQUANT_ASSERT(op_partition_idx_[op_ord] == 0);
           op_partition_idx_[op_ord] = partition_idx + 1;
         }
       }
@@ -447,14 +464,20 @@ class WickTheorem {
   mutable ExprPtr expr_input_;
 
   mutable std::shared_ptr<NormalOperatorSequence<S>> input_;
+  mutable ExprPtr prefactor_;
   bool full_contractions_ = true;
   bool use_topology_ = true;
   mutable Stats stats_;
 
-  mutable std::optional<container::set<Index>>
-      external_indices_;  // lack of external indices != all indices are
-                          // internal
-
+  mutable std::optional<container::set<Index>> all_indices_;
+  mutable bool user_defined_external_indices_ = false;
+  mutable std::optional<container::set<Index>> external_indices_;
+  // covariant indices (= dummy indices that appear twice in braket slots) can
+  // be "rotated" arbitrarily in reduce ... these are the ones that can't
+  // n.b. this list is computed using input expression and
+  // used to compute list in reduce because kronecker deltas propagate
+  // noncovariance
+  mutable std::optional<container::set<Index>> noncovariant_indices_;
   container::svector<std::pair<Index, Index>>
       input_partner_indices_;  //!< list of {cre,ann} pairs of Index objects in
                                //!< input_ whose corresponding Op<S> objects
@@ -492,6 +515,19 @@ class WickTheorem {
   mutable container::map<Op<S>, std::size_t> op_to_input_ordinal_;
   friend class NontensorWickState;  // NontensorWickState needs to access
                                     // members of this
+
+  /// @brief extracts and memoizes all, external (if not already set) and
+  /// covariant indices
+
+  /// External indices appear only once in an expression
+  /// @param expr an expression
+  /// @param force_external if true, will treat all indices (even repeating) as
+  /// external
+  /// @pre @p expr has been expanded (i.e. cannot contain a Sum as a
+  /// subexpression)
+  /// @note protoindices of external indices are external
+  /// @throw std::invalid_argument if any of @p expr subexpressions is a Sum
+  void extract_indices(const Expr &expr, bool force_external = false) const;
 
   /// upsizes `{nop,index}_topological_partition_`, filling new entries with
   /// zeroes noop if current size > new_size
@@ -580,9 +616,8 @@ class WickTheorem {
           "WickTheorem::compute: spinfree=true supported only for physical "
           "vacuum and for Fermi facuum");
 
-    // deduce external indices, if needed
-    if (!external_indices_) {
-      external_indices_ = extract_external_indices(*input_);
+    if (!all_indices_) {
+      extract_indices(*input_);
     }
 
     // process cached nop_connections_input_, if needed
@@ -608,23 +643,23 @@ class WickTheorem {
     /// matrix
     template <typename T>
     static auto ntri(T n) {
-      assert(n > 0);
+      SEQUANT_ASSERT(n > 0);
       return n * (n - 1) / 2;
     }
 
     template <typename T>
     static auto lowtri_idx(T i, T j) {
-      assert(i > j);
+      SEQUANT_ASSERT(i > j);
       return i * (i - 1) / 2 + j;
     }
 
     template <typename T, typename U>
     static auto uptri_idx(T i, T j, U n) {
-      assert(i >= 0);
-      assert(j >= 0);
-      assert(i < static_cast<T>(n));
-      assert(j < static_cast<T>(n));
-      assert(i < j);
+      SEQUANT_ASSERT(i >= 0);
+      SEQUANT_ASSERT(j >= 0);
+      SEQUANT_ASSERT(i < static_cast<T>(n));
+      SEQUANT_ASSERT(j < static_cast<T>(n));
+      SEQUANT_ASSERT(i < j);
       return i * (2 * n - i - 1) / 2 + j - i - 1;
     }
 
@@ -664,6 +699,7 @@ class WickTheorem {
     std::size_t nopseq_size;           //!< current size of nopseq
     Context ctx;                       //!< current context
     Product sp;                        //!< current prefactor
+    std::size_t sp_initial_size = 0;   //!< size of prefactor at the start
     container::svector<std::pair<Op<S>, Op<S>>>
         contractions;  //!< current list of indices of contracted {qpann,qpcre}
                        //!< ops
@@ -788,9 +824,9 @@ class WickTheorem {
                          });
         // assert that we don't have empty partitions due to broken logic
         // upstream
-        assert(ranges::any_of(nop_partitions, [](auto &&partition) {
-                 return partition.empty();
-               }) == false);
+        SEQUANT_ASSERT(ranges::any_of(nop_partitions, [](auto &&partition) {
+                         return partition.empty();
+                       }) == false);
       }
 
       // op partitions
@@ -813,14 +849,14 @@ class WickTheorem {
     inline bool connect(const container::svector<std::bitset<max_input_size>>
                             &target_nop_connections,
                         const Cursor &op1_cursor, const Cursor &op2_cursor) {
-      assert(op1_cursor.ordinal() < op2_cursor.ordinal());
+      SEQUANT_ASSERT(op1_cursor.ordinal() < op2_cursor.ordinal());
 
       // add contraction to the grand list
       auto register_contraction = [&]() {
-        assert(ranges::contains(this->contractions,
-                                std::make_pair(*(op1_cursor.elem_iter()),
-                                               *(op2_cursor.elem_iter()))) ==
-               false);
+        SEQUANT_ASSERT(ranges::contains(
+                           this->contractions,
+                           std::make_pair(*(op1_cursor.elem_iter()),
+                                          *(op2_cursor.elem_iter()))) == false);
         this->contractions.emplace_back(*op1_cursor.elem_iter(),
                                         *op2_cursor.elem_iter());
       };
@@ -833,10 +869,10 @@ class WickTheorem {
           auto partition_idx = wick.nop_partition_idx_[nop_idx];
           if (nconnections == 0 && partition_idx > 0) {
             --partition_idx;  // to 0-based
-            assert(nop_partitions.at(partition_idx).size() > 0);
+            SEQUANT_ASSERT(nop_partitions.at(partition_idx).size() > 0);
             [[maybe_unused]] auto removed =
                 nop_partitions[partition_idx].erase(nop_idx);
-            assert(removed);
+            SEQUANT_ASSERT(removed);
           }
         }
         ++nop_nconnections[nop_idx];
@@ -844,24 +880,24 @@ class WickTheorem {
 
       auto update_op_metadata = [this](const Op<S> &op1, const Op<S> &op2) {
         if (!this->wick.op_partition_idx_.empty()) {
-          assert(this->wick.op_to_input_ordinal_.contains(op1));
+          SEQUANT_ASSERT(this->wick.op_to_input_ordinal_.contains(op1));
           const auto op1_ord = this->wick.op_to_input_ordinal_[op1];
           auto op1_partition_idx = wick.op_partition_idx_[op1_ord];
-          assert(op1_partition_idx > 0);
+          SEQUANT_ASSERT(op1_partition_idx > 0);
           --op1_partition_idx;  // now partition index is 0-based
 
-          assert(this->wick.op_to_input_ordinal_.contains(op2));
+          SEQUANT_ASSERT(this->wick.op_to_input_ordinal_.contains(op2));
           const auto op2_ord = this->wick.op_to_input_ordinal_[op2];
           auto op2_partition_idx = wick.op_partition_idx_[op2_ord];
-          assert(op2_partition_idx > 0);
+          SEQUANT_ASSERT(op2_partition_idx > 0);
           --op2_partition_idx;  // now partition index is 0-based
 
           // op ordinals and partition indices are in increasing order
-          assert(op1_ord < op2_ord);
-          assert(op1_partition_idx < op2_partition_idx);
+          SEQUANT_ASSERT(op1_ord < op2_ord);
+          SEQUANT_ASSERT(op1_partition_idx < op2_partition_idx);
 
-          assert(op_partition_cdeg_matrix.size() >
-                 uptri_op(op1_partition_idx, op2_partition_idx));
+          SEQUANT_ASSERT(op_partition_cdeg_matrix.size() >
+                         uptri_op(op1_partition_idx, op2_partition_idx));
           op_partition_cdeg_matrix[uptri_op(op1_partition_idx,
                                             op2_partition_idx)] += 1;
           ++op_partition_ncontractions[op1_partition_idx];
@@ -934,19 +970,19 @@ class WickTheorem {
     inline void disconnect(const container::svector<std::bitset<max_input_size>>
                                &target_nop_connections,
                            const Cursor &op1_cursor, const Cursor &op2_cursor) {
-      assert(op1_cursor.ordinal() < op2_cursor.ordinal());
+      SEQUANT_ASSERT(op1_cursor.ordinal() < op2_cursor.ordinal());
 
       auto unregister_contraction = [&]() {
         // remove contraction from the grand list
         const auto found_contraction_it = ranges::find(
             this->contractions, std::make_pair(*(op1_cursor.elem_iter()),
                                                *(op2_cursor.elem_iter())));
-        assert(found_contraction_it != ranges::end(this->contractions));
+        SEQUANT_ASSERT(found_contraction_it != ranges::end(this->contractions));
         this->contractions.erase(found_contraction_it);
       };
 
       auto update_nop_metadata = [this](size_t nop_idx) {
-        assert(nop_nconnections.at(nop_idx) > 0);
+        SEQUANT_ASSERT(nop_nconnections.at(nop_idx) > 0);
         const auto nconnections = --nop_nconnections[nop_idx];
         if (!nop_partitions.empty()) {
           auto partition_idx = wick.nop_partition_idx_[nop_idx];
@@ -954,37 +990,37 @@ class WickTheorem {
             --partition_idx;  // to 0-based
             [[maybe_unused]] auto inserted =
                 nop_partitions.at(partition_idx).insert(nop_idx);
-            assert(inserted.second);
+            SEQUANT_ASSERT(inserted.second);
           }
         }
       };
 
       auto update_op_metadata = [this](const Op<S> &op1, const Op<S> &op2) {
         if (!this->wick.op_partition_idx_.empty()) {
-          assert(this->wick.op_to_input_ordinal_.contains(op1));
+          SEQUANT_ASSERT(this->wick.op_to_input_ordinal_.contains(op1));
           const auto op1_ord = this->wick.op_to_input_ordinal_[op1];
           auto op1_partition_idx = wick.op_partition_idx_[op1_ord];
-          assert(op1_partition_idx > 0);
+          SEQUANT_ASSERT(op1_partition_idx > 0);
           --op1_partition_idx;  // now partition index is 0-based
 
-          assert(this->wick.op_to_input_ordinal_.contains(op2));
+          SEQUANT_ASSERT(this->wick.op_to_input_ordinal_.contains(op2));
           const auto op2_ord = this->wick.op_to_input_ordinal_[op2];
           auto op2_partition_idx = wick.op_partition_idx_[op2_ord];
-          assert(op2_partition_idx > 0);
+          SEQUANT_ASSERT(op2_partition_idx > 0);
           --op2_partition_idx;  // now partition index is 0-based
 
           // op ordinals and partition indices are in increasing order
-          assert(op1_ord < op2_ord);
-          assert(op1_partition_idx < op2_partition_idx);
+          SEQUANT_ASSERT(op1_ord < op2_ord);
+          SEQUANT_ASSERT(op1_partition_idx < op2_partition_idx);
 
-          assert(op_partition_cdeg_matrix.size() >
-                 uptri_op(op1_partition_idx, op2_partition_idx));
-          assert(op_partition_cdeg_matrix[uptri_op(op1_partition_idx,
-                                                   op2_partition_idx)] > 0);
+          SEQUANT_ASSERT(op_partition_cdeg_matrix.size() >
+                         uptri_op(op1_partition_idx, op2_partition_idx));
+          SEQUANT_ASSERT(op_partition_cdeg_matrix[uptri_op(
+                             op1_partition_idx, op2_partition_idx)] > 0);
           op_partition_cdeg_matrix[uptri_op(op1_partition_idx,
                                             op2_partition_idx)] -= 1;
-          assert(op_partition_ncontractions[op1_partition_idx] > 0);
-          assert(op_partition_ncontractions[op2_partition_idx] > 0);
+          SEQUANT_ASSERT(op_partition_ncontractions[op1_partition_idx] > 0);
+          SEQUANT_ASSERT(op_partition_ncontractions[op2_partition_idx] > 0);
           --op_partition_ncontractions[op1_partition_idx];
           --op_partition_ncontractions[op2_partition_idx];
         }
@@ -1000,10 +1036,10 @@ class WickTheorem {
       if (target_nop_connections.empty())  // if no constraints, we don't keep
                                            // track of individual connections
         return;
-      assert(nop_connections[nop1_idx].test(nop2_idx));
+      SEQUANT_ASSERT(nop_connections[nop1_idx].test(nop2_idx));
 
       auto &adjval = nop_adjacency_matrix[uptri_nop(nop1_idx, nop2_idx)];
-      assert(adjval > 0);
+      SEQUANT_ASSERT(adjval > 0);
       adjval -= 1;
       if (adjval == 0) {
         nop_connections[nop1_idx].reset(nop2_idx);
@@ -1016,12 +1052,16 @@ class WickTheorem {
   /// counting Ops
   /// @return the result
   ExprPtr compute_nontensor_wick(const bool count_only) const {
-    std::vector<std::pair<Product, std::shared_ptr<NormalOperator<S>>>>
-        result;      //!< current value of the result
-    std::mutex mtx;  // used in critical sections updating the result
+    HashingAccumulator result;  //!< current value of the result
+    std::mutex mtx;             // used in critical sections updating the result
     auto result_plus_mutex = std::make_pair(&result, &mtx);
     NontensorWickState state(*this, *input_);
     state.count_only = count_only;
+    if (prefactor_) {
+      state.sp = this->prefactor_.template as<Product>().deep_copy();
+      state.sp_initial_size = state.sp.size();
+    }
+
     // TODO extract index->particle maps
 
     if (Logger::instance().wick_contract) {
@@ -1045,8 +1085,18 @@ class WickTheorem {
         ++state.count;
       } else {
         auto [phase, normop] = normalize(*input_, input_partner_indices_);
-        result_plus_mutex.first->push_back(
-            std::make_pair(Product(phase, {}), std::move(normop)));
+        ExprPtr summand = normop;
+        if (phase != 1) summand *= ex<Constant>(phase);
+        if (prefactor_) {
+          summand *= prefactor_;
+          auto bp = summand->canonicalize();
+          summand *= bp;
+        }
+        if (!summand.template is<Product>()) {
+          summand = ex<Product>(summand);
+        }
+
+        result_plus_mutex.first->append(std::move(summand));
       }
     }
 
@@ -1054,34 +1104,10 @@ class WickTheorem {
     // if result.size() == 0, return null ptr
     ExprPtr result_expr;
     if (count_only) {  // count only? return the total number as a Constant
-      assert(result.empty());
+      SEQUANT_ASSERT(result.empty());
       result_expr = ex<Constant>(state.count.load());
-    } else if (result.size() == 1) {  // if result.size() == 1, return Product
-      auto product = std::make_shared<Product>(std::move(result.at(0).first));
-      if (full_contractions_)
-        assert(result.at(0).second == nullptr);
-      else {
-        if (result.at(0).second)
-          product->append(1, std::move(result.at(0).second));
-      }
-      result_expr = product;
-    } else if (result.size() > 1) {
-      auto sum = std::make_shared<Sum>();
-      for (auto &&term : result) {
-        if (full_contractions_) {
-          assert(term.second == nullptr);
-          sum->append(ex<Product>(std::move(term.first)));
-        } else {
-          auto term_product = std::make_shared<Product>(std::move(term.first));
-          if (term.second) {
-            term_product->append(1, term.second);
-          }
-          sum->append(term_product);
-        }
-      }
-      result_expr = sum;
-    } else if (result_expr == nullptr)
-      result_expr = ex<Constant>(0);
+    } else
+      result_expr = result.make_expr(true);
     return result_expr;
   }
 
@@ -1090,9 +1116,7 @@ class WickTheorem {
 
  private:
   void recursive_nontensor_wick(
-      std::pair<
-          std::vector<std::pair<Product, std::shared_ptr<NormalOperator<S>>>> *,
-          std::mutex *> &result,
+      std::pair<HashingAccumulator *, std::mutex *> &result,
       NontensorWickState &state) const {
     using nopseq_view_type = flattened_rangenest<NormalOperatorSequence<S>>;
     auto nopseq_view = nopseq_view_type(&state.nopseq);
@@ -1239,9 +1263,9 @@ class WickTheorem {
                     if (op_right_partition.size() ==
                         nop_right_input.hug()->group_size(
                             op_right_ord_in_nop_input)) {
-                      assert(ref_op_psymm_weight ==
-                             op_right_partition.size() -
-                                 op_right_ord_in_partition);
+                      SEQUANT_ASSERT(ref_op_psymm_weight ==
+                                     op_right_partition.size() -
+                                         op_right_ord_in_partition);
                     }
                   }
                 }
@@ -1310,7 +1334,8 @@ class WickTheorem {
                     partition_i_size - partition_i_ncontr;
                 // sanity check: only full contractions encountered
                 // if full_contractions_==true
-                assert(!full_contractions_ || partition_i_noncontr == 0);
+                SEQUANT_ASSERT(!full_contractions_ ||
+                               partition_i_noncontr == 0);
                 if (partition_i_noncontr > 1)
                   result /= factorial(partition_i_noncontr);
               }
@@ -1370,7 +1395,7 @@ class WickTheorem {
                 //            to_latex(state.opseq) << std::endl;
 
                 // if have a nonzero result ...
-                if (!state.sp.empty()) {
+                if (state.sp.size() != state.sp_initial_size) {
                   // update the result if nothing left to contract and
                   if (!full_contractions_ ||
                       (full_contractions_ && state.nopseq_size == 0)) {
@@ -1391,20 +1416,23 @@ class WickTheorem {
                             ctx.spbasis() == SPBasis::Spinfree) {
                           auto [target_partner_indices, ncycles] =
                               state.make_target_partner_indices();
-                          assert(target_partner_indices
-                                     .empty());  // all ops are contracted out
+                          SEQUANT_ASSERT(
+                              target_partner_indices
+                                  .empty());  // all ops are contracted out
                           scalar_prefactor *= 1 << ncycles;
                         }
-                        auto prefactor = state.sp.deep_copy().scale(
+                        auto prefactor = state.sp.clone();
+                        prefactor.template as<Product>().scale(
                             std::move(scalar_prefactor));
+                        this->reduce(prefactor);
+                        auto bp = prefactor->canonicalize();
+                        prefactor *= bp;
 
                         result.second->lock();
                         //              std::wcout << "got " <<
                         //              to_latex(state.sp)
                         //              << std::endl;
-                        result.first->push_back(std::make_pair(
-                            std::move(prefactor),
-                            std::shared_ptr<NormalOperator<S>>{}));
+                        result.first->append(std::move(prefactor));
                         //              std::wcout << "now up to " <<
                         //              result.first->size()
                         //              << " terms" << std::endl;
@@ -1429,13 +1457,21 @@ class WickTheorem {
                             normalize(state.nopseq, target_partner_indices);
                         scalar_prefactor *= phase;
 
-                        auto prefactor = state.sp.deep_copy().scale(
+                        auto summand = state.sp.clone();
+                        summand.template as<Product>().scale(
                             std::move(scalar_prefactor));
+                        if (!op->empty()) summand *= std::move(op);
+                        if (state.sp_initial_size > 0) {
+                          this->reduce(summand);
+                          auto bp = summand->canonicalize();
+                          summand *= bp;
+                        }
+                        if (!summand.template is<Product>()) {
+                          summand = ex<Product>(summand);
+                        }
 
                         result.second->lock();
-                        result.first->push_back(std::make_pair(
-                            std::move(prefactor),
-                            op->empty() ? nullptr : std::move(op)));
+                        result.first->append(std::move(summand));
                         result.second->unlock();
                       }
                     } else
@@ -1492,7 +1528,7 @@ class WickTheorem {
           get_default_context(S).index_space_registry()) {
     // for bosons can only do Wick's theorem for physical vacuum (or similar)
     if constexpr (statistics == Statistics::BoseEinstein)
-      assert(vacuum == Vacuum::Physical);
+      SEQUANT_ASSERT(vacuum == Vacuum::Physical);
     if (is_qpannihilator<S>(left, vacuum, isr) &&
         is_qpcreator<S>(right, vacuum, isr)) {
       const auto qpspace_left = qpannihilator_space<S>(left, vacuum, isr);
@@ -1508,7 +1544,7 @@ class WickTheorem {
                           Vacuum vacuum = get_default_context(S).vacuum(),
                           const std::shared_ptr<const IndexSpaceRegistry> &isr =
                               get_default_context(S).index_space_registry()) {
-    assert(can_contract(left, right, vacuum, isr));
+    SEQUANT_ASSERT(can_contract(left, right, vacuum, isr));
     // contraction result depends on whether the left/right (L, R) spaces
     // are pure qp annihilator (hole, H) or qp creator (particle, P) subspaces
     // or not, i.e. on whether L ⊆ H and R ⊆ P. The either of the conditions
@@ -1546,7 +1582,7 @@ class WickTheorem {
 
     // preserve bra/ket positions of left & right
     const auto left_is_ann = left.action() == Action::Annihilate;
-    assert(left_is_ann || right.action() == Action::Annihilate);
+    SEQUANT_ASSERT(left_is_ann || right.action() == Action::Annihilate);
     const auto bra_is_pure = left_is_ann ? left_is_pure : right_is_pure;
     const auto ket_is_pure = left_is_ann ? right_is_pure : left_is_pure;
     const auto &bra_idx = left_is_ann ? left.index() : right.index();
@@ -1554,15 +1590,18 @@ class WickTheorem {
     const auto &bra_qp_idx_opt = left_is_ann ? left_qp_idx : right_qp_idx;
     const auto &ket_qp_idx_opt = left_is_ann ? right_qp_idx : left_qp_idx;
 
-    if (bra_is_pure || ket_is_pure) {
+    if (bra_is_pure && ket_is_pure) {
       return make_overlap(bra_idx, ket_idx);
     } else {
       auto result = std::make_shared<Product>();
-      assert(bra_qp_idx_opt);
-      assert(ket_qp_idx_opt);
-      result->append(1, make_overlap(*bra_qp_idx_opt, *ket_qp_idx_opt));
-      result->append(1, make_kronecker(bra_idx, *bra_qp_idx_opt));
-      result->append(1, make_kronecker(*ket_qp_idx_opt, ket_idx));
+      SEQUANT_ASSERT(bra_is_pure || bra_qp_idx_opt);
+      SEQUANT_ASSERT(ket_is_pure || ket_qp_idx_opt);
+      result->append(1, make_overlap(bra_qp_idx_opt.value_or(bra_idx),
+                                     ket_qp_idx_opt.value_or(ket_idx)));
+      if (!bra_is_pure)
+        result->append(1, make_kronecker(bra_idx, *bra_qp_idx_opt));
+      if (!ket_is_pure)
+        result->append(1, make_kronecker(*ket_qp_idx_opt, ket_idx));
       return result;
     }
   }

@@ -7,6 +7,7 @@
 #include <SeQuant/core/logger.hpp>
 #include <SeQuant/core/meta.hpp>
 #include <SeQuant/core/parse.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/domain/eval/cache_manager.hpp>
 #include <SeQuant/domain/eval/eval_fwd.hpp>
 #include <SeQuant/domain/eval/result.hpp>
@@ -59,9 +60,9 @@ enum struct EvalMode {
   SumInplace,
   Symmetrize,
   Antisymmetrize,
-  /// Cleanup operation of Wang-Knizia biorthogonalization
-  /// @sa ResultPtr::biorthogonal_cleanup
-  BiorthogonalCleanup,
+  /// NNS projection of Wang-Knizia biorthogonalization
+  /// @sa ResultPtr::biorthogonal_nns_project
+  BiorthogonalNNSProject,
   Unknown
 };
 
@@ -79,18 +80,18 @@ enum struct EvalMode {
 }
 
 [[nodiscard]] constexpr auto to_string(EvalMode mode) noexcept {
-  return (mode == EvalMode::Constant)              ? "Constant"
-         : (mode == EvalMode::Variable)            ? "Variable"
-         : (mode == EvalMode::Tensor)              ? "Tensor"
-         : (mode == EvalMode::Permute)             ? "Permute"
-         : (mode == EvalMode::Product)             ? "Product"
-         : (mode == EvalMode::MultByPhase)         ? "MultByPhase"
-         : (mode == EvalMode::Sum)                 ? "Sum"
-         : (mode == EvalMode::SumInplace)          ? "SumInplace"
-         : (mode == EvalMode::Symmetrize)          ? "Symmetrize"
-         : (mode == EvalMode::Antisymmetrize)      ? "Antisymmetrize"
-         : (mode == EvalMode::BiorthogonalCleanup) ? "BiorthogonalCleanup"
-                                                   : "??";
+  return (mode == EvalMode::Constant)                 ? "Constant"
+         : (mode == EvalMode::Variable)               ? "Variable"
+         : (mode == EvalMode::Tensor)                 ? "Tensor"
+         : (mode == EvalMode::Permute)                ? "Permute"
+         : (mode == EvalMode::Product)                ? "Product"
+         : (mode == EvalMode::MultByPhase)            ? "MultByPhase"
+         : (mode == EvalMode::Sum)                    ? "Sum"
+         : (mode == EvalMode::SumInplace)             ? "SumInplace"
+         : (mode == EvalMode::Symmetrize)             ? "Symmetrize"
+         : (mode == EvalMode::Antisymmetrize)         ? "Antisymmetrize"
+         : (mode == EvalMode::BiorthogonalNNSProject) ? "BiorthogonalNNSProject"
+                                                      : "??";
 }
 
 enum struct CacheMode { Store, Access, Release };
@@ -302,15 +303,15 @@ ResultPtr evaluate(Node const& node,  //
   } else {
     left = evaluate<EvalTrace>(node.left(), le, cache);
     right = evaluate<EvalTrace>(node.right(), le, cache);
-    assert(left);
-    assert(right);
+    SEQUANT_ASSERT(left);
+    SEQUANT_ASSERT(right);
 
     std::array<std::any, 3> const ann{node.left()->annot(),
                                       node.right()->annot(), node->annot()};
     if (node->op_type() == EvalOp::Sum) {
       time = timed_eval_inplace([&]() { result = left->sum(*right, ann); });
     } else {
-      assert(node->op_type() == EvalOp::Product);
+      SEQUANT_ASSERT(node->op_type() == EvalOp::Product);
       auto const de_nest =
           node.left()->tot() && node.right()->tot() && !node->tot();
       time = timed_eval_inplace([&]() {
@@ -320,7 +321,7 @@ ResultPtr evaluate(Node const& node,  //
     }
   }
 
-  assert(result);
+  SEQUANT_ASSERT(result);
 
   // logging
   if constexpr (trace(EvalTrace)) {
@@ -375,7 +376,7 @@ ResultPtr evaluate(Node const& node,           //
                        : result.pre;
   });
 
-  assert(result.post);
+  SEQUANT_ASSERT(result.post);
 
   // logging
   if constexpr (trace(EvalTrace)) {
@@ -496,7 +497,7 @@ ResultPtr evaluate(Args&&... args) {
 template <Trace EvalTrace = Trace::Default, typename... Args>
 ResultPtr evaluate_symm(Args&&... args) {
   ResultPtr pre = evaluate<EvalTrace>(std::forward<Args>(args)...);
-  assert(pre);
+  SEQUANT_ASSERT(pre);
   ResultPtr result;
   auto time = timed_eval_inplace([&]() { result = pre->symmetrize(); });
 
@@ -524,7 +525,7 @@ ResultPtr evaluate_symm(Args&&... args) {
 template <Trace EvalTrace = Trace::Default, typename... Args>
 ResultPtr evaluate_antisymm(Args&&... args) {
   ResultPtr pre = evaluate<EvalTrace>(std::forward<Args>(args)...);
-  assert(pre);
+  SEQUANT_ASSERT(pre);
 
   auto const& n0 = node0(arg0(std::forward<Args>(args)...));
 
@@ -542,24 +543,24 @@ ResultPtr evaluate_antisymm(Args&&... args) {
   return result;
 }
 
-/// \brief Calls sequant::evaluate followed by ResultPtr::biorthogonal_cleanup
-/// \return Evaluated result as ResultPtr.
-/// \sa ResultPtr::biorthogonal_cleanup
+/// \brief Calls sequant::evaluate followed by
+/// ResultPtr::biorthogonal_nns_project \return Evaluated result as ResultPtr.
+/// \sa ResultPtr::biorthogonal_nns_project
 template <Trace EvalTrace = Trace::Default, typename... Args>
-ResultPtr evaluate_biorthogonal_cleanup(Args&&... args) {
+ResultPtr evaluate_biorthogonal_nns_project(Args&&... args) {
   ResultPtr pre = evaluate<EvalTrace>(std::forward<Args>(args)...);
-  assert(pre);
+  SEQUANT_ASSERT(pre);
 
   auto const& n0 = node0(arg0(std::forward<Args>(args)...));
 
   ResultPtr result;
   auto time = timed_eval_inplace([&]() {
-    result = pre->biorthogonal_cleanup(n0->as_tensor().bra_rank());
+    result = pre->biorthogonal_nns_project(n0->as_tensor().bra_rank());
   });
 
   // logging
   if constexpr (trace(EvalTrace)) {
-    auto stat = log::EvalStat{.mode = log::EvalMode::BiorthogonalCleanup,
+    auto stat = log::EvalStat{.mode = log::EvalMode::BiorthogonalNNSProject,
                               .time = time,
                               .memory = log::bytes(pre, result)};
     log::eval(stat, n0->label());

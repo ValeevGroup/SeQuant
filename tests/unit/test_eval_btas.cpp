@@ -54,12 +54,13 @@ class rand_tensor_yield {
     using sequant::IndexSpace;
     auto isr = sequant::get_default_context().index_space_registry();
 
-    assert(ranges::all_of(tnsr.const_braket_indices(),
-                          [&isr](auto const& idx) {
-                            return idx.space() == isr->retrieve(L"i") ||
-                                   idx.space() == isr->retrieve(L"a");
-                          }) &&
-           "Unsupported IndexSpace type found while generating tensor.");
+    SEQUANT_ASSERT(
+        ranges::all_of(tnsr.const_braket_indices(),
+                       [&isr](auto const& idx) {
+                         return idx.space() == isr->retrieve(L"i") ||
+                                idx.space() == isr->retrieve(L"a");
+                       }) &&
+        "Unsupported IndexSpace type found while generating tensor.");
 
     auto rng = btas::Range{
         tnsr.const_braket_indices() | transform([this, &isr](auto const& idx) {
@@ -86,7 +87,7 @@ class rand_tensor_yield {
     auto t = make_rand_tensor(tnsr);
     auto&& success = label_to_tnsr_.emplace(
         label, eval_result<ResultTensorBTAS<Tensor_t>>(std::move(t)));
-    assert(success.second && "couldn't store tensor!");
+    SEQUANT_ASSERT(success.second && "couldn't store tensor!");
     //    std::wcout << "label = [" << label << "] NotFound in cache.
     //    Creating.."
     //               << std::endl;
@@ -97,13 +98,13 @@ class rand_tensor_yield {
       sequant::meta::can_evaluate auto const& node) const {
     using namespace sequant;
     if (node->result_type() == sequant::ResultType::Tensor) {
-      assert(node->expr()->template is<sequant::Tensor>());
+      SEQUANT_ASSERT(node->expr()->template is<sequant::Tensor>());
       return (*this)(node->expr()->template as<sequant::Tensor>());
     }
 
     using result_t = ResultScalar<double>;
 
-    assert(node->expr()->template is<sequant::Constant>());
+    SEQUANT_ASSERT(node->expr()->template is<sequant::Constant>());
     auto d = node->as_constant().template value<double>();
     return eval_result<result_t>(d);
   }
@@ -117,7 +118,7 @@ class rand_tensor_yield {
   sequant::ResultPtr operator()(std::wstring_view label) const {
     auto&& found = label_to_tnsr_.find(label.data());
     if (found == label_to_tnsr_.end()) {
-      assert(false && "attempted access of non-existent tensor!");
+      SEQUANT_ASSERT(false && "attempted access of non-existent tensor!");
     }
     return found->second;
   }
@@ -148,7 +149,7 @@ container::svector<long> tidxs(
     ExprPtr expr, std::initializer_list<size_t> tnsr_coords) noexcept {
   auto tnsr_p = expr;
   for (auto i : tnsr_coords) tnsr_p = tnsr_p->at(i);
-  assert(tnsr_p->is<Tensor>());
+  SEQUANT_ASSERT(tnsr_p->is<Tensor>());
   return tidxs(tnsr_p->as<Tensor>());
 }
 
@@ -205,11 +206,11 @@ TEST_CASE("eval_with_btas", "[eval_btas]") {
         ->get<BTensorD>();
   };
 
-  auto eval_biorthogonal_cleanup =
+  auto eval_biorthogonal_nns_project =
       [&yield_](sequant::ExprPtr const& expr,
                 container::svector<long> const& target_labels) {
-        return evaluate_biorthogonal_cleanup(eval_node(expr), target_labels,
-                                             yield_)
+        return evaluate_biorthogonal_nns_project(eval_node(expr), target_labels,
+                                                 yield_)
             ->get<BTensorD>();
       };
 
@@ -371,7 +372,7 @@ TEST_CASE("eval_with_btas", "[eval_btas]") {
     // low-rank residuals: skip cleanup
     auto expr1 = parse_antisymm(L"R_{a1, a2}^{i1, i2}");
     auto tidx1 = tidxs(L"a_1,a_2,i_1,i_2");
-    auto eval1 = eval_biorthogonal_cleanup(expr1, tidx1);
+    auto eval1 = eval_biorthogonal_nns_project(expr1, tidx1);
     auto const& r1 =
         yield(L"R{v,v;o,o}");  // Assuming v = virtual, o = occupied
 
@@ -390,7 +391,7 @@ TEST_CASE("eval_with_btas", "[eval_btas]") {
     // result = identity - (1/ket_rank!) * sum_of_ket_permutations
     auto expr2 = parse_antisymm(L"R_{a1, a2, a3}^{i1, i2, i3}");
     auto tidx2 = tidxs(L"a_1,a_2,a_3,i_1,i_2,i_3");
-    auto eval2 = eval_biorthogonal_cleanup(expr2, tidx2);
+    auto eval2 = eval_biorthogonal_nns_project(expr2, tidx2);
     auto const& r2 = yield(L"R{v,v,v;o,o,o}");
 
     BTensorD man2{r2.range()};

@@ -5,6 +5,7 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/external/bliss/graph.hh>
 
 #include <cstddef>
@@ -399,7 +400,7 @@ FullBinaryNode<ExprT> binarize(ResultExpr const& res) {
     tree = FullBinaryNode<ExprT>(std::move(result), std::move(tree),
                                  binarize<ExprT>(ex<Constant>(1)));
   }
-  assert(tree.size() > 1);
+  SEQUANT_ASSERT(tree.size() > 1);
 
   if (is_scalar) {
     if (res.has_label()) {
@@ -414,7 +415,7 @@ FullBinaryNode<ExprT> binarize(ResultExpr const& res) {
     //   tensor.set_label(res.label());
     // }
 
-    // assert(tensor.num_slots() ==
+    // SEQUANT_ASSERT(tensor.num_slots() ==
     //        res.bra().size() + res.ket().size() + res.aux().size());
     // tensor.set_bra(res.bra());
     // tensor.set_ket(res.ket());
@@ -442,7 +443,7 @@ ExprPtr to_expr(meta::eval_node auto const& node) {
     prod.append(1, lexpr, Product::Flatten::No);
     prod.append(1, rexpr, Product::Flatten::No);
 
-    assert(!prod.empty());
+    SEQUANT_ASSERT(!prod.empty());
 
     if (prod.size() == 1 && !prod.factor(0)->is<Tensor>()) {
       return ex<Product>(Product{prod.scalar(), prod.factor(0)->begin(),
@@ -452,7 +453,7 @@ ExprPtr to_expr(meta::eval_node auto const& node) {
     }
 
   } else {
-    assert(op == EvalOp::Sum && "unsupported operation type");
+    SEQUANT_ASSERT(op == EvalOp::Sum && "unsupported operation type");
     return ex<Sum>(Sum{to_expr(node.left()), to_expr(node.right())});
   }
 }

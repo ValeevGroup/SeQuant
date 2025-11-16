@@ -3,11 +3,11 @@
 
 #include "catch2_sequant.hpp"
 
-#include <SeQuant/core/biorthogonalization.hpp>
 #include <SeQuant/core/parse.hpp>
 #include <SeQuant/core/utility/expr.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 
+#include <SeQuant/domain/mbpt/biorthogonalization.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 
 #include <string>

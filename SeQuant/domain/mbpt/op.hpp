@@ -20,6 +20,7 @@
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/space.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/strong.hpp>
 
 #include <range/v3/iterator/basic_iterator.hpp>
@@ -32,7 +33,6 @@
 
 #include <algorithm>
 #include <array>
-#include <cassert>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
@@ -115,7 +115,6 @@ inline const container::map<OpType, std::wstring> optype2label{
     {OpType::RDM, L"γ"},
     // see https://en.wikipedia.org/wiki/Cumulant
     {OpType::RDMCumulant, L"κ"},
-    {OpType::δ, L"δ"},
     {OpType::h_1, L"h¹"},
     {OpType::t_1, L"t¹"},
     {OpType::λ_1, L"λ¹"}};
@@ -173,13 +172,13 @@ class Operator<void, S> : public Expr, public Labeled {
 
   /// @return label of the operator
   std::wstring_view label() const override {
-    assert(label_generator_);
+    SEQUANT_ASSERT(label_generator_);
     return label_generator_();
   }
 
   /// @return tensor form of the operator
   virtual ExprPtr tensor_form() const {
-    assert(tensor_form_generator_);
+    SEQUANT_ASSERT(tensor_form_generator_);
     return tensor_form_generator_();
   }
 
@@ -229,7 +228,7 @@ class QuantumNumberChange
     } else if (get_default_context().vacuum() == Vacuum::SingleProduct) {
       auto isr = get_default_context().index_space_registry();
       const auto& isr_base_spaces = isr->base_spaces();
-      assert(isr_base_spaces.size() > 0);
+      SEQUANT_ASSERT(isr_base_spaces.size() > 0);
       return isr_base_spaces.size() * 2;
     } else {
       throw std::logic_error("unknown Vacuum type");
@@ -239,7 +238,7 @@ class QuantumNumberChange
   /// initializes all values with zeroes
   QuantumNumberChange() {
     this->resize(this->size());
-    assert(this->base().size() != 0);
+    SEQUANT_ASSERT(this->base().size() != 0);
     std::fill(this->begin(), this->end(), interval_t{});
   }
 
@@ -252,7 +251,7 @@ class QuantumNumberChange
                 meta::is_range_v<std::remove_reference_t<Range>> &&
                 std::is_convertible_v<I, interval_t>>>
   explicit QuantumNumberChange(Range&& i) : QuantumNumberChange() {
-    assert(i.size() == size());
+    SEQUANT_ASSERT(i.size() == size());
     std::copy(i.begin(), i.end(), this->begin());
   }
 
@@ -265,13 +264,14 @@ class QuantumNumberChange
   explicit QuantumNumberChange(
       std::initializer_list<std::initializer_list<I>> i)
       : QuantumNumberChange() {
-    assert(i.size() == size());
-#ifndef NDEBUG
-    if (std::find_if(i.begin(), i.end(),
-                     [](const auto& ii) { return ii.size() != 2; }) != i.end())
-      throw std::invalid_argument(
-          "QuantumNumberChange<N>(initializer_list<initializer_list> i): each "
-          "element of i must contain 2 elements");
+    SEQUANT_ASSERT(i.size() == size());
+#ifdef SEQUANT_ASSERT_ENABLED
+    SEQUANT_ASSERT(
+        std::find_if(i.begin(), i.end(),
+                     [](const auto& ii) { return ii.size() != 2; }) ==
+            i.end() &&
+        "QuantumNumberChange<N>(initializer_list<initializer_list> i): each "
+        "element of i must contain 2 elements");
 #endif
     for (std::size_t c = 0; c != size(); ++c) {
       this->operator[](c) = interval_t{*((i.begin() + c)->begin()),
@@ -398,7 +398,7 @@ class QuantumNumberChange
   /// @return true if \p i is in `*this[0]`
   template <typename I, typename = std::enable_if_t<std::is_integral_v<I>>>
   bool in(std::initializer_list<I> i) {
-    assert(i.size() == size());
+    SEQUANT_ASSERT(i.size() == size());
     std::array<I, 4> i_arr;
     std::copy(i.begin(), i.end(), i_arr.begin());
     return this->in(i_arr);
@@ -416,7 +416,7 @@ class QuantumNumberChange
   }
 
   auto hash_value() const {
-    assert(size() > 0);
+    SEQUANT_ASSERT(size() > 0);
     auto val = sequant::hash::value(this->operator[](0));
     for (std::size_t c = 1; c != size(); ++c) {
       sequant::hash::combine(val, sequant::hash::value(this->operator[](c)));
@@ -529,6 +529,25 @@ qns_t generic_deexcitation_qns(std::size_t particle_rank, std::size_t hole_rank,
 
 inline namespace op {
 namespace tensor {
+namespace detail {
+ExprPtr expectation_value_impl(ExprPtr expr,
+                               std::vector<std::pair<int, int>> nop_connections,
+                               bool use_top, bool full_contractions);
+}  // namespace detail
+
+/// @brief computes the reference expectation value of a tensor-level expression
+/// @param expr input expression
+/// @param nop_connections connectivity information
+/// @param use_top if true, WickTheorem uses topological equivalence of terms
+ExprPtr ref_av(ExprPtr expr,
+               std::vector<std::pair<int, int>> nop_connections = {},
+               bool use_top = true);
+
+/// @brief computes the vacuum expectation value of a tensor-level expression,
+/// forces full contractions in WickTheorem
+/// @param expr input expression
+/// @param nop_connections connectivity information
+/// @param use_top if true, WickTheorem uses topological equivalence of terms
 ExprPtr vac_av(ExprPtr expr,
                std::vector<std::pair<int, int>> nop_connections = {},
                bool use_top = true);
@@ -575,7 +594,7 @@ class OpMaker {
       : op_(op),
         cre_spaces_(cre_list.begin(), cre_list.end()),
         ann_spaces_(ann_list.begin(), ann_list.end()) {
-    assert(ncreators() > 0 || nannihilators() > 0);
+    SEQUANT_ASSERT(ncreators() > 0 || nannihilators() > 0);
   }
 
   /// @param[in] op the operator type
@@ -639,7 +658,8 @@ class OpMaker {
     const auto dep_ket = dep == UseDepIdx::Ket;
 
     // not sure what it means to use nonsymmetric operator if nbra != nket
-    if (!symm) assert(ranges::size(creators) == ranges::size(annihilators));
+    if (!symm)
+      SEQUANT_ASSERT(ranges::size(creators) == ranges::size(annihilators));
 
     auto make_idx_vector = [](const auto& spacetypes) {
       container::svector<Index> result;
@@ -891,39 +911,39 @@ DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(A);
 ExprPtr S(std::int64_t K);
 
 /// @brief Makes perturbation operator of rank \p R
-/// @param order order of perturbation
 /// @param R rank of the operator,`R = 1` implies one-body perturbation
+/// @param order order of perturbation
 /// @pre `order==1`, only first order perturbation is supported now
-ExprPtr H_pt(std::size_t order, std::size_t R);
+ExprPtr H_pt(std::size_t R, std::size_t order = 1);
 
 /// @brief Makes perturbed particle-conserving excitation operator of rank \p K
-/// @param order order of perturbation
 /// @param K rank of the excitation operator
+/// @param order order of perturbation
 /// @pre `order==1`, only first order perturbation is supported now
-ExprPtr T_pt_(std::size_t order, std::size_t K);
+ExprPtr T_pt_(std::size_t K, std::size_t order = 1);
 
 /// @brief Makes sum of perturbed particle-conserving excitation operators up to
 /// rank \p K
-/// @param order order of perturbation
 /// @param K rank up to which the sum is to be formed
+/// @param order order of perturbation
 /// @param skip1 if true, skips single excitations
 /// @pre `order==1`, only first order perturbation is supported now
-ExprPtr T_pt(std::size_t order, std::size_t K, bool skip1 = false);
+ExprPtr T_pt(std::size_t K, std::size_t order = 1, bool skip1 = false);
 
 /// @brief Makes perturbed particle-conserving deexcitation operator of
 /// rank \p K
-/// @param order order of perturbation
 /// @param K rank of the deexcitation operator
+/// @param order order of perturbation
 /// @pre `order==1`, only first order perturbation is supported now
-ExprPtr Λ_pt_(std::size_t order, std::size_t K);
+ExprPtr Λ_pt_(std::size_t K, std::size_t order = 1);
 
 /// @brief Makes sum of perturbed particle-conserving deexcitation operators up
 /// to rank \p K
-/// @param order order of perturbation
 /// @param K rank up to which the sum is to be formed
+/// @param order order of perturbation
 /// @param skip1 if true, skips single deexcitations
 /// @pre `order==1`, only first order perturbation is supported now
-ExprPtr Λ_pt(std::size_t order, std::size_t K, bool skip1 = false);
+ExprPtr Λ_pt(std::size_t K, std::size_t order = 1, bool skip1 = false);
 }  // namespace tensor
 }  // namespace op
 
@@ -1053,51 +1073,76 @@ DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(A);
 ExprPtr S(std::int64_t K);
 
 /// @brief Makes perturbation operator of rank \p R
-/// @param order order of perturbation
 /// @param R rank of the operator,`R = 1` implies one-body perturbation
+/// @param order order of perturbation
 /// @pre `order==1`, only first order perturbation is supported now
-ExprPtr H_pt(std::size_t order, std::size_t R);
+ExprPtr H_pt(std::size_t R, std::size_t order = 1);
 
 /// @brief Makes perturbed particle-conserving excitation operator of rank \p K
-/// @param order order of perturbation
 /// @param K rank of the excitation operator
+/// @param order order of perturbation
 /// @pre `order==1`, only first order perturbation is supported now
-ExprPtr T_pt_(std::size_t order, std::size_t K);
+ExprPtr T_pt_(std::size_t K, std::size_t order = 1);
 
 /// @brief Makes sum of perturbed particle-conserving excitation operators up to
 /// rank \p K
-/// @param order order of perturbation
 /// @param K rank up to which the sum is to be formed
+/// @param order order of perturbation
 /// @param skip1 if true, skips single excitations
 /// @pre `order==1`, only first order perturbation is supported now
-ExprPtr T_pt(std::size_t order, std::size_t K, bool skip1 = false);
+ExprPtr T_pt(std::size_t K, std::size_t order = 1, bool skip1 = false);
 
 /// @brief Makes perturbed particle-conserving deexcitation operator of
 /// rank \p K
-/// @param order order of perturbation
 /// @param K rank of the deexcitation operator
+/// @param order order of perturbation
 /// @pre `order==1`, only first order perturbation is supported now
-ExprPtr Λ_pt_(std::size_t order, std::size_t K);
+ExprPtr Λ_pt_(std::size_t K, std::size_t order = 1);
 
 /// @brief Makes sum of perturbed particle-conserving deexcitation operators up
 /// to rank \p K
-/// @param order order of perturbation
 /// @param K rank up to which the sum is to be formed
+/// @param order order of perturbation
 /// @param skip1 if true, skips single deexcitations
 /// @pre `order==1`, only first order perturbation is supported now
-ExprPtr Λ_pt(std::size_t order, std::size_t K, bool skip1 = false);
+ExprPtr Λ_pt(std::size_t K, std::size_t order = 1, bool skip1 = false);
 
+/// @brief computes the quantum number change effected by a given Operator or
+/// Operator Product when applied to the vacuum state
+/// @param expr the operator or operator product whose quantum number change is
+/// to be computed
+/// @return the quantum number change effected by \p expr
+/// @pre \p expr must be an Operator or an Operator Product
+qns_t apply_to_vac(const ExprPtr& expr);
+
+/// @brief Checks if a given Operator or Operator Product can change the quantum
+/// numbers from \p source_qns to \p target_qns
+/// @param op_or_op_product the operator or operator product to check
+/// @param target_qns the target quantum numbers
+/// @param source_qns the source quantum numbers
+bool can_change_qns(const ExprPtr& op_or_op_product, const qns_t& target_qns,
+                    const qns_t& source_qns = {});
+
+/// @brief Checks if a given Operator or Operator Product can raise the vacuum
+/// quantum numbers up to rank \p k
 bool raises_vacuum_up_to_rank(const ExprPtr& op_or_op_product,
                               const unsigned long k);
 
+/// @brief Checks if a given Operator or Operator Product can lower quantum
+/// numbers of rank \p down up to vacuum
 bool lowers_rank_or_lower_to_vacuum(const ExprPtr& op_or_op_product,
                                     const unsigned long k);
 
+/// @brief Checks if a given Operator or Operator Product can raise the vacuum
+/// quantum numbers to rank \p k
 bool raises_vacuum_to_rank(const ExprPtr& op_or_op_product,
                            const unsigned long k);
 
+/// @brief Checks if a given Operator or Operator Product can lower quantum
+/// numbers of rank \p k down to vacuum
 bool lowers_rank_to_vacuum(const ExprPtr& op_or_op_product,
                            const unsigned long k);
+
 #include <SeQuant/domain/mbpt/vac_av.hpp>
 }  // namespace op
 }  // namespace mbpt

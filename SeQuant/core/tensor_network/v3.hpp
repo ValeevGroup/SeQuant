@@ -11,10 +11,10 @@
 #include <SeQuant/core/tensor_network/canonicals.hpp>
 #include <SeQuant/core/tensor_network/slot.hpp>
 #include <SeQuant/core/tensor_network/vertex.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 
 #include <range/v3/range/traits.hpp>
 
-#include <cassert>
 #include <cstdlib>
 #include <iosfwd>
 #include <memory>
@@ -100,25 +100,28 @@ class TensorNetworkV3 {
       if (vertices.empty()) {
         vertices.emplace(vertex);
       } else {
-        auto &first = *(vertices.begin());
-        // - can connect bra slot to ket slot, and vice versa, unless there is
-        // no distinction between primal and dual spaces
+        // - can't connect bra slot to bra slot or ket slot to ket slot, unless
+        // there is no distinction between primal and dual spaces
         if (get_default_context().braket_symmetry() != BraKetSymmetry::Symm) {
-          if (first.getOrigin() == Origin::Bra &&
-              vertex.getOrigin() != Origin::Ket) {
-            throw std::invalid_argument(
-                "TensorNetworkV3::Edge::connect_to: bra slot can only be "
-                "connected "
-                "to a ket slot if default context's braket_symmetry() != "
-                "BraKetSymmetry::Symm");
+          if (vertex.getOrigin() == Origin::Bra) {
+            if (ranges::contains(vertices, Origin::Bra,
+                                 [](const auto &v) { return v.getOrigin(); })) {
+              throw std::invalid_argument(
+                  "TensorNetworkV3::Edge::connect_to: bra slot can only be "
+                  "connected "
+                  "to a bra slot if default context's braket_symmetry() != "
+                  "BraKetSymmetry::Symm");
+            }
           }
-          if (first.getOrigin() == Origin::Ket &&
-              vertex.getOrigin() != Origin::Bra) {
-            throw std::invalid_argument(
-                "TensorNetworkV3::Edge::connect_to: ket slot can only be "
-                "connected "
-                "to a bra slot if default context's braket_symmetry() != "
-                "BraKetSymmetry::Symm");
+          if (vertex.getOrigin() == Origin::Ket) {
+            if (ranges::contains(vertices, Origin::Ket,
+                                 [](const auto &v) { return v.getOrigin(); })) {
+              throw std::invalid_argument(
+                  "TensorNetworkV3::Edge::connect_to: ket slot can only be "
+                  "connected "
+                  "to a ket slot if default context's braket_symmetry() != "
+                  "BraKetSymmetry::Symm");
+            }
           }
         }
         add_vertex(vertex);
@@ -138,7 +141,7 @@ class TensorNetworkV3 {
         return vertices < other.vertices;
       }
 
-      assert(index && other.index);
+      SEQUANT_ASSERT(index && other.index);
       return index->space() < other.index->space();
     }
 
@@ -150,7 +153,7 @@ class TensorNetworkV3 {
     /// @return const reference to the `i`th Vertex object
     /// @pre `this->size() > i`
     const Vertex &vertex(std::size_t i) const {
-      assert(vertices.size() > i);
+      SEQUANT_ASSERT(vertices.size() > i);
       return *(vertices.begin() + i);
     }
 
@@ -158,7 +161,7 @@ class TensorNetworkV3 {
     std::size_t vertex_count() const { return vertices.size(); }
 
     const Index &idx() const {
-      assert(index);
+      SEQUANT_ASSERT(index);
       return *index;
     }
 
@@ -240,7 +243,7 @@ class TensorNetworkV3 {
   TensorNetworkV3 &operator=(const TensorNetworkV3 &other) noexcept;
 
   /// @return const reference to the sequence of tensors
-  /// @note after invoking TensorNetwork::canonicalize() the order of
+  /// @note after invoking TensorNetworkV3::canonicalize() the order of
   /// tensors may be different from that provided as input; use
   /// tensor_input_ordinals() to obtain the input ordinals of
   /// the tensors in the result
@@ -339,14 +342,14 @@ class TensorNetworkV3 {
   /// by their Index's full label
   /// @sa Edge
   const auto &edges() const {
-    assert(have_edges_);
+    SEQUANT_ASSERT(have_edges_);
     return edges_;
   }
 
   /// @brief Returns a range of external indices, i.e. those indices that do not
   /// connect tensors
   const auto &ext_indices() const {
-    assert(have_edges_);
+    SEQUANT_ASSERT(have_edges_);
     return ext_indices_;
   }
 
@@ -498,23 +501,6 @@ class TensorNetworkV3 {
     tensor_input_ordinals_.push_back(tensor_input_ordinals_.size());
   }
 };
-
-template <typename CharT, typename Traits>
-std::basic_ostream<CharT, Traits> &operator<<(
-    std::basic_ostream<CharT, Traits> &stream, SlotType origin) {
-  switch (origin) {
-    case SlotType::Bra:
-      stream << "Bra";
-      break;
-    case SlotType::Ket:
-      stream << "Ket";
-      break;
-    case SlotType::Aux:
-      stream << "Aux";
-      break;
-  }
-  return stream;
-}
 
 }  // namespace sequant
 

@@ -295,4 +295,19 @@ ExprPtr parse_expr(std::wstring_view input, std::optional<Symmetry> perm_symm,
       to_default_symms(perm_symm, braket_symm, column_symm));
 }
 
+ExprPtr parse_expr(std::string_view input, std::optional<Symmetry> perm_symm,
+                   std::optional<BraKetSymmetry> braket_symm,
+                   std::optional<ColumnSymmetry> column_symm) {
+  return parse_expr(sequant::to_wstring(input), perm_symm, braket_symm,
+                    column_symm);
+}
+
+ResultExpr parse_result_expr(std::string_view input,
+                             std::optional<Symmetry> perm_symm,
+                             std::optional<BraKetSymmetry> braket_symm,
+                             std::optional<ColumnSymmetry> column_symm) {
+  return parse_result_expr(sequant::to_wstring(input), perm_symm, braket_symm,
+                           column_symm);
+}
+
 }  // namespace sequant

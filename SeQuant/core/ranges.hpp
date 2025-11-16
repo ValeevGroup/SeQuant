@@ -5,6 +5,8 @@
 #ifndef SEQUANT_RANGES_HPP
 #define SEQUANT_RANGES_HPP
 
+#include <SeQuant/core/utility/macros.hpp>
+
 #include <range/v3/all.hpp>
 
 namespace sequant {
@@ -161,24 +163,24 @@ class flattened_rangenest
 
     /// calls erase on the current iterator
     void erase() {
-      assert(range_iter_ != this->_end(*range_));
+      SEQUANT_ASSERT(range_iter_ != this->_end(*range_));
       // TODO resolve the compilation issue
       //      ranges::erase(*range_iter_, elem_iter_);
       // verify that capacity does not change
       [[maybe_unused]] const auto capacity = range_iter_->capacity();
       range_iter_->erase(elem_iter_);
-      assert(capacity == range_iter_->capacity());
+      SEQUANT_ASSERT(capacity == range_iter_->capacity());
     }
     /// calls insert on the current iterator
     template <typename T>
     void insert(T &&elem) {
-      assert(range_iter_ != this->_end(*range_));
+      SEQUANT_ASSERT(range_iter_ != this->_end(*range_));
       // TODO resolve the compilation issue
       //      ranges::insert(*range_iter_, elem_iter_, std::forward<T>(elem));
       // verify that capacity does not change
       [[maybe_unused]] const auto capacity = range_iter_->capacity();
       range_iter_->insert(elem_iter_, std::forward<T>(elem));
-      assert(capacity == range_iter_->capacity());
+      SEQUANT_ASSERT(capacity == range_iter_->capacity());
     }
   };
   cursor begin_cursor() const { return {range_}; }

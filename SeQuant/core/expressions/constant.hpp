@@ -5,10 +5,10 @@
 #include <SeQuant/core/expressions/expr.hpp>
 #include <SeQuant/core/expressions/expr_ptr.hpp>
 #include <SeQuant/core/rational.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 
 #include <boost/numeric/conversion/cast.hpp>
 
-#include <cassert>
 #include <string>
 
 namespace sequant {
@@ -17,7 +17,7 @@ namespace {
 template <typename X>
 X numeric_cast(const sequant::rational &r) {
   if constexpr (std::is_integral_v<X>) {
-    assert(denominator(r) == 1);
+    SEQUANT_ASSERT(denominator(r) == 1);
     return boost::numeric_cast<X>(numerator(r));
   } else {
     return boost::numeric_cast<X>(numerator(r)) /
@@ -51,7 +51,7 @@ class Constant : public Expr {
   template <typename T = scalar_type>
   auto value() const {
     if constexpr (std::is_arithmetic_v<T>) {
-      assert(value_.imag() == 0);
+      SEQUANT_ASSERT(value_.imag() == 0);
       return numeric_cast<T>(value_.real());
     } else if constexpr (meta::is_complex_v<T>) {
       return T(numeric_cast<typename T::value_type>(value_.real()),
@@ -104,12 +104,11 @@ class Constant : public Expr {
   }
 
   /// @param[in] v a scalar
-  /// @return true if this is a soft zero, i.e. its magnitude is less than
-  /// `std::sqrt(std::numeric_limits<float>::epsilon())`
+  /// @return true if this is zero
   static bool is_zero(scalar_type v) { return v.is_zero(); }
 
   /// @return `Constant::is_zero(this->value())`
-  bool is_zero() const { return is_zero(this->value()); }
+  bool is_zero() const final { return is_zero(this->value()); }
 
  private:
   scalar_type value_;
@@ -118,7 +117,7 @@ class Constant : public Expr {
     if (!hash_value_) {
       hash_value_ = hash::value(value_);
     } else {
-      assert(*hash_value_ == hash::value(value_));
+      SEQUANT_ASSERT(*hash_value_ == hash::value(value_));
     }
     return *hash_value_;
   }

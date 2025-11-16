@@ -10,6 +10,8 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expressions/expr_algorithms.hpp>
 #include <SeQuant/core/index.hpp>
+#include <SeQuant/core/latex.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 
 #include <cstdlib>
 #include <memory>
@@ -28,7 +30,27 @@ namespace sequant {
 /// index slot types
 ///
 /// @note This does not include slot bundles, like braket, etc.
-enum class SlotType { Bra, Ket, Aux };
+enum class SlotType { Bra = 0, Ket = 1, Aux = 2, Proto = 3 };
+
+template <typename CharT, typename Traits>
+std::basic_ostream<CharT, Traits>& operator<<(
+    std::basic_ostream<CharT, Traits>& stream, SlotType origin) {
+  switch (origin) {
+    case SlotType::Bra:
+      stream << "Bra";
+      break;
+    case SlotType::Ket:
+      stream << "Ket";
+      break;
+    case SlotType::Aux:
+      stream << "Aux";
+      break;
+    case SlotType::Proto:
+      stream << "Proto";
+      break;
+  }
+  return stream;
+}
 
 class TensorCanonicalizer;
 
@@ -271,7 +293,6 @@ class AbstractTensor {
     throw missing_instantiation_for("_swap_bra_ket");
   }
 
- private:
   /// @return mutable view of bra
   /// @warning this is used for mutable access, flush memoized state before
   /// returning!
@@ -291,12 +312,13 @@ class AbstractTensor {
     throw missing_instantiation_for("_aux_mutable");
   }
 
+ private:
   friend class TensorCanonicalizer;
 
   static void permute_impl(AbstractTensor::any_view_randsz indices,
                            std::span<const std::size_t> perm) {
     const auto n = indices.size();
-    assert(indices.size() == perm.size());
+    SEQUANT_ASSERT(indices.size() == perm.size());
     container::svector<Index> sorted_indices(n);
     for (std::size_t i = 0; i != n; ++i) {
       sorted_indices[i] = std::move(indices[perm[i]]);
@@ -310,7 +332,7 @@ class AbstractTensor {
                                    any_view_randsz ket_indices,
                                    std::span<std::size_t> perm_from) {
     const auto n = std::max(bra_indices.size(), ket_indices.size());
-    assert(n == perm_from.size());
+    SEQUANT_ASSERT(n == perm_from.size());
 
     // N.B. column slot bundles are kept in canonical order, see AbstractTensor
     // class dox: paired bundles first, then bra (paired with null ket) and
@@ -330,7 +352,7 @@ class AbstractTensor {
     }
     // corner case: there are only unpaired bra slots, no unpaired ket slots
     if (bra_indices.size() > ket_indices.size()) {
-      assert(ket_indices.size() == npaired);
+      SEQUANT_ASSERT(ket_indices.size() == npaired);
       nunpaired_bra += bra_indices.size() - ket_indices.size();
     }
 
@@ -353,14 +375,14 @@ class AbstractTensor {
 
     container::svector<Index> sorted_indices(n);
     for (std::size_t i = 0; i != bra_indices.size(); ++i) {
-      assert(perm_from[i] < bra_indices.size());
+      SEQUANT_ASSERT(perm_from[i] < bra_indices.size());
       sorted_indices[i] = std::move(bra_indices[perm_from[i]]);
     }
     for (std::size_t i = 0; i != bra_indices.size(); ++i) {
       bra_indices[i] = std::move(sorted_indices[i]);
     }
     for (std::size_t i = 0; i != ket_indices.size(); ++i) {
-      assert(perm_from[i] < ket_indices.size());
+      SEQUANT_ASSERT(perm_from[i] < ket_indices.size());
       sorted_indices[i] = std::move(ket_indices[perm_from[i]]);
     }
     for (std::size_t i = 0; i != ket_indices.size(); ++i) {
@@ -613,6 +635,18 @@ inline void permute_braket(AbstractTensor& t, std::span<std::size_t> perm) {
 ///@}
 
 using AbstractTensorPtr = std::shared_ptr<AbstractTensor>;
+
+/// @brief Check if a tensor with a certain label is present in an expression
+/// @param expr input expression
+/// @param label tensor label to find in the expression
+/// @return true if tensor with given label is found
+bool has_tensor(const ExprPtr& expr, std::wstring label);
+
+/// @brief Removes tensor with a certain label from an expression
+/// @param expr An expression pointer
+/// @param label Label of the tensor to remove
+/// @return ExprPtr with the tensor removed
+ExprPtr remove_tensor(const ExprPtr& expr, std::wstring label);
 
 }  // namespace sequant
 

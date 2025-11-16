@@ -1,15 +1,18 @@
+#include <SeQuant/version.hpp>
+
 #include <SeQuant/core/math.hpp>
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/runtime.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/timer.hpp>
 #include <SeQuant/domain/mbpt/context.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/models/cc.hpp>
 #include <SeQuant/domain/mbpt/spin.hpp>
-#include <fstream>
 
 #include <clocale>
+#include <fstream>
 
 using namespace sequant;
 
@@ -25,6 +28,9 @@ int main(int argc, char* argv[]) {
   std::wcout.precision(std::numeric_limits<double>::max_digits10);
   std::wcerr.precision(std::numeric_limits<double>::max_digits10);
   sequant::set_locale();
+
+  std::cout << "SeQuant revision: " << sequant::git_revision() << "\n";
+  std::cout << "Number of threads: " << sequant::num_threads() << "\n\n";
 
   sequant::set_default_context(
       {.index_space_registry_shared_ptr = mbpt::make_min_sr_spaces(),
@@ -42,6 +48,7 @@ int main(int argc, char* argv[]) {
 #endif
   const size_t NMAX = argc > 1 ? std::atoi(argv[1]) : DEFAULT_NMAX;
 
+  using mbpt::BiorthogonalizationMethod;
   const std::map<std::string, BiorthogonalizationMethod> bm_str2type{
       {"v1", BiorthogonalizationMethod::V1},
       {"v2", BiorthogonalizationMethod::V2}};
@@ -72,7 +79,7 @@ int main(int argc, char* argv[]) {
   std::vector<ExprPtr> cc_st_r(cc_r.size());
   for (auto i = 1; i < cc_r.size(); ++i) {
     const auto tstart = std::chrono::high_resolution_clock::now();
-    cc_st_r[i] = sequant::closed_shell_CC_spintrace(
+    cc_st_r[i] = mbpt::closed_shell_CC_spintrace(
         cc_r[i], {.method = biorthogonalization_method,
                   .naive_spintrace = naive_spintrace});
 
@@ -121,7 +128,7 @@ int main(int argc, char* argv[]) {
       }
       break;
     default:
-      assert(false && "unreachable code reached");
+      SEQUANT_ASSERT(false && "unreachable code reached");
       abort();
   }
 

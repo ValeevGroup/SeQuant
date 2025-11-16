@@ -16,10 +16,11 @@
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/utility/expr.hpp>
 #include <SeQuant/core/utility/indices.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/string.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/op.hpp>
-#include <SeQuant/domain/mbpt/spin.hpp>  // for remove_tensor
+#include <SeQuant/domain/mbpt/spin.hpp>
 
 #include <CLI/CLI.hpp>
 
@@ -29,7 +30,6 @@
 
 #include <boost/algorithm/string.hpp>
 
-#include <cassert>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
@@ -54,12 +54,12 @@ class ItfExportContext : public ItfContext {
   ItfExportContext(const IndexSpaceMeta &meta) : m_meta(&meta) {}
 
   std::string get_tag(const IndexSpace &space) const override {
-    assert(m_meta);
+    SEQUANT_ASSERT(m_meta);
     return m_meta->getTag(space);
   }
 
   std::string get_name(const IndexSpace &space) const override {
-    assert(m_meta);
+    SEQUANT_ASSERT(m_meta);
     return m_meta->getName(space);
   }
 
@@ -130,7 +130,7 @@ ExportNode<> prepareForExport(const ResultExpr &result,
   ExportNode<> tree = to_export_tree(result);
 
   if (result.produces_tensor()) {
-    assert(result.has_label());
+    SEQUANT_ASSERT(result.has_label());
     Tensor result_tensor = result.result_as_tensor();
     ctx.rewrite(result_tensor);
     if (importResult) {
@@ -144,7 +144,7 @@ ExportNode<> prepareForExport(const ResultExpr &result,
     }
   } else {
     if (importResult) {
-      assert(result.has_label());
+      SEQUANT_ASSERT(result.has_label());
       ctx.set_import_name(result.result_as_variable(), toUtf8(result.label()));
     }
     if (createResult) {
@@ -164,7 +164,7 @@ std::vector<ResultExpr> splitContributions(const ResultExpr &result) {
     return {result};
   }
 
-  assert(result.expression()->is<Sum>());
+  SEQUANT_ASSERT(result.expression()->is<Sum>());
 
   Tensor resultTensor(result.label(), bra(result.bra()), ket(result.ket()),
                       aux(result.aux()), result.symmetry(),
@@ -223,7 +223,40 @@ void generateITF(const json &blocks, std::string_view out_file,
         result.set_label(toUtf16(current_result.at("name").get<std::string>()));
       }
 
-      spdlog::debug("Initial equation is:\n{}", result);
+      if (current_result.contains("replace")) {
+        for (const nlohmann::json &sub : current_result.at("replace")) {
+          ExprPtr target = parse_expr(
+              toUtf16(sub.at("target").get<std::string>()), Symmetry::Antisymm);
+          ExprPtr replacement =
+              parse_expr(toUtf16(sub.at("replacement").get<std::string>()),
+                         Symmetry::Antisymm);
+
+          std::string equality_method =
+              sub.value("tensor_equality", "identity");
+
+          spdlog::debug("Replacing {} -> {} (tensor equality: '{}')", target,
+                        replacement, equality_method);
+
+          if (equality_method == "identity") {
+            replace(result, target, replacement);
+          } else if (equality_method == "block") {
+            replace<TensorBlockEqualComparator>(result, target, replacement);
+          } else {
+            throw std::runtime_error("Unknown tensor_equality choice '" +
+                                     equality_method + "'");
+          }
+        }
+      }
+
+      // SeQuant processing often assumes fully expanded/simplified expressions
+      // so at least for now, we start out with exactly that
+      rapid_simplify(result);
+
+      spdlog::debug("Initial (mildly simplified) equation is:\n{}", result);
+
+      if (std::string msg; !is_valid(result, &msg)) {
+        throw std::runtime_error("Input equation is invalid: " + msg);
+      }
 
       ProcessingOptions options =
           extractProcessingOptions(current_result, defaults);
@@ -268,7 +301,7 @@ void generateITF(const json &blocks, std::string_view out_file,
           if (needsSymmetrization(current.expression())) {
             std::optional<ExprPtr> symmetrizer =
                 pop_tensor(current.expression(), L"S");
-            assert(symmetrizer.has_value());
+            SEQUANT_ASSERT(symmetrizer.has_value());
 
             Tensor resultTensor(current.label(), bra(current.bra()),
                                 ket(current.ket()), aux(current.aux()),
@@ -362,7 +395,8 @@ void registerIndexSpaces(const json &spaces, IndexSpaceMeta &meta) {
     entry.tag = current.at("tag").get<std::string>();
 
     std::wstring label = toUtf16(current.at("label").get<std::string>());
-    registry.add(label, type, size);
+    registry.add(label, type, size,
+                 IndexSpace::QuantumNumbers{mbpt::Spin::any});
 
     spdlog::debug(
         "Registered index space '{}' with label '{}', tag '{}' and size {}",
@@ -399,8 +433,15 @@ void generalSetup() {
 
 int main(int argc, char **argv) {
   set_locale();
-  set_default_context({.index_space_registry = IndexSpaceRegistry(),
-                       .vacuum = Vacuum::SingleProduct});
+  Context ctx({.index_space_registry = IndexSpaceRegistry(),
+               .vacuum = Vacuum::SingleProduct});
+  // TODO: This only hides a bug/issue in the processing code where SeQuant
+  // assumes that it is okay to freely rename external indices while
+  // canonicalizing an expression. However, this breaks down as soon as those
+  // indices are tracked externally (e.g. ResultExpr) as those won't get updated
+  // to use the new names.
+  ctx.set(CanonicalizeOptions{.method = CanonicalizationMethod::Complete});
+  set_default_context(ctx);
   generalSetup();
 
   CLI::App app(

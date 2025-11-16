@@ -4,7 +4,7 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expressions/abstract_tensor.hpp>
 #include <SeQuant/core/index.hpp>
-#include <SeQuant/core/tensor_network_v2.hpp>
+#include <SeQuant/core/tensor_network/v2.hpp>
 
 #include <utility>
 #include <variant>
@@ -175,11 +175,11 @@ class VertexPainter : public VertexPainterImpl {
 // Template specializations vor TNv1 and TNv2, which still require
 // operator()(const AbstractTensor &) (refactoring would require changing tests
 // as well)
-class TensorNetwork;
+class TensorNetworkV1;
 class TensorNetworkV2;
 
 template <>
-class VertexPainter<TensorNetwork> : public VertexPainterImpl {
+class VertexPainter<TensorNetworkV1> : public VertexPainterImpl {
  public:
   using VertexPainterImpl::VertexPainterImpl;
 
@@ -193,9 +193,9 @@ class VertexPainter<TensorNetwork> : public VertexPainterImpl {
 };
 
 template <>
-class VertexPainter<TensorNetworkV2> : public VertexPainter<TensorNetwork> {
+class VertexPainter<TensorNetworkV2> : public VertexPainter<TensorNetworkV1> {
  public:
-  using VertexPainter<TensorNetwork>::VertexPainter;
+  using VertexPainter<TensorNetworkV1>::VertexPainter;
 };
 
 }  // namespace sequant

@@ -1,7 +1,6 @@
 #ifndef SEQUANT_OPTIMIZE_OPTIMIZE_HPP
 #define SEQUANT_OPTIMIZE_OPTIMIZE_HPP
 
-#include <cassert>
 #include <cmath>
 #include <cstddef>
 #include <functional>
@@ -16,12 +15,11 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
-#include <SeQuant/core/tensor_network_v3.hpp>
+#include <SeQuant/core/tensor_network.hpp>
 #include <SeQuant/core/utility/indices.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 
-#if __cplusplus >= 202002L
 #include <bit>
-#endif
 
 namespace {
 
@@ -31,11 +29,7 @@ namespace {
 ///
 template <typename T>
 bool has_single_bit(T x) noexcept {
-#if __cplusplus < 202002L
-  return x != 0 && (x & (x - 1)) == 0;
-#else
   return std::has_single_bit(x);
-#endif
 }
 
 }  // namespace
@@ -131,8 +125,8 @@ container::svector<Index> common_indices(I1 const& idxs1, I2 const& idxs2) {
   using std::end;
   using std::set_intersection;
 
-  assert(std::is_sorted(begin(idxs1), end(idxs1), Comp{}));
-  assert(std::is_sorted(begin(idxs2), end(idxs2), Comp{}));
+  SEQUANT_ASSERT(std::is_sorted(begin(idxs1), end(idxs1), Comp{}));
+  SEQUANT_ASSERT(std::is_sorted(begin(idxs2), end(idxs2), Comp{}));
 
   container::svector<Index> result;
 
@@ -155,8 +149,8 @@ container::svector<Index> diff_indices(I1 const& idxs1, I2 const& idxs2) {
   using std::end;
   using std::set_symmetric_difference;
 
-  assert(std::is_sorted(begin(idxs1), end(idxs1), Comp{}));
-  assert(std::is_sorted(begin(idxs2), end(idxs2), Comp{}));
+  SEQUANT_ASSERT(std::is_sorted(begin(idxs1), end(idxs1), Comp{}));
+  SEQUANT_ASSERT(std::is_sorted(begin(idxs2), end(idxs2), Comp{}));
 
   container::svector<Index> result;
 
@@ -175,7 +169,7 @@ container::svector<Index> diff_indices(I1 const& idxs1, I2 const& idxs2) {
 template <typename IdxToSz,
           std::enable_if_t<std::is_invocable_r_v<size_t, IdxToSz, const Index&>,
                            bool> = true>
-EvalSequence single_term_opt(TensorNetworkV3 const& network,
+EvalSequence single_term_opt(TensorNetwork const& network,
                              IdxToSz const& idxsz) {
   using ranges::views::concat;
   using IndexContainer = container::svector<Index>;
@@ -234,7 +228,7 @@ EvalSequence single_term_opt(TensorNetworkV3 const& network,
 
     auto& curr_result = results[n];
     if (has_single_bit(n)) {
-      assert(curr_indices.empty());
+      SEQUANT_ASSERT(curr_indices.empty());
       // evaluation of a single atomic tensor
       curr_result.flops = 0;
       curr_result.indices = std::move(nth_tensor_indices[power_pos]);
@@ -288,7 +282,7 @@ ExprPtr single_term_opt(Product const& prod, IdxToSz const& idxsz) {
                                prod.factors().end(), Product::Flatten::No});
   auto const tensors =
       prod | filter(&ExprPtr::template is<Tensor>) | ranges::to_vector;
-  auto seq = single_term_opt(TensorNetworkV3{tensors}, idxsz);
+  auto seq = single_term_opt(TensorNetwork{tensors}, idxsz);
   auto result = container::svector<ExprPtr>{};
   for (auto i : seq)
     if (i == -1) {
@@ -403,6 +397,26 @@ ExprPtr optimize(ExprPtr const& expr, IdxToSize const& idx2size,
 ///                    True by default.
 /// \return Optimized expression for lower evaluation cost.
 ExprPtr optimize(ExprPtr const& expr, bool reorder_sum = true);
+
+/// Optimize the expression using IndexSpace::aproximate_size() for reference
+/// index extent.
+///
+/// \param expr  Expression to be optimized.
+/// \param reorder_sum If true, the summands are reordered so that terms with
+///                    common sub-expressions appear closer to each other.
+///                    True by default.
+/// \return Optimized expression for lower evaluation cost.
+ResultExpr& optimize(ResultExpr& expr, bool reorder_sum = true);
+
+/// Optimize the expression using IndexSpace::aproximate_size() for reference
+/// index extent.
+///
+/// \param expr  Expression to be optimized.
+/// \param reorder_sum If true, the summands are reordered so that terms with
+///                    common sub-expressions appear closer to each other.
+///                    True by default.
+/// \return Optimized expression for lower evaluation cost.
+[[nodiscard]] ResultExpr& optimize(ResultExpr&& expr, bool reorder_sum = true);
 
 }  // namespace sequant
 
