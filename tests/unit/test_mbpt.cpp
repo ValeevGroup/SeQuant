@@ -480,15 +480,25 @@ TEST_CASE("mbpt", "[mbpt]") {
           get_default_context().index_space_registry()->retrieve(L"z"));
 
       using namespace mbpt;
-      // ctors (rank, pert_order == 1, batch)
-      REQUIRE_NOTHROW(op::H_pt(1, 1, 1));
-      REQUIRE_NOTHROW(op::H_pt(2, 1, 2));
-      REQUIRE_NOTHROW(op::T_pt(3, 1, 2));
+      REQUIRE_NOTHROW(op::H_pt({.rank = 1, .nbatch = 1}));
+      REQUIRE_NOTHROW(op::H_pt({.rank = 2, .nbatch = 2}));
+      REQUIRE_NOTHROW(
+          op::Λ_pt({.rank = 3, .batch_ordinals = {3, 4, 5}, .skip1 = true}));
+
+      // invalid usages
+      REQUIRE_THROWS_AS(op::H_pt({.nh = nₕ(2)}), sequant::Exception);
+      // have to set both np and nh
+      REQUIRE_THROWS_AS(
+          op::H_pt({.nh = nₕ(2), .np = nₚ(2), .rank = 2}),
+          sequant::Exception);  // cannot set both rank and (np,nh)
+      REQUIRE_THROWS_AS(
+          op::H_pt({.rank = 2, .nbatch = 2, .batch_ordinals = {1, 2}}),
+          sequant::Exception);  // cannot set both nbatch and batch_ordinals
 
       // operations
-      auto h1 = op::H_pt(1, 1, 1);
-      auto h1_2 = op::H_pt(1, 1, 2);
-      auto pt1 = op::T_pt(2, 1, 1);
+      auto h1 = op::H_pt({.rank = 1, .nbatch = 1});
+      auto h1_2 = op::H_pt({.rank = 1, .batch_ordinals = {1, 2}});
+      auto pt1 = op::T_pt({.rank = 2, .batch_ordinals = {1}});
 
       auto sum1 = h1 + h1;
       simplify(sum1);
@@ -514,8 +524,6 @@ TEST_CASE("mbpt", "[mbpt]") {
               L"{{\\hat{h¹}}{[{z}_{1}]}{\\hat{t¹}_{2}}{[{z}_{1}]}}\\bigr) }");
 
       // lowering to tensor form
-      // TODO: Rewrite using SimplifiesTo, but will wait until the upcoming
-      // refactor
       auto sum1_t = simplify(lower_to_tensor_form(sum1));
       // std::wcout << "sum1_t: " << to_latex(sum1_t) << std::endl;
       REQUIRE(to_latex(sum1_t) ==
