@@ -814,80 +814,57 @@ ExprPtr S(std::int64_t K) {
       OpType::S, cre(creators), ann(annihilators))(dep, {Symmetry::Nonsymm});
 }
 
-ExprPtr H_pt(std::size_t R, std::size_t order) {
-  return tensor::H_pt({.rank = R, .order = order});
-}
-
-ExprPtr H_pt(const OpParams& params) {
+ExprPtr H_pt(std::size_t R, const OpParams& params) {
   params.validate();
   SEQUANT_ASSERT(params.order == 1 &&
-                 "sequant::mbpt::tensor::H_pt(OpParams): only supports first "
+                 "sequant::mbpt::tensor::H_pt: only supports first "
                  "order perturbation");
-  SEQUANT_ASSERT(params.rank > 0 && "H_pt requires rank > 0");
-  return OpMaker<Statistics::FermiDirac>(OpType::h_1, params)();
+  SEQUANT_ASSERT(R > 0 && "Operator rank must be > 0");
+  return OpMaker<Statistics::FermiDirac>(OpType::h_1, ncre(R), nann(R),
+                                         params)();
 }
 
-ExprPtr T_pt_(std::size_t K, std::size_t order) {
-  return tensor::T_pt_({.rank = K, .order = order});
-}
-
-ExprPtr T_pt_(const OpParams& params) {
+ExprPtr T_pt_(std::size_t K, const OpParams& params) {
   params.validate();
   SEQUANT_ASSERT(params.order == 1 &&
-                 "sequant::mbpt::tensor::T_pt_(OpParams): only supports first "
+                 "sequant::mbpt::tensor::T_pt_: only supports first "
                  "order perturbation");
-  SEQUANT_ASSERT(params.rank > 0 && "T_pt_ requires rank > 0");
-  return OpMaker<Statistics::FermiDirac>(OpType::t_1, params)();
+  SEQUANT_ASSERT(K > 0 && "Operator rank must be > 0");
+  return OpMaker<Statistics::FermiDirac>(OpType::t_1, ncre(K), nann(K),
+                                         params)();
 }
 
-ExprPtr T_pt(std::size_t K, std::size_t order, bool skip1) {
-  return tensor::T_pt({.rank = K, .order = order, .skip1 = skip1});
-}
-
-ExprPtr T_pt(const OpParams& params) {
+ExprPtr T_pt(std::size_t K, const OpParams& params) {
   params.validate();
-  if (params.skip1) SEQUANT_ASSERT(params.rank > 1);
+  if (params.skip1) SEQUANT_ASSERT(K > 1);
   ExprPtr result;
-  for (auto k = (params.skip1 ? 2ul : 1ul); k <= params.rank; ++k) {
-    result += tensor::T_pt_({.rank = k,
-                             .nh = params.nh,
-                             .np = params.np,
-                             .order = params.order,
-                             .nbatch = params.nbatch,
-                             .batch_ordinals = params.batch_ordinals,
-                             .skip1 = false});
+  for (auto k = (params.skip1 ? 2ul : 1ul); k <= K; ++k) {
+    result += tensor::T_pt_(k, {.order = params.order,
+                                .nbatch = params.nbatch,
+                                .batch_ordinals = params.batch_ordinals,
+                                .skip1 = false});
   }
   return result;
 }
 
-ExprPtr Λ_pt_(std::size_t K, std::size_t order) {
-  return tensor::Λ_pt_({.rank = K, .order = order});
-}
-
-ExprPtr Λ_pt_(const OpParams& params) {
+ExprPtr Λ_pt_(std::size_t K, const OpParams& params) {
   SEQUANT_ASSERT(params.order == 1 &&
-                 "sequant::mbpt::tensor::Λ_pt_(OpParams): only supports first "
+                 "sequant::mbpt::tensor::Λ_pt_: only supports first "
                  "order perturbation");
-  SEQUANT_ASSERT(params.rank > 0 && "Λ_pt_ requires rank > 0");
-  return OpMaker<Statistics::FermiDirac>(OpType::λ_1, params)();
+  SEQUANT_ASSERT(K > 0 && "Operator rank must be > 0");
+  return OpMaker<Statistics::FermiDirac>(OpType::λ_1, ncre(K), nann(K),
+                                         params)();
 }
 
-ExprPtr Λ_pt(std::size_t K, std::size_t order, bool skip1) {
-  return tensor::Λ_pt({.rank = K, .order = order, .skip1 = skip1});
-}
-
-ExprPtr Λ_pt(const OpParams& params) {
+ExprPtr Λ_pt(std::size_t K, const OpParams& params) {
   params.validate();
-  if (params.skip1) SEQUANT_ASSERT(params.rank > 1);
+  if (params.skip1) SEQUANT_ASSERT(K > 1);
   ExprPtr result;
-  for (auto k = (params.skip1 ? 2ul : 1ul); k <= params.rank; ++k) {
-    result += tensor::Λ_pt_({.rank = k,
-                             .nh = params.nh,
-                             .np = params.np,
-                             .order = params.order,
-                             .nbatch = params.nbatch,
-                             .batch_ordinals = params.batch_ordinals,
-                             .skip1 = false});
+  for (auto k = (params.skip1 ? 2ul : 1ul); k <= K; ++k) {
+    result += tensor::Λ_pt_(k, {.order = params.order,
+                                .nbatch = params.nbatch,
+                                .batch_ordinals = params.batch_ordinals,
+                                .skip1 = false});
   }
   return result;
 }
@@ -1078,96 +1055,62 @@ ExprPtr make_op_from_params(std::function<std::wstring_view()> label_gen,
 }
 }  // anonymous namespace
 
-ExprPtr H_pt(std::size_t R, std::size_t order) {
-  return H_pt(OpParams{.rank = R, .order = order});
-}
-
-ExprPtr H_pt(const OpParams& params) {
-  SEQUANT_ASSERT(params.rank > 0);
+ExprPtr H_pt(std::size_t R, const OpParams& params) {
+  SEQUANT_ASSERT(R > 0);
   SEQUANT_ASSERT(params.order == 1 &&
                  "only first order perturbation is supported now");
 
   return make_op_from_params(
       []() -> std::wstring_view { return optype2label.at(OpType::h_1); },
-      [params]() -> ExprPtr { return tensor::H_pt(params); },
-      [params](qnc_t& qns) {
-        qns = combine(general_type_qns(params.rank), qns);
-      },
-      params);
+      [R, &params]() -> ExprPtr { return tensor::H_pt(R, params); },
+      [R](qnc_t& qns) { qns = combine(general_type_qns(R), qns); }, params);
 }
 
-ExprPtr T_pt_(std::size_t K, std::size_t order) {
-  return op::T_pt_({.rank = K, .order = order});
-}
-
-ExprPtr T_pt_(const OpParams& params) {
-  SEQUANT_ASSERT(params.rank > 0);
+ExprPtr T_pt_(std::size_t K, const OpParams& params) {
+  SEQUANT_ASSERT(K > 0);
   SEQUANT_ASSERT(params.order == 1 &&
                  "only first order perturbation is supported now");
 
   return make_op_from_params(
       []() -> std::wstring_view { return optype2label.at(OpType::t_1); },
-      [params]() -> ExprPtr { return tensor::T_pt_(params); },
-      [params](qnc_t& qns) {
-        qns = combine(excitation_type_qns(params.rank), qns);
-      },
-      params);
+      [K, params]() -> ExprPtr { return tensor::T_pt_(K, params); },
+      [K](qnc_t& qns) { qns = combine(excitation_type_qns(K), qns); }, params);
 }
 
-ExprPtr T_pt(std::size_t K, std::size_t order, bool skip1) {
-  return op::T_pt({.rank = K, .order = order, .skip1 = skip1});
-}
-
-ExprPtr T_pt(const OpParams& params) {
+ExprPtr T_pt(std::size_t K, const OpParams& params) {
   params.validate();
-  SEQUANT_ASSERT(params.rank > (params.skip1 ? 1 : 0));
+  SEQUANT_ASSERT(K > (params.skip1 ? 1 : 0));
   ExprPtr result;
-  for (auto k = (params.skip1 ? 2ul : 1ul); k <= params.rank; ++k) {
-    result += T_pt_({.rank = k,
-                     .nh = params.nh,
-                     .np = params.np,
-                     .order = params.order,
-                     .nbatch = params.nbatch,
-                     .batch_ordinals = params.batch_ordinals,
-                     .skip1 = false});
+  for (auto k = (params.skip1 ? 2ul : 1ul); k <= K; ++k) {
+    result += T_pt_(k, {.order = params.order,
+                        .nbatch = params.nbatch,
+                        .batch_ordinals = params.batch_ordinals,
+                        .skip1 = false});
   }
   return result;
 }
 
-ExprPtr Λ_pt_(std::size_t K, std::size_t order) {
-  return op::Λ_pt_({.rank = K, .order = order});
-}
-
-ExprPtr Λ_pt_(const OpParams& params) {
-  SEQUANT_ASSERT(params.rank > 0);
+ExprPtr Λ_pt_(std::size_t K, const OpParams& params) {
+  SEQUANT_ASSERT(K > 0);
   SEQUANT_ASSERT(params.order == 1 &&
                  "only first order perturbation is supported now");
 
   return make_op_from_params(
       []() -> std::wstring_view { return optype2label.at(OpType::λ_1); },
-      [params]() -> ExprPtr { return tensor::Λ_pt_(params); },
-      [params](qnc_t& qns) {
-        qns = combine(deexcitation_type_qns(params.rank), qns);
-      },
+      [K, params]() -> ExprPtr { return tensor::Λ_pt_(K, params); },
+      [K](qnc_t& qns) { qns = combine(deexcitation_type_qns(K), qns); },
       params);
 }
 
-ExprPtr Λ_pt(std::size_t K, std::size_t order, bool skip1) {
-  return op::Λ_pt({.rank = K, .order = order, .skip1 = skip1});
-}
-
-ExprPtr Λ_pt(const OpParams& params) {
+ExprPtr Λ_pt(std::size_t K, const OpParams& params) {
   params.validate();
-  SEQUANT_ASSERT(params.rank > (params.skip1 ? 1 : 0));
+  SEQUANT_ASSERT(K > (params.skip1 ? 1 : 0));
   ExprPtr result;
-  for (auto k = (params.skip1 ? 2ul : 1ul); k <= params.rank; ++k) {
-    result += Λ_pt_({.rank = k,
-                     .nh = params.nh,
-                     .np = params.np,
-                     .order = params.order,
-                     .nbatch = params.nbatch,
-                     .batch_ordinals = params.batch_ordinals,
-                     .skip1 = false});
+  for (auto k = (params.skip1 ? 2ul : 1ul); k <= K; ++k) {
+    result += Λ_pt_(k, {.order = params.order,
+                        .nbatch = params.nbatch,
+                        .batch_ordinals = params.batch_ordinals,
+                        .skip1 = false});
   }
   return result;
 }

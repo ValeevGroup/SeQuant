@@ -1065,68 +1065,44 @@ DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(A);
 /// deexcitation (if \p K < 0) operator of rank `|K|`
 ExprPtr S(std::int64_t K);
 
-/// @brief Makes perturbation operator of rank \p R
-/// @param R rank of the operator,`R = 1` implies one-body perturbation
-/// @param order order of perturbation
-/// @pre `order==1`, only first order perturbation is supported now
-ExprPtr H_pt(std::size_t R, std::size_t order = 1);
-
-/// @brief Makes perturbation operator from OpParams
-/// @param params OpParams for operator construction
+/// @brief Makes perturbation operator
+/// @param R rank of the perturbation operator
+/// @param params OpParams for operator construction. Default: order=1
 /// @pre `params.order==1`, only first order perturbation is supported now
-ExprPtr H_pt(const OpParams& params);
+/// @pre If batching is used, ISR must contain batching space
+ExprPtr H_pt(std::size_t R, const OpParams& params = {.order = 1});
 
-/// @brief Makes perturbed particle-conserving excitation operator of rank \p K
+/// @brief Makes perturbed particle-conserving excitation operator
 /// @param K rank of the excitation operator
-/// @param order order of perturbation
-/// @pre `order==1`, only first order perturbation is supported now
-ExprPtr T_pt_(std::size_t K, std::size_t order = 1);
-
-/// @brief Makes perturbed particle-conserving excitation operator from OpParams
-/// @param params OpParams for operator construction
+/// @param params OpParams for operator construction. Default: order=1
 /// @pre `params.order==1`, only first order perturbation is supported now
-ExprPtr T_pt_(const OpParams& params);
+/// @pre If batching is used, ISR must contain batching space
+ExprPtr T_pt_(std::size_t K, const OpParams& params = {.order = 1});
 
-/// @brief Makes sum of perturbed particle-conserving excitation operators up to
-/// rank \p K
+/// @brief Makes sum of perturbed particle-conserving excitation operators
 /// @param K rank up to which the sum is to be formed
-/// @param order order of perturbation
-/// @param skip1 if true, skips single excitations
-/// @pre `order==1`, only first order perturbation is supported now
-ExprPtr T_pt(std::size_t K, std::size_t order = 1, bool skip1 = false);
-
-/// @brief Makes sum of perturbed particle-conserving excitation operators from
-/// OpParams
-/// @param params OpParams for operator construction
+/// @param params OpParams for operator construction. Default: order=1,
+/// skip1=false
 /// @pre `params.order==1`, only first order perturbation is supported now
-ExprPtr T_pt(const OpParams& params);
+/// @pre If batching is used, ISR must contain batching space
+ExprPtr T_pt(std::size_t K,
+             const OpParams& params = {.order = 1, .skip1 = false});
 
-/// @brief Makes perturbed particle-conserving deexcitation operator of
-/// rank \p K
+/// @brief Makes perturbed particle-conserving deexcitation operator
 /// @param K rank of the deexcitation operator
-/// @param order order of perturbation
-/// @pre `order==1`, only first order perturbation is supported now
-ExprPtr Λ_pt_(std::size_t K, std::size_t order = 1);
-
-/// @brief Makes perturbed particle-conserving deexcitation operator from
-/// OpParams
-/// @param params OpParams for operator construction
+/// @param params OpParams for operator construction. Default: order=1
 /// @pre `params.order==1`, only first order perturbation is supported now
-ExprPtr Λ_pt_(const OpParams& params);
-
-/// @brief Makes sum of perturbed particle-conserving deexcitation operators up
-/// to rank \p K
-/// @param K rank up to which the sum is to be formed
-/// @param order order of perturbation
-/// @param skip1 if true, skips single deexcitations
-/// @pre `order==1`, only first order perturbation is supported now
-ExprPtr Λ_pt(std::size_t K, std::size_t order = 1, bool skip1 = false);
+/// @pre If batching is used, ISR must contain batching space
+ExprPtr Λ_pt_(std::size_t K, const OpParams& params = {.order = 1});
 
 /// @brief Makes sum of perturbed particle-conserving deexcitation operators
-/// from OpParams
-/// @param params OpParams for operator construction
+/// @param K rank up to which the sum is to be formed
+/// @param params OpParams for operator construction. Default: order=1,
+/// skip1=false
 /// @pre `params.order==1`, only first order perturbation is supported now
-ExprPtr Λ_pt(const OpParams& params);
+/// @pre If batching is used, ISR must contain batching space
+ExprPtr Λ_pt(std::size_t K,
+             const OpParams& params = {.order = 1, .skip1 = false});
 }  // namespace tensor
 }  // namespace op
 
@@ -1255,68 +1231,43 @@ DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(A);
 /// deexcitation (if \p K < 0) operator of rank `|K|`
 ExprPtr S(std::int64_t K);
 
-/// @brief Makes perturbation operator of rank \p R
-/// @param R rank of the operator,`R = 1` implies one-body perturbation
-/// @param order order of perturbation
-/// @pre `order==1`, only first order perturbation is supported now
-ExprPtr H_pt(std::size_t R, std::size_t order = 1);
-
 /// @brief Makes perturbation operator from OpParams
-/// @param params OpParams for operator construction
+/// @param params OpParams for operator construction. Default: order=1
 /// @pre `params.order==1`, only first order perturbation is supported now
-ExprPtr H_pt(const OpParams& params);
-
-/// @brief Makes perturbed particle-conserving excitation operator of rank \p K
-/// @param K rank of the excitation operator
-/// @param order order of perturbation
-/// @pre `order==1`, only first order perturbation is supported now
-ExprPtr T_pt_(std::size_t K, std::size_t order = 1);
+/// @pre If batching is used, ISR must contain batching space
+ExprPtr H_pt(std::size_t R, const OpParams& params = {.order = 1});
 
 /// @brief Makes perturbed particle-conserving excitation operator from OpParams
-/// @param params OpParams for operator construction
-/// @pre `params.order==1`, only first order perturbation is supported now
-ExprPtr T_pt_(const OpParams& params);
-
-/// @brief Makes sum of perturbed particle-conserving excitation operators up to
-/// rank \p K
 /// @param K rank up to which the sum is to be formed
-/// @param order order of perturbation
-/// @param skip1 if true, skips single excitations
-/// @pre `order==1`, only first order perturbation is supported now
-ExprPtr T_pt(std::size_t K, std::size_t order = 1, bool skip1 = false);
-
-/// @brief Makes sum of perturbed particle-conserving excitation operators from
-/// OpParams
-/// @param params OpParams for operator construction
+/// @param params OpParams for operator construction. Default: order=1
 /// @pre `params.order==1`, only first order perturbation is supported now
-ExprPtr T_pt(const OpParams& params);
+/// @pre If batching is used, ISR must contain batching space
+ExprPtr T_pt_(std::size_t K, const OpParams& params = {.order = 1});
 
-/// @brief Makes perturbed particle-conserving deexcitation operator of
-/// rank \p K
+/// @brief Makes sum of perturbed particle-conserving excitation operators
+/// @param K rank up to which the sum is to be formed
+/// @param params OpParams for operator construction. Default: order=1,
+/// skip1=false
+/// @pre `params.order==1`, only first order perturbation is supported now
+/// @pre If batching is used, ISR must contain batching space
+ExprPtr T_pt(std::size_t K,
+             const OpParams& params = {.order = 1, .skip1 = false});
+
+/// @brief Makes perturbed particle-conserving deexcitation operator
 /// @param K rank of the deexcitation operator
-/// @param order order of perturbation
-/// @pre `order==1`, only first order perturbation is supported now
-ExprPtr Λ_pt_(std::size_t K, std::size_t order = 1);
-
-/// @brief Makes perturbed particle-conserving deexcitation operator from
-/// OpParams
-/// @param params OpParams for operator construction
+/// @param params OpParams for operator construction. Default: order=1
 /// @pre `params.order==1`, only first order perturbation is supported now
-ExprPtr Λ_pt_(const OpParams& params);
-
-/// @brief Makes sum of perturbed particle-conserving deexcitation operators up
-/// to rank \p K
-/// @param K rank up to which the sum is to be formed
-/// @param order order of perturbation
-/// @param skip1 if true, skips single deexcitations
-/// @pre `order==1`, only first order perturbation is supported now
-ExprPtr Λ_pt(std::size_t K, std::size_t order = 1, bool skip1 = false);
+/// @pre If batching is used, ISR must contain batching space
+ExprPtr Λ_pt_(std::size_t K, const OpParams& params = {.order = 1});
 
 /// @brief Makes sum of perturbed particle-conserving deexcitation operators
-/// from OpParams
-/// @param params OpParams for operator construction
+/// @param K rank up to which the sum is to be formed
+/// @param params OpParams for operator construction. Default: order=1,
+/// skip1=false
 /// @pre `params.order==1`, only first order perturbation is supported now
-ExprPtr Λ_pt(const OpParams& params);
+/// @pre If batching is used, ISR must contain batching space
+ExprPtr Λ_pt(std::size_t K,
+             const OpParams& params = {.order = 1, .skip1 = false});
 
 /// @brief computes the quantum number change effected by a given Operator or
 /// Operator Product when applied to the vacuum state

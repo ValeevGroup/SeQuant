@@ -202,7 +202,7 @@ TEST_CASE("mbpt", "[mbpt]") {
       auto l1 = Λ_(1);
       auto t2 = T_(2);
       auto l2 = Λ_(2);
-      auto h_pt = H_pt(1, 1);
+      auto h_pt = H_pt(1, {.order = 1});
       REQUIRE(to_latex(f * t1 * t2) == to_latex(canonicalize(f * t2 * t1)));
       REQUIRE(to_latex(canonicalize(f * t1 * t2)) ==
               to_latex(canonicalize(f * t2 * t1)));
@@ -480,36 +480,30 @@ TEST_CASE("mbpt", "[mbpt]") {
           get_default_context().index_space_registry()->retrieve(L"z"));
 
       using namespace mbpt;
-      REQUIRE_NOTHROW(op::H_pt({.rank = 1, .nbatch = 1}));
-      REQUIRE_NOTHROW(op::H_pt({.rank = 2, .nbatch = 2}));
+      REQUIRE_NOTHROW(op::H_pt(1, {.nbatch = 1}));
+      REQUIRE_NOTHROW(op::H_pt(2, {.nbatch = 2}));
       REQUIRE_NOTHROW(
-          op::Λ_pt({.rank = 3, .batch_ordinals = {3, 4, 5}, .skip1 = true}));
-      REQUIRE_NOTHROW(op::T_pt({.rank = 2, .nbatch = 20}));
+          op::Λ_pt(3, {.batch_ordinals = {3, 4, 5}, .skip1 = true}));
+      REQUIRE_NOTHROW(op::T_pt(1, {.nbatch = 20}));
 
       // invalid usages
-      // have to set both np and nh
-      REQUIRE_THROWS_AS(op::H_pt({.nh = nₕ(2)}), sequant::Exception);
-      // cannot set both rank and (np,nh)
-      REQUIRE_THROWS_AS(op::H_pt({.rank = 2, .nh = nₕ(2), .np = nₚ(2)}),
-                        sequant::Exception);
       // cannot set both nbatch and batch_ordinals
-      REQUIRE_THROWS_AS(
-          op::H_pt({.rank = 2, .nbatch = 2, .batch_ordinals = {1, 2}}),
-          sequant::Exception);
+      REQUIRE_THROWS_AS(op::H_pt(2, {.nbatch = 2, .batch_ordinals = {1, 2}}),
+                        sequant::Exception);
       // all ordinals must be unique
-      REQUIRE_THROWS_AS(op::H_pt({.rank = 2, .batch_ordinals = {1, 2, 2}}),
+      REQUIRE_THROWS_AS(op::H_pt(2, {.batch_ordinals = {1, 2, 2}}),
                         sequant::Exception);
       // ordinals must be sorted
-      REQUIRE_THROWS_AS(op::H_pt({.rank = 2, .batch_ordinals = {3, 2}}),
+      REQUIRE_THROWS_AS(op::H_pt(1, {.batch_ordinals = {3, 2}}),
                         sequant::Exception);
 
       // operations
-      auto h0 = op::H_pt({.rank = 1});
+      auto h0 = op::H_pt(1);
       REQUIRE(to_latex(h0) == L"{\\hat{h¹}}");
 
-      auto h1 = op::H_pt({.rank = 1, .nbatch = 1});
-      auto h1_2 = op::H_pt({.rank = 1, .batch_ordinals = {1, 2}});
-      auto pt1 = op::T_pt({.rank = 2, .batch_ordinals = {1}});
+      auto h1 = op::H_pt(1, {.nbatch = 1});
+      auto h1_2 = op::H_pt(1, {.batch_ordinals = {1, 2}});
+      auto pt1 = op::T_pt(2, {.batch_ordinals = {1}});
 
       auto sum0 = h0 + h1;
       simplify(sum0);
