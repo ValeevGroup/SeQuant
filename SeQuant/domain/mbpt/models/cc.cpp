@@ -148,22 +148,17 @@ std::vector<ExprPtr> CC::t_pt(size_t rank, [[maybe_unused]] size_t order,
                  "operator is supported now");
   SEQUANT_ASSERT(ansatz_ == Ansatz::T && "unitary ansatz is not yet supported");
 
-  // OpParams for operators
-  OpParams hpt_params{.rank = rank, .order = order};
-  OpParams tpt_params{.rank = N, .order = order};
-  if (nbatch) {
-    hpt_params.nbatch = nbatch.value();
-    tpt_params.nbatch = nbatch.value();
-  }
-
   // construct h1_bar
   // truncate h1_bar at rank 2 for one-body perturbation
   // operator and at rank 4 for two-body perturbation operator
   const auto h1_truncate_at = rank == 1 ? 2 : 4;
-  const auto h1_bar = mbpt::lst(H_pt(hpt_params), T(N), h1_truncate_at);
+  const auto h1_bar =
+      mbpt::lst(H_pt({.rank = rank, .order = order, .nbatch = nbatch}), T(N),
+                h1_truncate_at);
 
   // construct [hbar, T(1)]
-  const auto hbar_pert = mbpt::lst(H(), T(N), 3) * T_pt(tpt_params);
+  const auto hbar_pert = mbpt::lst(H(), T(N), 3) *
+                         T_pt({.rank = N, .order = order, .nbatch = nbatch});
 
   // [Eq. 34, WIREs Comput Mol Sci. 2019; 9:e1406]
   const auto expr = simplify(h1_bar + hbar_pert);
@@ -180,11 +175,8 @@ std::vector<ExprPtr> CC::t_pt(size_t rank, [[maybe_unused]] size_t order,
 
   std::vector<ExprPtr> result(N + 1);
   for (auto p = N; p >= 1; --p) {
-    OpParams tp_params{.rank = p, .order = order};
-    if (nbatch) {
-      tp_params.nbatch = nbatch.value();
-    }
-    const auto freq_term = ex<Variable>(L"ω") * P(nₚ(p)) * T_pt_(tp_params);
+    const auto freq_term = ex<Variable>(L"ω") * P(nₚ(p)) *
+                           T_pt_({.rank = p, .order = order, .nbatch = nbatch});
     result.at(p) =
         this->ref_av(P(nₚ(p)) * expr, op_connect) - this->ref_av(freq_term);
   }
@@ -201,16 +193,6 @@ std::vector<ExprPtr> CC::λ_pt(size_t rank, [[maybe_unused]] size_t order,
                  "operator is supported now");
   SEQUANT_ASSERT(ansatz_ == Ansatz::T && "unitary ansatz is not yet supported");
 
-  // OpParams for operators
-  OpParams hpt_params{.rank = rank, .order = order};
-  OpParams tpt_params{.rank = N, .order = order};
-  OpParams lpt_params{.rank = N, .order = order};
-  if (nbatch) {
-    hpt_params.nbatch = nbatch.value();
-    tpt_params.nbatch = nbatch.value();
-    lpt_params.nbatch = nbatch.value();
-  }
-
   // construct hbar
   const auto hbar = mbpt::lst(H(), T(N), 4);
 
@@ -218,15 +200,19 @@ std::vector<ExprPtr> CC::λ_pt(size_t rank, [[maybe_unused]] size_t order,
   // truncate h1_bar at rank 2 for one-body perturbation
   // operator and at rank 4 for two-body perturbation operator
   const auto h1_truncate_at = rank == 1 ? 2 : 4;
-  const auto h1_bar = mbpt::lst(H_pt(hpt_params), T(N), h1_truncate_at);
+  const auto h1_bar =
+      mbpt::lst(H_pt({.rank = rank, .order = order, .nbatch = nbatch}), T(N),
+                h1_truncate_at);
 
   // construct [hbar, T(1)]
-  const auto hbar_pert = mbpt::lst(H(), T(N), 3) * T_pt(tpt_params);
+  const auto hbar_pert = mbpt::lst(H(), T(N), 3) *
+                         T_pt({.rank = N, .order = order, .nbatch = nbatch});
 
   // [Eq. 35, WIREs Comput Mol Sci. 2019; 9:e1406]
   const auto One = ex<Constant>(1);
   const auto expr =
-      simplify((One + Λ(N)) * (h1_bar + hbar_pert) + Λ_pt(lpt_params) * hbar);
+      simplify((One + Λ(N)) * (h1_bar + hbar_pert) +
+               Λ_pt({.rank = N, .order = order, .nbatch = nbatch}) * hbar);
 
   // connectivity:
   // t and t1 with {h,f,g}
@@ -250,11 +236,9 @@ std::vector<ExprPtr> CC::λ_pt(size_t rank, [[maybe_unused]] size_t order,
 
   std::vector<ExprPtr> result(N + 1);
   for (auto p = N; p >= 1; --p) {
-    OpParams lp_params{.rank = p, .order = order};
-    if (nbatch) {
-      lp_params.nbatch = nbatch.value();
-    }
-    const auto freq_term = ex<Variable>(L"ω") * Λ_pt_(lp_params) * P(nₚ(-p));
+    const auto freq_term =
+        ex<Variable>(L"ω") *
+        Λ_pt_({.rank = p, .order = order, .nbatch = nbatch}) * P(nₚ(-p));
     result.at(p) =
         this->ref_av(expr * P(nₚ(-p)), op_connect) + this->ref_av(freq_term);
   }
