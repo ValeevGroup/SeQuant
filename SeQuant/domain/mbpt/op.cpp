@@ -469,9 +469,8 @@ std::wstring to_latex(const mbpt::Operator<mbpt::qns_t, S>& op) {
 #include <SeQuant/domain/mbpt/op.ipp>
 
 namespace {
-/// @brief Creates a vector of auxiliary indices based on the given \p space and
-/// rank. Indexing goes from 1 to \p rank. Eg: for rank=3, indices will be
-/// aux_{1}, aux_{2}, aux_{3}
+/// @brief Make batching indices from a vector of IndexSpaces. IndexSpaces must
+/// be batching spaces. Indexing starts from 1 up to the size of \p spaces.
 /// @param spaces The vector of Auxiliary IndexSpaces
 /// @return A vector of Index objects
 sequant::container::svector<sequant::Index> make_batch_indices(
@@ -576,12 +575,9 @@ OpMaker<S>::OpMaker(OpType op, const OpParams& params) {
   }
   // delegate to existing constructors
   if (!params.batch_ordinals.empty()) {
-    // convert to svector for internal use
-    container::svector<std::size_t> batch_ords(params.batch_ordinals.begin(),
-                                               params.batch_ordinals.end());
-    *this = OpMaker(op, nc, na, batch_ords);
-  } else if (params.nbatch > 0) {
-    *this = OpMaker(op, nc, na, params.nbatch);
+    *this = OpMaker(op, nc, na, params.batch_ordinals);
+  } else if (params.nbatch) {
+    *this = OpMaker(op, nc, na, params.nbatch.value());
   } else {
     *this = OpMaker(op, nc, na);
   }
@@ -1089,12 +1085,9 @@ ExprPtr make_op_from_params(std::function<std::wstring_view()> label_gen,
                             const OpParams& params) {
   params.validate();
   if (!params.batch_ordinals.empty()) {
-    // Convert std::vector to container::svector for Operator constructor
-    container::svector<std::size_t> batch_ords(params.batch_ordinals.begin(),
-                                               params.batch_ordinals.end());
-    return ex<op_t>(label_gen, tensor_gen, qn_action, batch_ords);
-  } else if (params.nbatch > 0) {
-    return ex<op_t>(label_gen, tensor_gen, qn_action, params.nbatch);
+    return ex<op_t>(label_gen, tensor_gen, qn_action, params.batch_ordinals);
+  } else if (params.nbatch) {
+    return ex<op_t>(label_gen, tensor_gen, qn_action, params.nbatch.value());
   } else {
     return ex<op_t>(label_gen, tensor_gen, qn_action);
   }

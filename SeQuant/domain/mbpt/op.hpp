@@ -136,15 +136,15 @@ struct OpParams {
   ///< number of hole indices (for non-particle conserving)
   std::optional<nₚ> np = std::nullopt;
   ///< number of particle indices (for non-particle conserving)
-  std::size_t order = 1;   ///< perturbation order (for _pt operators)
-  std::size_t nbatch = 0;  ///< number of batching indices
-  std::vector<std::size_t> batch_ordinals{};
+  std::size_t order = 1;  ///< perturbation order (for _pt operators)
+  std::optional<size_t> nbatch = std::nullopt;  ///< number of batching indices
+  container::svector<std::size_t> batch_ordinals{};
   ///< custom batching index ordinals (empty = no batching)
   bool skip1 = false;  ///< skip single excitations (for sum operators)
 
   /// @brief Validates the parameters for consistency
   void validate() const {
-    SEQUANT_ASSERT(!(nbatch > 0 && !batch_ordinals.empty()) &&
+    SEQUANT_ASSERT(!(nbatch && !batch_ordinals.empty()) &&
                    "OpParams: Cannot specify both nbatch and batch_ordinals");
     SEQUANT_ASSERT(!(rank > 0 && (np || nh)) &&
                    "OpParams: Cannot specify both rank and np/nh.");

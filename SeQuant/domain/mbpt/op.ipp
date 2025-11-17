@@ -29,7 +29,6 @@ Operator<QuantumNumbers, S>::Operator(
     std::function<void(QuantumNumbers&)> qn_action, size_t batch_idx_rank)
     : Operator(std::move(label_generator), std::move(tensor_form_generator),
                std::move(qn_action)) {
-  SEQUANT_ASSERT(batch_idx_rank > 0 && "batch_idx_rank must be > 0");
   // make aux ordinals [1 to batch_idx_rank]
   if (batch_idx_rank != 0) {
     batching_ordinals_ = ranges::views::iota(1ul, 1ul + batch_idx_rank) |
