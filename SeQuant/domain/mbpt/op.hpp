@@ -130,12 +130,6 @@ enum class OpClass { ex, deex, gen };
 
 /// @brief Struct which holds parameters for operator construction
 struct OpParams {
-  std::size_t rank = 0;
-  ///< operator rank (can be used for particle-conserving ops)
-  std::optional<nₕ> nh = std::nullopt;
-  ///< number of hole indices (meant for non-particle conserving ops)
-  std::optional<nₚ> np = std::nullopt;
-  ///< number of particle indices (meant for non-particle conserving ops)
   std::size_t order = 1;  ///< perturbation order (for _pt operators)
   std::optional<size_t> nbatch = std::nullopt;  ///< number of batching indices
   container::svector<std::size_t> batch_ordinals{};
@@ -146,12 +140,6 @@ struct OpParams {
   void validate() const {
     SEQUANT_ASSERT(!(nbatch && !batch_ordinals.empty()) &&
                    "OpParams: Cannot specify both nbatch and batch_ordinals");
-    SEQUANT_ASSERT(!(rank > 0 && (np || nh)) &&
-                   "OpParams: Cannot specify both rank and np/nh.");
-    if (np || nh) {
-      SEQUANT_ASSERT((np && nh) &&
-                     "OpParams: Must specify both np and nh, or use rank");
-    }
     // ensure batch ordinals are unique
     if (!batch_ordinals.empty()) {
 #ifdef SEQUANT_ASSERT_ENABLED
@@ -658,8 +646,10 @@ class OpMaker {
 
   /// @brief Creates operator from OpParams
   /// @param[in] op the operator type
+  /// @param[in] nc number of bra indices/creators
+  /// @param[in] na number of ket indices/annihilators
   /// @param[in] params named parameters for operator construction
-  OpMaker(OpType op, const OpParams& params);
+  OpMaker(OpType op, ncre nc, nann na, const OpParams& params);
 
   enum class UseDepIdx {
     /// bra/cre indices depend on ket

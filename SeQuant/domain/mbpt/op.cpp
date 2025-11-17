@@ -527,22 +527,17 @@ OpMaker<S>::OpMaker(OpType op, ncre nc, nann na,
 }
 
 template <Statistics S>
-OpMaker<S>::OpMaker(OpType op, const OpParams& params) {
+OpMaker<S>::OpMaker(OpType op, ncre nc, nann na, const OpParams& params)
+    : OpMaker<S>(op, nc, na) {
   params.validate();
-  if (params.nh && params.np) {
-    *this = OpMaker(op, ncre(params.np.value()), nann(params.nh.value()));
-  } else {
-    *this = OpMaker(op, ncre(params.rank), nann(params.rank));
-  }
 
   // Handle batching indices if specified
   if (!params.batch_ordinals.empty()) {
     SEQUANT_ASSERT(ranges::is_sorted(params.batch_ordinals) &&
                    "OpMaker: batch_ordinals must be sorted");
-    auto isr = get_default_context().index_space_registry();
-    SEQUANT_ASSERT(isr->contains(L"z") &&
-                   "ISR does not contain any batching space");
-    const auto batch_space = isr->retrieve(L"z");
+    check_for_batching_space();
+    const auto batch_space =
+        get_default_context().index_space_registry()->retrieve(L"z");
     // sort ordinals
     auto sorted_ordinals = params.batch_ordinals;
     ranges::sort(sorted_ordinals);
@@ -556,10 +551,9 @@ OpMaker<S>::OpMaker(OpType op, const OpParams& params) {
   } else if (params.nbatch) {
     SEQUANT_ASSERT(params.nbatch.value() != 0 &&
                    "OpMaker: nbatch cannot be zero");
-    auto isr = get_default_context().index_space_registry();
-    SEQUANT_ASSERT(isr->contains(L"z") &&
-                   "ISR does not contain any batching space");
-    const auto batch_space = isr->retrieve(L"z");
+    check_for_batching_space();
+    const auto batch_space =
+        get_default_context().index_space_registry()->retrieve(L"z");
     batch_indices_ = make_batch_indices(
         IndexSpaceContainer(params.nbatch.value(), batch_space));
   }
