@@ -468,6 +468,29 @@ std::wstring to_latex(const mbpt::Operator<mbpt::qns_t, S>& op) {
 
 #include <SeQuant/domain/mbpt/op.ipp>
 
+namespace {
+/// @brief Creates a vector of auxiliary indices based on the given \p space and
+/// rank. Indexing goes from 1 to \p rank. Eg: for rank=3, indices will be
+/// aux_{1}, aux_{2}, aux_{3}
+/// @param spaces The vector of Auxiliary IndexSpaces
+/// @return A vector of Index objects
+sequant::container::svector<sequant::Index> make_batch_indices(
+    const sequant::container::svector<sequant::IndexSpace>& spaces) {
+  using namespace sequant;
+  auto validator = [](const Index& idx) {
+    return idx.space().base_key() ==
+           L"z";  // for now only z is allowed, i.e. batching index space
+  };
+
+  IndexFactory aux_factory{validator, 1};
+  return spaces |
+         ranges::views::transform([&aux_factory](const IndexSpace& space) {
+           return aux_factory.make(space);
+         }) |
+         ranges::to<container::svector<Index>>();
+}
+}  // namespace
+
 namespace sequant::mbpt {
 
 template <Statistics S>
@@ -502,7 +525,7 @@ OpMaker<S>::OpMaker(OpType op, ncre nc, nann na, std::size_t nbatch)
       isr->contains(L"z") &&
       "ISR does not contain any batching space");  // z is the batch space
   const auto batch_space = isr->retrieve(L"z");
-  batch_indices_ = make_aux_indices(IndexSpaceContainer(nbatch, batch_space));
+  batch_indices_ = make_batch_indices(IndexSpaceContainer(nbatch, batch_space));
 }
 
 template <Statistics S>
@@ -516,7 +539,7 @@ OpMaker<S>::OpMaker(OpType op, ncre nc, nann na,
       "ISR does not contain any batching space");  // z is the batch space
   const auto batch_space = isr->retrieve(L"z");
   container::svector<Index> batch_indices;
-  for (auto ord : batch_ordinals) {
+  for (const auto& ord : batch_ordinals) {
     auto idx = Index(batch_space, ord);
     batch_indices.push_back(idx);
   }
