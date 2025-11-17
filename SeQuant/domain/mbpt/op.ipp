@@ -31,8 +31,8 @@ Operator<QuantumNumbers, S>::Operator(
                std::move(qn_action)) {
   // make aux ordinals [1 to batch_idx_rank]
   if (batch_idx_rank != 0) {
-    batching_ordinals_ = ranges::views::iota(1ul, 1ul + batch_idx_rank) |
-                         ranges::to<container::svector<std::size_t>>();
+    batch_ordinals_ = ranges::views::iota(1ul, 1ul + batch_idx_rank) |
+                      ranges::to<container::svector<std::size_t>>();
   }
 }
 
@@ -47,7 +47,7 @@ Operator<QuantumNumbers, S>::Operator(
   SEQUANT_ASSERT(!batch_ordinals.empty() && "batch_ordinals cannot be empty");
   SEQUANT_ASSERT(ranges::is_sorted(batch_ordinals) &&
                  "expects sorted ordinals");
-  batching_ordinals_ = batch_ordinals;
+  batch_ordinals_ = batch_ordinals;
 }
 
 template <typename QuantumNumbers, Statistics S>
@@ -204,8 +204,8 @@ Expr::hash_type Operator<QuantumNumbers, S>::memoizing_hash() const {
     auto qns = (*this)(QuantumNumbers{});
     auto val = sequant::hash::value(qns);
     sequant::hash::combine(val, std::wstring(this->label()));
-    if (batching_ordinals()) {
-      const auto ordinals = batching_ordinals().value();
+    if (batch_ordinals()) {
+      const auto ordinals = batch_ordinals().value();
       sequant::hash::range(val, begin(ordinals), end(ordinals));
     }
     return val;
@@ -224,7 +224,7 @@ bool Operator<QuantumNumbers, S>::static_equal(const Expr& other_expr) const {
       static_cast<const Operator<QuantumNumbers, S>&>(other_expr);
   return this->label() == other.label() &&
          (*this)(QuantumNumbers{}) == other(QuantumNumbers{}) &&
-         this->batching_ordinals() == other.batching_ordinals();
+         this->batch_ordinals() == other.batch_ordinals();
 }
 
 }  // namespace mbpt

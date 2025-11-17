@@ -940,9 +940,9 @@ class Operator : public Operator<void, S> {
 
   void adjoint() override;
 
-  /// @brief returns the batching ordinals if any
-  std::optional<container::svector<std::size_t>> batching_ordinals() const {
-    return batching_ordinals_;
+  /// @brief returns the batch ordinals if any
+  std::optional<container::svector<std::size_t>> batch_ordinals() const {
+    return batch_ordinals_;
   }
 
  private:
@@ -950,8 +950,7 @@ class Operator : public Operator<void, S> {
 
   bool is_adjoint_ = false;
 
-  std::optional<container::svector<std::size_t>> batching_ordinals_ =
-      std::nullopt;
+  std::optional<container::svector<std::size_t>> batch_ordinals_ = std::nullopt;
 
   bool less_than_rank_of(const this_type& that) const;
 

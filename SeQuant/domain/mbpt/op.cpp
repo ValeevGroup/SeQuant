@@ -369,13 +369,13 @@ std::wstring to_latex(const mbpt::Operator<mbpt::qns_t, S>& op) {
   };
 
   // batch index handling
-  const auto has_batching = op.batching_ordinals();
+  const auto has_batching = op.batch_ordinals();
   auto add_batch_suffix = [&op](const std::wstring& inp) {
-    SEQUANT_ASSERT(op.batching_ordinals() && "Batching ordinals is not set");
+    SEQUANT_ASSERT(op.batch_ordinals() && "Op has not batch ordinals");
     std::wstring str = inp;
     using namespace ranges::views;
 
-    const auto ordinals = op.batching_ordinals().value();
+    const auto ordinals = op.batch_ordinals().value();
     str += L"{[";
     str += ordinals | transform([](const auto& ord) {
              return L"{z}_{" + std::to_wstring(ord) + L"}";
