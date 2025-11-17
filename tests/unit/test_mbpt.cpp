@@ -484,6 +484,7 @@ TEST_CASE("mbpt", "[mbpt]") {
       REQUIRE_NOTHROW(op::H_pt({.rank = 2, .nbatch = 2}));
       REQUIRE_NOTHROW(
           op::Λ_pt({.rank = 3, .batch_ordinals = {3, 4, 5}, .skip1 = true}));
+      REQUIRE_NOTHROW(op::T_pt({.rank = 2, .nbatch = 20}));
 
       // invalid usages
       REQUIRE_THROWS_AS(op::H_pt({.nh = nₕ(2)}), sequant::Exception);
@@ -496,9 +497,17 @@ TEST_CASE("mbpt", "[mbpt]") {
           sequant::Exception);  // cannot set both nbatch and batch_ordinals
 
       // operations
+      auto h0 = op::H_pt({.rank = 1, .nbatch = 0});
+      REQUIRE(to_latex(h0) == L"{\\hat{h¹}}");
+
       auto h1 = op::H_pt({.rank = 1, .nbatch = 1});
       auto h1_2 = op::H_pt({.rank = 1, .batch_ordinals = {1, 2}});
       auto pt1 = op::T_pt({.rank = 2, .batch_ordinals = {1}});
+
+      auto sum0 = h0 + h1;
+      simplify(sum0);
+      REQUIRE(to_latex(sum0) ==
+              L"{ \\bigl({\\hat{h¹}}{[{z}_{1}]} + {\\hat{h¹}}\\bigr) }");
 
       auto sum1 = h1 + h1;
       simplify(sum1);
@@ -509,6 +518,13 @@ TEST_CASE("mbpt", "[mbpt]") {
       REQUIRE(to_latex(sum2) ==
               L"{ \\bigl({\\hat{h¹}}{[{z}_{1}]} + {\\hat{t¹}_{2}}{[{z}_{1}]} + "
               L"{\\hat{t¹}_{1}}{[{z}_{1}]}\\bigr) }");
+
+      auto sum3 = h1 + h1_2;
+      simplify(sum3);
+      // std::wcout << "sum3:  " << to_latex(sum3) << std::endl;
+      REQUIRE(to_latex(sum3) ==
+              L"{ \\bigl({\\hat{h¹}}{[{z}_{1},{z}_{2}]} + "
+              L"{\\hat{h¹}}{[{z}_{1}]}\\bigr) }");
 
       auto pdt1 = h1 * h1_2;
       simplify(pdt1);
