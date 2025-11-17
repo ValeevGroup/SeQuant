@@ -1062,7 +1062,7 @@ ExprPtr H_pt(std::size_t R, const OpParams& params) {
 
   return make_op_from_params(
       []() -> std::wstring_view { return optype2label.at(OpType::h_1); },
-      [R, &params]() -> ExprPtr { return tensor::H_pt(R, params); },
+      [R, params]() -> ExprPtr { return tensor::H_pt(R, params); },
       [R](qnc_t& qns) { qns = combine(general_type_qns(R), qns); }, params);
 }
 

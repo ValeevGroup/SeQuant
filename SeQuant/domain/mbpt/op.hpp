@@ -684,16 +684,14 @@ class OpMaker {
                      std::optional<Symmetry> opsymm_opt = {}) const;
 
   /// @brief Creates an OpInfo struct containing creator and annihilator
-  /// indices,
-  ///        normalization factor, symmetry, and dependency information.
+  /// indices, normalization factor, symmetry, and dependency information.
   /// @param cre_spaces A container of IndexSpace objects representing the
   /// creator indices
   /// @param ann_spaces A container of IndexSpace objects representing the
   /// annihilator indices
   /// @param dep An optional parameter specifying the dependency of indices.
   /// @return An OpInfo struct containing the created indices, normalization
-  /// factor,
-  ///         symmetry, and dependency information.
+  /// factor, symmetry, and dependency information.
   static OpInfo build_op_info(const IndexSpaceContainer& cre_spaces,
                               const IndexSpaceContainer& ann_spaces,
                               UseDepIdx dep = UseDepIdx::None) {
@@ -1231,7 +1229,8 @@ DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(A);
 /// deexcitation (if \p K < 0) operator of rank `|K|`
 ExprPtr S(std::int64_t K);
 
-/// @brief Makes perturbation operator from OpParams
+/// @brief Makes perturbation operator
+/// @param R rank of the perturbation operator
 /// @param params OpParams for operator construction. Default: order=1
 /// @pre `params.order==1`, only first order perturbation is supported now
 /// @pre If batching is used, ISR must contain batching space
