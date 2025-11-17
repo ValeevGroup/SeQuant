@@ -45,6 +45,8 @@ Operator<QuantumNumbers, S>::Operator(
     : Operator(std::move(label_generator), std::move(tensor_form_generator),
                std::move(qn_action)) {
   SEQUANT_ASSERT(!batch_ordinals.empty() && "batch_ordinals cannot be empty");
+  SEQUANT_ASSERT(ranges::is_sorted(batch_ordinals) &&
+                 "expects sorted ordinals");
   batching_ordinals_ = batch_ordinals;
 }
 

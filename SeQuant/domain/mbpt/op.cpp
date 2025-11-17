@@ -540,21 +540,21 @@ OpMaker<S>::OpMaker(OpType op, const OpParams& params) {
 
   // Handle batching indices if specified
   if (!params.batch_ordinals.empty()) {
-    SEQUANT_ASSERT(!params.batch_ordinals.empty() &&
-                   "Batch ordinals cannot be empty");
     auto isr = get_default_context().index_space_registry();
     SEQUANT_ASSERT(isr->contains(L"z") &&
                    "ISR does not contain any batching space");
     const auto batch_space = isr->retrieve(L"z");
+    // sort ordinals
+    auto sorted_ordinals = params.batch_ordinals;
+    ranges::sort(sorted_ordinals);
+
     container::svector<Index> batch_indices;
-    for (const auto& ord : params.batch_ordinals) {
+    for (const auto& ord : sorted_ordinals) {
       auto idx = Index(batch_space, ord);
       batch_indices.push_back(idx);
     }
     batch_indices_ = std::move(batch_indices);
   } else if (params.nbatch) {
-    SEQUANT_ASSERT(params.nbatch.value() > 0 &&
-                   "Number of batching indices must be > 0");
     auto isr = get_default_context().index_space_registry();
     SEQUANT_ASSERT(isr->contains(L"z") &&
                    "ISR does not contain any batching space");
@@ -1072,7 +1072,10 @@ ExprPtr make_op_from_params(std::function<std::wstring_view()> label_gen,
                             const OpParams& params) {
   params.validate();
   if (!params.batch_ordinals.empty()) {
-    return ex<op_t>(label_gen, tensor_gen, qn_action, params.batch_ordinals);
+    // Sort ordinals to ensure canonical ordering
+    auto sorted_ordinals = params.batch_ordinals;
+    ranges::sort(sorted_ordinals);
+    return ex<op_t>(label_gen, tensor_gen, qn_action, sorted_ordinals);
   } else if (params.nbatch) {
     return ex<op_t>(label_gen, tensor_gen, qn_action, params.nbatch.value());
   } else {

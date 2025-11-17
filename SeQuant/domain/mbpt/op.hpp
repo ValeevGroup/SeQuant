@@ -152,6 +152,16 @@ struct OpParams {
       SEQUANT_ASSERT((np && nh) &&
                      "OpParams: Must specify both np and nh, or use rank");
     }
+    // Ensure batch ordinals are unique
+    if (!batch_ordinals.empty()) {
+#ifdef SEQUANT_ASSERT_ENABLED
+      auto sorted = batch_ordinals;
+      ranges::sort(sorted);
+      auto duplicate = ranges::adjacent_find(sorted);
+      SEQUANT_ASSERT(duplicate == sorted.end() &&
+                     "OpParams: batch_ordinals must contain unique values");
+#endif
+    }
   }
 };
 
