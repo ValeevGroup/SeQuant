@@ -30,11 +30,11 @@ Operator<QuantumNumbers, S>::Operator(
     : Operator(std::move(label_generator), std::move(tensor_form_generator),
                std::move(qn_action)) {
   check_for_batching_space();
+  SEQUANT_ASSERT(batch_idx_rank != 0 &&
+                 "Operator: batch_idx_rank cannot be zero");
   // make aux ordinals [1 to batch_idx_rank]
-  if (batch_idx_rank != 0) {
-    batch_ordinals_ = ranges::views::iota(1ul, 1ul + batch_idx_rank) |
-                      ranges::to<container::svector<std::size_t>>();
-  }
+  batch_ordinals_ = ranges::views::iota(1ul, 1ul + batch_idx_rank) |
+                    ranges::to<container::svector<std::size_t>>();
 }
 
 template <typename QuantumNumbers, Statistics S>
@@ -46,8 +46,10 @@ Operator<QuantumNumbers, S>::Operator(
     : Operator(std::move(label_generator), std::move(tensor_form_generator),
                std::move(qn_action)) {
   check_for_batching_space();
+  SEQUANT_ASSERT(!batch_ordinals.empty() &&
+                 "Operator: batch_ordinals cannot be empty");
   SEQUANT_ASSERT(ranges::is_sorted(batch_ordinals) &&
-                 "expects sorted ordinals");
+                 "Operator: batch_ordinals must be sorted");
   batch_ordinals_ = batch_ordinals;
 }
 

@@ -499,15 +499,12 @@ TEST_CASE("mbpt", "[mbpt]") {
       // all ordinals must be unique
       REQUIRE_THROWS_AS(op::H_pt({.rank = 2, .batch_ordinals = {1, 2, 2}}),
                         sequant::Exception);
-
-      // equality
-      // order of batch ordinals should not matter
-      auto h_a = op::H_pt({.rank = 2, .batch_ordinals = {2, 3}});
-      auto h_b = op::H_pt({.rank = 2, .batch_ordinals = {3, 2}});
-      REQUIRE(h_a == h_b);
+      // ordinals must be sorted
+      REQUIRE_THROWS_AS(op::H_pt({.rank = 2, .batch_ordinals = {3, 2}}),
+                        sequant::Exception);
 
       // operations
-      auto h0 = op::H_pt({.rank = 1, .nbatch = 0});
+      auto h0 = op::H_pt({.rank = 1});
       REQUIRE(to_latex(h0) == L"{\\hat{h¹}}");
 
       auto h1 = op::H_pt({.rank = 1, .nbatch = 1});

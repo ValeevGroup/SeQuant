@@ -537,6 +537,8 @@ OpMaker<S>::OpMaker(OpType op, const OpParams& params) {
 
   // Handle batching indices if specified
   if (!params.batch_ordinals.empty()) {
+    SEQUANT_ASSERT(ranges::is_sorted(params.batch_ordinals) &&
+                   "OpMaker: batch_ordinals must be sorted");
     auto isr = get_default_context().index_space_registry();
     SEQUANT_ASSERT(isr->contains(L"z") &&
                    "ISR does not contain any batching space");
@@ -552,6 +554,8 @@ OpMaker<S>::OpMaker(OpType op, const OpParams& params) {
     }
     batch_indices_ = std::move(batch_indices);
   } else if (params.nbatch) {
+    SEQUANT_ASSERT(params.nbatch.value() != 0 &&
+                   "OpMaker: nbatch cannot be zero");
     auto isr = get_default_context().index_space_registry();
     SEQUANT_ASSERT(isr->contains(L"z") &&
                    "ISR does not contain any batching space");
@@ -1070,10 +1074,7 @@ ExprPtr make_op_from_params(std::function<std::wstring_view()> label_gen,
   params.validate();
   if (!params.batch_ordinals.empty()) {
     check_for_batching_space();
-    // Sort ordinals to ensure canonical ordering
-    auto sorted_ordinals = params.batch_ordinals;
-    ranges::sort(sorted_ordinals);
-    return ex<op_t>(label_gen, tensor_gen, qn_action, sorted_ordinals);
+    return ex<op_t>(label_gen, tensor_gen, qn_action, params.batch_ordinals);
   } else if (params.nbatch) {
     check_for_batching_space();
     return ex<op_t>(label_gen, tensor_gen, qn_action, params.nbatch.value());

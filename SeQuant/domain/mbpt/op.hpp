@@ -895,7 +895,7 @@ class Operator : public Operator<void, S> {
   /// @param tensor_form_generator a function that generates the tensor form of
   /// the operator
   /// @param qn_action a function that modifies the quantum numbers
-  /// @param batch_idx_rank the rank of the batch index
+  /// @param batch_idx_rank the rank of the batch index, must be non-zero
   Operator(std::function<std::wstring_view()> label_generator,
            std::function<ExprPtr()> tensor_form_generator,
            std::function<void(QuantumNumbers&)> qn_action,
