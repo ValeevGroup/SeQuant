@@ -203,6 +203,10 @@ Expr::hash_type Operator<QuantumNumbers, S>::memoizing_hash() const {
     auto qns = (*this)(QuantumNumbers{});
     auto val = sequant::hash::value(qns);
     sequant::hash::combine(val, std::wstring(this->label()));
+    if (batching_ordinals()) {
+      const auto ordinals = batching_ordinals().value();
+      sequant::hash::range(val, begin(ordinals), end(ordinals));
+    }
     return val;
   };
   if (!this->hash_value_) {
