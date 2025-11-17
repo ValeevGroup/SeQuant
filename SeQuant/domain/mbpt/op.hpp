@@ -632,19 +632,6 @@ class OpMaker {
   /// @param[in] na number of ket indices/annihilators
   OpMaker(OpType op, ncre nc, nann na);
 
-  /// @param[in] op the operator type
-  /// @param[in] nc number of bra indices/creators
-  /// @param[in] na number of ket indices/annihilators
-  /// @param[in] nbatch number of auxiliary/batching indices
-  OpMaker(OpType op, ncre nc, nann na, std::size_t nbatch);
-
-  /// @param[in] op the operator type
-  /// @param[in] nc number of bra indices/creators
-  /// @param[in] na number of ket indices/annihilators
-  /// @param[in] batch_ordinals custom batching index ordinals
-  OpMaker(OpType op, ncre nc, nann na,
-          const container::svector<std::size_t>& batch_ordinals);
-
   /// @brief creates a particle-conserving replacement operator
   /// @param[in] op the operator type
   /// @param[in] rank particle rank of the operator (# of creators = # of

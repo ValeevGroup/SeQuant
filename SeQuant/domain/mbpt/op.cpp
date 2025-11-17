@@ -516,36 +516,6 @@ OpMaker<S>::OpMaker(OpType op, ncre nc, nann na) {
 }
 
 template <Statistics S>
-OpMaker<S>::OpMaker(OpType op, ncre nc, nann na, std::size_t nbatch)
-    : OpMaker(op, nc, na) {
-  SEQUANT_ASSERT(nbatch > 0 && "Number of batching indices must be > 0");
-  auto isr = get_default_context().index_space_registry();
-  SEQUANT_ASSERT(
-      isr->contains(L"z") &&
-      "ISR does not contain any batching space");  // z is the batch space
-  const auto batch_space = isr->retrieve(L"z");
-  batch_indices_ = make_batch_indices(IndexSpaceContainer(nbatch, batch_space));
-}
-
-template <Statistics S>
-OpMaker<S>::OpMaker(OpType op, ncre nc, nann na,
-                    const container::svector<std::size_t>& batch_ordinals)
-    : OpMaker(op, nc, na) {
-  SEQUANT_ASSERT(!batch_ordinals.empty() && "Batch ordinals cannot be empty");
-  auto isr = get_default_context().index_space_registry();
-  SEQUANT_ASSERT(
-      isr->contains(L"z") &&
-      "ISR does not contain any batching space");  // z is the batch space
-  const auto batch_space = isr->retrieve(L"z");
-  container::svector<Index> batch_indices;
-  for (const auto& ord : batch_ordinals) {
-    auto idx = Index(batch_space, ord);
-    batch_indices.push_back(idx);
-  }
-  batch_indices_ = std::move(batch_indices);
-}
-
-template <Statistics S>
 OpMaker<S>::OpMaker(OpType op, std::size_t rank)
     : OpMaker(op, ncre(rank), nann(rank)) {}
 
@@ -561,25 +531,36 @@ OpMaker<S>::OpMaker(OpType op, ncre nc, nann na,
 
 template <Statistics S>
 OpMaker<S>::OpMaker(OpType op, const OpParams& params) {
-  params.validate();  // validate params
-
-  ncre nc{};
-  nann na{};
-  if (params.np || params.nh) {  // use np/nh if provided
-    nc = ncre(params.np ? params.np->value() : 0);
-    na = nann(params.nh ? params.nh->value() : 0);
-  } else {  // else use rank
-    SEQUANT_ASSERT(params.rank > 0);
-    nc = ncre(params.rank);
-    na = nann(params.rank);
-  }
-  // delegate to existing constructors
-  if (!params.batch_ordinals.empty()) {
-    *this = OpMaker(op, nc, na, params.batch_ordinals);
-  } else if (params.nbatch) {
-    *this = OpMaker(op, nc, na, params.nbatch.value());
+  params.validate();
+  if (params.nh && params.np) {
+    *this = OpMaker(op, ncre(params.np.value()), nann(params.nh.value()));
   } else {
-    *this = OpMaker(op, nc, na);
+    *this = OpMaker(op, ncre(params.rank), nann(params.rank));
+  }
+
+  // Handle batching indices if specified
+  if (!params.batch_ordinals.empty()) {
+    SEQUANT_ASSERT(!params.batch_ordinals.empty() &&
+                   "Batch ordinals cannot be empty");
+    auto isr = get_default_context().index_space_registry();
+    SEQUANT_ASSERT(isr->contains(L"z") &&
+                   "ISR does not contain any batching space");
+    const auto batch_space = isr->retrieve(L"z");
+    container::svector<Index> batch_indices;
+    for (const auto& ord : params.batch_ordinals) {
+      auto idx = Index(batch_space, ord);
+      batch_indices.push_back(idx);
+    }
+    batch_indices_ = std::move(batch_indices);
+  } else if (params.nbatch) {
+    SEQUANT_ASSERT(params.nbatch.value() > 0 &&
+                   "Number of batching indices must be > 0");
+    auto isr = get_default_context().index_space_registry();
+    SEQUANT_ASSERT(isr->contains(L"z") &&
+                   "ISR does not contain any batching space");
+    const auto batch_space = isr->retrieve(L"z");
+    batch_indices_ = make_batch_indices(
+        IndexSpaceContainer(params.nbatch.value(), batch_space));
   }
 }
 
@@ -873,10 +854,13 @@ ExprPtr T_pt(const OpParams& params) {
   if (params.skip1) SEQUANT_ASSERT(params.rank > 1);
   ExprPtr result;
   for (auto k = (params.skip1 ? 2ul : 1ul); k <= params.rank; ++k) {
-    OpParams k_params = params;
-    k_params.rank = k;
-    k_params.skip1 = false;
-    result += tensor::T_pt_(k_params);
+    result += tensor::T_pt_({.rank = k,
+                             .nh = params.nh,
+                             .np = params.np,
+                             .order = params.order,
+                             .nbatch = params.nbatch,
+                             .batch_ordinals = params.batch_ordinals,
+                             .skip1 = false});
   }
   return result;
 }
@@ -902,10 +886,13 @@ ExprPtr Λ_pt(const OpParams& params) {
   if (params.skip1) SEQUANT_ASSERT(params.rank > 1);
   ExprPtr result;
   for (auto k = (params.skip1 ? 2ul : 1ul); k <= params.rank; ++k) {
-    OpParams k_params = params;
-    k_params.rank = k;
-    k_params.skip1 = false;
-    result += tensor::Λ_pt_(k_params);
+    result += tensor::Λ_pt_({.rank = k,
+                             .nh = params.nh,
+                             .np = params.np,
+                             .order = params.order,
+                             .nbatch = params.nbatch,
+                             .batch_ordinals = params.batch_ordinals,
+                             .skip1 = false});
   }
   return result;
 }
@@ -1139,10 +1126,13 @@ ExprPtr T_pt(const OpParams& params) {
   SEQUANT_ASSERT(params.rank > (params.skip1 ? 1 : 0));
   ExprPtr result;
   for (auto k = (params.skip1 ? 2ul : 1ul); k <= params.rank; ++k) {
-    OpParams k_params = params;
-    k_params.rank = k;
-    k_params.skip1 = false;
-    result += T_pt_(k_params);
+    result += T_pt_({.rank = k,
+                     .nh = params.nh,
+                     .np = params.np,
+                     .order = params.order,
+                     .nbatch = params.nbatch,
+                     .batch_ordinals = params.batch_ordinals,
+                     .skip1 = false});
   }
   return result;
 }
@@ -1174,10 +1164,13 @@ ExprPtr Λ_pt(const OpParams& params) {
   SEQUANT_ASSERT(params.rank > (params.skip1 ? 1 : 0));
   ExprPtr result;
   for (auto k = (params.skip1 ? 2ul : 1ul); k <= params.rank; ++k) {
-    OpParams k_params = params;
-    k_params.rank = k;
-    k_params.skip1 = false;
-    result += Λ_pt_(k_params);
+    result += Λ_pt_({.rank = k,
+                     .nh = params.nh,
+                     .np = params.np,
+                     .order = params.order,
+                     .nbatch = params.nbatch,
+                     .batch_ordinals = params.batch_ordinals,
+                     .skip1 = false});
   }
   return result;
 }
