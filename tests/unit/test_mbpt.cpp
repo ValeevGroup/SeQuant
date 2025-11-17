@@ -490,7 +490,7 @@ TEST_CASE("mbpt", "[mbpt]") {
       REQUIRE_THROWS_AS(op::H_pt({.nh = nₕ(2)}), sequant::Exception);
       // have to set both np and nh
       REQUIRE_THROWS_AS(
-          op::H_pt({.nh = nₕ(2), .np = nₚ(2), .rank = 2}),
+          op::H_pt({.rank = 2, .nh = nₕ(2), .np = nₚ(2)}),
           sequant::Exception);  // cannot set both rank and (np,nh)
       REQUIRE_THROWS_AS(
           op::H_pt({.rank = 2, .nbatch = 2, .batch_ordinals = {1, 2}}),
