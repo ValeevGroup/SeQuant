@@ -1072,11 +1072,13 @@ ExprPtr make_op_from_params(std::function<std::wstring_view()> label_gen,
                             const OpParams& params) {
   params.validate();
   if (!params.batch_ordinals.empty()) {
+    check_for_batching_space();
     // Sort ordinals to ensure canonical ordering
     auto sorted_ordinals = params.batch_ordinals;
     ranges::sort(sorted_ordinals);
     return ex<op_t>(label_gen, tensor_gen, qn_action, sorted_ordinals);
   } else if (params.nbatch) {
+    check_for_batching_space();
     return ex<op_t>(label_gen, tensor_gen, qn_action, params.nbatch.value());
   } else {
     return ex<op_t>(label_gen, tensor_gen, qn_action);

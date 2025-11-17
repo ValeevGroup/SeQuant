@@ -29,6 +29,7 @@ Operator<QuantumNumbers, S>::Operator(
     std::function<void(QuantumNumbers&)> qn_action, size_t batch_idx_rank)
     : Operator(std::move(label_generator), std::move(tensor_form_generator),
                std::move(qn_action)) {
+  check_for_batching_space();
   // make aux ordinals [1 to batch_idx_rank]
   if (batch_idx_rank != 0) {
     batch_ordinals_ = ranges::views::iota(1ul, 1ul + batch_idx_rank) |
@@ -44,7 +45,7 @@ Operator<QuantumNumbers, S>::Operator(
     container::svector<std::size_t> batch_ordinals)
     : Operator(std::move(label_generator), std::move(tensor_form_generator),
                std::move(qn_action)) {
-  SEQUANT_ASSERT(!batch_ordinals.empty() && "batch_ordinals cannot be empty");
+  check_for_batching_space();
   SEQUANT_ASSERT(ranges::is_sorted(batch_ordinals) &&
                  "expects sorted ordinals");
   batch_ordinals_ = batch_ordinals;

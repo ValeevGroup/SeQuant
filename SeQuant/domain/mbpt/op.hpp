@@ -810,16 +810,16 @@ class OpMaker {
                       const IndexContainer& batch_indices,
                       TensorGenerator&& tensor_generator,
                       UseDepIdx dep = UseDepIdx::None) {
-    const auto op_info = build_op_info(cre_spaces, ann_spaces, dep);
+    check_for_batching_space();
     SEQUANT_ASSERT(!batch_indices.empty());
-    SEQUANT_ASSERT(
-        get_default_context().index_space_registry()->contains(L"z"));
-    // assumes that there are no more than one type of batch space
     [[maybe_unused]] auto batch_space =
         get_default_context().index_space_registry()->retrieve(L"z");
+    // assumes that there are no more than one type of batch space
     for ([[maybe_unused]] const auto& idx : batch_indices) {
       SEQUANT_ASSERT(idx.space() == batch_space);
     }
+
+    const auto op_info = build_op_info(cre_spaces, ann_spaces, dep);
     const auto t = tensor_generator(op_info.creidxs, op_info.annidxs,
                                     batch_indices, op_info.opsymm);
 

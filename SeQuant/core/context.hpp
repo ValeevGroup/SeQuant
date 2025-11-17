@@ -311,6 +311,12 @@ set_scoped_default_context(Context::Options ctx_options);
 
 ///@}
 
+/// @brief checks whether ISR has batching space labelled by "z"
+/// throws assertion failure if not
+inline void check_for_batching_space() {
+  SEQUANT_ASSERT(get_default_context().index_space_registry()->contains(L"z"));
+}
+
 }  // namespace sequant
 
 #endif
