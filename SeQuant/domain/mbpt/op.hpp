@@ -128,21 +128,21 @@ inline const container::map<std::wstring, OpType> label2optype =
 /// Operator character relative to Fermi vacuum
 enum class OpClass { ex, deex, gen };
 
-/// @brief Named parameter struct for Operator construction
+/// @brief Struct which holds parameters for operator construction
 struct OpParams {
   std::size_t rank = 0;
-  ///< operator rank (for particle-conserving ops)
+  ///< operator rank (can be used for particle-conserving ops)
   std::optional<nₕ> nh = std::nullopt;
-  ///< number of hole indices (for non-particle conserving)
+  ///< number of hole indices (meant for non-particle conserving ops)
   std::optional<nₚ> np = std::nullopt;
-  ///< number of particle indices (for non-particle conserving)
+  ///< number of particle indices (meant for non-particle conserving ops)
   std::size_t order = 1;  ///< perturbation order (for _pt operators)
   std::optional<size_t> nbatch = std::nullopt;  ///< number of batching indices
   container::svector<std::size_t> batch_ordinals{};
   ///< custom batching index ordinals (empty = no batching)
   bool skip1 = false;  ///< skip single excitations (for sum operators)
 
-  /// @brief Validates the parameters for consistency
+  /// @brief Validates the parameters for consistency and correctness
   void validate() const {
     SEQUANT_ASSERT(!(nbatch && !batch_ordinals.empty()) &&
                    "OpParams: Cannot specify both nbatch and batch_ordinals");
@@ -152,7 +152,7 @@ struct OpParams {
       SEQUANT_ASSERT((np && nh) &&
                      "OpParams: Must specify both np and nh, or use rank");
     }
-    // Ensure batch ordinals are unique
+    // ensure batch ordinals are unique
     if (!batch_ordinals.empty()) {
 #ifdef SEQUANT_ASSERT_ENABLED
       auto sorted = batch_ordinals;
@@ -901,6 +901,14 @@ class Operator : public Operator<void, S> {
            std::function<void(QuantumNumbers&)> qn_action,
            size_t batch_idx_rank);
 
+  /// @brief Constructs an operator with the given label and tensor form and
+  /// quantum number action
+  /// @param label_generator a function that generates the label for the
+  /// operator
+  /// @param tensor_form_generator a function that generates the tensor form of
+  /// the operator
+  /// @param qn_action a function that modifies the quantum numbers
+  /// @param batch_ordinals the unique, sorted ordinals of the batch indices
   Operator(std::function<std::wstring_view()> label_generator,
            std::function<ExprPtr()> tensor_form_generator,
            std::function<void(QuantumNumbers&)> qn_action,

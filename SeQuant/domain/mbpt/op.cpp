@@ -371,7 +371,7 @@ std::wstring to_latex(const mbpt::Operator<mbpt::qns_t, S>& op) {
   // batch index handling
   const auto has_batching = op.batch_ordinals();
   auto add_batch_suffix = [&op](const std::wstring& inp) {
-    SEQUANT_ASSERT(op.batch_ordinals() && "Op has not batch ordinals");
+    SEQUANT_ASSERT(op.batch_ordinals() && "Op has no batch ordinals");
     std::wstring str = inp;
     using namespace ranges::views;
 
@@ -397,16 +397,13 @@ std::wstring to_latex(const mbpt::Operator<mbpt::qns_t, S>& op) {
   }
 
   if (get_default_context().vacuum() == Vacuum::Physical) {
-    if (op_qns[0] == op_qns[1]) {
-      // particle conserving
+    if (op_qns[0] == op_qns[1]) {  // particle conserving
       result += L"_{" + std::to_wstring(op_qns[0].lower()) + L"}";
-    } else {
-      // non-particle conserving
+    } else {  // non-particle conserving
       result += L"_{" + std::to_wstring(op_qns[1].lower()) + L"}^{" +
                 std::to_wstring(op_qns[0].lower()) + L"}";
     }
-  } else {
-    // single product vacuum
+  } else {  // single product vacuum
     auto nann_p =
         is_adjoint ? op_qns.ncre_particles() : op_qns.nann_particles();
     auto ncre_h = is_adjoint ? op_qns.nann_holes() : op_qns.ncre_holes();
@@ -590,7 +587,7 @@ ExprPtr OpMaker<S>::operator()(std::optional<UseDepIdx> dep,
     }
   }
 
-  // if batching indices are given, use them
+  // if batching indices are present, use them
   if (batch_indices_) {
     return make(
         cre_spaces_, ann_spaces_, batch_indices_.value(),
@@ -1061,9 +1058,9 @@ ExprPtr P(nₚ np, nₕ nh) {
 
 namespace {
 /// @brief Helper to create Operator from OpParams
-/// @param label_gen Function to generate operator label
-/// @param tensor_gen Function to generate tensor form
-/// @param qn_action Function to apply quantum number changes
+/// @param label_gen Callable to generate operator label
+/// @param tensor_gen Callable to generate tensor form
+/// @param qn_action Callable to apply quantum number changes
 /// @param params OpParams containing operator parameters (batching, etc.)
 /// @return ExprPtr to the created Operator
 ExprPtr make_op_from_params(std::function<std::wstring_view()> label_gen,
