@@ -588,56 +588,6 @@ ExprPtr vac_av(ExprPtr expr,
 mbpt::qns_t adjoint(mbpt::qns_t qns);
 
 namespace mbpt {
-namespace detail {
-/// @brief Creates a vector of indices based on the given spaces
-/// @param spaces A vector of IndexSpaces
-/// @return A vector of Index objects
-inline container::svector<Index> make_idx_vector(
-    const container::svector<IndexSpace>& spaces) {
-  return spaces | ranges::views::transform([](const IndexSpace& space) {
-           return Index::make_tmp_index(space);
-         }) |
-         ranges::to<container::svector<Index>>();
-}
-
-/// @brief Creates a vector of dependent indices based on the given spaces and
-/// protoindices
-/// @param spaces a vector of IndexSpaces representing the spaces for which
-/// indices are to be created
-/// @param protoidxs A vector of protoindices that the new indices will depend
-/// on
-/// @return A vector of Index objects
-inline container::svector<Index> make_depidx_vector(
-    const container::svector<IndexSpace>& spaces,
-    const container::svector<Index>& protoidxs) {
-  return spaces |
-         ranges::views::transform([&protoidxs](const IndexSpace& space) {
-           return Index::make_tmp_index(space, protoidxs, true);
-         }) |
-         ranges::to<container::svector<Index>>();
-}
-
-/// @brief Creates a vector of auxiliary indices based on the given \p space and
-/// rank. Indexing goes from 1 to \p rank. Eg: for rank=3, indices will be
-/// aux_{1}, aux_{2}, aux_{3}
-/// @param spaces The vector of Auxiliary IndexSpaces
-/// @return A vector of Index objects
-inline container::svector<Index> make_aux_indices(
-    const container::svector<IndexSpace>& spaces) {
-  auto validator = [](const Index& idx) {
-    return idx.space().base_key() ==
-           L"z";  // for now only z is allowed, i.e. batching index space
-  };
-
-  IndexFactory aux_factory{validator, 1};
-  return spaces |
-         ranges::views::transform([&aux_factory](const IndexSpace& space) {
-           return aux_factory.make(space);
-         }) |
-         ranges::to<container::svector<Index>>();
-}
-
-}  // namespace detail
 
 // clang-format off
 /// @brief makes a tensor-level many-body operator
@@ -769,16 +719,31 @@ class OpMaker {
     if (!symm)
       SEQUANT_ASSERT(ranges::size(cre_spaces) == ranges::size(ann_spaces));
 
+    auto make_idx_vector = [](const auto& spaces) {
+      return spaces | ranges::views::transform([](const IndexSpace& space) {
+               return Index::make_tmp_index(space);
+             }) |
+             ranges::to<container::svector<Index>>();
+    };
+
+    auto make_depidx_vector = [](const auto& spaces, auto&& protoidxs) {
+      return spaces |
+             ranges::views::transform([&protoidxs](const IndexSpace& space) {
+               return Index::make_tmp_index(space, protoidxs, true);
+             }) |
+             ranges::to<container::svector<Index>>();
+    };
+
     container::svector<Index> creidxs, annidxs;
     if (dep_bra) {
-      annidxs = detail::make_idx_vector(ann_spaces);
-      creidxs = detail::make_depidx_vector(cre_spaces, annidxs);
+      annidxs = make_idx_vector(ann_spaces);
+      creidxs = make_depidx_vector(cre_spaces, annidxs);
     } else if (dep_ket) {
-      creidxs = detail::make_idx_vector(cre_spaces);
-      annidxs = detail::make_depidx_vector(ann_spaces, creidxs);
+      creidxs = make_idx_vector(cre_spaces);
+      annidxs = make_depidx_vector(ann_spaces, creidxs);
     } else {
-      creidxs = detail::make_idx_vector(cre_spaces);
-      annidxs = detail::make_idx_vector(ann_spaces);
+      creidxs = make_idx_vector(cre_spaces);
+      annidxs = make_idx_vector(ann_spaces);
     }
 
     using ranges::size;
