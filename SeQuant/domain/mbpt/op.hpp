@@ -904,7 +904,7 @@ class Operator : public Operator<void, S> {
   Operator(std::function<std::wstring_view()> label_generator,
            std::function<ExprPtr()> tensor_form_generator,
            std::function<void(QuantumNumbers&)> qn_action,
-           container::svector<std::size_t> batch_ordinals);
+           const container::svector<std::size_t>& batch_ordinals);
 
   virtual ~Operator();
 

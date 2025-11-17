@@ -42,7 +42,7 @@ Operator<QuantumNumbers, S>::Operator(
     std::function<std::wstring_view()> label_generator,
     std::function<ExprPtr()> tensor_form_generator,
     std::function<void(QuantumNumbers&)> qn_action,
-    container::svector<std::size_t> batch_ordinals)
+    const container::svector<std::size_t>& batch_ordinals)
     : Operator(std::move(label_generator), std::move(tensor_form_generator),
                std::move(qn_action)) {
   check_for_batching_space();
