@@ -535,7 +535,7 @@ OpMaker<S>::OpMaker(OpType op, ncre nc, nann na, const OpParams& params)
   if (!params.batch_ordinals.empty()) {
     SEQUANT_ASSERT(ranges::is_sorted(params.batch_ordinals) &&
                    "OpMaker: batch_ordinals must be sorted");
-    check_for_batching_space();
+    mbpt::check_for_batching_space();
     const auto batch_space =
         get_default_context().index_space_registry()->retrieve(L"z");
     // sort ordinals
@@ -551,7 +551,7 @@ OpMaker<S>::OpMaker(OpType op, ncre nc, nann na, const OpParams& params)
   } else if (params.nbatch) {
     SEQUANT_ASSERT(params.nbatch.value() != 0 &&
                    "OpMaker: nbatch cannot be zero");
-    check_for_batching_space();
+    mbpt::check_for_batching_space();
     const auto batch_space =
         get_default_context().index_space_registry()->retrieve(L"z");
     batch_indices_ = make_batch_indices(
@@ -1045,10 +1045,10 @@ ExprPtr make_op_from_params(std::function<std::wstring_view()> label_gen,
                             const OpParams& params) {
   params.validate();
   if (!params.batch_ordinals.empty()) {
-    check_for_batching_space();
+    mbpt::check_for_batching_space();
     return ex<op_t>(label_gen, tensor_gen, qn_action, params.batch_ordinals);
   } else if (params.nbatch) {
-    check_for_batching_space();
+    mbpt::check_for_batching_space();
     return ex<op_t>(label_gen, tensor_gen, qn_action, params.nbatch.value());
   } else {
     return ex<op_t>(label_gen, tensor_gen, qn_action);

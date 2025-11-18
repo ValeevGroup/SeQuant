@@ -7,6 +7,7 @@
 
 #include <SeQuant/domain/mbpt/fwd.hpp>
 
+#include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/spin.hpp>
 
 #include <SeQuant/core/attr.hpp>
@@ -798,7 +799,7 @@ class OpMaker {
                       const IndexContainer& batch_indices,
                       TensorGenerator&& tensor_generator,
                       UseDepIdx dep = UseDepIdx::None) {
-    check_for_batching_space();
+    mbpt::check_for_batching_space();
     SEQUANT_ASSERT(!batch_indices.empty());
     [[maybe_unused]] auto batch_space =
         get_default_context().index_space_registry()->retrieve(L"z");
@@ -833,8 +834,7 @@ class OpMaker {
                       UseDepIdx csv = UseDepIdx::None) {
     IndexSpaceContainer cre_vec(creators.begin(), creators.end());
     IndexSpaceContainer ann_vec(annihilators.begin(), annihilators.end());
-    IndexContainer batchidx_vec(batch_indices.begin(),
-                                batch_indices.end());
+    IndexContainer batchidx_vec(batch_indices.begin(), batch_indices.end());
     return OpMaker::make(cre_vec, ann_vec, batchidx_vec,
                          std::forward<TensorGenerator>(tensor_generator), csv);
   }

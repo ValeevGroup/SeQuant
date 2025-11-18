@@ -29,7 +29,7 @@ Operator<QuantumNumbers, S>::Operator(
     std::function<void(QuantumNumbers&)> qn_action, size_t batch_idx_rank)
     : Operator(std::move(label_generator), std::move(tensor_form_generator),
                std::move(qn_action)) {
-  check_for_batching_space();
+  mbpt::check_for_batching_space();
   SEQUANT_ASSERT(batch_idx_rank != 0 &&
                  "Operator: batch_idx_rank cannot be zero");
   // make aux ordinals [1 to batch_idx_rank]
@@ -45,7 +45,7 @@ Operator<QuantumNumbers, S>::Operator(
     const container::svector<std::size_t>& batch_ordinals)
     : Operator(std::move(label_generator), std::move(tensor_form_generator),
                std::move(qn_action)) {
-  check_for_batching_space();
+  mbpt::check_for_batching_space();
   SEQUANT_ASSERT(!batch_ordinals.empty() &&
                  "Operator: batch_ordinals cannot be empty");
   SEQUANT_ASSERT(ranges::is_sorted(batch_ordinals) &&
