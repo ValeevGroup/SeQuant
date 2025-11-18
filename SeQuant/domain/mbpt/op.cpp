@@ -538,12 +538,9 @@ OpMaker<S>::OpMaker(OpType op, ncre nc, nann na, const OpParams& params)
     mbpt::check_for_batching_space();
     const auto batch_space =
         get_default_context().index_space_registry()->retrieve(L"z");
-    // sort ordinals
-    auto sorted_ordinals = params.batch_ordinals;
-    ranges::sort(sorted_ordinals);
 
     container::svector<Index> batch_indices;
-    for (const auto& ord : sorted_ordinals) {
+    for (const auto& ord : params.batch_ordinals) {
       auto idx = Index(batch_space, ord);
       batch_indices.push_back(idx);
     }
