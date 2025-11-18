@@ -542,40 +542,28 @@ TEST_CASE("mbpt", "[mbpt]") {
 
       // lowering to tensor form
       auto sum1_t = simplify(lower_to_tensor_form(sum1));
-      // std::wcout << "sum1_t: " << to_latex(sum1_t) << std::endl;
-      REQUIRE(to_latex(sum1_t) ==
-              L"{{{2}}{\\tensor*{h¹}{*^{\\kappa_1}_{\\kappa_2}}[{z_1}]}{"
-              L"\\tensor*{\\tilde{a}}{*^{\\kappa_2}_{\\kappa_1}}}}");
+      // std::wcout << "sum1_t: " << to_latex(simplify(sum1_t)) << std::endl;
+      REQUIRE_THAT(sum1_t, EquivalentTo(L"2 * h¹{κ1;κ2;z1}:A-C-S * ã{κ2;κ1}"));
 
       auto sum2_t = simplify(lower_to_tensor_form(sum2));
       // std::wcout << "sum2_t: " << to_latex(sum2_t) << std::endl;
-      REQUIRE(to_latex(sum2_t) ==
-              L"{ "
-              L"\\bigl({{\\tensor*{\\tilde{a}}{*^{a_1}_{i_1}}}{\\tensor*{t¹}{*^"
-              L"{i_1}_{a_1}}[{z_1}]}} + "
-              L"{{\\tensor*{h¹}{*^{\\kappa_1}_{\\kappa_2}}[{z_1}]}{\\tensor*{"
-              L"\\tilde{a}}{*^{\\kappa_2}_{\\kappa_1}}}} + "
-              L"{{{\\frac{1}{4}}}{\\tensor*{\\tilde{a}}{*^{a_1}_{i_1}*^{a_2}_{"
-              L"i_2}}}{\\tensor*{\\bar{t¹}}{*^{i_1}_{a_1}*^{i_2}_{a_2}}[{z_1}]}"
-              L"}\\bigr) }");
+      REQUIRE_THAT(
+          sum2_t,
+          EquivalentTo(L"h¹{κ2;κ1;z1}:A-C-S * ã{κ1;κ2} + t¹{a1;i1;z1}:A-C-S * "
+                       L"ã{i1;a1} + "
+                       "(1/4) * t¹{a1,a2;i1,i2;z1}:A-C-S * ã{i1,i2;a1,a2}"));
 
       auto expr3_t = simplify(lower_to_tensor_form(sum2 * h1_2));
-      // std::wcout << "expr3_t: " << to_latex(expr3_t) << std::endl;
-      REQUIRE(
-          to_latex(expr3_t) ==
-          L"{ "
-          L"\\bigl({{\\tensor*{h¹}{*^{\\kappa_1}_{\\kappa_2}}[{z_1},{z_2}]}{"
-          L"\\tensor*{\\tilde{a}}{*^{a_1}_{i_1}}}{\\tensor*{\\tilde{a}}{*^{"
-          L"\\kappa_2}_{\\kappa_1}}}{\\tensor*{t¹}{*^{i_1}_{a_1}}[{z_1}]}} + "
-          L"{{\\tensor*{h¹}{*^{\\kappa_3}_{\\kappa_4}}[{z_1}]}{\\tensor*{h¹}{*^"
-          L"{\\kappa_1}_{\\kappa_2}}[{z_1},{z_2}]}{\\tensor*{\\tilde{a}}{*^{"
-          L"\\kappa_4}_{\\kappa_3}}}{\\tensor*{\\tilde{a}}{*^{\\kappa_2}_{"
-          L"\\kappa_1}}}} + "
-          L"{{{\\frac{1}{4}}}{\\tensor*{\\tilde{a}}{*^{a_1}_{i_1}*^{a_2}_{i_2}}"
-          L"}{\\tensor*{\\bar{t¹}}{*^{i_1}_{a_1}*^{i_2}_{a_2}}[{z_1}]}{"
-          L"\\tensor*{h¹}{*^{\\kappa_1}_{\\kappa_2}}[{z_1},{z_2}]}{\\tensor*{"
-          L"\\tilde{a}}{*^{\\kappa_2}_{\\kappa_1}}}}\\bigr) }");
-    }
+      std::wcout << "expr3_t: " << to_latex(expr3_t) << std::endl;
+      std::wcout << deparse(expr3_t) << std::endl;
+      REQUIRE_THAT(
+          expr3_t,
+          EquivalentTo(
+              L"1/4 ã{i1,i2;a1,a2} * t¹{a1,a2;i1,i2;z1}:A-C-S * "
+              L"h¹{κ2;κ1;z1,z2}:A-C-S * ã{κ1;κ2} + h¹{κ2;κ1;z1,z2}:A-C-S * "
+              L"ã{i1;a1} * ã{κ1;κ2} * t¹{a1;i1;z1}:A-C-S + h¹{κ4;κ3;z1}:A-C-S "
+              L"* h¹{κ2;κ1;z1,z2}:A-C-S * ã{κ3;κ4} * ã{κ1;κ2}"));
+    }  // SECTION("batching")
   }
 
   SECTION("wick") {
