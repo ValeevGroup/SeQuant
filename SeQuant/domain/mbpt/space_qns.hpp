@@ -79,7 +79,12 @@ struct mask<TensorFactorizationQNS> {
 /// \note BatchingQNS uses the 6th rightmost bit
 enum class BatchingQNS : bitset_t {
   batch = 0b100000,  // for batching tensors
-  mask = batch
+};
+
+template <>
+struct mask<BatchingQNS> {
+  using type = std::underlying_type_t<BatchingQNS>;
+  static constexpr type value = static_cast<type>(BatchingQNS::batch);
 };
 
 }  // namespace sequant::mbpt
