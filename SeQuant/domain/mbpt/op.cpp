@@ -848,6 +848,7 @@ ExprPtr T_pt(std::size_t K, const OpParams& params) {
 }
 
 ExprPtr Λ_pt_(std::size_t K, const OpParams& params) {
+  params.validate();
   SEQUANT_ASSERT(params.order == 1 &&
                  "sequant::mbpt::tensor::Λ_pt_: only supports first "
                  "order perturbation");

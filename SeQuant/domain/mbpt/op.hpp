@@ -822,7 +822,7 @@ class OpMaker {
   /// and of the given symmetry
   /// @param[in] creators creator IndexSpaces as an initializer list
   /// @param[in] annihilators annihilator IndexSpaces as an initializer list
-  /// @param[in] batch_indices batch IndexSpaces as an initializer list
+  /// @param[in] batch_indices batch indices as an initializer list
   /// @param[in] tensor_generator the callable that generates the tensor
   /// @param[in] csv whether to use dependent indices
   template <typename TensorGenerator>
@@ -833,8 +833,8 @@ class OpMaker {
                       UseDepIdx csv = UseDepIdx::None) {
     IndexSpaceContainer cre_vec(creators.begin(), creators.end());
     IndexSpaceContainer ann_vec(annihilators.begin(), annihilators.end());
-    IndexSpaceContainer batchidx_vec(batch_indices.begin(),
-                                     batch_indices.end());
+    IndexContainer batchidx_vec(batch_indices.begin(),
+                                batch_indices.end());
     return OpMaker::make(cre_vec, ann_vec, batchidx_vec,
                          std::forward<TensorGenerator>(tensor_generator), csv);
   }
@@ -1237,7 +1237,7 @@ ExprPtr S(std::int64_t K);
 ExprPtr H_pt(std::size_t R, const OpParams& params = {.order = 1});
 
 /// @brief Makes perturbed particle-conserving excitation operator from OpParams
-/// @param K rank up to which the sum is to be formed
+/// @param K rank of the excitation operator
 /// @param params OpParams for operator construction. Default: order=1
 /// @pre `params.order==1`, only first order perturbation is supported now
 /// @pre If batching is used, ISR must contain batching space
