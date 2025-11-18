@@ -554,8 +554,7 @@ TEST_CASE("mbpt", "[mbpt]") {
                        "(1/4) * t¹{a1,a2;i1,i2;z1}:A-C-S * ã{i1,i2;a1,a2}"));
 
       auto expr3_t = simplify(lower_to_tensor_form(sum2 * h1_2));
-      std::wcout << "expr3_t: " << to_latex(expr3_t) << std::endl;
-      std::wcout << deparse(expr3_t) << std::endl;
+      // std::wcout << "expr3_t: " << to_latex(expr3_t) << std::endl;
       REQUIRE_THAT(
           expr3_t,
           EquivalentTo(
