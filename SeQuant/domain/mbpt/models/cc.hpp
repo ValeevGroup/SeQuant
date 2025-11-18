@@ -89,7 +89,7 @@ class CC {
   /// @return std::vector of perturbed t amplitude equations
   // clang-format on
   [[nodiscard]] std::vector<ExprPtr> t_pt(
-      size_t rank = 1, [[maybe_unused]] size_t order = 1,
+      size_t rank = 1, size_t order = 1,
       std::optional<size_t> nbatch = std::nullopt);
 
   // clang-format off
@@ -101,7 +101,7 @@ class CC {
   /// @return std::vector of perturbed λ amplitude equations
   // clang-format on
   [[nodiscard]] std::vector<ExprPtr> λ_pt(
-      size_t rank = 1, [[maybe_unused]] size_t order = 1,
+      size_t rank = 1, size_t order = 1,
       std::optional<size_t> nbatch = std::nullopt);
 
   /// @brief derives right-side sigma equations for EOM-CC
