@@ -202,7 +202,7 @@ TEST_CASE("mbpt", "[mbpt]") {
       auto l1 = Λ_(1);
       auto t2 = T_(2);
       auto l2 = Λ_(2);
-      auto h_pt = H_pt(1, 1);
+      auto h_pt = H_pt(1, {.order = 1});
       REQUIRE(to_latex(f * t1 * t2) == to_latex(canonicalize(f * t2 * t1)));
       REQUIRE(to_latex(canonicalize(f * t1 * t2)) ==
               to_latex(canonicalize(f * t2 * t1)));
@@ -468,6 +468,101 @@ TEST_CASE("mbpt", "[mbpt]") {
               L"3}}}{\\tilde{a}^{{i_1}{i_2}{i_3}}_{\\textvisiblespace\\,{a_1}{"
               L"a_2}}}}\\bigr) }");
     }
+
+    SECTION("batching") {
+      // update context to use batching index
+      auto isr = sequant::mbpt::make_legacy_spaces();
+      mbpt::add_batching_spaces(isr);
+      auto ctx_resetter =
+          set_scoped_default_context({.index_space_registry_shared_ptr = isr,
+                                      .vacuum = Vacuum::SingleProduct});
+      REQUIRE_NOTHROW(
+          get_default_context().index_space_registry()->retrieve(L"z"));
+
+      using namespace mbpt;
+      REQUIRE_NOTHROW(op::H_pt(1, {.nbatch = 1}));
+      REQUIRE_NOTHROW(op::H_pt(2, {.nbatch = 2}));
+      REQUIRE_NOTHROW(
+          op::Λ_pt(3, {.batch_ordinals = {3, 4, 5}, .skip1 = true}));
+      REQUIRE_NOTHROW(op::T_pt(1, {.nbatch = 20}));
+
+      // invalid usages
+      // cannot set both nbatch and batch_ordinals
+      REQUIRE_THROWS_AS(op::H_pt(2, {.nbatch = 2, .batch_ordinals = {1, 2}}),
+                        sequant::Exception);
+      // all ordinals must be unique
+      REQUIRE_THROWS_AS(op::H_pt(2, {.batch_ordinals = {1, 2, 2}}),
+                        sequant::Exception);
+      // ordinals must be sorted
+      REQUIRE_THROWS_AS(op::H_pt(1, {.batch_ordinals = {3, 2}}),
+                        sequant::Exception);
+
+      // operations
+      auto h0 = op::H_pt(1);
+      REQUIRE(to_latex(h0) == L"{\\hat{h¹}}");
+
+      auto h1 = op::H_pt(1, {.nbatch = 1});
+      auto h1_2 = op::H_pt(1, {.batch_ordinals = {1, 2}});
+      auto pt1 = op::T_pt(2, {.batch_ordinals = {1}});
+
+      auto sum0 = h0 + h1;
+      simplify(sum0);
+      REQUIRE(to_latex(sum0) ==
+              L"{ \\bigl({\\hat{h¹}}{[{z}_{1}]} + {\\hat{h¹}}\\bigr) }");
+
+      auto sum1 = h1 + h1;
+      simplify(sum1);
+      REQUIRE(to_latex(sum1) == L"{{{2}}{\\hat{h¹}}{[{z}_{1}]}}");
+      auto sum2 = h1 + pt1;
+      simplify(sum2);
+      // std::wcout << "sum2:  " << to_latex(sum2) << std::endl;
+      REQUIRE(to_latex(sum2) ==
+              L"{ \\bigl({\\hat{h¹}}{[{z}_{1}]} + {\\hat{t¹}_{2}}{[{z}_{1}]} + "
+              L"{\\hat{t¹}_{1}}{[{z}_{1}]}\\bigr) }");
+
+      auto sum3 = h1 + h1_2;
+      simplify(sum3);
+      // std::wcout << "sum3:  " << to_latex(sum3) << std::endl;
+      REQUIRE(to_latex(sum3) ==
+              L"{ \\bigl({\\hat{h¹}}{[{z}_{1},{z}_{2}]} + "
+              L"{\\hat{h¹}}{[{z}_{1}]}\\bigr) }");
+
+      auto pdt1 = h1 * h1_2;
+      simplify(pdt1);
+      // std::wcout << "pdt1: " << to_latex(pdt1) << std::endl;
+      REQUIRE(to_latex(pdt1) ==
+              L"{{\\hat{h¹}}{[{z}_{1}]}{\\hat{h¹}}{[{z}_{1},{z}_{2}]}}");
+
+      auto pdt2 = h1 * pt1;
+      simplify(pdt2);
+      // std::wcout << "pdt1: " << to_latex(pdt2) << std::endl;
+      REQUIRE(to_latex(pdt2) ==
+              L"{ \\bigl({{\\hat{h¹}}{[{z}_{1}]}{\\hat{t¹}_{1}}{[{z}_{1}]}} + "
+              L"{{\\hat{h¹}}{[{z}_{1}]}{\\hat{t¹}_{2}}{[{z}_{1}]}}\\bigr) }");
+
+      // lowering to tensor form
+      auto sum1_t = simplify(lower_to_tensor_form(sum1));
+      // std::wcout << "sum1_t: " << to_latex(simplify(sum1_t)) << std::endl;
+      REQUIRE_THAT(sum1_t, EquivalentTo(L"2 * h¹{κ1;κ2;z1}:A-C-S * ã{κ2;κ1}"));
+
+      auto sum2_t = simplify(lower_to_tensor_form(sum2));
+      // std::wcout << "sum2_t: " << to_latex(sum2_t) << std::endl;
+      REQUIRE_THAT(
+          sum2_t,
+          EquivalentTo(L"h¹{κ2;κ1;z1}:A-C-S * ã{κ1;κ2} + t¹{a1;i1;z1}:A-C-S * "
+                       L"ã{i1;a1} + "
+                       "(1/4) * t¹{a1,a2;i1,i2;z1}:A-C-S * ã{i1,i2;a1,a2}"));
+
+      auto expr3_t = simplify(lower_to_tensor_form(sum2 * h1_2));
+      // std::wcout << "expr3_t: " << to_latex(expr3_t) << std::endl;
+      REQUIRE_THAT(
+          expr3_t,
+          EquivalentTo(
+              L"1/4 ã{i1,i2;a1,a2} * t¹{a1,a2;i1,i2;z1}:A-C-S * "
+              L"h¹{κ2;κ1;z1,z2}:A-C-S * ã{κ1;κ2} + h¹{κ2;κ1;z1,z2}:A-C-S * "
+              L"ã{i1;a1} * ã{κ1;κ2} * t¹{a1;i1;z1}:A-C-S + h¹{κ4;κ3;z1}:A-C-S "
+              L"* h¹{κ2;κ1;z1,z2}:A-C-S * ã{κ3;κ4} * ã{κ1;κ2}"));
+    }  // SECTION("batching")
   }
 
   SECTION("wick") {

@@ -23,6 +23,37 @@ Operator<QuantumNumbers, S>::Operator(
       qn_action_(std::move(qn_action)) {}
 
 template <typename QuantumNumbers, Statistics S>
+Operator<QuantumNumbers, S>::Operator(
+    std::function<std::wstring_view()> label_generator,
+    std::function<ExprPtr()> tensor_form_generator,
+    std::function<void(QuantumNumbers&)> qn_action, size_t batch_idx_rank)
+    : Operator(std::move(label_generator), std::move(tensor_form_generator),
+               std::move(qn_action)) {
+  mbpt::check_for_batching_space();
+  SEQUANT_ASSERT(batch_idx_rank != 0 &&
+                 "Operator: batch_idx_rank cannot be zero");
+  // make aux ordinals [1 to batch_idx_rank]
+  batch_ordinals_ = ranges::views::iota(1ul, 1ul + batch_idx_rank) |
+                    ranges::to<container::svector<std::size_t>>();
+}
+
+template <typename QuantumNumbers, Statistics S>
+Operator<QuantumNumbers, S>::Operator(
+    std::function<std::wstring_view()> label_generator,
+    std::function<ExprPtr()> tensor_form_generator,
+    std::function<void(QuantumNumbers&)> qn_action,
+    const container::svector<std::size_t>& batch_ordinals)
+    : Operator(std::move(label_generator), std::move(tensor_form_generator),
+               std::move(qn_action)) {
+  mbpt::check_for_batching_space();
+  SEQUANT_ASSERT(!batch_ordinals.empty() &&
+                 "Operator: batch_ordinals cannot be empty");
+  SEQUANT_ASSERT(ranges::is_sorted(batch_ordinals) &&
+                 "Operator: batch_ordinals must be sorted");
+  batch_ordinals_ = batch_ordinals;
+}
+
+template <typename QuantumNumbers, Statistics S>
 Operator<QuantumNumbers, S>::~Operator() = default;
 
 template <typename QuantumNumbers, Statistics S>
@@ -176,6 +207,10 @@ Expr::hash_type Operator<QuantumNumbers, S>::memoizing_hash() const {
     auto qns = (*this)(QuantumNumbers{});
     auto val = sequant::hash::value(qns);
     sequant::hash::combine(val, std::wstring(this->label()));
+    if (batch_ordinals()) {
+      const auto ordinals = batch_ordinals().value();
+      sequant::hash::range(val, begin(ordinals), end(ordinals));
+    }
     return val;
   };
   if (!this->hash_value_) {
@@ -191,7 +226,8 @@ bool Operator<QuantumNumbers, S>::static_equal(const Expr& other_expr) const {
   const auto& other =
       static_cast<const Operator<QuantumNumbers, S>&>(other_expr);
   return this->label() == other.label() &&
-         (*this)(QuantumNumbers{}) == other(QuantumNumbers{});
+         (*this)(QuantumNumbers{}) == other(QuantumNumbers{}) &&
+         this->batch_ordinals() == other.batch_ordinals();
 }
 
 }  // namespace mbpt

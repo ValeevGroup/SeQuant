@@ -100,8 +100,11 @@ void add_pao_spaces(std::shared_ptr<IndexSpaceRegistry>& isr) {
 
 void add_df_spaces(std::shared_ptr<IndexSpaceRegistry>& isr) {
   // matches the MPQC layout, see spindex.h
-  isr->add(IndexSpace{L"Κ", 0b00001, TensorFactorizationQNS::df})  // DFBS AO
-      ;
+  isr->add(IndexSpace{L"Κ", 0b00001, TensorFactorizationQNS::df});  // DFBS AO
+}
+
+void add_batching_spaces(std::shared_ptr<IndexSpaceRegistry>& isr) {
+  isr->add(IndexSpace{L"z", 0b100000, BatchingQNS::batch});  // Batching Space
 }
 
 std::shared_ptr<IndexSpaceRegistry> make_min_sr_spaces(SpinConvention spconv) {
