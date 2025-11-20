@@ -41,6 +41,11 @@ int main(int argc, char* argv[]) {
        .braket_symmetry = BraKetSymmetry::Conjugate,
        .spbasis = SPBasis::Spinor,
        .first_dummy_index_ordinal = 100,
+       // TODO remove when CanonicalizeOptions::method is reverted to
+       // Topological
+       .canonicalization_options =
+           CanonicalizeOptions::default_options().copy_and_set(
+               CanonicalizationMethod::Topological),
        .braket_typesetting = BraKetTypesetting::ContraSub,
        // to_latex() reference outputs predominantly assume the original
        // (naive) convention
