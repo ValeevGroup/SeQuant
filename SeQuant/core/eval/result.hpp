@@ -3,11 +3,11 @@
 
 #include <SeQuant/core/algorithm.hpp>
 #include <SeQuant/core/container.hpp>
+#include <SeQuant/core/eval/eval_fwd.hpp>
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/logger.hpp>
 #include <SeQuant/core/utility/macros.hpp>
-#include <SeQuant/domain/eval/eval_fwd.hpp>
 
 #include <TiledArray/einsum/tiledarray.h>
 #include <btas/btas.h>
