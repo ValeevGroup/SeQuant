@@ -6,10 +6,10 @@
 #define SEQUANT_EVAL_SCF_TA_HPP
 
 #include <SeQuant/core/container.hpp>
+#include <SeQuant/core/eval/cache_manager.hpp>
+#include <SeQuant/core/eval/eval.hpp>
 #include <SeQuant/core/parse.hpp>
 #include <SeQuant/core/utility/macros.hpp>
-#include <SeQuant/domain/eval/cache_manager.hpp>
-#include <SeQuant/domain/eval/eval.hpp>
 
 #include <calc_info.hpp>
 #include <data_info.hpp>

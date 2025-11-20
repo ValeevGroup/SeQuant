@@ -3,10 +3,10 @@
 
 #include "catch2_sequant.hpp"
 
+#include <SeQuant/core/eval/eval.hpp>
+#include <SeQuant/core/eval/result.hpp>
 #include <SeQuant/core/optimize.hpp>
 #include <SeQuant/core/parse.hpp>
-#include <SeQuant/domain/eval/eval.hpp>
-#include <SeQuant/domain/eval/result.hpp>
 
 #include <btas/btas.h>
 #include <btas/tensor_func.h>

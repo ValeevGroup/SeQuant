@@ -9,9 +9,9 @@
 #include <eval_utils.hpp>
 
 #include <SeQuant/core/container.hpp>
+#include <SeQuant/core/eval/result.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/utility/macros.hpp>
-#include <SeQuant/domain/eval/result.hpp>
 
 #include <tiledarray.h>
 #include <range/v3/view.hpp>

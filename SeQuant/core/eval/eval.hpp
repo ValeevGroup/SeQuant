@@ -2,15 +2,15 @@
 #define SEQUANT_EVAL_EVAL_HPP
 
 #include <SeQuant/core/container.hpp>
+#include <SeQuant/core/eval/cache_manager.hpp>
+#include <SeQuant/core/eval/eval_fwd.hpp>
+#include <SeQuant/core/eval/result.hpp>
 #include <SeQuant/core/eval_node.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/logger.hpp>
 #include <SeQuant/core/meta.hpp>
 #include <SeQuant/core/parse.hpp>
 #include <SeQuant/core/utility/macros.hpp>
-#include <SeQuant/domain/eval/cache_manager.hpp>
-#include <SeQuant/domain/eval/eval_fwd.hpp>
-#include <SeQuant/domain/eval/result.hpp>
 
 #include <btas/btas.h>
 #include <tiledarray.h>

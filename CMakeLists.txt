@@ -418,12 +418,12 @@ endif()
 if (TARGET tiledarray)
     set(SEQUANT_HAS_TILEDARRAY ON)
     list(APPEND SeQuant_src
-            SeQuant/domain/eval/cache_manager.cpp
-            SeQuant/domain/eval/cache_manager.hpp
-            SeQuant/domain/eval/eval.hpp
-            SeQuant/domain/eval/result.cpp
-            SeQuant/domain/eval/result.hpp
-            SeQuant/domain/eval/eval_fwd.hpp
+            SeQuant/core/eval/cache_manager.cpp
+            SeQuant/core/eval/cache_manager.hpp
+            SeQuant/core/eval/eval.hpp
+            SeQuant/core/eval/result.cpp
+            SeQuant/core/eval/result.hpp
+            SeQuant/core/eval/eval_fwd.hpp
             )
 endif ()
 
