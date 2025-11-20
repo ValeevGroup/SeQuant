@@ -45,7 +45,15 @@ struct CanonicalizeOptions {
   enum class IgnoreNamedIndexLabel : bool { Yes = true, No = false };
 
   /// TN canonicalization method
-  CanonicalizationMethod method = CanonicalizationMethod::Topological;
+  /// @internal
+  /// TODO revert to CanonicalizationMethod::Topological once issues with
+  /// external index handling exemplified by
+  /// https://github.com/ValeevGroup/SeQuant/pull/406
+  /// https://github.com/ValeevGroup/SeQuant/issues/426
+  /// and https://github.com/ValeevGroup/SeQuant/issues/287
+  /// is fixed
+  /// @endinternal
+  CanonicalizationMethod method = CanonicalizationMethod::Complete;
   /// specifies named indices; by default all indices that appear only once are
   /// deduced to be named, but this may be misleading if e.g. single
   /// summed-over dummy index appears in an expression
