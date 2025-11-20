@@ -1,0 +1,23 @@
+.. _exhale_struct_structsequant_1_1mbpt_1_1_op_maker_1_1_op_info:
+
+Struct OpMaker::OpInfo
+======================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_op.hpp`
+
+
+Nested Relationships
+--------------------
+
+This struct is a nested type of :ref:`exhale_class_classsequant_1_1mbpt_1_1_op_maker`.
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::mbpt::OpMaker::OpInfo
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

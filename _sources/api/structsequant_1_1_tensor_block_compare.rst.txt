@@ -1,0 +1,17 @@
+.. _exhale_struct_structsequant_1_1_tensor_block_compare:
+
+Struct TensorBlockCompare
+=========================
+
+- Defined in :ref:`file_SeQuant_core_tensor_network_utils.hpp`
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::TensorBlockCompare
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a7b888863c31ea1fa88b640f535fa20a9:
+
+Function sequant::create_expr_for
+=================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_biorthogonalization.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::create_expr_for(const ParticlePairings&, const perm::Permutation&, const container::svector<ParticlePairings>&, const container::svector<ExprPtr>&)
+   :project: SeQuant

@@ -1,0 +1,14 @@
+.. _exhale_typedef_namespacesequant_1_1container_1a99e42a7ebf925cfdcf99eebbe39d129e:
+
+Typedef sequant::container::unordered_map
+=========================================
+
+- Defined in :ref:`file_SeQuant_core_container.hpp`
+
+
+Typedef Documentation
+---------------------
+
+
+.. doxygentypedef:: sequant::container::unordered_map
+   :project: SeQuant

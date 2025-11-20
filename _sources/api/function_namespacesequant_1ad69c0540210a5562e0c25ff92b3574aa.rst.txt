@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1ad69c0540210a5562e0c25ff92b3574aa:
+
+Function sequant::max_cache
+===========================
+
+- Defined in :ref:`file_SeQuant_core_eval_cache_manager.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::max_cache(meta::eval_node auto const&, CacheManager&, AsyCost&, AsyCost&)
+   :project: SeQuant

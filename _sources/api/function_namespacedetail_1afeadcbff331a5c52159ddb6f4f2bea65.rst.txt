@@ -1,0 +1,14 @@
+.. _exhale_function_namespacedetail_1afeadcbff331a5c52159ddb6f4f2bea65:
+
+Function detail::expectation_value_impl
+=======================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_vac_av.ipp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: detail::expectation_value_impl(ExprPtr, const OpConnections<std::wstring>&, bool, bool, bool, bool)
+   :project: SeQuant

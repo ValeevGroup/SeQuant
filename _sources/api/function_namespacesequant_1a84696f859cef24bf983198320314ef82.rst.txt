@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a84696f859cef24bf983198320314ef82:
+
+Function sequant::subset_indices
+================================
+
+- Defined in :ref:`file_SeQuant_core_algorithm.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::subset_indices(size_t)
+   :project: SeQuant

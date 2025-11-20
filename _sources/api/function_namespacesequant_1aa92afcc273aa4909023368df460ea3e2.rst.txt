@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1aa92afcc273aa4909023368df460ea3e2:
+
+Function sequant::expand(ExprPtr&&)
+===================================
+
+- Defined in :ref:`file_SeQuant_core_expressions_expr_algorithms.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::expand(ExprPtr&&)
+   :project: SeQuant
