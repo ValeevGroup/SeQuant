@@ -217,8 +217,24 @@ Eigen::Tensor<Scalar, NumDims, Options, IndexType> read_eigen_tensor_from_numpy(
     defined(SEQUANT_HAS_TORCH_FOR_VALIDATION)
 bool run_python_code(const std::string &code, const std::string &working_dir,
                      bool use_torch = false) {
+  // Convert to filesystem::path for proper handling
+  std::filesystem::path work_dir_path(working_dir);
+
+  // Validate that the path is safe (canonical and exists)
+  if (!std::filesystem::exists(work_dir_path)) {
+    return false;
+  }
+
+  // Get canonical path to prevent path traversal issues
+  std::filesystem::path canonical_work_dir;
+  try {
+    canonical_work_dir = std::filesystem::canonical(work_dir_path);
+  } catch (const std::filesystem::filesystem_error &) {
+    return false;
+  }
+
   // Write code to a temporary file
-  std::string script_path = working_dir + "/test_script.py";
+  std::filesystem::path script_path = canonical_work_dir / "test_script.py";
   std::ofstream script(script_path);
   if (!script) return false;
 
@@ -227,7 +243,10 @@ bool run_python_code(const std::string &code, const std::string &working_dir,
   } else {
     script << "import numpy as np\n";
   }
-  script << "import sys\n\n";
+  script << "import sys\n";
+  script << "import os\n";
+  // Change directory in Python to avoid shell command injection
+  script << "os.chdir(r'" << canonical_work_dir.string() << "')\n\n";
   script << code;
   script.close();
 
@@ -236,8 +255,8 @@ bool run_python_code(const std::string &code, const std::string &working_dir,
 #define SEQUANT_PYTHON3_EXECUTABLE "python3"
 #endif
   std::string python_exe = SEQUANT_PYTHON3_EXECUTABLE;
-  std::string cmd = "cd \"" + working_dir + "\" && " + python_exe + " " +
-                    script_path + " 2>&1";
+  // Execute Python directly with the script path - no shell cd command needed
+  std::string cmd = python_exe + " \"" + script_path.string() + "\" 2>&1";
   FILE *pipe = popen(cmd.c_str(), "r");
   if (!pipe) return false;
 
