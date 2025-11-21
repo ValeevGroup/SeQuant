@@ -212,6 +212,23 @@ Eigen::Tensor<Scalar, NumDims, Options, IndexType> read_eigen_tensor_from_numpy(
   return tensor;
 }
 
+// Helper function to properly escape shell arguments for POSIX shells
+// Uses single quotes and escapes embedded single quotes
+std::string shell_escape(const std::string &arg) {
+  std::string result = "'";
+  for (char c : arg) {
+    if (c == '\'') {
+      // End the current single-quoted string, add an escaped single quote,
+      // and start a new single-quoted string
+      result += "'\\''";
+    } else {
+      result += c;
+    }
+  }
+  result += "'";
+  return result;
+}
+
 // Execute Python code and check for errors
 #if defined(SEQUANT_HAS_NUMPY_FOR_VALIDATION) || \
     defined(SEQUANT_HAS_TORCH_FOR_VALIDATION)
@@ -255,8 +272,8 @@ bool run_python_code(const std::string &code, const std::string &working_dir,
 #define SEQUANT_PYTHON3_EXECUTABLE "python3"
 #endif
   std::string python_exe = SEQUANT_PYTHON3_EXECUTABLE;
-  // Execute Python directly with the script path - no shell cd command needed
-  std::string cmd = python_exe + " \"" + script_path.string() + "\" 2>&1";
+  // Execute Python directly with properly escaped script path
+  std::string cmd = python_exe + " " + shell_escape(script_path.string()) + " 2>&1";
   FILE *pipe = popen(cmd.c_str(), "r");
   if (!pipe) return false;
 
