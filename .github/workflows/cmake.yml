@@ -79,13 +79,13 @@ jobs:
 
     - name: Install prerequisite MacOS packages
       if: ${{ startswith(matrix.os, 'macos') }}
-      run: brew install boost eigen open-mpi ccache
+      run: brew install boost eigen open-mpi ccache numpy
 
     - name: Install prerequisites Ubuntu packages
       if: ${{ matrix.os == 'ubuntu-24.04' }}
       run: |
         sudo apt-get update
-        sudo apt-get install ninja-build g++-14 liblapack-dev libboost-dev libboost-locale-dev libboost-random-dev libboost-regex-dev libeigen3-dev openmpi-bin libopenmpi-dev ccache valgrind catch2
+        sudo apt-get install ninja-build g++-14 liblapack-dev libboost-dev libboost-locale-dev libboost-random-dev libboost-regex-dev libeigen3-dev openmpi-bin libopenmpi-dev ccache valgrind catch2 python3-numpy
     - name: Prepare ccache timestamp
       id: ccache_cache_timestamp
       shell: bash

@@ -1,6 +1,8 @@
 #include <catch2/catch_all.hpp>
 #include <catch2/catch_test_macros.hpp>
 
+#include "test_export.hpp"
+
 #include <SeQuant/core/export/export.hpp>
 #include <SeQuant/core/export/export_expr.hpp>
 #include <SeQuant/core/export/export_node.hpp>
@@ -10,6 +12,7 @@
 #include <SeQuant/core/export/julia_itensor.hpp>
 #include <SeQuant/core/export/julia_tensor_kit.hpp>
 #include <SeQuant/core/export/julia_tensor_operations.hpp>
+#include <SeQuant/core/export/python_einsum.hpp>
 #include <SeQuant/core/export/reordering_context.hpp>
 #include <SeQuant/core/export/text_generator.hpp>
 #include <SeQuant/core/index_space_registry.hpp>
@@ -87,6 +90,7 @@ using KnownGenerators = std::tuple<
     JuliaITensorGenerator<JuliaITensorGeneratorContext>,
     JuliaTensorKitGenerator<JuliaTensorKitGeneratorContext>,
     JuliaTensorOperationsGenerator<JuliaTensorOperationsGeneratorContext>,
+    PythonEinsumGenerator<PythonEinsumGeneratorContext>,
     ItfGenerator<ItfContext>
 >;
 // clang-format on
@@ -133,12 +137,25 @@ void configure_context_defaults(JuliaTensorOperationsGeneratorContext &ctx) {
   ctx.set_tag(virt, "v");
 }
 
+void configure_context_defaults(PythonEinsumGeneratorContext &ctx) {
+  auto registry = get_default_context().index_space_registry();
+  IndexSpace occ = registry->retrieve("i");
+  IndexSpace virt = registry->retrieve("a");
+
+  ctx.set_shape(occ, "nocc");
+  ctx.set_shape(virt, "nvirt");
+}
+
 void add_to_context(TextGeneratorContext &, std::string_view,
                     std::string_view) {
   throw std::runtime_error(
       "TextGeneratorContext doesn't support specifications");
 }
 void add_to_context(ItfContext &, std::string_view, std::string_view) {}
+void add_to_context(PythonEinsumGeneratorContext &, std::string_view,
+                    std::string_view) {
+  // PythonEinsumGeneratorContext doesn't support context specifications
+}
 void add_to_context(JuliaTensorOperationsGeneratorContext &ctx,
                     std::string_view key, std::string_view value) {
   auto parse_space_map = [](std::string_view spec) {
@@ -233,18 +250,6 @@ std::vector<ExpressionGroup<>> parse_expression_spec(const std::string &spec) {
   return groups;
 }
 
-[[nodiscard]] auto to_export_context() {
-  auto reg = std::make_shared<IndexSpaceRegistry>();
-  reg->add(L"i", 0b001, is_particle, 10);
-  reg->add(L"a", 0b010, is_vacuum_occupied, is_reference_occupied, is_hole,
-           100);
-  reg->add(L"u", 0b100, is_vacuum_occupied, is_reference_occupied, is_hole,
-           is_particle, 5);
-
-  return set_scoped_default_context(
-      {.index_space_registry_shared_ptr = std::move(reg)});
-}
-
 TEMPLATE_LIST_TEST_CASE("export_tests", "[export]", KnownGenerators) {
   using CurrentGen = TestType;
   using CurrentCtx = CurrentGen::Context;
@@ -254,7 +259,7 @@ TEMPLATE_LIST_TEST_CASE("export_tests", "[export]", KnownGenerators) {
   REQUIRE(Index(L"i_1") < Index(L"a_1"));
 
   // Safe-guard that template magic works
-  const std::size_t n_generators = 5;
+  const std::size_t n_generators = 6;
 
   const std::set<std::string> known_formats =
       known_format_names(KnownGenerators{});
@@ -778,5 +783,124 @@ TEST_CASE("ExportExpr", "[export]") {
     ExportExpr e3 = e1;
     REQUIRE(e1.id() == e3.id());
     REQUIRE(e1 == e3);
+  }
+}
+
+TEST_CASE("PythonEinsumGenerator", "[export]") {
+  auto resetter = to_export_context();
+
+  auto registry = get_default_context().index_space_registry();
+  IndexSpace occ = registry->retrieve("i");
+  IndexSpace virt = registry->retrieve("a");
+
+  SECTION("NumPy backend - simple contraction") {
+    // Create tensors: T[a1, a2] = F[a1, i1] * t[i1, a2]
+    auto F = ex<Tensor>(L"F", bra{L"a_1"}, ket{L"i_1"});
+    auto t = ex<Tensor>(L"t", bra{L"i_1"}, ket{L"a_2"});
+    Tensor T(L"T", bra{L"a_1"}, ket{L"a_2"});
+
+    // Build the expression
+    ResultExpr result_expr(T, F * t);
+
+    // Convert to export tree
+    auto export_tree = to_export_tree(result_expr);
+
+    // Set up context
+    PythonEinsumGeneratorContext ctx(PythonEinsumBackend::NumPy);
+    ctx.set_shape(occ, "nocc");
+    ctx.set_shape(virt, "nvirt");
+
+    // Generate code
+    PythonEinsumGenerator<> generator;
+    export_expression(export_tree, generator, ctx);
+
+    std::string code = generator.get_generated_code();
+
+    // Verify generated code contains expected elements
+    REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring("np.zeros"));
+    REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring("np.load"));
+    REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring("np.einsum"));
+    REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring("optimize=True"));
+    REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring("T +="));
+    REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring("np.save"));
+  }
+
+  SECTION("PyTorch backend - simple contraction") {
+    // Create tensors: T[a1, a2] = F[a1, i1] * t[i1, a2]
+    auto F = ex<Tensor>(L"F", bra{L"a_1"}, ket{L"i_1"});
+    auto t = ex<Tensor>(L"t", bra{L"i_1"}, ket{L"a_2"});
+    Tensor T(L"T", bra{L"a_1"}, ket{L"a_2"});
+
+    ResultExpr result_expr(T, F * t);
+    auto export_tree = to_export_tree(result_expr);
+
+    // Set up PyTorch context
+    PythonEinsumGeneratorContext ctx(PythonEinsumBackend::PyTorch);
+    ctx.set_shape(occ, "nocc");
+    ctx.set_shape(virt, "nvirt");
+
+    PythonEinsumGenerator<> generator;
+    export_expression(export_tree, generator, ctx);
+
+    std::string code = generator.get_generated_code();
+
+    // Verify PyTorch-specific code
+    REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring("torch.zeros"));
+    REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring("torch.load"));
+    REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring("torch.einsum"));
+    REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring("torch.save"));
+    REQUIRE_THAT(code, !Catch::Matchers::ContainsSubstring("optimize=True"));
+  }
+
+  SECTION("Scalar factor") {
+    // Test with scalar prefactor: R = 0.5 * t1 * t2
+    Index i1(L"i_1", occ);
+    Index i2(L"i_2", occ);
+    Index a1(L"a_1", virt);
+    Index a2(L"a_2", virt);
+
+    auto t1 = ex<Tensor>(L"t1", bra{L"i_1"}, ket{L"a_1"});
+    auto t2 = ex<Tensor>(L"t2", bra{L"i_2"}, ket{L"a_2"});
+    Tensor R(L"R", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"});
+
+    ResultExpr result_with_scalar(R, rational(1, 2) * t1 * t2);
+    auto export_tree_scalar = to_export_tree(result_with_scalar);
+
+    PythonEinsumGeneratorContext ctx(PythonEinsumBackend::PyTorch);
+    ctx.set_shape(occ, "nocc");
+    ctx.set_shape(virt, "nvirt");
+
+    PythonEinsumGenerator<> generator;
+    export_expression(export_tree_scalar, generator, ctx);
+
+    std::string code = generator.get_generated_code();
+
+    // Verify scalar factor is included
+    REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring("1/2"));
+    REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring("*"));
+    REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring(".einsum('"));
+  }
+
+  SECTION("Scalar result - energy expression") {
+    auto g = ex<Tensor>(L"g", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"});
+    auto t = ex<Tensor>(L"t", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"});
+    Variable E(L"E");
+
+    ResultExpr result_expr(E, g * t);
+    auto export_tree = to_export_tree(result_expr);
+
+    PythonEinsumGeneratorContext ctx(PythonEinsumBackend::PyTorch);
+    ctx.set_shape(occ, "nocc");
+    ctx.set_shape(virt, "nvirt");
+
+    PythonEinsumGenerator<> generator;
+    export_expression(export_tree, generator, ctx);
+
+    std::string code = generator.get_generated_code();
+
+    // Verify scalar result (einsum ending with "->")
+    REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring("E +="));
+    REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring("->'"));
+    REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring(".einsum('"));
   }
 }
