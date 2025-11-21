@@ -7,6 +7,7 @@
 #include <SeQuant/core/export/python_einsum.hpp>
 #include <SeQuant/core/index_space_registry.hpp>
 #include <SeQuant/core/rational.hpp>
+#include <SeQuant/core/utility/scope.hpp>
 
 #include "catch2_sequant.hpp"
 
@@ -294,6 +295,9 @@ TEST_CASE("PythonEinsumGenerator - Validation", "[export][python]") {
     std::filesystem::path temp_dir =
         std::filesystem::temp_directory_path() / "sequant_test_simple";
     std::filesystem::create_directories(temp_dir);
+    // Ensure cleanup on all exit paths
+    auto cleanup = sequant::detail::make_scope_exit(
+        [&temp_dir]() { std::filesystem::remove_all(temp_dir); });
 
     // Test: T[a1, a2] = F[a1, i1] * t[i1, a2]
     const Eigen::Index nocc = 3;
@@ -347,15 +351,15 @@ TEST_CASE("PythonEinsumGenerator - Validation", "[export][python]") {
         REQUIRE(std::abs(T_actual(i, j) - T_expected(i, j)) < tolerance);
       }
     }
-
-    // Cleanup
-    std::filesystem::remove_all(temp_dir);
   }
 
   SECTION("Validation: Scalar contraction (energy)") {
     std::filesystem::path temp_dir =
         std::filesystem::temp_directory_path() / "sequant_test_scalar";
     std::filesystem::create_directories(temp_dir);
+    // Ensure cleanup on all exit paths
+    auto cleanup = sequant::detail::make_scope_exit(
+        [&temp_dir]() { std::filesystem::remove_all(temp_dir); });
 
     // Test: E = g[i1, i2; a1, a2] * t[a1, a2; i1, i2]
     const Eigen::Index nocc = 2;
@@ -407,14 +411,15 @@ TEST_CASE("PythonEinsumGenerator - Validation", "[export][python]") {
     // Verify
     const double tolerance = 1e-9;
     REQUIRE(std::abs(E_actual() - E_expected()) < tolerance);
-
-    std::filesystem::remove_all(temp_dir);
   }
 
   SECTION("Validation: Three-tensor contraction") {
     std::filesystem::path temp_dir =
         std::filesystem::temp_directory_path() / "sequant_test_three";
     std::filesystem::create_directories(temp_dir);
+    // Ensure cleanup on all exit paths
+    auto cleanup = sequant::detail::make_scope_exit(
+        [&temp_dir]() { std::filesystem::remove_all(temp_dir); });
 
     // Test: R[a1, a2] = g[i1, i2; a3, a4] * t1[a3; i1] * t2[a4; i2]
     const Eigen::Index nocc = 2;
@@ -469,14 +474,15 @@ TEST_CASE("PythonEinsumGenerator - Validation", "[export][python]") {
 
     const double tolerance = 1e-9;
     REQUIRE(std::abs(R_actual() - R_expected()) < tolerance);
-
-    std::filesystem::remove_all(temp_dir);
   }
 
   SECTION("Validation: With scalar prefactor") {
     std::filesystem::path temp_dir =
         std::filesystem::temp_directory_path() / "sequant_test_scalar_factor";
     std::filesystem::create_directories(temp_dir);
+    // Ensure cleanup on all exit paths
+    auto cleanup = sequant::detail::make_scope_exit(
+        [&temp_dir]() { std::filesystem::remove_all(temp_dir); });
 
     // Test: T[a1, a2] = 0.5 * F[a1, i1] * t[i1, a2]
     const Eigen::Index nocc = 3;
@@ -521,14 +527,15 @@ TEST_CASE("PythonEinsumGenerator - Validation", "[export][python]") {
         REQUIRE(std::abs(T_actual(i, j) - T_expected(i, j)) < tolerance);
       }
     }
-
-    std::filesystem::remove_all(temp_dir);
   }
 
   SECTION("Tensor I/O - Layout compatibility") {
     std::filesystem::path temp_dir =
         std::filesystem::temp_directory_path() / "sequant_test_layout";
     std::filesystem::create_directories(temp_dir);
+    // Ensure cleanup on all exit paths
+    auto cleanup = sequant::detail::make_scope_exit(
+        [&temp_dir]() { std::filesystem::remove_all(temp_dir); });
 
     // Subsection 1: Column-major (default) write and read
     {
@@ -666,8 +673,6 @@ TEST_CASE("PythonEinsumGenerator - Validation", "[export][python]") {
         }
       }
     }
-
-    std::filesystem::remove_all(temp_dir);
   }
 }
 
