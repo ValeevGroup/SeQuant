@@ -377,8 +377,6 @@ class PythonEinsumGenerator : public Generator<Context> {
   void begin_export(const Context &ctx) override {
     (void)ctx;
     m_generated.clear();
-    m_index_counter = 0;
-    m_index_map.clear();
   }
 
   void end_export(const Context &ctx) override { (void)ctx; }
@@ -388,8 +386,6 @@ class PythonEinsumGenerator : public Generator<Context> {
  protected:
   std::string m_generated;
   std::string m_indent;
-  mutable int m_index_counter = 0;
-  mutable std::unordered_map<std::string, std::string> m_index_map;
 
   /// Sanitize a label to be a valid Python identifier
   std::string sanitize_python_name(std::wstring_view label) const {
@@ -411,13 +407,14 @@ class PythonEinsumGenerator : public Generator<Context> {
   }
 
   /// Get or create a single-character einsum index for a given Index
-  std::string get_einsum_index(const Index &idx,
-                               [[maybe_unused]] const Context &ctx) const {
+  std::string get_einsum_index(
+      const Index &idx, [[maybe_unused]] const Context &ctx,
+      std::unordered_map<std::string, std::string> &index_map) const {
     std::string full_label = toUtf8(idx.full_label());
 
     // Check if we've already assigned a character to this index
-    auto it = m_index_map.find(full_label);
-    if (it != m_index_map.end()) {
+    auto it = index_map.find(full_label);
+    if (it != index_map.end()) {
       return it->second;
     }
 
@@ -427,7 +424,7 @@ class PythonEinsumGenerator : public Generator<Context> {
 
     // Check if this character is already used for a different index
     bool found = false;
-    for (const auto &[key, value] : m_index_map) {
+    for (const auto &[key, value] : index_map) {
       if (value == candidate) {
         found = true;
         break;
@@ -444,7 +441,7 @@ class PythonEinsumGenerator : public Generator<Context> {
       for (int i = 0; i < num_chars; ++i) {
         candidate = std::string(1, chars[i]);
         found = false;
-        for (const auto &[key, value] : m_index_map) {
+        for (const auto &[key, value] : index_map) {
           if (value == candidate) {
             found = true;
             break;
@@ -459,16 +456,17 @@ class PythonEinsumGenerator : public Generator<Context> {
       }
     }
 
-    m_index_map[full_label] = candidate;
+    index_map[full_label] = candidate;
     return candidate;
   }
 
   /// Convert a tensor to its einsum subscript notation
-  std::string tensor_to_einsum_subscript(const Tensor &tensor,
-                                         const Context &ctx) const {
+  std::string tensor_to_einsum_subscript(
+      const Tensor &tensor, const Context &ctx,
+      std::unordered_map<std::string, std::string> &index_map) const {
     std::string subscript;
     for (const Index &idx : tensor.const_indices()) {
-      subscript += get_einsum_index(idx, ctx);
+      subscript += get_einsum_index(idx, ctx, index_map);
     }
     return subscript;
   }
@@ -476,8 +474,8 @@ class PythonEinsumGenerator : public Generator<Context> {
   /// Convert an expression to an einsum call
   std::string to_einsum_expr(const Expr &expr, const Tensor &result,
                              const Context &ctx) const {
-    // Reset index mapping for this expression
-    m_index_map.clear();
+    // Create local index mapping for this expression
+    std::unordered_map<std::string, std::string> index_map;
 
     std::string einsum_spec;
     std::vector<std::string> tensor_names;
@@ -485,10 +483,10 @@ class PythonEinsumGenerator : public Generator<Context> {
 
     // Extract scalar prefactor and tensors from the expression
     extract_einsum_components(expr, einsum_spec, tensor_names, scalar_factor,
-                              ctx);
+                              ctx, index_map);
 
     // Add output specification
-    einsum_spec += "->" + tensor_to_einsum_subscript(result, ctx);
+    einsum_spec += "->" + tensor_to_einsum_subscript(result, ctx, index_map);
 
     // Build einsum call
     std::string einsum_call =
@@ -514,14 +512,15 @@ class PythonEinsumGenerator : public Generator<Context> {
   }
 
   /// Extract einsum components from an expression
-  void extract_einsum_components(const Expr &expr, std::string &einsum_spec,
-                                 std::vector<std::string> &tensor_names,
-                                 std::string &scalar_factor,
-                                 const Context &ctx) const {
+  void extract_einsum_components(
+      const Expr &expr, std::string &einsum_spec,
+      std::vector<std::string> &tensor_names, std::string &scalar_factor,
+      const Context &ctx,
+      std::unordered_map<std::string, std::string> &index_map) const {
     if (expr.is<Tensor>()) {
       const Tensor &tensor = expr.as<Tensor>();
       if (!einsum_spec.empty()) einsum_spec += ",";
-      einsum_spec += tensor_to_einsum_subscript(tensor, ctx);
+      einsum_spec += tensor_to_einsum_subscript(tensor, ctx, index_map);
       tensor_names.push_back(represent(tensor, ctx));
     } else if (expr.is<Variable>()) {
       // Treat variable as a scalar
@@ -553,7 +552,7 @@ class PythonEinsumGenerator : public Generator<Context> {
       // Handle tensor factors
       for (std::size_t i = 0; i < product.size(); ++i) {
         extract_einsum_components(*product.factor(i), einsum_spec, tensor_names,
-                                  scalar_factor, ctx);
+                                  scalar_factor, ctx, index_map);
       }
     } else if (expr.is<Sum>()) {
       // For sums, we can't use a single einsum call
@@ -577,12 +576,15 @@ class PythonEinsumGenerator : public Generator<Context> {
       // For a scalar result, we need to contract all indices
       // This is an einsum with no output indices
 
+      // Create local index mapping for this expression
+      std::unordered_map<std::string, std::string> index_map;
+
       std::string einsum_spec;
       std::vector<std::string> tensor_names;
       std::string scalar_factor;
 
       extract_einsum_components(expr, einsum_spec, tensor_names, scalar_factor,
-                                ctx);
+                                ctx, index_map);
 
       // For scalar result, use "->" or "->..."
       einsum_spec += "->";
