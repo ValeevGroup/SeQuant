@@ -1,0 +1,5 @@
+if(EXISTS "/home/runner/work/SeQuant/SeQuant/_codeql_build_dir/tests/unit/unit_tests-sequant-b12d07c_tests.cmake")
+  include("/home/runner/work/SeQuant/SeQuant/_codeql_build_dir/tests/unit/unit_tests-sequant-b12d07c_tests.cmake")
+else()
+  add_test(unit_tests-sequant_NOT_BUILT-b12d07c unit_tests-sequant_NOT_BUILT-b12d07c)
+endif()

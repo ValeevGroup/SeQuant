@@ -1,0 +1,30 @@
+The following features have been enabled:
+
+ * SEQUANT_USE_SYSTEM_BOOST_HASH, SeQuant uses system Boost for hashing (thus results depend on the Boost version)
+ * SEQUANT_CONTEXT_MANIPULATION_THREADSAFE, The default context can be changed from multiple threads
+ * TESTS, Enable building of test cases
+
+-- The following OPTIONAL packages have been found:
+
+ * OpenSSL
+
+-- The following REQUIRED packages have been found:
+
+ * ZLIB
+ * zstd (required version >= 1.0)
+ * Iconv
+ * ICU
+ * Git
+ * Threads
+
+-- The following features have been disabled:
+
+ * TBB, Intel Thread-Building Blocks is an optional prerequisite for C++'s parallel STL
+ * PYTHON, PySeQuant: Python bindings to SeQuant
+ * EVAL_TESTS, Build evaluation tests (if true, will look for and/or build TiledArray)
+ * BUILD_DOCS, Build SeQuant documentation. Doxygen and Sphinx are required.
+
+-- The following OPTIONAL packages have not been found:
+
+ * Boost (required version >= 1.81)
+ * Eigen3 (required version >= 3.0)
