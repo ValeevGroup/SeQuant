@@ -419,7 +419,10 @@ class PythonEinsumGenerator : public Generator<Context> {
     }
 
     // Try to use the first character of the label
-    char base_char = full_label.empty() ? 'i' : std::tolower(static_cast<unsigned char>(full_label[0]));
+    char base_char =
+        full_label.empty()
+            ? 'i'
+            : std::tolower(static_cast<unsigned char>(full_label[0]));
     std::string candidate(1, base_char);
 
     // Check if this character is already used for a different index
