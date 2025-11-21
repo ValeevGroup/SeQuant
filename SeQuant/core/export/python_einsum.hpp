@@ -135,8 +135,8 @@ class PythonEinsumGenerator : public Generator<Context> {
 
     // Return first character (lowercase for einsum convention)
     char c = label[0];
-    if (std::isupper(c)) {
-      c = std::tolower(c);
+    if (std::isupper(static_cast<unsigned char>(c))) {
+      c = std::tolower(static_cast<unsigned char>(c));
     }
 
     (void)ctx;  // Suppress unused parameter warning
@@ -393,13 +393,13 @@ class PythonEinsumGenerator : public Generator<Context> {
 
     // Replace invalid characters with underscores
     for (char &c : name) {
-      if (!std::isalnum(c) && c != '_') {
+      if (!std::isalnum(static_cast<unsigned char>(c)) && c != '_') {
         c = '_';
       }
     }
 
     // Ensure it doesn't start with a number
-    if (!name.empty() && std::isdigit(name[0])) {
+    if (!name.empty() && std::isdigit(static_cast<unsigned char>(name[0]))) {
       name = "_" + name;
     }
 
@@ -419,7 +419,7 @@ class PythonEinsumGenerator : public Generator<Context> {
     }
 
     // Try to use the first character of the label
-    char base_char = full_label.empty() ? 'i' : std::tolower(full_label[0]);
+    char base_char = full_label.empty() ? 'i' : std::tolower(static_cast<unsigned char>(full_label[0]));
     std::string candidate(1, base_char);
 
     // Check if this character is already used for a different index

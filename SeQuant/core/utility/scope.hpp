@@ -17,7 +17,7 @@
 #if __has_include(<experimental/scope>)
 
 // ... and , if using libstdc++ >= 13, C++20 or later
-#if defined(__GLIBCXX__) && __GLIBCXX__ >= 13 && ___cplusplus >= 202002L
+#if defined(__GLIBCXX__) && __GLIBCXX__ >= 13 && __cplusplus >= 202002L
 #define SEQUANT_CORE_UTILITY_SCOPE_HPP_USE_STD_EXPERIMENTAL_SCOPE 1
 #endif
 
@@ -43,8 +43,6 @@ class scope_exit {
       : fn_(std::forward<Fn>(fn)), released_(false) {}
   scope_exit(scope_exit&& other) noexcept = default;
   scope_exit(const scope_exit&) = delete;
-
-  scope_exit() noexcept {}
 
   ~scope_exit() noexcept {
     if (!released_) {
