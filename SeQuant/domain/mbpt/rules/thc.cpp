@@ -30,10 +30,7 @@ ExprPtr tensor_hypercontract_impl(Tensor const& tnsr, Index const& aux_idx_1,
                        aux({aux_idx_2}));
   auto t4 = ex<Tensor>(factor_label, bra(), ket({ranges::back(tnsr.ket())}),
                        aux({aux_idx_2}));
-  std::wcout << to_latex(aux_idx_1) << L", " << to_latex(aux_idx_2) << L"\n"
-             << std::flush;
-  auto z = ex<Tensor>(aux_label, bra(), ket(), aux({aux_idx_1, aux_idx_2}),
-                      Symmetry::Symm);
+  auto z = ex<Tensor>(aux_label, bra(), ket(), aux({aux_idx_1, aux_idx_2}));
 
   if (tnsr.symmetry() == Symmetry::Antisymm) {
     auto t1a = ex<Tensor>(factor_label, bra({ranges::back(tnsr.bra())}), ket(),
