@@ -13,8 +13,8 @@
 namespace sequant::mbpt {
 
 ///
-/// Converts the 4-center (2-electron integral) tensors into a tensor hyper-contracted
-/// product of five rank-2 tensors.
+/// Converts the 4-center (2-electron integral) tensors into a tensor
+/// hyper-contracted product of five rank-2 tensors.
 ///
 /// \param expr The expression to be tensor-hyper-contracted.
 /// \param aux_space_1 The index space representing the auxiliary indices
@@ -22,11 +22,13 @@ namespace sequant::mbpt {
 /// \param tensor_label The label off the tensor that shall be decomposed
 /// \param factor_label The label of the rank-2 mixed tensors used in the
 /// decomposition.
-/// \param aux_label The label of the rank-2 auxiliary tensor used in the decomposition.
-[[nodiscard]] ExprPtr tensor_hypercontract(ExprPtr const& expr, IndexSpace aux_space,
-                                          std::wstring_view tensor_label,
-                                          std::wstring_view factor_label,
-                                          std::wstring_view aux_label);
+/// \param aux_label The label of the rank-2 auxiliary tensor used in the
+/// decomposition.
+[[nodiscard]] ExprPtr tensor_hypercontract(ExprPtr const& expr,
+                                           IndexSpace aux_space,
+                                           std::wstring_view tensor_label,
+                                           std::wstring_view factor_label,
+                                           std::wstring_view aux_label);
 
 }  // namespace sequant::mbpt
 

@@ -65,16 +65,13 @@ struct mask<LCAOQNS> {
 
 /// quantum numbers tags related to tensor factorization basis traits
 /// \note TensorFactorization basis traits use 5th and 6th rightmost bits
-enum class TensorFactorizationQNS : bitset_t {
-  df = 0b010000,
-  thc = 0b100000
-};
+enum class TensorFactorizationQNS : bitset_t { df = 0b010000, thc = 0b100000 };
 
 template <>
 struct mask<TensorFactorizationQNS> {
   using type = std::underlying_type_t<TensorFactorizationQNS>;
-  static constexpr type value = static_cast<type>(TensorFactorizationQNS::df)
-      | static_cast<type>(TensorFactorizationQNS::thc);
+  static constexpr type value = static_cast<type>(TensorFactorizationQNS::df) |
+                                static_cast<type>(TensorFactorizationQNS::thc);
 };
 
 /// tags related to batching
