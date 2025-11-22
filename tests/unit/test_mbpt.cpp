@@ -827,4 +827,5 @@ SECTION("rules") {
       REQUIRE_THAT(actual, EquivalentTo(expected.at(i)));
     }
   }
+}  // SECTION("rules")
 }
