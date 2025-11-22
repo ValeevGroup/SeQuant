@@ -274,7 +274,7 @@ bool run_python_code(const std::string &code, const std::string &working_dir,
   std::string python_exe = SEQUANT_PYTHON3_EXECUTABLE;
   // Execute Python directly with properly escaped script path
   std::string cmd =
-      python_exe + " " + shell_escape(script_path.string()) + " 2>&1";
+      shell_escape(python_exe) + " " + shell_escape(script_path.string()) + " 2>&1";
   FILE *pipe = popen(cmd.c_str(), "r");
   if (!pipe) return false;
 
