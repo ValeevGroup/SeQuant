@@ -1,5 +1,5 @@
 //
-// Create by Oliver Backhouse on 22/11/2025.
+// Created by Oliver Backhouse on 22/11/2025.
 //
 
 #include <SeQuant/domain/mbpt/rules/thc.hpp>

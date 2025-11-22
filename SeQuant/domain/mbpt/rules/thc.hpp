@@ -1,5 +1,5 @@
 //
-// Create by Oliver Backhouse on 22/11/2025.
+// Created by Oliver Backhouse on 22/11/2025.
 //
 
 #ifndef SEQUANT_DOMAIN_MBPT_RULES_THC_HPP
@@ -17,12 +17,12 @@ namespace sequant::mbpt {
 /// hyper-contracted product of five rank-2 tensors.
 ///
 /// \param expr The expression to be tensor-hyper-contracted.
-/// \param aux_space_1 The index space representing the auxiliary indices
+/// \param aux_space The index space representing the auxiliary indices
 /// introduced through the decomposition.
 /// \param tensor_label The label off the tensor that shall be decomposed
-/// \param factor_label The label of the rank-2 mixed tensors used in the
-/// decomposition.
-/// \param aux_label The label of the rank-2 auxiliary tensor used in the
+/// \param factor_label The label of the rank-2 collocation matrices used
+/// in the decomposition.
+/// \param aux_label The label of the rank-2 Coulomb matrices used in the
 /// decomposition.
 [[nodiscard]] ExprPtr tensor_hypercontract(ExprPtr const& expr,
                                            IndexSpace aux_space,
