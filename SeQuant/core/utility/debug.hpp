@@ -10,8 +10,8 @@
 
 namespace sequant {
 
-/// uses std::wostringstream + std::wprintf to print to stdout even if wcout is
-/// captured (e.g., by Catch2)
+/// uses std::ostringstream + std::printf to print to stdout even if std::cout
+/// is captured (e.g., by Catch2)
 template <typename... Args>
 void printf(Args&&... args) {
   std::ostringstream oss;
