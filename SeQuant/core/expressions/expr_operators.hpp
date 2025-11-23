@@ -65,6 +65,18 @@ inline ExprPtr operator^(const ExprPtr &left, const ExprPtr &right) {
   SEQUANT_UNREACHABLE;
 }
 
+template <typename T>
+  requires(std::constructible_from<Constant, T>)
+inline ExprPtr operator*(T left, const ExprPtr &right) {
+  return ex<Constant>(std::move(left)) * right;
+}
+
+template <typename T>
+  requires(std::constructible_from<Constant, T>)
+inline ExprPtr operator*(const ExprPtr &left, T right) {
+  return left * ex<Constant>(std::move(right));
+}
+
 inline ExprPtr operator+(const ExprPtr &left, const ExprPtr &right) {
   auto left_is_sum = left->is<Sum>();
   auto right_is_sum = right->is<Sum>();
