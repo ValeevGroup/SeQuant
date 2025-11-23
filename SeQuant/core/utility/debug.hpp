@@ -25,7 +25,7 @@ template <typename... Args>
 void wprintf(Args&&... args) {
   std::wostringstream oss;
   (oss << ... << std::forward<Args>(args));
-  std::wprintf(L"%sl", oss.str().c_str());
+  std::wprintf(L"%ls", oss.str().c_str());
 }
 
 }  // namespace sequant
