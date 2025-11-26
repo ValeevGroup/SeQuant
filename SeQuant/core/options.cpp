@@ -45,7 +45,7 @@ CanonicalizeOptions CanonicalizeOptions::copy_and_set(
 }
 
 CanonicalizeOptions CanonicalizeOptions::copy_and_set(
-    std::optional<std::vector<Index>> arg) const {
+    std::optional<container::set<Index>> arg) const {
   auto result = *this;
   result.named_indices = std::move(arg);
   return result;
