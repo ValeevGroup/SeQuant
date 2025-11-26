@@ -1345,6 +1345,39 @@ TEST_CASE("wick", "[algorithms][wick]") {
 
         REQUIRE(result == expected);
       }
+
+      // quasi-diagonal example, with some indices in covariant expression
+      // fixed, as in the pair-specific densities used to produce PNOs
+      {
+        auto expr = sequant::parse_expr(
+            L"1/16 t{i1,i2;a3,a4}:A-C-S * ã{a3,a4;i1,i2} * ã{;a1} * ã{a2} * "
+            L"t{a5,a6;i3,i4}:A-C-S * ã{i3,i4;a5,a6}");
+        auto resetter = sequant::set_scoped_default_context(
+            Context(get_default_context())
+                .set(CanonicalizeOptions::default_options().copy_and_set(
+                    container::set<Index>{L"i_1", L"i_2", L"a_1", L"a_2"}))
+                .set(BraKetSymmetry::Symm));
+        // std::wcout << expr.to_latex() << "\n";
+        auto rdm1_so = sequant::mbpt::tensor::vac_av(expr);
+        // std::wcout << "SO VEV: " << rdm1_so.to_latex() << "\n";
+        REQUIRE_THAT(
+            rdm1_so,
+            EquivalentTo(L"1/2 t{i1,i2;a3,a1}:A-C-S t{a3,a2;i1,i2;}:A-C-S"));
+
+        // N.B. closed-shell spintrace expects ext groups to consist of pairs of
+        // indices
+        auto rdm1_sf = sequant::mbpt::spintrace(
+            rdm1_so, {{L"a_1", L"a_2"}, {L"i_1"}, {L"i_2"}},
+            /* spin-free = */ true);
+        simplify(rdm1_sf);
+        // std::wcout << "ST VEV: " << rdm1_sf.to_latex() << "\n";
+        REQUIRE_THAT(
+            rdm1_sf,
+            EquivalentTo(L"2 t{i1,i2;a1,a3}:N-C-S t{a2,a3;i1,i2;}:N-C-S - "
+                         L"t{i1,i2;a3,a1}:N-C-S t{a2,a3;i1,i2;}:N-C-S  + 2 "
+                         L"t{i1,i2;a3,a1}:N-C-S t{a3,a2;i1,i2;}:N-C-S - "
+                         L"t{i1,i2;a1,a3}:N-C-S t{a3,a2;i1,i2;}:N-C-S"));
+      }
     }
   }
 }

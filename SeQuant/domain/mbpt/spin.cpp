@@ -458,8 +458,10 @@ ExprPtr expand_antisymm(const Tensor& tensor, bool skip_spinsymm) {
     auto expr_sum = std::make_shared<Sum>();
     do {
       // N.B. must copy
-      auto new_tensor = Tensor(tensor.label(), bra(bra_list), ket(ket_list),
-                               tensor.aux(), Symmetry::Nonsymm);
+      auto new_tensor =
+          Tensor(tensor.label(), bra(bra_list), ket(ket_list), tensor.aux(),
+                 Symmetry::Nonsymm, tensor.braket_symmetry(),
+                 tensor.column_symmetry());
 
       if (ms_conserving_columns(new_tensor)) {
         auto new_tensor_product = std::make_shared<Product>();
@@ -1665,19 +1667,23 @@ ExprPtr spintrace(
   }
 
 #ifdef SEQUANT_ASSERT_ENABLED
-  // Verify that the amount of external indices matches the amount of indices in
-  // ext_index_groups
-  auto count_indices = [](const auto& range) {
-    auto sizes = range | ranges::views::transform(
-                             [](const auto& list) { return list.size(); });
-    return std::accumulate(sizes.begin(), sizes.end(), 0);
-  };
-  auto determined_externals =
-      external_indices<container::svector<container::svector<Index>>>(
-          expression);
+  // Verify that the number of external indices matches the number of indices in
+  // ext_index_groups, UNLESS user overrode external definitions in default
+  // context
+  const auto& copts = get_default_context().canonicalization_options();
+  if (!copts.has_value() || !copts->named_indices) {
+    auto count_indices = [](const auto& range) {
+      auto sizes = range | ranges::views::transform(
+                               [](const auto& list) { return list.size(); });
+      return std::accumulate(sizes.begin(), sizes.end(), 0);
+    };
+    auto determined_externals =
+        external_indices<container::svector<container::svector<Index>>>(
+            expression);
 
-  SEQUANT_ASSERT(count_indices(ext_index_groups) ==
-                 count_indices(determined_externals));
+    SEQUANT_ASSERT(count_indices(ext_index_groups) ==
+                   count_indices(determined_externals));
+  }
 #endif
 
   // This function must be used for tensors with spin-specific indices only. If
