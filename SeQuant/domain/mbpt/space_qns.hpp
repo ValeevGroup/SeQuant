@@ -75,9 +75,9 @@ struct mask<TensorFactorizationQNS> {
 };
 
 /// tags related to batching
-/// \note BatchingQNS uses the 6th rightmost bit
+/// \note BatchingQNS uses the 7th rightmost bit
 enum class BatchingQNS : bitset_t {
-  batch = 0b100000,  // for batching tensors
+  batch = 0b1000000,  // for batching tensors
 };
 
 template <>
