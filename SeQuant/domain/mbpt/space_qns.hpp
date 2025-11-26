@@ -65,7 +65,10 @@ struct mask<LCAOQNS> {
 
 /// quantum numbers tags related to tensor factorization basis traits
 /// \note TensorFactorization basis traits use 5th and 6th rightmost bits
-enum class TensorFactorizationQNS : bitset_t { df = 0b010000, thc = 0b100000 };
+enum class TensorFactorizationQNS : bitset_t {
+  df = 0b010000,  // density fitting
+  thc = 0b100000  // tensor hypercontraction
+};
 
 template <>
 struct mask<TensorFactorizationQNS> {
