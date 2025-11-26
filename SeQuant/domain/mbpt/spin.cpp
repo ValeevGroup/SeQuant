@@ -458,8 +458,10 @@ ExprPtr expand_antisymm(const Tensor& tensor, bool skip_spinsymm) {
     auto expr_sum = std::make_shared<Sum>();
     do {
       // N.B. must copy
-      auto new_tensor = Tensor(tensor.label(), bra(bra_list), ket(ket_list),
-                               tensor.aux(), Symmetry::Nonsymm);
+      auto new_tensor =
+          Tensor(tensor.label(), bra(bra_list), ket(ket_list), tensor.aux(),
+                 Symmetry::Nonsymm, tensor.braket_symmetry(),
+                 tensor.column_symmetry());
 
       if (ms_conserving_columns(new_tensor)) {
         auto new_tensor_product = std::make_shared<Product>();
