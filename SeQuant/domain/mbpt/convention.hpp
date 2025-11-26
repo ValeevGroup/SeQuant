@@ -52,6 +52,9 @@ void add_ao_spaces(std::shared_ptr<IndexSpaceRegistry>& isr, bool vbs = false,
 /// @brief add DF spaces to registry
 void add_df_spaces(std::shared_ptr<IndexSpaceRegistry>& isr);
 
+/// @brief add THC spaces to registry
+void add_thc_spaces(std::shared_ptr<IndexSpaceRegistry>& isr);
+
 /// @brief add PAO spaces to registry
 
 /// expects \p isr to have a defined particle space
