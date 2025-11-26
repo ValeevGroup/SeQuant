@@ -652,14 +652,19 @@ void WickTheorem<S>::extract_indices(const Expr &expr,
       ranges::to<container::set<Index>>;
 
   if (!user_defined_external_indices_) {
-    // external indices either appears once in nonproto slot or is pure
-    // protoindex
-    external_indices_ =
-        idx_counter | ranges::views::filter([force_external](const auto &v) {
-          return v.second.nonproto() <= 1 || force_external;
-        }) |
-        ranges::views::transform([](const auto &v) { return v.first; }) |
-        ranges::to<container::set<Index>>;
+    const auto &copts = get_default_context().canonicalization_options();
+    if (copts && copts->named_indices) {
+      external_indices_ = copts->named_indices.value();
+    } else {
+      // external indices either appears once in nonproto slot or is pure
+      // protoindex
+      external_indices_ =
+          idx_counter | ranges::views::filter([force_external](const auto &v) {
+            return v.second.nonproto() <= 1 || force_external;
+          }) |
+          ranges::views::transform([](const auto &v) { return v.first; }) |
+          ranges::to<container::set<Index>>;
+    }
   }
 
   // covariant indices are indices that do not depend on other indices,
@@ -733,18 +738,24 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
 
       // find external_indices if don't have them
       if (!external_indices_) {
-        ranges::find_if(summands, [this](const auto &summand) {
-          if (summand.template is<Sum>())  // summands must not be a Sum
-            throw std::invalid_argument(
-                "WickTheorem<S>::compute(expr): expr is a Sum with one of the "
-                "summands also a Sum, WickTheorem can only accept a fully "
-                "expanded Sum");
-          else if (summand.template is<Product>()) {
-            extract_indices(*(summand.template as_shared_ptr<Product>()));
-            return true;
-          } else
-            return false;
-        });
+        const auto &copts = get_default_context().canonicalization_options();
+        if (copts && copts->named_indices) {
+          external_indices_ = copts->named_indices.value();
+        } else {
+          ranges::find_if(summands, [this](const auto &summand) {
+            if (summand.template is<Sum>())  // summands must not be a Sum
+              throw std::invalid_argument(
+                  "WickTheorem<S>::compute(expr): expr is a Sum with one of "
+                  "the "
+                  "summands also a Sum, WickTheorem can only accept a fully "
+                  "expanded Sum");
+            else if (summand.template is<Product>()) {
+              extract_indices(*(summand.template as_shared_ptr<Product>()));
+              return true;
+            } else
+              return false;
+          });
+        }
       }
 
       if (Logger::instance().wick_harness)

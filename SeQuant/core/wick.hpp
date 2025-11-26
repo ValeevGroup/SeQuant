@@ -1391,8 +1391,8 @@ class WickTheorem {
                 ranges::get_cursor(op_left_iter).erase();
                 --state.nopseq_size;
 
-                //            std::wcout << "  nopseq after contraction = " <<
-                //            to_latex(state.opseq) << std::endl;
+                // std::wcout << "  nopseq after contraction = " <<
+                // to_latex(state.nopseq) << std::endl;
 
                 // if have a nonzero result ...
                 if (state.sp.size() != state.sp_initial_size) {
