@@ -317,7 +317,7 @@ ExprPtr TensorNetworkV3::canonicalize_graph(const NamedIndexSet &named_indices,
   for (const Edge &current : edges_) {
     const Index &idx = current.idx();
 
-    const auto is_named = current.vertex_count() == 1;
+    const auto is_named = !is_anonymous_index(idx);
     if (is_named) continue;
 
     idxrepl_emplace(idx, idxfac.make(idx));
