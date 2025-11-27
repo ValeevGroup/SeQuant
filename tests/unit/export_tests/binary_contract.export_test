@@ -84,12 +84,12 @@ store I:cc[jk]
 =================================================
 Python (einsum)
 =================================================
-I = np.zeros((nocc, nocc), order='F')
-A = np.load('A.npy')
-B = np.load('B.npy')
-I += np.einsum('ai,ba->bi', A, B, optimize=True)
-del B
-del A
-np.save('I.npy', I)
+I_oo = np.zeros((nocc, nocc), order='F')
+A_vo = np.load('A_vo.npy')
+B_ov = np.load('B_ov.npy')
+I_oo += np.einsum('ai,ba->bi', A_vo, B_ov, optimize=True)
+del B_ov
+del A_vo
+np.save('I_oo.npy', I_oo)
 
 =================================================

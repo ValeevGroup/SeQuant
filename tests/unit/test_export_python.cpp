@@ -350,10 +350,6 @@ TEST_CASE("PythonEinsumGenerator - Validation", "[export][python]") {
     Eigen::Tensor<double, 2> T_expected =
         F_tensor.contract(t_tensor, contraction_dims);
 
-    // Write input tensors to numpy files
-    write_eigen_tensor_to_numpy(temp_dir.string() + "/F.npy", F_tensor);
-    write_eigen_tensor_to_numpy(temp_dir.string() + "/t.npy", t_tensor);
-
     // Generate Python code
     auto F = ex<Tensor>(L"F", bra{L"a_1"}, ket{L"i_1"});
     auto t = ex<Tensor>(L"t", bra{L"i_1"}, ket{L"a_2"});
@@ -365,8 +361,21 @@ TEST_CASE("PythonEinsumGenerator - Validation", "[export][python]") {
     PythonEinsumGeneratorContext ctx(PythonEinsumBackend::NumPy);
     ctx.set_shape(occ, std::to_string(nocc));
     ctx.set_shape(virt, std::to_string(nvirt));
+    ctx.set_tag(occ, "o");
+    ctx.set_tag(virt, "v");
 
     PythonEinsumGenerator<> generator;
+
+    // Get tagged names and write files
+    std::string F_name = generator.represent(F.as<Tensor>(), ctx);
+    std::string t_name = generator.represent(t.as<Tensor>(), ctx);
+    std::string T_name = generator.represent(T, ctx);
+
+    write_eigen_tensor_to_numpy(temp_dir.string() + "/" + F_name + ".npy",
+                                F_tensor);
+    write_eigen_tensor_to_numpy(temp_dir.string() + "/" + t_name + ".npy",
+                                t_tensor);
+
     export_expression(export_tree, generator, ctx);
 
     std::string code = generator.get_generated_code();
@@ -375,8 +384,8 @@ TEST_CASE("PythonEinsumGenerator - Validation", "[export][python]") {
     REQUIRE(run_python_code(code, temp_dir.string()));
 
     // Read result
-    auto T_actual =
-        read_eigen_tensor_from_numpy<double, 2>(temp_dir.string() + "/T.npy");
+    auto T_actual = read_eigen_tensor_from_numpy<double, 2>(
+        temp_dir.string() + "/" + T_name + ".npy");
 
     // Verify results match
     REQUIRE(T_actual.dimensions()[0] == nvirt);
@@ -417,10 +426,6 @@ TEST_CASE("PythonEinsumGenerator - Validation", "[export][python]") {
     Eigen::Tensor<double, 0> E_expected =
         g_tensor.contract(t_tensor, contraction_dims);
 
-    // Write input tensors
-    write_eigen_tensor_to_numpy(temp_dir.string() + "/g.npy", g_tensor);
-    write_eigen_tensor_to_numpy(temp_dir.string() + "/t.npy", t_tensor);
-
     // Generate Python code
     auto g = ex<Tensor>(L"g", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"});
     auto t = ex<Tensor>(L"t", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"});
@@ -432,8 +437,20 @@ TEST_CASE("PythonEinsumGenerator - Validation", "[export][python]") {
     PythonEinsumGeneratorContext ctx(PythonEinsumBackend::NumPy);
     ctx.set_shape(occ, std::to_string(nocc));
     ctx.set_shape(virt, std::to_string(nvirt));
+    ctx.set_tag(occ, "o");
+    ctx.set_tag(virt, "v");
 
     PythonEinsumGenerator<> generator;
+
+    // Get tagged names and write files
+    std::string g_name = generator.represent(g.as<Tensor>(), ctx);
+    std::string t_name = generator.represent(t.as<Tensor>(), ctx);
+
+    write_eigen_tensor_to_numpy(temp_dir.string() + "/" + g_name + ".npy",
+                                g_tensor);
+    write_eigen_tensor_to_numpy(temp_dir.string() + "/" + t_name + ".npy",
+                                t_tensor);
+
     export_expression(export_tree, generator, ctx);
 
     std::string code = generator.get_generated_code();
@@ -450,15 +467,15 @@ TEST_CASE("PythonEinsumGenerator - Validation", "[export][python]") {
     REQUIRE(std::abs(E_actual() - E_expected()) < tolerance);
   }
 
-  SECTION("Validation: Three-tensor contraction") {
+  SECTION("Validation: Three-tensor contraction (scalar result)") {
     std::filesystem::path temp_dir =
-        std::filesystem::temp_directory_path() / "sequant_test_three";
+        std::filesystem::temp_directory_path() / "sequant_test_three_scalar";
     std::filesystem::create_directories(temp_dir);
     // Ensure cleanup on all exit paths
     auto cleanup = sequant::detail::make_scope_exit(
         [&temp_dir]() { std::filesystem::remove_all(temp_dir); });
 
-    // Test: R[a1, a2] = g[i1, i2; a3, a4] * t1[a3; i1] * t2[a4; i2]
+    // Test: R = g[i1, i2; a3, a4] * t1[a3; i1] * t2[a4; i2] (scalar result)
     const Eigen::Index nocc = 2;
     const Eigen::Index nvirt = 3;
 
@@ -482,10 +499,6 @@ TEST_CASE("PythonEinsumGenerator - Validation", "[export][python]") {
       }
     }
 
-    write_eigen_tensor_to_numpy(temp_dir.string() + "/g.npy", g_tensor);
-    write_eigen_tensor_to_numpy(temp_dir.string() + "/t1.npy", t1_tensor);
-    write_eigen_tensor_to_numpy(temp_dir.string() + "/t2.npy", t2_tensor);
-
     // Generate Python code for: R = g * t1 * t2 (scalar result)
     auto g = ex<Tensor>(L"g", bra{L"i_1", L"i_2"}, ket{L"a_3", L"a_4"});
     auto t1 = ex<Tensor>(L"t1", bra{L"a_3"}, ket{L"i_1"});
@@ -498,8 +511,23 @@ TEST_CASE("PythonEinsumGenerator - Validation", "[export][python]") {
     PythonEinsumGeneratorContext ctx(PythonEinsumBackend::NumPy);
     ctx.set_shape(occ, std::to_string(nocc));
     ctx.set_shape(virt, std::to_string(nvirt));
+    ctx.set_tag(occ, "o");
+    ctx.set_tag(virt, "v");
 
     PythonEinsumGenerator<> generator;
+
+    // Get tagged names and write files
+    std::string g_name = generator.represent(g.as<Tensor>(), ctx);
+    std::string t1_name = generator.represent(t1.as<Tensor>(), ctx);
+    std::string t2_name = generator.represent(t2.as<Tensor>(), ctx);
+
+    write_eigen_tensor_to_numpy(temp_dir.string() + "/" + g_name + ".npy",
+                                g_tensor);
+    write_eigen_tensor_to_numpy(temp_dir.string() + "/" + t1_name + ".npy",
+                                t1_tensor);
+    write_eigen_tensor_to_numpy(temp_dir.string() + "/" + t2_name + ".npy",
+                                t2_tensor);
+
     export_expression(export_tree, generator, ctx);
 
     std::string code = generator.get_generated_code();
@@ -534,9 +562,6 @@ TEST_CASE("PythonEinsumGenerator - Validation", "[export][python]") {
     Eigen::Tensor<double, 2> T_expected =
         0.5 * F_tensor.contract(t_tensor, contraction_dims);
 
-    write_eigen_tensor_to_numpy(temp_dir.string() + "/F.npy", F_tensor);
-    write_eigen_tensor_to_numpy(temp_dir.string() + "/t.npy", t_tensor);
-
     auto F = ex<Tensor>(L"F", bra{L"a_1"}, ket{L"i_1"});
     auto t = ex<Tensor>(L"t", bra{L"i_1"}, ket{L"a_2"});
     Tensor T(L"T", bra{L"a_1"}, ket{L"a_2"});
@@ -547,16 +572,29 @@ TEST_CASE("PythonEinsumGenerator - Validation", "[export][python]") {
     PythonEinsumGeneratorContext ctx(PythonEinsumBackend::NumPy);
     ctx.set_shape(occ, std::to_string(nocc));
     ctx.set_shape(virt, std::to_string(nvirt));
+    ctx.set_tag(occ, "o");
+    ctx.set_tag(virt, "v");
 
     PythonEinsumGenerator<> generator;
+
+    // Get tagged names and write files
+    std::string F_name = generator.represent(F.as<Tensor>(), ctx);
+    std::string t_name = generator.represent(t.as<Tensor>(), ctx);
+    std::string T_name = generator.represent(T, ctx);
+
+    write_eigen_tensor_to_numpy(temp_dir.string() + "/" + F_name + ".npy",
+                                F_tensor);
+    write_eigen_tensor_to_numpy(temp_dir.string() + "/" + t_name + ".npy",
+                                t_tensor);
+
     export_expression(export_tree, generator, ctx);
 
     std::string code = generator.get_generated_code();
 
     REQUIRE(run_python_code(code, temp_dir.string()));
 
-    auto T_actual =
-        read_eigen_tensor_from_numpy<double, 2>(temp_dir.string() + "/T.npy");
+    auto T_actual = read_eigen_tensor_from_numpy<double, 2>(
+        temp_dir.string() + "/" + T_name + ".npy");
 
     const double tolerance = 1e-10;
     for (Eigen::Index i = 0; i < nvirt; ++i) {

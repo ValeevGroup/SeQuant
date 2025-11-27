@@ -34,6 +34,7 @@ enum class PythonEinsumBackend {
 class PythonEinsumGeneratorContext : public ExportContext {
  public:
   using ShapeMap = std::map<IndexSpace, std::string>;
+  using TagMap = std::map<IndexSpace, std::string>;
 
   PythonEinsumGeneratorContext(
       PythonEinsumBackend backend = PythonEinsumBackend::NumPy)
@@ -72,6 +73,22 @@ class PythonEinsumGeneratorContext : public ExportContext {
     m_index_shapes[space] = std::move(shape);
   }
 
+  /// Get the tag for a given index space
+  /// Tags are appended to tensor names to distinguish different blocks
+  std::string get_tag(const IndexSpace &space) const {
+    auto it = m_tags.find(space);
+    if (it != m_tags.end()) {
+      return it->second;
+    }
+    // Default: use first character of base key
+    return toUtf8(space.base_key()).substr(0, 1);
+  }
+
+  /// Set the tag for a given index space
+  void set_tag(const IndexSpace &space, std::string tag) {
+    m_tags[space] = std::move(tag);
+  }
+
   /// Get the backend being used
   PythonEinsumBackend backend() const { return m_backend; }
 
@@ -85,6 +102,7 @@ class PythonEinsumGeneratorContext : public ExportContext {
 
  protected:
   ShapeMap m_index_shapes;
+  TagMap m_tags;
   PythonEinsumBackend m_backend;
 };
 
@@ -146,9 +164,23 @@ class PythonEinsumGenerator : public Generator<Context> {
   }
 
   std::string represent(const Tensor &tensor,
-                        [[maybe_unused]] const Context &ctx) const override {
-    // For Python variable names, sanitize the tensor label
-    return sanitize_python_name(tensor.label());
+                        const Context &ctx) const override {
+    // For Python variable names, start with sanitized tensor label
+    std::string name = sanitize_python_name(tensor.label());
+
+    // Append index space tags to distinguish different tensor blocks
+    // e.g., I[i1,a1] becomes "I_ov", I[a2,a1] becomes "I_vv"
+    if (tensor.num_indices() > 0) {
+      std::string tags;
+      for (const Index &idx : tensor.const_indices()) {
+        tags += ctx.get_tag(idx.space());
+      }
+      if (!tags.empty()) {
+        name += "_" + tags;
+      }
+    }
+
+    return name;
   }
 
   std::string represent(const Variable &variable,

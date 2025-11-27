@@ -144,6 +144,9 @@ void configure_context_defaults(PythonEinsumGeneratorContext &ctx) {
 
   ctx.set_shape(occ, "nocc");
   ctx.set_shape(virt, "nvirt");
+
+  ctx.set_tag(occ, "o");
+  ctx.set_tag(virt, "v");
 }
 
 void add_to_context(TextGeneratorContext &, std::string_view,
@@ -809,6 +812,8 @@ TEST_CASE("PythonEinsumGenerator", "[export]") {
     PythonEinsumGeneratorContext ctx(PythonEinsumBackend::NumPy);
     ctx.set_shape(occ, "nocc");
     ctx.set_shape(virt, "nvirt");
+    ctx.set_tag(occ, "o");
+    ctx.set_tag(virt, "v");
 
     // Generate code
     PythonEinsumGenerator<> generator;
@@ -821,7 +826,7 @@ TEST_CASE("PythonEinsumGenerator", "[export]") {
     REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring("np.load"));
     REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring("np.einsum"));
     REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring("optimize=True"));
-    REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring("T +="));
+    REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring("T_vv +="));
     REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring("np.save"));
   }
 
@@ -838,6 +843,8 @@ TEST_CASE("PythonEinsumGenerator", "[export]") {
     PythonEinsumGeneratorContext ctx(PythonEinsumBackend::PyTorch);
     ctx.set_shape(occ, "nocc");
     ctx.set_shape(virt, "nvirt");
+    ctx.set_tag(occ, "o");
+    ctx.set_tag(virt, "v");
 
     PythonEinsumGenerator<> generator;
     export_expression(export_tree, generator, ctx);
@@ -869,6 +876,8 @@ TEST_CASE("PythonEinsumGenerator", "[export]") {
     PythonEinsumGeneratorContext ctx(PythonEinsumBackend::PyTorch);
     ctx.set_shape(occ, "nocc");
     ctx.set_shape(virt, "nvirt");
+    ctx.set_tag(occ, "o");
+    ctx.set_tag(virt, "v");
 
     PythonEinsumGenerator<> generator;
     export_expression(export_tree_scalar, generator, ctx);
@@ -892,6 +901,8 @@ TEST_CASE("PythonEinsumGenerator", "[export]") {
     PythonEinsumGeneratorContext ctx(PythonEinsumBackend::PyTorch);
     ctx.set_shape(occ, "nocc");
     ctx.set_shape(virt, "nvirt");
+    ctx.set_tag(occ, "o");
+    ctx.set_tag(virt, "v");
 
     PythonEinsumGenerator<> generator;
     export_expression(export_tree, generator, ctx);
