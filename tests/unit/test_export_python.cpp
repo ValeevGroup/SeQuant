@@ -541,6 +541,87 @@ TEST_CASE("PythonEinsumGenerator - Validation", "[export][python]") {
     REQUIRE(std::abs(R_actual() - R_expected()) < tolerance);
   }
 
+  SECTION("Validation: Ternary contraction with tensor result") {
+    std::filesystem::path temp_dir =
+        std::filesystem::temp_directory_path() / "sequant_test_ternary";
+    std::filesystem::create_directories(temp_dir);
+    // Ensure cleanup on all exit paths
+    auto cleanup = sequant::detail::make_scope_exit(
+        [&temp_dir]() { std::filesystem::remove_all(temp_dir); });
+
+    // Test: I[i1, a1] = A[a2, i2] * B[i2, a1] * C[i1, a2]
+    // This matches the ternary.export_test case
+    const Eigen::Index nocc = 3;
+    const Eigen::Index nvirt = 4;
+
+    auto A_tensor = random_tensor<double, 2>({nvirt, nocc}, 1000);
+    auto B_tensor = random_tensor<double, 2>({nocc, nvirt}, 1100);
+    auto C_tensor = random_tensor<double, 2>({nocc, nvirt}, 1200);
+
+    // Compute expected result: I[i1, a1] = A[a2, i2] * B[i2, a1] * C[i1, a2]
+    // First: Intermediate[a2, a1] = A[a2, i2] * B[i2, a1]
+    Eigen::array<Eigen::IndexPair<int>, 1> contract_AB = {
+        Eigen::IndexPair<int>(1, 0)};  // contract i2
+    Eigen::Tensor<double, 2> intermediate =
+        A_tensor.contract(B_tensor, contract_AB);
+
+    // Second: I[i1, a1] = Intermediate[a2, a1] * C[i1, a2]
+    // Swap to C.contract(intermediate) to get correct index order [i1, a1]
+    Eigen::array<Eigen::IndexPair<int>, 1> contract_CI = {Eigen::IndexPair<int>(
+        1, 0)};  // contract C.dim[1]=a2 with intermediate.dim[0]=a2
+    Eigen::Tensor<double, 2> I_expected =
+        C_tensor.contract(intermediate, contract_CI);
+
+    // Generate Python code matching ternary.export_test
+    auto A = ex<Tensor>(L"A", bra{L"a_2"}, ket{L"i_2"});
+    auto B = ex<Tensor>(L"B", bra{L"i_2"}, ket{L"a_1"});
+    auto C = ex<Tensor>(L"C", bra{L"i_1"}, ket{L"a_2"});
+    Tensor I(L"I", bra{L"i_1"}, ket{L"a_1"});
+
+    ResultExpr result_expr(I, A * B * C);
+    auto export_tree = to_export_tree(result_expr);
+
+    PythonEinsumGeneratorContext ctx(PythonEinsumBackend::NumPy);
+    ctx.set_shape(occ, std::to_string(nocc));
+    ctx.set_shape(virt, std::to_string(nvirt));
+    ctx.set_tag(occ, "o");
+    ctx.set_tag(virt, "v");
+
+    PythonEinsumGenerator<> generator;
+
+    // Get tagged file names for writing
+    std::string A_name = generator.represent(A.as<Tensor>(), ctx);
+    std::string B_name = generator.represent(B.as<Tensor>(), ctx);
+    std::string C_name = generator.represent(C.as<Tensor>(), ctx);
+    std::string I_name = generator.represent(I, ctx);
+
+    write_eigen_tensor_to_numpy(temp_dir.string() + "/" + A_name + ".npy",
+                                A_tensor);
+    write_eigen_tensor_to_numpy(temp_dir.string() + "/" + B_name + ".npy",
+                                B_tensor);
+    write_eigen_tensor_to_numpy(temp_dir.string() + "/" + C_name + ".npy",
+                                C_tensor);
+
+    export_expression(export_tree, generator, ctx);
+
+    std::string code = generator.get_generated_code();
+
+    REQUIRE(run_python_code(code, temp_dir.string()));
+
+    auto I_actual = read_eigen_tensor_from_numpy<double, 2>(
+        temp_dir.string() + "/" + I_name + ".npy");
+
+    REQUIRE(I_actual.dimensions()[0] == nocc);
+    REQUIRE(I_actual.dimensions()[1] == nvirt);
+
+    const double tolerance = 1e-10;
+    for (Eigen::Index i = 0; i < nocc; ++i) {
+      for (Eigen::Index a = 0; a < nvirt; ++a) {
+        REQUIRE(std::abs(I_actual(i, a) - I_expected(i, a)) < tolerance);
+      }
+    }
+  }
+
   SECTION("Validation: With scalar prefactor") {
     std::filesystem::path temp_dir =
         std::filesystem::temp_directory_path() / "sequant_test_scalar_factor";

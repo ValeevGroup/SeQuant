@@ -114,3 +114,19 @@ store I:ce[jb]
 ---- end
 
 =================================================
+Python (einsum)
+=================================================
+I_ov = np.zeros((nocc, nvirt), order='F')
+I_vv = np.zeros((nvirt, nvirt), order='F')
+A_vo = np.load('A_vo.npy')
+B_ov = np.load('B_ov.npy')
+I_vv += np.einsum('ai,ib->ab', A_vo, B_ov, optimize=True)
+del B_ov
+del A_vo
+C_ov = np.load('C_ov.npy')
+I_ov += np.einsum('ab,ia->ib', I_vv, C_ov, optimize=True)
+del C_ov
+del I_vv
+np.save('I_ov.npy', I_ov)
+
+=================================================
