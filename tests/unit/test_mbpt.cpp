@@ -487,6 +487,7 @@ TEST_CASE("mbpt", "[mbpt]") {
       REQUIRE_NOTHROW(op::T_pt(1, {.nbatch = 20}));
 
       // invalid usages
+#if SEQUANT_ASSERT_BEHAVIOR == SEQUANT_ASSERT_THROW
       // cannot set both nbatch and batch_ordinals
       REQUIRE_THROWS_AS(op::H_pt(2, {.nbatch = 2, .batch_ordinals = {1, 2}}),
                         sequant::Exception);
@@ -496,6 +497,7 @@ TEST_CASE("mbpt", "[mbpt]") {
       // ordinals must be sorted
       REQUIRE_THROWS_AS(op::H_pt(1, {.batch_ordinals = {3, 2}}),
                         sequant::Exception);
+#endif
 
       // operations
       auto h0 = op::H_pt(1);
