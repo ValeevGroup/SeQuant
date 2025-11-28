@@ -685,6 +685,84 @@ TEST_CASE("PythonEinsumGenerator - Validation", "[export][python]") {
     }
   }
 
+  SECTION("Validation: Sum of expressions") {
+    std::filesystem::path temp_dir =
+        std::filesystem::temp_directory_path() / "sequant_test_sum_expr";
+    std::filesystem::create_directories(temp_dir);
+    // Ensure cleanup on all exit paths
+    auto cleanup = sequant::detail::make_scope_exit(
+        [&temp_dir]() { std::filesystem::remove_all(temp_dir); });
+
+    // Test: I[a1, i1] = f[a1, i1] - f[i2, i1] * t[a1, i2]
+    // This matches the sum_unary_plus_binary.export_test case
+    const Eigen::Index nocc = 3;
+    const Eigen::Index nvirt = 4;
+
+    auto f_vo_tensor = random_tensor<double, 2>({nvirt, nocc}, 1300);
+    auto f_oo_tensor = random_tensor<double, 2>({nocc, nocc}, 1400);
+    auto t_vo_tensor = random_tensor<double, 2>({nvirt, nocc}, 1500);
+
+    // Compute expected result: I[a1, i1] = f[a1, i1] - f[i2, i1] * t[a1, i2]
+    // First: contraction[a1, i1] = f[i2, i1] * t[a1, i2] (contract over i2)
+    // Swap to t.contract(f) to get correct index order [a1, i1]
+    Eigen::array<Eigen::IndexPair<int>, 1> contract_tf = {
+        Eigen::IndexPair<int>(1, 0)};  // contract t.dim[1]=i2 with f.dim[0]=i2
+    Eigen::Tensor<double, 2> contraction =
+        t_vo_tensor.contract(f_oo_tensor, contract_tf);
+
+    // Second: I[a1, i1] = f[a1, i1] - contraction[a1, i1]
+    Eigen::Tensor<double, 2> I_expected = f_vo_tensor - contraction;
+
+    // Generate Python code matching sum_unary_plus_binary.export_test
+    auto f_vo = ex<Tensor>(L"f", bra{L"a_1"}, ket{L"i_1"});
+    auto f_oo = ex<Tensor>(L"f", bra{L"i_2"}, ket{L"i_1"});
+    auto t_vo = ex<Tensor>(L"t", bra{L"a_1"}, ket{L"i_2"});
+    Tensor I(L"I", bra{L"a_1"}, ket{L"i_1"});
+
+    ResultExpr result_expr(I, f_vo - f_oo * t_vo);
+    auto export_tree = to_export_tree(result_expr);
+
+    PythonEinsumGeneratorContext ctx(PythonEinsumBackend::NumPy);
+    ctx.set_shape(occ, std::to_string(nocc));
+    ctx.set_shape(virt, std::to_string(nvirt));
+    ctx.set_tag(occ, "o");
+    ctx.set_tag(virt, "v");
+
+    PythonEinsumGenerator<> generator;
+
+    // Get tagged file names for writing
+    std::string f_vo_name = generator.represent(f_vo.as<Tensor>(), ctx);
+    std::string f_oo_name = generator.represent(f_oo.as<Tensor>(), ctx);
+    std::string t_vo_name = generator.represent(t_vo.as<Tensor>(), ctx);
+    std::string I_name = generator.represent(I, ctx);
+
+    write_eigen_tensor_to_numpy(temp_dir.string() + "/" + f_vo_name + ".npy",
+                                f_vo_tensor);
+    write_eigen_tensor_to_numpy(temp_dir.string() + "/" + f_oo_name + ".npy",
+                                f_oo_tensor);
+    write_eigen_tensor_to_numpy(temp_dir.string() + "/" + t_vo_name + ".npy",
+                                t_vo_tensor);
+
+    export_expression(export_tree, generator, ctx);
+
+    std::string code = generator.get_generated_code();
+
+    REQUIRE(run_python_code(code, temp_dir.string()));
+
+    auto I_actual = read_eigen_tensor_from_numpy<double, 2>(
+        temp_dir.string() + "/" + I_name + ".npy");
+
+    REQUIRE(I_actual.dimensions()[0] == nvirt);
+    REQUIRE(I_actual.dimensions()[1] == nocc);
+
+    const double tolerance = 1e-10;
+    for (Eigen::Index a = 0; a < nvirt; ++a) {
+      for (Eigen::Index i = 0; i < nocc; ++i) {
+        REQUIRE(std::abs(I_actual(a, i) - I_expected(a, i)) < tolerance);
+      }
+    }
+  }
+
   SECTION("Tensor I/O - Layout compatibility") {
     std::filesystem::path temp_dir =
         std::filesystem::temp_directory_path() / "sequant_test_layout";
