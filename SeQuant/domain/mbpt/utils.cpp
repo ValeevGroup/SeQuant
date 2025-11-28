@@ -8,24 +8,39 @@
 namespace sequant::mbpt {
 
 ExprPtr lst(ExprPtr A, ExprPtr B, size_t commutator_rank, bool unitary,
-            bool skip_clone) {
+            bool use_commutators, bool skip_clone) {
   SEQUANT_ASSERT(commutator_rank >= 1 && "Truncation order must be at least 1");
 
   // use cloned expr to avoid side effects
   if (!skip_clone) A = A->clone();
 
   // takes a product or an operator and applies the similarity transformation
-  auto transform = [&B, commutator_rank, unitary](const ExprPtr& e) {
+  auto transform = [&B, commutator_rank, unitary,
+                    use_commutators](const ExprPtr& e) {
     SEQUANT_ASSERT(e.is<op_t>() || e.is<Product>());
     auto result = e;  // start with expr
     auto op_Sk = result;
 
     for (size_t k = 1; k <= commutator_rank; ++k) {
       ExprPtr op_Sk_comm_w_S;
-      op_Sk_comm_w_S = op_Sk * B;  // traditional ansatz: [O,B] = (O B)_c
 
-      if (unitary)  // unitary ansatz: [O,B-B^+] = (O B)_c + (B^+ O)_c
-        op_Sk_comm_w_S += adjoint(B) * op_Sk;
+      if (use_commutators) {
+        // commutator form: [O,B] = OB - BO
+        op_Sk_comm_w_S = op_Sk * B - B * op_Sk;
+
+        if (unitary) {
+          // [O, B-B^+] = [O,B] - [O,B^+]
+          op_Sk_comm_w_S -= (op_Sk * adjoint(B) - adjoint(B) * op_Sk);
+        }
+      } else {
+        // connected form: [O,B] = (O B)_c
+        op_Sk_comm_w_S = op_Sk * B;
+
+        if (unitary) {
+          // [O,B-B^+] = (O B)_c + (B^+ O)_c
+          op_Sk_comm_w_S += adjoint(B) * op_Sk;
+        }
+      }
 
       op_Sk = ex<Constant>(rational{1, k}) * op_Sk_comm_w_S;
       simplify(op_Sk);
@@ -45,13 +60,15 @@ ExprPtr lst(ExprPtr A, ExprPtr B, size_t commutator_rank, bool unitary,
         })) {
       A = sequant::expand(A);
       simplify(A);
-      return lst(A, B, commutator_rank, unitary, /*skip_clone*/ true);
+      return lst(A, B, commutator_rank, unitary, use_commutators,
+                 /*skip_clone*/ true);
     } else {
       return transform(A);
     }
   } else if (A.is<Sum>()) {
     auto result = sequant::transform_sum_expr(*A, [=](const auto& term) {
-      return lst(term, B, commutator_rank, unitary, /*skip_clone*/ true);
+      return lst(term, B, commutator_rank, unitary, use_commutators,
+                 /*skip_clone*/ true);
     });
     return result;
   } else if (A.is<Constant>() || A.is<Variable>())

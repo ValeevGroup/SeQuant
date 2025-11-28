@@ -20,16 +20,19 @@ namespace sequant::mbpt {
 ///
 /// Notes:
 /// - If \p unitary is true, the ansatz uses B - B^+ instead of B.
+/// - If \p use_commutators is false (default), commutators are computed via connected products: [A,B] = (AB)_c
+/// - If \p use_commutators is true, commutators are computed explicitly: [A,B] = AB - BA
 ///
 /// @param A Expression A (e.g., the Hamiltonian)
 /// @param B Expression B (e.g., the cluster operator T)
 /// @param commutator_rank The maximum order of nested commutators to retain (e.g. 4 for traditional coupled-cluster)
 /// @param unitary If true, uses unitary generator with B-B^+
-/// @param skip_clone if true, will not clone the input expression
+/// @param use_commutators If true, uses explicit commutators [A,B] = AB - BA; otherwise uses connected products (AB)_c
+/// @param skip_clone If true, will not clone the input expression
 /// @pre This function expects \p A and \p B to be composed of mbpt::Operators
 // clang-format on
 ExprPtr lst(ExprPtr A, ExprPtr B, size_t commutator_rank, bool unitary = false,
-            bool skip_clone = false);
+            bool use_commutators = false, bool skip_clone = false);
 
 /// @brief Screens out terms in the expression \p expr that cannot contribute to
 /// expectation value
