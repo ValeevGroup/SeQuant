@@ -90,7 +90,8 @@ using KnownGenerators = std::tuple<
     JuliaITensorGenerator<JuliaITensorGeneratorContext>,
     JuliaTensorKitGenerator<JuliaTensorKitGeneratorContext>,
     JuliaTensorOperationsGenerator<JuliaTensorOperationsGeneratorContext>,
-    PythonEinsumGenerator<PythonEinsumGeneratorContext>,
+    NumPyEinsumGenerator,
+    PyTorchEinsumGenerator,
     ItfGenerator<ItfContext>
 >;
 // clang-format on
@@ -137,7 +138,19 @@ void configure_context_defaults(JuliaTensorOperationsGeneratorContext &ctx) {
   ctx.set_tag(virt, "v");
 }
 
-void configure_context_defaults(PythonEinsumGeneratorContext &ctx) {
+void configure_context_defaults(NumPyEinsumGeneratorContext &ctx) {
+  auto registry = get_default_context().index_space_registry();
+  IndexSpace occ = registry->retrieve("i");
+  IndexSpace virt = registry->retrieve("a");
+
+  ctx.set_shape(occ, "nocc");
+  ctx.set_shape(virt, "nvirt");
+
+  ctx.set_tag(occ, "o");
+  ctx.set_tag(virt, "v");
+}
+
+void configure_context_defaults(PyTorchEinsumGeneratorContext &ctx) {
   auto registry = get_default_context().index_space_registry();
   IndexSpace occ = registry->retrieve("i");
   IndexSpace virt = registry->retrieve("a");
@@ -262,7 +275,7 @@ TEMPLATE_LIST_TEST_CASE("export_tests", "[export]", KnownGenerators) {
   REQUIRE(Index(L"i_1") < Index(L"a_1"));
 
   // Safe-guard that template magic works
-  const std::size_t n_generators = 6;
+  const std::size_t n_generators = 7;
 
   const std::set<std::string> known_formats =
       known_format_names(KnownGenerators{});
@@ -809,14 +822,14 @@ TEST_CASE("PythonEinsumGenerator", "[export]") {
     auto export_tree = to_export_tree(result_expr);
 
     // Set up context
-    PythonEinsumGeneratorContext ctx(PythonEinsumBackend::NumPy);
+    NumPyEinsumGeneratorContext ctx;
     ctx.set_shape(occ, "nocc");
     ctx.set_shape(virt, "nvirt");
     ctx.set_tag(occ, "o");
     ctx.set_tag(virt, "v");
 
     // Generate code
-    PythonEinsumGenerator<> generator;
+    NumPyEinsumGenerator generator;
     export_expression(export_tree, generator, ctx);
 
     std::string code = generator.get_generated_code();
@@ -840,13 +853,13 @@ TEST_CASE("PythonEinsumGenerator", "[export]") {
     auto export_tree = to_export_tree(result_expr);
 
     // Set up PyTorch context
-    PythonEinsumGeneratorContext ctx(PythonEinsumBackend::PyTorch);
+    PyTorchEinsumGeneratorContext ctx;
     ctx.set_shape(occ, "nocc");
     ctx.set_shape(virt, "nvirt");
     ctx.set_tag(occ, "o");
     ctx.set_tag(virt, "v");
 
-    PythonEinsumGenerator<> generator;
+    PyTorchEinsumGenerator generator;
     export_expression(export_tree, generator, ctx);
 
     std::string code = generator.get_generated_code();
@@ -873,13 +886,13 @@ TEST_CASE("PythonEinsumGenerator", "[export]") {
     ResultExpr result_with_scalar(R, rational(1, 2) * t1 * t2);
     auto export_tree_scalar = to_export_tree(result_with_scalar);
 
-    PythonEinsumGeneratorContext ctx(PythonEinsumBackend::PyTorch);
+    PyTorchEinsumGeneratorContext ctx;
     ctx.set_shape(occ, "nocc");
     ctx.set_shape(virt, "nvirt");
     ctx.set_tag(occ, "o");
     ctx.set_tag(virt, "v");
 
-    PythonEinsumGenerator<> generator;
+    PyTorchEinsumGenerator generator;
     export_expression(export_tree_scalar, generator, ctx);
 
     std::string code = generator.get_generated_code();
@@ -898,13 +911,13 @@ TEST_CASE("PythonEinsumGenerator", "[export]") {
     ResultExpr result_expr(E, g * t);
     auto export_tree = to_export_tree(result_expr);
 
-    PythonEinsumGeneratorContext ctx(PythonEinsumBackend::PyTorch);
+    PyTorchEinsumGeneratorContext ctx;
     ctx.set_shape(occ, "nocc");
     ctx.set_shape(virt, "nvirt");
     ctx.set_tag(occ, "o");
     ctx.set_tag(virt, "v");
 
-    PythonEinsumGenerator<> generator;
+    PyTorchEinsumGenerator generator;
     export_expression(export_tree, generator, ctx);
 
     std::string code = generator.get_generated_code();

@@ -358,13 +358,13 @@ TEST_CASE("PythonEinsumGenerator - Validation", "[export][python]") {
     ResultExpr result_expr(T, F * t);
     auto export_tree = to_export_tree(result_expr);
 
-    PythonEinsumGeneratorContext ctx(PythonEinsumBackend::NumPy);
+    NumPyEinsumGeneratorContext ctx;
     ctx.set_shape(occ, std::to_string(nocc));
     ctx.set_shape(virt, std::to_string(nvirt));
     ctx.set_tag(occ, "o");
     ctx.set_tag(virt, "v");
 
-    PythonEinsumGenerator<> generator;
+    NumPyEinsumGenerator generator;
 
     // Get tagged names and write files
     std::string F_name = generator.represent(F.as<Tensor>(), ctx);
@@ -434,13 +434,13 @@ TEST_CASE("PythonEinsumGenerator - Validation", "[export][python]") {
     ResultExpr result_expr(E, g * t);
     auto export_tree = to_export_tree(result_expr);
 
-    PythonEinsumGeneratorContext ctx(PythonEinsumBackend::NumPy);
+    NumPyEinsumGeneratorContext ctx;
     ctx.set_shape(occ, std::to_string(nocc));
     ctx.set_shape(virt, std::to_string(nvirt));
     ctx.set_tag(occ, "o");
     ctx.set_tag(virt, "v");
 
-    PythonEinsumGenerator<> generator;
+    NumPyEinsumGenerator generator;
 
     // Get tagged names and write files
     std::string g_name = generator.represent(g.as<Tensor>(), ctx);
@@ -508,13 +508,13 @@ TEST_CASE("PythonEinsumGenerator - Validation", "[export][python]") {
     ResultExpr result_expr(R, g * t1 * t2);
     auto export_tree = to_export_tree(result_expr);
 
-    PythonEinsumGeneratorContext ctx(PythonEinsumBackend::NumPy);
+    NumPyEinsumGeneratorContext ctx;
     ctx.set_shape(occ, std::to_string(nocc));
     ctx.set_shape(virt, std::to_string(nvirt));
     ctx.set_tag(occ, "o");
     ctx.set_tag(virt, "v");
 
-    PythonEinsumGenerator<> generator;
+    NumPyEinsumGenerator generator;
 
     // Get tagged names and write files
     std::string g_name = generator.represent(g.as<Tensor>(), ctx);
@@ -581,13 +581,13 @@ TEST_CASE("PythonEinsumGenerator - Validation", "[export][python]") {
     ResultExpr result_expr(I, A * B * C);
     auto export_tree = to_export_tree(result_expr);
 
-    PythonEinsumGeneratorContext ctx(PythonEinsumBackend::NumPy);
+    NumPyEinsumGeneratorContext ctx;
     ctx.set_shape(occ, std::to_string(nocc));
     ctx.set_shape(virt, std::to_string(nvirt));
     ctx.set_tag(occ, "o");
     ctx.set_tag(virt, "v");
 
-    PythonEinsumGenerator<> generator;
+    NumPyEinsumGenerator generator;
 
     // Get tagged file names for writing
     std::string A_name = generator.represent(A.as<Tensor>(), ctx);
@@ -650,13 +650,13 @@ TEST_CASE("PythonEinsumGenerator - Validation", "[export][python]") {
     ResultExpr result_expr(T, rational(1, 2) * F * t);
     auto export_tree = to_export_tree(result_expr);
 
-    PythonEinsumGeneratorContext ctx(PythonEinsumBackend::NumPy);
+    NumPyEinsumGeneratorContext ctx;
     ctx.set_shape(occ, std::to_string(nocc));
     ctx.set_shape(virt, std::to_string(nvirt));
     ctx.set_tag(occ, "o");
     ctx.set_tag(virt, "v");
 
-    PythonEinsumGenerator<> generator;
+    NumPyEinsumGenerator generator;
 
     // Get tagged names and write files
     std::string F_name = generator.represent(F.as<Tensor>(), ctx);
@@ -722,13 +722,13 @@ TEST_CASE("PythonEinsumGenerator - Validation", "[export][python]") {
     ResultExpr result_expr(I, f_vo - f_oo * t_vo);
     auto export_tree = to_export_tree(result_expr);
 
-    PythonEinsumGeneratorContext ctx(PythonEinsumBackend::NumPy);
+    NumPyEinsumGeneratorContext ctx;
     ctx.set_shape(occ, std::to_string(nocc));
     ctx.set_shape(virt, std::to_string(nvirt));
     ctx.set_tag(occ, "o");
     ctx.set_tag(virt, "v");
 
-    PythonEinsumGenerator<> generator;
+    NumPyEinsumGenerator generator;
 
     // Get tagged file names for writing
     std::string f_vo_name = generator.represent(f_vo.as<Tensor>(), ctx);

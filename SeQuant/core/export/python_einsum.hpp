@@ -24,26 +24,16 @@
 
 namespace sequant {
 
-/// Backend selection for Python einsum generator
-enum class PythonEinsumBackend {
-  NumPy,   ///< Generate code using numpy.einsum
-  PyTorch  ///< Generate code using torch.einsum
-};
-
-/// Context class for the PythonEinsumGenerator
+/// Base context class for Python einsum generators
 class PythonEinsumGeneratorContext : public ExportContext {
  public:
   using ShapeMap = std::map<IndexSpace, std::string>;
   using TagMap = std::map<IndexSpace, std::string>;
 
-  PythonEinsumGeneratorContext(
-      PythonEinsumBackend backend = PythonEinsumBackend::NumPy)
-      : m_backend(backend) {}
+  PythonEinsumGeneratorContext() = default;
   ~PythonEinsumGeneratorContext() = default;
-  PythonEinsumGeneratorContext(
-      ShapeMap index_shapes,
-      PythonEinsumBackend backend = PythonEinsumBackend::NumPy)
-      : m_index_shapes(std::move(index_shapes)), m_backend(backend) {}
+  PythonEinsumGeneratorContext(ShapeMap index_shapes)
+      : m_index_shapes(std::move(index_shapes)) {}
 
   /// Get the dimension/shape for a given index space
   std::string get_shape(const IndexSpace &space) const {
@@ -89,33 +79,30 @@ class PythonEinsumGeneratorContext : public ExportContext {
     m_tags[space] = std::move(tag);
   }
 
-  /// Get the backend being used
-  PythonEinsumBackend backend() const { return m_backend; }
-
-  /// Set the backend
-  void set_backend(PythonEinsumBackend backend) { m_backend = backend; }
-
-  /// Get the module prefix (np. or torch.)
-  std::string module_prefix() const {
-    return m_backend == PythonEinsumBackend::NumPy ? "np." : "torch.";
-  }
-
  protected:
   ShapeMap m_index_shapes;
   TagMap m_tags;
-  PythonEinsumBackend m_backend;
 };
 
-/// Generator for producing Python code using numpy.einsum or torch.einsum
-/// - NumPy: https://numpy.org/doc/stable/reference/generated/numpy.einsum.html
-/// - PyTorch: https://pytorch.org/docs/stable/generated/torch.einsum.html
-template <typename Context = PythonEinsumGeneratorContext>
-class PythonEinsumGenerator : public Generator<Context> {
+/// Context for NumPy einsum generator
+class NumPyEinsumGeneratorContext : public PythonEinsumGeneratorContext {
  public:
-  PythonEinsumGenerator() = default;
-  ~PythonEinsumGenerator() = default;
+  using PythonEinsumGeneratorContext::PythonEinsumGeneratorContext;
+};
 
-  std::string get_format_name() const override { return "Python (einsum)"; }
+/// Context for PyTorch einsum generator
+class PyTorchEinsumGeneratorContext : public PythonEinsumGeneratorContext {
+ public:
+  using PythonEinsumGeneratorContext::PythonEinsumGeneratorContext;
+};
+
+/// Base generator for producing Python code using einsum
+/// Provides common functionality shared by NumPy and PyTorch backends
+template <typename Context>
+class PythonEinsumGeneratorBase : public Generator<Context> {
+ public:
+  PythonEinsumGeneratorBase() = default;
+  virtual ~PythonEinsumGeneratorBase() = default;
 
   bool supports_named_sections() const override { return true; }
 
@@ -163,22 +150,7 @@ class PythonEinsumGenerator : public Generator<Context> {
 
   std::string represent(const Tensor &tensor,
                         const Context &ctx) const override {
-    // For Python variable names, start with sanitized tensor label
-    std::string name = sanitize_python_name(tensor.label());
-
-    // Append index space tags to distinguish different tensor blocks
-    // e.g., I[i1,a1] becomes "I_ov", I[a2,a1] becomes "I_vv"
-    if (tensor.num_indices() > 0) {
-      std::string tags;
-      for (const Index &idx : tensor.const_indices()) {
-        tags += ctx.get_tag(idx.space());
-      }
-      if (!tags.empty()) {
-        name += "_" + tags;
-      }
-    }
-
-    return name;
+    return tensor_name(tensor, ctx);
   }
 
   std::string represent(const Variable &variable,
@@ -214,38 +186,8 @@ class PythonEinsumGenerator : public Generator<Context> {
     }
 
     // Use Fortran order to match Eigen::Tensor's column-major layout
-    m_generated += m_indent + represent(tensor, ctx) + " = " +
-                   ctx.module_prefix() + "zeros(" +
-                   ctx.get_shape_tuple(tensor) + ", order='F')\n";
-  }
-
-  void load(const Tensor &tensor, bool set_to_zero,
-            const Context &ctx) override {
-    m_generated += m_indent + represent(tensor, ctx) + " = ";
-
-    if (set_to_zero) {
-      // Use Fortran order to match Eigen::Tensor's column-major layout
-      m_generated += ctx.module_prefix() + "zeros(" +
-                     ctx.get_shape_tuple(tensor) + ", order='F')";
-    } else {
-      // Load from file (using pickle or similar)
-      if (ctx.backend() == PythonEinsumBackend::NumPy) {
-        m_generated +=
-            ctx.module_prefix() + "load('" + represent(tensor, ctx) + ".npy')";
-      } else {
-        m_generated += "torch.load('" + represent(tensor, ctx) + ".pt')";
-      }
-    }
-
-    m_generated += "\n";
-  }
-
-  void set_to_zero(const Tensor &tensor, const Context &ctx) override {
-    if (ctx.backend() == PythonEinsumBackend::NumPy) {
-      m_generated += m_indent + represent(tensor, ctx) + ".fill(0)\n";
-    } else {
-      m_generated += m_indent + represent(tensor, ctx) + ".zero_()\n";
-    }
+    m_generated += m_indent + represent(tensor, ctx) + " = " + module_prefix() +
+                   "zeros(" + ctx.get_shape_tuple(tensor) + ", order='F')\n";
   }
 
   void unload(const Tensor &tensor, const Context &ctx) override {
@@ -255,24 +197,8 @@ class PythonEinsumGenerator : public Generator<Context> {
   void destroy(const Tensor &tensor, const Context &ctx) override {
     unload(tensor, ctx);
     // Remove the associated storage file from disk
-    if (ctx.backend() == PythonEinsumBackend::NumPy) {
-      m_generated +=
-          m_indent + "os.remove('" + represent(tensor, ctx) + ".npy')\n";
-    } else {
-      m_generated +=
-          m_indent + "os.remove('" + represent(tensor, ctx) + ".pt')\n";
-    }
-  }
-
-  void persist(const Tensor &tensor, const Context &ctx) override {
-    if (ctx.backend() == PythonEinsumBackend::NumPy) {
-      m_generated += m_indent + ctx.module_prefix() + "save('" +
-                     represent(tensor, ctx) + ".npy', " +
-                     represent(tensor, ctx) + ")\n";
-    } else {
-      m_generated += m_indent + "torch.save(" + represent(tensor, ctx) + ", '" +
-                     represent(tensor, ctx) + ".pt')\n";
-    }
+    m_generated += m_indent + "os.remove('" + represent(tensor, ctx) +
+                   file_extension() + "')\n";
   }
 
   void create(const Variable &variable, bool zero_init,
@@ -283,25 +209,6 @@ class PythonEinsumGenerator : public Generator<Context> {
     }
 
     m_generated += m_indent + represent(variable, ctx) + " = 0.0\n";
-  }
-
-  void load(const Variable &variable, bool set_to_zero,
-            const Context &ctx) override {
-    m_generated += m_indent + represent(variable, ctx) + " = ";
-
-    if (set_to_zero) {
-      m_generated += "0.0";
-    } else {
-      // Load from file
-      if (ctx.backend() == PythonEinsumBackend::NumPy) {
-        m_generated += ctx.module_prefix() + "load('" +
-                       represent(variable, ctx) + ".npy')";
-      } else {
-        m_generated += "torch.load('" + represent(variable, ctx) + ".pt')";
-      }
-    }
-
-    m_generated += "\n";
   }
 
   void set_to_zero(const Variable &variable, const Context &ctx) override {
@@ -315,24 +222,8 @@ class PythonEinsumGenerator : public Generator<Context> {
   void destroy(const Variable &variable, const Context &ctx) override {
     unload(variable, ctx);
     // Remove the associated storage file from disk
-    if (ctx.backend() == PythonEinsumBackend::NumPy) {
-      m_generated +=
-          m_indent + "os.remove('" + represent(variable, ctx) + ".npy')\n";
-    } else {
-      m_generated +=
-          m_indent + "os.remove('" + represent(variable, ctx) + ".pt')\n";
-    }
-  }
-
-  void persist(const Variable &variable, const Context &ctx) override {
-    if (ctx.backend() == PythonEinsumBackend::NumPy) {
-      m_generated += m_indent + ctx.module_prefix() + "save('" +
-                     represent(variable, ctx) + ".npy', " +
-                     represent(variable, ctx) + ")\n";
-    } else {
-      m_generated += m_indent + "torch.save(" + represent(variable, ctx) +
-                     ", '" + represent(variable, ctx) + ".pt')\n";
-    }
+    m_generated += m_indent + "os.remove('" + represent(variable, ctx) +
+                   file_extension() + "')\n";
   }
 
   void compute(const Expr &expression, const Tensor &result,
@@ -416,6 +307,7 @@ class PythonEinsumGenerator : public Generator<Context> {
   void begin_expression(const Context &ctx) override {
     (void)ctx;
     if (!m_generated.empty() && !m_generated.ends_with("\n\n")) {
+      // Add a blank line (no trailing whitespace in Python)
       m_generated += "\n";
     }
   }
@@ -435,7 +327,41 @@ class PythonEinsumGenerator : public Generator<Context> {
   std::string m_generated;
   std::string m_indent;
 
-  /// Sanitize \p label to be a valid Python identifier
+  /// Get the tensor name (without indices)
+  std::string tensor_name(const Tensor &tensor, const Context &ctx) const {
+    // For Python variable names, start with sanitized tensor label
+    std::string name = sanitize_python_name(tensor.label());
+
+    // Append index space tags to distinguish different tensor blocks
+    // e.g., I[i1,a1] becomes "I_ov", I[a2,a1] becomes "I_vv"
+    if (tensor.num_indices() > 0) {
+      std::string tags;
+      for (const Index &idx : tensor.const_indices()) {
+        tags += ctx.get_tag(idx.space());
+      }
+      if (!tags.empty()) {
+        name += "_" + tags;
+      }
+    }
+
+    return name;
+  }
+
+  /// Backend-specific methods to be overridden by derived classes
+
+  /// Get the module prefix (np., torch., etc.)
+  virtual std::string module_prefix() const = 0;
+
+  /// Get the file extension for persistence (.npy, .pt, etc.)
+  virtual std::string file_extension() const = 0;
+
+  /// Get the available characters for einsum indices
+  virtual const std::string &available_index_chars() const = 0;
+
+  /// Backend-specific flag for optimize parameter in einsum
+  virtual bool use_optimize_parameter() const = 0;
+
+  /// Sanitize a label to be a valid Python identifier
   std::string sanitize_python_name(std::wstring_view label) const {
     std::string name = toUtf8(label);
 
@@ -478,8 +404,7 @@ class PythonEinsumGenerator : public Generator<Context> {
     }
 
     // Try to use the first character of the label, preserving case
-    SEQUANT_ASSERT(!full_label.empty());
-    const char base_char = full_label[0];
+    char base_char = full_label.empty() ? 'i' : full_label[0];
     std::string candidate(1, base_char);
 
     // Check if this character is already used (O(1) lookup)
@@ -487,12 +412,11 @@ class PythonEinsumGenerator : public Generator<Context> {
 
     // If already used, find next available character
     if (found) {
-      // Use a sequence: a-z, then A-Z
-      constexpr char chars[] =
-          "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
-      constexpr auto num_chars = sizeof(chars) / sizeof(chars[0]) - 1;
+      // Use backend-specific character set
+      const std::string chars = available_index_chars();
+      const auto num_chars = chars.size();
 
-      for (int i = 0; i < num_chars; ++i) {
+      for (std::size_t i = 0; i < num_chars; ++i) {
         candidate = std::string(1, chars[i]);
         // O(1) lookup instead of O(n) iteration
         if (used_chars.find(candidate) == used_chars.end()) {
@@ -528,7 +452,8 @@ class PythonEinsumGenerator : public Generator<Context> {
   /// Convert an expression to an einsum call
   std::string to_einsum_expr(const Expr &expr, const Tensor &result,
                              const Context &ctx) const {
-    // Create local index mapping for this expression
+    // Create local index mapping for this einsum operation
+    // This ensures each operation uses optimal character assignments
     boost::unordered::unordered_map<std::string, std::string> index_map;
     boost::unordered::unordered_set<std::string> used_chars;
 
@@ -545,14 +470,13 @@ class PythonEinsumGenerator : public Generator<Context> {
         "->" + tensor_to_einsum_subscript(result, ctx, index_map, used_chars);
 
     // Build einsum call
-    std::string einsum_call =
-        ctx.module_prefix() + "einsum('" + einsum_spec + "'";
+    std::string einsum_call = module_prefix() + "einsum('" + einsum_spec + "'";
 
     for (const std::string &name : tensor_names) {
       einsum_call += ", " + name;
     }
 
-    if (ctx.backend() == PythonEinsumBackend::NumPy) {
+    if (use_optimize_parameter()) {
       einsum_call += ", optimize=True";
     }
 
@@ -634,7 +558,7 @@ class PythonEinsumGenerator : public Generator<Context> {
       // For a scalar result, we need to contract all indices
       // This is an einsum with no output indices
 
-      // Create local index mapping for this expression
+      // Create local index mapping for this einsum operation
       boost::unordered::unordered_map<std::string, std::string> index_map;
       boost::unordered::unordered_set<std::string> used_chars;
 
@@ -649,13 +573,13 @@ class PythonEinsumGenerator : public Generator<Context> {
       einsum_spec += "->";
 
       std::string einsum_call =
-          ctx.module_prefix() + "einsum('" + einsum_spec + "'";
+          module_prefix() + "einsum('" + einsum_spec + "'";
 
       for (const std::string &name : tensor_names) {
         einsum_call += ", " + name;
       }
 
-      if (ctx.backend() == PythonEinsumBackend::NumPy) {
+      if (use_optimize_parameter()) {
         einsum_call += ", optimize=True";
       }
 
@@ -684,6 +608,176 @@ class PythonEinsumGenerator : public Generator<Context> {
         "Unsupported expression type for Python scalar expression");
   }
 };
+
+/// Generator for NumPy einsum
+class NumPyEinsumGenerator
+    : public PythonEinsumGeneratorBase<NumPyEinsumGeneratorContext> {
+ private:
+  using Base = PythonEinsumGeneratorBase<NumPyEinsumGeneratorContext>;
+
+ public:
+  NumPyEinsumGenerator() = default;
+  ~NumPyEinsumGenerator() = default;
+
+  std::string get_format_name() const override { return "Python (einsum)"; }
+
+  // Bring base class overloads into scope to avoid hiding
+  using Base::load;
+  using Base::persist;
+  using Base::set_to_zero;
+
+  void load(const Tensor &tensor, bool set_to_zero,
+            const Context &ctx) override {
+    Base::m_generated += Base::m_indent + Base::represent(tensor, ctx) + " = ";
+
+    if (set_to_zero) {
+      // Use Fortran order to match Eigen::Tensor's column-major layout
+      Base::m_generated += module_prefix() + "zeros(" +
+                           ctx.get_shape_tuple(tensor) + ", order='F')";
+    } else {
+      // Load from file
+      Base::m_generated += module_prefix() + "load('" +
+                           Base::represent(tensor, ctx) + file_extension() +
+                           "')";
+    }
+
+    Base::m_generated += "\n";
+  }
+
+  void set_to_zero(const Tensor &tensor, const Context &ctx) override {
+    Base::m_generated +=
+        Base::m_indent + Base::represent(tensor, ctx) + ".fill(0)\n";
+  }
+
+  void persist(const Tensor &tensor, const Context &ctx) override {
+    Base::m_generated += Base::m_indent + module_prefix() + "save('" +
+                         Base::represent(tensor, ctx) + file_extension() +
+                         "', " + Base::represent(tensor, ctx) + ")\n";
+  }
+
+  void load(const Variable &variable, bool set_to_zero,
+            const Context &ctx) override {
+    Base::m_generated +=
+        Base::m_indent + Base::represent(variable, ctx) + " = ";
+
+    if (set_to_zero) {
+      Base::m_generated += "0.0";
+    } else {
+      // Load from file
+      Base::m_generated += module_prefix() + "load('" +
+                           Base::represent(variable, ctx) + file_extension() +
+                           "')";
+    }
+
+    Base::m_generated += "\n";
+  }
+
+  void persist(const Variable &variable, const Context &ctx) override {
+    Base::m_generated += Base::m_indent + module_prefix() + "save('" +
+                         Base::represent(variable, ctx) + file_extension() +
+                         "', " + Base::represent(variable, ctx) + ")\n";
+  }
+
+ protected:
+  std::string module_prefix() const override { return "np."; }
+
+  std::string file_extension() const override { return ".npy"; }
+
+  // NumPy supports both lowercase and uppercase indices
+  const std::string &available_index_chars() const override {
+    static const std::string chars =
+        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    return chars;
+  }
+
+  bool use_optimize_parameter() const override { return true; }
+};
+
+/// Generator for PyTorch einsum
+class PyTorchEinsumGenerator
+    : public PythonEinsumGeneratorBase<PyTorchEinsumGeneratorContext> {
+ private:
+  using Base = PythonEinsumGeneratorBase<PyTorchEinsumGeneratorContext>;
+
+ public:
+  PyTorchEinsumGenerator() = default;
+  ~PyTorchEinsumGenerator() = default;
+
+  std::string get_format_name() const override { return "PyTorch (einsum)"; }
+
+  // Bring base class overloads into scope to avoid hiding
+  using Base::load;
+  using Base::persist;
+  using Base::set_to_zero;
+
+  void load(const Tensor &tensor, bool set_to_zero,
+            const Context &ctx) override {
+    Base::m_generated += Base::m_indent + Base::represent(tensor, ctx) + " = ";
+
+    if (set_to_zero) {
+      // Use Fortran order to match Eigen::Tensor's column-major layout
+      Base::m_generated += module_prefix() + "zeros(" +
+                           ctx.get_shape_tuple(tensor) + ", order='F')";
+    } else {
+      // Load from file
+      Base::m_generated += "torch.load('" + Base::represent(tensor, ctx) +
+                           file_extension() + "')";
+    }
+
+    Base::m_generated += "\n";
+  }
+
+  void set_to_zero(const Tensor &tensor, const Context &ctx) override {
+    Base::m_generated +=
+        Base::m_indent + Base::represent(tensor, ctx) + ".zero_()\n";
+  }
+
+  void persist(const Tensor &tensor, const Context &ctx) override {
+    Base::m_generated +=
+        Base::m_indent + "torch.save(" + Base::represent(tensor, ctx) + ", '" +
+        Base::represent(tensor, ctx) + file_extension() + "')\n";
+  }
+
+  void load(const Variable &variable, bool set_to_zero,
+            const Context &ctx) override {
+    Base::m_generated +=
+        Base::m_indent + Base::represent(variable, ctx) + " = ";
+
+    if (set_to_zero) {
+      Base::m_generated += "0.0";
+    } else {
+      // Load from file
+      Base::m_generated += "torch.load('" + Base::represent(variable, ctx) +
+                           file_extension() + "')";
+    }
+
+    Base::m_generated += "\n";
+  }
+
+  void persist(const Variable &variable, const Context &ctx) override {
+    Base::m_generated +=
+        Base::m_indent + "torch.save(" + Base::represent(variable, ctx) +
+        ", '" + Base::represent(variable, ctx) + file_extension() + "')\n";
+  }
+
+ protected:
+  std::string module_prefix() const override { return "torch."; }
+
+  std::string file_extension() const override { return ".pt"; }
+
+  // PyTorch only supports lowercase indices
+  // See:
+  // https://stackoverflow.com/questions/55894693/understanding-pytorch-einsum
+  const std::string &available_index_chars() const override {
+    static const std::string chars = "abcdefghijklmnopqrstuvwxyz";
+    return chars;
+  }
+
+  bool use_optimize_parameter() const override { return false; }
+};
+
+/// Backward compatibility alias - default to NumPy
+using PythonEinsumGenerator = NumPyEinsumGenerator;
 
 }  // namespace sequant
 
