@@ -137,7 +137,8 @@ class PythonEinsumGenerator : public Generator<Context> {
     return PrunableScalars::All;
   }
 
-  std::string represent(const Index &idx, const Context &ctx) const override {
+  std::string represent(const Index &idx,
+                        [[maybe_unused]] const Context &ctx) const override {
     if (idx.has_proto_indices()) {
       throw std::runtime_error("Proto Indices are not (yet) supported!");
     }
@@ -159,7 +160,6 @@ class PythonEinsumGenerator : public Generator<Context> {
       c = std::tolower(static_cast<unsigned char>(c));
     }
 
-    (void)ctx;  // Suppress unused parameter warning
     return std::string(1, c);
   }
 
@@ -421,15 +421,25 @@ class PythonEinsumGenerator : public Generator<Context> {
   std::string m_generated;
   std::string m_indent;
 
-  /// Sanitize a label to be a valid Python identifier
+  /// Sanitize \p label to be a valid Python identifier
   std::string sanitize_python_name(std::wstring_view label) const {
     std::string name = toUtf8(label);
 
     // Replace invalid characters with underscores
+    // Python 3 supports unicode identifiers, so we only replace:
+    // - ASCII non-alphanumeric characters (except underscore)
+    // - Keep non-ASCII bytes as they're part of unicode characters (like Greek
+    // letters)
     for (char &c : name) {
-      if (!std::isalnum(static_cast<unsigned char>(c)) && c != '_') {
-        c = '_';
+      unsigned char uc = static_cast<unsigned char>(c);
+      // Only check ASCII range (0-127)
+      if (uc < 128) {
+        if (!std::isalnum(uc) && c != '_') {
+          c = '_';
+        }
       }
+      // For non-ASCII bytes (>= 128), keep them - they're part of valid UTF-8
+      // unicode chars
     }
 
     // Ensure it doesn't start with a number
