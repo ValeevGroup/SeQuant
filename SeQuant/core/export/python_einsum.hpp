@@ -256,6 +256,14 @@ class PythonEinsumGenerator : public Generator<Context> {
 
   void destroy(const Tensor &tensor, const Context &ctx) override {
     unload(tensor, ctx);
+    // Remove the associated storage file from disk
+    if (ctx.backend() == PythonEinsumBackend::NumPy) {
+      m_generated +=
+          m_indent + "os.remove('" + represent(tensor, ctx) + ".npy')\n";
+    } else {
+      m_generated +=
+          m_indent + "os.remove('" + represent(tensor, ctx) + ".pt')\n";
+    }
   }
 
   void persist(const Tensor &tensor, const Context &ctx) override {
@@ -308,6 +316,14 @@ class PythonEinsumGenerator : public Generator<Context> {
 
   void destroy(const Variable &variable, const Context &ctx) override {
     unload(variable, ctx);
+    // Remove the associated storage file from disk
+    if (ctx.backend() == PythonEinsumBackend::NumPy) {
+      m_generated +=
+          m_indent + "os.remove('" + represent(variable, ctx) + ".npy')\n";
+    } else {
+      m_generated +=
+          m_indent + "os.remove('" + represent(variable, ctx) + ".pt')\n";
+    }
   }
 
   void persist(const Variable &variable, const Context &ctx) override {
