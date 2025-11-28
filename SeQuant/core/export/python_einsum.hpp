@@ -245,67 +245,38 @@ class PythonEinsumGeneratorBase : public Generator<Context> {
                    " += " + to_python_scalar_expr(expression, ctx) + "\n";
   }
 
-  void declare(const Index &idx, const Context &ctx) override {
+  void declare(const Index &, const Context &) override {
     // Indices don't need explicit declaration in Python
-    (void)idx;
-    (void)ctx;
   }
 
-  void declare(const Variable &variable, UsageSet usage,
-               const Context &ctx) override {
+  void declare(const Variable &, UsageSet, const Context &) override {
     // Variables are dynamically typed in Python, no declaration needed
-    (void)variable;
-    (void)usage;
-    (void)ctx;
   }
 
-  void declare(const Tensor &tensor, UsageSet usage,
-               const Context &ctx) override {
+  void declare(const Tensor &, UsageSet, const Context &) override {
     // Tensors are dynamically typed in Python, no declaration needed
-    (void)tensor;
-    (void)usage;
-    (void)ctx;
   }
 
-  void all_indices_declared(std::size_t amount, const Context &ctx) override {
-    (void)amount;
-    (void)ctx;
-  }
+  void all_indices_declared(std::size_t, const Context &) override {}
 
-  void all_variables_declared(std::size_t amount, const Context &ctx) override {
-    (void)amount;
-    (void)ctx;
-  }
+  void all_variables_declared(std::size_t, const Context &) override {}
 
-  void all_tensors_declared(std::size_t amount, const Context &ctx) override {
-    (void)amount;
-    (void)ctx;
-  }
+  void all_tensors_declared(std::size_t, const Context &) override {}
 
-  void begin_declarations(DeclarationScope scope, const Context &ctx) override {
-    (void)scope;
-    (void)ctx;
-  }
+  void begin_declarations(DeclarationScope, const Context &) override {}
 
-  void end_declarations(DeclarationScope scope, const Context &ctx) override {
-    (void)scope;
-    (void)ctx;
-  }
+  void end_declarations(DeclarationScope, const Context &) override {}
 
-  void insert_comment(const std::string &comment, const Context &ctx) override {
-    (void)ctx;
+  void insert_comment(const std::string &comment, const Context &) override {
     m_generated += m_indent + "# " + comment + "\n";
   }
 
-  void begin_named_section(std::string_view name, const Context &ctx) override {
-    (void)ctx;
+  void begin_named_section(std::string_view name, const Context &) override {
     m_generated += m_indent + "def " + std::string(name) + "():\n";
     m_indent += "    ";
   }
 
-  void end_named_section(std::string_view /*name*/,
-                         const Context &ctx) override {
-    (void)ctx;
+  void end_named_section(std::string_view /*name*/, const Context &) override {
     SEQUANT_ASSERT(m_indent.size() >= 4);
     m_indent = m_indent.substr(0, m_indent.size() - 4);
     m_generated += "\n";
@@ -321,10 +292,7 @@ class PythonEinsumGeneratorBase : public Generator<Context> {
 
   void end_expression(const Context &ctx) override { (void)ctx; }
 
-  void begin_export(const Context &ctx) override {
-    (void)ctx;
-    m_generated.clear();
-  }
+  void begin_export(const Context &) override { m_generated.clear(); }
 
   void end_export(const Context &ctx) override { (void)ctx; }
 
@@ -399,10 +367,10 @@ class PythonEinsumGeneratorBase : public Generator<Context> {
 
   /// Get or create a single-character einsum index for a given Index
   std::string get_einsum_index(
-      const Index &idx, [[maybe_unused]] const Context &ctx,
+      const Index &idx, const Context &,
       boost::unordered::unordered_map<std::string, std::string> &index_map,
       boost::unordered::unordered_set<std::string> &used_chars) const {
-    std::string full_label = toUtf8(idx.full_label());
+    const std::string full_label = toUtf8(idx.full_label());
 
     // Check if we've already assigned a character to this index
     auto it = index_map.find(full_label);
