@@ -3,6 +3,7 @@
 
 #include <SeQuant/core/export/context.hpp>
 #include <SeQuant/core/export/generator.hpp>
+#include <SeQuant/core/export/reordering_context.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/space.hpp>
@@ -40,6 +41,12 @@ class PythonEinsumGeneratorContext : public ExportContext {
 
   /// Set whether to generate import statements
   void set_generate_imports(bool value) { m_generate_imports = value; }
+
+  /// Get the memory layout for tensors
+  MemoryLayout memory_layout() const { return m_memory_layout; }
+
+  /// Set the memory layout for tensors
+  void set_memory_layout(MemoryLayout layout) { m_memory_layout = layout; }
 
   /// Get the dimension/shape for a given index space
   std::string get_shape(const IndexSpace &space) const {
@@ -89,6 +96,8 @@ class PythonEinsumGeneratorContext : public ExportContext {
   ShapeMap m_index_shapes;
   TagMap m_tags;
   bool m_generate_imports = true;  // Generate imports by default
+  MemoryLayout m_memory_layout =
+      MemoryLayout::ColumnMajor;  // Fortran order to match Eigen::Tensor
 };
 
 /// Context for NumPy einsum generator
@@ -192,9 +201,9 @@ class PythonEinsumGeneratorBase : public Generator<Context> {
           "Python tensors must be initialized when created");
     }
 
-    // Use Fortran order to match Eigen::Tensor's column-major layout
     m_generated += m_indent + represent(tensor, ctx) + " = " + module_prefix() +
-                   "zeros(" + ctx.get_shape_tuple(tensor) + ", order='F')\n";
+                   "zeros(" + ctx.get_shape_tuple(tensor) + ", order='" +
+                   get_order_string(ctx) + "')\n";
   }
 
   void unload(const Tensor &tensor, const Context &ctx) override {
@@ -335,6 +344,20 @@ class PythonEinsumGeneratorBase : public Generator<Context> {
 
   /// Backend-specific flag for optimize parameter in einsum
   virtual bool use_optimize_parameter() const = 0;
+
+  /// Get the Python order string from memory layout
+  std::string get_order_string(const Context &ctx) const {
+    switch (ctx.memory_layout()) {
+      case MemoryLayout::ColumnMajor:
+        return "F";
+      case MemoryLayout::RowMajor:
+        return "C";
+      case MemoryLayout::Unspecified:
+        // Default to Fortran order for compatibility with Eigen::Tensor
+        return "F";
+    }
+    return "F";  // Fallback
+  }
 
   /// Sanitize a label to be a valid Python identifier
   std::string sanitize_python_name(std::wstring_view label) const {
@@ -614,9 +637,9 @@ class NumPyEinsumGenerator
     Base::m_generated += Base::m_indent + Base::represent(tensor, ctx) + " = ";
 
     if (set_to_zero) {
-      // Use Fortran order to match Eigen::Tensor's column-major layout
       Base::m_generated += module_prefix() + "zeros(" +
-                           ctx.get_shape_tuple(tensor) + ", order='F')";
+                           ctx.get_shape_tuple(tensor) + ", order='" +
+                           Base::get_order_string(ctx) + "')";
     } else {
       // Load from file
       Base::m_generated += module_prefix() + "load('" +
@@ -706,9 +729,9 @@ class PyTorchEinsumGenerator
     Base::m_generated += Base::m_indent + Base::represent(tensor, ctx) + " = ";
 
     if (set_to_zero) {
-      // Use Fortran order to match Eigen::Tensor's column-major layout
       Base::m_generated += module_prefix() + "zeros(" +
-                           ctx.get_shape_tuple(tensor) + ", order='F')";
+                           ctx.get_shape_tuple(tensor) + ", order='" +
+                           Base::get_order_string(ctx) + "')";
     } else {
       // Load from file
       Base::m_generated += "torch.load('" + Base::represent(tensor, ctx) +

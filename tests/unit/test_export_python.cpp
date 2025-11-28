@@ -315,6 +315,109 @@ Eigen::Tensor<Scalar, NumDims> random_tensor(
 }  // anonymous namespace
 
 // ============================================================================
+// UNIT TESTS - Test generator features without Python execution
+// ============================================================================
+
+TEST_CASE("PythonEinsumGenerator - Memory Layout", "[export][python]") {
+  auto resetter = to_export_context();
+
+  auto registry = get_default_context().index_space_registry();
+  IndexSpace occ = registry->retrieve("i");
+  IndexSpace virt = registry->retrieve("a");
+
+  SECTION("Default layout (ColumnMajor) generates order='F'") {
+    auto F = ex<Tensor>(L"F", bra{L"a_1"}, ket{L"i_1"});
+    Tensor T(L"T", bra{L"a_1"}, ket{L"i_1"});
+    ResultExpr result_expr(T, F);
+    auto export_tree = to_export_tree(result_expr);
+
+    NumPyEinsumGeneratorContext ctx;
+    ctx.set_shape(occ, "nocc");
+    ctx.set_shape(virt, "nvirt");
+    ctx.set_tag(occ, "o");
+    ctx.set_tag(virt, "v");
+
+    NumPyEinsumGenerator generator;
+    export_expression(export_tree, generator, ctx);
+
+    std::string code = generator.get_generated_code();
+
+    // Should contain Fortran order
+    REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring("order='F'"));
+    REQUIRE_THAT(code, !Catch::Matchers::ContainsSubstring("order='C'"));
+  }
+
+  SECTION("RowMajor layout generates order='C'") {
+    auto F = ex<Tensor>(L"F", bra{L"a_1"}, ket{L"i_1"});
+    Tensor T(L"T", bra{L"a_1"}, ket{L"i_1"});
+    ResultExpr result_expr(T, F);
+    auto export_tree = to_export_tree(result_expr);
+
+    NumPyEinsumGeneratorContext ctx;
+    ctx.set_shape(occ, "nocc");
+    ctx.set_shape(virt, "nvirt");
+    ctx.set_tag(occ, "o");
+    ctx.set_tag(virt, "v");
+    ctx.set_memory_layout(MemoryLayout::RowMajor);
+
+    NumPyEinsumGenerator generator;
+    export_expression(export_tree, generator, ctx);
+
+    std::string code = generator.get_generated_code();
+
+    // Should contain C order
+    REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring("order='C'"));
+    REQUIRE_THAT(code, !Catch::Matchers::ContainsSubstring("order='F'"));
+  }
+
+  SECTION("Unspecified layout defaults to order='F'") {
+    auto F = ex<Tensor>(L"F", bra{L"a_1"}, ket{L"i_1"});
+    Tensor T(L"T", bra{L"a_1"}, ket{L"i_1"});
+    ResultExpr result_expr(T, F);
+    auto export_tree = to_export_tree(result_expr);
+
+    NumPyEinsumGeneratorContext ctx;
+    ctx.set_shape(occ, "nocc");
+    ctx.set_shape(virt, "nvirt");
+    ctx.set_tag(occ, "o");
+    ctx.set_tag(virt, "v");
+    ctx.set_memory_layout(MemoryLayout::Unspecified);
+
+    NumPyEinsumGenerator generator;
+    export_expression(export_tree, generator, ctx);
+
+    std::string code = generator.get_generated_code();
+
+    // Should default to Fortran order
+    REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring("order='F'"));
+    REQUIRE_THAT(code, !Catch::Matchers::ContainsSubstring("order='C'"));
+  }
+
+  SECTION("PyTorch generator also respects memory layout") {
+    auto F = ex<Tensor>(L"F", bra{L"a_1"}, ket{L"i_1"});
+    Tensor T(L"T", bra{L"a_1"}, ket{L"i_1"});
+    ResultExpr result_expr(T, F);
+    auto export_tree = to_export_tree(result_expr);
+
+    PyTorchEinsumGeneratorContext ctx;
+    ctx.set_shape(occ, "nocc");
+    ctx.set_shape(virt, "nvirt");
+    ctx.set_tag(occ, "o");
+    ctx.set_tag(virt, "v");
+    ctx.set_memory_layout(MemoryLayout::RowMajor);
+
+    PyTorchEinsumGenerator generator;
+    export_expression(export_tree, generator, ctx);
+
+    std::string code = generator.get_generated_code();
+
+    // Should contain C order
+    REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring("order='C'"));
+    REQUIRE_THAT(code, !Catch::Matchers::ContainsSubstring("order='F'"));
+  }
+}
+
+// ============================================================================
 // VALIDATION TESTS - Execute generated Python code and verify results
 // ============================================================================
 
@@ -759,6 +862,166 @@ TEST_CASE("PythonEinsumGenerator - Validation", "[export][python]") {
     for (Eigen::Index a = 0; a < nvirt; ++a) {
       for (Eigen::Index i = 0; i < nocc; ++i) {
         REQUIRE(std::abs(I_actual(a, i) - I_expected(a, i)) < tolerance);
+      }
+    }
+  }
+
+  SECTION("Validation: RowMajor memory layout") {
+    // Test that RowMajor (C order) layout produces numerically correct results
+    std::filesystem::path temp_dir =
+        std::filesystem::temp_directory_path() / "sequant_test_rowmajor";
+    std::filesystem::create_directories(temp_dir);
+    auto cleanup = sequant::detail::make_scope_exit(
+        [&temp_dir]() { std::filesystem::remove_all(temp_dir); });
+
+    // Test: T[a1, a2] = F[a1, i1] * t[i1, a2]
+    const Eigen::Index nocc = 3;
+    const Eigen::Index nvirt = 5;
+
+    // Generate random input tensors with RowMajor layout
+    Eigen::Tensor<double, 2, Eigen::RowMajor> F_tensor(nvirt, nocc);
+    Eigen::Tensor<double, 2, Eigen::RowMajor> t_tensor(nocc, nvirt);
+
+    std::mt19937 gen_F(100), gen_t(200);
+    std::uniform_real_distribution<double> dist(-1.0, 1.0);
+    for (Eigen::Index i = 0; i < F_tensor.size(); ++i) {
+      F_tensor.data()[i] = dist(gen_F);
+    }
+    for (Eigen::Index i = 0; i < t_tensor.size(); ++i) {
+      t_tensor.data()[i] = dist(gen_t);
+    }
+
+    // Compute expected result using Eigen with RowMajor layout
+    Eigen::array<Eigen::IndexPair<int>, 1> contraction_dims = {
+        Eigen::IndexPair<int>(1, 0)};
+    Eigen::Tensor<double, 2, Eigen::RowMajor> T_expected =
+        F_tensor.contract(t_tensor, contraction_dims);
+
+    // Generate Python code with RowMajor layout
+    auto F = ex<Tensor>(L"F", bra{L"a_1"}, ket{L"i_1"});
+    auto t = ex<Tensor>(L"t", bra{L"i_1"}, ket{L"a_2"});
+    Tensor T(L"T", bra{L"a_1"}, ket{L"a_2"});
+
+    ResultExpr result_expr(T, F * t);
+    auto export_tree = to_export_tree(result_expr);
+
+    NumPyEinsumGeneratorContext ctx;
+    ctx.set_shape(occ, std::to_string(nocc));
+    ctx.set_shape(virt, std::to_string(nvirt));
+    ctx.set_tag(occ, "o");
+    ctx.set_tag(virt, "v");
+    ctx.set_memory_layout(MemoryLayout::RowMajor);  // Use C order
+
+    NumPyEinsumGenerator generator;
+
+    // Get tagged names and write files
+    std::string F_name = generator.represent(F.as<Tensor>(), ctx);
+    std::string t_name = generator.represent(t.as<Tensor>(), ctx);
+    std::string T_name = generator.represent(T, ctx);
+
+    write_eigen_tensor_to_numpy(temp_dir.string() + "/" + F_name + ".npy",
+                                F_tensor);
+    write_eigen_tensor_to_numpy(temp_dir.string() + "/" + t_name + ".npy",
+                                t_tensor);
+
+    export_expression(export_tree, generator, ctx);
+
+    std::string code = generator.get_generated_code();
+
+    // Verify code contains order='C'
+    REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring("order='C'"));
+
+    // Execute Python code
+    REQUIRE(run_python_code(code, temp_dir.string()));
+
+    // Read result with RowMajor layout
+    auto T_actual = read_eigen_tensor_from_numpy<double, 2, Eigen::RowMajor>(
+        temp_dir.string() + "/" + T_name + ".npy");
+
+    // Verify results match
+    REQUIRE(T_actual.dimensions()[0] == nvirt);
+    REQUIRE(T_actual.dimensions()[1] == nvirt);
+
+    const double tolerance = 1e-10;
+    for (Eigen::Index i = 0; i < nvirt; ++i) {
+      for (Eigen::Index j = 0; j < nvirt; ++j) {
+        REQUIRE(std::abs(T_actual(i, j) - T_expected(i, j)) < tolerance);
+      }
+    }
+  }
+
+  SECTION("Validation: ColumnMajor memory layout (explicit)") {
+    // Test that explicit ColumnMajor (Fortran order) layout produces correct
+    // results
+    std::filesystem::path temp_dir =
+        std::filesystem::temp_directory_path() / "sequant_test_colmajor";
+    std::filesystem::create_directories(temp_dir);
+    auto cleanup = sequant::detail::make_scope_exit(
+        [&temp_dir]() { std::filesystem::remove_all(temp_dir); });
+
+    // Test: T[a1, a2] = F[a1, i1] * t[i1, a2]
+    const Eigen::Index nocc = 4;
+    const Eigen::Index nvirt = 6;
+
+    // Generate random input tensors
+    auto F_tensor = random_tensor<double, 2>({nvirt, nocc}, 150);
+    auto t_tensor = random_tensor<double, 2>({nocc, nvirt}, 250);
+
+    // Compute expected result using Eigen
+    Eigen::array<Eigen::IndexPair<int>, 1> contraction_dims = {
+        Eigen::IndexPair<int>(1, 0)};
+    Eigen::Tensor<double, 2> T_expected =
+        F_tensor.contract(t_tensor, contraction_dims);
+
+    // Generate Python code with explicit ColumnMajor layout
+    auto F = ex<Tensor>(L"F", bra{L"a_1"}, ket{L"i_1"});
+    auto t = ex<Tensor>(L"t", bra{L"i_1"}, ket{L"a_2"});
+    Tensor T(L"T", bra{L"a_1"}, ket{L"a_2"});
+
+    ResultExpr result_expr(T, F * t);
+    auto export_tree = to_export_tree(result_expr);
+
+    NumPyEinsumGeneratorContext ctx;
+    ctx.set_shape(occ, std::to_string(nocc));
+    ctx.set_shape(virt, std::to_string(nvirt));
+    ctx.set_tag(occ, "o");
+    ctx.set_tag(virt, "v");
+    ctx.set_memory_layout(MemoryLayout::ColumnMajor);  // Use Fortran order
+
+    NumPyEinsumGenerator generator;
+
+    // Get tagged names and write files
+    std::string F_name = generator.represent(F.as<Tensor>(), ctx);
+    std::string t_name = generator.represent(t.as<Tensor>(), ctx);
+    std::string T_name = generator.represent(T, ctx);
+
+    write_eigen_tensor_to_numpy(temp_dir.string() + "/" + F_name + ".npy",
+                                F_tensor);
+    write_eigen_tensor_to_numpy(temp_dir.string() + "/" + t_name + ".npy",
+                                t_tensor);
+
+    export_expression(export_tree, generator, ctx);
+
+    std::string code = generator.get_generated_code();
+
+    // Verify code contains order='F'
+    REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring("order='F'"));
+
+    // Execute Python code
+    REQUIRE(run_python_code(code, temp_dir.string()));
+
+    // Read result
+    auto T_actual = read_eigen_tensor_from_numpy<double, 2>(
+        temp_dir.string() + "/" + T_name + ".npy");
+
+    // Verify results match
+    REQUIRE(T_actual.dimensions()[0] == nvirt);
+    REQUIRE(T_actual.dimensions()[1] == nvirt);
+
+    const double tolerance = 1e-10;
+    for (Eigen::Index i = 0; i < nvirt; ++i) {
+      for (Eigen::Index j = 0; j < nvirt; ++j) {
+        REQUIRE(std::abs(T_actual(i, j) - T_expected(i, j)) < tolerance);
       }
     }
   }
