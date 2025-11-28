@@ -35,6 +35,12 @@ class PythonEinsumGeneratorContext : public ExportContext {
   PythonEinsumGeneratorContext(ShapeMap index_shapes)
       : m_index_shapes(std::move(index_shapes)) {}
 
+  /// Get whether to generate import statements
+  bool generate_imports() const { return m_generate_imports; }
+
+  /// Set whether to generate import statements
+  void set_generate_imports(bool value) { m_generate_imports = value; }
+
   /// Get the dimension/shape for a given index space
   std::string get_shape(const IndexSpace &space) const {
     auto it = m_index_shapes.find(space);
@@ -82,6 +88,7 @@ class PythonEinsumGeneratorContext : public ExportContext {
  protected:
   ShapeMap m_index_shapes;
   TagMap m_tags;
+  bool m_generate_imports = true;  // Generate imports by default
 };
 
 /// Context for NumPy einsum generator
@@ -621,6 +628,14 @@ class NumPyEinsumGenerator
 
   std::string get_format_name() const override { return "Python (einsum)"; }
 
+  void begin_export(const Context &ctx) override {
+    Base::m_generated.clear();
+    if (ctx.generate_imports()) {
+      Base::m_generated += "import numpy as np\n";
+      Base::m_generated += "import os\n\n";
+    }
+  }
+
   // Bring base class overloads into scope to avoid hiding
   using Base::load;
   using Base::persist;
@@ -704,6 +719,14 @@ class PyTorchEinsumGenerator
   ~PyTorchEinsumGenerator() = default;
 
   std::string get_format_name() const override { return "PyTorch (einsum)"; }
+
+  void begin_export(const Context &ctx) override {
+    Base::m_generated.clear();
+    if (ctx.generate_imports()) {
+      Base::m_generated += "import torch\n";
+      Base::m_generated += "import os\n\n";
+    }
+  }
 
   // Bring base class overloads into scope to avoid hiding
   using Base::load;

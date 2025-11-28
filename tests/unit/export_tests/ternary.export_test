@@ -116,6 +116,9 @@ store I:ce[jb]
 =================================================
 Python (einsum)
 =================================================
+import numpy as np
+import os
+
 I_ov = np.zeros((nocc, nvirt), order='F')
 I_vv = np.zeros((nvirt, nvirt), order='F')
 A_vo = np.load('A_vo.npy')

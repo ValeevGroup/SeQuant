@@ -27,6 +27,9 @@ Persist I[a_1, i_1]
 =================================================
 Python (einsum)
 =================================================
+import numpy as np
+import os
+
 I_vo = np.zeros((nvirt, nocc), order='F')
 f_oo = np.load('f_oo.npy')
 t_vo = np.load('t_vo.npy')

@@ -27,6 +27,9 @@ end section
 =================================================
 Python (einsum)
 =================================================
+import numpy as np
+import os
+
 def test_section():
 
     R1_vo = np.zeros((nvirt, nocc), order='F')

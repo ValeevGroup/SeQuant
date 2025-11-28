@@ -84,6 +84,9 @@ store I:cc[jk]
 =================================================
 Python (einsum)
 =================================================
+import numpy as np
+import os
+
 I_oo = np.zeros((nocc, nocc), order='F')
 A_vo = np.load('A_vo.npy')
 B_ov = np.load('B_ov.npy')
