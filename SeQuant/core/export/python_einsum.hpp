@@ -154,11 +154,9 @@ class PythonEinsumGenerator : public Generator<Context> {
       throw std::runtime_error("Empty index label");
     }
 
-    // Return first character (lowercase for einsum convention)
+    // Return first character preserving case to avoid conflicts
+    // between index spaces that differ only in case (e.g., 'I' vs 'i')
     char c = label[0];
-    if (std::isupper(static_cast<unsigned char>(c))) {
-      c = std::tolower(static_cast<unsigned char>(c));
-    }
 
     return std::string(1, c);
   }
@@ -479,11 +477,9 @@ class PythonEinsumGenerator : public Generator<Context> {
       return it->second;
     }
 
-    // Try to use the first character of the label
-    char base_char =
-        full_label.empty()
-            ? 'i'
-            : std::tolower(static_cast<unsigned char>(full_label[0]));
+    // Try to use the first character of the label, preserving case
+    SEQUANT_ASSERT(!full_label.empty());
+    const char base_char = full_label[0];
     std::string candidate(1, base_char);
 
     // Check if this character is already used (O(1) lookup)
