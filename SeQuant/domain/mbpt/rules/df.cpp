@@ -52,8 +52,7 @@ ExprPtr density_fit(ExprPtr const& expr, IndexSpace aux_space,
     if (tensor.label() == tensor_label  //
         && tensor.bra_rank() == 2       //
         && tensor.ket_rank() == 2)
-      return density_fit_impl(tensor, Index(aux_space.base_key() + L"_1"),
-                              factor_label);
+      return density_fit_impl(tensor, Index(aux_space, 1), factor_label);
     else
       return expr;
   } else if (expr->is<Product>()) {
@@ -65,9 +64,8 @@ ExprPtr density_fit(ExprPtr const& expr, IndexSpace aux_space,
     for (auto&& f : prod.factors())
       if (f.is<Tensor>() && f.as<Tensor>().label() == tensor_label) {
         auto const& g = f->as<Tensor>();
-        auto g_df = density_fit_impl(
-            g, Index(aux_space.base_key() + L"_" + std::to_wstring(++aux_ix)),
-            factor_label);
+        auto g_df =
+            density_fit_impl(g, Index(aux_space, ++aux_ix), factor_label);
         result.append(1, std::move(g_df), Product::Flatten::Yes);
       } else {
         result.append(1, f, Product::Flatten::No);

@@ -61,10 +61,9 @@ ExprPtr tensor_hypercontract(ExprPtr const& expr, IndexSpace aux_space,
     if (tensor.label() == tensor_label  //
         && tensor.bra_rank() == 2       //
         && tensor.ket_rank() == 2)
-      return tensor_hypercontract_impl(
-          tensor, Index(aux_space.base_key() + L"_1"),
-          Index(aux_space.base_key() + L"_2", aux_space), factor_label,
-          aux_label);
+      return tensor_hypercontract_impl(tensor, Index(aux_space, 1),
+                                       Index(aux_space, 2), factor_label,
+                                       aux_label);
     else
       return expr;
   } else if (expr->is<Product>()) {
@@ -76,10 +75,8 @@ ExprPtr tensor_hypercontract(ExprPtr const& expr, IndexSpace aux_space,
     for (auto&& f : prod.factors()) {
       if (f->is<Tensor>() && f->as<Tensor>().label() == tensor_label) {
         auto const& g = f->as<Tensor>();
-        auto index1 =
-            Index(aux_space.base_key() + L"_" + std::to_wstring(++aux_ix));
-        auto index2 =
-            Index(aux_space.base_key() + L"_" + std::to_wstring(++aux_ix));
+        auto index1 = Index(aux_space, ++aux_ix);
+        auto index2 = Index(aux_space, ++aux_ix);
         auto g_thc = tensor_hypercontract_impl(g, index1, index2, factor_label,
                                                aux_label);
         result.append(1, std::move(g_thc), Product::Flatten::Yes);
