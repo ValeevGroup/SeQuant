@@ -40,7 +40,10 @@ class Constant : public Expr {
   Constant(Constant &&) = default;
   Constant &operator=(const Constant &) = default;
   Constant &operator=(Constant &&) = default;
-  template <typename U, typename = std::enable_if_t<!is_constant_v<U>>>
+  template <typename U>
+    requires(!is_constant_v<U> && !is_an_expr_v<std::remove_reference_t<U>> &&
+             !Expr::is_shared_ptr_of_expr_or_derived<
+                 std::remove_reference_t<U>>::value)
   explicit Constant(U &&value) : value_(std::forward<U>(value)) {}
 
   /// @tparam T the result type; default to the type of value_

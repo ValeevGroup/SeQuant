@@ -219,49 +219,21 @@ class JuliaTensorOperationsGenerator : public Generator<Context> {
                    " += " + to_julia_expr(expression, ctx) + "\n";
   }
 
-  void declare(const Index &idx, const Context &ctx) override {
-    (void)idx;
-    (void)ctx;
-  }
+  void declare(const Index &, const Context &) override {}
 
-  void declare(const Variable &variable, UsageSet usage,
-               const Context &ctx) override {
-    (void)variable;
-    (void)usage;
-    (void)ctx;
-  }
+  void declare(const Variable &, UsageSet, const Context &) override {}
 
-  void declare(const Tensor &tensor, UsageSet usage,
-               const Context &ctx) override {
-    (void)tensor;
-    (void)usage;
-    (void)ctx;
-  }
+  void declare(const Tensor &, UsageSet, const Context &) override {}
 
-  void all_indices_declared(std::size_t amount, const Context &ctx) override {
-    (void)amount;
-    (void)ctx;
-  }
+  void all_indices_declared(std::size_t, const Context &) override {}
 
-  void all_variables_declared(std::size_t amount, const Context &ctx) override {
-    (void)amount;
-    (void)ctx;
-  }
+  void all_variables_declared(std::size_t, const Context &) override {}
 
-  void all_tensors_declared(std::size_t amount, const Context &ctx) override {
-    (void)amount;
-    (void)ctx;
-  }
+  void all_tensors_declared(std::size_t, const Context &) override {}
 
-  void begin_declarations(DeclarationScope scope, const Context &ctx) override {
-    (void)scope;
-    (void)ctx;
-  }
+  void begin_declarations(DeclarationScope, const Context &) override {}
 
-  void end_declarations(DeclarationScope scope, const Context &ctx) override {
-    (void)scope;
-    (void)ctx;
-  }
+  void end_declarations(DeclarationScope, const Context &) override {}
 
   void insert_comment(const std::string &comment, const Context &) override {
     m_generated += "# " + comment + "\n";
