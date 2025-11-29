@@ -140,8 +140,7 @@ class PythonEinsumGeneratorBase : public Generator<Context> {
     return PrunableScalars::All;
   }
 
-  std::string represent(const Index &idx,
-                        [[maybe_unused]] const Context &ctx) const override {
+  std::string represent(const Index &idx, const Context &) const override {
     if (idx.has_proto_indices()) {
       throw std::runtime_error("Proto Indices are not (yet) supported!");
     }
