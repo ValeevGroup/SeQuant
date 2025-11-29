@@ -194,18 +194,6 @@ class PythonEinsumGeneratorBase : public Generator<Context> {
     return sstream.str();
   }
 
-  void create(const Tensor &tensor, bool zero_init,
-              const Context &ctx) override {
-    if (!zero_init) {
-      throw std::runtime_error(
-          "Python tensors must be initialized when created");
-    }
-
-    m_generated += m_indent + represent(tensor, ctx) + " = " + module_prefix() +
-                   "zeros(" + ctx.get_shape_tuple(tensor) + ", order='" +
-                   get_order_string(ctx) + "')\n";
-  }
-
   void unload(const Tensor &tensor, const Context &ctx) override {
     m_generated += m_indent + "del " + represent(tensor, ctx) + "\n";
   }
@@ -628,9 +616,22 @@ class NumPyEinsumGenerator
   }
 
   // Bring base class overloads into scope to avoid hiding
+  using Base::create;
   using Base::load;
   using Base::persist;
   using Base::set_to_zero;
+
+  void create(const Tensor &tensor, bool zero_init,
+              const Context &ctx) override {
+    if (!zero_init) {
+      throw std::runtime_error(
+          "Python tensors must be initialized when created");
+    }
+
+    m_generated += m_indent + represent(tensor, ctx) + " = " + module_prefix() +
+                   "zeros(" + ctx.get_shape_tuple(tensor) + ", order='" +
+                   get_order_string(ctx) + "')\n";
+  }
 
   void load(const Tensor &tensor, bool set_to_zero,
             const Context &ctx) override {
@@ -720,18 +721,37 @@ class PyTorchEinsumGenerator
   }
 
   // Bring base class overloads into scope to avoid hiding
+  using Base::create;
   using Base::load;
   using Base::persist;
   using Base::set_to_zero;
+
+  // Override create to not use 'order' parameter (PyTorch doesn't support it)
+  void create(const Tensor &tensor, bool zero_init,
+              const Context &ctx) override {
+    if (!zero_init) {
+      throw std::runtime_error(
+          "PyTorch tensors must be initialized when created");
+    }
+
+    // PyTorch doesn't support the 'order' parameter - tensors are always
+    // row-major Use float64 (double precision) to match C++ double type
+    Base::m_generated += Base::m_indent + Base::represent(tensor, ctx) + " = " +
+                         module_prefix() + "zeros(" +
+                         ctx.get_shape_tuple(tensor) +
+                         ", dtype=torch.float64)\n";
+  }
 
   void load(const Tensor &tensor, bool set_to_zero,
             const Context &ctx) override {
     Base::m_generated += Base::m_indent + Base::represent(tensor, ctx) + " = ";
 
     if (set_to_zero) {
+      // PyTorch doesn't support the 'order' parameter - tensors are always
+      // row-major Use float64 (double precision) to match C++ double type
       Base::m_generated += module_prefix() + "zeros(" +
-                           ctx.get_shape_tuple(tensor) + ", order='" +
-                           Base::get_order_string(ctx) + "')";
+                           ctx.get_shape_tuple(tensor) +
+                           ", dtype=torch.float64)";
     } else {
       // Load from file
       Base::m_generated += "torch.load('" + Base::represent(tensor, ctx) +

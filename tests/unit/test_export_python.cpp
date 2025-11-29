@@ -267,11 +267,8 @@ bool run_python_code(const std::string &code, const std::string &working_dir,
   script << code;
   script.close();
 
-// Execute Python (use CMake-discovered Python executable)
-#ifndef SEQUANT_PYTHON3_EXECUTABLE
-#define SEQUANT_PYTHON3_EXECUTABLE "python3"
-#endif
-  std::string python_exe = SEQUANT_PYTHON3_EXECUTABLE;
+  // Execute Python (use CMake-discovered Python executable)
+  std::string python_exe = SEQUANT_UNITTESTS_PYTHON_EXECUTABLE;
   // Execute Python directly with properly escaped script path
   std::string cmd = shell_escape(python_exe) + " " +
                     shell_escape(script_path.string()) + " 2>&1";
@@ -311,6 +308,56 @@ Eigen::Tensor<Scalar, NumDims> random_tensor(
 
   return tensor;
 }
+
+#ifdef SEQUANT_HAS_TORCH_FOR_VALIDATION
+// Helper to create a Python wrapper script for PyTorch code that handles NumPy
+// I/O This allows C++ tests to exchange data with PyTorch via NumPy format
+std::string create_pytorch_numpy_wrapper_script(const std::string &pytorch_code,
+                                                const std::string &work_dir) {
+  std::ostringstream script;
+
+  script << "import numpy as np\n";
+  script << "import torch\n";
+  script << "import os\n";
+  script << "from pathlib import Path\n\n";
+
+  script << "# Change to working directory\n";
+  script << "os.chdir(r'" << work_dir << "')\n\n";
+
+  script << "# Helper functions to handle .pt files backed by .npy storage\n";
+  script << "class NumpyBackedPyTorchIO:\n";
+  script << "    @staticmethod\n";
+  script << "    def load(pt_filename):\n";
+  script << "        \"\"\"Load .pt file by reading corresponding .npy "
+            "file\"\"\"\n";
+  script << "        npy_filename = pt_filename.replace('.pt', '.npy')\n";
+  script << "        return torch.from_numpy(np.load(npy_filename))\n\n";
+
+  script << "    @staticmethod\n";
+  script << "    def save(tensor, pt_filename):\n";
+  script << "        \"\"\"Save tensor to .pt file by writing to .npy "
+            "file\"\"\"\n";
+  script << "        npy_filename = pt_filename.replace('.pt', '.npy')\n";
+  script << "        np.save(npy_filename, tensor.numpy())\n\n";
+
+  script << "# Monkey-patch torch.load and torch.save for testing\n";
+  script << "torch.load = NumpyBackedPyTorchIO.load\n";
+  script << "torch.save = NumpyBackedPyTorchIO.save\n\n";
+
+  script << "# Execute the generated PyTorch code\n";
+  script << pytorch_code << "\n";
+
+  return script.str();
+}
+
+// Run PyTorch code with NumPy I/O wrapper
+bool run_pytorch_code_with_numpy_io(const std::string &pytorch_code,
+                                    const std::string &working_dir) {
+  std::string wrapped_script =
+      create_pytorch_numpy_wrapper_script(pytorch_code, working_dir);
+  return run_python_code(wrapped_script, working_dir, true);
+}
+#endif  // SEQUANT_HAS_TORCH_FOR_VALIDATION
 
 }  // anonymous namespace
 
@@ -393,7 +440,7 @@ TEST_CASE("PythonEinsumGenerator - Memory Layout", "[export][python]") {
     REQUIRE_THAT(code, !Catch::Matchers::ContainsSubstring("order='C'"));
   }
 
-  SECTION("PyTorch generator also respects memory layout") {
+  SECTION("PyTorch generator has hardwired memory layout") {
     auto F = ex<Tensor>(L"F", bra{L"a_1"}, ket{L"i_1"});
     Tensor T(L"T", bra{L"a_1"}, ket{L"i_1"});
     ResultExpr result_expr(T, F);
@@ -411,8 +458,8 @@ TEST_CASE("PythonEinsumGenerator - Memory Layout", "[export][python]") {
 
     std::string code = generator.get_generated_code();
 
-    // Should contain C order
-    REQUIRE_THAT(code, Catch::Matchers::ContainsSubstring("order='C'"));
+    // Should not contain order spec since PyTorch only support C layout
+    REQUIRE_THAT(code, !Catch::Matchers::ContainsSubstring("order='C'"));
     REQUIRE_THAT(code, !Catch::Matchers::ContainsSubstring("order='F'"));
   }
 }
@@ -1174,3 +1221,249 @@ TEST_CASE("PythonEinsumGenerator - Validation", "[export][python]") {
 }
 
 #endif  // SEQUANT_HAS_NUMPY_FOR_VALIDATION
+
+#ifdef SEQUANT_HAS_TORCH_FOR_VALIDATION
+
+TEST_CASE("PyTorchEinsumGenerator - Validation", "[export][python][torch]") {
+  auto resetter = to_export_context();
+
+  auto registry = get_default_context().index_space_registry();
+  IndexSpace occ = registry->retrieve("i");
+  IndexSpace virt = registry->retrieve("a");
+
+  SECTION("Validation: Simple matrix multiplication with PyTorch") {
+    std::filesystem::path temp_dir =
+        std::filesystem::temp_directory_path() / "sequant_test_pytorch_simple";
+    std::filesystem::create_directories(temp_dir);
+    auto cleanup = sequant::detail::make_scope_exit(
+        [&temp_dir]() { std::filesystem::remove_all(temp_dir); });
+
+    // Test: T[a1, a2] = F[a1, i1] * t[i1, a2]
+    const Eigen::Index nocc = 3;
+    const Eigen::Index nvirt = 5;
+
+    // Generate random input tensors
+    auto F_tensor = random_tensor<double, 2>({nvirt, nocc}, 100);
+    auto t_tensor = random_tensor<double, 2>({nocc, nvirt}, 200);
+
+    // Compute expected result using Eigen
+    Eigen::array<Eigen::IndexPair<int>, 1> contraction_dims = {
+        Eigen::IndexPair<int>(1, 0)};
+    Eigen::Tensor<double, 2> T_expected =
+        F_tensor.contract(t_tensor, contraction_dims);
+
+    // Generate PyTorch code
+    auto F = ex<Tensor>(L"F", bra{L"a_1"}, ket{L"i_1"});
+    auto t = ex<Tensor>(L"t", bra{L"i_1"}, ket{L"a_2"});
+    Tensor T(L"T", bra{L"a_1"}, ket{L"a_2"});
+
+    ResultExpr result_expr(T, F * t);
+    auto export_tree = to_export_tree(result_expr);
+
+    PyTorchEinsumGeneratorContext ctx;
+    ctx.set_shape(occ, std::to_string(nocc));
+    ctx.set_shape(virt, std::to_string(nvirt));
+    ctx.set_tag(occ, "o");
+    ctx.set_tag(virt, "v");
+
+    PyTorchEinsumGenerator generator;
+
+    // Get tagged names and write files (using NumPy format for C++ interop)
+    std::string F_name = generator.represent(F.as<Tensor>(), ctx);
+    std::string t_name = generator.represent(t.as<Tensor>(), ctx);
+    std::string T_name = generator.represent(T, ctx);
+
+    write_eigen_tensor_to_numpy(temp_dir.string() + "/" + F_name + ".npy",
+                                F_tensor);
+    write_eigen_tensor_to_numpy(temp_dir.string() + "/" + t_name + ".npy",
+                                t_tensor);
+
+    export_expression(export_tree, generator, ctx);
+
+    std::string code = generator.get_generated_code();
+
+    // Execute PyTorch code with NumPy I/O for C++ interop
+    REQUIRE(run_pytorch_code_with_numpy_io(code, temp_dir.string()));
+
+    // Read result (in NumPy format)
+    auto T_actual = read_eigen_tensor_from_numpy<double, 2, Eigen::RowMajor>(
+        temp_dir.string() + "/" + T_name + ".npy");
+
+    // Verify results match
+    REQUIRE(T_actual.dimensions()[0] == nvirt);
+    REQUIRE(T_actual.dimensions()[1] == nvirt);
+
+    const double tolerance = 1e-10;
+    for (Eigen::Index i = 0; i < nvirt; ++i) {
+      for (Eigen::Index j = 0; j < nvirt; ++j) {
+        REQUIRE(std::abs(T_actual(i, j) - T_expected(i, j)) < tolerance);
+      }
+    }
+  }
+
+  SECTION("Validation: RowMajor memory layout with PyTorch") {
+    std::filesystem::path temp_dir = std::filesystem::temp_directory_path() /
+                                     "sequant_test_pytorch_rowmajor";
+    std::filesystem::create_directories(temp_dir);
+    auto cleanup = sequant::detail::make_scope_exit(
+        [&temp_dir]() { std::filesystem::remove_all(temp_dir); });
+
+    const Eigen::Index nocc = 3;
+    const Eigen::Index nvirt = 5;
+
+    // Generate random input tensors with RowMajor layout
+    Eigen::Tensor<double, 2, Eigen::RowMajor> F_tensor(nvirt, nocc);
+    Eigen::Tensor<double, 2, Eigen::RowMajor> t_tensor(nocc, nvirt);
+
+    std::mt19937 gen_F(100), gen_t(200);
+    std::uniform_real_distribution<double> dist(-1.0, 1.0);
+    for (Eigen::Index i = 0; i < F_tensor.size(); ++i) {
+      F_tensor.data()[i] = dist(gen_F);
+    }
+    for (Eigen::Index i = 0; i < t_tensor.size(); ++i) {
+      t_tensor.data()[i] = dist(gen_t);
+    }
+
+    // Compute expected result using Eigen with RowMajor layout
+    Eigen::array<Eigen::IndexPair<int>, 1> contraction_dims = {
+        Eigen::IndexPair<int>(1, 0)};
+    Eigen::Tensor<double, 2, Eigen::RowMajor> T_expected =
+        F_tensor.contract(t_tensor, contraction_dims);
+
+    // Generate PyTorch code with RowMajor layout
+    auto F = ex<Tensor>(L"F", bra{L"a_1"}, ket{L"i_1"});
+    auto t = ex<Tensor>(L"t", bra{L"i_1"}, ket{L"a_2"});
+    Tensor T(L"T", bra{L"a_1"}, ket{L"a_2"});
+
+    ResultExpr result_expr(T, F * t);
+    auto export_tree = to_export_tree(result_expr);
+
+    PyTorchEinsumGeneratorContext ctx;
+    ctx.set_shape(occ, std::to_string(nocc));
+    ctx.set_shape(virt, std::to_string(nvirt));
+    ctx.set_tag(occ, "o");
+    ctx.set_tag(virt, "v");
+    ctx.set_memory_layout(MemoryLayout::RowMajor);
+
+    PyTorchEinsumGenerator generator;
+
+    std::string F_name = generator.represent(F.as<Tensor>(), ctx);
+    std::string t_name = generator.represent(t.as<Tensor>(), ctx);
+    std::string T_name = generator.represent(T, ctx);
+
+    write_eigen_tensor_to_numpy(temp_dir.string() + "/" + F_name + ".npy",
+                                F_tensor);
+    write_eigen_tensor_to_numpy(temp_dir.string() + "/" + t_name + ".npy",
+                                t_tensor);
+
+    export_expression(export_tree, generator, ctx);
+
+    std::string code = generator.get_generated_code();
+
+    // PyTorch doesn't support the 'order' parameter - tensors are always
+    // row-major Verify that code does NOT contain order parameter
+    REQUIRE_THAT(code, !Catch::Matchers::ContainsSubstring("order="));
+
+    // Execute PyTorch code with NumPy I/O for C++ interop
+    REQUIRE(run_pytorch_code_with_numpy_io(code, temp_dir.string()));
+
+    // Read result with RowMajor layout (PyTorch tensors are always row-major)
+    auto T_actual = read_eigen_tensor_from_numpy<double, 2, Eigen::RowMajor>(
+        temp_dir.string() + "/" + T_name + ".npy");
+
+    // Verify results match
+    REQUIRE(T_actual.dimensions()[0] == nvirt);
+    REQUIRE(T_actual.dimensions()[1] == nvirt);
+
+    const double tolerance = 1e-10;
+    for (Eigen::Index i = 0; i < nvirt; ++i) {
+      for (Eigen::Index j = 0; j < nvirt; ++j) {
+        REQUIRE(std::abs(T_actual(i, j) - T_expected(i, j)) < tolerance);
+      }
+    }
+  }
+
+  SECTION("Validation: ColumnMajor memory layout with PyTorch") {
+    // Note: PyTorch tensors are always row-major, so even when ColumnMajor is
+    // requested, PyTorch will use row-major layout
+    std::filesystem::path temp_dir = std::filesystem::temp_directory_path() /
+                                     "sequant_test_pytorch_colmajor";
+    std::filesystem::create_directories(temp_dir);
+    auto cleanup = sequant::detail::make_scope_exit(
+        [&temp_dir]() { std::filesystem::remove_all(temp_dir); });
+
+    const Eigen::Index nocc = 4;
+    const Eigen::Index nvirt = 6;
+
+    // Use RowMajor tensors since PyTorch is always row-major
+    Eigen::Tensor<double, 2, Eigen::RowMajor> F_tensor(nvirt, nocc);
+    Eigen::Tensor<double, 2, Eigen::RowMajor> t_tensor(nocc, nvirt);
+
+    std::mt19937 gen_F(500), gen_t(600);
+    std::uniform_real_distribution<double> dist(-1.0, 1.0);
+    for (Eigen::Index i = 0; i < F_tensor.size(); ++i) {
+      F_tensor.data()[i] = dist(gen_F);
+    }
+    for (Eigen::Index i = 0; i < t_tensor.size(); ++i) {
+      t_tensor.data()[i] = dist(gen_t);
+    }
+
+    Eigen::array<Eigen::IndexPair<int>, 1> contraction_dims = {
+        Eigen::IndexPair<int>(1, 0)};
+    Eigen::Tensor<double, 2, Eigen::RowMajor> T_expected =
+        F_tensor.contract(t_tensor, contraction_dims);
+
+    auto F = ex<Tensor>(L"F", bra{L"a_1"}, ket{L"i_1"});
+    auto t = ex<Tensor>(L"t", bra{L"i_1"}, ket{L"a_2"});
+    Tensor T(L"T", bra{L"a_1"}, ket{L"a_2"});
+
+    ResultExpr result_expr(T, F * t);
+    auto export_tree = to_export_tree(result_expr);
+
+    PyTorchEinsumGeneratorContext ctx;
+    ctx.set_shape(occ, std::to_string(nocc));
+    ctx.set_shape(virt, std::to_string(nvirt));
+    ctx.set_tag(occ, "o");
+    ctx.set_tag(virt, "v");
+    ctx.set_memory_layout(MemoryLayout::ColumnMajor);
+
+    PyTorchEinsumGenerator generator;
+
+    std::string F_name = generator.represent(F.as<Tensor>(), ctx);
+    std::string t_name = generator.represent(t.as<Tensor>(), ctx);
+    std::string T_name = generator.represent(T, ctx);
+
+    write_eigen_tensor_to_numpy(temp_dir.string() + "/" + F_name + ".npy",
+                                F_tensor);
+    write_eigen_tensor_to_numpy(temp_dir.string() + "/" + t_name + ".npy",
+                                t_tensor);
+
+    export_expression(export_tree, generator, ctx);
+
+    std::string code = generator.get_generated_code();
+
+    // PyTorch doesn't support the 'order' parameter - tensors are always
+    // row-major Verify that code does NOT contain order parameter
+    REQUIRE_THAT(code, !Catch::Matchers::ContainsSubstring("order="));
+
+    // Execute PyTorch code with NumPy I/O for C++ interop
+    REQUIRE(run_pytorch_code_with_numpy_io(code, temp_dir.string()));
+
+    // Read result with RowMajor layout (PyTorch tensors are always row-major)
+    auto T_actual = read_eigen_tensor_from_numpy<double, 2, Eigen::RowMajor>(
+        temp_dir.string() + "/" + T_name + ".npy");
+
+    // Verify results match
+    REQUIRE(T_actual.dimensions()[0] == nvirt);
+    REQUIRE(T_actual.dimensions()[1] == nvirt);
+
+    const double tolerance = 1e-10;
+    for (Eigen::Index i = 0; i < nvirt; ++i) {
+      for (Eigen::Index j = 0; j < nvirt; ++j) {
+        REQUIRE(std::abs(T_actual(i, j) - T_expected(i, j)) < tolerance);
+      }
+    }
+  }
+}
+
+#endif  // SEQUANT_HAS_TORCH_FOR_VALIDATION

@@ -42,13 +42,13 @@ target_compile_definitions(unit_tests-sequant PRIVATE SEQUANT_UNIT_TESTS_SOURCE_
 target_link_libraries(unit_tests-sequant PRIVATE Boost::boost)
 
 # Optional: Find Python for PythonEinsumGenerator validation tests
-find_package(Python3 COMPONENTS Interpreter QUIET)
-if(Python3_Interpreter_FOUND)
-    message(STATUS "Python ${Python3_VERSION} found for export validation tests")
+find_package(Python 3 COMPONENTS Interpreter QUIET)
+if(Python_Interpreter_FOUND)
+    message(STATUS "Found Python: ${Python_EXECUTABLE} (version ${Python_VERSION}) for export validation tests")
 
     # Check for NumPy
     execute_process(
-        COMMAND "${Python3_EXECUTABLE}" "-c" "import numpy; print(numpy.__version__)"
+        COMMAND "${Python_EXECUTABLE}" "-c" "import numpy; print(numpy.__version__)"
         RESULT_VARIABLE _numpy_status
         OUTPUT_VARIABLE _numpy_version
         ERROR_QUIET
@@ -58,15 +58,14 @@ if(Python3_Interpreter_FOUND)
     if(_numpy_status EQUAL 0)
         message(STATUS "NumPy ${_numpy_version} found for export validation tests")
         target_compile_definitions(unit_tests-sequant PRIVATE
-            SEQUANT_HAS_NUMPY_FOR_VALIDATION=1
-            SEQUANT_PYTHON3_EXECUTABLE="${Python3_EXECUTABLE}")
+            SEQUANT_HAS_NUMPY_FOR_VALIDATION=1)
     else()
         message(STATUS "NumPy not found - PythonEinsumGenerator NumPy validation tests will be disabled")
     endif()
 
     # Check for PyTorch
     execute_process(
-        COMMAND "${Python3_EXECUTABLE}" "-c" "import torch; print(torch.__version__)"
+        COMMAND "${Python_EXECUTABLE}" "-c" "import torch; print(torch.__version__)"
         RESULT_VARIABLE _torch_status
         OUTPUT_VARIABLE _torch_version
         ERROR_QUIET
@@ -78,6 +77,11 @@ if(Python3_Interpreter_FOUND)
         target_compile_definitions(unit_tests-sequant PRIVATE SEQUANT_HAS_TORCH_FOR_VALIDATION=1)
     else()
         message(STATUS "PyTorch not found - PythonEinsumGenerator PyTorch validation tests will be disabled")
+    endif()
+
+    if (_numpy_status EQUAL 0 OR _torch_status EQUAL 0)
+        target_compile_definitions(unit_tests-sequant PRIVATE
+                SEQUANT_UNITTESTS_PYTHON_EXECUTABLE="${Python_EXECUTABLE}")
     endif()
 else()
     message(STATUS "Python not found - PythonEinsumGenerator validation tests will be disabled")
