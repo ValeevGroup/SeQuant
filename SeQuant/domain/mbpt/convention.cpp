@@ -107,6 +107,11 @@ void add_batching_spaces(std::shared_ptr<IndexSpaceRegistry>& isr) {
   isr->add(IndexSpace{L"z", 0b100000, BatchingQNS::batch});  // Batching Space
 }
 
+void add_thc_spaces(std::shared_ptr<IndexSpaceRegistry>& isr) {
+  isr->add(IndexSpace{L"L", 0b000001, TensorFactorizationQNS::thc})  // THC AO
+      ;
+}
+
 std::shared_ptr<IndexSpaceRegistry> make_min_sr_spaces(SpinConvention spconv) {
   auto isr = std::make_shared<IndexSpaceRegistry>();
 
