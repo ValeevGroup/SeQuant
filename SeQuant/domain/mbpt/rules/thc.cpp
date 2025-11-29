@@ -46,14 +46,14 @@ ExprPtr tensor_hypercontract_impl(Tensor const& tnsr, Index const& aux_idx_1,
 
 ExprPtr tensor_hypercontract(ExprPtr const& expr, IndexSpace aux_space,
                              std::wstring_view tensor_label,
-                             std::wstring_view factor_label,
-                             std::wstring_view aux_label) {
+                             std::wstring_view outer_factor_label,
+                             std::wstring_view core_tensor_label) {
   using ranges::views::transform;
 
   if (expr->is<Sum>())
     return ex<Sum>(*expr | transform([&](auto&& x) {
-      return tensor_hypercontract(x, aux_space, tensor_label, factor_label,
-                                  aux_label);
+      return tensor_hypercontract(x, aux_space, tensor_label,
+                                  outer_factor_label, core_tensor_label);
     }));
 
   else if (expr->is<Tensor>()) {
@@ -62,8 +62,8 @@ ExprPtr tensor_hypercontract(ExprPtr const& expr, IndexSpace aux_space,
         && tensor.bra_rank() == 2       //
         && tensor.ket_rank() == 2)
       return tensor_hypercontract_impl(tensor, Index(aux_space, 1),
-                                       Index(aux_space, 2), factor_label,
-                                       aux_label);
+                                       Index(aux_space, 2), outer_factor_label,
+                                       core_tensor_label);
     else
       return expr;
   } else if (expr->is<Product>()) {
@@ -77,8 +77,8 @@ ExprPtr tensor_hypercontract(ExprPtr const& expr, IndexSpace aux_space,
         auto const& g = f->as<Tensor>();
         auto index1 = Index(aux_space, ++aux_ix);
         auto index2 = Index(aux_space, ++aux_ix);
-        auto g_thc = tensor_hypercontract_impl(g, index1, index2, factor_label,
-                                               aux_label);
+        auto g_thc = tensor_hypercontract_impl(
+            g, index1, index2, outer_factor_label, core_tensor_label);
         result.append(1, std::move(g_thc), Product::Flatten::Yes);
       } else {
         result.append(1, f, Product::Flatten::No);
