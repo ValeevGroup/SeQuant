@@ -1,0 +1,13 @@
+
+.. _namespace_sequant__mbpt__op__@150:
+
+Namespace sequant::mbpt::op::@150
+=================================
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+
+

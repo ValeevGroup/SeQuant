@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a56a2d981561353ebae333513f76981bb:
+
+Function sequant::deparse< Statistics::FermiDirac >
+===================================================
+
+- Defined in :ref:`file_SeQuant_core_parse_deparse.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::deparse< Statistics::FermiDirac >(NormalOperator<Statistics::FermiDirac> const&)
+   :project: SeQuant

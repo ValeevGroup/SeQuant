@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a803893b07c8cde45bd90e9111727e0fa:
+
+Template Function sequant::external_indices(const Expr&)
+========================================================
+
+- Defined in :ref:`file_SeQuant_core_utility_indices.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::external_indices(const Expr&)
+   :project: SeQuant

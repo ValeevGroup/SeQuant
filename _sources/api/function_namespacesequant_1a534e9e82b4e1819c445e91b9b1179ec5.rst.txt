@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a534e9e82b4e1819c445e91b9b1179ec5:
+
+Function sequant::operator&(CanonicalizationMethod, CanonicalizationMethod)
+===========================================================================
+
+- Defined in :ref:`file_SeQuant_core_options.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::operator&(CanonicalizationMethod, CanonicalizationMethod)
+   :project: SeQuant

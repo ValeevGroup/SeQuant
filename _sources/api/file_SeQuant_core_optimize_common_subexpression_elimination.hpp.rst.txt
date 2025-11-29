@@ -1,0 +1,106 @@
+
+.. _file_SeQuant_core_optimize_common_subexpression_elimination.hpp:
+
+File common_subexpression_elimination.hpp
+=========================================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core_optimize>` (``SeQuant/core/optimize``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/optimize/common_subexpression_elimination.hpp``)
+---------------------------------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_optimize_common_subexpression_elimination.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/binary_node.hpp`` (:ref:`file_SeQuant_core_binary_node.hpp`)
+
+- ``SeQuant/core/container.hpp`` (:ref:`file_SeQuant_core_container.hpp`)
+
+- ``SeQuant/core/eval_expr.hpp`` (:ref:`file_SeQuant_core_eval_expr.hpp`)
+
+- ``SeQuant/core/eval_node.hpp`` (:ref:`file_SeQuant_core_eval_node.hpp`)
+
+- ``SeQuant/core/expr.hpp`` (:ref:`file_SeQuant_core_expr.hpp`)
+
+- ``SeQuant/core/hash.hpp`` (:ref:`file_SeQuant_core_hash.hpp`)
+
+- ``SeQuant/core/utility/macros.hpp`` (:ref:`file_SeQuant_core_utility_macros.hpp`)
+
+- ``SeQuant/core/utility/tensor.hpp`` (:ref:`file_SeQuant_core_utility_tensor.hpp`)
+
+- ``concepts``
+
+- ``format``
+
+- ``optional``
+
+- ``ranges`` (:ref:`file_SeQuant_core_ranges.hpp`)
+
+- ``string`` (:ref:`file_SeQuant_core_utility_string.cpp`)
+
+- ``unordered_map``
+
+
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+- :ref:`namespace_sequant__cse`
+
+
+Classes
+-------
+
+
+- :ref:`exhale_struct_structsequant_1_1cse_1_1_accept_all_predicate`
+
+- :ref:`exhale_struct_structsequant_1_1cse_1_1_tree_node_equality_comparator`
+
+- :ref:`exhale_struct_structsequant_1_1cse_1_1_tree_node_hasher`
+
+- :ref:`exhale_class_classsequant_1_1cse_1_1_subexpression_identifier`
+
+- :ref:`exhale_class_classsequant_1_1cse_1_1_subexpression_replacer`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1af026fca6167e36b77662342ad29941ad`
+
+
+Typedefs
+--------
+
+
+- :ref:`exhale_typedef_namespacesequant_1_1cse_1ae5295312dd9a008323d452614b2fbdaf`
+
+- :ref:`exhale_typedef_namespacesequant_1_1cse_1a664dc0e2561ef6ba8d0deff1695a36f4`
+
+- :ref:`exhale_typedef_namespacesequant_1_1cse_1ad9f3c22afce74ee1c6a4f2f672d88de9`
+

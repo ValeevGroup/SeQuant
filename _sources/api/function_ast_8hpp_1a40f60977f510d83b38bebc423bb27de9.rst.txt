@@ -1,0 +1,14 @@
+.. _exhale_function_ast_8hpp_1a40f60977f510d83b38bebc423bb27de9:
+
+Function BOOST_FUSION_ADAPT_STRUCT(sequant::parse::ast::Product, factors)
+=========================================================================
+
+- Defined in :ref:`file_SeQuant_core_parse_ast.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: BOOST_FUSION_ADAPT_STRUCT(sequant::parse::ast::Product, factors)
+   :project: SeQuant

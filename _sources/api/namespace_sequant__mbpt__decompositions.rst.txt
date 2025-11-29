@@ -1,0 +1,34 @@
+
+.. _namespace_sequant__mbpt__decompositions:
+
+Namespace sequant::mbpt::decompositions
+=======================================
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+
+
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1decompositions_1a11fde815eb91ac961717185b9daa6568`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1decompositions_1a327a2f30c5728deaebc56e45aed3b080`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1decompositions_1a5d7ea9f3d960a41b337b04927018c762`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1decompositions_1a08c0043a78d0b3543233060643fd3f54`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1decompositions_1ab243616bd97e8f3aca19208a07b56208`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1decompositions_1abaa3116ca239366e571dd6cd04821e4b`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1decompositions_1a9720d4338b763608758d33d209abc615`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1decompositions_1a13ec8a61ec40568dee2c0dcdaedeaaf5`

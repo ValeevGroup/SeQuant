@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1parse_1_1transform_1a13e3fa3b87e929d7fef1cfd4c50e5f39:
+
+Template Function sequant::parse::transform::ast_to_expr(const parse::ast::Product&, const PositionCache&, const Iterator&, const DefaultSymmetries&)
+=====================================================================================================================================================
+
+- Defined in :ref:`file_SeQuant_core_parse_ast_conversions.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::parse::transform::ast_to_expr(const parse::ast::Product&, const PositionCache&, const Iterator&, const DefaultSymmetries&)
+   :project: SeQuant

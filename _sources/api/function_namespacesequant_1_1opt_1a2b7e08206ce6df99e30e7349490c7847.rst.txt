@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1opt_1a2b7e08206ce6df99e30e7349490c7847:
+
+Function sequant::opt::pull_scalar
+==================================
+
+- Defined in :ref:`file_SeQuant_core_optimize_optimize.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::opt::pull_scalar(sequant::ExprPtr)
+   :project: SeQuant

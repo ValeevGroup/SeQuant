@@ -1,0 +1,17 @@
+.. _exhale_struct_structsequant_1_1parse_1_1transform_1_1_transformer:
+
+Template Struct Transformer
+===========================
+
+- Defined in :ref:`file_SeQuant_core_parse_ast_conversions.hpp`
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::parse::transform::Transformer
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:
