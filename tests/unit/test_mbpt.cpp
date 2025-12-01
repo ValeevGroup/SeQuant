@@ -357,16 +357,16 @@ TEST_CASE("mbpt", "[mbpt]") {
       };
 
       // non-unitary, rank 3
-      auto expr1 = lst(H(), T_(2), 3, /*unitary=*/false,
-                       /*use_commutators=*/false);
+      auto expr1 =
+          lst(H(), T_(2), 3, {.unitary = false, .use_commutators = false});
       auto expected1 =
           H() * (ex<Constant>(1) + T_(2) +
                  ex<Constant>(rational{1, 2}) * T_(2) * T_(2) +
                  ex<Constant>(rational{1, 6}) * T_(2) * T_(2) * T_(2));
       REQUIRE(simplify(expr1 - expected1) == ex<Constant>(0));
 
-      auto expr2 = lst(H(), T_(2), 3, /*unitary=*/false,
-                       /*use_commutators=*/true);
+      auto expr2 =
+          lst(H(), T_(2), 3, {.unitary = false, .use_commutators = true});
       auto expected2 =
           H() + commutator(H(), T_(2)) +
           ex<Constant>(rational{1, 2}) *
@@ -377,8 +377,8 @@ TEST_CASE("mbpt", "[mbpt]") {
 
       // unitary, rank 2
       using sequant::adjoint;
-      auto expr3 = lst(H(), T_(2), 2, /*unitary=*/true,
-                       /*use_commutators=*/false);
+      auto expr3 =
+          lst(H(), T_(2), 2, {.unitary = true, .use_commutators = false});
       auto expected3 =
           H() + H() * T_(2) + adjoint(T_(2)) * H() +
           adjoint(T_(2)) * H() * T_(2) +
@@ -386,8 +386,8 @@ TEST_CASE("mbpt", "[mbpt]") {
           ex<Constant>(rational{1, 2}) * adjoint(T_(2)) * adjoint(T_(2)) * H();
       REQUIRE(simplify(expr3 - expected3) == ex<Constant>(0));
 
-      auto expr4 = lst(H(), T_(2), 2, /*unitary=*/true,
-                       /*use_commutators=*/true);
+      auto expr4 =
+          lst(H(), T_(2), 2, {.unitary = true, .use_commutators = true});
       auto generator = commutator(H(), T_(2)) - commutator(H(), adjoint(T_(2)));
       auto expected4 = H() + generator +
                        ex<Constant>(rational{1, 2}) *
