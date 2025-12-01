@@ -604,12 +604,14 @@ ExprPtr expand_A_op(const ProductPtr& product) {
 ExprPtr symmetrize_expr(const ProductPtr& product) {
   auto result = std::make_shared<Sum>();
 
-  // Assumes canonical sequence of tensors in the product
-  if (product->factor(0)->as<Tensor>().label() != L"A") return product;
+  // Drops canonical-order assumption; handles arbitrary sequence and variables.
+  auto A_tensors =
+      product->factors() | ranges::views::filter([](const ExprPtr& factor) {
+        return factor->is<Tensor>() && factor->as<Tensor>().label() == L"A";
+      });
+  if (ranges::empty(A_tensors)) return product;
+  auto A_tensor = ranges::front(A_tensors)->as<Tensor>();
 
-  // CHECK: A is present and >1 particle
-  // GENERATE S tensor
-  auto A_tensor = product->factor(0)->as<Tensor>();
   SEQUANT_ASSERT(A_tensor.label() == L"A");
 
   auto A_is_nconserving = A_tensor.bra_rank() == A_tensor.ket_rank();
@@ -863,8 +865,13 @@ ExprPtr S_maps(const ExprPtr& expr) {
     if (!has_tensor(product, L"S")) return product;
 
     container::svector<container::map<Index, Index>> maps;
-    if (product->factor(0)->as<Tensor>().label() == L"S")
-      maps = S_replacement_maps(product->factor(0)->as<Tensor>());
+    // supports arbitrary sequence and variables
+    for (auto&& factor : product->factors()) {
+      if (factor->is<Tensor>() && factor->as<Tensor>().label() == L"S") {
+        maps = S_replacement_maps(factor->as<Tensor>());
+        break;
+      }
+    }
     SEQUANT_ASSERT(!maps.empty());
     Sum sum{};
     for (auto&& map : maps) {
