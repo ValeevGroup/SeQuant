@@ -37,7 +37,8 @@ std::vector<ExprPtr> CC::t(size_t commutator_rank, size_t pmax, size_t pmin) {
   SEQUANT_ASSERT(pmax >= pmin && "pmax should be >= pmin");
 
   // 1. construct hbar(op) in canonical form
-  auto hbar = mbpt::lst(H(), T(N, skip_singles), commutator_rank, unitary());
+  auto hbar = mbpt::lst(H(), T(N, skip_singles), commutator_rank,
+                        {.unitary = unitary()});
 
   // 2. project onto each manifold, screen, lower to tensor form and wick it
   std::vector<ExprPtr> result(pmax + 1);
@@ -85,8 +86,8 @@ std::vector<ExprPtr> CC::λ(size_t commutator_rank) {
   const bool skip_singles = ansatz_ == Ansatz::oT || ansatz_ == Ansatz::oU;
 
   // construct hbar
-  auto hbar =
-      mbpt::lst(H(), T(N, skip_singles), commutator_rank - 1, unitary());
+  auto hbar = mbpt::lst(H(), T(N, skip_singles), commutator_rank - 1,
+                        {.unitary = unitary()});
 
   const auto One = ex<Constant>(1);
   auto lhbar = simplify((One + Λ(N)) * hbar);
