@@ -730,7 +730,8 @@ SECTION("Swap bra kets") {
 SECTION("Closed-shell spintrace CCD") {
   // Energy expression
   {
-    {  // standard = v1
+    {  // standard = v1 , expression can be parsed directly without requiring
+       // cast to Sum
       const auto input = ex<Sum>(ExprPtrList{parse_expr(
           L"1/4 g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_1,i_2}", Symmetry::Antisymm)});
       auto result = closed_shell_CC_spintrace_v1(input);
