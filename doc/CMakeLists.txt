@@ -1,5 +1,6 @@
 option(SEQUANT_BUILD_DOCS "Build SeQuant documentation using Doxygen and Sphinx" OFF)
 add_feature_info(BUILD_DOCS SEQUANT_BUILD_DOCS "Build SeQuant documentation. Doxygen and Sphinx are required.")
+option(SEQUANT_BUILD_DOCS_API_BREATHEEXHALE "Use Doxygen/Breathe/Exhale to generate API docs (slower than pure Doxygen, but is built into Sphinx docs)" OFF)
 
 if (SEQUANT_BUILD_DOCS)
     # Main documentation targets
@@ -8,31 +9,46 @@ if (SEQUANT_BUILD_DOCS)
     # Find Python for Sphinx dependencies
     find_package(Python 3.9 COMPONENTS Interpreter REQUIRED)
 
-    option(SEQUANT_GENERATE_API_DOCS "Use Doxygen to generate API docs" ON)
+    find_package(Doxygen ${SEQUANT_OLDEST_DOXYGEN_VERSION} REQUIRED)
 
-    if (SEQUANT_GENERATE_API_DOCS)
-        find_package(Doxygen 1.9.2 REQUIRED)
+    include(FetchContent)
+    FetchContent_Declare(
+        doxygen-awesome-css
+        URL https://github.com/jothepro/doxygen-awesome-css/archive/refs/tags/v2.4.1.zip
+    )
+    FetchContent_MakeAvailable(doxygen-awesome-css)
 
-        set(SEQUANT_DOXYGEN_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/.doxygen")
-        set(SEQUANT_DOXYGEN_OUTPUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/.doxygen")
+    # Save the location the files were cloned into
+    # This allows us to get the path to doxygen-awesome.css
+    FetchContent_GetProperties(doxygen-awesome-css SOURCE_DIR AWESOME_CSS_DIR)
 
-        file(REAL_PATH "${SEQUANT_DOXYGEN_SOURCE_DIR}" SEQUANT_DOXYGEN_SOURCE_DIR)
-        file(REAL_PATH "${SEQUANT_DOXYGEN_OUTPUT_DIR}" SEQUANT_DOXYGEN_OUTPUT_DIR)
+    set(SEQUANT_DOXYGEN_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/.doxygen")
+    set(SEQUANT_DOXYGEN_OUTPUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/.doxygen")
 
-        file(MAKE_DIRECTORY "${SEQUANT_DOXYGEN_OUTPUT_DIR}")
+    file(REAL_PATH "${SEQUANT_DOXYGEN_SOURCE_DIR}" SEQUANT_DOXYGEN_SOURCE_DIR)
+    file(REAL_PATH "${SEQUANT_DOXYGEN_OUTPUT_DIR}" SEQUANT_DOXYGEN_OUTPUT_DIR)
 
-        # Configure Doxyfile
-        configure_file(
-            ${SEQUANT_DOXYGEN_SOURCE_DIR}/Doxyfile.in
-            ${SEQUANT_DOXYGEN_OUTPUT_DIR}/Doxyfile @ONLY
-        )
+    file(MAKE_DIRECTORY "${SEQUANT_DOXYGEN_OUTPUT_DIR}")
 
-        doxygen_add_docs(
-            doxygen-sequant
-            COMMENT "Generating API documentation via Doxygen"
-            CONFIG_FILE "${SEQUANT_DOXYGEN_OUTPUT_DIR}/Doxyfile"
-        )
+    if (SEQUANT_BUILD_DOCS_API_BREATHEEXHALE)
+        set(SEQUANT_DOXYGEN_BUILD_HTML NO)
+        set(SEQUANT_DOXYGEN_BUILD_XML YES)
+    else()
+        set(SEQUANT_DOXYGEN_BUILD_HTML YES)
+        set(SEQUANT_DOXYGEN_BUILD_XML NO)
     endif()
+
+    # Configure Doxyfile
+    configure_file(
+        ${SEQUANT_DOXYGEN_SOURCE_DIR}/Doxyfile.in
+        ${SEQUANT_DOXYGEN_OUTPUT_DIR}/Doxyfile @ONLY
+    )
+
+    doxygen_add_docs(
+        doxygen-sequant
+        COMMENT "Generating API documentation via Doxygen"
+        CONFIG_FILE "${SEQUANT_DOXYGEN_OUTPUT_DIR}/Doxyfile"
+    )
 
 
     # Ensure the config file installed via sphinx-cmake pip package can be found
@@ -103,14 +119,40 @@ if (SEQUANT_BUILD_DOCS)
     find_package(Sphinx REQUIRED)
 
 
-    if (SEQUANT_GENERATE_API_DOCS)
-        set(SEQUANT_SPHINX_DEPENDENCIES
+    set(SEQUANT_SPHINX_DEPENDENCIES
             "DEPENDS" "doxygen-sequant"
-        )
+    )
+    if (SEQUANT_BUILD_DOCS_API_BREATHEEXHALE)
         set(SEQUANT_SPHINX_EXTRA_EXTENSIONS "'breathe','exhale',")
         set(SEQUANT_SPHINX_BREATHE_PROJECTS "breathe_projects = {\"SeQuant\": \"${SEQUANT_DOXYGEN_OUTPUT_DIR}/xml\"}")
+        # Link to breathe/exhale generated genindex
+        set(SEQUANT_API_REFERENCE_CONTENT "API Reference
+=============
+
+The complete API reference is available through the generated index.
+
+See the :ref:\`genindex\` for a complete index of all classes, functions, and namespaces.")
+    else()
+        # Link to standalone Doxygen HTML documentation
+        set(SEQUANT_API_REFERENCE_CONTENT "API Reference
+=============
+
+The complete API reference is available as standalone Doxygen-generated documentation.
+
+.. raw:: html
+
+   <div class=\"admonition note\">
+   <p class=\"admonition-title\">View API Documentation</p>
+   <p>Click the link below to view the full API reference:</p>
+   <p><a href=\"../.doxygen/html/index.html\" target=\"_blank\" class=\"reference external\">Open API Documentation</a></p>
+   </div>")
     endif()
 
+    # Configure API reference page (generated in source directory but gitignored)
+    configure_file(
+            ${CMAKE_CURRENT_SOURCE_DIR}/api.rst.in
+            ${SEQUANT_SPHINX_DOCS_DIR}/api.rst @ONLY
+    )
 
     # Configure Sphinx conf.py
     string(TIMESTAMP CURRENT_YEAR "%Y")
