@@ -979,6 +979,14 @@ SECTION("Closed-shell spintrace CCSD") {
   }
 }  // CCSD R1
 
+SECTION("Closed-shell spintrace LR-CCSD") {
+  {  // related to issue #432
+    auto expr1 = sequant::parse_expr(L"-1 ω * A{i1,i2;a1,a2} * t{a1,a2;i1,i2}");
+    auto st_expr1 = mbpt::closed_shell_CC_spintrace_v2(expr1);
+    std::wcout << "ST Expr1: " << st_expr1.to_latex() << "\n";
+  }
+}
+
 SECTION("Closed-shell spintrace CCSDT terms") {
   {  // A3 * f * t3, , spintracing with partial-expansion
     auto input = ex<Constant>(rational{1, 12}) *
