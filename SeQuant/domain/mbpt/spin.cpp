@@ -1108,7 +1108,6 @@ container::svector<ResultExpr> closed_shell_spintrace(const ResultExpr& expr,
 ExprPtr closed_shell_CC_spintrace_v1(ExprPtr const& expr,
                                      ClosedShellCCSpintraceOptions options) {
   SEQUANT_ASSERT(options.method == BiorthogonalizationMethod::V1);
-  // SEQUANT_ASSERT(expr->is<Sum>());
   using ranges::views::transform;
 
   auto const ext_idxs = external_indices(expr);
@@ -1142,8 +1141,6 @@ ExprPtr closed_shell_CC_spintrace_v1(ExprPtr const& expr,
 ExprPtr closed_shell_CC_spintrace_v2(ExprPtr const& expr,
                                      ClosedShellCCSpintraceOptions options) {
   SEQUANT_ASSERT(options.method == BiorthogonalizationMethod::V2);
-  // SEQUANT_ASSERT(expr->is<Sum>());
-
   using ranges::views::transform;
 
   auto const ext_idxs = external_indices(expr);
