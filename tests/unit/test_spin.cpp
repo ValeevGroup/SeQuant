@@ -979,11 +979,14 @@ SECTION("Closed-shell spintrace CCSD") {
   }
 }  // CCSD R1
 
-SECTION("Closed-shell spintrace LR-CCSD") {
+SECTION("Closed-shell CC spintrace with variable") {
   {  // related to issue #432
-    auto expr1 = sequant::parse_expr(L"-1 ω * A{i1,i2;a1,a2} * t{a1,a2;i1,i2}");
+    auto expr1 = sequant::parse_expr(L"-1 ω * A{i1,i2;a1,a2} * t{a1,a2;i1,i2}",
+                                     Symmetry::Antisymm);
     auto st_expr1 = mbpt::closed_shell_CC_spintrace_v2(expr1);
     std::wcout << "ST Expr1: " << st_expr1.to_latex() << "\n";
+    REQUIRE_THAT(st_expr1,
+                 EquivalentTo(L"-2 ω * S{i1,i2;a1,a2} * t{a1,a2;i1,i2}"));
   }
 }
 

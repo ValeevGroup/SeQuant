@@ -605,14 +605,11 @@ ExprPtr symmetrize_expr(const ProductPtr& product) {
   auto result = std::make_shared<Sum>();
 
   // Drops canonical-order assumption; handles arbitrary sequence and variables.
-  Tensor A_tensor;
-  for (auto&& factor : product->factors()) {
-    if (factor->is<Tensor>() && factor->as<Tensor>().label() == L"A") {
-      A_tensor = factor->as<Tensor>();
-      break;
-    }
-  }
-
+  auto it = ranges::find_if(product->factors(), [](const ExprPtr& factor) {
+    return factor->is<Tensor>() && factor->as<Tensor>().label() == L"A";
+  });
+  if (it == ranges::end(product->factors())) return product;
+  auto A_tensor = (*it)->as<Tensor>();
   SEQUANT_ASSERT(A_tensor.label() == L"A");
 
   auto A_is_nconserving = A_tensor.bra_rank() == A_tensor.ket_rank();
