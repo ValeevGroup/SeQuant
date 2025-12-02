@@ -30,6 +30,8 @@
 #include <utility>
 #include <vector>
 
+#include "SeQuant/core/utility/debug.hpp"
+
 TEST_CASE("mbpt", "[mbpt]") {
   SECTION("nbody_operators") {
     using namespace sequant;
@@ -346,6 +348,53 @@ TEST_CASE("mbpt", "[mbpt]") {
       REQUIRE(simplify(screened_expr4 - expected4) == ex<Constant>(0));
 
     }  // SECTION("screen")
+
+    SECTION("lst") {
+      using namespace sequant::mbpt;
+
+      auto commutator = [](const ExprPtr& A, const ExprPtr& B) {
+        return A * B - B * A;
+      };
+
+      // non-unitary, rank 3
+      auto expr1 =
+          lst(H(), T_(2), 3, {.unitary = false, .use_commutators = false});
+      auto expected1 =
+          H() * (ex<Constant>(1) + T_(2) +
+                 ex<Constant>(rational{1, 2}) * T_(2) * T_(2) +
+                 ex<Constant>(rational{1, 6}) * T_(2) * T_(2) * T_(2));
+      REQUIRE(simplify(expr1 - expected1) == ex<Constant>(0));
+
+      auto expr2 =
+          lst(H(), T_(2), 3, {.unitary = false, .use_commutators = true});
+      auto expected2 =
+          H() + commutator(H(), T_(2)) +
+          ex<Constant>(rational{1, 2}) *
+              commutator(commutator(H(), T_(2)), T_(2)) +
+          ex<Constant>(rational{1, 6}) *
+              commutator(commutator(commutator(H(), T_(2)), T_(2)), T_(2));
+      REQUIRE(simplify(expr2 - expected2) == ex<Constant>(0));
+
+      // unitary, rank 2
+      using sequant::adjoint;
+      auto expr3 =
+          lst(H(), T_(2), 2, {.unitary = true, .use_commutators = false});
+      auto expected3 =
+          H() + H() * T_(2) + adjoint(T_(2)) * H() +
+          adjoint(T_(2)) * H() * T_(2) +
+          H() * ex<Constant>(rational{1, 2}) * T_(2) * T_(2) +
+          ex<Constant>(rational{1, 2}) * adjoint(T_(2)) * adjoint(T_(2)) * H();
+      REQUIRE(simplify(expr3 - expected3) == ex<Constant>(0));
+
+      auto expr4 =
+          lst(H(), T_(2), 2, {.unitary = true, .use_commutators = true});
+      auto generator = commutator(H(), T_(2)) - commutator(H(), adjoint(T_(2)));
+      auto expected4 = H() + generator +
+                       ex<Constant>(rational{1, 2}) *
+                           (commutator(generator, T_(2)) -
+                            commutator(generator, adjoint(T_(2))));
+      REQUIRE(simplify(expr4 - expected4) == ex<Constant>(0));
+    }  // SECTION("lst")
 
     SECTION("predefined") {
       // P.S. ref outputs produced with complete canonicalization
