@@ -462,6 +462,7 @@ concept index_or_op_sequence =
     (meta::is_statically_castable_v<meta::range_value_t<T>, Index> ||
      meta::is_statically_castable_v<meta::range_value_t<T>, Op<S>>);
 
+// clang-format off
 /// @brief NormalOperator is an Operator normal-ordered with respect to a
 /// vacuum.
 
@@ -469,19 +470,18 @@ concept index_or_op_sequence =
 /// annihilators. It is natural to express at least number-conserving normal
 /// operators (i.e. those with equal number of creators and annihilators) as
 /// tensors with creators as superscripts and annihilators as subscripts.
-/// Operator cre(p1) cre(p2) ... cre(pN) ann(qN) ... ann(q2) ann(q1) is
-/// represented in such notation as a^{p1 p2 ... pN}_{q1 q2 ... qN}, hence it is
+/// Operator `cre(p1) cre(p2) ... cre(pN) ann(qN) ... ann(q2) ann(q1)` is
+/// represented in tensor notation as \f$ \tensor*{a}{*^{p1\dots}_{q1\dots} *^{pN}_{qN}} \f$ , hence it is
 /// natural to specify annihilators in the order of their particle index (i.e.
-/// as q1 q2, etc.) which is reverse of the order of their appearance in
+/// as `q1` `q2`, etc.) which is reverse of the order of their appearance in
 /// Operator.
 ///
 /// @note The tensor notation becomes less intuitive for number non-conserving
-/// operators, e.g. cre(p1) cre(p2) ann(q2) could be represented as a^{p1
-/// p2}_{q2 ⎵} or a^{p1 p2}_{⎵ q2}. To make it explicit that ann(q2) acts on
-/// same particle as cre(p2) the latter notation is used; similarly, cre(p1)
-/// ann(q1) ann(q2) is represented as a^{⎵ p1}_{q1 q2}.
+/// operators, e.g. `cre(p1) cre(p2) ann(q2)` could be represented as \f$ \tensor*{a}{*^{p1}_{q2} *^{p1}_{\textvisiblespace}} \f$ or \f$ \tensor*{a}{*^{p1}_{\textvisiblespace} *^{p1}_{q2}} \f$. To make it explicit that ann(q2) acts on
+/// same particle as `cre(p2)` the latter notation is used; similarly, `cre(p1) ann(q1) ann(q2)` is represented as \f$ \tensor*{a}{*^{\textvisiblespace}_{q1} *^{p1}_{q2}} \f$.
 ///
 /// @tparam S specifies the particle statistics
+// clang-format on
 template <Statistics S>
 class NormalOperator : public Operator<S>,
                        public AbstractTensor,

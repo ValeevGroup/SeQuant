@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   xmlns:dc="http://purl.org/dc/elements/1.1/"
+   xmlns:cc="http://creativecommons.org/ns#"
+   xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+   xmlns:svg="http://www.w3.org/2000/svg"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   id="Layer_1"
+   data-name="Layer 1"
+   viewBox="0 0 849.9076 674.02429"
+   version="1.1"
+   sodipodi:docname="SQ_Logos_Artboard 3.svg"
+   width="849.90759"
+   height="674.02429"
+   inkscape:version="1.0.2 (e86c8708, 2021-01-15)">
+  <metadata
+     id="metadata92">
+    <rdf:RDF>
+      <cc:Work
+         rdf:about="">
+        <dc:format>image/svg+xml</dc:format>
+        <dc:type
+           rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
+      </cc:Work>
+    </rdf:RDF>
+  </metadata>
+  <sodipodi:namedview
+     pagecolor="#ffffff"
+     bordercolor="#666666"
+     borderopacity="1"
+     objecttolerance="10"
+     gridtolerance="10"
+     guidetolerance="10"
+     inkscape:pageopacity="0"
+     inkscape:pageshadow="2"
+     inkscape:window-width="1512"
+     inkscape:window-height="915"
+     id="namedview90"
+     showgrid="false"
+     inkscape:zoom="0.58915981"
+     inkscape:cx="232.13003"
+     inkscape:cy="261.44671"
+     inkscape:window-x="0"
+     inkscape:window-y="38"
+     inkscape:window-maximized="0"
+     inkscape:current-layer="Layer_1" />
+  <defs
+     id="defs75">
+    <style
+       id="style73">
+      .cls-1, .cls-2 {
+        font-family: IvyJournal-Bold, 'Ivy Journal';
+        font-size: 600px;
+        font-weight: 700;
+      }
+
+      .cls-2 {
+        fill: #c1272d;
+      }
+    </style>
+  </defs>
+  <text
+     class="cls-1"
+     id="text79"
+     x="-21.6"
+     y="444"><tspan
+       x="-21.6"
+       y="444"
+       id="tspan77">S</tspan></text>
+  <text
+     class="cls-1"
+     id="text83"
+     x="285.90759"
+     y="557.62427"><tspan
+       x="285.90759"
+       y="557.62427"
+       id="tspan81">Q</tspan></text>
+  <text
+     class="cls-2"
+     id="text87"
+     x="364.17691"
+     y="472.23624"
+     style="fill:#ba0c2f;fill-opacity:1;"><tspan
+       x="364.17691"
+       y="472.23624"
+       id="tspan85"
+       style="fill:#ba0c2f;fill-opacity:1;">ˆ</tspan></text>
+</svg>

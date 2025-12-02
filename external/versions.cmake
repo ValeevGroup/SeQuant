@@ -35,3 +35,6 @@ set(SEQUANT_OLDEST_GOOGLEBENCHMARK_VERSION 1.9.3)
 
 set(SEQUANT_TRACKED_PYBIND11_TAG v3.0.1)
 set(SEQUANT_OLDEST_PYBIND11_VERSION 3)
+
+# oldest Doxygen we can tolerate ... doxygen-awesome-css requires doxygen 1.9.1 - 1.9.4 or 1.9.6 - 1.14.0, so just use 1.9.6 as the minimum
+set(SEQUANT_OLDEST_DOXYGEN_VERSION 1.9.6)
