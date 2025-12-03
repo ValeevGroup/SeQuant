@@ -14,6 +14,7 @@ jobs:
         -DCMAKE_PREFIX_PATH='/usr/include/boost'
         -DBUILD_TESTING=OFF
         -DSEQUANT_BUILD_DOCS=ON
+        -DSEQUANT_BUILD_DOCS_API_BREATHEEXHALE=ON
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v6
