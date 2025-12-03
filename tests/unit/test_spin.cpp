@@ -730,9 +730,10 @@ SECTION("Swap bra kets") {
 SECTION("Closed-shell spintrace CCD") {
   // Energy expression
   {
-    {  // standard = v1
-      const auto input = ex<Sum>(ExprPtrList{parse_expr(
-          L"1/4 g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_1,i_2}", Symmetry::Antisymm)});
+    {  // standard = v1 , expression can be parsed directly without requiring
+       // cast to Sum
+      const auto input = parse_expr(
+          L"1/4 g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_1,i_2}", Symmetry::Antisymm);
       auto result = closed_shell_CC_spintrace_v1(input);
       REQUIRE_THAT(result,
                    EquivalentTo(L"- g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_2,i_1} + "
@@ -977,6 +978,16 @@ SECTION("Closed-shell spintrace CCSD") {
                               "g{i2,i3;a2,a3} t{a1;i3} t{a2;i1} t{a3;i2}"));
   }
 }  // CCSD R1
+
+SECTION("Closed-shell CC spintrace with variable") {
+  {  // related to issue #432
+    auto expr1 = sequant::parse_expr(L"-1 ω * A{i1,i2;a1,a2} * t{a1,a2;i1,i2}",
+                                     Symmetry::Antisymm);
+    auto result = mbpt::closed_shell_CC_spintrace_v2(expr1);
+    REQUIRE_THAT(result,
+                 EquivalentTo(L"-2 ω * S{i1,i2;a1,a2} * t{a1,a2;i1,i2}"));
+  }
+}
 
 SECTION("Closed-shell spintrace CCSDT terms") {
   {  // A3 * f * t3, , spintracing with partial-expansion
