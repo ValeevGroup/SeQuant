@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a9c7e7721e4b51c1b20608b63794328bb:
+
+Function sequant::deparse(const Sum&, bool)
+===========================================
+
+- Defined in :ref:`file_SeQuant_core_parse_deparse.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::deparse(const Sum&, bool)
+   :project: SeQuant

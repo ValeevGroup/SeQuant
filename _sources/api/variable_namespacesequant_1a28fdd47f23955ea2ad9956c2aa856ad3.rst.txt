@@ -1,0 +1,14 @@
+.. _exhale_variable_namespacesequant_1a28fdd47f23955ea2ad9956c2aa856ad3:
+
+Variable sequant::is_tensor_v
+=============================
+
+- Defined in :ref:`file_SeQuant_core_expressions_abstract_tensor.hpp`
+
+
+Variable Documentation
+----------------------
+
+
+.. doxygenvariable:: sequant::is_tensor_v
+   :project: SeQuant

@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a26bb419c94ede3168d13a435a75e9d42:
+
+Template Function sequant::transform_sum_expr
+=============================================
+
+- Defined in :ref:`file_SeQuant_core_expressions_sum.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::transform_sum_expr(SizedRange&&, const UnaryMapOp&, const TransformSumExprOptions&)
+   :project: SeQuant

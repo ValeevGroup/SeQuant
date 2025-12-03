@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1aa43664dd75c601fc533ce7d549610eff:
+
+Function sequant::numerator
+===========================
+
+- Defined in :ref:`file_SeQuant_core_rational.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::numerator(const rational&)
+   :project: SeQuant

@@ -1,0 +1,14 @@
+.. _exhale_function_vac__av_8ipp_1a9a0e5168f9a7eb433c473b58c6d47627:
+
+Function ref_av(ExprPtr, const OpConnections<std::wstring>&, bool, bool, bool)
+==============================================================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_vac_av.ipp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: ref_av(ExprPtr, const OpConnections<std::wstring>&, bool, bool, bool)
+   :project: SeQuant

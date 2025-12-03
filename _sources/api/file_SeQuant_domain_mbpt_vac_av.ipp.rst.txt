@@ -1,0 +1,67 @@
+
+.. _file_SeQuant_domain_mbpt_vac_av.ipp:
+
+File vac_av.ipp
+===============
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_domain_mbpt>` (``SeQuant/domain/mbpt``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/domain/mbpt/vac_av.ipp``)
+-----------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_domain_mbpt_vac_av.ipp.rst
+
+
+
+
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_domain_mbpt_op.cpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_detail`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacedetail_1afeadcbff331a5c52159ddb6f4f2bea65`
+
+- :ref:`exhale_function_vac__av_8ipp_1a9a0e5168f9a7eb433c473b58c6d47627`
+
+- :ref:`exhale_function_vac__av_8ipp_1a9188697b0b44ee2378c9b30421127a90`
+
+- :ref:`exhale_function_vac__av_8ipp_1ab6ad60262d0c603b42728a71fa331dd8`
+
+- :ref:`exhale_function_vac__av_8ipp_1a7ecf5052e926ccb86ac845faec245cba`
+
+
+Defines
+-------
+
+
+- :ref:`exhale_define_vac__av_8ipp_1af603cf60bb018d99c0e90281bb185f99`
+

@@ -1,0 +1,73 @@
+
+.. _file_SeQuant_core_export_reordering_context.hpp:
+
+File reordering_context.hpp
+===========================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core_export>` (``SeQuant/core/export``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/export/reordering_context.hpp``)
+-----------------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_export_reordering_context.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/export/context.hpp`` (:ref:`file_SeQuant_core_export_context.hpp`)
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_core_export_itf.hpp`
+
+- :ref:`file_SeQuant_core_export_python_einsum.hpp`
+
+- :ref:`file_SeQuant_core_export_reordering_context.cpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+
+Classes
+-------
+
+
+- :ref:`exhale_struct_structsequant_1_1assume__real__orbitals`
+
+- :ref:`exhale_struct_structsequant_1_1assume__strict__column__permutability`
+
+- :ref:`exhale_class_classsequant_1_1_reordering_context`
+
+
+Enums
+-----
+
+
+- :ref:`exhale_enum_namespacesequant_1a27325ac609df40aecc8d66c3a67d6f58`
+
