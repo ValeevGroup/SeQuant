@@ -11,6 +11,7 @@ templates_path = ['@SEQUANT_SPHINX_SOURCE_DIR@/_templates']
 html_static_path = ['@SEQUANT_SPHINX_SOURCE_DIR@/_static']
 html_theme = 'furo'  # "sphinx_rtd_theme", "furo"
 html_title = "SeQuant Documentation"
+html_logo = '@PROJECT_SOURCE_DIR@/doc/images/logo.svg'
 
 # Extensions
 extensions = [
@@ -67,6 +68,7 @@ html_css_files = [
     "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/fontawesome.min.css",
     "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/solid.min.css",
     "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/brands.min.css",
+    "custom.css",
 ]
 
 html_theme_options = {
@@ -80,7 +82,7 @@ html_theme_options = {
         },
     ],
     # Navigation sidebar settings
-    "sidebar_hide_name": False,
+    "sidebar_hide_name": True,
     "light_css_variables": {
         "sidebar-item-font-size": "0.95em",
     },

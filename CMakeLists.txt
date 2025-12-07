@@ -315,6 +315,7 @@ set(SeQuant_src
         SeQuant/core/optimize/fusion.hpp
         SeQuant/core/optimize/optimize.cpp
         SeQuant/core/parse.hpp
+        SeQuant/core/parse/ast.cpp
         SeQuant/core/parse/deparse.cpp
         SeQuant/core/parse/parse.cpp
         SeQuant/core/ranges.hpp

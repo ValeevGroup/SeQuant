@@ -14,6 +14,7 @@ jobs:
         -DCMAKE_PREFIX_PATH='/usr/include/boost'
         -DBUILD_TESTING=OFF
         -DSEQUANT_BUILD_DOCS=ON
+        -DSEQUANT_BUILD_DOCS_API_BREATHEEXHALE=ON
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v6
@@ -35,7 +36,7 @@ jobs:
           cmake --build . --target sphinx-sequant
 
       - name: Deploy to gh-pages
-        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/master' }}
+        if: ${{ (github.event_name == 'push' && github.ref == 'refs/heads/master') || github.event_name == 'workflow_dispatch' }}
         uses: peaceiris/actions-gh-pages@v4
         with:
           publish_branch: gh-pages
