@@ -461,7 +461,18 @@ Container external_indices(const Expr& expr) {
 
   if (symmetrizer.has_value()) {
     // Generate external index list from symmetrization operator
-    return external_indices<Container>(symmetrizer.value());
+    // However, the symmetrizer has bra/ket conjugated (reversed)
+    Container res = external_indices<Container>(symmetrizer.value());
+
+    for (auto& pair : res) {
+      if (pair.size() <= 1) {
+        continue;
+      }
+
+      std::swap(pair.at(0), pair.at(1));
+    }
+
+    return res;
   }
 
   IndexGroups groups = get_unique_indices<container::svector<Index>>(expr);
