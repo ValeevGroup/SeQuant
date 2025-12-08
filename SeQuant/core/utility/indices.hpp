@@ -430,8 +430,10 @@ Container external_indices(const Expr& expr) {
   if (expr.is<Tensor>()) {
     const Tensor& tensor = expr.as<Tensor>();
 
-    Container cont(std::max(tensor.bra_rank(),
-                            std::max(tensor.ket_rank(), tensor.aux_rank())));
+    const std::size_t num_braket =
+        std::max(tensor.bra_rank(), tensor.ket_rank());
+    Container cont(num_braket + tensor.aux_rank());
+
     for (std::size_t i = 0; i < tensor.ket_rank(); ++i) {
       cont.at(i).push_back(tensor.ket()[i]);
     }
@@ -439,7 +441,7 @@ Container external_indices(const Expr& expr) {
       cont.at(i).push_back(tensor.bra()[i]);
     }
     for (std::size_t i = 0; i < tensor.aux_rank(); ++i) {
-      cont.at(i).push_back(tensor.aux()[i]);
+      cont.at(i + num_braket).push_back(tensor.aux()[i]);
     }
 
     return cont;
@@ -464,8 +466,9 @@ Container external_indices(const Expr& expr) {
 
   IndexGroups groups = get_unique_indices<container::svector<Index>>(expr);
 
-  Container cont(std::max(groups.bra.size(),
-                          std::max(groups.ket.size(), groups.aux.size())));
+  const std::size_t num_braket = std::max(groups.bra.size(), groups.ket.size());
+
+  Container cont(num_braket + groups.aux.size());
 
   for (std::size_t i = 0; i < groups.ket.size(); ++i) {
     cont.at(i).push_back(groups.ket[i]);
@@ -474,7 +477,7 @@ Container external_indices(const Expr& expr) {
     cont.at(i).push_back(groups.bra[i]);
   }
   for (std::size_t i = 0; i < groups.aux.size(); ++i) {
-    cont.at(i).push_back(groups.aux[i]);
+    cont.at(num_braket + i).push_back(groups.aux[i]);
   }
 
   return cont;
