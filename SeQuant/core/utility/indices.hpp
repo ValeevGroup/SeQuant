@@ -434,11 +434,11 @@ Container external_indices(const Expr& expr) {
         std::max(tensor.bra_rank(), tensor.ket_rank());
     Container cont(num_braket + tensor.aux_rank());
 
-    for (std::size_t i = 0; i < tensor.ket_rank(); ++i) {
-      cont.at(i).push_back(tensor.ket()[i]);
-    }
     for (std::size_t i = 0; i < tensor.bra_rank(); ++i) {
       cont.at(i).push_back(tensor.bra()[i]);
+    }
+    for (std::size_t i = 0; i < tensor.ket_rank(); ++i) {
+      cont.at(i).push_back(tensor.ket()[i]);
     }
     for (std::size_t i = 0; i < tensor.aux_rank(); ++i) {
       cont.at(i + num_braket).push_back(tensor.aux()[i]);
@@ -470,11 +470,11 @@ Container external_indices(const Expr& expr) {
 
   Container cont(num_braket + groups.aux.size());
 
-  for (std::size_t i = 0; i < groups.ket.size(); ++i) {
-    cont.at(i).push_back(groups.ket[i]);
-  }
   for (std::size_t i = 0; i < groups.bra.size(); ++i) {
     cont.at(i).push_back(groups.bra[i]);
+  }
+  for (std::size_t i = 0; i < groups.ket.size(); ++i) {
+    cont.at(i).push_back(groups.ket[i]);
   }
   for (std::size_t i = 0; i < groups.aux.size(); ++i) {
     cont.at(num_braket + i).push_back(groups.aux[i]);
