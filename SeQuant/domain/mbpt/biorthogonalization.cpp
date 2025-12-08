@@ -339,13 +339,6 @@ void biorthogonal_transform(container::svector<ResultExpr>& result_exprs,
 
   const std::size_t n_particles = externals.front().size();
 
-  // Eigen::MatrixXd coefficients = compute_biorth_coeffs(n_particles,
-  // threshold);
-
-  auto num_perms = factorial(n_particles);
-  SEQUANT_ASSERT(num_perms == coefficients.rows());
-  SEQUANT_ASSERT(num_perms == coefficients.cols());
-
   auto original_exprs = result_exprs |
                         ranges::views::transform([](const ResultExpr& res) {
                           return res.expression();
