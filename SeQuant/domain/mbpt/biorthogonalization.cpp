@@ -338,6 +338,7 @@ void biorthogonal_transform(container::svector<ResultExpr>& result_exprs,
                ranges::to<container::svector<std::size_t>>();
 
   const std::size_t n_particles = externals.front().size();
+  auto num_perms = factorial(n_particles);
 
   auto original_exprs = result_exprs |
                         ranges::views::transform([](const ResultExpr& res) {
