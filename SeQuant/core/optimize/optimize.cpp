@@ -7,6 +7,7 @@
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/optimize.hpp>
 #include <SeQuant/core/utility/indices.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 
 #include <range/v3/iterator/basic_iterator.hpp>
 #include <range/v3/range/access.hpp>
@@ -15,7 +16,6 @@
 #include <range/v3/view/view.hpp>
 
 #include <algorithm>
-#include <cassert>
 #include <cstddef>
 #include <memory>
 #include <stack>
@@ -153,7 +153,7 @@ Sum reorder(Sum const& sum) {
   for (auto const& clstr : clusters(sum))
     for (auto p : clstr) result.append(sum.at(p));
 
-  assert(result.size() == sum.size());
+  SEQUANT_ASSERT(result.size() == sum.size());
   return result;
 }
 

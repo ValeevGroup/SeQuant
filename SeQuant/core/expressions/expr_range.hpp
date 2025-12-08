@@ -3,6 +3,7 @@
 
 #include <SeQuant/core/expressions/expr.hpp>
 #include <SeQuant/core/expressions/expr_ptr.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 
 #include <range/v3/view/facade.hpp>
 
@@ -56,7 +57,7 @@ class ExprRange : public ranges::view_facade<ExprRange> {
         address_.push_back(std::make_pair(&expr, 0));
         next_atom((*expr)[0]);
       } else {
-        assert(!address_.empty());
+        SEQUANT_ASSERT(!address_.empty());
         const auto& parent_plus_child = address_.back();
         element_ptr_ = &((**parent_plus_child.first)[parent_plus_child.second]);
       }
@@ -78,14 +79,14 @@ class ExprRange : public ranges::view_facade<ExprRange> {
     cursor(ExprPtr& top, ranges::default_sentinel_t) : top_(&top) {}
 
     ExprPtr& read() const {
-      assert(ordinal_ != -1);
+      SEQUANT_ASSERT(ordinal_ != -1);
       return *element_ptr_;
     }
     bool equal(const cursor& that) const {
       return this->element_ptr_ == that.element_ptr_;
     }
     void next() {
-      assert(element_ptr_);
+      SEQUANT_ASSERT(element_ptr_);
       // first the next parent with children
       auto* parent_plus_child = &(address_.back());
       while ((size_t)parent_plus_child->second + 1 ==
@@ -112,30 +113,30 @@ class ExprRange : public ranges::view_facade<ExprRange> {
 
     auto address() const { return address_; }
     auto ordinal() const {
-      assert(ordinal_ >= 0);
+      SEQUANT_ASSERT(ordinal_ >= 0);
       return ordinal_;
     }
 
     //    /// calls erase on the current iterator
     //    void erase() {
-    //      assert(range_iter_ != this->_end(*range_));
+    //      SEQUANT_ASSERT(range_iter_ != this->_end(*range_));
     //      // TODO resolve the compilation issue
     //      //      ranges::erase(*range_iter_, elem_iter_);
     //      // verify that capacity does not change
     //      const auto capacity = range_iter_->capacity();
     //      range_iter_->erase(elem_iter_);
-    //      assert(capacity == range_iter_->capacity());
+    //      SEQUANT_ASSERT(capacity == range_iter_->capacity());
     //    }
     //    /// calls erase on the current iterator
     //    template <typename T> void insert(T &&elem) {
-    //      assert(range_iter_ != this->_end(*range_));
+    //      SEQUANT_ASSERT(range_iter_ != this->_end(*range_));
     //      // TODO resolve the compilation issue
     //      //      ranges::insert(*range_iter_, elem_iter_,
     //      std::forward<T>(elem));
     //      // verify that capacity does not change
     //      const auto capacity = range_iter_->capacity();
     //      range_iter_->insert(elem_iter_, std::forward<T>(elem));
-    //      assert(capacity == range_iter_->capacity());
+    //      SEQUANT_ASSERT(capacity == range_iter_->capacity());
     //    }
   };
   cursor begin_cursor() { return {top_}; }

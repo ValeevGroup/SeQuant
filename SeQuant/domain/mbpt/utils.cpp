@@ -2,29 +2,44 @@
 // Created by Ajay Melekamburath on 9/30/25.
 //
 
+#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/domain/mbpt/utils.hpp>
 
 namespace sequant::mbpt {
 
-ExprPtr lst(ExprPtr A, ExprPtr B, size_t commutator_rank, bool unitary,
-            bool skip_clone) {
-  assert(commutator_rank >= 1 && "Truncation order must be at least 1");
+ExprPtr lst(ExprPtr A, ExprPtr B, size_t commutator_rank,
+            const LSTOptions& options) {
+  SEQUANT_ASSERT(commutator_rank >= 1 && "Truncation order must be at least 1");
 
   // use cloned expr to avoid side effects
-  if (!skip_clone) A = A->clone();
+  if (!options.skip_clone) A = A->clone();
 
   // takes a product or an operator and applies the similarity transformation
-  auto transform = [&B, commutator_rank, unitary](const ExprPtr& e) {
-    assert(e.is<op_t>() || e.is<Product>());
+  auto transform = [&B, commutator_rank, options](const ExprPtr& e) {
+    SEQUANT_ASSERT(e.is<op_t>() || e.is<Product>());
     auto result = e;  // start with expr
     auto op_Sk = result;
 
     for (size_t k = 1; k <= commutator_rank; ++k) {
       ExprPtr op_Sk_comm_w_S;
-      op_Sk_comm_w_S = op_Sk * B;  // traditional ansatz: [O,B] = (O B)_c
 
-      if (unitary)  // unitary ansatz: [O,B-B^+] = (O B)_c + (B^+ O)_c
-        op_Sk_comm_w_S += adjoint(B) * op_Sk;
+      if (options.use_commutators) {
+        // commutator form: [O,B] = OB - BO
+        op_Sk_comm_w_S = op_Sk * B - B * op_Sk;
+
+        if (options.unitary) {
+          // [O, B-B^+] = [O,B] - [O,B^+]
+          op_Sk_comm_w_S -= (op_Sk * adjoint(B) - adjoint(B) * op_Sk);
+        }
+      } else {
+        // connected form: [O,B] = (O B)_c
+        op_Sk_comm_w_S = op_Sk * B;
+
+        if (options.unitary) {
+          // [O,B-B^+] = (O B)_c + (B^+ O)_c
+          op_Sk_comm_w_S += adjoint(B) * op_Sk;
+        }
+      }
 
       op_Sk = ex<Constant>(rational{1, k}) * op_Sk_comm_w_S;
       simplify(op_Sk);
@@ -32,6 +47,10 @@ ExprPtr lst(ExprPtr A, ExprPtr B, size_t commutator_rank, bool unitary,
     }
     return result;
   };
+
+  // copy options and set skip_clone to true for recursive calls
+  auto opt_with_skip_clone = options;
+  opt_with_skip_clone.skip_clone = true;
 
   // expression type dispatch
   if (A.is<op_t>()) {
@@ -44,19 +63,14 @@ ExprPtr lst(ExprPtr A, ExprPtr B, size_t commutator_rank, bool unitary,
         })) {
       A = sequant::expand(A);
       simplify(A);
-      return lst(A, B, commutator_rank, unitary, /*skip_clone*/ true);
+      return lst(A, B, commutator_rank, opt_with_skip_clone);
     } else {
       return transform(A);
     }
   } else if (A.is<Sum>()) {
-    auto result = sequant::transform_reduce(
-        *A, ex<Sum>(),
-        [](const ExprPtr& running_total, const ExprPtr& summand) {
-          return running_total + summand;
-        },
-        [=](const auto& term) {
-          return lst(term, B, commutator_rank, unitary, /*skip_clone*/ true);
-        });
+    auto result = sequant::transform_sum_expr(*A, [=](const auto& term) {
+      return lst(term, B, commutator_rank, opt_with_skip_clone);
+    });
     return result;
   } else if (A.is<Constant>() || A.is<Variable>())
     return A;
@@ -95,14 +109,9 @@ ExprPtr screen_vac_av(ExprPtr expr, bool skip_clone) {
   } else if (expr.is<Variable>() || expr.is<Constant>()) {
     return expr;
   } else if (expr.is<Sum>()) {
-    auto result = sequant::transform_reduce(
-        *expr, ex<Sum>(),
-        [](const ExprPtr& running_total, const ExprPtr& summand) {
-          return running_total + summand;
-        },
-        [=](const auto& term) {
-          return screen_vac_av(term, /*skip_clone*/ true);
-        });
+    auto result = sequant::transform_sum_expr(*expr, [=](const auto& term) {
+      return screen_vac_av(term, /*skip_clone*/ true);
+    });
     return result;
   } else
     throw std::invalid_argument(

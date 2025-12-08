@@ -130,7 +130,7 @@ class AbstractGraph {
   friend class Partition;
 
  public:
-  AbstractGraph();
+  AbstractGraph() = default;
   virtual ~AbstractGraph();
 
   /**
@@ -308,10 +308,10 @@ class AbstractGraph {
  protected:
   /** \internal
    * How much verbose output is produced (0 means none) */
-  unsigned int verbose_level;
+  unsigned int verbose_level = 0;
   /** \internal
    * The output stream for verbose output. */
-  FILE* verbstr;
+  FILE* verbstr = stdout;
 
  protected:
   /** \internal
@@ -322,27 +322,27 @@ class AbstractGraph {
    * Whether the search for automorphisms and a canonical labeling is
    * in progress.
    */
-  bool in_search;
+  bool in_search = {};
 
   /** \internal
    * Is failure recording in use?
    */
-  bool opt_use_failure_recording;
+  bool opt_use_failure_recording = true; /* Default value for using failure recording */
   /* The "tree-specific" invariant value for the point when current path
    * got different from the first path */
-  unsigned int failure_recording_fp_deviation;
+  unsigned int failure_recording_fp_deviation = {};
 
   /** \internal
    * Is component recursion in use?
    */
-  bool opt_use_comprec;
+  bool opt_use_comprec = true; /* Default value for using component recursion */
 
-  unsigned int refine_current_path_certificate_index;
-  bool refine_compare_certificate;
-  bool refine_equal_to_first;
-  unsigned int refine_first_path_subcertificate_end;
-  int refine_cmp_to_best;
-  unsigned int refine_best_path_subcertificate_end;
+  unsigned int refine_current_path_certificate_index = {};
+  bool refine_compare_certificate = {};
+  bool refine_equal_to_first = {};
+  unsigned int refine_first_path_subcertificate_end = {};
+  int refine_cmp_to_best = {};
+  unsigned int refine_best_path_subcertificate_end = {};
 
   static const unsigned int CERT_SPLIT = 0;  // UINT_MAX;
   static const unsigned int CERT_EDGE = 1;   // UINT_MAX-1;
@@ -364,7 +364,7 @@ class AbstractGraph {
   /**\internal
    * Is the long prune method in use?
    */
-  bool opt_use_long_prune;
+  bool opt_use_long_prune = true;  /* Default value for using "long prune" */
   /**\internal
    * Maximum amount of memory (in megabytes) available for
    * the long prune method
@@ -376,12 +376,12 @@ class AbstractGraph {
    */
   static const unsigned int long_prune_options_max_stored_auts = 100;
 
-  unsigned int long_prune_max_stored_autss;
+  unsigned int long_prune_max_stored_autss = {};
   std::vector<std::vector<bool>*> long_prune_fixed;
   std::vector<std::vector<bool>*> long_prune_mcrs;
   std::vector<bool> long_prune_temp;
-  unsigned int long_prune_begin;
-  unsigned int long_prune_end;
+  unsigned int long_prune_begin = {};
+  unsigned int long_prune_end = {};
   /** \internal
    * Initialize the "long prune" data structures.
    */
@@ -423,7 +423,7 @@ class AbstractGraph {
   /** \internal
    * Whether eqref_hash is updated during equitable refinement process.
    */
-  bool compute_eqref_hash;
+  bool compute_eqref_hash = {};
   UintSeqHash eqref_hash;
 
   /** \internal
@@ -432,15 +432,15 @@ class AbstractGraph {
    */
   virtual bool is_equitable() const = 0;
 
-  unsigned int* first_path_labeling;
-  unsigned int* first_path_labeling_inv;
+  unsigned int* first_path_labeling = nullptr;
+  unsigned int* first_path_labeling_inv = nullptr;
   Orbit first_path_orbits;
-  unsigned int* first_path_automorphism;
+  unsigned int* first_path_automorphism = nullptr;
 
-  unsigned int* best_path_labeling;
-  unsigned int* best_path_labeling_inv;
+  unsigned int* best_path_labeling = nullptr;
+  unsigned int* best_path_labeling_inv = nullptr;
   Orbit best_path_orbits;
-  unsigned int* best_path_automorphism;
+  unsigned int* best_path_automorphism = nullptr;
 
   void update_labeling(unsigned int* const lab);
   void update_labeling_and_its_inverse(unsigned int* const lab,
@@ -456,7 +456,7 @@ class AbstractGraph {
   std::vector<unsigned int> certificate_first_path;
   std::vector<unsigned int> certificate_best_path;
 
-  unsigned int certificate_index;
+  unsigned int certificate_index = {};
   virtual void initialize_certificate() = 0;
 
   virtual void remove_duplicate_edges() = 0;
@@ -467,8 +467,8 @@ class AbstractGraph {
   void search(const bool canonical, Stats& stats);
 
   void (*report_hook)(void* user_param, unsigned int n,
-                      const unsigned int* aut);
-  void* report_user_param;
+                      const unsigned int* aut) = nullptr;
+  void* report_user_param = nullptr;
 
   /*
    *
@@ -477,7 +477,7 @@ class AbstractGraph {
    */
 
   /** The currently traversed component */
-  unsigned int cr_level;
+  unsigned int cr_level = {};
 
   /** \internal
    * The "Component End Point" data structure
@@ -525,7 +525,7 @@ class AbstractGraph {
   /** \internal
    * The number of vertices in the component \a cr_component
    */
-  unsigned int cr_component_elements;
+  unsigned int cr_component_elements = {};
 };
 
 /**

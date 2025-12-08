@@ -4,13 +4,7 @@
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/op.hpp>
 
-#if __cplusplus >= 202002L
 inline auto commutator(auto op1, auto op2) { return op1 * op2 - op2 * op1; }
-#else
-inline auto commutator(sequant::ExprPtr op1, sequant::ExprPtr op2) {
-  return op1 * op2 - op2 * op1;
-}
-#endif
 
 int main() {
   using namespace sequant;

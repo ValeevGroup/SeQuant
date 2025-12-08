@@ -45,10 +45,6 @@ else (SEQUANT_PRERELEASE_ID)
     set(SEQUANT_EXT_VERSION "${SEQUANT_VERSION}")
 endif (SEQUANT_PRERELEASE_ID)
 
-# extract git metadata
-include(GetGitMetadata)
-vgkit_cmake_git_metadata()
-
 # make SeQuant project
 project(SeQuant LANGUAGES CXX VERSION "${SEQUANT_VERSION}" DESCRIPTION "SEcond QUANTization toolkit")
 
@@ -89,6 +85,10 @@ include(CMakePackageConfigHelpers)
 
 include(compiler)
 
+# extract git metadata
+include(GetGitMetadata)
+vgkit_cmake_git_metadata()
+
 ##########################
 # Standard build variables
 ##########################
@@ -115,6 +115,20 @@ option(SEQUANT_UTILITIES "Enable SeQuant utility programs" ${PROJECT_IS_TOP_LEVE
 
 option(SEQUANT_IWYU "Whether to use the include-what-you-use tool (if found)" OFF)
 option(SEQUANT_WARNINGS_AS_ERRORS "Whether to treat compiler warnings as errors" ${PROJECT_IS_TOP_LEVEL})
+
+# SEQUANT_ASSERT
+if (CMAKE_BUILD_TYPE STREQUAL Debug)
+    set (SEQUANT_ASSERT_BEHAVIOR_DEFAULT ABORT)
+else ()
+    set (SEQUANT_ASSERT_BEHAVIOR_DEFAULT IGNORE)
+endif()
+set (SEQUANT_ASSERT_BEHAVIOR ${SEQUANT_ASSERT_BEHAVIOR_DEFAULT} CACHE STRING "Controls the behavior of SEQUANT_ASSERT; THROW causes SEQUANT_ASSERT to throw, ABORT causes SEQUANT_ASSERT to abort, IGNORE makes SEQUANT_ASSERT a no-op")
+set_property(
+        CACHE SEQUANT_ASSERT_BEHAVIOR PROPERTY
+        STRINGS THROW ABORT IGNORE)
+if (NOT ($CACHE{SEQUANT_ASSERT_BEHAVIOR} STREQUAL THROW OR $CACHE{SEQUANT_ASSERT_BEHAVIOR} STREQUAL ABORT OR $CACHE{SEQUANT_ASSERT_BEHAVIOR} STREQUAL IGNORE))
+    message(FATAL_ERROR "SEQUANT_ASSERT_BEHAVIOR is set to $CACHE{SEQUANT_ASSERT_BEHAVIOR} but must be one of THROW, ABORT, or IGNORE")
+endif()
 
 ##########################
 # SeQuant package options
@@ -254,6 +268,7 @@ set(SeQuant_src
         SeQuant/core/export/export.hpp
         SeQuant/core/export/export_expr.cpp
         SeQuant/core/export/export_expr.hpp
+        SeQuant/core/export/generator.cpp
         SeQuant/core/export/generator.hpp
         SeQuant/core/export/itf.cpp
         SeQuant/core/export/itf.hpp
@@ -300,6 +315,7 @@ set(SeQuant_src
         SeQuant/core/optimize/fusion.hpp
         SeQuant/core/optimize/optimize.cpp
         SeQuant/core/parse.hpp
+        SeQuant/core/parse/ast.cpp
         SeQuant/core/parse/deparse.cpp
         SeQuant/core/parse/parse.cpp
         SeQuant/core/ranges.hpp
@@ -328,12 +344,14 @@ set(SeQuant_src
         SeQuant/core/utility/atomic.hpp
         SeQuant/core/utility/context.hpp
         SeQuant/core/utility/debug.hpp
+        SeQuant/core/utility/exception.hpp
         SeQuant/core/utility/expr.cpp
         SeQuant/core/utility/expr.hpp
         SeQuant/core/utility/indices.hpp
         SeQuant/core/utility/macros.hpp
         SeQuant/core/utility/nodiscard.hpp
         SeQuant/core/utility/permutation.hpp
+        SeQuant/core/utility/scope.hpp
         SeQuant/core/utility/singleton.hpp
         SeQuant/core/utility/string.cpp
         SeQuant/core/utility/string.hpp
@@ -365,6 +383,8 @@ set(SeQuant_src
         SeQuant/domain/mbpt/rules/csv.hpp
         SeQuant/domain/mbpt/rules/df.cpp
         SeQuant/domain/mbpt/rules/df.hpp
+        SeQuant/domain/mbpt/rules/thc.cpp
+        SeQuant/domain/mbpt/rules/thc.hpp
         SeQuant/domain/mbpt/space_qns.hpp
         SeQuant/domain/mbpt/spin.cpp
         SeQuant/domain/mbpt/spin.hpp
@@ -403,12 +423,12 @@ endif()
 if (TARGET tiledarray)
     set(SEQUANT_HAS_TILEDARRAY ON)
     list(APPEND SeQuant_src
-            SeQuant/domain/eval/cache_manager.cpp
-            SeQuant/domain/eval/cache_manager.hpp
-            SeQuant/domain/eval/eval.hpp
-            SeQuant/domain/eval/result.cpp
-            SeQuant/domain/eval/result.hpp
-            SeQuant/domain/eval/eval_fwd.hpp
+            SeQuant/core/eval/cache_manager.cpp
+            SeQuant/core/eval/cache_manager.hpp
+            SeQuant/core/eval/eval.hpp
+            SeQuant/core/eval/result.cpp
+            SeQuant/core/eval/result.hpp
+            SeQuant/core/eval/eval_fwd.hpp
             )
 endif ()
 
@@ -424,6 +444,7 @@ set_source_files_properties(
 if (SEQUANT_CONTEXT_MANIPULATION_THREADSAFE)
   target_compile_definitions(SeQuant PUBLIC SEQUANT_CONTEXT_MANIPULATION_THREADSAFE)
 endif()
+target_compile_definitions(SeQuant PUBLIC SEQUANT_ASSERT_BEHAVIOR_=${SEQUANT_ASSERT_BEHAVIOR})
 
 target_link_libraries(SeQuant PUBLIC range-v3::range-v3 Boost::regex Boost::locale Boost::headers SeQuant-bliss Threads::Threads)
 target_link_libraries(SeQuant PRIVATE libperm::libperm $<BUILD_LOCAL_INTERFACE:utfcpp>)

@@ -5,8 +5,8 @@
 #include <SeQuant/core/expressions/expr_ptr.hpp>
 #include <SeQuant/core/expressions/labeled.hpp>
 #include <SeQuant/core/hash.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 
-#include <cassert>
 #include <string>
 #include <string_view>
 
@@ -61,7 +61,7 @@ class Variable : public Expr, public MutatableLabeled {
     if (!hash_value_) {
       hash_value_ = compute_hash();
     } else {
-      assert(*hash_value_ == compute_hash());
+      SEQUANT_ASSERT(*hash_value_ == compute_hash());
     }
 
     return *hash_value_;

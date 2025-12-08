@@ -10,6 +10,7 @@
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/parse.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 
 #include <initializer_list>
@@ -30,7 +31,7 @@ Constant parse_constant(std::wstring_view c) {
 }
 
 EvalExpr result_expr(EvalExpr const& left, EvalExpr const& right, EvalOp op) {
-  assert(op == EvalOp::Product || op == EvalOp::Sum);
+  SEQUANT_ASSERT(op == EvalOp::Product || op == EvalOp::Sum);
   auto xpr = op == EvalOp::Product ? left.expr() * right.expr()
                                    : left.expr() + right.expr();
   return *binarize(xpr);

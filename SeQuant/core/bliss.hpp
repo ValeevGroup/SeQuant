@@ -5,6 +5,7 @@
 #ifndef SEQUANT_BLISS_HPP
 #define SEQUANT_BLISS_HPP
 
+#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/external/bliss/graph.hh>
 
 #include <range/v3/algorithm/for_each.hpp>
@@ -44,7 +45,7 @@ void print_auts(const PermutationSequence& aut_generators, Stream& stream,
                   use_labels = !vlabels.empty()](const auto& perm) {
       const unsigned int offset = 0;
       const unsigned int N = perm.size();
-      if (!vlabels.empty()) assert(vlabels.size() == N);
+      if (!vlabels.empty()) SEQUANT_ASSERT(vlabels.size() == N);
       for (unsigned int i = 0; i < N; i++) {
         unsigned int j = perm[i];
         if (j == i) continue;

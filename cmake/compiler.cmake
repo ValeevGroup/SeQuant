@@ -45,7 +45,10 @@ function(target_set_warning_flags TARGET)
         # - https://gcc.gnu.org/bugzilla/show_bug.cgi?id=119388
         # - https://gcc.gnu.org/cgit/gcc/commit/?id=6feb628a706e86eb3f303aff388c74bdb29e7381
         # - https://stackoverflow.com/q/79742311
-        target_compile_options("${TARGET}" PRIVATE "-Wno-error=maybe-uninitialized")
+
+        # With maybe-uninitialized in particular, it appears as if it creates a lot of false positives
+        # causing it to effectively only create noise. Hence, we disable it entirely.
+        target_compile_options("${TARGET}" PRIVATE "-Wno-maybe-uninitialized")
     endif()
     if (CMAKE_CXX_COMPILER_ID MATCHES "^(Clang|AppleClang)$")
         # This warning can be a bit odd in that it seems like some Clang versions emit it incorrectly,

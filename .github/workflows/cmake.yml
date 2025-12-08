@@ -10,11 +10,12 @@ concurrency:
 
 jobs:
   build:
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
         build_type : [ Release, Debug ]
-        os : [ macos-14, ubuntu-24.04 ]
+        os : [ macos-15, ubuntu-24.04 ]
         valgrind: [ true, false ]
         sanitize: [ true, false ]
         exclude:
@@ -24,15 +25,15 @@ jobs:
             valgrind : true
           - build_type : Release
             sanitize : true
-          - os: macos-14
+          - os: macos-15
             sanitize: true
-          - os: macos-14
+          - os: macos-15
             valgrind: true
         include:
           - os: ubuntu-24.04
             cxx: /usr/bin/g++-14
             sanitize_flags: -fsanitize=address -fsanitize=leak -fsanitize=undefined -fno-omit-frame-pointer -fno-var-tracking
-          - os: macos-14
+          - os: macos-15
             cxx: clang++
             sanitize_flags: -fsanitize=address -fsanitize=undefined -fno-omit-frame-pointer -fno-var-tracking
 
@@ -60,8 +61,21 @@ jobs:
         -DSEQUANT_SKIP_LONG_TESTS=${{ matrix.valgrind || matrix.sanitize }}
         -DSEQUANT_COMPILE_DOC_EXAMPLES=${{ !matrix.valgrind }}
         -DSEQUANT_PYTHON=${{ !matrix.valgrind && !matrix.sanitize }}
+        -DSEQUANT_ASSERT_BEHAVIOR=THROW
     steps:
     - uses: actions/checkout@v5
+
+    - name: free up disk space on Ubuntu runner
+      if: ${{ matrix.os == 'ubuntu-24.04' }}
+      uses: jlumbroso/free-disk-space@main
+
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.x'
+
+    - name: Install Python packages
+      run: pip install numpy torch
 
     - name: Create Build Environment
       # Some projects don't allow in-source building, so create a separate build directory

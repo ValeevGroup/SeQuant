@@ -5,6 +5,7 @@
 #include <SeQuant/core/tensor_network/v1.hpp>
 #include <SeQuant/core/tensor_network/v2.hpp>
 #include <SeQuant/core/tensor_network/v3.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/string.hpp>
 #include <SeQuant/domain/mbpt/context.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
@@ -90,7 +91,7 @@ int main(int argc, char **argv) {
                  << "': " << e.what() << std::endl;
       return 1;
     }
-    assert(expr);
+    SEQUANT_ASSERT(expr);
 
     if (version == 1) {
       std::optional<TensorNetworkV1> network = make_tn<TensorNetworkV1>(expr);

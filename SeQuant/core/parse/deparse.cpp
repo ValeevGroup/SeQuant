@@ -10,7 +10,6 @@
 
 #include <range/v3/all.hpp>
 
-#include <cassert>
 #include <cstddef>
 #include <stdexcept>
 #include <string>
@@ -120,7 +119,7 @@ std::wstring deparse_scalar(const Constant::scalar_type& scalar) {
     }
   }
 
-  assert(!deparsed.empty());
+  SEQUANT_ASSERT(!deparsed.empty());
 
   return to_wstring(deparsed);
 }

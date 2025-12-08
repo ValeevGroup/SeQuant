@@ -6,6 +6,7 @@
 #define SEQUANT_CORE_UTILITY_STRONG_HPP
 
 #include <SeQuant/core/meta.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 
 #include <utility>
 
@@ -102,16 +103,16 @@ class strong_type_base {
   /// \note this is disabled if \p T is the castable_to_any placeholder to allow
   /// GCC resolve string_type({}) construction ambiguity
   template <typename T_ = T,
-            typename = std::enable_if_t<!std::is_same_v<
-                meta::remove_cvref_t<T_>, meta::castable_to_any>>>
+            typename = std::enable_if_t<!std::is_same_v<std::remove_cvref_t<T_>,
+                                                        meta::castable_to_any>>>
   explicit constexpr strong_type_base(const T& value) : value_(value) {}
 
   /// \param value the value to this will hold
   /// \note this is disabled if \p T is the castable_to_any placeholder to allow
   /// GCC resolve string_type({}) construction ambiguity
   template <typename T_ = T,
-            typename = std::enable_if_t<!std::is_same_v<
-                meta::remove_cvref_t<T_>, meta::castable_to_any>>>
+            typename = std::enable_if_t<!std::is_same_v<std::remove_cvref_t<T_>,
+                                                        meta::castable_to_any>>>
   explicit constexpr strong_type_base(T&& value) noexcept(
       std::is_nothrow_move_constructible<T>::value)
       : value_(std::move(value)) {}
@@ -127,7 +128,7 @@ class strong_type_base {
     if constexpr (meta::has_memfn_push_back_v<T, U>)
       std::copy(elements.begin(), elements.end(), std::back_inserter(value_));
     else {
-      assert(elements.size() == value_.size());
+      SEQUANT_ASSERT(elements.size() == value_.size());
       std::copy(elements.begin(), elements.end(), value_.begin());
     }
   }
@@ -311,24 +312,23 @@ class strong_type_base {
                                                                                \
   template <typename T>                                                        \
   ID(T&& t) -> ID<std::conditional_t<                                          \
-      ((meta::is_range_v<meta::remove_cvref_t<T>> &&                           \
-        !meta::is_char_range_v<meta::remove_cvref_t<T>>) ||                    \
-       std::is_arithmetic_v<meta::remove_cvref_t<T>> ||                        \
-       std::is_same_v<meta::remove_cvref_t<T>, IndexSpace>),                   \
-      meta::remove_cvref_t<T>,                                                 \
-      container::svector<                                                      \
-          meta::literal_to_string_t<meta::remove_cvref_t<T>>>>>;               \
+      ((meta::is_range_v<std::remove_cvref_t<T>> &&                            \
+        !meta::is_char_range_v<std::remove_cvref_t<T>>) ||                     \
+       std::is_arithmetic_v<std::remove_cvref_t<T>> ||                         \
+       std::is_same_v<std::remove_cvref_t<T>, IndexSpace>),                    \
+      std::remove_cvref_t<T>,                                                  \
+      container::svector<meta::literal_to_string_t<std::remove_cvref_t<T>>>>>; \
   template <typename T = meta::castable_to_any>                                \
   ID(std::initializer_list<T> t) -> ID<                                        \
-      container::svector<meta::literal_to_string_t<meta::remove_cvref_t<T>>>>; \
+      container::svector<meta::literal_to_string_t<std::remove_cvref_t<T>>>>;  \
   template <                                                                   \
       typename T, typename... U,                                               \
       typename = std::enable_if_t<                                             \
           sizeof...(U) != 0 &&                                                 \
-          (std::is_same_v<meta::remove_cvref_t<T>, meta::remove_cvref_t<U>> && \
+          (std::is_same_v<std::remove_cvref_t<T>, std::remove_cvref_t<U>> &&   \
            ...)>>                                                              \
   ID(T&& t, U&&... rest)                                                       \
-      -> ID<std::array<meta::literal_to_string_t<meta::remove_cvref_t<T>>,     \
+      -> ID<std::array<meta::literal_to_string_t<std::remove_cvref_t<T>>,      \
                        1 + sizeof...(U)>>;                                     \
   template <typename T = meta::castable_to_any>                                \
   ID() -> ID<std::array<T, 0>>;

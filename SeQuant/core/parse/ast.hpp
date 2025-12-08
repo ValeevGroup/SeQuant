@@ -121,11 +121,6 @@ struct Sum : boost::spirit::x3::position_tagged {
 template <typename T>
 Product::Product(T value) : factors({std::move(value)}) {}
 
-Product::Product(std::vector<NullaryValue> factors)
-    : factors(std::move(factors)) {}
-
-Sum::Sum(std::vector<Product> summands) : summands(std::move(summands)) {}
-
 struct ResultExpr : boost::spirit::x3::position_tagged {
   std::variant<Tensor, Variable> lhs;
   Sum rhs;

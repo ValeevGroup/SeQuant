@@ -1345,6 +1345,105 @@ TEST_CASE("wick", "[algorithms][wick]") {
 
         REQUIRE(result == expected);
       }
+
+      // quasi-diagonal example, with some indices in covariant expression
+      // fixed, as in the pair-specific densities used to produce PNOs
+      {
+        auto expr = sequant::parse_expr(
+            L"1/16 t{i1,i2;a3,a4}:A-C-S * ã{a3,a4;i1,i2} * ã{;a1} * ã{a2} * "
+            L"t{a5,a6;i3,i4}:A-C-S * ã{i3,i4;a5,a6}");
+        auto resetter = sequant::set_scoped_default_context(
+            Context(get_default_context())
+                .set(CanonicalizeOptions::default_options().copy_and_set(
+                    container::set<Index>{L"i_1", L"i_2", L"a_1", L"a_2"}))
+                .set(BraKetSymmetry::Symm));
+        // std::wcout << expr.to_latex() << "\n";
+        auto rdm1_so = sequant::mbpt::tensor::vac_av(expr);
+        // std::wcout << "SO RDM: " << rdm1_so.to_latex() << "\n";
+        REQUIRE_THAT(
+            rdm1_so,
+            EquivalentTo(L"1/2 t{i1,i2;a3,a1}:A-C-S t{a3,a2;i1,i2;}:A-C-S"));
+
+        // N.B. closed-shell spintrace expects ext groups to consist of pairs of
+        // indices
+        auto rdm1_sf = sequant::mbpt::spintrace(
+            rdm1_so, {{L"a_1", L"a_2"}, {L"i_1"}, {L"i_2"}},
+            /* spin-free = */ true);
+        simplify(rdm1_sf);
+        // std::wcout << "SF RDM: " << rdm1_sf.to_latex() << "\n";
+        REQUIRE_THAT(
+            rdm1_sf,
+            EquivalentTo(L"2 t{i1,i2;a1,a3}:N-C-S t{a2,a3;i1,i2;}:N-C-S - "
+                         L"t{i1,i2;a3,a1}:N-C-S t{a2,a3;i1,i2;}:N-C-S  + 2 "
+                         L"t{i1,i2;a3,a1}:N-C-S t{a3,a2;i1,i2;}:N-C-S - "
+                         L"t{i1,i2;a1,a3}:N-C-S t{a3,a2;i1,i2;}:N-C-S"));
+      }
+
+      // triples variant of the previous case
+      {
+        auto expr = sequant::parse_expr(
+            L"1/1296 t{i1,i2,i3;a1,a2,a3}:A-C-S * ã{a1,a2,a3;i1,i2,i3} * "
+            L"ã{;a4} * ã{a5} * "
+            L"t{a6,a7,a8;i4,i5,i6}:A-C-S * ã{i4,i5,i6;a6,a7,a8}");
+        auto resetter = sequant::set_scoped_default_context(
+            Context(get_default_context())
+                .set(CanonicalizeOptions::default_options().copy_and_set(
+                    container::set<Index>{L"i_1", L"i_2", L"i_3", L"a_4",
+                                          L"a_5"}))
+                .set(BraKetSymmetry::Symm));
+        // std::wcout << expr.to_latex() << "\n";
+        auto rdm1_so = sequant::mbpt::tensor::vac_av(expr);
+        // std::wcout << "SO RDM: " << rdm1_so.to_latex() << "\n";
+        REQUIRE_THAT(rdm1_so, EquivalentTo(L"1/12 t{i1,i2,i3;a4,a1,a2}:A-C-S "
+                                           L"t{a5,a1,a2;i1,i2,i3;}:A-C-S"));
+
+        // N.B. closed-shell spintrace expects ext groups to consist of pairs of
+        // indices
+        auto rdm1_sf = sequant::mbpt::spintrace(
+            rdm1_so, {{L"a_4", L"a_5"}, {L"i_1"}, {L"i_2"}, {L"i_3"}},
+            /* spin-free = */ true);
+        simplify(rdm1_sf);
+        // std::wcout << "ST RDM: " << rdm1_sf.to_latex() << "\n";
+
+        const std::wstring expected =
+            L"-2/3 t{i_1,i_2,i_3;a_4,a_1,a_2}:N-C-S * "
+            L"t{a_5,a_1,a_2;i_1,i_3,i_2}:N-C-S - 2/3 "
+            L"t{i_1,i_2,i_3;a_4,a_2,a_1}:N-C-S * "
+            L"t{a_5,a_1,a_2;i_2,i_3,i_1}:N-C-S + 1/3 "
+            L"t{i_2,i_1,i_3;a_4,a_1,a_2}:N-C-S * "
+            L"t{a_5,a_1,a_2;i_1,i_3,i_2}:N-C-S - 2/3 "
+            L"t{i_1,i_2,i_3;a_4,a_2,a_1}:N-C-S * "
+            L"t{a_5,a_1,a_2;i_3,i_1,i_2}:N-C-S + 1/3 "
+            L"t{i_2,i_1,i_3;a_4,a_2,a_1}:N-C-S * "
+            L"t{a_5,a_1,a_2;i_3,i_1,i_2}:N-C-S + 1/3 "
+            L"t{i_1,i_2,i_3;a_4,a_2,a_1}:N-C-S * "
+            L"t{a_5,a_1,a_2;i_2,i_1,i_3}:N-C-S + 1/3 "
+            L"t{i_3,i_1,i_2;a_4,a_1,a_2}:N-C-S * "
+            L"t{a_5,a_1,a_2;i_2,i_3,i_1}:N-C-S - 2/3 "
+            L"t{i_2,i_1,i_3;a_4,a_2,a_1}:N-C-S * "
+            L"t{a_5,a_1,a_2;i_2,i_1,i_3}:N-C-S - 2/3 "
+            L"t{i_3,i_1,i_2;a_4,a_2,a_1}:N-C-S * "
+            L"t{a_5,a_1,a_2;i_3,i_1,i_2}:N-C-S - 2/3 "
+            L"t{i_2,i_1,i_3;a_4,a_1,a_2}:N-C-S * "
+            L"t{a_5,a_1,a_2;i_3,i_1,i_2}:N-C-S - 2/3 "
+            L"t{i_3,i_1,i_2;a_4,a_1,a_2}:N-C-S * "
+            L"t{a_5,a_1,a_2;i_2,i_1,i_3}:N-C-S - 2/3 "
+            L"t{i_2,i_1,i_3;a_4,a_2,a_1}:N-C-S * "
+            L"t{a_5,a_1,a_2;i_1,i_3,i_2}:N-C-S + 1/3 "
+            L"t{i_3,i_1,i_2;a_4,a_2,a_1}:N-C-S * "
+            L"t{a_5,a_1,a_2;i_1,i_3,i_2}:N-C-S - 2/3 "
+            L"t{i_3,i_1,i_2;a_4,a_1,a_2}:N-C-S * "
+            L"t{a_5,a_1,a_2;i_1,i_3,i_2}:N-C-S + 1/3 "
+            L"t{i_1,i_2,i_3;a_4,a_1,a_2}:N-C-S * "
+            L"t{a_5,a_1,a_2;i_3,i_1,i_2}:N-C-S + 4/3 "
+            L"t{i_1,i_2,i_3;a_4,a_2,a_1}:N-C-S * "
+            L"t{a_5,a_1,a_2;i_1,i_3,i_2}:N-C-S + 4/3 "
+            L"t{i_3,i_1,i_2;a_4,a_1,a_2}:N-C-S * "
+            L"t{a_5,a_1,a_2;i_3,i_1,i_2}:N-C-S + 4/3 "
+            L"t{i_2,i_1,i_3;a_4,a_1,a_2}:N-C-S * "
+            L"t{a_5,a_1,a_2;i_2,i_1,i_3}:N-C-S";
+        REQUIRE_THAT(rdm1_sf, EquivalentTo(expected));
+      }
     }
   }
 }

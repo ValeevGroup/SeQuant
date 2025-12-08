@@ -18,7 +18,6 @@
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/strong.hpp>
 
-#include <cassert>
 #include <cstddef>
 #include <cstdint>
 #include <initializer_list>
@@ -430,7 +429,7 @@ class Operator : public container::svector<Op<S>>, public Expr {
     if (!hash_value_) {
       hash_value_ = compute_hash();
     } else {
-      assert(*hash_value_ == compute_hash());
+      SEQUANT_ASSERT(*hash_value_ == compute_hash());
     }
     return *hash_value_;
   }
@@ -463,6 +462,7 @@ concept index_or_op_sequence =
     (meta::is_statically_castable_v<meta::range_value_t<T>, Index> ||
      meta::is_statically_castable_v<meta::range_value_t<T>, Op<S>>);
 
+// clang-format off
 /// @brief NormalOperator is an Operator normal-ordered with respect to a
 /// vacuum.
 
@@ -470,19 +470,18 @@ concept index_or_op_sequence =
 /// annihilators. It is natural to express at least number-conserving normal
 /// operators (i.e. those with equal number of creators and annihilators) as
 /// tensors with creators as superscripts and annihilators as subscripts.
-/// Operator cre(p1) cre(p2) ... cre(pN) ann(qN) ... ann(q2) ann(q1) is
-/// represented in such notation as a^{p1 p2 ... pN}_{q1 q2 ... qN}, hence it is
+/// Operator `cre(p1) cre(p2) ... cre(pN) ann(qN) ... ann(q2) ann(q1)` is
+/// represented in tensor notation as \f$ \tensor*{a}{*^{p1\dots}_{q1\dots} *^{pN}_{qN}} \f$ , hence it is
 /// natural to specify annihilators in the order of their particle index (i.e.
-/// as q1 q2, etc.) which is reverse of the order of their appearance in
+/// as `q1` `q2`, etc.) which is reverse of the order of their appearance in
 /// Operator.
 ///
 /// @note The tensor notation becomes less intuitive for number non-conserving
-/// operators, e.g. cre(p1) cre(p2) ann(q2) could be represented as a^{p1
-/// p2}_{q2 ⎵} or a^{p1 p2}_{⎵ q2}. To make it explicit that ann(q2) acts on
-/// same particle as cre(p2) the latter notation is used; similarly, cre(p1)
-/// ann(q1) ann(q2) is represented as a^{⎵ p1}_{q1 q2}.
+/// operators, e.g. `cre(p1) cre(p2) ann(q2)` could be represented as \f$ \tensor*{a}{*^{p1}_{q2} *^{p1}_{\textvisiblespace}} \f$ or \f$ \tensor*{a}{*^{p1}_{\textvisiblespace} *^{p1}_{q2}} \f$. To make it explicit that ann(q2) acts on
+/// same particle as `cre(p2)` the latter notation is used; similarly, `cre(p1) ann(q1) ann(q2)` is represented as \f$ \tensor*{a}{*^{\textvisiblespace}_{q1} *^{p1}_{q2}} \f$.
 ///
 /// @tparam S specifies the particle statistics
+// clang-format on
 template <Statistics S>
 class NormalOperator : public Operator<S>,
                        public AbstractTensor,
@@ -534,24 +533,24 @@ class NormalOperator : public Operator<S>,
       : Operator<S>{}, vacuum_(v), ncreators_(ranges::size(creators)) {
     this->reserve(ranges::size(creators) + ranges::size(annihilators));
     for (const auto &c : creators) {
-      assert((!std::is_same_v<meta::remove_cvref_t<IndexOrOpSequence1>,
-                              std::array<meta::castable_to_any, 0>>));
+      SEQUANT_ASSERT((!std::is_same_v<std::remove_cvref_t<IndexOrOpSequence1>,
+                                      std::array<meta::castable_to_any, 0>>));
       if constexpr (meta::is_statically_castable_v<
                         meta::range_value_t<IndexOrOpSequence1>, Index>)
         this->emplace_back(c, Action::Create);
       else {
-        assert(c.action() == Action::Create);
+        SEQUANT_ASSERT(c.action() == Action::Create);
         this->emplace_back(c);
       }
     }
     for (const auto &a : annihilators | ranges::views::reverse) {
-      assert((!std::is_same_v<meta::remove_cvref_t<IndexOrOpSequence2>,
-                              std::array<meta::castable_to_any, 0>>));
+      SEQUANT_ASSERT((!std::is_same_v<std::remove_cvref_t<IndexOrOpSequence2>,
+                                      std::array<meta::castable_to_any, 0>>));
       if constexpr (meta::is_statically_castable_v<
                         meta::range_value_t<IndexOrOpSequence2>, Index>)
         this->emplace_back(a, Action::Annihilate);
       else {
-        assert(a.action() == Action::Annihilate);
+        SEQUANT_ASSERT(a.action() == Action::Annihilate);
         this->emplace_back(a);
       }
     }
@@ -1145,7 +1144,7 @@ std::tuple<int, std::shared_ptr<NormalOperator<S>>> normalize(
   std::size_t pos = 0;
   const auto nops = opseq.opsize();  // # of Op<S>
   const auto nnops = opseq.size();   // # of NormalOperator<S>
-  assert(nnops > 0);
+  SEQUANT_ASSERT(nnops > 0);
   auto vacuum = opseq.vacuum();
   container::svector<container::svector<Op<S>>> annihilator_groups(nnops);
   while (opseq_view_iter != opseq_view_end) {
@@ -1157,7 +1156,7 @@ std::tuple<int, std::shared_ptr<NormalOperator<S>>> normalize(
        // to obtain the desired order of normalized NormalOperators, but within
        // each group simply concat to preserve the original order
     else {
-      assert(is_annihilator(*opseq_view_iter));
+      SEQUANT_ASSERT(is_annihilator(*opseq_view_iter));
 
       // distance from the given Op to the end of NOpSeq (to rev-concat NOps we
       // are pushing to the first available group ... since we are using vector
@@ -1167,7 +1166,7 @@ std::tuple<int, std::shared_ptr<NormalOperator<S>>> normalize(
       const auto op_group =
           nnops - ranges::get_cursor(opseq_view_iter).range_ordinal() -
           1;  // group idx = reverse of the NOp index within NopSeq
-      assert(op_group < nnops);
+      SEQUANT_ASSERT(op_group < nnops);
       const auto total_distance =
           distance_to_end + annihilator_groups[op_group]
                                 .size();  // we are fwd-concating Ops within
@@ -1217,7 +1216,7 @@ std::tuple<int, std::shared_ptr<NormalOperator<S>>> normalize(
               annihilators,
               [&ann_idx](const auto &v) { return v.index() == ann_idx; });
           if (source_ann_it != annihilators.end()) {
-            assert(p + nann_extra < annihilators.size());
+            SEQUANT_ASSERT(p + nann_extra < annihilators.size());
             const auto target_ann_it = annihilators.begin() + p + nann_extra;
             if (target_ann_it != source_ann_it) {
               if (S == Statistics::FermiDirac) phase *= -1.;  // 1 swap
@@ -1228,7 +1227,7 @@ std::tuple<int, std::shared_ptr<NormalOperator<S>>> normalize(
       }
     }       // ncre == rank
     else {  // nann == rank
-      assert(nann == rank);
+      SEQUANT_ASSERT(nann == rank);
       const auto ncre_extra = ncre - rank;
       for (std::int64_t p = rank - 1; p >= 0;
            --p) {  // "reverse" particle index
@@ -1243,7 +1242,7 @@ std::tuple<int, std::shared_ptr<NormalOperator<S>>> normalize(
               creators,
               [&cre_idx](const auto &v) { return v.index() == cre_idx; });
           if (source_cre_it != creators.end()) {
-            assert(p + ncre_extra < creators.size());
+            SEQUANT_ASSERT(p + ncre_extra < creators.size());
             const auto target_cre_it = creators.begin() + p + ncre_extra;
             if (source_cre_it != target_cre_it) {
               if (S == Statistics::FermiDirac) phase *= -1.;  // 1 swap

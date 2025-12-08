@@ -10,8 +10,9 @@
 
 #include <btas/btas.h>
 #include <SeQuant/core/container.hpp>
+#include <SeQuant/core/eval/eval.hpp>
 #include <SeQuant/core/expr.hpp>
-#include <SeQuant/domain/eval/eval.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 #include <range/v3/view.hpp>
 
 namespace sequant::eval::btas {
@@ -84,9 +85,9 @@ class DataWorldBTAS {
   ///
   void update_single_T(Tensor_t& T, Tensor_t const& R) {
     using namespace ranges::views;
-    assert(T.rank() == R.rank() && "Incompatible ranks of R and T");
+    SEQUANT_ASSERT(T.rank() == R.rank() && "Incompatible ranks of R and T");
 
-    assert(T.rank() % 2 == 0 && "Odd rank not supported");
+    SEQUANT_ASSERT(T.rank() % 2 == 0 && "Odd rank not supported");
 
     size_t const n = T.rank() / 2;
 
@@ -110,11 +111,11 @@ class DataWorldBTAS {
   Tensor_t operator()(sequant::Tensor const& tensor) const {
     using namespace ranges::views;
 
-    assert(tensor.label() != L"t");
+    SEQUANT_ASSERT(tensor.label() != L"t");
 
     auto r1_limits = range1_limits(tensor, nocc, nvirt);
-    assert(r1_limits.size() == DataInfo::fock_rank ||
-           r1_limits.size() == DataInfo::eri_rank);
+    SEQUANT_ASSERT(r1_limits.size() == DataInfo::fock_rank ||
+                   r1_limits.size() == DataInfo::eri_rank);
 
     auto const iter_limits =
         r1_limits | ranges::views::transform([this](auto x) {
@@ -123,7 +124,7 @@ class DataWorldBTAS {
         });
 
     auto const tlabel = tensor.label();
-    assert(tlabel == L"g" || tlabel == L"f");
+    SEQUANT_ASSERT(tlabel == L"g" || tlabel == L"f");
 
     auto const& big_tensor = tlabel == L"g" ? G_pqrs : F_pq;
 
@@ -156,17 +157,17 @@ class DataWorldBTAS {
   ResultPtr operator()(meta::can_evaluate auto const& n) const {
     using numeric_type = typename Tensor_t::numeric_type;
     if (n->result_type() == ResultType::Scalar) {
-      assert(n->expr()->template is<Constant>());
+      SEQUANT_ASSERT(n->expr()->template is<Constant>());
       auto d = n->as_constant().template value<numeric_type>();
       return eval_result<ResultScalar<numeric_type>>(d);
     }
 
-    assert(n->result_type() == ResultType::Tensor &&
-           n->expr()->template is<Tensor>());
+    SEQUANT_ASSERT(n->result_type() == ResultType::Tensor &&
+                   n->expr()->template is<Tensor>());
 
     if (auto t = n->as_tensor(); t.label() == L"t") {
       auto rank = t.rank();
-      assert(rank <= Ts.size());
+      SEQUANT_ASSERT(rank <= Ts.size());
       return Ts[rank - 1];
     }
     auto h = hash::value(*n);
@@ -176,7 +177,7 @@ class DataWorldBTAS {
       auto tnsr =
           eval_result<ResultTensorBTAS<Tensor_t>>((*this)(n->as_tensor()));
       auto stored = cache_.emplace(h, std::move(tnsr));
-      assert(stored.second && "failed to store tensor");
+      SEQUANT_ASSERT(stored.second && "failed to store tensor");
       return stored.first->second;
     }
   }
@@ -185,7 +186,7 @@ class DataWorldBTAS {
     using ranges::views::transform;
     using ranges::views::zip;
 
-    assert(rs.size() == Ts.size() && "Unequal number of Rs and Ts!");
+    SEQUANT_ASSERT(rs.size() == Ts.size() && "Unequal number of Rs and Ts!");
 
     for (auto&& [t, r] : zip(Ts | transform([](auto&& res) -> Tensor_t& {
                                return res->template get<Tensor_t>();

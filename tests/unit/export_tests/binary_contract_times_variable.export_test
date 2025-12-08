@@ -1,0 +1,77 @@
+3 Var A{a1;i2} B{i1;a1}
+
+=================================================
+# This test is about generators being able to configure
+# in how far scalars from evaluation trees should be pruned.
+# Notably, ITF can only prune constants but not variables.
+=================================================
+=================================================
+Plain Text
+=================================================
+Declare index i_1
+Declare index i_2
+Declare index a_1
+
+Declare variable Var
+
+Declare tensor A[a_1, i_2]
+Declare tensor B[i_1, a_1]
+Declare tensor I[i_1, i_2]
+
+Create I[i_1, i_2] and initialize to zero
+Load A[a_1, i_2]
+Load B[i_1, a_1]
+Load Var
+Compute I[i_1, i_2] += 3 Var A[a_1, i_2] B[i_1, a_1]
+Unload Var
+Unload B[i_1, a_1]
+Unload A[a_1, i_2]
+Persist I[i_1, i_2]
+
+=================================================
+Julia (TensorOperations)
+=================================================
+I_oo = zeros(Float64, nocc, nocc)
+A_vo = deserialize("A_vo.jlbin")
+B_ov = deserialize("B_ov.jlbin")
+Var = deserialize("Var.jlbin")
+@tensor I_oo[ i_1, i_2 ] += 3 * Var * A_vo[ a_1, i_2 ] * B_ov[ i_1, a_1 ]
+Var = nothing
+B_ov = nothing
+A_vo = nothing
+return I_oo
+
+=================================================
+ITF
+=================================================
+---- decl
+index-space: j, Closed, c
+index-space: k, Closed, c
+index-space: b, External, e
+
+tensor: Var[], Var
+
+tensor: A:ec[bk], A:ec
+tensor: B:ce[jb], B:ce
+tensor: I:cc[jk], I:cc
+tensor: I:ec[bk], !Create{type:plain}
+
+
+---- code("unnamed")
+alloc I:cc[jk]
+alloc I:ec[bk]
+load Var[]
+load A:ec[bk]
+.I:ec[bk] += Var[] A:ec[bk]
+drop A:ec[bk]
+drop Var[]
+load B:ce[jb]
+.I:cc[jk] += 3 * I:ec[bk] B:ce[jb]
+drop B:ce[jb]
+drop I:ec[bk]
+store I:cc[jk]
+
+
+---- end
+
+=================================================

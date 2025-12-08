@@ -5,6 +5,7 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/utility/indices.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 
 #include <range/v3/view/concat.hpp>
 #include <range/v3/view/enumerate.hpp>
@@ -22,6 +23,36 @@ namespace sequant {
 /// expressions. An empty diff means that they are equal. The produced diff is
 /// meant to be (resonably) human-readable.
 std::string diff(const Expr &lhs, const Expr &rhs);
+
+/// Checks whether the given expression is valid (i.e. uses
+/// consistent indexing etc.)
+/// @param expr The expression to validate
+/// @param msg If given, the function will set the string to a message
+///            describing why the provided expression is considered to
+///            be invalid. If the expression is valid, the string will
+///            be left unchanged.
+/// @returns The validity of the expression
+bool is_valid(const ExprPtr &expr, std::string *msg = nullptr);
+
+/// Checks whether the given expression is valid (i.e. uses
+/// consistent indexing etc.)
+/// @param expr The expression to validate
+/// @param msg If given, the function will set the string to a message
+///            describing why the provided expression is considered to
+///            be invalid. If the expression is valid, the string will
+///            be left unchanged.
+/// @returns The validity of the expression
+bool is_valid(const Expr &expr, std::string *msg = nullptr);
+
+/// Checks whether the given expression is valid (i.e. uses
+/// consistent indexing etc.)
+/// @param expr The expression to validate
+/// @param msg If given, the function will set the string to a message
+///            describing why the provided expression is considered to
+///            be invalid. If the expression is valid, the string will
+///            be left unchanged.
+/// @returns The validity of the expression
+bool is_valid(const ResultExpr &expr, std::string *msg = nullptr);
 
 /// @brief Applies index replacement rules to an ExprPtr
 /// @param expr ExprPtr to transform
@@ -101,13 +132,14 @@ ExprPtr &replace(ExprPtr &expr, const ExprPtr &target,
               // will also be shared with current and the actual replacement we
               // want to use for it (this becomes relevant if cmp compares only
               // equivalence instead of equality)
-              assert(current->is<AbstractTensor>());
-              assert(target->is<AbstractTensor>());
+              SEQUANT_ASSERT(current->is<AbstractTensor>());
+              SEQUANT_ASSERT(target->is<AbstractTensor>());
 
               const auto &current_tensor = current->as<AbstractTensor>();
               const auto &target_tensor = target->as<AbstractTensor>();
 
-              assert(num_slots(current_tensor) == num_slots(target_tensor));
+              SEQUANT_ASSERT(num_slots(current_tensor) ==
+                             num_slots(target_tensor));
 
               auto current_slots = slots(current_tensor);
               auto target_slots = slots(target_tensor);

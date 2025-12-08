@@ -7,6 +7,7 @@
 
 #include <SeQuant/domain/mbpt/fwd.hpp>
 
+#include <SeQuant/core/context.hpp>
 #include <SeQuant/core/index_space_registry.hpp>
 
 namespace sequant {
@@ -51,10 +52,16 @@ void add_ao_spaces(std::shared_ptr<IndexSpaceRegistry>& isr, bool vbs = false,
 /// @brief add DF spaces to registry
 void add_df_spaces(std::shared_ptr<IndexSpaceRegistry>& isr);
 
+/// @brief add THC spaces to registry
+void add_thc_spaces(std::shared_ptr<IndexSpaceRegistry>& isr);
+
 /// @brief add PAO spaces to registry
 
 /// expects \p isr to have a defined particle space
 void add_pao_spaces(std::shared_ptr<IndexSpaceRegistry>& isr);
+
+/// @brief add batching spaces to registry
+void add_batching_spaces(std::shared_ptr<IndexSpaceRegistry>& isr);
 
 /// @name built-in definitions of IndexSpace
 /// @{
@@ -100,6 +107,13 @@ std::pair<std::shared_ptr<IndexSpaceRegistry>,
 make_fermi_and_bose_spaces(SpinConvention spconv = SpinConvention::Default);
 
 /// @}
+
+/// @brief Checks whether ISR has batching space labelled by "z"
+/// @throws Assertion failure if batching space "z" is not found in the registry
+inline void check_for_batching_space() {
+  SEQUANT_ASSERT(
+      sequant::get_default_context().index_space_registry()->contains(L"z"));
+}
 
 }  // namespace mbpt
 }  // namespace sequant

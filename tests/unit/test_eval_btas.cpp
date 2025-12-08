@@ -3,10 +3,10 @@
 
 #include "catch2_sequant.hpp"
 
+#include <SeQuant/core/eval/eval.hpp>
+#include <SeQuant/core/eval/result.hpp>
 #include <SeQuant/core/optimize.hpp>
 #include <SeQuant/core/parse.hpp>
-#include <SeQuant/domain/eval/eval.hpp>
-#include <SeQuant/domain/eval/result.hpp>
 
 #include <btas/btas.h>
 #include <btas/tensor_func.h>
@@ -54,12 +54,13 @@ class rand_tensor_yield {
     using sequant::IndexSpace;
     auto isr = sequant::get_default_context().index_space_registry();
 
-    assert(ranges::all_of(tnsr.const_braket_indices(),
-                          [&isr](auto const& idx) {
-                            return idx.space() == isr->retrieve(L"i") ||
-                                   idx.space() == isr->retrieve(L"a");
-                          }) &&
-           "Unsupported IndexSpace type found while generating tensor.");
+    SEQUANT_ASSERT(
+        ranges::all_of(tnsr.const_braket_indices(),
+                       [&isr](auto const& idx) {
+                         return idx.space() == isr->retrieve(L"i") ||
+                                idx.space() == isr->retrieve(L"a");
+                       }) &&
+        "Unsupported IndexSpace type found while generating tensor.");
 
     auto rng = btas::Range{
         tnsr.const_braket_indices() | transform([this, &isr](auto const& idx) {
@@ -86,7 +87,7 @@ class rand_tensor_yield {
     auto t = make_rand_tensor(tnsr);
     auto&& success = label_to_tnsr_.emplace(
         label, eval_result<ResultTensorBTAS<Tensor_t>>(std::move(t)));
-    assert(success.second && "couldn't store tensor!");
+    SEQUANT_ASSERT(success.second && "couldn't store tensor!");
     //    std::wcout << "label = [" << label << "] NotFound in cache.
     //    Creating.."
     //               << std::endl;
@@ -97,13 +98,13 @@ class rand_tensor_yield {
       sequant::meta::can_evaluate auto const& node) const {
     using namespace sequant;
     if (node->result_type() == sequant::ResultType::Tensor) {
-      assert(node->expr()->template is<sequant::Tensor>());
+      SEQUANT_ASSERT(node->expr()->template is<sequant::Tensor>());
       return (*this)(node->expr()->template as<sequant::Tensor>());
     }
 
     using result_t = ResultScalar<double>;
 
-    assert(node->expr()->template is<sequant::Constant>());
+    SEQUANT_ASSERT(node->expr()->template is<sequant::Constant>());
     auto d = node->as_constant().template value<double>();
     return eval_result<result_t>(d);
   }
@@ -117,7 +118,7 @@ class rand_tensor_yield {
   sequant::ResultPtr operator()(std::wstring_view label) const {
     auto&& found = label_to_tnsr_.find(label.data());
     if (found == label_to_tnsr_.end()) {
-      assert(false && "attempted access of non-existent tensor!");
+      SEQUANT_ASSERT(false && "attempted access of non-existent tensor!");
     }
     return found->second;
   }
@@ -148,7 +149,7 @@ container::svector<long> tidxs(
     ExprPtr expr, std::initializer_list<size_t> tnsr_coords) noexcept {
   auto tnsr_p = expr;
   for (auto i : tnsr_coords) tnsr_p = tnsr_p->at(i);
-  assert(tnsr_p->is<Tensor>());
+  SEQUANT_ASSERT(tnsr_p->is<Tensor>());
   return tidxs(tnsr_p->as<Tensor>());
 }
 

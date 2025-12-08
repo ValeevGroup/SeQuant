@@ -4,7 +4,8 @@
 
 #include "data_info.hpp"
 
-#include <cassert>
+#include <SeQuant/core/utility/macros.hpp>
+
 #include <fstream>
 #include <sstream>
 
@@ -53,12 +54,12 @@ DataInfo::DataInfo(std::string_view fname1, std::string_view fname2) {
   // the one with smaller rank is the Fock file
   if (fock_header.rank > eri_header.rank) std::swap(fock_header, eri_header);
 
-  assert(fock_header.rank == 2 && "Fock tensor must have rank 2");
-  assert(eri_header.rank == 4 && "ERI tensor must have rank 4");
-  assert(fock_header.nocc == eri_header.nocc &&
-         fock_header.nvirt == eri_header.nvirt &&
-         "Number of occupied and virtual orbitals"
-         " in Fock and ERI tensor do not match.");
+  SEQUANT_ASSERT(fock_header.rank == 2 && "Fock tensor must have rank 2");
+  SEQUANT_ASSERT(eri_header.rank == 4 && "ERI tensor must have rank 4");
+  SEQUANT_ASSERT(fock_header.nocc == eri_header.nocc &&
+                 fock_header.nvirt == eri_header.nvirt &&
+                 "Number of occupied and virtual orbitals"
+                 " in Fock and ERI tensor do not match.");
 
   fock_file_ = fock_header.fname;
   eri_file_ = eri_header.fname;

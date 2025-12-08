@@ -11,9 +11,9 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/parse.hpp>
 #include <SeQuant/core/rational.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 
-#include <cassert>
 #include <initializer_list>
 #include <memory>
 #include <string>
@@ -37,7 +37,7 @@ sequant::EvalExpr node(sequant::EvalNode<sequant::EvalExpr> const& n,
   if (pos.size() == 0) return *n;
   auto n_ = n;
   for (auto p : pos) {
-    assert(!n_.leaf() && "Accessing child of leaf!");
+    SEQUANT_ASSERT(!n_.leaf() && "Accessing child of leaf!");
     n_ = p == Npos::L ? n_.left() : n_.right();
   }
 
@@ -114,12 +114,13 @@ TEST_CASE("eval_node", "[EvalNode]") {
                  EquivalentTo("t{a1,a2;i3,i4}:A"));
 
     // 1/16 * A * (B * C)
-    auto node2p = Product{p1->as<Product>().scalar(), {}};
-    node2p.append(1, p1->at(0), Product::Flatten::No);
-    node2p.append(1, ex<Product>(Product{p1->at(1), p1->at(2)}),
-                  Product::Flatten::No);
+    auto node2p =
+        std::make_shared<Product>(p1->as<Product>().scalar(), ExprPtrList{});
+    node2p->append(1, p1->at(0), Product::Flatten::No);
+    node2p->append(1, ex<Product>(Product{p1->at(1), p1->at(2)}),
+                   Product::Flatten::No);
 
-    auto const node2 = eval_node(ex<Product>(node2p));
+    auto const node2 = eval_node(node2p);
 
     REQUIRE_THAT(node(node2, {}).as_tensor(),
                  EquivalentTo("I{a1,a2;i1,i2}:N-N-N"));

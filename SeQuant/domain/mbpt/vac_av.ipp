@@ -8,16 +8,15 @@
 #define SEQUANT_DOMAIN_MBPT_VAC_AV_IPP
 
 namespace detail {
-ExprPtr expectation_value_impl(ExprPtr expr,
-                               const OpConnections<std::wstring>&
-                                   op_connections,
-                               bool use_topology, bool screen, bool skip_clone,
-                               bool full_contractions) {
+ExprPtr expectation_value_impl(
+    ExprPtr expr, const OpConnections<std::wstring>& op_connections,
+    bool use_topology, bool screen, bool skip_clone, bool full_contractions) {
   // use cloned expr to avoid side effects
   if (!skip_clone) expr = expr->clone();
 
-  auto vac_av_product = [&op_connections, use_topology, screen, full_contractions](ExprPtr expr) {
-    assert(expr.is<Product>());
+  auto vac_av_product = [&op_connections, use_topology, screen,
+                         full_contractions](ExprPtr expr) {
+    SEQUANT_ASSERT(expr.is<Product>());
     // extract scalar and factors
     const auto scalar = expr.as<Product>().scalar();
     auto factors = expr.as<Product>().factors();
@@ -91,7 +90,8 @@ ExprPtr expectation_value_impl(ExprPtr expr,
 
     // compute expectation value
     // call the tensor-level impl function directly
-    auto vev = tensor::detail::expectation_value_impl(product, connections, use_topology, full_contractions);
+    auto vev = tensor::detail::expectation_value_impl(
+        product, connections, use_topology, full_contractions);
     // restore Variable types to the Product
     if (!variables.empty())
       ranges::for_each(variables, [&vev](const auto& var) { vev *= var; });
@@ -108,18 +108,16 @@ ExprPtr expectation_value_impl(ExprPtr expr,
       expr = expand(expr);
       simplify(expr);  // condense equivalent terms after expansion
       return expectation_value_impl(expr, op_connections, use_topology, screen,
-                    /* skip_clone = */ true, full_contractions);
+                                    /* skip_clone = */ true, full_contractions);
     } else
       return vac_av_product(expr);
   } else if (expr.is<Sum>()) {
-    result = sequant::transform_reduce(
-        *expr, ex<Sum>(),
-        [](const ExprPtr& running_total, const ExprPtr& summand) {
-          return running_total + summand;
-        },
-        [&op_connections, use_topology, screen, full_contractions](const auto& op_product) {
-          return expectation_value_impl(op_product, op_connections, use_topology, screen,
-                        /* skip_clone = */ true, full_contractions);
+    result = sequant::transform_sum_expr(
+        *expr, [&op_connections, use_topology, screen,
+                full_contractions](const auto& op_product) {
+          return expectation_value_impl(
+              op_product, op_connections, use_topology, screen,
+              /* skip_clone = */ true, full_contractions);
         });
     simplify(result);  // combine possible equivalent summands
     return result;
@@ -129,9 +127,10 @@ ExprPtr expectation_value_impl(ExprPtr expr,
   } else if (expr.is<Constant>() || expr.is<Variable>()) {
     return expr;  // vacuum is normalized
   }
-  throw std::invalid_argument("mpbt::*::expectation_value_impl(expr): unknown expression type");
+  throw std::invalid_argument(
+      "mpbt::*::expectation_value_impl(expr): unknown expression type");
 }
-} // namespace detail
+}  // namespace detail
 
 ExprPtr ref_av(ExprPtr expr, const OpConnections<std::wstring>& op_connections,
                bool use_topology, bool screen, bool skip_clone) {
@@ -140,8 +139,7 @@ ExprPtr ref_av(ExprPtr expr, const OpConnections<std::wstring>& op_connections,
       (isr->reference_occupied_space() == isr->vacuum_occupied_space()) ? true
                                                                         : false;
   return detail::expectation_value_impl(expr, op_connections, use_topology,
-                                        screen, skip_clone,
-                                        full_contractions);
+                                        screen, skip_clone, full_contractions);
 }
 
 ExprPtr ref_av(ExprPtr expr, const OpConnections<OpType>& op_connections,
@@ -149,7 +147,6 @@ ExprPtr ref_av(ExprPtr expr, const OpConnections<OpType>& op_connections,
   return ref_av(expr, to_label_connections(op_connections), use_topology,
                 screen, skip_clone);
 }
-
 
 ExprPtr vac_av(ExprPtr expr, const OpConnections<std::wstring>& op_connections,
                bool use_topology, bool screen, bool skip_clone) {

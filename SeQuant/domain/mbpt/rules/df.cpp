@@ -6,6 +6,7 @@
 
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/space.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 
 #include <range/v3/view.hpp>
 
@@ -15,9 +16,9 @@ namespace sequant::mbpt {
 
 ExprPtr density_fit_impl(Tensor const& tnsr, Index const& aux_idx,
                          std::wstring_view factor_label) {
-  assert(tnsr.bra_rank() == 2     //
-         && tnsr.ket_rank() == 2  //
-         && tnsr.aux_rank() == 0);
+  SEQUANT_ASSERT(tnsr.bra_rank() == 2     //
+                 && tnsr.ket_rank() == 2  //
+                 && tnsr.aux_rank() == 0);
 
   auto t1 = ex<Tensor>(factor_label, bra({ranges::front(tnsr.bra())}),
                        ket({ranges::front(tnsr.ket())}), aux({aux_idx}));
@@ -51,8 +52,7 @@ ExprPtr density_fit(ExprPtr const& expr, IndexSpace aux_space,
     if (tensor.label() == tensor_label  //
         && tensor.bra_rank() == 2       //
         && tensor.ket_rank() == 2)
-      return density_fit_impl(
-          tensor, Index(aux_space.base_key() + L"_1", aux_space), factor_label);
+      return density_fit_impl(tensor, Index(aux_space, 1), factor_label);
     else
       return expr;
   } else if (expr->is<Product>()) {
@@ -62,10 +62,10 @@ ExprPtr density_fit(ExprPtr const& expr, IndexSpace aux_space,
     result.scale(prod.scalar());
     size_t aux_ix = 0;
     for (auto&& f : prod.factors())
-      if (f.is<Tensor>() && f.as<Tensor>().label() == L"g") {
+      if (f.is<Tensor>() && f.as<Tensor>().label() == tensor_label) {
         auto const& g = f->as<Tensor>();
-        auto g_df = density_fit_impl(
-            g, Index(std::to_wstring(++aux_ix), aux_space), factor_label);
+        auto g_df =
+            density_fit_impl(g, Index(aux_space, ++aux_ix), factor_label);
         result.append(1, std::move(g_df), Product::Flatten::Yes);
       } else {
         result.append(1, f, Product::Flatten::No);

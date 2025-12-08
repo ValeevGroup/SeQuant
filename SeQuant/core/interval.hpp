@@ -2,6 +2,7 @@
 #define SEQUANT_CORE_INTERVAL_H
 
 #include <SeQuant/core/hash.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 
 // boost/numeric/interval does not know about arm rounding .. on arm64/macos use
 // c99 rounding
@@ -29,7 +30,7 @@ inline auto is_definite(const boost::numeric::interval<T>& i) {
 
 template <typename T>
 inline auto nonnegative(const boost::numeric::interval<T>& i) {
-  assert(i.upper() >= 0);
+  SEQUANT_ASSERT(i.upper() >= 0);
   return boost::numeric::interval<T>{std::max(T(0), i.lower()), i.upper()};
 }
 

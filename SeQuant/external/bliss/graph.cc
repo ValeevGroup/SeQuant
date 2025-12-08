@@ -56,30 +56,6 @@ namespace bliss {
  *
  *-------------------------------------------------------------------------*/
 
-AbstractGraph::AbstractGraph() {
-  /* Initialize stuff */
-  first_path_labeling = 0;
-  first_path_labeling_inv = 0;
-  best_path_labeling = 0;
-  best_path_labeling_inv = 0;
-  first_path_automorphism = 0;
-  best_path_automorphism = 0;
-  in_search = false;
-
-  /* Default value for using "long prune" */
-  opt_use_long_prune = true;
-  /* Default value for using failure recording */
-  opt_use_failure_recording = true;
-  /* Default value for using component recursion */
-  opt_use_comprec = true;
-
-  verbose_level = 0;
-  verbstr = stdout;
-
-  report_hook = 0;
-  report_user_param = 0;
-}
-
 AbstractGraph::~AbstractGraph() {
   if (first_path_labeling) {
     free(first_path_labeling);

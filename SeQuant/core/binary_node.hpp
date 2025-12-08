@@ -1,7 +1,8 @@
 #ifndef SEQUANT_BINARY_NODE_HPP
 #define SEQUANT_BINARY_NODE_HPP
 
-#include <cassert>
+#include <SeQuant/core/utility/macros.hpp>
+
 #include <memory>
 #include <sstream>
 #include <stdexcept>
@@ -187,7 +188,7 @@ void visit(Node&& node, Visitor&& f, NodeType) {
       // Finished visiting right, now move back up to parent (if any)
       current_ptr = get_parent_ptr(current);
     } else {
-      assert(current.root() || previous_ptr == &current.parent());
+      SEQUANT_ASSERT(current.root() || previous_ptr == &current.parent());
       if constexpr ((order & TreeTraversal::PreOrder) ==
                         TreeTraversal::PreOrder &&
                     !std::is_same_v<NodeType, VisitLeaf>) {
@@ -666,7 +667,7 @@ Node fold_left_to_node(Rng rng, F op) {
   static_assert(invoke_on_value || invoke_on_node);
 
   using ranges::size;
-  assert(size(rng) > 0);
+  SEQUANT_ASSERT(size(rng) > 0);
 
   using ranges::views::move;
   using ranges::views::tail;

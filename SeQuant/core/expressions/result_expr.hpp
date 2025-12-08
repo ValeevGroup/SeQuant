@@ -6,8 +6,8 @@
 #include <SeQuant/core/expressions/tensor.hpp>
 #include <SeQuant/core/expressions/variable.hpp>
 #include <SeQuant/core/index.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 
-#include <cassert>
 #include <initializer_list>
 #include <optional>
 #include <string>
@@ -81,6 +81,10 @@ class ResultExpr {
   /// Obtains the exact grouping (pairing) of indices in the result. Typically,
   /// this represents particle-assignments (i.e. indices in the same group are
   /// associated with the same particle in the underlying theory).
+  /// This corresponds to columns of indices in the typical tensor notation.
+  ///
+  /// Note: auxiliary indices are ignored by this function (the assumption
+  /// being that they don't belong to this kind of pairings).
   ///
   /// @tparam Group The type of the object to represent an index group. Must be
   /// constructible from an initializer_list<Index> or from a set of two
@@ -89,10 +93,8 @@ class ResultExpr {
   container::svector<Group> index_particle_grouping() const {
     container::svector<Group> groups;
 
-    assert(m_braIndices.size() == m_ketIndices.size() &&
-           "Not yet generalized to particle non-conserving results");
-    assert(m_auxIndices.empty() &&
-           "Not yet clear how auxiliary indices should be handled");
+    SEQUANT_ASSERT(m_braIndices.size() == m_ketIndices.size() &&
+                   "Not yet generalized to particle non-conserving results");
 
     groups.reserve(m_braIndices.size());
 
@@ -123,7 +125,7 @@ class ResultExpr {
   }
 
   Variable result_as_variable(std::wstring default_label = L"Unnamed") const {
-    assert(!produces_tensor());
+    SEQUANT_ASSERT(!produces_tensor());
     return Variable(m_label.has_value() ? m_label.value() : default_label);
   }
 

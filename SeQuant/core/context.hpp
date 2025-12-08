@@ -55,7 +55,6 @@ class Context {
     constexpr static auto braket_symmetry = BraKetSymmetry::Conjugate;
     constexpr static auto spbasis = SPBasis::Spinor;
     constexpr static auto first_dummy_index_ordinal = 100;
-    constexpr static std::optional<CanonicalizeOptions> canonicalization_options = std::nullopt;
     constexpr static auto braket_typesetting = BraKetTypesetting::ContraSub;
     constexpr static auto braket_slot_typesetting =
         BraKetSlotTypesetting::TensorPackage;
@@ -80,7 +79,7 @@ class Context {
       /// the first dummy index ordinal
       std::size_t first_dummy_index_ordinal = Defaults::first_dummy_index_ordinal;
       /// the default canonicalization options
-      std::optional<CanonicalizeOptions> canonicalization_options = Defaults::canonicalization_options;
+      std::optional<CanonicalizeOptions> canonicalization_options = std::nullopt;
       /// the BraKetTypesetting object
       BraKetTypesetting braket_typesetting = Defaults::braket_typesetting;
       /// the BraKetSlotTypesetting object

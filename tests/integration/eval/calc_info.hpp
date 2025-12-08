@@ -9,9 +9,10 @@
 #include <options.hpp>
 
 #include <SeQuant/core/container.hpp>
+#include <SeQuant/core/eval/cache_manager.hpp>
 #include <SeQuant/core/eval_expr.hpp>
 #include <SeQuant/core/optimize.hpp>
-#include <SeQuant/domain/eval/cache_manager.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/domain/mbpt/spin.hpp>
 
 #include <range/v3/view.hpp>
@@ -49,7 +50,7 @@ struct CalcInfo {
   container::vector<container::vector<EvalNode<ExprT>>> nodes(
       const container::vector<sequant::ExprPtr>& exprs) const {
     using namespace ranges::views;
-    assert(exprs.size() == eqn_opts.excit);
+    SEQUANT_ASSERT(exprs.size() == eqn_opts.excit);
     return zip(exprs, iota(size_t{1}, eqn_opts.excit + 1)) |
            transform([this](auto&& pair) {
              return node_<ExprT>(pair.first, pair.second);

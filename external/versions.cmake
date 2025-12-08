@@ -1,7 +1,7 @@
 # for each dependency track both current and previous id (the variable for the latter must contain PREVIOUS)
 # to be able to auto-update them
 
-set(SEQUANT_TRACKED_VGCMAKEKIT_TAG 748f2499684c453109098aa06ccd03e10e915336)
+set(SEQUANT_TRACKED_VGCMAKEKIT_TAG a65dfddae0c90bae8e1826b21e3b10cb9a98a9e8)
 
 set(SEQUANT_TRACKED_RANGEV3_TAG 0.12.0)
 
@@ -35,3 +35,6 @@ set(SEQUANT_OLDEST_GOOGLEBENCHMARK_VERSION 1.9.3)
 
 set(SEQUANT_TRACKED_PYBIND11_TAG v3.0.1)
 set(SEQUANT_OLDEST_PYBIND11_VERSION 3)
+
+# oldest Doxygen we can tolerate ... doxygen-awesome-css requires doxygen 1.9.1 - 1.9.4 or 1.9.6 - 1.14.0, so just use 1.9.6 as the minimum
+set(SEQUANT_OLDEST_DOXYGEN_VERSION 1.9.6)
