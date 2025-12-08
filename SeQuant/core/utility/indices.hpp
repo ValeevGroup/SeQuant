@@ -459,7 +459,7 @@ Container external_indices(const Expr& expr) {
 
   if (symmetrizer.has_value()) {
     // Generate external index list from symmetrization operator
-    return external_indices(symmetrizer.value());
+    return external_indices<Container>(symmetrizer.value());
   }
 
   IndexGroups groups = get_unique_indices<container::svector<Index>>(expr);
