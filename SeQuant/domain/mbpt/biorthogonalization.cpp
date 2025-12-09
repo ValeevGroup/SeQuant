@@ -374,11 +374,11 @@ ExprPtr biorthogonal_transform(
     const double threshold) {
   ResultExpr res(
       bra(ext_index_groups | ranges::views::transform([](const auto& pair) {
-            return pair.at(0);
+            return pair.at(1);
           }) |
           ranges::to<container::svector<Index>>()),
       ket(ext_index_groups | ranges::views::transform([](const auto& pair) {
-            return pair.at(1);
+            return pair.at(0);
           }) |
           ranges::to<container::svector<Index>>()),
       aux(IndexList{}), Symmetry::Nonsymm, BraKetSymmetry::Nonsymm,

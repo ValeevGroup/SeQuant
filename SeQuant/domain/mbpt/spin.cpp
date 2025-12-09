@@ -1123,7 +1123,7 @@ ExprPtr closed_shell_CC_spintrace_v1(ExprPtr const& expr,
     auto bixs = ext_idxs | transform([](auto&& vec) { return vec.at(0); });
     auto kixs = ext_idxs | transform([](auto&& vec) { return vec.at(1); });
     st_expr =
-        ex<Tensor>(Tensor{L"S", bra(std::move(bixs)), ket(std::move(kixs))}) *
+        ex<Tensor>(Tensor{L"S", bra(std::move(kixs)), ket(std::move(bixs))}) *
         st_expr;
   }
 
@@ -1157,7 +1157,7 @@ ExprPtr closed_shell_CC_spintrace_v2(ExprPtr const& expr,
     auto kixs = ext_idxs | transform([](auto&& vec) { return vec.at(1); });
     if (bixs.size() > 1) {
       st_expr =
-          ex<Tensor>(Tensor{L"S", bra(std::move(bixs)), ket(std::move(kixs))}) *
+          ex<Tensor>(Tensor{L"S", bra(std::move(kixs)), ket(std::move(bixs))}) *
           st_expr;
     }
     simplify(st_expr);
@@ -1171,7 +1171,7 @@ ExprPtr closed_shell_CC_spintrace_v2(ExprPtr const& expr,
     st_expr = WK_biorthogonalization_filter(st_expr, ext_idxs);
     // add S tensor again
     st_expr =
-        ex<Tensor>(Tensor{L"S", bra(std::move(bixs)), ket(std::move(kixs))}) *
+        ex<Tensor>(Tensor{L"S", bra(std::move(kixs)), ket(std::move(bixs))}) *
         st_expr;
 
     rational combined_factor;
@@ -1893,6 +1893,7 @@ ExprPtr factorize_S(const ExprPtr& expression,
     // Fill bras and kets
     ranges::for_each(ext_index_groups, [&](const IndexList& idx_pair) {
       auto it = idx_pair.begin();
+      // TODO: order-dependent
       bra_list.push_back(*it);
       it++;
       ket_list.push_back(*it);
