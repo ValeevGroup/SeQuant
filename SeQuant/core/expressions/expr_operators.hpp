@@ -12,6 +12,7 @@
 #include <SeQuant/core/expressions/sum.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
+#include <concepts>
 #include <memory>
 
 namespace sequant {
@@ -103,37 +104,37 @@ inline ExprPtr operator-(const ExprPtr &left, const ExprPtr &right) {
 }
 
 template <typename T>
-  requires(std::is_constructible_v<Constant, T>)
+  requires(std::constructible_from<Constant, T>)
 ExprPtr operator+(const ExprPtr &lhs, T &&rhs) {
   return lhs + ex<Constant>(std::forward<T>(rhs));
 }
 
 template <typename T>
-  requires(std::is_constructible_v<Constant, T>)
+  requires(std::constructible_from<Constant, T>)
 ExprPtr operator+(T &&lhs, const ExprPtr &rhs) {
   return ex<Constant>(std::forward<T>(lhs)) + rhs;
 }
 
 template <typename T>
-  requires(std::is_constructible_v<Constant, T>)
+  requires(std::constructible_from<Constant, T>)
 ExprPtr operator-(const ExprPtr &lhs, T &&rhs) {
   return lhs - ex<Constant>(std::forward<T>(rhs));
 }
 
 template <typename T>
-  requires(std::is_constructible_v<Constant, T>)
+  requires(std::constructible_from<Constant, T>)
 ExprPtr operator-(T &&lhs, const ExprPtr &rhs) {
   return ex<Constant>(std::forward<T>(lhs)) - rhs;
 }
 
 template <typename T>
-  requires(std::is_constructible_v<Constant, T>)
+  requires(std::constructible_from<Constant, T>)
 ExprPtr operator*(const ExprPtr &lhs, T &&rhs) {
   return lhs * ex<Constant>(std::forward<T>(rhs));
 }
 
 template <typename T>
-  requires(std::is_constructible_v<Constant, T>)
+  requires(std::constructible_from<Constant, T>)
 ExprPtr operator*(T &&lhs, const ExprPtr &rhs) {
   return ex<Constant>(std::forward<T>(lhs)) * rhs;
 }
