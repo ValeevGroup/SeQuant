@@ -12,6 +12,7 @@
 #include <SeQuant/core/expressions/sum.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
+#include <concepts>
 #include <memory>
 
 namespace sequant {
@@ -65,18 +66,6 @@ inline ExprPtr operator^(const ExprPtr &left, const ExprPtr &right) {
   SEQUANT_UNREACHABLE;
 }
 
-template <typename T>
-  requires(std::constructible_from<Constant, T>)
-inline ExprPtr operator*(T left, const ExprPtr &right) {
-  return ex<Constant>(std::move(left)) * right;
-}
-
-template <typename T>
-  requires(std::constructible_from<Constant, T>)
-inline ExprPtr operator*(const ExprPtr &left, T right) {
-  return left * ex<Constant>(std::move(right));
-}
-
 inline ExprPtr operator+(const ExprPtr &left, const ExprPtr &right) {
   auto left_is_sum = left->is<Sum>();
   auto right_is_sum = right->is<Sum>();
@@ -112,6 +101,52 @@ inline ExprPtr operator-(const ExprPtr &left, const ExprPtr &right) {
   }
 
   SEQUANT_UNREACHABLE;
+}
+
+template <typename T>
+  requires(std::constructible_from<Constant, T>)
+ExprPtr operator+(const ExprPtr &lhs, T &&rhs) {
+  return lhs + ex<Constant>(std::forward<T>(rhs));
+}
+
+template <typename T>
+  requires(std::constructible_from<Constant, T>)
+ExprPtr operator+(T &&lhs, const ExprPtr &rhs) {
+  return ex<Constant>(std::forward<T>(lhs)) + rhs;
+}
+
+template <typename T>
+  requires(std::constructible_from<Constant, T>)
+ExprPtr operator-(const ExprPtr &lhs, T &&rhs) {
+  return lhs - ex<Constant>(std::forward<T>(rhs));
+}
+
+template <typename T>
+  requires(std::constructible_from<Constant, T>)
+ExprPtr operator-(T &&lhs, const ExprPtr &rhs) {
+  return ex<Constant>(std::forward<T>(lhs)) - rhs;
+}
+
+template <typename T>
+  requires(std::constructible_from<Constant, T>)
+ExprPtr operator*(const ExprPtr &lhs, T &&rhs) {
+  return lhs * ex<Constant>(std::forward<T>(rhs));
+}
+
+template <typename T>
+  requires(std::constructible_from<Constant, T>)
+ExprPtr operator*(T &&lhs, const ExprPtr &rhs) {
+  return ex<Constant>(std::forward<T>(lhs)) * rhs;
+}
+
+template <typename T>
+  requires(std::is_arithmetic_v<T>)
+ExprPtr operator/(const ExprPtr &lhs, T &&rhs) {
+  return lhs * ex<Constant>(rational(1, std::forward<T>(rhs)));
+}
+
+inline ExprPtr operator/(const ExprPtr &lhs, const Constant &rhs) {
+  return lhs * ex<Constant>(1.0 / rhs.value());
 }
 
 }  // namespace sequant
