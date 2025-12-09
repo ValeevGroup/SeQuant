@@ -145,6 +145,10 @@ ExprPtr operator/(const ExprPtr &lhs, T &&rhs) {
   return lhs * ex<Constant>(rational(1, std::forward<T>(rhs)));
 }
 
+inline ExprPtr operator/(const ExprPtr &lhs, const Constant &rhs) {
+  return lhs * ex<Constant>(1.0 / rhs.value());
+}
+
 }  // namespace sequant
 
 #endif  // SEQUANT_EXPRESSIONS_OPERATORS_HPP

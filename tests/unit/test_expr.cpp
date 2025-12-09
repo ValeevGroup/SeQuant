@@ -850,6 +850,15 @@ TEST_CASE("expr", "[elements]") {
         simplify(res);
         REQUIRE(res == ex<Constant>(rational(1, 5)));
       }
+
+      SECTION("Divide by Constant") {
+        ex1 = ex<Constant>(5);
+
+        ExprPtr res = ex1 / Constant(3);
+        simplify(res);
+
+        REQUIRE(res == ex<Constant>(rational(5, 3)));
+      }
     }
   }
 
