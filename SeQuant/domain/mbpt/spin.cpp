@@ -1120,10 +1120,12 @@ ExprPtr closed_shell_CC_spintrace_v1(ExprPtr const& expr,
     // Biorthogonal transformation
     st_expr = biorthogonal_transform(st_expr, ext_idxs);
 
-    auto bixs = ext_idxs | transform([](auto&& vec) { return vec[1]; });
-    auto kixs = ext_idxs | transform([](auto&& vec) { return vec[0]; });
+    auto bixs =
+        ext_idxs | transform([](auto&& vec) { return get_bra_idx(vec); });
+    auto kixs =
+        ext_idxs | transform([](auto&& vec) { return get_ket_idx(vec); });
     st_expr =
-        ex<Tensor>(Tensor{L"S", bra(std::move(bixs)), ket(std::move(kixs))}) *
+        ex<Tensor>(Tensor{L"S", bra(std::move(kixs)), ket(std::move(bixs))}) *
         st_expr;
   }
 
@@ -1153,11 +1155,13 @@ ExprPtr closed_shell_CC_spintrace_v2(ExprPtr const& expr,
     st_expr = biorthogonal_transform(st_expr, ext_idxs);
 
     // adding S in order to expand it and have all the raw equations
-    auto bixs = ext_idxs | transform([](auto&& vec) { return vec[1]; });
-    auto kixs = ext_idxs | transform([](auto&& vec) { return vec[0]; });
+    auto bixs =
+        ext_idxs | transform([](auto&& vec) { return get_bra_idx(vec); });
+    auto kixs =
+        ext_idxs | transform([](auto&& vec) { return get_ket_idx(vec); });
     if (bixs.size() > 1) {
       st_expr =
-          ex<Tensor>(Tensor{L"S", bra(std::move(bixs)), ket(std::move(kixs))}) *
+          ex<Tensor>(Tensor{L"S", bra(std::move(kixs)), ket(std::move(bixs))}) *
           st_expr;
     }
     simplify(st_expr);
@@ -1171,7 +1175,7 @@ ExprPtr closed_shell_CC_spintrace_v2(ExprPtr const& expr,
     st_expr = WK_biorthogonalization_filter(st_expr, ext_idxs);
     // add S tensor again
     st_expr =
-        ex<Tensor>(Tensor{L"S", bra(std::move(bixs)), ket(std::move(kixs))}) *
+        ex<Tensor>(Tensor{L"S", bra(std::move(kixs)), ket(std::move(bixs))}) *
         st_expr;
 
     rational combined_factor;
@@ -1892,10 +1896,8 @@ ExprPtr factorize_S(const ExprPtr& expression,
 
     // Fill bras and kets
     ranges::for_each(ext_index_groups, [&](const IndexList& idx_pair) {
-      auto it = idx_pair.begin();
-      bra_list.push_back(*it);
-      it++;
-      ket_list.push_back(*it);
+      bra_list.push_back(get_bra_idx(idx_pair));
+      ket_list.push_back(get_ket_idx(idx_pair));
     });
     SEQUANT_ASSERT(bra_list.size() == ket_list.size());
     S = Tensor(L"S", bra(std::move(bra_list)), ket(std::move(ket_list)),

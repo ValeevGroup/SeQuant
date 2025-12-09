@@ -10,6 +10,7 @@
 #include <range/v3/view.hpp>
 
 #include <algorithm>
+#include <iterator>
 #include <optional>
 #include <ranges>
 #include <set>
@@ -421,6 +422,17 @@ std::string csv_labels(Rng&& idxs) {
          | ranges::to<std::string>;
 }
 
+/// Obtains the groups of external (named) indices for the given expression.
+///
+/// @param expr The expression to fetch the indices for
+/// @returns A container of index groups
+///
+/// @note The order of indices in index groups is unspecified and may change in
+/// the future. If you need to selectively obtain bra or ket indices, use
+/// get_bra_idx or get_ket_idx on the group.
+///
+/// @see get_bra_idx
+/// @see get_ket_idx
 template <typename Container = container::svector<container::svector<Index>>>
 Container external_indices(const Expr& expr) {
   if (!expr.is<Sum>() && !expr.is<Product>() && !expr.is<Tensor>()) {
@@ -430,16 +442,18 @@ Container external_indices(const Expr& expr) {
   if (expr.is<Tensor>()) {
     const Tensor& tensor = expr.as<Tensor>();
 
-    Container cont(std::max(tensor.bra_rank(),
-                            std::max(tensor.ket_rank(), tensor.aux_rank())));
-    for (std::size_t i = 0; i < tensor.ket_rank(); ++i) {
-      cont.at(i).push_back(tensor.ket()[i]);
-    }
+    const std::size_t num_braket =
+        std::max(tensor.bra_rank(), tensor.ket_rank());
+    Container cont(num_braket + tensor.aux_rank());
+
     for (std::size_t i = 0; i < tensor.bra_rank(); ++i) {
       cont.at(i).push_back(tensor.bra()[i]);
     }
+    for (std::size_t i = 0; i < tensor.ket_rank(); ++i) {
+      cont.at(i).push_back(tensor.ket()[i]);
+    }
     for (std::size_t i = 0; i < tensor.aux_rank(); ++i) {
-      cont.at(i).push_back(tensor.aux()[i]);
+      cont.at(i + num_braket).push_back(tensor.aux()[i]);
     }
 
     return cont;
@@ -459,30 +473,97 @@ Container external_indices(const Expr& expr) {
 
   if (symmetrizer.has_value()) {
     // Generate external index list from symmetrization operator
-    return external_indices(symmetrizer.value());
+    // However, the symmetrizer has bra/ket conjugated (reversed)
+    Container res = external_indices<Container>(symmetrizer.value());
+
+    for (auto& pair : res) {
+      if (pair.size() <= 1) {
+        continue;
+      }
+
+      std::swap(pair.at(0), pair.at(1));
+    }
+
+    return res;
   }
 
   IndexGroups groups = get_unique_indices<container::svector<Index>>(expr);
 
-  Container cont(std::max(groups.bra.size(),
-                          std::max(groups.ket.size(), groups.aux.size())));
+  const std::size_t num_braket = std::max(groups.bra.size(), groups.ket.size());
 
-  for (std::size_t i = 0; i < groups.ket.size(); ++i) {
-    cont.at(i).push_back(groups.ket[i]);
-  }
+  Container cont(num_braket + groups.aux.size());
+
   for (std::size_t i = 0; i < groups.bra.size(); ++i) {
     cont.at(i).push_back(groups.bra[i]);
   }
+  for (std::size_t i = 0; i < groups.ket.size(); ++i) {
+    cont.at(i).push_back(groups.ket[i]);
+  }
   for (std::size_t i = 0; i < groups.aux.size(); ++i) {
-    cont.at(i).push_back(groups.aux[i]);
+    cont.at(num_braket + i).push_back(groups.aux[i]);
   }
 
   return cont;
 }
 
+/// Obtains the groups of external (named) indices for the given expression.
+///
+/// @param expr The expression to fetch the indices for
+/// @returns A container of index groups
+///
+/// @note The order of indices in index groups is unspecified and may change in
+/// the future. If you need to selectively obtain bra or ket indices, use
+/// get_bra_idx or get_ket_idx on the group.
+///
+/// @see get_bra_idx
+/// @see get_ket_idx
 template <typename Container = container::svector<container::svector<Index>>>
 Container external_indices(const ExprPtr& expr) {
   return external_indices<Container>(*expr);
+}
+
+/// @param container An index group expected to represent a pair of indices
+/// @returns The bra index of the provided pair
+///
+/// @tparam T The type of the container used to represent the index pair. May
+/// be a std::pair<Index, Index> or a container that retains the order of its
+/// elements based on how they have been inserted.
+template <typename T>
+auto get_bra_idx(T&& container)
+    -> std::conditional_t<std::is_const_v<std::remove_reference_t<T>>,
+                          const Index&, Index&> {
+  if constexpr (std::is_same_v<std::remove_cvref_t<T>,
+                               std::pair<Index, Index>>) {
+    return container.first;
+  } else {
+    using std::begin;
+    using std::size;
+    SEQUANT_ASSERT(size(container) == 2);
+    return *begin(container);
+  }
+}
+
+/// @param container An index group expected to represent a pair of indices
+/// @returns The ket index of the provided pair
+///
+/// @tparam T The type of the container used to represent the index pair. May
+/// be a std::pair<Index, Index> or a container that retains the order of its
+/// elements based on how they have been inserted.
+template <typename T>
+auto get_ket_idx(T&& container)
+    -> std::conditional_t<std::is_const_v<std::remove_reference_t<T>>,
+                          const Index&, Index&> {
+  if constexpr (std::is_same_v<std::remove_cvref_t<T>,
+                               std::pair<Index, Index>>) {
+    return container.second;
+  } else {
+    using std::begin;
+    using std::size;
+    SEQUANT_ASSERT(size(container) == 2);
+    auto it = begin(container);
+    std::advance(it, 1);
+    return *it;
+  }
 }
 
 }  // namespace sequant

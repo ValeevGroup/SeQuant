@@ -178,7 +178,6 @@ class compute_cceqvec {
                                      [](auto&& vec) { return vec[0]; });
           auto kixs = ext_idxs | ranges::views::transform(
                                      [](auto&& vec) { return vec[1]; });
-          // N.B. external_indices(expr) confuses bra and ket
           if (bixs.size() > 1) {
             eqvec[R] =
                 ex<Tensor>(Tensor{L"S", bra(kixs), ket(bixs)}) * eqvec[R];

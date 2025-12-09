@@ -979,7 +979,7 @@ SECTION("Closed-shell spintrace CCSD") {
 }  // CCSD R1
 
 SECTION("Closed-shell spintrace CCSDT terms") {
-  {  // A3 * f * t3, , spintracing with partial-expansion
+  SECTION("A3 * f * t3, , spintracing with partial-expansion") {
     auto input = ex<Constant>(rational{1, 12}) *
                  ex<Tensor>(L"A", bra{L"i_1", L"i_2", L"i_3"},
                             ket{L"a_1", L"a_2", L"a_3"}, Symmetry::Antisymm) *
@@ -1002,7 +1002,7 @@ SECTION("Closed-shell spintrace CCSDT terms") {
                      "S{i1,i2,i3;a1,a2,a3} f{i4;i3} t{a1,a2,a3;i2,i1,i4}"));
   }
 
-  {  // ppl term: A3 * g * t3, spintracing with direct full-expansion
+  SECTION("ppl term: A3 * g * t3, spintracing with direct full-expansion") {
     auto input = ex<Constant>(rational{1, 24}) *
                  ex<Tensor>(L"A", bra{L"i_1", L"i_2", L"i_3"},
                             ket{L"a_1", L"a_2", L"a_3"}, Symmetry::Antisymm) *
@@ -1074,7 +1074,7 @@ SECTION("Closed-shell spintrace CCSDT terms") {
             "g{a_1,a_3;a_4,a_5}:N-C-S * t{a_2,a_4,a_5;i_1,i_3,i_2}:N-C-S"));
   }
 
-  {  // ppl term in optimal: results in 1 term
+  SECTION("ppl term in optimal") {  // results in 1 term
     const auto input = ex<Sum>(ExprPtrList{
         parse_expr(L"1/24 A{i_1,i_2,i_3;a_1,a_2,a_3} * "
                    L"g{a_1,a_2;a_4,a_5} * t{a_3,a_4,a_5;i_1,i_2,i_3}",
@@ -1093,7 +1093,8 @@ SECTION("Closed-shell spintrace CCSDT terms") {
             L"1/2 S{i_1,i_2,i_3;a_1,a_2,a_3}:N-C-S * "
             "g{a_1,a_2;a_4,a_5}:N-C-S * t{a_3,a_4,a_5;i_3,i_1,i_2}:N-C-S"));
   }
-  {  // ppl term in regular_cs: results in 4 terms
+
+  SECTION("ppl term in regular_cs") {  // results in 4 terms
     const auto input = ex<Sum>(ExprPtrList{
         parse_expr(L"1/24 A{i_1,i_2,i_3;a_1,a_2,a_3} * g{a_1,a_2;a_4,a_5} * "
                    "t{a_3,a_4,a_5;i_1,i_2,i_3}",
@@ -1116,7 +1117,7 @@ SECTION("Closed-shell spintrace CCSDT terms") {
             "g{a_1,a_2;a_4,a_5}:N-C-S * t{a_3,a_4,a_5;i_2,i_1,i_3}:N-C-S"));
   }
 
-  {  // f * t3
+  SECTION("f * t3") {
     auto input = ex<Tensor>(L"f", bra{L"i_4"}, ket{L"i_1"}) *
                  ex<Tensor>(L"t", bra{L"a_1", L"a_2", L"a_3"},
                             ket{L"i_2", L"i_3", L"i_4"}, Symmetry::Antisymm);
@@ -1131,7 +1132,7 @@ SECTION("Closed-shell spintrace CCSDT terms") {
     REQUIRE(result->size() == 6);
   }
 
-  {  // A * g * t3
+  SECTION("A * g * t3") {
     auto input = ex<Constant>(rational{-1, 4}) *
                  ex<Tensor>(L"A", bra{L"i_1", L"i_2", L"i_3"},
                             ket{L"a_1", L"a_2", L"a_3"}, Symmetry::Antisymm) *
@@ -1146,7 +1147,8 @@ SECTION("Closed-shell spintrace CCSDT terms") {
         input, {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}, {L"i_3", L"a_3"}});
     REQUIRE(result->size() == 20);
   }
-  {  // g * t3
+
+  SECTION("g * t3") {
     auto input = ex<Tensor>(L"g", bra{L"i_4", L"a_1"}, ket{L"i_1", L"a_4"},
                             Symmetry::Antisymm) *
                  ex<Tensor>(L"t", bra{L"a_2", L"a_3", L"a_4"},
