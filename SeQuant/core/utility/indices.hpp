@@ -10,6 +10,7 @@
 #include <range/v3/view.hpp>
 
 #include <algorithm>
+#include <iterator>
 #include <optional>
 #include <ranges>
 #include <set>
@@ -497,6 +498,50 @@ Container external_indices(const Expr& expr) {
 template <typename Container = container::svector<container::svector<Index>>>
 Container external_indices(const ExprPtr& expr) {
   return external_indices<Container>(*expr);
+}
+
+/// @param container An index group expected to represent a pair of indices
+/// @returns The bra index of the provided pair
+///
+/// @tparam T The type of the container used to represent the index pair. May
+/// be a std::pair<Index, Index> or a container that retains the order of its
+/// elements based on how they have been inserted.
+template <typename T>
+auto get_bra_idx(T&& container)
+    -> std::conditional_t<std::is_const_v<std::remove_reference_t<T>>,
+                          const Index&, Index&> {
+  if constexpr (std::is_same_v<std::remove_cvref_t<T>,
+                               std::pair<Index, Index>>) {
+    return container.first;
+  } else {
+    using std::begin;
+    using std::size;
+    SEQUANT_ASSERT(size(container) == 2);
+    return *begin(container);
+  }
+}
+
+/// @param container An index group expected to represent a pair of indices
+/// @returns The ket index of the provided pair
+///
+/// @tparam T The type of the container used to represent the index pair. May
+/// be a std::pair<Index, Index> or a container that retains the order of its
+/// elements based on how they have been inserted.
+template <typename T>
+auto get_ket_idx(T&& container)
+    -> std::conditional_t<std::is_const_v<std::remove_reference_t<T>>,
+                          const Index&, Index&> {
+  if constexpr (std::is_same_v<std::remove_cvref_t<T>,
+                               std::pair<Index, Index>>) {
+    return container.second;
+  } else {
+    using std::begin;
+    using std::size;
+    SEQUANT_ASSERT(size(container) == 2);
+    auto it = begin(container);
+    std::advance(it, 1);
+    return *it;
+  }
 }
 
 }  // namespace sequant
