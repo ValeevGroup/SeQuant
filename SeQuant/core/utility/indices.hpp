@@ -422,6 +422,17 @@ std::string csv_labels(Rng&& idxs) {
          | ranges::to<std::string>;
 }
 
+/// Obtains the groups of external (named) indices for the given expression.
+///
+/// @param expr The expression to fetch the indices for
+/// @returns A container of index groups
+///
+/// @note The order of indices in index groups is unspecified and may change in
+/// the future. If you need to selectively obtain bra or ket indices, use
+/// get_bra_idx or get_ket_idx on the group.
+///
+/// @see get_bra_idx
+/// @see get_ket_idx
 template <typename Container = container::svector<container::svector<Index>>>
 Container external_indices(const Expr& expr) {
   if (!expr.is<Sum>() && !expr.is<Product>() && !expr.is<Tensor>()) {
@@ -495,6 +506,17 @@ Container external_indices(const Expr& expr) {
   return cont;
 }
 
+/// Obtains the groups of external (named) indices for the given expression.
+///
+/// @param expr The expression to fetch the indices for
+/// @returns A container of index groups
+///
+/// @note The order of indices in index groups is unspecified and may change in
+/// the future. If you need to selectively obtain bra or ket indices, use
+/// get_bra_idx or get_ket_idx on the group.
+///
+/// @see get_bra_idx
+/// @see get_ket_idx
 template <typename Container = container::svector<container::svector<Index>>>
 Container external_indices(const ExprPtr& expr) {
   return external_indices<Container>(*expr);
