@@ -877,4 +877,52 @@ SECTION("rules") {
     }
   }
 }  // SECTION("rules")
+
+SECTION("manuscript-examples") {
+  using namespace sequant::mbpt;
+
+  SECTION("CCD Term") {
+    auto expr = ref_av(P(2) * H() * T_(2) * T_(2));
+    REQUIRE(expr.size() == 4);
+  }
+
+  SECTION("CC LR Function") {
+    const int N = 2;  // CC rank
+
+    auto θ̅ = lst(θ(1), T(N), 2);
+    auto expr = (1 + Λ(N)) * θ̅ * T_pt(N) + Λ_pt(N) * θ̅;
+    auto result = ref_av(expr, {{L"θ", L"t"}, {L"θ", L"t¹"}});
+    REQUIRE(result.size() == 21);
+  }
+
+  SECTION("EOM-CC Equations") {
+    const auto H̅ = lst(H(), T(2), 4);
+
+    // connectivity info for right and left amplitude equations
+    const auto r_connect =
+        concat(default_op_connections(),
+               OpConnections<OpType>{{OpType::h, OpType::R},
+                                     {OpType::f, OpType::R},
+                                     {OpType::g, OpType::R}});
+    const auto l_connect =
+        concat(default_op_connections(),
+               OpConnections<OpType>{{OpType::h, OpType::A},
+                                     {OpType::f, OpType::A},
+                                     {OpType::g, OpType::A}});
+
+    // Note: the correctness of the equations are verified in test_mbpt_cc.cpp
+    // here, we just make sure the examples run without any issues
+
+    // EE
+    REQUIRE_NOTHROW(ref_av(P(2) * H̅ * R(2), r_connect));
+    REQUIRE_NOTHROW(ref_av(L(2) * H̅ * P(-2), l_connect));
+    // EA
+    REQUIRE_NOTHROW(P(nₚ(2), nₕ(1)) * H̅ * R(nₚ(2), nₕ(1)), r_connect);
+    REQUIRE_NOTHROW(L(nₚ(2), nₕ(1)) * H̅ * P(nₚ(-2), nₕ(-1)), l_connect);
+    // IP
+    REQUIRE_NOTHROW(P(nₚ(1), nₕ(2)) * H̅ * R(nₚ(1), nₕ(2)), r_connect);
+    REQUIRE_NOTHROW(L(nₚ(1), nₕ(2)) * H̅ * P(nₚ(-1), nₕ(-2)), l_connect);
+  }
+
+}  // SECTION("manuscript examples")
 }
