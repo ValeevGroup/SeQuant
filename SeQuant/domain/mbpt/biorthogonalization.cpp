@@ -6,6 +6,7 @@
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/math.hpp>
 #include <SeQuant/core/utility/expr.hpp>
+#include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/permutation.hpp>
 
@@ -399,11 +400,11 @@ ExprPtr biorthogonal_transform(
     bool use_hardcoded, const double threshold) {
   ResultExpr res(
       bra(ext_index_groups | ranges::views::transform([](const auto& pair) {
-            return pair.at(0);
+            return get_ket_idx(pair);
           }) |
           ranges::to<container::svector<Index>>()),
       ket(ext_index_groups | ranges::views::transform([](const auto& pair) {
-            return pair.at(1);
+            return get_bra_idx(pair);
           }) |
           ranges::to<container::svector<Index>>()),
       aux(IndexList{}), Symmetry::Nonsymm, BraKetSymmetry::Nonsymm,
