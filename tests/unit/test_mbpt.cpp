@@ -924,5 +924,37 @@ SECTION("manuscript-examples") {
     REQUIRE_NOTHROW(L(nₚ(1), nₕ(2)) * H̅ * P(nₚ(-1), nₕ(-2)), l_connect);
   }
 
+  SECTION("CC Perturbed Amplitudes") {
+    const auto H̅ = lst(H(), T(2), 4);       // sim-transformed Hamiltonian
+    const auto H̅1 = lst(H_pt(1), T(2), 2);  // sim-transformed pert operator
+
+    // connectivity info for perturbed t and λ amplitude equations
+    const auto t_connect =
+        concat(default_op_connections(),
+               OpConnections<OpType>{{OpType::h, OpType::t_1},
+                                     {OpType::f, OpType::t_1},
+                                     {OpType::g, OpType::t_1},
+                                     {OpType::h_1, OpType::t}});
+
+    const auto l_connect =
+        concat(default_op_connections(),
+               OpConnections<OpType>{{OpType::h, OpType::t_1},
+                                     {OpType::f, OpType::t_1},
+                                     {OpType::g, OpType::t_1},
+                                     {OpType::h_1, OpType::t},
+                                     {OpType::h, OpType::A},
+                                     {OpType::f, OpType::A},
+                                     {OpType::g, OpType::A},
+                                     {OpType::h_1, OpType::A}});
+
+    // pert t amplitudes except frequency term (RHS of Eq18 in SQ Manuscript #2)
+    auto t = ref_av(P(2) * (H̅1 + H̅ * T_pt(2)), t_connect);
+    REQUIRE(t.size() == 57);
+
+    // pert λ amplitudes except frequency term (RHS of Eq19 in SQ Manuscript #2)
+    auto λ = ref_av(((1 + Λ(2)) * (H̅1 + H̅ * T_pt(2)) + Λ_pt(2) * H̅) * P(-2),
+                    l_connect);
+    REQUIRE(λ.size() == 62);
+  }
 }  // SECTION("manuscript examples")
 }
