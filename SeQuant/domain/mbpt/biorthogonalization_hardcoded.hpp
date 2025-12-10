@@ -14,8 +14,8 @@
 namespace sequant {
 
 // hardcoded coefficients for biorthogonalization
-inline std::optional<std::vector<sequant::rational>>
-get_first_row_biorth_coeffs_rational(std::size_t n_particles) {
+std::vector<sequant::rational> get_first_row_biorth_coeffs_rational(
+    std::size_t n_particles) {
   switch (n_particles) {
     case 1:
       return std::vector<sequant::rational>{ratio(1, 2)};
@@ -2009,12 +2009,12 @@ get_first_row_biorth_coeffs_rational(std::size_t n_particles) {
           ratio(20, 788031),    ratio(37, 1636827),   ratio(-4, 1472109)};
 
     default:
-      return std::nullopt;
+      return std::vector<sequant::rational>{};
   }
 }
 
 // constructs the full coeff matrix from the first row
-inline Eigen::Matrix<sequant::rational, Eigen::Dynamic, Eigen::Dynamic>
+Eigen::Matrix<sequant::rational, Eigen::Dynamic, Eigen::Dynamic>
 biorth_coeffs_from_first_row_rational(
     const std::vector<sequant::rational>& first_row, std::size_t n_particles) {
   const auto n = first_row.size();
@@ -2036,15 +2036,14 @@ biorth_coeffs_from_first_row_rational(
   return M;
 }
 
-inline std::optional<
-    Eigen::Matrix<sequant::rational, Eigen::Dynamic, Eigen::Dynamic>>
+Eigen::Matrix<sequant::rational, Eigen::Dynamic, Eigen::Dynamic>
 get_hardcoded_biorth_coeffs_rational(std::size_t n_particles) {
   auto first_row = get_first_row_biorth_coeffs_rational(n_particles);
-  if (first_row.has_value()) {
-    return biorth_coeffs_from_first_row_rational(first_row.value(),
-                                                 n_particles);
+  if (!first_row.empty()) {
+    return biorth_coeffs_from_first_row_rational(first_row, n_particles);
   }
-  return std::nullopt;
+  // empty matrix for unsupported ranks
+  return Eigen::Matrix<sequant::rational, Eigen::Dynamic, Eigen::Dynamic>(0, 0);
 }
 
 }  // namespace sequant

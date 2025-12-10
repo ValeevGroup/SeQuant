@@ -346,20 +346,26 @@ void biorthogonal_transform(container::svector<ResultExpr>& result_exprs,
                         }) |
                         ranges::to<container::svector<ExprPtr>>();
 
-  // check if we have hardcoded coefficients for that rank
   auto hardcoded_coefficients =
-      use_hardcoded ? get_hardcoded_biorth_coeffs_rational(n_particles)
-                    : std::nullopt;
-  std::cout << "hardcoded coeffs: = "
-            << (hardcoded_coefficients.has_value() ? "true" : "false")
-            << std::endl;
-
-  // get coefficients: hardcoded or computed_svd
+      get_hardcoded_biorth_coeffs_rational(n_particles);
   Eigen::MatrixXd computed_coefficients;
-  if (!hardcoded_coefficients.has_value()) {
+
+  if (use_hardcoded && hardcoded_coefficients.rows() > 0) {
+    std::cout << "using hardcoded biorthogonalization coefficients for rank = "
+              << n_particles << std::endl;
+  } else {
+    if (use_hardcoded && hardcoded_coefficients.rows() == 0) {
+      std::cout << "hardcoded coefficients not available for rank = "
+                << n_particles << ", using computed pinv (via SVD) "
+                << std::endl;
+    } else {
+      std::cout << "using computed biorthogonalization coefficients (pinv) for "
+                   "rank = "
+                << n_particles << " via SVD" << std::endl;
+    }
     computed_coefficients = compute_biorth_coeffs(n_particles, threshold);
-    assert(num_perms == computed_coefficients.rows());
-    assert(num_perms == computed_coefficients.cols());
+    SEQUANT_ASSERT(num_perms == computed_coefficients.rows());
+    SEQUANT_ASSERT(num_perms == computed_coefficients.cols());
   }
 
   for (std::size_t i = 0; i < result_exprs.size(); ++i) {
@@ -372,8 +378,8 @@ void biorthogonal_transform(container::svector<ResultExpr>& result_exprs,
       perm->postMultiply(reference);
 
       sequant::rational coeff =
-          hardcoded_coefficients.has_value()
-              ? hardcoded_coefficients.value()(ranks.at(i), rank)
+          (use_hardcoded && hardcoded_coefficients.rows() > 0)
+              ? hardcoded_coefficients(ranks.at(i), rank)
               : to_rational(computed_coefficients(ranks.at(i), rank),
                             threshold);
 
