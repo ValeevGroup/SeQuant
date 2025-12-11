@@ -6,6 +6,7 @@
 #include <SeQuant/core/expressions/labeled.hpp>
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/utility/macros.hpp>
+#include <SeQuant/core/utility/string.hpp>
 
 #include <string>
 #include <string_view>
@@ -29,6 +30,9 @@ class Variable : public Expr, public MutatableLabeled {
   explicit Variable(U &&label) : label_(std::forward<U>(label)) {}
 
   Variable(std::wstring label) : label_(std::move(label)), conjugated_(false) {}
+
+  Variable(const std::string &label)
+      : label_(sequant::toUtf16(label)), conjugated_(false) {}
 
   /// @return variable label
   /// @warning conjugation does not change it
