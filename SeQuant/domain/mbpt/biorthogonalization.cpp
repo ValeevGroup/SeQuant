@@ -31,32 +31,30 @@ using IndexPair = std::pair<Index, Index>;
 using ParticlePairings = container::svector<IndexPair>;
 
 ResultExpr biorthogonal_transform_copy(const ResultExpr& expr,
-                                       bool use_hardcoded, double threshold) {
+                                       double threshold) {
   container::svector<ResultExpr> wrapper = {expr.clone()};
 
-  biorthogonal_transform(wrapper, use_hardcoded, threshold);
+  biorthogonal_transform(wrapper, threshold);
 
   return wrapper.front();
 }
 
 container::svector<ResultExpr> biorthogonal_transform_copy(
-    const container::svector<ResultExpr>& exprs, bool use_hardcoded,
-    double threshold) {
+    const container::svector<ResultExpr>& exprs, double threshold) {
   container::svector<ResultExpr> copy;
   copy.reserve(exprs.size());
 
   std::transform(exprs.begin(), exprs.end(), std::back_inserter(copy),
                  [](const ResultExpr& expr) { return expr.clone(); });
 
-  biorthogonal_transform(copy, use_hardcoded, threshold);
+  biorthogonal_transform(copy, threshold);
 
   return copy;
 }
 
-void biorthogonal_transform(ResultExpr& expr, bool use_hardcoded,
-                            double threshold) {
+void biorthogonal_transform(ResultExpr& expr, double threshold) {
   // TODO: avoid copy
-  expr = biorthogonal_transform_copy(expr, use_hardcoded, threshold);
+  expr = biorthogonal_transform_copy(expr, threshold);
 }
 
 Eigen::MatrixXd permutational_overlap_matrix(std::size_t n_particles) {
@@ -130,6 +128,17 @@ Eigen::MatrixXd compute_biorth_coeffs(std::size_t n_particles,
   pinv *= normalization;
 
   return pinv;
+}
+
+// compute nns using normalized_pinve
+Eigen::MatrixXd compute_nns_p_matrix(std::size_t n_particles,
+                                     double threshold) {
+  auto perm_ovlp_mat = permutational_overlap_matrix(n_particles);
+  auto normalized_pinv = compute_biorth_coeffs(n_particles, threshold);
+
+  auto nns = perm_ovlp_mat * normalized_pinv;
+
+  return nns;
 }
 
 void sort_pairings(ParticlePairings& pairing) {
@@ -253,7 +262,7 @@ ExprPtr create_expr_for(const ParticlePairings& ref_pairing,
 }
 
 void biorthogonal_transform(container::svector<ResultExpr>& result_exprs,
-                            bool use_hardcoded, double threshold) {
+                            double threshold) {
   if (result_exprs.empty()) {
     return;
   }
@@ -347,23 +356,22 @@ void biorthogonal_transform(container::svector<ResultExpr>& result_exprs,
                         }) |
                         ranges::to<container::svector<ExprPtr>>();
 
-  auto hardcoded_coefficients =
-      get_hardcoded_biorth_coeffs_rational(n_particles);
+  Eigen::Matrix<sequant::rational, Eigen::Dynamic, Eigen::Dynamic>
+      hardcoded_coefficients;
   Eigen::MatrixXd computed_coefficients;
+  bool using_hardcoded = false;
 
-  if (use_hardcoded && hardcoded_coefficients.rows() > 0) {
+  // Use hardcoded coefficients for ranks 1-6
+  if (n_particles <= 6) {
     std::cout << "using hardcoded biorthogonalization coefficients for rank = "
               << n_particles << std::endl;
+    hardcoded_coefficients = get_hardcoded_biorth_coeffs_rational(n_particles);
+    using_hardcoded = true;
   } else {
-    if (use_hardcoded && hardcoded_coefficients.rows() == 0) {
-      std::cout << "hardcoded coefficients not available for rank = "
-                << n_particles << ", using computed pinv (via SVD) "
-                << std::endl;
-    } else {
-      std::cout << "using computed biorthogonalization coefficients (pinv) for "
-                   "rank = "
-                << n_particles << " via SVD" << std::endl;
-    }
+    // For ranks > 6, use computed coefficients
+    std::cout << "using computed biorthogonalization coefficients (pinv) for "
+                 "rank = "
+              << n_particles << " via SVD" << std::endl;
     computed_coefficients = compute_biorth_coeffs(n_particles, threshold);
     SEQUANT_ASSERT(num_perms == computed_coefficients.rows());
     SEQUANT_ASSERT(num_perms == computed_coefficients.cols());
@@ -379,7 +387,7 @@ void biorthogonal_transform(container::svector<ResultExpr>& result_exprs,
       perm->postMultiply(reference);
 
       sequant::rational coeff =
-          (use_hardcoded && hardcoded_coefficients.rows() > 0)
+          using_hardcoded
               ? hardcoded_coefficients(ranks.at(i), rank)
               : to_rational(computed_coefficients(ranks.at(i), rank),
                             threshold);
@@ -397,7 +405,7 @@ ExprPtr biorthogonal_transform(
     const sequant::ExprPtr& expr,
     const container::svector<container::svector<sequant::Index>>&
         ext_index_groups,
-    bool use_hardcoded, const double threshold) {
+    const double threshold) {
   ResultExpr res(
       bra(ext_index_groups | ranges::views::transform([](const auto& pair) {
             return get_ket_idx(pair);
@@ -410,7 +418,7 @@ ExprPtr biorthogonal_transform(
       aux(IndexList{}), Symmetry::Nonsymm, BraKetSymmetry::Nonsymm,
       ColumnSymmetry::Symm, {}, expr);
 
-  biorthogonal_transform(res, use_hardcoded, threshold);
+  biorthogonal_transform(res, threshold);
 
   return res.expression();
 }
