@@ -1,4 +1,4 @@
-#include <SeQuant/domain/mbpt  //biorthogonalization_hardcoded.hpp>
+#include <SeQuant/domain/mbpt/biorthogonalization_hardcoded.hpp>
 
 #include <libperm/Permutation.hpp>
 #include <libperm/Rank.hpp>
