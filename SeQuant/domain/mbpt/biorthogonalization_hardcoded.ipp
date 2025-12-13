@@ -1,0 +1,69 @@
+
+template <typename T>
+  requires(std::floating_point<T> || meta::is_complex_v<T>)
+std::vector<T> get_nns_p_last_row_numeric(std::size_t n_particles) {
+  switch (n_particles) {
+    case 1:
+      return std::vector<T>{T(1) / T(1)};
+
+    case 2:
+      return std::vector<T>{T(1) / T(1), T(1) / T(1)};
+
+    case 3:
+      return std::vector<T>{T(-1) / T(5), T(-1) / T(5), T(-1) / T(5),
+                            T(-1) / T(5), T(-1) / T(5), T(1) / T(1)};
+
+    case 4:
+      return std::vector<T>{
+          T(1) / T(7),   T(1) / T(7),   T(1) / T(7),   T(-1) / T(14),
+          T(1) / T(7),   T(1) / T(7),   T(1) / T(7),   T(-1) / T(14),
+          T(-1) / T(14), T(-1) / T(14), T(1) / T(7),   T(-2) / T(7),
+          T(-1) / T(14), T(1) / T(7),   T(-1) / T(14), T(-2) / T(7),
+          T(1) / T(7),   T(-1) / T(14), T(-1) / T(14), T(-2) / T(7),
+          T(-2) / T(7),  T(-2) / T(7),  T(-2) / T(7),  T(1) / T(1)};
+
+    case 5:
+      return std::vector<T>{
+          T(-1) / T(14), T(-1) / T(14), T(-1) / T(14), T(-1) / T(14),
+          T(2) / T(21),  T(-1) / T(14), T(-1) / T(14), T(-1) / T(14),
+          T(-1) / T(14), T(2) / T(21),  T(-1) / T(14), T(-1) / T(14),
+          T(-1) / T(14), T(-1) / T(14), T(2) / T(21),  T(2) / T(21),
+          T(2) / T(21),  T(2) / T(21),  T(-1) / T(21), T(0) / T(1),
+          T(-1) / T(14), T(-1) / T(14), T(-1) / T(14), T(-1) / T(14),
+          T(2) / T(21),  T(-1) / T(14), T(-1) / T(14), T(-1) / T(14),
+          T(-1) / T(14), T(2) / T(21),  T(-1) / T(14), T(-1) / T(14),
+          T(-1) / T(14), T(-1) / T(14), T(2) / T(21),  T(2) / T(21),
+          T(2) / T(21),  T(2) / T(21),  T(-1) / T(21), T(0) / T(1),
+          T(2) / T(21),  T(2) / T(21),  T(-1) / T(21), T(2) / T(21),
+          T(0) / T(1),   T(2) / T(21),  T(2) / T(21),  T(-1) / T(21),
+          T(2) / T(21),  T(0) / T(1),   T(-1) / T(21), T(-1) / T(21),
+          T(-1) / T(21), T(-1) / T(21), T(1) / T(7),   T(0) / T(1),
+          T(0) / T(1),   T(1) / T(7),   T(1) / T(7),   T(-1) / T(3),
+          T(2) / T(21),  T(-1) / T(21), T(2) / T(21),  T(2) / T(21),
+          T(0) / T(1),   T(-1) / T(21), T(-1) / T(21), T(-1) / T(21),
+          T(-1) / T(21), T(1) / T(7),   T(2) / T(21),  T(-1) / T(21),
+          T(2) / T(21),  T(2) / T(21),  T(0) / T(1),   T(0) / T(1),
+          T(1) / T(7),   T(0) / T(1),   T(1) / T(7),   T(-1) / T(3),
+          T(-1) / T(21), T(-1) / T(21), T(-1) / T(21), T(-1) / T(21),
+          T(1) / T(7),   T(-1) / T(21), T(2) / T(21),  T(2) / T(21),
+          T(2) / T(21),  T(0) / T(1),   T(-1) / T(21), T(2) / T(21),
+          T(2) / T(21),  T(2) / T(21),  T(0) / T(1),   T(1) / T(7),
+          T(0) / T(1),   T(0) / T(1),   T(1) / T(7),   T(-1) / T(3),
+          T(0) / T(1),   T(1) / T(7),   T(1) / T(7),   T(0) / T(1),
+          T(-1) / T(3),  T(1) / T(7),   T(0) / T(1),   T(1) / T(7),
+          T(0) / T(1),   T(-1) / T(3),  T(1) / T(7),   T(1) / T(7),
+          T(0) / T(1),   T(0) / T(1),   T(-1) / T(3),  T(-1) / T(3),
+          T(-1) / T(3),  T(-1) / T(3),  T(-1) / T(3),  T(1) / T(1)};
+
+    case 6:
+      // I need to add rank 6 later
+      throw std::runtime_error(
+          "hardcoded NNS weights need to be implemented for rank 6");
+
+    default:
+      throw std::runtime_error(
+          "hardcoded NNS weights only available for ranks 1-6, "
+          "requested rank is : " +
+          std::to_string(n_particles));
+  }
+}
