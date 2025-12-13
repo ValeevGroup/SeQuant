@@ -8,12 +8,18 @@
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/logger.hpp>
 #include <SeQuant/core/utility/macros.hpp>
+#include <SeQuant/domain/mbpt/biorthogonalization.hpp>
+#include <SeQuant/domain/mbpt/biorthogonalization_hardcoded.hpp>
 
 #include <TiledArray/einsum/tiledarray.h>
 #include <btas/btas.h>
 #include <tiledarray.h>
 #include <range/v3/numeric.hpp>
 #include <range/v3/view.hpp>
+
+#include <libperm/Permutation.hpp>
+#include <libperm/Rank.hpp>
+#include <libperm/Utils.hpp>
 
 #include <any>
 #include <memory>
@@ -349,10 +355,10 @@ auto particle_antisymmetrize_btas(btas::Tensor<Args...> const& arr,
 /// \return The cleaned TA::DistArray.
 template <typename... Args>
 auto biorthogonal_nns_project_ta(TA::DistArray<Args...> const& arr,
-                                 size_t bra_rank) {
+                                 size_t bra_rank, double threshold = 1e-12) {
   using ranges::views::iota;
   size_t const rank = arr.trange().rank();
-  SEQUANT_ASSERT(bra_rank <= rank);
+  assert(bra_rank <= rank);
   size_t const ket_rank = rank - bra_rank;
 
   if (rank <= 4) {
@@ -361,11 +367,29 @@ auto biorthogonal_nns_project_ta(TA::DistArray<Args...> const& arr,
 
   using numeric_type = typename TA::DistArray<Args...>::numeric_type;
 
-  size_t factorial_ket = 1;
-  for (size_t i = 2; i <= ket_rank; ++i) {
-    factorial_ket *= i;
+  std::vector<numeric_type> cleanup_weights;
+
+  if (ket_rank >= 3) {
+    // use hardcoded nns weights for ranks 1-6
+    if (ket_rank <= 6) {
+      cleanup_weights = get_nns_p_last_row_numeric<numeric_type>(ket_rank);
+      std::cout << "using hardcoded nns for rank = " << ket_rank << std::endl;
+    } else {
+      // for ranks > 6, use last row of computed nns matrix
+      std::cout << "using computed nns for rank = " << ket_rank << std::endl;
+
+      Eigen::MatrixXd nns_matrix = compute_nns_p_matrix(ket_rank, threshold);
+      size_t num_perms = nns_matrix.rows();
+
+      cleanup_weights.reserve(num_perms);
+      for (size_t i = 0; i < num_perms; ++i) {
+        cleanup_weights.push_back(
+            static_cast<numeric_type>(nns_matrix(num_perms - 1, i)));
+      }
+    }
+  } else {
+    std::cout << "no cleanup needed for rank = " << ket_rank << std::endl;
   }
-  numeric_type norm_factor = numeric_type(1) / numeric_type(factorial_ket);
 
   TA::DistArray<Args...> result;
 
@@ -375,43 +399,42 @@ auto biorthogonal_nns_project_ta(TA::DistArray<Args...> const& arr,
 
   const auto lannot = ords_to_annot(perm);
 
-  auto process_permutations = [&lannot](const TA::DistArray<Args...>& input_arr,
-                                        size_t range_rank, perm_t range_perm,
-                                        const std::string& other_annot,
-                                        bool is_bra) -> TA::DistArray<Args...> {
-    if (range_rank <= 1) return input_arr;
-    TA::DistArray<Args...> result;
+  if (ket_rank > 2 && !cleanup_weights.empty()) {
+    std::cout << "numerical nns projection for rank " << ket_rank << std::endl;
 
-    auto callback = [&]([[maybe_unused]] int parity) {
-      const auto range_annot = ords_to_annot(range_perm);
-      const auto annot = other_annot.empty()
-                             ? range_annot
-                             : (is_bra ? range_annot + "," + other_annot
-                                       : other_annot + "," + range_annot);
-
-      // ignore parity, all permutations get same coefficient
-      numeric_type p_ = 1;
-      if (result.is_initialized()) {
-        result(lannot) += p_ * input_arr(annot);
-      } else {
-        result(lannot) = p_ * input_arr(annot);
-      }
-    };
-    antisymmetric_permutation(ParticleRange{range_perm.begin(), range_rank},
-                              callback);
-    return result;
-  };
-
-  // identity term with coefficient +1
-  result(lannot) = arr(lannot);
-
-  // process only ket permutations with coefficient norm_factor
-  if (ket_rank > 1) {
     const auto bra_annot = bra_rank == 0 ? "" : ords_to_annot(bra_perm);
-    auto ket_result =
-        process_permutations(arr, ket_rank, ket_perm, bra_annot, false);
 
-    result(lannot) -= norm_factor * ket_result(lannot);
+    size_t num_perms = cleanup_weights.size();
+    for (size_t perm_rank = 0; perm_rank < num_perms; ++perm_rank) {
+      perm::Permutation perm_obj = perm::unrank(perm_rank, ket_rank);
+
+      perm_t permuted_ket(ket_rank);
+      for (size_t i = 0; i < ket_rank; ++i) {
+        permuted_ket[i] = ket_perm[perm_obj[i]];
+      }
+
+      numeric_type coeff = cleanup_weights[perm_rank];
+
+      std::cout << "perm" << std::setw(2) << perm_rank << ":"
+                << "coeff=" << std::setw(10) << std::fixed
+                << std::setprecision(6) << coeff;
+
+      const auto ket_annot = ords_to_annot(permuted_ket);
+      const auto annot =
+          bra_annot.empty() ? ket_annot : bra_annot + "," + ket_annot;
+
+      std::cout << " annot: " << annot << std::endl;
+
+      if (result.is_initialized()) {
+        result(lannot) += coeff * arr(annot);
+      } else {
+        result(lannot) = coeff * arr(annot);
+      }
+    }
+
+    std::cout << "=================\n" << std::endl;
+  } else {
+    result(lannot) = arr(lannot);
   }
 
   TA::DistArray<Args...>::wait_for_lazy_cleanup(result.world());
@@ -427,11 +450,10 @@ auto biorthogonal_nns_project_ta(TA::DistArray<Args...> const& arr,
 /// \return The cleaned btas::Tensor.
 template <typename... Args>
 auto biorthogonal_nns_project_btas(btas::Tensor<Args...> const& arr,
-                                   size_t bra_rank) {
-  using ranges::views::concat;
+                                   size_t bra_rank, double threshold = 1e-12) {
   using ranges::views::iota;
   size_t const rank = arr.rank();
-  SEQUANT_ASSERT(bra_rank <= rank);
+  assert(bra_rank <= rank);
   size_t const ket_rank = rank - bra_rank;
 
   if (rank <= 4) {
@@ -439,53 +461,94 @@ auto biorthogonal_nns_project_btas(btas::Tensor<Args...> const& arr,
   }
 
   using numeric_type = typename btas::Tensor<Args...>::numeric_type;
+  std::vector<numeric_type> cleanup_weights;
 
-  size_t factorial_ket = 1;
-  for (size_t i = 2; i <= ket_rank; ++i) {
-    factorial_ket *= i;
+  if (ket_rank >= 3) {
+    // use hardcoded weights for ranks 1-6
+    if (ket_rank <= 6) {
+      cleanup_weights = get_nns_p_last_row_numeric<numeric_type>(ket_rank);
+      std::cout << "using hardcoded nns for rank = " << ket_rank << std::endl;
+    } else {
+      // for ranks > 6, use last row of computed nns matrix
+      std::cout << "using computed nns for rank = " << ket_rank << std::endl;
+
+      Eigen::MatrixXd nns_matrix = compute_nns_p_matrix(ket_rank, threshold);
+      size_t num_perms = nns_matrix.rows();
+
+      cleanup_weights.reserve(num_perms);
+      // extracting last row
+      for (size_t i = 0; i < num_perms; ++i) {
+        cleanup_weights.push_back(
+            static_cast<numeric_type>(nns_matrix(num_perms - 1, i)));
+      }
+    }
+  } else {
+    std::cout << "no cleanup needed for rank = " << ket_rank << std::endl;
   }
-  numeric_type norm_factor = numeric_type(1) / numeric_type(factorial_ket);
 
+  btas::Tensor<Args...> result;
+
+  perm_t perm = iota(size_t{0}, rank) | ranges::to<perm_t>;
   perm_t bra_perm = iota(size_t{0}, bra_rank) | ranges::to<perm_t>;
   perm_t ket_perm = iota(bra_rank, rank) | ranges::to<perm_t>;
-  const auto lannot = iota(size_t{0}, rank) | ranges::to<perm_t>;
 
-  auto process_permutations = [&lannot](const btas::Tensor<Args...>& input_arr,
-                                        size_t range_rank, perm_t range_perm,
-                                        const perm_t& other_perm, bool is_bra) {
-    if (range_rank <= 1) return input_arr;
-    btas::Tensor<Args...> result{input_arr.range()};
-    result.fill(0);
+  const auto lannot = perm;
 
-    auto callback = [&]([[maybe_unused]] int parity) {
-      const auto annot =
-          is_bra ? concat(range_perm, other_perm) | ranges::to<perm_t>()
-                 : concat(other_perm, range_perm) | ranges::to<perm_t>();
+  // apply cleanup to only ket indices (matching biortho implementation)
+  if (ket_rank > 2 && !cleanup_weights.empty()) {
+    std::cout << "numerical nns projection for rank " << ket_rank << std::endl;
 
-      // ignore parity, all permutations get same coefficient
-      numeric_type p_ = 1;
+    bool result_initialized = false;
+
+    // using perm::unrank to generate permutations in the same order as
+    // verification and biortho implementation
+    size_t num_perms = cleanup_weights.size();
+    for (size_t perm_rank = 0; perm_rank < num_perms; ++perm_rank) {
+      perm::Permutation perm_obj = perm::unrank(perm_rank, ket_rank);
+
+      perm_t permuted_ket(ket_rank);
+      for (size_t i = 0; i < ket_rank; ++i) {
+        permuted_ket[i] = ket_perm[perm_obj[i]];
+      }
+
+      numeric_type coeff = cleanup_weights[perm_rank];
+
+      std::cout << "perm" << std::setw(2) << perm_rank << ":";
+      std::cout << "coeff=" << std::setw(10) << std::fixed
+                << std::setprecision(6) << coeff;
+
+      // full permutation annotation to print
+      perm_t annot;
+      annot.reserve(rank);
+      for (size_t i = 0; i < bra_rank; ++i) {
+        annot.push_back(bra_perm[i]);
+      }
+      for (size_t i = 0; i < ket_rank; ++i) {
+        annot.push_back(permuted_ket[i]);
+      }
+
+      std::cout << " annot: ";
+      for (size_t i = 0; i < annot.size(); ++i) {
+        if (i > 0) std::cout << ",";
+        std::cout << annot[i];
+      }
+      std::cout << std::endl;
+
       btas::Tensor<Args...> temp;
-      btas::permute(input_arr, lannot, temp, annot);
-      btas::scal(p_, temp);
-      result += temp;
-    };
+      btas::permute(arr, annot, temp, lannot);
+      btas::scal(coeff, temp);
 
-    antisymmetric_permutation(ParticleRange{range_perm.begin(), range_rank},
-                              callback);
-    return result;
-  };
+      if (result_initialized) {
+        result += temp;
+      } else {
+        result = temp;
+        result_initialized = true;
+      }
+    }
 
-  // identity term with coefficient +1
-  auto result = arr;
-
-  // process only ket permutations with coefficient norm_factor
-  if (ket_rank > 1) {
-    const auto bra_annot = bra_rank == 0 ? perm_t{} : bra_perm;
-    auto ket_result =
-        process_permutations(arr, ket_rank, ket_perm, bra_annot, false);
-
-    btas::scal(norm_factor, ket_result);
-    result -= ket_result;
+    std::cout << "=================\n" << std::endl;
+  } else {
+    result = arr;
   }
 
   return result;
@@ -903,8 +966,14 @@ class ResultTensorTA final : public Result {
 
   [[nodiscard]] ResultPtr biorthogonal_nns_project(
       size_t bra_rank) const override {
-    return eval_result<this_type>(
-        biorthogonal_nns_project_ta(get<ArrayT>(), bra_rank));
+    // nns will be never called with int type. so,
+    // for int type, return the tensor unchanged. is this a suitable approach?
+    if constexpr (std::is_integral_v<numeric_type>) {
+      return eval_result<this_type>(get<ArrayT>());
+    } else {
+      return eval_result<this_type>(
+          biorthogonal_nns_project_ta(get<ArrayT>(), bra_rank));
+    }
   }
 
  private:
@@ -1166,8 +1235,14 @@ class ResultTensorBTAS final : public Result {
 
   [[nodiscard]] ResultPtr biorthogonal_nns_project(
       [[maybe_unused]] size_t bra_rank) const override {
-    return eval_result<ResultTensorBTAS<T>>(
-        biorthogonal_nns_project_btas(get<T>(), bra_rank));
+    // again, nns will be never called with int type. so,
+    // for int type, return the tensor unchanged. is this a suitable approach?
+    if constexpr (std::is_integral_v<numeric_type>) {
+      return eval_result<ResultTensorBTAS<T>>(get<T>());
+    } else {
+      return eval_result<ResultTensorBTAS<T>>(
+          biorthogonal_nns_project_btas(get<T>(), bra_rank));
+    }
   }
 
  private:
