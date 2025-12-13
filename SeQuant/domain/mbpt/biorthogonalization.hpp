@@ -5,7 +5,7 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
 
-#include <Eigen/EigenValues>
+#include <Eigen/Core>
 
 namespace sequant {
 

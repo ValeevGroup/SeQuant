@@ -10,6 +10,7 @@
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/permutation.hpp>
 
+#include <Eigen/Core>
 #include <Eigen/Eigenvalues>
 
 #include <libperm/Permutation.hpp>
