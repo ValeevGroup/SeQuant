@@ -6,7 +6,7 @@
 
 namespace sequant {
 
-std::vector<sequant::rational> get_first_row_biorth_coeffs_rational(
+std::vector<sequant::rational> hardcoded_biorth_coeffs_first_row(
     std::size_t n_particles) {
   switch (n_particles) {
     case 1:
@@ -326,7 +326,7 @@ std::vector<sequant::rational> get_first_row_biorth_coeffs_rational(
 }
 
 Eigen::Matrix<sequant::rational, Eigen::Dynamic, Eigen::Dynamic>
-biorth_coeffs_from_first_row_rational(
+make_hardcoded_biorth_coeffs_matrix(
     const std::vector<sequant::rational>& first_row, std::size_t n_particles) {
   const auto n = first_row.size();
   Eigen::Matrix<sequant::rational, Eigen::Dynamic, Eigen::Dynamic> M(n, n);
@@ -346,10 +346,10 @@ biorth_coeffs_from_first_row_rational(
 }
 
 Eigen::Matrix<sequant::rational, Eigen::Dynamic, Eigen::Dynamic>
-get_hardcoded_biorth_coeffs_rational(std::size_t n_particles) {
-  auto first_row = get_first_row_biorth_coeffs_rational(n_particles);
+hardcoded_biorth_coeffs_matrix(std::size_t n_particles) {
+  auto first_row = hardcoded_biorth_coeffs_first_row(n_particles);
   if (!first_row.empty()) {
-    return biorth_coeffs_from_first_row_rational(first_row, n_particles);
+    return make_hardcoded_biorth_coeffs_matrix(first_row, n_particles);
   }
   return Eigen::Matrix<sequant::rational, Eigen::Dynamic, Eigen::Dynamic>(0, 0);
 }

@@ -366,7 +366,7 @@ void biorthogonal_transform(container::svector<ResultExpr>& result_exprs,
   if (n_particles <= 6) {
     std::cout << "using hardcoded biorthogonalization coefficients for rank = "
               << n_particles << std::endl;
-    hardcoded_coefficients = get_hardcoded_biorth_coeffs_rational(n_particles);
+    hardcoded_coefficients = hardcoded_biorth_coeffs_matrix(n_particles);
     using_hardcoded = true;
   } else {
     // For ranks > 6, use computed coefficients
