@@ -1,7 +1,7 @@
 
 template <typename T>
   requires(std::floating_point<T> || meta::is_complex_v<T>)
-std::vector<T> get_hardcoded_nns_p(std::size_t n_particles) {
+std::vector<T> hardcoded_nns_p_coeffs(std::size_t n_particles) {
   switch (n_particles) {
     case 1:
       return std::vector<T>{T(1) / T(1)};

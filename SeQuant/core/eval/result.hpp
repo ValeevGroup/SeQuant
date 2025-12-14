@@ -372,7 +372,7 @@ auto biorthogonal_nns_project_ta(TA::DistArray<Args...> const& arr,
   if (ket_rank >= 3) {
     // use hardcoded nns weights for ranks 1-6
     if (ket_rank <= 6) {
-      cleanup_weights = get_hardcoded_nns_p<numeric_type>(ket_rank);
+      cleanup_weights = hardcoded_nns_p_coeffs<numeric_type>(ket_rank);
       std::cout << "using hardcoded nns for rank = " << ket_rank << std::endl;
     } else {
       // for ranks > 6, use last row of computed nns matrix
@@ -466,7 +466,7 @@ auto biorthogonal_nns_project_btas(btas::Tensor<Args...> const& arr,
   if (ket_rank >= 3) {
     // use hardcoded weights for ranks 1-6
     if (ket_rank <= 6) {
-      cleanup_weights = get_hardcoded_nns_p<numeric_type>(ket_rank);
+      cleanup_weights = hardcoded_nns_p_coeffs<numeric_type>(ket_rank);
       std::cout << "using hardcoded nns for rank = " << ket_rank << std::endl;
     } else {
       // for ranks > 6, use last row of computed nns matrix
