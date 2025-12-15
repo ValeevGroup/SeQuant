@@ -896,6 +896,22 @@ SECTION("manuscript-examples") {
     REQUIRE(expr.size() == 4);
   }
 
+  SECTION("Ground State Amplitudes") {
+    // connectivity info for t and λ amplitude equations
+    const auto t_connect = default_op_connections();
+    const auto l_connect =
+        concat(default_op_connections(),
+               OpConnections<OpType>{{OpType::h, OpType::A},
+                                     {OpType::f, OpType::A},
+                                     {OpType::g, OpType::A}});
+
+    auto t = ref_av(P(2) * H̅(), t_connect);
+    auto λ = ref_av((1 + Λ(2)) * H̅() * P(-2), l_connect);
+
+    REQUIRE(t.size() == 31);
+    REQUIRE(λ.size() == 32);
+  }
+
   SECTION("CC LR Function") {
     const int N = 2;  // CC rank
 
