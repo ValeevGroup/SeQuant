@@ -358,7 +358,7 @@ auto biorthogonal_nns_project_ta(TA::DistArray<Args...> const& arr,
                                  size_t bra_rank, double threshold = 1e-12) {
   using ranges::views::iota;
   size_t const rank = arr.trange().rank();
-  assert(bra_rank <= rank);
+  SEQUANT_ASSERT(bra_rank <= rank);
   size_t const ket_rank = rank - bra_rank;
 
   if (rank <= 4) {
@@ -453,7 +453,7 @@ auto biorthogonal_nns_project_btas(btas::Tensor<Args...> const& arr,
                                    size_t bra_rank, double threshold = 1e-12) {
   using ranges::views::iota;
   size_t const rank = arr.rank();
-  assert(bra_rank <= rank);
+  SEQUANT_ASSERT(bra_rank <= rank);
   size_t const ket_rank = rank - bra_rank;
 
   if (rank <= 4) {

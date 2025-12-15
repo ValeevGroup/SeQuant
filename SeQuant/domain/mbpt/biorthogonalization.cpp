@@ -322,7 +322,7 @@ void biorthogonal_transform(container::svector<ResultExpr>& result_exprs,
   // like R^{IJ}_{AB} and the index pairing of the result is what determines
   // the required symmetrization. Hence, the symmetrization operator must not
   // be changed when transforming from one representation into the other.
-  assert(std::all_of(
+  SEQUANT_ASSERT(std::all_of(
       result_exprs.begin(), result_exprs.end(), [](const ResultExpr& res) {
         bool found = false;
         res.expression()->visit(
