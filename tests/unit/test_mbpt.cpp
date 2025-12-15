@@ -880,6 +880,17 @@ SECTION("rules") {
 SECTION("manuscript-examples") {
   using namespace sequant::mbpt;
 
+  /// When order == 0, returns sim. transformed of zeroth order Hamiltonian.
+  /// When order > 0, returns sim. transformed perturbation operator or given
+  /// order.
+  auto H̅ = [](size_t order = 0) {
+    auto hbar0 = lst(op::H(), T(2), 4);
+    if (order == 0) return hbar0;
+    // only one-body perturbation operator
+    auto hbar_pt = lst(op::Hʼ(/*rank*/ 1, {.order = order}), T(2), 2);
+    return hbar_pt;
+  };
+
   SECTION("CCD Term") {
     auto expr = ref_av(P(2) * H() * T_(2) * T_(2));
     REQUIRE(expr.size() == 4);
@@ -895,8 +906,6 @@ SECTION("manuscript-examples") {
   }
 
   SECTION("EOM-CC Equations") {
-    const auto H̅ = lst(H(), T(2), 4);
-
     // connectivity info for right and left amplitude equations
     const auto r_connect =
         concat(default_op_connections(),
@@ -913,20 +922,17 @@ SECTION("manuscript-examples") {
     // here, we just make sure the examples run without any issues
 
     // EE
-    REQUIRE_NOTHROW(ref_av(P(2) * H̅ * R(2), r_connect));
-    REQUIRE_NOTHROW(ref_av(L(2) * H̅ * P(-2), l_connect));
+    REQUIRE_NOTHROW(ref_av(P(2) * H̅() * R(2), r_connect));
+    REQUIRE_NOTHROW(ref_av(L(2) * H̅() * P(-2), l_connect));
     // EA
-    REQUIRE_NOTHROW(P(nₚ(2), nₕ(1)) * H̅ * R(nₚ(2), nₕ(1)), r_connect);
-    REQUIRE_NOTHROW(L(nₚ(2), nₕ(1)) * H̅ * P(nₚ(-2), nₕ(-1)), l_connect);
+    REQUIRE_NOTHROW(P(nₚ(2), nₕ(1)) * H̅() * R(nₚ(2), nₕ(1)), r_connect);
+    REQUIRE_NOTHROW(L(nₚ(2), nₕ(1)) * H̅() * P(nₚ(-2), nₕ(-1)), l_connect);
     // IP
-    REQUIRE_NOTHROW(P(nₚ(1), nₕ(2)) * H̅ * R(nₚ(1), nₕ(2)), r_connect);
-    REQUIRE_NOTHROW(L(nₚ(1), nₕ(2)) * H̅ * P(nₚ(-1), nₕ(-2)), l_connect);
+    REQUIRE_NOTHROW(P(nₚ(1), nₕ(2)) * H̅() * R(nₚ(1), nₕ(2)), r_connect);
+    REQUIRE_NOTHROW(L(nₚ(1), nₕ(2)) * H̅() * P(nₚ(-1), nₕ(-2)), l_connect);
   }
 
   SECTION("CC Perturbed Amplitudes") {
-    const auto H̅ = lst(H(), T(2), 4);     // sim-transformed Hamiltonian
-    const auto H̅1 = lst(Hʼ(1), T(2), 2);  // sim-transformed pert operator
-
     // connectivity info for perturbed t and λ amplitude equations
     const auto t_connect =
         concat(default_op_connections(),
@@ -947,12 +953,12 @@ SECTION("manuscript-examples") {
                                      {OpType::h_1, OpType::A}});
 
     // perturbed t amplitudes (Eq 18 in SQ Manuscript #2)
-    auto t = ref_av(P(2) * (H̅1 + H̅ * Tʼ(2) - "ω" * Tʼ(2)), t_connect);
+    auto t = ref_av(P(2) * (H̅(1) + H̅() * Tʼ(2) - "ω" * Tʼ(2)), t_connect);
     REQUIRE(t.size() == 58);
 
     // perturbed λ amplitudes (Eq 19 in SQ Manuscript #2)
     auto λ = ref_av(
-        ((1 + Λ(2)) * (H̅1 + H̅ * Tʼ(2)) + Λʼ(2) * H̅ + "ω" * Λʼ(2)) * P(-2),
+        ((1 + Λ(2)) * (H̅(1) + H̅() * Tʼ(2)) + Λʼ(2) * H̅() + "ω" * Λʼ(2)) * P(-2),
         l_connect);
     REQUIRE(λ.size() == 63);
   }
