@@ -946,14 +946,15 @@ SECTION("manuscript-examples") {
                                      {OpType::g, OpType::A},
                                      {OpType::h_1, OpType::A}});
 
-    // pert t amplitudes except frequency term (RHS of Eq18 in SQ Manuscript #2)
-    auto t = ref_av(P(2) * (H̅1 + H̅ * Tʼ(2)), t_connect);
-    REQUIRE(t.size() == 57);
+    // perturbed t amplitudes (Eq 18 in SQ Manuscript #2)
+    auto t = ref_av(P(2) * (H̅1 + H̅ * Tʼ(2) - "ω" * Tʼ(2)), t_connect);
+    REQUIRE(t.size() == 58);
 
-    // pert λ amplitudes except frequency term (RHS of Eq19 in SQ Manuscript #2)
-    auto λ =
-        ref_av(((1 + Λ(2)) * (H̅1 + H̅ * Tʼ(2)) + Λʼ(2) * H̅) * P(-2), l_connect);
-    REQUIRE(λ.size() == 62);
+    // perturbed λ amplitudes (Eq 19 in SQ Manuscript #2)
+    auto λ = ref_av(
+        ((1 + Λ(2)) * (H̅1 + H̅ * Tʼ(2)) + Λʼ(2) * H̅ + "ω" * Λʼ(2)) * P(-2),
+        l_connect);
+    REQUIRE(λ.size() == 63);
   }
 }  // SECTION("manuscript examples")
 }
