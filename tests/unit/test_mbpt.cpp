@@ -205,7 +205,7 @@ TEST_CASE("mbpt", "[mbpt]") {
       auto l1 = Λ_(1);
       auto t2 = T_(2);
       auto l2 = Λ_(2);
-      auto h_pt = H_pt(1, {.order = 1});
+      auto h_pt = Hʼ(1, {.order = 1});
       REQUIRE(to_latex(f * t1 * t2) == to_latex(canonicalize(f * t2 * t1)));
       REQUIRE(to_latex(canonicalize(f * t1 * t2)) ==
               to_latex(canonicalize(f * t2 * t1)));
@@ -530,32 +530,31 @@ TEST_CASE("mbpt", "[mbpt]") {
           get_default_context().index_space_registry()->retrieve(L"z"));
 
       using namespace mbpt;
-      REQUIRE_NOTHROW(op::H_pt(1, {.nbatch = 1}));
-      REQUIRE_NOTHROW(op::H_pt(2, {.nbatch = 2}));
-      REQUIRE_NOTHROW(
-          op::Λ_pt(3, {.batch_ordinals = {3, 4, 5}, .skip1 = true}));
-      REQUIRE_NOTHROW(op::T_pt(1, {.nbatch = 20}));
+      REQUIRE_NOTHROW(op::Hʼ(1, {.nbatch = 1}));
+      REQUIRE_NOTHROW(op::Hʼ(2, {.nbatch = 2}));
+      REQUIRE_NOTHROW(op::Λʼ(3, {.batch_ordinals = {3, 4, 5}, .skip1 = true}));
+      REQUIRE_NOTHROW(op::Tʼ(1, {.nbatch = 20}));
 
       // invalid usages
 #if SEQUANT_ASSERT_BEHAVIOR == SEQUANT_ASSERT_THROW
       // cannot set both nbatch and batch_ordinals
-      REQUIRE_THROWS_AS(op::H_pt(2, {.nbatch = 2, .batch_ordinals = {1, 2}}),
+      REQUIRE_THROWS_AS(op::Hʼ(2, {.nbatch = 2, .batch_ordinals = {1, 2}}),
                         sequant::Exception);
       // all ordinals must be unique
-      REQUIRE_THROWS_AS(op::H_pt(2, {.batch_ordinals = {1, 2, 2}}),
+      REQUIRE_THROWS_AS(op::Hʼ(2, {.batch_ordinals = {1, 2, 2}}),
                         sequant::Exception);
       // ordinals must be sorted
-      REQUIRE_THROWS_AS(op::H_pt(1, {.batch_ordinals = {3, 2}}),
+      REQUIRE_THROWS_AS(op::Hʼ(1, {.batch_ordinals = {3, 2}}),
                         sequant::Exception);
 #endif
 
       // operations
-      auto h0 = op::H_pt(1);
+      auto h0 = op::Hʼ(1);
       REQUIRE(to_latex(h0) == L"{\\hat{h¹}}");
 
-      auto h1 = op::H_pt(1, {.nbatch = 1});
-      auto h1_2 = op::H_pt(1, {.batch_ordinals = {1, 2}});
-      auto pt1 = op::T_pt(2, {.batch_ordinals = {1}});
+      auto h1 = op::Hʼ(1, {.nbatch = 1});
+      auto h1_2 = op::Hʼ(1, {.batch_ordinals = {1, 2}});
+      auto pt1 = op::Tʼ(2, {.batch_ordinals = {1}});
 
       auto sum0 = h0 + h1;
       simplify(sum0);
@@ -890,7 +889,7 @@ SECTION("manuscript-examples") {
     const int N = 2;  // CC rank
 
     auto θ̅ = lst(θ(1), T(N), 2);
-    auto expr = (1 + Λ(N)) * θ̅ * T_pt(N) + Λ_pt(N) * θ̅;
+    auto expr = (1 + Λ(N)) * θ̅ * Tʼ(N) + Λʼ(N) * θ̅;
     auto result = ref_av(expr, {{L"θ", L"t"}, {L"θ", L"t¹"}});
     REQUIRE(result.size() == 21);
   }
@@ -925,8 +924,8 @@ SECTION("manuscript-examples") {
   }
 
   SECTION("CC Perturbed Amplitudes") {
-    const auto H̅ = lst(H(), T(2), 4);       // sim-transformed Hamiltonian
-    const auto H̅1 = lst(H_pt(1), T(2), 2);  // sim-transformed pert operator
+    const auto H̅ = lst(H(), T(2), 4);     // sim-transformed Hamiltonian
+    const auto H̅1 = lst(Hʼ(1), T(2), 2);  // sim-transformed pert operator
 
     // connectivity info for perturbed t and λ amplitude equations
     const auto t_connect =
@@ -948,12 +947,12 @@ SECTION("manuscript-examples") {
                                      {OpType::h_1, OpType::A}});
 
     // pert t amplitudes except frequency term (RHS of Eq18 in SQ Manuscript #2)
-    auto t = ref_av(P(2) * (H̅1 + H̅ * T_pt(2)), t_connect);
+    auto t = ref_av(P(2) * (H̅1 + H̅ * Tʼ(2)), t_connect);
     REQUIRE(t.size() == 57);
 
     // pert λ amplitudes except frequency term (RHS of Eq19 in SQ Manuscript #2)
-    auto λ = ref_av(((1 + Λ(2)) * (H̅1 + H̅ * T_pt(2)) + Λ_pt(2) * H̅) * P(-2),
-                    l_connect);
+    auto λ =
+        ref_av(((1 + Λ(2)) * (H̅1 + H̅ * Tʼ(2)) + Λʼ(2) * H̅) * P(-2), l_connect);
     REQUIRE(λ.size() == 62);
   }
 }  // SECTION("manuscript examples")
