@@ -2,12 +2,26 @@
 // Created by Eduard Valeyev on 8/2/23.
 //
 
-//  operator-level vac_av is same for SR and MR, to be included from {sr,mr}.cpp
+#include <SeQuant/domain/mbpt/vac_av.hpp>
 
-#ifndef SEQUANT_DOMAIN_MBPT_VAC_AV_IPP
-#define SEQUANT_DOMAIN_MBPT_VAC_AV_IPP
+#include <SeQuant/core/context.hpp>
+#include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/op.hpp>
+#include <SeQuant/core/utility/macros.hpp>
+
+#include <range/v3/algorithm/any_of.hpp>
+#include <range/v3/algorithm/for_each.hpp>
+#include <range/v3/range/conversion.hpp>
+#include <range/v3/view/filter.hpp>
+
+#include <vector>
+
+namespace sequant {
+namespace mbpt {
+inline namespace op {
 
 namespace detail {
+
 ExprPtr expectation_value_impl(
     ExprPtr expr, const OpConnections<std::wstring>& op_connections,
     bool use_topology, bool screen, bool skip_clone, bool full_contractions) {
@@ -128,8 +142,10 @@ ExprPtr expectation_value_impl(
     return expr;  // vacuum is normalized
   }
   throw std::invalid_argument(
-      "mpbt::*::expectation_value_impl(expr): unknown expression type");
+      "mbpt::op::detail::expectation_value_impl(expr): unknown expression "
+      "type");
 }
+
 }  // namespace detail
 
 ExprPtr ref_av(ExprPtr expr, const OpConnections<std::wstring>& op_connections,
@@ -152,7 +168,7 @@ ExprPtr vac_av(ExprPtr expr, const OpConnections<std::wstring>& op_connections,
                bool use_topology, bool screen, bool skip_clone) {
   return detail::expectation_value_impl(expr, op_connections, use_topology,
                                         screen, skip_clone,
-                                        /* full_contractions*/ true);
+                                        /* full_contractions */ true);
 }
 
 ExprPtr vac_av(ExprPtr expr, const OpConnections<OpType>& op_connections,
@@ -161,4 +177,6 @@ ExprPtr vac_av(ExprPtr expr, const OpConnections<OpType>& op_connections,
                 screen, skip_clone);
 }
 
-#endif  // SEQUANT_DOMAIN_MBPT_VAC_AV_IPP
+}  // namespace op
+}  // namespace mbpt
+}  // namespace sequant

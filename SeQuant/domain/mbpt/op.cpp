@@ -1236,8 +1236,6 @@ bool lowers_rank_to_vacuum(const ExprPtr& op_or_op_product,
   return can_change_qns(op_or_op_product, qns_t{}, excitation_type_qns(k));
 }
 
-#include <SeQuant/domain/mbpt/vac_av.ipp>
-
 namespace tensor {
 
 ExprPtr detail::expectation_value_impl(

@@ -2,6 +2,14 @@
 // Created by Eduard Valeyev on 2023-10-30.
 //
 
+#ifndef SEQUANT_DOMAIN_MBPT_VAC_AV_HPP
+#define SEQUANT_DOMAIN_MBPT_VAC_AV_HPP
+
+#include <SeQuant/domain/mbpt/op.hpp>
+
+namespace sequant::mbpt {
+inline namespace op {
+
 template <typename T>
 using OpConnections = std::vector<std::pair<T, T>>;
 
@@ -73,12 +81,9 @@ inline ExprPtr lower_to_tensor_form(const ExprPtr& expr_inp) {
   return expr;
 }
 
-namespace detail {
 ExprPtr expectation_value_impl(
     ExprPtr expr, const OpConnections<std::wstring>& op_connections,
     bool use_topology, bool screen, bool skip_clone, bool full_contractions);
-
-}  // namespace detail
 
 // clang-format off
 /// @brief computes the reference expectation value
@@ -165,3 +170,7 @@ ExprPtr vac_av(ExprPtr expr,
                    default_op_connections(),
                bool use_topology = true, bool screen = true,
                bool skip_clone = false);
+
+}  // namespace op
+}  // namespace sequant::mbpt
+#endif  // SEQUANT_DOMAIN_MBPT_VAC_AV_HPP

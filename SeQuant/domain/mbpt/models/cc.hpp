@@ -3,6 +3,7 @@
 
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/domain/mbpt/op.hpp>
+#include <SeQuant/domain/mbpt/vac_av.hpp>
 
 #include <cstddef>
 #include <limits>
