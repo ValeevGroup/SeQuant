@@ -814,7 +814,7 @@ ExprPtr S(std::int64_t K) {
 ExprPtr Hʼ(std::size_t R, const OpParams& params) {
   params.validate();
   SEQUANT_ASSERT(params.order == 1 &&
-                 "sequant::mbpt::tensor::H_pt: only supports first "
+                 "sequant::mbpt::tensor::Hʼ: only supports first "
                  "order perturbation");
   SEQUANT_ASSERT(R > 0 && "Operator rank must be > 0");
   return OpMaker<Statistics::FermiDirac>(OpType::h_1, ncre(R), nann(R),
@@ -824,7 +824,7 @@ ExprPtr Hʼ(std::size_t R, const OpParams& params) {
 ExprPtr Tʼ_(std::size_t K, const OpParams& params) {
   params.validate();
   SEQUANT_ASSERT(params.order == 1 &&
-                 "sequant::mbpt::tensor::T_pt_: only supports first "
+                 "sequant::mbpt::tensor::Tʼ_: only supports first "
                  "order perturbation");
   SEQUANT_ASSERT(K > 0 && "Operator rank must be > 0");
   return OpMaker<Statistics::FermiDirac>(OpType::t_1, ncre(K), nann(K),
@@ -847,7 +847,7 @@ ExprPtr Tʼ(std::size_t K, const OpParams& params) {
 ExprPtr Λʼ_(std::size_t K, const OpParams& params) {
   params.validate();
   SEQUANT_ASSERT(params.order == 1 &&
-                 "sequant::mbpt::tensor::Λ_pt_: only supports first "
+                 "sequant::mbpt::tensor::Λʼ: only supports first "
                  "order perturbation");
   SEQUANT_ASSERT(K > 0 && "Operator rank must be > 0");
   return OpMaker<Statistics::FermiDirac>(OpType::λ_1, ncre(K), nann(K),
