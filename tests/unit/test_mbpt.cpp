@@ -934,18 +934,23 @@ SECTION("manuscript-examples") {
                                      {OpType::f, OpType::A},
                                      {OpType::g, OpType::A}});
 
-    // Note: the correctness of the equations are verified in test_mbpt_cc.cpp
-    // here, we just make sure the examples run without any issues
-
     // EE
-    REQUIRE_NOTHROW(ref_av(P(2) * H̅() * R(2), r_connect));
-    REQUIRE_NOTHROW(ref_av(L(2) * H̅() * P(-2), l_connect));
+    auto r_EE = ref_av(P(2) * H̅() * R(2), r_connect);
+    auto l_EE = ref_av(L(2) * H̅() * P(-2), l_connect);
     // EA
-    REQUIRE_NOTHROW(P(nₚ(2), nₕ(1)) * H̅() * R(nₚ(2), nₕ(1)), r_connect);
-    REQUIRE_NOTHROW(L(nₚ(2), nₕ(1)) * H̅() * P(nₚ(-2), nₕ(-1)), l_connect);
+    auto r_EA = ref_av(P(nₚ(2), nₕ(1)) * H̅() * R(nₚ(2), nₕ(1)), r_connect);
+    auto l_EA = ref_av(L(nₚ(2), nₕ(1)) * H̅() * P(nₚ(-2), nₕ(-1)), l_connect);
     // IP
-    REQUIRE_NOTHROW(P(nₚ(1), nₕ(2)) * H̅() * R(nₚ(1), nₕ(2)), r_connect);
-    REQUIRE_NOTHROW(L(nₚ(1), nₕ(2)) * H̅() * P(nₚ(-1), nₕ(-2)), l_connect);
+    auto r_IP = ref_av(P(nₚ(1), nₕ(2)) * H̅() * R(nₚ(1), nₕ(2)), r_connect);
+    auto l_IP = ref_av(L(nₚ(1), nₕ(2)) * H̅() * P(nₚ(-1), nₕ(-2)), l_connect);
+
+    // number of terms are verified against eomcc results
+    REQUIRE(r_EE.size() == 53);
+    REQUIRE(l_EE.size() == 31);
+    REQUIRE(r_EA.size() == 32);
+    REQUIRE(l_EA.size() == 24);
+    REQUIRE(r_IP.size() == 32);
+    REQUIRE(l_IP.size() == 24);
   }
 
   SECTION("CC Perturbed Amplitudes") {
