@@ -908,6 +908,7 @@ SECTION("manuscript-examples") {
     auto t = ref_av(P(2) * H̅(), t_connect);
     auto λ = ref_av((1 + Λ(2)) * H̅() * P(-2), l_connect);
 
+    // numer of terms are verified against srcc results
     REQUIRE(t.size() == 31);
     REQUIRE(λ.size() == 32);
   }
@@ -918,6 +919,7 @@ SECTION("manuscript-examples") {
     auto θ̅ = lst(θ(1), T(N), 2);
     auto expr = (1 + Λ(N)) * θ̅ * Tʼ(N) + Λʼ(N) * θ̅;
     auto result = ref_av(expr, {{L"θ", L"t"}, {L"θ", L"t¹"}});
+    // number of terms is verified against MPQC4 implementation
     REQUIRE(result.size() == 21);
   }
 
@@ -975,13 +977,14 @@ SECTION("manuscript-examples") {
 
     // perturbed t amplitudes (Eq 18 in SQ Manuscript #2)
     auto t = ref_av(P(2) * (H̅(1) + H̅() * Tʼ(2) - "ω" * Tʼ(2)), t_connect);
-    REQUIRE(t.size() == 58);
-
     // perturbed λ amplitudes (Eq 19 in SQ Manuscript #2)
     auto λ = ref_av(
         ((1 + Λ(2)) * (H̅(1) + H̅() * Tʼ(2)) + Λʼ(2) * H̅() + "ω" * Λʼ(2)) * P(-2),
         l_connect);
+
+    // number of terms are verified against MPQC4 implementation
+    REQUIRE(t.size() == 58);
     REQUIRE(λ.size() == 63);
   }
-}  // SECTION("manuscript examples")
+}  // SECTION("manuscript-examples")
 }
