@@ -851,6 +851,29 @@ TEST_CASE("expr", "[elements]") {
         REQUIRE(res == ex<Constant>(rational(1, 5)));
       }
 
+      SECTION("Overloads with Variables") {
+        auto One = ex<Constant>(1);
+        auto Two = ex<Constant>(2);
+
+        ExprPtr res1 = One + L"x";
+        simplify(res1);
+        REQUIRE(res1 == simplify(One + ex<Variable>(L"x")));
+        REQUIRE(simplify(L"x" + One) == res1);
+
+        ExprPtr res2 = res1 - "x";
+        simplify(res2);
+        REQUIRE(res2 == One);
+
+        ExprPtr res3 = L"x" - One;
+        simplify(res3);
+        REQUIRE(res3 == ex<Variable>(L"x") - One);
+
+        ExprPtr res4 = Two * "y";
+        simplify(res4);
+        REQUIRE(res4 == simplify(Two * ex<Variable>("y")));
+        REQUIRE(simplify("y" * Two) == res4);
+      }
+
       SECTION("Divide by Constant") {
         ex1 = ex<Constant>(5);
 

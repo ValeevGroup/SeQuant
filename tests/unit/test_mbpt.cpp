@@ -820,11 +820,13 @@ SECTION("rules") {
   SECTION("density-fit") {
     const std::vector<std::wstring> inputs = {
         L"t{a1,a2;i1,i2} t{a3;i3}",
+        L"t{a1,a2;i1,i2} g{a3;i3}",
         L"t{a1,a2;i1,i2} g{i1,i2;a1,a2}",
         L"t{a1,a2;i1,i2} g{i1,i2;a1,a2}:A",
     };
     const std::vector<std::wstring> expected = {
         L"t{a1,a2;i1,i2} t{a3;i3}",
+        L"t{a1,a2;i1,i2} g{a3;i3}",
         L"t{a1,a2;i1,i2} B{i1;a1;x_1} B{i2;a2;x_1}",
         L"t{a1,a2;i1,i2} (B{i1;a1;x_1} B{i2;a2;x_1} "
         "- B{i2;a1;x_1} B{i1;a2;x_1})",
