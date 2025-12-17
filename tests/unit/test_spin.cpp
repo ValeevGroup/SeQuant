@@ -730,9 +730,10 @@ SECTION("Swap bra kets") {
 SECTION("Closed-shell spintrace CCD") {
   // Energy expression
   {
-    {  // standard = v1
-      const auto input = ex<Sum>(ExprPtrList{parse_expr(
-          L"1/4 g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_1,i_2}", Symmetry::Antisymm)});
+    {  // standard = v1 , expression can be parsed directly without requiring
+       // cast to Sum
+      const auto input = parse_expr(
+          L"1/4 g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_1,i_2}", Symmetry::Antisymm);
       auto result = closed_shell_CC_spintrace_v1(input);
       REQUIRE_THAT(result,
                    EquivalentTo(L"- g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_2,i_1} + "
@@ -978,6 +979,53 @@ SECTION("Closed-shell spintrace CCSD") {
   }
 }  // CCSD R1
 
+SECTION("Closed-shell CC spintrace for variable, constant, product") {
+  {  // test variable * tensors
+    auto expr1 = sequant::parse_expr(L"-ω A{i1,i2;a1,a2} t{a1,a2;i1,i2}",
+                                     Symmetry::Antisymm);
+
+    auto result_v1 = mbpt::closed_shell_CC_spintrace_v1(expr1);
+    REQUIRE_THAT(result_v1,
+                 EquivalentTo(L"-2 ω S{i1,i2;a1,a2} t{a1,a2;i1,i2}"));
+
+    auto result_v2 = mbpt::closed_shell_CC_spintrace_v2(expr1);
+    REQUIRE_THAT(result_v2,
+                 EquivalentTo(L"-2 ω S{i1,i2;a1,a2} t{a1,a2;i1,i2}"));
+  }
+  {  // test a single variable
+    auto expr1 = sequant::parse_expr(L"ω");
+
+    auto result_v1 = mbpt::closed_shell_CC_spintrace_v1(expr1);
+    REQUIRE_THAT(result_v1, EquivalentTo(L"ω"));
+
+    auto result_v2 = mbpt::closed_shell_CC_spintrace_v2(expr1);
+    REQUIRE_THAT(result_v2, EquivalentTo(L"ω"));
+  }
+  {  // test a single constant
+    auto expr1 = sequant::parse_expr(L"1/4");
+
+    auto result_v1 = mbpt::closed_shell_CC_spintrace_v1(expr1);
+    REQUIRE_THAT(result_v1, EquivalentTo(L"1/4"));
+
+    auto result_v2 = mbpt::closed_shell_CC_spintrace_v2(expr1);
+    REQUIRE_THAT(result_v2, EquivalentTo(L"1/4"));
+  }
+  {  // test a product of tensors
+    const auto input = parse_expr(L"1/4 g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_1,i_2}",
+                                  Symmetry::Antisymm);
+
+    auto result_v1 = closed_shell_CC_spintrace_v1(input);
+    REQUIRE_THAT(result_v1,
+                 EquivalentTo(L"- g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_2,i_1} + "
+                              L"2 g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_1,i_2}"));
+
+    auto result_v2 = closed_shell_CC_spintrace_v2(input);
+    REQUIRE_THAT(result_v2,
+                 EquivalentTo(L"- g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_2,i_1} + "
+                              L"2 g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_1,i_2}"));
+  }
+}
+
 SECTION("Closed-shell spintrace CCSDT terms") {
   SECTION("A3 * f * t3, , spintracing with partial-expansion") {
     auto input = ex<Constant>(rational{1, 12}) *
@@ -1021,7 +1069,8 @@ SECTION("Closed-shell spintrace CCSDT terms") {
     REQUIRE_THAT(
         result_1,
         EquivalentTo(
-            "  8 g{a_1,a_2;a_4,a_5}:N-C-S * t{a_3,a_4,a_5;i_3,i_1,i_2}:N-C-S + "
+            "  8 g{a_1,a_2;a_4,a_5}:N-C-S * t{a_3,a_4,a_5;i_3,i_1,i_2}:N-C-S "
+            "+ "
             "2 "
             "g{a_1,a_2;a_4,a_5}:N-C-S * t{a_3,a_4,a_5;i_2,i_3,i_1}:N-C-S - 4 "
             "g{a_1,a_3;a_4,a_5}:N-C-S * t{a_2,a_4,a_5;i_3,i_1,i_2}:N-C-S - 4 "
@@ -1054,7 +1103,8 @@ SECTION("Closed-shell spintrace CCSDT terms") {
     REQUIRE_THAT(
         result_2,
         EquivalentTo(
-            "8 g{a_1,a_2;a_4,a_5}:N-C-S * t{a_3,a_4,a_5;i_3,i_1,i_2}:N-C-S + 2 "
+            "8 g{a_1,a_2;a_4,a_5}:N-C-S * t{a_3,a_4,a_5;i_3,i_1,i_2}:N-C-S + "
+            "2 "
             "g{a_1,a_2;a_4,a_5}:N-C-S * t{a_3,a_4,a_5;i_2,i_3,i_1}:N-C-S - 4 "
             "g{a_1,a_3;a_4,a_5}:N-C-S * t{a_2,a_4,a_5;i_3,i_1,i_2}:N-C-S - 4 "
             "g{a_2,a_3;a_4,a_5}:N-C-S * t{a_1,a_4,a_5;i_1,i_3,i_2}:N-C-S - 4 "
@@ -1105,7 +1155,8 @@ SECTION("Closed-shell spintrace CCSDT terms") {
     REQUIRE_THAT(
         result,
         EquivalentTo(
-            L"-1/5 S{i_1,i_2,i_3;a_1,a_2,a_3}:N-C-S * g{a_1,a_2;a_4,a_5}:N-C-S "
+            L"-1/5 S{i_1,i_2,i_3;a_1,a_2,a_3}:N-C-S * "
+            L"g{a_1,a_2;a_4,a_5}:N-C-S "
             L"* "
             "t{a_3,a_4,a_5;i_1,i_2,i_3}:N-C-S + 1/2 "
             "S{i_1,i_2,i_3;a_1,a_2,a_3}:N-C-S * "
@@ -1578,7 +1629,8 @@ SECTION("ResultExpr") {
       L"R{a1,a2;i1,u1}:A = g{a1,a2;i1,u1}:A",
       L"R{a1,u1;i1,i2}:A = g{a1,u1;i1,i2}:A",
       L"R{a1,u1;i1,u2}:A = g{a1,u1;i1,u2}:A",
-      L"R{a1,u1;i1,u2}:A = f{a1;i1}:A γ{u1;u2}:A + g{a1,u1;i1,u3}:A γ{u3;u2}:A",
+      L"R{a1,u1;i1,u2}:A = f{a1;i1}:A γ{u1;u2}:A + g{a1,u1;i1,u3}:A "
+      L"γ{u3;u2}:A",
   };
   const std::vector<std::vector<std::wstring>> expected_outputs = {
       {L"R = 1/4"},
