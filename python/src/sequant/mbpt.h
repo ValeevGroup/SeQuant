@@ -35,8 +35,7 @@ inline void __init__(py::module m) {
   py::enum_<sequant::mbpt::OpType>(m, "OpType")
       .value("h", sequant::mbpt::OpType::h)
       .value("f", sequant::mbpt::OpType::f)
-      .value("t", sequant::mbpt::OpType::t)
-      .export_values();
+      .value("t", sequant::mbpt::OpType::t);
 
   m.def("F", &sequant::mbpt::F);
   m.def("H", &sequant::mbpt::H,
