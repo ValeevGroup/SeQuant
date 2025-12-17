@@ -176,7 +176,7 @@ std::vector<ExprPtr> CC::tʼ(size_t rank, size_t order,
   std::vector<ExprPtr> result(N + 1);
   for (auto p = N; p >= 1; --p) {
     const auto freq_term = ex<Variable>(L"ω") * P(nₚ(p)) *
-                           Tʼ_(p, {.order = order, .nbatch = nbatch});
+                           op::tʼ(p, {.order = order, .nbatch = nbatch});
     result.at(p) =
         this->ref_av(P(nₚ(p)) * expr, op_connect) - this->ref_av(freq_term);
   }
@@ -235,7 +235,7 @@ std::vector<ExprPtr> CC::λʼ(size_t rank, size_t order,
   std::vector<ExprPtr> result(N + 1);
   for (auto p = N; p >= 1; --p) {
     const auto freq_term = ex<Variable>(L"ω") *
-                           Λʼ_(p, {.order = order, .nbatch = nbatch}) *
+                           op::λʼ(p, {.order = order, .nbatch = nbatch}) *
                            P(nₚ(-p));
     result.at(p) =
         this->ref_av(expr * P(nₚ(-p)), op_connect) + this->ref_av(freq_term);
