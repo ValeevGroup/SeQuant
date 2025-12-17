@@ -981,16 +981,16 @@ SECTION("Closed-shell spintrace CCSD") {
 
 SECTION("Closed-shell CC spintrace for variable, constant, product") {
   {  // test variable * tensors
-    auto expr1 = sequant::parse_expr(L"-1 ω * A{i1,i2;a1,a2} * t{a1,a2;i1,i2}",
+    auto expr1 = sequant::parse_expr(L"-ω A{i1,i2;a1,a2} t{a1,a2;i1,i2}",
                                      Symmetry::Antisymm);
 
     auto result_v1 = mbpt::closed_shell_CC_spintrace_v1(expr1);
     REQUIRE_THAT(result_v1,
-                 EquivalentTo(L"-2 ω * S{i1,i2;a1,a2} * t{a1,a2;i1,i2}"));
+                 EquivalentTo(L"-2 ω S{i1,i2;a1,a2} t{a1,a2;i1,i2}"));
 
     auto result_v2 = mbpt::closed_shell_CC_spintrace_v2(expr1);
     REQUIRE_THAT(result_v2,
-                 EquivalentTo(L"-2 ω * S{i1,i2;a1,a2} * t{a1,a2;i1,i2}"));
+                 EquivalentTo(L"-2 ω S{i1,i2;a1,a2} t{a1,a2;i1,i2}"));
   }
   {  // test a single variable
     auto expr1 = sequant::parse_expr(L"ω");
