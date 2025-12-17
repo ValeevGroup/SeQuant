@@ -1238,9 +1238,9 @@ bool lowers_rank_to_vacuum(const ExprPtr& op_or_op_product,
 
 namespace tensor {
 
-ExprPtr detail::expectation_value_impl(
-    ExprPtr expr, std::vector<std::pair<int, int>> nop_connections,
-    bool use_top, bool full_contractions) {
+ExprPtr expectation_value_impl(ExprPtr expr,
+                               std::vector<std::pair<int, int>> nop_connections,
+                               bool use_top, bool full_contractions) {
   simplify(expr);
   auto isr = get_default_context().index_space_registry();
   const auto spinor = get_default_context().spbasis() == SPBasis::Spinor;
@@ -1464,14 +1464,14 @@ ExprPtr ref_av(ExprPtr expr, std::vector<std::pair<int, int>> nop_connections,
   const bool full_contractions =
       (isr->reference_occupied_space() == isr->vacuum_occupied_space()) ? true
                                                                         : false;
-  return detail::expectation_value_impl(expr, nop_connections, use_top,
-                                        full_contractions);
+  return expectation_value_impl(expr, nop_connections, use_top,
+                                full_contractions);
 }
 
 ExprPtr vac_av(ExprPtr expr, std::vector<std::pair<int, int>> nop_connections,
                bool use_top) {
-  return detail::expectation_value_impl(expr, nop_connections, use_top,
-                                        /* full_contractions*/ true);
+  return expectation_value_impl(expr, nop_connections, use_top,
+                                /* full_contractions*/ true);
 }
 
 }  // namespace tensor

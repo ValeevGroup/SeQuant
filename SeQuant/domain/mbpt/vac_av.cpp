@@ -20,8 +20,6 @@ namespace sequant {
 namespace mbpt {
 inline namespace op {
 
-namespace detail {
-
 ExprPtr expectation_value_impl(
     ExprPtr expr, const OpConnections<std::wstring>& op_connections,
     bool use_topology, bool screen, bool skip_clone, bool full_contractions) {
@@ -104,8 +102,8 @@ ExprPtr expectation_value_impl(
 
     // compute expectation value
     // call the tensor-level impl function directly
-    auto vev = tensor::detail::expectation_value_impl(
-        product, connections, use_topology, full_contractions);
+    auto vev = tensor::expectation_value_impl(product, connections,
+                                              use_topology, full_contractions);
     // restore Variable types to the Product
     if (!variables.empty())
       ranges::for_each(variables, [&vev](const auto& var) { vev *= var; });
@@ -146,16 +144,14 @@ ExprPtr expectation_value_impl(
       "type");
 }
 
-}  // namespace detail
-
 ExprPtr ref_av(ExprPtr expr, const OpConnections<std::wstring>& op_connections,
                bool use_topology, bool screen, bool skip_clone) {
   auto isr = get_default_context().index_space_registry();
   const bool full_contractions =
       (isr->reference_occupied_space() == isr->vacuum_occupied_space()) ? true
                                                                         : false;
-  return detail::expectation_value_impl(expr, op_connections, use_topology,
-                                        screen, skip_clone, full_contractions);
+  return expectation_value_impl(expr, op_connections, use_topology, screen,
+                                skip_clone, full_contractions);
 }
 
 ExprPtr ref_av(ExprPtr expr, const OpConnections<OpType>& op_connections,
@@ -166,9 +162,9 @@ ExprPtr ref_av(ExprPtr expr, const OpConnections<OpType>& op_connections,
 
 ExprPtr vac_av(ExprPtr expr, const OpConnections<std::wstring>& op_connections,
                bool use_topology, bool screen, bool skip_clone) {
-  return detail::expectation_value_impl(expr, op_connections, use_topology,
-                                        screen, skip_clone,
-                                        /* full_contractions */ true);
+  return expectation_value_impl(expr, op_connections, use_topology, screen,
+                                skip_clone,
+                                /* full_contractions */ true);
 }
 
 ExprPtr vac_av(ExprPtr expr, const OpConnections<OpType>& op_connections,
