@@ -1081,11 +1081,6 @@ SECTION("Closed-shell spintrace CCSDT terms") {
                    Symmetry::Antisymm)});
 
     auto result = closed_shell_CC_spintrace_v2(input);
-    // multiply the result by 6/5 to revert the rescaling factor
-    result *= ex<Constant>(rational{5, 6});
-
-    // There is a problem with casting a single term to Sum
-    // REQUIRE(result->size()== 1); // it needs to be checked
 
     REQUIRE_THAT(
         result,
