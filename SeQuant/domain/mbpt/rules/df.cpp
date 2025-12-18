@@ -42,19 +42,27 @@ ExprPtr density_fit(ExprPtr const& expr, IndexSpace aux_space,
                     std::wstring_view tensor_label,
                     std::wstring_view factor_label) {
   using ranges::views::transform;
-  if (expr->is<Sum>())
+
+  auto process_tensor = [&](const Tensor& tensor,
+                            std::size_t idx_ordinal) -> ExprPtr {
+    if (tensor.label() == tensor_label && tensor.bra_net_rank() == 2 &&
+        tensor.ket_net_rank() == 2 && tensor.aux_rank() == 0) {
+      return density_fit_impl(tensor, Index(aux_space, idx_ordinal),
+                              factor_label);
+    }
+
+    return nullptr;
+  };
+
+  if (expr->is<Sum>()) {
     return ex<Sum>(*expr | transform([&](auto&& x) {
       return density_fit(x, aux_space, tensor_label, factor_label);
     }));
-
-  else if (expr->is<Tensor>()) {
-    auto const& tensor = expr->as<Tensor>();
-    if (tensor.label() == tensor_label  //
-        && tensor.bra_rank() == 2       //
-        && tensor.ket_rank() == 2)
-      return density_fit_impl(tensor, Index(aux_space, 1), factor_label);
-    else
-      return expr;
+  } else if (expr->is<Tensor>()) {
+    if (auto factorized = process_tensor(expr->as<Tensor>(), 1); factorized) {
+      return factorized;
+    }
+    return expr;
   } else if (expr->is<Product>()) {
     auto const& prod = expr->as<Product>();
 
@@ -62,11 +70,13 @@ ExprPtr density_fit(ExprPtr const& expr, IndexSpace aux_space,
     result.scale(prod.scalar());
     size_t aux_ix = 0;
     for (auto&& f : prod.factors())
-      if (f.is<Tensor>() && f.as<Tensor>().label() == tensor_label) {
-        auto const& g = f->as<Tensor>();
-        auto g_df =
-            density_fit_impl(g, Index(aux_space, ++aux_ix), factor_label);
-        result.append(1, std::move(g_df), Product::Flatten::Yes);
+      if (f.is<Tensor>()) {
+        if (auto factorized = process_tensor(f->as<Tensor>(), ++aux_ix);
+            factorized) {
+          result.append(1, std::move(factorized), Product::Flatten::Yes);
+        } else {
+          result.append(1, f, Product::Flatten::No);
+        }
       } else {
         result.append(1, f, Product::Flatten::No);
       }

@@ -604,12 +604,13 @@ ExprPtr expand_A_op(const ProductPtr& product) {
 ExprPtr symmetrize_expr(const ProductPtr& product) {
   auto result = std::make_shared<Sum>();
 
-  // Assumes canonical sequence of tensors in the product
-  if (product->factor(0)->as<Tensor>().label() != L"A") return product;
-
-  // CHECK: A is present and >1 particle
-  // GENERATE S tensor
-  auto A_tensor = product->factor(0)->as<Tensor>();
+  // Drops canonical-order assumption; handles arbitrary sequence and variables.
+  const auto& factors = product->factors();
+  auto it = ranges::find_if(factors, [](const ExprPtr& factor) {
+    return factor->is<Tensor>() && factor->as<Tensor>().label() == L"A";
+  });
+  if (it == ranges::end(factors)) return product;
+  const auto& A_tensor = (*it)->as<Tensor>();
   SEQUANT_ASSERT(A_tensor.label() == L"A");
 
   auto A_is_nconserving = A_tensor.bra_rank() == A_tensor.ket_rank();
@@ -863,8 +864,13 @@ ExprPtr S_maps(const ExprPtr& expr) {
     if (!has_tensor(product, L"S")) return product;
 
     container::svector<container::map<Index, Index>> maps;
-    if (product->factor(0)->as<Tensor>().label() == L"S")
-      maps = S_replacement_maps(product->factor(0)->as<Tensor>());
+    // supports arbitrary sequence and variables
+    for (auto&& factor : product->factors()) {
+      if (factor->is<Tensor>() && factor->as<Tensor>().label() == L"S") {
+        maps = S_replacement_maps(factor->as<Tensor>());
+        break;
+      }
+    }
     SEQUANT_ASSERT(!maps.empty());
     Sum sum{};
     for (auto&& map : maps) {
@@ -1101,7 +1107,6 @@ container::svector<ResultExpr> closed_shell_spintrace(const ResultExpr& expr,
 ExprPtr closed_shell_CC_spintrace_v1(ExprPtr const& expr,
                                      ClosedShellCCSpintraceOptions options) {
   SEQUANT_ASSERT(options.method == BiorthogonalizationMethod::V1);
-  SEQUANT_ASSERT(expr->is<Sum>());
   using ranges::views::transform;
 
   auto const ext_idxs = external_indices(expr);
@@ -1137,7 +1142,6 @@ ExprPtr closed_shell_CC_spintrace_v1(ExprPtr const& expr,
 ExprPtr closed_shell_CC_spintrace_v2(ExprPtr const& expr,
                                      ClosedShellCCSpintraceOptions options) {
   SEQUANT_ASSERT(options.method == BiorthogonalizationMethod::V2);
-  SEQUANT_ASSERT(expr->is<Sum>());
   using ranges::views::transform;
 
   auto const ext_idxs = external_indices(expr);
