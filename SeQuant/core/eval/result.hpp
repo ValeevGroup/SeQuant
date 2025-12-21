@@ -966,10 +966,8 @@ class ResultTensorTA final : public Result {
 
   [[nodiscard]] ResultPtr biorthogonal_nns_project(
       size_t bra_rank) const override {
-    // nns will be never called with int type. so,
-    // for int type, return the tensor unchanged. is this a suitable approach?
     if constexpr (std::is_integral_v<numeric_type>) {
-      return eval_result<this_type>(get<ArrayT>());
+      std::abort();
     } else {
       return eval_result<this_type>(
           biorthogonal_nns_project_ta(get<ArrayT>(), bra_rank));
@@ -1235,10 +1233,8 @@ class ResultTensorBTAS final : public Result {
 
   [[nodiscard]] ResultPtr biorthogonal_nns_project(
       [[maybe_unused]] size_t bra_rank) const override {
-    // again, nns will be never called with int type. so,
-    // for int type, return the tensor unchanged. is this a suitable approach?
     if constexpr (std::is_integral_v<numeric_type>) {
-      return eval_result<ResultTensorBTAS<T>>(get<T>());
+      std::abort();
     } else {
       return eval_result<ResultTensorBTAS<T>>(
           biorthogonal_nns_project_btas(get<T>(), bra_rank));
