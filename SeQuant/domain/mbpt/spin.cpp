@@ -1182,8 +1182,9 @@ ExprPtr closed_shell_CC_spintrace_v2(ExprPtr const& expr,
         ex<Tensor>(Tensor{L"S", bra(std::move(kixs)), ket(std::move(bixs))}) *
         st_expr;
 
-    rational s_normalization_factor = rational(1, factorial(ext_idxs.size()));
-    st_expr = ex<Constant>(s_normalization_factor) * st_expr;
+    const auto nf = ex<Constant>(
+        rational{1, factorial(ext_idxs.size())});  // normalization factor for S
+    st_expr = nf * st_expr;
   }
 
   simplify(st_expr);
