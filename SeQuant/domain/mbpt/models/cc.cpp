@@ -89,8 +89,7 @@ std::vector<ExprPtr> CC::λ(size_t commutator_rank) {
   auto hbar = mbpt::lst(H(), T(N, skip_singles), commutator_rank - 1,
                         {.unitary = unitary()});
 
-  const auto One = ex<Constant>(1);
-  auto lhbar = simplify((One + Λ(N)) * hbar);
+  auto lhbar = simplify((1 + Λ(N)) * hbar);
 
   const auto op_connect = concat(default_op_connections(),
                                  OpConnections<OpType>{{OpType::h, OpType::A},
@@ -175,8 +174,8 @@ std::vector<ExprPtr> CC::tʼ(size_t rank, size_t order,
 
   std::vector<ExprPtr> result(N + 1);
   for (auto p = N; p >= 1; --p) {
-    const auto freq_term = ex<Variable>(L"ω") * P(nₚ(p)) *
-                           op::tʼ(p, {.order = order, .nbatch = nbatch});
+    const auto freq_term =
+        L"ω" * P(nₚ(p)) * op::tʼ(p, {.order = order, .nbatch = nbatch});
     result.at(p) =
         this->ref_av(P(nₚ(p)) * expr, op_connect) - this->ref_av(freq_term);
   }
@@ -208,8 +207,7 @@ std::vector<ExprPtr> CC::λʼ(size_t rank, size_t order,
       mbpt::lst(H(), T(N), 3) * Tʼ(N, {.order = order, .nbatch = nbatch});
 
   // [Eq. 35, WIREs Comput Mol Sci. 2019; 9:e1406]
-  const auto One = ex<Constant>(1);
-  const auto expr = simplify((One + Λ(N)) * (h1_bar + hbar_pert) +
+  const auto expr = simplify((1 + Λ(N)) * (h1_bar + hbar_pert) +
                              Λʼ(N, {.order = order, .nbatch = nbatch}) * hbar);
 
   // connectivity:
@@ -234,9 +232,8 @@ std::vector<ExprPtr> CC::λʼ(size_t rank, size_t order,
 
   std::vector<ExprPtr> result(N + 1);
   for (auto p = N; p >= 1; --p) {
-    const auto freq_term = ex<Variable>(L"ω") *
-                           op::λʼ(p, {.order = order, .nbatch = nbatch}) *
-                           P(nₚ(-p));
+    const auto freq_term =
+        L"ω" * op::λʼ(p, {.order = order, .nbatch = nbatch}) * P(nₚ(-p));
     result.at(p) =
         this->ref_av(expr * P(nₚ(-p)), op_connect) + this->ref_av(freq_term);
   }
