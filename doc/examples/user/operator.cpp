@@ -60,9 +60,7 @@ int main() {
   bool raises_up_to_double = raises_vacuum_up_to_rank(expr1, 2);  // true
 
   // Screening: can an expression lower a double excitation to the vacuum?
-  auto lambda2 = λ(2);
-  auto expr2 = lambda2 * h(1);
-  bool lowers_to_vacuum = lowers_rank_to_vacuum(expr2, 2);  // true
+  bool lowers_to_vacuum = lowers_rank_to_vacuum(λ(2) * h(1), 2);  // true
   // end-snippet-3
   (void)raises_to_double;
   (void)raises_up_to_double;
