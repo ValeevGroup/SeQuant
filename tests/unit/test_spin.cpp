@@ -487,11 +487,27 @@ TEST_CASE("spin", "[spin]") {
 }
 
 SECTION("Expand Symmetrizer") {
+  {  // the action of S operator in spinfree basis
+    auto ctx = sequant::get_default_context();
+    ctx.set(SPBasis::Spinfree);
+    auto _ = sequant::set_scoped_default_context(ctx);
+    auto expr = tensor::S(2) * parse_expr(L"f{a1,a2;i1,i2}");
+    simplify(expr);
+
+    if (expr.is<Product>()) {
+      auto nf = expr.as<Product>().scalar();
+      REQUIRE(nf == rational(1, 2));
+    }
+    REQUIRE_THAT(expr,
+                 SimplifiesTo("1/2 S{a_3,a_4;i_3,i_4}:N-C-S * "
+                              "f{a_1,a_2;i_1,i_2}:N-C-S * ã{i_3,i_4;a_3,a_4}"));
+  }
   {  // 2-body
     const auto input = ex<Tensor>(L"S", bra{L"i_1", L"i_2"},
                                   ket{L"a_1", L"a_2"}, Symmetry::Nonsymm) *
                        ex<Tensor>(L"t", bra{L"a_1", L"a_2"},
                                   ket{L"i_1", L"i_2"}, Symmetry::Antisymm);
+
     auto result = S_maps(input);
     REQUIRE(result->size() == 2);
     REQUIRE(result->is<Sum>());
