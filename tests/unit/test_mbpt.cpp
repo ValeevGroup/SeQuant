@@ -106,6 +106,104 @@ TEST_CASE("mbpt", "[mbpt]") {
     }
   }  // SECTION("registry")
 
+  SECTION("context") {
+    using namespace sequant::mbpt;
+
+    SECTION("default-context") {
+      auto default_ctx = get_default_mbpt_context();
+      // check default values
+      REQUIRE(default_ctx.csv() == CSV::No);
+      REQUIRE_NOTHROW(default_ctx.csv());
+      REQUIRE_NOTHROW(default_ctx.op_registry());
+    }
+
+    SECTION("context-with-CSV") {
+      auto ctx = Context({.csv = CSV::Yes});
+      REQUIRE(ctx.csv() == CSV::Yes);
+
+      ctx.set(CSV::No);
+      REQUIRE(ctx.csv() == CSV::No);
+    }
+
+    SECTION("context-with-registry") {
+      auto reg = make_minimal_registry();
+      auto ctx = Context({.op_registry_ptr = reg});
+
+      REQUIRE(ctx.csv() == CSV::No);
+      REQUIRE(ctx.op_registry() != nullptr);
+      REQUIRE(ctx.op_registry() == reg);
+    }
+
+    SECTION("set-operator-registry") {
+      auto ctx = Context();
+      auto reg = make_legacy_registry();
+
+      ctx.set(reg);
+      REQUIRE(ctx.op_registry() != nullptr);
+      REQUIRE(ctx.op_registry() == reg);
+    }
+
+    SECTION("clone-context") {
+      auto reg = std::make_shared<OpRegistry>();
+      reg->add(L"T", OpClass::ex);
+
+      auto ctx = Context({.csv = CSV::Yes, .op_registry_ptr = reg});
+      auto cloned = ctx.clone();
+
+      REQUIRE(cloned.csv() == ctx.csv());
+      REQUIRE(cloned.op_registry() != ctx.op_registry());  // Different pointer
+      REQUIRE(cloned.op_registry()->contains(L"T"));
+    }
+
+    SECTION("context-equality") {
+      auto reg1 = make_legacy_registry();
+      auto reg2 = make_minimal_registry();
+      auto ctx1 = Context({.csv = CSV::Yes, .op_registry_ptr = reg1});
+      auto ctx2 = Context({.csv = CSV::Yes, .op_registry_ptr = reg1});
+      auto ctx3 = Context({.csv = CSV::No, .op_registry_ptr = reg1});
+      auto ctx4 = Context({.csv = CSV::Yes, .op_registry_ptr = reg2});
+
+      REQUIRE(ctx1 == ctx2);
+      REQUIRE(ctx1 != ctx3);
+      REQUIRE(ctx1 != ctx4);
+    }
+
+    SECTION("scoped-context") {
+      auto original_ctx = get_default_mbpt_context();
+      auto original_csv = original_ctx.csv();
+
+      {
+        auto reg1 = make_legacy_registry();
+        auto ctx = Context({.csv = CSV::Yes, .op_registry_ptr = reg1});
+        auto _ = set_scoped_default_mbpt_context(ctx);
+
+        auto current_ctx = get_default_mbpt_context();
+        REQUIRE(current_ctx.csv() == CSV::Yes);
+        REQUIRE(current_ctx.op_registry() == reg1);
+      }
+
+      // after scope, original context should be restored
+      auto restored_ctx = get_default_mbpt_context();
+      REQUIRE(restored_ctx.csv() == original_csv);
+    }
+
+    SECTION("set-and-reset-default-context") {
+      auto original_ctx = get_default_mbpt_context();
+
+      auto reg = make_minimal_registry();
+      auto new_ctx = Context({.csv = CSV::Yes, .op_registry_ptr = reg});
+      set_default_mbpt_context(new_ctx);
+
+      auto current_ctx = get_default_mbpt_context();
+      REQUIRE(current_ctx.csv() == CSV::Yes);
+      REQUIRE(current_ctx.op_registry() == reg);
+
+      reset_default_mbpt_context();
+      auto reset_ctx = get_default_mbpt_context();
+      REQUIRE(reset_ctx.csv() == Context::Defaults::csv);
+    }
+  }  // SECTION("context")
+
   SECTION("nbody_operators") {
     using namespace sequant;
 
