@@ -1,3 +1,5 @@
+#include <fmt/base.h>
+
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/math.hpp>
 #include <SeQuant/core/op.hpp>
@@ -787,6 +789,10 @@ ExprPtr A(nₚ np, nₕ nh) {
 }
 
 ExprPtr S(std::int64_t K) {
+  if (get_default_context().spbasis() != SPBasis::Spinfree) {
+    throw std::runtime_error(
+        "The S operator should be used only with spinfree basis");
+  }
   SEQUANT_ASSERT(K != 0);
   container::svector<IndexSpace> creators;
   container::svector<IndexSpace> annihilators;
@@ -1000,6 +1006,10 @@ ExprPtr A(nₚ np, nₕ nh) {
 }
 
 ExprPtr S(std::int64_t K) {
+  if (get_default_context().spbasis() != SPBasis::Spinfree) {
+    throw std::runtime_error(
+        "The S operator should be used only with spinfree basis");
+  }
   SEQUANT_ASSERT(K != 0);
   return ex<op_t>([]() -> std::wstring_view { return L"S"; },
                   [=]() -> ExprPtr { return tensor::S(K); },
