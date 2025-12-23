@@ -31,9 +31,7 @@ class Context {
   };
 
   /// @brief makes default options for mbpt::Context
-  static Options make_default_options() {
-    return Options{};
-  }
+  static Options make_default_options() { return Options{}; }
 
   /// @brief Construct a Context object, uses default options if none are given
   Context(Options options = make_default_options());
@@ -91,6 +89,16 @@ void set_default_mbpt_context(const Context& ctx);
 void reset_default_mbpt_context();
 [[nodiscard]] sequant::detail::ImplicitContextResetter<Context>
 set_scoped_default_mbpt_context(const Context& ctx);
+
+/// predefined operator registries
+
+/// @brief makes a minimal operator registry with only essential operators for
+/// MBPT
+std::shared_ptr<OpRegistry> make_minimal_registry();
+
+/// @brief make a legacy operator registry with SeQuant's old predefined
+/// operators set
+std::shared_ptr<OpRegistry> make_legacy_registry();
 
 }  // namespace sequant::mbpt
 

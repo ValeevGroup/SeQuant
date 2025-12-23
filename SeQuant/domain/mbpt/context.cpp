@@ -71,4 +71,44 @@ set_scoped_default_mbpt_context(const Context& f) {
   return sequant::detail::set_scoped_implicit_context(f);
 }
 
+std::shared_ptr<OpRegistry> make_minimal_registry() {
+  auto registry = std::make_shared<OpRegistry>();
+
+  registry
+      ->add(L"h", OpClass::gen)   /// 1-body Hamiltonian
+      .add(L"g", OpClass::gen)    /// 2-body Coulomb
+      .add(L"f", OpClass::gen)    /// Fock operator
+      .add(L"θ", OpClass::gen)    /// general fock space operator
+      .add(L"t", OpClass::ex)     /// cluster operator
+      .add(L"λ", OpClass::deex)   /// deexcitation cluster operator
+      .add(L"R", OpClass::ex)     /// right-hand eigenstate
+      .add(L"L", OpClass::deex);  /// left-hand eigenstate
+
+  return registry;
+}
+
+std::shared_ptr<OpRegistry> make_legacy_registry() {
+  auto registry = std::make_shared<OpRegistry>();
+
+  registry->add(L"h", OpClass::gen)
+      .add(L"f", OpClass::gen)
+      /// closed Fock operator (i.e. Fock operator due to fully-occupied
+      /// orbitals)
+      .add(L"f̃", OpClass::gen)
+      .add(L"g", OpClass::gen)
+      .add(L"θ", OpClass::gen)
+      .add(L"t", OpClass::ex)
+      .add(L"λ", OpClass::deex)
+      .add(L"R", OpClass::ex)
+      .add(L"L", OpClass::deex)
+      /// R12
+      .add(L"F", OpClass::gen)
+      .add(L"GR", OpClass::gen)
+      .add(L"C", OpClass::gen)
+      /// RDM and RDM Cumulant
+      .add(L"γ", OpClass::gen)
+      .add(L"κ", OpClass::gen);
+
+  return registry;
+}
 }  // namespace sequant::mbpt
