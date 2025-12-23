@@ -6,6 +6,7 @@
 #define SEQUANT_DOMAIN_MBPT_OP_REGISTRY_HPP
 
 #include <SeQuant/core/container.hpp>
+#include <SeQuant/core/expressions/tensor.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
 #include <range/v3/view.hpp>
@@ -14,16 +15,27 @@
 
 namespace sequant::mbpt {
 
-namespace detail {
+namespace reserved {
 /// @brief returns the reserved label for the antisymmetrization operator
 inline std::wstring antisymm_label() { return L"A"; }
 
 /// @brief returns the reserved label for the symmetrization operator
 inline std::wstring symm_label() { return L"S"; }
 
-}  // namespace detail
+/// @brief returns a list of all reserved operator labels
+inline auto labels() {
+  static const std::array reserved{antisymm_label(), symm_label(),
+                                   sequant::kronecker_label(),
+                                   sequant::overlap_label()};
+  return reserved;
+}
 
-enum class OpClass;
+/// @brief checks if a label is not reserved
+inline bool is_nonreserved(const std::wstring& label) {
+  return !ranges::contains(labels(), label);
+}
+
+}  // namespace reserved
 
 /// @brief A Registry for MBPT Operators
 ///
