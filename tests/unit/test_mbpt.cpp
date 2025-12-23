@@ -864,8 +864,8 @@ SECTION("SRSO Fock") {
 
 SECTION("SRSO-PNO") {
   using sequant::mbpt::Context;
-  auto mbpt_ctx =
-      sequant::mbpt::set_scoped_default_mbpt_context(Context(mbpt::CSV::Yes));
+  auto mbpt_ctx = sequant::mbpt::set_scoped_default_mbpt_context(
+      Context({.csv = CSV::Yes}));
 
   // H2**T2**T2 -> R2
   SECTION("wick(H2**T2**T2 -> R2)") {
