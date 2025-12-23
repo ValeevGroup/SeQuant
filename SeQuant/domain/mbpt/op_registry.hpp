@@ -9,8 +9,6 @@
 #include <SeQuant/core/expressions/tensor.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
-#include <range/v3/view.hpp>
-
 #include <memory>
 
 namespace sequant::mbpt {
@@ -42,7 +40,7 @@ inline bool is_nonreserved(const std::wstring& label) {
 
 /// @brief A Registry for MBPT Operators
 ///
-/// A runtime registry that keeps track of MBPT operators by their labels and
+/// A registry that keeps track of MBPT operators by their labels and
 /// properties.
 class OpRegistry {
  public:
@@ -61,11 +59,21 @@ class OpRegistry {
   /// move constructor
   OpRegistry(OpRegistry&& other) noexcept : ops_(std::move(other.ops_)) {}
 
+  /// copy assignment operator
+  OpRegistry& operator=(const OpRegistry& other);
+
+  /// move assignment operator
+  OpRegistry& operator=(OpRegistry&& other) noexcept;
+
+  /// @brief clones this OpRegistry, creates a copy of ops_
+  OpRegistry clone() const;
+
   /// @brief Adds a new operator to the registry
   /// @param op the operator label
   /// @param action the class of the operator
   OpRegistry& add(const std::wstring& op, OpClass action);
 
+  /// @brief Removes an operator from the registry
   OpRegistry& remove(const std::wstring& op);
 
   /// @brief Checks if the registry contains an operator with the given label
@@ -91,8 +99,13 @@ class OpRegistry {
   /// @brief Validates that the operator label is not reserved and not already
   /// registered
   /// @param op the operator label to validate
-  /// @throws sequant::Exception if the label is reserved or already exists
+  /// @throws std::runtime_error if the label is reserved or already exists
   void validate_op(const std::wstring& op) const;
+
+  /// @brief Equality operator for OpRegistry
+  friend bool operator==(const OpRegistry& reg1, const OpRegistry& reg2) {
+    return *reg1.ops_ == *reg2.ops_;
+  }
 };
 }  // namespace sequant::mbpt
 

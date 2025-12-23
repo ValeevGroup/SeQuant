@@ -8,27 +8,26 @@
 #include <SeQuant/domain/mbpt/op_registry.hpp>
 
 namespace sequant::mbpt {
-
-namespace detail {
-/// @brief returns a list of reserved operator labels
-auto reserved_labels() {
-  return std::array<const std::wstring, 4>{antisymm_label(), symm_label(),
-                                           overlap_label(), kronecker_label()};
-}
-
-/// @brief checks if a label is not reserved
-bool is_nonreserved_label(const std::wstring& label) {
-  return !ranges::contains(reserved_labels(), label);
-}
-}  // namespace detail
-
 void OpRegistry::validate_op(const std::wstring& op) const {
-  // SEQUANT_ASSERT(detail::is_nonreserved_label(op),
-  //                "mbpt::OpRegistry::validate_op: operator " +
-  //                sequant::to_string (op) + " uses a reserved label");
-  SEQUANT_ASSERT(!this->contains(op), "mbpt::OpRegistry::add: operator " +
-                                          sequant::to_string(op) +
-                                          " already exists in registry");
+  if (!reserved::is_nonreserved(op)) {
+    throw std::runtime_error("mbpt::OpRegistry::add: operator " +
+                             sequant::to_string(op) + " uses a reserved label");
+  }
+  if (this->contains(op)) {
+    throw std::runtime_error("mbpt::OpRegistry::add: operator " +
+                             sequant::to_string(op) +
+                             " already exists in registry");
+  }
+}
+
+OpRegistry& OpRegistry::operator=(const OpRegistry& other) {
+  ops_ = other.ops_;
+  return *this;
+}
+
+OpRegistry& OpRegistry::operator=(OpRegistry&& other) noexcept {
+  ops_ = std::move(other.ops_);
+  return *this;
 }
 
 OpRegistry& OpRegistry::add(const std::wstring& op, OpClass action) {
@@ -38,9 +37,11 @@ OpRegistry& OpRegistry::add(const std::wstring& op, OpClass action) {
 }
 
 OpRegistry& OpRegistry::remove(const std::wstring& op) {
-  SEQUANT_ASSERT(this->contains(op), "mbpt::OpRegistry::remove: operator " +
-                                         sequant::to_string(op) +
-                                         " not found in registry");
+  if (!this->contains(op)) {
+    throw std::runtime_error("mbpt::OpRegistry::remove: operator " +
+                             sequant::to_string(op) +
+                             " does not exist in registry");
+  }
   ops_->erase(op);
   return *this;
 }
@@ -50,14 +51,22 @@ bool OpRegistry::contains(const std::wstring& op) const {
 }
 
 OpClass OpRegistry::to_class(const std::wstring& op) const {
-  SEQUANT_ASSERT(this->contains(op), "mbpt::OpRegistry::action: operator " +
-                                         sequant::to_string(op) +
-                                         " not found in registry");
+  if (!this->contains(op)) {
+    throw std::runtime_error("mbpt::OpRegistry::to_class: operator " +
+                             sequant::to_string(op) +
+                             " does not exist in registry");
+  }
   return ops_->at(op);
+}
+
+OpRegistry OpRegistry::clone() const {
+  OpRegistry result(*this);
+  result.ops_ = std::make_shared<container::map<std::wstring, OpClass>>(*ops_);
+  return result;
 }
 
 container::svector<std::wstring> OpRegistry::ops() const {
   return ranges::views::keys(*ops_) |
-         ranges::to<container::svector<std::wstring>>;
+         ranges::to<container::svector<std::wstring>>();
 }
 }  // namespace sequant::mbpt
