@@ -8,6 +8,7 @@
 #include <SeQuant/domain/mbpt/fwd.hpp>
 
 #include <SeQuant/domain/mbpt/convention.hpp>
+#include <SeQuant/domain/mbpt/op_registry.hpp>
 #include <SeQuant/domain/mbpt/spin.hpp>
 
 #include <SeQuant/core/attr.hpp>
@@ -125,9 +126,6 @@ inline const container::map<std::wstring, OpType> label2optype =
     ranges::views::zip(ranges::views::values(optype2label),
                        ranges::views::keys(optype2label)) |
     ranges::to<container::map<std::wstring, OpType>>();
-
-/// Operator character relative to Fermi vacuum
-enum class OpClass { ex, deex, gen };
 
 /// @brief Struct which holds parameters for operator construction
 struct OpParams {

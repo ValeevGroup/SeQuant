@@ -15,6 +15,9 @@
 
 namespace sequant::mbpt {
 
+/// Operator character relative to Fermi vacuum
+enum class OpClass { ex, deex, gen };
+
 namespace reserved {
 /// @brief returns the reserved label for the antisymmetrization operator
 inline std::wstring antisymm_label() { return L"A"; }
