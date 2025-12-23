@@ -14,6 +14,7 @@
 #include <SeQuant/domain/mbpt/context.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/op.hpp>
+#include <SeQuant/domain/mbpt/op_registry.hpp>
 #include <SeQuant/domain/mbpt/rules/df.hpp>
 #include <SeQuant/domain/mbpt/rules/thc.hpp>
 #include <SeQuant/domain/mbpt/utils.hpp>
@@ -33,6 +34,78 @@
 #include "SeQuant/core/utility/debug.hpp"
 
 TEST_CASE("mbpt", "[mbpt]") {
+  SECTION("registry") {
+    using namespace sequant::mbpt;
+
+    SECTION("empty-registry") {
+      OpRegistry registry;
+      REQUIRE(registry.ops().empty());
+      REQUIRE_FALSE(registry.contains(L"T"));
+    }
+
+    SECTION("add-operators") {
+      OpRegistry registry;
+      registry.add(L"T", OpClass::ex);
+      registry.add(L"L", OpClass::deex);
+      registry.add(L"F", OpClass::gen);
+
+      REQUIRE(registry.contains(L"T"));
+      REQUIRE(registry.contains(L"L"));
+      REQUIRE(registry.contains(L"F"));
+      REQUIRE(registry.ops().size() == 3);
+
+      REQUIRE(registry.to_class(L"T") == OpClass::ex);
+      REQUIRE(registry.to_class(L"L") == OpClass::deex);
+      REQUIRE(registry.to_class(L"F") == OpClass::gen);
+    }
+
+    SECTION("remove-operators") {
+      OpRegistry registry;
+      registry.add(L"T", OpClass::ex);
+      registry.add(L"L", OpClass::deex);
+
+      REQUIRE(registry.contains(L"T"));
+      registry.remove(L"T");
+      REQUIRE_FALSE(registry.contains(L"T"));
+      REQUIRE(registry.contains(L"L"));
+    }
+
+    SECTION("clone-registry") {
+      OpRegistry registry;
+      registry.add(L"T", OpClass::ex);
+      registry.add(L"L", OpClass::deex);
+
+      auto cloned = registry.clone();
+      REQUIRE(cloned.contains(L"T"));
+      REQUIRE(cloned.contains(L"L"));
+      REQUIRE(cloned.ops().size() == registry.ops().size());
+    }
+
+    SECTION("purge-registry") {
+      OpRegistry registry;
+      registry.add(L"T", OpClass::ex);
+      registry.add(L"L", OpClass::deex);
+
+      REQUIRE_FALSE(registry.ops().empty());
+      registry.purge();
+      REQUIRE(registry.ops().empty());
+    }
+
+    SECTION("reserved-labels") {
+      OpRegistry registry;
+      // should not be able to add reserved labels
+      REQUIRE_THROWS(registry.add(reserved::antisymm_label(), OpClass::gen));
+      REQUIRE_THROWS(registry.add(reserved::symm_label(), OpClass::gen));
+    }
+
+    SECTION("duplicate-operators") {
+      OpRegistry registry;
+      registry.add(L"T", OpClass::ex);
+      // should not be able to add duplicate
+      REQUIRE_THROWS(registry.add(L"T", OpClass::deex));
+    }
+  }  // SECTION("registry")
+
   SECTION("nbody_operators") {
     using namespace sequant;
 
