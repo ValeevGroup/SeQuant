@@ -2,10 +2,52 @@
 
 namespace sequant::mbpt {
 
-Context::Context(CSV csv) noexcept : csv_(csv) {}
+/// forward declaration of OpClass
+enum class OpClass;
+
+Context::Context(Options options)
+    : csv_(options.csv),
+      op_registry_(options.op_registry_ptr
+                       ? std::move(options.op_registry_ptr)
+                       : (options.op_registry
+                              ? std::make_shared<OpRegistry>(
+                                    std::move(options.op_registry.value()))
+                              : nullptr)) {}
+
+Context Context::clone() const {
+  Context ctx(*this);
+  ctx.op_registry_ = std::make_shared<OpRegistry>(op_registry_->clone());
+  return ctx;
+}
+
+CSV Context::csv() const { return csv_; }
+
+std::shared_ptr<const OpRegistry> Context::op_registry() const {
+  return op_registry_;
+}
+
+std::shared_ptr<OpRegistry> Context::mutable_op_registry() {
+  return op_registry_;
+}
+
+Context& Context::set(const OpRegistry& op_registry) {
+  op_registry_ = std::make_shared<OpRegistry>(op_registry);
+  return *this;
+}
+
+Context& Context::set(std::shared_ptr<OpRegistry> op_registry) {
+  op_registry_ = std::move(op_registry);
+  return *this;
+}
+
+Context& Context::set(CSV csv) {
+  csv_ = csv;
+  return *this;
+}
 
 bool operator==(Context const& left, Context const& right) {
-  return left.csv() == right.csv();
+  return left.csv() == right.csv() &&
+         *(left.op_registry()) == *(right.op_registry());
 }
 
 bool operator!=(Context const& left, Context const& right) {

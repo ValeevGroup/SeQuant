@@ -21,8 +21,6 @@ class Context {
     constexpr static auto csv = CSV::No;
   };
 
-  /// @brief Construct a Formalism object
-  explicit Context(CSV csv_formalism = Defaults::csv) noexcept;
   struct Options {
     /// shared pointer to operator registry
     std::shared_ptr<OpRegistry> op_registry_ptr = nullptr;
@@ -37,11 +35,49 @@ class Context {
     return Options{};
   }
 
+  /// @brief Construct a Context object, uses default options if none are given
+  Context(Options options = make_default_options());
 
-  CSV csv() const { return csv_; }
+  /// @brief destructor
+  ~Context() = default;
+
+  /// @brief move constructor
+  Context(Context&&) = default;
+
+  /// @brief copy constructor
+  Context(Context const& other) = default;
+
+  /// @brief copy assignment
+  Context& operator=(Context const& other) = default;
+
+  /// @brief clones this object and its OpRegistry
+  Context clone() const;
+
+  /// @return the value of CSV in this context
+  CSV csv() const;
+
+  /// @return a constant pointer to the OpRegistry for this context
+  /// @warning can be null when user did not provide one to Context (i.e., it
+  /// was default constructed)
+  std::shared_ptr<const OpRegistry> op_registry() const;
+
+  /// @return a pointer to the OpRegistry for this context
+  /// @warning can be null when user did not provide one to Context (i.e., it
+  /// was default constructed)
+  std::shared_ptr<OpRegistry> mutable_op_registry();
+
+  /// @brief sets the OpRegistry for this context
+  Context& set(const OpRegistry& op_registry);
+
+  /// @brief sets the OpRegistry for this context
+  Context& set(std::shared_ptr<OpRegistry> op_registry);
+
+  /// @brief sets whether to use cluster-specific virtuals
+  Context& set(CSV csv);
 
  private:
   CSV csv_ = Defaults::csv;
+  std::shared_ptr<OpRegistry> op_registry_;
 };
 
 bool operator==(Context const& left, Context const& right);
