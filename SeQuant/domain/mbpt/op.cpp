@@ -1229,7 +1229,7 @@ ExprPtr expectation_value_impl(ExprPtr expr,
   auto isr = get_default_context().index_space_registry();
   const auto spinor = get_default_context().spbasis() == SPBasis::Spinor;
   // convention is to use different label for spin-orbital and spin-free RDM
-  const auto rdm_label = spinor ? optype2label.at(OpType::RDM) : L"Γ";
+  const auto rdm_label = spinor ? L"γ" : L"Γ";
 
   // N.B. reference < vacuum is not yet supported
   if (isr->reference_occupied_space().intersection(
