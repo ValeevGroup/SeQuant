@@ -306,7 +306,11 @@ template <Statistics S>
 std::wstring to_latex(const mbpt::Operator<mbpt::qns_t, S>& op) {
   using namespace sequant::mbpt;
 
-  auto result = L"{\\hat{" + utf_to_latex(op.label()) + L"}";
+  // start with label and perturbation order (if any)
+  auto result =
+      L"{\\hat{" +
+      utf_to_latex(mbpt::decorate_with_pert_order(op.label(), op.order())) +
+      L"}";
 
   // check if operator has adjoint label, remove if present for base label
   auto base_lbl = sequant::to_wstring(op.label());
@@ -318,18 +322,24 @@ std::wstring to_latex(const mbpt::Operator<mbpt::qns_t, S>& op) {
 
   auto op_qns = op();  // operator action i.e. quantum number change
 
-  auto it = label2optype.find(base_lbl);  // look for OpType
-  const bool known_optype = it != label2optype.end();
+  auto registry = mbpt::get_default_mbpt_context().op_registry();
+  // if it is not a reserved label, make sure it is registered
+  if (reserved::is_nonreserved(base_lbl)) {
+    SEQUANT_ASSERT(registry->contains(base_lbl) &&
+                   "to_latex(mbpt::Operator): "
+                   "unregistered operator label");
+  }
+  // find the `class` of Operator
+  OpClass opclass = mbpt::to_op_class(base_lbl);
 
   // special handling for general operators
   // - Ops like f and g does not need ranks, it is implied
   // - Ops like A, S, θ are general, but need rank information
   // - θ needs to be treated differently because it can have variable number of
   // quantum numbers
-
-  auto skip_rank_info = [](const OpType& optype) {
-    return to_class(optype) == OpClass::gen &&
-           !(optype == OpType::θ || optype == OpType::A || optype == OpType::S);
+  auto skip_rank_info = [opclass](const auto& label) {
+    return opclass == OpClass::gen && label != reserved::antisymm_label() &&
+           label != reserved::symm_label() && label != L"θ";
   };
 
   // batch index handling
@@ -349,12 +359,12 @@ std::wstring to_latex(const mbpt::Operator<mbpt::qns_t, S>& op) {
     return str;
   };
 
-  if (known_optype && skip_rank_info(it->second)) {
+  if (skip_rank_info(base_lbl)) {
     result += L"}";  // close the brace
     return has_batching ? add_batch_suffix(result) : result;
   }
   // specially handle θ operator
-  if (known_optype && it->second == OpType::θ) {
+  if (base_lbl == L"θ") {
     result += L"_{" + std::to_wstring(op_qns[0].upper()) + L"}";
     result += L"}";  // close the brace
     return has_batching ? add_batch_suffix(result) : result;
@@ -385,7 +395,8 @@ std::wstring to_latex(const mbpt::Operator<mbpt::qns_t, S>& op) {
     // check if the Op is a projector (A or S)
     // projectors can have negative ranks, need special handling
     [[maybe_unused]] const bool is_projector =
-        known_optype && (it->second == OpType::A || it->second == OpType::S);
+        base_lbl == reserved::antisymm_label() ||
+        base_lbl == reserved::symm_label();
 
     // pure quasiparticle creator/annihilator?
     const auto qprank_cre = ncre_p.lower() + nann_h.lower();
