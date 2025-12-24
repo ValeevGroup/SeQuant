@@ -1,8 +1,6 @@
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/domain/mbpt/rdm.hpp>
 
-namespace sequant::mbpt::decompositions {
-
 // anonymous namespace for holding specific labels used here
 namespace {
 std::wstring rdm_label() {
@@ -15,6 +13,8 @@ std::wstring rdm_cumulant_label() {
   return label;
 }
 }  // namespace
+
+namespace sequant::mbpt::decompositions {
 
 ExprPtr cumu_to_density(ExprPtr ex_) {
   SEQUANT_ASSERT(ex_->is<Tensor>());
