@@ -4,10 +4,10 @@
 
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/domain/mbpt/context.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/op.hpp>
 #include <SeQuant/domain/mbpt/vac_av.hpp>
-#include "SeQuant/domain/mbpt/context.hpp"
 
 int main() {
   // start-snippet-0
