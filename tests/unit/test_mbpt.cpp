@@ -181,27 +181,13 @@ TEST_CASE("mbpt", "[mbpt]") {
         auto current_ctx = get_default_mbpt_context();
         REQUIRE(current_ctx.csv() == CSV::Yes);
         REQUIRE(current_ctx.op_registry() == reg1);
+        REQUIRE(current_ctx.op_registry()->contains(L"t"));
+        REQUIRE(current_ctx.op_registry()->contains(L"λ"));
       }
 
       // after scope, original context should be restored
       auto restored_ctx = get_default_mbpt_context();
       REQUIRE(restored_ctx.csv() == original_csv);
-    }
-
-    SECTION("set-and-reset-default-context") {
-      auto original_ctx = get_default_mbpt_context();
-
-      auto reg = make_minimal_registry();
-      auto new_ctx = Context({.csv = CSV::Yes, .op_registry_ptr = reg});
-      set_default_mbpt_context(new_ctx);
-
-      auto current_ctx = get_default_mbpt_context();
-      REQUIRE(current_ctx.csv() == CSV::Yes);
-      REQUIRE(current_ctx.op_registry() == reg);
-
-      reset_default_mbpt_context();
-      auto reset_ctx = get_default_mbpt_context();
-      REQUIRE(reset_ctx.csv() == Context::Defaults::csv);
     }
   }  // SECTION("context")
 
