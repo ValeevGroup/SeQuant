@@ -373,6 +373,7 @@ set(SeQuant_src
         SeQuant/domain/mbpt/convention.hpp
         SeQuant/domain/mbpt/models/cc.cpp
         SeQuant/domain/mbpt/models/cc.hpp
+        SeQuant/domain/mbpt/reserved.hpp
         SeQuant/domain/mbpt/op_registry.hpp
         SeQuant/domain/mbpt/op_registry.cpp
         SeQuant/domain/mbpt/op.cpp
