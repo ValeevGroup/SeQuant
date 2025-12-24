@@ -325,7 +325,7 @@ TEST_CASE("eval_with_btas", "[eval_btas]") {
     temp.clear();
     man1 += BTensorD{permute(g, {1, 0, 3, 2})};
 
-    btas::scal(0.5, man1);
+    btas::scal(2.0, man1);  // 4 * 1/2
 
     REQUIRE(norm(eval1) == Catch::Approx(norm(man1)));
 
@@ -343,6 +343,7 @@ TEST_CASE("eval_with_btas", "[eval_btas]") {
     temp2 += BTensorD{permute(r, {1, 0, 2})};
     btas::scal(-1.0, temp2);
     man2 += temp2;
+    btas::scal(2.0, man2);
     temp2.clear();
 
     REQUIRE(norm(eval2) == Catch::Approx(norm(man2)));
@@ -362,7 +363,6 @@ TEST_CASE("eval_with_btas", "[eval_btas]") {
 
     man1 += BTensorD{permute(g, {0, 1, 2, 3})};
     man1 += BTensorD{permute(g, {1, 0, 3, 2})};
-    btas::scal(0.5, man1);
 
     REQUIRE(norm(eval1) == Catch::Approx(norm(man1)));
   }

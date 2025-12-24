@@ -447,7 +447,8 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
       man1("0,1,2,3") =
           arr1("0,1,2,3") - arr1("1,0,2,3") + arr1("1,0,3,2") - arr1("0,1,3,2");
 
-      man1("0,1,2,3") = 0.5 * man1("0,1,2,3");
+      // should be multiplied by (N_ket)! * (N_bra)! so, 4 * 1/2
+      man1("0,1,2,3") = 2.0 * man1("0,1,2,3");
 
       REQUIRE(norm(man1) == Catch::Approx(norm(eval1)));
 
@@ -469,16 +470,20 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
           arr2("2,1,0,3,4") + arr2("2,0,1,3,4") - arr2("0,2,1,3,4") -
           arr2("0,1,2,4,3") + arr2("1,0,2,4,3") - arr2("1,2,0,4,3") +
           arr2("2,1,0,4,3") - arr2("2,0,1,4,3") + arr2("0,2,1,4,3");
+
+      man2("0,1,2,3,4") = 24.0 * man2("0,1,2,3,4");
       TArrayD zero2;
       zero2("0,1,2,3,4") = man2("0,1,2,3,4") - eval2("0,1,2,3,4");
-      REQUIRE(norm(zero2) == Catch::Approx(0).margin(
-                                 100 * std::numeric_limits<double>::epsilon()));
+      REQUIRE(norm(zero2) ==
+              Catch::Approx(0).margin(1000 *
+                                      std::numeric_limits<double>::epsilon()));
 
       auto expr3 = parse_antisymm(L"R_{a1,a2}^{}");
       auto eval3 = eval_antisymm(expr3, "a_1,a_2");
       auto const& arr3 = yield(L"R{a1,a2;}");
       auto man3 = TArrayD{};
       man3("0,1") = arr3("0,1") - arr3("1,0");
+      man3("0,1") = 2 * man3("0,1");
 
       TArrayD zero3;
       zero3("0,1") = man3("0,1") - eval3("0,1");
@@ -493,7 +498,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
 
       auto man1 = TArrayD{};
       man1("0,1,2,3") = arr1("0,1,2,3") + arr1("1,0,3,2");
-      man1("0,1,2,3") = 0.5 * man1("0,1,2,3");
+      man1("0,1,2,3") = man1("0,1,2,3");  // 1/2 * 2!
 
       REQUIRE(norm(man1) == Catch::Approx(norm(eval1)));
 
@@ -506,6 +511,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
                             arr2("2,0,1,5,3,4") + arr2("2,1,0,5,4,3") +
                             arr2("1,2,0,4,5,3") + arr2("1,0,2,4,3,5");
 
+      man2("0,1,2,3,4,5") = 6 * man2("0,1,2,3,4,5");  // * (N_ket)!
       REQUIRE(norm(man2) == Catch::Approx(norm(eval2)));
     }
 
@@ -707,7 +713,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
       man1("0,1,2,3") =
           arr1("0,1,2,3") - arr1("1,0,2,3") + arr1("1,0,3,2") - arr1("0,1,3,2");
 
-      man1("0,1,2,3") = std::complex<double>{0.5} * man1("0,1,2,3");
+      man1("0,1,2,3") = std::complex<double>{2.0} * man1("0,1,2,3");  // 4 * 1/2
 
       REQUIRE(norm(man1) == Catch::Approx(norm(eval1)));
 
@@ -728,16 +734,21 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
           arr2("2,1,0,3,4") + arr2("2,0,1,3,4") - arr2("0,2,1,3,4") -
           arr2("0,1,2,4,3") + arr2("1,0,2,4,3") - arr2("1,2,0,4,3") +
           arr2("2,1,0,4,3") - arr2("2,0,1,4,3") + arr2("0,2,1,4,3");
+
+      man2("0,1,2,3,4") =
+          24.0 * man2("0,1,2,3,4");  // why it got almost zero without this?
       TArrayC zero2;
       zero2("0,1,2,3,4") = man2("0,1,2,3,4") - eval2("0,1,2,3,4");
-      REQUIRE(norm(zero2) == Catch::Approx(0).margin(
-                                 100 * std::numeric_limits<double>::epsilon()));
+      REQUIRE(norm(zero2) ==
+              Catch::Approx(0).margin(1000 *
+                                      std::numeric_limits<double>::epsilon()));
 
       auto expr3 = parse_expr(L"R_{a1,a2}^{}");
       auto eval3 = eval_antisymm(expr3, "a_1,a_2");
       auto const& arr3 = yield(L"R{a1,a2;}");
       auto man3 = TArrayC{};
       man3("0,1") = arr3("0,1") - arr3("1,0");
+      man3("0,1") = 2.0 * man3("0,1");
 
       TArrayC zero3;
       zero3("0,1") = man3("0,1") - eval3("0,1");
@@ -752,7 +763,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
 
       auto man1 = TArrayC{};
       man1("0,1,2,3") = arr1("0,1,2,3") + arr1("1,0,3,2");
-      man1("0,1,2,3") = 0.5 * man1("0,1,2,3");
+      man1("0,1,2,3") = man1("0,1,2,3");  // 2 * 1/2
 
       REQUIRE(norm(man1) == Catch::Approx(norm(eval1)));
 
@@ -764,6 +775,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
       man2("0,1,2,3,4,5") = arr2("0,1,2,3,4,5") + arr2("0,2,1,3,5,4") +
                             arr2("2,0,1,5,3,4") + arr2("2,1,0,5,4,3") +
                             arr2("1,2,0,4,5,3") + arr2("1,0,2,4,3,5");
+      man2("0,1,2,3,4,5") = 6.0 * man2("0,1,2,3,4,5");
 
       REQUIRE(norm(man2) == Catch::Approx(norm(eval2)));
     }

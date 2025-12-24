@@ -7,6 +7,7 @@
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/logger.hpp>
+#include <SeQuant/core/math.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
 #include <TiledArray/einsum/tiledarray.h>
@@ -176,6 +177,9 @@ auto column_symmetrize_ta(TA::DistArray<Args...> const& arr) {
 
   TA::DistArray<Args...>::wait_for_lazy_cleanup(result.world());
 
+  auto const nf = static_cast<double>(factorial(nparticles));
+  result(lannot) = nf * result(lannot);
+
   return result;
 }
 
@@ -242,6 +246,11 @@ auto particle_antisymmetrize_ta(TA::DistArray<Args...> const& arr,
   result = process_permutations(result, ket_rank, ket_perm, bra_annot, false);
 
   TA::DistArray<Args...>::wait_for_lazy_cleanup(result.world());
+
+  auto const nf_bra = static_cast<double>(factorial(bra_rank));
+  auto const nf_ket = static_cast<double>(factorial(ket_rank));
+  result(lannot) = (nf_bra * nf_ket) * result(lannot);
+
   return result;
 }
 
@@ -281,6 +290,9 @@ auto column_symmetrize_btas(btas::Tensor<Args...> const& arr) {
                                                perm.begin() + nparticles,  //
                                                nparticles},
                         call_back);
+
+  auto const nf = static_cast<double>(factorial(nparticles));
+  btas::scal(nf, result);
 
   return result;
 }
@@ -336,6 +348,10 @@ auto particle_antisymmetrize_btas(btas::Tensor<Args...> const& arr,
   // Process ket permutations if needed
   const auto bra_annot = bra_rank == 0 ? perm_t{} : bra_perm;
   result = process_permutations(result, ket_rank, ket_perm, bra_annot, false);
+
+  auto const nf_bra = static_cast<double>(factorial(bra_rank));
+  auto const nf_ket = static_cast<double>(factorial(ket_rank));
+  btas::scal(nf_bra * nf_ket, result);
 
   return result;
 }
