@@ -26,31 +26,24 @@ template <typename QuantumNumbers, Statistics S>
 Operator<QuantumNumbers, S>::Operator(
     std::function<std::wstring_view()> label_generator,
     std::function<ExprPtr()> tensor_form_generator,
-    std::function<void(QuantumNumbers&)> qn_action, size_t batch_idx_rank)
+    std::function<void(QuantumNumbers&)> qn_action, const OpParams& params)
     : Operator(std::move(label_generator), std::move(tensor_form_generator),
                std::move(qn_action)) {
-  mbpt::check_for_batching_space();
-  SEQUANT_ASSERT(batch_idx_rank != 0 &&
-                 "Operator: batch_idx_rank cannot be zero");
-  // make aux ordinals [1 to batch_idx_rank]
-  batch_ordinals_ = ranges::views::iota(1ul, 1ul + batch_idx_rank) |
-                    ranges::to<container::svector<std::size_t>>();
-}
-
-template <typename QuantumNumbers, Statistics S>
-Operator<QuantumNumbers, S>::Operator(
-    std::function<std::wstring_view()> label_generator,
-    std::function<ExprPtr()> tensor_form_generator,
-    std::function<void(QuantumNumbers&)> qn_action,
-    const container::svector<std::size_t>& batch_ordinals)
-    : Operator(std::move(label_generator), std::move(tensor_form_generator),
-               std::move(qn_action)) {
-  mbpt::check_for_batching_space();
-  SEQUANT_ASSERT(!batch_ordinals.empty() &&
-                 "Operator: batch_ordinals cannot be empty");
-  SEQUANT_ASSERT(ranges::is_sorted(batch_ordinals) &&
-                 "Operator: batch_ordinals must be sorted");
-  batch_ordinals_ = batch_ordinals;
+  params.validate();
+  order_ = params.order;
+  // set up batch ordinals if any
+  if (!params.batch_ordinals.empty()) {
+    mbpt::check_for_batching_space();
+    SEQUANT_ASSERT(ranges::is_sorted(params.batch_ordinals) &&
+                   "Operator: batch_ordinals must be sorted");
+    batch_ordinals_ = params.batch_ordinals;
+  } else if (params.nbatch) {
+    mbpt::check_for_batching_space();
+    SEQUANT_ASSERT(params.nbatch != 0 && "Operator: nbatch cannot be zero");
+    // make aux ordinals [1 to nbatch]
+    batch_ordinals_ = ranges::views::iota(1ul, 1ul + params.nbatch.value()) |
+                      ranges::to<container::svector<std::size_t>>();
+  }
 }
 
 template <typename QuantumNumbers, Statistics S>
@@ -207,6 +200,7 @@ Expr::hash_type Operator<QuantumNumbers, S>::memoizing_hash() const {
     auto qns = (*this)(QuantumNumbers{});
     auto val = sequant::hash::value(qns);
     sequant::hash::combine(val, std::wstring(this->label()));
+    sequant::hash::combine(val, this->order());
     if (batch_ordinals()) {
       const auto ordinals = batch_ordinals().value();
       sequant::hash::range(val, begin(ordinals), end(ordinals));

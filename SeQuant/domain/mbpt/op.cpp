@@ -1004,30 +1004,6 @@ ExprPtr P(nₚ np, nₕ nh) {
   }
 }
 
-namespace {
-/// @brief Helper to create Operator from OpParams
-/// @param label_gen Callable to generate operator label
-/// @param tensor_gen Callable to generate tensor form
-/// @param qn_action Callable to apply quantum number changes
-/// @param params OpParams containing operator parameters (batching, etc.)
-/// @return ExprPtr to the created Operator
-ExprPtr make_op_from_params(std::function<std::wstring_view()> label_gen,
-                            std::function<ExprPtr()> tensor_gen,
-                            std::function<void(qnc_t&)> qn_action,
-                            const OpParams& params) {
-  params.validate();
-  if (!params.batch_ordinals.empty()) {
-    mbpt::check_for_batching_space();
-    return ex<op_t>(label_gen, tensor_gen, qn_action, params.batch_ordinals);
-  } else if (params.nbatch) {
-    mbpt::check_for_batching_space();
-    return ex<op_t>(label_gen, tensor_gen, qn_action, params.nbatch.value());
-  } else {
-    return ex<op_t>(label_gen, tensor_gen, qn_action);
-  }
-}
-}  // anonymous namespace
-
 ExprPtr H_pt(std::size_t R, const OpParams& params) {
   SEQUANT_ASSERT(R > 0);
   SEQUANT_ASSERT(params.order == 1 &&

@@ -834,31 +834,10 @@ class Operator : public Operator<void, S> {
            std::function<ExprPtr()> tensor_form_generator,
            std::function<void(QuantumNumbers&)> qn_action);
 
-  /// @brief Constructs an operator with the given label and tensor form and
-  /// quantum number action
-  /// @param label_generator a function that generates the label for the
-  /// operator
-  /// @param tensor_form_generator a function that generates the tensor form of
-  /// the operator
-  /// @param qn_action a function that modifies the quantum numbers
-  /// @param batch_idx_rank the rank of the batch index, must be non-zero
   Operator(std::function<std::wstring_view()> label_generator,
            std::function<ExprPtr()> tensor_form_generator,
            std::function<void(QuantumNumbers&)> qn_action,
-           size_t batch_idx_rank);
-
-  /// @brief Constructs an operator with the given label and tensor form and
-  /// quantum number action
-  /// @param label_generator a function that generates the label for the
-  /// operator
-  /// @param tensor_form_generator a function that generates the tensor form of
-  /// the operator
-  /// @param qn_action a function that modifies the quantum numbers
-  /// @param batch_ordinals the unique, sorted ordinals of the batch indices
-  Operator(std::function<std::wstring_view()> label_generator,
-           std::function<ExprPtr()> tensor_form_generator,
-           std::function<void(QuantumNumbers&)> qn_action,
-           const container::svector<std::size_t>& batch_ordinals);
+           const OpParams& params);
 
   virtual ~Operator();
 
@@ -899,12 +878,17 @@ class Operator : public Operator<void, S> {
     return batch_ordinals_;
   }
 
+  /// @brief returns the pertubation order of this operator
+  [[nodiscard]] size_t order() const { return order_; }
+
  private:
   std::function<void(QuantumNumbers&)> qn_action_;
 
   bool is_adjoint_ = false;
 
   std::optional<container::svector<std::size_t>> batch_ordinals_ = std::nullopt;
+
+  size_t order_ = 0;
 
   bool less_than_rank_of(const this_type& that) const;
 
