@@ -1,5 +1,3 @@
-#include <fmt/base.h>
-
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/math.hpp>
 #include <SeQuant/core/op.hpp>
