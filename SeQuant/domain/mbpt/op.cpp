@@ -454,13 +454,15 @@ sequant::container::svector<sequant::Index> make_batch_indices(
 namespace sequant::mbpt {
 
 template <Statistics S>
-OpMaker<S>::OpMaker(OpType op) : op_(op) {}
+OpMaker<S>::OpMaker(const std::wstring& label) : label_(label) {}
 
 template <Statistics S>
-OpMaker<S>::OpMaker(OpType op, ncre nc, nann na) {
-  op_ = op;
+OpMaker<S>::OpMaker(const std::wstring& label, ncre nc, nann na) {
+  label_ = label;
   SEQUANT_ASSERT(nc > 0 || na > 0);
-  switch (to_class(op)) {
+  auto registry = get_default_mbpt_context().op_registry();
+
+  switch (registry->to_class(label_)) {
     case OpClass::ex:
       cre_spaces_ = IndexSpaceContainer(nc, get_particle_space(Spin::any));
       ann_spaces_ = IndexSpaceContainer(na, get_hole_space(Spin::any));
@@ -477,23 +479,27 @@ OpMaker<S>::OpMaker(OpType op, ncre nc, nann na) {
 }
 
 template <Statistics S>
-OpMaker<S>::OpMaker(OpType op, std::size_t rank)
-    : OpMaker(op, ncre(rank), nann(rank)) {}
+OpMaker<S>::OpMaker(const std::wstring& label, std::size_t rank)
+    : OpMaker(label, ncre(rank), nann(rank)) {}
 
 template <Statistics S>
-OpMaker<S>::OpMaker(OpType op, ncre nc, nann na,
+OpMaker<S>::OpMaker(const std::wstring& label, ncre nc, nann na,
                     const cre<IndexSpace>& cre_space,
                     const ann<IndexSpace>& ann_space) {
-  op_ = op;
+  label_ = label;
   SEQUANT_ASSERT(nc > 0 || na > 0);
   cre_spaces_ = IndexSpaceContainer(nc, cre_space);
   ann_spaces_ = IndexSpaceContainer(na, ann_space);
 }
 
 template <Statistics S>
-OpMaker<S>::OpMaker(OpType op, ncre nc, nann na, const OpParams& params)
-    : OpMaker<S>(op, nc, na) {
+OpMaker<S>::OpMaker(const std::wstring& label, ncre nc, nann na,
+                    const OpParams& params)
+    : OpMaker<S>(label, nc, na) {
   params.validate();
+
+  // set perturbation order
+  order_ = params.order;
 
   // Handle batching indices if specified
   if (!params.batch_ordinals.empty()) {
@@ -524,17 +530,21 @@ template <Statistics S>
 ExprPtr OpMaker<S>::operator()(std::optional<UseDepIdx> dep,
                                std::optional<Symmetry> opsymm_opt) const {
   auto isr = get_default_context(Statistics::FermiDirac).index_space_registry();
+
   // if not given dep, use mbpt::Context::CSV to determine whether to use
   // dependent indices for pure (de)excitation ops
-  if (!dep && get_default_mbpt_context().csv() == mbpt::CSV::Yes) {
-    if (to_class(op_) == OpClass::ex) {
+  const auto csv = get_default_mbpt_context().csv() == mbpt::CSV::Yes;
+  const auto opclass = mbpt::to_op_class(label_);
+
+  if (!dep && csv) {
+    if (opclass == OpClass::ex) {
 #ifdef SEQUANT_ASSERT_ENABLED
       for (auto&& s : cre_spaces_) {
         SEQUANT_ASSERT(isr->contains_unoccupied(s));
       }
 #endif
       dep = UseDepIdx::Bra;
-    } else if (to_class(op_) == OpClass::deex) {
+    } else if (opclass == OpClass::deex) {
 #ifdef SEQUANT_ASSERT_ENABLED
       for (auto&& s : ann_spaces_) {
         SEQUANT_ASSERT(isr->contains_unoccupied(s));
@@ -545,14 +555,15 @@ ExprPtr OpMaker<S>::operator()(std::optional<UseDepIdx> dep,
       dep = UseDepIdx::None;
     }
   }
+  const std::wstring full_label = decorate_with_pert_order(label_, order_);
 
   // if batching indices are present, use them
   if (batch_indices_) {
     return make(
         cre_spaces_, ann_spaces_, batch_indices_.value(),
-        [this, opsymm_opt](const auto& creidxs, const auto& annidxs,
-                           const auto& batchidxs, Symmetry opsymm) {
-          return ex<Tensor>(to_wstring(op_), bra(creidxs), ket(annidxs),
+        [this, opsymm_opt, full_label](const auto& creidxs, const auto& annidxs,
+                                       const auto& batchidxs, Symmetry opsymm) {
+          return ex<Tensor>(full_label, bra(creidxs), ket(annidxs),
                             aux(batchidxs), opsymm_opt ? *opsymm_opt : opsymm);
         },
         dep ? *dep : UseDepIdx::None);
@@ -560,9 +571,9 @@ ExprPtr OpMaker<S>::operator()(std::optional<UseDepIdx> dep,
   // else no batching
   return make(
       cre_spaces_, ann_spaces_,
-      [this, opsymm_opt](const auto& creidxs, const auto& annidxs,
-                         Symmetry opsymm) {
-        return ex<Tensor>(to_wstring(op_), bra(creidxs), ket(annidxs),
+      [this, opsymm_opt, full_label](const auto& creidxs, const auto& annidxs,
+                                     Symmetry opsymm) {
+        return ex<Tensor>(full_label, bra(creidxs), ket(annidxs),
                           opsymm_opt ? *opsymm_opt : opsymm);
       },
       dep ? *dep : UseDepIdx::None);

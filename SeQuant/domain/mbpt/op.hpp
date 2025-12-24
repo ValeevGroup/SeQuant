@@ -52,6 +52,10 @@
 namespace sequant {
 namespace mbpt {
 
+namespace detail {
+inline constexpr std::wstring_view pert_superscripts = L"⁰¹²³⁴⁵⁶⁷⁸⁹";
+}  // namespace detail
+
 DEFINE_STRONG_TYPE_FOR_INTEGER(nₚ, std::int64_t);  // define nₚ
 DEFINE_STRONG_TYPE_FOR_INTEGER(nₕ, std::int64_t);  // define nₕ
 
@@ -98,8 +102,21 @@ struct OpParams {
 /// @return the tensor labels in the cardinal order
 std::vector<std::wstring> cardinal_tensor_labels();
 
-std::wstring to_wstring(OpType op);
-OpClass to_class(OpType op);
+/// @brief decorates a base label with perturbation order as superscript
+/// @param base_label the base label to decorate
+/// @param pert_order the perturbation order to decorate with
+/// @return the decorated label
+inline std::wstring decorate_with_pert_order(std::wstring_view base_label,
+                                             int pert_order = 0) {
+  if (pert_order == 0) return std::wstring(base_label);
+  SEQUANT_ASSERT(
+      pert_order >= 0 && pert_order <= 9,
+      "decorate_with_pert_order: perturbation order out of range [0,9]");
+
+  std::wstring result(base_label);
+  result += detail::pert_superscripts[pert_order];
+  return result;
+}
 
 //////////////////////////////
 
@@ -557,9 +574,10 @@ class OpMaker {
   /// @param[in] cre_list list of creator indices
   /// @param[in] ann_list list of annihilator indices
   template <typename IndexSpaceTypeRange1, typename IndexSpaceTypeRange2>
-  OpMaker(OpType op, const cre<IndexSpaceTypeRange1>& cre_list,
-          const ann<IndexSpaceTypeRange2>& ann_list)
-      : op_(op),
+  OpMaker(const std::wstring& label, const cre<IndexSpaceTypeRange1>& cre_list,
+          const ann<IndexSpaceTypeRange2>& ann_list, size_t order = 0)
+      : label_(label),
+        order_(order),
         cre_spaces_(cre_list.begin(), cre_list.end()),
         ann_spaces_(ann_list.begin(), ann_list.end()) {
     SEQUANT_ASSERT(ncreators() > 0 || nannihilators() > 0);
@@ -568,28 +586,28 @@ class OpMaker {
   /// @param[in] op the operator type
   /// @param[in] nc number of bra indices/creators
   /// @param[in] na number of ket indices/annihilators
-  OpMaker(OpType op, ncre nc, nann na);
+  OpMaker(const std::wstring& label, ncre nc, nann na);
 
   /// @brief creates a particle-conserving replacement operator
   /// @param[in] op the operator type
   /// @param[in] rank particle rank of the operator (# of creators = # of
   /// annihilators = @p rank )
-  OpMaker(OpType op, std::size_t rank);
+  OpMaker(const std::wstring& label, std::size_t rank);
 
   /// @param[in] op the operator type
   /// @param[in] nc number of bra indices/creators
   /// @param[in] na number of ket indices/annihilators
   /// @param[in] cre_space IndexSpace referred to be the creator
   /// @param[in] ann_space IndexSpace referred to be the annihilators
-  OpMaker(OpType op, ncre nc, nann na, const cre<IndexSpace>& cre_space,
-          const ann<IndexSpace>& ann_space);
+  OpMaker(const std::wstring& label, ncre nc, nann na,
+          const cre<IndexSpace>& cre_space, const ann<IndexSpace>& ann_space);
 
   /// @brief Creates operator from OpParams
   /// @param[in] op the operator type
   /// @param[in] nc number of bra indices/creators
   /// @param[in] na number of ket indices/annihilators
   /// @param[in] params named parameters for operator construction
-  OpMaker(OpType op, ncre nc, nann na, const OpParams& params);
+  OpMaker(const std::wstring& label, ncre nc, nann na, const OpParams& params);
 
   enum class UseDepIdx {
     /// bra/cre indices depend on ket
@@ -779,12 +797,13 @@ class OpMaker {
   }
 
  protected:
-  OpType op_;
+  std::wstring label_;
+  size_t order_ = 0;
   IndexSpaceContainer cre_spaces_;
   IndexSpaceContainer ann_spaces_;
   std::optional<IndexContainer> batch_indices_ = std::nullopt;
 
-  OpMaker(OpType op);
+  OpMaker(const std::wstring& op);
 
   [[nodiscard]] auto ncreators() const { return cre_spaces_.size(); };
   [[nodiscard]] auto nannihilators() const { return ann_spaces_.size(); };
