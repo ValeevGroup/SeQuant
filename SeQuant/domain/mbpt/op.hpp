@@ -928,7 +928,8 @@ ExprPtr H(std::size_t k = 2);
 /// @brief Fock operator implied one-body operator, optional explicit
 /// construction requires user to specify the IndexSpace corresponding to all
 /// orbitals which may have non-zero density.
-ExprPtr F(bool use_tensor = true, IndexSpace reference_occupied = {L"", 0});
+ExprPtr F(bool use_tensor = true,
+          const IndexSpace& reference_occupied = {L"", 0});
 
 /// A general operator of rank \p K
 ExprPtr θ(std::size_t K);
@@ -1062,7 +1063,8 @@ ExprPtr H(std::size_t k = 2);
 /// @brief Fock operator implied one-body operator, optional explicit
 /// construction requires user to specify the IndexSpace corresponding to all
 /// orbitals which may have non-zero density.
-ExprPtr F(bool use_tensor = true, IndexSpace reference_occupied = {L"", 0});
+ExprPtr F(bool use_tensor = true,
+          const IndexSpace& reference_occupied = {L"", 0});
 
 /// A general operator of rank \p K
 ExprPtr θ(std::size_t K);
