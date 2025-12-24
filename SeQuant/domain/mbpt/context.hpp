@@ -86,9 +86,15 @@ const Context& get_default_mbpt_context();
 
 void set_default_mbpt_context(const Context& ctx);
 
+void set_default_mbpt_context(const Context::Options& options);
+
 void reset_default_mbpt_context();
+
 [[nodiscard]] sequant::detail::ImplicitContextResetter<Context>
 set_scoped_default_mbpt_context(const Context& ctx);
+
+[[nodiscard]] sequant::detail::ImplicitContextResetter<Context>
+set_scoped_default_mbpt_context(const Context::Options& options);
 
 /// predefined operator registries
 

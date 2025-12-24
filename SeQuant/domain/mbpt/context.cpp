@@ -62,6 +62,10 @@ void set_default_mbpt_context(const Context& ctx) {
   sequant::detail::set_implicit_context(ctx);
 }
 
+void set_default_mbpt_context(const Context::Options& options) {
+  return set_default_mbpt_context(Context(options));
+}
+
 void reset_default_mbpt_context() {
   sequant::detail::reset_implicit_context<Context>();
 }
@@ -69,6 +73,11 @@ void reset_default_mbpt_context() {
 [[nodiscard]] sequant::detail::ImplicitContextResetter<Context>
 set_scoped_default_mbpt_context(const Context& f) {
   return sequant::detail::set_scoped_implicit_context(f);
+}
+
+[[nodiscard]] sequant::detail::ImplicitContextResetter<Context>
+set_scoped_default_mbpt_context(const Context::Options& f) {
+  return sequant::detail::set_scoped_implicit_context(Context(f));
 }
 
 std::shared_ptr<OpRegistry> make_minimal_registry() {
