@@ -688,22 +688,23 @@ TEST_CASE("mbpt", "[mbpt]") {
           get_default_context().index_space_registry()->retrieve(L"z"));
 
       using namespace mbpt;
-      REQUIRE_NOTHROW(op::H_pt(1, {.nbatch = 1}));
-      REQUIRE_NOTHROW(op::H_pt(2, {.nbatch = 2}));
-      REQUIRE_NOTHROW(
-          op::Λ_pt(3, {.batch_ordinals = {3, 4, 5}, .skip1 = true}));
-      REQUIRE_NOTHROW(op::T_pt(1, {.nbatch = 20}));
+      REQUIRE_NOTHROW(op::H_pt(1, {.order = 1, .nbatch = 1}));
+      REQUIRE_NOTHROW(op::H_pt(2, {.order = 1, .nbatch = 2}));
+      REQUIRE_NOTHROW(op::Λ_pt(
+          3, {.order = 1, .batch_ordinals = {3, 4, 5}, .skip1 = true}));
+      REQUIRE_NOTHROW(op::T_pt(1, {.order = 1, .nbatch = 20}));
 
       // invalid usages
 #if SEQUANT_ASSERT_BEHAVIOR == SEQUANT_ASSERT_THROW
       // cannot set both nbatch and batch_ordinals
-      REQUIRE_THROWS_AS(op::H_pt(2, {.nbatch = 2, .batch_ordinals = {1, 2}}),
-                        sequant::Exception);
+      REQUIRE_THROWS_AS(
+          op::H_pt(2, {.order = 1, .nbatch = 2, .batch_ordinals = {1, 2}}),
+          sequant::Exception);
       // all ordinals must be unique
-      REQUIRE_THROWS_AS(op::H_pt(2, {.batch_ordinals = {1, 2, 2}}),
+      REQUIRE_THROWS_AS(op::H_pt(2, {.order = 1, .batch_ordinals = {1, 2, 2}}),
                         sequant::Exception);
       // ordinals must be sorted
-      REQUIRE_THROWS_AS(op::H_pt(1, {.batch_ordinals = {3, 2}}),
+      REQUIRE_THROWS_AS(op::H_pt(1, {.order = 1, .batch_ordinals = {3, 2}}),
                         sequant::Exception);
 #endif
 
@@ -711,9 +712,9 @@ TEST_CASE("mbpt", "[mbpt]") {
       auto h0 = op::H_pt(1);
       REQUIRE(to_latex(h0) == L"{\\hat{h¹}}");
 
-      auto h1 = op::H_pt(1, {.nbatch = 1});
-      auto h1_2 = op::H_pt(1, {.batch_ordinals = {1, 2}});
-      auto pt1 = op::T_pt(2, {.batch_ordinals = {1}});
+      auto h1 = op::H_pt(1, {.order = 1, .nbatch = 1});
+      auto h1_2 = op::H_pt(1, {.order = 1, .batch_ordinals = {1, 2}});
+      auto pt1 = op::T_pt(2, {.order = 1, .batch_ordinals = {1}});
 
       auto sum0 = h0 + h1;
       simplify(sum0);
@@ -727,8 +728,8 @@ TEST_CASE("mbpt", "[mbpt]") {
       simplify(sum2);
       // std::wcout << "sum2:  " << to_latex(sum2) << std::endl;
       REQUIRE(to_latex(sum2) ==
-              L"{ \\bigl({\\hat{h¹}}{[{z}_{1}]} + {\\hat{t¹}_{2}}{[{z}_{1}]} + "
-              L"{\\hat{t¹}_{1}}{[{z}_{1}]}\\bigr) }");
+              L"{ \\bigl({\\hat{t¹}_{1}}{[{z}_{1}]} + {\\hat{h¹}}{[{z}_{1}]} + "
+              L"{\\hat{t¹}_{2}}{[{z}_{1}]}\\bigr) }");
 
       auto sum3 = h1 + h1_2;
       simplify(sum3);
