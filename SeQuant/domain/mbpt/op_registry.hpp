@@ -65,10 +65,10 @@ class OpRegistry {
   /// if it exists
   /// @param op the operator label
   /// @return the class of the operator
-  OpClass to_class(const std::wstring& op) const;
+  [[nodiscard]] OpClass to_class(const std::wstring& op) const;
 
   /// @brief returns a list of registered operators
-  container::svector<std::wstring> ops() const;
+  [[nodiscard]] container::svector<std::wstring> ops() const;
 
   /// @brief clears all registered operators
   void purge() { ops_->clear(); }
