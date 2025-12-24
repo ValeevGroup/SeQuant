@@ -2,10 +2,8 @@
 // Created by Ajay Melekamburath on 12/24/25.
 //
 
-#ifndef SEQUANT_DOMAIN_MBPT_OP_RESERVED_HPP
-#define SEQUANT_DOMAIN_MBPT_OP_RESERVED_HPP
-
-#endif  // SEQUANT_DOMAIN_MBPT_OP_RESERVED_HPP
+#ifndef SEQUANT_DOMAIN_MBPT_RESERVED_HPP
+#define SEQUANT_DOMAIN_MBPT_RESERVED_HPP
 
 namespace sequant::mbpt {
 
@@ -38,3 +36,5 @@ inline bool is_nonreserved(const std::wstring& label) {
 }  // namespace reserved
 
 }  // namespace sequant::mbpt
+
+#endif  // SEQUANT_DOMAIN_MBPT_RESERVED_HPP
