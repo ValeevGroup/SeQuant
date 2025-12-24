@@ -35,6 +35,8 @@ int main(int argc, char* argv[]) {
        .canonicalization_options =
            CanonicalizeOptions::default_options().copy_and_set(
                CanonicalizationMethod::Complete)});
+  mbpt::set_default_mbpt_context(
+      {.op_registry_ptr = mbpt::make_minimal_registry()});
   TensorCanonicalizer::register_instance(
       std::make_shared<DefaultTensorCanonicalizer>());
 
