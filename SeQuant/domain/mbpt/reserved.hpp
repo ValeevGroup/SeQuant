@@ -11,10 +11,16 @@ namespace sequant::mbpt {
 
 namespace reserved {
 /// @brief returns the reserved label for the antisymmetrization operator
-inline std::wstring antisymm_label() { return L"A"; }
+inline const std::wstring& antisymm_label() {
+  static const std::wstring label = L"A";
+  return label;
+}
 
 /// @brief returns the reserved label for the symmetrization operator
-inline std::wstring symm_label() { return L"S"; }
+inline const std::wstring& symm_label() {
+  static const std::wstring label = L"S";
+  return label;
+}
 
 /// @brief returns a list of all reserved operator labels
 inline auto labels() {
