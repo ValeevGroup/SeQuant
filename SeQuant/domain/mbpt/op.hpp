@@ -70,63 +70,6 @@ inline IndexSpace make_space(const IndexSpace::Type& type) {
                                                                 Spin::any);
 }
 
-/// enumerates the known Operator types
-enum class OpType {
-  h,    //!< 1-body Hamiltonian
-  f,    //!< Fock operator
-  f̃,    //!< closed Fock operator (i.e. Fock operator due to fully-occupied
-        //!< orbitals)
-  s,    //!< 1-body overlap
-  θ,    //!< general fock space operator
-  g,    //!< 2-body Coulomb
-  t,    //!< cluster amplitudes
-  λ,    //!< deexcitation cluster amplitudes
-  A,    //!< antisymmetrizer
-  S,    //!< particle symmetrizer
-  L,    //!< left-hand eigenstate
-  R,    //!< right-hand eigenstate
-  R12,  //!< geminal kernel
-  GR,   //!< GR kernel from f12 theory
-  C,    //!< cabs singles op
-  RDM,  //!< RDM
-  RDMCumulant,  //!< RDM cumulant
-  δ,            //!< Kronecker delta (=identity) operator
-  h_1,          //!< Hamiltonian perturbation
-  t_1,          //!< first order perturbed excitation cluster operator
-  λ_1,          //!< first order perturbed deexcitation cluster operator
-};
-
-/// maps operator types to their labels
-inline const container::map<OpType, std::wstring> optype2label{
-    {OpType::h, L"h"},
-    {OpType::f, L"f"},
-    {OpType::f̃, L"f̃"},
-    {OpType::s, overlap_label()},
-    {OpType::δ, kronecker_label()},
-    {OpType::g, L"g"},
-    {OpType::θ, L"θ"},
-    {OpType::t, L"t"},
-    {OpType::λ, L"λ"},
-    {OpType::A, L"A"},
-    {OpType::S, L"S"},
-    {OpType::L, L"L"},
-    {OpType::R, L"R"},
-    {OpType::R12, L"F"},
-    {OpType::GR, L"GR"},
-    {OpType::C, L"C"},
-    {OpType::RDM, L"γ"},
-    // see https://en.wikipedia.org/wiki/Cumulant
-    {OpType::RDMCumulant, L"κ"},
-    {OpType::h_1, L"h¹"},
-    {OpType::t_1, L"t¹"},
-    {OpType::λ_1, L"λ¹"}};
-
-/// maps operator labels to their types
-inline const container::map<std::wstring, OpType> label2optype =
-    ranges::views::zip(ranges::views::values(optype2label),
-                       ranges::views::keys(optype2label)) |
-    ranges::to<container::map<std::wstring, OpType>>();
-
 /// @brief Struct which holds parameters for operator construction
 struct OpParams {
   std::size_t order = 1;  ///< perturbation order (for _pt operators)

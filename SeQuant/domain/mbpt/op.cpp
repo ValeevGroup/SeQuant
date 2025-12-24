@@ -46,42 +46,6 @@ std::vector<std::wstring> cardinal_tensor_labels() {
           L"E"};
 }
 
-std::wstring to_wstring(OpType op) {
-  auto found_it = optype2label.find(op);
-  if (found_it != optype2label.end())
-    return found_it->second;
-  else
-    throw std::invalid_argument("to_wstring(OpType op): invalid op");
-}
-
-OpClass to_class(OpType op) {
-  switch (op) {
-    case OpType::h:
-    case OpType::f:
-    case OpType::f̃:
-    case OpType::g:
-    case OpType::RDM:
-    case OpType::RDMCumulant:
-    case OpType::δ:
-    case OpType::A:
-    case OpType::S:
-    case OpType::h_1:
-    case OpType::θ:
-      return OpClass::gen;
-    case OpType::t:
-    case OpType::R:
-    case OpType::R12:
-    case OpType::t_1:
-      return OpClass::ex;
-    case OpType::λ:
-    case OpType::L:
-    case OpType::λ_1:
-      return OpClass::deex;
-    default:
-      throw std::invalid_argument("to_class(OpType op): invalid op");
-  }
-}
-
 // Excitation type QNs will have quasiparticle annihilators in every space which
 // intersects with the active hole space. The active particle space will have
 // quasiparticle creators. The presence of additional blocks depends on whether
