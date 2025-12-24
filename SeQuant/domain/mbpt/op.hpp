@@ -72,7 +72,7 @@ inline IndexSpace make_space(const IndexSpace::Type& type) {
 
 /// @brief Struct which holds parameters for operator construction
 struct OpParams {
-  std::size_t order = 1;  ///< perturbation order (for _pt operators)
+  std::size_t order = 0;  ///< perturbation order (for _pt operators)
   std::optional<size_t> nbatch = std::nullopt;  ///< number of batching indices
   container::svector<std::size_t> batch_ordinals{};
   ///< custom batching index ordinals (empty = no batching)
