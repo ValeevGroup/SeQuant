@@ -106,6 +106,19 @@ std::shared_ptr<OpRegistry> make_minimal_registry();
 /// operators set
 std::shared_ptr<OpRegistry> make_legacy_registry();
 
+/// @brief converts an operator label to its OpClass using the default MBPT
+/// context
+/// @param op the operator label
+/// @return the OpClass of the operator
+inline OpClass to_op_class(const std::wstring& op) {
+  // check reserved labels first
+  if (ranges::contains(reserved::labels(), op)) {
+    return OpClass::gen;  // all reserved labels are gen
+  } else {
+    return get_default_mbpt_context().op_registry()->to_class(op);
+  }
+}
+
 }  // namespace sequant::mbpt
 
 #endif  // SEQUANT_DOMAIN_MBPT_CONTEXT_HPP
