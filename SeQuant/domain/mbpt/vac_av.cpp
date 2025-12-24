@@ -154,23 +154,11 @@ ExprPtr ref_av(ExprPtr expr, const OpConnections<std::wstring>& op_connections,
                                 skip_clone, full_contractions);
 }
 
-ExprPtr ref_av(ExprPtr expr, const OpConnections<OpType>& op_connections,
-               bool use_topology, bool screen, bool skip_clone) {
-  return ref_av(expr, to_label_connections(op_connections), use_topology,
-                screen, skip_clone);
-}
-
 ExprPtr vac_av(ExprPtr expr, const OpConnections<std::wstring>& op_connections,
                bool use_topology, bool screen, bool skip_clone) {
   return expectation_value_impl(expr, op_connections, use_topology, screen,
                                 skip_clone,
                                 /* full_contractions */ true);
-}
-
-ExprPtr vac_av(ExprPtr expr, const OpConnections<OpType>& op_connections,
-               bool use_topology, bool screen, bool skip_clone) {
-  return vac_av(expr, to_label_connections(op_connections), use_topology,
-                screen, skip_clone);
 }
 
 }  // namespace op
