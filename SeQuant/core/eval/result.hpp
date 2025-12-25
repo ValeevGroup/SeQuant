@@ -351,11 +351,14 @@ auto particle_antisymmetrize_btas(btas::Tensor<Args...> const& arr,
 ///
 /// \param arr The array to be "cleaned up"
 /// \param bra_rank The rank of the bra indices
-///
+/// \param svd_threshold The threshold used in computing the NNS projection
+/// matrix
+///        via pseudoinverse decomposition
 /// \return The cleaned TA::DistArray.
 template <typename... Args>
 auto biorthogonal_nns_project_ta(TA::DistArray<Args...> const& arr,
-                                 size_t bra_rank, double threshold = 1e-12) {
+                                 size_t bra_rank,
+                                 double svd_threshold = 1e-12) {
   using ranges::views::iota;
   size_t const rank = arr.trange().rank();
   SEQUANT_ASSERT(bra_rank <= rank);
@@ -367,18 +370,20 @@ auto biorthogonal_nns_project_ta(TA::DistArray<Args...> const& arr,
 
   using numeric_type = typename TA::DistArray<Args...>::numeric_type;
 
-  std::vector<numeric_type> cleanup_weights;
+  std::vector<numeric_type> nns_p_coeffs;
 
+  constexpr std::size_t max_rank_hardcoded_nns_projector = 5;
   if (ket_rank >= 3) {
-    if (ket_rank < 6) {
-      cleanup_weights = hardcoded_nns_p_coeffs<numeric_type>(ket_rank);
+    if (ket_rank <= max_rank_hardcoded_nns_projector) {
+      nns_p_coeffs = hardcoded_nns_projector<numeric_type>(ket_rank);
     } else {
-      Eigen::MatrixXd nns_matrix = compute_nns_p_matrix(ket_rank, threshold);
+      Eigen::MatrixXd nns_matrix =
+          compute_nns_p_matrix(ket_rank, svd_threshold);
       size_t num_perms = nns_matrix.rows();
 
-      cleanup_weights.reserve(num_perms);
+      nns_p_coeffs.reserve(num_perms);
       for (size_t i = 0; i < num_perms; ++i) {
-        cleanup_weights.push_back(
+        nns_p_coeffs.push_back(
             static_cast<numeric_type>(nns_matrix(num_perms - 1, i)));
       }
     }
@@ -392,10 +397,10 @@ auto biorthogonal_nns_project_ta(TA::DistArray<Args...> const& arr,
 
   const auto lannot = ords_to_annot(perm);
 
-  if (ket_rank > 2 && !cleanup_weights.empty()) {
+  if (ket_rank > 2 && !nns_p_coeffs.empty()) {
     const auto bra_annot = bra_rank == 0 ? "" : ords_to_annot(bra_perm);
 
-    size_t num_perms = cleanup_weights.size();
+    size_t num_perms = nns_p_coeffs.size();
     for (size_t perm_rank = 0; perm_rank < num_perms; ++perm_rank) {
       perm::Permutation perm_obj = perm::unrank(perm_rank, ket_rank);
 
@@ -404,7 +409,7 @@ auto biorthogonal_nns_project_ta(TA::DistArray<Args...> const& arr,
         permuted_ket[i] = ket_perm[perm_obj[i]];
       }
 
-      numeric_type coeff = cleanup_weights[perm_rank];
+      numeric_type coeff = nns_p_coeffs[perm_rank];
 
       const auto ket_annot = ords_to_annot(permuted_ket);
       const auto annot =
@@ -429,11 +434,15 @@ auto biorthogonal_nns_project_ta(TA::DistArray<Args...> const& arr,
 ///
 /// \param arr The array to be "cleaned up"
 /// \param bra_rank The rank of the bra indices
+/// /// \param svd_threshold The threshold used in computing the NNS projection
+/// matrix
+///        via pseudoinverse decomposition
 ///
 /// \return The cleaned btas::Tensor.
 template <typename... Args>
 auto biorthogonal_nns_project_btas(btas::Tensor<Args...> const& arr,
-                                   size_t bra_rank, double threshold = 1e-12) {
+                                   size_t bra_rank,
+                                   double svd_threshold = 1e-12) {
   using ranges::views::iota;
   size_t const rank = arr.rank();
   SEQUANT_ASSERT(bra_rank <= rank);
@@ -444,18 +453,20 @@ auto biorthogonal_nns_project_btas(btas::Tensor<Args...> const& arr,
   }
 
   using numeric_type = typename btas::Tensor<Args...>::numeric_type;
-  std::vector<numeric_type> cleanup_weights;
+  std::vector<numeric_type> nns_p_coeffs;
+  constexpr std::size_t max_rank_hardcoded_nns_projector = 5;
 
   if (ket_rank >= 3) {
-    if (ket_rank < 6) {
-      cleanup_weights = hardcoded_nns_p_coeffs<numeric_type>(ket_rank);
+    if (ket_rank <= max_rank_hardcoded_nns_projector) {
+      nns_p_coeffs = hardcoded_nns_projector<numeric_type>(ket_rank);
     } else {
-      Eigen::MatrixXd nns_matrix = compute_nns_p_matrix(ket_rank, threshold);
+      Eigen::MatrixXd nns_matrix =
+          compute_nns_p_matrix(ket_rank, svd_threshold);
       size_t num_perms = nns_matrix.rows();
 
-      cleanup_weights.reserve(num_perms);
+      nns_p_coeffs.reserve(num_perms);
       for (size_t i = 0; i < num_perms; ++i) {
-        cleanup_weights.push_back(
+        nns_p_coeffs.push_back(
             static_cast<numeric_type>(nns_matrix(num_perms - 1, i)));
       }
     }
@@ -469,10 +480,10 @@ auto biorthogonal_nns_project_btas(btas::Tensor<Args...> const& arr,
 
   const auto lannot = perm;
 
-  if (ket_rank > 2 && !cleanup_weights.empty()) {
+  if (ket_rank > 2 && !nns_p_coeffs.empty()) {
     bool result_initialized = false;
 
-    size_t num_perms = cleanup_weights.size();
+    size_t num_perms = nns_p_coeffs.size();
     for (size_t perm_rank = 0; perm_rank < num_perms; ++perm_rank) {
       perm::Permutation perm_obj = perm::unrank(perm_rank, ket_rank);
 
@@ -481,7 +492,7 @@ auto biorthogonal_nns_project_btas(btas::Tensor<Args...> const& arr,
         permuted_ket[i] = ket_perm[perm_obj[i]];
       }
 
-      numeric_type coeff = cleanup_weights[perm_rank];
+      numeric_type coeff = nns_p_coeffs[perm_rank];
 
       perm_t annot = bra_perm;
       annot.insert(annot.end(), permuted_ket.begin(), permuted_ket.end());

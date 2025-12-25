@@ -131,7 +131,6 @@ Eigen::MatrixXd compute_biorth_coeffs(std::size_t n_particles,
   return pinv;
 }
 
-// compute nns using normalized_pinve
 Eigen::MatrixXd compute_nns_p_matrix(std::size_t n_particles,
                                      double threshold) {
   auto perm_ovlp_mat = permutational_overlap_matrix(n_particles);

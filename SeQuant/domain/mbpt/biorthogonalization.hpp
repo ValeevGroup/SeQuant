@@ -37,6 +37,11 @@ void biorthogonal_transform(container::svector<ResultExpr>& exprs,
         ext_index_groups = {},
     double threshold = default_biorth_threshold);
 
+/// \brief Computes the non-null space (NNS) projection matrix
+///
+/// \param n_particles The rank of external index pairs
+/// \param threshold The threshold to compute the pseudoinverse matrix
+/// \return The computed NNS projection matrix
 [[nodiscard]] Eigen::MatrixXd compute_nns_p_matrix(std::size_t n_particles,
                                                    double threshold);
 
