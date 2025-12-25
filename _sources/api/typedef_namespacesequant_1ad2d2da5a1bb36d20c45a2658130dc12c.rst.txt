@@ -1,0 +1,14 @@
+.. _exhale_typedef_namespacesequant_1ad2d2da5a1bb36d20c45a2658130dc12c:
+
+Typedef sequant::ProtoBundle
+============================
+
+- Defined in :ref:`file_SeQuant_core_tensor_network_vertex_painter.hpp`
+
+
+Typedef Documentation
+---------------------
+
+
+.. doxygentypedef:: sequant::ProtoBundle
+   :project: SeQuant

@@ -1,0 +1,14 @@
+.. _exhale_enum_namespacesequant_1a9517b28099d86f3b2c0d4799125f5931:
+
+Enum ResultType
+===============
+
+- Defined in :ref:`file_SeQuant_core_eval_expr.hpp`
+
+
+Enum Documentation
+------------------
+
+
+.. doxygenenum:: sequant::ResultType
+   :project: SeQuant

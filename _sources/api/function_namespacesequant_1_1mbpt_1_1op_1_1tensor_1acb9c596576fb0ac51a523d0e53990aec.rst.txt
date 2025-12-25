@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1mbpt_1_1op_1_1tensor_1acb9c596576fb0ac51a523d0e53990aec:
+
+Function sequant::mbpt::op::sequant::mbpt::tensor::ref_av
+=========================================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_op.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::mbpt::op::sequant::mbpt::tensor::ref_av()
+   :project: SeQuant

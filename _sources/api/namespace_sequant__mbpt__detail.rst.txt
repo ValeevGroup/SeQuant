@@ -1,0 +1,24 @@
+
+.. _namespace_sequant__mbpt__detail:
+
+Namespace sequant::mbpt::detail
+===============================
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+
+
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1detail_1a2cf223aeefce975b72d965aa6a6c9c79`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1detail_1a1b32eae296da8c2b4fe74c38adf9fbdc`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1detail_1a25932ff2c195d03c120c57b8ac5a5925`

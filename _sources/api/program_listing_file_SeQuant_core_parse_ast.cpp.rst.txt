@@ -1,0 +1,26 @@
+
+.. _program_listing_file_SeQuant_core_parse_ast.cpp:
+
+Program Listing for File ast.cpp
+================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_core_parse_ast.cpp>` (``SeQuant/core/parse/ast.cpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   //
+   // Created by Robert Adam on 2023-09-21
+   //
+   
+   #include <SeQuant/core/parse/ast.hpp>
+   
+   namespace sequant::parse::ast {
+   
+   Product::Product(std::vector<NullaryValue> factors)
+       : factors(std::move(factors)) {}
+   
+   Sum::Sum(std::vector<Product> summands) : summands(std::move(summands)) {}
+   
+   }  // namespace sequant::parse::ast

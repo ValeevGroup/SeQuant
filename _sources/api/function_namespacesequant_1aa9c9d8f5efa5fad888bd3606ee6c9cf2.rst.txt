@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1aa9c9d8f5efa5fad888bd3606ee6c9cf2:
+
+Function sequant::num_slots
+===========================
+
+- Defined in :ref:`file_SeQuant_core_expressions_abstract_tensor.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::num_slots()
+   :project: SeQuant

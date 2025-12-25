@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1ae26676e1f377a579f18757b858de3193:
+
+Template Function sequant::export_expression
+============================================
+
+- Defined in :ref:`file_SeQuant_core_export_export.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::export_expression(ExportNode<T>, Generator<Context>&, Context)
+   :project: SeQuant

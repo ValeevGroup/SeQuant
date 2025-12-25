@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a8c09257461a7b2160aa97c6819fd9251:
+
+Template Function sequant::to_wolfram(const std::complex<T>&)
+=============================================================
+
+- Defined in :ref:`file_SeQuant_core_wolfram.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::to_wolfram(const std::complex<T>&)
+   :project: SeQuant

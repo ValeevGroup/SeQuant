@@ -1,0 +1,17 @@
+.. _exhale_struct_structsequant_1_1detail_1_1_op_id_registrar:
+
+Struct OpIdRegistrar
+====================
+
+- Defined in :ref:`file_SeQuant_core_op.hpp`
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::detail::OpIdRegistrar
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

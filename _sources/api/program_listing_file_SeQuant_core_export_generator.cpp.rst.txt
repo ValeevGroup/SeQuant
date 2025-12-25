@@ -1,0 +1,34 @@
+
+.. _program_listing_file_SeQuant_core_export_generator.cpp:
+
+Program Listing for File generator.cpp
+======================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_core_export_generator.cpp>` (``SeQuant/core/export/generator.cpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   #include <SeQuant/core/export/context.hpp>
+   #include <SeQuant/core/export/generator.hpp>
+   
+   #include <type_traits>
+   
+   namespace sequant {
+   
+   PrunableScalars operator&(PrunableScalars lhs, PrunableScalars rhs) {
+     using UT = std::underlying_type_t<PrunableScalars>;
+   
+     return static_cast<PrunableScalars>(static_cast<UT>(lhs) &
+                                         static_cast<UT>(rhs));
+   }
+   
+   PrunableScalars operator|(PrunableScalars lhs, PrunableScalars rhs) {
+     using UT = std::underlying_type_t<PrunableScalars>;
+   
+     return static_cast<PrunableScalars>(static_cast<UT>(lhs) |
+                                         static_cast<UT>(rhs));
+   }
+   
+   }  // namespace sequant

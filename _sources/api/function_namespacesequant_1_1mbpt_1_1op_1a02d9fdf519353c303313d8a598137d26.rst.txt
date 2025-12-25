@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1mbpt_1_1op_1a02d9fdf519353c303313d8a598137d26:
+
+Function sequant::mbpt::op::vac_av(ExprPtr, const OpConnections<OpType>&, bool, bool, bool)
+===========================================================================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_vac_av.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::mbpt::op::vac_av(ExprPtr, const OpConnections<OpType>&, bool, bool, bool)
+   :project: SeQuant
