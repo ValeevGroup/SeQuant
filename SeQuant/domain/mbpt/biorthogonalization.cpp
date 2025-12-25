@@ -362,14 +362,12 @@ void biorthogonal_transform(container::svector<ResultExpr>& result_exprs,
   Eigen::MatrixXd computed_coefficients;
   bool using_hardcoded = false;
 
-  // Use hardcoded coefficients for ranks 1-6
   if (n_particles <= 6) {
     std::cout << "using hardcoded biorthogonalization coefficients for rank = "
               << n_particles << std::endl;
     hardcoded_coefficients = hardcoded_biorth_coeffs_matrix(n_particles);
     using_hardcoded = true;
   } else {
-    // For ranks > 6, use computed coefficients
     std::cout << "using computed biorthogonalization coefficients (pinv) for "
                  "rank = "
               << n_particles << " via SVD" << std::endl;

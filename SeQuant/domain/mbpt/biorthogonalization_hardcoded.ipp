@@ -55,14 +55,9 @@ std::vector<T> hardcoded_nns_p_coeffs(std::size_t n_particles) {
           T(0) / T(1),   T(0) / T(1),   T(-1) / T(3),  T(-1) / T(3),
           T(-1) / T(3),  T(-1) / T(3),  T(-1) / T(3),  T(1) / T(1)};
 
-    case 6:
-      // I need to add rank 6 later
-      throw std::runtime_error(
-          "hardcoded NNS weights need to be implemented for rank 6");
-
     default:
       throw std::runtime_error(
-          "hardcoded NNS weights only available for ranks 1-6, "
+          "hardcoded NNS weights only available for ranks 1-5, "
           "requested rank is : " +
           std::to_string(n_particles));
   }

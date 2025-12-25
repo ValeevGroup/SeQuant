@@ -370,14 +370,9 @@ auto biorthogonal_nns_project_ta(TA::DistArray<Args...> const& arr,
   std::vector<numeric_type> cleanup_weights;
 
   if (ket_rank >= 3) {
-    // use hardcoded nns weights for ranks 1-6
-    if (ket_rank <= 6) {
+    if (ket_rank < 6) {
       cleanup_weights = hardcoded_nns_p_coeffs<numeric_type>(ket_rank);
-      std::cout << "using hardcoded nns for rank = " << ket_rank << std::endl;
     } else {
-      // for ranks > 6, use last row of computed nns matrix
-      std::cout << "using computed nns for rank = " << ket_rank << std::endl;
-
       Eigen::MatrixXd nns_matrix = compute_nns_p_matrix(ket_rank, threshold);
       size_t num_perms = nns_matrix.rows();
 
@@ -387,8 +382,6 @@ auto biorthogonal_nns_project_ta(TA::DistArray<Args...> const& arr,
             static_cast<numeric_type>(nns_matrix(num_perms - 1, i)));
       }
     }
-  } else {
-    std::cout << "no cleanup needed for rank = " << ket_rank << std::endl;
   }
 
   TA::DistArray<Args...> result;
@@ -400,8 +393,6 @@ auto biorthogonal_nns_project_ta(TA::DistArray<Args...> const& arr,
   const auto lannot = ords_to_annot(perm);
 
   if (ket_rank > 2 && !cleanup_weights.empty()) {
-    std::cout << "numerical nns projection for rank " << ket_rank << std::endl;
-
     const auto bra_annot = bra_rank == 0 ? "" : ords_to_annot(bra_perm);
 
     size_t num_perms = cleanup_weights.size();
@@ -415,15 +406,9 @@ auto biorthogonal_nns_project_ta(TA::DistArray<Args...> const& arr,
 
       numeric_type coeff = cleanup_weights[perm_rank];
 
-      std::cout << "perm" << std::setw(2) << perm_rank << ":"
-                << "coeff=" << std::setw(10) << std::fixed
-                << std::setprecision(6) << coeff;
-
       const auto ket_annot = ords_to_annot(permuted_ket);
       const auto annot =
           bra_annot.empty() ? ket_annot : bra_annot + "," + ket_annot;
-
-      std::cout << " annot: " << annot << std::endl;
 
       if (result.is_initialized()) {
         result(lannot) += coeff * arr(annot);
@@ -431,8 +416,6 @@ auto biorthogonal_nns_project_ta(TA::DistArray<Args...> const& arr,
         result(lannot) = coeff * arr(annot);
       }
     }
-
-    std::cout << "=================\n" << std::endl;
   } else {
     result(lannot) = arr(lannot);
   }
@@ -464,26 +447,18 @@ auto biorthogonal_nns_project_btas(btas::Tensor<Args...> const& arr,
   std::vector<numeric_type> cleanup_weights;
 
   if (ket_rank >= 3) {
-    // use hardcoded weights for ranks 1-6
-    if (ket_rank <= 6) {
+    if (ket_rank < 6) {
       cleanup_weights = hardcoded_nns_p_coeffs<numeric_type>(ket_rank);
-      std::cout << "using hardcoded nns for rank = " << ket_rank << std::endl;
     } else {
-      // for ranks > 6, use last row of computed nns matrix
-      std::cout << "using computed nns for rank = " << ket_rank << std::endl;
-
       Eigen::MatrixXd nns_matrix = compute_nns_p_matrix(ket_rank, threshold);
       size_t num_perms = nns_matrix.rows();
 
       cleanup_weights.reserve(num_perms);
-      // extracting last row
       for (size_t i = 0; i < num_perms; ++i) {
         cleanup_weights.push_back(
             static_cast<numeric_type>(nns_matrix(num_perms - 1, i)));
       }
     }
-  } else {
-    std::cout << "no cleanup needed for rank = " << ket_rank << std::endl;
   }
 
   btas::Tensor<Args...> result;
@@ -494,14 +469,9 @@ auto biorthogonal_nns_project_btas(btas::Tensor<Args...> const& arr,
 
   const auto lannot = perm;
 
-  // apply cleanup to only ket indices (matching biortho implementation)
   if (ket_rank > 2 && !cleanup_weights.empty()) {
-    std::cout << "numerical nns projection for rank " << ket_rank << std::endl;
-
     bool result_initialized = false;
 
-    // using perm::unrank to generate permutations in the same order as
-    // verification and biortho implementation
     size_t num_perms = cleanup_weights.size();
     for (size_t perm_rank = 0; perm_rank < num_perms; ++perm_rank) {
       perm::Permutation perm_obj = perm::unrank(perm_rank, ket_rank);
@@ -513,26 +483,8 @@ auto biorthogonal_nns_project_btas(btas::Tensor<Args...> const& arr,
 
       numeric_type coeff = cleanup_weights[perm_rank];
 
-      std::cout << "perm" << std::setw(2) << perm_rank << ":";
-      std::cout << "coeff=" << std::setw(10) << std::fixed
-                << std::setprecision(6) << coeff;
-
-      // full permutation annotation to print
-      perm_t annot;
-      annot.reserve(rank);
-      for (size_t i = 0; i < bra_rank; ++i) {
-        annot.push_back(bra_perm[i]);
-      }
-      for (size_t i = 0; i < ket_rank; ++i) {
-        annot.push_back(permuted_ket[i]);
-      }
-
-      std::cout << " annot: ";
-      for (size_t i = 0; i < annot.size(); ++i) {
-        if (i > 0) std::cout << ",";
-        std::cout << annot[i];
-      }
-      std::cout << std::endl;
+      perm_t annot = bra_perm;
+      annot.insert(annot.end(), permuted_ket.begin(), permuted_ket.end());
 
       btas::Tensor<Args...> temp;
       btas::permute(arr, annot, temp, lannot);
@@ -546,7 +498,6 @@ auto biorthogonal_nns_project_btas(btas::Tensor<Args...> const& arr,
       }
     }
 
-    std::cout << "=================\n" << std::endl;
   } else {
     result = arr;
   }

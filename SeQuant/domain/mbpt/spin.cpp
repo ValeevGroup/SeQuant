@@ -1169,15 +1169,13 @@ ExprPtr closed_shell_CC_spintrace_v2(ExprPtr const& expr,
           st_expr;
     }
     simplify(st_expr);
-    // expanding S after spintracing and biorthogonalization, to avoid dealing
-    // with large number of terms
+
     st_expr = S_maps(st_expr);
     // canonicalizer must be called before hash-filter to combine terms
     canonicalize(st_expr);
 
-    // apply hash filter method to get unique set of terms
     st_expr = WK_biorthogonalization_filter(st_expr, ext_idxs);
-    // add S tensor again
+
     st_expr =
         ex<Tensor>(Tensor{L"S", bra(std::move(kixs)), ket(std::move(bixs))}) *
         st_expr;
