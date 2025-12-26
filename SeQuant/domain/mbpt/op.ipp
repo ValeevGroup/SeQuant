@@ -221,7 +221,8 @@ bool Operator<QuantumNumbers, S>::static_equal(const Expr& other_expr) const {
       static_cast<const Operator<QuantumNumbers, S>&>(other_expr);
   return this->label() == other.label() &&
          (*this)(QuantumNumbers{}) == other(QuantumNumbers{}) &&
-         this->batch_ordinals() == other.batch_ordinals();
+         this->batch_ordinals() == other.batch_ordinals() &&
+         this->order() == other.order();
 }
 
 }  // namespace mbpt
