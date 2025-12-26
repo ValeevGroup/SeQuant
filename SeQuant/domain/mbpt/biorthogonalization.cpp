@@ -359,17 +359,11 @@ void biorthogonal_transform(container::svector<ResultExpr>& result_exprs,
   Eigen::Matrix<sequant::rational, Eigen::Dynamic, Eigen::Dynamic>
       hardcoded_coefficients;
   Eigen::MatrixXd computed_coefficients;
-  bool using_hardcoded = false;
+  constexpr std::size_t max_rank_hardcoded_biorth_coeffs = 6;
 
-  if (n_particles <= 6) {
-    std::cout << "using hardcoded biorthogonalization coefficients for rank = "
-              << n_particles << std::endl;
+  if (n_particles <= max_rank_hardcoded_biorth_coeffs) {
     hardcoded_coefficients = hardcoded_biorth_coeffs_matrix(n_particles);
-    using_hardcoded = true;
   } else {
-    std::cout << "using computed biorthogonalization coefficients (pinv) for "
-                 "rank = "
-              << n_particles << " via SVD" << std::endl;
     computed_coefficients = compute_biorth_coeffs(n_particles, threshold);
     SEQUANT_ASSERT(num_perms == computed_coefficients.rows());
     SEQUANT_ASSERT(num_perms == computed_coefficients.cols());
@@ -385,7 +379,7 @@ void biorthogonal_transform(container::svector<ResultExpr>& result_exprs,
       perm->postMultiply(reference);
 
       sequant::rational coeff =
-          using_hardcoded
+          (n_particles <= max_rank_hardcoded_biorth_coeffs)
               ? hardcoded_coefficients(ranks.at(i), rank)
               : to_rational(computed_coefficients(ranks.at(i), rank),
                             threshold);

@@ -478,8 +478,6 @@ auto biorthogonal_nns_project_btas(btas::Tensor<Args...> const& arr,
   perm_t bra_perm = iota(size_t{0}, bra_rank) | ranges::to<perm_t>;
   perm_t ket_perm = iota(bra_rank, rank) | ranges::to<perm_t>;
 
-  const auto lannot = perm;
-
   if (ket_rank > 2 && !nns_p_coeffs.empty()) {
     bool result_initialized = false;
 
@@ -498,7 +496,7 @@ auto biorthogonal_nns_project_btas(btas::Tensor<Args...> const& arr,
       annot.insert(annot.end(), permuted_ket.begin(), permuted_ket.end());
 
       btas::Tensor<Args...> temp;
-      btas::permute(arr, annot, temp, lannot);
+      btas::permute(arr, annot, temp, perm);
       btas::scal(coeff, temp);
 
       if (result_initialized) {
@@ -929,7 +927,9 @@ class ResultTensorTA final : public Result {
   [[nodiscard]] ResultPtr biorthogonal_nns_project(
       size_t bra_rank) const override {
     if constexpr (std::is_integral_v<numeric_type>) {
-      std::abort();
+      SEQUANT_ABORT(
+          "biorthogonal_nns_project is not supported for integral numeric "
+          "types");
     } else {
       return eval_result<this_type>(
           biorthogonal_nns_project_ta(get<ArrayT>(), bra_rank));
@@ -1196,7 +1196,9 @@ class ResultTensorBTAS final : public Result {
   [[nodiscard]] ResultPtr biorthogonal_nns_project(
       [[maybe_unused]] size_t bra_rank) const override {
     if constexpr (std::is_integral_v<numeric_type>) {
-      std::abort();
+      SEQUANT_ABORT(
+          "biorthogonal_nns_project is not supported for integral numeric "
+          "types");
     } else {
       return eval_result<ResultTensorBTAS<T>>(
           biorthogonal_nns_project_btas(get<T>(), bra_rank));

@@ -348,10 +348,7 @@ make_hardcoded_biorth_coeffs_matrix(
 Eigen::Matrix<sequant::rational, Eigen::Dynamic, Eigen::Dynamic>
 hardcoded_biorth_coeffs_matrix(std::size_t n_particles) {
   auto first_row = hardcoded_biorth_coeffs_first_row(n_particles);
-  if (!first_row.empty()) {
-    return make_hardcoded_biorth_coeffs_matrix(first_row, n_particles);
-  }
-  return Eigen::Matrix<sequant::rational, Eigen::Dynamic, Eigen::Dynamic>(0, 0);
+  return make_hardcoded_biorth_coeffs_matrix(first_row, n_particles);
 }
 
 }  // namespace sequant
