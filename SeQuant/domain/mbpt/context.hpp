@@ -115,7 +115,12 @@ inline OpClass to_op_class(const std::wstring& op) {
   if (ranges::contains(reserved::labels(), op)) {
     return OpClass::gen;  // all reserved labels are gen
   } else {
-    return get_default_mbpt_context().op_registry()->to_class(op);
+    auto registry = get_default_mbpt_context().op_registry();
+    if (!registry) {
+      throw std::runtime_error(
+          "to_op_class: no OpRegistry in default mbpt::Context");
+    }
+    return registry->to_class(op);
   }
 }
 
