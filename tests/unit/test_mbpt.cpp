@@ -14,6 +14,7 @@
 #include <SeQuant/domain/mbpt/context.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/op.hpp>
+#include <SeQuant/domain/mbpt/op_registry.hpp>
 #include <SeQuant/domain/mbpt/rules/df.hpp>
 #include <SeQuant/domain/mbpt/rules/thc.hpp>
 #include <SeQuant/domain/mbpt/utils.hpp>
@@ -34,6 +35,162 @@
 #include "SeQuant/core/utility/debug.hpp"
 
 TEST_CASE("mbpt", "[mbpt]") {
+  SECTION("registry") {
+    using namespace sequant::mbpt;
+
+    SECTION("empty-registry") {
+      OpRegistry registry;
+      REQUIRE(registry.ops().empty());
+      REQUIRE_FALSE(registry.contains(L"T"));
+    }
+
+    SECTION("add-operators") {
+      OpRegistry registry;
+      registry.add(L"T", OpClass::ex);
+      registry.add(L"L", OpClass::deex);
+      registry.add(L"F", OpClass::gen);
+
+      REQUIRE(registry.contains(L"T"));
+      REQUIRE(registry.contains(L"L"));
+      REQUIRE(registry.contains(L"F"));
+      REQUIRE(registry.ops().size() == 3);
+
+      REQUIRE(registry.to_class(L"T") == OpClass::ex);
+      REQUIRE(registry.to_class(L"L") == OpClass::deex);
+      REQUIRE(registry.to_class(L"F") == OpClass::gen);
+    }
+
+    SECTION("remove-operators") {
+      OpRegistry registry;
+      registry.add(L"T", OpClass::ex);
+      registry.add(L"L", OpClass::deex);
+
+      REQUIRE(registry.contains(L"T"));
+      registry.remove(L"T");
+      REQUIRE_FALSE(registry.contains(L"T"));
+      REQUIRE(registry.contains(L"L"));
+    }
+
+    SECTION("clone-registry") {
+      OpRegistry registry;
+      registry.add(L"T", OpClass::ex);
+      registry.add(L"L", OpClass::deex);
+
+      auto cloned = registry.clone();
+      REQUIRE(cloned.contains(L"T"));
+      REQUIRE(cloned.contains(L"L"));
+      REQUIRE(cloned.ops().size() == registry.ops().size());
+    }
+
+    SECTION("purge-registry") {
+      OpRegistry registry;
+      registry.add(L"T", OpClass::ex);
+      registry.add(L"L", OpClass::deex);
+
+      REQUIRE_FALSE(registry.ops().empty());
+      registry.purge();
+      REQUIRE(registry.ops().empty());
+    }
+
+    SECTION("reserved-labels") {
+      OpRegistry registry;
+      // should not be able to add reserved labels
+      REQUIRE_THROWS(registry.add(reserved::antisymm_label(), OpClass::gen));
+      REQUIRE_THROWS(registry.add(reserved::symm_label(), OpClass::gen));
+    }
+
+    SECTION("duplicate-operators") {
+      OpRegistry registry;
+      registry.add(L"T", OpClass::ex);
+      // should not be able to add duplicate
+      REQUIRE_THROWS(registry.add(L"T", OpClass::deex));
+    }
+  }  // SECTION("registry")
+
+  SECTION("context") {
+    using namespace sequant::mbpt;
+
+    SECTION("default-context") {
+      auto default_ctx = get_default_mbpt_context();
+      // check default values
+      REQUIRE(default_ctx.csv() == CSV::No);
+      REQUIRE_NOTHROW(default_ctx.csv());
+      REQUIRE_NOTHROW(default_ctx.op_registry());
+    }
+
+    SECTION("context-with-CSV") {
+      auto ctx = Context({.csv = CSV::Yes});
+      REQUIRE(ctx.csv() == CSV::Yes);
+
+      ctx.set(CSV::No);
+      REQUIRE(ctx.csv() == CSV::No);
+    }
+
+    SECTION("context-with-registry") {
+      auto reg = make_minimal_registry();
+      auto ctx = Context({.op_registry_ptr = reg});
+
+      REQUIRE(ctx.csv() == CSV::No);
+      REQUIRE(ctx.op_registry() != nullptr);
+      REQUIRE(ctx.op_registry() == reg);
+    }
+
+    SECTION("set-operator-registry") {
+      auto ctx = Context();
+      auto reg = make_legacy_registry();
+
+      ctx.set(reg);
+      REQUIRE(ctx.op_registry() != nullptr);
+      REQUIRE(ctx.op_registry() == reg);
+    }
+
+    SECTION("clone-context") {
+      auto reg = std::make_shared<OpRegistry>();
+      reg->add(L"T", OpClass::ex);
+
+      auto ctx = Context({.csv = CSV::Yes, .op_registry_ptr = reg});
+      auto cloned = ctx.clone();
+
+      REQUIRE(cloned.csv() == ctx.csv());
+      REQUIRE(cloned.op_registry() != ctx.op_registry());  // Different pointer
+      REQUIRE(cloned.op_registry()->contains(L"T"));
+    }
+
+    SECTION("context-equality") {
+      auto reg1 = make_legacy_registry();
+      auto reg2 = make_minimal_registry();
+      auto ctx1 = Context({.csv = CSV::Yes, .op_registry_ptr = reg1});
+      auto ctx2 = Context({.csv = CSV::Yes, .op_registry_ptr = reg1});
+      auto ctx3 = Context({.csv = CSV::No, .op_registry_ptr = reg1});
+      auto ctx4 = Context({.csv = CSV::Yes, .op_registry_ptr = reg2});
+
+      REQUIRE(ctx1 == ctx2);
+      REQUIRE(ctx1 != ctx3);
+      REQUIRE(ctx1 != ctx4);
+    }
+
+    SECTION("scoped-context") {
+      auto original_ctx = get_default_mbpt_context();
+      auto original_csv = original_ctx.csv();
+
+      {
+        auto reg1 = make_legacy_registry();
+        auto ctx = Context({.csv = CSV::Yes, .op_registry_ptr = reg1});
+        auto _ = set_scoped_default_mbpt_context(ctx);
+
+        auto current_ctx = get_default_mbpt_context();
+        REQUIRE(current_ctx.csv() == CSV::Yes);
+        REQUIRE(current_ctx.op_registry() == reg1);
+        REQUIRE(current_ctx.op_registry()->contains(L"t"));
+        REQUIRE(current_ctx.op_registry()->contains(L"λ"));
+      }
+
+      // after scope, original context should be restored
+      auto restored_ctx = get_default_mbpt_context();
+      REQUIRE(restored_ctx.csv() == original_csv);
+    }
+  }  // SECTION("context")
+
   SECTION("nbody_operators") {
     using namespace sequant;
 
@@ -303,6 +460,18 @@ TEST_CASE("mbpt", "[mbpt]") {
       REQUIRE(to_latex(adjoint(r_1_2_adj).as<Expr>()) == L"{\\hat{R}_{1,2}}");
       REQUIRE(to_latex(adjoint(lambda2_adj).as<Expr>()) ==
               L"{\\hat{\\lambda}_{2}}");
+
+      // adjoint should preserve perturbation order
+      auto t1_order2 = T_pt_(1, {.order = 2});
+      REQUIRE(t1_order2.as<op_t>().order() == 2);
+      auto t1_order2_adj = adjoint(t1_order2);
+      REQUIRE(t1_order2_adj.as<op_t>().order() == 2);
+
+      auto λ1_order3 = Λ_pt_(1, {.order = 3});
+      REQUIRE(λ1_order3.as<op_t>().order() == 3);
+      auto λ1_order3_adj = adjoint(λ1_order3);
+      REQUIRE(λ1_order3_adj.as<op_t>().order() == 3);
+
     }  // SECTION("adjoint")
 
     SECTION("screen") {
@@ -518,7 +687,32 @@ TEST_CASE("mbpt", "[mbpt]") {
               L"{{{\\frac{1}{12}}}{\\bar{L}^{{a_1}{a_2}}_{{i_1}{i_2}{i_"
               L"3}}}{\\tilde{a}^{{i_1}{i_2}{i_3}}_{\\textvisiblespace\\,{a_1}{"
               L"a_2}}}}\\bigr) }");
-    }
+
+      // perturbation ops
+      REQUIRE_NOTHROW(H_pt(1, {.order = 1}));
+      REQUIRE_NOTHROW(H_pt(2, {.order = 2}));
+      REQUIRE_NOTHROW(Λ_pt(3, {.order = 5, .skip1 = true}));
+      REQUIRE_NOTHROW(T_pt(2, {.order = 9}));
+#if SEQUANT_ASSERT_BEHAVIOR == SEQUANT_ASSERT_THROW
+      REQUIRE_THROWS(H_pt(1, {.order = 10}));  // invalid order
+#endif
+
+      auto h0 = H_pt(1);
+      REQUIRE(to_latex(h0) == L"{\\hat{h¹}}");
+      auto h1 = H_pt(1, {.order = 1});
+      auto h2 = H_pt(1, {.order = 2});
+      auto t2 = T_pt_(2, {.order = 2});
+
+      REQUIRE(h1 != h2);
+      REQUIRE(h0 == h1);
+
+      REQUIRE(to_latex(simplify(h0 + h1)) == L"{{{2}}{\\hat{h¹}}}");
+      REQUIRE(to_latex(simplify(h1 + h2)) ==
+              L"{ \\bigl({\\hat{h¹}} + {\\hat{h²}}\\bigr) }");
+
+      REQUIRE(to_latex(simplify(h1 * t2)) == L"{{\\hat{h¹}}{\\hat{t²}_{2}}}");
+      REQUIRE(to_latex(simplify(h2 * t2)) == L"{{\\hat{h²}}{\\hat{t²}_{2}}}");
+    }  // SECTION("predefined")
 
     SECTION("batching") {
       // update context to use batching index
@@ -531,22 +725,23 @@ TEST_CASE("mbpt", "[mbpt]") {
           get_default_context().index_space_registry()->retrieve(L"z"));
 
       using namespace mbpt;
-      REQUIRE_NOTHROW(op::H_pt(1, {.nbatch = 1}));
-      REQUIRE_NOTHROW(op::H_pt(2, {.nbatch = 2}));
-      REQUIRE_NOTHROW(
-          op::Λ_pt(3, {.batch_ordinals = {3, 4, 5}, .skip1 = true}));
-      REQUIRE_NOTHROW(op::T_pt(1, {.nbatch = 20}));
+      REQUIRE_NOTHROW(op::H_pt(1, {.order = 1, .nbatch = 1}));
+      REQUIRE_NOTHROW(op::H_pt(2, {.order = 1, .nbatch = 2}));
+      REQUIRE_NOTHROW(op::Λ_pt(
+          3, {.order = 1, .batch_ordinals = {3, 4, 5}, .skip1 = true}));
+      REQUIRE_NOTHROW(op::T_pt(1, {.order = 1, .nbatch = 20}));
 
       // invalid usages
 #if SEQUANT_ASSERT_BEHAVIOR == SEQUANT_ASSERT_THROW
       // cannot set both nbatch and batch_ordinals
-      REQUIRE_THROWS_AS(op::H_pt(2, {.nbatch = 2, .batch_ordinals = {1, 2}}),
-                        sequant::Exception);
+      REQUIRE_THROWS_AS(
+          op::H_pt(2, {.order = 1, .nbatch = 2, .batch_ordinals = {1, 2}}),
+          sequant::Exception);
       // all ordinals must be unique
-      REQUIRE_THROWS_AS(op::H_pt(2, {.batch_ordinals = {1, 2, 2}}),
+      REQUIRE_THROWS_AS(op::H_pt(2, {.order = 1, .batch_ordinals = {1, 2, 2}}),
                         sequant::Exception);
       // ordinals must be sorted
-      REQUIRE_THROWS_AS(op::H_pt(1, {.batch_ordinals = {3, 2}}),
+      REQUIRE_THROWS_AS(op::H_pt(1, {.order = 1, .batch_ordinals = {3, 2}}),
                         sequant::Exception);
 #endif
 
@@ -554,9 +749,9 @@ TEST_CASE("mbpt", "[mbpt]") {
       auto h0 = op::H_pt(1);
       REQUIRE(to_latex(h0) == L"{\\hat{h¹}}");
 
-      auto h1 = op::H_pt(1, {.nbatch = 1});
-      auto h1_2 = op::H_pt(1, {.batch_ordinals = {1, 2}});
-      auto pt1 = op::T_pt(2, {.batch_ordinals = {1}});
+      auto h1 = op::H_pt(1, {.order = 1, .nbatch = 1});
+      auto h1_2 = op::H_pt(1, {.order = 1, .batch_ordinals = {1, 2}});
+      auto pt1 = op::T_pt(2, {.order = 1, .batch_ordinals = {1}});
 
       auto sum0 = h0 + h1;
       simplify(sum0);
@@ -570,8 +765,8 @@ TEST_CASE("mbpt", "[mbpt]") {
       simplify(sum2);
       // std::wcout << "sum2:  " << to_latex(sum2) << std::endl;
       REQUIRE(to_latex(sum2) ==
-              L"{ \\bigl({\\hat{h¹}}{[{z}_{1}]} + {\\hat{t¹}_{2}}{[{z}_{1}]} + "
-              L"{\\hat{t¹}_{1}}{[{z}_{1}]}\\bigr) }");
+              L"{ \\bigl({\\hat{t¹}_{1}}{[{z}_{1}]} + {\\hat{h¹}}{[{z}_{1}]} + "
+              L"{\\hat{t¹}_{2}}{[{z}_{1}]}\\bigr) }");
 
       auto sum3 = h1 + h1_2;
       simplify(sum3);
@@ -615,6 +810,22 @@ TEST_CASE("mbpt", "[mbpt]") {
               L"h¹{κ2;κ1;z1,z2}:A-C-S * ã{κ1;κ2} + h¹{κ2;κ1;z1,z2}:A-C-S * "
               L"ã{i1;a1} * ã{κ1;κ2} * t¹{a1;i1;z1}:A-C-S + h¹{κ4;κ3;z1}:A-C-S "
               L"* h¹{κ2;κ1;z1,z2}:A-C-S * ã{κ3;κ4} * ã{κ1;κ2}"));
+
+      // batching + adjoint: verify batch_ordinals are preserved
+      auto h1_adj = adjoint(h1);
+      REQUIRE(h1_adj.as<op_t>().batch_ordinals().has_value());
+      REQUIRE(h1_adj.as<op_t>().batch_ordinals().value() ==
+              h1.as<op_t>().batch_ordinals().value());
+
+      auto h1_2_adj = adjoint(h1_2);
+      REQUIRE(h1_2_adj.as<op_t>().batch_ordinals().value() ==
+              h1_2.as<op_t>().batch_ordinals().value());
+
+      // custom batch ordinals
+      auto t = op::T_pt_(2, {.batch_ordinals = {5, 10, 15}});
+      auto t_adj = adjoint(t);
+      REQUIRE(t_adj.as<op_t>().batch_ordinals().value() ==
+              t.as<op_t>().batch_ordinals().value());
     }  // SECTION("batching")
   }
 
@@ -694,8 +905,8 @@ SECTION("SRSO Fock") {
 
 SECTION("SRSO-PNO") {
   using sequant::mbpt::Context;
-  auto mbpt_ctx =
-      sequant::mbpt::set_scoped_default_mbpt_context(Context(mbpt::CSV::Yes));
+  auto mbpt_ctx = sequant::mbpt::set_scoped_default_mbpt_context(
+      Context({.csv = CSV::Yes, .op_registry_ptr = make_minimal_registry()}));
 
   // H2**T2**T2 -> R2
   SECTION("wick(H2**T2**T2 -> R2)") {

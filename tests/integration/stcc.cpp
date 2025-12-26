@@ -40,6 +40,8 @@ int main(int argc, char* argv[]) {
                CanonicalizationMethod::Complete)});
   TensorCanonicalizer::register_instance(
       std::make_shared<DefaultTensorCanonicalizer>());
+  mbpt::set_default_mbpt_context(
+      {.op_registry_ptr = mbpt::make_minimal_registry()});
 
 #ifndef NDEBUG
   const size_t DEFAULT_NMAX = 3;
