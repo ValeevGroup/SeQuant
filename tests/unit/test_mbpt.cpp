@@ -460,6 +460,18 @@ TEST_CASE("mbpt", "[mbpt]") {
       REQUIRE(to_latex(adjoint(r_1_2_adj).as<Expr>()) == L"{\\hat{R}_{1,2}}");
       REQUIRE(to_latex(adjoint(lambda2_adj).as<Expr>()) ==
               L"{\\hat{\\lambda}_{2}}");
+
+      // adjoint should preserve perturbation order
+      auto t1_order2 = T_pt_(1, {.order = 2});
+      REQUIRE(t1_order2.as<op_t>().order() == 2);
+      auto t1_order2_adj = adjoint(t1_order2);
+      REQUIRE(t1_order2_adj.as<op_t>().order() == 2);
+
+      auto λ1_order3 = Λ_pt_(1, {.order = 3});
+      REQUIRE(λ1_order3.as<op_t>().order() == 3);
+      auto λ1_order3_adj = adjoint(λ1_order3);
+      REQUIRE(λ1_order3_adj.as<op_t>().order() == 3);
+
     }  // SECTION("adjoint")
 
     SECTION("screen") {
@@ -773,6 +785,22 @@ TEST_CASE("mbpt", "[mbpt]") {
               L"h¹{κ2;κ1;z1,z2}:A-C-S * ã{κ1;κ2} + h¹{κ2;κ1;z1,z2}:A-C-S * "
               L"ã{i1;a1} * ã{κ1;κ2} * t¹{a1;i1;z1}:A-C-S + h¹{κ4;κ3;z1}:A-C-S "
               L"* h¹{κ2;κ1;z1,z2}:A-C-S * ã{κ3;κ4} * ã{κ1;κ2}"));
+
+      // batching + adjoint: verify batch_ordinals are preserved
+      auto h1_adj = adjoint(h1);
+      REQUIRE(h1_adj.as<op_t>().batch_ordinals().has_value());
+      REQUIRE(h1_adj.as<op_t>().batch_ordinals().value() ==
+              h1.as<op_t>().batch_ordinals().value());
+
+      auto h1_2_adj = adjoint(h1_2);
+      REQUIRE(h1_2_adj.as<op_t>().batch_ordinals().value() ==
+              h1_2.as<op_t>().batch_ordinals().value());
+
+      // custom batch ordinals
+      auto t = op::T_pt_(2, {.batch_ordinals = {5, 10, 15}});
+      auto t_adj = adjoint(t);
+      REQUIRE(t_adj.as<op_t>().batch_ordinals().value() ==
+              t.as<op_t>().batch_ordinals().value());
     }  // SECTION("batching")
   }
 

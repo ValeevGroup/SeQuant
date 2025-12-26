@@ -145,6 +145,10 @@ void Operator<QuantumNumbers, S>::adjoint() {
     lbl.push_back(sequant::adjoint_label);
   }
 
+  // get order and batch_ordinals to restore later
+  const auto saved_order = this->order_;
+  const auto saved_batch_ordinals = this->batch_ordinals_;
+
   const auto tnsr = this->tensor_form();
   *this =
       Operator{[=]() -> std::wstring_view { return lbl; },  // label_generator
@@ -156,6 +160,10 @@ void Operator<QuantumNumbers, S>::adjoint() {
                  return qn;  // qn_action
                }};
   this->is_adjoint_ = !this->is_adjoint_;  // toggle adjoint flag
+
+  // restore original order and batch_ordinals
+  this->order_ = saved_order;
+  this->batch_ordinals_ = saved_batch_ordinals;
 }
 
 template <typename QuantumNumbers, Statistics S>
