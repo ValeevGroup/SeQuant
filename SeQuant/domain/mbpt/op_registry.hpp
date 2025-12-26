@@ -22,6 +22,10 @@ enum class OpClass { ex, deex, gen };
 ///
 /// A registry that keeps track of MBPT operators by their labels and
 /// properties.
+///
+/// Copy semantics is shallow (operator map shared via `std::shared_ptr`),
+/// allowing multiple mbpt::Context objects to share operator definitions.
+/// Use OpRegistry::clone() for deep copies.
 class OpRegistry {
  public:
   /// default constructor, creates an empty registry
@@ -44,6 +48,12 @@ class OpRegistry {
 
   /// move assignment operator
   OpRegistry& operator=(OpRegistry&& other) noexcept;
+
+  /// @brief const iterator to beginning of registry
+  [[nodiscard]] decltype(auto) begin() const { return ops_->cbegin(); }
+
+  /// @brief const iterator to end of registry
+  [[nodiscard]] decltype(auto) end() const { return ops_->cend(); }
 
   /// @brief clones this OpRegistry, creates a copy of ops_
   OpRegistry clone() const;
@@ -86,7 +96,7 @@ class OpRegistry {
   friend bool operator==(const OpRegistry& reg1, const OpRegistry& reg2) {
     return *reg1.ops_ == *reg2.ops_;
   }
-};
+};  // class OpRegistry
 }  // namespace sequant::mbpt
 
 #endif  // SEQUANT_DOMAIN_MBPT_OP_REGISTRY_HPP
