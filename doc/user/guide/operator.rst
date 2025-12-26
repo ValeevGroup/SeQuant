@@ -78,6 +78,35 @@ it into individual contributions, each with definite effect on quantum numbers. 
     - Although the user can construct ``mbpt::Operator`` directly, SeQuant predefines factories for many commonly-used operators. For example, functions :class:`H_ <sequant::mbpt::op::H_>`, :class:`T_ <sequant::mbpt::op::T_>`, :class:`Λ_ <sequant::mbpt::op::Λ_>`, :class:`R_ <sequant::mbpt::op::R_>`, and :class:`L_ <sequant::mbpt::op::L_>`  in the ``mbpt::op`` namespace all return instances of ``Operator`` (or expressions built from them), each representing a specific type of many-body operator (Hamiltonian, excitation, deexcitation, etc).
     - There are convenient helper functions available in ``sequant::mbpt`` namespace for constructing different types of ``QuantumNumberChange`` objects. For example, see ``sequant::mbpt::excitation_type_qns``.
 
+Operator Registry
+-----------------
+
+The :class:`mbpt::OpRegistry <sequant::mbpt::OpRegistry>` maintains a mapping from operator labels to their operator classes. In this section we describe how to use and extend the operator registry.
+
+Each operator must be registered with one of three classes:
+
+- :cpp:enumerator:`OpClass::ex <sequant::mbpt::OpClass::ex>`: Excitation operators (e.g., cluster excitation operator)
+- :cpp:enumerator:`OpClass::deex <sequant::mbpt::OpClass::deex>`: De-excitation operators (e.g., cluster de-excitation operator)
+- :cpp:enumerator:`OpClass::gen <sequant::mbpt::OpClass::gen>`: General operators (e.g., Hamiltonian-like operators)
+
+.. note:: Some operator labels are reserved for SeQuant's internal MBPT and core functionalities and cannot be registered. See ``SeQuant/domain/mbpt/reserved.hpp`` for more details.
+
+SeQuant provides two predefined registries:
+
+- :func:`make_minimal_registry() <sequant::mbpt::make_minimal_registry>`: Contains only a minimal set of operators
+- :func:`make_legacy_registry() <sequant::mbpt::make_legacy_registry>`: A backward-compatible registry that includes all operators used in legacy MBPT module.
+
+
+Custom operators can be registered to extend SeQuant's vocabulary. Once registered, operators can be used with both :class:`OpMaker <sequant::mbpt::OpMaker>` and :class:`mbpt::Operator <sequant::mbpt::Operator>`:
+
+.. literalinclude:: /examples/user/operator.cpp
+   :language: cpp
+   :start-after: start-snippet-5
+   :end-before: end-snippet-5
+   :dedent: 2
+
+The registry is stored in the :class:`mbpt::Context <sequant::mbpt::Context>`. See the unit test cases for further manipulations with :class:`mbpt::Context <sequant::mbpt::Context>` and :class:`mbpt::OpRegistry <sequant::mbpt::OpRegistry>`.
+
 Examples
 --------
 
