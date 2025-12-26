@@ -100,17 +100,17 @@ struct OpParams {
 
   /// @brief Validates the parameters for consistency and correctness
   void validate() const {
+    SEQUANT_ASSERT(order <= 9 &&
+                   "OpParams: perturbation order must be in range [0,9]");
     SEQUANT_ASSERT(!(nbatch && !batch_ordinals.empty()) &&
                    "OpParams: Cannot specify both nbatch and batch_ordinals");
     // ensure batch ordinals are unique
     if (!batch_ordinals.empty()) {
-#ifdef SEQUANT_ASSERT_ENABLED
       SEQUANT_ASSERT(ranges::is_sorted(batch_ordinals) &&
                      "OpParams: batch_ordinals must be sorted");
       auto duplicate = ranges::adjacent_find(batch_ordinals);
       SEQUANT_ASSERT(duplicate == batch_ordinals.end() &&
                      "OpParams: batch_ordinals must contain unique values");
-#endif
     }
   }
 };
