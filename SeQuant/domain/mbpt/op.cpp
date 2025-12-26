@@ -820,9 +820,6 @@ ExprPtr H_pt(std::size_t R, const OpParams& params) {
 
 ExprPtr T_pt_(std::size_t K, const OpParams& params) {
   params.validate();
-  SEQUANT_ASSERT(params.order == 1 &&
-                 "sequant::mbpt::tensor::T_pt_: only supports first "
-                 "order perturbation");
   SEQUANT_ASSERT(K > 0 && "Operator rank must be > 0");
   SEQUANT_ASSERT(get_default_mbpt_context().op_registry()->contains(L"t"));
   return OpMaker<Statistics::FermiDirac>(L"t", ncre(K), nann(K), params)();

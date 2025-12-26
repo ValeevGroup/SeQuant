@@ -687,7 +687,32 @@ TEST_CASE("mbpt", "[mbpt]") {
               L"{{{\\frac{1}{12}}}{\\bar{L}^{{a_1}{a_2}}_{{i_1}{i_2}{i_"
               L"3}}}{\\tilde{a}^{{i_1}{i_2}{i_3}}_{\\textvisiblespace\\,{a_1}{"
               L"a_2}}}}\\bigr) }");
-    }
+
+      // perturbation ops
+      REQUIRE_NOTHROW(H_pt(1, {.order = 1}));
+      REQUIRE_NOTHROW(H_pt(2, {.order = 2}));
+      REQUIRE_NOTHROW(Λ_pt(3, {.order = 5, .skip1 = true}));
+      REQUIRE_NOTHROW(T_pt(2, {.order = 9}));
+#if SEQUANT_ASSERT_BEHAVIOR == SEQUANT_ASSERT_THROW
+      REQUIRE_THROWS(H_pt(1, {.order = 10}));  // invalid order
+#endif
+
+      auto h0 = H_pt(1);
+      REQUIRE(to_latex(h0) == L"{\\hat{h¹}}");
+      auto h1 = H_pt(1, {.order = 1});
+      auto h2 = H_pt(1, {.order = 2});
+      auto t2 = T_pt_(2, {.order = 2});
+
+      REQUIRE(h1 != h2);
+      REQUIRE(h0 == h1);
+
+      REQUIRE(to_latex(simplify(h0 + h1)) == L"{{{2}}{\\hat{h¹}}}");
+      REQUIRE(to_latex(simplify(h1 + h2)) ==
+              L"{ \\bigl({\\hat{h¹}} + {\\hat{h²}}\\bigr) }");
+
+      REQUIRE(to_latex(simplify(h1 * t2)) == L"{{\\hat{h¹}}{\\hat{t²}_{2}}}");
+      REQUIRE(to_latex(simplify(h2 * t2)) == L"{{\\hat{h²}}{\\hat{t²}_{2}}}");
+    }  // SECTION("predefined")
 
     SECTION("batching") {
       // update context to use batching index
