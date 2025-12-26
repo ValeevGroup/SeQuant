@@ -1,6 +1,14 @@
 #include <SeQuant/domain/mbpt/context.hpp>
 
+#ifdef SEQUANT_CONTEXT_MANIPULATION_THREADSAFE
+#include <mutex>
+#endif
+
 namespace sequant::mbpt {
+
+#ifdef SEQUANT_CONTEXT_MANIPULATION_THREADSAFE
+static std::recursive_mutex mbpt_ctx_mtx;  // used to protect the MBPT context
+#endif
 
 /// forward declaration of OpClass
 enum class OpClass;
@@ -55,10 +63,16 @@ bool operator!=(Context const& left, Context const& right) {
 }
 
 const Context& get_default_mbpt_context() {
+#ifdef SEQUANT_CONTEXT_MANIPULATION_THREADSAFE
+  std::scoped_lock lock(mbpt_ctx_mtx);
+#endif
   return sequant::detail::get_implicit_context<Context>();
 }
 
 void set_default_mbpt_context(const Context& ctx) {
+#ifdef SEQUANT_CONTEXT_MANIPULATION_THREADSAFE
+  std::scoped_lock lock(mbpt_ctx_mtx);
+#endif
   sequant::detail::set_implicit_context(ctx);
 }
 
@@ -67,17 +81,23 @@ void set_default_mbpt_context(const Context::Options& options) {
 }
 
 void reset_default_mbpt_context() {
+#ifdef SEQUANT_CONTEXT_MANIPULATION_THREADSAFE
+  std::scoped_lock lock(mbpt_ctx_mtx);
+#endif
   sequant::detail::reset_implicit_context<Context>();
 }
 
 [[nodiscard]] sequant::detail::ImplicitContextResetter<Context>
 set_scoped_default_mbpt_context(const Context& f) {
+#ifdef SEQUANT_CONTEXT_MANIPULATION_THREADSAFE
+  std::scoped_lock lock(mbpt_ctx_mtx);
+#endif
   return sequant::detail::set_scoped_implicit_context(f);
 }
 
 [[nodiscard]] sequant::detail::ImplicitContextResetter<Context>
 set_scoped_default_mbpt_context(const Context::Options& f) {
-  return sequant::detail::set_scoped_implicit_context(Context(f));
+  return set_scoped_default_mbpt_context(Context(f));
 }
 
 std::shared_ptr<OpRegistry> make_minimal_registry() {
