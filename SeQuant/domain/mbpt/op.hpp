@@ -54,6 +54,22 @@ namespace mbpt {
 
 namespace detail {
 inline constexpr std::wstring_view pert_superscripts = L"⁰¹²³⁴⁵⁶⁷⁸⁹";
+
+/// @brief decorates a base label with perturbation order as superscript
+/// @param base_label the base label to decorate
+/// @param pert_order the perturbation order to decorate with
+/// @return the decorated label
+inline std::wstring decorate_with_pert_order(std::wstring_view base_label,
+                                             int pert_order = 0) {
+  if (pert_order == 0) return std::wstring(base_label);
+  SEQUANT_ASSERT(
+      pert_order >= 0 && pert_order <= 9,
+      "decorate_with_pert_order: perturbation order out of range [0,9]");
+
+  std::wstring result(base_label);
+  result += detail::pert_superscripts[pert_order];
+  return result;
+}
 }  // namespace detail
 
 DEFINE_STRONG_TYPE_FOR_INTEGER(nₚ, std::int64_t);  // define nₚ
@@ -101,22 +117,6 @@ struct OpParams {
 
 /// @return the tensor labels in the cardinal order
 std::vector<std::wstring> cardinal_tensor_labels();
-
-/// @brief decorates a base label with perturbation order as superscript
-/// @param base_label the base label to decorate
-/// @param pert_order the perturbation order to decorate with
-/// @return the decorated label
-inline std::wstring decorate_with_pert_order(std::wstring_view base_label,
-                                             int pert_order = 0) {
-  if (pert_order == 0) return std::wstring(base_label);
-  SEQUANT_ASSERT(
-      pert_order >= 0 && pert_order <= 9,
-      "decorate_with_pert_order: perturbation order out of range [0,9]");
-
-  std::wstring result(base_label);
-  result += detail::pert_superscripts[pert_order];
-  return result;
-}
 
 //////////////////////////////
 

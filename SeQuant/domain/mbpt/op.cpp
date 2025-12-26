@@ -307,10 +307,10 @@ std::wstring to_latex(const mbpt::Operator<mbpt::qns_t, S>& op) {
   using namespace sequant::mbpt;
 
   // start with label and perturbation order (if any)
-  auto result =
-      L"{\\hat{" +
-      utf_to_latex(mbpt::decorate_with_pert_order(op.label(), op.order())) +
-      L"}";
+  auto result = L"{\\hat{" +
+                utf_to_latex(mbpt::detail::decorate_with_pert_order(
+                    op.label(), op.order())) +
+                L"}";
 
   // check if operator has adjoint label, remove if present for base label
   auto base_lbl = sequant::to_wstring(op.label());
@@ -566,7 +566,7 @@ ExprPtr OpMaker<S>::operator()(std::optional<UseDepIdx> dep,
       dep = UseDepIdx::None;
     }
   }
-  const std::wstring full_label = decorate_with_pert_order(label_, order_);
+  const auto full_label = detail::decorate_with_pert_order(label_, order_);
 
   // if batching indices are present, use them
   if (batch_indices_) {
