@@ -389,7 +389,7 @@ TEST_CASE("tensor_network", "[elements]") {
     }
 
     {  // with Tensors and NormalOperators
-      auto tmp = t::A(nₚ(-2)) * t::H_(2) * t::T_(2) * t::T_(2);
+      auto tmp = t::A(nₚ(-2)) * t::h(2) * t::t(2) * t::t(2);
       REQUIRE_NOTHROW(TN(tmp->as<Product>().factors()));
     }
 
@@ -516,7 +516,7 @@ TEST_CASE("tensor_network", "[elements]") {
     // can't use operator expression (due to unspecified order of evaluation of
     // function arguments), must use initializer list
     auto tmp = ex<Product, std::initializer_list<ExprPtr>>(
-        {t::A(nₚ(-2)), t::H_(2), t::T_(2), t::T_(2), t::T_(2)});
+        {t::A(nₚ(-2)), t::h(2), t::t(2), t::t(2), t::t(2)});
     // canonicalize to avoid dependence on the implementation details of
     // mbpt::sr::make_op
     // N.B. graph structure before canonicalization will depend on the input
@@ -930,7 +930,7 @@ TEST_CASE("tensor_network_v2", "[elements]") {
     }
 
     {  // with Tensors and NormalOperators
-      auto tmp = t::A(nₚ(-2)) * t::H_(2) * t::T_(2) * t::T_(2);
+      auto tmp = t::A(nₚ(-2)) * t::h(2) * t::t(2) * t::t(2);
       REQUIRE_NOTHROW(TensorNetworkV2(tmp->as<Product>().factors()));
     }
 
@@ -1572,7 +1572,7 @@ TEST_CASE("tensor_network_v3", "[elements]") {
     }
 
     {  // with Tensors and NormalOperators
-      auto tmp = t::A(nₚ(-2)) * t::H_(2) * t::T_(2) * t::T_(2);
+      auto tmp = t::A(nₚ(-2)) * t::h(2) * t::t(2) * t::t(2);
       REQUIRE_NOTHROW(TN(tmp->as<Product>().factors()));
     }
 

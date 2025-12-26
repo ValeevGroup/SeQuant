@@ -125,7 +125,7 @@ jobs:
       working-directory: ${{github.workspace}}/build
       shell: bash
       # Execute the build.  You can specify a specific target with "--target <NAME>"
-      run: ccache -p && ccache -z && cmake --build . && ccache -s
+      run: ccache -p && ccache -z && cmake --build . -j 2 && ccache -s
 
     - name: Test
       if: ${{ !matrix.valgrind }}

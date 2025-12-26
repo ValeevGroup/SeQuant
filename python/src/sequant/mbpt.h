@@ -36,8 +36,7 @@ inline void __init__(py::module m) {
   py::enum_<sequant::mbpt::OpType>(m, "OpType")
       .value("h", sequant::mbpt::OpType::h)
       .value("f", sequant::mbpt::OpType::f)
-      .value("t", sequant::mbpt::OpType::t)
-      .export_values();
+      .value("t", sequant::mbpt::OpType::t);
 
   m.def("F", &sequant::mbpt::F);
   m.def("H", &sequant::mbpt::H,
@@ -46,7 +45,7 @@ inline void __init__(py::module m) {
 
   m.def(SR_OP(A));
   m.def(SR_OP(T));
-  m.def(SR_OP(T_));
+  m.def(SR_OP(t));
 
   m.def("VacuumAverage", &VacuumAverage<>);
   m.def("VacuumAverage",

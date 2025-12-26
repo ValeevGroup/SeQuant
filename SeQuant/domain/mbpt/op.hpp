@@ -974,7 +974,7 @@ using mbpt::nₚ;
 /// @param[in] k the rank of the particle interactions; only `k<=2` is
 /// supported
 // clang-format on
-ExprPtr H_(std::size_t k);
+ExprPtr h(std::size_t k);
 
 /// @brief Total Hamiltonian including up to `k`-body interactions
 /// @param[in] k the maximum rank of the particle interactions; only `k<=2` is
@@ -991,7 +991,7 @@ ExprPtr θ(std::size_t K);
 
 /// Makes particle-conserving excitation operator of rank \p K based on the
 /// defined context
-ExprPtr T_(std::size_t K);
+ExprPtr t(std::size_t K);
 
 /// Makes sum of particle-conserving excitation operators of all ranks up to \p
 /// K based on the defined context
@@ -999,7 +999,7 @@ ExprPtr T(std::size_t K, bool skip1 = false);
 
 /// Makes particle-conserving deexcitation operator of rank \p K based on the
 /// defined context
-ExprPtr Λ_(std::size_t K);
+ExprPtr λ(std::size_t K);
 
 /// Makes sum of particle-conserving deexcitation operators of all ranks up to
 /// \p K based on the defined context
@@ -1010,23 +1010,22 @@ ExprPtr Λ(std::size_t K, bool skip1 = false);
 /// @param nc number of creators
 /// @param cre_space IndexSpace on which creators act
 /// @param ann_space IndexSpace on which annihilators act
-ExprPtr R_(
-    nann na, ncre nc,
-    const cre<IndexSpace>& cre_space = cre(get_particle_space(Spin::any)),
-    const ann<IndexSpace>& ann_space = ann(get_hole_space(Spin::any)));
+ExprPtr r(nann na, ncre nc,
+          const cre<IndexSpace>& cre_space = cre(get_particle_space(Spin::any)),
+          const ann<IndexSpace>& ann_space = ann(get_hole_space(Spin::any)));
 
 /// @brief Makes generic excitation operator
 /// @param np number of particle creators
 /// @param nh number of hole creators
-ExprPtr R_(nₚ np, nₕ nh);
-DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(R_);
+ExprPtr r(nₚ np, nₕ nh);
+DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(r);
 
 /// @brief Makes generic left-hand replacement operator
 /// @param na number of annihilators
 /// @param nc number of creators
 /// @param cre_space IndexSpace on which creators act
 /// @param ann_space IndexSpace on which annihilators act
-ExprPtr L_(
+ExprPtr l(
     nann na, ncre nc,
     const cre<IndexSpace>& cre_space = cre(get_hole_space(Spin::any)),
     const ann<IndexSpace>& ann_space = ann(get_particle_space(Spin::any)));
@@ -1034,8 +1033,8 @@ ExprPtr L_(
 /// @brief Makes generic deexcitation operator
 /// @param np number of particle annihilators
 /// @param nh number of hole annihilators
-ExprPtr L_(nₚ np, nₕ nh);
-DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(L_);
+ExprPtr l(nₚ np, nₕ nh);
+DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(l);
 
 // clang-format off
 /// makes projector onto excited bra (if \p np > 0 && \p nh > 0) or ket (if \p np < 0 && \p nh <0) manifold
@@ -1066,14 +1065,14 @@ ExprPtr S(std::int64_t K);
 /// @param params OpParams for operator construction. Default: order=1
 /// @pre `params.order==1`, only first order perturbation is supported now
 /// @pre If batching is used, ISR must contain batching space
-ExprPtr H_pt(std::size_t R, const OpParams& params = {.order = 1});
+ExprPtr Hʼ(std::size_t R, const OpParams& params = {.order = 1});
 
 /// @brief Makes perturbed particle-conserving excitation operator
 /// @param K rank of the excitation operator
 /// @param params OpParams for operator construction. Default: order=1
 /// @pre `params.order==1`, only first order perturbation is supported now
 /// @pre If batching is used, ISR must contain batching space
-ExprPtr T_pt_(std::size_t K, const OpParams& params = {.order = 1});
+ExprPtr tʼ(std::size_t K, const OpParams& params = {.order = 1});
 
 /// @brief Makes sum of perturbed particle-conserving excitation operators
 /// @param K rank up to which the sum is to be formed
@@ -1081,15 +1080,15 @@ ExprPtr T_pt_(std::size_t K, const OpParams& params = {.order = 1});
 /// skip1=false
 /// @pre `params.order==1`, only first order perturbation is supported now
 /// @pre If batching is used, ISR must contain batching space
-ExprPtr T_pt(std::size_t K,
-             const OpParams& params = {.order = 1, .skip1 = false});
+ExprPtr Tʼ(std::size_t K,
+           const OpParams& params = {.order = 1, .skip1 = false});
 
 /// @brief Makes perturbed particle-conserving deexcitation operator
 /// @param K rank of the deexcitation operator
 /// @param params OpParams for operator construction. Default: order=1
 /// @pre `params.order==1`, only first order perturbation is supported now
 /// @pre If batching is used, ISR must contain batching space
-ExprPtr Λ_pt_(std::size_t K, const OpParams& params = {.order = 1});
+ExprPtr λʼ(std::size_t K, const OpParams& params = {.order = 1});
 
 /// @brief Makes sum of perturbed particle-conserving deexcitation operators
 /// @param K rank up to which the sum is to be formed
@@ -1097,8 +1096,8 @@ ExprPtr Λ_pt_(std::size_t K, const OpParams& params = {.order = 1});
 /// skip1=false
 /// @pre `params.order==1`, only first order perturbation is supported now
 /// @pre If batching is used, ISR must contain batching space
-ExprPtr Λ_pt(std::size_t K,
-             const OpParams& params = {.order = 1, .skip1 = false});
+ExprPtr Λʼ(std::size_t K,
+           const OpParams& params = {.order = 1, .skip1 = false});
 }  // namespace tensor
 }  // namespace op
 
@@ -1108,7 +1107,7 @@ inline namespace op {
 /// @param[in] k the rank of the particle interactions; only `k<=2` is
 /// supported
 // clang-format on
-ExprPtr H_(std::size_t k);
+ExprPtr h(std::size_t k);
 
 /// @brief Total Hamiltonian including up to `k`-body interactions
 /// @param[in] k the maximum rank of the particle interactions; only `k<=2` is
@@ -1124,14 +1123,14 @@ ExprPtr F(bool use_tensor = true, IndexSpace reference_occupied = {L"", 0});
 ExprPtr θ(std::size_t K);
 
 /// Makes particle-conserving excitation operator of rank \p K
-ExprPtr T_(std::size_t K);
+ExprPtr t(std::size_t K);
 
 /// Makes sum of particle-conserving excitation operators of all ranks up to \p
 /// K
 ExprPtr T(std::size_t K, bool skip1 = false);
 
 /// Makes particle-conserving deexcitation operator of rank \p K
-ExprPtr Λ_(std::size_t K);
+ExprPtr λ(std::size_t K);
 
 /// Makes sum of particle-conserving deexcitation operators of all ranks up to
 /// \p K
@@ -1142,23 +1141,22 @@ ExprPtr Λ(std::size_t K, bool skip1 = false);
 /// @param nc number of creators
 /// @param cre_space IndexSpace on which creators act
 /// @param ann_space IndexSpace on which annihilators act
-ExprPtr R_(
-    nann na, ncre nc,
-    const cre<IndexSpace>& cre_space = cre(get_particle_space(Spin::any)),
-    const ann<IndexSpace>& ann_space = ann(get_hole_space(Spin::any)));
+ExprPtr r(nann na, ncre nc,
+          const cre<IndexSpace>& cre_space = cre(get_particle_space(Spin::any)),
+          const ann<IndexSpace>& ann_space = ann(get_hole_space(Spin::any)));
 
 /// @brief Makes generic excitation operator
 /// @param np number of particle creators
 /// @param nh number of hole creators
-ExprPtr R_(nₚ np, nₕ nh);
-DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(R_);
+ExprPtr r(nₚ np, nₕ nh);
+DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(r);
 
 /// @brief Makes generic deexcitation operator
 /// @param na number of annihilators
 /// @param nc number of creators
 /// @param cre_space IndexSpace on which creators act
 /// @param ann_space IndexSpace on which annihilators act
-ExprPtr L_(
+ExprPtr l(
     nann na, ncre nc,
     const cre<IndexSpace>& cre_space = cre(get_hole_space(Spin::any)),
     const ann<IndexSpace>& ann_space = ann(get_particle_space(Spin::any)));
@@ -1166,15 +1164,15 @@ ExprPtr L_(
 /// @brief Makes generic deexcitation operator
 /// @param np number of particle annihilators
 /// @param nh number of hole annihilators
-ExprPtr L_(nₚ np, nₕ nh);
-DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(L_);
+ExprPtr l(nₚ np, nₕ nh);
+DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(l);
 
 /// @brief Makes sum of generic right-hand replacement operators up to max rank
 /// @param na number of annihilators
 /// @param nc number of creators
 /// @param cre_space IndexSpace on which creators act
 /// @param ann_space IndexSpace on which annihilators act
-/// @return `R_(na,nc) + R_(na-1,nc-1) + ...`
+/// @return `r(na,nc) + r(na-1,nc-1) + ...`
 ExprPtr R(nann na, ncre nc,
           const cre<IndexSpace>& cre_space = cre(get_particle_space(Spin::any)),
           const ann<IndexSpace>& ann_space = ann(get_hole_space(Spin::any)));
@@ -1182,7 +1180,7 @@ ExprPtr R(nann na, ncre nc,
 /// @brief Makes sum of generic excitation operators up to max rank
 /// @param np max number of particle creators
 /// @param nh max number of hole creators
-/// @return `R_(np,nh) + R_(np-1,nh-1) + ...`
+/// @return `r(np,nh) + r(np-1,nh-1) + ...`
 ExprPtr R(nₚ np, nₕ nh);
 DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(R);
 
@@ -1191,7 +1189,7 @@ DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(R);
 /// @param nc number of creators
 /// @param cre_space IndexSpace on which creators act
 /// @param ann_space IndexSpace on which annihilators act
-/// @return `L_(na,nc) + L_(na-1,nc-1) + ...`
+/// @return `l(na,nc) + l(na-1,nc-1) + ...`
 ExprPtr L(
     nann na, ncre nc,
     const cre<IndexSpace>& cre_space = cre(get_hole_space(Spin::any)),
@@ -1200,7 +1198,7 @@ ExprPtr L(
 /// @brief Makes sum of deexcitation operators up to max rank
 /// @param np max number of particle annihilators
 /// @param nh max number of hole annihilators
-/// @return `L_(np,nh) + L_(np-1,nh-1) + ...`
+/// @return `l(np,nh) + l(np-1,nh-1) + ...`
 ExprPtr L(nₚ np, nₕ nh);
 DEFINE_SINGLE_SIGNED_ARGUMENT_OP_VARIANT(L);
 
@@ -1232,14 +1230,14 @@ ExprPtr S(std::int64_t K);
 /// @param params OpParams for operator construction. Default: order=1
 /// @pre `params.order==1`, only first order perturbation is supported now
 /// @pre If batching is used, ISR must contain batching space
-ExprPtr H_pt(std::size_t R, const OpParams& params = {.order = 1});
+ExprPtr Hʼ(std::size_t R, const OpParams& params = {.order = 1});
 
 /// @brief Makes perturbed particle-conserving excitation operator from OpParams
 /// @param K rank of the excitation operator
 /// @param params OpParams for operator construction. Default: order=1
 /// @pre `params.order==1`, only first order perturbation is supported now
 /// @pre If batching is used, ISR must contain batching space
-ExprPtr T_pt_(std::size_t K, const OpParams& params = {.order = 1});
+ExprPtr tʼ(std::size_t K, const OpParams& params = {.order = 1});
 
 /// @brief Makes sum of perturbed particle-conserving excitation operators
 /// @param K rank up to which the sum is to be formed
@@ -1247,15 +1245,15 @@ ExprPtr T_pt_(std::size_t K, const OpParams& params = {.order = 1});
 /// skip1=false
 /// @pre `params.order==1`, only first order perturbation is supported now
 /// @pre If batching is used, ISR must contain batching space
-ExprPtr T_pt(std::size_t K,
-             const OpParams& params = {.order = 1, .skip1 = false});
+ExprPtr Tʼ(std::size_t K,
+           const OpParams& params = {.order = 1, .skip1 = false});
 
 /// @brief Makes perturbed particle-conserving deexcitation operator
 /// @param K rank of the deexcitation operator
 /// @param params OpParams for operator construction. Default: order=1
 /// @pre `params.order==1`, only first order perturbation is supported now
 /// @pre If batching is used, ISR must contain batching space
-ExprPtr Λ_pt_(std::size_t K, const OpParams& params = {.order = 1});
+ExprPtr λʼ(std::size_t K, const OpParams& params = {.order = 1});
 
 /// @brief Makes sum of perturbed particle-conserving deexcitation operators
 /// @param K rank up to which the sum is to be formed
@@ -1263,8 +1261,8 @@ ExprPtr Λ_pt_(std::size_t K, const OpParams& params = {.order = 1});
 /// skip1=false
 /// @pre `params.order==1`, only first order perturbation is supported now
 /// @pre If batching is used, ISR must contain batching space
-ExprPtr Λ_pt(std::size_t K,
-             const OpParams& params = {.order = 1, .skip1 = false});
+ExprPtr Λʼ(std::size_t K,
+           const OpParams& params = {.order = 1, .skip1 = false});
 
 /// @brief computes the quantum number change effected by a given Operator or
 /// Operator Product when applied to the vacuum state

@@ -135,14 +135,13 @@ VacAvPair get_mbpt_expr(std::size_t i) {
       return {t::A(nₚ(-2)) * t::H(2) * t ::T(2) * t::T(2),
               VacAvPair::Connections{{1, 2}, {1, 3}}};
     case 2:
-      return {t::A(nₚ(-4)) * t::H_(2) * t ::T_(3) * t::T_(3),
+      return {t::A(nₚ(-4)) * t::h(2) * t ::t(3) * t::t(3),
               VacAvPair::Connections{{1, 2}, {1, 3}}};
     case 3:
-      return {t::A(-5) * t::H_(2) * t::T_(2) * t::T_(2) * t::T_(3),
+      return {t::A(-5) * t::h(2) * t::t(2) * t::t(2) * t::t(3),
               VacAvPair::Connections{{1, 2}, {1, 3}, {1, 4}}};
     case 4:
-      return {t::L_(nₚ(2), nₕ(1)) * t::H_(2) * t::R_(nₚ(1), nₕ(0)),
-              std::nullopt};
+      return {t::l(nₚ(2), nₕ(1)) * t::h(2) * t::r(nₚ(1), nₕ(0)), std::nullopt};
   }
 
   throw "Invalid index";

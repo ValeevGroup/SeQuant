@@ -77,8 +77,8 @@ Coupled-Cluster Response
 
 .. code-block:: cpp
 
-   std::vector<ExprPtr> t_pt(size_t order = 1, size_t rank = 1);
-   std::vector<ExprPtr> λ_pt(size_t order = 1, size_t rank = 1);
+   std::vector<ExprPtr> tʼ(size_t rank = 1, size_t order = 1);
+   std::vector<ExprPtr> λʼ(size_t rank = 1, size_t order = 1);
 
 Derives perturbed amplitude equations for response theory calculations.
 
