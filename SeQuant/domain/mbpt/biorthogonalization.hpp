@@ -45,6 +45,17 @@ void biorthogonal_transform(container::svector<ResultExpr>& exprs,
 [[nodiscard]] Eigen::MatrixXd compute_nns_p_matrix(std::size_t n_particles,
                                                    double threshold);
 
+/// \brief Provides permuted indices using libperm unrank function
+///
+/// \param indices The indices to permute
+/// \param perm_rank The rank of the permutation
+/// \param n_particles The rank of external index pairs
+///
+/// \return The permuted indices
+container::svector<size_t> compute_permuted_indices(
+    const container::svector<size_t>& indices, size_t perm_rank,
+    size_t n_particles);
+
 }  // namespace sequant
 
 #endif

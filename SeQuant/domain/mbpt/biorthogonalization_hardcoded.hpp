@@ -36,7 +36,6 @@ make_hardcoded_biorth_coeffs_matrix(
 /// \param n_particles The rank of external index pairs
 ///
 /// \return The biorthogonal coefficient matrix as a matrix of rational numbers
-
 Eigen::Matrix<sequant::rational, Eigen::Dynamic, Eigen::Dynamic>
 hardcoded_biorth_coeffs_matrix(std::size_t n_particles);
 

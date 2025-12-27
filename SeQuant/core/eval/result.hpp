@@ -17,10 +17,6 @@
 #include <range/v3/numeric.hpp>
 #include <range/v3/view.hpp>
 
-#include <libperm/Permutation.hpp>
-#include <libperm/Rank.hpp>
-#include <libperm/Utils.hpp>
-
 #include <any>
 #include <memory>
 #include <utility>
@@ -352,8 +348,8 @@ auto particle_antisymmetrize_btas(btas::Tensor<Args...> const& arr,
 /// \param arr The array to be "cleaned up"
 /// \param bra_rank The rank of the bra indices
 /// \param svd_threshold The threshold used in computing the NNS projection
-/// matrix
-///        via pseudoinverse decomposition
+/// matrix via pseudoinverse decomposition
+///
 /// \return The cleaned TA::DistArray.
 template <typename... Args>
 auto biorthogonal_nns_project_ta(TA::DistArray<Args...> const& arr,
@@ -402,12 +398,8 @@ auto biorthogonal_nns_project_ta(TA::DistArray<Args...> const& arr,
 
     size_t num_perms = nns_p_coeffs.size();
     for (size_t perm_rank = 0; perm_rank < num_perms; ++perm_rank) {
-      perm::Permutation perm_obj = perm::unrank(perm_rank, ket_rank);
-
-      perm_t permuted_ket(ket_rank);
-      for (size_t i = 0; i < ket_rank; ++i) {
-        permuted_ket[i] = ket_perm[perm_obj[i]];
-      }
+      perm_t permuted_ket =
+          compute_permuted_indices(ket_perm, perm_rank, ket_rank);
 
       numeric_type coeff = nns_p_coeffs[perm_rank];
 
@@ -435,8 +427,7 @@ auto biorthogonal_nns_project_ta(TA::DistArray<Args...> const& arr,
 /// \param arr The array to be "cleaned up"
 /// \param bra_rank The rank of the bra indices
 /// /// \param svd_threshold The threshold used in computing the NNS projection
-/// matrix
-///        via pseudoinverse decomposition
+/// matrix via pseudoinverse decomposition
 ///
 /// \return The cleaned btas::Tensor.
 template <typename... Args>
@@ -483,12 +474,8 @@ auto biorthogonal_nns_project_btas(btas::Tensor<Args...> const& arr,
 
     size_t num_perms = nns_p_coeffs.size();
     for (size_t perm_rank = 0; perm_rank < num_perms; ++perm_rank) {
-      perm::Permutation perm_obj = perm::unrank(perm_rank, ket_rank);
-
-      perm_t permuted_ket(ket_rank);
-      for (size_t i = 0; i < ket_rank; ++i) {
-        permuted_ket[i] = ket_perm[perm_obj[i]];
-      }
+      perm_t permuted_ket =
+          compute_permuted_indices(ket_perm, perm_rank, ket_rank);
 
       numeric_type coeff = nns_p_coeffs[perm_rank];
 

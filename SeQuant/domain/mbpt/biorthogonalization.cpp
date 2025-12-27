@@ -141,6 +141,18 @@ Eigen::MatrixXd compute_nns_p_matrix(std::size_t n_particles,
   return nns;
 }
 
+container::svector<size_t> compute_permuted_indices(
+    const container::svector<size_t>& indices, size_t perm_rank,
+    size_t n_particles) {
+  perm::Permutation perm_obj = perm::unrank(perm_rank, n_particles);
+
+  container::svector<size_t> permuted_indices(n_particles);
+  for (size_t i = 0; i < n_particles; ++i) {
+    permuted_indices[i] = indices[perm_obj[i]];
+  }
+  return permuted_indices;
+}
+
 void sort_pairings(ParticlePairings& pairing) {
   std::stable_sort(pairing.begin(), pairing.end(),
                    compare_first_less<IndexPair>{});
