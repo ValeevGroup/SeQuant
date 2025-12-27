@@ -1,4 +1,5 @@
 #include <SeQuant/domain/mbpt/biorthogonalization.hpp>
+#include <SeQuant/domain/mbpt/biorthogonalization_hardcoded.hpp>
 
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
@@ -9,6 +10,7 @@
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/permutation.hpp>
 
+#include <Eigen/Core>
 #include <Eigen/Eigenvalues>
 
 #include <libperm/Permutation.hpp>
@@ -127,6 +129,28 @@ Eigen::MatrixXd compute_biorth_coeffs(std::size_t n_particles,
   pinv *= normalization;
 
   return pinv;
+}
+
+Eigen::MatrixXd compute_nns_p_matrix(std::size_t n_particles,
+                                     double threshold) {
+  auto perm_ovlp_mat = permutational_overlap_matrix(n_particles);
+  auto normalized_pinv = compute_biorth_coeffs(n_particles, threshold);
+
+  auto nns = perm_ovlp_mat * normalized_pinv;
+
+  return nns;
+}
+
+container::svector<size_t> compute_permuted_indices(
+    const container::svector<size_t>& indices, size_t perm_rank,
+    size_t n_particles) {
+  perm::Permutation perm_obj = perm::unrank(perm_rank, n_particles);
+
+  container::svector<size_t> permuted_indices(n_particles);
+  for (size_t i = 0; i < n_particles; ++i) {
+    permuted_indices[i] = indices[perm_obj[i]];
+  }
+  return permuted_indices;
 }
 
 void sort_pairings(ParticlePairings& pairing) {
@@ -309,7 +333,7 @@ void biorthogonal_transform(container::svector<ResultExpr>& result_exprs,
   // like R^{IJ}_{AB} and the index pairing of the result is what determines
   // the required symmetrization. Hence, the symmetrization operator must not
   // be changed when transforming from one representation into the other.
-  assert(std::all_of(
+  SEQUANT_ASSERT(std::all_of(
       result_exprs.begin(), result_exprs.end(), [](const ResultExpr& res) {
         bool found = false;
         res.expression()->visit(
@@ -336,18 +360,26 @@ void biorthogonal_transform(container::svector<ResultExpr>& result_exprs,
                ranges::to<container::svector<std::size_t>>();
 
   const std::size_t n_particles = externals.front().size();
-
-  Eigen::MatrixXd coefficients = compute_biorth_coeffs(n_particles, threshold);
-
   auto num_perms = factorial(n_particles);
-  SEQUANT_ASSERT(num_perms == coefficients.rows());
-  SEQUANT_ASSERT(num_perms == coefficients.cols());
 
   auto original_exprs = result_exprs |
                         ranges::views::transform([](const ResultExpr& res) {
                           return res.expression();
                         }) |
                         ranges::to<container::svector<ExprPtr>>();
+
+  Eigen::Matrix<sequant::rational, Eigen::Dynamic, Eigen::Dynamic>
+      hardcoded_coefficients;
+  Eigen::MatrixXd computed_coefficients;
+  constexpr std::size_t max_rank_hardcoded_biorth_coeffs = 6;
+
+  if (n_particles <= max_rank_hardcoded_biorth_coeffs) {
+    hardcoded_coefficients = hardcoded_biorth_coeffs_matrix(n_particles);
+  } else {
+    computed_coefficients = compute_biorth_coeffs(n_particles, threshold);
+    SEQUANT_ASSERT(num_perms == computed_coefficients.rows());
+    SEQUANT_ASSERT(num_perms == computed_coefficients.cols());
+  }
 
   for (std::size_t i = 0; i < result_exprs.size(); ++i) {
     result_exprs.at(i).expression() = ex<Constant>(0);
@@ -358,9 +390,14 @@ void biorthogonal_transform(container::svector<ResultExpr>& result_exprs,
       perm::Permutation perm = perm::unrank(rank, n_particles);
       perm->postMultiply(reference);
 
+      sequant::rational coeff =
+          (n_particles <= max_rank_hardcoded_biorth_coeffs)
+              ? hardcoded_coefficients(ranks.at(i), rank)
+              : to_rational(computed_coefficients(ranks.at(i), rank),
+                            threshold);
+
       result_exprs.at(i).expression() +=
-          ex<Constant>(
-              to_rational(coefficients(ranks.at(i), rank), threshold)) *
+          ex<Constant>(coeff) *
           create_expr_for(externals.at(i), perm, externals, original_exprs);
     }
 
