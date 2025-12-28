@@ -51,12 +51,13 @@ bool OpRegistry::contains(const std::wstring& op) const {
 }
 
 OpClass OpRegistry::to_class(const std::wstring& op) const {
-  if (!this->contains(op)) {
+  auto it = ops_->find(op);
+  if (it == ops_->end()) {
     throw std::runtime_error("mbpt::OpRegistry::to_class: operator " +
                              sequant::to_string(op) +
                              " does not exist in registry");
   }
-  return ops_->at(op);
+  return it->second;
 }
 
 OpRegistry OpRegistry::clone() const {
