@@ -21,7 +21,9 @@ Context::Context(Options options)
 
 Context Context::clone() const {
   Context ctx(*this);
-  ctx.op_registry_ = std::make_shared<OpRegistry>(op_registry_->clone());
+  if (op_registry_) {
+    ctx.op_registry_ = std::make_shared<OpRegistry>(op_registry_->clone());
+  }
   return ctx;
 }
 
@@ -51,8 +53,13 @@ Context& Context::set(CSV csv) {
 }
 
 bool operator==(Context const& left, Context const& right) {
-  return left.csv() == right.csv() &&
-         *(left.op_registry()) == *(right.op_registry());
+  if (left.csv() != right.csv()) return false;
+
+  // both null -> equal; one null -> not equal
+  if (!left.op_registry() && !right.op_registry()) return true;
+  if (!left.op_registry() || !right.op_registry()) return false;
+
+  return *left.op_registry() == *right.op_registry();
 }
 
 bool operator!=(Context const& left, Context const& right) {
