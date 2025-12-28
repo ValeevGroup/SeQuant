@@ -110,19 +110,7 @@ std::shared_ptr<OpRegistry> make_legacy_registry();
 /// context
 /// @param op the operator label
 /// @return the OpClass of the operator
-inline OpClass to_op_class(const std::wstring& op) {
-  // check reserved labels first
-  if (ranges::contains(reserved::labels(), op)) {
-    return OpClass::gen;  // all reserved labels are gen
-  } else {
-    auto registry = get_default_mbpt_context().op_registry();
-    if (!registry) {
-      throw std::runtime_error(
-          "to_op_class: no OpRegistry in default mbpt::Context");
-    }
-    return registry->to_class(op);
-  }
-}
+OpClass to_op_class(const std::wstring& op);
 
 }  // namespace sequant::mbpt
 
