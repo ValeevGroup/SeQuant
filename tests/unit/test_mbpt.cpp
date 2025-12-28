@@ -92,6 +92,7 @@ TEST_CASE("mbpt", "[mbpt]") {
       REQUIRE(registry.ops().empty());
     }
 
+#if SEQUANT_ASSERT_BEHAVIOR == SEQUANT_ASSERT_THROW
     SECTION("reserved-labels") {
       OpRegistry registry;
       // should not be able to add reserved labels
@@ -107,6 +108,7 @@ TEST_CASE("mbpt", "[mbpt]") {
       // should not be able to add duplicate
       REQUIRE_THROWS(registry.add(L"T", OpClass::deex));
     }
+#endif
   }  // SECTION("registry")
 
   SECTION("context") {
