@@ -95,8 +95,10 @@ TEST_CASE("mbpt", "[mbpt]") {
     SECTION("reserved-labels") {
       OpRegistry registry;
       // should not be able to add reserved labels
-      REQUIRE_THROWS(registry.add(reserved::antisymm_label(), OpClass::gen));
-      REQUIRE_THROWS(registry.add(reserved::symm_label(), OpClass::gen));
+      REQUIRE_THROWS(
+          registry.add(sequant::reserved::antisymm_label(), OpClass::gen));
+      REQUIRE_THROWS(
+          registry.add(sequant::reserved::symm_label(), OpClass::gen));
     }
 
     SECTION("duplicate-operators") {

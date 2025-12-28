@@ -89,7 +89,7 @@ Each operator must be registered with one of three classes:
 - :cpp:enumerator:`OpClass::deex <sequant::mbpt::OpClass::deex>`: De-excitation operators (e.g., cluster de-excitation operator)
 - :cpp:enumerator:`OpClass::gen <sequant::mbpt::OpClass::gen>`: General operators (e.g., Hamiltonian-like operators)
 
-.. note:: Some operator labels are reserved for SeQuant's internal MBPT and core functionalities and cannot be registered. See ``SeQuant/domain/mbpt/reserved.hpp`` for more details.
+.. note:: Some operator labels are reserved for SeQuant's internal MBPT and core functionalities and cannot be registered. See ``SeQuant/core/reserved.hpp`` for more details.
 
 SeQuant provides two predefined registries:
 

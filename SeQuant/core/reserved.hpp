@@ -5,7 +5,7 @@
 #ifndef SEQUANT_DOMAIN_MBPT_RESERVED_HPP
 #define SEQUANT_DOMAIN_MBPT_RESERVED_HPP
 
-namespace sequant::mbpt {
+namespace sequant {
 
 namespace reserved {
 /// @brief returns the reserved label for the antisymmetrization operator
@@ -35,6 +35,6 @@ inline bool is_nonreserved(const std::wstring& label) {
 
 }  // namespace reserved
 
-}  // namespace sequant::mbpt
+}  // namespace sequant
 
 #endif  // SEQUANT_DOMAIN_MBPT_RESERVED_HPP

@@ -7,9 +7,8 @@
 
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expressions/tensor.hpp>
+#include <SeQuant/core/reserved.hpp>
 #include <SeQuant/core/utility/macros.hpp>
-
-#include <SeQuant/domain/mbpt/reserved.hpp>
 
 #include <memory>
 

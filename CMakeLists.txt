@@ -359,6 +359,7 @@ set(SeQuant_src
         SeQuant/core/utility/tensor.hpp
         SeQuant/core/utility/timer.hpp
         SeQuant/core/utility/tuple.hpp
+        SeQuant/core/reserved.hpp
         SeQuant/core/wick.hpp
         SeQuant/core/wick.impl.hpp
         SeQuant/core/wolfram.hpp
@@ -373,7 +374,6 @@ set(SeQuant_src
         SeQuant/domain/mbpt/convention.hpp
         SeQuant/domain/mbpt/models/cc.cpp
         SeQuant/domain/mbpt/models/cc.hpp
-        SeQuant/domain/mbpt/reserved.hpp
         SeQuant/domain/mbpt/op_registry.hpp
         SeQuant/domain/mbpt/op_registry.cpp
         SeQuant/domain/mbpt/op.cpp
