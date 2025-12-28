@@ -12,9 +12,21 @@ namespace sequant::mbpt {
 /// Whether to use cluster-specific virtuals.
 enum class CSV { Yes, No };
 
-/// @brief details of the MBPT formalism
+// clang-format off
+/// @brief Specifies details of the MBPT formalism
 ///
-/// to be used as a implicit or explicit specification of the formalism
+/// MBPT context contains:
+/// - csv: whether to use cluster-specific virtuals
+/// - an `OpRegistry`: maps operator labels to their `OpClass`
+///
+/// @warning Default construction creates a `Context` with null `OpRegistry`.
+///          Most MBPT functions require a registry. Can be initialized as:
+///          @code
+///          set_default_mbpt_context(Context({.op_registry_ptr = make_minimal_registry()}));
+///          @endcode
+///
+/// Can be accessed via `get_default_mbpt_context()`. Functions access this global context to validate operator types and properties.
+// clang-format on
 class Context {
  public:
   struct Defaults {
