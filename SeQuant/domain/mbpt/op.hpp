@@ -90,9 +90,11 @@ inline IndexSpace make_space(const IndexSpace::Type& type) {
                                                                 Spin::any);
 }
 
-/// @brief Struct which holds parameters for operator construction
+/// @brief Holds parameters for operator construction
+///
+/// Used with `mbpt::OpMaker` and `mbpt::Operator` classes
 struct OpParams {
-  std::size_t order = 0;  ///< perturbation order (for _pt operators)
+  std::size_t order = 0;  ///< perturbation order, limited to range [0,9]
   std::optional<size_t> nbatch = std::nullopt;  ///< number of batching indices
   container::svector<std::size_t> batch_ordinals{};
   ///< custom batching index ordinals (empty = no batching)
