@@ -10,9 +10,6 @@ namespace sequant::mbpt {
 static std::recursive_mutex mbpt_ctx_mtx;  // used to protect the MBPT context
 #endif
 
-/// forward declaration of OpClass
-enum class OpClass;
-
 Context::Context(Options options)
     : csv_(options.csv),
       op_registry_(options.op_registry_ptr
