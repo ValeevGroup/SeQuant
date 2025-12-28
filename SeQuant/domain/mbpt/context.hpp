@@ -62,7 +62,7 @@ class Context {
   /// @return a pointer to the OpRegistry for this context
   /// @warning can be null when user did not provide one to Context (i.e., it
   /// was default constructed)
-  std::shared_ptr<OpRegistry> mutable_op_registry();
+  std::shared_ptr<OpRegistry> mutable_op_registry() const;
 
   /// @brief sets the OpRegistry for this context
   Context& set(const OpRegistry& op_registry);

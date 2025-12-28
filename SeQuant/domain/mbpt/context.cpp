@@ -33,7 +33,7 @@ std::shared_ptr<const OpRegistry> Context::op_registry() const {
   return op_registry_;
 }
 
-std::shared_ptr<OpRegistry> Context::mutable_op_registry() {
+std::shared_ptr<OpRegistry> Context::mutable_op_registry() const {
   return op_registry_;
 }
 
