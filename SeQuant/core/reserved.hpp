@@ -2,8 +2,10 @@
 // Created by Ajay Melekamburath on 12/24/25.
 //
 
-#ifndef SEQUANT_DOMAIN_MBPT_RESERVED_HPP
-#define SEQUANT_DOMAIN_MBPT_RESERVED_HPP
+#ifndef SEQUANT_CORE_RESERVED_HPP
+#define SEQUANT_CORE_RESERVED_HPP
+
+#include <SeQuant/core/expressions/tensor.hpp>
 
 namespace sequant {
 
@@ -37,4 +39,4 @@ inline bool is_nonreserved(const std::wstring& label) {
 
 }  // namespace sequant
 
-#endif  // SEQUANT_DOMAIN_MBPT_RESERVED_HPP
+#endif  // SEQUANT_CORE_RESERVED_HPP
