@@ -710,7 +710,7 @@ ExprPtr Λ_(std::size_t K) {
 
 ExprPtr Λ(std::size_t K, bool skip1) {
   SEQUANT_ASSERT(K > (skip1 ? 1 : 0));
-  SEQUANT_ASSERT(get_default_mbpt_context().op_registry()->contains(L"t"));
+  SEQUANT_ASSERT(get_default_mbpt_context().op_registry()->contains(L"λ"));
   ExprPtr result;
   for (auto k = (skip1 ? 2ul : 1ul); k <= K; ++k) {
     result = k > 1 ? result + tensor::Λ_(k) : tensor::Λ_(k);
@@ -910,6 +910,7 @@ ExprPtr H(std::size_t k) {
 
 ExprPtr θ(std::size_t K) {
   SEQUANT_ASSERT(K > 0);
+  SEQUANT_ASSERT(get_default_mbpt_context().op_registry()->contains(L"θ"));
   return ex<op_t>([]() -> std::wstring_view { return L"θ"; },
                   [=]() -> ExprPtr { return tensor::θ(K); },
                   [=](qnc_t& qns) {
