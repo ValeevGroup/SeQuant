@@ -1236,13 +1236,11 @@ bool lowers_rank_to_vacuum(const ExprPtr& op_or_op_product,
   return can_change_qns(op_or_op_product, qns_t{}, excitation_type_qns(k));
 }
 
-#include <SeQuant/domain/mbpt/vac_av.ipp>
-
 namespace tensor {
 
-ExprPtr detail::expectation_value_impl(
-    ExprPtr expr, std::vector<std::pair<int, int>> nop_connections,
-    bool use_top, bool full_contractions) {
+ExprPtr expectation_value_impl(ExprPtr expr,
+                               std::vector<std::pair<int, int>> nop_connections,
+                               bool use_top, bool full_contractions) {
   simplify(expr);
   auto isr = get_default_context().index_space_registry();
   const auto spinor = get_default_context().spbasis() == SPBasis::Spinor;
@@ -1466,38 +1464,17 @@ ExprPtr ref_av(ExprPtr expr, std::vector<std::pair<int, int>> nop_connections,
   const bool full_contractions =
       (isr->reference_occupied_space() == isr->vacuum_occupied_space()) ? true
                                                                         : false;
-  return detail::expectation_value_impl(expr, nop_connections, use_top,
-                                        full_contractions);
+  return expectation_value_impl(expr, nop_connections, use_top,
+                                full_contractions);
 }
 
 ExprPtr vac_av(ExprPtr expr, std::vector<std::pair<int, int>> nop_connections,
                bool use_top) {
-  return detail::expectation_value_impl(expr, nop_connections, use_top,
-                                        /* full_contractions*/ true);
+  return expectation_value_impl(expr, nop_connections, use_top,
+                                /* full_contractions*/ true);
 }
 
 }  // namespace tensor
 }  // namespace op
-
-bool can_change_qns(const ExprPtr& op_or_op_product, const qns_t target_qns,
-                    const qns_t source_qns = {}) {
-  qns_t qns = source_qns;
-  if (op_or_op_product.is<Product>()) {
-    const auto& op_product = op_or_op_product.as<Product>();
-    for (auto& op_ptr : ranges::views::reverse(op_product.factors())) {
-      SEQUANT_ASSERT(op_ptr->template is<op_t>());
-      const auto& op = op_ptr->template as<op_t>();
-      qns = op(qns);
-    }
-    return qns.overlaps_with(target_qns);
-  } else if (op_or_op_product.is<op_t>()) {
-    const auto& op = op_or_op_product.as<op_t>();
-    qns = op(qns);
-    return qns.overlaps_with(target_qns);
-  } else
-    throw std::invalid_argument(
-        "sequant::mbpt::sr::contains_rank(op_or_op_product): op_or_op_product "
-        "must be mbpt::sr::op_t or Product thereof");
-}
 
 }  // namespace sequant::mbpt

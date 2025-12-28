@@ -3,6 +3,7 @@
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/op.hpp>
+#include <SeQuant/domain/mbpt/vac_av.hpp>
 
 inline auto commutator(auto op1, auto op2) { return op1 * op2 - op2 * op1; }
 

@@ -555,11 +555,9 @@ qns_t generic_deexcitation_qns(std::size_t particle_rank, std::size_t hole_rank,
 
 inline namespace op {
 namespace tensor {
-namespace detail {
 ExprPtr expectation_value_impl(ExprPtr expr,
                                std::vector<std::pair<int, int>> nop_connections,
                                bool use_top, bool full_contractions);
-}  // namespace detail
 
 /// @brief computes the reference expectation value of a tensor-level expression
 /// @param expr input expression
@@ -1304,7 +1302,6 @@ bool raises_vacuum_to_rank(const ExprPtr& op_or_op_product,
 bool lowers_rank_to_vacuum(const ExprPtr& op_or_op_product,
                            const unsigned long k);
 
-#include <SeQuant/domain/mbpt/vac_av.hpp>
 }  // namespace op
 }  // namespace mbpt
 }  // namespace sequant
