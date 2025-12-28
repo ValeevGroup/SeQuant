@@ -76,8 +76,8 @@ class OpRegistry {
   /// @return the class of the operator
   [[nodiscard]] OpClass to_class(const std::wstring& op) const;
 
-  /// @brief returns a list of registered operators
-  [[nodiscard]] container::svector<std::wstring> ops() const;
+  /// @brief returns a view of registered operator labels
+  [[nodiscard]] auto ops() const { return ranges::views::keys(*ops_); }
 
   /// @brief clears all registered operators
   void purge() { ops_->clear(); }

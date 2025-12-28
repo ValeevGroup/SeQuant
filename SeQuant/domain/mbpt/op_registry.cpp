@@ -66,8 +66,4 @@ OpRegistry OpRegistry::clone() const {
   return result;
 }
 
-container::svector<std::wstring> OpRegistry::ops() const {
-  return ranges::views::keys(*ops_) |
-         ranges::to<container::svector<std::wstring>>();
-}
 }  // namespace sequant::mbpt
