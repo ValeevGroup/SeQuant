@@ -23,7 +23,7 @@ inline const std::wstring& symm_label() {
 }
 
 /// @brief returns a list of all reserved operator labels
-inline auto labels() {
+inline const auto& labels() {
   static const std::array reserved{antisymm_label(), symm_label(),
                                    sequant::kronecker_label(),
                                    sequant::overlap_label()};
