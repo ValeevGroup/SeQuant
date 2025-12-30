@@ -5,7 +5,10 @@
 #ifndef SEQUANT_CORE_RESERVED_HPP
 #define SEQUANT_CORE_RESERVED_HPP
 
-#include <SeQuant/core/expressions/tensor.hpp>
+#include <range/v3/algorithm/contains.hpp>
+
+#include <array>
+#include <string>
 
 namespace sequant {
 
@@ -22,11 +25,24 @@ inline const std::wstring& symm_label() {
   return label;
 }
 
+/// @brief overlap/metric tensor label is reserved since it is used by low-level
+/// SeQuant machinery. Users can create overlap Tensor using make_overlap()
+inline const std::wstring& overlap_label() {
+  static const std::wstring label = L"s";
+  return label;
+}
+
+/// @brief kronecker tensor label is reserved since it is used by low-level
+/// SeQuant machinery. Users can create Kronecker Tensor using make_kronecker()
+inline const std::wstring& kronecker_label() {
+  static const std::wstring label = L"δ";
+  return label;
+}
+
 /// @brief returns a list of all reserved operator labels
 inline const auto& labels() {
   static const std::array reserved{antisymm_label(), symm_label(),
-                                   sequant::kronecker_label(),
-                                   sequant::overlap_label()};
+                                   kronecker_label(), overlap_label()};
   return reserved;
 }
 

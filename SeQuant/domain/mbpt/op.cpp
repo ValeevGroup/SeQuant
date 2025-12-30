@@ -37,8 +37,8 @@ std::vector<std::wstring> cardinal_tensor_labels() {
           L"U",
           L"GR",
           L"C",
-          overlap_label(),
-          kronecker_label(),
+          reserved::overlap_label(),
+          reserved::kronecker_label(),
           L"a",
           L"ã",
           L"b",
@@ -632,6 +632,7 @@ ExprPtr H(std::size_t k) {
 
 ExprPtr F(bool use_tensor, const IndexSpace& reference_occupied) {
   auto registry = get_default_mbpt_context().op_registry();
+  using sequant::reserved::kronecker_label;
   if (use_tensor) {
     SEQUANT_ASSERT(registry->contains(L"f"));
     return OpMaker<Statistics::FermiDirac>(L"f", 1)();
