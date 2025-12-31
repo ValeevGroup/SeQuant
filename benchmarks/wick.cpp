@@ -150,7 +150,7 @@ VacAvPair get_mbpt_expr(std::size_t i) {
 
 static void mbpt_vac_av(benchmark::State &state, bool csv) {
   auto ctx = sequant::mbpt::set_scoped_default_mbpt_context(
-      mbpt::Context(csv ? mbpt::CSV::Yes : mbpt::CSV::No));
+      mbpt::Context({.csv = csv ? CSV::Yes : CSV::No}));
 
   VacAvPair input = get_mbpt_expr(state.range(0));
 

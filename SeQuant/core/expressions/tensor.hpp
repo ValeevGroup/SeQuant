@@ -14,6 +14,7 @@
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/latex.hpp>
+#include <SeQuant/core/reserved.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/strong.hpp>
 
@@ -809,22 +810,14 @@ static_assert(is_tensor_v<Tensor>,
 
 using TensorPtr = std::shared_ptr<Tensor>;
 
-/// overlap/metric tensor label is reserved since it is used by low-level
-/// SeQuant machinery. Users can create overlap Tensor using make_overlap()
-inline std::wstring overlap_label() { return L"s"; }
-
 inline ExprPtr make_overlap(const Index &bra_index, const Index &ket_index) {
-  return ex<Tensor>(Tensor(overlap_label(), bra{bra_index}, ket{ket_index},
-                           aux{}, Tensor::reserved_tag{}));
+  return ex<Tensor>(Tensor(reserved::overlap_label(), bra{bra_index},
+                           ket{ket_index}, aux{}, Tensor::reserved_tag{}));
 }
 
-/// kronecker tensor label is reserved since it is used by low-level
-/// SeQuant machinery. Users can create Kronecker Tensor using make_kronecker()
-inline std::wstring kronecker_label() { return L"δ"; }
-
 inline ExprPtr make_kronecker(const Index &bra_index, const Index &ket_index) {
-  return ex<Tensor>(Tensor(kronecker_label(), bra{bra_index}, ket{ket_index},
-                           aux{}, Tensor::reserved_tag{}));
+  return ex<Tensor>(Tensor(reserved::kronecker_label(), bra{bra_index},
+                           ket{ket_index}, aux{}, Tensor::reserved_tag{}));
 }
 
 }  // namespace sequant
