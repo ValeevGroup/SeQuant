@@ -347,14 +347,11 @@ auto particle_antisymmetrize_btas(btas::Tensor<Args...> const& arr,
 ///
 /// \param arr The array to be "cleaned up"
 /// \param bra_rank The rank of the bra indices
-/// \param biorth_threshold The threshold used in computing the NNS projection
-/// matrix via pseudoinverse decomposition
 ///
 /// \return The cleaned TA::DistArray.
 template <typename... Args>
 auto biorthogonal_nns_project_ta(TA::DistArray<Args...> const& arr,
-                                 size_t bra_rank,
-                                 double biorth_threshold = 1e-12) {
+                                 size_t bra_rank) {
   using ranges::views::iota;
   size_t const rank = arr.trange().rank();
   SEQUANT_ASSERT(bra_rank <= rank);
@@ -373,8 +370,7 @@ auto biorthogonal_nns_project_ta(TA::DistArray<Args...> const& arr,
     if (ket_rank <= max_rank_hardcoded_nns_projector) {
       nns_p_coeffs = hardcoded_nns_projector<numeric_type>(ket_rank);
     } else {
-      Eigen::MatrixXd nns_matrix =
-          compute_nns_p_matrix(ket_rank, biorth_threshold);
+      Eigen::MatrixXd nns_matrix = compute_nns_p_matrix(ket_rank);
       size_t num_perms = nns_matrix.rows();
 
       nns_p_coeffs.reserve(num_perms);
@@ -426,14 +422,11 @@ auto biorthogonal_nns_project_ta(TA::DistArray<Args...> const& arr,
 ///
 /// \param arr The array to be "cleaned up"
 /// \param bra_rank The rank of the bra indices
-/// /// \param biorth_threshold The threshold used in computing the NNS
-/// projection matrix via pseudoinverse decomposition
 ///
 /// \return The cleaned btas::Tensor.
 template <typename... Args>
 auto biorthogonal_nns_project_btas(btas::Tensor<Args...> const& arr,
-                                   size_t bra_rank,
-                                   double biorth_threshold = 1e-12) {
+                                   size_t bra_rank) {
   using ranges::views::iota;
   size_t const rank = arr.rank();
   SEQUANT_ASSERT(bra_rank <= rank);
@@ -451,8 +444,7 @@ auto biorthogonal_nns_project_btas(btas::Tensor<Args...> const& arr,
     if (ket_rank <= max_rank_hardcoded_nns_projector) {
       nns_p_coeffs = hardcoded_nns_projector<numeric_type>(ket_rank);
     } else {
-      Eigen::MatrixXd nns_matrix =
-          compute_nns_p_matrix(ket_rank, biorth_threshold);
+      Eigen::MatrixXd nns_matrix = compute_nns_p_matrix(ket_rank);
       size_t num_perms = nns_matrix.rows();
 
       nns_p_coeffs.reserve(num_perms);

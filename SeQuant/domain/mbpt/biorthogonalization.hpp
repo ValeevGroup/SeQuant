@@ -41,9 +41,10 @@ void biorthogonal_transform(container::svector<ResultExpr>& exprs,
 ///
 /// \param n_particles The rank of external index pairs
 /// \param threshold The threshold to compute the pseudoinverse matrix
+///        (set to default_biorth_threshold)
 /// \return The computed NNS projection matrix
-[[nodiscard]] Eigen::MatrixXd compute_nns_p_matrix(std::size_t n_particles,
-                                                   double threshold);
+[[nodiscard]] Eigen::MatrixXd compute_nns_p_matrix(
+    std::size_t n_particles, double threshold = default_biorth_threshold);
 
 /// \brief Provides permuted indices using libperm unrank function
 ///
