@@ -15,13 +15,14 @@ namespace sequant {
 namespace reserved {
 /// @brief returns the reserved label for the antisymmetrization operator
 inline const std::wstring& antisymm_label() {
-  static const std::wstring label = L"A";
+  static const std::wstring label = L"Â";
+
   return label;
 }
 
 /// @brief returns the reserved label for the symmetrization operator
 inline const std::wstring& symm_label() {
-  static const std::wstring label = L"S";
+  static const std::wstring label = L"Ŝ";
   return label;
 }
 
