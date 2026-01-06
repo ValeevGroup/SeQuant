@@ -306,12 +306,6 @@ template <Statistics S>
 std::wstring to_latex(const mbpt::Operator<mbpt::qns_t, S>& op) {
   using namespace sequant::mbpt;
 
-  // start with label and perturbation order (if any)
-  auto result = L"{\\hat{" +
-                utf_to_latex(mbpt::detail::decorate_with_pert_order(
-                    op.label(), op.order())) +
-                L"}";
-
   // check if operator has adjoint label, remove if present for base label
   auto base_lbl = sequant::to_wstring(op.label());
   bool is_adjoint = false;
@@ -319,6 +313,18 @@ std::wstring to_latex(const mbpt::Operator<mbpt::qns_t, S>& op) {
     is_adjoint = true;
     base_lbl.pop_back();
   }
+
+  // labels like Â and Ŝ already have a hat, so skip wrapping in \hat{}.
+  // NOTE: for a general solution, we would need a way to normalize Unicode
+  // strings (using ICU, utf8proc, etc.) and check for the combining
+  // hat/circumflex (U+0302). See: https://unicode.org/reports/tr15/
+  const bool has_hat = base_lbl == reserved::antisymm_label() ||
+                       base_lbl == reserved::symm_label();
+
+  // start with label and perturbation order (if any)
+  const auto label = utf_to_latex(
+      mbpt::detail::decorate_with_pert_order(op.label(), op.order()));
+  auto result = has_hat ? L"{" + label : L"{\\hat{" + label + L"}";
 
   auto op_qns = op();  // operator action i.e. quantum number change
 
