@@ -1882,7 +1882,7 @@ TEST_CASE("tensor_network_v3", "[elements]") {
       // writing it down, canonicalizes to the same exact form
       const Product expectedExpr =
           parse_expr(
-              L"A{i1,i2;a1,a2} g{i3,i4;a3,a4} t{a1,a3;i1,i2} t{a2,a4;i3,i4}",
+              L"Â{i1,i2;a1,a2} g{i3,i4;a3,a4} t{a1,a3;i1,i2} t{a2,a4;i3,i4}",
               Symmetry::Antisymm)
               .as<Product>();
 
