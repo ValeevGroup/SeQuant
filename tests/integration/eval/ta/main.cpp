@@ -11,6 +11,7 @@
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/domain/mbpt/context.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
+#include <SeQuant/domain/mbpt/op.hpp>
 
 #include <calc_info.hpp>
 #include <ta/scf_ta.hpp>
@@ -84,6 +85,8 @@ int main(int argc, char* argv[]) {
                CanonicalizationMethod::Complete)});
   TensorCanonicalizer::register_instance(
       std::make_shared<DefaultTensorCanonicalizer>());
+  TensorCanonicalizer::set_cardinal_tensor_labels(
+      sequant::mbpt::cardinal_tensor_labels());
   mbpt::set_default_mbpt_context(
       {.op_registry_ptr = mbpt::make_minimal_registry()});
 
