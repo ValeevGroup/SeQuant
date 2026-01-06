@@ -517,8 +517,10 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
     const auto bkst = ctx.braket_slot_typesetting();
 
     // either rank > 1 or sum of bra and ket ranks > 1
-    const bool add_bar =
-        bra_rank() == ket_rank() ? rank() > 1 : bra_rank() + ket_rank() > 1;
+    // and label is not antisymmetrizer label, since it is already implied
+    bool add_bar =
+        (bra_rank() == ket_rank() ? rank() > 1 : bra_rank() + ket_rank() > 1) &&
+        this->label() != reserved::antisymm_label();
 
     std::wstring core_label;
     if ((this->symmetry() == Symmetry::Antisymm) && add_bar)
