@@ -1007,14 +1007,16 @@ ExprPtr closed_shell_spintrace(
     // Remove S if present in a product
     Product temp_product{};
     temp_product.scale(product.scalar());
-    if (product.factor(0).is<Tensor>() &&
-        product.factor(0)->as<Tensor>().label() == reserved::symm_label()) {
-      for (auto&& term : product.factors()) {
-        if (term->is<Tensor>() &&
-            term->as<Tensor>().label() != reserved::symm_label()) {
-          temp_product.append(1, term, Product::Flatten::No);
-        } else if (!term->is<Tensor>()) {
-          temp_product.append(1, term, Product::Flatten::No);
+    const auto& factors = product.factors();
+    auto is_symm_tensor = [](const auto& factor) {
+      return factor->template is<Tensor>() &&
+             factor->template as<Tensor>().label() == reserved::symm_label();
+    };
+
+    if (std::ranges::any_of(factors, is_symm_tensor)) {
+      for (auto&& factor : factors) {
+        if (!is_symm_tensor(factor)) {
+          temp_product.append(1, factor, Product::Flatten::No);
         }
       }
     } else {
