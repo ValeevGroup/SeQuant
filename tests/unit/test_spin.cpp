@@ -34,6 +34,9 @@ TEST_CASE("spin", "[spin]") {
   using namespace sequant;
   using namespace sequant::mbpt;
 
+  using reserved::antisymm_label;
+  using reserved::symm_label;
+
   // P.S. ref outputs produced with complete canonicalization
   auto ctx = get_default_context();
   ctx.set(CanonicalizeOptions{.method = CanonicalizationMethod::Complete});
@@ -327,13 +330,13 @@ TEST_CASE("spin", "[spin]") {
 
   SECTION("Tensor times variable") {
     ResultExpr expr = parse_result_expr(
-        L"R2{a1,a2;i1,i2}:A = 1/4 A{i1,i2;a1,a2}:A INTkx{a1,a2;i1,i2}:A H");
+        L"R2{a1,a2;i1,i2}:A = 1/4 Â{i1,i2;a1,a2}:A INTkx{a1,a2;i1,i2}:A H");
     auto results = closed_shell_spintrace(expr);
     REQUIRE_THAT(
         results.at(0),
-        EquivalentTo(L"R2{a_1,a_2;i_1,i_2}:N = -1 H * S{i_1,i_2;a_1,a_2}:N "
+        EquivalentTo(L"R2{a_1,a_2;i_1,i_2}:N = -1 H * Ŝ{i_1,i_2;a_1,a_2}:N "
                      L"* INTkx{a_1,a_2;i_2,i_1}:N + 2 H * "
-                     L"S{i_1,i_2;a_1,a_2}:N * INTkx{a_1,a_2;i_1,i_2}:N"));
+                     L"Ŝ{i_1,i_2;a_1,a_2}:N * INTkx{a_1,a_2;i_1,i_2}:N"));
   }
 
   SECTION("Sum") {
@@ -371,8 +374,8 @@ TEST_CASE("spin", "[spin]") {
   REQUIRE(result->size() == 0);
   REQUIRE(result->is_atom());
 
-  input = ex<Constant>(1) *
-          ex<Tensor>(L"A", bra{L"i_1"}, ket{L"a_1"}, Symmetry::Antisymm);
+  input = ex<Constant>(1) * ex<Tensor>(reserved::antisymm_label(), bra{L"i_1"},
+                                       ket{L"a_1"}, Symmetry::Antisymm);
   result = expand_A_op(input);
   REQUIRE(result->size() == 0);
   REQUIRE(result->is_atom());
@@ -380,7 +383,8 @@ TEST_CASE("spin", "[spin]") {
 
 // 1-body
 {
-  auto input = ex<Tensor>(L"A", bra{L"i_1"}, ket{L"a_1"}, Symmetry::Antisymm) *
+  auto input = ex<Tensor>(reserved::antisymm_label(), bra{L"i_1"}, ket{L"a_1"},
+                          Symmetry::Antisymm) *
                ex<Tensor>(L"t", bra{L"a_1"}, ket{L"i_1"}, Symmetry::Antisymm);
   auto result = expand_A_op(input);
   REQUIRE(result->size() == 1);
@@ -396,7 +400,7 @@ TEST_CASE("spin", "[spin]") {
   REQUIRE_THAT(result, EquivalentTo("1/4 g{i1,i2;a1,a2}:A"));
 
   input = ex<Constant>(rational{1, 4}) *
-          ex<Tensor>(L"A", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"},
+          ex<Tensor>(antisymm_label(), bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"},
                      Symmetry::Antisymm) *
           ex<Tensor>(L"g", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"},
                      Symmetry::Antisymm);
@@ -408,7 +412,7 @@ TEST_CASE("spin", "[spin]") {
 
   // 1/4 * A * g * t1 * t1
   input = ex<Constant>(rational{1, 4}) *
-          ex<Tensor>(L"A", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"},
+          ex<Tensor>(antisymm_label(), bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"},
                      Symmetry::Antisymm) *
           ex<Tensor>(L"g", bra{L"a_1", L"a_2"}, ket{L"a_3", L"a_4"},
                      Symmetry::Antisymm) *
@@ -425,7 +429,7 @@ TEST_CASE("spin", "[spin]") {
 
   // 1/4 * A * g * t1 * t1 * t1 * t1
   input = ex<Constant>(rational{1, 4}) *
-          ex<Tensor>(L"A", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"},
+          ex<Tensor>(antisymm_label(), bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"},
                      Symmetry::Antisymm) *
           ex<Tensor>(L"g", bra{L"i_3", L"i_4"}, ket{L"a_3", L"a_4"},
                      Symmetry::Antisymm) *
@@ -450,7 +454,7 @@ TEST_CASE("spin", "[spin]") {
   auto result = expand_A_op(input);
   REQUIRE_THAT(result, SimplifiesTo("t{a1,a2,a3;i1,i2,i3}:A"));
 
-  input = ex<Tensor>(L"A", bra{L"i_1", L"i_2", L"i_3"},
+  input = ex<Tensor>(antisymm_label(), bra{L"i_1", L"i_2", L"i_3"},
                      ket{L"a_1", L"a_2", L"a_3"}, Symmetry::Antisymm) *
           ex<Tensor>(L"t", bra{L"a_1", L"a_2", L"a_3"},
                      ket{L"i_1", L"i_2", L"i_3"}, Symmetry::Antisymm);
@@ -461,7 +465,7 @@ TEST_CASE("spin", "[spin]") {
 
 {  // 4-body
   const auto input =
-      ex<Tensor>(L"A", bra{L"i_1", L"i_2", L"i_3", L"i_4"},
+      ex<Tensor>(antisymm_label(), bra{L"i_1", L"i_2", L"i_3", L"i_4"},
                  ket{L"a_1", L"a_2", L"a_3", L"a_4"}, Symmetry::Antisymm) *
       ex<Tensor>(L"t", bra{L"a_1", L"a_2", L"a_3", L"a_4"},
                  ket{L"i_1", L"i_2", L"i_3", L"i_4"}, Symmetry::Antisymm);
@@ -473,7 +477,7 @@ TEST_CASE("spin", "[spin]") {
 #ifndef SEQUANT_SKIP_LONG_TESTS
 {  // 5-body
   const auto input =
-      ex<Tensor>(L"A", bra{L"i_1", L"i_2", L"i_3", L"i_4", L"i_5"},
+      ex<Tensor>(antisymm_label(), bra{L"i_1", L"i_2", L"i_3", L"i_4", L"i_5"},
                  ket{L"a_1", L"a_2", L"a_3", L"a_4", L"a_5"},
                  Symmetry::Antisymm) *
       ex<Tensor>(L"t", bra{L"a_1", L"a_2", L"a_3", L"a_4", L"a_5"},
@@ -488,7 +492,7 @@ TEST_CASE("spin", "[spin]") {
 
 SECTION("Expand Symmetrizer") {
   {  // 2-body
-    const auto input = ex<Tensor>(L"S", bra{L"i_1", L"i_2"},
+    const auto input = ex<Tensor>(symm_label(), bra{L"i_1", L"i_2"},
                                   ket{L"a_1", L"a_2"}, Symmetry::Nonsymm) *
                        ex<Tensor>(L"t", bra{L"a_1", L"a_2"},
                                   ket{L"i_1", L"i_2"}, Symmetry::Antisymm);
@@ -500,7 +504,7 @@ SECTION("Expand Symmetrizer") {
 
   {  // 3-body
     const auto input =
-        ex<Tensor>(L"S", bra{L"i_1", L"i_2", L"i_3"},
+        ex<Tensor>(symm_label(), bra{L"i_1", L"i_2", L"i_3"},
                    ket{L"a_1", L"a_2", L"a_3"}, Symmetry::Nonsymm) *
         ex<Tensor>(L"t", bra{L"a_1", L"a_2", L"a_3"},
                    ket{L"i_1", L"i_2", L"i_3"}, Symmetry::Antisymm);
@@ -515,7 +519,7 @@ SECTION("Expand Symmetrizer") {
 
   {  // 4-body
     const auto input =
-        ex<Tensor>(L"S", bra{L"i_1", L"i_2", L"i_3", L"i_4"},
+        ex<Tensor>(symm_label(), bra{L"i_1", L"i_2", L"i_3", L"i_4"},
                    ket{L"a_1", L"a_2", L"a_3", L"a_4"}, Symmetry::Nonsymm) *
         ex<Tensor>(L"t", bra{L"a_1", L"a_2", L"a_3", L"a_4"},
                    ket{L"i_1", L"i_2", L"i_3", L"i_4"}, Symmetry::Antisymm);
@@ -549,7 +553,7 @@ SECTION("Expand Symmetrizer") {
   {
     const auto input =
         ex<Constant>(4) *
-        ex<Tensor>(L"S", bra{L"i_1", L"i_2", L"i_3"},
+        ex<Tensor>(symm_label(), bra{L"i_1", L"i_2", L"i_3"},
                    ket{L"a_1", L"a_2", L"a_3"}, Symmetry::Nonsymm) *
         ex<Tensor>(L"g", bra{L"i_4", L"i_5"}, ket{L"a_4", L"a_5"},
                    Symmetry::Nonsymm) *
@@ -576,16 +580,16 @@ SECTION("Expand Symmetrizer") {
 
 SECTION("partial expansion + S_maps = full expansion") {
   auto input = ex<Constant>(rational{1, 4}) *
-               ex<Tensor>(L"A", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"},
-                          Symmetry::Antisymm) *
+               ex<Tensor>(antisymm_label(), bra{L"i_1", L"i_2"},
+                          ket{L"a_1", L"a_2"}, Symmetry::Antisymm) *
                ex<Tensor>(L"t", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"},
                           Symmetry::Antisymm);
   auto result = symmetrize_expr(input);
   REQUIRE_THAT(
       result, SimplifiesTo(
-                  "1/4 S{i_1,i_2;a_1,a_2}:N-C-S * t{a_1,a_2;i_1,i_2}:A-C-S "
-                  "- 1/4 S{i_1,i_2;a_1,a_2}:N-C-S * t{a_1,a_2;i_2,i_1}:A-C-S"));
-  //(canonicalized: 1/2 S{i_1,i_2;a_1,a_2}:N-C-S * t{a_1,a_2;i_1,i_2}:A-C-S)
+                  "1/4 Ŝ{i_1,i_2;a_1,a_2}:N-C-S * t{a_1,a_2;i_1,i_2}:A-C-S "
+                  "- 1/4 Ŝ{i_1,i_2;a_1,a_2}:N-C-S * t{a_1,a_2;i_2,i_1}:A-C-S"));
+  //(canonicalized: 1/2 Ŝ{i_1,i_2;a_1,a_2}:N-C-S * t{a_1,a_2;i_1,i_2}:A-C-S)
 
   result = S_maps(result);
   REQUIRE_THAT(
@@ -606,16 +610,16 @@ SECTION("partial expansion + S_maps = full expansion") {
 
 SECTION("partial spintracing + S_maps = full spintracing") {
   auto input = ex<Constant>(rational{1, 4}) *
-               ex<Tensor>(L"A", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"},
-                          Symmetry::Antisymm) *
+               ex<Tensor>(antisymm_label(), bra{L"i_1", L"i_2"},
+                          ket{L"a_1", L"a_2"}, Symmetry::Antisymm) *
                ex<Tensor>(L"t", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"},
                           Symmetry::Antisymm);
   auto result =
       closed_shell_spintrace(input, {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}});
   REQUIRE_THAT(
       result,
-      EquivalentTo("-1 S{i_1,i_2;a_1,a_2}:N-C-S * t{a_1,a_2;i_2,i_1}:N-C-S "
-                   "+ 2 S{i_1,i_2;a_1,a_2}:N-C-S * t{a_1,a_2;i_1,i_2}:N-C-S"));
+      EquivalentTo("-1 Ŝ{i_1,i_2;a_1,a_2}:N-C-S * t{a_1,a_2;i_2,i_1}:N-C-S "
+                   "+ 2 Ŝ{i_1,i_2;a_1,a_2}:N-C-S * t{a_1,a_2;i_1,i_2}:N-C-S"));
   result = S_maps(result);
   REQUIRE_THAT(
       result, EquivalentTo(
@@ -644,7 +648,7 @@ SECTION("Symmetrize expression") {
     auto result =
         factorize_S(input, {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}}, true);
     REQUIRE_THAT(result,
-                 EquivalentTo("S{i1,i2;a1,a2} g{a1,a2;i2,a3}:S t{a3;i1}"));
+                 EquivalentTo("Ŝ{i1,i2;a1,a2} g{a1,a2;i2,a3}:S t{a3;i1}"));
   }
 
   {
@@ -663,7 +667,7 @@ SECTION("Symmetrize expression") {
     REQUIRE_THAT(
         result,
         EquivalentTo(
-            "S{i3,i4;a2,a1} g{i1,i2;i4,a3}:S t{a1;i1} t{a2;i2} t{a3;i3}"));
+            "Ŝ{i3,i4;a2,a1} g{i1,i2;i4,a3}:S t{a1;i1} t{a2;i2} t{a3;i3}"));
   }
 
   {
@@ -684,7 +688,7 @@ SECTION("Symmetrize expression") {
     auto result =
         factorize_S(input, {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}}, true);
     REQUIRE(result->is<Sum>() == false);
-    REQUIRE_THAT(result, EquivalentTo("2 S{i1,i2;a1,a2} g{i3,i4;a3,a4}:S "
+    REQUIRE_THAT(result, EquivalentTo("2 Ŝ{i1,i2;a1,a2} g{i3,i4;a3,a4}:S "
                                       "t{a4;i3} t{a2;i4} t{a1,a3;i1,i2}"));
   }
 }
@@ -787,7 +791,7 @@ SECTION("Closed-shell spintrace CCSD") {
   // These terms from CCSD R1 equations
   {
     // A * f
-    const auto input = ex<Tensor>(L"A", bra{L"i_1"}, ket{L"a_1"}) *
+    const auto input = ex<Tensor>(antisymm_label(), bra{L"i_1"}, ket{L"a_1"}) *
                        ex<Tensor>(L"f", bra{L"a_1"}, ket{L"i_1"});
     auto result =
         ex<Constant>(rational{1, 2}) * spintrace(input, {{L"i_1", L"a_1"}});
@@ -800,7 +804,7 @@ SECTION("Closed-shell spintrace CCSD") {
   {
     // - A * f * t1
     const auto input = ex<Constant>(-1) *
-                       ex<Tensor>(L"A", bra{L"i_1"}, ket{L"a_1"}) *
+                       ex<Tensor>(antisymm_label(), bra{L"i_1"}, ket{L"a_1"}) *
                        ex<Tensor>(L"f", bra{L"i_2"}, ket{L"i_1"}) *
                        ex<Tensor>(L"t", bra{L"a_1"}, ket{L"i_2"});
     auto result =
@@ -811,7 +815,7 @@ SECTION("Closed-shell spintrace CCSD") {
 
   {
     // A * f * t1
-    const auto input = ex<Tensor>(L"A", bra{L"i_1"}, ket{L"a_1"}) *
+    const auto input = ex<Tensor>(antisymm_label(), bra{L"i_1"}, ket{L"a_1"}) *
                        ex<Tensor>(L"f", bra{L"a_1"}, ket{L"a_2"}) *
                        ex<Tensor>(L"t", bra{L"a_2"}, ket{L"i_1"});
     auto result =
@@ -823,7 +827,7 @@ SECTION("Closed-shell spintrace CCSD") {
   {
     // -1/2 * A * g * t2
     const auto input = ex<Constant>(rational{-1, 2}) *
-                       ex<Tensor>(L"A", bra{L"i_1"}, ket{L"a_1"}) *
+                       ex<Tensor>(antisymm_label(), bra{L"i_1"}, ket{L"a_1"}) *
                        ex<Tensor>(L"g", bra{L"i_2", L"i_3"},
                                   ket{L"i_1", L"a_2"}, Symmetry::Antisymm) *
                        ex<Tensor>(L"t", bra{L"a_1", L"a_2"},
@@ -840,7 +844,7 @@ SECTION("Closed-shell spintrace CCSD") {
   {
     // -1/2 * A * g * t2
     const auto input = ex<Constant>(rational{-1, 2}) *
-                       ex<Tensor>(L"A", bra{L"i_1"}, ket{L"a_1"}) *
+                       ex<Tensor>(antisymm_label(), bra{L"i_1"}, ket{L"a_1"}) *
                        ex<Tensor>(L"g", bra{L"i_2", L"a_1"},
                                   ket{L"a_2", L"a_3"}, Symmetry::Antisymm) *
                        ex<Tensor>(L"t", bra{L"a_2", L"a_3"},
@@ -856,7 +860,7 @@ SECTION("Closed-shell spintrace CCSD") {
   {
     // A * f * t2
     const auto input =
-        ex<Tensor>(L"A", bra{L"i_1"}, ket{L"a_1"}) *
+        ex<Tensor>(antisymm_label(), bra{L"i_1"}, ket{L"a_1"}) *
         ex<Tensor>(L"f", bra{L"i_2"}, ket{L"a_2"}, Symmetry::Antisymm) *
         ex<Tensor>(L"t", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"},
                    Symmetry::Antisymm);
@@ -870,7 +874,7 @@ SECTION("Closed-shell spintrace CCSD") {
 
   {
     // A * g * t1 * t1
-    const auto input = ex<Tensor>(L"A", bra{L"i_1"}, ket{L"a_1"}) *
+    const auto input = ex<Tensor>(antisymm_label(), bra{L"i_1"}, ket{L"a_1"}) *
                        ex<Tensor>(L"g", bra{L"i_2", L"a_1"},
                                   ket{L"a_2", L"a_3"}, Symmetry::Antisymm) *
                        ex<Tensor>(L"t", bra{L"a_2"}, ket{L"i_2"}) *
@@ -884,7 +888,7 @@ SECTION("Closed-shell spintrace CCSD") {
 
   {
     // A * g * t2 * t2
-    const auto input = ex<Tensor>(L"A", bra{L"i_1"}, ket{L"a_1"}) *
+    const auto input = ex<Tensor>(antisymm_label(), bra{L"i_1"}, ket{L"a_1"}) *
                        ex<Tensor>(L"g", bra{L"i_2", L"i_3"},
                                   ket{L"i_1", L"a_2"}, Symmetry::Antisymm) *
                        ex<Tensor>(L"t", bra{L"a_2"}, ket{L"i_2"}) *
@@ -899,7 +903,7 @@ SECTION("Closed-shell spintrace CCSD") {
   {
     // A * f * t1 * t1
     const auto input = ex<Constant>(-1) *
-                       ex<Tensor>(L"A", bra{L"i_1"}, ket{L"a_1"}) *
+                       ex<Tensor>(antisymm_label(), bra{L"i_1"}, ket{L"a_1"}) *
                        ex<Tensor>(L"f", bra{L"i_2"}, ket{L"a_2"}) *
                        ex<Tensor>(L"t", bra{L"a_2"}, ket{L"i_1"}) *
                        ex<Tensor>(L"t", bra{L"a_1"}, ket{L"i_2"});
@@ -912,7 +916,7 @@ SECTION("Closed-shell spintrace CCSD") {
   {
     // -1/2 * A * g * t1 * t2
     const auto input = ex<Constant>(rational{-1, 2}) *
-                       ex<Tensor>(L"A", bra{L"i_1"}, ket{L"a_1"}) *
+                       ex<Tensor>(antisymm_label(), bra{L"i_1"}, ket{L"a_1"}) *
                        ex<Tensor>(L"g", bra{L"i_2", L"i_3"},
                                   ket{L"a_2", L"a_3"}, Symmetry::Antisymm) *
                        ex<Tensor>(L"t", bra{L"a_1"}, ket{L"i_2"}) *
@@ -929,7 +933,7 @@ SECTION("Closed-shell spintrace CCSD") {
   {
     // -1/2 * A * g * t1 * t2
     const auto input = ex<Constant>(rational{-1, 2}) *
-                       ex<Tensor>(L"A", bra{L"i_1"}, ket{L"a_1"}) *
+                       ex<Tensor>(antisymm_label(), bra{L"i_1"}, ket{L"a_1"}) *
                        ex<Tensor>(L"g", bra{L"i_2", L"i_3"},
                                   ket{L"a_2", L"a_3"}, Symmetry::Antisymm) *
                        ex<Tensor>(L"t", bra{L"a_2"}, ket{L"i_1"}) *
@@ -946,7 +950,7 @@ SECTION("Closed-shell spintrace CCSD") {
   {
     // A * g * t1 * t2
     const auto input = ex<Constant>(1) *
-                       ex<Tensor>(L"A", bra{L"i_1"}, ket{L"a_1"}) *
+                       ex<Tensor>(antisymm_label(), bra{L"i_1"}, ket{L"a_1"}) *
                        ex<Tensor>(L"g", bra{L"i_2", L"i_3"},
                                   ket{L"a_2", L"a_3"}, Symmetry::Antisymm) *
                        ex<Tensor>(L"t", bra{L"a_2"}, ket{L"i_2"}) *
@@ -981,16 +985,16 @@ SECTION("Closed-shell spintrace CCSD") {
 
 SECTION("Closed-shell CC spintrace for variable, constant, product") {
   {  // test variable * tensors
-    auto expr1 = sequant::parse_expr(L"-ω A{i1,i2;a1,a2} t{a1,a2;i1,i2}",
+    auto expr1 = sequant::parse_expr(L"-ω Â{i1,i2;a1,a2} t{a1,a2;i1,i2}",
                                      Symmetry::Antisymm);
 
     auto result_v1 = mbpt::closed_shell_CC_spintrace_v1(expr1);
     REQUIRE_THAT(result_v1,
-                 EquivalentTo(L"-2 ω S{i1,i2;a1,a2} t{a1,a2;i1,i2}"));
+                 EquivalentTo(L"-2 ω Ŝ{i1,i2;a1,a2} t{a1,a2;i1,i2}"));
 
     auto result_v2 = mbpt::closed_shell_CC_spintrace_v2(expr1);
     REQUIRE_THAT(result_v2,
-                 EquivalentTo(L"-2 ω S{i1,i2;a1,a2} t{a1,a2;i1,i2}"));
+                 EquivalentTo(L"-2 ω Ŝ{i1,i2;a1,a2} t{a1,a2;i1,i2}"));
   }
   {  // test a single variable
     auto expr1 = sequant::parse_expr(L"ω");
@@ -1029,7 +1033,7 @@ SECTION("Closed-shell CC spintrace for variable, constant, product") {
 SECTION("Closed-shell spintrace CCSDT terms") {
   SECTION("A3 * f * t3, , spintracing with partial-expansion") {
     auto input = ex<Constant>(rational{1, 12}) *
-                 ex<Tensor>(L"A", bra{L"i_1", L"i_2", L"i_3"},
+                 ex<Tensor>(antisymm_label(), bra{L"i_1", L"i_2", L"i_3"},
                             ket{L"a_1", L"a_2", L"a_3"}, Symmetry::Antisymm) *
                  ex<Tensor>(L"f", bra{L"i_4"}, ket{L"i_1"}) *
                  ex<Tensor>(L"t", bra{L"a_1", L"a_2", L"a_3"},
@@ -1044,15 +1048,15 @@ SECTION("Closed-shell spintrace CCSDT terms") {
     REQUIRE(result->size() == 4);
     REQUIRE_THAT(
         result,
-        EquivalentTo("2 S{i1,i2,i3;a1,a2,a3} f{i4;i3} t{a1,a2,a3;i4,i1,i2} - 4 "
-                     "S{i1,i2,i3;a1,a2,a3} f{i4;i3} t{a1,a2,a3;i1,i4,i2} + 4 "
-                     "S{i1,i2,i3;a1,a2,a3} f{i4;i3} t{a1,a2,a3;i1,i2,i4} - 2 "
-                     "S{i1,i2,i3;a1,a2,a3} f{i4;i3} t{a1,a2,a3;i2,i1,i4}"));
+        EquivalentTo("2 Ŝ{i1,i2,i3;a1,a2,a3} f{i4;i3} t{a1,a2,a3;i4,i1,i2} - 4 "
+                     "Ŝ{i1,i2,i3;a1,a2,a3} f{i4;i3} t{a1,a2,a3;i1,i4,i2} + 4 "
+                     "Ŝ{i1,i2,i3;a1,a2,a3} f{i4;i3} t{a1,a2,a3;i1,i2,i4} - 2 "
+                     "Ŝ{i1,i2,i3;a1,a2,a3} f{i4;i3} t{a1,a2,a3;i2,i1,i4}"));
   }
 
   SECTION("ppl term: A3 * g * t3, spintracing with direct full-expansion") {
     auto input = ex<Constant>(rational{1, 24}) *
-                 ex<Tensor>(L"A", bra{L"i_1", L"i_2", L"i_3"},
+                 ex<Tensor>(antisymm_label(), bra{L"i_1", L"i_2", L"i_3"},
                             ket{L"a_1", L"a_2", L"a_3"}, Symmetry::Antisymm) *
                  ex<Tensor>(L"g", bra{L"a_1", L"a_2"}, ket{L"a_4", L"a_5"},
                             Symmetry::Antisymm) *
@@ -1126,7 +1130,7 @@ SECTION("Closed-shell spintrace CCSDT terms") {
 
   SECTION("ppl term in optimal") {  // results in 1 term
     const auto input = ex<Sum>(ExprPtrList{
-        parse_expr(L"1/24 A{i_1,i_2,i_3;a_1,a_2,a_3} * "
+        parse_expr(L"1/24 Â{i_1,i_2,i_3;a_1,a_2,a_3} * "
                    L"g{a_1,a_2;a_4,a_5} * t{a_3,a_4,a_5;i_1,i_2,i_3}",
                    Symmetry::Antisymm)});
 
@@ -1140,13 +1144,13 @@ SECTION("Closed-shell spintrace CCSDT terms") {
     REQUIRE_THAT(
         result,
         EquivalentTo(
-            L"1/2 S{i_1,i_2,i_3;a_1,a_2,a_3}:N-C-S * "
+            L"1/2 Ŝ{i_1,i_2,i_3;a_1,a_2,a_3}:N-C-S * "
             "g{a_1,a_2;a_4,a_5}:N-C-S * t{a_3,a_4,a_5;i_3,i_1,i_2}:N-C-S"));
   }
 
   SECTION("ppl term in regular_cs") {  // results in 4 terms
     const auto input = ex<Sum>(ExprPtrList{
-        parse_expr(L"1/24 A{i_1,i_2,i_3;a_1,a_2,a_3} * g{a_1,a_2;a_4,a_5} * "
+        parse_expr(L"1/24 Â{i_1,i_2,i_3;a_1,a_2,a_3} * g{a_1,a_2;a_4,a_5} * "
                    "t{a_3,a_4,a_5;i_1,i_2,i_3}",
                    Symmetry::Antisymm)});
 
@@ -1155,16 +1159,16 @@ SECTION("Closed-shell spintrace CCSDT terms") {
     REQUIRE_THAT(
         result,
         EquivalentTo(
-            L"-1/5 S{i_1,i_2,i_3;a_1,a_2,a_3}:N-C-S * "
+            L"-1/5 Ŝ{i_1,i_2,i_3;a_1,a_2,a_3}:N-C-S * "
             L"g{a_1,a_2;a_4,a_5}:N-C-S "
             L"* "
             "t{a_3,a_4,a_5;i_1,i_2,i_3}:N-C-S + 1/2 "
-            "S{i_1,i_2,i_3;a_1,a_2,a_3}:N-C-S * "
+            "Ŝ{i_1,i_2,i_3;a_1,a_2,a_3}:N-C-S * "
             "g{a_1,a_2;a_4,a_5}:N-C-S * t{a_3,a_4,a_5;i_3,i_1,i_2}:N-C-S - "
             "1/10 "
-            "S{i_1,i_2,i_3;a_1,a_2,a_3}:N-C-S * g{a_1,a_2;a_4,a_5}:N-C-S * "
+            "Ŝ{i_1,i_2,i_3;a_1,a_2,a_3}:N-C-S * g{a_1,a_2;a_4,a_5}:N-C-S * "
             "t{a_3,a_4,a_5;i_3,i_2,i_1}:N-C-S - 1/5 "
-            "S{i_1,i_2,i_3;a_1,a_2,a_3}:N-C-S * "
+            "Ŝ{i_1,i_2,i_3;a_1,a_2,a_3}:N-C-S * "
             "g{a_1,a_2;a_4,a_5}:N-C-S * t{a_3,a_4,a_5;i_2,i_1,i_3}:N-C-S"));
   }
 
@@ -1185,7 +1189,7 @@ SECTION("Closed-shell spintrace CCSDT terms") {
 
   SECTION("A * g * t3") {
     auto input = ex<Constant>(rational{-1, 4}) *
-                 ex<Tensor>(L"A", bra{L"i_1", L"i_2", L"i_3"},
+                 ex<Tensor>(antisymm_label(), bra{L"i_1", L"i_2", L"i_3"},
                             ket{L"a_1", L"a_2", L"a_3"}, Symmetry::Antisymm) *
                  ex<Tensor>(L"g", bra{L"i_4", L"a_1"}, ket{L"i_1", L"a_4"},
                             Symmetry::Antisymm) *
@@ -1228,19 +1232,19 @@ SECTION("Merge P operators") {
 }
 
 SECTION("Permutation operators") {
-  auto A_12 = ex<Tensor>(L"A", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"},
-                         Symmetry::Antisymm);
-  auto A_23 = ex<Tensor>(L"A", bra{L"i_2", L"i_3"}, ket{L"a_2", L"a_3"},
-                         Symmetry::Antisymm);
-  auto A2 = ex<Tensor>(L"A", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"},
-                       Symmetry::Antisymm);
-  auto A3 = ex<Tensor>(L"A", bra{L"i_1", L"i_2", L"i_3"},
+  auto A_12 = ex<Tensor>(antisymm_label(), bra{L"i_1", L"i_2"},
+                         ket{L"a_1", L"a_2"}, Symmetry::Antisymm);
+  auto A_23 = ex<Tensor>(antisymm_label(), bra{L"i_2", L"i_3"},
+                         ket{L"a_2", L"a_3"}, Symmetry::Antisymm);
+  auto A2 = ex<Tensor>(antisymm_label(), bra{L"i_1", L"i_2"},
+                       ket{L"a_1", L"a_2"}, Symmetry::Antisymm);
+  auto A3 = ex<Tensor>(antisymm_label(), bra{L"i_1", L"i_2", L"i_3"},
                        ket{L"a_1", L"a_2", L"a_3"}, Symmetry::Antisymm);
-  auto A4 = ex<Tensor>(L"A", bra{L"i_1", L"i_2", L"i_3", L"i_4"},
+  auto A4 = ex<Tensor>(antisymm_label(), bra{L"i_1", L"i_2", L"i_3", L"i_4"},
                        ket{L"a_1", L"a_2", L"a_3", L"a_4"}, Symmetry::Antisymm);
-  auto A5 = ex<Tensor>(L"A", bra{L"i_1", L"i_2", L"i_3", L"i_4", L"i_5"},
-                       ket{L"a_1", L"a_2", L"a_3", L"a_4", L"a_5"},
-                       Symmetry::Antisymm);
+  auto A5 = ex<Tensor>(
+      antisymm_label(), bra{L"i_1", L"i_2", L"i_3", L"i_4", L"i_5"},
+      ket{L"a_1", L"a_2", L"a_3", L"a_4", L"a_5"}, Symmetry::Antisymm);
 
   auto Avec2 = open_shell_A_op(A2->as<Tensor>());
   auto P3 = open_shell_P_op_vector(A3->as<Tensor>());
@@ -1310,11 +1314,11 @@ SECTION("Relation in spin P operators") {
   p6_result->visit(reset_idx_tags);
   simplify(p6_result);
 
-  auto A_12 = ex<Tensor>(L"A", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"},
-                         Symmetry::Antisymm);
-  auto A_23 = ex<Tensor>(L"A", bra{L"i_2", L"i_3"}, ket{L"a_2", L"a_3"},
-                         Symmetry::Antisymm);
-  auto A3 = ex<Tensor>(L"A", bra{L"i_1", L"i_2", L"i_3"},
+  auto A_12 = ex<Tensor>(antisymm_label(), bra{L"i_1", L"i_2"},
+                         ket{L"a_1", L"a_2"}, Symmetry::Antisymm);
+  auto A_23 = ex<Tensor>(antisymm_label(), bra{L"i_2", L"i_3"},
+                         ket{L"a_2", L"a_3"}, Symmetry::Antisymm);
+  auto A3 = ex<Tensor>(antisymm_label(), bra{L"i_1", L"i_2", L"i_3"},
                        ket{L"a_1", L"a_2", L"a_3"}, Symmetry::Antisymm);
 
   p6_result = A_12 * p6_result;
@@ -1498,10 +1502,10 @@ SECTION("Open-shell spin-tracing") {
 
   // aab: g*t3 (CCSDT R3 4)
   {
-    auto A2_aab =
-        Tensor(L"A", bra{i1A, i2A}, ket{a1A, a2A}, Symmetry::Antisymm);
-    auto A2_abb =
-        Tensor(L"A", bra{i2B, i3B}, ket{a2B, a3B}, Symmetry::Antisymm);
+    auto A2_aab = Tensor(antisymm_label(), bra{i1A, i2A}, ket{a1A, a2A},
+                         Symmetry::Antisymm);
+    auto A2_abb = Tensor(antisymm_label(), bra{i2B, i3B}, ket{a2B, a3B},
+                         Symmetry::Antisymm);
 
     auto g = Tensor(L"g", bra{i3A, i4A}, ket{i1A, i2A}, Symmetry::Antisymm);
     auto t3 =
@@ -1541,8 +1545,8 @@ SECTION("Open-shell spin-tracing") {
     auto result = open_shell_spintrace(
         input, {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}, {L"i_3", L"a_3"}});
     REQUIRE(result[0]->size() == 3);
-    auto A3_aaa = Tensor(L"A", bra{i1A, i2A, i3A}, ket{a1A, a2A, a3A},
-                         Symmetry::Antisymm);
+    auto A3_aaa = Tensor(antisymm_label(), bra{i1A, i2A, i3A},
+                         ket{a1A, a2A, a3A}, Symmetry::Antisymm);
     auto result2 = ex<Tensor>(A3_aaa) * result[0];
     expand(result2);
     result2 = expand_A_op(result2);
@@ -1551,8 +1555,8 @@ SECTION("Open-shell spin-tracing") {
     rapid_simplify(result2);
     REQUIRE(result2->size() == 27);
 
-    auto A3_bbb = Tensor(L"A", bra{i1B, i2B, i3B}, ket{a1B, a2B, a3B},
-                         Symmetry::Antisymm);
+    auto A3_bbb = Tensor(antisymm_label(), bra{i1B, i2B, i3B},
+                         ket{a1B, a2B, a3B}, Symmetry::Antisymm);
     auto result3 = ex<Tensor>(A3_bbb) * result[3];
     expand(result3);
     result3 = expand_A_op(result3);
@@ -1589,8 +1593,8 @@ SECTION("Open-shell spin-tracing") {
     auto result = open_shell_spintrace(
         input, {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}, {L"i_3", L"a_3"}});
 
-    auto result_aab = ex<Tensor>(Tensor(L"A", bra{i1A, i2A}, ket{a1A, a2A},
-                                        Symmetry::Antisymm)) *
+    auto result_aab = ex<Tensor>(Tensor(antisymm_label(), bra{i1A, i2A},
+                                        ket{a1A, a2A}, Symmetry::Antisymm)) *
                       result[1];
     expand(result_aab);
     result_aab = expand_A_op(result_aab);
@@ -1600,7 +1604,7 @@ SECTION("Open-shell spin-tracing") {
     REQUIRE(result_aab->size() == 18);
 
     auto input2 = ex<Constant>(rational{1, 8}) *
-                  ex<Tensor>(L"A", bra{L"i_1", L"i_2", L"i_3"},
+                  ex<Tensor>(antisymm_label(), bra{L"i_1", L"i_2", L"i_3"},
                              ket{L"a_1", L"a_2", L"a_3"}, Symmetry::Antisymm) *
                   ex<Tensor>(L"g", bra{L"i_4", L"i_5"}, ket{L"a_4", L"a_5"},
                              Symmetry::Antisymm) *
