@@ -14,8 +14,6 @@ std::vector<std::wstring> cardinal_tensor_labels() {
   return {L"κ",
           L"γ",
           L"Γ",
-          reserved::antisymm_label(),
-          reserved::symm_label(),
           L"P",
           L"L",
           L"λ",
