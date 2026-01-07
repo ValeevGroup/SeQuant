@@ -300,7 +300,7 @@ void generateITF(const json &blocks, std::string_view out_file,
 
           if (needsSymmetrization(current.expression())) {
             std::optional<ExprPtr> symmetrizer =
-                pop_tensor(current.expression(), L"S");
+                pop_tensor(current.expression(), reserved::symm_label());
             SEQUANT_ASSERT(symmetrizer.has_value());
 
             Tensor resultTensor(current.label(), bra(current.bra()),
