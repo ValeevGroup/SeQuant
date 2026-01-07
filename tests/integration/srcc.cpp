@@ -288,6 +288,8 @@ int main(int argc, char* argv[]) {
                         .spbasis = spbasis}));
   TensorCanonicalizer::register_instance(
       std::make_shared<DefaultTensorCanonicalizer>());
+  TensorCanonicalizer::set_cardinal_tensor_labels(
+      sequant::mbpt::cardinal_tensor_labels());
 
   // change to true to print stats
   Logger::instance().wick_stats = false;

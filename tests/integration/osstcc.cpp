@@ -39,6 +39,8 @@ int main(int argc, char* argv[]) {
       {.op_registry_ptr = mbpt::make_minimal_registry()});
   TensorCanonicalizer::register_instance(
       std::make_shared<DefaultTensorCanonicalizer>());
+  TensorCanonicalizer::set_cardinal_tensor_labels(
+      sequant::mbpt::cardinal_tensor_labels());
 
 #ifndef NDEBUG
   const size_t DEFAULT_NMAX = 3;
