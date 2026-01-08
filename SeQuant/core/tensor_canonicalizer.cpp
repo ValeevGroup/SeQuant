@@ -196,12 +196,12 @@ void TensorCanonicalizer::set_cardinal_tensor_labels(
   SEQUANT_ASSERT(duplicate == sorted_labels.end() &&
                  "cardinal tensor labels must not contain duplicates");
 
-  // check if any label conflicts with defaults
-  const auto& defaults = default_cardinal_tensor_labels_accessor();
+  // check if any label conflicts with existing ones
+  const auto& existing = cardinal_tensor_labels_accessor();
   for (const auto& label : labels) {
-    auto conflict = ranges::find(defaults, label);
-    SEQUANT_ASSERT(conflict == defaults.end() &&
-                   "cardinal tensor labels must not conflict with defaults");
+    auto conflict = ranges::find(existing, label);
+    SEQUANT_ASSERT(conflict == existing.end() &&
+                   "cardinal tensor labels must not contain duplicates");
   }
 #endif
   auto& ctlabels = cardinal_tensor_labels_accessor();
