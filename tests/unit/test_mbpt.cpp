@@ -1208,9 +1208,8 @@ SECTION("manuscript-examples") {
     const auto& cre_space = get_particle_space(Spin::any);
     const auto& ann_space = get_hole_space(Spin::any);
 
-    auto registry = std::make_shared<OpRegistry>();
-
-    registry->add(L"f", OpClass::gen)
+    OpRegistry registry;
+    registry.add(L"f", OpClass::gen)
         .add(L"g", OpClass::gen)
         .add(L"t", OpClass::ex)
         .add(L"x", OpClass::ex)
@@ -1218,7 +1217,7 @@ SECTION("manuscript-examples") {
 
     // set MBPT context
     auto ctx_resetter = set_scoped_default_mbpt_context(
-        {.csv = CSV::No, .op_registry_ptr = registry});
+        {.csv = CSV::No, .op_registry = registry});
 
     // use OpMaker to define a custom excitation operator of rank 2
     auto x = OpMaker<Statistics::FermiDirac>(L"x", 2)();
