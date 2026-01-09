@@ -1200,5 +1200,41 @@ SECTION("manuscript-examples") {
     REQUIRE(t.size() == 58);
     REQUIRE(λ.size() == 63);
   }
+
+  SECTION("Custom MBPT Operators") {
+    using namespace sequant;
+    using namespace sequant::mbpt;
+    // get two IndexSpaces for custom excitation operator, could be any spaces
+    const auto& cre_space = get_particle_space(Spin::any);
+    const auto& ann_space = get_hole_space(Spin::any);
+
+    auto registry = std::make_shared<OpRegistry>();
+
+    registry->add(L"f", OpClass::gen)
+        .add(L"g", OpClass::gen)
+        .add(L"t", OpClass::ex)
+        .add(L"x", OpClass::ex)
+        .add(L"y", OpClass::ex);
+
+    // set MBPT context
+    auto ctx_resetter = set_scoped_default_mbpt_context(
+        {.csv = CSV::No, .op_registry_ptr = registry});
+
+    // use OpMaker to define a custom excitation operator of rank 2
+    auto x = OpMaker<Statistics::FermiDirac>(L"x", 2)();
+
+    // particle non-conserving excitation operator with custom IndexSpaces
+    auto y = OpMaker<Statistics::FermiDirac>(L"y", ncre(2), nann(1),
+                                             cre(cre_space), ann(ann_space))();
+
+    auto expr = tensor::H() * x * y;
+    REQUIRE_THAT(
+        simplify(expr),
+        EquivalentTo(
+            L"1/8 f{p1;p2}:A-C-S x{a1,a2;i1,i2}:A-C-S y{a3,a4;i3}:A-C-S "
+            L"ã{p2;p1} ã{i1,i2;a1,a2} ã{i3;a3,a4} + 1/32 g{p3,p4;p1,p2}:A-C-S "
+            L"x{a1,a2;i1,i2}:A-C-S y{a3,a4;i3}:A-C-S ã{p1,p2;p3,p4} "
+            L"ã{i1,i2;a1,a2} ã{i3;a3,a4}"));
+  }
 }  // SECTION("manuscript-examples")
 }
