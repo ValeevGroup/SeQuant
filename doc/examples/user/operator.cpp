@@ -48,13 +48,13 @@ int main() {
   using namespace sequant::mbpt::op;
 
   // Construct a double excitation operator (T2)
-  auto T2 = T_(2);
+  auto t2 = t(2);
 
   // Construct a two-body Hamiltonian
-  auto H2 = H_(2);
+  auto h2 = h(2);
 
-  // Product: H2 * T2 * T2
-  auto expr1 = H2 * T2 * T2;
+  // Product: h2 * t2 * t2
+  auto expr1 = h2 * t2 * t2;
 
   // Screening: can an expression raise the vacuum to double excitation?
   bool raises_to_double = raises_vacuum_to_rank(expr1, 2);  // true
@@ -63,9 +63,7 @@ int main() {
   bool raises_up_to_double = raises_vacuum_up_to_rank(expr1, 2);  // true
 
   // Screening: can an expression lower a double excitation to the vacuum?
-  auto lambda2 = Λ_(2);
-  auto expr2 = lambda2 * H_(1);
-  bool lowers_to_vacuum = lowers_rank_to_vacuum(expr2, 2);  // true
+  bool lowers_to_vacuum = lowers_rank_to_vacuum(λ(2) * h(1), 2);  // true
   // end-snippet-3
   (void)raises_to_double;
   (void)raises_up_to_double;
@@ -95,9 +93,6 @@ int main() {
   // Use the custom registry to set the default MBPT context
   set_default_mbpt_context({.op_registry_ptr = custom_registry});
 
-  // Built-in operators work as before
-  auto t2 = T_(2);  // Uses 't' from registry
-
   // Create custom operator using OpMaker
   auto X2_tensor = OpMaker<Statistics::FermiDirac>(L"X", 2)();
 
@@ -108,7 +103,7 @@ int main() {
       [](qns_t& qns) { qns += excitation_type_qns(2); });
 
   // Use in expressions
-  auto custom_expr = H_(2) * X2_op * t2;
+  auto custom_expr = h(2) * X2_op * t(2);
   // end-snippet-5
 
   return 0;

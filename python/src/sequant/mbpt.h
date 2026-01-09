@@ -58,7 +58,7 @@ inline void __init__(py::module m) {
 
   m.def(SR_OP(A));
   m.def(SR_OP(T));
-  m.def(SR_OP(T_));
+  m.def(SR_OP(t));
 
   m.def("VacuumAverage", py::overload_cast<const ExprPtr&>(&VacuumAverage),
         py::arg("expr"));
