@@ -357,6 +357,8 @@ auto biorthogonal_nns_project_ta(TA::DistArray<Args...> const& arr,
   SEQUANT_ASSERT(bra_rank <= rank);
   size_t const ket_rank = rank - bra_rank;
 
+  // Residuals of rank 4 or less have no redundancy and don't require NNS
+  // projection
   if (rank <= 4) {
     return arr;
   }
@@ -432,6 +434,8 @@ auto biorthogonal_nns_project_btas(btas::Tensor<Args...> const& arr,
   SEQUANT_ASSERT(bra_rank <= rank);
   size_t const ket_rank = rank - bra_rank;
 
+  // Residuals of rank 4 or less have no redundancy and don't require NNS
+  // projection
   if (rank <= 4) {
     return arr;
   }

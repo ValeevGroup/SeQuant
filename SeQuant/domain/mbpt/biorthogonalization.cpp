@@ -371,7 +371,7 @@ void biorthogonal_transform(container::svector<ResultExpr>& result_exprs,
   Eigen::Matrix<sequant::rational, Eigen::Dynamic, Eigen::Dynamic>
       hardcoded_coefficients;
   Eigen::MatrixXd computed_coefficients;
-  constexpr std::size_t max_rank_hardcoded_biorth_coeffs = 6;
+  constexpr std::size_t max_rank_hardcoded_biorth_coeffs = 5;
 
   if (n_particles <= max_rank_hardcoded_biorth_coeffs) {
     hardcoded_coefficients = hardcoded_biorth_coeffs_matrix(n_particles);

@@ -9,14 +9,24 @@
 
 namespace sequant {
 
-/// \brief Provides the first row of the hardcoded biorthogonal coefficients
-/// matrix
+/// \brief Provides the first row of the biorthogonal coefficients matrix,
+/// hardcoded from Mathematica to avoid numerical precision loss.
+///
+/// The Myrvold-Ruskey unrank1 algorithm (doi.org/10.1016/S0020-0190(01)00141-7)
+/// was used to order permutations, then computing the permutational overlap
+/// matrix (M) where elements are (-2)^{cycles} × (-1)^n.
+///
+/// The biorthogonal coefficients are obtained from the normalized pseudoinverse
+/// of M: first compute M_pinv (the pseudoinverse), then normalize it by
+/// multiplying by (rank / rows) where rank is the matrix rank and rows is n!.
+/// Finally, coeffs = normalized_M_pinv · e_1 (where e_1 is the first unit
+/// vector).
 ///
 /// \param n_particles The rank of external index pairs
 ///
 /// \return Vector of rational coefficients representing the first row
 ///
-/// \throw std::runtime_error if n_particles is not in the range [1,6]
+/// \throw std::runtime_error if n_particles is not in the range [1,5]
 std::vector<sequant::rational> hardcoded_biorth_coeffs_first_row(
     std::size_t n_particles);
 
