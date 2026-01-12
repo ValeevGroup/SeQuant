@@ -93,6 +93,10 @@ Useful CMake Variables
    * - SEQUANT_CONTEXT_MANIPULATION_THREADSAFE
      - ON
      - If set to `OFF` the default context must be initialized and manipulated from single thread only (most users will want to do this).
+   * - SEQUANT_ASSERT_BEHAVIOR
+     - ``ABORT`` in ``Debug`` mode, ``IGNORE`` otherwise
+     - Controls how assertions within SeQuant's code are handled. Valid options are ``ABORT``, ``THROW`` and ``IGNORE``. The latter disables
+       assertions, whereas the former keep them active and either abort the program or throw an exception on violation respectively.
 
 
 Configuring and Building
