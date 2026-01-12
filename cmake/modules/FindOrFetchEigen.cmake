@@ -5,6 +5,7 @@ if (NOT TARGET Eigen3::Eigen)
     if (TARGET TiledArray_Eigen)
         add_library(Eigen3::Eigen ALIAS TiledArray_Eigen)
     else()
+		set(EIGEN_BUILD_CMAKE_PACKAGE ON)
 		FetchContent_Declare(
 			Eigen3
 			GIT_REPOSITORY https://gitlab.com/libeigen/eigen.git
