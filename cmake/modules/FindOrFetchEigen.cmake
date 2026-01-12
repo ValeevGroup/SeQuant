@@ -15,7 +15,7 @@ if (NOT TARGET Eigen3::Eigen)
 			SYSTEM
 		    # re:NO_CMAKE_PACKAGE_REGISTRY: eigen3 registers its *build* tree with the user package registry ...
 		    #                               to avoid issues with wiped build directory look for installed eigen
-			FIND_PACKAGE_ARGS ${SEQUANT_OLDEST_EIGEN_VERSION} NO_MODULE NO_CMAKE_PACKAGE_REGISTRY
+			FIND_PACKAGE_ARGS ${SEQUANT_OLDEST_EIGEN_VERSION} NO_CMAKE_PACKAGE_REGISTRY
 		)
 
 		FetchContent_MakeAvailable(Eigen3)
