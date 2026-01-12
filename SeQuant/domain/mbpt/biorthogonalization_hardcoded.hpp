@@ -13,14 +13,15 @@ namespace sequant {
 /// hardcoded from Mathematica to avoid numerical precision loss.
 ///
 /// The Myrvold-Ruskey unrank1 algorithm (doi.org/10.1016/S0020-0190(01)00141-7)
-/// was used to order permutations, then computing the permutational overlap
-/// matrix (M) where elements are (-2)^{cycles} × (-1)^n.
+/// is used to order permutations, then the permutational overlap matrix M is
+/// constructed with elements (-2)^{c} × (-1)^{n_particles}, where c is the
+/// number of cycles in the relative permutation.
 ///
 /// The biorthogonal coefficients are obtained from the normalized pseudoinverse
-/// of M: first compute M_pinv (the pseudoinverse), then normalize it by
-/// multiplying by (rank / rows) where rank is the matrix rank and rows is n!.
-/// Finally, coeffs = normalized_M_pinv · e_1 (where e_1 is the first unit
-/// vector).
+/// of M: first compute M_pinv (the pseudoinverse), then normalize it by the
+/// factor ((n_particles)!/rank(M)).
+/// Finally, biorthogonal coefficients = normalized_M_pinv · e_1,
+/// where e_1 is the first unit vector.
 ///
 /// \param n_particles The rank of external index pairs
 ///
@@ -33,7 +34,7 @@ std::vector<sequant::rational> hardcoded_biorth_coeffs_first_row(
 /// \brief Constructs the full biorthogonal coefficient matrix from the first
 /// row
 ///
-/// \param first_row The first row of rational biorthogonal coefficients
+/// \param first_row The first row of rational biorthogonal coefficients matrix
 /// \param n_particles The rank of external index pairs
 ///
 /// \return The complete biorthogonal coefficient matrix

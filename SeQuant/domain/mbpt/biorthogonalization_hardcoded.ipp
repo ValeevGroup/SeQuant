@@ -2,12 +2,14 @@
 /// hardcoded from Mathematica to avoid numerical precision loss.
 ///
 /// The Myrvold-Ruskey unrank1 algorithm (doi.org/10.1016/S0020-0190(01)00141-7)
-/// was used to order permutations, then computing the permutational overlap
-/// matrix (M) where elements are (-2)^{cycles} × (-1)^n.
+/// is used to order permutations, then the permutational overlap matrix M is
+/// constructed with elements (-2)^{c} × (-1)^{n_particles}, where c is the
+/// number of cycles in the relative permutation.
+///
 /// The NNS projector weights are obtained from the normalized pseudoinverse
-/// of M: first compute M_pinv (the pseudoinverse), then normalize it by
-/// multiplying by (rank / rows) where rank is the matrix rank and rows is n!.
-/// Finally, NNS projector = normalized_M_pinv · M
+/// of M: first compute M_pinv (the pseudoinverse), then normalize it by the
+/// factor ((n_particles)!/rank(M)).
+//// Finally, NNS projector = normalized_M_pinv · M.
 ///
 /// \param n_particles The rank of external index pairs
 ///
