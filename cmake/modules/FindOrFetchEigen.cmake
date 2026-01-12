@@ -13,8 +13,8 @@ if (NOT TARGET Eigen3::Eigen)
 			GIT_SHALLOW TRUE
 			EXCLUDE_FROM_ALL
 			SYSTEM
-		    # re:NO_CMAKE_PACKAGE_REGISTRY: eigen3 registers its *build* tree with the user package registry ...
-		    #                               to avoid issues with wiped build directory look for installed eigen
+			# re:NO_CMAKE_PACKAGE_REGISTRY: eigen3 registers its *build* tree with the user package registry ...
+			#                               to avoid issues with wiped build directory look for installed eigen
 			FIND_PACKAGE_ARGS ${SEQUANT_OLDEST_EIGEN_VERSION} NO_CMAKE_PACKAGE_REGISTRY
 		)
 
