@@ -435,8 +435,8 @@ if (SEQUANT_CONTEXT_MANIPULATION_THREADSAFE)
 endif()
 target_compile_definitions(SeQuant PUBLIC SEQUANT_ASSERT_BEHAVIOR_=${SEQUANT_ASSERT_BEHAVIOR})
 
-target_link_libraries(SeQuant PUBLIC range-v3::range-v3 Boost::regex Boost::locale Boost::headers SeQuant-bliss Threads::Threads Eigen3::Eigen)
-target_link_libraries(SeQuant PRIVATE libperm::libperm $<BUILD_LOCAL_INTERFACE:utfcpp>)
+target_link_libraries(SeQuant PUBLIC range-v3::range-v3 Boost::regex Boost::locale Boost::headers SeQuant-bliss Threads::Threads)
+target_link_libraries(SeQuant PRIVATE libperm::libperm $<BUILD_LOCAL_INTERFACE:utfcpp> Eigen3::Eigen)
 target_link_libraries(SeQuant PUBLIC polymorphic_variant::polymorphic_variant)
 # modularized Boost has finer grained targets than just Boost::headers
 if (Boost_IS_MODULARIZED)
