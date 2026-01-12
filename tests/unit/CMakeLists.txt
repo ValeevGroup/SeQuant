@@ -39,7 +39,7 @@ add_executable(unit_tests-sequant ${BUILD_BY_DEFAULT}
 )
 
 target_compile_definitions(unit_tests-sequant PRIVATE SEQUANT_UNIT_TESTS_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
-target_link_libraries(unit_tests-sequant PRIVATE Boost::boost)
+target_link_libraries(unit_tests-sequant PRIVATE Boost::boost Eigen3::Eigen)
 
 # Optional: Find Python for PythonEinsumGenerator validation tests
 find_package(Python 3 COMPONENTS Interpreter QUIET)
