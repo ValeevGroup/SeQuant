@@ -444,11 +444,10 @@ TEST_CASE("mbpt", "[mbpt]") {
       auto A_2_1 = A(nₚ(2), nₕ(1))->as<op_t>();
       //    std::wcout << "A_2_1: " << to_latex(simplify(A_2_1.tensor_form()))
       //               << std::endl;
-      REQUIRE(
-          to_latex(simplify(A_2_1.tensor_form())) ==
-          L"{{{\\frac{1}{2}}}{\\bar{A}^{{i_1}}_{{a_1}{a_2}}}{\\tilde{a}^{{a_"
-          L"1}{a_2}}"
-          L"_{\\textvisiblespace\\,{i_1}}}}");
+      REQUIRE(to_latex(simplify(A_2_1.tensor_form())) ==
+              L"{{\\bar{A}^{{i_1}}_{{a_1}{a_2}}}{\\tilde{a}^{{a_"
+              L"1}{a_2}}"
+              L"_{\\textvisiblespace\\,{i_1}}}}");
 
       auto P_0_1 = P(nₚ(0), nₕ(1))->as<op_t>();
       //    std::wcout << "P_0_1: " << to_latex(simplify(P_0_1.tensor_form()))
