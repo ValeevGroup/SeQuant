@@ -439,7 +439,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
     }
 
     SECTION("Antisymmetrization") {
-      auto expr1 = parse_antisymm(L"1/2 * g_{i1, i2}^{a1, a2}");
+      auto expr1 = parse_antisymm(L"g_{i1, i2}^{a1, a2}");
       auto eval1 = eval_antisymm(expr1, "i_1,i_2,a_1,a_2");
       auto const& arr1 = yield(L"g{i1,i2;a1,a2}");
 
@@ -447,7 +447,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
       man1("0,1,2,3") =
           arr1("0,1,2,3") - arr1("1,0,2,3") + arr1("1,0,3,2") - arr1("0,1,3,2");
 
-      man1("0,1,2,3") = 0.5 * man1("0,1,2,3");
+      man1("0,1,2,3") = 0.25 * man1("0,1,2,3");
 
       REQUIRE(norm(man1) == Catch::Approx(norm(eval1)));
 
@@ -479,6 +479,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
       auto const& arr3 = yield(L"R{a1,a2;}");
       auto man3 = TArrayD{};
       man3("0,1") = arr3("0,1") - arr3("1,0");
+      man3("0,1") = 0.5 * man3("0,1");
 
       TArrayD zero3;
       zero3("0,1") = man3("0,1") - eval3("0,1");
@@ -487,7 +488,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
     }
 
     SECTION("Symmetrization") {
-      auto expr1 = parse_antisymm(L"1/2 * g_{i1, i2}^{a1, a2}");
+      auto expr1 = parse_antisymm(L"g_{i1, i2}^{a1, a2}");
       auto eval1 = eval_symm(expr1, "i_1,i_2,a_1,a_2");
       auto const& arr1 = yield(L"g{i1,i2;a1,a2}");
 
@@ -505,7 +506,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
       man2("0,1,2,3,4,5") = arr2("0,1,2,3,4,5") + arr2("0,2,1,3,5,4") +
                             arr2("2,0,1,5,3,4") + arr2("2,1,0,5,4,3") +
                             arr2("1,2,0,4,5,3") + arr2("1,0,2,4,3,5");
-
+      man2("0,1,2,3,4,5") = (1.0 / 6.0) * man2("0,1,2,3,4,5");
       REQUIRE(norm(man2) == Catch::Approx(norm(eval2)));
     }
 
@@ -740,7 +741,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
     }
 
     SECTION("Antisymmetrization") {
-      auto expr1 = parse_expr(L"1/2 * g_{i1, i2}^{a1, a2}");
+      auto expr1 = parse_expr(L"g_{i1, i2}^{a1, a2}");
       auto eval1 = eval_antisymm(expr1, "i_1,i_2,a_1,a_2");
       auto const& arr1 = yield(L"g{i1,i2;a1,a2}");
 
@@ -748,7 +749,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
       man1("0,1,2,3") =
           arr1("0,1,2,3") - arr1("1,0,2,3") + arr1("1,0,3,2") - arr1("0,1,3,2");
 
-      man1("0,1,2,3") = std::complex<double>{0.5} * man1("0,1,2,3");
+      man1("0,1,2,3") = std::complex<double>{0.25} * man1("0,1,2,3");
 
       REQUIRE(norm(man1) == Catch::Approx(norm(eval1)));
 
@@ -779,6 +780,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
       auto const& arr3 = yield(L"R{a1,a2;}");
       auto man3 = TArrayC{};
       man3("0,1") = arr3("0,1") - arr3("1,0");
+      man3("0,1") = std::complex<double>{0.5} * man3("0,1");
 
       TArrayC zero3;
       zero3("0,1") = man3("0,1") - eval3("0,1");
@@ -787,7 +789,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
     }
 
     SECTION("Symmetrization") {
-      auto expr1 = parse_expr(L"1/2 * g_{i1, i2}^{a1, a2}");
+      auto expr1 = parse_expr(L"g_{i1, i2}^{a1, a2}");
       auto eval1 = eval_symm(expr1, "i_1,i_2,a_1,a_2");
       auto const& arr1 = yield(L"g{i1,i2;a1,a2}");
 
@@ -805,6 +807,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
       man2("0,1,2,3,4,5") = arr2("0,1,2,3,4,5") + arr2("0,2,1,3,5,4") +
                             arr2("2,0,1,5,3,4") + arr2("2,1,0,5,4,3") +
                             arr2("1,2,0,4,5,3") + arr2("1,0,2,4,3,5");
+      man2("0,1,2,3,4,5") = (1.0 / 6.0) * man2("0,1,2,3,4,5");
 
       REQUIRE(norm(man2) == Catch::Approx(norm(eval2)));
     }

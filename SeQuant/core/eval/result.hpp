@@ -178,6 +178,9 @@ auto column_symmetrize_ta(TA::DistArray<Args...> const& arr) {
 
   TA::DistArray<Args...>::wait_for_lazy_cleanup(result.world());
 
+  auto const nf = static_cast<double>(rational{1, factorial(nparticles)});
+  result(lannot) = nf * result(lannot);
+
   return result;
 }
 
@@ -244,6 +247,11 @@ auto particle_antisymmetrize_ta(TA::DistArray<Args...> const& arr,
   result = process_permutations(result, ket_rank, ket_perm, bra_annot, false);
 
   TA::DistArray<Args...>::wait_for_lazy_cleanup(result.world());
+
+  auto const nf = static_cast<double>(
+      rational{1, factorial(bra_rank) * factorial(ket_rank)});
+  result(lannot) = nf * result(lannot);
+
   return result;
 }
 
@@ -283,6 +291,9 @@ auto column_symmetrize_btas(btas::Tensor<Args...> const& arr) {
                                                perm.begin() + nparticles,  //
                                                nparticles},
                         call_back);
+
+  auto const nf = static_cast<double>(rational{1, factorial(nparticles)});
+  btas::scal(nf, result);
 
   return result;
 }
@@ -338,6 +349,10 @@ auto particle_antisymmetrize_btas(btas::Tensor<Args...> const& arr,
   // Process ket permutations if needed
   const auto bra_annot = bra_rank == 0 ? perm_t{} : bra_perm;
   result = process_permutations(result, ket_rank, ket_perm, bra_annot, false);
+
+  auto const nf = static_cast<double>(
+      rational{1, factorial(bra_rank) * factorial(ket_rank)});
+  btas::scal(nf, result);
 
   return result;
 }
