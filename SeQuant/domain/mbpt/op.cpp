@@ -782,8 +782,11 @@ ExprPtr A(nₚ np, nₕ nh) {
   if (get_default_mbpt_context().csv() == mbpt::CSV::Yes)
     dep = (np > 0 || nh > 0) ? OpMaker<Statistics::FermiDirac>::UseDepIdx::Bra
                              : OpMaker<Statistics::FermiDirac>::UseDepIdx::Ket;
-  return OpMaker<Statistics::FermiDirac>(
+  using ranges::size;
+  auto tf = OpMaker<Statistics::FermiDirac>(
       OpType::A, cre(creators), ann(annihilators))(dep, {Symmetry::Antisymm});
+  auto factor = factorial(size(creators)) * factorial(size(annihilators));
+  return ex<Constant>(factor) * tf;
 }
 
 ExprPtr S(std::int64_t K) {
