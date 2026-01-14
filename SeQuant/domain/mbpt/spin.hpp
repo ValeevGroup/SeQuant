@@ -402,16 +402,6 @@ ExprPtr spintrace(
 container::svector<ResultExpr> spintrace(const ResultExpr& expr,
                                          bool spinfree_index_spaces = true);
 
-/// @brief Factorize S out of terms
-/// @details Given an expression, permute indices and check if a given product
-/// @param expression Expression pointer
-/// @param fast_method use hash maps (memory intensive) for faster evaluation
-/// @param ext_index_groups External index groups to generate the S operator
-/// @return ExprPtr with terms with S operator as a factor
-ExprPtr factorize_S(const ExprPtr& expression,
-                    std::initializer_list<IndexList> ext_index_groups,
-                    bool fast_method = true);
-
 }  // namespace sequant::mbpt
 
 #endif  // SEQUANT_DOMAIN_MBPT_SPIN_HPP

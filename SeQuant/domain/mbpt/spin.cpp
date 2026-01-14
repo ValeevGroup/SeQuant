@@ -552,6 +552,7 @@ ExprPtr expand_A_op(const ProductPtr& product) {
 
   // Check A and build replacement map
   container::svector<container::map<Index, Index>> map_list;
+  Tensor A_tensor;
   for (auto& term : product) {
     if (term->is<Tensor>()) {
       auto A = term->as<Tensor>();
@@ -559,6 +560,7 @@ ExprPtr expand_A_op(const ProductPtr& product) {
         return remove_tensor(product, L"A");
       } else if ((A.label() == L"A")) {
         has_A_operator = true;
+        A_tensor = A;
         map_list = A_maps(A);
         break;
       }
@@ -566,6 +568,9 @@ ExprPtr expand_A_op(const ProductPtr& product) {
   }
 
   if (!has_A_operator) return product;
+
+  const auto nf = ex<Constant>(rational{
+      1, (factorial(A_tensor.bra_rank()) * factorial(A_tensor.ket_rank()))});
 
   auto new_result = std::make_shared<Sum>();
   for (auto&& map : map_list) {
@@ -593,6 +598,7 @@ ExprPtr expand_A_op(const ProductPtr& product) {
       }
     }
     new_product->scale(phase);
+    new_product->append(1, nf);
     new_result->append(new_product);
   }  // map_list
 
@@ -633,6 +639,7 @@ ExprPtr symmetrize_expr(const ProductPtr& product) {
     S = Tensor(L"S", bra(std::move(bra_list)), ket(std::move(ket_list)),
                A_tensor.aux(), Symmetry::Nonsymm);
   }
+  const auto nf = ex<Constant>(rational{1, factorial(S.ket_rank())});
 
   // Generate replacement maps from a list of Index type (could be a bra or a
   // ket)
@@ -681,6 +688,7 @@ ExprPtr symmetrize_expr(const ProductPtr& product) {
     Product new_product{};
     new_product.scale(product->scalar());
     new_product.append(get_phase(map), ex<Tensor>(S));
+    new_product.append(1, nf);
     auto temp_product = remove_tensor(product, L"A");
     for (auto&& term : *temp_product) {
       if (term->is<Tensor>()) {
@@ -865,17 +873,22 @@ ExprPtr S_maps(const ExprPtr& expr) {
 
     container::svector<container::map<Index, Index>> maps;
     // supports arbitrary sequence and variables
+    Tensor S_tensor;
     for (auto&& factor : product->factors()) {
       if (factor->is<Tensor>() && factor->as<Tensor>().label() == L"S") {
+        S_tensor = factor->as<Tensor>();
         maps = S_replacement_maps(factor->as<Tensor>());
         break;
       }
     }
     SEQUANT_ASSERT(!maps.empty());
+    const auto nf = ex<Constant>(rational{1, factorial(S_tensor.ket_rank())});
+
     Sum sum{};
     for (auto&& map : maps) {
       ProductPtr new_product = std::make_shared<Product>();
       new_product->scale(product->scalar());
+      new_product->append(1, nf);
       auto temp_product = remove_tensor(product, L"S").as_shared_ptr<Product>();
       for (auto&& term : temp_product) {
         if (term->is<Tensor>()) {
@@ -1143,7 +1156,7 @@ ExprPtr closed_shell_CC_spintrace_v2(ExprPtr const& expr,
                                      ClosedShellCCSpintraceOptions options) {
   SEQUANT_ASSERT(options.method == BiorthogonalizationMethod::V2);
   using ranges::views::transform;
-
+  std::wcout << " expr is: " << to_latex_align(expr) << "\n";
   auto const ext_idxs = external_indices(expr);
   auto st_expr = options.naive_spintrace
                      ? spintrace(expr, ext_idxs)
@@ -1168,6 +1181,7 @@ ExprPtr closed_shell_CC_spintrace_v2(ExprPtr const& expr,
           ex<Tensor>(Tensor{L"S", bra(std::move(kixs)), ket(std::move(bixs))}) *
           st_expr;
     }
+
     simplify(st_expr);
 
     st_expr = S_maps(st_expr);
@@ -1180,9 +1194,10 @@ ExprPtr closed_shell_CC_spintrace_v2(ExprPtr const& expr,
         ex<Tensor>(Tensor{L"S", bra(std::move(kixs)), ket(std::move(bixs))}) *
         st_expr;
 
-    const auto nf = ex<Constant>(
-        rational{1, factorial(ext_idxs.size())});  // normalization factor for S
-    st_expr = nf * st_expr;
+    // const auto nf =
+    //     ex<Constant>(factorial(ext_idxs.size()));  // normalization factor
+    //     for S
+    // st_expr = nf * st_expr;
   }
 
   simplify(st_expr);
@@ -1873,279 +1888,6 @@ container::svector<ResultExpr> spintrace(const ResultExpr& expr,
 
   return detail::wrap_trace<container::svector<ResultExpr>>(
       expr, static_cast<TraceFunction>(&spintrace), spinfree_index_spaces);
-}
-
-ExprPtr factorize_S(const ExprPtr& expression,
-                    std::initializer_list<IndexList> ext_index_groups,
-                    const bool fast_method) {
-  // Canonicalize the expression
-  ExprPtr expr = expression;
-  // canonicalize(expr);
-
-  // If expression has S operator, do nothing and exit
-  if (has_tensor(expr, L"S")) return expr;
-
-  // If S operator is absent: generate from ext_index_groups
-  Tensor S{};
-  {
-    container::svector<Index> bra_list, ket_list;
-
-    // Fill bras and kets
-    ranges::for_each(ext_index_groups, [&](const IndexList& idx_pair) {
-      bra_list.push_back(get_bra_idx(idx_pair));
-      ket_list.push_back(get_ket_idx(idx_pair));
-    });
-    SEQUANT_ASSERT(bra_list.size() == ket_list.size());
-    S = Tensor(L"S", bra(std::move(bra_list)), ket(std::move(ket_list)),
-               Symmetry::Nonsymm);
-  }
-
-  // For any order CC residual equation:
-  // Generate a list of permutation indices
-  // Erase the canonical entry
-  auto replacement_maps = S_replacement_maps(S);
-  replacement_maps.erase(replacement_maps.begin());
-
-  // Lambda function for index replacement in tensor
-  auto transform_tensor =
-      [](const Tensor& tensor,
-         const container::map<Index, Index>& replacement_map) {
-        auto result = std::make_shared<Tensor>(tensor);
-        result->transform_indices(replacement_map);
-        result->reset_tags();
-        return result;
-      };
-
-  Sum result_sum{};
-  ///////////////////////////////////////////////
-  ///            Fast approach                ///
-  ///////////////////////////////////////////////
-  // This method hashes terms for faster run times
-
-  if (fast_method) {
-    // summands_hash_list sorted container of hash values of canonicalized
-    // summands summands_hash_map unsorted map of (hash_val, summand) pairs
-    // container::set<size_t> summands_hash_list;
-    container::svector<size_t> summands_hash_list;
-    std::unordered_map<size_t, ExprPtr> summands_hash_map;
-    for (auto it = expr->begin(); it != expr->end(); ++it) {
-      (*it)->canonicalize();
-      auto hash = (*it)->hash_value();
-      summands_hash_list.push_back(hash);
-      summands_hash_map.emplace(hash, *it);
-    }
-    SEQUANT_ASSERT(summands_hash_list.size() == expr->size());
-    SEQUANT_ASSERT(summands_hash_map.size() == expr->size());
-
-    // Symmetrize every summand, assign its hash value to hash1
-    // Check if hash1 exist in summands_hash_list
-    // if(hash1 present in summands_hash_list) remove hash0, hash1
-    // else continue
-    [[maybe_unused]] int n_symm_terms = 0;
-    auto symm_factor = factorial(S.bra_rank());
-    for (auto it = expr->begin(); it != expr->end(); ++it) {
-      // Exclude summand with value zero
-      while ((*it)->hash_value() == ex<Constant>(0)->hash_value()) {
-        ++it;
-        if (it == expr->end()) break;
-      }
-      if (it == expr->end()) break;
-
-      // Remove current hash_value from list and clone summand
-      auto hash0 = (*it)->hash_value();
-      summands_hash_list.erase(std::find(summands_hash_list.begin(),
-                                         summands_hash_list.end(), hash0));
-      auto new_product = (*it)->clone();
-      new_product =
-          ex<Constant>(rational{1, symm_factor}) * ex<Tensor>(S) * new_product;
-
-      // CONTAINER OF HASH VALUES AND SYMMETRIZED TERMS
-      // FOR GENERALIZED EXPRESSION WITH ARBITRARY S OPERATOR
-      // Loop over replacement maps The entire code from here
-      container::vector<size_t> hash1_list;
-      for (auto&& replacement_map : replacement_maps) {
-        size_t hash1 = 0;
-        if ((*it)->is<Product>()) {
-          // Clone *it, apply symmetrizer, store hash1 value
-          auto product = (*it)->as<Product>();
-          Product S_product{};
-          S_product.scale(product.scalar());
-
-          // Transform indices by action of S operator
-          for (auto&& t : product) {
-            if (t->is<Tensor>()) {
-              S_product.append(
-                  1, transform_tensor(t->as<Tensor>(), replacement_map),
-                  Product::Flatten::No);
-            } else if (t->is<Constant>() || t->is<Variable>()) {
-              S_product.append(1, t, Product::Flatten::No);
-            } else {
-              throw std::runtime_error("Invalid Expr in factorize_S: " +
-                                       t->type_name());
-            }
-          }
-          auto new_product_expr = ex<Product>(S_product);
-          new_product_expr->canonicalize();
-          hash1 = new_product_expr->hash_value();
-
-        } else if ((*it)->is<Tensor>()) {
-          // Clone *it, apply symmetrizer, store hash value
-          auto tensor = (*it)->as<Tensor>();
-
-          // Transform indices by action of S operator
-          auto new_tensor = transform_tensor(tensor, replacement_map);
-
-          // Canonicalize the new tensor before computing hash value
-          new_tensor->canonicalize();
-          hash1 = new_tensor->hash_value();
-        } else if ((*it)->is<Constant>() || (*it)->is<Variable>()) {
-          hash1 = (*it)->hash_value();
-        } else {
-          throw std::runtime_error("Invalid Expr in factorize_S: " +
-                                   (*it)->type_name());
-        }
-        hash1_list.push_back(hash1);
-      }
-
-      // bool symmetrizable = false;
-      // auto hash1_found = [&](size_t h){ return summands_hash_list.find(h) !=
-      // summands_hash_list.end();};
-      auto hash1_found = [&summands_hash_list](size_t h) {
-        return std::find(summands_hash_list.begin(), summands_hash_list.end(),
-                         h) != summands_hash_list.end();
-      };
-      std::size_t n_hash_found = ranges::count_if(hash1_list, hash1_found);
-
-      if (n_hash_found == hash1_list.size()) {
-        // Prepend S operator
-        // new_product = ex<Tensor>(S) * new_product;
-        new_product = ex<Constant>(symm_factor) * new_product;
-        ++n_symm_terms;
-
-        // remove values from hash1_list from summands_hash_list
-        ranges::for_each(hash1_list, [&](const size_t hash1) {
-          // summands_hash_list.erase(hash1);
-          summands_hash_list.erase(std::find(summands_hash_list.begin(),
-                                             summands_hash_list.end(), hash1));
-
-          auto term = summands_hash_map.find(hash1)->second;
-
-          for (auto&& summand : *expr) {
-            if (summand->hash_value() == hash1) summand = ex<Constant>(0);
-          }
-        });
-      }
-      result_sum.append(new_product);
-    }
-  } else {
-    ///////////////////////////////////////////////
-    ///            Lazy approach                ///
-    ///////////////////////////////////////////////
-    // This approach is slower because the hash values are computed on the fly.
-    // Subsequently, this algorithm applies 'S' operator n^2 times
-
-    [[maybe_unused]] int n_symm_terms = 0;
-
-    // If a term was symmetrized, put the index in a list
-    container::set<int> i_list;
-
-    // The quick_method is a "faster" lazy approach that
-    // symmetrizes *it instead of symmetrizing *find_it in the inside loop
-    //    const auto tstart = std::chrono::high_resolution_clock::now();
-
-    // Controls which term to symmetrize
-    // true -> symmetrize the summand
-    // false -> symmetrize lookup term
-    // bool quick_method = true;
-
-    // Loop over terms of expression (OUTER LOOP)
-    for (auto it = expr->begin(); it != expr->end(); ++it) {
-      // If *it is symmetrized, go to next
-      while (std::find(i_list.begin(), i_list.end(),
-                       std::distance(expr->begin(), it)) != i_list.end())
-        ++it;
-      // Clone the summand
-      auto new_product = (*it)->clone();
-
-      // hash value of summand
-      container::vector<size_t> hash0_list;
-      for (auto&& replacement_map : replacement_maps) {
-        size_t hash0 = 0;
-        if ((*it)->is<Product>()) {
-          // Clone *it, apply symmetrizer, store hash value
-          auto product = (*it)->as<Product>();
-          Product S_product{};
-          S_product.scale(product.scalar());
-
-          // Transform indices by action of S operator
-          for (auto&& t : product) {
-            if (t->is<Tensor>()) {
-              S_product.append(
-                  1, transform_tensor(t->as<Tensor>(), replacement_map),
-                  Product::Flatten::No);
-            } else if (t->is<Constant>() || t->is<Variable>()) {
-              S_product.append(1, t, Product::Flatten::No);
-            } else {
-              throw std::runtime_error("Invalid Expr type in factorize_S: " +
-                                       t->type_name());
-            }
-          }
-          auto new_product_expr = ex<Product>(S_product);
-          new_product_expr->canonicalize();
-          hash0 = new_product_expr->hash_value();
-        } else if ((*it)->is<Tensor>()) {
-          // Clone *it, apply symmetrizer, store hash value
-          auto tensor = (*it)->as<Tensor>();
-
-          // Transform indices by action of S operator
-          auto new_tensor = transform_tensor(tensor, replacement_map);
-
-          // Canonicalize the new tensor before computing hash value
-          new_tensor->canonicalize();
-          hash0 = new_tensor->hash_value();
-        } else if ((*it)->is<Constant>() || (*it)->is<Variable>()) {
-          hash0 = (*it)->hash_value();
-        } else {
-          throw std::runtime_error("Invalid Expr type in factorize_S: " +
-                                   (*it)->type_name());
-        }
-        hash0_list.push_back(hash0);
-      }
-
-      for (auto&& hash0 : hash0_list) {
-        std::size_t n_matches = 0;
-        container::svector<size_t> idx_vec;
-        for (auto find_it = it + 1; find_it != expr->end(); ++find_it) {
-          auto idx = std::distance(expr->begin(), find_it);
-          (*find_it)->canonicalize();
-
-          if ((*find_it)->hash_value() == hash0) {
-            ++n_matches;
-            idx_vec.push_back(idx);
-          }
-        }
-        if (n_matches == hash0_list.size()) {
-          ++n_symm_terms;
-          new_product = ex<Tensor>(S) * new_product;
-          i_list.insert(idx_vec.begin(), idx_vec.end());
-        }
-      }
-
-      // append product to running sum
-      result_sum.append(new_product);
-    }
-    //    const auto tstop = std::chrono::high_resolution_clock::now();
-    //    const auto time_elapsed =
-    //        std::chrono::duration_cast<std::chrono::microseconds>(tstop -
-    //        tstart);
-    // std::cout << "Fast method: " << std::boolalpha << fast_method << "\n";
-    // std::cout << "N symm terms found: " << n_symm_terms << "\n";
-    // std::cout << "Time: " << time_elapsed.count() << " μs.\n";
-  }
-
-  ExprPtr result = std::make_shared<Sum>(result_sum);
-  simplify(result);
-  return result;
 }
 
 }  // namespace sequant::mbpt
