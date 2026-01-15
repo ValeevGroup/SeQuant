@@ -367,7 +367,6 @@ set(SeQuant_src
         SeQuant/domain/mbpt/antisymmetrizer.hpp
         SeQuant/domain/mbpt/biorthogonalization.cpp
         SeQuant/domain/mbpt/biorthogonalization.hpp
-        SeQuant/domain/mbpt/biorthogonalization_hardcoded.ipp
         SeQuant/domain/mbpt/biorthogonalization_hardcoded.cpp
         SeQuant/domain/mbpt/biorthogonalization_hardcoded.hpp
         SeQuant/domain/mbpt/context.cpp

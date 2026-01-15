@@ -359,29 +359,12 @@ auto biorthogonal_nns_project_ta(TA::DistArray<Args...> const& arr,
 
   // Residuals of rank 4 or less have no redundancy and don't require NNS
   // projection
-  if (rank <= 4) {
-    return arr;
-  }
+  if (rank <= 4) return arr;
 
   using numeric_type = typename TA::DistArray<Args...>::numeric_type;
 
-  std::vector<numeric_type> nns_p_coeffs;
-
-  constexpr std::size_t max_rank_hardcoded_nns_projector = 5;
-  if (ket_rank >= 3) {
-    if (ket_rank <= max_rank_hardcoded_nns_projector) {
-      nns_p_coeffs = hardcoded_nns_projector<numeric_type>(ket_rank);
-    } else {
-      Eigen::MatrixXd nns_matrix = compute_nns_p_matrix(ket_rank);
-      size_t num_perms = nns_matrix.rows();
-
-      nns_p_coeffs.reserve(num_perms);
-      for (size_t i = 0; i < num_perms; ++i) {
-        nns_p_coeffs.push_back(
-            static_cast<numeric_type>(nns_matrix(num_perms - 1, i)));
-      }
-    }
-  }
+  std::vector<numeric_type> nns_p_coeffs =
+      nns_projection_weights<numeric_type>(ket_rank);
 
   TA::DistArray<Args...> result;
 
@@ -436,28 +419,11 @@ auto biorthogonal_nns_project_btas(btas::Tensor<Args...> const& arr,
 
   // Residuals of rank 4 or less have no redundancy and don't require NNS
   // projection
-  if (rank <= 4) {
-    return arr;
-  }
+  if (rank <= 4) return arr;
 
   using numeric_type = typename btas::Tensor<Args...>::numeric_type;
-  std::vector<numeric_type> nns_p_coeffs;
-  constexpr std::size_t max_rank_hardcoded_nns_projector = 5;
-
-  if (ket_rank >= 3) {
-    if (ket_rank <= max_rank_hardcoded_nns_projector) {
-      nns_p_coeffs = hardcoded_nns_projector<numeric_type>(ket_rank);
-    } else {
-      Eigen::MatrixXd nns_matrix = compute_nns_p_matrix(ket_rank);
-      size_t num_perms = nns_matrix.rows();
-
-      nns_p_coeffs.reserve(num_perms);
-      for (size_t i = 0; i < num_perms; ++i) {
-        nns_p_coeffs.push_back(
-            static_cast<numeric_type>(nns_matrix(num_perms - 1, i)));
-      }
-    }
-  }
+  std::vector<numeric_type> nns_p_coeffs =
+      nns_projection_weights<numeric_type>(ket_rank);
 
   btas::Tensor<Args...> result;
 
