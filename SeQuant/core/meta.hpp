@@ -9,6 +9,7 @@
 #include <memory>
 #include <range/v3/range/access.hpp>
 #include <range/v3/range/traits.hpp>
+#include <ranges>
 #include <type_traits>
 
 namespace sequant {
@@ -505,6 +506,23 @@ struct std_array_size<std::array<T, N>>
 
 template <typename T>
 constexpr inline std::size_t std_array_size_v = std_array_size<T>::value;
+
+///
+/// True if @tparam Rng is a range whose value type is convertible
+/// to @tparam V .
+///
+template <typename Rng, typename V>
+concept range_of = std::ranges::range<Rng> &&
+                   std::is_convertible_v<std::ranges::range_value_t<Rng>, V>;
+
+///
+/// True if @tparam Rng is a range whose value type is convertible
+/// to @tparam V and the size (std::ranges::distance) is known in constant time.
+///
+/// @see https://en.cppreference.com/w/cpp/ranges/sized_range.html
+///
+template <typename Rng, typename V>
+concept sized_range_of = std::ranges::sized_range<Rng> && range_of<Rng, V>;
 
 }  // namespace meta
 }  // namespace sequant
