@@ -139,34 +139,6 @@ bool next_permutation_parity(int& parity, BidirIt first, BidirIt last,
 }
 
 ///
-/// Given a size of a container @c n, returns a range of bitsets. The bitsets
-/// represent the sieve that can be used to construct the subsequences of the
-/// size-n container.
-///
-inline auto subset_indices(size_t n) {
-  using ranges::views::iota;
-  using ranges::views::transform;
-  return iota(size_t{1}, size_t(1 << n)) |
-         transform([n](auto i) { return boost::dynamic_bitset<>(n, i); });
-}
-
-///
-/// Given an iterable @c it and a bitset @c bs, select the elements in the
-/// iterable that correspond to an 'on' bit.
-///
-template <typename Iterable>
-auto subsequence(Iterable const& it, boost::dynamic_bitset<> const& bs) {
-  using ranges::views::filter;
-  using ranges::views::iota;
-  using ranges::views::transform;
-  using ranges::views::zip;
-
-  auto bits = iota(size_t{0}) | transform([&bs](auto i) { return bs.at(i); });
-  return zip(it, bits) | filter([](auto&& kv) { return std::get<1>(kv); }) |
-         transform([](auto&& kv) { return std::get<0>(kv); });
-}
-
-///
 /// All elements in the vector belong to the integral range [-1,N)
 /// where N is the length of the [Expr] (ie. the iterable of expressions)
 ///   * only applicable for binary evaluations
