@@ -1,0 +1,18 @@
+
+.. _namespace_sequant__parse__actions__@93:
+
+Namespace sequant::parse::actions::@93
+======================================
+
+
+Auxiliary type traits. 
+
+
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+
+

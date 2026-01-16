@@ -1,0 +1,23 @@
+.. _exhale_class_classsequant_1_1_cache_manager_1_1entry:
+
+Class CacheManager::entry
+=========================
+
+- Defined in :ref:`file_SeQuant_core_eval_cache_manager.hpp`
+
+
+Nested Relationships
+--------------------
+
+This class is a nested type of :ref:`exhale_class_classsequant_1_1_cache_manager`.
+
+
+Class Documentation
+-------------------
+
+
+.. doxygenclass:: sequant::CacheManager::entry
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

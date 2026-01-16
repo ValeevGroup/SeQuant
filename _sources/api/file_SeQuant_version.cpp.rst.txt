@@ -1,0 +1,54 @@
+
+.. _file_SeQuant_version.cpp:
+
+File version.cpp
+================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant>` (``SeQuant``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/version.cpp``)
+------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_version.cpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/version.hpp``
+
+
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1a4aa9b3b5d751603b3a53e38a6041a8c1`
+
+- :ref:`exhale_function_namespacesequant_1a591a8e64e09189564f2ddf132cc50ccd`
+

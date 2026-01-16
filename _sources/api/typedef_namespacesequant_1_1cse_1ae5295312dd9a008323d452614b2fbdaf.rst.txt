@@ -1,0 +1,14 @@
+.. _exhale_typedef_namespacesequant_1_1cse_1ae5295312dd9a008323d452614b2fbdaf:
+
+Typedef sequant::cse::SubexpressionHashCollector
+================================================
+
+- Defined in :ref:`file_SeQuant_core_optimize_common_subexpression_elimination.hpp`
+
+
+Typedef Documentation
+---------------------
+
+
+.. doxygentypedef:: sequant::cse::SubexpressionHashCollector
+   :project: SeQuant

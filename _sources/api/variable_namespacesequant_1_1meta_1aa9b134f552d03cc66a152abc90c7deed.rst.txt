@@ -1,0 +1,14 @@
+.. _exhale_variable_namespacesequant_1_1meta_1aa9b134f552d03cc66a152abc90c7deed:
+
+Template Variable sequant::meta::is_full_binary_node< FullBinaryNode< T > >
+===========================================================================
+
+- Defined in :ref:`file_SeQuant_core_binary_node.hpp`
+
+
+Variable Documentation
+----------------------
+
+
+.. doxygenvariable:: sequant::meta::is_full_binary_node< FullBinaryNode< T > >
+   :project: SeQuant

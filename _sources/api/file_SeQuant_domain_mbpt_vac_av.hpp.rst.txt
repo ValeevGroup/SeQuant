@@ -1,0 +1,83 @@
+
+.. _file_SeQuant_domain_mbpt_vac_av.hpp:
+
+File vac_av.hpp
+===============
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_domain_mbpt>` (``SeQuant/domain/mbpt``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/domain/mbpt/vac_av.hpp``)
+-----------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_domain_mbpt_vac_av.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/domain/mbpt/op.hpp`` (:ref:`file_SeQuant_domain_mbpt_op.hpp`)
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_domain_mbpt_models_cc.hpp`
+
+- :ref:`file_SeQuant_domain_mbpt_vac_av.cpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+- :ref:`namespace_sequant__mbpt`
+
+- :ref:`namespace_sequant__mbpt__op`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1a33f80fe239231517db31082c8ef65c7a`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1ae74f4fc4ce92cb05395688dbd42918e3`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1a6eb224d07b96ee459e3720cdab99b3bd`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1ab5a51703fa1be2baf0e03afbba941858`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1a72ee9bd81e744bf120bf3869aa58b4fb`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1a4c7a7bc581db34ce26a22799c474a51a`
+
+- :ref:`exhale_function_namespacesequant_1_1mbpt_1_1op_1a2d7c37e898e6d72ce741a95aa43e31b5`
+
+
+Typedefs
+--------
+
+
+- :ref:`exhale_typedef_namespacesequant_1_1mbpt_1_1op_1a6f2d374cd7ee2e1be35988da01e545a7`
+

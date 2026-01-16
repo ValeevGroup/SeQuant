@@ -1,0 +1,14 @@
+.. _exhale_define_macros_8hpp_1aeb52e4ed05337a83fff8fa9daeeb2cfc:
+
+Define SEQUANT_CXX_COMPILER_ID_Clang
+====================================
+
+- Defined in :ref:`file_SeQuant_core_utility_macros.hpp`
+
+
+Define Documentation
+--------------------
+
+
+.. doxygendefine:: SEQUANT_CXX_COMPILER_ID_Clang
+   :project: SeQuant

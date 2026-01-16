@@ -1,0 +1,91 @@
+
+.. _program_listing_file_SeQuant_domain_mbpt_space_qns.hpp:
+
+Program Listing for File space_qns.hpp
+======================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_domain_mbpt_space_qns.hpp>` (``SeQuant/domain/mbpt/space_qns.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   //
+   // Created by Eduard Valeyev on 3/9/25.
+   //
+   
+   #ifndef SEQUANT_DOMAIN_MBPT_SPACE_QNS_HPP
+   #define SEQUANT_DOMAIN_MBPT_SPACE_QNS_HPP
+   
+   #include "SeQuant/core/fwd.hpp"
+   
+   namespace sequant::mbpt {
+   
+   template <typename BitSet>
+   struct mask;
+   
+   template <typename BitSet>
+   constexpr auto mask_v = mask<BitSet>::value;
+   
+   template <typename BitSet>
+   using mask_t = mask<BitSet>::type;
+   
+   // SeQuant/mbpt definitions of IndexSpace QNs
+   
+   enum class Spin : bitset_t {
+     alpha = 0b000001,  
+     beta = 0b000010,   
+     any = alpha | beta,
+     // syntactic sugar
+     free = any,   
+     none = any,   
+     up = alpha,   
+     down = beta,  
+     // only used by legacy code
+     null = 0b000000
+   };
+   
+   template <>
+   struct mask<Spin> {
+     using type = std::underlying_type_t<Spin>;
+     static constexpr type value = static_cast<type>(Spin::any);
+   };
+   
+   enum class LCAOQNS : bitset_t {
+     ao = 0b000100,
+     pao = 0b001000  // projected AO space denotes unoccupied spaces made
+                     // from AO basis and orthogonal to occupied orbitals
+   };
+   
+   template <>
+   struct mask<LCAOQNS> {
+     using type = std::underlying_type_t<LCAOQNS>;
+     static constexpr type value =
+         static_cast<type>(LCAOQNS::ao) | static_cast<type>(LCAOQNS::pao);
+   };
+   
+   enum class TensorFactorizationQNS : bitset_t {
+     df = 0b010000,  // density fitting
+     thc = 0b100000  // tensor hypercontraction
+   };
+   
+   template <>
+   struct mask<TensorFactorizationQNS> {
+     using type = std::underlying_type_t<TensorFactorizationQNS>;
+     static constexpr type value = static_cast<type>(TensorFactorizationQNS::df) |
+                                   static_cast<type>(TensorFactorizationQNS::thc);
+   };
+   
+   enum class BatchingQNS : bitset_t {
+     batch = 0b1000000,  // for batching tensors
+   };
+   
+   template <>
+   struct mask<BatchingQNS> {
+     using type = std::underlying_type_t<BatchingQNS>;
+     static constexpr type value = static_cast<type>(BatchingQNS::batch);
+   };
+   
+   }  // namespace sequant::mbpt
+   
+   #endif  // SEQUANT_DOMAIN_MBPT_SPACE_QNS_HPP

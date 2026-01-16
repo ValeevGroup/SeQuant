@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1mbpt_1_1op_1a4c7a7bc581db34ce26a22799c474a51a:
+
+Function sequant::mbpt::op::to_label_connections
+================================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_vac_av.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::mbpt::op::to_label_connections(const OpConnections<mbpt::OpType>&)
+   :project: SeQuant

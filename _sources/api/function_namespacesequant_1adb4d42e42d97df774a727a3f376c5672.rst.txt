@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1adb4d42e42d97df774a727a3f376c5672:
+
+Function sequant::biorthogonal_transform(ResultExpr&, double)
+=============================================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_biorthogonalization.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::biorthogonal_transform(ResultExpr&, double)
+   :project: SeQuant

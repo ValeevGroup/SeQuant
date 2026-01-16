@@ -1,0 +1,17 @@
+.. _exhale_struct_structsequant_1_1assume__real__orbitals:
+
+Struct assume_real_orbitals
+===========================
+
+- Defined in :ref:`file_SeQuant_core_export_reordering_context.hpp`
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::assume_real_orbitals
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

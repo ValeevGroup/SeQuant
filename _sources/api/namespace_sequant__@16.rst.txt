@@ -1,0 +1,13 @@
+
+.. _namespace_sequant__@16:
+
+Namespace sequant::@16
+======================
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+
+

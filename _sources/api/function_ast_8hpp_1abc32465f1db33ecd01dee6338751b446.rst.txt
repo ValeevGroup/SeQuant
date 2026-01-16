@@ -1,0 +1,14 @@
+.. _exhale_function_ast_8hpp_1abc32465f1db33ecd01dee6338751b446:
+
+Function BOOST_FUSION_ADAPT_STRUCT(sequant::parse::ast::Tensor, name, indices, symmetry)
+========================================================================================
+
+- Defined in :ref:`file_SeQuant_core_parse_ast.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: BOOST_FUSION_ADAPT_STRUCT(sequant::parse::ast::Tensor, name, indices, symmetry)
+   :project: SeQuant
