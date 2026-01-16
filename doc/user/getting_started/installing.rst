@@ -41,7 +41,8 @@ Optional
 ~~~~~~~~
 * `TiledArray <https://github.com/ValeevGroup/tiledarray.git>`_ - for building coupled-cluster evaluation tests
 
-.. note:: If not found, SeQuant can download and build all dependencies other than CMake and the C++ compiler.
+.. note:: If not found, SeQuant can download and build all dependencies other than CMake and the C++ compiler, provided `git <https://git-scm.com/>`
+   is available on the system.
 
 
 Useful CMake Variables
