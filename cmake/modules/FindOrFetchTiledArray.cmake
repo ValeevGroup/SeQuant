@@ -25,5 +25,5 @@ endif()
 
 # postcond check
 if (NOT TARGET tiledarray)
-    message(FATAL_ERROR "FindOrFetchCatch2 could not make TARGET tiledarray available")
+	message(FATAL_ERROR "FindOrFetchTiledArray could not make TARGET tiledarray available")
 endif()
