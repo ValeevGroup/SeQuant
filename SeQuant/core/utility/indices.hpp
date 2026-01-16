@@ -566,6 +566,46 @@ auto get_ket_idx(T&& container)
   }
 }
 
+auto subexpr_index_counts(meta::sized_range_of<Tensor> auto const& tnsrs) {
+  size_t const N = ranges::distance(tnsrs);
+  container::vector<container::map<Index, size_t, Index::FullLabelCompare>>
+      result((1 << N));
+  for (auto i = 1; i < result.size(); ++i) {
+    auto bs = boost::dynamic_bitset<>(N, i);
+    for (auto b = 0; b < N; ++b)
+      if (bs[b])
+        for (auto&& ix : ranges::at(tnsrs, b).indices())
+          if (auto [it, yn] = result[i].try_emplace(ix, 1); !yn)  //
+            ++(it->second);
+  }
+  return result;
+}
+
+template <meta::sized_range_of<Tensor> Rng, meta::range_of<Index> Ixs>
+auto subexpr_target_indices(Rng const& tnsrs, Ixs const& tixs) {
+  using IndexSet = container::set<Index, Index::FullLabelCompare>;
+  size_t const N = ranges::distance(tnsrs);
+  container::vector<IndexSet> result((1 << N));
+
+  if (result.empty()) return result;
+
+  for (auto i = 0; i < N; ++i) {
+    auto&& ixs = ranges::at(tnsrs, i).indices();
+    result[(1 << i)] = IndexSet(ranges::begin(ixs), ranges::end(ixs));
+  }
+
+  *result.rbegin() = IndexSet(ranges::begin(tixs), ranges::end(tixs));
+
+  auto counts = subexpr_index_counts(tnsrs);
+
+  for (auto i = 0; i < result.size(); ++i)
+    for (auto&& [k, v] : counts[i])
+      if (v == 1 || (v > 0 && counts.at(counts.size() - i - 1).contains(k)))
+        result[i].emplace(k);
+
+  return result;
+}
+
 }  // namespace sequant
 
 #endif  // SEQUANT_CORE_UTILITY_INDICES_HPP
