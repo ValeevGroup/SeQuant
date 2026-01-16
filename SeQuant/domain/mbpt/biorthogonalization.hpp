@@ -6,6 +6,8 @@
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/domain/mbpt/biorthogonalization_hardcoded.hpp>
 
+#include <condition_variable>
+
 #include <Eigen/Core>
 
 namespace sequant {
