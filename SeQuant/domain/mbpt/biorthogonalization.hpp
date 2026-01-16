@@ -118,11 +118,7 @@ template <typename T>
   {
     std::lock_guard<std::mutex> lock(cache_mutex);
     cache[key] = std::move(nns_p_coeffs);
-  }
-  cache_cv.notify_all();
-
-  {
-    std::lock_guard<std::mutex> lock(cache_mutex);
+    cache_cv.notify_all();
     return cache[key].value();
   }
 }
