@@ -18,7 +18,7 @@ Prerequisites
 Mandatory
 ~~~~~~~~~
 
-* `CMake <https://cmake.org/>`_ 3.27 or later
+* `CMake <https://cmake.org/>`_ 3.28 or later
 * `C++20 compatible compiler <https://en.cppreference.com/w/cpp/compiler_support#cpp20>`_
 * `Boost <https://www.boost.org/>`_ 1.81 or later
 * `Range-V3 <https://github.com/ericniebler/range-v3.git>`_ 0.12.0 or later
