@@ -3,7 +3,6 @@
 
 #include <SeQuant/core/math.hpp>
 
-#include <Eigen/Core>
 #include <cstddef>
 #include <vector>
 
@@ -34,26 +33,6 @@ namespace sequant {
 // clang-format on
 std::vector<sequant::rational> hardcoded_biorth_coeffs_first_row(
     std::size_t n_particles);
-
-/// \brief Constructs the full biorthogonal coefficient matrix from the first
-/// row
-///
-/// \param first_row The first row of rational biorthogonal coefficients matrix
-/// \param n_particles The rank of external index pairs
-///
-/// \return The complete biorthogonal coefficient matrix
-Eigen::Matrix<sequant::rational, Eigen::Dynamic, Eigen::Dynamic>
-make_hardcoded_biorth_coeffs_matrix(
-    const std::vector<sequant::rational>& first_row, std::size_t n_particles);
-
-/// \brief Provides the hardcoded biorthogonal coefficient matrix
-///
-/// \param n_particles The rank of external index pairs
-///
-/// \return Optional vector of NNS projector weights (std::nullopt if
-/// n_particles not in [1,5])
-Eigen::Matrix<sequant::rational, Eigen::Dynamic, Eigen::Dynamic>
-hardcoded_biorth_coeffs_matrix(std::size_t n_particles);
 
 /// \brief Provides one row of the NNS projector matrix,
 /// hardcoded from Mathematica to avoid numerical precision loss.

@@ -31,6 +31,10 @@ struct compare_first_less {
 using IndexPair = std::pair<Index, Index>;
 using ParticlePairings = container::svector<IndexPair>;
 
+// forward declaration to avoid Eigen in header files
+Eigen::Matrix<sequant::rational, Eigen::Dynamic, Eigen::Dynamic>
+hardcoded_biorth_coeffs_matrix(std::size_t n_particles);
+
 ResultExpr biorthogonal_transform_copy(const ResultExpr& expr,
                                        double threshold) {
   container::svector<ResultExpr> wrapper = {expr.clone()};

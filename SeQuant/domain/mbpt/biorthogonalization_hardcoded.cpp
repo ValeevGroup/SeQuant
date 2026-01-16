@@ -1,5 +1,7 @@
 #include <SeQuant/domain/mbpt/biorthogonalization_hardcoded.hpp>
 
+#include <Eigen/Core>
+
 #include <libperm/Permutation.hpp>
 #include <libperm/Rank.hpp>
 #include <libperm/Utils.hpp>
