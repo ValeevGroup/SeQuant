@@ -8,8 +8,6 @@
 
 #include <condition_variable>
 
-#include <Eigen/Core>
-
 namespace sequant {
 
 namespace {
