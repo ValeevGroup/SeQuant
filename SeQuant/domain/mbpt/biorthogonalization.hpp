@@ -66,35 +66,64 @@ container::svector<size_t> compute_permuted_indices(
 /// \param threshold The threshold to compute the pseudoinverse matrix
 ///        (set to default_biorth_threshold)
 ///
-/// \return Vector of hrdcoded/computed NNS projection weights
+/// \return (memoized) Vector of hrdcoded/computed NNS projection weights
 template <typename T>
   requires(std::floating_point<T> || meta::is_complex_v<T>)
-[[nodiscard]] std::vector<T> nns_projection_weights(
+[[nodiscard]] const std::vector<T>& nns_projection_weights(
     std::size_t n_particles, double threshold = default_biorth_threshold) {
-  std::vector<T> nns_p_coeffs;
+  static const std::vector<T> empty_vec{};
 
-  constexpr std::size_t max_rank_hardcoded_nns_projector = 5;
+  if (n_particles < 3) {
+    return empty_vec;
+  }
 
-  if (n_particles >= 3) {
-    if (n_particles <= max_rank_hardcoded_nns_projector) {
-      auto hardcoded_coeffs = hardcoded_nns_projector<T>(n_particles);
-      if (hardcoded_coeffs) {
-        nns_p_coeffs = std::move(hardcoded_coeffs.value());
-      }
-    } else {
-      Eigen::MatrixXd nns_matrix = compute_nns_p_matrix(n_particles, threshold);
-      std::size_t num_perms = nns_matrix.rows();
+  using CacheKey = std::pair<std::size_t, double>;
+  using CacheValue = std::optional<std::vector<T>>;
 
-      nns_p_coeffs.reserve(num_perms);
-      for (std::size_t i = 0; i < num_perms; ++i) {
-        nns_p_coeffs.push_back(static_cast<T>(nns_matrix(num_perms - 1, i)));
-      }
+  static std::mutex cache_mutex;
+  static std::condition_variable cache_cv;
+  static container::map<CacheKey, CacheValue> cache;
+
+  CacheKey key{n_particles, threshold};
+
+  {
+    std::unique_lock<std::mutex> lock(cache_mutex);
+    auto [it, inserted] = cache.try_emplace(key, std::nullopt);
+    if (!inserted) {
+      cache_cv.wait(lock, [&] { return it->second.has_value(); });
+      return it->second.value();
     }
   }
 
-  return nns_p_coeffs;
-}
+  std::vector<T> nns_p_coeffs;
 
+  constexpr std::size_t max_rank_hardcoded_nns_projector = 5;
+  if (n_particles <= max_rank_hardcoded_nns_projector) {
+    auto hardcoded_coeffs = hardcoded_nns_projector<T>(n_particles);
+    if (hardcoded_coeffs) {
+      nns_p_coeffs = std::move(hardcoded_coeffs.value());
+    }
+  } else {
+    Eigen::MatrixXd nns_matrix = compute_nns_p_matrix(n_particles, threshold);
+    std::size_t num_perms = nns_matrix.rows();
+
+    nns_p_coeffs.reserve(num_perms);
+    for (std::size_t i = 0; i < num_perms; ++i) {
+      nns_p_coeffs.push_back(static_cast<T>(nns_matrix(num_perms - 1, i)));
+    }
+  }
+
+  {
+    std::lock_guard<std::mutex> lock(cache_mutex);
+    cache[key] = std::move(nns_p_coeffs);
+  }
+  cache_cv.notify_all();
+
+  {
+    std::lock_guard<std::mutex> lock(cache_mutex);
+    return cache[key].value();
+  }
+}
 }  // namespace sequant
 
 #endif

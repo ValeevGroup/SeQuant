@@ -363,8 +363,7 @@ auto biorthogonal_nns_project_ta(TA::DistArray<Args...> const& arr,
 
   using numeric_type = typename TA::DistArray<Args...>::numeric_type;
 
-  std::vector<numeric_type> nns_p_coeffs =
-      nns_projection_weights<numeric_type>(ket_rank);
+  const auto& nns_p_coeffs = nns_projection_weights<numeric_type>(ket_rank);
 
   TA::DistArray<Args...> result;
 
@@ -422,8 +421,8 @@ auto biorthogonal_nns_project_btas(btas::Tensor<Args...> const& arr,
   if (rank <= 4) return arr;
 
   using numeric_type = typename btas::Tensor<Args...>::numeric_type;
-  std::vector<numeric_type> nns_p_coeffs =
-      nns_projection_weights<numeric_type>(ket_rank);
+
+  const auto& nns_p_coeffs = nns_projection_weights<numeric_type>(ket_rank);
 
   btas::Tensor<Args...> result;
 
