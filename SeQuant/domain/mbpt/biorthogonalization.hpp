@@ -40,14 +40,14 @@ void biorthogonal_transform(container::svector<ResultExpr>& exprs,
         ext_index_groups = {},
     double threshold = default_biorth_threshold);
 
-/// \brief Computes the non-null space (NNS) projection matrix
+/// \brief Computes the non-null space (NNS) projection coefficients
 ///
 /// \param n_particles The rank of external index pairs
 /// \param threshold The threshold to compute the pseudoinverse matrix
 ///        (set to default_biorth_threshold)
 ///
-/// \return The computed NNS projection matrix
-[[nodiscard]] Eigen::MatrixXd compute_nns_p_matrix(
+/// \return Vector of computed NNS projection coefficients
+[[nodiscard]] std::vector<double> compute_nns_p_coeffs(
     std::size_t n_particles, double threshold = default_biorth_threshold);
 
 /// \brief Provides permuted indices using libperm unrank function
@@ -106,12 +106,10 @@ template <typename T>
       nns_p_coeffs = std::move(hardcoded_coeffs.value());
     }
   } else {
-    Eigen::MatrixXd nns_matrix = compute_nns_p_matrix(n_particles, threshold);
-    std::size_t num_perms = nns_matrix.rows();
-
-    nns_p_coeffs.reserve(num_perms);
-    for (std::size_t i = 0; i < num_perms; ++i) {
-      nns_p_coeffs.push_back(static_cast<T>(nns_matrix(num_perms - 1, i)));
+    auto coeffs = compute_nns_p_coeffs(n_particles, threshold);
+    nns_p_coeffs.reserve(coeffs.size());
+    for (const auto& c : coeffs) {
+      nns_p_coeffs.push_back(static_cast<T>(c));
     }
   }
 

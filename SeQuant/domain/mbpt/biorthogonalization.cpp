@@ -141,6 +141,19 @@ Eigen::MatrixXd compute_nns_p_matrix(std::size_t n_particles,
   return nns;
 }
 
+std::vector<double> compute_nns_p_coeffs(std::size_t n_particles,
+                                         double threshold) {
+  Eigen::MatrixXd nns_matrix = compute_nns_p_matrix(n_particles, threshold);
+  std::size_t num_perms = nns_matrix.rows();
+
+  std::vector<double> coeffs;
+  coeffs.reserve(num_perms);
+  for (std::size_t i = 0; i < num_perms; ++i) {
+    coeffs.push_back(nns_matrix(num_perms - 1, i));
+  }
+  return coeffs;
+}
+
 container::svector<size_t> compute_permuted_indices(
     const container::svector<size_t>& indices, size_t perm_rank,
     size_t n_particles) {
