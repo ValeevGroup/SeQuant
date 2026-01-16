@@ -1,12 +1,14 @@
 #ifndef SEQUANT_PYTHON_MBPT_H
 #define SEQUANT_PYTHON_MBPT_H
 
+#include <SeQuant/domain/mbpt/context.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/op.hpp>
 #include <SeQuant/domain/mbpt/vac_av.hpp>
 
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
+#include <SeQuant/core/wstring.hpp>
 
 #include "python.h"
 
@@ -20,9 +22,20 @@ auto make_sr_op(F f) {
   return op;
 }
 
-template <class... Args>
-ExprPtr VacuumAverage(const ExprPtr& e, const Args&... args) {
-  return sequant::mbpt::op::vac_av(e, args...);
+// Overload for no op_connections
+ExprPtr VacuumAverage(const ExprPtr& e) { return sequant::mbpt::op::vac_av(e); }
+
+// overload  with string conversion
+ExprPtr VacuumAverage(
+    const ExprPtr& e,
+    const std::vector<std::pair<std::string, std::string>>& op_connections) {
+  sequant::mbpt::OpConnections<std::wstring> wop_connections;
+  wop_connections.reserve(op_connections.size());
+  for (const auto& [op1, op2] : op_connections) {
+    wop_connections.emplace_back(sequant::to_wstring(op1),
+                                 sequant::to_wstring(op2));
+  }
+  return sequant::mbpt::op::vac_av(e, wop_connections);
 }
 
 #define SR_OP(OP) \
@@ -33,10 +46,10 @@ inline void __init__(py::module m) {
   sequant::TensorCanonicalizer::register_instance(
       std::make_shared<DefaultTensorCanonicalizer>());
 
-  py::enum_<sequant::mbpt::OpType>(m, "OpType")
-      .value("h", sequant::mbpt::OpType::h)
-      .value("f", sequant::mbpt::OpType::f)
-      .value("t", sequant::mbpt::OpType::t);
+  // mbpt context setup
+  sequant::mbpt::Context::Options opts;
+  opts.op_registry_ptr = sequant::mbpt::make_legacy_registry();
+  sequant::mbpt::set_default_mbpt_context(opts);
 
   m.def("F", &sequant::mbpt::F);
   m.def("H", &sequant::mbpt::H,
@@ -47,10 +60,14 @@ inline void __init__(py::module m) {
   m.def(SR_OP(T));
   m.def(SR_OP(t));
 
-  m.def("VacuumAverage", &VacuumAverage<>);
+  m.def("VacuumAverage", py::overload_cast<const ExprPtr&>(&VacuumAverage),
+        py::arg("expr"));
   m.def("VacuumAverage",
-        &VacuumAverage<std::vector<
-            std::pair<sequant::mbpt::OpType, sequant::mbpt::OpType> > >);
+        py::overload_cast<
+            const ExprPtr&,
+            const std::vector<std::pair<std::string, std::string>>&>(
+            &VacuumAverage),
+        py::arg("expr"), py::arg("op_connections"));
 }
 
 }  // namespace sequant::python::mbpt

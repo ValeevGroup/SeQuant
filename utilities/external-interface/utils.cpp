@@ -87,8 +87,8 @@ container::svector<container::svector<Index> > getExternalIndexPairs(
   const Product &product = expression->as<Product>();
 
   if (product.at(0)->is<Tensor>() &&
-      (product.at(0).as<Tensor>().label() == L"A" ||
-       product.at(0).as<Tensor>().label() == L"S")) {
+      (product.at(0).as<Tensor>().label() == reserved::antisymm_label() ||
+       product.at(0).as<Tensor>().label() == reserved::symm_label())) {
     // Special case in the presence of an (anti)symmetrizer operator
     return getExternalIndexPairs(product.at(0).as<Tensor>());
   }
@@ -140,7 +140,8 @@ bool needsSymmetrization(const sequant::ExprPtr &expression) {
       [&containsSymmetrizer](const ExprPtr &expr) {
         // Right now symmetrizer operators are represented as tensor objects
         // with name "S"
-        if (expr.is<Tensor>() && expr.as<Tensor>().label() == L"S") {
+        if (expr.is<Tensor>() &&
+            expr.as<Tensor>().label() == reserved::symm_label()) {
           containsSymmetrizer = true;
         }
       },
@@ -200,10 +201,11 @@ sequant::ExprPtr generateResultSymmetrization(
 }
 
 std::optional<ExprPtr> pop_symmetrizer(ResultExpr &expr) {
-  std::optional<ExprPtr> symmetrizer = pop_tensor(expr.expression(), L"S");
+  std::optional<ExprPtr> symmetrizer =
+      pop_tensor(expr.expression(), reserved::symm_label());
 
   if (!symmetrizer.has_value()) {
-    symmetrizer = pop_tensor(expr.expression(), L"A");
+    symmetrizer = pop_tensor(expr.expression(), reserved::antisymm_label());
   }
 
   return symmetrizer;

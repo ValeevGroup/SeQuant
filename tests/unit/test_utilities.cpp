@@ -7,6 +7,7 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/parse.hpp>
+#include <SeQuant/core/reserved.hpp>
 #include <SeQuant/core/utility/expr.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/singleton.hpp>
@@ -503,8 +504,8 @@ TEST_CASE("utilities", "[utilities]") {
       for (const auto& [expr_str, msg] :
            std::vector<std::pair<std::wstring, std::string>>{
                {L"R{a1;a2} = t{a1;i1} t{i1;a2}", ""},
-               {L"R{a1,a2;i1,i2} = A{i1,i2;a1,a2} t{a1,a2;i1,i2}", ""},
-               {L"R{a2,a1;i1,i2} = S{i1,i2;a1,a2} t{a1,a2;i1,i2}", ""},
+               {L"R{a1,a2;i1,i2} = Â{i1,i2;a1,a2} t{a1,a2;i1,i2}", ""},
+               {L"R{a2,a1;i1,i2} = Ŝ{i1,i2;a1,a2} t{a1,a2;i1,i2}", ""},
                {L"R{a1} = Var",
                 "Bra indices of result are inconsistent with the rhs "
                 "expression"},
@@ -552,11 +553,11 @@ TEST_CASE("utilities", "[utilities]") {
               {{L"a_1", L"i_1"}, {L"a_2", L"i_2"}}},
              // When present, external indices are deduced from the symmetrizer
              // (though bra/ket will be swapped)
-             {L"A{a1;i1} t{i1;a1}", {{L"i_1", L"a_1"}}},
-             {L"A{a1,a2;i1,i2} t{i1;a1} t{i2;a2}",
+             {L"Â{a1;i1} t{i1;a1}", {{L"i_1", L"a_1"}}},
+             {L"Â{a1,a2;i1,i2} t{i1;a1} t{i2;a2}",
               {{L"i_1", L"a_1"}, {L"i_2", "a_2"}}},
-             {L"S{a1;i1} t{i1;a1}", {{L"i_1", L"a_1"}}},
-             {L"S{a1,a2;i1,i2} t{i1;a1} t{i2;a2}",
+             {L"Ŝ{a1;i1} t{i1;a1}", {{L"i_1", L"a_1"}}},
+             {L"Ŝ{a1,a2;i1,i2} t{i1;a1} t{i2;a2}",
               {{L"i_1", L"a_1"}, {L"i_2", "a_2"}}},
          }) {
       CAPTURE(toUtf8(input));

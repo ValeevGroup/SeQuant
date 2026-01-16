@@ -1,5 +1,5 @@
 R2{a1,a2;u1,u2} =
-  + 1/2 1/4 A{u1,u2;a1,a2} GAM0{u3,u4;u1,u2} g{a1,a2;u3,u4}
-  - 1/2 1/2 A{u1,u2;a1,a2} GAM0{u3,u4;u1,u2} HAM_D{a1;a3} T2g{a2,a3;u3,u4}
-  + 1/4 A{u1,u2;a1,a2} GAM0{u4,u5;u1,u2} T2g{a1,a2;u3,u4} HAM_D{u3;u5}
-  - 1/4 1/4 A{u1,u2;a1,a2} GAM0{u5,u6;u1,u2} T2g{a1,a2;u3,u4} HAM_D{u3,u4;u5,u6}
+  + 1/2 1/4 Â{u1,u2;a1,a2} GAM0{u3,u4;u1,u2} g{a1,a2;u3,u4}
+  - 1/2 1/2 Â{u1,u2;a1,a2} GAM0{u3,u4;u1,u2} HAM_D{a1;a3} T2g{a2,a3;u3,u4}
+  + 1/4 Â{u1,u2;a1,a2} GAM0{u4,u5;u1,u2} T2g{a1,a2;u3,u4} HAM_D{u3;u5}
+  - 1/4 1/4 Â{u1,u2;a1,a2} GAM0{u5,u6;u1,u2} T2g{a1,a2;u3,u4} HAM_D{u3,u4;u5,u6}

@@ -68,11 +68,22 @@ TEST_CASE("latex", "[util]") {
     std::wstring caron__f = L"f̌";
     REQUIRE(caron__f.size() == 2);
     REQUIRE(diactrics_to_latex(caron__f) == L"\\check{f}");
+
+    // notice the size is 1 since these are precomposed characters
+    std::wstring hat_A = L"Â";
+    REQUIRE(hat_A.size() == 1);
+    REQUIRE(diactrics_to_latex(hat_A) == L"\\hat{A}");
+    std::wstring hat_S = L"Ŝ";
+    REQUIRE(hat_S.size() == 1);
+    REQUIRE(diactrics_to_latex(hat_S) == L"\\hat{S}");
   }
 
   SECTION("UTF->latex") {
     std::wstring tilde__alpha = L"α̃";
     REQUIRE(tilde__alpha.size() == 2);
     REQUIRE(utf_to_latex(tilde__alpha) == L"\\tilde{\\alpha}");
+    std::wstring hat__alpha = L"α̂";
+    REQUIRE(hat__alpha.size() == 2);
+    REQUIRE(utf_to_latex(hat__alpha) == L"\\hat{\\alpha}");
   }
 }

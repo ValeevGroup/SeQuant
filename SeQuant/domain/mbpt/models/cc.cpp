@@ -1,5 +1,6 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/rational.hpp>
+#include <SeQuant/core/reserved.hpp>
 #include <SeQuant/core/runtime.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/domain/mbpt/context.hpp>
@@ -14,6 +15,12 @@
 #include <new>
 #include <stdexcept>
 #include <utility>
+
+// alias reserved labels for readability
+namespace {
+const auto& asymm = sequant::reserved::antisymm_label();
+const auto& symm = sequant::reserved::symm_label();
+}  // namespace
 
 namespace sequant::mbpt {
 
@@ -92,12 +99,12 @@ std::vector<ExprPtr> CC::λ(size_t commutator_rank) {
   auto lhbar = simplify((1 + Λ(N)) * hbar);
 
   const auto op_connect = concat(default_op_connections(),
-                                 OpConnections<OpType>{{OpType::h, OpType::A},
-                                                       {OpType::f, OpType::A},
-                                                       {OpType::g, OpType::A},
-                                                       {OpType::h, OpType::S},
-                                                       {OpType::f, OpType::S},
-                                                       {OpType::g, OpType::S}});
+                                 OpConnections<std::wstring>{{L"h", asymm},
+                                                             {L"f", asymm},
+                                                             {L"g", asymm},
+                                                             {L"h", symm},
+                                                             {L"f", symm},
+                                                             {L"g", symm}});
 
   // 2. project onto each manifold, screen, lower to tensor form and wick it
   std::vector<ExprPtr> result(N + 1);
@@ -167,10 +174,8 @@ std::vector<ExprPtr> CC::tʼ(size_t rank, size_t order,
   // connect h1 with t
   const auto op_connect =
       concat(default_op_connections(),
-             OpConnections<OpType>{{OpType::h, OpType::t_1},
-                                   {OpType::f, OpType::t_1},
-                                   {OpType::g, OpType::t_1},
-                                   {OpType::h_1, OpType::t}});
+             OpConnections<std::wstring>{
+                 {L"h", L"t¹"}, {L"f", L"t¹"}, {L"g", L"t¹"}, {L"h¹", L"t"}});
 
   std::vector<ExprPtr> result(N + 1);
   for (auto p = N; p >= 1; --p) {
@@ -215,20 +220,19 @@ std::vector<ExprPtr> CC::λʼ(size_t rank, size_t order,
   // projectors with {h,f,g}
   // h1 with t
   // h1 with projectors
-  const auto op_connect =
-      concat(default_op_connections(),
-             OpConnections<OpType>{{OpType::h, OpType::t_1},
-                                   {OpType::f, OpType::t_1},
-                                   {OpType::g, OpType::t_1},
-                                   {OpType::h_1, OpType::t},
-                                   {OpType::h, OpType::A},
-                                   {OpType::f, OpType::A},
-                                   {OpType::g, OpType::A},
-                                   {OpType::h, OpType::S},
-                                   {OpType::f, OpType::S},
-                                   {OpType::g, OpType::S},
-                                   {OpType::h_1, OpType::A},
-                                   {OpType::h_1, OpType::S}});
+  const auto op_connect = concat(default_op_connections(),
+                                 OpConnections<std::wstring>{{L"h", L"t¹"},
+                                                             {L"f", L"t¹"},
+                                                             {L"g", L"t¹"},
+                                                             {L"h¹", L"t"},
+                                                             {L"h", asymm},
+                                                             {L"f", asymm},
+                                                             {L"g", asymm},
+                                                             {L"h", symm},
+                                                             {L"f", symm},
+                                                             {L"g", symm},
+                                                             {L"h¹", asymm},
+                                                             {L"h¹", symm}});
 
   std::vector<ExprPtr> result(N + 1);
   for (auto p = N; p >= 1; --p) {
@@ -258,10 +262,9 @@ std::vector<ExprPtr> CC::eom_r(nₚ np, nₕ nh) {
 
   // connectivity:
   // default connections + connect R with {h,f,g}
-  const auto op_connect = concat(default_op_connections(),
-                                 OpConnections<OpType>{{OpType::h, OpType::R},
-                                                       {OpType::f, OpType::R},
-                                                       {OpType::g, OpType::R}});
+  const auto op_connect = concat(
+      default_op_connections(),
+      OpConnections<std::wstring>{{L"h", L"R"}, {L"f", L"R"}, {L"g", L"R"}});
 
   // initialize result vector
   std::vector<ExprPtr> result;
@@ -301,12 +304,12 @@ std::vector<ExprPtr> CC::eom_l(nₚ np, nₕ nh) {
   // connectivity:
   // default connections + connect H with projectors
   const auto op_connect = concat(default_op_connections(),
-                                 OpConnections<OpType>{{OpType::h, OpType::A},
-                                                       {OpType::f, OpType::A},
-                                                       {OpType::g, OpType::A},
-                                                       {OpType::h, OpType::S},
-                                                       {OpType::f, OpType::S},
-                                                       {OpType::g, OpType::S}});
+                                 OpConnections<std::wstring>{{L"h", asymm},
+                                                             {L"f", asymm},
+                                                             {L"g", asymm},
+                                                             {L"h", symm},
+                                                             {L"f", symm},
+                                                             {L"g", symm}});
 
   // initialize result vector
   std::vector<ExprPtr> result;

@@ -7,6 +7,7 @@
 
 #include <SeQuant/core/bliss.hpp>
 #include <SeQuant/core/logger.hpp>
+#include <SeQuant/core/reserved.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/tensor_network.hpp>
 #include <SeQuant/core/tensor_network/vertex.hpp>
@@ -350,6 +351,9 @@ compute_index_replacement_rules(
     }
   };
 
+  using sequant::reserved::kronecker_label;
+  using sequant::reserved::overlap_label;
+
   /// this makes the list of replacements ... we do not mutate the expressions
   /// to keep the information about which indices are related
   for (auto it = ranges::begin(exrng); it != ranges::end(exrng); ++it) {
@@ -456,6 +460,9 @@ inline bool apply_index_replacement_rules(
   do {
     pass_mutated = false;
 
+    using sequant::reserved::kronecker_label;
+    using sequant::reserved::overlap_label;
+
     for (auto it = ranges::begin(exrng); it != ranges::end(exrng);) {
       const auto &factor = *it;
       if (factor->is<AbstractTensor>()) {
@@ -513,6 +520,9 @@ bool reduce_wick_impl(std::shared_ptr<Product> &expr,
   // if have noncovariant indices, will need to update them at the beginning of
   // every pass
   const auto have_noncovariant_indices = !noncovariant_indices.empty();
+
+  using sequant::reserved::kronecker_label;
+  using sequant::reserved::overlap_label;
 
   if (Logger::instance().wick_reduce) {
     sequant::wprintf(

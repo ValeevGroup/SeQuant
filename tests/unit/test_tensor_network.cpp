@@ -608,13 +608,13 @@ L"v19 [ label=\"κ_4\", texlbl=\"${\\kappa_4}$\", color=\"#e174c5\", fillcolor=\
 L"v19 -- v26\n"
 L"v19 -- v45\n"
 L"subgraph cluster0 {\n"
-L"v20 [ label=\"A\", texlbl=\"$A$\", color=\"#257a61\", fillcolor=\"#94f4c2\" ];\n"
+L"v20 [ label=\"Â\", texlbl=\"$\\hat{A}$\", color=\"#acc52f\", fillcolor=\"#acc5bc\" ];\n"
 L"v20 -- v23\n"
 L"v21 [ label=\"bra2a\", color=\"#06d223\", fillcolor=\"#30d28c\" ];\n"
 L"v21 -- v23\n"
 L"v22 [ label=\"ket2a\", color=\"#c849cb\", fillcolor=\"#c892cb\" ];\n"
 L"v22 -- v23\n"
-L"v23 [ label=\"bka\", color=\"#257a61\", fillcolor=\"#94f4c2\" ];\n"
+L"v23 [ label=\"bka\", color=\"#acc52f\", fillcolor=\"#acc5bc\" ];\n"
 L"}\n"
 L"subgraph cluster1 {\n"
 L"v24 [ label=\"g\", texlbl=\"$g$\", color=\"#300a49\", fillcolor=\"#c05092\" ];\n"
@@ -1183,7 +1183,7 @@ TEST_CASE("tensor_network_v2", "[elements]") {
       // writing it down, canonicalizes to the same exact form
       const Product expectedExpr =
           parse_expr(
-              L"A{i1,i2;a1,a2} g{i3,i4;a3,a4} t{a1,a3;i3,i4} t{a2,a4;i1,i2}",
+              L"Â{i1,i2;a1,a2} g{i3,i4;a3,a4} t{a1,a3;i1,i2} t{a2,a4;i3,i4}",
               Symmetry::Antisymm)
               .as<Product>();
 
@@ -1882,7 +1882,7 @@ TEST_CASE("tensor_network_v3", "[elements]") {
       // writing it down, canonicalizes to the same exact form
       const Product expectedExpr =
           parse_expr(
-              L"A{i1,i2;a1,a2} g{i3,i4;a3,a4} t{a1,a3;i1,i2} t{a2,a4;i3,i4}",
+              L"Â{i1,i2;a1,a2} g{i3,i4;a3,a4} t{a1,a3;i1,i2} t{a2,a4;i3,i4}",
               Symmetry::Antisymm)
               .as<Product>();
 

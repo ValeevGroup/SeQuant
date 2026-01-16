@@ -57,6 +57,11 @@ int main(int argc, char* argv[]) {
   // ... or can instead selectively set/unset particular logging flags
   // Logger::instance().wick_contract = true;
 
+  // MBPT Context setup
+  auto mbpt_ctx = mbpt::Context(
+      {.csv = mbpt::CSV::No, .op_registry_ptr = mbpt::make_legacy_registry()});
+  sequant::mbpt::set_default_mbpt_context(mbpt_ctx);
+
 #ifdef SEQUANT_HAS_TILEDARRAY
   auto& world = TA::initialize(argc, argv);
   TA::set_default_world(world);

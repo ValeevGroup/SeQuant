@@ -105,7 +105,7 @@ TEST_CASE("canonicalization", "[algorithms]") {
 
     {
       auto input =
-          ex<Tensor>(L"S", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"},
+          ex<Tensor>(L"Ŝ", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"},
                      Symmetry::Nonsymm) *
           ex<Tensor>(L"f", bra{L"a_5"}, ket{L"i_5"}, Symmetry::Nonsymm) *
           ex<Tensor>(L"t", bra{L"i_5"}, ket{L"a_1"}, Symmetry::Nonsymm) *
@@ -114,11 +114,11 @@ TEST_CASE("canonicalization", "[algorithms]") {
       canonicalize(input);
       REQUIRE_THAT(
           input,
-          SimplifiesTo("S{a1,a2;i1,i2} f{a3;i3} t{i3;a2} t{i1,i2;a1,a3}"));
+          SimplifiesTo("Ŝ{a1,a2;i1,i2} f{a3;i3} t{i3;a2} t{i1,i2;a1,a3}"));
     }
     {
       auto input =
-          ex<Tensor>(L"S", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"},
+          ex<Tensor>(L"Ŝ", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"},
                      Symmetry::Nonsymm) *
           ex<Tensor>(L"f", bra{L"a_5"}, ket{L"i_5"}, Symmetry::Nonsymm) *
           ex<Tensor>(L"t", bra{L"i_1"}, ket{L"a_5"}, Symmetry::Nonsymm) *
@@ -128,7 +128,7 @@ TEST_CASE("canonicalization", "[algorithms]") {
       REQUIRE_THAT(
           input,
           SimplifiesTo(
-              "S{a_1,a_2;i_1,i_2} f{a_3;i_3} t{i_2;a_3} t{i_1,i_3;a_1,a_2}"));
+              "Ŝ{a_1,a_2;i_1,i_2} f{a_3;i_3} t{i_2;a_3} t{i_1,i_3;a_1,a_2}"));
     }
     {  // Azam's example:
       // two intermediates that are equivalent modulo permutation of columns of
@@ -168,7 +168,7 @@ TEST_CASE("canonicalization", "[algorithms]") {
       auto q2 = ex<Variable>(L"q2");
       q2->adjoint();
       auto input =
-          ex<Tensor>(L"S", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"},
+          ex<Tensor>(L"Ŝ", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"},
                      Symmetry::Nonsymm) *
           q2 * ex<Tensor>(L"f", bra{L"a_5"}, ket{L"i_5"}, Symmetry::Nonsymm) *
           ex<Variable>(L"p") *
@@ -178,7 +178,7 @@ TEST_CASE("canonicalization", "[algorithms]") {
                      Symmetry::Nonsymm);
       canonicalize(input);
       REQUIRE_THAT(input,
-                   SimplifiesTo("p q1 q2^* S{a_1,a_2;i_1,i_2} f{a_3;i_3} "
+                   SimplifiesTo("p q1 q2^* Ŝ{a_1,a_2;i_1,i_2} f{a_3;i_3} "
                                 "t{i_2;a_3} t{i_1,i_3;a_1,a_2}"));
     }
     {  // Product containing adjoint of a Tensor
@@ -186,23 +186,23 @@ TEST_CASE("canonicalization", "[algorithms]") {
                            Symmetry::Nonsymm, BraKetSymmetry::Nonsymm);
       f2->adjoint();
       auto input1 =
-          ex<Tensor>(L"S", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"},
+          ex<Tensor>(L"Ŝ", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"},
                      Symmetry::Nonsymm) *
           ex<Tensor>(L"f", bra{L"a_5"}, ket{L"i_5"}, Symmetry::Nonsymm) *
           ex<Tensor>(L"t", bra{L"i_1"}, ket{L"a_5"}, Symmetry::Nonsymm) * f2;
       canonicalize(input1);
       REQUIRE_THAT(input1,
-                   SimplifiesTo("S{a_1,a_2;i_1,i_2} f{a_3;i_3} "
+                   SimplifiesTo("Ŝ{a_1,a_2;i_1,i_2} f{a_3;i_3} "
                                 "f⁺{i_1,i_3;a_1,a_2}:N-N-S t{i_2;a_3}"));
       auto input2 =
-          ex<Tensor>(L"S", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"},
+          ex<Tensor>(L"Ŝ", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"},
                      Symmetry::Nonsymm) *
           ex<Tensor>(L"f", bra{L"a_5"}, ket{L"i_5"}, Symmetry::Nonsymm) *
           ex<Tensor>(L"t", bra{L"i_1"}, ket{L"a_5"}, Symmetry::Nonsymm) * f2 *
           ex<Variable>(L"w") * ex<Constant>(rational{1, 2});
       canonicalize(input2);
       REQUIRE_THAT(input2,
-                   SimplifiesTo("1/2 w S{a_1,a_2;i_1,i_2} f{a_3;i_3} "
+                   SimplifiesTo("1/2 w Ŝ{a_1,a_2;i_1,i_2} f{a_3;i_3} "
                                 "f⁺{i_1,i_3;a_1,a_2}:N-N-S t{i_2;a_3}"));
     }
     // with aux indices
