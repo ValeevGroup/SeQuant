@@ -9,7 +9,6 @@
 #include <SeQuant/core/logger.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/domain/mbpt/biorthogonalization.hpp>
-#include <SeQuant/domain/mbpt/biorthogonalization_hardcoded.hpp>
 
 #include <TiledArray/einsum/tiledarray.h>
 #include <btas/btas.h>
