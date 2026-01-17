@@ -13,6 +13,32 @@ namespace {
 static constexpr double default_biorth_threshold = 1e-12;
 }  // namespace
 
+// clang-format off
+/// \brief Provides the first row of the biorthogonal coefficients matrix,
+/// hardcoded from Mathematica to avoid numerical precision loss.
+///
+/// The Myrvold-Ruskey unrank1 algorithm (doi.org/10.1016/S0020-0190(01)00141-7)
+/// is used to order permutations, then the permutational overlap matrix M is
+/// constructed with elements (-2)^{c} × (-1)^{n_particles}, where c is the
+/// number of cycles in the relative permutation.
+///
+/// The biorthogonal coefficients are obtained from the normalized pseudoinverse
+/// of M: first compute M_pinv (the pseudoinverse), then normalize it by the
+/// factor ((n_particles)!/rank(M)).
+/// Finally, biorthogonal coefficients = normalized_M_pinv · e_1,
+/// where e_1 is the first unit vector.
+/// See [DOI 10.48550/ARXIV.1805.00565](https://doi.org/10.48550/ARXIV.1805.00565)
+/// for more details.
+///
+/// \param n_particles The rank of external index pairs
+///
+/// \return Vector of rational coefficients representing the first row
+///
+/// \throw std::runtime_error if n_particles is not in the range [1,5]
+// clang-format on
+std::vector<sequant::rational> hardcoded_biorth_coeffs_first_row(
+    std::size_t n_particles);
+
 [[nodiscard]] ResultExpr biorthogonal_transform_copy(
     const ResultExpr& expr, double threshold = default_biorth_threshold);
 
