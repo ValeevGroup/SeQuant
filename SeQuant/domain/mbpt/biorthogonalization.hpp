@@ -4,7 +4,6 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
-#include <SeQuant/domain/mbpt/biorthogonalization_hardcoded.hpp>
 
 #include <condition_variable>
 
@@ -58,6 +57,80 @@ void biorthogonal_transform(container::svector<ResultExpr>& exprs,
 container::svector<size_t> compute_permuted_indices(
     const container::svector<size_t>& indices, size_t perm_rank,
     size_t n_particles);
+
+/// \brief Provides one row of the NNS projector matrix,
+/// hardcoded from Mathematica to avoid numerical precision loss.
+///
+/// The NNS projector weights are obtained from the normalized pseudoinverse
+/// of M: first compute M_pinv (the pseudoinverse), then normalize it by the
+/// factor ((n_particles)!/rank(M)).
+//// Finally, NNS projector = normalized_M_pinv · M.
+///
+/// \param n_particles The rank of external index pairs
+///
+/// \return Vector of NNS projector weights representing the last row
+///
+/// \throw std::runtime_error if n_particles is not in the range [1,5]
+template <typename T>
+  requires(std::floating_point<T> || meta::is_complex_v<T>)
+std::optional<std::vector<T>> hardcoded_nns_projector(std::size_t n_particles) {
+  switch (n_particles) {
+    case 1:
+      return std::vector<T>{T(1) / T(1)};
+
+    case 2:
+      return std::vector<T>{T(1) / T(1), T(1) / T(1)};
+
+    case 3:
+      return std::vector<T>{T(-1) / T(5), T(-1) / T(5), T(-1) / T(5),
+                            T(-1) / T(5), T(-1) / T(5), T(1) / T(1)};
+
+    case 4:
+      return std::vector<T>{
+          T(1) / T(7),   T(1) / T(7),   T(1) / T(7),   T(-1) / T(14),
+          T(1) / T(7),   T(1) / T(7),   T(1) / T(7),   T(-1) / T(14),
+          T(-1) / T(14), T(-1) / T(14), T(1) / T(7),   T(-2) / T(7),
+          T(-1) / T(14), T(1) / T(7),   T(-1) / T(14), T(-2) / T(7),
+          T(1) / T(7),   T(-1) / T(14), T(-1) / T(14), T(-2) / T(7),
+          T(-2) / T(7),  T(-2) / T(7),  T(-2) / T(7),  T(1) / T(1)};
+
+    case 5:
+      return std::vector<T>{
+          T(-1) / T(14), T(-1) / T(14), T(-1) / T(14), T(-1) / T(14),
+          T(2) / T(21),  T(-1) / T(14), T(-1) / T(14), T(-1) / T(14),
+          T(-1) / T(14), T(2) / T(21),  T(-1) / T(14), T(-1) / T(14),
+          T(-1) / T(14), T(-1) / T(14), T(2) / T(21),  T(2) / T(21),
+          T(2) / T(21),  T(2) / T(21),  T(-1) / T(21), T(0) / T(1),
+          T(-1) / T(14), T(-1) / T(14), T(-1) / T(14), T(-1) / T(14),
+          T(2) / T(21),  T(-1) / T(14), T(-1) / T(14), T(-1) / T(14),
+          T(-1) / T(14), T(2) / T(21),  T(-1) / T(14), T(-1) / T(14),
+          T(-1) / T(14), T(-1) / T(14), T(2) / T(21),  T(2) / T(21),
+          T(2) / T(21),  T(2) / T(21),  T(-1) / T(21), T(0) / T(1),
+          T(2) / T(21),  T(2) / T(21),  T(-1) / T(21), T(2) / T(21),
+          T(0) / T(1),   T(2) / T(21),  T(2) / T(21),  T(-1) / T(21),
+          T(2) / T(21),  T(0) / T(1),   T(-1) / T(21), T(-1) / T(21),
+          T(-1) / T(21), T(-1) / T(21), T(1) / T(7),   T(0) / T(1),
+          T(0) / T(1),   T(1) / T(7),   T(1) / T(7),   T(-1) / T(3),
+          T(2) / T(21),  T(-1) / T(21), T(2) / T(21),  T(2) / T(21),
+          T(0) / T(1),   T(-1) / T(21), T(-1) / T(21), T(-1) / T(21),
+          T(-1) / T(21), T(1) / T(7),   T(2) / T(21),  T(-1) / T(21),
+          T(2) / T(21),  T(2) / T(21),  T(0) / T(1),   T(0) / T(1),
+          T(1) / T(7),   T(0) / T(1),   T(1) / T(7),   T(-1) / T(3),
+          T(-1) / T(21), T(-1) / T(21), T(-1) / T(21), T(-1) / T(21),
+          T(1) / T(7),   T(-1) / T(21), T(2) / T(21),  T(2) / T(21),
+          T(2) / T(21),  T(0) / T(1),   T(-1) / T(21), T(2) / T(21),
+          T(2) / T(21),  T(2) / T(21),  T(0) / T(1),   T(1) / T(7),
+          T(0) / T(1),   T(0) / T(1),   T(1) / T(7),   T(-1) / T(3),
+          T(0) / T(1),   T(1) / T(7),   T(1) / T(7),   T(0) / T(1),
+          T(-1) / T(3),  T(1) / T(7),   T(0) / T(1),   T(1) / T(7),
+          T(0) / T(1),   T(-1) / T(3),  T(1) / T(7),   T(1) / T(7),
+          T(0) / T(1),   T(0) / T(1),   T(-1) / T(3),  T(-1) / T(3),
+          T(-1) / T(3),  T(-1) / T(3),  T(-1) / T(3),  T(1) / T(1)};
+
+    default:
+      return std::nullopt;
+  }
+}
 
 /// \brief Provides NNS projection weights for a given rank
 ///

@@ -1,5 +1,4 @@
 #include <SeQuant/domain/mbpt/biorthogonalization.hpp>
-#include <SeQuant/domain/mbpt/biorthogonalization_hardcoded.hpp>
 
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
@@ -31,9 +30,107 @@ struct compare_first_less {
 using IndexPair = std::pair<Index, Index>;
 using ParticlePairings = container::svector<IndexPair>;
 
-// forward declaration to avoid Eigen in header files
+std::vector<sequant::rational> hardcoded_biorth_coeffs_first_row(
+    std::size_t n_particles) {
+  switch (n_particles) {
+    case 1:
+      return std::vector<sequant::rational>{ratio(1, 2)};
+
+    case 2:
+      return std::vector<sequant::rational>{ratio(1, 3), ratio(1, 6)};
+
+    case 3:
+      return std::vector<sequant::rational>{ratio(17, 120), ratio(-7, 120),
+                                            ratio(-1, 120), ratio(-1, 120),
+                                            ratio(-1, 120), ratio(-7, 120)};
+
+    case 4:
+      return std::vector<sequant::rational>{
+          ratio(43, 840), ratio(-19, 1680), ratio(-19, 1680),
+          ratio(-1, 105), ratio(-19, 1680), ratio(-19, 1680),
+          ratio(13, 840), ratio(1, 120),    ratio(-1, 105),
+          ratio(1, 120),  ratio(-1, 105),   ratio(-19, 1680),
+          ratio(-1, 105), ratio(1, 120),    ratio(1, 120),
+          ratio(13, 840), ratio(-1, 105),   ratio(-1, 105),
+          ratio(1, 120),  ratio(-19, 1680), ratio(-19, 1680),
+          ratio(13, 840), ratio(-19, 1680), ratio(1, 120)};
+
+    case 5:
+      return std::vector<sequant::rational>{
+          ratio(59, 3780),   ratio(-5, 3024),   ratio(-5, 3024),
+          ratio(-5, 3024),   ratio(-31, 7560),  ratio(-5, 3024),
+          ratio(-5, 3024),   ratio(-23, 30240), ratio(19, 7560),
+          ratio(37, 15120),  ratio(-5, 3024),   ratio(-23, 30240),
+          ratio(-5, 3024),   ratio(19, 7560),   ratio(37, 15120),
+          ratio(-31, 7560),  ratio(37, 15120),  ratio(37, 15120),
+          ratio(-31, 7560),  ratio(-5, 3024),   ratio(-5, 3024),
+          ratio(-23, 30240), ratio(-23, 30240), ratio(-23, 30240),
+          ratio(-13, 7560),  ratio(-5, 3024),   ratio(-5, 3024),
+          ratio(19, 7560),   ratio(-23, 30240), ratio(37, 15120),
+          ratio(19, 7560),   ratio(-23, 30240), ratio(19, 7560),
+          ratio(-23, 30240), ratio(-13, 7560),  ratio(37, 15120),
+          ratio(-13, 7560),  ratio(-13, 7560),  ratio(37, 15120),
+          ratio(-23, 30240), ratio(-31, 7560),  ratio(-13, 7560),
+          ratio(37, 15120),  ratio(37, 15120),  ratio(19, 7560),
+          ratio(37, 15120),  ratio(37, 15120),  ratio(-13, 7560),
+          ratio(-13, 7560),  ratio(-23, 30240), ratio(-31, 7560),
+          ratio(37, 15120),  ratio(-31, 7560),  ratio(37, 15120),
+          ratio(-5, 3024),   ratio(-5, 3024),   ratio(-23, 30240),
+          ratio(19, 7560),   ratio(-5, 3024),   ratio(37, 15120),
+          ratio(-31, 7560),  ratio(37, 15120),  ratio(37, 15120),
+          ratio(-13, 7560),  ratio(19, 7560),   ratio(37, 15120),
+          ratio(37, 15120),  ratio(-13, 7560),  ratio(-13, 7560),
+          ratio(-23, 30240), ratio(37, 15120),  ratio(-13, 7560),
+          ratio(37, 15120),  ratio(-13, 7560),  ratio(-23, 30240),
+          ratio(19, 7560),   ratio(-23, 30240), ratio(-23, 30240),
+          ratio(19, 7560),   ratio(-13, 7560),  ratio(-31, 7560),
+          ratio(37, 15120),  ratio(-13, 7560),  ratio(37, 15120),
+          ratio(19, 7560),   ratio(-31, 7560),  ratio(-31, 7560),
+          ratio(37, 15120),  ratio(37, 15120),  ratio(-5, 3024),
+          ratio(37, 15120),  ratio(-13, 7560),  ratio(37, 15120),
+          ratio(-13, 7560),  ratio(-23, 30240), ratio(-5, 3024),
+          ratio(19, 7560),   ratio(-23, 30240), ratio(-5, 3024),
+          ratio(37, 15120),  ratio(-5, 3024),   ratio(-23, 30240),
+          ratio(-23, 30240), ratio(-23, 30240), ratio(-13, 7560),
+          ratio(19, 7560),   ratio(19, 7560),   ratio(-23, 30240),
+          ratio(-23, 30240), ratio(-13, 7560),  ratio(-5, 3024),
+          ratio(19, 7560),   ratio(-5, 3024),   ratio(-23, 30240),
+          ratio(37, 15120),  ratio(37, 15120),  ratio(-13, 7560),
+          ratio(-13, 7560),  ratio(37, 15120),  ratio(-23, 30240)};
+
+    default:
+      throw std::runtime_error(
+          "hardcoded biorthogonal coefficients only available for ranks 1-5, "
+          "requested rank is : " +
+          std::to_string(n_particles));
+  }
+}
+
 Eigen::Matrix<sequant::rational, Eigen::Dynamic, Eigen::Dynamic>
-hardcoded_biorth_coeffs_matrix(std::size_t n_particles);
+make_hardcoded_biorth_coeffs_matrix(
+    const std::vector<sequant::rational>& first_row, std::size_t n_particles) {
+  const auto n = first_row.size();
+  Eigen::Matrix<sequant::rational, Eigen::Dynamic, Eigen::Dynamic> M(n, n);
+
+  for (std::size_t row = 0; row < n; ++row) {
+    for (std::size_t col = 0; col < n; ++col) {
+      perm::Permutation row_perm = perm::unrank(n - 1 - row, n_particles);
+      perm::Permutation col_perm = perm::unrank(col, n_particles);
+
+      col_perm->preMultiply(row_perm);
+
+      std::size_t source_idx = perm::rank(col_perm, n_particles);
+      M(row, col) = first_row[source_idx];
+    }
+  }
+  return M;
+}
+
+Eigen::Matrix<sequant::rational, Eigen::Dynamic, Eigen::Dynamic>
+hardcoded_biorth_coeffs_matrix(std::size_t n_particles) {
+  auto first_row = hardcoded_biorth_coeffs_first_row(n_particles);
+  return make_hardcoded_biorth_coeffs_matrix(first_row, n_particles);
+}
 
 ResultExpr biorthogonal_transform_copy(const ResultExpr& expr,
                                        double threshold) {
@@ -133,41 +230,6 @@ Eigen::MatrixXd compute_biorth_coeffs(std::size_t n_particles,
   pinv *= normalization;
 
   return pinv;
-}
-
-Eigen::MatrixXd compute_nns_p_matrix(std::size_t n_particles,
-                                     double threshold) {
-  auto perm_ovlp_mat = permutational_overlap_matrix(n_particles);
-  auto normalized_pinv = compute_biorth_coeffs(n_particles, threshold);
-
-  auto nns = perm_ovlp_mat * normalized_pinv;
-
-  return nns;
-}
-
-std::vector<double> compute_nns_p_coeffs(std::size_t n_particles,
-                                         double threshold) {
-  Eigen::MatrixXd nns_matrix = compute_nns_p_matrix(n_particles, threshold);
-  std::size_t num_perms = nns_matrix.rows();
-
-  std::vector<double> coeffs;
-  coeffs.reserve(num_perms);
-  for (std::size_t i = 0; i < num_perms; ++i) {
-    coeffs.push_back(nns_matrix(num_perms - 1, i));
-  }
-  return coeffs;
-}
-
-container::svector<size_t> compute_permuted_indices(
-    const container::svector<size_t>& indices, size_t perm_rank,
-    size_t n_particles) {
-  perm::Permutation perm_obj = perm::unrank(perm_rank, n_particles);
-
-  container::svector<size_t> permuted_indices(n_particles);
-  for (size_t i = 0; i < n_particles; ++i) {
-    permuted_indices[i] = indices[perm_obj[i]];
-  }
-  return permuted_indices;
 }
 
 void sort_pairings(ParticlePairings& pairing) {
@@ -482,6 +544,40 @@ ExprPtr biorthogonal_transform(
   biorthogonal_transform(res, threshold);
 
   return res.expression();
+}
+Eigen::MatrixXd compute_nns_p_matrix(std::size_t n_particles,
+                                     double threshold) {
+  auto perm_ovlp_mat = permutational_overlap_matrix(n_particles);
+  auto normalized_pinv = compute_biorth_coeffs(n_particles, threshold);
+
+  auto nns = perm_ovlp_mat * normalized_pinv;
+
+  return nns;
+}
+
+std::vector<double> compute_nns_p_coeffs(std::size_t n_particles,
+                                         double threshold) {
+  Eigen::MatrixXd nns_matrix = compute_nns_p_matrix(n_particles, threshold);
+  std::size_t num_perms = nns_matrix.rows();
+
+  std::vector<double> coeffs;
+  coeffs.reserve(num_perms);
+  for (std::size_t i = 0; i < num_perms; ++i) {
+    coeffs.push_back(nns_matrix(num_perms - 1, i));
+  }
+  return coeffs;
+}
+
+container::svector<size_t> compute_permuted_indices(
+    const container::svector<size_t>& indices, size_t perm_rank,
+    size_t n_particles) {
+  perm::Permutation perm_obj = perm::unrank(perm_rank, n_particles);
+
+  container::svector<size_t> permuted_indices(n_particles);
+  for (size_t i = 0; i < n_particles; ++i) {
+    permuted_indices[i] = indices[perm_obj[i]];
+  }
+  return permuted_indices;
 }
 
 }  // namespace sequant
