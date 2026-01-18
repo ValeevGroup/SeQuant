@@ -1156,7 +1156,6 @@ ExprPtr closed_shell_CC_spintrace_v2(ExprPtr const& expr,
                                      ClosedShellCCSpintraceOptions options) {
   SEQUANT_ASSERT(options.method == BiorthogonalizationMethod::V2);
   using ranges::views::transform;
-  std::wcout << " expr is: " << to_latex_align(expr) << "\n";
   auto const ext_idxs = external_indices(expr);
   auto st_expr = options.naive_spintrace
                      ? spintrace(expr, ext_idxs)
@@ -1193,11 +1192,6 @@ ExprPtr closed_shell_CC_spintrace_v2(ExprPtr const& expr,
     st_expr =
         ex<Tensor>(Tensor{L"S", bra(std::move(kixs)), ket(std::move(bixs))}) *
         st_expr;
-
-    // const auto nf =
-    //     ex<Constant>(factorial(ext_idxs.size()));  // normalization factor
-    //     for S
-    // st_expr = nf * st_expr;
   }
 
   simplify(st_expr);

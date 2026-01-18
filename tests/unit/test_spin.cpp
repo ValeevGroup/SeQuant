@@ -642,11 +642,7 @@ SECTION("Symmetrize expression") {
                             Symmetry::Symm) *
                      ex<Tensor>(L"t", bra{L"a_3"}, ket{L"i_1"});
 
-    // auto result = factorize_S(input, {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}});
-    // factorize_S(input, {{L"a_1", L"i_1"}, {L"a_2", L"i_2"}}); // with my fn
-
     auto const ext_idxs = external_indices(input);
-
     auto bixs = ext_idxs | ranges::views::transform(
                                [](auto&& vec) { return get_bra_idx(vec); });
     auto kixs = ext_idxs | ranges::views::transform(
@@ -654,64 +650,23 @@ SECTION("Symmetrize expression") {
     auto result =
         ex<Tensor>(Tensor{L"S", bra(std::move(kixs)), ket(std::move(bixs))}) *
         input;
-
-    std::wcout << "does it factorize S or not? " << to_latex_align(result)
-               << "\n";
-    std::wcout << "finish checking my test: "
-               << "\n";
-    // what will be the result?
-    // simplified fn with hleper gives correct restult for this
-    // or big fn with helper
-
     REQUIRE_THAT(result,
                  EquivalentTo("2 S{i1,i2;a1,a2} g{a1,a2;i2,a3}:S t{a3;i1}"));
+  }
 
-    auto input2 = ex<Tensor>(L"g", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"},
-                             Symmetry::Antisymm) +
-                  ex<Tensor>(L"g", bra{L"a_2", L"a_1"}, ket{L"i_1", L"i_2"},
-                             Symmetry::Antisymm);
-    // auto res = factorize_S(input2, {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}});
+  {  // symmeetrize only one g
+    auto input = ex<Tensor>(L"g", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"},
+                            Symmetry::Symm);
 
-    // std::wcout << "let's see: ? " << to_latex_align(res) << "\n";
-
-    auto input3 = ex<Tensor>(L"g", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"},
-                             Symmetry::Antisymm) +
-                  ex<Tensor>(L"g", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"},
-                             Symmetry::Antisymm);
-
-    // this works fine with old factorize_S, I just turned on the canonicalizer
-    // auto res3 = factorize_S(input3, {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}});
-
-    auto const ext_idxs3 = external_indices(input3);
-
-    auto bixs3 = ext_idxs3 | ranges::views::transform(
-                                 [](auto&& vec) { return get_bra_idx(vec); });
-    auto kixs3 = ext_idxs3 | ranges::views::transform(
-                                 [](auto&& vec) { return get_ket_idx(vec); });
-    auto res3 =
-        ex<Tensor>(Tensor{L"S", bra(std::move(kixs3)), ket(std::move(bixs3))}) *
-        input3;
-    simplify(res3);
-
-    std::wcout << "does it factorize S or not? " << to_latex_align(res3)
-               << "\n";
-    /*
-    & ({{{2}}{\bar{g}^{{i_1}{i_2}}_{{a_1}{a_2}}}})
-\end{align}
-does it factorize S or not? \begin{align}
-& {{{2}}{S^{{a_1}{a_2}}_{{i_1}{i_2}}}{\bar{g}^{{i_1}{i_2}}_{{a_1}{a_2}}}}
-\end{align}
-     */
-
-    auto input4 = ex<Tensor>(L"g", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"},
-                             Symmetry::Antisymm);
-    // auto res4 = factorize_S(input4, {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}});
-    // std::wcout << "does it factorize S or not? " << to_latex_align(res4)
-    //            << "\n";
-    // after adding sum it works correctly:
-    // \begin{align}
-    // & {{S^{{a_1}{a_2}}_{{i_1}{i_2}}}{\bar{g}^{{i_1}{i_2}}_{{a_1}{a_2}}}}
-    // \end{align}
+    auto const ext_idxs = external_indices(input);
+    auto bixs = ext_idxs | ranges::views::transform(
+                               [](auto&& vec) { return get_bra_idx(vec); });
+    auto kixs = ext_idxs | ranges::views::transform(
+                               [](auto&& vec) { return get_ket_idx(vec); });
+    auto result =
+        ex<Tensor>(Tensor{L"S", bra(std::move(kixs)), ket(std::move(bixs))}) *
+        input;
+    REQUIRE_THAT(result, EquivalentTo("S{i1,i2;a1,a2} * g{a1,a2;i1,i2}:S"));
   }
 
   {  // g * t1 * t1 * t1 + g * t1 * t1 * t1
@@ -725,10 +680,8 @@ does it factorize S or not? \begin{align}
                      ex<Tensor>(L"t", bra{L"a_2"}, ket{L"i_3"}) *
                      ex<Tensor>(L"t", bra{L"a_1"}, ket{L"i_4"}) *
                      ex<Tensor>(L"t", bra{L"a_3"}, ket{L"i_1"});
-    // auto result = factorize_S(input, {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}});
 
     auto const ext_idxs = external_indices(input);
-
     auto bixs = ext_idxs | ranges::views::transform(
                                [](auto&& vec) { return get_bra_idx(vec); });
     auto kixs = ext_idxs | ranges::views::transform(
@@ -736,32 +689,10 @@ does it factorize S or not? \begin{align}
     auto result =
         ex<Tensor>(Tensor{L"S", bra(std::move(kixs)), ket(std::move(bixs))}) *
         input;
-
     REQUIRE_THAT(
         result,
         EquivalentTo(
             "2S{i3,i4;a2,a1} g{i1,i2;i4,a3}:S t{a1;i1} t{a2;i2} t{a3;i3}"));
-    // std::wcout << "how it factorize it? " << to_latex_align(result) << "\n";
-
-    auto input2 = ex<Tensor>(L"g", bra{L"a_1", L"a_2"}, ket{L"i_1", L"a_3"},
-                             Symmetry::Symm) *
-                      ex<Tensor>(L"t", bra{L"a_3"}, ket{L"i_2"}) +
-                  ex<Tensor>(L"g", bra{L"a_2", L"a_1"}, ket{L"i_2", L"a_3"},
-                             Symmetry::Symm) *
-                      ex<Tensor>(L"t", bra{L"a_3"}, ket{L"i_1"}) +
-                  ex<Tensor>(L"g", bra{L"i_3", L"i_4"}, ket{L"i_1", L"a_3"},
-                             Symmetry::Symm) *
-                      ex<Tensor>(L"t", bra{L"a_1"}, ket{L"i_3"}) *
-                      ex<Tensor>(L"t", bra{L"a_2"}, ket{L"i_4"}) *
-                      ex<Tensor>(L"t", bra{L"a_3"}, ket{L"i_2"}) +
-                  ex<Tensor>(L"g", bra{L"i_3", L"i_4"}, ket{L"i_2", L"a_3"},
-                             Symmetry::Symm) *
-                      ex<Tensor>(L"t", bra{L"a_2"}, ket{L"i_3"}) *
-                      ex<Tensor>(L"t", bra{L"a_1"}, ket{L"i_4"}) *
-                      ex<Tensor>(L"t", bra{L"a_3"}, ket{L"i_1"});
-    // auto rest2 = factorize_S(input2, {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}});
-    // std::wcout << "the output of input 2 which are two different terms: "
-    //            << to_latex_align(rest2) << "\n";
   }
 
   {  // 2 g * t1 * t1 * t2 + 2 g * t1 * t1 * t2
@@ -778,10 +709,8 @@ does it factorize S or not? \begin{align}
             ex<Tensor>(L"t", bra{L"a_3"}, ket{L"i_3"}) *
             ex<Tensor>(L"t", bra{L"a_1"}, ket{L"i_4"}) *
             ex<Tensor>(L"t", bra{L"a_2", L"a_4"}, ket{L"i_2", L"i_1"});
-    // auto result = factorize_S(input, {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}});
 
     auto const ext_idxs = external_indices(input);
-
     auto bixs = ext_idxs | ranges::views::transform(
                                [](auto&& vec) { return get_bra_idx(vec); });
     auto kixs = ext_idxs | ranges::views::transform(
@@ -791,12 +720,9 @@ does it factorize S or not? \begin{align}
         input;
     simplify(result);
     REQUIRE(result->is<Sum>() == false);
-    // REQUIRE_THAT(result, EquivalentTo("4 S{i1,i2;a1,a2} g{i3,i4;a3,a4} "
-    //                                   "t{a4;i3} t{a2;i4} t{a1,a3;i1,i2}"));
-
-    // with expansion:
-    // 4 S{i_1,i_2;a_1,a_2}:N-C-S * g{i_3,i_4;a_3,a_4}:S-C-S * t{a_1;i_3}:N-C-S
-    // * t{a_3;i_4}:N-C-S * t{a_2,a_4;i_1,i_2}:N-C-S
+    REQUIRE_THAT(result,
+                 EquivalentTo("4 S{i1,i2;a1,a2} g{i3,i4;a3,a4}:S "
+                              "t{a_1;i_3} * t{a_3;i_4} * t{a_2,a_4;i_1,i_2}"));
   }
 }
 
@@ -1096,12 +1022,10 @@ SECTION("Closed-shell CC spintrace for variable, constant, product") {
                                      Symmetry::Antisymm);
 
     auto result_v1 = mbpt::closed_shell_CC_spintrace_v1(expr1);
-    REQUIRE_THAT(result_v1,
-                 EquivalentTo(L"-1 ω S{i1,i2;a1,a2} t{a1,a2;i1,i2}"));
+    REQUIRE_THAT(result_v1, EquivalentTo(L"-ω S{i1,i2;a1,a2} t{a1,a2;i1,i2}"));
 
     auto result_v2 = mbpt::closed_shell_CC_spintrace_v2(expr1);
-    REQUIRE_THAT(result_v2,
-                 EquivalentTo(L"-1 ω S{i1,i2;a1,a2} t{a1,a2;i1,i2}"));
+    REQUIRE_THAT(result_v2, EquivalentTo(L"-ω S{i1,i2;a1,a2} t{a1,a2;i1,i2}"));
   }
   {  // test a single variable
     auto expr1 = sequant::parse_expr(L"ω");
@@ -1142,30 +1066,26 @@ SECTION("Closed-shell spintrace CCSDT terms") {
     auto input = ex<Constant>(3) *
                  ex<Tensor>(L"A", bra{L"i_1", L"i_2", L"i_3"},
                             ket{L"a_1", L"a_2", L"a_3"}, Symmetry::Antisymm) *
-                 ex<Tensor>(L"f", bra{L"i_4"}, ket{L"i_1"}) *
                  ex<Tensor>(L"t", bra{L"a_1", L"a_2", L"a_3"},
-                            ket{L"i_2", L"i_3", L"i_4"}, Symmetry::Antisymm);
+                            ket{L"i_2", L"i_3", L"i_4"}, Symmetry::Antisymm) *
+                 ex<Tensor>(L"f", bra{L"i_4"}, ket{L"i_1"});
 
     auto result = expand_A_op(input);
     REQUIRE(result->size() == 36);
-    // result = expand_antisymm(result);
     result = closed_shell_spintrace(
         input, {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}, {L"i_3", L"a_3"}});
-    simplify(result);
-    std::wcout << "the result is: " << to_latex_align(result) << "\n";
-    // REQUIRE(result->size() == 4);
+    REQUIRE(result->size() == 4);
 
-    // REQUIRE_THAT(
-    // result,
-    // EquivalentTo(
-    //     "24 S{i_1,i_2,i_3;a_1,a_2,a_3}:N-C-S * f{i_4;i_3}:N-C-S *
-    //     t{a_1,a_2,a_3;i_1,i_2,i_4}:N-C-S "
-    //     "-12 S{i_1,i_2,i_3;a_1,a_2,a_3}:N-C-S * f{i_4;i_3}:N-C-S *
-    //     t{a_1,a_2,a_3;i_2,i_1,i_4}:N-C-S "
-    //     "+12 S{i_1,i_2,i_3;a_1,a_2,a_3}:N-C-S * f{i_4;i_1}:N-C-S *
-    //     t{a_1,a_2,a_3;i_2,i_3,i_4}:N-C-S "
-    //     "-24 S{i_1,i_2,i_3;a_1,a_2,a_3}:N-C-S * f{i_4;i_2}:N-C-S *
-    //     t{a_1,a_2,a_3;i_1,i_3,i_4}:N-C-S"));
+    REQUIRE_THAT(
+        result,
+        EquivalentTo("24 S{i_1,i_2,i_3;a_1,a_2,a_3}:N-C-S * f{i_4;i_3}:N-C-S * "
+                     "t{a_1,a_2,a_3;i_1,i_2,i_4}:N-C-S - 12"
+                     " S{i_1,i_2,i_3;a_1,a_2,a_3}:N-C-S * f{i_4;i_3}:N-C-S * "
+                     "t{a_1,a_2,a_3;i_2,i_1,i_4}:N-C-S + 12"
+                     " S{i_1,i_2,i_3;a_1,a_2,a_3}:N-C-S * f{i_4;i_1}:N-C-S * "
+                     "t{a_1,a_2,a_3;i_2,i_3,i_4}:N-C-S - 24"
+                     " S{i_1,i_2,i_3;a_1,a_2,a_3}:N-C-S * f{i_4;i_2}:N-C-S * "
+                     "t{a_1,a_2,a_3;i_1,i_3,i_4}:N-C-S "));
   }
 
   SECTION("ppl term: A3 * g * t3, spintracing with direct full-expansion") {
@@ -1240,7 +1160,7 @@ SECTION("Closed-shell spintrace CCSDT terms") {
             "g{a_1,a_3;a_4,a_5}:N-C-S * t{a_2,a_4,a_5;i_1,i_3,i_2}:N-C-S"));
   }
 
-  SECTION("most expensive terms in CCSDT") {  // results in 1 term
+  SECTION("most expensive terms in CCSDT in v2") {  // results in 1 term
     const auto input = ex<Sum>(ExprPtrList{
         parse_expr(L" 3/2 A{i_1,i_2,i_3;a_1,a_2,a_3} * "
                    L"g{a_1,a_2;a_4,a_5} * t{a_3,a_4,a_5;i_1,i_2,i_3}",
@@ -1254,7 +1174,7 @@ SECTION("Closed-shell spintrace CCSDT terms") {
             "g{a_1,a_2;a_4,a_5}:N-C-S * t{a_3,a_4,a_5;i_3,i_1,i_2}:N-C-S"));
   }
 
-  SECTION("ppl term in regular_cs") {  // results in 4 terms
+  SECTION("most expensive CCSDT term in v1") {  // results in 4 terms
     const auto input = ex<Sum>(ExprPtrList{
         parse_expr(L"3/2 A{i_1,i_2,i_3;a_1,a_2,a_3} * g{a_1,a_2;a_4,a_5} * "
                    "t{a_3,a_4,a_5;i_1,i_2,i_3}",
