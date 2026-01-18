@@ -790,6 +790,10 @@ ExprPtr A(nₚ np, nₕ nh) {
 }
 
 ExprPtr S(std::int64_t K) {
+  if (get_default_context().spbasis() != SPBasis::Spinfree) {
+    throw std::runtime_error(
+        "S operator should only be used with the spinfree basis");
+  }
   SEQUANT_ASSERT(K != 0);
   container::svector<IndexSpace> creators;
   container::svector<IndexSpace> annihilators;
@@ -1003,6 +1007,10 @@ ExprPtr A(nₚ np, nₕ nh) {
 }
 
 ExprPtr S(std::int64_t K) {
+  if (get_default_context().spbasis() != SPBasis::Spinfree) {
+    throw std::runtime_error(
+        "S operator should only be used with the spinfree basis");
+  }
   SEQUANT_ASSERT(K != 0);
   return ex<op_t>([]() -> std::wstring_view { return L"S"; },
                   [=]() -> ExprPtr { return tensor::S(K); },

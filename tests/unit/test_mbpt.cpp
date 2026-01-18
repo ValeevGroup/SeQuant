@@ -729,6 +729,17 @@ SECTION("SRSF") {
       REQUIRE(result->size() == 12);
     }
   }
+  SECTION("S operator action") {
+    auto expr = tensor::S(2) * parse_expr(L"f{a1,a2;i1,i2}");
+    simplify(expr);
+    if (expr->is<Product>()) {
+      auto nf = expr->as<Product>().scalar();
+      REQUIRE(nf == rational(1, 2));
+    }
+    REQUIRE_THAT(expr,
+                 EquivalentTo("1/2 S{a_3,a_4;i_3,i_4}:N-C-S * "
+                              "f{a_1,a_2;i_1,i_2}:N-C-S * ã{i_3,i_4;a_3,a_4}"));
+  }
 }  // SECTION("SRSF")
 
 SECTION("MRSO") {
