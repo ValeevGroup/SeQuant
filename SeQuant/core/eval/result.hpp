@@ -7,6 +7,7 @@
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/logger.hpp>
+#include <SeQuant/core/math.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/domain/mbpt/biorthogonalization.hpp>
 
