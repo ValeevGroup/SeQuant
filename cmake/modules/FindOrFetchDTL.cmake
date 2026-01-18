@@ -18,5 +18,5 @@ endif()
 
 # postcond check
 if (NOT TARGET dtl::dtl)
-    message(FATAL_ERROR "FindOrFetchCatch2 could not make TARGET dtl::dtl available")
+	message(FATAL_ERROR "FindOrFetchDTL could not make TARGET dtl::dtl available")
 endif()
