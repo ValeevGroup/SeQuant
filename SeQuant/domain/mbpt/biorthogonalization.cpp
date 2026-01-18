@@ -545,21 +545,14 @@ ExprPtr biorthogonal_transform(
 
   return res.expression();
 }
-Eigen::MatrixXd compute_nns_p_matrix(std::size_t n_particles,
-                                     double threshold) {
-  auto perm_ovlp_mat = permutational_overlap_matrix(n_particles);
-  auto normalized_pinv = compute_biorth_coeffs(n_particles, threshold);
-
-  auto nns = perm_ovlp_mat * normalized_pinv;
-
-  return nns;
-}
 
 std::vector<double> compute_nns_p_coeffs(std::size_t n_particles,
                                          double threshold) {
-  Eigen::MatrixXd nns_matrix = compute_nns_p_matrix(n_particles, threshold);
-  std::size_t num_perms = nns_matrix.rows();
+  auto perm_ovlp_mat = permutational_overlap_matrix(n_particles);
+  auto normalized_pinv = compute_biorth_coeffs(n_particles, threshold);
+  Eigen::MatrixXd nns_matrix = perm_ovlp_mat * normalized_pinv;
 
+  std::size_t num_perms = nns_matrix.rows();
   std::vector<double> coeffs;
   coeffs.reserve(num_perms);
   for (std::size_t i = 0; i < num_perms; ++i) {

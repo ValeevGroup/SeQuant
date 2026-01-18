@@ -105,7 +105,7 @@ std::optional<std::vector<T>> hardcoded_nns_projector(std::size_t n_particles) {
       return std::vector<T>{T(1) / T(1)};
 
     case 2:
-      return std::vector<T>{T(1) / T(1), T(1) / T(1)};
+      return std::vector<T>{T(0) / T(1), T(1) / T(1)};
 
     case 3:
       return std::vector<T>{T(-1) / T(5), T(-1) / T(5), T(-1) / T(5),
