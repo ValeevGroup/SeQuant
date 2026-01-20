@@ -122,6 +122,8 @@ class CC {
   Ansatz ansatz_ = Ansatz::T;
   bool screen_ = true;
   bool use_topology_ = true;
+  std::optional<size_t> hbar_truncation_rank_ = std::nullopt;
+  std::optional<size_t> pertbar_truncation_rank_ = std::nullopt;
 
   /// @brief computes reference expectation value of an expression. Dispatches
   /// to `mbpt::op::ref_av()`
