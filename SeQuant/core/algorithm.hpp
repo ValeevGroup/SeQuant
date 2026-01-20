@@ -16,6 +16,7 @@
 #include <iterator>
 #include <tuple>
 #include <type_traits>
+#include <format>
 
 namespace sequant {
 
