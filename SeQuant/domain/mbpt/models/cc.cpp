@@ -20,6 +20,25 @@ namespace sequant::mbpt {
 CC::CC(size_t n, Ansatz a, bool screen, bool use_topology)
     : N(n), ansatz_(a), screen_(screen), use_topology_(use_topology) {}
 
+CC::CC(const Options& opts)
+    : N(opts.N),
+      ansatz_(opts.ansatz),
+      screen_(opts.screen),
+      use_topology_(opts.use_topology),
+      hbar_truncation_rank_(opts.hbar_truncation_rank),
+      pertbar_truncation_rank_(opts.pertbar_truncation_rank) {
+  if (unitary() && !hbar_truncation_rank_) {
+    throw std::invalid_argument(
+        "CC: hbar_truncation_rank is required for unitary ansatz");
+  }
+  if (hbar_truncation_rank_)
+    SEQUANT_ASSERT(hbar_truncation_rank_.value() > 0 &&
+                   "CC::CC: hbar_truncation_rank must be greater than zero");
+  if (pertbar_truncation_rank_)
+    SEQUANT_ASSERT(pertbar_truncation_rank_.value() > 0 &&
+                   "CC::CC: pertbar_truncation_rank must be greater than zero");
+}
+
 CC::Ansatz CC::ansatz() const { return ansatz_; }
 
 bool CC::unitary() const {

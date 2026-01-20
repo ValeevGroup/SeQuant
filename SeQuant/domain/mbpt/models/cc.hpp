@@ -7,6 +7,7 @@
 
 #include <cstddef>
 #include <limits>
+#include <optional>
 #include <vector>
 
 namespace sequant {
@@ -29,6 +30,25 @@ class CC {
     oU
   };
 
+  /// Configuration options for CC class
+  struct Options {
+    /// coupled cluster rank or cluster operator rank
+    size_t N;
+    /// type of CC ansatz
+    Ansatz ansatz = Ansatz::T;
+    /// if true, uses Operator level screening before applying WickTheorem.
+    /// This propagates to all ref_av() calls
+    bool screen = true;
+    /// if true, uses topological optimizations in WickTheorem
+    bool use_topology = true;
+    /// truncation rank for similarity transformed Hamiltonian, must be
+    /// specified if unitary ansatz is used
+    std::optional<size_t> hbar_truncation_rank = std::nullopt;
+    /// truncation rank for similarity transformed perturbation operator, must
+    /// be specified if unitary ansatz is used in perturbed amplitude derivation
+    std::optional<size_t> pertbar_truncation_rank = std::nullopt;
+  };
+
   /// @brief constructs CC engine
   /// @param N coupled cluster excitation rank
   /// @param ansatz the type of CC ansatz
@@ -37,6 +57,10 @@ class CC {
   /// @param use_topology if true, uses topological optimizations in WickTheorem
   explicit CC(size_t N, Ansatz ansatz = Ansatz::T, bool screen = true,
               bool use_topology = true);
+
+  /// @brief constructs CC engine with named parameters
+  /// @param opts configuration options. @see CC::Options
+  explicit CC(const Options& opts);
 
   /// @return the type of ansatz
   Ansatz ansatz() const;
