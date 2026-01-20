@@ -163,6 +163,64 @@ auto inits(Rng const& rng) {
          });
 }
 
+namespace bits {
+
+enum struct BitSetFrom { Mask_t, Nbits_t };
+
+enum struct IterDir { Asc, Desc };
+
+constexpr BitSetFrom Mask{BitSetFrom::Mask_t};
+constexpr BitSetFrom Nbits{BitSetFrom::Nbits_t};
+
+template <std::unsigned_integral T = size_t>
+class SmallBitSet {
+ private:
+  static constexpr size_t max_nbits = std::numeric_limits<T>::digits;
+  T mask_;
+
+  auto subsets_desc() const {
+    size_t const nelem = (1 << std::popcount(mask_));
+    return std::views::iota(size_t{0}, nelem) |
+           std::views::transform([&m = mask_, s = mask_](auto) mutable {
+             auto s_ = s;
+             s = (s - 1) & m;
+             return SmallBitSet(Mask, s_);
+           });
+  }
+
+  auto subsets_asc() const {
+    return subsets_desc() |
+           std::views::transform([&m = mask_](auto const& val) {
+             return SmallBitSet(Mask, (val.as_integral() ^ m));
+           });
+  }
+
+ public:
+  SmallBitSet(BitSetFrom from, std::unsigned_integral auto val) {
+    if (from == Mask) {
+      mask_ = val;
+    } else {
+      if (val > max_nbits)
+        throw std::invalid_argument(std::format(
+            "Allowed max num of bits{}. Passed {}", max_nbits, val));
+      mask_ =
+          (val == max_nbits) ? std::numeric_limits<T>::max() : ((1 << val) - 1);
+    }
+  }
+
+  template <IterDir Dir = IterDir::Asc>
+  auto subsets() const {
+    if constexpr (Dir == IterDir::Asc)
+      return subsets_asc();
+    else
+      return subsets_desc();
+  }
+
+  [[nodiscard]] auto as_integral() const noexcept { return mask_; }
+};
+
+}  // namespace bits
+
 }  // namespace sequant
 
 #endif  // SEQUANT_ALGORITHM_HPP
