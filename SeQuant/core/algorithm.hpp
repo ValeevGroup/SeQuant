@@ -177,7 +177,7 @@ namespace bits {
 /// @return A view of pairs of disjoint submasks.
 ///
 template <std::unsigned_integral T>
-auto bipartitions_ordered(T mask) {
+constexpr auto bipartitions_ordered(T mask) {
   // number of possible bipartitions
   size_t const nparts = (1 << std::popcount(mask));
   return std::views::iota(size_t{0}, nparts) |
@@ -199,7 +199,7 @@ auto bipartitions_ordered(T mask) {
 /// @param mask The bitmask representing the set.
 /// @return A view of unordered bipartitions.
 ///
-auto bipartitions_unordered(std::unsigned_integral auto mask) {
+constexpr auto bipartitions_unordered(std::unsigned_integral auto mask) {
   auto bps = bipartitions_ordered(mask);
   size_t const nparts = std::ranges::distance(bps) / 2;
   return bps | std::views::take(nparts);
@@ -211,7 +211,7 @@ auto bipartitions_unordered(std::unsigned_integral auto mask) {
 /// @param mask The bitmask representing the set.
 /// @return A view of unordered bipartitions.
 ///
-auto bipartitions(std::unsigned_integral auto mask) {
+constexpr auto bipartitions(std::unsigned_integral auto mask) {
   return bipartitions_unordered(mask);
 }
 
@@ -221,7 +221,7 @@ auto bipartitions(std::unsigned_integral auto mask) {
 /// @param mask The bitmask representing the set.
 /// @return A view of submasks sorted ascending.
 ///
-auto subsets_ascending(std::unsigned_integral auto mask) {
+constexpr auto subsets_ascending(std::unsigned_integral auto mask) {
   return bipartitions_ordered(mask) | std::views::elements<0>;
 }
 
@@ -231,7 +231,7 @@ auto subsets_ascending(std::unsigned_integral auto mask) {
 /// @param mask The bitmask representing the set.
 /// @return A view of submasks sorted descending.
 ///
-auto subsets_descending(std::unsigned_integral auto mask) {
+constexpr auto subsets_descending(std::unsigned_integral auto mask) {
   return bipartitions_ordered(mask) | std::views::elements<1>;
 }
 
@@ -241,7 +241,7 @@ auto subsets_descending(std::unsigned_integral auto mask) {
 /// @param mask The bitmask representing the set.
 /// @return A view of submasks.
 ///
-auto subsets(std::unsigned_integral auto mask) {
+constexpr auto subsets(std::unsigned_integral auto mask) {
   return subsets_ascending(mask);
 }
 
