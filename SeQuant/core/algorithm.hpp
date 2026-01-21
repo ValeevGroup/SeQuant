@@ -16,7 +16,6 @@
 #include <iterator>
 #include <tuple>
 #include <type_traits>
-#include <format>
 
 namespace sequant {
 
@@ -166,59 +165,85 @@ auto inits(Rng const& rng) {
 
 namespace bits {
 
-enum struct BitSetFrom { Mask_t, Nbits_t };
+///
+/// @brief Generates all ordered bipartitions of the set bits in the mask.
+///
+/// For a given mask representing a set S, this function returns a view of pairs
+/// (A, B) such that A ∪ B = S, A ∩ B = {}, and A, B are subsets of S. The
+/// iteration order results in B descending and A ascending.
+///
+/// @tparam T The unsigned integer type of the mask.
+/// @param mask The bitmask representing the set.
+/// @return A view of pairs of disjoint submasks.
+///
+template <std::unsigned_integral T>
+auto bipartitions_ordered(T mask) {
+  // number of possible bipartitions
+  size_t const nparts = (1 << std::popcount(mask));
+  return std::views::iota(size_t{0}, nparts) |
+         std::views::transform([mask, p = mask](auto) mutable {
+           auto p_ = p;
+           p = (p - 1) & mask;
+           return std::pair<T, T>{p_ ^ mask, p_};
+         });
+}
 
-enum struct IterDir { Asc, Desc };
+///
+/// @brief Generates unordered bipartitions of the mask.
+///
+/// This function returns a subset of the ordered bipartitions such that for
+/// every pair {A, B}, the pair {B, A} is excluded (unless A == B, which is
+/// handled naturally). Specifically, it takes the first half of the ordered
+/// bipartitions.
+///
+/// @param mask The bitmask representing the set.
+/// @return A view of unordered bipartitions.
+///
+auto bipartitions_unordered(std::unsigned_integral auto mask) {
+  auto bps = bipartitions_ordered(mask);
+  size_t const nparts = std::ranges::distance(bps) / 2;
+  return bps | std::views::take(nparts);
+}
 
-constexpr BitSetFrom Mask{BitSetFrom::Mask_t};
-constexpr BitSetFrom Nbits{BitSetFrom::Nbits_t};
+///
+/// @brief Alias for bipartitions_unordered.
+///
+/// @param mask The bitmask representing the set.
+/// @return A view of unordered bipartitions.
+///
+auto bipartitions(std::unsigned_integral auto mask) {
+  return bipartitions_unordered(mask);
+}
 
-template <std::unsigned_integral T = size_t>
-class SmallBitSet {
- private:
-  static constexpr size_t max_nbits = std::numeric_limits<T>::digits;
-  T mask_;
+///
+/// @brief Generates all subsets of the mask in ascending numerical order.
+///
+/// @param mask The bitmask representing the set.
+/// @return A view of submasks sorted ascending.
+///
+auto subsets_ascending(std::unsigned_integral auto mask) {
+  return bipartitions_ordered(mask) | std::views::elements<0>;
+}
 
-  auto subsets_desc() const {
-    size_t const nelem = (1 << std::popcount(mask_));
-    return std::views::iota(size_t{0}, nelem) |
-           std::views::transform([&m = mask_, s = mask_](auto) mutable {
-             auto s_ = s;
-             s = (s - 1) & m;
-             return SmallBitSet(Mask, s_);
-           });
-  }
+///
+/// @brief Generates all subsets of the mask in descending numerical order.
+///
+/// @param mask The bitmask representing the set.
+/// @return A view of submasks sorted descending.
+///
+auto subsets_descending(std::unsigned_integral auto mask) {
+  return bipartitions_ordered(mask) | std::views::elements<1>;
+}
 
-  auto subsets_asc() const {
-    return subsets_desc() |
-           std::views::transform([&m = mask_](auto const& val) {
-             return SmallBitSet(Mask, (val.as_integral() ^ m));
-           });
-  }
-
- public:
-  SmallBitSet(BitSetFrom from, std::unsigned_integral auto val) {
-    if (from == Mask) {
-      mask_ = val;
-    } else {
-      if (val > max_nbits)
-        throw std::invalid_argument(std::format(
-            "Allowed max num of bits{}. Passed {}", max_nbits, val));
-      mask_ =
-          (val == max_nbits) ? std::numeric_limits<T>::max() : ((1 << val) - 1);
-    }
-  }
-
-  template <IterDir Dir = IterDir::Asc>
-  auto subsets() const {
-    if constexpr (Dir == IterDir::Asc)
-      return subsets_asc();
-    else
-      return subsets_desc();
-  }
-
-  [[nodiscard]] auto as_integral() const noexcept { return mask_; }
-};
+///
+/// @brief Generates all subsets of the mask in ascending numerical order.
+///
+/// @param mask The bitmask representing the set.
+/// @return A view of submasks.
+///
+auto subsets(std::unsigned_integral auto mask) {
+  return subsets_ascending(mask);
+}
 
 }  // namespace bits
 
