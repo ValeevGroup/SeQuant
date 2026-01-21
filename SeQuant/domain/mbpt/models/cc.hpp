@@ -76,9 +76,6 @@ class CC {
 
   /// @brief derives t amplitude equations, \f$ \langle P|\bar{H}|0 \rangle = 0
   /// \f$
-  /// @param commutator_rank rank of commutators included in \f$ \bar{H} \f$ ;
-  /// must be specified for unitary ansatz and/or
-  ///   Hamiltonians with particle rank != 2
   /// @param pmax highest particle rank of the projector manifold `\f \langle P
   /// | \f`; the default value is to use
   ///   the cluster operator rank of this engine
@@ -89,21 +86,17 @@ class CC {
   ///   \f$ \langle k |\bar{H}|0 \rangle = 0 \f$ for `k` in the [\p pmin,\p
   ///   pmax] range, and null value otherwise
   [[nodiscard]] std::vector<ExprPtr> t(
-      size_t commutator_rank = 4,
       size_t pmax = std::numeric_limits<size_t>::max(), size_t pmin = 0);
 
   /// @brief derives λ amplitude equations,
   /// \f$ \langle 0| (1 + \hat{\Lambda}) \frac{d \bar{H}}{d \hat{T}_P} |0
   /// \rangle = 0 \f$
-  /// @param commutator_rank rank of commutators included in \f$ \bar{H} \f$ ;
-  /// must be specified for unitary ansatz and/or Hamiltonians with particle
-  /// rank != 2
   /// @return vector of λ amplitude equations, with element `k` containing
   /// equation
   ///   \f$ \langle 0| (1 + \hat{\Lambda}) \frac{d \bar{H}}{d \hat{T}_k} |0
   ///   \rangle = 0 \f$ for `k` in
   /// the [1,N] range; element 0 is always null
-  [[nodiscard]] std::vector<ExprPtr> λ(size_t commutator_rank = 4);
+  [[nodiscard]] std::vector<ExprPtr> λ();
 
   // clang-format off
   /// @brief derives perturbed t amplitude equations

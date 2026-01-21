@@ -49,11 +49,15 @@ bool CC::screen() const { return screen_; }
 
 bool CC::use_topology() const { return use_topology_; }
 
-std::vector<ExprPtr> CC::t(size_t commutator_rank, size_t pmax, size_t pmin) {
+std::vector<ExprPtr> CC::t(size_t pmax, size_t pmin) {
   pmax = (pmax == std::numeric_limits<size_t>::max() ? N : pmax);
   const bool skip_singles = ansatz_ == Ansatz::oT || ansatz_ == Ansatz::oU;
 
   SEQUANT_ASSERT(pmax >= pmin && "pmax should be >= pmin");
+  if (unitary())
+    SEQUANT_ASSERT(hbar_truncation_rank_ &&
+                   "hbar_truncation_rank must be specified for unitary ansatz");
+  const auto commutator_rank = hbar_truncation_rank_.value_or(4);
 
   // 1. construct hbar(op) in canonical form
   auto hbar = mbpt::lst(H(), T(N, skip_singles), commutator_rank,
@@ -99,14 +103,15 @@ std::vector<ExprPtr> CC::t(size_t commutator_rank, size_t pmax, size_t pmin) {
   return result;
 }
 
-std::vector<ExprPtr> CC::λ(size_t commutator_rank) {
-  SEQUANT_ASSERT(commutator_rank >= 1 && "commutator rank should be >= 1");
+std::vector<ExprPtr> CC::λ() {
   SEQUANT_ASSERT(!unitary() && "there is no need for CC::λ for unitary ansatz");
   const bool skip_singles = ansatz_ == Ansatz::oT || ansatz_ == Ansatz::oU;
 
+  const auto commutator_rank =
+      hbar_truncation_rank_.value_or(4);  // default truncation rank is 4
+
   // construct hbar
-  auto hbar = mbpt::lst(H(), T(N, skip_singles), commutator_rank - 1,
-                        {.unitary = unitary()});
+  auto hbar = mbpt::lst(H(), T(N, skip_singles), commutator_rank - 1);
 
   auto lhbar = simplify((1 + Λ(N)) * hbar);
 
@@ -165,18 +170,27 @@ std::vector<ExprPtr> CC::tʼ(size_t rank, size_t order,
   SEQUANT_ASSERT(rank == 1 &&
                  "sequant::mbpt::CC::tʼ(): only one-body perturbation "
                  "operator is supported now");
-  SEQUANT_ASSERT(ansatz_ == Ansatz::T && "unitary ansatz is not yet supported");
+  if (unitary())
+    SEQUANT_ASSERT(hbar_truncation_rank_ &&
+                   "hbar_truncation_rank must be specified for unitary ansatz");
 
   // construct h1_bar
-  // truncate h1_bar at rank 2 for one-body perturbation
-  // operator and at rank 4 for two-body perturbation operator
-  const auto h1_truncate_at = rank == 1 ? 2 : 4;
+  // truncate h1_bar at rank 2 for one-body perturbation operator and at rank 4
+  // for two-body perturbation operator; unless specified otherwise
+  const auto h1_truncate_at = (rank == 1)
+                                  ? pertbar_truncation_rank_.value_or(2)
+                                  : pertbar_truncation_rank_.value_or(4);
   const auto h1_bar = mbpt::lst(Hʼ(rank, {.order = order, .nbatch = nbatch}),
-                                T(N), h1_truncate_at);
+                                T(N), h1_truncate_at, {.unitary = unitary()});
 
   // construct [hbar, T(1)]
+  const auto hbar_truncate_at = hbar_truncation_rank_.value_or(
+      3);  // notice 3 instead of 4 here, this is because of the commutator with
+           // T'(1). In case 4 is used, it will generate more terms but they
+           // will not contribute.
   const auto hbar_pert =
-      mbpt::lst(H(), T(N), 3) * Tʼ(N, {.order = order, .nbatch = nbatch});
+      mbpt::lst(H(), T(N), hbar_truncate_at, {.unitary = unitary()}) *
+      Tʼ(N, {.order = order, .nbatch = nbatch});
 
   // [Eq. 34, WIREs Comput Mol Sci. 2019; 9:e1406]
   const auto expr = simplify(h1_bar + hbar_pert);
@@ -209,15 +223,21 @@ std::vector<ExprPtr> CC::λʼ(size_t rank, size_t order,
   SEQUANT_ASSERT(rank == 1 &&
                  "sequant::mbpt::CC::λʼ(): only one-body perturbation "
                  "operator is supported now");
-  SEQUANT_ASSERT(ansatz_ == Ansatz::T && "unitary ansatz is not yet supported");
+  SEQUANT_ASSERT(!unitary() &&
+                 "there is no need for CC::λʼ for unitary ansatz");
+  SEQUANT_ASSERT(ansatz_ == Ansatz::T &&
+                 "CC::λʼ: only traditional ansatz is supported");
 
   // construct hbar
-  const auto hbar = mbpt::lst(H(), T(N), 4);
+  const auto hbar_truncate_at = hbar_truncation_rank_.value_or(4);
+  const auto hbar = mbpt::lst(H(), T(N), hbar_truncate_at);
 
   // construct h1_bar
-  // truncate h1_bar at rank 2 for one-body perturbation
-  // operator and at rank 4 for two-body perturbation operator
-  const auto h1_truncate_at = rank == 1 ? 2 : 4;
+  // truncate h1_bar at rank 2 for one-body perturbation operator and at rank 4
+  // for two-body perturbation operator; unless specified otherwise
+  const auto h1_truncate_at = (rank == 1)
+                                  ? pertbar_truncation_rank_.value_or(2)
+                                  : pertbar_truncation_rank_.value_or(4);
   const auto h1_bar = mbpt::lst(Hʼ(rank, {.order = order, .nbatch = nbatch}),
                                 T(N), h1_truncate_at);
 
@@ -260,17 +280,21 @@ std::vector<ExprPtr> CC::λʼ(size_t rank, size_t order,
 }
 
 std::vector<ExprPtr> CC::eom_r(nₚ np, nₕ nh) {
-  SEQUANT_ASSERT(!unitary() && "Unitary ansatz is not yet supported");
   SEQUANT_ASSERT((np > 0 || nh > 0) && "Unsupported excitation order");
-
   if (np != nh)
     SEQUANT_ASSERT(
         get_default_context().spbasis() != SPBasis::Spinfree &&
         "spin-free basis does not yet support non particle-conserving cases");
+  if (unitary())
+    SEQUANT_ASSERT(hbar_truncation_rank_.has_value() &&
+                   "hbar_truncation_rank must be specified for unitary ansatz "
+                   "in EOM-R");
   const bool skip_singles = ansatz_ == Ansatz::oT;
 
   // construct hbar
-  const auto hbar = mbpt::lst(H(), T(N, skip_singles), 4);
+  const auto hbar_truncate_at = hbar_truncation_rank_.value_or(4);
+  const auto hbar = mbpt::lst(H(), T(N, skip_singles), hbar_truncate_at,
+                              {.unitary = unitary()});
 
   // hbar * R
   const auto hbar_R = hbar * R(np, nh);
@@ -302,7 +326,8 @@ std::vector<ExprPtr> CC::eom_r(nₚ np, nₕ nh) {
 }
 
 std::vector<ExprPtr> CC::eom_l(nₚ np, nₕ nh) {
-  SEQUANT_ASSERT(!unitary() && "Unitary ansatz is not yet supported");
+  SEQUANT_ASSERT(!unitary() &&
+                 "there is no need for CC::eom_l for unitary ansatz");
   SEQUANT_ASSERT((np > 0 || nh > 0) && "Unsupported excitation order");
 
   if (np != nh)
@@ -312,7 +337,8 @@ std::vector<ExprPtr> CC::eom_l(nₚ np, nₕ nh) {
   const bool skip_singles = ansatz_ == Ansatz::oT;
 
   // construct hbar
-  const auto hbar = mbpt::lst(H(), T(N, skip_singles), 4);
+  const auto hbar_truncate_at = hbar_truncation_rank_.value_or(4);
+  const auto hbar = mbpt::lst(H(), T(N, skip_singles), hbar_truncate_at);
 
   // L * hbar
   const auto L_hbar = L(np, nh) * hbar;
