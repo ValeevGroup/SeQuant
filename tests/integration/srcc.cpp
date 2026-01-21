@@ -62,10 +62,10 @@ class compute_cceqvec {
     std::vector<ExprPtr> eqvec;
     switch (type) {
       case EqnType::t:
-        eqvec = CC{N, CC::Ansatz::T, screen, use_topology}.t(4, P, PMIN);
+        eqvec = CC{N, CC::Ansatz::T, screen, use_topology}.t(P, PMIN);
         break;
       case EqnType::λ:
-        eqvec = CC{N, CC::Ansatz::T, screen, use_topology}.λ(4);
+        eqvec = CC{N, CC::Ansatz::T, screen, use_topology}.λ();
         break;
     }
     tpool.stop(N);
@@ -84,7 +84,7 @@ class compute_cceqvec {
       std::vector<ExprPtr> eqvec_so;
       switch (type) {
         case EqnType::t:
-          eqvec_so = CC{N}.t(4, P, PMIN);
+          eqvec_so = CC{N}.t(P, PMIN);
           break;
         case EqnType::λ:
           eqvec_so = CC{N}.λ();

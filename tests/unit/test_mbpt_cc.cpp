@@ -102,7 +102,7 @@ SECTION("ucc") {
     CC::Ansatz ansatz = CC::Ansatz::U;
 
     // oUCC energy, up to third commutator
-    auto t_eqs = CC{N, ansatz}.t(C);
+    auto t_eqs = CC({.N = N, .ansatz = ansatz, .hbar_truncation_rank = 3}).t();
     REQUIRE(t_eqs.size() == N + 1);
     for (auto k = 0; k <= N; ++k) {
       REQUIRE(t_eqs[k]);
