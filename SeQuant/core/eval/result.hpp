@@ -176,10 +176,11 @@ auto column_symmetrize_ta(TA::DistArray<Args...> const& arr) {
                                                nparticles},
                         call_back);
 
-  TA::DistArray<Args...>::wait_for_lazy_cleanup(result.world());
-
-  auto const nf = static_cast<double>(rational{1, factorial(nparticles)});
+  using scalar_type = typename TA::DistArray<Args...>::scalar_type;
+  auto const nf = static_cast<scalar_type>(rational{1, factorial(nparticles)});
   result(lannot) = nf * result(lannot);
+
+  TA::DistArray<Args...>::wait_for_lazy_cleanup(result.world());
 
   return result;
 }
@@ -246,11 +247,12 @@ auto particle_antisymmetrize_ta(TA::DistArray<Args...> const& arr,
   const auto bra_annot = bra_rank == 0 ? "" : ords_to_annot(bra_perm);
   result = process_permutations(result, ket_rank, ket_perm, bra_annot, false);
 
-  TA::DistArray<Args...>::wait_for_lazy_cleanup(result.world());
-
-  auto const nf = static_cast<double>(
+  using scalar_type = typename TA::DistArray<Args...>::scalar_type;
+  auto const nf = static_cast<scalar_type>(
       rational{1, factorial(bra_rank) * factorial(ket_rank)});
   result(lannot) = nf * result(lannot);
+
+  TA::DistArray<Args...>::wait_for_lazy_cleanup(result.world());
 
   return result;
 }
@@ -292,7 +294,8 @@ auto column_symmetrize_btas(btas::Tensor<Args...> const& arr) {
                                                nparticles},
                         call_back);
 
-  auto const nf = static_cast<double>(rational{1, factorial(nparticles)});
+  using numeric_type = typename btas::Tensor<Args...>::numeric_type;
+  auto const nf = static_cast<numeric_type>(rational{1, factorial(nparticles)});
   btas::scal(nf, result);
 
   return result;
@@ -350,7 +353,8 @@ auto particle_antisymmetrize_btas(btas::Tensor<Args...> const& arr,
   const auto bra_annot = bra_rank == 0 ? perm_t{} : bra_perm;
   result = process_permutations(result, ket_rank, ket_perm, bra_annot, false);
 
-  auto const nf = static_cast<double>(
+  using numeric_type = typename btas::Tensor<Args...>::numeric_type;
+  auto const nf = static_cast<numeric_type>(
       rational{1, factorial(bra_rank) * factorial(ket_rank)});
   btas::scal(nf, result);
 
