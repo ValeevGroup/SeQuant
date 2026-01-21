@@ -286,9 +286,9 @@ std::vector<ExprPtr> CC::eom_r(nₚ np, nₕ nh) {
         get_default_context().spbasis() != SPBasis::Spinfree &&
         "spin-free basis does not yet support non particle-conserving cases");
   if (unitary())
-    SEQUANT_ASSERT(hbar_truncation_rank_.has_value() &&
+    SEQUANT_ASSERT(hbar_truncation_rank_ &&
                    "hbar_truncation_rank must be specified for unitary ansatz "
-                   "in EOM-R");
+                   "in CC::eom_r");
   const bool skip_singles = ansatz_ == Ansatz::oT;
 
   // construct hbar
