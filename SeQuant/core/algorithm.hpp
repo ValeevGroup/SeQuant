@@ -245,6 +245,36 @@ constexpr auto subsets(std::unsigned_integral auto mask) {
   return subsets_ascending(mask);
 }
 
+///
+/// @brief Generates indices of set bits in the mask.
+/// @param mask The bitmask representing the set.
+/// @return A view of indices of set bits.
+///
+constexpr auto on_bits_index(std::unsigned_integral auto mask) {
+  size_t const nbits = std::popcount(mask);
+  return std::views::iota(size_t{0}, nbits) |
+         std::views::transform([m = mask](auto) mutable {
+           size_t i = std::countr_zero(m);
+           m &= (m - 1);
+           return i;
+         });
+}
+
+///
+/// @brief Creates a view adaptor that selects elements from the input range
+/// based on indices.
+/// This function returns a closure object that, when applied to a range of
+/// indices, maps those indices to elements in the source range `rng`.
+/// @param rng The source range from which elements are selected.
+/// @return A view adaptor that transforms indices into elements from `rng`.
+///
+constexpr auto sieve(std::ranges::viewable_range auto&& rng) {
+  auto elems = std::views::all(std::forward<decltype(rng)>(rng));
+  return std::views::transform([elems](auto i) {
+    return *std::ranges::next(std::ranges::begin(elems), i);
+  });
+}
+
 }  // namespace bits
 
 }  // namespace sequant
