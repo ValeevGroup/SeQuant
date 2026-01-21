@@ -18,11 +18,11 @@ Prerequisites
 Mandatory
 ~~~~~~~~~
 
-* `CMake <https://cmake.org/>`_ 3.27 or later
+* `CMake <https://cmake.org/>`_ 3.28 or later
 * `C++20 compatible compiler <https://en.cppreference.com/w/cpp/compiler_support#cpp20>`_
 * `Boost <https://www.boost.org/>`_ 1.81 or later
 * `Range-V3 <https://github.com/ericniebler/range-v3.git>`_ 0.12.0 or later
-* `Eigen3 <http://eigen.tuxfamily.org/>`_ 
+* `Eigen3 <http://eigen.tuxfamily.org/>`_ 3.0 or later
 * `libperm <https://github.com/Krzmbrzl/libPerm>`_
 * `polymorphic_variant <https://github.com/Krzmbrzl/polymorphic_variant>`_
 * `Utfcpp <https://github.com/nemtrif/utfcpp>`_ 4.0 or later
@@ -41,7 +41,8 @@ Optional
 ~~~~~~~~
 * `TiledArray <https://github.com/ValeevGroup/tiledarray.git>`_ - for building coupled-cluster evaluation tests
 
-.. note:: If not found, SeQuant can download and build Range-V3, libperm, polymorphic_variant, DTL and TiledArray.
+.. note:: If not found, SeQuant can download and build all dependencies other than CMake and the C++ compiler, provided `git <https://git-scm.com/>`
+   is available on the system.
 
 
 Useful CMake Variables
@@ -93,6 +94,10 @@ Useful CMake Variables
    * - SEQUANT_CONTEXT_MANIPULATION_THREADSAFE
      - ON
      - If set to `OFF` the default context must be initialized and manipulated from single thread only (most users will want to do this).
+   * - SEQUANT_ASSERT_BEHAVIOR
+     - ``ABORT`` in ``Debug`` mode, ``IGNORE`` otherwise
+     - Controls how assertions within SeQuant's code are handled. Valid options are ``ABORT``, ``THROW`` and ``IGNORE``. The latter disables
+       assertions, whereas the former keep them active and either abort the program or throw an exception on violation respectively.
 
 
 Configuring and Building

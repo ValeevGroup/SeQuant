@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.27) # 3.27 required for CONFIG_FILE option in doxygen_add_docs
+cmake_minimum_required(VERSION 3.28) # 3.28 required for EXCLUDE_FROM_ALL for FetchContent_Declare
 
 # Preload versions/tags of all dependencies ====================================
 include(external/versions.cmake)
@@ -208,6 +208,9 @@ include(FindOrFetchLibPerm)
 # Utfcpp
 include(FindOrFetchUtfcpp)
 
+# Eigen
+include(FindOrFetchEigen)
+
 # embedded bliss-0.73
 add_library(SeQuant-bliss
         SeQuant/external/bliss/defs.cc
@@ -408,19 +411,6 @@ set_source_files_properties(
 if (SEQUANT_EVAL_TESTS)
     include(FindOrFetchTiledArray)
 endif (SEQUANT_EVAL_TESTS)
-if (NOT TARGET Eigen3::Eigen)
-    # use TA's Eigen, if available
-    if (TARGET TiledArray_Eigen)
-        add_library(Eigen3::Eigen ALIAS TiledArray_Eigen)
-    else()
-      # re:NO_CMAKE_PACKAGE_REGISTRY: eigen3 registers its *build* tree with the user package registry ...
-      #                               to avoid issues with wiped build directory look for installed eigen
-      find_package(Eigen3 3.0 NO_MODULE NO_CMAKE_PACKAGE_REGISTRY)
-    endif()
-endif()
-if (TARGET Eigen3::Eigen)
-    set(SEQUANT_HAS_EIGEN ON)
-endif()
 
 if (TARGET tiledarray)
     set(SEQUANT_HAS_TILEDARRAY ON)
@@ -449,7 +439,7 @@ endif()
 target_compile_definitions(SeQuant PUBLIC SEQUANT_ASSERT_BEHAVIOR_=${SEQUANT_ASSERT_BEHAVIOR})
 
 target_link_libraries(SeQuant PUBLIC range-v3::range-v3 Boost::regex Boost::locale Boost::headers SeQuant-bliss Threads::Threads)
-target_link_libraries(SeQuant PRIVATE libperm::libperm $<BUILD_LOCAL_INTERFACE:utfcpp>)
+target_link_libraries(SeQuant PRIVATE libperm::libperm $<BUILD_LOCAL_INTERFACE:utfcpp> Eigen3::Eigen)
 target_link_libraries(SeQuant PUBLIC polymorphic_variant::polymorphic_variant)
 # modularized Boost has finer grained targets than just Boost::headers
 if (Boost_IS_MODULARIZED)
@@ -467,10 +457,6 @@ endif()
 if (TARGET tiledarray)
     target_link_libraries(SeQuant PUBLIC tiledarray)
 endif ()
-if (TARGET Eigen3::Eigen)
-    target_link_libraries(SeQuant PUBLIC Eigen3::Eigen)
-    target_compile_definitions(SeQuant PUBLIC SEQUANT_HAS_EIGEN=1)
-endif()
 if (SEQUANT_HAS_EXECUTION_HEADER_STANDALONE OR SEQUANT_HAS_EXECUTION_HEADER_WITH_TBB)
     target_compile_definitions(SeQuant PUBLIC SEQUANT_HAS_EXECUTION_HEADER)
     if (SEQUANT_HAS_EXECUTION_HEADER_WITH_TBB)
