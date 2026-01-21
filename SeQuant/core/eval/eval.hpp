@@ -1,9 +1,10 @@
 #ifndef SEQUANT_EVAL_EVAL_HPP
 #define SEQUANT_EVAL_EVAL_HPP
 
+#include <SeQuant/core/eval/eval_fwd.hpp>
+
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/eval/cache_manager.hpp>
-#include <SeQuant/core/eval/eval_fwd.hpp>
 #include <SeQuant/core/eval/result.hpp>
 #include <SeQuant/core/eval_node.hpp>
 #include <SeQuant/core/expr.hpp>
@@ -60,9 +61,6 @@ enum struct EvalMode {
   SumInplace,
   Symmetrize,
   Antisymmetrize,
-  /// NNS projection of Wang-Knizia biorthogonalization
-  /// @sa ResultPtr::biorthogonal_nns_project
-  BiorthogonalNNSProject,
   Unknown
 };
 
@@ -80,18 +78,17 @@ enum struct EvalMode {
 }
 
 [[nodiscard]] constexpr auto to_string(EvalMode mode) noexcept {
-  return (mode == EvalMode::Constant)                 ? "Constant"
-         : (mode == EvalMode::Variable)               ? "Variable"
-         : (mode == EvalMode::Tensor)                 ? "Tensor"
-         : (mode == EvalMode::Permute)                ? "Permute"
-         : (mode == EvalMode::Product)                ? "Product"
-         : (mode == EvalMode::MultByPhase)            ? "MultByPhase"
-         : (mode == EvalMode::Sum)                    ? "Sum"
-         : (mode == EvalMode::SumInplace)             ? "SumInplace"
-         : (mode == EvalMode::Symmetrize)             ? "Symmetrize"
-         : (mode == EvalMode::Antisymmetrize)         ? "Antisymmetrize"
-         : (mode == EvalMode::BiorthogonalNNSProject) ? "BiorthogonalNNSProject"
-                                                      : "??";
+  return (mode == EvalMode::Constant)         ? "Constant"
+         : (mode == EvalMode::Variable)       ? "Variable"
+         : (mode == EvalMode::Tensor)         ? "Tensor"
+         : (mode == EvalMode::Permute)        ? "Permute"
+         : (mode == EvalMode::Product)        ? "Product"
+         : (mode == EvalMode::MultByPhase)    ? "MultByPhase"
+         : (mode == EvalMode::Sum)            ? "Sum"
+         : (mode == EvalMode::SumInplace)     ? "SumInplace"
+         : (mode == EvalMode::Symmetrize)     ? "Symmetrize"
+         : (mode == EvalMode::Antisymmetrize) ? "Antisymmetrize"
+                                              : "??";
 }
 
 enum struct CacheMode { Store, Access, Release };
@@ -543,30 +540,6 @@ ResultPtr evaluate_antisymm(Args&&... args) {
   return result;
 }
 
-/// \brief Calls sequant::evaluate followed by
-/// ResultPtr::biorthogonal_nns_project \return Evaluated result as ResultPtr.
-/// \sa ResultPtr::biorthogonal_nns_project
-template <Trace EvalTrace = Trace::Default, typename... Args>
-ResultPtr evaluate_biorthogonal_nns_project(Args&&... args) {
-  ResultPtr pre = evaluate<EvalTrace>(std::forward<Args>(args)...);
-  SEQUANT_ASSERT(pre);
-
-  auto const& n0 = node0(arg0(std::forward<Args>(args)...));
-
-  ResultPtr result;
-  auto time = timed_eval_inplace([&]() {
-    result = pre->biorthogonal_nns_project(n0->as_tensor().bra_rank());
-  });
-
-  // logging
-  if constexpr (trace(EvalTrace)) {
-    auto stat = log::EvalStat{.mode = log::EvalMode::BiorthogonalNNSProject,
-                              .time = time,
-                              .memory = log::bytes(pre, result)};
-    log::eval(stat, n0->label());
-  }
-  return result;
-}
 }  // namespace sequant
 
 #endif  // SEQUANT_EVAL_EVAL_HPP

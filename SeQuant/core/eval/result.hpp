@@ -1,14 +1,14 @@
 #ifndef SEQUANT_EVAL_RESULT_HPP
 #define SEQUANT_EVAL_RESULT_HPP
 
+#include <SeQuant/core/eval/eval_fwd.hpp>
+
 #include <SeQuant/core/algorithm.hpp>
 #include <SeQuant/core/container.hpp>
-#include <SeQuant/core/eval/eval_fwd.hpp>
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/logger.hpp>
 #include <SeQuant/core/utility/macros.hpp>
-#include <SeQuant/domain/mbpt/biorthogonalization.hpp>
 
 #include <TiledArray/einsum/tiledarray.h>
 #include <btas/btas.h>
@@ -341,126 +341,6 @@ auto particle_antisymmetrize_btas(btas::Tensor<Args...> const& arr,
   return result;
 }
 
-/// \brief This function is used to implement
-/// ResultPtr::biorthogonal_nns_project for TA::DistArray
-///
-/// \param arr The array to be "cleaned up"
-/// \param bra_rank The rank of the bra indices
-///
-/// \return The cleaned TA::DistArray.
-template <typename... Args>
-auto biorthogonal_nns_project_ta(TA::DistArray<Args...> const& arr,
-                                 size_t bra_rank) {
-  using ranges::views::iota;
-  size_t const rank = arr.trange().rank();
-  SEQUANT_ASSERT(bra_rank <= rank);
-  size_t const ket_rank = rank - bra_rank;
-
-  // Residuals of rank 4 or less have no redundancy and don't require NNS
-  // projection
-  if (rank <= 4) return arr;
-
-  using numeric_type = typename TA::DistArray<Args...>::numeric_type;
-
-  const auto& nns_p_coeffs = nns_projection_weights<numeric_type>(ket_rank);
-
-  TA::DistArray<Args...> result;
-
-  perm_t perm = iota(size_t{0}, rank) | ranges::to<perm_t>;
-  perm_t bra_perm = iota(size_t{0}, bra_rank) | ranges::to<perm_t>;
-  perm_t ket_perm = iota(bra_rank, rank) | ranges::to<perm_t>;
-
-  const auto lannot = ords_to_annot(perm);
-
-  if (ket_rank > 2 && !nns_p_coeffs.empty()) {
-    const auto bra_annot = bra_rank == 0 ? "" : ords_to_annot(bra_perm);
-
-    size_t num_perms = nns_p_coeffs.size();
-    for (size_t perm_rank = 0; perm_rank < num_perms; ++perm_rank) {
-      perm_t permuted_ket =
-          compute_permuted_indices(ket_perm, perm_rank, ket_rank);
-
-      numeric_type coeff = nns_p_coeffs[perm_rank];
-
-      const auto ket_annot = ords_to_annot(permuted_ket);
-      const auto annot =
-          bra_annot.empty() ? ket_annot : bra_annot + "," + ket_annot;
-
-      if (result.is_initialized()) {
-        result(lannot) += coeff * arr(annot);
-      } else {
-        result(lannot) = coeff * arr(annot);
-      }
-    }
-  } else {
-    result(lannot) = arr(lannot);
-  }
-
-  TA::DistArray<Args...>::wait_for_lazy_cleanup(result.world());
-  return result;
-}
-
-/// \brief This function is used to implement
-/// ResultPtr::biorthogonal_nns_project for btas::Tensor
-///
-/// \param arr The array to be "cleaned up"
-/// \param bra_rank The rank of the bra indices
-///
-/// \return The cleaned btas::Tensor.
-template <typename... Args>
-auto biorthogonal_nns_project_btas(btas::Tensor<Args...> const& arr,
-                                   size_t bra_rank) {
-  using ranges::views::iota;
-  size_t const rank = arr.rank();
-  SEQUANT_ASSERT(bra_rank <= rank);
-  size_t const ket_rank = rank - bra_rank;
-
-  // Residuals of rank 4 or less have no redundancy and don't require NNS
-  // projection
-  if (rank <= 4) return arr;
-
-  using numeric_type = typename btas::Tensor<Args...>::numeric_type;
-
-  const auto& nns_p_coeffs = nns_projection_weights<numeric_type>(ket_rank);
-
-  btas::Tensor<Args...> result;
-
-  perm_t perm = iota(size_t{0}, rank) | ranges::to<perm_t>;
-  perm_t bra_perm = iota(size_t{0}, bra_rank) | ranges::to<perm_t>;
-  perm_t ket_perm = iota(bra_rank, rank) | ranges::to<perm_t>;
-
-  if (ket_rank > 2 && !nns_p_coeffs.empty()) {
-    bool result_initialized = false;
-
-    size_t num_perms = nns_p_coeffs.size();
-    for (size_t perm_rank = 0; perm_rank < num_perms; ++perm_rank) {
-      perm_t permuted_ket =
-          compute_permuted_indices(ket_perm, perm_rank, ket_rank);
-
-      numeric_type coeff = nns_p_coeffs[perm_rank];
-
-      perm_t annot = bra_perm;
-      annot.insert(annot.end(), permuted_ket.begin(), permuted_ket.end());
-
-      btas::Tensor<Args...> temp;
-      btas::permute(arr, annot, temp, perm);
-      btas::scal(coeff, temp);
-
-      if (result_initialized) {
-        result += temp;
-      } else {
-        result = temp;
-        result_initialized = true;
-      }
-    }
-
-  } else {
-    result = arr;
-  }
-
-  return result;
-}
-
 template <typename... Args>
 inline void log_result(Args const&... args) noexcept {
   auto& l = Logger::instance();
@@ -601,19 +481,6 @@ class Result {
   ///
   [[nodiscard]] virtual ResultPtr antisymmetrize(size_t bra_rank) const = 0;
 
-  /// \brief Implements "biorthogonal cleanup" of closed-shell
-  /// more compact spintraced equations produced via method of
-  /// <a href="https://arxiv.org/abs/1805.00565">Wang and Knizia</a>.
-  ///
-  /// For 3-body residual (`bra_rank=3`) this implements Eq. (41) of the
-  /// Wang/Knizia paper, same as the first line of Figure 1.
-  /// For 4-body residual this implements the first line of Figure 2.
-  /// The implementation is for arbitrary ranks.
-  /// @param bra_rank the particle rank of the residual tensor (i.e.
-  ///                 its order halved)
-  [[nodiscard]] virtual ResultPtr biorthogonal_nns_project(
-      size_t bra_rank) const = 0;
-
   [[nodiscard]] bool has_value() const noexcept;
 
   [[nodiscard]] virtual ResultPtr mult_by_phase(std::int8_t) const = 0;
@@ -723,11 +590,6 @@ class ResultScalar final : public Result {
 
   [[nodiscard]] ResultPtr antisymmetrize(size_t /*bra_rank*/) const override {
     throw unimplemented_method("antisymmetrize");
-  }
-
-  [[nodiscard]] ResultPtr biorthogonal_nns_project(
-      [[maybe_unused]] size_t bra_rank) const override {
-    throw unimplemented_method("biorthogonal_nns_project");
   }
 
   [[nodiscard]] ResultPtr mult_by_phase(std::int8_t factor) const override {
@@ -869,18 +731,6 @@ class ResultTensorTA final : public Result {
   [[nodiscard]] ResultPtr antisymmetrize(size_t bra_rank) const override {
     return eval_result<this_type>(
         particle_antisymmetrize_ta(get<ArrayT>(), bra_rank));
-  }
-
-  [[nodiscard]] ResultPtr biorthogonal_nns_project(
-      size_t bra_rank) const override {
-    if constexpr (std::is_integral_v<numeric_type>) {
-      SEQUANT_ABORT(
-          "biorthogonal_nns_project is not supported for integral numeric "
-          "types");
-    } else {
-      return eval_result<this_type>(
-          biorthogonal_nns_project_ta(get<ArrayT>(), bra_rank));
-    }
   }
 
  private:
@@ -1031,13 +881,6 @@ class ResultTensorOfTensorTA final : public Result {
     return nullptr;
   }
 
-  [[nodiscard]] ResultPtr biorthogonal_nns_project(
-      [[maybe_unused]] size_t bra_rank) const override {
-    // or? throw unimplemented_method("biorthogonal_nns_project");
-    // not implemented yet, I think I need it for CSV
-    return nullptr;
-  }
-
  private:
   [[nodiscard]] std::size_t size_in_bytes() const final {
     auto& v = get<ArrayT>();
@@ -1138,18 +981,6 @@ class ResultTensorBTAS final : public Result {
   [[nodiscard]] ResultPtr antisymmetrize(size_t bra_rank) const override {
     return eval_result<ResultTensorBTAS<T>>(
         particle_antisymmetrize_btas(get<T>(), bra_rank));
-  }
-
-  [[nodiscard]] ResultPtr biorthogonal_nns_project(
-      [[maybe_unused]] size_t bra_rank) const override {
-    if constexpr (std::is_integral_v<numeric_type>) {
-      SEQUANT_ABORT(
-          "biorthogonal_nns_project is not supported for integral numeric "
-          "types");
-    } else {
-      return eval_result<ResultTensorBTAS<T>>(
-          biorthogonal_nns_project_btas(get<T>(), bra_rank));
-    }
   }
 
  private:

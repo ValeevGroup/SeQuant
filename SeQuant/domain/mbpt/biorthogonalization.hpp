@@ -5,6 +5,10 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
 
+#if defined(SEQUANT_HAS_TILEDARRAY) || defined(SEQUANT_HAS_BTAS)
+#include <SeQuant/core/eval/eval.hpp>
+#endif
+
 #include <condition_variable>
 
 namespace sequant {
@@ -217,6 +221,131 @@ template <typename T>
     return cache[key].value();
   }
 }
+
+#if defined(SEQUANT_HAS_TILEDARRAY) || defined(SEQUANT_HAS_BTAS)
+
+/// \brief This function is used to implement
+/// ResultPtr::biorthogonal_nns_project for TA::DistArray
+///
+/// \param arr The array to be "cleaned up"
+/// \param bra_rank The rank of the bra indices
+///
+/// \return The cleaned TA::DistArray.
+template <typename... Args>
+auto biorthogonal_nns_project_ta(TA::DistArray<Args...> const& arr,
+                                 size_t bra_rank) {
+  using ranges::views::iota;
+  size_t const rank = arr.trange().rank();
+  SEQUANT_ASSERT(bra_rank <= rank);
+  size_t const ket_rank = rank - bra_rank;
+
+  // Residuals of rank 4 or less have no redundancy and don't require NNS
+  // projection
+  if (rank <= 4) return arr;
+
+  using numeric_type = typename TA::DistArray<Args...>::numeric_type;
+
+  const auto& nns_p_coeffs = nns_projection_weights<numeric_type>(ket_rank);
+
+  TA::DistArray<Args...> result;
+
+  perm_t perm = iota(size_t{0}, rank) | ranges::to<perm_t>;
+  perm_t bra_perm = iota(size_t{0}, bra_rank) | ranges::to<perm_t>;
+  perm_t ket_perm = iota(bra_rank, rank) | ranges::to<perm_t>;
+
+  const auto lannot = ords_to_annot(perm);
+
+  if (ket_rank > 2 && !nns_p_coeffs.empty()) {
+    const auto bra_annot = bra_rank == 0 ? "" : ords_to_annot(bra_perm);
+
+    size_t num_perms = nns_p_coeffs.size();
+    for (size_t perm_rank = 0; perm_rank < num_perms; ++perm_rank) {
+      perm_t permuted_ket =
+          compute_permuted_indices(ket_perm, perm_rank, ket_rank);
+
+      numeric_type coeff = nns_p_coeffs[perm_rank];
+
+      const auto ket_annot = ords_to_annot(permuted_ket);
+      const auto annot =
+          bra_annot.empty() ? ket_annot : bra_annot + "," + ket_annot;
+
+      if (result.is_initialized()) {
+        result(lannot) += coeff * arr(annot);
+      } else {
+        result(lannot) = coeff * arr(annot);
+      }
+    }
+  } else {
+    result(lannot) = arr(lannot);
+  }
+
+  TA::DistArray<Args...>::wait_for_lazy_cleanup(result.world());
+  return result;
+}
+
+/// \brief This function is used to implement
+/// ResultPtr::biorthogonal_nns_project for btas::Tensor
+///
+/// \param arr The array to be "cleaned up"
+/// \param bra_rank The rank of the bra indices
+///
+/// \return The cleaned btas::Tensor.
+template <typename... Args>
+auto biorthogonal_nns_project_btas(btas::Tensor<Args...> const& arr,
+                                   size_t bra_rank) {
+  using ranges::views::iota;
+  size_t const rank = arr.rank();
+  SEQUANT_ASSERT(bra_rank <= rank);
+  size_t const ket_rank = rank - bra_rank;
+
+  // Residuals of rank 4 or less have no redundancy and don't require NNS
+  // projection
+  if (rank <= 4) return arr;
+
+  using numeric_type = typename btas::Tensor<Args...>::numeric_type;
+
+  const auto& nns_p_coeffs = nns_projection_weights<numeric_type>(ket_rank);
+
+  btas::Tensor<Args...> result;
+
+  perm_t perm = iota(size_t{0}, rank) | ranges::to<perm_t>;
+  perm_t bra_perm = iota(size_t{0}, bra_rank) | ranges::to<perm_t>;
+  perm_t ket_perm = iota(bra_rank, rank) | ranges::to<perm_t>;
+
+  if (ket_rank > 2 && !nns_p_coeffs.empty()) {
+    bool result_initialized = false;
+
+    size_t num_perms = nns_p_coeffs.size();
+    for (size_t perm_rank = 0; perm_rank < num_perms; ++perm_rank) {
+      perm_t permuted_ket =
+          compute_permuted_indices(ket_perm, perm_rank, ket_rank);
+
+      numeric_type coeff = nns_p_coeffs[perm_rank];
+
+      perm_t annot = bra_perm;
+      annot.insert(annot.end(), permuted_ket.begin(), permuted_ket.end());
+
+      btas::Tensor<Args...> temp;
+      btas::permute(arr, annot, temp, perm);
+      btas::scal(coeff, temp);
+
+      if (result_initialized) {
+        result += temp;
+      } else {
+        result = temp;
+        result_initialized = true;
+      }
+    }
+
+  } else {
+    result = arr;
+  }
+
+  return result;
+}
+
+#endif
+
 }  // namespace sequant
 
 #endif
