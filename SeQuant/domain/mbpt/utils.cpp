@@ -7,9 +7,14 @@
 
 namespace sequant::mbpt {
 
-ExprPtr lst(ExprPtr A, ExprPtr B, size_t commutator_rank,
-            const LSTOptions& options) {
+ExprPtr lst(ExprPtr A, ExprPtr B, size_t commutator_rank, LSTOptions options) {
   SEQUANT_ASSERT(commutator_rank >= 1 && "Truncation order must be at least 1");
+
+  // use commutators if unitary ansatz is chosen
+  if (!options.use_commutators.has_value())
+    options.use_commutators = options.unitary;
+  SEQUANT_ASSERT(options.use_commutators.has_value() &&
+                 "mbpt::lst: use_commutators must have a value");
 
   // use cloned expr to avoid side effects
   if (!options.skip_clone) A = A->clone();
@@ -23,7 +28,7 @@ ExprPtr lst(ExprPtr A, ExprPtr B, size_t commutator_rank,
     for (size_t k = 1; k <= commutator_rank; ++k) {
       ExprPtr op_Sk_comm_w_S;
 
-      if (options.use_commutators) {
+      if (options.use_commutators.value()) {
         // commutator form: [O,B] = OB - BO
         op_Sk_comm_w_S = op_Sk * B - B * op_Sk;
 

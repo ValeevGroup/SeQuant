@@ -21,7 +21,8 @@ struct LSTOptions {
   bool unitary = false;
   /// If true, uses explicit commutators [A,B] = AB - BA; otherwise uses
   /// connected products (AB)_c
-  bool use_commutators = false;
+  /// LST will set this to true if unitary is true, else remains std::nullopt
+  std::optional<bool> use_commutators = std::nullopt;
   /// If true, will not clone the input expression
   bool skip_clone = false;
 };
@@ -33,16 +34,17 @@ struct LSTOptions {
 /// @param A Expression A (e.g., the Hamiltonian)
 /// @param B Expression B (e.g., the cluster operator T)
 /// @param commutator_rank The maximum order of nested commutators to retain (e.g. 4 for traditional coupled-cluster)
-/// @param options Options controlling the transformation behavior
+/// @param options Options controlling the transformation behavior, see LSTOptions.
 /// @sa LSTOptions
 /// Notes:
 /// - If \p options.unitary is true, the ansatz uses B - B^+ instead of B.
-/// - If \p options.use_commutators is false (default), commutators are computed via connected products: [A,B] = (AB)_c
+/// - If \p options.use_commutators is false, commutators are computed via connected products: [A,B] = (AB)_c
 /// - If \p options.use_commutators is true, commutators are computed explicitly: [A,B] = AB - BA
+/// - If \p options.use_commutators is not set, it defaults to the value of \p options.unitary. i.e., unless explicitly specified, unitary ansatz will always use commutators.
 /// @pre This function expects \p A and \p B to be composed of mbpt::Operators
 // clang-format on
 ExprPtr lst(ExprPtr A, ExprPtr B, size_t commutator_rank,
-            const LSTOptions& options = {});
+            LSTOptions options = {});
 
 /// @brief Screens out terms in the expression \p expr that cannot contribute to
 /// expectation value
