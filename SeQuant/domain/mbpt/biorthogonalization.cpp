@@ -552,7 +552,7 @@ std::vector<double> compute_nns_p_coeffs(std::size_t n_particles,
   auto normalized_pinv = compute_biorth_coeffs(n_particles, threshold);
   Eigen::MatrixXd nns_matrix = perm_ovlp_mat * normalized_pinv;
 
-  std::size_t num_perms = nns_matrix.rows();
+  auto num_perms = nns_matrix.rows();
   std::vector<double> coeffs;
   coeffs.reserve(num_perms);
   for (std::size_t i = 0; i < num_perms; ++i) {
