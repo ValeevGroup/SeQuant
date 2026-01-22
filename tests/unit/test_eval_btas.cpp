@@ -7,6 +7,7 @@
 #include <SeQuant/core/eval/result.hpp>
 #include <SeQuant/core/optimize.hpp>
 #include <SeQuant/core/parse.hpp>
+#include <SeQuant/domain/mbpt/biorthogonalization.hpp>
 
 #include <btas/btas.h>
 #include <btas/tensor_func.h>
@@ -209,9 +210,9 @@ TEST_CASE("eval_with_btas", "[eval_btas]") {
   auto eval_biorthogonal_nns_project =
       [&yield_](sequant::ExprPtr const& expr,
                 container::svector<long> const& target_labels) {
-        return evaluate_biorthogonal_nns_project(eval_node(expr), target_labels,
-                                                 yield_)
-            ->get<BTensorD>();
+        auto result = evaluate(eval_node(expr), target_labels, yield_);
+        return biorthogonal_nns_project(
+            result->get<BTensorD>(), eval_node(expr)->as_tensor().bra_rank());
       };
 
   auto parse_antisymm = [](auto const& xpr) {

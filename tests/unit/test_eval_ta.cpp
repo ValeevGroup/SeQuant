@@ -8,6 +8,7 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/parse.hpp>
 #include <SeQuant/core/utility/macros.hpp>
+#include <SeQuant/domain/mbpt/biorthogonalization.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 
 #include <tiledarray.h>
@@ -324,9 +325,9 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
     auto eval_biorthogonal_nns_project = [&yield_](
                                              sequant::ExprPtr const& expr,
                                              std::string const& target_labels) {
-      return evaluate_biorthogonal_nns_project(eval_node(expr), target_labels,
-                                               yield_)
-          ->get<TA::TArrayD>();
+      auto result = evaluate(eval_node(expr), target_labels, yield_);
+      return sequant::biorthogonal_nns_project(
+          result->get<TA::TArrayD>(), eval_node(expr)->as_tensor().bra_rank());
     };
 
     SECTION("summation") {

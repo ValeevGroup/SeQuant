@@ -344,6 +344,22 @@ auto biorthogonal_nns_project_btas(btas::Tensor<Args...> const& arr,
   return result;
 }
 
+#ifdef SEQUANT_HAS_TILEDARRAY
+template <typename... Args>
+auto biorthogonal_nns_project(TA::DistArray<Args...> const& arr,
+                              size_t bra_rank) {
+  return biorthogonal_nns_project_ta(arr, bra_rank);
+}
+#endif
+
+#ifdef SEQUANT_HAS_BTAS
+template <typename... Args>
+auto biorthogonal_nns_project(btas::Tensor<Args...> const& arr,
+                              size_t bra_rank) {
+  return biorthogonal_nns_project_btas(arr, bra_rank);
+}
+#endif
+
 #endif
 
 }  // namespace sequant
