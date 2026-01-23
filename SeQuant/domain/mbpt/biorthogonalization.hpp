@@ -23,58 +23,33 @@
 
 namespace sequant {
 
-namespace {
-static constexpr double default_biorth_threshold = 1e-12;
-}  // namespace
+static constexpr double default_biorthogonalizer_pseudoinverse_threshold =
+    1e-12;
 
-// clang-format off
-/// \brief Provides the first row of the biorthogonal coefficients matrix,
-/// hardcoded from Mathematica to avoid numerical precision loss.
-///
-/// The Myrvold-Ruskey unrank1 algorithm (doi.org/10.1016/S0020-0190(01)00141-7)
-/// is used to order permutations, then the permutational overlap matrix M is
-/// constructed with elements (-2)^{c} × (-1)^{n_particles}, where c is the
-/// number of cycles in the relative permutation.
-///
-/// The biorthogonal coefficients are obtained from the normalized pseudoinverse
-/// of M: first compute M_pinv (the pseudoinverse), then normalize it by the
-/// factor ((n_particles)!/rank(M)).
-/// Finally, biorthogonal coefficients = normalized_M_pinv · e_1,
-/// where e_1 is the first unit vector.
-/// See [DOI 10.48550/ARXIV.1805.00565](https://doi.org/10.48550/ARXIV.1805.00565)
-/// for more details.
-///
-/// \param n_particles The rank of external index pairs
-///
-/// \return Vector of rational coefficients representing the first row
-///
-/// \throw std::runtime_error if n_particles is not in the range [1,5]
-// clang-format on
-std::vector<sequant::rational> hardcoded_biorth_coeffs_first_row(
-    std::size_t n_particles);
+void biorthogonal_transform(
+    ResultExpr& expr, double pseudoinverse_threshold =
+                          default_biorthogonalizer_pseudoinverse_threshold);
 
-[[nodiscard]] ResultExpr biorthogonal_transform_copy(
-    const ResultExpr& expr, double threshold = default_biorth_threshold);
-
-[[nodiscard]] container::svector<ResultExpr> biorthogonal_transform_copy(
-    const container::svector<ResultExpr>& exprs,
-    double threshold = default_biorth_threshold);
-
-void biorthogonal_transform(ResultExpr& expr,
-                            double threshold = default_biorth_threshold);
-
-void biorthogonal_transform(container::svector<ResultExpr>& exprs,
-                            double threshold = default_biorth_threshold);
+void biorthogonal_transform(
+    container::svector<ResultExpr>& exprs,
+    double pseudoinverse_threshold =
+        default_biorthogonalizer_pseudoinverse_threshold);
 
 /// performs symbolic biorthogonal transform of CC-like equation using
 ///(for rank-3 and higher
-/// Wang-Knizia biorthogonalization (https://arxiv.org/abs/1805.00565) uses
-/// hardcoded coefficients for ranks 1-5, computed coefficients for higher ranks
+/// [Wang-Knizia biorthogonalization](https://arxiv.org/abs/1805.00565).
+///
+/// @note uses hardcoded coefficients for ranks 1-5,
+///  for higher ranks computes coefficients (if Eigen3 is available, else throws
+///  an exception)
 [[nodiscard]] ExprPtr biorthogonal_transform(
     const ExprPtr& expr,
     const container::svector<container::svector<sequant::Index>>&
         ext_index_groups = {},
-    double threshold = default_biorth_threshold);
+    double pseudoinverse_threshold =
+        default_biorthogonalizer_pseudoinverse_threshold);
+
+namespace detail {
 
 /// \brief Computes the non-null space (NNS) projection coefficients
 ///
@@ -84,7 +59,9 @@ void biorthogonal_transform(container::svector<ResultExpr>& exprs,
 ///
 /// \return Vector of computed NNS projection coefficients
 [[nodiscard]] std::vector<double> compute_nns_p_coeffs(
-    std::size_t n_particles, double threshold = default_biorth_threshold);
+    std::size_t n_particles,
+    double pseudoinverse_threshold =
+        default_biorthogonalizer_pseudoinverse_threshold);
 
 /// \brief Provides permuted indices using libperm unrank function
 ///
@@ -175,13 +152,15 @@ std::optional<std::vector<T>> hardcoded_nns_projector(std::size_t n_particles) {
 /// \tparam T The numeric type (must be floating point or complex)
 /// \param n_particles The rank of external index pairs
 /// \param threshold The threshold to compute the pseudoinverse matrix
-///        (set to default_biorth_threshold)
+///        (set to default_biorthogonalizer_pseudoinverse_threshold)
 ///
 /// \return (memoized) Vector of hrdcoded/computed NNS projection weights
 template <typename T>
   requires(std::floating_point<T> || meta::is_complex_v<T>)
 [[nodiscard]] const std::vector<T>& nns_projection_weights(
-    std::size_t n_particles, double threshold = default_biorth_threshold) {
+    std::size_t n_particles,
+    double pseudoinverse_threshold =
+        default_biorthogonalizer_pseudoinverse_threshold) {
   static const std::vector<T> empty_vec{};
 
   if (n_particles < 3) {
@@ -195,7 +174,7 @@ template <typename T>
   static std::condition_variable cache_cv;
   static container::map<CacheKey, CacheValue> cache;
 
-  CacheKey key{n_particles, threshold};
+  CacheKey key{n_particles, pseudoinverse_threshold};
 
   {
     std::unique_lock<std::mutex> lock(cache_mutex);
@@ -215,7 +194,8 @@ template <typename T>
       nns_p_coeffs = std::move(hardcoded_coeffs.value());
     }
   } else {
-    auto coeffs = compute_nns_p_coeffs(n_particles, threshold);
+    auto coeffs =
+        detail::compute_nns_p_coeffs(n_particles, pseudoinverse_threshold);
     nns_p_coeffs.reserve(coeffs.size());
     for (const auto& c : coeffs) {
       nns_p_coeffs.push_back(static_cast<T>(c));
@@ -229,6 +209,8 @@ template <typename T>
     return cache[key].value();
   }
 }
+
+}  // namespace detail
 
 #if defined(SEQUANT_HAS_TILEDARRAY)
 
@@ -253,7 +235,8 @@ auto biorthogonal_nns_project_ta(TA::DistArray<Args...> const& arr,
 
   using numeric_type = typename TA::DistArray<Args...>::numeric_type;
 
-  const auto& nns_p_coeffs = nns_projection_weights<numeric_type>(ket_rank);
+  const auto& nns_p_coeffs =
+      detail::nns_projection_weights<numeric_type>(ket_rank);
 
   TA::DistArray<Args...> result;
 
@@ -269,7 +252,7 @@ auto biorthogonal_nns_project_ta(TA::DistArray<Args...> const& arr,
     size_t num_perms = nns_p_coeffs.size();
     for (size_t perm_rank = 0; perm_rank < num_perms; ++perm_rank) {
       perm_t permuted_ket =
-          compute_permuted_indices(ket_perm, perm_rank, ket_rank);
+          detail::compute_permuted_indices(ket_perm, perm_rank, ket_rank);
 
       numeric_type coeff = nns_p_coeffs[perm_rank];
 
@@ -289,6 +272,12 @@ auto biorthogonal_nns_project_ta(TA::DistArray<Args...> const& arr,
 
   TA::DistArray<Args...>::wait_for_lazy_cleanup(result.world());
   return result;
+}
+
+template <typename... Args>
+auto biorthogonal_nns_project(TA::DistArray<Args...> const& arr,
+                              size_t bra_rank) {
+  return biorthogonal_nns_project_ta(arr, bra_rank);
 }
 
 #endif  // defined(SEQUANT_HAS_TILEDARRAY)
@@ -316,7 +305,8 @@ auto biorthogonal_nns_project_btas(btas::Tensor<Args...> const& arr,
 
   using numeric_type = typename btas::Tensor<Args...>::numeric_type;
 
-  const auto& nns_p_coeffs = nns_projection_weights<numeric_type>(ket_rank);
+  const auto& nns_p_coeffs =
+      detail::nns_projection_weights<numeric_type>(ket_rank);
 
   btas::Tensor<Args...> result;
 
@@ -330,7 +320,7 @@ auto biorthogonal_nns_project_btas(btas::Tensor<Args...> const& arr,
     size_t num_perms = nns_p_coeffs.size();
     for (size_t perm_rank = 0; perm_rank < num_perms; ++perm_rank) {
       perm_t permuted_ket =
-          compute_permuted_indices(ket_perm, perm_rank, ket_rank);
+          detail::compute_permuted_indices(ket_perm, perm_rank, ket_rank);
 
       numeric_type coeff = nns_p_coeffs[perm_rank];
 
@@ -356,21 +346,11 @@ auto biorthogonal_nns_project_btas(btas::Tensor<Args...> const& arr,
   return result;
 }
 
-#ifdef SEQUANT_HAS_TILEDARRAY
-template <typename... Args>
-auto biorthogonal_nns_project(TA::DistArray<Args...> const& arr,
-                              size_t bra_rank) {
-  return biorthogonal_nns_project_ta(arr, bra_rank);
-}
-#endif
-
-#ifdef SEQUANT_HAS_BTAS
 template <typename... Args>
 auto biorthogonal_nns_project(btas::Tensor<Args...> const& arr,
                               size_t bra_rank) {
   return biorthogonal_nns_project_btas(arr, bra_rank);
 }
-#endif
 
 #endif  // defined(SEQUANT_HAS_BTAS)
 
