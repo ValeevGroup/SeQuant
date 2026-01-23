@@ -5,8 +5,13 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
 
-#if defined(SEQUANT_HAS_TILEDARRAY) || defined(SEQUANT_HAS_BTAS)
-#include <SeQuant/core/eval/eval.hpp>
+#if defined(SEQUANT_HAS_TILEDARRAY)
+#include <SeQuant/core/eval/backends/tiledarray/eval_expr.hpp>
+#include <SeQuant/core/eval/backends/tiledarray/result.hpp>
+#endif
+#if defined(SEQUANT_HAS_BTAS)
+#include <SeQuant/core/eval/backends/btas/eval_expr.hpp>
+#include <SeQuant/core/eval/backends/btas/result.hpp>
 #endif
 
 #include <condition_variable>
@@ -222,7 +227,7 @@ template <typename T>
   }
 }
 
-#if defined(SEQUANT_HAS_TILEDARRAY) || defined(SEQUANT_HAS_BTAS)
+#if defined(SEQUANT_HAS_TILEDARRAY)
 
 /// \brief This function is used to implement
 /// ResultPtr::biorthogonal_nns_project for TA::DistArray
@@ -282,6 +287,10 @@ auto biorthogonal_nns_project_ta(TA::DistArray<Args...> const& arr,
   TA::DistArray<Args...>::wait_for_lazy_cleanup(result.world());
   return result;
 }
+
+#endif  // defined(SEQUANT_HAS_TILEDARRAY)
+
+#if defined(SEQUANT_HAS_BTAS)
 
 /// \brief This function is used to implement
 /// ResultPtr::biorthogonal_nns_project for btas::Tensor
@@ -360,7 +369,7 @@ auto biorthogonal_nns_project(btas::Tensor<Args...> const& arr,
 }
 #endif
 
-#endif
+#endif  // defined(SEQUANT_HAS_BTAS)
 
 }  // namespace sequant
 

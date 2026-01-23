@@ -3,14 +3,16 @@
 
 #include "catch2_sequant.hpp"
 
+#include <SeQuant/core/eval/backends/btas/eval_expr.hpp>
+#include <SeQuant/core/eval/backends/btas/result.hpp>
 #include <SeQuant/core/eval/eval.hpp>
-#include <SeQuant/core/eval/result.hpp>
 #include <SeQuant/core/optimize.hpp>
 #include <SeQuant/core/parse.hpp>
 #include <SeQuant/domain/mbpt/biorthogonalization.hpp>
 
 #include <btas/btas.h>
 #include <btas/tensor_func.h>
+
 #include <boost/regex.hpp>
 
 #include <string>
@@ -179,7 +181,9 @@ TEST_CASE("eval_with_btas", "[eval_btas]") {
 
   using BTensorD = btas::Tensor<double>;
 
-  auto norm = [](BTensorD const& tnsr) { return btas::norm(tnsr); };
+  auto norm = [](BTensorD const& tnsr) {
+    return std::sqrt(btas::dotc(tnsr, tnsr));
+  };
 
   std::srand(2023);
   const size_t nocc = 2, nvirt = 20;

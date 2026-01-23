@@ -67,9 +67,12 @@ Useful CMake Variables
    * - SEQUANT_TESTS
      - `BUILD_TESTING <https://cmake.org/cmake/help/latest/variable/BUILD_TESTING.html>`_
      - Enables test targets, e.g. ``check-sequant``.
-   * - SEQUANT_EVAL_TESTS
+   * - SEQUANT_BTAS
      - OFF
-     - Enables SeQuant evaluation tests using ``TiledArray`` and ``BTAS``.
+     - SeQuant will look for (or build) `BTAS tensor library <https://github.com/ValeevGroup/BTAS>` and enable its use as an evaluation backend.
+   * - SEQUANT_TILEDARRAY
+     - OFF
+     - SeQuant will look for (or build) `TiledArray tensor framework <https://github.com/ValeevGroup/TiledArray>` and enable its use as an evaluation backend.
    * - SEQUANT_MIMALLOC
      - OFF
      - Use `mimalloc <https://github.com/microsoft/mimalloc>`_ for fast memory allocation.

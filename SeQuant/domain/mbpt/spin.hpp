@@ -214,7 +214,7 @@ ExprPtr S_maps(const ExprPtr& expr);
 
 /// WK biorthogonalization rewrites biorthogonal expressions as a projector
 /// onto non-null-space (NNS)
-/// applied to the biorothogonal expressions where out of each
+/// applied to the biorthogonal expressions where out of each
 /// group of terms related by permutation of external indices
 /// those with the largest coefficients are selected.
 /// This function performs the selection by forming groups of terms that
