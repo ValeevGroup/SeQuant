@@ -112,6 +112,11 @@ set(SEQUANT_INSTALL_CMAKEDIR "lib/cmake/sequant"
 ############################
 option(SEQUANT_BENCHMARKS "Enable SeQuant benchmarks" ${PROJECT_IS_TOP_LEVEL})
 option(SEQUANT_UTILITIES "Enable SeQuant utility programs" ${PROJECT_IS_TOP_LEVEL})
+option(SEQUANT_EVAL_TESTS "OBSOLETE: use SEQUANT_TILEDARRAY and SEQUANT_BTAS" OFF)
+option(SEQUANT_BTAS "Enable BTAS eval backend" ${SEQUANT_EVAL_TESTS})
+add_feature_info(SEQUANT_EVAL_BTAS SEQUANT_BTAS "Enable BTAS eval backend")
+option(SEQUANT_TILEDARRAY "Enable TiledArray eval backend" ${SEQUANT_EVAL_TESTS})
+add_feature_info(SEQUANT_EVAL_TILEDARRAY SEQUANT_TILEDARRAY "Enable TiledArray eval backend")
 
 option(SEQUANT_IWYU "Whether to use the include-what-you-use tool (if found)" OFF)
 option(SEQUANT_WARNINGS_AS_ERRORS "Whether to treat compiler warnings as errors" ${PROJECT_IS_TOP_LEVEL})
@@ -260,9 +265,9 @@ set(SeQuant_src
         SeQuant/core/container.hpp
         SeQuant/core/context.cpp
         SeQuant/core/context.hpp
-        SeQuant/core/eval_expr.cpp
-        SeQuant/core/eval_expr.hpp
-        SeQuant/core/eval_node.hpp
+        SeQuant/core/eval/eval_expr.cpp
+        SeQuant/core/eval/eval_expr.hpp
+        SeQuant/core/eval/eval_node.hpp
         SeQuant/core/export/compute_selection.cpp
         SeQuant/core/export/compute_selection.hpp
         SeQuant/core/export/context.cpp
@@ -405,20 +410,44 @@ set_source_files_properties(
 )
 
 ### optional prereqs
-if (SEQUANT_EVAL_TESTS)
-    include(FindOrFetchTiledArray)
-endif (SEQUANT_EVAL_TESTS)
-
-if (TARGET tiledarray)
+set(SEQUANT_HAS_EVAL OFF)  # do not build SQ/eval unless there is a backend
+if (SEQUANT_TILEDARRAY)
+    if (NOT TARGET tiledarray)
+        include(FindOrFetchTiledArray)
+    endif()
+    set(SEQUANT_HAS_EVAL ON)
     set(SEQUANT_HAS_TILEDARRAY ON)
+endif ()
+if (SEQUANT_BTAS)
+    if (NOT TARGET BTAS::BTAS)
+        include(FindOrFetchBTAS)
+    endif()
+    set(SEQUANT_HAS_EVAL ON)
+    set(SEQUANT_HAS_BTAS ON)
+endif ()
+
+if (SEQUANT_HAS_EVAL)
     list(APPEND SeQuant_src
             SeQuant/core/eval/cache_manager.cpp
             SeQuant/core/eval/cache_manager.hpp
             SeQuant/core/eval/eval.hpp
             SeQuant/core/eval/result.cpp
             SeQuant/core/eval/result.hpp
-            SeQuant/core/eval/eval_fwd.hpp
+            SeQuant/core/eval/fwd.hpp
             )
+    if (SEQUANT_HAS_TILEDARRAY)
+        list(APPEND SeQuant_src
+                SeQuant/core/eval/backends/tiledarray/eval_expr.hpp
+                SeQuant/core/eval/backends/tiledarray/result.hpp
+                SeQuant/core/eval/backends/tiledarray/result.cpp
+                )
+    endif ()
+    if (SEQUANT_HAS_BTAS)
+        list(APPEND SeQuant_src
+                SeQuant/core/eval/backends/btas/eval_expr.hpp
+                SeQuant/core/eval/backends/btas/result.hpp
+                )
+    endif ()
 endif ()
 
 add_library(SeQuant
@@ -451,10 +480,17 @@ if (Boost_IS_MODULARIZED)
             Boost::spirit
     )
 endif()
-if (TARGET tiledarray)
+if (SEQUANT_HAS_EVAL)
+  target_compile_definitions(SeQuant PUBLIC SEQUANT_HAS_EVAL=1)
+  if (SEQUANT_HAS_TILEDARRAY)
     target_link_libraries(SeQuant PUBLIC tiledarray)
-    target_compile_definitions(SeQuant PUBLIC SEQUANT_HAS_TILEDARRAY=1 SEQUANT_HAS_BTAS=1)
-endif ()
+    target_compile_definitions(SeQuant PUBLIC SEQUANT_HAS_TILEDARRAY=1)
+  endif ()
+  if (SEQUANT_HAS_BTAS)
+    target_link_libraries(SeQuant PUBLIC BTAS::BTAS)
+    target_compile_definitions(SeQuant PUBLIC SEQUANT_HAS_BTAS=1)
+  endif ()
+endif()
 if (SEQUANT_HAS_EXECUTION_HEADER_STANDALONE OR SEQUANT_HAS_EXECUTION_HEADER_WITH_TBB)
     target_compile_definitions(SeQuant PUBLIC SEQUANT_HAS_EXECUTION_HEADER)
     if (SEQUANT_HAS_EXECUTION_HEADER_WITH_TBB)

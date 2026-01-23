@@ -1,20 +1,17 @@
 #ifndef SEQUANT_EVAL_EVAL_HPP
 #define SEQUANT_EVAL_EVAL_HPP
 
-#include <SeQuant/core/eval/eval_fwd.hpp>
+#include <SeQuant/core/eval/fwd.hpp>
 
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/eval/cache_manager.hpp>
+#include <SeQuant/core/eval/eval_node.hpp>
 #include <SeQuant/core/eval/result.hpp>
-#include <SeQuant/core/eval_node.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/logger.hpp>
 #include <SeQuant/core/meta.hpp>
 #include <SeQuant/core/parse.hpp>
 #include <SeQuant/core/utility/macros.hpp>
-
-#include <btas/btas.h>
-#include <tiledarray.h>
 
 #include <chrono>
 #include <range/v3/numeric.hpp>
@@ -312,8 +309,8 @@ ResultPtr evaluate(Node const& node,  //
       auto const de_nest =
           node.left()->tot() && node.right()->tot() && !node->tot();
       time = timed_eval_inplace([&]() {
-        result = left->prod(*right, ann,
-                            de_nest ? TA::DeNest::True : TA::DeNest::False);
+        result =
+            left->prod(*right, ann, de_nest ? DeNest::True : DeNest::False);
       });
     }
   }
