@@ -14,7 +14,12 @@
 #include <SeQuant/core/eval/backends/btas/result.hpp>
 #endif
 
+#include <concepts>
 #include <condition_variable>
+#include <cstddef>
+#include <mutex>
+#include <optional>
+#include <vector>
 
 namespace sequant {
 
@@ -63,9 +68,8 @@ void biorthogonal_transform(container::svector<ResultExpr>& exprs,
 
 /// performs symbolic biorthogonal transform of CC-like equation using
 ///(for rank-3 and higher
-/// Wang-Knizia biorthogonalization (https://arxiv.org/abs/1805.00565) is used
-/// uses hardcoded coefficients for ranks 1-6, computed coefficients for higher
-/// ranks
+/// Wang-Knizia biorthogonalization (https://arxiv.org/abs/1805.00565) uses
+/// hardcoded coefficients for ranks 1-5, computed coefficients for higher ranks
 [[nodiscard]] ExprPtr biorthogonal_transform(
     const ExprPtr& expr,
     const container::svector<container::svector<sequant::Index>>&
@@ -99,13 +103,12 @@ container::svector<size_t> compute_permuted_indices(
 /// The NNS projector weights are obtained from the normalized pseudoinverse
 /// of M: first compute M_pinv (the pseudoinverse), then normalize it by the
 /// factor ((n_particles)!/rank(M)).
-//// Finally, NNS projector = normalized_M_pinv · M.
+/// Finally, NNS projector = normalized_M_pinv · M.
 ///
 /// \param n_particles The rank of external index pairs
 ///
-/// \return Vector of NNS projector weights representing the last row
-///
-/// \throw std::runtime_error if n_particles is not in the range [1,5]
+/// \return Optional vector of NNS projector weights representing the last row,
+///         std::nullopt if n_particles is outside the range [1,5].
 template <typename T>
   requires(std::floating_point<T> || meta::is_complex_v<T>)
 std::optional<std::vector<T>> hardcoded_nns_projector(std::size_t n_particles) {

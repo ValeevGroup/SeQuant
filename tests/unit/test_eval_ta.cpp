@@ -544,7 +544,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
       REQUIRE(norm(man2) == Catch::Approx(norm(eval2)));
       TArrayD zero2;
       zero2("0,1,2,3,4,5") = man2("0,1,2,3,4,5") - eval2("0,1,2,3,4,5");
-      REQUIRE(norm(zero1) == Catch::Approx(0).margin(
+      REQUIRE(norm(zero2) == Catch::Approx(0).margin(
                                  100 * std::numeric_limits<double>::epsilon()));
 
       // for rank 4 residual, nns applies:

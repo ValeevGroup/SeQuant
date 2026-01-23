@@ -197,16 +197,9 @@ class compute_cceqvec {
           eqvec[R] = ex<Tensor>(Tensor{L"S", bra(kixs), ket(bixs)}) * eqvec[R];
           eqvec[R] = expand(eqvec[R]);
 
-          // apply normalization and rescaling factors
-          rational combined_factor;
-          if (ext_idxs.size() <= 2) {
-            combined_factor = rational(1, factorial(ext_idxs.size()));
-          } else {
-            auto fact_n = factorial(ext_idxs.size());
-            combined_factor = rational(
-                1, fact_n - 1);  // this is (1/fact_n) * (fact_n/(fact_n-1))
-          }
-          eqvec[R] = ex<Constant>(combined_factor) * eqvec[R];
+          // apply normalization factor
+          auto const nf = rational(1, factorial(ext_idxs.size()));
+          eqvec[R] = ex<Constant>(nf) * eqvec[R];
           simplify(eqvec[R]);
 
           // WK_biorthogonalization_filter method removes the redundancy caused
