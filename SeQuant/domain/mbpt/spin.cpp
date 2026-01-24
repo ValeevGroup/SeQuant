@@ -1181,28 +1181,20 @@ ExprPtr closed_shell_CC_spintrace_v2(ExprPtr const& expr,
                 st_expr;
     }
     simplify(st_expr);
-    // expanding S after spintracing and biorthogonalization, to avoid dealing
-    // with large number of terms
+
     st_expr = S_maps(st_expr);
     // canonicalizer must be called before hash-filter to combine terms
     canonicalize(st_expr);
 
-    // apply hash filter method to get unique set of terms
     st_expr = WK_biorthogonalization_filter(st_expr, ext_idxs);
     // add S tensor again
     st_expr = ex<Tensor>(Tensor{reserved::symm_label(), bra(std::move(kixs)),
                                 ket(std::move(bixs))}) *
               st_expr;
 
-    rational combined_factor;
-    if (ext_idxs.size() <= 2) {
-      combined_factor = rational(1, factorial(ext_idxs.size()));
-    } else {
-      auto fact_n = factorial(ext_idxs.size());
-      combined_factor =
-          rational(1, fact_n - 1);  // this is (1/fact_n) * (fact_n/(fact_n-1))
-    }
-    st_expr = ex<Constant>(combined_factor) * st_expr;
+    const auto nf = ex<Constant>(
+        rational{1, factorial(ext_idxs.size())});  // normalization factor for S
+    st_expr = nf * st_expr;
   }
 
   simplify(st_expr);

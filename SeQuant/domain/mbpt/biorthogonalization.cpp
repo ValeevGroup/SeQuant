@@ -10,6 +10,7 @@
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/permutation.hpp>
 
+#include <Eigen/Core>
 #include <Eigen/Eigenvalues>
 
 #include <libperm/Permutation.hpp>
@@ -30,8 +31,134 @@ struct compare_first_less {
 using IndexPair = std::pair<Index, Index>;
 using ParticlePairings = container::svector<IndexPair>;
 
-ResultExpr biorthogonal_transform_copy(const ResultExpr& expr,
-                                       double threshold) {
+// clang-format off
+/// \brief Provides the first row of the biorthogonal coefficients matrix,
+/// hardcoded from Mathematica to avoid numerical precision loss.
+///
+/// The Myrvold-Ruskey unrank1 algorithm (doi.org/10.1016/S0020-0190(01)00141-7)
+/// is used to order permutations, then the permutational overlap matrix M is
+/// constructed with elements (-2)^{c} × (-1)^{n_particles}, where c is the
+/// number of cycles in the relative permutation.
+///
+/// The biorthogonal coefficients are obtained from the normalized pseudoinverse
+/// of M: first compute M_pinv (the pseudoinverse), then normalize it by the
+/// factor ((n_particles)!/rank(M)).
+/// Finally, biorthogonal coefficients = normalized_M_pinv · e_1,
+/// where e_1 is the first unit vector.
+/// See [DOI 10.48550/ARXIV.1805.00565](https://doi.org/10.48550/ARXIV.1805.00565)
+/// for more details.
+///
+/// \param n_particles The rank of external index pairs
+///
+/// \return Vector of rational coefficients representing the first row
+///
+/// \throw std::runtime_error if n_particles is not in the range [1,5]
+// clang-format on
+std::vector<sequant::rational> hardcoded_biorthogonalizer_row(
+    std::size_t n_particles) {
+  switch (n_particles) {
+    case 1:
+      return std::vector<sequant::rational>{ratio(1, 2)};
+
+    case 2:
+      return std::vector<sequant::rational>{ratio(1, 3), ratio(1, 6)};
+
+    case 3:
+      return std::vector<sequant::rational>{ratio(17, 120), ratio(-7, 120),
+                                            ratio(-1, 120), ratio(-1, 120),
+                                            ratio(-1, 120), ratio(-7, 120)};
+
+    case 4:
+      return std::vector<sequant::rational>{
+          ratio(43, 840), ratio(-19, 1680), ratio(-19, 1680),
+          ratio(-1, 105), ratio(-19, 1680), ratio(-19, 1680),
+          ratio(13, 840), ratio(1, 120),    ratio(-1, 105),
+          ratio(1, 120),  ratio(-1, 105),   ratio(-19, 1680),
+          ratio(-1, 105), ratio(1, 120),    ratio(1, 120),
+          ratio(13, 840), ratio(-1, 105),   ratio(-1, 105),
+          ratio(1, 120),  ratio(-19, 1680), ratio(-19, 1680),
+          ratio(13, 840), ratio(-19, 1680), ratio(1, 120)};
+
+    case 5:
+      return std::vector<sequant::rational>{
+          ratio(59, 3780),   ratio(-5, 3024),   ratio(-5, 3024),
+          ratio(-5, 3024),   ratio(-31, 7560),  ratio(-5, 3024),
+          ratio(-5, 3024),   ratio(-23, 30240), ratio(19, 7560),
+          ratio(37, 15120),  ratio(-5, 3024),   ratio(-23, 30240),
+          ratio(-5, 3024),   ratio(19, 7560),   ratio(37, 15120),
+          ratio(-31, 7560),  ratio(37, 15120),  ratio(37, 15120),
+          ratio(-31, 7560),  ratio(-5, 3024),   ratio(-5, 3024),
+          ratio(-23, 30240), ratio(-23, 30240), ratio(-23, 30240),
+          ratio(-13, 7560),  ratio(-5, 3024),   ratio(-5, 3024),
+          ratio(19, 7560),   ratio(-23, 30240), ratio(37, 15120),
+          ratio(19, 7560),   ratio(-23, 30240), ratio(19, 7560),
+          ratio(-23, 30240), ratio(-13, 7560),  ratio(37, 15120),
+          ratio(-13, 7560),  ratio(-13, 7560),  ratio(37, 15120),
+          ratio(-23, 30240), ratio(-31, 7560),  ratio(-13, 7560),
+          ratio(37, 15120),  ratio(37, 15120),  ratio(19, 7560),
+          ratio(37, 15120),  ratio(37, 15120),  ratio(-13, 7560),
+          ratio(-13, 7560),  ratio(-23, 30240), ratio(-31, 7560),
+          ratio(37, 15120),  ratio(-31, 7560),  ratio(37, 15120),
+          ratio(-5, 3024),   ratio(-5, 3024),   ratio(-23, 30240),
+          ratio(19, 7560),   ratio(-5, 3024),   ratio(37, 15120),
+          ratio(-31, 7560),  ratio(37, 15120),  ratio(37, 15120),
+          ratio(-13, 7560),  ratio(19, 7560),   ratio(37, 15120),
+          ratio(37, 15120),  ratio(-13, 7560),  ratio(-13, 7560),
+          ratio(-23, 30240), ratio(37, 15120),  ratio(-13, 7560),
+          ratio(37, 15120),  ratio(-13, 7560),  ratio(-23, 30240),
+          ratio(19, 7560),   ratio(-23, 30240), ratio(-23, 30240),
+          ratio(19, 7560),   ratio(-13, 7560),  ratio(-31, 7560),
+          ratio(37, 15120),  ratio(-13, 7560),  ratio(37, 15120),
+          ratio(19, 7560),   ratio(-31, 7560),  ratio(-31, 7560),
+          ratio(37, 15120),  ratio(37, 15120),  ratio(-5, 3024),
+          ratio(37, 15120),  ratio(-13, 7560),  ratio(37, 15120),
+          ratio(-13, 7560),  ratio(-23, 30240), ratio(-5, 3024),
+          ratio(19, 7560),   ratio(-23, 30240), ratio(-5, 3024),
+          ratio(37, 15120),  ratio(-5, 3024),   ratio(-23, 30240),
+          ratio(-23, 30240), ratio(-23, 30240), ratio(-13, 7560),
+          ratio(19, 7560),   ratio(19, 7560),   ratio(-23, 30240),
+          ratio(-23, 30240), ratio(-13, 7560),  ratio(-5, 3024),
+          ratio(19, 7560),   ratio(-5, 3024),   ratio(-23, 30240),
+          ratio(37, 15120),  ratio(37, 15120),  ratio(-13, 7560),
+          ratio(-13, 7560),  ratio(37, 15120),  ratio(-23, 30240)};
+
+    default:
+      throw std::runtime_error(
+          "hardcoded biorthogonal coefficients only available for ranks 1-5, "
+          "requested rank is : " +
+          std::to_string(n_particles));
+  }
+}
+
+Eigen::Matrix<sequant::rational, Eigen::Dynamic, Eigen::Dynamic>
+make_hardcoded_biorthogonalizer_matrix(
+    const std::vector<sequant::rational>& first_row, std::size_t n_particles) {
+  const auto n = first_row.size();
+  Eigen::Matrix<sequant::rational, Eigen::Dynamic, Eigen::Dynamic> M(n, n);
+
+  for (std::size_t row = 0; row < n; ++row) {
+    for (std::size_t col = 0; col < n; ++col) {
+      perm::Permutation row_perm = perm::unrank(n - 1 - row, n_particles);
+      perm::Permutation col_perm = perm::unrank(col, n_particles);
+
+      col_perm->preMultiply(row_perm);
+
+      std::size_t source_idx = perm::rank(col_perm, n_particles);
+      M(row, col) = first_row[source_idx];
+    }
+  }
+  return M;
+}
+
+Eigen::Matrix<sequant::rational, Eigen::Dynamic, Eigen::Dynamic>
+hardcoded_biorthogonalizer_matrix(std::size_t n_particles) {
+  auto first_row = hardcoded_biorthogonalizer_row(n_particles);
+  return make_hardcoded_biorthogonalizer_matrix(first_row, n_particles);
+}
+
+ResultExpr biorthogonal_transform_copy(
+    const ResultExpr& expr,
+    double threshold = default_biorthogonalizer_pseudoinverse_threshold) {
   container::svector<ResultExpr> wrapper = {expr.clone()};
 
   biorthogonal_transform(wrapper, threshold);
@@ -40,7 +167,8 @@ ResultExpr biorthogonal_transform_copy(const ResultExpr& expr,
 }
 
 container::svector<ResultExpr> biorthogonal_transform_copy(
-    const container::svector<ResultExpr>& exprs, double threshold) {
+    const container::svector<ResultExpr>& exprs,
+    double threshold = default_biorthogonalizer_pseudoinverse_threshold) {
   container::svector<ResultExpr> copy;
   copy.reserve(exprs.size());
 
@@ -102,8 +230,8 @@ Eigen::MatrixXd permutational_overlap_matrix(std::size_t n_particles) {
   return M;
 }
 
-Eigen::MatrixXd compute_biorth_coeffs(std::size_t n_particles,
-                                      double threshold) {
+Eigen::MatrixXd compute_biorthogonalizer_matrix(std::size_t n_particles,
+                                                double threshold) {
   auto perm_ovlp_mat = permutational_overlap_matrix(n_particles);
   SEQUANT_ASSERT(perm_ovlp_mat.rows() == perm_ovlp_mat.cols());
   SEQUANT_ASSERT(perm_ovlp_mat.isApprox(perm_ovlp_mat.transpose()));
@@ -310,7 +438,7 @@ void biorthogonal_transform(container::svector<ResultExpr>& result_exprs,
   // like R^{IJ}_{AB} and the index pairing of the result is what determines
   // the required symmetrization. Hence, the symmetrization operator must not
   // be changed when transforming from one representation into the other.
-  assert(std::all_of(
+  SEQUANT_ASSERT(std::all_of(
       result_exprs.begin(), result_exprs.end(), [](const ResultExpr& res) {
         bool found = false;
         res.expression()->visit(
@@ -338,18 +466,67 @@ void biorthogonal_transform(container::svector<ResultExpr>& result_exprs,
                ranges::to<container::svector<std::size_t>>();
 
   const std::size_t n_particles = externals.front().size();
-
-  Eigen::MatrixXd coefficients = compute_biorth_coeffs(n_particles, threshold);
-
   auto num_perms = factorial(n_particles);
-  SEQUANT_ASSERT(num_perms == coefficients.rows());
-  SEQUANT_ASSERT(num_perms == coefficients.cols());
 
   auto original_exprs = result_exprs |
                         ranges::views::transform([](const ResultExpr& res) {
                           return res.expression();
                         }) |
                         ranges::to<container::svector<ExprPtr>>();
+
+  auto memoize = []<typename T>(container::map<std::pair<std::size_t, double>,
+                                               std::optional<T>>& cache,
+                                std::mutex& mutex, std::condition_variable& cv,
+                                std::pair<std::size_t, double> key,
+                                auto compute_fn) -> const T& {
+    {
+      std::unique_lock<std::mutex> lock(mutex);
+      auto [it, inserted] = cache.try_emplace(key, std::nullopt);
+      if (!inserted) {
+        cv.wait(lock, [&] { return it->second.has_value(); });
+        return it->second.value();
+      }
+    }
+
+    T result = compute_fn();
+
+    {
+      std::lock_guard<std::mutex> lock(mutex);
+      cache[key] = std::move(result);
+      cv.notify_all();
+      return cache[key].value();
+    }
+  };
+
+  using HardcodedMatrix =
+      Eigen::Matrix<sequant::rational, Eigen::Dynamic, Eigen::Dynamic>;
+  using ComputedMatrix = Eigen::MatrixXd;
+  using CacheKey = std::pair<std::size_t, double>;
+
+  static std::mutex cache_mutex;
+  static std::condition_variable cache_cv;
+  static container::map<CacheKey, std::optional<HardcodedMatrix>>
+      hardcoded_cache;
+  static container::map<CacheKey, std::optional<ComputedMatrix>> computed_cache;
+
+  constexpr std::size_t max_rank_hardcoded_biorthogonalizer_matrix = 5;
+  CacheKey key{n_particles, threshold};
+
+  const HardcodedMatrix* hardcoded_coefficients = nullptr;
+  const ComputedMatrix* computed_coefficients = nullptr;
+
+  if (n_particles <= max_rank_hardcoded_biorthogonalizer_matrix) {
+    hardcoded_coefficients = &memoize(
+        hardcoded_cache, cache_mutex, cache_cv, key,
+        [&] { return hardcoded_biorthogonalizer_matrix(n_particles); });
+  } else {
+    computed_coefficients =
+        &memoize(computed_cache, cache_mutex, cache_cv, key, [&] {
+          return compute_biorthogonalizer_matrix(n_particles, threshold);
+        });
+    SEQUANT_ASSERT(num_perms == computed_coefficients->rows());
+    SEQUANT_ASSERT(num_perms == computed_coefficients->cols());
+  }
 
   for (std::size_t i = 0; i < result_exprs.size(); ++i) {
     result_exprs.at(i).expression() = ex<Constant>(0);
@@ -360,9 +537,14 @@ void biorthogonal_transform(container::svector<ResultExpr>& result_exprs,
       perm::Permutation perm = perm::unrank(rank, n_particles);
       perm->postMultiply(reference);
 
+      sequant::rational coeff =
+          (n_particles <= max_rank_hardcoded_biorthogonalizer_matrix)
+              ? (*hardcoded_coefficients)(ranks.at(i), rank)
+              : to_rational((*computed_coefficients)(ranks.at(i), rank),
+                            threshold);
+
       result_exprs.at(i).expression() +=
-          ex<Constant>(
-              to_rational(coefficients(ranks.at(i), rank), threshold)) *
+          ex<Constant>(coeff) *
           create_expr_for(externals.at(i), perm, externals, original_exprs);
     }
 
@@ -391,5 +573,37 @@ ExprPtr biorthogonal_transform(
 
   return res.expression();
 }
+
+namespace detail {
+
+std::vector<double> compute_nns_p_coeffs(std::size_t n_particles,
+                                         double threshold) {
+  auto perm_ovlp_mat = permutational_overlap_matrix(n_particles);
+  auto normalized_pinv =
+      compute_biorthogonalizer_matrix(n_particles, threshold);
+  Eigen::MatrixXd nns_matrix = perm_ovlp_mat * normalized_pinv;
+
+  auto num_perms = nns_matrix.rows();
+  std::vector<double> coeffs;
+  coeffs.reserve(num_perms);
+  for (std::size_t i = 0; i < num_perms; ++i) {
+    coeffs.push_back(nns_matrix(num_perms - 1, i));
+  }
+  return coeffs;
+}
+
+container::svector<size_t> compute_permuted_indices(
+    const container::svector<size_t>& indices, size_t perm_rank,
+    size_t n_particles) {
+  perm::Permutation perm_obj = perm::unrank(perm_rank, n_particles);
+
+  container::svector<size_t> permuted_indices(n_particles);
+  for (size_t i = 0; i < n_particles; ++i) {
+    permuted_indices[i] = indices[perm_obj[i]];
+  }
+  return permuted_indices;
+}
+
+}  // namespace detail
 
 }  // namespace sequant
