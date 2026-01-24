@@ -170,16 +170,19 @@ std::vector<ExprPtr> CC::tʼ(size_t rank, size_t order,
   SEQUANT_ASSERT(rank == 1 &&
                  "sequant::mbpt::CC::tʼ(): only one-body perturbation "
                  "operator is supported now");
-  if (unitary())
+  if (unitary()) {
     SEQUANT_ASSERT(hbar_truncation_rank_ &&
                    "hbar_truncation_rank must be specified for unitary ansatz");
-
+    SEQUANT_ASSERT(pertbar_truncation_rank_ &&
+                   "pertbar_truncation_rank must be specified for unitary "
+                   "ansatz");
+  }
   // construct h1_bar
   // truncate h1_bar at rank 2 for one-body perturbation operator and at rank 4
   // for two-body perturbation operator; unless specified otherwise
-  const auto h1_truncate_at = (rank == 1)
-                                  ? pertbar_truncation_rank_.value_or(2)
-                                  : pertbar_truncation_rank_.value_or(4);
+  const auto h1_truncate_default = rank == 1 ? 2 : 4;
+  const auto h1_truncate_at =
+      pertbar_truncation_rank_.value_or(h1_truncate_default);
   const auto h1_bar = mbpt::lst(Hʼ(rank, {.order = order, .nbatch = nbatch}),
                                 T(N), h1_truncate_at, {.unitary = unitary()});
 
