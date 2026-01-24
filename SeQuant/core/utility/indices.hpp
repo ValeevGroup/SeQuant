@@ -566,37 +566,40 @@ auto get_ket_idx(T&& container)
   }
 }
 
-auto subexpr_index_counts(meta::sized_range_of<Tensor> auto const& tnsrs) {
-  size_t const N = ranges::distance(tnsrs);
+template <std::ranges::input_range Rng>
+  requires meta::range_of<std::ranges::range_value_t<Rng>, Index>
+auto subset_index_counts(Rng const& rng) {
+  size_t const N = ranges::distance(rng);
   container::vector<container::map<Index, size_t, Index::FullLabelCompare>>
       result((1 << N));
-  for (auto i = 1; i < result.size(); ++i) {
-    auto bs = boost::dynamic_bitset<>(N, i);
-    for (auto b = 0; b < N; ++b)
-      if (bs[b])
-        for (auto&& ix : ranges::at(tnsrs, b).indices())
-          if (auto [it, yn] = result[i].try_emplace(ix, 1); !yn)  //
-            ++(it->second);
+  for (size_t i = 1; i < result.size(); ++i) {
+    for (auto&& ixs : bits::on_bits_index(i) | bits::sieve(rng)) {
+      for (auto&& ix : ixs)
+        if (auto [it, yn] = result[i].try_emplace(ix, 1); !yn)  //
+          ++(it->second);
+    }
   }
   return result;
 }
 
-template <meta::sized_range_of<Tensor> Rng, meta::range_of<Index> Ixs>
-auto subexpr_target_indices(Rng const& tnsrs, Ixs const& tixs) {
+template <std::ranges::input_range Rng>
+  requires meta::range_of<std::ranges::range_value_t<Rng>, Index>
+auto subset_target_indices(Rng const& rng,
+                            meta::range_of<Index> auto const& tixs) {
   using IndexSet = container::set<Index, Index::FullLabelCompare>;
-  size_t const N = ranges::distance(tnsrs);
+  size_t const N = ranges::distance(rng);
   container::vector<IndexSet> result((1 << N));
 
   if (result.empty()) return result;
 
   for (auto i = 0; i < N; ++i) {
-    auto&& ixs = ranges::at(tnsrs, i).indices();
+    auto&& ixs = ranges::at(rng, i);
     result[(1 << i)] = IndexSet(ranges::begin(ixs), ranges::end(ixs));
   }
 
   *result.rbegin() = IndexSet(ranges::begin(tixs), ranges::end(tixs));
 
-  auto counts = subexpr_index_counts(tnsrs);
+  auto counts = subset_index_counts(rng);
 
   for (auto i = 0; i < result.size(); ++i)
     for (auto&& [k, v] : counts[i])
