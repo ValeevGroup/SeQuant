@@ -569,8 +569,8 @@ ExprPtr expand_A_op(const ProductPtr& product) {
 
   if (!has_A_operator) return product;
 
-  const auto nf = ex<Constant>(rational{
-      1, (factorial(A_tensor.bra_rank()) * factorial(A_tensor.ket_rank()))});
+  const auto nf = rational{
+      1, (factorial(A_tensor.bra_rank()) * factorial(A_tensor.ket_rank()))};
 
   auto new_result = std::make_shared<Sum>();
   for (auto&& map : map_list) {
@@ -597,8 +597,7 @@ ExprPtr expand_A_op(const ProductPtr& product) {
         new_product->append(1, term);
       }
     }
-    new_product->scale(phase);
-    new_product->append(1, nf);
+    new_product->scale(phase * nf);
     new_result->append(new_product);
   }  // map_list
 
@@ -639,7 +638,7 @@ ExprPtr symmetrize_expr(const ProductPtr& product) {
     S = Tensor(L"S", bra(std::move(bra_list)), ket(std::move(ket_list)),
                A_tensor.aux(), Symmetry::Nonsymm);
   }
-  const auto nf = ex<Constant>(rational{1, factorial(S.ket_rank())});
+  const auto nf = rational{1, factorial(S.ket_rank())};
 
   // Generate replacement maps from a list of Index type (could be a bra or a
   // ket)
@@ -686,9 +685,8 @@ ExprPtr symmetrize_expr(const ProductPtr& product) {
   SEQUANT_ASSERT(!maps.empty());
   for (auto&& map : maps) {
     Product new_product{};
-    new_product.scale(product->scalar());
+    new_product.scale(product->scalar() * nf);
     new_product.append(get_phase(map), ex<Tensor>(S));
-    new_product.append(1, nf);
     auto temp_product = remove_tensor(product, L"A");
     for (auto&& term : *temp_product) {
       if (term->is<Tensor>()) {
@@ -882,13 +880,12 @@ ExprPtr S_maps(const ExprPtr& expr) {
       }
     }
     SEQUANT_ASSERT(!maps.empty());
-    const auto nf = ex<Constant>(rational{1, factorial(S_tensor.ket_rank())});
+    const auto nf = rational{1, factorial(S_tensor.ket_rank())};
 
     Sum sum{};
     for (auto&& map : maps) {
       ProductPtr new_product = std::make_shared<Product>();
-      new_product->scale(product->scalar());
-      new_product->append(1, nf);
+      new_product->scale(product->scalar() * nf);
       auto temp_product = remove_tensor(product, L"S").as_shared_ptr<Product>();
       for (auto&& term : temp_product) {
         if (term->is<Tensor>()) {
@@ -1175,12 +1172,11 @@ ExprPtr closed_shell_CC_spintrace_v2(ExprPtr const& expr,
         ext_idxs | transform([](auto&& vec) { return get_bra_idx(vec); });
     auto kixs =
         ext_idxs | transform([](auto&& vec) { return get_ket_idx(vec); });
-    if (bixs.size() > 1) {
-      st_expr =
-          ex<Tensor>(Tensor{L"S", bra(std::move(kixs)), ket(std::move(bixs))}) *
-          st_expr;
-    }
+    ExprPtr S_tensor = ex<Tensor>(Tensor{L"S", bra(kixs), ket(bixs)});
 
+    if (bixs.size() > 1) {
+      st_expr = S_tensor * st_expr;
+    }
     simplify(st_expr);
 
     st_expr = S_maps(st_expr);
@@ -1189,9 +1185,7 @@ ExprPtr closed_shell_CC_spintrace_v2(ExprPtr const& expr,
 
     st_expr = WK_biorthogonalization_filter(st_expr, ext_idxs);
 
-    st_expr =
-        ex<Tensor>(Tensor{L"S", bra(std::move(kixs)), ket(std::move(bixs))}) *
-        st_expr;
+    st_expr = S_tensor * st_expr;
   }
 
   simplify(st_expr);
