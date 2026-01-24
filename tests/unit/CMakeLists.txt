@@ -91,22 +91,24 @@ if (SEQUANT_SKIP_LONG_TESTS)
     target_compile_definitions(unit_tests-sequant PRIVATE SEQUANT_SKIP_LONG_TESTS=1)
 endif()
 
-if (TARGET tiledarray)
+if (SEQUANT_HAS_EVAL)
+    set(sq_ut_eval_src "test_cache_manager.cpp")
+    if (SEQUANT_HAS_TILEDARRAY)
+        list(APPEND sq_ut_eval_src "test_eval_ta.cpp")
+    endif()
+    if (SEQUANT_HAS_BTAS)
+        list(APPEND sq_ut_eval_src "test_eval_btas.cpp")
+    endif()
     target_sources(unit_tests-sequant
         PRIVATE
-            "test_cache_manager.cpp"
-            "test_eval_btas.cpp"
-            "test_eval_ta.cpp"
+            ${sq_ut_eval_src}
     )
     set_source_files_properties(
-        "test_eval_btas.cpp"
-        "test_eval_ta.cpp"
+        ${sq_ut_eval_src}
         "test_main.cpp"
         PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON
     )
-    target_link_libraries(unit_tests-sequant PRIVATE tiledarray)
-    target_compile_definitions(unit_tests-sequant PRIVATE SEQUANT_HAS_TILEDARRAY)
-endif (TARGET tiledarray)
+endif (SEQUANT_HAS_EVAL)
 
 target_link_libraries(unit_tests-sequant PRIVATE SeQuant::SeQuant Catch2::Catch2 dtl::dtl)
 

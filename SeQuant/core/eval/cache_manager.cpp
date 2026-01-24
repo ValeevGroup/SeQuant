@@ -5,7 +5,7 @@
 #include <SeQuant/core/eval/cache_manager.hpp>
 #include <SeQuant/core/eval/result.hpp>
 
-#include <SeQuant/core/eval_node.hpp>
+#include <SeQuant/core/eval/eval_node.hpp>
 
 namespace sequant {
 

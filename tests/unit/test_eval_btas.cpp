@@ -3,13 +3,16 @@
 
 #include "catch2_sequant.hpp"
 
+#include <SeQuant/core/eval/backends/btas/eval_expr.hpp>
+#include <SeQuant/core/eval/backends/btas/result.hpp>
 #include <SeQuant/core/eval/eval.hpp>
-#include <SeQuant/core/eval/result.hpp>
 #include <SeQuant/core/optimize.hpp>
 #include <SeQuant/core/parse.hpp>
+#include <SeQuant/domain/mbpt/biorthogonalization.hpp>
 
 #include <btas/btas.h>
 #include <btas/tensor_func.h>
+
 #include <boost/regex.hpp>
 
 #include <string>
@@ -178,7 +181,9 @@ TEST_CASE("eval_with_btas", "[eval_btas]") {
 
   using BTensorD = btas::Tensor<double>;
 
-  auto norm = [](BTensorD const& tnsr) { return btas::norm(tnsr); };
+  auto norm = [](BTensorD const& tnsr) {
+    return std::sqrt(btas::dotc(tnsr, tnsr));
+  };
 
   std::srand(2023);
   const size_t nocc = 2, nvirt = 20;
@@ -209,9 +214,9 @@ TEST_CASE("eval_with_btas", "[eval_btas]") {
   auto eval_biorthogonal_nns_project =
       [&yield_](sequant::ExprPtr const& expr,
                 container::svector<long> const& target_labels) {
-        return evaluate_biorthogonal_nns_project(eval_node(expr), target_labels,
-                                                 yield_)
-            ->get<BTensorD>();
+        auto result = evaluate(eval_node(expr), target_labels, yield_);
+        return biorthogonal_nns_project(
+            result->get<BTensorD>(), eval_node(expr)->as_tensor().bra_rank());
       };
 
   auto parse_antisymm = [](auto const& xpr) {
@@ -401,14 +406,13 @@ TEST_CASE("eval_with_btas", "[eval_btas]") {
     BTensorD perm_sum{r2.range()};
     perm_sum.fill(0);
 
-    perm_sum += r2;
     perm_sum += BTensorD{permute(r2, {0, 1, 2, 3, 5, 4})};
     perm_sum += BTensorD{permute(r2, {0, 1, 2, 4, 3, 5})};
     perm_sum += BTensorD{permute(r2, {0, 1, 2, 4, 5, 3})};
     perm_sum += BTensorD{permute(r2, {0, 1, 2, 5, 3, 4})};
     perm_sum += BTensorD{permute(r2, {0, 1, 2, 5, 4, 3})};
 
-    btas::scal(1.0 / 6.0, perm_sum);
+    btas::scal(1.0 / 5.0, perm_sum);
     man2 -= perm_sum;
     REQUIRE(norm(eval2) == Catch::Approx(norm(man2)));
 

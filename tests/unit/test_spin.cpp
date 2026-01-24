@@ -1090,8 +1090,8 @@ SECTION("Closed-shell spintrace CCSDT terms") {
             "g{a_1,a_2;a_4,a_5}:N-C-S * t{a_3,a_4,a_5;i_1,i_2,i_3}:N-C-S + 2 "
             "g{a_1,a_3;a_4,a_5}:N-C-S * t{a_2,a_4,a_5;i_1,i_3,i_2}:N-C-S"));
 
-    // the new efficient method, spintracing with partial expansion, then
-    // expanding by S_map ( this method is used in
+    // the new efficient method, does spintracing with partial expansion, then
+    // expanding by S_map (this method is used in
     // closed_shell_CC_spintrace_v2)
     auto result_2 = closed_shell_spintrace(
         input, {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}, {L"i_3", L"a_3"}});
@@ -1124,19 +1124,13 @@ SECTION("Closed-shell spintrace CCSDT terms") {
             "g{a_1,a_3;a_4,a_5}:N-C-S * t{a_2,a_4,a_5;i_1,i_3,i_2}:N-C-S"));
   }
 
-  SECTION("ppl term in optimal") {  // results in 1 term
+  SECTION("most expensive terms in CCSDT") {  // results in 1 term
     const auto input = ex<Sum>(ExprPtrList{
         parse_expr(L"1/24 A{i_1,i_2,i_3;a_1,a_2,a_3} * "
                    L"g{a_1,a_2;a_4,a_5} * t{a_3,a_4,a_5;i_1,i_2,i_3}",
                    Symmetry::Antisymm)});
 
     auto result = closed_shell_CC_spintrace_v2(input);
-    // multiply the result by 6/5 to revert the rescaling factor
-    result *= ex<Constant>(rational{5, 6});
-
-    // There is a problem with casting a single term to Sum
-    // REQUIRE(result->size()== 1); // it needs to be checked
-
     REQUIRE_THAT(
         result,
         EquivalentTo(
