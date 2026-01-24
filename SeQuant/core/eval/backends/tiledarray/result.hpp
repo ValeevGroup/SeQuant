@@ -4,6 +4,7 @@
 #ifdef SEQUANT_HAS_TILEDARRAY
 
 #include <SeQuant/core/eval/result.hpp>
+#include <SeQuant/core/math.hpp>
 
 #include <TiledArray/einsum/tiledarray.h>
 #include <tiledarray.h>

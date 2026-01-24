@@ -4,6 +4,7 @@
 #ifdef SEQUANT_HAS_BTAS
 
 #include <SeQuant/core/eval/result.hpp>
+#include <SeQuant/core/math.hpp>
 
 #include <btas/btas.h>
 
