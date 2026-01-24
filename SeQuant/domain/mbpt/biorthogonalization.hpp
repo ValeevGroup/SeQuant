@@ -4,6 +4,7 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
+#include <SeQuant/core/utility/memoize.hpp>
 
 #if defined(SEQUANT_HAS_TILEDARRAY)
 #include <SeQuant/core/eval/backends/tiledarray/eval_expr.hpp>
@@ -168,46 +169,29 @@ template <typename T>
   }
 
   using CacheKey = std::pair<std::size_t, double>;
-  using CacheValue = std::optional<std::vector<T>>;
 
   static std::mutex cache_mutex;
   static std::condition_variable cache_cv;
-  static container::map<CacheKey, CacheValue> cache;
+  static container::map<CacheKey, std::optional<std::vector<T>>> cache;
 
   CacheKey key{n_particles, pseudoinverse_threshold};
 
-  {
-    std::unique_lock<std::mutex> lock(cache_mutex);
-    auto [it, inserted] = cache.try_emplace(key, std::nullopt);
-    if (!inserted) {
-      cache_cv.wait(lock, [&] { return it->second.has_value(); });
-      return it->second.value();
+  return memoize(cache, cache_mutex, cache_cv, key, [&]() -> std::vector<T> {
+    constexpr std::size_t max_rank_hardcoded_nns_projector = 5;
+    if (n_particles <= max_rank_hardcoded_nns_projector) {
+      if (auto hardcoded_coeffs = hardcoded_nns_projector<T>(n_particles)) {
+        return std::move(hardcoded_coeffs.value());
+      }
     }
-  }
-
-  std::vector<T> nns_p_coeffs;
-
-  constexpr std::size_t max_rank_hardcoded_nns_projector = 5;
-  if (n_particles <= max_rank_hardcoded_nns_projector) {
-    auto hardcoded_coeffs = hardcoded_nns_projector<T>(n_particles);
-    if (hardcoded_coeffs) {
-      nns_p_coeffs = std::move(hardcoded_coeffs.value());
-    }
-  } else {
     auto coeffs =
         detail::compute_nns_p_coeffs(n_particles, pseudoinverse_threshold);
+    std::vector<T> nns_p_coeffs;
     nns_p_coeffs.reserve(coeffs.size());
     for (const auto& c : coeffs) {
       nns_p_coeffs.push_back(static_cast<T>(c));
     }
-  }
-
-  {
-    std::lock_guard<std::mutex> lock(cache_mutex);
-    cache[key] = std::move(nns_p_coeffs);
-    cache_cv.notify_all();
-    return cache[key].value();
-  }
+    return nns_p_coeffs;
+  });
 }
 
 }  // namespace detail
