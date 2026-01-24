@@ -785,8 +785,8 @@ ExprPtr A(nₚ np, nₕ nh) {
   using ranges::size;
   auto tf = OpMaker<Statistics::FermiDirac>(
       OpType::A, cre(creators), ann(annihilators))(dep, {Symmetry::Antisymm});
-  auto factor = factorial(size(creators)) * factorial(size(annihilators));
   // cancel out the prefactor applied during operator construction (OpMaker)
+  auto factor = factorial(size(creators)) * factorial(size(annihilators));
   return ex<Constant>(factor) * tf;
 }
 
@@ -815,8 +815,12 @@ ExprPtr S(std::int64_t K) {
   if (get_default_mbpt_context().csv() == mbpt::CSV::Yes)
     dep = K > 0 ? OpMaker<Statistics::FermiDirac>::UseDepIdx::Bra
                 : OpMaker<Statistics::FermiDirac>::UseDepIdx::Ket;
-  return OpMaker<Statistics::FermiDirac>(
+  using ranges::size;
+  auto tf = OpMaker<Statistics::FermiDirac>(
       OpType::S, cre(creators), ann(annihilators))(dep, {Symmetry::Nonsymm});
+  // cancel out the prefactor applied during operator construction (OpMaker)
+  auto factor = factorial(size(creators));
+  return ex<Constant>(factor) * tf;
 }
 
 ExprPtr Hʼ(std::size_t R, const OpParams& params) {
