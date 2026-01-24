@@ -786,6 +786,7 @@ ExprPtr A(nₚ np, nₕ nh) {
   auto tf = OpMaker<Statistics::FermiDirac>(
       OpType::A, cre(creators), ann(annihilators))(dep, {Symmetry::Antisymm});
   auto factor = factorial(size(creators)) * factorial(size(annihilators));
+  // cancel out the prefactor applied during operator construction (OpMaker)
   return ex<Constant>(factor) * tf;
 }
 
