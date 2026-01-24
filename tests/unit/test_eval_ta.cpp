@@ -4,10 +4,13 @@
 #include "catch2_sequant.hpp"
 
 #include <SeQuant/core/context.hpp>
+#include <SeQuant/core/eval/backends/tiledarray/eval_expr.hpp>
+#include <SeQuant/core/eval/backends/tiledarray/result.hpp>
 #include <SeQuant/core/eval/eval.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/parse.hpp>
 #include <SeQuant/core/utility/macros.hpp>
+#include <SeQuant/domain/mbpt/biorthogonalization.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 
 #include <tiledarray.h>
@@ -324,9 +327,9 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
     auto eval_biorthogonal_nns_project = [&yield_](
                                              sequant::ExprPtr const& expr,
                                              std::string const& target_labels) {
-      return evaluate_biorthogonal_nns_project(eval_node(expr), target_labels,
-                                               yield_)
-          ->get<TA::TArrayD>();
+      auto result = evaluate(eval_node(expr), target_labels, yield_);
+      return sequant::biorthogonal_nns_project(
+          result->get<TA::TArrayD>(), eval_node(expr)->as_tensor().bra_rank());
     };
 
     SECTION("summation") {
@@ -542,7 +545,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
       REQUIRE(norm(man2) == Catch::Approx(norm(eval2)));
       TArrayD zero2;
       zero2("0,1,2,3,4,5") = man2("0,1,2,3,4,5") - eval2("0,1,2,3,4,5");
-      REQUIRE(norm(zero1) == Catch::Approx(0).margin(
+      REQUIRE(norm(zero2) == Catch::Approx(0).margin(
                                  100 * std::numeric_limits<double>::epsilon()));
 
       // for rank 4 residual, nns applies:

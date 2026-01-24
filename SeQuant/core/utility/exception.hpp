@@ -14,7 +14,7 @@ namespace sequant {
 class Exception {
  public:
   Exception(const std::string& str) : msg_(str) {}
-  const auto& what() const { return msg_; }
+  virtual std::string_view what() const { return msg_; }
 
  private:
   std::string msg_;

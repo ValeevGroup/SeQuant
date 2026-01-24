@@ -1,8 +1,9 @@
-#ifndef SEQUANT_EVAL_EXPR_HPP
-#define SEQUANT_EVAL_EXPR_HPP
+#ifndef SEQUANT_EVAL_EVAL_EXPR_HPP
+#define SEQUANT_EVAL_EVAL_EXPR_HPP
 
 #include <SeQuant/core/binary_node.hpp>
 #include <SeQuant/core/container.hpp>
+#include <SeQuant/core/eval/fwd.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/utility/macros.hpp>
@@ -248,68 +249,6 @@ struct EvalOpSetter {
   void set(EvalExpr& expr, EvalOp op) { expr.op_type_ = op; }
 };
 
-///
-/// \brief This class extends the EvalExpr class by adding an annot() method so
-///        that it can be used to evaluate using TiledArray.
-///
-class EvalExprTA final : public EvalExpr {
- public:
-  template <typename... Args, typename = std::enable_if_t<
-                                  std::is_constructible_v<EvalExpr, Args...>>>
-  EvalExprTA(Args&&... args) : EvalExpr{std::forward<Args>(args)...} {
-    annot_ = indices_annot();
-  }
-
-  [[nodiscard]] inline auto const& annot() const noexcept { return annot_; }
-
- private:
-  std::string annot_;
-};
-
-///
-/// \brief This class extends the EvalExpr class by adding an annot() method so
-///        that it can be used to evaluate using BTAS.
-///
-class EvalExprBTAS final : public EvalExpr {
- public:
-  using annot_t = container::svector<long>;
-
-  ///
-  /// \param bk iterable of Index objects.
-  /// \return vector of long-type hash values
-  ///         of the labels of indices in \c bk
-  ///
-  template <typename Iterable>
-  static auto index_hash(Iterable&& bk) {
-    return ranges::views::transform(
-        std::forward<Iterable>(bk), [](auto const& idx) {
-          //
-          // WARNING!
-          // The BTAS uses long for scalar indexing by default.
-          // Hence, here we explicitly cast the size_t values to long
-          // Which is a potentially narrowing conversion leading to
-          // integral overflow. Hence, the values in the returned
-          // container are mixed negative and positive integers (long type)
-          //
-          return static_cast<long>(sequant::hash::value(Index{idx}.label()));
-        });
-  }
-
-  template <typename... Args, typename = std::enable_if_t<
-                                  std::is_constructible_v<EvalExpr, Args...>>>
-  EvalExprBTAS(Args&&... args) : EvalExpr{std::forward<Args>(args)...} {
-    annot_ = index_hash(canon_indices()) | ranges::to<annot_t>;
-  }
-
-  ///
-  /// \return Annotation (container::svector<long>) for BTAS::Tensor.
-  ///
-  [[nodiscard]] inline annot_t const& annot() const noexcept { return annot_; }
-
- private:
-  annot_t annot_;
-};
-
 namespace meta {
 
 namespace detail {
@@ -350,6 +289,48 @@ template <typename Rng>
 concept eval_node_range =
     std::ranges::range<Rng> && eval_node<std::ranges::range_value_t<Rng>>;
 
+///
+/// \brief Satisfied by a type with a method named `annot` that returns
+///        a non-void type.
+///
+template <typename T>
+concept has_annot = requires(T t) {
+  t.annot();
+  requires !std::is_void_v<decltype(t.annot())>;
+};
+
+///
+/// \brief Satisfied by an eval_node whose dereferenced type satisfies the
+///        has_annot method.
+/// \example
+///          * `static_assert(!meta::can_evaluate<EvalNode<EvalExpr>>)`
+///          * `static_assert(meta::can_evaluate<EvalNodeTA>)` (where EvalNodeTA
+///            is defined in backends/tiledarray/eval_expr.hpp)
+///
+template <typename T>
+concept can_evaluate = eval_node<T> && requires(T n) {
+  { *n } -> has_annot;
+};
+
+///
+/// \brief Satisfied by a range type of objects satisfying can_evaluate.
+///
+template <typename Rng>
+concept can_evaluate_range =
+    std::ranges::range<Rng> && can_evaluate<std::ranges::range_value_t<Rng>>;
+
+///
+/// \brief \tparam F is a leaf node evaluator of type \tparam Node if
+///        an object (a function object) of type \tparam F returns ResultPtr
+///        when called with the single argument of const ref type to
+///        \tparam Node and the \tparam Node satisfies can_evaluate.
+///
+template <typename Node, typename F>
+concept leaf_node_evaluator =
+    can_evaluate<Node> && requires(F f, Node const& n) {
+      { f(n) } -> std::same_as<ResultPtr>;
+    };
+
 }  // namespace meta
 
 namespace impl {
@@ -361,6 +342,9 @@ FullBinaryNode<EvalExpr> binarize(ExprPtr const&);
 ///
 template <meta::eval_expr T>
 using EvalNode = FullBinaryNode<T>;
+
+static_assert(meta::eval_node<EvalNode<EvalExpr>>);
+static_assert(!meta::can_evaluate<EvalNode<EvalExpr>>);
 
 ///
 /// Creates a binary tree for evaluation.
@@ -460,4 +444,4 @@ ExprPtr to_expr(meta::eval_node auto const& node) {
 
 }  // namespace sequant
 
-#endif  // SEQUANT_EVAL_EXPR_HPP
+#endif  // SEQUANT_EVAL_EVAL_EXPR_HPP

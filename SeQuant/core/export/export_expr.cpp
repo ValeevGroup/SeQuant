@@ -1,4 +1,4 @@
-#include <SeQuant/core/eval_expr.hpp>
+#include <SeQuant/core/eval/eval_expr.hpp>
 #include <SeQuant/core/export/compute_selection.hpp>
 #include <SeQuant/core/export/export_expr.hpp>
 #include <SeQuant/core/utility/atomic.hpp>
