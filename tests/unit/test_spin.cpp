@@ -1361,7 +1361,7 @@ SECTION("Relation in spin P operators") {
   expanded_A = expand_A_op(expanded_A);
   expanded_A->visit(reset_idx_tags);
   simplify(expanded_A);
-  // REQUIRE(p6_result == p7_result);
+  REQUIRE(p6_result == p7_result);
   // REQUIRE(p6_result == expanded_A);
 }
 
