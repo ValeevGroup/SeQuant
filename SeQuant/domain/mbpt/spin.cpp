@@ -1411,17 +1411,23 @@ std::vector<ExprPtr> open_shell_P_op_vector(const Tensor& A) {
     }
 
     ExprPtr spin_case_result =
-        ex<Sum>(bra_permutations) * ex<Sum>(ket_permutations);
+        ex<Sum>(bra_permutations) * ex<Sum>(ket_permutations) /
+        (bra_permutations.size() * ket_permutations.size());
     expand(spin_case_result);
 
     // Merge P operators if it encounters alpha_spin product of operators
     for (auto& term : *spin_case_result) {
       if (term->is<Product>()) {
-        auto P = term->as<Product>();
-        if (P.factors().size() == 2) {
+        const auto& P = term->as<Product>();
+        const auto nfactors = P.factors().size();
+        SEQUANT_ASSERT(
+            nfactors <=
+            2);  // constant, single P, or 2 P's (one for alpha, one for beta)
+        if (nfactors == 2) {
+          const auto scalar = P.scalar();
           auto P1 = P.factor(0)->as<Tensor>();
           auto P2 = P.factor(1)->as<Tensor>();
-          term = merge_tensors(P1, P2);
+          term = ex<Constant>(scalar) * merge_tensors(P1, P2);
         }
       }
     }
