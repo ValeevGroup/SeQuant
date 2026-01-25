@@ -1319,11 +1319,13 @@ SECTION("Relation in spin P operators") {
   auto P4_1312 = ex<Tensor>(L"P", bra{L"i_1", L"i_3"}, ket{L"a_1", L"a_2"},
                             Symmetry::Nonsymm);
 
-  auto p_aab = ex<Constant>(1) - P13_b - P23_b - P13_k - P23_k + P4_1313 +
-               P4_1323 + P4_2313 + P4_2323;
+  auto p_aab = (ex<Constant>(1) - P13_b - P23_b - P13_k - P23_k + P4_1313 +
+                P4_1323 + P4_2313 + P4_2323) /
+               9;
 
-  auto p_abb = ex<Constant>(1) - P13_b - P12_b - P13_k - P12_k + P4_1212 +
-               P4_1213 + P4_1312 + P4_1313;
+  auto p_abb = (ex<Constant>(1) - P13_b - P12_b - P13_k - P12_k + P4_1212 +
+                P4_1213 + P4_1312 + P4_1313) /
+               9;
 
   auto p6_input = p_aab * input;
   expand(p6_input);
@@ -1362,7 +1364,7 @@ SECTION("Relation in spin P operators") {
   expanded_A->visit(reset_idx_tags);
   simplify(expanded_A);
   REQUIRE(p6_result == p7_result);
-  // REQUIRE(p6_result == expanded_A);
+  REQUIRE(p6_result == expanded_A);
 }
 
 SECTION("Expand P operator pair-wise") {
