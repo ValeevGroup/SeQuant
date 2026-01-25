@@ -1622,7 +1622,9 @@ std::vector<ExprPtr> open_shell_spintrace(
 }
 
 std::vector<ExprPtr> open_shell_CC_spintrace(const ExprPtr& expr) {
-  Tensor A = expr->at(0)->at(0)->as<Tensor>();
+  SEQUANT_ASSERT(expr->is<Sum>() || expr->is<Product>());
+  Tensor A = expr.is<Sum>() ? expr->at(0)->at(0)->as<Tensor>()
+                            : expr->at(0)->as<Tensor>();
   SEQUANT_ASSERT(A.label() == L"A");
   size_t const i = A.rank();
   auto P_vec = open_shell_P_op_vector(A);
@@ -1630,7 +1632,9 @@ std::vector<ExprPtr> open_shell_CC_spintrace(const ExprPtr& expr) {
   SEQUANT_ASSERT(P_vec.size() == i + 1);
   std::vector<Sum> concat_terms(i + 1);
   [[maybe_unused]] size_t n_spin_orbital_term = 0;
-  for (auto& product_term : *expr) {
+  for (auto& product_term : expr.is<Sum>()
+                                ? std::span{expr.as<Sum>().summands()}
+                                : std::span{&expr, 1}) {
     auto term = remove_tensor(product_term.as_shared_ptr<Product>(), L"A");
     std::vector<ExprPtr> os_st(i + 1);
 
