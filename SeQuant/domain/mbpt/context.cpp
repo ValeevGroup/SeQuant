@@ -1,3 +1,4 @@
+#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/domain/mbpt/context.hpp>
 
 #ifdef SEQUANT_CONTEXT_MANIPULATION_THREADSAFE
@@ -30,10 +31,12 @@ Context Context::clone() const {
 CSV Context::csv() const { return csv_; }
 
 std::shared_ptr<const OpRegistry> Context::op_registry() const {
+  SEQUANT_ASSERT(op_registry_, "mbpt::Context has null OpRegistry");
   return op_registry_;
 }
 
 std::shared_ptr<OpRegistry> Context::mutable_op_registry() const {
+  SEQUANT_ASSERT(op_registry_, "mbpt::Context has null OpRegistry");
   return op_registry_;
 }
 
@@ -56,10 +59,10 @@ bool operator==(Context const& left, Context const& right) {
   if (left.csv() != right.csv()) return false;
 
   // both null -> equal; one null -> not equal
-  if (!left.op_registry() && !right.op_registry()) return true;
-  if (!left.op_registry() || !right.op_registry()) return false;
+  if (!left.op_registry_ && !right.op_registry_) return true;
+  if (!left.op_registry_ || !right.op_registry_) return false;
 
-  return *left.op_registry() == *right.op_registry();
+  return *left.op_registry_ == *right.op_registry_;
 }
 
 bool operator!=(Context const& left, Context const& right) {

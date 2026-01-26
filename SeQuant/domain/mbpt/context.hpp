@@ -67,13 +67,11 @@ class Context {
   CSV csv() const;
 
   /// @return a constant pointer to the OpRegistry for this context
-  /// @warning can be null when user did not provide one to Context (i.e., it
-  /// was default constructed)
+  /// @note asserts that OpRegistry is not null
   std::shared_ptr<const OpRegistry> op_registry() const;
 
   /// @return a pointer to the OpRegistry for this context
-  /// @warning can be null when user did not provide one to Context (i.e., it
-  /// was default constructed)
+  /// @note asserts that OpRegistry is not null
   std::shared_ptr<OpRegistry> mutable_op_registry() const;
 
   /// @brief sets the OpRegistry for this context
@@ -88,9 +86,9 @@ class Context {
  private:
   CSV csv_ = Defaults::csv;
   std::shared_ptr<OpRegistry> op_registry_;
-};
 
-bool operator==(Context const& left, Context const& right);
+  friend bool operator==(Context const& left, Context const& right);
+};
 
 bool operator!=(Context const& left, Context const& right);
 
