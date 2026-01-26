@@ -7,6 +7,7 @@
 #include <SeQuant/core/math.hpp>
 #include <SeQuant/core/optimize.hpp>
 #include <SeQuant/core/rational.hpp>
+#include <SeQuant/core/reserved.hpp>
 #include <SeQuant/core/space.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/tensor_network.hpp>
@@ -520,7 +521,7 @@ ExprPtr expand_antisymm(const ExprPtr& expr, bool skip_spinsymm) {
 }
 
 container::svector<container::map<Index, Index>> A_maps(const Tensor& A) {
-  SEQUANT_ASSERT(A.label() == L"A");
+  SEQUANT_ASSERT(A.label() == reserved::antisymm_label());
 
   container::svector<std::size_t> bra_indices(A.bra_rank());
   container::svector<std::size_t> ket_indices(A.ket_rank());
@@ -556,9 +557,10 @@ ExprPtr expand_A_op(const ProductPtr& product) {
   for (auto& term : product) {
     if (term->is<Tensor>()) {
       auto A = term->as<Tensor>();
-      if (A.label() == L"A" && A.bra_rank() <= 1 && A.ket_rank() <= 1) {
-        return remove_tensor(product, L"A");
-      } else if ((A.label() == L"A")) {
+      if (A.label() == reserved::antisymm_label() && A.bra_rank() <= 1 &&
+          A.ket_rank() <= 1) {
+        return remove_tensor(product, reserved::antisymm_label());
+      } else if ((A.label() == reserved::antisymm_label())) {
         has_A_operator = true;
         A_tensor = A;
         map_list = A_maps(A);
@@ -587,7 +589,7 @@ ExprPtr expand_A_op(const ProductPtr& product) {
 
     ProductPtr new_product = std::make_shared<Product>();
     new_product->scale(product->scalar());
-    auto temp_product = remove_tensor(product, L"A");
+    auto temp_product = remove_tensor(product, reserved::antisymm_label());
     for (auto&& term : *temp_product) {
       if (term->is<Tensor>()) {
         auto new_tensor = term->as<Tensor>();
@@ -612,31 +614,32 @@ ExprPtr symmetrize_expr(const ProductPtr& product) {
   // Drops canonical-order assumption; handles arbitrary sequence and variables.
   const auto& factors = product->factors();
   auto it = ranges::find_if(factors, [](const ExprPtr& factor) {
-    return factor->is<Tensor>() && factor->as<Tensor>().label() == L"A";
+    return factor->is<Tensor>() &&
+           factor->as<Tensor>().label() == reserved::antisymm_label();
   });
   if (it == ranges::end(factors)) return product;
   const auto& A_tensor = (*it)->as<Tensor>();
-  SEQUANT_ASSERT(A_tensor.label() == L"A");
+  SEQUANT_ASSERT(A_tensor.label() == reserved::antisymm_label());
 
   auto A_is_nconserving = A_tensor.bra_rank() == A_tensor.ket_rank();
 
   if (A_is_nconserving && A_tensor.bra_rank() == 1)
-    return remove_tensor(product, L"A");
+    return remove_tensor(product, reserved::antisymm_label());
 
   SEQUANT_ASSERT(A_tensor.rank() > 1);
 
   auto S = Tensor{};
   if (A_is_nconserving) {
-    S = Tensor(L"S", A_tensor.bra(), A_tensor.ket(), A_tensor.aux(),
-               Symmetry::Nonsymm);
+    S = Tensor(reserved::symm_label(), A_tensor.bra(), A_tensor.ket(),
+               A_tensor.aux(), Symmetry::Nonsymm);
   } else {  // A is N-nonconserving
     auto n = std::min(A_tensor.bra_rank(), A_tensor.ket_rank());
     container::svector<Index> bra_list(A_tensor.bra().begin(),
                                        A_tensor.bra().begin() + n);
     container::svector<Index> ket_list(A_tensor.ket().begin(),
                                        A_tensor.ket().begin() + n);
-    S = Tensor(L"S", bra(std::move(bra_list)), ket(std::move(ket_list)),
-               A_tensor.aux(), Symmetry::Nonsymm);
+    S = Tensor(reserved::symm_label(), bra(std::move(bra_list)),
+               ket(std::move(ket_list)), A_tensor.aux(), Symmetry::Nonsymm);
   }
   const auto nf = rational{1, factorial(S.ket_rank())};
 
@@ -687,7 +690,7 @@ ExprPtr symmetrize_expr(const ProductPtr& product) {
     Product new_product{};
     new_product.scale(product->scalar() * nf);
     new_product.append(get_phase(map), ex<Tensor>(S));
-    auto temp_product = remove_tensor(product, L"A");
+    auto temp_product = remove_tensor(product, reserved::antisymm_label());
     for (auto&& term : *temp_product) {
       if (term->is<Tensor>()) {
         auto new_tensor = term->as<Tensor>();
@@ -742,7 +745,7 @@ ExprPtr expand_A_op(const ExprPtr& expr) {
 }
 
 container::svector<container::map<Index, Index>> P_maps(const Tensor& P) {
-  SEQUANT_ASSERT(P.label() == L"P");
+  SEQUANT_ASSERT(P.label() == reserved::transposition_label());
 
   // Return pair-wise replacements
   // P_ij -> {{i,j},{j,i}}
@@ -774,13 +777,14 @@ ExprPtr expand_P_op(const ProductPtr& product) {
   for (auto& term : product) {
     if (term->is<Tensor>()) {
       const auto& P = term->as<Tensor>();
-      if ((P.label() == L"P") && (P.bra_rank() > 1 || (P.ket_rank() > 1))) {
+      if ((P.label() == reserved::transposition_label()) &&
+          (P.bra_rank() > 1 || (P.ket_rank() > 1))) {
         has_P_operator = true;
         auto map = P_maps(P);
         map_list.insert(map_list.end(), map.begin(), map.end());
-      } else if ((P.label() == L"P") &&
+      } else if ((P.label() == reserved::transposition_label()) &&
                  (P.bra_rank() == 1 && (P.ket_rank() == 1))) {
-        return remove_tensor(product, L"P");
+        return remove_tensor(product, reserved::transposition_label());
       }
     }
   }
@@ -791,7 +795,7 @@ ExprPtr expand_P_op(const ProductPtr& product) {
   for (auto&& map : map_list) {
     ProductPtr new_product = std::make_shared<Product>();
     new_product->scale(product->scalar());
-    auto temp_product = remove_tensor(product, L"P");
+    auto temp_product = remove_tensor(product, reserved::transposition_label());
     for (auto&& term : *temp_product) {
       if (term->is<Tensor>()) {
         auto new_tensor = term->as<Tensor>();
@@ -830,7 +834,7 @@ ExprPtr expand_P_op(const ExprPtr& expr) {
 
 container::svector<container::map<Index, Index>> S_replacement_maps(
     const Tensor& S) {
-  SEQUANT_ASSERT(S.label() == L"S");
+  SEQUANT_ASSERT(S.label() == reserved::symm_label());
   SEQUANT_ASSERT(S.bra_rank() > 1);
   SEQUANT_ASSERT(S.bra().size() == S.ket().size());
   container::svector<int> int_list(S.bra().size());
@@ -860,33 +864,36 @@ ExprPtr S_maps(const ExprPtr& expr) {
   auto result = std::make_shared<Sum>();
 
   // Check if S operator is present
-  if (!has_tensor(expr, L"S")) return expr;
+  if (!has_tensor(expr, reserved::symm_label())) return expr;
 
   detail::reset_idx_tags(expr);
 
   // Lambda for applying S on products
   auto expand_S_product = [](const ProductPtr& product) -> ExprPtr {
     // check if S is present
-    if (!has_tensor(product, L"S")) return product;
+    if (!has_tensor(product, reserved::symm_label())) return product;
 
     container::svector<container::map<Index, Index>> maps;
     // supports arbitrary sequence and variables
-    Tensor S_tensor;
+    std::size_t S_tensor_rank;
     for (auto&& factor : product->factors()) {
-      if (factor->is<Tensor>() && factor->as<Tensor>().label() == L"S") {
-        S_tensor = factor->as<Tensor>();
-        maps = S_replacement_maps(factor->as<Tensor>());
+      if (factor->is<Tensor>() &&
+          factor->as<Tensor>().label() == reserved::symm_label()) {
+        auto factor_as_tensor = factor.as<Tensor>();
+        S_tensor_rank = factor_as_tensor.ket_rank();
+        maps = S_replacement_maps(factor_as_tensor);
         break;
       }
     }
     SEQUANT_ASSERT(!maps.empty());
-    const auto nf = rational{1, factorial(S_tensor.ket_rank())};
+    const auto nf = rational{1, factorial(S_tensor_rank)};
 
     Sum sum{};
     for (auto&& map : maps) {
       ProductPtr new_product = std::make_shared<Product>();
       new_product->scale(product->scalar() * nf);
-      auto temp_product = remove_tensor(product, L"S").as_shared_ptr<Product>();
+      auto temp_product = remove_tensor(product, reserved::symm_label())
+                              .as_shared_ptr<Product>();
       for (auto&& term : temp_product) {
         if (term->is<Tensor>()) {
           auto new_tensor = term->as<Tensor>();
@@ -983,7 +990,7 @@ ExprPtr closed_shell_spintrace(
   // for v2 eqs, however it is not an optimized way).
   auto partially_or_fully_expand = [&full_expansion](const ExprPtr& expr) {
     auto temp = expr;
-    if (has_tensor(temp, L"A")) {
+    if (has_tensor(temp, reserved::antisymm_label())) {
       if (full_expansion) {
         temp = expand_A_op(temp);
       } else {
@@ -1012,13 +1019,16 @@ ExprPtr closed_shell_spintrace(
     // Remove S if present in a product
     Product temp_product{};
     temp_product.scale(product.scalar());
-    if (product.factor(0).is<Tensor>() &&
-        product.factor(0)->as<Tensor>().label() == L"S") {
-      for (auto&& term : product.factors()) {
-        if (term->is<Tensor>() && term->as<Tensor>().label() != L"S") {
-          temp_product.append(1, term, Product::Flatten::No);
-        } else if (!term->is<Tensor>()) {
-          temp_product.append(1, term, Product::Flatten::No);
+    const auto& factors = product.factors();
+    auto is_symm_tensor = [](const auto& factor) {
+      return factor->template is<Tensor>() &&
+             factor->template as<Tensor>().label() == reserved::symm_label();
+    };
+
+    if (std::ranges::any_of(factors, is_symm_tensor)) {
+      for (auto&& factor : factors) {
+        if (!is_symm_tensor(factor)) {
+          temp_product.append(1, factor, Product::Flatten::No);
         }
       }
     } else {
@@ -1030,9 +1040,10 @@ ExprPtr closed_shell_spintrace(
     auto get_ket_indices = [&](const Product& prod) {
       container::svector<Index> ket_idx;
       for (auto&& t : prod) {
-        if (t->is<Tensor>() && (collect_symmetrizer_indices ||
-                                (t->as<Tensor>().label() != L"A" &&
-                                 t->as<Tensor>().label() != L"S"))) {
+        if (t->is<Tensor>() &&
+            (collect_symmetrizer_indices ||
+             (t->as<Tensor>().label() != reserved::antisymm_label() &&
+              t->as<Tensor>().label() != reserved::symm_label()))) {
           const Tensor& tensor = t->as<Tensor>();
           ket_idx.insert(ket_idx.end(), tensor.ket().begin(),
                          tensor.ket().end());
@@ -1045,9 +1056,10 @@ ExprPtr closed_shell_spintrace(
     auto get_bra_indices = [&](const Product& prod) {
       container::svector<Index> bra_idx;
       for (auto&& t : prod) {
-        if (t->is<Tensor>() && (collect_symmetrizer_indices ||
-                                (t->as<Tensor>().label() != L"A" &&
-                                 t->as<Tensor>().label() != L"S"))) {
+        if (t->is<Tensor>() &&
+            (collect_symmetrizer_indices ||
+             (t->as<Tensor>().label() != reserved::antisymm_label() &&
+              t->as<Tensor>().label() != reserved::symm_label()))) {
           const Tensor& tensor = t->as<Tensor>();
           bra_idx.insert(bra_idx.end(), tensor.bra().begin(),
                          tensor.bra().end());
@@ -1129,7 +1141,8 @@ ExprPtr closed_shell_CC_spintrace_v1(ExprPtr const& expr,
     // Remove S operator
     for (auto& term : *st_expr) {
       if (term->is<Product>())
-        term = remove_tensor(term.as_shared_ptr<Product>(), L"S");
+        term = remove_tensor(term.as_shared_ptr<Product>(),
+                             reserved::symm_label());
     }
 
     // Biorthogonal transformation
@@ -1139,9 +1152,9 @@ ExprPtr closed_shell_CC_spintrace_v1(ExprPtr const& expr,
         ext_idxs | transform([](auto&& vec) { return get_bra_idx(vec); });
     auto kixs =
         ext_idxs | transform([](auto&& vec) { return get_ket_idx(vec); });
-    st_expr =
-        ex<Tensor>(Tensor{L"S", bra(std::move(kixs)), ket(std::move(bixs))}) *
-        st_expr;
+    st_expr = ex<Tensor>(Tensor{reserved::symm_label(), bra(std::move(kixs)),
+                                ket(std::move(bixs))}) *
+              st_expr;
   }
 
   simplify(st_expr);
@@ -1163,7 +1176,8 @@ ExprPtr closed_shell_CC_spintrace_v2(ExprPtr const& expr,
     // Remove S operator to apply biorthogonal transformation
     for (auto& term : *st_expr) {
       if (term->is<Product>())
-        term = remove_tensor(term.as_shared_ptr<Product>(), L"S");
+        term = remove_tensor(term.as_shared_ptr<Product>(),
+                             reserved::symm_label());
     }
     st_expr = biorthogonal_transform(st_expr, ext_idxs);
 
@@ -1172,7 +1186,8 @@ ExprPtr closed_shell_CC_spintrace_v2(ExprPtr const& expr,
         ext_idxs | transform([](auto&& vec) { return get_bra_idx(vec); });
     auto kixs =
         ext_idxs | transform([](auto&& vec) { return get_ket_idx(vec); });
-    ExprPtr S_tensor = ex<Tensor>(Tensor{L"S", bra(kixs), ket(bixs)});
+    ExprPtr S_tensor =
+        ex<Tensor>(Tensor{reserved::symm_label(), bra(kixs), ket(bixs)});
 
     if (bixs.size() > 1) {
       st_expr = S_tensor * st_expr;
@@ -1307,7 +1322,7 @@ ExprPtr merge_tensors(const Tensor& O1, const Tensor& O2) {
 }
 
 std::vector<ExprPtr> open_shell_A_op(const Tensor& A) {
-  SEQUANT_ASSERT(A.label() == L"A");
+  SEQUANT_ASSERT(A.label() == reserved::antisymm_label());
   SEQUANT_ASSERT(A.bra_rank() == A.ket_rank());
   auto rank = A.bra_rank();
 
@@ -1328,8 +1343,8 @@ std::vector<ExprPtr> open_shell_A_op(const Tensor& A) {
                    make_spinbeta);
     ranges::for_each(spin_bra, [](const Index& i) { i.reset_tag(); });
     ranges::for_each(spin_ket, [](const Index& i) { i.reset_tag(); });
-    result.at(i) = ex<Tensor>(
-        Tensor(L"A", spin_bra, spin_ket, A.aux(), Symmetry::Antisymm));
+    result.at(i) = ex<Tensor>(Tensor(reserved::antisymm_label(), spin_bra,
+                                     spin_ket, A.aux(), Symmetry::Antisymm));
     // std::wcout << to_latex(result.at(i)) << " ";
   }
   // std::wcout << "\n" << std::endl;
@@ -1337,7 +1352,7 @@ std::vector<ExprPtr> open_shell_A_op(const Tensor& A) {
 }
 
 std::vector<ExprPtr> open_shell_P_op_vector(const Tensor& A) {
-  SEQUANT_ASSERT(A.label() == L"A");
+  SEQUANT_ASSERT(A.label() == reserved::antisymm_label());
 
   // N+1 spin-cases for corresponding residual
   std::vector<ExprPtr> result_vector(A.bra_rank() + 1);
@@ -1361,10 +1376,12 @@ std::vector<ExprPtr> open_shell_P_op_vector(const Tensor& A) {
     for (auto& j : alpha_spin) {
       for (auto& k : beta_spin) {
         if (!alpha_spin.empty() && !beta_spin.empty()) {
-          P_bra_list.emplace_back(Tensor(
-              L"P", bra{A.bra().at(j), A.bra().at(k)}, ket{}, Symmetry::Symm));
-          P_ket_list.emplace_back(Tensor(
-              L"P", bra{}, ket{A.ket().at(j), A.ket().at(k)}, Symmetry::Symm));
+          P_bra_list.emplace_back(Tensor(reserved::transposition_label(),
+                                         bra{A.bra().at(j), A.bra().at(k)},
+                                         ket{}, Symmetry::Symm));
+          P_ket_list.emplace_back(Tensor(reserved::transposition_label(), bra{},
+                                         ket{A.ket().at(j), A.ket().at(k)},
+                                         Symmetry::Symm));
         }
       }
     }
@@ -1380,12 +1397,12 @@ std::vector<ExprPtr> open_shell_P_op_vector(const Tensor& A) {
             for (std::size_t d = c + 1; d != beta_spin.size(); ++d) {
               auto i4 = beta_spin[d];
               P_bra_list.emplace_back(
-                  Tensor(L"P",
+                  Tensor(reserved::transposition_label(),
                          bra{A.bra().at(i1), A.bra().at(i3), A.bra().at(i2),
                              A.bra().at(i4)},
                          ket{}, Symmetry::Symm));
               P_ket_list.emplace_back(
-                  Tensor(L"P", bra{},
+                  Tensor(reserved::transposition_label(), bra{},
                          ket{A.ket().at(i1), A.ket().at(i3), A.ket().at(i2),
                              A.ket().at(i4)},
                          Symmetry::Symm));
@@ -1625,7 +1642,7 @@ std::vector<ExprPtr> open_shell_CC_spintrace(const ExprPtr& expr) {
   SEQUANT_ASSERT(expr->is<Sum>() || expr->is<Product>());
   Tensor A = expr.is<Sum>() ? expr->at(0)->at(0)->as<Tensor>()
                             : expr->at(0)->as<Tensor>();
-  SEQUANT_ASSERT(A.label() == L"A");
+  SEQUANT_ASSERT(A.label() == reserved::antisymm_label());
   size_t const i = A.rank();
   auto P_vec = open_shell_P_op_vector(A);
   auto A_vec = open_shell_A_op(A);
@@ -1635,7 +1652,8 @@ std::vector<ExprPtr> open_shell_CC_spintrace(const ExprPtr& expr) {
   for (auto& product_term : expr.is<Sum>()
                                 ? std::span{expr.as<Sum>().summands()}
                                 : std::span{&expr, 1}) {
-    auto term = remove_tensor(product_term.as_shared_ptr<Product>(), L"A");
+    auto term = remove_tensor(product_term.as_shared_ptr<Product>(),
+                              reserved::antisymm_label());
     std::vector<ExprPtr> os_st(i + 1);
 
     // Apply the P operators on the product term without the A,
@@ -1650,7 +1668,7 @@ std::vector<ExprPtr> open_shell_CC_spintrace(const ExprPtr& expr) {
       if (i > 2) {
         os_st.at(s) = A_vec.at(s) * os_st.at(s);
         simplify(os_st.at(s));
-        os_st.at(s) = remove_tensor(os_st.at(s), L"A");
+        os_st.at(s) = remove_tensor(os_st.at(s), reserved::antisymm_label());
       }
     }
 
@@ -1848,7 +1866,7 @@ ExprPtr spintrace(
 
   // Expand antisymmetrizer operator (A) if present in the expression
   ExprPtr expr = expression;
-  if (has_tensor(expr, L"A")) expr = expand_A_op(expr);
+  if (has_tensor(expr, reserved::antisymm_label())) expr = expand_A_op(expr);
 
   if (expr->is<Tensor>()) expr = ex<Constant>(1) * expr;
 

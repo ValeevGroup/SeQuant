@@ -1,11 +1,11 @@
 R2{a1,u1;i1,i2} =
-  + 1/2 A{i1,i2;} g{a1,u1;i1,i2}
-  - 1/2 A{i1,i2;} GAM0{u1;u2} g{a1,u2;i1,i2}
-  - A{i1,i2;} HAM_D{i3;i2} T2g{a1,u1;i1,i3}
-  - A{i1,i2;} HAM_D{i3;i1} GAM0{u1;u2} T2g{a1,u2;i2,i3}
-  + 1/2 A{i1,i2;} HAM_D{a1;a3} T2g{a3,u1;i1,i2}
-  - 1/2 A{i1,i2;} HAM_D{a1;a3} GAM0{u1;u2} T2g{a3,u2;i1,i2}
-  + 1/2 A{i1,i2;} HAM_D{u1;u2} T2g{a1,u2;i1,i2}
-  - 1/2 A{i1,i2;} GAM0{u1;u2} HAM_D{u2;u3} T2g{a1,u3;i1,i2}
-  + 1/2 A{i1,i2;} GAM0{u4;u2} HAM_D{u1,u2;u3,u4} T2g{a1,u3;i1,i2}
-  - 1/2 1/2 A{i1,i2;} GAM0{u1,u5;u2,u3} HAM_D{u2,u3;u4,u5} T2g{a1,u4;i1,i2}
+  + 1/2 Â{i1,i2;} g{a1,u1;i1,i2}
+  - 1/2 Â{i1,i2;} GAM0{u1;u2} g{a1,u2;i1,i2}
+  - Â{i1,i2;} HAM_D{i3;i2} T2g{a1,u1;i1,i3}
+  - Â{i1,i2;} HAM_D{i3;i1} GAM0{u1;u2} T2g{a1,u2;i2,i3}
+  + 1/2 Â{i1,i2;} HAM_D{a1;a3} T2g{a3,u1;i1,i2}
+  - 1/2 Â{i1,i2;} HAM_D{a1;a3} GAM0{u1;u2} T2g{a3,u2;i1,i2}
+  + 1/2 Â{i1,i2;} HAM_D{u1;u2} T2g{a1,u2;i1,i2}
+  - 1/2 Â{i1,i2;} GAM0{u1;u2} HAM_D{u2;u3} T2g{a1,u3;i1,i2}
+  + 1/2 Â{i1,i2;} GAM0{u4;u2} HAM_D{u1,u2;u3,u4} T2g{a1,u3;i1,i2}
+  - 1/2 1/2 Â{i1,i2;} GAM0{u1,u5;u2,u3} HAM_D{u2,u3;u4,u5} T2g{a1,u4;i1,i2}

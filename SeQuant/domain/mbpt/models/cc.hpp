@@ -129,7 +129,7 @@ class CC {
   /// @param[in] op_connect list of pairs of operators to be connected. Default
   /// is given by `mbpt::default_op_connections()`.
   auto ref_av(const ExprPtr& expr,
-              const OpConnections<mbpt::OpType>& op_connect =
+              const OpConnections<std::wstring>& op_connect =
                   default_op_connections()) const {
     return op::ref_av(expr, op_connect, this->use_topology(), this->screen());
   }

@@ -4,6 +4,7 @@
 
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/op.hpp>
+#include <SeQuant/domain/mbpt/context.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/models/cc.hpp>
 #include <SeQuant/domain/mbpt/spin.hpp>
@@ -16,6 +17,7 @@ int main() {
   using namespace sequant::mbpt;
   set_default_context({.index_space_registry_shared_ptr = make_min_sr_spaces(),
                        .vacuum = Vacuum::SingleProduct});
+  set_default_mbpt_context({.op_registry_ptr = make_legacy_registry()});
   // end-snippet-0
 
   // start-snippet-1

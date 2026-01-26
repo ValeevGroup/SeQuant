@@ -4,6 +4,7 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/math.hpp>
+#include <SeQuant/core/reserved.hpp>
 #include <SeQuant/core/utility/expr.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/macros.hpp>
@@ -442,8 +443,9 @@ void biorthogonal_transform(container::svector<ResultExpr>& result_exprs,
         bool found = false;
         res.expression()->visit(
             [&](const ExprPtr& expr) {
-              if (expr->is<Tensor>() && (expr->as<Tensor>().label() == L"S" ||
-                                         expr->as<Tensor>().label() == L"A")) {
+              if (expr->is<Tensor>() &&
+                  (expr->as<Tensor>().label() == reserved::symm_label() ||
+                   expr->as<Tensor>().label() == reserved::antisymm_label())) {
                 found = true;
               };
             },
