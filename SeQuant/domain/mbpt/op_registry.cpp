@@ -2,8 +2,6 @@
 // Created by Ajay Melekamburath on 12/14/25.
 //
 
-#include <SeQuant/core/expressions/tensor.hpp>
-#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/wstring.hpp>
 #include <SeQuant/domain/mbpt/op_registry.hpp>
 
