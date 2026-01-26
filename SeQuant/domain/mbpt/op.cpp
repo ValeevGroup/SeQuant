@@ -319,9 +319,13 @@ std::wstring to_latex(const mbpt::Operator<mbpt::qns_t, S>& op) {
   const bool has_hat = base_lbl == reserved::antisymm_label() ||
                        base_lbl == reserved::symm_label();
 
-  // start with label and perturbation order (if any)
-  const auto label = utf_to_latex(
-      mbpt::detail::decorate_with_pert_order(op.label(), op.order()));
+  // start with label and perturbation order (if any). First decorate the
+  // base label, then append the adjoint label.
+  std::wstring label = utf_to_latex(
+      mbpt::detail::decorate_with_pert_order(base_lbl, op.order()));
+  if (is_adjoint) {
+    label += utf_to_latex(std::wstring(1, adjoint_label));
+  }
   auto result = has_hat ? L"{" + label : L"{\\hat{" + label + L"}";
 
   auto op_qns = op();  // operator action i.e. quantum number change
