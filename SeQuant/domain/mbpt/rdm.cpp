@@ -19,7 +19,7 @@ namespace sequant::mbpt::decompositions {
 ExprPtr cumu_to_density(ExprPtr ex_) {
   SEQUANT_ASSERT(ex_->is<Tensor>());
   SEQUANT_ASSERT(ex_->as<Tensor>().rank() == 1);
-  SEQUANT_ASSERT(ex_->as<Tensor>().label() == rdm_label());
+  SEQUANT_ASSERT(ex_->as<Tensor>().label() == rdm_cumulant_label());
   auto down_0 = ex_->as<Tensor>().ket()[0];
   auto up_0 = ex_->as<Tensor>().bra()[0];
 
