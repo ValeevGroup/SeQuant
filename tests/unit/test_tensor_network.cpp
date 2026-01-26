@@ -351,8 +351,8 @@ TEMPLATE_TEST_CASE("tensor_network_shared", "[elements]", TensorNetworkV1,
                   {Index{L"p_11"}, Index{L"p_6"}},
                   {Index{L"p_6"}, Index{L"p_7"}}};
               apply_index_replacements(*t2_i, idxrepl, false);
-              REQUIRE(deparse(*(tn1.tensors()[i]), true) ==
-                      deparse(*t2_i, true));
+              REQUIRE(deparse(*(tn1.tensors()[i]), {.annot_sym = true}) ==
+                      deparse(*t2_i, {.annot_sym = true}));
             }
           }
         }
@@ -1184,7 +1184,7 @@ TEST_CASE("tensor_network_v2", "[elements]") {
       const Product expectedExpr =
           parse_expr(
               L"Â{i1,i2;a1,a2} g{i3,i4;a3,a4} t{a1,a3;i1,i2} t{a2,a4;i3,i4}",
-              Symmetry::Antisymm)
+              {.def_perm_symm = Symmetry::Antisymm})
               .as<Product>();
 
       const auto expected = expectedExpr.factors();
@@ -1883,7 +1883,7 @@ TEST_CASE("tensor_network_v3", "[elements]") {
       const Product expectedExpr =
           parse_expr(
               L"Â{i1,i2;a1,a2} g{i3,i4;a3,a4} t{a1,a3;i1,i2} t{a2,a4;i3,i4}",
-              Symmetry::Antisymm)
+              {.def_perm_symm = Symmetry::Antisymm})
               .as<Product>();
 
       const auto expected = expectedExpr.factors();

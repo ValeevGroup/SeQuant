@@ -243,26 +243,23 @@ AST do_parse(const StartRule &start, std::wstring_view input,
 }
 
 parse::transform::DefaultSymmetries to_default_symms(
-    const std::optional<Symmetry> &perm_symm,
-    const std::optional<BraKetSymmetry> &braket_symm,
-    const std::optional<ColumnSymmetry> &column_symm) {
+    const ParseOptions &options) {
   const Context &ctx = get_default_context();
 
   parse::transform::DefaultSymmetries symms{
       Symmetry::Nonsymm, ctx.braket_symmetry(), ColumnSymmetry::Symm};
 
-  if (perm_symm.has_value()) {
-    std::get<0>(symms) = perm_symm.value();
+  if (options.def_perm_symm.has_value()) {
+    std::get<0>(symms) = options.def_perm_symm.value();
   }
-  if (braket_symm.has_value()) {
-    std::get<1>(symms) = braket_symm.value();
+  if (options.def_braket_symm.has_value()) {
+    std::get<1>(symms) = options.def_braket_symm.value();
   }
-  if (column_symm.has_value()) {
-    std::get<2>(symms) = column_symm.value();
+  if (options.def_col_symm.has_value()) {
+    std::get<2>(symms) = options.def_col_symm.value();
   }
-  if (std::get<0>(symms) !=
-      Symmetry::Nonsymm) {  // antisymmetry/symmetric bra and ket imply particle
-                            // symmetry
+  if (std::get<0>(symms) != Symmetry::Nonsymm) {
+    // antisymmetry/symmetric bra and ket imply particle symmetry
     std::get<2>(symms) = ColumnSymmetry::Symm;
   }
 
@@ -270,46 +267,34 @@ parse::transform::DefaultSymmetries to_default_symms(
 }
 
 ResultExpr parse_result_expr(std::wstring_view input,
-                             std::optional<Symmetry> perm_symm,
-                             std::optional<BraKetSymmetry> braket_symm,
-                             std::optional<ColumnSymmetry> column_symm) {
+                             const ParseOptions &options) {
   using iterator_type = decltype(input)::iterator;
   x3::position_cache<std::vector<iterator_type>> positions(input.begin(),
                                                            input.end());
   auto ast =
       do_parse<parse::ast::ResultExpr>(parse::resultExpr, input, positions);
 
-  return parse::transform::ast_to_result(
-      ast, positions, input.begin(),
-      to_default_symms(perm_symm, braket_symm, column_symm));
+  return parse::transform::ast_to_result(ast, positions, input.begin(),
+                                         to_default_symms(options));
 }
 
-ExprPtr parse_expr(std::wstring_view input, std::optional<Symmetry> perm_symm,
-                   std::optional<BraKetSymmetry> braket_symm,
-                   std::optional<ColumnSymmetry> column_symm) {
+ExprPtr parse_expr(std::wstring_view input, const ParseOptions &options) {
   using iterator_type = decltype(input)::iterator;
   x3::position_cache<std::vector<iterator_type>> positions(input.begin(),
                                                            input.end());
   auto ast = do_parse<parse::ast::Sum>(parse::expr, input, positions);
 
-  return parse::transform::ast_to_expr(
-      ast, positions, input.begin(),
-      to_default_symms(perm_symm, braket_symm, column_symm));
+  return parse::transform::ast_to_expr(ast, positions, input.begin(),
+                                       to_default_symms(options));
 }
 
-ExprPtr parse_expr(std::string_view input, std::optional<Symmetry> perm_symm,
-                   std::optional<BraKetSymmetry> braket_symm,
-                   std::optional<ColumnSymmetry> column_symm) {
-  return parse_expr(sequant::to_wstring(input), perm_symm, braket_symm,
-                    column_symm);
+ExprPtr parse_expr(std::string_view input, const ParseOptions &options) {
+  return parse_expr(sequant::to_wstring(input), options);
 }
 
 ResultExpr parse_result_expr(std::string_view input,
-                             std::optional<Symmetry> perm_symm,
-                             std::optional<BraKetSymmetry> braket_symm,
-                             std::optional<ColumnSymmetry> column_symm) {
-  return parse_result_expr(sequant::to_wstring(input), perm_symm, braket_symm,
-                           column_symm);
+                             const ParseOptions &options) {
+  return parse_result_expr(sequant::to_wstring(input), options);
 }
 
 }  // namespace sequant

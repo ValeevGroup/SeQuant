@@ -31,13 +31,15 @@ auto tensor_to_key(sequant::Tensor const& tnsr) {
     return (mo[1].str() == L"i" ? L"o" : L"v") + mo[2].str();
   };
 
-  auto const tnsr_deparsed = sequant::deparse(tnsr.clone(), false);
+  auto const tnsr_deparsed =
+      sequant::deparse(tnsr.clone(), {.annot_sym = false});
   return boost::regex_replace(tnsr_deparsed, idx_rgx, formatter);
 }
 
 [[maybe_unused]] auto tensor_to_key(std::wstring_view spec) {
-  return tensor_to_key(sequant::parse_expr(spec, sequant::Symmetry::Nonsymm)
-                           ->as<sequant::Tensor>());
+  return tensor_to_key(
+      sequant::parse_expr(spec, {.def_perm_symm = sequant::Symmetry::Nonsymm})
+          ->as<sequant::Tensor>());
 }
 
 template <typename Tensor_t>
@@ -220,7 +222,7 @@ TEST_CASE("eval_with_btas", "[eval_btas]") {
       };
 
   auto parse_antisymm = [](auto const& xpr) {
-    return parse_expr(xpr, sequant::Symmetry::Antisymm);
+    return parse_expr(xpr, {.def_perm_symm = sequant::Symmetry::Antisymm});
   };
 
   SECTION("Summation") {
