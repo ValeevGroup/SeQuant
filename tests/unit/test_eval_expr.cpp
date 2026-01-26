@@ -21,8 +21,8 @@
 #include <range/v3/all.hpp>
 
 namespace sequant {
-Tensor parse_tensor(std::wstring_view tnsr, Symmetry s = Symmetry::Nonsymm) {
-  return parse_expr(tnsr, s)->as<Tensor>();
+Tensor parse_tensor(std::wstring_view tnsr, const ParseOptions& options = {}) {
+  return parse_expr(tnsr, options)->as<Tensor>();
 }
 
 Constant parse_constant(std::wstring_view c) {
@@ -220,9 +220,12 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
   }
 
   SECTION("Hash value") {
-    const auto t1 = parse_tensor(L"t_{i1}^{a1}", Symmetry::Antisymm);
-    const auto t2 = parse_tensor(L"t_{i2}^{a2}", Symmetry::Antisymm);
-    const auto t3 = parse_tensor(L"t_{i1,i2}^{a1,a2}", Symmetry::Antisymm);
+    const auto t1 =
+        parse_tensor(L"t_{i1}^{a1}", {.def_perm_symm = Symmetry::Antisymm});
+    const auto t2 =
+        parse_tensor(L"t_{i2}^{a2}", {.def_perm_symm = Symmetry::Antisymm});
+    const auto t3 = parse_tensor(L"t_{i1,i2}^{a1,a2}",
+                                 {.def_perm_symm = Symmetry::Antisymm});
 
     const auto& x1 = EvalExpr{t1};
     const auto& x2 = EvalExpr{t2};
@@ -245,8 +248,10 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
 
   SECTION("Symmetry of product") {
     // whole bra <-> ket contraction between two antisymmetric tensors
-    const auto t1 = parse_tensor(L"g_{i3,i4}^{i1,i2}", Symmetry::Antisymm);
-    const auto t2 = parse_tensor(L"t_{a1,a2}^{i3,i4}", Symmetry::Antisymm);
+    const auto t1 = parse_tensor(L"g_{i3,i4}^{i1,i2}",
+                                 {.def_perm_symm = Symmetry::Antisymm});
+    const auto t2 = parse_tensor(L"t_{a1,a2}^{i3,i4}",
+                                 {.def_perm_symm = Symmetry::Antisymm});
 
     const auto x12 = result_expr(EvalExpr{t1}, EvalExpr{t2}, EvalOp::Product);
 
@@ -256,9 +261,11 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
 
     // whole bra <-> ket contraction between two symmetric tensors
     const auto t3 =
-        parse_expr(L"g_{i3,i4}^{i1,i2}", Symmetry::Symm)->as<Tensor>();
+        parse_expr(L"g_{i3,i4}^{i1,i2}", {.def_perm_symm = Symmetry::Symm})
+            ->as<Tensor>();
     const auto t4 =
-        parse_expr(L"t_{a1,a2}^{i3,i4}", Symmetry::Symm)->as<Tensor>();
+        parse_expr(L"t_{a1,a2}^{i3,i4}", {.def_perm_symm = Symmetry::Symm})
+            ->as<Tensor>();
 
     const auto x34 = result_expr(EvalExpr{t3}, EvalExpr{t4}, EvalOp::Product);
 
@@ -267,8 +274,12 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
     REQUIRE(x34.expr()->as<Tensor>().symmetry() == Symmetry::Nonsymm);
 
     // outer product of the same tensor
-    const auto t5 = parse_expr(L"f_{i1}^{a1}", Symmetry::Nonsymm)->as<Tensor>();
-    const auto t6 = parse_expr(L"f_{i2}^{a2}", Symmetry::Nonsymm)->as<Tensor>();
+    const auto t5 =
+        parse_expr(L"f_{i1}^{a1}", {.def_perm_symm = Symmetry::Nonsymm})
+            ->as<Tensor>();
+    const auto t6 =
+        parse_expr(L"f_{i2}^{a2}", {.def_perm_symm = Symmetry::Nonsymm})
+            ->as<Tensor>();
 
     const auto& x56 = result_expr(EvalExpr{t5}, EvalExpr{t6}, EvalOp::Product);
 
@@ -277,17 +288,21 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
     REQUIRE(x56.expr()->as<Tensor>().symmetry() == Symmetry::Nonsymm);
 
     // contraction of some indices from a bra to a ket
-    const auto t7 = parse_tensor(L"g_{a1,a2}^{i1,a3}", Symmetry::Antisymm);
-    const auto t8 = parse_tensor(L"t_{a3}^{i2}", Symmetry::Antisymm);
+    const auto t7 = parse_tensor(L"g_{a1,a2}^{i1,a3}",
+                                 {.def_perm_symm = Symmetry::Antisymm});
+    const auto t8 =
+        parse_tensor(L"t_{a3}^{i2}", {.def_perm_symm = Symmetry::Antisymm});
 
     const auto x78 = result_expr(EvalExpr{t7}, EvalExpr{t8}, EvalOp::Product);
     REQUIRE(x78.expr()->as<Tensor>().symmetry() == Symmetry::Nonsymm);
 
     // whole bra <-> ket contraction between symmetric and antisymmetric tensors
     auto const t9 =
-        parse_expr(L"g_{a1,a2}^{a3,a4}", Symmetry::Antisymm)->as<Tensor>();
+        parse_expr(L"g_{a1,a2}^{a3,a4}", {.def_perm_symm = Symmetry::Antisymm})
+            ->as<Tensor>();
     auto const t10 =
-        parse_expr(L"t_{a3,a4}^{i1,i2}", Symmetry::Symm)->as<Tensor>();
+        parse_expr(L"t_{a3,a4}^{i1,i2}", {.def_perm_symm = Symmetry::Symm})
+            ->as<Tensor>();
     auto const x910 = result_expr(EvalExpr{t9}, EvalExpr{t10}, EvalOp::Product);
     // todo:
     // REQUIRE(x910.expr()->as<Tensor>().symmetry() == Symmetry::Symm);
@@ -338,12 +353,12 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
 #endif
 
   SECTION("Debug") {
-    auto t1 =
-        EvalExpr{parse_expr(L"O{a_1<i_1,i_2>;a_1<i_3,i_2>}", Symmetry::Nonsymm)
-                     ->as<Tensor>()};
-    auto t2 =
-        EvalExpr{parse_expr(L"O{a_2<i_1,i_2>;a_2<i_3,i_2>}", Symmetry::Nonsymm)
-                     ->as<Tensor>()};
+    auto t1 = EvalExpr{parse_expr(L"O{a_1<i_1,i_2>;a_1<i_3,i_2>}",
+                                  {.def_perm_symm = Symmetry::Nonsymm})
+                           ->as<Tensor>()};
+    auto t2 = EvalExpr{parse_expr(L"O{a_2<i_1,i_2>;a_2<i_3,i_2>}",
+                                  {.def_perm_symm = Symmetry::Nonsymm})
+                           ->as<Tensor>()};
 
     REQUIRE_NOTHROW(result_expr(t1, t2, EvalOp::Product));
   }

@@ -86,7 +86,8 @@ auto tensor_to_key(sequant::Tensor const& tnsr) {
 
   NestedTensorIndices oixs{tnsr};
   if (oixs.inner.empty()) {
-    auto const tnsr_deparsed = sequant::deparse(tnsr.clone(), false);
+    auto const tnsr_deparsed =
+        sequant::deparse(tnsr.clone(), {.annot_sym = false});
     return boost::regex_replace(tnsr_deparsed, idx_rgx, formatter);
   } else {
     using ranges::views::intersperse;
@@ -111,8 +112,9 @@ auto tensor_to_key(sequant::Tensor const& tnsr) {
 }
 
 auto tensor_to_key(std::wstring_view spec) {
-  return tensor_to_key(sequant::parse_expr(spec, sequant::Symmetry::Nonsymm)
-                           ->as<sequant::Tensor>());
+  return tensor_to_key(
+      sequant::parse_expr(spec, {.def_perm_symm = sequant::Symmetry::Nonsymm})
+          ->as<sequant::Tensor>());
 }
 
 template <typename NumericT>
@@ -286,7 +288,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
     using TA::TArrayD;
 
     auto parse_antisymm = [](auto const& xpr) {
-      return parse_expr(xpr, sequant::Symmetry::Antisymm);
+      return parse_expr(xpr, {.def_perm_symm = sequant::Symmetry::Antisymm});
     };
 
     // tnsr is assumed to be single-tiled

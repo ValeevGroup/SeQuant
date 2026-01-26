@@ -767,16 +767,18 @@ SECTION("Closed-shell spintrace CCD") {
   {
     {  // standard = v1 , expression can be parsed directly without requiring
        // cast to Sum
-      const auto input = parse_expr(
-          L"1/4 g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_1,i_2}", Symmetry::Antisymm);
+      const auto input =
+          parse_expr(L"1/4 g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_1,i_2}",
+                     {.def_perm_symm = Symmetry::Antisymm});
       auto result = closed_shell_CC_spintrace_v1(input);
       REQUIRE_THAT(result,
                    EquivalentTo(L"- g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_2,i_1} + "
                                 L"2 g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_1,i_2}"));
     }
     {  // compact = v2
-      const auto input = ex<Sum>(ExprPtrList{parse_expr(
-          L"1/4 g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_1,i_2}", Symmetry::Antisymm)});
+      const auto input = ex<Sum>(
+          ExprPtrList{parse_expr(L"1/4 g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_1,i_2}",
+                                 {.def_perm_symm = Symmetry::Antisymm})});
 
       auto result = closed_shell_CC_spintrace_v2(input);
       REQUIRE_THAT(result,
@@ -1017,7 +1019,7 @@ SECTION("Closed-shell spintrace CCSD") {
 SECTION("Closed-shell CC spintrace for variable, constant, product") {
   {  // test variable * tensors
     auto expr1 = sequant::parse_expr(L"-ω Â{i1,i2;a1,a2} t{a1,a2;i1,i2}",
-                                     Symmetry::Antisymm);
+                                     {.def_perm_symm = Symmetry::Antisymm});
 
     auto result_v1 = mbpt::closed_shell_CC_spintrace_v1(expr1);
     REQUIRE_THAT(result_v1, EquivalentTo(L"-ω Ŝ{i1,i2;a1,a2} t{a1,a2;i1,i2}"));
@@ -1045,7 +1047,7 @@ SECTION("Closed-shell CC spintrace for variable, constant, product") {
   }
   {  // test a product of tensors
     const auto input = parse_expr(L"1/4 g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_1,i_2}",
-                                  Symmetry::Antisymm);
+                                  {.def_perm_symm = Symmetry::Antisymm});
 
     auto result_v1 = closed_shell_CC_spintrace_v1(input);
     REQUIRE_THAT(result_v1,
@@ -1164,7 +1166,7 @@ SECTION("Closed-shell spintrace CCSDT terms") {
     const auto input = ex<Sum>(ExprPtrList{
         parse_expr(L" 3/2 Â{i_1,i_2,i_3;a_1,a_2,a_3} * "
                    L"g{a_1,a_2;a_4,a_5} * t{a_3,a_4,a_5;i_1,i_2,i_3}",
-                   Symmetry::Antisymm)});
+                   {.def_perm_symm = Symmetry::Antisymm})});
 
     auto result = closed_shell_CC_spintrace_v2(input);
     REQUIRE_THAT(
@@ -1178,7 +1180,7 @@ SECTION("Closed-shell spintrace CCSDT terms") {
     const auto input = ex<Sum>(ExprPtrList{
         parse_expr(L"3/2 Â{i_1,i_2,i_3;a_1,a_2,a_3} * g{a_1,a_2;a_4,a_5} * "
                    "t{a_3,a_4,a_5;i_1,i_2,i_3}",
-                   Symmetry::Antisymm)});
+                   {.def_perm_symm = Symmetry::Antisymm})});
 
     auto result = closed_shell_CC_spintrace_v1(input);
     REQUIRE(result->size() == 4);

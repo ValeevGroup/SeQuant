@@ -21,11 +21,11 @@ namespace sequant {
 namespace details {
 
 template <typename Range>
-std::wstring deparse_indices(Range&& indices) {
+std::wstring deparse_indices(Range&& indices, const DeparseOptions& options) {
   std::wstring deparsed;
 
   for (std::size_t i = 0; i < indices.size(); ++i) {
-    deparsed += deparse(indices[i]);
+    deparsed += deparse(indices[i], options);
 
     if (i + 1 < indices.size()) {
       deparsed += L",";
@@ -36,11 +36,11 @@ std::wstring deparse_indices(Range&& indices) {
 }
 
 template <typename Range>
-std::wstring deparse_ops(const Range& ops) {
+std::wstring deparse_ops(const Range& ops, const DeparseOptions& options) {
   std::wstring deparsed;
 
   for (std::size_t i = 0; i < ops.size(); ++i) {
-    deparsed += deparse(ops[i].index());
+    deparsed += deparse(ops[i].index(), options);
 
     if (i + 1 < ops.size()) {
       deparsed += L",";
@@ -50,7 +50,7 @@ std::wstring deparse_ops(const Range& ops) {
   return deparsed;
 }
 
-std::wstring deparse_symm(Symmetry symm) {
+std::wstring deparse_symm(Symmetry symm, const DeparseOptions&) {
   switch (symm) {
     case Symmetry::Symm:
       return L"S";
@@ -63,7 +63,7 @@ std::wstring deparse_symm(Symmetry symm) {
   SEQUANT_UNREACHABLE;
 }
 
-std::wstring deparse_symm(BraKetSymmetry symm) {
+std::wstring deparse_symm(BraKetSymmetry symm, const DeparseOptions&) {
   switch (symm) {
     case BraKetSymmetry::Conjugate:
       return L"C";
@@ -76,7 +76,7 @@ std::wstring deparse_symm(BraKetSymmetry symm) {
   SEQUANT_UNREACHABLE;
 }
 
-std::wstring deparse_symm(ColumnSymmetry symm) {
+std::wstring deparse_symm(ColumnSymmetry symm, const DeparseOptions&) {
   switch (symm) {
     case ColumnSymmetry::Symm:
       return L"S";
@@ -87,7 +87,8 @@ std::wstring deparse_symm(ColumnSymmetry symm) {
   SEQUANT_UNREACHABLE;
 }
 
-std::wstring deparse_scalar(const Constant::scalar_type& scalar) {
+std::wstring deparse_scalar(const Constant::scalar_type& scalar,
+                            const DeparseOptions&) {
   if (scalar == 0) {
     return L"0";
   }
@@ -124,141 +125,24 @@ std::wstring deparse_scalar(const Constant::scalar_type& scalar) {
   return to_wstring(deparsed);
 }
 
-}  // namespace details
-
-std::wstring deparse(const ExprPtr& expr, bool annot_sym) {
-  if (!expr) return {};
-
-  return deparse(*expr, annot_sym);
+std::wstring deparse(Tensor const& tensor, const DeparseOptions& options) {
+  return deparse(static_cast<const AbstractTensor&>(tensor), options);
 }
 
-std::wstring deparse(const Expr& expr, bool annot_sym) {
-  using namespace details;
-  if (expr.is<Tensor>())
-    return deparse(expr.as<Tensor>(), annot_sym);
-  else if (expr.is<FNOperator>())
-    return deparse(expr.as<FNOperator>());
-  else if (expr.is<BNOperator>())
-    return deparse(expr.as<BNOperator>());
-  else if (expr.is<Sum>())
-    return deparse(expr.as<Sum>(), annot_sym);
-  else if (expr.is<Product>())
-    return deparse(expr.as<Product>(), annot_sym);
-  else if (expr.is<Constant>())
-    return deparse(expr.as<Constant>());
-  else if (expr.is<Variable>())
-    return deparse(expr.as<Variable>());
-  else
-    throw std::runtime_error("Unsupported expr type for deparse!");
+std::wstring deparse(const Constant& constant, const DeparseOptions& options) {
+  return details::deparse_scalar(constant.value(), options);
 }
 
-std::wstring deparse(const ResultExpr& result, bool annot_sym) {
-  std::wstring deparsed;
-  if (result.produces_tensor()) {
-    deparsed = deparse(result.result_as_tensor(L"?"), annot_sym);
-  } else {
-    deparsed = deparse(result.result_as_variable(L"?"), annot_sym);
-  }
-
-  return deparsed + L" = " + deparse(result.expression(), annot_sym);
-}
-
-std::wstring deparse(const Index& index) {
-  std::wstring deparsed(index.label());
-
-  if (index.has_proto_indices()) {
-    deparsed += L"<";
-    const auto& protos = index.proto_indices();
-    for (std::size_t i = 0; i < protos.size(); ++i) {
-      deparsed += protos[i].label();
-
-      if (i + 1 < protos.size()) {
-        deparsed += L",";
-      }
-    }
-    deparsed += L">";
-  }
-
-  return deparsed;
-}
-
-std::wstring deparse(Tensor const& tensor, bool annot_sym) {
-  std::wstring deparsed(tensor.label());
-  deparsed += L"{" + details::deparse_indices(tensor.bra());
-  if (tensor.ket_rank() > 0) {
-    deparsed += L";" + details::deparse_indices(tensor.ket());
-  }
-  if (tensor.aux_rank() > 0) {
-    if (tensor.ket_rank() == 0) {
-      deparsed += L";";
-    }
-    deparsed += L";" + details::deparse_indices(tensor.aux());
-  }
-  deparsed += L"}";
-
-  if (annot_sym) {
-    deparsed += L":" + details::deparse_symm(tensor.symmetry());
-    deparsed += L"-" + details::deparse_symm(tensor.braket_symmetry());
-    deparsed += L"-" + details::deparse_symm(tensor.column_symmetry());
-  }
-
-  return deparsed;
-}
-
-std::wstring deparse(AbstractTensor const& tensor, bool annot_sym) {
-  std::wstring deparsed(tensor._label());
-  deparsed += L"{" + details::deparse_indices(tensor._bra());
-  if (tensor._ket_rank() > 0) {
-    deparsed += L";" + details::deparse_indices(tensor._ket());
-  }
-  if (tensor._aux_rank() > 0) {
-    if (tensor._ket_rank() == 0) {
-      deparsed += L";";
-    }
-    deparsed += L";" + details::deparse_indices(tensor._aux());
-  }
-  deparsed += L"}";
-
-  if (annot_sym) {
-    deparsed += L":" + details::deparse_symm(tensor._symmetry());
-    deparsed += L"-" + details::deparse_symm(tensor._braket_symmetry());
-    deparsed += L"-" + details::deparse_symm(tensor._column_symmetry());
-  }
-
-  return deparsed;
-}
-
-template <Statistics S>
-std::wstring deparse(NormalOperator<S> const& nop) {
-  std::wstring deparsed(nop.label());
-  deparsed += L"{" + details::deparse_ops(nop.annihilators());
-  if (nop.ncreators() > 0) {
-    deparsed += L";" + details::deparse_ops(nop.creators());
-  }
-  deparsed += L"}";
-
-  return deparsed;
-}
-
-template std::wstring deparse<Statistics::FermiDirac>(
-    NormalOperator<Statistics::FermiDirac> const& nop);
-template std::wstring deparse<Statistics::BoseEinstein>(
-    NormalOperator<Statistics::BoseEinstein> const& nop);
-
-std::wstring deparse(const Constant& constant) {
-  return details::deparse_scalar(constant.value());
-}
-
-std::wstring deparse(const Variable& variable) {
+std::wstring deparse(const Variable& variable, const DeparseOptions&) {
   return std::wstring(variable.label()) + (variable.conjugated() ? L"^*" : L"");
 }
 
-std::wstring deparse(Product const& prod, bool annot_sym) {
+std::wstring deparse(Product const& prod, const DeparseOptions& options) {
   std::wstring deparsed;
 
   const auto& scal = prod.scalar();
   if (scal != Product::scalar_type{1}) {
-    deparsed += details::deparse_scalar(scal) + L" ";
+    deparsed += details::deparse_scalar(scal, options) + L" ";
   }
 
   for (std::size_t i = 0; i < prod.size(); ++i) {
@@ -269,7 +153,7 @@ std::wstring deparse(Product const& prod, bool annot_sym) {
       deparsed += L"(";
     }
 
-    deparsed += deparse(current, annot_sym);
+    deparsed += deparse(current, options);
 
     if (parenthesize) {
       deparsed += L")";
@@ -283,7 +167,7 @@ std::wstring deparse(Product const& prod, bool annot_sym) {
   return deparsed;
 }
 
-std::wstring deparse(Sum const& sum, bool annot_sym) {
+std::wstring deparse(Sum const& sum, const DeparseOptions& options) {
   std::wstring deparsed;
 
   for (std::size_t i = 0; i < sum.size(); ++i) {
@@ -291,7 +175,7 @@ std::wstring deparse(Sum const& sum, bool annot_sym) {
 
     const bool parenthesize = current->is<Sum>();
 
-    std::wstring current_deparsed = deparse(current, annot_sym);
+    std::wstring current_deparsed = deparse(current, options);
 
     bool is_negative = false;
     if (parenthesize) {
@@ -312,5 +196,109 @@ std::wstring deparse(Sum const& sum, bool annot_sym) {
   }
   return deparsed;
 }
+
+}  // namespace details
+
+std::wstring deparse(const ExprPtr& expr, const DeparseOptions& options) {
+  if (!expr) return {};
+
+  return deparse(*expr, options);
+}
+
+std::wstring deparse(const Expr& expr, const DeparseOptions& options) {
+  using namespace details;
+  if (expr.is<Tensor>())
+    return details::deparse(expr.as<Tensor>(), options);
+  else if (expr.is<FNOperator>())
+    return deparse(expr.as<FNOperator>(), options);
+  else if (expr.is<BNOperator>())
+    return deparse(expr.as<BNOperator>(), options);
+  else if (expr.is<Sum>())
+    return details::deparse(expr.as<Sum>(), options);
+  else if (expr.is<Product>())
+    return details::deparse(expr.as<Product>(), options);
+  else if (expr.is<Constant>())
+    return details::deparse(expr.as<Constant>(), options);
+  else if (expr.is<Variable>())
+    return details::deparse(expr.as<Variable>(), options);
+  else
+    throw std::runtime_error("Unsupported expr type for deparse!");
+}
+
+std::wstring deparse(const ResultExpr& result, const DeparseOptions& options) {
+  std::wstring deparsed;
+  if (result.produces_tensor()) {
+    deparsed = details::deparse(result.result_as_tensor(L"?"), options);
+  } else {
+    deparsed = details::deparse(result.result_as_variable(L"?"), options);
+  }
+
+  return deparsed + L" = " + deparse(result.expression(), options);
+}
+
+std::wstring deparse(const Index& index, const DeparseOptions&) {
+  std::wstring deparsed(index.label());
+
+  if (index.has_proto_indices()) {
+    deparsed += L"<";
+    const auto& protos = index.proto_indices();
+    for (std::size_t i = 0; i < protos.size(); ++i) {
+      deparsed += protos[i].label();
+
+      if (i + 1 < protos.size()) {
+        deparsed += L",";
+      }
+    }
+    deparsed += L">";
+  }
+
+  return deparsed;
+}
+
+std::wstring deparse(AbstractTensor const& tensor,
+                     const DeparseOptions& options) {
+  std::wstring deparsed(tensor._label());
+  deparsed += L"{" + details::deparse_indices(tensor._bra(), options);
+  if (tensor._ket_rank() > 0) {
+    deparsed += L";" + details::deparse_indices(tensor._ket(), options);
+  }
+  if (tensor._aux_rank() > 0) {
+    if (tensor._ket_rank() == 0) {
+      deparsed += L";";
+    }
+    deparsed += L";" + details::deparse_indices(tensor._aux(), options);
+  }
+  deparsed += L"}";
+
+  if (options.annot_sym) {
+    deparsed += L":" + details::deparse_symm(tensor._symmetry(), options);
+    deparsed +=
+        L"-" + details::deparse_symm(tensor._braket_symmetry(), options);
+    deparsed +=
+        L"-" + details::deparse_symm(tensor._column_symmetry(), options);
+  }
+
+  return deparsed;
+}
+
+template <Statistics S>
+std::wstring deparse(NormalOperator<S> const& nop,
+                     const DeparseOptions& options) {
+  std::wstring deparsed(nop.label());
+  deparsed += L"{" + details::deparse_ops(nop.annihilators(), options);
+  if (nop.ncreators() > 0) {
+    deparsed += L";" + details::deparse_ops(nop.creators(), options);
+  }
+  deparsed += L"}";
+
+  return deparsed;
+}
+
+template std::wstring deparse<Statistics::FermiDirac>(
+    NormalOperator<Statistics::FermiDirac> const& nop,
+    const DeparseOptions& options);
+template std::wstring deparse<Statistics::BoseEinstein>(
+    NormalOperator<Statistics::BoseEinstein> const& nop,
+    const DeparseOptions& options);
 
 }  // namespace sequant

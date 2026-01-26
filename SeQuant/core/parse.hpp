@@ -27,6 +27,24 @@ struct ParseError : std::runtime_error {
   ParseError(std::size_t offset, std::size_t length, std::string message);
 };
 
+struct ParseOptions {
+  /// The Symmetry (within bra and ket) to use, if none is specified in the
+  /// input explicitly. The Context is queried in case this is not provided
+  /// explicitly.
+  std::optional<Symmetry> def_perm_symm = {};
+  /// The BraKetSymmetry to use, if none is specified in the input explicitly.
+  /// The Context is queried in case this is not provided explicitly.
+  std::optional<BraKetSymmetry> def_braket_symm = {};
+  /// The ColumnSymmetry to use, if none is specified in the input explicitly.
+  /// The Context is queried in case this is not provided explicitly.
+  std::optional<ColumnSymmetry> def_col_symm = {};
+};
+
+struct DeparseOptions {
+  /// Whether to explicitly annotate tensor symmetries
+  bool annot_sym = true;
+};
+
 // clang-format off
 /// \brief Construct expressions from string representations
 ///
@@ -73,27 +91,18 @@ struct ParseError : std::runtime_error {
 ///                       'g{i1, a1; i2, a2}:N' tensor with 'sequant::Symmetry::Nonsymm' annotation
 /// \return SeQuant expression.
 // clang-format on
-ExprPtr parse_expr(std::wstring_view raw,
-                   std::optional<Symmetry> perm_symm = {},
-                   std::optional<BraKetSymmetry> braket_symm = {},
-                   std::optional<ColumnSymmetry> column_symm = {});
+ExprPtr parse_expr(std::wstring_view raw, const ParseOptions &options = {});
 
 /// \sa parse_expr
-ExprPtr parse_expr(std::string_view raw, std::optional<Symmetry> perm_symm = {},
-                   std::optional<BraKetSymmetry> braket_symm = {},
-                   std::optional<ColumnSymmetry> column_symm = {});
+ExprPtr parse_expr(std::string_view raw, const ParseOptions &options = {});
 
 /// \sa parse_expr
 ResultExpr parse_result_expr(std::wstring_view raw,
-                             std::optional<Symmetry> perm_symm = {},
-                             std::optional<BraKetSymmetry> braket_symm = {},
-                             std::optional<ColumnSymmetry> column_symm = {});
+                             const ParseOptions &options = {});
 
 /// \sa parse_expr
 ResultExpr parse_result_expr(std::string_view raw,
-                             std::optional<Symmetry> perm_symm = {},
-                             std::optional<BraKetSymmetry> braket_symm = {},
-                             std::optional<ColumnSymmetry> column_symm = {});
+                             const ParseOptions &options = {});
 
 ///
 /// Get a parsable string from an expression.
@@ -110,18 +119,16 @@ ResultExpr parse_result_expr(std::string_view raw,
 /// \param annot_sym Whether to add sequant::Symmetry annotation
 ///                  to each Tensor string.
 /// \return wstring of the expression.
-std::wstring deparse(const ResultExpr &expr, bool annot_sym = true);
-std::wstring deparse(const ExprPtr &expr, bool annot_sym = true);
-std::wstring deparse(const Expr &expr, bool annot_sym = true);
-std::wstring deparse(const Product &product, bool annot_sym);
-std::wstring deparse(const Sum &sum, bool annot_sym);
-std::wstring deparse(const Tensor &tensor, bool annot_sym = true);
-std::wstring deparse(const AbstractTensor &tensor, bool annot_sym = true);
+std::wstring deparse(const ResultExpr &expr,
+                     const DeparseOptions &options = {});
+std::wstring deparse(const ExprPtr &expr, const DeparseOptions &options = {});
+std::wstring deparse(const Expr &expr, const DeparseOptions &options = {});
+std::wstring deparse(const AbstractTensor &tensor,
+                     const DeparseOptions &options = {});
 template <Statistics S>
-std::wstring deparse(const NormalOperator<S> &nop);
-std::wstring deparse(const Variable &variable);
-std::wstring deparse(const Constant &constant);
-std::wstring deparse(const Index &index);
+std::wstring deparse(const NormalOperator<S> &nop,
+                     const DeparseOptions &options = {});
+std::wstring deparse(const Index &index, const DeparseOptions &options = {});
 
 }  // namespace sequant
 

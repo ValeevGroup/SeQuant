@@ -56,7 +56,7 @@ TEST_CASE("eval_node", "[EvalNode]") {
   auto R = Npos::R;
 
   auto parse_expr_antisymm = [](auto const& xpr) {
-    return parse_expr(xpr, Symmetry::Antisymm);
+    return parse_expr(xpr, {.def_perm_symm = Symmetry::Antisymm});
   };
 
   SECTION("terminals") {
