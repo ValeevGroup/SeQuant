@@ -80,7 +80,9 @@ auto to_char_type = [](auto c) {
 
 // clang-format off
 auto word_components = x3::unicode::alnum
-                       | x3::char_('_') | x3::unicode::char_(L'⁔') | x3::unicode::char_(L'̃') | x3::unicode::char_(to_char_type(0x0302))
+                       | x3::char_('_') | x3::unicode::char_(L'⁔')
+                       | x3::unicode::char_(to_char_type(0x0303)) // combining tilde
+                       | x3::unicode::char_(to_char_type(0x0302)) // combining circumflex/hat
                        // Superscript and Subscript block
                        | (x3::unicode::char_(to_char_type(0x2070), to_char_type(0x209F)) - x3::unicode::unassigned)
                        // These are defined in the Latin-1 Supplement block and thus need to be listed explicitly
