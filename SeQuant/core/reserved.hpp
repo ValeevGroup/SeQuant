@@ -16,7 +16,6 @@ namespace reserved {
 /// @brief returns the reserved label for the antisymmetrization operator
 inline const std::wstring& antisymm_label() {
   static const std::wstring label = L"Â";
-
   return label;
 }
 
@@ -29,7 +28,6 @@ inline const std::wstring& symm_label() {
 /// @brief returns the reserved label for the transposition operator
 inline const std::wstring& transposition_label() {
   static const std::wstring label = L"P̂";
-
   return label;
 }
 

@@ -172,7 +172,7 @@ TensorCanonicalizer::instance_map_accessor() {
 
 container::vector<std::wstring>&
 TensorCanonicalizer::default_cardinal_tensor_labels_accessor() {
-  // {antisymm_label, symm_label} is the default
+  // {antisymm_label, symm_label, transposition_label} is the default
   static container::vector<std::wstring> default_ctlabels_{
       reserved::antisymm_label(), reserved::symm_label(),
       reserved::transposition_label()};

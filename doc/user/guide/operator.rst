@@ -7,7 +7,7 @@ Motivation
 The :class:`mbpt::Operator <sequant::mbpt::Operator>` class represents an abstract Fock-space many-body operator, such as the Hamiltonian operator, that can be used within SeQuant expressions.
 We already saw `earlier <../getting_started/operators.html>`_ that
 the lower-level *tensor* representation of such operators involves specific index labels which makes tensor
-representation  inconvenient when multiple instances of the same operator occur.
+representation inconvenient when multiple instances of the same operator occur.
 For example, consider a general 1-body operator
 
 .. math::
