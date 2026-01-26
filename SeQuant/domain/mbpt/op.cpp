@@ -15,7 +15,6 @@ std::vector<std::wstring> cardinal_tensor_labels() {
   return {L"κ",
           L"γ",
           L"Γ",
-          L"P",
           L"L",
           L"λ",
           L"λ¹",

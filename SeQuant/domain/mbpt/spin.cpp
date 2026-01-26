@@ -745,7 +745,7 @@ ExprPtr expand_A_op(const ExprPtr& expr) {
 }
 
 container::svector<container::map<Index, Index>> P_maps(const Tensor& P) {
-  SEQUANT_ASSERT(P.label() == L"P");
+  SEQUANT_ASSERT(P.label() == L"P̂");
 
   // Return pair-wise replacements
   // P_ij -> {{i,j},{j,i}}
@@ -777,13 +777,13 @@ ExprPtr expand_P_op(const ProductPtr& product) {
   for (auto& term : product) {
     if (term->is<Tensor>()) {
       const auto& P = term->as<Tensor>();
-      if ((P.label() == L"P") && (P.bra_rank() > 1 || (P.ket_rank() > 1))) {
+      if ((P.label() == L"P̂") && (P.bra_rank() > 1 || (P.ket_rank() > 1))) {
         has_P_operator = true;
         auto map = P_maps(P);
         map_list.insert(map_list.end(), map.begin(), map.end());
-      } else if ((P.label() == L"P") &&
+      } else if ((P.label() == L"P̂") &&
                  (P.bra_rank() == 1 && (P.ket_rank() == 1))) {
-        return remove_tensor(product, L"P");
+        return remove_tensor(product, L"P̂");
       }
     }
   }
@@ -794,7 +794,7 @@ ExprPtr expand_P_op(const ProductPtr& product) {
   for (auto&& map : map_list) {
     ProductPtr new_product = std::make_shared<Product>();
     new_product->scale(product->scalar());
-    auto temp_product = remove_tensor(product, L"P");
+    auto temp_product = remove_tensor(product, L"P̂");
     for (auto&& term : *temp_product) {
       if (term->is<Tensor>()) {
         auto new_tensor = term->as<Tensor>();
@@ -1376,9 +1376,9 @@ std::vector<ExprPtr> open_shell_P_op_vector(const Tensor& A) {
       for (auto& k : beta_spin) {
         if (!alpha_spin.empty() && !beta_spin.empty()) {
           P_bra_list.emplace_back(Tensor(
-              L"P", bra{A.bra().at(j), A.bra().at(k)}, ket{}, Symmetry::Symm));
+              L"P̂", bra{A.bra().at(j), A.bra().at(k)}, ket{}, Symmetry::Symm));
           P_ket_list.emplace_back(Tensor(
-              L"P", bra{}, ket{A.ket().at(j), A.ket().at(k)}, Symmetry::Symm));
+              L"P̂", bra{}, ket{A.ket().at(j), A.ket().at(k)}, Symmetry::Symm));
         }
       }
     }
@@ -1394,12 +1394,12 @@ std::vector<ExprPtr> open_shell_P_op_vector(const Tensor& A) {
             for (std::size_t d = c + 1; d != beta_spin.size(); ++d) {
               auto i4 = beta_spin[d];
               P_bra_list.emplace_back(
-                  Tensor(L"P",
+                  Tensor(L"P̂",
                          bra{A.bra().at(i1), A.bra().at(i3), A.bra().at(i2),
                              A.bra().at(i4)},
                          ket{}, Symmetry::Symm));
               P_ket_list.emplace_back(
-                  Tensor(L"P", bra{},
+                  Tensor(L"P̂", bra{},
                          ket{A.ket().at(i1), A.ket().at(i3), A.ket().at(i2),
                              A.ket().at(i4)},
                          Symmetry::Symm));

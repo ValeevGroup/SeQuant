@@ -26,6 +26,13 @@ inline const std::wstring& symm_label() {
   return label;
 }
 
+/// @brief returns the reserved label for the transposition operator
+inline const std::wstring& transposition_label() {
+  static const std::wstring label = L"P̂";
+
+  return label;
+}
+
 /// @brief overlap/metric tensor label is reserved since it is used by low-level
 /// SeQuant machinery. Users can create overlap Tensor using make_overlap()
 inline const std::wstring& overlap_label() {
@@ -43,7 +50,8 @@ inline const std::wstring& kronecker_label() {
 /// @brief returns a list of all reserved operator labels
 inline const auto& labels() {
   static const std::array reserved{antisymm_label(), symm_label(),
-                                   kronecker_label(), overlap_label()};
+                                   transposition_label(), kronecker_label(),
+                                   overlap_label()};
   return reserved;
 }
 
