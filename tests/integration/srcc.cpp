@@ -100,7 +100,8 @@ class compute_cceqvec {
           using ranges::views::transform;
           auto bixs = ext_idxs | transform([](auto&& vec) { return vec[0]; });
           auto kixs = ext_idxs | transform([](auto&& vec) { return vec[1]; });
-          auto s_tensor = ex<Tensor>(Tensor{L"S", bra(kixs), ket(bixs)});
+          auto s_tensor =
+              ex<Tensor>(Tensor{reserved::symm_label(), bra(kixs), ket(bixs)});
           eqvec_sf_ref[R] = s_tensor * eqvec_sf_ref[R];
           expand(eqvec_sf_ref[R]);
         }
@@ -166,7 +167,8 @@ class compute_cceqvec {
           // Remove S operator
           for (auto& term : eqvec[R]->expr()) {
             if (term->is<Product>())
-              term = remove_tensor(term.as_shared_ptr<Product>(), L"S");
+              term = remove_tensor(term.as_shared_ptr<Product>(),
+                                   reserved::symm_label());
           }
 
           // Biorthogonal transformation
@@ -179,8 +181,9 @@ class compute_cceqvec {
           auto kixs = ext_idxs | ranges::views::transform(
                                      [](auto&& vec) { return vec[1]; });
           if (bixs.size() > 1) {
-            eqvec[R] =
-                ex<Tensor>(Tensor{L"S", bra(kixs), ket(bixs)}) * eqvec[R];
+            eqvec[R] = ex<Tensor>(Tensor{reserved::symm_label(), bra(kixs),
+                                         ket(bixs)}) *
+                       eqvec[R];
           }
           simplify(eqvec[R]);
 
@@ -194,7 +197,9 @@ class compute_cceqvec {
 
           // restore the particle symmetrizer again to get the most compact set
           // of equations
-          eqvec[R] = ex<Tensor>(Tensor{L"S", bra(kixs), ket(bixs)}) * eqvec[R];
+          eqvec[R] =
+              ex<Tensor>(Tensor{reserved::symm_label(), bra(kixs), ket(bixs)}) *
+              eqvec[R];
           eqvec[R] = expand(eqvec[R]);
 
           // apply normalization factor

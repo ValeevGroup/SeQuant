@@ -1111,7 +1111,7 @@ TEST_CASE("wick", "[algorithms][wick]") {
 
       // multiply tensor factors and expand
       auto wick_result_2 =
-          ex<Tensor>(L"A", bra{L"i_1", L"i_2"},
+          ex<Tensor>(reserved::antisymm_label(), bra{L"i_1", L"i_2"},
                      ket{Index{L"a_1", {L"i_1", L"i_2"}},
                          Index{L"a_2", {L"i_1", L"i_2"}}},
                      Symmetry::Antisymm) *
@@ -1176,7 +1176,7 @@ TEST_CASE("wick", "[algorithms][wick]") {
           // multiply tensor factors and expand
           auto wick_result_2 =
               ex<Constant>(rational{1, 256}) *
-              ex<Tensor>(L"A", bra{L"i_1", L"i_2"},
+              ex<Tensor>(reserved::antisymm_label(), bra{L"i_1", L"i_2"},
                          ket{Index{L"a_1", {L"i_1", L"i_2"}},
                              Index{L"a_2", {L"i_1", L"i_2"}}},
                          Symmetry::Antisymm) *
@@ -1214,11 +1214,12 @@ TEST_CASE("wick", "[algorithms][wick]") {
     SECTION("wick(P3*H2*T2*T3)") {
       constexpr bool connected_only = true;
       constexpr bool topology = true;
-      auto P3 = ex<Constant>(rational{1, 36}) *
-                ex<Tensor>(L"A", bra{L"i_1", L"i_2", L"i_3"},
-                           ket{L"a_1", L"a_2", L"a_3"}, Symmetry::Antisymm) *
-                ex<FNOperator>(cre{L"i_1", L"i_2", L"i_3"},
-                               ann{L"a_1", L"a_2", L"a_3"});
+      auto P3 =
+          ex<Constant>(rational{1, 36}) *
+          ex<Tensor>(reserved::antisymm_label(), bra{L"i_1", L"i_2", L"i_3"},
+                     ket{L"a_1", L"a_2", L"a_3"}, Symmetry::Antisymm) *
+          ex<FNOperator>(cre{L"i_1", L"i_2", L"i_3"},
+                         ann{L"a_1", L"a_2", L"a_3"});
       auto H2 = ex<Constant>(rational{1, 4}) *
                 ex<Tensor>(L"g", bra{L"p_1", L"p_2"}, ket{L"p_3", L"p_4"},
                            Symmetry::Antisymm) *

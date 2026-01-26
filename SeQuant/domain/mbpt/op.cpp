@@ -5,6 +5,7 @@
 #include <SeQuant/core/wick.hpp>
 #include <SeQuant/domain/mbpt/context.hpp>
 #include <SeQuant/domain/mbpt/op.hpp>
+#include <SeQuant/domain/mbpt/op_registry.hpp>
 
 #include <stdexcept>
 
@@ -572,6 +573,11 @@ ExprPtr OpMaker<S>::operator()(std::optional<UseDepIdx> dep,
   }
   const auto full_label = detail::decorate_with_pert_order(label_, order_);
 
+  const auto normalization =
+      label_ == reserved::antisymm_label() || label_ == reserved::symm_label()
+          ? Normalization::Implicit
+          : Normalization::Default;
+
   // if batching indices are present, use them
   if (batch_indices_) {
     return make(
@@ -581,7 +587,7 @@ ExprPtr OpMaker<S>::operator()(std::optional<UseDepIdx> dep,
           return ex<Tensor>(full_label, bra(creidxs), ket(annidxs),
                             aux(batchidxs), opsymm_opt ? *opsymm_opt : opsymm);
         },
-        dep ? *dep : UseDepIdx::None);
+        dep ? *dep : UseDepIdx::None, normalization);
   }
   // else no batching
   return make(
@@ -591,7 +597,7 @@ ExprPtr OpMaker<S>::operator()(std::optional<UseDepIdx> dep,
         return ex<Tensor>(full_label, bra(creidxs), ket(annidxs),
                           opsymm_opt ? *opsymm_opt : opsymm);
       },
-      dep ? *dep : UseDepIdx::None);
+      dep ? *dep : UseDepIdx::None, normalization);
 }
 
 template class OpMaker<Statistics::FermiDirac>;

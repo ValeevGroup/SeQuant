@@ -357,6 +357,7 @@ set(SeQuant_src
         SeQuant/core/utility/expr.hpp
         SeQuant/core/utility/indices.hpp
         SeQuant/core/utility/macros.hpp
+        SeQuant/core/utility/memoize.hpp
         SeQuant/core/utility/nodiscard.hpp
         SeQuant/core/utility/permutation.hpp
         SeQuant/core/utility/scope.hpp

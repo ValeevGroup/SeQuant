@@ -8,7 +8,6 @@
 #include <SeQuant/domain/mbpt/fwd.hpp>
 
 #include <SeQuant/domain/mbpt/convention.hpp>
-#include <SeQuant/domain/mbpt/op_registry.hpp>
 #include <SeQuant/domain/mbpt/spin.hpp>
 
 #include <SeQuant/core/attr.hpp>
@@ -620,6 +619,12 @@ class OpMaker {
     None
   };
 
+  /// Op of e.g. rank {c,a} by default includes normalization factor
+  /// of 1/(c! a!) ... sometimes we want to change normalization, e.g.
+  /// A and S include normalization factor in their definition,
+  /// so no need to include it explicitly
+  enum class Normalization { Default, Implicit };
+
   /// struct to hold the information about the operator
   struct OpInfo {
     container::svector<Index> creidxs;  //!< creator indices
@@ -710,18 +715,30 @@ class OpMaker {
   /// @param[in] ann_spaces annihilator IndexSpaces
   /// @param[in] tensor_generator the callable that generates the tensor
   /// @param[in] dep whether to use dependent indices
+  /// @param[in] normalization the normalization convention, see Normalization
   template <typename TensorGenerator>
   static ExprPtr make(const IndexSpaceContainer& cre_spaces,
                       const IndexSpaceContainer& ann_spaces,
                       TensorGenerator&& tensor_generator,
-                      UseDepIdx dep = UseDepIdx::None) {
+                      UseDepIdx dep = UseDepIdx::None,
+                      Normalization normalization = Normalization::Default) {
     const auto op_info = build_op_info(cre_spaces, ann_spaces, dep);
 
     const auto t =
         tensor_generator(op_info.creidxs, op_info.annidxs, op_info.opsymm);
-    return ex<Constant>(rational{1, op_info.mult}) * t *
-           ex<NormalOperator<S>>(cre(op_info.creidxs), ann(op_info.annidxs),
-                                 get_default_context().vacuum());
+    auto result =
+        t * ex<NormalOperator<S>>(cre(op_info.creidxs), ann(op_info.annidxs),
+                                  get_default_context().vacuum());
+    switch (normalization) {
+      case Normalization::Default:
+        result = ex<Constant>(rational{1, op_info.mult}) * result;
+        break;
+      case Normalization::Implicit:
+        break;
+      default:
+        abort();
+    }
+    return result;
   }
 
   /// @tparam TensorGenerator callable with signature
@@ -732,15 +749,18 @@ class OpMaker {
   /// @param[in] ann_spaces annihilator IndexSpaces as an initializer list
   /// @param[in] tensor_generator the callable that generates the tensor
   /// @param[in] csv whether to use dependent indices
+  /// @param[in] normalization the normalization convention, see Normalization
   template <typename TensorGenerator>
   static ExprPtr make(std::initializer_list<IndexSpace::Type> cre_spaces,
                       std::initializer_list<IndexSpace::Type> ann_spaces,
                       TensorGenerator&& tensor_generator,
-                      UseDepIdx csv = UseDepIdx::None) {
+                      UseDepIdx csv = UseDepIdx::None,
+                      Normalization normalization = Normalization::Default) {
     IndexSpaceContainer cre_vec(cre_spaces.begin(), cre_spaces.end());
     IndexSpaceContainer ann_vec(ann_spaces.begin(), ann_spaces.end());
     return OpMaker::make(cre_vec, ann_vec,
-                         std::forward<TensorGenerator>(tensor_generator), csv);
+                         std::forward<TensorGenerator>(tensor_generator), csv,
+                         normalization);
   }
 
   /// @tparam TensorGenerator callable with signature
@@ -752,12 +772,14 @@ class OpMaker {
   /// @param[in] batch_indices batch indices
   /// @param[in] tensor_generator the callable that generates the tensor
   /// @param[in] dep whether to use dependent indices
+  /// @param[in] normalization the normalization convention, see Normalization
   template <typename TensorGenerator>
   static ExprPtr make(const IndexSpaceContainer& cre_spaces,
                       const IndexSpaceContainer& ann_spaces,
                       const IndexContainer& batch_indices,
                       TensorGenerator&& tensor_generator,
-                      UseDepIdx dep = UseDepIdx::None) {
+                      UseDepIdx dep = UseDepIdx::None,
+                      Normalization normalization = Normalization::Default) {
     mbpt::check_for_batching_space();
     SEQUANT_ASSERT(!batch_indices.empty());
     [[maybe_unused]] auto batch_space =
@@ -771,9 +793,19 @@ class OpMaker {
     const auto t = tensor_generator(op_info.creidxs, op_info.annidxs,
                                     batch_indices, op_info.opsymm);
 
-    return ex<Constant>(rational{1, op_info.mult}) * t *
-           ex<NormalOperator<S>>(cre(op_info.creidxs), ann(op_info.annidxs),
-                                 get_default_context().vacuum());
+    auto result =
+        t * ex<NormalOperator<S>>(cre(op_info.creidxs), ann(op_info.annidxs),
+                                  get_default_context().vacuum());
+    switch (normalization) {
+      case Normalization::Default:
+        result = ex<Constant>(rational{1, op_info.mult}) * result;
+        break;
+      case Normalization::Implicit:
+        break;
+      default:
+        abort();
+    }
+    return result;
   }
 
   /// @tparam TensorGenerator callable with signature
@@ -785,17 +817,20 @@ class OpMaker {
   /// @param[in] batch_indices batch indices as an initializer list
   /// @param[in] tensor_generator the callable that generates the tensor
   /// @param[in] csv whether to use dependent indices
+  /// @param[in] normalization the normalization convention, see Normalization
   template <typename TensorGenerator>
   static ExprPtr make(std::initializer_list<IndexSpace::Type> creators,
                       std::initializer_list<IndexSpace::Type> annihilators,
                       std::initializer_list<Index> batch_indices,
                       TensorGenerator&& tensor_generator,
-                      UseDepIdx csv = UseDepIdx::None) {
+                      UseDepIdx csv = UseDepIdx::None,
+                      Normalization normalization = Normalization::Default) {
     IndexSpaceContainer cre_vec(creators.begin(), creators.end());
     IndexSpaceContainer ann_vec(annihilators.begin(), annihilators.end());
     IndexContainer batchidx_vec(batch_indices.begin(), batch_indices.end());
     return OpMaker::make(cre_vec, ann_vec, batchidx_vec,
-                         std::forward<TensorGenerator>(tensor_generator), csv);
+                         std::forward<TensorGenerator>(tensor_generator), csv,
+                         normalization);
   }
 
  protected:

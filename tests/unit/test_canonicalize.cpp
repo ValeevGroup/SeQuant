@@ -364,13 +364,13 @@ TEST_CASE("canonicalization", "[algorithms]") {
       {  // Terms 1 and 6 from spin-traced result
         auto input =
             ex<Constant>(-4) *
-                ex<Tensor>(L"S", bra{L"i_1", L"i_2", L"i_3"},
+                ex<Tensor>(reserved::symm_label(), bra{L"i_1", L"i_2", L"i_3"},
                            ket{L"a_1", L"a_2", L"a_3"}, Symmetry::Nonsymm) *
                 ex<Tensor>(L"f", bra{L"i_4"}, ket{L"i_1"}) *
                 ex<Tensor>(L"t", bra{L"a_1", L"a_2", L"a_3"},
                            ket{L"i_3", L"i_2", L"i_4"}, Symmetry::Nonsymm) +
             ex<Constant>(-4) *
-                ex<Tensor>(L"S", bra{L"i_1", L"i_2", L"i_3"},
+                ex<Tensor>(reserved::symm_label(), bra{L"i_1", L"i_2", L"i_3"},
                            ket{L"a_1", L"a_2", L"a_3"}, Symmetry::Nonsymm) *
                 ex<Tensor>(L"f", bra{L"i_4"}, ket{L"i_1"}) *
                 ex<Tensor>(L"t", bra{L"a_1", L"a_2", L"a_3"},
@@ -379,20 +379,20 @@ TEST_CASE("canonicalization", "[algorithms]") {
         REQUIRE_THAT(
             input,
             EquivalentTo(
-                "-8 S{i1,i2,i3;a1,a2,a3} f{i4;i3} t{a1,a2,a3;i1,i4,i2}"));
+                "-8 Ŝ{i1,i2,i3;a1,a2,a3} f{i4;i3} t{a1,a2,a3;i1,i4,i2}"));
       }
 
       {
         auto term1 =
             ex<Constant>(-4) *
-            ex<Tensor>(L"S", bra{L"i_1", L"i_2", L"i_3"},
+            ex<Tensor>(reserved::symm_label(), bra{L"i_1", L"i_2", L"i_3"},
                        ket{L"a_1", L"a_2", L"a_3"}, Symmetry::Nonsymm) *
             ex<Tensor>(L"f", bra{L"i_4"}, ket{L"i_1"}) *
             ex<Tensor>(L"t", bra{L"a_1", L"a_2", L"a_3"},
                        ket{L"i_3", L"i_2", L"i_4"}, Symmetry::Nonsymm);
         auto term2 =
             ex<Constant>(-4) *
-            ex<Tensor>(L"S", bra{L"i_1", L"i_2", L"i_3"},
+            ex<Tensor>(reserved::symm_label(), bra{L"i_1", L"i_2", L"i_3"},
                        ket{L"a_1", L"a_2", L"a_3"}, Symmetry::Nonsymm) *
             ex<Tensor>(L"f", bra{L"i_4"}, ket{L"i_1"}) *
             ex<Tensor>(L"t", bra{L"a_1", L"a_2", L"a_3"},
@@ -400,29 +400,29 @@ TEST_CASE("canonicalization", "[algorithms]") {
         canonicalize(term1);
         canonicalize(term2);
         REQUIRE_THAT(term1,
-                     EquivalentTo("-4 S{i_1,i_2,i_3;a_1,a_2,a_3} f{i_4;i_3} "
+                     EquivalentTo("-4 Ŝ{i_1,i_2,i_3;a_1,a_2,a_3} f{i_4;i_3} "
                                   "t{a_1,a_2,a_3;i_1,i_4,i_2}"));
         REQUIRE_THAT(term2,
-                     EquivalentTo("-4 S{i_1,i_2,i_3;a_1,a_2,a_3} f{i_4;i_3} "
+                     EquivalentTo("-4 Ŝ{i_1,i_2,i_3;a_1,a_2,a_3} f{i_4;i_3} "
                                   "t{a_1,a_2,a_3;i_1,i_4,i_2}"));
         auto sum_of_terms = term1 + term2;
         simplify(sum_of_terms);
         REQUIRE_THAT(
             sum_of_terms,
             EquivalentTo(
-                "-8 S{i1,i2,i3;a1,a2,a3} f{i4;i3} t{a1,a2,a3;i1,i4,i2}"));
+                "-8 Ŝ{i1,i2,i3;a1,a2,a3} f{i4;i3} t{a1,a2,a3;i1,i4,i2}"));
       }
 
       {  // Terms 2 and 4 from spin-traced result
         auto input =
             ex<Constant>(2) *
-                ex<Tensor>(L"S", bra{L"i_1", L"i_2", L"i_3"},
+                ex<Tensor>(reserved::symm_label(), bra{L"i_1", L"i_2", L"i_3"},
                            ket{L"a_1", L"a_2", L"a_3"}, Symmetry::Nonsymm) *
                 ex<Tensor>(L"f", bra{L"i_4"}, ket{L"i_1"}) *
                 ex<Tensor>(L"t", bra{L"a_1", L"a_2", L"a_3"},
                            ket{L"i_3", L"i_4", L"i_2"}, Symmetry::Nonsymm) +
             ex<Constant>(2) *
-                ex<Tensor>(L"S", bra{L"i_1", L"i_2", L"i_3"},
+                ex<Tensor>(reserved::symm_label(), bra{L"i_1", L"i_2", L"i_3"},
                            ket{L"a_1", L"a_2", L"a_3"}, Symmetry::Nonsymm) *
                 ex<Tensor>(L"f", bra{L"i_4"}, ket{L"i_1"}) *
                 ex<Tensor>(L"t", bra{L"a_1", L"a_2", L"a_3"},
@@ -430,7 +430,7 @@ TEST_CASE("canonicalization", "[algorithms]") {
         canonicalize(input);
         REQUIRE_THAT(
             input, EquivalentTo(
-                       "4 S{i1,i2,i3;a1,a2,a3} f{i4;i3} t{a1,a2,a3;i4,i1,i2}"));
+                       "4 Ŝ{i1,i2,i3;a1,a2,a3} f{i4;i3} t{a1,a2,a3;i4,i1,i2}"));
       }
     }
 

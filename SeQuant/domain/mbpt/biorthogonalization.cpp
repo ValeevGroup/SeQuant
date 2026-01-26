@@ -474,30 +474,6 @@ void biorthogonal_transform(container::svector<ResultExpr>& result_exprs,
                         }) |
                         ranges::to<container::svector<ExprPtr>>();
 
-  auto memoize = []<typename T>(container::map<std::pair<std::size_t, double>,
-                                               std::optional<T>>& cache,
-                                std::mutex& mutex, std::condition_variable& cv,
-                                std::pair<std::size_t, double> key,
-                                auto compute_fn) -> const T& {
-    {
-      std::unique_lock<std::mutex> lock(mutex);
-      auto [it, inserted] = cache.try_emplace(key, std::nullopt);
-      if (!inserted) {
-        cv.wait(lock, [&] { return it->second.has_value(); });
-        return it->second.value();
-      }
-    }
-
-    T result = compute_fn();
-
-    {
-      std::lock_guard<std::mutex> lock(mutex);
-      cache[key] = std::move(result);
-      cv.notify_all();
-      return cache[key].value();
-    }
-  };
-
   using HardcodedMatrix =
       Eigen::Matrix<sequant::rational, Eigen::Dynamic, Eigen::Dynamic>;
   using ComputedMatrix = Eigen::MatrixXd;
@@ -516,12 +492,12 @@ void biorthogonal_transform(container::svector<ResultExpr>& result_exprs,
   const ComputedMatrix* computed_coefficients = nullptr;
 
   if (n_particles <= max_rank_hardcoded_biorthogonalizer_matrix) {
-    hardcoded_coefficients = &memoize(
+    hardcoded_coefficients = &detail::memoize(
         hardcoded_cache, cache_mutex, cache_cv, key,
         [&] { return hardcoded_biorthogonalizer_matrix(n_particles); });
   } else {
     computed_coefficients =
-        &memoize(computed_cache, cache_mutex, cache_cv, key, [&] {
+        &detail::memoize(computed_cache, cache_mutex, cache_cv, key, [&] {
           return compute_biorthogonalizer_matrix(n_particles, threshold);
         });
     SEQUANT_ASSERT(num_perms == computed_coefficients->rows());
