@@ -120,6 +120,7 @@ std::shared_ptr<OpRegistry> make_legacy_registry();
 /// context
 /// @param op the operator label
 /// @return the OpClass of the operator
+/// @note returns OpClass::gen for reserved operator labels
 OpClass to_op_class(const std::wstring& op);
 
 }  // namespace sequant::mbpt
