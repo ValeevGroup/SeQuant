@@ -444,11 +444,10 @@ TEST_CASE("mbpt", "[mbpt]") {
       auto A_2_1 = A(nₚ(2), nₕ(1))->as<op_t>();
       //    std::wcout << "A_2_1: " << to_latex(simplify(A_2_1.tensor_form()))
       //               << std::endl;
-      REQUIRE(
-          to_latex(simplify(A_2_1.tensor_form())) ==
-          L"{{{\\frac{1}{2}}}{\\bar{A}^{{i_1}}_{{a_1}{a_2}}}{\\tilde{a}^{{a_"
-          L"1}{a_2}}"
-          L"_{\\textvisiblespace\\,{i_1}}}}");
+      REQUIRE(to_latex(simplify(A_2_1.tensor_form())) ==
+              L"{{\\bar{A}^{{i_1}}_{{a_1}{a_2}}}{\\tilde{a}^{{a_"
+              L"1}{a_2}}"
+              L"_{\\textvisiblespace\\,{i_1}}}}");
 
       auto P_0_1 = P(nₚ(0), nₕ(1))->as<op_t>();
       //    std::wcout << "P_0_1: " << to_latex(simplify(P_0_1.tensor_form()))
@@ -460,14 +459,14 @@ TEST_CASE("mbpt", "[mbpt]") {
       //    std::wcout << "P_2_1: " << to_latex(simplify(P_2_1.tensor_form()))
       //               << std::endl;
       REQUIRE(to_latex(simplify(P_2_1.tensor_form())) ==
-              L"{{{\\frac{1}{2}}}{\\bar{A}^{{a_1}{a_2}}_{{i_1}}}{\\tilde{a}^{"
+              L"{{\\bar{A}^{{a_1}{a_2}}_{{i_1}}}{\\tilde{a}^{"
               L"\\textvisiblespace\\,{i_1}}_{{a_1}{a_2}}}}");
 
       auto P_2_3 = P(nₚ(2), nₕ(3))->as<op_t>();
       //    std::wcout << "P_2_3: " << to_latex(simplify(P_3_2.tensor_form()))
       //               << std::endl;
       REQUIRE(to_latex(simplify(P_2_3.tensor_form())) ==
-              L"{{{\\frac{1}{12}}}{\\bar{A}^{{a_1}{a_2}}_{{i_1}{i_2}{i_3}}}{"
+              L"{{\\bar{A}^{{a_1}{a_2}}_{{i_1}{i_2}{i_3}}}{"
               L"\\tilde{a}^{"
               L"{i_1}{i_2}{i_3}}_{\\textvisiblespace\\,{a_1}{a_2}}}}");
 
@@ -729,6 +728,15 @@ SECTION("SRSF") {
       REQUIRE(result->is<Sum>());
       REQUIRE(result->size() == 12);
     }
+  }
+  SECTION("S operator action") {
+    auto expr = tensor::S(2) * parse_expr(L"f{a1,a2;i1,i2}");
+    simplify(expr);
+    auto scalar = expr->as<Product>().scalar();
+    REQUIRE(scalar == 1);
+    REQUIRE_THAT(expr,
+                 EquivalentTo("S{a_3,a_4;i_3,i_4}:N-C-S * "
+                              "f{a_1,a_2;i_1,i_2}:N-C-S * ã{i_3,i_4;a_3,a_4}"));
   }
 }  // SECTION("SRSF")
 

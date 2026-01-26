@@ -9,8 +9,6 @@ namespace sequant::mbpt {
 
 ExprPtr lst(ExprPtr A, ExprPtr B, size_t commutator_rank,
             const LSTOptions& options) {
-  SEQUANT_ASSERT(commutator_rank >= 1 && "Truncation order must be at least 1");
-
   // use cloned expr to avoid side effects
   if (!options.skip_clone) A = A->clone();
 
