@@ -1243,11 +1243,14 @@ SECTION("Closed-shell spintrace CCSDT terms") {
 }
 
 SECTION("Merge P operators") {
-  auto P1 = Tensor(L"P̂", bra{L"i_1", L"i_2"}, ket{}, Symmetry::Symm);
-  auto P2 = Tensor(L"P̂", bra{}, ket{L"a_1", L"a_2"}, Symmetry::Symm);
-  auto P3 =
-      Tensor(L"P̂", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"}, Symmetry::Symm);
-  auto P4 = Tensor(L"P̂", bra{}, ket{}, Symmetry::Symm);
+  auto P1 = Tensor(reserved::transposition_label(), bra{L"i_1", L"i_2"}, ket{},
+                   Symmetry::Symm);
+  auto P2 = Tensor(reserved::transposition_label(), bra{}, ket{L"a_1", L"a_2"},
+                   Symmetry::Symm);
+  auto P3 = Tensor(reserved::transposition_label(), bra{L"i_1", L"i_2"},
+                   ket{L"a_1", L"a_2"}, Symmetry::Symm);
+  auto P4 =
+      Tensor(reserved::transposition_label(), bra{}, ket{}, Symmetry::Symm);
   auto P12 = merge_tensors(P1, P2);
   auto P34 = merge_tensors(P3, P4);
   REQUIRE_THAT(P12, EquivalentTo("P̂{i1,i2;a1,a2}:S"));
@@ -1301,29 +1304,42 @@ SECTION("Relation in spin P operators") {
                ex<Tensor>(L"t", bra{L"a_2", L"a_3"}, ket{L"i_3", L"i_4"},
                           Symmetry::Antisymm);
 
-  auto P13_b = ex<Tensor>(L"P̂", bra{}, ket{L"a_1", L"a_3"}, Symmetry::Nonsymm);
-  auto P13_k = ex<Tensor>(L"P̂", bra{L"i_1", L"i_3"}, ket{}, Symmetry::Nonsymm);
-  auto P12_b = ex<Tensor>(L"P̂", bra{}, ket{L"a_1", L"a_2"}, Symmetry::Nonsymm);
-  auto P12_k = ex<Tensor>(L"P̂", bra{L"i_1", L"i_2"}, ket{}, Symmetry::Nonsymm);
+  auto P13_b = ex<Tensor>(reserved::transposition_label(), bra{},
+                          ket{L"a_1", L"a_3"}, Symmetry::Nonsymm);
+  auto P13_k = ex<Tensor>(reserved::transposition_label(), bra{L"i_1", L"i_3"},
+                          ket{}, Symmetry::Nonsymm);
+  auto P12_b = ex<Tensor>(reserved::transposition_label(), bra{},
+                          ket{L"a_1", L"a_2"}, Symmetry::Nonsymm);
+  auto P12_k = ex<Tensor>(reserved::transposition_label(), bra{L"i_1", L"i_2"},
+                          ket{}, Symmetry::Nonsymm);
 
-  auto P23_b = ex<Tensor>(L"P̂", bra{}, ket{L"a_2", L"a_3"}, Symmetry::Nonsymm);
-  auto P23_k = ex<Tensor>(L"P̂", bra{L"i_2", L"i_3"}, ket{}, Symmetry::Nonsymm);
+  auto P23_b = ex<Tensor>(reserved::transposition_label(), bra{},
+                          ket{L"a_2", L"a_3"}, Symmetry::Nonsymm);
+  auto P23_k = ex<Tensor>(reserved::transposition_label(), bra{L"i_2", L"i_3"},
+                          ket{}, Symmetry::Nonsymm);
 
-  auto P4_1313 = ex<Tensor>(L"P̂", bra{L"i_1", L"i_3"}, ket{L"a_1", L"a_3"},
-                            Symmetry::Nonsymm);
-  auto P4_1323 = ex<Tensor>(L"P̂", bra{L"i_1", L"i_3"}, ket{L"a_2", L"a_3"},
-                            Symmetry::Nonsymm);
-  auto P4_2313 = ex<Tensor>(L"P̂", bra{L"i_2", L"i_3"}, ket{L"a_1", L"a_3"},
-                            Symmetry::Nonsymm);
-  auto P4_2323 = ex<Tensor>(L"P̂", bra{L"i_2", L"i_3"}, ket{L"a_2", L"a_3"},
-                            Symmetry::Nonsymm);
+  auto P4_1313 =
+      ex<Tensor>(reserved::transposition_label(), bra{L"i_1", L"i_3"},
+                 ket{L"a_1", L"a_3"}, Symmetry::Nonsymm);
+  auto P4_1323 =
+      ex<Tensor>(reserved::transposition_label(), bra{L"i_1", L"i_3"},
+                 ket{L"a_2", L"a_3"}, Symmetry::Nonsymm);
+  auto P4_2313 =
+      ex<Tensor>(reserved::transposition_label(), bra{L"i_2", L"i_3"},
+                 ket{L"a_1", L"a_3"}, Symmetry::Nonsymm);
+  auto P4_2323 =
+      ex<Tensor>(reserved::transposition_label(), bra{L"i_2", L"i_3"},
+                 ket{L"a_2", L"a_3"}, Symmetry::Nonsymm);
 
-  auto P4_1212 = ex<Tensor>(L"P̂", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"},
-                            Symmetry::Nonsymm);
-  auto P4_1213 = ex<Tensor>(L"P̂", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_3"},
-                            Symmetry::Nonsymm);
-  auto P4_1312 = ex<Tensor>(L"P̂", bra{L"i_1", L"i_3"}, ket{L"a_1", L"a_2"},
-                            Symmetry::Nonsymm);
+  auto P4_1212 =
+      ex<Tensor>(reserved::transposition_label(), bra{L"i_1", L"i_2"},
+                 ket{L"a_1", L"a_2"}, Symmetry::Nonsymm);
+  auto P4_1213 =
+      ex<Tensor>(reserved::transposition_label(), bra{L"i_1", L"i_2"},
+                 ket{L"a_1", L"a_3"}, Symmetry::Nonsymm);
+  auto P4_1312 =
+      ex<Tensor>(reserved::transposition_label(), bra{L"i_1", L"i_3"},
+                 ket{L"a_1", L"a_2"}, Symmetry::Nonsymm);
 
   auto p_aab = (ex<Constant>(1) - P13_b - P23_b - P13_k - P23_k + P4_1313 +
                 P4_1323 + P4_2313 + P4_2323) /
@@ -1374,11 +1390,14 @@ SECTION("Relation in spin P operators") {
 }
 
 SECTION("Expand P operator pair-wise") {
-  auto P1 = Tensor(L"P̂", bra{L"i_1", L"i_2"}, ket{});
-  auto P2 = Tensor(L"P̂", bra{L"i_1", L"i_2", L"i_3", L"i_4"}, ket{});
-  auto P3 = Tensor(L"P̂", bra{}, ket{L"a_1", L"a_2"});
-  auto P4 = Tensor(L"P̂", bra{L"i_1", L"i_2"}, ket{L"a_1", L"a_2"});
-  auto P5 = Tensor(L"P̂", bra{L"i_1", L"i_2", L"i_3", L"i_4"},
+  auto P1 = Tensor(reserved::transposition_label(), bra{L"i_1", L"i_2"}, ket{});
+  auto P2 = Tensor(reserved::transposition_label(),
+                   bra{L"i_1", L"i_2", L"i_3", L"i_4"}, ket{});
+  auto P3 = Tensor(reserved::transposition_label(), bra{}, ket{L"a_1", L"a_2"});
+  auto P4 = Tensor(reserved::transposition_label(), bra{L"i_1", L"i_2"},
+                   ket{L"a_1", L"a_2"});
+  auto P5 = Tensor(reserved::transposition_label(),
+                   bra{L"i_1", L"i_2", L"i_3", L"i_4"},
                    ket{L"a_1", L"a_2", L"a_3", L"a_4"});
 
   // g* t3
@@ -1593,8 +1612,8 @@ SECTION("Open-shell spin-tracing") {
   {
     auto input =
         ex<Constant>(rational{1, 8}) *
-            ex<Tensor>(L"P̂", bra{L"i_1", L"i_3"}, ket{L"a_1", L"a_3"},
-                       Symmetry::Nonsymm) *
+            ex<Tensor>(reserved::transposition_label(), bra{L"i_1", L"i_3"},
+                       ket{L"a_1", L"a_3"}, Symmetry::Nonsymm) *
             ex<Tensor>(L"g", bra{L"i_4", L"i_5"}, ket{L"a_4", L"a_5"},
                        Symmetry::Antisymm) *
             ex<Tensor>(L"t", bra{L"a_1", L"a_4"}, ket{L"i_1", L"i_2"},
@@ -1602,8 +1621,8 @@ SECTION("Open-shell spin-tracing") {
             ex<Tensor>(L"t", bra{L"a_2", L"a_3", L"a_5"},
                        ket{L"i_3", L"i_4", L"i_5"}, Symmetry::Antisymm) +
         ex<Constant>(rational{1, 8}) *
-            ex<Tensor>(L"P̂", bra{L"i_2", L"i_3"}, ket{L"a_2", L"a_3"},
-                       Symmetry::Nonsymm) *
+            ex<Tensor>(reserved::transposition_label(), bra{L"i_2", L"i_3"},
+                       ket{L"a_2", L"a_3"}, Symmetry::Nonsymm) *
             ex<Tensor>(L"g", bra{L"i_4", L"i_5"}, ket{L"a_4", L"a_5"},
                        Symmetry::Antisymm) *
             ex<Tensor>(L"t", bra{L"a_1", L"a_4"}, ket{L"i_1", L"i_2"},
