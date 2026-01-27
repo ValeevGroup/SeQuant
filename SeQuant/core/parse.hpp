@@ -11,13 +11,6 @@
 #include <string>
 #include <string_view>
 
-///
-///  Create SeQuant expression from string input.
-///
-/// @author: Bimal Gaudel
-/// version: 21 July, 2021
-///
-
 namespace sequant {
 
 struct ParseError : std::runtime_error {
@@ -25,6 +18,20 @@ struct ParseError : std::runtime_error {
   std::size_t length;
 
   ParseError(std::size_t offset, std::size_t length, std::string message);
+};
+
+/// Specifies the syntax of the textual input/representation to use. All
+/// potential changes made to the syntax within a given version is understood to
+/// be backwards compatible in the parse sense. That is older inputs will
+/// continue to work as before. However, representations generated via
+/// deparse(…) may not necessarily be parsable by older version of SeQuant.
+///
+/// @note Everything but Latest is considered to be deprecated by default
+///       and support for it may be removed in future versions.
+enum class ParseSyntax {
+  V1,
+
+  Latest = V1
 };
 
 struct ParseOptions {
@@ -38,11 +45,15 @@ struct ParseOptions {
   /// The ColumnSymmetry to use, if none is specified in the input explicitly.
   /// The Context is queried in case this is not provided explicitly.
   std::optional<ColumnSymmetry> def_col_symm = {};
+  /// The expected syntax version of the input
+  ParseSyntax syntax = ParseSyntax::Latest;
 };
 
 struct DeparseOptions {
   /// Whether to explicitly annotate tensor symmetries
   bool annot_symm = true;
+  /// The syntax version of the produced output
+  ParseSyntax syntax = ParseSyntax::Latest;
 };
 
 #define SEQUANT_DECLARE_PARSE_FUNC(name, returnType)                          \
@@ -59,8 +70,6 @@ SEQUANT_DECLARE_PARSE_FUNC(parse_expr, ExprPtr);
 
 /// \sa parse_expr
 SEQUANT_DECLARE_PARSE_FUNC(parse_result_expr, ResultExpr);
-
-#undef SEQUANT_DECLARE_PARSE_FUNC
 
 
 #define SEQUANT_DECLARE_DEPARSE_FUNC(name) \
@@ -87,6 +96,20 @@ SEQUANT_DECLARE_PARSE_FUNC(parse_result_expr, ResultExpr);
 /// \param options Customization options
 /// \return wstring of the expression.
 SEQUANT_DECLARE_DEPARSE_FUNC(deparse)
+
+
+
+// Namespaced variants
+namespace parse::v1 {
+	SEQUANT_DECLARE_PARSE_FUNC(parse_expr, ExprPtr);
+	SEQUANT_DECLARE_PARSE_FUNC(parse_result_expr, ResultExpr);
+
+	SEQUANT_DECLARE_DEPARSE_FUNC(deparse)
+}
+
+
+#undef SEQUANT_DECLARE_PARSE_FUNC
+#undef SEQUANT_DECLARE_DEPARSE_FUNC
 
 }  // namespace sequant
 

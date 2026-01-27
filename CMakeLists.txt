@@ -314,9 +314,13 @@ set(SeQuant_symb_src
         SeQuant/core/options.cpp
         SeQuant/core/options.hpp
         SeQuant/core/parse.hpp
-        SeQuant/core/parse/ast.cpp
-        SeQuant/core/parse/deparse.cpp
         SeQuant/core/parse/parse.cpp
+        SeQuant/core/parse/v1/ast.cpp
+        SeQuant/core/parse/v1/ast.hpp
+        SeQuant/core/parse/v1/ast_conversions.hpp
+        SeQuant/core/parse/v1/deparse.cpp
+        SeQuant/core/parse/v1/parse.cpp
+        SeQuant/core/parse/v1/semantic_actions.hpp
         SeQuant/core/ranges.hpp
         SeQuant/core/rational.hpp
         SeQuant/core/runtime.cpp

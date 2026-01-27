@@ -16,7 +16,7 @@
 #include <utility>
 #include <vector>
 
-namespace sequant {
+namespace sequant::parse::v1 {
 
 namespace details {
 
@@ -25,7 +25,7 @@ std::wstring deparse_indices(Range&& indices, const DeparseOptions& options) {
   std::wstring deparsed;
 
   for (std::size_t i = 0; i < indices.size(); ++i) {
-    deparsed += deparse(indices[i], options);
+    deparsed += v1::deparse(indices[i], options);
 
     if (i + 1 < indices.size()) {
       deparsed += L",";
@@ -40,7 +40,7 @@ std::wstring deparse_ops(const Range& ops, const DeparseOptions& options) {
   std::wstring deparsed;
 
   for (std::size_t i = 0; i < ops.size(); ++i) {
-    deparsed += deparse(ops[i].index(), options);
+    deparsed += v1::deparse(ops[i].index(), options);
 
     if (i + 1 < ops.size()) {
       deparsed += L",";
@@ -202,7 +202,7 @@ std::wstring deparse(Sum const& sum, const DeparseOptions& options) {
 std::wstring deparse(const ExprPtr& expr, const DeparseOptions& options) {
   if (!expr) return {};
 
-  return deparse(*expr, options);
+  return v1::deparse(*expr, options);
 }
 
 std::wstring deparse(const Expr& expr, const DeparseOptions& options) {
@@ -210,9 +210,9 @@ std::wstring deparse(const Expr& expr, const DeparseOptions& options) {
   if (expr.is<Tensor>())
     return details::deparse(expr.as<Tensor>(), options);
   else if (expr.is<FNOperator>())
-    return deparse(expr.as<FNOperator>(), options);
+    return v1::deparse(expr.as<FNOperator>(), options);
   else if (expr.is<BNOperator>())
-    return deparse(expr.as<BNOperator>(), options);
+    return v1::deparse(expr.as<BNOperator>(), options);
   else if (expr.is<Sum>())
     return details::deparse(expr.as<Sum>(), options);
   else if (expr.is<Product>())
@@ -233,7 +233,7 @@ std::wstring deparse(const ResultExpr& result, const DeparseOptions& options) {
     deparsed = details::deparse(result.result_as_variable(L"?"), options);
   }
 
-  return deparsed + L" = " + deparse(result.expression(), options);
+  return deparsed + L" = " + v1::deparse(result.expression(), options);
 }
 
 std::wstring deparse(const Index& index, const DeparseOptions&) {
@@ -301,4 +301,4 @@ template std::wstring deparse<Statistics::BoseEinstein>(
     NormalOperator<Statistics::BoseEinstein> const& nop,
     const DeparseOptions& options);
 
-}  // namespace sequant
+}  // namespace sequant::parse::v1
