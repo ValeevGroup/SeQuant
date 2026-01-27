@@ -410,9 +410,7 @@ inline bool ordinal_compare(Index const& idx1, Index const& idx2) {
 ///   eg. [a_1^{i_1,i_2},a_2^{i_2,i_3}] -> "a_1i_1i_2,a_2i_2i_3"
 ///   eg. [i_1, i_2] -> "i_1,i_2"
 ///
-template <typename Rng, typename Idx = ranges::range_value_t<Rng>,
-          typename = std::enable_if_t<std::is_same_v<Idx, Index>>>
-std::string csv_labels(Rng&& idxs) {
+std::string csv_labels(meta::range_of<Index> auto&& idxs) {
   using ranges::views::concat;
   using ranges::views::intersperse;
   using ranges::views::join;
@@ -426,10 +424,10 @@ std::string csv_labels(Rng&& idxs) {
     return sequant::to_string(v | ranges::to<std::wstring>);
   };
 
-  return std::forward<Rng>(idxs)  //
-         | transform(str)         //
-         | intersperse(",")       //
-         | join                   //
+  return std::forward<decltype(idxs)>(idxs)  //
+         | transform(str)                    //
+         | intersperse(",")                  //
+         | join                              //
          | ranges::to<std::string>;
 }
 
