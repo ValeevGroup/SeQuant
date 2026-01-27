@@ -224,9 +224,7 @@ Sum reorder(Sum const& sum);
 /// \param reorder_sum If true, the summands are reordered so that terms with
 ///                    common sub-expressions appear closer to each other.
 /// \return Optimized expression for lower evaluation cost.
-template <typename IdxToSize, typename = std::enable_if_t<std::is_invocable_r_v<
-                                  size_t, IdxToSize, const Index&>>>
-ExprPtr optimize(ExprPtr const& expr, IdxToSize const& idx2size,
+ExprPtr optimize(ExprPtr const& expr, has_index_extent auto const& idx2size,
                  bool reorder_sum) {
   using ranges::views::transform;
   if (expr->is<Product>()) {
