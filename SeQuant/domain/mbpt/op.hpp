@@ -171,7 +171,7 @@ class Operator<void, S> : public Expr, public Labeled {
   /// q-numbers
   bool is_cnumber() const override { return false; }
 
- private:
+ protected:
   std::function<std::wstring_view()> label_generator_;
   std::function<ExprPtr()> tensor_form_generator_;
 };
@@ -915,7 +915,7 @@ class Operator : public Operator<void, S> {
     return batch_ordinals_;
   }
 
-  /// @brief returns the pertubation order of this operator
+  /// @brief returns the perturbation order of this operator
   [[nodiscard]] size_t order() const { return order_; }
 
  private:

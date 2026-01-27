@@ -31,6 +31,13 @@ Operator<QuantumNumbers, S>::Operator(
                std::move(qn_action)) {
   params.validate();
   order_ = params.order;
+  // decorate label with perturbation order if non-zero
+  if (order_ != 0) {
+    auto decorated = detail::decorate_with_pert_order(this->label_generator_(),
+                                                      static_cast<int>(order_));
+    this->label_generator_ =
+        [label = std::move(decorated)]() -> std::wstring_view { return label; };
+  }
   // set up batch ordinals if any
   if (!params.batch_ordinals.empty()) {
     mbpt::check_for_batching_space();
@@ -208,7 +215,6 @@ Expr::hash_type Operator<QuantumNumbers, S>::memoizing_hash() const {
     auto qns = (*this)(QuantumNumbers{});
     auto val = sequant::hash::value(qns);
     sequant::hash::combine(val, std::wstring(this->label()));
-    sequant::hash::combine(val, this->order());
     if (batch_ordinals()) {
       const auto ordinals = batch_ordinals().value();
       sequant::hash::range(val, begin(ordinals), end(ordinals));
