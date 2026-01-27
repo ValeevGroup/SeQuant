@@ -508,21 +508,50 @@ template <typename T>
 constexpr inline std::size_t std_array_size_v = std_array_size<T>::value;
 
 ///
+/// True if @p T is a range of rank @p Rank whose value type is convertible to
+/// @p V.
+///
+/// A rank of 0 means @p T is directly convertible to @p V.
+/// A rank of 1 means @p T is a range of values convertible to @p V.
+/// A rank of N means @p T is a range of ranges ... (N times) of values
+/// convertible to @p V.
+///
+template <typename, typename, size_t>
+constexpr bool range_of_rank{};
+
+template <typename T, typename V>
+constexpr bool range_of_rank<T, V, 0> = std::is_convertible_v<T, V>;
+
+template <std::ranges::range Rng, typename V, size_t Rank>
+constexpr bool range_of_rank<Rng, V, Rank> =
+    range_of_rank<std::ranges::range_value_t<Rng>, V, (Rank - 1)>;
+
+///
 /// True if @tparam Rng is a range whose value type is convertible
 /// to @tparam V .
 ///
-template <typename Rng, typename V>
-concept range_of = std::ranges::range<Rng> &&
-                   std::is_convertible_v<std::ranges::range_value_t<Rng>, V>;
+/// A rank of 0 means @tparam Rng is directly convertible to @tparam V.
+/// A rank of 1 means @tparam Rng is a range of values convertible to @tparam V.
+/// A rank of N means @tparam Rng is a range of ranges ... (N times) of values
+/// convertible to @tparam V.
+///
+template <typename Rng, typename V, size_t Rank = 1>
+concept range_of = range_of_rank<Rng, V, Rank>;
 
 ///
 /// True if @tparam Rng is a range whose value type is convertible
 /// to @tparam V and the size (std::ranges::distance) is known in constant time.
 ///
+/// A rank of 0 means @tparam Rng is directly convertible to @tparam V.
+/// A rank of 1 means @tparam Rng is a range of values convertible to @tparam V.
+/// A rank of N means @tparam Rng is a range of ranges ... (N times) of values
+/// convertible to @tparam V.
+///
 /// @see https://en.cppreference.com/w/cpp/ranges/sized_range.html
 ///
-template <typename Rng, typename V>
-concept sized_range_of = std::ranges::sized_range<Rng> && range_of<Rng, V>;
+template <typename Rng, typename V, size_t Rank = 1>
+concept sized_range_of =
+    std::ranges::sized_range<Rng> && range_of<Rng, V, Rank>;
 
 }  // namespace meta
 }  // namespace sequant
