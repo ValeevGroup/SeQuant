@@ -47,13 +47,8 @@ auto constexpr flops_counter(has_index_extent auto&& ixex) {
                 meta::range_of<Index> auto const& rhs,
                 meta::range_of<Index> auto const& result) {
     using ranges::views::concat;
-    auto tot_idxs = tot_indices(concat(lhs, rhs, result));
-    {
-      ranges::actions::sort(tot_idxs.inner, Index::FullLabelCompare{});
-      ranges::actions::sort(tot_idxs.outer, Index::FullLabelCompare{});
-      ranges::actions::unique(tot_idxs.inner);
-      ranges::actions::unique(tot_idxs.outer);
-    }
+    auto tot_idxs = tot_indices<container::set<Index, Index::LabelCompare>>(
+        concat(lhs, rhs, result));
     double ops = 1.;
     for (auto&& idx : concat(tot_idxs.outer, tot_idxs.inner)) ops *= ixex(idx);
     // ops == 1 implies zero flops
@@ -81,8 +76,8 @@ template <typename CostFn>
     { std::forward<CostFn>(fn)(ixs, ixs, ixs) } -> std::floating_point;
   }
 EvalSequence single_term_opt_impl(TensorNetwork const& network,
-                             meta::range_of<Index> auto const& tidxs,
-                             CostFn&& cost_fn) {
+                                  meta::range_of<Index> auto const& tidxs,
+                                  CostFn&& cost_fn) {
   using ranges::views::concat;
   using ranges::views::indirect;
   using ranges::views::transform;
@@ -180,7 +175,8 @@ ExprPtr single_term_opt(Product const& prod, IdxToSz&& idxsz) {
                                prod.factors().end(), Product::Flatten::No});
   auto const tensors =
       prod | filter(&ExprPtr::template is<Tensor>) | ranges::to_vector;
-  auto seq = single_term_opt(TensorNetwork{tensors}, std::forward<IdxToSz>(idxsz));
+  auto seq =
+      single_term_opt(TensorNetwork{tensors}, std::forward<IdxToSz>(idxsz));
   auto result = container::svector<ExprPtr>{};
   for (auto i : seq)
     if (i == -1) {

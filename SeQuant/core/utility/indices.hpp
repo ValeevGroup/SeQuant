@@ -363,20 +363,31 @@ TensorOfTensorIndices<Container> tot_indices(Rng const& idxs) {
   using ranges::views::join;
   using ranges::views::transform;
 
-  // Container indep_idxs;
+  constexpr auto emplace_into = [](Container& target, auto&& value) {
+    if constexpr (requires { target.emplace_back(value); }) {
+      // for sequence containers like vectors, lists
+      target.emplace_back(value);
+    } else if constexpr (requires { target.emplace(value); }) {
+      // for associative containers like set
+      target.emplace(value);
+    } else {
+      static_assert(false,
+                    "Container does not support emplace_back or emplace");
+    }
+  };
 
   TensorOfTensorIndices<Container> result;
   auto& outer = result.outer;
 
   for (auto&& i : idxs | transform(&Index::proto_indices) | join)
-    if (!ranges::contains(outer, i)) outer.emplace_back(i);
+    if (!ranges::contains(outer, i)) emplace_into(outer, i);
 
   for (auto&& i : idxs | filter(not_fn(&Index::has_proto_indices)))
-    if (!ranges::contains(outer, i)) outer.emplace_back(i);
+    if (!ranges::contains(outer, i)) emplace_into(outer, i);
 
   auto& inner = result.inner;
   for (auto&& i : idxs | filter(&Index::has_proto_indices))
-    inner.emplace_back(i);
+    emplace_into(inner, i);
 
   return result;
 }
