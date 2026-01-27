@@ -215,7 +215,6 @@ Expr::hash_type Operator<QuantumNumbers, S>::memoizing_hash() const {
     auto qns = (*this)(QuantumNumbers{});
     auto val = sequant::hash::value(qns);
     sequant::hash::combine(val, std::wstring(this->label()));
-    sequant::hash::combine(val, this->order());
     if (batch_ordinals()) {
       const auto ordinals = batch_ordinals().value();
       sequant::hash::range(val, begin(ordinals), end(ordinals));
