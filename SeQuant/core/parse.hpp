@@ -42,7 +42,7 @@ struct ParseOptions {
 
 struct DeparseOptions {
   /// Whether to explicitly annotate tensor symmetries
-  bool annot_sym = true;
+  bool annot_symm = true;
 };
 
 // clang-format off

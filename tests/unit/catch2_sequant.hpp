@@ -35,7 +35,7 @@ struct StringMaker<sequant::Expr> {
                              bool include_canonical = true) {
     std::string str;
     try {
-      str = sequant::to_string(sequant::deparse(expr, {.annot_sym = true}));
+      str = sequant::to_string(sequant::deparse(expr, {.annot_symm = true}));
     } catch (const std::exception &) {
       // deparse doesn't support all kinds of expressions -> fall back to LaTeX
       // representation
@@ -82,7 +82,7 @@ struct StringMaker<sequant::ResultExpr> {
   static std::string convert(const sequant::ResultExpr &res,
                              bool include_canonical = true) {
     std::string str =
-        sequant::to_string(sequant::deparse(res, {.annot_sym = true}));
+        sequant::to_string(sequant::deparse(res, {.annot_symm = true}));
 
     if (include_canonical) {
       sequant::ResultExpr clone = res.clone();

@@ -87,7 +87,7 @@ auto tensor_to_key(sequant::Tensor const& tnsr) {
   NestedTensorIndices oixs{tnsr};
   if (oixs.inner.empty()) {
     auto const tnsr_deparsed =
-        sequant::deparse(tnsr.clone(), {.annot_sym = false});
+        sequant::deparse(tnsr.clone(), {.annot_symm = false});
     return boost::regex_replace(tnsr_deparsed, idx_rgx, formatter);
   } else {
     using ranges::views::intersperse;
