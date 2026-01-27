@@ -337,7 +337,6 @@ TEST_CASE("mbpt", "[mbpt]") {
                        },
                        [](qns_t& qns) { qns += excitation_type_qns(1); },
                        OpParams{.order = 0});
-        std::wcout << op_order0.tensor_form().to_latex() << std::endl;
         REQUIRE(op_order0.label() == L"t");
         REQUIRE(op_order0.order() == 0);
 
