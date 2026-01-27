@@ -566,9 +566,21 @@ auto get_ket_idx(T&& container)
   }
 }
 
-template <std::ranges::input_range Rng>
-  requires meta::range_of<std::ranges::range_value_t<Rng>, Index>
-auto subset_index_counts(Rng const& rng) {
+///
+/// @brief Computes index counts for all subsets of a given range of index
+/// groups.
+///
+/// This function generates a vector where each element corresponds to a subset
+/// of the input range `rng`. The subsets are indexed by a bitmask, where the
+/// $i$-th bit being set means the $i$-th element of `rng` is included in the
+/// subset. For each subset, it counts the occurrences of each `Index`.
+///
+/// @param rng A range of ranges of `Index`. The outer range represents a
+/// collection of index groups (e.g., indices of multiple tensors).
+/// @return A vector of maps, where `result[mask]` contains a map of
+/// `Index` to its count in the subset defined by `mask`.
+///
+auto subset_index_counts(meta::range_of<Index, 2> auto const& rng) {
   size_t const N = ranges::distance(rng);
   container::vector<container::map<Index, size_t, Index::FullLabelCompare>>
       result((1 << N));
@@ -582,24 +594,42 @@ auto subset_index_counts(Rng const& rng) {
   return result;
 }
 
-template <std::ranges::input_range Rng>
-  requires meta::range_of<std::ranges::range_value_t<Rng>, Index>
-auto subset_target_indices(Rng const& rng,
-                            meta::range_of<Index> auto const& tixs) {
+///
+/// @brief Determines the target indices for all subsets of a given range of
+/// index groups.
+///
+/// This function computes the set of "target" indices for each subset of `rng`.
+/// An index is considered a target for a subset if it appears exactly once
+/// within that subset (making it an open index for that subset) or if it is
+/// present in the provided `tixs` (target indices) and also appears in the
+/// subset. Additionally, indices that appear in the subset and also appear in
+/// the complementary subset (implied by `counts.at(counts.size() - i -
+/// 1).contains(k)`) are included, which effectively identifies contracted
+/// indices that need to be preserved as open indices if they are matched in the
+/// complement.
+///
+/// @param rng A range of ranges of `Index`. The outer range represents a
+/// collection of index groups.
+/// @param tixs A range of `Index` representing the global target indices (e.g.,
+/// indices of the result tensor).
+/// @return A vector of sets, where `result[mask]` contains the set of target
+/// `Index` objects for the subset defined by `mask`.
+///
+auto subset_target_indices(meta::range_of<Index, 2> auto const& rng,
+                           meta::range_of<Index> auto const& tixs) {
   using IndexSet = container::set<Index, Index::FullLabelCompare>;
   size_t const N = ranges::distance(rng);
   container::vector<IndexSet> result((1 << N));
 
   if (result.empty()) return result;
 
-  for (auto i = 0; i < N; ++i) {
-    auto&& ixs = ranges::at(rng, i);
-    result[(1 << i)] = IndexSet(ranges::begin(ixs), ranges::end(ixs));
-  }
-
-  *result.rbegin() = IndexSet(ranges::begin(tixs), ranges::end(tixs));
+  for (auto i = 0; i < N; ++i)
+    for (auto&& ix : ranges::at(rng, i)) result[(1 << i)].emplace(ix);
 
   auto counts = subset_index_counts(rng);
+
+  for (auto&& [k, v] : *counts.rbegin())
+    if (v == 1 || ranges::contains(tixs, k)) result.rbegin()->emplace(k);
 
   for (auto i = 0; i < result.size(); ++i)
     for (auto&& [k, v] : counts[i])
