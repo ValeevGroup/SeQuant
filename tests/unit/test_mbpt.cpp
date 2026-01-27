@@ -804,8 +804,8 @@ TEST_CASE("mbpt", "[mbpt]") {
       simplify(sum2);
       // std::wcout << "sum2:  " << to_latex(sum2) << std::endl;
       REQUIRE(to_latex(sum2) ==
-              L"{ \\bigl({\\hat{t¹}_{1}}{[{z}_{1}]} + {\\hat{h¹}}{[{z}_{1}]} + "
-              L"{\\hat{t¹}_{2}}{[{z}_{1}]}\\bigr) }");
+              L"{ \\bigl({\\hat{h¹}}{[{z}_{1}]} + {\\hat{t¹}_{2}}{[{z}_{1}]} + "
+              L"{\\hat{t¹}_{1}}{[{z}_{1}]}\\bigr) }");
 
       auto sum3 = h1 + h1_2;
       simplify(sum3);
