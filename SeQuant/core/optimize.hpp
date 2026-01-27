@@ -21,20 +21,8 @@
 
 #include <bit>
 
-namespace {
-
-///
-/// \tparam T integral type
-/// \return true if @c x has a single bit on in its bit representation.
-///
-template <typename T>
-bool has_single_bit(T x) noexcept {
-  return std::has_single_bit(x);
-}
-
-}  // namespace
-
 namespace sequant {
+
 /// Optimize an expression assuming the number of virtual orbitals
 /// greater than the number of occupied orbitals.
 
@@ -51,49 +39,26 @@ namespace opt {
 /// \param idxs Index objects.
 /// \return flops count
 ///
-template <typename IdxToSz, typename Idxs,
-          std::enable_if_t<std::is_invocable_r_v<size_t, IdxToSz, const Index&>,
-                           bool> = true>
-double ops_count(IdxToSz const& idxsz, Idxs const& idxs) {
-  auto oixs = tot_indices(idxs);
-  double ops = 1.0;
-  for (auto&& idx : ranges::views::concat(oixs.outer, oixs.inner))
-    ops *= std::invoke(idxsz, idx);
-  // ops == 1.0 implies zero flops.
-  return ops == 1.0 ? 0 : ops;
-}
+template <typename F>
+concept has_index_extent = std::is_invocable_r_v<size_t, F, Index const&>;
 
-namespace {
-
-///
-/// Non-trivial, unique bipartitions of the bits in an unsigned integral.
-///  eg.
-///  decimal (binary) => [{decimal (binary)}...]
-///  -------------------------------------------
-///         3 (11) => [{1 (01), 2 (10)}]
-///      11 (1011) => [{1  (0001), 10 (1010)},
-///                     {2 (0010), 9 (1001)},
-///                     {3 (0011), 8 (1000)}]
-///      0 (0)     => [] (empty: no partitions possible)
-///      2 (10)    => [] (empty)
-///      4 (100)   => [] (empty)
-///
-/// \tparam I Unsigned integral type.
-/// \param n Represents a bit set.
-/// \param func func is function that takes two arguments of type I.
-///
-template <
-    typename I, typename F,
-    typename = std::enable_if_t<std::is_integral_v<I> && std::is_unsigned_v<I>>,
-    typename = std::enable_if_t<std::is_invocable_v<F, I, I>>>
-void biparts(I n, F const& func) {
-  if (n == 0) return;
-  I const h = static_cast<I>(std::floor(n / 2.0));
-  for (I n_ = 1; n_ <= h; ++n_) {
-    auto const l = n & n_;
-    auto const r = (n - n_) & n;
-    if ((l | r) == n) func(l, r);
-  }
+auto constexpr flops_counter(has_index_extent auto&& ixex) {
+  return [ixex](meta::range_of<Index> auto const& lhs,
+                meta::range_of<Index> auto const& rhs,
+                meta::range_of<Index> auto const& result) {
+    using ranges::views::concat;
+    auto tot_idxs = tot_indices(concat(lhs, rhs, result));
+    {
+      ranges::actions::sort(tot_idxs.inner, Index::FullLabelCompare{});
+      ranges::actions::sort(tot_idxs.outer, Index::FullLabelCompare{});
+      ranges::actions::unique(tot_idxs.inner);
+      ranges::actions::unique(tot_idxs.outer);
+    }
+    double ops = 1.;
+    for (auto&& idx : concat(tot_idxs.outer, tot_idxs.inner)) ops *= ixex(idx);
+    // ops == 1 implies zero flops
+    return ops == 1. ? 0. : ops;
+  };
 }
 
 ///
@@ -111,52 +76,63 @@ struct OptRes {
   EvalSequence sequence;
 };
 
-///
-/// Returns a vector of Index objects that are common in @c idxs1 and @c idxs2
-/// that are sorted using Index:LabelCompare{}.
-///
-/// @note I1 and I2 containers are assumed to be sorted by using
-/// Index::LabelCompare{};
-///
-template <typename I1, typename I2, typename Comp = std::less<Index>>
-container::svector<Index> common_indices(I1 const& idxs1, I2 const& idxs2) {
-  using std::back_inserter;
-  using std::begin;
-  using std::end;
-  using std::set_intersection;
+template <typename CostFn>
+  requires requires(CostFn&& fn, decltype(OptRes::indices) const& ixs) {
+    { std::forward<CostFn>(fn)(ixs, ixs, ixs) } -> std::floating_point;
+  }
+EvalSequence single_term_opt_impl(TensorNetwork const& network,
+                             meta::range_of<Index> auto const& tidxs,
+                             CostFn&& cost_fn) {
+  using ranges::views::concat;
+  using ranges::views::indirect;
+  using ranges::views::transform;
+  using IndexContainer = decltype(OptRes::indices);
+  auto const nt = network.tensors().size();
+  if (nt == 1) return EvalSequence{0};
+  if (nt == 2) return EvalSequence{0, 1, -1};
 
-  SEQUANT_ASSERT(std::is_sorted(begin(idxs1), end(idxs1), Comp{}));
-  SEQUANT_ASSERT(std::is_sorted(begin(idxs2), end(idxs2), Comp{}));
+  container::vector<OptRes> results((1 << nt));
 
-  container::svector<Index> result;
+  // initialize the intermediate results
+  {
+    auto tensor_indices = network.tensors()  //
+                          | indirect         //
+                          | transform(slots);
+    auto imed_indices = subset_target_indices(tensor_indices, tidxs);
+    SEQUANT_ASSERT(ranges::distance(imed_indices) == ranges::distance(results));
+    for (size_t i = 0; i < results.size(); ++i) {
+      results[i].indices =
+          imed_indices[i] | ranges::views::move | ranges::to<IndexContainer>;
+      results[i].flops =
+          std::popcount(i) > 1
+              ? std::numeric_limits<decltype(OptRes::flops)>::max()
+              : 0;
+      // results[i].sequence is left uninitialized
+    }
+  }
 
-  set_intersection(begin(idxs1), end(idxs1), begin(idxs2), end(idxs2),
-                   back_inserter(result), Comp{});
-  return result;
-}
+  // find the optimal evaluation sequence
+  for (size_t n = 0; n < results.size(); ++n) {
+    if (std::popcount(n) < 2) continue;
+    std::pair<size_t, size_t> curr_parts{0, 0};
+    for (auto& curr_cost = results[n].flops;
+         auto&& [lp, rp] : bits::bipartitions(n)) {
+      auto new_cost = std::forward<CostFn>(cost_fn)(
+          results[lp].indices, results[rp].indices, results[n].indices);
+      if (new_cost < curr_cost) {
+        curr_cost = new_cost;
+        curr_parts = decltype(curr_parts){lp, rp};
+      }
+    }
+    auto const& lseq = results[curr_parts.first].sequence;
+    auto const& rseq = results[curr_parts.second].sequence;
+    results[n].sequence =
+        (lseq[0] < rseq[0] ? concat(lseq, rseq) : concat(rseq, lseq)) |
+        ranges::to<EvalSequence>;
+    results[n].sequence.push_back(-1);
+  }
 
-///
-/// Returns a vector of Index objects that are common in @c idxs1 and @c idxs2
-/// that are sorted using Index::LabelCompare{}.
-///
-/// @note I1 and I2 containers are assumed to be sorted by using
-/// Index::LabelCompare{};
-///
-template <typename I1, typename I2, typename Comp = std::less<Index>>
-container::svector<Index> diff_indices(I1 const& idxs1, I2 const& idxs2) {
-  using std::back_inserter;
-  using std::begin;
-  using std::end;
-  using std::set_symmetric_difference;
-
-  SEQUANT_ASSERT(std::is_sorted(begin(idxs1), end(idxs1), Comp{}));
-  SEQUANT_ASSERT(std::is_sorted(begin(idxs2), end(idxs2), Comp{}));
-
-  container::svector<Index> result;
-
-  set_symmetric_difference(begin(idxs1), end(idxs1), begin(idxs2), end(idxs2),
-                           back_inserter(result), Comp{});
-  return result;
+  return results.back().sequence;
 }
 
 ///
@@ -166,90 +142,13 @@ container::svector<Index> diff_indices(I1 const& idxs1, I2 const& idxs2) {
 /// \return Optimal evaluation sequence that minimizes flops. If there are
 ///         equivalent optimal sequences then the result is the one that keeps
 ///         the order of tensors in the network as original as possible.
-template <typename IdxToSz,
-          std::enable_if_t<std::is_invocable_r_v<size_t, IdxToSz, const Index&>,
-                           bool> = true>
-EvalSequence single_term_opt(TensorNetwork const& network,
-                             IdxToSz const& idxsz) {
-  using ranges::views::concat;
-  using IndexContainer = container::svector<Index>;
-  // number of terms
-  auto const nt = network.tensors().size();
-  if (nt == 1) return EvalSequence{0};
-  if (nt == 2) return EvalSequence{0, 1, -1};
-  auto nth_tensor_indices = container::svector<IndexContainer>{};
-  nth_tensor_indices.reserve(nt);
-
-  for (std::size_t i = 0; i < nt; ++i) {
-    auto const& tnsr = *network.tensors().at(i);
-
-    nth_tensor_indices.emplace_back();
-    auto& ixs = nth_tensor_indices.back();
-    for (auto&& j : slots(tnsr)) ixs.emplace_back(j);
-
-    ranges::sort(ixs, std::less<Index>{});
-  }
-
-  container::svector<OptRes> results((1 << nt), OptRes{{}, 0, {}});
-
-  // power_pos is used, and incremented, only when the
-  // result[1<<0]
-  // result[1<<1]
-  // result[1<<2]
-  // and so on are set
-  size_t power_pos = 0;
-  for (size_t n = 1; n < (1ul << nt); ++n) {
-    double curr_cost = std::numeric_limits<double>::max();
-    std::pair<size_t, size_t> curr_parts{0, 0};
-    container::svector<Index> curr_indices{};
-
-    // function to find the optimal partition
-    auto scan_parts = [&curr_cost,                              //
-                       &curr_parts,                             //
-                       &curr_indices,                           //
-                           & results = std::as_const(results),  //
-                       &idxsz](                                 //
-                          size_t lpart, size_t rpart) {
-      auto commons =
-          common_indices(results[lpart].indices, results[rpart].indices);
-      auto diffs = diff_indices(results[lpart].indices, results[rpart].indices);
-      auto new_cost = ops_count(idxsz,                   //
-                                concat(commons, diffs))  //
-                      + results[lpart].flops             //
-                      + results[rpart].flops;
-      if (new_cost <= curr_cost) {
-        curr_cost = new_cost;
-        curr_parts = decltype(curr_parts){lpart, rpart};
-        curr_indices = std::move(diffs);
-      }
-    };
-
-    biparts(n, scan_parts);
-
-    auto& curr_result = results[n];
-    if (has_single_bit(n)) {
-      SEQUANT_ASSERT(curr_indices.empty());
-      // evaluation of a single atomic tensor
-      curr_result.flops = 0;
-      curr_result.indices = std::move(nth_tensor_indices[power_pos]);
-      curr_result.sequence = EvalSequence{static_cast<int>(power_pos++)};
-    } else {
-      curr_result.flops = curr_cost;
-      curr_result.indices = std::move(curr_indices);
-      auto const& first = results[curr_parts.first].sequence;
-      auto const& second = results[curr_parts.second].sequence;
-
-      curr_result.sequence = (first[0] < second[0] ? concat(first, second)
-                                                   : concat(second, first)) |
-                             ranges::to<EvalSequence>;
-      curr_result.sequence.push_back(-1);
-    }
-  }
-
-  return results[(1 << nt) - 1].sequence;
+///
+template <has_index_extent IdxToSz>
+EvalSequence single_term_opt(TensorNetwork const& network, IdxToSz&& idxsz) {
+  auto cost_fn = flops_counter(std::forward<IdxToSz>(idxsz));
+  decltype(OptRes::indices) tidxs{};
+  return single_term_opt_impl(network, tidxs, cost_fn);
 }
-
-}  // namespace
 
 ///
 /// Omit the first factor from the top level product from given expression.
@@ -271,9 +170,8 @@ void pull_scalar(sequant::ExprPtr expr) noexcept;
 ///
 /// @note @c prod is assumed to consist of only Tensor expressions
 ///
-template <typename IdxToSz,
-          std::enable_if_t<std::is_invocable_v<IdxToSz, Index>, bool> = true>
-ExprPtr single_term_opt(Product const& prod, IdxToSz const& idxsz) {
+template <has_index_extent IdxToSz>
+ExprPtr single_term_opt(Product const& prod, IdxToSz&& idxsz) {
   using ranges::views::filter;
   using ranges::views::reverse;
 
@@ -282,7 +180,7 @@ ExprPtr single_term_opt(Product const& prod, IdxToSz const& idxsz) {
                                prod.factors().end(), Product::Flatten::No});
   auto const tensors =
       prod | filter(&ExprPtr::template is<Tensor>) | ranges::to_vector;
-  auto seq = single_term_opt(TensorNetwork{tensors}, idxsz);
+  auto seq = single_term_opt(TensorNetwork{tensors}, std::forward<IdxToSz>(idxsz));
   auto result = container::svector<ExprPtr>{};
   for (auto i : seq)
     if (i == -1) {
