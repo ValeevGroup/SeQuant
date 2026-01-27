@@ -323,9 +323,13 @@ set(SeQuant_src
         SeQuant/core/optimize/fusion.hpp
         SeQuant/core/optimize/optimize.cpp
         SeQuant/core/parse.hpp
-        SeQuant/core/parse/ast.cpp
-        SeQuant/core/parse/deparse.cpp
         SeQuant/core/parse/parse.cpp
+        SeQuant/core/parse/v1/ast.cpp
+        SeQuant/core/parse/v1/ast.hpp
+        SeQuant/core/parse/v1/ast_conversions.hpp
+        SeQuant/core/parse/v1/deparse.cpp
+        SeQuant/core/parse/v1/parse.cpp
+        SeQuant/core/parse/v1/semantic_actions.hpp
         SeQuant/core/ranges.hpp
         SeQuant/core/rational.hpp
         SeQuant/core/runtime.cpp
