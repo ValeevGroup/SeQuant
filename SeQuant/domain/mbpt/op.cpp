@@ -307,6 +307,7 @@ std::wstring to_latex(const mbpt::Operator<mbpt::qns_t, S>& op) {
   // base_lbl is used for registry check, it should not have adjoint label or
   // perturbation order
   auto base_lbl = sequant::to_wstring(op.label());
+  SEQUANT_ASSERT(!base_lbl.empty());
   bool is_adjoint = false;
   if (base_lbl.back() == adjoint_label) {
     is_adjoint = true;
@@ -314,10 +315,10 @@ std::wstring to_latex(const mbpt::Operator<mbpt::qns_t, S>& op) {
   }
 
   // now remove perturbation order decoration if any
+  SEQUANT_ASSERT(!base_lbl.empty());
   if (ranges::contains(mbpt::detail::pert_superscripts, base_lbl.back())) {
     base_lbl.pop_back();
   }
-  SEQUANT_ASSERT(!base_lbl.empty());
 
   auto registry = mbpt::get_default_mbpt_context().op_registry();
   // if it is not a reserved label, make sure it is registered
