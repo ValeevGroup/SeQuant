@@ -288,7 +288,8 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
     using TA::TArrayD;
 
     auto parse_antisymm = [](auto const& xpr) {
-      return parse_expr(xpr, {.def_perm_symm = sequant::Symmetry::Antisymm});
+      return sequant::parse_expr(
+          xpr, {.def_perm_symm = sequant::Symmetry::Antisymm});
     };
 
     // tnsr is assumed to be single-tiled
