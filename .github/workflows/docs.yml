@@ -19,7 +19,7 @@ jobs:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
         with:
-          python-version: '3.9' # Breathe needs 3.9 or later
+          python-version: '>=3.9' # Breathe needs 3.9 or later
           cache: 'pip'
 
       - name: Setup Environment
