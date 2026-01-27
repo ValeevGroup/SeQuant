@@ -210,7 +210,7 @@ else()
     message(STATUS "Python not found - PythonEinsumGenerator validation tests will be disabled")
 endif()
 
-if (SEQUANT_SKIP_LONG_TESTS)
+if (SEQUANT_INTERAL_SKIP_LONG_TESTS)
     target_compile_definitions(unit_tests-sequant-symb-obj PRIVATE SEQUANT_SKIP_LONG_TESTS=1)
     target_compile_definitions(unit_tests-sequant-mbpt-obj PRIVATE SEQUANT_SKIP_LONG_TESTS=1)
 endif()
