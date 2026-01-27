@@ -5,7 +5,7 @@ on: [push, pull_request, workflow_dispatch]
 jobs:
   build:
     name: "Build and Deploy"
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     env:
       CXX: g++
       BUILD_CONFIG: >
