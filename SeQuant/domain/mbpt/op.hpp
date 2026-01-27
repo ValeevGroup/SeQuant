@@ -171,7 +171,7 @@ class Operator<void, S> : public Expr, public Labeled {
   /// q-numbers
   bool is_cnumber() const override { return false; }
 
- private:
+ protected:
   std::function<std::wstring_view()> label_generator_;
   std::function<ExprPtr()> tensor_form_generator_;
 };
