@@ -304,7 +304,8 @@ template <Statistics S>
 std::wstring to_latex(const mbpt::Operator<mbpt::qns_t, S>& op) {
   using namespace sequant::mbpt;
 
-  // check if operator has adjoint label, remove if present for base label
+  // base_lbl is used for registry check, it should not have adjoint label or
+  // perturbation order
   auto base_lbl = sequant::to_wstring(op.label());
   bool is_adjoint = false;
   if (base_lbl.back() == adjoint_label) {
@@ -312,23 +313,11 @@ std::wstring to_latex(const mbpt::Operator<mbpt::qns_t, S>& op) {
     base_lbl.pop_back();
   }
 
-  // labels like Â and Ŝ already have a hat, so skip wrapping in \hat{}.
-  // NOTE: for a general solution, we would need a way to normalize Unicode
-  // strings (using ICU, utf8proc, etc.) and check for the combining
-  // hat/circumflex (U+0302). See: https://unicode.org/reports/tr15/
-  const bool has_hat = base_lbl == reserved::antisymm_label() ||
-                       base_lbl == reserved::symm_label();
-
-  // start with label and perturbation order (if any). First decorate the
-  // base label, then append the adjoint label.
-  std::wstring label = utf_to_latex(
-      mbpt::detail::decorate_with_pert_order(base_lbl, op.order()));
-  if (is_adjoint) {
-    label += utf_to_latex(std::wstring(1, adjoint_label));
+  // now remove perturbation order decoration if any
+  if (ranges::contains(mbpt::detail::pert_superscripts, base_lbl.back())) {
+    base_lbl.pop_back();
   }
-  auto result = has_hat ? L"{" + label : L"{\\hat{" + label + L"}";
-
-  auto op_qns = op();  // operator action i.e. quantum number change
+  SEQUANT_ASSERT(!base_lbl.empty());
 
   auto registry = mbpt::get_default_mbpt_context().op_registry();
   // if it is not a reserved label, make sure it is registered
@@ -339,6 +328,19 @@ std::wstring to_latex(const mbpt::Operator<mbpt::qns_t, S>& op) {
   }
   // find the `class` of Operator
   OpClass opclass = mbpt::to_op_class(base_lbl);
+
+  // labels like Â and Ŝ already have a hat, so skip wrapping in \hat{}.
+  // NOTE: for a general solution, we would need a way to normalize Unicode
+  // strings (using ICU, utf8proc, etc.) and check for the combining
+  // hat/circumflex (U+0302). See: https://unicode.org/reports/tr15/
+  const bool has_hat = base_lbl == reserved::antisymm_label() ||
+                       base_lbl == reserved::symm_label();
+
+  // now start building the output
+  std::wstring label = utf_to_latex(op.label());
+  auto result = has_hat ? L"{" + label : L"{\\hat{" + label + L"}";
+
+  auto op_qns = op();  // operator action i.e. quantum number change
 
   // special handling for general operators
   // - Ops like f and g does not need ranks, it is implied
