@@ -915,7 +915,7 @@ class Operator : public Operator<void, S> {
     return batch_ordinals_;
   }
 
-  /// @brief returns the pertubation order of this operator
+  /// @brief returns the perturbation order of this operator
   [[nodiscard]] size_t order() const { return order_; }
 
  private:
