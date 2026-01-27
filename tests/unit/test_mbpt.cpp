@@ -325,6 +325,44 @@ TEST_CASE("mbpt", "[mbpt]") {
           //        REQUIRE(equal(f1(qns_t{-1, 1}), qns_t{-2, 2}));
         }
       }
+
+      // tests OpParams constructor with perturbation order
+      {
+        using namespace sequant::mbpt;
+
+        op_t op_order0([]() -> std::wstring_view { return L"t"; },
+                       []() -> ExprPtr {
+                         return ex<Tensor>(L"t", bra{L"a_1"}, ket{L"i_1"}) *
+                                ex<FNOperator>(cre({L"a_1"}), ann({L"i_1"}));
+                       },
+                       [](qns_t& qns) { qns += excitation_type_qns(1); },
+                       OpParams{.order = 0});
+        std::wcout << op_order0.tensor_form().to_latex() << std::endl;
+        REQUIRE(op_order0.label() == L"t");
+        REQUIRE(op_order0.order() == 0);
+
+        op_t op_order1([]() -> std::wstring_view { return L"t"; },
+                       []() -> ExprPtr {
+                         return ex<Tensor>(L"t", bra{L"a_1"}, ket{L"i_1"}) *
+                                ex<FNOperator>(cre({L"a_1"}), ann({L"i_1"}));
+                       },
+                       [](qns_t& qns) { qns += excitation_type_qns(1); },
+                       OpParams{.order = 1});
+        REQUIRE(op_order1.label() == L"t¹");
+        REQUIRE(op_order1.order() == 1);
+
+        op_t op_order2([]() -> std::wstring_view { return L"t"; },
+                       []() -> ExprPtr {
+                         return ex<Tensor>(L"t", bra{L"a_1", L"a_2"},
+                                           ket{L"i_1", L"i_2"}) *
+                                ex<FNOperator>(cre({L"a_1", L"a_2"}),
+                                               ann({L"i_1", L"i_2"}));
+                       },
+                       [](qns_t& qns) { qns += excitation_type_qns(2); },
+                       OpParams{.order = 2});
+        REQUIRE(op_order2.label() == L"t²");
+        REQUIRE(op_order2.order() == 2);
+      }
     }  // SECTION("constructor")
 
     SECTION("to_latex") {
