@@ -479,7 +479,7 @@ TEST_CASE("parsing", "[parse]") {
     for (const std::wstring& current : expressions) {
       ExprPtr expression = parse_expr(current);
 
-      REQUIRE(deparse(expression, {.annot_sym = true}) == current);
+      REQUIRE(deparse(expression, {.annot_symm = true}) == current);
     }
 
     SECTION("result_expressions") {
@@ -494,7 +494,7 @@ TEST_CASE("parsing", "[parse]") {
       for (const std::wstring& current : expressions) {
         ResultExpr result = parse_result_expr(current);
 
-        REQUIRE(deparse(result, {.annot_sym = true}) == current);
+        REQUIRE(deparse(result, {.annot_symm = true}) == current);
       }
     }
   }

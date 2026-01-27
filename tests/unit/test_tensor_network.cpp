@@ -351,8 +351,8 @@ TEMPLATE_TEST_CASE("tensor_network_shared", "[elements]", TensorNetworkV1,
                   {Index{L"p_11"}, Index{L"p_6"}},
                   {Index{L"p_6"}, Index{L"p_7"}}};
               apply_index_replacements(*t2_i, idxrepl, false);
-              REQUIRE(deparse(*(tn1.tensors()[i]), {.annot_sym = true}) ==
-                      deparse(*t2_i, {.annot_sym = true}));
+              REQUIRE(deparse(*(tn1.tensors()[i]), {.annot_symm = true}) ==
+                      deparse(*t2_i, {.annot_symm = true}));
             }
           }
         }

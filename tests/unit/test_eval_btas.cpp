@@ -32,7 +32,7 @@ auto tensor_to_key(sequant::Tensor const& tnsr) {
   };
 
   auto const tnsr_deparsed =
-      sequant::deparse(tnsr.clone(), {.annot_sym = false});
+      sequant::deparse(tnsr.clone(), {.annot_symm = false});
   return boost::regex_replace(tnsr_deparsed, idx_rgx, formatter);
 }
 

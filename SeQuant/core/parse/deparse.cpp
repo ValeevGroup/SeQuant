@@ -270,7 +270,7 @@ std::wstring deparse(AbstractTensor const& tensor,
   }
   deparsed += L"}";
 
-  if (options.annot_sym) {
+  if (options.annot_symm) {
     deparsed += L":" + details::deparse_symm(tensor._symmetry(), options);
     deparsed +=
         L"-" + details::deparse_symm(tensor._braket_symmetry(), options);
