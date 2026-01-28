@@ -63,14 +63,14 @@ jobs:
         -DSEQUANT_PYTHON=${{ !matrix.valgrind && !matrix.sanitize }}
         -DSEQUANT_ASSERT_BEHAVIOR=THROW
     steps:
-    - uses: actions/checkout@v5
+    - uses: actions/checkout@v6
 
     - name: free up disk space on Ubuntu runner
       if: ${{ matrix.os == 'ubuntu-24.04' }}
       uses: jlumbroso/free-disk-space@main
 
     - name: Setup Python
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v6
       with:
         python-version: '3.x'
 
@@ -99,17 +99,20 @@ jobs:
       run: |
         sudo apt-get update
         sudo apt-get install ninja-build g++-14 liblapack-dev libboost-dev libboost-locale-dev libboost-random-dev libboost-regex-dev libeigen3-dev openmpi-bin libopenmpi-dev ccache valgrind catch2
+
     - name: Prepare ccache timestamp
       id: ccache_cache_timestamp
       shell: bash
       run: echo "timestamp=$(date -u +'%Y-%m-%d-%H-%M-%S')" >> $GITHUB_OUTPUT
+
     - name: Setup ccache cache files
-      uses: actions/cache@v4
+      uses: actions/cache@v5
       with:
         path: ${{github.workspace}}/build/.ccache
         key: ${{ matrix.config.name }}-ccache-${{ steps.ccache_cache_timestamp.outputs.timestamp }}
         restore-keys: |
           ${{ matrix.config.name }}-ccache-
+
     - name: Configure CMake
       # Use a bash shell so we can use the same syntax for environment variable
       # access regardless of the host operating system
@@ -125,7 +128,7 @@ jobs:
       working-directory: ${{github.workspace}}/build
       shell: bash
       # Execute the build.  You can specify a specific target with "--target <NAME>"
-      run: ccache -p && ccache -z && cmake --build . && ccache -s
+      run: ccache -p && ccache -z && cmake --build . -j 2 && ccache -s
 
     - name: Test
       if: ${{ !matrix.valgrind }}

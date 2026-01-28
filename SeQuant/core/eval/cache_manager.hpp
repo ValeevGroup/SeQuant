@@ -3,8 +3,8 @@
 
 #include <SeQuant/core/asy_cost.hpp>
 #include <SeQuant/core/container.hpp>
-#include <SeQuant/core/eval/eval_fwd.hpp>
-#include <SeQuant/core/eval_node.hpp>
+#include <SeQuant/core/eval/eval_node.hpp>
+#include <SeQuant/core/eval/fwd.hpp>
 #include <SeQuant/core/expr.hpp>
 
 #include <memory>

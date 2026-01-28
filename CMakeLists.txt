@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.27) # 3.27 required for CONFIG_FILE option in doxygen_add_docs
+cmake_minimum_required(VERSION 3.28) # 3.28 required for EXCLUDE_FROM_ALL for FetchContent_Declare
 
 # Preload versions/tags of all dependencies ====================================
 include(external/versions.cmake)
@@ -112,6 +112,11 @@ set(SEQUANT_INSTALL_CMAKEDIR "lib/cmake/sequant"
 ############################
 option(SEQUANT_BENCHMARKS "Enable SeQuant benchmarks" ${PROJECT_IS_TOP_LEVEL})
 option(SEQUANT_UTILITIES "Enable SeQuant utility programs" ${PROJECT_IS_TOP_LEVEL})
+option(SEQUANT_EVAL_TESTS "OBSOLETE: use SEQUANT_TILEDARRAY and SEQUANT_BTAS" OFF)
+option(SEQUANT_BTAS "Enable BTAS eval backend" ${SEQUANT_EVAL_TESTS})
+add_feature_info(SEQUANT_EVAL_BTAS SEQUANT_BTAS "Enable BTAS eval backend")
+option(SEQUANT_TILEDARRAY "Enable TiledArray eval backend" ${SEQUANT_EVAL_TESTS})
+add_feature_info(SEQUANT_EVAL_TILEDARRAY SEQUANT_TILEDARRAY "Enable TiledArray eval backend")
 
 option(SEQUANT_IWYU "Whether to use the include-what-you-use tool (if found)" OFF)
 option(SEQUANT_WARNINGS_AS_ERRORS "Whether to treat compiler warnings as errors" ${PROJECT_IS_TOP_LEVEL})
@@ -208,6 +213,9 @@ include(FindOrFetchLibPerm)
 # Utfcpp
 include(FindOrFetchUtfcpp)
 
+# Eigen
+include(FindOrFetchEigen)
+
 # embedded bliss-0.73
 add_library(SeQuant-bliss
         SeQuant/external/bliss/defs.cc
@@ -257,9 +265,9 @@ set(SeQuant_src
         SeQuant/core/container.hpp
         SeQuant/core/context.cpp
         SeQuant/core/context.hpp
-        SeQuant/core/eval_expr.cpp
-        SeQuant/core/eval_expr.hpp
-        SeQuant/core/eval_node.hpp
+        SeQuant/core/eval/eval_expr.cpp
+        SeQuant/core/eval/eval_expr.hpp
+        SeQuant/core/eval/eval_node.hpp
         SeQuant/core/export/compute_selection.cpp
         SeQuant/core/export/compute_selection.hpp
         SeQuant/core/export/context.cpp
@@ -349,6 +357,7 @@ set(SeQuant_src
         SeQuant/core/utility/expr.hpp
         SeQuant/core/utility/indices.hpp
         SeQuant/core/utility/macros.hpp
+        SeQuant/core/utility/memoize.hpp
         SeQuant/core/utility/nodiscard.hpp
         SeQuant/core/utility/permutation.hpp
         SeQuant/core/utility/scope.hpp
@@ -359,6 +368,7 @@ set(SeQuant_src
         SeQuant/core/utility/tensor.hpp
         SeQuant/core/utility/timer.hpp
         SeQuant/core/utility/tuple.hpp
+        SeQuant/core/reserved.hpp
         SeQuant/core/wick.hpp
         SeQuant/core/wick.impl.hpp
         SeQuant/core/wolfram.hpp
@@ -373,6 +383,8 @@ set(SeQuant_src
         SeQuant/domain/mbpt/convention.hpp
         SeQuant/domain/mbpt/models/cc.cpp
         SeQuant/domain/mbpt/models/cc.hpp
+        SeQuant/domain/mbpt/op_registry.hpp
+        SeQuant/domain/mbpt/op_registry.cpp
         SeQuant/domain/mbpt/op.cpp
         SeQuant/domain/mbpt/op.hpp
         SeQuant/domain/mbpt/op.ipp
@@ -402,33 +414,44 @@ set_source_files_properties(
 )
 
 ### optional prereqs
-if (SEQUANT_EVAL_TESTS)
-    include(FindOrFetchTiledArray)
-endif (SEQUANT_EVAL_TESTS)
-if (NOT TARGET Eigen3::Eigen)
-    # use TA's Eigen, if available
-    if (TARGET TiledArray_Eigen)
-        add_library(Eigen3::Eigen ALIAS TiledArray_Eigen)
-    else()
-      # re:NO_CMAKE_PACKAGE_REGISTRY: eigen3 registers its *build* tree with the user package registry ...
-      #                               to avoid issues with wiped build directory look for installed eigen
-      find_package(Eigen3 3.0 NO_MODULE NO_CMAKE_PACKAGE_REGISTRY)
+set(SEQUANT_HAS_EVAL OFF)  # do not build SQ/eval unless there is a backend
+if (SEQUANT_TILEDARRAY)
+    if (NOT TARGET tiledarray)
+        include(FindOrFetchTiledArray)
     endif()
-endif()
-if (TARGET Eigen3::Eigen)
-    set(SEQUANT_HAS_EIGEN ON)
-endif()
-
-if (TARGET tiledarray)
+    set(SEQUANT_HAS_EVAL ON)
     set(SEQUANT_HAS_TILEDARRAY ON)
+endif ()
+if (SEQUANT_BTAS)
+    if (NOT TARGET BTAS::BTAS)
+        include(FindOrFetchBTAS)
+    endif()
+    set(SEQUANT_HAS_EVAL ON)
+    set(SEQUANT_HAS_BTAS ON)
+endif ()
+
+if (SEQUANT_HAS_EVAL)
     list(APPEND SeQuant_src
             SeQuant/core/eval/cache_manager.cpp
             SeQuant/core/eval/cache_manager.hpp
             SeQuant/core/eval/eval.hpp
             SeQuant/core/eval/result.cpp
             SeQuant/core/eval/result.hpp
-            SeQuant/core/eval/eval_fwd.hpp
+            SeQuant/core/eval/fwd.hpp
             )
+    if (SEQUANT_HAS_TILEDARRAY)
+        list(APPEND SeQuant_src
+                SeQuant/core/eval/backends/tiledarray/eval_expr.hpp
+                SeQuant/core/eval/backends/tiledarray/result.hpp
+                SeQuant/core/eval/backends/tiledarray/result.cpp
+                )
+    endif ()
+    if (SEQUANT_HAS_BTAS)
+        list(APPEND SeQuant_src
+                SeQuant/core/eval/backends/btas/eval_expr.hpp
+                SeQuant/core/eval/backends/btas/result.hpp
+                )
+    endif ()
 endif ()
 
 add_library(SeQuant
@@ -446,7 +469,7 @@ endif()
 target_compile_definitions(SeQuant PUBLIC SEQUANT_ASSERT_BEHAVIOR_=${SEQUANT_ASSERT_BEHAVIOR})
 
 target_link_libraries(SeQuant PUBLIC range-v3::range-v3 Boost::regex Boost::locale Boost::headers SeQuant-bliss Threads::Threads)
-target_link_libraries(SeQuant PRIVATE libperm::libperm $<BUILD_LOCAL_INTERFACE:utfcpp>)
+target_link_libraries(SeQuant PRIVATE libperm::libperm $<BUILD_LOCAL_INTERFACE:utfcpp> Eigen3::Eigen)
 target_link_libraries(SeQuant PUBLIC polymorphic_variant::polymorphic_variant)
 # modularized Boost has finer grained targets than just Boost::headers
 if (Boost_IS_MODULARIZED)
@@ -461,12 +484,16 @@ if (Boost_IS_MODULARIZED)
             Boost::spirit
     )
 endif()
-if (TARGET tiledarray)
+if (SEQUANT_HAS_EVAL)
+  target_compile_definitions(SeQuant PUBLIC SEQUANT_HAS_EVAL=1)
+  if (SEQUANT_HAS_TILEDARRAY)
     target_link_libraries(SeQuant PUBLIC tiledarray)
-endif ()
-if (TARGET Eigen3::Eigen)
-    target_link_libraries(SeQuant PUBLIC Eigen3::Eigen)
-    target_compile_definitions(SeQuant PUBLIC SEQUANT_HAS_EIGEN=1)
+    target_compile_definitions(SeQuant PUBLIC SEQUANT_HAS_TILEDARRAY=1)
+  endif ()
+  if (SEQUANT_HAS_BTAS)
+    target_link_libraries(SeQuant PUBLIC BTAS::BTAS)
+    target_compile_definitions(SeQuant PUBLIC SEQUANT_HAS_BTAS=1)
+  endif ()
 endif()
 if (SEQUANT_HAS_EXECUTION_HEADER_STANDALONE OR SEQUANT_HAS_EXECUTION_HEADER_WITH_TBB)
     target_compile_definitions(SeQuant PUBLIC SEQUANT_HAS_EXECUTION_HEADER)

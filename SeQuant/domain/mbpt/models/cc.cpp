@@ -1,5 +1,6 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/rational.hpp>
+#include <SeQuant/core/reserved.hpp>
 #include <SeQuant/core/runtime.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/domain/mbpt/context.hpp>
@@ -14,6 +15,12 @@
 #include <new>
 #include <stdexcept>
 #include <utility>
+
+// alias reserved labels for readability
+namespace {
+const auto& asymm = sequant::reserved::antisymm_label();
+const auto& symm = sequant::reserved::symm_label();
+}  // namespace
 
 namespace sequant::mbpt {
 
@@ -89,16 +96,15 @@ std::vector<ExprPtr> CC::λ(size_t commutator_rank) {
   auto hbar = mbpt::lst(H(), T(N, skip_singles), commutator_rank - 1,
                         {.unitary = unitary()});
 
-  const auto One = ex<Constant>(1);
-  auto lhbar = simplify((One + Λ(N)) * hbar);
+  auto lhbar = simplify((1 + Λ(N)) * hbar);
 
   const auto op_connect = concat(default_op_connections(),
-                                 OpConnections<OpType>{{OpType::h, OpType::A},
-                                                       {OpType::f, OpType::A},
-                                                       {OpType::g, OpType::A},
-                                                       {OpType::h, OpType::S},
-                                                       {OpType::f, OpType::S},
-                                                       {OpType::g, OpType::S}});
+                                 OpConnections<std::wstring>{{L"h", asymm},
+                                                             {L"f", asymm},
+                                                             {L"g", asymm},
+                                                             {L"h", symm},
+                                                             {L"f", symm},
+                                                             {L"g", symm}});
 
   // 2. project onto each manifold, screen, lower to tensor form and wick it
   std::vector<ExprPtr> result(N + 1);
@@ -139,13 +145,13 @@ std::vector<ExprPtr> CC::λ(size_t commutator_rank) {
   return result;
 }
 
-std::vector<ExprPtr> CC::t_pt(size_t rank, size_t order,
-                              std::optional<size_t> nbatch) {
+std::vector<ExprPtr> CC::tʼ(size_t rank, size_t order,
+                            std::optional<size_t> nbatch) {
   SEQUANT_ASSERT(order == 1 &&
-                 "sequant::mbpt::CC::t_pt(): only first-order perturbation is "
+                 "sequant::mbpt::CC::tʼ(): only first-order perturbation is "
                  "supported now");
   SEQUANT_ASSERT(rank == 1 &&
-                 "sequant::mbpt::CC::t_pt(): only one-body perturbation "
+                 "sequant::mbpt::CC::tʼ(): only one-body perturbation "
                  "operator is supported now");
   SEQUANT_ASSERT(ansatz_ == Ansatz::T && "unitary ansatz is not yet supported");
 
@@ -153,12 +159,12 @@ std::vector<ExprPtr> CC::t_pt(size_t rank, size_t order,
   // truncate h1_bar at rank 2 for one-body perturbation
   // operator and at rank 4 for two-body perturbation operator
   const auto h1_truncate_at = rank == 1 ? 2 : 4;
-  const auto h1_bar = mbpt::lst(H_pt(rank, {.order = order, .nbatch = nbatch}),
+  const auto h1_bar = mbpt::lst(Hʼ(rank, {.order = order, .nbatch = nbatch}),
                                 T(N), h1_truncate_at);
 
   // construct [hbar, T(1)]
   const auto hbar_pert =
-      mbpt::lst(H(), T(N), 3) * T_pt(N, {.order = order, .nbatch = nbatch});
+      mbpt::lst(H(), T(N), 3) * Tʼ(N, {.order = order, .nbatch = nbatch});
 
   // [Eq. 34, WIREs Comput Mol Sci. 2019; 9:e1406]
   const auto expr = simplify(h1_bar + hbar_pert);
@@ -168,28 +174,26 @@ std::vector<ExprPtr> CC::t_pt(size_t rank, size_t order,
   // connect h1 with t
   const auto op_connect =
       concat(default_op_connections(),
-             OpConnections<OpType>{{OpType::h, OpType::t_1},
-                                   {OpType::f, OpType::t_1},
-                                   {OpType::g, OpType::t_1},
-                                   {OpType::h_1, OpType::t}});
+             OpConnections<std::wstring>{
+                 {L"h", L"t¹"}, {L"f", L"t¹"}, {L"g", L"t¹"}, {L"h¹", L"t"}});
 
   std::vector<ExprPtr> result(N + 1);
   for (auto p = N; p >= 1; --p) {
-    const auto freq_term = ex<Variable>(L"ω") * P(nₚ(p)) *
-                           T_pt_(p, {.order = order, .nbatch = nbatch});
+    const auto freq_term =
+        L"ω" * P(nₚ(p)) * op::tʼ(p, {.order = order, .nbatch = nbatch});
     result.at(p) =
         this->ref_av(P(nₚ(p)) * expr, op_connect) - this->ref_av(freq_term);
   }
   return result;
 }
 
-std::vector<ExprPtr> CC::λ_pt(size_t rank, size_t order,
-                              std::optional<size_t> nbatch) {
+std::vector<ExprPtr> CC::λʼ(size_t rank, size_t order,
+                            std::optional<size_t> nbatch) {
   SEQUANT_ASSERT(order == 1 &&
-                 "sequant::mbpt::CC::λ_pt(): only first-order perturbation is "
+                 "sequant::mbpt::CC::λʼ(): only first-order perturbation is "
                  "supported now");
   SEQUANT_ASSERT(rank == 1 &&
-                 "sequant::mbpt::CC::λ_pt(): only one-body perturbation "
+                 "sequant::mbpt::CC::λʼ(): only one-body perturbation "
                  "operator is supported now");
   SEQUANT_ASSERT(ansatz_ == Ansatz::T && "unitary ansatz is not yet supported");
 
@@ -200,44 +204,40 @@ std::vector<ExprPtr> CC::λ_pt(size_t rank, size_t order,
   // truncate h1_bar at rank 2 for one-body perturbation
   // operator and at rank 4 for two-body perturbation operator
   const auto h1_truncate_at = rank == 1 ? 2 : 4;
-  const auto h1_bar = mbpt::lst(H_pt(rank, {.order = order, .nbatch = nbatch}),
+  const auto h1_bar = mbpt::lst(Hʼ(rank, {.order = order, .nbatch = nbatch}),
                                 T(N), h1_truncate_at);
 
   // construct [hbar, T(1)]
   const auto hbar_pert =
-      mbpt::lst(H(), T(N), 3) * T_pt(N, {.order = order, .nbatch = nbatch});
+      mbpt::lst(H(), T(N), 3) * Tʼ(N, {.order = order, .nbatch = nbatch});
 
   // [Eq. 35, WIREs Comput Mol Sci. 2019; 9:e1406]
-  const auto One = ex<Constant>(1);
-  const auto expr =
-      simplify((One + Λ(N)) * (h1_bar + hbar_pert) +
-               Λ_pt(N, {.order = order, .nbatch = nbatch}) * hbar);
+  const auto expr = simplify((1 + Λ(N)) * (h1_bar + hbar_pert) +
+                             Λʼ(N, {.order = order, .nbatch = nbatch}) * hbar);
 
   // connectivity:
   // t and t1 with {h,f,g}
   // projectors with {h,f,g}
   // h1 with t
   // h1 with projectors
-  const auto op_connect =
-      concat(default_op_connections(),
-             OpConnections<OpType>{{OpType::h, OpType::t_1},
-                                   {OpType::f, OpType::t_1},
-                                   {OpType::g, OpType::t_1},
-                                   {OpType::h_1, OpType::t},
-                                   {OpType::h, OpType::A},
-                                   {OpType::f, OpType::A},
-                                   {OpType::g, OpType::A},
-                                   {OpType::h, OpType::S},
-                                   {OpType::f, OpType::S},
-                                   {OpType::g, OpType::S},
-                                   {OpType::h_1, OpType::A},
-                                   {OpType::h_1, OpType::S}});
+  const auto op_connect = concat(default_op_connections(),
+                                 OpConnections<std::wstring>{{L"h", L"t¹"},
+                                                             {L"f", L"t¹"},
+                                                             {L"g", L"t¹"},
+                                                             {L"h¹", L"t"},
+                                                             {L"h", asymm},
+                                                             {L"f", asymm},
+                                                             {L"g", asymm},
+                                                             {L"h", symm},
+                                                             {L"f", symm},
+                                                             {L"g", symm},
+                                                             {L"h¹", asymm},
+                                                             {L"h¹", symm}});
 
   std::vector<ExprPtr> result(N + 1);
   for (auto p = N; p >= 1; --p) {
-    const auto freq_term = ex<Variable>(L"ω") *
-                           Λ_pt_(p, {.order = order, .nbatch = nbatch}) *
-                           P(nₚ(-p));
+    const auto freq_term =
+        L"ω" * op::λʼ(p, {.order = order, .nbatch = nbatch}) * P(nₚ(-p));
     result.at(p) =
         this->ref_av(expr * P(nₚ(-p)), op_connect) + this->ref_av(freq_term);
   }
@@ -262,10 +262,9 @@ std::vector<ExprPtr> CC::eom_r(nₚ np, nₕ nh) {
 
   // connectivity:
   // default connections + connect R with {h,f,g}
-  const auto op_connect = concat(default_op_connections(),
-                                 OpConnections<OpType>{{OpType::h, OpType::R},
-                                                       {OpType::f, OpType::R},
-                                                       {OpType::g, OpType::R}});
+  const auto op_connect = concat(
+      default_op_connections(),
+      OpConnections<std::wstring>{{L"h", L"R"}, {L"f", L"R"}, {L"g", L"R"}});
 
   // initialize result vector
   std::vector<ExprPtr> result;
@@ -305,12 +304,12 @@ std::vector<ExprPtr> CC::eom_l(nₚ np, nₕ nh) {
   // connectivity:
   // default connections + connect H with projectors
   const auto op_connect = concat(default_op_connections(),
-                                 OpConnections<OpType>{{OpType::h, OpType::A},
-                                                       {OpType::f, OpType::A},
-                                                       {OpType::g, OpType::A},
-                                                       {OpType::h, OpType::S},
-                                                       {OpType::f, OpType::S},
-                                                       {OpType::g, OpType::S}});
+                                 OpConnections<std::wstring>{{L"h", asymm},
+                                                             {L"f", asymm},
+                                                             {L"g", asymm},
+                                                             {L"h", symm},
+                                                             {L"f", symm},
+                                                             {L"g", symm}});
 
   // initialize result vector
   std::vector<ExprPtr> result;

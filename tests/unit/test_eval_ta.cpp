@@ -4,10 +4,13 @@
 #include "catch2_sequant.hpp"
 
 #include <SeQuant/core/context.hpp>
+#include <SeQuant/core/eval/backends/tiledarray/eval_expr.hpp>
+#include <SeQuant/core/eval/backends/tiledarray/result.hpp>
 #include <SeQuant/core/eval/eval.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/parse.hpp>
 #include <SeQuant/core/utility/macros.hpp>
+#include <SeQuant/domain/mbpt/biorthogonalization.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 
 #include <tiledarray.h>
@@ -324,9 +327,9 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
     auto eval_biorthogonal_nns_project = [&yield_](
                                              sequant::ExprPtr const& expr,
                                              std::string const& target_labels) {
-      return evaluate_biorthogonal_nns_project(eval_node(expr), target_labels,
-                                               yield_)
-          ->get<TA::TArrayD>();
+      auto result = evaluate(eval_node(expr), target_labels, yield_);
+      return sequant::biorthogonal_nns_project(
+          result->get<TA::TArrayD>(), eval_node(expr)->as_tensor().bra_rank());
     };
 
     SECTION("summation") {
@@ -439,7 +442,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
     }
 
     SECTION("Antisymmetrization") {
-      auto expr1 = parse_antisymm(L"1/2 * g_{i1, i2}^{a1, a2}");
+      auto expr1 = parse_antisymm(L"g_{i1, i2}^{a1, a2}");
       auto eval1 = eval_antisymm(expr1, "i_1,i_2,a_1,a_2");
       auto const& arr1 = yield(L"g{i1,i2;a1,a2}");
 
@@ -447,7 +450,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
       man1("0,1,2,3") =
           arr1("0,1,2,3") - arr1("1,0,2,3") + arr1("1,0,3,2") - arr1("0,1,3,2");
 
-      man1("0,1,2,3") = 0.5 * man1("0,1,2,3");
+      man1("0,1,2,3") = 0.25 * man1("0,1,2,3");
 
       REQUIRE(norm(man1) == Catch::Approx(norm(eval1)));
 
@@ -479,6 +482,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
       auto const& arr3 = yield(L"R{a1,a2;}");
       auto man3 = TArrayD{};
       man3("0,1") = arr3("0,1") - arr3("1,0");
+      man3("0,1") = 0.5 * man3("0,1");
 
       TArrayD zero3;
       zero3("0,1") = man3("0,1") - eval3("0,1");
@@ -487,7 +491,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
     }
 
     SECTION("Symmetrization") {
-      auto expr1 = parse_antisymm(L"1/2 * g_{i1, i2}^{a1, a2}");
+      auto expr1 = parse_antisymm(L"g_{i1, i2}^{a1, a2}");
       auto eval1 = eval_symm(expr1, "i_1,i_2,a_1,a_2");
       auto const& arr1 = yield(L"g{i1,i2;a1,a2}");
 
@@ -505,12 +509,12 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
       man2("0,1,2,3,4,5") = arr2("0,1,2,3,4,5") + arr2("0,2,1,3,5,4") +
                             arr2("2,0,1,5,3,4") + arr2("2,1,0,5,4,3") +
                             arr2("1,2,0,4,5,3") + arr2("1,0,2,4,3,5");
-
+      man2("0,1,2,3,4,5") = (1.0 / 6.0) * man2("0,1,2,3,4,5");
       REQUIRE(norm(man2) == Catch::Approx(norm(eval2)));
     }
 
     SECTION("Biorthogonal Cleanup") {
-      // low-rank residuals: skip cleanup
+      // low-rank residuals: skip nns
       auto expr1 = parse_antisymm(L"R_{a1, a2}^{i1, i2}");
       auto eval1 = eval_biorthogonal_nns_project(expr1, "a_1,a_2,i_1,i_2");
       auto const& arr1 = yield(L"R{a1,a2;i1,i2}");
@@ -524,8 +528,8 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
       REQUIRE(norm(zero1) == Catch::Approx(0).margin(
                                  100 * std::numeric_limits<double>::epsilon()));
 
-      // high-rank residuals: cleanup applies:
-      // result = identity - (1/ket_rank!) * sum_of_ket_permutations
+      // for rank 3 residual, nns applies:
+      // result = NNS_P * sum_of_ket_permutations
       auto expr2 = parse_antisymm(L"R_{a1, a2, a3}^{i1, i2, i3}");
       auto eval2 =
           eval_biorthogonal_nns_project(expr2, "a_1,a_2,a_3,i_1,i_2,i_3");
@@ -534,15 +538,56 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
       auto man2 = TArrayD{};
       man2("0,1,2,3,4,5") =
           arr2("0,1,2,3,4,5") -
-          (1.0 / 6.0) *
-              (arr2("0,1,2,3,4,5") + arr2("0,1,2,3,5,4") + arr2("0,1,2,4,3,5") +
-               arr2("0,1,2,4,5,3") + arr2("0,1,2,5,3,4") + arr2("0,1,2,5,4,3"));
+          (1.0 / 5.0) *
+              (arr2("0,1,2,3,5,4") + arr2("0,1,2,4,3,5") + arr2("0,1,2,4,5,3") +
+               arr2("0,1,2,5,3,4") + arr2("0,1,2,5,4,3"));
 
       REQUIRE(norm(man2) == Catch::Approx(norm(eval2)));
       TArrayD zero2;
       zero2("0,1,2,3,4,5") = man2("0,1,2,3,4,5") - eval2("0,1,2,3,4,5");
-      REQUIRE(norm(zero1) == Catch::Approx(0).margin(
+      REQUIRE(norm(zero2) == Catch::Approx(0).margin(
                                  100 * std::numeric_limits<double>::epsilon()));
+
+      // for rank 4 residual, nns applies:
+      // result = NNS_P * sum_of_ket_permutations
+      auto expr3 = parse_antisymm(L"R_{a1, a2, a3, a4}^{i1, i2, i3, i4}");
+      auto eval3 = eval_biorthogonal_nns_project(
+          expr3, "a_1,a_2,a_3,a_4,i_1,i_2,i_3,i_4");
+      auto const& arr3 = yield(L"R{a1,a2,a3,a4;i1,i2,i3,i4}");
+
+      auto man3 = TArrayD{};
+      man3("0,1,2,3,4,5,6,7") = 1.0 * arr3("0,1,2,3,4,5,6,7") +
+                                -4.0 / 14.0 * arr3("0,1,2,3,4,5,7,6") +
+                                -4.0 / 14.0 * arr3("0,1,2,3,4,6,5,7") +
+                                -1.0 / 14.0 * arr3("0,1,2,3,4,6,7,5") +
+                                -1.0 / 14.0 * arr3("0,1,2,3,4,7,5,6") +
+                                -4.0 / 14.0 * arr3("0,1,2,3,4,7,6,5") +
+                                -4.0 / 14.0 * arr3("0,1,2,3,5,4,6,7") +
+                                2.0 / 14.0 * arr3("0,1,2,3,5,4,7,6") +
+                                -1.0 / 14.0 * arr3("0,1,2,3,5,6,4,7") +
+                                2.0 / 14.0 * arr3("0,1,2,3,5,6,7,4") +
+                                2.0 / 14.0 * arr3("0,1,2,3,5,7,4,6") +
+                                -1.0 / 14.0 * arr3("0,1,2,3,5,7,6,4") +
+                                -1.0 / 14.0 * arr3("0,1,2,3,6,4,5,7") +
+                                2.0 / 14.0 * arr3("0,1,2,3,6,4,7,5") +
+                                -4.0 / 14.0 * arr3("0,1,2,3,6,5,4,7") +
+                                -1.0 / 14.0 * arr3("0,1,2,3,6,5,7,4") +
+                                2.0 / 14.0 * arr3("0,1,2,3,6,7,4,5") +
+                                2.0 / 14.0 * arr3("0,1,2,3,6,7,5,4") +
+                                2.0 / 14.0 * arr3("0,1,2,3,7,4,5,6") +
+                                -1.0 / 14.0 * arr3("0,1,2,3,7,4,6,5") +
+                                -1.0 / 14.0 * arr3("0,1,2,3,7,5,4,6") +
+                                -4.0 / 14.0 * arr3("0,1,2,3,7,5,6,4") +
+                                2.0 / 14.0 * arr3("0,1,2,3,7,6,4,5") +
+                                2.0 / 14.0 * arr3("0,1,2,3,7,6,5,4");
+
+      REQUIRE(norm(man3) == Catch::Approx(norm(eval3)));
+      TArrayD zero3;
+      zero3("0,1,2,3,4,5,6,7") =
+          man3("0,1,2,3,4,5,6,7") - eval3("0,1,2,3,4,5,6,7");
+      REQUIRE(norm(zero3) ==
+              Catch::Approx(0).margin(1000 *
+                                      std::numeric_limits<double>::epsilon()));
     }
 
     SECTION("Others") {
@@ -699,7 +744,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
     }
 
     SECTION("Antisymmetrization") {
-      auto expr1 = parse_expr(L"1/2 * g_{i1, i2}^{a1, a2}");
+      auto expr1 = parse_expr(L"g_{i1, i2}^{a1, a2}");
       auto eval1 = eval_antisymm(expr1, "i_1,i_2,a_1,a_2");
       auto const& arr1 = yield(L"g{i1,i2;a1,a2}");
 
@@ -707,7 +752,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
       man1("0,1,2,3") =
           arr1("0,1,2,3") - arr1("1,0,2,3") + arr1("1,0,3,2") - arr1("0,1,3,2");
 
-      man1("0,1,2,3") = std::complex<double>{0.5} * man1("0,1,2,3");
+      man1("0,1,2,3") = std::complex<double>{0.25} * man1("0,1,2,3");
 
       REQUIRE(norm(man1) == Catch::Approx(norm(eval1)));
 
@@ -738,6 +783,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
       auto const& arr3 = yield(L"R{a1,a2;}");
       auto man3 = TArrayC{};
       man3("0,1") = arr3("0,1") - arr3("1,0");
+      man3("0,1") = std::complex<double>{0.5} * man3("0,1");
 
       TArrayC zero3;
       zero3("0,1") = man3("0,1") - eval3("0,1");
@@ -746,7 +792,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
     }
 
     SECTION("Symmetrization") {
-      auto expr1 = parse_expr(L"1/2 * g_{i1, i2}^{a1, a2}");
+      auto expr1 = parse_expr(L"g_{i1, i2}^{a1, a2}");
       auto eval1 = eval_symm(expr1, "i_1,i_2,a_1,a_2");
       auto const& arr1 = yield(L"g{i1,i2;a1,a2}");
 
@@ -764,6 +810,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
       man2("0,1,2,3,4,5") = arr2("0,1,2,3,4,5") + arr2("0,2,1,3,5,4") +
                             arr2("2,0,1,5,3,4") + arr2("2,1,0,5,4,3") +
                             arr2("1,2,0,4,5,3") + arr2("1,0,2,4,3,5");
+      man2("0,1,2,3,4,5") = (1.0 / 6.0) * man2("0,1,2,3,4,5");
 
       REQUIRE(norm(man2) == Catch::Approx(norm(eval2)));
     }

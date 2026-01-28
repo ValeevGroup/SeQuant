@@ -73,12 +73,20 @@ class TensorCanonicalizer {
     return cardinal_tensor_labels_accessor();
   }
 
-  /// @param labels a list of Tensor labels with lexicographic
+  /// @brief Sets cardinal tensor labels by appending to defaults
+  /// @param labels a list of additional Tensor labels with lexicographic
   /// preference (in order)
+  /// @note The default labels are always prepended to the provided labels
+  /// @note To restore defaults only, use reset_cardinal_tensor_labels()
   static void set_cardinal_tensor_labels(
-      const container::vector<std::wstring>& labels) {
-    cardinal_tensor_labels_accessor() = labels;
-  }
+      const container::vector<std::wstring>& labels);
+
+  /// @brief Resets cardinal tensor labels to default values only
+  static void reset_cardinal_tensor_labels();
+
+  /// @brief Clears all cardinal tensor labels including defaults (sets to empty
+  /// list)
+  static void clear_all_cardinal_tensor_labels();
 
   /// @return a side effect of canonicalization (e.g. phase), or nullptr if none
   /// @internal what should be returned if canonicalization requires
@@ -122,6 +130,8 @@ class TensorCanonicalizer {
       std::unique_lock<std::recursive_mutex>>
   instance_map_accessor();  // map* + locked recursive mutex
   static container::vector<std::wstring>& cardinal_tensor_labels_accessor();
+  static container::vector<std::wstring>&
+  default_cardinal_tensor_labels_accessor();
 };
 
 /// @brief null Tensor canonicalizer does nothing

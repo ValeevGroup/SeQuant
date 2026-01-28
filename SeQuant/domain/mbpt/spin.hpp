@@ -214,7 +214,7 @@ ExprPtr S_maps(const ExprPtr& expr);
 
 /// WK biorthogonalization rewrites biorthogonal expressions as a projector
 /// onto non-null-space (NNS)
-/// applied to the biorothogonal expressions where out of each
+/// applied to the biorthogonal expressions where out of each
 /// group of terms related by permutation of external indices
 /// those with the largest coefficients are selected.
 /// This function performs the selection by forming groups of terms that
@@ -401,16 +401,6 @@ ExprPtr spintrace(
 
 container::svector<ResultExpr> spintrace(const ResultExpr& expr,
                                          bool spinfree_index_spaces = true);
-
-/// @brief Factorize S out of terms
-/// @details Given an expression, permute indices and check if a given product
-/// @param expression Expression pointer
-/// @param fast_method use hash maps (memory intensive) for faster evaluation
-/// @param ext_index_groups External index groups to generate the S operator
-/// @return ExprPtr with terms with S operator as a factor
-ExprPtr factorize_S(const ExprPtr& expression,
-                    std::initializer_list<IndexList> ext_index_groups,
-                    bool fast_method = true);
 
 }  // namespace sequant::mbpt
 

@@ -4,6 +4,7 @@
 
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/op.hpp>
+#include <SeQuant/domain/mbpt/context.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/models/cc.hpp>
 #include <SeQuant/domain/mbpt/spin.hpp>
@@ -16,6 +17,7 @@ int main() {
   using namespace sequant::mbpt;
   set_default_context({.index_space_registry_shared_ptr = make_min_sr_spaces(),
                        .vacuum = Vacuum::SingleProduct});
+  set_default_mbpt_context({.op_registry_ptr = make_legacy_registry()});
   // end-snippet-0
 
   // start-snippet-1
@@ -62,12 +64,12 @@ int main() {
 
   // start-snippet-3
   // First-order perturbed amplitude equations
-  auto t_pt = CC{2}.t_pt(1, 1);
+  auto t_pt = CC{2}.tʼ(1, 1);
   std::wcout << "T1 perturbed: " << to_latex(t_pt[1]) << "\n"
              << "T2 perturbed: " << to_latex(t_pt[2]) << "\n";
 
   // First-order perturbed Lambda amplitude equations
-  auto l_pt = CC{2}.λ_pt(1, 1);
+  auto l_pt = CC{2}.λʼ(1, 1);
   std::wcout << "λ1 perturbed: " << to_latex(l_pt[1]) << "\n"
              << "λ2 perturbed: " << to_latex(l_pt[2]) << "\n";
   // end-snippet-3

@@ -1,5 +1,6 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/reserved.hpp>
 #include <SeQuant/core/utility/expr.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/macros.hpp>
@@ -386,8 +387,8 @@ bool is_valid(const ResultExpr &expr, std::string *msg) {
   // We need to make sure to remove any symmetrizers from the expression in
   // order to not mess up the determination of external indices
   ExprPtr rhs = expr.expression().clone();
-  pop_tensor(rhs, L"A");
-  pop_tensor(rhs, L"S");
+  pop_tensor(rhs, reserved::antisymm_label());
+  pop_tensor(rhs, reserved::symm_label());
 
   IndexGroups<> externals = get_unique_indices(rhs);
 

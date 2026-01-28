@@ -37,7 +37,7 @@ jobs:
     steps:
       - name: Get PR details
         id: pr
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             const pullRequestNumber = context.eventName === 'workflow_dispatch'
@@ -60,7 +60,7 @@ jobs:
             };
 
       - name: Create status check
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             const prData = ${{ steps.pr.outputs.result }};
@@ -75,7 +75,7 @@ jobs:
             });
 
       - name: Checkout base repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -96,7 +96,7 @@ jobs:
           echo "timestamp=$(date -u +'%Y-%m-%d-%H;%M;%S')" >> $GITHUB_OUTPUT
 
       - name: Setup ccache cache files
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ${{github.workspace}}/build/.ccache
           key: benchmark-ccache-${{ steps.ccache_cache_timestamp.outputs.timestamp }}
@@ -114,7 +114,7 @@ jobs:
 
       - name: Upload Results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: benchmark-data-${{ github.run_id }}
           path: |
@@ -125,7 +125,7 @@ jobs:
 
       - name: Post Results
         if: success()
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             const fs = require('fs');
@@ -156,7 +156,7 @@ jobs:
 
       - name: Update status check - Success
         if: success()
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             const prData = ${{ steps.pr.outputs.result }};
@@ -172,7 +172,7 @@ jobs:
 
       - name: Notify on Failure
         if: failure()
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             const prData = ${{ steps.pr.outputs.result }};

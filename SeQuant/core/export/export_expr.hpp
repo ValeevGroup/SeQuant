@@ -1,7 +1,7 @@
 #ifndef SEQUANT_CORE_EXPORT_EXPORT_EXPR_HPP
 #define SEQUANT_CORE_EXPORT_EXPORT_EXPR_HPP
 
-#include <SeQuant/core/eval_expr.hpp>
+#include <SeQuant/core/eval/eval_expr.hpp>
 #include <SeQuant/core/export/compute_selection.hpp>
 
 #include <cstddef>

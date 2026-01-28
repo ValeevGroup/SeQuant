@@ -14,6 +14,7 @@
 #include <SeQuant/domain/mbpt/context.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/op.hpp>
+#include <SeQuant/domain/mbpt/op_registry.hpp>
 #include <SeQuant/domain/mbpt/rules/df.hpp>
 #include <SeQuant/domain/mbpt/rules/thc.hpp>
 #include <SeQuant/domain/mbpt/utils.hpp>
@@ -34,6 +35,166 @@
 #include "SeQuant/core/utility/debug.hpp"
 
 TEST_CASE("mbpt", "[mbpt]") {
+  SECTION("registry") {
+    using namespace sequant::mbpt;
+
+    SECTION("empty-registry") {
+      OpRegistry registry;
+      REQUIRE(registry.ops().empty());
+      REQUIRE_FALSE(registry.contains(L"T"));
+    }
+
+    SECTION("add-operators") {
+      OpRegistry registry;
+      registry.add(L"T", OpClass::ex);
+      registry.add(L"L", OpClass::deex);
+      registry.add(L"F", OpClass::gen);
+
+      REQUIRE(registry.contains(L"T"));
+      REQUIRE(registry.contains(L"L"));
+      REQUIRE(registry.contains(L"F"));
+      REQUIRE(registry.ops().size() == 3);
+
+      REQUIRE(registry.to_class(L"T") == OpClass::ex);
+      REQUIRE(registry.to_class(L"L") == OpClass::deex);
+      REQUIRE(registry.to_class(L"F") == OpClass::gen);
+    }
+
+    SECTION("remove-operators") {
+      OpRegistry registry;
+      registry.add(L"T", OpClass::ex);
+      registry.add(L"L", OpClass::deex);
+
+      REQUIRE(registry.contains(L"T"));
+      registry.remove(L"T");
+      REQUIRE_FALSE(registry.contains(L"T"));
+      REQUIRE(registry.contains(L"L"));
+    }
+
+    SECTION("clone-registry") {
+      OpRegistry registry;
+      registry.add(L"T", OpClass::ex);
+      registry.add(L"L", OpClass::deex);
+
+      auto cloned = registry.clone();
+      REQUIRE(cloned.contains(L"T"));
+      REQUIRE(cloned.contains(L"L"));
+      REQUIRE(cloned.ops().size() == registry.ops().size());
+    }
+
+    SECTION("purge-registry") {
+      OpRegistry registry;
+      registry.add(L"T", OpClass::ex);
+      registry.add(L"L", OpClass::deex);
+
+      REQUIRE_FALSE(registry.ops().empty());
+      registry.purge();
+      REQUIRE(registry.ops().empty());
+    }
+
+#if SEQUANT_ASSERT_BEHAVIOR == SEQUANT_ASSERT_THROW
+    SECTION("reserved-labels") {
+      OpRegistry registry;
+      // should not be able to add reserved labels
+      REQUIRE_THROWS(
+          registry.add(sequant::reserved::antisymm_label(), OpClass::gen));
+      REQUIRE_THROWS(
+          registry.add(sequant::reserved::symm_label(), OpClass::gen));
+    }
+
+    SECTION("duplicate-operators") {
+      OpRegistry registry;
+      registry.add(L"T", OpClass::ex);
+      // should not be able to add duplicate
+      REQUIRE_THROWS(registry.add(L"T", OpClass::deex));
+    }
+#endif
+  }  // SECTION("registry")
+
+  SECTION("context") {
+    using namespace sequant::mbpt;
+
+    SECTION("default-context") {
+      auto default_ctx = get_default_mbpt_context();
+      // check default values
+      REQUIRE(default_ctx.csv() == CSV::No);
+      REQUIRE_NOTHROW(default_ctx.csv());
+      REQUIRE_NOTHROW(default_ctx.op_registry());
+    }
+
+    SECTION("context-with-CSV") {
+      auto ctx = Context({.csv = CSV::Yes});
+      REQUIRE(ctx.csv() == CSV::Yes);
+
+      ctx.set(CSV::No);
+      REQUIRE(ctx.csv() == CSV::No);
+    }
+
+    SECTION("context-with-registry") {
+      auto reg = make_minimal_registry();
+      auto ctx = Context({.op_registry_ptr = reg});
+
+      REQUIRE(ctx.csv() == CSV::No);
+      REQUIRE(ctx.op_registry() != nullptr);
+      REQUIRE(ctx.op_registry() == reg);
+    }
+
+    SECTION("set-operator-registry") {
+      auto ctx = Context();
+      auto reg = make_legacy_registry();
+
+      ctx.set(reg);
+      REQUIRE(ctx.op_registry() != nullptr);
+      REQUIRE(ctx.op_registry() == reg);
+    }
+
+    SECTION("clone-context") {
+      auto reg = std::make_shared<OpRegistry>();
+      reg->add(L"T", OpClass::ex);
+
+      auto ctx = Context({.csv = CSV::Yes, .op_registry_ptr = reg});
+      auto cloned = ctx.clone();
+
+      REQUIRE(cloned.csv() == ctx.csv());
+      REQUIRE(cloned.op_registry() != ctx.op_registry());  // Different pointer
+      REQUIRE(cloned.op_registry()->contains(L"T"));
+    }
+
+    SECTION("context-equality") {
+      auto reg1 = make_legacy_registry();
+      auto reg2 = make_minimal_registry();
+      auto ctx1 = Context({.csv = CSV::Yes, .op_registry_ptr = reg1});
+      auto ctx2 = Context({.csv = CSV::Yes, .op_registry_ptr = reg1});
+      auto ctx3 = Context({.csv = CSV::No, .op_registry_ptr = reg1});
+      auto ctx4 = Context({.csv = CSV::Yes, .op_registry_ptr = reg2});
+
+      REQUIRE(ctx1 == ctx2);
+      REQUIRE(ctx1 != ctx3);
+      REQUIRE(ctx1 != ctx4);
+    }
+
+    SECTION("scoped-context") {
+      auto original_ctx = get_default_mbpt_context();
+      auto original_csv = original_ctx.csv();
+
+      {
+        auto reg1 = make_legacy_registry();
+        auto ctx = Context({.csv = CSV::Yes, .op_registry_ptr = reg1});
+        auto _ = set_scoped_default_mbpt_context(ctx);
+
+        auto current_ctx = get_default_mbpt_context();
+        REQUIRE(current_ctx.csv() == CSV::Yes);
+        REQUIRE(current_ctx.op_registry() == reg1);
+        REQUIRE(current_ctx.op_registry()->contains(L"t"));
+        REQUIRE(current_ctx.op_registry()->contains(L"λ"));
+      }
+
+      // after scope, original context should be restored
+      auto restored_ctx = get_default_mbpt_context();
+      REQUIRE(restored_ctx.csv() == original_csv);
+    }
+  }  // SECTION("context")
+
   SECTION("nbody_operators") {
     using namespace sequant;
 
@@ -164,6 +325,43 @@ TEST_CASE("mbpt", "[mbpt]") {
           //        REQUIRE(equal(f1(qns_t{-1, 1}), qns_t{-2, 2}));
         }
       }
+
+      // tests OpParams constructor with perturbation order
+      {
+        using namespace sequant::mbpt;
+
+        op_t op_order0([]() -> std::wstring_view { return L"t"; },
+                       []() -> ExprPtr {
+                         return ex<Tensor>(L"t", bra{L"a_1"}, ket{L"i_1"}) *
+                                ex<FNOperator>(cre({L"a_1"}), ann({L"i_1"}));
+                       },
+                       [](qns_t& qns) { qns += excitation_type_qns(1); },
+                       OpParams{.order = 0});
+        REQUIRE(op_order0.label() == L"t");
+        REQUIRE(op_order0.order() == 0);
+
+        op_t op_order1([]() -> std::wstring_view { return L"t"; },
+                       []() -> ExprPtr {
+                         return ex<Tensor>(L"t", bra{L"a_1"}, ket{L"i_1"}) *
+                                ex<FNOperator>(cre({L"a_1"}), ann({L"i_1"}));
+                       },
+                       [](qns_t& qns) { qns += excitation_type_qns(1); },
+                       OpParams{.order = 1});
+        REQUIRE(op_order1.label() == L"t¹");
+        REQUIRE(op_order1.order() == 1);
+
+        op_t op_order2([]() -> std::wstring_view { return L"t"; },
+                       []() -> ExprPtr {
+                         return ex<Tensor>(L"t", bra{L"a_1", L"a_2"},
+                                           ket{L"i_1", L"i_2"}) *
+                                ex<FNOperator>(cre({L"a_1", L"a_2"}),
+                                               ann({L"i_1", L"i_2"}));
+                       },
+                       [](qns_t& qns) { qns += excitation_type_qns(2); },
+                       OpParams{.order = 2});
+        REQUIRE(op_order2.label() == L"t²");
+        REQUIRE(op_order2.order() == 2);
+      }
     }  // SECTION("constructor")
 
     SECTION("to_latex") {
@@ -172,11 +370,11 @@ TEST_CASE("mbpt", "[mbpt]") {
 
       auto f = F();
       auto t1 = T(1);
-      auto t2 = T_(2);
-      auto lambda1 = Λ_(1);
-      auto lambda2 = Λ_(2);
-      auto r_2_1 = R_(nₚ(1), nₕ(2));
-      auto r_1_2 = R_(nₚ(2), nₕ(1));
+      auto t2 = t(2);
+      auto lambda1 = λ(1);
+      auto lambda2 = λ(2);
+      auto r_2_1 = r(nₚ(1), nₕ(2));
+      auto r_1_2 = r(nₚ(2), nₕ(1));
       auto theta2 = θ(2);
       REQUIRE(to_latex(theta2) == L"{\\hat{\\theta}_{2}}");
       REQUIRE(to_latex(f) == L"{\\hat{f}}");
@@ -202,11 +400,11 @@ TEST_CASE("mbpt", "[mbpt]") {
       using qns_t [[maybe_unused]] = mbpt::qns_t;
       using namespace sequant::mbpt;
       auto f = F();
-      auto t1 = T_(1);
-      auto l1 = Λ_(1);
-      auto t2 = T_(2);
-      auto l2 = Λ_(2);
-      auto h_pt = H_pt(1, {.order = 1});
+      auto t1 = t(1);
+      auto l1 = λ(1);
+      auto t2 = t(2);
+      auto l2 = λ(2);
+      auto h_pt = Hʼ(1, {.order = 1});
       REQUIRE(to_latex(f * t1 * t2) == to_latex(canonicalize(f * t2 * t1)));
       REQUIRE(to_latex(canonicalize(f * t1 * t2)) ==
               to_latex(canonicalize(f * t2 * t1)));
@@ -261,9 +459,9 @@ TEST_CASE("mbpt", "[mbpt]") {
       using op_t = mbpt::Operator<qns_t>;
       using namespace mbpt;
       op_t f = F()->as<op_t>();
-      op_t t1 = T_(1)->as<op_t>();
-      op_t lambda2 = Λ_(2)->as<op_t>();
-      op_t r_1_2 = R_(nₚ(2), nₕ(1))->as<op_t>();
+      op_t t1 = t(1)->as<op_t>();
+      op_t lambda2 = λ(2)->as<op_t>();
+      op_t r_1_2 = r(nₚ(2), nₕ(1))->as<op_t>();
 
       REQUIRE_NOTHROW(adjoint(f));
       REQUIRE_NOTHROW(adjoint(t1));
@@ -273,7 +471,7 @@ TEST_CASE("mbpt", "[mbpt]") {
       REQUIRE(adjoint(f)() == mbpt::general_type_qns(1));
       REQUIRE(adjoint(t1)() == mbpt::deexcitation_type_qns(1));
       REQUIRE(adjoint(lambda2)() == mbpt::excitation_type_qns(2));
-      REQUIRE(adjoint(r_1_2)() == L_(nₚ(2), nₕ(1))->as<op_t>()());
+      REQUIRE(adjoint(r_1_2)() == l(nₚ(2), nₕ(1))->as<op_t>()());
 
       // adjoint(adjoint(Op)) = Op
       REQUIRE(adjoint(adjoint(t1))() == t1());
@@ -303,18 +501,30 @@ TEST_CASE("mbpt", "[mbpt]") {
       REQUIRE(to_latex(adjoint(r_1_2_adj).as<Expr>()) == L"{\\hat{R}_{1,2}}");
       REQUIRE(to_latex(adjoint(lambda2_adj).as<Expr>()) ==
               L"{\\hat{\\lambda}_{2}}");
+
+      // adjoint should preserve perturbation order
+      auto t1_order2 = tʼ(1, {.order = 2});
+      REQUIRE(t1_order2.as<op_t>().order() == 2);
+      auto t1_order2_adj = adjoint(t1_order2);
+      REQUIRE(t1_order2_adj.as<op_t>().order() == 2);
+
+      auto λ1_order3 = λʼ(1, {.order = 3});
+      REQUIRE(λ1_order3.as<op_t>().order() == 3);
+      auto λ1_order3_adj = adjoint(λ1_order3);
+      REQUIRE(λ1_order3_adj.as<op_t>().order() == 3);
+
     }  // SECTION("adjoint")
 
     SECTION("screen") {
       using namespace sequant::mbpt;
-      auto g_t2_t2 = H_(2) * T_(2) * T_(2);
+      auto g_t2_t2 = h(2) * t(2) * t(2);
       REQUIRE(raises_vacuum_to_rank(g_t2_t2, 2));
       REQUIRE(raises_vacuum_up_to_rank(g_t2_t2, 2));
 
-      auto g_t2 = H_(2) * T_(2);
+      auto g_t2 = h(2) * t(2);
       REQUIRE(raises_vacuum_to_rank(g_t2, 3));
 
-      auto lambda2_f = Λ_(2) * H_(1);
+      auto lambda2_f = λ(2) * h(1);
       REQUIRE(lowers_rank_to_vacuum(lambda2_f, 2));
 
       auto expr1 = P(nₚ(0), nₕ(1)) * H() * R(nₚ(0), nₕ(1));
@@ -330,21 +540,20 @@ TEST_CASE("mbpt", "[mbpt]") {
       REQUIRE(to_latex(vev2_op) == to_latex(vev2_t));
 
       // Test screen_vac_av
-      auto hbar = mbpt::lst(H(), T_(2), 4);  // CCD Hbar
+      auto hbar = mbpt::lst(H(), t(2), 4);  // CCD Hbar
       auto screened_hbar = screen_vac_av(hbar);
-      auto expected = H_(2) * T_(2);
+      auto expected = h(2) * t(2);
       REQUIRE(simplify(screened_hbar - expected) == ex<Constant>(0));
 
-      auto expr3 = P(2) * hbar * R_(nₚ(2), nₕ(2));
+      auto expr3 = P(2) * hbar * r(nₚ(2), nₕ(2));
       auto screened_expr3 = screen_vac_av(expr3);
-      auto expected3 =
-          op::P(2) * (H_(2) * T_(2) + H_(2) + H_(1)) * R_(nₚ(2), nₕ(2));
+      auto expected3 = op::P(2) * (h(2) * t(2) + h(2) + h(1)) * r(nₚ(2), nₕ(2));
       REQUIRE(simplify(screened_expr3 - expected3) == ex<Constant>(0));
 
       auto expr4 = P(nₚ(2), nₕ(1)) * hbar * R(nₚ(1), nₕ(0));
       auto screened_expr4 = screen_vac_av(expr4);
       auto expected4 = P(nₚ(2), nₕ(1)) *
-                       (H_(1) + H_(1) * T_(2) + H_(2) * T_(2) + H_(2)) *
+                       (h(1) + h(1) * t(2) + h(2) * t(2) + h(2)) *
                        R(nₚ(1), nₕ(0));
       REQUIRE(simplify(screened_expr4 - expected4) == ex<Constant>(0));
 
@@ -359,41 +568,40 @@ TEST_CASE("mbpt", "[mbpt]") {
 
       // non-unitary, rank 3
       auto expr1 =
-          lst(H(), T_(2), 3, {.unitary = false, .use_commutators = false});
+          lst(H(), t(2), 3, {.unitary = false, .use_commutators = false});
       auto expected1 =
-          H() * (ex<Constant>(1) + T_(2) +
-                 ex<Constant>(rational{1, 2}) * T_(2) * T_(2) +
-                 ex<Constant>(rational{1, 6}) * T_(2) * T_(2) * T_(2));
+          H() *
+          (ex<Constant>(1) + t(2) + ex<Constant>(rational{1, 2}) * t(2) * t(2) +
+           ex<Constant>(rational{1, 6}) * t(2) * t(2) * t(2));
       REQUIRE(simplify(expr1 - expected1) == ex<Constant>(0));
 
       auto expr2 =
-          lst(H(), T_(2), 3, {.unitary = false, .use_commutators = true});
+          lst(H(), t(2), 3, {.unitary = false, .use_commutators = true});
       auto expected2 =
-          H() + commutator(H(), T_(2)) +
+          H() + commutator(H(), t(2)) +
           ex<Constant>(rational{1, 2}) *
-              commutator(commutator(H(), T_(2)), T_(2)) +
+              commutator(commutator(H(), t(2)), t(2)) +
           ex<Constant>(rational{1, 6}) *
-              commutator(commutator(commutator(H(), T_(2)), T_(2)), T_(2));
+              commutator(commutator(commutator(H(), t(2)), t(2)), t(2));
       REQUIRE(simplify(expr2 - expected2) == ex<Constant>(0));
 
       // unitary, rank 2
       using sequant::adjoint;
       auto expr3 =
-          lst(H(), T_(2), 2, {.unitary = true, .use_commutators = false});
+          lst(H(), t(2), 2, {.unitary = true, .use_commutators = false});
       auto expected3 =
-          H() + H() * T_(2) + adjoint(T_(2)) * H() +
-          adjoint(T_(2)) * H() * T_(2) +
-          H() * ex<Constant>(rational{1, 2}) * T_(2) * T_(2) +
-          ex<Constant>(rational{1, 2}) * adjoint(T_(2)) * adjoint(T_(2)) * H();
+          H() + H() * t(2) + adjoint(t(2)) * H() + adjoint(t(2)) * H() * t(2) +
+          H() * ex<Constant>(rational{1, 2}) * t(2) * t(2) +
+          ex<Constant>(rational{1, 2}) * adjoint(t(2)) * adjoint(t(2)) * H();
       REQUIRE(simplify(expr3 - expected3) == ex<Constant>(0));
 
       auto expr4 =
-          lst(H(), T_(2), 2, {.unitary = true, .use_commutators = true});
-      auto generator = commutator(H(), T_(2)) - commutator(H(), adjoint(T_(2)));
-      auto expected4 = H() + generator +
-                       ex<Constant>(rational{1, 2}) *
-                           (commutator(generator, T_(2)) -
-                            commutator(generator, adjoint(T_(2))));
+          lst(H(), t(2), 2, {.unitary = true, .use_commutators = true});
+      auto generator = commutator(H(), t(2)) - commutator(H(), adjoint(t(2)));
+      auto expected4 =
+          H() + generator +
+          ex<Constant>(rational{1, 2}) * (commutator(generator, t(2)) -
+                                          commutator(generator, adjoint(t(2))));
       REQUIRE(simplify(expr4 - expected4) == ex<Constant>(0));
     }  // SECTION("lst")
 
@@ -409,7 +617,7 @@ TEST_CASE("mbpt", "[mbpt]") {
       REQUIRE(to_latex(simplify(theta1.tensor_form())) ==
               L"{{\\theta^{{p_2}}_{{p_1}}}{\\tilde{a}^{{p_1}}_{{p_2}}}}");
 
-      auto R_2 = R_(2)->as<op_t>();
+      auto R_2 = r(2)->as<op_t>();
       //    std::wcout << "R_2: " << to_latex(simplify(R_2.tensor_form())) <<
       //    std::endl;
       REQUIRE(
@@ -418,7 +626,7 @@ TEST_CASE("mbpt", "[mbpt]") {
           L"{{a_1}{"
           L"a_2}}_{{i_1}{i_2}}}}");
 
-      auto L_3 = L_(3)->as<op_t>();
+      auto L_3 = l(3)->as<op_t>();
       //    std::wcout << "L_3: " << to_latex(simplify(L_3.tensor_form())) <<
       //    std::endl;
       REQUIRE(
@@ -426,7 +634,7 @@ TEST_CASE("mbpt", "[mbpt]") {
           L"{{{\\frac{1}{36}}}{\\bar{L}^{{a_1}{a_2}{a_3}}_{{i_1}{i_2}{i_3}}}{"
           L"\\tilde{a}^{{i_1}{i_2}{i_3}}_{{a_1}{a_2}{a_3}}}}");
 
-      auto R_2_3 = R_(nₚ(3), nₕ(2))->as<op_t>();
+      auto R_2_3 = r(nₚ(3), nₕ(2))->as<op_t>();
       //    std::wcout << "R_2_3: " << to_latex(simplify(R_2_3.tensor_form()))
       //    << std::endl;
       REQUIRE(to_latex(simplify(R_2_3.tensor_form())) ==
@@ -434,8 +642,8 @@ TEST_CASE("mbpt", "[mbpt]") {
               L"\\tilde{a}^{"
               L"{a_1}{a_2}{a_3}}_{\\textvisiblespace\\,{i_1}{i_2}}}}");
 
-      auto L_1_2 = L_(nₚ(1), nₕ(2))->as<op_t>();
-      // std::wcout << "L_(1,2): " << to_latex(simplify(L_1_2.tensor_form())) <<
+      auto L_1_2 = l(nₚ(1), nₕ(2))->as<op_t>();
+      // std::wcout << "l(1,2): " << to_latex(simplify(L_1_2.tensor_form())) <<
       // std::endl;
       REQUIRE(
           to_latex(simplify(L_1_2.tensor_form())) ==
@@ -446,30 +654,29 @@ TEST_CASE("mbpt", "[mbpt]") {
       auto A_2_1 = A(nₚ(2), nₕ(1))->as<op_t>();
       //    std::wcout << "A_2_1: " << to_latex(simplify(A_2_1.tensor_form()))
       //               << std::endl;
-      REQUIRE(
-          to_latex(simplify(A_2_1.tensor_form())) ==
-          L"{{{\\frac{1}{2}}}{\\bar{A}^{{i_1}}_{{a_1}{a_2}}}{\\tilde{a}^{{a_"
-          L"1}{a_2}}"
-          L"_{\\textvisiblespace\\,{i_1}}}}");
+      REQUIRE(to_latex(simplify(A_2_1.tensor_form())) ==
+              L"{{\\hat{A}^{{i_1}}_{{a_1}{a_2}}}{\\tilde{a}^{{a_"
+              L"1}{a_2}}"
+              L"_{\\textvisiblespace\\,{i_1}}}}");
 
       auto P_0_1 = P(nₚ(0), nₕ(1))->as<op_t>();
       //    std::wcout << "P_0_1: " << to_latex(simplify(P_0_1.tensor_form()))
       //               << std::endl;
       REQUIRE(to_latex(simplify(P_0_1.tensor_form())) ==
-              L"{{A^{}_{{i_1}}}{\\tilde{a}^{{i_1}}}}");
+              L"{{\\hat{A}^{}_{{i_1}}}{\\tilde{a}^{{i_1}}}}");
 
       auto P_2_1 = P(nₚ(2), nₕ(1))->as<op_t>();
       //    std::wcout << "P_2_1: " << to_latex(simplify(P_2_1.tensor_form()))
       //               << std::endl;
       REQUIRE(to_latex(simplify(P_2_1.tensor_form())) ==
-              L"{{{\\frac{1}{2}}}{\\bar{A}^{{a_1}{a_2}}_{{i_1}}}{\\tilde{a}^{"
+              L"{{\\hat{A}^{{a_1}{a_2}}_{{i_1}}}{\\tilde{a}^{"
               L"\\textvisiblespace\\,{i_1}}_{{a_1}{a_2}}}}");
 
       auto P_2_3 = P(nₚ(2), nₕ(3))->as<op_t>();
       //    std::wcout << "P_2_3: " << to_latex(simplify(P_3_2.tensor_form()))
       //               << std::endl;
       REQUIRE(to_latex(simplify(P_2_3.tensor_form())) ==
-              L"{{{\\frac{1}{12}}}{\\bar{A}^{{a_1}{a_2}}_{{i_1}{i_2}{i_3}}}{"
+              L"{{\\hat{A}^{{a_1}{a_2}}_{{i_1}{i_2}{i_3}}}{"
               L"\\tilde{a}^{"
               L"{i_1}{i_2}{i_3}}_{\\textvisiblespace\\,{a_1}{a_2}}}}");
 
@@ -518,7 +725,32 @@ TEST_CASE("mbpt", "[mbpt]") {
               L"{{{\\frac{1}{12}}}{\\bar{L}^{{a_1}{a_2}}_{{i_1}{i_2}{i_"
               L"3}}}{\\tilde{a}^{{i_1}{i_2}{i_3}}_{\\textvisiblespace\\,{a_1}{"
               L"a_2}}}}\\bigr) }");
-    }
+
+      // perturbation ops
+      REQUIRE_NOTHROW(Hʼ(1, {.order = 1}));
+      REQUIRE_NOTHROW(Hʼ(2, {.order = 2}));
+      REQUIRE_NOTHROW(Λʼ(3, {.order = 5, .skip1 = true}));
+      REQUIRE_NOTHROW(Tʼ(2, {.order = 9}));
+#if SEQUANT_ASSERT_BEHAVIOR == SEQUANT_ASSERT_THROW
+      REQUIRE_THROWS(Hʼ(1, {.order = 10}));  // invalid order
+#endif
+
+      auto h0 = Hʼ(1);
+      REQUIRE(to_latex(h0) == L"{\\hat{h¹}}");
+      auto h1 = Hʼ(1, {.order = 1});
+      auto h2 = Hʼ(1, {.order = 2});
+      auto t2 = tʼ(2, {.order = 2});
+
+      REQUIRE(h1 != h2);
+      REQUIRE(h0 == h1);
+
+      REQUIRE(to_latex(simplify(h0 + h1)) == L"{{{2}}{\\hat{h¹}}}");
+      REQUIRE(to_latex(simplify(h1 + h2)) ==
+              L"{ \\bigl({\\hat{h¹}} + {\\hat{h²}}\\bigr) }");
+
+      REQUIRE(to_latex(simplify(h1 * t2)) == L"{{\\hat{h¹}}{\\hat{t²}_{2}}}");
+      REQUIRE(to_latex(simplify(h2 * t2)) == L"{{\\hat{h²}}{\\hat{t²}_{2}}}");
+    }  // SECTION("predefined")
 
     SECTION("batching") {
       // update context to use batching index
@@ -531,32 +763,33 @@ TEST_CASE("mbpt", "[mbpt]") {
           get_default_context().index_space_registry()->retrieve(L"z"));
 
       using namespace mbpt;
-      REQUIRE_NOTHROW(op::H_pt(1, {.nbatch = 1}));
-      REQUIRE_NOTHROW(op::H_pt(2, {.nbatch = 2}));
+      REQUIRE_NOTHROW(op::Hʼ(1, {.order = 1, .nbatch = 1}));
+      REQUIRE_NOTHROW(op::Hʼ(2, {.order = 1, .nbatch = 2}));
       REQUIRE_NOTHROW(
-          op::Λ_pt(3, {.batch_ordinals = {3, 4, 5}, .skip1 = true}));
-      REQUIRE_NOTHROW(op::T_pt(1, {.nbatch = 20}));
+          op::Λʼ(3, {.order = 1, .batch_ordinals = {3, 4, 5}, .skip1 = true}));
+      REQUIRE_NOTHROW(op::Tʼ(1, {.order = 1, .nbatch = 20}));
 
       // invalid usages
 #if SEQUANT_ASSERT_BEHAVIOR == SEQUANT_ASSERT_THROW
       // cannot set both nbatch and batch_ordinals
-      REQUIRE_THROWS_AS(op::H_pt(2, {.nbatch = 2, .batch_ordinals = {1, 2}}),
-                        sequant::Exception);
+      REQUIRE_THROWS_AS(
+          op::Hʼ(2, {.order = 1, .nbatch = 2, .batch_ordinals = {1, 2}}),
+          sequant::Exception);
       // all ordinals must be unique
-      REQUIRE_THROWS_AS(op::H_pt(2, {.batch_ordinals = {1, 2, 2}}),
+      REQUIRE_THROWS_AS(op::Hʼ(2, {.order = 1, .batch_ordinals = {1, 2, 2}}),
                         sequant::Exception);
       // ordinals must be sorted
-      REQUIRE_THROWS_AS(op::H_pt(1, {.batch_ordinals = {3, 2}}),
+      REQUIRE_THROWS_AS(op::Hʼ(1, {.order = 1, .batch_ordinals = {3, 2}}),
                         sequant::Exception);
 #endif
 
       // operations
-      auto h0 = op::H_pt(1);
+      auto h0 = op::Hʼ(1);
       REQUIRE(to_latex(h0) == L"{\\hat{h¹}}");
 
-      auto h1 = op::H_pt(1, {.nbatch = 1});
-      auto h1_2 = op::H_pt(1, {.batch_ordinals = {1, 2}});
-      auto pt1 = op::T_pt(2, {.batch_ordinals = {1}});
+      auto h1 = op::Hʼ(1, {.order = 1, .nbatch = 1});
+      auto h1_2 = op::Hʼ(1, {.order = 1, .batch_ordinals = {1, 2}});
+      auto pt1 = op::Tʼ(2, {.order = 1, .batch_ordinals = {1}});
 
       auto sum0 = h0 + h1;
       simplify(sum0);
@@ -615,6 +848,22 @@ TEST_CASE("mbpt", "[mbpt]") {
               L"h¹{κ2;κ1;z1,z2}:A-C-S * ã{κ1;κ2} + h¹{κ2;κ1;z1,z2}:A-C-S * "
               L"ã{i1;a1} * ã{κ1;κ2} * t¹{a1;i1;z1}:A-C-S + h¹{κ4;κ3;z1}:A-C-S "
               L"* h¹{κ2;κ1;z1,z2}:A-C-S * ã{κ3;κ4} * ã{κ1;κ2}"));
+
+      // batching + adjoint: verify batch_ordinals are preserved
+      auto h1_adj = adjoint(h1);
+      REQUIRE(h1_adj.as<op_t>().batch_ordinals().has_value());
+      REQUIRE(h1_adj.as<op_t>().batch_ordinals().value() ==
+              h1.as<op_t>().batch_ordinals().value());
+
+      auto h1_2_adj = adjoint(h1_2);
+      REQUIRE(h1_2_adj.as<op_t>().batch_ordinals().value() ==
+              h1_2.as<op_t>().batch_ordinals().value());
+
+      // custom batch ordinals
+      auto t = op::tʼ(2, {.batch_ordinals = {5, 10, 15}});
+      auto t_adj = adjoint(t);
+      REQUIRE(t_adj.as<op_t>().batch_ordinals().value() ==
+              t.as<op_t>().batch_ordinals().value());
     }  // SECTION("batching")
   }
 
@@ -647,8 +896,8 @@ TEST_CASE("mbpt", "[mbpt]") {
 
   // H2**T3**T3 -> R4
   SECTION("wick(H2**T3**T3 -> R4)") {
-    auto result = t::vac_av(t::A(nₚ(-4)) * t::H_(2) * t::T_(3) * t::T_(3),
-                            {{1, 2}, {1, 3}});
+    auto result =
+        t::vac_av(t::A(nₚ(-4)) * t::h(2) * t::t(3) * t::t(3), {{1, 2}, {1, 3}});
 
     // std::wcout << "H2**T3**T3 -> R4 = " << to_latex_align(result, 20)
     //            << std::endl;
@@ -661,9 +910,8 @@ TEST_CASE("mbpt", "[mbpt]") {
   {
     ExprPtr ref_result;
     SECTION("wick(H2**T2**T2**T3 -> R5)") {
-      ref_result =
-          t::vac_av(t::A(-5) * t::H_(2) * t::T_(2) * t::T_(2) * t::T_(3),
-                    {{1, 2}, {1, 3}, {1, 4}});
+      ref_result = t::vac_av(t::A(-5) * t::h(2) * t::t(2) * t::t(2) * t::t(3),
+                             {{1, 2}, {1, 3}, {1, 4}});
       REQUIRE(ref_result->size() == 7);
     }
   }
@@ -673,7 +921,7 @@ TEST_CASE("mbpt", "[mbpt]") {
 SECTION("SRSO Fock") {
   // <2p1h|H2|1p> ->
   SECTION("wick(<2p1h|H2|1p>)") {
-    auto input = t::L_(nₚ(2), nₕ(1)) * t::H_(2) * t::R_(nₚ(1), nₕ(0));
+    auto input = t::l(nₚ(2), nₕ(1)) * t::h(2) * t::r(nₚ(1), nₕ(0));
     auto result = t::vac_av(input);
 
     REQUIRE(result->is<Product>());  // product ...
@@ -682,7 +930,7 @@ SECTION("SRSO Fock") {
 
   // <2p1h|H2|2p1h(c)> ->
   SECTION("wick(<2p1h|H2|2p1h(c)>)") {
-    auto input = t::L_(nₚ(2), nₕ(1)) * t::H() * t::R_(nₚ(2), nₕ(1));
+    auto input = t::l(nₚ(2), nₕ(1)) * t::H() * t::r(nₚ(2), nₕ(1));
     auto result = t::vac_av(input);
 
     // std::wcout << "<2p1h|H|2p1h(c)> = " << to_latex(result)
@@ -694,13 +942,13 @@ SECTION("SRSO Fock") {
 
 SECTION("SRSO-PNO") {
   using sequant::mbpt::Context;
-  auto mbpt_ctx =
-      sequant::mbpt::set_scoped_default_mbpt_context(Context(mbpt::CSV::Yes));
+  auto mbpt_ctx = sequant::mbpt::set_scoped_default_mbpt_context(
+      Context({.csv = CSV::Yes, .op_registry_ptr = make_minimal_registry()}));
 
   // H2**T2**T2 -> R2
   SECTION("wick(H2**T2**T2 -> R2)") {
-    auto result = t::vac_av(t::A(nₚ(-2)) * t::H_(2) * t::T_(2) * t::T_(2),
-                            {{1, 2}, {1, 3}});
+    auto result =
+        t::vac_av(t::A(nₚ(-2)) * t::h(2) * t::t(2) * t::t(2), {{1, 2}, {1, 3}});
 
     REQUIRE(result->size() == 4);
   }
@@ -713,7 +961,7 @@ SECTION("SRSF") {
 
   // H2 -> R2
   SECTION("wick(H2 -> R2)") {
-    auto result = t::vac_av(t::S(-2) * t::H_(2));
+    auto result = t::vac_av(t::S(-2) * t::h(2));
 
     {
       // std::wcout << "H2 -> R2 = " << to_latex_align(result, 0, 1)
@@ -725,7 +973,7 @@ SECTION("SRSF") {
 
   // H2**T2 -> R2
   SECTION("wick(H2**T2 -> R2)") {
-    auto result = t::vac_av(t::S(-2) * t::H_(2) * t::T_(2), {{1, 2}});
+    auto result = t::vac_av(t::S(-2) * t::h(2) * t::t(2), {{1, 2}});
 
     {
       // std::wcout << "H2**T2 -> R2 = " << to_latex_align(result, 0, 1)
@@ -733,6 +981,15 @@ SECTION("SRSF") {
       REQUIRE(result->is<Sum>());
       REQUIRE(result->size() == 12);
     }
+  }
+  SECTION("S operator action") {
+    auto expr = tensor::S(2) * parse_expr(L"f{a1,a2;i1,i2}");
+    simplify(expr);
+    auto scalar = expr->as<Product>().scalar();
+    REQUIRE(scalar == 1);
+    REQUIRE_THAT(expr,
+                 EquivalentTo("Ŝ{a_3,a_4;i_3,i_4}:N-C-S * "
+                              "f{a_1,a_2;i_1,i_2}:N-C-S * ã{i_3,i_4;a_3,a_4}"));
   }
 }  // SECTION("SRSF")
 
@@ -743,9 +1000,9 @@ SECTION("MRSO") {
 
   SECTION("wick(H2**T2 -> 0)") {
     {
-      auto result = t::ref_av(t::H_(2) * t::T_(2), {{0, 1}});
+      auto result = t::ref_av(t::h(2) * t::t(2), {{0, 1}});
 
-      auto result_wo_top = t::ref_av(t::H_(2) * t::T_(2), {{0, 1}},
+      auto result_wo_top = t::ref_av(t::h(2) * t::t(2), {{0, 1}},
                                      /* use_topology = */ false);
       REQUIRE(simplify(result - result_wo_top) == ex<Constant>(0));
     }
@@ -756,17 +1013,17 @@ SECTION("MRSO") {
       ctx.set(mbpt::make_mr_spaces());
       ctx.set(Vacuum::Physical);
       auto ctx_resetter = set_scoped_default_context(ctx);
-      auto result_phys = t::ref_av(t::H_(2) * t::T_(2), {{0, 1}});
+      auto result_phys = t::ref_av(t::h(2) * t::t(2), {{0, 1}});
     }
   }
 
   // H2 ** T2 ** T2 -> 0
   SECTION("wick(H2**T2**T2 -> 0)") {
     // first without use of topology
-    auto result = t::ref_av(t::H_(2) * t::T_(2) * t::T_(2), {{0, 1}},
+    auto result = t::ref_av(t::h(2) * t::t(2) * t::t(2), {{0, 1}},
                             /* use_topology = */ false);
     // now with topology use
-    auto result_top = t::ref_av(t::H_(2) * t::T_(2) * t ::T_(2), {{0, 1}},
+    auto result_top = t::ref_av(t::h(2) * t::t(2) * t ::t(2), {{0, 1}},
                                 /* use_topology = */ true);
 
     REQUIRE(simplify(result - result_top) == ex<Constant>(0));
@@ -775,7 +1032,7 @@ SECTION("MRSO") {
 #if 0
     // H**T12 -> R2
     SECTION("wick(H**T2 -> R2)") {
-      auto result = t::ref_av(t::A(-2) * t::H() * t::T_(2), {{1, 2}});
+      auto result = t::ref_av(t::A(-2) * t::H() * t::t(2), {{1, 2}});
 
       {
         std::wcout << "H*T2 -> R2 = " << to_latex_align(result, 0, 1)
@@ -793,11 +1050,11 @@ SECTION("MRSF") {
   auto ctx_resetter = set_scoped_default_context(ctx);
 
   SECTION("wick(H2**T2 -> 0)") {
-    auto result = t::ref_av(t::H_(2) * t::T_(2), {{0, 1}});
+    auto result = t::ref_av(t::h(2) * t::t(2), {{0, 1}});
 
     {
       // make sure get same result without use of topology
-      auto result_wo_top = t::ref_av(t::H_(2) * t::T_(2), {{0, 1}},
+      auto result_wo_top = t::ref_av(t::h(2) * t::t(2), {{0, 1}},
                                      /* use_topology = */ false);
 
       REQUIRE(simplify(result - result_wo_top) == ex<Constant>(0));
@@ -805,7 +1062,7 @@ SECTION("MRSF") {
 
     {
       // make sure get same result using operators
-      auto result_op = o::ref_av(o::H_(2) * o::T_(2));
+      auto result_op = o::ref_av(o::h(2) * o::t(2));
 
       REQUIRE(result_op->size() == result->size());
       REQUIRE(simplify(result - result_op) == ex<Constant>(0));
@@ -880,4 +1137,148 @@ SECTION("rules") {
     }
   }
 }  // SECTION("rules")
+
+SECTION("manuscript-examples") {
+  using namespace sequant::mbpt;
+
+  using sequant::reserved::antisymm_label;
+
+  /// When order == 0, returns sim. transformed of zeroth order Hamiltonian.
+  /// When order > 0, returns sim. transformed perturbation operator or given
+  /// order.
+  auto H̅ = [](size_t order = 0) {
+    auto hbar0 = lst(op::H(), T(2), 4);
+    if (order == 0) return hbar0;
+    // only one-body perturbation operator
+    auto hbar_pt = lst(op::Hʼ(/*rank*/ 1, {.order = order}), T(2), 2);
+    return hbar_pt;
+  };
+
+  SECTION("CCD Term") {
+    auto expr = ref_av(P(2) * H() * t(2) * t(2));
+    REQUIRE(expr.size() == 4);
+  }
+
+  SECTION("Ground State Amplitudes") {
+    // connectivity info for t and λ amplitude equations
+    const auto t_connect = default_op_connections();
+    const auto l_connect =
+        concat(default_op_connections(),
+               OpConnections<std::wstring>{{L"h", antisymm_label()},
+                                           {L"f", antisymm_label()},
+                                           {L"g", antisymm_label()}});
+
+    auto t = ref_av(P(2) * H̅(), t_connect);
+    auto λ = ref_av((1 + Λ(2)) * H̅() * P(-2), l_connect);
+
+    // numer of terms are verified against srcc results
+    REQUIRE(t.size() == 31);
+    REQUIRE(λ.size() == 32);
+  }
+
+  SECTION("CC LR Function") {
+    const int N = 2;  // CC rank
+
+    auto θ̅ = lst(θ(1), T(N), 2);
+    auto expr = (1 + Λ(N)) * θ̅ * Tʼ(N) + Λʼ(N) * θ̅;
+    auto result = ref_av(expr, {{L"θ", L"t"}, {L"θ", L"t¹"}});
+    // number of terms is verified against MPQC4 implementation
+    REQUIRE(result.size() == 21);
+  }
+
+  SECTION("EOM-CC Equations") {
+    // connectivity info for right and left amplitude equations
+    const auto r_connect = concat(
+        default_op_connections(),
+        OpConnections<std::wstring>{{L"h", L"R"}, {L"f", L"R"}, {L"g", L"R"}});
+    const auto l_connect =
+        concat(default_op_connections(),
+               OpConnections<std::wstring>{{L"h", antisymm_label()},
+                                           {L"f", antisymm_label()},
+                                           {L"g", antisymm_label()}});
+
+    // EE
+    auto r_EE = ref_av(P(2) * H̅() * R(2), r_connect);
+    auto l_EE = ref_av(L(2) * H̅() * P(-2), l_connect);
+    // EA
+    auto r_EA = ref_av(P(nₚ(2), nₕ(1)) * H̅() * R(nₚ(2), nₕ(1)), r_connect);
+    auto l_EA = ref_av(L(nₚ(2), nₕ(1)) * H̅() * P(nₚ(-2), nₕ(-1)), l_connect);
+    // IP
+    auto r_IP = ref_av(P(nₚ(1), nₕ(2)) * H̅() * R(nₚ(1), nₕ(2)), r_connect);
+    auto l_IP = ref_av(L(nₚ(1), nₕ(2)) * H̅() * P(nₚ(-1), nₕ(-2)), l_connect);
+
+    // number of terms are verified against eomcc results
+    REQUIRE(r_EE.size() == 53);
+    REQUIRE(l_EE.size() == 31);
+    REQUIRE(r_EA.size() == 32);
+    REQUIRE(l_EA.size() == 24);
+    REQUIRE(r_IP.size() == 32);
+    REQUIRE(l_IP.size() == 24);
+  }
+
+  SECTION("CC Perturbed Amplitudes") {
+    // connectivity info for perturbed t and λ amplitude equations
+    const auto t_connect =
+        concat(default_op_connections(),
+               OpConnections<std::wstring>{
+                   {L"h", L"t¹"}, {L"f", L"t¹"}, {L"g", L"t¹"}, {L"h¹", L"t"}});
+
+    const auto l_connect =
+        concat(default_op_connections(),
+               OpConnections<std::wstring>{{L"h", L"t¹"},
+                                           {L"f", L"t¹"},
+                                           {L"g", L"t¹"},
+                                           {L"h¹", L"t"},
+                                           {L"h", antisymm_label()},
+                                           {L"f", antisymm_label()},
+                                           {L"g", antisymm_label()},
+                                           {L"h¹", antisymm_label()}});
+
+    // perturbed t amplitudes (Eq 18 in SQ Manuscript #2)
+    auto t = ref_av(P(2) * (H̅(1) + H̅() * Tʼ(2) - "ω" * tʼ(2)), t_connect);
+    // perturbed λ amplitudes (Eq 19 in SQ Manuscript #2)
+    auto λ = ref_av(
+        ((1 + Λ(2)) * (H̅(1) + H̅() * Tʼ(2)) + Λʼ(2) * H̅() + "ω" * λʼ(2)) * P(-2),
+        l_connect);
+
+    // number of terms are verified against MPQC4 implementation
+    REQUIRE(t.size() == 58);
+    REQUIRE(λ.size() == 63);
+  }
+
+  SECTION("Custom MBPT Operators") {
+    using namespace sequant;
+    using namespace sequant::mbpt;
+    // get two IndexSpaces for custom excitation operator, could be any spaces
+    const auto& cre_space = get_particle_space(Spin::any);
+    const auto& ann_space = get_hole_space(Spin::any);
+
+    OpRegistry registry;
+    registry.add(L"f", OpClass::gen)
+        .add(L"g", OpClass::gen)
+        .add(L"t", OpClass::ex)
+        .add(L"x", OpClass::ex)
+        .add(L"y", OpClass::ex);
+
+    // set MBPT context
+    auto ctx_resetter = set_scoped_default_mbpt_context(
+        {.csv = CSV::No, .op_registry = registry});
+
+    // use OpMaker to define a custom excitation operator of rank 2
+    auto x = OpMaker<Statistics::FermiDirac>(L"x", 2)();
+
+    // particle non-conserving excitation operator with custom IndexSpaces
+    auto y = OpMaker<Statistics::FermiDirac>(L"y", ncre(2), nann(1),
+                                             cre(cre_space), ann(ann_space))();
+
+    auto expr = tensor::H() * x * y;
+    REQUIRE_THAT(
+        simplify(expr),
+        EquivalentTo(
+            L"1/8 f{p1;p2}:A-C-S x{a1,a2;i1,i2}:A-C-S y{a3,a4;i3}:A-C-S "
+            L"ã{p2;p1} ã{i1,i2;a1,a2} ã{i3;a3,a4} + 1/32 g{p3,p4;p1,p2}:A-C-S "
+            L"x{a1,a2;i1,i2}:A-C-S y{a3,a4;i3}:A-C-S ã{p1,p2;p3,p4} "
+            L"ã{i1,i2;a1,a2} ã{i3;a3,a4}"));
+  }
+}  // SECTION("manuscript-examples")
 }

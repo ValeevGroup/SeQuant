@@ -89,7 +89,7 @@ class CC {
   /// @pre `rank==1 && order==1`, only first order perturbation and one-body perturbation operator is supported now
   /// @return std::vector of perturbed t amplitude equations
   // clang-format on
-  [[nodiscard]] std::vector<ExprPtr> t_pt(
+  [[nodiscard]] std::vector<ExprPtr> tʼ(
       size_t rank = 1, size_t order = 1,
       std::optional<size_t> nbatch = std::nullopt);
 
@@ -101,7 +101,7 @@ class CC {
   /// @pre `rank==1 && order==1`, only first order perturbation and one-body perturbation operator is supported now
   /// @return std::vector of perturbed λ amplitude equations
   // clang-format on
-  [[nodiscard]] std::vector<ExprPtr> λ_pt(
+  [[nodiscard]] std::vector<ExprPtr> λʼ(
       size_t rank = 1, size_t order = 1,
       std::optional<size_t> nbatch = std::nullopt);
 
@@ -129,7 +129,7 @@ class CC {
   /// @param[in] op_connect list of pairs of operators to be connected. Default
   /// is given by `mbpt::default_op_connections()`.
   auto ref_av(const ExprPtr& expr,
-              const OpConnections<mbpt::OpType>& op_connect =
+              const OpConnections<std::wstring>& op_connect =
                   default_op_connections()) const {
     return op::ref_av(expr, op_connect, this->use_topology(), this->screen());
   }
