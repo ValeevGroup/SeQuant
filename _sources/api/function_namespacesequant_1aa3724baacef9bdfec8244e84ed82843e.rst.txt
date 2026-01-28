@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1aa3724baacef9bdfec8244e84ed82843e:
+
+Template Function sequant::do_parse
+===================================
+
+- Defined in :ref:`file_SeQuant_core_parse_parse.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::do_parse(const StartRule&, std::wstring_view, PositionCache&)
+   :project: SeQuant

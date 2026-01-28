@@ -1,0 +1,14 @@
+.. _exhale_variable_namespacesequant_1_1parse_1a0eafa72f6a9a2d74ac97889507d0d4ac:
+
+Variable sequant::parse::grouped
+================================
+
+- Defined in :ref:`file_SeQuant_core_parse_parse.cpp`
+
+
+Variable Documentation
+----------------------
+
+
+.. doxygenvariable:: sequant::parse::grouped
+   :project: SeQuant

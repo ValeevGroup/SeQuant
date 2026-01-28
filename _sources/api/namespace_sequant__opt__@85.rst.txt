@@ -1,0 +1,13 @@
+
+.. _namespace_sequant__opt__@85:
+
+Namespace sequant::opt::@85
+===========================
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+
+

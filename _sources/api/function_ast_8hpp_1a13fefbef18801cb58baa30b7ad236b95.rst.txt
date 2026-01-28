@@ -1,0 +1,14 @@
+.. _exhale_function_ast_8hpp_1a13fefbef18801cb58baa30b7ad236b95:
+
+Function BOOST_FUSION_ADAPT_STRUCT(sequant::parse::ast::IndexLabel, label, id)
+==============================================================================
+
+- Defined in :ref:`file_SeQuant_core_parse_ast.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: BOOST_FUSION_ADAPT_STRUCT(sequant::parse::ast::IndexLabel, label, id)
+   :project: SeQuant

@@ -1,0 +1,14 @@
+.. _exhale_define_macros_8hpp_1aaacfe20b2ea60d7028b8c790aeb0d577:
+
+Define SEQUANT_ASSERT_MESSAGE
+=============================
+
+- Defined in :ref:`file_SeQuant_core_utility_macros.hpp`
+
+
+Define Documentation
+--------------------
+
+
+.. doxygendefine:: SEQUANT_ASSERT_MESSAGE
+   :project: SeQuant

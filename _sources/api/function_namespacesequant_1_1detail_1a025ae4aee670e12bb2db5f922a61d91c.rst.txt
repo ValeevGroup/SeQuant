@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1detail_1a025ae4aee670e12bb2db5f922a61d91c:
+
+Function sequant::detail::compute_nns_p_coeffs
+==============================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_biorthogonalization.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::detail::compute_nns_p_coeffs(std::size_t, double)
+   :project: SeQuant

@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a0b02572642a937415bf42e47899d6647:
+
+Template Function sequant::inits
+================================
+
+- Defined in :ref:`file_SeQuant_core_algorithm.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::inits(Rng const&)
+   :project: SeQuant

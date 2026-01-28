@@ -1,0 +1,17 @@
+.. _exhale_struct_structsequant_1_1_error_handler:
+
+Template Struct ErrorHandler
+============================
+
+- Defined in :ref:`file_SeQuant_core_parse_parse.cpp`
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::ErrorHandler
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

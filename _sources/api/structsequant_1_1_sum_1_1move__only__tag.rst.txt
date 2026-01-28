@@ -1,0 +1,23 @@
+.. _exhale_struct_structsequant_1_1_sum_1_1move__only__tag:
+
+Struct Sum::move_only_tag
+=========================
+
+- Defined in :ref:`file_SeQuant_core_expressions_sum.hpp`
+
+
+Nested Relationships
+--------------------
+
+This struct is a nested type of :ref:`exhale_class_classsequant_1_1_sum`.
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::Sum::move_only_tag
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

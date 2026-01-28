@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1details_1a956db5f186d4b7eaf5f87a67dc8afa05:
+
+Function sequant::details::deparse_scalar
+=========================================
+
+- Defined in :ref:`file_SeQuant_core_parse_deparse.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::details::deparse_scalar(const Constant::scalar_type&)
+   :project: SeQuant

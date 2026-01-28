@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1details_1a30d8b834203c749c23acd27b2da1b38e:
+
+Function sequant::details::deparse_symm(ColumnSymmetry)
+=======================================================
+
+- Defined in :ref:`file_SeQuant_core_parse_deparse.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::details::deparse_symm(ColumnSymmetry)
+   :project: SeQuant

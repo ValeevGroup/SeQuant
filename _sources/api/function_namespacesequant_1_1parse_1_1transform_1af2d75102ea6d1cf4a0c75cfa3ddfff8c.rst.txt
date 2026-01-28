@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1parse_1_1transform_1af2d75102ea6d1cf4a0c75cfa3ddfff8c:
+
+Template Function sequant::parse::transform::get_pos
+====================================================
+
+- Defined in :ref:`file_SeQuant_core_parse_ast_conversions.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::parse::transform::get_pos(const AST&, const PositionCache&, const Iterator&)
+   :project: SeQuant

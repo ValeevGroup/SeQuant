@@ -1,0 +1,14 @@
+.. _exhale_function_ast_8hpp_1a2cec8e03a95282b7312545f2c2d3c82d:
+
+Function BOOST_FUSION_ADAPT_STRUCT(sequant::parse::ast::IndexGroups, bra, ket, auxiliaries, reverse_bra_ket)
+============================================================================================================
+
+- Defined in :ref:`file_SeQuant_core_parse_ast.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: BOOST_FUSION_ADAPT_STRUCT(sequant::parse::ast::IndexGroups, bra, ket, auxiliaries, reverse_bra_ket)
+   :project: SeQuant

@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a27d85d524fa3339535a7e4ec65249fb3:
+
+Template Function sequant::utf_to_latex(const std::basic_string<Char, Traits, Alloc>&)
+======================================================================================
+
+- Defined in :ref:`file_SeQuant_core_latex.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::utf_to_latex(const std::basic_string<Char, Traits, Alloc>&)
+   :project: SeQuant

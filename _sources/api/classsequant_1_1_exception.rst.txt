@@ -1,0 +1,17 @@
+.. _exhale_class_classsequant_1_1_exception:
+
+Class Exception
+===============
+
+- Defined in :ref:`file_SeQuant_core_utility_exception.hpp`
+
+
+Class Documentation
+-------------------
+
+
+.. doxygenclass:: sequant::Exception
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

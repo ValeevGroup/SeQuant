@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1mbpt_1a4d614b0d85caab271fd18f92fb4a3a74:
+
+Function sequant::mbpt::index_list
+==================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_spin.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::mbpt::index_list(const ExprPtr&)
+   :project: SeQuant

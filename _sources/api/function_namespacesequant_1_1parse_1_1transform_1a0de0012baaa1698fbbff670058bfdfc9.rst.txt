@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1parse_1_1transform_1a0de0012baaa1698fbbff670058bfdfc9:
+
+Template Function sequant::parse::transform::to_column_symmetry
+===============================================================
+
+- Defined in :ref:`file_SeQuant_core_parse_ast_conversions.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::parse::transform::to_column_symmetry(char, std::size_t, const Iterator&, ColumnSymmetry)
+   :project: SeQuant

@@ -1,0 +1,14 @@
+.. _exhale_typedef_namespacesequant_1aca802264508af9fcdf0ba274315bdd4f:
+
+Typedef sequant::IndexPair
+==========================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_biorthogonalization.cpp`
+
+
+Typedef Documentation
+---------------------
+
+
+.. doxygentypedef:: sequant::IndexPair
+   :project: SeQuant

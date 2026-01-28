@@ -1,0 +1,14 @@
+.. _exhale_typedef_namespacesequant_1_1mbpt_1_1op_1a6f2d374cd7ee2e1be35988da01e545a7:
+
+Typedef sequant::mbpt::op::OpConnections
+========================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_vac_av.hpp`
+
+
+Typedef Documentation
+---------------------
+
+
+.. doxygentypedef:: sequant::mbpt::op::OpConnections
+   :project: SeQuant

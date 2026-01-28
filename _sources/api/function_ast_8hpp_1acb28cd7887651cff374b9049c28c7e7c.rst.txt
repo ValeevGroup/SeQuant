@@ -1,0 +1,14 @@
+.. _exhale_function_ast_8hpp_1acb28cd7887651cff374b9049c28c7e7c:
+
+Function BOOST_FUSION_ADAPT_STRUCT(sequant::parse::ast::Variable, name, conjugated)
+===================================================================================
+
+- Defined in :ref:`file_SeQuant_core_parse_ast.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: BOOST_FUSION_ADAPT_STRUCT(sequant::parse::ast::Variable, name, conjugated)
+   :project: SeQuant

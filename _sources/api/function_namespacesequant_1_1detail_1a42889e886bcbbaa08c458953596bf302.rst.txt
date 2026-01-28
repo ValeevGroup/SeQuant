@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1detail_1a42889e886bcbbaa08c458953596bf302:
+
+Template Function sequant::detail::nns_projection_weights
+=========================================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_biorthogonalization.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::detail::nns_projection_weights(std::size_t, double)
+   :project: SeQuant

@@ -1,0 +1,17 @@
+.. _exhale_class_classsequant_1_1antisymm__element:
+
+Class antisymm_element
+======================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_antisymmetrizer.hpp`
+
+
+Class Documentation
+-------------------
+
+
+.. doxygenclass:: sequant::antisymm_element
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

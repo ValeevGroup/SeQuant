@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1accc4967667f64928f9fb5a45b6ac1844:
+
+Template Function sequant::to_wstring(S&&)
+==========================================
+
+- Defined in :ref:`file_SeQuant_core_wstring.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::to_wstring(S&&)
+   :project: SeQuant

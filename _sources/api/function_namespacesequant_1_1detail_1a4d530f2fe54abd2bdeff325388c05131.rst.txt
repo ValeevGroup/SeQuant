@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1detail_1a4d530f2fe54abd2bdeff325388c05131:
+
+Function sequant::detail::SQ_IMPL1(wchar_t)
+===========================================
+
+- Defined in :ref:`file_SeQuant_core_latex.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::detail::SQ_IMPL1(wchar_t)
+   :project: SeQuant

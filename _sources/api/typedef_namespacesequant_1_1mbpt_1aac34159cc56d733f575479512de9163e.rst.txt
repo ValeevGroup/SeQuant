@@ -1,0 +1,14 @@
+.. _exhale_typedef_namespacesequant_1_1mbpt_1aac34159cc56d733f575479512de9163e:
+
+Typedef sequant::mbpt::qninterval_t
+===================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_op.hpp`
+
+
+Typedef Documentation
+---------------------
+
+
+.. doxygentypedef:: sequant::mbpt::qninterval_t
+   :project: SeQuant

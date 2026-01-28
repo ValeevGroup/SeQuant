@@ -1,0 +1,17 @@
+.. _exhale_class_classsequant_1_1mbpt_1_1_c_c:
+
+Class CC
+========
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_models_cc.hpp`
+
+
+Class Documentation
+-------------------
+
+
+.. doxygenclass:: sequant::mbpt::CC
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:
