@@ -201,10 +201,6 @@ class compute_cceqvec {
               ex<Tensor>(Tensor{reserved::symm_label(), bra(kixs), ket(bixs)}) *
               eqvec[R];
           eqvec[R] = expand(eqvec[R]);
-
-          // apply normalization factor
-          auto const nf = rational(1, factorial(ext_idxs.size()));
-          eqvec[R] = ex<Constant>(nf) * eqvec[R];
           simplify(eqvec[R]);
 
           // WK_biorthogonalization_filter method removes the redundancy caused
