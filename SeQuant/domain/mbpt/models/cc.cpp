@@ -96,9 +96,14 @@ std::vector<ExprPtr> CC::t(size_t pmax, size_t pmin) {
                                     : std::make_shared<Sum>(hbar);
     }
 
+    // connectivity: empty for unitary ansatz, default otherwise
+    const auto connectivity = this->unitary()
+                                  ? mbpt::OpConnections<std::wstring>{}
+                                  : default_op_connections();
+
     // 2.b project onto <p| (i.e., multiply by P(p) if p>0) and compute VEV
-    result.at(p) =
-        this->ref_av(p != 0 ? P(nₚ(p)) * hbar_for_vev : hbar_for_vev);
+    result.at(p) = this->ref_av(p != 0 ? P(nₚ(p)) * hbar_for_vev : hbar_for_vev,
+                                connectivity);
   }
 
   return result;
@@ -199,13 +204,16 @@ std::vector<ExprPtr> CC::tʼ(size_t rank, size_t order,
   // [Eq. 34, WIREs Comput Mol Sci. 2019; 9:e1406]
   const auto expr = simplify(h1_bar + hbar_pert);
 
-  // connectivity:
-  // connect t and t1 with {h,f,g}
-  // connect h1 with t
-  const auto op_connect =
-      concat(default_op_connections(),
-             OpConnections<std::wstring>{
-                 {L"h", L"t¹"}, {L"f", L"t¹"}, {L"g", L"t¹"}, {L"h¹", L"t"}});
+  // connectivity: empty for unitary ansatz, build otherwise
+  OpConnections<std::wstring> op_connect = {};
+  if (!this->unitary()) {
+    // connect t and t1 with {h,f,g}
+    // connect h1 with t
+    op_connect =
+        concat(default_op_connections(),
+               OpConnections<std::wstring>{
+                   {L"h", L"t¹"}, {L"f", L"t¹"}, {L"g", L"t¹"}, {L"h¹", L"t"}});
+  }
 
   std::vector<ExprPtr> result(N + 1);
   for (auto p = N; p >= 1; --p) {
@@ -300,12 +308,14 @@ std::vector<ExprPtr> CC::eom_r(nₚ np, nₕ nh) {
   // hbar * R
   const auto hbar_R = hbar * R(np, nh);
 
-  // connectivity:
-  // default connections + connect R with {h,f,g}
-  const auto op_connect = concat(
-      default_op_connections(),
-      OpConnections<std::wstring>{{L"h", L"R"}, {L"f", L"R"}, {L"g", L"R"}});
-
+  // connectivity: empty for unitary ansatz, build otherwise
+  OpConnections<std::wstring> op_connect = {};
+  if (!this->unitary()) {
+    // default connections + connect R with {h,f,g}
+    op_connect = concat(
+        default_op_connections(),
+        OpConnections<std::wstring>{{L"h", L"R"}, {L"f", L"R"}, {L"g", L"R"}});
+  }
   // initialize result vector
   std::vector<ExprPtr> result;
   using std::min;
