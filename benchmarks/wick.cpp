@@ -26,17 +26,17 @@ ExprPtr get_op_sequence(std::size_t i) {
              ex<Op>(cre({L"p_1"}), ann({L"p_2"})) *
              ex<Op>(cre({L"p_3"}), ann({L"p_4"}));
     case 2:
-      return parse_expr(L"A{p1,p2;p3,p4}:A g{p5,p6;p7,p8}:A") *
+      return parse_expr(L"Â{p1,p2;p3,p4}:A g{p5,p6;p7,p8}:A") *
              ex<Op>(cre({L"p_1", L"p_2"}), ann({L"p_3", L"p_4"})) *
              ex<Op>(cre({L"p_5", L"p_6"}), ann({L"p_7", L"p_8"}));
     case 3:
-      return parse_expr(L"A{p1,p2,p3;p4,p5,p6}:A g{p7,p8;p9,p10}:A") *
+      return parse_expr(L"Â{p1,p2,p3;p4,p5,p6}:A g{p7,p8;p9,p10}:A") *
              ex<Op>(cre({L"p_1", L"p_2", L"p_3"}),
                     ann({L"p_4", L"p_5", L"p_6"})) *
              ex<Op>(cre({L"p_7", L"p_8"}), ann({L"p_9", L"p_10"}));
     case 4:
       return parse_expr(
-                 L"A{p1,p2,p3;p4,p5,p6}:A g{p7,p8;p9,p10}:A "
+                 L"Â{p1,p2,p3;p4,p5,p6}:A g{p7,p8;p9,p10}:A "
                  L"t{p11,p12,p13;p14,p15,p16}:A") *
              ex<Op>(cre({L"p_1", L"p_2", L"p_3"}),
                     ann({L"p_4", L"p_5", L"p_6"})) *
@@ -45,7 +45,7 @@ ExprPtr get_op_sequence(std::size_t i) {
                     ann({L"p_14", L"p_15", L"p_16"}));
     case 5:
       return parse_expr(
-                 L"A{p1,p2;p3,p4}:A g{p5,p6;p7,p8}:A "
+                 L"Â{p1,p2;p3,p4}:A g{p5,p6;p7,p8}:A "
                  L"t{p9,p10;p11,p12}:A t{p13,p14;p15,p16}:A") *
              ex<Op>(cre({L"p_1", L"p_2"}), ann({L"p_3", L"p_4"})) *
              ex<Op>(cre({L"p_5", L"p_6"}), ann({L"p_7", L"p_8"})) *
@@ -149,7 +149,7 @@ VacAvPair get_mbpt_expr(std::size_t i) {
 
 static void mbpt_vac_av(benchmark::State &state, bool csv) {
   auto ctx = sequant::mbpt::set_scoped_default_mbpt_context(
-      mbpt::Context(csv ? mbpt::CSV::Yes : mbpt::CSV::No));
+      mbpt::Context({.csv = csv ? CSV::Yes : CSV::No}));
 
   VacAvPair input = get_mbpt_expr(state.range(0));
 

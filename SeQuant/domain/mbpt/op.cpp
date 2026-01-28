@@ -5,6 +5,7 @@
 #include <SeQuant/core/wick.hpp>
 #include <SeQuant/domain/mbpt/context.hpp>
 #include <SeQuant/domain/mbpt/op.hpp>
+#include <SeQuant/domain/mbpt/op_registry.hpp>
 
 #include <stdexcept>
 
@@ -14,9 +15,6 @@ std::vector<std::wstring> cardinal_tensor_labels() {
   return {L"κ",
           L"γ",
           L"Γ",
-          L"A",
-          L"S",
-          L"P",
           L"L",
           L"λ",
           L"λ¹",
@@ -37,49 +35,13 @@ std::vector<std::wstring> cardinal_tensor_labels() {
           L"U",
           L"GR",
           L"C",
-          overlap_label(),
-          kronecker_label(),
+          reserved::overlap_label(),
+          reserved::kronecker_label(),
           L"a",
           L"ã",
           L"b",
           L"b̃",
           L"E"};
-}
-
-std::wstring to_wstring(OpType op) {
-  auto found_it = optype2label.find(op);
-  if (found_it != optype2label.end())
-    return found_it->second;
-  else
-    throw std::invalid_argument("to_wstring(OpType op): invalid op");
-}
-
-OpClass to_class(OpType op) {
-  switch (op) {
-    case OpType::h:
-    case OpType::f:
-    case OpType::f̃:
-    case OpType::g:
-    case OpType::RDM:
-    case OpType::RDMCumulant:
-    case OpType::δ:
-    case OpType::A:
-    case OpType::S:
-    case OpType::h_1:
-    case OpType::θ:
-      return OpClass::gen;
-    case OpType::t:
-    case OpType::R:
-    case OpType::R12:
-    case OpType::t_1:
-      return OpClass::ex;
-    case OpType::λ:
-    case OpType::L:
-    case OpType::λ_1:
-      return OpClass::deex;
-    default:
-      throw std::invalid_argument("to_class(OpType op): invalid op");
-  }
 }
 
 // Excitation type QNs will have quasiparticle annihilators in every space which
@@ -342,30 +304,53 @@ template <Statistics S>
 std::wstring to_latex(const mbpt::Operator<mbpt::qns_t, S>& op) {
   using namespace sequant::mbpt;
 
-  auto result = L"{\\hat{" + utf_to_latex(op.label()) + L"}";
-
-  // check if operator has adjoint label, remove if present for base label
+  // base_lbl is used for registry check, it should not have adjoint label or
+  // perturbation order
   auto base_lbl = sequant::to_wstring(op.label());
+  SEQUANT_ASSERT(!base_lbl.empty());
   bool is_adjoint = false;
   if (base_lbl.back() == adjoint_label) {
     is_adjoint = true;
     base_lbl.pop_back();
   }
 
-  auto op_qns = op();  // operator action i.e. quantum number change
+  // now remove perturbation order decoration if any
+  SEQUANT_ASSERT(!base_lbl.empty());
+  if (ranges::contains(mbpt::detail::pert_superscripts, base_lbl.back())) {
+    base_lbl.pop_back();
+  }
 
-  auto it = label2optype.find(base_lbl);  // look for OpType
-  const bool known_optype = it != label2optype.end();
+  auto registry = mbpt::get_default_mbpt_context().op_registry();
+  // if it is not a reserved label, make sure it is registered
+  if (reserved::is_nonreserved(base_lbl)) {
+    SEQUANT_ASSERT(registry->contains(base_lbl) &&
+                   "to_latex(mbpt::Operator): "
+                   "unregistered operator label");
+  }
+  // find the `class` of Operator
+  OpClass opclass = mbpt::to_op_class(base_lbl);
+
+  // labels like Â and Ŝ already have a hat, so skip wrapping in \hat{}.
+  // NOTE: for a general solution, we would need a way to normalize Unicode
+  // strings (using ICU, utf8proc, etc.) and check for the combining
+  // hat/circumflex (U+0302). See: https://unicode.org/reports/tr15/
+  const bool has_hat = base_lbl == reserved::antisymm_label() ||
+                       base_lbl == reserved::symm_label();
+
+  // now start building the output
+  std::wstring label = utf_to_latex(op.label());
+  auto result = has_hat ? L"{" + label : L"{\\hat{" + label + L"}";
+
+  auto op_qns = op();  // operator action i.e. quantum number change
 
   // special handling for general operators
   // - Ops like f and g does not need ranks, it is implied
   // - Ops like A, S, θ are general, but need rank information
   // - θ needs to be treated differently because it can have variable number of
   // quantum numbers
-
-  auto skip_rank_info = [](const OpType& optype) {
-    return to_class(optype) == OpClass::gen &&
-           !(optype == OpType::θ || optype == OpType::A || optype == OpType::S);
+  auto skip_rank_info = [opclass](const auto& label) {
+    return opclass == OpClass::gen && label != reserved::antisymm_label() &&
+           label != reserved::symm_label() && label != L"θ";
   };
 
   // batch index handling
@@ -385,12 +370,12 @@ std::wstring to_latex(const mbpt::Operator<mbpt::qns_t, S>& op) {
     return str;
   };
 
-  if (known_optype && skip_rank_info(it->second)) {
+  if (skip_rank_info(base_lbl)) {
     result += L"}";  // close the brace
     return has_batching ? add_batch_suffix(result) : result;
   }
   // specially handle θ operator
-  if (known_optype && it->second == OpType::θ) {
+  if (base_lbl == L"θ") {
     result += L"_{" + std::to_wstring(op_qns[0].upper()) + L"}";
     result += L"}";  // close the brace
     return has_batching ? add_batch_suffix(result) : result;
@@ -421,7 +406,8 @@ std::wstring to_latex(const mbpt::Operator<mbpt::qns_t, S>& op) {
     // check if the Op is a projector (A or S)
     // projectors can have negative ranks, need special handling
     [[maybe_unused]] const bool is_projector =
-        known_optype && (it->second == OpType::A || it->second == OpType::S);
+        base_lbl == reserved::antisymm_label() ||
+        base_lbl == reserved::symm_label();
 
     // pure quasiparticle creator/annihilator?
     const auto qprank_cre = ncre_p.lower() + nann_h.lower();
@@ -490,13 +476,15 @@ sequant::container::svector<sequant::Index> make_batch_indices(
 namespace sequant::mbpt {
 
 template <Statistics S>
-OpMaker<S>::OpMaker(OpType op) : op_(op) {}
+OpMaker<S>::OpMaker(const std::wstring& label) : label_(label) {}
 
 template <Statistics S>
-OpMaker<S>::OpMaker(OpType op, ncre nc, nann na) {
-  op_ = op;
+OpMaker<S>::OpMaker(const std::wstring& label, ncre nc, nann na) {
+  label_ = label;
   SEQUANT_ASSERT(nc > 0 || na > 0);
-  switch (to_class(op)) {
+  auto registry = get_default_mbpt_context().op_registry();
+
+  switch (registry->to_class(label_)) {
     case OpClass::ex:
       cre_spaces_ = IndexSpaceContainer(nc, get_particle_space(Spin::any));
       ann_spaces_ = IndexSpaceContainer(na, get_hole_space(Spin::any));
@@ -513,23 +501,27 @@ OpMaker<S>::OpMaker(OpType op, ncre nc, nann na) {
 }
 
 template <Statistics S>
-OpMaker<S>::OpMaker(OpType op, std::size_t rank)
-    : OpMaker(op, ncre(rank), nann(rank)) {}
+OpMaker<S>::OpMaker(const std::wstring& label, std::size_t rank)
+    : OpMaker(label, ncre(rank), nann(rank)) {}
 
 template <Statistics S>
-OpMaker<S>::OpMaker(OpType op, ncre nc, nann na,
+OpMaker<S>::OpMaker(const std::wstring& label, ncre nc, nann na,
                     const cre<IndexSpace>& cre_space,
                     const ann<IndexSpace>& ann_space) {
-  op_ = op;
+  label_ = label;
   SEQUANT_ASSERT(nc > 0 || na > 0);
   cre_spaces_ = IndexSpaceContainer(nc, cre_space);
   ann_spaces_ = IndexSpaceContainer(na, ann_space);
 }
 
 template <Statistics S>
-OpMaker<S>::OpMaker(OpType op, ncre nc, nann na, const OpParams& params)
-    : OpMaker<S>(op, nc, na) {
+OpMaker<S>::OpMaker(const std::wstring& label, ncre nc, nann na,
+                    const OpParams& params)
+    : OpMaker<S>(label, nc, na) {
   params.validate();
+
+  // set perturbation order
+  order_ = params.order;
 
   // Handle batching indices if specified
   if (!params.batch_ordinals.empty()) {
@@ -560,17 +552,21 @@ template <Statistics S>
 ExprPtr OpMaker<S>::operator()(std::optional<UseDepIdx> dep,
                                std::optional<Symmetry> opsymm_opt) const {
   auto isr = get_default_context(Statistics::FermiDirac).index_space_registry();
+
   // if not given dep, use mbpt::Context::CSV to determine whether to use
   // dependent indices for pure (de)excitation ops
-  if (!dep && get_default_mbpt_context().csv() == mbpt::CSV::Yes) {
-    if (to_class(op_) == OpClass::ex) {
+  const auto csv = get_default_mbpt_context().csv() == mbpt::CSV::Yes;
+  const auto opclass = mbpt::to_op_class(label_);
+
+  if (!dep && csv) {
+    if (opclass == OpClass::ex) {
 #ifdef SEQUANT_ASSERT_ENABLED
       for (auto&& s : cre_spaces_) {
         SEQUANT_ASSERT(isr->contains_unoccupied(s));
       }
 #endif
       dep = UseDepIdx::Bra;
-    } else if (to_class(op_) == OpClass::deex) {
+    } else if (opclass == OpClass::deex) {
 #ifdef SEQUANT_ASSERT_ENABLED
       for (auto&& s : ann_spaces_) {
         SEQUANT_ASSERT(isr->contains_unoccupied(s));
@@ -581,27 +577,33 @@ ExprPtr OpMaker<S>::operator()(std::optional<UseDepIdx> dep,
       dep = UseDepIdx::None;
     }
   }
+  const auto full_label = detail::decorate_with_pert_order(label_, order_);
+
+  const auto normalization =
+      label_ == reserved::antisymm_label() || label_ == reserved::symm_label()
+          ? Normalization::Implicit
+          : Normalization::Default;
 
   // if batching indices are present, use them
   if (batch_indices_) {
     return make(
         cre_spaces_, ann_spaces_, batch_indices_.value(),
-        [this, opsymm_opt](const auto& creidxs, const auto& annidxs,
-                           const auto& batchidxs, Symmetry opsymm) {
-          return ex<Tensor>(to_wstring(op_), bra(creidxs), ket(annidxs),
+        [this, opsymm_opt, full_label](const auto& creidxs, const auto& annidxs,
+                                       const auto& batchidxs, Symmetry opsymm) {
+          return ex<Tensor>(full_label, bra(creidxs), ket(annidxs),
                             aux(batchidxs), opsymm_opt ? *opsymm_opt : opsymm);
         },
-        dep ? *dep : UseDepIdx::None);
+        dep ? *dep : UseDepIdx::None, normalization);
   }
   // else no batching
   return make(
       cre_spaces_, ann_spaces_,
-      [this, opsymm_opt](const auto& creidxs, const auto& annidxs,
-                         Symmetry opsymm) {
-        return ex<Tensor>(to_wstring(op_), bra(creidxs), ket(annidxs),
+      [this, opsymm_opt, full_label](const auto& creidxs, const auto& annidxs,
+                                     Symmetry opsymm) {
+        return ex<Tensor>(full_label, bra(creidxs), ket(annidxs),
                           opsymm_opt ? *opsymm_opt : opsymm);
       },
-      dep ? *dep : UseDepIdx::None);
+      dep ? *dep : UseDepIdx::None, normalization);
 }
 
 template class OpMaker<Statistics::FermiDirac>;
@@ -615,20 +617,25 @@ inline namespace op {
 namespace tensor {
 ExprPtr h(std::size_t k) {
   SEQUANT_ASSERT(k > 0 && k <= 2);
+  auto registry = get_default_mbpt_context().op_registry();
   switch (k) {
     case 1:
       switch (get_default_context().vacuum()) {
         case Vacuum::Physical:
-          return OpMaker<Statistics::FermiDirac>(OpType::h, 1)();
+          SEQUANT_ASSERT(registry->contains(L"h"));
+          return OpMaker<Statistics::FermiDirac>(L"h", 1)();
         case Vacuum::SingleProduct:
-          return OpMaker<Statistics::FermiDirac>(OpType::f, 1)();
+          SEQUANT_ASSERT(registry->contains(L"f"));
+          return OpMaker<Statistics::FermiDirac>(L"f", 1)();
         case Vacuum::MultiProduct:
-          return OpMaker<Statistics::FermiDirac>(OpType::f, 1)();
+          SEQUANT_ASSERT(registry->contains(L"f"));
+          return OpMaker<Statistics::FermiDirac>(L"f", 1)();
       }
       SEQUANT_UNREACHABLE;
 
     case 2:
-      return OpMaker<Statistics::FermiDirac>(OpType::g, 2)();
+      SEQUANT_ASSERT(registry->contains(L"g"));
+      return OpMaker<Statistics::FermiDirac>(L"g", 2)();
   }
 
   SEQUANT_ABORT("Unhandled k value");
@@ -639,15 +646,18 @@ ExprPtr H(std::size_t k) {
   return k == 1 ? tensor::h(1) : tensor::h(1) + tensor::h(2);
 }
 
-ExprPtr F(bool use_tensor, IndexSpace reference_occupied) {
+ExprPtr F(bool use_tensor, const IndexSpace& reference_occupied) {
+  auto registry = get_default_mbpt_context().op_registry();
+  using sequant::reserved::kronecker_label;
   if (use_tensor) {
-    return OpMaker<Statistics::FermiDirac>(OpType::f, 1)();
+    SEQUANT_ASSERT(registry->contains(L"f"));
+    return OpMaker<Statistics::FermiDirac>(L"f", 1)();
   } else {  // explicit density matrix construction
     SEQUANT_ASSERT(
         reference_occupied);  // cannot explicitly instantiate fock operator
                               // without providing an occupied indexspace
     // add \bar{g}^{\kappa x}_{\lambda y} \gamma^y_x with x,y in occ_space_type
-    auto make_g_contribution = [](const auto occ_space) {
+    auto make_g_contribution = [](const auto& occ_space) {
       auto isr = get_default_context().index_space_registry();
       return mbpt::OpMaker<Statistics::FermiDirac>::make(
           {isr->complete_space(Spin::any)}, {isr->complete_space(Spin::any)},
@@ -659,10 +669,9 @@ ExprPtr F(bool use_tensor, IndexSpace reference_occupied) {
             if (opsymm == Symmetry::Antisymm) {
               braidxs.push_back(m1);
               ketidxs.push_back(m2);
-              return ex<Tensor>(to_wstring(mbpt::OpType::g),
-                                bra(std::move(braidxs)),
+              return ex<Tensor>(L"g", bra(std::move(braidxs)),
                                 ket(std::move(ketidxs)), Symmetry::Antisymm) *
-                     ex<Tensor>(to_wstring(mbpt::OpType::δ), bra{m2}, ket{m1},
+                     ex<Tensor>(kronecker_label(), bra{m2}, ket{m1},
                                 Symmetry::Nonsymm);
             } else {  // opsymm == Symmetry::Nonsymm
               auto braidx_J = braidxs;
@@ -674,33 +683,36 @@ ExprPtr F(bool use_tensor, IndexSpace reference_occupied) {
               auto ketidxs_K = ketidxs;
               using std::begin;
               ketidxs_K.emplace(begin(ketidxs_K), m2);
-              return (ex<Tensor>(to_wstring(mbpt::OpType::g),
-                                 bra(std::move(braidx_J)),
+              return (ex<Tensor>(L"g", bra(std::move(braidx_J)),
                                  ket(std::move(ketidxs_J)), Symmetry::Nonsymm) -
-                      ex<Tensor>(
-                          to_wstring(mbpt::OpType::g), bra(std::move(braidx_K)),
-                          ket(std::move(ketidxs_K)), Symmetry::Nonsymm)) *
-                     ex<Tensor>(to_wstring(mbpt::OpType::δ), bra{m2}, ket{m1},
+                      ex<Tensor>(L"g", bra(std::move(braidx_K)),
+                                 ket(std::move(ketidxs_K)),
+                                 Symmetry::Nonsymm)) *
+                     ex<Tensor>(kronecker_label(), bra{m2}, ket{m1},
                                 Symmetry::Nonsymm);
             }
           });
     };
     auto isr = get_default_context().index_space_registry();
-    return OpMaker<Statistics::FermiDirac>(OpType::h, 1)() +
+    SEQUANT_ASSERT(registry->contains(L"h"));
+    return OpMaker<Statistics::FermiDirac>(L"h", 1)() +
            make_g_contribution(reference_occupied);
   }
 }
 
 ExprPtr θ(std::size_t K) {
-  return OpMaker<Statistics::FermiDirac>(OpType::θ, K)();
+  SEQUANT_ASSERT(get_default_mbpt_context().op_registry()->contains(L"θ"));
+  return OpMaker<Statistics::FermiDirac>(L"θ", K)();
 }
 
 ExprPtr t(std::size_t K) {
-  return OpMaker<Statistics::FermiDirac>(OpType::t, K)();
+  SEQUANT_ASSERT(get_default_mbpt_context().op_registry()->contains(L"t"));
+  return OpMaker<Statistics::FermiDirac>(L"t", K)();
 }
 
 ExprPtr T(std::size_t K, bool skip1) {
   SEQUANT_ASSERT(K > (skip1 ? 1 : 0));
+  SEQUANT_ASSERT(get_default_mbpt_context().op_registry()->contains(L"t"));
   ExprPtr result;
   for (auto k = skip1 ? 2ul : 1ul; k <= K; ++k) {
     result += tensor::t(k);
@@ -709,12 +721,13 @@ ExprPtr T(std::size_t K, bool skip1) {
 }
 
 ExprPtr λ(std::size_t K) {
-  return OpMaker<Statistics::FermiDirac>(OpType::λ, K)();
+  SEQUANT_ASSERT(get_default_mbpt_context().op_registry()->contains(L"λ"));
+  return OpMaker<Statistics::FermiDirac>(L"λ", K)();
 }
 
 ExprPtr Λ(std::size_t K, bool skip1) {
   SEQUANT_ASSERT(K > (skip1 ? 1 : 0));
-
+  SEQUANT_ASSERT(get_default_mbpt_context().op_registry()->contains(L"λ"));
   ExprPtr result;
   for (auto k = (skip1 ? 2ul : 1ul); k <= K; ++k) {
     result = k > 1 ? result + tensor::λ(k) : tensor::λ(k);
@@ -724,24 +737,26 @@ ExprPtr Λ(std::size_t K, bool skip1) {
 
 ExprPtr r(nann na, ncre nc, const cre<IndexSpace>& cre_space,
           const ann<IndexSpace>& ann_space) {
-  return OpMaker<Statistics::FermiDirac>(OpType::R, nc, na, cre_space,
-                                         ann_space)();
+  SEQUANT_ASSERT(get_default_mbpt_context().op_registry()->contains(L"R"));
+  return OpMaker<Statistics::FermiDirac>(L"R", nc, na, cre_space, ann_space)();
 }
 ExprPtr r(nₚ np, nₕ nh) {
   SEQUANT_ASSERT(np >= 0 && nh >= 0);
-  return OpMaker<Statistics::FermiDirac>(OpType::R, ncre(np.value()),
+  SEQUANT_ASSERT(get_default_mbpt_context().op_registry()->contains(L"R"));
+  return OpMaker<Statistics::FermiDirac>(L"R", ncre(np.value()),
                                          nann(nh.value()))();
 }
 
 ExprPtr l(nann na, ncre nc, const cre<IndexSpace>& cre_space,
           const ann<IndexSpace>& ann_space) {
-  return OpMaker<Statistics::FermiDirac>(OpType::L, nc, na, cre_space,
-                                         ann_space)();
+  SEQUANT_ASSERT(get_default_mbpt_context().op_registry()->contains(L"L"));
+  return OpMaker<Statistics::FermiDirac>(L"L", nc, na, cre_space, ann_space)();
 }
 
 ExprPtr l(nₚ np, nₕ nh) {
   SEQUANT_ASSERT(np >= 0 && nh >= 0);
-  return OpMaker<Statistics::FermiDirac>(OpType::L, ncre(nh.value()),
+  SEQUANT_ASSERT(get_default_mbpt_context().op_registry()->contains(L"L"));
+  return OpMaker<Statistics::FermiDirac>(L"L", ncre(nh.value()),
                                          nann(np.value()))();
 }
 
@@ -782,8 +797,9 @@ ExprPtr A(nₚ np, nₕ nh) {
   if (get_default_mbpt_context().csv() == mbpt::CSV::Yes)
     dep = (np > 0 || nh > 0) ? OpMaker<Statistics::FermiDirac>::UseDepIdx::Bra
                              : OpMaker<Statistics::FermiDirac>::UseDepIdx::Ket;
-  return OpMaker<Statistics::FermiDirac>(
-      OpType::A, cre(creators), ann(annihilators))(dep, {Symmetry::Antisymm});
+  return OpMaker<Statistics::FermiDirac>(reserved::antisymm_label(),
+                                         cre(creators), ann(annihilators))(
+      dep, {Symmetry::Antisymm});
 }
 
 ExprPtr S(std::int64_t K) {
@@ -807,33 +823,29 @@ ExprPtr S(std::int64_t K) {
   if (get_default_mbpt_context().csv() == mbpt::CSV::Yes)
     dep = K > 0 ? OpMaker<Statistics::FermiDirac>::UseDepIdx::Bra
                 : OpMaker<Statistics::FermiDirac>::UseDepIdx::Ket;
-  return OpMaker<Statistics::FermiDirac>(
-      OpType::S, cre(creators), ann(annihilators))(dep, {Symmetry::Nonsymm});
+  return OpMaker<Statistics::FermiDirac>(reserved::symm_label(), cre(creators),
+                                         ann(annihilators))(
+      dep, {Symmetry::Nonsymm});
 }
 
 ExprPtr Hʼ(std::size_t R, const OpParams& params) {
   params.validate();
-  SEQUANT_ASSERT(params.order == 1 &&
-                 "sequant::mbpt::tensor::Hʼ: only supports first "
-                 "order perturbation");
   SEQUANT_ASSERT(R > 0 && "Operator rank must be > 0");
-  return OpMaker<Statistics::FermiDirac>(OpType::h_1, ncre(R), nann(R),
-                                         params)();
+  SEQUANT_ASSERT(get_default_mbpt_context().op_registry()->contains(L"h"));
+  return OpMaker<Statistics::FermiDirac>(L"h", ncre(R), nann(R), params)();
 }
 
 ExprPtr tʼ(std::size_t K, const OpParams& params) {
   params.validate();
-  SEQUANT_ASSERT(params.order == 1 &&
-                 "sequant::mbpt::tensor::tʼ: only supports first "
-                 "order perturbation");
   SEQUANT_ASSERT(K > 0 && "Operator rank must be > 0");
-  return OpMaker<Statistics::FermiDirac>(OpType::t_1, ncre(K), nann(K),
-                                         params)();
+  SEQUANT_ASSERT(get_default_mbpt_context().op_registry()->contains(L"t"));
+  return OpMaker<Statistics::FermiDirac>(L"t", ncre(K), nann(K), params)();
 }
 
 ExprPtr Tʼ(std::size_t K, const OpParams& params) {
   params.validate();
   if (params.skip1) SEQUANT_ASSERT(K > 1);
+  SEQUANT_ASSERT(get_default_mbpt_context().op_registry()->contains(L"t"));
   ExprPtr result;
   for (auto k = (params.skip1 ? 2ul : 1ul); k <= K; ++k) {
     result += tensor::tʼ(k, {.order = params.order,
@@ -846,17 +858,15 @@ ExprPtr Tʼ(std::size_t K, const OpParams& params) {
 
 ExprPtr λʼ(std::size_t K, const OpParams& params) {
   params.validate();
-  SEQUANT_ASSERT(params.order == 1 &&
-                 "sequant::mbpt::tensor::Λʼ: only supports first "
-                 "order perturbation");
   SEQUANT_ASSERT(K > 0 && "Operator rank must be > 0");
-  return OpMaker<Statistics::FermiDirac>(OpType::λ_1, ncre(K), nann(K),
-                                         params)();
+  SEQUANT_ASSERT(get_default_mbpt_context().op_registry()->contains(L"λ"));
+  return OpMaker<Statistics::FermiDirac>(L"λ", ncre(K), nann(K), params)();
 }
 
 ExprPtr Λʼ(std::size_t K, const OpParams& params) {
   params.validate();
   if (params.skip1) SEQUANT_ASSERT(K > 1);
+  SEQUANT_ASSERT(get_default_mbpt_context().op_registry()->contains(L"λ"));
   ExprPtr result;
   for (auto k = (params.skip1 ? 2ul : 1ul); k <= K; ++k) {
     result += tensor::λʼ(k, {.order = params.order,
@@ -871,16 +881,21 @@ ExprPtr Λʼ(std::size_t K, const OpParams& params) {
 
 ExprPtr h(std::size_t k) {
   SEQUANT_ASSERT(k > 0 && k <= 2);
+  auto registry = get_default_mbpt_context().op_registry();
   switch (k) {
     case 1:
       return ex<op_t>(
-          [vacuum = get_default_context().vacuum()]() -> std::wstring_view {
+          [vacuum = get_default_context().vacuum(),
+           registry]() -> std::wstring_view {
             switch (vacuum) {
               case Vacuum::Physical:
+                SEQUANT_ASSERT(registry->contains(L"h"));
                 return L"h";
               case Vacuum::SingleProduct:
+                SEQUANT_ASSERT(registry->contains(L"f"));
                 return L"f";
               case Vacuum::MultiProduct:
+                SEQUANT_ASSERT(registry->contains(L"f"));
                 return L"f";
             }
 
@@ -893,6 +908,7 @@ ExprPtr h(std::size_t k) {
           });
 
     case 2:
+      SEQUANT_ASSERT(registry->contains(L"g"));
       return ex<op_t>([]() -> std::wstring_view { return L"g"; },
                       [=]() -> ExprPtr { return tensor::h(2); },
                       [=](qnc_t& qns) {
@@ -911,6 +927,7 @@ ExprPtr H(std::size_t k) {
 
 ExprPtr θ(std::size_t K) {
   SEQUANT_ASSERT(K > 0);
+  SEQUANT_ASSERT(get_default_mbpt_context().op_registry()->contains(L"θ"));
   return ex<op_t>([]() -> std::wstring_view { return L"θ"; },
                   [=]() -> ExprPtr { return tensor::θ(K); },
                   [=](qnc_t& qns) {
@@ -921,6 +938,7 @@ ExprPtr θ(std::size_t K) {
 
 ExprPtr t(std::size_t K) {
   SEQUANT_ASSERT(K > 0);
+  SEQUANT_ASSERT(get_default_mbpt_context().op_registry()->contains(L"t"));
   return ex<op_t>([]() -> std::wstring_view { return L"t"; },
                   [=]() -> ExprPtr { return tensor::t(K); },
                   [=](qnc_t& qns) {
@@ -931,6 +949,7 @@ ExprPtr t(std::size_t K) {
 
 ExprPtr T(std::size_t K, bool skip1) {
   SEQUANT_ASSERT(K > (skip1 ? 1 : 0));
+  SEQUANT_ASSERT(get_default_mbpt_context().op_registry()->contains(L"t"));
   ExprPtr result;
   for (auto k = skip1 ? 2ul : 1ul; k <= K; ++k) {
     result += t(k);
@@ -940,6 +959,7 @@ ExprPtr T(std::size_t K, bool skip1) {
 
 ExprPtr λ(std::size_t K) {
   SEQUANT_ASSERT(K > 0);
+  SEQUANT_ASSERT(get_default_mbpt_context().op_registry()->contains(L"λ"));
   return ex<op_t>([]() -> std::wstring_view { return L"λ"; },
                   [=]() -> ExprPtr { return tensor::λ(K); },
                   [=](qnc_t& qns) {
@@ -950,6 +970,7 @@ ExprPtr λ(std::size_t K) {
 
 ExprPtr Λ(std::size_t K, bool skip1) {
   SEQUANT_ASSERT(K > (skip1 ? 1 : 0));
+  SEQUANT_ASSERT(get_default_mbpt_context().op_registry()->contains(L"λ"));
   ExprPtr result;
   for (auto k = (skip1 ? 2ul : 1ul); k <= K; ++k) {
     result = k > 1 ? result + λ(k) : λ(k);
@@ -957,7 +978,8 @@ ExprPtr Λ(std::size_t K, bool skip1) {
   return result;
 }
 
-ExprPtr F(bool use_f_tensor, IndexSpace occupied_density) {
+ExprPtr F(bool use_f_tensor, const IndexSpace& occupied_density) {
+  SEQUANT_ASSERT(get_default_mbpt_context().op_registry()->contains(L"f"));
   if (use_f_tensor) {
     return ex<op_t>(
         []() -> std::wstring_view { return L"f"; },
@@ -982,26 +1004,27 @@ ExprPtr A(nₚ np, nₕ nh) {
 
   auto particle_space = get_particle_space(Spin::any);
   auto hole_space = get_hole_space(Spin::any);
-  return ex<op_t>([]() -> std::wstring_view { return L"A"; },
-                  [=]() -> ExprPtr { return tensor::A(np, nh); },
-                  [=](qnc_t& qns) {
-                    const std::size_t abs_nh = std::abs(nh);
-                    const std::size_t abs_np = std::abs(np);
-                    if (deexcitation) {
-                      qnc_t op_qnc_t = generic_deexcitation_qns(
-                          abs_np, abs_nh, particle_space, hole_space);
-                      qns = combine(op_qnc_t, qns);
-                    } else {
-                      qnc_t op_qnc_t = generic_excitation_qns(
-                          abs_np, abs_nh, particle_space, hole_space);
-                      qns = combine(op_qnc_t, qns);
-                    }
-                  });
+  return ex<op_t>(
+      []() -> std::wstring_view { return reserved::antisymm_label(); },
+      [=]() -> ExprPtr { return tensor::A(np, nh); },
+      [=](qnc_t& qns) {
+        const std::size_t abs_nh = std::abs(nh);
+        const std::size_t abs_np = std::abs(np);
+        if (deexcitation) {
+          qnc_t op_qnc_t = generic_deexcitation_qns(abs_np, abs_nh,
+                                                    particle_space, hole_space);
+          qns = combine(op_qnc_t, qns);
+        } else {
+          qnc_t op_qnc_t = generic_excitation_qns(abs_np, abs_nh,
+                                                  particle_space, hole_space);
+          qns = combine(op_qnc_t, qns);
+        }
+      });
 }
 
 ExprPtr S(std::int64_t K) {
   SEQUANT_ASSERT(K != 0);
-  return ex<op_t>([]() -> std::wstring_view { return L"S"; },
+  return ex<op_t>([]() -> std::wstring_view { return reserved::symm_label(); },
                   [=]() -> ExprPtr { return tensor::S(K); },
                   [=](qnc_t& qns) {
                     const std::size_t abs_K = std::abs(K);
@@ -1029,48 +1052,20 @@ ExprPtr P(nₚ np, nₕ nh) {
   }
 }
 
-namespace {
-/// @brief Helper to create Operator from OpParams
-/// @param label_gen Callable to generate operator label
-/// @param tensor_gen Callable to generate tensor form
-/// @param qn_action Callable to apply quantum number changes
-/// @param params OpParams containing operator parameters (batching, etc.)
-/// @return ExprPtr to the created Operator
-ExprPtr make_op_from_params(std::function<std::wstring_view()> label_gen,
-                            std::function<ExprPtr()> tensor_gen,
-                            std::function<void(qnc_t&)> qn_action,
-                            const OpParams& params) {
-  params.validate();
-  if (!params.batch_ordinals.empty()) {
-    mbpt::check_for_batching_space();
-    return ex<op_t>(label_gen, tensor_gen, qn_action, params.batch_ordinals);
-  } else if (params.nbatch) {
-    mbpt::check_for_batching_space();
-    return ex<op_t>(label_gen, tensor_gen, qn_action, params.nbatch.value());
-  } else {
-    return ex<op_t>(label_gen, tensor_gen, qn_action);
-  }
-}
-}  // anonymous namespace
-
 ExprPtr Hʼ(std::size_t R, const OpParams& params) {
   SEQUANT_ASSERT(R > 0);
-  SEQUANT_ASSERT(params.order == 1 &&
-                 "only first order perturbation is supported now");
-
-  return make_op_from_params(
-      []() -> std::wstring_view { return optype2label.at(OpType::h_1); },
-      [R, params]() -> ExprPtr { return tensor::Hʼ(R, params); },
-      [R](qnc_t& qns) { qns = combine(general_type_qns(R), qns); }, params);
+  SEQUANT_ASSERT(get_default_mbpt_context().op_registry()->contains(L"h"));
+  return ex<op_t>([]() -> std::wstring_view { return L"h"; },
+                  [R, params]() -> ExprPtr { return tensor::Hʼ(R, params); },
+                  [R](qnc_t& qns) { qns = combine(general_type_qns(R), qns); },
+                  params);
 }
 
 ExprPtr tʼ(std::size_t K, const OpParams& params) {
   SEQUANT_ASSERT(K > 0);
-  SEQUANT_ASSERT(params.order == 1 &&
-                 "only first order perturbation is supported now");
-
-  return make_op_from_params(
-      []() -> std::wstring_view { return optype2label.at(OpType::t_1); },
+  SEQUANT_ASSERT(get_default_mbpt_context().op_registry()->contains(L"t"));
+  return ex<op_t>(
+      []() -> std::wstring_view { return L"t"; },
       [K, params]() -> ExprPtr { return tensor::tʼ(K, params); },
       [K](qnc_t& qns) { qns = combine(excitation_type_qns(K), qns); }, params);
 }
@@ -1078,6 +1073,7 @@ ExprPtr tʼ(std::size_t K, const OpParams& params) {
 ExprPtr Tʼ(std::size_t K, const OpParams& params) {
   params.validate();
   SEQUANT_ASSERT(K > (params.skip1 ? 1 : 0));
+  SEQUANT_ASSERT(get_default_mbpt_context().op_registry()->contains(L"t"));
   ExprPtr result;
   for (auto k = (params.skip1 ? 2ul : 1ul); k <= K; ++k) {
     result += tʼ(k, {.order = params.order,
@@ -1090,11 +1086,9 @@ ExprPtr Tʼ(std::size_t K, const OpParams& params) {
 
 ExprPtr λʼ(std::size_t K, const OpParams& params) {
   SEQUANT_ASSERT(K > 0);
-  SEQUANT_ASSERT(params.order == 1 &&
-                 "only first order perturbation is supported now");
-
-  return make_op_from_params(
-      []() -> std::wstring_view { return optype2label.at(OpType::λ_1); },
+  SEQUANT_ASSERT(get_default_mbpt_context().op_registry()->contains(L"λ"));
+  return ex<op_t>(
+      []() -> std::wstring_view { return L"λ"; },
       [K, params]() -> ExprPtr { return tensor::λʼ(K, params); },
       [K](qnc_t& qns) { qns = combine(deexcitation_type_qns(K), qns); },
       params);
@@ -1103,6 +1097,7 @@ ExprPtr λʼ(std::size_t K, const OpParams& params) {
 ExprPtr Λʼ(std::size_t K, const OpParams& params) {
   params.validate();
   SEQUANT_ASSERT(K > (params.skip1 ? 1 : 0));
+  SEQUANT_ASSERT(get_default_mbpt_context().op_registry()->contains(L"λ"));
   ExprPtr result;
   for (auto k = (params.skip1 ? 2ul : 1ul); k <= K; ++k) {
     result += λʼ(k, {.order = params.order,
@@ -1115,8 +1110,9 @@ ExprPtr Λʼ(std::size_t K, const OpParams& params) {
 
 ExprPtr r(nann na, ncre nc, const cre<IndexSpace>& cre_space,
           const ann<IndexSpace>& ann_space) {
+  SEQUANT_ASSERT(get_default_mbpt_context().op_registry()->contains(L"R"));
   return ex<op_t>(
-      []() -> std::wstring_view { return optype2label.at(OpType::R); },
+      []() -> std::wstring_view { return L"R"; },
       [=]() -> ExprPtr { return tensor::r(na, nc, cre_space, ann_space); },
       [=](qnc_t& qns) {
         // ex -> creators in particle_space, annihilators in hole_space
@@ -1131,8 +1127,9 @@ ExprPtr r(nₚ np, nₕ nh) { return r(nann(nh), ncre(np)); }
 
 ExprPtr l(nann na, ncre nc, const cre<IndexSpace>& cre_space,
           const ann<IndexSpace>& ann_space) {
+  SEQUANT_ASSERT(get_default_mbpt_context().op_registry()->contains(L"L"));
   return ex<op_t>(
-      []() -> std::wstring_view { return optype2label.at(OpType::L); },
+      []() -> std::wstring_view { return L"L"; },
       [=]() -> ExprPtr { return tensor::l(na, nc, cre_space, ann_space); },
       [=](qnc_t& qns) {
         // deex -> creators in hole_space, annihilators in particle_space
@@ -1148,6 +1145,7 @@ ExprPtr l(nₚ np, nₕ nh) { return l(nann(np), ncre(nh)); }
 ExprPtr R(nann na, ncre nc, const cre<IndexSpace>& cre_space,
           const ann<IndexSpace>& ann_space) {
   SEQUANT_ASSERT(na > 0 || nc > 0);
+  SEQUANT_ASSERT(get_default_mbpt_context().op_registry()->contains(L"R"));
   ExprPtr result;
 
   std::int64_t ra = na, rc = nc;
@@ -1166,6 +1164,7 @@ ExprPtr R(nₚ np, nₕ nh) { return R(nann(nh), ncre(np)); }
 ExprPtr L(nann na, ncre nc, const cre<IndexSpace>& cre_space,
           const ann<IndexSpace>& ann_space) {
   SEQUANT_ASSERT(na > 0 || nc > 0);
+  SEQUANT_ASSERT(get_default_mbpt_context().op_registry()->contains(L"L"));
   ExprPtr result;
 
   std::int64_t ra = na, rc = nc;
@@ -1245,7 +1244,7 @@ ExprPtr expectation_value_impl(ExprPtr expr,
   auto isr = get_default_context().index_space_registry();
   const auto spinor = get_default_context().spbasis() == SPBasis::Spinor;
   // convention is to use different label for spin-orbital and spin-free RDM
-  const auto rdm_label = spinor ? optype2label.at(OpType::RDM) : L"Γ";
+  const auto rdm_label = spinor ? L"γ" : L"Γ";
 
   // N.B. reference < vacuum is not yet supported
   if (isr->reference_occupied_space().intersection(

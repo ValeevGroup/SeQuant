@@ -4,6 +4,7 @@
 #ifdef SEQUANT_HAS_TILEDARRAY
 
 #include <SeQuant/core/eval/result.hpp>
+#include <SeQuant/core/math.hpp>
 
 #include <TiledArray/einsum/tiledarray.h>
 #include <tiledarray.h>
@@ -49,6 +50,9 @@ auto column_symmetrize_ta(TA::DistArray<Args...> const& arr) {
                                                perm.begin() + nparticles,  //
                                                nparticles},
                         call_back);
+
+  auto const nf = static_cast<double>(rational{1, factorial(nparticles)});
+  result(lannot) = nf * result(lannot);
 
   TA::DistArray<Args...>::wait_for_lazy_cleanup(result.world());
 
@@ -116,6 +120,10 @@ auto particle_antisymmetrize_ta(TA::DistArray<Args...> const& arr,
   // Process ket permutations
   const auto bra_annot = bra_rank == 0 ? "" : ords_to_annot(bra_perm);
   result = process_permutations(result, ket_rank, ket_perm, bra_annot, false);
+
+  auto const nf = static_cast<double>(
+      rational{1, factorial(bra_rank) * factorial(ket_rank)});
+  result(lannot) = nf * result(lannot);
 
   TA::DistArray<Args...>::wait_for_lazy_cleanup(result.world());
   return result;

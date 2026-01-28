@@ -253,7 +253,7 @@ EvalSequence single_term_opt(TensorNetwork const& network,
 
 ///
 /// Omit the first factor from the top level product from given expression.
-/// Intended to drop "A" and "S" tensors from CC amplitudes as a preparatory
+/// Intended to drop "Â" and "Ŝ" tensors from CC amplitudes as a preparatory
 /// step for evaluation of the amplitudes.
 ///
 ExprPtr tail_factor(ExprPtr const& expr) noexcept;

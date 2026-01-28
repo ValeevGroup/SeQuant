@@ -4,6 +4,7 @@
 
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/domain/mbpt/context.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/op.hpp>
 #include <SeQuant/domain/mbpt/vac_av.hpp>
@@ -14,6 +15,7 @@ int main() {
   using namespace sequant::mbpt;
   set_default_context({.index_space_registry_shared_ptr = make_min_sr_spaces(),
                        .vacuum = Vacuum::SingleProduct});
+  set_default_mbpt_context({.op_registry_ptr = make_legacy_registry()});
   // end-snippet-0
 
   // start-snippet-1
@@ -77,6 +79,32 @@ int main() {
 
   std::wcout << "Result: " << to_latex(result) << "\n";
   // end-snippet-4
+
+  // start-snippet-5
+  // Create a custom operator registry with a new operator
+  auto custom_registry = std::make_shared<OpRegistry>();
+
+  custom_registry->add(L"f", OpClass::gen)
+      .add(L"g", OpClass::gen)
+      .add(L"t", OpClass::ex)
+      .add(L"λ", OpClass::deex)
+      .add(L"X", OpClass::ex);  // Custom excitation operator
+
+  // Use the custom registry to set the default MBPT context
+  set_default_mbpt_context({.op_registry_ptr = custom_registry});
+
+  // Create custom operator using OpMaker
+  auto X2_tensor = OpMaker<Statistics::FermiDirac>(L"X", 2)();
+
+  // Create custom operator using mbpt::Operator
+  auto X2_op = ex<op_t>(
+      []() -> std::wstring_view { return L"X"; },
+      []() -> ExprPtr { return OpMaker<Statistics::FermiDirac>(L"X", 2)(); },
+      [](qns_t& qns) { qns += excitation_type_qns(2); });
+
+  // Use in expressions
+  auto custom_expr = h(2) * X2_op * t(2);
+  // end-snippet-5
 
   return 0;
 }

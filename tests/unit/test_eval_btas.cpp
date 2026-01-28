@@ -307,7 +307,7 @@ TEST_CASE("eval_with_btas", "[eval_btas]") {
   SECTION("Antisymmetrization") {
     using btas::permute;
 
-    auto expr1 = parse_antisymm(L"1/2 * g_{i1, i2}^{a1, a2}");
+    auto expr1 = parse_antisymm(L"g_{i1, i2}^{a1, a2}");
     auto tidx1 = tidxs(L"i_1,i_2,a_1,a_2");
     auto eval1 = eval_antisymm(expr1, tidx1);
 
@@ -330,7 +330,7 @@ TEST_CASE("eval_with_btas", "[eval_btas]") {
     temp.clear();
     man1 += BTensorD{permute(g, {1, 0, 3, 2})};
 
-    btas::scal(0.5, man1);
+    btas::scal(0.25, man1);
 
     REQUIRE(norm(eval1) == Catch::Approx(norm(man1)));
 
@@ -348,6 +348,7 @@ TEST_CASE("eval_with_btas", "[eval_btas]") {
     temp2 += BTensorD{permute(r, {1, 0, 2})};
     btas::scal(-1.0, temp2);
     man2 += temp2;
+    btas::scal(0.5, man2);
     temp2.clear();
 
     REQUIRE(norm(eval2) == Catch::Approx(norm(man2)));
@@ -356,7 +357,7 @@ TEST_CASE("eval_with_btas", "[eval_btas]") {
   SECTION("Symmetrization") {
     using btas::permute;
 
-    auto expr1 = parse_antisymm(L"1/2 * g_{i1, i2}^{a1, a2}");
+    auto expr1 = parse_antisymm(L"g_{i1, i2}^{a1, a2}");
     auto tidx1 = tidxs(L"i_1,i_2,a_1,a_2");
     auto eval1 = eval_symm(expr1, tidx1);
 
