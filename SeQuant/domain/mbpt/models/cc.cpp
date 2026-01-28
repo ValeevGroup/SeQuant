@@ -27,8 +27,8 @@ namespace sequant::mbpt {
 CC::CC(size_t n, Ansatz a, bool screen, bool use_topology)
     : N(n), ansatz_(a), screen_(screen), use_topology_(use_topology) {}
 
-CC::CC(const Options& opts)
-    : N(opts.N),
+CC::CC(size_t n, const Options& opts)
+    : N(n),
       ansatz_(opts.ansatz),
       screen_(opts.screen),
       use_topology_(opts.use_topology),

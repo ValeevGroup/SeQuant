@@ -77,7 +77,7 @@ int main() {
   // start-snippet-4
   // Unitary CCSDT with 6th-order commutator expansion
   auto Ut_ccsdt =
-      CC({.N = 3, .ansatz = CC::Ansatz::U, .hbar_truncation_rank = 6}).t();
+      CC(3, {.ansatz = CC::Ansatz::U, .hbar_truncation_rank = 6}).t();
   // end-snippet-4
 
   // start-snippet-5

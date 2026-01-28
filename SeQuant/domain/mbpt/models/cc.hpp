@@ -32,8 +32,6 @@ class CC {
 
   /// Configuration options for CC class
   struct Options {
-    /// coupled cluster rank or cluster operator rank
-    size_t N;
     /// type of CC ansatz
     Ansatz ansatz = Ansatz::T;
     /// if true, uses Operator level screening before applying WickTheorem.
@@ -59,8 +57,9 @@ class CC {
               bool use_topology = true);
 
   /// @brief constructs CC engine with named parameters
+  /// @param n coupled cluster excitation rank
   /// @param opts configuration options. @see CC::Options
-  explicit CC(const Options& opts);
+  explicit CC(size_t n, const Options& opts);
 
   /// @return the type of ansatz
   Ansatz ansatz() const;
