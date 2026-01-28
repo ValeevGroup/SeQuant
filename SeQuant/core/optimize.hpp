@@ -102,7 +102,9 @@ EvalSequence single_term_opt_impl(TensorNetwork const& network,
           std::popcount(i) > 1
               ? std::numeric_limits<decltype(OptRes::flops)>::max()
               : 0;
-      // results[i].sequence is left uninitialized
+      if (std::popcount(i) == 1)
+        results[i].sequence.emplace_back(std::countr_zero(i));
+      // else results[i].sequence is left uninitialized
     }
   }
 
@@ -112,9 +114,12 @@ EvalSequence single_term_opt_impl(TensorNetwork const& network,
     std::pair<size_t, size_t> curr_parts{0, 0};
     for (auto& curr_cost = results[n].flops;
          auto&& [lp, rp] : bits::bipartitions(n)) {
+      // do nothing with the trivial bipartition
+      // i.e. one subset is the empty set and the other full
+      if (lp == 0 || rp == 0) continue;
       auto new_cost = std::forward<CostFn>(cost_fn)(
           results[lp].indices, results[rp].indices, results[n].indices);
-      if (new_cost < curr_cost) {
+      if (new_cost <= curr_cost) {
         curr_cost = new_cost;
         curr_parts = decltype(curr_parts){lp, rp};
       }
