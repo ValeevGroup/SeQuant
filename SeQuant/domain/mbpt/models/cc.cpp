@@ -38,12 +38,6 @@ CC::CC(size_t n, const Options& opts)
     throw std::invalid_argument(
         "CC: hbar_truncation_rank is required for unitary ansatz");
   }
-  if (hbar_truncation_rank_)
-    SEQUANT_ASSERT(hbar_truncation_rank_.value() > 0 &&
-                   "CC::CC: hbar_truncation_rank must be greater than zero");
-  if (pertbar_truncation_rank_)
-    SEQUANT_ASSERT(pertbar_truncation_rank_.value() > 0 &&
-                   "CC::CC: pertbar_truncation_rank must be greater than zero");
 }
 
 CC::Ansatz CC::ansatz() const { return ansatz_; }
