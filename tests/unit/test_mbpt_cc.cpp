@@ -98,21 +98,21 @@ SECTION("EOM-CCSDT") {
 SECTION("ucc") {
   SECTION("t") {
     const auto N = 2;
-    const std::size_t C = 3;
+    const auto C = std::array{2, 3};  // commutator truncation ranks
     CC::Ansatz ansatz = CC::Ansatz::U;
 
-    // oUCC energy, up to third commutator
-    auto t_eqs = CC(N, {.ansatz = ansatz, .hbar_truncation_rank = 3}).t();
-    REQUIRE(t_eqs.size() == N + 1);
-    for (auto k = 0; k <= N; ++k) {
-      REQUIRE(t_eqs[k]);
+    for (const auto& c : C) {
+      // UCC energy, with commutator truncation rank = c
+      auto t_eqs = CC(N, {.ansatz = ansatz, .hbar_truncation_rank = c}).t();
+      REQUIRE(t_eqs.size() == N + 1);
+      for (auto k = 0; k <= N; ++k) {
+        REQUIRE(t_eqs[k]);
+      }
+      // these are numerically verified against http://arxiv.org/abs/2503.00617
+      const auto energy_nterms = size(t_eqs[0]);
+      if (c == 2) REQUIRE(energy_nterms == 20);
+      if (c == 3) REQUIRE(energy_nterms == 74);
     }
-
-    // std::wcout << to_latex_align(t_eqs[0], 5, 3) << std::endl;
-    if (C == 3 && ansatz == CC::Ansatz::U) {
-      REQUIRE(size(t_eqs[0]) == 56);
-    }
-
   }  // SECTION("t")
 }  // SECTION("ucc")
 #endif
