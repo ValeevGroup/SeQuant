@@ -976,6 +976,45 @@ ExprPtr WK_biorthogonalization_filter(
   return result;
 }
 
+ExprPtr augmented_biorthogonal_transform(
+    const ExprPtr& expr,
+    const container::svector<container::svector<Index>>& ext_idxs,
+    bool compact) {
+  using ranges::views::transform;
+
+  // Remove leading S operator if present
+  ExprPtr input_expr = expr;
+  for (auto& term : *input_expr) {
+    if (term->is<Product>())
+      term =
+          remove_tensor(term.as_shared_ptr<Product>(), reserved::symm_label());
+  }
+
+  auto bt = biorthogonal_transform(input_expr, ext_idxs);
+
+  auto bixs = ext_idxs | transform([](auto&& vec) { return get_bra_idx(vec); });
+  auto kixs = ext_idxs | transform([](auto&& vec) { return get_ket_idx(vec); });
+  ExprPtr S_tensor =
+      ex<Tensor>(Tensor{reserved::symm_label(), bra(kixs), ket(bixs)});
+
+  // Post-processing only for rank > 1 and when compact is true
+  if (compact) {
+    if (ext_idxs.size() > 1) {
+      bt = S_tensor * bt;
+    }
+    simplify(bt);
+
+    bt = S_maps(bt);
+    canonicalize(bt);
+    bt = WK_biorthogonalization_filter(bt, ext_idxs);
+  }
+
+  bt = S_tensor * bt;
+  simplify(bt);
+
+  return bt;
+}
+
 ExprPtr closed_shell_spintrace(
     const ExprPtr& expression,
     const container::svector<container::svector<Index>>& ext_index_groups,
@@ -1138,25 +1177,9 @@ ExprPtr closed_shell_CC_spintrace_v1(ExprPtr const& expr,
   canonicalize(st_expr);
 
   if (!ext_idxs.empty()) {
-    // Remove S operator
-    for (auto& term : *st_expr) {
-      if (term->is<Product>())
-        term = remove_tensor(term.as_shared_ptr<Product>(),
-                             reserved::symm_label());
-    }
-
-    // Biorthogonal transformation
-    st_expr = biorthogonal_transform(st_expr, ext_idxs);
-
-    auto bixs =
-        ext_idxs | transform([](auto&& vec) { return get_bra_idx(vec); });
-    auto kixs =
-        ext_idxs | transform([](auto&& vec) { return get_ket_idx(vec); });
-    st_expr = ex<Tensor>(Tensor{reserved::symm_label(), bra(std::move(kixs)),
-                                ket(std::move(bixs))}) *
-              st_expr;
+    // Biorthogonal transformation without post-processing
+    st_expr = augmented_biorthogonal_transform(st_expr, ext_idxs, false);
   }
-
   simplify(st_expr);
 
   return st_expr;
@@ -1173,34 +1196,7 @@ ExprPtr closed_shell_CC_spintrace_v2(ExprPtr const& expr,
   canonicalize(st_expr);
 
   if (!ext_idxs.empty()) {
-    // Remove S operator to apply biorthogonal transformation
-    for (auto& term : *st_expr) {
-      if (term->is<Product>())
-        term = remove_tensor(term.as_shared_ptr<Product>(),
-                             reserved::symm_label());
-    }
-    st_expr = biorthogonal_transform(st_expr, ext_idxs);
-
-    // adding S in order to expand it and have all the raw equations
-    auto bixs =
-        ext_idxs | transform([](auto&& vec) { return get_bra_idx(vec); });
-    auto kixs =
-        ext_idxs | transform([](auto&& vec) { return get_ket_idx(vec); });
-    ExprPtr S_tensor =
-        ex<Tensor>(Tensor{reserved::symm_label(), bra(kixs), ket(bixs)});
-
-    if (bixs.size() > 1) {
-      st_expr = S_tensor * st_expr;
-    }
-    simplify(st_expr);
-
-    st_expr = S_maps(st_expr);
-    // canonicalizer must be called before hash-filter to combine terms
-    canonicalize(st_expr);
-
-    st_expr = WK_biorthogonalization_filter(st_expr, ext_idxs);
-
-    st_expr = S_tensor * st_expr;
+    st_expr = augmented_biorthogonal_transform(st_expr, ext_idxs);
   }
 
   simplify(st_expr);
