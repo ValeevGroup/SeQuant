@@ -2,8 +2,8 @@
 // Created by Robert Adam on 2023-09-21
 //
 
-#ifndef SEQUANT_CORE_PARSE_AST_HPP
-#define SEQUANT_CORE_PARSE_AST_HPP
+#ifndef SEQUANT_CORE_PARSE_V1_AST_HPP
+#define SEQUANT_CORE_PARSE_V1_AST_HPP
 
 #define BOOST_SPIRIT_X3_UNICODE
 #include <boost/fusion/include/adapt_struct.hpp>
@@ -17,7 +17,7 @@
 #include <variant>
 #include <vector>
 
-namespace sequant::parse::ast {
+namespace sequant::parse::v1::ast {
 
 struct IndexLabel : boost::spirit::x3::position_tagged {
   std::wstring label;
@@ -132,20 +132,22 @@ struct ResultExpr : boost::spirit::x3::position_tagged {
       : lhs(std::move(tensor)), rhs(std::move(expr)) {}
 };
 
-}  // namespace sequant::parse::ast
+}  // namespace sequant::parse::v1::ast
 
-BOOST_FUSION_ADAPT_STRUCT(sequant::parse::ast::IndexLabel, label, id);
-BOOST_FUSION_ADAPT_STRUCT(sequant::parse::ast::Index, label, protoLabels);
-BOOST_FUSION_ADAPT_STRUCT(sequant::parse::ast::Number, numerator, denominator);
-BOOST_FUSION_ADAPT_STRUCT(sequant::parse::ast::Variable, name, conjugated);
-BOOST_FUSION_ADAPT_STRUCT(sequant::parse::ast::IndexGroups, bra, ket,
+BOOST_FUSION_ADAPT_STRUCT(sequant::parse::v1::ast::IndexLabel, label, id);
+BOOST_FUSION_ADAPT_STRUCT(sequant::parse::v1::ast::Index, label, protoLabels);
+BOOST_FUSION_ADAPT_STRUCT(sequant::parse::v1::ast::Number, numerator,
+                          denominator);
+BOOST_FUSION_ADAPT_STRUCT(sequant::parse::v1::ast::Variable, name, conjugated);
+BOOST_FUSION_ADAPT_STRUCT(sequant::parse::v1::ast::IndexGroups, bra, ket,
                           auxiliaries, reverse_bra_ket);
-BOOST_FUSION_ADAPT_STRUCT(sequant::parse::ast::SymmetrySpec, perm_symm,
+BOOST_FUSION_ADAPT_STRUCT(sequant::parse::v1::ast::SymmetrySpec, perm_symm,
                           braket_symm, column_symm);
-BOOST_FUSION_ADAPT_STRUCT(sequant::parse::ast::Tensor, name, indices, symmetry);
+BOOST_FUSION_ADAPT_STRUCT(sequant::parse::v1::ast::Tensor, name, indices,
+                          symmetry);
 
-BOOST_FUSION_ADAPT_STRUCT(sequant::parse::ast::Product, factors);
-BOOST_FUSION_ADAPT_STRUCT(sequant::parse::ast::Sum, summands);
-BOOST_FUSION_ADAPT_STRUCT(sequant::parse::ast::ResultExpr, lhs, rhs);
+BOOST_FUSION_ADAPT_STRUCT(sequant::parse::v1::ast::Product, factors);
+BOOST_FUSION_ADAPT_STRUCT(sequant::parse::v1::ast::Sum, summands);
+BOOST_FUSION_ADAPT_STRUCT(sequant::parse::v1::ast::ResultExpr, lhs, rhs);
 
-#endif  // SEQUANT_CORE_PARSE_AST_HPP
+#endif  // SEQUANT_CORE_PARSE_AST_V1_HPP

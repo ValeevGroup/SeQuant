@@ -9,6 +9,10 @@ endif()
 
 option(SEQUANT_SKIP_LONG_TESTS "Whether to skip execution of long-running tests" OFF)
 
+if (SEQUANT_SKIP_LONG_TESTS OR CMAKE_BUILD_TYPE STREQUAL "Debug")
+    set(SEQUANT_INTERNAL_SKIP_LONG_TESTS ON)
+endif()
+
 if (SEQUANT_TESTS)
     # Add a "test" that builds that "all" target, which includes the tests binaries
     add_test("sequant/build" "${CMAKE_COMMAND}" --build "${PROJECT_BINARY_DIR}")
