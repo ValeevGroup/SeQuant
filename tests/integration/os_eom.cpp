@@ -116,6 +116,8 @@ class compute_eomcc_openshell {
       //     // spintraced_results.push_back({});
       std::wcout << "R[" << i << "] has " << eqvec[i].size() << " terms\n";
 
+      // #define shortcut
+#ifdef shortcut
       auto expr = eqvec[i];
       Tensor A = expr->at(0)->at(0)->as<Tensor>();
       SEQUANT_ASSERT(A.label() == reserved::antisymm_label());
@@ -173,32 +175,45 @@ class compute_eomcc_openshell {
       spintraced_results.push_back(level_spin_cases);
     }
 
-    for (size_t i = 0; i < spintraced_results.size(); ++i) {
-      const auto& spin_cases = spintraced_results[i];
+#else
+      auto spin_cases = open_shell_CC_spintrace(eqvec[i]);
 
-      if (spin_cases.empty()) {
-        std::wcout << type2wstr.at(type) << i << ": empty\n";
+      // it said we should canonicalize, but we did not do it in
+      // open-shell-cc-spintrace! and it did not change the results
+
+      // for (auto& sc : spin_cases) {
+      //   simplify(sc);
+      //   canonicalize(sc);
+      // }
+      spintraced_results.push_back(spin_cases);
+#endif
+  }
+  for (size_t i = 0; i < spintraced_results.size(); ++i) {
+    const auto& spin_cases = spintraced_results[i];
+
+    if (spin_cases.empty()) {
+      std::wcout << type2wstr.at(type) << i << ": empty\n";
+      continue;
+    }
+
+    if (eqvec[i] != nullptr) {
+      std::wcout << "original (spin-orbital): " << eqvec[i]->size()
+                 << " terms\n";
+    }
+    std::wcout << "spin-traced cases: " << spin_cases.size() << "\n";
+
+    for (size_t sc = 0; sc < spin_cases.size(); ++sc) {
+      if (spin_cases[sc] == nullptr) {
+        std::wcout << "case " << sc << ": null\n";
         continue;
       }
-
-      if (eqvec[i] != nullptr) {
-        std::wcout << "original (spin-orbital): " << eqvec[i]->size()
-                   << " terms\n";
-      }
-      std::wcout << "spin-traced cases: " << spin_cases.size() << "\n";
-
-      for (size_t sc = 0; sc < spin_cases.size(); ++sc) {
-        if (spin_cases[sc] == nullptr) {
-          std::wcout << "case " << sc << ": null\n";
-          continue;
-        }
-        std::wcout << "case " << sc << " : " << spin_cases[sc]->size()
-                   << " terms\n";
-        // std::wcout << "check spintraced eqs: "
-        // <<to_latex_align(spin_cases[sc], 20, 1) << "\n";
-      }
+      std::wcout << "case " << sc << " : " << spin_cases[sc]->size()
+                 << " terms\n";
+      // std::wcout << "check spintraced eqs: "
+      // <<to_latex_align(spin_cases[sc], 20, 1) << "\n";
     }
   }
+}
 };
 
 class compute_all_openshell {
