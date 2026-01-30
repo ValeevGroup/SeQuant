@@ -24,8 +24,7 @@ const auto& symm = sequant::reserved::symm_label();
 
 namespace sequant::mbpt {
 
-CC::CC(size_t n, Ansatz a, bool screen, bool use_topology)
-    : N(n), ansatz_(a), screen_(screen), use_topology_(use_topology) {}
+CC::CC(size_t n) : CC(n, Options{}) {}
 
 CC::CC(size_t n, const Options& opts)
     : N(n),

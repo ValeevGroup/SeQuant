@@ -32,7 +32,7 @@ class CC {
 
   /// Configuration options for CC class
   struct Options {
-    /// type of CC ansatz
+    /// type of CC ansatz. see CC::Ansatz
     Ansatz ansatz = Ansatz::T;
     /// if true, uses Operator level screening before applying WickTheorem.
     /// This propagates to all ref_av() calls
@@ -47,18 +47,14 @@ class CC {
     std::optional<size_t> pertbar_truncation_rank = std::nullopt;
   };
 
-  /// @brief constructs CC engine
-  /// @param N coupled cluster excitation rank
-  /// @param ansatz the type of CC ansatz
-  /// @param screen if true, uses Operator level screening before applying
-  /// WickTheorem
-  /// @param use_topology if true, uses topological optimizations in WickTheorem
-  explicit CC(size_t N, Ansatz ansatz = Ansatz::T, bool screen = true,
-              bool use_topology = true);
-
-  /// @brief constructs CC engine with named parameters
+  /// @brief constructs CC engine with default options (traditional ansatz,
+  /// screening enabled, topological optimization enabled)
   /// @param n coupled cluster excitation rank
-  /// @param opts configuration options. @see CC::Options
+  explicit CC(size_t n);
+
+  /// @brief constructs CC engine with custom options
+  /// @param n coupled cluster excitation rank
+  /// @param opts configuration options @see CC::Options
   explicit CC(size_t n, const Options& opts);
 
   /// @return the type of ansatz
