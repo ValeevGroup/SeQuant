@@ -232,19 +232,19 @@ ExprPtr WK_biorthogonalization_filter(
     const container::svector<container::svector<Index>>& ext_idxs);
 
 /// @brief Performs biorthogonal transformation with optional post-processing
-/// @details Applies biorthogonal transformation. When augmented is true
+/// @details Applies biorthogonal transformation. When post_process is true
 /// (default), applies post-processing (S_maps and
-/// WK_biorthogonalization_filter) to produce compact semi-biorthogonal
+/// WK_biorthogonalization_filter) to produce compact biorthogonal
 /// equations.
-/// @param expr The expression to transform
+/// @param expr The input expression.
 /// @param ext_idxs A vector of external index groups.
-/// @param augmented If true (default), applies post-processing for compact
-/// equations
-/// @return Compact biorthogonalized expression with leading S operator
+/// @param post_process If true (default), applies post-processing to obtain
+/// compact equations.
+/// @return Compact biorthogonalized expression with leading S operator.
 ExprPtr augmented_biorthogonal_transform(
     const ExprPtr& expr,
     const container::svector<container::svector<Index>>& ext_idxs,
-    bool augmented = true);
+    bool post_process = true);
 
 // clang-format off
 /// @brief Traces out spin degrees of freedom from fermionic operator moments

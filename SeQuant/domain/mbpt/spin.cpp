@@ -979,7 +979,7 @@ ExprPtr WK_biorthogonalization_filter(
 ExprPtr augmented_biorthogonal_transform(
     const ExprPtr& expr,
     const container::svector<container::svector<Index>>& ext_idxs,
-    bool compact) {
+    bool post_process) {
   using ranges::views::transform;
 
   // Remove leading S operator if present
@@ -997,8 +997,7 @@ ExprPtr augmented_biorthogonal_transform(
   ExprPtr S_tensor =
       ex<Tensor>(Tensor{reserved::symm_label(), bra(kixs), ket(bixs)});
 
-  // Post-processing only for rank > 1 and when compact is true
-  if (compact) {
+  if (post_process) {
     if (ext_idxs.size() > 1) {
       bt = S_tensor * bt;
     }
