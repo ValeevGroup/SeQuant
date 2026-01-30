@@ -1,26 +1,15 @@
-#include <SeQuant/core/attr.hpp>
-#include <SeQuant/core/expr.hpp>
+#include <SeQuant/version.hpp>
+
 #include <SeQuant/core/logger.hpp>
-#include <SeQuant/core/optimize.hpp>
-#include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/runtime.hpp>
-#include <SeQuant/core/space.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/macros.hpp>
-#include <SeQuant/core/utility/permutation.hpp>
 #include <SeQuant/core/utility/timer.hpp>
 #include <SeQuant/domain/mbpt/context.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 #include <SeQuant/domain/mbpt/models/cc.hpp>
 #include <SeQuant/domain/mbpt/spin.hpp>
-
-#include <algorithm>
-#include <functional>
-#include <iterator>
-#include <stdexcept>
-#include <string_view>
-#include <unordered_map>
 
 using namespace sequant;
 using namespace sequant::mbpt;
@@ -129,7 +118,7 @@ class compute_eomcc_openshell {
 
       auto expr = eqvec[i];
       Tensor A = expr->at(0)->at(0)->as<Tensor>();
-      SEQUANT_ASSERT(A.label() == L"A");
+      SEQUANT_ASSERT(A.label() == reserved::antisymm_label());
       size_t rank = A.bra_rank();
       runtime_assert(rank == A.ket_rank());
       auto ext_idxs = external_indices(A);
@@ -247,6 +236,9 @@ int main(int argc, char* argv[]) {
   std::wcerr.precision(std::numeric_limits<double>::max_digits10);
   sequant::set_locale();
 
+  std::cout << "SeQuant revision: " << sequant::git_revision() << "\n";
+  std::cout << "Number of threads: " << sequant::num_threads() << "\n\n";
+
 #ifndef NDEBUG
   constexpr size_t DEFAULT_NMAX = 3;
 #else
@@ -271,7 +263,8 @@ int main(int argc, char* argv[]) {
        .vacuum = Vacuum::SingleProduct,
        .canonicalization_options = CanonicalizeOptions().copy_and_set(
            CanonicalizationMethod::Complete)}));
-
+  mbpt::set_default_mbpt_context(
+      {.op_registry_ptr = mbpt::make_minimal_registry()});
   TensorCanonicalizer::register_instance(
       std::make_shared<DefaultTensorCanonicalizer>());
 
