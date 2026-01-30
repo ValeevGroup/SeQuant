@@ -133,7 +133,8 @@ class compute_eomcc_openshell {
       std::wcout << "processing " << expr->size() << " terms:\n";
       for (auto& product_term : *expr) {
         // remove A from this term, like how we did for S in v2
-        auto term = remove_tensor(product_term.as_shared_ptr<Product>(), L"A");
+        auto term = remove_tensor(product_term.as_shared_ptr<Product>(),
+                                  reserved::antisymm_label());
 
         std::vector<ExprPtr> os_st(rank + 1);
 
