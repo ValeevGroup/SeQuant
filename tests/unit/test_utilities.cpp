@@ -601,25 +601,30 @@ TEST_CASE("utilities", "[utilities]") {
                                  "'4 ' could not be fully parsed as a")));
     }
     SECTION("float") {
-      REQUIRE_THAT(string_to<float>("42"),
-                   WithinAbs(42, std::numeric_limits<float>::epsilon()));
-      REQUIRE_THAT(string_to<float>("3.14"),
-                   WithinAbs(3.14, std::numeric_limits<float>::epsilon()));
-      REQUIRE_THAT(string_to<float>("-3.14159"),
-                   WithinAbs(-3.14159, std::numeric_limits<float>::epsilon()));
-      REQUIRE_THAT(
-          string_to<double>("2.7182818284590"),
-          WithinAbs(2.7182818284590, std::numeric_limits<double>::epsilon()));
+      if constexpr (string_to_supports<float>) {
+        REQUIRE_THAT(string_to<float>("42"),
+                     WithinAbs(42, std::numeric_limits<float>::epsilon()));
+        REQUIRE_THAT(string_to<float>("3.14"),
+                     WithinAbs(3.14, std::numeric_limits<float>::epsilon()));
+        REQUIRE_THAT(
+            string_to<float>("-3.14159"),
+            WithinAbs(-3.14159, std::numeric_limits<float>::epsilon()));
+        if constexpr (string_to_supports<double>) {
+          REQUIRE_THAT(string_to<double>("2.7182818284590"),
+                       WithinAbs(2.7182818284590,
+                                 std::numeric_limits<double>::epsilon()));
+        }
 
-      REQUIRE_THROWS_MATCHES(
-          string_to<float>(" 3.14"), ConversionException,
-          MessageMatches(ContainsSubstring("' 3.14' is not a valid")));
-      REQUIRE_THROWS_MATCHES(
-          string_to<float>("abc"), ConversionException,
-          MessageMatches(ContainsSubstring("'abc' is not a valid")));
-      REQUIRE_THROWS_MATCHES(string_to<float>("2.718 "), ConversionException,
-                             MessageMatches(ContainsSubstring(
-                                 "'2.718 ' could not be fully parsed as a")));
+        REQUIRE_THROWS_MATCHES(
+            string_to<float>(" 3.14"), ConversionException,
+            MessageMatches(ContainsSubstring("' 3.14' is not a valid")));
+        REQUIRE_THROWS_MATCHES(
+            string_to<float>("abc"), ConversionException,
+            MessageMatches(ContainsSubstring("'abc' is not a valid")));
+        REQUIRE_THROWS_MATCHES(string_to<float>("2.718 "), ConversionException,
+                               MessageMatches(ContainsSubstring(
+                                   "'2.718 ' could not be fully parsed as a")));
+      }
     }
   }
 }

@@ -54,6 +54,10 @@ T string_to_impl(std::string_view str, Arg &&arg) {
 
 }  // namespace
 
+template <typename T>
+concept string_to_supports =
+    requires(const char *c, T &v) { std::from_chars(c, c + 1, v); };
+
 /// Converts the provided string to the desired integral type.
 /// Contrary to standard functions, this function does perform explicit
 /// error checking and will throw a ConversionException if the provided
@@ -70,6 +74,9 @@ T string_to_impl(std::string_view str, Arg &&arg) {
 /// the parsed value can't be represented as a T.
 template <std::integral T>
 T string_to(std::string_view str, int base = 10) {
+  static_assert(string_to_supports<T>,
+                "Your C++ standard library is missing a std::from_chars "
+                "implementation for this integral type");
   return string_to_impl<T>(str, base);
 }
 
@@ -90,6 +97,10 @@ T string_to(std::string_view str, int base = 10) {
 template <std::floating_point T>
 T string_to(std::string_view str,
             std::chars_format fmt = std::chars_format::general) {
+  static_assert(string_to_supports<T>,
+                "Your C++ standard library is missing a std::from_chars "
+                "implementation for this floating point type");
+
   return string_to_impl<T>(str, fmt);
 }
 
