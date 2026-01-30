@@ -315,19 +315,6 @@ struct has_memfn_to_latex<T, std::void_t<decltype(static_cast<std::wstring>(
 template <typename T>
 static constexpr bool has_memfn_to_latex_v = has_memfn_to_latex<T>::value;
 
-///////// has_memfn_to_wolfram /////////
-
-template <typename T, typename = std::void_t<>>
-struct has_memfn_to_wolfram : public std::false_type {};
-
-template <typename T>
-struct has_memfn_to_wolfram<T, std::void_t<decltype(static_cast<std::wstring>(
-                                   std::declval<const T &>().to_wolfram()))>>
-    : public std::true_type {};
-
-template <typename T>
-static constexpr bool has_memfn_to_wolfram_v = has_memfn_to_wolfram<T>::value;
-
 /// is_range
 
 namespace is_range_impl {  // detects presence of std::{begin,end}

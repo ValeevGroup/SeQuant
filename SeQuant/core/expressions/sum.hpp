@@ -240,19 +240,6 @@ class Sum : public Expr {
     return result;
   }
 
-  std::wstring to_wolfram() const override {
-    std::wstring result;
-    result = L"Plus[";
-    std::size_t counter = 0;
-    for (const auto &i : summands()) {
-      result += i->to_wolfram();
-      ++counter;
-      if (counter != summands().size()) result += L",";
-    }
-    result += L"]";
-    return result;
-  }
-
   Expr::type_id_type type_id() const override {
     return Expr::get_type_id<Sum>();
   };

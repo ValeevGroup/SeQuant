@@ -166,23 +166,6 @@ inline std::wstring to_latex(const rational& t) {
   return result;
 }
 
-template <typename Backend>
-inline std::wstring to_wolfram(
-    const boost::multiprecision::number<Backend>& t) {
-  return ::sequant::to_wstring(t);
-}
-
-inline std::wstring to_wolfram(const rational& t) {
-  using ::sequant::to_wstring;
-  if (denominator(t) == 1) {
-    // n.b. use to_string to skip extra braces so that output agrees with code
-    // that used scalars return to_wolfram(t.numerator());
-    return to_wstring(numerator(t));
-  } else
-    return std::wstring(L"Rational[") + to_wolfram(numerator(t)) + L"," +
-           to_wolfram(denominator(t)) + L"]";
-}
-
 }  // namespace sequant
 
 #endif  // SEQUANT_CORE_RATIONAL_H

@@ -321,22 +321,6 @@ class Product : public Expr {
     return result;
   }
 
-  std::wstring to_wolfram() const override {
-    std::wstring result =
-        is_commutative() ? L"Times[" : L"NonCommutativeMultiply[";
-    if (scalar() != decltype(scalar_)(1)) {
-      result += sequant::to_wolfram(scalar()) + L",";
-    }
-    const auto nfactors = factors().size();
-    size_t factor_count = 1;
-    for (const auto &i : factors()) {
-      result += i->to_wolfram() + (factor_count == nfactors ? L"" : L",");
-      ++factor_count;
-    }
-    result += L"]";
-    return result;
-  }
-
   type_id_type type_id() const override { return get_type_id<Product>(); };
 
   /// @return an identical clone of this Product (a deep copy allocated on the
