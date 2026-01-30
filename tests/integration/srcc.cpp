@@ -62,10 +62,11 @@ class compute_cceqvec {
     std::vector<ExprPtr> eqvec;
     switch (type) {
       case EqnType::t:
-        eqvec = CC{N, CC::Ansatz::T, screen, use_topology}.t(P, PMIN);
+        eqvec =
+            CC{N, {.screen = screen, .use_topology = use_topology}}.t(P, PMIN);
         break;
       case EqnType::λ:
-        eqvec = CC{N, CC::Ansatz::T, screen, use_topology}.λ();
+        eqvec = CC{N, {.screen = screen, .use_topology = use_topology}}.λ();
         break;
     }
     tpool.stop(N);

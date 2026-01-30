@@ -32,13 +32,13 @@ int main() {
              << "λ2: " << to_latex(l_eqs[2]) << "\n";
 
   // Unitary CCSD
-  auto Ut_eqs =
-      CC{2, CC::Ansatz::U}.t(4);  // Use 4th-order commutator expansion
+  auto Ut_eqs = CC(2, {.ansatz = CC::Ansatz::U, .hbar_truncation_rank = 4})
+                    .t();  // Use 4th-order commutator expansion
   std::wcout << "T1 (UCC): " << to_latex(Ut_eqs[1]) << "\n"
              << "T2 (UCC): " << to_latex(Ut_eqs[2]) << "\n";
 
   // Orbital-optimized CCSD
-  auto oT_eqs = CC{2, CC::Ansatz::oT}.t();
+  auto oT_eqs = CC(2, {.ansatz = CC::Ansatz::oT}).t();
   std::wcout << "T2 (oT): " << to_latex(oT_eqs[2]) << "\n";
   // end-snippet-1
 
