@@ -1699,15 +1699,16 @@ std::vector<ExprPtr> open_shell_CC_spintrace(const ExprPtr& expr) {
     auto ptr = sequant::ex<Sum>(spin_case);
     expr_vec.push_back(ptr);
   }
-  std::wcout << "original (spin-orbital): " << expr->size() << " terms\n";
-  std::wcout << "spin-traced cases: " << expr_vec.size() << "\n";
-  for (size_t sc = 0; sc < expr_vec.size(); ++sc) {
-    if (expr_vec[sc] == nullptr) {
-      std::wcout << "case " << sc << ": null\n";
-      continue;
-    }
-    std::wcout << "case " << sc << " : " << expr_vec[sc]->size() << " terms\n";
-  }
+  // std::wcout << "original (spin-orbital): " << expr->size() << " terms\n";
+  // std::wcout << "spin-traced cases: " << expr_vec.size() << "\n";
+  // for (size_t sc = 0; sc < expr_vec.size(); ++sc) {
+  //   if (expr_vec[sc] == nullptr) {
+  //     std::wcout << "case " << sc << ": null\n";
+  //     continue;
+  //   }
+  //   std::wcout << "case " << sc << " : " << expr_vec[sc]->size() << "
+  //   terms\n";
+  // }
 
   return expr_vec;
 }
