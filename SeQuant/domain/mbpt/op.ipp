@@ -23,6 +23,37 @@ Operator<QuantumNumbers, S>::Operator(
       qn_action_(std::move(qn_action)) {}
 
 template <typename QuantumNumbers, Statistics S>
+Operator<QuantumNumbers, S>::Operator(
+    std::function<std::wstring_view()> label_generator,
+    std::function<ExprPtr()> tensor_form_generator,
+    std::function<void(QuantumNumbers&)> qn_action, const OpParams& params)
+    : Operator(std::move(label_generator), std::move(tensor_form_generator),
+               std::move(qn_action)) {
+  params.validate();
+  order_ = params.order;
+  // decorate label with perturbation order if non-zero
+  if (order_ != 0) {
+    auto decorated = detail::decorate_with_pert_order(this->label_generator_(),
+                                                      static_cast<int>(order_));
+    this->label_generator_ =
+        [label = std::move(decorated)]() -> std::wstring_view { return label; };
+  }
+  // set up batch ordinals if any
+  if (!params.batch_ordinals.empty()) {
+    mbpt::check_for_batching_space();
+    SEQUANT_ASSERT(ranges::is_sorted(params.batch_ordinals) &&
+                   "Operator: batch_ordinals must be sorted");
+    batch_ordinals_ = params.batch_ordinals;
+  } else if (params.nbatch) {
+    mbpt::check_for_batching_space();
+    SEQUANT_ASSERT(params.nbatch != 0 && "Operator: nbatch cannot be zero");
+    // make aux ordinals [1 to nbatch]
+    batch_ordinals_ = ranges::views::iota(1ul, 1ul + params.nbatch.value()) |
+                      ranges::to<container::svector<std::size_t>>();
+  }
+}
+
+template <typename QuantumNumbers, Statistics S>
 Operator<QuantumNumbers, S>::~Operator() = default;
 
 template <typename QuantumNumbers, Statistics S>
@@ -121,6 +152,10 @@ void Operator<QuantumNumbers, S>::adjoint() {
     lbl.push_back(sequant::adjoint_label);
   }
 
+  // get order and batch_ordinals to restore later
+  const auto saved_order = this->order_;
+  const auto saved_batch_ordinals = this->batch_ordinals_;
+
   const auto tnsr = this->tensor_form();
   *this =
       Operator{[=]() -> std::wstring_view { return lbl; },  // label_generator
@@ -132,6 +167,10 @@ void Operator<QuantumNumbers, S>::adjoint() {
                  return qn;  // qn_action
                }};
   this->is_adjoint_ = !this->is_adjoint_;  // toggle adjoint flag
+
+  // restore original order and batch_ordinals
+  this->order_ = saved_order;
+  this->batch_ordinals_ = saved_batch_ordinals;
 }
 
 template <typename QuantumNumbers, Statistics S>
@@ -176,12 +215,15 @@ Expr::hash_type Operator<QuantumNumbers, S>::memoizing_hash() const {
     auto qns = (*this)(QuantumNumbers{});
     auto val = sequant::hash::value(qns);
     sequant::hash::combine(val, std::wstring(this->label()));
+    if (batch_ordinals()) {
+      const auto ordinals = batch_ordinals().value();
+      sequant::hash::range(val, begin(ordinals), end(ordinals));
+    }
     return val;
   };
   if (!this->hash_value_) {
     this->hash_value_ = compute_hash();
-  }
-  else {
+  } else {
     SEQUANT_ASSERT(*(this->hash_value_) == compute_hash());
   }
   return *(this->hash_value_);
@@ -189,8 +231,12 @@ Expr::hash_type Operator<QuantumNumbers, S>::memoizing_hash() const {
 
 template <typename QuantumNumbers, Statistics S>
 bool Operator<QuantumNumbers, S>::static_equal(const Expr& other_expr) const {
-  const auto& other = static_cast<const Operator<QuantumNumbers, S>&>(other_expr);
-  return this->label() == other.label() && (*this)(QuantumNumbers{}) == other(QuantumNumbers{});
+  const auto& other =
+      static_cast<const Operator<QuantumNumbers, S>&>(other_expr);
+  return this->label() == other.label() &&
+         (*this)(QuantumNumbers{}) == other(QuantumNumbers{}) &&
+         this->batch_ordinals() == other.batch_ordinals() &&
+         this->order() == other.order();
 }
 
 }  // namespace mbpt

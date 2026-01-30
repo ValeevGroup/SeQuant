@@ -2,10 +2,10 @@
 // Created by Bimal Gaudel on 9/26/23.
 //
 
-#include <SeQuant/domain/eval/cache_manager.hpp>
-#include <SeQuant/domain/eval/result.hpp>
+#include <SeQuant/core/eval/cache_manager.hpp>
+#include <SeQuant/core/eval/result.hpp>
 
-#include <SeQuant/core/eval_node.hpp>
+#include <SeQuant/core/eval/eval_node.hpp>
 
 namespace sequant {
 

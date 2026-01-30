@@ -6,6 +6,7 @@
 #define SEQUANT_DOMAIN_MBPT_RULES_CSV_HPP
 
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/reserved.hpp>
 
 namespace sequant::mbpt {
 
@@ -25,7 +26,7 @@ namespace sequant::mbpt {
 ExprPtr csv_transform(ExprPtr const& expr, const IndexSpace& csv_basis,
                       std::wstring const& coeff_tensor_label = L"C",
                       container::svector<std::wstring> const& tensor_labels = {
-                          L"f", L"g", overlap_label()});
+                          L"f", L"g", sequant::reserved::overlap_label()});
 
 }  // namespace sequant::mbpt
 

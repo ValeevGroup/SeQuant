@@ -1425,11 +1425,7 @@ class IndexSpaceRegistry {
 
     std::string errmsg;
     for (auto&& [qn, t] : qn2type) {
-#if __cplusplus < 202002L
-      if (qn2type_found.find(qn) == qn2type_found.end()) {
-#else
       if (!qn2type_found.contains(qn)) {
-#endif
         errmsg +=
             call_context +
             ": missing { IndexSpace::Type=" + std::to_string(t.to_int32()) +

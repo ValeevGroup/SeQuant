@@ -14,6 +14,7 @@
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/latex.hpp>
+#include <SeQuant/core/reserved.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/strong.hpp>
 
@@ -516,8 +517,10 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
     const auto bkst = ctx.braket_slot_typesetting();
 
     // either rank > 1 or sum of bra and ket ranks > 1
-    const bool add_bar =
-        bra_rank() == ket_rank() ? rank() > 1 : bra_rank() + ket_rank() > 1;
+    // and label is not antisymmetrizer label, since it is already implied
+    bool add_bar =
+        (bra_rank() == ket_rank() ? rank() > 1 : bra_rank() + ket_rank() > 1) &&
+        this->label() != reserved::antisymm_label();
 
     std::wstring core_label;
     if ((this->symmetry() == Symmetry::Antisymm) && add_bar)
@@ -809,22 +812,14 @@ static_assert(is_tensor_v<Tensor>,
 
 using TensorPtr = std::shared_ptr<Tensor>;
 
-/// overlap/metric tensor label is reserved since it is used by low-level
-/// SeQuant machinery. Users can create overlap Tensor using make_overlap()
-inline std::wstring overlap_label() { return L"s"; }
-
 inline ExprPtr make_overlap(const Index &bra_index, const Index &ket_index) {
-  return ex<Tensor>(Tensor(overlap_label(), bra{bra_index}, ket{ket_index},
-                           aux{}, Tensor::reserved_tag{}));
+  return ex<Tensor>(Tensor(reserved::overlap_label(), bra{bra_index},
+                           ket{ket_index}, aux{}, Tensor::reserved_tag{}));
 }
 
-/// kronecker tensor label is reserved since it is used by low-level
-/// SeQuant machinery. Users can create Kronecker Tensor using make_kronecker()
-inline std::wstring kronecker_label() { return L"δ"; }
-
 inline ExprPtr make_kronecker(const Index &bra_index, const Index &ket_index) {
-  return ex<Tensor>(Tensor(kronecker_label(), bra{bra_index}, ket{ket_index},
-                           aux{}, Tensor::reserved_tag{}));
+  return ex<Tensor>(Tensor(reserved::kronecker_label(), bra{bra_index},
+                           ket{ket_index}, aux{}, Tensor::reserved_tag{}));
 }
 
 }  // namespace sequant

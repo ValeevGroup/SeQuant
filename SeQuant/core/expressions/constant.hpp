@@ -40,7 +40,11 @@ class Constant : public Expr {
   Constant(Constant &&) = default;
   Constant &operator=(const Constant &) = default;
   Constant &operator=(Constant &&) = default;
-  template <typename U, typename = std::enable_if_t<!is_constant_v<U>>>
+  template <typename U>
+    requires(!is_constant_v<U> && !is_an_expr_v<std::remove_reference_t<U>> &&
+             !Expr::is_shared_ptr_of_expr_or_derived<
+                 std::remove_reference_t<U>>::value &&
+             std::constructible_from<scalar_type, U>)
   explicit Constant(U &&value) : value_(std::forward<U>(value)) {}
 
   /// @tparam T the result type; default to the type of value_
@@ -104,12 +108,11 @@ class Constant : public Expr {
   }
 
   /// @param[in] v a scalar
-  /// @return true if this is a soft zero, i.e. its magnitude is less than
-  /// `std::sqrt(std::numeric_limits<float>::epsilon())`
+  /// @return true if this is zero
   static bool is_zero(scalar_type v) { return v.is_zero(); }
 
   /// @return `Constant::is_zero(this->value())`
-  bool is_zero() const { return is_zero(this->value()); }
+  bool is_zero() const final { return is_zero(this->value()); }
 
  private:
   scalar_type value_;

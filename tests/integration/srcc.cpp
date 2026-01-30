@@ -1,3 +1,5 @@
+#include <SeQuant/version.hpp>
+
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/runtime.hpp>
@@ -10,8 +12,6 @@
 #include <SeQuant/domain/mbpt/models/cc.hpp>
 #include <SeQuant/domain/mbpt/op.hpp>
 #include <SeQuant/domain/mbpt/spin.hpp>
-
-#include <clocale>
 
 using namespace sequant;
 using namespace sequant::mbpt;
@@ -100,7 +100,8 @@ class compute_cceqvec {
           using ranges::views::transform;
           auto bixs = ext_idxs | transform([](auto&& vec) { return vec[0]; });
           auto kixs = ext_idxs | transform([](auto&& vec) { return vec[1]; });
-          auto s_tensor = ex<Tensor>(Tensor{L"S", bra(kixs), ket(bixs)});
+          auto s_tensor =
+              ex<Tensor>(Tensor{reserved::symm_label(), bra(kixs), ket(bixs)});
           eqvec_sf_ref[R] = s_tensor * eqvec_sf_ref[R];
           expand(eqvec_sf_ref[R]);
         }
@@ -166,7 +167,8 @@ class compute_cceqvec {
           // Remove S operator
           for (auto& term : eqvec[R]->expr()) {
             if (term->is<Product>())
-              term = remove_tensor(term.as_shared_ptr<Product>(), L"S");
+              term = remove_tensor(term.as_shared_ptr<Product>(),
+                                   reserved::symm_label());
           }
 
           // Biorthogonal transformation
@@ -178,10 +180,10 @@ class compute_cceqvec {
                                      [](auto&& vec) { return vec[0]; });
           auto kixs = ext_idxs | ranges::views::transform(
                                      [](auto&& vec) { return vec[1]; });
-          // N.B. external_indices(expr) confuses bra and ket
           if (bixs.size() > 1) {
-            eqvec[R] =
-                ex<Tensor>(Tensor{L"S", bra(kixs), ket(bixs)}) * eqvec[R];
+            eqvec[R] = ex<Tensor>(Tensor{reserved::symm_label(), bra(kixs),
+                                         ket(bixs)}) *
+                       eqvec[R];
           }
           simplify(eqvec[R]);
 
@@ -195,26 +197,17 @@ class compute_cceqvec {
 
           // restore the particle symmetrizer again to get the most compact set
           // of equations
-          eqvec[R] = ex<Tensor>(Tensor{L"S", bra(kixs), ket(bixs)}) * eqvec[R];
+          eqvec[R] =
+              ex<Tensor>(Tensor{reserved::symm_label(), bra(kixs), ket(bixs)}) *
+              eqvec[R];
           eqvec[R] = expand(eqvec[R]);
-
-          // apply normalization and rescaling factors
-          rational combined_factor;
-          if (ext_idxs.size() <= 2) {
-            combined_factor = rational(1, factorial(ext_idxs.size()));
-          } else {
-            auto fact_n = factorial(ext_idxs.size());
-            combined_factor = rational(
-                1, fact_n - 1);  // this is (1/fact_n) * (fact_n/(fact_n-1))
-          }
-          eqvec[R] = ex<Constant>(combined_factor) * eqvec[R];
           simplify(eqvec[R]);
 
           // WK_biorthogonalization_filter method removes the redundancy caused
           // by biorthogonal transformation and gives the most compact set of
           // equations. However, we need to restore the effects of those deleted
           // terms. So, after evaluate_symm call in sequant evaluation scope, we
-          // need to call evaluate_biorthogonal_nns_project.
+          // need to call biorthogonal_nns_project_<backend>.
 
           std::wcout << "biorthogonal spin-free R" << R << "(expS" << N
                      << ") has " << eqvec[R]->size() << " terms:" << std::endl;
@@ -256,7 +249,8 @@ int main(int argc, char* argv[]) {
   std::wcerr.precision(std::numeric_limits<double>::max_digits10);
   sequant::set_locale();
 
-  // set_num_threads(1);
+  std::cout << "SeQuant revision: " << sequant::git_revision() << "\n";
+  std::cout << "Number of threads: " << sequant::num_threads() << "\n\n";
 
 #ifndef NDEBUG
   const size_t DEFAULT_NMAX = 3;
@@ -271,7 +265,8 @@ int main(int argc, char* argv[]) {
 
   const std::string uocc_type_str = argc > 3 ? argv[3] : "std";
   const mbpt::CSV uocc_type = str2uocc.at(uocc_type_str);
-  auto mbpt_ctx = set_scoped_default_mbpt_context(mbpt::Context(uocc_type));
+  set_default_mbpt_context(
+      {.csv = uocc_type, .op_registry_ptr = make_minimal_registry()});
 
   const std::string spbasis_str = argc > 4 ? argv[4] : "so";
   const SPBasis spbasis = str2spbasis.at(spbasis_str);

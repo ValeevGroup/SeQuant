@@ -19,9 +19,7 @@
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
-#if __cplusplus >= 202002L
 #include <bit>
-#endif
 
 namespace {
 
@@ -31,11 +29,7 @@ namespace {
 ///
 template <typename T>
 bool has_single_bit(T x) noexcept {
-#if __cplusplus < 202002L
-  return x != 0 && (x & (x - 1)) == 0;
-#else
   return std::has_single_bit(x);
-#endif
 }
 
 }  // namespace
@@ -259,7 +253,7 @@ EvalSequence single_term_opt(TensorNetwork const& network,
 
 ///
 /// Omit the first factor from the top level product from given expression.
-/// Intended to drop "A" and "S" tensors from CC amplitudes as a preparatory
+/// Intended to drop "Â" and "Ŝ" tensors from CC amplitudes as a preparatory
 /// step for evaluation of the amplitudes.
 ///
 ExprPtr tail_factor(ExprPtr const& expr) noexcept;

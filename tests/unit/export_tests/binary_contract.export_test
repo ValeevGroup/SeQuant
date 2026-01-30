@@ -82,3 +82,17 @@ store I:cc[jk]
 ---- end
 
 =================================================
+Python (einsum)
+=================================================
+import numpy as np
+import os
+
+I_oo = np.zeros((nocc, nocc), order='F')
+A_vo = np.load('A_vo.npy')
+B_ov = np.load('B_ov.npy')
+I_oo += np.einsum('ai,ba->bi', A_vo, B_ov, optimize=True)
+del B_ov
+del A_vo
+np.save('I_oo.npy', I_oo)
+
+=================================================

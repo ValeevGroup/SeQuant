@@ -817,6 +817,71 @@ TEST_CASE("expr", "[elements]") {
       ex3.reset();
       REQUIRE_NOTHROW(ex3 *= ex2);
       CHECK(ex3 == ex2);
+
+      SECTION("Overloads with basic numeric types") {
+        ex1 = ex<Constant>(1);
+
+        ExprPtr res = ex1 + 1;
+        simplify(res);
+        REQUIRE(res == ex<Constant>(2));
+
+        res = 1 + ex1;
+        simplify(res);
+        REQUIRE(res == ex<Constant>(2));
+
+        res = ex1 - 1;
+        simplify(res);
+        REQUIRE(res == ex<Constant>(0));
+
+        res = 1 - ex1;
+        simplify(res);
+        REQUIRE(res == ex<Constant>(0));
+
+        res = ex1 * 5.0;
+        simplify(res);
+        REQUIRE(res == ex<Constant>(5));
+
+        res = 5.0 * ex1;
+        simplify(res);
+        REQUIRE(res == ex<Constant>(5));
+
+        // This will be rewritten as (1/5.0) * ex1
+        res = ex1 / 5.0;
+        simplify(res);
+        REQUIRE(res == ex<Constant>(rational(1, 5)));
+      }
+
+      SECTION("Overloads with Variables") {
+        auto One = ex<Constant>(1);
+        auto Two = ex<Constant>(2);
+
+        ExprPtr res1 = One + L"x";
+        simplify(res1);
+        REQUIRE(res1 == simplify(One + ex<Variable>(L"x")));
+        REQUIRE(simplify(L"x" + One) == res1);
+
+        ExprPtr res2 = res1 - "x";
+        simplify(res2);
+        REQUIRE(res2 == One);
+
+        ExprPtr res3 = L"x" - One;
+        simplify(res3);
+        REQUIRE(res3 == ex<Variable>(L"x") - One);
+
+        ExprPtr res4 = Two * "y";
+        simplify(res4);
+        REQUIRE(res4 == simplify(Two * ex<Variable>("y")));
+        REQUIRE(simplify("y" * Two) == res4);
+      }
+
+      SECTION("Divide by Constant") {
+        ex1 = ex<Constant>(5);
+
+        ExprPtr res = ex1 / Constant(3);
+        simplify(res);
+
+        REQUIRE(res == ex<Constant>(rational(5, 3)));
+      }
     }
   }
 

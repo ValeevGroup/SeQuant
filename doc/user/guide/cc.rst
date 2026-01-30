@@ -55,6 +55,8 @@ Lie Similarity Transformation
 
 Returns Lie similarity transformation, :math:`\bar{A} = e^{-\hat{B}} \hat{A} e^{\hat{B}}`, as a series of nested commutators, :math:`[\hat{A},\hat{B}]`, :math:`[[\hat{A},\hat{B}],\hat{B}]`, etc., up to order ``r``.
 
+The method ``lst`` is used internally by the CC class to construct the similarity-transformed Hamiltonian. It is, however, provided as a standalone utility and can be used independently by including the header ``<SeQuant/domain/mbpt/utils.hpp>``.
+
 Ground State Amplitudes
 ^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -77,8 +79,8 @@ Coupled-Cluster Response
 
 .. code-block:: cpp
 
-   std::vector<ExprPtr> t_pt(size_t order = 1, size_t rank = 1);
-   std::vector<ExprPtr> λ_pt(size_t order = 1, size_t rank = 1);
+   std::vector<ExprPtr> tʼ(size_t rank = 1, size_t order = 1);
+   std::vector<ExprPtr> λʼ(size_t rank = 1, size_t order = 1);
 
 Derives perturbed amplitude equations for response theory calculations.
 
@@ -97,7 +99,7 @@ Examples
 
 The following examples demonstrate how to use the :class:`CC <sequant::mbpt::CC>` class to derive CC equations for various ansätze and excitation levels.
 
-From this point onward, assume the following namespaces are imported, and the :class:`sequant::Context` is configured as shown.
+From this point onward, assume the following namespaces are imported, and :class:`sequant::Context` and :class:`sequant::mbpt::Context` are set up as shown.
 
 .. literalinclude:: /examples/user/cc.cpp
    :language: cpp

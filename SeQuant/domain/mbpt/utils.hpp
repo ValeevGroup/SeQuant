@@ -14,22 +14,35 @@
 #include <range/v3/view.hpp>
 
 namespace sequant::mbpt {
+
+/// Options for Lie Similarity Transformation. @see lst
+struct LSTOptions {
+  /// If true, uses unitary generator
+  bool unitary = false;
+  /// If true, uses explicit commutators [A,B] = AB - BA; otherwise uses
+  /// connected products (AB)_c
+  bool use_commutators = false;
+  /// If true, will not clone the input expression
+  bool skip_clone = false;
+};
+
 // clang-format off
 /// @brief Computes the Lie similarity transformation, e^(-B) A e^B, using its Campbell expansion (DOI 10.1112/plms/s1-28.1.381) as a series of nested commutators:
 /// `e^(-B) A e^B = A + [A,B] + (1/2!)[[A,B],B] + (1/3!)[[[A,B],B],B] + ...`
 ///
-/// Notes:
-/// - If \p unitary is true, the ansatz uses B - B^+ instead of B.
-///
 /// @param A Expression A (e.g., the Hamiltonian)
 /// @param B Expression B (e.g., the cluster operator T)
 /// @param commutator_rank The maximum order of nested commutators to retain (e.g. 4 for traditional coupled-cluster)
-/// @param unitary If true, uses unitary generator with B-B^+
-/// @param skip_clone if true, will not clone the input expression
+/// @param options Options controlling the transformation behavior
+/// @sa LSTOptions
+/// Notes:
+/// - If \p options.unitary is true, the ansatz uses B - B^+ instead of B.
+/// - If \p options.use_commutators is false (default), commutators are computed via connected products: [A,B] = (AB)_c
+/// - If \p options.use_commutators is true, commutators are computed explicitly: [A,B] = AB - BA
 /// @pre This function expects \p A and \p B to be composed of mbpt::Operators
 // clang-format on
-ExprPtr lst(ExprPtr A, ExprPtr B, size_t commutator_rank, bool unitary = false,
-            bool skip_clone = false);
+ExprPtr lst(ExprPtr A, ExprPtr B, size_t commutator_rank,
+            const LSTOptions& options = {});
 
 /// @brief Screens out terms in the expression \p expr that cannot contribute to
 /// expectation value

@@ -1,13 +1,16 @@
-#include <SeQuant/domain/eval/result.hpp>
+#include <SeQuant/core/eval/backends/tiledarray/result.hpp>
+
+#ifdef SEQUANT_HAS_TILEDARRAY
+
+#include <SeQuant/core/logger.hpp>
+
+#include <tiledarray.h>
+
+#include <iomanip>
+#include <sstream>
+#include <vector>
 
 namespace sequant {
-
-Result::id_t Result::next_id() noexcept {
-  static std::atomic<id_t> grand_type_id = 0;
-  return ++grand_type_id;
-}
-
-bool Result::has_value() const noexcept { return value_.has_value(); }
 
 void log_ta_tensor_host_memory_use([[maybe_unused]] madness::World& world,
                                    [[maybe_unused]] std::string_view label) {
@@ -53,4 +56,7 @@ void log_ta_tensor_host_memory_use([[maybe_unused]] madness::World& world,
   write_log(logger, oss.str());
 #endif
 }
+
 }  // namespace sequant
+
+#endif  // SEQUANT_HAS_TILEDARRAY

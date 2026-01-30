@@ -5,7 +5,7 @@ on: [push, pull_request, workflow_dispatch]
 jobs:
   build:
     name: "Build and Deploy"
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     env:
       CXX: g++
       BUILD_CONFIG: >
@@ -14,11 +14,12 @@ jobs:
         -DCMAKE_PREFIX_PATH='/usr/include/boost'
         -DBUILD_TESTING=OFF
         -DSEQUANT_BUILD_DOCS=ON
+        -DSEQUANT_BUILD_DOCS_API_BREATHEEXHALE=ON
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
         with:
-          python-version: '3.9' # Breathe needs 3.9 or later
+          python-version: '>=3.9' # Breathe needs 3.9 or later
           cache: 'pip'
 
       - name: Setup Environment
@@ -35,7 +36,7 @@ jobs:
           cmake --build . --target sphinx-sequant
 
       - name: Deploy to gh-pages
-        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/master' }}
+        if: ${{ (github.event_name == 'push' && github.ref == 'refs/heads/master') || github.event_name == 'workflow_dispatch' }}
         uses: peaceiris/actions-gh-pages@v4
         with:
           publish_branch: gh-pages

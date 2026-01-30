@@ -70,6 +70,9 @@ class Expr : public std::enable_shared_from_this<Expr>,
   /// @return true if this is a leaf
   bool is_atom() const { return ranges::empty(*this); }
 
+  /// @return true if this is zero
+  virtual bool is_zero() const { return false; }
+
   /// @return the string representation of @c this in the LaTeX format
   virtual std::wstring to_latex() const;
 
@@ -297,7 +300,7 @@ class Expr : public std::enable_shared_from_this<Expr>,
     if constexpr (is_expr_v<T>)
       return true;
     else if constexpr (std::is_base_of_v<Expr, T>)
-      return this->type_id() == get_type_id<meta::remove_cvref_t<T>>();
+      return this->type_id() == get_type_id<std::remove_cvref_t<T>>();
     else
       return dynamic_cast<const T *>(this) != nullptr;
   }
@@ -365,9 +368,9 @@ class Expr : public std::enable_shared_from_this<Expr>,
  private:
   friend ranges::range_access;
 
-  template <typename E, typename Visitor,
-            typename =
-                std::enable_if_t<std::is_same_v<meta::remove_cvref_t<E>, Expr>>>
+  template <
+      typename E, typename Visitor,
+      typename = std::enable_if_t<std::is_same_v<std::remove_cvref_t<E>, Expr>>>
   static bool visit_impl(E &&expr, Visitor &&visitor, const bool atoms_only) {
     if (expr.weak_from_this().use_count() == 0)
       throw std::invalid_argument(
@@ -531,11 +534,6 @@ inline bool operator==(const Expr &a, const Expr &b) {
   else
     return a.static_equal(b);
 }
-
-#if __cplusplus < 202002L
-/// @return true if @c a is not equal to @c b
-inline bool operator!=(const Expr &a, const Expr &b) { return !(a == b); }
-#endif  // __cplusplus < 202002L
 
 /// binary predicate that returns true is 2 expressions differ by a factor
 struct proportional_to {

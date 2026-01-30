@@ -1,6 +1,8 @@
 //
 // Created by Ajay Melekamburath on 2/3/25.
 //
+#include <SeQuant/version.hpp>
+
 #include <SeQuant/core/logger.hpp>
 #include <SeQuant/core/runtime.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
@@ -84,8 +86,7 @@ class compute_eomcc {
   }
 
   void operator()(bool print) {
-    SEQUANT_ASSERT(get_default_context().spbasis() == SPBasis::Spinor);  //
-    // for spin-free I cancelled this assertion
+    SEQUANT_ASSERT(get_default_context().spbasis() == SPBasis::Spinor);
     timer_pool.start(N);
     std::vector<ExprPtr> eqvec;
     switch (type) {
@@ -172,6 +173,9 @@ int main(int argc, char* argv[]) {
   std::wcerr.precision(std::numeric_limits<double>::max_digits10);
   sequant::set_locale();
 
+  std::cout << "SeQuant revision: " << sequant::git_revision() << "\n";
+  std::cout << "Number of threads: " << sequant::num_threads() << "\n\n";
+
 #ifndef NDEBUG
   constexpr size_t DEFAULT_NMAX = 3;
 #else
@@ -190,19 +194,11 @@ int main(int argc, char* argv[]) {
   const bool print = print_str == "print";
 
   sequant::detail::OpIdRegistrar op_id_registrar;
-
-  // contex for spin-orbital, for open-shell or closed-shell I need so basis
   sequant::set_default_context(
       sequant::Context({.index_space_registry_shared_ptr = make_min_sr_spaces(),
                         .vacuum = Vacuum::SingleProduct}));
-
-  // now I set the context for spin-free
-  // sequant::set_default_context(
-  // sequant::Context({.index_space_registry_shared_ptr =
-  //                       make_min_sr_spaces(SpinConvention::None),
-  //                   .vacuum = Vacuum::SingleProduct,
-  //                   .spbasis = SPBasis::Spinfree}));
-
+  mbpt::set_default_mbpt_context(
+      {.op_registry_ptr = mbpt::make_minimal_registry()});
   TensorCanonicalizer::register_instance(
       std::make_shared<DefaultTensorCanonicalizer>());
 

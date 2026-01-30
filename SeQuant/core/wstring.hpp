@@ -64,8 +64,6 @@ inline std::wstring to_wstring(std::wstring&& str_utf8) {
   return std::move(str_utf8);
 }
 
-#if __cplusplus >= 202002L
-
 namespace detail {
 
 /// selects the string literal matching the code unit given by @p Char
@@ -99,33 +97,6 @@ constexpr decltype(auto) select_string_literal(
       SEQUANT_CONCAT(u8, char_string_literal),                     \
       SEQUANT_CONCAT(u, char_string_literal),                      \
       SEQUANT_CONCAT(U, char_string_literal))
-
-#else  // __cplusplus < 202002L
-
-namespace detail {
-
-/// selects the string literal matching the code unit given by @p Char
-template <typename Char, std::size_t NChar, std::size_t NWChar>
-constexpr decltype(auto) select_string_literal(const char (&str)[NChar],
-                                               const wchar_t (&wstr)[NWChar]) {
-  if constexpr (std::is_same_v<Char, char>)
-    return str;
-  else if constexpr (std::is_same_v<Char, wchar_t>)
-    return wstr;
-
-  SEQUANT_ABORT("Unhandled character type");
-}
-
-}  // namespace detail
-
-/// @brief Converts a base string literal to the desired code unit type
-/// @param code_unit The desired code unit type; either `char` or `wchar_t`
-/// @param char_string_literal `char`-based string literal
-#define SQ_STRLIT(code_unit, char_string_literal) \
-  detail::select_string_literal<code_unit>(       \
-      char_string_literal, SEQUANT_CONCAT(L, char_string_literal))
-
-#endif  // __cplusplus < 202002L
 
 }  // namespace sequant
 

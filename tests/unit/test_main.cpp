@@ -41,6 +41,11 @@ int main(int argc, char* argv[]) {
        .braket_symmetry = BraKetSymmetry::Conjugate,
        .spbasis = SPBasis::Spinor,
        .first_dummy_index_ordinal = 100,
+       // TODO remove when CanonicalizeOptions::method is reverted to
+       // Topological
+       .canonicalization_options =
+           CanonicalizeOptions::default_options().copy_and_set(
+               CanonicalizationMethod::Topological),
        .braket_typesetting = BraKetTypesetting::ContraSub,
        // to_latex() reference outputs predominantly assume the original
        // (naive) convention
@@ -51,6 +56,11 @@ int main(int argc, char* argv[]) {
   // Logger::set_instance(1);
   // ... or can instead selectively set/unset particular logging flags
   // Logger::instance().wick_contract = true;
+
+  // MBPT Context setup
+  auto mbpt_ctx = mbpt::Context(
+      {.csv = mbpt::CSV::No, .op_registry_ptr = mbpt::make_legacy_registry()});
+  sequant::mbpt::set_default_mbpt_context(mbpt_ctx);
 
 #ifdef SEQUANT_HAS_TILEDARRAY
   auto& world = TA::initialize(argc, argv);

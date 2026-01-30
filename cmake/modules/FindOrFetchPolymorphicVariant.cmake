@@ -14,5 +14,5 @@ endif()
 
 # postcond check
 if (NOT TARGET polymorphic_variant::polymorphic_variant)
-    message(FATAL_ERROR "FindOrFetchLibPerm could not make TARGET polymorphic_variant::polymorphic_variant available")
+    message(FATAL_ERROR "FindOrFetchPolymorphicVariant could not make TARGET polymorphic_variant::polymorphic_variant available")
 endif()

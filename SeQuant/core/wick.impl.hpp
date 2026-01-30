@@ -7,6 +7,7 @@
 
 #include <SeQuant/core/bliss.hpp>
 #include <SeQuant/core/logger.hpp>
+#include <SeQuant/core/reserved.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/tensor_network.hpp>
 #include <SeQuant/core/tensor_network/vertex.hpp>
@@ -350,6 +351,9 @@ compute_index_replacement_rules(
     }
   };
 
+  using sequant::reserved::kronecker_label;
+  using sequant::reserved::overlap_label;
+
   /// this makes the list of replacements ... we do not mutate the expressions
   /// to keep the information about which indices are related
   for (auto it = ranges::begin(exrng); it != ranges::end(exrng); ++it) {
@@ -433,10 +437,6 @@ inline bool apply_index_replacement_rules(
     std::shared_ptr<Product> &product,
     const container::map<Index, Index> &const_replrules,
     std::set<Index, Index::LabelCompare> &all_indices) {
-  // to be able to use map[]
-  [[maybe_unused]] auto &replrules =
-      const_cast<container::map<Index, Index> &>(const_replrules);
-
   expr_range exrng(product);
 
   /// this recursively applies replacement rules until result does not
@@ -459,6 +459,9 @@ inline bool apply_index_replacement_rules(
   bool pass_mutated = false;
   do {
     pass_mutated = false;
+
+    using sequant::reserved::kronecker_label;
+    using sequant::reserved::overlap_label;
 
     for (auto it = ranges::begin(exrng); it != ranges::end(exrng);) {
       const auto &factor = *it;
@@ -517,6 +520,9 @@ bool reduce_wick_impl(std::shared_ptr<Product> &expr,
   // if have noncovariant indices, will need to update them at the beginning of
   // every pass
   const auto have_noncovariant_indices = !noncovariant_indices.empty();
+
+  using sequant::reserved::kronecker_label;
+  using sequant::reserved::overlap_label;
 
   if (Logger::instance().wick_reduce) {
     sequant::wprintf(
@@ -656,14 +662,19 @@ void WickTheorem<S>::extract_indices(const Expr &expr,
       ranges::to<container::set<Index>>;
 
   if (!user_defined_external_indices_) {
-    // external indices either appears once in nonproto slot or is pure
-    // protoindex
-    external_indices_ =
-        idx_counter | ranges::views::filter([force_external](const auto &v) {
-          return v.second.nonproto() <= 1 || force_external;
-        }) |
-        ranges::views::transform([](const auto &v) { return v.first; }) |
-        ranges::to<container::set<Index>>;
+    const auto &copts = get_default_context().canonicalization_options();
+    if (copts && copts->named_indices) {
+      external_indices_ = copts->named_indices.value();
+    } else {
+      // external indices either appears once in nonproto slot or is pure
+      // protoindex
+      external_indices_ =
+          idx_counter | ranges::views::filter([force_external](const auto &v) {
+            return v.second.nonproto() <= 1 || force_external;
+          }) |
+          ranges::views::transform([](const auto &v) { return v.first; }) |
+          ranges::to<container::set<Index>>;
+    }
   }
 
   // covariant indices are indices that do not depend on other indices,
@@ -731,32 +742,38 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
       disable_nop_canonicalization();
 
       // parallelize over summands
-      auto result = std::make_shared<Sum>();
+      HashingAccumulator result_acc;
       std::mutex result_mtx;  // serializes updates of result
       auto summands = expr_input_->as<Sum>().summands();
 
       // find external_indices if don't have them
       if (!external_indices_) {
-        ranges::find_if(summands, [this](const auto &summand) {
-          if (summand.template is<Sum>())  // summands must not be a Sum
-            throw std::invalid_argument(
-                "WickTheorem<S>::compute(expr): expr is a Sum with one of the "
-                "summands also a Sum, WickTheorem can only accept a fully "
-                "expanded Sum");
-          else if (summand.template is<Product>()) {
-            extract_indices(*(summand.template as_shared_ptr<Product>()));
-            return true;
-          } else
-            return false;
-        });
+        const auto &copts = get_default_context().canonicalization_options();
+        if (copts && copts->named_indices) {
+          external_indices_ = copts->named_indices.value();
+        } else {
+          ranges::find_if(summands, [this](const auto &summand) {
+            if (summand.template is<Sum>())  // summands must not be a Sum
+              throw std::invalid_argument(
+                  "WickTheorem<S>::compute(expr): expr is a Sum with one of "
+                  "the "
+                  "summands also a Sum, WickTheorem can only accept a fully "
+                  "expanded Sum");
+            else if (summand.template is<Product>()) {
+              extract_indices(*(summand.template as_shared_ptr<Product>()));
+              return true;
+            } else
+              return false;
+          });
+        }
       }
 
       if (Logger::instance().wick_harness)
         std::wcout << "WickTheorem<S>::compute: input (after canonicalize) has "
-                   << summands.size() << " terms = " << to_latex_align(result)
-                   << std::endl;
+                   << summands.size()
+                   << " terms = " << to_latex_align(expr_input_) << std::endl;
 
-      auto wick_task = [&result, &result_mtx, this,
+      auto wick_task = [&result_acc, &result_mtx, this,
                         &count_only](const ExprPtr &input) {
         WickTheorem wt(input->clone(), *this);
         auto task_result = wt.compute(
@@ -764,21 +781,14 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
         stats() += wt.stats();
         if (task_result) {
           std::scoped_lock<std::mutex> lock(result_mtx);
-          result->append(task_result);
+          result_acc.append(task_result);
         }
       };
       sequant::for_each(summands, wick_task);
 
       // if the sum is empty return zero
       // if the sum has 1 summand, return it directly
-      ExprPtr result_expr = result;
-      if (result->summands().size() == 0) {
-        result_expr = ex<Constant>(0);
-      }
-      if (result->summands().size() == 1)
-        result_expr = std::move(result->summands()[0]);
-
-      return result_expr;
+      return result_acc.make_expr();
     }
     // ... else if a product, find NormalOperatorSequence, if any, and compute
     // ...
@@ -1226,13 +1236,14 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
             for (auto &&nop : input_) std::wcout << to_latex(nop) << "\n";
             std::wcout << "}" << std::endl;
           }
+
+          prefactor_ = prefactor;
           auto result = compute_nopseq(count_only);
+          prefactor_.reset();
+
           if (result) {  // simplify if obtained nonzero ...
-            result = prefactor * result;
-            expand(result);
-            this->reduce(result);
-            rapid_simplify(result);
-            canonicalize(result);
+            // rapid_simplify(result);
+            // canonicalize(result);
             rapid_simplify(
                 result);  // rapid_simplify again since canonization may produce
                           // new opportunities (e.g. terms cancel, etc.)

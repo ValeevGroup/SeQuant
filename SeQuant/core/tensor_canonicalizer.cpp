@@ -6,6 +6,7 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/meta.hpp>
+#include <SeQuant/core/reserved.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 
 #include <regex>
@@ -170,9 +171,53 @@ TensorCanonicalizer::instance_map_accessor() {
 }
 
 container::vector<std::wstring>&
+TensorCanonicalizer::default_cardinal_tensor_labels_accessor() {
+  // {antisymm_label, symm_label, transposition_label} is the default
+  static container::vector<std::wstring> default_ctlabels_{
+      reserved::antisymm_label(), reserved::symm_label(),
+      reserved::transposition_label()};
+  return default_ctlabels_;
+}
+
+container::vector<std::wstring>&
 TensorCanonicalizer::cardinal_tensor_labels_accessor() {
-  static container::vector<std::wstring> ctlabels_;
+  static container::vector<std::wstring> ctlabels_ =
+      default_cardinal_tensor_labels_accessor();
   return ctlabels_;
+}
+
+void TensorCanonicalizer::set_cardinal_tensor_labels(
+    const container::vector<std::wstring>& labels) {
+  // check for duplicates
+#ifdef SEQUANT_ASSERT_ENABLED
+  // check for duplicates within user provided labels
+  auto sorted_labels = labels;
+  ranges::sort(sorted_labels);
+  auto duplicate = ranges::adjacent_find(sorted_labels);
+  SEQUANT_ASSERT(duplicate == sorted_labels.end() &&
+                 "cardinal tensor labels must not contain duplicates");
+
+  // check if any label conflicts with existing ones
+  const auto& existing = cardinal_tensor_labels_accessor();
+  for (const auto& label : labels) {
+    auto conflict = ranges::find(existing, label);
+    SEQUANT_ASSERT(conflict == existing.end() &&
+                   "cardinal tensor labels must not contain duplicates");
+  }
+#endif
+  auto& ctlabels = cardinal_tensor_labels_accessor();
+  // get defaults
+  ctlabels = default_cardinal_tensor_labels_accessor();
+  // append
+  ctlabels.insert(ctlabels.end(), labels.begin(), labels.end());
+}
+
+void TensorCanonicalizer::reset_cardinal_tensor_labels() {
+  cardinal_tensor_labels_accessor() = default_cardinal_tensor_labels_accessor();
+}
+
+void TensorCanonicalizer::clear_all_cardinal_tensor_labels() {
+  cardinal_tensor_labels_accessor().clear();
 }
 
 std::shared_ptr<TensorCanonicalizer>

@@ -10,9 +10,11 @@
 
 #include <btas/btas.h>
 #include <SeQuant/core/container.hpp>
+#include <SeQuant/core/eval/backends/btas/eval_expr.hpp>
+#include <SeQuant/core/eval/backends/btas/result.hpp>
+#include <SeQuant/core/eval/eval.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/utility/macros.hpp>
-#include <SeQuant/domain/eval/eval.hpp>
 #include <range/v3/view.hpp>
 
 namespace sequant::eval::btas {

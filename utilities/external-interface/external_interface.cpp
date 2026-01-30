@@ -200,6 +200,8 @@ void generateITF(const json &blocks, std::string_view out_file,
 
     container::svector<ExportNode<>> results;
 
+    std::set<std::variant<Tensor, Variable>> createdResults;
+
     for (const json &current_result : current_block.at("results")) {
       const std::string result_name = current_result.at("name");
       const std::string input_file = current_result.at("equation_file");
@@ -267,7 +269,6 @@ void generateITF(const json &blocks, std::string_view out_file,
 
       std::unordered_set<Tensor> tensorsToSymmetrize;
 
-      std::set<std::variant<Tensor, Variable>> createdResults;
       for (const ResultExpr &contribution : resultParts) {
         if (resultParts.size() > 1) {
           spdlog::debug("Current contribution:\n{}", contribution);
@@ -300,7 +301,7 @@ void generateITF(const json &blocks, std::string_view out_file,
 
           if (needsSymmetrization(current.expression())) {
             std::optional<ExprPtr> symmetrizer =
-                pop_tensor(current.expression(), L"S");
+                pop_tensor(current.expression(), reserved::symm_label());
             SEQUANT_ASSERT(symmetrizer.has_value());
 
             Tensor resultTensor(current.label(), bra(current.bra()),

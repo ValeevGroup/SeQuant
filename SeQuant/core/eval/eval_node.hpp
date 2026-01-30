@@ -2,12 +2,12 @@
 // Created by Bimal Gaudel on 5/24/21.
 //
 
-#ifndef SEQUANT_EVAL_NODE_HPP
-#define SEQUANT_EVAL_NODE_HPP
+#ifndef SEQUANT_EVAL_EVAL_NODE_HPP
+#define SEQUANT_EVAL_EVAL_NODE_HPP
 
 #include <SeQuant/core/asy_cost.hpp>
 #include <SeQuant/core/binary_node.hpp>
-#include <SeQuant/core/eval_expr.hpp>
+#include <SeQuant/core/eval/eval_expr.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/math.hpp>
 #include <SeQuant/core/utility/macros.hpp>
@@ -252,4 +252,4 @@ AsyCost min_storage(meta::eval_node auto const& node) {
 
 }  // namespace sequant
 
-#endif  // SEQUANT_EVAL_NODE_HPP
+#endif  // SEQUANT_EVAL_EVAL_NODE_HPP

@@ -65,6 +65,8 @@ _deps
 # End of https://www.gitignore.io/api/cmake
 # build directory
 build
+_codeql_build_dir
+_codeql_detected_source_root
 
 .clangd
 .vscode

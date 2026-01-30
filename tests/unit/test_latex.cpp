@@ -28,7 +28,6 @@ TEST_CASE("latex", "[util]") {
     REQUIRE(greek_characters_to_latex(std::wstring(L"Α")) == L"A");
     REQUIRE(greek_characters_to_latex(std::wstring(L"Γ")) == L"\\Gamma");
 
-#if __cplusplus >= 202002L
     REQUIRE(greek_characters_to_latex(std::u8string(u8"alpha")) == u8"alpha");
     REQUIRE_THROWS_AS(
         greek_characters_to_latex(std::u8string(u8"α")) == u8"\\alpha",
@@ -44,8 +43,6 @@ TEST_CASE("latex", "[util]") {
     REQUIRE(greek_characters_to_latex(std::u32string(U"alpha")) == U"alpha");
     REQUIRE(greek_characters_to_latex(std::u32string(U"α")) == U"\\alpha");
     REQUIRE(greek_characters_to_latex(std::u32string(U"Γ")) == U"\\Gamma");
-
-#endif
   }
 
   SECTION("diactrids->latex") {
@@ -71,11 +68,22 @@ TEST_CASE("latex", "[util]") {
     std::wstring caron__f = L"f̌";
     REQUIRE(caron__f.size() == 2);
     REQUIRE(diactrics_to_latex(caron__f) == L"\\check{f}");
+
+    // notice the size is 1 since these are precomposed characters
+    std::wstring hat_A = L"Â";
+    REQUIRE(hat_A.size() == 1);
+    REQUIRE(diactrics_to_latex(hat_A) == L"\\hat{A}");
+    std::wstring hat_S = L"Ŝ";
+    REQUIRE(hat_S.size() == 1);
+    REQUIRE(diactrics_to_latex(hat_S) == L"\\hat{S}");
   }
 
   SECTION("UTF->latex") {
     std::wstring tilde__alpha = L"α̃";
     REQUIRE(tilde__alpha.size() == 2);
     REQUIRE(utf_to_latex(tilde__alpha) == L"\\tilde{\\alpha}");
+    std::wstring hat__alpha = L"α̂";
+    REQUIRE(hat__alpha.size() == 2);
+    REQUIRE(utf_to_latex(hat__alpha) == L"\\hat{\\alpha}");
   }
 }

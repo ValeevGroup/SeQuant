@@ -7,6 +7,7 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/parse.hpp>
+#include <SeQuant/core/reserved.hpp>
 #include <SeQuant/core/utility/expr.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/singleton.hpp>
@@ -14,11 +15,11 @@
 #include <SeQuant/core/utility/tensor.hpp>
 
 #include <iostream>
-#include <locale>
 #include <ranges>
 #include <string>
 #include <string_view>
 #include <thread>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -503,8 +504,8 @@ TEST_CASE("utilities", "[utilities]") {
       for (const auto& [expr_str, msg] :
            std::vector<std::pair<std::wstring, std::string>>{
                {L"R{a1;a2} = t{a1;i1} t{i1;a2}", ""},
-               {L"R{a1,a2;i1,i2} = A{i1,i2;a1,a2} t{a1,a2;i1,i2}", ""},
-               {L"R{a2,a1;i1,i2} = S{i1,i2;a1,a2} t{a1,a2;i1,i2}", ""},
+               {L"R{a1,a2;i1,i2} = Â{i1,i2;a1,a2} t{a1,a2;i1,i2}", ""},
+               {L"R{a2,a1;i1,i2} = Ŝ{i1,i2;a1,a2} t{a1,a2;i1,i2}", ""},
                {L"R{a1} = Var",
                 "Bra indices of result are inconsistent with the rhs "
                 "expression"},
@@ -530,6 +531,42 @@ TEST_CASE("utilities", "[utilities]") {
         REQUIRE(actual_msg == msg);
         REQUIRE(actual == expected);
       }
+    }
+  }
+
+  SECTION("external_indices") {
+    for (const auto& [input, expected] :
+         std::vector<std::pair<std::wstring, std::vector<std::vector<Index>>>>{
+             {L"1/2", {}},
+             {L"t", {}},
+             {L"t{}", {}},
+             {L"t{i1;a1}", {{L"i_1", L"a_1"}}},
+             {L"t{i1,i2;a1,a2}", {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}}},
+             {L"t{i1,i2;a2,a1}", {{L"i_1", L"a_2"}, {L"i_2", L"a_1"}}},
+             {L"t{;;i1,i2}", {{L"i_2"}, {L"i_1"}}},
+             {L"t{a1;a2;i1,i2}", {{L"a_1", L"a_2"}, {L"i_1"}, {L"i_2"}}},
+             {L"t{a1,a2;a3,a4;i1,i2}",
+              {{L"a_1", L"a_3"}, {L"a_2", L"a_4"}, {L"i_1"}, {L"i_2"}}},
+             {L"g{a3;a2;i2} t{a1,a2;a3,a4;i1,i2}",
+              {{L"a_1", L"a_4"}, {L"i_1"}}},
+             {L"t{a1,a2;i1,i2} + t{a1;i1} t{a2;i2}",
+              {{L"a_1", L"i_1"}, {L"a_2", L"i_2"}}},
+             // When present, external indices are deduced from the symmetrizer
+             // (though bra/ket will be swapped)
+             {L"Â{a1;i1} t{i1;a1}", {{L"i_1", L"a_1"}}},
+             {L"Â{a1,a2;i1,i2} t{i1;a1} t{i2;a2}",
+              {{L"i_1", L"a_1"}, {L"i_2", "a_2"}}},
+             {L"Ŝ{a1;i1} t{i1;a1}", {{L"i_1", L"a_1"}}},
+             {L"Ŝ{a1,a2;i1,i2} t{i1;a1} t{i2;a2}",
+              {{L"i_1", L"a_1"}, {L"i_2", "a_2"}}},
+         }) {
+      CAPTURE(toUtf8(input));
+
+      ExprPtr expr = parse_expr(input);
+      auto actual =
+          external_indices<std::remove_cvref_t<decltype(expected)>>(expr);
+
+      REQUIRE_THAT(actual, ::Catch::Matchers::UnorderedRangeEquals(expected));
     }
   }
 }

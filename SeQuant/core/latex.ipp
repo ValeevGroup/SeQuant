@@ -5,9 +5,9 @@
 #ifndef SEQUANT_CORE_LATEX_IPP
 #define SEQUANT_CORE_LATEX_IPP
 
+#include <SeQuant/core/container.hpp>
 #include <SeQuant/core/latex.hpp>
 #include <SeQuant/core/wstring.hpp>
-#include <SeQuant/core/container.hpp>
 #include <map>
 #include <optional>
 #include <type_traits>
@@ -83,13 +83,15 @@ std::basic_string<Char, Traits, Alloc> greek_characters_to_latex_impl(
     if (!is_ascii(ch)) {
       if (is_lc(ch)) {
         const auto ch_addr = static_cast<long>(ch) - static_cast<long>(0x3B1);
-        SEQUANT_ASSERT(ch_addr >= 0 && static_cast<std::size_t>(ch_addr) < lc.size());
+        SEQUANT_ASSERT(ch_addr >= 0 &&
+                       static_cast<std::size_t>(ch_addr) < lc.size());
         const auto& lc_str = lc[static_cast<std::size_t>(ch_addr)];
         SEQUANT_ASSERT(lc_str.size() > 0);
         append(lc_str);
       } else if (is_uc(ch)) {
         const auto ch_addr = static_cast<long>(ch) - static_cast<long>(0x391);
-        SEQUANT_ASSERT(ch_addr >= 0 && static_cast<std::size_t>(ch_addr) < uc.size());
+        SEQUANT_ASSERT(ch_addr >= 0 &&
+                       static_cast<std::size_t>(ch_addr) < uc.size());
         const auto& uc_str = uc[static_cast<std::size_t>(ch_addr)];
         SEQUANT_ASSERT(uc_str.size() > 0);
         append(uc_str);
@@ -163,6 +165,11 @@ std::basic_string<Char, Traits, Alloc> diactrics_to_latex_impl(
         case 0x30C:
           append_latex(SQ_STRLIT(Char, "\\check{"));
           continue;
+
+        // hat/circumflex
+        case 0x302:
+          append_latex(SQ_STRLIT(Char, "\\hat{"));
+          continue;
       }
     }
 
@@ -194,6 +201,30 @@ std::basic_string<Char, Traits, Alloc> diactrics_to_latex_impl(
           }
         }
       }  // tilde
+      {  // circumflex/hat
+         // lower-case characters with circumflex
+        const container::map<str_t, str_t> lc = {
+            {SQ_STRLIT(Char, "â"), SQ_STRLIT(Char, "\\hat{a}")},
+            {SQ_STRLIT(Char, "ê"), SQ_STRLIT(Char, "\\hat{e}")},
+            {SQ_STRLIT(Char, "î"), SQ_STRLIT(Char, "\\hat{i}")},
+            {SQ_STRLIT(Char, "ô"), SQ_STRLIT(Char, "\\hat{o}")}};
+        auto lc_it = lc.find(str_t{ch});
+        if (lc_it != lc.end()) {
+          append(lc_it->second);
+        } else {
+          // upper-case characters with circumflex
+          const container::map<str_t, str_t> uc = {
+              {SQ_STRLIT(Char, "Â"), SQ_STRLIT(Char, "\\hat{A}")},
+              {SQ_STRLIT(Char, "Ê"), SQ_STRLIT(Char, "\\hat{E}")},
+              {SQ_STRLIT(Char, "Î"), SQ_STRLIT(Char, "\\hat{I}")},
+              {SQ_STRLIT(Char, "Ô"), SQ_STRLIT(Char, "\\hat{O}")},
+              {SQ_STRLIT(Char, "Ŝ"), SQ_STRLIT(Char, "\\hat{S}")}};
+          auto uc_it = uc.find(str_t{ch});
+          if (uc_it != uc.end()) {
+            append(uc_it->second);
+          }
+        }
+      }  // circumflex/hat
     }
   }
 

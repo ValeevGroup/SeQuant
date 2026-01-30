@@ -389,7 +389,7 @@ TEST_CASE("tensor_network", "[elements]") {
     }
 
     {  // with Tensors and NormalOperators
-      auto tmp = t::A(nₚ(-2)) * t::H_(2) * t::T_(2) * t::T_(2);
+      auto tmp = t::A(nₚ(-2)) * t::h(2) * t::t(2) * t::t(2);
       REQUIRE_NOTHROW(TN(tmp->as<Product>().factors()));
     }
 
@@ -516,7 +516,7 @@ TEST_CASE("tensor_network", "[elements]") {
     // can't use operator expression (due to unspecified order of evaluation of
     // function arguments), must use initializer list
     auto tmp = ex<Product, std::initializer_list<ExprPtr>>(
-        {t::A(nₚ(-2)), t::H_(2), t::T_(2), t::T_(2), t::T_(2)});
+        {t::A(nₚ(-2)), t::h(2), t::t(2), t::t(2), t::t(2)});
     // canonicalize to avoid dependence on the implementation details of
     // mbpt::sr::make_op
     // N.B. graph structure before canonicalization will depend on the input
@@ -608,13 +608,13 @@ L"v19 [ label=\"κ_4\", texlbl=\"${\\kappa_4}$\", color=\"#e174c5\", fillcolor=\
 L"v19 -- v26\n"
 L"v19 -- v45\n"
 L"subgraph cluster0 {\n"
-L"v20 [ label=\"A\", texlbl=\"$A$\", color=\"#257a61\", fillcolor=\"#94f4c2\" ];\n"
+L"v20 [ label=\"Â\", texlbl=\"$\\hat{A}$\", color=\"#acc52f\", fillcolor=\"#acc5bc\" ];\n"
 L"v20 -- v23\n"
 L"v21 [ label=\"bra2a\", color=\"#06d223\", fillcolor=\"#30d28c\" ];\n"
 L"v21 -- v23\n"
 L"v22 [ label=\"ket2a\", color=\"#c849cb\", fillcolor=\"#c892cb\" ];\n"
 L"v22 -- v23\n"
-L"v23 [ label=\"bka\", color=\"#257a61\", fillcolor=\"#94f4c2\" ];\n"
+L"v23 [ label=\"bka\", color=\"#acc52f\", fillcolor=\"#acc5bc\" ];\n"
 L"}\n"
 L"subgraph cluster1 {\n"
 L"v24 [ label=\"g\", texlbl=\"$g$\", color=\"#300a49\", fillcolor=\"#c05092\" ];\n"
@@ -930,7 +930,7 @@ TEST_CASE("tensor_network_v2", "[elements]") {
     }
 
     {  // with Tensors and NormalOperators
-      auto tmp = t::A(nₚ(-2)) * t::H_(2) * t::T_(2) * t::T_(2);
+      auto tmp = t::A(nₚ(-2)) * t::h(2) * t::t(2) * t::t(2);
       REQUIRE_NOTHROW(TensorNetworkV2(tmp->as<Product>().factors()));
     }
 
@@ -1058,11 +1058,11 @@ TEST_CASE("tensor_network_v2", "[elements]") {
 
     SECTION("non-symmetric") {
       const auto input =
-          parse_expr(L"A{i9,i12;i7,i3}:A I1{i7,i3;;x5}:N I2{;i9,i12;x5}:N")
+          parse_expr(L"Â{i9,i12;i7,i3}:A I1{i7,i3;;x5}:N I2{;i9,i12;x5}:N")
               .as<Product>()
               .factors();
       const std::wstring expected =
-          L"A{i_1,i_2;i_3,i_4}:A * I1{i_3,i_4;;x_1}:N * I2{;i_1,i_2;x_1}:N";
+          L"Â{i_1,i_2;i_3,i_4}:A * I1{i_3,i_4;;x_1}:N * I2{;i_1,i_2;x_1}:N";
 
       for (bool fast : {true, false}) {
         TensorNetworkV2 tn(input);
@@ -1074,9 +1074,9 @@ TEST_CASE("tensor_network_v2", "[elements]") {
 
     SECTION("particle-1,2-symmetry") {
       const std::vector<std::pair<std::wstring, std::wstring>> pairs = {
-          {L"S{i_1,i_2,i_3;a_1,a_2,a_3}:N * f{i_4;i_2}:N * "
+          {L"Ŝ{i_1,i_2,i_3;a_1,a_2,a_3}:N * f{i_4;i_2}:N * "
            L"t{a_1,a_2,a_3;i_4,i_3,i_1}:N",
-           L"S{i_1,i_2,i_3;a_1,a_2,a_3}:N * f{i_4;i_1}:N * "
+           L"Ŝ{i_1,i_2,i_3;a_1,a_2,a_3}:N * f{i_4;i_1}:N * "
            L"t{a_1,a_2,a_3;i_2,i_3,i_4}:N"},
           {L"Γ{o_2,o_4;o_1,o_3}:N * g{i_1,o_1;o_2,e_1}:N * "
            L"t{o_3,e_1;o_4,i_1}:N",
@@ -1159,7 +1159,7 @@ TEST_CASE("tensor_network_v2", "[elements]") {
     SECTION("special") {
       auto factors =
           parse_expr(
-              L"S{i_1;a_1<i_1>}:N-C-S g{i_2,a_1<i_1>;a_2<i_2>,i_1}:N-C-S "
+              L"Ŝ{i_1;a_1<i_1>}:N-C-S g{i_2,a_1<i_1>;a_2<i_2>,i_1}:N-C-S "
               L"t{a_2<i_2>;i_2}:N-C-S")
               ->as<Product>()
               .factors();
@@ -1183,7 +1183,7 @@ TEST_CASE("tensor_network_v2", "[elements]") {
       // writing it down, canonicalizes to the same exact form
       const Product expectedExpr =
           parse_expr(
-              L"A{i1,i2;a1,a2} g{i3,i4;a3,a4} t{a1,a3;i3,i4} t{a2,a4;i1,i2}",
+              L"Â{i1,i2;a1,a2} g{i3,i4;a3,a4} t{a1,a3;i1,i2} t{a2,a4;i3,i4}",
               Symmetry::Antisymm)
               .as<Product>();
 
@@ -1314,8 +1314,8 @@ TEST_CASE("tensor_network_v2", "[elements]") {
     SECTION("idempotency") {
       const std::vector<std::wstring> inputs = {
           L"F{i1;i8} g{i8,i9;i1,i7}",
-          L"A{i9,i12;i7,i3}:A I1{i7,i3;;x5}:N I2{;i9,i12;x5}:N",
-          L"f{i4;i1}:N t{a1,a2,a3;i2,i3,i4}:N S{i1,i2,i3;a1,a2,a3}:N",
+          L"Â{i9,i12;i7,i3}:A I1{i7,i3;;x5}:N I2{;i9,i12;x5}:N",
+          L"f{i4;i1}:N t{a1,a2,a3;i2,i3,i4}:N Ŝ{i1,i2,i3;a1,a2,a3}:N",
           L"P{a1,a3;} k{i8;i2}",
           L"L{x6;;x2} P{;a1,a3}",
       };
@@ -1572,7 +1572,7 @@ TEST_CASE("tensor_network_v3", "[elements]") {
     }
 
     {  // with Tensors and NormalOperators
-      auto tmp = t::A(nₚ(-2)) * t::H_(2) * t::T_(2) * t::T_(2);
+      auto tmp = t::A(nₚ(-2)) * t::h(2) * t::t(2) * t::t(2);
       REQUIRE_NOTHROW(TN(tmp->as<Product>().factors()));
     }
 
@@ -1703,11 +1703,11 @@ TEST_CASE("tensor_network_v3", "[elements]") {
 
     SECTION("non-symmetric") {
       const auto input =
-          parse_expr(L"A{i9,i12;i7,i3}:A I1{i7,i3;;x5}:N I2{;i9,i12;x5}:N")
+          parse_expr(L"Â{i9,i12;i7,i3}:A I1{i7,i3;;x5}:N I2{;i9,i12;x5}:N")
               .as<Product>()
               .factors();
       const std::wstring expected =
-          L"A{i_1,i_2;i_3,i_4}:A * I1{i_3,i_4;;x_1}:N * I2{;i_1,i_2;x_1}:N";
+          L"Â{i_1,i_2;i_3,i_4}:A * I1{i_3,i_4;;x_1}:N * I2{;i_1,i_2;x_1}:N";
 
       for (auto method :
            {CanonicalizationMethod::Rapid, CanonicalizationMethod::Complete}) {
@@ -1721,9 +1721,9 @@ TEST_CASE("tensor_network_v3", "[elements]") {
 
     SECTION("particle-1,2-symmetry") {
       const std::vector<std::pair<std::wstring, std::wstring>> pairs = {
-          {L"S{i_1,i_2,i_3;a_1,a_2,a_3}:N * f{i_4;i_2}:N * "
+          {L"Ŝ{i_1,i_2,i_3;a_1,a_2,a_3}:N * f{i_4;i_2}:N * "
            L"t{a_1,a_2,a_3;i_4,i_3,i_1}:N",
-           L"S{i_1,i_2,i_3;a_1,a_2,a_3}:N * f{i_4;i_1}:N * "
+           L"Ŝ{i_1,i_2,i_3;a_1,a_2,a_3}:N * f{i_4;i_1}:N * "
            L"t{a_1,a_2,a_3;i_2,i_3,i_4}:N"},
           {L"Γ{o_2,o_4;o_1,o_3}:N * g{i_1,o_1;o_2,e_1}:N * "
            L"t{o_3,e_1;o_4,i_1}:N",
@@ -1808,7 +1808,7 @@ TEST_CASE("tensor_network_v3", "[elements]") {
     SECTION("special") {
       auto factors =
           parse_expr(
-              L"S{i_1;a_1<i_1>}:N-C-S g{i_2,a_1<i_1>;a_2<i_2>,i_1}:N-C-S "
+              L"Ŝ{i_1;a_1<i_1>}:N-C-S g{i_2,a_1<i_1>;a_2<i_2>,i_1}:N-C-S "
               L"t{a_2<i_2>;i_2}:N-C-S")
               ->as<Product>()
               .factors();
@@ -1882,7 +1882,7 @@ TEST_CASE("tensor_network_v3", "[elements]") {
       // writing it down, canonicalizes to the same exact form
       const Product expectedExpr =
           parse_expr(
-              L"A{i1,i2;a1,a2} g{i3,i4;a3,a4} t{a1,a3;i1,i2} t{a2,a4;i3,i4}",
+              L"Â{i1,i2;a1,a2} g{i3,i4;a3,a4} t{a1,a3;i1,i2} t{a2,a4;i3,i4}",
               Symmetry::Antisymm)
               .as<Product>();
 
@@ -2013,8 +2013,8 @@ TEST_CASE("tensor_network_v3", "[elements]") {
     SECTION("idempotency") {
       const std::vector<std::wstring> inputs = {
           L"F{i1;i8} g{i8,i9;i1,i7}",
-          L"A{i9,i12;i7,i3}:A I1{i7,i3;;x5}:N I2{;i9,i12;x5}:N",
-          L"f{i4;i1}:N t{a1,a2,a3;i2,i3,i4}:N S{i1,i2,i3;a1,a2,a3}:N",
+          L"Â{i9,i12;i7,i3}:A I1{i7,i3;;x5}:N I2{;i9,i12;x5}:N",
+          L"f{i4;i1}:N t{a1,a2,a3;i2,i3,i4}:N Ŝ{i1,i2,i3;a1,a2,a3}:N",
           L"P{a1,a3;} k{i8;i2}",
           L"L{x6;;x2} P{;a1,a3}",
       };
