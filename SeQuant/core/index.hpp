@@ -532,15 +532,14 @@ class Index : public Taggable {
   static std::wstring base_label(std::string_view label) {
     auto underscore_position = label.find('_');
     if (underscore_position == std::string::npos)
-      return to_wstring(std::string({label.begin(), label.end()}));
+      return toUtf16(label);
     else
-      return to_wstring(
-          std::string({label.data(), label.data() + underscore_position}));
+      return toUtf16(label.substr(0, underscore_position));
   }
 
   template <typename Char, typename = std::enable_if_t<meta::is_char_v<Char>>>
   static std::wstring base_label(Char label) {
-    return to_wstring(label);
+    return toUtf16(label);
   }
 
   /// @return the memoized label as a UTF-8 encoded wide-character string
@@ -575,7 +574,6 @@ class Index : public Taggable {
 
   /// @return A UTF-8 encoded narrow-character string label
   /// @warning not to be used with proto indices
-  /// @note equivalent to `sequant::to_string(this->label())`
   std::string to_string() const;
 
   /// @return the full label as a UTF-8 encoded wide-character string

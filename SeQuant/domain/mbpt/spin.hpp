@@ -13,6 +13,7 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/utility/macros.hpp>
+#include <SeQuant/core/utility/string.hpp>
 
 #include <cstddef>
 #include <initializer_list>
@@ -80,11 +81,11 @@ std::wstring spinannotation_add(WS&& label, Spin s) {
   SEQUANT_ASSERT(view.back() != L'↑' && view.back() != L'↓');
   switch (s) {
     case Spin::any:
-      return to_wstring(std::forward<WS>(label));
+      return std::wstring(std::forward<WS>(label));
     case Spin::alpha:
-      return to_wstring(std::forward<WS>(label)) + L'↑';
+      return std::wstring(std::forward<WS>(label)) + L'↑';
     case Spin::beta:
-      return to_wstring(std::forward<WS>(label)) + L'↓';
+      return std::wstring(std::forward<WS>(label)) + L'↓';
     case Spin::null:
       SEQUANT_ABORT("Invalid spin quantum number");
   }

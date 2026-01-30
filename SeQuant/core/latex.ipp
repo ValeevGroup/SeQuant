@@ -7,7 +7,7 @@
 
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/latex.hpp>
-#include <SeQuant/core/wstring.hpp>
+#include <SeQuant/core/utility/string.hpp>
 #include <map>
 #include <optional>
 #include <type_traits>

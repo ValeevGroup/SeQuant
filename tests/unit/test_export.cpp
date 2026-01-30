@@ -251,16 +251,16 @@ std::vector<ExpressionGroup<>> parse_expression_spec(const std::string &spec) {
     }
 
     try {
-      ResultExpr res = parse_result_expr(
-          to_wstring(line), {.def_perm_symm = Symmetry::Nonsymm,
-                             .def_braket_symm = BraKetSymmetry::Nonsymm,
-                             .def_col_symm = ColumnSymmetry::Nonsymm});
+      ResultExpr res =
+          parse_result_expr(line, {.def_perm_symm = Symmetry::Nonsymm,
+                                   .def_braket_symm = BraKetSymmetry::Nonsymm,
+                                   .def_col_symm = ColumnSymmetry::Nonsymm});
       groups.back().add(to_export_tree(res));
     } catch (...) {
-      ExprPtr expr = parse_expr(to_wstring(line),
-                                {.def_perm_symm = Symmetry::Nonsymm,
-                                 .def_braket_symm = BraKetSymmetry::Nonsymm,
-                                 .def_col_symm = ColumnSymmetry::Nonsymm});
+      ExprPtr expr =
+          parse_expr(line, {.def_perm_symm = Symmetry::Nonsymm,
+                            .def_braket_symm = BraKetSymmetry::Nonsymm,
+                            .def_col_symm = ColumnSymmetry::Nonsymm});
       groups.back().add(to_export_tree(expr));
     }
   }

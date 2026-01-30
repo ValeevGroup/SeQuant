@@ -283,12 +283,12 @@ ExprPtr parse_expr(std::wstring_view input, const ParseOptions &options) {
 }
 
 ExprPtr parse_expr(std::string_view input, const ParseOptions &options) {
-  return v1::parse_expr(sequant::to_wstring(input), options);
+  return v1::parse_expr(toUtf16(input), options);
 }
 
 ResultExpr parse_result_expr(std::string_view input,
                              const ParseOptions &options) {
-  return v1::parse_result_expr(sequant::to_wstring(input), options);
+  return v1::parse_result_expr(toUtf16(input), options);
 }
 
 }  // namespace sequant::parse::v1

@@ -51,7 +51,7 @@ std::string toplevel_diff(const Variable &lhs, const Variable &rhs) {
   }
 
   if (lhs.label() != rhs.label()) {
-    return to_string(lhs.label()) + " vs. " + to_string(rhs.label());
+    return toUtf8(lhs.label()) + " vs. " + toUtf8(rhs.label());
   }
 
   return (lhs.conjugated() ? "conjugated"
@@ -115,8 +115,8 @@ std::string diff_spaces(const IndexSpace &lhs, const IndexSpace &rhs) {
     stream << "QNs differ: " << AttrSet(lhs.qns().to_int32()) << " vs. "
            << AttrSet(rhs.qns().to_int32());
   } else if (lhs.base_key() != rhs.base_key()) {
-    stream << "Base key differs: " << to_string(lhs.base_key()) << " vs. "
-           << to_string(rhs.base_key());
+    stream << "Base key differs: " << toUtf8(lhs.base_key()) << " vs. "
+           << toUtf8(rhs.base_key());
   } else if (lhs.approximate_size() != rhs.approximate_size()) {
     stream << "Size differs: " << std::to_string(lhs.approximate_size())
            << " vs. " << std::to_string(rhs.approximate_size());
@@ -134,7 +134,7 @@ std::string toplevel_diff(const Index &lhs, const Index &rhs) {
   }
 
   if (lhs.full_label() != rhs.full_label()) {
-    return to_string(lhs.full_label()) + " vs. " + to_string(rhs.full_label());
+    return toUtf8(lhs.full_label()) + " vs. " + toUtf8(rhs.full_label());
   }
 
   if (lhs.space() != rhs.space()) {
@@ -167,8 +167,8 @@ std::string toplevel_diff(const Tensor &lhs, const Tensor &rhs) {
   }
 
   if (lhs.label() != rhs.label()) {
-    return "Names differ: " + to_string(lhs.label()) + " vs. " +
-           to_string(rhs.label());
+    return "Names differ: " + toUtf8(lhs.label()) + " vs. " +
+           toUtf8(rhs.label());
   }
 
   if (lhs.slots().size() != rhs.slots().size()) {
@@ -177,18 +177,18 @@ std::string toplevel_diff(const Tensor &lhs, const Tensor &rhs) {
   }
 
   if (lhs.symmetry() != rhs.symmetry()) {
-    return "Symmetry differs: " + to_string(to_wstring(lhs.symmetry())) +
-           " vs. " + to_string(to_wstring(rhs.symmetry()));
+    return "Symmetry differs: " + toUtf8(to_wstring(lhs.symmetry())) + " vs. " +
+           toUtf8(to_wstring(rhs.symmetry()));
   }
   if (lhs.column_symmetry() != rhs.column_symmetry()) {
     return "Particle-Symmetry differs: " +
-           to_string(to_wstring(lhs.column_symmetry())) + " vs. " +
-           to_string(to_wstring(rhs.column_symmetry()));
+           toUtf8(to_wstring(lhs.column_symmetry())) + " vs. " +
+           toUtf8(to_wstring(rhs.column_symmetry()));
   }
   if (lhs.braket_symmetry() != rhs.braket_symmetry()) {
     return "BraKet-Symmetry differs: " +
-           to_string(to_wstring(lhs.braket_symmetry())) + " vs. " +
-           to_string(to_wstring(rhs.braket_symmetry()));
+           toUtf8(to_wstring(lhs.braket_symmetry())) + " vs. " +
+           toUtf8(to_wstring(rhs.braket_symmetry()));
   }
 
   if (lhs.bra() != rhs.bra()) {

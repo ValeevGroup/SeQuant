@@ -6,7 +6,7 @@
 #define SEQUANT_CORE_LATEX_HPP
 
 #include <SeQuant/core/meta.hpp>
-#include <SeQuant/core/wstring.hpp>
+#include <SeQuant/core/utility/string.hpp>
 
 #include <cmath>
 #include <complex>

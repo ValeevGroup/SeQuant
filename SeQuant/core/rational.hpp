@@ -2,7 +2,7 @@
 #define SEQUANT_CORE_RATIONAL_H
 
 #include <SeQuant/core/hash.hpp>
-#include <SeQuant/core/wstring.hpp>
+#include <SeQuant/core/utility/string.hpp>
 
 #include <boost/multiprecision/cpp_int.hpp>
 #include <boost/multiprecision/rational_adaptor.hpp>
@@ -125,13 +125,13 @@ inline std::string to_string(const boost::multiprecision::number<Backend>& i) {
 }
 
 inline std::wstring to_wstring(const rational& i) {
-  return ::sequant::to_wstring(boost::lexical_cast<std::string>(i));
+  return toUtf16(boost::lexical_cast<std::string>(i));
 }
 
 template <typename Backend>
 inline std::wstring to_wstring(
     const boost::multiprecision::number<Backend>& i) {
-  return ::sequant::to_wstring(boost::lexical_cast<std::string>(i));
+  return toUtf16(boost::lexical_cast<std::string>(i));
 }
 
 template <typename Backend>

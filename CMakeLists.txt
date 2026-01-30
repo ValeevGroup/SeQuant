@@ -368,7 +368,6 @@ set(SeQuant_symb_src
         SeQuant/core/wick.hpp
         SeQuant/core/wick.impl.hpp
         SeQuant/core/wick.cpp
-        SeQuant/core/wstring.hpp
 )
 
 # MBPT domain sources

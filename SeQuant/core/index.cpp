@@ -5,7 +5,7 @@
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/latex.hpp>
-#include <SeQuant/core/wstring.hpp>
+#include <SeQuant/core/utility/string.hpp>
 
 #include <format>
 #include <unordered_map>
@@ -67,9 +67,7 @@ std::string Index::ascii_label() const {
   return label_ascii;
 }
 
-std::string Index::to_string() const {
-  return sequant::to_string(this->label());
-}
+std::string Index::to_string() const { return toUtf8(this->label()); }
 
 std::shared_ptr<const IndexSpaceRegistry>
 Index::obtain_default_index_registry() {

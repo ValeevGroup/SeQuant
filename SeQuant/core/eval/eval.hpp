@@ -12,6 +12,7 @@
 #include <SeQuant/core/meta.hpp>
 #include <SeQuant/core/parse.hpp>
 #include <SeQuant/core/utility/macros.hpp>
+#include <SeQuant/core/utility/string.hpp>
 
 #include <chrono>
 #include <range/v3/numeric.hpp>
@@ -354,7 +355,7 @@ ResultPtr evaluate(Node const& node,           //
 
   std::string xpr;
   if constexpr (trace(EvalTrace)) {
-    xpr = to_string(deparse(to_expr(node)));
+    xpr = toUtf8(deparse(to_expr(node)));
     log::term(log::TermMode::Begin, xpr);
   }
 
