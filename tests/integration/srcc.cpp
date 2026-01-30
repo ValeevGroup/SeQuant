@@ -3,6 +3,7 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/runtime.hpp>
+#include <SeQuant/core/utility/conversion.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/timer.hpp>
 #include <SeQuant/core/wick.hpp>
@@ -258,7 +259,7 @@ int main(int argc, char* argv[]) {
   const size_t DEFAULT_NMAX = 4;
 #endif
 
-  const size_t NMAX = argc > 1 ? std::atoi(argv[1]) : DEFAULT_NMAX;
+  const size_t NMAX = argc > 1 ? string_to<size_t>(argv[1]) : DEFAULT_NMAX;
 
   const std::string eqn_type_str = argc > 2 ? argv[2] : "t";
   const EqnType eqn_type = str2type.at(eqn_type_str);
