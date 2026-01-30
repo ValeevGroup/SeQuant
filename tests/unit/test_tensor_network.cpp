@@ -1106,7 +1106,7 @@ TEST_CASE("tensor_network_v2", "[elements]") {
                                         .texlabels = graph.vertex_texlabels,
                                         .display_colors = true});
 
-          FAIL(to_string(stream.str()));
+          FAIL(toUtf8(stream.str()));
         }
 
         TensorNetworkV2 tn1(first);
@@ -1300,7 +1300,7 @@ TEST_CASE("tensor_network_v2", "[elements]") {
               }
               sstream << "\nInput was " << deparse(ex<Product>(factors))
                       << "\n";
-              FAIL(to_string(sstream.str()));
+              FAIL(toUtf8(sstream.str()));
             }
           } while (std::next_permutation(indices.begin() + 4, indices.end()));
         } while (std::next_permutation(indices.begin(), indices.begin() + 4));
@@ -1754,7 +1754,7 @@ TEST_CASE("tensor_network_v3", "[elements]") {
                                         .texlabels = graph.vertex_texlabels,
                                         .display_colors = true});
 
-          FAIL(to_string(stream.str()));
+          FAIL(toUtf8(stream.str()));
         }
 
         TN tn1(first);
@@ -1999,7 +1999,7 @@ TEST_CASE("tensor_network_v3", "[elements]") {
               }
               sstream << "\nInput was " << deparse(ex<Product>(factors))
                       << "\n";
-              FAIL(to_string(sstream.str()));
+              FAIL(toUtf8(sstream.str()));
             }
           } while (std::next_permutation(indices.begin() + 4, indices.end()));
         } while (std::next_permutation(indices.begin(), indices.begin() + 4));

@@ -10,7 +10,7 @@
 #include <SeQuant/core/meta.hpp>
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/parse.hpp>
-#include <SeQuant/core/wstring.hpp>
+#include <SeQuant/core/utility/string.hpp>
 #include <SeQuant/domain/mbpt/op.hpp>
 
 #include <range/v3/algorithm.hpp>
@@ -35,11 +35,11 @@ struct StringMaker<sequant::Expr> {
                              bool include_canonical = true) {
     std::string str;
     try {
-      str = sequant::to_string(sequant::deparse(expr, {.annot_symm = true}));
+      str = sequant::toUtf8(sequant::deparse(expr, {.annot_symm = true}));
     } catch (const std::exception &) {
       // deparse doesn't support all kinds of expressions -> fall back to LaTeX
       // representation
-      str = sequant::to_string(sequant::to_latex(expr));
+      str = sequant::toUtf8(sequant::to_latex(expr));
     }
 
     if (include_canonical) {
@@ -73,7 +73,7 @@ struct StringMaker<sequant::Tensor> {
 template <>
 struct StringMaker<sequant::Index> {
   static std::string convert(const sequant::Index &idx) {
-    return sequant::to_string(idx.full_label());
+    return sequant::toUtf8(idx.full_label());
   }
 };
 
@@ -82,7 +82,7 @@ struct StringMaker<sequant::ResultExpr> {
   static std::string convert(const sequant::ResultExpr &res,
                              bool include_canonical = true) {
     std::string str =
-        sequant::to_string(sequant::deparse(res, {.annot_symm = true}));
+        sequant::toUtf8(sequant::deparse(res, {.annot_symm = true}));
 
     if (include_canonical) {
       sequant::ResultExpr clone = res.clone();
@@ -186,16 +186,15 @@ ExprVar to_expression(T &&expression) {
   using std::end;
 
   if constexpr (std::is_convertible_v<T, std::string>) {
-    std::wstring string = sequant::to_wstring(std::forward<T>(expression));
+    std::wstring string = sequant::toUtf16(std::forward<T>(expression));
 
     if (std::find(begin(string), end(string), L'=') != end(string)) {
       return sequant::parse_result_expr(
-          sequant::to_wstring(std::string(std::forward<T>(expression))),
+          std::string(std::forward<T>(expression)),
           {.def_perm_symm = sequant::Symmetry::Nonsymm});
     } else {
-      return sequant::parse_expr(
-          sequant::to_wstring(std::string(std::forward<T>(expression))),
-          {.def_perm_symm = sequant::Symmetry::Nonsymm});
+      return sequant::parse_expr(std::string(std::forward<T>(expression)),
+                                 {.def_perm_symm = sequant::Symmetry::Nonsymm});
     }
   } else if constexpr (std::is_convertible_v<T, std::wstring>) {
     if (std::find(begin(expression), end(expression), L'=') !=

@@ -18,9 +18,9 @@
 #include <SeQuant/core/tensor_network/v2.hpp>
 #include <SeQuant/core/tensor_network/vertex_painter.hpp>
 #include <SeQuant/core/utility/macros.hpp>
+#include <SeQuant/core/utility/string.hpp>
 #include <SeQuant/core/utility/swap.hpp>
 #include <SeQuant/core/utility/tuple.hpp>
-#include <SeQuant/core/wstring.hpp>
 
 #include <algorithm>
 #include <iostream>

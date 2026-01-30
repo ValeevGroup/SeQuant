@@ -8,7 +8,7 @@
 #include <SeQuant/core/bitset.hpp>
 #include <SeQuant/core/space.hpp>
 #include <SeQuant/core/utility/macros.hpp>
-#include <SeQuant/core/wstring.hpp>
+#include <SeQuant/core/utility/string.hpp>
 
 #include <range/v3/algorithm/sort.hpp>
 #include <range/v3/numeric/accumulate.hpp>
@@ -296,7 +296,7 @@ class IndexSpaceRegistry {
       throw std::invalid_argument(
           (std::string("IndexSpaceRegistry::add(index_space): space with "
                        "index_space.base_key()=") +
-           to_string(IS.base_key()) +
+           toUtf8(IS.base_key()) +
            " already in the registry; if you are trying to replace the "
            "IndexSpace use "
            "IndexSpaceRegistry::replace(is)"));
@@ -571,12 +571,12 @@ class IndexSpaceRegistry {
       throw std::invalid_argument(
           std::string("IndexSpaceRegistry::valid_intersection(s1,s2): space "
                       "with key s1=") +
-          to_string(space1_key) + " must be added to the registry first");
+          toUtf8(space1_key) + " must be added to the registry first");
     if (!contains(space2_key))
       throw std::invalid_argument(
           std::string(
               "IndexSpaceRegistry::valid_intersection(s1,s2): space key s2=") +
-          to_string(space2_key) + " must be added to the registry first");
+          toUtf8(space2_key) + " must be added to the registry first");
     return this->valid_intersection(
         *(this->retrieve_ptr(std::forward<S1>(space1_key))),
         *(this->retrieve_ptr(std::forward<S2>(space2_key))));
@@ -630,12 +630,12 @@ class IndexSpaceRegistry {
       throw std::invalid_argument(
           std::string(
               "IndexSpaceRegistry::intersection(s1,s2): space with key s1=") +
-          to_string(space1_key) + " must be added to the registry first");
+          toUtf8(space1_key) + " must be added to the registry first");
     if (!contains(space2_key))
       throw std::invalid_argument(
           std::string(
               "IndexSpaceRegistry::intersection(s1,s2): space key s2=") +
-          to_string(space2_key) + " must be added to the registry first");
+          toUtf8(space2_key) + " must be added to the registry first");
     return this->intersection(
         *(this->retrieve_ptr(std::forward<S1>(space1_key))),
         *(this->retrieve_ptr(std::forward<S2>(space2_key))));
@@ -683,11 +683,11 @@ class IndexSpaceRegistry {
       throw std::invalid_argument(
           std::string(
               "IndexSpaceRegistry::valid_unIon(s1,s2): space with key s1=") +
-          to_string(space1_key) + " must be added to the registry first");
+          toUtf8(space1_key) + " must be added to the registry first");
     if (!contains(space2_key))
       throw std::invalid_argument(
           std::string("IndexSpaceRegistry::valid_unIon(s1,s2): space key s2=") +
-          to_string(space2_key) + " must be added to the registry first");
+          toUtf8(space2_key) + " must be added to the registry first");
     return this->valid_unIon(
         *(this->retrieve_ptr(std::forward<S1>(space1_key))),
         *(this->retrieve_ptr(std::forward<S2>(space2_key))));
@@ -749,11 +749,11 @@ class IndexSpaceRegistry {
     if (!contains(space1_key))
       throw std::invalid_argument(
           std::string("IndexSpaceRegistry::unIon(s1,s2): space with key s1=") +
-          to_string(space1_key) + " must be added to the registry first");
+          toUtf8(space1_key) + " must be added to the registry first");
     if (!contains(space2_key))
       throw std::invalid_argument(
           std::string("IndexSpaceRegistry::unIon(s1,s2): space key s2=") +
-          to_string(space2_key) + " must be added to the registry first");
+          toUtf8(space2_key) + " must be added to the registry first");
     return this->unIon(*(this->retrieve_ptr(std::forward<S1>(space1_key))),
                        *(this->retrieve_ptr(std::forward<S2>(space2_key))));
   }
@@ -867,7 +867,7 @@ class IndexSpaceRegistry {
     if (!contains(space_key))
       throw std::invalid_argument(
           std::string("IndexSpaceRegistry::is_base(s): space with key s=") +
-          to_string(space_key) + " must be added to the registry first");
+          toUtf8(space_key) + " must be added to the registry first");
     return this->is_base(*(this->retrieve_ptr(std::forward<S>(space_key))));
   }
 
@@ -907,7 +907,7 @@ class IndexSpaceRegistry {
       throw std::invalid_argument(
           std::string(
               "IndexSpaceRegistry::is_pure_occupied(s): space with key s=") +
-          to_string(space_key) + " must be added to the registry first");
+          toUtf8(space_key) + " must be added to the registry first");
     return this->is_pure_occupied(
         *(this->retrieve_ptr(std::forward<S>(space_key))));
   }
@@ -937,7 +937,7 @@ class IndexSpaceRegistry {
       throw std::invalid_argument(
           std::string(
               "IndexSpaceRegistry::is_pure_unoccupied(s): space with key s=") +
-          to_string(space_key) + " must be added to the registry first");
+          toUtf8(space_key) + " must be added to the registry first");
     return this->is_pure_unoccupied(
         *(this->retrieve_ptr(std::forward<S>(space_key))));
   }
@@ -958,7 +958,7 @@ class IndexSpaceRegistry {
       throw std::invalid_argument(
           std::string(
               "IndexSpaceRegistry::contains_occupied(s): space with key s=") +
-          to_string(space_key) + " must be added to the registry first");
+          toUtf8(space_key) + " must be added to the registry first");
     return this->contains_occupied(
         *(this->retrieve_ptr(std::forward<S>(space_key))));
   }
@@ -979,7 +979,7 @@ class IndexSpaceRegistry {
       throw std::invalid_argument(
           std::string(
               "IndexSpaceRegistry::contains_unoccupied(s): space with key s=") +
-          to_string(space_key) + " must be added to the registry first");
+          toUtf8(space_key) + " must be added to the registry first");
     return this->contains_unoccupied(
         *(this->retrieve_ptr(std::forward<S>(space_key))));
   }

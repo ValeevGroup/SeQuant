@@ -31,7 +31,6 @@ add_executable(unit_tests-sequant ${BUILD_BY_DEFAULT}
     "test_runtime.cpp"
     "test_space.cpp"
     "test_spin.cpp"
-    "test_string.cpp"
     "test_tensor.cpp"
     "test_tensor_network.cpp"
     "test_utilities.cpp"

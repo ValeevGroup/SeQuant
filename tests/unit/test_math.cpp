@@ -10,7 +10,7 @@
 #include <SeQuant/core/meta.hpp>
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/runtime.hpp>
-#include <SeQuant/core/wstring.hpp>
+#include <SeQuant/core/utility/string.hpp>
 
 #include <cmath>
 #include <iostream>

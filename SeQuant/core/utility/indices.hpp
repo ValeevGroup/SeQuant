@@ -413,7 +413,7 @@ std::string csv_labels(Rng&& idxs) {
     auto v = concat(single(i.label()),                             //
                     i.proto_indices() | transform(&Index::label))  //
              | join;
-    return sequant::to_string(v | ranges::to<std::wstring>);
+    return toUtf8(v | ranges::to<std::wstring>);
   };
 
   return std::forward<Rng>(idxs)  //

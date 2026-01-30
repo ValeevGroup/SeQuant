@@ -122,7 +122,7 @@ std::wstring deparse_scalar(const Constant::scalar_type& scalar,
 
   SEQUANT_ASSERT(!deparsed.empty());
 
-  return to_wstring(deparsed);
+  return toUtf16(deparsed);
 }
 
 std::wstring deparse(Tensor const& tensor, const DeparseOptions& options) {
