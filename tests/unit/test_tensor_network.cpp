@@ -351,8 +351,8 @@ TEMPLATE_TEST_CASE("tensor_network_shared", "[elements]", TensorNetworkV1,
                   {Index{L"p_11"}, Index{L"p_6"}},
                   {Index{L"p_6"}, Index{L"p_7"}}};
               apply_index_replacements(*t2_i, idxrepl, false);
-              REQUIRE(deparse(*(tn1.tensors()[i]), true) ==
-                      deparse(*t2_i, true));
+              REQUIRE(deparse(*(tn1.tensors()[i]), {.annot_symm = true}) ==
+                      deparse(*t2_i, {.annot_symm = true}));
             }
           }
         }
@@ -1106,7 +1106,7 @@ TEST_CASE("tensor_network_v2", "[elements]") {
                                         .texlabels = graph.vertex_texlabels,
                                         .display_colors = true});
 
-          FAIL(to_string(stream.str()));
+          FAIL(toUtf8(stream.str()));
         }
 
         TensorNetworkV2 tn1(first);
@@ -1184,7 +1184,7 @@ TEST_CASE("tensor_network_v2", "[elements]") {
       const Product expectedExpr =
           parse_expr(
               L"Â{i1,i2;a1,a2} g{i3,i4;a3,a4} t{a1,a3;i1,i2} t{a2,a4;i3,i4}",
-              Symmetry::Antisymm)
+              {.def_perm_symm = Symmetry::Antisymm})
               .as<Product>();
 
       const auto expected = expectedExpr.factors();
@@ -1300,7 +1300,7 @@ TEST_CASE("tensor_network_v2", "[elements]") {
               }
               sstream << "\nInput was " << deparse(ex<Product>(factors))
                       << "\n";
-              FAIL(to_string(sstream.str()));
+              FAIL(toUtf8(sstream.str()));
             }
           } while (std::next_permutation(indices.begin() + 4, indices.end()));
         } while (std::next_permutation(indices.begin(), indices.begin() + 4));
@@ -1754,7 +1754,7 @@ TEST_CASE("tensor_network_v3", "[elements]") {
                                         .texlabels = graph.vertex_texlabels,
                                         .display_colors = true});
 
-          FAIL(to_string(stream.str()));
+          FAIL(toUtf8(stream.str()));
         }
 
         TN tn1(first);
@@ -1883,7 +1883,7 @@ TEST_CASE("tensor_network_v3", "[elements]") {
       const Product expectedExpr =
           parse_expr(
               L"Â{i1,i2;a1,a2} g{i3,i4;a3,a4} t{a1,a3;i1,i2} t{a2,a4;i3,i4}",
-              Symmetry::Antisymm)
+              {.def_perm_symm = Symmetry::Antisymm})
               .as<Product>();
 
       const auto expected = expectedExpr.factors();
@@ -1999,7 +1999,7 @@ TEST_CASE("tensor_network_v3", "[elements]") {
               }
               sstream << "\nInput was " << deparse(ex<Product>(factors))
                       << "\n";
-              FAIL(to_string(sstream.str()));
+              FAIL(toUtf8(sstream.str()));
             }
           } while (std::next_permutation(indices.begin() + 4, indices.end()));
         } while (std::next_permutation(indices.begin(), indices.begin() + 4));

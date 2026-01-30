@@ -69,10 +69,6 @@ class Constant : public Expr {
     return L"{" + sequant::to_latex(value()) + L"}";
   }
 
-  std::wstring to_wolfram() const override {
-    return sequant::to_wolfram(value());
-  }
-
   type_id_type type_id() const override { return get_type_id<Constant>(); }
 
   ExprPtr clone() const override { return ex<Constant>(this->value()); }

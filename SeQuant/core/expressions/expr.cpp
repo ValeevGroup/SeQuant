@@ -115,8 +115,6 @@ std::logic_error Expr::not_implemented(const char *fn) const {
 
 std::wstring Expr::to_latex() const { throw not_implemented("to_latex"); }
 
-std::wstring Expr::to_wolfram() const { throw not_implemented("to_wolfram"); }
-
 ExprPtr Expr::clone() const { throw not_implemented("clone"); }
 
 void Expr::adjoint() { throw not_implemented("adjoint"); }

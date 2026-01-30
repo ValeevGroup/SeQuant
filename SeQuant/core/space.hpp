@@ -12,7 +12,6 @@
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/string.hpp>
-#include <SeQuant/core/wstring.hpp>
 
 #include <range/v3/algorithm/any_of.hpp>
 
@@ -381,8 +380,7 @@ class IndexSpace {
     bad_key() : std::invalid_argument("bad key") {}
     template <basic_string_convertible S>
     bad_key(S &&key)
-        : std::invalid_argument(std::string("bad key: ") +
-                                sequant::to_string(key)) {}
+        : std::invalid_argument(std::string("bad key: ") + toUtf8(key)) {}
   };
 
   struct KeyCompare {
@@ -448,7 +446,7 @@ class IndexSpace {
              QuantumNumbersAttr qnattr = QuantumNumbersAttr{0},
              unsigned long approximate_size = 10)
       : attr_(typeattr, qnattr),
-        base_key_(sequant::to_wstring(std::forward<S>(type_label))),
+        base_key_(toUtf16(std::forward<S>(type_label))),
         approximate_size_(approximate_size) {}
 
   explicit IndexSpace(std::string_view label);
@@ -488,9 +486,9 @@ class IndexSpace {
   static std::wstring reduce_key(std::string_view key) {
     const auto underscore_position = key.rfind(L'_');
     if (underscore_position != std::string::npos) {  // key can be reduced
-      return sequant::to_wstring(key.substr(0, underscore_position));
+      return toUtf16(key.substr(0, underscore_position));
     } else {
-      return sequant::to_wstring(key);
+      return toUtf16(key);
     }
   }
 
@@ -504,10 +502,6 @@ class IndexSpace {
   Attr attr_ = {};
   std::wstring base_key_ = {};
   std::size_t approximate_size_ = {};
-
-  static std::wstring to_wstring(std::wstring_view key) {
-    return std::wstring(key.begin(), key.end());
-  }
 };  // class IndexSpace
 
 inline const IndexSpace IndexSpace::null;

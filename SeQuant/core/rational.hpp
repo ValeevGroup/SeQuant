@@ -2,7 +2,7 @@
 #define SEQUANT_CORE_RATIONAL_H
 
 #include <SeQuant/core/hash.hpp>
-#include <SeQuant/core/wstring.hpp>
+#include <SeQuant/core/utility/string.hpp>
 
 #include <boost/multiprecision/cpp_int.hpp>
 #include <boost/multiprecision/rational_adaptor.hpp>
@@ -125,13 +125,13 @@ inline std::string to_string(const boost::multiprecision::number<Backend>& i) {
 }
 
 inline std::wstring to_wstring(const rational& i) {
-  return ::sequant::to_wstring(boost::lexical_cast<std::string>(i));
+  return toUtf16(boost::lexical_cast<std::string>(i));
 }
 
 template <typename Backend>
 inline std::wstring to_wstring(
     const boost::multiprecision::number<Backend>& i) {
-  return ::sequant::to_wstring(boost::lexical_cast<std::string>(i));
+  return toUtf16(boost::lexical_cast<std::string>(i));
 }
 
 template <typename Backend>
@@ -164,23 +164,6 @@ inline std::wstring to_latex(const rational& t) {
   // n.b.
   // result += L"}";
   return result;
-}
-
-template <typename Backend>
-inline std::wstring to_wolfram(
-    const boost::multiprecision::number<Backend>& t) {
-  return ::sequant::to_wstring(t);
-}
-
-inline std::wstring to_wolfram(const rational& t) {
-  using ::sequant::to_wstring;
-  if (denominator(t) == 1) {
-    // n.b. use to_string to skip extra braces so that output agrees with code
-    // that used scalars return to_wolfram(t.numerator());
-    return to_wstring(numerator(t));
-  } else
-    return std::wstring(L"Rational[") + to_wolfram(numerator(t)) + L"," +
-           to_wolfram(denominator(t)) + L"]";
 }
 
 }  // namespace sequant

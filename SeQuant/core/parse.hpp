@@ -11,13 +11,6 @@
 #include <string>
 #include <string_view>
 
-///
-///  Create SeQuant expression from string input.
-///
-/// @author: Bimal Gaudel
-/// version: 21 July, 2021
-///
-
 namespace sequant {
 
 struct ParseError : std::runtime_error {
@@ -27,73 +20,66 @@ struct ParseError : std::runtime_error {
   ParseError(std::size_t offset, std::size_t length, std::string message);
 };
 
+/// Specifies the syntax of the textual input/representation to use. All
+/// potential changes made to the syntax within a given version is understood to
+/// be backwards compatible in the parse sense. That is older inputs will
+/// continue to work as before. However, representations generated via
+/// deparse(…) may not necessarily be parsable by older version of SeQuant.
+///
+/// @note Everything but Latest is considered to be deprecated by default
+///       and support for it may be removed in future versions.
+enum class ParseSyntax {
+  V1,
+
+  Latest = V1
+};
+
+struct ParseOptions {
+  /// The Symmetry (within bra and ket) to use, if none is specified in the
+  /// input explicitly. The Context is queried in case this is not provided
+  /// explicitly.
+  std::optional<Symmetry> def_perm_symm = {};
+  /// The BraKetSymmetry to use, if none is specified in the input explicitly.
+  /// The Context is queried in case this is not provided explicitly.
+  std::optional<BraKetSymmetry> def_braket_symm = {};
+  /// The ColumnSymmetry to use, if none is specified in the input explicitly.
+  /// The Context is queried in case this is not provided explicitly.
+  std::optional<ColumnSymmetry> def_col_symm = {};
+  /// The expected syntax version of the input
+  ParseSyntax syntax = ParseSyntax::Latest;
+};
+
+struct DeparseOptions {
+  /// Whether to explicitly annotate tensor symmetries
+  bool annot_symm = true;
+  /// The syntax version of the produced output
+  ParseSyntax syntax = ParseSyntax::Latest;
+};
+
+#define SEQUANT_DECLARE_PARSE_FUNC(name, returnType)                          \
+  returnType name(std::wstring_view input, const ParseOptions &options = {}); \
+  returnType name(std::string_view input, const ParseOptions &options = {});
+
 // clang-format off
 /// \brief Construct expressions from string representations
 ///
-/// \param raw A tensor algebra expression. A valid expression is
-///            a product, a sum or a mix of those including parentheses.
-///            eg. 'A{i1, a1; i2, a2}' A is the label (non-space), i1, a1 are bra indices, i2, a2 are ket indices.
-///                'A{i_1, a_1; i_2, a_2}' same as above with alternate notation for indices
-///                'A_{i1, a1}^{i2, a2}' same as above with alternate notation for bra and ket
-///                'A^{i2, a2}_{i1, a1}' same as above with alternate notation for bra and ket
-///                'A{i1,i2; a1,a2} + B{i2,i1; a1,a2}' a sum of tensors
-///                'A{i1,i2; a3,a4} * B{a3,a4; a1,a2}' a product of tensors
-///                'A{i1,i2; a3,a4} * B{a3,a4; a1,a2} + C{i1,i2;a1,a2}' a sum and a product of tensors
-///                'A{i1,i2; a3,a4} * (B{a3,a4; a1,a2} + C{a3,a4; a1,a2}) a parenthesized expression
-///                '0.5 * t{i1;a1} * f{i1; a1}' tensor product with a scalar
-///                '1/2 * t{i1;a1} * f{i1; a1}' same as above (fractions supported)
-///                '1./2. * t{i1;a1} * f{i1; a1}' same as above num. and denom. are automatically cast to double
-///                '1.0/2.0 * t{i1;a1} * f{i1; a1}' same as above
-///                't{i1,i2; a1<i1,i2>, a2<i1,i2>}' a tensor having indices with proto indices.
-///                                                a1<i1,i2> is an index with i1 and i2 as proto-indices.
-///             Every tensor may optionally be annoted with index symmetry specifications. The general syntax is
-///             `<tensorSpec> [:<perm symm> [-<braket symm> [-<particle symm>]]]`
-///             (no whitespace is allowed at this place). Examples are
-///             't{i1;i2}:A', 't{i1;i2}:A-S', 't{i1;i2}:N-C-S'
-///             Possible values for `<perm symm>` are
-///             - 'A' for antisymmetry (sequant::Symmetry::Antisymm)
-///             - 'S' for symmetric (sequant::Symmetry::Symm)
-///             - 'N' for non-symmetric (sequant::Symmetry::Nonsymm)
-///             Possible values for `<braket symm>` are
-///             - 'C' for antisymmetry (sequant::BraKetSymmetry::Conjugate)
-///             - 'S' for symmetric (sequant::BraKetSymmetry::Symm)
-///             - 'N' for non-symmetric (sequant::BraKetSymmetry::Nonsymm)
-///             Possible values for `<particle symm>` are
-///             - 'S' for symmetric (sequant::ColumnSymmetry::Symm)
-///             - 'N' for non-symmetric (sequant::ColumnSymmetry::Nonsymm)
-/// \param perm_symm Default index permutation symmetry to be used if tensors don't specify a permutation
-///                  symmetry explicitly.
-/// \param braket_symm Default BraKet symmetry to be used if tensors don't specify a BraKet symmetry explicitly.
-/// \param column_symm Default particle symmetry to be used if tensors don't specify a particle symmetry explicitly.
-///                   @c raw expression. Explicit tensor symmetry can
-///                   be annotated in the expression itself. In that case, the
-///                   annotated symmetry will be used.
-///                   eg. 'g{i1, a1; i2, a2}:A' tensor with 'sequant::Symmetry::Antisymm' annotation
-///                       'g{i1, a1; i2, a2}:S' tensor with 'sequant::Symmetry::Symm' annotation
-///                       'g{i1, a1; i2, a2}:N' tensor with 'sequant::Symmetry::Nonsymm' annotation
+/// \param input The input to parse
+/// \param options Customization options
 /// \return SeQuant expression.
-// clang-format on
-ExprPtr parse_expr(std::wstring_view raw,
-                   std::optional<Symmetry> perm_symm = {},
-                   std::optional<BraKetSymmetry> braket_symm = {},
-                   std::optional<ColumnSymmetry> column_symm = {});
+SEQUANT_DECLARE_PARSE_FUNC(parse_expr, ExprPtr);
 
 /// \sa parse_expr
-ExprPtr parse_expr(std::string_view raw, std::optional<Symmetry> perm_symm = {},
-                   std::optional<BraKetSymmetry> braket_symm = {},
-                   std::optional<ColumnSymmetry> column_symm = {});
+SEQUANT_DECLARE_PARSE_FUNC(parse_result_expr, ResultExpr);
 
-/// \sa parse_expr
-ResultExpr parse_result_expr(std::wstring_view raw,
-                             std::optional<Symmetry> perm_symm = {},
-                             std::optional<BraKetSymmetry> braket_symm = {},
-                             std::optional<ColumnSymmetry> column_symm = {});
 
-/// \sa parse_expr
-ResultExpr parse_result_expr(std::string_view raw,
-                             std::optional<Symmetry> perm_symm = {},
-                             std::optional<BraKetSymmetry> braket_symm = {},
-                             std::optional<ColumnSymmetry> column_symm = {});
+#define SEQUANT_DECLARE_DEPARSE_FUNC(name) \
+	std::wstring name(const ResultExpr &expr, const DeparseOptions &options = {}); \
+	std::wstring name(const ExprPtr &expr, const DeparseOptions &options = {}); \
+	std::wstring name(const Expr &expr, const DeparseOptions &options = {}); \
+	std::wstring name(const AbstractTensor &expr, const DeparseOptions &options = {}); \
+	std::wstring name(const Index &index, const DeparseOptions &options = {}); \
+	template< Statistics S> \
+	std::wstring name(const NormalOperator<S> &nop, const DeparseOptions &options = {}); \
 
 ///
 /// Get a parsable string from an expression.
@@ -107,21 +93,23 @@ ResultExpr parse_result_expr(std::string_view raw,
 /// equivalent.
 ///
 /// \param expr Expression to stringify that can be re-parsed to itself.
-/// \param annot_sym Whether to add sequant::Symmetry annotation
-///                  to each Tensor string.
+/// \param options Customization options
 /// \return wstring of the expression.
-std::wstring deparse(const ResultExpr &expr, bool annot_sym = true);
-std::wstring deparse(const ExprPtr &expr, bool annot_sym = true);
-std::wstring deparse(const Expr &expr, bool annot_sym = true);
-std::wstring deparse(const Product &product, bool annot_sym);
-std::wstring deparse(const Sum &sum, bool annot_sym);
-std::wstring deparse(const Tensor &tensor, bool annot_sym = true);
-std::wstring deparse(const AbstractTensor &tensor, bool annot_sym = true);
-template <Statistics S>
-std::wstring deparse(const NormalOperator<S> &nop);
-std::wstring deparse(const Variable &variable);
-std::wstring deparse(const Constant &constant);
-std::wstring deparse(const Index &index);
+SEQUANT_DECLARE_DEPARSE_FUNC(deparse)
+
+
+
+// Namespaced variants
+namespace parse::v1 {
+	SEQUANT_DECLARE_PARSE_FUNC(parse_expr, ExprPtr);
+	SEQUANT_DECLARE_PARSE_FUNC(parse_result_expr, ResultExpr);
+
+	SEQUANT_DECLARE_DEPARSE_FUNC(deparse)
+}
+
+
+#undef SEQUANT_DECLARE_PARSE_FUNC
+#undef SEQUANT_DECLARE_DEPARSE_FUNC
 
 }  // namespace sequant
 

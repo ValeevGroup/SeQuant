@@ -16,6 +16,7 @@
 #include <SeQuant/core/ranges.hpp>
 #include <SeQuant/core/runtime.hpp>
 #include <SeQuant/core/utility/macros.hpp>
+#include <SeQuant/core/utility/string.hpp>
 
 namespace sequant {
 
@@ -162,7 +163,7 @@ class WickTheorem {
               ss << L"WickTheorem::set_external_indices: "
                     L"external index " +
                         to_latex(Index(v)) + L" repeated";
-              throw std::invalid_argument(to_string(ss.str()));
+              throw std::invalid_argument(toUtf8(ss.str()));
             }
           });
     }

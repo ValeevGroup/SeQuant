@@ -31,7 +31,6 @@ add_executable(unit_tests-sequant ${BUILD_BY_DEFAULT}
     "test_runtime.cpp"
     "test_space.cpp"
     "test_spin.cpp"
-    "test_string.cpp"
     "test_tensor.cpp"
     "test_tensor_network.cpp"
     "test_utilities.cpp"
@@ -87,7 +86,7 @@ else()
     message(STATUS "Python not found - PythonEinsumGenerator validation tests will be disabled")
 endif()
 
-if (SEQUANT_SKIP_LONG_TESTS)
+if (SEQUANT_INTERNAL_SKIP_LONG_TESTS)
     target_compile_definitions(unit_tests-sequant PRIVATE SEQUANT_SKIP_LONG_TESTS=1)
 endif()
 

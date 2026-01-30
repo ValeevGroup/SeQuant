@@ -16,6 +16,7 @@
 #include <SeQuant/core/latex.hpp>
 #include <SeQuant/core/reserved.hpp>
 #include <SeQuant/core/utility/macros.hpp>
+#include <SeQuant/core/utility/string.hpp>
 #include <SeQuant/core/utility/strong.hpp>
 
 #include <algorithm>
@@ -250,7 +251,7 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
          Symmetry s = Symmetry::Nonsymm,
          BraKetSymmetry bks = get_default_context().braket_symmetry(),
          ColumnSymmetry ps = ColumnSymmetry::Symm)
-      : label_(to_wstring(std::forward<S>(label))),
+      : label_(toUtf16(std::forward<S>(label))),
         bra_(make_indices(bra_indices)),
         ket_(make_indices(ket_indices)),
         aux_(make_indices(aux_indices)),
@@ -273,7 +274,7 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
          Symmetry s = Symmetry::Nonsymm,
          BraKetSymmetry bks = get_default_context().braket_symmetry(),
          ColumnSymmetry ps = ColumnSymmetry::Symm)
-      : label_(to_wstring(std::forward<S>(label))),
+      : label_(toUtf16(std::forward<S>(label))),
         bra_(std::move(bra_indices)),
         ket_(std::move(ket_indices)),
         aux_(std::move(aux_indices)),

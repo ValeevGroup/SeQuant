@@ -79,10 +79,6 @@ std::wstring to_latex_align(const ExprPtr& exprptr, size_t max_lines_per_align,
   return result;
 }
 
-std::wstring to_wolfram(const ExprPtr& exprptr) {
-  return exprptr->to_wolfram();
-}
-
 std::size_t size(const Expr& expr) { return ranges::size(expr); }
 
 std::size_t size(const ExprPtr& exprptr) {

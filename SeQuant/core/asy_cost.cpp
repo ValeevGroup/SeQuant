@@ -2,7 +2,7 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/meta.hpp>
 #include <SeQuant/core/rational.hpp>
-#include <SeQuant/core/wstring.hpp>
+#include <SeQuant/core/utility/string.hpp>
 
 #include <boost/numeric/conversion/cast.hpp>
 
@@ -242,9 +242,9 @@ std::wstring AsyCost::to_latex() const {
     //
     // stream out in reverse so that more expensive terms appear first
     auto rev = ranges::views::reverse(cost_);
-    oss << sequant::to_wstring(ranges::front(rev).to_latex());
+    oss << toUtf16(ranges::front(rev).to_latex());
     for (auto &&c : ranges::views::tail(rev))
-      oss << L" + " << sequant::to_wstring(c.to_latex());
+      oss << L" + " << toUtf16(c.to_latex());
   }
   return oss.str();
 }
