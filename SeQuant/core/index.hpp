@@ -716,37 +716,6 @@ class Index : public Taggable {
 
   std::wstring to_latex() const noexcept;
 
-  /*template <typename... Attrs>
-  std::wstring to_wolfram(Attrs &&...attrs) const {
-    auto protect_subscript = [](const std::wstring_view str) {
-      auto subsc_pos = str.rfind(L'_');
-      if (subsc_pos == std::wstring_view::npos)
-        return std::wstring(str);
-      else {
-        SEQUANT_ASSERT(subsc_pos + 1 < str.size());
-        std::wstring result = L"\\!\\(\\*SubscriptBox[\\(";
-        result += std::wstring(str.substr(0, subsc_pos));
-        result += L"\\), \\(";
-        result += std::wstring(str.substr(subsc_pos + 1));
-        result += L"\\)]\\)";
-        return result;
-      }
-    };
-
-    using namespace std::literals;
-    std::wstring result =
-        L"particleIndex[\""s + protect_subscript(this->label()) + L"\"";
-    if (this->has_proto_indices()) {
-      SEQUANT_ASSERT(false && "not yet supported");
-    }
-    using namespace std::literals;
-    result += L","s + ::sequant::to_wolfram(space());
-    ((result += ((L","s + ::sequant::to_wolfram(std::forward<Attrs>(attrs))))),
-     ...);
-    result += L"]";
-    return result;
-  }*/
-
   /// @param protoindex_range a range of Index objects
   /// @return the color of the protoindices
   /// @sa Index::color()

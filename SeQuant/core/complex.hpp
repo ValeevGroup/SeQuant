@@ -11,7 +11,6 @@
 #include <SeQuant/core/latex.hpp>
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/utility/macros.hpp>
-#include <SeQuant/core/wolfram.hpp>
 
 namespace sequant {
 
@@ -52,15 +51,6 @@ struct Complex {
           L"\\bigl(" + result + L" - i " + to_latex(-this->imag()) + L"\\bigr)";
     result += L"}";
     return result;
-  }
-
-  std::wstring to_wolfram() const {
-    using ::sequant::to_wolfram;
-    if (this->imag() == 0)
-      return to_wolfram(this->real());
-    else
-      return std::wstring(L"Complex[") + to_wolfram(this->real()) + L"," +
-             to_wolfram(this->imag()) + L"]";
   }
 
   std::size_t hash_value() const {

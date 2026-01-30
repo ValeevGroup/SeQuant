@@ -13,7 +13,6 @@
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/latex.hpp>
 #include <SeQuant/core/meta.hpp>
-#include <SeQuant/core/wolfram.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 
 #include <algorithm>
@@ -34,7 +33,6 @@
 struct Dummy : public sequant::Expr {
   virtual ~Dummy() = default;
   std::wstring to_latex() const override { return L"{\\text{Dummy}}"; }
-  std::wstring to_wolfram() const override { return L"Dummy[]"; }
   type_id_type type_id() const override { return get_type_id<Dummy>(); };
   sequant::ExprPtr clone() const override { return sequant::ex<Dummy>(); }
   bool static_equal(const sequant::Expr &) const override { return true; }
@@ -63,21 +61,6 @@ struct VecExpr : public std::vector<T>, public sequant::Expr {
       }
     }
     result += L"\\}}";
-    return result;
-  }
-  std::wstring to_wolfram() const override {
-    std::wstring result = L"VecExpr[";
-    size_t count = 1;
-    for (const auto &e : *this) {
-      const auto last_it = count == this->std::vector<T>::size();
-      if constexpr (sequant::Expr::is_shared_ptr_of_expr_or_derived<T>::value) {
-        result += e->to_wolfram() + (last_it ? L"" : L",");
-      } else {
-        result += std::to_wstring(e) + (last_it ? L"" : L",");
-      }
-      ++count;
-    }
-    result += L"]";
     return result;
   }
 
@@ -123,9 +106,6 @@ struct Adjointable : public sequant::Expr {
   virtual ~Adjointable() = default;
   std::wstring to_latex() const override {
     return L"{\\text{Adjointable}{" + std::to_wstring(v) + L"}}";
-  }
-  std::wstring to_wolfram() const override {
-    return L"Adjointable[" + std::to_wstring(v) + L"]";
   }
   type_id_type type_id() const override { return get_type_id<Adjointable>(); };
   sequant::ExprPtr clone() const override {
@@ -439,22 +419,6 @@ TEST_CASE("expr", "[elements]") {
               "\\end{align}");
     }
   }  // SECTION("latex")
-
-  SECTION("wolfram") {
-    Product sp0{};
-    sp0.append(2, std::make_shared<Dummy>());
-    REQUIRE(to_wolfram(sp0) == L"Times[2,Dummy[]]");
-
-    // VecExpr<ExprPtr>
-    {
-      const auto ex5_init = std::vector<std::shared_ptr<Constant>>{
-          std::make_shared<Constant>(1), std::make_shared<Constant>(2),
-          std::make_shared<Constant>(3)};
-      auto ex6 =
-          std::make_shared<VecExpr<ExprPtr>>(begin(ex5_init), end(ex5_init));
-      REQUIRE(ex6->to_wolfram() == L"VecExpr[1,2,3]");
-    }
-  }
 
   SECTION("visitor") {
     // read-only visitor

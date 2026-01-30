@@ -27,8 +27,6 @@ std::wstring to_latex_align(const ExprPtr& exprptr,
                             size_t max_lines_per_align = 0,
                             size_t max_terms_per_line = 1);
 
-std::wstring to_wolfram(const ExprPtr& exprptr);
-
 template <typename Sequence>
 std::decay_t<Sequence> clone(Sequence&& exprseq) {
   auto cloned_seq = exprseq | ranges::views::transform([](const ExprPtr& ptr) {
