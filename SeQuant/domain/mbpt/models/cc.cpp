@@ -297,7 +297,7 @@ std::vector<ExprPtr> CC::eom_r(nₚ np, nₕ nh) {
     SEQUANT_ASSERT(hbar_truncation_rank_ &&
                    "hbar_truncation_rank must be specified for unitary ansatz "
                    "in CC::eom_r");
-  const bool skip_singles = ansatz_ == Ansatz::oT;
+  const bool skip_singles = ansatz_ == Ansatz::oT || ansatz_ == Ansatz::oU;
 
   // construct hbar
   const auto hbar_truncate_at = hbar_truncation_rank_.value_or(4);
