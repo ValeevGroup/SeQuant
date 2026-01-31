@@ -119,23 +119,13 @@ class compute_eomcc_openshell {
     for (size_t i = 0; i < os_st_eom.size(); ++i) {
       const auto& spin_cases = os_st_eom[i];
 
-      if (spin_cases.empty()) {
-        std::wcout << type2wstr.at(type) << i << ": empty\n";
-        continue;
-      }
-
       if (eqvec[i] != nullptr) {
         std::wcout << "original (spin-orbital): " << eqvec[i]->size()
                    << " terms\n";
       }
-      std::wcout << "spin-traced cases: " << spin_cases.size() << "\n";
 
       for (size_t sc = 0; sc < spin_cases.size(); ++sc) {
-        if (spin_cases[sc] == nullptr) {
-          std::wcout << "case " << sc << ": null\n";
-          continue;
-        }
-        std::wcout << "case " << sc << " : " << spin_cases[sc]->size()
+        std::wcout << "case [" << sc << "] : " << spin_cases[sc]->size()
                    << " terms\n";
         // std::wcout << "check os_st_eom eqs: "
         // <<to_latex_align(spin_cases[sc], 20, 1) << "\n";
