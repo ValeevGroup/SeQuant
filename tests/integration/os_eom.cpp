@@ -108,112 +108,40 @@ class compute_eomcc_openshell {
     if (print) std::wcout << "\n";
     // to_latex_align(eqvec[i], 20, 1) << "\n";
 
-    // open-shell spin-tracing
-    std::vector<std::vector<ExprPtr>> spintraced_results;
+    std::vector<std::vector<ExprPtr>> os_st_eom;
 
     for (size_t i = 0; i < eqvec.size(); ++i) {
       if (eqvec[i] == nullptr) continue;
-      //     // spintraced_results.push_back({});
       std::wcout << "R[" << i << "] has " << eqvec[i].size() << " terms\n";
-
-      // #define shortcut
-#ifdef shortcut
-      auto expr = eqvec[i];
-      Tensor A = expr->at(0)->at(0)->as<Tensor>();
-      SEQUANT_ASSERT(A.label() == reserved::antisymm_label());
-      size_t rank = A.bra_rank();
-      runtime_assert(rank == A.ket_rank());
-      auto ext_idxs = external_indices(A);
-
-      auto P_vec = open_shell_P_op_vector(A);
-      SEQUANT_ASSERT(P_vec.size() == rank + 1);
-
-      auto A_vec = open_shell_A_op(A);
-      SEQUANT_ASSERT(A_vec.size() == rank + 1);
-      std::vector<Sum> concat_terms(rank + 1);
-
-      std::wcout << "processing " << expr->size() << " terms:\n";
-      for (auto& product_term : *expr) {
-        // remove A from this term, like how we did for S in v2
-        auto term = remove_tensor(product_term.as_shared_ptr<Product>(),
-                                  reserved::antisymm_label());
-
-        std::vector<ExprPtr> os_st(rank + 1);
-
-        for (size_t s = 0; s <= rank; ++s) {
-          os_st[s] = P_vec[s] * term;
-          expand(os_st[s]);
-          os_st[s] = expand_P_op(os_st[s]);
-
-          // os_st[s] = open_shell_spintrace(os_st[s], ext_idxs, s)[0];
-          auto spintraced = open_shell_spintrace(os_st[s], ext_idxs, s);
-          if (spintraced.empty()) {
-            throw std::runtime_error(
-                "open_shell_spintrace returned empty vector");
-          }
-          os_st[s] = spintraced[0];
-
-          if (rank > 2) {
-            os_st[s] = A_vec[s] * os_st[s];
-            simplify(os_st[s]);
-            os_st[s] = remove_tensor(os_st[s], L"A");
-          }
-        }
-
-        for (size_t s = 0; s <= rank; ++s) {
-          concat_terms[s].append(os_st[s]);
-        }
-      }
-
-      std::vector<ExprPtr> level_spin_cases;
-      for (auto& spin_case : concat_terms) {
-        auto ptr = ex<Sum>(spin_case);
-        simplify(ptr);
-        canonicalize(ptr);
-        level_spin_cases.push_back(ptr);
-      }
-      spintraced_results.push_back(level_spin_cases);
+      os_st_eom.push_back(open_shell_CC_spintrace(eqvec[i]));
     }
 
-#else
-      auto spin_cases = open_shell_CC_spintrace(eqvec[i]);
+    for (size_t i = 0; i < os_st_eom.size(); ++i) {
+      const auto& spin_cases = os_st_eom[i];
 
-      // it said we should canonicalize, but we did not do it in
-      // open-shell-cc-spintrace! and it did not change the results
-
-      // for (auto& sc : spin_cases) {
-      //   simplify(sc);
-      //   canonicalize(sc);
-      // }
-      spintraced_results.push_back(spin_cases);
-#endif
-  }
-  for (size_t i = 0; i < spintraced_results.size(); ++i) {
-    const auto& spin_cases = spintraced_results[i];
-
-    if (spin_cases.empty()) {
-      std::wcout << type2wstr.at(type) << i << ": empty\n";
-      continue;
-    }
-
-    if (eqvec[i] != nullptr) {
-      std::wcout << "original (spin-orbital): " << eqvec[i]->size()
-                 << " terms\n";
-    }
-    std::wcout << "spin-traced cases: " << spin_cases.size() << "\n";
-
-    for (size_t sc = 0; sc < spin_cases.size(); ++sc) {
-      if (spin_cases[sc] == nullptr) {
-        std::wcout << "case " << sc << ": null\n";
+      if (spin_cases.empty()) {
+        std::wcout << type2wstr.at(type) << i << ": empty\n";
         continue;
       }
-      std::wcout << "case " << sc << " : " << spin_cases[sc]->size()
-                 << " terms\n";
-      // std::wcout << "check spintraced eqs: "
-      // <<to_latex_align(spin_cases[sc], 20, 1) << "\n";
+
+      if (eqvec[i] != nullptr) {
+        std::wcout << "original (spin-orbital): " << eqvec[i]->size()
+                   << " terms\n";
+      }
+      std::wcout << "spin-traced cases: " << spin_cases.size() << "\n";
+
+      for (size_t sc = 0; sc < spin_cases.size(); ++sc) {
+        if (spin_cases[sc] == nullptr) {
+          std::wcout << "case " << sc << ": null\n";
+          continue;
+        }
+        std::wcout << "case " << sc << " : " << spin_cases[sc]->size()
+                   << " terms\n";
+        // std::wcout << "check os_st_eom eqs: "
+        // <<to_latex_align(spin_cases[sc], 20, 1) << "\n";
+      }
     }
   }
-}
 };
 
 class compute_all_openshell {
