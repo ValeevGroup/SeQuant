@@ -13,6 +13,7 @@
 #include <vector>
 
 #include <SeQuant/core/ranges.hpp>
+#include <SeQuant/core/utility/conversion.hpp>
 
 #ifdef SEQUANT_HAS_EXECUTION_HEADER
 #include <execution>
@@ -27,7 +28,7 @@ namespace detail {
 inline int& nthreads_accessor() {
   auto init_nthreads = []() {
     const auto nthreads_cstr = std::getenv("SEQUANT_NUM_THREADS");
-    int nthreads = nthreads_cstr ? std::atoi(nthreads_cstr)
+    int nthreads = nthreads_cstr ? string_to<unsigned int>(nthreads_cstr)
                                  : (std::thread::hardware_concurrency() > 0
                                         ? std::thread::hardware_concurrency()
                                         : 1);

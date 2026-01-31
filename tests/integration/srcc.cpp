@@ -3,6 +3,7 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/runtime.hpp>
+#include <SeQuant/core/utility/conversion.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/timer.hpp>
 #include <SeQuant/core/wick.hpp>
@@ -101,7 +102,7 @@ class compute_cceqvec {
           auto bixs = ext_idxs | transform([](auto&& vec) { return vec[0]; });
           auto kixs = ext_idxs | transform([](auto&& vec) { return vec[1]; });
           auto s_tensor =
-              ex<Tensor>(Tensor{reserved::symm_label(), bra(kixs), ket(bixs)});
+              ex<Tensor>(Tensor{reserved::symm_label(), bra(bixs), ket(kixs)});
           eqvec_sf_ref[R] = s_tensor * eqvec_sf_ref[R];
           expand(eqvec_sf_ref[R]);
         }
@@ -181,8 +182,8 @@ class compute_cceqvec {
           auto kixs = ext_idxs | ranges::views::transform(
                                      [](auto&& vec) { return vec[1]; });
           if (bixs.size() > 1) {
-            eqvec[R] = ex<Tensor>(Tensor{reserved::symm_label(), bra(kixs),
-                                         ket(bixs)}) *
+            eqvec[R] = ex<Tensor>(Tensor{reserved::symm_label(), bra(bixs),
+                                         ket(kixs)}) *
                        eqvec[R];
           }
           simplify(eqvec[R]);
@@ -198,7 +199,7 @@ class compute_cceqvec {
           // restore the particle symmetrizer again to get the most compact set
           // of equations
           eqvec[R] =
-              ex<Tensor>(Tensor{reserved::symm_label(), bra(kixs), ket(bixs)}) *
+              ex<Tensor>(Tensor{reserved::symm_label(), bra(bixs), ket(kixs)}) *
               eqvec[R];
           eqvec[R] = expand(eqvec[R]);
           simplify(eqvec[R]);
@@ -258,7 +259,7 @@ int main(int argc, char* argv[]) {
   const size_t DEFAULT_NMAX = 4;
 #endif
 
-  const size_t NMAX = argc > 1 ? std::atoi(argv[1]) : DEFAULT_NMAX;
+  const size_t NMAX = argc > 1 ? string_to<size_t>(argv[1]) : DEFAULT_NMAX;
 
   const std::string eqn_type_str = argc > 2 ? argv[2] : "t";
   const EqnType eqn_type = str2type.at(eqn_type_str);
