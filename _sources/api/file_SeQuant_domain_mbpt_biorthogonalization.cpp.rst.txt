@@ -1,0 +1,128 @@
+
+.. _file_SeQuant_domain_mbpt_biorthogonalization.cpp:
+
+File biorthogonalization.cpp
+============================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_domain_mbpt>` (``SeQuant/domain/mbpt``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/domain/mbpt/biorthogonalization.cpp``)
+------------------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_domain_mbpt_biorthogonalization.cpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``Eigen/Core``
+
+- ``Eigen/Eigenvalues``
+
+- ``SeQuant/core/container.hpp`` (:ref:`file_SeQuant_core_container.hpp`)
+
+- ``SeQuant/core/expr.hpp`` (:ref:`file_SeQuant_core_expr.hpp`)
+
+- ``SeQuant/core/index.hpp`` (:ref:`file_SeQuant_core_index.hpp`)
+
+- ``SeQuant/core/math.hpp`` (:ref:`file_SeQuant_core_math.hpp`)
+
+- ``SeQuant/core/reserved.hpp`` (:ref:`file_SeQuant_core_reserved.hpp`)
+
+- ``SeQuant/core/utility/expr.hpp`` (:ref:`file_SeQuant_core_utility_expr.hpp`)
+
+- ``SeQuant/core/utility/indices.hpp`` (:ref:`file_SeQuant_core_utility_indices.hpp`)
+
+- ``SeQuant/core/utility/macros.hpp`` (:ref:`file_SeQuant_core_utility_macros.hpp`)
+
+- ``SeQuant/core/utility/permutation.hpp`` (:ref:`file_SeQuant_core_utility_permutation.hpp`)
+
+- ``SeQuant/domain/mbpt/biorthogonalization.hpp`` (:ref:`file_SeQuant_domain_mbpt_biorthogonalization.hpp`)
+
+- ``algorithm`` (:ref:`file_SeQuant_core_algorithm.hpp`)
+
+- ``libperm/Permutation.hpp``
+
+- ``libperm/Rank.hpp``
+
+- ``libperm/Utils.hpp``
+
+
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+- :ref:`namespace_sequant__detail`
+
+
+Classes
+-------
+
+
+- :ref:`exhale_struct_structsequant_1_1compare__first__less`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1adb4d42e42d97df774a727a3f376c5672`
+
+- :ref:`exhale_function_namespacesequant_1abf91e6ba929de81989e494c217a51ac8`
+
+- :ref:`exhale_function_namespacesequant_1af177a78c070530901125cd738dd9c418`
+
+- :ref:`exhale_function_namespacesequant_1aa03437596718ed6a9d58c86d80e6a509`
+
+- :ref:`exhale_function_namespacesequant_1a7b5f2f09750dbd03626ef3125a28c948`
+
+- :ref:`exhale_function_namespacesequant_1a3ddfa730be467d4fd2c041dc39cb6ffc`
+
+- :ref:`exhale_function_namespacesequant_1a7b888863c31ea1fa88b640f535fa20a9`
+
+- :ref:`exhale_function_namespacesequant_1_1detail_1a025ae4aee670e12bb2db5f922a61d91c`
+
+- :ref:`exhale_function_namespacesequant_1_1detail_1a20e49f440a45a35efe1952b899ab0f4b`
+
+- :ref:`exhale_function_namespacesequant_1a97fcc107672d5b80712128a4a26d5b0f`
+
+- :ref:`exhale_function_namespacesequant_1a818fb0798629f32d3bcb4cd4c48b83a6`
+
+- :ref:`exhale_function_namespacesequant_1ad5bc36341a9fccda13bed72e28070207`
+
+- :ref:`exhale_function_namespacesequant_1a0f8671512889ee9cdc8389dc34b1fd5c`
+
+- :ref:`exhale_function_namespacesequant_1a9ddafc35cab6fe9407bc39c5781d8444`
+
+- :ref:`exhale_function_namespacesequant_1ac004b31c28fbc4422d90883daebf9b50`
+
+
+Typedefs
+--------
+
+
+- :ref:`exhale_typedef_namespacesequant_1aca802264508af9fcdf0ba274315bdd4f`
+
+- :ref:`exhale_typedef_namespacesequant_1a1fdcf540761e6cd241eb758074b1048a`
+

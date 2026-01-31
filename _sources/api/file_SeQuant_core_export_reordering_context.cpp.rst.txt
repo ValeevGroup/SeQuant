@@ -1,0 +1,73 @@
+
+.. _file_SeQuant_core_export_reordering_context.cpp:
+
+File reordering_context.cpp
+===========================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core_export>` (``SeQuant/core/export``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/export/reordering_context.cpp``)
+-----------------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_export_reordering_context.cpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/export/reordering_context.hpp`` (:ref:`file_SeQuant_core_export_reordering_context.hpp`)
+
+- ``SeQuant/core/utility/macros.hpp`` (:ref:`file_SeQuant_core_utility_macros.hpp`)
+
+- ``algorithm`` (:ref:`file_SeQuant_core_algorithm.hpp`)
+
+- ``range/v3/algorithm/sort.hpp``
+
+- ``range/v3/view/subrange.hpp``
+
+- ``range/v3/view/zip.hpp``
+
+- ``ranges`` (:ref:`file_SeQuant_core_ranges.hpp`)
+
+
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+
+Classes
+-------
+
+
+- :ref:`exhale_struct_structsequant_1_1_pair_comparator`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1aac3ff4ce356aea7bda9e9c965be71272`
+
+- :ref:`exhale_function_namespacesequant_1aecb79143cc16e51ecb54a114a677b461`
+

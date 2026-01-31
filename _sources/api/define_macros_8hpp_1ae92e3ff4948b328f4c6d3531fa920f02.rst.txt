@@ -1,0 +1,14 @@
+.. _exhale_define_macros_8hpp_1ae92e3ff4948b328f4c6d3531fa920f02:
+
+Define SEQUANT_ASSERT_ENABLED
+=============================
+
+- Defined in :ref:`file_SeQuant_core_utility_macros.hpp`
+
+
+Define Documentation
+--------------------
+
+
+.. doxygendefine:: SEQUANT_ASSERT_ENABLED
+   :project: SeQuant

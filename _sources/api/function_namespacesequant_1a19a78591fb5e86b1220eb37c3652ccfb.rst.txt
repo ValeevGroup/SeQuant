@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a19a78591fb5e86b1220eb37c3652ccfb:
+
+Template Function sequant::evaluate(Node const&, F const&, CacheManager&)
+=========================================================================
+
+- Defined in :ref:`file_SeQuant_core_eval_eval.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::evaluate(Node const&, F const&, CacheManager&)
+   :project: SeQuant

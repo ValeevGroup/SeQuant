@@ -1,0 +1,14 @@
+.. _exhale_typedef_namespacesequant_1a1fdcf540761e6cd241eb758074b1048a:
+
+Typedef sequant::ParticlePairings
+=================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_biorthogonalization.cpp`
+
+
+Typedef Documentation
+---------------------
+
+
+.. doxygentypedef:: sequant::ParticlePairings
+   :project: SeQuant

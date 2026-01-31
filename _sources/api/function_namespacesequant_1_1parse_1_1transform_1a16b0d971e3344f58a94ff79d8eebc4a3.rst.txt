@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1parse_1_1transform_1a16b0d971e3344f58a94ff79d8eebc4a3:
+
+Template Function sequant::parse::transform::to_perm_symmetry
+=============================================================
+
+- Defined in :ref:`file_SeQuant_core_parse_ast_conversions.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::parse::transform::to_perm_symmetry(char, std::size_t, const Iterator&, Symmetry)
+   :project: SeQuant

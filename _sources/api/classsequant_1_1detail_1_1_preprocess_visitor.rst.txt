@@ -1,0 +1,17 @@
+.. _exhale_class_classsequant_1_1detail_1_1_preprocess_visitor:
+
+Template Class PreprocessVisitor
+================================
+
+- Defined in :ref:`file_SeQuant_core_export_export.hpp`
+
+
+Class Documentation
+-------------------
+
+
+.. doxygenclass:: sequant::detail::PreprocessVisitor
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

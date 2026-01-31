@@ -1,0 +1,32 @@
+.. _exhale_class_classsequant_1_1_reordering_context:
+
+Class ReorderingContext
+=======================
+
+- Defined in :ref:`file_SeQuant_core_export_reordering_context.hpp`
+
+
+Inheritance Relationships
+-------------------------
+
+Base Type
+*********
+
+- ``public sequant::ExportContext`` (:ref:`exhale_class_classsequant_1_1_export_context`)
+
+
+Derived Type
+************
+
+- ``public sequant::ItfContext`` (:ref:`exhale_class_classsequant_1_1_itf_context`)
+
+
+Class Documentation
+-------------------
+
+
+.. doxygenclass:: sequant::ReorderingContext
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

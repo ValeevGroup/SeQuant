@@ -1,0 +1,27 @@
+.. _exhale_struct_structsequant_1_1parse_1_1_product_rule:
+
+Struct ProductRule
+==================
+
+- Defined in :ref:`file_SeQuant_core_parse_parse.cpp`
+
+
+Inheritance Relationships
+-------------------------
+
+Base Types
+**********
+
+- ``public sequant::parse::helpers::annotate_position`` (:ref:`exhale_struct_structsequant_1_1parse_1_1helpers_1_1annotate__position`)
+- ``public sequant::parse::helpers::error_handler`` (:ref:`exhale_struct_structsequant_1_1parse_1_1helpers_1_1error__handler`)
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::parse::ProductRule
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

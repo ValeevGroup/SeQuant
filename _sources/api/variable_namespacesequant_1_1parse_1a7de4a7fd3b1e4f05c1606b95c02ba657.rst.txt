@@ -1,0 +1,14 @@
+.. _exhale_variable_namespacesequant_1_1parse_1a7de4a7fd3b1e4f05c1606b95c02ba657:
+
+Variable sequant::parse::tensor_def
+===================================
+
+- Defined in :ref:`file_SeQuant_core_parse_parse.cpp`
+
+
+Variable Documentation
+----------------------
+
+
+.. doxygenvariable:: sequant::parse::tensor_def
+   :project: SeQuant

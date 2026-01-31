@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1opt_1a6e03db58ed0430c2fd1b61ddefdf42ab:
+
+Template Function sequant::opt::ops_count
+=========================================
+
+- Defined in :ref:`file_SeQuant_core_optimize.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::opt::ops_count(IdxToSz const&, Idxs const&)
+   :project: SeQuant

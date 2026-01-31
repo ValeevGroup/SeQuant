@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a6a56e41dbabad25a310c712c17aff9b7:
+
+Template Function sequant::operator-(const Complex<T>&)
+=======================================================
+
+- Defined in :ref:`file_SeQuant_core_complex.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::operator-(const Complex<T>&)
+   :project: SeQuant

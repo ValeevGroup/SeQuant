@@ -1,0 +1,17 @@
+.. _exhale_struct_structsequant_1_1_transform_sum_expr_options:
+
+Struct TransformSumExprOptions
+==============================
+
+- Defined in :ref:`file_SeQuant_core_expressions_sum.hpp`
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::TransformSumExprOptions
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

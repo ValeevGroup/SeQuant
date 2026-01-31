@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1parse_1_1transform_1ad63184ebdcc5630245b4272c40b47726:
+
+Template Function sequant::parse::transform::ast_to_result
+==========================================================
+
+- Defined in :ref:`file_SeQuant_core_parse_ast_conversions.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::parse::transform::ast_to_result(const parse::ast::ResultExpr&, const PositionCache&, const Iterator&, DefaultSymmetries)
+   :project: SeQuant

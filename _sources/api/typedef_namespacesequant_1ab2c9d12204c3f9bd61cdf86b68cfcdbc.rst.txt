@@ -1,0 +1,14 @@
+.. _exhale_typedef_namespacesequant_1ab2c9d12204c3f9bd61cdf86b68cfcdbc:
+
+Typedef sequant::ExportNode
+===========================
+
+- Defined in :ref:`file_SeQuant_core_export_export_node.hpp`
+
+
+Typedef Documentation
+---------------------
+
+
+.. doxygentypedef:: sequant::ExportNode
+   :project: SeQuant

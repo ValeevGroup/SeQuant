@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1ac949140b1ce9b06ccbb14110982ef4de:
+
+Function sequant::deparse< Statistics::BoseEinstein >
+=====================================================
+
+- Defined in :ref:`file_SeQuant_core_parse_deparse.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::deparse< Statistics::BoseEinstein >(NormalOperator<Statistics::BoseEinstein> const&)
+   :project: SeQuant

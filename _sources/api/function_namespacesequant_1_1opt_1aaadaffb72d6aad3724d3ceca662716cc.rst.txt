@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1opt_1aaadaffb72d6aad3724d3ceca662716cc:
+
+Function sequant::opt::tail_factor
+==================================
+
+- Defined in :ref:`file_SeQuant_core_optimize_optimize.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::opt::tail_factor(ExprPtr const&)
+   :project: SeQuant

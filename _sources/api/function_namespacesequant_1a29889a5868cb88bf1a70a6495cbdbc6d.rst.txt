@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a29889a5868cb88bf1a70a6495cbdbc6d:
+
+Function sequant::to_wolfram(const Symmetry&)
+=============================================
+
+- Defined in :ref:`file_SeQuant_core_attr.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::to_wolfram(const Symmetry&)
+   :project: SeQuant

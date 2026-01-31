@@ -1,0 +1,26 @@
+.. _exhale_struct_structsequant_1_1parse_1_1ast_1_1_product:
+
+Struct Product
+==============
+
+- Defined in :ref:`file_SeQuant_core_parse_ast.hpp`
+
+
+Inheritance Relationships
+-------------------------
+
+Base Type
+*********
+
+- ``public boost::spirit::x3::position_tagged``
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::parse::ast::Product
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

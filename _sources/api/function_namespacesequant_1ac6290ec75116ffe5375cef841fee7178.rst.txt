@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1ac6290ec75116ffe5375cef841fee7178:
+
+Function sequant::fcre(Index)
+=============================
+
+- Defined in :ref:`file_SeQuant_core_op.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::fcre(Index)
+   :project: SeQuant

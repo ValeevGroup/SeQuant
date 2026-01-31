@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1ad5bc36341a9fccda13bed72e28070207:
+
+Function sequant::make_hardcoded_biorthogonalizer_matrix
+========================================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_biorthogonalization.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::make_hardcoded_biorthogonalizer_matrix(const std::vector<sequant::rational>&, std::size_t)
+   :project: SeQuant

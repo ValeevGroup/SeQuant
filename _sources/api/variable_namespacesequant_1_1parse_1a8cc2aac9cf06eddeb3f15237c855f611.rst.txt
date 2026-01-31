@@ -1,0 +1,14 @@
+.. _exhale_variable_namespacesequant_1_1parse_1a8cc2aac9cf06eddeb3f15237c855f611:
+
+Variable sequant::parse::symmetry_spec
+======================================
+
+- Defined in :ref:`file_SeQuant_core_parse_parse.cpp`
+
+
+Variable Documentation
+----------------------
+
+
+.. doxygenvariable:: sequant::parse::symmetry_spec
+   :project: SeQuant

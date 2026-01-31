@@ -1,0 +1,14 @@
+.. _exhale_define_semantic__actions_8hpp_1a4d6f7f1e18b9eab7b16fe0f0b6ebe5df:
+
+Define BOOST_SPIRIT_X3_UNICODE
+==============================
+
+- Defined in :ref:`file_SeQuant_core_parse_semantic_actions.hpp`
+
+
+Define Documentation
+--------------------
+
+
+.. doxygendefine:: BOOST_SPIRIT_X3_UNICODE
+   :project: SeQuant

@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1detail_1a20e49f440a45a35efe1952b899ab0f4b:
+
+Function sequant::detail::compute_permuted_indices
+==================================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_biorthogonalization.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::detail::compute_permuted_indices(const container::svector<size_t>&, size_t, size_t)
+   :project: SeQuant

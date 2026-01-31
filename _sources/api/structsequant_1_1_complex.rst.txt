@@ -1,0 +1,17 @@
+.. _exhale_struct_structsequant_1_1_complex:
+
+Template Struct Complex
+=======================
+
+- Defined in :ref:`file_SeQuant_core_complex.hpp`
+
+
+Struct Documentation
+--------------------
+
+
+.. doxygenstruct:: sequant::Complex
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

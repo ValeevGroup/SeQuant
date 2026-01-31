@@ -1,0 +1,14 @@
+.. _exhale_function_ast_8hpp_1aa18db2677f2e4507fec03dbc5848ddb1:
+
+Function BOOST_FUSION_ADAPT_STRUCT(sequant::parse::ast::Sum, summands)
+======================================================================
+
+- Defined in :ref:`file_SeQuant_core_parse_ast.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: BOOST_FUSION_ADAPT_STRUCT(sequant::parse::ast::Sum, summands)
+   :project: SeQuant

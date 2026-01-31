@@ -1,0 +1,14 @@
+.. _exhale_variable_namespacesequant_1_1parse_1a28197edaca728a73868925701d71dd2b:
+
+Variable sequant::parse::addend
+===============================
+
+- Defined in :ref:`file_SeQuant_core_parse_parse.cpp`
+
+
+Variable Documentation
+----------------------
+
+
+.. doxygenvariable:: sequant::parse::addend
+   :project: SeQuant

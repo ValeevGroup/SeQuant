@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a3ceecd19f5ca5e670006026f89ce9998:
+
+Template Function sequant::qpannihilator_space
+==============================================
+
+- Defined in :ref:`file_SeQuant_core_op.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::qpannihilator_space(const Op<S>&, Vacuum, const std::shared_ptr<const IndexSpaceRegistry>&)
+   :project: SeQuant

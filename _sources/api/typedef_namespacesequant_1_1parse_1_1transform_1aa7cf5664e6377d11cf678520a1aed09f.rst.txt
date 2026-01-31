@@ -1,0 +1,14 @@
+.. _exhale_typedef_namespacesequant_1_1parse_1_1transform_1aa7cf5664e6377d11cf678520a1aed09f:
+
+Typedef sequant::parse::transform::DefaultSymmetries
+====================================================
+
+- Defined in :ref:`file_SeQuant_core_parse_ast_conversions.hpp`
+
+
+Typedef Documentation
+---------------------
+
+
+.. doxygentypedef:: sequant::parse::transform::DefaultSymmetries
+   :project: SeQuant
