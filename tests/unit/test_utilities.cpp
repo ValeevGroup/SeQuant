@@ -8,13 +8,14 @@
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/parse.hpp>
 #include <SeQuant/core/reserved.hpp>
+#include <SeQuant/core/utility/conversion.hpp>
 #include <SeQuant/core/utility/expr.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/singleton.hpp>
 #include <SeQuant/core/utility/strong.hpp>
 #include <SeQuant/core/utility/tensor.hpp>
 
-#include <iostream>
+#include <limits>
 #include <ranges>
 #include <string>
 #include <string_view>
@@ -567,6 +568,63 @@ TEST_CASE("utilities", "[utilities]") {
           external_indices<std::remove_cvref_t<decltype(expected)>>(expr);
 
       REQUIRE_THAT(actual, ::Catch::Matchers::UnorderedRangeEquals(expected));
+    }
+  }
+
+  SECTION("conversion") {
+    using namespace Catch::Matchers;
+
+    SECTION("integral") {
+      REQUIRE(string_to<int>("4") == 4);
+      REQUIRE(string_to<std::int8_t>("-4") == -4);
+      REQUIRE(string_to<std::uint64_t>("8236491630465033923") ==
+              8236491630465033923);
+
+      REQUIRE_THROWS_MATCHES(
+          string_to<std::uint64_t>("-4"), ConversionException,
+          MessageMatches(ContainsSubstring("'-4' is not a valid")));
+
+      REQUIRE_THROWS_MATCHES(
+          string_to<std::uint8_t>("256"), ConversionException,
+          MessageMatches(ContainsSubstring("'256' is out of range for type")));
+
+      REQUIRE_THROWS_MATCHES(
+          string_to<std::uint8_t>(" 4"), ConversionException,
+          MessageMatches(ContainsSubstring("' 4' is not a valid")));
+
+      REQUIRE_THROWS_MATCHES(
+          string_to<std::uint8_t>("abc"), ConversionException,
+          MessageMatches(ContainsSubstring("'abc' is not a valid")));
+
+      REQUIRE_THROWS_MATCHES(string_to<std::uint8_t>("4 "), ConversionException,
+                             MessageMatches(ContainsSubstring(
+                                 "'4 ' could not be fully parsed as a")));
+    }
+    SECTION("float") {
+      if constexpr (string_to_supports<float>) {
+        REQUIRE_THAT(string_to<float>("42"),
+                     WithinAbs(42, std::numeric_limits<float>::epsilon()));
+        REQUIRE_THAT(string_to<float>("3.14"),
+                     WithinAbs(3.14, std::numeric_limits<float>::epsilon()));
+        REQUIRE_THAT(
+            string_to<float>("-3.14159"),
+            WithinAbs(-3.14159, std::numeric_limits<float>::epsilon()));
+        if constexpr (string_to_supports<double>) {
+          REQUIRE_THAT(string_to<double>("2.7182818284590"),
+                       WithinAbs(2.7182818284590,
+                                 std::numeric_limits<double>::epsilon()));
+        }
+
+        REQUIRE_THROWS_MATCHES(
+            string_to<float>(" 3.14"), ConversionException,
+            MessageMatches(ContainsSubstring("' 3.14' is not a valid")));
+        REQUIRE_THROWS_MATCHES(
+            string_to<float>("abc"), ConversionException,
+            MessageMatches(ContainsSubstring("'abc' is not a valid")));
+        REQUIRE_THROWS_MATCHES(string_to<float>("2.718 "), ConversionException,
+                               MessageMatches(ContainsSubstring(
+                                   "'2.718 ' could not be fully parsed as a")));
+      }
     }
   }
 }
