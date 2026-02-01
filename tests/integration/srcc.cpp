@@ -94,15 +94,14 @@ class compute_cceqvec {
 
       eqvec_sf_ref.resize(eqvec_so.size());
       for (size_t R = PMIN; R <= P; ++R) {
-        auto const ext_idxs =
-            external_indices(eqvec_so[R]->at(0)->at(0)->as<Tensor>());
+        auto const ext_idxs = external_indices(eqvec_so[R]->at(0));
         eqvec_sf_ref[R] = closed_shell_spintrace(eqvec_so[R], ext_idxs);
         if (R == 1) {  // closed_shell_spintrace omits 1-body S
           using ranges::views::transform;
           auto bixs = ext_idxs | transform([](auto&& vec) { return vec[0]; });
           auto kixs = ext_idxs | transform([](auto&& vec) { return vec[1]; });
           auto s_tensor =
-              ex<Tensor>(Tensor{reserved::symm_label(), bra(bixs), ket(kixs)});
+              ex<Tensor>(Tensor{reserved::symm_label(), bra(kixs), ket(bixs)});
           eqvec_sf_ref[R] = s_tensor * eqvec_sf_ref[R];
           expand(eqvec_sf_ref[R]);
         }
@@ -162,8 +161,7 @@ class compute_cceqvec {
 
         // validate sizes of spin-free t equations after biorthogonal transform
         if (type == EqnType::t) {
-          auto const ext_idxs =
-              external_indices(eqvec[R]->at(0)->at(0)->as<Tensor>());
+          auto const ext_idxs = external_indices(eqvec[R]->at(0));
 
           // Remove S operator
           for (auto& term : eqvec[R]->expr()) {
@@ -182,8 +180,8 @@ class compute_cceqvec {
           auto kixs = ext_idxs | ranges::views::transform(
                                      [](auto&& vec) { return vec[1]; });
           if (bixs.size() > 1) {
-            eqvec[R] = ex<Tensor>(Tensor{reserved::symm_label(), bra(bixs),
-                                         ket(kixs)}) *
+            eqvec[R] = ex<Tensor>(Tensor{reserved::symm_label(), bra(kixs),
+                                         ket(bixs)}) *
                        eqvec[R];
           }
           simplify(eqvec[R]);
@@ -199,7 +197,7 @@ class compute_cceqvec {
           // restore the particle symmetrizer again to get the most compact set
           // of equations
           eqvec[R] =
-              ex<Tensor>(Tensor{reserved::symm_label(), bra(bixs), ket(kixs)}) *
+              ex<Tensor>(Tensor{reserved::symm_label(), bra(kixs), ket(bixs)}) *
               eqvec[R];
           eqvec[R] = expand(eqvec[R]);
           simplify(eqvec[R]);
