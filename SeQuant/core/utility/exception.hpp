@@ -11,10 +11,10 @@ namespace sequant {
 
 /// basic SeQuant exception
 /// @sa SEQUANT_ASSERT
-class Exception {
+class Exception : public std::exception {
  public:
   Exception(const std::string& str) : msg_(str) {}
-  virtual std::string_view what() const { return msg_; }
+  virtual const char* what() const noexcept { return msg_.data(); }
 
  private:
   std::string msg_;

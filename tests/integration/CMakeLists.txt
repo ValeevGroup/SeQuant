@@ -66,9 +66,10 @@ foreach(current IN LISTS TEST_CASES)
 
         set(counter 1)
         foreach(arguments IN LISTS test_variants)
+            separate_arguments(argument_list UNIX_COMMAND "${arguments}")
             add_test(
                 NAME "sequant/integration/${test_name}/${counter}"
-                COMMAND ${test_name} ${arguments}
+                COMMAND ${test_name} ${argument_list}
                 WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
             )
             list(APPEND variant_names "sequant/integration/${test_name}/${counter}")

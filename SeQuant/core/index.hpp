@@ -10,6 +10,7 @@
 #include <SeQuant/core/index_space_registry.hpp>
 #include <SeQuant/core/space.hpp>
 #include <SeQuant/core/tag.hpp>
+#include <SeQuant/core/utility/conversion.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/string.hpp>
 #include <SeQuant/core/utility/swap.hpp>
@@ -961,8 +962,8 @@ class Index : public Taggable {
     if (underscore_position != std::wstring::npos) {
       // check that there is at least one char past the underscore
       SEQUANT_ASSERT(underscore_position + 1 < label.size());
-      return std::atol(
-          label.substr(underscore_position + 1, std::string::npos).data());
+      return string_to<ordinal_type>(
+          label.substr(underscore_position + 1).data());
     } else
       return std::nullopt;
   }
