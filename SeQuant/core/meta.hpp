@@ -7,9 +7,10 @@
 
 #include <complex>
 #include <memory>
+#include <type_traits>
+
 #include <range/v3/range/access.hpp>
 #include <range/v3/range/traits.hpp>
-#include <type_traits>
 
 namespace sequant {
 
@@ -492,6 +493,84 @@ struct std_array_size<std::array<T, N>>
 
 template <typename T>
 constexpr inline std::size_t std_array_size_v = std_array_size<T>::value;
+
+/// make_immutable_t
+/// Contrary to std::add_const_t, this works as one would expect on reference
+/// types
+template <typename T>
+using make_immutable_t = std::conditional_t<
+    std::is_lvalue_reference_v<T>,
+    std::add_lvalue_reference_t<std::add_const_t<std::remove_reference_t<T>>>,
+    std::conditional_t<std::is_rvalue_reference_v<T>,
+                       std::add_rvalue_reference_t<
+                           std::add_const_t<std::remove_reference_t<T>>>,
+                       std::add_const_t<T>>>;
+static_assert(std::is_const_v<make_immutable_t<float>>);
+static_assert(std::is_const_v<make_immutable_t<const float>>);
+static_assert(std::is_lvalue_reference_v<make_immutable_t<float &>>);
+static_assert(std::is_lvalue_reference_v<make_immutable_t<const float &>>);
+static_assert(
+    std::is_const_v<std::remove_reference_t<make_immutable_t<float &>>>);
+static_assert(
+    std::is_const_v<std::remove_reference_t<make_immutable_t<const float &>>>);
+static_assert(std::is_rvalue_reference_v<make_immutable_t<float &&>>);
+static_assert(std::is_rvalue_reference_v<make_immutable_t<const float &&>>);
+static_assert(
+    std::is_const_v<std::remove_reference_t<make_immutable_t<float &&>>>);
+static_assert(
+    std::is_const_v<std::remove_reference_t<make_immutable_t<const float &&>>>);
+
+/// make_mutable_t
+/// Contrary to std::remove_const_t, this works as one would expect on reference
+/// types
+template <typename T>
+using make_mutable_t = std::conditional_t<
+    std::is_lvalue_reference_v<T>,
+    std::add_lvalue_reference_t<
+        std::remove_const_t<std::remove_reference_t<T>>>,
+    std::conditional_t<std::is_rvalue_reference_v<T>,
+                       std::add_rvalue_reference_t<
+                           std::remove_const_t<std::remove_reference_t<T>>>,
+                       std::remove_const_t<T>>>;
+static_assert(!std::is_const_v<make_mutable_t<float>>);
+static_assert(!std::is_const_v<make_mutable_t<const float>>);
+static_assert(std::is_lvalue_reference_v<make_mutable_t<float &>>);
+static_assert(std::is_lvalue_reference_v<make_mutable_t<const float &>>);
+static_assert(
+    !std::is_const_v<std::remove_reference_t<make_mutable_t<float &>>>);
+static_assert(
+    !std::is_const_v<std::remove_reference_t<make_mutable_t<const float &>>>);
+static_assert(std::is_rvalue_reference_v<make_mutable_t<float &&>>);
+static_assert(std::is_rvalue_reference_v<make_mutable_t<const float &&>>);
+static_assert(
+    !std::is_const_v<std::remove_reference_t<make_mutable_t<float &&>>>);
+static_assert(
+    !std::is_const_v<std::remove_reference_t<make_mutable_t<const float &&>>>);
+
+/// is_immutable_v
+/// Contrary to std::is_const_v, this works as one would expect on reference
+/// types
+template <typename T>
+constexpr bool is_immutable_v = std::is_const_v<std::remove_reference_t<T>>;
+static_assert(is_immutable_v<const float>);
+static_assert(!is_immutable_v<float>);
+static_assert(is_immutable_v<const float &>);
+static_assert(!is_immutable_v<float &>);
+static_assert(is_immutable_v<const float &&>);
+static_assert(!is_immutable_v<float &&>);
+
+/// mimic_constness_t
+/// Makes To const, if From is const, else makes To non-const
+template <typename From, typename To>
+using mimic_constness_t =
+    std::conditional_t<is_immutable_v<From>, make_immutable_t<To>,
+                       make_mutable_t<From>>;
+static_assert(
+    std::is_const_v<
+        std::remove_reference_t<mimic_constness_t<const int &, float &>>>);
+static_assert(
+    !std::is_const_v<
+        std::remove_reference_t<mimic_constness_t<int &, const float &>>>);
 
 }  // namespace meta
 }  // namespace sequant
