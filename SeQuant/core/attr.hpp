@@ -54,6 +54,12 @@ enum class BraKetPos {
   Ket,
 };
 
+enum class Slot {
+  Bra,
+  Ket,
+  Aux,
+};
+
 enum class Statistics {
   FermiDirac,
   BoseEinstein,
