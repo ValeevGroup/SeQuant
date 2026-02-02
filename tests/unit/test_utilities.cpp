@@ -560,6 +560,11 @@ TEST_CASE("utilities", "[utilities]") {
              {L"Ŝ{a1;i1} t{i1;a1}", {{L"i_1", L"a_1"}}},
              {L"Ŝ{a1,a2;i1,i2} t{i1;a1} t{i2;a2}",
               {{L"i_1", L"a_1"}, {L"i_2", "a_2"}}},
+             // We still want the "swap" behavior when called on an isolated
+             // symmetrizer Note: this is the inverse behavior to a regular
+             // tensor
+             {L"Ŝ{a1,a2;i1,i2}", {{L"i_1", L"a_1"}, {L"i_2", "a_2"}}},
+             {L"Â{a1;i1}", {{L"i_1", L"a_1"}}},
          }) {
       CAPTURE(toUtf8(input));
 
