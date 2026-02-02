@@ -457,6 +457,16 @@ Container external_indices(const Expr& expr) {
       cont.at(i + num_braket).push_back(tensor.aux()[i]);
     }
 
+    if (tensor.label() == reserved::symm_label() ||
+        tensor.label() == reserved::antisymm_label()) {
+      // Note: In tensors representing symmetrization operators, bra and ket
+      // indices are conjugated (reversed). Hence, we have to swap the
+      // determined bra and ket indices.
+      for (std::size_t i = 0; i < num_braket; ++i) {
+        std::swap(cont.at(i).at(0), cont.at(i).at(1));
+      }
+    }
+
     return cont;
   }
 
@@ -477,14 +487,6 @@ Container external_indices(const Expr& expr) {
     // Generate external index list from symmetrization operator
     // However, the symmetrizer has bra/ket conjugated (reversed)
     Container res = external_indices<Container>(symmetrizer.value());
-
-    for (auto& pair : res) {
-      if (pair.size() <= 1) {
-        continue;
-      }
-
-      std::swap(pair.at(0), pair.at(1));
-    }
 
     return res;
   }
