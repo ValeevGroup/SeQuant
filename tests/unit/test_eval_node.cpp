@@ -276,6 +276,13 @@ TEST_CASE("eval_node", "[EvalNode]") {
     auto const np3 = eval_node(p3);
     REQUIRE(asy_cost(np3) == AsyCost{2, 2, 1} + AsyCost{2, 3, 1});
 
+    // full contraction to scalar: cc energy-like expression
+    auto const p_e = parse_expr_antisymm(
+        L"f_{i1}^{a1} * t_{a1}^{i1} + g_{i1,i2}^{a1,a2} * t_{a1,a2}^{i1,i2}");
+    auto const n_e = eval_node(p_e);
+    REQUIRE(n_e->is_scalar());
+    REQUIRE(asy_cost(n_e) == 2 * AsyCost{2, 2} + 2 * AsyCost{1, 1});
+
 #if 0
     auto const s1 =
         parse_expr(L"I{i1,i2;a1,a2} + I{i1,i2;a1,a2}", Symmetry::Symm);
