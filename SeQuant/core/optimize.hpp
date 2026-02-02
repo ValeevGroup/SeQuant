@@ -117,8 +117,10 @@ EvalSequence single_term_opt_impl(TensorNetwork const& network,
       // do nothing with the trivial bipartition
       // i.e. one subset is the empty set and the other full
       if (lp == 0 || rp == 0) continue;
-      auto new_cost = std::forward<CostFn>(cost_fn)(
-          results[lp].indices, results[rp].indices, results[n].indices);
+      auto new_cost = std::forward<CostFn>(cost_fn)(results[lp].indices,  //
+                                                    results[rp].indices,  //
+                                                    results[n].indices)   //
+                      + results[lp].flops + results[rp].flops;
       if (new_cost <= curr_cost) {
         curr_cost = new_cost;
         curr_parts = decltype(curr_parts){lp, rp};
