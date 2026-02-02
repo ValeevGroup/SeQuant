@@ -120,6 +120,8 @@ struct Flops {
         return idx_count.is_outerpod() ? c : 2 * c;
       } else {  // full contraction to scalar
         SEQUANT_ASSERT(n->is_scalar());
+        SEQUANT_ASSERT(occ_virt(n.left()->as_tensor()) ==
+                       occ_virt(n.right()->as_tensor()));
         return 2 * AsyCost{occ_virt(n.left()->as_tensor())};
       }
     } else if (n->is_tensor()) {
