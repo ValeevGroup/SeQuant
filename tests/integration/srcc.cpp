@@ -3,6 +3,7 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/runtime.hpp>
+#include <SeQuant/core/utility/conversion.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/timer.hpp>
 #include <SeQuant/core/wick.hpp>
@@ -94,8 +95,7 @@ class compute_cceqvec {
 
       eqvec_sf_ref.resize(eqvec_so.size());
       for (size_t R = PMIN; R <= P; ++R) {
-        auto const ext_idxs =
-            external_indices(eqvec_so[R]->at(0)->at(0)->as<Tensor>());
+        auto const ext_idxs = external_indices(eqvec_so[R]->at(0));
         eqvec_sf_ref[R] = closed_shell_spintrace(eqvec_so[R], ext_idxs);
         if (R == 1) {  // closed_shell_spintrace omits 1-body S
           using ranges::views::transform;
@@ -162,8 +162,7 @@ class compute_cceqvec {
 
         // validate sizes of spin-free t equations after biorthogonal transform
         if (type == EqnType::t) {
-          auto const ext_idxs =
-              external_indices(eqvec[R]->at(0)->at(0)->as<Tensor>());
+          auto const ext_idxs = external_indices(eqvec[R]->at(0));
 
           // Remove S operator
           for (auto& term : eqvec[R]->expr()) {
@@ -202,10 +201,6 @@ class compute_cceqvec {
               ex<Tensor>(Tensor{reserved::symm_label(), bra(kixs), ket(bixs)}) *
               eqvec[R];
           eqvec[R] = expand(eqvec[R]);
-
-          // apply normalization factor
-          auto const nf = rational(1, factorial(ext_idxs.size()));
-          eqvec[R] = ex<Constant>(nf) * eqvec[R];
           simplify(eqvec[R]);
 
           // WK_biorthogonalization_filter method removes the redundancy caused
@@ -263,7 +258,7 @@ int main(int argc, char* argv[]) {
   const size_t DEFAULT_NMAX = 4;
 #endif
 
-  const size_t NMAX = argc > 1 ? std::atoi(argv[1]) : DEFAULT_NMAX;
+  const size_t NMAX = argc > 1 ? string_to<size_t>(argv[1]) : DEFAULT_NMAX;
 
   const std::string eqn_type_str = argc > 2 ? argv[2] : "t";
   const EqnType eqn_type = str2type.at(eqn_type_str);
