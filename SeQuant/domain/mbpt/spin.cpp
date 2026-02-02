@@ -5,9 +5,11 @@
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/eval/optimize.hpp>
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/index.hpp>
 #include <SeQuant/core/math.hpp>
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/reserved.hpp>
+#include <SeQuant/core/slotted_index.hpp>
 #include <SeQuant/core/space.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/tensor_network.hpp>
@@ -107,10 +109,10 @@ template <typename Container, typename TraceFunction, typename... Args>
 
   if (!searchForNonEquivalentResults) {
     ResultExpr traced = expr.clone();
-    traced.expression() =
-        tracer(traced.expression(),
-               traced.index_particle_grouping<container::svector<Index>>(),
-               std::forward<Args>(args)...);
+    traced.expression() = tracer(
+        traced.expression(),
+        traced.index_particle_grouping<container::svector<SlottedIndex>>(),
+        std::forward<Args>(args)...);
 
     traced.set_symmetry(Symmetry::Nonsymm);
 
@@ -198,10 +200,10 @@ template <typename Container, typename TraceFunction, typename... Args>
       }
     }();
 
-    result.expression() =
-        tracer(result.expression(),
-               result.index_particle_grouping<container::svector<Index>>(),
-               std::forward<Args>(args)...);
+    result.expression() = tracer(
+        result.expression(),
+        result.index_particle_grouping<container::svector<SlottedIndex>>(),
+        std::forward<Args>(args)...);
 
     result.set_symmetry(Symmetry::Nonsymm);
 
@@ -928,7 +930,8 @@ ExprPtr S_maps(const ExprPtr& expr) {
 
 ExprPtr closed_shell_spintrace(
     const ExprPtr& expression,
-    const container::svector<container::svector<Index>>& ext_index_groups,
+    const container::svector<container::svector<SlottedIndex>>&
+        ext_index_groups,
     bool full_expansion) {
   // Symmetrize and expression
   // Partially expand the antisymmetrizer and write it in terms of S operator.
@@ -1020,10 +1023,10 @@ ExprPtr closed_shell_spintrace(
     auto product_bras = get_bra_indices(temp_product);
 
     auto substitute_ext_idx = [&product_bras, &product_kets](
-                                  const container::svector<Index>& idx_pair) {
+                                  const SlottedIndexContainer auto& idx_pair) {
       SEQUANT_ASSERT(idx_pair.size() == 2);
-      const auto& what = idx_pair[0];
-      const auto& with = idx_pair[1];
+      const auto& what = idx_pair[0].index();
+      const auto& with = idx_pair[1].index();
       std::replace(product_bras.begin(), product_bras.end(), what, with);
       std::replace(product_kets.begin(), product_kets.end(), what, with);
     };
@@ -1067,9 +1070,9 @@ ExprPtr closed_shell_spintrace(
 
 container::svector<ResultExpr> closed_shell_spintrace(const ResultExpr& expr,
                                                       bool full_expansion) {
-  using TraceFunction =
-      ExprPtr (*)(const ExprPtr&,
-                  const container::svector<container::svector<Index>>&, bool);
+  using TraceFunction = ExprPtr (*)(
+      const ExprPtr&,
+      const container::svector<container::svector<SlottedIndex>>&, bool);
 
   return detail::wrap_trace<container::svector<ResultExpr>>(
       expr, static_cast<TraceFunction>(&closed_shell_spintrace),
@@ -1345,7 +1348,8 @@ std::vector<ExprPtr> open_shell_P_op_vector(const Tensor& A) {
 
 std::vector<ExprPtr> open_shell_spintrace(
     const ExprPtr& expr,
-    const container::svector<container::svector<Index>>& ext_index_groups,
+    const container::svector<container::svector<SlottedIndex>>&
+        ext_index_groups,
     std::optional<int> target_spin_case) {
   if (expr->is<Constant>() || expr->is<Variable>()) {
     return std::vector<ExprPtr>{expr};
@@ -1356,10 +1360,11 @@ std::vector<ExprPtr> open_shell_spintrace(
       get_used_indices<decltype(grand_idxlist)>(expr);
 
   container::set<Index> ext_idxlist;
-  for (auto&& idxgrp : ext_index_groups) {
-    for (auto&& idx : idxgrp) {
+  for (const SlottedIndexGroup auto& idxgrp : ext_index_groups) {
+    for (const SlottedIndex& current : idxgrp) {
+      Index idx = current.index();
       idx.reset_tag();
-      ext_idxlist.insert(idx);
+      ext_idxlist.insert(std::move(idx));
     }
   }
 
@@ -1407,26 +1412,25 @@ std::vector<ExprPtr> open_shell_spintrace(
   };
 
   // External index replacement maps
-  auto ext_spin_cases =
-      [&make_spinspecific](const container::svector<IndexGroup>& idx_group) {
-        container::svector<container::map<Index, Index>> all_replacements;
+  auto ext_spin_cases = [&make_spinspecific](const auto& idx_groups) {
+    container::svector<container::map<Index, Index>> all_replacements;
 
-        // container::svector<int> spins(idx_group.size(), 0);
-        for (std::size_t i = 0; i <= idx_group.size(); ++i) {
-          container::svector<int> spins(idx_group.size(), 0);
-          std::fill(spins.end() - i, spins.end(), 1);
+    // container::svector<int> spins(idx_group.size(), 0);
+    for (std::size_t i = 0; i <= idx_groups.size(); ++i) {
+      container::svector<int> spins(idx_groups.size(), 0);
+      std::fill(spins.end() - i, spins.end(), 1);
 
-          container::map<Index, Index> idx_rep;
-          for (std::size_t j = 0; j != idx_group.size(); ++j) {
-            for (auto& idx : idx_group[j]) {
-              auto spin_idx = make_spinspecific(idx, spins[j]);
-              idx_rep.emplace(idx, spin_idx);
-            }
-          }
-          all_replacements.push_back(idx_rep);
+      container::map<Index, Index> idx_rep;
+      for (std::size_t j = 0; j != idx_groups.size(); ++j) {
+        for (const SlottedIndex& idx : idx_groups[j]) {
+          auto spin_idx = make_spinspecific(idx.index(), spins[j]);
+          idx_rep.emplace(idx.index(), spin_idx);
         }
-        return all_replacements;
-      };
+      }
+      all_replacements.push_back(idx_rep);
+    }
+    return all_replacements;
+  };
 
   // Internal and external index replacements are independent
   auto i_rep = spin_cases(int_index_groups);
@@ -1579,10 +1583,10 @@ std::vector<ExprPtr> open_shell_CC_spintrace(const ExprPtr& expr) {
   return expr_vec;
 }
 
-ExprPtr spintrace(
-    const ExprPtr& expression,
-    const container::svector<container::svector<Index>>& ext_index_groups,
-    bool spinfree_index_spaces) {
+ExprPtr spintrace(const ExprPtr& expression,
+                  const container::svector<container::svector<SlottedIndex>>&
+                      ext_index_groups,
+                  bool spinfree_index_spaces) {
   // Escape immediately if expression is a constant
   if (expression->is<Constant>() || expression->is<Variable>()) {
     return expression;
@@ -1599,9 +1603,7 @@ ExprPtr spintrace(
                                [](const auto& list) { return list.size(); });
       return std::accumulate(sizes.begin(), sizes.end(), 0);
     };
-    auto determined_externals =
-        external_indices<container::svector<container::svector<Index>>>(
-            expression);
+    auto determined_externals = external_indices(expression);
 
     SEQUANT_ASSERT(count_indices(ext_index_groups) ==
                    count_indices(determined_externals));
@@ -1668,10 +1670,11 @@ ExprPtr spintrace(
     // List of external indices, i.e. indices that are not summed over Einstein
     // style (indices that are not repeated in an expression)
     container::set<Index> ext_idxlist;
-    for (auto&& idxgrp : ext_index_groups) {
-      for (auto&& idx : idxgrp) {
+    for (const SlottedIndexGroup auto& idxgrp : ext_index_groups) {
+      for (const SlottedIndex& current : idxgrp) {
+        Index idx = current.index();
         idx.reset_tag();
-        ext_idxlist.insert(idx);
+        ext_idxlist.insert(std::move(idx));
       }
     }
 
@@ -1693,8 +1696,14 @@ ExprPtr spintrace(
     using IndexGroup = container::svector<Index>;
     container::svector<IndexGroup> index_groups;
     for (auto&& i : int_idxlist) index_groups.emplace_back(IndexGroup(1, i));
-    index_groups.insert(index_groups.end(), ext_index_groups.begin(),
-                        ext_index_groups.end());
+    for (const SlottedIndexGroup auto& group : ext_index_groups) {
+      IndexGroup target;
+      target.reserve(group.size());
+      for (const SlottedIndex& current : group) {
+        target.emplace_back(current.index());
+      }
+      index_groups.emplace_back(std::move(target));
+    }
 
     // EFV: for each spincase (loop over integer from 0 to 2^n-1, n=#of index
     // groups)
@@ -1790,9 +1799,9 @@ ExprPtr spintrace(
 
 container::svector<ResultExpr> spintrace(const ResultExpr& expr,
                                          bool spinfree_index_spaces) {
-  using TraceFunction =
-      ExprPtr (*)(const ExprPtr&,
-                  const container::svector<container::svector<Index>>&, bool);
+  using TraceFunction = ExprPtr (*)(
+      const ExprPtr&,
+      const container::svector<container::svector<SlottedIndex>>&, bool);
 
   return detail::wrap_trace<container::svector<ResultExpr>>(
       expr, static_cast<TraceFunction>(&spintrace), spinfree_index_spaces);

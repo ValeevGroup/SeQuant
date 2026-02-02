@@ -1368,7 +1368,10 @@ TEST_CASE("wick", "[algorithms][wick]") {
         // N.B. closed-shell spintrace expects ext groups to consist of pairs of
         // indices
         auto rdm1_sf = sequant::mbpt::spintrace(
-            rdm1_so, {{L"a_1", L"a_2"}, {L"i_1"}, {L"i_2"}},
+            rdm1_so,
+            {{{L"a_1", Slot::Bra}, {L"a_2", Slot::Ket}},
+             {{L"i_1", Slot::Ket}},
+             {{L"i_2", Slot::Ket}}},
             /* spin-free = */ true);
         simplify(rdm1_sf);
         // std::wcout << "SF RDM: " << rdm1_sf.to_latex() << "\n";
@@ -1401,7 +1404,11 @@ TEST_CASE("wick", "[algorithms][wick]") {
         // N.B. closed-shell spintrace expects ext groups to consist of pairs of
         // indices
         auto rdm1_sf = sequant::mbpt::spintrace(
-            rdm1_so, {{L"a_4", L"a_5"}, {L"i_1"}, {L"i_2"}, {L"i_3"}},
+            rdm1_so,
+            {{{L"a_4", Slot::Bra}, {L"a_5", Slot::Ket}},
+             {{L"i_1", Slot::Ket}},
+             {{L"i_2", Slot::Ket}},
+             {{L"i_3", Slot::Ket}}},
             /* spin-free = */ true);
         simplify(rdm1_sf);
         // std::wcout << "ST RDM: " << rdm1_sf.to_latex() << "\n";

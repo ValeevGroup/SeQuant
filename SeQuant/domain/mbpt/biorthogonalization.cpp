@@ -533,7 +533,7 @@ void biorthogonal_transform(container::svector<ResultExpr>& result_exprs,
 
 ExprPtr biorthogonal_transform(
     const sequant::ExprPtr& expr,
-    const container::svector<container::svector<sequant::Index>>&
+    const container::svector<container::svector<sequant::SlottedIndex>>&
         ext_index_groups,
     const double threshold) {
   ResultExpr res(
@@ -555,7 +555,7 @@ ExprPtr biorthogonal_transform(
 
 ExprPtr WK_biorthogonalization_filter(
     ExprPtr expr,
-    const container::svector<container::svector<Index>>& ext_idxs) {
+    const container::svector<container::svector<SlottedIndex>>& ext_idxs) {
   if (!expr->is<Sum>()) return expr;
   if (ext_idxs.size() <= 2) return expr;  // always skip R1 and R2
 
@@ -605,7 +605,7 @@ ExprPtr WK_biorthogonalization_filter(
 
 ExprPtr biorthogonal_transform_pre_nnsproject(
     ExprPtr& expr,
-    const container::svector<container::svector<Index>>& ext_idxs,
+    const container::svector<container::svector<SlottedIndex>>& ext_idxs,
     bool factor_out_nns_projector) {
   using ranges::views::transform;
 

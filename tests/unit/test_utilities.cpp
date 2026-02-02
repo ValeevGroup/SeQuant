@@ -8,6 +8,7 @@
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/reserved.hpp>
+#include <SeQuant/core/slotted_index.hpp>
 #include <SeQuant/core/utility/conversion.hpp>
 #include <SeQuant/core/utility/expr.hpp>
 #include <SeQuant/core/utility/indices.hpp>
@@ -536,41 +537,59 @@ TEST_CASE("utilities", "[utilities]") {
   }
 
   SECTION("external_indices") {
-    for (const auto& [input, expected] :
-         std::vector<std::pair<std::wstring, std::vector<std::vector<Index>>>>{
+    for (const auto& [input, expected] : std::vector<
+             std::pair<std::wstring, std::vector<std::vector<SlottedIndex>>>>{
              {L"1/2", {}},
              {L"t", {}},
              {L"t{}", {}},
-             {L"t{i1;a1}", {{L"i_1", L"a_1"}}},
-             {L"t{i1,i2;a1,a2}", {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}}},
-             {L"t{i1,i2;a2,a1}", {{L"i_1", L"a_2"}, {L"i_2", L"a_1"}}},
-             {L"t{;;i1,i2}", {{L"i_2"}, {L"i_1"}}},
-             {L"t{a1;a2;i1,i2}", {{L"a_1", L"a_2"}, {L"i_1"}, {L"i_2"}}},
+             {L"t{i1;a1}", {{{L"i_1", Slot::Bra}, {L"a_1", Slot::Ket}}}},
+             {L"t{i1,i2;a1,a2}",
+              {{{L"i_1", Slot::Bra}, {L"a_1", Slot::Ket}},
+               {{L"i_2", Slot::Bra}, {L"a_2", Slot::Ket}}}},
+             {L"t{i1,i2;a2,a1}",
+              {{{L"i_1", Slot::Bra}, {L"a_2", Slot::Ket}},
+               {{L"i_2", Slot::Bra}, {L"a_1", Slot::Ket}}}},
+             {L"t{;;i1,i2}", {{{L"i_2", Slot::Aux}}, {{L"i_1", Slot::Aux}}}},
+             {L"t{a1;a2;i1,i2}",
+              {{{L"a_1", Slot::Bra}, {L"a_2", Slot::Ket}},
+               {{L"i_1", Slot::Aux}},
+               {{L"i_2", Slot::Aux}}}},
              {L"t{a1,a2;a3,a4;i1,i2}",
-              {{L"a_1", L"a_3"}, {L"a_2", L"a_4"}, {L"i_1"}, {L"i_2"}}},
+              {{{L"a_1", Slot::Bra}, {L"a_3", Slot::Ket}},
+               {{L"a_2", Slot::Bra}, {L"a_4", Slot::Ket}},
+               {{L"i_1", Slot::Aux}},
+               {{L"i_2", Slot::Aux}}}},
              {L"g{a3;a2;i2} t{a1,a2;a3,a4;i1,i2}",
-              {{L"a_1", L"a_4"}, {L"i_1"}}},
+              {{{L"a_1", Slot::Bra}, {L"a_4", Slot::Ket}},
+               {{L"i_1", Slot::Aux}}}},
              {L"t{a1,a2;i1,i2} + t{a1;i1} t{a2;i2}",
-              {{L"a_1", L"i_1"}, {L"a_2", L"i_2"}}},
+              {{{L"a_1", Slot::Bra}, {L"i_1", Slot::Ket}},
+               {{L"a_2", Slot::Bra}, {L"i_2", Slot::Ket}}}},
              // When present, external indices are deduced from the symmetrizer
              // (though bra/ket will be swapped)
-             {L"Â{a1;i1} t{i1;a1}", {{L"i_1", L"a_1"}}},
+             {L"Â{a1;i1} t{i1;a1}",
+              {{{L"i_1", Slot::Bra}, {L"a_1", Slot::Ket}}}},
              {L"Â{a1,a2;i1,i2} t{i1;a1} t{i2;a2}",
-              {{L"i_1", L"a_1"}, {L"i_2", "a_2"}}},
-             {L"Ŝ{a1;i1} t{i1;a1}", {{L"i_1", L"a_1"}}},
+              {{{L"i_1", Slot::Bra}, {L"a_1", Slot::Ket}},
+               {{L"i_2", Slot::Bra}, {"a_2", Slot::Ket}}}},
+             {L"Ŝ{a1;i1} t{i1;a1}",
+              {{{L"i_1", Slot::Bra}, {L"a_1", Slot::Ket}}}},
              {L"Ŝ{a1,a2;i1,i2} t{i1;a1} t{i2;a2}",
-              {{L"i_1", L"a_1"}, {L"i_2", "a_2"}}},
+              {{{L"i_1", Slot::Bra}, {L"a_1", Slot::Ket}},
+               {{L"i_2", Slot::Bra}, {"a_2", Slot::Ket}}}},
              // We still want the "swap" behavior when called on an isolated
              // symmetrizer Note: this is the inverse behavior to a regular
              // tensor
-             {L"Ŝ{a1,a2;i1,i2}", {{L"i_1", L"a_1"}, {L"i_2", "a_2"}}},
-             {L"Â{a1;i1}", {{L"i_1", L"a_1"}}},
+             {L"Ŝ{a1,a2;i1,i2}",
+              {{{L"i_1", Slot::Bra}, {L"a_1", Slot::Ket}},
+               {{L"i_2", Slot::Bra}, {"a_2", Slot::Ket}}}},
+             {L"Â{a1;i1}", {{{L"i_1", Slot::Bra}, {L"a_1", Slot::Ket}}}},
          }) {
       CAPTURE(toUtf8(input));
 
       ExprPtr expr = deserialize(input);
-      auto actual =
-          external_indices<std::remove_cvref_t<decltype(expected)>>(expr);
+      SlottedIndexGroupContainer auto actual =
+          external_indices<std::vector, std::vector>(expr);
 
       REQUIRE_THAT(actual, ::Catch::Matchers::UnorderedRangeEquals(expected));
     }
