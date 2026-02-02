@@ -163,50 +163,16 @@ class compute_cceqvec {
         if (type == EqnType::t) {
           auto const ext_idxs = external_indices(eqvec[R]->at(0));
 
-          // Remove S operator
-          for (auto& term : eqvec[R]->expr()) {
-            if (term->is<Product>())
-              term = remove_tensor(term.as_shared_ptr<Product>(),
-                                   reserved::symm_label());
-          }
+          // Biorthogonal transformation along with post-precessing steps
+          eqvec[R] = augmented_biorthogonal_transform(eqvec[R], ext_idxs);
 
-          // Biorthogonal transformation
-          eqvec[R] = biorthogonal_transform(eqvec[R], ext_idxs);
-
-          // restore the particle symmetrizer to then expand it in order to get
-          // all the raw equations
-          auto bixs = ext_idxs | ranges::views::transform(
-                                     [](auto&& vec) { return vec[0]; });
-          auto kixs = ext_idxs | ranges::views::transform(
-                                     [](auto&& vec) { return vec[1]; });
-          if (bixs.size() > 1) {
-            eqvec[R] = ex<Tensor>(Tensor{reserved::symm_label(), bra(kixs),
-                                         ket(bixs)}) *
-                       eqvec[R];
-          }
-          simplify(eqvec[R]);
-
-          // expand the particle symmetrizer to get all the raw equations
-          eqvec[R] = S_maps(eqvec[R]);
-          canonicalize(eqvec[R]);
-
-          // apply WK_biorthogonalization_filter to get only terms with large
-          // coefficients
-          eqvec[R] = WK_biorthogonalization_filter(eqvec[R], ext_idxs);
-
-          // restore the particle symmetrizer again to get the most compact set
-          // of equations
-          eqvec[R] =
-              ex<Tensor>(Tensor{reserved::symm_label(), bra(kixs), ket(bixs)}) *
-              eqvec[R];
-          eqvec[R] = expand(eqvec[R]);
-          simplify(eqvec[R]);
-
-          // WK_biorthogonalization_filter method removes the redundancy caused
-          // by biorthogonal transformation and gives the most compact set of
-          // equations. However, we need to restore the effects of those deleted
-          // terms. So, after evaluate_symm call in sequant evaluation scope, we
-          // need to call biorthogonal_nns_project_<backend>.
+          // augmented_biorthogonal_transform contains post-processing steps
+          // (such as WK_biorthogonalization_filter method) which removes the
+          // redundancy caused by biorthogonal transformation and gives the most
+          // compact set of equations. However, we need to restore the effects
+          // of those deleted terms. So, after evaluate_symm call in sequant
+          // evaluation scope, we need to call
+          // biorthogonal_nns_project_<backend>.
 
           std::wcout << "biorthogonal spin-free R" << R << "(expS" << N
                      << ") has " << eqvec[R]->size() << " terms:" << std::endl;
