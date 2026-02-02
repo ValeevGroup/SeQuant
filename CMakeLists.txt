@@ -330,6 +330,7 @@ set(SeQuant_symb_src
         SeQuant/core/runtime.hpp
         SeQuant/core/space.cpp
         SeQuant/core/space.hpp
+        SeQuant/core/slotted_index.hpp
         SeQuant/core/tag.hpp
         SeQuant/core/tensor_canonicalizer.cpp
         SeQuant/core/tensor_canonicalizer.hpp
