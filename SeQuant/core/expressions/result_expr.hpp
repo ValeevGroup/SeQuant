@@ -6,6 +6,7 @@
 #include <SeQuant/core/expressions/tensor.hpp>
 #include <SeQuant/core/expressions/variable.hpp>
 #include <SeQuant/core/index.hpp>
+#include <SeQuant/core/slotted_index.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
 #include <initializer_list>
@@ -102,15 +103,23 @@ class ResultExpr {
     // based on the particle they belong to and that bra and
     // ket indices are assigned to the same set of particles.
     for (std::size_t i = 0; i < m_braIndices.size(); ++i) {
-      if constexpr (std::is_constructible_v<Group,
-                                            std::initializer_list<Index>>) {
+      if constexpr (std::is_constructible_v<
+                        Group, std::initializer_list<SlottedIndex>>) {
+        groups.emplace_back(std::initializer_list<SlottedIndex>{
+            {m_braIndices.at(i), Slot::Bra}, {m_ketIndices.at(i), Slot::Ket}});
+      } else if constexpr (std::is_constructible_v<
+                               Group, std::initializer_list<Index>>) {
         groups.emplace_back(std::initializer_list<Index>{m_braIndices.at(i),
                                                          m_ketIndices.at(i)});
+      } else if constexpr (std::is_constructible_v<Group, SlottedIndex,
+                                                   SlottedIndex>) {
+        groups.emplace_back(SlottedIndex{m_braIndices.at(i), Slot::Bra},
+                            SlottedIndex{m_ketIndices.at(i), Slot::Ket});
       } else {
         static_assert(
             std::is_constructible_v<Group, Index, Index>,
-            "Group is expected to be constructible from two indices or from an "
-            "initializer_list of indices");
+            "Group is expected to be constructible from two (slotted) indices "
+            "or from an initializer_list of (slotted) indices");
         groups.emplace_back(m_braIndices.at(i), m_ketIndices.at(i));
       }
     }
