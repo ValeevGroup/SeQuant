@@ -977,20 +977,19 @@ ExprPtr WK_biorthogonalization_filter(
 }
 
 ExprPtr augmented_biorthogonal_transform(
-    const ExprPtr& expr,
+    ExprPtr& expr,
     const container::svector<container::svector<Index>>& ext_idxs,
     bool post_process) {
   using ranges::views::transform;
 
   // Remove leading S operator if present
-  ExprPtr input_expr = expr;
-  for (auto& term : *input_expr) {
+  for (auto& term : *expr) {
     if (term->is<Product>())
       term =
           remove_tensor(term.as_shared_ptr<Product>(), reserved::symm_label());
   }
 
-  auto bt = biorthogonal_transform(input_expr, ext_idxs);
+  auto bt = biorthogonal_transform(expr, ext_idxs);
 
   auto bixs = ext_idxs | transform([](auto&& vec) { return get_bra_idx(vec); });
   auto kixs = ext_idxs | transform([](auto&& vec) { return get_ket_idx(vec); });

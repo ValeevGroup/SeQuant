@@ -242,7 +242,7 @@ ExprPtr WK_biorthogonalization_filter(
 /// compact equations.
 /// @return Compact biorthogonalized expression with leading S operator.
 ExprPtr augmented_biorthogonal_transform(
-    const ExprPtr& expr,
+    ExprPtr& expr,
     const container::svector<container::svector<Index>>& ext_idxs,
     bool post_process = true);
 
