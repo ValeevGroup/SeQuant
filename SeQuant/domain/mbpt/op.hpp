@@ -109,7 +109,7 @@ struct OpParams {
     if (!batch_ordinals.empty()) {
       SEQUANT_ASSERT(ranges::is_sorted(batch_ordinals) &&
                      "OpParams: batch_ordinals must be sorted");
-      auto duplicate = ranges::adjacent_find(batch_ordinals);
+      [[maybe_unused]] auto duplicate = ranges::adjacent_find(batch_ordinals);
       SEQUANT_ASSERT(duplicate == batch_ordinals.end() &&
                      "OpParams: batch_ordinals must contain unique values");
     }
