@@ -231,20 +231,22 @@ ExprPtr WK_biorthogonalization_filter(
     ExprPtr expr,
     const container::svector<container::svector<Index>>& ext_idxs);
 
-/// @brief Performs biorthogonal transformation with optional post-processing
-/// @details Applies biorthogonal transformation. When post_process is true
-/// (default), applies post-processing (S_maps and
-/// WK_biorthogonalization_filter) to produce compact biorthogonal
-/// equations.
+/// @brief Performs biorthogonal transformation with optional pre-NNS-projection
+/// steps
+/// @details Applies biorthogonal transformation. When pre_nnsproject is true
+/// (default), applies additional steps (S_maps and
+/// WK_biorthogonalization_filter) to produce compact biorthogonal equations
+/// suitable for subsequent NNS-projection numerical evaluation.
 /// @param expr The input expression.
 /// @param ext_idxs A vector of external index groups.
-/// @param post_process If true (default), applies post-processing to obtain
+/// @param pre_nnsproject If true (default), applies additional steps to obtain
 /// compact equations.
-/// @return Compact biorthogonalized expression with leading S operator.
-ExprPtr augmented_biorthogonal_transform(
+/// @return Expression pointer to the biorthogonalized result with leading S
+/// operator.
+ExprPtr biorthogonal_transform_pre_nnsproject(
     ExprPtr& expr,
     const container::svector<container::svector<Index>>& ext_idxs,
-    bool post_process = true);
+    bool pre_nnsproject = true);
 
 // clang-format off
 /// @brief Traces out spin degrees of freedom from fermionic operator moments

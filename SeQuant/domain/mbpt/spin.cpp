@@ -976,10 +976,10 @@ ExprPtr WK_biorthogonalization_filter(
   return result;
 }
 
-ExprPtr augmented_biorthogonal_transform(
+ExprPtr biorthogonal_transform_pre_nnsproject(
     ExprPtr& expr,
     const container::svector<container::svector<Index>>& ext_idxs,
-    bool post_process) {
+    bool pre_nnsproject) {
   using ranges::views::transform;
 
   // Remove leading S operator if present
@@ -996,7 +996,7 @@ ExprPtr augmented_biorthogonal_transform(
   ExprPtr S_tensor =
       ex<Tensor>(Tensor{reserved::symm_label(), bra(kixs), ket(bixs)});
 
-  if (post_process) {
+  if (pre_nnsproject) {
     if (ext_idxs.size() > 1) {
       bt = S_tensor * bt;
     }
@@ -1175,8 +1175,8 @@ ExprPtr closed_shell_CC_spintrace_v1(ExprPtr const& expr,
   canonicalize(st_expr);
 
   if (!ext_idxs.empty()) {
-    // Biorthogonal transformation without post-processing
-    st_expr = augmented_biorthogonal_transform(st_expr, ext_idxs, false);
+    // Biorthogonal transformation without pre-nnsproject steps
+    st_expr = biorthogonal_transform_pre_nnsproject(st_expr, ext_idxs, false);
   }
   simplify(st_expr);
 
@@ -1194,7 +1194,7 @@ ExprPtr closed_shell_CC_spintrace_v2(ExprPtr const& expr,
   canonicalize(st_expr);
 
   if (!ext_idxs.empty()) {
-    st_expr = augmented_biorthogonal_transform(st_expr, ext_idxs);
+    st_expr = biorthogonal_transform_pre_nnsproject(st_expr, ext_idxs);
   }
 
   simplify(st_expr);
