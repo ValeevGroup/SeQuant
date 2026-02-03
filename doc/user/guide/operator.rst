@@ -47,7 +47,7 @@ only the non-zero contributions.
 
 ``mbpt::Operator`` is constructed from 3 callables (e.g., lambdas):
 
-- ``void -> std::wstring_view``: returns the operator label such as "T" or "Λ"
+- ``void -> std::wstring_view``: returns the operator label such as "t" or "λ"
 - ``void -> ExptPtr``: returns the tensor form of the operator, and
 - ``QuantumNumberChange<>& -> void``: encodes the action on the given input state by mutating its quantum numbers given as the argument to the lambda.
 
