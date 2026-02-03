@@ -163,16 +163,8 @@ class compute_cceqvec {
         if (type == EqnType::t) {
           auto const ext_idxs = external_indices(eqvec[R]->at(0));
 
-          // Biorthogonal transformation along with post-precessing steps
+          // Biorthogonal transformation with factoring out NNS projector
           eqvec[R] = biorthogonal_transform_pre_nnsproject(eqvec[R], ext_idxs);
-
-          // augmented_biorthogonal_transform contains post-processing steps
-          // (S_maps and WK_biorthogonalization_filter method) which removes the
-          // redundancy caused by biorthogonal transformation and gives the most
-          // compact set of equations. However, we need to restore the effects
-          // of those deleted terms. So, after evaluate_symm call in sequant
-          // evaluation scope, we need to call
-          // biorthogonal_nns_project_<backend>.
 
           std::wcout << "biorthogonal spin-free R" << R << "(expS" << N
                      << ") has " << eqvec[R]->size() << " terms:" << std::endl;

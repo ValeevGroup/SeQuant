@@ -979,7 +979,7 @@ ExprPtr WK_biorthogonalization_filter(
 ExprPtr biorthogonal_transform_pre_nnsproject(
     ExprPtr& expr,
     const container::svector<container::svector<Index>>& ext_idxs,
-    bool pre_nnsproject) {
+    bool factor_out_nns_projector) {
   using ranges::views::transform;
 
   // Remove leading S operator if present
@@ -996,7 +996,7 @@ ExprPtr biorthogonal_transform_pre_nnsproject(
   ExprPtr S_tensor =
       ex<Tensor>(Tensor{reserved::symm_label(), bra(kixs), ket(bixs)});
 
-  if (pre_nnsproject) {
+  if (factor_out_nns_projector) {
     if (ext_idxs.size() > 1) {
       bt = S_tensor * bt;
     }
@@ -1175,7 +1175,7 @@ ExprPtr closed_shell_CC_spintrace_v1(ExprPtr const& expr,
   canonicalize(st_expr);
 
   if (!ext_idxs.empty()) {
-    // Biorthogonal transformation without pre-nnsproject steps
+    // Biorthogonal transformation without factoring out NNS projector
     st_expr = biorthogonal_transform_pre_nnsproject(st_expr, ext_idxs, false);
   }
   simplify(st_expr);
@@ -1194,6 +1194,7 @@ ExprPtr closed_shell_CC_spintrace_v2(ExprPtr const& expr,
   canonicalize(st_expr);
 
   if (!ext_idxs.empty()) {
+    // Biorthogonal transformation with factoring out NNS projector
     st_expr = biorthogonal_transform_pre_nnsproject(st_expr, ext_idxs);
   }
 
