@@ -12,7 +12,6 @@
 #include <SeQuant/core/parse.hpp>
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/utility/macros.hpp>
-#include <SeQuant/domain/mbpt/convention.hpp>
 
 #include <initializer_list>
 #include <memory>

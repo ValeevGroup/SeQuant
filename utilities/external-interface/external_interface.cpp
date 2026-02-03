@@ -3,6 +3,7 @@
 #include "utils.hpp"
 
 #include <SeQuant/core/context.hpp>
+#include <SeQuant/core/eval/optimize/common_subexpression_elimination.hpp>
 #include <SeQuant/core/export/export.hpp>
 #include <SeQuant/core/export/export_expr.hpp>
 #include <SeQuant/core/export/export_node.hpp>
@@ -10,7 +11,6 @@
 #include <SeQuant/core/export/generation_optimizer.hpp>
 #include <SeQuant/core/export/itf.hpp>
 #include <SeQuant/core/expr.hpp>
-#include <SeQuant/core/optimize/common_subexpression_elimination.hpp>
 #include <SeQuant/core/parse.hpp>
 #include <SeQuant/core/runtime.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>

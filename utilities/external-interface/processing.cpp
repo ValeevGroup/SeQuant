@@ -3,9 +3,9 @@
 #include "utils.hpp"
 
 #include <SeQuant/core/container.hpp>
+#include <SeQuant/core/eval/optimize.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
-#include <SeQuant/core/optimize.hpp>
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/utility/expr.hpp>
 #include <SeQuant/core/utility/macros.hpp>

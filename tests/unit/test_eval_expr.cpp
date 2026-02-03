@@ -11,7 +11,6 @@
 #include <SeQuant/core/parse.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/utility/macros.hpp>
-#include <SeQuant/domain/mbpt/convention.hpp>
 
 #include <initializer_list>
 #include <memory>
