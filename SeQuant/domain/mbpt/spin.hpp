@@ -231,6 +231,24 @@ ExprPtr WK_biorthogonalization_filter(
     ExprPtr expr,
     const container::svector<container::svector<Index>>& ext_idxs);
 
+/// @brief Performs biorthogonal transformation with factored out NNS projector
+/// @details Applies biorthogonal transformation. When factor_out_nns_projector
+/// is true (default), factors out the NNS projector by applying additional
+/// steps (S_maps and WK_biorthogonalization_filter) to produce compact
+/// biorthogonal equations, necessitating a subsequent numerical NNS-projection
+/// evaluation. When false, the NNS projector is not factored out, so no need to
+/// apply numerical NNS-projection evaluation.
+/// @param expr The input expression.
+/// @param ext_idxs A vector of external index groups.
+/// @param factor_out_nns_projector If true (default), factored out NNS
+/// projector. If false, NNS projector is not factored out.
+/// @return Expression pointer to the biorthogonalized result with leading S
+/// operator.
+ExprPtr biorthogonal_transform_pre_nnsproject(
+    ExprPtr& expr,
+    const container::svector<container::svector<Index>>& ext_idxs,
+    bool factor_out_nns_projector = true);
+
 // clang-format off
 /// @brief Traces out spin degrees of freedom from fermionic operator moments
 /// @details This function is designed for integrating spin out of
