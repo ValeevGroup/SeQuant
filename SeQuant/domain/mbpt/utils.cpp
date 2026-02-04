@@ -81,7 +81,7 @@ ExprPtr lst(ExprPtr A, ExprPtr B, size_t commutator_rank, LSTOptions options) {
     return A;
   else
     throw std::invalid_argument(
-        "mbpt::lst(A, B, commutator_rank, unitary): Unsupported expression "
+        "mbpt::lst(A, B, commutator_rank, options): Unsupported expression "
         "type");
 }
 

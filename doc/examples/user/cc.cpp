@@ -50,8 +50,8 @@ int main() {
 
   //  EE-EOM-CCSD Left eigenvectors
   auto ee_l_eqs = CC{2}.eom_l(nₚ(2), nₕ(2));
-  std::wcout << "L1: " << to_latex(l_eqs[1]) << "\n"
-             << "L2: " << to_latex(l_eqs[2]) << "\n";
+  std::wcout << "L1: " << to_latex(ee_l_eqs[1]) << "\n"
+             << "L2: " << to_latex(ee_l_eqs[2]) << "\n";
 
   // IP-EOM-CCSD (ionization potential)
   auto ip_eqs = CC{2}.eom_r(nₚ(0), nₕ(1));
@@ -65,8 +65,8 @@ int main() {
   // start-snippet-3
   // First-order perturbed amplitude equations
   auto t_pt = CC{2}.tʼ(1, 1);
-  std::wcout << "T1 perturbed: " << to_latex(t_pt[1]) << "\n"
-             << "T2 perturbed: " << to_latex(t_pt[2]) << "\n";
+  std::wcout << "t1 perturbed: " << to_latex(t_pt[1]) << "\n"
+             << "t2 perturbed: " << to_latex(t_pt[2]) << "\n";
 
   // First-order perturbed Lambda amplitude equations
   auto l_pt = CC{2}.λʼ(1, 1);
