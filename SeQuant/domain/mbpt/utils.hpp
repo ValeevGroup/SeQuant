@@ -21,7 +21,7 @@ struct LSTOptions {
   bool unitary = false;
   /// If true, uses explicit commutators [A,B] = AB - BA; otherwise uses
   /// connected products (AB)_c
-  /// LST will set this to true if unitary is true, else remains std::nullopt
+  /// If not explicitly set, LST will set this to the value of unitary
   std::optional<bool> use_commutators = std::nullopt;
   /// If true, will not clone the input expression
   bool skip_clone = false;
