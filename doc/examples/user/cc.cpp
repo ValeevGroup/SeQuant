@@ -32,7 +32,7 @@ int main() {
              << "λ2: " << to_latex(l_eqs[2]) << "\n";
 
   // Unitary CCSD
-  auto Ut_eqs = CC(2, {.ansatz = CC::Ansatz::U, .hbar_truncation_rank = 4})
+  auto Ut_eqs = CC(2, {.ansatz = CC::Ansatz::U, .hbar_comm_rank = 4})
                     .t();  // Use 4th-order commutator expansion
   std::wcout << "T1 (UCC): " << to_latex(Ut_eqs[1]) << "\n"
              << "T2 (UCC): " << to_latex(Ut_eqs[2]) << "\n";
@@ -76,8 +76,7 @@ int main() {
 
   // start-snippet-4
   // Unitary CCSDT with 6th-order commutator expansion
-  auto Ut_ccsdt =
-      CC(3, {.ansatz = CC::Ansatz::U, .hbar_truncation_rank = 6}).t();
+  auto Ut_ccsdt = CC(3, {.ansatz = CC::Ansatz::U, .hbar_comm_rank = 6}).t();
   // end-snippet-4
 
   // start-snippet-5

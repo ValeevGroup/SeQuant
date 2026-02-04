@@ -103,7 +103,7 @@ SECTION("ucc") {
 
     for (const auto& c : C) {
       // UCC energy, with commutator truncation rank = c
-      auto t_eqs = CC(N, {.ansatz = ansatz, .hbar_truncation_rank = c}).t();
+      auto t_eqs = CC(N, {.ansatz = ansatz, .hbar_comm_rank = c}).t();
       REQUIRE(t_eqs.size() == N + 1);
       for (auto k = 0; k <= N; ++k) {
         REQUIRE(t_eqs[k]);

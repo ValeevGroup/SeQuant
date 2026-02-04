@@ -39,12 +39,13 @@ class CC {
     bool screen = true;
     /// if true, uses topological optimizations in WickTheorem
     bool use_topology = true;
-    /// truncation rank for similarity transformed Hamiltonian, must be
-    /// specified if unitary ansatz is used
-    std::optional<size_t> hbar_truncation_rank = std::nullopt;
-    /// truncation rank for similarity transformed perturbation operator, must
-    /// be specified if unitary ansatz is used in perturbed amplitude derivation
-    std::optional<size_t> pertbar_truncation_rank = std::nullopt;
+    /// maximum order of nested commutators in H̄; must be specified if unitary
+    /// ansatz is used
+    std::optional<size_t> hbar_comm_rank = std::nullopt;
+    /// maximum order of nested commutators in the similarity transformed
+    /// perturbation operator; must be specified if unitary ansatz is used in
+    /// perturbed amplitude derivation
+    std::optional<size_t> pertbar_comm_rank = std::nullopt;
   };
 
   /// @brief constructs CC engine with default options (traditional ansatz,
@@ -134,8 +135,8 @@ class CC {
   Ansatz ansatz_ = Ansatz::T;
   bool screen_ = true;
   bool use_topology_ = true;
-  std::optional<size_t> hbar_truncation_rank_ = std::nullopt;
-  std::optional<size_t> pertbar_truncation_rank_ = std::nullopt;
+  std::optional<size_t> hbar_comm_rank_ = std::nullopt;
+  std::optional<size_t> pertbar_comm_rank_ = std::nullopt;
 
   /// @brief computes reference expectation value of an expression. Dispatches
   /// to `mbpt::op::ref_av()`
