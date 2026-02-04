@@ -564,13 +564,10 @@ static_assert(!is_immutable_v<float &&>);
 template <typename From, typename To>
 using mimic_constness_t =
     std::conditional_t<is_immutable_v<From>, make_immutable_t<To>,
-                       make_mutable_t<From>>;
+                       make_mutable_t<To>>;
 static_assert(
-    std::is_const_v<
-        std::remove_reference_t<mimic_constness_t<const int &, float &>>>);
-static_assert(
-    !std::is_const_v<
-        std::remove_reference_t<mimic_constness_t<int &, const float &>>>);
+    std::same_as<mimic_constness_t<const int &, float &>, const float &>);
+static_assert(std::same_as<mimic_constness_t<int &, const float &>, float &>);
 
 }  // namespace meta
 }  // namespace sequant
