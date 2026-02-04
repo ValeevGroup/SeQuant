@@ -976,43 +976,6 @@ ExprPtr WK_biorthogonalization_filter(
   return result;
 }
 
-ExprPtr biorthogonal_transform_pre_nnsproject(
-    ExprPtr& expr,
-    const container::svector<container::svector<Index>>& ext_idxs,
-    bool factor_out_nns_projector) {
-  using ranges::views::transform;
-
-  // Remove leading S operator if present
-  for (auto& term : *expr) {
-    if (term->is<Product>())
-      term =
-          remove_tensor(term.as_shared_ptr<Product>(), reserved::symm_label());
-  }
-
-  auto bt = biorthogonal_transform(expr, ext_idxs);
-
-  auto bixs = ext_idxs | transform([](auto&& vec) { return get_bra_idx(vec); });
-  auto kixs = ext_idxs | transform([](auto&& vec) { return get_ket_idx(vec); });
-  ExprPtr S_tensor =
-      ex<Tensor>(Tensor{reserved::symm_label(), bra(kixs), ket(bixs)});
-
-  if (factor_out_nns_projector) {
-    if (ext_idxs.size() > 1) {
-      bt = S_tensor * bt;
-    }
-    simplify(bt);
-
-    bt = S_maps(bt);
-    canonicalize(bt);
-    bt = WK_biorthogonalization_filter(bt, ext_idxs);
-  }
-
-  bt = S_tensor * bt;
-  simplify(bt);
-
-  return bt;
-}
-
 ExprPtr closed_shell_spintrace(
     const ExprPtr& expression,
     const container::svector<container::svector<Index>>& ext_index_groups,

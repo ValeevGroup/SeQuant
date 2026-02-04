@@ -328,7 +328,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
                                              sequant::ExprPtr const& expr,
                                              std::string const& target_labels) {
       auto result = evaluate(eval_node(expr), target_labels, yield_);
-      return sequant::biorthogonal_nns_project(
+      return sequant::mbpt::biorthogonal_nns_project(
           result->get<TA::TArrayD>(), eval_node(expr)->as_tensor().bra_rank());
     };
 

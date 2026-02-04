@@ -1,4 +1,5 @@
 #include <SeQuant/domain/mbpt/biorthogonalization.hpp>
+#include <SeQuant/domain/mbpt/spin.hpp>
 
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
@@ -19,7 +20,7 @@
 
 #include <algorithm>
 
-namespace sequant {
+namespace sequant::mbpt {
 
 template <typename T>
 struct compare_first_less {
@@ -492,12 +493,12 @@ void biorthogonal_transform(container::svector<ResultExpr>& result_exprs,
   const ComputedMatrix* computed_coefficients = nullptr;
 
   if (n_particles <= max_rank_hardcoded_biorthogonalizer_matrix) {
-    hardcoded_coefficients = &detail::memoize(
+    hardcoded_coefficients = &sequant::detail::memoize(
         hardcoded_cache, cache_mutex, cache_cv, key,
         [&] { return hardcoded_biorthogonalizer_matrix(n_particles); });
   } else {
-    computed_coefficients =
-        &detail::memoize(computed_cache, cache_mutex, cache_cv, key, [&] {
+    computed_coefficients = &sequant::detail::memoize(
+        computed_cache, cache_mutex, cache_cv, key, [&] {
           return compute_biorthogonalizer_matrix(n_particles, threshold);
         });
     SEQUANT_ASSERT(num_perms == computed_coefficients->rows());
@@ -550,6 +551,43 @@ ExprPtr biorthogonal_transform(
   return res.expression();
 }
 
+ExprPtr biorthogonal_transform_pre_nnsproject(
+    ExprPtr& expr,
+    const container::svector<container::svector<Index>>& ext_idxs,
+    bool factor_out_nns_projector) {
+  using ranges::views::transform;
+
+  // Remove leading S operator if present
+  for (auto& term : *expr) {
+    if (term->is<Product>())
+      term =
+          remove_tensor(term.as_shared_ptr<Product>(), reserved::symm_label());
+  }
+
+  auto bt = biorthogonal_transform(expr, ext_idxs);
+
+  auto bixs = ext_idxs | transform([](auto&& vec) { return get_bra_idx(vec); });
+  auto kixs = ext_idxs | transform([](auto&& vec) { return get_ket_idx(vec); });
+  ExprPtr S_tensor =
+      ex<Tensor>(Tensor{reserved::symm_label(), bra(kixs), ket(bixs)});
+
+  if (factor_out_nns_projector) {
+    if (ext_idxs.size() > 1) {
+      bt = S_tensor * bt;
+    }
+    simplify(bt);
+
+    bt = S_maps(bt);
+    canonicalize(bt);
+    bt = WK_biorthogonalization_filter(bt, ext_idxs);
+  }
+
+  bt = S_tensor * bt;
+  simplify(bt);
+
+  return bt;
+}
+
 namespace detail {
 
 std::vector<double> compute_nns_p_coeffs(std::size_t n_particles,
@@ -582,4 +620,4 @@ container::svector<size_t> compute_permuted_indices(
 
 }  // namespace detail
 
-}  // namespace sequant
+}  // namespace sequant::mbpt

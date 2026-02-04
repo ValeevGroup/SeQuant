@@ -43,7 +43,7 @@ TEST_CASE("biorthogonalization", "[Biorthogonalization]") {
 
       auto externals = external_indices(input_expr);
 
-      ExprPtr actual = biorthogonal_transform(input_expr, externals);
+      ExprPtr actual = mbpt::biorthogonal_transform(input_expr, externals);
 
       REQUIRE_THAT(actual, EquivalentTo(expected_outputs.at(i)));
     }
@@ -86,7 +86,7 @@ TEST_CASE("biorthogonalization", "[Biorthogonalization]") {
         expected.push_back(parse_result_expr(expected_outputs.at(i).at(k)));
       }
 
-      biorthogonal_transform(expressions);
+      mbpt::biorthogonal_transform(expressions);
 
       REQUIRE(expected.size() == expressions.size());
 
@@ -111,7 +111,7 @@ TEST_CASE("biorthogonalization", "[Biorthogonalization]") {
       }
 
       REQUIRE_THROWS_WITH(
-          biorthogonal_transform(expressions),
+          mbpt::biorthogonal_transform(expressions),
           Catch::Matchers::ContainsSubstring("Missing explicit expression"));
     }
   }

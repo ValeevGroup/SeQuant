@@ -215,7 +215,7 @@ TEST_CASE("eval_with_btas", "[eval_btas]") {
       [&yield_](sequant::ExprPtr const& expr,
                 container::svector<long> const& target_labels) {
         auto result = evaluate(eval_node(expr), target_labels, yield_);
-        return biorthogonal_nns_project(
+        return mbpt::biorthogonal_nns_project(
             result->get<BTensorD>(), eval_node(expr)->as_tensor().bra_rank());
       };
 

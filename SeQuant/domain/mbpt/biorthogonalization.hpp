@@ -22,7 +22,7 @@
 #include <optional>
 #include <vector>
 
-namespace sequant {
+namespace sequant::mbpt {
 
 static constexpr double default_biorthogonalizer_pseudoinverse_threshold =
     1e-12;
@@ -49,6 +49,24 @@ void biorthogonal_transform(
         ext_index_groups = {},
     double pseudoinverse_threshold =
         default_biorthogonalizer_pseudoinverse_threshold);
+
+/// @brief Performs biorthogonal transformation with factored out NNS projector
+/// @details Applies biorthogonal transformation. When factor_out_nns_projector
+/// is true (default), factors out the NNS projector by applying additional
+/// steps (S_maps and WK_biorthogonalization_filter) to produce compact
+/// biorthogonal equations, necessitating a subsequent numerical NNS-projection
+/// evaluation. When false, the NNS projector is not factored out, so no need to
+/// apply numerical NNS-projection evaluation.
+/// @param expr The input expression.
+/// @param ext_idxs A vector of external index groups.
+/// @param factor_out_nns_projector If true (default), factored out NNS
+/// projector. If false, NNS projector is not factored out.
+/// @return Expression pointer to the biorthogonalized result with leading S
+/// operator.
+ExprPtr biorthogonal_transform_pre_nnsproject(
+    ExprPtr& expr,
+    const container::svector<container::svector<Index>>& ext_idxs,
+    bool factor_out_nns_projector = true);
 
 namespace detail {
 
@@ -338,6 +356,6 @@ auto biorthogonal_nns_project(btas::Tensor<Args...> const& arr,
 
 #endif  // defined(SEQUANT_HAS_BTAS)
 
-}  // namespace sequant
+}  // namespace sequant::mbpt
 
 #endif
