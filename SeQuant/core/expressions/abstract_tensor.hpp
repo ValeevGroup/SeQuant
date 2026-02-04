@@ -10,7 +10,7 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expressions/expr_algorithms.hpp>
 #include <SeQuant/core/index.hpp>
-#include <SeQuant/core/io/shorthands.hpp>
+#include <SeQuant/core/io/latex/latex.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
 #include <cstdlib>
@@ -455,7 +455,7 @@ inline std::wstring to_latex_tensor(
            unpaired_type == SlotType::Bra) ||
           (bkt == BraKetTypesetting::KetSuper &&
            unpaired_type == SlotType::Ket)) {
-        result += to_latex(unpaired_indices[col]);
+        result += io::latex::to_string(unpaired_indices[col]);
       } else
         result += L"{}";
       result += L"_";
@@ -463,7 +463,7 @@ inline std::wstring to_latex_tensor(
            unpaired_type == SlotType::Bra) ||
           (bkt == BraKetTypesetting::KetSub &&
            unpaired_type == SlotType::Ket)) {
-        result += to_latex(unpaired_indices[col]);
+        result += io::latex::to_string(unpaired_indices[col]);
       } else
         result += L"{}";
     }
@@ -477,11 +477,13 @@ inline std::wstring to_latex_tensor(
   const auto paired_fence = col + num_paired;
   for (; col != paired_fence; ++col, ++paired_bra, ++paired_ket) {
     result += L"*^";
-    result += (bkt == BraKetTypesetting::BraSuper) ? to_latex(bra[paired_bra])
-                                                   : to_latex(ket[paired_ket]);
+    result += (bkt == BraKetTypesetting::BraSuper)
+                  ? io::latex::to_string(bra[paired_bra])
+                  : io::latex::to_string(ket[paired_ket]);
     result += L"_";
-    result += (bkt == BraKetTypesetting::BraSub) ? to_latex(bra[paired_bra])
-                                                 : to_latex(ket[paired_ket]);
+    result += (bkt == BraKetTypesetting::BraSub)
+                  ? io::latex::to_string(bra[paired_bra])
+                  : io::latex::to_string(ket[paired_ket]);
   }
 
   // loop over right-aligned unpaired slots, if left_align==true
@@ -495,7 +497,7 @@ inline std::wstring to_latex_tensor(
            unpaired_type == SlotType::Bra) ||
           (bkt == BraKetTypesetting::KetSuper &&
            unpaired_type == SlotType::Ket)) {
-        result += to_latex(unpaired_indices[col]);
+        result += io::latex::to_string(unpaired_indices[col]);
       } else
         result += L"{}";
       result += L"_";
@@ -503,7 +505,7 @@ inline std::wstring to_latex_tensor(
            unpaired_type == SlotType::Bra) ||
           (bkt == BraKetTypesetting::KetSub &&
            unpaired_type == SlotType::Ket)) {
-        result += to_latex(unpaired_indices[col]);
+        result += io::latex::to_string(unpaired_indices[col]);
       } else
         result += L"{}";
     }
@@ -515,7 +517,7 @@ inline std::wstring to_latex_tensor(
     result += L"[";
     const auto aux_rank = aux.size();
     for (std::size_t i = 0; i < aux_rank; ++i) {
-      result += sequant::to_latex(aux[i]);
+      result += io::latex::to_string(aux[i]);
       if (i + 1 < aux_rank) {
         result += L",";
       }

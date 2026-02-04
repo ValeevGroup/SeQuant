@@ -14,7 +14,6 @@
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/io/latex/latex.hpp>
-#include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/reserved.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/string.hpp>
@@ -539,7 +538,7 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
         result += (bkt == BraKetTypesetting::KetSub ? L"_" : L"^");
         result += L"{";
         for (const auto &i : this->ket()) {
-          result += i ? sequant::to_latex(i) : L"\\textvisiblespace";
+          result += i ? io::latex::to_string(i) : L"\\textvisiblespace";
         }
         result += L"}";
 
@@ -547,7 +546,7 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
         result += (bkt == BraKetTypesetting::BraSub ? L"_" : L"^");
         result += L"{";
         for (const auto &i : this->bra()) {
-          result += i ? sequant::to_latex(i) : L"\\textvisiblespace";
+          result += i ? io::latex::to_string(i) : L"\\textvisiblespace";
         }
         result += L"}";
 
@@ -556,7 +555,7 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
           result += L"[";
           const index_container_type &__aux = this->aux();
           for (std::size_t i = 0; i < aux_rank(); ++i) {
-            result += sequant::to_latex(__aux[i]);
+            result += io::latex::to_string(__aux[i]);
 
             if (i + 1 < aux_rank()) {
               result += L",";

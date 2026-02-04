@@ -8,7 +8,7 @@
 #include <string>
 
 #include <SeQuant/core/hash.hpp>
-#include <SeQuant/core/io/shorthands.hpp>
+#include <SeQuant/core/io/latex/latex.hpp>
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
@@ -40,15 +40,14 @@ struct Complex {
   constexpr bool is_identity() const { return real() == 1 && imag() == 0; }
 
   std::wstring to_latex() const {
-    using ::sequant::to_latex;
     std::wstring result = L"{";
-    result += to_latex(this->real());
+    result += io::latex::to_string(this->real());
     if (this->imag() > 0) {
-      result =
-          L"\\bigl(" + result + L" + i " + to_latex(this->imag()) + L"\\bigr)";
+      result = L"\\bigl(" + result + L" + i " +
+               io::latex::to_string(this->imag()) + L"\\bigr)";
     } else if (this->imag() < 0)
-      result =
-          L"\\bigl(" + result + L" - i " + to_latex(-this->imag()) + L"\\bigr)";
+      result = L"\\bigl(" + result + L" - i " +
+               io::latex::to_string(-this->imag()) + L"\\bigr)";
     result += L"}";
     return result;
   }
