@@ -8,6 +8,8 @@
 namespace sequant::mbpt {
 
 ExprPtr lst(ExprPtr A, ExprPtr B, size_t commutator_rank, LSTOptions options) {
+  if (commutator_rank == 0) return A;  // nothing to do here
+
   // if use_commutators is not set, set to true if unitary is true, else false
   if (!options.use_commutators.has_value())
     options.use_commutators = options.unitary;
