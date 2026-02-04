@@ -18,8 +18,6 @@
 
 namespace sequant {
 
-std::wstring to_latex(const ExprPtr& exprptr) { return exprptr->to_latex(); }
-
 std::wstring to_latex_align(const ExprPtr& exprptr, size_t max_lines_per_align,
                             size_t max_terms_per_line) {
   std::wstring result = io::latex::to_string(exprptr);

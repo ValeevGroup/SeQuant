@@ -16,8 +16,6 @@
 
 namespace sequant {
 
-std::wstring to_latex(const ExprPtr& exprptr);
-
 /// splits long outer sum into a multiline align
 /// @param exprptr the expression to be converted to a string
 /// @param max_lines_per_align the maximum number of lines in the align before
