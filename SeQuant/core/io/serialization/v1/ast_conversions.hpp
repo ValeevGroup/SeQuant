@@ -8,9 +8,8 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
+#include <SeQuant/core/io/serialization/v1/ast.hpp>
 #include <SeQuant/core/op.hpp>
-#include <SeQuant/core/parse.hpp>
-#include <SeQuant/core/parse/v1/ast.hpp>
 #include <SeQuant/core/space.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/string.hpp>
@@ -21,7 +20,7 @@
 #include <string>
 #include <tuple>
 
-namespace sequant::parse::v1::transform {
+namespace sequant::io::serialization::v1::transform {
 
 using DefaultSymmetries = std::tuple<Symmetry, BraKetSymmetry, ColumnSymmetry>;
 
@@ -36,12 +35,13 @@ std::tuple<std::size_t, std::size_t> get_pos(const AST &ast,
 }
 
 template <typename PositionCache, typename Iterator>
-Index to_index(const parse::v1::ast::Index &index,
+Index to_index(const io::serialization::v1::ast::Index &index,
                const PositionCache &position_cache, const Iterator &begin) {
   container::vector<Index> protoIndices;
   protoIndices.reserve(index.protoLabels.size());
 
-  for (const parse::v1::ast::IndexLabel &current : index.protoLabels) {
+  for (const io::serialization::v1::ast::IndexLabel &current :
+       index.protoLabels) {
     try {
       std::wstring label = current.label + L"_" + std::to_wstring(current.id);
       IndexSpace space =
@@ -49,14 +49,15 @@ Index to_index(const parse::v1::ast::Index &index,
       protoIndices.push_back(Index(std::move(label), std::move(space)));
     } catch (const IndexSpace::bad_key &) {
       auto [offset, length] = get_pos(current, position_cache, begin);
-      throw ParseError(offset, length,
-                       "Unknown index space '" + toUtf8(current.label) +
-                           "' in proto index specification");
+      throw SerializationError(offset, length,
+                               "Unknown index space '" + toUtf8(current.label) +
+                                   "' in proto index specification");
     } catch (const std::invalid_argument &e) {
       auto [offset, length] = get_pos(current, position_cache, begin);
-      throw ParseError(offset, length,
-                       "Invalid index '" + toUtf8(current.label) + "_" +
-                           std::to_string(current.id) + ": " + e.what());
+      throw SerializationError(offset, length,
+                               "Invalid index '" + toUtf8(current.label) + "_" +
+                                   std::to_string(current.id) + ": " +
+                                   e.what());
     }
   }
 
@@ -66,21 +67,23 @@ Index to_index(const parse::v1::ast::Index &index,
     return Index(std::move(space), index.label.id, std::move(protoIndices));
   } catch (const IndexSpace::bad_key &e) {
     auto [offset, length] = get_pos(index.label, position_cache, begin);
-    throw ParseError(offset, length,
-                     "Unknown index space '" + toUtf8(index.label.label) +
-                         "' in index specification");
+    throw SerializationError(offset, length,
+                             "Unknown index space '" +
+                                 toUtf8(index.label.label) +
+                                 "' in index specification");
   } catch (const std::invalid_argument &e) {
     auto [offset, length] = get_pos(index.label, position_cache, begin);
-    throw ParseError(offset, length,
-                     "Invalid index '" + toUtf8(index.label.label) + "_" +
-                         std::to_string(index.label.id) + ": " + e.what());
+    throw SerializationError(offset, length,
+                             "Invalid index '" + toUtf8(index.label.label) +
+                                 "_" + std::to_string(index.label.id) + ": " +
+                                 e.what());
   }
 }
 
 template <typename PositionCache, typename Iterator>
 std::tuple<container::vector<Index>, container::vector<Index>,
            container::vector<Index>>
-make_indices(const parse::v1::ast::IndexGroups &groups,
+make_indices(const io::serialization::v1::ast::IndexGroups &groups,
              const PositionCache &position_cache, const Iterator &begin) {
   container::vector<Index> braIndices;
   container::vector<Index> ketIndices;
@@ -101,13 +104,13 @@ make_indices(const parse::v1::ast::IndexGroups &groups,
   braIndices.reserve(bra->size());
   ketIndices.reserve(ket->size());
 
-  for (const parse::v1::ast::Index &current : *bra) {
+  for (const io::serialization::v1::ast::Index &current : *bra) {
     braIndices.push_back(to_index(current, position_cache, begin));
   }
-  for (const parse::v1::ast::Index &current : *ket) {
+  for (const io::serialization::v1::ast::Index &current : *ket) {
     ketIndices.push_back(to_index(current, position_cache, begin));
   }
-  for (const parse::v1::ast::Index &current : groups.auxiliaries) {
+  for (const io::serialization::v1::ast::Index &current : groups.auxiliaries) {
     auxiliaries.push_back(to_index(current, position_cache, begin));
   }
 
@@ -117,7 +120,7 @@ make_indices(const parse::v1::ast::IndexGroups &groups,
 template <typename Iterator>
 Symmetry to_perm_symmetry(char c, std::size_t offset, const Iterator &,
                           Symmetry default_symmetry) {
-  if (c == parse::v1::ast::SymmetrySpec::unspecified) {
+  if (c == io::serialization::v1::ast::SymmetrySpec::unspecified) {
     return default_symmetry;
   }
 
@@ -133,14 +136,14 @@ Symmetry to_perm_symmetry(char c, std::size_t offset, const Iterator &,
       return Symmetry::Nonsymm;
   }
 
-  throw ParseError(offset, 1,
-                   std::string("Invalid symmetry specifier '") + c + "'");
+  throw SerializationError(
+      offset, 1, std::string("Invalid symmetry specifier '") + c + "'");
 }
 
 template <typename Iterator>
 BraKetSymmetry to_braket_symmetry(char c, std::size_t offset, const Iterator &,
                                   BraKetSymmetry default_symmetry) {
-  if (c == parse::v1::ast::SymmetrySpec::unspecified) {
+  if (c == io::serialization::v1::ast::SymmetrySpec::unspecified) {
     return default_symmetry;
   }
 
@@ -156,14 +159,14 @@ BraKetSymmetry to_braket_symmetry(char c, std::size_t offset, const Iterator &,
       return BraKetSymmetry::Nonsymm;
   }
 
-  throw ParseError(
+  throw SerializationError(
       offset, 1, std::string("Invalid BraKet symmetry specifier '") + c + "'");
 }
 
 template <typename Iterator>
 ColumnSymmetry to_column_symmetry(char c, std::size_t offset, const Iterator &,
                                   ColumnSymmetry default_symmetry) {
-  if (c == parse::v1::ast::SymmetrySpec::unspecified) {
+  if (c == io::serialization::v1::ast::SymmetrySpec::unspecified) {
     return default_symmetry;
   }
 
@@ -176,13 +179,13 @@ ColumnSymmetry to_column_symmetry(char c, std::size_t offset, const Iterator &,
       return ColumnSymmetry::Nonsymm;
   }
 
-  throw ParseError(
+  throw SerializationError(
       offset, 1,
       std::string("Invalid particle symmetry specifier '") + c + "'");
 }
 
 template <typename PositionCache, typename Iterator>
-Constant to_constant(const parse::v1::ast::Number &number,
+Constant to_constant(const io::serialization::v1::ast::Number &number,
                      const PositionCache &, const Iterator &) {
   if (static_cast<std::int64_t>(number.numerator) == number.numerator &&
       static_cast<std::int64_t>(number.denominator) == number.denominator) {
@@ -198,7 +201,7 @@ Constant to_constant(const parse::v1::ast::Number &number,
 
 template <typename PositionCache, typename Iterator>
 std::tuple<Symmetry, BraKetSymmetry, ColumnSymmetry> to_symmetries(
-    const boost::optional<parse::v1::ast::SymmetrySpec> &symm_spec,
+    const boost::optional<io::serialization::v1::ast::SymmetrySpec> &symm_spec,
     const DefaultSymmetries &default_symms, const PositionCache &cache,
     const Iterator &begin) {
   if (!symm_spec.has_value()) {
@@ -223,11 +226,11 @@ std::tuple<Symmetry, BraKetSymmetry, ColumnSymmetry> to_symmetries(
 }
 
 template <typename PositionCache, typename Iterator>
-ExprPtr ast_to_expr(const parse::v1::ast::Product &product,
+ExprPtr ast_to_expr(const io::serialization::v1::ast::Product &product,
                     const PositionCache &position_cache, const Iterator &begin,
                     const DefaultSymmetries &default_symms);
 template <typename PositionCache, typename Iterator>
-ExprPtr ast_to_expr(const parse::v1::ast::Sum &sum,
+ExprPtr ast_to_expr(const io::serialization::v1::ast::Sum &sum,
                     const PositionCache &position_cache, const Iterator &begin,
                     const DefaultSymmetries &default_symms);
 
@@ -237,17 +240,17 @@ struct Transformer {
   std::reference_wrapper<const Iterator> begin;
   std::reference_wrapper<const DefaultSymmetries> default_symms;
 
-  ExprPtr operator()(const parse::v1::ast::Product &product) const {
+  ExprPtr operator()(const io::serialization::v1::ast::Product &product) const {
     return ast_to_expr<PositionCache>(product, position_cache.get(),
                                       begin.get(), default_symms.get());
   }
 
-  ExprPtr operator()(const parse::v1::ast::Sum &sum) const {
+  ExprPtr operator()(const io::serialization::v1::ast::Sum &sum) const {
     return ast_to_expr<PositionCache>(sum, position_cache.get(), begin.get(),
                                       default_symms.get());
   }
 
-  ExprPtr operator()(const parse::v1::ast::Tensor &tensor) const {
+  ExprPtr operator()(const io::serialization::v1::ast::Tensor &tensor) const {
     auto [braIndices, ketIndices, auxiliaries] =
         make_indices(tensor.indices, position_cache.get(), begin.get());
 
@@ -295,7 +298,8 @@ struct Transformer {
                       perm_symm, braket_symm, column_symm);
   }
 
-  ExprPtr operator()(const parse::v1::ast::Variable &variable) const {
+  ExprPtr operator()(
+      const io::serialization::v1::ast::Variable &variable) const {
     ExprPtr var = ex<Variable>(variable.name);
 
     if (variable.conjugated) {
@@ -305,13 +309,13 @@ struct Transformer {
     return var;
   }
 
-  ExprPtr operator()(const parse::v1::ast::Number &number) const {
+  ExprPtr operator()(const io::serialization::v1::ast::Number &number) const {
     return ex<Constant>(to_constant(number, position_cache.get(), begin.get()));
   }
 };
 
 template <typename PositionCache, typename Iterator>
-ExprPtr ast_to_expr(const parse::v1::ast::NullaryValue &value,
+ExprPtr ast_to_expr(const io::serialization::v1::ast::NullaryValue &value,
                     const PositionCache &position_cache, const Iterator &begin,
                     DefaultSymmetries default_symms) {
   return boost::apply_visitor(
@@ -326,7 +330,7 @@ bool holds_alternative(const boost::variant<Ts...> &v) noexcept {
 }
 
 template <typename PositionCache, typename Iterator>
-ExprPtr ast_to_expr(const parse::v1::ast::Product &product,
+ExprPtr ast_to_expr(const io::serialization::v1::ast::Product &product,
                     const PositionCache &position_cache, const Iterator &begin,
                     const DefaultSymmetries &default_symms) {
   if (product.factors.empty()) {
@@ -343,10 +347,12 @@ ExprPtr ast_to_expr(const parse::v1::ast::Product &product,
   Constant prefactor(1);
 
   // We perform constant folding
-  for (const parse::v1::ast::NullaryValue &value : product.factors) {
-    if (holds_alternative<parse::v1::ast::Number>(value)) {
-      prefactor *= to_constant(boost::get<parse::v1::ast::Number>(value),
-                               position_cache, begin);
+  for (const io::serialization::v1::ast::NullaryValue &value :
+       product.factors) {
+    if (holds_alternative<io::serialization::v1::ast::Number>(value)) {
+      prefactor *=
+          to_constant(boost::get<io::serialization::v1::ast::Number>(value),
+                      position_cache, begin);
     } else {
       factors.push_back(
           ast_to_expr(value, position_cache, begin, default_symms));
@@ -367,7 +373,7 @@ ExprPtr ast_to_expr(const parse::v1::ast::Product &product,
 }
 
 template <typename PositionCache, typename Iterator>
-ExprPtr ast_to_expr(const parse::v1::ast::Sum &sum,
+ExprPtr ast_to_expr(const io::serialization::v1::ast::Sum &sum,
                     const PositionCache &position_cache, const Iterator &begin,
                     const DefaultSymmetries &default_symms) {
   if (sum.summands.empty()) {
@@ -382,7 +388,7 @@ ExprPtr ast_to_expr(const parse::v1::ast::Sum &sum,
   summands.reserve(sum.summands.size());
   std::transform(
       sum.summands.begin(), sum.summands.end(), std::back_inserter(summands),
-      [&](const parse::v1::ast::Product &product) {
+      [&](const io::serialization::v1::ast::Product &product) {
         return ast_to_expr(product, position_cache, begin, default_symms);
       });
 
@@ -390,7 +396,7 @@ ExprPtr ast_to_expr(const parse::v1::ast::Sum &sum,
 }
 
 template <typename PositionCache, typename Iterator>
-ResultExpr ast_to_result(const parse::v1::ast::ResultExpr &result,
+ResultExpr ast_to_result(const io::serialization::v1::ast::ResultExpr &result,
                          const PositionCache &position_cache,
                          const Iterator &begin,
                          DefaultSymmetries default_symms) {
@@ -406,11 +412,11 @@ ResultExpr ast_to_result(const parse::v1::ast::ResultExpr &result,
     return {std::move(lhs.as<Variable>()), std::move(rhs)};
   } else {
     auto [offset, length] = get_pos(result.lhs, position_cache, begin);
-    throw ParseError(offset, length,
-                     "LHS of a ResultExpr must be a Tensor or a Variable");
+    throw SerializationError(
+        offset, length, "LHS of a ResultExpr must be a Tensor or a Variable");
   }
 }
 
-}  // namespace sequant::parse::v1::transform
+}  // namespace sequant::io::serialization::v1::transform
 
 #endif  // SEQUANT_CORE_PARSE_AST_CONVERSIONS_HPP

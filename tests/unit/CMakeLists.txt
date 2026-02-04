@@ -21,7 +21,6 @@ set(symb_test_sources
     "test_parse.cpp"
     "test_runtime.cpp"
     "test_space.cpp"
-    "test_string.cpp"
     "test_tensor.cpp"
     "test_tensor_network.cpp"
     "test_utilities.cpp"

@@ -8,9 +8,9 @@
 #include <SeQuant/core/eval/eval_node.hpp>
 #include <SeQuant/core/eval/result.hpp>
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/io/serialization/serialization.hpp>
 #include <SeQuant/core/logger.hpp>
 #include <SeQuant/core/meta.hpp>
-#include <SeQuant/core/parse.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/string.hpp>
 
@@ -355,7 +355,7 @@ ResultPtr evaluate(Node const& node,           //
 
   std::string xpr;
   if constexpr (trace(EvalTrace)) {
-    xpr = toUtf8(deparse(to_expr(node)));
+    xpr = toUtf8(io::serialization::to_string(to_expr(node)));
     log::term(log::TermMode::Begin, xpr);
   }
 

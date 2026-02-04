@@ -1,8 +1,8 @@
 #include <benchmark/benchmark.h>
 
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/op.hpp>
-#include <SeQuant/core/parse.hpp>
 #include <SeQuant/core/wick.hpp>
 #include <SeQuant/domain/mbpt/context.hpp>
 #include <SeQuant/domain/mbpt/op.hpp>
@@ -22,20 +22,20 @@ ExprPtr get_op_sequence(std::size_t i) {
 
   switch (i) {
     case 1:
-      return parse_expr(L"f{p1;p2} t{p3;p4}") *
+      return deserialize<ExprPtr>(L"f{p1;p2} t{p3;p4}") *
              ex<Op>(cre({L"p_1"}), ann({L"p_2"})) *
              ex<Op>(cre({L"p_3"}), ann({L"p_4"}));
     case 2:
-      return parse_expr(L"Â{p1,p2;p3,p4}:A g{p5,p6;p7,p8}:A") *
+      return deserialize<ExprPtr>(L"Â{p1,p2;p3,p4}:A g{p5,p6;p7,p8}:A") *
              ex<Op>(cre({L"p_1", L"p_2"}), ann({L"p_3", L"p_4"})) *
              ex<Op>(cre({L"p_5", L"p_6"}), ann({L"p_7", L"p_8"}));
     case 3:
-      return parse_expr(L"Â{p1,p2,p3;p4,p5,p6}:A g{p7,p8;p9,p10}:A") *
+      return deserialize<ExprPtr>(L"Â{p1,p2,p3;p4,p5,p6}:A g{p7,p8;p9,p10}:A") *
              ex<Op>(cre({L"p_1", L"p_2", L"p_3"}),
                     ann({L"p_4", L"p_5", L"p_6"})) *
              ex<Op>(cre({L"p_7", L"p_8"}), ann({L"p_9", L"p_10"}));
     case 4:
-      return parse_expr(
+      return deserialize<ExprPtr>(
                  L"Â{p1,p2,p3;p4,p5,p6}:A g{p7,p8;p9,p10}:A "
                  L"t{p11,p12,p13;p14,p15,p16}:A") *
              ex<Op>(cre({L"p_1", L"p_2", L"p_3"}),
@@ -44,7 +44,7 @@ ExprPtr get_op_sequence(std::size_t i) {
              ex<Op>(cre({L"p_11", L"p_12", L"p_13"}),
                     ann({L"p_14", L"p_15", L"p_16"}));
     case 5:
-      return parse_expr(
+      return deserialize<ExprPtr>(
                  L"Â{p1,p2;p3,p4}:A g{p5,p6;p7,p8}:A "
                  L"t{p9,p10;p11,p12}:A t{p13,p14;p15,p16}:A") *
              ex<Op>(cre({L"p_1", L"p_2"}), ann({L"p_3", L"p_4"})) *

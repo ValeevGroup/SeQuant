@@ -9,7 +9,7 @@
 #include <SeQuant/core/eval/eval_expr.hpp>
 #include <SeQuant/core/eval/eval_node.hpp>
 #include <SeQuant/core/expr.hpp>
-#include <SeQuant/core/parse.hpp>
+#include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
@@ -56,7 +56,7 @@ TEST_CASE("eval_node", "[EvalNode]") {
   auto R = Npos::R;
 
   auto parse_expr_antisymm = [](auto const& xpr) {
-    return parse_expr(xpr, {.def_perm_symm = Symmetry::Antisymm});
+    return deserialize<ExprPtr>(xpr, {.def_perm_symm = Symmetry::Antisymm});
   };
 
   SECTION("terminals") {
@@ -67,14 +67,14 @@ TEST_CASE("eval_node", "[EvalNode]") {
     // In order to represent unary computations, i.e. assignments, we have to
     // represent them as a multiplication with 1 in order for the tree to remain
     // a full binary tree.
-    node = binarize(parse_result_expr(L"R{a1;i1} = f{a1;i1}"));
+    node = binarize(deserialize<ResultExpr>(L"R{a1;i1} = f{a1;i1}"));
     REQUIRE(!node.leaf());
     REQUIRE(node->op_type() == EvalOp::Product);
     REQUIRE(node->as_tensor().label() == L"R");
     REQUIRE(((node.left()->is_tensor() && node.right()->is_scalar()) ||
              (node.right()->is_tensor() && node.left()->is_scalar())));
 
-    node = binarize(parse_result_expr(L"R = Var"));
+    node = binarize(deserialize<ResultExpr>(L"R = Var"));
     REQUIRE(!node.leaf());
     REQUIRE(node->op_type() == EvalOp::Product);
     REQUIRE(node->as_variable().label() == L"R");
@@ -168,7 +168,7 @@ TEST_CASE("eval_node", "[EvalNode]") {
   }
 
   SECTION("variable") {
-    auto prod1 = parse_expr(L"a * b * c");
+    auto prod1 = deserialize<ExprPtr>(L"a * b * c");
     auto node1 = eval_node(prod1);
 
     REQUIRE(node1->op_type() == EvalOp::Product);
@@ -181,7 +181,7 @@ TEST_CASE("eval_node", "[EvalNode]") {
     REQUIRE(node(node1, {L, R}).as_variable() == Variable{L"b"});
     REQUIRE(node(node1, {L, L}).as_variable() == Variable{L"a"});
 
-    auto sum1 = parse_expr(L"a + b + c");
+    auto sum1 = deserialize<ExprPtr>(L"a + b + c");
     auto node2 = eval_node(sum1);
 
     REQUIRE(node2->op_type() == EvalOp::Sum);
@@ -194,7 +194,7 @@ TEST_CASE("eval_node", "[EvalNode]") {
     REQUIRE(node(node2, {L, R}).as_variable() == Variable{L"b"});
     REQUIRE(node(node2, {L, L}).as_variable() == Variable{L"a"});
 
-    auto prod2 = parse_expr(L"a * t{i1;a1}");
+    auto prod2 = deserialize<ExprPtr>(L"a * t{i1;a1}");
     auto node3 = eval_node(prod2);
     REQUIRE_THAT(node(node3, {}).as_tensor(), EquivalentTo("I{i1;a1}:N-N-N"));
     REQUIRE_THAT(node(node3, {R}).as_tensor(), EquivalentTo("t{i1;a1}"));
@@ -284,48 +284,48 @@ TEST_CASE("eval_node", "[EvalNode]") {
 
 #if 0
     auto const s1 =
-        parse_expr(L"I{i1,i2;a1,a2} + I{i1,i2;a1,a2}", Symmetry::Symm);
+        deserialize<ExprPtr>(L"I{i1,i2;a1,a2} + I{i1,i2;a1,a2}", Symmetry::Symm);
     auto const ns1 = eval_node(s1);
     REQUIRE(asy_cost(ns1) == AsyCost{{1, 4}, 2, 2});  // 1/4 * O^2V^2
 
     auto const s2 =
-        parse_expr(L"I{i1,i2;a1,a2} + I{i1,i2;a1,a2}", Symmetry::Antisymm);
+        deserialize<ExprPtr>(L"I{i1,i2;a1,a2} + I{i1,i2;a1,a2}", Symmetry::Antisymm);
     auto const ns2 = eval_node(s2);
     REQUIRE(asy_cost(ns2) == AsyCost{{1, 2}, 2, 2});  // 1/2 * O^2V^2
 
     auto const s3 =
-        parse_expr(L"I{i1,i2;a1,a2} + I{i1,i2;a1,a2}", Symmetry::Nonsymm);
+        deserialize<ExprPtr>(L"I{i1,i2;a1,a2} + I{i1,i2;a1,a2}", Symmetry::Nonsymm);
     auto const ns3 = eval_node(s3);
     REQUIRE(asy_cost(ns3) == AsyCost{2, 2});  // O^2V^2
 
     auto const p4 =
-        parse_expr(L"I{i1,i2;a3,a4} * I{a3,a4;a1,a2}", Symmetry::Symm);
+        deserialize<ExprPtr>(L"I{i1,i2;a3,a4} * I{a3,a4;a1,a2}", Symmetry::Symm);
     auto const np4 = eval_node(p4);
     REQUIRE(asy_cost(np4) == AsyCost{{1, 2}, 2, 4});  // 1/4 * 2 * O^2V^4
 
     auto const p5 =
-        parse_expr(L"I{i1,i2;a3,a4} * I{a3,a4;a1,a2}", Symmetry::Antisymm);
+        deserialize<ExprPtr>(L"I{i1,i2;a3,a4} * I{a3,a4;a1,a2}", Symmetry::Antisymm);
     auto const np5 = eval_node(p5);
     REQUIRE(asy_cost(np5) == AsyCost{{1, 2}, 2, 4});  // 1/4 * 2 * O^2V^4
 
     auto const p6 =
-        parse_expr(L"I{i1,i2;a3,a4} * I{a3,a4;a1,a2}", Symmetry::Antisymm);
+        deserialize<ExprPtr>(L"I{i1,i2;a3,a4} * I{a3,a4;a1,a2}", Symmetry::Antisymm);
     auto const np6 = eval_node(p6);
     REQUIRE(asy_cost(np6) == AsyCost{{1, 2}, 2, 4});  // 1/4 * 2 * O^2V^4
 
-    auto const p7 = parse_expr(L"I{i1;a1} * I{i2;a2}", Symmetry::Nonsymm);
+    auto const p7 = deserialize<ExprPtr>(L"I{i1;a1} * I{i2;a2}", Symmetry::Nonsymm);
     auto const np7 = eval_node(p7);
     REQUIRE(asy_cost(np7) == AsyCost{{1, 2}, 2, 2});  // 1/2 * O^2V^2
 
     auto const p8 =
-        parse_expr(L"I{i1,i2;a3,a4} * I{a3,a4;a1,a2}", Symmetry::Nonsymm);
+        deserialize<ExprPtr>(L"I{i1,i2;a3,a4} * I{a3,a4;a1,a2}", Symmetry::Nonsymm);
     auto const np8 = eval_node(p8);
     REQUIRE(asy_cost(np8) == AsyCost{2, 2, 4});  // 2 * O^2V^4
 #endif
   }
 
   SECTION("minimum storage") {
-    auto p1 = parse_expr(L"2 * g{i2,a1;a2,a3} * t{a2,a3;i2,i1}");
+    auto p1 = deserialize<ExprPtr>(L"2 * g{i2,a1;a2,a3} * t{a2,a3;i2,i1}");
     auto const n1 = eval_node(p1);
     // evaluation happens in two steps.
     // g and t are contracted to give an intermediate I{a1;i1}
@@ -337,7 +337,8 @@ TEST_CASE("eval_node", "[EvalNode]") {
     // storage requirement.
     REQUIRE(min_storage(n1) == AsyCost{1, 3} + AsyCost{2, 2} + AsyCost{1, 1});
 
-    auto p2 = parse_expr(L"1/2 * (g{a1,a2; a3,a4} t{a3;i1}) t{a4;i2}");
+    auto p2 =
+        deserialize<ExprPtr>(L"1/2 * (g{a1,a2; a3,a4} t{a3;i1}) t{a4;i2}");
     auto const n2 = eval_node(p2);
     REQUIRE(min_storage(n2) == AsyCost{0, 4} + AsyCost{1, 3} + AsyCost{1, 1});
   }

@@ -6,7 +6,7 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
-#include <SeQuant/core/parse.hpp>
+#include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/reserved.hpp>
 #include <SeQuant/core/utility/conversion.hpp>
 #include <SeQuant/core/utility/expr.hpp>
@@ -46,7 +46,7 @@ class S : public sequant::Singleton<S<T>> {
 }  // namespace sequant::singleton
 
 sequant::Tensor parse_tensor(std::wstring_view str) {
-  return sequant::parse_expr(str)->as<sequant::Tensor>();
+  return sequant::deserialize<sequant::ExprPtr>(str)->as<sequant::Tensor>();
 }
 
 TEST_CASE("utilities", "[utilities]") {
@@ -93,7 +93,7 @@ TEST_CASE("utilities", "[utilities]") {
     using namespace Catch::Matchers;
 
     SECTION("Constant") {
-      auto const expression = parse_expr(L"5");
+      auto const expression = deserialize<ExprPtr>(L"5");
 
       auto const indices = get_unique_indices(expression);
 
@@ -111,7 +111,7 @@ TEST_CASE("utilities", "[utilities]") {
       REQUIRE(indices == get_unique_indices(expression->as<Variable>()));
     }
     SECTION("Tensor") {
-      auto expression = parse_expr(L"t{i1;a1,a2;x1}");
+      auto expression = deserialize<ExprPtr>(L"t{i1;a1,a2;x1}");
 
       auto indices = get_unique_indices(expression);
 
@@ -121,7 +121,7 @@ TEST_CASE("utilities", "[utilities]") {
       REQUIRE_THAT(indices.aux, UnorderedEquals(std::vector<Index>{{L"x_1"}}));
       REQUIRE(indices == get_unique_indices(expression->as<Tensor>()));
 
-      expression = parse_expr(L"t{i1,i2;a1,a2}");
+      expression = deserialize<ExprPtr>(L"t{i1,i2;a1,a2}");
 
       indices = get_unique_indices(expression);
 
@@ -132,7 +132,7 @@ TEST_CASE("utilities", "[utilities]") {
       REQUIRE(indices.aux.size() == 0);
       REQUIRE(indices == get_unique_indices(expression->as<Tensor>()));
 
-      expression = parse_expr(L"t{i1,i2;a1,i1}");
+      expression = deserialize<ExprPtr>(L"t{i1,i2;a1,i1}");
 
       indices = get_unique_indices(expression);
 
@@ -141,7 +141,7 @@ TEST_CASE("utilities", "[utilities]") {
       REQUIRE(indices == get_unique_indices(expression->as<Tensor>()));
     }
     SECTION("Product") {
-      auto expression = parse_expr(L"t{i1;a1,a2} p{a2;i2;x1}");
+      auto expression = deserialize<ExprPtr>(L"t{i1;a1,a2} p{a2;i2;x1}");
 
       auto indices = get_unique_indices(expression);
 
@@ -151,7 +151,8 @@ TEST_CASE("utilities", "[utilities]") {
       REQUIRE_THAT(indices.aux, UnorderedEquals(std::vector<Index>{{L"x_1"}}));
       REQUIRE(indices == get_unique_indices(expression->as<Product>()));
 
-      expression = parse_expr(L"1/8 g{a3,a4;i3,i4;x1} t{a1,a4;i1,i4;x1}");
+      expression =
+          deserialize<ExprPtr>(L"1/8 g{a3,a4;i3,i4;x1} t{a1,a4;i1,i4;x1}");
 
       indices = get_unique_indices(expression);
 
@@ -163,7 +164,7 @@ TEST_CASE("utilities", "[utilities]") {
       REQUIRE(indices == get_unique_indices(expression->as<Product>()));
     }
     SECTION("Sum") {
-      auto expression = parse_expr(L"t{i1;a2;x1} + g{i1;a2;x1}");
+      auto expression = deserialize<ExprPtr>(L"t{i1;a2;x1} + g{i1;a2;x1}");
 
       auto indices = get_unique_indices(expression);
 
@@ -172,7 +173,8 @@ TEST_CASE("utilities", "[utilities]") {
       REQUIRE_THAT(indices.aux, UnorderedEquals(std::vector<Index>{{L"x_1"}}));
       REQUIRE(indices == get_unique_indices(expression->as<Sum>()));
 
-      expression = parse_expr(L"t{i1;a2} t{i1;a1} + t{i1;a1} g{i1;a2}");
+      expression =
+          deserialize<ExprPtr>(L"t{i1;a2} t{i1;a1} + t{i1;a1} g{i1;a2}");
 
       indices = get_unique_indices(expression);
 
@@ -284,8 +286,8 @@ TEST_CASE("utilities", "[utilities]") {
 
   SECTION("transform_expr") {
     {
-      ExprPtr expr =
-          parse_expr(L"- g{a1,i2;a2,i1} t{a2;i2} + 2 g{a1,i2;i1,a2} t{a2;i2}");
+      ExprPtr expr = deserialize<ExprPtr>(
+          L"- g{a1,i2;a2,i1} t{a2;i2} + 2 g{a1,i2;i1,a2} t{a2;i2}");
       container::map<Index, Index> idxmap = {{Index{L"i_1"}, Index{L"i_2"}},
                                              {Index{L"i_2"}, Index{L"i_1"}}};
       auto transformed_result = transform_expr(expr, idxmap);
@@ -298,7 +300,7 @@ TEST_CASE("utilities", "[utilities]") {
     }
     {
       ExprPtr expr =
-          parse_expr(L"- g{i2,a1;i1,a2} + 2 g{i2,a1;a2,i1} t{a2;i2}");
+          deserialize<ExprPtr>(L"- g{i2,a1;i1,a2} + 2 g{i2,a1;a2,i1} t{a2;i2}");
       container::map<Index, Index> idxmap = {{Index{L"i_1"}, Index{L"i_2"}},
                                              {Index{L"i_2"}, Index{L"i_1"}}};
       auto transformed_result = transform_expr(expr, idxmap);
@@ -330,8 +332,8 @@ TEST_CASE("utilities", "[utilities]") {
         CAPTURE(toUtf8(lhs));
         CAPTURE(toUtf8(rhs));
 
-        const Tensor lhs_tensor = parse_expr(lhs)->as<Tensor>();
-        const Tensor rhs_tensor = parse_expr(rhs)->as<Tensor>();
+        const Tensor lhs_tensor = deserialize<ExprPtr>(lhs)->as<Tensor>();
+        const Tensor rhs_tensor = deserialize<ExprPtr>(rhs)->as<Tensor>();
         REQUIRE(cmp(lhs_tensor, rhs_tensor) == equal);
       }
     }
@@ -361,8 +363,8 @@ TEST_CASE("utilities", "[utilities]") {
         CAPTURE(toUtf8(lhs));
         CAPTURE(toUtf8(rhs));
 
-        const Tensor lhs_tensor = parse_expr(lhs)->as<Tensor>();
-        const Tensor rhs_tensor = parse_expr(rhs)->as<Tensor>();
+        const Tensor lhs_tensor = deserialize<ExprPtr>(lhs)->as<Tensor>();
+        const Tensor rhs_tensor = deserialize<ExprPtr>(rhs)->as<Tensor>();
         REQUIRE(cmp(lhs_tensor, rhs_tensor) == less);
 
         if (equal_cmp(lhs_tensor, rhs_tensor)) {
@@ -384,7 +386,7 @@ TEST_CASE("utilities", "[utilities]") {
              {L"t{a1;a2} - (Var * (B{p1} T{a1,a2;p1}) + t{a1;a2})",
               {L"a_1", L"a_2", L"p_1"}},
          }) {
-      ExprPtr expr = parse_expr(input);
+      ExprPtr expr = deserialize<ExprPtr>(input);
       auto indices =
           expected | std::ranges::views::transform(
                          [](const std::wstring& idx) { return Index(idx); });
@@ -414,9 +416,9 @@ TEST_CASE("utilities", "[utilities]") {
         CAPTURE(toUtf8(replacement_str));
         CAPTURE(toUtf8(expected_str));
 
-        ExprPtr input = parse_expr(input_str);
-        const ExprPtr target = parse_expr(target_str);
-        const ExprPtr replacement = parse_expr(replacement_str);
+        ExprPtr input = deserialize<ExprPtr>(input_str);
+        const ExprPtr target = deserialize<ExprPtr>(target_str);
+        const ExprPtr replacement = deserialize<ExprPtr>(replacement_str);
 
         replace<TensorBlockEqualComparator>(input, target, replacement);
 
@@ -448,9 +450,9 @@ TEST_CASE("utilities", "[utilities]") {
         CAPTURE(toUtf8(replacement_str));
         CAPTURE(toUtf8(expected_str));
 
-        ResultExpr input = parse_result_expr(input_str);
-        const ExprPtr target = parse_expr(target_str);
-        const ExprPtr replacement = parse_expr(replacement_str);
+        ResultExpr input = deserialize<ResultExpr>(input_str);
+        const ExprPtr target = deserialize<ExprPtr>(target_str);
+        const ExprPtr replacement = deserialize<ExprPtr>(replacement_str);
 
         replace<TensorBlockEqualComparator>(input, target, replacement);
 
@@ -477,7 +479,7 @@ TEST_CASE("utilities", "[utilities]") {
            }) {
         CAPTURE(toUtf8(expr_str));
 
-        ExprPtr expr = parse_expr(expr_str);
+        ExprPtr expr = deserialize<ExprPtr>(expr_str);
 
         const bool expected = msg.empty();
 
@@ -522,7 +524,7 @@ TEST_CASE("utilities", "[utilities]") {
            }) {
         CAPTURE(toUtf8(expr_str));
 
-        ResultExpr expr = parse_result_expr(expr_str);
+        ResultExpr expr = deserialize<ResultExpr>(expr_str);
 
         const bool expected = msg.empty();
 
@@ -568,7 +570,7 @@ TEST_CASE("utilities", "[utilities]") {
          }) {
       CAPTURE(toUtf8(input));
 
-      ExprPtr expr = parse_expr(input);
+      ExprPtr expr = deserialize<ExprPtr>(input);
       auto actual =
           external_indices<std::remove_cvref_t<decltype(expected)>>(expr);
 

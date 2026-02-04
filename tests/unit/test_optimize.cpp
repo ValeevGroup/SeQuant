@@ -10,7 +10,7 @@
 #include <SeQuant/core/eval/optimize/common_subexpression_elimination.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
-#include <SeQuant/core/parse.hpp>
+#include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/space.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 
@@ -61,7 +61,7 @@ TEST_CASE("optimize", "[optimize]") {
     };
 
     auto parse_expr_antisymm = [](auto const& xpr) {
-      return parse_expr(xpr, {.def_perm_symm = Symmetry::Antisymm});
+      return deserialize<ExprPtr>(xpr, {.def_perm_symm = Symmetry::Antisymm});
     };
 
     SECTION("Single term optimization") {
@@ -141,7 +141,7 @@ TEST_CASE("optimize", "[optimize]") {
       //
       // single-term optimization when sequant::Variables appear in a product
       //
-      auto prod6 = parse_expr(
+      auto prod6 = deserialize<ExprPtr>(
                        L"α * β * γ * "
                        "g_{i3,i4}^{a3,a4}"      // T1
                        " * t_{a1,a2}^{i3,i4}"   // T2
@@ -161,7 +161,7 @@ TEST_CASE("optimize", "[optimize]") {
       //
       // single-term optimization including tensors with auxiliary indices
       //
-      auto prod7 = parse_expr(
+      auto prod7 = deserialize<ExprPtr>(
                        L"DF{a_1;a_3;x_1} "  // T1
                        "DF{a_2;i_1;x_1} "   // T2
                        "t{a_3;i_2}"         // T3
@@ -177,7 +177,7 @@ TEST_CASE("optimize", "[optimize]") {
       REQUIRE(extract(res7, {1}) == prod7.at(1));
 
       auto prod8 =
-          parse_expr(
+          deserialize<ExprPtr>(
               L"T1{i_1;i_2;x_1,x_2,x_3,x_4} T2{i_2;i_1;x_5,x_6,x_7,x_8} "
               L"T3{i_3;;x_1,x_2,x_3,x_4} T4{i_4;;x_5,x_6,x_7,x_8}")
               ->as<Product>();
@@ -194,7 +194,7 @@ TEST_CASE("optimize", "[optimize]") {
     SECTION("Ensure single-value sums/products are not discarded") {
       auto sum = ex<Sum>();
       sum->as<Sum>().append(
-          ex<Product>(ExprPtrList{parse_expr(L"f{a_1;i_1}")}));
+          ex<Product>(ExprPtrList{deserialize<ExprPtr>(L"f{a_1;i_1}")}));
       REQUIRE(sum->as<Sum>().summand(0).as<Product>().factors().size() == 1);
       auto optimized = optimize(sum);
       REQUIRE(optimized->is<Sum>());
@@ -232,13 +232,13 @@ TEST_CASE("optimize", "[optimize]") {
         std::vector<ResultExpr> expected;
 
         for (const std::wstring& current : inputs) {
-          expressions.push_back(binarize(parse_result_expr(
+          expressions.push_back(binarize(deserialize<ResultExpr>(
               current, {.def_perm_symm = Symmetry::Nonsymm,
                         .def_braket_symm = BraKetSymmetry::Nonsymm,
                         .def_col_symm = ColumnSymmetry::Nonsymm})));
         }
         for (const std::wstring& current : outputs) {
-          expected.push_back(parse_result_expr(
+          expected.push_back(deserialize<ResultExpr>(
               current, {.def_perm_symm = Symmetry::Nonsymm,
                         .def_braket_symm = BraKetSymmetry::Nonsymm,
                         .def_col_symm = ColumnSymmetry::Nonsymm}));

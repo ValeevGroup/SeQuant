@@ -9,7 +9,6 @@
 #include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/meta.hpp>
 #include <SeQuant/core/op.hpp>
-#include <SeQuant/core/parse.hpp>
 #include <SeQuant/core/utility/string.hpp>
 #include <SeQuant/domain/mbpt/op.hpp>
 
@@ -35,10 +34,10 @@ struct StringMaker<sequant::Expr> {
                              bool include_canonical = true) {
     std::string str;
     try {
-      str = sequant::toUtf8(sequant::deparse(expr, {.annot_symm = true}));
+      str = sequant::toUtf8(sequant::serialize(expr, {.annot_symm = true}));
     } catch (const std::exception &) {
-      // deparse doesn't support all kinds of expressions -> fall back to LaTeX
-      // representation
+      // serialize doesn't support all kinds of expressions -> fall back to
+      // LaTeX representation
       str = sequant::toUtf8(sequant::to_latex(expr));
     }
 
@@ -82,7 +81,7 @@ struct StringMaker<sequant::ResultExpr> {
   static std::string convert(const sequant::ResultExpr &res,
                              bool include_canonical = true) {
     std::string str =
-        sequant::toUtf8(sequant::deparse(res, {.annot_symm = true}));
+        sequant::toUtf8(sequant::serialize(res, {.annot_symm = true}));
 
     if (include_canonical) {
       sequant::ResultExpr clone = res.clone();
@@ -178,7 +177,7 @@ using ExprVar = std::variant<sequant::ExprPtr, sequant::ResultExpr>;
 
 /// Converts the given expression-like object into an actual ExprPtr.
 /// It accepts either an actual expression object (as Expr & or ExprPtr) or
-/// a (w)string-like object which will then be parsed to yield the actual
+/// a (w)string-like object which will then be deserialized to yield the actual
 /// expression object.
 template <typename T>
 ExprVar to_expression(T &&expression) {
@@ -189,22 +188,24 @@ ExprVar to_expression(T &&expression) {
     std::wstring string = sequant::toUtf16(std::forward<T>(expression));
 
     if (std::find(begin(string), end(string), L'=') != end(string)) {
-      return sequant::parse_result_expr(
+      return sequant::deserialize<sequant::ResultExpr>(
           std::string(std::forward<T>(expression)),
           {.def_perm_symm = sequant::Symmetry::Nonsymm});
     } else {
-      return sequant::parse_expr(std::string(std::forward<T>(expression)),
-                                 {.def_perm_symm = sequant::Symmetry::Nonsymm});
+      return sequant::deserialize<sequant::ExprPtr>(
+          std::string(std::forward<T>(expression)),
+          {.def_perm_symm = sequant::Symmetry::Nonsymm});
     }
   } else if constexpr (std::is_convertible_v<T, std::wstring>) {
     if (std::find(begin(expression), end(expression), L'=') !=
         end(expression)) {
-      return sequant::parse_result_expr(
+      return sequant::deserialize<sequant::ResultExpr>(
           std::wstring(std::forward<T>(expression)),
           {.def_perm_symm = sequant::Symmetry::Nonsymm});
     } else {
-      return sequant::parse_expr(std::wstring(std::forward<T>(expression)),
-                                 {.def_perm_symm = sequant::Symmetry::Nonsymm});
+      return sequant::deserialize<sequant::ExprPtr>(
+          std::wstring(std::forward<T>(expression)),
+          {.def_perm_symm = sequant::Symmetry::Nonsymm});
     }
   } else if constexpr (std::is_convertible_v<T, sequant::ResultExpr>) {
     return expression;

@@ -8,7 +8,7 @@
 #include <SeQuant/core/eval/backends/tiledarray/result.hpp>
 #include <SeQuant/core/eval/eval.hpp>
 #include <SeQuant/core/expr.hpp>
-#include <SeQuant/core/parse.hpp>
+#include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/domain/mbpt/biorthogonalization.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
@@ -87,7 +87,7 @@ auto tensor_to_key(sequant::Tensor const& tnsr) {
   NestedTensorIndices oixs{tnsr};
   if (oixs.inner.empty()) {
     auto const tnsr_deparsed =
-        sequant::deparse(tnsr.clone(), {.annot_symm = false});
+        sequant::serialize(tnsr.clone(), {.annot_symm = false});
     return boost::regex_replace(tnsr_deparsed, idx_rgx, formatter);
   } else {
     using ranges::views::intersperse;
@@ -112,9 +112,9 @@ auto tensor_to_key(sequant::Tensor const& tnsr) {
 }
 
 auto tensor_to_key(std::wstring_view spec) {
-  return tensor_to_key(
-      sequant::parse_expr(spec, {.def_perm_symm = sequant::Symmetry::Nonsymm})
-          ->as<sequant::Tensor>());
+  return tensor_to_key(sequant::deserialize<sequant::ExprPtr>(
+                           spec, {.def_perm_symm = sequant::Symmetry::Nonsymm})
+                           ->as<sequant::Tensor>());
 }
 
 template <typename NumericT>
@@ -288,7 +288,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
     using TA::TArrayD;
 
     auto parse_antisymm = [](auto const& xpr) {
-      return sequant::parse_expr(
+      return sequant::deserialize<sequant::ExprPtr>(
           xpr, {.def_perm_symm = sequant::Symmetry::Antisymm});
     };
 
@@ -382,14 +382,15 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
 
       REQUIRE(norm(prod2_man) == Catch::Approx(norm(prod2_eval)));
 
-      auto expr3 = sequant::parse_expr(L"R_{a1}^{i1,i3} * f_{i3}^{i2}");
+      auto expr3 = sequant::deserialize<sequant::ExprPtr>(
+          L"R_{a1}^{i1,i3} * f_{i3}^{i2}");
       auto prod3_eval = eval(expr3, "a_1,i_1,i_2");
       auto prod3_man = TArrayD{};
       prod3_man("a1,i1,i2") =
           yield(L"R{a1;i1,i3}")("a1,i1,i3") * yield(L"f{i3;i2}")("i3,i2");
       REQUIRE(norm(prod3_man) == Catch::Approx(norm(prod3_eval)));
 
-      auto expr4 = sequant::parse_expr(
+      auto expr4 = sequant::deserialize<sequant::ExprPtr>(
           L"1/4 * R_{a1,a2,a3}^{i2,i3} * g_{i2,i3}^{i1,a3}");
       auto prod4_eval = eval(expr4, "i_1,a_1,a_2");
       auto prod4_man = TArrayD{};
@@ -416,7 +417,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
 
       REQUIRE(norm(man1) == Catch::Approx(norm(eval1)));
 
-      auto expr2 = sequant::parse_expr(
+      auto expr2 = sequant::deserialize<sequant::ExprPtr>(
           L"1/4 * R_{a1,a2,a3}^{i2,i3} * g_{i2,i3}^{i1,a3} + R_{a1,a3}^{i1} * "
           L"f_{i2}^{a3} * t_{a2}^{i2}");
       auto eval2 = eval(expr2, "i_1,a_1,a_2");
@@ -649,7 +650,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
     using namespace std::string_literals;
 
     SECTION("summation") {
-      auto expr1 = parse_expr(L"t_{a1}^{i1} + f_{i1}^{a1}");
+      auto expr1 = deserialize<sequant::ExprPtr>(L"t_{a1}^{i1} + f_{i1}^{a1}");
 
       auto sum1_eval = eval(expr1, "i_1,a_1");
 
@@ -660,7 +661,8 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
       // todo:
       REQUIRE(norm(sum1_man) == Catch::Approx(norm(sum1_eval)));
 
-      auto expr2 = parse_expr(L"2 * t_{a1}^{i1} + 3/2 * f_{i1}^{a1}");
+      auto expr2 =
+          deserialize<sequant::ExprPtr>(L"2 * t_{a1}^{i1} + 3/2 * f_{i1}^{a1}");
 
       auto sum2_eval = eval(expr2, "i_1,a_1");
 
@@ -673,7 +675,8 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
     }
 
     SECTION("product") {
-      auto expr1 = parse_expr(L"1/2 * g_{i2,i4}^{a2,a4} * t_{a1,a2}^{i1,i2}");
+      auto expr1 = deserialize<sequant::ExprPtr>(
+          L"1/2 * g_{i2,i4}^{a2,a4} * t_{a1,a2}^{i1,i2}");
       auto prod1_eval = eval(expr1, "i_4,a_1,a_4,i_1");
 
       TArrayC prod1_man{};
@@ -683,7 +686,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
 
       REQUIRE(norm(prod1_man) == Catch::Approx(norm(prod1_eval)));
 
-      auto expr2 = parse_expr(
+      auto expr2 = deserialize<sequant::ExprPtr>(
           L"-1/4 * g_{i3,i4}^{a3,a4} * t_{a2,a4}^{i1,i2} * t_{a1,a3}^{ i3, "
           L"i4}");
       auto prod2_eval = eval(expr2, "a_1,a_2,i_1,i_2");
@@ -696,14 +699,15 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
 
       REQUIRE(norm(prod2_man) == Catch::Approx(norm(prod2_eval)));
 
-      auto expr3 = sequant::parse_expr(L"R_{a1}^{i1,i3} * f_{i3}^{i2}");
+      auto expr3 = sequant::deserialize<sequant::ExprPtr>(
+          L"R_{a1}^{i1,i3} * f_{i3}^{i2}");
       auto prod3_eval = eval(expr3, "a_1,i_1,i_2");
       auto prod3_man = TArrayC{};
       prod3_man("a1,i1,i2") =
           yield(L"R{a1;i1,i3}")("a1,i1,i3") * yield(L"f{i3;i2}")("i3,i2");
       REQUIRE(norm(prod3_man) == Catch::Approx(norm(prod3_eval)));
 
-      auto expr4 = sequant::parse_expr(
+      auto expr4 = sequant::deserialize<sequant::ExprPtr>(
           L"1/4 * R_{a1,a2,a3}^{i2,i3} * g_{i2,i3}^{i1,a3}");
       auto prod4_eval = eval(expr4, "i_1,a_1,a_2");
       auto prod4_man = TArrayC{};
@@ -714,7 +718,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
     }
 
     SECTION("sum and product") {
-      auto expr1 = parse_expr(
+      auto expr1 = deserialize<sequant::ExprPtr>(
           L"-1/4 * g_{i3,i4}^{a3,a4} * t_{a2,a4}^{i1,i2} * t_{a1,a3}^{i3,i4}"
           " + "
           " 1/16 * g_{i3,i4}^{a3,a4} * t_{a1,a2}^{i3,i4} * t_{a3,a4}^{i1,i2}");
@@ -732,7 +736,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
 
       REQUIRE(norm(man1) == Catch::Approx(norm(eval1)));
 
-      auto expr2 = sequant::parse_expr(
+      auto expr2 = sequant::deserialize<sequant::ExprPtr>(
           L"1/4 * R_{a1,a2,a3}^{i2,i3} * g_{i2,i3}^{i1,a3} + R_{a1,a3}^{i1} * "
           L"f_{i2}^{a3} * t_{a2}^{i2}");
       auto eval2 = eval(expr2, "i_1,a_1,a_2");
@@ -747,7 +751,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
     }
 
     SECTION("Antisymmetrization") {
-      auto expr1 = parse_expr(L"g_{i1, i2}^{a1, a2}");
+      auto expr1 = deserialize<sequant::ExprPtr>(L"g_{i1, i2}^{a1, a2}");
       auto eval1 = eval_antisymm(expr1, "i_1,i_2,a_1,a_2");
       auto const& arr1 = yield(L"g{i1,i2;a1,a2}");
 
@@ -766,7 +770,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
       // REQUIRE(Approx(norm(zero1)) == 0);
 
       // odd-ranked tensor
-      auto expr2 = parse_expr(L"g_{i1, i2, i3}^{a1, a2}");
+      auto expr2 = deserialize<sequant::ExprPtr>(L"g_{i1, i2, i3}^{a1, a2}");
       auto eval2 = eval_antisymm(expr2, "i_1,i_2,i_3,a_1,a_2");
       auto const& arr2 = yield(L"g{i1,i2,i3;a1,a2}");
 
@@ -781,7 +785,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
       REQUIRE(norm(zero2) == Catch::Approx(0).margin(
                                  100 * std::numeric_limits<double>::epsilon()));
 
-      auto expr3 = parse_expr(L"R_{a1,a2}^{}");
+      auto expr3 = deserialize<sequant::ExprPtr>(L"R_{a1,a2}^{}");
       auto eval3 = eval_antisymm(expr3, "a_1,a_2");
       auto const& arr3 = yield(L"R{a1,a2;}");
       auto man3 = TArrayC{};
@@ -795,7 +799,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
     }
 
     SECTION("Symmetrization") {
-      auto expr1 = parse_expr(L"g_{i1, i2}^{a1, a2}");
+      auto expr1 = deserialize<sequant::ExprPtr>(L"g_{i1, i2}^{a1, a2}");
       auto eval1 = eval_symm(expr1, "i_1,i_2,a_1,a_2");
       auto const& arr1 = yield(L"g{i1,i2;a1,a2}");
 
@@ -805,7 +809,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
 
       REQUIRE(norm(man1) == Catch::Approx(norm(eval1)));
 
-      auto expr2 = parse_expr(L"g_{i1,i2,i3}^{a1,a2,a3}");
+      auto expr2 = deserialize<sequant::ExprPtr>(L"g_{i1,i2,i3}^{a1,a2,a3}");
 
       auto eval2 = eval_symm(expr2, "i_1,i_2,i_3,a_1,a_2,a_3");
       auto const& arr2 = yield(L"g{i1,i2,i3;a1,a2,a3}");
@@ -820,7 +824,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
 
     SECTION("Others") {
       using namespace std::string_literals;
-      auto expr1 = parse_expr(
+      auto expr1 = deserialize<sequant::ExprPtr>(
           L"-1/4 * g_{i3,i4}^{a3,a4} * t_{a2,a4}^{i1,i2} * t_{a1,a3}^{i3,i4}"
           " + "
           " 1/16 * g_{i3,i4}^{a3,a4} * t_{a1,a2}^{i3,i4} * t_{a3,a4}^{i1,i2}");
@@ -875,7 +879,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
           L"f{i3;i1}"
           L" * "
           L"t{a3<i2,i3>,a4<i2,i3>;i2,i3}";
-      auto const node = eval_node(parse_expr(expr_str));
+      auto const node = eval_node(deserialize<sequant::ExprPtr>(expr_str));
       std::string const target_layout{"i_1,i_2,i_3;a_3i_2i_3,a_4i_2i_3"};
       auto result = evaluate(node, target_layout, yield)->get<ArrayToT>();
       ArrayToT ref;
@@ -896,7 +900,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
           L" * "
           L"s{a2<i1,i2>;a4<i2,i3>}";
 
-      auto const node = eval_node(parse_expr(expr_str));
+      auto const node = eval_node(deserialize<sequant::ExprPtr>(expr_str));
       std::string const target_layout{"i_2,i_1;a_1i_1i_2,a_2i_1i_2"};
 
       auto result = evaluate(node, target_layout, yield)->get<ArrayToT>();
@@ -917,7 +921,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
           L"I{a1<i1,i2>,a2<i1,i2>;i1,i2}"
           L" * "
           L"g{i1,i2;a2<i1,i2>,a1<i1,i2>}";
-      auto const node = eval_node(parse_expr(expr_str));
+      auto const node = eval_node(deserialize<sequant::ExprPtr>(expr_str));
 
       auto result = evaluate(node, yield)->get<NumericT>();
 

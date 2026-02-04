@@ -8,7 +8,7 @@
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
-#include <SeQuant/core/parse.hpp>
+#include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/rational.hpp>
 
 #include <SeQuant/domain/mbpt/convention.hpp>
@@ -28,27 +28,32 @@
 
 namespace Catch {
 template <>
-struct StringMaker<sequant::ParseError> {
-  static std::string convert(const sequant::ParseError& error) {
-    return "ParseError{offset: " + std::to_string(error.offset) +
+struct StringMaker<sequant::io::serialization::SerializationError> {
+  static std::string convert(
+      const sequant::io::serialization::SerializationError& error) {
+    return "io::serialization::SerializationError{offset: " +
+           std::to_string(error.offset) +
            ", length: " + std::to_string(error.length) + ", what(): '" +
            error.what() + "'}";
   }
 };
 }  // namespace Catch
 
-struct ParseErrorMatcher : Catch::Matchers::MatcherBase<sequant::ParseError> {
+struct SerializationErrorMatcher
+    : Catch::Matchers::MatcherBase<
+          sequant::io::serialization::SerializationError> {
   std::size_t offset;
   std::size_t length;
   std::string messageFragment;
 
-  ParseErrorMatcher(std::size_t offset, std::size_t length,
-                    std::string messageFragment = "")
+  SerializationErrorMatcher(std::size_t offset, std::size_t length,
+                            std::string messageFragment = "")
       : offset(offset),
         length(length),
         messageFragment(std::move(messageFragment)) {}
 
-  bool match(const sequant::ParseError& exception) const override {
+  bool match(const sequant::io::serialization::SerializationError& exception)
+      const override {
     if (exception.offset != offset) {
       return false;
     }
@@ -73,13 +78,13 @@ struct ParseErrorMatcher : Catch::Matchers::MatcherBase<sequant::ParseError> {
   }
 };
 
-ParseErrorMatcher parseErrorMatches(std::size_t offset, std::size_t length,
-                                    std::string messageFragment = "") {
-  return ParseErrorMatcher{offset, length, std::move(messageFragment)};
+SerializationErrorMatcher serializationErrorMatches(
+    std::size_t offset, std::size_t length, std::string messageFragment = "") {
+  return SerializationErrorMatcher{offset, length, std::move(messageFragment)};
 }
 
-TEST_CASE("parsing", "[parse]") {
-  SECTION("parse_expr") {
+TEST_CASE("serialization", "[serialization]") {
+  SECTION("deserialize<ExprPtr>") {
     using namespace sequant;
 
     auto ctx = get_default_context();
@@ -87,19 +92,19 @@ TEST_CASE("parsing", "[parse]") {
     auto ctx_resetter = set_scoped_default_context(ctx);
 
     SECTION("Scalar tensor") {
-      auto expr = parse_expr(L"t{}");
+      auto expr = deserialize<ExprPtr>(L"t{}");
       REQUIRE(expr->is<Tensor>());
       REQUIRE(expr->as<Tensor>().bra().empty());
       REQUIRE(expr->as<Tensor>().ket().empty());
       REQUIRE(expr->as<Tensor>().aux().empty());
 
-      REQUIRE(expr == parse_expr(L"t{;}"));
-      REQUIRE(expr == parse_expr(L"t{;;}"));
-      REQUIRE(expr == parse_expr(L"t^{}_{}"));
-      REQUIRE(expr == parse_expr(L"t_{}^{}"));
+      REQUIRE(expr == deserialize<ExprPtr>(L"t{;}"));
+      REQUIRE(expr == deserialize<ExprPtr>(L"t{;;}"));
+      REQUIRE(expr == deserialize<ExprPtr>(L"t^{}_{}"));
+      REQUIRE(expr == deserialize<ExprPtr>(L"t_{}^{}"));
     }
     SECTION("Tensor") {
-      auto expr = parse_expr(L"t{i1;a1}");
+      auto expr = deserialize<ExprPtr>(L"t{i1;a1}");
       REQUIRE(expr->is<Tensor>());
       REQUIRE(expr->as<Tensor>().label() == L"t");
       REQUIRE(expr->as<Tensor>().bra().size() == 1);
@@ -108,13 +113,13 @@ TEST_CASE("parsing", "[parse]") {
       REQUIRE(expr->as<Tensor>().ket().at(0) == L"a_1");
       REQUIRE(expr->as<Tensor>().aux().empty());
 
-      REQUIRE(expr == parse_expr(L"t_{i1}^{a1}"));
-      REQUIRE(expr == parse_expr(L"t^{a1}_{i1}"));
-      REQUIRE(expr == parse_expr(L"t{i_1; a_1}"));
-      REQUIRE(expr == parse_expr(L"t{i_1; a_1;}"));
-      REQUIRE(expr == parse_expr(L"t_{i_1}^{a_1}"));
+      REQUIRE(expr == deserialize<ExprPtr>(L"t_{i1}^{a1}"));
+      REQUIRE(expr == deserialize<ExprPtr>(L"t^{a1}_{i1}"));
+      REQUIRE(expr == deserialize<ExprPtr>(L"t{i_1; a_1}"));
+      REQUIRE(expr == deserialize<ExprPtr>(L"t{i_1; a_1;}"));
+      REQUIRE(expr == deserialize<ExprPtr>(L"t_{i_1}^{a_1}"));
 
-      expr = parse_expr(L"t{i1,i2;a1,a2}");
+      expr = deserialize<ExprPtr>(L"t{i1,i2;a1,a2}");
       REQUIRE(expr->as<Tensor>().bra().size() == 2);
       REQUIRE(expr->as<Tensor>().bra().at(0).label() == L"i_1");
       REQUIRE(expr->as<Tensor>().bra().at(1).label() == L"i_2");
@@ -123,33 +128,44 @@ TEST_CASE("parsing", "[parse]") {
       REQUIRE(expr->as<Tensor>().ket().at(1).label() == L"a_2");
       REQUIRE(expr->as<Tensor>().aux().empty());
 
-      REQUIRE(expr == parse_expr(L"+t{i1, i2; a1, a2}"));
-      REQUIRE(parse_expr(L"-t{i1;a1}")->is<Product>());
-      REQUIRE(expr == parse_expr(L"t{\ti1, \ti2; \na1,\t a2 \t}"));
+      REQUIRE(expr == deserialize<ExprPtr>(L"+t{i1, i2; a1, a2}"));
+      REQUIRE(deserialize<ExprPtr>(L"-t{i1;a1}")->is<Product>());
+      REQUIRE(expr == deserialize<ExprPtr>(L"t{\ti1, \ti2; \na1,\t a2 \t}"));
 
       // Tensor labels including underscores
-      REQUIRE(parse_expr(L"T_1{i_1;a_1}")->as<Tensor>().label() == L"T_1");
+      REQUIRE(deserialize<ExprPtr>(L"T_1{i_1;a_1}")->as<Tensor>().label() ==
+              L"T_1");
 
       // "Non-standard" tensor labels
-      REQUIRE(parse_expr(L"α{a1;i1}")->as<Tensor>().label() == L"α");
-      REQUIRE(parse_expr(L"γ_1{a1;i1}")->as<Tensor>().label() == L"γ_1");
-      REQUIRE(parse_expr(L"t⁔1{a1;i1}")->as<Tensor>().label() == L"t⁔1");
-      REQUIRE(parse_expr(L"t¹{a1;i1}")->as<Tensor>().label() == L"t¹");
-      REQUIRE(parse_expr(L"t⁸{a1;i1}")->as<Tensor>().label() == L"t⁸");
-      REQUIRE(parse_expr(L"t⁻{a1;i1}")->as<Tensor>().label() == L"t⁻");
-      REQUIRE(parse_expr(L"tₐ{a1;i1}")->as<Tensor>().label() == L"tₐ");
-      REQUIRE(parse_expr(L"t₋{a1;i1}")->as<Tensor>().label() == L"t₋");
-      REQUIRE(parse_expr(L"t₌{a1;i1}")->as<Tensor>().label() == L"t₌");
-      REQUIRE(parse_expr(L"t↓{a1;i1}")->as<Tensor>().label() == L"t↓");
-      REQUIRE(parse_expr(L"t↑{a1;i1}")->as<Tensor>().label() == L"t↑");
+      REQUIRE(deserialize<ExprPtr>(L"α{a1;i1}")->as<Tensor>().label() == L"α");
+      REQUIRE(deserialize<ExprPtr>(L"γ_1{a1;i1}")->as<Tensor>().label() ==
+              L"γ_1");
+      REQUIRE(deserialize<ExprPtr>(L"t⁔1{a1;i1}")->as<Tensor>().label() ==
+              L"t⁔1");
+      REQUIRE(deserialize<ExprPtr>(L"t¹{a1;i1}")->as<Tensor>().label() ==
+              L"t¹");
+      REQUIRE(deserialize<ExprPtr>(L"t⁸{a1;i1}")->as<Tensor>().label() ==
+              L"t⁸");
+      REQUIRE(deserialize<ExprPtr>(L"t⁻{a1;i1}")->as<Tensor>().label() ==
+              L"t⁻");
+      REQUIRE(deserialize<ExprPtr>(L"tₐ{a1;i1}")->as<Tensor>().label() ==
+              L"tₐ");
+      REQUIRE(deserialize<ExprPtr>(L"t₋{a1;i1}")->as<Tensor>().label() ==
+              L"t₋");
+      REQUIRE(deserialize<ExprPtr>(L"t₌{a1;i1}")->as<Tensor>().label() ==
+              L"t₌");
+      REQUIRE(deserialize<ExprPtr>(L"t↓{a1;i1}")->as<Tensor>().label() ==
+              L"t↓");
+      REQUIRE(deserialize<ExprPtr>(L"t↑{a1;i1}")->as<Tensor>().label() ==
+              L"t↑");
 
       // "Non-standard" index names
-      auto expr1 = parse_expr(L"t{a↓1;i↑1}");
+      auto expr1 = deserialize<ExprPtr>(L"t{a↓1;i↑1}");
       REQUIRE(expr1->as<Tensor>().bra().at(0).label() == L"a↓_1");
       REQUIRE(expr1->as<Tensor>().ket().at(0).label() == L"i↑_1");
 
       // Auxiliary indices
-      expr = parse_expr(L"t{;;i1}");
+      expr = deserialize<ExprPtr>(L"t{;;i1}");
       REQUIRE(expr->is<Tensor>());
       REQUIRE(expr->as<Tensor>().bra().empty());
       REQUIRE(expr->as<Tensor>().ket().empty());
@@ -157,7 +173,7 @@ TEST_CASE("parsing", "[parse]") {
       REQUIRE(expr->as<Tensor>().aux()[0].label() == L"i_1");
 
       // All index groups at once
-      expr = parse_expr(L"t{i1,i2;a1;x1,x2}");
+      expr = deserialize<ExprPtr>(L"t{i1,i2;a1;x1,x2}");
       REQUIRE(expr->is<Tensor>());
       REQUIRE(expr->as<Tensor>().bra().size() == 2);
       REQUIRE(expr->as<Tensor>().bra().at(0).label() == L"i_1");
@@ -170,9 +186,9 @@ TEST_CASE("parsing", "[parse]") {
     }
 
     SECTION("Tensor with symmetry annotation") {
-      auto expr1 = parse_expr(L"t{a1;i1}:A");
-      auto expr2 = parse_expr(L"t{a1;i1}:S-C");
-      auto expr3 = parse_expr(L"t{a1;i1}:N-S-N");
+      auto expr1 = deserialize<ExprPtr>(L"t{a1;i1}:A");
+      auto expr2 = deserialize<ExprPtr>(L"t{a1;i1}:S-C");
+      auto expr3 = deserialize<ExprPtr>(L"t{a1;i1}:N-S-N");
 
       const Tensor& t1 = expr1->as<Tensor>();
       const Tensor& t2 = expr2->as<Tensor>();
@@ -191,7 +207,7 @@ TEST_CASE("parsing", "[parse]") {
     SECTION("NormalOperator") {
       {
         using NOp = FNOperator;
-        auto expr = parse_expr(L"a{i1;a1}");
+        auto expr = deserialize<ExprPtr>(L"a{i1;a1}");
         REQUIRE(expr->is<NOp>());
         REQUIRE(expr->as<NOp>().label() == NOp::labels()[0]);
         REQUIRE(expr->as<NOp>().creators().size() == 1);
@@ -202,7 +218,7 @@ TEST_CASE("parsing", "[parse]") {
       }
       {
         using NOp = FNOperator;
-        auto expr = parse_expr(L"ã{i1;}");
+        auto expr = deserialize<ExprPtr>(L"ã{i1;}");
         REQUIRE(expr->is<NOp>());
         REQUIRE(expr->as<NOp>().label() == NOp::labels()[1]);
         REQUIRE(expr->as<NOp>().creators().size() == 0);
@@ -213,7 +229,7 @@ TEST_CASE("parsing", "[parse]") {
 
       {
         using NOp = BNOperator;
-        auto expr = parse_expr(L"b{i1;a1}");
+        auto expr = deserialize<ExprPtr>(L"b{i1;a1}");
         REQUIRE(expr->is<NOp>());
         REQUIRE(expr->as<NOp>().label() == NOp::labels()[0]);
         REQUIRE(expr->as<NOp>().creators().size() == 1);
@@ -224,7 +240,7 @@ TEST_CASE("parsing", "[parse]") {
       }
       {
         using NOp = BNOperator;
-        auto expr = parse_expr(L"b̃{;a1}");
+        auto expr = deserialize<ExprPtr>(L"b̃{;a1}");
         REQUIRE(expr->is<NOp>());
         REQUIRE(expr->as<NOp>().label() == NOp::labels()[1]);
         REQUIRE(expr->as<NOp>().creators().size() == 1);
@@ -235,47 +251,49 @@ TEST_CASE("parsing", "[parse]") {
     }
 
     SECTION("Constant") {
-      REQUIRE(parse_expr(L"1/2")->is<Constant>());
-      REQUIRE(parse_expr(L"0/2")->is<Constant>());
-      REQUIRE(parse_expr(L"-1/2")->is<Constant>());
-      REQUIRE(parse_expr(L"-0/2")->is<Constant>());
-      REQUIRE(parse_expr(L"1")->is<Constant>());
-      REQUIRE(parse_expr(L"123")->is<Constant>());
-      REQUIRE(parse_expr(L"1.")->is<Constant>());
-      REQUIRE(parse_expr(L"01.00")->is<Constant>());
-      REQUIRE(parse_expr(L"0 / 10")->is<Constant>());
-      REQUIRE(parse_expr(L"0.5/0.25")->is<Constant>());
-      REQUIRE(parse_expr(L".4")->is<Constant>());
+      REQUIRE(deserialize<ExprPtr>(L"1/2")->is<Constant>());
+      REQUIRE(deserialize<ExprPtr>(L"0/2")->is<Constant>());
+      REQUIRE(deserialize<ExprPtr>(L"-1/2")->is<Constant>());
+      REQUIRE(deserialize<ExprPtr>(L"-0/2")->is<Constant>());
+      REQUIRE(deserialize<ExprPtr>(L"1")->is<Constant>());
+      REQUIRE(deserialize<ExprPtr>(L"123")->is<Constant>());
+      REQUIRE(deserialize<ExprPtr>(L"1.")->is<Constant>());
+      REQUIRE(deserialize<ExprPtr>(L"01.00")->is<Constant>());
+      REQUIRE(deserialize<ExprPtr>(L"0 / 10")->is<Constant>());
+      REQUIRE(deserialize<ExprPtr>(L"0.5/0.25")->is<Constant>());
+      REQUIRE(deserialize<ExprPtr>(L".4")->is<Constant>());
     }
 
     SECTION("Variable") {
       // SeQuant variable is just a label followed by an optional ^*
       // to denote if the variable is conjugated
-      REQUIRE(parse_expr(L"a")->is<Variable>());
-      REQUIRE(parse_expr(L"α")->is<Variable>());
-      REQUIRE(parse_expr(L"β")->is<Variable>());
-      REQUIRE(parse_expr(L"γ")->is<Variable>());
-      REQUIRE(parse_expr(L"λ")->is<Variable>());
-      REQUIRE(parse_expr(L"δ")->is<Variable>());
-      REQUIRE(parse_expr(L"a^*")->is<Variable>());
-      REQUIRE(parse_expr(L"α^*")->is<Variable>());
-      REQUIRE(parse_expr(L"β^*")->is<Variable>());
-      REQUIRE(parse_expr(L"b^*")->is<Variable>());
-      REQUIRE(parse_expr(L"b^*")->as<Variable>().conjugated());
-      REQUIRE(parse_expr(L"b^*")->as<Variable>().label() == L"b");
+      REQUIRE(deserialize<ExprPtr>(L"a")->is<Variable>());
+      REQUIRE(deserialize<ExprPtr>(L"α")->is<Variable>());
+      REQUIRE(deserialize<ExprPtr>(L"β")->is<Variable>());
+      REQUIRE(deserialize<ExprPtr>(L"γ")->is<Variable>());
+      REQUIRE(deserialize<ExprPtr>(L"λ")->is<Variable>());
+      REQUIRE(deserialize<ExprPtr>(L"δ")->is<Variable>());
+      REQUIRE(deserialize<ExprPtr>(L"a^*")->is<Variable>());
+      REQUIRE(deserialize<ExprPtr>(L"α^*")->is<Variable>());
+      REQUIRE(deserialize<ExprPtr>(L"β^*")->is<Variable>());
+      REQUIRE(deserialize<ExprPtr>(L"b^*")->is<Variable>());
+      REQUIRE(deserialize<ExprPtr>(L"b^*")->as<Variable>().conjugated());
+      REQUIRE(deserialize<ExprPtr>(L"b^*")->as<Variable>().label() == L"b");
     }
 
     SECTION("Product") {
-      auto expr = parse_expr(L"-1/2 g{i2,i3; i1,a2} t{a1,a2; i2,i3}");
+      auto expr = deserialize<ExprPtr>(L"-1/2 g{i2,i3; i1,a2} t{a1,a2; i2,i3}");
       REQUIRE(expr->is<Product>());
 
       auto const& prod = expr->as<Product>();
       REQUIRE(prod.scalar() == rational{-1, 2});
-      REQUIRE(prod.factor(0) == parse_expr(L"g_{i_2, i_3}^{i_1, a_2}"));
-      REQUIRE(prod.factor(1) == parse_expr(L"t^{i2, i3}_{a1, a2}"));
-      REQUIRE(parse_expr(L"-1/2 * δ * t{i1;a1}") ==
-              parse_expr(L"-1/2  δ  t{i1;a1}"));
-      auto const prod2 = parse_expr(L"-1/2 * δ * γ * t{i1;a1}")->as<Product>();
+      REQUIRE(prod.factor(0) ==
+              deserialize<ExprPtr>(L"g_{i_2, i_3}^{i_1, a_2}"));
+      REQUIRE(prod.factor(1) == deserialize<ExprPtr>(L"t^{i2, i3}_{a1, a2}"));
+      REQUIRE(deserialize<ExprPtr>(L"-1/2 * δ * t{i1;a1}") ==
+              deserialize<ExprPtr>(L"-1/2  δ  t{i1;a1}"));
+      auto const prod2 =
+          deserialize<ExprPtr>(L"-1/2 * δ * γ * t{i1;a1}")->as<Product>();
       REQUIRE(prod2.scalar() == rational{-1, 2});
       REQUIRE(prod2.factor(0) == ex<Variable>(L"δ"));
       REQUIRE(prod2.factor(1) == ex<Variable>(L"γ"));
@@ -283,27 +301,28 @@ TEST_CASE("parsing", "[parse]") {
     }
 
     SECTION("Sum") {
-      auto expr1 = parse_expr(
+      auto expr1 = deserialize<ExprPtr>(
           L"f{a1;i1}"
           "- 1/2*g{i2,a1; a2,a3}t{a2,a3; i1,i2}");
       REQUIRE(expr1->is<Sum>());
 
       auto const& sum1 = expr1->as<Sum>();
-      REQUIRE(sum1.summand(0) == parse_expr(L"f{a1;i1}"));
-      REQUIRE(sum1.summand(1) ==
-              parse_expr(L"- 1/2 * g{i2,a1; a2,a3} * t{a2,a3; i1,i2}"));
+      REQUIRE(sum1.summand(0) == deserialize<ExprPtr>(L"f{a1;i1}"));
+      REQUIRE(
+          sum1.summand(1) ==
+          deserialize<ExprPtr>(L"- 1/2 * g{i2,a1; a2,a3} * t{a2,a3; i1,i2}"));
 
-      auto expr2 = parse_expr(L"a - 4");
+      auto expr2 = deserialize<ExprPtr>(L"a - 4");
       REQUIRE(expr2->is<Sum>());
 
       auto const& sum2 = expr2->as<Sum>();
-      REQUIRE(sum2.summand(0) == parse_expr(L"a"));
-      REQUIRE(sum2.summand(1) == parse_expr(L"-4"));
+      REQUIRE(sum2.summand(0) == deserialize<ExprPtr>(L"a"));
+      REQUIRE(sum2.summand(1) == deserialize<ExprPtr>(L"-4"));
     }
 
     SECTION("Parentheses") {
-      auto expr1 =
-          parse_expr(L"-1/2 g{i2,i3; a2,a3} * ( t{a1,a3; i2,i3} * t{a2;i1} )");
+      auto expr1 = deserialize<ExprPtr>(
+          L"-1/2 g{i2,i3; a2,a3} * ( t{a1,a3; i2,i3} * t{a2;i1} )");
       REQUIRE(expr1->is<Product>());
 
       auto const& prod1 = expr1->as<Product>();
@@ -313,7 +332,7 @@ TEST_CASE("parsing", "[parse]") {
       REQUIRE(prod1.factor(1)->is<Product>());
       REQUIRE(prod1.factor(1)->size() == 2);
 
-      auto expr2 = parse_expr(
+      auto expr2 = deserialize<ExprPtr>(
           L"(-1/2) ( g{i2,i3; a2,a3} * t{a1,a3; i2,i3} ) * (t{a2;i1})");
       REQUIRE(expr2->is<Product>());
 
@@ -321,11 +340,13 @@ TEST_CASE("parsing", "[parse]") {
       REQUIRE(prod2.size() == 2);
       REQUIRE(prod2.scalar() == rational{-1, 2});
       REQUIRE(prod2.factor(0)->is<Product>());
-      REQUIRE(prod2.factor(0)->at(0) == parse_expr(L"g{i2,i3; a2,a3}"));
-      REQUIRE(prod2.factor(0)->at(1) == parse_expr(L"t{a1,a3; i2,i3}"));
-      REQUIRE(prod2.factor(1) == parse_expr(L"t{a2;i1}"));
+      REQUIRE(prod2.factor(0)->at(0) ==
+              deserialize<ExprPtr>(L"g{i2,i3; a2,a3}"));
+      REQUIRE(prod2.factor(0)->at(1) ==
+              deserialize<ExprPtr>(L"t{a1,a3; i2,i3}"));
+      REQUIRE(prod2.factor(1) == deserialize<ExprPtr>(L"t{a2;i1}"));
 
-      auto expr3 = parse_expr(
+      auto expr3 = deserialize<ExprPtr>(
           L"(-1/2) ( g{i2,i3; a2,a3} * t{a1,a3; i2,i3} ) * (1/2) * "
           L"((t{a2;i1}))");
       REQUIRE(expr3->is<Product>());
@@ -334,11 +355,13 @@ TEST_CASE("parsing", "[parse]") {
       REQUIRE(prod3.size() == 2);
       REQUIRE(prod3.scalar() == rational{-1, 4});
       REQUIRE(prod3.factor(0)->is<Product>());
-      REQUIRE(prod3.factor(0)->at(0) == parse_expr(L"g{i2,i3; a2,a3}"));
-      REQUIRE(prod3.factor(0)->at(1) == parse_expr(L"t{a1,a3; i2,i3}"));
-      REQUIRE(prod3.factor(1) == parse_expr(L"t{a2;i1}"));
+      REQUIRE(prod3.factor(0)->at(0) ==
+              deserialize<ExprPtr>(L"g{i2,i3; a2,a3}"));
+      REQUIRE(prod3.factor(0)->at(1) ==
+              deserialize<ExprPtr>(L"t{a1,a3; i2,i3}"));
+      REQUIRE(prod3.factor(1) == deserialize<ExprPtr>(L"t{a2;i1}"));
 
-      auto expr4 = parse_expr(L"1/2 (a + b) * c");
+      auto expr4 = deserialize<ExprPtr>(L"1/2 (a + b) * c");
       REQUIRE(expr4->is<Product>());
 
       const auto& prod4 = expr4->as<Product>();
@@ -356,7 +379,7 @@ TEST_CASE("parsing", "[parse]") {
     }
 
     SECTION("Mixed") {
-      auto expr = parse_expr(
+      auto expr = deserialize<ExprPtr>(
           L"0.25 g{a1,a2; i1,i2}"
           "+ 1/4 g{i3,i4; a3,a4} (t{a3;i1} * t{a4;i2}) * (t{a1;i3} * "
           "t{a2;i4})");
@@ -368,25 +391,26 @@ TEST_CASE("parsing", "[parse]") {
       REQUIRE(sum.summand(0)->is<Product>());
       REQUIRE(sum.summand(0)->as<Product>().scalar() == rational{1, 4});
       REQUIRE(sum.summand(0)->size() == 1);
-      REQUIRE(sum.summand(0)->at(0) == parse_expr(L"g{a1,a2; i1,i2}"));
+      REQUIRE(sum.summand(0)->at(0) ==
+              deserialize<ExprPtr>(L"g{a1,a2; i1,i2}"));
 
       REQUIRE(sum.summand(1)->is<Product>());
       auto const& prod = sum.summand(1)->as<Product>();
 
       REQUIRE(prod.scalar() == rational{1, 4});
       REQUIRE(prod.size() == 3);
-      REQUIRE(prod.factor(0) == parse_expr(L"g{i3,i4; a3,a4}"));
+      REQUIRE(prod.factor(0) == deserialize<ExprPtr>(L"g{i3,i4; a3,a4}"));
 
       REQUIRE(prod.factor(1)->is<Product>());
-      REQUIRE(prod.factor(1)->at(0) == parse_expr(L"t{a3;i1}"));
-      REQUIRE(prod.factor(1)->at(1) == parse_expr(L"t{a4;i2}"));
+      REQUIRE(prod.factor(1)->at(0) == deserialize<ExprPtr>(L"t{a3;i1}"));
+      REQUIRE(prod.factor(1)->at(1) == deserialize<ExprPtr>(L"t{a4;i2}"));
 
       REQUIRE(prod.factor(2)->is<Product>());
-      REQUIRE(prod.factor(2)->at(0) == parse_expr(L"t{a1;i3}"));
-      REQUIRE(prod.factor(2)->at(1) == parse_expr(L"t{a2;i4}"));
+      REQUIRE(prod.factor(2)->at(0) == deserialize<ExprPtr>(L"t{a1;i3}"));
+      REQUIRE(prod.factor(2)->at(1) == deserialize<ExprPtr>(L"t{a2;i4}"));
     }
 
-    SECTION("Empty input") { REQUIRE(parse_expr(L"") == nullptr); }
+    SECTION("Empty input") { REQUIRE(deserialize<ExprPtr>(L"") == nullptr); }
 
     SECTION("Error handling") {
       SECTION("Exception type") {
@@ -397,30 +421,35 @@ TEST_CASE("parsing", "[parse]") {
                                             L"T^{i1}{a1}"};
 
         for (const std::wstring& current : inputs) {
-          REQUIRE_THROWS_AS(parse_expr(current), ParseError);
+          REQUIRE_THROWS_AS(deserialize<ExprPtr>(current),
+                            io::serialization::SerializationError);
         }
       }
 
       SECTION("Invalid index") {
-        REQUIRE_THROWS_MATCHES(parse_expr(L"t{i1<az1>;}"), ParseError,
-                               parseErrorMatches(5, 3, "proto"));
-        REQUIRE_THROWS_MATCHES(parse_expr(L"t{i1;az3}"), ParseError,
-                               parseErrorMatches(5, 3, "Unknown index space"));
+        REQUIRE_THROWS_MATCHES(deserialize<ExprPtr>(L"t{i1<az1>;}"),
+                               io::serialization::SerializationError,
+                               serializationErrorMatches(5, 3, "proto"));
+        REQUIRE_THROWS_MATCHES(
+            deserialize<ExprPtr>(L"t{i1;az3}"),
+            io::serialization::SerializationError,
+            serializationErrorMatches(5, 3, "Unknown index space"));
       }
 
       SECTION("Invalid symmetry") {
         REQUIRE_THROWS_MATCHES(
-            parse_expr(L"t{i1;a3}:P"), ParseError,
-            parseErrorMatches(9, 1, "Invalid symmetry specifier"));
+            deserialize<ExprPtr>(L"t{i1;a3}:P"),
+            io::serialization::SerializationError,
+            serializationErrorMatches(9, 1, "Invalid symmetry specifier"));
       }
     }
   }
 
-  SECTION("parse_result_expr") {
+  SECTION("deserialize<ResultExpr>") {
     using namespace sequant;
 
     SECTION("constant") {
-      ResultExpr result = parse_result_expr(L"A = 3");
+      ResultExpr result = deserialize<ResultExpr>(L"A = 3");
 
       REQUIRE(result.has_label());
       REQUIRE(result.label() == L"A");
@@ -434,8 +463,8 @@ TEST_CASE("parsing", "[parse]") {
       REQUIRE(result.expression().as<Constant>().value<int>() == 3);
     }
     SECTION("contraction") {
-      ResultExpr result =
-          parse_result_expr(L"R{i1,i2;e1,e2}:A = f{e2;e3} t{e1,e3;i1,i2}");
+      ResultExpr result = deserialize<ResultExpr>(
+          L"R{i1,i2;e1,e2}:A = f{e2;e3} t{e1,e3;i1,i2}");
 
       REQUIRE(result.has_label());
       REQUIRE(result.label() == L"R");
@@ -460,7 +489,7 @@ TEST_CASE("parsing", "[parse]") {
     }
   }
 
-  SECTION("deparse") {
+  SECTION("serialize") {
     using namespace sequant;
 
     std::vector<std::wstring> expressions = {
@@ -477,9 +506,9 @@ TEST_CASE("parsing", "[parse]") {
         L"1/2 ã{i_1;i_2} * b̃{i_3;i_4}"};
 
     for (const std::wstring& current : expressions) {
-      ExprPtr expression = parse_expr(current);
+      ExprPtr expression = deserialize<ExprPtr>(current);
 
-      REQUIRE(deparse(expression, {.annot_symm = true}) == current);
+      REQUIRE(serialize(expression, {.annot_symm = true}) == current);
     }
 
     SECTION("result_expressions") {
@@ -492,9 +521,9 @@ TEST_CASE("parsing", "[parse]") {
       };
 
       for (const std::wstring& current : expressions) {
-        ResultExpr result = parse_result_expr(current);
+        ResultExpr result = deserialize<ResultExpr>(current);
 
-        REQUIRE(deparse(result, {.annot_symm = true}) == current);
+        REQUIRE(serialize(result, {.annot_symm = true}) == current);
       }
     }
   }

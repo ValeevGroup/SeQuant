@@ -17,7 +17,7 @@
 #include <SeQuant/core/export/reordering_context.hpp>
 #include <SeQuant/core/export/text_generator.hpp>
 #include <SeQuant/core/index_space_registry.hpp>
-#include <SeQuant/core/parse.hpp>
+#include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/string.hpp>
@@ -251,16 +251,16 @@ std::vector<ExpressionGroup<>> parse_expression_spec(const std::string &spec) {
     }
 
     try {
-      ResultExpr res =
-          parse_result_expr(line, {.def_perm_symm = Symmetry::Nonsymm,
-                                   .def_braket_symm = BraKetSymmetry::Nonsymm,
-                                   .def_col_symm = ColumnSymmetry::Nonsymm});
+      ResultExpr res = deserialize<ResultExpr>(
+          line, {.def_perm_symm = Symmetry::Nonsymm,
+                 .def_braket_symm = BraKetSymmetry::Nonsymm,
+                 .def_col_symm = ColumnSymmetry::Nonsymm});
       groups.back().add(to_export_tree(res));
     } catch (...) {
-      ExprPtr expr =
-          parse_expr(line, {.def_perm_symm = Symmetry::Nonsymm,
-                            .def_braket_symm = BraKetSymmetry::Nonsymm,
-                            .def_col_symm = ColumnSymmetry::Nonsymm});
+      ExprPtr expr = deserialize<ExprPtr>(
+          line, {.def_perm_symm = Symmetry::Nonsymm,
+                 .def_braket_symm = BraKetSymmetry::Nonsymm,
+                 .def_col_symm = ColumnSymmetry::Nonsymm});
       groups.back().add(to_export_tree(expr));
     }
   }
@@ -430,11 +430,11 @@ TEST_CASE("export", "[export]") {
         const std::string &expected =
             candidates.at(static_cast<std::size_t>(layout));
 
-        Tensor tensor =
-            parse_expr(input, {.def_perm_symm = Symmetry::Nonsymm,
-                               .def_braket_symm = BraKetSymmetry::Nonsymm,
-                               .def_col_symm = ColumnSymmetry::Nonsymm})
-                ->as<Tensor>();
+        Tensor tensor = deserialize<ExprPtr>(
+                            input, {.def_perm_symm = Symmetry::Nonsymm,
+                                    .def_braket_symm = BraKetSymmetry::Nonsymm,
+                                    .def_col_symm = ColumnSymmetry::Nonsymm})
+                            ->as<Tensor>();
         bool rewritten = ctx.rewrite(tensor);
         REQUIRE_THAT(tensor, EquivalentTo(expected));
         REQUIRE(rewritten == (toUtf8(input) != expected));
@@ -452,7 +452,7 @@ TEST_CASE("export", "[export]") {
     Variable v3{L"v3"};
 
     SECTION("unchanged") {
-      export_expression(to_export_tree(parse_result_expr(L"v1 = 2 v2")),
+      export_expression(to_export_tree(deserialize<ResultExpr>(L"v1 = 2 v2")),
                         generator, ctx);
 
       REQUIRE_THAT(generator.get_generated_code(),
@@ -468,7 +468,7 @@ TEST_CASE("export", "[export]") {
     SECTION("elided load/unload") {
       SECTION("single") {
         export_expression(
-            to_export_tree(parse_result_expr(L"v1 = 2 v2 + 4 v2 v3")),
+            to_export_tree(deserialize<ResultExpr>(L"v1 = 2 v2 + 4 v2 v3")),
             generator, ctx);
 
         REQUIRE_THAT(generator.get_generated_code(),
@@ -486,7 +486,7 @@ TEST_CASE("export", "[export]") {
                                         "Persist v1\n"));
       }
       SECTION("multiple") {
-        export_expression(to_export_tree(parse_result_expr(
+        export_expression(to_export_tree(deserialize<ResultExpr>(
                               L"ECC = 2 g{i1,i2;a1,a2} t{a1,a2;i1,i2} "
                               "- g{i1,i2;a1,a2} t{a2,a1;i1,i2}")),
                           generator, ctx);
@@ -525,7 +525,7 @@ TEST_CASE("export", "[export]") {
         // needs to be moved before the load of B in order to retain
         // compatibility to frameworks with stack-based memory models
         export_expression(
-            to_export_tree(parse_result_expr(
+            to_export_tree(deserialize<ResultExpr>(
                 L"R{a1;i1} = 2 B{a1;i1} + B{a1;i1} C - C D{a1;i1}")),
             generator, ctx);
 
@@ -553,7 +553,7 @@ TEST_CASE("export", "[export]") {
                                "Persist R[a_1, i_1]\n"));
       }
       SECTION("reused intermediates") {
-        export_expression(to_export_tree(parse_result_expr(
+        export_expression(to_export_tree(deserialize<ResultExpr>(
                               L"ECC = 2 K{i1,i2;a1,a2} t{a1;i1} t{a2;i2} - "
                               L"K{i1,i2;a1,a2} t{a1;i2} t{a2;i1}")),
                           generator, ctx);
@@ -591,7 +591,7 @@ TEST_CASE("export", "[export]") {
       }
       SECTION("requires caution") {
         export_expression(
-            to_export_tree(parse_result_expr(
+            to_export_tree(deserialize<ResultExpr>(
                 L"R{a1,a2;i1,i2} = g{i3,i4;a3,a4} t{a4;i2} t{a1,a3;i1,i4} "
                 L"t{a2;i3} "
                 "- 2 g{i3,i4;a3,a4} t{a4;i2} t{a1,a3;i1,i3} t{a2;i4} ")),
@@ -656,7 +656,7 @@ TEST_CASE("export", "[export]") {
       }
       SECTION("tbd2") {
         export_expression(
-            to_export_tree(parse_result_expr(
+            to_export_tree(deserialize<ResultExpr>(
                 L"R1{u_1;i_1;} = "
                 L"+ 2 g{u_2, i_2;a_1, a_2;} (GAM0{u_3, u_4;u_5, u_2;} T2g{a_2, "
                 L"u_5;u_3, i_2;}) T2g{a_1, u_1;i_1, u_4;} "
@@ -676,12 +676,13 @@ TEST_CASE("export", "[export]") {
 
     SECTION("remap_integrals") {
       SECTION("Unchanged") {
-        Tensor tensor = parse_expr(L"t{i1;a1}:N-N-N")->as<Tensor>();
+        Tensor tensor = deserialize<ExprPtr>(L"t{i1;a1}:N-N-N")->as<Tensor>();
         bool rewritten = ctx.rewrite(tensor);
         REQUIRE_THAT(tensor, EquivalentTo("t{i1;a1}:N-N-N"));
         REQUIRE_FALSE(rewritten);
 
-        tensor = parse_expr(int_label + L"{a1;i1}:N-N-N")->as<Tensor>();
+        tensor =
+            deserialize<ExprPtr>(int_label + L"{a1;i1}:N-N-N")->as<Tensor>();
         rewritten = ctx.rewrite(tensor);
         REQUIRE_THAT(tensor, EquivalentTo("g{a1;i1}:N-N-N"));
       }

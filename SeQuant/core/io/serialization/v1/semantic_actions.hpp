@@ -5,7 +5,7 @@
 #ifndef SEQUANT_CORE_PARSE_SEMANTIC_ACTIONS_V1_HPP
 #define SEQUANT_CORE_PARSE_SEMANTIC_ACTIONS_V1_HPP
 
-#include <SeQuant/core/parse/v1/ast.hpp>
+#include <SeQuant/core/io/serialization/v1/ast.hpp>
 #include <SeQuant/core/utility/string.hpp>
 
 #define BOOST_SPIRIT_X3_UNICODE
@@ -15,7 +15,7 @@
 #include <type_traits>
 #include <vector>
 
-namespace sequant::parse::v1::actions {
+namespace sequant::io::serialization::v1::actions {
 
 namespace x3 = boost::spirit::x3;
 
@@ -70,6 +70,6 @@ struct process_addend {
   }
 };
 
-}  // namespace sequant::parse::v1::actions
+}  // namespace sequant::io::serialization::v1::actions
 
 #endif  // SEQUANT_CORE_PARSE_SEMANTIC_ACTIONS_V1_HPP

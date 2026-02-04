@@ -16,7 +16,7 @@
 
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/eval/eval_node.hpp>
-#include <SeQuant/core/parse.hpp>
+#include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
 #include <btas/btas.h>
@@ -37,15 +37,16 @@ class SequantEvalScfBTAS final : public SequantEvalScf {
 
   Tensor_t const& f_vo() const {
     static Tensor_t tnsr = data_world_(
-        parse_expr(L"f{a1;i1}", {.def_perm_symm = Symmetry::Nonsymm})
+        deserialize<ExprPtr>(L"f{a1;i1}", {.def_perm_symm = Symmetry::Nonsymm})
             ->as<Tensor>());
     return tnsr;
   }
 
   Tensor_t const& g_vvoo() const {
-    static Tensor_t tnsr = data_world_(
-        parse_expr(L"g{a1,a2;i1,i2}", {.def_perm_symm = Symmetry::Nonsymm})
-            ->as<Tensor>());
+    static Tensor_t tnsr =
+        data_world_(deserialize<ExprPtr>(L"g{a1,a2;i1,i2}",
+                                         {.def_perm_symm = Symmetry::Nonsymm})
+                        ->as<Tensor>());
     return tnsr;
   }
 
@@ -53,8 +54,8 @@ class SequantEvalScfBTAS final : public SequantEvalScf {
     static const std::wstring_view energy_expr =
         L"f{i1;a1} * t{a1;i1} + g{i1,i2;a1,a2} * "
         L"(1/4 * t{a1,a2;i1,i2} + 1/2 t{a1;i1} * t{a2;i2})";
-    static auto const node = binarize<EvalExprBTAS>(
-        parse_expr(energy_expr, {.def_perm_symm = Symmetry::Antisymm}));
+    static auto const node = binarize<EvalExprBTAS>(deserialize<ExprPtr>(
+        energy_expr, {.def_perm_symm = Symmetry::Antisymm}));
 
     return evaluate(node, data_world_)->template get<double>();
   }

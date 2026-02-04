@@ -314,14 +314,14 @@ set(SeQuant_symb_src
         SeQuant/core/op.hpp
         SeQuant/core/options.cpp
         SeQuant/core/options.hpp
-        SeQuant/core/parse.hpp
-        SeQuant/core/parse/parse.cpp
-        SeQuant/core/parse/v1/ast.cpp
-        SeQuant/core/parse/v1/ast.hpp
-        SeQuant/core/parse/v1/ast_conversions.hpp
-        SeQuant/core/parse/v1/deparse.cpp
-        SeQuant/core/parse/v1/parse.cpp
-        SeQuant/core/parse/v1/semantic_actions.hpp
+        SeQuant/core/io/serialization/serialization.cpp
+        SeQuant/core/io/serialization/serialization.hpp
+        SeQuant/core/io/serialization/v1/ast.cpp
+        SeQuant/core/io/serialization/v1/ast.hpp
+        SeQuant/core/io/serialization/v1/ast_conversions.hpp
+        SeQuant/core/io/serialization/v1/deserialize.cpp
+        SeQuant/core/io/serialization/v1/semantic_actions.hpp
+        SeQuant/core/io/serialization/v1/serialize.cpp
         SeQuant/core/ranges.hpp
         SeQuant/core/rational.hpp
         SeQuant/core/runtime.cpp

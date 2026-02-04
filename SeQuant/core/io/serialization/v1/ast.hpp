@@ -12,12 +12,11 @@
 #include <boost/spirit/home/x3/support/ast/position_tagged.hpp>
 #include <boost/variant.hpp>
 
-#include <cstdint>
 #include <string>
 #include <variant>
 #include <vector>
 
-namespace sequant::parse::v1::ast {
+namespace sequant::io::serialization::v1::ast {
 
 struct IndexLabel : boost::spirit::x3::position_tagged {
   std::wstring label;
@@ -132,22 +131,27 @@ struct ResultExpr : boost::spirit::x3::position_tagged {
       : lhs(std::move(tensor)), rhs(std::move(expr)) {}
 };
 
-}  // namespace sequant::parse::v1::ast
+}  // namespace sequant::io::serialization::v1::ast
 
-BOOST_FUSION_ADAPT_STRUCT(sequant::parse::v1::ast::IndexLabel, label, id);
-BOOST_FUSION_ADAPT_STRUCT(sequant::parse::v1::ast::Index, label, protoLabels);
-BOOST_FUSION_ADAPT_STRUCT(sequant::parse::v1::ast::Number, numerator,
-                          denominator);
-BOOST_FUSION_ADAPT_STRUCT(sequant::parse::v1::ast::Variable, name, conjugated);
-BOOST_FUSION_ADAPT_STRUCT(sequant::parse::v1::ast::IndexGroups, bra, ket,
-                          auxiliaries, reverse_bra_ket);
-BOOST_FUSION_ADAPT_STRUCT(sequant::parse::v1::ast::SymmetrySpec, perm_symm,
-                          braket_symm, column_symm);
-BOOST_FUSION_ADAPT_STRUCT(sequant::parse::v1::ast::Tensor, name, indices,
-                          symmetry);
+BOOST_FUSION_ADAPT_STRUCT(sequant::io::serialization::v1::ast::IndexLabel,
+                          label, id);
+BOOST_FUSION_ADAPT_STRUCT(sequant::io::serialization::v1::ast::Index, label,
+                          protoLabels);
+BOOST_FUSION_ADAPT_STRUCT(sequant::io::serialization::v1::ast::Number,
+                          numerator, denominator);
+BOOST_FUSION_ADAPT_STRUCT(sequant::io::serialization::v1::ast::Variable, name,
+                          conjugated);
+BOOST_FUSION_ADAPT_STRUCT(sequant::io::serialization::v1::ast::IndexGroups, bra,
+                          ket, auxiliaries, reverse_bra_ket);
+BOOST_FUSION_ADAPT_STRUCT(sequant::io::serialization::v1::ast::SymmetrySpec,
+                          perm_symm, braket_symm, column_symm);
+BOOST_FUSION_ADAPT_STRUCT(sequant::io::serialization::v1::ast::Tensor, name,
+                          indices, symmetry);
 
-BOOST_FUSION_ADAPT_STRUCT(sequant::parse::v1::ast::Product, factors);
-BOOST_FUSION_ADAPT_STRUCT(sequant::parse::v1::ast::Sum, summands);
-BOOST_FUSION_ADAPT_STRUCT(sequant::parse::v1::ast::ResultExpr, lhs, rhs);
+BOOST_FUSION_ADAPT_STRUCT(sequant::io::serialization::v1::ast::Product,
+                          factors);
+BOOST_FUSION_ADAPT_STRUCT(sequant::io::serialization::v1::ast::Sum, summands);
+BOOST_FUSION_ADAPT_STRUCT(sequant::io::serialization::v1::ast::ResultExpr, lhs,
+                          rhs);
 
 #endif  // SEQUANT_CORE_PARSE_AST_V1_HPP

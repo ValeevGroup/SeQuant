@@ -11,7 +11,6 @@
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
-#include <SeQuant/core/parse.hpp>
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/space.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
@@ -274,7 +273,7 @@ TEST_CASE("spin", "[spin]") {
       // as this forces the code to take a path where it traces a product which
       // ends up as a single tensor (due to an additional factor of -1 induces
       // by the chosen pairing of external indices)
-      ExprPtr expr = parse_expr(L"- g{p1,p2;p3,p4}:A");
+      ExprPtr expr = deserialize<ExprPtr>(L"- g{p1,p2;p3,p4}:A");
       ExprPtr result = spintrace(expr, {{L"p_1", L"p_4"}, {L"p_2", L"p_3"}});
 
       REQUIRE_THAT(result,
@@ -322,7 +321,8 @@ TEST_CASE("spin", "[spin]") {
   }
 
   SECTION("Scaled Product with variable") {
-    ExprPtr expr = parse_expr(L"1/2 Var g{i1,i2;a1,a2}:A t{a1;i1} t{a2;i2}");
+    ExprPtr expr =
+        deserialize<ExprPtr>(L"1/2 Var g{i1,i2;a1,a2}:A t{a1;i1} t{a2;i2}");
     auto result = spintrace(expr);
     canonicalize(result);
     REQUIRE_THAT(
@@ -333,7 +333,7 @@ TEST_CASE("spin", "[spin]") {
   }
 
   SECTION("Tensor times variable") {
-    ResultExpr expr = parse_result_expr(
+    ResultExpr expr = deserialize<ResultExpr>(
         L"R2{a1,a2;i1,i2}:A = Â{i1,i2;a1,a2}:A INTkx{a1,a2;i1,i2}:A H");
     auto results = closed_shell_spintrace(expr);
     REQUIRE_THAT(
@@ -768,17 +768,17 @@ SECTION("Closed-shell spintrace CCD") {
     {  // standard = v1 , expression can be parsed directly without requiring
        // cast to Sum
       const auto input =
-          parse_expr(L"1/4 g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_1,i_2}",
-                     {.def_perm_symm = Symmetry::Antisymm});
+          deserialize<ExprPtr>(L"1/4 g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_1,i_2}",
+                               {.def_perm_symm = Symmetry::Antisymm});
       auto result = closed_shell_CC_spintrace_v1(input);
       REQUIRE_THAT(result,
                    EquivalentTo(L"- g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_2,i_1} + "
                                 L"2 g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_1,i_2}"));
     }
     {  // compact = v2
-      const auto input = ex<Sum>(
-          ExprPtrList{parse_expr(L"1/4 g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_1,i_2}",
-                                 {.def_perm_symm = Symmetry::Antisymm})});
+      const auto input = ex<Sum>(ExprPtrList{
+          deserialize<ExprPtr>(L"1/4 g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_1,i_2}",
+                               {.def_perm_symm = Symmetry::Antisymm})});
 
       auto result = closed_shell_CC_spintrace_v2(input);
       REQUIRE_THAT(result,
@@ -786,7 +786,7 @@ SECTION("Closed-shell spintrace CCD") {
                                 L"2 g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_1,i_2}"));
     }
     {  // CSV (aka PNO) for regular cs
-      const auto pno_ccd_energy_so = parse_expr(
+      const auto pno_ccd_energy_so = deserialize<ExprPtr>(
           L"1/4 g{a1<i1,i2>, a2<i1,i2>;i1, i2}:A-C t{i1,i2;a1<i1,i2>, "
           L"a2<i1,i2>}:A");
 
@@ -802,7 +802,7 @@ SECTION("Closed-shell spintrace CCD") {
                                 "t{i1,i2;a2<i1,i2>,a1<i1,i2>}:N-C"));
     }
     {  // CSV (aka PNO) for more compact equations
-      const auto pno_ccd_energy_so = parse_expr(
+      const auto pno_ccd_energy_so = deserialize<ExprPtr>(
           L"1/4 g{a1<i1,i2>, a2<i1,i2>;i1, i2}:A-C t{i1,i2;a1<i1,i2>, "
           L"a2<i1,i2>}:A");
 
@@ -1018,8 +1018,9 @@ SECTION("Closed-shell spintrace CCSD") {
 
 SECTION("Closed-shell CC spintrace for variable, constant, product") {
   {  // test variable * tensors
-    auto expr1 = sequant::parse_expr(L"-ω Â{i1,i2;a1,a2} t{a1,a2;i1,i2}",
-                                     {.def_perm_symm = Symmetry::Antisymm});
+    auto expr1 =
+        sequant::deserialize<ExprPtr>(L"-ω Â{i1,i2;a1,a2} t{a1,a2;i1,i2}",
+                                      {.def_perm_symm = Symmetry::Antisymm});
 
     auto result_v1 = mbpt::closed_shell_CC_spintrace_v1(expr1);
     REQUIRE_THAT(result_v1, EquivalentTo(L"-ω Ŝ{i1,i2;a1,a2} t{a1,a2;i1,i2}"));
@@ -1028,7 +1029,7 @@ SECTION("Closed-shell CC spintrace for variable, constant, product") {
     REQUIRE_THAT(result_v2, EquivalentTo(L"-ω Ŝ{i1,i2;a1,a2} t{a1,a2;i1,i2}"));
   }
   {  // test a single variable
-    auto expr1 = sequant::parse_expr(L"ω");
+    auto expr1 = sequant::deserialize<ExprPtr>(L"ω");
 
     auto result_v1 = mbpt::closed_shell_CC_spintrace_v1(expr1);
     REQUIRE_THAT(result_v1, EquivalentTo(L"ω"));
@@ -1037,7 +1038,7 @@ SECTION("Closed-shell CC spintrace for variable, constant, product") {
     REQUIRE_THAT(result_v2, EquivalentTo(L"ω"));
   }
   {  // test a single constant
-    auto expr1 = sequant::parse_expr(L"1/4");
+    auto expr1 = sequant::deserialize<ExprPtr>(L"1/4");
 
     auto result_v1 = mbpt::closed_shell_CC_spintrace_v1(expr1);
     REQUIRE_THAT(result_v1, EquivalentTo(L"1/4"));
@@ -1046,8 +1047,9 @@ SECTION("Closed-shell CC spintrace for variable, constant, product") {
     REQUIRE_THAT(result_v2, EquivalentTo(L"1/4"));
   }
   {  // test a product of tensors
-    const auto input = parse_expr(L"1/4 g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_1,i_2}",
-                                  {.def_perm_symm = Symmetry::Antisymm});
+    const auto input =
+        deserialize<ExprPtr>(L"1/4 g{i_1,i_2;a_1,a_2} t{a_1,a_2;i_1,i_2}",
+                             {.def_perm_symm = Symmetry::Antisymm});
 
     auto result_v1 = closed_shell_CC_spintrace_v1(input);
     REQUIRE_THAT(result_v1,
@@ -1164,9 +1166,9 @@ SECTION("Closed-shell spintrace CCSDT terms") {
 
   SECTION("the most expensive terms in CCSDT in v2") {  // results in 1 term
     const auto input = ex<Sum>(ExprPtrList{
-        parse_expr(L" 3/2 Â{i_1,i_2,i_3;a_1,a_2,a_3} * "
-                   L"g{a_1,a_2;a_4,a_5} * t{a_3,a_4,a_5;i_1,i_2,i_3}",
-                   {.def_perm_symm = Symmetry::Antisymm})});
+        deserialize<ExprPtr>(L" 3/2 Â{i_1,i_2,i_3;a_1,a_2,a_3} * "
+                             L"g{a_1,a_2;a_4,a_5} * t{a_3,a_4,a_5;i_1,i_2,i_3}",
+                             {.def_perm_symm = Symmetry::Antisymm})});
 
     auto result = closed_shell_CC_spintrace_v2(input);
     REQUIRE_THAT(
@@ -1177,10 +1179,10 @@ SECTION("Closed-shell spintrace CCSDT terms") {
   }
 
   SECTION("most expensive CCSDT term in v1") {  // results in 4 terms
-    const auto input = ex<Sum>(ExprPtrList{
-        parse_expr(L"3/2 Â{i_1,i_2,i_3;a_1,a_2,a_3} * g{a_1,a_2;a_4,a_5} * "
-                   "t{a_3,a_4,a_5;i_1,i_2,i_3}",
-                   {.def_perm_symm = Symmetry::Antisymm})});
+    const auto input = ex<Sum>(ExprPtrList{deserialize<ExprPtr>(
+        L"3/2 Â{i_1,i_2,i_3;a_1,a_2,a_3} * g{a_1,a_2;a_4,a_5} * "
+        "t{a_3,a_4,a_5;i_1,i_2,i_3}",
+        {.def_perm_symm = Symmetry::Antisymm})});
 
     auto result = closed_shell_CC_spintrace_v1(input);
     REQUIRE(result->size() == 4);
@@ -1705,11 +1707,11 @@ SECTION("ResultExpr") {
 
   for (std::size_t i = 0; i < inputs.size(); ++i) {
     CAPTURE(inputs.at(i));
-    const ResultExpr input = parse_result_expr(inputs.at(i));
+    const ResultExpr input = deserialize<ResultExpr>(inputs.at(i));
 
     container::svector<ResultExpr> expected;
     for (std::size_t k = 0; k < expected_outputs.at(i).size(); ++k) {
-      expected.push_back(parse_result_expr(expected_outputs.at(i).at(k)));
+      expected.push_back(deserialize<ResultExpr>(expected_outputs.at(i).at(k)));
     }
 
     SECTION("closed_shell" + std::to_string(i)) {

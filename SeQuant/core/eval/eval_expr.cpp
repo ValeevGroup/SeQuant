@@ -7,7 +7,7 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/index.hpp>
-#include <SeQuant/core/parse.hpp>
+#include <SeQuant/core/io/serialization/serialization.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/tensor_network.hpp>
 #include <SeQuant/core/utility/indices.hpp>
@@ -226,7 +226,7 @@ std::string EvalExpr::label() const noexcept {
   if (is_tensor())
     return toUtf8(as_tensor().label()) + "(" + indices_annot() + ")";
   else if (is_constant()) {
-    return toUtf8(sequant::deparse(as_constant()));
+    return toUtf8(io::serialization::to_string(as_constant()));
   } else {
     SEQUANT_ASSERT(is_variable());
     return toUtf8(as_variable().label());

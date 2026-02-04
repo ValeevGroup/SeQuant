@@ -7,7 +7,7 @@
 #include <SeQuant/core/eval/backends/btas/result.hpp>
 #include <SeQuant/core/eval/eval.hpp>
 #include <SeQuant/core/eval/optimize.hpp>
-#include <SeQuant/core/parse.hpp>
+#include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/domain/mbpt/biorthogonalization.hpp>
 
 #include <btas/btas.h>
@@ -32,14 +32,14 @@ auto tensor_to_key(sequant::Tensor const& tnsr) {
   };
 
   auto const tnsr_deparsed =
-      sequant::deparse(tnsr.clone(), {.annot_symm = false});
+      sequant::serialize(tnsr.clone(), {.annot_symm = false});
   return boost::regex_replace(tnsr_deparsed, idx_rgx, formatter);
 }
 
 [[maybe_unused]] auto tensor_to_key(std::wstring_view spec) {
-  return tensor_to_key(
-      sequant::parse_expr(spec, {.def_perm_symm = sequant::Symmetry::Nonsymm})
-          ->as<sequant::Tensor>());
+  return tensor_to_key(sequant::deserialize<sequant::ExprPtr>(
+                           spec, {.def_perm_symm = sequant::Symmetry::Nonsymm})
+                           ->as<sequant::Tensor>());
 }
 
 template <typename Tensor_t>
@@ -222,7 +222,8 @@ TEST_CASE("eval_with_btas", "[eval_btas]") {
       };
 
   auto parse_antisymm = [](auto const& xpr) {
-    return parse_expr(xpr, {.def_perm_symm = sequant::Symmetry::Antisymm});
+    return deserialize<sequant::ExprPtr>(
+        xpr, {.def_perm_symm = sequant::Symmetry::Antisymm});
   };
 
   SECTION("Summation") {
