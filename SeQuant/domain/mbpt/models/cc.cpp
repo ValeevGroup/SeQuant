@@ -33,10 +33,9 @@ CC::CC(size_t n, const Options& opts)
       use_topology_(opts.use_topology),
       hbar_truncation_rank_(opts.hbar_truncation_rank),
       pertbar_truncation_rank_(opts.pertbar_truncation_rank) {
-  if (unitary() && !hbar_truncation_rank_) {
-    throw std::invalid_argument(
-        "CC: hbar_truncation_rank is required for unitary ansatz");
-  }
+  if (unitary())
+    SEQUANT_ASSERT(hbar_truncation_rank_ &&
+                   "CC: hbar_truncation_rank is required for unitary ansatz");
 }
 
 CC::Ansatz CC::ansatz() const { return ansatz_; }
@@ -54,9 +53,6 @@ std::vector<ExprPtr> CC::t(size_t pmax, size_t pmin) {
   const bool skip_singles = ansatz_ == Ansatz::oT || ansatz_ == Ansatz::oU;
 
   SEQUANT_ASSERT(pmax >= pmin && "pmax should be >= pmin");
-  if (unitary())
-    SEQUANT_ASSERT(hbar_truncation_rank_ &&
-                   "hbar_truncation_rank must be specified for unitary ansatz");
   const auto commutator_rank = hbar_truncation_rank_.value_or(4);
 
   // 1. construct hbar(op) in canonical form
@@ -110,7 +106,7 @@ std::vector<ExprPtr> CC::t(size_t pmax, size_t pmin) {
 
 std::vector<ExprPtr> CC::λ() {
   SEQUANT_ASSERT(!unitary() && "there is no need for CC::λ for unitary ansatz");
-  const bool skip_singles = ansatz_ == Ansatz::oT || ansatz_ == Ansatz::oU;
+  const bool skip_singles = ansatz_ == Ansatz::oT;
 
   const auto commutator_rank =
       hbar_truncation_rank_.value_or(4);  // default truncation rank is 4
