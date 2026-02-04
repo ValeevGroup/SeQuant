@@ -931,11 +931,11 @@ class NormalOperator : public Operator<S>,
 };
 
 static_assert(
-    is_tensor_v<NormalOperator<Statistics::FermiDirac>>,
+    is_tensor<NormalOperator<Statistics::FermiDirac>>,
     "The NormalOperator<Statistics::FermiDirac> class does not fulfill the "
     "requirements of the Tensor interface");
 static_assert(
-    is_tensor_v<NormalOperator<Statistics::BoseEinstein>>,
+    is_tensor<NormalOperator<Statistics::BoseEinstein>>,
     "The NormalOperator<Statistics::BoseEinstein> class does not fulfill the "
     "requirements of the Tensor interface");
 

@@ -807,7 +807,7 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
 
 };  // class Tensor
 
-static_assert(is_tensor_v<Tensor>,
+static_assert(is_tensor<Tensor>,
               "The Tensor class does not fulfill the requirements of the "
               "Tensor interface");
 

@@ -554,28 +554,24 @@ inline std::wstring to_latex_tensor(
 ///         colors are, for now, always assumed to commute)
 ///         - @c label(t) is a valid expression and its return is convertible to
 ///         a std::wstring;
-///         - @c to_latex(t) is a valid expression and its return is convertible
+///         - @c io::latex::to_string(t) is a valid expression and its return is convertible
 ///         to a std::wstring.
 template <typename T>
-struct is_tensor
-    : std::bool_constant<
-          std::is_invocable_v<decltype(braket), T> &&
-          std::is_invocable_v<decltype(braketaux), T> &&
-          std::is_invocable_v<decltype(bra_rank), T> &&
-          std::is_invocable_v<decltype(ket_rank), T> &&
-          std::is_invocable_v<decltype(aux_rank), T> &&
-          std::is_invocable_v<decltype(symmetry), T> &&
-          std::is_invocable_v<decltype(braket_symmetry), T> &&
-          std::is_invocable_v<decltype(column_symmetry), T> &&
-          std::is_invocable_v<decltype(color), T> &&
-          std::is_invocable_v<decltype(is_cnumber), T> &&
-          std::is_invocable_v<decltype(label), T> &&
-          std::is_invocable_v<
-              decltype(static_cast<std::wstring (*)(const T&)>(to_latex)), T>> {
+concept is_tensor = requires (const T &obj) {
+	{ braket(obj) } -> std::ranges::range;
+	{ braketaux(obj) } -> std::ranges::range;
+	{ bra_rank(obj) } -> std::convertible_to<std::size_t>;
+	{ ket_rank(obj) } -> std::convertible_to<std::size_t>;
+	{ aux_rank(obj) } -> std::convertible_to<std::size_t>;
+	{ symmetry(obj) } -> std::convertible_to<Symmetry>;
+	{ braket_symmetry(obj) } -> std::convertible_to<BraKetSymmetry>;
+	{ column_symmetry(obj) } -> std::convertible_to<ColumnSymmetry>;
+	{ color(obj) } -> std::convertible_to<std::size_t>;
+	{ is_cnumber(obj) } -> std::convertible_to<bool>;
+	{ label(obj) } -> std::constructible_from<std::wstring>;
+	{ to_latex(obj) } -> std::convertible_to<std::wstring>;
 };
-template <typename T>
-constexpr bool is_tensor_v = is_tensor<T>::value;
-static_assert(is_tensor_v<AbstractTensor>,
+static_assert(is_tensor<AbstractTensor>,
               "The AbstractTensor class does not fulfill the requirements of "
               "the Tensor interface");
 
