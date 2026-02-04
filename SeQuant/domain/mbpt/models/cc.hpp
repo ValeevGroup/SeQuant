@@ -58,7 +58,7 @@ class CC {
   explicit CC(size_t n, const Options& opts);
 
   /// @return the type of ansatz
-  Ansatz ansatz() const;
+  [[nodiscard]] Ansatz ansatz() const;
 
   /// @return true if the ansatz is unitary
   [[nodiscard]] bool unitary() const;
