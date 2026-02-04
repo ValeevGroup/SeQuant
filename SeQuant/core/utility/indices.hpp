@@ -457,13 +457,13 @@ Container<Group<SlottedIndex>> external_indices(const Expr& expr) {
     cont.resize(num_braket + tensor.aux_rank());
 
     for (std::size_t i = 0; i < tensor.bra_rank(); ++i) {
-      cont.at(i).emplace_back(tensor.bra()[i], Slot::Bra);
+      cont.at(i).emplace_back(tensor.bra()[i], SlotType::Bra);
     }
     for (std::size_t i = 0; i < tensor.ket_rank(); ++i) {
-      cont.at(i).emplace_back(tensor.ket()[i], Slot::Ket);
+      cont.at(i).emplace_back(tensor.ket()[i], SlotType::Ket);
     }
     for (std::size_t i = 0; i < tensor.aux_rank(); ++i) {
-      cont.at(i + num_braket).emplace_back(tensor.aux()[i], Slot::Aux);
+      cont.at(i + num_braket).emplace_back(tensor.aux()[i], SlotType::Aux);
     }
 
     if (tensor.label() == reserved::symm_label() ||
@@ -505,13 +505,13 @@ Container<Group<SlottedIndex>> external_indices(const Expr& expr) {
   cont.resize(num_braket + groups.aux.size());
 
   for (std::size_t i = 0; i < groups.bra.size(); ++i) {
-    cont.at(i).emplace_back(groups.bra[i], Slot::Bra);
+    cont.at(i).emplace_back(groups.bra[i], SlotType::Bra);
   }
   for (std::size_t i = 0; i < groups.ket.size(); ++i) {
-    cont.at(i).emplace_back(groups.ket[i], Slot::Ket);
+    cont.at(i).emplace_back(groups.ket[i], SlotType::Ket);
   }
   for (std::size_t i = 0; i < groups.aux.size(); ++i) {
-    cont.at(num_braket + i).emplace_back(groups.aux[i], Slot::Aux);
+    cont.at(num_braket + i).emplace_back(groups.aux[i], SlotType::Aux);
   }
 
   return cont;
@@ -564,16 +564,18 @@ concept SlottedIndexGroupContainer =
 template <SlottedIndexGroup Group>
 auto get_bra_idx(Group&& group) -> meta::mimic_constness_t<Group, Index&> {
   if constexpr (SlottedIndexTuple<Group>) {
-    SEQUANT_ASSERT(std::get<0>(group).slot() == Slot::Bra ||
-                   std::get<1>(group).slot() == Slot::Bra);
-    return std::get<0>(group).slot() == Slot::Bra ? std::get<0>(group).index()
-                                                  : std::get<1>(group).index();
+    SEQUANT_ASSERT(std::get<0>(group).slot_type() == SlotType::Bra ||
+                   std::get<1>(group).slot_type() == SlotType::Bra);
+    return std::get<0>(group).slot_type() == SlotType::Bra
+               ? std::get<0>(group).index()
+               : std::get<1>(group).index();
   } else {
     using std::begin;
     using std::end;
-    auto it = std::find_if(
-        begin(group), end(group),
-        [](const SlottedIndex& idx) { return idx.slot() == Slot::Bra; });
+    auto it =
+        std::find_if(begin(group), end(group), [](const SlottedIndex& idx) {
+          return idx.slot_type() == SlotType::Bra;
+        });
     SEQUANT_ASSERT(it != end(group));
     return it->index();
   }
@@ -591,18 +593,20 @@ auto get_bra_idx(Group&& group) -> meta::mimic_constness_t<Group, Index&> {
 template <SlottedIndexGroup Group>
 auto get_ket_idx(Group&& group) -> meta::mimic_constness_t<Group, Index&> {
   if constexpr (SlottedIndexTuple<Group>) {
-    SEQUANT_ASSERT(std::get<0>(group).slot() == Slot::Ket ||
-                   std::get<1>(group).slot() == Slot::Ket);
-    return std::get<1>(group).slot() == Slot::Ket ? std::get<1>(group).index()
-                                                  : std::get<0>(group).index();
+    SEQUANT_ASSERT(std::get<0>(group).slot_type() == SlotType::Ket ||
+                   std::get<1>(group).slot_type() == SlotType::Ket);
+    return std::get<1>(group).slot_type() == SlotType::Ket
+               ? std::get<1>(group).index()
+               : std::get<0>(group).index();
   } else {
     // Note: We're using reverse iteration order as typically, we expect the ket
     // slot to be the second of two
     using std::rbegin;
     using std::rend;
-    auto it = std::find_if(
-        rbegin(group), rend(group),
-        [](const SlottedIndex& idx) { return idx.slot() == Slot::Ket; });
+    auto it =
+        std::find_if(rbegin(group), rend(group), [](const SlottedIndex& idx) {
+          return idx.slot_type() == SlotType::Ket;
+        });
     SEQUANT_ASSERT(it != rend(group));
     return it->index();
   }

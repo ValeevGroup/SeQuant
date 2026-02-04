@@ -15,7 +15,6 @@
 
 #include <cstdlib>
 #include <memory>
-#include <ostream>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -26,31 +25,6 @@
 #include <boost/core/demangle.hpp>
 
 namespace sequant {
-
-/// index slot types
-///
-/// @note This does not include slot bundles, like braket, etc.
-enum class SlotType { Bra = 0, Ket = 1, Aux = 2, Proto = 3 };
-
-template <typename CharT, typename Traits>
-std::basic_ostream<CharT, Traits>& operator<<(
-    std::basic_ostream<CharT, Traits>& stream, SlotType origin) {
-  switch (origin) {
-    case SlotType::Bra:
-      stream << "Bra";
-      break;
-    case SlotType::Ket:
-      stream << "Ket";
-      break;
-    case SlotType::Aux:
-      stream << "Aux";
-      break;
-    case SlotType::Proto:
-      stream << "Proto";
-      break;
-  }
-  return stream;
-}
 
 class TensorCanonicalizer;
 

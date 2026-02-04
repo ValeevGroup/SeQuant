@@ -1369,9 +1369,9 @@ TEST_CASE("wick", "[algorithms][wick]") {
         // indices
         auto rdm1_sf = sequant::mbpt::spintrace(
             rdm1_so,
-            {{{L"a_1", Slot::Bra}, {L"a_2", Slot::Ket}},
-             {{L"i_1", Slot::Ket}},
-             {{L"i_2", Slot::Ket}}},
+            {{{L"a_1", SlotType::Bra}, {L"a_2", SlotType::Ket}},
+             {{L"i_1", SlotType::Ket}},
+             {{L"i_2", SlotType::Ket}}},
             /* spin-free = */ true);
         simplify(rdm1_sf);
         // std::wcout << "SF RDM: " << rdm1_sf.to_latex() << "\n";
@@ -1405,10 +1405,10 @@ TEST_CASE("wick", "[algorithms][wick]") {
         // indices
         auto rdm1_sf = sequant::mbpt::spintrace(
             rdm1_so,
-            {{{L"a_4", Slot::Bra}, {L"a_5", Slot::Ket}},
-             {{L"i_1", Slot::Ket}},
-             {{L"i_2", Slot::Ket}},
-             {{L"i_3", Slot::Ket}}},
+            {{{L"a_4", SlotType::Bra}, {L"a_5", SlotType::Ket}},
+             {{L"i_1", SlotType::Ket}},
+             {{L"i_2", SlotType::Ket}},
+             {{L"i_3", SlotType::Ket}}},
             /* spin-free = */ true);
         simplify(rdm1_sf);
         // std::wcout << "ST RDM: " << rdm1_sf.to_latex() << "\n";

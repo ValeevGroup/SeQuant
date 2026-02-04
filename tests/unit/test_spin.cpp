@@ -264,8 +264,8 @@ TEST_CASE("spin", "[spin]") {
                         ex<Tensor>(L"g", bra{L"p_1", L"p_2"},
                                    ket{L"p_3", L"p_4"}, Symmetry::Antisymm);
       auto result =
-          spintrace(expr, {{{L"p_1", Slot::Bra}, {L"p_3", Slot::Ket}},
-                           {{L"p_2", Slot::Bra}, {L"p_4", Slot::Ket}}});
+          spintrace(expr, {{{L"p_1", SlotType::Bra}, {L"p_3", SlotType::Ket}},
+                           {{L"p_2", SlotType::Bra}, {L"p_4", SlotType::Ket}}});
       REQUIRE_THAT(result,
                    EquivalentTo("-1/2 g{p1,p2;p4,p3} + g{p1,p2;p3,p4}"));
     }
@@ -277,8 +277,8 @@ TEST_CASE("spin", "[spin]") {
       // by the chosen pairing of external indices)
       ExprPtr expr = deserialize(L"- g{p1,p2;p3,p4}:A");
       ExprPtr result =
-          spintrace(expr, {{{L"p_1", Slot::Bra}, {L"p_4", Slot::Ket}},
-                           {{L"p_2", Slot::Bra}, {L"p_3", Slot::Ket}}});
+          spintrace(expr, {{{L"p_1", SlotType::Bra}, {L"p_4", SlotType::Ket}},
+                           {{L"p_2", SlotType::Bra}, {L"p_3", SlotType::Ket}}});
 
       REQUIRE_THAT(result,
                    EquivalentTo(L"4 g{p1,p2;p4,p3} - 2 g{p1,p2;p3,p4}"));
@@ -287,10 +287,11 @@ TEST_CASE("spin", "[spin]") {
       const auto expr = ex<Constant>(rational{1, 4}) *
                         ex<Tensor>(L"g", bra{L"p_1", L"p_2"},
                                    ket{L"p_3", L"p_4"}, Symmetry::Antisymm);
-      auto result = spintrace(expr,
-                              {{{L"p_1", Slot::Bra}, {L"p_3", Slot::Ket}},
-                               {{L"p_2", Slot::Bra}, {L"p_4", Slot::Ket}}},
-                              /* spinfree = */ false);
+      auto result =
+          spintrace(expr,
+                    {{{L"p_1", SlotType::Bra}, {L"p_3", SlotType::Ket}},
+                     {{L"p_2", SlotType::Bra}, {L"p_4", SlotType::Ket}}},
+                    /* spinfree = */ false);
       REQUIRE_THAT(
           result,
           EquivalentTo(
@@ -615,8 +616,8 @@ SECTION("partial spintracing + S_maps = full spintracing") {
                ex<Tensor>(L"t", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"},
                           Symmetry::Antisymm);
   auto result = closed_shell_spintrace(
-      input, {{{L"i_1", Slot::Bra}, {L"a_1", Slot::Ket}},
-              {{L"i_2", Slot::Bra}, {L"a_2", Slot::Ket}}});
+      input, {{{L"i_1", SlotType::Bra}, {L"a_1", SlotType::Ket}},
+              {{L"i_2", SlotType::Bra}, {L"a_2", SlotType::Ket}}});
   REQUIRE_THAT(
       result,
       EquivalentTo("-2 Ŝ{i_1,i_2;a_1,a_2}:N-C-S * t{a_1,a_2;i_2,i_1}:N-C-S "
@@ -627,10 +628,11 @@ SECTION("partial spintracing + S_maps = full spintracing") {
                   "-1 t{a_1,a_2;i_2,i_1}:N-C-S - 1 t{a_2,a_1;i_1,i_2}:N-C-S "
                   "+ 2 t{a_1,a_2;i_1,i_2}:N-C-S + 2 t{a_2,a_1;i_2,i_1}:N-C-S"));
 
-  result = closed_shell_spintrace(input,
-                                  {{{L"i_1", Slot::Bra}, {L"a_1", Slot::Ket}},
-                                   {{L"i_2", Slot::Bra}, {L"a_2", Slot::Ket}}},
-                                  true);
+  result = closed_shell_spintrace(
+      input,
+      {{{L"i_1", SlotType::Bra}, {L"a_1", SlotType::Ket}},
+       {{L"i_2", SlotType::Bra}, {L"a_2", SlotType::Ket}}},
+      true);
   REQUIRE_THAT(
       result, EquivalentTo(
                   "-1 t{a_1,a_2;i_2,i_1}:N-C-S - 1 t{a_2,a_1;i_1,i_2}:N-C-S "
@@ -836,7 +838,7 @@ SECTION("Closed-shell spintrace CCSD") {
                        ex<Tensor>(L"f", bra{L"a_1"}, ket{L"i_1"});
     auto result =
         ex<Constant>(rational{1, 2}) *
-        spintrace(input, {{{L"i_1", Slot::Bra}, {L"a_1", Slot::Ket}}});
+        spintrace(input, {{{L"i_1", SlotType::Bra}, {L"a_1", SlotType::Ket}}});
     expand(result);
     rapid_simplify(result);
     canonicalize(result);
@@ -851,7 +853,7 @@ SECTION("Closed-shell spintrace CCSD") {
                        ex<Tensor>(L"t", bra{L"a_1"}, ket{L"i_2"});
     auto result =
         ex<Constant>(rational{1, 2}) *
-        spintrace(input, {{{L"i_1", Slot::Bra}, {L"a_1", Slot::Ket}}});
+        spintrace(input, {{{L"i_1", SlotType::Bra}, {L"a_1", SlotType::Ket}}});
     expand(result);
     REQUIRE_THAT(result, EquivalentTo("- f{i2;i1} t{a1;i2}"));
   }
@@ -863,7 +865,7 @@ SECTION("Closed-shell spintrace CCSD") {
                        ex<Tensor>(L"t", bra{L"a_2"}, ket{L"i_1"});
     auto result =
         ex<Constant>(rational{1, 2}) *
-        spintrace(input, {{{L"i_1", Slot::Bra}, {L"a_1", Slot::Ket}}});
+        spintrace(input, {{{L"i_1", SlotType::Bra}, {L"a_1", SlotType::Ket}}});
     expand(result);
     REQUIRE_THAT(result, EquivalentTo("f{a1;a2} t{a2;i1}"));
   }
@@ -878,7 +880,7 @@ SECTION("Closed-shell spintrace CCSD") {
                                   ket{L"i_2", L"i_3"}, Symmetry::Antisymm);
     auto result =
         ex<Constant>(rational{1, 2}) *
-        spintrace(input, {{{L"i_1", Slot::Bra}, {L"a_1", Slot::Ket}}});
+        spintrace(input, {{{L"i_1", SlotType::Bra}, {L"a_1", SlotType::Ket}}});
     expand(result);
     REQUIRE_THAT(
         result,
@@ -896,7 +898,7 @@ SECTION("Closed-shell spintrace CCSD") {
                                   ket{L"i_1", L"i_2"}, Symmetry::Antisymm);
     auto result =
         ex<Constant>(rational{1, 2}) *
-        spintrace(input, {{{L"i_1", Slot::Bra}, {L"a_1", Slot::Ket}}});
+        spintrace(input, {{{L"i_1", SlotType::Bra}, {L"a_1", SlotType::Ket}}});
     expand(result);
 
     REQUIRE_THAT(result, EquivalentTo("- g{a1,i2;a3,a2} t{a2,a3;i1,i2} + 2 "
@@ -912,7 +914,7 @@ SECTION("Closed-shell spintrace CCSD") {
                    Symmetry::Antisymm);
     auto result =
         ex<Constant>(rational{1, 2}) *
-        spintrace(input, {{{L"i_1", Slot::Bra}, {L"a_1", Slot::Ket}}});
+        spintrace(input, {{{L"i_1", SlotType::Bra}, {L"a_1", SlotType::Ket}}});
     expand(result);
     REQUIRE_THAT(
         result,
@@ -928,7 +930,7 @@ SECTION("Closed-shell spintrace CCSD") {
                        ex<Tensor>(L"t", bra{L"a_3"}, ket{L"i_1"});
     auto result =
         ex<Constant>(rational{1, 2}) *
-        spintrace(input, {{{L"i_1", Slot::Bra}, {L"a_1", Slot::Ket}}});
+        spintrace(input, {{{L"i_1", SlotType::Bra}, {L"a_1", SlotType::Ket}}});
     expand(result);
     REQUIRE_THAT(result, EquivalentTo("2 g{a1,i2;a3,a2} t{a2;i2} t{a3;i1} - "
                                       "g{a1,i2;a3,a2} t{a2;i1} t{a3;i2}"));
@@ -943,7 +945,7 @@ SECTION("Closed-shell spintrace CCSD") {
                        ex<Tensor>(L"t", bra{L"a_1"}, ket{L"i_3"});
     auto result =
         ex<Constant>(rational{1, 2}) *
-        spintrace(input, {{{L"i_1", Slot::Bra}, {L"a_1", Slot::Ket}}});
+        spintrace(input, {{{L"i_1", SlotType::Bra}, {L"a_1", SlotType::Ket}}});
     expand(result);
     REQUIRE_THAT(result, EquivalentTo("g{i2,i3;i1,a2} t{a1;i3} t{a2;i2} - 2 "
                                       "g{i2,i3;a2,i1} t{a1;i3} t{a2;i2}"));
@@ -958,7 +960,7 @@ SECTION("Closed-shell spintrace CCSD") {
                        ex<Tensor>(L"t", bra{L"a_1"}, ket{L"i_2"});
     auto result =
         ex<Constant>(rational{1, 2}) *
-        spintrace(input, {{{L"i_1", Slot::Bra}, {L"a_1", Slot::Ket}}});
+        spintrace(input, {{{L"i_1", SlotType::Bra}, {L"a_1", SlotType::Ket}}});
     expand(result);
     REQUIRE_THAT(result, EquivalentTo("-f{i2;a2} t{a1;i2} t{a2;i1}"));
   }
@@ -974,7 +976,7 @@ SECTION("Closed-shell spintrace CCSD") {
                                   ket{L"i_1", L"i_3"}, Symmetry::Antisymm);
     auto result =
         ex<Constant>(rational{1, 2}) *
-        spintrace(input, {{{L"i_1", Slot::Bra}, {L"a_1", Slot::Ket}}});
+        spintrace(input, {{{L"i_1", SlotType::Bra}, {L"a_1", SlotType::Ket}}});
     expand(result);
     REQUIRE_THAT(result,
                  EquivalentTo("g{i2,i3;a2,a3} t{a1;i3} t{a2,a3;i1,i2} - 2 "
@@ -992,7 +994,7 @@ SECTION("Closed-shell spintrace CCSD") {
                                   ket{L"i_2", L"i_3"}, Symmetry::Antisymm);
     auto result =
         ex<Constant>(rational{1, 2}) *
-        spintrace(input, {{{L"i_1", Slot::Bra}, {L"a_1", Slot::Ket}}});
+        spintrace(input, {{{L"i_1", SlotType::Bra}, {L"a_1", SlotType::Ket}}});
     expand(result);
     REQUIRE_THAT(result,
                  EquivalentTo("g{i2,i3;a2,a3} t{a2;i1} t{a1,a3;i3,i2} - 2 "
@@ -1010,7 +1012,7 @@ SECTION("Closed-shell spintrace CCSD") {
                                   ket{L"i_1", L"i_3"}, Symmetry::Antisymm);
     auto result =
         ex<Constant>(rational{1, 2}) *
-        spintrace(input, {{{L"i_1", Slot::Bra}, {L"a_1", Slot::Ket}}});
+        spintrace(input, {{{L"i_1", SlotType::Bra}, {L"a_1", SlotType::Ket}}});
     expand(result);
     REQUIRE_THAT(result,
                  EquivalentTo("-2 g{i2,i3;a2,a3} t{a3;i2} t{a1,a2;i1,i3} + 4 "
@@ -1029,7 +1031,7 @@ SECTION("Closed-shell spintrace CCSD") {
                  ex<Tensor>(L"t", bra{L"a_1"}, ket{L"i_3"});
     auto result =
         ex<Constant>(rational{1, 2}) *
-        spintrace(input, {{{L"i_1", Slot::Bra}, {L"a_1", Slot::Ket}}});
+        spintrace(input, {{{L"i_1", SlotType::Bra}, {L"a_1", SlotType::Ket}}});
     expand(result);
     REQUIRE_THAT(result,
                  EquivalentTo("-2 g{i2,i3;a2,a3} t{a1;i3} t{a2;i2} t{a3;i1} + "
@@ -1094,9 +1096,9 @@ SECTION("Closed-shell spintrace CCSDT terms") {
     auto result = expand_A_op(input);
     REQUIRE(result->size() == 36);
     result = closed_shell_spintrace(
-        input, {{{L"i_1", Slot::Bra}, {L"a_1", Slot::Ket}},
-                {{L"i_2", Slot::Bra}, {L"a_2", Slot::Ket}},
-                {{L"i_3", Slot::Bra}, {L"a_3", Slot::Ket}}});
+        input, {{{L"i_1", SlotType::Bra}, {L"a_1", SlotType::Ket}},
+                {{L"i_2", SlotType::Bra}, {L"a_2", SlotType::Ket}},
+                {{L"i_3", SlotType::Bra}, {L"a_3", SlotType::Ket}}});
     REQUIRE(result->size() == 4);
 
     REQUIRE_THAT(
@@ -1125,12 +1127,12 @@ SECTION("Closed-shell spintrace CCSDT terms") {
     auto result_1 = expand_A_op(input);
     REQUIRE(result_1->size() == 36);
     result_1 = expand_antisymm(result_1);
-    result_1 =
-        closed_shell_spintrace(input,
-                               {{{L"i_1", Slot::Bra}, {L"a_1", Slot::Ket}},
-                                {{L"i_2", Slot::Bra}, {L"a_2", Slot::Ket}},
-                                {{L"i_3", Slot::Bra}, {L"a_3", Slot::Ket}}},
-                               true);
+    result_1 = closed_shell_spintrace(
+        input,
+        {{{L"i_1", SlotType::Bra}, {L"a_1", SlotType::Ket}},
+         {{L"i_2", SlotType::Bra}, {L"a_2", SlotType::Ket}},
+         {{L"i_3", SlotType::Bra}, {L"a_3", SlotType::Ket}}},
+        true);
     simplify(result_1);
     REQUIRE(result_1->size() == 18);  // 18 raw terms
     REQUIRE_THAT(
@@ -1160,9 +1162,9 @@ SECTION("Closed-shell spintrace CCSDT terms") {
     // expanding by S_map (this method is used in
     // closed_shell_CC_spintrace_v2)
     auto result_2 = closed_shell_spintrace(
-        input, {{{L"i_1", Slot::Bra}, {L"a_1", Slot::Ket}},
-                {{L"i_2", Slot::Bra}, {L"a_2", Slot::Ket}},
-                {{L"i_3", Slot::Bra}, {L"a_3", Slot::Ket}}});
+        input, {{{L"i_1", SlotType::Bra}, {L"a_1", SlotType::Ket}},
+                {{L"i_2", SlotType::Bra}, {L"a_2", SlotType::Ket}},
+                {{L"i_3", SlotType::Bra}, {L"a_3", SlotType::Ket}}});
     simplify(result_2);
     result_2 = S_maps(result_2);
     simplify(result_2);
@@ -1235,9 +1237,9 @@ SECTION("Closed-shell spintrace CCSDT terms") {
     REQUIRE(result->size() == 2);
     result = expand_antisymm(result);
     result = closed_shell_spintrace(
-        input, {{{L"i_1", Slot::Bra}, {L"a_1", Slot::Ket}},
-                {{L"i_2", Slot::Bra}, {L"a_2", Slot::Ket}},
-                {{L"i_3", Slot::Bra}, {L"a_3", Slot::Ket}}});
+        input, {{{L"i_1", SlotType::Bra}, {L"a_1", SlotType::Ket}},
+                {{L"i_2", SlotType::Bra}, {L"a_2", SlotType::Ket}},
+                {{L"i_3", SlotType::Bra}, {L"a_3", SlotType::Ket}}});
     REQUIRE(result->size() == 6);
     simplify(result);
     REQUIRE(result->size() == 6);
@@ -1255,9 +1257,9 @@ SECTION("Closed-shell spintrace CCSDT terms") {
     REQUIRE(result->size() == 36);
     result = expand_antisymm(result);
     result = closed_shell_spintrace(
-        input, {{{L"i_1", Slot::Bra}, {L"a_1", Slot::Ket}},
-                {{L"i_2", Slot::Bra}, {L"a_2", Slot::Ket}},
-                {{L"i_3", Slot::Bra}, {L"a_3", Slot::Ket}}});
+        input, {{{L"i_1", SlotType::Bra}, {L"a_1", SlotType::Ket}},
+                {{L"i_2", SlotType::Bra}, {L"a_2", SlotType::Ket}},
+                {{L"i_3", SlotType::Bra}, {L"a_3", SlotType::Ket}}});
     REQUIRE(result->size() == 20);
   }
 
@@ -1270,9 +1272,9 @@ SECTION("Closed-shell spintrace CCSDT terms") {
     REQUIRE(result->size() == 2);
     result = expand_antisymm(result);
     result = closed_shell_spintrace(
-        input, {{{L"i_1", Slot::Bra}, {L"a_1", Slot::Ket}},
-                {{L"i_2", Slot::Bra}, {L"a_2", Slot::Ket}},
-                {{L"i_3", Slot::Bra}, {L"a_3", Slot::Ket}}});
+        input, {{{L"i_1", SlotType::Bra}, {L"a_1", SlotType::Ket}},
+                {{L"i_2", SlotType::Bra}, {L"a_2", SlotType::Ket}},
+                {{L"i_3", SlotType::Bra}, {L"a_3", SlotType::Ket}}});
     REQUIRE(result->size() == 12);
     simplify(result);
     REQUIRE(result->size() == 12);
@@ -1515,8 +1517,8 @@ SECTION("Open-shell spin-tracing") {
                  ex<Tensor>(L"g", bra{L"a_1", L"a_2"}, ket{L"i_1", L"i_2"},
                             Symmetry::Antisymm);
     auto result = open_shell_spintrace(
-        input, {{{L"i_1", Slot::Bra}, {L"a_1", Slot::Ket}},
-                {{L"i_2", Slot::Bra}, {L"a_2", Slot::Ket}}});
+        input, {{{L"i_1", SlotType::Bra}, {L"a_1", SlotType::Ket}},
+                {{L"i_2", SlotType::Bra}, {L"a_2", SlotType::Ket}}});
     REQUIRE(result.size() == 3);
     REQUIRE_THAT(result[0], EquivalentTo("1/4 g{a↑1,a↑2;i↑1,i↑2}:A"));
     REQUIRE_THAT(result[1], EquivalentTo("1/4 g{a↑1,a↓2;i↑1,i↓2}"));
@@ -1531,8 +1533,8 @@ SECTION("Open-shell spin-tracing") {
                             Symmetry::Antisymm);
 
     auto result = open_shell_spintrace(
-        input, {{{L"i_1", Slot::Bra}, {L"a_1", Slot::Ket}},
-                {{L"i_2", Slot::Bra}, {L"a_2", Slot::Ket}}});
+        input, {{{L"i_1", SlotType::Bra}, {L"a_1", SlotType::Ket}},
+                {{L"i_2", SlotType::Bra}, {L"a_2", SlotType::Ket}}});
     REQUIRE(result.size() == 3);
     REQUIRE_THAT(result[0],
                  EquivalentTo("1/2 f{i↑3;i↑1} t{a↑1,a↑2;i↑2,i↑3}:A"));
@@ -1548,8 +1550,8 @@ SECTION("Open-shell spin-tracing") {
                             Symmetry::Antisymm) *
                  ex<Tensor>(L"t", bra{L"a_2"}, ket{L"i_3"}, Symmetry::Nonsymm);
     auto result = open_shell_spintrace(
-        input, {{{L"i_1", Slot::Bra}, {L"a_1", Slot::Ket}},
-                {{L"i_2", Slot::Bra}, {L"a_2", Slot::Ket}}});
+        input, {{{L"i_1", SlotType::Bra}, {L"a_1", SlotType::Ket}},
+                {{L"i_2", SlotType::Bra}, {L"a_2", SlotType::Ket}}});
     REQUIRE(result.size() == 3);
     REQUIRE(
         toUtf8(to_latex(result[0])) ==
@@ -1570,9 +1572,9 @@ SECTION("Open-shell spin-tracing") {
                  ex<Tensor>(L"t", bra{L"a_2", L"a_3", L"a_4"},
                             ket{L"i_1", L"i_2", L"i_3"}, Symmetry::Antisymm);
     auto result = open_shell_spintrace(
-        input, {{{L"i_1", Slot::Bra}, {L"a_1", Slot::Ket}},
-                {{L"i_2", Slot::Bra}, {L"a_2", Slot::Ket}},
-                {{L"i_3", Slot::Bra}, {L"a_3", Slot::Ket}}});
+        input, {{{L"i_1", SlotType::Bra}, {L"a_1", SlotType::Ket}},
+                {{L"i_2", SlotType::Bra}, {L"a_2", SlotType::Ket}},
+                {{L"i_3", SlotType::Bra}, {L"a_3", SlotType::Ket}}});
     REQUIRE(result.size() == 4);
     REQUIRE_THAT(result[0],
                  EquivalentTo("1/12 f{a↑1;a↑4} t{a↑2,a↑3,a↑4;i↑1,i↑2,i↑3}:A"));
@@ -1627,9 +1629,9 @@ SECTION("Open-shell spin-tracing") {
                             ket{L"i_3", L"i_4", L"i_5"}, Symmetry::Antisymm);
 
     auto result = open_shell_spintrace(
-        input, {{{L"i_1", Slot::Bra}, {L"a_1", Slot::Ket}},
-                {{L"i_2", Slot::Bra}, {L"a_2", Slot::Ket}},
-                {{L"i_3", Slot::Bra}, {L"a_3", Slot::Ket}}});
+        input, {{{L"i_1", SlotType::Bra}, {L"a_1", SlotType::Ket}},
+                {{L"i_2", SlotType::Bra}, {L"a_2", SlotType::Ket}},
+                {{L"i_3", SlotType::Bra}, {L"a_3", SlotType::Ket}}});
     REQUIRE(result[0]->size() == 3);
     auto A3_aaa = Tensor(antisymm_label(), bra{i1A, i2A, i3A},
                          ket{a1A, a2A, a3A}, Symmetry::Antisymm);
@@ -1677,9 +1679,9 @@ SECTION("Open-shell spin-tracing") {
     input = expand_P_op(input);
     input->visit(reset_idx_tags);
     auto result = open_shell_spintrace(
-        input, {{{L"i_1", Slot::Bra}, {L"a_1", Slot::Ket}},
-                {{L"i_2", Slot::Bra}, {L"a_2", Slot::Ket}},
-                {{L"i_3", Slot::Bra}, {L"a_3", Slot::Ket}}});
+        input, {{{L"i_1", SlotType::Bra}, {L"a_1", SlotType::Ket}},
+                {{L"i_2", SlotType::Bra}, {L"a_2", SlotType::Ket}},
+                {{L"i_3", SlotType::Bra}, {L"a_3", SlotType::Ket}}});
 
     auto result_aab = ex<Tensor>(Tensor(antisymm_label(), bra{i1A, i2A},
                                         ket{a1A, a2A}, Symmetry::Antisymm)) *
@@ -1702,9 +1704,9 @@ SECTION("Open-shell spin-tracing") {
                              ket{L"i_3", L"i_4", L"i_5"}, Symmetry::Antisymm);
 
     auto result2 = open_shell_spintrace(
-        input2, {{{L"i_1", Slot::Bra}, {L"a_1", Slot::Ket}},
-                 {{L"i_2", Slot::Bra}, {L"a_2", Slot::Ket}},
-                 {{L"i_3", Slot::Bra}, {L"a_3", Slot::Ket}}});
+        input2, {{{L"i_1", SlotType::Bra}, {L"a_1", SlotType::Ket}},
+                 {{L"i_2", SlotType::Bra}, {L"a_2", SlotType::Ket}},
+                 {{L"i_3", SlotType::Bra}, {L"a_3", SlotType::Ket}}});
     REQUIRE(result2[1]->size() == 24);
   }
 }

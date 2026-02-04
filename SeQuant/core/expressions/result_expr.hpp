@@ -106,15 +106,16 @@ class ResultExpr {
       if constexpr (std::is_constructible_v<
                         Group, std::initializer_list<SlottedIndex>>) {
         groups.emplace_back(std::initializer_list<SlottedIndex>{
-            {m_braIndices.at(i), Slot::Bra}, {m_ketIndices.at(i), Slot::Ket}});
+            {m_braIndices.at(i), SlotType::Bra},
+            {m_ketIndices.at(i), SlotType::Ket}});
       } else if constexpr (std::is_constructible_v<
                                Group, std::initializer_list<Index>>) {
         groups.emplace_back(std::initializer_list<Index>{m_braIndices.at(i),
                                                          m_ketIndices.at(i)});
       } else if constexpr (std::is_constructible_v<Group, SlottedIndex,
                                                    SlottedIndex>) {
-        groups.emplace_back(SlottedIndex{m_braIndices.at(i), Slot::Bra},
-                            SlottedIndex{m_ketIndices.at(i), Slot::Ket});
+        groups.emplace_back(SlottedIndex{m_braIndices.at(i), SlotType::Bra},
+                            SlottedIndex{m_ketIndices.at(i), SlotType::Ket});
       } else {
         static_assert(
             std::is_constructible_v<Group, Index, Index>,

@@ -15,17 +15,17 @@ namespace sequant {
 /// @sa Slot
 class SlottedIndex {
  public:
-  SlottedIndex(Index idx, Slot slot)
+  SlottedIndex(Index idx, SlotType slot)
       : idx_(std::move(idx)), slot_(std::move(slot)) {}
 
   Index &index() { return idx_; }
 
   const Index &index() const { return idx_; }
 
-  Slot slot() const { return slot_; }
+  SlotType slot_type() const { return slot_; }
 
   friend bool operator==(const SlottedIndex &lhs, const SlottedIndex &rhs) {
-    return lhs.index() == rhs.index() && lhs.slot() == rhs.slot();
+    return lhs.index() == rhs.index() && lhs.slot_type() == rhs.slot_type();
   }
 
   friend bool operator!=(const SlottedIndex &lhs, const SlottedIndex &rhs) {
@@ -34,7 +34,7 @@ class SlottedIndex {
 
  private:
   Index idx_;
-  Slot slot_;
+  SlotType slot_;
 };
 
 }  // namespace sequant
