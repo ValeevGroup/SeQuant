@@ -6,8 +6,8 @@
 #include <SeQuant/core/expressions/expr.hpp>
 #include <SeQuant/core/expressions/expr_algorithms.hpp>
 #include <SeQuant/core/expressions/expr_ptr.hpp>
-#include <SeQuant/core/meta.hpp>
 #include <SeQuant/core/io/latex/latex.hpp>
+#include <SeQuant/core/meta.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
 #include <string>

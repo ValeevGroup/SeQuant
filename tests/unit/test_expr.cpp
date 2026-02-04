@@ -12,6 +12,7 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/meta.hpp>
+#include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 
 #include <algorithm>
@@ -388,7 +389,7 @@ TEST_CASE("expr", "[elements]") {
       e->append(ex<Adjointable>(3));
       e->append(ex<Adjointable>(4));
       // std::wcout << "to_latex(e) = " << to_latex(e) << std::endl;
-      REQUIRE(to_latex(e) ==
+      REQUIRE(to_latex(*e) ==
               L"{ \\bigl({\\text{Adjointable}{1}} + {\\text{Adjointable}{2}} + "
               L"{\\text{Adjointable}{3}} + {\\text{Adjointable}{4}}\\bigr) }");
       // std::wcout << "to_latex_align(e) = " << to_latex_align(e) << std::endl;

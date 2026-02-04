@@ -1387,8 +1387,8 @@ ExprPtr expectation_value_impl(ExprPtr expr,
           });
           std::wcout << "\n  replrules = ";
           ranges::for_each(replacement_rules, [](auto& index) {
-            std::wcout << to_latex(index.first) << "\\to"
-                       << to_latex(index.second) << "\\,";
+            std::wcout << io::latex::to_string(index.first) << "\\to"
+                       << io::latex::to_string(index.second) << "\\,";
           });
           std::wcout.flush();
         }

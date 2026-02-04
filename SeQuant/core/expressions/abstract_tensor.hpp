@@ -415,7 +415,6 @@ inline auto column_symmetry(const AbstractTensor& t) {
 inline auto color(const AbstractTensor& t) { return t._color(); }
 inline auto is_cnumber(const AbstractTensor& t) { return t._is_cnumber(); }
 inline auto label(const AbstractTensor& t) { return t._label(); }
-inline auto to_latex(const AbstractTensor& t) { return t._to_latex(); }
 
 /// produces LaTeX representation typeset using <a
 /// href="https://ctan.org/pkg/tensor?lang=en">tensor package</a>
@@ -554,22 +553,22 @@ inline std::wstring to_latex_tensor(
 ///         colors are, for now, always assumed to commute)
 ///         - @c label(t) is a valid expression and its return is convertible to
 ///         a std::wstring;
-///         - @c io::latex::to_string(t) is a valid expression and its return is convertible
-///         to a std::wstring.
+///         - @c io::latex::to_string(t) is a valid expression and its return is
+///         convertible to a std::wstring.
 template <typename T>
-concept is_tensor = requires (const T &obj) {
-	{ braket(obj) } -> std::ranges::range;
-	{ braketaux(obj) } -> std::ranges::range;
-	{ bra_rank(obj) } -> std::convertible_to<std::size_t>;
-	{ ket_rank(obj) } -> std::convertible_to<std::size_t>;
-	{ aux_rank(obj) } -> std::convertible_to<std::size_t>;
-	{ symmetry(obj) } -> std::convertible_to<Symmetry>;
-	{ braket_symmetry(obj) } -> std::convertible_to<BraKetSymmetry>;
-	{ column_symmetry(obj) } -> std::convertible_to<ColumnSymmetry>;
-	{ color(obj) } -> std::convertible_to<std::size_t>;
-	{ is_cnumber(obj) } -> std::convertible_to<bool>;
-	{ label(obj) } -> std::constructible_from<std::wstring>;
-	{ to_latex(obj) } -> std::convertible_to<std::wstring>;
+concept is_tensor = requires(const T& obj) {
+  { braket(obj) } -> std::ranges::range;
+  { braketaux(obj) } -> std::ranges::range;
+  { bra_rank(obj) } -> std::convertible_to<std::size_t>;
+  { ket_rank(obj) } -> std::convertible_to<std::size_t>;
+  { aux_rank(obj) } -> std::convertible_to<std::size_t>;
+  { symmetry(obj) } -> std::convertible_to<Symmetry>;
+  { braket_symmetry(obj) } -> std::convertible_to<BraKetSymmetry>;
+  { column_symmetry(obj) } -> std::convertible_to<ColumnSymmetry>;
+  { color(obj) } -> std::convertible_to<std::size_t>;
+  { is_cnumber(obj) } -> std::convertible_to<bool>;
+  { label(obj) } -> std::constructible_from<std::wstring>;
+  { io::latex::to_string(obj) } -> std::convertible_to<std::wstring>;
 };
 static_assert(is_tensor<AbstractTensor>,
               "The AbstractTensor class does not fulfill the requirements of "

@@ -4,8 +4,8 @@
 #include <SeQuant/core/complex.hpp>
 #include <SeQuant/core/expressions/expr.hpp>
 #include <SeQuant/core/expressions/expr_ptr.hpp>
-#include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/io/latex/latex.hpp>
+#include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
 #include <boost/numeric/conversion/cast.hpp>

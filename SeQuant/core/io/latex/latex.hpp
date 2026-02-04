@@ -6,6 +6,7 @@
 #define SEQUANT_CORE_IO_LATEX_LATEX_HPP
 
 #include <SeQuant/core/meta.hpp>
+#include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/utility/string.hpp>
 
 #include <cmath>
@@ -18,9 +19,27 @@
 namespace sequant::io::latex {
 
 template <typename T>
-std::enable_if_t<meta::has_memfn_to_latex_v<std::decay_t<T>>, std::wstring>
-to_string(T&& t) {
+concept has_to_latex_member = requires(const T& t) { t.to_latex(); };
+
+template <typename T>
+concept pointer_can_call_to_latex = requires(const T& t) { t->to_latex(); };
+
+template <typename T>
+  requires(has_to_latex_member<T>)
+std::wstring to_string(T&& t) {
   return t.to_latex();
+}
+
+template <typename T>
+  requires(!has_to_latex_member<T> && pointer_can_call_to_latex<T>)
+std::wstring to_string(T&& t) {
+  return t->to_latex();
+}
+
+template <typename T>
+  requires(requires(const T& t) { t._to_latex(); })
+std::wstring to_string(const T& t) {
+  return t._to_latex();
 }
 
 template <typename T>
@@ -36,7 +55,8 @@ to_string(T&& t) {
 
 template <typename T>
 std::enable_if_t<std::is_arithmetic_v<std::decay_t<T>> &&
-                     std::is_floating_point_v<std::decay_t<T>>,
+                     std::is_floating_point_v<std::decay_t<T>> &&
+                     !std::is_same_v<std::decay_t<T>, rational>,
                  std::wstring>
 to_string(T&& t) {
   using Real = std::decay_t<T>;
@@ -48,7 +68,7 @@ to_string(T&& t) {
   const long round_t = std::lround(t);
   if (std::abs(round_t - t) < eps_sqrt)  // exact integer
     result += to_wstring(round_t) + L"}";
-  else {  // TODO detect rationals
+  else {
     const auto inv_t = Real(1) / t;
     const long round_inv_t = std::lround(inv_t);
     if (std::abs(round_inv_t - inv_t) < eps_sqrt) {  // exact inverse of an
@@ -74,6 +94,8 @@ std::wstring to_string(const std::complex<T>& t) {
   result += L"}";
   return result;
 }
+
+std::wstring to_string(const rational& num);
 
 namespace detail {
 

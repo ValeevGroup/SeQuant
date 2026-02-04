@@ -10,6 +10,7 @@
 #include <utility>
 
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/io/latex/latex.hpp>
 #include <SeQuant/core/logger.hpp>
 #include <SeQuant/core/math.hpp>
 #include <SeQuant/core/op.hpp>
@@ -162,7 +163,7 @@ class WickTheorem {
               std::wstringstream ss;
               ss << L"WickTheorem::set_external_indices: "
                     L"external index " +
-                        to_latex(Index(v)) + L" repeated";
+                        io::latex::to_string(Index(v)) + L" repeated";
               throw std::invalid_argument(toUtf8(ss.str()));
             }
           });
@@ -1355,12 +1356,12 @@ class WickTheorem {
                                 ranges::get_cursor(op_right_iter))) {
                 if (Logger::instance().wick_contract) {
                   std::wcout << "level " << state.level << ":contracting "
-                             << to_latex(*op_left_iter) << " with "
-                             << to_latex(*op_right_iter)
+                             << io::latex::to_string(*op_left_iter) << " with "
+                             << io::latex::to_string(*op_right_iter)
                              << " (nop_top_degen=" << nop_top_degen << ")"
                              << std::endl;
-                  std::wcout << " current nopseq = " << to_latex(state.nopseq)
-                             << std::endl;
+                  std::wcout << " current nopseq = "
+                             << io::latex::to_string(state.nopseq) << std::endl;
                 }
 
                 // update the phase, if needed
@@ -1393,7 +1394,7 @@ class WickTheorem {
                 --state.nopseq_size;
 
                 // std::wcout << "  nopseq after contraction = " <<
-                // to_latex(state.nopseq) << std::endl;
+                // io::latex::to_string(state.nopseq) << std::endl;
 
                 // if have a nonzero result ...
                 if (state.sp.size() != state.sp_initial_size) {
@@ -1431,7 +1432,7 @@ class WickTheorem {
 
                         result.second->lock();
                         //              std::wcout << "got " <<
-                        //              to_latex(state.sp)
+                        //              io::latex::to_string(state.sp)
                         //              << std::endl;
                         result.first->append(std::move(prefactor));
                         //              std::wcout << "now up to " <<
@@ -1509,7 +1510,7 @@ class WickTheorem {
                                  ranges::get_cursor(op_left_iter),
                                  ranges::get_cursor(op_right_iter));
                 //            std::wcout << "  restored nopseq = " <<
-                //            to_latex(state.opseq) << std::endl;
+                //            io::latex::to_string(state.opseq) << std::endl;
               }  // connect succeeded
             }    // topologically-unique contraction
           }      // can_contract

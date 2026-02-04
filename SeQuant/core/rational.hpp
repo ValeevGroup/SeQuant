@@ -134,38 +134,6 @@ inline std::wstring to_wstring(
   return toUtf16(boost::lexical_cast<std::string>(i));
 }
 
-template <typename Backend>
-inline std::wstring to_latex(const boost::multiprecision::number<Backend>& t) {
-  std::wstring result = L"{";
-  using ::sequant::to_wstring;
-  result += to_wstring(t) + L"}";
-  return result;
-}
-
-inline std::wstring to_latex(const rational& t) {
-  // n.b. skip enclosing braces to make Constant::to_latex to produce same
-  // output as before std::wstring result = L"{";
-  std::wstring result;
-  if (denominator(t) == 1)
-    result += to_latex(numerator(t));
-  else {
-    const auto num = numerator(t);
-    // n.b. extra braces around \frac and use of to_wstring instead of to_latex
-    // to avoid extra braces around args to \frac
-    if (num > 0) {
-      result += L"{\\frac{" + to_wstring(numerator(t)) + L"}{" +
-                to_wstring(denominator(t)) + L"}}";
-    } else if (num < 0) {
-      result += L"{-\\frac{" + to_wstring(-num) + L"}{" +
-                to_wstring(denominator(t)) + L"}}";
-    } else
-      result += L"0";
-  }
-  // n.b.
-  // result += L"}";
-  return result;
-}
-
 }  // namespace sequant
 
 #endif  // SEQUANT_CORE_RATIONAL_H

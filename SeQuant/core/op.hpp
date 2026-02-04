@@ -1100,16 +1100,6 @@ inline ExprPtr fannx(Index i, Attr &&...attr) {
   return ex<FNOperator>(cre(), ann({fann(i, std::forward<Attr>(attr)...)}));
 }
 
-template <Statistics S>
-std::wstring to_latex(const NormalOperator<S> &op) {
-  return op.to_latex();
-}
-
-template <Statistics S>
-std::wstring to_latex(const NormalOperatorSequence<S> &opseq) {
-  return opseq.to_latex();
-}
-
 namespace detail {
 struct OpIdRegistrar {
   OpIdRegistrar();

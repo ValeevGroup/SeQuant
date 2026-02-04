@@ -4,12 +4,40 @@
 
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/io/latex/latex.hpp>
+#include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/utility/string.hpp>
+
 #include <map>
 #include <optional>
 #include <vector>
 
-namespace sequant::io::latex::detail {
+namespace sequant::io::latex {
+
+std::wstring to_string(const rational& t) {
+  // n.b. skip enclosing braces to make Constant::to_latex to produce same
+  // output as before std::wstring result = L"{";
+  std::wstring result;
+  if (denominator(t) == 1)
+    result += L"{" + to_wstring(numerator(t)) + L"}";
+  else {
+    const auto num = numerator(t);
+    // n.b. extra braces around \frac and use of to_wstring instead of to_latex
+    // to avoid extra braces around args to \frac
+    if (num > 0) {
+      result += L"{\\frac{" + to_wstring(numerator(t)) + L"}{" +
+                to_wstring(denominator(t)) + L"}}";
+    } else if (num < 0) {
+      result += L"{-\\frac{" + to_wstring(-num) + L"}{" +
+                to_wstring(denominator(t)) + L"}}";
+    } else
+      result += L"0";
+  }
+  // n.b.
+  // result += L"}";
+  return result;
+}
+
+namespace detail {
 
 template <typename Char, typename Traits, typename Alloc>
 std::basic_string<Char, Traits, Alloc> greek_characters_to_string_impl(
@@ -251,4 +279,5 @@ SQ_IMPL2(char8_t);
 SQ_IMPL2(char16_t);
 SQ_IMPL2(char32_t);
 
-}  // namespace sequant::io::latex::detail
+}  // namespace detail
+}  // namespace sequant::io::latex
