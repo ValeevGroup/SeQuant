@@ -112,6 +112,8 @@ std::vector<ExprPtr> CC::λ() {
       hbar_comm_rank_.value_or(4);  // default truncation rank is 4
 
   // construct hbar
+  SEQUANT_ASSERT(commutator_rank >= 1 &&
+                 "commutator_rank should be at least 1");
   auto hbar = mbpt::lst(H(), T(N, skip_singles), commutator_rank - 1);
 
   auto lhbar = simplify((1 + Λ(N)) * hbar);
