@@ -333,9 +333,6 @@ ExprPtr closed_shell_CC_spintrace_v2(
     ClosedShellCCSpintraceOptions options = {
         .method = BiorthogonalizationMethod::V2, .naive_spintrace = false});
 
-/// Collect all indices from an expression
-container::set<Index, Index::LabelCompare> index_list(const ExprPtr& expr);
-
 /// @brief Swap spin labels in a tensor
 Tensor swap_spin(const Tensor& t);
 
