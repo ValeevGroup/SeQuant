@@ -59,6 +59,11 @@ std::vector<ExprPtr> CC::t(size_t pmax, size_t pmin) {
   auto hbar = mbpt::lst(H(), T(N, skip_singles), commutator_rank,
                         {.unitary = unitary()});
 
+  // connectivity: empty for unitary ansatz, default otherwise
+  const auto connectivity = this->unitary()
+                                ? mbpt::OpConnections<std::wstring>{}
+                                : default_op_connections();
+
   // 2. project onto each manifold, screen, lower to tensor form and wick it
   std::vector<ExprPtr> result(pmax + 1);
   for (std::int64_t p = pmax; p >= static_cast<std::int64_t>(pmin); --p) {
@@ -90,11 +95,6 @@ std::vector<ExprPtr> CC::t(size_t pmax, size_t pmin) {
       hbar_for_vev = hbar.is<Sum>() ? hbar.as_shared_ptr<Sum>()
                                     : std::make_shared<Sum>(hbar);
     }
-
-    // connectivity: empty for unitary ansatz, default otherwise
-    const auto connectivity = this->unitary()
-                                  ? mbpt::OpConnections<std::wstring>{}
-                                  : default_op_connections();
 
     // 2.b project onto <p| (i.e., multiply by P(p) if p>0) and compute VEV
     result.at(p) = this->ref_av(p != 0 ? P(nₚ(p)) * hbar_for_vev : hbar_for_vev,
