@@ -173,7 +173,7 @@ constexpr decltype(auto) select_string_literal(
 /// @param code_unit The desired code unit type; either `char` or `wchar_t`
 /// @param char_string_literal `char`-based string literal
 #define SQ_STRLIT(code_unit, char_string_literal)                  \
-  detail::select_string_literal<code_unit>(                        \
+  ::sequant::detail::select_string_literal<code_unit>(             \
       char_string_literal, SEQUANT_CONCAT(L, char_string_literal), \
       SEQUANT_CONCAT(u8, char_string_literal),                     \
       SEQUANT_CONCAT(u, char_string_literal),                      \
