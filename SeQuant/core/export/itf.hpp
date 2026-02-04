@@ -1,8 +1,6 @@
 #ifndef SEQUANT_CORE_EXPORT_ITF_HPP
 #define SEQUANT_CORE_EXPORT_ITF_HPP
 
-#include <SeQuant/core/parse.hpp>
-
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/export/context.hpp>
 #include <SeQuant/core/export/reordering_context.hpp>
@@ -408,7 +406,6 @@ class ItfGenerator : public Generator<Context> {
       const Product &product = expr.as<Product>();
 
       if (product.factors().size() > 2) {
-        std::wcerr << deparse(product) << std::endl;
         throw std::runtime_error("ITF can only handle binary contractions");
       }
 
