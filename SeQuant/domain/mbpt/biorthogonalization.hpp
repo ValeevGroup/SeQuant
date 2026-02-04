@@ -194,22 +194,23 @@ template <typename T>
 
   CacheKey key{n_particles, pseudoinverse_threshold};
 
-  return memoize(cache, cache_mutex, cache_cv, key, [&]() -> std::vector<T> {
-    constexpr std::size_t max_rank_hardcoded_nns_projector = 5;
-    if (n_particles <= max_rank_hardcoded_nns_projector) {
-      if (auto hardcoded_coeffs = hardcoded_nns_projector<T>(n_particles)) {
-        return std::move(hardcoded_coeffs.value());
-      }
-    }
-    auto coeffs =
-        detail::compute_nns_p_coeffs(n_particles, pseudoinverse_threshold);
-    std::vector<T> nns_p_coeffs;
-    nns_p_coeffs.reserve(coeffs.size());
-    for (const auto& c : coeffs) {
-      nns_p_coeffs.push_back(static_cast<T>(c));
-    }
-    return nns_p_coeffs;
-  });
+  return sequant::detail::memoize(
+      cache, cache_mutex, cache_cv, key, [&]() -> std::vector<T> {
+        constexpr std::size_t max_rank_hardcoded_nns_projector = 5;
+        if (n_particles <= max_rank_hardcoded_nns_projector) {
+          if (auto hardcoded_coeffs = hardcoded_nns_projector<T>(n_particles)) {
+            return std::move(hardcoded_coeffs.value());
+          }
+        }
+        auto coeffs =
+            detail::compute_nns_p_coeffs(n_particles, pseudoinverse_threshold);
+        std::vector<T> nns_p_coeffs;
+        nns_p_coeffs.reserve(coeffs.size());
+        for (const auto& c : coeffs) {
+          nns_p_coeffs.push_back(static_cast<T>(c));
+        }
+        return nns_p_coeffs;
+      });
 }
 
 }  // namespace detail
