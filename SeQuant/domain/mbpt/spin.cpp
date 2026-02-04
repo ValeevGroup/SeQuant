@@ -926,56 +926,6 @@ ExprPtr S_maps(const ExprPtr& expr) {
   return result;
 }
 
-ExprPtr WK_biorthogonalization_filter(
-    ExprPtr expr,
-    const container::svector<container::svector<Index>>& ext_idxs) {
-  if (!expr->is<Sum>()) return expr;
-  if (ext_idxs.size() <= 2) return expr;  // always skip R1 and R2
-
-  // hash filtering logic for R > 2
-  container::map<std::size_t, container::vector<ExprPtr>> largest_coeff_terms;
-
-  for (const auto& term : *expr) {
-    if (!term->is<Product>()) continue;
-
-    auto product = term.as_shared_ptr<Product>();
-    auto scalar = product->scalar();
-
-    sequant::TensorNetwork tn(*product);
-    auto hash =
-        tn.canonicalize_slots(TensorCanonicalizer::cardinal_tensor_labels())
-            .hash_value();
-
-    auto it = largest_coeff_terms.find(hash);
-    if (it == largest_coeff_terms.end()) {
-      largest_coeff_terms[hash] = {term};
-    } else {
-      if (!it->second.empty()) {
-        auto existing_scalar = it->second[0]->as<Product>().scalar();
-        auto existing_abs = abs(existing_scalar);
-        auto current_abs = abs(scalar);
-
-        if (current_abs > existing_abs) {
-          it->second.clear();
-          it->second.push_back(term);
-        } else if (current_abs == existing_abs) {
-          it->second.push_back(term);
-        }
-      }
-    }
-  }
-
-  Sum filtered;
-  for (const auto& [_, terms] : largest_coeff_terms) {
-    for (const auto& t : terms) {
-      filtered.append(t);
-    }
-  }
-  auto result = ex<Sum>(filtered);
-
-  return result;
-}
-
 ExprPtr closed_shell_spintrace(
     const ExprPtr& expression,
     const container::svector<container::svector<Index>>& ext_index_groups,

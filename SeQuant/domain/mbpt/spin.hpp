@@ -210,27 +210,6 @@ container::svector<container::map<Index, Index>> S_replacement_maps(
 /// @brief Expand S operator
 ExprPtr S_maps(const ExprPtr& expr);
 
-/// @brief filters out the nonunique terms in Wang-Knizia biorthogonalization
-
-/// WK biorthogonalization rewrites biorthogonal expressions as a projector
-/// onto non-null-space (NNS)
-/// applied to the biorthogonal expressions where out of each
-/// group of terms related by permutation of external indices
-/// those with the largest coefficients are selected.
-/// This function performs the selection by forming groups of terms that
-/// are equivalent modulo external index permutation (all terms in a group
-/// have identical graph hashes).
-/// @details This function processes a sum expression, grouping product terms by
-/// hash of their canonicalized tensor network forms. For each group, it
-/// retains only the terms with the largest absolute scalar coefficient.
-/// @param expr The input expression, expected to be a `Sum` of `Product` terms.
-/// @param ext_idxs A vector of external index groups. The function will not
-/// apply the filtering logic if `ext_idxs.size()` is 2 or less.
-/// @return A new `ExprPtr` representing the filtered and compacted expression.
-ExprPtr WK_biorthogonalization_filter(
-    ExprPtr expr,
-    const container::svector<container::svector<Index>>& ext_idxs);
-
 // clang-format off
 /// @brief Traces out spin degrees of freedom from fermionic operator moments
 /// @details This function is designed for integrating spin out of
