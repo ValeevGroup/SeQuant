@@ -542,7 +542,7 @@ template <typename T>
 concept SlottedIndexTuple =
     std::is_same_v<std::tuple_element_t<0, std::remove_cvref_t<T>>,
                    SlottedIndex> &&
-    std::is_same_v<std::tuple_element_t<0, std::remove_cvref_t<T>>,
+    std::is_same_v<std::tuple_element_t<1, std::remove_cvref_t<T>>,
                    SlottedIndex>;
 
 template <typename T>
