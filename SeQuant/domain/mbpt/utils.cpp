@@ -8,13 +8,9 @@
 namespace sequant::mbpt {
 
 ExprPtr lst(ExprPtr A, ExprPtr B, size_t commutator_rank, LSTOptions options) {
-  SEQUANT_ASSERT(commutator_rank >= 1 && "Truncation order must be at least 1");
-
-  // use commutators if unitary ansatz is chosen
+  // if use_commutators is not set, set to true if unitary is true, else false
   if (!options.use_commutators.has_value())
     options.use_commutators = options.unitary;
-  SEQUANT_ASSERT(options.use_commutators.has_value() &&
-                 "mbpt::lst: use_commutators must have a value");
 
   // use cloned expr to avoid side effects
   if (!options.skip_clone) A = A->clone();
