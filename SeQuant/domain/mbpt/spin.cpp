@@ -1025,8 +1025,8 @@ ExprPtr closed_shell_spintrace(
     auto substitute_ext_idx = [&product_bras, &product_kets](
                                   const SlottedIndexContainer auto& idx_pair) {
       SEQUANT_ASSERT(idx_pair.size() == 2);
-      const auto& what = idx_pair[0].index();
-      const auto& with = idx_pair[1].index();
+      const auto& what = get_bra_idx(idx_pair);
+      const auto& with = get_ket_idx(idx_pair);
       std::replace(product_bras.begin(), product_bras.end(), what, with);
       std::replace(product_kets.begin(), product_kets.end(), what, with);
     };
