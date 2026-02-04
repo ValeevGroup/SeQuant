@@ -571,18 +571,18 @@ TEST_CASE("utilities", "[utilities]") {
               {{{L"i_1", Slot::Bra}, {L"a_1", Slot::Ket}}}},
              {L"Â{a1,a2;i1,i2} t{i1;a1} t{i2;a2}",
               {{{L"i_1", Slot::Bra}, {L"a_1", Slot::Ket}},
-               {{L"i_2", Slot::Bra}, {"a_2", Slot::Ket}}}},
+               {{L"i_2", Slot::Bra}, {L"a_2", Slot::Ket}}}},
              {L"Ŝ{a1;i1} t{i1;a1}",
               {{{L"i_1", Slot::Bra}, {L"a_1", Slot::Ket}}}},
              {L"Ŝ{a1,a2;i1,i2} t{i1;a1} t{i2;a2}",
               {{{L"i_1", Slot::Bra}, {L"a_1", Slot::Ket}},
-               {{L"i_2", Slot::Bra}, {"a_2", Slot::Ket}}}},
+               {{L"i_2", Slot::Bra}, {L"a_2", Slot::Ket}}}},
              // We still want the "swap" behavior when called on an isolated
              // symmetrizer Note: this is the inverse behavior to a regular
              // tensor
              {L"Ŝ{a1,a2;i1,i2}",
               {{{L"i_1", Slot::Bra}, {L"a_1", Slot::Ket}},
-               {{L"i_2", Slot::Bra}, {"a_2", Slot::Ket}}}},
+               {{L"i_2", Slot::Bra}, {L"a_2", Slot::Ket}}}},
              {L"Â{a1;i1}", {{{L"i_1", Slot::Bra}, {L"a_1", Slot::Ket}}}},
          }) {
       CAPTURE(toUtf8(input));
