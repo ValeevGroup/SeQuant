@@ -7,6 +7,7 @@
 #include <SeQuant/core/expressions/tensor.hpp>
 #include <SeQuant/core/logger.hpp>
 #include <SeQuant/core/options.hpp>
+#include <SeQuant/core/io/latex/latex.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
 #include <range/v3/range/primitives.hpp>
@@ -21,7 +22,7 @@ std::wstring to_latex(const ExprPtr& exprptr) { return exprptr->to_latex(); }
 
 std::wstring to_latex_align(const ExprPtr& exprptr, size_t max_lines_per_align,
                             size_t max_terms_per_line) {
-  std::wstring result = to_latex(exprptr);
+  std::wstring result = io::latex::to_string(exprptr);
   if (exprptr->is<Sum>()) {
     result.erase(0, 7);  // remove leading  "{ \bigl"
     result.replace(result.size() - 8, 8,
@@ -118,15 +119,15 @@ ResultExpr& canonicalize(ResultExpr&& expr, CanonicalizeOptions opts) {
 struct ExpandVisitor {
   void operator()(ExprPtr& expr) {
     if (Logger::instance().expand)
-      std::wcout << "expand_visitor received " << to_latex(expr) << std::endl;
+      std::wcout << "expand_visitor received " << io::latex::to_string(expr) << std::endl;
     // apply expand() iteratively until done
     while (expand(expr)) {
       if (Logger::instance().expand)
-        std::wcout << "after 1 round of expansion have " << to_latex(expr)
+        std::wcout << "after 1 round of expansion have " << io::latex::to_string(expr)
                    << std::endl;
     }
     if (Logger::instance().expand)
-      std::wcout << "expansion result = " << to_latex(expr) << std::endl;
+      std::wcout << "expansion result = " << io::latex::to_string(expr) << std::endl;
     // simplification and canonicalization are to be done by other visitors
   }
 
@@ -173,7 +174,7 @@ struct ExpandVisitor {
         result;  // will keep the result if one or more summands is expanded
     const auto nsubexpr = size(expr);
     if (Logger::instance().expand)
-      std::wcout << "in expand_sum: expr = " << to_latex(expr) << std::endl;
+      std::wcout << "in expand_sum: expr = " << io::latex::to_string(expr) << std::endl;
     for (std::size_t i = 0; i != nsubexpr; ++i) {
       // if summand is a Product, expand it
       if (expr_ref[i]->is<Product>()) {
@@ -189,7 +190,7 @@ struct ExpandVisitor {
         if (Logger::instance().expand)
           std::wcout << "in expand_sum: after expand_product("
                      << (this_term_expanded ? "true)" : "false)")
-                     << " result = " << to_latex(result ? result : expr)
+                     << " result = " << io::latex::to_string(result ? result : expr)
                      << std::endl;
       }
       // if summand is a Sum, flatten it
@@ -203,7 +204,7 @@ struct ExpandVisitor {
         if (result) result->append(expr_ref[i]);
         if (Logger::instance().expand)
           std::wcout << "in expand_sum: after flattening Sum summand result = "
-                     << to_latex(result ? result : expr) << std::endl;
+                     << io::latex::to_string(result ? result : expr) << std::endl;
       } else {  // nothing to expand? if expanded previously (i.e. result is
                 // nonnull) append to result
         if (result) result->append(expr_ref[i]);
@@ -312,16 +313,16 @@ struct RapidSimplifyVisitor {
 
   void operator()(ExprPtr& expr) {
     if (Logger::instance().simplify)
-      std::wcout << "rapid_simplify_visitor received " << to_latex(expr)
+      std::wcout << "rapid_simplify_visitor received " << io::latex::to_string(expr)
                  << std::endl;
     // apply simplify() iteratively until done
     while (simplify(expr, opts)) {
       if (Logger::instance().simplify)
-        std::wcout << "after 1 round of simplification have " << to_latex(expr)
+        std::wcout << "after 1 round of simplification have " << io::latex::to_string(expr)
                    << std::endl;
     }
     if (Logger::instance().simplify)
-      std::wcout << "simplification result = " << to_latex(expr) << std::endl;
+      std::wcout << "simplification result = " << io::latex::to_string(expr) << std::endl;
   }
 
   /// simplifies a Product by:

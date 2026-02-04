@@ -7,6 +7,7 @@
 #include <SeQuant/core/expressions/expr_algorithms.hpp>
 #include <SeQuant/core/expressions/expr_ptr.hpp>
 #include <SeQuant/core/meta.hpp>
+#include <SeQuant/core/io/latex/latex.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
 #include <string>
@@ -305,7 +306,7 @@ class Product : public Expr {
       if (!scal.is_identity()) {
         // replace -1 prefactor by -
         if (!(negate ? scalar() : -scalar()).is_identity()) {
-          result += sequant::to_latex(scal);
+          result += io::latex::to_string(scal);
         } else {
           result += L"{-}";
         }
