@@ -10,7 +10,7 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/index.hpp>
-#include <SeQuant/core/latex.hpp>
+#include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/parse.hpp>
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/space.hpp>

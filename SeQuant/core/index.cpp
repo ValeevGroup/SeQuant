@@ -4,7 +4,7 @@
 
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/index.hpp>
-#include <SeQuant/core/latex.hpp>
+#include <SeQuant/core/io/latex/latex.hpp>
 #include <SeQuant/core/utility/string.hpp>
 
 #include <format>
@@ -32,8 +32,8 @@ std::wstring Index::to_latex() const noexcept {
     sfx =
         std::format(L"_{}", *ordinal_ < 10 ? std::to_wstring(*ordinal_)
                                            : std::format(L"{{{}}}", *ordinal_));
-  return std::format(L"{{{}{}{}}}", utf_to_latex(space().base_key()), sfx,
-                     protos);
+  return std::format(L"{{{}{}{}}}",
+                     io::latex::utf_to_string(space().base_key()), sfx, protos);
 }
 
 std::string Index::ascii_label() const {

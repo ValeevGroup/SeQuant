@@ -8,7 +8,7 @@
 #include <string>
 
 #include <SeQuant/core/hash.hpp>
-#include <SeQuant/core/latex.hpp>
+#include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 

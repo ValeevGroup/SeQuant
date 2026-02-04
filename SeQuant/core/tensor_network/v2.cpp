@@ -10,7 +10,8 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/index.hpp>
-#include <SeQuant/core/latex.hpp>
+#include <SeQuant/core/io/latex/latex.hpp>
+#include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/logger.hpp>
 #include <SeQuant/core/tag.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
@@ -754,7 +755,8 @@ TensorNetworkV2::Graph TensorNetworkV2::create_graph(
     ++nvertex;
     if (options.make_labels) graph.vertex_labels.emplace_back(tlabel);
     if (options.make_texlabels)
-      graph.vertex_texlabels.emplace_back(L"$" + utf_to_latex(tlabel) + L"$");
+      graph.vertex_texlabels.emplace_back(
+          L"$" + io::latex::utf_to_string(tlabel) + L"$");
     graph.vertex_types.emplace_back(VertexType::TensorCore);
     graph.vertex_colors.push_back(colorizer(tensor));
 

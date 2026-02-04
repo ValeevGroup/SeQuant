@@ -11,7 +11,6 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/hash.hpp>
-#include <SeQuant/core/latex.hpp>
 #include <SeQuant/core/meta.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 

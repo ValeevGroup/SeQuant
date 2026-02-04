@@ -13,7 +13,8 @@
 #include <SeQuant/core/expressions/labeled.hpp>
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/index.hpp>
-#include <SeQuant/core/latex.hpp>
+#include <SeQuant/core/io/latex/latex.hpp>
+#include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/reserved.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/string.hpp>
@@ -526,7 +527,7 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
     std::wstring core_label;
     if ((this->symmetry() == Symmetry::Antisymm) && add_bar)
       core_label += L"\\bar{";
-    core_label += utf_to_latex(this->label());
+    core_label += io::latex::utf_to_string(this->label());
     if ((this->symmetry() == Symmetry::Antisymm) && add_bar) core_label += L"}";
 
     switch (bkst) {

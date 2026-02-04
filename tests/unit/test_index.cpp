@@ -7,7 +7,7 @@
 #include "catch2_sequant.hpp"
 
 #include <SeQuant/core/index.hpp>
-#include <SeQuant/core/latex.hpp>
+#include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 
 #include <iostream>

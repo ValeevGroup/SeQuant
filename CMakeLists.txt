@@ -303,9 +303,10 @@ set(SeQuant_symb_src
         SeQuant/core/index_space_registry.cpp
         SeQuant/core/index_space_registry.hpp
         SeQuant/core/interval.hpp
-        SeQuant/core/latex.cpp
-        SeQuant/core/latex.hpp
-        SeQuant/core/latex.ipp
+        SeQuant/core/io/concepts.hpp
+        SeQuant/core/io/shorthands.hpp
+        SeQuant/core/io/latex/latex.cpp
+        SeQuant/core/io/latex/latex.hpp
         SeQuant/core/logger.hpp
         SeQuant/core/math.hpp
         SeQuant/core/meta.hpp

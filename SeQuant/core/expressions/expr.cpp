@@ -7,6 +7,7 @@
 #include <SeQuant/core/expressions/constant.hpp>
 #include <SeQuant/core/expressions/expr.hpp>
 #include <SeQuant/core/expressions/tensor.hpp>
+#include <SeQuant/core/io/latex/latex.hpp>
 #include <SeQuant/core/logger.hpp>
 #include <SeQuant/core/runtime.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
@@ -150,7 +151,7 @@ void Variable::conjugate() { conjugated_ = !conjugated_; }
 bool Variable::conjugated() const { return conjugated_; }
 
 std::wstring Variable::to_latex() const {
-  std::wstring result = L"{" + utf_to_latex(label_) + L"}";
+  std::wstring result = L"{" + io::latex::utf_to_string(label_) + L"}";
   if (conjugated_) result = L"{" + result + L"^*" + L"}";
   return result;
 }

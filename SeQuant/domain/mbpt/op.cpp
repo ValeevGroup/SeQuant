@@ -1,4 +1,5 @@
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/io/latex/latex.hpp>
 #include <SeQuant/core/math.hpp>
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/utility/macros.hpp>
@@ -338,7 +339,7 @@ std::wstring to_latex(const mbpt::Operator<mbpt::qns_t, S>& op) {
                        base_lbl == reserved::symm_label();
 
   // now start building the output
-  std::wstring label = utf_to_latex(op.label());
+  std::wstring label = io::latex::utf_to_string(op.label());
   auto result = has_hat ? L"{" + label : L"{\\hat{" + label + L"}";
 
   auto op_qns = op();  // operator action i.e. quantum number change

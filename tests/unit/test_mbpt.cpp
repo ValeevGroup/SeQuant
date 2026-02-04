@@ -6,7 +6,7 @@
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
-#include <SeQuant/core/latex.hpp>
+#include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/parse.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>

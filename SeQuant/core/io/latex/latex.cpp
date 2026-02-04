@@ -1,23 +1,18 @@
 //
-// Created by Eduard Valeyev on 3/30/18.
+// Created by Eduard Valeyev on 7/18/23.
 //
 
-#ifndef SEQUANT_CORE_LATEX_IPP
-#define SEQUANT_CORE_LATEX_IPP
-
 #include <SeQuant/core/container.hpp>
-#include <SeQuant/core/latex.hpp>
+#include <SeQuant/core/io/latex/latex.hpp>
 #include <SeQuant/core/utility/string.hpp>
 #include <map>
 #include <optional>
-#include <type_traits>
 #include <vector>
 
-namespace sequant {
-namespace detail {
+namespace sequant::io::latex::detail {
 
 template <typename Char, typename Traits, typename Alloc>
-std::basic_string<Char, Traits, Alloc> greek_characters_to_latex_impl(
+std::basic_string<Char, Traits, Alloc> greek_characters_to_string_impl(
     std::basic_string_view<Char, Traits> str) {
   // lower-case greek characters in the order of their appearance in Unicode
   // chart https://www.unicode.org/charts/PDF/U0370.pdf
@@ -75,7 +70,7 @@ std::basic_string<Char, Traits, Alloc> greek_characters_to_latex_impl(
     const Char ch = *it;
     if (sizeof(Char) == 1 && !is_ascii(ch))
       throw std::invalid_argument(
-          "greek_characters_to_latex<Char,...>(str): currently only supports "
+          "greek_characters_to_string<Char,...>(str): currently only supports "
           "non-ASCII characters in str if Char is a wide character (wchar_t, "
           "char16_t, or char32_t)");
 
@@ -110,7 +105,7 @@ std::basic_string<Char, Traits, Alloc> greek_characters_to_latex_impl(
 }
 
 template <typename Char, typename Traits, typename Alloc>
-std::basic_string<Char, Traits, Alloc> diactrics_to_latex_impl(
+std::basic_string<Char, Traits, Alloc> diactrics_to_string_impl(
     std::basic_string_view<Char, Traits> str) {
   using str_t = std::basic_string<Char, Traits, Alloc>;
 
@@ -131,7 +126,7 @@ std::basic_string<Char, Traits, Alloc> diactrics_to_latex_impl(
     if (sizeof(Char) == 1 &&
         ((it == begin && !is_ascii(ch)) || (next_ch && !is_ascii(*next_ch)))) {
       throw std::invalid_argument(
-          "diactrics_to_latex<Char,...>(str): currently only supports "
+          "diactrics_to_string<Char,...>(str): currently only supports "
           "non-ASCII characters in str if Char is a wide character (wchar_t, "
           "char16_t, or char32_t)");
     }
@@ -234,8 +229,26 @@ std::basic_string<Char, Traits, Alloc> diactrics_to_latex_impl(
     return decltype(result)(str);
 }
 
-}  // namespace detail
+#define SQ_IMPL1(CHAR)                                              \
+  template std::basic_string<CHAR> greek_characters_to_string_impl< \
+      CHAR, std::char_traits<CHAR>, std::allocator<CHAR>>(          \
+      std::basic_string_view<CHAR>);
 
-}  // namespace sequant
+SQ_IMPL1(char);
+SQ_IMPL1(wchar_t);
+SQ_IMPL1(char8_t);
+SQ_IMPL1(char16_t);
+SQ_IMPL1(char32_t);
 
-#endif  // SEQUANT_CORE_LATEX_IPP
+#define SQ_IMPL2(CHAR)                                       \
+  template std::basic_string<CHAR> diactrics_to_string_impl< \
+      CHAR, std::char_traits<CHAR>, std::allocator<CHAR>>(   \
+      std::basic_string_view<CHAR>);
+
+SQ_IMPL2(char);
+SQ_IMPL2(wchar_t);
+SQ_IMPL2(char8_t);
+SQ_IMPL2(char16_t);
+SQ_IMPL2(char32_t);
+
+}  // namespace sequant::io::latex::detail

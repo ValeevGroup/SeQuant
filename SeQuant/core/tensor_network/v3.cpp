@@ -10,7 +10,8 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/index.hpp>
-#include <SeQuant/core/latex.hpp>
+#include <SeQuant/core/io/latex/latex.hpp>
+#include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/logger.hpp>
 #include <SeQuant/core/tag.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
@@ -940,7 +941,7 @@ TensorNetworkV3::Graph TensorNetworkV3::create_graph(
     if (options.make_labels) make_label(std::wstring{tlabel});
     if (options.make_xlabels) make_xlabel();
     if (options.make_texlabels)
-      make_texlabel(L"$" + utf_to_latex(tlabel) + L"$");
+      make_texlabel(L"$" + io::latex::utf_to_string(tlabel) + L"$");
     graph.vertex_types.emplace_back(VertexType::TensorCore);
     const auto tensor_color =
         colorizer.apply_shade(tensor);  // subsequent vertices will be shaded by

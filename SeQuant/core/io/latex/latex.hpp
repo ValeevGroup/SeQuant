@@ -2,8 +2,8 @@
 // Created by Eduard Valeyev on 3/30/18.
 //
 
-#ifndef SEQUANT_CORE_LATEX_HPP
-#define SEQUANT_CORE_LATEX_HPP
+#ifndef SEQUANT_CORE_IO_LATEX_LATEX_HPP
+#define SEQUANT_CORE_IO_LATEX_LATEX_HPP
 
 #include <SeQuant/core/meta.hpp>
 #include <SeQuant/core/utility/string.hpp>
@@ -15,11 +15,11 @@
 #include <string_view>
 #include <type_traits>
 
-namespace sequant {
+namespace sequant::io::latex {
 
 template <typename T>
 std::enable_if_t<meta::has_memfn_to_latex_v<std::decay_t<T>>, std::wstring>
-to_latex(T&& t) {
+to_string(T&& t) {
   return t.to_latex();
 }
 
@@ -27,7 +27,7 @@ template <typename T>
 std::enable_if_t<std::is_arithmetic_v<std::decay_t<T>> &&
                      !std::is_floating_point_v<std::decay_t<T>>,
                  std::wstring>
-to_latex(T&& t) {
+to_string(T&& t) {
   std::wstring result = L"{";
   using ::sequant::to_wstring;
   result += to_wstring(t) + L"}";
@@ -38,7 +38,7 @@ template <typename T>
 std::enable_if_t<std::is_arithmetic_v<std::decay_t<T>> &&
                      std::is_floating_point_v<std::decay_t<T>>,
                  std::wstring>
-to_latex(T&& t) {
+to_string(T&& t) {
   using Real = std::decay_t<T>;
   static const auto eps_sqrt = std::sqrt(std::numeric_limits<Real>::epsilon());
 
@@ -64,13 +64,13 @@ to_latex(T&& t) {
 }
 
 template <typename T>
-std::wstring to_latex(const std::complex<T>& t) {
+std::wstring to_string(const std::complex<T>& t) {
   std::wstring result = L"{";
-  result += to_latex(t.real());
+  result += to_string(t.real());
   if (t.imag() > 0) {
-    result += L" + i " + to_latex(t.imag());
+    result += L" + i " + to_string(t.imag());
   } else if (t.imag() < 0)
-    result += L" - i " + to_latex(-t.imag());
+    result += L" - i " + to_string(-t.imag());
   result += L"}";
   return result;
 }
@@ -78,12 +78,11 @@ std::wstring to_latex(const std::complex<T>& t) {
 namespace detail {
 
 template <typename Char, typename Traits, typename Alloc>
-std::basic_string<Char, Traits, Alloc> greek_characters_to_latex_impl(
+std::basic_string<Char, Traits, Alloc> greek_characters_to_string_impl(
     std::basic_string_view<Char, Traits> str);
 
 }  // namespace detail
 
-// chang-format off
 /// replaces certain greek characters in a string with their (math-mode) LaTeX
 /// equivalents
 /// @tparam Char character type
@@ -95,29 +94,27 @@ std::basic_string<Char, Traits, Alloc> greek_characters_to_latex_impl(
 /// @warning if @p str contains non-ASCII characters `Char` must be `wchar_t`
 /// @throw std::invalid_argument if @p Char is narrow and @p str contains
 /// non-ASCII characters
-// chang-format on
 template <typename Char, typename Traits>
-std::basic_string<Char, Traits> greek_characters_to_latex(
+std::basic_string<Char, Traits> greek_characters_to_string(
     const std::basic_string_view<Char, Traits>& str) {
-  return detail::greek_characters_to_latex_impl<Char, Traits,
-                                                std::allocator<Char>>(str);
+  return detail::greek_characters_to_string_impl<Char, Traits,
+                                                 std::allocator<Char>>(str);
 }
 
 template <typename Char, typename Traits, typename Alloc>
-std::basic_string<Char, Traits, Alloc> greek_characters_to_latex(
+std::basic_string<Char, Traits, Alloc> greek_characters_to_string(
     const std::basic_string<Char, Traits, Alloc>& str) {
-  return detail::greek_characters_to_latex_impl<Char, Traits, Alloc>(str);
+  return detail::greek_characters_to_string_impl<Char, Traits, Alloc>(str);
 }
 
 namespace detail {
 
 template <typename Char, typename Traits, typename Alloc>
-std::basic_string<Char, Traits, Alloc> diactrics_to_latex_impl(
+std::basic_string<Char, Traits, Alloc> diactrics_to_string_impl(
     std::basic_string_view<Char, Traits> str);
 
 }  // namespace detail
 
-// chang-format off
 /// replaces certain diactric marks with their (math-mode) LaTeX equivalents
 /// @tparam Char character type
 /// @tparam Traits character traits type
@@ -127,21 +124,19 @@ std::basic_string<Char, Traits, Alloc> diactrics_to_latex_impl(
 /// @throw std::invalid_argument if @p Char is narrow and @p str contains
 /// non-ASCII characters
 /// @note only some combined Unicode characters are currently supported
-// chang-format on
 template <typename Char, typename Traits>
-std::basic_string<Char, Traits> diactrics_to_latex(
+std::basic_string<Char, Traits> diactrics_to_string(
     const std::basic_string_view<Char, Traits>& str) {
-  return detail::diactrics_to_latex_impl<Char, Traits, std::allocator<Char>>(
+  return detail::diactrics_to_string_impl<Char, Traits, std::allocator<Char>>(
       str);
 }
 
 template <typename Char, typename Traits, typename Alloc>
-std::basic_string<Char, Traits, Alloc> diactrics_to_latex(
+std::basic_string<Char, Traits, Alloc> diactrics_to_string(
     const std::basic_string<Char, Traits, Alloc>& str) {
-  return detail::diactrics_to_latex_impl<Char, Traits, Alloc>(str);
+  return detail::diactrics_to_string_impl<Char, Traits, Alloc>(str);
 }
 
-// chang-format off
 /// replaces certain Unicode characters with their (math-mode) LaTeX equivalents
 /// @tparam Char character type
 /// @tparam Traits character traits type
@@ -155,22 +150,21 @@ std::basic_string<Char, Traits, Alloc> diactrics_to_latex(
 /// @internal useful resources
 /// - https://milde.users.sourceforge.net/LUCR/Math/unimathsymbols.pdf
 /// - https://www.unicode.org/charts/PDF/U1D400.pdf
-// chang-format on
 template <typename Char, typename Traits>
-std::basic_string<Char, Traits> utf_to_latex(
+std::basic_string<Char, Traits> utf_to_string(
     const std::basic_string_view<Char, Traits>& str) {
   // replace diacritics first since it relies on wide character structure
-  auto tmp = diactrics_to_latex(str);
-  return greek_characters_to_latex(tmp);
+  auto tmp = diactrics_to_string(str);
+  return greek_characters_to_string(tmp);
 }
 
 template <typename Char, typename Traits, typename Alloc>
-std::basic_string<Char, Traits, Alloc> utf_to_latex(
+std::basic_string<Char, Traits, Alloc> utf_to_string(
     const std::basic_string<Char, Traits, Alloc>& str) {
-  auto tmp = diactrics_to_latex(str);
-  return greek_characters_to_latex(tmp);
+  auto tmp = diactrics_to_string(str);
+  return greek_characters_to_string(tmp);
 }
 
-}  // namespace sequant
+}  // namespace sequant::io::latex
 
-#endif  // SEQUANT_CORE_LATEX_HPP
+#endif  // SEQUANT_CORE_IO_LATEX_LATEX_HPP
