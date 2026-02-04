@@ -1222,24 +1222,6 @@ ExprPtr closed_shell_CC_spintrace(ExprPtr const& expr,
   }
 }
 
-/// Collect all indices from an expression
-container::set<Index, Index::LabelCompare> index_list(const ExprPtr& expr) {
-  container::set<Index, Index::LabelCompare> grand_idxlist;
-  if (expr->is<Tensor>()) {
-    ranges::for_each(expr->as<Tensor>().const_indices(),
-                     [&grand_idxlist](const Index& idx) {
-                       idx.reset_tag();
-                       grand_idxlist.insert(idx);
-                     });
-  }
-
-  for (const ExprPtr& subExpr : expr) {
-    grand_idxlist.merge(index_list(subExpr));
-  }
-
-  return grand_idxlist;
-}
-
 Tensor swap_spin(const Tensor& t) {
   auto is_any_spin = [](const Index& i) {
     return mbpt::to_spin(i.space().qns()) == mbpt::Spin::any;
@@ -1457,7 +1439,8 @@ std::vector<ExprPtr> open_shell_spintrace(
   }
 
   // Grand index list contains both internal and external indices
-  container::set<Index, Index::LabelCompare> grand_idxlist = index_list(expr);
+  container::set<Index, Index::LabelCompare> grand_idxlist =
+      get_used_indices<decltype(grand_idxlist)>(expr);
 
   container::set<Index> ext_idxlist;
   for (auto&& idxgrp : ext_index_groups) {
@@ -1766,7 +1749,8 @@ ExprPtr spintrace(
                         spinfree_index_spaces](const ProductPtr& product) {
     ExprPtr expr = product->clone();
     // List of all indices in the expression
-    container::set<Index, Index::LabelCompare> grand_idxlist = index_list(expr);
+    container::set<Index, Index::LabelCompare> grand_idxlist =
+        get_used_indices<decltype(grand_idxlist)>(expr);
 
     // List of external indices, i.e. indices that are not summed over Einstein
     // style (indices that are not repeated in an expression)
