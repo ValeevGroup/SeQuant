@@ -8,6 +8,14 @@
 
 namespace sequant {
 
+bool default_context_manipulation_threadsafe() {
+#ifdef SEQUANT_CONTEXT_MANIPULATION_THREADSAFE
+  return true;
+#else
+  return false;
+#endif
+}
+
 bool operator==(const Context& ctx1, const Context& ctx2) {
   if (&ctx1 == &ctx2)
     return true;

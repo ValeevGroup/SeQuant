@@ -498,7 +498,7 @@ if (NOT SEQUANT_ASSERT_BEHAVIOR STREQUAL "IGNORE")
     target_compile_definitions(SeQuant-symb PUBLIC SEQUANT_ASSERT_ENABLED)
 endif()
 if (SEQUANT_CONTEXT_MANIPULATION_THREADSAFE)
-    target_compile_definitions(SeQuant-symb PUBLIC SEQUANT_CONTEXT_MANIPULATION_THREADSAFE)
+    target_compile_definitions(SeQuant-symb PRIVATE SEQUANT_CONTEXT_MANIPULATION_THREADSAFE)
 endif()
 if (SEQUANT_USE_SYSTEM_BOOST_HASH)
     target_compile_definitions(SeQuant-symb PUBLIC SEQUANT_USE_SYSTEM_BOOST_HASH=1)
@@ -601,6 +601,9 @@ set_source_files_properties(
 sequant_add_library(mbpt ${SeQuant_mbpt_src})
 target_link_libraries(SeQuant-mbpt PUBLIC SeQuant-core SeQuant-optimize)
 target_link_libraries(SeQuant-mbpt PRIVATE Eigen3::Eigen libperm::libperm)
+if (SEQUANT_CONTEXT_MANIPULATION_THREADSAFE)
+    target_compile_definitions(SeQuant-mbpt PRIVATE SEQUANT_CONTEXT_MANIPULATION_THREADSAFE)
+endif()
 
 ##########################
 # SeQuant: umbrella INTERFACE target (backwards compatibility)

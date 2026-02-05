@@ -222,13 +222,7 @@ bool operator!=(const Context& ctx1, const Context& ctx2);
 /// @{
 
 /// \return whether context manipulation functions are thread-safe
-inline constexpr bool default_context_manipulation_threadsafe() {
-#ifdef SEQUANT_CONTEXT_MANIPULATION_THREADSAFE
-  return true;
-#else
-  return false;
-#endif
-}
+bool default_context_manipulation_threadsafe();
 
 /// @brief access default Context for the given Statistics
 /// @param s Statistics
