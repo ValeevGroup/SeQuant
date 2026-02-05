@@ -16,10 +16,17 @@
 #include <stdexcept>
 #include <utility>
 
-// alias reserved labels for readability
 namespace {
+// alias reserved labels for readability
 const auto& asymm = sequant::reserved::antisymm_label();
 const auto& symm = sequant::reserved::symm_label();
+
+/// simple commutator of A and B: [A,B] = AB - BA
+inline auto commutator(const sequant::ExprPtr& A, const sequant::ExprPtr& B) {
+  auto result = A * B - B * A;
+  sequant::non_canon_simplify(result);
+  return result;
+}
 }  // namespace
 
 namespace sequant::mbpt {
@@ -180,6 +187,7 @@ std::vector<ExprPtr> CC::tʼ(size_t rank, size_t order,
                    "pertbar_comm_rank must be specified for unitary "
                    "ansatz");
   }
+
   // construct h1_bar
   // truncate h1_bar at rank 2 for one-body perturbation operator and at rank 4
   // for two-body perturbation operator; unless specified otherwise
@@ -188,14 +196,22 @@ std::vector<ExprPtr> CC::tʼ(size_t rank, size_t order,
   const auto h1_bar = mbpt::lst(Hʼ(rank, {.order = order, .nbatch = nbatch}),
                                 T(N), h1_truncate_at, {.unitary = unitary()});
 
-  // construct [hbar, T(1)]
+  // construct [hbar, Tʼ(1)]
   const auto hbar_truncate_at = hbar_comm_rank_.value_or(
       3);  // notice 3 instead of 4 here, this is because of the commutator with
            // T'(1). In case 4 is used, it will generate more terms but they
            // will not contribute.
-  const auto hbar_pert =
-      mbpt::lst(H(), T(N), hbar_truncate_at, {.unitary = unitary()}) *
-      Tʼ(N, {.order = order, .nbatch = nbatch});
+  const auto hbar =
+      mbpt::lst(H(), T(N), hbar_truncate_at, {.unitary = unitary()});
+
+  ExprPtr hbar_pert;
+  if (unitary()) {
+    // for unitary ansatz, we need to compute the commutator [hbar, Tʼ],
+    // otherwise just hbar * Tʼ is sufficient because ref_av uses connectivity
+    hbar_pert = commutator(hbar, Tʼ(N, {.order = order, .nbatch = nbatch}));
+  } else {
+    hbar_pert = hbar * Tʼ(N, {.order = order, .nbatch = nbatch});
+  }
 
   // [Eq. 34, WIREs Comput Mol Sci. 2019; 9:e1406]
   const auto expr = simplify(h1_bar + hbar_pert);
@@ -300,8 +316,15 @@ std::vector<ExprPtr> CC::eom_r(nₚ np, nₕ nh) {
   const auto hbar = mbpt::lst(H(), T(N, skip_singles), hbar_truncate_at,
                               {.unitary = unitary()});
 
-  // hbar * R
-  const auto hbar_R = hbar * R(np, nh);
+  // construct [hbar, R]
+  ExprPtr hbar_R;
+  // for unitary ansatz, we need to compute the commutator [hbar, R], otherwise
+  // just hbar * R is sufficient because ref_av uses connectivity
+  if (this->unitary()) {
+    hbar_R = commutator(hbar, R(np, nh));
+  } else {
+    hbar_R = hbar * R(np, nh);
+  }
 
   // connectivity: empty for unitary ansatz, build otherwise
   OpConnections<std::wstring> op_connect = {};
