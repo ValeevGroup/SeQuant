@@ -11,7 +11,6 @@ set(symb_test_sources
     "test_bliss.cpp"
     "test_canonicalize.cpp"
     "test_expr.cpp"
-    "test_fusion.cpp"
     "test_index.cpp"
     "test_iterator.cpp"
     "test_latex.cpp"
@@ -19,7 +18,6 @@ set(symb_test_sources
     "test_math.cpp"
     "test_meta.cpp"
     "test_op.cpp"
-    "test_optimize.cpp"
     "test_parse.cpp"
     "test_runtime.cpp"
     "test_space.cpp"
@@ -32,11 +30,9 @@ set(symb_test_sources
 
 add_library(unit_tests-sequant-symb-obj OBJECT ${symb_test_sources})
 target_link_libraries(unit_tests-sequant-symb-obj PRIVATE
-    SeQuant::SeQuant-symb
+    SeQuant::symb
     Catch2::Catch2
-    dtl::dtl
-    Boost::boost
-    Eigen3::Eigen)
+    dtl::dtl)
 target_compile_definitions(unit_tests-sequant-symb-obj PRIVATE
     SEQUANT_UNIT_TESTS_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
 
@@ -49,12 +45,25 @@ set(eval_test_sources
 )
 add_library(unit_tests-sequant-eval-obj OBJECT ${eval_test_sources})
 target_link_libraries(unit_tests-sequant-eval-obj PRIVATE
-    SeQuant::SeQuant-eval
+    SeQuant::eval
     Catch2::Catch2
-    dtl::dtl
-    Boost::boost
-    Eigen3::Eigen)
+    dtl::dtl)
 target_compile_definitions(unit_tests-sequant-eval-obj PRIVATE
+    SEQUANT_UNIT_TESTS_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+
+##########################
+# OBJECT library: Optimize tests (SeQuant-optimize)
+##########################
+set(optimize_test_sources
+    "test_fusion.cpp"
+    "test_optimize.cpp"
+)
+add_library(unit_tests-sequant-optimize-obj OBJECT ${optimize_test_sources})
+target_link_libraries(unit_tests-sequant-optimize-obj PRIVATE
+    SeQuant::optimize
+    Catch2::Catch2
+    dtl::dtl)
+target_compile_definitions(unit_tests-sequant-optimize-obj PRIVATE
     SEQUANT_UNIT_TESTS_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
 
 ##########################
@@ -67,10 +76,10 @@ set(export_test_sources
 )
 add_library(unit_tests-sequant-export-obj OBJECT ${export_test_sources})
 target_link_libraries(unit_tests-sequant-export-obj PRIVATE
-    SeQuant::SeQuant-export
+    SeQuant::export
+    SeQuant::optimize
     Catch2::Catch2
     dtl::dtl
-    Boost::boost
     Eigen3::Eigen)
 target_compile_definitions(unit_tests-sequant-export-obj PRIVATE
     SEQUANT_UNIT_TESTS_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
@@ -87,7 +96,7 @@ set(mbpt_test_sources
 
 add_library(unit_tests-sequant-mbpt-obj OBJECT ${mbpt_test_sources})
 target_link_libraries(unit_tests-sequant-mbpt-obj PRIVATE
-    SeQuant::SeQuant-mbpt
+    SeQuant::mbpt
     Catch2::Catch2
     dtl::dtl)
 target_compile_definitions(unit_tests-sequant-mbpt-obj PRIVATE
@@ -103,8 +112,8 @@ if (SEQUANT_HAS_TILEDARRAY)
     )
     add_library(unit_tests-sequant-eval-ta-obj OBJECT ${eval_ta_test_sources})
     target_link_libraries(unit_tests-sequant-eval-ta-obj PRIVATE
-        SeQuant::SeQuant-eval-ta
-        SeQuant::SeQuant-mbpt
+        SeQuant::eval::ta
+        SeQuant::mbpt
         Catch2::Catch2
         dtl::dtl)
     target_compile_definitions(unit_tests-sequant-eval-ta-obj PRIVATE
@@ -124,8 +133,8 @@ if (SEQUANT_HAS_BTAS)
     endif()
     add_library(unit_tests-sequant-eval-btas-obj OBJECT ${eval_btas_test_sources})
     target_link_libraries(unit_tests-sequant-eval-btas-obj PRIVATE
-        SeQuant::SeQuant-eval-btas
-        SeQuant::SeQuant-mbpt
+        SeQuant::eval::btas
+        SeQuant::mbpt
         Catch2::Catch2
         dtl::dtl)
     target_compile_definitions(unit_tests-sequant-eval-btas-obj PRIVATE
@@ -141,6 +150,7 @@ add_executable(unit_tests-sequant ${BUILD_BY_DEFAULT}
     "test_main.cpp"
     $<TARGET_OBJECTS:unit_tests-sequant-symb-obj>
     $<TARGET_OBJECTS:unit_tests-sequant-eval-obj>
+    $<TARGET_OBJECTS:unit_tests-sequant-optimize-obj>
     $<TARGET_OBJECTS:unit_tests-sequant-export-obj>
     $<TARGET_OBJECTS:unit_tests-sequant-mbpt-obj>
 )
@@ -159,9 +169,7 @@ endif()
 target_link_libraries(unit_tests-sequant PRIVATE
     SeQuant::SeQuant
     Catch2::Catch2
-    dtl::dtl
-    Boost::boost
-    Eigen3::Eigen)
+    dtl::dtl)
 
 target_compile_definitions(unit_tests-sequant PRIVATE
     SEQUANT_UNIT_TESTS_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
@@ -186,8 +194,6 @@ if(Python_Interpreter_FOUND)
 
     if(_numpy_status EQUAL 0)
         message(STATUS "NumPy ${_numpy_version} found for export validation tests")
-        target_compile_definitions(unit_tests-sequant PRIVATE
-            SEQUANT_HAS_NUMPY_FOR_VALIDATION=1)
         target_compile_definitions(unit_tests-sequant-export-obj PRIVATE
             SEQUANT_HAS_NUMPY_FOR_VALIDATION=1)
     else()
@@ -205,8 +211,6 @@ if(Python_Interpreter_FOUND)
 
     if(_torch_status EQUAL 0)
         message(STATUS "PyTorch ${_torch_version} found for export validation tests")
-        target_compile_definitions(unit_tests-sequant PRIVATE
-            SEQUANT_HAS_TORCH_FOR_VALIDATION=1)
         target_compile_definitions(unit_tests-sequant-export-obj PRIVATE
             SEQUANT_HAS_TORCH_FOR_VALIDATION=1)
     else()
@@ -214,8 +218,6 @@ if(Python_Interpreter_FOUND)
     endif()
 
     if (_numpy_status EQUAL 0 OR _torch_status EQUAL 0)
-        target_compile_definitions(unit_tests-sequant PRIVATE
-            SEQUANT_UNITTESTS_PYTHON_EXECUTABLE="${Python_EXECUTABLE}")
         target_compile_definitions(unit_tests-sequant-export-obj PRIVATE
             SEQUANT_UNITTESTS_PYTHON_EXECUTABLE="${Python_EXECUTABLE}")
     endif()
@@ -224,7 +226,6 @@ else()
 endif()
 
 if (SEQUANT_SKIP_LONG_TESTS)
-    target_compile_definitions(unit_tests-sequant PRIVATE SEQUANT_SKIP_LONG_TESTS=1)
     target_compile_definitions(unit_tests-sequant-symb-obj PRIVATE SEQUANT_SKIP_LONG_TESTS=1)
     target_compile_definitions(unit_tests-sequant-mbpt-obj PRIVATE SEQUANT_SKIP_LONG_TESTS=1)
 endif()
