@@ -2,11 +2,11 @@
 I/O
 ***
 SeQuant provides different forms of I/O for its objects. Generally, they can be found in the :code:`sequant::io` namespace. Different formats live in
-different sub-namespaces. E.g. :func:`sequant::io::latex::to_string(…)` yields a LaTeX representation of the respective object.
+different sub-namespaces. E.g. :func:`sequant::io::latex::to_string` yields a LaTeX representation of the respective object.
 
 .. note::
    Frequently used I/O functions also have shorthands that can be brought in by including the :file:`sequant/core/io/shorthands.hpp` header. These
-   shorthands live directly in the :code:`sequant` namespace. The example from above could be achieved via :func:`sequant::to_latex(…)` once that
+   shorthands live directly in the :code:`sequant` namespace. The example from above could be achieved via :func:`sequant::to_latex` once that
    header is included.
 
 LaTeX
@@ -35,9 +35,9 @@ SeQuant provides `serialization <https://en.wikipedia.org/wiki/Serialization>`_ 
 intermediary storable format (*serialization*), which can later be converted back (*deserialization*) to yield the original SeQuant object.
 
 Functions associated with this live in the :code:`sequant::io::serialization` namespace. At the moment, there is only a text format implemented via
-:func:`to_string(…)` and :func:`from_string(…)`. More formats may be added at a later point. It is important to note that in order to work with C++'s
+:func:`to_string` and :func:`from_string`. More formats may be added at a later point. It is important to note that in order to work with C++'s
 type system, :func:`from_string` is a template that takes in the type of object it is supposed to produce. The most important variants are
-:func:`from_string<ExprPtr>(…)` and :func:`from_string<ResultExpr>(…)` where the former also allows to deserialize any :class:`Expr` subclass.
+:func:`from_string<ExprPtr>` and :func:`from_string<ResultExpr>` where the former also allows to deserialize any :class:`Expr` subclass.
 Depending on the used template type, the expected format of the input will change accordingly.
 
 As SeQuant's capabilities develop over time, it can be necessary to adapt the syntax of the serialization format.
@@ -49,8 +49,8 @@ function calls.
    All syntax versions except :class:`SerializationSyntax::Latest` are considered deprecated. Support for them will remain available for some time but
    might get removed in future versions of SeQuant.
 
-If the shorthands header is included, text-based serialization and deserialization is available as :func:`sequant::serialize(…)` and
-:func:`sequant::deserialize<T>(…)`.
+If the shorthands header is included, text-based serialization and deserialization is available as :func:`sequant::serialize` and
+:func:`sequant::deserialize<T>`.
 
 
 Customizations
