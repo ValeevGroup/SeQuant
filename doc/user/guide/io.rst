@@ -105,7 +105,8 @@ V1
    Name                                                                              Single word (may include Unicode chars)
    ==============  ===============================================================  ===========================================
 
-:func:`parse_expr` will start at rule :code:`Expression`, whereas :func:`parse_result_expr` will start at :code:`Result`.
+:func:`sequant::io::serialization::from_string<ExprPtr>` will start at rule :code:`Expression`, whereas
+:func:`sequant::io::serialization::from_string<ResultExpr>` will start at :code:`Result`.
 
 
 Examples
