@@ -7,8 +7,13 @@
 
 namespace sequant::mbpt {
 
-ExprPtr lst(ExprPtr A, ExprPtr B, size_t commutator_rank,
-            const LSTOptions& options) {
+ExprPtr lst(ExprPtr A, ExprPtr B, size_t commutator_rank, LSTOptions options) {
+  if (commutator_rank == 0) return A;  // nothing to do here
+
+  // if use_commutators is not set, set to true if unitary is true, else false
+  if (!options.use_commutators.has_value())
+    options.use_commutators = options.unitary;
+
   // use cloned expr to avoid side effects
   if (!options.skip_clone) A = A->clone();
 
@@ -21,7 +26,7 @@ ExprPtr lst(ExprPtr A, ExprPtr B, size_t commutator_rank,
     for (size_t k = 1; k <= commutator_rank; ++k) {
       ExprPtr op_Sk_comm_w_S;
 
-      if (options.use_commutators) {
+      if (options.use_commutators.value()) {
         // commutator form: [O,B] = OB - BO
         op_Sk_comm_w_S = op_Sk * B - B * op_Sk;
 
@@ -74,7 +79,7 @@ ExprPtr lst(ExprPtr A, ExprPtr B, size_t commutator_rank,
     return A;
   else
     throw std::invalid_argument(
-        "mbpt::lst(A, B, commutator_rank, unitary): Unsupported expression "
+        "mbpt::lst(A, B, commutator_rank, options): Unsupported expression "
         "type");
 }
 
