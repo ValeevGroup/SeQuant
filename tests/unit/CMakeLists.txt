@@ -29,10 +29,9 @@ set(symb_test_sources
 )
 
 add_library(unit_tests-sequant-symb-obj OBJECT ${symb_test_sources})
-target_link_libraries(unit_tests-sequant-symb-obj PRIVATE
-    SeQuant::symb
-    Catch2::Catch2
-    dtl::dtl)
+target_link_libraries(unit_tests-sequant-symb-obj
+    PUBLIC SeQuant::symb SeQuant::bliss
+    PRIVATE Catch2::Catch2 dtl::dtl)
 target_compile_definitions(unit_tests-sequant-symb-obj PRIVATE
     SEQUANT_UNIT_TESTS_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
 
@@ -44,10 +43,9 @@ set(eval_test_sources
     "test_eval_node.cpp"
 )
 add_library(unit_tests-sequant-eval-obj OBJECT ${eval_test_sources})
-target_link_libraries(unit_tests-sequant-eval-obj PRIVATE
-    SeQuant::eval
-    Catch2::Catch2
-    dtl::dtl)
+target_link_libraries(unit_tests-sequant-eval-obj
+    PUBLIC SeQuant::eval
+    PRIVATE Catch2::Catch2 dtl::dtl)
 target_compile_definitions(unit_tests-sequant-eval-obj PRIVATE
     SEQUANT_UNIT_TESTS_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
 
@@ -59,10 +57,9 @@ set(optimize_test_sources
     "test_optimize.cpp"
 )
 add_library(unit_tests-sequant-optimize-obj OBJECT ${optimize_test_sources})
-target_link_libraries(unit_tests-sequant-optimize-obj PRIVATE
-    SeQuant::optimize
-    Catch2::Catch2
-    dtl::dtl)
+target_link_libraries(unit_tests-sequant-optimize-obj
+    PUBLIC SeQuant::optimize SeQuant::bliss
+    PRIVATE Catch2::Catch2 dtl::dtl)
 target_compile_definitions(unit_tests-sequant-optimize-obj PRIVATE
     SEQUANT_UNIT_TESTS_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
 
@@ -75,12 +72,9 @@ set(export_test_sources
     "test_export_python.cpp"
 )
 add_library(unit_tests-sequant-export-obj OBJECT ${export_test_sources})
-target_link_libraries(unit_tests-sequant-export-obj PRIVATE
-    SeQuant::export
-    SeQuant::optimize
-    Catch2::Catch2
-    dtl::dtl
-    Eigen3::Eigen)
+target_link_libraries(unit_tests-sequant-export-obj
+    PUBLIC SeQuant::export SeQuant::optimize
+    PRIVATE Catch2::Catch2 dtl::dtl Eigen3::Eigen)
 target_compile_definitions(unit_tests-sequant-export-obj PRIVATE
     SEQUANT_UNIT_TESTS_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
 
@@ -95,10 +89,9 @@ set(mbpt_test_sources
 )
 
 add_library(unit_tests-sequant-mbpt-obj OBJECT ${mbpt_test_sources})
-target_link_libraries(unit_tests-sequant-mbpt-obj PRIVATE
-    SeQuant::mbpt
-    Catch2::Catch2
-    dtl::dtl)
+target_link_libraries(unit_tests-sequant-mbpt-obj
+    PUBLIC SeQuant::mbpt
+    PRIVATE Catch2::Catch2 dtl::dtl)
 target_compile_definitions(unit_tests-sequant-mbpt-obj PRIVATE
     SEQUANT_UNIT_TESTS_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
 
@@ -111,11 +104,9 @@ if (SEQUANT_HAS_TILEDARRAY)
         "test_cache_manager.cpp"
     )
     add_library(unit_tests-sequant-eval-ta-obj OBJECT ${eval_ta_test_sources})
-    target_link_libraries(unit_tests-sequant-eval-ta-obj PRIVATE
-        SeQuant::eval::ta
-        SeQuant::mbpt
-        Catch2::Catch2
-        dtl::dtl)
+    target_link_libraries(unit_tests-sequant-eval-ta-obj
+        PUBLIC SeQuant::eval::ta SeQuant::mbpt
+        PRIVATE Catch2::Catch2 dtl::dtl)
     target_compile_definitions(unit_tests-sequant-eval-ta-obj PRIVATE
         SEQUANT_UNIT_TESTS_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
     set_source_files_properties(${eval_ta_test_sources}
@@ -132,11 +123,9 @@ if (SEQUANT_HAS_BTAS)
         list(APPEND eval_btas_test_sources "test_cache_manager.cpp")
     endif()
     add_library(unit_tests-sequant-eval-btas-obj OBJECT ${eval_btas_test_sources})
-    target_link_libraries(unit_tests-sequant-eval-btas-obj PRIVATE
-        SeQuant::eval::btas
-        SeQuant::mbpt
-        Catch2::Catch2
-        dtl::dtl)
+    target_link_libraries(unit_tests-sequant-eval-btas-obj
+        PUBLIC SeQuant::eval::btas SeQuant::mbpt
+        PRIVATE Catch2::Catch2 dtl::dtl)
     target_compile_definitions(unit_tests-sequant-eval-btas-obj PRIVATE
         SEQUANT_UNIT_TESTS_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
     set_source_files_properties(${eval_btas_test_sources}
@@ -145,31 +134,27 @@ endif()
 
 ##########################
 # Single executable combining all OBJECT libraries
+# NB linking OBJECT libraries (since CMake 3.21) both includes their object
+# files AND propagates their PUBLIC/INTERFACE usage requirements, so the
+# SeQuant module link deps flow through automatically.
 ##########################
 add_executable(unit_tests-sequant ${BUILD_BY_DEFAULT}
     "test_main.cpp"
-    $<TARGET_OBJECTS:unit_tests-sequant-symb-obj>
-    $<TARGET_OBJECTS:unit_tests-sequant-eval-obj>
-    $<TARGET_OBJECTS:unit_tests-sequant-optimize-obj>
-    $<TARGET_OBJECTS:unit_tests-sequant-export-obj>
-    $<TARGET_OBJECTS:unit_tests-sequant-mbpt-obj>
 )
-
-# Add eval backend test objects conditionally
-if (SEQUANT_HAS_TILEDARRAY)
-    target_sources(unit_tests-sequant PRIVATE
-        $<TARGET_OBJECTS:unit_tests-sequant-eval-ta-obj>)
-endif()
-if (SEQUANT_HAS_BTAS)
-    target_sources(unit_tests-sequant PRIVATE
-        $<TARGET_OBJECTS:unit_tests-sequant-eval-btas-obj>)
-endif()
-
-# Link against full SeQuant umbrella for the executable
 target_link_libraries(unit_tests-sequant PRIVATE
-    SeQuant::SeQuant
+    unit_tests-sequant-symb-obj
+    unit_tests-sequant-eval-obj
+    unit_tests-sequant-optimize-obj
+    unit_tests-sequant-export-obj
+    unit_tests-sequant-mbpt-obj
     Catch2::Catch2
     dtl::dtl)
+if (SEQUANT_HAS_TILEDARRAY)
+    target_link_libraries(unit_tests-sequant PRIVATE unit_tests-sequant-eval-ta-obj)
+endif()
+if (SEQUANT_HAS_BTAS)
+    target_link_libraries(unit_tests-sequant PRIVATE unit_tests-sequant-eval-btas-obj)
+endif()
 
 target_compile_definitions(unit_tests-sequant PRIVATE
     SEQUANT_UNIT_TESTS_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
