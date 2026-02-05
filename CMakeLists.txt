@@ -346,6 +346,7 @@ set(SeQuant_symb_src
         SeQuant/core/utility/expr.cpp
         SeQuant/core/utility/expr.hpp
         SeQuant/core/utility/indices.hpp
+        SeQuant/core/utility/macros.cpp
         SeQuant/core/utility/macros.hpp
         SeQuant/core/utility/memoize.hpp
         SeQuant/core/utility/nodiscard.hpp
@@ -492,7 +493,10 @@ endif()
 # SeQuant-symb: core symbolic layer
 ##########################
 sequant_add_library(symb ${SeQuant_symb_src})
-target_compile_definitions(SeQuant-symb PUBLIC SEQUANT_ASSERT_BEHAVIOR_=${SEQUANT_ASSERT_BEHAVIOR})
+target_compile_definitions(SeQuant-symb PRIVATE SEQUANT_ASSERT_BEHAVIOR_=${SEQUANT_ASSERT_BEHAVIOR})
+if (NOT SEQUANT_ASSERT_BEHAVIOR STREQUAL "IGNORE")
+    target_compile_definitions(SeQuant-symb PUBLIC SEQUANT_ASSERT_ENABLED)
+endif()
 if (SEQUANT_CONTEXT_MANIPULATION_THREADSAFE)
     target_compile_definitions(SeQuant-symb PUBLIC SEQUANT_CONTEXT_MANIPULATION_THREADSAFE)
 endif()
