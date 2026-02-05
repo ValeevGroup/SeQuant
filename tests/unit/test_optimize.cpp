@@ -201,6 +201,27 @@ TEST_CASE("optimize", "[optimize]") {
       REQUIRE(optimized->as<Sum>().summands().size() == 1);
       REQUIRE(sum->as<Sum>().summand(0).as<Product>().factors().size() == 1);
     }
+
+    SECTION("Non-covariant indices") {
+      auto uocc = reg->retrieve_ptr(L"a");
+      auto aux = reg->retrieve_ptr(L"x");
+      auto const aux_sz = aux->approximate_size();
+      auto const uocc_sz = uocc->approximate_size();
+      REQUIRE(uocc);
+      REQUIRE(aux);
+      aux->approximate_size(3 * uocc->approximate_size());
+
+      auto const G_abcd_thc =
+          parse_expr(L"X{a1;;x1} X{;a2;x1} Y{;;x1,x2} X{a3;;x2} X{;a4;x2}")
+              ->as<Product>();
+      auto const G_abcd_thc_opt =
+          parse_expr(L"((X{a1;;x1} X{;a2;x1}) Y{;;x1,x2})(X{a3;;x2} X{;a4;x2})")
+              ->as<Product>();
+      REQUIRE(single_term_opt(G_abcd_thc)->as<Product>() == G_abcd_thc_opt);
+      aux->approximate_size(aux_sz);
+      REQUIRE(aux->approximate_size() == aux_sz);
+      REQUIRE(uocc->approximate_size() == uocc_sz);
+    }
   }
 
   SECTION("CSE") {
