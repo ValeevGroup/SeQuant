@@ -109,42 +109,6 @@ std::wstring to_wstring(std::floating_point auto t) {
     return std::to_wstring(t);
 }
 
-#if 0
-/// @brief (potentially) narrowing character converter.
-///
-/// Converts a UTF-8 encoded string (C or C++) to a UTF-8 encoded
-/// std::string
-template <basic_string_convertible S>
-std::string to_string(S&& str_utf8) {
-  auto str_utf8_view = to_basic_string_view(std::forward<S>(str_utf8));
-  using boost::locale::conv::utf_to_utf;
-  return utf_to_utf<char>(str_utf8_view.data(),
-                          str_utf8_view.data() + str_utf8_view.size());
-}
-
-/// Optimized to_string for std::string
-inline std::string to_string(std::string&& str_utf8) {
-  return std::move(str_utf8);
-}
-
-/// @brief (potentially) narrowing character converter.
-///
-/// Converts a UTF-8 encoded std::basic_string_view<Char> to a UTF-8 encoded
-/// std::wstring
-template <basic_string_convertible S>
-std::wstring to_wstring(S&& str_utf8) {
-  auto str_utf8_view = to_basic_string_view(std::forward<S>(str_utf8));
-  using boost::locale::conv::utf_to_utf;
-  return utf_to_utf<wchar_t>(str_utf8_view.data(),
-                             str_utf8_view.data() + str_utf8_view.size());
-}
-
-/// Optimized to_wstring for std::wstring
-inline std::wstring to_wstring(std::wstring&& str_utf8) {
-  return std::move(str_utf8);
-}
-#endif
-
 namespace detail {
 
 /// selects the string literal matching the code unit given by @p Char
