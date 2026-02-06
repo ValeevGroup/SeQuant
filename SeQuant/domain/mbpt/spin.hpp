@@ -14,10 +14,9 @@
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/macros.hpp>
+#include <SeQuant/core/utility/overloads.hpp>
 #include <SeQuant/core/utility/string.hpp>
 
-#include <cstddef>
-#include <initializer_list>
 #include <string>
 #include <vector>
 
@@ -234,6 +233,12 @@ ExprPtr closed_shell_spintrace(
     const container::svector<container::svector<SlottedIndex>>&
         ext_index_groups = {},
     bool full_expansion = false);
+ExprPtr closed_shell_spintrace(const ExprPtr& expr, EmptyInitializerList,
+                               bool full_expansion = false);
+ExprPtr closed_shell_spintrace(
+    const ExprPtr& expr,
+    const container::svector<container::svector<Index>>& ext_index_groups,
+    bool full_expansion = false);
 
 container::svector<ResultExpr> closed_shell_spintrace(
     const ResultExpr& expr, bool full_expansion = false);
@@ -341,7 +346,14 @@ std::vector<ExprPtr> open_shell_spintrace(
     const ExprPtr& expr,
     const container::svector<container::svector<SlottedIndex>>&
         ext_index_groups,
-    std::optional<int> target_spin_case = std::nullopt);
+    const std::optional<int>& target_spin_case = std::nullopt);
+std::vector<ExprPtr> open_shell_spintrace(
+    const ExprPtr& expr, EmptyInitializerList,
+    const std::optional<int>& target_spin_case = std::nullopt);
+std::vector<ExprPtr> open_shell_spintrace(
+    const ExprPtr& expr,
+    const container::svector<container::svector<Index>>& ext_index_groups,
+    const std::optional<int>& target_spin_case = std::nullopt);
 
 // clang-format off
 /// @brief Like open_shell_spintrace but uses minimal expansion of the antisymmetrizer
@@ -378,6 +390,12 @@ ExprPtr spintrace(const ExprPtr& expr,
                   const container::svector<container::svector<SlottedIndex>>&
                       ext_index_groups = {},
                   bool spinfree_index_spaces = true);
+ExprPtr spintrace(const ExprPtr& expr, EmptyInitializerList,
+                  bool spinfree_index_spaces = true);
+ExprPtr spintrace(
+    const ExprPtr& expr,
+    const container::svector<container::svector<Index>>& ext_index_groups,
+    bool spinfree_index_spaces = true);
 
 container::svector<ResultExpr> spintrace(const ResultExpr& expr,
                                          bool spinfree_index_spaces = true);

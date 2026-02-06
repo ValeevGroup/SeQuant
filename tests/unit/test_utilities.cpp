@@ -10,8 +10,10 @@
 #include <SeQuant/core/reserved.hpp>
 #include <SeQuant/core/slotted_index.hpp>
 #include <SeQuant/core/utility/conversion.hpp>
+#include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/expr.hpp>
 #include <SeQuant/core/utility/indices.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/singleton.hpp>
 #include <SeQuant/core/utility/strong.hpp>
 #include <SeQuant/core/utility/tensor.hpp>
@@ -677,5 +679,114 @@ TEST_CASE("utilities", "[utilities]") {
                                   const char16_t(&)[2]>);
     STATIC_REQUIRE(std::is_same_v<decltype(SQ_STRLIT(char32_t, "ɑ")),
                                   const char32_t(&)[2]>);
+  }
+
+  SECTION("as_index_group_view") {
+    std::vector<SlottedIndex> indices;
+
+    SECTION("as-is") {
+      SECTION("mutable") {
+        indices = {{L"a_1", SlotType::Bra}, {L"i_1", SlotType::Ket}};
+
+        auto group_view = as_index_group_view(indices);
+
+        REQUIRE(get_bra_idx(group_view) == Index(L"a_1"));
+        REQUIRE(get_ket_idx(group_view) == Index(L"i_1"));
+      }
+      SECTION("const") {
+        indices = {{L"a_1", SlotType::Bra}, {L"i_1", SlotType::Ket}};
+
+        auto group_view = as_index_group_view(std::as_const(indices));
+
+        REQUIRE(get_bra_idx(group_view) == Index(L"a_1"));
+        REQUIRE(get_ket_idx(group_view) == Index(L"i_1"));
+      }
+    }
+    SECTION("reordering") {
+      SECTION("mutable") {
+        indices = {{L"a_1", SlotType::Ket}, {L"i_1", SlotType::Bra}};
+
+        auto group_view = as_index_group_view(indices);
+
+        REQUIRE(get_bra_idx(group_view) == Index(L"i_1"));
+        REQUIRE(get_ket_idx(group_view) == Index(L"a_1"));
+      }
+#if SEQUANT_ASSERT_BEHAVIOR == SEQUANT_ASSERT_THROW
+      SECTION("const") {
+        indices = {{L"a_1", SlotType::Ket}, {L"i_1", SlotType::Bra}};
+
+        // Since the indices are not in the expected order but the range is
+        // passed as const, the assertions will trigger due to uncorrectable
+        // ordering.
+        REQUIRE_THROWS_AS(as_index_group_view(std::as_const(indices)),
+                          Exception);
+      }
+#endif
+    }
+  }
+
+  SECTION("as_view_of_index_groups") {
+    std::vector<container::svector<SlottedIndex>> groups;
+
+    SECTION("as-is") {
+      SECTION("mutable") {
+        groups = {
+            {{L"a_1", SlotType::Bra}, {L"i_1", SlotType::Ket}},
+            {{L"a_2", SlotType::Bra}, {L"i_2", SlotType::Ket}},
+        };
+
+        auto groups_view = as_view_of_index_groups(groups);
+
+        REQUIRE(get_bra_idx(groups_view[0]) == Index(L"a_1"));
+        REQUIRE(get_ket_idx(groups_view[0]) == Index(L"i_1"));
+        REQUIRE(get_bra_idx(groups_view[1]) == Index(L"a_2"));
+        REQUIRE(get_ket_idx(groups_view[1]) == Index(L"i_2"));
+      }
+      SECTION("const") {
+        groups = {
+            {{L"a_1", SlotType::Bra}, {L"i_1", SlotType::Ket}},
+            {{L"a_2", SlotType::Bra}, {L"i_2", SlotType::Ket}},
+        };
+
+        auto groups_view = as_view_of_index_groups(std::as_const(groups));
+
+        REQUIRE(get_bra_idx(groups_view[0]) == Index(L"a_1"));
+        REQUIRE(get_ket_idx(groups_view[0]) == Index(L"i_1"));
+        REQUIRE(get_bra_idx(groups_view[1]) == Index(L"a_2"));
+        REQUIRE(get_ket_idx(groups_view[1]) == Index(L"i_2"));
+      }
+    }
+    SECTION("reordering") {
+      SECTION("mutable") {
+        groups = {
+            {{L"a_1", SlotType::Bra}, {L"i_1", SlotType::Ket}},
+            {{L"a_2", SlotType::Ket}, {L"i_2", SlotType::Bra}},
+        };
+
+        auto groups_view = as_view_of_index_groups(groups);
+
+        REQUIRE(get_bra_idx(groups_view[0]) == Index(L"a_1"));
+        REQUIRE(get_ket_idx(groups_view[0]) == Index(L"i_1"));
+        REQUIRE(get_bra_idx(groups_view[1]) == Index(L"i_2"));
+        REQUIRE(get_ket_idx(groups_view[1]) == Index(L"a_2"));
+      }
+      SECTION("const") {
+        groups = {
+            {{L"a_1", SlotType::Bra}, {L"i_1", SlotType::Ket}},
+            {{L"a_2", SlotType::Ket}, {L"i_2", SlotType::Bra}},
+        };
+
+        auto groups_view = as_view_of_index_groups(std::as_const(groups));
+
+        // Note: due to the lazy evaluation of ranges, we get the assert error
+        // only once we actually attempt to access the second group
+        REQUIRE(get_bra_idx(groups_view[0]) == Index(L"a_1"));
+        REQUIRE(get_ket_idx(groups_view[0]) == Index(L"i_1"));
+
+#if SEQUANT_ASSERT_BEHAVIOR == SEQUANT_ASSERT_THROW
+        REQUIRE_THROWS_AS(get_bra_idx(groups_view[1]), Exception);
+#endif
+      }
+    }
   }
 }

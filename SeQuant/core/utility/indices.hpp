@@ -536,7 +536,12 @@ Container<Group<SlottedIndex>> external_indices(const ExprPtr& expr) {
 
 template <typename T>
 concept SlottedIndexContainer =
-    std::same_as<typename std::remove_cvref_t<T>::value_type, SlottedIndex>;
+    std::ranges::range<T> &&
+    std::same_as<std::ranges::range_value_t<T>, SlottedIndex>;
+
+template <typename T>
+concept IndexContainer =
+    std::ranges::range<T> && std::same_as<std::ranges::range_value_t<T>, Index>;
 
 template <typename T>
 concept SlottedIndexTuple =
@@ -544,13 +549,24 @@ concept SlottedIndexTuple =
                    SlottedIndex> &&
     std::is_same_v<std::tuple_element_t<1, std::remove_cvref_t<T>>,
                    SlottedIndex>;
+template <typename T>
+concept IndexTuple =
+    std::is_same_v<std::tuple_element_t<0, std::remove_cvref_t<T>>, Index> &&
+    std::is_same_v<std::tuple_element_t<1, std::remove_cvref_t<T>>, Index>;
 
 template <typename T>
 concept SlottedIndexGroup = SlottedIndexContainer<T> || SlottedIndexTuple<T>;
 
 template <typename T>
+concept IndexGroup = IndexContainer<T> || IndexTuple<T>;
+
+template <typename T>
 concept SlottedIndexGroupContainer =
     std::ranges::range<T> && SlottedIndexGroup<std::ranges::range_value_t<T>>;
+
+template <typename T>
+concept IndexGroupContainer =
+    std::ranges::range<T> && IndexGroup<std::ranges::range_value_t<T>>;
 
 /// @param group A group of indices with slot information
 /// @returns The bra index of the provided group
@@ -562,7 +578,7 @@ concept SlottedIndexGroupContainer =
 /// the order of its elements based on how they have been inserted
 /// (vector-like).
 template <SlottedIndexGroup Group>
-auto get_bra_idx(Group&& group) -> meta::mimic_constness_t<Group, Index&> {
+decltype(auto) get_bra_idx(Group&& group) {
   if constexpr (SlottedIndexTuple<Group>) {
     SEQUANT_ASSERT(std::get<0>(group).slot_type() == SlotType::Bra ||
                    std::get<1>(group).slot_type() == SlotType::Bra);
@@ -581,6 +597,26 @@ auto get_bra_idx(Group&& group) -> meta::mimic_constness_t<Group, Index&> {
   }
 }
 
+/// @param group A group of indices assumed to be in canonical ordering
+/// @returns The bra index of the provided group
+///
+/// @tparam Group The type of the container used to represent the index group.
+/// May be a std::pair<Index, Index> or a container that retains
+/// the order of its elements based on how they have been inserted
+/// (vector-like).
+template <IndexGroup Group>
+decltype(auto) get_bra_idx(Group&& group) {
+  if constexpr (IndexTuple<Group>) {
+    return std::get<0>(group);
+  } else {
+    using std::begin;
+    using std::end;
+    auto it = begin(group);
+    SEQUANT_ASSERT(it != end(group));
+    return *it;
+  }
+}
+
 /// @param group A group of indices with slot information
 /// @returns The ket index of the provided group
 ///
@@ -591,7 +627,7 @@ auto get_bra_idx(Group&& group) -> meta::mimic_constness_t<Group, Index&> {
 /// the order of its elements based on how they have been inserted
 /// (vector-like).
 template <SlottedIndexGroup Group>
-auto get_ket_idx(Group&& group) -> meta::mimic_constness_t<Group, Index&> {
+decltype(auto) get_ket_idx(Group&& group) {
   if constexpr (SlottedIndexTuple<Group>) {
     SEQUANT_ASSERT(std::get<0>(group).slot_type() == SlotType::Ket ||
                    std::get<1>(group).slot_type() == SlotType::Ket);
@@ -610,6 +646,65 @@ auto get_ket_idx(Group&& group) -> meta::mimic_constness_t<Group, Index&> {
     SEQUANT_ASSERT(it != rend(group));
     return it->index();
   }
+}
+
+/// @param group A group of indices assumed to be in canonical ordering
+/// @returns The ket index of the provided group
+///
+/// @tparam Group The type of the container used to represent the index group.
+/// May be a std::pair<Index, Index> or a container that retains
+/// the order of its elements based on how they have been inserted
+/// (vector-like).
+template <IndexGroup Group>
+decltype(auto) get_ket_idx(Group&& group) {
+  if constexpr (IndexTuple<Group>) {
+    return std::get<1>(group);
+  } else {
+    using std::begin;
+    using std::end;
+    auto it = begin(group);
+    SEQUANT_ASSERT(it != end(group));
+    std::advance(it, 1);
+    SEQUANT_ASSERT(it != end(group));
+    return *it;
+  }
+}
+
+/// Produces a view of plain Index objects from a range of SlottedIndex objects
+///
+/// @note This function will bring indices in the group into canonical order
+/// (based on slot type) or assert that they already are in canonical order,
+/// if group is const.
+decltype(auto) as_index_group_view(SlottedIndexGroup auto&& group) {
+  static_assert(static_cast<int>(SlotType::Bra) == 0);
+  static_assert(static_cast<int>(SlotType::Ket) == 1);
+
+  // We have to ensure a unique order of indices if we're getting rid of the
+  // SlotType tag
+  if constexpr (!meta::is_immutable_v<decltype(group)>) {
+    std::ranges::sort(group, std::less{}, &SlottedIndex::slot_type);
+  } else {
+    SEQUANT_ASSERT(
+        std::ranges::is_sorted(group, std::less{}, &SlottedIndex::slot_type));
+  }
+
+  return group | std::ranges::views::transform(
+                     [](auto&& idx) -> decltype(auto) { return idx.index(); });
+}
+
+/// Produces a view of a view of plain Index objects from a range of a range of
+/// SlottedIndex objects
+///
+/// @note This function transforms all elements via as_index_group, which may
+/// change order of indices or assert on the order being as expected.
+///
+/// @sa as_index_group
+decltype(auto) as_view_of_index_groups(
+    SlottedIndexGroupContainer auto&& groups) {
+  return groups |
+         std::ranges::views::transform([](auto&& group) -> decltype(auto) {
+           return as_index_group_view(group);
+         });
 }
 
 }  // namespace sequant
