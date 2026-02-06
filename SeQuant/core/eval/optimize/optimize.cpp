@@ -2,10 +2,9 @@
 #include <SeQuant/core/complex.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/eval/eval_expr.hpp>
-#include <SeQuant/core/eval/eval_node.hpp>
+#include <SeQuant/core/eval/optimize.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/hash.hpp>
-#include <SeQuant/core/optimize.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 

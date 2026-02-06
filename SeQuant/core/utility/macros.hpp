@@ -8,10 +8,8 @@
 #include <SeQuant/core/utility/exception.hpp>
 
 #include <cstdlib>
-#include <iostream>
 #include <source_location>
-#include <sstream>
-#include <utility>
+#include <string>
 
 /* detect C++ compiler id:
 - ids taken from CMake
@@ -71,38 +69,15 @@
 #define SEQUANT_ASSERT_ABORT 3
 #define SEQUANT_ASSERT_IGNORE 4
 #define SEQUANT_STRINGIFY(x) #x
-#define SEQUANT_ASSERT_BEHAVIOR \
-  SEQUANT_CONCAT(SEQUANT_ASSERT_, SEQUANT_ASSERT_BEHAVIOR_)
-#if SEQUANT_ASSERT_BEHAVIOR != SEQUANT_ASSERT_IGNORE
-#define SEQUANT_ASSERT_ENABLED
-#endif
 
 namespace sequant {
 
 #ifdef SEQUANT_ASSERT_ENABLED
 [[noreturn]]
 #endif
-inline void
-assert_failed([[maybe_unused]] const std::string &errmsg,
-              [[maybe_unused]] const std::source_location location =
-                  std::source_location::current()) {
-#ifdef SEQUANT_ASSERT_ENABLED
-#if SEQUANT_ASSERT_BEHAVIOR == SEQUANT_ASSERT_THROW
-  std::ostringstream oss;
-  oss
-#elif SEQUANT_ASSERT_BEHAVIOR == SEQUANT_ASSERT_ABORT
-  std::cerr
-#endif  // SEQUANT_ASSERT_BEHAVIOR
-      << errmsg << " at " << location.file_name() << ":" << location.line()
-      << " in function '" << location.function_name() << "'";
-#if SEQUANT_ASSERT_BEHAVIOR == SEQUANT_ASSERT_THROW
-  throw sequant::Exception(oss.str());
-#elif SEQUANT_ASSERT_BEHAVIOR == SEQUANT_ASSERT_ABORT
-  std::cerr << std::endl;
-  std::abort();
-#endif  // SEQUANT_ASSERT_BEHAVIOR
-#endif  // SEQUANT_ASSERT_ENABLED
-}
+void assert_failed(
+    const std::string &errmsg,
+    std::source_location location = std::source_location::current());
 }  // namespace sequant
 
 #ifdef SEQUANT_ASSERT_ENABLED
@@ -123,14 +98,9 @@ assert_failed([[maybe_unused]] const std::string &errmsg,
 #endif
 
 namespace sequant {
-[[noreturn]] inline void abort_msg(
+[[noreturn]] void abort_msg(
     const std::string &errmsg,
-    const std::source_location location = std::source_location::current()) {
-  std::cerr << errmsg << " at " << location.file_name() << ":"
-            << location.line() << " in function '" << location.function_name()
-            << "'";
-  std::abort();
-}
+    std::source_location location = std::source_location::current());
 }  // namespace sequant
 
 #define SEQUANT_ABORT(msg) sequant::abort_msg(msg)

@@ -7,7 +7,13 @@
 #
 # and the following imported targets
 #
-#     SeQuant::SeQuant    - the SeQuant library
+#     SeQuant::SeQuant    - umbrella SeQuant target (links all modules)
+#     SeQuant::symb       - symbolic core
+#     SeQuant::eval       - evaluation framework
+#     SeQuant::optimize   - expression optimization (STO, CSE, fusion)
+#     SeQuant::export     - code generation/export
+#     SeQuant::core       - version info + symb + eval + export
+#     SeQuant::mbpt       - MBPT domain code
 #
 
 # Set package version
@@ -72,9 +78,19 @@ endif (NOT TARGET Threads::Threads)
 # Include library IMPORT targets
 if(NOT TARGET SeQuant::SeQuant)
   include("${CMAKE_CURRENT_LIST_DIR}/sequant-targets.cmake")
-  if(NOT TARGET SeQuant::SeQuant)
-    message(FATAL_ERROR "expected SeQuant::SeQuant among imported SeQuant targets")
+  # Verify expected targets exist
+  set(grandTargetList symb eval optimize export core mbpt SeQuant)
+  if (SEQUANT_HAS_TILEDARRAY)
+    list(APPEND grandTargetList eval::ta)
   endif()
+  if (SEQUANT_HAS_BTAS)
+    list(APPEND grandTargetList eval::btas)
+  endif()
+  foreach(_target ${grandTargetList})
+    if(NOT TARGET SeQuant::${_target})
+      message(FATAL_ERROR "expected SeQuant::${_target} among imported SeQuant targets")
+    endif()
+  endforeach()
 endif()
 
 set(SEQUANT_FOUND TRUE)

@@ -1611,6 +1611,9 @@ class WickTheorem {
   void reduce(ExprPtr &expr) const;
 };
 
+extern template class WickTheorem<Statistics::BoseEinstein>;
+extern template class WickTheorem<Statistics::FermiDirac>;
+
 using BWickTheorem = WickTheorem<Statistics::BoseEinstein>;
 using FWickTheorem = WickTheorem<Statistics::FermiDirac>;
 

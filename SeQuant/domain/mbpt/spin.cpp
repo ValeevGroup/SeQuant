@@ -3,9 +3,9 @@
 
 #include <SeQuant/core/algorithm.hpp>
 #include <SeQuant/core/attr.hpp>
+#include <SeQuant/core/eval/optimize.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/math.hpp>
-#include <SeQuant/core/optimize.hpp>
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/reserved.hpp>
 #include <SeQuant/core/space.hpp>

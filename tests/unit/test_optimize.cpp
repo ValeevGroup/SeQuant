@@ -6,10 +6,10 @@
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/eval/eval_expr.hpp>
 #include <SeQuant/core/eval/eval_node.hpp>
+#include <SeQuant/core/eval/optimize.hpp>
+#include <SeQuant/core/eval/optimize/common_subexpression_elimination.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
-#include <SeQuant/core/optimize.hpp>
-#include <SeQuant/core/optimize/common_subexpression_elimination.hpp>
 #include <SeQuant/core/parse.hpp>
 #include <SeQuant/core/space.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>

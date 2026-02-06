@@ -60,7 +60,9 @@ class GWT {
       bool done = false;
       while (!done) {
         result_t next_wf_terms;
-        for (const auto& [oper, contrs] : current_wf_terms) {
+        for (auto&& o_c : current_wf_terms) {
+          const auto& oper = o_c.oper;
+          const auto& contrs = o_c.contrs;
           // return true if op_it is first op of its type (cre or ann) in its
           // nop
           auto first_in_nop = [this, &oper](const auto& op_it) {

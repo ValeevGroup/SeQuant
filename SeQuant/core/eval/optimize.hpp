@@ -388,7 +388,7 @@ ExprPtr optimize(ExprPtr const& expr, IdxToSize const& idx2size,
 }  // namespace opt
 
 ///
-/// Optimize the expression using IndexSpace::aproximate_size() for reference
+/// Optimize the expression using IndexSpace::approximate_size() for reference
 /// index extent.
 ///
 /// \param expr  Expression to be optimized.
@@ -398,7 +398,7 @@ ExprPtr optimize(ExprPtr const& expr, IdxToSize const& idx2size,
 /// \return Optimized expression for lower evaluation cost.
 ExprPtr optimize(ExprPtr const& expr, bool reorder_sum = true);
 
-/// Optimize the expression using IndexSpace::aproximate_size() for reference
+/// Optimize the expression using IndexSpace::approximate_size() for reference
 /// index extent.
 ///
 /// \param expr  Expression to be optimized.
@@ -408,7 +408,7 @@ ExprPtr optimize(ExprPtr const& expr, bool reorder_sum = true);
 /// \return Optimized expression for lower evaluation cost.
 ResultExpr& optimize(ResultExpr& expr, bool reorder_sum = true);
 
-/// Optimize the expression using IndexSpace::aproximate_size() for reference
+/// Optimize the expression using IndexSpace::approximate_size() for reference
 /// index extent.
 ///
 /// \param expr  Expression to be optimized.
