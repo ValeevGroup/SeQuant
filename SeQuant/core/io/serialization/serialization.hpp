@@ -1,5 +1,5 @@
-#ifndef SEQUANT_PARSE_HPP
-#define SEQUANT_PARSE_HPP
+#ifndef SEQUANT_CORE_IO_SERIALIZATION_HPP
+#define SEQUANT_CORE_IO_SERIALIZATION_HPP
 
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/expr_fwd.hpp>
@@ -130,4 +130,4 @@ namespace v1 {
 
 }  // namespace sequant
 
-#endif  // SEQUANT_PARSE_HPP
+#endif  // SEQUANT_CORE_IO_SERIALIZATION_HPP
