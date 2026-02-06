@@ -27,7 +27,7 @@ SEQUANT_RESOLVE_DESERIALIZATION_FUNC(std::string_view, ExprPtr)
 SEQUANT_RESOLVE_DESERIALIZATION_FUNC(std::wstring_view, ResultExpr)
 SEQUANT_RESOLVE_DESERIALIZATION_FUNC(std::string_view, ResultExpr)
 
-#define RESOLVE_SERIALIZE_FUNC(argType)                         \
+#define SEQUANT_RESOLVE_SERIALIZE_FUNC(argType)                 \
   std::wstring to_string(const argType &arg,                    \
                          const SerializationOptions &options) { \
     switch (options.syntax) {                                   \
@@ -38,15 +38,15 @@ SEQUANT_RESOLVE_DESERIALIZATION_FUNC(std::string_view, ResultExpr)
     SEQUANT_UNREACHABLE;                                        \
   }
 
-RESOLVE_SERIALIZE_FUNC(ResultExpr)
-RESOLVE_SERIALIZE_FUNC(ExprPtr)
-RESOLVE_SERIALIZE_FUNC(Expr)
-RESOLVE_SERIALIZE_FUNC(AbstractTensor)
-RESOLVE_SERIALIZE_FUNC(Index)
-RESOLVE_SERIALIZE_FUNC(NormalOperator<Statistics::BoseEinstein>)
-RESOLVE_SERIALIZE_FUNC(NormalOperator<Statistics::FermiDirac>)
+SEQUANT_RESOLVE_SERIALIZE_FUNC(ResultExpr)
+SEQUANT_RESOLVE_SERIALIZE_FUNC(ExprPtr)
+SEQUANT_RESOLVE_SERIALIZE_FUNC(Expr)
+SEQUANT_RESOLVE_SERIALIZE_FUNC(AbstractTensor)
+SEQUANT_RESOLVE_SERIALIZE_FUNC(Index)
+SEQUANT_RESOLVE_SERIALIZE_FUNC(NormalOperator<Statistics::BoseEinstein>)
+SEQUANT_RESOLVE_SERIALIZE_FUNC(NormalOperator<Statistics::FermiDirac>)
 
-#undef SEQUANT_RESOLVE_PARSE_FUNC
-#undef SEQUANT_RESOLVE_DEPARSE_FUNC
+#undef SEQUANT_RESOLVE_SERIALIZE_FUNC
+#undef SEQUANT_RESOLVE_DESERIALIZATION_FUNC
 
 }  // namespace sequant::io::serialization
