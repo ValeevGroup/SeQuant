@@ -74,7 +74,6 @@ struct SerializationOptions {
   ExprType from_string<ExprType>(std::wstring_view input,                \
                                  const DeserializationOptions &options);
 
-// clang-format off
 /// \brief Construct expressions from string representations
 ///
 /// \param input The input to deserialize
@@ -85,15 +84,20 @@ SEQUANT_DECLARE_DESERIALIZATION_FUNC;
 SEQUANT_DECLARE_DESERIALIZATION_FUNC_SPECIALIZATION(ExprPtr);
 SEQUANT_DECLARE_DESERIALIZATION_FUNC_SPECIALIZATION(ResultExpr);
 
-
-#define SEQUANT_DECLARE_SERIALIZATION_FUNC \
-	std::wstring to_string(const ResultExpr &expr, const SerializationOptions &options = {}); \
-	std::wstring to_string(const ExprPtr &expr, const SerializationOptions &options = {}); \
-	std::wstring to_string(const Expr &expr, const SerializationOptions &options = {}); \
-	std::wstring to_string(const AbstractTensor &expr, const SerializationOptions &options = {}); \
-	std::wstring to_string(const Index &index, const SerializationOptions &options = {}); \
-	template< Statistics S> \
-	std::wstring to_string(const NormalOperator<S> &nop, const SerializationOptions &options = {}); \
+#define SEQUANT_DECLARE_SERIALIZATION_FUNC                          \
+  std::wstring to_string(const ResultExpr &expr,                    \
+                         const SerializationOptions &options = {}); \
+  std::wstring to_string(const ExprPtr &expr,                       \
+                         const SerializationOptions &options = {}); \
+  std::wstring to_string(const Expr &expr,                          \
+                         const SerializationOptions &options = {}); \
+  std::wstring to_string(const AbstractTensor &expr,                \
+                         const SerializationOptions &options = {}); \
+  std::wstring to_string(const Index &index,                        \
+                         const SerializationOptions &options = {}); \
+  template <Statistics S>                                           \
+  std::wstring to_string(const NormalOperator<S> &nop,              \
+                         const SerializationOptions &options = {});
 
 ///
 /// Get a serialized string from an expression.
@@ -111,23 +115,20 @@ SEQUANT_DECLARE_DESERIALIZATION_FUNC_SPECIALIZATION(ResultExpr);
 /// \return wstring of the expression.
 SEQUANT_DECLARE_SERIALIZATION_FUNC
 
-
-
 // Versioned variants
 namespace v1 {
-	SEQUANT_DECLARE_DESERIALIZATION_FUNC;
+SEQUANT_DECLARE_DESERIALIZATION_FUNC;
 
-	SEQUANT_DECLARE_DESERIALIZATION_FUNC_SPECIALIZATION(ExprPtr);
-	SEQUANT_DECLARE_DESERIALIZATION_FUNC_SPECIALIZATION(ResultExpr);
+SEQUANT_DECLARE_DESERIALIZATION_FUNC_SPECIALIZATION(ExprPtr);
+SEQUANT_DECLARE_DESERIALIZATION_FUNC_SPECIALIZATION(ResultExpr);
 
-	SEQUANT_DECLARE_SERIALIZATION_FUNC
-}
-
+SEQUANT_DECLARE_SERIALIZATION_FUNC
+}  // namespace v1
 
 #undef SEQUANT_DECLARE_DESERIALIZATION_FUNC
 #undef SEQUANT_DECLARE_DESERIALIZATION_FUNC_SPECIALIZATION
 #undef SEQUANT_DECLARE_SERIALIZATION_FUNC
 
-} // namespace sequant::io::serialization
+}  // namespace sequant::io::serialization
 
 #endif  // SEQUANT_CORE_IO_SERIALIZATION_HPP
