@@ -128,6 +128,6 @@ namespace v1 {
 #undef SEQUANT_DECLARE_DESERIALIZATION_FUNC_SPECIALIZATION
 #undef SEQUANT_DECLARE_SERIALIZATION_FUNC
 
-}  // namespace sequant
+} // namespace sequant::io::serialization
 
 #endif  // SEQUANT_CORE_IO_SERIALIZATION_HPP
