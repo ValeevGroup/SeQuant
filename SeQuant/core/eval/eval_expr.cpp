@@ -30,6 +30,11 @@
 
 namespace sequant {
 
+using EvalExprNode = FullBinaryNode<EvalExpr>;
+
+using IndexSet = container::set<Index, Index::FullLabelCompare>;
+using IndexCount = container::map<Index, size_t, Index::FullLabelCompare>;
+
 namespace {
 
 size_t hash_terminal_tensor(Tensor const&) noexcept;
@@ -300,7 +305,39 @@ struct ExprWithHash {
   size_t hash;
 };
 
-using EvalExprNode = FullBinaryNode<EvalExpr>;
+void index_count(IndexCount& counts, ExprPtr const& expr) {
+  if (!expr) return;
+  if (expr->is<Tensor>()) {
+    for (auto&& i : expr->as<Tensor>().const_indices()) {
+      auto&& [it, yn] = counts.emplace(i, 1);
+      if (!yn) it->second++;
+    }
+  } else if (expr->is<Sum>() && !expr->empty())
+    index_count(counts, expr->front());
+  else if (expr->is<Product>())
+    for (auto&& fac : *expr) index_count(counts, fac);
+}
+
+IndexCount index_count(meta::range_of<ExprPtr> auto const& facs) {
+  IndexCount result;
+  for (auto&& f : facs) index_count(result, f);
+  return result;
+}
+
+IndexSet target_indices(meta::range_of<ExprPtr> auto const& facs,
+                        IndexSet const& tidxs) {
+  IndexSet result;
+  for (auto&& [k, v] : index_count(facs))
+    if (v == 1 || tidxs.contains(k)) result.emplace(k);
+  return result;
+}
+
+auto imed_target_indices(Product const& prod, IndexSet const& tidxs) {
+  return inits(prod.factors()) |
+         ranges::views::transform(
+             [&tidxs](auto&& facs) { return target_indices(facs, tidxs); }) |
+         ranges::to_vector;
+}
 
 ///
 /// \brief Collect tensors appearing as a factor at the leaf node of a product
