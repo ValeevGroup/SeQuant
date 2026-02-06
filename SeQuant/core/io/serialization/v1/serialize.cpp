@@ -96,11 +96,11 @@ std::wstring serialize_scalar(const Constant::scalar_type& scalar,
   }
 
   const auto& real = scalar.real();
-  const auto& realNumerator = boost::multiprecision::numerator(real);
-  const auto& realDenominator = boost::multiprecision::denominator(real);
+  const auto& realNumerator = numerator(real);
+  const auto& realDenominator = denominator(real);
   const auto& imag = scalar.imag();
-  const auto& imagNumerator = boost::multiprecision::numerator(imag);
-  const auto& imagDenominator = boost::multiprecision::denominator(imag);
+  auto imagNumerator = numerator(imag);
+  const auto& imagDenominator = denominator(imag);
 
   std::string serialized;
   if (realNumerator != 0) {
@@ -112,7 +112,12 @@ std::wstring serialize_scalar(const Constant::scalar_type& scalar,
   }
   if (imagNumerator != 0) {
     if (!serialized.empty()) {
-      serialized += imagNumerator < 0 ? " + i " : " - i ";
+      if (imagNumerator < 0) {
+        serialized += " - i ";
+        imagNumerator *= -1;
+      } else {
+        serialized += " + i ";
+      }
     }
 
     serialized += imagNumerator.str();
