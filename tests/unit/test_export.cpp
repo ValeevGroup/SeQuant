@@ -257,10 +257,10 @@ std::vector<ExpressionGroup<>> parse_expression_spec(const std::string &spec) {
                  .def_col_symm = ColumnSymmetry::Nonsymm});
       groups.back().add(to_export_tree(res));
     } catch (...) {
-      ExprPtr expr = deserialize<ExprPtr>(
-          line, {.def_perm_symm = Symmetry::Nonsymm,
-                 .def_braket_symm = BraKetSymmetry::Nonsymm,
-                 .def_col_symm = ColumnSymmetry::Nonsymm});
+      ExprPtr expr =
+          deserialize(line, {.def_perm_symm = Symmetry::Nonsymm,
+                             .def_braket_symm = BraKetSymmetry::Nonsymm,
+                             .def_col_symm = ColumnSymmetry::Nonsymm});
       groups.back().add(to_export_tree(expr));
     }
   }
@@ -430,11 +430,11 @@ TEST_CASE("export", "[export]") {
         const std::string &expected =
             candidates.at(static_cast<std::size_t>(layout));
 
-        Tensor tensor = deserialize<ExprPtr>(
-                            input, {.def_perm_symm = Symmetry::Nonsymm,
-                                    .def_braket_symm = BraKetSymmetry::Nonsymm,
-                                    .def_col_symm = ColumnSymmetry::Nonsymm})
-                            ->as<Tensor>();
+        Tensor tensor =
+            deserialize(input, {.def_perm_symm = Symmetry::Nonsymm,
+                                .def_braket_symm = BraKetSymmetry::Nonsymm,
+                                .def_col_symm = ColumnSymmetry::Nonsymm})
+                ->as<Tensor>();
         bool rewritten = ctx.rewrite(tensor);
         REQUIRE_THAT(tensor, EquivalentTo(expected));
         REQUIRE(rewritten == (toUtf8(input) != expected));
@@ -676,13 +676,12 @@ TEST_CASE("export", "[export]") {
 
     SECTION("remap_integrals") {
       SECTION("Unchanged") {
-        Tensor tensor = deserialize<ExprPtr>(L"t{i1;a1}:N-N-N")->as<Tensor>();
+        Tensor tensor = deserialize(L"t{i1;a1}:N-N-N")->as<Tensor>();
         bool rewritten = ctx.rewrite(tensor);
         REQUIRE_THAT(tensor, EquivalentTo("t{i1;a1}:N-N-N"));
         REQUIRE_FALSE(rewritten);
 
-        tensor =
-            deserialize<ExprPtr>(int_label + L"{a1;i1}:N-N-N")->as<Tensor>();
+        tensor = deserialize(int_label + L"{a1;i1}:N-N-N")->as<Tensor>();
         rewritten = ctx.rewrite(tensor);
         REQUIRE_THAT(tensor, EquivalentTo("g{a1;i1}:N-N-N"));
       }

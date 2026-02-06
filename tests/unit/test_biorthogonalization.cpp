@@ -39,7 +39,7 @@ TEST_CASE("biorthogonalization", "[Biorthogonalization]") {
     for (std::size_t i = 0; i < inputs.size(); ++i) {
       CAPTURE(i);
 
-      ExprPtr input_expr = deserialize<ExprPtr>(inputs.at(i));
+      ExprPtr input_expr = deserialize(inputs.at(i));
 
       auto externals = external_indices(input_expr);
 

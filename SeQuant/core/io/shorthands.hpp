@@ -5,6 +5,7 @@
 /// of simple wrapper functions directly in the sequant namespace which delegate
 /// to the respective functions in the sequant::io namespace.
 
+#include <SeQuant/core/expr_fwd.hpp>
 #include <SeQuant/core/io/concepts.hpp>
 #include <SeQuant/core/io/latex/latex.hpp>
 #include <SeQuant/core/io/serialization/serialization.hpp>
@@ -29,7 +30,7 @@ decltype(auto) serialize(
 }
 
 /// Shorthand for io::serialization::from_string
-template <typename T>
+template <typename T = ExprPtr>
   requires(io::deserializable<T>)
 decltype(auto) deserialize(
     std::string_view input,
@@ -37,7 +38,7 @@ decltype(auto) deserialize(
   return io::serialization::from_string<T>(input, options);
 }
 
-template <typename T>
+template <typename T = ExprPtr>
   requires(io::deserializable<T>)
 decltype(auto) deserialize(
     std::wstring_view input,

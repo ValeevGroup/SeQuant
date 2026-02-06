@@ -982,7 +982,7 @@ SECTION("SRSF") {
     }
   }
   SECTION("S operator action") {
-    auto expr = tensor::S(2) * deserialize<ExprPtr>(L"f{a1,a2;i1,i2}");
+    auto expr = tensor::S(2) * deserialize(L"f{a1,a2;i1,i2}");
     simplify(expr);
     auto scalar = expr->as<Product>().scalar();
     REQUIRE(scalar == 1);
@@ -1093,7 +1093,7 @@ SECTION("rules") {
     for (std::size_t i = 0; i < inputs.size(); ++i) {
       CAPTURE(inputs.at(i));
 
-      ExprPtr input_expr = deserialize<ExprPtr>(inputs.at(i));
+      ExprPtr input_expr = deserialize(inputs.at(i));
 
       const IndexSpace aux_space =
           get_default_context().index_space_registry()->retrieve(L"x");
@@ -1124,7 +1124,7 @@ SECTION("rules") {
     for (std::size_t i = 0; i < inputs.size(); ++i) {
       CAPTURE(inputs.at(i));
 
-      ExprPtr input_expr = deserialize<ExprPtr>(inputs.at(i));
+      ExprPtr input_expr = deserialize(inputs.at(i));
 
       const IndexSpace aux_space =
           get_default_context().index_space_registry()->retrieve(L"x");

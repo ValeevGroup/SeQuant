@@ -59,10 +59,10 @@ struct SerializationOptions {
 };
 
 #define SEQUANT_DECLARE_DESERIALIZATION_FUNC                          \
-  template <typename T>                                               \
+  template <typename T = ExprPtr>                                     \
   T from_string(std::string_view input,                               \
                 const DeserializationOptions &options = {}) = delete; \
-  template <typename T>                                               \
+  template <typename T = ExprPtr>                                     \
   T from_string(std::wstring_view input,                              \
                 const DeserializationOptions &options = {}) = delete;
 

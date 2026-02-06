@@ -43,9 +43,9 @@ TEST_CASE("fusion", "[optimize]") {
   };
 
   for (auto&& [l, r, f] : fused_terms) {
-    auto const le = deserialize<ExprPtr>(l);
-    auto const re = deserialize<ExprPtr>(r);
-    auto const fe = deserialize<ExprPtr>(f);
+    auto const le = deserialize(l);
+    auto const re = deserialize(r);
+    auto const fe = deserialize(f);
     auto fu = Fusion{le->as<Product>(), re->as<Product>()};
     REQUIRE((fu.left() || fu.right()));
 
