@@ -55,6 +55,12 @@ void biorthogonal_transform(
         ext_index_groups = {},
     double pseudoinverse_threshold =
         default_biorthogonalizer_pseudoinverse_threshold);
+[[nodiscard]] ExprPtr biorthogonal_transform(
+    const ExprPtr& expr,
+    const container::svector<container::svector<sequant::Index>>&
+        ext_index_groups = {},
+    double pseudoinverse_threshold =
+        default_biorthogonalizer_pseudoinverse_threshold);
 
 /// @brief filters out the nonunique terms in Wang-Knizia biorthogonalization
 /// WK biorthogonalization rewrites biorthogonal expressions as a projector
@@ -75,6 +81,9 @@ void biorthogonal_transform(
 ExprPtr WK_biorthogonalization_filter(
     ExprPtr expr,
     const container::svector<container::svector<SlottedIndex>>& ext_idxs);
+ExprPtr WK_biorthogonalization_filter(
+    ExprPtr expr,
+    const container::svector<container::svector<Index>>& ext_idxs);
 
 /// @brief Performs biorthogonal transformation with factored out NNS projector
 /// @details Applies biorthogonal transformation. When factor_out_nns_projector
@@ -92,6 +101,10 @@ ExprPtr WK_biorthogonalization_filter(
 ExprPtr biorthogonal_transform_pre_nnsproject(
     ExprPtr& expr,
     const container::svector<container::svector<SlottedIndex>>& ext_idxs,
+    bool factor_out_nns_projector = true);
+ExprPtr biorthogonal_transform_pre_nnsproject(
+    ExprPtr& expr,
+    const container::svector<container::svector<Index>>& ext_idxs,
     bool factor_out_nns_projector = true);
 
 namespace detail {
