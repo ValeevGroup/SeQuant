@@ -37,7 +37,8 @@ std::wstring to_string(T&& t) {
 }
 
 template <typename T>
-  requires(requires(const T& t) { t._to_latex(); })
+  requires(!has_to_latex_member<T> && !pointer_can_call_to_latex<T> &&
+           requires(const T& t) { t._to_latex(); })
 std::wstring to_string(const T& t) {
   return t._to_latex();
 }
