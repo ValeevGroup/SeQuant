@@ -129,6 +129,8 @@ option(SEQUANT_BTAS "Enable BTAS eval backend" ${SEQUANT_EVAL_TESTS})
 add_feature_info(SEQUANT_EVAL_BTAS SEQUANT_BTAS "Enable BTAS eval backend")
 option(SEQUANT_TILEDARRAY "Enable TiledArray eval backend" ${SEQUANT_EVAL_TESTS})
 add_feature_info(SEQUANT_EVAL_TILEDARRAY SEQUANT_TILEDARRAY "Enable TiledArray eval backend")
+option(SEQUANT_TAPP "Enable TAPP eval backend" ${SEQUANT_EVAL_TESTS})
+add_feature_info(SEQUANT_EVAL_TAPP SEQUANT_TAPP "Enable TAPP eval backend")
 
 option(SEQUANT_IWYU "Whether to use the include-what-you-use tool (if found)" OFF)
 option(SEQUANT_WARNINGS_AS_ERRORS "Whether to treat compiler warnings as errors" ${PROJECT_IS_TOP_LEVEL})
@@ -460,6 +462,14 @@ set(SeQuant_eval_btas_src
         SeQuant/core/eval/backends/btas/result.hpp
 )
 
+# TAPP backend sources (header-only)
+set(SeQuant_eval_tapp_src
+        SeQuant/core/eval/backends/tapp/tensor.hpp
+        SeQuant/core/eval/backends/tapp/ops.hpp
+        SeQuant/core/eval/backends/tapp/eval_expr.hpp
+        SeQuant/core/eval/backends/tapp/result.hpp
+)
+
 # Core sources (just version info)
 set(SeQuant_core_src
         ${PROJECT_BINARY_DIR}/SeQuant/version.hpp
@@ -485,6 +495,12 @@ if (SEQUANT_BTAS)
         include(FindOrFetchBTAS)
     endif()
     set(SEQUANT_HAS_BTAS ON)
+endif ()
+if (SEQUANT_TAPP)
+    if (NOT TARGET tapp-reference)
+        include(FindOrFetchTAPP)
+    endif()
+    set(SEQUANT_HAS_TAPP ON)
 endif ()
 
 if (NOT PROJECT_IS_TOP_LEVEL)
@@ -579,6 +595,17 @@ if (SEQUANT_HAS_BTAS)
 endif()
 
 ##########################
+# SeQuant-eval-tapp: TAPP backend (header-only)
+##########################
+if (SEQUANT_HAS_TAPP)
+    add_library(SeQuant-eval-tapp INTERFACE)
+    set_target_properties(SeQuant-eval-tapp PROPERTIES EXPORT_NAME eval::tapp)
+    add_library(SeQuant::eval::tapp ALIAS SeQuant-eval-tapp)
+    target_link_libraries(SeQuant-eval-tapp INTERFACE SeQuant-eval SeQuant-symb tapp-reference)
+    target_compile_definitions(SeQuant-eval-tapp INTERFACE SEQUANT_HAS_TAPP=1)
+endif()
+
+##########################
 # SeQuant-export: code generation/export (depends on eval)
 ##########################
 sequant_add_library(export ${SeQuant_export_src})
@@ -615,6 +642,9 @@ if (SEQUANT_HAS_TILEDARRAY)
 endif()
 if (SEQUANT_HAS_BTAS)
     list(APPEND SEQUANT_MODULES SeQuant-eval-btas)
+endif()
+if (SEQUANT_HAS_TAPP)
+    list(APPEND SEQUANT_MODULES SeQuant-eval-tapp)
 endif()
 
 ##########################
