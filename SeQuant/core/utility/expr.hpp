@@ -21,7 +21,7 @@ namespace sequant {
 
 /// @returns A string describing (some of) the difference between the given
 /// expressions. An empty diff means that they are equal. The produced diff is
-/// meant to be (resonably) human-readable.
+/// meant to be (reasonably) human-readable.
 std::string diff(const Expr &lhs, const Expr &rhs);
 
 /// Checks whether the given expression is valid (i.e. uses
