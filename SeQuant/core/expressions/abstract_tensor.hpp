@@ -553,8 +553,6 @@ inline std::wstring to_latex_tensor(
 ///         colors are, for now, always assumed to commute)
 ///         - @c label(t) is a valid expression and its return is convertible to
 ///         a std::wstring;
-///         - @c io::latex::to_string(t) is a valid expression and its return is
-///         convertible to a std::wstring.
 template <typename T>
 concept is_tensor = requires(const T& obj) {
   { braket(obj) } -> std::ranges::range;
@@ -568,7 +566,6 @@ concept is_tensor = requires(const T& obj) {
   { color(obj) } -> std::convertible_to<std::size_t>;
   { is_cnumber(obj) } -> std::convertible_to<bool>;
   { label(obj) } -> std::constructible_from<std::wstring>;
-  { io::latex::to_string(obj) } -> std::convertible_to<std::wstring>;
 };
 static_assert(is_tensor<AbstractTensor>,
               "The AbstractTensor class does not fulfill the requirements of "
