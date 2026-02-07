@@ -425,11 +425,11 @@ set(SeQuant_eval_src
 
 # Optimize sources (depends on eval)
 set(SeQuant_optimize_src
-        SeQuant/core/eval/optimize.hpp
-        SeQuant/core/eval/optimize/common_subexpression_elimination.hpp
-        SeQuant/core/eval/optimize/fusion.cpp
-        SeQuant/core/eval/optimize/fusion.hpp
-        SeQuant/core/eval/optimize/optimize.cpp
+        SeQuant/core/optimize/optimize.hpp
+        SeQuant/core/optimize/common_subexpression_elimination.hpp
+        SeQuant/core/optimize/fusion.cpp
+        SeQuant/core/optimize/fusion.hpp
+        SeQuant/core/optimize/optimize.cpp
 )
 
 # Export sources (depends on eval)
