@@ -1,74 +1,29 @@
 # try find_package
-if (NOT TARGET tapp-reference)
+if (NOT TARGET tapp::reference)
   include(FindPackageRegimport)
-  find_package_regimport(tapp-reference QUIET CONFIG)
-  if (TARGET tapp-reference)
-    message(STATUS "Found tapp-reference CONFIG at ${tapp-reference_CONFIG}")
-  endif (TARGET tapp-reference)
-endif (NOT TARGET tapp-reference)
+  find_package_regimport(tapp QUIET CONFIG COMPONENTS reference)
+  if (TARGET tapp::reference)
+    message(STATUS "Found tapp CONFIG at ${tapp_CONFIG}")
+  endif()
+endif()
 
 # if not found, build via FetchContent
-if (NOT TARGET tapp-reference)
-
+if (NOT TARGET tapp::reference)
   include(FetchContent)
   FetchContent_Declare(
-      tapp-reference
+      tapp
       GIT_REPOSITORY      https://github.com/TAPPorg/reference-implementation.git
       GIT_TAG             ${SEQUANT_TRACKED_TAPP_TAG}
-      EXCLUDE_FROM_ALL
       SYSTEM
   )
-  FetchContent_MakeAvailable(tapp-reference)
-  FetchContent_GetProperties(tapp-reference
-      SOURCE_DIR TAPP_SOURCE_DIR
-      BINARY_DIR TAPP_BINARY_DIR
-  )
+  FetchContent_MakeAvailable(tapp)
 
-  set(SEQUANT_TAPP_BUILT_FROM_SOURCE TRUE)
+  # set tapp_CONFIG to the install location so that sequant-config.cmake knows where to find it
+  set(tapp_CONFIG ${CMAKE_INSTALL_PREFIX}/${TAPP_INSTALL_CMAKEDIR}/tapp-config.cmake)
 
-  # The TAPP reference implementation does not provide install/export config,
-  # so we patch its targets and install them as part of SeQuant.
-
-  # The TAPP upstream CMakeLists.txt uses bare source paths for include
-  # directories and INTERFACE_SOURCES which CMake rejects during install/export.
-  # Patch them to use proper BUILD_INTERFACE/INSTALL_INTERFACE generator exprs.
-
-  # Fix tapp-reference include directories
-  set_property(TARGET tapp-reference PROPERTY INTERFACE_INCLUDE_DIRECTORIES)
-  target_include_directories(tapp-reference PUBLIC
-      $<BUILD_INTERFACE:${TAPP_SOURCE_DIR}/reference_implementation/include>
-      $<INSTALL_INTERFACE:${SEQUANT_INSTALL_INCLUDEDIR}>
-  )
-
-  # Fix tapp-api: clear INTERFACE_SOURCES (bare source paths not exportable;
-  # these are just for IDE display, headers are found via include dirs)
-  set_property(TARGET tapp-api PROPERTY INTERFACE_SOURCES)
-
-  # Install both tapp-api (INTERFACE) and tapp-reference (SHARED) in the
-  # sequant export set so that downstream find_package(SeQuant) works.
-  install(TARGETS tapp-api
-          EXPORT sequant
-          COMPONENT sequant)
-  install(TARGETS tapp-reference
-          EXPORT sequant
-          COMPONENT sequant
-          LIBRARY DESTINATION ${SEQUANT_INSTALL_LIBDIR})
-
-  # Install headers from both the API and the reference implementation
-  if (EXISTS "${TAPP_SOURCE_DIR}/api/include")
-    install(DIRECTORY "${TAPP_SOURCE_DIR}/api/include/"
-            COMPONENT sequant
-            DESTINATION "${SEQUANT_INSTALL_INCLUDEDIR}")
-  endif()
-  if (EXISTS "${TAPP_SOURCE_DIR}/reference_implementation/include")
-    install(DIRECTORY "${TAPP_SOURCE_DIR}/reference_implementation/include/"
-            COMPONENT sequant
-            DESTINATION "${SEQUANT_INSTALL_INCLUDEDIR}")
-  endif()
-
-endif(NOT TARGET tapp-reference)
+endif()
 
 # postcond check
-if (NOT TARGET tapp-reference)
-  message(FATAL_ERROR "FindOrFetchTAPP could not make tapp-reference target available")
-endif(NOT TARGET tapp-reference)
+if (NOT TARGET tapp::reference)
+  message(FATAL_ERROR "FindOrFetchTAPP could not make tapp::reference target available")
+endif()

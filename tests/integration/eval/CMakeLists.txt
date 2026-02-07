@@ -56,7 +56,7 @@ if (SEQUANT_HAS_TAPP)
             "tapp/scf_tapp.hpp"
             "tapp/main.cpp"
     )
-    target_link_libraries(eval_tapp PRIVATE eval_shared tapp-reference)
+    target_link_libraries(eval_tapp PRIVATE eval_shared tapp::reference)
 
     set(test_name "sequant/integration/eval_tapp")
     add_test(
