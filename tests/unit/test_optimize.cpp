@@ -11,6 +11,7 @@
 #include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/optimize/common_subexpression_elimination.hpp>
 #include <SeQuant/core/optimize/optimize.hpp>
+#include <SeQuant/core/optimize/single_term.hpp>
 #include <SeQuant/core/space.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 
