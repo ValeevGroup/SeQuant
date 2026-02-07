@@ -14,6 +14,10 @@
 #include <SeQuant/core/eval/backends/btas/eval_expr.hpp>
 #include <SeQuant/core/eval/backends/btas/result.hpp>
 #endif
+#if defined(SEQUANT_HAS_TAPP)
+#include <SeQuant/core/eval/backends/tapp/ops.hpp>
+#include <SeQuant/core/eval/backends/tapp/tensor.hpp>
+#endif
 
 #include <concepts>
 #include <condition_variable>
@@ -376,6 +380,83 @@ auto biorthogonal_nns_project(btas::Tensor<Args...> const& arr,
 }
 
 #endif  // defined(SEQUANT_HAS_BTAS)
+
+#if defined(SEQUANT_HAS_TAPP)
+
+/// \brief This function is used to implement
+/// ResultPtr::biorthogonal_nns_project for TAPPTensor
+///
+/// \param arr The tensor to be "cleaned up"
+/// \param bra_rank The rank of the bra indices
+///
+/// \return The cleaned TAPPTensor.
+template <typename T, typename Alloc>
+auto biorthogonal_nns_project_tapp(TAPPTensor<T, Alloc> const& arr,
+                                   size_t bra_rank) {
+  using ranges::views::iota;
+  size_t const rank = arr.rank();
+  SEQUANT_ASSERT(bra_rank <= rank);
+  size_t const ket_rank = rank - bra_rank;
+
+  // Residuals of rank 4 or less have no redundancy and don't require NNS
+  // projection
+  if (rank <= 4) return arr;
+
+  using numeric_type = T;
+
+  const auto& nns_p_coeffs =
+      detail::nns_projection_weights<numeric_type>(ket_rank);
+
+  using perm_type = container::svector<size_t>;
+
+  TAPPTensor<T, Alloc> result;
+
+  perm_type perm = iota(size_t{0}, rank) | ranges::to<perm_type>;
+  perm_type bra_perm = iota(size_t{0}, bra_rank) | ranges::to<perm_type>;
+  perm_type ket_perm = iota(bra_rank, rank) | ranges::to<perm_type>;
+
+  if (ket_rank > 2 && !nns_p_coeffs.empty()) {
+    bool result_initialized = false;
+
+    size_t num_perms = nns_p_coeffs.size();
+    for (size_t perm_rank = 0; perm_rank < num_perms; ++perm_rank) {
+      perm_type permuted_ket =
+          detail::compute_permuted_indices(ket_perm, perm_rank, ket_rank);
+
+      numeric_type coeff = nns_p_coeffs[perm_rank];
+
+      perm_type annot = bra_perm;
+      annot.insert(annot.end(), permuted_ket.begin(), permuted_ket.end());
+
+      container::svector<int64_t> annot_i64(annot.begin(), annot.end());
+      container::svector<int64_t> perm_i64(perm.begin(), perm.end());
+
+      TAPPTensor<T, Alloc> temp;
+      tapp_ops::permute(arr, annot_i64, temp, perm_i64);
+      tapp_ops::scal(coeff, temp);
+
+      if (result_initialized) {
+        result += temp;
+      } else {
+        result = temp;
+        result_initialized = true;
+      }
+    }
+
+  } else {
+    result = arr;
+  }
+
+  return result;
+}
+
+template <typename T, typename Alloc>
+auto biorthogonal_nns_project(TAPPTensor<T, Alloc> const& arr,
+                              size_t bra_rank) {
+  return biorthogonal_nns_project_tapp(arr, bra_rank);
+}
+
+#endif  // defined(SEQUANT_HAS_TAPP)
 
 }  // namespace sequant::mbpt
 

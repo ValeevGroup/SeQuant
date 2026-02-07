@@ -1,0 +1,279 @@
+#ifndef SEQUANT_EVAL_BACKENDS_TAPP_TENSOR_HPP
+#define SEQUANT_EVAL_BACKENDS_TAPP_TENSOR_HPP
+
+#ifdef SEQUANT_HAS_TAPP
+
+#include <SeQuant/core/container.hpp>
+
+#include <tapp.h>
+
+#include <algorithm>
+#include <cassert>
+#include <complex>
+#include <cstdint>
+#include <memory>
+#include <numeric>
+#include <stdexcept>
+#include <type_traits>
+#include <vector>
+
+namespace sequant {
+
+namespace tapp_detail {
+
+/// Maps C++ numeric types to TAPP_datatype constants.
+template <typename T>
+constexpr TAPP_datatype datatype() noexcept {
+  if constexpr (std::is_same_v<T, float>)
+    return TAPP_F32;
+  else if constexpr (std::is_same_v<T, double>)
+    return TAPP_F64;
+  else if constexpr (std::is_same_v<T, std::complex<float>>)
+    return TAPP_C32;
+  else if constexpr (std::is_same_v<T, std::complex<double>>)
+    return TAPP_C64;
+  else
+    static_assert(!sizeof(T), "Unsupported type for TAPP");
+}
+
+/// Compute row-major (C-contiguous) strides from extents.
+inline container::svector<int64_t> compute_strides(
+    container::svector<int64_t> const& extents) {
+  container::svector<int64_t> strides(extents.size());
+  if (extents.empty()) return strides;
+  strides.back() = 1;
+  for (int i = static_cast<int>(extents.size()) - 2; i >= 0; --i) {
+    strides[i] = strides[i + 1] * extents[i + 1];
+  }
+  return strides;
+}
+
+/// Compute the volume (total number of elements) from extents.
+inline size_t compute_volume(container::svector<int64_t> const& extents) {
+  if (extents.empty()) return 1;  // scalar
+  return static_cast<size_t>(std::accumulate(extents.begin(), extents.end(),
+                                             int64_t{1}, std::multiplies<>{}));
+}
+
+/// Check a TAPP error code and throw on failure.
+inline void check_error(TAPP_error err) {
+  if (!TAPP_check_success(err)) {
+    char msg[256];
+    TAPP_explain_error(err, sizeof(msg), msg);
+    throw std::runtime_error(std::string("TAPP error: ") + msg);
+  }
+}
+
+}  // namespace tapp_detail
+
+///
+/// \brief A lightweight C++ tensor container backed by the TAPP C API.
+///
+/// Owns the data buffer and manages a TAPP_tensor_info opaque handle that
+/// describes the tensor's shape and layout for use with TAPP operations.
+///
+/// \tparam T        The numeric element type (float, double, complex<float>,
+///                  complex<double>).
+/// \tparam Allocator The allocator for the data buffer.
+///
+template <typename T, typename Allocator = std::allocator<T>>
+class TAPPTensor {
+ public:
+  using numeric_type = T;
+  using value_type = T;
+  using allocator_type = Allocator;
+
+  /// Default constructor: creates an empty (scalar-like) tensor.
+  TAPPTensor() = default;
+
+  /// Construct from extents (row-major layout).
+  explicit TAPPTensor(container::svector<int64_t> extents,
+                      Allocator alloc = Allocator{})
+      : extents_{std::move(extents)},
+        strides_{tapp_detail::compute_strides(extents_)},
+        data_(tapp_detail::compute_volume(extents_), T{}, std::move(alloc)) {
+    create_info();
+  }
+
+  /// Construct from any range of extents.
+  template <
+      typename Range,
+      typename = std::enable_if_t<
+          !std::is_same_v<std::decay_t<Range>, container::svector<int64_t>> &&
+          !std::is_same_v<std::decay_t<Range>, TAPPTensor>>>
+  explicit TAPPTensor(Range const& range, Allocator alloc = Allocator{})
+      : TAPPTensor(
+            container::svector<int64_t>(std::begin(range), std::end(range)),
+            std::move(alloc)) {}
+
+  ~TAPPTensor() { destroy_info(); }
+
+  TAPPTensor(TAPPTensor const& other)
+      : extents_{other.extents_}, strides_{other.strides_}, data_{other.data_} {
+    create_info();
+  }
+
+  TAPPTensor(TAPPTensor&& other) noexcept
+      : extents_{std::move(other.extents_)},
+        strides_{std::move(other.strides_)},
+        data_{std::move(other.data_)},
+        info_{other.info_} {
+    other.info_ = 0;
+  }
+
+  TAPPTensor& operator=(TAPPTensor const& other) {
+    if (this != &other) {
+      destroy_info();
+      extents_ = other.extents_;
+      strides_ = other.strides_;
+      data_ = other.data_;
+      create_info();
+    }
+    return *this;
+  }
+
+  TAPPTensor& operator=(TAPPTensor&& other) noexcept {
+    if (this != &other) {
+      destroy_info();
+      extents_ = std::move(other.extents_);
+      strides_ = std::move(other.strides_);
+      data_ = std::move(other.data_);
+      info_ = other.info_;
+      other.info_ = 0;
+    }
+    return *this;
+  }
+
+  /// \return The number of modes (dimensions).
+  [[nodiscard]] int rank() const noexcept {
+    return static_cast<int>(extents_.size());
+  }
+
+  [[nodiscard]] container::svector<int64_t> const& extents() const noexcept {
+    return extents_;
+  }
+
+  [[nodiscard]] container::svector<int64_t> const& strides() const noexcept {
+    return strides_;
+  }
+
+  [[nodiscard]] T* data() noexcept { return data_.data(); }
+
+  [[nodiscard]] T const* data() const noexcept { return data_.data(); }
+
+  /// \return The total number of elements.
+  [[nodiscard]] size_t volume() const noexcept { return data_.size(); }
+
+  /// \return The TAPP_tensor_info opaque handle for this tensor.
+  [[nodiscard]] TAPP_tensor_info info() const noexcept { return info_; }
+
+  // Iterator support (for compatibility with std::begin/std::end)
+  using iterator = typename std::vector<T, Allocator>::iterator;
+  using const_iterator = typename std::vector<T, Allocator>::const_iterator;
+  iterator begin() noexcept { return data_.begin(); }
+  iterator end() noexcept { return data_.end(); }
+  const_iterator begin() const noexcept { return data_.begin(); }
+  const_iterator end() const noexcept { return data_.end(); }
+  const_iterator cbegin() const noexcept { return data_.cbegin(); }
+  const_iterator cend() const noexcept { return data_.cend(); }
+
+  /// Fill all elements with the given value.
+  void fill(T val) { std::fill(data_.begin(), data_.end(), val); }
+
+  /// Generate elements using a callable.
+  template <typename Gen>
+  void generate(Gen gen) {
+    std::generate(data_.begin(), data_.end(), gen);
+  }
+
+  /// Element-wise in-place addition.
+  TAPPTensor& operator+=(TAPPTensor const& other) {
+    assert(extents_ == other.extents_);
+    for (size_t i = 0; i < data_.size(); ++i) data_[i] += other.data_[i];
+    return *this;
+  }
+
+  /// Element-wise subtraction returning a new tensor.
+  TAPPTensor operator-(TAPPTensor const& other) const {
+    assert(extents_ == other.extents_);
+    TAPPTensor result(extents_);
+    for (size_t i = 0; i < data_.size(); ++i)
+      result.data_[i] = data_[i] - other.data_[i];
+    return result;
+  }
+
+  /// Variadic element access (row-major).
+  template <typename... Indices>
+  [[nodiscard]] T& operator()(Indices... indices) {
+    return data_[offset(indices...)];
+  }
+
+  template <typename... Indices>
+  [[nodiscard]] T const& operator()(Indices... indices) const {
+    return data_[offset(indices...)];
+  }
+
+  /// Element access via index vector.
+  template <typename Vec>
+    requires(!std::is_integral_v<Vec>)
+  [[nodiscard]] T& operator()(Vec const& idx_vec) {
+    return data_[offset_from_vec(idx_vec)];
+  }
+
+  template <typename Vec>
+    requires(!std::is_integral_v<Vec>)
+  [[nodiscard]] T const& operator()(Vec const& idx_vec) const {
+    return data_[offset_from_vec(idx_vec)];
+  }
+
+  /// Reset to empty state.
+  void clear() {
+    data_.clear();
+    extents_.clear();
+    strides_.clear();
+    destroy_info();
+  }
+
+ private:
+  container::svector<int64_t> extents_;
+  container::svector<int64_t> strides_;
+  std::vector<T, Allocator> data_;
+  TAPP_tensor_info info_ = 0;
+
+  void create_info() {
+    tapp_detail::check_error(
+        TAPP_create_tensor_info(&info_, tapp_detail::datatype<T>(), rank(),
+                                extents_.data(), strides_.data()));
+  }
+
+  void destroy_info() {
+    if (info_) {
+      TAPP_destroy_tensor_info(info_);
+      info_ = 0;
+    }
+  }
+
+  template <typename... Indices>
+  [[nodiscard]] size_t offset(Indices... indices) const {
+    static_assert((std::is_integral_v<Indices> && ...));
+    assert(sizeof...(indices) == extents_.size());
+    size_t off = 0;
+    size_t i = 0;
+    ((off += static_cast<size_t>(indices) * strides_[i++]), ...);
+    return off;
+  }
+
+  template <typename Vec>
+  [[nodiscard]] size_t offset_from_vec(Vec const& idx_vec) const {
+    size_t off = 0;
+    for (size_t i = 0; i < extents_.size(); ++i)
+      off += static_cast<size_t>(idx_vec[i]) * strides_[i];
+    return off;
+  }
+};
+
+}  // namespace sequant
+
+#endif  // SEQUANT_HAS_TAPP
+
+#endif  // SEQUANT_EVAL_BACKENDS_TAPP_TENSOR_HPP

@@ -133,6 +133,21 @@ if (SEQUANT_HAS_BTAS)
 endif()
 
 ##########################
+# OBJECT library: TAPP backend tests (conditional)
+##########################
+if (SEQUANT_HAS_TAPP)
+    set(eval_tapp_test_sources "test_eval_tapp.cpp")
+    add_library(unit_tests-sequant-eval-tapp-obj OBJECT ${eval_tapp_test_sources})
+    target_link_libraries(unit_tests-sequant-eval-tapp-obj
+        PUBLIC SeQuant::eval::tapp SeQuant::mbpt
+        PRIVATE Catch2::Catch2 dtl::dtl)
+    target_compile_definitions(unit_tests-sequant-eval-tapp-obj PRIVATE
+        SEQUANT_UNIT_TESTS_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+    set_source_files_properties(${eval_tapp_test_sources}
+        PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON)
+endif()
+
+##########################
 # Single executable combining all OBJECT libraries
 # NB linking OBJECT libraries (since CMake 3.21) both includes their object
 # files AND propagates their PUBLIC/INTERFACE usage requirements, so the
@@ -154,6 +169,9 @@ if (SEQUANT_HAS_TILEDARRAY)
 endif()
 if (SEQUANT_HAS_BTAS)
     target_link_libraries(unit_tests-sequant PRIVATE unit_tests-sequant-eval-btas-obj)
+endif()
+if (SEQUANT_HAS_TAPP)
+    target_link_libraries(unit_tests-sequant PRIVATE unit_tests-sequant-eval-tapp-obj)
 endif()
 
 target_compile_definitions(unit_tests-sequant PRIVATE
