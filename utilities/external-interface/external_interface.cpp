@@ -341,7 +341,7 @@ void generateITF(const json &blocks, std::string_view out_file,
 
     if (current_block.value("subexpression_elimination",
                             defaults.subexpression_elimination)) {
-      eliminate_common_subexpressions(results, [](const auto &expr) {
+      opt::eliminate_common_subexpressions(results, [](const auto &expr) {
         // Note: the lambda is needed to make the callable usable for
         // ExprPtr as well as ResultExpr objects
         return to_export_tree(expr);

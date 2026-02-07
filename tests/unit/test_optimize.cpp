@@ -251,12 +251,12 @@ TEST_CASE("optimize", "[optimize]") {
           // every pair of objects will yield a hash collision which need to be
           // dealt with by using proper comparison operators.
           static constexpr bool force_collisions = true;
-          eliminate_common_subexpressions<
+          opt::eliminate_common_subexpressions<
               decltype(expressions), decltype(binarizer),
-              cse::AcceptAllPredicate, force_collisions>(expressions,
-                                                         binarizer);
+              opt::cse::AcceptAllPredicate, force_collisions>(expressions,
+                                                              binarizer);
         } else {
-          eliminate_common_subexpressions(expressions, binarizer);
+          opt::eliminate_common_subexpressions(expressions, binarizer);
         }
 
         std::vector<ResultExpr> actual;
