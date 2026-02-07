@@ -11,7 +11,7 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/index.hpp>
-#include <SeQuant/core/latex.hpp>
+#include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/meta.hpp>
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/tag.hpp>
@@ -291,7 +291,7 @@ TEST_CASE("tensor", "[elements]") {
     REQUIRE(!t.ket()[1].tag().has_value());
 
     SECTION("proto indices") {
-      Tensor tensor = parse_expr(L"g{i2,a1<i1>;a2<i2>,i1}")->as<Tensor>();
+      Tensor tensor = deserialize(L"g{i2,a1<i1>;a2<i2>,i1}")->as<Tensor>();
 
       const auto* slot_b0 = &(tensor.bra()[0]);
       const auto* slot_b1 = &(tensor.bra()[1]);
@@ -307,7 +307,7 @@ TEST_CASE("tensor", "[elements]") {
       };
 
       const Tensor expected =
-          parse_expr(L"g{a1<i1>,i2;i1,a2<i2>}")->as<Tensor>();
+          deserialize(L"g{a1<i1>,i2;i1,a2<i2>}")->as<Tensor>();
       tensor.transform_indices(idxmap);
 
       REQUIRE(tensor == expected);

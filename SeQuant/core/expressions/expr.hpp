@@ -76,10 +76,6 @@ class Expr : public std::enable_shared_from_this<Expr>,
   /// @return the string representation of @c this in the LaTeX format
   virtual std::wstring to_latex() const;
 
-  /// @return the string representation of @c this in the Wolfram Language
-  /// format
-  virtual std::wstring to_wolfram() const;
-
   /// @return a clone of this object, i.e. an object that is equal to @c this
   /// @note - must be overridden in the derived class.
   ///       - the default implementation throws an exception

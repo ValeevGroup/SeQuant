@@ -305,9 +305,10 @@ set(SeQuant_symb_src
         SeQuant/core/index_space_registry.cpp
         SeQuant/core/index_space_registry.hpp
         SeQuant/core/interval.hpp
-        SeQuant/core/latex.cpp
-        SeQuant/core/latex.hpp
-        SeQuant/core/latex.ipp
+        SeQuant/core/io/concepts.hpp
+        SeQuant/core/io/shorthands.hpp
+        SeQuant/core/io/latex/latex.cpp
+        SeQuant/core/io/latex/latex.hpp
         SeQuant/core/logger.hpp
         SeQuant/core/math.hpp
         SeQuant/core/meta.hpp
@@ -315,10 +316,14 @@ set(SeQuant_symb_src
         SeQuant/core/op.hpp
         SeQuant/core/options.cpp
         SeQuant/core/options.hpp
-        SeQuant/core/parse.hpp
-        SeQuant/core/parse/ast.cpp
-        SeQuant/core/parse/deparse.cpp
-        SeQuant/core/parse/parse.cpp
+        SeQuant/core/io/serialization/serialization.cpp
+        SeQuant/core/io/serialization/serialization.hpp
+        SeQuant/core/io/serialization/v1/ast.cpp
+        SeQuant/core/io/serialization/v1/ast.hpp
+        SeQuant/core/io/serialization/v1/ast_conversions.hpp
+        SeQuant/core/io/serialization/v1/deserialize.cpp
+        SeQuant/core/io/serialization/v1/semantic_actions.hpp
+        SeQuant/core/io/serialization/v1/serialize.cpp
         SeQuant/core/ranges.hpp
         SeQuant/core/rational.hpp
         SeQuant/core/runtime.cpp
@@ -366,8 +371,6 @@ set(SeQuant_symb_src
         SeQuant/core/wick.hpp
         SeQuant/core/wick.impl.hpp
         SeQuant/core/wick.cpp
-        SeQuant/core/wolfram.hpp
-        SeQuant/core/wstring.hpp
 )
 
 # MBPT domain sources

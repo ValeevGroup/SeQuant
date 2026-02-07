@@ -4,7 +4,7 @@
 
 #include <SeQuant/core/eval/optimize/fusion.hpp>
 #include <SeQuant/core/expr.hpp>
-#include <SeQuant/core/parse.hpp>
+#include <SeQuant/core/io/shorthands.hpp>
 
 #include <array>
 #include <memory>
@@ -43,9 +43,9 @@ TEST_CASE("fusion", "[optimize]") {
   };
 
   for (auto&& [l, r, f] : fused_terms) {
-    auto const le = parse_expr(l);
-    auto const re = parse_expr(r);
-    auto const fe = parse_expr(f);
+    auto const le = deserialize(l);
+    auto const re = deserialize(r);
+    auto const fe = deserialize(f);
     auto fu = Fusion{le->as<Product>(), re->as<Product>()};
     REQUIRE((fu.left() || fu.right()));
 

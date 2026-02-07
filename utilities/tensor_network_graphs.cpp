@@ -1,6 +1,6 @@
 #include <SeQuant/core/bliss.hpp>
 #include <SeQuant/core/expr.hpp>
-#include <SeQuant/core/parse.hpp>
+#include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/runtime.hpp>
 #include <SeQuant/core/tensor_network/v1.hpp>
 #include <SeQuant/core/tensor_network/v2.hpp>
@@ -85,9 +85,9 @@ int main(int argc, char **argv) {
 
     ExprPtr expr;
     try {
-      expr = parse_expr(current);
-    } catch (const ParseError &e) {
-      std::wcout << "Failed to parse expression '" << current
+      expr = deserialize<ExprPtr>(current);
+    } catch (const io::serialization::SerializationError &e) {
+      std::wcout << "Failed to deserialize expression '" << current
                  << "': " << e.what() << std::endl;
       return 1;
     }

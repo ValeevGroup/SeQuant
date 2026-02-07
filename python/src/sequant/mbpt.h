@@ -8,7 +8,7 @@
 
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
-#include <SeQuant/core/wstring.hpp>
+#include <SeQuant/core/utility/string.hpp>
 
 #include "python.h"
 
@@ -32,8 +32,7 @@ ExprPtr VacuumAverage(
   sequant::mbpt::OpConnections<std::wstring> wop_connections;
   wop_connections.reserve(op_connections.size());
   for (const auto& [op1, op2] : op_connections) {
-    wop_connections.emplace_back(sequant::to_wstring(op1),
-                                 sequant::to_wstring(op2));
+    wop_connections.emplace_back(sequant::toUtf16(op1), sequant::toUtf16(op2));
   }
   return sequant::mbpt::op::vac_av(e, wop_connections);
 }

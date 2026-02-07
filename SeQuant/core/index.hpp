@@ -532,15 +532,14 @@ class Index : public Taggable {
   static std::wstring base_label(std::string_view label) {
     auto underscore_position = label.find('_');
     if (underscore_position == std::string::npos)
-      return to_wstring(std::string({label.begin(), label.end()}));
+      return toUtf16(label);
     else
-      return to_wstring(
-          std::string({label.data(), label.data() + underscore_position}));
+      return toUtf16(label.substr(0, underscore_position));
   }
 
   template <typename Char, typename = std::enable_if_t<meta::is_char_v<Char>>>
   static std::wstring base_label(Char label) {
-    return to_wstring(label);
+    return toUtf16(label);
   }
 
   /// @return the memoized label as a UTF-8 encoded wide-character string
@@ -575,7 +574,6 @@ class Index : public Taggable {
 
   /// @return A UTF-8 encoded narrow-character string label
   /// @warning not to be used with proto indices
-  /// @note equivalent to `sequant::to_string(this->label())`
   std::string to_string() const;
 
   /// @return the full label as a UTF-8 encoded wide-character string
@@ -715,37 +713,6 @@ class Index : public Taggable {
   }
 
   std::wstring to_latex() const noexcept;
-
-  /*template <typename... Attrs>
-  std::wstring to_wolfram(Attrs &&...attrs) const {
-    auto protect_subscript = [](const std::wstring_view str) {
-      auto subsc_pos = str.rfind(L'_');
-      if (subsc_pos == std::wstring_view::npos)
-        return std::wstring(str);
-      else {
-        SEQUANT_ASSERT(subsc_pos + 1 < str.size());
-        std::wstring result = L"\\!\\(\\*SubscriptBox[\\(";
-        result += std::wstring(str.substr(0, subsc_pos));
-        result += L"\\), \\(";
-        result += std::wstring(str.substr(subsc_pos + 1));
-        result += L"\\)]\\)";
-        return result;
-      }
-    };
-
-    using namespace std::literals;
-    std::wstring result =
-        L"particleIndex[\""s + protect_subscript(this->label()) + L"\"";
-    if (this->has_proto_indices()) {
-      SEQUANT_ASSERT(false && "not yet supported");
-    }
-    using namespace std::literals;
-    result += L","s + ::sequant::to_wolfram(space());
-    ((result += ((L","s + ::sequant::to_wolfram(std::forward<Attrs>(attrs))))),
-     ...);
-    result += L"]";
-    return result;
-  }*/
 
   /// @param protoindex_range a range of Index objects
   /// @return the color of the protoindices

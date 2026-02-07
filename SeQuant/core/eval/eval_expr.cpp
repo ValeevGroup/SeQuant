@@ -7,12 +7,11 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/index.hpp>
-#include <SeQuant/core/parse.hpp>
+#include <SeQuant/core/io/serialization/serialization.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/tensor_network.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/macros.hpp>
-#include <SeQuant/core/wstring.hpp>
 #include <SeQuant/external/bliss/graph.hh>
 
 #include <range/v3/action.hpp>
@@ -98,9 +97,9 @@ std::string to_label_annotation(const Index& idx) {
   using namespace ranges::views;
   using ranges::to;
 
-  return sequant::to_string(idx.label()) +
+  return toUtf8(idx.label()) +
          (idx.proto_indices() | transform(&Index::label) |
-          transform([](auto&& str) { return sequant::to_string(str); }) |
+          transform([](auto&& str) { return toUtf8(str); }) |
           ranges::views::join | to<std::string>);
 }
 
@@ -225,12 +224,12 @@ Variable const& EvalExpr::as_variable() const { return expr().as<Variable>(); }
 
 std::string EvalExpr::label() const noexcept {
   if (is_tensor())
-    return to_string(as_tensor().label()) + "(" + indices_annot() + ")";
+    return toUtf8(as_tensor().label()) + "(" + indices_annot() + ")";
   else if (is_constant()) {
-    return sequant::to_string(sequant::deparse(as_constant()));
+    return toUtf8(io::serialization::to_string(as_constant()));
   } else {
     SEQUANT_ASSERT(is_variable());
-    return to_string(as_variable().label());
+    return toUtf8(as_variable().label());
   }
 }
 

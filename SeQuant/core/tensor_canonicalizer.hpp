@@ -173,8 +173,6 @@ class DefaultTensorCanonicalizer : public TensorCanonicalizer {
   template <typename IndexComp, typename IndexPairComp>
   ExprPtr apply(AbstractTensor& t, const IndexComp& idxcmp,
                 const IndexPairComp& paircmp) const {
-    // std::wcout << "abstract tensor: " << to_latex(t) << "\n";
-
     // nothing to do for non-particle-symmetric tensors
     if (t._column_symmetry() == ColumnSymmetry::Nonsymm) return nullptr;
 
@@ -200,7 +198,6 @@ class DefaultTensorCanonicalizer : public TensorCanonicalizer {
       case Symmetry::Symm: {
         auto _bra = mutable_bra_range(t);
         auto _ket = mutable_ket_range(t);
-        //      std::wcout << "canonicalizing " << to_latex(t);
         reset_ts_swap_counter<Index>();
         // std::{stable_}sort does not necessarily use swap! so must implement
         // sort ourselves .. thankfully ranks will be low so can stick with
@@ -208,8 +205,6 @@ class DefaultTensorCanonicalizer : public TensorCanonicalizer {
         bubble_sort(begin(_bra), end(_bra), idxcmp);
         bubble_sort(begin(_ket), end(_ket), idxcmp);
         if (is_antisymm) even = ts_swap_counter_is_even<Index>();
-        //      std::wcout << " is " << (even ? "even" : "odd") << " and
-        //      produces " << to_latex(t) << std::endl;
       } break;
 
       case Symmetry::Nonsymm: {

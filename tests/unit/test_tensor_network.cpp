@@ -14,9 +14,9 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/index.hpp>
+#include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/logger.hpp>
 #include <SeQuant/core/op.hpp>
-#include <SeQuant/core/parse.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/tensor_network/v1.hpp>
 #include <SeQuant/core/tensor_network/v2.hpp>
@@ -176,8 +176,8 @@ TEMPLATE_TEST_CASE("tensor_network_shared", "[elements]", TensorNetworkV1,
         CAPTURE(toUtf8(input1));
         CAPTURE(toUtf8(input2));
 
-        auto ex1 = parse_expr(input1);
-        auto ex2 = parse_expr(input2);
+        auto ex1 = deserialize(input1);
+        auto ex2 = deserialize(input2);
 
         TN tn1(ex1);
         auto cbp1 = tn1.canonicalize_slots(
@@ -215,10 +215,10 @@ TEMPLATE_TEST_CASE("tensor_network_shared", "[elements]", TensorNetworkV1,
 
     SECTION("phase_difference") {
       const Product prod1 =
-          parse_expr(L"g{i_2,i_3;a_2,a_3}:A-C-S * t{a_2;i_2}:A-C-S")
+          deserialize(L"g{i_2,i_3;a_2,a_3}:A-C-S * t{a_2;i_2}:A-C-S")
               ->as<Product>();
       const Product prod2 =
-          parse_expr(L"g{i_2,i_3;a_2,a_3}:A-C-S * t{a_2;i_3}:A-C-S")
+          deserialize(L"g{i_2,i_3;a_2,a_3}:A-C-S * t{a_2;i_3}:A-C-S")
               ->as<Product>();
 
       TN tn1(prod1.factors());
@@ -240,12 +240,12 @@ TEMPLATE_TEST_CASE("tensor_network_shared", "[elements]", TensorNetworkV1,
            .first_dummy_index_ordinal = 20000});
 
       const Product prod1 =
-          parse_expr(
+          deserialize(
               L"g{i_2,i_3;a_19592,a_19593}:N-C-S * C{a_19592;a_2<i_1>}:N-C-S * "
               L"C{a_19593;a_3<i_2,i_3>}:N-C-S")
               ->as<Product>();
       const Product prod2 =
-          parse_expr(
+          deserialize(
               L"g{i_2,i_3;a_19594,a_19595}:N-C-S * C{a_19594;a_2<i_2>}:N-C-S * "
               L"C{a_19595;a_3<i_1,i_3>}:N-C-S")
               ->as<Product>();
@@ -285,7 +285,7 @@ TEMPLATE_TEST_CASE("tensor_network_shared", "[elements]", TensorNetworkV1,
             }) |
             ranges::to<std::vector>();
 
-        Product prod = parse_expr(input)->as<Product>();
+        Product prod = deserialize(input)->as<Product>();
         TN tn(prod.factors());
 
         auto meta = tn.canonicalize_slots(
@@ -302,11 +302,11 @@ TEMPLATE_TEST_CASE("tensor_network_shared", "[elements]", TensorNetworkV1,
     SECTION("need particle reorder?") {
       {
         Index::reset_tmp_index();
-        auto input1 = parse_expr(
+        auto input1 = deserialize(
             L"t{p1,p2;p3,p4}:N-C-S t{p4,p5;p6,p7}:N-C-S t{p7,p8;p9,p1}:N-C-S");
         // N.B. renaming external index changes local canonical order produced
         // by TNV1 (due to the use of DefaultTensorCanonicalizer)
-        auto input2 = parse_expr(
+        auto input2 = deserialize(
             L"t{p1,p2;p3,p4}:N-C-S t{p4,p5;p11,p7}:N-C-S t{p7,p8;p9,p1}:N-C-S");
 
         CAPTURE(input1);
@@ -351,8 +351,8 @@ TEMPLATE_TEST_CASE("tensor_network_shared", "[elements]", TensorNetworkV1,
                   {Index{L"p_11"}, Index{L"p_6"}},
                   {Index{L"p_6"}, Index{L"p_7"}}};
               apply_index_replacements(*t2_i, idxrepl, false);
-              REQUIRE(deparse(*(tn1.tensors()[i]), true) ==
-                      deparse(*t2_i, true));
+              REQUIRE(serialize(*(tn1.tensors()[i]), {.annot_symm = true}) ==
+                      serialize(*t2_i, {.annot_symm = true}));
             }
           }
         }
@@ -1039,8 +1039,8 @@ TEST_CASE("tensor_network_v2", "[elements]") {
     }
 
     SECTION("particle non-conserving") {
-      const auto input1 = parse_expr(L"P{;a1,a3}");
-      const auto input2 = parse_expr(L"P{a1,a3;}");
+      const auto input1 = deserialize(L"P{;a1,a3}");
+      const auto input2 = deserialize(L"P{a1,a3;}");
       const std::wstring expected1 = L"{{P^{{a_1}{a_3}}_{}}}";
       const std::wstring expected2 = L"{{P^{}_{{a_1}{a_3}}}}";
 
@@ -1058,7 +1058,7 @@ TEST_CASE("tensor_network_v2", "[elements]") {
 
     SECTION("non-symmetric") {
       const auto input =
-          parse_expr(L"Â{i9,i12;i7,i3}:A I1{i7,i3;;x5}:N I2{;i9,i12;x5}:N")
+          deserialize(L"Â{i9,i12;i7,i3}:A I1{i7,i3;;x5}:N I2{;i9,i12;x5}:N")
               .as<Product>()
               .factors();
       const std::wstring expected =
@@ -1083,8 +1083,8 @@ TEST_CASE("tensor_network_v2", "[elements]") {
            L"Γ{o_2,o_4;o_1,o_3}:N * g{i_1,o_3;o_4,e_1}:N * "
            L"t{o_1,e_1;o_2,i_1}:N"}};
       for (const auto& pair : pairs) {
-        const auto first = parse_expr(pair.first).as<Product>().factors();
-        const auto second = parse_expr(pair.second).as<Product>().factors();
+        const auto first = deserialize(pair.first).as<Product>().factors();
+        const auto second = deserialize(pair.second).as<Product>().factors();
 
         TensorNetworkV2Accessor accessor;
         auto [first_graph, first_labels] =
@@ -1106,7 +1106,7 @@ TEST_CASE("tensor_network_v2", "[elements]") {
                                         .texlabels = graph.vertex_texlabels,
                                         .display_colors = true});
 
-          FAIL(to_string(stream.str()));
+          FAIL(toUtf8(stream.str()));
         }
 
         TensorNetworkV2 tn1(first);
@@ -1140,7 +1140,7 @@ TEST_CASE("tensor_network_v2", "[elements]") {
       };
 
       for (const auto& [input, expected] : inputs) {
-        const auto input_tensors = parse_expr(input).as<Product>().factors();
+        const auto input_tensors = deserialize(input).as<Product>().factors();
 
         TensorNetworkV2 tn(input_tensors);
         ExprPtr factor = tn.canonicalize(
@@ -1158,7 +1158,7 @@ TEST_CASE("tensor_network_v2", "[elements]") {
 
     SECTION("special") {
       auto factors =
-          parse_expr(
+          deserialize(
               L"Ŝ{i_1;a_1<i_1>}:N-C-S g{i_2,a_1<i_1>;a_2<i_2>,i_1}:N-C-S "
               L"t{a_2<i_2>;i_2}:N-C-S")
               ->as<Product>()
@@ -1182,9 +1182,9 @@ TEST_CASE("tensor_network_v2", "[elements]") {
       // and doesn't actually matter What does, is that all equivalent ways of
       // writing it down, canonicalizes to the same exact form
       const Product expectedExpr =
-          parse_expr(
+          deserialize(
               L"Â{i1,i2;a1,a2} g{i3,i4;a3,a4} t{a1,a3;i1,i2} t{a2,a4;i3,i4}",
-              Symmetry::Antisymm)
+              {.def_perm_symm = Symmetry::Antisymm})
               .as<Product>();
 
       const auto expected = expectedExpr.factors();
@@ -1261,8 +1261,8 @@ TEST_CASE("tensor_network_v2", "[elements]") {
             const auto [current_graph, current_graph_labels] =
                 accessor.get_canonical_bliss_graph(tn);
             if (current_graph->cmp(*canonical_graph) != 0) {
-              std::wcout << "Canonical graph for " << deparse(ex<Product>(copy))
-                         << ":\n";
+              std::wcout << "Canonical graph for "
+                         << serialize(ex<Product>(copy)) << ":\n";
               current_graph->write_dot(std::wcout,
                                        {.labels = current_graph_labels});
               std::wcout << std::endl;
@@ -1295,12 +1295,12 @@ TEST_CASE("tensor_network_v2", "[elements]") {
                 std::wstring equality =
                     actual[i] == expected[i] ? L" == " : L" != ";
 
-                sstream << deparse(actual[i]) << equality
-                        << deparse(expected[i]) << "\n";
+                sstream << serialize(actual[i]) << equality
+                        << serialize(expected[i]) << "\n";
               }
-              sstream << "\nInput was " << deparse(ex<Product>(factors))
+              sstream << "\nInput was " << serialize(ex<Product>(factors))
                       << "\n";
-              FAIL(to_string(sstream.str()));
+              FAIL(toUtf8(sstream.str()));
             }
           } while (std::next_permutation(indices.begin() + 4, indices.end()));
         } while (std::next_permutation(indices.begin(), indices.begin() + 4));
@@ -1321,8 +1321,8 @@ TEST_CASE("tensor_network_v2", "[elements]") {
       };
 
       for (const std::wstring& current : inputs) {
-        auto factors1 = parse_expr(current).as<Product>().factors();
-        auto factors2 = parse_expr(current).as<Product>().factors();
+        auto factors1 = deserialize(current).as<Product>().factors();
+        auto factors2 = deserialize(current).as<Product>().factors();
 
         TensorNetworkV2 reference_tn(factors1);
         reference_tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(),
@@ -1683,8 +1683,8 @@ TEST_CASE("tensor_network_v3", "[elements]") {
     }
 
     SECTION("particle non-conserving") {
-      const auto input1 = parse_expr(L"P{;a1,a3}");
-      const auto input2 = parse_expr(L"P{a1,a3;}");
+      const auto input1 = deserialize(L"P{;a1,a3}");
+      const auto input2 = deserialize(L"P{a1,a3;}");
       const std::wstring expected1 = L"{{P^{{a_1}{a_3}}_{}}}";
       const std::wstring expected2 = L"{{P^{}_{{a_1}{a_3}}}}";
 
@@ -1703,7 +1703,7 @@ TEST_CASE("tensor_network_v3", "[elements]") {
 
     SECTION("non-symmetric") {
       const auto input =
-          parse_expr(L"Â{i9,i12;i7,i3}:A I1{i7,i3;;x5}:N I2{;i9,i12;x5}:N")
+          deserialize(L"Â{i9,i12;i7,i3}:A I1{i7,i3;;x5}:N I2{;i9,i12;x5}:N")
               .as<Product>()
               .factors();
       const std::wstring expected =
@@ -1730,8 +1730,8 @@ TEST_CASE("tensor_network_v3", "[elements]") {
            L"Γ{o_2,o_4;o_1,o_3}:N * g{i_1,o_3;o_4,e_1}:N * "
            L"t{o_1,e_1;o_2,i_1}:N"}};
       for (const auto& pair : pairs) {
-        const auto first = parse_expr(pair.first).as<Product>().factors();
-        const auto second = parse_expr(pair.second).as<Product>().factors();
+        const auto first = deserialize(pair.first).as<Product>().factors();
+        const auto second = deserialize(pair.second).as<Product>().factors();
 
         TensorNetworkV3Accessor accessor;
         auto [first_graph, first_labels] =
@@ -1754,7 +1754,7 @@ TEST_CASE("tensor_network_v3", "[elements]") {
                                         .texlabels = graph.vertex_texlabels,
                                         .display_colors = true});
 
-          FAIL(to_string(stream.str()));
+          FAIL(toUtf8(stream.str()));
         }
 
         TN tn1(first);
@@ -1788,7 +1788,7 @@ TEST_CASE("tensor_network_v3", "[elements]") {
       };
 
       for (const auto& [input, expected] : inputs) {
-        const auto input_tensors = parse_expr(input).as<Product>().factors();
+        const auto input_tensors = deserialize(input).as<Product>().factors();
 
         TN tn(input_tensors);
         ExprPtr factor =
@@ -1807,7 +1807,7 @@ TEST_CASE("tensor_network_v3", "[elements]") {
 
     SECTION("special") {
       auto factors =
-          parse_expr(
+          deserialize(
               L"Ŝ{i_1;a_1<i_1>}:N-C-S g{i_2,a_1<i_1>;a_2<i_2>,i_1}:N-C-S "
               L"t{a_2<i_2>;i_2}:N-C-S")
               ->as<Product>()
@@ -1881,9 +1881,9 @@ TEST_CASE("tensor_network_v3", "[elements]") {
       // and doesn't actually matter What does, is that all equivalent ways of
       // writing it down, canonicalizes to the same exact form
       const Product expectedExpr =
-          parse_expr(
+          deserialize(
               L"Â{i1,i2;a1,a2} g{i3,i4;a3,a4} t{a1,a3;i1,i2} t{a2,a4;i3,i4}",
-              Symmetry::Antisymm)
+              {.def_perm_symm = Symmetry::Antisymm})
               .as<Product>();
 
       const auto expected = expectedExpr.factors();
@@ -1960,8 +1960,8 @@ TEST_CASE("tensor_network_v3", "[elements]") {
             const auto [current_graph, current_graph_labels] =
                 accessor.get_canonical_bliss_graph(tn);
             if (current_graph->cmp(*canonical_graph) != 0) {
-              std::wcout << "Canonical graph for " << deparse(ex<Product>(copy))
-                         << ":\n";
+              std::wcout << "Canonical graph for "
+                         << serialize(ex<Product>(copy)) << ":\n";
               current_graph->write_dot(std::wcout,
                                        {.labels = current_graph_labels});
               std::wcout << std::endl;
@@ -1994,12 +1994,12 @@ TEST_CASE("tensor_network_v3", "[elements]") {
                 std::wstring equality =
                     actual[i] == expected[i] ? L" == " : L" != ";
 
-                sstream << deparse(actual[i]) << equality
-                        << deparse(expected[i]) << "\n";
+                sstream << serialize(actual[i]) << equality
+                        << serialize(expected[i]) << "\n";
               }
-              sstream << "\nInput was " << deparse(ex<Product>(factors))
+              sstream << "\nInput was " << serialize(ex<Product>(factors))
                       << "\n";
-              FAIL(to_string(sstream.str()));
+              FAIL(toUtf8(sstream.str()));
             }
           } while (std::next_permutation(indices.begin() + 4, indices.end()));
         } while (std::next_permutation(indices.begin(), indices.begin() + 4));
@@ -2020,8 +2020,8 @@ TEST_CASE("tensor_network_v3", "[elements]") {
       };
 
       for (const std::wstring& current : inputs) {
-        auto factors1 = parse_expr(current).as<Product>().factors();
-        auto factors2 = parse_expr(current).as<Product>().factors();
+        auto factors1 = deserialize(current).as<Product>().factors();
+        auto factors2 = deserialize(current).as<Product>().factors();
 
         TN reference_tn(factors1);
         reference_tn.canonicalize(TensorCanonicalizer::cardinal_tensor_labels(),

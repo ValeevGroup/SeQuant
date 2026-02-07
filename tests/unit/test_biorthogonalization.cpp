@@ -3,7 +3,7 @@
 
 #include "catch2_sequant.hpp"
 
-#include <SeQuant/core/parse.hpp>
+#include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/utility/expr.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 
@@ -39,7 +39,7 @@ TEST_CASE("biorthogonalization", "[Biorthogonalization]") {
     for (std::size_t i = 0; i < inputs.size(); ++i) {
       CAPTURE(i);
 
-      ExprPtr input_expr = parse_expr(inputs.at(i));
+      ExprPtr input_expr = deserialize(inputs.at(i));
 
       auto externals = external_indices(input_expr);
 
@@ -80,10 +80,11 @@ TEST_CASE("biorthogonalization", "[Biorthogonalization]") {
       container::svector<ResultExpr> expressions;
       container::svector<ResultExpr> expected;
       for (std::size_t k = 0; k < inputs.at(i).size(); ++k) {
-        ResultExpr parsed = parse_result_expr(inputs.at(i).at(k));
+        ResultExpr parsed = deserialize<ResultExpr>(inputs.at(i).at(k));
         expressions.push_back(parsed);
 
-        expected.push_back(parse_result_expr(expected_outputs.at(i).at(k)));
+        expected.push_back(
+            deserialize<ResultExpr>(expected_outputs.at(i).at(k)));
       }
 
       mbpt::biorthogonal_transform(expressions);
@@ -107,7 +108,7 @@ TEST_CASE("biorthogonalization", "[Biorthogonalization]") {
       container::svector<ResultExpr> expressions;
 
       for (const std::wstring &str : current_inputs) {
-        expressions.push_back(parse_result_expr(str));
+        expressions.push_back(deserialize<ResultExpr>(str));
       }
 
       REQUIRE_THROWS_WITH(

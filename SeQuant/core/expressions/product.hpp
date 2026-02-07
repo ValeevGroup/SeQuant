@@ -6,6 +6,7 @@
 #include <SeQuant/core/expressions/expr.hpp>
 #include <SeQuant/core/expressions/expr_algorithms.hpp>
 #include <SeQuant/core/expressions/expr_ptr.hpp>
+#include <SeQuant/core/io/latex/latex.hpp>
 #include <SeQuant/core/meta.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
@@ -305,7 +306,7 @@ class Product : public Expr {
       if (!scal.is_identity()) {
         // replace -1 prefactor by -
         if (!(negate ? scalar() : -scalar()).is_identity()) {
-          result += sequant::to_latex(scal);
+          result += io::latex::to_string(scal);
         } else {
           result += L"{-}";
         }
@@ -318,22 +319,6 @@ class Product : public Expr {
       }
     }
     result += L"}";
-    return result;
-  }
-
-  std::wstring to_wolfram() const override {
-    std::wstring result =
-        is_commutative() ? L"Times[" : L"NonCommutativeMultiply[";
-    if (scalar() != decltype(scalar_)(1)) {
-      result += sequant::to_wolfram(scalar()) + L",";
-    }
-    const auto nfactors = factors().size();
-    size_t factor_count = 1;
-    for (const auto &i : factors()) {
-      result += i->to_wolfram() + (factor_count == nfactors ? L"" : L",");
-      ++factor_count;
-    }
-    result += L"]";
     return result;
   }
 
