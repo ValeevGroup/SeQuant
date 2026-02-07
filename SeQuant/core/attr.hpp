@@ -55,7 +55,6 @@ enum class BraKetPos {
   Ket,
 };
 
-
 /// index slot types
 ///
 /// @note This does not include slot bundles, like braket, etc.
