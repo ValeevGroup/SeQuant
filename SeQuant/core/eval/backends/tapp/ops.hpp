@@ -126,7 +126,7 @@ void contract(T alpha,                                   //
               TAPPTensor<T, Alloc>& result,              //
               container::svector<int64_t> const& idx_result) {
   // If result is empty and beta==0, allocate it
-  if (result.volume() == 0 || result.rank() == 0) {
+  if (result.volume() == 0) {
     auto extents =
         detail::compute_result_extents(A, idx_A, B, idx_B, idx_result);
     result = TAPPTensor<T, Alloc>(std::move(extents));

@@ -119,7 +119,7 @@ class rand_tensor_yield {
   ///       otherwise throws assertion error. To avoid that use the other
   ///       overload of operator() that takes sequant::Tensor const&
   sequant::ResultPtr operator()(std::wstring_view label) const {
-    auto&& found = label_to_tnsr_.find(label.data());
+    auto&& found = label_to_tnsr_.find(std::wstring{label});
     if (found == label_to_tnsr_.end()) {
       SEQUANT_ASSERT(false && "attempted access of non-existent tensor!");
     }
@@ -199,7 +199,6 @@ TEST_CASE("eval_with_btas", "[eval_btas]") {
 
   auto eval_symm = [&yield_](sequant::ExprPtr const& expr,
                              container::svector<long> const& target_labels) {
-    auto cache = sequant::CacheManager::empty();
     return evaluate_symm(eval_node(expr), target_labels, yield_)
         ->get<BTensorD>();
   };
