@@ -178,7 +178,11 @@ if (CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang" AND
 endif()
 
 include(CheckCXXFeatures)
-check_libcxx_linker_mismatch()
+if (PROJECT_IS_TOP_LEVEL)
+  vgkit_check_libcxx_linker_mismatch(MODIFY_GLOBAL_FLAGS)
+else()
+  vgkit_check_libcxx_linker_mismatch()
+endif()
 
 if (PROJECT_IS_TOP_LEVEL AND NOT DEFINED CMAKE_POSITION_INDEPENDENT_CODE)
     set(CMAKE_POSITION_INDEPENDENT_CODE ON)
@@ -201,7 +205,7 @@ if ((${CMAKE_CXX_COMPILER_ID} STREQUAL "GNU" AND
     endif (ENABLE_TBB)
 endif ()
 # check if <execution> header is usable
-check_cxx_execution_header(SEQUANT)
+vgkit_check_cxx_execution_header(SEQUANT)
 
 # Ranges-V3
 include(FindOrFetchRangeV3)
@@ -766,7 +770,7 @@ configure_package_config_file(cmake/sequant-config.cmake.in
         SEQUANT_INSTALL_INCLUDEDIR SEQUANT_INSTALL_LIBDIR
         SEQUANT_INSTALL_DOCDIR SEQUANT_INSTALL_CMAKEDIR)
 # Copy CheckCXXFeatures.cmake to build dir so sequant-config.cmake can find it
-configure_file(cmake/modules/CheckCXXFeatures.cmake
+configure_file("${vg_cmake_kit_SOURCE_DIR}/modules/CheckCXXFeatures.cmake"
         "${PROJECT_BINARY_DIR}/CheckCXXFeatures.cmake" COPYONLY)
 
 ## Install config, version, and target files
@@ -778,7 +782,7 @@ install(EXPORT sequant
 install(FILES
         "${PROJECT_BINARY_DIR}/sequant-config.cmake"
         "${PROJECT_BINARY_DIR}/sequant-config-version.cmake"
-        "${PROJECT_SOURCE_DIR}/cmake/modules/CheckCXXFeatures.cmake"
+        "${vg_cmake_kit_SOURCE_DIR}/modules/CheckCXXFeatures.cmake"
         DESTINATION "${SEQUANT_INSTALL_CMAKEDIR}"
         COMPONENT sequant-config)
 add_custom_target_subproject(sequant install-config
