@@ -847,7 +847,7 @@ class TensorNetworkV2Accessor {
 };
 }  // namespace sequant
 
-TEST_CASE("tensor_network_v2", "[elements]") {
+TEST_CASE("tensor_network_v2", "[elements][valgrind_skip]") {
   using namespace sequant;
   using namespace sequant::mbpt;
   using sequant::Context;
@@ -1436,7 +1436,7 @@ class TensorNetworkV3Accessor {
 };
 }  // namespace sequant
 
-TEST_CASE("tensor_network_v3", "[elements]") {
+TEST_CASE("tensor_network_v3", "[elements][valgrind_skip]") {
   using namespace sequant;
   using namespace sequant::mbpt;
   using sequant::Context;

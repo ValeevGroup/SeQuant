@@ -1,70 +1,9 @@
-#include <SeQuant/core/binary_node.hpp>
-#include <SeQuant/core/complex.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/eval/eval_expr.hpp>
-#include <SeQuant/core/eval/optimize.hpp>
 #include <SeQuant/core/expr.hpp>
-#include <SeQuant/core/hash.hpp>
-#include <SeQuant/core/utility/indices.hpp>
-#include <SeQuant/core/utility/macros.hpp>
+#include <SeQuant/core/optimize/sum.hpp>
 
-#include <range/v3/iterator/basic_iterator.hpp>
-#include <range/v3/range/access.hpp>
-#include <range/v3/view/tail.hpp>
-#include <range/v3/view/transform.hpp>
-#include <range/v3/view/view.hpp>
-
-#include <algorithm>
-#include <cstddef>
-#include <memory>
-#include <stack>
-#include <utility>
-#include <vector>
-
-namespace sequant {
-
-class Tensor;
-
-namespace opt {
-
-ExprPtr tail_factor(ExprPtr const& expr) noexcept {
-  if (expr->is<Tensor>())
-    return expr->clone();
-
-  else if (expr->is<Product>()) {
-    auto scalar = expr->as<Product>().scalar();
-    if (scalar == 1 && expr->size() == 2) {
-      // product with
-      //   -single factor that is a tensor
-      //   -scalar is just 1
-      //  will not be formed because of this block
-      return expr->at(1);
-    }
-    auto facs = ranges::views::tail(*expr);
-    return ex<Product>(Product{scalar, ranges::begin(facs), ranges::end(facs)});
-  } else {
-    // sum
-    auto summands = *expr | ranges::views::transform(
-                                [](auto const& x) { return tail_factor(x); });
-    return ex<Sum>(Sum{ranges::begin(summands), ranges::end(summands)});
-  }
-}
-
-void pull_scalar(ExprPtr expr) noexcept {
-  if (!expr->is<Product>()) return;
-  auto& prod = expr->as<Product>();
-
-  auto scal = prod.scalar();
-  for (auto&& x : *expr)
-    if (x->is<Product>()) {
-      auto& p = x->as<Product>();
-      scal *= p.scalar();
-      p.scale(1 / p.scalar());
-    }
-
-  prod.scale(1 / prod.scalar());
-  prod.scale(scal);
-}
+namespace sequant::opt {
 
 bool has_only_single_atom(const ExprPtr& term) {
   if (term->is_atom()) {
@@ -156,22 +95,4 @@ Sum reorder(Sum const& sum) {
   return result;
 }
 
-}  // namespace opt
-
-ExprPtr optimize(ExprPtr const& expr, bool reorder_sum) {
-  return opt::optimize(
-      expr, [](Index const& ix) { return ix.space().approximate_size(); },
-      reorder_sum);
-}
-
-ResultExpr& optimize(ResultExpr& expr, bool reorder_sum) {
-  expr.expression() = optimize(expr.expression(), reorder_sum);
-
-  return expr;
-}
-
-ResultExpr& optimize(ResultExpr&& expr, bool reorder_sum) {
-  return optimize(expr, reorder_sum);
-}
-
-}  // namespace sequant
+}  // namespace sequant::opt

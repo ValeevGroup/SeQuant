@@ -6,8 +6,8 @@
 #include <SeQuant/core/eval/backends/btas/eval_expr.hpp>
 #include <SeQuant/core/eval/backends/btas/result.hpp>
 #include <SeQuant/core/eval/eval.hpp>
-#include <SeQuant/core/eval/optimize.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
+#include <SeQuant/core/optimize/optimize.hpp>
 #include <SeQuant/domain/mbpt/biorthogonalization.hpp>
 
 #include <btas/btas.h>

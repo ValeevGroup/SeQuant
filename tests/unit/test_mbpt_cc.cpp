@@ -10,7 +10,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include "catch2_sequant.hpp"
 
-TEST_CASE("mbpt_cc", "[mbpt/cc]") {
+TEST_CASE("mbpt_cc", "[mbpt/cc][valgrind_skip]") {
   using namespace sequant;
   using namespace sequant::mbpt;
 

@@ -169,6 +169,21 @@ add_feature_info(SEQUANT_CONTEXT_MANIPULATION_THREADSAFE SEQUANT_CONTEXT_MANIPUL
 # Prerequisites
 ##########################
 
+# Apple Clang 16 and earlier do not correctly implement P0522R0
+# (relaxed matching of template template arguments), which SeQuant requires
+if (CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang" AND
+    CMAKE_CXX_COMPILER_VERSION VERSION_LESS 17)
+  message(FATAL_ERROR "SeQuant requires Apple Clang 17 or later (found ${CMAKE_CXX_COMPILER_VERSION}). "
+    "Upgrade Xcode or use a different compiler (e.g., LLVM Clang from Homebrew).")
+endif()
+
+include(CheckCXXFeatures)
+if (PROJECT_IS_TOP_LEVEL)
+  vgkit_check_libcxx_linker_mismatch(MODIFY_GLOBAL_FLAGS)
+else()
+  vgkit_check_libcxx_linker_mismatch()
+endif()
+
 if (PROJECT_IS_TOP_LEVEL AND NOT DEFINED CMAKE_POSITION_INDEPENDENT_CODE)
     set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 endif()
@@ -189,9 +204,8 @@ if ((${CMAKE_CXX_COMPILER_ID} STREQUAL "GNU" AND
         set_target_properties(TBB::tbb PROPERTIES IMPORTED_GLOBAL TRUE)
     endif (ENABLE_TBB)
 endif ()
-# check of <execution> header is usable
-include(CheckCXXFeatures)
-check_cxx_execution_header(SEQUANT)
+# check if <execution> header is usable
+vgkit_check_cxx_execution_header(SEQUANT)
 
 # Ranges-V3
 include(FindOrFetchRangeV3)
@@ -425,11 +439,14 @@ set(SeQuant_eval_src
 
 # Optimize sources (depends on eval)
 set(SeQuant_optimize_src
-        SeQuant/core/eval/optimize.hpp
-        SeQuant/core/eval/optimize/common_subexpression_elimination.hpp
-        SeQuant/core/eval/optimize/fusion.cpp
-        SeQuant/core/eval/optimize/fusion.hpp
-        SeQuant/core/eval/optimize/optimize.cpp
+        SeQuant/core/optimize/common_subexpression_elimination.hpp
+        SeQuant/core/optimize/fusion.cpp
+        SeQuant/core/optimize/fusion.hpp
+        SeQuant/core/optimize/optimize.cpp
+        SeQuant/core/optimize/optimize.hpp
+        SeQuant/core/optimize/single_term.hpp
+        SeQuant/core/optimize/sum.cpp
+        SeQuant/core/optimize/sum.hpp
 )
 
 # Export sources (depends on eval)
@@ -752,6 +769,9 @@ configure_package_config_file(cmake/sequant-config.cmake.in
         PATH_VARS CMAKE_INSTALL_PREFIX SEQUANT_INSTALL_BINDIR
         SEQUANT_INSTALL_INCLUDEDIR SEQUANT_INSTALL_LIBDIR
         SEQUANT_INSTALL_DOCDIR SEQUANT_INSTALL_CMAKEDIR)
+# Copy CheckCXXFeatures.cmake to build dir so sequant-config.cmake can find it
+configure_file("${vg_cmake_kit_SOURCE_DIR}/modules/CheckCXXFeatures.cmake"
+        "${PROJECT_BINARY_DIR}/CheckCXXFeatures.cmake" COPYONLY)
 
 ## Install config, version, and target files
 install(EXPORT sequant
@@ -762,6 +782,7 @@ install(EXPORT sequant
 install(FILES
         "${PROJECT_BINARY_DIR}/sequant-config.cmake"
         "${PROJECT_BINARY_DIR}/sequant-config-version.cmake"
+        "${vg_cmake_kit_SOURCE_DIR}/modules/CheckCXXFeatures.cmake"
         DESTINATION "${SEQUANT_INSTALL_CMAKEDIR}"
         COMPONENT sequant-config)
 add_custom_target_subproject(sequant install-config

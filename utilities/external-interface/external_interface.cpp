@@ -3,7 +3,6 @@
 #include "utils.hpp"
 
 #include <SeQuant/core/context.hpp>
-#include <SeQuant/core/eval/optimize/common_subexpression_elimination.hpp>
 #include <SeQuant/core/export/export.hpp>
 #include <SeQuant/core/export/export_expr.hpp>
 #include <SeQuant/core/export/export_node.hpp>
@@ -12,6 +11,7 @@
 #include <SeQuant/core/export/itf.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
+#include <SeQuant/core/optimize/common_subexpression_elimination.hpp>
 #include <SeQuant/core/runtime.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/utility/expr.hpp>
@@ -341,7 +341,7 @@ void generateITF(const json &blocks, std::string_view out_file,
 
     if (current_block.value("subexpression_elimination",
                             defaults.subexpression_elimination)) {
-      eliminate_common_subexpressions(results, [](const auto &expr) {
+      opt::eliminate_common_subexpressions(results, [](const auto &expr) {
         // Note: the lambda is needed to make the callable usable for
         // ExprPtr as well as ResultExpr objects
         return to_export_tree(expr);

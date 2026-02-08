@@ -3,7 +3,6 @@
 
 #include "test_export.hpp"
 
-#include <SeQuant/core/eval/optimize.hpp>
 #include <SeQuant/core/export/export.hpp>
 #include <SeQuant/core/export/export_expr.hpp>
 #include <SeQuant/core/export/export_node.hpp>
@@ -18,6 +17,7 @@
 #include <SeQuant/core/export/text_generator.hpp>
 #include <SeQuant/core/index_space_registry.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
+#include <SeQuant/core/optimize/optimize.hpp>
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/string.hpp>
