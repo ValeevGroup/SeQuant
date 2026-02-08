@@ -22,6 +22,10 @@ set(SEQUANT_EXT_VERSION "@SEQUANT_EXT_VERSION@")
 
 @PACKAGE_INIT@
 
+# Detect and fix libc++ header/library mismatch for non-Apple Clang
+include("${CMAKE_CURRENT_LIST_DIR}/CheckCXXFeatures.cmake")
+check_libcxx_linker_mismatch()
+
 @Boost_CONFIG_FILE_CONTENTS@
 
 set(SEQUANT_HAS_TILEDARRAY @SEQUANT_HAS_TILEDARRAY@)
