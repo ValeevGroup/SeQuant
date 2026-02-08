@@ -2,9 +2,9 @@
 
 #include "catch2_sequant.hpp"
 
-#include <SeQuant/core/eval/optimize/fusion.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
+#include <SeQuant/core/optimize/fusion.hpp>
 
 #include <array>
 #include <memory>

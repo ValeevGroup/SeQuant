@@ -4,7 +4,6 @@
 
 #include <SeQuant/core/algorithm.hpp>
 #include <SeQuant/core/attr.hpp>
-#include <SeQuant/core/eval/optimize.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/math.hpp>

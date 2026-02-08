@@ -17,7 +17,7 @@
 #include <string>
 #include <unordered_map>
 
-namespace sequant {
+namespace sequant::opt {
 
 namespace cse {
 
@@ -382,6 +382,6 @@ void eliminate_common_subexpressions(VectorLike &expr_trees,
   replacer.perform_replacements();
 }
 
-}  // namespace sequant
+}  // namespace sequant::opt
 
 #endif  // SEQUANT_COMMON_SUBEXPRESSION_ELIMINATION_HPP

@@ -6,11 +6,12 @@
 #include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/eval/eval_expr.hpp>
 #include <SeQuant/core/eval/eval_node.hpp>
-#include <SeQuant/core/eval/optimize.hpp>
-#include <SeQuant/core/eval/optimize/common_subexpression_elimination.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
+#include <SeQuant/core/optimize/common_subexpression_elimination.hpp>
+#include <SeQuant/core/optimize/optimize.hpp>
+#include <SeQuant/core/optimize/single_term.hpp>
 #include <SeQuant/core/space.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
 
@@ -251,12 +252,12 @@ TEST_CASE("optimize", "[optimize]") {
           // every pair of objects will yield a hash collision which need to be
           // dealt with by using proper comparison operators.
           static constexpr bool force_collisions = true;
-          eliminate_common_subexpressions<
+          opt::eliminate_common_subexpressions<
               decltype(expressions), decltype(binarizer),
-              cse::AcceptAllPredicate, force_collisions>(expressions,
-                                                         binarizer);
+              opt::cse::AcceptAllPredicate, force_collisions>(expressions,
+                                                              binarizer);
         } else {
-          eliminate_common_subexpressions(expressions, binarizer);
+          opt::eliminate_common_subexpressions(expressions, binarizer);
         }
 
         std::vector<ResultExpr> actual;
