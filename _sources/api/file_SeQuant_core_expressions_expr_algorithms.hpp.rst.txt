@@ -1,0 +1,88 @@
+
+.. _file_SeQuant_core_expressions_expr_algorithms.hpp:
+
+File expr_algorithms.hpp
+========================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core_expressions>` (``SeQuant/core/expressions``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/expressions/expr_algorithms.hpp``)
+-------------------------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_expressions_expr_algorithms.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/expr_fwd.hpp`` (:ref:`file_SeQuant_core_expr_fwd.hpp`)
+
+- ``SeQuant/core/expressions/expr.hpp`` (:ref:`file_SeQuant_core_expressions_expr.hpp`)
+
+- ``SeQuant/core/expressions/expr_ptr.hpp`` (:ref:`file_SeQuant_core_expressions_expr_ptr.hpp`)
+
+- ``SeQuant/core/utility/macros.hpp`` (:ref:`file_SeQuant_core_utility_macros.hpp`)
+
+- ``range/v3/range/access.hpp``
+
+- ``string`` (:ref:`file_SeQuant_core_utility_string.cpp`)
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_core_expr.hpp`
+
+- :ref:`file_SeQuant_core_expressions_abstract_tensor.hpp`
+
+- :ref:`file_SeQuant_core_expressions_expr_algorithms.cpp`
+
+- :ref:`file_SeQuant_core_expressions_product.hpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1ade3116efc18d901007d72fdc0fc208ea`
+
+- :ref:`exhale_function_namespacesequant_1ab497a84be7129a4f02e4b2d3cd30fb77`
+
+- :ref:`exhale_function_namespacesequant_1a4fb2134f803040f97c457fd476d97c55`
+
+- :ref:`exhale_function_namespacesequant_1ada68b8bbbeeb3a3d5a3077ae74186544`
+
+- :ref:`exhale_function_namespacesequant_1a92238a447312a29368c42f7b9ac14bef`
+
+- :ref:`exhale_function_namespacesequant_1af4ece5a049a3d307e03f6b2af97697ab`
+
+- :ref:`exhale_function_namespacesequant_1ad600d7fe47c0c4f006149cd13a114bc5`
+
+- :ref:`exhale_function_namespacesequant_1a155527dcd3e0bba6e2d81accd9be2a7e`
+

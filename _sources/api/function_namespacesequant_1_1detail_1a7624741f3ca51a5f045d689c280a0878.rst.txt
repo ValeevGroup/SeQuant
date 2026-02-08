@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1detail_1a7624741f3ca51a5f045d689c280a0878:
+
+Function sequant::detail::nthreads_accessor
+===========================================
+
+- Defined in :ref:`file_SeQuant_core_runtime.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::detail::nthreads_accessor()
+   :project: SeQuant

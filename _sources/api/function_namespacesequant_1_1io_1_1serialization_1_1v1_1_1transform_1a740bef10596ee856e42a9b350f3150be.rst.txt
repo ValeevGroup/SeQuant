@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1io_1_1serialization_1_1v1_1_1transform_1a740bef10596ee856e42a9b350f3150be:
+
+Template Function sequant::io::serialization::v1::transform::to_braket_symmetry
+===============================================================================
+
+- Defined in :ref:`file_SeQuant_core_io_serialization_v1_ast_conversions.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::io::serialization::v1::transform::to_braket_symmetry(char, std::size_t, const Iterator&, BraKetSymmetry)
+   :project: SeQuant

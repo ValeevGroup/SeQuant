@@ -1,0 +1,14 @@
+.. _exhale_variable_eval__node_8hpp_1ac2b5196b0e925244cd8b73d8a05a1fd2:
+
+Variable virts_
+===============
+
+- Defined in :ref:`file_SeQuant_core_eval_eval_node.hpp`
+
+
+Variable Documentation
+----------------------
+
+
+.. doxygenvariable:: virts_
+   :project: SeQuant

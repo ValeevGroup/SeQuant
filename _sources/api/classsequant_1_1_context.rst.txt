@@ -1,0 +1,28 @@
+.. _exhale_class_classsequant_1_1_context:
+
+Class Context
+=============
+
+- Defined in :ref:`file_SeQuant_core_context.hpp`
+
+
+Nested Relationships
+--------------------
+
+
+Nested Types
+************
+
+- :ref:`exhale_struct_structsequant_1_1_context_1_1_defaults`
+- :ref:`exhale_struct_structsequant_1_1_context_1_1_options`
+
+
+Class Documentation
+-------------------
+
+
+.. doxygenclass:: sequant::Context
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

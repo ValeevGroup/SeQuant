@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1af0948cfc462ccc7967a31e2cf87318f6:
+
+Function sequant::size(const Expr&)
+===================================
+
+- Defined in :ref:`file_SeQuant_core_expressions_expr_algorithms.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::size(const Expr&)
+   :project: SeQuant

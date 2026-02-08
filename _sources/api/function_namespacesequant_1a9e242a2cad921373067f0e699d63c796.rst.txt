@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a9e242a2cad921373067f0e699d63c796:
+
+Function sequant::is_valid(const Expr&, std::string \*)
+=======================================================
+
+- Defined in :ref:`file_SeQuant_core_utility_expr.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::is_valid(const Expr&, std::string *)
+   :project: SeQuant

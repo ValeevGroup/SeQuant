@@ -1,0 +1,245 @@
+
+.. _program_listing_file_SeQuant_domain_mbpt_spin.hpp:
+
+Program Listing for File spin.hpp
+=================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_domain_mbpt_spin.hpp>` (``SeQuant/domain/mbpt/spin.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   //
+   // Created by Eduard Valeyev on 2019-02-27.
+   //
+   
+   #ifndef SEQUANT_DOMAIN_MBPT_SPIN_HPP
+   #define SEQUANT_DOMAIN_MBPT_SPIN_HPP
+   
+   #include <SeQuant/domain/mbpt/fwd.hpp>
+   
+   #include <SeQuant/domain/mbpt/space_qns.hpp>
+   
+   #include <SeQuant/core/container.hpp>
+   #include <SeQuant/core/expr.hpp>
+   #include <SeQuant/core/index.hpp>
+   #include <SeQuant/core/utility/indices.hpp>
+   #include <SeQuant/core/utility/macros.hpp>
+   #include <SeQuant/core/utility/overloads.hpp>
+   #include <SeQuant/core/utility/string.hpp>
+   
+   #include <string>
+   #include <vector>
+   
+   namespace sequant::mbpt {
+   
+   // Spin is a scoped enum, hence not implicitly convertible to
+   // QuantumNumbersAttr::bitset_t
+   static_assert(!std::is_convertible_v<sequant::mbpt::Spin, bitset_t>);
+   // QuantumNumbersAttr::bitset_t cannot be constructed from Spin
+   static_assert(!std::is_constructible_v<bitset_t, sequant::mbpt::Spin>);
+   // but Spin can be cast to QuantumNumbersAttr::bitset_t
+   static_assert(meta::is_statically_castable_v<sequant::mbpt::Spin, bitset_t>);
+   // Spin cannot be cast to nonsense ...
+   static_assert(
+       !meta::is_statically_castable_v<sequant::mbpt::Spin, std::string>);
+   
+   inline Spin operator~(Spin s) {
+     return static_cast<Spin>(~(static_cast<bitset_t>(s)));
+   }
+   inline Spin operator|(Spin s1, Spin s2) {
+     return static_cast<Spin>(static_cast<bitset_t>(s1) |
+                              static_cast<bitset_t>(s2));
+   }
+   inline Spin operator&(Spin s1, Spin s2) {
+     return static_cast<Spin>(static_cast<bitset_t>(s1) &
+                              static_cast<bitset_t>(s2));
+   }
+   
+   inline Spin to_spin(const QuantumNumbersAttr& t) {
+     SEQUANT_ASSERT((t.to_int32() & mask_v<Spin>) != 0);
+     return static_cast<Spin>(t.to_int32() & mask_v<Spin>);
+   }
+   
+   inline QuantumNumbersAttr spinannotation_remove(const QuantumNumbersAttr& t) {
+     static_assert((~(~mask_v<Spin> & ~bitset::reserved) & ~bitset::reserved) ==
+                       mask_v<Spin>,
+                   "Spin bitmask uses reserved bits");
+     return t.intersection(QuantumNumbersAttr(~mask_v<Spin> & ~bitset::reserved));
+   }
+   
+   template <typename WS, typename = std::enable_if_t<
+                              meta::is_wstring_or_view_v<std::decay_t<WS>>>>
+   std::wstring spinannotation_remove(WS&& label) {
+     auto view = to_basic_string_view(label);
+     SEQUANT_ASSERT(!ranges::contains(view, L'_'));
+     const auto has_annotation = view.back() == L'↑' || view.back() == L'↓';
+     return std::wstring{view.data(),
+                         view.data() + view.size() - (has_annotation ? 1 : 0)};
+   }
+   
+   template <typename WS, typename = std::enable_if_t<
+                              meta::is_wstring_or_view_v<std::decay_t<WS>>>>
+   std::wstring spinannotation_add(WS&& label, Spin s) {
+     [[maybe_unused]] auto view = to_basic_string_view(label);
+     SEQUANT_ASSERT(!ranges::contains(view, L'_'));
+     SEQUANT_ASSERT(view.back() != L'↑' && view.back() != L'↓');
+     switch (s) {
+       case Spin::any:
+         return std::wstring(std::forward<WS>(label));
+       case Spin::alpha:
+         return std::wstring(std::forward<WS>(label)) + L'↑';
+       case Spin::beta:
+         return std::wstring(std::forward<WS>(label)) + L'↓';
+       case Spin::null:
+         SEQUANT_ABORT("Invalid spin quantum number");
+     }
+   
+     SEQUANT_UNREACHABLE;
+   }
+   
+   template <typename WS, typename = std::enable_if_t<
+                              meta::is_wstring_or_view_v<std::decay_t<WS>>>>
+   std::wstring spinannotation_replacе(WS&& label, Spin s) {
+     auto label_sf = spinannotation_remove(std::forward<WS>(label));
+     return spinannotation_add(label_sf, s);
+   }
+   
+   // make alpha-spin idx
+   [[nodiscard]] Index make_spinalpha(const Index& idx);
+   
+   // make beta-spin idx
+   [[nodiscard]] Index make_spinbeta(const Index& idx);
+   
+   // make null-spin idx
+   [[nodiscard]] Index make_spinfree(const Index& idx);
+   
+   ExprPtr swap_bra_ket(const ExprPtr& expr);
+   
+   ExprPtr append_spin(const ExprPtr& expr,
+                       const container::map<Index, Index>& index_replacements);
+   
+   ExprPtr remove_spin(const ExprPtr& expr);
+   
+   bool ms_conserving_columns(const AbstractTensor& tensor);
+   
+   bool ms_uniform_tensor(const AbstractTensor& tensor);
+   
+   bool can_expand(const AbstractTensor& tensor);
+   
+   ExprPtr expand_antisymm(const Tensor& tensor, bool skip_spinsymm = false);
+   
+   ExprPtr expand_antisymm(const ExprPtr& expr, bool skip_spinsymm = false);
+   
+   container::svector<container::map<Index, Index>> A_maps(const Tensor& A);
+   
+   ExprPtr expand_A_op(const ProductPtr& product);
+   
+   ExprPtr symmetrize_expr(const ProductPtr& product);
+   
+   ExprPtr symmetrize_expr(const ExprPtr& expr);
+   
+   ExprPtr expand_A_op(const ExprPtr& expr);
+   
+   container::svector<container::map<Index, Index>> P_maps(const Tensor& P);
+   
+   ExprPtr expand_P_op(const ProductPtr& product);
+   
+   ExprPtr expand_P_op(const ExprPtr& expr);
+   
+   container::svector<container::map<Index, Index>> S_replacement_maps(
+       const Tensor& S);
+   
+   ExprPtr S_maps(const ExprPtr& expr);
+   
+   // clang-format off
+   // clang-format on
+   ExprPtr closed_shell_spintrace(
+       const ExprPtr& expr,
+       const container::svector<container::svector<SlottedIndex>>&
+           ext_index_groups = {},
+       bool full_expansion = false);
+   ExprPtr closed_shell_spintrace(const ExprPtr& expr, EmptyInitializerList,
+                                  bool full_expansion = false);
+   ExprPtr closed_shell_spintrace(
+       const ExprPtr& expr,
+       const container::svector<container::svector<Index>>& ext_index_groups,
+       bool full_expansion = false);
+   
+   container::svector<ResultExpr> closed_shell_spintrace(
+       const ResultExpr& expr, bool full_expansion = false);
+   
+   // clang-format off
+   enum class BiorthogonalizationMethod {
+     V1,
+     V2
+   };
+   // clang-format on
+   
+   struct ClosedShellCCSpintraceOptions {
+     BiorthogonalizationMethod method = BiorthogonalizationMethod::V2;
+     bool naive_spintrace = false;
+   };
+   
+   // clang-format off
+   // clang-format on
+   ExprPtr closed_shell_CC_spintrace(ExprPtr const& expr,
+                                     ClosedShellCCSpintraceOptions options = {});
+   
+   ExprPtr closed_shell_CC_spintrace_v1(
+       ExprPtr const& expr,
+       ClosedShellCCSpintraceOptions options = {
+           .method = BiorthogonalizationMethod::V1, .naive_spintrace = false});
+   
+   ExprPtr closed_shell_CC_spintrace_v2(
+       ExprPtr const& expr,
+       ClosedShellCCSpintraceOptions options = {
+           .method = BiorthogonalizationMethod::V2, .naive_spintrace = false});
+   
+   Tensor swap_spin(const Tensor& t);
+   
+   ExprPtr swap_spin(const ExprPtr& expr);
+   
+   ExprPtr merge_tensors(const Tensor& O1, const Tensor& O2);
+   
+   std::vector<ExprPtr> open_shell_A_op(const Tensor& A);
+   
+   std::vector<ExprPtr> open_shell_P_op_vector(const Tensor& A);
+   
+   // clang-format off
+   // clang-format on
+   std::vector<ExprPtr> open_shell_spintrace(
+       const ExprPtr& expr,
+       const container::svector<container::svector<SlottedIndex>>&
+           ext_index_groups,
+       const std::optional<int>& target_spin_case = std::nullopt);
+   std::vector<ExprPtr> open_shell_spintrace(
+       const ExprPtr& expr, EmptyInitializerList,
+       const std::optional<int>& target_spin_case = std::nullopt);
+   std::vector<ExprPtr> open_shell_spintrace(
+       const ExprPtr& expr,
+       const container::svector<container::svector<Index>>& ext_index_groups,
+       const std::optional<int>& target_spin_case = std::nullopt);
+   
+   // clang-format off
+   // clang-format on
+   std::vector<ExprPtr> open_shell_CC_spintrace(const ExprPtr& expr);
+   
+   ExprPtr spintrace(const ExprPtr& expr,
+                     const container::svector<container::svector<SlottedIndex>>&
+                         ext_index_groups = {},
+                     bool spinfree_index_spaces = true);
+   ExprPtr spintrace(const ExprPtr& expr, EmptyInitializerList,
+                     bool spinfree_index_spaces = true);
+   ExprPtr spintrace(
+       const ExprPtr& expr,
+       const container::svector<container::svector<Index>>& ext_index_groups,
+       bool spinfree_index_spaces = true);
+   
+   container::svector<ResultExpr> spintrace(const ResultExpr& expr,
+                                            bool spinfree_index_spaces = true);
+   
+   }  // namespace sequant::mbpt
+   
+   #endif  // SEQUANT_DOMAIN_MBPT_SPIN_HPP

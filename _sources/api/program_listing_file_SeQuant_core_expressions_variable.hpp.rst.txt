@@ -1,0 +1,92 @@
+
+.. _program_listing_file_SeQuant_core_expressions_variable.hpp:
+
+Program Listing for File variable.hpp
+=====================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_core_expressions_variable.hpp>` (``SeQuant/core/expressions/variable.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   #ifndef SEQUANT_EXPRESSIONS_VARIABLE_HPP
+   #define SEQUANT_EXPRESSIONS_VARIABLE_HPP
+   
+   #include <SeQuant/core/expressions/expr.hpp>
+   #include <SeQuant/core/expressions/expr_ptr.hpp>
+   #include <SeQuant/core/expressions/labeled.hpp>
+   #include <SeQuant/core/hash.hpp>
+   #include <SeQuant/core/utility/macros.hpp>
+   #include <SeQuant/core/utility/string.hpp>
+   
+   #include <string>
+   #include <string_view>
+   
+   namespace sequant {
+   
+   class Variable : public Expr, public MutatableLabeled {
+    public:
+     Variable() = delete;
+     virtual ~Variable() = default;
+     Variable(const Variable &) = default;
+     Variable(Variable &&) = default;
+     Variable &operator=(const Variable &) = default;
+     Variable &operator=(Variable &&) = default;
+     template <typename U>
+       requires(!is_variable_v<U> && !is_an_expr_v<std::remove_reference_t<U>> &&
+                !Expr::is_shared_ptr_of_expr_or_derived<
+                    std::remove_reference_t<U>>::value &&
+                std::constructible_from<std::wstring, U>)
+     explicit Variable(U &&label) : label_(std::forward<U>(label)) {}
+   
+     Variable(std::wstring label) : label_(std::move(label)), conjugated_(false) {}
+   
+     Variable(const std::string &label)
+         : label_(sequant::toUtf16(label)), conjugated_(false) {}
+   
+     std::wstring_view label() const override;
+   
+     void set_label(std::wstring label) override;
+   
+     void conjugate();
+   
+     bool conjugated() const;
+   
+     std::wstring to_latex() const override;
+   
+     type_id_type type_id() const override { return get_type_id<Variable>(); }
+   
+     ExprPtr clone() const override;
+   
+     virtual void adjoint() override;
+   
+    private:
+     std::wstring label_;
+     bool conjugated_ = false;
+   
+     hash_type memoizing_hash() const override {
+       auto compute_hash = [this]() {
+         auto val = hash::value(label_);
+         hash::combine(val, conjugated_);
+         return val;
+       };
+   
+       if (!hash_value_) {
+         hash_value_ = compute_hash();
+       } else {
+         SEQUANT_ASSERT(*hash_value_ == compute_hash());
+       }
+   
+       return *hash_value_;
+     }
+   
+     bool static_equal(const Expr &that) const override {
+       return label_ == static_cast<const Variable &>(that).label_ &&
+              conjugated_ == static_cast<const Variable &>(that).conjugated_;
+     }
+   };  // class Variable
+   
+   }  // namespace sequant
+   
+   #endif  // SEQUANT_EXPRESSIONS_VARIABLE_HPP
