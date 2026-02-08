@@ -99,8 +99,12 @@ class compute_cceqvec {
         eqvec_sf_ref[R] = closed_shell_spintrace(eqvec_so[R], ext_idxs);
         if (R == 1) {  // closed_shell_spintrace omits 1-body S
           using ranges::views::transform;
-          auto bixs = ext_idxs | transform([](auto&& vec) { return vec[0]; });
-          auto kixs = ext_idxs | transform([](auto&& vec) { return vec[1]; });
+          auto bixs = ext_idxs | transform([](auto&& group) {
+                        return get_bra_idx(group);
+                      });
+          auto kixs = ext_idxs | transform([](auto&& group) {
+                        return get_ket_idx(group);
+                      });
           auto s_tensor =
               ex<Tensor>(Tensor{reserved::symm_label(), bra(kixs), ket(bixs)});
           eqvec_sf_ref[R] = s_tensor * eqvec_sf_ref[R];

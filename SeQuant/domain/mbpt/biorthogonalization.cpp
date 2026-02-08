@@ -1,4 +1,5 @@
 #include <SeQuant/domain/mbpt/biorthogonalization.hpp>
+#include <SeQuant/domain/mbpt/detail/concepts.hpp>
 #include <SeQuant/domain/mbpt/spin.hpp>
 
 #include <SeQuant/core/container.hpp>
@@ -531,11 +532,10 @@ void biorthogonal_transform(container::svector<ResultExpr>& result_exprs,
   }
 }
 
-ExprPtr biorthogonal_transform(
-    const sequant::ExprPtr& expr,
-    const container::svector<container::svector<sequant::Index>>&
-        ext_index_groups,
-    const double threshold) {
+template <detail::index_group_range IdxGroups>
+ExprPtr biorthogonal_transform_impl(const sequant::ExprPtr& expr,
+                                    IdxGroups&& ext_index_groups,
+                                    const double threshold) {
   ResultExpr res(
       bra(ext_index_groups | ranges::views::transform([](const auto& pair) {
             return get_ket_idx(pair);
@@ -553,9 +553,25 @@ ExprPtr biorthogonal_transform(
   return res.expression();
 }
 
-ExprPtr WK_biorthogonalization_filter(
-    ExprPtr expr,
-    const container::svector<container::svector<Index>>& ext_idxs) {
+ExprPtr biorthogonal_transform(
+    const sequant::ExprPtr& expr,
+    const container::svector<container::svector<sequant::SlottedIndex>>&
+        ext_index_groups,
+    const double threshold) {
+  return biorthogonal_transform_impl(
+      expr, as_view_of_index_groups(ext_index_groups), threshold);
+}
+
+ExprPtr biorthogonal_transform(
+    const sequant::ExprPtr& expr,
+    const container::svector<container::svector<sequant::Index>>&
+        ext_index_groups,
+    const double threshold) {
+  return biorthogonal_transform_impl(expr, ext_index_groups, threshold);
+}
+
+template <detail::index_group_range IdxGroups>
+ExprPtr WK_biorthogonalization_filter_impl(ExprPtr expr, IdxGroups&& ext_idxs) {
   if (!expr->is<Sum>()) return expr;
   if (ext_idxs.size() <= 2) return expr;  // always skip R1 and R2
 
@@ -603,10 +619,21 @@ ExprPtr WK_biorthogonalization_filter(
   return result;
 }
 
-ExprPtr biorthogonal_transform_pre_nnsproject(
-    ExprPtr& expr,
-    const container::svector<container::svector<Index>>& ext_idxs,
-    bool factor_out_nns_projector) {
+ExprPtr WK_biorthogonalization_filter(
+    ExprPtr expr,
+    const container::svector<container::svector<SlottedIndex>>& ext_idxs) {
+  return WK_biorthogonalization_filter_impl(expr,
+                                            as_view_of_index_groups(ext_idxs));
+}
+ExprPtr WK_biorthogonalization_filter(
+    ExprPtr expr,
+    const container::svector<container::svector<Index>>& ext_idxs) {
+  return WK_biorthogonalization_filter_impl(expr, ext_idxs);
+}
+
+template <detail::index_group_range IdxGroups>
+ExprPtr biorthogonal_transform_pre_nnsproject_impl(
+    ExprPtr& expr, IdxGroups&& ext_idxs, bool factor_out_nns_projector) {
   using ranges::views::transform;
 
   // Remove leading S operator if present
@@ -616,7 +643,8 @@ ExprPtr biorthogonal_transform_pre_nnsproject(
           remove_tensor(term.as_shared_ptr<Product>(), reserved::symm_label());
   }
 
-  auto bt = biorthogonal_transform(expr, ext_idxs);
+  auto bt = biorthogonal_transform_impl(
+      expr, ext_idxs, default_biorthogonalizer_pseudoinverse_threshold);
 
   auto bixs = ext_idxs | transform([](auto&& vec) { return get_bra_idx(vec); });
   auto kixs = ext_idxs | transform([](auto&& vec) { return get_ket_idx(vec); });
@@ -631,13 +659,29 @@ ExprPtr biorthogonal_transform_pre_nnsproject(
 
     bt = S_maps(bt);
     canonicalize(bt);
-    bt = WK_biorthogonalization_filter(bt, ext_idxs);
+    bt = WK_biorthogonalization_filter_impl(bt, ext_idxs);
   }
 
   bt = S_tensor * bt;
   simplify(bt);
 
   return bt;
+}
+
+ExprPtr biorthogonal_transform_pre_nnsproject(
+    ExprPtr& expr,
+    const container::svector<container::svector<SlottedIndex>>& ext_idxs,
+    bool factor_out_nns_projector) {
+  return biorthogonal_transform_pre_nnsproject_impl(
+      expr, as_view_of_index_groups(ext_idxs), factor_out_nns_projector);
+}
+
+ExprPtr biorthogonal_transform_pre_nnsproject(
+    ExprPtr& expr,
+    const container::svector<container::svector<Index>>& ext_idxs,
+    bool factor_out_nns_projector) {
+  return biorthogonal_transform_pre_nnsproject_impl(expr, ext_idxs,
+                                                    factor_out_nns_projector);
 }
 
 namespace detail {

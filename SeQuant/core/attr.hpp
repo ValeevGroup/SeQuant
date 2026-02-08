@@ -9,6 +9,7 @@
 
 #include <cassert>
 #include <cstdlib>
+#include <ostream>
 #include <string>
 
 namespace sequant {
@@ -53,6 +54,36 @@ enum class BraKetPos {
   Bra,
   Ket,
 };
+
+/// index slot types
+///
+/// @note This does not include slot bundles, like braket, etc.
+enum class SlotType {
+  Bra,
+  Ket,
+  Aux,
+  Proto,
+};
+
+template <typename CharT, typename Traits>
+std::basic_ostream<CharT, Traits>& operator<<(
+    std::basic_ostream<CharT, Traits>& stream, SlotType origin) {
+  switch (origin) {
+    case SlotType::Bra:
+      stream << "Bra";
+      break;
+    case SlotType::Ket:
+      stream << "Ket";
+      break;
+    case SlotType::Aux:
+      stream << "Aux";
+      break;
+    case SlotType::Proto:
+      stream << "Proto";
+      break;
+  }
+  return stream;
+}
 
 enum class Statistics {
   FermiDirac,

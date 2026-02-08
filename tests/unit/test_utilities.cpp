@@ -8,9 +8,12 @@
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/reserved.hpp>
+#include <SeQuant/core/slotted_index.hpp>
 #include <SeQuant/core/utility/conversion.hpp>
+#include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/expr.hpp>
 #include <SeQuant/core/utility/indices.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/singleton.hpp>
 #include <SeQuant/core/utility/strong.hpp>
 #include <SeQuant/core/utility/tensor.hpp>
@@ -536,41 +539,62 @@ TEST_CASE("utilities", "[utilities]") {
   }
 
   SECTION("external_indices") {
-    for (const auto& [input, expected] :
-         std::vector<std::pair<std::wstring, std::vector<std::vector<Index>>>>{
+    for (const auto& [input, expected] : std::vector<
+             std::pair<std::wstring, std::vector<std::vector<SlottedIndex>>>>{
              {L"1/2", {}},
              {L"t", {}},
              {L"t{}", {}},
-             {L"t{i1;a1}", {{L"i_1", L"a_1"}}},
-             {L"t{i1,i2;a1,a2}", {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}}},
-             {L"t{i1,i2;a2,a1}", {{L"i_1", L"a_2"}, {L"i_2", L"a_1"}}},
-             {L"t{;;i1,i2}", {{L"i_2"}, {L"i_1"}}},
-             {L"t{a1;a2;i1,i2}", {{L"a_1", L"a_2"}, {L"i_1"}, {L"i_2"}}},
+             {L"t{i1;a1}",
+              {{{L"i_1", SlotType::Bra}, {L"a_1", SlotType::Ket}}}},
+             {L"t{i1,i2;a1,a2}",
+              {{{L"i_1", SlotType::Bra}, {L"a_1", SlotType::Ket}},
+               {{L"i_2", SlotType::Bra}, {L"a_2", SlotType::Ket}}}},
+             {L"t{i1,i2;a2,a1}",
+              {{{L"i_1", SlotType::Bra}, {L"a_2", SlotType::Ket}},
+               {{L"i_2", SlotType::Bra}, {L"a_1", SlotType::Ket}}}},
+             {L"t{;;i1,i2}",
+              {{{L"i_2", SlotType::Aux}}, {{L"i_1", SlotType::Aux}}}},
+             {L"t{a1;a2;i1,i2}",
+              {{{L"a_1", SlotType::Bra}, {L"a_2", SlotType::Ket}},
+               {{L"i_1", SlotType::Aux}},
+               {{L"i_2", SlotType::Aux}}}},
              {L"t{a1,a2;a3,a4;i1,i2}",
-              {{L"a_1", L"a_3"}, {L"a_2", L"a_4"}, {L"i_1"}, {L"i_2"}}},
+              {{{L"a_1", SlotType::Bra}, {L"a_3", SlotType::Ket}},
+               {{L"a_2", SlotType::Bra}, {L"a_4", SlotType::Ket}},
+               {{L"i_1", SlotType::Aux}},
+               {{L"i_2", SlotType::Aux}}}},
              {L"g{a3;a2;i2} t{a1,a2;a3,a4;i1,i2}",
-              {{L"a_1", L"a_4"}, {L"i_1"}}},
+              {{{L"a_1", SlotType::Bra}, {L"a_4", SlotType::Ket}},
+               {{L"i_1", SlotType::Aux}}}},
              {L"t{a1,a2;i1,i2} + t{a1;i1} t{a2;i2}",
-              {{L"a_1", L"i_1"}, {L"a_2", L"i_2"}}},
+              {{{L"a_1", SlotType::Bra}, {L"i_1", SlotType::Ket}},
+               {{L"a_2", SlotType::Bra}, {L"i_2", SlotType::Ket}}}},
              // When present, external indices are deduced from the symmetrizer
              // (though bra/ket will be swapped)
-             {L"Â{a1;i1} t{i1;a1}", {{L"i_1", L"a_1"}}},
+             {L"Â{a1;i1} t{i1;a1}",
+              {{{L"i_1", SlotType::Bra}, {L"a_1", SlotType::Ket}}}},
              {L"Â{a1,a2;i1,i2} t{i1;a1} t{i2;a2}",
-              {{L"i_1", L"a_1"}, {L"i_2", "a_2"}}},
-             {L"Ŝ{a1;i1} t{i1;a1}", {{L"i_1", L"a_1"}}},
+              {{{L"i_1", SlotType::Bra}, {L"a_1", SlotType::Ket}},
+               {{L"i_2", SlotType::Bra}, {L"a_2", SlotType::Ket}}}},
+             {L"Ŝ{a1;i1} t{i1;a1}",
+              {{{L"i_1", SlotType::Bra}, {L"a_1", SlotType::Ket}}}},
              {L"Ŝ{a1,a2;i1,i2} t{i1;a1} t{i2;a2}",
-              {{L"i_1", L"a_1"}, {L"i_2", "a_2"}}},
+              {{{L"i_1", SlotType::Bra}, {L"a_1", SlotType::Ket}},
+               {{L"i_2", SlotType::Bra}, {L"a_2", SlotType::Ket}}}},
              // We still want the "swap" behavior when called on an isolated
              // symmetrizer Note: this is the inverse behavior to a regular
              // tensor
-             {L"Ŝ{a1,a2;i1,i2}", {{L"i_1", L"a_1"}, {L"i_2", "a_2"}}},
-             {L"Â{a1;i1}", {{L"i_1", L"a_1"}}},
+             {L"Ŝ{a1,a2;i1,i2}",
+              {{{L"i_1", SlotType::Bra}, {L"a_1", SlotType::Ket}},
+               {{L"i_2", SlotType::Bra}, {L"a_2", SlotType::Ket}}}},
+             {L"Â{a1;i1}",
+              {{{L"i_1", SlotType::Bra}, {L"a_1", SlotType::Ket}}}},
          }) {
       CAPTURE(toUtf8(input));
 
       ExprPtr expr = deserialize(input);
-      auto actual =
-          external_indices<std::remove_cvref_t<decltype(expected)>>(expr);
+      SlottedIndexGroupContainer auto actual =
+          external_indices<std::vector, std::vector>(expr);
 
       REQUIRE_THAT(actual, ::Catch::Matchers::UnorderedRangeEquals(expected));
     }
@@ -655,5 +679,114 @@ TEST_CASE("utilities", "[utilities]") {
                                   const char16_t(&)[2]>);
     STATIC_REQUIRE(std::is_same_v<decltype(SQ_STRLIT(char32_t, "ɑ")),
                                   const char32_t(&)[2]>);
+  }
+
+  SECTION("as_index_group_view") {
+    std::vector<SlottedIndex> indices;
+
+    SECTION("as-is") {
+      SECTION("mutable") {
+        indices = {{L"a_1", SlotType::Bra}, {L"i_1", SlotType::Ket}};
+
+        auto group_view = as_index_group_view(indices);
+
+        REQUIRE(get_bra_idx(group_view) == Index(L"a_1"));
+        REQUIRE(get_ket_idx(group_view) == Index(L"i_1"));
+      }
+      SECTION("const") {
+        indices = {{L"a_1", SlotType::Bra}, {L"i_1", SlotType::Ket}};
+
+        auto group_view = as_index_group_view(std::as_const(indices));
+
+        REQUIRE(get_bra_idx(group_view) == Index(L"a_1"));
+        REQUIRE(get_ket_idx(group_view) == Index(L"i_1"));
+      }
+    }
+    SECTION("reordering") {
+      SECTION("mutable") {
+        indices = {{L"a_1", SlotType::Ket}, {L"i_1", SlotType::Bra}};
+
+        auto group_view = as_index_group_view(indices);
+
+        REQUIRE(get_bra_idx(group_view) == Index(L"i_1"));
+        REQUIRE(get_ket_idx(group_view) == Index(L"a_1"));
+      }
+#if SEQUANT_ASSERT_BEHAVIOR == SEQUANT_ASSERT_THROW
+      SECTION("const") {
+        indices = {{L"a_1", SlotType::Ket}, {L"i_1", SlotType::Bra}};
+
+        // Since the indices are not in the expected order but the range is
+        // passed as const, the assertions will trigger due to uncorrectable
+        // ordering.
+        REQUIRE_THROWS_AS(as_index_group_view(std::as_const(indices)),
+                          Exception);
+      }
+#endif
+    }
+  }
+
+  SECTION("as_view_of_index_groups") {
+    std::vector<container::svector<SlottedIndex>> groups;
+
+    SECTION("as-is") {
+      SECTION("mutable") {
+        groups = {
+            {{L"a_1", SlotType::Bra}, {L"i_1", SlotType::Ket}},
+            {{L"a_2", SlotType::Bra}, {L"i_2", SlotType::Ket}},
+        };
+
+        auto groups_view = as_view_of_index_groups(groups);
+
+        REQUIRE(get_bra_idx(groups_view[0]) == Index(L"a_1"));
+        REQUIRE(get_ket_idx(groups_view[0]) == Index(L"i_1"));
+        REQUIRE(get_bra_idx(groups_view[1]) == Index(L"a_2"));
+        REQUIRE(get_ket_idx(groups_view[1]) == Index(L"i_2"));
+      }
+      SECTION("const") {
+        groups = {
+            {{L"a_1", SlotType::Bra}, {L"i_1", SlotType::Ket}},
+            {{L"a_2", SlotType::Bra}, {L"i_2", SlotType::Ket}},
+        };
+
+        auto groups_view = as_view_of_index_groups(std::as_const(groups));
+
+        REQUIRE(get_bra_idx(groups_view[0]) == Index(L"a_1"));
+        REQUIRE(get_ket_idx(groups_view[0]) == Index(L"i_1"));
+        REQUIRE(get_bra_idx(groups_view[1]) == Index(L"a_2"));
+        REQUIRE(get_ket_idx(groups_view[1]) == Index(L"i_2"));
+      }
+    }
+    SECTION("reordering") {
+      SECTION("mutable") {
+        groups = {
+            {{L"a_1", SlotType::Bra}, {L"i_1", SlotType::Ket}},
+            {{L"a_2", SlotType::Ket}, {L"i_2", SlotType::Bra}},
+        };
+
+        auto groups_view = as_view_of_index_groups(groups);
+
+        REQUIRE(get_bra_idx(groups_view[0]) == Index(L"a_1"));
+        REQUIRE(get_ket_idx(groups_view[0]) == Index(L"i_1"));
+        REQUIRE(get_bra_idx(groups_view[1]) == Index(L"i_2"));
+        REQUIRE(get_ket_idx(groups_view[1]) == Index(L"a_2"));
+      }
+      SECTION("const") {
+        groups = {
+            {{L"a_1", SlotType::Bra}, {L"i_1", SlotType::Ket}},
+            {{L"a_2", SlotType::Ket}, {L"i_2", SlotType::Bra}},
+        };
+
+        auto groups_view = as_view_of_index_groups(std::as_const(groups));
+
+        // Note: due to the lazy evaluation of ranges, we get the assert error
+        // only once we actually attempt to access the second group
+        REQUIRE(get_bra_idx(groups_view[0]) == Index(L"a_1"));
+        REQUIRE(get_ket_idx(groups_view[0]) == Index(L"i_1"));
+
+#if SEQUANT_ASSERT_BEHAVIOR == SEQUANT_ASSERT_THROW
+        REQUIRE_THROWS_AS(get_bra_idx(groups_view[1]), Exception);
+#endif
+      }
+    }
   }
 }

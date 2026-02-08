@@ -4,6 +4,8 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
+#include <SeQuant/core/slotted_index.hpp>
+#include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/memoize.hpp>
 
 #if defined(SEQUANT_HAS_TILEDARRAY)
@@ -49,6 +51,12 @@ void biorthogonal_transform(
 ///  an exception)
 [[nodiscard]] ExprPtr biorthogonal_transform(
     const ExprPtr& expr,
+    const container::svector<container::svector<sequant::SlottedIndex>>&
+        ext_index_groups = {},
+    double pseudoinverse_threshold =
+        default_biorthogonalizer_pseudoinverse_threshold);
+[[nodiscard]] ExprPtr biorthogonal_transform(
+    const ExprPtr& expr,
     const container::svector<container::svector<sequant::Index>>&
         ext_index_groups = {},
     double pseudoinverse_threshold =
@@ -72,6 +80,9 @@ void biorthogonal_transform(
 /// @return A new `ExprPtr` representing the filtered and compacted expression.
 ExprPtr WK_biorthogonalization_filter(
     ExprPtr expr,
+    const container::svector<container::svector<SlottedIndex>>& ext_idxs);
+ExprPtr WK_biorthogonalization_filter(
+    ExprPtr expr,
     const container::svector<container::svector<Index>>& ext_idxs);
 
 /// @brief Performs biorthogonal transformation with factored out NNS projector
@@ -87,6 +98,10 @@ ExprPtr WK_biorthogonalization_filter(
 /// projector. If false, NNS projector is not factored out.
 /// @return Expression pointer to the biorthogonalized result with leading S
 /// operator.
+ExprPtr biorthogonal_transform_pre_nnsproject(
+    ExprPtr& expr,
+    const container::svector<container::svector<SlottedIndex>>& ext_idxs,
+    bool factor_out_nns_projector = true);
 ExprPtr biorthogonal_transform_pre_nnsproject(
     ExprPtr& expr,
     const container::svector<container::svector<Index>>& ext_idxs,

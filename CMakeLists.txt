@@ -330,6 +330,7 @@ set(SeQuant_symb_src
         SeQuant/core/runtime.hpp
         SeQuant/core/space.cpp
         SeQuant/core/space.hpp
+        SeQuant/core/slotted_index.hpp
         SeQuant/core/tag.hpp
         SeQuant/core/tensor_canonicalizer.cpp
         SeQuant/core/tensor_canonicalizer.hpp
@@ -358,6 +359,7 @@ set(SeQuant_symb_src
         SeQuant/core/utility/macros.hpp
         SeQuant/core/utility/memoize.hpp
         SeQuant/core/utility/nodiscard.hpp
+        SeQuant/core/utility/overloads.hpp
         SeQuant/core/utility/permutation.hpp
         SeQuant/core/utility/scope.hpp
         SeQuant/core/utility/singleton.hpp
@@ -383,6 +385,7 @@ set(SeQuant_mbpt_src
         SeQuant/domain/mbpt/context.hpp
         SeQuant/domain/mbpt/convention.cpp
         SeQuant/domain/mbpt/convention.hpp
+        SeQuant/domain/mbpt/detail/concepts.hpp
         SeQuant/domain/mbpt/models/cc.cpp
         SeQuant/domain/mbpt/models/cc.hpp
         SeQuant/domain/mbpt/op_registry.hpp
