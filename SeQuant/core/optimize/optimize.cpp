@@ -10,8 +10,10 @@
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
+#include <range/v3/algorithm/all_of.hpp>
 #include <range/v3/iterator/basic_iterator.hpp>
 #include <range/v3/range/access.hpp>
+#include <range/v3/range/conversion.hpp>
 #include <range/v3/view/tail.hpp>
 #include <range/v3/view/transform.hpp>
 #include <range/v3/view/view.hpp>
