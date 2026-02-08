@@ -169,6 +169,14 @@ add_feature_info(SEQUANT_CONTEXT_MANIPULATION_THREADSAFE SEQUANT_CONTEXT_MANIPUL
 # Prerequisites
 ##########################
 
+# Apple Clang 16 and earlier do not correctly implement P0522R0
+# (relaxed matching of template template arguments), which SeQuant requires
+if (CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang" AND
+    CMAKE_CXX_COMPILER_VERSION VERSION_LESS 17)
+  message(FATAL_ERROR "SeQuant requires Apple Clang 17 or later (found ${CMAKE_CXX_COMPILER_VERSION}). "
+    "Upgrade Xcode or use a different compiler (e.g., LLVM Clang from Homebrew).")
+endif()
+
 if (PROJECT_IS_TOP_LEVEL AND NOT DEFINED CMAKE_POSITION_INDEPENDENT_CODE)
     set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 endif()
