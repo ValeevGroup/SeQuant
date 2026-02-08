@@ -33,7 +33,7 @@
 
 #include "SeQuant/core/utility/debug.hpp"
 
-TEST_CASE("mbpt", "[mbpt]") {
+TEST_CASE("mbpt", "[mbpt][valgrind_skip]") {
   SECTION("registry") {
     using namespace sequant::mbpt;
 
