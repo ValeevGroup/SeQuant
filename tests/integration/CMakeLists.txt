@@ -63,17 +63,20 @@ foreach(current IN LISTS TEST_CASES)
         # By inserting semicolons, we turn test_variants into a list
         string(REPLACE "|" ";" test_variants "${test_variants}")
 
-        set(counter 1)
         foreach(arguments IN LISTS test_variants)
+            string(STRIP "${arguments}" variant_name)
             separate_arguments(argument_list UNIX_COMMAND "${arguments}")
+            string(REPLACE " " "_" variant_name "${variant_name}")
+            # if arguments are empty, use "default" as the variant name
+            if (variant_name STREQUAL "")
+                set(variant_name "default")
+            endif()
             add_test(
-                NAME "sequant/integration/${test_name}/${counter}"
+                NAME "sequant/integration/${test_name}/${variant_name}"
                 COMMAND ${test_name} ${argument_list}
                 WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
             )
-            list(APPEND variant_names "sequant/integration/${test_name}/${counter}")
-
-            math(EXPR counter "${counter} + 1")
+            list(APPEND variant_names "sequant/integration/${test_name}/${variant_name}")
         endforeach()
     endif()
 

@@ -3,6 +3,8 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/optimize/sum.hpp>
 
+#include <stack>
+
 namespace sequant::opt {
 
 bool has_only_single_atom(const ExprPtr& term) {
