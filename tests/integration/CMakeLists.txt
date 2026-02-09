@@ -67,6 +67,10 @@ foreach(current IN LISTS TEST_CASES)
             string(STRIP "${arguments}" variant_name)
             separate_arguments(argument_list UNIX_COMMAND "${arguments}")
             string(REPLACE " " "_" variant_name "${variant_name}")
+            # if arguments are empty, use "default" as the variant name
+            if (variant_name STREQUAL "")
+                set(variant_name "default")
+            endif()
             add_test(
                 NAME "sequant/integration/${test_name}/${variant_name}"
                 COMMAND ${test_name} ${argument_list}
