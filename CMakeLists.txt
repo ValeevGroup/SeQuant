@@ -183,6 +183,9 @@ if (PROJECT_IS_TOP_LEVEL)
 else()
   vgkit_check_libcxx_linker_mismatch()
 endif()
+# Clang < 19 needs -frelaxed-template-template-args for P0522R0;
+# sets VGKIT_P0522R0_COMPILE_FLAG, applied to SeQuant-symb below
+vgkit_check_p0522r0()
 
 if (PROJECT_IS_TOP_LEVEL AND NOT DEFINED CMAKE_POSITION_INDEPENDENT_CODE)
     set(CMAKE_POSITION_INDEPENDENT_CODE ON)
@@ -534,6 +537,9 @@ endif()
 # SeQuant-symb: core symbolic layer
 ##########################
 sequant_add_library(symb ${SeQuant_symb_src})
+if (VGKIT_P0522R0_COMPILE_FLAG)
+  target_compile_options(SeQuant-symb PUBLIC ${VGKIT_P0522R0_COMPILE_FLAG})
+endif()
 target_compile_definitions(SeQuant-symb PRIVATE SEQUANT_ASSERT_BEHAVIOR_=${SEQUANT_ASSERT_BEHAVIOR})
 if (NOT SEQUANT_ASSERT_BEHAVIOR STREQUAL "IGNORE")
     target_compile_definitions(SeQuant-symb PUBLIC SEQUANT_ASSERT_ENABLED)
