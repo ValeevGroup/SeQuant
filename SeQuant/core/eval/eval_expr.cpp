@@ -32,8 +32,7 @@ namespace sequant {
 
 using EvalExprNode = FullBinaryNode<EvalExpr>;
 
-using IndexSet = container::set<Index, Index::FullLabelCompare>;
-using IndexCount = container::map<Index, size_t, Index::FullLabelCompare>;
+using impl::IndexSet;
 
 namespace {
 
@@ -305,38 +304,20 @@ struct ExprWithHash {
   size_t hash;
 };
 
-void index_count(IndexCount& counts, ExprPtr const& expr) {
+void hyper_indices(IndexSet& result, ExprPtr const& expr) {
   if (!expr) return;
-  if (expr->is<Tensor>()) {
-    for (auto&& i : expr->as<Tensor>().const_indices()) {
-      auto&& [it, yn] = counts.emplace(i, 1);
-      if (!yn) it->second++;
-    }
-  } else if (expr->is<Sum>() && !expr->empty())
-    index_count(counts, expr->front());
+  if (expr->is<Tensor>())
+    for (auto&& ix : expr->as<Tensor>().aux()) result.emplace(ix);
+  else if (expr->is<Sum>() && !expr->empty())
+    hyper_indices(result, expr->front());
   else if (expr->is<Product>())
-    for (auto&& fac : *expr) index_count(counts, fac);
+    for (auto&& fac : *expr) hyper_indices(result, fac);
 }
 
-IndexCount index_count(meta::range_of<ExprPtr> auto const& facs) {
-  IndexCount result;
-  for (auto&& f : facs) index_count(result, f);
-  return result;
-}
-
-IndexSet target_indices(meta::range_of<ExprPtr> auto const& facs,
-                        IndexSet const& tidxs) {
+IndexSet hyper_indices(ExprPtr const& expr) {
   IndexSet result;
-  for (auto&& [k, v] : index_count(facs))
-    if (v == 1 || tidxs.contains(k)) result.emplace(k);
+  hyper_indices(result, expr);
   return result;
-}
-
-auto imed_target_indices(Product const& prod, IndexSet const& tidxs) {
-  return inits(prod.factors()) |
-         ranges::views::transform(
-             [&tidxs](auto&& facs) { return target_indices(facs, tidxs); }) |
-         ranges::to_vector;
 }
 
 ///
@@ -363,11 +344,13 @@ EvalExprNode binarize(Variable const& v) { return EvalExprNode{EvalExpr{v}}; }
 
 EvalExprNode binarize(Tensor const& t) { return EvalExprNode{EvalExpr{t}}; }
 
-EvalExprNode binarize(Sum const& sum) {
+EvalExprNode binarize(Sum const& sum, IndexSet const& uncontract) {
   using ranges::views::move;
   using ranges::views::transform;
-  auto summands = sum.summands()                                             //
-                  | transform([](ExprPtr const& x) { return binarize(x); })  //
+  auto summands = sum.summands()  //
+                  | transform([&uncontract](ExprPtr const& x) {
+                      return impl::binarize(x, uncontract);
+                    })  //
                   | ranges::to_vector;
 
   bool const all_tensors =
@@ -409,23 +392,39 @@ EvalExprNode binarize(Sum const& sum) {
   return fold_left_to_node(summands | move, make_sum);
 }
 
-EvalExprNode binarize(Product const& prod) {
+EvalExprNode binarize(Product const& prod, IndexSet const& uncontract) {
+  using ranges::views::filter;
+  using ranges::views::move;
+  using ranges::views::transform;
+
   if (prod.factors().empty()) {
     return binarize(Constant(prod.scalar()));
   }
 
-  using ranges::views::move;
-  using ranges::views::transform;
-  auto factors = prod.factors()                                             //
-                 | transform([](ExprPtr const& x) { return binarize(x); })  //
-                 | ranges::to_vector;
+  auto const ltr_uncontr_idxs = [&]() {
+    auto hyper_idxs = prod.factors() |
+                      transform([](auto&& xpr) { return hyper_indices(xpr); }) |
+                      ranges::to_vector;
+    return left_to_right_binarization_indices<Index, IndexSet>(hyper_idxs,
+                                                               uncontract);
+  }();
+
+  auto factors =
+      prod.factors()  //
+      | transform([i = 0, &ltr_uncontr_idxs](ExprPtr const& x) mutable {
+          return impl::binarize(x, ltr_uncontr_idxs.children[i++]);
+        })  //
+      | ranges::to_vector;
 
   auto hvals = factors | transform([](auto&& n) { return n->hash_value(); });
   auto const hs = imed_hashes(hvals) | ranges::to_vector;
 
-  auto make_prod = [i = 0, &hs](EvalExprNode const& left,
-                                EvalExprNode const& right) mutable -> EvalExpr {
+  auto make_prod = [i = 0, &hs, &ltr_uncontr_idxs](
+                       EvalExprNode const& left,
+                       EvalExprNode const& right) mutable -> EvalExpr {
     auto h = ranges::at(hs, ++i);
+    auto const& uncontracted_idxs = ltr_uncontr_idxs.imed[i];
+    std::wcout << std::endl;
     if (left->is_scalar() && right->is_scalar()) {
       // scalar * scalar
       return {EvalOp::Product,
@@ -453,9 +452,22 @@ EvalExprNode binarize(Product const& prod) {
       collect_tensor_factors(left, subfacs);
       collect_tensor_factors(right, subfacs);
       auto ts = subfacs | transform([](auto&& t) { return t.expr; });
+      auto idxs = get_unique_indices(Product(ts));
+      {
+        constexpr auto equal_index = [lt = typename IndexSet::key_compare{}](
+                                         Index const& lhs, Index const& rhs) {
+          return !lt(lhs, rhs) && !lt(rhs, lhs);
+        };
+        for (auto&& idx : uncontracted_idxs) idxs.aux.push_back(idx);
+        ranges::actions::sort(idxs.aux, equal_index);
+        ranges::actions::unique(idxs.aux, equal_index);
+      }
       auto tn = TensorNetwork(ts);
-      auto canon =
-          tn.canonicalize_slots(TensorCanonicalizer::cardinal_tensor_labels());
+      auto named_indices = ranges::views::concat(idxs.bra, idxs.ket, idxs.aux) |
+                           ranges::to<TensorNetwork::NamedIndexSet>;
+
+      auto canon = tn.canonicalize_slots(
+          TensorCanonicalizer::cardinal_tensor_labels(), &named_indices);
       hash::combine(h, canon.hash_value());
       bool const scalar_result = canon.named_indices_canonical.empty();
       if (scalar_result) {
@@ -467,7 +479,6 @@ EvalExprNode binarize(Product const& prod) {
                 h,
                 std::move(canon.graph)};
       } else {
-        auto idxs = get_unique_indices(Product(ts));
         return {EvalOp::Product,     //
                 ResultType::Tensor,  //
                 detail::make_tensor_wo_symmetries(bra(idxs.bra), ket(idxs.ket),
@@ -508,7 +519,7 @@ EvalExprNode binarize(Product const& prod) {
 
 namespace impl {
 
-EvalExprNode binarize(ExprPtr const& expr) {
+EvalExprNode binarize(ExprPtr const& expr, IndexSet const& uncontract) {
   if (expr->is<Constant>())  //
     return binarize(expr->as<Constant>());
 
@@ -519,10 +530,10 @@ EvalExprNode binarize(ExprPtr const& expr) {
     return binarize(expr->as<Tensor>());
 
   if (expr->is<Sum>())  //
-    return binarize(expr->as<Sum>());
+    return binarize(expr->as<Sum>(), uncontract);
 
   if (expr->is<Product>())  //
-    return binarize(expr->as<Product>());
+    return binarize(expr->as<Product>(), uncontract);
 
   throw std::logic_error("Encountered unsupported expression in binarize.");
 }
