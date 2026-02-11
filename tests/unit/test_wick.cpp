@@ -9,7 +9,7 @@
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/index.hpp>
-#include <SeQuant/core/latex.hpp>
+#include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/utility/debug.hpp>
@@ -51,7 +51,7 @@ auto compute_nontensor_wick(WickTheorem<Statistics::FermiDirac>& wick) {
 }  // namespace sequant
 
 #if 1
-TEST_CASE("wick", "[algorithms][wick]") {
+TEST_CASE("wick", "[algorithms][wick][valgrind_skip]") {
   using namespace sequant;
 
   TensorCanonicalizer::register_instance(
@@ -1335,7 +1335,7 @@ TEST_CASE("wick", "[algorithms][wick]") {
         REQUIRE(result.as<Sum>().size() == 5);
 
         // clang-format off
-        auto expected = parse_expr(
+        auto expected = deserialize(
             "- h{;;p_3} ã{p_1<i_1>,p_3;p_2<i_2>,p_3}"
             "+ h{;;p_3} δ{p_1<i_1>;a_1<i_1>} δ{a_2<i_2>;p_2<i_2>} ã{p_3;p_3} s{a_1<i_1>;a_2<i_2>} "
             "- h{;;a_1} δ{a_2<i_2>;p_2<i_2>} ã{p_1<i_1>;a_1} s{a_1;a_2<i_2>} "
@@ -1350,7 +1350,7 @@ TEST_CASE("wick", "[algorithms][wick]") {
       // quasi-diagonal example, with some indices in covariant expression
       // fixed, as in the pair-specific densities used to produce PNOs
       {
-        auto expr = sequant::parse_expr(
+        auto expr = sequant::deserialize(
             L"1/16 t{i1,i2;a3,a4}:A-C-S * ã{a3,a4;i1,i2} * ã{;a1} * ã{a2} * "
             L"t{a5,a6;i3,i4}:A-C-S * ã{i3,i4;a5,a6}");
         auto resetter = sequant::set_scoped_default_context(
@@ -1382,7 +1382,7 @@ TEST_CASE("wick", "[algorithms][wick]") {
 
       // triples variant of the previous case
       {
-        auto expr = sequant::parse_expr(
+        auto expr = sequant::deserialize(
             L"1/1296 t{i1,i2,i3;a1,a2,a3}:A-C-S * ã{a1,a2,a3;i1,i2,i3} * "
             L"ã{;a4} * ã{a5} * "
             L"t{a6,a7,a8;i4,i5,i6}:A-C-S * ã{i4,i5,i6;a6,a7,a8}");

@@ -6,15 +6,19 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
-#include <SeQuant/core/parse.hpp>
+#include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/reserved.hpp>
+#include <SeQuant/core/slotted_index.hpp>
+#include <SeQuant/core/utility/conversion.hpp>
+#include <SeQuant/core/utility/exception.hpp>
 #include <SeQuant/core/utility/expr.hpp>
 #include <SeQuant/core/utility/indices.hpp>
+#include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/singleton.hpp>
 #include <SeQuant/core/utility/strong.hpp>
 #include <SeQuant/core/utility/tensor.hpp>
 
-#include <iostream>
+#include <limits>
 #include <ranges>
 #include <string>
 #include <string_view>
@@ -45,7 +49,7 @@ class S : public sequant::Singleton<S<T>> {
 }  // namespace sequant::singleton
 
 sequant::Tensor parse_tensor(std::wstring_view str) {
-  return sequant::parse_expr(str)->as<sequant::Tensor>();
+  return sequant::deserialize<sequant::ExprPtr>(str)->as<sequant::Tensor>();
 }
 
 TEST_CASE("utilities", "[utilities]") {
@@ -92,7 +96,7 @@ TEST_CASE("utilities", "[utilities]") {
     using namespace Catch::Matchers;
 
     SECTION("Constant") {
-      auto const expression = parse_expr(L"5");
+      auto const expression = deserialize(L"5");
 
       auto const indices = get_unique_indices(expression);
 
@@ -110,7 +114,7 @@ TEST_CASE("utilities", "[utilities]") {
       REQUIRE(indices == get_unique_indices(expression->as<Variable>()));
     }
     SECTION("Tensor") {
-      auto expression = parse_expr(L"t{i1;a1,a2;x1}");
+      auto expression = deserialize(L"t{i1;a1,a2;x1}");
 
       auto indices = get_unique_indices(expression);
 
@@ -120,7 +124,7 @@ TEST_CASE("utilities", "[utilities]") {
       REQUIRE_THAT(indices.aux, UnorderedEquals(std::vector<Index>{{L"x_1"}}));
       REQUIRE(indices == get_unique_indices(expression->as<Tensor>()));
 
-      expression = parse_expr(L"t{i1,i2;a1,a2}");
+      expression = deserialize(L"t{i1,i2;a1,a2}");
 
       indices = get_unique_indices(expression);
 
@@ -131,7 +135,7 @@ TEST_CASE("utilities", "[utilities]") {
       REQUIRE(indices.aux.size() == 0);
       REQUIRE(indices == get_unique_indices(expression->as<Tensor>()));
 
-      expression = parse_expr(L"t{i1,i2;a1,i1}");
+      expression = deserialize(L"t{i1,i2;a1,i1}");
 
       indices = get_unique_indices(expression);
 
@@ -140,7 +144,7 @@ TEST_CASE("utilities", "[utilities]") {
       REQUIRE(indices == get_unique_indices(expression->as<Tensor>()));
     }
     SECTION("Product") {
-      auto expression = parse_expr(L"t{i1;a1,a2} p{a2;i2;x1}");
+      auto expression = deserialize(L"t{i1;a1,a2} p{a2;i2;x1}");
 
       auto indices = get_unique_indices(expression);
 
@@ -150,7 +154,7 @@ TEST_CASE("utilities", "[utilities]") {
       REQUIRE_THAT(indices.aux, UnorderedEquals(std::vector<Index>{{L"x_1"}}));
       REQUIRE(indices == get_unique_indices(expression->as<Product>()));
 
-      expression = parse_expr(L"1/8 g{a3,a4;i3,i4;x1} t{a1,a4;i1,i4;x1}");
+      expression = deserialize(L"1/8 g{a3,a4;i3,i4;x1} t{a1,a4;i1,i4;x1}");
 
       indices = get_unique_indices(expression);
 
@@ -162,7 +166,7 @@ TEST_CASE("utilities", "[utilities]") {
       REQUIRE(indices == get_unique_indices(expression->as<Product>()));
     }
     SECTION("Sum") {
-      auto expression = parse_expr(L"t{i1;a2;x1} + g{i1;a2;x1}");
+      auto expression = deserialize(L"t{i1;a2;x1} + g{i1;a2;x1}");
 
       auto indices = get_unique_indices(expression);
 
@@ -171,7 +175,7 @@ TEST_CASE("utilities", "[utilities]") {
       REQUIRE_THAT(indices.aux, UnorderedEquals(std::vector<Index>{{L"x_1"}}));
       REQUIRE(indices == get_unique_indices(expression->as<Sum>()));
 
-      expression = parse_expr(L"t{i1;a2} t{i1;a1} + t{i1;a1} g{i1;a2}");
+      expression = deserialize(L"t{i1;a2} t{i1;a1} + t{i1;a1} g{i1;a2}");
 
       indices = get_unique_indices(expression);
 
@@ -284,7 +288,7 @@ TEST_CASE("utilities", "[utilities]") {
   SECTION("transform_expr") {
     {
       ExprPtr expr =
-          parse_expr(L"- g{a1,i2;a2,i1} t{a2;i2} + 2 g{a1,i2;i1,a2} t{a2;i2}");
+          deserialize(L"- g{a1,i2;a2,i1} t{a2;i2} + 2 g{a1,i2;i1,a2} t{a2;i2}");
       container::map<Index, Index> idxmap = {{Index{L"i_1"}, Index{L"i_2"}},
                                              {Index{L"i_2"}, Index{L"i_1"}}};
       auto transformed_result = transform_expr(expr, idxmap);
@@ -297,7 +301,7 @@ TEST_CASE("utilities", "[utilities]") {
     }
     {
       ExprPtr expr =
-          parse_expr(L"- g{i2,a1;i1,a2} + 2 g{i2,a1;a2,i1} t{a2;i2}");
+          deserialize(L"- g{i2,a1;i1,a2} + 2 g{i2,a1;a2,i1} t{a2;i2}");
       container::map<Index, Index> idxmap = {{Index{L"i_1"}, Index{L"i_2"}},
                                              {Index{L"i_2"}, Index{L"i_1"}}};
       auto transformed_result = transform_expr(expr, idxmap);
@@ -329,8 +333,8 @@ TEST_CASE("utilities", "[utilities]") {
         CAPTURE(toUtf8(lhs));
         CAPTURE(toUtf8(rhs));
 
-        const Tensor lhs_tensor = parse_expr(lhs)->as<Tensor>();
-        const Tensor rhs_tensor = parse_expr(rhs)->as<Tensor>();
+        const Tensor lhs_tensor = deserialize(lhs)->as<Tensor>();
+        const Tensor rhs_tensor = deserialize(rhs)->as<Tensor>();
         REQUIRE(cmp(lhs_tensor, rhs_tensor) == equal);
       }
     }
@@ -360,8 +364,8 @@ TEST_CASE("utilities", "[utilities]") {
         CAPTURE(toUtf8(lhs));
         CAPTURE(toUtf8(rhs));
 
-        const Tensor lhs_tensor = parse_expr(lhs)->as<Tensor>();
-        const Tensor rhs_tensor = parse_expr(rhs)->as<Tensor>();
+        const Tensor lhs_tensor = deserialize(lhs)->as<Tensor>();
+        const Tensor rhs_tensor = deserialize(rhs)->as<Tensor>();
         REQUIRE(cmp(lhs_tensor, rhs_tensor) == less);
 
         if (equal_cmp(lhs_tensor, rhs_tensor)) {
@@ -383,7 +387,7 @@ TEST_CASE("utilities", "[utilities]") {
              {L"t{a1;a2} - (Var * (B{p1} T{a1,a2;p1}) + t{a1;a2})",
               {L"a_1", L"a_2", L"p_1"}},
          }) {
-      ExprPtr expr = parse_expr(input);
+      ExprPtr expr = deserialize(input);
       auto indices =
           expected | std::ranges::views::transform(
                          [](const std::wstring& idx) { return Index(idx); });
@@ -413,9 +417,9 @@ TEST_CASE("utilities", "[utilities]") {
         CAPTURE(toUtf8(replacement_str));
         CAPTURE(toUtf8(expected_str));
 
-        ExprPtr input = parse_expr(input_str);
-        const ExprPtr target = parse_expr(target_str);
-        const ExprPtr replacement = parse_expr(replacement_str);
+        ExprPtr input = deserialize(input_str);
+        const ExprPtr target = deserialize(target_str);
+        const ExprPtr replacement = deserialize(replacement_str);
 
         replace<TensorBlockEqualComparator>(input, target, replacement);
 
@@ -447,9 +451,9 @@ TEST_CASE("utilities", "[utilities]") {
         CAPTURE(toUtf8(replacement_str));
         CAPTURE(toUtf8(expected_str));
 
-        ResultExpr input = parse_result_expr(input_str);
-        const ExprPtr target = parse_expr(target_str);
-        const ExprPtr replacement = parse_expr(replacement_str);
+        ResultExpr input = deserialize<ResultExpr>(input_str);
+        const ExprPtr target = deserialize(target_str);
+        const ExprPtr replacement = deserialize(replacement_str);
 
         replace<TensorBlockEqualComparator>(input, target, replacement);
 
@@ -476,7 +480,7 @@ TEST_CASE("utilities", "[utilities]") {
            }) {
         CAPTURE(toUtf8(expr_str));
 
-        ExprPtr expr = parse_expr(expr_str);
+        ExprPtr expr = deserialize(expr_str);
 
         const bool expected = msg.empty();
 
@@ -521,7 +525,7 @@ TEST_CASE("utilities", "[utilities]") {
            }) {
         CAPTURE(toUtf8(expr_str));
 
-        ResultExpr expr = parse_result_expr(expr_str);
+        ResultExpr expr = deserialize<ResultExpr>(expr_str);
 
         const bool expected = msg.empty();
 
@@ -535,38 +539,254 @@ TEST_CASE("utilities", "[utilities]") {
   }
 
   SECTION("external_indices") {
-    for (const auto& [input, expected] :
-         std::vector<std::pair<std::wstring, std::vector<std::vector<Index>>>>{
+    for (const auto& [input, expected] : std::vector<
+             std::pair<std::wstring, std::vector<std::vector<SlottedIndex>>>>{
              {L"1/2", {}},
              {L"t", {}},
              {L"t{}", {}},
-             {L"t{i1;a1}", {{L"i_1", L"a_1"}}},
-             {L"t{i1,i2;a1,a2}", {{L"i_1", L"a_1"}, {L"i_2", L"a_2"}}},
-             {L"t{i1,i2;a2,a1}", {{L"i_1", L"a_2"}, {L"i_2", L"a_1"}}},
-             {L"t{;;i1,i2}", {{L"i_2"}, {L"i_1"}}},
-             {L"t{a1;a2;i1,i2}", {{L"a_1", L"a_2"}, {L"i_1"}, {L"i_2"}}},
+             {L"t{i1;a1}",
+              {{{L"i_1", SlotType::Bra}, {L"a_1", SlotType::Ket}}}},
+             {L"t{i1,i2;a1,a2}",
+              {{{L"i_1", SlotType::Bra}, {L"a_1", SlotType::Ket}},
+               {{L"i_2", SlotType::Bra}, {L"a_2", SlotType::Ket}}}},
+             {L"t{i1,i2;a2,a1}",
+              {{{L"i_1", SlotType::Bra}, {L"a_2", SlotType::Ket}},
+               {{L"i_2", SlotType::Bra}, {L"a_1", SlotType::Ket}}}},
+             {L"t{;;i1,i2}",
+              {{{L"i_2", SlotType::Aux}}, {{L"i_1", SlotType::Aux}}}},
+             {L"t{a1;a2;i1,i2}",
+              {{{L"a_1", SlotType::Bra}, {L"a_2", SlotType::Ket}},
+               {{L"i_1", SlotType::Aux}},
+               {{L"i_2", SlotType::Aux}}}},
              {L"t{a1,a2;a3,a4;i1,i2}",
-              {{L"a_1", L"a_3"}, {L"a_2", L"a_4"}, {L"i_1"}, {L"i_2"}}},
+              {{{L"a_1", SlotType::Bra}, {L"a_3", SlotType::Ket}},
+               {{L"a_2", SlotType::Bra}, {L"a_4", SlotType::Ket}},
+               {{L"i_1", SlotType::Aux}},
+               {{L"i_2", SlotType::Aux}}}},
              {L"g{a3;a2;i2} t{a1,a2;a3,a4;i1,i2}",
-              {{L"a_1", L"a_4"}, {L"i_1"}}},
+              {{{L"a_1", SlotType::Bra}, {L"a_4", SlotType::Ket}},
+               {{L"i_1", SlotType::Aux}}}},
              {L"t{a1,a2;i1,i2} + t{a1;i1} t{a2;i2}",
-              {{L"a_1", L"i_1"}, {L"a_2", L"i_2"}}},
+              {{{L"a_1", SlotType::Bra}, {L"i_1", SlotType::Ket}},
+               {{L"a_2", SlotType::Bra}, {L"i_2", SlotType::Ket}}}},
              // When present, external indices are deduced from the symmetrizer
              // (though bra/ket will be swapped)
-             {L"Â{a1;i1} t{i1;a1}", {{L"i_1", L"a_1"}}},
+             {L"Â{a1;i1} t{i1;a1}",
+              {{{L"i_1", SlotType::Bra}, {L"a_1", SlotType::Ket}}}},
              {L"Â{a1,a2;i1,i2} t{i1;a1} t{i2;a2}",
-              {{L"i_1", L"a_1"}, {L"i_2", "a_2"}}},
-             {L"Ŝ{a1;i1} t{i1;a1}", {{L"i_1", L"a_1"}}},
+              {{{L"i_1", SlotType::Bra}, {L"a_1", SlotType::Ket}},
+               {{L"i_2", SlotType::Bra}, {L"a_2", SlotType::Ket}}}},
+             {L"Ŝ{a1;i1} t{i1;a1}",
+              {{{L"i_1", SlotType::Bra}, {L"a_1", SlotType::Ket}}}},
              {L"Ŝ{a1,a2;i1,i2} t{i1;a1} t{i2;a2}",
-              {{L"i_1", L"a_1"}, {L"i_2", "a_2"}}},
+              {{{L"i_1", SlotType::Bra}, {L"a_1", SlotType::Ket}},
+               {{L"i_2", SlotType::Bra}, {L"a_2", SlotType::Ket}}}},
+             // We still want the "swap" behavior when called on an isolated
+             // symmetrizer Note: this is the inverse behavior to a regular
+             // tensor
+             {L"Ŝ{a1,a2;i1,i2}",
+              {{{L"i_1", SlotType::Bra}, {L"a_1", SlotType::Ket}},
+               {{L"i_2", SlotType::Bra}, {L"a_2", SlotType::Ket}}}},
+             {L"Â{a1;i1}",
+              {{{L"i_1", SlotType::Bra}, {L"a_1", SlotType::Ket}}}},
          }) {
       CAPTURE(toUtf8(input));
 
-      ExprPtr expr = parse_expr(input);
-      auto actual =
-          external_indices<std::remove_cvref_t<decltype(expected)>>(expr);
+      ExprPtr expr = deserialize(input);
+      SlottedIndexGroupContainer auto actual =
+          external_indices<std::vector, std::vector>(expr);
 
       REQUIRE_THAT(actual, ::Catch::Matchers::UnorderedRangeEquals(expected));
+    }
+  }
+
+  SECTION("conversion") {
+    using namespace Catch::Matchers;
+
+    SECTION("integral") {
+      REQUIRE(string_to<int>("4") == 4);
+      REQUIRE(string_to<std::int8_t>("-4") == -4);
+      REQUIRE(string_to<std::uint64_t>("8236491630465033923") ==
+              8236491630465033923);
+
+      REQUIRE_THROWS_MATCHES(
+          string_to<std::uint64_t>("-4"), ConversionException,
+          MessageMatches(ContainsSubstring("'-4' is not a valid")));
+
+      REQUIRE_THROWS_MATCHES(
+          string_to<std::uint8_t>("256"), ConversionException,
+          MessageMatches(ContainsSubstring("'256' is out of range for type")));
+
+      REQUIRE_THROWS_MATCHES(
+          string_to<std::uint8_t>(" 4"), ConversionException,
+          MessageMatches(ContainsSubstring("' 4' is not a valid")));
+
+      REQUIRE_THROWS_MATCHES(
+          string_to<std::uint8_t>("abc"), ConversionException,
+          MessageMatches(ContainsSubstring("'abc' is not a valid")));
+
+      REQUIRE_THROWS_MATCHES(string_to<std::uint8_t>("4 "), ConversionException,
+                             MessageMatches(ContainsSubstring(
+                                 "'4 ' could not be fully parsed as a")));
+    }
+    SECTION("float") {
+      if constexpr (string_to_supports<float>) {
+        REQUIRE_THAT(string_to<float>("42"),
+                     WithinAbs(42, std::numeric_limits<float>::epsilon()));
+        REQUIRE_THAT(string_to<float>("3.14"),
+                     WithinAbs(3.14, std::numeric_limits<float>::epsilon()));
+        REQUIRE_THAT(
+            string_to<float>("-3.14159"),
+            WithinAbs(-3.14159, std::numeric_limits<float>::epsilon()));
+        if constexpr (string_to_supports<double>) {
+          REQUIRE_THAT(string_to<double>("2.7182818284590"),
+                       WithinAbs(2.7182818284590,
+                                 std::numeric_limits<double>::epsilon()));
+        }
+
+        REQUIRE_THROWS_MATCHES(
+            string_to<float>(" 3.14"), ConversionException,
+            MessageMatches(ContainsSubstring("' 3.14' is not a valid")));
+        REQUIRE_THROWS_MATCHES(
+            string_to<float>("abc"), ConversionException,
+            MessageMatches(ContainsSubstring("'abc' is not a valid")));
+        REQUIRE_THROWS_MATCHES(string_to<float>("2.718 "), ConversionException,
+                               MessageMatches(ContainsSubstring(
+                                   "'2.718 ' could not be fully parsed as a")));
+      }
+    }
+  }
+
+  SECTION("SQ_STRLIT") {
+    STATIC_REQUIRE(
+        std::is_same_v<decltype(SQ_STRLIT(char, "alpha")), const char(&)[6]>);
+    STATIC_REQUIRE(std::is_same_v<decltype(SQ_STRLIT(wchar_t, "alpha")),
+                                  const wchar_t(&)[6]>);
+    STATIC_REQUIRE(std::is_same_v<decltype(SQ_STRLIT(char8_t, "alpha")),
+                                  const char8_t(&)[6]>);
+    STATIC_REQUIRE(std::is_same_v<decltype(SQ_STRLIT(char16_t, "alpha")),
+                                  const char16_t(&)[6]>);
+    STATIC_REQUIRE(std::is_same_v<decltype(SQ_STRLIT(char32_t, "alpha")),
+                                  const char32_t(&)[6]>);
+
+    STATIC_REQUIRE(
+        std::is_same_v<decltype(SQ_STRLIT(char, "ɑ")), const char(&)[3]>);
+    STATIC_REQUIRE(
+        std::is_same_v<decltype(SQ_STRLIT(wchar_t, "ɑ")), const wchar_t(&)[2]>);
+    STATIC_REQUIRE(
+        std::is_same_v<decltype(SQ_STRLIT(char8_t, "ɑ")), const char8_t(&)[3]>);
+    STATIC_REQUIRE(std::is_same_v<decltype(SQ_STRLIT(char16_t, "ɑ")),
+                                  const char16_t(&)[2]>);
+    STATIC_REQUIRE(std::is_same_v<decltype(SQ_STRLIT(char32_t, "ɑ")),
+                                  const char32_t(&)[2]>);
+  }
+
+  SECTION("as_index_group_view") {
+    std::vector<SlottedIndex> indices;
+
+    SECTION("as-is") {
+      SECTION("mutable") {
+        indices = {{L"a_1", SlotType::Bra}, {L"i_1", SlotType::Ket}};
+
+        auto group_view = as_index_group_view(indices);
+
+        REQUIRE(get_bra_idx(group_view) == Index(L"a_1"));
+        REQUIRE(get_ket_idx(group_view) == Index(L"i_1"));
+      }
+      SECTION("const") {
+        indices = {{L"a_1", SlotType::Bra}, {L"i_1", SlotType::Ket}};
+
+        auto group_view = as_index_group_view(std::as_const(indices));
+
+        REQUIRE(get_bra_idx(group_view) == Index(L"a_1"));
+        REQUIRE(get_ket_idx(group_view) == Index(L"i_1"));
+      }
+    }
+    SECTION("reordering") {
+      SECTION("mutable") {
+        indices = {{L"a_1", SlotType::Ket}, {L"i_1", SlotType::Bra}};
+
+        auto group_view = as_index_group_view(indices);
+
+        REQUIRE(get_bra_idx(group_view) == Index(L"i_1"));
+        REQUIRE(get_ket_idx(group_view) == Index(L"a_1"));
+      }
+#if SEQUANT_ASSERT_BEHAVIOR == SEQUANT_ASSERT_THROW
+      SECTION("const") {
+        indices = {{L"a_1", SlotType::Ket}, {L"i_1", SlotType::Bra}};
+
+        // Since the indices are not in the expected order but the range is
+        // passed as const, the assertions will trigger due to uncorrectable
+        // ordering.
+        REQUIRE_THROWS_AS(as_index_group_view(std::as_const(indices)),
+                          Exception);
+      }
+#endif
+    }
+  }
+
+  SECTION("as_view_of_index_groups") {
+    std::vector<container::svector<SlottedIndex>> groups;
+
+    SECTION("as-is") {
+      SECTION("mutable") {
+        groups = {
+            {{L"a_1", SlotType::Bra}, {L"i_1", SlotType::Ket}},
+            {{L"a_2", SlotType::Bra}, {L"i_2", SlotType::Ket}},
+        };
+
+        auto groups_view = as_view_of_index_groups(groups);
+
+        REQUIRE(get_bra_idx(groups_view[0]) == Index(L"a_1"));
+        REQUIRE(get_ket_idx(groups_view[0]) == Index(L"i_1"));
+        REQUIRE(get_bra_idx(groups_view[1]) == Index(L"a_2"));
+        REQUIRE(get_ket_idx(groups_view[1]) == Index(L"i_2"));
+      }
+      SECTION("const") {
+        groups = {
+            {{L"a_1", SlotType::Bra}, {L"i_1", SlotType::Ket}},
+            {{L"a_2", SlotType::Bra}, {L"i_2", SlotType::Ket}},
+        };
+
+        auto groups_view = as_view_of_index_groups(std::as_const(groups));
+
+        REQUIRE(get_bra_idx(groups_view[0]) == Index(L"a_1"));
+        REQUIRE(get_ket_idx(groups_view[0]) == Index(L"i_1"));
+        REQUIRE(get_bra_idx(groups_view[1]) == Index(L"a_2"));
+        REQUIRE(get_ket_idx(groups_view[1]) == Index(L"i_2"));
+      }
+    }
+    SECTION("reordering") {
+      SECTION("mutable") {
+        groups = {
+            {{L"a_1", SlotType::Bra}, {L"i_1", SlotType::Ket}},
+            {{L"a_2", SlotType::Ket}, {L"i_2", SlotType::Bra}},
+        };
+
+        auto groups_view = as_view_of_index_groups(groups);
+
+        REQUIRE(get_bra_idx(groups_view[0]) == Index(L"a_1"));
+        REQUIRE(get_ket_idx(groups_view[0]) == Index(L"i_1"));
+        REQUIRE(get_bra_idx(groups_view[1]) == Index(L"i_2"));
+        REQUIRE(get_ket_idx(groups_view[1]) == Index(L"a_2"));
+      }
+      SECTION("const") {
+        groups = {
+            {{L"a_1", SlotType::Bra}, {L"i_1", SlotType::Ket}},
+            {{L"a_2", SlotType::Ket}, {L"i_2", SlotType::Bra}},
+        };
+
+        auto groups_view = as_view_of_index_groups(std::as_const(groups));
+
+        // Note: due to the lazy evaluation of ranges, we get the assert error
+        // only once we actually attempt to access the second group
+        REQUIRE(get_bra_idx(groups_view[0]) == Index(L"a_1"));
+        REQUIRE(get_ket_idx(groups_view[0]) == Index(L"i_1"));
+
+#if SEQUANT_ASSERT_BEHAVIOR == SEQUANT_ASSERT_THROW
+        REQUIRE_THROWS_AS(get_bra_idx(groups_view[1]), Exception);
+#endif
+      }
     }
   }
 }

@@ -4,6 +4,7 @@
 #include <SeQuant/core/complex.hpp>
 #include <SeQuant/core/expressions/expr.hpp>
 #include <SeQuant/core/expressions/expr_ptr.hpp>
+#include <SeQuant/core/io/latex/latex.hpp>
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
@@ -66,11 +67,7 @@ class Constant : public Expr {
   }
 
   std::wstring to_latex() const override {
-    return L"{" + sequant::to_latex(value()) + L"}";
-  }
-
-  std::wstring to_wolfram() const override {
-    return sequant::to_wolfram(value());
+    return L"{" + io::latex::to_string(value()) + L"}";
   }
 
   type_id_type type_id() const override { return get_type_id<Constant>(); }

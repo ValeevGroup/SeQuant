@@ -3,6 +3,7 @@
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/runtime.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
+#include <SeQuant/core/utility/conversion.hpp>
 #include <SeQuant/core/utility/timer.hpp>
 #include <SeQuant/domain/mbpt/context.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>
@@ -45,7 +46,7 @@ int main(int argc, char* argv[]) {
 #else
   const size_t DEFAULT_NMAX = 3;
 #endif
-  const size_t NMAX = argc > 1 ? std::atoi(argv[1]) : DEFAULT_NMAX;
+  const size_t NMAX = argc > 1 ? string_to<size_t>(argv[1]) : DEFAULT_NMAX;
   if (NMAX >= 4)
     throw std::logic_error(
         "spin-tracing rank-4 and "

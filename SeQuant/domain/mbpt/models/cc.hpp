@@ -7,6 +7,7 @@
 
 #include <cstddef>
 #include <limits>
+#include <optional>
 #include <vector>
 
 namespace sequant {
@@ -29,17 +30,36 @@ class CC {
     oU
   };
 
-  /// @brief constructs CC engine
-  /// @param N coupled cluster excitation rank
-  /// @param ansatz the type of CC ansatz
-  /// @param screen if true, uses Operator level screening before applying
-  /// WickTheorem
-  /// @param use_topology if true, uses topological optimizations in WickTheorem
-  explicit CC(size_t N, Ansatz ansatz = Ansatz::T, bool screen = true,
-              bool use_topology = true);
+  /// Configuration options for CC class
+  struct Options {
+    /// type of CC ansatz. see CC::Ansatz
+    Ansatz ansatz = Ansatz::T;
+    /// if true, uses Operator level screening before applying WickTheorem.
+    /// This propagates to all ref_av() calls
+    bool screen = true;
+    /// if true, uses topological optimizations in WickTheorem
+    bool use_topology = true;
+    /// maximum order of nested commutators in H̄; must be specified if unitary
+    /// ansatz is used
+    std::optional<size_t> hbar_comm_rank = std::nullopt;
+    /// maximum order of nested commutators in the similarity transformed
+    /// perturbation operator; must be specified if unitary ansatz is used in
+    /// perturbed amplitude derivation
+    std::optional<size_t> pertbar_comm_rank = std::nullopt;
+  };
+
+  /// @brief constructs CC engine with default options (traditional ansatz,
+  /// screening enabled, topological optimization enabled)
+  /// @param n coupled cluster excitation rank
+  explicit CC(size_t n);
+
+  /// @brief constructs CC engine with custom options
+  /// @param n coupled cluster excitation rank
+  /// @param opts configuration options @see CC::Options
+  explicit CC(size_t n, const Options& opts);
 
   /// @return the type of ansatz
-  Ansatz ansatz() const;
+  [[nodiscard]] Ansatz ansatz() const;
 
   /// @return true if the ansatz is unitary
   [[nodiscard]] bool unitary() const;
@@ -52,9 +72,6 @@ class CC {
 
   /// @brief derives t amplitude equations, \f$ \langle P|\bar{H}|0 \rangle = 0
   /// \f$
-  /// @param commutator_rank rank of commutators included in \f$ \bar{H} \f$ ;
-  /// must be specified for unitary ansatz and/or
-  ///   Hamiltonians with particle rank != 2
   /// @param pmax highest particle rank of the projector manifold `\f \langle P
   /// | \f`; the default value is to use
   ///   the cluster operator rank of this engine
@@ -65,21 +82,17 @@ class CC {
   ///   \f$ \langle k |\bar{H}|0 \rangle = 0 \f$ for `k` in the [\p pmin,\p
   ///   pmax] range, and null value otherwise
   [[nodiscard]] std::vector<ExprPtr> t(
-      size_t commutator_rank = 4,
       size_t pmax = std::numeric_limits<size_t>::max(), size_t pmin = 0);
 
   /// @brief derives λ amplitude equations,
   /// \f$ \langle 0| (1 + \hat{\Lambda}) \frac{d \bar{H}}{d \hat{T}_P} |0
   /// \rangle = 0 \f$
-  /// @param commutator_rank rank of commutators included in \f$ \bar{H} \f$ ;
-  /// must be specified for unitary ansatz and/or Hamiltonians with particle
-  /// rank != 2
   /// @return vector of λ amplitude equations, with element `k` containing
   /// equation
   ///   \f$ \langle 0| (1 + \hat{\Lambda}) \frac{d \bar{H}}{d \hat{T}_k} |0
   ///   \rangle = 0 \f$ for `k` in
   /// the [1,N] range; element 0 is always null
-  [[nodiscard]] std::vector<ExprPtr> λ(size_t commutator_rank = 4);
+  [[nodiscard]] std::vector<ExprPtr> λ();
 
   // clang-format off
   /// @brief derives perturbed t amplitude equations
@@ -122,6 +135,8 @@ class CC {
   Ansatz ansatz_ = Ansatz::T;
   bool screen_ = true;
   bool use_topology_ = true;
+  std::optional<size_t> hbar_comm_rank_ = std::nullopt;
+  std::optional<size_t> pertbar_comm_rank_ = std::nullopt;
 
   /// @brief computes reference expectation value of an expression. Dispatches
   /// to `mbpt::op::ref_av()`

@@ -85,6 +85,18 @@ include(CMakePackageConfigHelpers)
 
 include(compiler)
 
+# Helper: creates SeQuant-${module} target, sets EXPORT_NAME, creates SeQuant::${module} alias,
+#         and applies warning flags (for non-INTERFACE targets)
+macro(sequant_add_library _module)
+    add_library(SeQuant-${_module} ${ARGN})
+    set_target_properties(SeQuant-${_module} PROPERTIES EXPORT_NAME ${_module})
+    add_library(SeQuant::${_module} ALIAS SeQuant-${_module})
+    get_target_property(_type SeQuant-${_module} TYPE)
+    if (NOT _type STREQUAL "INTERFACE_LIBRARY")
+        target_set_warning_flags(SeQuant-${_module})
+    endif()
+endmacro()
+
 # extract git metadata
 include(GetGitMetadata)
 vgkit_cmake_git_metadata()
@@ -117,6 +129,8 @@ option(SEQUANT_BTAS "Enable BTAS eval backend" ${SEQUANT_EVAL_TESTS})
 add_feature_info(SEQUANT_EVAL_BTAS SEQUANT_BTAS "Enable BTAS eval backend")
 option(SEQUANT_TILEDARRAY "Enable TiledArray eval backend" ${SEQUANT_EVAL_TESTS})
 add_feature_info(SEQUANT_EVAL_TILEDARRAY SEQUANT_TILEDARRAY "Enable TiledArray eval backend")
+option(SEQUANT_TAPP "Enable TAPP eval backend" ${SEQUANT_EVAL_TESTS})
+add_feature_info(SEQUANT_EVAL_TAPP SEQUANT_TAPP "Enable TAPP eval backend")
 
 option(SEQUANT_IWYU "Whether to use the include-what-you-use tool (if found)" OFF)
 option(SEQUANT_WARNINGS_AS_ERRORS "Whether to treat compiler warnings as errors" ${PROJECT_IS_TOP_LEVEL})
@@ -155,6 +169,24 @@ add_feature_info(SEQUANT_CONTEXT_MANIPULATION_THREADSAFE SEQUANT_CONTEXT_MANIPUL
 # Prerequisites
 ##########################
 
+# Apple Clang 16 and earlier do not correctly implement P0522R0
+# (relaxed matching of template template arguments), which SeQuant requires
+if (CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang" AND
+    CMAKE_CXX_COMPILER_VERSION VERSION_LESS 17)
+  message(FATAL_ERROR "SeQuant requires Apple Clang 17 or later (found ${CMAKE_CXX_COMPILER_VERSION}). "
+    "Upgrade Xcode or use a different compiler (e.g., LLVM Clang from Homebrew).")
+endif()
+
+include(CheckCXXFeatures)
+if (PROJECT_IS_TOP_LEVEL)
+  vgkit_check_libcxx_linker_mismatch(MODIFY_GLOBAL_FLAGS)
+else()
+  vgkit_check_libcxx_linker_mismatch()
+endif()
+# Clang < 19 needs -frelaxed-template-template-args for P0522R0;
+# sets VGKIT_P0522R0_COMPILE_FLAG, applied to SeQuant-symb below
+vgkit_check_p0522r0()
+
 if (PROJECT_IS_TOP_LEVEL AND NOT DEFINED CMAKE_POSITION_INDEPENDENT_CODE)
     set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 endif()
@@ -175,9 +207,8 @@ if ((${CMAKE_CXX_COMPILER_ID} STREQUAL "GNU" AND
         set_target_properties(TBB::tbb PROPERTIES IMPORTED_GLOBAL TRUE)
     endif (ENABLE_TBB)
 endif ()
-# check of <execution> header is usable
-include(CheckCXXFeatures)
-check_cxx_execution_header(SEQUANT)
+# check if <execution> header is usable
+vgkit_check_cxx_execution_header(SEQUANT)
 
 # Ranges-V3
 include(FindOrFetchRangeV3)
@@ -237,6 +268,8 @@ add_library(SeQuant-bliss
         SeQuant/external/bliss/bliss_C.cc
         SeQuant/external/bliss/bliss_C.h
         )
+set_target_properties(SeQuant-bliss PROPERTIES EXPORT_NAME bliss)
+add_library(SeQuant::bliss ALIAS SeQuant-bliss)
 target_link_libraries(SeQuant-bliss PUBLIC range-v3::range-v3 Boost::headers)
 if (SEQUANT_USE_SYSTEM_BOOST_HASH)
     target_compile_definitions(SeQuant-bliss PUBLIC SEQUANT_USE_SYSTEM_BOOST_HASH=1)
@@ -252,8 +285,12 @@ if (Boost_IS_MODULARIZED)
     )
 endif()
 
-set(SeQuant_src
-        ${PROJECT_BINARY_DIR}/SeQuant/version.hpp
+##########################
+# Partitioned source lists
+##########################
+
+# Symbolic layer sources (no eval/export dependencies)
+set(SeQuant_symb_src
         SeQuant/core/algorithm.hpp
         SeQuant/core/asy_cost.cpp
         SeQuant/core/asy_cost.hpp
@@ -265,28 +302,6 @@ set(SeQuant_src
         SeQuant/core/container.hpp
         SeQuant/core/context.cpp
         SeQuant/core/context.hpp
-        SeQuant/core/eval/eval_expr.cpp
-        SeQuant/core/eval/eval_expr.hpp
-        SeQuant/core/eval/eval_node.hpp
-        SeQuant/core/export/compute_selection.cpp
-        SeQuant/core/export/compute_selection.hpp
-        SeQuant/core/export/context.cpp
-        SeQuant/core/export/context.hpp
-        SeQuant/core/export/export.cpp
-        SeQuant/core/export/export.hpp
-        SeQuant/core/export/export_expr.cpp
-        SeQuant/core/export/export_expr.hpp
-        SeQuant/core/export/generator.cpp
-        SeQuant/core/export/generator.hpp
-        SeQuant/core/export/itf.cpp
-        SeQuant/core/export/itf.hpp
-        SeQuant/core/export/julia_itensor.hpp
-        SeQuant/core/export/julia_tensor_kit.hpp
-        SeQuant/core/export/julia_tensor_operations.cpp
-        SeQuant/core/export/julia_tensor_operations.hpp
-        SeQuant/core/export/reordering_context.cpp
-        SeQuant/core/export/reordering_context.hpp
-        SeQuant/core/export/text_generator.hpp
         SeQuant/core/expressions/abstract_tensor.cpp
         SeQuant/core/expressions/abstract_tensor.hpp
         SeQuant/core/expressions/expr.cpp
@@ -307,9 +322,10 @@ set(SeQuant_src
         SeQuant/core/index_space_registry.cpp
         SeQuant/core/index_space_registry.hpp
         SeQuant/core/interval.hpp
-        SeQuant/core/latex.cpp
-        SeQuant/core/latex.hpp
-        SeQuant/core/latex.ipp
+        SeQuant/core/io/concepts.hpp
+        SeQuant/core/io/shorthands.hpp
+        SeQuant/core/io/latex/latex.cpp
+        SeQuant/core/io/latex/latex.hpp
         SeQuant/core/logger.hpp
         SeQuant/core/math.hpp
         SeQuant/core/meta.hpp
@@ -317,21 +333,21 @@ set(SeQuant_src
         SeQuant/core/op.hpp
         SeQuant/core/options.cpp
         SeQuant/core/options.hpp
-        SeQuant/core/optimize.hpp
-        SeQuant/core/optimize/common_subexpression_elimination.hpp
-        SeQuant/core/optimize/fusion.cpp
-        SeQuant/core/optimize/fusion.hpp
-        SeQuant/core/optimize/optimize.cpp
-        SeQuant/core/parse.hpp
-        SeQuant/core/parse/ast.cpp
-        SeQuant/core/parse/deparse.cpp
-        SeQuant/core/parse/parse.cpp
+        SeQuant/core/io/serialization/serialization.cpp
+        SeQuant/core/io/serialization/serialization.hpp
+        SeQuant/core/io/serialization/v1/ast.cpp
+        SeQuant/core/io/serialization/v1/ast.hpp
+        SeQuant/core/io/serialization/v1/ast_conversions.hpp
+        SeQuant/core/io/serialization/v1/deserialize.cpp
+        SeQuant/core/io/serialization/v1/semantic_actions.hpp
+        SeQuant/core/io/serialization/v1/serialize.cpp
         SeQuant/core/ranges.hpp
         SeQuant/core/rational.hpp
         SeQuant/core/runtime.cpp
         SeQuant/core/runtime.hpp
         SeQuant/core/space.cpp
         SeQuant/core/space.hpp
+        SeQuant/core/slotted_index.hpp
         SeQuant/core/tag.hpp
         SeQuant/core/tensor_canonicalizer.cpp
         SeQuant/core/tensor_canonicalizer.hpp
@@ -356,9 +372,11 @@ set(SeQuant_src
         SeQuant/core/utility/expr.cpp
         SeQuant/core/utility/expr.hpp
         SeQuant/core/utility/indices.hpp
+        SeQuant/core/utility/macros.cpp
         SeQuant/core/utility/macros.hpp
         SeQuant/core/utility/memoize.hpp
         SeQuant/core/utility/nodiscard.hpp
+        SeQuant/core/utility/overloads.hpp
         SeQuant/core/utility/permutation.hpp
         SeQuant/core/utility/scope.hpp
         SeQuant/core/utility/singleton.hpp
@@ -371,8 +389,11 @@ set(SeQuant_src
         SeQuant/core/reserved.hpp
         SeQuant/core/wick.hpp
         SeQuant/core/wick.impl.hpp
-        SeQuant/core/wolfram.hpp
-        SeQuant/core/wstring.hpp
+        SeQuant/core/wick.cpp
+)
+
+# MBPT domain sources
+set(SeQuant_mbpt_src
         SeQuant/domain/mbpt/antisymmetrizer.cpp
         SeQuant/domain/mbpt/antisymmetrizer.hpp
         SeQuant/domain/mbpt/biorthogonalization.cpp
@@ -381,6 +402,7 @@ set(SeQuant_src
         SeQuant/domain/mbpt/context.hpp
         SeQuant/domain/mbpt/convention.cpp
         SeQuant/domain/mbpt/convention.hpp
+        SeQuant/domain/mbpt/detail/concepts.hpp
         SeQuant/domain/mbpt/models/cc.cpp
         SeQuant/domain/mbpt/models/cc.hpp
         SeQuant/domain/mbpt/op_registry.hpp
@@ -403,6 +425,80 @@ set(SeQuant_src
         SeQuant/domain/mbpt/vac_av.cpp
         SeQuant/domain/mbpt/utils.hpp
         SeQuant/domain/mbpt/utils.cpp
+)
+
+# Eval framework sources (backend-agnostic)
+set(SeQuant_eval_src
+        SeQuant/core/eval/cache_manager.cpp
+        SeQuant/core/eval/cache_manager.hpp
+        SeQuant/core/eval/eval.hpp
+        SeQuant/core/eval/eval_expr.cpp
+        SeQuant/core/eval/eval_expr.hpp
+        SeQuant/core/eval/eval_node.hpp
+        SeQuant/core/eval/result.cpp
+        SeQuant/core/eval/result.hpp
+        SeQuant/core/eval/fwd.hpp
+)
+
+# Optimize sources (depends on eval)
+set(SeQuant_optimize_src
+        SeQuant/core/optimize/common_subexpression_elimination.hpp
+        SeQuant/core/optimize/fusion.cpp
+        SeQuant/core/optimize/fusion.hpp
+        SeQuant/core/optimize/optimize.cpp
+        SeQuant/core/optimize/optimize.hpp
+        SeQuant/core/optimize/single_term.hpp
+        SeQuant/core/optimize/sum.cpp
+        SeQuant/core/optimize/sum.hpp
+)
+
+# Export sources (depends on eval)
+set(SeQuant_export_src
+        SeQuant/core/export/compute_selection.cpp
+        SeQuant/core/export/compute_selection.hpp
+        SeQuant/core/export/context.cpp
+        SeQuant/core/export/context.hpp
+        SeQuant/core/export/export.cpp
+        SeQuant/core/export/export.hpp
+        SeQuant/core/export/export_expr.cpp
+        SeQuant/core/export/export_expr.hpp
+        SeQuant/core/export/generator.cpp
+        SeQuant/core/export/generator.hpp
+        SeQuant/core/export/itf.cpp
+        SeQuant/core/export/itf.hpp
+        SeQuant/core/export/julia_itensor.hpp
+        SeQuant/core/export/julia_tensor_kit.hpp
+        SeQuant/core/export/julia_tensor_operations.cpp
+        SeQuant/core/export/julia_tensor_operations.hpp
+        SeQuant/core/export/reordering_context.cpp
+        SeQuant/core/export/reordering_context.hpp
+        SeQuant/core/export/text_generator.hpp
+)
+
+# TiledArray backend sources
+set(SeQuant_eval_ta_src
+        SeQuant/core/eval/backends/tiledarray/eval_expr.hpp
+        SeQuant/core/eval/backends/tiledarray/result.hpp
+        SeQuant/core/eval/backends/tiledarray/result.cpp
+)
+
+# BTAS backend sources (header-only)
+set(SeQuant_eval_btas_src
+        SeQuant/core/eval/backends/btas/eval_expr.hpp
+        SeQuant/core/eval/backends/btas/result.hpp
+)
+
+# TAPP backend sources (header-only)
+set(SeQuant_eval_tapp_src
+        SeQuant/core/eval/backends/tapp/tensor.hpp
+        SeQuant/core/eval/backends/tapp/ops.hpp
+        SeQuant/core/eval/backends/tapp/eval_expr.hpp
+        SeQuant/core/eval/backends/tapp/result.hpp
+)
+
+# Core sources (just version info)
+set(SeQuant_core_src
+        ${PROJECT_BINARY_DIR}/SeQuant/version.hpp
         SeQuant/version.cpp
 )
 
@@ -414,66 +510,66 @@ set_source_files_properties(
 )
 
 ### optional prereqs
-set(SEQUANT_HAS_EVAL OFF)  # do not build SQ/eval unless there is a backend
 if (SEQUANT_TILEDARRAY)
     if (NOT TARGET tiledarray)
         include(FindOrFetchTiledArray)
     endif()
-    set(SEQUANT_HAS_EVAL ON)
     set(SEQUANT_HAS_TILEDARRAY ON)
 endif ()
 if (SEQUANT_BTAS)
     if (NOT TARGET BTAS::BTAS)
         include(FindOrFetchBTAS)
     endif()
-    set(SEQUANT_HAS_EVAL ON)
     set(SEQUANT_HAS_BTAS ON)
 endif ()
-
-if (SEQUANT_HAS_EVAL)
-    list(APPEND SeQuant_src
-            SeQuant/core/eval/cache_manager.cpp
-            SeQuant/core/eval/cache_manager.hpp
-            SeQuant/core/eval/eval.hpp
-            SeQuant/core/eval/result.cpp
-            SeQuant/core/eval/result.hpp
-            SeQuant/core/eval/fwd.hpp
-            )
-    if (SEQUANT_HAS_TILEDARRAY)
-        list(APPEND SeQuant_src
-                SeQuant/core/eval/backends/tiledarray/eval_expr.hpp
-                SeQuant/core/eval/backends/tiledarray/result.hpp
-                SeQuant/core/eval/backends/tiledarray/result.cpp
-                )
-    endif ()
-    if (SEQUANT_HAS_BTAS)
-        list(APPEND SeQuant_src
-                SeQuant/core/eval/backends/btas/eval_expr.hpp
-                SeQuant/core/eval/backends/btas/result.hpp
-                )
-    endif ()
+if (SEQUANT_TAPP)
+    if (NOT TARGET tapp::reference)
+        include(FindOrFetchTAPP)
+    endif()
+    set(SEQUANT_HAS_TAPP ON)
 endif ()
 
-add_library(SeQuant
-        ${SeQuant_src}
-        )
-# feed SEQUANT_GIT_REVISION and SEQUANT_GIT_DESCRIPTION to SeQuant/version.cpp only to avoid recompiling everything
-set_source_files_properties(
-        SeQuant/version.cpp
-        PROPERTIES COMPILE_DEFINITIONS
-        "SEQUANT_GIT_REVISION=\"${SEQUANT_GIT_REVISION}\";SEQUANT_GIT_DESCRIPTION=\"${SEQUANT_GIT_DESCRIPTION}\""
-)
-if (SEQUANT_CONTEXT_MANIPULATION_THREADSAFE)
-  target_compile_definitions(SeQuant PUBLIC SEQUANT_CONTEXT_MANIPULATION_THREADSAFE)
+if (NOT PROJECT_IS_TOP_LEVEL)
+    set(SEQUANT_SYSTEM "SYSTEM")
 endif()
-target_compile_definitions(SeQuant PUBLIC SEQUANT_ASSERT_BEHAVIOR_=${SEQUANT_ASSERT_BEHAVIOR})
 
-target_link_libraries(SeQuant PUBLIC range-v3::range-v3 Boost::regex Boost::locale Boost::headers SeQuant-bliss Threads::Threads)
-target_link_libraries(SeQuant PRIVATE libperm::libperm $<BUILD_LOCAL_INTERFACE:utfcpp> Eigen3::Eigen)
-target_link_libraries(SeQuant PUBLIC polymorphic_variant::polymorphic_variant)
-# modularized Boost has finer grained targets than just Boost::headers
+##########################
+# SeQuant-symb: core symbolic layer
+##########################
+sequant_add_library(symb ${SeQuant_symb_src})
+if (VGKIT_P0522R0_COMPILE_FLAG)
+  target_compile_options(SeQuant-symb PUBLIC ${VGKIT_P0522R0_COMPILE_FLAG})
+endif()
+target_compile_definitions(SeQuant-symb PRIVATE SEQUANT_ASSERT_BEHAVIOR_=${SEQUANT_ASSERT_BEHAVIOR})
+if (NOT SEQUANT_ASSERT_BEHAVIOR STREQUAL "IGNORE")
+    target_compile_definitions(SeQuant-symb PUBLIC SEQUANT_ASSERT_ENABLED)
+endif()
+if (SEQUANT_CONTEXT_MANIPULATION_THREADSAFE)
+    target_compile_definitions(SeQuant-symb PRIVATE SEQUANT_CONTEXT_MANIPULATION_THREADSAFE)
+endif()
+if (SEQUANT_USE_SYSTEM_BOOST_HASH)
+    target_compile_definitions(SeQuant-symb PUBLIC SEQUANT_USE_SYSTEM_BOOST_HASH=1)
+endif()
+if (SEQUANT_HAS_EXECUTION_HEADER_STANDALONE OR SEQUANT_HAS_EXECUTION_HEADER_WITH_TBB)
+    target_compile_definitions(SeQuant-symb PUBLIC SEQUANT_HAS_EXECUTION_HEADER)
+    if (SEQUANT_HAS_EXECUTION_HEADER_WITH_TBB)
+        target_link_libraries(SeQuant-symb PRIVATE ${TBB_LIBRARIES})
+    endif()
+endif()
+target_link_libraries(SeQuant-symb
+        PUBLIC
+        range-v3::range-v3
+        Boost::headers
+        Boost::locale
+        polymorphic_variant::polymorphic_variant
+        PRIVATE
+        SeQuant-bliss
+        Threads::Threads
+        libperm::libperm
+        $<BUILD_LOCAL_INTERFACE:utfcpp>
+        Eigen3::Eigen)
 if (Boost_IS_MODULARIZED)
-    target_link_libraries(SeQuant PUBLIC
+    target_link_libraries(SeQuant-symb PUBLIC
             Boost::container
             Boost::container_hash
             Boost::hana
@@ -481,64 +577,134 @@ if (Boost_IS_MODULARIZED)
             Boost::numeric_conversion
             Boost::numeric_interval
             Boost::range
-            Boost::spirit
-    )
+            Boost::spirit)
 endif()
-if (SEQUANT_HAS_EVAL)
-  target_compile_definitions(SeQuant PUBLIC SEQUANT_HAS_EVAL=1)
-  if (SEQUANT_HAS_TILEDARRAY)
-    target_link_libraries(SeQuant PUBLIC tiledarray)
-    target_compile_definitions(SeQuant PUBLIC SEQUANT_HAS_TILEDARRAY=1)
-  endif ()
-  if (SEQUANT_HAS_BTAS)
-    target_link_libraries(SeQuant PUBLIC BTAS::BTAS)
-    target_compile_definitions(SeQuant PUBLIC SEQUANT_HAS_BTAS=1)
-  endif ()
-endif()
-if (SEQUANT_HAS_EXECUTION_HEADER_STANDALONE OR SEQUANT_HAS_EXECUTION_HEADER_WITH_TBB)
-    target_compile_definitions(SeQuant PUBLIC SEQUANT_HAS_EXECUTION_HEADER)
-    if (SEQUANT_HAS_EXECUTION_HEADER_WITH_TBB)
-        target_link_libraries(SeQuant PUBLIC ${TBB_LIBRARIES})
-        target_include_directories(SeQuant SYSTEM PUBLIC ${TBB_INCLUDE_DIRS})
-    endif ()
-endif ()
-if (NOT PROJECT_IS_TOP_LEVEL)
-    set(SEQUANT_SYSTEM "SYSTEM")
-endif()
-target_include_directories(SeQuant ${SEQUANT_SYSTEM} PUBLIC
+target_include_directories(SeQuant-symb ${SEQUANT_SYSTEM} PUBLIC
         $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}>
         $<INSTALL_INTERFACE:${CMAKE_INSTALL_PREFIX}/include>)
-target_include_directories(SeQuant SYSTEM PUBLIC
+target_include_directories(SeQuant-symb SYSTEM PUBLIC
         $<BUILD_INTERFACE:${PROJECT_BINARY_DIR}>)
-target_compile_features(SeQuant INTERFACE "cxx_std_20")
+target_compile_features(SeQuant-symb INTERFACE "cxx_std_20")
+
+##########################
+# SeQuant-eval: backend-agnostic evaluation framework
+##########################
+sequant_add_library(eval ${SeQuant_eval_src})
+target_link_libraries(SeQuant-eval PUBLIC SeQuant-symb PRIVATE SeQuant-bliss)
 if (SEQUANT_EVAL_TRACE)
-    target_compile_definitions(SeQuant PUBLIC SEQUANT_EVAL_TRACE=1)
-endif ()
-if (SEQUANT_USE_SYSTEM_BOOST_HASH)
-    target_compile_definitions(SeQuant PUBLIC SEQUANT_USE_SYSTEM_BOOST_HASH=1)
+    target_compile_definitions(SeQuant-eval PUBLIC SEQUANT_EVAL_TRACE=1)
 endif()
 
-target_set_warning_flags(SeQuant)
+##########################
+# SeQuant-optimize: expression optimization (STO, CSE, fusion)
+##########################
+sequant_add_library(optimize ${SeQuant_optimize_src})
+target_link_libraries(SeQuant-optimize PUBLIC SeQuant-eval SeQuant-symb SeQuant-bliss)
 
-install(TARGETS SeQuant-bliss EXPORT sequant COMPONENT sequant LIBRARY DESTINATION ${SEQUANT_INSTALL_LIBDIR})
-install(TARGETS SeQuant EXPORT sequant COMPONENT sequant LIBRARY DESTINATION ${SEQUANT_INSTALL_LIBDIR})
+##########################
+# SeQuant-eval-ta: TiledArray backend
+##########################
+if (SEQUANT_HAS_TILEDARRAY)
+    add_library(SeQuant-eval-ta ${SeQuant_eval_ta_src})
+    set_target_properties(SeQuant-eval-ta PROPERTIES EXPORT_NAME eval::ta)
+    add_library(SeQuant::eval::ta ALIAS SeQuant-eval-ta)
+    target_link_libraries(SeQuant-eval-ta PUBLIC SeQuant-eval SeQuant-symb tiledarray)
+    target_compile_definitions(SeQuant-eval-ta PUBLIC SEQUANT_HAS_TILEDARRAY=1)
+endif()
+
+##########################
+# SeQuant-eval-btas: BTAS backend (header-only)
+##########################
+if (SEQUANT_HAS_BTAS)
+    add_library(SeQuant-eval-btas INTERFACE)
+    set_target_properties(SeQuant-eval-btas PROPERTIES EXPORT_NAME eval::btas)
+    add_library(SeQuant::eval::btas ALIAS SeQuant-eval-btas)
+    target_link_libraries(SeQuant-eval-btas INTERFACE SeQuant-eval SeQuant-symb BTAS::BTAS)
+    target_compile_definitions(SeQuant-eval-btas INTERFACE SEQUANT_HAS_BTAS=1)
+endif()
+
+##########################
+# SeQuant-eval-tapp: TAPP backend (header-only)
+##########################
+if (SEQUANT_HAS_TAPP)
+    add_library(SeQuant-eval-tapp INTERFACE)
+    set_target_properties(SeQuant-eval-tapp PROPERTIES EXPORT_NAME eval::tapp)
+    add_library(SeQuant::eval::tapp ALIAS SeQuant-eval-tapp)
+    target_link_libraries(SeQuant-eval-tapp INTERFACE SeQuant-eval SeQuant-symb tapp::reference)
+    target_compile_definitions(SeQuant-eval-tapp INTERFACE SEQUANT_HAS_TAPP=1)
+endif()
+
+##########################
+# SeQuant-export: code generation/export (depends on eval)
+##########################
+sequant_add_library(export ${SeQuant_export_src})
+target_link_libraries(SeQuant-export PUBLIC SeQuant-optimize SeQuant-eval SeQuant-symb)
+
+##########################
+# SeQuant-core: version info, links symb + export
+##########################
+sequant_add_library(core ${SeQuant_core_src})
+target_link_libraries(SeQuant-core PUBLIC SeQuant-symb SeQuant-eval SeQuant-optimize SeQuant-export)
+# feed SEQUANT_GIT_REVISION and SEQUANT_GIT_DESCRIPTION to SeQuant/version.cpp only to avoid recompiling everything
+set_source_files_properties(
+        SeQuant/version.cpp
+        PROPERTIES COMPILE_DEFINITIONS
+        "SEQUANT_GIT_REVISION=\"${SEQUANT_GIT_REVISION}\";SEQUANT_GIT_DESCRIPTION=\"${SEQUANT_GIT_DESCRIPTION}\""
+)
+
+##########################
+# SeQuant-mbpt: MBPT domain code
+##########################
+sequant_add_library(mbpt ${SeQuant_mbpt_src})
+target_link_libraries(SeQuant-mbpt PUBLIC SeQuant-core SeQuant-optimize)
+target_link_libraries(SeQuant-mbpt PRIVATE Eigen3::Eigen libperm::libperm)
+if (SEQUANT_CONTEXT_MANIPULATION_THREADSAFE)
+    target_compile_definitions(SeQuant-mbpt PRIVATE SEQUANT_CONTEXT_MANIPULATION_THREADSAFE)
+endif()
+
+##########################
+# All SeQuant modules (used for install, IWYU, etc.)
+##########################
+set(SEQUANT_MODULES SeQuant-bliss SeQuant-symb SeQuant-eval SeQuant-optimize SeQuant-export SeQuant-core SeQuant-mbpt SeQuant)
+if (SEQUANT_HAS_TILEDARRAY)
+    list(APPEND SEQUANT_MODULES SeQuant-eval-ta)
+endif()
+if (SEQUANT_HAS_BTAS)
+    list(APPEND SEQUANT_MODULES SeQuant-eval-btas)
+endif()
+if (SEQUANT_HAS_TAPP)
+    list(APPEND SEQUANT_MODULES SeQuant-eval-tapp)
+endif()
+
+##########################
+# SeQuant: umbrella INTERFACE target (backwards compatibility)
+##########################
+add_library(SeQuant INTERFACE)
+target_link_libraries(SeQuant INTERFACE ${SEQUANT_MODULES})
+set_target_properties(SeQuant PROPERTIES EXPORT_NAME SeQuant)
+add_library(SeQuant::SeQuant ALIAS SeQuant)
+
+##########################
+# Installation
+##########################
+install(TARGETS ${SEQUANT_MODULES}
+        EXPORT sequant COMPONENT sequant
+        LIBRARY DESTINATION ${SEQUANT_INSTALL_LIBDIR})
 install(DIRECTORY SeQuant
         COMPONENT sequant
         DESTINATION "${SEQUANT_INSTALL_INCLUDEDIR}"
         FILES_MATCHING PATTERN "*.hpp"
-        PATTERN "*.hh"
-        )
-add_library(SeQuant::SeQuant ALIAS SeQuant)  # to be able to use as subproject
+        PATTERN "*.hh")
 
 if (SEQUANT_MIMALLOC)
     find_package(mimalloc REQUIRED)
-    target_link_libraries(SeQuant PUBLIC mimalloc)
-    target_compile_definitions(SeQuant PUBLIC SEQUANT_HAS_MIMALLOC=1)
+    target_link_libraries(SeQuant-symb PUBLIC mimalloc)
+    target_compile_definitions(SeQuant-symb PUBLIC SEQUANT_HAS_MIMALLOC=1)
 endif ()
 
-# build all of boost before SeQuant, including parts it does not use
+# build all of boost before SeQuant-symb, including parts it does not use
 if (Boost_BUILT_FROM_SOURCE AND TARGET build-boost-in-SeQuant)
-    add_dependencies(SeQuant build-boost-in-SeQuant)
+    add_dependencies(SeQuant-symb build-boost-in-SeQuant)
 endif()
 
 if (SEQUANT_IWYU)
@@ -550,7 +716,12 @@ if (SEQUANT_IWYU)
             -Xiwyu --cxx20ns
             -Xiwyu --no_comments
         )
-        set_property(TARGET SeQuant PROPERTY CXX_INCLUDE_WHAT_YOU_USE ${iwyu_options_and_path})
+        foreach(_target ${SEQUANT_MODULES})
+            get_target_property(_type ${_target} TYPE)
+            if (NOT _type STREQUAL "INTERFACE_LIBRARY")
+                set_property(TARGET ${_target} PROPERTY CXX_INCLUDE_WHAT_YOU_USE ${iwyu_options_and_path})
+            endif()
+        endforeach()
     endif()
 endif()
 
@@ -604,6 +775,9 @@ configure_package_config_file(cmake/sequant-config.cmake.in
         PATH_VARS CMAKE_INSTALL_PREFIX SEQUANT_INSTALL_BINDIR
         SEQUANT_INSTALL_INCLUDEDIR SEQUANT_INSTALL_LIBDIR
         SEQUANT_INSTALL_DOCDIR SEQUANT_INSTALL_CMAKEDIR)
+# Copy CheckCXXFeatures.cmake to build dir so sequant-config.cmake can find it
+configure_file("${vg_cmake_kit_SOURCE_DIR}/modules/CheckCXXFeatures.cmake"
+        "${PROJECT_BINARY_DIR}/CheckCXXFeatures.cmake" COPYONLY)
 
 ## Install config, version, and target files
 install(EXPORT sequant
@@ -614,6 +788,7 @@ install(EXPORT sequant
 install(FILES
         "${PROJECT_BINARY_DIR}/sequant-config.cmake"
         "${PROJECT_BINARY_DIR}/sequant-config-version.cmake"
+        "${vg_cmake_kit_SOURCE_DIR}/modules/CheckCXXFeatures.cmake"
         DESTINATION "${SEQUANT_INSTALL_CMAKEDIR}"
         COMPONENT sequant-config)
 add_custom_target_subproject(sequant install-config

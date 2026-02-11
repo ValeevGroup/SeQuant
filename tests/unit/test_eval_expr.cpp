@@ -8,10 +8,9 @@
 #include <SeQuant/core/eval/eval_expr.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
-#include <SeQuant/core/parse.hpp>
+#include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/utility/macros.hpp>
-#include <SeQuant/domain/mbpt/convention.hpp>
 
 #include <initializer_list>
 #include <memory>
@@ -22,12 +21,14 @@
 #include <range/v3/all.hpp>
 
 namespace sequant {
-Tensor parse_tensor(std::wstring_view tnsr, Symmetry s = Symmetry::Nonsymm) {
-  return parse_expr(tnsr, s)->as<Tensor>();
+Tensor parse_tensor(
+    std::wstring_view tnsr,
+    const io::serialization::DeserializationOptions& options = {}) {
+  return deserialize(tnsr, options)->as<Tensor>();
 }
 
 Constant parse_constant(std::wstring_view c) {
-  return parse_expr(c)->as<Constant>();
+  return deserialize(c)->as<Constant>();
 }
 
 EvalExpr result_expr(EvalExpr const& left, EvalExpr const& right, EvalOp op) {
@@ -51,7 +52,7 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
 
     REQUIRE_NOTHROW(EvalExpr{t1});
 
-    auto p1 = parse_expr(L"g_{i3,a1}^{i1,i2} * t_{a2}^{a3}");
+    auto p1 = deserialize(L"g_{i3,a1}^{i1,i2} * t_{a2}^{a3}");
 
     const auto& c2 = EvalExpr{p1->at(0)->as<Tensor>()};
     const auto& c3 = EvalExpr{p1->at(1)->as<Tensor>()};
@@ -68,12 +69,12 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
 
     REQUIRE(!x1.op_type());
 
-    auto p1 = parse_expr(L"g_{i3,a1}^{i1,i2} * t_{a2}^{a3}");
+    auto p1 = deserialize(L"g_{i3,a1}^{i1,i2} * t_{a2}^{a3}");
 
     const auto& c2 = EvalExpr{p1->at(0)->as<Tensor>()};
     const auto& c3 = EvalExpr{p1->at(1)->as<Tensor>()};
 
-    auto x2 = EvalExpr(parse_expr(L"1/2")->as<Constant>());
+    auto x2 = EvalExpr(deserialize(L"1/2")->as<Constant>());
     REQUIRE(!x2.op_type());
 
     REQUIRE(!EvalExpr{Variable{L"λ"}}.op_type());
@@ -130,24 +131,26 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
   }
 
   SECTION("result expr") {
-    ExprPtr expr = parse_expr(L"2 var");
+    ExprPtr expr = deserialize(L"2 var");
     ExprPtr root_expr = binarize(expr)->expr();
     REQUIRE(root_expr->is<Variable>());
     REQUIRE(*root_expr != *expr);
 
-    expr = parse_expr(L"2 t{a1;i1}");
+    expr = deserialize(L"2 t{a1;i1}");
     root_expr = binarize(expr)->expr();
     REQUIRE(root_expr->is<Tensor>());
     REQUIRE(*root_expr != *expr);
 
     // The binarized tree shall respect the label of the ResultExpr
-    ResultExpr res = parse_result_expr(L"E = g{i1,i2;a1,a2} t{a1,a2;i1,i2}");
+    ResultExpr res =
+        deserialize<ResultExpr>(L"E = g{i1,i2;a1,a2} t{a1,a2;i1,i2}");
     root_expr = binarize(res)->expr();
     REQUIRE(root_expr.is<Variable>());
     REQUIRE(root_expr.as<Variable>().label() == L"E");
 
     // The binarized tree shall respect the indexing of the ResultExpr
-    res = parse_result_expr(L"Result{a2;i2}:A-S-S = g{i1,i2;a1,a2} t{a1;i1}");
+    res = deserialize<ResultExpr>(
+        L"Result{a2;i2}:A-S-S = g{i1,i2;a1,a2} t{a1;i1}");
     root_expr = binarize(res)->expr();
     REQUIRE(root_expr.is<Tensor>());
     REQUIRE(root_expr.as<Tensor>() ==
@@ -157,7 +160,8 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
 
     // continued ->  check that changing indexing in result changes indexing in
     // tree
-    res = parse_result_expr(L"Result{i2;a2}:A-S-S = g{i1,i2;a1,a2} t{a1;i1}");
+    res = deserialize<ResultExpr>(
+        L"Result{i2;a2}:A-S-S = g{i1,i2;a1,a2} t{a1;i1}");
     root_expr = binarize(res)->expr();
     REQUIRE(root_expr.is<Tensor>());
     REQUIRE(root_expr.as<Tensor>() ==
@@ -166,12 +170,12 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
                    ColumnSymmetry::Symm));
 
     // The name-respecting property shall also hold for terminals
-    res = parse_result_expr(L"Other = Var");
+    res = deserialize<ResultExpr>(L"Other = Var");
     root_expr = binarize(res)->expr();
     REQUIRE(root_expr.is<Variable>());
     REQUIRE(root_expr.as<Variable>().label() == L"Other");
 
-    res = parse_result_expr(L"Amplitude{i1;a1} = t{a1;i1}");
+    res = deserialize<ResultExpr>(L"Amplitude{i1;a1} = t{a1;i1}");
     root_expr = binarize(res)->expr();
     REQUIRE(root_expr.is<Tensor>());
     REQUIRE(root_expr.as<Tensor>() == Tensor(L"Amplitude",
@@ -182,9 +186,9 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
   SECTION("Sequant expression") {
     const auto& str_t1 = L"g_{a1,a2}^{a3,a4}";
     const auto& str_t2 = L"t_{a3,a4}^{i1,i2}";
-    const auto& t1 = parse_expr(str_t1);
+    const auto& t1 = deserialize(str_t1);
 
-    const auto& t2 = parse_expr(str_t2);
+    const auto& t2 = deserialize(str_t2);
 
     const auto& x1 = EvalExpr{t1->as<Tensor>()};
     const auto& x2 = EvalExpr{t2->as<Tensor>()};
@@ -216,14 +220,17 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
     const auto& x45 = result_expr(EvalExpr{t4}, EvalExpr{t5}, EvalOp::Product);
     const auto& x54 = result_expr(EvalExpr{t5}, EvalExpr{t4}, EvalOp::Product);
 
-    REQUIRE(x45.to_latex() == parse_expr(L"I_{a1,a2}^{i1,i2}")->to_latex());
+    REQUIRE(x45.to_latex() == deserialize(L"I_{a1,a2}^{i1,i2}")->to_latex());
     REQUIRE(x45.to_latex() == x54.to_latex());
   }
 
   SECTION("Hash value") {
-    const auto t1 = parse_tensor(L"t_{i1}^{a1}", Symmetry::Antisymm);
-    const auto t2 = parse_tensor(L"t_{i2}^{a2}", Symmetry::Antisymm);
-    const auto t3 = parse_tensor(L"t_{i1,i2}^{a1,a2}", Symmetry::Antisymm);
+    const auto t1 =
+        parse_tensor(L"t_{i1}^{a1}", {.def_perm_symm = Symmetry::Antisymm});
+    const auto t2 =
+        parse_tensor(L"t_{i2}^{a2}", {.def_perm_symm = Symmetry::Antisymm});
+    const auto t3 = parse_tensor(L"t_{i1,i2}^{a1,a2}",
+                                 {.def_perm_symm = Symmetry::Antisymm});
 
     const auto& x1 = EvalExpr{t1};
     const auto& x2 = EvalExpr{t2};
@@ -238,16 +245,18 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
 
     REQUIRE_FALSE(x1.hash_value() == x3.hash_value());
     REQUIRE_FALSE(x12.hash_value() == x3.hash_value());
-    auto tree1 = binarize(parse_expr(L"A C"));
-    auto tree2 = binarize(parse_expr(L"A t{a1;i1}"));
+    auto tree1 = binarize(deserialize(L"A C"));
+    auto tree2 = binarize(deserialize(L"A t{a1;i1}"));
 
     REQUIRE(tree1->hash_value() != tree2->hash_value());
   }
 
   SECTION("Symmetry of product") {
     // whole bra <-> ket contraction between two antisymmetric tensors
-    const auto t1 = parse_tensor(L"g_{i3,i4}^{i1,i2}", Symmetry::Antisymm);
-    const auto t2 = parse_tensor(L"t_{a1,a2}^{i3,i4}", Symmetry::Antisymm);
+    const auto t1 = parse_tensor(L"g_{i3,i4}^{i1,i2}",
+                                 {.def_perm_symm = Symmetry::Antisymm});
+    const auto t2 = parse_tensor(L"t_{a1,a2}^{i3,i4}",
+                                 {.def_perm_symm = Symmetry::Antisymm});
 
     const auto x12 = result_expr(EvalExpr{t1}, EvalExpr{t2}, EvalOp::Product);
 
@@ -257,9 +266,11 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
 
     // whole bra <-> ket contraction between two symmetric tensors
     const auto t3 =
-        parse_expr(L"g_{i3,i4}^{i1,i2}", Symmetry::Symm)->as<Tensor>();
+        deserialize(L"g_{i3,i4}^{i1,i2}", {.def_perm_symm = Symmetry::Symm})
+            ->as<Tensor>();
     const auto t4 =
-        parse_expr(L"t_{a1,a2}^{i3,i4}", Symmetry::Symm)->as<Tensor>();
+        deserialize(L"t_{a1,a2}^{i3,i4}", {.def_perm_symm = Symmetry::Symm})
+            ->as<Tensor>();
 
     const auto x34 = result_expr(EvalExpr{t3}, EvalExpr{t4}, EvalOp::Product);
 
@@ -268,8 +279,12 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
     REQUIRE(x34.expr()->as<Tensor>().symmetry() == Symmetry::Nonsymm);
 
     // outer product of the same tensor
-    const auto t5 = parse_expr(L"f_{i1}^{a1}", Symmetry::Nonsymm)->as<Tensor>();
-    const auto t6 = parse_expr(L"f_{i2}^{a2}", Symmetry::Nonsymm)->as<Tensor>();
+    const auto t5 =
+        deserialize(L"f_{i1}^{a1}", {.def_perm_symm = Symmetry::Nonsymm})
+            ->as<Tensor>();
+    const auto t6 =
+        deserialize(L"f_{i2}^{a2}", {.def_perm_symm = Symmetry::Nonsymm})
+            ->as<Tensor>();
 
     const auto& x56 = result_expr(EvalExpr{t5}, EvalExpr{t6}, EvalOp::Product);
 
@@ -278,17 +293,21 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
     REQUIRE(x56.expr()->as<Tensor>().symmetry() == Symmetry::Nonsymm);
 
     // contraction of some indices from a bra to a ket
-    const auto t7 = parse_tensor(L"g_{a1,a2}^{i1,a3}", Symmetry::Antisymm);
-    const auto t8 = parse_tensor(L"t_{a3}^{i2}", Symmetry::Antisymm);
+    const auto t7 = parse_tensor(L"g_{a1,a2}^{i1,a3}",
+                                 {.def_perm_symm = Symmetry::Antisymm});
+    const auto t8 =
+        parse_tensor(L"t_{a3}^{i2}", {.def_perm_symm = Symmetry::Antisymm});
 
     const auto x78 = result_expr(EvalExpr{t7}, EvalExpr{t8}, EvalOp::Product);
     REQUIRE(x78.expr()->as<Tensor>().symmetry() == Symmetry::Nonsymm);
 
     // whole bra <-> ket contraction between symmetric and antisymmetric tensors
     auto const t9 =
-        parse_expr(L"g_{a1,a2}^{a3,a4}", Symmetry::Antisymm)->as<Tensor>();
+        deserialize(L"g_{a1,a2}^{a3,a4}", {.def_perm_symm = Symmetry::Antisymm})
+            ->as<Tensor>();
     auto const t10 =
-        parse_expr(L"t_{a3,a4}^{i1,i2}", Symmetry::Symm)->as<Tensor>();
+        deserialize(L"t_{a3,a4}^{i1,i2}", {.def_perm_symm = Symmetry::Symm})
+            ->as<Tensor>();
     auto const x910 = result_expr(EvalExpr{t9}, EvalExpr{t10}, EvalOp::Product);
     // todo:
     // REQUIRE(x910.expr()->as<Tensor>().symmetry() == Symmetry::Symm);
@@ -298,7 +317,7 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
 #if 0
   SECTION("Symmetry of sum") {
     auto tensor = [](Symmetry s) {
-      return parse_expr(L"I_{i1,i2}^{a1,a2}", s)->as<Tensor>();
+      return deserialize(L"I_{i1,i2}^{a1,a2}", s)->as<Tensor>();
     };
 
     auto symmetry = [](const EvalExpr& x) {
@@ -339,12 +358,12 @@ TEST_CASE("eval_expr", "[EvalExpr]") {
 #endif
 
   SECTION("Debug") {
-    auto t1 =
-        EvalExpr{parse_expr(L"O{a_1<i_1,i_2>;a_1<i_3,i_2>}", Symmetry::Nonsymm)
-                     ->as<Tensor>()};
-    auto t2 =
-        EvalExpr{parse_expr(L"O{a_2<i_1,i_2>;a_2<i_3,i_2>}", Symmetry::Nonsymm)
-                     ->as<Tensor>()};
+    auto t1 = EvalExpr{deserialize(L"O{a_1<i_1,i_2>;a_1<i_3,i_2>}",
+                                   {.def_perm_symm = Symmetry::Nonsymm})
+                           ->as<Tensor>()};
+    auto t2 = EvalExpr{deserialize(L"O{a_2<i_1,i_2>;a_2<i_3,i_2>}",
+                                   {.def_perm_symm = Symmetry::Nonsymm})
+                           ->as<Tensor>()};
 
     REQUIRE_NOTHROW(result_expr(t1, t2, EvalOp::Product));
   }

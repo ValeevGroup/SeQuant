@@ -11,7 +11,8 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/eval/cache_manager.hpp>
 #include <SeQuant/core/eval/eval_expr.hpp>
-#include <SeQuant/core/optimize.hpp>
+#include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/optimize/optimize.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/domain/mbpt/spin.hpp>
 
@@ -67,11 +68,33 @@ struct CalcInfo {
   }
 
  private:
+  /// Omit the first factor from the top level product from given expression.
+  /// Intended to drop "A" and "S" tensors from CC amplitudes as a preparatory
+  /// step for evaluation of the amplitudes.
+  static ExprPtr tail_factor(ExprPtr const& expr) noexcept {
+    if (expr->is<Tensor>())
+      return expr->clone();
+    else if (expr->is<Product>()) {
+      auto scalar = expr->as<Product>().scalar();
+      if (scalar == 1 && expr->size() == 2) {
+        return expr->at(1);
+      }
+      auto facs = ranges::views::tail(*expr);
+      return ex<Product>(
+          Product{scalar, ranges::begin(facs), ranges::end(facs)});
+    } else {
+      // sum
+      auto summands = *expr | ranges::views::transform(
+                                  [](auto const& x) { return tail_factor(x); });
+      return ex<Sum>(Sum{ranges::begin(summands), ranges::end(summands)});
+    }
+  }
+
   template <typename ExprT>
   [[nodiscard]] container::vector<EvalNode<ExprT>> node_(ExprPtr const& expr,
                                                          size_t rank) const {
     using ranges::views::transform;
-    auto trimmed = opt::tail_factor(expr);
+    auto trimmed = tail_factor(expr);
     auto tform_and_save =
         transform([st = optm_opts.single_term](const auto& expr) {
           return binarize<ExprT>(st ? optimize(expr) : expr);

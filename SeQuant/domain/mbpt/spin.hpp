@@ -12,10 +12,11 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
+#include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/macros.hpp>
+#include <SeQuant/core/utility/overloads.hpp>
+#include <SeQuant/core/utility/string.hpp>
 
-#include <cstddef>
-#include <initializer_list>
 #include <string>
 #include <vector>
 
@@ -80,11 +81,11 @@ std::wstring spinannotation_add(WS&& label, Spin s) {
   SEQUANT_ASSERT(view.back() != L'↑' && view.back() != L'↓');
   switch (s) {
     case Spin::any:
-      return to_wstring(std::forward<WS>(label));
+      return std::wstring(std::forward<WS>(label));
     case Spin::alpha:
-      return to_wstring(std::forward<WS>(label)) + L'↑';
+      return std::wstring(std::forward<WS>(label)) + L'↑';
     case Spin::beta:
-      return to_wstring(std::forward<WS>(label)) + L'↓';
+      return std::wstring(std::forward<WS>(label)) + L'↓';
     case Spin::null:
       SEQUANT_ABORT("Invalid spin quantum number");
   }
@@ -210,27 +211,6 @@ container::svector<container::map<Index, Index>> S_replacement_maps(
 /// @brief Expand S operator
 ExprPtr S_maps(const ExprPtr& expr);
 
-/// @brief filters out the nonunique terms in Wang-Knizia biorthogonalization
-
-/// WK biorthogonalization rewrites biorthogonal expressions as a projector
-/// onto non-null-space (NNS)
-/// applied to the biorthogonal expressions where out of each
-/// group of terms related by permutation of external indices
-/// those with the largest coefficients are selected.
-/// This function performs the selection by forming groups of terms that
-/// are equivalent modulo external index permutation (all terms in a group
-/// have identical graph hashes).
-/// @details This function processes a sum expression, grouping product terms by
-/// hash of their canonicalized tensor network forms. For each group, it
-/// retains only the terms with the largest absolute scalar coefficient.
-/// @param expr The input expression, expected to be a `Sum` of `Product` terms.
-/// @param ext_idxs A vector of external index groups. The function will not
-/// apply the filtering logic if `ext_idxs.size()` is 2 or less.
-/// @return A new `ExprPtr` representing the filtered and compacted expression.
-ExprPtr WK_biorthogonalization_filter(
-    ExprPtr expr,
-    const container::svector<container::svector<Index>>& ext_idxs);
-
 // clang-format off
 /// @brief Traces out spin degrees of freedom from fermionic operator moments
 /// @details This function is designed for integrating spin out of
@@ -250,7 +230,14 @@ ExprPtr WK_biorthogonalization_filter(
 // clang-format on
 ExprPtr closed_shell_spintrace(
     const ExprPtr& expr,
-    const container::svector<container::svector<Index>>& ext_index_groups = {},
+    const container::svector<container::svector<SlottedIndex>>&
+        ext_index_groups = {},
+    bool full_expansion = false);
+ExprPtr closed_shell_spintrace(const ExprPtr& expr, EmptyInitializerList,
+                               bool full_expansion = false);
+ExprPtr closed_shell_spintrace(
+    const ExprPtr& expr,
+    const container::svector<container::svector<Index>>& ext_index_groups,
     bool full_expansion = false);
 
 container::svector<ResultExpr> closed_shell_spintrace(
@@ -315,9 +302,6 @@ ExprPtr closed_shell_CC_spintrace_v2(
     ClosedShellCCSpintraceOptions options = {
         .method = BiorthogonalizationMethod::V2, .naive_spintrace = false});
 
-/// Collect all indices from an expression
-container::set<Index, Index::LabelCompare> index_list(const ExprPtr& expr);
-
 /// @brief Swap spin labels in a tensor
 Tensor swap_spin(const Tensor& t);
 
@@ -360,8 +344,16 @@ std::vector<ExprPtr> open_shell_P_op_vector(const Tensor& A);
 // clang-format on
 std::vector<ExprPtr> open_shell_spintrace(
     const ExprPtr& expr,
+    const container::svector<container::svector<SlottedIndex>>&
+        ext_index_groups,
+    const std::optional<int>& target_spin_case = std::nullopt);
+std::vector<ExprPtr> open_shell_spintrace(
+    const ExprPtr& expr, EmptyInitializerList,
+    const std::optional<int>& target_spin_case = std::nullopt);
+std::vector<ExprPtr> open_shell_spintrace(
+    const ExprPtr& expr,
     const container::svector<container::svector<Index>>& ext_index_groups,
-    std::optional<int> target_spin_case = std::nullopt);
+    const std::optional<int>& target_spin_case = std::nullopt);
 
 // clang-format off
 /// @brief Like open_shell_spintrace but uses minimal expansion of the antisymmetrizer
@@ -394,9 +386,15 @@ std::vector<ExprPtr> open_shell_CC_spintrace(const ExprPtr& expr);
 /// @return an expression with spin integrated/adapted
 /// @warning The result of this function is not simplified since this is a
 /// building block for more specialized spin-tracing functions
+ExprPtr spintrace(const ExprPtr& expr,
+                  const container::svector<container::svector<SlottedIndex>>&
+                      ext_index_groups = {},
+                  bool spinfree_index_spaces = true);
+ExprPtr spintrace(const ExprPtr& expr, EmptyInitializerList,
+                  bool spinfree_index_spaces = true);
 ExprPtr spintrace(
     const ExprPtr& expr,
-    const container::svector<container::svector<Index>>& ext_index_groups = {},
+    const container::svector<container::svector<Index>>& ext_index_groups,
     bool spinfree_index_spaces = true);
 
 container::svector<ResultExpr> spintrace(const ResultExpr& expr,

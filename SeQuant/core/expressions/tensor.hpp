@@ -13,9 +13,10 @@
 #include <SeQuant/core/expressions/labeled.hpp>
 #include <SeQuant/core/hash.hpp>
 #include <SeQuant/core/index.hpp>
-#include <SeQuant/core/latex.hpp>
+#include <SeQuant/core/io/latex/latex.hpp>
 #include <SeQuant/core/reserved.hpp>
 #include <SeQuant/core/utility/macros.hpp>
+#include <SeQuant/core/utility/string.hpp>
 #include <SeQuant/core/utility/strong.hpp>
 
 #include <algorithm>
@@ -250,7 +251,7 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
          Symmetry s = Symmetry::Nonsymm,
          BraKetSymmetry bks = get_default_context().braket_symmetry(),
          ColumnSymmetry ps = ColumnSymmetry::Symm)
-      : label_(to_wstring(std::forward<S>(label))),
+      : label_(toUtf16(std::forward<S>(label))),
         bra_(make_indices(bra_indices)),
         ket_(make_indices(ket_indices)),
         aux_(make_indices(aux_indices)),
@@ -273,7 +274,7 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
          Symmetry s = Symmetry::Nonsymm,
          BraKetSymmetry bks = get_default_context().braket_symmetry(),
          ColumnSymmetry ps = ColumnSymmetry::Symm)
-      : label_(to_wstring(std::forward<S>(label))),
+      : label_(toUtf16(std::forward<S>(label))),
         bra_(std::move(bra_indices)),
         ket_(std::move(ket_indices)),
         aux_(std::move(aux_indices)),
@@ -525,7 +526,7 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
     std::wstring core_label;
     if ((this->symmetry() == Symmetry::Antisymm) && add_bar)
       core_label += L"\\bar{";
-    core_label += utf_to_latex(this->label());
+    core_label += io::latex::utf_to_string(this->label());
     if ((this->symmetry() == Symmetry::Antisymm) && add_bar) core_label += L"}";
 
     switch (bkst) {
@@ -537,7 +538,7 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
         result += (bkt == BraKetTypesetting::KetSub ? L"_" : L"^");
         result += L"{";
         for (const auto &i : this->ket()) {
-          result += i ? sequant::to_latex(i) : L"\\textvisiblespace";
+          result += i ? io::latex::to_string(i) : L"\\textvisiblespace";
         }
         result += L"}";
 
@@ -545,7 +546,7 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
         result += (bkt == BraKetTypesetting::BraSub ? L"_" : L"^");
         result += L"{";
         for (const auto &i : this->bra()) {
-          result += i ? sequant::to_latex(i) : L"\\textvisiblespace";
+          result += i ? io::latex::to_string(i) : L"\\textvisiblespace";
         }
         result += L"}";
 
@@ -554,7 +555,7 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
           result += L"[";
           const index_container_type &__aux = this->aux();
           for (std::size_t i = 0; i < aux_rank(); ++i) {
-            result += sequant::to_latex(__aux[i]);
+            result += io::latex::to_string(__aux[i]);
 
             if (i + 1 < aux_rank()) {
               result += L",";
@@ -806,7 +807,7 @@ class Tensor : public Expr, public AbstractTensor, public MutatableLabeled {
 
 };  // class Tensor
 
-static_assert(is_tensor_v<Tensor>,
+static_assert(is_tensor<Tensor>,
               "The Tensor class does not fulfill the requirements of the "
               "Tensor interface");
 

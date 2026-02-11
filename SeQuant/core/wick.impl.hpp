@@ -6,6 +6,7 @@
 #define SEQUANT_WICK_IMPL_HPP
 
 #include <SeQuant/core/bliss.hpp>
+#include <SeQuant/core/io/latex/latex.hpp>
 #include <SeQuant/core/logger.hpp>
 #include <SeQuant/core/reserved.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
@@ -620,8 +621,8 @@ bool reduce_wick_impl(std::shared_ptr<Product> &expr,
       });
       sequant::wprintf("\n  replrules = ");
       ranges::for_each(replacement_rules, [](auto &index) {
-        sequant::wprintf(to_latex(index.first), "\\to", to_latex(index.second),
-                         "\\,");
+        sequant::wprintf(io::latex::to_string(index.first), "\\to",
+                         io::latex::to_string(index.second), "\\,");
       });
     }
 
@@ -834,7 +835,7 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
           if (Logger::instance().wick_topology)
             std::wcout
                 << "WickTheorem<S>::compute: input to topology computation = "
-                << to_latex(expr_input_) << std::endl;
+                << io::latex::to_string(expr_input_) << std::endl;
 
           // construct graph representation of the tensor product
           using TN = TensorNetwork;
@@ -1233,7 +1234,8 @@ ExprPtr WickTheorem<S>::compute(const bool count_only,
           if (Logger::instance().wick_contract) {
             std::wcout
                 << "WickTheorem<S>::compute: input to compute_nopseq = {\n";
-            for (auto &&nop : input_) std::wcout << to_latex(nop) << "\n";
+            for (auto &&nop : input_)
+              std::wcout << io::latex::to_string(nop) << "\n";
             std::wcout << "}" << std::endl;
           }
 

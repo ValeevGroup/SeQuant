@@ -1,20 +1,25 @@
 #ifndef SEQUANT_CORE_UTILITY_INDICES_HPP
 #define SEQUANT_CORE_UTILITY_INDICES_HPP
 
+#include <SeQuant/core/attr.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
+#include <SeQuant/core/meta.hpp>
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/core/reserved.hpp>
+#include <SeQuant/core/slotted_index.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
 #include <range/v3/view.hpp>
 
 #include <algorithm>
+#include <concepts>
 #include <iterator>
 #include <optional>
 #include <ranges>
 #include <set>
+#include <tuple>
 #include <type_traits>
 #include <vector>
 
@@ -422,7 +427,7 @@ std::string csv_labels(meta::range_of<Index> auto&& idxs) {
     auto v = concat(single(i.label()),                             //
                     i.proto_indices() | transform(&Index::label))  //
              | join;
-    return sequant::to_string(v | ranges::to<std::wstring>);
+    return toUtf8(v | ranges::to<std::wstring>);
   };
 
   return std::forward<decltype(idxs)>(idxs)  //
@@ -443,8 +448,11 @@ std::string csv_labels(meta::range_of<Index> auto&& idxs) {
 ///
 /// @see get_bra_idx
 /// @see get_ket_idx
-template <typename Container = container::svector<container::svector<Index>>>
-Container external_indices(const Expr& expr) {
+template <template <class> class Container = container::svector,
+          template <class> class Group = container::svector>
+Container<Group<SlottedIndex>> external_indices(const Expr& expr) {
+  using HolderType = Container<Group<SlottedIndex>>;
+
   if (!expr.is<Sum>() && !expr.is<Product>() && !expr.is<Tensor>()) {
     return {};
   }
@@ -454,16 +462,27 @@ Container external_indices(const Expr& expr) {
 
     const std::size_t num_braket =
         std::max(tensor.bra_rank(), tensor.ket_rank());
-    Container cont(num_braket + tensor.aux_rank());
+    HolderType cont;
+    cont.resize(num_braket + tensor.aux_rank());
 
     for (std::size_t i = 0; i < tensor.bra_rank(); ++i) {
-      cont.at(i).push_back(tensor.bra()[i]);
+      cont.at(i).emplace_back(tensor.bra()[i], SlotType::Bra);
     }
     for (std::size_t i = 0; i < tensor.ket_rank(); ++i) {
-      cont.at(i).push_back(tensor.ket()[i]);
+      cont.at(i).emplace_back(tensor.ket()[i], SlotType::Ket);
     }
     for (std::size_t i = 0; i < tensor.aux_rank(); ++i) {
-      cont.at(i + num_braket).push_back(tensor.aux()[i]);
+      cont.at(i + num_braket).emplace_back(tensor.aux()[i], SlotType::Aux);
+    }
+
+    if (tensor.label() == reserved::symm_label() ||
+        tensor.label() == reserved::antisymm_label()) {
+      // Note: In tensors representing symmetrization operators, bra and ket
+      // indices are conjugated (reversed). Hence, we have to swap the
+      // determined bra and ket indices.
+      for (std::size_t i = 0; i < num_braket; ++i) {
+        std::swap(cont.at(i).at(0).index(), cont.at(i).at(1).index());
+      }
     }
 
     return cont;
@@ -484,34 +503,24 @@ Container external_indices(const Expr& expr) {
 
   if (symmetrizer.has_value()) {
     // Generate external index list from symmetrization operator
-    // However, the symmetrizer has bra/ket conjugated (reversed)
-    Container res = external_indices<Container>(symmetrizer.value());
-
-    for (auto& pair : res) {
-      if (pair.size() <= 1) {
-        continue;
-      }
-
-      std::swap(pair.at(0), pair.at(1));
-    }
-
-    return res;
+    return external_indices<Container, Group>(symmetrizer.value());
   }
 
   IndexGroups groups = get_unique_indices<container::svector<Index>>(expr);
 
   const std::size_t num_braket = std::max(groups.bra.size(), groups.ket.size());
 
-  Container cont(num_braket + groups.aux.size());
+  HolderType cont;
+  cont.resize(num_braket + groups.aux.size());
 
   for (std::size_t i = 0; i < groups.bra.size(); ++i) {
-    cont.at(i).push_back(groups.bra[i]);
+    cont.at(i).emplace_back(groups.bra[i], SlotType::Bra);
   }
   for (std::size_t i = 0; i < groups.ket.size(); ++i) {
-    cont.at(i).push_back(groups.ket[i]);
+    cont.at(i).emplace_back(groups.ket[i], SlotType::Ket);
   }
   for (std::size_t i = 0; i < groups.aux.size(); ++i) {
-    cont.at(num_braket + i).push_back(groups.aux[i]);
+    cont.at(num_braket + i).emplace_back(groups.aux[i], SlotType::Aux);
   }
 
   return cont;
@@ -528,53 +537,183 @@ Container external_indices(const Expr& expr) {
 ///
 /// @see get_bra_idx
 /// @see get_ket_idx
-template <typename Container = container::svector<container::svector<Index>>>
-Container external_indices(const ExprPtr& expr) {
-  return external_indices<Container>(*expr);
+template <template <class> class Container = container::svector,
+          template <class> class Group = container::svector>
+Container<Group<SlottedIndex>> external_indices(const ExprPtr& expr) {
+  return external_indices<Container, Group>(*expr);
 }
 
-/// @param container An index group expected to represent a pair of indices
-/// @returns The bra index of the provided pair
-///
-/// @tparam T The type of the container used to represent the index pair. May
-/// be a std::pair<Index, Index> or a container that retains the order of its
-/// elements based on how they have been inserted.
 template <typename T>
-auto get_bra_idx(T&& container)
-    -> std::conditional_t<std::is_const_v<std::remove_reference_t<T>>,
-                          const Index&, Index&> {
-  if constexpr (std::is_same_v<std::remove_cvref_t<T>,
-                               std::pair<Index, Index>>) {
-    return container.first;
+concept SlottedIndexContainer =
+    std::ranges::range<T> &&
+    std::same_as<std::ranges::range_value_t<T>, SlottedIndex>;
+
+template <typename T>
+concept IndexContainer =
+    std::ranges::range<T> && std::same_as<std::ranges::range_value_t<T>, Index>;
+
+template <typename T>
+concept SlottedIndexTuple =
+    std::is_same_v<std::tuple_element_t<0, std::remove_cvref_t<T>>,
+                   SlottedIndex> &&
+    std::is_same_v<std::tuple_element_t<1, std::remove_cvref_t<T>>,
+                   SlottedIndex>;
+template <typename T>
+concept IndexTuple =
+    std::is_same_v<std::tuple_element_t<0, std::remove_cvref_t<T>>, Index> &&
+    std::is_same_v<std::tuple_element_t<1, std::remove_cvref_t<T>>, Index>;
+
+template <typename T>
+concept SlottedIndexGroup = SlottedIndexContainer<T> || SlottedIndexTuple<T>;
+
+template <typename T>
+concept IndexGroup = IndexContainer<T> || IndexTuple<T>;
+
+template <typename T>
+concept SlottedIndexGroupContainer =
+    std::ranges::range<T> && SlottedIndexGroup<std::ranges::range_value_t<T>>;
+
+template <typename T>
+concept IndexGroupContainer =
+    std::ranges::range<T> && IndexGroup<std::ranges::range_value_t<T>>;
+
+/// @param group A group of indices with slot information
+/// @returns The bra index of the provided group
+///
+///@note This function assumes that there are no duplicate slots
+///
+/// @tparam Group The type of the container used to represent the index group.
+/// May be a std::pair<SlottedIndex, SlottedIndex> or a container that retains
+/// the order of its elements based on how they have been inserted
+/// (vector-like).
+template <SlottedIndexGroup Group>
+decltype(auto) get_bra_idx(Group&& group) {
+  if constexpr (SlottedIndexTuple<Group>) {
+    SEQUANT_ASSERT(std::get<0>(group).slot_type() == SlotType::Bra ||
+                   std::get<1>(group).slot_type() == SlotType::Bra);
+    return std::get<0>(group).slot_type() == SlotType::Bra
+               ? std::get<0>(group).index()
+               : std::get<1>(group).index();
   } else {
     using std::begin;
-    using std::size;
-    SEQUANT_ASSERT(size(container) == 2);
-    return *begin(container);
+    using std::end;
+    auto it =
+        std::find_if(begin(group), end(group), [](const SlottedIndex& idx) {
+          return idx.slot_type() == SlotType::Bra;
+        });
+    SEQUANT_ASSERT(it != end(group));
+    return it->index();
   }
 }
 
-/// @param container An index group expected to represent a pair of indices
-/// @returns The ket index of the provided pair
+/// @param group A group of indices assumed to be in canonical ordering
+/// @returns The bra index of the provided group
 ///
-/// @tparam T The type of the container used to represent the index pair. May
-/// be a std::pair<Index, Index> or a container that retains the order of its
-/// elements based on how they have been inserted.
-template <typename T>
-auto get_ket_idx(T&& container)
-    -> std::conditional_t<std::is_const_v<std::remove_reference_t<T>>,
-                          const Index&, Index&> {
-  if constexpr (std::is_same_v<std::remove_cvref_t<T>,
-                               std::pair<Index, Index>>) {
-    return container.second;
+/// @tparam Group The type of the container used to represent the index group.
+/// May be a std::pair<Index, Index> or a container that retains
+/// the order of its elements based on how they have been inserted
+/// (vector-like).
+template <IndexGroup Group>
+decltype(auto) get_bra_idx(Group&& group) {
+  if constexpr (IndexTuple<Group>) {
+    return std::get<0>(group);
   } else {
     using std::begin;
-    using std::size;
-    SEQUANT_ASSERT(size(container) == 2);
-    auto it = begin(container);
-    std::advance(it, 1);
+    using std::end;
+    auto it = begin(group);
+    SEQUANT_ASSERT(it != end(group));
     return *it;
   }
+}
+
+/// @param group A group of indices with slot information
+/// @returns The ket index of the provided group
+///
+///@note This function assumes that there are no duplicate slots
+///
+/// @tparam Group The type of the container used to represent the index group.
+/// May be a std::pair<SlottedIndex, SlottedIndex> or a container that retains
+/// the order of its elements based on how they have been inserted
+/// (vector-like).
+template <SlottedIndexGroup Group>
+decltype(auto) get_ket_idx(Group&& group) {
+  if constexpr (SlottedIndexTuple<Group>) {
+    SEQUANT_ASSERT(std::get<0>(group).slot_type() == SlotType::Ket ||
+                   std::get<1>(group).slot_type() == SlotType::Ket);
+    return std::get<1>(group).slot_type() == SlotType::Ket
+               ? std::get<1>(group).index()
+               : std::get<0>(group).index();
+  } else {
+    // Note: We're using reverse iteration order as typically, we expect the ket
+    // slot to be the second of two
+    using std::rbegin;
+    using std::rend;
+    auto it =
+        std::find_if(rbegin(group), rend(group), [](const SlottedIndex& idx) {
+          return idx.slot_type() == SlotType::Ket;
+        });
+    SEQUANT_ASSERT(it != rend(group));
+    return it->index();
+  }
+}
+
+/// @param group A group of indices assumed to be in canonical ordering
+/// @returns The ket index of the provided group
+///
+/// @tparam Group The type of the container used to represent the index group.
+/// May be a std::pair<Index, Index> or a container that retains
+/// the order of its elements based on how they have been inserted
+/// (vector-like).
+template <IndexGroup Group>
+decltype(auto) get_ket_idx(Group&& group) {
+  if constexpr (IndexTuple<Group>) {
+    return std::get<1>(group);
+  } else {
+    using std::begin;
+    using std::end;
+    auto it = begin(group);
+    SEQUANT_ASSERT(it != end(group));
+    std::advance(it, 1);
+    SEQUANT_ASSERT(it != end(group));
+    return *it;
+  }
+}
+
+/// Produces a view of plain Index objects from a range of SlottedIndex objects
+///
+/// @note This function will bring indices in the group into canonical order
+/// (based on slot type) or assert that they already are in canonical order,
+/// if group is const.
+decltype(auto) as_index_group_view(SlottedIndexGroup auto&& group) {
+  static_assert(static_cast<int>(SlotType::Bra) == 0);
+  static_assert(static_cast<int>(SlotType::Ket) == 1);
+
+  // We have to ensure a unique order of indices if we're getting rid of the
+  // SlotType tag
+  if constexpr (!meta::is_immutable_v<decltype(group)>) {
+    std::ranges::sort(group, std::less{}, &SlottedIndex::slot_type);
+  } else {
+    SEQUANT_ASSERT(
+        std::ranges::is_sorted(group, std::less{}, &SlottedIndex::slot_type));
+  }
+
+  return group | std::ranges::views::transform(
+                     [](auto&& idx) -> decltype(auto) { return idx.index(); });
+}
+
+/// Produces a view of a view of plain Index objects from a range of a range of
+/// SlottedIndex objects
+///
+/// @note This function transforms all elements via as_index_group, which may
+/// change order of indices or assert on the order being as expected.
+///
+/// @sa as_index_group
+decltype(auto) as_view_of_index_groups(
+    SlottedIndexGroupContainer auto&& groups) {
+  return groups |
+         std::ranges::views::transform([](auto&& group) -> decltype(auto) {
+           return as_index_group_view(group);
+         });
 }
 
 ///

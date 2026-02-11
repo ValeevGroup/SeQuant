@@ -10,12 +10,11 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expressions/expr_algorithms.hpp>
 #include <SeQuant/core/index.hpp>
-#include <SeQuant/core/latex.hpp>
+#include <SeQuant/core/io/latex/latex.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
 #include <cstdlib>
 #include <memory>
-#include <ostream>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -26,31 +25,6 @@
 #include <boost/core/demangle.hpp>
 
 namespace sequant {
-
-/// index slot types
-///
-/// @note This does not include slot bundles, like braket, etc.
-enum class SlotType { Bra = 0, Ket = 1, Aux = 2, Proto = 3 };
-
-template <typename CharT, typename Traits>
-std::basic_ostream<CharT, Traits>& operator<<(
-    std::basic_ostream<CharT, Traits>& stream, SlotType origin) {
-  switch (origin) {
-    case SlotType::Bra:
-      stream << "Bra";
-      break;
-    case SlotType::Ket:
-      stream << "Ket";
-      break;
-    case SlotType::Aux:
-      stream << "Aux";
-      break;
-    case SlotType::Proto:
-      stream << "Proto";
-      break;
-  }
-  return stream;
-}
 
 class TensorCanonicalizer;
 
@@ -415,7 +389,6 @@ inline auto column_symmetry(const AbstractTensor& t) {
 inline auto color(const AbstractTensor& t) { return t._color(); }
 inline auto is_cnumber(const AbstractTensor& t) { return t._is_cnumber(); }
 inline auto label(const AbstractTensor& t) { return t._label(); }
-inline auto to_latex(const AbstractTensor& t) { return t._to_latex(); }
 
 /// produces LaTeX representation typeset using <a
 /// href="https://ctan.org/pkg/tensor?lang=en">tensor package</a>
@@ -455,7 +428,7 @@ inline std::wstring to_latex_tensor(
            unpaired_type == SlotType::Bra) ||
           (bkt == BraKetTypesetting::KetSuper &&
            unpaired_type == SlotType::Ket)) {
-        result += to_latex(unpaired_indices[col]);
+        result += io::latex::to_string(unpaired_indices[col]);
       } else
         result += L"{}";
       result += L"_";
@@ -463,7 +436,7 @@ inline std::wstring to_latex_tensor(
            unpaired_type == SlotType::Bra) ||
           (bkt == BraKetTypesetting::KetSub &&
            unpaired_type == SlotType::Ket)) {
-        result += to_latex(unpaired_indices[col]);
+        result += io::latex::to_string(unpaired_indices[col]);
       } else
         result += L"{}";
     }
@@ -477,11 +450,13 @@ inline std::wstring to_latex_tensor(
   const auto paired_fence = col + num_paired;
   for (; col != paired_fence; ++col, ++paired_bra, ++paired_ket) {
     result += L"*^";
-    result += (bkt == BraKetTypesetting::BraSuper) ? to_latex(bra[paired_bra])
-                                                   : to_latex(ket[paired_ket]);
+    result += (bkt == BraKetTypesetting::BraSuper)
+                  ? io::latex::to_string(bra[paired_bra])
+                  : io::latex::to_string(ket[paired_ket]);
     result += L"_";
-    result += (bkt == BraKetTypesetting::BraSub) ? to_latex(bra[paired_bra])
-                                                 : to_latex(ket[paired_ket]);
+    result += (bkt == BraKetTypesetting::BraSub)
+                  ? io::latex::to_string(bra[paired_bra])
+                  : io::latex::to_string(ket[paired_ket]);
   }
 
   // loop over right-aligned unpaired slots, if left_align==true
@@ -495,7 +470,7 @@ inline std::wstring to_latex_tensor(
            unpaired_type == SlotType::Bra) ||
           (bkt == BraKetTypesetting::KetSuper &&
            unpaired_type == SlotType::Ket)) {
-        result += to_latex(unpaired_indices[col]);
+        result += io::latex::to_string(unpaired_indices[col]);
       } else
         result += L"{}";
       result += L"_";
@@ -503,7 +478,7 @@ inline std::wstring to_latex_tensor(
            unpaired_type == SlotType::Bra) ||
           (bkt == BraKetTypesetting::KetSub &&
            unpaired_type == SlotType::Ket)) {
-        result += to_latex(unpaired_indices[col]);
+        result += io::latex::to_string(unpaired_indices[col]);
       } else
         result += L"{}";
     }
@@ -515,7 +490,7 @@ inline std::wstring to_latex_tensor(
     result += L"[";
     const auto aux_rank = aux.size();
     for (std::size_t i = 0; i < aux_rank; ++i) {
-      result += sequant::to_latex(aux[i]);
+      result += io::latex::to_string(aux[i]);
       if (i + 1 < aux_rank) {
         result += L",";
       }
@@ -552,28 +527,21 @@ inline std::wstring to_latex_tensor(
 ///         colors are, for now, always assumed to commute)
 ///         - @c label(t) is a valid expression and its return is convertible to
 ///         a std::wstring;
-///         - @c to_latex(t) is a valid expression and its return is convertible
-///         to a std::wstring.
 template <typename T>
-struct is_tensor
-    : std::bool_constant<
-          std::is_invocable_v<decltype(braket), T> &&
-          std::is_invocable_v<decltype(braketaux), T> &&
-          std::is_invocable_v<decltype(bra_rank), T> &&
-          std::is_invocable_v<decltype(ket_rank), T> &&
-          std::is_invocable_v<decltype(aux_rank), T> &&
-          std::is_invocable_v<decltype(symmetry), T> &&
-          std::is_invocable_v<decltype(braket_symmetry), T> &&
-          std::is_invocable_v<decltype(column_symmetry), T> &&
-          std::is_invocable_v<decltype(color), T> &&
-          std::is_invocable_v<decltype(is_cnumber), T> &&
-          std::is_invocable_v<decltype(label), T> &&
-          std::is_invocable_v<
-              decltype(static_cast<std::wstring (*)(const T&)>(to_latex)), T>> {
+concept is_tensor = requires(const T& obj) {
+  { braket(obj) } -> std::ranges::range;
+  { braketaux(obj) } -> std::ranges::range;
+  { bra_rank(obj) } -> std::convertible_to<std::size_t>;
+  { ket_rank(obj) } -> std::convertible_to<std::size_t>;
+  { aux_rank(obj) } -> std::convertible_to<std::size_t>;
+  { symmetry(obj) } -> std::convertible_to<Symmetry>;
+  { braket_symmetry(obj) } -> std::convertible_to<BraKetSymmetry>;
+  { column_symmetry(obj) } -> std::convertible_to<ColumnSymmetry>;
+  { color(obj) } -> std::convertible_to<std::size_t>;
+  { is_cnumber(obj) } -> std::convertible_to<bool>;
+  { label(obj) } -> std::constructible_from<std::wstring>;
 };
-template <typename T>
-constexpr bool is_tensor_v = is_tensor<T>::value;
-static_assert(is_tensor_v<AbstractTensor>,
+static_assert(is_tensor<AbstractTensor>,
               "The AbstractTensor class does not fulfill the requirements of "
               "the Tensor interface");
 

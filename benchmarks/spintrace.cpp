@@ -1,7 +1,7 @@
 #include <benchmark/benchmark.h>
 
 #include <SeQuant/core/expr.hpp>
-#include <SeQuant/core/parse.hpp>
+#include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/domain/mbpt/spin.hpp>
 
 using namespace sequant;
@@ -11,9 +11,9 @@ static constexpr std::size_t nInputs = 2;
 static ExprPtr get_expression(std::size_t i) {
   switch (i) {
     case 1:
-      return parse_expr(L"2 t{i1;a1<i1>} F{a1<i1>;i1}");
+      return deserialize<ExprPtr>(L"2 t{i1;a1<i1>} F{a1<i1>;i1}");
     case 2:
-      return parse_expr(
+      return deserialize<ExprPtr>(
           L"f{i1;a1} t{a1;i1} + 1/2 g{i1,i2;a1,a2}:A t{a1;i1} t{a2;i2} "
           L"+ 1/4 g{i1,i2;a1,a2}:A t{a1,a2;i1,i2}:A");
   }

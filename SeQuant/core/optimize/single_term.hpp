@@ -1,39 +1,18 @@
-#ifndef SEQUANT_OPTIMIZE_OPTIMIZE_HPP
-#define SEQUANT_OPTIMIZE_OPTIMIZE_HPP
+#ifndef SEQUANT_CORE_OPTIMIZE_SINGLE_TERM_HPP
+#define SEQUANT_CORE_OPTIMIZE_SINGLE_TERM_HPP
 
-#include <cmath>
-#include <cstddef>
-#include <functional>
-#include <iterator>
-#include <limits>
-#include <memory>
-#include <stdexcept>
-#include <type_traits>
-#include <utility>
-
-#include <SeQuant/core/algorithm.hpp>
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
-#include <SeQuant/core/index.hpp>
 #include <SeQuant/core/tensor_network.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 
+#include <range/v3/view.hpp>
+
 #include <bit>
+#include <type_traits>
 
-namespace sequant {
-
-/// Optimize an expression assuming the number of virtual orbitals
-/// greater than the number of occupied orbitals.
-
-class Tensor;
-
-/// \param expr Expression to be optimized.
-/// \return EvalNode object.
-// EvalNode optimize(ExprPtr const& expr);
-
-namespace opt {
-
+namespace sequant::opt {
 ///
 /// \param idxsz An invocable that returns size_t for Index argument.
 /// \param idxs Index objects.
@@ -41,6 +20,7 @@ namespace opt {
 ///
 template <typename F>
 concept has_index_extent = std::is_invocable_r_v<size_t, F, Index const&>;
+namespace detail {
 
 auto constexpr flops_counter(has_index_extent auto&& ixex) {
   return [ixex](meta::range_of<Index> auto const& lhs,
@@ -152,18 +132,7 @@ EvalSequence single_term_opt(TensorNetwork const& network, IdxToSz&& idxsz) {
   return single_term_opt_impl(network, tidxs, cost_fn);
 }
 
-///
-/// Omit the first factor from the top level product from given expression.
-/// Intended to drop "Â" and "Ŝ" tensors from CC amplitudes as a preparatory
-/// step for evaluation of the amplitudes.
-///
-ExprPtr tail_factor(ExprPtr const& expr) noexcept;
-
-///
-///
-/// Pulls out scalar to the top level from a nested product.
-/// If @c expr is not Product, does nothing.
-void pull_scalar(sequant::ExprPtr expr) noexcept;
+}  // namespace detail
 
 ///
 /// \param prod  Product to be optimized.
@@ -182,8 +151,8 @@ ExprPtr single_term_opt(Product const& prod, IdxToSz&& idxsz) {
                                prod.factors().end(), Product::Flatten::No});
   auto const tensors =
       prod | filter(&ExprPtr::template is<Tensor>) | ranges::to_vector;
-  auto seq =
-      single_term_opt(TensorNetwork{tensors}, std::forward<IdxToSz>(idxsz));
+  auto seq = detail::single_term_opt(TensorNetwork{tensors},
+                                     std::forward<IdxToSz>(idxsz));
   auto result = container::svector<ExprPtr>{};
   for (auto i : seq)
     if (i == -1) {
@@ -206,117 +175,6 @@ ExprPtr single_term_opt(Product const& prod, IdxToSz&& idxsz) {
   return *result.rbegin();
 }
 
-///
-/// \brief Create clusters out of positions of terms in a sum that share common
-///        intermediates.
-///
-/// \param expr A Sum to find clusters in.
-/// \return A vector of clusters (vectors of position index of terms
-///         in \c expr).
-///
-container::vector<container::vector<size_t>> clusters(Sum const& expr);
+}  // namespace sequant::opt
 
-///
-/// \brief Reorder summands so that terms having common intermediates appear
-///        closer.
-///
-/// \param sum Expression to reorder.
-/// \return Expression with summands re-ordered.
-///
-Sum reorder(Sum const& sum);
-
-///
-/// \param expr  Expression to be optimized.
-/// \param idxsz An invocable object that maps an Index object to size.
-/// \param reorder_sum If true, the summands are reordered so that terms with
-///                    common sub-expressions appear closer to each other.
-/// \return Optimized expression for lower evaluation cost.
-ExprPtr optimize(ExprPtr const& expr, has_index_extent auto const& idx2size,
-                 bool reorder_sum) {
-  using ranges::views::transform;
-  if (expr->is<Product>()) {
-    if (ranges::all_of(*expr, [](auto&& x) {
-          return x->template is<Tensor>() || x->template is<Variable>();
-        }))
-      return opt::single_term_opt(expr->as<Product>(), idx2size);
-    else {
-      auto const& prod = expr->as<Product>();
-
-      container::svector<ExprPtr> non_tensors(prod.size());
-      container::svector<ExprPtr> new_factors;
-
-      for (auto i = 0; i < prod.size(); ++i) {
-        auto&& f = prod.factor(i);
-        if (f.is<Tensor>() || f.is<Variable>())
-          new_factors.emplace_back(f);
-        else {
-          non_tensors[i] = f;
-          auto target_idxs = get_unique_indices(f);
-          new_factors.emplace_back(
-              ex<Tensor>(L"I_" + std::to_wstring(i), bra(target_idxs.bra),
-                         ket(target_idxs.ket), aux(target_idxs.aux)));
-        }
-      }
-
-      auto result = opt::single_term_opt(
-          Product(prod.scalar(), new_factors, Product::Flatten::No), idx2size);
-
-      auto replacer = [&non_tensors](ExprPtr& out) {
-        if (!out->is<Tensor>()) return;
-        auto const& tnsr = out->as<Tensor>();
-        auto&& label = tnsr.label();
-        if (label.at(0) == L'I' && label.at(1) == L'_') {
-          size_t suffix = std::stoi(std::wstring(label.data() + 2));
-          out = non_tensors[suffix].clone();
-        }
-      };
-
-      result->visit(replacer, /* atoms_only = */ true);
-      return result;
-    }
-  } else if (expr->is<Sum>()) {
-    auto smands = *expr | transform([&idx2size](auto&& s) {
-      return optimize(s, idx2size, /* reorder_sum= */ false);
-    }) | ranges::to_vector;
-    auto sum = Sum{smands.begin(), smands.end()};
-    return reorder_sum ? ex<Sum>(opt::reorder(sum)) : ex<Sum>(std::move(sum));
-  } else
-    return expr->clone();
-}
-
-}  // namespace opt
-
-///
-/// Optimize the expression using IndexSpace::aproximate_size() for reference
-/// index extent.
-///
-/// \param expr  Expression to be optimized.
-/// \param reorder_sum If true, the summands are reordered so that terms with
-///                    common sub-expressions appear closer to each other.
-///                    True by default.
-/// \return Optimized expression for lower evaluation cost.
-ExprPtr optimize(ExprPtr const& expr, bool reorder_sum = true);
-
-/// Optimize the expression using IndexSpace::aproximate_size() for reference
-/// index extent.
-///
-/// \param expr  Expression to be optimized.
-/// \param reorder_sum If true, the summands are reordered so that terms with
-///                    common sub-expressions appear closer to each other.
-///                    True by default.
-/// \return Optimized expression for lower evaluation cost.
-ResultExpr& optimize(ResultExpr& expr, bool reorder_sum = true);
-
-/// Optimize the expression using IndexSpace::aproximate_size() for reference
-/// index extent.
-///
-/// \param expr  Expression to be optimized.
-/// \param reorder_sum If true, the summands are reordered so that terms with
-///                    common sub-expressions appear closer to each other.
-///                    True by default.
-/// \return Optimized expression for lower evaluation cost.
-[[nodiscard]] ResultExpr& optimize(ResultExpr&& expr, bool reorder_sum = true);
-
-}  // namespace sequant
-
-#endif  // SEQUANT_OPTIMIZE_OPTIMIZE_HPP
+#endif  // SEQUANT_CORE_OPTIMIZE_SINGLE_TERM_HPP

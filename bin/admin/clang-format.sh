@@ -79,10 +79,16 @@ if [[ $have_supported_clang_format_version -eq 0 ]]; then
       args="$args $i"
       continue
     fi
+    if [[ ! -e "$i" ]]; then
+        # Skip non-existent files/directories
+        continue
+    fi
 
     args="$args /hostHOME/$(realpath --relative-to="$mount_path" $i )"
   done
-  "$path_to_docker" run --platform linux/x86_64 -u $(id -u $USER):$(id -g $USER) -v $mount_path:/hostHOME xianpengshen/clang-tools:$preferred_clang_format_version clang-format $args
+  if [[ -n "$args" ]]; then
+      "$path_to_docker" run --platform linux/x86_64 -u $(id -u $USER):$(id -g $USER) -v $mount_path:/hostHOME xianpengshen/clang-tools:$preferred_clang_format_version clang-format $args
+  fi
 else
   #echo "found $path_to_clang_format with required version $clang_format_version"
   "$path_to_clang_format" $*

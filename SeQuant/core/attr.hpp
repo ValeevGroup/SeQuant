@@ -9,6 +9,7 @@
 
 #include <cassert>
 #include <cstdlib>
+#include <ostream>
 #include <string>
 
 namespace sequant {
@@ -36,22 +37,6 @@ enum class BraKetSymmetry { Symm, Conjugate, Nonsymm };
 /// describes type of single-particle basis
 enum class SPBasis { Spinor, Spinfree };
 
-inline std::wstring to_wolfram(const Symmetry& symmetry) {
-  std::wstring result;
-  switch (symmetry) {
-    case Symmetry::Symm:
-      result = L"indexSymm[1]";
-      break;
-    case Symmetry::Antisymm:
-      result = L"indexSymm[-1]";
-      break;
-    case Symmetry::Nonsymm:
-      result = L"indexSymm[0]";
-      break;
-  }
-  return result;
-}
-
 inline std::wstring to_wstring(Symmetry sym) {
   switch (sym) {
     case Symmetry::Symm:
@@ -70,13 +55,34 @@ enum class BraKetPos {
   Ket,
 };
 
-inline std::wstring to_wolfram(BraKetPos a) {
-  switch (a) {
-    case BraKetPos::Bra:
-      return L"indexType[bra]";
-    case BraKetPos::Ket:
-      return L"indexType[ket]";
+/// index slot types
+///
+/// @note This does not include slot bundles, like braket, etc.
+enum class SlotType {
+  Bra,
+  Ket,
+  Aux,
+  Proto,
+};
+
+template <typename CharT, typename Traits>
+std::basic_ostream<CharT, Traits>& operator<<(
+    std::basic_ostream<CharT, Traits>& stream, SlotType origin) {
+  switch (origin) {
+    case SlotType::Bra:
+      stream << "Bra";
+      break;
+    case SlotType::Ket:
+      stream << "Ket";
+      break;
+    case SlotType::Aux:
+      stream << "Aux";
+      break;
+    case SlotType::Proto:
+      stream << "Proto";
+      break;
   }
+  return stream;
 }
 
 enum class Statistics {
@@ -90,11 +96,6 @@ enum class Action { Create, Annihilate };
 /// applies (Hermitian) adjoint to @c action
 inline Action adjoint(Action action) {
   return action == Action::Create ? Action::Annihilate : Action::Create;
-}
-
-inline std::wstring to_wolfram(Action a) {
-  using namespace std::literals;
-  return L"indexType["s + (a == Action::Create ? L"cre" : L"ann") + L"]";
 }
 
 enum class Vacuum { Physical, SingleProduct, MultiProduct };

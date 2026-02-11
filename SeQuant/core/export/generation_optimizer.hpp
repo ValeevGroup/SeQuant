@@ -4,7 +4,6 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/export/generator.hpp>
 #include <SeQuant/core/expr.hpp>
-#include <SeQuant/core/parse.hpp>
 #include <SeQuant/core/utility/macros.hpp>
 #include <SeQuant/core/utility/tensor.hpp>
 

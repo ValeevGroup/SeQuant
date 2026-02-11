@@ -1,5 +1,6 @@
 #include <SeQuant/core/context.hpp>
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/op.hpp>
 #include <SeQuant/domain/mbpt/context.hpp>
 #include <SeQuant/domain/mbpt/convention.hpp>

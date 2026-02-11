@@ -1,10 +1,14 @@
 #include <SeQuant/domain/mbpt/biorthogonalization.hpp>
+#include <SeQuant/domain/mbpt/detail/concepts.hpp>
+#include <SeQuant/domain/mbpt/spin.hpp>
 
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/expr.hpp>
 #include <SeQuant/core/index.hpp>
 #include <SeQuant/core/math.hpp>
 #include <SeQuant/core/reserved.hpp>
+#include <SeQuant/core/tensor_canonicalizer.hpp>
+#include <SeQuant/core/tensor_network.hpp>
 #include <SeQuant/core/utility/expr.hpp>
 #include <SeQuant/core/utility/indices.hpp>
 #include <SeQuant/core/utility/macros.hpp>
@@ -19,7 +23,7 @@
 
 #include <algorithm>
 
-namespace sequant {
+namespace sequant::mbpt {
 
 template <typename T>
 struct compare_first_less {
@@ -492,12 +496,12 @@ void biorthogonal_transform(container::svector<ResultExpr>& result_exprs,
   const ComputedMatrix* computed_coefficients = nullptr;
 
   if (n_particles <= max_rank_hardcoded_biorthogonalizer_matrix) {
-    hardcoded_coefficients = &detail::memoize(
+    hardcoded_coefficients = &sequant::detail::memoize(
         hardcoded_cache, cache_mutex, cache_cv, key,
         [&] { return hardcoded_biorthogonalizer_matrix(n_particles); });
   } else {
-    computed_coefficients =
-        &detail::memoize(computed_cache, cache_mutex, cache_cv, key, [&] {
+    computed_coefficients = &sequant::detail::memoize(
+        computed_cache, cache_mutex, cache_cv, key, [&] {
           return compute_biorthogonalizer_matrix(n_particles, threshold);
         });
     SEQUANT_ASSERT(num_perms == computed_coefficients->rows());
@@ -528,11 +532,10 @@ void biorthogonal_transform(container::svector<ResultExpr>& result_exprs,
   }
 }
 
-ExprPtr biorthogonal_transform(
-    const sequant::ExprPtr& expr,
-    const container::svector<container::svector<sequant::Index>>&
-        ext_index_groups,
-    const double threshold) {
+template <detail::index_group_range IdxGroups>
+ExprPtr biorthogonal_transform_impl(const sequant::ExprPtr& expr,
+                                    IdxGroups&& ext_index_groups,
+                                    const double threshold) {
   ResultExpr res(
       bra(ext_index_groups | ranges::views::transform([](const auto& pair) {
             return get_ket_idx(pair);
@@ -548,6 +551,137 @@ ExprPtr biorthogonal_transform(
   biorthogonal_transform(res, threshold);
 
   return res.expression();
+}
+
+ExprPtr biorthogonal_transform(
+    const sequant::ExprPtr& expr,
+    const container::svector<container::svector<sequant::SlottedIndex>>&
+        ext_index_groups,
+    const double threshold) {
+  return biorthogonal_transform_impl(
+      expr, as_view_of_index_groups(ext_index_groups), threshold);
+}
+
+ExprPtr biorthogonal_transform(
+    const sequant::ExprPtr& expr,
+    const container::svector<container::svector<sequant::Index>>&
+        ext_index_groups,
+    const double threshold) {
+  return biorthogonal_transform_impl(expr, ext_index_groups, threshold);
+}
+
+template <detail::index_group_range IdxGroups>
+ExprPtr WK_biorthogonalization_filter_impl(ExprPtr expr, IdxGroups&& ext_idxs) {
+  if (!expr->is<Sum>()) return expr;
+  if (ext_idxs.size() <= 2) return expr;  // always skip R1 and R2
+
+  // hash filtering logic for R > 2
+  container::map<std::size_t, container::vector<ExprPtr>> largest_coeff_terms;
+
+  for (const auto& term : *expr) {
+    if (!term->is<Product>()) continue;
+
+    auto product = term.as_shared_ptr<Product>();
+    auto scalar = product->scalar();
+
+    sequant::TensorNetwork tn(*product);
+    auto hash =
+        tn.canonicalize_slots(TensorCanonicalizer::cardinal_tensor_labels())
+            .hash_value();
+
+    auto it = largest_coeff_terms.find(hash);
+    if (it == largest_coeff_terms.end()) {
+      largest_coeff_terms[hash] = {term};
+    } else {
+      if (!it->second.empty()) {
+        auto existing_scalar = it->second[0]->as<Product>().scalar();
+        auto existing_abs = abs(existing_scalar);
+        auto current_abs = abs(scalar);
+
+        if (current_abs > existing_abs) {
+          it->second.clear();
+          it->second.push_back(term);
+        } else if (current_abs == existing_abs) {
+          it->second.push_back(term);
+        }
+      }
+    }
+  }
+
+  Sum filtered;
+  for (const auto& [_, terms] : largest_coeff_terms) {
+    for (const auto& t : terms) {
+      filtered.append(t);
+    }
+  }
+  auto result = ex<Sum>(filtered);
+
+  return result;
+}
+
+ExprPtr WK_biorthogonalization_filter(
+    ExprPtr expr,
+    const container::svector<container::svector<SlottedIndex>>& ext_idxs) {
+  return WK_biorthogonalization_filter_impl(expr,
+                                            as_view_of_index_groups(ext_idxs));
+}
+ExprPtr WK_biorthogonalization_filter(
+    ExprPtr expr,
+    const container::svector<container::svector<Index>>& ext_idxs) {
+  return WK_biorthogonalization_filter_impl(expr, ext_idxs);
+}
+
+template <detail::index_group_range IdxGroups>
+ExprPtr biorthogonal_transform_pre_nnsproject_impl(
+    ExprPtr& expr, IdxGroups&& ext_idxs, bool factor_out_nns_projector) {
+  using ranges::views::transform;
+
+  // Remove leading S operator if present
+  for (auto& term : *expr) {
+    if (term->is<Product>())
+      term =
+          remove_tensor(term.as_shared_ptr<Product>(), reserved::symm_label());
+  }
+
+  auto bt = biorthogonal_transform_impl(
+      expr, ext_idxs, default_biorthogonalizer_pseudoinverse_threshold);
+
+  auto bixs = ext_idxs | transform([](auto&& vec) { return get_bra_idx(vec); });
+  auto kixs = ext_idxs | transform([](auto&& vec) { return get_ket_idx(vec); });
+  ExprPtr S_tensor =
+      ex<Tensor>(Tensor{reserved::symm_label(), bra(kixs), ket(bixs)});
+
+  if (factor_out_nns_projector) {
+    if (ext_idxs.size() > 1) {
+      bt = S_tensor * bt;
+    }
+    simplify(bt);
+
+    bt = S_maps(bt);
+    canonicalize(bt);
+    bt = WK_biorthogonalization_filter_impl(bt, ext_idxs);
+  }
+
+  bt = S_tensor * bt;
+  simplify(bt);
+
+  return bt;
+}
+
+ExprPtr biorthogonal_transform_pre_nnsproject(
+    ExprPtr& expr,
+    const container::svector<container::svector<SlottedIndex>>& ext_idxs,
+    bool factor_out_nns_projector) {
+  return biorthogonal_transform_pre_nnsproject_impl(
+      expr, as_view_of_index_groups(ext_idxs), factor_out_nns_projector);
+}
+
+ExprPtr biorthogonal_transform_pre_nnsproject(
+    ExprPtr& expr,
+    const container::svector<container::svector<Index>>& ext_idxs,
+    bool factor_out_nns_projector) {
+  return biorthogonal_transform_pre_nnsproject_impl(expr, ext_idxs,
+                                                    factor_out_nns_projector);
 }
 
 namespace detail {
@@ -582,4 +716,4 @@ container::svector<size_t> compute_permuted_indices(
 
 }  // namespace detail
 
-}  // namespace sequant
+}  // namespace sequant::mbpt

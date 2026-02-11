@@ -931,11 +931,11 @@ class NormalOperator : public Operator<S>,
 };
 
 static_assert(
-    is_tensor_v<NormalOperator<Statistics::FermiDirac>>,
+    is_tensor<NormalOperator<Statistics::FermiDirac>>,
     "The NormalOperator<Statistics::FermiDirac> class does not fulfill the "
     "requirements of the Tensor interface");
 static_assert(
-    is_tensor_v<NormalOperator<Statistics::BoseEinstein>>,
+    is_tensor<NormalOperator<Statistics::BoseEinstein>>,
     "The NormalOperator<Statistics::BoseEinstein> class does not fulfill the "
     "requirements of the Tensor interface");
 
@@ -1098,16 +1098,6 @@ inline ExprPtr fcrex(Index i, Attr &&...attr) {
 template <typename... Attr>
 inline ExprPtr fannx(Index i, Attr &&...attr) {
   return ex<FNOperator>(cre(), ann({fann(i, std::forward<Attr>(attr)...)}));
-}
-
-template <Statistics S>
-std::wstring to_latex(const NormalOperator<S> &op) {
-  return op.to_latex();
-}
-
-template <Statistics S>
-std::wstring to_latex(const NormalOperatorSequence<S> &opseq) {
-  return opseq.to_latex();
 }
 
 namespace detail {

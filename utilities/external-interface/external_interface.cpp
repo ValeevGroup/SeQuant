@@ -10,8 +10,8 @@
 #include <SeQuant/core/export/generation_optimizer.hpp>
 #include <SeQuant/core/export/itf.hpp>
 #include <SeQuant/core/expr.hpp>
+#include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/optimize/common_subexpression_elimination.hpp>
-#include <SeQuant/core/parse.hpp>
 #include <SeQuant/core/runtime.hpp>
 #include <SeQuant/core/tensor_canonicalizer.hpp>
 #include <SeQuant/core/utility/expr.hpp>
@@ -218,8 +218,8 @@ void generateITF(const json &blocks, std::string_view out_file,
       std::ifstream in(input_file);
       const std::string input(std::istreambuf_iterator<char>(in), {});
 
-      sequant::ResultExpr result =
-          sequant::parse_result_expr(toUtf16(input), Symmetry::Antisymm);
+      sequant::ResultExpr result = sequant::deserialize<sequant::ResultExpr>(
+          input, {.def_perm_symm = Symmetry::Antisymm});
 
       if (current_result.contains("name")) {
         result.set_label(toUtf16(current_result.at("name").get<std::string>()));
@@ -227,11 +227,12 @@ void generateITF(const json &blocks, std::string_view out_file,
 
       if (current_result.contains("replace")) {
         for (const nlohmann::json &sub : current_result.at("replace")) {
-          ExprPtr target = parse_expr(
-              toUtf16(sub.at("target").get<std::string>()), Symmetry::Antisymm);
+          ExprPtr target =
+              deserialize<ExprPtr>(sub.at("target").get<std::string>(),
+                                   {.def_perm_symm = Symmetry::Antisymm});
           ExprPtr replacement =
-              parse_expr(toUtf16(sub.at("replacement").get<std::string>()),
-                         Symmetry::Antisymm);
+              deserialize<ExprPtr>(sub.at("replacement").get<std::string>(),
+                                   {.def_perm_symm = Symmetry::Antisymm});
 
           std::string equality_method =
               sub.value("tensor_equality", "identity");
@@ -340,7 +341,7 @@ void generateITF(const json &blocks, std::string_view out_file,
 
     if (current_block.value("subexpression_elimination",
                             defaults.subexpression_elimination)) {
-      eliminate_common_subexpressions(results, [](const auto &expr) {
+      opt::eliminate_common_subexpressions(results, [](const auto &expr) {
         // Note: the lambda is needed to make the callable usable for
         // ExprPtr as well as ResultExpr objects
         return to_export_tree(expr);

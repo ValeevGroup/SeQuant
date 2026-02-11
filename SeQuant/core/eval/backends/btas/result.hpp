@@ -210,7 +210,6 @@ class ResultTensorBTAS final : public Result {
 
  private:
   [[nodiscard]] std::size_t size_in_bytes() const final {
-    static_assert(std::is_arithmetic_v<typename T::value_type>);
     const auto& tensor = get<T>();
     // only count data
     return tensor.range().volume() * sizeof(T);

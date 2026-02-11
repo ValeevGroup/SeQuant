@@ -1,4 +1,5 @@
 #include <SeQuant/core/context.hpp>
+#include <SeQuant/core/io/shorthands.hpp>
 #include <SeQuant/core/wick.hpp>
 
 int main() {

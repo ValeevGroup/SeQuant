@@ -1,7 +1,7 @@
 set(TEST_CASES
     "antisymmetrizer.cpp"
 )
-if (NOT SEQUANT_SKIP_LONG_TESTS)
+if (NOT SEQUANT_INTERNAL_SKIP_LONG_TESTS)
     list(APPEND TEST_CASES
         # Single-Reference Coupled-Cluster equation generation (spin-orbital and spin-free)
         "srcc.cpp ->  |3 t std so|3 t csv so|3 lambda std so|3 lambda csv so|2 t std sf|2 t csv sf|2 lambda std sf|2 lambda csv sf"
@@ -44,7 +44,7 @@ foreach(current IN LISTS TEST_CASES)
     add_executable(${test_name} ${BUILD_BY_DEFAULT} ${test_source})
     target_link_libraries(${test_name} PRIVATE SeQuant)
 
-    if (SEQUANT_SKIP_LONG_TESTS)
+    if (SEQUANT_INTERNAL_SKIP_LONG_TESTS)
         target_compile_definitions(${test_name} PRIVATE SEQUANT_SKIP_LONG_TESTS=1)
     endif()
 
@@ -63,16 +63,20 @@ foreach(current IN LISTS TEST_CASES)
         # By inserting semicolons, we turn test_variants into a list
         string(REPLACE "|" ";" test_variants "${test_variants}")
 
-        set(counter 1)
         foreach(arguments IN LISTS test_variants)
+            string(STRIP "${arguments}" variant_name)
+            separate_arguments(argument_list UNIX_COMMAND "${arguments}")
+            string(REPLACE " " "_" variant_name "${variant_name}")
+            # if arguments are empty, use "default" as the variant name
+            if (variant_name STREQUAL "")
+                set(variant_name "default")
+            endif()
             add_test(
-                NAME "sequant/integration/${test_name}/${counter}"
-                COMMAND ${test_name} ${arguments}
+                NAME "sequant/integration/${test_name}/${variant_name}"
+                COMMAND ${test_name} ${argument_list}
                 WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
             )
-            list(APPEND variant_names "sequant/integration/${test_name}/${counter}")
-
-            math(EXPR counter "${counter} + 1")
+            list(APPEND variant_names "sequant/integration/${test_name}/${variant_name}")
         endforeach()
     endif()
 
