@@ -424,7 +424,6 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract) {
                        EvalExprNode const& right) mutable -> EvalExpr {
     auto h = ranges::at(hs, ++i);
     auto const& uncontracted_idxs = ltr_uncontr_idxs.imed[i];
-    std::wcout << std::endl;
     if (left->is_scalar() && right->is_scalar()) {
       // scalar * scalar
       return {EvalOp::Product,
@@ -454,17 +453,14 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract) {
       auto ts = subfacs | transform([](auto&& t) { return t.expr; });
       auto idxs = get_unique_indices(Product(ts));
       {
-        constexpr auto equal_index = [lt = typename IndexSet::key_compare{}](
-                                         Index const& lhs, Index const& rhs) {
-          return !lt(lhs, rhs) && !lt(rhs, lhs);
-        };
-        for (auto&& idx : uncontracted_idxs) idxs.aux.push_back(idx);
-        ranges::actions::sort(idxs.aux, equal_index);
-        ranges::actions::unique(idxs.aux, equal_index);
+        auto amend_aux_idxs = uncontracted_idxs;
+        for (auto&& idx : idxs.aux) amend_aux_idxs.emplace(idx);
+        idxs.aux = amend_aux_idxs |
+                   ranges::to<std::remove_cvref_t<decltype(idxs.aux)>>;
       }
       auto tn = TensorNetwork(ts);
-      auto named_indices = ranges::views::concat(idxs.bra, idxs.ket, idxs.aux) |
-                           ranges::to<TensorNetwork::NamedIndexSet>;
+      auto named_indices = tn.ext_indices();
+      for (auto&& ix : uncontracted_idxs) named_indices.emplace(ix);
 
       auto canon = tn.canonicalize_slots(
           TensorCanonicalizer::cardinal_tensor_labels(), &named_indices);
