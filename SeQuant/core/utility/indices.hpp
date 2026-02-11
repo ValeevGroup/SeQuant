@@ -688,7 +688,7 @@ auto left_to_right_binarization_indices(meta::range_of<Set> auto const& rng,
   auto survives_in_imed = [&max_count, &uncontract](auto&& kv) -> bool {
     auto&& [k, v] = kv;
     auto mk = max_count.at(k);
-    return mk == 1 || v < mk || uncontract.contains(k);
+    return v < mk || uncontract.contains(k);
   };
 
   for (auto&& ixcs : counts) {
