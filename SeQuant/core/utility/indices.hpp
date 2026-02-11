@@ -650,6 +650,57 @@ auto subset_target_indices(meta::range_of<Index, 2> auto const& rng,
   return result;
 }
 
+template <typename T, typename Set = std::set<T>,
+          typename Vec = std::vector<Set>>
+struct LTRUncontractedIndices {
+  Vec children;
+  Vec imed;
+};
+
+template <typename T, typename Set = std::set<T>>
+auto left_to_right_binarization_indices(meta::range_of<Set> auto const& rng,
+                                        Set const& uncontract) {
+  using ranges::views::filter;
+  using CountMap = std::map<T, size_t, typename Set::key_compare>;
+  LTRUncontractedIndices<T, Set> result;
+
+  std::vector<CountMap> counts;
+  for (auto acc = CountMap{}; auto&& ixs : rng) {
+    for (auto&& ix : ixs) {
+      auto [it, yn] = acc.emplace(ix, 1);
+      if (!yn) ++(it->second);
+    }
+    counts.push_back(acc);
+  }
+
+  auto const& max_count = counts.back();
+
+  auto survives_in_children = [&max_count,
+                               &uncontract](auto const& ix) -> bool {
+    return max_count.at(ix) > 1 || uncontract.contains(ix);
+  };
+
+  for (auto&& ixs : rng)
+    result.children.emplace_back(ixs                             //
+                                 | filter(survives_in_children)  //
+                                 | ranges::to<Set>);
+
+  auto survives_in_imed = [&max_count, &uncontract](auto&& kv) -> bool {
+    auto&& [k, v] = kv;
+    auto mk = max_count.at(k);
+    return mk == 1 || v < mk || uncontract.contains(k);
+  };
+
+  for (auto&& ixcs : counts) {
+    result.imed.emplace_back(ixcs                        //
+                             | filter(survives_in_imed)  //
+                             | std::views::elements<0>   //
+                             | ranges::to<Set>);
+  }
+
+  return result;
+}
+
 }  // namespace sequant
 
 #endif  // SEQUANT_CORE_UTILITY_INDICES_HPP
