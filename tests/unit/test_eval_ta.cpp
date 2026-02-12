@@ -946,3 +946,48 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
     }
   }
 }
+
+TEST_CASE("eval_with_tiledarray_new", "[feature]") {
+  SECTION("non-covariant indices") {
+    using sequant::deserialize;
+    using sequant::EvalExprTA;
+    using sequant::evaluate;
+
+    using TA::TArrayD;
+    auto& world = TA::get_default_world();
+    const size_t nocc = 2, nvirt = 20, naux = 40;
+
+    auto yield_ =
+        rand_tensor_yield<double, TA::DensePolicy>{world, nocc, nvirt, naux};
+    auto yield = [&yield_](std::wstring_view lbl) -> TA::TArrayD const& {
+      return yield_(lbl)->get<TA::TArrayD>();
+    };
+
+    auto yield_d = [&yield_](std::wstring_view lbl) ->
+        typename TA::TArrayD::numeric_type {
+          return yield_(lbl)->get<typename TA::TArrayD::numeric_type>();
+        };
+
+    auto eval = [&yield_](sequant::ExprPtr const& expr,
+                          std::string const& target_labels) {
+      return evaluate(eval_node(expr), target_labels, yield_)
+          ->get<TA::TArrayD>();
+    };
+
+    auto expr1 =
+        deserialize(L"((X{a1;;x1} X{;a2;x1}) Y{;;x1,x2})(X{a3;;x2} X{;a4;x2})");
+    auto eval1 = eval(expr1, "a_1,a_2,a_3,a_4");
+    auto man1 = [&]() {
+      auto X1 = yield(L"X{a1;;x1}");
+      auto X2 = yield(L"X{;a2;x1}");
+      auto X3 = yield(L"X{a3;;x2}");
+      auto X4 = yield(L"X{;a4;x2}");
+      auto Y = yield(L"Y{;;x1,x2}");
+      auto X12 = TA::einsum("ax,bx->abx", X1, X2);
+      auto X12Y = TA::einsum("abx,xy->aby", X12, Y);
+      auto X34 = TA::einsum("cy,dy->cdy", X3, X4);
+      return TA::einsum("aby,cdy->abcd", X12Y, X34);
+    };
+    // REQUIRE(equal_tarrays(eval1, man1, "a1,a2,a3,a4"));
+  }
+}
