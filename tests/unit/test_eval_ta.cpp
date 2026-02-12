@@ -54,12 +54,6 @@ struct NestedTensorIndices {
     using ranges::views::transform;
     using namespace sequant;
 
-    for (auto&& ix : tnsr.aux()) {
-      SEQUANT_ASSERT(!ix.has_proto_indices() &&
-                     "Aux indices with proto indices not supported");
-      outer.emplace_back(ix);
-    }
-
     auto append_unique = [](auto& cont, auto const& el) {
       if (!ranges::contains(cont, el)) cont.emplace_back(el);
     };
@@ -71,6 +65,12 @@ struct NestedTensorIndices {
     for (Index const& ix :
          tnsr.const_braket_indices() | transform(&Index::proto_indices) | join)
       append_unique(outer, ix);
+
+    for (auto&& ix : tnsr.aux()) {
+      SEQUANT_ASSERT(!ix.has_proto_indices() &&
+                     "Aux indices with proto indices not supported");
+      outer.emplace_back(ix);
+    }
   }
 
   [[nodiscard]] auto outer_inner() const noexcept {
@@ -653,6 +653,62 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
     }
   }
 
+  SECTION("non-covariant indices") {
+    using sequant::deserialize;
+    using sequant::EvalExprTA;
+    using sequant::evaluate;
+
+    using TA::TArrayD;
+    auto& world = TA::get_default_world();
+    const size_t nocc = 2, nvirt = 4, naux = 12;
+
+    auto yield_ =
+        rand_tensor_yield<double, TA::DensePolicy>{world, nocc, nvirt, naux};
+    auto yield = [&yield_](std::wstring_view lbl) -> TA::TArrayD const& {
+      return yield_(lbl)->get<TA::TArrayD>();
+    };
+
+    auto yield_d = [&yield_](std::wstring_view lbl) ->
+        typename TA::TArrayD::numeric_type {
+          return yield_(lbl)->get<typename TA::TArrayD::numeric_type>();
+        };
+
+    auto eval = [&yield_](sequant::ExprPtr const& expr,
+                          std::string const& target_labels) {
+      return evaluate(eval_node(expr), target_labels, yield_)
+          ->get<TA::TArrayD>();
+    };
+
+    auto expr1 =
+        deserialize(L"((X{a1;;x1} X{;a2;x1}) Y{;;x1,x2})(X{a3;;x2} X{;a4;x2})");
+    auto eval1 = eval(expr1, "a_1,a_2,a_3,a_4");
+    auto man1 = [&]() {
+      auto X1 = yield(L"X{a1;;x1}");
+      REQUIRE(X1.trange().elements_range().extent(0) == nvirt);
+      REQUIRE(X1.trange().elements_range().extent(1) == naux);
+      auto X2 = yield(L"X{;a2;x1}");
+      REQUIRE(X2.trange().elements_range().extent(0) == nvirt);
+      REQUIRE(X2.trange().elements_range().extent(1) == naux);
+      auto X3 = yield(L"X{a3;;x2}");
+      REQUIRE(X3.trange().elements_range().extent(0) == nvirt);
+      REQUIRE(X3.trange().elements_range().extent(1) == naux);
+      auto X4 = yield(L"X{;a4;x2}");
+      REQUIRE(X4.trange().elements_range().extent(0) == nvirt);
+      REQUIRE(X4.trange().elements_range().extent(1) == naux);
+      auto Y = yield(L"Y{;;x1,x2}");
+      REQUIRE(Y.trange().elements_range().extent(0) == naux);
+      REQUIRE(Y.trange().elements_range().extent(1) == naux);
+      auto X12 = TA::einsum("ax,bx->abx", X1, X2);
+      REQUIRE(X12.trange().elements_range().extent(0) == nvirt);
+      REQUIRE(X12.trange().elements_range().extent(1) == nvirt);
+      REQUIRE(X12.trange().elements_range().extent(2) == naux);
+      auto X12Y = TA::einsum("abx,xy->aby", X12, Y);
+      auto X34 = TA::einsum("cy,dy->cdy", X3, X4);
+      return TA::einsum("aby,cdy->abcd", X12Y, X34);
+    }();
+    REQUIRE(equal_tarrays(eval1, man1, "a1,a2,a3,a4"));
+  }
+
   SECTION("complex") {
     using TArrayC = TA::DistArray<TA::Tensor<std::complex<double>>>;
 
@@ -962,50 +1018,5 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
       }
       REQUIRE(result == Catch::Approx(ref));
     }
-  }
-}
-
-TEST_CASE("eval_with_tiledarray_new", "[feature]") {
-  SECTION("non-covariant indices") {
-    using sequant::deserialize;
-    using sequant::EvalExprTA;
-    using sequant::evaluate;
-
-    using TA::TArrayD;
-    auto& world = TA::get_default_world();
-    const size_t nocc = 2, nvirt = 20, naux = 40;
-
-    auto yield_ =
-        rand_tensor_yield<double, TA::DensePolicy>{world, nocc, nvirt, naux};
-    auto yield = [&yield_](std::wstring_view lbl) -> TA::TArrayD const& {
-      return yield_(lbl)->get<TA::TArrayD>();
-    };
-
-    auto yield_d = [&yield_](std::wstring_view lbl) ->
-        typename TA::TArrayD::numeric_type {
-          return yield_(lbl)->get<typename TA::TArrayD::numeric_type>();
-        };
-
-    auto eval = [&yield_](sequant::ExprPtr const& expr,
-                          std::string const& target_labels) {
-      return evaluate(eval_node(expr), target_labels, yield_)
-          ->get<TA::TArrayD>();
-    };
-
-    auto expr1 =
-        deserialize(L"((X{a1;;x1} X{;a2;x1}) Y{;;x1,x2})(X{a3;;x2} X{;a4;x2})");
-    auto eval1 = eval(expr1, "a_1,a_2,a_3,a_4");
-    auto man1 = [&]() {
-      auto X1 = yield(L"X{a1;;x1}");
-      auto X2 = yield(L"X{;a2;x1}");
-      auto X3 = yield(L"X{a3;;x2}");
-      auto X4 = yield(L"X{;a4;x2}");
-      auto Y = yield(L"Y{;;x1,x2}");
-      auto X12 = TA::einsum("ax,bx->abx", X1, X2);
-      auto X12Y = TA::einsum("abx,xy->aby", X12, Y);
-      auto X34 = TA::einsum("cy,dy->cdy", X3, X4);
-      return TA::einsum("aby,cdy->abcd", X12Y, X34);
-    };
-    // REQUIRE(equal_tarrays(eval1, man1, "a1,a2,a3,a4"));
   }
 }
