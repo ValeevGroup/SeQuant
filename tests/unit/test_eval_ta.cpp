@@ -30,6 +30,9 @@ constexpr bool is_tnsr_expr_v<expressions::TsrExpr<Arg, Args...>> = true;
 template <typename T>
 concept tnsr_expr = is_tnsr_expr_v<T>;
 
+template <typename T>
+concept array = TA::detail::array_tos<T> || TA::detail::array_tot<T>;
+
 }  // namespace TiledArray
 
 namespace {
@@ -298,29 +301,47 @@ class rand_tensor_yield {
   }
 };
 
-constexpr int DefaultTolExp = 2;
+enum struct ErrorTol : int { Loose = 1000, Normal = 100, Tight = 2 };
+
+using enum ErrorTol;
+
+template <ErrorTol Tol, std::floating_point T>
+constexpr bool approx_equal(T val1, T val2) {
+  constexpr auto margin =
+      static_cast<int>(Tol) * std::numeric_limits<T>::epsilon();
+  return (val1 - val2) == Catch::Approx(0.).margin(margin);
+}
 
 /// @param tol_exp The power of 10 used to scale the error margin.
 /// - A value of 0 results in standard machine epsilon.
 /// - A value of 3 results in 1000 * epsilon.
 /// - A value of -1 results in 0.1 * epsilon.
 
-template <TA::tnsr_expr ArrExpr>
-bool equal_tarrays(ArrExpr const& arr1, ArrExpr const& arr2,
-                   int tol_exp = DefaultTolExp) {
+template <ErrorTol Tol = Normal, TA::tnsr_expr ArrExpr>
+bool equal_tarrays(ArrExpr const& arr1, ArrExpr const& arr2) {
   typename ArrExpr::array_type diff;
   diff(arr1.annotation()) = arr1 - arr2;
-  return TA::norm2(diff) ==
-         Catch::Approx(0.).margin(std::pow(10., tol_exp) *
-                                  std::numeric_limits<double>::epsilon());
+  return approx_equal<Tol>(TA::norm2(diff), 0.);
 }
 
-template <typename Array>
-  requires TA::detail::array_tos<Array> || TA::detail::array_tot<Array>
+template <ErrorTol Tol = Normal, TA::array Array>
+bool equal_tarrays(Array arr1, Array arr2, std::string const& annot1,
+                   std::string const& annot2) {
+  return equal_tarrays<Tol>(arr1(annot1), arr2(annot2));
+}
+
+template <ErrorTol Tol = Normal, TA::array Array>
 bool equal_tarrays(Array const& arr1,  //
                    Array const& arr2,  //
-                   std::string const& annot, int tol_exp = DefaultTolExp) {
-  return equal_tarrays(arr1(annot), arr2(annot), tol_exp);
+                   std::string const& annot) {
+  return equal_tarrays<Tol>(arr1, arr2, annot, annot);
+}
+
+template <ErrorTol Tol = Normal, TA::detail::array_tos Array>
+bool equal_tarrays(Array const& arr1, Array const& arr2) {
+  return equal_tarrays<Tol>(arr1, arr2,
+                            TA::detail::dummy_annotation(rank(arr1)),
+                            TA::detail::dummy_annotation(rank(arr2)));
 }
 
 }  // namespace
@@ -389,7 +410,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
       sum1_man("i1,a1") =
           yield(L"t{a1;i1}")("a1,i1") + yield(L"f{i1;a1}")("i1,a1");
 
-      REQUIRE(equal_tarrays(sum1_eval, sum1_man, "i1,a1"));
+      REQUIRE(equal_tarrays(sum1_eval, sum1_man));
 
       auto expr2 = parse_antisymm(L"2 * t_{a1}^{i1} + 3/2 * f_{i1}^{a1}");
 
@@ -398,7 +419,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
       auto sum2_man = TArrayD{};
       sum2_man("i1,a1") =
           2 * yield(L"t{a1;i1}")("a1,i1") + 1.5 * yield(L"f{i1;a1}")("i1,a1");
-      REQUIRE(equal_tarrays(sum2_eval, sum2_man, "i1,a1"));
+      REQUIRE(equal_tarrays(sum2_eval, sum2_man));
     }
 
     SECTION("product") {
@@ -411,7 +432,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
                                  yield(L"g{i2,i4;a2,a4}")("i2,i4,a2,a4") *
                                  yield(L"t{a1,a2;i1,i2}")("a1,a2,i1,i2");
 
-      REQUIRE(equal_tarrays(prod1_eval, prod1_man, "i4,a1,a4,i1"));
+      REQUIRE(equal_tarrays(prod1_eval, prod1_man));
 
       auto expr2 = parse_antisymm(
           L"-1/4 * g_{i3,i4}^{a3,a4} * t_{a2,a4}^{i1,i2} * t_{a1,a3}^{ i3, "
@@ -424,7 +445,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
                                  yield(L"t{a2,a4;i1,i2}")("a2,a4,i1,i2") *
                                  yield(L"t{a1,a3;i3,i4}")("a1,a3,i3,i4");
 
-      REQUIRE(equal_tarrays(prod2_eval, prod2_man, "a1,a2,i1,i2"));
+      REQUIRE(equal_tarrays(prod2_eval, prod2_man));
 
       auto expr3 = sequant::deserialize<sequant::ExprPtr>(
           L"R_{a1}^{i1,i3} * f_{i3}^{i2}");
@@ -432,7 +453,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
       auto prod3_man = TArrayD{};
       prod3_man("a1,i1,i2") =
           yield(L"R{a1;i1,i3}")("a1,i1,i3") * yield(L"f{i3;i2}")("i3,i2");
-      REQUIRE(equal_tarrays(prod3_eval, prod3_man, "a1,i1,i2"));
+      REQUIRE(equal_tarrays(prod3_eval, prod3_man));
 
       auto expr4 = sequant::deserialize<sequant::ExprPtr>(
           L"1/4 * R_{a1,a2,a3}^{i2,i3} * g_{i2,i3}^{i1,a3}");
@@ -441,7 +462,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
       prod4_man("i1,a1,a2") = 1 / 4.0 *
                               yield(L"R{a1,a2,a3;i2,i3}")("a1,a2,a3,i2,i3") *
                               yield(L"g{i2,i3;i1,a3}")("i2,i3,i1,a3");
-      REQUIRE(equal_tarrays(prod4_eval, prod4_man, "i1,a1,a2"));
+      REQUIRE(equal_tarrays(prod4_eval, prod4_man));
     }
 
     SECTION("sum and product") {
@@ -458,7 +479,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
                             1.0 / 16 * yield(L"g{i3,i4;a3,a4}")("i3,i4,a3,a4") *
                                 yield(L"t{a1,a2;i3,i4}")("a1,a2,i3,i4") *
                                 yield(L"t{a3,a4;i1,i2}")("a3,a4,i1,i2");
-      REQUIRE(equal_tarrays(eval1, man1, "a1,a2,i1,i2"));
+      REQUIRE(equal_tarrays(eval1, man1));
 
       auto expr2 = sequant::deserialize<sequant::ExprPtr>(
           L"1/4 * R_{a1,a2,a3}^{i2,i3} * g_{i2,i3}^{i1,a3} + R_{a1,a3}^{i1} * "
@@ -471,7 +492,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
               yield(L"g{i2,i3;i1,a3}")("i2,i3,i1,a3") +
           yield(L"R{a1,a3;i1}")("a1,a3,i1") * yield(L"f{i2;a3}")("i2,a3") *
               yield(L"t{a2;i2}")("a2,i2");
-      REQUIRE(equal_tarrays(eval2, man2, "i1,a1,a2"));
+      REQUIRE(equal_tarrays(eval2, man2));
     }
 
     SECTION("variable at leaves") {
@@ -485,7 +506,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
           yield_d(L"α") * 2 * yield(L"t{a1;i1}")("a1,i1") * yield_d(L"β") +
           1.5 * yield(L"f{i1;a1}")("i1,a1");
 
-      REQUIRE(equal_tarrays(sum2_eval, sum2_man, "i1,a1"));
+      REQUIRE(equal_tarrays(sum2_eval, sum2_man));
     }
 
     SECTION("Antisymmetrization") {
@@ -499,7 +520,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
 
       man1("0,1,2,3") = 0.25 * man1("0,1,2,3");
 
-      REQUIRE(equal_tarrays(eval1, man1, "0,1,2,3"));
+      REQUIRE(equal_tarrays(eval1, man1));
 
       // odd-ranked tensor
       auto expr2 = parse_antisymm(L"g_{i1, i2, i3}^{a1, a2}");
@@ -513,7 +534,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
           arr2("0,1,2,4,3") + arr2("1,0,2,4,3") - arr2("1,2,0,4,3") +
           arr2("2,1,0,4,3") - arr2("2,0,1,4,3") + arr2("0,2,1,4,3");
 
-      REQUIRE(equal_tarrays(eval2, man2, "0,1,2,3"));
+      REQUIRE(equal_tarrays(eval2, man2));
 
       auto expr3 = parse_antisymm(L"R_{a1,a2}^{}");
       auto eval3 = eval_antisymm(expr3, "a_1,a_2");
@@ -522,7 +543,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
       man3("0,1") = arr3("0,1") - arr3("1,0");
       man3("0,1") = 0.5 * man3("0,1");
 
-      REQUIRE(equal_tarrays(eval3, man3, "0,1"));
+      REQUIRE(equal_tarrays(eval3, man3));
     }
 
     SECTION("Symmetrization") {
@@ -534,7 +555,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
       man1("0,1,2,3") = arr1("0,1,2,3") + arr1("1,0,3,2");
       man1("0,1,2,3") = 0.5 * man1("0,1,2,3");
 
-      REQUIRE(equal_tarrays(eval1, man1, "0,1,2,3"));
+      REQUIRE(equal_tarrays(eval1, man1));
 
       auto expr2 = parse_antisymm(L"g_{i1,i2,i3}^{a1,a2,a3}");
 
@@ -545,7 +566,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
                             arr2("2,0,1,5,3,4") + arr2("2,1,0,5,4,3") +
                             arr2("1,2,0,4,5,3") + arr2("1,0,2,4,3,5");
       man2("0,1,2,3,4,5") = (1.0 / 6.0) * man2("0,1,2,3,4,5");
-      REQUIRE(equal_tarrays(eval2, man2, "0,1,2,3,4,5"));
+      REQUIRE(equal_tarrays(eval2, man2));
     }
 
     SECTION("Biorthogonal Cleanup") {
@@ -557,7 +578,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
       auto man1 = TArrayD{};
       man1("0,1,2,3") = arr1("0,1,2,3");
 
-      REQUIRE(equal_tarrays(eval1, man1, "0,1,2,3"));
+      REQUIRE(equal_tarrays(eval1, man1));
 
       // for rank 3 residual, nns applies:
       // result = NNS_P * sum_of_ket_permutations
@@ -573,7 +594,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
               (arr2("0,1,2,3,5,4") + arr2("0,1,2,4,3,5") + arr2("0,1,2,4,5,3") +
                arr2("0,1,2,5,3,4") + arr2("0,1,2,5,4,3"));
 
-      REQUIRE(equal_tarrays(eval2, man2, "0,1,2,3,4,5"));
+      REQUIRE(equal_tarrays(eval2, man2));
 
       // for rank 4 residual, nns applies:
       // result = NNS_P * sum_of_ket_permutations
@@ -608,10 +629,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
                                 2.0 / 14.0 * arr3("0,1,2,3,7,6,4,5") +
                                 2.0 / 14.0 * arr3("0,1,2,3,7,6,5,4");
 
-      // the int argument 3 implies the epsilon is multiplied by 1000
-      // effectively increasing the error tolerance when comparing
-      // the two arrays
-      REQUIRE(equal_tarrays(eval3, man3, "0,1,2,3,4,5,6,7", 3));
+      REQUIRE(equal_tarrays<Loose>(eval3, man3));
     }
 
     SECTION("Others") {
@@ -631,7 +649,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
       auto eval2 =
           evaluate(nodes1, "i_1,i_2,a_1,a_2"s, yield_)->get<TA::TArrayD>();
 
-      REQUIRE(equal_tarrays(eval1, eval2, "i1,i2,a1,a2"));
+      REQUIRE(equal_tarrays(eval1, eval2));
     }
   }
 
@@ -677,7 +695,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
       sum1_man("i1,a1") =
           yield(L"t{a1;i1}")("a1,i1") + yield(L"f{i1;a1}")("i1,a1");
 
-      REQUIRE(equal_tarrays(sum1_eval, sum1_man, "i1,a1"));
+      REQUIRE(equal_tarrays(sum1_eval, sum1_man));
 
       auto expr2 =
           deserialize<sequant::ExprPtr>(L"2 * t_{a1}^{i1} + 3/2 * f_{i1}^{a1}");
@@ -689,7 +707,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
           std::complex<double>{2} * yield(L"t{a1;i1}")("a1,i1") +
           std::complex<double>{1.5} * yield(L"f{i1;a1}")("i1,a1");
 
-      REQUIRE(equal_tarrays(sum2_eval, sum2_man, "i1,a1"));
+      REQUIRE(equal_tarrays(sum2_eval, sum2_man));
     }
 
     SECTION("product") {
@@ -702,7 +720,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
                                  yield(L"g{i2,i4;a2,a4}")("i2,i4,a2,a4") *
                                  yield(L"t{a1,a2;i1,i2}")("a1,a2,i1,i2");
 
-      REQUIRE(equal_tarrays(prod1_eval, prod1_man, "i4,a1,a4,i1"));
+      REQUIRE(equal_tarrays(prod1_eval, prod1_man));
 
       auto expr2 = deserialize<sequant::ExprPtr>(
           L"-1/4 * g_{i3,i4}^{a3,a4} * t_{a2,a4}^{i1,i2} * t_{a1,a3}^{ i3, "
@@ -715,7 +733,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
                                  yield(L"t{a2,a4;i1,i2}")("a2,a4,i1,i2") *
                                  yield(L"t{a1,a3;i3,i4}")("a1,a3,i3,i4");
 
-      REQUIRE(equal_tarrays(prod2_eval, prod2_man, "a1,a2,i1,i2"));
+      REQUIRE(equal_tarrays(prod2_eval, prod2_man));
 
       auto expr3 = sequant::deserialize<sequant::ExprPtr>(
           L"R_{a1}^{i1,i3} * f_{i3}^{i2}");
@@ -724,7 +742,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
       prod3_man("a1,i1,i2") =
           yield(L"R{a1;i1,i3}")("a1,i1,i3") * yield(L"f{i3;i2}")("i3,i2");
 
-      REQUIRE(equal_tarrays(prod3_eval, prod3_man, "a1,i1,i2"));
+      REQUIRE(equal_tarrays(prod3_eval, prod3_man));
 
       auto expr4 = sequant::deserialize<sequant::ExprPtr>(
           L"1/4 * R_{a1,a2,a3}^{i2,i3} * g_{i2,i3}^{i1,a3}");
@@ -733,7 +751,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
       prod4_man("i1,a1,a2") = 1 / 4.0 *
                               yield(L"R{a1,a2,a3;i2,i3}")("a1,a2,a3,i2,i3") *
                               yield(L"g{i2,i3;i1,a3}")("i2,i3,i1,a3");
-      REQUIRE(equal_tarrays(prod4_eval, prod4_man, "a1,i1,i2"));
+      REQUIRE(equal_tarrays(prod4_eval, prod4_man));
     }
 
     SECTION("sum and product") {
@@ -753,7 +771,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
                                 yield(L"t{a1,a2;i3,i4}")("a1,a2,i3,i4") *
                                 yield(L"t{a3,a4;i1,i2}")("a3,a4,i1,i2");
 
-      REQUIRE(equal_tarrays(eval1, man1, "a1,a2,i1,i2"));
+      REQUIRE(equal_tarrays(eval1, man1));
 
       auto expr2 = sequant::deserialize<sequant::ExprPtr>(
           L"1/4 * R_{a1,a2,a3}^{i2,i3} * g_{i2,i3}^{i1,a3} + R_{a1,a3}^{i1} * "
@@ -766,7 +784,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
               yield(L"g{i2,i3;i1,a3}")("i2,i3,i1,a3") +
           yield(L"R{a1,a3;i1}")("a1,a3,i1") * yield(L"f{i2;a3}")("i2,a3") *
               yield(L"t{a2;i2}")("a2,i2");
-      REQUIRE(equal_tarrays(eval2, man2, "i1,a1,a2"));
+      REQUIRE(equal_tarrays(eval2, man2));
     }
 
     SECTION("Antisymmetrization") {
@@ -780,7 +798,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
 
       man1("0,1,2,3") = std::complex<double>{0.25} * man1("0,1,2,3");
 
-      REQUIRE(equal_tarrays(eval1, man1, "0,1,2,3"));
+      REQUIRE(equal_tarrays(eval1, man1));
 
       // odd-ranked tensor
       auto expr2 = deserialize<sequant::ExprPtr>(L"g_{i1, i2, i3}^{a1, a2}");
@@ -794,7 +812,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
           arr2("0,1,2,4,3") + arr2("1,0,2,4,3") - arr2("1,2,0,4,3") +
           arr2("2,1,0,4,3") - arr2("2,0,1,4,3") + arr2("0,2,1,4,3");
 
-      REQUIRE(equal_tarrays(eval2, man2, "0,1,2,3,4"));
+      REQUIRE(equal_tarrays(eval2, man2));
 
       auto expr3 = deserialize<sequant::ExprPtr>(L"R_{a1,a2}^{}");
       auto eval3 = eval_antisymm(expr3, "a_1,a_2");
@@ -803,7 +821,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
       man3("0,1") = arr3("0,1") - arr3("1,0");
       man3("0,1") = std::complex<double>{0.5} * man3("0,1");
 
-      REQUIRE(equal_tarrays(eval3, man3, "0,1"));
+      REQUIRE(equal_tarrays(eval3, man3));
     }
 
     SECTION("Symmetrization") {
@@ -815,7 +833,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
       man1("0,1,2,3") = arr1("0,1,2,3") + arr1("1,0,3,2");
       man1("0,1,2,3") = 0.5 * man1("0,1,2,3");
 
-      REQUIRE(equal_tarrays(eval1, man1, "0,1,2,3"));
+      REQUIRE(equal_tarrays(eval1, man1));
 
       auto expr2 = deserialize<sequant::ExprPtr>(L"g_{i1,i2,i3}^{a1,a2,a3}");
 
@@ -827,7 +845,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
                             arr2("1,2,0,4,5,3") + arr2("1,0,2,4,3,5");
       man2("0,1,2,3,4,5") = (1.0 / 6.0) * man2("0,1,2,3,4,5");
 
-      REQUIRE(equal_tarrays(eval2, man2, "0,1,2,3,4,5"));
+      REQUIRE(equal_tarrays(eval2, man2));
     }
 
     SECTION("Others") {
@@ -846,7 +864,7 @@ TEST_CASE("eval_with_tiledarray", "[eval]") {
 
       auto eval2 = evaluate(nodes1, "i_1,i_2,a_1,a_2"s, yield_)->get<TArrayC>();
 
-      REQUIRE(equal_tarrays(eval1, eval2, "i_1,i_2,a_1,a_2"));
+      REQUIRE(equal_tarrays(eval1, eval2));
     }
   }
 
