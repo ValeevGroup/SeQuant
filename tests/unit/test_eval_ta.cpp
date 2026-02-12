@@ -91,9 +91,12 @@ auto eval_node(sequant::ExprPtr const& expr) {
 }
 
 auto tensor_to_key(sequant::Tensor const& tnsr) {
-  static auto const idx_rgx = boost::wregex{L"([ia])([↑↓])?(_?\\d+)"};
+  static auto const idx_rgx = boost::wregex{L"([iax])([↑↓])?(_?\\d+)"};
   auto formatter = [](boost::wsmatch mo) -> std::wstring {
-    return (mo[1].str() == L"i" ? L"o" : L"v") + mo[2].str();
+    return (mo[1].str() == L"i"   ? L"o"
+            : mo[1].str() == L"a" ? L"v"
+                                  : L"x") +
+           mo[2].str();
   };
 
   NestedTensorIndices oixs{tnsr};
@@ -155,6 +158,7 @@ class rand_tensor_yield {
   TA::World& world;
   size_t nocc_;
   size_t nvirt_;
+  size_t naux_;
   mutable sequant::container::map<std::wstring, sequant::ResultPtr>
       label_to_er_;
 
@@ -165,7 +169,10 @@ class rand_tensor_yield {
   using numeric_type = NumericT;
 
   rand_tensor_yield(TA::World& world_, size_t nocc, size_t nvirt)
-      : world{world_}, nocc_{nocc}, nvirt_{nvirt} {}
+      : world{world_}, nocc_{nocc}, nvirt_{nvirt}, naux_{nvirt * 2} {}
+
+  rand_tensor_yield(TA::World& world_, size_t nocc, size_t nvirt, size_t naux)
+      : world{world_}, nocc_{nocc}, nvirt_{nvirt}, naux_{naux} {}
 
   sequant::ResultPtr operator()(sequant::Variable const& var) const {
     using result_t = sequant::ResultScalar<NumericT>;
@@ -211,8 +218,11 @@ class rand_tensor_yield {
     auto make_extents = [this, &isr](auto&& ixs) -> container::svector<size_t> {
       return ixs | transform([this, &isr](auto const& ix) -> size_t {
                SEQUANT_ASSERT(ix.space() == isr->retrieve(L"i") ||
-                              ix.space() == isr->retrieve(L"a"));
-               return ix.space() == isr->retrieve(L"i") ? nocc_ : nvirt_;
+                              ix.space() == isr->retrieve(L"a") ||
+                              ix.space() == isr->retrieve(L"x"));
+               return ix.space() == isr->retrieve(L"i")   ? nocc_
+                      : ix.space() == isr->retrieve(L"a") ? nvirt_
+                                                          : naux_;
              }) |
              ranges::to<container::svector<size_t>>;
     };
