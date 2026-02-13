@@ -732,12 +732,14 @@ decltype(auto) as_view_of_index_groups(
 ///
 auto subset_index_counts(meta::range_of<Index, 2> auto const& rng) {
   size_t const N = ranges::distance(rng);
+  SEQUANT_ASSERT(N <= 24 &&
+                 "subset_index_counts: N > 24 would require excessive memory");
   container::vector<container::map<Index, size_t, Index::FullLabelCompare>>
-      result((1 << N));
+      result((size_t{1} << N));
   for (size_t i = 1; i < result.size(); ++i) {
     for (auto&& ixs : bits::on_bits_index(i) | bits::sieve(rng)) {
       for (auto&& ix : ixs)
-        if (auto [it, yn] = result[i].try_emplace(ix, 1); !yn)  //
+        if (auto [it, inserted] = result[i].try_emplace(ix, 1); !inserted)  //
           ++(it->second);
     }
   }
@@ -769,19 +771,20 @@ auto subset_target_indices(meta::range_of<Index, 2> auto const& rng,
                            meta::range_of<Index> auto const& tixs) {
   using IndexSet = container::set<Index, Index::FullLabelCompare>;
   size_t const N = ranges::distance(rng);
-  container::vector<IndexSet> result((1 << N));
+  SEQUANT_ASSERT(
+      N <= 24 &&
+      "subset_target_indices: N > 24 would require excessive memory");
+  container::vector<IndexSet> result((size_t{1} << N));
 
-  if (result.empty()) return result;
-
-  for (auto i = 0; i < N; ++i)
-    for (auto&& ix : ranges::at(rng, i)) result[(1 << i)].emplace(ix);
+  for (size_t i = 0; i < N; ++i)
+    for (auto&& ix : ranges::at(rng, i)) result[(size_t{1} << i)].emplace(ix);
 
   auto counts = subset_index_counts(rng);
 
   for (auto&& [k, v] : *counts.rbegin())
     if (v == 1 || ranges::contains(tixs, k)) result.rbegin()->emplace(k);
 
-  for (auto i = 0; i < result.size(); ++i)
+  for (size_t i = 0; i < result.size(); ++i)
     for (auto&& [k, v] : counts[i])
       if (v == 1 || (v > 0 && counts.at(counts.size() - i - 1).contains(k)))
         result[i].emplace(k);
@@ -806,8 +809,8 @@ auto left_to_right_binarization_indices(meta::range_of<Set> auto const& rng,
   std::vector<CountMap> counts;
   for (auto acc = CountMap{}; auto&& ixs : rng) {
     for (auto&& ix : ixs) {
-      auto [it, yn] = acc.emplace(ix, 1);
-      if (!yn) ++(it->second);
+      auto [it, inserted] = acc.emplace(ix, 1);
+      if (!inserted) ++(it->second);
     }
     counts.push_back(acc);
   }

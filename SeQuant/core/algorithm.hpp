@@ -8,7 +8,6 @@
 #include <SeQuant/core/container.hpp>
 #include <SeQuant/core/meta.hpp>
 
-#include <boost/dynamic_bitset.hpp>
 #include <range/v3/view.hpp>
 
 #include <algorithm>
@@ -179,7 +178,7 @@ namespace bits {
 template <std::unsigned_integral T>
 constexpr auto bipartitions_ordered(T mask) {
   // number of possible bipartitions
-  size_t const nparts = (1 << std::popcount(mask));
+  size_t const nparts = (size_t{1} << std::popcount(mask));
   return std::views::iota(size_t{0}, nparts) |
          std::views::transform([mask, p = mask](auto) mutable {
            auto p_ = p;

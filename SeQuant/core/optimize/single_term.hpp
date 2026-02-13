@@ -66,7 +66,7 @@ EvalSequence single_term_opt_impl(TensorNetwork const& network,
   if (nt == 1) return EvalSequence{0};
   if (nt == 2) return EvalSequence{0, 1, -1};
 
-  container::vector<OptRes> results((1 << nt));
+  container::vector<OptRes> results((size_t{1} << nt));
 
   // initialize the intermediate results
   {
@@ -97,9 +97,9 @@ EvalSequence single_term_opt_impl(TensorNetwork const& network,
       // do nothing with the trivial bipartition
       // i.e. one subset is the empty set and the other full
       if (lp == 0 || rp == 0) continue;
-      auto new_cost = std::forward<CostFn>(cost_fn)(results[lp].indices,  //
-                                                    results[rp].indices,  //
-                                                    results[n].indices)   //
+      auto new_cost = cost_fn(results[lp].indices,  //
+                              results[rp].indices,  //
+                              results[n].indices)   //
                       + results[lp].flops + results[rp].flops;
       if (new_cost <= curr_cost) {
         curr_cost = new_cost;

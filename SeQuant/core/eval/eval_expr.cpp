@@ -303,19 +303,19 @@ struct ExprWithHash {
   size_t hash;
 };
 
-void hyper_indices(IndexSet& result, ExprPtr const& expr) {
+void aux_indices(IndexSet& result, ExprPtr const& expr) {
   if (!expr) return;
   if (expr->is<Tensor>())
     for (auto&& ix : expr->as<Tensor>().aux()) result.emplace(ix);
   else if (expr->is<Sum>() && !expr->empty())
-    hyper_indices(result, expr->front());
+    aux_indices(result, expr->front());
   else if (expr->is<Product>())
-    for (auto&& fac : *expr) hyper_indices(result, fac);
+    for (auto&& fac : *expr) aux_indices(result, fac);
 }
 
-IndexSet hyper_indices(ExprPtr const& expr) {
+IndexSet aux_indices(ExprPtr const& expr) {
   IndexSet result;
-  hyper_indices(result, expr);
+  aux_indices(result, expr);
   return result;
 }
 
@@ -401,10 +401,10 @@ EvalExprNode binarize(Product const& prod, IndexSet const& uncontract) {
   }
 
   auto const ltr_uncontr_idxs = [&]() {
-    auto hyper_idxs = prod.factors() |
-                      transform([](auto&& xpr) { return hyper_indices(xpr); }) |
-                      ranges::to_vector;
-    return left_to_right_binarization_indices<Index, IndexSet>(hyper_idxs,
+    auto aux_idxs = prod.factors() |
+                    transform([](auto&& xpr) { return aux_indices(xpr); }) |
+                    ranges::to_vector;
+    return left_to_right_binarization_indices<Index, IndexSet>(aux_idxs,
                                                                uncontract);
   }();
 
