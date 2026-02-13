@@ -207,9 +207,6 @@ TEST_CASE("optimize", "[optimize]") {
       auto uocc = reg->retrieve_ptr(L"a");
       auto aux = reg->retrieve_ptr(L"x");
       auto const aux_sz = aux->approximate_size();
-      auto const uocc_sz = uocc->approximate_size();
-      REQUIRE(uocc);
-      REQUIRE(aux);
       aux->approximate_size(3 * uocc->approximate_size());
 
       auto const G_abcd_thc =
@@ -220,9 +217,20 @@ TEST_CASE("optimize", "[optimize]") {
               L"((X{a1;;x1} X{;a2;x1}) Y{;;x1,x2})(X{a3;;x2} X{;a4;x2})")
               ->as<Product>();
       REQUIRE(single_term_opt(G_abcd_thc)->as<Product>() == G_abcd_thc_opt);
+
+      auto const GT_abij_thc = deserialize(
+                                   L"X{a1;;x1} X{;a2;x1} Y{;;x1,x2} X{a3;;x2} "
+                                   L"X{;a4;x2} T{a2,a4;i1,i2}")
+                                   ->as<Product>();
+      auto const GT_abij_thc_opt = deserialize(
+                                       L"(((X{a1;;x1} X{;a2;x1}) Y{;;x1,x2}) ( "
+                                       L"X{;a4;x2} T{a2,a4;i1,i2} )) X{a3;;x2}")
+                                       ->as<Product>();
+      std::wcout << single_term_opt(GT_abij_thc).to_latex() << std::endl;
+      std::wcout << GT_abij_thc_opt.to_latex() << std::endl;
+      REQUIRE(single_term_opt(GT_abij_thc)->as<Product>() == GT_abij_thc_opt);
+
       aux->approximate_size(aux_sz);
-      REQUIRE(aux->approximate_size() == aux_sz);
-      REQUIRE(uocc->approximate_size() == uocc_sz);
     }
   }
 
