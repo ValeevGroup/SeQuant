@@ -330,7 +330,8 @@ void collect_tensor_factors(EvalExprNode const& node,  //
 
   if (auto op = node->op_type();
       node->is_tensor() && (!op || *op == EvalOp::Sum))
-    collect.emplace_back(ExprWithHash{node->expr(), node->hash_value()});
+    collect.emplace_back(
+        ExprWithHash{.expr = node->expr(), .hash = node->hash_value()});
   else if (node->op_type() == EvalOp::Product && !node.leaf()) {
     collect_tensor_factors(node.left(), collect);
     collect_tensor_factors(node.right(), collect);

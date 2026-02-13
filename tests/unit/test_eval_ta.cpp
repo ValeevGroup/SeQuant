@@ -312,11 +312,6 @@ constexpr bool approx_equal(T val1, T val2) {
   return (val1 - val2) == Catch::Approx(0.).margin(margin);
 }
 
-/// @param tol_exp The power of 10 used to scale the error margin.
-/// - A value of 0 results in standard machine epsilon.
-/// - A value of 3 results in 1000 * epsilon.
-/// - A value of -1 results in 0.1 * epsilon.
-
 template <ErrorTol Tol = Normal, TA::tnsr_expr ArrExpr>
 bool equal_tarrays(ArrExpr const& arr1, ArrExpr const& arr2) {
   typename ArrExpr::array_type diff;

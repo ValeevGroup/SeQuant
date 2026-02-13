@@ -792,13 +792,57 @@ auto subset_target_indices(meta::range_of<Index, 2> auto const& rng,
   return result;
 }
 
+///
+/// @brief Helper struct to hold indices for left-to-right binarization.
+/// @tparam T The type of the index (e.g., Index).
+/// @tparam Set The type of the set container (default: std::set<T>).
+/// @tparam Vec The type of the vector container (default: std::vector<Set>).
+///
 template <typename T, typename Set = std::set<T>,
           typename Vec = std::vector<Set>>
 struct LTRUncontractedIndices {
+  /// @brief The relevant indices of the input tensors (leaves).
+  /// These are indices that either participate in future contractions or are
+  /// external. They correspond to [A, B, C] sub-expressions in a product Prod
+  /// [A, B, C]. These sets are computed so that uncontracted indices can be
+  /// utilized in the children's binarization index computations.
   Vec children;
+  /// @brief The indices of the intermediate tensors.
+  /// imed[i] contains the open indices after contracting the first (i+1)
+  /// tensors. They correspond to [A, AB, ABC] intermediates when a product
+  /// expression Prod [A, B, C] is to be evaluated left-to-right.
   Vec imed;
 };
 
+///
+/// @brief Calculates index sets for a left-to-right contraction sequence.
+///
+/// This function simulates a left-to-right contraction of a sequence of
+/// tensors. It determines which indices in the input tensors are relevant
+/// (participate in contraction or are external) and computes the index sets of
+/// the intermediate results.
+///
+/// @note
+/// - The 'uncontract' indices are only necessary to mark those indices that
+/// appear in
+///   more than one set from 'rng'.
+/// - Indices that appear exactly once in the sets from 'rng' are always
+/// uncontracted (or external).
+///   The term 'uncontract' implies some indices tend to 'contract-out' because
+///   they repeat, but we force them to survive.
+/// - Passing non-repeating indices in 'uncontract' does not change the behavior
+/// of the algorithm.
+///   Neither will passing indices that do not appear in any of the sets from
+///   'rng'.
+///
+/// @tparam T The type of the index.
+/// @tparam Set The type of the set container.
+/// @param rng A range of index sets representing the input tensors.
+/// @param uncontract The set of indices that should remain in the final result
+/// (external indices).
+/// @return LTRUncontractedIndices<T, Set> containing the filtered children
+/// indices and intermediate indices.
+///
 template <typename T, typename Set = std::set<T>>
 auto left_to_right_binarization_indices(meta::range_of<Set> auto const& rng,
                                         Set const& uncontract) {
