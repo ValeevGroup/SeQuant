@@ -226,8 +226,6 @@ TEST_CASE("optimize", "[optimize]") {
                                        L"(((X{a1;;x1} X{;a2;x1}) Y{;;x1,x2}) ( "
                                        L"X{;a4;x2} T{a2,a4;i1,i2} )) X{a3;;x2}")
                                        ->as<Product>();
-      std::wcout << single_term_opt(GT_abij_thc).to_latex() << std::endl;
-      std::wcout << GT_abij_thc_opt.to_latex() << std::endl;
       REQUIRE(single_term_opt(GT_abij_thc)->as<Product>() == GT_abij_thc_opt);
 
       aux->approximate_size(aux_sz);
