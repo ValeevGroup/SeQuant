@@ -1,0 +1,71 @@
+{
+  "title": "SeQuant: Symbolic Tensor Algebra in C++",
+  "description": "SeQuant is a framework for performing symbolic algebra of tensors over scalar and operator rings. In addition to symbolic manipulation it can numerically evaluate general tensor algebra expressions with an appropriate external tensor backend (TiledArray, BTAS, TAPP) or generate code for an external tensor backend (ITF, Julia, NumPy/Torch).",
+  "license": {
+    "id": "LGPL-3.0-only"
+  },
+  "upload_type": "software",
+  "creators": [
+    {
+      "name": "Valeyev, Eduard",
+      "affiliation": "Virginia Tech",
+      "orcid": "0000-0001-5765-7550"
+    },
+    {
+      "name": "Gaudel, Bimal",
+      "affiliation": "Virginia Tech",
+      "orcid": "0000-0003-3938-0277"
+    },
+    {
+      "name": "Adam, Robert",
+      "affiliation": "University of Stuttgart",
+      "orcid": "0000-0003-0829-0148"
+    },
+    {
+      "name": "Melekamburath, Ajay",
+      "affiliation": "Virginia Tech",
+      "orcid": "0000-0002-0079-5443"
+    },
+    {
+      "name": "Teke, Nakul",
+      "affiliation": "Virginia Tech",
+      "orcid": "0000-0003-0834-2040"
+    },
+    {
+      "name": "Besharatnik, Azam",
+      "affiliation": "Virginia Tech",
+      "orcid": "0009-0008-5694-4138"
+    },
+    {
+      "name": "Masteran, Conner",
+      "affiliation": "Virginia Tech",
+      "orcid": "0000-0001-5001-4564"
+    }
+  ],
+  "keywords": [
+    "tensor algebra",
+    "symbolic computation",
+    "many-body theory",
+    "second quantization",
+    "C++"
+  ],
+  "grants": [
+    {
+      "id": "10.13039/100000001::2217081"
+    },
+    {
+      "id": "10.13039/100000015::DE-SC0022327"
+    },
+    {
+      "id": "10.13039/100000015::DE-SC0022263"
+    }
+  ],
+  "related_identifiers": [
+    {
+      "identifier": "2511.09943",
+      "relation": "isDocumentedBy",
+      "resource_type": "publication-preprint",
+      "scheme": "arxiv"
+    }
+  ]
+}
