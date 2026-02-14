@@ -1,0 +1,30 @@
+changelog:
+  exclude:
+    labels:
+      - duplicate
+      - invalid
+      - wontfix
+  categories:
+    - title: New Features
+      labels:
+        - enhancement
+        - feature
+    - title: Bug Fixes
+      labels:
+        - bug
+        - fix
+    - title: Documentation
+      labels:
+        - docs
+        - dox
+    - title: Tests
+      labels:
+        - tests
+        - unit
+    - title: Build Infrastructure
+      labels:
+        - ci
+        - cmake
+    - title: Other Changes
+      labels:
+        - "*"

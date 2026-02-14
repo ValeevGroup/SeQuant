@@ -1,3 +1,9 @@
+SeQuant: Symbolic Tensor Algebra in C++
+Copyright (C) 2018 the SeQuant contributors (see CITATION.cff for details)
+
+SeQuant is licensed under the GNU Lesser General Public License version 3.
+The full text of the license follows.
+
                   GNU LESSER GENERAL PUBLIC LICENSE
                        Version 3, 29 June 2007
 
@@ -163,4 +169,3 @@ whether future versions of the GNU Lesser General Public License shall
 apply, that proxy's public statement of acceptance of any version is
 permanent authorization for you to choose that version for the
 Library.
-

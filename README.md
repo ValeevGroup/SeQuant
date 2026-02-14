@@ -22,7 +22,7 @@ See detailed documentation at [https://valeevgroup.github.io/SeQuant/](https://v
 
 The short version:
 
-- configure (from top SeQuant source dfirectory): `cmake -B build -S . -DCMAKE_INSTALL_PREFIX=/path/to/where/sequant/to/be/installed`
+- configure (from top SeQuant source directory): `cmake -B build -S . -DCMAKE_INSTALL_PREFIX=/path/to/where/sequant/to/be/installed`
 - build and install: `cmake --build build --target install`
 
 For detailed instructions see [SeQuant: Installation Guide](https://valeevgroup.github.io/SeQuant/user/getting_started/installing.html).
