@@ -1,0 +1,14 @@
+.. _exhale_typedef_namespacesequant_1_1opt_1_1cse_1a9300f3b656255d15732524f5d8b4a721:
+
+Typedef sequant::opt::cse::SubexpressionUsageCounts
+===================================================
+
+- Defined in :ref:`file_SeQuant_core_optimize_common_subexpression_elimination.hpp`
+
+
+Typedef Documentation
+---------------------
+
+
+.. doxygentypedef:: sequant::opt::cse::SubexpressionUsageCounts
+   :project: SeQuant

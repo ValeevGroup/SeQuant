@@ -1,0 +1,115 @@
+
+.. _file_SeQuant_core_algorithm.hpp:
+
+File algorithm.hpp
+==================
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core>` (``SeQuant/core``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+.. contents:: Contents
+   :local:
+   :backlinks: none
+
+Definition (``SeQuant/core/algorithm.hpp``)
+-------------------------------------------
+
+
+.. toctree::
+   :maxdepth: 1
+
+   program_listing_file_SeQuant_core_algorithm.hpp.rst
+
+
+
+
+
+Includes
+--------
+
+
+- ``SeQuant/core/container.hpp`` (:ref:`file_SeQuant_core_container.hpp`)
+
+- ``SeQuant/core/meta.hpp``
+
+- ``algorithm`` (:ref:`file_SeQuant_core_algorithm.hpp`)
+
+- ``functional``
+
+- ``iterator``
+
+- ``range/v3/view.hpp``
+
+- ``tuple`` (:ref:`file_SeQuant_core_utility_tuple.hpp`)
+
+- ``type_traits``
+
+
+
+Included By
+-----------
+
+
+- :ref:`file_SeQuant_core_eval_result.hpp`
+
+- :ref:`file_SeQuant_core_expressions_abstract_tensor.hpp`
+
+- :ref:`file_SeQuant_core_expressions_expr.cpp`
+
+- :ref:`file_SeQuant_core_tensor_network_v1.cpp`
+
+- :ref:`file_SeQuant_core_tensor_network_v2.cpp`
+
+- :ref:`file_SeQuant_core_tensor_network_v3.cpp`
+
+- :ref:`file_SeQuant_domain_mbpt_spin.cpp`
+
+
+
+
+Namespaces
+----------
+
+
+- :ref:`namespace_sequant`
+
+- :ref:`namespace_sequant__bits`
+
+
+Functions
+---------
+
+
+- :ref:`exhale_function_namespacesequant_1_1bits_1a24892a13c74e96a78713f4b3358e91bf`
+
+- :ref:`exhale_function_namespacesequant_1_1bits_1a891e329e5455ed53f805796f3003c94e`
+
+- :ref:`exhale_function_namespacesequant_1_1bits_1a99f473a0ceaeead77adfccb4dab7252e`
+
+- :ref:`exhale_function_namespacesequant_1_1bits_1aeb8fffda94763b6a9dd75e67ab0a6abf`
+
+- :ref:`exhale_function_namespacesequant_1_1bits_1a27643d767f9cb951b83c21314cbb91c4`
+
+- :ref:`exhale_function_namespacesequant_1_1bits_1a035ec45622998247bd8d110842a381b5`
+
+- :ref:`exhale_function_namespacesequant_1_1bits_1aad5c205eac6212ff9e3a04085d20d163`
+
+- :ref:`exhale_function_namespacesequant_1_1bits_1ac4058dc05938571ea579613a657dc87e`
+
+- :ref:`exhale_function_namespacesequant_1a76ac6d4264f742c11bb19037d9686b8e`
+
+- :ref:`exhale_function_namespacesequant_1a0b02572642a937415bf42e47899d6647`
+
+- :ref:`exhale_function_namespacesequant_1a1f2111e048cde79c5edaf1371d65bf50`
+
+
+Typedefs
+--------
+
+
+- :ref:`exhale_typedef_namespacesequant_1a1635f01fc0a05c311a8ffdd1d4f79126`
+
+- :ref:`exhale_typedef_namespacesequant_1a29942dea09dd6e9780b9507ad0feaf86`
+

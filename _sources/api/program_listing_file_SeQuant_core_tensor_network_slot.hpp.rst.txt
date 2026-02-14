@@ -1,0 +1,38 @@
+
+.. _program_listing_file_SeQuant_core_tensor_network_slot.hpp:
+
+Program Listing for File slot.hpp
+=================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_core_tensor_network_slot.hpp>` (``SeQuant/core/tensor_network/slot.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   #ifndef SEQUANT_TENSOR_NETWORK_SLOT_H
+   #define SEQUANT_TENSOR_NETWORK_SLOT_H
+   
+   namespace sequant {
+   
+   
+   enum class TensorIndexSlotType {
+     Bra = 0,
+     Ket = 1,
+     Aux = 2,
+   };
+   
+   
+   enum class IndexSlotType {
+     IndexBundle,
+     SPBundle = IndexBundle,
+     TensorBra,
+     TensorKet,
+     TensorBraKet,
+     TensorAux,
+     TensorAuxAux,
+   };
+   
+   }  // namespace sequant
+   
+   #endif  // SEQUANT_TENSOR_NETWORK_SLOT_H

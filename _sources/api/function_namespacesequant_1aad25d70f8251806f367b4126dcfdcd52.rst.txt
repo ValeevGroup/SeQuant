@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1aad25d70f8251806f367b4126dcfdcd52:
+
+Function sequant::aux_indices(IndexSet&, ExprPtr const&)
+========================================================
+
+- Defined in :ref:`file_SeQuant_core_eval_eval_expr.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::aux_indices(IndexSet&, ExprPtr const&)
+   :project: SeQuant

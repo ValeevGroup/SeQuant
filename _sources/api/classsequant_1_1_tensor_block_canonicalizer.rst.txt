@@ -1,0 +1,26 @@
+.. _exhale_class_classsequant_1_1_tensor_block_canonicalizer:
+
+Class TensorBlockCanonicalizer
+==============================
+
+- Defined in :ref:`file_SeQuant_core_tensor_canonicalizer.hpp`
+
+
+Inheritance Relationships
+-------------------------
+
+Base Type
+*********
+
+- ``public sequant::DefaultTensorCanonicalizer`` (:ref:`exhale_class_classsequant_1_1_default_tensor_canonicalizer`)
+
+
+Class Documentation
+-------------------
+
+
+.. doxygenclass:: sequant::TensorBlockCanonicalizer
+   :project: SeQuant
+   :members:
+   :protected-members:
+   :undoc-members:

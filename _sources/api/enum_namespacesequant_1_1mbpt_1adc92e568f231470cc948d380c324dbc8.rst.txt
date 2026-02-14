@@ -1,0 +1,14 @@
+.. _exhale_enum_namespacesequant_1_1mbpt_1adc92e568f231470cc948d380c324dbc8:
+
+Enum TensorFactorizationQNS
+===========================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_space_qns.hpp`
+
+
+Enum Documentation
+------------------
+
+
+.. doxygenenum:: sequant::mbpt::TensorFactorizationQNS
+   :project: SeQuant

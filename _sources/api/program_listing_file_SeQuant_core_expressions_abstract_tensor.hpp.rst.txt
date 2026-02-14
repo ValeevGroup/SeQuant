@@ -1,0 +1,433 @@
+
+.. _program_listing_file_SeQuant_core_expressions_abstract_tensor.hpp:
+
+Program Listing for File abstract_tensor.hpp
+============================================
+
+|exhale_lsh| :ref:`Return to documentation for file <file_SeQuant_core_expressions_abstract_tensor.hpp>` (``SeQuant/core/expressions/abstract_tensor.hpp``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+.. code-block:: cpp
+
+   //
+   // Created by Eduard Valeyev on 2019-03-22.
+   //
+   
+   #ifndef SEQUANT_ABSTRACT_TENSOR_HPP
+   #define SEQUANT_ABSTRACT_TENSOR_HPP
+   
+   #include <SeQuant/core/algorithm.hpp>
+   #include <SeQuant/core/attr.hpp>
+   #include <SeQuant/core/container.hpp>
+   #include <SeQuant/core/expressions/expr_algorithms.hpp>
+   #include <SeQuant/core/index.hpp>
+   #include <SeQuant/core/io/latex/latex.hpp>
+   #include <SeQuant/core/utility/macros.hpp>
+   
+   #include <cstdlib>
+   #include <memory>
+   #include <stdexcept>
+   #include <string>
+   #include <string_view>
+   #include <typeinfo>
+   
+   #include <range/v3/all.hpp>
+   
+   #include <boost/core/demangle.hpp>
+   
+   namespace sequant {
+   
+   class TensorCanonicalizer;
+   
+   class AbstractTensor {
+     inline auto missing_instantiation_for(const char* fn_name) const {
+       std::ostringstream oss;
+       oss << "AbstractTensor::" << fn_name << " not implemented in class "
+           << boost::core::demangle(typeid(*this).name());
+       return std::runtime_error(oss.str());
+     }
+   
+    public:
+     virtual ~AbstractTensor() = default;
+   
+     virtual AbstractTensor* _clone() const {
+       throw missing_instantiation_for("_clone");
+     }
+   
+     virtual std::shared_ptr<AbstractTensor> _clone_shared() const {
+       throw missing_instantiation_for("_clone_shared");
+     }
+   
+     using const_any_view_rand =
+         ranges::any_view<const Index&, ranges::category::random_access>;
+     using const_any_view_randsz =
+         ranges::any_view<const Index&, ranges::category::random_access |
+                                            ranges::category::sized>;
+     using any_view_rand =
+         ranges::any_view<Index&, ranges::category::random_access>;
+     using any_view_randsz =
+         ranges::any_view<Index&, ranges::category::random_access |
+                                      ranges::category::sized>;
+   
+     virtual const_any_view_randsz _bra() const {
+       throw missing_instantiation_for("_bra");
+     }
+     virtual const_any_view_randsz _ket() const {
+       throw missing_instantiation_for("_ket");
+     }
+     virtual const_any_view_randsz _aux() const {
+       throw missing_instantiation_for("_aux");
+     }
+     virtual const_any_view_rand _braket() const {
+       throw missing_instantiation_for("_braket");
+     }
+     virtual const_any_view_rand _braketaux() const {
+       throw missing_instantiation_for("_braketaux");
+     }
+     virtual const_any_view_rand _slots() const {
+       throw missing_instantiation_for("_slots");
+     }
+     virtual std::size_t _bra_rank() const {
+       throw missing_instantiation_for("_bra_rank");
+     }
+     virtual std::size_t _bra_net_rank() const {
+       throw missing_instantiation_for("_bra_net_rank");
+     }
+     virtual std::size_t _ket_rank() const {
+       throw missing_instantiation_for("_ket_rank");
+     }
+     virtual std::size_t _ket_net_rank() const {
+       throw missing_instantiation_for("_ket_net_rank");
+     }
+     virtual std::size_t _aux_rank() const {
+       throw missing_instantiation_for("_aux_rank");
+     }
+     virtual std::size_t _num_slots() const {
+       throw missing_instantiation_for("_num_slots");
+     }
+     virtual std::size_t _num_indices() const {
+       throw missing_instantiation_for("_num_indices");
+     }
+     virtual Symmetry _symmetry() const {
+       throw missing_instantiation_for("_symmetry");
+     }
+     virtual BraKetSymmetry _braket_symmetry() const {
+       throw missing_instantiation_for("_braket_symmetry");
+     }
+     virtual ColumnSymmetry _column_symmetry() const {
+       throw missing_instantiation_for("_column_symmetry");
+     }
+     virtual std::size_t _color() const {
+       throw missing_instantiation_for("_color");
+     }
+     virtual bool _is_cnumber() const {
+       throw missing_instantiation_for("_is_cnumber");
+     }
+     virtual std::wstring_view _label() const {
+       throw missing_instantiation_for("_label");
+     }
+     virtual std::wstring _to_latex() const {
+       throw missing_instantiation_for("_to_latex");
+     }
+   
+     virtual bool operator<(const AbstractTensor&) const {
+       throw missing_instantiation_for("operator<");
+     }
+   
+     virtual std::size_t _hash_value() const {
+       throw missing_instantiation_for("_hash_value");
+     }
+   
+     virtual bool _transform_indices(const container::map<Index, Index>&) {
+       throw missing_instantiation_for("_transform_indices");
+     }
+     virtual void _reset_tags() { throw missing_instantiation_for("_reset_tags"); }
+   
+     virtual void _permute_bra(std::span<const std::size_t> perm) {
+       permute_impl(_bra_mutable(), perm);
+     }
+     virtual void _permute_ket(std::span<const std::size_t> perm) {
+       permute_impl(_ket_mutable(), perm);
+     }
+     virtual void _permute_aux(std::span<const std::size_t> perm) {
+       permute_impl(_aux_mutable(), perm);
+     }
+     virtual void _permute_columns(std::span<std::size_t> perm) {
+       permute_columns_impl(_bra_mutable(), _ket_mutable(), perm);
+     }
+     virtual void _swap_bra_ket() {
+       throw missing_instantiation_for("_swap_bra_ket");
+     }
+   
+     virtual any_view_randsz _bra_mutable() {
+       throw missing_instantiation_for("_bra_mutable");
+     }
+     virtual any_view_randsz _ket_mutable() {
+       throw missing_instantiation_for("_ket_mutable");
+     }
+     virtual any_view_randsz _aux_mutable() {
+       throw missing_instantiation_for("_aux_mutable");
+     }
+   
+    private:
+     friend class TensorCanonicalizer;
+   
+     static void permute_impl(AbstractTensor::any_view_randsz indices,
+                              std::span<const std::size_t> perm) {
+       const auto n = indices.size();
+       SEQUANT_ASSERT(indices.size() == perm.size());
+       container::svector<Index> sorted_indices(n);
+       for (std::size_t i = 0; i != n; ++i) {
+         sorted_indices[i] = std::move(indices[perm[i]]);
+       }
+       for (std::size_t i = 0; i != n; ++i) {
+         indices[i] = std::move(sorted_indices[i]);
+       }
+     }
+   
+     static void permute_columns_impl(AbstractTensor::any_view_randsz bra_indices,
+                                      any_view_randsz ket_indices,
+                                      std::span<std::size_t> perm_from) {
+       const auto n = std::max(bra_indices.size(), ket_indices.size());
+       SEQUANT_ASSERT(n == perm_from.size());
+   
+       // N.B. column slot bundles are kept in canonical order, see AbstractTensor
+       // class dox: paired bundles first, then bra (paired with null ket) and
+       // ket (unpaired).
+   
+       // 1. count each type of bundles
+       std::size_t npaired = 0;
+       std::size_t nunpaired_bra = 0;
+       for (const auto& [bra_idx, ket_idx] :
+            ranges::views::zip(bra_indices, ket_indices)) {
+         if (bra_idx.nonnull()) {
+           if (ket_idx.nonnull())
+             ++npaired;
+           else
+             ++nunpaired_bra;
+         }
+       }
+       // corner case: there are only unpaired bra slots, no unpaired ket slots
+       if (bra_indices.size() > ket_indices.size()) {
+         SEQUANT_ASSERT(ket_indices.size() == npaired);
+         nunpaired_bra += bra_indices.size() - ket_indices.size();
+       }
+   
+       // adjust perm to ensure that different types of bundles do not mix
+       // this ends up just a simple stable sort according to the bundle type
+       // i.e. bring elements of perm_from with values [0,npaired) to the front,
+       // etc.
+       ranges::stable_sort(perm_from, [&](const auto& i, const auto j) {
+         enum { paired = 0, bra_unpaired = 1, ket_unpaired = 2 };
+         auto to_type = [&](const auto& i) {
+           if (i < npaired)
+             return paired;
+           else if (i < npaired + nunpaired_bra)
+             return bra_unpaired;
+           else
+             return ket_unpaired;
+         };
+         return to_type(i) < to_type(j);
+       });
+   
+       container::svector<Index> sorted_indices(n);
+       for (std::size_t i = 0; i != bra_indices.size(); ++i) {
+         SEQUANT_ASSERT(perm_from[i] < bra_indices.size());
+         sorted_indices[i] = std::move(bra_indices[perm_from[i]]);
+       }
+       for (std::size_t i = 0; i != bra_indices.size(); ++i) {
+         bra_indices[i] = std::move(sorted_indices[i]);
+       }
+       for (std::size_t i = 0; i != ket_indices.size(); ++i) {
+         SEQUANT_ASSERT(perm_from[i] < ket_indices.size());
+         sorted_indices[i] = std::move(ket_indices[perm_from[i]]);
+       }
+       for (std::size_t i = 0; i != ket_indices.size(); ++i) {
+         ket_indices[i] = std::move(sorted_indices[i]);
+       }
+     }
+   };
+   
+   inline auto braket(const AbstractTensor& t) { return t._braket(); }
+   inline auto braketaux(const AbstractTensor& t) { return t._slots(); }
+   inline auto slots(const AbstractTensor& t) { return t._slots(); }
+   inline auto bra_rank(const AbstractTensor& t) { return t._bra_rank(); }
+   inline auto bra_net_rank(const AbstractTensor& t) { return t._bra_net_rank(); }
+   inline auto ket_rank(const AbstractTensor& t) { return t._ket_rank(); }
+   inline auto ket_net_rank(const AbstractTensor& t) { return t._ket_net_rank(); }
+   inline auto aux_rank(const AbstractTensor& t) { return t._aux_rank(); }
+   inline auto num_indices(const AbstractTensor& t) { return t._num_indices(); }
+   inline auto num_slots(const AbstractTensor& t) { return t._num_slots(); }
+   inline auto symmetry(const AbstractTensor& t) { return t._symmetry(); }
+   inline auto braket_symmetry(const AbstractTensor& t) {
+     return t._braket_symmetry();
+   }
+   inline auto column_symmetry(const AbstractTensor& t) {
+     return t._column_symmetry();
+   }
+   inline auto color(const AbstractTensor& t) { return t._color(); }
+   inline auto is_cnumber(const AbstractTensor& t) { return t._is_cnumber(); }
+   inline auto label(const AbstractTensor& t) { return t._label(); }
+   
+   
+   inline std::wstring to_latex_tensor(
+       const std::wstring& core_label, AbstractTensor::const_any_view_randsz bra,
+       AbstractTensor::const_any_view_randsz ket,
+       AbstractTensor::const_any_view_randsz aux,
+       const BraKetTypesetting bkt = BraKetTypesetting::ContraSub,
+       bool left_align = true) {
+     std::wstring result = L"{\\tensor*{" + core_label + L"}{";
+   
+     const auto braket_rank_max = std::max(bra.size(), ket.size());
+     const auto num_paired = std::min(bra.size(), ket.size());
+     const auto num_unpaired = braket_rank_max - num_paired;
+     const auto unpaired_type =
+         bra.size() > ket.size() ? SlotType::Bra : SlotType::Ket;
+   
+     std::size_t col = 0;
+   
+     // loop over left-aligned unpaired slots, if left_align==false
+     if (!left_align && num_unpaired) {
+       auto* unpaired_indices = unpaired_type == SlotType::Bra
+                                    ? &bra[0]
+                                    : &ket[0];  // bra/ket are contiguous
+       for (; col != num_unpaired; ++col) {
+         result += L"*^";
+         if ((bkt == BraKetTypesetting::BraSuper &&
+              unpaired_type == SlotType::Bra) ||
+             (bkt == BraKetTypesetting::KetSuper &&
+              unpaired_type == SlotType::Ket)) {
+           result += io::latex::to_string(unpaired_indices[col]);
+         } else
+           result += L"{}";
+         result += L"_";
+         if ((bkt == BraKetTypesetting::BraSub &&
+              unpaired_type == SlotType::Bra) ||
+             (bkt == BraKetTypesetting::KetSub &&
+              unpaired_type == SlotType::Ket)) {
+           result += io::latex::to_string(unpaired_indices[col]);
+         } else
+           result += L"{}";
+       }
+     }
+   
+     // loop over paired indices
+     auto paired_bra =
+         unpaired_type == SlotType::Bra && left_align == false ? col : 0;
+     auto paired_ket =
+         unpaired_type == SlotType::Ket && left_align == false ? col : 0;
+     const auto paired_fence = col + num_paired;
+     for (; col != paired_fence; ++col, ++paired_bra, ++paired_ket) {
+       result += L"*^";
+       result += (bkt == BraKetTypesetting::BraSuper)
+                     ? io::latex::to_string(bra[paired_bra])
+                     : io::latex::to_string(ket[paired_ket]);
+       result += L"_";
+       result += (bkt == BraKetTypesetting::BraSub)
+                     ? io::latex::to_string(bra[paired_bra])
+                     : io::latex::to_string(ket[paired_ket]);
+     }
+   
+     // loop over right-aligned unpaired slots, if left_align==true
+     if (left_align && num_unpaired) {
+       auto* unpaired_indices = unpaired_type == SlotType::Bra
+                                    ? &bra[0]
+                                    : &ket[0];  // bra/ket are contiguous
+       for (; col != braket_rank_max; ++col) {
+         result += L"*^";
+         if ((bkt == BraKetTypesetting::BraSuper &&
+              unpaired_type == SlotType::Bra) ||
+             (bkt == BraKetTypesetting::KetSuper &&
+              unpaired_type == SlotType::Ket)) {
+           result += io::latex::to_string(unpaired_indices[col]);
+         } else
+           result += L"{}";
+         result += L"_";
+         if ((bkt == BraKetTypesetting::BraSub &&
+              unpaired_type == SlotType::Bra) ||
+             (bkt == BraKetTypesetting::KetSub &&
+              unpaired_type == SlotType::Ket)) {
+           result += io::latex::to_string(unpaired_indices[col]);
+         } else
+           result += L"{}";
+       }
+     }
+     result += L"}";
+   
+     // aux
+     if (aux.size() != 0) {
+       result += L"[";
+       const auto aux_rank = aux.size();
+       for (std::size_t i = 0; i < aux_rank; ++i) {
+         result += io::latex::to_string(aux[i]);
+         if (i + 1 < aux_rank) {
+           result += L",";
+         }
+       }
+       result += L"]";
+     }
+   
+     result += L"}";
+     return result;
+   }
+   
+   template <typename T>
+   concept is_tensor = requires(const T& obj) {
+     { braket(obj) } -> std::ranges::range;
+     { braketaux(obj) } -> std::ranges::range;
+     { bra_rank(obj) } -> std::convertible_to<std::size_t>;
+     { ket_rank(obj) } -> std::convertible_to<std::size_t>;
+     { aux_rank(obj) } -> std::convertible_to<std::size_t>;
+     { symmetry(obj) } -> std::convertible_to<Symmetry>;
+     { braket_symmetry(obj) } -> std::convertible_to<BraKetSymmetry>;
+     { column_symmetry(obj) } -> std::convertible_to<ColumnSymmetry>;
+     { color(obj) } -> std::convertible_to<std::size_t>;
+     { is_cnumber(obj) } -> std::convertible_to<bool>;
+     { label(obj) } -> std::constructible_from<std::wstring>;
+   };
+   static_assert(is_tensor<AbstractTensor>,
+                 "The AbstractTensor class does not fulfill the requirements of "
+                 "the Tensor interface");
+   
+   template <typename IndexMap = container::map<Index, Index>>
+   inline bool transform_indices(AbstractTensor& t, const IndexMap& index_map) {
+     if constexpr (std::is_same_v<IndexMap, container::map<Index, Index>>) {
+       return t._transform_indices(index_map);
+     } else {
+       container::map<Index, Index> index_map_copy;
+       ranges::copy(index_map, index_map_copy);
+       return t._transform_indices(index_map_copy);
+     }
+   }
+   
+   inline void reset_tags(AbstractTensor& t) { t._reset_tags(); }
+   
+   inline void permute_bra(AbstractTensor& t, std::span<const std::size_t> perm) {
+     return t._permute_bra(perm);
+   }
+   
+   inline void permute_ket(AbstractTensor& t, std::span<const std::size_t> perm) {
+     return t._permute_ket(perm);
+   }
+   
+   inline void permute_braket(AbstractTensor& t, std::span<std::size_t> perm) {
+     return t._permute_columns(perm);
+   }
+   
+   // defined in AbstractTensor
+   // inline bool operator<(const AbstractTensor& first, const AbstractTensor&
+   // second) {
+   //  return first.operator<(second);
+   //}
+   
+   
+   using AbstractTensorPtr = std::shared_ptr<AbstractTensor>;
+   
+   bool has_tensor(const ExprPtr& expr, std::wstring label);
+   
+   ExprPtr remove_tensor(const ExprPtr& expr, std::wstring label);
+   
+   }  // namespace sequant
+   
+   #endif  // SEQUANT_ABSTRACT_TENSOR_HPP

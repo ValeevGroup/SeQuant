@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1a77bacfa9b834eb5b0bbb7c44d52b25c1:
+
+Function sequant::to_label_annotation
+=====================================
+
+- Defined in :ref:`file_SeQuant_core_eval_eval_expr.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::to_label_annotation(const Index&)
+   :project: SeQuant

@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1bits_1a891e329e5455ed53f805796f3003c94e:
+
+Template Function sequant::bits::bipartitions_ordered
+=====================================================
+
+- Defined in :ref:`file_SeQuant_core_algorithm.hpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::bits::bipartitions_ordered(T)
+   :project: SeQuant

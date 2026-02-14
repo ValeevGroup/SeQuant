@@ -1,0 +1,14 @@
+.. _exhale_typedef_namespacesequant_1af0e57e9b355ca9023473b1e41414dfa8:
+
+Typedef sequant::PythonEinsumGenerator
+======================================
+
+- Defined in :ref:`file_SeQuant_core_export_python_einsum.hpp`
+
+
+Typedef Documentation
+---------------------
+
+
+.. doxygentypedef:: sequant::PythonEinsumGenerator
+   :project: SeQuant

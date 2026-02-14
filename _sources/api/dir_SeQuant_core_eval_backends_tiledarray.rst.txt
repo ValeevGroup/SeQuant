@@ -1,0 +1,23 @@
+.. _dir_SeQuant_core_eval_backends_tiledarray:
+
+
+Directory tiledarray
+====================
+
+
+|exhale_lsh| :ref:`Parent directory <dir_SeQuant_core_eval_backends>` (``SeQuant/core/eval/backends``)
+
+.. |exhale_lsh| unicode:: U+021B0 .. UPWARDS ARROW WITH TIP LEFTWARDS
+
+
+*Directory path:* ``SeQuant/core/eval/backends/tiledarray``
+
+
+Files
+-----
+
+- :ref:`file_SeQuant_core_eval_backends_tiledarray_eval_expr.hpp`
+- :ref:`file_SeQuant_core_eval_backends_tiledarray_result.cpp`
+- :ref:`file_SeQuant_core_eval_backends_tiledarray_result.hpp`
+
+

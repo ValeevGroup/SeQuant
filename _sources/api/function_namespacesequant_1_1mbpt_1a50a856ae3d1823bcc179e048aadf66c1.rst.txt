@@ -1,0 +1,14 @@
+.. _exhale_function_namespacesequant_1_1mbpt_1a50a856ae3d1823bcc179e048aadf66c1:
+
+Function sequant::mbpt::excitation_type_qns
+===========================================
+
+- Defined in :ref:`file_SeQuant_domain_mbpt_op.cpp`
+
+
+Function Documentation
+----------------------
+
+
+.. doxygenfunction:: sequant::mbpt::excitation_type_qns(std::size_t, IndexSpace::QuantumNumbers)
+   :project: SeQuant
