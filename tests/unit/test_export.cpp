@@ -118,48 +118,60 @@ void configure_context_defaults(ItfContext &ctx) {
   auto registry = get_default_context().index_space_registry();
   IndexSpace occ = registry->retrieve("i");
   IndexSpace virt = registry->retrieve("a");
+  IndexSpace aux = registry->retrieve("x");
 
   ctx.set_tag(occ, "c");
   ctx.set_tag(virt, "e");
+  ctx.set_tag(aux, "x");
 
   ctx.set_name(occ, "Closed");
   ctx.set_name(virt, "External");
+  ctx.set_name(aux, "Auxiliary");
 }
 
 void configure_context_defaults(JuliaTensorOperationsGeneratorContext &ctx) {
   auto registry = get_default_context().index_space_registry();
   IndexSpace occ = registry->retrieve("i");
   IndexSpace virt = registry->retrieve("a");
+  IndexSpace aux = registry->retrieve("x");
 
   ctx.set_dim(occ, "nocc");
   ctx.set_dim(virt, "nv");
+  ctx.set_dim(aux, "naux");
 
   ctx.set_tag(occ, "o");
   ctx.set_tag(virt, "v");
+  ctx.set_tag(aux, "x");
 }
 
 void configure_context_defaults(NumPyEinsumGeneratorContext &ctx) {
   auto registry = get_default_context().index_space_registry();
   IndexSpace occ = registry->retrieve("i");
   IndexSpace virt = registry->retrieve("a");
+  IndexSpace aux = registry->retrieve("x");
 
   ctx.set_shape(occ, "nocc");
   ctx.set_shape(virt, "nvirt");
+  ctx.set_shape(aux, "naux");
 
   ctx.set_tag(occ, "o");
   ctx.set_tag(virt, "v");
+  ctx.set_tag(aux, "x");
 }
 
 void configure_context_defaults(PyTorchEinsumGeneratorContext &ctx) {
   auto registry = get_default_context().index_space_registry();
   IndexSpace occ = registry->retrieve("i");
   IndexSpace virt = registry->retrieve("a");
+  IndexSpace aux = registry->retrieve("x");
 
   ctx.set_shape(occ, "nocc");
   ctx.set_shape(virt, "nvirt");
+  ctx.set_shape(aux, "naux");
 
   ctx.set_tag(occ, "o");
   ctx.set_tag(virt, "v");
+  ctx.set_tag(aux, "x");
 }
 
 void add_to_context(TextGeneratorContext &, std::string_view,

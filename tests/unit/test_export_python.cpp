@@ -6,6 +6,7 @@
 #include <SeQuant/core/export/export.hpp>
 #include <SeQuant/core/export/python_einsum.hpp>
 #include <SeQuant/core/index_space_registry.hpp>
+#include <SeQuant/core/io/serialization/serialization.hpp>
 #include <SeQuant/core/rational.hpp>
 #include <SeQuant/core/utility/scope.hpp>
 
@@ -913,6 +914,98 @@ TEST_CASE("PythonEinsumGenerator - Validation", "[export][python]") {
     }
   }
 
+  SECTION("Validation: Non-covariant indices (THC factorization)") {
+    // Test THC factorization with auxiliary (non-covariant) indices:
+    // I[a1,a3,a2,a4] = sum_{x1,x2} X(a1,x1)*X(a2,x1)*Y(x1,x2)*X(a3,x2)*X(a4,x2)
+    std::filesystem::path temp_dir =
+        std::filesystem::temp_directory_path() / "sequant_test_thc_numpy";
+    std::filesystem::create_directories(temp_dir);
+    auto cleanup = sequant::detail::make_scope_exit(
+        [&temp_dir]() { std::filesystem::remove_all(temp_dir); });
+
+    IndexSpace auxsp = registry->retrieve("x");
+
+    const Eigen::Index nvirt = 4;
+    const Eigen::Index naux = 3;
+
+    auto X_tensor = random_tensor<double, 2>({nvirt, naux}, 2000);
+    auto Y_tensor = random_tensor<double, 2>({naux, naux}, 2100);
+
+    // Compute reference result using explicit loops
+    Eigen::Tensor<double, 4> I_expected(nvirt, nvirt, nvirt, nvirt);
+    I_expected.setZero();
+
+    for (Eigen::Index a1 = 0; a1 < nvirt; ++a1) {
+      for (Eigen::Index a3 = 0; a3 < nvirt; ++a3) {
+        for (Eigen::Index a2 = 0; a2 < nvirt; ++a2) {
+          for (Eigen::Index a4 = 0; a4 < nvirt; ++a4) {
+            for (Eigen::Index x1 = 0; x1 < naux; ++x1) {
+              for (Eigen::Index x2 = 0; x2 < naux; ++x2) {
+                I_expected(a1, a3, a2, a4) +=
+                    X_tensor(a1, x1) * X_tensor(a2, x1) * Y_tensor(x1, x2) *
+                    X_tensor(a3, x2) * X_tensor(a4, x2);
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // Expression: X{a_1;;x_1} X{;a_2;x_1} Y{;;x_1,x_2} X{a_3;;x_2} X{;a_4;x_2}
+    auto thc_expr = deserialize(
+        L"X{a_1;;x_1} X{;a_2;x_1} Y{;;x_1,x_2} X{a_3;;x_2} X{;a_4;x_2}");
+    Tensor I(L"I", bra{L"a_1", L"a_3"}, ket{L"a_2", L"a_4"});
+
+    ResultExpr result_expr(I, thc_expr);
+    auto export_tree = to_export_tree(result_expr);
+
+    NumPyEinsumGeneratorContext ctx;
+    ctx.set_shape(virt, std::to_string(nvirt));
+    ctx.set_shape(auxsp, std::to_string(naux));
+    ctx.set_tag(virt, "v");
+    ctx.set_tag(auxsp, "x");
+
+    NumPyEinsumGenerator generator;
+
+    // Get tensor file names via represent
+    auto X_repr = ex<Tensor>(L"X", bra{L"a_1"}, ket{}, aux{L"x_1"});
+    auto Y_repr = ex<Tensor>(L"Y", bra{}, ket{}, aux{L"x_1", L"x_2"});
+    std::string X_name = generator.represent(X_repr.as<Tensor>(), ctx);
+    std::string Y_name = generator.represent(Y_repr.as<Tensor>(), ctx);
+    std::string I_name = generator.represent(I, ctx);
+
+    write_eigen_tensor_to_numpy(temp_dir.string() + "/" + X_name + ".npy",
+                                X_tensor);
+    write_eigen_tensor_to_numpy(temp_dir.string() + "/" + Y_name + ".npy",
+                                Y_tensor);
+
+    export_expression(export_tree, generator, ctx);
+
+    std::string code = generator.get_generated_code();
+
+    REQUIRE(run_python_code(code, temp_dir.string()));
+
+    auto I_actual = read_eigen_tensor_from_numpy<double, 4>(
+        temp_dir.string() + "/" + I_name + ".npy");
+
+    REQUIRE(I_actual.dimensions()[0] == nvirt);
+    REQUIRE(I_actual.dimensions()[1] == nvirt);
+    REQUIRE(I_actual.dimensions()[2] == nvirt);
+    REQUIRE(I_actual.dimensions()[3] == nvirt);
+
+    const double tolerance = 1e-9;
+    for (Eigen::Index a1 = 0; a1 < nvirt; ++a1) {
+      for (Eigen::Index a3 = 0; a3 < nvirt; ++a3) {
+        for (Eigen::Index a2 = 0; a2 < nvirt; ++a2) {
+          for (Eigen::Index a4 = 0; a4 < nvirt; ++a4) {
+            REQUIRE(std::abs(I_actual(a1, a3, a2, a4) -
+                             I_expected(a1, a3, a2, a4)) < tolerance);
+          }
+        }
+      }
+    }
+  }
+
   SECTION("Validation: RowMajor memory layout") {
     // Test that RowMajor (C order) layout produces numerically correct results
     std::filesystem::path temp_dir =
@@ -1461,6 +1554,106 @@ TEST_CASE("PyTorchEinsumGenerator - Validation", "[export][python][torch]") {
     for (Eigen::Index i = 0; i < nvirt; ++i) {
       for (Eigen::Index j = 0; j < nvirt; ++j) {
         REQUIRE(std::abs(T_actual(i, j) - T_expected(i, j)) < tolerance);
+      }
+    }
+  }
+
+  SECTION("Validation: Non-covariant indices (THC) with PyTorch") {
+    // Same THC factorization test as NumPy but using PyTorch backend
+    std::filesystem::path temp_dir =
+        std::filesystem::temp_directory_path() / "sequant_test_thc_pytorch";
+    std::filesystem::create_directories(temp_dir);
+    auto cleanup = sequant::detail::make_scope_exit(
+        [&temp_dir]() { std::filesystem::remove_all(temp_dir); });
+
+    IndexSpace auxsp = registry->retrieve("x");
+
+    const Eigen::Index nvirt = 4;
+    const Eigen::Index naux = 3;
+
+    // Use RowMajor tensors since PyTorch is always row-major
+    Eigen::Tensor<double, 2, Eigen::RowMajor> X_tensor(nvirt, naux);
+    Eigen::Tensor<double, 2, Eigen::RowMajor> Y_tensor(naux, naux);
+
+    std::mt19937 gen_X(2000), gen_Y(2100);
+    std::uniform_real_distribution<double> dist(-1.0, 1.0);
+    for (Eigen::Index i = 0; i < X_tensor.size(); ++i) {
+      X_tensor.data()[i] = dist(gen_X);
+    }
+    for (Eigen::Index i = 0; i < Y_tensor.size(); ++i) {
+      Y_tensor.data()[i] = dist(gen_Y);
+    }
+
+    // Compute reference result
+    Eigen::Tensor<double, 4, Eigen::RowMajor> I_expected(nvirt, nvirt, nvirt,
+                                                         nvirt);
+    I_expected.setZero();
+
+    for (Eigen::Index a1 = 0; a1 < nvirt; ++a1) {
+      for (Eigen::Index a3 = 0; a3 < nvirt; ++a3) {
+        for (Eigen::Index a2 = 0; a2 < nvirt; ++a2) {
+          for (Eigen::Index a4 = 0; a4 < nvirt; ++a4) {
+            for (Eigen::Index x1 = 0; x1 < naux; ++x1) {
+              for (Eigen::Index x2 = 0; x2 < naux; ++x2) {
+                I_expected(a1, a3, a2, a4) +=
+                    X_tensor(a1, x1) * X_tensor(a2, x1) * Y_tensor(x1, x2) *
+                    X_tensor(a3, x2) * X_tensor(a4, x2);
+              }
+            }
+          }
+        }
+      }
+    }
+
+    auto thc_expr = deserialize(
+        L"X{a_1;;x_1} X{;a_2;x_1} Y{;;x_1,x_2} X{a_3;;x_2} X{;a_4;x_2}");
+    Tensor I(L"I", bra{L"a_1", L"a_3"}, ket{L"a_2", L"a_4"});
+
+    ResultExpr result_expr(I, thc_expr);
+    auto export_tree = to_export_tree(result_expr);
+
+    PyTorchEinsumGeneratorContext ctx;
+    ctx.set_shape(virt, std::to_string(nvirt));
+    ctx.set_shape(auxsp, std::to_string(naux));
+    ctx.set_tag(virt, "v");
+    ctx.set_tag(auxsp, "x");
+
+    PyTorchEinsumGenerator generator;
+
+    auto X_repr = ex<Tensor>(L"X", bra{L"a_1"}, ket{}, aux{L"x_1"});
+    auto Y_repr = ex<Tensor>(L"Y", bra{}, ket{}, aux{L"x_1", L"x_2"});
+    std::string X_name = generator.represent(X_repr.as<Tensor>(), ctx);
+    std::string Y_name = generator.represent(Y_repr.as<Tensor>(), ctx);
+    std::string I_name = generator.represent(I, ctx);
+
+    write_eigen_tensor_to_numpy(temp_dir.string() + "/" + X_name + ".npy",
+                                X_tensor);
+    write_eigen_tensor_to_numpy(temp_dir.string() + "/" + Y_name + ".npy",
+                                Y_tensor);
+
+    export_expression(export_tree, generator, ctx);
+
+    std::string code = generator.get_generated_code();
+
+    REQUIRE(run_pytorch_code_with_numpy_io(code, temp_dir.string()));
+
+    auto I_actual = read_eigen_tensor_from_numpy<double, 4, Eigen::RowMajor>(
+        temp_dir.string() + "/" + I_name + ".npy");
+
+    REQUIRE(I_actual.dimensions()[0] == nvirt);
+    REQUIRE(I_actual.dimensions()[1] == nvirt);
+    REQUIRE(I_actual.dimensions()[2] == nvirt);
+    REQUIRE(I_actual.dimensions()[3] == nvirt);
+
+    const double tolerance = 1e-9;
+    for (Eigen::Index a1 = 0; a1 < nvirt; ++a1) {
+      for (Eigen::Index a3 = 0; a3 < nvirt; ++a3) {
+        for (Eigen::Index a2 = 0; a2 < nvirt; ++a2) {
+          for (Eigen::Index a4 = 0; a4 < nvirt; ++a4) {
+            REQUIRE(std::abs(I_actual(a1, a3, a2, a4) -
+                             I_expected(a1, a3, a2, a4)) < tolerance);
+          }
+        }
       }
     }
   }
