@@ -8,9 +8,18 @@ jobs:
     runs-on: "ubuntu-latest"
     steps:
       - uses: actions/checkout@v6
-      - uses: jidicula/clang-format-action@v4.16.0
-        with:
-          clang-format-version: "17"
-          include-regex: '.*\.(h|hpp|hh|hxx|ipp|cpp|cc|cxx)$'
-          exclude-regex: "/SeQuant\\/external/"
-    
+
+      - name: Install clang-format-17
+        run: |
+          wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/keyrings/llvm.asc > /dev/null
+          echo "deb [signed-by=/etc/apt/keyrings/llvm.asc] https://apt.llvm.org/$(lsb_release -cs)/ llvm-toolchain-$(lsb_release -cs)-17 main" | sudo tee /etc/apt/sources.list.d/llvm-17.list > /dev/null
+          sudo apt-get update
+          sudo apt-get install -y clang-format-17
+
+      - name: Run clang-format check
+        run: |
+          find . -path ./SeQuant/external -prune -o \
+            -regextype posix-extended \
+            -regex '.*\.(h|hpp|hh|hxx|ipp|cpp|cc|cxx)$' \
+            -print0 | \
+          xargs -0 clang-format-17 --dry-run --Werror
