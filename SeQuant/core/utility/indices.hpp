@@ -369,20 +369,31 @@ TensorOfTensorIndices<Container> tot_indices(Rng const& idxs) {
   using ranges::views::join;
   using ranges::views::transform;
 
-  // Container indep_idxs;
+  constexpr auto emplace_into = [](Container& target, auto&& value) {
+    if constexpr (requires { target.emplace_back(value); }) {
+      // for sequence containers like vectors, lists
+      target.emplace_back(value);
+    } else if constexpr (requires { target.emplace(value); }) {
+      // for associative containers like set
+      target.emplace(value);
+    } else {
+      static_assert(false,
+                    "Container does not support emplace_back or emplace");
+    }
+  };
 
   TensorOfTensorIndices<Container> result;
   auto& outer = result.outer;
 
   for (auto&& i : idxs | transform(&Index::proto_indices) | join)
-    if (!ranges::contains(outer, i)) outer.emplace_back(i);
+    if (!ranges::contains(outer, i)) emplace_into(outer, i);
 
   for (auto&& i : idxs | filter(not_fn(&Index::has_proto_indices)))
-    if (!ranges::contains(outer, i)) outer.emplace_back(i);
+    if (!ranges::contains(outer, i)) emplace_into(outer, i);
 
   auto& inner = result.inner;
   for (auto&& i : idxs | filter(&Index::has_proto_indices))
-    inner.emplace_back(i);
+    emplace_into(inner, i);
 
   return result;
 }
@@ -405,9 +416,7 @@ inline bool ordinal_compare(Index const& idx1, Index const& idx2) {
 ///   eg. [a_1^{i_1,i_2},a_2^{i_2,i_3}] -> "a_1i_1i_2,a_2i_2i_3"
 ///   eg. [i_1, i_2] -> "i_1,i_2"
 ///
-template <typename Rng, typename Idx = ranges::range_value_t<Rng>,
-          typename = std::enable_if_t<std::is_same_v<Idx, Index>>>
-std::string csv_labels(Rng&& idxs) {
+std::string csv_labels(meta::range_of<Index> auto&& idxs) {
   using ranges::views::concat;
   using ranges::views::intersperse;
   using ranges::views::join;
@@ -421,10 +430,10 @@ std::string csv_labels(Rng&& idxs) {
     return toUtf8(v | ranges::to<std::wstring>);
   };
 
-  return std::forward<Rng>(idxs)  //
-         | transform(str)         //
-         | intersperse(",")       //
-         | join                   //
+  return std::forward<decltype(idxs)>(idxs)  //
+         | transform(str)                    //
+         | intersperse(",")                  //
+         | join                              //
          | ranges::to<std::string>;
 }
 
@@ -705,6 +714,177 @@ decltype(auto) as_view_of_index_groups(
          std::ranges::views::transform([](auto&& group) -> decltype(auto) {
            return as_index_group_view(group);
          });
+}
+
+///
+/// @brief Computes index counts for all subsets of a given range of index
+/// groups.
+///
+/// This function generates a vector where each element corresponds to a subset
+/// of the input range `rng`. The subsets are indexed by a bitmask, where the
+/// $i$-th bit being set means the $i$-th element of `rng` is included in the
+/// subset. For each subset, it counts the occurrences of each `Index`.
+///
+/// @param rng A range of ranges of `Index`. The outer range represents a
+/// collection of index groups (e.g., indices of multiple tensors).
+/// @return A vector of maps, where `result[mask]` contains a map of
+/// `Index` to its count in the subset defined by `mask`.
+///
+auto subset_index_counts(meta::range_of<Index, 2> auto const& rng) {
+  size_t const N = ranges::distance(rng);
+  SEQUANT_ASSERT(N <= 24 &&
+                 "subset_index_counts: N > 24 would require excessive memory");
+  container::vector<container::map<Index, size_t, Index::FullLabelCompare>>
+      result((size_t{1} << N));
+  for (size_t i = 1; i < result.size(); ++i) {
+    for (auto&& ixs : bits::on_bits_index(i) | bits::sieve(rng)) {
+      for (auto&& ix : ixs)
+        if (auto [it, inserted] = result[i].try_emplace(ix, 1); !inserted)  //
+          ++(it->second);
+    }
+  }
+  return result;
+}
+
+///
+/// @brief Determines the target indices for all subsets of a given range of
+/// index groups.
+///
+/// This function computes the set of "target" indices for each subset of `rng`.
+/// An index is considered a target for a subset if it appears exactly once
+/// within that subset (making it an open index for that subset) or if it is
+/// present in the provided `tixs` (target indices) and also appears in the
+/// subset. Additionally, indices that appear in the subset and also appear in
+/// the complementary subset (implied by `counts.at(counts.size() - i -
+/// 1).contains(k)`) are included, which effectively identifies contracted
+/// indices that need to be preserved as open indices if they are matched in the
+/// complement.
+///
+/// @param rng A range of ranges of `Index`. The outer range represents a
+/// collection of index groups.
+/// @param tixs A range of `Index` representing the global target indices (e.g.,
+/// indices of the result tensor).
+/// @return A vector of sets, where `result[mask]` contains the set of target
+/// `Index` objects for the subset defined by `mask`.
+///
+auto subset_target_indices(meta::range_of<Index, 2> auto const& rng,
+                           meta::range_of<Index> auto const& tixs) {
+  using IndexSet = container::set<Index, Index::FullLabelCompare>;
+  size_t const N = ranges::distance(rng);
+  SEQUANT_ASSERT(
+      N <= 24 &&
+      "subset_target_indices: N > 24 would require excessive memory");
+  container::vector<IndexSet> result((size_t{1} << N));
+
+  for (size_t i = 0; i < N; ++i)
+    for (auto&& ix : ranges::at(rng, i)) result[(size_t{1} << i)].emplace(ix);
+
+  auto counts = subset_index_counts(rng);
+
+  for (auto&& [k, v] : *counts.rbegin())
+    if (v == 1 || ranges::contains(tixs, k)) result.rbegin()->emplace(k);
+
+  for (size_t i = 0; i < result.size(); ++i)
+    for (auto&& [k, v] : counts[i])
+      if (v == 1 || (v > 0 && counts.at(counts.size() - i - 1).contains(k)))
+        result[i].emplace(k);
+
+  return result;
+}
+
+///
+/// @brief Helper struct to hold indices for left-to-right binarization.
+/// @tparam T The type of the index (e.g., Index).
+/// @tparam Set The type of the set container (default: std::set<T>).
+/// @tparam Vec The type of the vector container (default: std::vector<Set>).
+///
+template <typename T, typename Set = std::set<T>,
+          typename Vec = std::vector<Set>>
+struct LTRUncontractedIndices {
+  /// @brief The relevant indices of the input tensors (leaves).
+  /// These are indices that either participate in future contractions or are
+  /// external. They correspond to [A, B, C] sub-expressions in a product Prod
+  /// [A, B, C]. These sets are computed so that uncontracted indices can be
+  /// utilized in the children's binarization index computations.
+  Vec children;
+  /// @brief The indices of the intermediate tensors.
+  /// imed[i] contains the open indices after contracting the first (i+1)
+  /// tensors. They correspond to [A, AB, ABC] intermediates when a product
+  /// expression Prod [A, B, C] is to be evaluated left-to-right.
+  Vec imed;
+};
+
+///
+/// @brief Calculates index sets for a left-to-right contraction sequence.
+///
+/// This function simulates a left-to-right contraction of a sequence of
+/// tensors. It determines which indices in the input tensors are relevant
+/// (participate in contraction or are external) and computes the index sets of
+/// the intermediate results.
+///
+/// @note
+/// - The 'uncontract' indices are only necessary to mark those indices that
+/// appear in
+///   more than one set from 'rng'.
+/// - Indices that appear exactly once in the sets from 'rng' are always
+/// uncontracted (or external).
+///   The term 'uncontract' implies some indices tend to 'contract-out' because
+///   they repeat, but we force them to survive.
+/// - Passing non-repeating indices in 'uncontract' does not change the behavior
+/// of the algorithm.
+///   Neither will passing indices that do not appear in any of the sets from
+///   'rng'.
+///
+/// @tparam T The type of the index.
+/// @tparam Set The type of the set container.
+/// @param rng A range of index sets representing the input tensors.
+/// @param uncontract The set of indices that should remain in the final result
+/// (external indices).
+/// @return LTRUncontractedIndices<T, Set> containing the filtered children
+/// indices and intermediate indices.
+///
+template <typename T, typename Set = std::set<T>>
+auto left_to_right_binarization_indices(meta::range_of<Set> auto const& rng,
+                                        Set const& uncontract) {
+  using ranges::views::filter;
+  using CountMap = std::map<T, size_t, typename Set::key_compare>;
+  LTRUncontractedIndices<T, Set> result;
+
+  std::vector<CountMap> counts;
+  for (auto acc = CountMap{}; auto&& ixs : rng) {
+    for (auto&& ix : ixs) {
+      auto [it, inserted] = acc.emplace(ix, 1);
+      if (!inserted) ++(it->second);
+    }
+    counts.push_back(acc);
+  }
+
+  auto const& max_count = counts.back();
+
+  auto survives_in_children = [&max_count,
+                               &uncontract](auto const& ix) -> bool {
+    return max_count.at(ix) > 1 || uncontract.contains(ix);
+  };
+
+  for (auto&& ixs : rng)
+    result.children.emplace_back(ixs                             //
+                                 | filter(survives_in_children)  //
+                                 | ranges::to<Set>);
+
+  auto survives_in_imed = [&max_count, &uncontract](auto&& kv) -> bool {
+    auto&& [k, v] = kv;
+    auto mk = max_count.at(k);
+    return v < mk || uncontract.contains(k);
+  };
+
+  for (auto&& ixcs : counts) {
+    result.imed.emplace_back(ixcs                        //
+                             | filter(survives_in_imed)  //
+                             | std::views::elements<0>   //
+                             | ranges::to<Set>);
+  }
+
+  return result;
 }
 
 }  // namespace sequant

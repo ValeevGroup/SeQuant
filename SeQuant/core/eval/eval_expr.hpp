@@ -334,8 +334,10 @@ concept leaf_node_evaluator =
 }  // namespace meta
 
 namespace impl {
-FullBinaryNode<EvalExpr> binarize(ExprPtr const&);
-}
+using IndexSet = container::set<Index, Index::FullLabelCompare>;
+
+FullBinaryNode<EvalExpr> binarize(ExprPtr const&, IndexSet const& uncontract);
+}  // namespace impl
 
 ///
 /// \brief A type alias for the types that satisfy the eval_node concept.
@@ -352,8 +354,9 @@ static_assert(!meta::can_evaluate<EvalNode<EvalExpr>>);
 template <typename ExprT = EvalExpr>
   requires std::is_constructible_v<ExprT, EvalExpr>
 FullBinaryNode<ExprT> binarize(ExprPtr const& expr) {
-  if constexpr (std::is_same_v<ExprT, EvalExpr>) return impl::binarize(expr);
-  return transform_node(impl::binarize(expr),
+  if constexpr (std::is_same_v<ExprT, EvalExpr>)
+    return impl::binarize(expr, {});
+  return transform_node(impl::binarize(expr, {}),
                         [](auto&& val) { return ExprT{val}; });
 }
 
