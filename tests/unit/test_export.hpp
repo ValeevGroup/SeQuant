@@ -13,6 +13,7 @@ namespace {
   reg->add(L"a", 0b010, is_vacuum_occupied, is_reference_occupied, is_hole,
            100);
   reg->add(L"u", 0b100, is_reference_occupied, is_hole, is_particle, 5);
+  reg->add(L"x", 0b1000, is_particle, 50);
 
   return set_scoped_default_context(
       {.index_space_registry_shared_ptr = std::move(reg)});
