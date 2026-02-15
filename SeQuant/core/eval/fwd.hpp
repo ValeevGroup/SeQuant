@@ -14,7 +14,9 @@ namespace sequant {
 /// should be "de-nested" (flattened) to a regular tensor or kept as nested.
 enum class DeNest { True, False };
 
+template <typename TreeNode, bool force_hash_collisions = false>
 class CacheManager;
+
 class Result;
 
 ///

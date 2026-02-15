@@ -435,6 +435,7 @@ set(SeQuant_eval_src
         SeQuant/core/eval/eval_expr.cpp
         SeQuant/core/eval/eval_expr.hpp
         SeQuant/core/eval/eval_node.hpp
+        SeQuant/core/eval/eval_node_compare.hpp
         SeQuant/core/eval/result.cpp
         SeQuant/core/eval/result.hpp
         SeQuant/core/eval/fwd.hpp
